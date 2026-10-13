@@ -493,6 +493,12 @@ async function main() {
       // pk_ammo_empty_trickle → EMPTY_TRICKLE_DEFAULTS 10/30/1 are under test).
       const { sim, events } = makeMatchSim("tdm", 51);
       sim.match.start(sim);
+      // BOT-AI PASS: the 30 s / 4-kill fixture clock used to outlive this
+      // 10.5 s dry window by luck of slow bots; the sharper bands finish the
+      // 4 kills in ~13 s and the match ENDS mid-test (phase 'ended' -> no
+      // trickle). The trickle is about the floor, not the clock: stretch both.
+      sim.match.m.rules.scoreLimit = 999;
+      sim.match.m.rules.timeLimitS = 120;
       for (let i = 0; i < 200; i++) sim.step(null); // through warmup, into live
       ok(sim.state.match.phase === "live", "fixture match live for the trickle test");
       const p = sim.state.player;

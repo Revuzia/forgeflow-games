@@ -132,7 +132,10 @@ export function createModeSelect(ctx, cb) {
 
   const state = {
     mode: "tdm",
-    difficulty: loadDifficulty(), // H2: persisted; default "standard" (C11)
+    // PVP has NO difficulty setting (owner 2026-10-12): every opponent plays at the top
+    // tier, always. The campaign keeps its CASUAL/STANDARD/HARD row (menu.js briefing);
+    // this panel no longer shows one, and match starts always carry "expert".
+    difficulty: "expert",
     map: loadMap(ctx.content && ctx.content.arenas), // persisted arena choice
     panel: null,
   };
@@ -177,7 +180,6 @@ export function createModeSelect(ctx, cb) {
   }
 
   function render(panel) {
-    if (panel) state.difficulty = loadDifficulty(); // H2: screen (re)open → sync with the campaign row's choice
     if (panel) state.map = loadMap(ctx.content && ctx.content.arenas); // same, for the arena row
     state.panel = panel || state.panel;
     if (!state.panel) return;
@@ -192,9 +194,6 @@ export function createModeSelect(ctx, cb) {
         `</div>`;
     }).join("");
 
-    const diff = DIFFICULTIES.map((d) =>
-      `<button data-diff="${d}" class="${state.difficulty === d ? "on" : ""}">${d}</button>`).join("");
-
     // MAP row — same `.w6-diff` chrome as the difficulty row (one visual
     // language for "pick one of these"); `.w6-map` only scopes the listener.
     const ids = arenas();
@@ -208,9 +207,7 @@ export function createModeSelect(ctx, cb) {
       `<div class="w6-cards">${cards}</div>` +
       `<div class="w6-rules">${rulesLines(state.mode).map(esc).join("<br>")}</div>` +
       `<div style="font-size:10px;letter-spacing:.24em;opacity:.5;margin-bottom:6px">MAP</div>` +
-      `<div class="w6-diff w6-map" style="margin-bottom:14px">${maps}</div>` +
-      `<div style="font-size:10px;letter-spacing:.24em;opacity:.5;margin-bottom:6px">DIFFICULTY</div>` +
-      `<div class="w6-diff">${diff}</div>` +
+      `<div class="w6-diff w6-map" style="margin-bottom:6px">${maps}</div>` +
       `<div class="w6-stats">${esc(statsLine(state.mode))}</div>` +
       `<div class="w6-err"></div>` +
       `</div>`;
@@ -220,13 +217,6 @@ export function createModeSelect(ctx, cb) {
         state.mode = c.getAttribute("data-mode");
         render();
         if (cb && cb.onSelectionChange) cb.onSelectionChange(state.mode, available(state.mode));
-      });
-    });
-    state.panel.querySelectorAll(".w6-diff button[data-diff]").forEach((b) => {
-      b.addEventListener("click", () => {
-        state.difficulty = b.getAttribute("data-diff");
-        saveDifficulty(state.difficulty); // H2: shared with the campaign row
-        render();
       });
     });
     state.panel.querySelectorAll(".w6-map button[data-map]").forEach((b) => {

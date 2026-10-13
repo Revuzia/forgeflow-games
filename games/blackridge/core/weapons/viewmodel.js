@@ -1,5 +1,6 @@
 // core/weapons/viewmodel.js [A4] — arms+gun rig: sway, bob, ADS spring
-// layers, kick, muzzle/eject sockets, and the FIRST-PERSON CAMERA RIG.
+// layers, kick, weapon-switch / reload / pump animation, scope state, and the
+// FIRST-PERSON CAMERA RIG.
 //
 // Frozen surface (architecture §3.11 + changelog v2.1c):
 //   createViewmodel(ctx) → { equip, update, kick, muzzleWorld, setVisible,
@@ -13,53 +14,60 @@
 //
 // RENDER-PASS SEAM (A6): this module exposes `ctx.vmRenderPass(renderer)`
 // (clearDepth + render scene with the vm camera into the CURRENT render
-// target) and `ctx.vmCamera`. A6's post.js should call ctx.vmRenderPass(
-// renderer) immediately after its world scene pass — inside the HDR target,
-// before bloom/composite — and call ctx.claimVmPass() once at construction.
+// target) and `ctx.vmCamera`. post.js calls ctx.vmRenderPass(renderer)
+// immediately after its world scene pass — inside the HDR target, before
+// bloom/composite — and calls ctx.claimVmPass() once at construction.
 // INTERIM AUTO-PASS: until a post implementation claims the pass, a sentinel
 // object's onAfterRender runs the same nested render at the end of the
-// default-framebuffer scene pass (three supports nested render via its state
-// stacks), so the gun is visible even against A0's stub post. The sentinel
-// only fires on the DEFAULT framebuffer (render-target passes — planar
-// reflection, HDR chains — never get an un-claimed vm pass drawn into them).
-// LIGHT LAYERS (A6): pool lights must enable VM_LAYER (light.layers
-// .enableAll() at pool creation) or the vm camera collects zero lights and
-// the gun renders black — flagged in needsElsewhere.
+// default-framebuffer scene pass.
+// LIGHT LAYERS (A6): pool lights enable VM_LAYER (light.layers.enableAll()) or
+// the vm camera collects zero lights and the gun renders black.
 //
-// TICK INTERPOLATION (skating fix): update(dt, alpha) takes the frame's
-// interpolation factor and builds the camera's BASE position by lerping the
-// player's last two SIM TICKS — boot.js owns that history (a render-only ring
-// captured inside its single sim.step() call site) and hands the lerped point
-// back through ctx.playerRenderPos(alpha, out). Only POSITION is interpolated:
-// yaw/pitch stay raw off input.state, because interpolating look would trade
-// smoothness for input latency. Every offset below — eye height, crouch lerp,
-// bob, landing dip, recoil/ADS — is applied ON TOP of that base, in the order
-// it always was. With no history (before the first tick of a fresh sim) or an
-// omitted alpha, the base is the raw current p.pos, i.e. the old behaviour.
+// TICK INTERPOLATION: update(dt, alpha) builds the camera's BASE position by
+// lerping the player's last two SIM TICKS (boot owns that history, handed back
+// through ctx.playerRenderPos(alpha, out)). Only POSITION is interpolated —
+// yaw/pitch stay raw off input.state (interpolating look trades smoothness for
+// input latency). Every offset below — eye height, crouch lerp, bob, landing
+// dip, recoil/ADS — is applied ON TOP of that base.
 //
-// CAMERA RIG OWNERSHIP: no other lane drives the world camera from sim state
-// (verified: boot sets it once at (0,1.7,0)). This module owns the
-// first-person camera per architecture §3.4 ("the camera renders from sim
-// state plus view-only bob/kick offsets") and combat_spec §1.3/§1.4/§1.6/
-// §1.7/§2.4: eye heights + 140 ms crouch lerp, slide eye 0.90 m + 2.5° roll
-// + FOV +4°, head-bob (camera share, bob slider applies here only), landing
-// dips, ADS/sprint FOV kinetics, §2.6 ADS sway + Corvus breath hold applied
-// DIFFERENTIALLY (render-rotation offsets only — input.state is never
-// written by this module; recoil.js owns aim writes through input.addLook).
-// The rig only drives while: vm visible AND !ctx.cameraDetached AND the
-// mission phase is live AND the player is alive. A11's detached scenarios
-// (S9, menu framings) set ctx.cameraDetached = true (flagged) or call
-// vm.setVisible(false); either releases the camera completely.
+// CAMERA RIG OWNERSHIP: this module owns the first-person camera per
+// architecture §3.4 ("the camera renders from sim state plus view-only bob/kick
+// offsets") and combat_spec §1.3/§1.4/§1.6/§1.7/§2.4: eye heights + 140 ms
+// crouch lerp, slide eye 0.90 m + 2.5° roll + FOV +4°, head-bob (camera share,
+// bob slider applies here only), landing dips, ADS/sprint FOV kinetics, §2.6 ADS
+// sway + Corvus breath hold. The rig only drives while: vm visible AND
+// !ctx.cameraDetached AND the mission phase is live AND the player is alive.
+//
+// PRESENTATION PASS (2026-10) — what is new in this file:
+//   * LIGHT RIG: hemisphere fill + camera-space key + cool rim, VM_LAYER only
+//     (the viewmodel was a dark navy silhouette; the owner: "muddy").
+//   * SWITCH: the held weapon is lowered, the MESH SWAPS AT 42% OF THE SIM'S
+//     switchS (sim only changes weapon.id at the end), the new one is raised.
+//     All five GLBs are preloaded + material-warmed at construction, so a swap
+//     is synchronous and never hitches.
+//   * RELOAD: per-class hand animation from the sim's reloading state — magazine
+//     out / drop / new magazine / seat / rack (rifles), grip magazine (pistol,
+//     SMG), per-shell insertion with the gun canted (shotgun).
+//   * PUMP: the shotgun forend and the support hand rack after every blast.
+//   * SPRINT / SLIDE poses blend smoothly instead of stepping.
+//   * SCOPE: weapons flagged view.scope get a scope blend (0..1) that hides the
+//     3D gun at full ADS and drives the HUD scope overlay (hud.js reads
+//     `vm.scope`). The scoped weapon's sway is a REAL aim wobble (via recoil's
+//     nudge), so what the lens shows is where the round goes; breath-hold
+//     (Shift) steadies it.
+//   * SHOTGUN CONTRACT: nine "shot" events per blast — kick() counts ROUNDS (shots
+//     fired ÷ pellets), never pellets.
 
 import * as THREE from "three";
-import { WEAPONS, SWAY, VIEWMODEL, FEEL } from "./weapon_data.js";
-import { loadWeaponGLB, loadedPrototypes } from "./weapon_meshes.js";
-// The SAME stride model the footsteps run on. player.js exports it for exactly
-// this ("Exported so the viewmodel can derive the same bob frequency the
-// footsteps run at", player.js §1.6) and, until now, nothing imported it.
+import { WEAPONS, SWAY, VIEWMODEL, FEEL, SLOT_ORDER } from "./weapon_data.js";
+import { loadWeaponGLB, loadedPrototypes, loadAllWeapons, invalidateWeapon } from "./weapon_meshes.js";
+// The SAME stride model the footsteps run on (player.js §1.6).
 import { strideLength } from "../sim/player.js";
 
 export const VM_LAYER = 2;
+
+// fraction of the sim's switchS at which the held mesh is swapped (lower first half, raise second)
+const SWITCH_SWAP = 0.42;
 
 const DEG = Math.PI / 180;
 const LIVE_PHASES = new Set(["infil", "assault", "exfil"]);
@@ -77,124 +85,26 @@ const BOB = {
 const EYE_STAND = 1.62, EYE_CROUCH = 1.10, EYE_SLIDE = 0.90; // §1.3/§1.4
 
 // ===== FIRE RESPONSE (combat_spec §2.3, VT §5 layer 6, VT §7) ==============
-// iter05 measurement, live build, C1 pose, Warden, 12 rounds of auto (probe
-// sampled every rAF): mount.rotation.x peaked at 0.020-0.028 rad (1.1-1.6°)
-// and sat at 0.009-0.015 rad (0.5-0.9°) at the ticks C1 actually photographs
-// (240, 269); camera.rotation.z was EXACTLY 0 on every frame; camera.fov was
-// EXACTLY 74.000 on every frame. Two of the four channels the scorecard names
-// (roll, FOV) were not implemented at all, and the two that were had decayed
-// to a fifth of their peak by capture time — which is why 3/3 critics read
-// "no weapon kick, no camera pitch, no roll, no FOV change" off a filmstrip
-// whose manifest proves rounds were leaving the barrel.
-//
-// ROOT CAUSE of the invisibility (not the amplitudes alone): a shot was
-// SETTING a value that then decayed to zero — `damp(rotPunch, 0, 0.07)`
-// (τ 70 ms) and `punchT -= 6·dt` (0.75 units gone in 125 ms, exactly one
-// 750-rpm shot interval). A set-then-decay term is at its maximum for one
-// frame and near zero for the rest, so an arbitrarily-sampled frame almost
-// never catches it, and sustained fire never accumulates.
-//
-// FIX: every channel is an under-damped SPRING that a round IMPULSES (adds
-// velocity to), integrated every frame. Three consequences, all wanted:
-//   1. a single shot peaks inside VT §5.6's per-shot envelope (translation
-//      back 8-15 mm, rotation up 1-3°);
-//   2. sustained auto fire ACCUMULATES — 8 impulses/s into a 0.45 s-period
-//      spring settles at a HELD displacement, exactly as a real spring-mass
-//      under repeated impulses does — so EVERY frame inside a burst reads as
-//      displaced, not just the one frame after a round;
-//   3. the return overshoots slightly and settles over ~0.5 s, so frames
-//      after the burst read as RECOVERING rather than as a different still.
-// Aim is untouched: these are render-only offsets on the camera (the same
-// differential seam §2.6 sway uses). input.state is written only by
-// recoil.js — the climb the player fights stays the spec'd one, so a punchy
-// burst costs no aimability.
+// Every channel is an under-damped SPRING that a round IMPULSES (adds velocity
+// to), integrated every frame: a single shot peaks inside VT §5.6's per-shot
+// envelope (translation back 8-15 mm, rotation up 1-3°); sustained auto fire
+// ACCUMULATES to a HELD displacement; the return overshoots slightly and settles
+// over ~0.5 s. Render-only offsets (input.state is written only by recoil.js).
+// Gains were set BY MEASUREMENT against that envelope (see git history for the
+// iter05-iter08 sweeps) — do not "tune by eye".
 const KICK = {
   omega: 14.0, zeta: 0.50,        // viewmodel spring: period 0.45 s, settles ~0.6 s
-  // camZeta stays 0.55, and that is a MEASURED decision, not the default left
-  // alone. The obvious move for "make every in-burst frame read as displaced"
-  // is more damping, so the spring sits on its held mean instead of ringing.
-  // Tried at 0.70 and captured: the block-matched horizon shift between the
-  // settled panel and the burst-end panel FELL from 3.77 deg to 1.30 deg —
-  // extra damping bleeds off more peak than it adds to the trough over a burst
-  // this short (1.0 s, ~12 rounds, which never reaches steady state). Reverted.
   camOmega: 16.0, camZeta: 0.55,  // camera spring: faster, tighter
-  // impulses are per unit of the weapon's recoil.vmKick / vmPunch, so all
-  // four weapons scale off the numbers already in weapon_data.js
-  // ---- iter08 RAISE. The owner's brief carries the iter06 number ("0.9
-  // degrees"); the iter07 lane raised the CAMERA pitch and measured 2.51/3.62
-  // deg at the photographed C1 ticks, of which its own view-only punch was
-  // 0.59-0.71 deg. That is the honest state of play, and it is why this pass
-  // does NOT push camPitchPerKick any further: the note below spells out that
-  // view-only pitch decouples the crosshair from the bullet, and at 0.52 the
-  // sustained level is already ~0.7-1.0 m low at 20 m.
-  //
-  // What was NEVER raised is the WEAPON's own kick. Those channels move the
-  // viewmodel inside the frame and cost exactly nothing in aimability — the
-  // camera does not move, input.state does not move, the bullet does not move.
-  // They are raised here, and the gains are set BY MEASUREMENT against VT
-  // §5.6's per-shot envelope — "translation back 8-15 mm, rotation up 1-3°" —
-  // rather than by picking a multiplier. A first pass at 1.65x measured 3.86°
-  // and 19.0 mm on ONE Warden round, i.e. 27% THROUGH the top of the project's
-  // own contract, and was trimmed back to land on it. Measured live this
-  // session, Warden, hip, one round, springs sampled 40 ticks after the shot:
-  //     weapon pitch 3.01°, back 14.8 mm, rise 10.1 mm, roll 2.70°
-  //     camera pitch 2.71°, camera roll 3.23°, FOV punch 3.09°
-  // Under sustained auto (70 pinned-fire ticks) those same springs ACCUMULATE
-  // to a HELD displacement instead of spiking for one frame — measured peak
-  // 5.67° / 27.8 mm, settling around 4.7° for the rest of the burst — and that
-  // is the number that decides the score, because the critics compared two
-  // frames BOTH inside the burst and called them identical.
   rotXPerKick: 0.468,   // rad/s of pitch-up  (Warden 3.2 -> 3.00° single-shot peak)
   rotZPerKick: 0.420,   // rad/s of roll, sign alternates per round
   rotYPerKick: 0.190,   // rad/s of yaw, sign alternates opposite the roll
   posYPerKick: 0.090,   // m/s of rise
   posZPerPunch: 0.562,  // m/s back along the barrel (Warden 0.75 -> 15.0 mm peak)
-  // iter07 (D10 lane), FIRE RESPONSE RAISED. Measured live on the C1 hip
-  // burst at the iter06 values: camPitch peaked at 2.50 deg and ran 1.28-2.50
-  // deg through the burst. 2/3 critics still read "no camera pitch kick", and
-  // the reason is what they compared — C1_05 against C1_06, two frames BOTH
-  // inside the sustained burst, where the spring is at its held displacement
-  // and the frame-to-frame delta was only ~0.7 deg. Raising the per-round
-  // impulse raises the held level AND the ripple around it in the same
-  // proportion, so both the burst-vs-rest difference and the shot-to-shot
-  // difference clear the threshold at which a still reads as a punch.
-  // These are RENDER-ONLY camera offsets (input.state, and therefore the
-  // bullet's direction and the climb recoil.js makes the player fight, are
-  // untouched) — the cost is that the DOM crosshair decouples from the point
-  // of aim by this angle while the burst is live, which is why it is tuned to
-  // a ~4 deg peak that recovers inside 0.5 s and not to the cap.
-  // WHY PITCH STOPS HERE AND ROLL/FOV DO NOT. These are render-only camera
-  // offsets, but they are not equally free. A view-only PITCH offset moves the
-  // rendered world without moving input.state, so the bullet leaves along the
-  // un-offset direction and lands `camPitch` BELOW the screen-centre crosshair
-  // — at 0.52 the sustained-fire level is ~2-3 deg, i.e. 0.7-1.0 m low at 20 m,
-  // which is the outer edge of what a player can still fight. Pushing pitch far
-  // enough to be unmissable in a still would make the crosshair a lie.
-  // ROLL and FOV cost nothing: rolling about the view axis leaves the centre
-  // pixel pointing exactly where it did, and a FOV punch is a uniform scale
-  // about that same centre. So the punch that still has to grow goes there —
-  // a tilted horizon is as legible in a still as a dropped one.
-  // MEASURED OUTCOME, read off the world camera at the exact photographed
-  // ticks of the C1 filmstrip: camera.rotation.x is 0.000 deg on the settled
-  // panel and +2.510 / +3.623 deg on the two burst panels, against the 0.9 deg
-  // the iter06 lane measured — 2.8x to 4.0x. Caveat worth keeping: most of
-  // that total is recoil.js's HONEST aim climb; the view-only pitch punch
-  // contributes 0.59-0.71 deg at those instants, and roll/yaw contribute
-  // 0.30-0.37 deg because they ALTERNATE sign per round, so their expected
-  // value at an arbitrary tick is near zero however high the gain goes. Roll
-  // gain buys felt response in motion, not a bigger number in a still.
-  camPitchPerKick: 0.520, // rad/s of view-only camera pitch punch (the ceiling)
-  // Roll and FOV are the free camera channels per the note above — rolling
-  // about the view axis and scaling about the view centre both leave the
-  // centre pixel pointing exactly where it did. iter08 takes them up with the
-  // weapon channels; roll's DC term survives the per-round sign alternation
-  // because altRollMult is -0.55, not -1, so a burst has a net lean.
-  camRollPerKick: 0.620,  // rad/s of view-only camera roll, alternating
-  camYawPerKick: 0.120,   // rad/s of view-only camera yaw, alternating
-  fovPerKick: 34.0,       // deg/s of FOV punch
-  // caps — the linear spring is self-limiting, these only guard a hitch. They
-  // move with the gains (iter08); maxCamPitch deliberately does NOT, so the
-  // one channel that can make the crosshair a lie keeps its old ceiling.
+  camPitchPerKick: 0.520, // rad/s of view-only camera pitch punch (the ceiling —
+                          // a view-only pitch decouples the crosshair from the bullet)
+  camRollPerKick: 0.620,  // free channel: rolling about the view axis moves nothing
+  camYawPerKick: 0.120,
+  fovPerKick: 34.0,       // deg/s of FOV punch (uniform scale about the view centre)
   maxRotX: 0.200, maxRotZ: 0.130, maxRotY: 0.075,
   maxPosY: 0.045, maxPosZ: 0.090,
   maxCamPitch: 0.105, maxCamRoll: 0.130, maxCamYaw: 0.042, maxFov: 6.5,
@@ -216,27 +126,19 @@ function springStep(s, omega, zeta, dt, cap) {
 function damp(cur, target, tau, dt) {
   return cur + (target - cur) * (1 - Math.exp(-dt / Math.max(1e-4, tau)));
 }
-function smoothstep(t) { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }
+function clamp01(t) { return t < 0 ? 0 : t > 1 ? 1 : t; }
+function smoothstep(t) { t = clamp01(t); return t * t * (3 - 2 * t); }
+// eased 0..1 ramp of p across [a,b]
+function ramp(p, a, b) { return smoothstep((p - a) / Math.max(1e-6, b - a)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
 
 // ---- WRIST RIG ------------------------------------------------------------
-// The arms are STATIC, NON-SKINNED meshes: all four shipped GLBs report
-// skins 0 / animations 0, attributes [NORMAL, POSITION, TANGENT, TEXCOORD_0],
-// no JOINTS_0/WEIGHTS_0. So no finger or forearm DEFORMATION is reachable from
-// code — that needs a Blender rebuild and is out of scope. What IS reachable
-// is each arm node's own transform, and that node's origin is the WRIST, so a
-// small rotation on it is an anatomically correct wrist flex.
-//
-// Without this the hands are welded rigidly to the gun: every recoil kick and
-// every fast turn moves hands and weapon as one solid lump, which is the
-// clearest "not AAA" tell left once the material is right. Real hands ABSORB
-// the kick — the muzzle climbs against a wrist that gives.
-//
-// SAFETY: the rest pose is cached per NODE in userData, and every frame
-// composes an ABSOLUTE rotation from that rest. It never accumulates onto the
-// live value, because loadWeaponGLB caches prototypes and re-equipping the
-// same weapon returns the SAME nodes — an accumulating rig would drift a
-// little further every equip and end up with the hands on backwards.
-const ARM_RE = /^arms?_/;
+// The arms are STATIC, NON-SKINNED meshes, but each arm node's origin is the
+// WRIST, so a small rotation on it is an anatomically correct wrist flex. Without
+// it every recoil kick and every fast turn moves hands and weapon as one solid
+// lump; real hands ABSORB the kick. Composed ABSOLUTELY from each node's cached
+// rest quaternion every frame, never accumulating onto the live value (the
+// prototypes are cached, re-equipping returns the SAME nodes).
 const ARM = {
   kickRoll: 0.55,    // share of the gun's kick roll the wrist gives back
   kickPitch: 0.42,   // ...and of the muzzle climb
@@ -244,21 +146,46 @@ const ARM = {
   maxRad: 0.20,      // hard clamp — a wrist, not a rag doll
   tau: 0.06,
 };
-function armNodes(group) {
-  if (!group) return null;
-  if (group.userData._armNodes) return group.userData._armNodes;
-  const out = [];
-  try {
-    group.traverse((o) => {
-      if (!ARM_RE.test(o.name || "")) return;
-      // snapshot the authored rest ONCE, on the node itself
-      if (!o.userData._restQ) o.userData._restQ = o.quaternion.clone();
-      out.push(o);
-    });
-  } catch (e) { return null; }
-  group.userData._armNodes = out;
-  return out;
+
+// ---- hand pose helper: build frame (x right, y MUZZLE, z up) -> glTF ----------
+// The generator places a hand from (fingers_dir, palm_dir): canonical y = fingers,
+// canonical -z = palm, x = y × z. Poses below are authored in the same vocabulary
+// and the wrist is derived from the PALM centre, so a key pose says where the palm
+// is and which way it faces — never a raw wrist coordinate.
+// The mesh is exported in glTF axes ((x,y,z)_blender -> (x,z,-y)), so a node's LOCAL frame is the
+// canonical hand frame converted by C and the node rotation is R = C·M·C⁻¹, NOT the converted basis
+// itself. handPose builds the converted basis B = C·M and right-multiplies C⁻¹. The palm centre in
+// that node-local frame is C·(0, 0.05, -0.012) = (0, -0.012, -0.05).
+const PALM_LOCAL = new THREE.Vector3(0.0, -0.012, -0.050);
+const C_INV = new THREE.Matrix4().set(1, 0, 0, 0,  0, 0, -1, 0,  0, 1, 0, 0,  0, 0, 0, 1);
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const _m4 = new THREE.Matrix4();
+function bfv(a, out) { return out.set(a[0], a[2], -a[1]); }
+function handPose(pose, outP, outQ) {
+  const f = bfv(pose.fingers, _v1).normalize();
+  const zc = bfv(pose.dir, _v2).normalize().negate();   // canonical +Z = -palm direction
+  const xc = _v3.crossVectors(f, zc).normalize();
+  zc.crossVectors(xc, f).normalize();
+  _m4.makeBasis(xc, f, zc).multiply(C_INV);
+  outQ.setFromRotationMatrix(_m4);
+  bfv(pose.palm, outP);
+  outP.sub(_v1.copy(PALM_LOCAL).applyQuaternion(outQ));
 }
+function palmOf(restP, restQ, out) {
+  return out.copy(PALM_LOCAL).applyQuaternion(restQ).add(restP);
+}
+
+// Per-class animation defaults. view.anim in weapon_data.js overrides any key.
+// All key poses are in the BUILD frame (x right, y toward the muzzle, z up).
+const ANIM_DEFAULT = {
+  kind: "mag",
+  // gun cant / lift while the hands work (deg, applied on top of the pose)
+  tilt: [8, 0, -16],           // rx (muzzle up), ry (yaw), rz (roll)
+  lift: [-0.03, 0.05, 0.0],    // metres the gun rises/shifts toward the centre while the hands work, so
+                               // the magazine well and the support hand stay IN FRAME (build x/y/z = right/up/back)
+  magDrop: 0.13,               // metres the magazine slides before it is released
+  shellsPerCycle: 1,
+};
 
 export function createViewmodel(ctx) {
   const camera = ctx.camera;
@@ -279,58 +206,59 @@ export function createViewmodel(ctx) {
 
   ctx.vmCamera = vmCamera;
 
-  // ---- VM FILL RIG (iter01 F2 fix) -----------------------------------------
-  // The blue-hour scene's ambient floor is (correctly) near zero — VT §1
-  // demands darkness — but that left the gun a BLACK CUTOUT at night (iter01
-  // S1 "shattered black polygon soup" / S2 "no viewmodel visible": the
-  // camera-facing surfaces collected ~no light; a 3.4× albedo lift changed
-  // nothing, verified by capture). The viewmodel is ~30% of every frame and
-  // MUST read (VT §5) — CoD ships a dedicated viewmodel lighting rig for
-  // exactly this reason. Two lights on VM_LAYER ONLY: camera layer masks
-  // filter light collection, so the WORLD pass never sees them and the
-  // world's key:ambient discipline (VT §1 ≥4:1) is untouched. Created ONCE
-  // at boot, always visible, constant intensity, never added/removed after
-  // — doctrine §3 compliant (light COUNT is a shader-permutation key; the
-  // boot prewarm's vm pass compiles this permutation before frame 1).
-  //
-  // W1 (iter03) LEVEL FIX — the rig was ~15x too hot and THAT is what made the
-  // viewmodel a white blob, not the geometry (the geometry defect was the torn
-  // arm chunks; fixed in a4_build_fp_weapons.py). Two numbers were wrong:
-  //   * the point light. decay 2 means irradiance = intensity / d^2, and the
-  //     gun sits 0.30-0.35 m from the camera, so d^2 ~= 0.10: intensity 0.5
-  //     delivered ~5 units at the receiver. The WORLD pool delivers ~3.2 total
-  //     (moon 3.8 x lum(#a8c0e0) 0.51 + hemi 8.0 x lum(#5c7290) 0.164,
-  //     lighting.js) — and that is across a whole night street, most of it at
-  //     grazing incidence. The viewmodel was taking a full-strength key at
-  //     point-blank range while post.js reports an AgX night frame living in
-  //     [0.004 .. 0.06]; the gun measured ~0.75 there, and post's above-pivot
-  //     contrast gain then finished the job by pushing it to paper white.
-  //   * the hemisphere sky tint #9db4d6 is luminance ~0.68 — it was carrying
-  //     level as well as colour. Tint at unit-ish luminance, intensity is the
-  //     level knob (the same discipline lighting.js's W2 exposure fix imposed
-  //     on the world pool).
-  // Levels are expressed against the vm key distance so the intent survives:
-  // VM_KEY_D is the working distance, VM_KEY_E the irradiance we want there.
-  const VM_KEY_D = 0.42;              // m, light -> receiver at the hip pose
-  const VM_KEY_E = 1.15;              // irradiance at VM_KEY_D (world pool ~3.2)
-  const vmFill = new THREE.HemisphereLight(0x8fa6c4, 0x2a2420, 0.55);
+  // ---- VM LIGHT RIG ---------------------------------------------------------
+  // The blue-hour scene's ambient floor is (correctly) near zero, which left the gun
+  // a BLACK CUTOUT (iter01 S1/S2). CoD ships a dedicated viewmodel lighting rig for
+  // exactly this reason. All lights on VM_LAYER ONLY (camera layer masks filter light
+  // collection, so the WORLD pass never sees them and the world's key:ambient
+  // discipline is untouched). Created ONCE at boot, constant, never added/removed
+  // after — doctrine §3 (light COUNT is a shader-permutation key; the boot prewarm's
+  // vm pass compiles this permutation before frame 1).
+  //   fill  — sky/ground hemisphere: sets the shadow side so the form never goes
+  //           black (the world pool still adds its moon + street practicals).
+  //   key   — camera-space directional from upper-left-front: models the receiver,
+  //           the glove knuckles and the sleeve folds (what makes it read 3D).
+  //   rim   — cool directional from behind-right: separates the dark gun/arms from
+  //           the dark night scene with a silhouette edge (the readability fix).
+  //   point — the old over-the-shoulder point, kept low (muzzle flash adds its own).
+  const vmFill = new THREE.HemisphereLight(0xa9bfdc, 0x2e2a26, 1.8);
   vmFill.name = "__vm_fill__";
   vmFill.layers.set(VM_LAYER);        // NOT enableAll — vm pass only
   ctx.scene.add(vmFill);              // scene-parented: hemi axis stays world-up
+  const mkDir = (name, color, intensity, pos, tgt) => {
+    const l = new THREE.DirectionalLight(color, intensity);
+    l.name = name;
+    l.position.set(pos[0], pos[1], pos[2]);
+    l.layers.set(VM_LAYER);
+    camera.add(l);
+    const t = new THREE.Object3D();
+    t.position.set(tgt[0], tgt[1], tgt[2]);
+    camera.add(t);
+    l.target = t;
+    return l;
+  };
+  const vmKeyDir = mkDir("__vm_key_dir__", 0xe8eef8, 2.2, [-0.5, 0.9, 0.7], [0.0, -0.1, -1.0]);
+  const vmRim = mkDir("__vm_rim__", 0x86a8ff, 1.5, [0.8, 0.5, -0.9], [0.0, 0.0, 0.0]);
+  const VM_KEY_D = 0.42, VM_KEY_E = 0.45;
   const vmKey = new THREE.PointLight(0xc8d6ea, VM_KEY_E * VM_KEY_D * VM_KEY_D, 3.5, 2);
   vmKey.name = "__vm_key__";
   vmKey.position.set(0.38, 0.30, 0.25); // camera-space: over the right shoulder
   vmKey.layers.set(VM_LAYER);
   camera.add(vmKey);
+  void vmKeyDir; void vmRim;
 
   // ---- state ---------------------------------------------------------------
   let visible = true;
+  let lowered = false;       // setLowered(): test seam — weapon held down
   let current = null;        // { id, w, group }
   let armRoll = 0, armPitch = 0, armLead = 0;   // wrist rig, damped
   const _armE = new THREE.Euler();
   const _armQ = new THREE.Quaternion();
   let equipEpoch = 0;
   let raiseClock = Infinity; // seconds since last equip swap (raise anim)
+  let raiseDur = 0.45;
+  let sinceShot = 9;         // seconds since the last round (pump cycle clock)
+  let swapPending = null;    // id wanted but not yet loaded
 
   // camera rig
   let eyeH = EYE_STAND;
@@ -346,6 +274,15 @@ export function createViewmodel(ctx) {
   let lagX = 0, lagY = 0, lagZ = 0;    // translation lag (m, camera space)
   const prevCamPos = new THREE.Vector3();
   let havePrevCam = false;
+
+  // smoothed pose channels
+  let sprintBlend = 0, slideBlend = 0, mantleBlend = 0;
+  let reloadW = 0;           // eased reload weight 0..1
+  let lastReloadP = 0;       // last evaluated reload progress (frozen while the weight decays)
+  let reloadKind = "mag";
+  let reloadEmpty = false;
+  let prevMag = null, shellClock = 0, shellsSeen = 0, reloadT0Mag = 0, shellT0 = null;
+  let prevWState = "idle";
 
   // kick — one under-damped spring per channel (see KICK above)
   const K = {
@@ -363,17 +300,25 @@ export function createViewmodel(ctx) {
   let settleClock = Infinity; // time since adsT reached 1 (FEEL.adsSettleS)
   let prevAdsFull = false;
   let swayT = 0;
+  let scopeSwayYaw = 0, scopeSwayPitch = 0;   // last applied REAL aim wobble (rad)
+
+  // scope state read by hud.js (see `scope` getter at the bottom)
+  const scopeS = {
+    blend: 0, active: false, zoom: 1, lagX: 0, lagY: 0,
+    breath: 1, winded: false, holding: false, swayX: 0, swayY: 0, kick: 0,
+  };
 
   // MEASUREMENT SEAM (iter10, private extra — never the frozen surface).
-  // _harness/occlusion.py sets this to 1 to reproduce the pre-iter10
-  // "hold the vm:world FOV ratio" behaviour on the SAME build, so the
-  // before/after occlusion numbers are a controlled A/B rather than a
-  // comparison across two builds. null in normal play.
   let zoomShareOverride = null;
   let standoffOverride = null;   // metres added to the ADS standoff (same seam)
+  // dev: freeze the reload pose at progress p (screenshots) — see _dbg()
+  const dbg = { reloadP: null, kind: null, empty: false, lower: null, pump: null, sprint: null, handL: null };
 
   const _v = new THREE.Vector3();
   const _q = new THREE.Quaternion();
+  const _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3();
+  const _q0 = new THREE.Quaternion(), _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+  const _e0 = new THREE.Euler();
 
   // Interpolated camera base position (see the TICK INTERPOLATION note in the
   // header). Scratch array, refilled every frame — never retained.
@@ -384,8 +329,6 @@ export function createViewmodel(ctx) {
       const o = f(alpha, _base);
       if (o) return o; // lerp of the last two sim ticks
     }
-    // No history yet (first tick after a startMission/startMatch swap), or a
-    // caller that predates the alpha argument: use the raw current tick.
     _base[0] = p.pos[0]; _base[1] = p.pos[1]; _base[2] = p.pos[2];
     return _base;
   }
@@ -402,14 +345,8 @@ export function createViewmodel(ctx) {
     inPass = true;
     const sm = renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate = false; // vm pass re-renders no shadow maps
-    // F1 (iter07), same fidelity class as the vm:world FOV ratio below: the vm
-    // camera's ASPECT must track the WORLD camera's, not the window's. The
-    // resize listener is the only other writer, and __test.capture() renders a
-    // read-back frame with camera.aspect = w/h WITHOUT touching this camera
-    // (testsurface.js owns that path) — so any capture whose aspect differed
-    // from the live window stretched the weapon relative to the world it is
-    // composited into, silently. No-op when they already agree (the 1920x1080
-    // battery in a 1920x1080 page), correct when they do not.
+    // The vm camera's ASPECT must track the WORLD camera's, not the window's
+    // (capture() renders at its own aspect without touching this camera).
     if (Math.abs(vmCamera.aspect - ctx.camera.aspect) > 1e-6) {
       vmCamera.aspect = ctx.camera.aspect;
       vmCamera.updateProjectionMatrix();
@@ -423,7 +360,7 @@ export function createViewmodel(ctx) {
   ctx.claimVmPass = () => { claimed = true; };
 
   // Interim auto-pass sentinel: fires at the end of any DEFAULT-framebuffer
-  // scene render until a real post chain claims the pass. colorWrite=false,
+  // scene render until a post chain claims the pass. colorWrite=false,
   // 1 degenerate triangle — costs one no-op draw call.
   const sentinel = new THREE.Mesh(
     new THREE.BufferGeometry().setAttribute("position",
@@ -435,10 +372,6 @@ export function createViewmodel(ctx) {
   sentinel.renderOrder = 1e9;
   sentinel.onAfterRender = (renderer, _scene, cam) => {
     if (claimed || inPass) return;
-    // Fire ONLY for the world camera's scene pass — this includes a post
-    // chain's HDR render (the gun then gets bloom/grade like everything
-    // else) but excludes planar-reflection, env-bake, and any other camera's
-    // pass (shadow passes never invoke these hooks at all).
     if (cam !== ctx.camera) return;
     vmRenderPass(renderer);
   };
@@ -450,20 +383,89 @@ export function createViewmodel(ctx) {
     vmCamera.updateProjectionMatrix();
   });
 
+  // ---- preload + warm ----------------------------------------------------------
+  // ALL FIVE slot weapons are fetched at construction (boot only awaits warden+pike
+  // for the mission loadout, R26) and each prototype's materials + textures are
+  // compiled/uploaded by one synchronous draw into a scratch RT — three keys programs
+  // on the RT's *format*, not its size, and any render target compiles the same
+  // (linear, un-tonemapped) variant the post chain's HDR target uses. So a weapon
+  // switch is a synchronous mesh swap with no shader compile, no texture upload.
+  let warmRT = null;
+  const warmed = new WeakSet();
+  function warmOne(proto) {
+    if (!proto || warmed.has(proto)) return;
+    warmed.add(proto);
+    if (proto.parent === mount) return;   // the equipped gun is drawn every frame anyway
+    const r = ctx.renderer;
+    if (!r || !r.render) return;
+    try {
+      if (!warmRT) warmRT = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType });
+      setLayersDeep(proto);
+      const prevParent = proto.parent;
+      mount.add(proto);
+      const wasVisible = rig.visible;
+      rig.visible = true;
+      const sm = r.shadowMap.autoUpdate;
+      r.shadowMap.autoUpdate = false;
+      const prevRT = r.getRenderTarget();
+      r.setRenderTarget(warmRT);
+      r.render(ctx.scene, vmCamera);
+      r.setRenderTarget(prevRT);
+      r.shadowMap.autoUpdate = sm;
+      rig.visible = wasVisible;
+      mount.remove(proto);
+      if (prevParent && prevParent !== mount) prevParent.add(proto);
+    } catch (e) {
+      console.warn("[vm] warm failed:", e && e.message);
+    }
+  }
+  function warmAllWhenReady() {
+    loadAllWeapons().then((protos) => {
+      // staged: one weapon per timer tick so the menu never stalls on four compiles
+      let i = 0;
+      const next = () => {
+        if (i >= protos.length) return;
+        const pr = protos[i++];
+        if (!(current && current.group === pr)) warmOne(pr);
+        setTimeout(next, 120);
+      };
+      setTimeout(next, 200);
+    }).catch((e) => console.warn("[vm] preload failed:", e && e.message));
+  }
+  warmAllWhenReady();
+
   // ---- equip ----------------------------------------------------------------
-  async function equip(weaponId) {
-    const tok = ++equipEpoch;
-    const proto = await loadWeaponGLB(weaponId);
-    if (tok !== equipEpoch) return; // superseded mid-await
+  function installProto(weaponId, proto) {
     if (current && current.group && current.group.parent === mount) {
       mount.remove(current.group);
     }
     setLayersDeep(proto);
     mount.add(proto);
     current = { id: weaponId, w: WEAPONS[weaponId] || null, group: proto };
-    raiseClock = 0;
+    // arms/parts back to their authored rest (a cached prototype may have been
+    // left mid-animation by the previous equip)
+    resetParts(proto);
+    prevMag = null; shellT0 = null; shellsSeen = 0; shellClock = 0; reloadW = 0; lastReloadP = 0;
   }
-
+  function resetParts(proto) {
+    const parts = proto && proto.userData.parts;
+    if (!parts) return;
+    for (const k of Object.keys(parts)) {
+      const pt = parts[k];
+      pt.node.position.copy(pt.restP);
+      pt.node.quaternion.copy(pt.restQ);
+      pt.node.scale.copy(pt.restS);
+      pt.node.visible = true;
+    }
+  }
+  async function equip(weaponId) {
+    const tok = ++equipEpoch;
+    const proto = await loadWeaponGLB(weaponId);
+    if (tok !== equipEpoch) return; // superseded mid-await
+    installProto(weaponId, proto);
+    raiseClock = 0;
+    raiseDur = (WEAPONS[weaponId] && WEAPONS[weaponId].raiseS) || 0.45;
+  }
   // ---- kick -----------------------------------------------------------------
   // One round's worth of impulse into every fire-response spring. `adsEase`
   // is the eased ADS blend at the moment of the shot.
@@ -485,21 +487,27 @@ export function createViewmodel(ctx) {
     K.camR.v += vmK * KICK.camRollPerKick * gc * side;
     K.camY.v += vmK * KICK.camYawPerKick * gc * side;
     K.fov.v  += vmK * KICK.fovPerKick * gc;           // brief FOV widen
+    scopeS.kick = Math.min(1, scopeS.kick + 0.6);
   }
 
   function kick(weaponId) {
     const w = WEAPONS[weaponId];
     if (!w || !w.recoil) return;
     let n = 1;
-    // dedup impactOnly/pen replays via the fire-time-only shotsFired counter
+    // Dedup impactOnly/pen replays AND multi-pellet volleys via the fire-time-only
+    // shotsFired counter, which increments once per PELLET at fire time. A shotgun
+    // blast therefore arrives as nine events but one ROUND: count rounds, not pellets,
+    // or one Breaker shot kicks nine times (eight, with the batching cap).
+    const pellets = Math.max(1, w.pellets || 1);
     try {
       const sim = ctx.sim && ctx.sim();
       const c = sim && sim.state && sim.state.counters;
       if (c) {
-        if (lastShotsFired == null) lastShotsFired = Math.max(0, c.shotsFired - 1);
-        n = c.shotsFired - lastShotsFired;
+        if (lastShotsFired == null) lastShotsFired = Math.max(0, c.shotsFired - pellets);
+        const raw = c.shotsFired - lastShotsFired;
         lastShotsFired = c.shotsFired;
-        if (n <= 0) return;
+        if (raw <= 0) return;
+        n = Math.max(1, Math.round(raw / pellets));
         n = Math.min(n, 4); // batched fire events under a hitch — never lose one
       }
     } catch (e) { /* fall through — kick anyway */ }
@@ -509,14 +517,311 @@ export function createViewmodel(ctx) {
     })();
     const adsEase = smoothstep(wp ? (wp.adsT || 0) : 0);
     for (let i = 0; i < n; i++) impulse(w, adsEase);
+    sinceShot = 0;
+  }
+
+  // ---- hand / part poses -----------------------------------------------------
+  // Keyframe lookup helpers read the weapon's view.anim block (weapon_data.js) over
+  // ANIM_DEFAULT. Poses are in the BUILD frame and resolved to glTF per frame.
+  function animOf(w) {
+    const a = (w && w.view && w.view.anim) || {};
+    return Object.assign({}, ANIM_DEFAULT, a);
+  }
+
+  // Compose the support-hand + part animation for this frame. Returns the gun-level
+  // pose deltas (tilt/lift) through `out` and writes the part transforms directly.
+  const out = { px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0 };
+  const _hp = new THREE.Vector3(), _hq = new THREE.Quaternion();
+
+  function applyHands(group, w, anim, wp, dt, adsEase) {
+    const parts = group.userData.parts || {};
+    const armL = parts.armL, mag = parts.mag, pump = parts.pump;
+    out.px = out.py = out.pz = out.rx = out.ry = out.rz = 0;
+    if (!armL) return;
+
+    // -- weights --------------------------------------------------------------
+    // reload: derived from the sim state machine
+    let reloading = !!(wp && wp.state === "reloading");
+    let p = 0;
+    let dur = 2;
+    if (reloading) {
+      dur = wp._reloadDur || (w && w.reloadS) || 2;
+      p = clamp01((wp.stateT || 0) / dur);
+      reloadEmpty = (wp._preReloadMag === 0);
+    }
+    if (dbg.reloadP != null) { reloading = true; p = dbg.reloadP; reloadEmpty = !!dbg.empty; dur = dbg.dur || 2.4; }
+    const kind = (dbg.kind || anim.kind);
+    reloadKind = kind;
+    if (reloading) lastReloadP = p;
+    reloadW = damp(reloadW, reloading ? 1 : 0, reloading ? 0.07 : 0.10, dt);
+    if (reloadW < 0.002 && !reloading) reloadW = 0;
+
+    // -- rest transforms --------------------------------------------------------
+    // start every part at rest; the sections below override what they animate
+    armL.node.position.copy(armL.restP);
+    armL.node.quaternion.copy(armL.restQ);
+    if (mag) { mag.node.position.copy(mag.restP); mag.node.scale.copy(mag.restS); mag.node.visible = true; }
+    if (pump) pump.node.position.copy(pump.restP);
+
+    // -- pump (shotgun): forend + support hand rack after every blast ---------------
+    let pumpOff = 0;
+    if (pump) {
+      let t = sinceShot;
+      if (dbg.pump != null) t = dbg.pump;
+      // sfx.js racks BACK at +0.36 s and FORWARD 0.15 s later (PUMP_BACK_S / PUMP_FWD_GAP_S):
+      // the stroke is centred on those two sounds — back 0.28->0.40, hold, forward 0.46->0.60
+      const tb = t - 0.28;
+      if (tb > 0 && tb < 0.32) {
+        pumpOff = tb < 0.12 ? ramp(tb, 0, 0.12)
+          : tb < 0.18 ? 1
+          : 1 - ramp(tb, 0.18, 0.32);
+      }
+    }
+
+    if (reloadW > 0.001) {
+      const pp = reloading ? p : lastReloadP;
+      const rw = reloadW;
+      if (kind === "shell") reloadShell(group, w, anim, parts, pp, rw, wp, dt);
+      else reloadMag(group, w, anim, parts, pp, rw, kind);
+    }
+
+    if (dbg.handL) {      // dev: pin the support hand to an authored pose (tuning screenshots)
+      handPose(dbg.handL, _hp, _hq);
+      armL.node.position.copy(_hp); armL.node.quaternion.copy(_hq);
+    }
+
+    // pump rides on top of everything (it can follow the final reload rack too)
+    if (pump && pumpOff > 0) {
+      const d = 0.085 * pumpOff;
+      pump.node.position.z = pump.restP.z + d;
+      armL.node.position.z += d;
+    }
+  }
+
+  // --- keyframe evaluator ------------------------------------------------------
+  // keys: [{ t, P:Vector3, Q:Quaternion }] sorted by t; smoothstep between keys.
+  function evalKeys(keys, t, outP, outQ) {
+    if (t <= keys[0].t) { outP.copy(keys[0].P); outQ.copy(keys[0].Q); return; }
+    for (let i = 0; i < keys.length - 1; i++) {
+      const a = keys[i], b = keys[i + 1];
+      if (t <= b.t) {
+        const s = smoothstep((t - a.t) / Math.max(1e-6, b.t - a.t));
+        outP.copy(a.P).lerp(b.P, s);
+        outQ.copy(a.Q).slerp(b.Q, s);
+        return;
+      }
+    }
+    const l = keys[keys.length - 1];
+    outP.copy(l.P); outQ.copy(l.Q);
+  }
+  const keyPool = [];
+  function key(i, t, P, Q) {
+    let k = keyPool[i];
+    if (!k) { k = keyPool[i] = { t: 0, P: new THREE.Vector3(), Q: new THREE.Quaternion() }; }
+    k.t = t; k.P.copy(P); k.Q.copy(Q);
+    return k;
+  }
+
+  // Key hand poses for a weapon: authored in view.anim.hand (build frame), with generic
+  // defaults derived from the magazine's own bounds so every weapon animates sensibly
+  // out of the box and view.anim only has to correct what the eye disagrees with.
+  const _handCache = new Map();
+  function handKeys(group, anim, kind) {
+    const id = group.userData.weaponId;
+    const ck = id + ":" + kind;
+    let c = _handCache.get(ck);
+    if (c) return c;
+    const parts = group.userData.parts || {};
+    const H = anim.hand || {};
+    const mag = parts.mag;
+    // build-frame centre/size of the magazine (glTF (x,y,z) -> build (x,-z,y))
+    const mc = mag ? [mag.center.x, -mag.center.z, mag.center.y] : [0, 0.12, -0.07];
+    const ms = mag ? [mag.size.x, mag.size.z, mag.size.y] : [0.03, 0.08, 0.10];
+    const bot = mc[2] - ms[2] / 2;
+    const slide = anim.magDrop;
+    const mk = (o) => ({ p: new THREE.Vector3(), q: new THREE.Quaternion(), pose: o });
+    const boreZ = (group.userData.muzzleOffset && group.userData.muzzleOffset[1]) || 0.06;
+    let defs;
+    if (kind === "gripmag") {
+      // magazine inside the grip (pistol, SMG): the support hand cups the floor plate from
+      // below and pulls it straight down
+      defs = {
+        mag: H.mag || { palm: [mc[0] - 0.004, mc[1], bot - 0.026], fingers: [0.9, 0.3, 0.3], dir: [0.15, 0, 1] },
+        pouch: H.pouch || { palm: [mc[0] - 0.13, mc[1] - 0.02, bot - 0.20], fingers: [0.5, 0.5, 1], dir: [0.6, 0, 1] },
+        rack: H.rack || { palm: [0.0, -0.05, boreZ + 0.06], fingers: [0.6, 1, 0], dir: [0, 0, -1] },
+        port: H.port || { palm: [0, 0, 0], fingers: [1, 0, 0], dir: [0, 0, 1] },
+      };
+    } else {
+      defs = {
+        mag: H.mag || { palm: [mc[0] - (ms[0] / 2 + 0.021), mc[1], mc[2] - 0.004],
+                        fingers: [0.1, 0.6, 1], dir: [1, 0, 0] },
+        pouch: H.pouch || { palm: [mc[0] - 0.13, mc[1] - 0.05, mc[2] - 0.20],
+                            fingers: [0.3, 0.4, 1], dir: [1, 0, 0.3] },
+        rack: H.rack || { palm: [0.0, -0.06, boreZ + 0.075], fingers: [0.6, 1, 0], dir: [0, 0, -1] },
+        port: H.port || { palm: [mc[0] - 0.02, mc[1], mc[2] - 0.02], fingers: [0.5, 1, 0.1], dir: [0.2, 0, 1] },
+      };
+    }
+    c = {};
+    for (const k of Object.keys(defs)) {
+      c[k] = mk(defs[k]);
+      handPose(defs[k], c[k].p, c[k].q);
+    }
+    // the magazine pulled out: the same grip, `slide` lower
+    const out = JSON.parse(JSON.stringify(defs.mag));
+    out.palm[2] -= slide;
+    c.magOut = mk(out);
+    handPose(out, c.magOut.p, c.magOut.q);
+    // the new magazine just below the well, before it is pushed home
+    const below = JSON.parse(JSON.stringify(defs.mag));
+    below.palm[2] -= slide * 0.75;
+    c.magBelow = mk(below);
+    handPose(below, c.magBelow.p, c.magBelow.q);
+    // where the magazine's centre sits relative to the palm while it is held
+    c.holdOff = new THREE.Vector3(mag ? mag.center.x : 0, mag ? mag.center.y : -0.07, mag ? mag.center.z : -0.12);
+    const pm = palmOf(c.mag.p, c.mag.q, new THREE.Vector3());
+    c.holdOff.sub(pm);
+    c.drop = slide;
+    _handCache.set(ck, c);
+    return c;
+  }
+  function dropHandCache(id) { for (const k of [..._handCache.keys()]) if (k.startsWith(id + ":")) _handCache.delete(k); }
+
+  // --- magazine reload (rifles, DMR, and the in-grip magazines of pistol/SMG) -------
+  const _palm = new THREE.Vector3();
+  function reloadMag(group, w, anim, parts, p, rw, kind) {
+    const armL = parts.armL, mag = parts.mag;
+    const C = handKeys(group, anim, kind);
+    const empty = reloadEmpty;
+    const rest = armL.restP, restQ = armL.restQ;
+    // timeline (fractions of the sim's reload time; the sim commits at 0.65)
+    //   0.00-0.16 hand to the magazine   0.16-0.28 pull it out   0.28-0.44 to the pouch
+    //   0.44-0.58 new magazine up        0.58-0.66 push home     (empty) 0.68-0.92 rack
+    const ks = [];
+    let n = 0;
+    ks[n] = key(n, 0.00, rest, restQ); n++;
+    ks[n] = key(n, 0.16, C.mag.p, C.mag.q); n++;
+    ks[n] = key(n, 0.28, C.magOut.p, C.magOut.q); n++;
+    ks[n] = key(n, 0.44, C.pouch.p, C.pouch.q); n++;
+    ks[n] = key(n, 0.58, C.magBelow.p, C.magBelow.q); n++;
+    ks[n] = key(n, 0.65, C.mag.p, C.mag.q); n++;
+    if (empty) {
+      ks[n] = key(n, 0.70, C.mag.p, C.mag.q); n++;
+      ks[n] = key(n, 0.78, C.rack.p, C.rack.q); n++;
+      _p2.copy(C.rack.p); _p2.z += 0.075;            // racking stroke toward the stock
+      ks[n] = key(n, 0.85, _p2, C.rack.q); n++;
+      ks[n] = key(n, 0.91, C.rack.p, C.rack.q); n++;
+      ks[n] = key(n, 1.00, rest, restQ); n++;
+    } else {
+      ks[n] = key(n, 0.72, C.mag.p, C.mag.q); n++;
+      ks[n] = key(n, 0.90, rest, restQ); n++;
+      ks[n] = key(n, 1.00, rest, restQ); n++;
+    }
+    keyPool.length = Math.max(keyPool.length, n);
+    const keys = ks.slice(0, n);
+    evalKeys(keys, p, _hp, _hq);
+    armL.node.position.lerp(_hp, rw);
+    armL.node.quaternion.slerp(_hq, rw);
+
+    // gun cant + lift while the hands work
+    const cant = ramp(p, 0.0, 0.16) * (1 - ramp(p, empty ? 0.90 : 0.84, 1.0));
+    out.rx += anim.tilt[0] * DEG * cant * rw;
+    out.ry += anim.tilt[1] * DEG * cant * rw;
+    out.rz += anim.tilt[2] * DEG * cant * rw;
+    out.px += anim.lift[0] * cant * rw;
+    out.py += anim.lift[1] * cant * rw;
+    out.pz += (anim.lift[2] + 0.02) * cant * rw;
+    // seat jolt as the magazine goes home
+    if (p > 0.62 && p < 0.70) {
+      const j = Math.sin(Math.PI * (p - 0.62) / 0.08);
+      out.py -= 0.010 * j * rw; out.rx -= 2.4 * DEG * j * rw;
+    }
+
+    // ---- the magazine node ------------------------------------------------------
+    if (mag) {
+      const mp = mag.node.position;
+      mp.copy(mag.restP);
+      mag.node.visible = true;
+      const held = (p >= 0.16 && p < 0.30) || (p >= 0.44 && p < 0.66);
+      if (held) {
+        // carried by the hand: centre = palm + holdOff, relative to rest
+        palmOf(_hp, _hq, _palm).add(C.holdOff);
+        mp.copy(mag.restP).add(_v.copy(_palm).sub(mag.center));
+        // hands are blended with weight rw; keep the magazine on the same blend
+        mp.lerp(mag.restP, 1 - rw);
+      } else if (p >= 0.30 && p < 0.44) {
+        // released: falls away under gravity, then is gone
+        const tf = (p - 0.30) / 0.14;
+        const tt = tf * 0.5;  // seconds-ish
+        palmOf(C.magOut.p, C.magOut.q, _palm).add(C.holdOff);
+        mp.copy(mag.restP).add(_v.copy(_palm).sub(mag.center));
+        mp.x += -0.06 * tf; mp.y += -4.0 * tt * tt * 2.0; mp.z += 0.04 * tf;
+        mag.node.visible = tf < 0.62;
+      }
+    }
+  }
+
+  // --- shell-by-shell reload (pump shotgun) --------------------------------------
+  function reloadShell(group, w, anim, parts, p, rw, wp, dt) {
+    const armL = parts.armL, pump = parts.pump;
+    const rl = (w && w.reload) || { startS: 0.55, perShellS: 0.42, endS: 0.35 };
+    const dur = (wp && wp._reloadDur) || (w && w.reloadS) || 3.4;
+    const tr = (dbg.reloadP != null ? p * dur : (wp && wp.stateT) || p * dur);
+    // Re-sync the per-shell cycle to the sim's own inserts: every time the magazine count rises by
+    // exactly one while reloading, that is a shell going in — put the cycle at its 'push' beat
+    // (0.70) right then, so hand and ammo counter agree whatever the sim's pacing is.
+    if (wp && dbg.reloadP == null) {
+      if (prevMag != null && wp.mag === prevMag + 1) { shellT0 = tr - 0.70 * rl.perShellS; }
+      prevMag = wp.mag;
+      if (tr < 0.05) shellT0 = null;
+    }
+    const t = tr - (shellT0 != null ? shellT0 : rl.startS);
+    const endAt = Math.max(rl.startS + 0.1, dur - rl.endS);
+    const C = handKeys(group, anim, "shell");
+    const rest = armL.restP, restQ = armL.restQ;
+
+    const tIn = ramp(tr, 0.0, rl.startS);                  // tilt in + hand to the port
+    const tOutEnd = ramp(tr, endAt, dur);                  // hand back to the forend
+    let towardBand = 0, push = 0;
+    if (t > 0 && tr < endAt) {
+      const c = (t % rl.perShellS) / rl.perShellS;
+      // 0..0.30 at the bandolier -> 0.30..0.62 up to the port -> push 0.62..0.80 -> settle
+      towardBand = c < 0.30 ? 1 : 1 - ramp(c, 0.30, 0.62);
+      push = c > 0.62 && c < 0.82 ? Math.sin(Math.PI * (c - 0.62) / 0.20) : 0;
+    }
+    const gunTilt = tIn * (1 - tOutEnd);
+    out.rx += anim.tilt[0] * DEG * gunTilt * rw;
+    out.ry += anim.tilt[1] * DEG * gunTilt * rw;
+    out.rz += anim.tilt[2] * DEG * gunTilt * rw;
+    out.px += anim.lift[0] * gunTilt * rw;
+    out.py += anim.lift[1] * gunTilt * rw;
+    out.pz += (anim.lift[2] + 0.025) * gunTilt * rw;
+
+    _hp.copy(rest); _hq.copy(restQ);
+    _hp.lerp(C.port.p, tIn); _hq.slerp(C.port.q, tIn);
+    if (t > 0 && tr < endAt) {
+      _hp.copy(C.port.p).lerp(C.pouch.p, towardBand);
+      _hq.copy(C.port.q).slerp(C.pouch.q, towardBand);
+      _hp.y += 0.006 * push;           // glTF y = up
+      _hp.z -= 0.016 * push;           // glTF -z = toward the muzzle
+    }
+    if (tOutEnd > 0) { _hp.lerp(rest, tOutEnd); _hq.slerp(restQ, tOutEnd); }
+    armL.node.position.lerp(_hp, rw);
+    armL.node.quaternion.slerp(_hq, rw);
+
+    // closing rack: forend + hand stroke back and forward during the end phase
+    if (pump && tr > endAt) {
+      const re = (tr - endAt) / Math.max(1e-3, dur - endAt);
+      const stroke = re < 0.5 ? ramp(re, 0, 0.5) : 1 - ramp(re, 0.5, 1.0);
+      pump.node.position.z = pump.restP.z + 0.085 * stroke * rw;
+      armL.node.position.z += 0.085 * stroke * rw;
+    }
+    void dt;
   }
 
   // ---- update ---------------------------------------------------------------
   function update(dt, alpha) {
     if (!(dt > 0)) dt = 1 / 60;
-    // Default 1 = "render the tick that just ran", which is bit-for-bit the
-    // pre-interpolation behaviour. boot's stepFrames path passes exactly that,
-    // so every harness capture and battery frame is unchanged.
+    // Default 1 = "render the tick that just ran" (boot's stepFrames path).
     if (!(alpha >= 0)) alpha = 1; // covers undefined and NaN
     else if (alpha > 1) alpha = 1;
     const S = ctx.settings;
@@ -525,21 +830,39 @@ export function createViewmodel(ctx) {
     const p = st && st.player;
     const m = (p && p._m) || {};
     const input = ctx.input;
+    const wp0 = p && p.weapon;
 
-    // -- auto-equip: mirror the sim's held weapon (switch timing is sim's) --
-    if (p && p.weapon && p.weapon.id && (!current || current.id !== p.weapon.id)) {
-      equip(p.weapon.id);
+    sinceShot += dt;
+
+    // -- which weapon is on screen? Mirror the sim's held weapon, EXCEPT during a
+    // switch: the sim only changes weapon.id when the switch ENDS, so the swap is
+    // done here at SWITCH_SWAP of the way through, from `_switchTo`.
+    let wantId = wp0 && wp0.id;
+    let switchProg = -1;
+    if (wp0 && wp0.state === "switching" && wp0._switchTo) {
+      const sdur = wp0._switchDur || 0.45;
+      switchProg = clamp01((wp0.stateT || 0) / sdur);
+      if (switchProg >= SWITCH_SWAP) wantId = wp0._switchTo;
+    }
+    if (dbg.lower != null) { switchProg = dbg.lower; }
+    if (wantId && (!current || current.id !== wantId)) {
+      const proto = peek(wantId);
+      if (proto) {
+        installProto(wantId, proto);
+        if (switchProg < 0) { raiseClock = 0; raiseDur = (WEAPONS[wantId] && WEAPONS[wantId].raiseS) || 0.45; }
+      } else if (swapPending !== wantId) {
+        swapPending = wantId;
+        equip(wantId).then(() => { swapPending = null; });
+      }
     }
     const w = current && current.w;
-    const wp = p && p.weapon;
+    const wp = wp0;
 
     const driving = visible && !ctx.cameraDetached && p && p.alive &&
       st && LIVE_PHASES.has(st.phase);
 
     // -- fire-response springs: integrated EVERY frame, before anything reads
-    // them, and before the `!rig.visible` early-out below — a spring that only
-    // ticks while the rig draws would freeze mid-kick across a hidden frame.
-    // Sub-stepped at 120 Hz so a hitch cannot blow the integrator up.
+    // them, and before the `!rig.visible` early-out below.
     {
       let rem = Math.min(dt, 0.25);
       while (rem > 1e-6) {
@@ -555,6 +878,7 @@ export function createViewmodel(ctx) {
         springStep(K.camY, KICK.camOmega, KICK.camZeta, h, KICK.maxCamYaw);
         springStep(K.fov,  KICK.camOmega, KICK.camZeta, h, KICK.maxFov);
       }
+      scopeS.kick *= Math.exp(-dt / 0.18);
     }
 
     // ================= CAMERA RIG =================
@@ -565,6 +889,7 @@ export function createViewmodel(ctx) {
     const sliding = !!m.sliding;
     const adsT = wp ? (wp.adsT || 0) : 0;
     const adsEase = smoothstep(adsT);
+    const isScoped = !!(w && w.view && w.view.scope);
 
     if (driving) {
       // eye height (§1.3 140 ms crouch lerp; §1.4 slide 0.90 over 110 ms)
@@ -583,20 +908,9 @@ export function createViewmodel(ctx) {
       const targetAmpL = moving && stateRow ? stateRow.l * adsBobMult : 0;
       bobAmpV = damp(bobAmpV, targetAmpV, 0.12, dt);
       bobAmpL = damp(bobAmpL, targetAmpL, 0.12, dt);
-      // BOB FREQUENCY IS DISTANCE-BASED, NOT A CLOCK.
-      // This used to advance at stateRow.hz — a FIXED rate per stance — while
-      // the footsteps had already been moved onto a distance accumulator
-      // (player.js: one footfall per strideLength() of ground covered). The two
-      // never agreed. Measured against the shipped constants:
-      //   walk   4.6 m/s / 1.41 m stride = 3.27 steps/s vs BOB.hz 2.1  (64%)
-      //   sprint 6.4      / 1.81         = 3.54         vs      2.6   (73%)
-      //   tac    7.3      / 1.97         = 3.70         vs      2.9   (78%)
-      //   crouch 2.4      / 0.82         = 2.94         vs      1.5   (51%)
-      // so the view rhythm ran at half to three-quarters of the player's real
-      // cadence and, being a constant, did not change AT ALL through the 0.25 s
-      // accel ramp or the 0.15 s decel. Feet said running, the camera said
-      // gliding — the "sliding rather than running" report.
-      // One stride of ground = one bob cycle, at every speed, always.
+      // BOB FREQUENCY IS DISTANCE-BASED, NOT A CLOCK: one stride of ground = one bob
+      // cycle, at every speed, always — the footsteps run on the same accumulator
+      // (player.js strideLength), so feet and view agree, through accel and decel.
       if (moving && stateRow) {
         const hs = Math.hypot(p.vel[0], p.vel[2]);
         const stride = Math.max(0.3, strideLength(hs, p.stance, sprintState !== "none"));
@@ -645,18 +959,20 @@ export function createViewmodel(ctx) {
       const adsFull = adsT >= 0.999;
       if (adsFull && !prevAdsFull) settleClock = 0; else settleClock += dt;
       prevAdsFull = adsFull;
+      let holding = false;
+      let swayAmpOut = 0;
       if (adsFull && w) {
         const id = current.id;
         let amp = (SWAY.adsAmpDeg[id] != null ? SWAY.adsAmpDeg[id] : 0.03) * DEG;
-        const movingMult = id === "corvus" ? SWAY.corvusMovingMult : SWAY.movingMult;
+        const movingMult = isScoped ? (SWAY.scopedMovingMult || SWAY.corvusMovingMult) : SWAY.movingMult;
         if (speedNorm > 0.03) amp *= movingMult;
         // settle: ×2 → ×1 over FEEL.adsSettleS after ADS completes
         if (settleClock < FEEL.adsSettleS) {
           amp *= FEEL.adsSettleAmpMult - (FEEL.adsSettleAmpMult - 1) * (settleClock / FEEL.adsSettleS);
         }
-        // breath hold (Corvus scope): Shift while scoped
-        if (id === "corvus") {
-          const holding = !!input.state.sprint && breathMeter > 0 && !winded;
+        // breath hold (scoped weapons): Shift while scoped
+        if (isScoped) {
+          holding = !!input.state.sprint && breathMeter > 0 && !winded;
           if (holding) {
             breathMeter = Math.max(0, breathMeter - dt);
             if (breathMeter === 0) winded = true;
@@ -670,6 +986,7 @@ export function createViewmodel(ctx) {
             }
           }
         }
+        swayAmpOut = amp;
         const [f1, f2] = SWAY.baseFreqsHz;
         camSwayYaw = amp * (Math.sin(2 * Math.PI * f1 * swayT) * 0.6 +
                             Math.sin(2 * Math.PI * f2 * swayT + 1.3) * 0.4);
@@ -680,12 +997,30 @@ export function createViewmodel(ctx) {
           breathMeter + dt * (SWAY.breath.meterS / SWAY.breath.refillS));
         if (breathMeter >= SWAY.breath.meterS * SWAY.breath.windedRefillFrac) winded = false;
       }
+      scopeS.holding = holding;
+      scopeS.winded = winded;
+      scopeS.breath = breathMeter / SWAY.breath.meterS;
+
+      // SCOPED WEAPON: the sway is a REAL aim wobble. The player's aim (input.state)
+      // is nudged by the differential of the sway signal, so the reticle on the lens,
+      // the world drifting under it and the bullet's path are one thing — never a
+      // cosmetic offset that lies about where the round goes. Applied through recoil's
+      // nudge (it keeps its pulldown bookkeeping honest). Not applied to iron sights:
+      // their ±0.03° view sway is below what anyone can see or exploit.
+      if (isScoped && swayAmpOut > 0) {
+        const nudge = globalThis.__BR_RECOIL__ && globalThis.__BR_RECOIL__.nudge;
+        const dY = camSwayYaw - scopeSwayYaw, dP = camSwayPitch - scopeSwayPitch;
+        if (nudge && (Math.abs(dY) + Math.abs(dP)) > 0) nudge(dY, dP);
+        scopeSwayYaw = camSwayYaw; scopeSwayPitch = camSwayPitch;
+        camSwayYaw = 0; camSwayPitch = 0;   // the world moves because the AIM moved
+      } else {
+        scopeSwayYaw = 0; scopeSwayPitch = 0;
+      }
+      scopeS.swayX = scopeSwayYaw; scopeS.swayY = scopeSwayPitch;
 
       // position + rotation. The BASE is the player's last two sim ticks lerped
-      // by this frame's alpha (header: TICK INTERPOLATION) — the raw 60 Hz
-      // position held still for 2-3 frames at 144 Hz and then jumped, which is
-      // the skating read. eyeH / bob / dip ride ON TOP, unchanged and in the
-      // same order. Rotation below is untouched: raw input.state, zero latency.
+      // by this frame's alpha; eyeH / bob / dip ride ON TOP. Rotation is raw
+      // input.state, zero latency.
       const bp = basePos(p, alpha);
       camera.position.set(
         bp[0] + camBobX * Math.cos(input.state.yaw),
@@ -693,8 +1028,7 @@ export function createViewmodel(ctx) {
         bp[2] - camBobX * Math.sin(input.state.yaw),
       );
       // VT §7 fire response, camera share: pitch punch + roll + yaw, all
-      // RENDER-ONLY (input.state is recoil.js's alone), so the burst reads as
-      // physical without stealing a degree of aim from the player.
+      // RENDER-ONLY.
       camera.rotation.set(
         input.state.pitch + camSwayPitch + K.camP.x,
         input.state.yaw + camSwayYaw + K.camY.x,
@@ -709,74 +1043,20 @@ export function createViewmodel(ctx) {
       fovSprint = damp(fovSprint,
         sprintState === "tac" ? 7 : sprintState === "sprint" ? 5 : 0, 0.12, dt);
       fovSlide = damp(fovSlide, sliding ? 4 : 0, sliding ? 0.06 : 0.1, dt);
-      const fov = fovAim + fovSprint + fovSlide + K.fov.x;
+      // a scoped lens must not breathe with the fire-response FOV punch
+      const fov = fovAim + fovSprint + fovSlide + (isScoped ? K.fov.x * (1 - adsEase) : K.fov.x);
       if (Math.abs(camera.fov - fov) > 0.01) {
         camera.fov = fov;
         camera.updateProjectionMatrix();
       }
 
-      // VT §5 layer 4: "world FOV -15 to -20 deg, VIEWMODEL FOV TIGHTENS".
-      // W1 (iter05): the vm camera was pinned at VIEWMODEL.fovDeg forever, so
-      // ADS zoomed the WORLD and left the weapon at hip scale — which is why
-      // the corvus optic occupied ~21% of frame height in an ADS frame that is
-      // supposed to be a sight picture, and why S2 read as "more receiver than
-      // scope". Hold the vm:world FOV RATIO instead of the vm FOV: the gun
-      // keeps exactly the apparent size relative to the world it has at the
-      // hip, and the magnification an optic implies (Corvus 74 -> 34 = 2.2x)
-      // reaches the thing the player is looking through. Iron sights barely
-      // move (74 -> 55 = 1.35x), which is correct — they are 1x.
-      //
-      // F1 (iter07) — THE DENOMINATOR IS THE PLAYER'S BASE FOV, NOT WHATEVER
-      // IS CURRENTLY IN settings.fov. The ratio this line exists to hold is
-      // vm:world = VIEWMODEL.fovDeg / (player base FOV) — a constant of the
-      // rig, identical at hip and at full ADS. A11's scenario path forces
-      // settings.fov to a pose's cinematic framing (scenarios.js: it is the
-      // rig's own base channel, and the only input that survives a driven
-      // frame), which silently rewrote THIS denominator too and collapsed the
-      // ratio to 1 whenever a pose's fov matched the weapon's adsFov: measured
-      // live in S2, vm 60 against world 34 (ratio 1.765) where real gameplay
-      // renders vm 27.57 against world 34 (ratio 0.811) — the captured weapon
-      // 2.35x SMALLER in solid angle than any player has ever seen it, across
-      // every battery frame of three iterations. ctx.vmFovBase carries the
-      // un-poisoned base through that override, so a captured frame is a
-      // faithful (uniformly magnified) image of the gameplay frame instead of
-      // a differently-proportioned one. Null in normal play → base, unchanged.
+      // vm camera FOV: share of the world's ADS zoom that reaches the gun (see
+      // weapon_data VIEWMODEL.adsZoomShare). Done in TANGENT space, where
+      // "magnification" lives; alignment is safe BY CONSTRUCTION (a FOV change on
+      // the vm camera is a pure scale about its centre ray, and view.posAds.y =
+      // -view.sightY parks the sight line ON that ray).
       const vmBase = (ctx.vmFovBase != null && ctx.vmFovBase > 0)
         ? ctx.vmFovBase : base;
-      // ---- iter10 ADS OCCLUSION FIX (owner: "it blocks alot of the vision
-      // when aiming (right click)") -----------------------------------------
-      // The line above used to be `fovDeg * (fovAim / vmBase)` — hold the
-      // vm:world FOV RATIO, i.e. apply the world's ADS zoom to the gun as
-      // well. Measured live at 1600x900 through the vm camera with a flat
-      // override material (_harness/occlusion.py), that made right-click
-      // roughly DOUBLE the weapon's screen footprint against the hip:
-      //   warden 5.88 -> 10.86 % of screen, 26.6 % of the sight-picture disc
-      //   vesper 5.13 -> 12.61 %,           48.6 %
-      //   corvus 5.04 -> 12.61 %,          100.0 %  (the disc was ALL housing)
-      //   pike   4.07 ->  9.92 %,           56.7 %
-      //
-      // A zoom optic magnifies the WORLD; it does not magnify the rifle
-      // already 30 cm from the eye. So the share of the world's zoom that
-      // reaches the viewmodel is now an explicit number per weapon — 0 for the
-      // three 1x iron-sighted guns, VIEWMODEL.adsZoomShare (also 0) for
-      // anything unlisted, and 0.35 for the Corvus's real 2.2x optic.
-      //
-      // Done in TANGENT space, which is where "magnification" actually lives:
-      //   magWorld = tan(vmBase/2) / tan(fovAim/2)     (1 at the hip, rising)
-      //   magVm    = magWorld ** share
-      //   vmFov    = 2*atan( tan(fovDeg/2) / magVm )
-      // share = 1 reproduces the old magnification exactly; share = 0 pins the
-      // vm FOV at fovDeg so the gun holds its hip angular size all the way in.
-      // Continuous through the whole ADS blend (magWorld -> 1 as fovAim ->
-      // vmBase), so there is no step at the start or end of the transition,
-      // and vmFovBase's capture-fidelity role (F1, iter07) is untouched — it
-      // is still the denominator.
-      //
-      // ALIGNMENT IS SAFE BY CONSTRUCTION: a FOV change on the vm camera is a
-      // pure scale about that camera's centre ray, and view.posAds.y =
-      // -view.sightY already parks the sight line ON the centre ray. Scaling
-      // slides the sight along the ray, never off it — verified live after the
-      // change (sight-to-centre error measured in _harness/occlusion.py).
       const share = zoomShareOverride != null ? zoomShareOverride
         : (w && w.view && w.view.adsZoom != null)
           ? w.view.adsZoom
@@ -790,12 +1070,26 @@ export function createViewmodel(ctx) {
         vmCamera.fov = vmFov;
         vmCamera.updateProjectionMatrix();
       }
+      scopeS.zoom = halfBase / Math.max(1e-6, Math.tan(0.5 * DEG * Math.max(1, adsFovTarget)));
+    }
+
+    // ---- scope blend: the 3D weapon fades out and the HUD lens fades in
+    {
+      const target = (isScoped && wp && wp.ads) ? ramp(adsT, 0.45, 0.85) : 0;
+      // follow the sim's own ADS progress both ways (no extra smoothing: adsT is
+      // already a ramp, and a second filter would desync lens and zoom)
+      const tb = isScoped ? ramp(adsT, 0.45, 0.85) : 0;
+      scopeS.blend = (wp && (wp.ads || adsT > 0.01)) ? tb : 0;
+      void target;
+      scopeS.active = scopeS.blend > 0.02;
     }
 
     // ================= VIEWMODEL LAYERS =================
-    // hidden outside live mission phases (no gun floating behind the menu)
+    // hidden outside live mission phases (no gun floating behind the menu); hidden
+    // too while a scope owns the whole frame
+    const scopeHides = scopeS.blend > 0.985;
     rig.visible = visible && !!current && !ctx.cameraDetached &&
-      !!st && LIVE_PHASES.has(st.phase);
+      !!st && LIVE_PHASES.has(st.phase) && !scopeHides;
     if (!rig.visible) { havePrevCam = false; return; }
 
     // -- translation lag (§2.7: τ 45 ms, max 3.2 cm) — camera-space ---------
@@ -830,40 +1124,37 @@ export function createViewmodel(ctx) {
       swayPitch = damp(swayPitch, Math.max(-maxR, Math.min(maxR, -(dPitch / dt) * gain)), VIEWMODEL.rotLagTau, dt);
     }
     prevYaw = yawNow; prevPitch = pitchNow;
+    scopeS.lagX = swayYaw; scopeS.lagY = swayPitch;
 
     // -- pose selection ------------------------------------------------------
     const view = (w && w.view) || { posHip: [0.16, -0.18, -0.34], posAds: [0, -0.14, -0.26] };
+    // arm/part animation first: it can contribute gun-level cant/lift
+    if (current.group) applyHands(current.group, w, animOf(w), wp, dt, adsEase);
+
+    // sprint / slide / mantle weights ease in and out — they used to step
+    const sprintTarget = sprintState === "tac" ? 1 : sprintState === "sprint" ? 0.8 : 0;
+    sprintBlend = damp(sprintBlend, dbg.sprint != null ? dbg.sprint : sprintTarget,
+      (dbg.sprint != null ? dbg.sprint : sprintTarget) > sprintBlend ? 0.11 : 0.09, dt);
+    slideBlend = damp(slideBlend, sliding ? 1 : 0, sliding ? 0.08 : 0.14, dt);
+    mantleBlend = damp(mantleBlend, m.mantle ? 1 : 0, m.mantle ? 0.06 : 0.14, dt);
+    const sb = sprintBlend * (1 - adsEase);
+
     let px = view.posHip[0] + (view.posAds[0] - view.posHip[0]) * adsEase;
     let py = view.posHip[1] + (view.posAds[1] - view.posHip[1]) * adsEase;
     let pz = view.posHip[2] + (view.posAds[2] - view.posHip[2]) * adsEase;
-    // W1 (iter03) HIP REAR STANDOFF: weapon_meshes.js measures how far this
-    // prototype's rearmost vertex has to move to stop being inside the eye at
-    // the hip pose (warden's butt pad sat 9.4 cm from the camera and filled the
-    // frame with macro-range receiver facets — the iter01-03 "shattered white
-    // polygon" read). Hip only: at full ADS the push is 0, because the sight
-    // picture is the subject and a pushed-back weapon shrinks it.
+    // HIP REAR STANDOFF: weapon_meshes.js measures how far this prototype has to move
+    // so no weapon vertex sits inside the eye at the hip pose. Hip only: at full ADS
+    // the push is 0 (the sight picture is the subject).
     if (current.group && current.group.userData.hipPush) {
       pz -= current.group.userData.hipPush * (1 - adsEase);
     }
-    // ---- iter10 ADS STANDOFF (owner: "it blocks alot of the vision when
-    // aiming (right click)") -------------------------------------------------
-    // The eye-to-weapon distance is the ONLY lever that shrinks the weapon's
-    // solid angle without also flattening or distorting it, and it is exact:
-    // the sight line already lies ON the vm camera's centre ray (posAds.y =
-    // -view.sightY, no ADS rotation), so translating along -Z slides the sight
-    // ALONG that ray and can never take it off it. Alignment is preserved by
-    // construction, which is why this was chosen over any pose re-authoring.
-    //
-    // WHY IT IS NEEDED AT ALL — the render FOV is not a human field of view.
-    // A shouldered rifle really does sit ~0.25 m from the eye, but a human
-    // reads it inside a ~120 deg field while the game renders 55 deg at ADS,
-    // so a physically-placed weapon subtends tan(60)/tan(27.5) = 3.3x the
-    // fraction of the frame it occupies in life. Every shipped military
-    // shooter compensates by parking the ADS viewmodel further out than the
-    // anatomy implies; blackridge did not, and the owner's "it blocks alot of
-    // the vision" is that omission, measured (see weapon_data.js VIEWMODEL).
-    //
-    // Applied on adsEase so the hip pose is bit-identical to before.
+    // ADS STANDOFF: the eye-to-weapon distance is the ONLY lever that shrinks the
+    // weapon's solid angle without distorting it, and it is exact (the sight line
+    // lies ON the vm camera's centre ray, so translating along -Z slides the sight
+    // ALONG that ray). A shouldered rifle really sits ~0.25 m from the eye, but the
+    // game renders 55° where a human reads a 120° field — so a physically-placed gun
+    // subtends ~3.3x the fraction of the frame it does in life. Applied on adsEase so
+    // the hip pose is bit-identical.
     {
       const so = standoffOverride != null ? standoffOverride
         : (w && w.view && w.view.adsStandoff != null) ? w.view.adsStandoff
@@ -872,59 +1163,61 @@ export function createViewmodel(ctx) {
     }
     let rx = 0, ry = 0, rz = 0;
 
-    const sprintBlend = sprintState === "tac" ? 1 : sprintState === "sprint" ? 0.7 : 0;
-    if (sprintBlend > 0) {
-      // §1.1/VT §5: sprint = canted low; tac = across the chest
-      px += (-0.045 - 0.03 * sprintBlend) * sprintBlend;
-      py += -0.075 * sprintBlend;
-      pz += 0.06 * sprintBlend;
-      rx += -18 * DEG * sprintBlend;
-      ry += 22 * DEG * sprintBlend;
-      rz += -14 * DEG * sprintBlend;
+    if (sb > 0.001) {
+      // §1.1/VT §5: sprint = gun across the chest, muzzle up-left, low (CoD "high port"): the
+      // weapon stays PARTLY in frame at the bottom-right so the player still sees a gun.
+      // Per-weapon override: view.sprint = { pos:[x,y,z], rot:[rx,ry,rz deg] }.
+      const SP = (w && w.view && w.view.sprint) || VIEWMODEL.sprint || { pos: [-0.045, -0.02, 0.05], rot: [-8, 38, -22] };
+      px += SP.pos[0] * sb;
+      py += SP.pos[1] * sb;
+      pz += SP.pos[2] * sb;
+      rx += SP.rot[0] * DEG * sb;
+      ry += SP.rot[1] * DEG * sb;
+      rz += SP.rot[2] * DEG * sb;
+    }
+    if (slideBlend > 0.001) {
+      px += -0.02 * slideBlend; py += -0.05 * slideBlend; pz += 0.03 * slideBlend;
+      rx += -8 * DEG * slideBlend; ry += 12 * DEG * slideBlend; rz += 14 * DEG * slideBlend;
+    }
+    // mantle: weapon lowered hard (§1.5)
+    if (mantleBlend > 0.001) {
+      py += -0.16 * mantleBlend; pz += 0.07 * mantleBlend;
+      rx += -35 * DEG * mantleBlend; rz += 10 * DEG * mantleBlend;
     }
 
-    // mantle: weapon lowered hard (§1.5), raise handled by mantleRaiseUntil
-    if (m.mantle) {
-      py += -0.16; pz += 0.07; rx += -35 * DEG; rz += 10 * DEG;
-    }
+    // reload / pump animation contributions (cant, lift)
+    px += out.px; py += out.py; pz += out.pz; rx += out.rx; ry += out.ry; rz += out.rz;
 
-    // reload / switch dips driven by the sim's own state machine + timers
-    if (wp && wp.state === "reloading" && w) {
-      const dur = wp._reloadDur || w.reloadS || 2;
-      const prog = Math.min(1, (wp.stateT || 0) / dur);
-      const env = prog < 0.15 ? smoothstep(prog / 0.15)
-        : prog > 0.85 ? 1 - smoothstep((prog - 0.85) / 0.15) : 1;
-      py += -0.055 * env;
-      pz += 0.02 * env;
-      rx += -16 * DEG * env;
-      rz += 9 * DEG * env;
-      // commit twitch at 65% (mag seats — RELOAD_MODEL.commitFraction)
-      const c = Math.abs(prog - 0.65);
-      if (c < 0.05) py += -0.008 * (1 - c / 0.05);
-    } else if (wp && wp.state === "switching" && w) {
-      const dur = wp._switchDur || w.switchS || 0.45;
-      const prog = Math.min(1, (wp.stateT || 0) / dur);
-      const env = Math.sin(Math.PI * prog); // down then up
-      py += -0.14 * env;
-      rx += -30 * DEG * env;
-    }
-
-    // equip raise (just after the mesh swap)
-    if (raiseClock < ((w && w.raiseS) || 0.45)) {
-      raiseClock += dt;
-      const rp = Math.min(1, raiseClock / ((w && w.raiseS) || 0.45));
-      const env = 1 - smoothstep(rp);
-      py += -0.12 * env;
-      rx += -25 * DEG * env;
+    // weapon switch: lower the old gun, swap the mesh, raise the new one. One
+    // continuous 0..1 "lowered" channel across both halves.
+    {
+      let lowerAmt = 0;
+      if (switchProg >= 0) {
+        lowerAmt = switchProg < SWITCH_SWAP
+          ? smoothstep(switchProg / SWITCH_SWAP)
+          : 1 - smoothstep((switchProg - SWITCH_SWAP) / (1 - SWITCH_SWAP));
+      } else if (raiseClock < raiseDur) {
+        raiseClock += dt;
+        lowerAmt = 1 - smoothstep(Math.min(1, raiseClock / raiseDur));
+      }
+      if (lowered) lowerAmt = Math.max(lowerAmt, 1);
+      if (lowerAmt > 0.001) {
+        py += -0.17 * lowerAmt; px += 0.05 * lowerAmt; pz += 0.05 * lowerAmt;
+        rx += -42 * DEG * lowerAmt; ry += -10 * DEG * lowerAmt; rz += 16 * DEG * lowerAmt;
+      }
     }
 
     // vm bob: camera numbers × 2.3, in camera space (not the bob slider)
     const vmBobY = Math.sin(bobPhase) * bobAmpV * 2.3;
     const vmBobX = Math.sin(bobPhase * 0.5) * bobAmpL * 2.3;
+    // the gun also pitches and rolls a little with the stride (a held weight)
+    const vmBobRx = Math.sin(bobPhase + 0.6) * bobAmpV * 14 * (1 - adsEase);
+    const vmBobRz = Math.sin(bobPhase * 0.5) * bobAmpL * 28 * (1 - adsEase);
 
-    // idle breathe (VT §5 layer 1): ±1.5 mm dual sine
-    const breatheY = 0.0015 * (Math.sin(swayT * 2 * Math.PI * 0.32) * 0.7 +
+    // idle breathe (VT §5 layer 1): ±2.5 mm dual sine + a hair of pitch
+    const breatheY = 0.0025 * (Math.sin(swayT * 2 * Math.PI * 0.32) * 0.7 +
                                Math.sin(swayT * 2 * Math.PI * 0.53 + 1.1) * 0.3);
+    const breatheRx = 0.0035 * Math.sin(swayT * 2 * Math.PI * 0.32 + 0.4) * (1 - 0.8 * adsEase);
 
     // fire response, viewmodel share (springs integrated at the top of update)
     mount.position.set(
@@ -933,61 +1226,66 @@ export function createViewmodel(ctx) {
       pz + lagZ + K.posZ.x,
     );
     mount.rotation.set(
-      rx + swayPitch * (1 - 0.7 * adsEase) + K.rotX.x,
+      rx + vmBobRx + breatheRx + swayPitch * (1 - 0.7 * adsEase) + K.rotX.x,
       ry + swayYaw * (1 - 0.7 * adsEase) + K.rotY.x,
-      rz + swayYaw * 0.35 * (1 - adsEase) + K.rotZ.x,
+      rz + vmBobRz + swayYaw * 0.35 * (1 - adsEase) + K.rotZ.x,
       "YXZ",
     );
 
     // ---- wrist rig: the hands give against what the gun does ---------------
-    // Composed ABSOLUTELY from each node's cached rest quaternion (see the
-    // ARM block at the top of this file) so re-equipping a cached prototype
-    // can never accumulate drift.
     {
-      const nodes = current && current.group ? armNodes(current.group) : null;
-      if (nodes && nodes.length) {
+      const parts = current.group.userData.parts;
+      if (parts) {
         const cl = (v) => Math.max(-ARM.maxRad, Math.min(ARM.maxRad, v));
         armRoll = damp(armRoll, cl(-K.rotZ.x * ARM.kickRoll), ARM.tau, dt);
         armPitch = damp(armPitch, cl(-K.rotX.x * ARM.kickPitch), ARM.tau, dt);
         armLead = damp(armLead, cl(-swayYaw * ARM.swayLead), ARM.tau, dt);
         _armE.set(armPitch, armLead, armRoll, "YXZ");
         _armQ.setFromEuler(_armE);
-        for (const n of nodes) {
-          const rest = n.userData._restQ;
-          if (rest) n.quaternion.copy(rest).multiply(_armQ);
-        }
+        // post-multiply: the wrist flexes in its own local frame, on top of whatever
+        // the reload animation set this frame
+        if (parts.armR) parts.armR.node.quaternion.copy(parts.armR.restQ).multiply(_armQ);
+        if (parts.armL) parts.armL.node.quaternion.multiply(_armQ);
       }
     }
   }
 
+  // sync reader for a prototype that has already resolved
+  function peek(id) {
+    for (const pr of loadedPrototypes()) {
+      if (pr && pr.userData && pr.userData.weaponId === id) return pr;
+    }
+    return null;
+  }
+
   // ---- sockets ---------------------------------------------------------------
   function muzzleWorld(outVec3) {
-    const out = outVec3 || new THREE.Vector3();
+    const o = outVec3 || new THREE.Vector3();
     if (current && current.group) {
       const s = current.group.userData.muzzle;
-      if (s) { s.updateWorldMatrix(true, false); return s.getWorldPosition(out); }
+      if (s) { s.updateWorldMatrix(true, false); return s.getWorldPosition(o); }
       const off = current.group.userData.muzzleOffset || [0, 0.05, -0.5];
-      out.set(off[0], off[1], off[2]);
+      o.set(off[0], off[1], off[2]);
       mount.updateWorldMatrix(true, false);
-      return mount.localToWorld(out);
+      return mount.localToWorld(o);
     }
     camera.updateWorldMatrix(true, false);
-    out.set(0.15, -0.1, -0.6);
-    return camera.localToWorld(out);
+    o.set(0.15, -0.1, -0.6);
+    return camera.localToWorld(o);
   }
 
   // private: shell-ejection world position (A7 casings)
   function ejectWorld(outVec3) {
-    const out = outVec3 || new THREE.Vector3();
+    const o = outVec3 || new THREE.Vector3();
     if (current && current.group) {
       const s = current.group.userData.eject;
-      if (s) { s.updateWorldMatrix(true, false); return s.getWorldPosition(out); }
+      if (s) { s.updateWorldMatrix(true, false); return s.getWorldPosition(o); }
       const off = current.group.userData.ejectOffset || [0.03, 0.05, -0.1];
-      out.set(off[0], off[1], off[2]);
+      o.set(off[0], off[1], off[2]);
       mount.updateWorldMatrix(true, false);
-      return mount.localToWorld(out);
+      return mount.localToWorld(o);
     }
-    return muzzleWorld(out);
+    return muzzleWorld(o);
   }
 
   return {
@@ -996,6 +1294,7 @@ export function createViewmodel(ctx) {
     kick,
     muzzleWorld,
     setVisible(on) { visible = !!on; rig.visible = !!on && !!current; },
+    setLowered(on) { lowered = !!on; },
     prewarmables() {
       // every loaded weapon prototype — their materials must compile during
       // boot prewarm or the first ADS frame hitches (doctrine §3)
@@ -1006,10 +1305,8 @@ export function createViewmodel(ctx) {
     // iter10 A/B seam — see zoomShareOverride above.
     setAdsZoomShareOverride(v) { zoomShareOverride = (v == null ? null : +v); },
     // combat_spec §1.6: "a step SOUND lands on a bob TROUGH". The frequency
-    // above already matches the gait; this keeps the PHASE honest so the plant
-    // and the lowest point of the head coincide instead of slowly sliding past
-    // each other. Nudged, not snapped — a hard set would show as a hitch if the
-    // phase had drifted. boot.js registers this on the "step" event.
+    // already matches the gait; this keeps the PHASE honest so the plant and the
+    // lowest point of the head coincide. Nudged, not snapped.
     onStep(d) {
       if (!d || d.who !== "P") return;
       const TROUGH = 3 * Math.PI / 2;        // sin() minimum
@@ -1025,6 +1322,33 @@ export function createViewmodel(ctx) {
     get camera() { return vmCamera; },
     get currentId() { return current ? current.id : null; },
     get _breath() { return { meter: breathMeter, winded }; },
+    // scope state for the HUD lens (hud.js reads this every frame)
+    get scope() { return scopeS; },
+    get parts() { return current && current.group ? current.group.userData.parts : null; },
+    get group() { return current ? current.group : null; },
+    get mount() { return mount; },
+    // dev: pin an animation at a fixed progress for screenshots. reload: {p, kind, empty}
+    _dbg(o) {
+      if (o == null) { dbg.reloadP = null; dbg.kind = null; dbg.lower = null; dbg.pump = null; dbg.sprint = null; dbg.handL = null; return; }
+      if ("handL" in o) dbg.handL = o.handL;
+      if ("reloadP" in o) dbg.reloadP = o.reloadP;
+      if ("kind" in o) dbg.kind = o.kind;
+      if ("empty" in o) dbg.empty = o.empty;
+      if ("dur" in o) dbg.dur = o.dur;
+      if ("lower" in o) dbg.lower = o.lower;
+      if ("pump" in o) dbg.pump = o.pump;
+      if ("sprint" in o) dbg.sprint = o.sprint;
+    },
+    // dev: authored-pose helpers for hand tuning
+    _handPose(pose) { const P = new THREE.Vector3(), Q = new THREE.Quaternion(); handPose(pose, P, Q); return { p: P.toArray(), q: Q.toArray() }; },
+    _clearHands() { _handCache.clear(); },
+    // dev: forget a cached GLB and re-fetch it (after a Blender re-export)
+    async _hot(id) {
+      invalidateWeapon(id);
+      const proto = await loadWeaponGLB(id);
+      installProto(id, proto);
+      return id;
+    },
     // fire-response spring state — the D10 probe reads this to assert the
     // burst is displaced at the ticks C1 photographs (never frozen surface)
     get _kick() {

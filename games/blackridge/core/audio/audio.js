@@ -438,7 +438,7 @@ export function createAudio(ctx) {
 
     attach(bridge) {
       // R13-amended vocabulary only (architecture §4 + changelog v2 item 5).
-      bridge.register("shot", safe("shot", (d) => sfx.onShot(d)));
+      bridge.register("shot", safe("shot", (d, t) => sfx.onShot(d, t))); // t = sim time: the volley window is sim-time
       bridge.register("hurt", safe("hurt", (d) => sfx.onHurt(d)));
       bridge.register("death", safe("death", (d) => {
         sfx.onDeath(d);
@@ -612,6 +612,9 @@ export function createAudio(ctx) {
       };
     },
     ui(kind) { if (ac && sfx) { try { sfx.ui(kind); } catch (e) { err(e, "ui"); } } },
+    // weapon-voice counters (shot events seen vs volleys voiced, racks, shell
+    // inserts, hit/kill ticks) — probes read these to prove one boom per volley.
+    sfxStats() { return sfx ? { ...sfx.stats(), voices: env.voices, ctxState: ac ? ac.state : "none" } : null; },
     radioSquelch() { if (ac && sfx) { try { sfx.radioSquelch(); } catch (e) { err(e, "squelch"); } } },
 
     // Scripted burst for the lane gate: exercises gunshot/footstep/reverb/
@@ -645,6 +648,18 @@ export function createAudio(ctx) {
       fire("shot", { shooter: "P", weaponId: "corvus", origin: at(0, 0, 0), dir: [0, 0, -1], hit: { pos: at(0, 0, -60), normal: [0, 0, 1], surface: "metal", entity: 7, part: "head" }, tracer: true, pellet: 0, impactOnly: true });
       fire("shot", { shooter: "P", weaponId: "warden", origin: at(0, 0, 0), dir: [0, 0, -1], hit: { pos: at(0, 0, -8), normal: [0, 0, 1], surface: "wood", entity: null, part: null }, tracer: false, pellet: 0, impactOnly: true, pen: "entry" });
       fire("shot", { shooter: "P", weaponId: "warden", origin: at(0, 0, 0), dir: [0, 0, -1], hit: { pos: at(0, 0, -8.3), normal: [0, 0, -1], surface: "wood", entity: null, part: null }, tracer: false, pellet: 0, impactOnly: true, pen: "exit" });
+
+      // B-12 Breaker: a nine-pellet volley (own + a bot at 12 m), then the
+      // shell-by-shell reload, switch and dry-fire foley
+      for (let p = 0; p < 9; p++) fire("shot", { shooter: "P", weaponId: "breaker", origin: at(0, 0, 0), dir: [0, 0, -1], hit: p % 3 === 0 ? { pos: at(0, 0, -6), normal: [0, 0, 1], surface: "flesh", entity: 7, part: p === 6 ? "head" : "body" } : null, tracer: true, pellet: p, firstShot: true });
+      for (let p = 1; p < 9; p++) fire("shot", { shooter: 7, weaponId: "breaker", origin: at(4, 0, -12), dir: [0, 0, 1], hit: null, tracer: false, pellet: p, firstShot: true });
+      fire("reload", { who: "P", weaponId: "breaker", phase: "start", duration: 3.4, empty: false });
+      fire("reload", { who: "P", weaponId: "breaker", phase: "shell", mag: 5, reserve: 25 });
+      fire("reload", { who: "P", weaponId: "breaker", phase: "shell", mag: 6, reserve: 24 });
+      fire("reload", { who: "P", weaponId: "breaker", phase: "done", duration: 3.4 });
+      fire("switch", { who: "P", from: "pike", to: "breaker" });
+      fire("switch", { who: "P", from: "breaker", to: "corvus" });
+      fire("empty", { who: "P", weaponId: "breaker" });
 
       // whiz-by
       fire("whiz", { pos: at(0.8, 0.2, -1), dist: 0.8 });
@@ -716,7 +731,7 @@ export function createAudio(ctx) {
 
   // selftest dispatch table — bound to the SAME functions attach() registers
   const testHooks = {
-    shot: (d) => sfx && sfx.onShot(d),
+    shot: (d, t) => sfx && sfx.onShot(d, t),
     hurt: (d) => sfx && sfx.onHurt(d),
     death: (d) => { if (sfx) { sfx.onDeath(d); if (d.victim === "P") music.playerDeath(); } },
     reload: (d) => sfx && sfx.onReload(d),

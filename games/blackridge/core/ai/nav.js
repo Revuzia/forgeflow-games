@@ -17,6 +17,23 @@
 // single source — imported read-only; colliders does not re-export it,
 // flagged to A3). perception.js reads nav.lightAt(x,z).
 // Static v1: the beat-3 blackout does NOT dim AI perception (flagged).
+//
+// BOT-AI PASS (2026-10) — the nav now models the MOVER, not just the floors:
+//   - hop validation at bake time: every cross-floor hop and every hop near a
+//     kerb/stair tread is REPLAYED through world.moveCapsule's own blocking and
+//     support rules (moverHopOk); flat hops get a midpoint/quarter-point capsule
+//     test (thin walls between anchors); 4 m collision buckets are padded so a
+//     point query sees boxes across a bucket line.
+//   - wall-distance classes (clr 0..6 cells) from a multi-source BFS; A* prices
+//     them (WALL_PEN) and randomPoint/openSpot can demand a minimum.
+//   - findPath(from, to, opts): typed-array A*, PADDED string pull from the
+//     bot's exact position, opts {noise,bias,heat,heatW,expose,expW,avoid,pad};
+//     the result carries .ids (A* node chain) for crowd-heat stamping.
+//   - lineClear(a, b, pad)  capsule-clear leg test (steering lookahead);
+//     clearAt(pos), openSpot(pos, r, minClr), makeHeat/stampHeat/decayHeat
+//     (caller-owned crowd map — nav stays stateless across sims),
+//     exposure(pos, radius) (cached grid shadow-cast: cells in view of pos).
+//   Probes: tools/nav_probe.mjs (arrival / stuck / snag / hug / skip metrics).
 
 import { buildLayout } from "../level/layout.js";
 import { mulberry32 } from "../rng.js";
@@ -40,6 +57,29 @@ const FOOT_R = 0.34;        // blocking footprint = the locomotion capsule
 const MAX_FLOOR_ABOVE = 6;  // never nav roofs
 const GRID_MAX = 160;       // frozen budget
 
+// BOT-AI PASS (2026-10, nav_probe.mjs baseline: 80–96% arrival, 18–35% of
+// drive ticks hugging a wall, ~1.3k–4.2k skipped waypoints per 300 routes):
+//  - PULL_PAD: string-pulled legs keep this much EXTRA clearance beyond the
+//    capsule, so a straight leg never grazes a corner the square mover
+//    footprint (world.capsuleBlocked is an AABB test, not a circle) would
+//    snag on. Legs the pad cannot satisfy (door slits, 1 m lanes) fall back to
+//    the plain A* hop, which already sits on the best-clearance node chain.
+//  - WALL_PEN: A* step multiplier by wall-distance class (0 = within one cell
+//    of an obstacle). Open ground prefers the middle of the space; narrow
+//    lanes are uniform so the shortest path still wins there.
+//  - the "climb-adjacent" 0.2 m footprint exception now applies ONLY to stair
+//    risers (kind==='step'). It used to cover every box ≤2 risers tall — low
+//    walls, bollards — which the mover (capsuleBlocked above STEP_UP=0.35)
+//    treats as full-radius walls, so paths ran through 0.2–0.35 m "gaps" that
+//    snagged every bot that took them.
+const PULL_PAD = 0.22;
+const WALL_PEN = [0.75, 0.28, 0.08];
+const CLR_MAX = 6;
+const NOISE_DEFAULT = 0;
+// probe-only timing split (nav_probe --perf sets globalThis.__NAV_PERF__)
+const PERF = { astarMs: 0, pullMs: 0, calls: 0, nodes: 0 };
+const PERF_ON = !!globalThis.__NAV_PERF__;
+
 // POI zone ambient light (LD §3.4 zone-contrast plan, scaled to the §5.1
 // ground-light term; pools from the practicals add on top).
 // W3 (PVP_BUILD_PLAN C20/X2): the three Lanternwalk PVP rooms get authored
@@ -58,6 +98,8 @@ const DEFAULT_AMBIENT = 0.35; // custom/test collider sets without zones
 
 export function bakeNav(colliders, opts = {}) {
   const t0 = (globalThis.performance ? performance.now() : Date.now());
+  const marks = [];
+  const mark = (n) => marks.push([n, (globalThis.performance ? performance.now() : Date.now()) - t0]);
   const cellOpt = opts.cell != null ? opts.cell : 1.0;
   // rayOnly boxes are the ballistic collision layer (compound prop
   // silhouettes, colliders.js) — movement/nav uses each prop's moveOnly
@@ -74,16 +116,22 @@ export function bakeNav(colliders, opts = {}) {
   const ox = bounds.min[0], oz = bounds.min[2];
 
   // ---- box buckets (8 m) for fast per-cell queries
-  const BK = 8;
+  const BK = 4, BK_PAD = 0.9; // 4 m buckets: ~4x fewer boxes per point query than 8 m
   const bw = Math.ceil(W / BK) + 1, bh = Math.ceil(H / BK) + 1;
   const buckets = new Array(bw * bh);
   for (let i = 0; i < buckets.length; i++) buckets[i] = [];
   for (let i = 0; i < boxes.length; i++) {
     const b = boxes[i];
-    const i0 = Math.max(0, Math.floor((b.min[0] - ox) / BK));
-    const i1 = Math.min(bw - 1, Math.floor((b.max[0] - ox) / BK));
-    const j0 = Math.max(0, Math.floor((b.min[2] - oz) / BK));
-    const j1 = Math.min(bh - 1, Math.floor((b.max[2] - oz) / BK));
+    // BOT-AI PASS: bucket by the box inflated by BK_PAD (> FOOT_R + PULL_PAD +
+    // lookahead pad). A point query only sees its OWN bucket, so a point
+    // 0.2 m from a bucket line used to miss a box whose face was 0.2 m away on
+    // the other side — nodes and legs within the capsule radius of a wall at
+    // every 8 m grid line were declared clear (nav_probe: bad hops clustered
+    // there).
+    const i0 = Math.max(0, Math.floor((b.min[0] - BK_PAD - ox) / BK));
+    const i1 = Math.min(bw - 1, Math.floor((b.max[0] + BK_PAD - ox) / BK));
+    const j0 = Math.max(0, Math.floor((b.min[2] - BK_PAD - oz) / BK));
+    const j1 = Math.min(bh - 1, Math.floor((b.max[2] + BK_PAD - oz) / BK));
     for (let bi = i0; bi <= i1; bi++) for (let bj = j0; bj <= j1; bj++) buckets[bi * bh + bj].push(i);
   }
   const nearBoxes = (x, z) => {
@@ -92,11 +140,13 @@ export function bakeNav(colliders, opts = {}) {
     return buckets[bi * bh + bj];
   };
 
+  mark("buckets");
   // ---- floors per cell
   // node storage: flat arrays; cellNodes[ci] = array of node ids
   const cellNodes = new Array(nx * nz).fill(null);
-  const nodeX = [], nodeY = [], nodeZ = [], nodeCell = [];
+  let nodeX = [], nodeY = [], nodeZ = [], nodeCell = [];
   const scratch = [];
+  const cellNear = [];
 
   // Stair note (why two radii): a 0.28 m-deep step top is ALWAYS within
   // 0.34 m of the +2 riser's face, so the full capsule footprint would mark
@@ -106,12 +156,14 @@ export function bakeNav(colliders, opts = {}) {
   // so a "+2" riser is "+1" by the time its face is inside the radius. A
   // box ≤2 risers above the floor is therefore climb-adjacent and keeps the
   // legacy 0.2 footprint; anything taller is a wall and gets the capsule's.
-  function blockedAt(x, z, y, near) {
+  function blockedAt(x, z, y, near, pad) {
+    const pd = pad || 0;
     for (let k = 0; k < near.length; k++) {
       const b = boxes[near[k]];
       if (b.max[1] <= y + STEP + 0.01) continue;   // step/kerb — walkable over
       if (b.min[1] >= y + CLEAR_H) continue;       // high ceiling — clear
-      const r = b.max[1] - y <= 2 * STEP + 0.01 ? 0.2 : FOOT_R;
+      // climb-adjacent exception: STAIR RISERS only (see header note)
+      const r = (b.kind === "step" && b.max[1] - y <= 2 * STEP + 0.01 ? 0.2 : FOOT_R) + pd;
       if (x + r <= b.min[0] || x - r >= b.max[0]) continue;
       if (z + r <= b.min[2] || z - r >= b.max[2]) continue;
       return true;
@@ -128,7 +180,31 @@ export function bakeNav(colliders, opts = {}) {
   for (let ix = 0; ix < nx; ix++) {
     for (let iz = 0; iz < nz; iz++) {
       const x = ox + (ix + 0.5) * cell, z = oz + (iz + 0.5) * cell;
-      const near = nearBoxes(x, z);
+      // cull the 4 m bucket list down to the boxes that can touch ANY sample of
+      // this cell (samples sit <= 0.28 m from the centre, the footprint reaches
+      // 0.34 m further: 0.7 m is exact-safe) — most cells then have none
+      const nearAll = nearBoxes(x, z);
+      const near = cellNear;
+      near.length = 0;
+      for (let q = 0; q < nearAll.length; q++) {
+        const bq = boxes[nearAll[q]];
+        if (x + 0.7 < bq.min[0] || x - 0.7 > bq.max[0] || z + 0.7 < bq.min[2] || z - 0.7 > bq.max[2]) continue;
+        near.push(nearAll[q]);
+      }
+      // fast path: no box can touch this cell and the terrain is flat across
+      // its samples -> exactly one ground node at the centre (what the 9-sample
+      // pass + dedupe would produce, minus ~9 closure calls; ~60% of cells)
+      if (near.length === 0) {
+        const g0 = groundY(x, z), ex = 0.375 * cell;
+        if (groundY(x - ex, z) === g0 && groundY(x + ex, z) === g0 && groundY(x, z - ex) === g0 && groundY(x, z + ex) === g0) {
+          if (g0 >= -0.5) {
+            nodeX.push(x); nodeY.push(g0); nodeZ.push(z);
+            nodeCell.push(ix * nz + iz);
+            cellNodes[ix * nz + iz] = [nodeX.length - 1];
+          }
+          continue;
+        }
+      }
       scratch.length = 0;
       // v2.2 (A0 wave-3): a GROUND floor requires the cell CENTER POINT to not
       // sit INSIDE a tall solid. Offset samples alone could resurrect a
@@ -205,17 +281,181 @@ export function bakeNav(colliders, opts = {}) {
       if (ids) cellNodes[ix * nz + iz] = ids;
     }
   }
+  mark("floors");
   const N = nodeX.length;
+  // typed copies (hot A*/line loops); values identical to the build arrays
+  nodeX = Float64Array.from(nodeX); nodeY = Float64Array.from(nodeY);
+  nodeZ = Float64Array.from(nodeZ); nodeCell = Int32Array.from(nodeCell);
+
+  // ---- mover-faithful hop check (BOT-AI PASS). world.moveCapsule resolves X
+  // then Z with the capsule's footprint tested at the CURRENT feet height and
+  // only afterwards lifts the feet onto the support under the new position.
+  // That ordering makes a stair tread entered from the SIDE impassable
+  // whenever the next riser (top > feet + STEP_UP) overlaps the footprint
+  // before the lift happens — while the same tread climbed along the run is
+  // fine. The floor-graph rules (|dy| <= STEP, kind==='step' footprint
+  // exception) cannot see that, so nav_probe watched bots push at the
+  // first-tread side of a 3 m wide stair run for 40 s (switchyard gbank_step).
+  // This replays the mover's own rules along a straight hop in 6 cm steps
+  // (below one 4.6 m/s tick, 7.7 cm) and answers whether the capsule gets
+  // there. Used for every cross-floor link at bake time and for any pulled /
+  // steering leg whose floor height changes. R = FOOT_R (a hair under the
+  // mover's 0.35, matching how node anchors were cleared).
+  // Cells within 0.9 m of a LOW ground-attached box (kerb / stair tread /
+  // sandbag / barrier: top 0.05..1.1 m). The floor graph labels a hop across
+  // such a box "flat" (a <= STEP box is walk-over-able), but the mover can
+  // still be blocked by a TALLER neighbour tread while it is lifting - e.g. a
+  // run entered from the side (switchyard plat_e_stair_n: bots pushed at the
+  // west flank of the run for a full minute). Every hop / leg touching a
+  // flagged cell is replayed through the mover rules; elsewhere it is skipped
+  // (the replay on all ~60k hops would cost ~80 ms of bake).
+  // cells within 1 m of anything taller than a step: flat hops elsewhere cannot
+  // hit a wall and skip the midpoint test entirely
+  const solidFlag = new Uint8Array(nx * nz);
+  for (let bi = 0; bi < boxes.length; bi++) {
+    const b = boxes[bi];
+    const gy = groundY((b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2) || 0;
+    if (b.max[1] - gy <= STEP + 0.01 && b.kind !== "step") continue;
+    const i0 = Math.max(0, Math.floor((b.min[0] - 1.1 - ox) / cell)), i1 = Math.min(nx - 1, Math.floor((b.max[0] + 1.1 - ox) / cell));
+    const j0 = Math.max(0, Math.floor((b.min[2] - 1.1 - oz) / cell)), j1 = Math.min(nz - 1, Math.floor((b.max[2] + 1.1 - oz) / cell));
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) solidFlag[i * nz + j] = 1;
+  }
+  const lowFlag = new Uint8Array(nx * nz);
+  for (let bi = 0; bi < boxes.length; bi++) {
+    const b = boxes[bi];
+    const top = b.max[1] - (groundY((b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2) || 0);
+    // only things the floor graph treats as walk-over-able (<= STEP) or that are
+    // stair treads can disagree with the mover; a taller box is a wall to both
+    if (!(top > 0.05 && (top <= 0.4 || b.kind === "step")) || b.min[1] > 0.4) continue;
+    const i0 = Math.max(0, Math.floor((b.min[0] - 0.9 - ox) / cell)), i1 = Math.min(nx - 1, Math.floor((b.max[0] + 0.9 - ox) / cell));
+    const j0 = Math.max(0, Math.floor((b.min[2] - 0.9 - oz) / cell)), j1 = Math.min(nz - 1, Math.floor((b.max[2] + 0.9 - oz) / cell));
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) lowFlag[i * nz + j] = 1;
+  }
+  const MV_STEP_UP = 0.35, MV_H = 1.8, MV_SUP_R = 0.35 * 0.6;
+  const hopBoxes = [];
+  function moverBlocked(x, y, z) {
+    for (let k = 0; k < hopBoxes.length; k++) {
+      const b = hopBoxes[k];
+      if (x + FOOT_R <= b.min[0] || x - FOOT_R >= b.max[0]) continue;
+      if (z + FOOT_R <= b.min[2] || z - FOOT_R >= b.max[2]) continue;
+      if (b.max[1] <= y + MV_STEP_UP) continue;
+      if (b.min[1] >= y + MV_H) continue;
+      return true;
+    }
+    return false;
+  }
+  function moverSupport(x, z, y) {
+    let sup = groundY(x, z);
+    for (let k = 0; k < hopBoxes.length; k++) {
+      const b = hopBoxes[k];
+      if (x + MV_SUP_R < b.min[0] || x - MV_SUP_R > b.max[0] || z + MV_SUP_R < b.min[2] || z - MV_SUP_R > b.max[2]) continue;
+      const top = b.max[1];
+      if (top <= y + MV_STEP_UP && top > sup) sup = top;
+    }
+    return sup;
+  }
+  let replays = 0;
+  function moverHopOk(ax, ay, az, bx, by, bz) {
+    replays++;
+    const dx = bx - ax, dz = bz - az;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    // local box list: everything the 0.34 footprint / 0.21 support can touch
+    // along this hop (hop bounds + 0.5 m)
+    hopBoxes.length = 0;
+    const lx0 = Math.min(ax, bx) - 0.5, lx1 = Math.max(ax, bx) + 0.5;
+    const lz0 = Math.min(az, bz) - 0.5, lz1 = Math.max(az, bz) + 0.5;
+    const near = nearBoxes((ax + bx) * 0.5, (az + bz) * 0.5);
+    for (let k = 0; k < near.length; k++) {
+      const b = boxes[near[k]];
+      if (b.max[0] < lx0 || b.min[0] > lx1 || b.max[2] < lz0 || b.min[2] > lz1) continue;
+      hopBoxes.push(b);
+    }
+    const steps = Math.max(2, Math.ceil(dist / 0.06));
+    let x = ax, y = ay, z = az;
+    // a node floor is point-sampled; the mover STANDS on the highest tread its
+    // 0.21 m support footprint touches (up to a riser higher on 0.225 m treads),
+    // so start from that settled height, not the sampled one
+    for (let r = 0; r < 4; r++) { const s2 = moverSupport(x, z, y); if (s2 <= y + 1e-6) break; y = s2; }
+    for (let s = 1; s <= steps; s++) {
+      const nxp = ax + dx * (s / steps), nzp = az + dz * (s / steps);
+      if (moverBlocked(nxp, y, z)) return false;
+      x = nxp;
+      if (moverBlocked(x, y, nzp)) return false;
+      z = nzp;
+      y = moverSupport(x, z, y);
+    }
+    // the mover's support uses a 0.21 m footprint, so on 0.225 m treads it sits
+    // up to one riser ABOVE the point-sampled node floor: tolerate 2 risers
+    return Math.abs(y - by) <= 0.65;
+  }
 
   // ---- adjacency (4-neighbour + diagonals w/ corner-cut guard) + intra-cell
   const adj = new Array(N);
   for (let i = 0; i < N; i++) adj[i] = [];
   const link = (a, b) => { adj[a].push(b); adj[b].push(a); };
+  // BOT-AI PASS: a hop between two clear anchors can still cut straight
+  // through a thin wall / fence / rail that fits BETWEEN the anchors of
+  // neighbouring cells (anchors are offset up to 0.375 cell from centres, so a
+  // hop is up to ~1.5 cell long). nav_probe measured ~9% of A* hops blocked
+  // for the capsule, some by solid boxes. Test the hop midpoint with the same
+  // footprint (anchor squares + midpoint square leave < 0.07 m of unchecked
+  // line). Cross-floor (stair) hops use the lower floor, where a +1 riser is
+  // passable by the STEP rule. Intra-cell stair chains skip the check.
+  let hopsCut = 0;
+  let hopNear = [], hopCell = -1, hopFresh = false;
+  function hopList() {
+    if (hopFresh) return hopNear;
+    hopFresh = true;
+    const ix = (hopCell / nz) | 0, iz = hopCell - ix * nz;
+    const cx = ox + (ix + 0.5) * cell, cz = oz + (iz + 0.5) * cell;
+    const all = nearBoxes(cx, cz);
+    hopNear.length = 0;
+    for (let q = 0; q < all.length; q++) {
+      const bq = boxes[all[q]];
+      if (cx + 1.7 < bq.min[0] || cx - 1.7 > bq.max[0] || cz + 1.7 < bq.min[2] || cz - 1.7 > bq.max[2]) continue;
+      hopNear.push(all[q]);
+    }
+    return hopNear;
+  }
+  const cutLog = [];
+  const linkMid = (a, b) => {
+    // stair hops (any height change) keep the pre-pass rule: the riser/side-wall
+    // geometry there is exactly what the kind==='step' footprint exception models
+    if (Math.abs(nodeY[a] - nodeY[b]) > 0.05) {
+      // faithful replay in the direction of the climb (lower -> higher): the
+      // limiting case — a descent falls gradually, so its footprint is tested
+      // from ABOVE the risers and is never stricter than the climb
+      const lo = nodeY[a] <= nodeY[b] ? a : b, hi = lo === a ? b : a;
+      if (moverHopOk(nodeX[lo], nodeY[lo], nodeZ[lo], nodeX[hi], nodeY[hi], nodeZ[hi])) link(a, b);
+      else { hopsCut++; if (cutLog.length < 3000) cutLog.push([nodeX[lo], nodeY[lo], nodeZ[lo], nodeX[hi], nodeY[hi], nodeZ[hi]]); }
+      return;
+    }
+    if (lowFlag[nodeCell[a]] || lowFlag[nodeCell[b]]) {
+      if (!moverHopOk(nodeX[a], nodeY[a], nodeZ[a], nodeX[b], nodeY[b], nodeZ[b]) ||
+          !moverHopOk(nodeX[b], nodeY[b], nodeZ[b], nodeX[a], nodeY[a], nodeZ[a])) {
+        hopsCut++;
+        if (cutLog.length < 3000) cutLog.push([nodeX[a], nodeY[a], nodeZ[a], nodeX[b], nodeY[b], nodeZ[b]]);
+        return;
+      }
+    }
+    if (!solidFlag[nodeCell[a]] && !solidFlag[nodeCell[b]]) { link(a, b); return; } // open ground
+    const my = Math.min(nodeY[a], nodeY[b]);
+    const hx = nodeX[b] - nodeX[a], hz = nodeZ[b] - nodeZ[a];
+    // long / diagonal hops also get the quarter points: a square footprint
+    // can clip a box corner between the midpoint and an anchor
+    const long = hx * hx + hz * hz > 0.81;
+    for (let q = long ? 1 : 2; q <= (long ? 3 : 2); q += long ? 1 : 2) {
+      const f = q * (long ? 0.25 : 0.25);
+      const mx = nodeX[a] + hx * f, mz = nodeZ[a] + hz * f;
+      if (blockedAt(mx, mz, my, hopList())) { hopsCut++; return; }
+    }
+    link(a, b);
+  };
   const bestPair = (idsA, idsB) => {
     // link every floor pair within STEP (stairs need the full chain)
     for (let a = 0; a < idsA.length; a++) {
       for (let b = 0; b < idsB.length; b++) {
-        if (Math.abs(nodeY[idsA[a]] - nodeY[idsB[b]]) <= STEP) link(idsA[a], idsB[b]);
+        if (Math.abs(nodeY[idsA[a]] - nodeY[idsB[b]]) <= STEP) linkMid(idsA[a], idsB[b]);
       }
     }
   };
@@ -223,10 +463,18 @@ export function bakeNav(colliders, opts = {}) {
     for (let iz = 0; iz < nz; iz++) {
       const ids = cellNodes[ix * nz + iz];
       if (!ids) continue;
+      // boxes that can touch any hop leaving this cell (E, S, SE, SW: <= 1.1 m
+      // from the centre + the 0.34 footprint): culled once per cell
+      hopCell = ix * nz + iz; hopFresh = false; // hopNear is built on first use (open ground never needs it)
       // intra-cell floor chain (stair runs inside one cell)
       for (let a = 0; a < ids.length; a++) {
         for (let b = a + 1; b < ids.length; b++) {
-          if (Math.abs(nodeY[ids[a]] - nodeY[ids[b]]) <= STEP) link(ids[a], ids[b]);
+          if (Math.abs(nodeY[ids[a]] - nodeY[ids[b]]) <= STEP) {
+            const A = ids[a], B = ids[b];
+            const lo = nodeY[A] <= nodeY[B] ? A : B, hi = lo === A ? B : A;
+            if (Math.abs(nodeY[A] - nodeY[B]) <= 0.05 ||
+                moverHopOk(nodeX[lo], nodeY[lo], nodeZ[lo], nodeX[hi], nodeY[hi], nodeZ[hi])) link(A, B);
+          }
         }
       }
       // east + south orthogonals (each pair linked once)
@@ -254,7 +502,7 @@ export function bakeNav(colliders, opts = {}) {
               }
               return false;
             };
-            if (ok(o1) && ok(o2)) link(idsA[a], idsB[b]);
+            if (ok(o1) && ok(o2)) linkMid(idsA[a], idsB[b]);
           }
         }
       };
@@ -269,6 +517,45 @@ export function bakeNav(colliders, opts = {}) {
     }
   }
 
+  mark("adjacency");
+  // ---- wall-distance classes (BOT-AI PASS). An "edge" node is one whose
+  // eight neighbour cells are not ALL linked at a compatible floor (a wall,
+  // prop, or the map boundary sits within ~one cell). A multi-source BFS over
+  // the link graph then gives every node its distance, in cells, to the
+  // nearest edge — O(N), ~3 ms, no raycasts. clr: 0 = against an obstacle,
+  // CLR_MAX = open ground. A* prices low classes (WALL_PEN) and randomPoint /
+  // openSpot can demand a minimum so goals are not chosen in doorways.
+  const clr = new Uint8Array(N).fill(CLR_MAX);
+  {
+    const q = new Int32Array(N);
+    let qh = 0, qt = 0;
+    for (let i = 0; i < N; i++) {
+      const ci = nodeCell[i], cix = (ci / nz) | 0, ciz = ci - cix * nz;
+      let mask = 0;
+      const a = adj[i];
+      for (let k = 0; k < a.length; k++) {
+        const cj = nodeCell[a[k]];
+        if (cj === ci) continue;
+        const dx = ((cj / nz) | 0) - cix, dz = (cj - ((cj / nz) | 0) * nz) - ciz;
+        if (dx < -1 || dx > 1 || dz < -1 || dz > 1) continue;
+        mask |= 1 << ((dx + 1) * 3 + (dz + 1));
+      }
+      if ((mask | 16) !== 511) { clr[i] = 0; q[qt++] = i; } // bit 4 = self cell
+    }
+    while (qh < qt) {
+      const c = q[qh++], d = clr[c] + 1;
+      if (d >= CLR_MAX) continue;
+      const a = adj[c];
+      for (let k = 0; k < a.length; k++) {
+        const nb = a[k];
+        if (clr[nb] > d) { clr[nb] = d; q[qt++] = nb; }
+      }
+    }
+  }
+  const wallPen = new Float32Array(N);
+  for (let i = 0; i < N; i++) wallPen[i] = clr[i] < WALL_PEN.length ? WALL_PEN[clr[i]] : 0;
+
+  mark("clearance");
   // ---- reachability: flood fill from seeds; unreachable floors dropped
   const comp = new Int32Array(N).fill(-1);
   let compCount = 0;
@@ -337,6 +624,7 @@ export function bakeNav(colliders, opts = {}) {
   for (let i = 0; i < N; i++) walk[i] = keep.has(comp[i]) ? 1 : 0;
   walkArr = walk; // nodeAt now prefers walkable floors
 
+  mark("flood");
   // ---- static light bake (per cell, single XZ layer)
   const light = new Float32Array(nx * nz);
   const zones = colliders.zones || null;
@@ -358,6 +646,11 @@ export function bakeNav(colliders, opts = {}) {
     const cz = p.aim ? p.aim[2] : p.pos[2];
     return { x: cx, z: cz, r: Math.min(14, Math.max(3, real ? coneR : 4)), peak };
   });
+  // base ambient per cell (zones), then each practical SPLATS its pool onto
+  // the cells inside its radius (same per-cell add order as the old
+  // cell-major loop: poles in array order -> identical floats, a fraction of
+  // the cost — the light bake was ~30-40 ms of the budget)
+  const lightD = new Float64Array(nx * nz); // double accumulation == the old per-cell local
   for (let ix = 0; ix < nx; ix++) {
     for (let iz = 0; iz < nz; iz++) {
       const x = ox + (ix + 0.5) * cell, z = oz + (iz + 0.5) * cell;
@@ -372,57 +665,125 @@ export function bakeNav(colliders, opts = {}) {
           }
         }
       }
-      for (const p of poleData) {
-        const d = Math.hypot(x - p.x, z - p.z);
-        if (d < p.r) L += p.peak * (1 - d / p.r);
-      }
-      light[ix * nz + iz] = Math.min(1, Math.max(0, L));
+      lightD[ix * nz + iz] = L;
     }
   }
-
-  // ---- A*
-  const gScore = new Float64Array(N);
-  const fromN = new Int32Array(N);
-  const closedGen = new Int32Array(N);
+  for (const p of poleData) {
+    const i0 = Math.max(0, Math.floor((p.x - p.r - ox) / cell));
+    const i1 = Math.min(nx - 1, Math.floor((p.x + p.r - ox) / cell));
+    const j0 = Math.max(0, Math.floor((p.z - p.r - oz) / cell));
+    const j1 = Math.min(nz - 1, Math.floor((p.z + p.r - oz) / cell));
+    for (let ix = i0; ix <= i1; ix++) {
+      for (let iz = j0; iz <= j1; iz++) {
+        const x = ox + (ix + 0.5) * cell, z = oz + (iz + 0.5) * cell;
+        const d = Math.hypot(x - p.x, z - p.z);
+        if (d < p.r) lightD[ix * nz + iz] += p.peak * (1 - d / p.r);
+      }
+    }
+  }
+  for (let i = 0; i < light.length; i++) light[i] = Math.min(1, Math.max(0, lightD[i]));
+  mark("light");
+  // ---- A* (typed-array binary heap; BOT-AI PASS rewrite — the Map/Set
+  // version cost 2–3.4 ms mean / 22 ms worst per path on these maps).
+  // Edge cost = geometric length × (1 + wall class penalty + per-bot lane
+  // noise + squad heat + exposure) — every extra term is >= 0, so the octile
+  // heuristic stays admissible. opts (all optional, all pure inputs):
+  //   noise,bias   — per-bot deterministic lane jitter amplitude + hash seed
+  //   heat,heatW   — Float32Array(N) crowd map owned by the CALLER (nav stays
+  //                  stateless across sims: matchprobe shares ONE nav)
+  //   expose,expW  — Uint8Array(nx*nz) mask of cells in view of a known threat
+  //   avoid        — [x, z, r, w]: extra cost inside a disc (stuck re-routes)
+  const gS = new Float32Array(N);
+  const par = new Int32Array(N);
+  const seenG = new Int32Array(N);
+  const cloG = new Int32Array(N);
   let gen = 0;
-  function astar(a, b) {
+  let heapId = new Int32Array(8192), heapF = new Float32Array(8192), hn = 0;
+  function hpush(id, f) {
+    if (hn === heapId.length) {
+      const ni = new Int32Array(hn * 2), nf = new Float32Array(hn * 2);
+      ni.set(heapId); nf.set(heapF); heapId = ni; heapF = nf;
+    }
+    let c = hn++;
+    while (c > 0) {
+      const p = (c - 1) >> 1;
+      if (heapF[p] <= f) break;
+      heapId[c] = heapId[p]; heapF[c] = heapF[p]; c = p;
+    }
+    heapId[c] = id; heapF[c] = f;
+  }
+  function hpop() {
+    const top = heapId[0];
+    hn--;
+    if (hn > 0) {
+      const id = heapId[hn], f = heapF[hn];
+      let c = 0;
+      for (;;) {
+        const l = 2 * c + 1;
+        if (l >= hn) break;
+        const r = l + 1;
+        const m = (r < hn && heapF[r] < heapF[l]) ? r : l;
+        if (heapF[m] >= f) break;
+        heapId[c] = heapId[m]; heapF[c] = heapF[m]; c = m;
+      }
+      heapId[c] = id; heapF[c] = f;
+    }
+    return top;
+  }
+  // integer hash → [0,1): deterministic per (node, seed), no rng stream used
+  function hash01(i, seed) {
+    let h = (Math.imul(i + 1, 0x9e3779b1) ^ Math.imul(seed + 7, 0x85ebca6b)) >>> 0;
+    h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
+    h = Math.imul(h ^ (h >>> 12), 0x297a2d39) >>> 0;
+    return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
+  }
+  function astar(a, b, opts) {
     gen++;
-    const open = [a]; // binary heap of node ids keyed by f
-    const fKey = new Map();
-    gScore[a] = 0; fromN[a] = -1; closedGen[a] = gen; // closedGen doubles as "seen this gen"
-    const hx = (i) => {
-      const dx = Math.abs(nodeX[i] - nodeX[b]), dz = Math.abs(nodeZ[i] - nodeZ[b]);
-      return Math.max(dx, dz) + 0.4142 * Math.min(dx, dz) + Math.abs(nodeY[i] - nodeY[b]);
-    };
-    fKey.set(a, hx(a));
-    const done = new Set();
-    const up = (i) => { let c = i; while (c > 0) { const p = (c - 1) >> 1; if (fKey.get(open[p]) <= fKey.get(open[c])) break; const t = open[p]; open[p] = open[c]; open[c] = t; c = p; } };
-    const down = () => { let c = 0; for (;;) { let m = c; const l = 2 * c + 1, r = l + 1; if (l < open.length && fKey.get(open[l]) < fKey.get(open[m])) m = l; if (r < open.length && fKey.get(open[r]) < fKey.get(open[m])) m = r; if (m === c) break; const t = open[m]; open[m] = open[c]; open[c] = t; c = m; } };
-    while (open.length) {
-      const cur = open[0];
-      const last = open.pop();
-      if (open.length) { open[0] = last; down(); }
+    hn = 0;
+    const bx = nodeX[b], bz = nodeZ[b], by = nodeY[b];
+    const noise = opts && opts.noise ? opts.noise : NOISE_DEFAULT;
+    const bias = opts && opts.bias ? opts.bias | 0 : 0;
+    const heat = opts && opts.heat ? opts.heat : null;
+    const heatW = opts && opts.heatW != null ? opts.heatW : 0.25;
+    const expose = opts && opts.expose ? opts.expose : null;
+    const expW = opts && opts.expW != null ? opts.expW : 0.9;
+    const avoid = opts && opts.avoid ? opts.avoid : null;
+    const ax0 = nodeX[a], az0 = nodeZ[a];
+    let dxa = Math.abs(ax0 - bx), dza = Math.abs(az0 - bz);
+    gS[a] = 0; par[a] = -1; seenG[a] = gen;
+    hpush(a, Math.max(dxa, dza) + 0.4142 * Math.min(dxa, dza) + Math.abs(nodeY[a] - by));
+    while (hn > 0) {
+      const cur = hpop();
       if (cur === b) {
         const path = [];
-        for (let n = b; n >= 0; n = fromN[n]) path.push(n);
+        for (let n = b; n >= 0; n = par[n]) path.push(n);
         path.reverse();
         return path;
       }
-      if (done.has(cur)) continue;
-      done.add(cur);
+      if (cloG[cur] === gen) continue;
+      cloG[cur] = gen;
       const a2 = adj[cur];
+      const cx = nodeX[cur], cz = nodeZ[cur], cy = nodeY[cur], gc = gS[cur];
       for (let k = 0; k < a2.length; k++) {
         const nb = a2[k];
-        if (!walk[nb] || done.has(nb)) continue;
-        const dx = nodeX[nb] - nodeX[cur], dz = nodeZ[nb] - nodeZ[cur], dy = nodeY[nb] - nodeY[cur];
-        const g = gScore[cur] + Math.hypot(dx, dz) + Math.abs(dy) * 1.5;
-        if (closedGen[nb] === gen && g >= gScore[nb]) continue;
-        closedGen[nb] = gen;
-        gScore[nb] = g;
-        fromN[nb] = cur;
-        fKey.set(nb, g + hx(nb));
-        open.push(nb);
-        up(open.length - 1);
+        if (!walk[nb] || cloG[nb] === gen) continue;
+        const dx = nodeX[nb] - cx, dz = nodeZ[nb] - cz, dy = nodeY[nb] - cy;
+        const len = Math.sqrt(dx * dx + dz * dz);
+        let mult = 1 + wallPen[nb];
+        if (noise) mult += noise * hash01(nb, bias);
+        if (heat) mult += heat[nb] * heatW;
+        if (expose && expose[nodeCell[nb]]) mult += expW;
+        if (avoid) {
+          const ex = nodeX[nb] - avoid[0], ez = nodeZ[nb] - avoid[1];
+          if (ex * ex + ez * ez < avoid[2] * avoid[2]) mult += avoid[3];
+        }
+        const g = gc + len * mult + (dy < 0 ? -dy : dy) * 1.5;
+        if (seenG[nb] === gen && g >= gS[nb]) continue;
+        seenG[nb] = gen;
+        gS[nb] = g;
+        par[nb] = cur;
+        const ex2 = Math.abs(nodeX[nb] - bx), ez2 = Math.abs(nodeZ[nb] - bz);
+        hpush(nb, g + Math.max(ex2, ez2) + 0.4142 * Math.min(ex2, ez2) + Math.abs(nodeY[nb] - by));
       }
     }
     return null;
@@ -436,13 +797,21 @@ export function bakeNav(colliders, opts = {}) {
   // live: a flag CARRIER pinned 297 s at one such corner, seed 17 0-0).
   // Step 0.4×cell (~0.3 m at cell 0.75): the FOOT_R pad makes even a corner
   // graze block ≥~0.3 m of the line, so samples cannot skip past one.
-  function lineWalkable(x0, y0, z0, x1, y1, z1) {
-    const dist = Math.hypot(x1 - x0, z1 - z0);
-    const steps = Math.max(1, Math.ceil(dist / (cell * 0.4)));
+  // pad (BOT-AI PASS): extra clearance on top of the capsule footprint, and a
+  // denser sample step (a padded graze blocks a longer stretch of the line, so
+  // 0.4×cell samples cannot skip it; unpadded keeps the legacy step).
+  let lwDY = 0; // largest |floor height - start| seen by the last lineWalkable
+  function lineWalkable(x0, y0, z0, x1, y1, z1, pad) {
+    const pd = pad || 0;
+    lwDY = 0;
+    let lowHit = false;
+    const dx0 = x1 - x0, dz0 = z1 - z0;
+    const dist = Math.sqrt(dx0 * dx0 + dz0 * dz0);
+    const steps = Math.max(1, Math.ceil(dist / (cell * (pd > 0 ? 0.33 : 0.4))));
     let y = y0;
     for (let s = 1; s <= steps; s++) {
       const t = s / steps;
-      const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+      const x = x0 + dx0 * t, z = z0 + dz0 * t;
       const ci = cellOf(x, z);
       if (ci < 0) return false;
       const ids = cellNodes[ci];
@@ -452,9 +821,15 @@ export function bakeNav(colliders, opts = {}) {
         if (walk[ids[k]] && Math.abs(nodeY[ids[k]] - y) <= STEP + 0.02) { y = nodeY[ids[k]]; ok = true; break; }
       }
       if (!ok) return false;
-      if (blockedAt(x, z, y, nearBoxes(x, z))) return false;
+      if (lowFlag[ci]) lowHit = true;
+      if (blockedAt(x, z, y, nearBoxes(x, z), pd)) return false;
+      const dyy = y - y0;
+      if (dyy > lwDY) lwDY = dyy; else if (-dyy > lwDY) lwDY = -dyy;
     }
-    return Math.abs(y - y1) <= STEP + 0.02;
+    if (Math.abs(y - y1) > STEP + 0.02) return false;
+    // any leg that climbs / descends must also survive the mover's own rules
+    if (lwDY > 0.05 || lowHit) return moverHopOk(x0, y0, z0, x1, y1, z1);
+    return true;
   }
 
   const fallbackRng = mulberry32(0x5eed5eed); // API-compat only; pass rng!
@@ -499,62 +874,158 @@ export function bakeNav(colliders, opts = {}) {
     return cands[0][1];
   }
 
+  // ---- exposure (lazy; nothing here runs at bake time)
+  let opaque = null;
+  const expCache = new Map();
+  function buildOpaque() {
+    opaque = new Uint8Array(nx * nz);
+    const all = colliders.boxes || [];
+    for (let bi = 0; bi < all.length; bi++) {
+      const b = all[bi];
+      if (b.moveOnly) continue;               // movement hull - transparent to sight
+      if (!(b.min[1] < 1.2 && b.max[1] > 1.3)) continue; // does not cross the eye line
+      const i0 = Math.max(0, Math.floor((b.min[0] - 0.1 - ox) / cell));
+      const i1 = Math.min(nx - 1, Math.floor((b.max[0] + 0.1 - ox) / cell));
+      const j0 = Math.max(0, Math.floor((b.min[2] - 0.1 - oz) / cell));
+      const j1 = Math.min(nz - 1, Math.floor((b.max[2] + 0.1 - oz) / cell));
+      for (let i = i0; i <= i1; i++) {
+        for (let j = j0; j <= j1; j++) {
+          const cx = ox + (i + 0.5) * cell, cz = oz + (j + 0.5) * cell;
+          // real overlap of the cell centre +-0.25 cell with the box
+          if (cx + cell * 0.25 > b.min[0] && cx - cell * 0.25 < b.max[0] &&
+              cz + cell * 0.25 > b.min[2] && cz - cell * 0.25 < b.max[2]) opaque[i * nz + j] = 1;
+        }
+      }
+    }
+  }
+  function exposureMask(pos, radius) {
+    const sci = Math.floor((pos[0] - ox) / cell), scj = Math.floor((pos[2] - oz) / cell);
+    if (sci < 0 || sci >= nx || scj < 0 || scj >= nz) return null;
+    const R = Math.min(60, Math.max(2, Math.ceil(radius / cell)));
+    const key = ((sci * 1000 + scj) * 100) + R;
+    const hit = expCache.get(key);
+    if (hit) return hit;
+    if (!opaque) buildOpaque();
+    const W = 2 * R + 1;
+    const vis = new Uint8Array(W * W);
+    const mask = new Uint8Array(nx * nz);
+    vis[R * W + R] = 1;
+    const R2 = R * R;
+    // rings of increasing Chebyshev distance so the cell "one step back" is done
+    for (let d = 1; d <= R; d++) {
+      for (let dx = -d; dx <= d; dx++) {
+        for (let dz = -d; dz <= d; dz++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== d) continue;
+          if (dx * dx + dz * dz > R2) continue;
+          const ax = Math.abs(dx), az = Math.abs(dz);
+          let px, pz;
+          if (ax >= az) { px = dx - Math.sign(dx); pz = Math.round(dz * (ax - 1) / ax); }
+          else { pz = dz - Math.sign(dz); px = Math.round(dx * (az - 1) / az); }
+          if (!vis[(px + R) * W + (pz + R)]) continue;
+          if (px !== 0 || pz !== 0) {
+            const ci = sci + px, cj = scj + pz;
+            if (ci < 0 || ci >= nx || cj < 0 || cj >= nz) continue;
+            if (opaque[ci * nz + cj]) continue;
+          }
+          vis[(dx + R) * W + (dz + R)] = 1;
+          const gi = sci + dx, gj = scj + dz;
+          if (gi >= 0 && gi < nx && gj >= 0 && gj < nz) mask[gi * nz + gj] = 1;
+        }
+      }
+    }
+    mask[sci * nz + scj] = 1;
+    if (expCache.size >= 8) expCache.delete(expCache.keys().next().value);
+    expCache.set(key, mask);
+    return mask;
+  }
+
   const nav = {
     // -------------------------------------------------- frozen signatures
-    findPath(from, to) {
+    // findPath(from, to [, opts]) — A* over the floor graph, then a PADDED
+    // string pull (PULL_PAD clearance beyond the capsule) from the bot's exact
+    // position. opts: see astar() header + { pad } to override the pull pad
+    // (0 = legacy unpadded). The result carries .ids (the A* node chain) so a
+    // caller can stamp a crowd-heat map without re-resolving nodes.
+    findPath(from, to, opts) {
       const a = reachableNodeAt(from), b = nodeAt(to);
       if (a < 0 || b < 0 || !walk[a] || !walk[b]) return null;
       if (comp[a] !== comp[b]) return null;
-      const ids = astar(a, b);
+      const tP0 = PERF_ON ? performance.now() : 0;
+      const ids = astar(a, b, opts);
+      if (PERF_ON) { PERF.astarMs += performance.now() - tP0; PERF.calls++; PERF.nodes += ids ? ids.length : 0; }
       if (!ids) return null;
-      // string pulling: greedy skip while the straight line stays walkable
-      const pts = ids.map((i) => [nodeX[i], nodeY[i], nodeZ[i]]);
-      const out = [pts[0]];
-      let i = 0;
-      while (i < pts.length - 1) {
-        let j = pts.length - 1;
-        for (; j > i + 1; j--) {
-          if (Math.abs(pts[j][1] - pts[i][1]) <= STEP + 0.02 || j === i + 1) {
-            if (lineWalkable(pts[i][0], pts[i][1], pts[i][2], pts[j][0], pts[j][1], pts[j][2])) break;
-          }
-        }
-        out.push(pts[j]);
-        i = j;
+      const tP1 = PERF_ON ? performance.now() : 0;
+      const pad = opts && opts.pad != null ? opts.pad : PULL_PAD;
+      const L = [];
+      // exact start (see v2.2 note below): the chain's first node is kept as a
+      // waypoint only when the pull cannot skip it
+      const aY = nodeY[ids[0]];
+      const fromCi = cellOf(from[0], from[2]);
+      const toCi = cellOf(to[0], to[2]);
+      L.push([from[0], aY, from[2]]);
+      for (let k = 0; k < ids.length; k++) L.push([nodeX[ids[k]], nodeY[ids[k]], nodeZ[ids[k]]]);
+      const lastN = L[L.length - 1];
+      let goalPt = null;
+      if (Math.hypot(lastN[0] - to[0], lastN[2] - to[2]) > 0.4 &&
+          (nodeCell[b] === toCi ||
+           lineWalkable(lastN[0], lastN[1], lastN[2], to[0], lastN[1], to[2]))) {
+        goalPt = [to[0], lastN[1], to[2]];
+        L.push(goalPt);
       }
       // exact endpoints at nav height (v2.2, A0 wave-3, SCOPED): nodeAt's
       // ring search can resolve an OFF-MESH endpoint to a node ~1 cell away;
       // blindly replacing that node with the exact endpoint created a first
       // leg that crossed the very solid the ring was avoiding (measured: the
-      // alley scaffold al_scaf_1 — player AND three bots pressed into its
-      // faces forever). The validation applies ONLY when the endpoint was
-      // ring-resolved out of its own cell (the pathological case) — normal
-      // paths keep the original replace/append byte-for-byte, so the frozen
-      // fairness/passivity probes see unchanged routes.
-      const fromCi = cellOf(from[0], from[2]);
-      const toCi = cellOf(to[0], to[2]);
-      const aY = out[0][1];
-      if (nodeCell[a] === fromCi ||
-          (out.length >= 2 &&
-           lineWalkable(from[0], aY, from[2], out[1][0], out[1][1], out[1][2])) ||
-          Math.hypot(out[0][0] - from[0], out[0][2] - from[2]) <= 0.4) {
-        out[0] = [from[0], aY, from[2]];
-      } else {
-        out.unshift([from[0], aY, from[2]]); // keep the resolved node as a waypoint
+      // alley scaffold al_scaf_1). A start/goal point that is NOT line-reachable
+      // from its resolved node keeps that node as a waypoint — the pull below
+      // only skips a node when a straight capsule-clear leg exists.
+      const lastIdx = L.length - 1;
+      const out = [L[0]];
+      let i = 0;
+      while (i < lastIdx) {
+        const jmax = Math.min(lastIdx, i + 56);
+        let j = jmax;
+        for (; j > i + 1; j--) {
+          if (Math.abs(L[j][1] - L[i][1]) > STEP + 0.02) continue;
+          const dxl = L[j][0] - L[i][0], dzl = L[j][2] - L[i][2];
+          if (dxl * dxl + dzl * dzl > 1600) continue;
+          if (lineWalkable(L[i][0], L[i][1], L[i][2], L[j][0], L[j][1], L[j][2], pad)) break;
+        }
+        // Unpadded legs are allowed only SHORT and only at the two ends: the
+        // start (the bot is where it is, possibly against a wall) and the goal
+        // (a flag stand may sit 0.35 m off a wall). An unpadded long goal leg
+        // ran 0.08 m off a crate and the bot, drifting 0.3 m, wedged on its face.
+        if (i === 0 || jmax === lastIdx) {
+          for (let jj = jmax; jj > j; jj--) {
+            if (!(i === 0 || jj === lastIdx)) continue;
+            if (Math.abs(L[jj][1] - L[i][1]) > STEP + 0.02) continue;
+            const dxl = L[jj][0] - L[i][0], dzl = L[jj][2] - L[i][2];
+            if (dxl * dxl + dzl * dzl > 9) continue;
+            if (lineWalkable(L[i][0], L[i][1], L[i][2], L[jj][0], L[jj][1], L[jj][2], 0)) { j = jj; break; }
+          }
+        }
+        out.push(L[j]);
+        i = j;
       }
-      const last = out[out.length - 1];
-      if (Math.hypot(last[0] - to[0], last[2] - to[2]) > 0.4 &&
-          (nodeCell[b] === toCi ||
-           lineWalkable(last[0], last[1], last[2], to[0], last[1], to[2]))) {
-        out.push([to[0], last[1], to[2]]);
-      }
+      void fromCi;
+      if (PERF_ON) PERF.pullMs += performance.now() - tP1;
+      out.ids = ids;
       return out;
     },
 
-    randomPoint(near, r, rng) {
+    // minClr (BOT-AI PASS, optional): demand a wall-distance class >= minClr so
+    // wander / investigate / hold goals are not picked in doorways and against
+    // walls; falls back to the unfiltered set when nothing qualifies. Still
+    // exactly ONE rng() draw per call (stream discipline unchanged).
+    randomPoint(near, r, rng, minClr) {
       const rand = rng || fallbackRng;
       const cix = Math.floor((near[0] - ox) / cell), ciz = Math.floor((near[2] - oz) / cell);
       const rr = Math.max(1, Math.ceil(r / cell));
       const cands = [];
+      const want = minClr | 0;
+      let loose = null;
+      if (want > 0) loose = [];
+      const r2 = r * r, ny0 = near[1] || 0;
       for (let dx = -rr; dx <= rr; dx++) {
         for (let dz = -rr; dz <= rr; dz++) {
           const ix = cix + dx, iz = ciz + dz;
@@ -564,13 +1035,17 @@ export function bakeNav(colliders, opts = {}) {
           for (let k = 0; k < ids.length; k++) {
             const id = ids[k];
             if (!walk[id]) continue;
-            if (Math.hypot(nodeX[id] - near[0], nodeZ[id] - near[2]) <= r &&
-                Math.abs(nodeY[id] - (near[1] || 0)) <= 3.5) cands.push(id);
+            const ex = nodeX[id] - near[0], ez = nodeZ[id] - near[2];
+            if (ex * ex + ez * ez <= r2 && Math.abs(nodeY[id] - ny0) <= 3.5) {
+              if (want > 0) { if (clr[id] >= want) cands.push(id); else loose.push(id); }
+              else cands.push(id);
+            }
           }
         }
       }
-      if (!cands.length) return [near[0], near[1] || 0, near[2]];
-      const id = cands[Math.min(cands.length - 1, Math.floor(rand() * cands.length))];
+      const pool = cands.length ? cands : (loose && loose.length ? loose : null);
+      if (!pool) return [near[0], near[1] || 0, near[2]];
+      const id = pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
       return [nodeX[id], nodeY[id], nodeZ[id]];
     },
 
@@ -578,6 +1053,66 @@ export function bakeNav(colliders, opts = {}) {
       const a = nodeAt(from), b = nodeAt(to);
       return a >= 0 && b >= 0 && walk[a] === 1 && walk[b] === 1 && comp[a] === comp[b];
     },
+
+    // -------------------------------------------------- BOT-AI PASS additions
+    // capsule-clear straight leg from a to b following the floor graph, with
+    // `pad` metres of extra clearance (steering lookahead; ~10 samples/3 m)
+    lineClear(a, b, pad) {
+      return lineWalkable(a[0], a[1] || 0, a[2], b[0], b[1] != null ? b[1] : (a[1] || 0), b[2], pad || 0);
+    },
+    // wall-distance class (0 = against an obstacle ... CLR_MAX = open) of the
+    // node nearest `pos`; -1 off the mesh
+    clearAt(pos) {
+      const id = nodeAt(pos, 1.5);
+      return id < 0 ? -1 : clr[id];
+    },
+    // nearest walkable node >= minClr within r of pos, for nudging a hold /
+    // wander goal out of a doorway (deterministic; no rng). null when none.
+    openSpot(pos, r, minClr) {
+      const cix = Math.floor((pos[0] - ox) / cell), ciz = Math.floor((pos[2] - oz) / cell);
+      const rr = Math.max(1, Math.ceil(r / cell));
+      let best = -1, bestD = Infinity;
+      for (let dx = -rr; dx <= rr; dx++) {
+        for (let dz = -rr; dz <= rr; dz++) {
+          const ix = cix + dx, iz = ciz + dz;
+          if (ix < 0 || ix >= nx || iz < 0 || iz >= nz) continue;
+          const ids = cellNodes[ix * nz + iz];
+          if (!ids) continue;
+          for (let k = 0; k < ids.length; k++) {
+            const id = ids[k];
+            if (!walk[id] || clr[id] < minClr) continue;
+            if (Math.abs(nodeY[id] - (pos[1] || 0)) > 0.8) continue;
+            const ex = nodeX[id] - pos[0], ez = nodeZ[id] - pos[2];
+            const d = ex * ex + ez * ez;
+            if (d < bestD && d <= r * r) { bestD = d; best = id; }
+          }
+        }
+      }
+      return best < 0 ? null : [nodeX[best], nodeY[best], nodeZ[best]];
+    },
+    // crowd heat (lane diversity). The map is owned by the CALLER (nav is
+    // shared between sims/matches and must stay stateless).
+    makeHeat() { return new Float32Array(N); },
+    stampHeat(heat, ids, amt) {
+      if (!heat || !ids) return;
+      for (let k = 0; k < ids.length; k++) {
+        const id = ids[k];
+        heat[id] += amt;
+        const a = adj[id];
+        for (let m = 0; m < a.length; m++) heat[a[m]] += amt * 0.5;
+      }
+    },
+    decayHeat(heat, f) { if (heat) for (let i = 0; i < heat.length; i++) heat[i] *= f; },
+    // which cells can a viewer standing at pos see (ground-level eye line,
+    // radius metres)? Uint8Array(nx*nz); pure function of (pos cell, radius),
+    // cached (8 entries). Approximate permissive grid shadow-cast: a cell is
+    // seen if the cell one step back toward the viewer is seen and not opaque.
+    exposure(pos, radius) {
+      return exposureMask(pos, radius);
+    },
+    cellOfPos(x, z) { return cellOf(x, z); },
+    // read-only graph view for probes / debugging (not a stable API)
+    _graph() { return { nodeX, nodeY, nodeZ, nodeCell, adj, walk, clr, nodeAt }; },
 
     // -------------------------------------------------- private additions
     lightAt(x, z) {
@@ -592,7 +1127,7 @@ export function bakeNav(colliders, opts = {}) {
       const id = nodeAt(pos, 2.0);
       return id < 0 ? null : nodeY[id];
     },
-    stats: { cells: nx * nz, nodes: N, walkable: 0, bakeMs, cell, nx, nz },
+    stats: { cells: nx * nz, nodes: N, walkable: 0, bakeMs, cell, nx, nz, perf: PERF, hopsCut, marks, cutLog, get replays() { return replays; } },
     _hash() {
       // deterministic bake fingerprint for probes
       let h = 5381 >>> 0;

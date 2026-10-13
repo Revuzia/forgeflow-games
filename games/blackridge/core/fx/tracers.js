@@ -57,6 +57,26 @@ const HDR = 3.1;    // color multiplier — the streak blooms, the frame doesn't
 const NEAR_REF = 8.0;         // m — inside this, hold apparent width constant
 const NEAR_REF_INV = 1 / NEAR_REF;
 
+// ---- per-weapon streak STYLE (presentation pass) ---------------------------------
+// len/w = streak length and width (m), spd = fraction of the cosmetic speed cap.
+// A pistol round is a short thin dart, the marksman rifle a long fast streak,
+// and a shotgun PELLET a thin, short, slightly slower spark — at most 3 of a
+// volley's 9 pellets ever draw one (see TRACERS_PER_VOLLEY), so the blast reads
+// as a spray of a few streaks, not nine slabs.
+const STYLE_DEFAULT = { len: LEN, w: WIDTH, spd: 1 };
+const STYLE = {
+  warden:  { len: 8.0, w: 0.092, spd: 1 },
+  vesper:  { len: 6.0, w: 0.076, spd: 1 },
+  corvus:  { len: 11.0, w: 0.100, spd: 1 },
+  pike:    { len: 5.5, w: 0.074, spd: 1 },
+  breaker: { len: 3.2, w: 0.046, spd: 0.72 },
+};
+// Of the nine fire-time events of ONE volley only the first TRACERS_PER_VOLLEY
+// that reach spawn() draw a streak. Counted here per volley id (env.shot.volleys)
+// rather than derived from the pellet index, because fx.js may pre-filter which
+// pellets it forwards and muzzle.spawn only sees some of them.
+const TRACERS_PER_VOLLEY = 3;
+
 function streakTexture() {
   // 128 x 32 teardrop: alpha = lengthRamp(u) * softCrossSection(v, u).
   // Thin at the tail, full at the head, and soft-edged everywhere — so the
@@ -139,10 +159,16 @@ export function makeTracers(env) {
   const dir = new Float32Array(N * 3);
   const traveled = new Float32Array(N);
   const total = new Float32Array(N);
+  const maxLen = new Float32Array(N);   // per-weapon streak length
+  const wid = new Float32Array(N);      // per-weapon streak width
+  const spd = new Float32Array(N);      // per-weapon fraction of the speed cap
   const alive = new Uint8Array(N);
   let cursor = 0;
   let activeCount = 0;
   let spawnedCount = 0;
+  let skippedCount = 0; // volley pellets that deliberately drew no streak
+  let volleyId = -1;    // env.shot.volleys of the volley currently being counted
+  let volleyDrawn = 0;  // streaks drawn so far in that volley
 
   function deactivate(i) {
     if (!alive[i]) return;
@@ -156,9 +182,22 @@ export function makeTracers(env) {
     // origin/direction are the shot event's [3] arrays; dist = metres to the
     // resolved hit (or a far cap on a terminal miss).
     spawn(origin, direction, dist) {
+      // env.shot is published by muzzle.spawn(d), which fx.js calls for the SAME
+      // event immediately before this; trust it only when the origin matches.
+      let st = STYLE_DEFAULT;
+      const S = env.shot;
+      if (S && S.n > 0 && S.ox === origin[0] && S.oy === origin[1] && S.oz === origin[2]) {
+        if (S.multi) {
+          if (volleyId !== S.volleys) { volleyId = S.volleys; volleyDrawn = 0; }
+          if (volleyDrawn >= TRACERS_PER_VOLLEY) { skippedCount++; return; }
+          volleyDrawn++;
+        }
+        st = STYLE[S.weaponId] || STYLE_DEFAULT;
+      }
       const i = cursor;
       cursor = (cursor + 1) % N;
       if (!alive[i]) { alive[i] = 1; activeCount++; }
+      maxLen[i] = st.len; wid[i] = st.w; spd[i] = st.spd;
       const i3 = i * 3;
       // start slightly downrange so the quad never sits inside the camera
       head[i3] = origin[0] + direction[0] * 0.9;
@@ -173,16 +212,17 @@ export function makeTracers(env) {
     update(dt) {
       if (activeCount === 0) return;
       const cam = env.cam;
-      const step = TRACER.cosmeticCapMps * dt;
+      const stepBase = TRACER.cosmeticCapMps * dt;
       for (let i = 0; i < N; i++) {
         if (!alive[i]) continue;
         const i3 = i * 3;
+        const step = stepBase * spd[i];
         traveled[i] += step;
         if (traveled[i] >= total[i]) { deactivate(i); continue; }
         head[i3] += dir[i3] * step;
         head[i3 + 1] += dir[i3 + 1] * step;
         head[i3 + 2] += dir[i3 + 2] * step;
-        const len = Math.min(LEN, traveled[i]);
+        const len = Math.min(maxLen[i], traveled[i]);
         _dirV.set(dir[i3], dir[i3 + 1], dir[i3 + 2]);
         _mid.set(
           head[i3] - _dirV.x * len * 0.5,
@@ -210,7 +250,7 @@ export function makeTracers(env) {
         if (tproj < 0) tproj = 0; else if (tproj > len) tproj = len;
         _near.copy(_tail).addScaledVector(_dirV, tproj).sub(cam.position);
         const dNear = Math.sqrt(_near.lengthSq()) || 1e-3;
-        _y.multiplyScalar(WIDTH * Math.min(1, dNear * NEAR_REF_INV));
+        _y.multiplyScalar(wid[i] * Math.min(1, dNear * NEAR_REF_INV));
         _m.makeBasis(_x, _y, _z);
         _m.setPosition(_mid);
         mesh.setMatrixAt(i, _m);
@@ -221,9 +261,11 @@ export function makeTracers(env) {
     clear() {
       for (let i = 0; i < N; i++) deactivate(i);
       mesh.instanceMatrix.needsUpdate = true;
+      volleyId = -1; volleyDrawn = 0;
     },
     prewarmables() { return [mesh]; },
     active: () => activeCount,
     spawned: () => spawnedCount,
+    skipped: () => skippedCount,
   };
 }

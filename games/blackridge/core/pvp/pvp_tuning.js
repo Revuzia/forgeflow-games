@@ -111,10 +111,38 @@ export function getTuning(id) {
 // NO scaling. Headless selftests never select a difficulty, so every
 // existing probe expectation is byte-identical by construction; the live
 // game always selects one (menu default STANDARD).
+//
+// BOT-AI PASS (2026-10): each row also carries an `ai` block - the part of the
+// level that changes HOW BOTS PLAY (never HP, damage, ammo, speed or sight):
+//   enemyBandShift     PVP: bump every bot hostile to the human up/down the
+//                      recruit<regular<hardened<veteran ladder (botfsm.js
+//                      skillOf). The roster presets (match/roster.js) still pick
+//                      the base MIX; this makes the levels reach further apart
+//                      (CASUAL ~0.9 s reactions, HARD 0.2-0.3 s).
+//   campaignBandShift  campaign: extra shift on top of mission.js's bandShift
+//   reactScale/jitterScale  global multipliers on every band's reaction window
+//                      and aim sigma (fine-tuning without editing BANDS)
+//   humanTokens        fire tokens per squad on the HUMAN (<= the audited 2)
+//   humanWindow        distinct attackers in one 250 ms window (<= the audited 3)
+// content.json's difficulty.<level>.ai overrides these defaults (shallow: give
+// the whole block). Selftests select no difficulty -> resolveDifficulty() is
+// null -> the raw BANDS table and the original caps.
 export const DIFFICULTY = {
-  casual:   { playerIncomingMult: 0.60, bandShift: -1 },
-  standard: { playerIncomingMult: 0.80, bandShift: 0 },
-  hard:     { playerIncomingMult: 1.00, bandShift: 0 },
+  casual:   { playerIncomingMult: 0.60, bandShift: -1, ai: { enemyBandShift: -1, campaignBandShift: 0, reactScale: 1, jitterScale: 1, humanTokens: 1, humanWindow: 2 } },
+  standard: { playerIncomingMult: 0.80, bandShift: 0,  ai: { enemyBandShift: 0,  campaignBandShift: 0, reactScale: 1, jitterScale: 1, humanTokens: 2, humanWindow: 3 } },
+  hard:     { playerIncomingMult: 1.00, bandShift: 0,  ai: { enemyBandShift: 1,  campaignBandShift: 1, reactScale: 1, jitterScale: 1, humanTokens: 2, humanWindow: 3 } },
+  // expert (owner 2026-10-12): the ONLY tier PVP uses. Identity damage to the
+  // human (1.0, same as hard), no shift - match/roster.js DIFFICULTY_PRESETS.expert
+  // already seats every combatant at the veteran band - and the audited caps
+  // (<= 2 fire tokens / <= 3 attackers per 250 ms) untouched.
+  expert:   { playerIncomingMult: 1.00, bandShift: 0,  ai: { enemyBandShift: 0,  campaignBandShift: 0, reactScale: 1, jitterScale: 1, humanTokens: 2, humanWindow: 3,
+    // sharpened veteran (see botfsm.js BANDS knob reference); mirrors content.json
+    bandOverrides: { veteran: {
+      reactMin: 0.22, reactMax: 0.3, jitter: 0.015, pauseMin: 0.28, pauseMax: 0.5, leadErr: 0.08,
+      turnRate: 14, acquire: 2.2, thinkS: 0.1, strafeReact: false, holdWhenSeen: true, notice: 1.5, memory: 0.45,
+      hearMult: 1.4, hearFuzz: 0.55, coverRescoreS: 3.5, flankEvery: 3.5, flankP: 0.85,
+      grenStaticS: 1.8, grenCdS: 9, huntAfterS: 2, exposureAvoid: 1.6, lootRange: 40,
+    } } } },
 };
 
 export function resolveDifficulty(id, contentDiff) {

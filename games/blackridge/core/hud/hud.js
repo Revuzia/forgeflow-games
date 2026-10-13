@@ -157,18 +157,42 @@ export function ensureStyle() {
   width:14px;height:14px;border:1.5px solid var(--a10-red);border-radius:50%;opacity:0;}
 
 /* ---------------------------------------------------------- hitmarker */
-#hitmarker{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;will-change:transform,opacity;}
-#hitmarker .a10-hm{position:absolute;width:2px;background:var(--a10-ink);
-  left:-1px;top:0;transform-origin:50% 0;}
-#hitmarker.kill .a10-hm{background:var(--a10-kill);}
-#hitmarker .a10-notch{position:absolute;left:-1px;top:-3px;width:2px;height:0;
-  background:var(--a10-ink);}
-#hitmarker.head .a10-notch{height:3px;}
+/* Weapon-feedback pass. Three variants, three colours, and RED stays reserved
+   for the kill: a white 4-tick X for a hit (a dark 1 px contour + soft halo so
+   it survives a bright wall), a warm GOLD-white X with longer arms and a small
+   gold DIAMOND for a headshot, a larger RED X for a kill (with the diamond when
+   the killing blow was a headshot). --hmr is the inner radius of the X: the
+   arms start that far from the centre along their own diagonal. The pop-in
+   (widest on the first frame, settling in ~60-85 ms) is driven from update() on
+   SIM time. */
+#hitmarker{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;
+  will-change:transform,opacity;--hmr:6px;}
+#hitmarker .a10-hm{position:absolute;width:2.5px;height:9px;background:var(--a10-ink);
+  left:-1.25px;top:0;transform-origin:50% 0;border-radius:1px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 4px 1px rgba(0,0,0,.5);}
+#hitmarker .a10-dia{position:absolute;left:-4px;top:-4px;width:8px;height:8px;
+  box-sizing:border-box;border:1.6px solid #f2c14e;background:rgba(255,232,168,.30);
+  transform:rotate(45deg);display:none;
+  box-shadow:0 0 0 1px rgba(0,0,0,.55),0 0 4px rgba(0,0,0,.5);}
+#hitmarker.head{--hmr:7px;}
+#hitmarker.head .a10-hm{height:12px;background:#ffe6a0;}
+#hitmarker.head .a10-dia{display:block;}
+#hitmarker.kill{--hmr:9px;}
+#hitmarker.kill .a10-hm{width:3.5px;left:-1.75px;height:15px;background:var(--a10-kill);
+  box-shadow:0 0 0 1px rgba(30,0,0,.7),0 0 7px 1px rgba(255,59,48,.5);}
+#hitmarker.kill .a10-dia{display:none;}
+#hitmarker.kill.hd .a10-dia{display:block;}
 
 /* --------------------------------------------------------- threat ring */
-#a10-threat{position:absolute;left:50%;top:50%;width:0;height:0;}
-#a10-threat .a10-arc{position:absolute;left:-60px;top:-60px;width:120px;height:120px;
-  opacity:0;will-change:transform,opacity;}
+/* Damage-direction wedges: a crisp, tapered red crescent riding a ring ~20% of
+   the screen height from the centre (outside the hip crosshair), one per
+   recent attacker bearing. update() rotates it to the attacker's bearing and
+   fades it over 0.8 s of SIM time. The old ring was a 4 px hairline at 48 px
+   radius, hidden under the crosshair's own spread. */
+#a10-threat{position:absolute;left:50%;top:50%;width:0;height:0;--arc-s:min(47vh,500px);}
+#a10-threat .a10-arc{position:absolute;left:calc(var(--arc-s) / -2);top:calc(var(--arc-s) / -2);
+  width:var(--arc-s);height:var(--arc-s);opacity:0;will-change:transform,opacity;}
+#a10-threat .a10-arc svg{display:block;width:100%;height:100%;overflow:visible;}
 
 /* ------------------------------------------------------ grenade warning */
 #a10-grenade{position:absolute;left:50%;top:58%;transform:translateX(-50%);
@@ -283,16 +307,42 @@ export function ensureStyle() {
 #a10-fade{position:absolute;inset:0;background:#000;opacity:0;}
 
 /* --------------------------------------------------------------- scope */
-#a10-scope{position:absolute;inset:0;display:none;}
-#a10-scope .hole{position:absolute;left:50%;top:50%;width:76vmin;height:76vmin;
-  transform:translate(-50%,-50%);border-radius:50%;
-  box-shadow:0 0 0 9999px rgba(2,3,4,.985),inset 0 0 90px rgba(0,0,0,.9);
-  border:1px solid rgba(0,0,0,.9);}
-#a10-scope .cx{position:absolute;left:50%;top:50%;background:rgba(10,10,10,.92);}
-#a10-scope .cxh{width:76vmin;height:1px;transform:translate(-50%,-0.5px);}
-#a10-scope .cxv{width:1px;height:76vmin;transform:translate(-0.5px,-50%);}
-#a10-scope .mil{position:absolute;left:50%;top:50%;background:rgba(10,10,10,.85);}
-#a10-scope .drift{position:absolute;inset:0;will-change:transform;}
+/* PRESENTATION PASS (2026-10): full-screen scope. --R is the lens radius in px (set from
+   JS, 45.5% of the short side). Layers, bottom to top:
+     .sc-housing  — everything attached to the GUN: black surround (.sc-mask), the lens
+                    glass effects (.sc-lens: edge vignette, tint, glint, chromatic fringe),
+                    the metal ring and the zoom label. It LAGS the view a few px when you
+                    turn and kicks with each round (parallax / sway read).
+     .sc-ret      — the reticle, fixed on the aim ray (screen centre): aim truth.
+     .sc-breath   — breath-hold arc just outside the ring.
+   The 3D gun is hidden by viewmodel.js at full ADS; the world itself is zoomed 3.9x by the
+   camera FOV, so this overlay is only the optic's body, never a fake zoom. */
+#a10-scope{position:absolute;inset:0;display:none;overflow:hidden;--R:380px;}
+#a10-scope .sc-housing{position:absolute;inset:0;will-change:transform;}
+#a10-scope .sc-mask{position:absolute;inset:-40vmax;will-change:opacity;
+  background:radial-gradient(circle at 50% 50%,rgba(0,0,0,0) 0,rgba(0,0,0,0) calc(var(--R) - 2px),
+    rgba(1,2,3,.62) calc(var(--R) + 0.5px),#010203 calc(var(--R) + 6px));}
+#a10-scope .sc-lens{position:absolute;left:50%;top:50%;width:calc(var(--R)*2);height:calc(var(--R)*2);
+  margin:calc(var(--R)*-1) 0 0 calc(var(--R)*-1);border-radius:50%;overflow:hidden;will-change:opacity,transform;
+  background:
+    radial-gradient(circle at 50% 50%,rgba(0,0,0,0) 0,rgba(0,0,0,0) 64%,rgba(0,0,0,.26) 86%,rgba(0,0,0,.70) 100%),
+    radial-gradient(circle at 50% 50%,rgba(60,115,125,.05),rgba(60,115,125,.05));}
+#a10-scope .sc-glint{position:absolute;left:7%;top:5%;width:52%;height:30%;border-radius:50%;
+  background:radial-gradient(ellipse at 38% 50%,rgba(255,255,255,.085),rgba(255,255,255,0) 68%);
+  transform:rotate(-27deg);}
+#a10-scope .sc-glint.b{left:62%;top:74%;width:30%;height:14%;transform:rotate(-27deg);opacity:.6;}
+#a10-scope .sc-ca{position:absolute;inset:0;border-radius:50%;
+  box-shadow:inset 0 0 0 1px rgba(255,90,70,.20),inset 0 0 0 2px rgba(70,130,255,.15),
+    inset 0 0 30px 6px rgba(0,0,0,.55);}
+#a10-scope .sc-ring{position:absolute;left:50%;top:50%;width:calc(var(--R)*2 + 14px);height:calc(var(--R)*2 + 14px);
+  margin:calc(var(--R)*-1 - 7px) 0 0 calc(var(--R)*-1 - 7px);border-radius:50%;
+  box-shadow:0 0 0 2px #14161a,0 0 0 5px #3a3f47,0 0 0 7px #08090b,0 0 26px 10px rgba(0,0,0,.85);}
+#a10-scope .sc-zoom{position:absolute;left:50%;top:50%;transform:translate(calc(var(--R)*.52),calc(var(--R)*-.84));
+  font-size:12px;letter-spacing:.3em;color:#d9a441;opacity:.8;text-shadow:0 0 6px rgba(0,0,0,.9);}
+#a10-scope .sc-ret{position:absolute;left:50%;top:50%;width:calc(var(--R)*2);height:calc(var(--R)*2);
+  margin:calc(var(--R)*-1) 0 0 calc(var(--R)*-1);overflow:visible;}
+#a10-scope .sc-breath{position:absolute;left:50%;top:50%;width:calc(var(--R)*2.4);height:calc(var(--R)*2.4);
+  margin:calc(var(--R)*-1.2) 0 0 calc(var(--R)*-1.2);opacity:0;overflow:visible;}
 
 /* -------------------------------------------------------------- debrief */
 #a10-debrief{position:fixed;inset:0;z-index:65;display:none;pointer-events:auto;
@@ -390,6 +440,8 @@ const GLYPHS = { // per weapon class, tiny original silhouettes for the killfeed
   smg: "M2 4h9V2h4l1 2h6v2h-5l-1 3h-3l1-3H2z",
   dmr: "M0 4h11l1-2h3v2h13v2h-9l-1 3h-3l1-3H0zM13 0h5v1h-5z",
   pistol: "M6 2h14v2h-7l-1 4h-4l1-4H6z",
+  // pump shotgun: barrel, magazine tube under it, pump forend, receiver + stock
+  shotgun: "M0 2.6h16v1.4H0zM2.5 4.6H16v1.4H2.5zM7 6h6v2H7zM16 2h5l1 1h5v5l-4.5-.5L21 7h-5z",
 };
 function weaponGlyphSvg(cls) {
   const d = GLYPHS[cls] || GLYPHS.ar;
@@ -484,30 +536,47 @@ export function createHud(ctx) {
   // hitmarker --------------------------------------------------------------
   const hm = document.createElement("div");
   hm.id = "hitmarker";
+  // four arms at 45/135/225/315 deg, each starting --hmr from the centre along
+  // its own diagonal (CSS variable: the head/kill variants widen the X)
   hm.innerHTML =
-    `<div class="a10-hm" style="transform:rotate(45deg) translateY(5px)"></div>` +
-    `<div class="a10-hm" style="transform:rotate(135deg) translateY(5px)"></div>` +
-    `<div class="a10-hm" style="transform:rotate(225deg) translateY(5px)"></div>` +
-    `<div class="a10-hm" style="transform:rotate(315deg) translateY(5px)"></div>` +
-    `<div class="a10-notch"></div>`;
+    `<div class="a10-hm" style="transform:rotate(45deg) translateY(var(--hmr))"></div>` +
+    `<div class="a10-hm" style="transform:rotate(135deg) translateY(var(--hmr))"></div>` +
+    `<div class="a10-hm" style="transform:rotate(225deg) translateY(var(--hmr))"></div>` +
+    `<div class="a10-hm" style="transform:rotate(315deg) translateY(var(--hmr))"></div>` +
+    `<div class="a10-dia"></div>`;
   root.appendChild(hm);
-  const hmArms = hm.querySelectorAll(".a10-hm");
+  // marker-private state (change gates, volley gate, kill latch). Kept OUT of
+  // `st` so the shared state block stays untouched. `tallies` (hud.tallies /
+  // hud.counts) still count EVERY pellet event exactly as before — only the
+  // VISUAL is gated to one flash per multi-pellet volley.
+  const hmSt = { op: "", tr: "", cls: "", head: false, killT: -9, volleyT: -9, volleyHits: 0,
+                 fireW: null, fireT: -9 };
+  const hmPellets = (id) => { const w = W[id]; return (w && w.pellets) | 0; };
+  const HM_VOLLEY_S = 0.10;
 
   // threat ring -------------------------------------------------------------
+  // One crisp tapered crescent per recent attacker bearing (400-unit box, ring
+  // radius 176): a 58 deg arc of ~13 units at its thickest, pointed at both
+  // ends. The outer edge is the ring itself, the inner edge a flatter arc over
+  // the same chord, so the shape needs no gradient to read as a wedge. A wider
+  // faint stroke of the same outline is the glow.
   const threat = document.createElement("div");
   threat.id = "a10-threat";
-  const ARC_R = 48, ARC_HALF = 35 * Math.PI / 180; // 70° wide (§4.3)
-  const ax0 = 60 - ARC_R * Math.sin(ARC_HALF), ay0 = 60 - ARC_R * Math.cos(ARC_HALF);
-  const ax1 = 60 + ARC_R * Math.sin(ARC_HALF);
-  const arcPath = `M${ax0.toFixed(1)} ${ay0.toFixed(1)} A${ARC_R} ${ARC_R} 0 0 1 ${ax1.toFixed(1)} ${ay0.toFixed(1)}`;
+  const ARC_RO = 176, ARC_HALF = 29 * Math.PI / 180, ARC_RI = 430;
+  const arcX0 = (200 - ARC_RO * Math.sin(ARC_HALF)).toFixed(1);
+  const arcX1 = (200 + ARC_RO * Math.sin(ARC_HALF)).toFixed(1);
+  const arcY = (200 - ARC_RO * Math.cos(ARC_HALF)).toFixed(1);
+  const arcPath = `M${arcX0} ${arcY} A${ARC_RO} ${ARC_RO} 0 0 1 ${arcX1} ${arcY} ` +
+                  `A${ARC_RI} ${ARC_RI} 0 0 0 ${arcX0} ${arcY}Z`;
   const arcs = [];
   for (let i = 0; i < 4; i++) {
     const a = document.createElement("div");
     a.className = "a10-arc";
-    a.innerHTML = `<svg width="120" height="120" viewBox="0 0 120 120">` +
-      `<path d="${arcPath}" fill="none" stroke="#ff4d4d" stroke-width="4" stroke-linecap="round"/></svg>`;
+    a.innerHTML = `<svg viewBox="0 0 400 400">` +
+      `<path d="${arcPath}" fill="none" stroke="#ff3a30" stroke-opacity=".28" stroke-width="9" stroke-linejoin="round"/>` +
+      `<path d="${arcPath}" fill="#ff4a40" stroke="rgba(60,0,0,.6)" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
     threat.appendChild(a);
-    arcs.push({ el: a, t: -9, deg: 0, live: false, dir: null });
+    arcs.push({ el: a, t: -9, deg: 0, live: false, dir: null, lastOp: "", lastTr: "" });
   }
   root.appendChild(threat);
 
@@ -580,19 +649,60 @@ export function createHud(ctx) {
   const flash = document.createElement("div"); flash.id = "a10-flash"; root.appendChild(flash);
   const fade = document.createElement("div"); fade.id = "a10-fade"; root.appendChild(fade);
 
-  // Corvus scope overlay ----------------------------------------------------------
+  // Scope overlay (any weapon whose view.scope is set — the Corvus) ---------------
+  // Reticle: a duplex mil-dot, drawn in a 200x200 box where the lens radius is 100.
+  // Thin hairlines + five mil dots per arm + tapered outer posts + a small amber centre
+  // dot (an illuminated reticle: a black reticle over a night street is an invisible
+  // reticle). Every stroke gets a faint light under-stroke so it survives a dark scene.
   const scope = document.createElement("div");
   scope.id = "a10-scope";
+  const retSvg = (() => {
+    const L = [];   // [path d, stroke width]
+    const hair = [[-98, -6], [6, 98]];
+    for (const [a, b] of hair) {
+      L.push([`M${a} 0H${b}`, 0.30]);
+      L.push([`M0 ${a}V${b}`, 0.30]);
+    }
+    const posts = [
+      "M52 -.25L98 -1.15V1.15L52 .25Z", "M-52 -.25L-98 -1.15V1.15L-52 .25Z",
+      "M-.25 52L-1.15 98H1.15L.25 52Z", "M-.25 -52L-.9 -98H.9L.25 -52Z"];
+    let g = "";
+    for (const d of posts) g += `<path d="${d}" fill="rgba(255,255,255,.16)" stroke="rgba(255,255,255,.16)" stroke-width=".7"/>`;
+    for (const d of posts) g += `<path d="${d}" fill="#05070a"/>`;
+    for (const [d, w] of L) g += `<path d="${d}" stroke="rgba(255,255,255,.15)" stroke-width="${w + 0.55}" fill="none"/>`;
+    for (const [d, w] of L) g += `<path d="${d}" stroke="#05070a" stroke-width="${w}" fill="none"/>`;
+    // mil dots
+    let dots = "";
+    for (const k of [13, 21, 29, 37, 45]) {
+      for (const [x, y] of [[k, 0], [-k, 0], [0, k], [0, -k]]) {
+        dots += `<circle cx="${x}" cy="${y}" r="1.05" fill="rgba(255,255,255,.18)"/><circle cx="${x}" cy="${y}" r=".72" fill="#05070a"/>`;
+      }
+    }
+    // hold-over bars under the centre
+    let bars = "";
+    [[60, 7], [69, 9], [78, 11]].forEach(([y, hw]) => {
+      bars += `<path d="M${-hw} ${y}H${hw}" stroke="rgba(255,255,255,.15)" stroke-width=".95" fill="none"/>` +
+              `<path d="M${-hw} ${y}H${hw}" stroke="#05070a" stroke-width=".42" fill="none"/>`;
+    });
+    return `<svg class="sc-ret" viewBox="-100 -100 200 200" aria-hidden="true">${g}${dots}${bars}` +
+      `<circle r="2.4" fill="rgba(255,150,60,.16)"/><circle r=".62" fill="#ff9a3c"/></svg>`;
+  })();
   scope.innerHTML =
-    `<div class="drift"><div class="cx cxh"></div><div class="cx cxv"></div>` +
-    `<div class="mil" style="width:1px;height:10px;transform:translate(-0.5px,60px)"></div>` +
-    `<div class="mil" style="width:1px;height:10px;transform:translate(-0.5px,130px)"></div>` +
-    `<div class="mil" style="width:10px;height:1px;transform:translate(60px,-0.5px)"></div>` +
-    `<div class="mil" style="width:10px;height:1px;transform:translate(-70px,-0.5px)"></div>` +
-    `<div class="mil" style="width:1px;height:10px;transform:translate(-0.5px,-70px)"></div></div>` +
-    `<div class="hole"></div>`;
+    `<div class="sc-housing"><div class="sc-mask"></div>` +
+    `<div class="sc-lens"><div class="sc-glint"></div><div class="sc-glint b"></div><div class="sc-ca"></div></div>` +
+    `<div class="sc-ring"></div><div class="sc-zoom">3.9×</div></div>` +
+    retSvg +
+    `<svg class="sc-breath" viewBox="-120 -120 240 240" aria-hidden="true">` +
+    `<path d="M-84 76.1A114 114 0 0 0 84 76.1" fill="none" stroke="rgba(232,232,228,.16)" stroke-width="2.2" stroke-linecap="round"/>` +
+    `<path class="bar" d="M-84 76.1A114 114 0 0 0 84 76.1" pathLength="100" fill="none" stroke="#e8e8e4" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="100 100"/>` +
+    `</svg>`;
   root.appendChild(scope);
-  const scopeDrift = scope.querySelector(".drift");
+  const scHousing = scope.querySelector(".sc-housing"), scMask = scope.querySelector(".sc-mask");
+  const scLens = scope.querySelector(".sc-lens"), scRing = scope.querySelector(".sc-ring");
+  const scZoom = scope.querySelector(".sc-zoom"), scBreath = scope.querySelector(".sc-breath");
+  const scBar = scope.querySelector(".sc-breath .bar");
+  const scRet = scope.querySelector(".sc-ret");
+  let scLastR = -1, scLastZoom = "";
 
   // ---- ADS Z-ORDER SELF-CHECK (iter08) ------------------------------------
   // The iter07 fix above (the three z-bands) answers 2/3 critics' "the entire
@@ -676,6 +786,7 @@ export function createHud(ctx) {
 
   function resetTransient() {
     st.hmT = st.dryT = st.bannerT = st.objToastT = st.flashT = st.vigDirT = -9;
+    hmSt.killT = hmSt.volleyT = hmSt.fireT = -9; hmSt.fireW = null; hmSt.head = false; hmSt.volleyHits = 0;
     st.nade = null;
     st.hpBarA = 0; st.hpFullT = -9; st.lastHpBarA = -1;
     health.style.opacity = "0";
@@ -690,11 +801,30 @@ export function createHud(ctx) {
   // ------------------------------------------------------------------ events
   function onShot(d) {
     if (!d || d.pen) return;                       // pen FX events carry no entity
+    // The sim applies damage (hurt/death) BEFORE it emits the shot event of the
+    // same bullet, so a kill's death event reaches onDeath() first. Remember the
+    // weapon of the latest FIRE-TIME player shot so the killfeed glyph is the
+    // gun that actually fired, not whatever last hit that victim.
+    if (d.shooter === "P" && !d.impactOnly) { hmSt.fireW = d.weaponId; hmSt.fireT = simNow(); }
     if (d.shooter !== "P" || !d.hit || d.hit.entity == null) return;
-    st.tallies.hitmarkers++;
-    st.hmT = simNow();
-    st.hmKind = d.hit.part === "head" ? "head" : "hit";
+    st.tallies.hitmarkers++;                       // EVERY pellet event counts (probe parity)
     if (d.hit.entity !== "P") st.lastHitWeapon[d.hit.entity] = d.weaponId;
+    const now = simNow();
+    const head = d.hit.part === "head";
+    // the kill that this bullet caused already arrived and owns the marker for
+    // this frame: it must not be repainted as a plain hit
+    if (st.hmKind === "kill" && now >= hmSt.killT && now - hmSt.killT < 0.05) return;
+    // ONE marker flash per trigger pull of a multi-pellet weapon: the nine
+    // pellets resolve in the same tick (< 11.7 m) or a few ticks apart (beyond).
+    // A head pellet upgrades the marker in place; 3+ pellets make it a touch bigger.
+    if (hmPellets(d.weaponId) > 1 && now >= hmSt.volleyT && now - hmSt.volleyT <= HM_VOLLEY_S) {
+      hmSt.volleyHits++;
+      if (head && st.hmKind === "hit") st.hmKind = "head";
+      return;
+    }
+    st.hmT = now;
+    st.hmKind = head ? "head" : "hit";
+    hmSt.volleyT = now; hmSt.volleyHits = 1;
   }
 
   function onHurt(d) {
@@ -722,13 +852,18 @@ export function createHud(ctx) {
     // kill hitmarker overrides the latch (§4.1)
     if (d.attacker === "P") {
       st.hmT = t; st.hmKind = "kill";
+      hmSt.killT = t; hmSt.head = !!d.headshot;
       st.bannerT = t;
       bannerN.textContent = "ELIMINATED — " + nameOf(d.victim).toUpperCase();
     }
-    // killfeed row (display names — R4)
+    // killfeed row (display names — R4). The player's weapon: the latest
+    // fire-time shot within 0.6 s (see onShot), else the weapon in hand, else
+    // the last weapon that hit this victim.
     const kName = nameOf(d.attacker), vName = nameOf(d.victim);
     const wid = d.attacker === "P"
-      ? (st.lastHitWeapon[d.victim] || sim.state.player.weapon.id)
+      ? ((hmSt.fireW && t >= hmSt.fireT && t - hmSt.fireT <= 0.6 && hmSt.fireW) ||
+         (sim.state.player.weapon && sim.state.player.weapon.id) ||
+         st.lastHitWeapon[d.victim])
       : botWeaponId(d.attacker);
     // shift rows up, newest last
     let slot = null;
@@ -975,28 +1110,48 @@ export function createHud(ctx) {
     dryEl.style.opacity = dryAge >= 0 && dryAge < 0.3 ? String(0.9 * (1 - dryAge / 0.3)) : "0";
 
     // ---- hitmarker (§4.1 — sim-time driven, deterministic)
+    // CoD read: the X snaps in LARGE (widest spread on the first frame), settles
+    // in 55-85 ms, holds, then fades (a kill drifts outward as it goes, a hit
+    // shrinks a touch). White = hit, gold+diamond = headshot, red = kill (the
+    // only red on the marker). Variant geometry lives in the CSS (.head/.kill).
     const hmAge = t - st.hmT;
-    const hmLife = st.hmKind === "kill" ? 0.32 : 0.22;
+    const hk = st.hmKind;
+    const hmLife = hk === "kill" ? 0.46 : hk === "head" ? 0.30 : 0.22;
     if (hmAge >= 0 && hmAge < hmLife) {
-      const spawn = st.hmKind === "kill" ? 1.35 : 1.15;
-      const scale = 1 + (spawn - 1) * Math.max(0, 1 - hmAge / 0.06);
-      const alpha = hmAge < hmLife - 0.06 ? 0.9 : 0.9 * (hmLife - hmAge) / 0.06;
-      hm.style.opacity = alpha.toFixed(2);
-      hm.style.transform = `scale(${scale.toFixed(3)})`;
-      hm.className = st.hmKind === "kill" ? "kill" : st.hmKind === "head" ? "head" : "";
-      const armLen = st.hmKind === "head" ? 8.4 : 7; // headshot +20% (§4.1)
-      for (const a of hmArms) a.style.height = armLen + "px";
-    } else if (hm.style.opacity !== "0") hm.style.opacity = "0";
+      const popT = hk === "kill" ? 0.085 : hk === "head" ? 0.07 : 0.055;
+      const k0 = hk === "kill" ? 1.85 : hk === "head" ? 1.6 : 1.5;
+      const pu = Math.min(1, hmAge / popT);
+      let scale = k0 + (1 - k0) * (1 - (1 - pu) * (1 - pu));      // ease-out
+      if (hk !== "kill" && hmSt.volleyHits >= 3) scale *= 1.12;     // multi-pellet hit
+      const fadeT = hk === "kill" ? 0.16 : 0.07;
+      let alpha = 0.95;
+      if (hmAge > hmLife - fadeT) {
+        const f = (hmLife - hmAge) / fadeT;                          // 1 -> 0
+        alpha *= f;
+        scale *= hk === "kill" ? 1 + 0.18 * (1 - f) : 0.92 + 0.08 * f;
+      }
+      const cls = hk === "kill" ? (hmSt.head ? "kill hd" : "kill") : hk === "head" ? "head" : "";
+      if (cls !== hmSt.cls) { hmSt.cls = cls; hm.className = cls; }
+      const os = alpha.toFixed(2), ts = `scale(${scale.toFixed(3)})`;
+      if (os !== hmSt.op) { hmSt.op = os; hm.style.opacity = os; }
+      if (ts !== hmSt.tr) { hmSt.tr = ts; hm.style.transform = ts; }
+    } else if (hmSt.op !== "0") { hmSt.op = "0"; hm.style.opacity = "0"; }
 
-    // ---- threat arcs (§4.3): live-update 200 ms, then frozen; fade 600 ms
+    // ---- threat arcs (§4.3): one crescent per attacker bearing, 0.8 s of SIM
+    // time. It keeps tracking the attacker's WORLD direction for its whole life
+    // (turning toward the shooter walks the arc up to 12 o'clock), pops in
+    // slightly large, holds 0.25 s at full strength, then fades.
     for (const a of arcs) {
-      if (!a.live) { if (a.el.style.opacity !== "0") a.el.style.opacity = "0"; continue; }
+      if (!a.live) { if (a.lastOp !== "0") { a.lastOp = "0"; a.el.style.opacity = "0"; } continue; }
       const age = t - a.t;
-      if (age > 0.8) { a.live = false; a.el.style.opacity = "0"; continue; }
-      if (age < 0.2 && a.dir) a.deg = relDegDir(sim, a.dir);
-      const alpha = 0.85 * (1 - Math.max(0, age - 0.2) / 0.6);
-      a.el.style.opacity = alpha.toFixed(2);
-      a.el.style.transform = `rotate(${a.deg.toFixed(1)}deg)`;
+      if (age > 0.8 || age < 0) { a.live = false; a.lastOp = "0"; a.el.style.opacity = "0"; continue; }
+      if (a.dir) a.deg = relDegDir(sim, a.dir);
+      const alpha = age < 0.25 ? 0.95 : 0.95 * (1 - (age - 0.25) / 0.55);
+      const pop = 1 + 0.14 * Math.max(0, 1 - age / 0.09);
+      const os = alpha.toFixed(2);
+      const ts = `rotate(${a.deg.toFixed(1)}deg) scale(${pop.toFixed(3)})`;
+      if (os !== a.lastOp) { a.lastOp = os; a.el.style.opacity = os; }
+      if (ts !== a.lastTr) { a.lastTr = ts; a.el.style.transform = ts; }
     }
 
     // ---- grenade warning (§5.9: icon + direction arrow within 6 m)
@@ -1014,7 +1169,7 @@ export function createHud(ctx) {
     if (wid + (weapon ? "" : "?") !== st.lastWname) {
       st.lastWname = wid + (weapon ? "" : "?");
       amName.textContent = wName(wid);
-      amMode.textContent = weapon ? (weapon.auto ? "AUTO" : "SEMI") : "";
+      amMode.textContent = weapon ? (weapon.class === "shotgun" ? "PUMP" : weapon.auto ? "AUTO" : "SEMI") : "";
     }
     if (mag !== st.lastMag) {
       st.lastMag = mag;
@@ -1178,13 +1333,19 @@ export function createHud(ctx) {
       if (dLvl) desat.style.backdropFilter = dLvl === 2 ? "saturate(.62)" : "saturate(.8)";
     }
     // directional bias (§4.3): red creeps 12% further in from the hit side
+    // Weapon-feedback pass: the bias was ~4% alpha at full health (peak .34 x
+    // (0.12 + a) with a = 0) — present in the code, absent on screen. Now an
+    // edge-hugging ellipse (peak .62) that holds 0.12 s and fades by 0.7 s; at
+    // low hp the full-screen vignette `a` still adds on top.
     const vdAge = t - st.vigDirT;
-    if (vdAge >= 0 && vdAge < 0.5) {
+    if (vdAge >= 0 && vdAge < 0.7) {
       const rad = (st.vigDirDeg - 90) * Math.PI / 180;
-      const bx = 50 + Math.cos(rad) * 46, by = 50 + Math.sin(rad) * 46;
-      vigDir.style.background =
-        `radial-gradient(circle at ${bx.toFixed(0)}% ${by.toFixed(0)}%,rgba(230,30,30,.34),rgba(230,30,30,0) 42%)`;
-      vigDir.style.opacity = String((1 - vdAge / 0.5) * (0.12 + a));
+      const bx = 50 + Math.cos(rad) * 52, by = 50 + Math.sin(rad) * 52;
+      const bg = `radial-gradient(ellipse 62% 70% at ${bx.toFixed(0)}% ${by.toFixed(0)}%,` +
+        `rgba(225,24,24,.62),rgba(225,24,24,.18) 55%,rgba(225,24,24,0) 100%)`;
+      if (bg !== hmSt.vigBg) { hmSt.vigBg = bg; vigDir.style.background = bg; }
+      const fade = vdAge < 0.12 ? 1 : 1 - (vdAge - 0.12) / 0.58;
+      vigDir.style.opacity = (fade * (0.6 + a * 0.6)).toFixed(3);
     } else if (vigDir.style.opacity !== "0") vigDir.style.opacity = "0";
 
     // ---- explosion tinnitus flash (§6: near-explosion ring; visual half)
@@ -1197,15 +1358,41 @@ export function createHud(ctx) {
     f += (target - f) * Math.min(1, dt * (p.alive ? 3 : 4.5));
     if (Math.abs(f - st.lastFade) > 0.004) { st.lastFade = f; fade.style.opacity = f.toFixed(3); }
 
-    // ---- Corvus scope overlay (§4.6 — ADS hides crosshair, scope is the reticle)
-    const scoped = wid === "corvus" && p.weapon.ads && (p.weapon.adsT || 0) >= 0.95 && p.alive;
-    if (scoped) {
-      if (scope.style.display !== "block") scope.style.display = "block";
-      // cosmetic micro-drift (visual echo of §2.6 sway; aim itself is sim truth)
-      const dx = Math.sin(t * 2 * Math.PI * 0.9) * 2.2 + Math.sin(t * 2 * Math.PI * 1.7) * 1.3;
-      const dy = Math.cos(t * 2 * Math.PI * 1.1) * 1.8 + Math.sin(t * 2 * Math.PI * 0.7) * 1.2;
-      scopeDrift.style.transform = `translate(${dx.toFixed(1)}px,${dy.toFixed(1)}px)`;
-    } else if (scope.style.display !== "none") scope.style.display = "none";
+    // ---- scope overlay (§4.6 — ADS hides the crosshair, the scope is the reticle).
+    // viewmodel.js owns the state (`vm.scope`): blend 0..1 follows the sim's ADS ramp,
+    // zoom is the world magnification, lag/kick drive the housing, breath/holding the arc.
+    // The reticle never moves (it IS the aim ray — scoped sway is a real aim wobble).
+    {
+      const F = typeof window !== "undefined" ? window.__FPS__ : null;
+      const sv = F && F.vm ? F.vm.scope : null;
+      const blend = sv && p.alive ? sv.blend : 0;
+      if (blend > 0.012) {
+        if (scope.style.display !== "block") scope.style.display = "block";
+        const vw2 = window.innerWidth || 1920, vh2 = window.innerHeight || 1080;
+        const R = Math.round(0.455 * Math.min(vw2, vh2));
+        if (R !== scLastR) { scLastR = R; scope.style.setProperty("--R", R + "px"); }
+        const e = blend * blend * (3 - 2 * blend);
+        // housing: lags the view a few px (rad -> px), kicks into the eye with each round
+        const lx = Math.max(-34, Math.min(34, -sv.lagX * 420));
+        const ly = Math.max(-34, Math.min(34, sv.lagY * 420)) + sv.kick * 9;
+        const sc = 1 + (1 - e) * 0.30 + sv.kick * 0.012;
+        scHousing.style.transform = `translate(${lx.toFixed(1)}px,${ly.toFixed(1)}px) scale(${sc.toFixed(4)})`;
+        scMask.style.opacity = Math.min(1, e * 1.25).toFixed(3);
+        scLens.style.opacity = Math.min(1, e * 1.4).toFixed(3);
+        scRing.style.opacity = e.toFixed(3);
+        scZoom.style.opacity = (0.8 * e).toFixed(3);
+        scRet.style.opacity = Math.min(1, e * 1.2).toFixed(3);
+        const zt = sv.zoom.toFixed(1) + "×";
+        if (zt !== scLastZoom) { scLastZoom = zt; scZoom.textContent = zt; }
+        // breath hold: arc drains while Shift is held, refills after; amber low, red winded
+        const showB = sv.holding || sv.breath < 0.995 || sv.winded;
+        scBreath.style.opacity = showB ? (0.85 * e).toFixed(3) : "0";
+        if (showB) {
+          scBar.setAttribute("stroke-dasharray", (Math.max(0, sv.breath) * 100).toFixed(1) + " 100");
+          scBar.setAttribute("stroke", sv.winded ? "#ff4d4d" : sv.breath < 0.3 ? "#d9a441" : "#e8e8e4");
+        }
+      } else if (scope.style.display !== "none") scope.style.display = "none";
+    }
   }
 
   function drainRadioInto(sim) {

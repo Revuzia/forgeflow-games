@@ -112,7 +112,7 @@ export function createScoreboard(ctx) {
     held: false,          // TAB currently held
     end: false,           // end board shown
     lastMode: "tdm",
-    lastDifficulty: "standard",
+    lastDifficulty: "expert", // PVP has no difficulty setting: always the top tier
     lastMap: null,        // arena of the live match; a rematch replays it (null → boot falls back to the persisted pick)
     endTimer: null,       // 3 s banner → board
     autoAt: 0,            // auto-advance deadline (wall clock)
@@ -142,7 +142,7 @@ export function createScoreboard(ctx) {
     const ctf = m.modeId === "ctf", ffa = m.modeId === "ffa";
     const modeCols = ctf ? `<th>CAP</th><th>RET</th>` : ffa ? `<th>PLACE</th>` : `<th>STREAK</th>`;
     const header =
-      `<tr><th class="l">NAME</th><th class="l">BAND</th><th>SCORE</th>` +
+      `<tr><th class="l">NAME</th><th>SCORE</th>` +
       `<th>K</th><th>D</th><th>A</th>${modeCols}</tr>`;
 
     const rowsOf = (list, placeOf) => list.map((a) => {
@@ -151,7 +151,7 @@ export function createScoreboard(ctx) {
         : ffa ? `<td>${placeOf ? placeOf(a) : ""}</td>`
           : `<td>${a.bestStreak || 0}</td>`;
       return `<tr class="${a.actorId === 0 ? "me" : ""}${a.alive ? "" : " dead"}">` +
-        `<td class="l">${nameCell(a)}</td><td class="l">${bandCell(a)}</td>` +
+        `<td class="l">${nameCell(a)}</td>` +
         `<td>${a.score}</td><td>${a.kills}</td><td>${a.deaths}</td><td>${a.assists}</td>` +
         mode + `</tr>`;
     }).join("");

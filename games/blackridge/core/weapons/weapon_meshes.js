@@ -1,5 +1,6 @@
 // core/weapons/weapon_meshes.js [A4] — FP weapon GLB load + material repair +
-// sockets (architecture §3.11, frozen: loadWeaponGLB(id) → Promise<Group>).
+// sockets + animatable parts (architecture §3.11, frozen: loadWeaponGLB(id) →
+// Promise<Group>).
 //
 // GLB convention (produced by tools/a4_build_fp_weapons.py — fix the
 // generator, never the artifact):
@@ -8,33 +9,31 @@
 //     EXACTLY (pixel-exact ADS alignment is BY CONSTRUCTION: at ADS the
 //     weapon group sits at [0, -sightY, z], putting the sight on the
 //     viewmodel camera's center ray — VT §5's 2-px-off red-dot tell);
-//   - empties named SOCKET_muzzle / SOCKET_eject baked in (fallback: the
-//     data offsets in weapon_data view.muzzle / view.eject);
-//   - Draco compressed, ≤250 KB each (Part 5 budget), arms included.
+//   - empties named SOCKET_muzzle / SOCKET_eject / SOCKET_sight baked in
+//     (fallback: the data offsets in weapon_data view.muzzle / view.eject);
+//   - nodes: base (receiver/stock/barrel), dressing (sights, muzzle device,
+//     scope), mag / pump (OPTIONAL separate nodes the reload and pump-action
+//     animations move), arms_R_<id> / arms_L_<id> (procedural gloved arms).
+//
+// PRESENTATION PASS (2026-10). The arms are no longer the soldier rig-cut; they
+// are authored gloves + sleeves painted with per-vertex colour (COLOR_0) and one
+// tileable weave normal map. repair() therefore treats the two arm materials
+// (br_glove, br_sleeve) as FABRIC: MeshPhysicalMaterial with a broad sheen lobe so
+// a knit catches a street light at grazing angles, vertex colours kept. Gun
+// materials read the authored maps as shipped (the generator now emits a calm,
+// dark albedo — the roughness factor is NOT scaled down any more, which is what
+// made the old build render as glossy blue-white "dazzle camo").
 //
 // Doctrine §1/§3 discipline: strips any GLB-embedded light; defensive Meshy
-// material repair (emissive-as-albedo bug) even though the build script
-// authors materials — the next regenerated asset arrives broken the same way.
-// NIGHT TREATMENT (iter01 F2 fix): VT §3/§5 — "source weapon GLBs ... then
-// ADD roughness variance + edge-wear treatment at load. The viewmodel weapon
-// is the closest, most-stared-at surface in the game." The a4 build tool
-// authors a charcoal albedo set (body mean #2b2d2e ≈ 0.028 linear, gloves
-// #121212 ≈ 0.008 linear) that is plausible PBR in daylight but renders as a
-// BLACK CUTOUT in the blue-hour scene (iter01 S1/S2: "shattered black
-// polygon soup" / "no viewmodel visible" — both were the unlit-black gun).
-// repair() lifts albedo through the material color multiplier (the ORM/
-// albedo MAPS stay authoritative for variance and edge wear) and gives the
-// body a real env-map sheen so the night sky/practicals model the surface.
-// Tuned against tools/a4_build_fp_weapons.py's authored set — regenerating
-// brighter textures at the build tool makes these multipliers 1.0 again.
-// On failure: HONEST dev placeholder (screaming magenta, unmistakably not a
-// gun) + window.__FFG_FALLBACKS__ push — ship is BLOCKED while non-empty
-// (doctrine §7). A primitive composition is never silently shipped as final.
+// material repair (emissive-as-albedo bug). On failure: HONEST dev placeholder
+// (screaming magenta, unmistakably not a gun) + window.__FFG_FALLBACKS__ push —
+// ship is BLOCKED while non-empty (doctrine §7). A primitive composition is never
+// silently shipped as final.
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
-import { WEAPONS, VIEWMODEL } from "./weapon_data.js";
+import { WEAPONS, VIEWMODEL, SLOT_ORDER } from "./weapon_data.js";
 
 const DEG = Math.PI / 180;
 
@@ -64,292 +63,128 @@ function pushFallback(msg) {
   console.warn("[A4]", msg);
 }
 
-// D-lane (iter10) MATERIALS ARE SHARED BETWEEN MESHES — REPAIR EACH ONE ONCE.
-// Every treatment below that MULTIPLIES an authored value (roughness × 0.58,
-// normalScale × 0.5) was being applied once PER MESH, and glTF materials are
-// shared datablocks: br_metal is bound to Mesh_0_1 AND `dressing`, br_glove to
-// arms_R AND arms_L. Those two therefore took the multiplier TWICE — squared.
-// Measured live on the shipped warden this session (probe: material factors
-// read off the booted page), against the values a4_build_fp_weapons.py authors:
-//   br_body  1 mesh  → roughness 0.580 = 1.00×0.58   normalScale 0.575 ✓
-//   br_grip  1 mesh  → roughness 0.615 = 1.06×0.58   normalScale 0.625 ✓
-//   br_recv  1 mesh  → roughness 0.429 = 0.74×0.58   normalScale 0.500 ✓
-//   br_metal 2 meshes→ roughness 0.336 = 1.00×0.58²  normalScale 0.262 ✗
-//   br_glove 2 meshes→ roughness 0.336 = 1.00×0.58²  normalScale 0.287 ✗
-// The glove's authored roughness MAP means 0.885, so a squared factor put the
-// effective roughness of a nomex glove at 0.30 — wet latex — with half the
-// authored micro-relief to break it up. That is why both hands read as smooth
-// chrome-ish sheets rather than fabric, at hip and at ADS alike. The guard is a
-// WeakSet, so a material shared across two WEAPONS is still repaired once (the
-// treatments are idempotent by intent, not by construction).
+// Materials are shared datablocks (br_metal is bound to several meshes) — every
+// multiplicative treatment is applied ONCE per material (the old build squared
+// them; see git history of this file for the measurement).
 const repaired = new WeakSet();
+// original material -> its fabric replacement (br_glove / br_sleeve are shared by BOTH arms of a
+// weapon and by nothing else, so every mesh that used the original must get the same copy)
+const fabricOf = new WeakMap();
+
+const ARM_NODE_RE = /^arms?_/;
+const FABRIC_RE = /glove|sleeve/i;
+
+function isArmMesh(o) {
+  let n = o;
+  while (n) { if (ARM_NODE_RE.test(n.name || "")) return true; n = n.parent; }
+  return false;
+}
 
 // Doctrine §1 defensive repair + light strip + shadow discipline.
 function repair(group) {
   const doomedLights = [];
-  const armMeshes = [];
   group.traverse((o) => {
     if (o.isLight) { doomedLights.push(o); return; } // NEVER a light outside the pool
-    if (o.isMesh) {
-      if (/^arms?_/.test(o.name || "")) armMeshes.push(o);
-      o.castShadow = false;    // viewmodel never casts into the world
-      // ...but it DOES receive. The old comment conflated the two: what is too
-      // coarse at 30 cm is the viewmodel CASTING into the moon's 1024 map, and
-      // that stays off above. RECEIVING is a different question, because the
-      // occluders already printed into that map are buildings and awnings,
-      // which resolve at ~0.088 m/texel (lighting.js SHADOW_HALF 45 over
-      // mapSize 1024, camera-following). With this off, your hands stayed lit
-      // by the moon while you stood under an awning — the single loudest
-      // "pasted-on viewmodel" tell in the night scenes. Costs zero shader
-      // programs: in the vendored three r172 receiveShadow is a UNIFORM, not a
-      // define ("p_uniforms.setValue( _gl, 'receiveShadow', object.receiveShadow )"),
-      // consumed as `( directLight.visible && receiveShadow ) ? getShadow(...) : 1.0`.
-      // Buys world-shadow reception only — nothing on VM_LAYER casts, so there
-      // is still no self-shadowing of gun onto hands.
-      o.receiveShadow = true;
-      o.frustumCulled = false; // camera-space rig; bounds vs frustum lie
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) {
-        if (!m) continue;
-        if (repaired.has(m)) continue;
-        repaired.add(m);
-        // Meshy export bug class: albedo bound as full-strength emissive.
-        if (m.emissiveMap && m.emissiveMap === m.map) {
-          m.emissiveMap = null;
-          if (m.emissive) m.emissive.setRGB(0, 0, 0);
-        }
-        if (m.emissiveIntensity == null || m.emissiveIntensity > 1.001) m.emissiveIntensity = 1;
-        if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
-        // W1 (iter03): NO ALBEDO MULTIPLIER. The 3.4x/4.5x lift above was
-        // written against an OLD authored texture set (the stale header note
-        // still quotes "#2b2d2e ~ 0.028 linear"); the set the build tool
-        // actually ships now measures sRGB 0.288 body / 0.426 metal / 0.22-0.36
-        // glove (PIL means over tools/_a4_gen/*.png, this session), and
-        // gen_textures' own comment says the glove band "needs no runtime lift".
-        // Multiplying a 0.15-linear metal by 3.4 puts albedo at 0.51 and then
-        // the VM fill rig lands on top of it: that is the BLOWN WHITE gun in
-        // iter03 S1/S2. Albedo > 1 is not a lighting fix, it is a clipped
-        // surface with no form left in it. Read the maps as authored; the vm
-        // fill rig (viewmodel.js) owns night readability, which is where a
-        // lighting problem belongs.
-        // ---- OPTIC GLASS (W1, iter07) -----------------------------------
-        // a4_build_fp_weapons.py build_scope() authors an objective lens disc
-        // (br_glass) and its coating rim (br_arcoat) as OPAQUE meshes, and the
-        // transparency is applied here on purpose: glTF alphaMode/alphaCutoff
-        // round-trips are exporter-version dependent, and a lens that silently
-        // exports opaque does not soften a frame — it BLINDS the optic. Keyed
-        // on the material name, which is the contract between the two files.
-        // The defect this exists to close: 2/3 iter06 blind verdicts led with
-        // the S2 ADS frame, and both named the same absence — "no modelled
-        // optic body, no lens, no glass". The tube was bored end to end, so
-        // the pixels inside the ring were byte-identical to the pixels outside
-        // it and nothing said the player was looking THROUGH anything.
-        if (/glass|arcoat/i.test(m.name || "")) {
-          const rim = /arcoat/i.test(m.name || "");
-          m.transparent = true;
-          m.opacity = rim ? 0.55 : 0.24;
-          m.depthWrite = false;      // never occlude the reticle behind it
-          m.metalness = 0.0;
-          m.roughness = rim ? 0.16 : 0.035;
-          // A coated objective is a MIRROR at grazing angles — this is the one
-          // surface on the gun that legitimately reflects the sky and the
-          // sodium practicals, and it is what makes glass read as glass.
-          m.envMapIntensity = rim ? 1.4 : 3.2;
-          m.needsUpdate = true;
-          continue;                  // skip the parkerised-metal treatment
-        }
-        // ---- D5 (iter09) THE SURFACE, MEASURED --------------------------
-        // Three cold critics read the closest asset in the game as broken:
-        // "smeared, stretched camo", "bright orange edge-highlights that trace
-        // polygon seams", "chaotic high-frequency gold/white striated glitter
-        // with hard triangular facets". None of that is exposure (clip250 is
-        // 0.0000% on every shot in the iter08 battery) and none of it is the
-        // texture generator (a4's maps are correct: map + roughnessMap +
-        // normalMap + metalnessMap with real UVs on all 7 materials). It is
-        // the SAMPLING and the LOBE, both measured live this session on the
-        // booted page with the four in-page A/B sweeps below.
-        //
-        //  1. ANISOTROPY WAS 1. Probed on the running build: every viewmodel
-        //     texture reported `anisotropy: 1` against a driver maximum of 16.
-        //     The barrel and the receiver run AWAY from the eye, so their
-        //     texels are minified anisotropically — exactly the case a 1x
-        //     sampler cannot filter — and a 768 px normal map under that
-        //     sampler is a per-frame noise generator. That is the "striated
-        //     glitter" and the "smeared camo" in one mechanism: the A/B at
-        //     aniso 16 is the single largest visible change of the four.
-        //     three clamps this to the driver max at upload, so 16 is safe on
-        //     hardware that offers less.
-        //  2. NORMAL SCALE. The build tool authors 1.00-1.25 (correct for a
-        //     hero asset at arm's length); at the 25 cm the hip pose actually
-        //     renders it, that amplitude puts the shading normal outside the
-        //     specular lobe on adjacent pixels. Halved, not zeroed — the micro
-        //     detail is the thing VT §3 grades.
-        //  3. ROUGHNESS FACTOR 1.0 IS WHY THE GUN IS CLAY WITHOUT A FLASH.
-        //     Measured: br_body / br_metal / br_glove all shipped
-        //     roughnessFactor 1.0 and metalness 1. A rough metal has no
-        //     specular lobe to speak of, so in S2/S8 (no muzzle flash) the
-        //     weapon rendered as a flat navy silhouette with no form at all.
-        //     PROOF THAT THIS, NOT THE ENV, IS THE CAUSE: sweeping
-        //     envMapIntensity 0.55 -> 1.4 -> 2.4 at roughnessFactor 1.0 moved
-        //     the S8 weapon-region mean luma by 0.04 of 42.6 — a dead lever.
-        //     Sweeping the roughness FACTOR 1.0 -> 0.62 -> 0.42 -> 0.28 at
-        //     fixed env brought the receiver, the barrel and the stock into
-        //     form on the first step. The factor multiplies the authored MAP,
-        //     so its variance survives untouched — this scales the lobe, it
-        //     does not flatten the surface. 0.58 is the S1/S8 compromise: the
-        //     S8 pass wants lower still, the S1 muzzle-flash frame gets hotter
-        //     as it drops (weapon-region mean 122.8 at 1.0 -> 138.8 at 0.62 ->
-        //     148.7 at 0.42), and the flash's own intensity is not this file's
-        //     to change.
-        const setAniso = (t) => {
-          if (t && t.anisotropy !== 16) { t.anisotropy = 16; t.needsUpdate = true; }
-        };
-        setAniso(m.map); setAniso(m.normalMap);
-        setAniso(m.roughnessMap); setAniso(m.metalnessMap);
-        // THE GLOVE IS NOT METAL. Both treatments below were written for
-        // parkerised steel — a TIGHT specular lobe with restrained relief —
-        // and both were reaching br_glove, which is a nomex knit whose entire
-        // visual identity is a BROAD lobe plus surface relief.
-        //   * normalScale x0.5 ran here, two lines ABOVE where `glove` was
-        //     computed, so it was unconditional: it halved the glove's
-        //     authored normalTexture.scale 1.15 -> 0.575, discarding 43% of
-        //     the only detail channel the glove has (the pads, the ripstop
-        //     weave, the stitching and the cuff all live in that map).
-        //   * roughness x0.58 sat above the `if (!glove)` gate. br_glove ships
-        //     NO roughnessFactor, so GLTFLoader defaults it to 1.0 and this
-        //     took it to 0.58. Against an ORM green channel measured on the
-        //     shipped warden.glb at mean 0.885 / min 0.302, that rendered
-        //     five-sixths of the glove at GGX roughness ~0.51 and the knuckle
-        //     pads at ~0.175 — moulded plastic, not fabric. That single
-        //     multiplier is the largest contributor to the "one smooth
-        //     injection-moulded mitten" read the owner reported, which is why
-        //     earlier albedo and lighting passes never shifted it.
-        // Leaving the glove's roughness at the glTF default 1.0 makes the
-        // AUTHORED map authoritative, which is what we want.
-        const glove = /glove/i.test(m.name || "");
-        if (m.normalScale && !glove) m.normalScale.multiplyScalar(0.5);
-        if (glove) {
-          // THE GLOVE TEXTURE IS NOT A GLOVE TEXTURE.
-          // Dumped from the shipped GLB this session: a 1024x1024 sheet whose
-          // TOP half is clean woven olive fabric and whose BOTTOM half is the
-          // same weave overprinted with a band of black ragged blotches and
-          // vertical drips — a generic grunge swatch, with no knuckle pads, no
-          // finger seams and no palm anywhere on it.
-          // The hands' UVs land in the BOTTOM half: arms_R occupies
-          // u[0.008,0.492] v[0.508,0.992] and arms_L u[0.508,0.992] v the same.
-          // So every finger was being painted with random black tatters, which
-          // over curled digits reads as bark. That is the owner's "it looks
-          // like ROOTS" report, and no amount of roughness/metalness tuning
-          // could touch it because the defect is in the pixels.
-          // The CLEAN weave is already in the file, half a texture away, so
-          // sample that instead. Textures are CLONED first: the map objects can
-          // be shared with other materials in the same GLB and an offset on a
-          // shared texture would drag the weapon's own surfaces with it.
-          const shiftToCleanHalf = (t) => {
-            if (!t) return t;
-            const c = t.clone();
-            c.wrapS = THREE.RepeatWrapping; c.wrapT = THREE.RepeatWrapping;
-            c.offset = new THREE.Vector2(t.offset.x, t.offset.y - 0.5);
-            c.needsUpdate = true;
-            return c;
-          };
-          m.map = shiftToCleanHalf(m.map);
-          m.normalMap = shiftToCleanHalf(m.normalMap);
-          m.roughnessMap = shiftToCleanHalf(m.roughnessMap);
-          // ...and ease the relief. 1.15 over a weave this tight reads as
-          // craggy stone at viewmodel range rather than fabric; measured A/B
-          // this session at 1.15 / 0.55 / 0.25, 0.45 keeps the weave legible
-          // without the crags. (The earlier pass raised this from 0.575 to
-          // 1.15 to undo a metal-oriented halving — correct in principle, but
-          // it was tuned against the blotched half of the sheet.)
-          if (m.normalScale) m.normalScale.set(0.45, 0.45);
-          // br_glove ships no metallicFactor either, so GLTFLoader defaults
-          // metalness to 1.0 — the glove is saved from rendering as a chrome
-          // mitten ONLY by its ORM blue channel measuring all-zero. Pin it, so
-          // a future ORM regen with any blue data cannot silently turn both
-          // hands into mirrors with no diffuse term and no obvious cause.
-          m.metalness = 0.0;
-          m.metalnessMap = null;          // all-zero: a dead sampler read
-          // Never written by GLTFLoader, and the `m.envMapIntensity = 1.0`
-          // below is inside `if (!glove)` — so without this the glove silently
-          // inherits three's constructor default. A dielectric fabric should
-          // take less ambient specular than wet parkerised steel.
-          m.envMapIntensity = 0.75;
-        }
-        if (m.color) {
-          m.color.setScalar(1.0);
-          // Scale the authored roughness FACTOR, never replace it: the
-          // per-part multipliers the build tool ships (grip 1.06, receiver
-          // 0.70 over one shared map) are the "distinct roughness per part"
-          // VT §3 asks for, and they survive a uniform scale.
-          if (m.roughnessMap && !glove) m.roughness = Math.max(0.06, m.roughness * 0.58);
-          if (!glove) {
-            // W1 (iter05): 1.15 was not "sheen" — with metalness-1 barrel and
-            // sight hardware it mirrored the sky PMREM and rendered them as
-            // chrome at macro range in the live S8 capture. 0.55 keeps the
-            // blue-hour wet-metal cue without a second key light.
-            // iter09: 0.55 -> 1.0. The iter05 chroming happened at
-            // roughnessFactor 1.0, where (measured this session) the env term
-            // is inert anyway — so whatever chromed the barrel then, it was
-            // not this number acting alone. With the lobe restored above the
-            // env finally has something to reflect INTO, and 1.0 x the
-            // scene's own environmentIntensity 0.5 = 0.5x a night PMREM,
-            // which is the ambient specular a wet receiver should have and
-            // still half of what the world's materials take.
-            m.envMapIntensity = 1.0;
-            // W1 (iter05): the 0.92 clamp used to fire on EVERY gun material,
-            // because glTF's roughnessFactor default is 1.0 whenever a
-            // metallicRoughness map is bound. The build tool now ships that
-            // factor as a deliberate per-part multiplier (rubberised grip 1.06,
-            // anodised receiver 0.70 over one shared roughness map — VT §3
-            // "distinct roughness per part"), so clamping it flattened the
-            // very variance this repair exists to protect. Clamp only the
-            // mapless case, which is the one it was written for.
-            if (!m.roughnessMap && (m.roughness == null || m.roughness > 0.92)) {
-              m.roughness = 0.92;
-            }
-          }
-        }
+    if (!o.isMesh) return;
+    o.castShadow = false;    // viewmodel never casts into the world
+    // ...but it DOES receive: with this off, your hands stayed lit by the moon
+    // while you stood under an awning — the loudest "pasted-on viewmodel" tell.
+    // receiveShadow is a UNIFORM in the vendored r172 (no shader permutation).
+    o.receiveShadow = true;
+    o.frustumCulled = false; // camera-space rig; bounds vs frustum lie
+    if (isArmMesh(o)) o.userData.isArm = true;
+    const list = Array.isArray(o.material) ? o.material : [o.material];
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i];
+      if (m && fabricOf.has(m)) { list[i] = fabricOf.get(m); continue; }
+      if (!m || repaired.has(m)) continue;
+      repaired.add(m);
+      // Meshy export bug class: albedo bound as full-strength emissive.
+      if (m.emissiveMap && m.emissiveMap === m.map) {
+        m.emissiveMap = null;
+        if (m.emissive) m.emissive.setRGB(0, 0, 0);
+      }
+      if (m.emissiveIntensity == null || m.emissiveIntensity > 1.001) m.emissiveIntensity = 1;
+      if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
+      // ---- OPTIC GLASS ------------------------------------------------------
+      // The generator authors lens discs (br_glass) and a coating ring (br_arcoat)
+      // OPAQUE; transparency is applied here on purpose (glTF alphaMode round-trips
+      // are exporter-version dependent, and an opaque lens BLINDS the optic).
+      if (/glass|arcoat/i.test(m.name || "")) {
+        const rim = /arcoat/i.test(m.name || "");
+        m.transparent = true;
+        // coated glass reads as DARK with a bright reflected highlight, never as a flat teal disc
+        if (!rim && m.color) m.color.setRGB(0.012, 0.020, 0.024);
+        m.opacity = rim ? 0.55 : 0.88;
+        m.depthWrite = false;
+        m.metalness = rim ? 0.0 : 0.25;
+        m.roughness = rim ? 0.16 : 0.03;
+        m.envMapIntensity = rim ? 1.4 : 2.6;
         m.needsUpdate = true;
+        continue;
       }
+      const setAniso = (t) => { if (t && t.anisotropy !== 16) { t.anisotropy = 16; t.needsUpdate = true; } };
+      setAniso(m.map); setAniso(m.normalMap); setAniso(m.roughnessMap); setAniso(m.metalnessMap);
+      if (FABRIC_RE.test(m.name || "")) {
+        // FABRIC: dielectric, broad lobe, per-vertex colour (COLOR_0 → vertexColors).
+        // Built EXPLICITLY (never pm.copy(m): MeshPhysicalMaterial.copy in r172 throws
+        // on a MeshStandardMaterial source and the whole weapon would fall to the
+        // magenta placeholder). Wrapped so a three bump degrades to the standard one.
+        try {
+          const isSleeve = /sleeve/i.test(m.name);
+          const pm = new THREE.MeshPhysicalMaterial({
+            name: m.name,
+            // vertex colours carry the albedo; this factor is the night treatment (see the
+            // gun-metal note below): the vm key + rim over-light dark fabric to a pale card
+            color: isSleeve ? new THREE.Color(0.75, 0.75, 0.75) : new THREE.Color(0.58, 0.58, 0.58),
+            vertexColors: !!m.vertexColors,
+            map: m.map || null,
+            normalMap: m.normalMap || null,
+            normalScale: m.normalScale ? m.normalScale.clone() : new THREE.Vector2(1, 1),
+            roughness: Math.min(1, Math.max(0.3, m.roughness == null ? 0.85 : m.roughness)),
+            metalness: 0.0,
+            envMapIntensity: 0.35,
+            side: THREE.FrontSide,
+            // Sheen is ADDED on top of the diffuse term and does not scale with albedo: at
+            // ~14 units of irradiance a (0.16,0.14,0.11) sheen colour turned dark fabric into
+            // cream-coloured card (measured: vertex colour 0.007 linear, rendered ~0.5).
+            // Kept as a faint rim accent only.
+            sheen: 0.35,
+            sheenRoughness: 0.85,
+            sheenColor: isSleeve ? new THREE.Color(0.030, 0.034, 0.028) : new THREE.Color(0.050, 0.044, 0.036),
+          });
+          list[i] = pm;
+          fabricOf.set(m, pm);
+          repaired.add(pm);
+          m.dispose();
+          continue;
+        } catch (e) {
+          console.warn("[weapon_meshes] fabric sheen skipped:", e && e.message);
+          m.metalness = 0.0; m.metalnessMap = null; m.envMapIntensity = 0.65;
+        }
+      } else {
+        // GUN METAL / POLYMER. Normal relief halved (surface noise at 25 cm is a
+        // per-frame glitter generator), roughness read AS AUTHORED. The generator's
+        // roughness map already carries the per-part variance (grip 1.06, receiver
+        // 0.74): scaling it down 0.58x was the "wet chrome" the owner saw.
+        if (m.normalScale) m.normalScale.multiplyScalar(0.6);
+        // NIGHT TREATMENT: the world pool (moon 5.0 + hemisphere 4.6 + the vm rig) lands
+        // ~14 units of irradiance on an upward-facing receiver at 40 cm, so albedo that is
+        // right in daylight (sRGB 0.12-0.16) renders as pale blue-grey card at night —
+        // measured live, black-albedo A/B: the stock goes from (170,180,205) to near black.
+        // 0.5x lands dark gunmetal with the form carried by the key and rim.
+        if (m.color) m.color.setScalar(/metal|optic/i.test(m.name || "") ? 0.85 : 0.70);
+        m.envMapIntensity = 0.5;
+        // The roughness map's low end (0.36 on worn steel) is a narrow lobe that turns the muzzle-flash
+        // light and the moon into a foil-like glitter on a hand-sized part. The shader clamps the
+        // PRODUCT at 1, so a factor of 1.5 lifts the whole map (0.36 -> 0.54) and keeps its variance.
+        if (m.roughnessMap) m.roughness = Math.min(1.8, (m.roughness == null ? 1 : m.roughness) * 1.5);
+        else if (m.roughness == null || m.roughness > 0.92) m.roughness = 0.92;
+      }
+      m.needsUpdate = true;
     }
+    if (Array.isArray(o.material)) o.material = list; else o.material = list[0];
   });
-  // ---- GLOVE SHEEN -------------------------------------------------------
-  // The last thing separating the hands from fabric. A MeshStandardMaterial
-  // has one GGX lobe, so a knit can only ever be "rougher plastic"; real cloth
-  // adds a wide retroreflective rim where fibres catch light at grazing
-  // angles, which is exactly the read you get on a glove backlit by a street
-  // lamp. three exposes it as the sheen term on MeshPhysicalMaterial.
-  //
-  // CONSTRUCTED EXPLICITLY, NEVER pm.copy(m). MeshPhysicalMaterial.copy in the
-  // vendored three r172 runs clearcoatNormalScale.copy(source.clearcoatNormalScale),
-  // sheenColor.copy(source.sheenColor) and [ ...source.iridescenceThicknessRange ]
-  // — all undefined on a MeshStandardMaterial — so copy() throws a TypeError,
-  // loadWeaponGLB's catch fires, and the weapon ships as the magenta
-  // placeholder. Wrapped as well, so a future three bump degrades to the
-  // standard material rather than losing the whole weapon.
-  try {
-    if (armMeshes.length) {
-      const src = armMeshes[0].material;
-      if (src && src.isMeshStandardMaterial && !src.isMeshPhysicalMaterial &&
-          armMeshes.every((a) => a.material === src)) {
-        const pm = new THREE.MeshPhysicalMaterial({
-          name: src.name, map: src.map, normalMap: src.normalMap,
-          normalScale: src.normalScale ? src.normalScale.clone() : undefined,
-          roughnessMap: src.roughnessMap, roughness: src.roughness,
-          metalness: src.metalness, envMapIntensity: src.envMapIntensity,
-          side: src.side, transparent: src.transparent, alphaTest: src.alphaTest,
-          sheen: 1.0,
-          sheenRoughness: 0.75,               // broad — knit, not satin
-          sheenColor: new THREE.Color(0.36, 0.34, 0.32), // warm dust, not white
-        });
-        for (const a of armMeshes) a.material = pm;
-        src.dispose();
-      }
-    }
-  } catch (e) {
-    console.warn("[weapon_meshes] glove sheen skipped:", e && e.message);
-  }
   for (const l of doomedLights) l.parent && l.parent.remove(l);
 }
 
@@ -374,22 +209,64 @@ function makePlaceholder(id) {
   const grip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.05), mat);
   grip.position.set(0, -0.05, -0.02);
   g.add(body, grip);
-  // receiveShadow matches repair() above so the dev placeholder does not
-  // diverge from a real weapon in how it takes world shadow.
   g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; } });
   const view = (WEAPONS[id] && WEAPONS[id].view) || {};
   g.userData.muzzleOffset = (view.muzzle || [0, 0.05, -0.5]).slice();
   g.userData.ejectOffset = (view.eject || [0.03, 0.05, -0.1]).slice();
   g.userData.placeholder = true;
   g.userData.weaponId = id;
+  g.userData.parts = {};
   return g;
+}
+
+// Animatable parts: rest transforms + weapon-space bounds, read ONCE at load so the
+// viewmodel never has to guess where the magazine or the hands are. Everything is
+// expressed in the group's own (grip-origin) space.
+function discoverParts(group) {
+  const parts = {};
+  group.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(group.matrixWorld).invert();
+  const box = new THREE.Box3(), tmp = new THREE.Box3();
+  const boxOf = (o) => {
+    box.makeEmpty();
+    o.traverse((c) => {
+      if (!c.isMesh || !c.geometry) return;
+      if (!c.geometry.boundingBox) c.geometry.computeBoundingBox();
+      tmp.copy(c.geometry.boundingBox).applyMatrix4(c.matrixWorld).applyMatrix4(inv);
+      box.union(tmp);
+    });
+    return box.clone();
+  };
+  const put = (key, node) => {
+    if (!node) return;
+    const b = boxOf(node);
+    parts[key] = {
+      node,
+      restP: node.position.clone(),
+      restQ: node.quaternion.clone(),
+      restS: node.scale.clone(),
+      box: b,
+      center: b.getCenter(new THREE.Vector3()),
+      size: b.getSize(new THREE.Vector3()),
+    };
+  };
+  put("mag", group.getObjectByName("mag"));
+  put("pump", group.getObjectByName("pump"));
+  let armL = null, armR = null;
+  for (const c of group.children) {
+    if (/^arms?_L/.test(c.name || "")) armL = c;
+    else if (/^arms?_R/.test(c.name || "")) armR = c;
+  }
+  put("armL", armL);
+  put("armR", armR);
+  return parts;
 }
 
 /**
  * Load (and cache) the FP viewmodel GLB for a weapon id. Resolves to a
  * THREE.Group with userData:
- *   { weaponId, muzzle: Object3D|null, eject: Object3D|null,
- *     muzzleOffset:[3], ejectOffset:[3], placeholder?:true }
+ *   { weaponId, muzzle: Object3D|null, eject: Object3D|null, sight, hipPush,
+ *     muzzleOffset:[3], ejectOffset:[3], parts:{mag,pump,armL,armR}, placeholder?:true }
  * Callers clone via SkeletonUtils/clone() if they need independent copies;
  * viewmodel.js uses the cached prototype directly (single consumer).
  */
@@ -409,15 +286,11 @@ export async function loadWeaponGLB(id) {
       }
       const muzzle = findSocket(group, "SOCKET_muzzle");
       const eject = findSocket(group, "SOCKET_eject");
-      // W1 (iter03): ADS alignment BY CONSTRUCTION, not by a copied number.
-      // weapon_data's view.sightY is transcribed by hand from the build tool's
-      // A4BUILD report and it drifts — this session the tool reported warden
-      // 0.134 / vesper 0.0997 / corvus 0.106 against declared 0.126 / 0.0967 /
-      // 0.103, i.e. up to 8 mm, ~1.8 deg of aim error at the 0.26 m ADS pose.
-      // viewmodel.js parks the mount at y = -view.sightY for ADS, so shifting
-      // the prototype by (declared - built) puts the real sight line on the vm
-      // camera's centre ray whatever the data file says. Falls back to a no-op
-      // when the GLB predates the socket.
+      // ADS alignment BY CONSTRUCTION, not by a copied number: weapon_data's
+      // view.sightY is transcribed by hand from the build tool's report and it
+      // drifts. viewmodel.js parks the mount at y = -view.sightY for ADS, so
+      // shifting the prototype by (declared - built) puts the real sight line on
+      // the vm camera's centre ray whatever the data file says.
       const sight = findSocket(group, "SOCKET_sight");
       const declaredSightY = w && w.view && typeof w.view.sightY === "number"
         ? w.view.sightY : null;
@@ -436,70 +309,33 @@ export async function loadWeaponGLB(id) {
         console.warn(`[A4] ${id}.glb has no SOCKET_sight — ADS rides weapon_data view.sightY unchecked`);
       }
 
-      // ---- HIP STANDOFF — MEASURED AGAINST THE FRUSTUM (D lane, iter10) ---
-      // OWNER REPORT, playing the build: "the hand/weapon isn't fully
-      // procedural, only when zooming in". Measured live this session on the
-      // booted page (colour-ID pass rendered with the real vm camera, per-mesh
-      // visible-pixel counts at 1280x720, warden, hip vs full ADS held with a
-      // real MouseEvent(button 2)):
-      //     hip  total viewmodel  5.98 % of frame   (arms 2.20 %)
-      //     ADS  total viewmodel  9.76 % of frame   (arms 4.76 %)
-      // The weapon the player holds while NOT aiming was 1.63x smaller than the
-      // same weapon while aiming, and 5x under visual_target.md's "30% of every
-      // frame is the viewmodel". The mount sat at z -0.596 m at the hip against
-      // -0.26 m at ADS: the rig was being held 60 cm from the eye, past the end
-      // of a human arm, which is exactly the "bare pipe with no hands" read.
-      //
-      // CAUSE — the rule below used to be `push the rearmost vertex until it is
-      // REAR_CLEAR metres from the eye`, and REAR_CLEAR had been raised 0.28 ->
-      // 0.35 by a still-frame-graded pass. A scalar distance is the wrong test:
-      // it does not know where the frame EDGE is. The warden's butt pad sits at
-      // camera-space (x +0.13..+0.19, y -0.32..-0.06) because posHip offsets the
-      // grip right and down — at 9.4 cm the vm camera's 60 deg vFOV spans only
-      // +/-0.097 m horizontally, so the whole buttstock is OFF-SCREEN RIGHT and
-      // was never capable of "filling the frame with macro facets". The rule was
-      // paying a 26 cm framing tax to solve a problem that projection had
-      // already solved.
-      //
-      // THE RULE NOW: push only far enough that no WEAPON vertex is BOTH nearer
-      // than MACRO_D and inside the vm camera's view volume. Same intent (never
-      // photograph a receiver facet at macro range), tested where it actually
-      // matters. Self-adapting per weapon, no per-asset constant. Measured
-      // outcome this session, warden: push 0.2562 m -> 0.000 m, hip viewmodel
-      // 5.98 % -> 10.06 %, i.e. hip/ADS parity, with both gloved hands legible
-      // on the grip and the handguard.
-      //
-      // Retained from the old rule, and still right:
-      //  * HIP ONLY — viewmodel.js blends the push out with adsEase. A
-      //    shouldered rifle's stock IS behind the eye and the near plane is the
-      //    correct thing to remove it; pushing at ADS shrinks the sight picture,
-      //    which is the one thing that frame exists to show.
-      //  * PURE Z — the sight stays on x=0,y=0 at ADS, so alignment is untouched.
-      //  * MEASURE THE WEAPON, NOT THE ARMS — a forearm is supposed to run past
-      //    the eye and be clipped; letting it drive the rule shoved the Pike (a
-      //    23 cm pistol) out to 0.49 m on the strength of a 19 cm arm stub.
+      // ---- HIP STANDOFF — MEASURED AGAINST THE FRUSTUM --------------------------
+      // Push the weapon forward at the HIP pose only far enough that no WEAPON vertex
+      // (never the arms: a forearm is supposed to run past the eye and be clipped) is
+      // BOTH nearer than MACRO_D and inside the vm camera's view volume. Same intent
+      // as the old fixed 'rear clearance' rule (never photograph a receiver facet at
+      // macro range) but tested where it matters. viewmodel.js blends the push out
+      // with adsEase (a shouldered rifle's stock IS behind the eye). Pure Z, so the
+      // sight stays on x=0,y=0 at ADS and alignment is untouched.
       const MACRO_D = 0.16;      // m — nearer than this, a facet reads as macro noise
       const HARD_D = 0.055;      // m — nearer than this it is inside the eye, always push
-      const MAX_PUSH = 0.34;     // never shove a weapon out to arm's length
-      const EDGE_MARGIN = 1.05;  // 5% of slack outside the frame edge, for bob/sway
-      const REF_ASPECT = 16 / 9; // the aspect the game is designed and captured at
+      const MAX_PUSH = 0.34;
+      const EDGE_MARGIN = 1.05;
+      const REF_ASPECT = 16 / 9;
       const TAN_V = Math.tan(VIEWMODEL.fovDeg * 0.5 * DEG);
       const hipPose = (w && w.view && w.view.posHip) ? w.view.posHip : [0.16, -0.18, -0.34];
-      // weapon vertices in mount space (the group is unparented here, so a
-      // mesh's matrixWorld already carries the sightY shift and view.scale)
       const wpnPts = [];
       {
-        const p = new THREE.Vector3();
+        const pt = new THREE.Vector3();
+        group.updateMatrixWorld(true);
         group.traverse((o) => {
           if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
-          let n = o;
-          while (n && n !== group) { if (/^arms?_/.test(n.name || "")) return; n = n.parent; }
-          o.updateWorldMatrix(true, false);
+          if (o.userData.isArm) return;
           const a = o.geometry.attributes.position;
           const stride = Math.max(1, Math.floor(a.count / 4000));
           for (let i = 0; i < a.count; i += stride) {
-            p.set(a.getX(i), a.getY(i), a.getZ(i)).applyMatrix4(o.matrixWorld);
-            wpnPts.push(p.x, p.y, p.z);
+            pt.set(a.getX(i), a.getY(i), a.getZ(i)).applyMatrix4(o.matrixWorld);
+            wpnPts.push(pt.x, pt.y, pt.z);
           }
         });
       }
@@ -507,13 +343,13 @@ export async function loadWeaponGLB(id) {
         for (let i = 0; i < wpnPts.length; i += 3) {
           const cx = hipPose[0] + wpnPts[i];
           const cy = hipPose[1] + wpnPts[i + 1];
-          const d = -(hipPose[2] - push + wpnPts[i + 2]); // metres in front of the eye
-          if (d < HARD_D) return true;                    // in the eye, on-screen or not
-          if (d >= MACRO_D) continue;                     // far enough to be a surface
+          const d = -(hipPose[2] - push + wpnPts[i + 2]);
+          if (d < HARD_D) return true;
+          if (d >= MACRO_D) continue;
           const hh = d * TAN_V * EDGE_MARGIN;
-          if (Math.abs(cy) > hh) continue;                // above/below the frame
-          if (Math.abs(cx) > hh * REF_ASPECT) continue;   // left/right of the frame
-          return true;                                    // macro-range AND on screen
+          if (Math.abs(cy) > hh) continue;
+          if (Math.abs(cx) > hh * REF_ASPECT) continue;
+          return true;
         }
         return false;
       };
@@ -524,7 +360,6 @@ export async function loadWeaponGLB(id) {
       }
       group.userData.hipPush = push;
       {
-        // report the framing the rule actually produces, every load
         let rear = -Infinity;
         for (let i = 2; i < wpnPts.length; i += 3) rear = Math.max(rear, wpnPts[i]);
         const rearCam = hipPose[2] - push + rear;
@@ -532,49 +367,13 @@ export async function loadWeaponGLB(id) {
           `from the eye, rearmost weapon vertex ${(-rearCam * 100).toFixed(1)} cm, ` +
           `hipPush ${(push * 100).toFixed(1)} cm (0 at full ADS)`);
       }
-      // ---- superseded (kept for the record) — W1 (iter03) REAR STANDOFF ----
-      // THE iter01-03 "shattered white polygon" framing bug, measured:
-      // weapon_data's posHip/posAds place the GRIP, and the GLB origin IS the
-      // grip — so the buttstock sticks out BEHIND the origin, straight at the
-      // eye. Rearmost vertex vs. pose (Blender -Y = glTF +Z, this session):
-      //   warden  rear +0.246 @ posHip z -0.34  ->  9.4 cm from the camera
-      //   corvus  rear +0.313 @ posHip z -0.40  ->  8.8 cm
-      //   vesper  rear +0.247 @ posHip z -0.30  ->  5.3 cm
-      // A 10 cm buttstock viewed from 9 cm at the vm camera's 60 deg vFOV
-      // subtends ~58 deg — the whole frame. That is what S1/S6 were showing:
-      // not broken geometry (the rifle clay-renders clean, iso render this
-      // session) but the REAR OF THE RECEIVER at macro range, where the base
-      // mesh's own facets read as polygon soup. No amount of material or mesh
-      // work fixes a camera that is inside the gun.
-      // Rule, not a per-asset fudge: measure the prototype and publish the
-      // forward push its rearmost point needs to clear REAR_CLEAR at the HIP
-      // pose. viewmodel.js applies it to the HIP term only and blends it out
-      // with adsEase — ADS must NOT be pushed: a shouldered rifle's stock IS
-      // behind the eye (the near plane is the correct thing to remove it), and
-      // shoving the weapon out at ADS shrinks the sight picture, which is the
-      // one thing that frame exists to show. Pure Z either way, so the sight
-      // stays on x=0,y=0 at ADS and alignment is untouched.
-      // iter09 D5: 0.28 -> 0.35. Two of three cold critics called the shipped
-      // framing "grossly oversized — the barrel crosses frame centre and the
-      // gun eats the whole lower-right quadrant", and the iter08 consolidation
-      // measured br_body's rear at -0.235 m from the eye, i.e. 4.5 cm INSIDE
-      // the standoff this constant already demanded (the kick spring's 9 cm of
-      // posZ drive-back is what eats it during a burst — the rule was written
-      // against the static pose and the burst is what gets photographed).
-      // Swept live in-page at +0, +4, +8 and +12 cm of extra push on the S1
-      // muzzle-flash frame: +7 cm opens the lower-right quadrant enough to
-      // read the car, the sandbag stack and the crates behind the weapon
-      // without shrinking the gun below VT §5's "~30% of every frame".
-      // ADS is untouched (the push blends out with adsEase), so the sight
-      // picture S2 exists to show is exactly as before.
-      //   const REAR_CLEAR = 0.35; push = clamp(rearCam + REAR_CLEAR, 0, 0.34)
-      // ----------------------------------------------------------------------
       group.userData.sight = sight;
       group.userData.weaponId = id;
       group.userData.muzzle = muzzle;
       group.userData.eject = eject;
       group.userData.muzzleOffset = (w && w.view && w.view.muzzle ? w.view.muzzle : [0, 0.05, -0.5]).slice();
       group.userData.ejectOffset = (w && w.view && w.view.eject ? w.view.eject : [0.03, 0.05, -0.1]).slice();
+      group.userData.parts = discoverParts(group);
       if (!muzzle) console.warn(`[A4] ${id}.glb has no SOCKET_muzzle — using weapon_data view.muzzle offset`);
       return group;
     } catch (err) {
@@ -589,9 +388,7 @@ export async function loadWeaponGLB(id) {
 
 // ---- private extras ---------------------------------------------------------
 
-/** Prototypes loaded so far (resolved only) — viewmodel.prewarmables() source.
- *  Prewarm runs in boot phase 5, after phase 4 awaited warden+pike, so the
- *  mission-loadout prototypes are always present here by then. */
+/** Prototypes loaded so far (resolved only) — viewmodel.prewarmables() source. */
 export function loadedPrototypes() {
   const out = [];
   for (const p of cache.values()) {
@@ -599,3 +396,21 @@ export function loadedPrototypes() {
   }
   return out;
 }
+
+/** Kick off (and await) every weapon in the five slots so a weapon switch never
+ *  pays a network + decode + material-compile hitch. Safe to call repeatedly. */
+export function loadAllWeapons(ids) {
+  return Promise.all((ids || SLOT_ORDER).map((id) => loadWeaponGLB(id)));
+}
+
+/** Dev/hot-reload seam: forget a cached prototype so the next loadWeaponGLB(id)
+ *  re-fetches the (re-exported) GLB. Returns the old group (caller removes it). */
+export function invalidateWeapon(id) {
+  const old = cache.get(id);
+  cache.delete(id);
+  return old && old._resolved;
+}
+
+// World/third-person loot model (core/weapons/world_weapon.js owns it; boot imports it directly
+// too). Re-exported so `import { buildWorldWeapon } from "./weapon_meshes.js"` also works.
+export { buildWorldWeapon, preloadWorldWeapons, WORLD_WEAPON_INFO } from "./world_weapon.js";

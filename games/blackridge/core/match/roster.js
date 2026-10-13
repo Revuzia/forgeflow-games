@@ -55,6 +55,20 @@ export const DIFFICULTY_PRESETS = {
     enemy: ["VETERAN_SLOT", "regular", "regular", "hardened", "hardened"],
     ffa: ["regular", "regular", "regular", "hardened", "hardened", "hardened", "hardened", "hardened", "VETERAN_SLOT"],
   },
+  // EXPERT (owner decision 2026-10-12, supersedes the PVP half of the ladder):
+  // PVP has no difficulty setting — boot starts every match on "expert". EVERY
+  // other combatant, teammates AND opponents, plays at the top skill profile
+  // (botfsm.js BANDS.veteran: ~0.2-0.3 s reactions, tight bursts, strafing,
+  // peek/re-peek, pre-aim, sound tracking, flush grenades, retreat-to-heal) —
+  // an expert human, never a cheat (same fairness invariants, no HP/damage
+  // change). The literal band name, not VETERAN_SLOT: that slot stays gated on
+  // opts.veteran for the campaign-style ladder; expert is not a ladder rung.
+  // The campaign's casual/standard/hard ladder is unchanged.
+  expert: {
+    friendly: ["veteran", "veteran", "veteran", "veteran"],
+    enemy: ["veteran", "veteran", "veteran", "veteran", "veteran"],
+    ffa: ["veteran", "veteran", "veteran", "veteran", "veteran", "veteran", "veteran", "veteran", "veteran"],
+  },
 };
 
 // C23 archetype spread: the arena has exactly one long lane, so one marksman

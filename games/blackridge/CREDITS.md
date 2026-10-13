@@ -21,10 +21,11 @@ asset lands. Format follows last-circle's CREDITS.
 | `assets/textures/iron_plate_*` | imported | `pipeline/assets/generated-materials/` (FFG generated) | original (FFG) |
 | `assets/props/*.glb` (vehicles, street props) | imported | Kenney / Quaternius cc0-city kit via `pipeline/assets/_downloaded/cc0-city/` (per its SOURCES.json) | CC0 |
 | All other level textures (facade/trim/emissive/neon/decal/glow/ripple/metal/burlap/tarp) | procedural | canvas-generated at load (`core/level/materials.js`) | original |
-| `assets/weapons/{warden,vesper,corvus,pike}.glb` (FP viewmodels, weapon + rig-cut gloved hands) | generated | `tools/a4_build_fp_weapons.py` from `games/last-circle` Meshy bases `wpn_{ar,smg,sniper,pistol}.glb` + `soldier.glb` rig-cut arms (Meshy, owner account, original IP per last-circle CREDITS.md) + authored procedural dressing + numpy-generated PBR textures | original (FFG Meshy) |
+| `assets/weapons/{warden,vesper,corvus,pike,breaker}.glb` (FP viewmodels, weapon + procedural gloved hands; Breaker added 2026-10-12 from `wpn_shotgun.glb`) | generated | `tools/a4_build_fp_weapons.py` from `games/last-circle` Meshy bases `wpn_{ar,smg,sniper,pistol}.glb` + `soldier.glb` rig-cut arms (Meshy, owner account, original IP per last-circle CREDITS.md) + authored procedural dressing + numpy-generated PBR textures | original (FFG Meshy) |
 | `assets/chars/soldier.glb`, `assets/chars/juggernaut.glb` (Draco+WebP repacks) | imported | `games/last-circle/assets/chars/meshy/` (Meshy, ForgeFlow account) | original (FFG Meshy) |
 | `assets/chars/clip_*.glb` (rifle idle/walk/run/crouch/reload, hit, death_a — animation-only) | imported | last-circle baked `soldier_*` clip set (clip_death_b/c REMOVED — foreign rig lineage, see manifest.a8 note) | original (FFG Meshy) |
 | `assets/chars/wpn3p_{ar,smg,sniper}.glb` (bot-carried weapons) | imported | `games/last-circle/assets/props/meshy_wpn/` | original (FFG Meshy) |
+| `assets/weapons/wpn3p_{pistol,shotgun}.glb` (bot-carried pistol/shotgun + ground loot) | imported | `games/last-circle/assets/props/meshy_wpn/wpn_{pistol,shotgun}.glb` | original (FFG Meshy) |
 | `assets/audio/sfx/*` (gun bodies, footsteps, impacts, foley, UI) | imported | FFSL CC0 slices + Kenney CC0 via `games/last-circle/assets/audio/sfx/` (license txts in-dir) | CC0 |
 | `assets/audio/beds/*`, `assets/audio/oneshots/*` (ambience beds, thunder, explosions, Corvus layers) | imported | Sonniss GDC 2024 slices (44.1 kHz OGG re-encodes via ffmpeg `-vn`; never raw WAVs) — license captured at `assets/audio/SONNISS-LICENSE.txt` | Sonniss GDC royalty-free |
 | Music (entire adaptive score) | procedural | Web-Audio synthesis (R14, `core/audio/music.js`) — no files | original |
@@ -53,7 +54,7 @@ triangle counts (Blender import, this session):
 | `wpn_smg.glb` | 4,620 | 5,962 | **selected** — Vesper |
 | `wpn_sniper.glb` | 4,479 | 6,143 | **selected** — Corvus. Bolt gun + scope; stock ships detached and is welded by the build tool |
 | `wpn_pistol.glb` | 4,482 | 5,955 | **selected** — Pike |
-| `wpn_shotgun.glb` | 4,704 | 6,088 | not used — no shotgun in the loadout |
+| `wpn_shotgun.glb` | 4,704 | 6,088 | **selected** — Breaker (added 2026-10-12) |
 | `wpn_glauncher.glb` | 4,506 | 6,169 | not used — no launcher in the loadout |
 
 All six are original ForgeFlow Meshy generations (owner account), same lineage

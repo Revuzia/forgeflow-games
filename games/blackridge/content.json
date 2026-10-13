@@ -10,17 +10,37 @@
   "version": 2,
   "difficulty": {
     "_comment": "H2 survivability config — overrides core/pvp/pvp_tuning.js DIFFICULTY field-by-field. playerIncomingMult scales damage the HUMAN receives from bots ONLY (never bot-vs-bot, never player-outgoing — doctrine §2 honesty). bandShift (campaign only) moves each authored spawn band down the recruit<regular<hardened<veteran ladder, clamped (casual softens; 0 = authored mix). regenDelayS (optional, consumed by damage.js) overrides the player's regen delay — measured NOT needed at casual (H2 probe, deaths identical), so unset. HARD = identity: pre-H2 lethality byte-for-byte (closer 2026-08-25: bandShift hard 1->0 — +1 made HARD harder than the pre-change build, breaking the identity contract).",
+    "_ai_comment": "BOT-AI PASS 2026-10 - each level's 'ai' block drives core/ai/botfsm.js (aiCfg/skillOf) and squad.js; the per-band skill profile itself lives in botfsm.js BANDS (knob reference in its header). enemyBandShift: PVP - shift the band of every bot hostile to the human along recruit<regular<hardened<veteran (-1/0/+1; FFA: all eight rivals). campaignBandShift: campaign - extra shift on top of mission.js's own bandShift (casual's -1 already lives there). reactScale/jitterScale: global x on every band's reaction window and aim sigma. humanTokens/humanWindow: fire tokens per squad on the human (<=2) and distinct attackers in one 250 ms window (<=3) - difficulty can only LOWER these audited caps, never raise them. None of it touches HP, damage, ammo, speed or sight lines.",
     "casual": {
       "playerIncomingMult": 0.6,
-      "bandShift": -1
+      "bandShift": -1,
+      "ai": { "enemyBandShift": -1, "campaignBandShift": 0, "reactScale": 1, "jitterScale": 1, "humanTokens": 1, "humanWindow": 2 }
     },
     "standard": {
       "playerIncomingMult": 0.8,
-      "bandShift": 0
+      "bandShift": 0,
+      "ai": { "enemyBandShift": 0, "campaignBandShift": 0, "reactScale": 1, "jitterScale": 1, "humanTokens": 2, "humanWindow": 3 }
     },
     "hard": {
       "playerIncomingMult": 1,
-      "bandShift": 0
+      "bandShift": 0,
+      "ai": { "enemyBandShift": 1, "campaignBandShift": 1, "reactScale": 1, "jitterScale": 1, "humanTokens": 2, "humanWindow": 3 }
+    },
+    "expert": {
+      "_comment": "PVP's only tier (owner 2026-10-12: no difficulty setting; every other combatant plays like an expert human). roster.js DIFFICULTY_PRESETS.expert seats all nine at the veteran band; identity damage, audited fairness caps untouched. Not offered on the campaign briefing row.",
+      "playerIncomingMult": 1,
+      "bandShift": 0,
+      "ai": {
+        "enemyBandShift": 0, "campaignBandShift": 0, "reactScale": 1, "jitterScale": 1, "humanTokens": 2, "humanWindow": 3,
+        "bandOverrides": {
+          "veteran": {
+            "reactMin": 0.22, "reactMax": 0.3, "jitter": 0.015, "pauseMin": 0.28, "pauseMax": 0.5, "leadErr": 0.08,
+            "turnRate": 14, "acquire": 2.2, "thinkS": 0.1, "strafeReact": false, "holdWhenSeen": true, "notice": 1.5, "memory": 0.45,
+            "hearMult": 1.4, "hearFuzz": 0.55, "coverRescoreS": 3.5, "flankEvery": 3.5, "flankP": 0.85,
+            "grenStaticS": 1.8, "grenCdS": 9, "huntAfterS": 2, "exposureAvoid": 1.6, "lootRange": 40
+          }
+        }
+      }
     }
   },
   "mission": {
@@ -1715,6 +1735,29 @@
       "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
     },
     {
+      "id": "rk_lw_breaker_w",
+      "kind": "weapon_pad",
+      "weapon": "breaker",
+      "arenas": [
+        "lanternwalk"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -42.4,
+        0,
+        -14.5
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 24,
+      "label": "B-12 Breaker - rack",
+      "_comment": "Pump shotgun rack beside the Vesper: the CQB choice. Sits 1.4 m past the SMG so a rush for guns forces a pick."
+    },
+    {
       "id": "rk_lw_warden_e",
       "kind": "weapon_pad",
       "weapon": "warden",
@@ -1759,6 +1802,29 @@
       "reserve": 32,
       "label": "KS-23 Vesper - rack",
       "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_lw_breaker_e",
+      "kind": "weapon_pad",
+      "weapon": "breaker",
+      "arenas": [
+        "lanternwalk"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        8.6,
+        0,
+        -9
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 24,
+      "label": "B-12 Breaker - rack",
+      "_comment": "Pump shotgun rack beside the Vesper: the CQB choice. Sits 1.4 m past the SMG so a rush for guns forces a pick."
     },
     {
       "id": "rk_lw_corvus",
@@ -1830,6 +1896,29 @@
       "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
     },
     {
+      "id": "rk_sy_breaker_w",
+      "kind": "weapon_pad",
+      "weapon": "breaker",
+      "arenas": [
+        "switchyard"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -15.9,
+        0,
+        -4
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 24,
+      "label": "B-12 Breaker - rack",
+      "_comment": "Pump shotgun rack beside the Vesper: the CQB choice. Sits 1.4 m past the SMG so a rush for guns forces a pick."
+    },
+    {
       "id": "rk_sy_warden_e",
       "kind": "weapon_pad",
       "weapon": "warden",
@@ -1874,6 +1963,29 @@
       "reserve": 32,
       "label": "KS-23 Vesper - rack",
       "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_sy_breaker_e",
+      "kind": "weapon_pad",
+      "weapon": "breaker",
+      "arenas": [
+        "switchyard"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        12.1,
+        0,
+        0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 24,
+      "label": "B-12 Breaker - rack",
+      "_comment": "Pump shotgun rack beside the Vesper: the CQB choice. Sits 1.4 m past the SMG so a rush for guns forces a pick."
     },
     {
       "id": "rk_sy_corvus",
@@ -1945,6 +2057,29 @@
       "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
     },
     {
+      "id": "rk_sm_breaker_w",
+      "kind": "weapon_pad",
+      "weapon": "breaker",
+      "arenas": [
+        "saltmarket"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -12.4,
+        0,
+        -8
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 24,
+      "label": "B-12 Breaker - rack",
+      "_comment": "Pump shotgun rack beside the Vesper: the CQB choice. Sits 1.4 m past the SMG so a rush for guns forces a pick."
+    },
+    {
       "id": "rk_sm_warden_e",
       "kind": "weapon_pad",
       "weapon": "warden",
@@ -1989,6 +2124,29 @@
       "reserve": 32,
       "label": "KS-23 Vesper - rack",
       "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_sm_breaker_e",
+      "kind": "weapon_pad",
+      "weapon": "breaker",
+      "arenas": [
+        "saltmarket"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        8.1,
+        0,
+        4
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 24,
+      "label": "B-12 Breaker - rack",
+      "_comment": "Pump shotgun rack beside the Vesper: the CQB choice. Sits 1.4 m past the SMG so a rush for guns forces a pick."
     },
     {
       "id": "rk_sm_corvus",
@@ -9205,5 +9363,133 @@
       "grenades": 1,
       "_comment": "PISTOL START. Every PVP combatant (human and bot) spawns with the GS-9 Pike; the Warden, Vesper and Corvus are fought over on the map as weapon_pad racks. The campaign keeps mission.loadout [warden,pike] -- sim.js only reads this block when opts.mode is set."
     }
-  }
+  },
+  "loot": [
+    {
+      "id": "lt_ammo_quay",
+      "kind": "ammo",
+      "scope": "campaign",
+      "pos": [
+        1.8,
+        0,
+        46.8
+      ],
+      "label": "Ammo crate"
+    },
+    {
+      "id": "lt_breaker_alley",
+      "kind": "weapon",
+      "scope": "campaign",
+      "pos": [
+        -49.3,
+        0,
+        16
+      ],
+      "weapon": "breaker",
+      "label": "B-12 Breaker",
+      "mag": 6,
+      "reserve": 18
+    },
+    {
+      "id": "lt_vesper_alley",
+      "kind": "weapon",
+      "scope": "campaign",
+      "pos": [
+        -47,
+        0,
+        -8.2
+      ],
+      "weapon": "vesper",
+      "label": "KS-23 Vesper",
+      "mag": 32,
+      "reserve": 64
+    },
+    {
+      "id": "lt_ammo_plaza",
+      "kind": "ammo",
+      "scope": "campaign",
+      "pos": [
+        -18.8,
+        0,
+        2
+      ],
+      "label": "Ammo crate"
+    },
+    {
+      "id": "lt_breaker_arcade",
+      "kind": "weapon",
+      "scope": "campaign",
+      "pos": [
+        -30.5,
+        0,
+        -8.8
+      ],
+      "weapon": "breaker",
+      "label": "B-12 Breaker",
+      "mag": 6,
+      "reserve": 12
+    },
+    {
+      "id": "lt_ammo_gallery",
+      "kind": "ammo",
+      "scope": "campaign",
+      "pos": [
+        21.6,
+        0,
+        -2.6
+      ],
+      "label": "Ammo crate"
+    },
+    {
+      "id": "lt_vesper_blvd",
+      "kind": "weapon",
+      "scope": "campaign",
+      "pos": [
+        38.6,
+        0,
+        34.6
+      ],
+      "weapon": "vesper",
+      "label": "KS-23 Vesper",
+      "mag": 32,
+      "reserve": 64
+    },
+    {
+      "id": "lt_ammo_blvd",
+      "kind": "ammo",
+      "scope": "campaign",
+      "pos": [
+        35.4,
+        0,
+        -0.4
+      ],
+      "label": "Ammo crate"
+    },
+    {
+      "id": "lt_ammo_customs",
+      "kind": "ammo",
+      "scope": "campaign",
+      "pos": [
+        -3.8,
+        0,
+        -48.6
+      ],
+      "label": "Ammo crate"
+    },
+    {
+      "id": "lt_breaker_gate",
+      "kind": "weapon",
+      "scope": "campaign",
+      "pos": [
+        5.4,
+        0,
+        -49.4
+      ],
+      "weapon": "breaker",
+      "label": "B-12 Breaker",
+      "mag": 6,
+      "reserve": 18
+    }
+  ],
+  "_loot_comment": "Ground weapons/ammo (core/sim/loot.js). scope:'campaign' entries are one-shot walkovers in the campaign; PVP uses the weapon_pad racks in `pickups` plus the guns bots drop when they die."
 }

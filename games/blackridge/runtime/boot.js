@@ -263,6 +263,23 @@ try {
   // miscount there cross-wires two modules silently.
   const { createKillCam } = await import(`../core/render/killcam.js${V}`);
   const killcam = createKillCam(ctx);
+  // Loot + weapon slots + kill streaks: HUD bar/tray/medals, the world loot models,
+  // the call-in lead-in effects, and their small synthesized cues. Own modules,
+  // imported separately for the same reason as the kill cam (index-matched
+  // destructure above).
+  const { createLoadoutHud } = await import(`../core/hud/loadout_hud.js${V}`);
+  const { createLootFx } = await import(`../core/fx/lootfx.js${V}`);
+  const { createStreakFx } = await import(`../core/fx/streakfx.js${V}`);
+  const { createStreakAudio } = await import(`../core/audio/streak_audio.js${V}`);
+  // World (third-person) weapon models for ground loot. Imported WITHOUT the ?v=
+  // suffix on purpose: soldiers.js imports this module query-less, so this resolves
+  // to the SAME instance — one GLB prototype cache for the bots' guns AND the loot.
+  try {
+    ctx.weaponMeshes = await import("../core/weapons/world_weapon.js");
+  } catch (e) {
+    console.warn("[boot] world_weapon.js unavailable — loot uses primitive stand-ins:", e && e.message);
+    ctx.weaponMeshes = null;
+  }
 
   // Menu-state sim: exists from boot so __FPS__.sim is truthy for the ready
   // expression; startMission() replaces it with a fresh epoch.
@@ -287,6 +304,10 @@ try {
   const soldiers = createSoldiers(ctx);
   const audio = createAudio(ctx);
   const hud = createHud(ctx);
+  const ldHud = createLoadoutHud(ctx);
+  const lootFx = createLootFx(ctx);
+  const streakFx = createStreakFx(ctx);
+  const streakAudio = createStreakAudio(ctx);
   const post = createPost(ctx);
   ctx.post = post; // v2.2 (A11: capture()/post.resize seam)
   const dynres = createDynres(renderer, perf);
@@ -315,12 +336,16 @@ try {
     soldiers.attach(bridge);
     audio.attach(bridge);
     hud.attach(bridge);
+    ldHud.attach(bridge);
+    streakFx.attach(bridge);
+    streakAudio.attach(bridge);
     // A0 wiring per architecture §3.11: player shots kick recoil + viewmodel.
     // v2.2 swept-projectile convention: impactOnly resolution replays and
     // pen entry/exit events must NOT kick (a Warden hit past ~12 m would
     // double-kick otherwise — A1/A4 needsElsewhere).
     bridge.register("shot", (d) => {
-      if (d && d.shooter === "P" && !d.impactOnly && !d.pen) {
+      // pellet > 0 = the 2nd..9th pellet of one shotgun blast: ONE kick per trigger pull
+      if (d && d.shooter === "P" && !d.impactOnly && !d.pen && !(d.pellet > 0)) {
         recoil.kick(d.weaponId); vm.kick(d.weaponId);
       }
     });
@@ -422,7 +447,9 @@ try {
         mode: modeId,
         tuning: "pvp", // C25 seam — identity delta set until wave 5
         matchOpts: {
-          difficulty: opts.difficulty,
+          // PVP has no difficulty setting (owner 2026-10-12): every match is played against
+          // the top tier ("expert"), whatever a caller passes. The campaign keeps its ladder.
+          difficulty: "expert",
           veteran: opts.veteran,
           spawnDirectorFactory: spawnsMod && spawnsMod.makeSpawns ? spawnsMod.makeSpawns : null,
         },
@@ -497,7 +524,15 @@ try {
     have: false,  // no sample yet — first tick of a fresh sim
     owner: null,  // the sim INSTANCE these samples belong to
     out: [0, 0, 0],
+    // STEP SMOOTHING (view only). A stair riser / kerb snaps the capsule up by its
+    // height in ONE 60 Hz tick (world.supportAt), which the camera used to follow
+    // 1:1 — a 0.30 m pop on every step of a staircase, the "jerky stairs" feel.
+    // yOff holds the opposite of each such snap and eases to zero (~0.1 s), so the eye
+    // glides up while the body (collision, bullets) is exactly where the sim says.
+    yOff: 0,
+    wasGrounded: true,
   };
+  const STEP_SMOOTH_MIN = 0.02, STEP_SMOOTH_MAX = 0.42, STEP_SMOOTH_TAU = 0.085;
   // One tick of legitimate locomotion cannot approach this. The fastest ground
   // speed in the sim is MOVE.SLIDE_ENTRY 7.8 m/s = 0.130 m/tick, and free-fall
   // (MOVE.GRAV -20, no terminal clamp) would need 60 m/s — a ~90 m drop — to
@@ -519,9 +554,16 @@ try {
     // COPY, never alias: player.js reassigns `p.pos = res.pos` every tick.
     c[0] = p.pos[0]; c[1] = p.pos[1]; c[2] = p.pos[2];
     const dx = c[0] - pv[0], dy = c[1] - pv[1], dz = c[2] - pv[2];
+    const grounded = !!p.grounded;
     if (fresh || dx * dx + dy * dy + dz * dz > TELEPORT_M2) {
       pv[0] = c[0]; pv[1] = c[1]; pv[2] = c[2]; // snap — never lerp across a jump
+      camHist.yOff = 0;
+    } else if (grounded && camHist.wasGrounded && Math.abs(dy) > STEP_SMOOTH_MIN && Math.abs(dy) < STEP_SMOOTH_MAX) {
+      camHist.yOff -= dy; // a step up/down while walking: hide the snap, ease it back in
+      if (camHist.yOff > STEP_SMOOTH_MAX) camHist.yOff = STEP_SMOOTH_MAX;
+      else if (camHist.yOff < -STEP_SMOOTH_MAX) camHist.yOff = -STEP_SMOOTH_MAX;
     }
+    camHist.wasGrounded = grounded;
     camHist.have = true;
     camHist.owner = sim;
   }
@@ -544,12 +586,16 @@ try {
     const o = out || camHist.out;
     const pv = camHist.prev, c = camHist.curr;
     o[0] = pv[0] + (c[0] - pv[0]) * a;
-    o[1] = pv[1] + (c[1] - pv[1]) * a;
+    o[1] = pv[1] + (c[1] - pv[1]) * a + camHist.yOff;
     o[2] = pv[2] + (c[2] - pv[2]) * a;
     return o;
   };
 
   function viewUpdates(dt, alpha) {
+    if (camHist.yOff !== 0) {
+      camHist.yOff *= Math.exp(-Math.min(dt, 0.1) / STEP_SMOOTH_TAU);
+      if (Math.abs(camHist.yOff) < 0.002) camHist.yOff = 0;
+    }
     recoil.update(dt);
     vm.update(dt, alpha); // alpha drives the camera's POSITION only — never
     // yaw/pitch, which stay raw off input.state (interpolating look would buy
@@ -561,6 +607,9 @@ try {
     soldiers.update(dt, alpha);
     fx.update(dt);
     hud.update(dt);
+    ldHud.update(dt);
+    lootFx.update(dt);
+    streakFx.update(dt);
     audio.update(dt);
     sky.update(dt);
     weather.update(dt);
@@ -698,7 +747,7 @@ try {
   window.__FPS__ = window.__FFG3D__ = {
     renderer, scene, camera,
     get sim() { return sim; },
-    lights, fx, hud, vm, soldiers, audio,
+    lights, fx, hud, vm, soldiers, audio, ldHud, lootFx, streakFx,
     settings: S,
     version: `v${VN}`, // MUST equal the boot.js?v number
     _bridge: bridge, // private extra (v2.2): harness/diagnostic event taps —

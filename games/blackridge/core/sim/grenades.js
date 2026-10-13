@@ -39,21 +39,28 @@ export function spawnGrenade(sim, who, origin, vel, fuseLeft = GRENADE.FUSE_S) {
 }
 
 // Immediate detonation helper (cooked-in-hand, drum chains — source knows why).
-export function detonateAt(sim, who, pos, source = "grenade") {
-  explode(sim, who, pos, source);
+// `opts` (kill-streak call-ins, streaks.js): {radius, dmgCenter, dmgEdge, noSelf}
+// override the frag numbers; noSelf spares the caller ("P") from their own strike.
+export function detonateAt(sim, who, pos, source = "grenade", opts = null) {
+  explode(sim, who, pos, source, opts);
 }
 
-function explode(sim, who, pos, source) {
+function explode(sim, who, pos, source, opts) {
+  const R = (opts && opts.radius) || GRENADE.RADIUS_M;
+  const dC = (opts && opts.dmgCenter != null) ? opts.dmgCenter : GRENADE.DMG_CENTER;
+  const dE = (opts && opts.dmgEdge != null) ? opts.dmgEdge : GRENADE.DMG_EDGE;
+  const noSelf = !!(opts && opts.noSelf);
   sim.emit("grenade", { phase: "detonate", who, pos: pos.slice() });
-  sim.emit("explosion", { pos: pos.slice(), radius: GRENADE.RADIUS_M, source });
+  sim.emit("explosion", { pos: pos.slice(), radius: R, source });
   const world = sim.world;
   const hardOnly = (box) => (box.matClass || "hard") === "hard";
 
   const applyTo = (victim, vpos, stance) => {
+    if (noSelf && victim === who) return;
     const chest = [vpos[0], vpos[1] + (stance === "crouch" ? 0.8 : 1.1), vpos[2]];
     const d = Math.hypot(chest[0] - pos[0], chest[1] - pos[1], chest[2] - pos[2]);
-    if (d > GRENADE.RADIUS_M) return;
-    let dmg = GRENADE.DMG_CENTER + (GRENADE.DMG_EDGE - GRENADE.DMG_CENTER) * (d / GRENADE.RADIUS_M);
+    if (d > R) return;
+    let dmg = dC + (dE - dC) * (d / R);
     // §5.9: through `hard` cover 25% (crouching behind full cover survives)
     if (world.losBlocked(pos, chest, hardOnly)) dmg *= GRENADE.THROUGH_HARD;
     if (dmg > 0.5) applyDamage(sim, victim, dmg, who, "body", "grenade");

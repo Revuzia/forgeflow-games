@@ -1,0 +1,21 @@
+nav_probe  pairs=150 seed=1 cell=0.75 mode=solo-sprint driver=aiNavGoto
+meridian_ward  nodes=17751 bake=663.54ms pairs=150
+   findPath ms mean=6.17 p95=35.92 max=85.58
+   found 150/150 (100.00%)  arrived 150/150 (100.00%)  badSeg 2/971
+   t/ideal mean=1.02 p95=1.08   t/line mean=1.25 p95=1.80   path/line mean=1.23 p95=1.79
+   stuck events=0 (>3s: 0, longest 0.00s)  snag episodes=3 in 3 runs  hug%=0.52  skipWP=41
+lanternwalk    nodes=14942 bake=282.56ms pairs=150
+   findPath ms mean=2.66 p95=7.36 max=19.58
+   found 150/150 (100.00%)  arrived 150/150 (100.00%)  badSeg 20/1507
+   t/ideal mean=1.04 p95=1.10   t/line mean=1.26 p95=1.79   path/line mean=1.22 p95=1.65
+   stuck events=0 (>3s: 0, longest 0.00s)  snag episodes=14 in 13 runs  hug%=2.39  skipWP=157
+switchyard     nodes=16892 bake=538.78ms pairs=150
+   findPath ms mean=4.41 p95=15.55 max=65.62
+   found 150/150 (100.00%)  arrived 150/150 (100.00%)  badSeg 14/1671
+   t/ideal mean=1.03 p95=1.14   t/line mean=1.22 p95=1.67   path/line mean=1.18 p95=1.52
+   stuck events=0 (>3s: 0, longest 0.00s)  snag episodes=18 in 15 runs  hug%=2.58  skipWP=150
+saltmarket     nodes=14725 bake=81.23ms pairs=150
+   findPath ms mean=2.85 p95=7.06 max=10.12
+   found 150/150 (100.00%)  arrived 150/150 (100.00%)  badSeg 19/2170
+   t/ideal mean=1.03 p95=1.11   t/line mean=1.66 p95=3.63   path/line mean=1.63 p95=3.60
+   stuck events=2 (>3s: 0, longest 2.50s)  snag episodes=17 in 14 runs  hug%=2.72  skipWP=214

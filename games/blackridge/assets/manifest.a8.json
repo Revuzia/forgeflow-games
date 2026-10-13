@@ -86,6 +86,20 @@
       "kind": "imported",
       "license": "Meshy generated (FFG owned, last-circle provenance)",
       "source": "games/last-circle/assets/props/meshy_wpn/wpn_sniper.glb (draco)"
+    },
+    {
+      "path": "assets/weapons/wpn3p_pistol.glb",
+      "bytes": 100076,
+      "kind": "imported",
+      "license": "Meshy generated (FFG owned, last-circle provenance)",
+      "source": "games/last-circle/assets/props/meshy_wpn/wpn_pistol.glb (via core/weapons/world_weapon.js prep)"
+    },
+    {
+      "path": "assets/weapons/wpn3p_shotgun.glb",
+      "bytes": 68372,
+      "kind": "imported",
+      "license": "Meshy generated (FFG owned, last-circle provenance)",
+      "source": "games/last-circle/assets/props/meshy_wpn/wpn_shotgun.glb (via core/weapons/world_weapon.js prep)"
     }
   ]
 }

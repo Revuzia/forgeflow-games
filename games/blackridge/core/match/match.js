@@ -599,7 +599,10 @@ export function makeMatch(content, emit, opts = {}) {
       SIM = sim;
       if (!arena) synthFallbackArena(sim);
       // [RACKS] resolve the weapon pads for THIS mode + arena, once.
-      ms.racks = readRacks(content, modeId, (arena && arena.id) || (content.arena && content.arena.id) || "lanternwalk");
+      // racks live in the loot system now (core/sim/loot.js: visible pedestals, one pick-up
+      // rule for everyone); the legacy walkover pass below only runs without it
+      ms.racks = (sim.internal && sim.internal.racksInLoot) ? []
+        : readRacks(content, modeId, (arena && arena.id) || (content.arena && content.arena.id) || "lanternwalk");
       ms.rackUntil = {};
       if (!director && opts.spawnDirectorFactory) {
         try {

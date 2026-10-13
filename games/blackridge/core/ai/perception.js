@@ -33,6 +33,16 @@
 // sector (±4 m fuzz), attributed to bot.lastHitBy when the sim provides it
 // (else the current target / nearest candidate — flagged to W1).
 //
+// BOT-AI PASS (2026-10): the awareness meter, decay and hearing now scale with
+// the bot's SKILL profile (botfsm.js BANDS: notice, memory, hearMult,
+// hearFuzz). A recruit takes ~1.8x longer to confirm the same target, forgets
+// it 2x faster, hears footsteps at 60% of the range and places them 1.6x
+// sloppier; a veteran notices 1.4x faster, forgets at half speed, hears 35%
+// farther and places sounds 40% tighter. Sight geometry (cone, light, LOS,
+// detectRange) and the hearing TABLE (what makes noise) are untouched - this is
+// attention and memory, not X-ray. Skill is read from bot._brain.k (written by
+// botfsm.kOf before perceive); absent -> 1 everywhere (selftest pre-brain calls).
+//
 // noTarget (sim.flags.noTarget): the PLAYER does not exist to perception —
 // keeps A1's ballistic probes clean, and is the C14 warm-up freeze lever.
 
@@ -160,6 +170,10 @@ export function perceive(bot, sim, world, dt, rngAi) {
   }
   const P = bot.percept;
   const noTarget = !!(sim.flags && sim.flags.noTarget);
+  const K = (bot._brain && bot._brain.k) || null;
+  const kNotice = K ? K.notice : 1, kMem = K ? K.memory : 1;
+  const kHear = K ? K.hearMult : 1, kFuzz = K ? K.hearFuzz : 1;
+  const DECAY = DECAY_PER_S * kMem;
 
   // ---- candidate list (the player is skipped entirely under noTarget)
   const listRaw = enemyBodiesOf(sim, bot);
@@ -183,13 +197,13 @@ export function perceive(bot, sim, world, dt, rngAi) {
     // nobody to perceive: everything decays (old noTarget / player-dead path)
     for (const k in P.byTarget) {
       const r = P.byTarget[k];
-      r.awareness = Math.max(0, r.awareness - DECAY_PER_S * dt);
+      r.awareness = Math.max(0, r.awareness - DECAY * dt);
       r.seen = false;
       r.lastEvalT = t;
     }
     P.seesTarget = false; P.seesPlayer = false; P.targetBody = null;
     if (P.target != null && P.byTarget[P.target]) P.awareness = P.byTarget[P.target].awareness;
-    else P.awareness = Math.max(0, P.awareness - DECAY_PER_S * dt);
+    else P.awareness = Math.max(0, P.awareness - DECAY * dt);
     return;
   }
 
@@ -220,10 +234,10 @@ export function perceive(bot, sim, world, dt, rngAi) {
     const shotT = (body.weapon && body.weapon.lastShotT != null) ? body.weapon.lastShotT : -9;
     if (shotT > rec.prevShotT) {
       rec.prevShotT = shotT;
-      if (d <= 300) {
+      if (d <= 300 * kHear) {
         let pos = body.pos.slice();
         if (d > 120) {
-          pos = [pos[0] + (rngAi() * 2 - 1) * 6, pos[1], pos[2] + (rngAi() * 2 - 1) * 6];
+          pos = [pos[0] + (rngAi() * 2 - 1) * 6 * kFuzz, pos[1], pos[2] + (rngAi() * 2 - 1) * 6 * kFuzz];
         }
         hear(rec, "gunshot", pos, HEARD_CAP); // unmistakable at night
         c.stim = true;
@@ -233,9 +247,9 @@ export function perceive(bot, sim, world, dt, rngAi) {
     const hspeed = Math.hypot(body.vel[0], body.vel[2]);
     const grounded = body.grounded !== false; // bots are ground-locked
     if (grounded && hspeed > 0.8) {
-      const r = hspeed >= 5.5 ? 14 : (body.stance === "crouch" ? 2.5 : 7);
+      const r = (hspeed >= 5.5 ? 14 : (body.stance === "crouch" ? 2.5 : 7)) * kHear;
       if (d <= r) {
-        const fz = body.stance === "crouch" ? 2 : 3;
+        const fz = (body.stance === "crouch" ? 2 : 3) * kFuzz;
         const pos = [body.pos[0] + (rngAi() * 2 - 1) * fz, body.pos[1],
                      body.pos[2] + (rngAi() * 2 - 1) * fz];
         hear(rec, "steps", pos, 2.0 * (1 - d / r) * dt);
@@ -244,18 +258,18 @@ export function perceive(bot, sim, world, dt, rngAi) {
     }
     // reload: 10 m (edge-triggered)
     const reloading = body.weapon && body.weapon.state === "reloading";
-    if (reloading && !rec.prevReloading && d <= 10) {
-      hear(rec, "reload", [body.pos[0] + (rngAi() * 2 - 1) * 2, body.pos[1],
-                           body.pos[2] + (rngAi() * 2 - 1) * 2], 0.5);
+    if (reloading && !rec.prevReloading && d <= 10 * kHear) {
+      hear(rec, "reload", [body.pos[0] + (rngAi() * 2 - 1) * 2 * kFuzz, body.pos[1],
+                           body.pos[2] + (rngAi() * 2 - 1) * 2 * kFuzz], 0.5);
       c.stim = true;
     }
     rec.prevReloading = !!reloading;
     // slide / mantle: 12 m (rate-limited 1 s) — player-only movement
     const pm = body._m || null;
-    if (pm && (pm.sliding || pm.mantle) && d <= 12 && t - rec.lastSlideBumpT > 1.0) {
+    if (pm && (pm.sliding || pm.mantle) && d <= 12 * kHear && t - rec.lastSlideBumpT > 1.0) {
       rec.lastSlideBumpT = t;
-      hear(rec, "slide", [body.pos[0] + (rngAi() * 2 - 1) * 3, body.pos[1],
-                          body.pos[2] + (rngAi() * 2 - 1) * 3], 0.5);
+      hear(rec, "slide", [body.pos[0] + (rngAi() * 2 - 1) * 3 * kFuzz, body.pos[1],
+                          body.pos[2] + (rngAi() * 2 - 1) * 3 * kFuzz], 0.5);
       c.stim = true;
     }
   }
@@ -266,7 +280,7 @@ export function perceive(bot, sim, world, dt, rngAi) {
       const g = grenades[i];
       if ((!g.bounced && !g.landed) || !whoSet.has(g.who)) continue;
       const gd = Math.hypot(g.pos[0] - eye[0], g.pos[2] - eye[2]);
-      if (gd <= 20) {
+      if (gd <= 20 * kHear) {
         for (const c of cands) {
           if (c.who !== g.who) continue;
           hear(c.rec, "grenade", g.pos.slice(), 0.6);
@@ -297,8 +311,8 @@ export function perceive(bot, sim, world, dt, rngAi) {
     if (hitC) {
       const rec = hitC.rec, body = hitC.body;
       rec.awareness = 1.0;
-      rec.lastKnown = [body.pos[0] + (rngAi() * 2 - 1) * 4, body.pos[1],
-                       body.pos[2] + (rngAi() * 2 - 1) * 4];
+      rec.lastKnown = [body.pos[0] + (rngAi() * 2 - 1) * 4 * kFuzz, body.pos[1],
+                       body.pos[2] + (rngAi() * 2 - 1) * 4 * kFuzz];
       hitC.stim = true;
       if (rec.firstSeenT < 0) rec.firstSeenT = t;
       P.lastHitWho = hitC.who;
@@ -315,7 +329,7 @@ export function perceive(bot, sim, world, dt, rngAi) {
     if (c.facing === 0 || c.d > maxRange) {
       // cannot see: decay for its accumulated interval (unless heard now)
       const iv = Math.min(0.5, Math.max(0, t - c.rec.lastEvalT));
-      if (!c.stim) c.rec.awareness = Math.max(0, c.rec.awareness - DECAY_PER_S * iv);
+      if (!c.stim) c.rec.awareness = Math.max(0, c.rec.awareness - DECAY * iv);
       c.rec.seen = false;
       c.rec.lastEvalT = t;
       continue;
@@ -375,7 +389,7 @@ export function perceive(bot, sim, world, dt, rngAi) {
       const hspeed = Math.hypot(body.vel[0], body.vel[2]);
       const stance = body.stance === "crouch" ? 0.6 : (sliding ? 1.2 : 1.0);
       const speed = 0.7 + 0.3 * Math.min(1, hspeed / 6.4);
-      const fill = BASE_FILL * distFactor * c.facing * lightFactor(L) * stance * speed;
+      const fill = BASE_FILL * kNotice * distFactor * c.facing * lightFactor(L) * stance * speed;
       rec.awareness = Math.min(1, rec.awareness + fill * iv);
       rec.lastKnown = body.pos.slice();
       rec.lastSeenT = t;
@@ -384,7 +398,7 @@ export function perceive(bot, sim, world, dt, rngAi) {
       c.stim = true;
     } else {
       rec.seen = false;
-      if (!c.stim) rec.awareness = Math.max(0, rec.awareness - DECAY_PER_S * iv);
+      if (!c.stim) rec.awareness = Math.max(0, rec.awareness - DECAY * iv);
     }
     if (rec.seen && rec.awareness >= 1 && rec.firstSeenT < 0) rec.firstSeenT = t;
 
@@ -440,7 +454,7 @@ export function perceive(bot, sim, world, dt, rngAi) {
   } else {
     P.target = null; P.targetActor = null; P.targetBody = null;
     P.seesTarget = false;
-    P.awareness = Math.max(0, P.awareness - DECAY_PER_S * dt);
+    P.awareness = Math.max(0, P.awareness - DECAY * dt);
   }
   P.seesPlayer = P.target === "P" && P.seesTarget;
 }

@@ -32,13 +32,16 @@ import { makeMatch } from "../match/match.js";
 import { getTuning, applyTuning } from "../pvp/pvp_tuning.js";
 import { aiStep } from "../ai/botfsm.js";
 import { makeSquad } from "../ai/squad.js";
+import { slotsFromList, grant as grantWeapon } from "./loadout.js";
+import { makeLoot } from "./loot.js";
+import { makeStreaks } from "./streaks.js";
 
 const DT = 1 / 60;
 
 const NULL_CMD = {
   moveX: 0, moveZ: 0, yaw: 0, pitch: 0, jump: false, crouch: false,
   sprint: false, fire: false, ads: false, reload: false, switchTo: null,
-  interact: false, grenade: false,
+  interact: false, grenade: false, streak: 0,
 };
 
 export function createSim(opts = {}) {
@@ -101,7 +104,7 @@ export function createSim(opts = {}) {
         id: primary, mag: wTable.mag, reserve: wTable.reserve, state: "idle",
         ads: false, adsT: 0, recoilIndex: 0, stateT: 0,
       },
-      slots: loadoutSlots.slice(0, 2),
+      slots: slotsFromList(loadoutSlots),
       speedNorm: 0,
       grenades: (content && content.mission && content.mission.loadout && content.mission.loadout.grenades) || tun.grenades,
       lastDamageT: -999,
@@ -119,6 +122,7 @@ export function createSim(opts = {}) {
   // per-slot ammo store
   state.player._slotAmmo = {};
   for (const id of state.player.slots) {
+    if (!id) continue;
     const wt = weapons[id];
     state.player._slotAmmo[id] = { mag: wt ? wt.mag : 0, reserve: wt ? wt.reserve : 0 };
   }
@@ -149,8 +153,17 @@ export function createSim(opts = {}) {
     tuning: tun, // C25 balance seam — identity in wave 1; W11 flips the data
     emit: (type, data) => {
       if (type === "shot" && !data.impactOnly && !data.pen) internal.shotsAnyTotal++;
+      // Deaths feed the world systems BEFORE the event is bridged: loot drops the
+      // body's gun where it fell; streaks count the kill (and may emit its medal
+      // events, which the HUD reads in the same dispatch).
+      if (type === "death" && data) {
+        if (sim.loot) sim.loot.onDeath(sim, data);
+        if (sim.streaks) sim.streaks.onDeath(sim, data);
+      }
       emit(type, data);
     },
+    loot: null,    // ground weapons/ammo (core/sim/loot.js) — set below
+    streaks: null, // kill-streak specials (core/sim/streaks.js) — set below
     mission: null, // set below when content present (campaign driver, A1)
     match: null,   // set below when opts.mode requests a PVP match; when set,
                    // sim.match === sim.mission (ONE object, two names — C29a)
@@ -167,6 +180,8 @@ export function createSim(opts = {}) {
 
       // 1+2. player movement + stance + weapon machine
       stepPlayer(state, c, world, weapons, DT, sim);
+      // 2.5 killstreak activation (keys 6/7/8 -> cmd.streak 1..3)
+      if (c.streak && sim.streaks) sim.streaks.activate(sim, c.streak | 0);
 
       // 3. AI brains (A5) — write bot.cmd only; ≤4 think/tick inside
       aiStep(sim, nav, squad, DT);
@@ -194,8 +209,11 @@ export function createSim(opts = {}) {
           fireHeld: !!bc.fire,
           fireBufferedT: b._fireEdgeT ?? null,
           reloadBufferedT: b._reloadEdgeT ?? null,
-          switchBufferedT: null,
-          switchTo: null,
+          // bots may swap guns too (cmd.switchTo = a weapon id they own — e.g. the
+          // pistol when the primary runs dry, the shotgun when someone is close)
+          switchBufferedT: bc.switchTo ? state.time : null,
+          switchTo: bc.switchTo || null,
+          consumeSwitch: () => { if (b.cmd) b.cmd.switchTo = null; },
           ads: !!bc.ads,
           consumeFire: () => { b._fireEdgeT = null; },
           consumeReload: () => { b._reloadEdgeT = null; },
@@ -214,6 +232,10 @@ export function createSim(opts = {}) {
       stepGrenades(sim, world, DT);
       stepHealth(sim, DT);
 
+      // 5.5 world systems: ground loot pick-ups + the streak call-ins in flight
+      if (sim.loot) sim.loot.tick(sim, DT);
+      if (sim.streaks) sim.streaks.tick(sim, DT);
+
       // 6. mission objective checks + phase transitions
       if (sim.mission && state.phase !== "menu") sim.mission.tick(sim);
 
@@ -223,7 +245,11 @@ export function createSim(opts = {}) {
     },
 
     snapshot() {
-      return JSON.parse(JSON.stringify(state));
+      // JSON-safe copy for probes / the test surface. A perceiving bot holds a LIVE reference
+      // to its target's body (percept.targetBody), and bodies hold their percepts — a cycle that
+      // made JSON.stringify throw the moment two combatants had seen each other. The reference
+      // is scratch, not state: it is dropped (percept.target still carries the id).
+      return JSON.parse(JSON.stringify(state, (k, v) => (k === "targetBody" ? undefined : v)));
     },
 
     // ------------------------------------------------------------- mutators
@@ -283,7 +309,8 @@ export function createSim(opts = {}) {
         // Bots carry slots too now, so a rack pickup has somewhere to land and
         // giveBodyWeapon can treat every combatant identically. Campaign bots get
         // their archetype weapon in slot 0 exactly as before.
-        slots: startWeapon ? [startWeapon, null] : [weaponId, null],
+        slots: slotsFromList([startWeapon || weaponId]),
+        _slotAmmo: { [startWeapon || weaponId]: { mag: wt.mag, reserve: wt.reserve } },
       };
       state.bots.push(bot);
       sim.emit("spawn", { botId: id, archetype: bot.archetype, pos: bot.pos.slice(), yaw: bot.yaw });
@@ -329,10 +356,10 @@ export function createSim(opts = {}) {
      *  weapon does not persist across lives. */
     resetBodyLoadout(body) {
       if (!body) return;
-      const slots = loadoutSlots.slice(0, 2);
-      const id = slots[0];
+      const id = loadoutSlots[0];
       const wt = weapons[id] || { mag: 30, reserve: 120 };
-      body.slots = slots.length > 1 ? slots.slice() : [id, null];
+      body.slots = slotsFromList(loadoutSlots);
+      body._lastWeapon = null;
       body._slotAmmo = {};
       for (const sId of body.slots) {
         if (!sId) continue;
@@ -362,41 +389,19 @@ export function createSim(opts = {}) {
      *    refill. Racks now pass their own `reserve`.
      */
     giveBodyWeapon(body, id, opts, whoTag) {
-      if (!body) return false;
-      const wt = weapons[id];
-      if (!wt) return false;
-      const w = body.weapon;
-      const from = w.id;
-      if (from === id) return false;                  // already holding it
-      if (!body.slots) body.slots = [from, null];
-      if (!body._slotAmmo) body._slotAmmo = {};
-      body._slotAmmo[from] = { mag: w.mag, reserve: w.reserve };   // stow what we hold
-
-      // Prefer an empty slot, then the slot this weapon already occupies, then
-      // the slot we are holding. Never write the same id into both slots.
-      let idx = body.slots.indexOf(id);
-      if (idx < 0) idx = body.slots.indexOf(null);
-      if (idx < 0) idx = body.slots.indexOf(from);
-      if (idx < 0) idx = 0;
-      const dropped = body.slots[idx];
-      if (dropped && dropped !== id && dropped !== from) delete body._slotAmmo[dropped];
-      body.slots[idx] = id;
-
-      const reserve = opts && typeof opts.reserve === "number" ? opts.reserve : wt.reserve;
-      body._slotAmmo[id] = { mag: wt.mag, reserve };
-      w.id = id;
-      w.mag = wt.mag;
-      w.reserve = reserve;
-      w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
-      w.recoilIndex = 0; w._shotCount = 0;
-      sim.emit("switch", { who: whoTag || (body === state.player ? "P" : body.id), from, to: id });
-      return true;
+      // One rule for the human, every bot, map racks, crates and dropped guns:
+      // loadout.grant() fills the weapon's FIXED slot (or tops up ammo when it is
+      // already owned), equips by tier. Returns true when something was gained so
+      // a rack only goes on cooldown after a real pick-up.
+      const r = grantWeapon(sim, body, id, opts, whoTag);
+      return !!(r && r.ok);
     },
 
     grantAmmoMag(cls) {
       if (!cls) return;
       const p = state.player;
       for (const slotId of p.slots) {
+        if (!slotId) continue;
         const wt = weapons[slotId];
         if (wt && wt.class === cls) {
           if (p.weapon.id === slotId) p.weapon.reserve += wt.mag;
@@ -429,6 +434,11 @@ export function createSim(opts = {}) {
   } else if (content) {
     sim.mission = makeMission(content, sim.emit);
   }
+
+  // World systems that need the finished sim object (they read sim.state, emit and
+  // the weapons table). Built last so every dependency exists.
+  sim.loot = makeLoot(sim, content, mode ? (content && content.arena && content.arena.id) || null : "meridian_ward", mode);
+  sim.streaks = makeStreaks(sim);
 
   // ---- helpers
   function updateReverbZone() {

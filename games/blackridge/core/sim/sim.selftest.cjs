@@ -827,6 +827,9 @@ async function main() {
       "mission:start", "mission:phase", "mission:end", "objective", "shot",
       "hurt", "death", "spawn", "reload", "switch", "ads", "step", "land",
       "botstate", "bark", "empty", "explosion", "grenade", "whiz", "zone",
+      // additive vocabulary: ground loot + weapon pick-ups (loot.js), kill streaks,
+      // medals and score popups (streaks.js)
+      "loot", "pickup", "streak", "medal", "score",
     ]);
     const seen = new Set();
     const sim = S.createSim({

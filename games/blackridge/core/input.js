@@ -99,7 +99,8 @@ export function createInput(canvas, settings) {
     jump: false, crouch: false, sprint: false,
     fire: false, ads: false, reload: false,
     grenade: false,
-    switchTo: null, // weaponId | null — consumed by buildCmd
+    switchTo: null, // 'slot1'..'slot5' | 'next' | 'prev' | 'last' | weaponId | null — consumed by buildCmd
+    streak: 0,      // 1..3 = activate that killstreak tier (keys 6/7/8) — one-shot, consumed by buildCmd
     interact: false,
     yaw: 0, pitch: 0,
   };
@@ -187,9 +188,11 @@ export function createInput(canvas, settings) {
         reload: on ? (state.reload || latch.reload) : false,
         grenade: on ? (state.grenade || latch.grenade) : false,
         switchTo: on ? state.switchTo : null,
+        streak: on ? state.streak : 0,
         interact: on ? (state.interact || latch.interact) : false,
       };
       state.switchTo = null; // one-shot: consumed by the snapshot
+      state.streak = 0;      // one-shot
       for (let i = 0; i < LATCHED.length; i++) latch[LATCHED[i]] = false;
       return cmd;
     },
@@ -247,8 +250,17 @@ export function createInput(canvas, settings) {
       case "KeyR": press("reload"); break;
       case "KeyG": press("grenade"); break;
       case "KeyF": press("interact"); break;
+      // FIVE fixed weapon slots (weapon_data.js WEAPON_SLOT) + Q = last weapon.
       case "Digit1": state.switchTo = "slot1"; break;
       case "Digit2": state.switchTo = "slot2"; break;
+      case "Digit3": state.switchTo = "slot3"; break;
+      case "Digit4": state.switchTo = "slot4"; break;
+      case "Digit5": state.switchTo = "slot5"; break;
+      case "KeyQ": state.switchTo = "last"; break;
+      // KILLSTREAK specials (core/sim/streaks.js): 6 mortar · 7 airstrike · 8 orbital
+      case "Digit6": state.streak = 1; break;
+      case "Digit7": state.streak = 2; break;
+      case "Digit8": state.streak = 3; break;
     }
   });
 
@@ -278,6 +290,21 @@ export function createInput(canvas, settings) {
   });
 
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  // Mouse wheel cycles owned weapons (next/prev). One notch = one switch; a
+  // trackpad's burst of tiny deltas is gathered so it cannot spin the bar.
+  let wheelAcc = 0, wheelAt = 0;
+  window.addEventListener("wheel", (e) => {
+    if (!input.enabled || !input.pointerLocked) return;
+    const now = performance.now();
+    if (now - wheelAt > 250) wheelAcc = 0;
+    wheelAt = now;
+    wheelAcc += e.deltaY;
+    if (Math.abs(wheelAcc) < 40) return;
+    state.switchTo = wheelAcc > 0 ? "next" : "prev";
+    wheelAcc = 0;
+    e.preventDefault();
+  }, { passive: false });
 
   window.addEventListener("mousemove", (e) => {
     // Applied on the EVENT, not once per frame: Chrome delivers several

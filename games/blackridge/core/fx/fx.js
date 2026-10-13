@@ -31,10 +31,23 @@ import { makeDecals } from "./decals.js";
 import { makeCasings } from "./casings.js";
 import { makeExplosions } from "./explosions.js";
 import { makeGrounding } from "./grounding.js";
+import { makeSurfaceIndex, CLS_GLASS, CLS_METAL, CLS_WOOD, CLS_DIRT } from "./surfaceindex.js";
 
 const FX_SEED = 0xa7f0c5; // reseeded every mission:start → deterministic batteries
 const MISS_TRACER_DIST = 130; // terminal-miss streak length cap (m)
 const CASING_MAX_CAM_DIST = 45;
+
+// Impact power (particle counts/sizes) and bullet-hole edge (metres) by weapon
+// class. ONE hole per bullet; a shotgun blast is nine small holes, not nine big
+// ones. Unknown classes fall back to a generic rifle round.
+const IMPACT_BY_CLASS = {
+  pistol:  { power: 0.75, size: 0.17 },
+  smg:     { power: 0.70, size: 0.16 },
+  ar:      { power: 1.00, size: 0.19 },
+  dmr:     { power: 1.50, size: 0.27 },
+  shotgun: { power: 0.50, size: 0.15 },
+};
+const IMPACT_DEFAULT = { power: 1.0, size: 0.19 };
 
 export function createFx(ctx) {
   const root = new THREE.Group();
@@ -93,6 +106,12 @@ export function createFx(ctx) {
 
   const pools = makeParticlePools(env);
   const decals = makeDecals(env);
+  // Visible-surface index (surfaceindex.js): re-resolves each sim hit onto the
+  // triangles the player actually sees, so a mark never hangs in the air.
+  const surfaceIndex = makeSurfaceIndex();
+  decals.setClipper((pos, n, half) => surfaceIndex.supportedScale(pos, n, half));
+  const snapOut = { pos: [0, 0, 0], normal: [0, 0, 0], cls: 0 };
+  const snapCounters = { snapped: 0, phantom: 0, unbaked: 0, retyped: 0 };
   const impacts = makeImpacts(env, pools, decals);
   env.impacts = impacts;
   const tracers = makeTracers(env);
@@ -197,10 +216,51 @@ export function createFx(ctx) {
       const key = hit.entity == null ? "?" : hit.entity;
       if (!fleshGate(key)) return;
     }
+    // ---- snap the sim's collider hit onto the VISIBLE surface (surfaceindex.js)
+    let pos = hit.pos, normal = hit.normal, surface = surf;
+    if (surf !== "flesh") {
+      let origin = d.origin;
+      let hp = hit.pos;
+      if (d.pen === "exit") {
+        // exit hole: look at the far face from just behind it, back toward the shot
+        origin = [hp[0] + d.dir[0] * 0.4, hp[1] + d.dir[1] * 0.4, hp[2] + d.dir[2] * 0.4];
+      }
+      const r = d.pen === "exit" ? null : surfaceIndex.snap(origin, hp, snapOut);
+      if (d.pen === "exit") {
+        // the exit face has no sim normal worth trusting; skip the snap, keep the hole
+      } else if (r === null) {
+        // canal water has no triangle in the index (it is a transparent plane) — a round
+        // that hits the water splashes; any other phantom hit is the collider firing on
+        // empty air (invisible box corner): no mark, no puff
+        if (hit.pos[1] < -1.0 && hit.normal && hit.normal[1] > 0.5) {
+          impacts.spawn(hit.pos, [0, 1, 0], "water", d.dir, IMPACT_BY_CLASS[(ctx.sim && ctx.sim() && ctx.sim().weapons[d.weaponId] || {}).class] || IMPACT_DEFAULT);
+          snapCounters.splash = (snapCounters.splash || 0) + 1;
+          counters.impacts++;
+        }
+        snapCounters.phantom++;
+        return;
+      } else if (r === undefined) {
+        snapCounters.unbaked++;
+      } else {
+        snapCounters.snapped++;
+        pos = snapOut.pos; normal = snapOut.normal;
+        // what the player SEES decides the material: a window reads as glass even
+        // when the collider under it is concrete, a car panel as metal, a crate wood
+        let vis = null;
+        if (snapOut.cls === CLS_GLASS) vis = "glass";
+        else if (snapOut.cls === CLS_METAL && surf === "concrete") vis = "metal";
+        else if (snapOut.cls === CLS_WOOD && surf === "concrete") vis = "wood";
+        else if (snapOut.cls === CLS_DIRT && surf === "concrete") vis = "dirt";
+        if (vis) { surface = vis; snapCounters.retyped++; }
+      }
+    }
     // d.dir is the shot's launch direction — the only evidence available at
     // this layer that a hit normal is a fallback rather than a measurement
     // (decals.js `spawn` header).
-    impacts.spawn(hit.pos, hit.normal, surf, d.dir);
+    const s = ctx.sim && ctx.sim();
+    const wt = s && s.weapons ? s.weapons[d.weaponId] : null;
+    const prof = (wt && IMPACT_BY_CLASS[wt.class]) || IMPACT_DEFAULT;
+    impacts.spawn(pos, normal, surface, d.dir, prof);
     counters.impacts++;
   }
 
@@ -211,13 +271,17 @@ export function createFx(ctx) {
     if (d.pen) { if (d.hit) handleHit(d); return; }        // both-face pen fx
     if (d.impactOnly) { if (d.hit) handleHit(d); return; } // late flight resolve
     // fire-time event: muzzle + tracer + casing (+ inline hit)
-    muzzle.spawn(d);
-    if (d.tracer || d.firstShot) {
+    // A SHOTGUN blast arrives as one shot event per pellet (same tick, same origin):
+    // the flash, the shell and the report belong to the TRIGGER PULL (pellet 0); only
+    // a few pellets draw a tracer, and every pellet still gets its own impact below.
+    const first = !(d.pellet > 0);
+    if (first) muzzle.spawn(d);
+    if ((d.tracer || d.firstShot) && (first || d.pellet < 4)) {
       const dist = d.hit ? dist3(d.origin, d.hit.pos) : MISS_TRACER_DIST;
       tracers.spawn(d.origin, d.dir, dist);
     }
     const cam = ctx.camera.position;
-    if (Math.hypot(d.origin[0] - cam.x, d.origin[2] - cam.z) < CASING_MAX_CAM_DIST) {
+    if (first && Math.hypot(d.origin[0] - cam.x, d.origin[2] - cam.z) < CASING_MAX_CAM_DIST) {
       casings.eject(d.origin, d.dir, d.weaponId, floorFor(d.shooter, d.origin));
     }
     if (d.hit) handleHit(d);
@@ -291,7 +355,15 @@ export function createFx(ctx) {
         if (!s || s.epoch !== epoch0) return;
         fn(d, t);
       };
-      bridge.register("mission:start", guard(clearAll));
+      bridge.register("mission:start", guard(() => {
+        clearAll();
+        try {
+          surfaceIndex.bake([ctx.scene.getObjectByName("level"), ctx.scene.getObjectByName("props")]);
+        } catch (e) {
+          console.warn("[fx] surface index bake failed — decals fall back to collider points:", e && e.message);
+          surfaceIndex.clear();
+        }
+      }));
       bridge.register("shot", guard(onShot));
       bridge.register("hurt", guard(onHurt));
       bridge.register("death", guard(onDeath));
@@ -347,6 +419,8 @@ export function createFx(ctx) {
         casings: casings.stats(),
         decalsSpawned: decals.spawnedCount(),
         decalsRejected: decals.rejectedCount(),
+        decalsClipped: decals.clippedCount(),
+        surface: { ...surfaceIndex.stats(), ...snapCounters },
         explosions: explosions.stats(),
       };
     },

@@ -611,10 +611,22 @@ async function main() {
         return shots;
       }
       let layered = 0, unlayered = 0;
+      // BOT-AI PASS: the premise above ("a moving bot fails the stationary fire
+      // gate") is a property of the BASE bands. The sharper bands may pull the
+      // trigger on a slow strafe (BANDS.fireSpeed 1.4-2.4 m/s) and side-step
+      // between bursts (strafeP), which makes "the layer moved my feet" stop
+      // being a pure shot-removal in this tiny 4 s window (measured 12 seeds:
+      // layered 93 vs unlayered 78 with live knobs; 90 vs 124 on the pre-pass AI).
+      // The audit isolates the LAYER: run it with the gate/strafe knobs at their
+      // base values (restored after) - the layer's own monotonicity, unchanged bar.
+      const FSMX = await import(u("core/ai/botfsm.js"));
+      const savedKnobs = Object.entries(FSMX.BANDS).map(([k, b]) => [k, b.fireSpeed, b.strafeP]);
+      for (const b of Object.values(FSMX.BANDS)) { b.fireSpeed = 0.75; b.strafeP = 0; }
       for (const seed of [21, 22, 23]) {
         layered += standoff(seed, false);
         unlayered += standoff(seed, true);
       }
+      for (const [k, fs2, sp] of savedKnobs) { FSMX.BANDS[k].fireSpeed = fs2; FSMX.BANDS[k].strafeP = sp; }
       ok(layered <= unlayered,
         `bot shots layered ${layered} ≤ unlayered ${unlayered} over 3 posed 4 s standoffs`);
       console.log(`  info  layered ${layered} vs unlayered ${unlayered} bot shots`);

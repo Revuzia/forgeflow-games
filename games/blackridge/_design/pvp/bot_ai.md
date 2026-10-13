@@ -1213,6 +1213,59 @@ target becomes a human. Each is flagged with a recommendation; none is changed b
 
 ---
 
+## PART 15 — BOT-AI PASS (2026-10): navigation and the difficulty ladder
+
+**Navigation** (`core/ai/nav.js`, `core/ai/steer.js`). Measured with `tools/nav_probe.mjs` (300 random
+routes per map, a real bot driven by the real brain through the real mover; baseline = the pre-pass AI
+against today's sliding mover). Root causes found and fixed, in order of impact:
+
+1. **Heading-driven feet.** The old `followPath` moved only along the direction the bot was *facing*, and
+   facing turns at 2.4–5.6 rad/s, so every corner was an arc that swung into the wall it was rounding; a
+   speed-scaled 1.2–1.6 m waypoint accept then skipped corner waypoints outright. Now `steer.followPath`
+   writes a world-space heading toward a *carrot* a few metres ahead along the path, shrunk until a
+   capsule-clear straight leg exists (`nav.lineClear`); `act()` expresses it in the facing frame, so
+   aim/scan/turn caps and travel are independent.
+2. **Nav lied about the mover.** (a) 8 m collision buckets were queried by point only, so a box 0.2 m
+   away across a bucket line was invisible (nodes/legs inside walls at every 8 m grid line); (b) hops
+   between two clear anchors could cut through thin walls; (c) stair treads entered from the side — the
+   mover tests the footprint at the *current* feet height before lifting, so a 3 m wide run that looks
+   walkable in the floor graph is blocked at its flank; (d) the "climb-adjacent" 0.2 m footprint exception
+   covered every box ≤2 risers tall, not just stair risers; (e) string-pulled legs grazed corners by 0–5 cm.
+   Fixed with bucket padding, a hop midpoint/quarter-point test, a **mover-faithful replay** of every
+   cross-floor hop and every hop near a kerb/tread (`moverHopOk`, same blocking/support rules as
+   `world.moveCapsule`), the exception narrowed to `kind==='step'`, and a *padded* string pull.
+3. **A\*** is typed-array (≈2x faster, 1–2 ms per route) and prices wall proximity, per-bot lane noise,
+   a per-team crowd-heat map (lanes, not single file) and — for hunting bots with a known threat — cells in
+   view of the threat (`nav.exposure`, a cached grid shadow-cast; last-known position only, never a live read).
+4. **Stuck ladder** (`steer.watchStuck`): 0.7 s → sidestep + local replan around the spot, then the old
+   escalating detour (which now resumes the interrupted goal), then the embed-tomb depenetration; a second
+   displacement detector catches orbits.
+
+**Difficulty.** A band (`botfsm.js` `BANDS`, knob reference in its header) is now a full skill profile:
+reaction, aim sigma, turn cap, trigger speed (stop-and-shoot vs fire on the strafe), notice rate, memory,
+hearing range/fuzz, forget time, strafe habit, side-peek, cover judgement noise, reload discipline, flank
+chance/cooldown, grenade thresholds, retreat threshold, push-on-reload, hunt delay, exposure avoidance,
+corner pre-aim, gun-for-range swaps, loot range. The UI levels pick a *mix* of bands (roster presets) and
+`content.json difficulty.<level>.ai` shifts it for enemies (`enemyBandShift`, PVP; `campaignBandShift`) and
+may only **lower** the human-facing caps (`humanTokens` ≤ 2, `humanWindow` ≤ 3). Nothing changes HP,
+damage, ammo, speed or sight lines; every reaction/jitter/token/muzzle-block invariant in `ai.selftest.cjs`
+still holds. Proof: `tools/skill_probe.mjs` (real matches, mixes per level, both sides), `tools/duel_probe.mjs`
+(one bot vs a scripted player, per band), `ai.selftest.cjs` "BOT-AI PASS" section.
+
+**The PVP tier (owner decision 2026-10-12).** PVP has no difficulty setting: boot starts every match on
+`expert`, and every other combatant — teammates and opponents — is seated at the top skill profile
+(`roster.js DIFFICULTY_PRESETS.expert` = nine `veteran`s). `content.json difficulty.expert.ai.bandOverrides.veteran`
+sharpens that profile for PVP only (human-plausible: reaction 0.22–0.30 s, aim sigma 0.015 rad, brain re-reads the
+fight every 0.10 s, no side-step before the first burst, stops and fights anything in view inside 45 m, 2.2x
+acquisition settle, shorter bursts' pauses, 1.4x hearing, flush grenades after 1.8 s of a static target); the
+campaign ladder's own veterans are untouched. Same fairness surface as every other tier: no wallhack (last-known
+only; exposure avoidance reads the last sighting), no HP/damage change (`playerIncomingMult` 1.0), caps of 2 fire
+tokens / 3 attackers per 250 ms, muzzle-block, reaction latch. `tools/persona_duel_probe.mjs` is the yardstick for
+"beatable only by playing well": a scripted human (novice / regular / expert aim and reaction) against one opponent;
+`tools/expert_probe.mjs` measures the nine against each other on the three arenas in TDM / CTF / FFA.
+
+---
+
 *Design sign-off: every on-disk claim in Part 0 traces to a file read this session and is cited by
 line. Where this document proposes numbers that were not measured — LANTERNWALK route lengths, flag
 stand positions — it says so and routes them to the lane that can measure them. Where the existing

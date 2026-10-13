@@ -116,16 +116,34 @@ export function createRecoil(input) {
     lastWeapon = w;
   }
 
+  // Aim nudge for a SCOPED weapon's sway (viewmodel.js): the wobble is a real change of
+  // aim, applied through input.addLook like every other aim write — but it is the
+  // player's wobble, not recoil, so it must not count as mouse pulldown either. The
+  // pulldown bookkeeping above reads `st.pitch - expectedPitch` as player input, so the
+  // expectation is advanced by exactly what we add.
+  function nudge(dYaw, dPitch) {
+    input.addLook(dYaw, dPitch);
+    if (expectedPitch != null) expectedPitch += dPitch;
+  }
+  // one live recoil per page; viewmodel.js reaches it through the global (a bare module
+  // import would instantiate a second copy — boot loads modules with ?v=N, see top).
+  try { globalThis.__BR_RECOIL__ = { nudge }; } catch (e) { /* headless */ }
+
   return {
     kick(weaponId) {
       const w = WEAPONS[weaponId];
       if (!w) return;
       const c = simCounters();
       if (c) {
-        if (lastShotsFired == null) lastShotsFired = Math.max(0, c.shotsFired - 1);
-        const n = c.shotsFired - lastShotsFired;
+        // shotsFired counts PELLETS at fire time. A Breaker blast is nine "shot" events
+        // and nine counter ticks but ONE round: convert to rounds, or one shell kicks
+        // the aim eight times (the batching cap) — 29 degrees of climb per blast.
+        const pellets = Math.max(1, w.pellets || 1);
+        if (lastShotsFired == null) lastShotsFired = Math.max(0, c.shotsFired - pellets);
+        const raw = c.shotsFired - lastShotsFired;
         lastShotsFired = c.shotsFired;
-        if (n <= 0) return;              // impactOnly / pen replay — no new round left the gun
+        if (raw <= 0) return;            // impactOnly / pen replay / later pellet of the same volley
+        const n = Math.max(1, Math.round(raw / pellets));
         const steps = Math.min(n, 8);    // batched fire events under a hitch: apply each step
         for (let i = 0; i < steps; i++) applyKick(w);
       } else {

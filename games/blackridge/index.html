@@ -172,7 +172,7 @@
     #hint {
         position: fixed;
         left: 50%;
-        bottom: 38px;
+        bottom: 118px; /* above the weapon bar + streak tray (core/hud/loadout_hud.js) */
         z-index: 50;
         transform: translateX(-50%);
         width: max-content;
@@ -194,7 +194,7 @@
 <body>
     <canvas id="view" tabindex="0"></canvas>
 
-    <div id="hint">wasd move &nbsp;·&nbsp; mouse look &nbsp;·&nbsp; lmb fire &nbsp;·&nbsp; rmb ads &nbsp;·&nbsp; r reload &nbsp;·&nbsp; shift sprint &nbsp;·&nbsp; ctrl crouch &nbsp;·&nbsp; space jump &nbsp;·&nbsp; 1/2 weapons &nbsp;·&nbsp; g grenade &nbsp;·&nbsp; f interact &nbsp;·&nbsp; tab scoreboard &nbsp;·&nbsp; esc pause</div>
+    <div id="hint">wasd move &nbsp;·&nbsp; mouse look &nbsp;·&nbsp; lmb fire &nbsp;·&nbsp; rmb ads &nbsp;·&nbsp; r reload &nbsp;·&nbsp; shift sprint &nbsp;·&nbsp; ctrl crouch &nbsp;·&nbsp; space jump &nbsp;·&nbsp; 1-5 weapons &nbsp;·&nbsp; q last &nbsp;·&nbsp; 6-8 streaks &nbsp;·&nbsp; g grenade &nbsp;·&nbsp; f interact &nbsp;·&nbsp; tab scoreboard &nbsp;·&nbsp; esc pause</div>
 
     <div id="boot">
         <div class="boot-inner">
@@ -285,7 +285,7 @@
 
     var s = document.createElement("script");
     s.type = "module";
-    s.src = "./runtime/boot.js?v=121";   /* ?v=N — BUMP EVERY ITERATION */
+    s.src = "./runtime/boot.js?v=122";   /* ?v=N — BUMP EVERY ITERATION */
     document.body.appendChild(s);
 })();
 </script>

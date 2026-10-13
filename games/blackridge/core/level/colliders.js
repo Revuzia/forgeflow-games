@@ -221,6 +221,26 @@ function collidersFromLayout(L) {
     });
   }
   for (const w of L.walls) {
+    if (w.id === "canal_edge") {
+      // The quay edge is a LOW COPING + OPEN RAILING (level.js builds a 0.45 m
+      // coping and 6 cm rails up to 1.15 m), but its collider is a solid 2.2 m x
+      // 4 m wall. Bullets stopped in thin air over the canal (589 of 708 sampled
+      // rays hit a box with NO visible surface — measured live, surfaceindex.js)
+      // and sight lines across the water were blocked by nothing. Movement keeps
+      // the full hull (nobody walks into the canal); bullets/LOS see what is there.
+      boxes.push({
+        min: w.min, max: w.max, surface: w.surface, matClass: w.matClass,
+        kind: w.kind, id: `${w.id}~move`, propId: w.id, moveOnly: true,
+      });
+      const sub = (tag, y0, y1, z0, z1, surface, matClass) => boxes.push({
+        min: [w.min[0], y0, z0], max: [w.max[0], y1, z1],
+        surface, matClass, kind: w.kind, id: `${w.id}~${tag}`, propId: w.id, rayOnly: true,
+      });
+      sub("coping", 0, 0.45, w.min[2], w.min[2] + 0.9, w.surface, w.matClass);
+      sub("rail_top", 1.10, 1.16, w.min[2] + 0.25, w.min[2] + 0.31, "metal", "metal_thin");
+      sub("rail_mid", 0.72, 0.76, w.min[2] + 0.26, w.min[2] + 0.30, "metal", "metal_thin");
+      continue;
+    }
     boxes.push({
       min: w.min, max: w.max,
       surface: w.surface, matClass: w.matClass,
@@ -230,13 +250,27 @@ function collidersFromLayout(L) {
   for (const p of L.props) {
     if (!p.solid || !p.aabb) continue;
     const subs = propSubBoxes(p.kind, p.size);
+    // ORIENTED footprint for props turned off the grid (see world.js rayObb): the
+    // AABB stays as the conservative bound; `obb` makes ray + capsule + support
+    // queries exact. Quarter turns are already exact as an AABB (swapped extents).
+    const rotOff = (() => {
+      const q = Math.PI / 2;
+      const r = (((p.rot || 0) % q) + q) % q;
+      return Math.min(r, q - r);
+    })();
+    const rc = Math.cos(p.rot || 0), rs = Math.sin(p.rot || 0);
+    const footObb = rotOff > 0.02
+      ? { cx: p.pos[0], cz: p.pos[2], c: rc, s: rs, hx: p.size[0] / 2, hz: p.size[2] / 2 }
+      : undefined;
     if (!subs) {
-      boxes.push({
+      const bx = {
         min: p.aabb.min, max: p.aabb.max,
         surface: p.surface, matClass: p.matClass,
         kind: p.kind, id: p.id,
         flags: p.flags || undefined,
-      });
+      };
+      if (footObb) bx.obb = footObb;
+      boxes.push(bx);
       continue;
     }
     // Rotation about Y by p.rot (matches props.js's setFromAxisAngle(up,rot):
@@ -252,21 +286,26 @@ function collidersFromLayout(L) {
       const wx = p.pos[0] + cx * c + cz * s;
       const wz = p.pos[2] - cx * s + cz * c;
       const hx = ac * bx + as * bz, hz = as * bx + ac * bz;
-      boxes.push({
+      const sbx = {
         min: [wx - hx, y0 + sb.min[1], wz - hz],
         max: [wx + hx, y0 + sb.max[1], wz + hz],
         surface: p.surface, matClass: p.matClass,
         kind: p.kind, id: `${p.id}~${sb.tag}`, propId: p.id, rayOnly: true,
         flags: p.flags || undefined,
-      });
+      };
+      // the sub-box's own oriented footprint: centre (wx,wz), local half extents
+      if (footObb) sbx.obb = { cx: wx, cz: wz, c: rc, s: rs, hx: bx, hz: bz };
+      boxes.push(sbx);
     }
     // movement hull: the original coarse AABB, invisible to bullets/LOS
-    boxes.push({
+    const hull = {
       min: p.aabb.min, max: p.aabb.max,
       surface: p.surface, matClass: p.matClass,
       kind: p.kind, id: `${p.id}~move`, propId: p.id, moveOnly: true,
       flags: p.flags || undefined,
-    });
+    };
+    if (footObb) hull.obb = footObb;
+    boxes.push(hull);
   }
 
   const cover = [];

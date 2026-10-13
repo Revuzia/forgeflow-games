@@ -25,6 +25,18 @@
 // the zero-light stub, dynamicFree() is 0 and every flash is sprite-only,
 // by design. Sprite budget (architecture §3.14): 12 world slots + 8 vm
 // slots; a flash uses 2 (crown core + leading puff). Internal to fx.js.
+//
+// PRESENTATION PASS (weapon-FX lane): per-weapon flash PROFILES (size, life,
+// tint, atlas cell set, light multiplier, smoke) and ONE-FLASH-PER-VOLLEY for
+// multi-pellet weapons. The B-12 Breaker's sim emits NINE fire-time `shot`
+// events in a single tick (same shooter, same origin values, pellet 0..8);
+// fx.js calls muzzle.spawn / tracers.spawn / casings.eject once PER EVENT, so
+// the volley is classified HERE (beginShot) and published on `env.shot`, where
+// tracers.js and casings.js read it back. The rule never relies on pellet===0:
+// a bot's pellet 0 can be suppressed by the sim's point-blank cover check, so
+// the first event SEEN for a volley is its leader. Single-pellet weapons
+// always carry pellet 0, can never satisfy `pellet > lastPellet`, and so are
+// always their own leader — nothing changes for them.
 
 import * as THREE from "three";
 import * as WD from "../weapons/weapon_data.js";
@@ -93,58 +105,201 @@ const BOT_LIGHT_MAX_DIST = 60;
 // 1080-px frame. That is the flash's whole screen budget — 0.15 m (~140 px)
 // veiled the left third once it grew and bloomed; 0.10 m (~95 px) disappeared
 // into the lit barrel behind it.
-const FLASH_SIZE = { warden: 0.13, vesper: 0.105, corvus: 0.16, pike: 0.10 };
 const BOT_SIZE_MULT = 2.2; // night readability at 10–60 m through world FOV
 
-// ---- 4-variant flash atlas (2×2, 512²) --------------------------------------
+// ---- per-weapon flash PROFILES ------------------------------------------------
+// size     base quad edge (m) for the PLAYER's crown core
+// bright   multiplier on the HDR brightness (core 1.9 / first 2.4, puff 1.3)
+// life     [min, span] seconds of sprite life (still gated by MIN_PRESENT)
+// cells    atlas cell set the sprite draws from (A→B flicker inside the set)
+// tint     [g, b] multipliers on the sprite colour (r stays 1): the colour grade
+// grow     fractional growth over the sprite's life (0.45 = the old fixed value)
+// light    multiplier on the leased flash light's peak
+// puffs    muzzle-smoke puffs per flash (fractional = probability of the extra)
+// botMult  size multiplier for bots (night readability at range)
+// ignoreFirst  the §2.8 first-shot scale/light bump is skipped: a pump gun's
+//              pull interval (0.77 s) is >= the 0.5 s burst gap, so EVERY volley
+//              is a "first shot" and the bump would just be the normal flash.
+// Cell indices (see flashAtlasTexture): 0-3 ragged combustion flash, 4-5 big
+// orange BLAST, 6 horizontal side-blast (muzzle-brake), 7 small soft glow.
+const CELLS_GEN = [0, 1, 2, 3];
+const CELLS_BLAST = [4, 5];
+const CELLS_SIDE = [6];
+const CELLS_SOFT = [7];
+const CELLS_SUPP = [7, 7, 0];
+const PROFILE_DEFAULT = { size: 0.14, bright: 1, life: [0.070, 0.025], cells: CELLS_GEN,
+  tint: [0.92, 0.80], grow: 0.45, light: 1, puffs: 1, botMult: BOT_SIZE_MULT };
+const PROFILE = {
+  // AR: the baseline look, untouched — a tight ragged cone
+  warden: { size: 0.13, bright: 1, life: [0.070, 0.025], cells: CELLS_GEN,
+    tint: [0.92, 0.80], grow: 0.45, light: 1, puffs: 1, botMult: BOT_SIZE_MULT },
+  // suppressed SMG: a small DIM flash and a faint smoke puff only
+  vesper: { size: 0.088, bright: 0.62, life: [0.048, 0.020], cells: CELLS_SUPP,
+    tint: [0.86, 0.66], grow: 0.30, light: 0.40, puffs: 0.5, botMult: 2.0 },
+  // DMR: a big flash with a muzzle-brake side-blast
+  corvus: { size: 0.17, bright: 1.15, life: [0.078, 0.025], cells: CELLS_GEN,
+    tint: [0.90, 0.74], grow: 0.50, light: 1.2, puffs: 2, botMult: BOT_SIZE_MULT,
+    side: { size: 1.55, asp: 2.1, bright: 1.35 } },
+  // pistol: quick and snappy
+  pike: { size: 0.108, bright: 1.15, life: [0.040, 0.015], cells: CELLS_GEN,
+    tint: [0.92, 0.80], grow: 0.32, light: 1, puffs: 1, botMult: BOT_SIZE_MULT },
+  // pump shotgun: a wide, violent, orange blast — core + side spray + fireball
+  breaker: { size: 0.31, bright: 0.55, life: [0.088, 0.024], cells: CELLS_BLAST,
+    tint: [0.62, 0.30], grow: 0.75, light: 1.4, puffs: 2, botMult: 1.9, ignoreFirst: true,
+    side: { size: 1.15, asp: 1.9, bright: 1.5 } },
+};
+
+// ---- shot-VOLLEY bookkeeping (shared through env.shot) -------------------------
+// Published for tracers.js / casings.js, which only see (origin, dir, dist) and
+// (origin, dir, weaponId, floorY) and so cannot tell the nine pellets of one
+// trigger pull apart. muzzle.spawn(d) runs FIRST in fx.js's onShot, so by the
+// time they are called S already describes THEIR event.
+const VOLLEY_WINDOW_S = 0.05;
+function shotState(env) {
+  return env.shot || (env.shot = {
+    n: 0, volleys: 0, skipped: 0,
+    shooter: null, weaponId: null, ox: 0, oy: 0, oz: 0, t: -9, lastPellet: -1,
+    leader: true, idx: 0, multi: false,
+  });
+}
+function pelletsOf(weaponId) {
+  const w = WD.WEAPONS && WD.WEAPONS[weaponId];
+  return (w && w.pellets) | 0;
+}
+function beginShot(env, d) {
+  const S = shotState(env);
+  const o = d.origin;
+  const now = env.now();
+  const pellet = d.pellet | 0;
+  S.n++;
+  const same = S.volleys > 0 && S.shooter === d.shooter && S.weaponId === d.weaponId &&
+    now >= S.t && now - S.t <= VOLLEY_WINDOW_S && pellet > S.lastPellet &&
+    o[0] === S.ox && o[1] === S.oy && o[2] === S.oz;
+  if (same) {
+    S.idx++; S.leader = false; S.skipped++; S.lastPellet = pellet;
+  } else {
+    S.volleys++; S.leader = true; S.idx = 0;
+    S.shooter = d.shooter; S.weaponId = d.weaponId;
+    S.ox = o[0]; S.oy = o[1]; S.oz = o[2];
+    S.t = now; S.lastPellet = pellet;
+  }
+  S.multi = pelletsOf(d.weaponId) > 1;
+  return S;
+}
+
+// ---- 8-cell flash atlas (4×2, 1024×512) -----------------------------------------
 // Irregular combustion read: ragged petals at jittered angles/lengths, a
-// multi-blob core, spark specks. Four variants; each sprite picks one at
-// spawn and swaps to a second mid-life (multi-frame flicker).
+// multi-blob core, spark specks — never a clean geometric star. Cells 0-3 are
+// the generic flash; each sprite picks one at spawn and swaps to a second
+// mid-life (multi-frame flicker). Cells 4-7 are the weapon-specific shapes.
+const ATLAS_COLS = 4, ATLAS_ROWS = 2, CELL_PX = 256;
+
+function petal(g, a, len, w, c0, c1, c2) {
+  const gr = g.createLinearGradient(0, 0, Math.cos(a) * len, Math.sin(a) * len);
+  gr.addColorStop(0, c0);
+  gr.addColorStop(0.4, c1);
+  gr.addColorStop(1, c2);
+  g.fillStyle = gr;
+  g.beginPath();
+  g.moveTo(Math.cos(a + Math.PI / 2) * w * 0.5, Math.sin(a + Math.PI / 2) * w * 0.5);
+  g.quadraticCurveTo(Math.cos(a) * len * 0.55, Math.sin(a) * len * 0.55,
+                     Math.cos(a) * len, Math.sin(a) * len);
+  g.quadraticCurveTo(Math.cos(a) * len * 0.55, Math.sin(a) * len * 0.55,
+                     Math.cos(a - Math.PI / 2) * w * 0.5, Math.sin(a - Math.PI / 2) * w * 0.5);
+  g.closePath();
+  g.fill();
+}
+function blob(g, ox, oy, r, c0, c1, c2) {
+  const core = g.createRadialGradient(ox, oy, 1, ox, oy, r);
+  core.addColorStop(0, c0);
+  core.addColorStop(0.45, c1);
+  core.addColorStop(1, c2);
+  g.fillStyle = core;
+  g.fillRect(-128, -128, 256, 256);
+}
+function specks(g, rnd, n, r0, rSpan, aLo, aSpan) {
+  for (let s = 0; s < n; s++) {
+    const a = rnd() * Math.PI * 2, r = r0 + rnd() * rSpan;
+    g.fillStyle = `rgba(255,${(200 + rnd() * 40) | 0},150,${(aLo + rnd() * aSpan).toFixed(2)})`;
+    g.beginPath();
+    g.arc(Math.cos(a) * r, Math.sin(a) * r, 1 + rnd() * 2.2, 0, Math.PI * 2);
+    g.fill();
+  }
+}
+
+function drawGeneric(g, rnd) {
+  const petals = 6 + ((rnd() * 4) | 0);
+  const a0 = rnd() * Math.PI;
+  for (let i = 0; i < petals; i++) {
+    const a = a0 + (i / petals) * Math.PI * 2 + (rnd() - 0.5) * 0.9;
+    const len = 38 + rnd() * 52;   // short ragged petals — flash, not star
+    const w = 5 + rnd() * 9;
+    petal(g, a, len, w, "rgba(255,236,200,0.85)", "rgba(255,180,90,0.38)", "rgba(255,140,60,0)");
+  }
+  for (let b = 0; b < 3; b++) {
+    blob(g, (rnd() - 0.5) * 22, (rnd() - 0.5) * 22, 34 + rnd() * 26,
+      "rgba(255,252,240,0.95)", "rgba(255,210,140,0.55)", "rgba(255,160,70,0)");
+  }
+  specks(g, rnd, 12, 30, 80, 0.25, 0.5);
+}
+
+// BLAST: a big, ragged, orange fireball. Many long irregular petals (it is a
+// 9-pellet wad leaving a short barrel, not a rifle's tidy cone), hot core.
+function drawBlast(g, rnd) {
+  const petals = 12 + ((rnd() * 4) | 0);
+  const a0 = rnd() * Math.PI;
+  for (let i = 0; i < petals; i++) {
+    const a = a0 + (i / petals) * Math.PI * 2 + (rnd() - 0.5) * 0.7;
+    const len = 62 + rnd() * 58;
+    const w = 10 + rnd() * 15;
+    petal(g, a, len, w, "rgba(255,240,208,0.92)", "rgba(255,170,72,0.52)", "rgba(255,100,26,0)");
+  }
+  for (let b = 0; b < 5; b++) {
+    blob(g, (rnd() - 0.5) * 30, (rnd() - 0.5) * 30, 44 + rnd() * 34,
+      "rgba(255,251,238,0.96)", "rgba(255,200,120,0.62)", "rgba(255,125,40,0)");
+  }
+  specks(g, rnd, 26, 44, 78, 0.3, 0.5);
+}
+
+// SIDE: a horizontal two-lobed blast — the muzzle-brake / shotgun side spray.
+function drawSide(g, rnd) {
+  for (let sgn = -1; sgn <= 1; sgn += 2) {
+    for (let k = 0; k < 4; k++) {
+      // k 0 = the fat central jet along the horizon; 1-3 = ragged secondary jets
+      // fanned 0.18-0.55 rad above/below it
+      const spread = k === 0 ? (rnd() - 0.5) * 0.10 : (k % 2 ? 1 : -1) * (0.16 + rnd() * 0.40);
+      const a = (sgn > 0 ? 0 : Math.PI) + spread;
+      const len = (k === 0 ? 104 : 64) + rnd() * 22;
+      const w = (k === 0 ? 40 : 20) + rnd() * 12;
+      petal(g, a, len, w, "rgba(255,246,218,0.92)", "rgba(255,186,96,0.55)", "rgba(255,122,42,0)");
+    }
+  }
+  blob(g, 0, 0, 50, "rgba(255,252,240,0.95)", "rgba(255,206,130,0.6)", "rgba(255,140,60,0)");
+  specks(g, rnd, 12, 40, 70, 0.25, 0.45);
+}
+
+// SOFT: a small round glow with three stubby petals — the suppressed muzzle.
+function drawSoft(g, rnd) {
+  blob(g, 0, 0, 72, "rgba(255,226,176,0.78)", "rgba(255,190,110,0.32)", "rgba(255,150,70,0)");
+  for (let i = 0; i < 3; i++) {
+    petal(g, rnd() * Math.PI * 2, 34 + rnd() * 18, 5 + rnd() * 4,
+      "rgba(255,238,210,0.55)", "rgba(255,190,110,0.22)", "rgba(255,150,70,0)");
+  }
+}
+
 function flashAtlasTexture(rnd) {
   const cv = document.createElement("canvas");
-  cv.width = cv.height = 512;
+  cv.width = ATLAS_COLS * CELL_PX; cv.height = ATLAS_ROWS * CELL_PX;
   const g = cv.getContext("2d");
-  for (let f = 0; f < 4; f++) {
-    const cx = (f % 2) * 256 + 128, cy = ((f / 2) | 0) * 256 + 128;
+  const draw = [drawGeneric, drawGeneric, drawGeneric, drawGeneric,
+                drawBlast, drawBlast, drawSide, drawSoft];
+  for (let f = 0; f < ATLAS_COLS * ATLAS_ROWS; f++) {
+    const cx = (f % ATLAS_COLS) * CELL_PX + CELL_PX / 2;
+    const cy = ((f / ATLAS_COLS) | 0) * CELL_PX + CELL_PX / 2;
     g.save();
     g.translate(cx, cy);
-    const petals = 6 + ((rnd() * 4) | 0);
-    const a0 = rnd() * Math.PI;
-    for (let i = 0; i < petals; i++) {
-      const a = a0 + (i / petals) * Math.PI * 2 + (rnd() - 0.5) * 0.9;
-      const len = 38 + rnd() * 52;   // short ragged petals — flash, not star
-      const w = 5 + rnd() * 9;
-      const gr = g.createLinearGradient(0, 0, Math.cos(a) * len, Math.sin(a) * len);
-      gr.addColorStop(0, "rgba(255,236,200,0.85)");
-      gr.addColorStop(0.4, "rgba(255,180,90,0.38)");
-      gr.addColorStop(1, "rgba(255,140,60,0)");
-      g.fillStyle = gr;
-      g.beginPath();
-      g.moveTo(Math.cos(a + Math.PI / 2) * w * 0.5, Math.sin(a + Math.PI / 2) * w * 0.5);
-      g.quadraticCurveTo(Math.cos(a) * len * 0.55, Math.sin(a) * len * 0.55,
-                         Math.cos(a) * len, Math.sin(a) * len);
-      g.quadraticCurveTo(Math.cos(a) * len * 0.55, Math.sin(a) * len * 0.55,
-                         Math.cos(a - Math.PI / 2) * w * 0.5, Math.sin(a - Math.PI / 2) * w * 0.5);
-      g.closePath();
-      g.fill();
-    }
-    for (let b = 0; b < 3; b++) {
-      const ox = (rnd() - 0.5) * 22, oy = (rnd() - 0.5) * 22;
-      const r = 34 + rnd() * 26;
-      const core = g.createRadialGradient(ox, oy, 1, ox, oy, r);
-      core.addColorStop(0, "rgba(255,252,240,0.95)");
-      core.addColorStop(0.45, "rgba(255,210,140,0.55)");
-      core.addColorStop(1, "rgba(255,160,70,0)");
-      g.fillStyle = core;
-      g.fillRect(-128, -128, 256, 256);
-    }
-    for (let s = 0; s < 12; s++) {
-      const a = rnd() * Math.PI * 2, r = 30 + rnd() * 80;
-      g.fillStyle = `rgba(255,${(200 + rnd() * 40) | 0},150,${(0.25 + rnd() * 0.5).toFixed(2)})`;
-      g.beginPath();
-      g.arc(Math.cos(a) * r, Math.sin(a) * r, 1 + rnd() * 2.2, 0, Math.PI * 2);
-      g.fill();
-    }
+    g.beginPath(); g.rect(-128, -128, 256, 256); g.clip(); // never bleed into a neighbour
+    draw[f](g, rnd);
     g.restore();
   }
   const t = new THREE.CanvasTexture(cv);
@@ -154,9 +309,9 @@ function flashAtlasTexture(rnd) {
   return t;
 }
 
-// atlas cell -> UV offset (CanvasTexture flipY: row 0 of the canvas is v 0.5)
-function frameU(f) { return (f & 1) * 0.5; }
-function frameV(f) { return f < 2 ? 0.5 : 0; }
+// atlas cell -> UV offset (CanvasTexture flipY: canvas row 0 is v 0.5..1)
+function frameU(f) { return (f & 3) * 0.25; }
+function frameV(f) { return f < 4 ? 0.5 : 0; }
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -198,6 +353,10 @@ function createPool(n, mat, env, layer, renderOrder, name) {
   const swapped = new Uint8Array(n);
   const alive = new Uint8Array(n);
   const drawn = new Uint8Array(n); // presented at least once (see LIGHT header)
+  const asp = new Float32Array(n);   // x:y aspect (1 = square billboard)
+  const tintG = new Float32Array(n); // colour grade, r stays 1
+  const tintB = new Float32Array(n);
+  const grow = new Float32Array(n);  // fractional growth over the sprite's life
   let cursor = 0;
   let active = 0;
   // Flashes that reached a rendered frame. `flashCount` (spawned) minus this
@@ -211,14 +370,20 @@ function createPool(n, mat, env, layer, renderOrder, name) {
     uvOff.needsUpdate = true;
   }
 
-  function spawn(x, y, z, sz, brightMult) {
+  // cells = atlas cell set (preallocated array, see CELLS_*); aspect/rollFixed
+  // let a sprite be a screen-aligned wide fan (rollFixed finite = radians off
+  // the camera's horizontal, NaN = random roll like the generic flash).
+  function spawn(x, y, z, sz, brightMult, cells, aspect, rollFixed, life0, lifeSpan, tg, tb, gr) {
     const i = cursor;
     cursor = (cursor + 1) % n;
     if (!alive[i]) { alive[i] = 1; active++; }
     const i3 = i * 3;
     pos[i3] = x; pos[i3 + 1] = y; pos[i3 + 2] = z;
     size[i] = sz;
-    roll[i] = rnd() * Math.PI * 2;
+    asp[i] = aspect;
+    tintG[i] = tg; tintB[i] = tb;
+    grow[i] = gr;
+    roll[i] = rollFixed === rollFixed ? rollFixed : rnd() * Math.PI * 2;
     birth[i] = env.now();
     // 70–95 ms. Authored as 42–58 ms, which is right for a single shot seen at
     // 120 fps and wrong here twice over: this build presents a frame roughly
@@ -228,13 +393,17 @@ function createPool(n, mat, env, layer, renderOrder, name) {
     // — a sustained burst reads as sustained flash, which is what a camera
     // actually records of full-auto fire — while a single shot still snaps off
     // inside two frames. Decay steepened below so it never reads as a torch.
-    life[i] = 0.070 + rnd() * 0.025;
+    life[i] = life0 + rnd() * lifeSpan;
     bright[i] = brightMult;
-    const fA = (rnd() * 4) | 0;
-    frameB[i] = (fA + 1 + ((rnd() * 3) | 0)) % 4;
+    // A→B flicker inside the weapon's own cell set (a single-cell set simply
+    // holds its frame — the suppressed glow does not flicker)
+    const nc = cells.length;
+    const ia = (rnd() * nc) | 0;
+    const ib = nc > 1 ? (ia + 1 + ((rnd() * (nc - 1)) | 0)) % nc : ia;
+    frameB[i] = cells[ib];
     swapped[i] = 0;
     drawn[i] = 0;
-    setFrame(i, fA);
+    setFrame(i, cells[ia]);
   }
 
   function deactivate(i) {
@@ -270,13 +439,13 @@ function createPool(n, mat, env, layer, renderOrder, name) {
       const i3 = i * 3;
       _qr.setFromAxisAngle(_ZAXIS, roll[i]);
       _q.copy(camQ).multiply(_qr);
-      const s = size[i] * (0.85 + 0.45 * u);
+      const s = size[i] * (0.85 + grow[i] * u);
       _p.set(pos[i3], pos[i3 + 1], pos[i3 + 2]);
-      _s.set(s, s, 1);
+      _s.set(s * asp[i], s, 1);
       _m.compose(_p, _q, _s);
       mesh.setMatrixAt(i, _m);
       const b = bright[i] * (1 - 0.75 * u) * 2.0; // HDR: flash blooms in post
-      _c.setRGB(b, b * 0.92, b * 0.8);
+      _c.setRGB(b, b * tintG[i], b * tintB[i]);
       mesh.setColorAt(i, _c);
     }
     mesh.instanceMatrix.needsUpdate = true;
@@ -301,11 +470,12 @@ export function makeMuzzle(env) {
     side: THREE.DoubleSide,
     fog: false,
   });
-  // per-instance atlas cell: shift vMapUv into the sprite's 2×2 cell
+  // per-instance atlas cell: shift vMapUv into the sprite's cell of the 4×2 atlas
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nattribute vec2 aUvOff;")
-      .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvMapUv = vMapUv * 0.5 + aUvOff;");
+      .replace("#include <uv_vertex>",
+        "#include <uv_vertex>\n\tvMapUv = vMapUv * vec2(0.25, 0.5) + aUvOff;");
   };
 
   // Player flash lives on the VM layer: drawn in the viewmodel pass through
@@ -336,7 +506,7 @@ export function makeMuzzle(env) {
     leaseCount--;
   }
 
-  function grantLight(x, y, z, isPlayer, firstShot) {
+  function grantLight(x, y, z, isPlayer, firstShot, mult) {
     const api = env.lights();
     if (!api || !api.dynamicFree || api.dynamicFree() <= 0) return;
     // RE-ARM IN PLACE. At 90 ms of pulse against ~96 ms between rounds the
@@ -350,7 +520,7 @@ export function makeMuzzle(env) {
       if (E.slot && E.isPlayer === isPlayer && isPlayer) {
         E.x = x; E.y = y; E.z = z;
         E.t0 = env.now();
-        E.peak = LIGHT.peak * (firstShot ? (FIRST.flashIntensityMult || 1.25) : 1);
+        E.peak = LIGHT.peak * mult * (firstShot ? (FIRST.flashIntensityMult || 1.25) : 1);
         E.applied = 0;
         return;
       }
@@ -378,7 +548,7 @@ export function makeMuzzle(env) {
     L.slot = slot;
     L.x = x; L.y = y; L.z = z;
     L.t0 = env.now();
-    L.peak = LIGHT.peak * (firstShot ? (FIRST.flashIntensityMult || 1.25) : 1);
+    L.peak = LIGHT.peak * mult * (firstShot ? (FIRST.flashIntensityMult || 1.25) : 1);
     L.isPlayer = isPlayer;
     L.applied = 0;
     leaseCount++;
@@ -437,19 +607,48 @@ export function makeMuzzle(env) {
   return {
     // d = the fire-time shot event (never impactOnly/pen — fx.js gates that)
     spawn(d) {
+      // ONE flash per volley: the nine pellets of a shotgun blast are nine
+      // events but one muzzle flash, one light pulse, one smoke cloud. Only the
+      // volley leader (the first event SEEN, never "pellet 0" by assumption —
+      // see the header) draws anything.
+      const S = beginShot(env, d);
+      if (!S.leader) return;
       resolveMuzzle(d, _mz);
-      const first = !!d.firstShot;
+      const P = PROFILE[d.weaponId] || PROFILE_DEFAULT;
+      const first = !!d.firstShot && !P.ignoreFirst;
       const isPlayer = d.shooter === "P";
-      const base = (FLASH_SIZE[d.weaponId] || 0.14)
+      const base = P.size
         * (first ? (FIRST.flashScaleMult || 1.2) : 1)
-        * (isPlayer ? 1 : BOT_SIZE_MULT);
+        * (isPlayer ? 1 : P.botMult);
       const pool = isPlayer ? poolVm : poolWorld;
       const dir = d.dir || [0, 0, 0];
+      const hb = P.bright;
+      // Looking THROUGH a scope the gun is hidden and the lens is a flat picture:
+      // a muzzle-flash sprite 0.5 m ahead of the eye would be a white starburst
+      // inside the sight picture. Real optics show (almost) nothing, so skip the
+      // flash sprites; the light pulse and smoke below still read.
+      let scoped = false;
+      if (isPlayer && typeof window !== "undefined") {
+        const vmS = window.__FPS__ && window.__FPS__.vm;
+        scoped = !!(vmS && vmS.scope && vmS.scope.active);
+      }
       // 2-sprite cluster (VT §5): crown core + a smaller leading puff 12 cm
       // down-range — both frame-randomized, both swap frames mid-life.
-      pool.spawn(_mz[0], _mz[1], _mz[2], base * (0.85 + rnd() * 0.35), first ? 2.4 : 1.9);
-      pool.spawn(_mz[0] + dir[0] * 0.12, _mz[1] + dir[1] * 0.12, _mz[2] + dir[2] * 0.12,
-                 base * 0.55, 1.3);
+      if (!scoped) {
+        pool.spawn(_mz[0], _mz[1], _mz[2], base * (0.85 + rnd() * 0.35),
+                   (first ? 2.4 : 1.9) * hb, P.cells, 1, NaN,
+                   P.life[0], P.life[1], P.tint[0], P.tint[1], P.grow);
+        pool.spawn(_mz[0] + dir[0] * 0.12, _mz[1] + dir[1] * 0.12, _mz[2] + dir[2] * 0.12,
+                   base * 0.55, 1.3 * hb, P.cells, 1, NaN,
+                   P.life[0], P.life[1], P.tint[0], P.tint[1], P.grow);
+      }
+      // side spray (DMR muzzle-brake blast / shotgun fan): a screen-horizontal
+      // wide sprite, near-fixed roll so it stays a horizontal flare
+      if (P.side && !scoped) {
+        pool.spawn(_mz[0], _mz[1], _mz[2], base * P.side.size, P.side.bright * hb,
+                   CELLS_SIDE, P.side.asp, (rnd() - 0.5) * 0.16,
+                   P.life[0] * 0.85, P.life[1], P.tint[0], P.tint[1], P.grow * 0.7);
+      }
       flashCount++;
       // ---- LINGERING MUZZLE SMOKE (iter06, D6) ---------------------------
       // The flash itself is ~50 ms; the smoke it leaves is the part of a
@@ -460,11 +659,19 @@ export function makeMuzzle(env) {
       // material) at a stand-off that keeps it off the lens.
       const smoke = env.impacts;
       if (smoke && typeof smoke.puff === "function") {
-        const so = isPlayer ? PLAYER_SMOKE_STANDOFF : BOT_SMOKE_STANDOFF;
-        _smoke[0] = _mz[0] + dir[0] * so;
-        _smoke[1] = _mz[1] + dir[1] * so;
-        _smoke[2] = _mz[2] + dir[2] * so;
-        smoke.puff(_smoke, "muzzleSmoke");
+        // puffs: whole part always, fractional part as a probability (the
+        // suppressed Vesper leaves a faint haze on every other round, the
+        // Breaker a heavier two-cloud bloom at staggered distances)
+        let np = P.puffs | 0;
+        if (rnd() < P.puffs - np) np++;
+        const so0 = isPlayer ? PLAYER_SMOKE_STANDOFF : BOT_SMOKE_STANDOFF;
+        for (let k = 0; k < np; k++) {
+          const so = so0 + k * (isPlayer ? 0.55 : 0.45);
+          _smoke[0] = _mz[0] + dir[0] * so;
+          _smoke[1] = _mz[1] + dir[1] * so + k * 0.04;
+          _smoke[2] = _mz[2] + dir[2] * so;
+          smoke.puff(_smoke, "muzzleSmoke");
+        }
       }
       if (isPlayer || onScreenAndNear(_mz[0], _mz[1], _mz[2])) {
         // PLAYER FLASH LIGHT STAND-OFF (iter04 open item a: "the muzzle flash
@@ -482,7 +689,7 @@ export function makeMuzzle(env) {
         const d0 = d.dir || [0, 0, 0];
         const off = isPlayer ? PLAYER_LIGHT_STANDOFF : 0;
         grantLight(_mz[0] + d0[0] * off, _mz[1] + d0[1] * off, _mz[2] + d0[2] * off,
-                   isPlayer, first);
+                   isPlayer, first, P.light);
       }
     },
 
@@ -518,10 +725,17 @@ export function makeMuzzle(env) {
       poolWorld.clear();
       poolVm.clear();
       for (let i = 0; i < leases.length; i++) releaseLease(leases[i]);
+      env.shot = null; // a fresh mission starts with no volley in flight
     },
     prewarmables() { return [poolWorld.mesh, poolVm.mesh]; },
     stats: () => ({ activeSprites: poolWorld.activeCount() + poolVm.activeCount(),
                     leaseCount, flashCount,
+                    // volley bookkeeping (env.shot): shotEvents counts EVERY
+                    // fire-time event seen, volleys the trigger pulls they
+                    // collapse into, volleyEventsSkipped the non-leader pellets
+                    shotEvents: env.shot ? env.shot.n : 0,
+                    volleys: env.shot ? env.shot.volleys : 0,
+                    volleyEventsSkipped: env.shot ? env.shot.skipped : 0,
                     // flashesPresented < flashCount means flashes are being
                     // spawned and expiring between two rendered frames.
                     flashesPresented: poolWorld.presentedCount() + poolVm.presentedCount(),

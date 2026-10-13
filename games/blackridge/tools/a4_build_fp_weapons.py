@@ -89,6 +89,7 @@ CFG = {
         "foregrip": None,
         "eject": {"y": 0.045, "z_rel": -0.004},
         "sights": "iron",
+        "mag": {"y0": 0.095, "y1": 0.215, "z_max": -0.012},   # AR box magazine
         "arms": True,
     },
     "vesper": {  # KS-23 Vesper — suppressed SMG (base wpn_smg)
@@ -111,6 +112,7 @@ CFG = {
         "foregrip": None,          # W1 (iter03): see warden — floating cylinder
         "eject": {"y": 0.035, "z_rel": -0.004},
         "sights": "iron_low",
+        "mag": {"authored": True, "cy": -0.030, "wy": 0.042, "wx": 0.024, "z0": -0.096, "z1": -0.020},
         "arms": True,
     },
     "corvus": {  # LR-1 Corvus — DMR (base wpn_sniper; scope baked in mesh)
@@ -144,10 +146,12 @@ CFG = {
         # bar's exact 20% housing is NOT met and is not chased: the bezel is
         # 2.8 mm of real wall, so a 20% housing forces a ~14% peephole, and a
         # peephole is a worse frame than a slightly generous ring.
-        "scope": {"axis_rel": 0.098, "y_ocular": -0.088, "y_obj": 0.012,
-                  "clear_r": 0.0076, "wall": 0.0028, "rim_wall": 0.0030,
-                  "turret_r": 0.0060, "turret_stand": 0.0080,
-                  "y_turret": -0.030, "mount_base_rel": 0.045},
+        # PRESENTATION PASS: solid optic (build_scope_solid). The full-screen scope
+        # overlay is the sight picture now; this model is what the player sees at the
+        # hip and through the raise / zoom-in. axis_rel stays 0.098 (= sightY 0.123).
+        "scope": {"solid": True, "axis_rel": 0.098, "y_ocular": -0.105, "y_obj": 0.185,
+                  "tube_r": 0.0155, "y_turret": 0.040, "mount_base_rel": 0.045,
+                  "mounts": (-0.035, 0.085)},
         # the ENTIRE Meshy scope goes: a ray cast along its own axis crosses
         # five solid slabs, so no boolean on the authored parts alone could
         # ever open a sight line through it (see build_scope).
@@ -161,6 +165,25 @@ CFG = {
         "eject": {"y": 0.10, "z_rel": -0.002},
         "sights": "none",
         "stock_fix": {"gap_x_raw": 0.60, "shift_raw": -0.085},
+        "mag": {"y0": -0.140, "y1": -0.050, "z_max": -0.020},   # box magazine
+        "arms": True,
+    },
+    "breaker": {  # B-12 Breaker — pump shotgun (base wpn_shotgun; PRESENTATION PASS)
+        "src": "wpn_shotgun.glb", "length": 0.98,
+        "grip_x_raw": 0.50,        # stock wrist = the trigger hand's grip station
+        "barrel_probe_raw": 0.10,
+        "sight_h": 0.036,
+        "rail": None,
+        "iron_base_rel": 0.018,    # receiver top (ghost-ring base)
+        "iron": {"rear_y": 0.118, "front_y": 0.715, "front_base_rel": 0.010},
+        "strip_regions": [],
+        "barrel_y": 0.45,
+        "lh_y": 0.340,
+        "muzzle_dev": None,
+        "foregrip": None,
+        "eject": {"y": 0.150, "z_rel": 0.082, "plate": False},
+        "sights": "iron_low",
+        "pump": {"y0": 0.205, "y1": 0.455, "z_min": 0.028, "z_max": 0.078},   # pump forend
         "arms": True,
     },
     "pike": {  # GS-9 Pike — pistol (base wpn_pistol)
@@ -174,40 +197,51 @@ CFG = {
         "foregrip": None,
         "eject": {"y": 0.01, "z_rel": -0.002},
         "sights": "pistol",
+        "mag": {"authored": True, "cy": 0.0, "wy": 0.056, "wx": 0.024, "z0": -0.074, "z1": -0.012},
         "arms": True,
     },
 }
 
-# arm placement per weapon: (hand, wrist_pos, fingers_dir, palm_dir).
-# canonical hand chunk frame: origin at the wrist, fingers +Y, palm -Z
-# (canonicalized from the hand bone matrix at cut time). Placement builds an
-# explicit basis from the two direction vectors (eulers were unreviewable).
+# arm placement per weapon: (hand, wrist_pos, fingers_dir, palm_dir[, params]).
+# canonical hand frame: origin at the wrist, fingers +Y, palm -Z, thumb at -X for
+# the right hand (+X left). Placement builds an explicit basis from the two
+# direction vectors. params (all optional): curl (3 deg per phalanx), index_curl,
+# thumb (3 dirs), elbow (wrist->elbow, canonical), sleeve_len/sleeve_r.
 #
-# W1 (iter03) FRAMING: the forearm stub runs roughly ANTI-parallel to fingers_dir
-# (the chunk is cut on the forearm bone axis, which is near-collinear with the
-# hand bone in the T-pose). The old trigger-hand fingers_dir (-0.10, 0.90, 0.25)
-# therefore pointed the forearm almost straight back AT THE EYE: at the Corvus
-# ADS pose the wrist sits 0.21 m from the vm camera and the stub reached to
-# 0.05 m, so a 10 cm-thick forearm filled the whole lower frame (iter03 S2, and
-# the corvus_ads preview). Trigger-hand fingers_dir now carries real +Z so the
-# stub falls away DOWN-and-back and leaves frame the way a shouldered rifle's
-# firing arm actually does.
+# PRESENTATION PASS 2026-10: the arms are now PROCEDURAL gloves (see the
+# PROCEDURAL ARMS block). Poses are in the build frame (+Y muzzle, +Z up, +X
+# right, origin at the grip) and are judged against the previews
+# (_shots/a4_fp/<id>_gripR / _gripL). RIGHT hand = hammer grip on the pistol
+# grip: palm faces -X, fingers curl round the FRONT of the grip, thumb rides up
+# the left side, index extended along the receiver. LEFT hand = C-clamp under
+# the handguard: palm faces up, fingers stacked along the barrel and wrapping
+# the right side, thumb forward.
 ARM_POSE = {
     "warden": [
-        ("R", (0.035, -0.088, -0.088), (-0.10, 0.72, 0.68), (-0.95, 0.24, -0.20)),
-        ("L", (-0.05, 0.22, -0.090), (0.82, 0.22, 0.53), (0.52, 0.06, 0.85)),
+        ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
+         {"index_curl": (12, 16, 8)}),
+        ("L", (-0.085, 0.235, 0.012), (1.0, 0.05, 0.25), (0.15, 0.0, 1.0), {"elbow": (0.26, -0.56, 0.78)}),
     ],
     "vesper": [
-        ("R", (0.035, -0.088, -0.088), (-0.10, 0.72, 0.68), (-0.95, 0.24, -0.20)),
-        ("L", (-0.05, 0.16, -0.088), (0.82, 0.22, 0.53), (0.52, 0.06, 0.85)),
+        ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
+         {"index_curl": (12, 16, 8)}),
+        ("L", (-0.085, 0.200, 0.000), (1.0, 0.05, 0.25), (0.15, 0.0, 1.0), {"elbow": (0.26, -0.56, 0.78)}),
     ],
     "corvus": [
-        ("R", (0.035, -0.088, -0.088), (-0.10, 0.72, 0.68), (-0.95, 0.24, -0.20)),
-        ("L", (-0.05, 0.19, -0.10), (0.82, 0.18, 0.55), (0.48, 0.04, 0.88)),
+        ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
+         {"index_curl": (12, 16, 8)}),
+        ("L", (-0.085, 0.235, -0.010), (1.0, 0.05, 0.25), (0.15, 0.0, 1.0), {"elbow": (0.26, -0.56, 0.78)}),
+    ],
+    "breaker": [
+        ("R", (0.036, -0.085, -0.020), (0.0, 1.0, 0.10), (-1.0, 0.0, 0.0),
+         {"index_curl": (10, 14, 8)}),
+        ("L", (-0.085, 0.340, 0.020), (1.0, 0.05, 0.25), (0.15, 0.0, 1.0), {"elbow": (0.26, -0.56, 0.78)}),
     ],
     "pike": [
-        ("R", (0.030, -0.080, -0.092), (-0.10, 0.70, 0.70), (-0.95, 0.22, -0.18)),
-        ("L", (-0.030, -0.095, -0.105), (0.90, 0.30, 0.20), (0.60, 0.30, 0.70)),
+        ("R", (0.034, -0.050, -0.020), (0.0, 1.0, 0.10), (-1.0, 0.0, 0.0),
+         {"index_curl": (8, 12, 6)}),
+        ("L", (-0.034, -0.060, -0.040), (0.15, 1.0, 0.10), (1.0, 0.0, 0.0),
+         {"curl": (62, 84, 46), "thumb": ((0.40, 0.80, -0.20), (0.20, 0.90, -0.20), (0.05, 0.98, -0.12))}),
     ],
 }
 
@@ -245,13 +279,13 @@ ARM_POSE = {
 # no-ops is worse than no edit. Replaced by TEX_VERSION: the stamp is written
 # beside the textures and any mismatch (or --regen) rebuilds the whole set.
 # ---------------------------------------------------------------------------
-TEX_VERSION = "a4tex-v6-flatstock"        # bump to force a full texture regen
+TEX_VERSION = "a4tex-v8-calmer"        # bump to force a full texture regen
 TEX_SIZE = 768                           # albedo/normal; ORM ships at half
 # "metal" (W1, iter07): the metallic channel is now an AUTHORED coating-
 # breakthrough mask and a flat one is the exact defect this build shipped for
 # three critic rounds (corvus_orm_metal.png B: mean 1.0000, std 0.0000 —
 # measured, this session). A constant metallic channel can never ship again.
-TEX_FLOORS = {"albedo": 0.045, "rough": 0.070, "normal": 0.045, "metal": 0.060}
+TEX_FLOORS = {"albedo": 0.010, "rough": 0.070, "normal": 0.045, "metal": 0.060}
 FORCE_REGEN = "--regen" in ARGS
 
 
@@ -307,6 +341,13 @@ def _sstep(e0, e1, x):
     t = np.clip((x - e0) / max(1e-6, e1 - e0), 0.0, 1.0)
     return t * t * (3 - 2 * t)
 
+
+
+def _ss(a, b, x):
+    """smoothstep that also accepts reversed edges (a > b = falling edge)."""
+    d = (b - a) if abs(b - a) > 1e-12 else 1e-12
+    t = np.clip((x - a) / d, 0.0, 1.0)
+    return t * t * (3 - 2 * t)
 
 def _scratches(size, seed, n, lo_len, hi_len, width=1, bias_deg=None, spread_deg=90):
     """Scratch coverage 0..1. bias_deg biases direction so the wear reads as
@@ -561,9 +602,12 @@ def gun_texture_arrays(S, masks=None, seed=0):
     # albedo and paid back at 1.6-2.0x in height and roughness; the shipped
     # gate assert_wear_is_lit() fails the build if that ratio ever inverts.
     wear_p = _sstep(0.26, 0.80, np.clip(0.55 * mac + 0.45 * mid, 0, 1))
-    a = 0.104 + 0.165 * wear_p
-    a += 0.105 * (flow - 0.35) * (0.35 + 0.65 * wear_p)
-    a += 0.070 * fine
+    # PRESENTATION PASS: albedo swing 0.104..0.269 -> 0.088..0.150. The old range
+    # rendered as a pale-blue DAZZLE CAMO on a near-black night scene (owner: 'muddy'
+    # / 'blotchy'). Wear lives in roughness + height (lit channels) now.
+    a = 0.100 + 0.020 * wear_p
+    a += 0.020 * (flow - 0.35) * (0.35 + 0.65 * wear_p)
+    a += 0.026 * fine
     a += (0.021 * scr_f + 0.033 * scr_c + 0.016 * scr_x) * (0.35 + 0.65 * wear_p)
     a -= 0.060 * pit
     a -= 0.055 * soot
@@ -586,16 +630,16 @@ def gun_texture_arrays(S, masks=None, seed=0):
     r += 0.16 * M["fouling"] + 0.13 * M["crevice"] + 0.10 * pit
     r += 0.20 * (mid - 0.5) + 0.11 * (flow - 0.5)
     r += 0.07 * slots
-    rough_poly = np.clip(r, 0.40, 0.995)
+    rough_poly = np.clip(r, 0.52, 0.995)
 
     # ==================== PARKERISED / BLUED STEEL =========================
     wear_m = _sstep(0.30, 0.82, np.clip(0.45 * mac + 0.55 * mid, 0, 1))
     # base lifted 0.160 -> 0.197 to hold the map's MEAN while the painted-wear
     # terms come out of it (brush alone carried +0.06 of mean); the point of
     # this edit is to remove the bright TAIL, not to darken the gun.
-    m = 0.197 + 0.190 * wear_m
-    m += 0.045 * brush                                    # was 0.120 (machining as paint)
-    m += 0.048 * fine
+    m = 0.140 + 0.030 * wear_m
+    m += 0.020 * brush                                    # was 0.120 (machining as paint)
+    m += 0.022 * fine
     m += (0.038 * scr_f + 0.062 * scr_c + 0.026 * scr_x) * (0.35 + 0.65 * wear_m)
     m -= 0.080 * pit
     m -= 0.070 * soot
@@ -702,7 +746,7 @@ def gun_texture_arrays(S, masks=None, seed=0):
     # and reached NOTHING. Parkerising genuinely burnishes to ~0.35 where a
     # hand or a sling rides; 0.36 is that number, and it is the value that
     # makes the specular lobe narrow enough to move when the light does.
-    rough_metal = np.clip(rm, 0.36, 0.995)
+    rough_metal = np.clip(rm, 0.46, 0.995)
 
     # ==================== HEIGHT ===========================================
     # W1 (iter07): the scratch terms are the ones the albedo just handed back.
@@ -932,9 +976,9 @@ def gen_textures(wid, masks=None):
     pre = wid + "_"
     done = {}
     done["albedo_body"] = _emit(pre + "albedo_body", t["alb_body"], "albedo",
-                                tint=(1.00, 1.02, 1.06), fmt="JPEG")
+                                tint=(1.00, 1.00, 1.02), fmt="JPEG")
     done["albedo_metal"] = _emit(pre + "albedo_metal", t["alb_metal"], "albedo",
-                                 tint=(0.95, 1.00, 1.10), fmt="JPEG")
+                                 tint=(0.98, 1.00, 1.04), fmt="JPEG")
     rp = t["rough_poly"][::2, ::2]
     done["orm_polymer"] = _emit(pre + "orm_polymer", rp, "rough",
                                 chan=(np.ones_like(rp), rp, np.zeros_like(rp)))
@@ -950,7 +994,7 @@ def gen_textures(wid, masks=None):
     _TEX_STATS[pre + "orm_metal:B(metal)"] = {
         "kind": "metal", "std": round(float(mm.std()), 4),
         "mean": round(float(mm.mean()), 4), "px": int(mm.shape[0])}
-    nx, ny, nz = _height_to_normal(t["height"], 12.0)
+    nx, ny, nz = _height_to_normal(t["height"], 7.0)
     done["normal"] = _emit(pre + "normal", nx, "normal",
                            chan=(nx, ny, nz))
     return done
@@ -1169,9 +1213,9 @@ def box(name, cx, cy, cz, sx, sy, sz, mat, bevel=0.0015):
         b.limit_method = "ANGLE"
     return o
 
-def cyl(name, cx, cy, cz, r, length, mat, axis="Y", verts=20, r2=None):
+def cyl(name, cx, cy, cz, r, length, mat, axis="Y", verts=20, r2=None, caps=True):
     bm = bmesh.new()
-    bmesh.ops.create_cone(bm, cap_ends=True, segments=verts,
+    bmesh.ops.create_cone(bm, cap_ends=caps, segments=verts,
                           radius1=r, radius2=r2 if r2 is not None else r, depth=length)
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me); bm.free()
@@ -1456,6 +1500,60 @@ def weld_mesh(mo, dist=0.0004):
     print(f"A4WELD {mo.name}: {before} -> {after} verts")
 
 
+def smooth_base(mo, iters=6, lam=0.35):
+    """Relax the Meshy reconstruction noise. The base meshes are AI-generated and
+    carry ~1 mm vertex jitter everywhere: under a normal map and a key light that
+    is the 'crumpled blue foil' every critic round named (measured: it survives
+    killing albedo, roughness and the env map — it is the SURFACE). A volume-
+    preserving Laplacian pass takes the jitter out and keeps the silhouette."""
+    if iters <= 0:
+        return
+    bpy.context.view_layer.objects.active = mo
+    for so in bpy.context.selected_objects:
+        so.select_set(False)
+    mo.select_set(True)
+    mod = mo.modifiers.new("lap", "LAPLACIANSMOOTH")
+    mod.iterations = int(iters)
+    mod.lambda_factor = float(lam)
+    mod.lambda_border = 0.0
+    mod.use_volume_preserve = True
+    mod.use_normalized = True
+    try:
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    except Exception as ex:
+        print("A4SMOOTH failed:", ex)
+    print(f"A4SMOOTH {mo.name}: {iters} iterations @ {lam}")
+
+
+def reunwrap_base(mo, angle=66.0, margin=0.004):
+    """Replace the Meshy atlas with a fresh uniform-density unwrap. The atlas packs
+    shells at wildly different scales and stretches them, so every authored
+    pattern (brush, scratch, normal relief) renders as wavy streaks of random
+    size across the receiver — the 'crumpled foil' read, measured: the surface
+    survives killing albedo/roughness/env but goes away with the normal map.
+    Smart-project gives one density everywhere. The wear masks are baked AFTER
+    this, through the new UVs, so they stay aligned."""
+    bpy.context.view_layer.objects.active = mo
+    for so in bpy.context.selected_objects:
+        so.select_set(False)
+    mo.select_set(True)
+    try:
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.smart_project(angle_limit=D(angle), island_margin=margin,
+                                 area_weight=0.0, correct_aspect=True,
+                                 scale_to_bounds=False)
+        bpy.ops.uv.pack_islands(margin=margin)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        print("A4UNWRAP %s: uniform smart-project" % mo.name)
+    except Exception as ex:
+        try:
+            bpy.ops.object.mode_set(mode="OBJECT")
+        except Exception:
+            pass
+        print("A4UNWRAP failed:", ex)
+
+
 def strip_top(mo, y0, y1, z_cut, half_w):
     """Remove the base mesh's mangled top furniture (bent Meshy sight towers,
     mushy rail) in a narrow centerline channel — the authored rail/sights
@@ -1501,20 +1599,21 @@ def build_rail(cfg_rail, top_z, mats):
         objs.append(box(f"rail_n{i}", 0, y, zb + 0.005, w * 0.92, 0.006, 0.004, mats["metal"], bevel=0.0008))
     return objs, zb + 0.007  # rail top z
 
-def build_sights(kind, rail_top_z, sight_z, y_front, y_rear, mats):
+def build_sights(kind, rail_top_z, sight_z, y_front, y_rear, mats, front_top_z=None):
     """Front post + rear ring, centered EXACTLY on x=0, post top at sight_z."""
     objs = []
     if kind == "none":
         return objs
     if kind in ("iron", "iron_low"):
         # front: tower + thin post, top of post at sight_z
-        tower_h = (sight_z - rail_top_z) * 0.55
-        objs.append(box("fs_tower", 0, y_front, rail_top_z + tower_h / 2, 0.014, 0.016, tower_h, mats["metal"]))
-        post_h = (sight_z - rail_top_z) - tower_h
-        objs.append(box("fs_post", 0, y_front, rail_top_z + tower_h + post_h / 2, 0.0022, 0.0035, post_h, mats["metal"], bevel=0.0004))
+        ftz = rail_top_z if front_top_z is None else front_top_z
+        tower_h = (sight_z - ftz) * 0.55
+        objs.append(box("fs_tower", 0, y_front, ftz + tower_h / 2, 0.014, 0.016, tower_h, mats["metal"]))
+        post_h = (sight_z - ftz) - tower_h
+        objs.append(box("fs_post", 0, y_front, ftz + tower_h + post_h / 2, 0.0022, 0.0035, post_h, mats["metal"], bevel=0.0004))
         # protective ears
         for sx in (-1, 1):
-            objs.append(box(f"fs_ear{sx}", sx * 0.0085, y_front, rail_top_z + tower_h * 0.9, 0.003, 0.014, tower_h * 1.15, mats["metal"]))
+            objs.append(box(f"fs_ear{sx}", sx * 0.0085, y_front, ftz + tower_h * 0.9, 0.003, 0.014, tower_h * 1.15, mats["metal"]))
         # rear: aperture ring, center at sight_z (peep: post tip centers in it)
         ring_r = 0.0075
         ring = cyl("rs_ring", 0, y_rear, sight_z, ring_r, 0.006, mats["metal"], axis="Y", verts=24)
@@ -1793,6 +1892,154 @@ def build_scope(cfg, bore_z, mats, z_ads):
     return objs
 
 
+# ---------------------------------------------------------------------------
+# ANIMATABLE PARTS (presentation pass): the magazine and the pump forend leave the
+# base mesh as their OWN nodes ("mag", "pump") so viewmodel.js can move them with
+# the reload / pump animations. Meshy bases are one fused surface, so the part is
+# cut by a face-centre box; the hole it leaves in the base is capped (dark) and
+# the part itself is capped at the cut, so neither shows a torn opening.
+# ---------------------------------------------------------------------------
+def _region_pred(r):
+    y0, y1 = r.get("y0", -9.0), r.get("y1", 9.0)
+    zlo, zhi = r.get("z_min", -9.0), r.get("z_max", 9.0)
+    xa = r.get("x_abs", 9.0)
+
+    def pred(c):
+        return y0 <= c.y <= y1 and zlo <= c.z <= zhi and abs(c.x) <= xa
+    return pred
+
+
+def split_region(base, name, region):
+    pred = _region_pred(region)
+    # --- the part: a copy keeping ONLY the region's faces
+    part = base.copy()
+    part.data = base.data.copy()
+    part.name = name
+    link(part)
+    bm = bmesh.new()
+    bm.from_mesh(part.data)
+    bm.faces.ensure_lookup_table()
+    drop = [f for f in bm.faces if not pred(f.calc_center_median())]
+    bmesh.ops.delete(bm, geom=drop, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    n_part = len(bm.faces)
+    bnd = [e for e in bm.edges if e.is_boundary]
+    if bnd:
+        try:
+            filled = bmesh.ops.holes_fill(bm, edges=bnd, sides=0)
+            for f in filled.get("faces", []):
+                f.material_index = 1
+        except Exception:
+            pass
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bm.to_mesh(part.data)
+    bm.free()
+    # --- the base: region faces removed, hole capped
+    bm = bmesh.new()
+    bm.from_mesh(base.data)
+    bm.faces.ensure_lookup_table()
+    gone = [f for f in bm.faces if pred(f.calc_center_median())]
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    pad = 0.012
+    y0, y1 = region.get("y0", -9.0) - pad, region.get("y1", 9.0) + pad
+    zhi = region.get("z_max", 9.0) + pad
+    ring = [e for e in bm.edges if e.is_boundary and all(
+        y0 <= v.co.y <= y1 and v.co.z <= zhi for v in e.verts)]
+    if ring:
+        try:
+            filled = bmesh.ops.holes_fill(bm, edges=ring, sides=0)
+            for f in filled.get("faces", []):
+                f.material_index = 1
+        except Exception:
+            pass
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bm.to_mesh(base.data)
+    bm.free()
+    base.data.update()
+    part.data.update()
+    print("A4SPLIT %s: %d faces split out" % (name, n_part))
+    return part
+
+
+def author_mag(region, mats):
+    """A magazine box for weapons whose magazine lives inside the grip (pistol,
+    SMG): the box is hidden inside the base mesh at rest and only its floor plate
+    shows below the grip; the reload slides it out and a fresh one back in."""
+    cy, wy, wx = region["cy"], region["wy"], region["wx"]
+    z0, z1 = region["z0"], region["z1"]
+    body = box("mag_body", 0, cy, (z0 + z1) / 2, wx, wy, z1 - z0, mats["metal"], bevel=0.0012)
+    plate = box("mag_plate", 0, cy, z0 - 0.003, wx + 0.004, wy + 0.004, 0.007, mats["body"], bevel=0.0012)
+    bpy.context.view_layer.update()
+    for o in (body, plate):
+        apply_all(o)
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    body.select_set(True)
+    plate.select_set(True)
+    bpy.context.view_layer.objects.active = body
+    bpy.ops.object.join()
+    m = bpy.context.view_layer.objects.active
+    m.name = "mag"
+    print("A4SPLIT mag: authored box")
+    return m
+
+
+def build_scope_solid(cfg, bore_z, mats):
+    """SOLID optic for the scoped weapon. At full ADS the game replaces the view
+    with a full-screen scope overlay and hides the 3D gun, so this model only has
+    to read as a believable 3-9x scope at the hip, in the raise/lower and through
+    the zoom-in. (The old bored-tube optic existed so the player could look
+    THROUGH it; that is now the overlay's job.) Axis z = bore + axis_rel, which is
+    also the ADS sight line (SOCKET_sight rides it)."""
+    sc = cfg["scope"]
+    z = bore_z + sc["axis_rel"]
+    y0, y1 = sc["y_ocular"], sc["y_obj"]
+    OPT = mats["optic"]
+    R = sc.get("tube_r", 0.0155)
+    objs = []
+
+    def seg(name, ya, yb, ra, rb, mat=OPT, verts=40):
+        # ya rear (toward the eye), yb front; ra/rb radii at those ends
+        # OPEN tube (no end caps): a capped eyecup is a solid disc across the ocular and hides
+        # the lens glass behind it — the grey "plate" seen from the hip pose.
+        o = cyl(name, 0, (ya + yb) / 2, z, rb, yb - ya, mat, axis="Y", verts=verts, r2=ra, caps=False)
+        o["uv_axial"] = (2.0, 0.0, 0.0)
+        objs.append(o)
+        return o
+    seg("sc_eyecup", y0, y0 + 0.016, 0.0300, 0.0290, mats["grip"])           # rubber eyecup
+    seg("sc_ocbell", y0 + 0.016, y0 + 0.056, 0.0290, 0.0200)                # eyepiece flare
+    seg("sc_tube", y0 + 0.056, y1 - 0.070, R, R)
+    seg("sc_objtaper", y1 - 0.070, y1 - 0.040, R, 0.0265)                   # objective flare
+    seg("sc_objbell", y1 - 0.040, y1, 0.0265, 0.0272)
+    seg("sc_objrim", y1 - 0.004, y1 + 0.003, 0.0285, 0.0285, mats["metal"])  # lens ring
+    # lens glass: ocular (faces the shooter) and objective
+    objs.append(disc("sc_glass_oc", 0, y0 + 0.0185, z, 0.0192, mats["glass"], axis="Y", verts=40))
+    objs.append(disc("sc_glass_obj", 0, y1 - 0.003, z, 0.0262, mats["glass"], axis="Y", verts=40))
+    # turrets: elevation (top), windage (right), parallax (left, smaller)
+    ty = sc.get("y_turret", (y0 + y1) * 0.5)
+    for nm, axis, sgn, rr, ln, off in (
+            ("tur_up", "Z", 1, 0.0095, 0.016, R + 0.0050),
+            ("tur_up_cap", "Z", 1, 0.0075, 0.007, R + 0.0155),
+            ("tur_rt", "X", 1, 0.0095, 0.016, R + 0.0050),
+            ("tur_rt_cap", "X", 1, 0.0075, 0.007, R + 0.0155),
+            ("tur_lf", "X", -1, 0.0070, 0.012, R + 0.0035)):
+        if axis == "Z":
+            o = cyl("sc_" + nm, 0, ty, z + sgn * off, rr, ln, OPT, axis="Z", verts=24)
+        else:
+            o = cyl("sc_" + nm, sgn * off, ty, z, rr, ln, OPT, axis="X", verts=24)
+        o["uv_axial"] = (2.0, 0.0, 0.0)
+        objs.append(o)
+    # mounts: two rings clamped to the receiver rail
+    rail_z = bore_z + sc.get("mount_base_rel", 0.045)
+    for i, my in enumerate(sc.get("mounts", (y0 + 0.075, y1 - 0.085))):
+        h = max(0.008, (z - R * 0.9) - rail_z)
+        objs.append(box("sc_mount%d" % i, 0, my, rail_z + h / 2, 0.030, 0.020, h, OPT))
+        objs.append(box("sc_clamp%d" % i, 0, my, z - R * 0.35, 0.0420, 0.017, R * 1.2, OPT))
+        objs.append(box("sc_screw%d" % i, 0.0205, my, z - R * 0.35, 0.006, 0.008, 0.008, mats["metal"]))
+    return objs
+
+
 def build_muzzle_device(cfg, muzzle_y, bore_z, mats):
     objs = []
     md = cfg.get("muzzle_dev")
@@ -1825,6 +2072,8 @@ def build_eject_plate(cfg, right_x, mats):
     if not e:
         return [], None
     y, z = e["y"], e["z_rel"]
+    if e.get("plate") is False:
+        return [], (right_x + 0.006, y, z)
     plate = box("ej_plate", right_x + 0.001, y, z, 0.003, 0.052, 0.02, mats["metal"], bevel=0.0008)
     bump = box("ej_deflector", right_x + 0.004, y - 0.032, z, 0.007, 0.01, 0.016, mats["metal"])
     return [plate, bump], (right_x + 0.006, y, z)
@@ -2670,6 +2919,394 @@ def build_arm_chunks():
             pass
     return _ARM_CACHE
 
+# =============================================================================
+# PROCEDURAL ARMS (presentation pass, 2026-10) — REPLACES the soldier rig-cut.
+#
+# WHY. The soldier.glb rig-cut (build_arm_chunks above, kept for the record and
+# no longer called) produced shells of torn camo ribbon: bell-shaped sleeve
+# cones with no readable hand, in the muddy olive of the Meshy soldier's own
+# uniform atlas. Rendered from the a4 grip preview the "hand" is a funnel and
+# five loose strips. Ten iterations of texture/lighting work could not fix a
+# surface that is not a hand, so the hand is now AUTHORED: a glove built from
+# tapered capsules (palm + thumb + four 3-phalanx fingers curled by FK angles),
+# unioned and smoothed by a voxel remesh (one watertight, organic glove with no
+# seams to tear), plus a separate tapered sleeve. Colour comes from per-vertex
+# painting (back / palm / knuckle shell / cuff) so the whole arm is two draws and
+# needs no atlas — a tileable weave normal map supplies the fabric.
+#
+# READABILITY RULE (the owner's "muddy green blob"): the viewmodel sits on a
+# near-black gun in a near-black night scene, so the hands are the one place the
+# frame can carry value contrast. Gloves are mid-value coyote with a dark
+# knuckle shell and dark palm; the sleeve is a dark olive that is still lighter
+# than the gun. Nothing here is camo, nothing is green-on-green.
+#
+# Canonical hand frame (unchanged from the old pipeline so ARM_POSE keeps its
+# meaning): wrist at the origin, fingers +Y, palm faces -Z, thumb at -X for the
+# RIGHT hand (mirrored in X for the left).
+# =============================================================================
+def _srgb_lin(c):
+    out = []
+    for v in c:
+        s = v / 255.0
+        out.append(s / 12.92 if s <= 0.04045 else ((s + 0.055) / 1.055) ** 2.4)
+    return tuple(out)
+
+GLOVE_COL = {
+    "back": _srgb_lin((70, 61, 45)),      # coyote knit back of hand
+    "pad":  _srgb_lin((24, 23, 22)),      # knuckle shell, fingertip caps
+    "palm": _srgb_lin((32, 29, 26)),      # suede palm
+    "cuff": _srgb_lin((20, 20, 21)),      # neoprene wrist cuff
+}
+SLEEVE_COL = {"cloth": _srgb_lin((31, 35, 29)), "band": _srgb_lin((14, 15, 14))}
+
+# adult male hand, glove thickness included (metres). Right hand, thumb at -X.
+HAND_FINGERS = {
+    "index":  dict(x=-0.0305, y=0.0905, z=0.0000, L=(0.044, 0.026, 0.021),
+                   r=(0.0100, 0.0092, 0.0085), spread=-3.0),
+    "middle": dict(x=-0.0105, y=0.0920, z=0.0000, L=(0.048, 0.030, 0.022),
+                   r=(0.0102, 0.0094, 0.0087), spread=0.0),
+    "ring":   dict(x=0.0095, y=0.0895, z=-0.0010, L=(0.044, 0.028, 0.021),
+                   r=(0.0098, 0.0090, 0.0083), spread=3.0),
+    "pinky":  dict(x=0.0285, y=0.0835, z=-0.0020, L=(0.035, 0.021, 0.018),
+                   r=(0.0089, 0.0081, 0.0075), spread=8.0),
+}
+HAND_THUMB = dict(base=(-0.0215, 0.0120, -0.0070), L=(0.040, 0.033, 0.027),
+                  r=(0.0128, 0.0112, 0.0100, 0.0092),
+                  dirs=((-0.50, 0.78, -0.38), (-0.30, 0.86, -0.42), (-0.12, 0.93, -0.35)))
+GRIP_CURL = (58.0, 82.0, 42.0)     # fist around a ~35 mm grip, degrees per phalanx
+
+
+def _frame_z(zdir):
+    z = Vector(zdir).normalized()
+    ref = Vector((0, 0, 1)) if abs(z.z) < 0.9 else Vector((1, 0, 0))
+    x = ref.cross(z).normalized()
+    y = z.cross(x).normalized()
+    return Matrix(((x.x, y.x, z.x, 0), (x.y, y.y, z.y, 0), (x.z, y.z, z.z, 0), (0, 0, 0, 1)))
+
+
+def _bm_cone(bm, p, q, r1, r2, seg=14):
+    p, q = Vector(p), Vector(q)
+    d = q - p
+    if d.length < 1e-6:
+        return
+    M = Matrix.Translation((p + q) * 0.5) @ _frame_z(d)
+    bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=seg,
+                          radius1=r1, radius2=r2, depth=d.length, matrix=M, calc_uvs=False)
+
+
+def _bm_ball(bm, c, rx, ry=None, rz=None, seg=14):
+    ry = rx if ry is None else ry
+    rz = rx if rz is None else rz
+    M = Matrix.Translation(Vector(c)) @ Matrix.Diagonal((rx, ry, rz, 1.0))
+    bmesh.ops.create_uvsphere(bm, u_segments=seg, v_segments=max(6, seg // 2),
+                              radius=1.0, matrix=M, calc_uvs=False)
+
+
+def _mat_vcol(name, rough, normal_img=None, nstrength=0.8, metallic=0.0):
+    """Material whose base colour is the mesh's vertex colour 'Col' — the glTF
+    exporter writes COLOR_0 when a Color Attribute node feeds the shader, and
+    three's GLTFLoader turns vertexColors on for it."""
+    m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.clear()
+    outn = nt.nodes.new("ShaderNodeOutputMaterial")
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    nt.links.new(bsdf.outputs["BSDF"], outn.inputs["Surface"])
+    vc = nt.nodes.new("ShaderNodeVertexColor")
+    vc.layer_name = "Col"
+    nt.links.new(vc.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = rough
+    bsdf.inputs["Metallic"].default_value = metallic
+    bsdf.inputs["Emission Strength"].default_value = 0.0
+    if normal_img:
+        ntex = nt.nodes.new("ShaderNodeTexImage")
+        ntex.image = bpy.data.images.load(normal_img, check_existing=True)
+        ntex.image.colorspace_settings.name = "Non-Color"
+        nm = nt.nodes.new("ShaderNodeNormalMap")
+        nm.inputs["Strength"].default_value = nstrength
+        nt.links.new(ntex.outputs["Color"], nm.inputs["Color"])
+        nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
+    return m
+
+
+_FABRIC = {}
+
+
+def fabric_normal_path():
+    """Tileable woven-fabric normal map (256 px): a plain-weave over/under
+    lattice plus fibre noise. Authored once per build, ~60 KB PNG."""
+    if "p" in _FABRIC and os.path.exists(_FABRIC["p"]):
+        return _FABRIC["p"]
+    S = 256
+    ix = np.arange(S)[None, :].astype(np.float64)
+    iy = np.arange(S)[:, None].astype(np.float64)
+    pitch = 8.0
+    u = (ix % pitch) / pitch
+    v = (iy % pitch) / pitch
+    cu = (np.floor(ix / pitch) + np.floor(iy / pitch)) % 2     # over/under checker
+    thread_u = np.sin(math.pi * u) ** 1.4                      # warp thread cross-section
+    thread_v = np.sin(math.pi * v) ** 1.4
+    h = np.where(cu > 0.5, thread_u, thread_v) * 0.55
+    h = h + 0.18 * _n01(_fbm(S, 8101, 3, 20))                  # fibre nap
+    h = h + 0.05 * _n01(_fbm(S, 8113, 2, 70))
+    nx, ny, nz = _height_to_normal(h, 3.2)
+    rgba = np.stack([nx, ny, nz, np.ones_like(nx)], axis=-1)
+    _FABRIC["p"] = _save_img("arm_fabric_normal", rgba, fmt="PNG")
+    _TEX_STATS["arm_fabric_normal"] = {"kind": "normal", "std": round(float(nx.std()), 4),
+                                       "mean": round(float(nx.mean()), 4), "px": S}
+    return _FABRIC["p"]
+
+
+def _hand_rot_curl(deg_list, spread_deg, sx):
+    """direction after cumulative curl about X (toward -Z) and spread about Z."""
+    out = []
+    acc = 0.0
+    for dg in deg_list:
+        acc += dg
+        a = D(acc)
+        d = Vector((0.0, math.cos(a), -math.sin(a)))
+        d = Matrix.Rotation(D(spread_deg) * sx, 3, "Z") @ d
+        out.append(d)
+    return out
+
+
+def build_hand(tag, hand, prm):
+    """One arm (glove + sleeve) in the canonical frame. Returns the object
+    (2 material slots: 0 glove, 1 sleeve) plus a landmarks dict."""
+    sx = -1.0 if hand == "L" else 1.0
+    X = lambda v: Vector((v[0] * sx, v[1], v[2]))
+    curl = prm.get("curl", GRIP_CURL)
+    icurl = prm.get("index_curl", curl)
+    fcurl = {"index": icurl, "middle": curl, "ring": prm.get("ring_curl", curl),
+             "pinky": prm.get("pinky_curl", tuple(c * 1.05 for c in curl))}
+    thumb_dirs = prm.get("thumb", HAND_THUMB["dirs"])
+    e = X(Vector(prm.get("elbow", (0.30, -0.88, 0.38)))).normalized()   # wrist -> elbow
+    spread_mul = prm.get("spread", 1.0)
+
+    bm = bmesh.new()
+    lm = {"wrist": [0.0, 0.0, 0.0]}
+    joints = []     # joint ball centres, for painting (vertex colour) + landmarks
+    tips = []
+    # ---- palm + wrist -----------------------------------------------------
+    _bm_ball(bm, X((0.0, 0.050, 0.000)), 0.0430, 0.0480, 0.0165)           # metacarpal slab
+    _bm_ball(bm, X((0.0, 0.015, -0.001)), 0.0330, 0.0300, 0.0190)          # wrist block
+    _bm_ball(bm, X((-0.0255, 0.036, -0.0110)), 0.0200, 0.0300, 0.0135)     # thenar
+    _bm_ball(bm, X((0.0310, 0.040, -0.0075)), 0.0140, 0.0290, 0.0110)      # hypothenar
+    _bm_ball(bm, X((-0.0300, 0.066, -0.0040)), 0.0170, 0.0150, 0.0120)     # thumb web
+    # knuckle shell: one flat hard guard over the four MCP joints, back side
+    _bm_ball(bm, X((-0.0010, 0.0880, 0.0100)), 0.0420, 0.0125, 0.0070)
+    # ---- fingers ----------------------------------------------------------
+    for nm, f in HAND_FINGERS.items():
+        degs = fcurl[nm]
+        dirs = _hand_rot_curl(degs, f["spread"] * spread_mul, sx)
+        p = X((f["x"], f["y"], f["z"]))
+        joints.append(p.copy())
+        _bm_ball(bm, p, f["r"][0] * 1.04)
+        for i in range(3):
+            d = dirs[i]
+            q = p + d * f["L"][i]
+            _bm_cone(bm, p, q, f["r"][i], f["r"][min(i + 1, 2)] * (0.96 if i == 2 else 1.0))
+            _bm_ball(bm, q, f["r"][min(i + 1, 2)] * (0.98 if i == 2 else 1.03))
+            if i < 2:
+                joints.append(q.copy())
+            else:
+                tips.append(q.copy())
+                lm[nm + "_tip"] = [round(c, 4) for c in q]
+            p = q
+        # knuckle bump on the back of the MCP
+        _bm_ball(bm, X((f["x"], f["y"] + 0.001, f["z"] + 0.0080)), 0.0085, 0.0085, 0.0055)
+    # ---- thumb ------------------------------------------------------------
+    p = X(HAND_THUMB["base"])
+    _bm_ball(bm, p, HAND_THUMB["r"][0] * 1.05)
+    for i in range(3):
+        d = X(Vector(thumb_dirs[i])).normalized()
+        q = p + d * HAND_THUMB["L"][i]
+        _bm_cone(bm, p, q, HAND_THUMB["r"][i], HAND_THUMB["r"][i + 1])
+        _bm_ball(bm, q, HAND_THUMB["r"][i + 1] * 1.03)
+        if i < 2:
+            joints.append(q.copy())
+        p = q
+    tips.append(p.copy())
+    lm["thumb_tip"] = [round(c, 4) for c in p]
+    # ---- wrist cuff (glove gauntlet, along the forearm axis) --------------
+    _bm_cone(bm, e * -0.004, e * 0.060, 0.0335, 0.0372, seg=20)
+    _bm_cone(bm, e * 0.044, e * 0.052, 0.0405, 0.0405, seg=20)       # velcro strap, proud
+    lm["palm"] = [round(c, 4) for c in X((0.0, 0.050, -0.012))]
+
+    me_g = bpy.data.meshes.new(f"hand_{tag}")
+    bm.to_mesh(me_g)
+    bm.free()
+    og = bpy.data.objects.new(f"hand_{tag}", me_g)
+    link(og)
+    # --- voxel union, smooth, decimate -------------------------------------
+    for o2 in bpy.context.selected_objects:
+        o2.select_set(False)
+    bpy.context.view_layer.objects.active = og
+    og.select_set(True)
+    rm = og.modifiers.new("rm", "REMESH")
+    rm.mode = "VOXEL"
+    rm.voxel_size = prm.get("voxel", 0.0030)
+    rm.adaptivity = 0.0
+    rm.use_smooth_shade = True
+    bpy.ops.object.modifier_apply(modifier=rm.name)
+    sm = og.modifiers.new("sm", "SMOOTH")
+    sm.factor = 0.55
+    sm.iterations = 5
+    bpy.ops.object.modifier_apply(modifier=sm.name)
+    dc = og.modifiers.new("dc", "DECIMATE")
+    dc.ratio = prm.get("decimate", 0.40)
+    bpy.ops.object.modifier_apply(modifier=dc.name)
+
+    # --- sleeve (separate, tapered along the elbow axis) --------------------
+    bs = bmesh.new()
+    r0, r1, L = 0.0425, prm.get("sleeve_r", 0.060), prm.get("sleeve_len", 1.0)
+    _bm_cone(bs, e * 0.034, e * L, r0, r1, seg=28)
+    _bm_cone(bs, e * 0.030, e * 0.058, 0.0452, 0.0452, seg=28)       # elastic cuff band
+    me_s = bpy.data.meshes.new(f"sleeve_{tag}")
+    bs.to_mesh(me_s)
+    bs.free()
+    osl = bpy.data.objects.new(f"sleeve_{tag}", me_s)
+    link(osl)
+
+    # --- vertex colours ------------------------------------------------------
+    def _vcol(o, painter):
+        me = o.data
+        n = len(me.vertices)
+        bmn = bmesh.new()
+        bmn.from_mesh(me)
+        bmn.verts.ensure_lookup_table()
+        bmn.normal_update()
+        co = np.array([tuple(v.co) for v in bmn.verts], np.float64)
+        no = np.array([tuple(v.normal) for v in bmn.verts], np.float64)
+        bmn.free()
+        col = painter(co, no)
+        if "Col" in me.color_attributes:
+            me.color_attributes.remove(me.color_attributes["Col"])
+        ca = me.color_attributes.new(name="Col", type="FLOAT_COLOR", domain="POINT")
+        rgba = np.concatenate([col, np.ones((n, 1))], axis=1).astype(np.float32)
+        ca.data.foreach_set("color", rgba.ravel())
+
+    J = np.array([tuple(j) for j in joints], np.float64)
+    T = np.array([tuple(t) for t in tips], np.float64)
+    ea = np.array(tuple(e), np.float64)
+
+    def _noise(co, k):
+        return (np.sin(co[:, 0] * 190 + k) * np.sin(co[:, 1] * 230 - k * 0.7)
+                * np.sin(co[:, 2] * 210 + k * 1.3))
+
+    def paint_glove(co, no):
+        ax = co @ ea                                   # distance along the forearm axis
+        dj = np.sqrt(((co[:, None, :] - J[None]) ** 2).sum(2)).min(1)
+        dt = np.sqrt(((co[:, None, :] - T[None]) ** 2).sum(2)).min(1)
+        back = np.clip(no[:, 2] * 2.0 + 0.15, 0, 1)
+        palm = np.clip(-no[:, 2] * 2.0 + 0.15, 0, 1)
+        knuckle = _ss(0.016, 0.006, dj) * back          # shell over every back-side joint
+        # the MCP row is a continuous guard, not four dots
+        guard = _ss(0.064, 0.080, co[:, 1]) * _ss(0.118, 0.100, co[:, 1]) * back * \
+            (np.abs(co[:, 0]) < 0.047)
+        tipcap = _ss(0.014, 0.006, dt)
+        cuffm = _ss(0.020, 0.034, ax)
+        c_back = np.array(GLOVE_COL["back"])[None]
+        c_pad = np.array(GLOVE_COL["pad"])[None]
+        c_palm = np.array(GLOVE_COL["palm"])[None]
+        c_cuff = np.array(GLOVE_COL["cuff"])[None]
+        base = c_back * (1 - palm[:, None]) + c_palm * palm[:, None]
+        shell = np.clip(np.maximum(np.maximum(knuckle, guard * 0.92), tipcap * 0.9), 0, 1)[:, None]
+        col = base * (1 - shell) + c_pad * shell
+        col = col * (1 - cuffm[:, None]) + c_cuff * cuffm[:, None]
+        print('A4PAINT n=%d back>.5 %d palm>.5 %d guard>.5 %d knuckle>.5 %d tip>.5 %d cuff>.5 %d nz[min,max]=%.2f,%.2f y[min,max]=%.3f,%.3f' % (
+            len(co), (back > .5).sum(), (palm > .5).sum(), (guard > .5).sum(), (knuckle > .5).sum(), (tipcap > .5).sum(), (cuffm > .5).sum(),
+            no[:, 2].min(), no[:, 2].max(), co[:, 1].min(), co[:, 1].max()))
+        col *= (1.0 + 0.10 * _noise(co, 1.0))[:, None]
+        return np.clip(col, 0, 1)
+
+    def paint_sleeve(co, no):
+        ax = co @ ea
+        band = _ss(0.026, 0.032, ax) * _ss(0.064, 0.058, ax)
+        c_cl = np.array(SLEEVE_COL["cloth"])[None]
+        c_bd = np.array(SLEEVE_COL["band"])[None]
+        col = c_cl * (1 - band[:, None]) + c_bd * band[:, None]
+        # soft longitudinal fabric streaks + slow tonal drift
+        col *= (1.0 + 0.08 * _noise(co, 3.0) + 0.05 * np.sin(ax * 40.0))[:, None]
+        # fall off into shadow along the forearm: the sleeve leaves frame through the bottom edge, so
+        # its visible length should fade to black rather than end on a lit terminator line
+        col *= (1.0 - 0.80 * _ss(0.06, 0.36, ax))[:, None]
+        return np.clip(col, 0, 1)
+
+    _vcol(og, paint_glove)
+    _vcol(osl, paint_sleeve)
+
+    # --- join into one mesh: slot 0 glove, slot 1 sleeve ---------------------
+    og.data.materials.clear()
+    og.data.materials.append(bpy.data.materials["br_glove"])
+    osl.data.materials.clear()
+    osl.data.materials.append(bpy.data.materials["br_sleeve"])
+    for o2 in bpy.context.selected_objects:
+        o2.select_set(False)
+    og.select_set(True)
+    osl.select_set(True)
+    bpy.context.view_layer.objects.active = og
+    bpy.ops.object.join()
+    arm = bpy.context.view_layer.objects.active
+    arm.name = f"arm_{tag}"
+    shade_smooth(arm, 60)
+    # cube-project UVs for the tileable weave (0.07 m per tile)
+    try:
+        bpy.context.view_layer.objects.active = arm
+        for o2 in bpy.context.selected_objects:
+            o2.select_set(False)
+        arm.select_set(True)
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.cube_project(cube_size=0.045)
+        bpy.ops.object.mode_set(mode="OBJECT")
+    except Exception as ex:
+        print("A4ARM unwrap failed", tag, ex)
+    arm["a4_lm"] = json.dumps(lm)
+    print("A4ARM %s: %d tris (glove+sleeve)" % (tag, sum(len(p.vertices) - 2 for p in arm.data.polygons)))
+    return arm
+
+
+def _ensure_arm_materials():
+    nrm = fabric_normal_path()
+    _mat_vcol("br_glove", 0.80, nrm, nstrength=0.55)
+    _mat_vcol("br_sleeve", 0.92, nrm, nstrength=0.45)
+
+
+def place_arms(wid, mats, pose_override=None):
+    """Build + place the arms for one weapon. Each pose entry is
+    (hand, wrist_pos, fingers_dir, palm_dir[, params]) — same placement basis as
+    the old rig-cut (an explicit basis from the two direction vectors), plus an
+    optional params dict (curl / thumb / elbow / index_curl ...) because a
+    procedural hand can actually be re-posed per weapon."""
+    _ensure_arm_materials()
+    placed = []
+    for ent in (pose_override or ARM_POSE.get(wid, [])):
+        hand, loc, fingers, palm = ent[0], ent[1], ent[2], ent[3]
+        prm = ent[4] if len(ent) > 4 else {}
+        dup = build_hand(f"{hand}_{wid}", hand, prm)
+        dup.name = f"arms_{hand}_{wid}"
+        y = Vector(fingers).normalized()
+        z = -Vector(palm)                 # canonical -Z is the palm
+        x = y.cross(z).normalized()
+        z = x.cross(y).normalized()
+        M = Matrix((
+            (x.x, y.x, z.x, loc[0]),
+            (x.y, y.y, z.y, loc[1]),
+            (x.z, y.z, z.z, loc[2]),
+            (0, 0, 0, 1)))
+        dup.matrix_world = M
+        try:
+            lm = json.loads(dup.get("a4_lm", "{}"))
+            out = {k: [round(c, 4) for c in (M @ Vector(v))] for k, v in lm.items()}
+            print("A4HAND %s %s %s" % (wid, hand, json.dumps(out)))
+        except Exception:
+            pass
+        placed.append(dup)
+    return placed
+
+
 def support_hand_seat(base, y, bore_z, half_w=0.024):
     """Underside of the handguard at station y (build frame) — the surface the
     support hand must actually wrap. W1: the old ARM_POSE hard-coded the left
@@ -2699,7 +3336,7 @@ def grip_seat(base, cfg, bore_z):
     return (sum(p.y for p in pts) / n, sum(p.z for p in pts) / n)
 
 
-def place_arms(wid, mats, pose_override=None):
+def place_arms_old_riglcut(wid, mats, pose_override=None):
     chunks = build_arm_chunks()
     placed = []
     for hand, loc, fingers, palm in (pose_override or ARM_POSE.get(wid, [])):
@@ -2756,6 +3393,7 @@ VIEW = {  # posHip / zAds in glTF camera space (x right, y up, z back).
     "vesper": {"posHip": (0.155, -0.175, -0.30), "zAds": -0.42},  # -0.24 - 0.18
     "corvus": {"posHip": (0.175, -0.195, -0.40), "zAds": -0.36},  # -0.26 - 0.10
     "pike":   {"posHip": (0.145, -0.165, -0.27), "zAds": -0.40},  # -0.22 - 0.18
+    "breaker": {"posHip": (0.16, -0.19, -0.34), "zAds": -0.43},    # presentation pass
 }
 
 def add_area(name, loc, energy, color, size, rot):
@@ -2816,6 +3454,25 @@ def previews(wid, sight_z):
     bpy.context.scene.camera.location = (0.22, -0.16, 0.02)
     bpy.context.scene.camera.rotation_euler = (D(84), 0, D(55))
     render(os.path.join(PREV_DIR, f"{wid}_grip.png"))
+    # PRESENTATION PASS: one view per hand, from where the player is not (so the
+    # whole hand is judged), plus a from-behind view = what the camera sees.
+    cam = bpy.context.scene.camera
+    cam.location = (0.30, -0.05, -0.02)
+    cam.rotation_euler = (D(88), 0, D(90))
+    render(os.path.join(PREV_DIR, f"{wid}_gripR.png"), 1200, 800)
+    cam.location = (-0.30, 0.20, -0.04)
+    cam.rotation_euler = (D(88), 0, D(-90))
+    render(os.path.join(PREV_DIR, f"{wid}_gripL.png"), 1200, 800)
+    cam.location = (0.0, -0.45, 0.10)
+    cam.rotation_euler = (D(85), 0, 0)
+    render(os.path.join(PREV_DIR, f"{wid}_behind.png"), 1200, 800)
+    cam.location = (0.0, 0.10, -0.38)
+    cam.rotation_euler = (D(5), 0, 0)
+    render(os.path.join(PREV_DIR, f"{wid}_below.png"), 1200, 800)
+    # macro of the trigger hand (back of glove: knuckle shell, cuff, index)
+    cam.location = (0.16, -0.02, -0.01)
+    cam.rotation_euler = (D(90), 0, D(90))
+    render(os.path.join(PREV_DIR, f"{wid}_handR.png"), 1200, 800)
 
 # ---------------------------------------------------------------------------
 # per-weapon build
@@ -2836,6 +3493,8 @@ def build(wid):
     # and weld, measure, bake, then author the textures and the materials.
     base, muzzle_y, bore_z, right_x, scale = import_base(cfg)
     weld_mesh(base)                      # W1 (iter03) — before any cutting
+    smooth_base(base, *cfg.get("smooth", (6, 0.35)))
+    reunwrap_base(base)
     chans = mesh_wear_channels(base, cfg, bore_z, muzzle_y, right_x)
     masks = bake_channels_to_uv(base, chans, TEX_SIZE)
     tex = gen_textures(wid, masks)
@@ -2856,6 +3515,17 @@ def build(wid):
     for sr in (cfg.get("strip_regions") or []):
         strip_top(base, sr["y0"], sr["y1"], bore_z + sr["z_rel"], sr["half_w"])
 
+    # animatable parts (mag / pump): cut from the base, or authored when the
+    # magazine lives inside the grip. They are separate NODES in the GLB.
+    extras = []
+    for key in ("mag", "pump"):
+        reg = cfg.get(key)
+        if not reg:
+            continue
+        if reg.get("authored"):
+            extras.append(author_mag(reg, mats))
+        else:
+            extras.append(split_region(base, key, reg))
     sight_z = bore_z + cfg["sight_h"]
     if cfg["sights"] == "pistol":
         # sights ride the slide top: find top of mesh near centerline
@@ -2867,8 +3537,13 @@ def build(wid):
         base_z = bore_z + cfg.get("iron_base_rel", 0.030)   # the MESH's rail plane
         y_front = iron.get("front_y", muzzle_y - 0.05)
         y_rear = iron.get("rear_y", -0.02)
-        parts += build_sights(cfg["sights"], base_z, sight_z, y_front, y_rear, mats)
-    parts += build_scope(cfg, bore_z, mats, z_ads)
+        fb = iron.get("front_base_rel")
+        parts += build_sights(cfg["sights"], base_z, sight_z, y_front, y_rear, mats,
+                              front_top_z=(bore_z + fb) if fb is not None else None)
+    if (cfg.get("scope") or {}).get("solid"):
+        parts += build_scope_solid(cfg, bore_z, mats)
+    else:
+        parts += build_scope(cfg, bore_z, mats, z_ads)
     md_objs, muzzle_tip_y = build_muzzle_device(cfg, muzzle_y, bore_z, mats)
     parts += md_objs
     parts += build_foregrip(cfg.get("foregrip"), mats)
@@ -2893,6 +3568,8 @@ def build(wid):
     # all three critics named on the viewmodel. 52 deg smooths a tube run and
     # still holds a receiver corner hard.
     shade_smooth(base, 52)
+    for ex in extras:
+        shade_smooth(ex, 52)
 
     # join all dressing into ONE mesh (material slots survive a join) — the
     # first bootcheck measured ~70 draws per gun from loose rail notches;
@@ -2907,33 +3584,10 @@ def build(wid):
         joined.name = "dressing"
         parts = [base, joined]
 
-    # arms — support hand seated on the MEASURED handguard underside (W1)
+    # arms — procedural gloves, posed from ARM_POSE (explicit per-weapon numbers,
+    # judged against the grip previews; see the PROCEDURAL ARMS block)
     if cfg.get("arms"):
-        pose = [list(p) for p in ARM_POSE.get(wid, [])]
-        gs = grip_seat(base, cfg, bore_z)
-        if gs is not None:
-            gy, gz = gs
-            for p in pose:
-                if p[0] == "R":
-                    # wrist just behind and below the grip centroid: the curled
-                    # fingers then close ON the backstrap instead of inside the
-                    # receiver (W1 iter03, see grip_seat).
-                    p[1] = (p[1][0], gy - 0.028, gz - 0.022)
-        lh_y = cfg.get("lh_y")
-        if lh_y is not None:
-            seat = support_hand_seat(base, lh_y, bore_z)
-            for p in pose:
-                if p[0] == "L":
-                    # wrist sits under the handguard so the curled fingers
-                    # close ON it. W1 (iter03): 3.2 cm put the palm INSIDE the
-                    # handguard — the fingertips poked out through the top of
-                    # the rail (S6 capture). 4.6 cm seats the grip on the
-                    # underside where a support hand actually goes.
-                    p[1] = (p[1][0], lh_y, seat - 0.046)
-        pose = [tuple(p) for p in pose]
-        print("A4GRIP %s bore_z %.4f sight_z %.4f lh_y %s seat %s" %
-              (wid, bore_z, sight_z, lh_y,
-               round(support_hand_seat(base, lh_y, bore_z), 4) if lh_y is not None else None))
+        pose = [tuple(p) for p in ARM_POSE.get(wid, [])]
         parts += place_arms(wid, mats, pose_override=pose)
 
     # sockets
@@ -2962,7 +3616,7 @@ def build(wid):
     # export
     out = os.path.join(OUT_DIR, f"{wid}.glb")
     for o in bpy.context.scene.collection.objects: o.select_set(False)
-    for o in parts + [mz, ej, sg]:
+    for o in parts + extras + [mz, ej, sg]:
         o.select_set(True)
 
     # ---- TRIANGULATE BEFORE EXPORT (W-D3/iter09) --------------------------
@@ -2981,7 +3635,7 @@ def build(wid):
     # supports it, because shade_smooth(dup, 55) upstream is what keeps the
     # curved runs of a Meshy receiver from faceting and triangulation must not
     # undo it.
-    for o in parts + [mz, ej, sg]:
+    for o in parts + extras + [mz, ej, sg]:
         if getattr(o, "type", None) != "MESH":
             continue
         bpy.context.view_layer.objects.active = o
@@ -3003,7 +3657,8 @@ def build(wid):
     bpy.ops.export_scene.gltf(
         filepath=out, export_format="GLB", use_selection=True,
         export_animations=False, export_skins=False, export_morph=False,
-        export_apply=True, export_image_format="AUTO",
+        export_apply=True, export_image_format="WEBP", export_image_webp_fallback=False,
+        export_image_quality=88,
         export_yup=True,
         # ---- export_tangents: W-D3/iter09, and it is a REAL DEFECT, not polish.
         # iter08's three blind verdicts describe the same signature on the
@@ -3037,6 +3692,27 @@ def build(wid):
         # and it costs one exporter flag.
         export_tangents=True,
     )
+
+    # ---- COMPRESSION PASS (presentation pass): textures are exported as WebP above (the
+    # three-vendored GLTFLoader reads EXT_texture_webp); geometry is Draco-compressed here with
+    # gltf-transform (3.4-4.4 MB per weapon -> ~0.5 MB). weapon_meshes.js already wires the Draco
+    # decoder. Skipped, loudly, when the CLI is absent — the un-compressed GLB still loads.
+    try:
+        import shutil, subprocess
+        gt = shutil.which("gltf-transform")
+        if gt:
+            before = os.path.getsize(out)
+            r = subprocess.run([gt, "draco", out, out, "--quantize-position", "16",
+                                "--quantize-normal", "10", "--quantize-texcoord", "13"],
+                               capture_output=True, text=True, shell=(os.name == "nt"))
+            if r.returncode == 0:
+                print("A4DRACO %s: %d -> %d bytes" % (wid, before, os.path.getsize(out)))
+            else:
+                print("A4DRACO FAILED (kept uncompressed):", (r.stderr or r.stdout)[-300:])
+        else:
+            print("A4DRACO skipped: gltf-transform not on PATH (npm i -g @gltf-transform/cli)")
+    except Exception as ex:
+        print("A4DRACO error:", ex)
 
     report = {
         "weapon": wid, "glb": out,

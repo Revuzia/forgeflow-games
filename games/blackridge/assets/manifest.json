@@ -10,9 +10,9 @@
   "source": "str"
  },
  "payload_sums_bytes": {
-  "menu": 5630190,
-  "mission": 2887826,
-  "menu_budget": 6291456,
+  "menu": 6379492,
+  "mission": 4533034,
+  "menu_budget": 6815744,
   "mission_budget": 5242880
  },
  "entries": [
@@ -696,7 +696,8 @@
    "bytes": 45348,
    "kind": "imported",
    "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
-   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/sedan.glb (textures stripped, re-materialed at load, quantized)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/sedan.glb (textures stripped, quantized)",
+   "status": "RETIRED 2026-08-20 (iter07 ranked fix #2) \u2014 NOT FETCHED. props.js no longer loads any vehicle GLB; core/level/vehicles.js builds the car/van/truck from an automotive parts vocabulary instead. Kept on disk for licence provenance and for diffing against the mesh it replaced; delete once no lane needs the comparison.",
    "lane": "A3-level",
    "payload": "menu"
   },
@@ -732,7 +733,8 @@
    "bytes": 46908,
    "kind": "imported",
    "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
-   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/truck.glb (textures stripped, re-materialed at load, quantized)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/truck.glb (textures stripped, quantized)",
+   "status": "RETIRED 2026-08-20 (iter07 ranked fix #2) \u2014 NOT FETCHED. props.js no longer loads any vehicle GLB; core/level/vehicles.js builds the car/van/truck from an automotive parts vocabulary instead. Kept on disk for licence provenance and for diffing against the mesh it replaced; delete once no lane needs the comparison.",
    "lane": "A3-level",
    "payload": "menu"
   },
@@ -741,7 +743,8 @@
    "bytes": 46696,
    "kind": "imported",
    "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
-   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/van.glb (textures stripped, re-materialed at load, quantized)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/van.glb (textures stripped, quantized)",
+   "status": "RETIRED 2026-08-20 (iter07 ranked fix #2) \u2014 NOT FETCHED. props.js no longer loads any vehicle GLB; core/level/vehicles.js builds the car/van/truck from an automotive parts vocabulary instead. Kept on disk for licence provenance and for diffing against the mesh it replaced; delete once no lane needs the comparison.",
    "lane": "A3-level",
    "payload": "menu"
   },
@@ -756,7 +759,7 @@
   },
   {
    "path": "assets/textures/asphalt_worn_normal.webp",
-   "bytes": 346212,
+   "bytes": 91860,
    "kind": "imported",
    "license": "CC0 (Poly Haven)",
    "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (normal; normals Sobel-generated from displacement at build time)",
@@ -770,6 +773,63 @@
    "license": "CC0 (Poly Haven)",
    "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (rough; normals Sobel-generated from displacement at build time)",
    "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/burlap_sack_albedo.webp",
+   "bytes": 25694,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (albedo) \u2014 authored hessian sandbag (warp/weft weave at ~8 mm/thread, slubs, slump wrinkles, damp mud staining, frayed threads)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/burlap_sack_normal.webp",
+   "bytes": 59330,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (normal) \u2014 authored hessian sandbag (warp/weft weave at ~8 mm/thread, slubs, slump wrinkles, damp mud staining, frayed threads)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/burlap_sack_rough.webp",
+   "bytes": 4788,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (rough) \u2014 authored hessian sandbag (warp/weft weave at ~8 mm/thread, slubs, slump wrinkles, damp mud staining, frayed threads)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/car_paint_albedo.webp",
+   "bytes": 9688,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (albedo) \u2014 authored automotive paint (metallic flake, orange peel, clear-coat swirl, road film, water spotting) \u2014 achromatic near-white so props.js PALETTES.car drives hue via InstancedMesh setColorAt",
+   "lane": "A3-level",
+   "bytes_fragment_stale": 3234,
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/car_paint_normal.webp",
+   "bytes": 12736,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (normal) \u2014 authored automotive paint (metallic flake, orange peel, clear-coat swirl, road film, water spotting) \u2014 achromatic near-white so props.js PALETTES.car drives hue via InstancedMesh setColorAt",
+   "lane": "A3-level",
+   "bytes_fragment_stale": 6490,
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/car_paint_rough.webp",
+   "bytes": 4320,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (rough) \u2014 authored automotive paint (metallic flake, orange peel, clear-coat swirl, road film, water spotting) \u2014 achromatic near-white so props.js PALETTES.car drives hue via InstancedMesh setColorAt",
+   "lane": "A3-level",
+   "bytes_fragment_stale": 3164,
    "payload": "menu"
   },
   {
@@ -800,6 +860,33 @@
    "payload": "menu"
   },
   {
+   "path": "assets/textures/concrete_formed_albedo.webp",
+   "bytes": 13668,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/concrete_formed_normal.webp",
+   "bytes": 16238,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/concrete_formed_rough.webp",
+   "bytes": 5088,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
    "path": "assets/textures/concrete_yard_albedo.webp",
    "bytes": 167394,
    "kind": "imported",
@@ -810,7 +897,7 @@
   },
   {
    "path": "assets/textures/concrete_yard_normal.webp",
-   "bytes": 161292,
+   "bytes": 33830,
    "kind": "imported",
    "license": "CC0 (Poly Haven)",
    "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_04 (normal; normals Sobel-generated from displacement at build time)",
@@ -854,6 +941,33 @@
    "payload": "menu"
   },
   {
+   "path": "assets/textures/metal_panel_albedo.webp",
+   "bytes": 4772,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/metal_panel_normal.webp",
+   "bytes": 2302,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/metal_panel_rough.webp",
+   "bytes": 3590,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
    "path": "assets/textures/wall_plaster_albedo.webp",
    "bytes": 702,
    "kind": "imported",
@@ -864,7 +978,7 @@
   },
   {
    "path": "assets/textures/wall_plaster_normal.webp",
-   "bytes": 165990,
+   "bytes": 29360,
    "kind": "imported",
    "license": "CC0 (Poly Haven)",
    "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (normal; normals Sobel-generated from displacement at build time)",
@@ -877,6 +991,33 @@
    "kind": "imported",
    "license": "CC0 (Poly Haven)",
    "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (rough; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wall_render_albedo.webp",
+   "bytes": 11306,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::wall_render (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wall_render_normal.webp",
+   "bytes": 9428,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::wall_render (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wall_render_rough.webp",
+   "bytes": 3362,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::wall_render (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)",
    "lane": "A3-level",
    "payload": "menu"
   },
@@ -1084,10 +1225,19 @@
    "payload": "menu"
   },
   {
-   "path": "assets/weapons/corvus.glb",
-   "bytes": 136612,
+   "path": "assets/weapons/breaker.glb",
+   "bytes": 496564,
    "kind": "generated",
-   "license": "Original (Meshy, owner account; base wpn_sniper.glb + soldier.glb arms per games/last-circle/CREDITS.md) + authored dressing",
+   "license": "Original (Meshy, owner account; base wpn_shotgun.glb per games/last-circle/CREDITS.md) + authored dressing",
+   "source": "tools/a4_build_fp_weapons.py",
+   "lane": "A4",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/weapons/corvus.glb",
+   "bytes": 606616,
+   "kind": "generated",
+   "license": "Original (Meshy, owner account; base wpn_sniper.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
    "lane": "A4",
    "bytes_fragment_stale": 141128,
@@ -1095,9 +1245,9 @@
   },
   {
    "path": "assets/weapons/pike.glb",
-   "bytes": 144828,
+   "bytes": 658228,
    "kind": "generated",
-   "license": "Original (Meshy, owner account; base wpn_pistol.glb + soldier.glb arms per games/last-circle/CREDITS.md) + authored dressing",
+   "license": "Original (Meshy, owner account; base wpn_pistol.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
    "lane": "A4",
    "bytes_fragment_stale": 148536,
@@ -1105,9 +1255,9 @@
   },
   {
    "path": "assets/weapons/vesper.glb",
-   "bytes": 142268,
+   "bytes": 652460,
    "kind": "generated",
-   "license": "Original (Meshy, owner account; base wpn_smg.glb + soldier.glb arms per games/last-circle/CREDITS.md) + authored dressing",
+   "license": "Original (Meshy, owner account; base wpn_smg.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
    "lane": "A4",
    "bytes_fragment_stale": 181452,
@@ -1115,13 +1265,31 @@
   },
   {
    "path": "assets/weapons/warden.glb",
-   "bytes": 146692,
+   "bytes": 714728,
    "kind": "generated",
-   "license": "Original (Meshy, owner account; base wpn_ar.glb + soldier.glb arms per games/last-circle/CREDITS.md) + authored dressing",
+   "license": "Original (Meshy, owner account; base wpn_ar.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
    "lane": "A4",
    "bytes_fragment_stale": 197812,
    "payload": "menu"
+  },
+  {
+   "path": "assets/weapons/wpn3p_pistol.glb",
+   "bytes": 100076,
+   "kind": "imported",
+   "license": "Meshy generated (FFG owned, last-circle provenance)",
+   "source": "games/last-circle/assets/props/meshy_wpn/wpn_pistol.glb (via core/weapons/world_weapon.js prep)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/weapons/wpn3p_shotgun.glb",
+   "bytes": 68372,
+   "kind": "imported",
+   "license": "Meshy generated (FFG owned, last-circle provenance)",
+   "source": "games/last-circle/assets/props/meshy_wpn/wpn_shotgun.glb (via core/weapons/world_weapon.js prep)",
+   "lane": "A8",
+   "payload": "mission"
   }
  ]
 }

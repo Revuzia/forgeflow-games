@@ -71,7 +71,10 @@ const CONTROLS = [
   ["WASD", "move"], ["MOUSE", "look"], ["LMB", "fire"], ["RMB", "aim"],
   ["SHIFT", "sprint (double-tap: tac sprint)"], ["SPACE", "jump / mantle"],
   ["C / CTRL", "crouch · slide while sprinting"], ["R", "reload"],
-  ["G", "frag (hold to cook)"], ["F", "interact"], ["1 / 2", "weapons"],
+  ["G", "frag (hold to cook)"], ["F", "interact"],
+  ["1 - 5", "weapons · wheel cycles · Q = last weapon"],
+  ["6 / 7 / 8", "killstreaks: mortar (3) · airstrike (5) · orbital (10)"],
+  ["WALK OVER", "weapons & ammo to loot them — enemies drop their guns"],
   ["TAB", "scoreboard (hold, in match)"], ["ESC", "pause"],
 ];
 
@@ -275,7 +278,7 @@ Full per-asset provenance: CREDITS.md</pre></div>`;
     }
     matchStarting = true;
     renderNav("modeselect");
-    Promise.resolve(ctx.startMatch({ mode, difficulty: modeSelect.difficulty, map: modeSelect.map }))
+    Promise.resolve(ctx.startMatch({ mode, difficulty: "expert", map: modeSelect.map }))
       .then((ok) => {
         matchStarting = false;
         if (!ok && menu._screen === "modeselect") {

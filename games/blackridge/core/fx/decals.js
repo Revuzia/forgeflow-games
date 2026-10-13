@@ -34,9 +34,12 @@
 
 import * as THREE from "three";
 
-const FULL_S = 14; // opaque window
-const OUT_S = 6;   // fade-out window (total ≈ 20 s)
-const N = 256;
+// ONE hole per bullet now (impacts.js — the old build stamped 4-5 marks per round,
+// which on a pistol read as "3 holes per shot"), so the ring can be shallower in
+// marks-per-shot and longer in time: a wall you have shot up STAYS shot up.
+const FULL_S = 45; // opaque window
+const OUT_S = 10;  // fade-out window (total ≈ 55 s)
+const N = 384;
 
 // ---- atlas layout (frozen; aKind indexes it) -----------------------------
 //   0 = concrete/masonry strike A     2 = metal strike (bright gouge)
@@ -49,7 +52,10 @@ export const KIND_SCORCH = 1;
 export const KIND_METAL = 2;
 export const KIND_CONCRETE_B = 3;
 export const KIND_SCUFF = 4;
-const FRAMES = 5;
+export const KIND_GLASS = 5;   // star-cracked pane
+export const KIND_WOOD = 6;    // splintered hole
+export const KIND_DIRT = 7;    // scuffed earth
+const FRAMES = 8;
 const CELL = 256;
 
 function atlasTexture() {
@@ -81,8 +87,8 @@ function atlasTexture() {
       // iter09: the halo is the low-frequency component and it is exactly what
       // averaged the whole mark into a pale smudge. Cut roughly in half now
       // that the rim above carries the "this is damage" signal.
-      hg.addColorStop(0.00, "rgba(96,92,86,0.12)");
-      hg.addColorStop(0.45, "rgba(88,84,79,0.065)");
+      hg.addColorStop(0.00, "rgba(96,92,86,0.07)");
+      hg.addColorStop(0.45, "rgba(88,84,79,0.04)");
       hg.addColorStop(1.00, "rgba(80,77,72,0)");
       g.fillStyle = hg;
       g.fillRect(cell * CELL, 0, CELL, CELL);
@@ -132,11 +138,13 @@ function atlasTexture() {
     // narrow bright annulus at 0.62-0.88 of the crater radius with a dark
     // shoulder inside it — is what survives minification, and that is kept in
     // full. Structure carries the read, not brightness.
-    cg.addColorStop(0.00, "rgba(104,100,94,0.34)");
-    cg.addColorStop(0.55, "rgba(116,112,105,0.62)");
-    cg.addColorStop(0.78, "rgba(122,118,110,0.70)");
-    cg.addColorStop(0.92, "rgba(104,100,94,0.46)");
-    cg.addColorStop(1.00, "rgba(88,84,79,0.18)");
+    // (rim alphas x0.62 vs iter09: the quad is ~0.2 m now, not 0.45 m, so the same
+    // rim read as a glowing donut at arm's length — keep the ring, lose the glow)
+    cg.addColorStop(0.00, "rgba(96,92,86,0.22)");
+    cg.addColorStop(0.55, "rgba(106,102,95,0.38)");
+    cg.addColorStop(0.78, "rgba(110,106,99,0.44)");
+    cg.addColorStop(0.92, "rgba(96,92,86,0.28)");
+    cg.addColorStop(1.00, "rgba(84,80,75,0.10)");
     g.fillStyle = cg;
     g.fill();
 
@@ -309,11 +317,125 @@ function atlasTexture() {
     g.restore();
   }
 
+
+  // ---- cell 5: GLASS STAR CRACK -------------------------------------------
+  // A round through a pane leaves a tiny punched hole and a star of radial
+  // cracks with a couple of ragged rings. Cracks are BRIGHT thin lines (light
+  // catching fractured glass) over a faint dark shadow line so they read on both
+  // a lit and a dark pane; the dark punch at the centre carries it at range.
+  function glassCrack(cell) {
+    const cx = cell * CELL + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+    g.lineCap = "round"; g.lineJoin = "round";
+    const spokes = 11;
+    const ends = [];
+    for (let i = 0; i < spokes; i++) {
+      const a = (i / spokes) * Math.PI * 2 + (rnd() - 0.5) * 0.35;
+      const len = R * (0.46 + rnd() * 0.46);
+      ends.push([a, len]);
+      // jagged spoke: 3 segments with a small lateral kink
+      let px = cx, py = cy;
+      for (let k = 1; k <= 3; k++) {
+        const f = k / 3;
+        const kink = (rnd() - 0.5) * R * 0.07;
+        const nx = cx + Math.cos(a) * len * f - Math.sin(a) * kink;
+        const ny = cy + Math.sin(a) * len * f + Math.cos(a) * kink;
+        g.beginPath(); g.moveTo(px, py); g.lineTo(nx, ny);
+        g.strokeStyle = "rgba(8,10,14,0.40)"; g.lineWidth = 3.4 * (1.1 - f * 0.6); g.stroke();
+        g.beginPath(); g.moveTo(px, py); g.lineTo(nx, ny);
+        g.strokeStyle = `rgba(196,208,222,${(0.78 - f * 0.28).toFixed(2)})`; g.lineWidth = 1.7 * (1.1 - f * 0.55); g.stroke();
+        px = nx; py = ny;
+      }
+    }
+    // two ragged concentric rings joining neighbouring spokes
+    for (const rf of [0.30, 0.58]) {
+      g.beginPath();
+      for (let i = 0; i <= spokes; i++) {
+        const e = ends[i % spokes];
+        const rr = e[1] * rf * (0.85 + rnd() * 0.3);
+        const x = cx + Math.cos(e[0]) * rr, y = cy + Math.sin(e[0]) * rr;
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.strokeStyle = "rgba(186,198,212,0.46)"; g.lineWidth = 1.3; g.stroke();
+    }
+    // crushed white powder right at the punch, then the dark hole
+    const pg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.20);
+    pg.addColorStop(0.0, "rgba(220,228,236,0.70)");
+    pg.addColorStop(1.0, "rgba(200,210,222,0)");
+    g.fillStyle = pg; g.beginPath(); g.arc(cx, cy, R * 0.20, 0, Math.PI * 2); g.fill();
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.075);
+    kg.addColorStop(0.0, "rgba(4,5,7,0.98)");
+    kg.addColorStop(1.0, "rgba(10,12,16,0)");
+    g.fillStyle = kg; g.beginPath(); g.arc(cx, cy, R * 0.08, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
+  // ---- cell 6: WOOD SPLINTER HOLE ------------------------------------------
+  function woodHole(cell) {
+    const cx = cell * CELL + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+    g.lineCap = "round";
+    // pale exposed-grain splinters radiating out of the hole
+    for (let i = 0; i < 12; i++) {
+      const a = rnd() * Math.PI * 2;
+      const len = R * (0.20 + rnd() * 0.30);
+      const w = R * (0.018 + rnd() * 0.030);
+      g.save(); g.translate(cx, cy); g.rotate(a);
+      const lg = g.createLinearGradient(0, 0, len, 0);
+      lg.addColorStop(0.0, "rgba(150,118,76,0.80)");
+      lg.addColorStop(1.0, "rgba(120,92,58,0)");
+      g.fillStyle = lg;
+      g.beginPath(); g.moveTo(0, -w); g.lineTo(len, 0); g.lineTo(0, w); g.closePath(); g.fill();
+      g.restore();
+    }
+    const sg = g.createRadialGradient(cx, cy, R * 0.04, cx, cy, R * 0.26);
+    sg.addColorStop(0.0, "rgba(14,10,6,0.95)");
+    sg.addColorStop(0.6, "rgba(30,22,14,0.55)");
+    sg.addColorStop(1.0, "rgba(40,30,20,0)");
+    g.fillStyle = sg; g.beginPath(); g.arc(cx, cy, R * 0.26, 0, Math.PI * 2); g.fill();
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.12);
+    kg.addColorStop(0.0, "rgba(3,2,2,1)");
+    kg.addColorStop(0.8, "rgba(6,4,3,0.98)");
+    kg.addColorStop(1.0, "rgba(10,7,5,0)");
+    g.fillStyle = kg; g.beginPath(); g.arc(cx, cy, R * 0.13, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
+  // ---- cell 7: DIRT / SAND SCUFF ---------------------------------------------
+  function dirtScuff(cell) {
+    const cx = cell * CELL + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+    for (let i = 0; i < 6; i++) {
+      const hx = cx + (rnd() - 0.5) * R * 0.45, hy = cy + (rnd() - 0.5) * R * 0.45;
+      const hr = R * (0.18 + rnd() * 0.20);
+      const hg = g.createRadialGradient(hx, hy, 1, hx, hy, hr);
+      hg.addColorStop(0.0, "rgba(34,26,18,0.62)");
+      hg.addColorStop(0.7, "rgba(44,34,24,0.32)");
+      hg.addColorStop(1.0, "rgba(52,42,30,0)");
+      g.fillStyle = hg; g.beginPath(); g.arc(hx, hy, hr, 0, Math.PI * 2); g.fill();
+    }
+    for (let i = 0; i < 22; i++) {
+      const a = rnd() * Math.PI * 2, r = R * (0.2 + rnd() * 0.5);
+      g.fillStyle = `rgba(70,56,40,${(0.25 + rnd() * 0.35).toFixed(2)})`;
+      g.fillRect(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 2 + rnd() * 4, 2 + rnd() * 3);
+    }
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.12);
+    kg.addColorStop(0.0, "rgba(10,8,5,0.9)"); kg.addColorStop(1.0, "rgba(20,15,10,0)");
+    g.fillStyle = kg; g.beginPath(); g.arc(cx, cy, R * 0.12, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
   concrete(KIND_CONCRETE_A, 11, 0.14);
   scorch(KIND_SCORCH);
   metal(KIND_METAL);
   concrete(KIND_CONCRETE_B, 9, -0.18);
   scuff(KIND_SCUFF);
+  glassCrack(KIND_GLASS);
+  woodHole(KIND_WOOD);
+  dirtScuff(KIND_DIRT);
 
   const t = new THREE.CanvasTexture(cv);
   // Mipmapped: a 0.40 m decal is ~19 px at 20 m against a 256 px cell, i.e.
@@ -399,8 +521,14 @@ export function makeDecals(env) {
   const rnd = env.rng;
 
   let rejected = 0;
+  let clipped = 0;
+  // Optional surface clipper (fx.js wires it to surfaceindex.supportedScale):
+  // (pos, normal, halfSize) -> 1 | 0.7 | 0.5 | 0 — the largest fraction of the quad
+  // that is fully backed by visible geometry (a mark never hangs off an edge).
+  let clipper = null;
 
   return {
+    setClipper(fn) { clipper = fn || null; },
     // kind indexes the atlas (KIND_* above). size = quad edge in metres.
     // `dir` (optional) = the incoming ray direction, used ONLY to reject a
     // decal whose surface normal cannot be trusted.
@@ -448,6 +576,11 @@ export function makeDecals(env) {
           }
         }
       }
+      if (clipper) {
+        const sc = clipper(pos, [_n.x, _n.y, _n.z], size * 0.5);
+        if (!(sc > 0)) { clipped++; return -1; }
+        size *= sc;
+      }
       const i = cursor;
       cursor = (cursor + 1) % N;
       _q.setFromUnitVectors(_Z, _n);
@@ -475,5 +608,6 @@ export function makeDecals(env) {
     prewarmables() { return [mesh]; },
     spawnedCount: () => spawned,
     rejectedCount: () => rejected,
+    clippedCount: () => clipped,
   };
 }

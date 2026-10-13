@@ -1,0 +1,3 @@
+casual   t=240s phase=assault beat=? tourNode=9/9 bots seen=12 peakAlive=11 alive=10 bullets-at-P=739 hurt=0 worstStuck=1.0s ai=0.252ms/tick errors=0
+standard t=240s phase=assault beat=? tourNode=9/9 bots seen=12 peakAlive=12 alive=10 bullets-at-P=771 hurt=0 worstStuck=2.0s ai=0.234ms/tick errors=0
+hard     t=240s phase=assault beat=? tourNode=9/9 bots seen=12 peakAlive=12 alive=11 bullets-at-P=1078 hurt=0 worstStuck=2.0s ai=0.233ms/tick errors=0

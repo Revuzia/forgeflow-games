@@ -14,6 +14,7 @@
 // Decel stays 34 (counter-strafe crispness).
 
 import { fireShot, dirFromAngles } from "./ballistics.js";
+import { resolveSwitch as resolveSwitchTarget, normalise as normaliseLoadout } from "./loadout.js";
 import { spawnGrenade, detonateAt } from "./grenades.js";
 
 export const MOVE = {
@@ -97,6 +98,7 @@ export function strideLength(hspeed, stance, sprinting) {
 export const SPRINT_OUT_S = {
   smg: [0.160, 0.240], pistol: [0.130, 0.195],
   ar: [0.210, 0.315], dmr: [0.290, 0.435],
+  shotgun: [0.190, 0.285],
 };
 
 export function eyeHeight(stance, sliding) {
@@ -493,19 +495,15 @@ function stepPlayerWeaponVerbs(state, cmd, world, weapons, dt, sim, mantling) {
 
 // The SHARED weapon state machine (player + bots). vc = verb context.
 /**
- * Turn an input intent into a weapon id.
- *
- * input.js emits the LITERAL strings "slot1"/"slot2" for the 1 and 2 keys
- * (input.js:250-251), but nothing in the codebase ever mapped them to a weapon.
- * Both guards here — `slots.indexOf(switchTo)` and `weapons[switchTo]` — were
- * therefore false forever, so pressing 1 or 2 has never switched weapons in any
- * shipped build, despite the on-screen "1/2 weapons" hint. Bots pass real
- * weapon ids and are unaffected.
+ * Turn an input intent into a weapon id: "slot1".."slot5" (the FIVE fixed slots,
+ * weapon_data.js WEAPON_SLOT), "next"/"prev" (mouse wheel), "last" (Q), or a
+ * literal weapon id (bots, scenarios). History: input.js has always emitted the
+ * literal strings "slot1"/"slot2" but nothing ever mapped them to a weapon, so
+ * pressing 1 or 2 never switched weapons in any shipped build. The mapping lives
+ * in loadout.js now, shared by the human and bots.
  */
 function resolveSwitch(actor, want) {
-  if (want === "slot1") return (actor.slots || [])[0] || null;
-  if (want === "slot2") return (actor.slots || [])[1] || null;
-  return want;
+  return resolveSwitchTarget(actor, want);
 }
 
 export function stepActorWeapon(sim, who, vc, dt) {
@@ -538,6 +536,7 @@ export function stepActorWeapon(sim, who, vc, dt) {
     if (w.stateT >= (w._switchDur || 0.5)) {
       const to = w._switchTo;
       commitSlotAmmo(actor, w);
+      actor._lastWeapon = w.id; // Q = swap back
       w.id = to;
       const na = actor._slotAmmo && actor._slotAmmo[to];
       w.mag = na ? na.mag : (weapons[to] ? weapons[to].mag : 0);
@@ -549,11 +548,12 @@ export function stepActorWeapon(sim, who, vc, dt) {
     }
   } else if (vc.switchBufferedT != null && t - vc.switchBufferedT <= MOVE.BUFFER_S && vc.switchTo &&
              resolveSwitch(actor, vc.switchTo) && resolveSwitch(actor, vc.switchTo) !== w.id &&
-             (isP ? (actor.slots || []).indexOf(resolveSwitch(actor, vc.switchTo)) >= 0 : true) &&
+             (actor.slots || []).indexOf(resolveSwitch(actor, vc.switchTo)) >= 0 &&
              weapons[resolveSwitch(actor, vc.switchTo)]) {
     const wantId = resolveSwitch(actor, vc.switchTo);
     vc.consumeSwitch && vc.consumeSwitch();
     cancelReloadForSwitch(sim, who, actor, w);
+    resetShell(w);
     const to = wantId;                    // resolved: "slot2" -> the actual id
     w.state = "switching";
     w.stateT = 0;
@@ -563,7 +563,9 @@ export function stepActorWeapon(sim, who, vc, dt) {
   }
 
   // ---- reload (§2.2): tactical vs empty, 65% commit, cancel semantics
-  if (w.state === "reloading") {
+  if (w.state === "reloading" && weapon.reload && weapon.reload.mode === "shell") {
+    stepShellReload(sim, who, actor, w, weapon);
+  } else if (w.state === "reloading") {
     const dur = w._reloadDur || weapon.reloadS;
     if (!w._reloadCommitted && w.stateT >= dur * 0.65) {
       const magSize = weapon.mag;
@@ -590,6 +592,12 @@ export function stepActorWeapon(sim, who, vc, dt) {
       w._reloadDur = empty ? weapon.reloadEmptyS : weapon.reloadS;
       w._reloadCommitted = false;
       w._preReloadMag = w.mag;
+      if (weapon.reload && weapon.reload.mode === "shell") {
+        // shell-by-shell: the first shell lands at startS, then one per perShellS
+        w._shellNext = weapon.reload.startS;
+        w._shellPhase = "load";
+        w._reloadDur = weapon.reload.startS + weapon.reload.perShellS * Math.max(1, weapon.mag - w.mag) + weapon.reload.endS;
+      }
       sim.emit("reload", { who, weaponId: w.id, phase: "start", duration: w._reloadDur, empty });
     } else if (vc.reloadBufferedT != null && t - vc.reloadBufferedT <= MOVE.BUFFER_S) {
       vc.consumeReload && vc.consumeReload();
@@ -611,8 +619,9 @@ export function stepActorWeapon(sim, who, vc, dt) {
   const sprintReady = (vc.sprintState == null || vc.sprintState === "none") &&
     (vc.sprintExitT == null || t - vc.sprintExitT >= sprintOut);
   const raiseReady = t >= (vc.mantleRaiseUntil ?? -9);
+  const shellReloading = w.state === "reloading" && !!(weapon.reload && weapon.reload.mode === "shell");
   const canFire = !vc.mantling && sprintReady && raiseReady &&
-    w.state !== "reloading" && w.state !== "switching" &&
+    (w.state !== "reloading" || (shellReloading && w.mag > 0)) && w.state !== "switching" &&
     sinceShot >= interval - 1e-9;
 
   let wantsShot = false;
@@ -647,6 +656,11 @@ export function stepActorWeapon(sim, who, vc, dt) {
       const pitch = isP ? actor.pitch : (actor.cmd ? actor.cmd.pitch || 0 : 0);
       const yaw = isP ? actor.yaw : actor.yaw;
       const dir = dirFromAngles(yaw, pitch);
+      if (shellReloading) {
+        // cutting a shell reload short by firing: the loaded shells stay loaded
+        sim.emit("reload", { who, weaponId: w.id, phase: "done", duration: 0, canceled: true });
+        resetShell(w);
+      }
       w.mag--;
       w.state = "firing";
       w.stateT = 0;
@@ -667,8 +681,44 @@ export function stepActorWeapon(sim, who, vc, dt) {
   }
 }
 
+// ---- shell-by-shell reload (weapon_data.js `reload.mode:"shell"`, the Breaker).
+// One "reload" event per shell (phase:"shell") so the viewmodel can animate each
+// insertion; `done` after the closing pump. Firing at any point with ≥1 shell in the
+// gun interrupts it (canFire above) — the pump-gun escape hatch.
+function resetShell(w) {
+  w._shellNext = null;
+  w._shellPhase = null;
+  w._shellEndAt = null;
+}
+
+function stepShellReload(sim, who, actor, w, weapon) {
+  const r = weapon.reload;
+  if (w._shellNext == null) w._shellNext = r.startS;
+  if (w._shellPhase !== "end") {
+    if (w.stateT >= w._shellNext) {
+      if (w.mag < weapon.mag && w.reserve > 0) {
+        w.mag++;
+        w.reserve--;
+        w._reloadCommitted = true;   // a shell is in: sprint no longer cancels the reload
+        commitSlotAmmo(actor, w);
+        sim.emit("reload", { who, weaponId: w.id, phase: "shell", mag: w.mag, reserve: w.reserve });
+        w._shellNext += r.perShellS;
+      }
+      if (w.mag >= weapon.mag || w.reserve <= 0) {
+        w._shellPhase = "end";
+        w._shellEndAt = w.stateT + r.endS;
+      }
+    }
+  } else if (w.stateT >= w._shellEndAt) {
+    w.state = "idle";
+    w.stateT = 0;
+    resetShell(w);
+    sim.emit("reload", { who, weaponId: w.id, phase: "done", duration: w._reloadDur });
+  }
+}
+
 function cancelReloadForSwitch(sim, who, actor, w) {
-  if (w.state === "reloading" && !w._reloadCommitted) {
+  if (w.state === "reloading" && (!w._reloadCommitted || w._shellPhase != null)) {
     w.state = "idle";
     w.stateT = 0;
     sim.emit("reload", { who, weaponId: w.id, phase: "done", duration: 0, canceled: true });
@@ -693,12 +743,37 @@ export function stepBotLocomotion(sim, bot, dt) {
 
   const f = [-Math.sin(bot.yaw), -Math.cos(bot.yaw)];
   const r = [-f[1], f[0]];
-  const target = cmd.crouch ? MOVE.CROUCH : cmd.sprint ? MOVE.SPRINT : MOVE.WALK;
-  let wx = f[0] * (cmd.moveZ || 0) + r[0] * (cmd.moveX || 0);
-  let wz = f[1] * (cmd.moveZ || 0) + r[1] * (cmd.moveX || 0);
-  const wl = Math.hypot(wx, wz);
-  if (wl > 0.01) { wx = (wx / wl) * target; wz = (wz / wl) * target; }
-  else { wx = 0; wz = 0; }
+  // BOT-AI PASS: the PLAYER'S directional speed rules (stepPlayer "wish
+  // velocity", §1.2) instead of a flat walk/sprint speed in every direction:
+  // strafe x0.9, back-pedal x0.76, ADS crawl (weapon.adsMoveMult), and a sprint
+  // only counts when the move is mostly along the facing (the brains' travel
+  // heading is now independent of facing, so a bot could otherwise sprint
+  // sideways/backwards at 6.4 m/s — a speed the human cannot match). This only
+  // ever SLOWS a bot (monotonic fairness rule), and is exact for pure-forward
+  // movement, which is what unchanged brains command.
+  // brains write a UNIT direction (cos/sin of the heading); the player's keys
+  // are +-1 per axis, so scale to the dominant axis = 1 before the shared rule
+  // (a 45 deg move is then 4.6 m/s exactly like W+A, not 3.25)
+  let mz = cmd.moveZ || 0, mx = cmd.moveX || 0;
+  {
+    const mm = Math.max(Math.abs(mz), Math.abs(mx));
+    if (mm > 0.01) { mz /= mm; mx /= mm; } else { mz = 0; mx = 0; }
+  }
+  const fwdSpd = mz >= 0 ? MOVE.WALK : MOVE.WALK * MOVE.BACK_MULT;
+  const strSpd = MOVE.WALK * MOVE.STRAFE_MULT;
+  let wx = f[0] * mz * fwdSpd + r[0] * mx * strSpd;
+  let wz = f[1] * mz * fwdSpd + r[1] * mx * strSpd;
+  let wl = Math.hypot(wx, wz);
+  const wcap = Math.max(Math.abs(mz) * fwdSpd, Math.abs(mx) * strSpd);
+  if (wl > wcap && wl > 0) { wx *= wcap / wl; wz *= wcap / wl; wl = wcap; }
+  {
+    const wpn = sim.weapons && bot.weapon ? sim.weapons[bot.weapon.id] : null;
+    let tgt = null;
+    if (cmd.crouch) tgt = MOVE.CROUCH;
+    else if (cmd.sprint && mz > 0.5) tgt = MOVE.SPRINT;
+    else if (bot.weapon && bot.weapon.ads) tgt = MOVE.WALK * (wpn && wpn.adsMoveMult != null ? wpn.adsMoveMult : 0.6);
+    if (tgt != null && wl > 0.01) { wx = (wx / wl) * tgt; wz = (wz / wl) * tgt; }
+  }
 
   const dvx = wx - bot.vel[0], dvz = wz - bot.vel[2];
   const dl = Math.hypot(dvx, dvz);

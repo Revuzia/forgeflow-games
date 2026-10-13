@@ -28,25 +28,191 @@
 import { perceive, enemyBodiesOf } from "./perception.js";
 import { spawnGrenade, GRENADE } from "../sim/grenades.js";
 import { objectiveStep } from "./objective.js"; // W7 slot 3a (bot_ai §2.4)
+import * as STEER from "./steer.js";               // BOT-AI PASS: planning + path following
+import { tierOf, owns } from "../sim/loadout.js";    // BOT-AI PASS: weapon tiers for swap / loot decisions
 
 const DEG = Math.PI / 180;
 
 // §5.5 difficulty bands (R30 authored mix — bands change ONLY perception/
 // reaction/accuracy/aggression, never HP or damage).
+//
+// BOT-AI PASS (2026-10): a band is now a full SKILL PROFILE, not three numbers.
+// The UI levels (CASUAL / STANDARD / HARD) pick a MIX of bands per team in
+// match/roster.js and mission.js and may shift it (content.json
+// difficulty.<level>.ai, see aiCfg below); everything a band changes is
+// perception, reaction, aim error or tactics. NOTHING here touches HP, damage,
+// ammo, speed or sight lines (monotonic fairness rule, bot_ai.md §2.2).
+//
+// Knob reference (all per band; "x" = multiplier, 1 = unchanged behaviour):
+//   REACTION / AIM (fairness-audited by ai.selftest)
+//     reactMin/Max  latched reaction roll in s (rolled ONCE per confirm)
+//     jitter        per-shot gaussian aim sigma, rad
+//     missRounds, missMin/Max   forced early misses after a confirm (rounds, deg)
+//     pauseMin/Max  pause between bursts, s
+//     aimHigh       chance a confirm rolls headshot intent
+//     leadErr       max +-fraction error on velocity lead (rolled per confirm)
+//     turnRate      combat turn cap, rad/s (aim catch-up speed)
+//     acquire       sigma multiplier at the moment of a confirm, easing to 1 over
+//                   0.6 s (doctrine: 3). A better shooter settles faster.
+//     thinkS        brain cadence (s) against an enemy inside 25 m (0.15 default;
+//                   a sharper player re-reads the situation sooner)
+//     strafeReact   false = no side-stepping inside the reaction window: stand,
+//                   take the first burst, THEN move (first-shot discipline)
+//     holdWhenSeen  true = an enemy in view inside 45 m stops the walk to a far
+//                   goal and is fought where the bot stands; default keeps the
+//                   legacy "walk on, gun up, until within 14 m of the goal"
+//     fireSpeed     bot may pull the trigger only below this horizontal speed
+//                   (m/s). 0.75 = stop-and-shoot; higher = fires on the strafe
+//                   (the sigma x1.5 moving penalty and the shared spread model
+//                   still apply, so it is accurate only if it is also slow)
+//   PERCEPTION
+//     notice        awareness fill-rate x          memory   awareness decay x
+//     hearMult      hearing radius x               hearFuzz heard-position fuzz x
+//     loseS         seconds without sight before 'combat' is dropped for
+//                   'suspicious' (0 = never; the referee still ends fights)
+//   TACTICS
+//     strafeP       chance a confirm rolls a strafe habit (side-steps in the
+//                   pauses between bursts, never while a burst is firing)
+//     peek          0..1 propensity to side-peek from cover (hide / lean out /
+//                   fire / hide) instead of standing in it
+//     coverRescoreS cover re-evaluation period    coverNoise random cover-score
+//                   error (bad judgement) — sigma in score points
+//     reloadBreak   chance to step to lateral cover for a reload (else reloads
+//                   in the open)
+//     flankP/flankEvery   token-less flank roll chance / cooldown s
+//     grenStaticS/grenP/grenCdS   target-static seconds needed, chance to commit,
+//                   squad cooldown s for a frag
+//     retreatHp/retreatP   retreat threshold hp and roll chance
+//     pushReload    chance to close on a target seen reloading
+//     huntAfterS    seconds after losing sight before advancing on the last
+//                   known position (0 = hold and wait)
+//     exposureAvoid path-cost weight for cells in view of a known threat
+//     lookCorners   0..1 pre-aim: face the far side of an upcoming corner
+//     swapSmart     chance to use the right gun for the range (shotgun inside
+//                   8 m, pistol when the primary is dry) instead of reloading
+//     lootRange     m a bot will detour to a rack / drop when under-armed
+//     loudP         chance a routeless wander leg is SPRINTED (loud, readable)
+//     laneNoise     per-bot route jitter (lane diversity)
 export const BANDS = {
-  recruit:  { reactMin: 0.650, reactMax: 0.800, jitter: 0.030, missRounds: 2, missMin: 1.8, missMax: 2.5, pauseMin: 0.8, pauseMax: 1.2, aimHigh: 0 },
-  regular:  { reactMin: 0.500, reactMax: 0.700, jitter: 0.022, missRounds: 2, missMin: 1.5, missMax: 2.2, pauseMin: 0.6, pauseMax: 1.0, aimHigh: 0 },
-  hardened: { reactMin: 0.380, reactMax: 0.550, jitter: 0.018, missRounds: 1, missMin: 1.2, missMax: 1.8, pauseMin: 0.5, pauseMax: 0.9, aimHigh: 0.10 },
-  veteran:  { reactMin: 0.300, reactMax: 0.420, jitter: 0.012, missRounds: 0, missMin: 0, missMax: 0, pauseMin: 0.4, pauseMax: 0.7, aimHigh: 0.18 },
+  recruit: {
+    reactMin: 0.800, reactMax: 1.100, jitter: 0.038, missRounds: 3, missMin: 2.0, missMax: 3.0,
+    pauseMin: 1.0, pauseMax: 1.6, aimHigh: 0, leadErr: 0.60, turnRate: 4.0, fireSpeed: 0.75,
+    notice: 0.55, memory: 2.0, hearMult: 0.6, hearFuzz: 1.6, loseS: 7,
+    strafeP: 0, peek: 0, coverRescoreS: 14, coverNoise: 2.5, reloadBreak: 0,
+    flankP: 0.08, flankEvery: 20, grenStaticS: 14, grenP: 0.12, grenCdS: 45,
+    retreatHp: 22, retreatP: 0.3, pushReload: 0, huntAfterS: 0, exposureAvoid: 0,
+    lookCorners: 0, swapSmart: 0, lootRange: 10, loudP: 0.45, laneNoise: 0.10,
+  },
+  regular: {
+    reactMin: 0.500, reactMax: 0.700, jitter: 0.022, missRounds: 2, missMin: 1.5, missMax: 2.2,
+    pauseMin: 0.6, pauseMax: 1.0, aimHigh: 0, leadErr: 0.30, turnRate: 7.0, fireSpeed: 0.75,
+    notice: 1.0, memory: 1.0, hearMult: 1.0, hearFuzz: 1.0, loseS: 0,
+    strafeP: 0.25, peek: 0.5, coverRescoreS: 6, coverNoise: 0.6, reloadBreak: 0.65,
+    flankP: 0.5, flankEvery: 8, grenStaticS: 6, grenP: 1, grenCdS: 20,
+    retreatHp: 35, retreatP: 0.6, pushReload: 0.2, huntAfterS: 12, exposureAvoid: 0.35,
+    lookCorners: 0, swapSmart: 0.7, lootRange: 25, loudP: 0.1, laneNoise: 0.10,
+  },
+  hardened: {
+    reactMin: 0.300, reactMax: 0.420, jitter: 0.016, missRounds: 1, missMin: 1.0, missMax: 1.5,
+    pauseMin: 0.45, pauseMax: 0.8, aimHigh: 0.12, leadErr: 0.20, turnRate: 9.4, fireSpeed: 1.4,
+    notice: 1.2, memory: 0.7, hearMult: 1.2, hearFuzz: 0.8, loseS: 0,
+    strafeP: 0.7, peek: 1, coverRescoreS: 5, coverNoise: 0.2, reloadBreak: 1,
+    flankP: 0.6, flankEvery: 6, grenStaticS: 3.5, grenP: 1, grenCdS: 14,
+    retreatHp: 40, retreatP: 0.8, pushReload: 0.7, huntAfterS: 5, exposureAvoid: 0.9,
+    lookCorners: 0.7, swapSmart: 1, lootRange: 30, loudP: 0, laneNoise: 0.10,
+  },
+  veteran: {
+    reactMin: 0.200, reactMax: 0.300, jitter: 0.012, missRounds: 0, missMin: 0, missMax: 0,
+    pauseMin: 0.35, pauseMax: 0.6, aimHigh: 0.20, leadErr: 0.12, turnRate: 12.0, fireSpeed: 2.4,
+    notice: 1.4, memory: 0.5, hearMult: 1.35, hearFuzz: 0.6, loseS: 0,
+    strafeP: 1, peek: 1, coverRescoreS: 4, coverNoise: 0, reloadBreak: 1,
+    flankP: 0.8, flankEvery: 4, grenStaticS: 2, grenP: 1, grenCdS: 10,
+    retreatHp: 45, retreatP: 0.9, pushReload: 1, huntAfterS: 2.5, exposureAvoid: 1.4,
+    lookCorners: 1, swapSmart: 1, lootRange: 35, loudP: 0, laneNoise: 0.10,
+  },
 };
+export const BAND_LADDER = ["recruit", "regular", "hardened", "veteran"];
+for (const k of BAND_LADDER) {
+  const b = BANDS[k];
+  if (b.acquire == null) b.acquire = 3;
+  if (b.thinkS == null) b.thinkS = 0.15;
+  if (b.strafeReact == null) b.strafeReact = true;
+  if (b.holdWhenSeen == null) b.holdWhenSeen = false;
+}
+
+// Difficulty-level AI config: content.json difficulty.<level>.ai (merged over
+// pvp_tuning.DIFFICULTY by resolveDifficulty) reaches the brain through
+// sim.mission.diffCfg — null in every headless selftest, so those see the raw
+// band table. Fields:
+//   enemyBandShift   PVP: shift the band of every bot hostile to the human
+//                    along recruit<regular<hardened<veteran (-1 casual, +1 hard)
+//   campaignBandShift  campaign: same, on top of mission.js's own bandShift
+//   reactScale / jitterScale  global multipliers on reactMin/Max and jitter
+//   humanTokens / humanWindow  fire tokens per squad on the human (squad.js,
+//                    <= 2) and the attackers allowed in one 250 ms window (<= 3):
+//                    one-directional, can only REMOVE shooters
+//   bandOverrides    { <band>: { knob: value, ... } } - per-level edits to a band's
+//                    profile. PVP's only tier, "expert" (owner 2026-10-12: every
+//                    opponent plays like an expert HUMAN), seats everyone at
+//                    'veteran' and sharpens it here, so the campaign ladder's own
+//                    veterans stay exactly as they were. Same fairness surface:
+//                    no knob grants sight, speed, HP, damage or ammo.
+function aiCfg(sim) {
+  const m = sim.mission;
+  const d = m && m.diffCfg;
+  return (d && d.ai) || null;
+}
+
+// effective skill profile of a bot: the band after the difficulty shift, with
+// the level's global scales applied. Computed once per brain (the shift is a
+// function of team only, which is fixed for a body's life).
+function skillOf(sim, bot) {
+  const base = BANDS[bot.band] ? bot.band : "regular";
+  const cfg = aiCfg(sim);
+  let name = base;
+  let reactScale = 1, jitterScale = 1;
+  if (cfg) {
+    reactScale = cfg.reactScale != null ? cfg.reactScale : 1;
+    jitterScale = cfg.jitterScale != null ? cfg.jitterScale : 1;
+    const hostile = sim.state.player && bot.team != null && bot.team !== sim.state.player.team;
+    const shift = hostile ? (sim.match ? (cfg.enemyBandShift | 0) : (cfg.campaignBandShift | 0)) : 0;
+    if (shift) {
+      const i = Math.max(0, Math.min(BAND_LADDER.length - 1, BAND_LADDER.indexOf(base) + shift));
+      name = BAND_LADDER[i];
+    }
+  }
+  let src = BANDS[name];
+  const ov = cfg && cfg.bandOverrides && cfg.bandOverrides[name];
+  if (ov) src = Object.assign({}, src, ov);
+  if (reactScale === 1 && jitterScale === 1) return Object.assign({ name }, src);
+  return Object.assign({ name }, src, {
+    reactMin: src.reactMin * reactScale, reactMax: src.reactMax * reactScale, jitter: src.jitter * jitterScale,
+  });
+}
+// the brain caches its skill; re-derive if the body's band was rewritten
+// (scenario harnesses retag bands after spawn)
+function kOf(sim, bot, brain) {
+  if (!brain.k || brain.kSrc !== bot.band) {
+    brain.k = skillOf(sim, bot); brain.kSrc = bot.band;
+    // the band this bot actually PLAYS at after the difficulty shift (bot.band stays
+    // the roster's label); scoreboard/HUD code can show this instead
+    bot.bandEff = brain.k.name;
+  }
+  return brain.k;
+}
 
 // §5.7 burst rounds + §5.8 preferred bands — mirrors content.json archetypes
 // (sim does not expose content; values are the combat_spec numbers verbatim,
 // weapon-class fallback for test spawns).
 const BURST_BY_ARCH = { rifleman: [3, 5], cqb: [5, 8], marksman: [1, 1], heavy: [5, 8] };
-const BURST_BY_CLASS = { ar: [3, 5], smg: [5, 8], dmr: [1, 1], pistol: [2, 3] };
+const BURST_BY_CLASS = { ar: [3, 5], smg: [5, 8], dmr: [1, 1], pistol: [2, 3], shotgun: [1, 1] };
 const BAND_BY_ARCH = { rifleman: [15, 35], cqb: [8, 18], marksman: [35, 80], heavy: [10, 30] };
-const BAND_BY_CLASS = { ar: [15, 35], smg: [8, 18], dmr: [35, 80], pistol: [6, 15] };
+const BAND_BY_CLASS = { ar: [15, 35], smg: [8, 18], dmr: [35, 80], pistol: [6, 15], shotgun: [2, 9] };
+// the weapon class each archetype is built around. The archetype tables above
+// describe THAT gun; when the bot actually holds something else (PVP: every
+// body starts on the pistol, then picks racks/drops up) the held weapon's CLASS
+// table wins — a rifleman with a Pike must not fight at 15-35 m.
+const NATIVE_CLASS = { rifleman: "ar", cqb: "smg", marksman: "dmr", heavy: "ar" };
 
 const FLINCH_SIGMA_PER_STACK = 0.8 * DEG; // §3.4 aim-error injection
 const THINK_NEAR_S = 0.15, THINK_FAR_S = 0.4, THINK_NEAR_M = 25;
@@ -81,10 +247,14 @@ function eyeOf(bot) {
 }
 function hdist(a, b) { return Math.hypot(a[0] - b[0], a[2] - b[2]); }
 function burstRange(bot, weapon) {
-  return BURST_BY_ARCH[bot.archetype] || BURST_BY_CLASS[weapon ? weapon.class : "ar"] || [3, 5];
+  const cls = weapon ? weapon.class : "ar";
+  if (BURST_BY_ARCH[bot.archetype] && (!weapon || NATIVE_CLASS[bot.archetype] === cls)) return BURST_BY_ARCH[bot.archetype];
+  return BURST_BY_CLASS[cls] || BURST_BY_ARCH[bot.archetype] || [3, 5];
 }
 function prefBand(bot, weapon, pushOn) {
-  const b = BAND_BY_ARCH[bot.archetype] || BAND_BY_CLASS[weapon ? weapon.class : "ar"] || [15, 35];
+  const cls = weapon ? weapon.class : "ar";
+  const native = BAND_BY_ARCH[bot.archetype] && (!weapon || NATIVE_CLASS[bot.archetype] === cls);
+  const b = (native ? BAND_BY_ARCH[bot.archetype] : null) || BAND_BY_CLASS[cls] || BAND_BY_ARCH[bot.archetype] || [15, 35];
   return pushOn ? [b[0] * 0.5, b[1] * 0.5] : b; // §5.3: at 75 s ranges halve
 }
 
@@ -125,6 +295,9 @@ function mkBrain(bot, t) {
     // burst (blow-counted)
     burstSize: 0, burstLeft: 0, pauseUntil: -9, prevMag: -1, burstLog: [],
     // movement
+    mvActive: false, mvx: 0, mvz: 0, moveYaw: null, // steer.js world-space heading
+    nudgeUntil: -9, nudgeX: 0, nudgeZ: 0, avoid: null, avoidUntil: -9, progA: null,
+    goalUnreach: -9, orbitN: 0,
     goal: null, path: null, pathI: 0, needRepath: false, stuckT: 0,
     stuckN: 0, detourUntil: -9, wpKey: -1, wpMinD: Infinity, goalKey: null, goalMinD: Infinity,
     sprintMove: false, arrived: true,
@@ -153,6 +326,13 @@ function mkBrain(bot, t) {
     lowHpBarked: false, prevWeaponState: "idle", reloadDest: null,
     prevReloadCmd: false, semiToggle: false, supOffSign: 1,
     flankThinkAt: -9, wasFiring: false,
+    // BOT-AI PASS: skill profile cache + new behaviour state
+    k: null, kSrc: null,
+    strafeOn: false, strafeDir: 1, strafeUntil: -9, strafeHome: null,
+    pk: { ph: "hide", until: -9, side: 1, home: null, spot: null, on: null, coverIdx: -2 },
+    lootUntil: -9, lootId: -1, lootCheckT: -9, lootFrom: null,
+    pushUntil: -9, reloadSeenT: -9, huntOn: false, grenBlockUntil: -9, coverHopUntil: -9, coverHopNextT: -9,
+    swapT: -9, smartSwap: null, wantSwap: null, idleSinceT: -9, nudgeCheckT: -9,
   };
 }
 
@@ -186,7 +366,7 @@ function nearestEnemyDist(sim, bot) {
 // loads (or creates) the new one. A latched in-flight reaction on the old
 // target survives untouched for its next re-acquire.
 const LATCH_FIELDS = ["confirmT", "reactionS", "confirmed", "rerollArmed",
-  "missLeft", "missOff", "missSign", "aimHigh", "leadErr"];
+  "missLeft", "missOff", "missSign", "aimHigh", "leadErr", "strafeOn"];
 function swapLatch(brain, who, t, P) {
   if (brain.curTgtWho === who) return;
   if (brain.curTgtWho != null) {
@@ -209,7 +389,7 @@ function swapLatch(brain, who, t, P) {
     brain.confirmT = -1; brain.reactionS = 0; brain.confirmed = false;
     brain.rerollArmed = true;
     brain.missLeft = 0; brain.missOff = 0; brain.missSign = 1;
-    brain.aimHigh = false; brain.leadErr = 0;
+    brain.aimHigh = false; brain.leadErr = 0; brain.strafeOn = false;
   }
 }
 
@@ -231,6 +411,7 @@ export function aiStep(sim, nav, squad, dt) {
 
   const t0 = perfNow();
   squad._bind(sim);
+  STEER.tickHeat(sim, nav); // crowd-heat decay (lane diversity)
   // W7 slot 3a: the commander runs BEFORE squad._tick (bot_ai §2.4). One
   // branch when no match is live; writes bot._obj only — H1–H4 read it.
   objectiveStep(sim, nav, squad, dt);
@@ -256,7 +437,7 @@ export function aiStep(sim, nav, squad, dt) {
     // waste a think slot — their cmd is pinned and assignments are swallowed.
     if (!bot._brain) bot._brain = mkBrain(bot, t);
     const d = nearestEnemyDist(sim, bot); // W3 Part 12.6 — not S.player
-    const interval = d <= THINK_NEAR_M ? THINK_NEAR_S : THINK_FAR_S;
+    const interval = d <= THINK_NEAR_M ? (bot._brain.k ? bot._brain.k.thinkS : THINK_NEAR_S) : THINK_FAR_S;
     if (t - bot._brain.lastThinkT >= interval - 1e-9) {
       think(sim, nav, squad, bot, t);
       thinks++;
@@ -279,7 +460,7 @@ export function aiStep(sim, nav, squad, dt) {
 function think(sim, nav, squad, bot, t) {
   const brain = bot._brain;
   const rng = sim.rng.ai;
-  const band = BANDS[bot.band] || BANDS.regular;
+  const band = kOf(sim, bot, brain);
   const dtT = Math.min(0.5, Math.max(1 / 60, t - Math.max(0, brain.lastThinkT)));
   brain.lastThinkT = t;
 
@@ -303,7 +484,8 @@ function think(sim, nav, squad, bot, t) {
       brain.missOff = (band.missMin + rng() * (band.missMax - band.missMin)) * DEG;
       brain.missSign = rng() < 0.5 ? -1 : 1;
       brain.aimHigh = rng() < band.aimHigh;
-      brain.leadErr = (rng() * 2 - 1) * 0.30;
+      brain.leadErr = (rng() * 2 - 1) * band.leadErr;
+      brain.strafeOn = band.strafeP >= 1 ? true : (band.strafeP > 0 && rng() < band.strafeP);
       if (brain.reactionLog.length < 32) brain.reactionLog.push({ confirmT: t, reactionS: brain.reactionS });
       squad.noteConfirm(bot.id, t);
     }
@@ -344,6 +526,9 @@ function think(sim, nav, squad, bot, t) {
         }
         break;
       }
+      // BOT-AI PASS: an under-armed bot detours to a rack / drop (PVP) before
+      // resuming its orders; a running detour owns the goal until it ends
+      if (considerLoot(sim, nav, squad, bot, brain, band, t)) break;
       // W3 H4: the objective layer's anchor owns the idle anchor outright
       const obj = bot._obj;
       if (obj && obj.anchor) {
@@ -364,9 +549,23 @@ function think(sim, nav, squad, bot, t) {
       // of standing still (goal-following for this lives in act())
       if (!bot.patrol && brain.floorAnchor && brain.arrived && t >= brain.wanderAt) {
         brain.wanderAt = t + 6 + rng() * 6;
-        const p2 = nav ? nav.randomPoint(brain.anchor, 12, rng) : null;
-        if (p2) setGoal(nav, sim, brain, bot, p2, false);
+        const p2 = nav ? nav.randomPoint(brain.anchor, 12, rng, 2) : null; // minClr 2: not in a doorway
+        if (p2) setGoal(nav, sim, brain, bot, p2, band.loudP > 0 && rng() < band.loudP);
       }
+      // BOT-AI PASS: an idle bot parked IN a doorway / against a wall (wall-
+      // distance class 0) steps to open ground within 3 m after 2.5 s — never
+      // for stand / flag / carry anchors (those need the exact spot)
+      if (nav && brain.arrived && !bot.patrol) {
+        if (brain.idleSinceT < 0) brain.idleSinceT = t;
+        const exactSpot = obj && obj.anchor && (obj.priority >= 0.85 || obj.anchorKind === "stand" || obj.anchorKind === "flag" || obj.anchorKind === "cutoff");
+        if (!exactSpot && t - brain.idleSinceT > 2.5 && t - brain.nudgeCheckT > 3) {
+          brain.nudgeCheckT = t;
+          if (nav.clearAt(bot.pos) === 0) {
+            const spot = nav.openSpot(bot.pos, 3, 2);
+            if (spot) { brain.arrived = false; setGoal(nav, sim, brain, bot, spot, false); brain.idleSinceT = -9; }
+          }
+        }
+      } else brain.idleSinceT = -9;
       if (t >= brain.idleBarkAt && st === "patrol") {
         squad.requestBark(bot.id, "idle");
         brain.idleBarkAt = t + 25 + rng() * 15;
@@ -397,9 +596,21 @@ function think(sim, nav, squad, bot, t) {
       break;
     }
 
-    case "combat":
+    case "combat": {
+      // a recruit forgets: no sight, no hit and no order for loseS seconds ends
+      // the fight (the referee still ends everyone else's)
+      const lostFor = t - Math.max(P.lastSeenT, brain.enteredT, bot.lastHitT ?? -9);
+      if (band.loseS > 0 && lostFor > band.loseS && !(bot._obj && bot._obj.priority >= 0.9) && !brain.forceFlank) {
+        const lk1 = squad.squadLastKnown(bot.id, P.target) || (P.lastKnown ? { pos: P.lastKnown } : null);
+        setState(sim, bot, brain, "suspicious");
+        brain.investT = { until: t + 8, sweepUntil: -9, nextSampleT: -9, sprint: false, target: lk1 ? lk1.pos.slice() : bot.pos.slice() };
+        setGoal(nav, sim, brain, bot, brain.investT.target, false);
+        squad.release(bot.id);
+        break;
+      }
       planCombat(sim, nav, squad, bot, brain, t, rng);
       break;
+    }
 
     case "flank": {
       // committed — no reactive self-cancel (doctrine); arrival/timeout in act
@@ -428,7 +639,7 @@ function think(sim, nav, squad, bot, t) {
   // path upkeep
   if (brain.goal && (brain.needRepath || !brain.path) && !brain.arrived) {
     brain.needRepath = false;
-    brain.path = nav ? nav.findPath(bot.pos, brain.goal) : null;
+    brain.path = nav ? STEER.planPath(sim, nav, bot, brain, brain.goal, band) : null;
     brain.pathI = brain.path ? 1 : 0;
   }
 }
@@ -469,7 +680,7 @@ function setGoal(nav, sim, brain, bot, pos, sprint) {
   brain.goal = [pos[0], pos[1] != null ? pos[1] : bot.pos[1], pos[2]];
   brain.sprintMove = !!sprint;
   brain.arrived = false;
-  brain.path = nav ? nav.findPath(bot.pos, brain.goal) : null;
+  brain.path = nav ? STEER.planPath(sim, nav, bot, brain, brain.goal, kOf(sim, bot, brain)) : null;
   brain.pathI = brain.path ? 1 : 0;
   brain.stuckT = 0;
 }
@@ -478,6 +689,7 @@ function setGoal(nav, sim, brain, bot, pos, sprint) {
 // token-less decisions, grenade eligibility.
 function planCombat(sim, nav, squad, bot, brain, t, rng) {
   const P = bot.percept;
+  const band = kOf(sim, bot, brain);
   const weapon = sim.weapons[bot.weapon.id];
   const pushOn = squad.pushActive();
   const squadAlive = countSquadAlive(sim, bot);
@@ -509,10 +721,10 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
 
   // §5.3 RETREAT: hp<35 AND squad ≥2 alive AND roll 0.6 once (latched).
   // W3: _obj.noRetreat REMOVES the roll (one-directional — plan C10).
-  if (bot.hp < 35 && !(obj && obj.noRetreat)) {
+  if (bot.hp < band.retreatHp && !(obj && obj.noRetreat)) {
     if (!brain.retreatRolled) {
       brain.retreatRolled = true;
-      brain.retreatGo = !lastStand && rng() < 0.6;
+      brain.retreatGo = !lastStand && rng() < band.retreatP;
     }
     if (brain.retreatGo && !lastStand) {
       const threatRef = P.lastKnown || (squad.squadLastKnown(bot.id, who) || {}).pos || null;
@@ -548,9 +760,9 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
       setState(sim, bot, brain, "suppress");
       return;
     }
-    if (t - brain.flankThinkAt > 8 && !(obj && obj.noFlank)) {
+    if (t - brain.flankThinkAt > band.flankEvery && !(obj && obj.noFlank)) {
       brain.flankThinkAt = t;
-      if (rng() < 0.5) { enterFlank(sim, nav, squad, bot, brain, t, rng); return; }
+      if (rng() < band.flankP) { enterFlank(sim, nav, squad, bot, brain, t, rng); return; }
     }
   }
 
@@ -561,30 +773,76 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
   const pri = obj ? (obj.priority || 0) : 0;
   const objDrive = pri >= 0.75 && obj.anchor;
 
+  // BOT-AI PASS: opportunism. (1) the target is VISIBLY reloading -> close on
+  // it for the reload's length (a person sees the animation; pushReload is the
+  // chance this bot acts on it, rolled once per reload). (2) the target has
+  // been out of sight for huntAfterS -> advance on the last known position
+  // along a path that keeps out of that position's view (exposureAvoid), instead
+  // of waiting at a cover node until the referee forces a push.
+  const tbody = targetBodyOf(sim, bot);
+  const seenNow = !!(P.seesTarget && tbody && t - P.lastSeenT <= 0.4);
+  if (seenNow && tbody.weapon && tbody.weapon.state === "reloading" && t - brain.reloadSeenT > 2.5) {
+    brain.reloadSeenT = t;
+    const dR = hdist(bot.pos, tbody.pos);
+    if (band.pushReload > 0 && dR > 5 && dR < 32 && (band.pushReload >= 1 || rng() < band.pushReload) && !objDrive && bot.hp > 45) {
+      const f = Math.max(0.35, 1 - 9 / dR); // close to ~9 m, never onto the muzzle
+      setGoal(nav, sim, brain, bot, [bot.pos[0] + (tbody.pos[0] - bot.pos[0]) * (1 - f), bot.pos[1], bot.pos[2] + (tbody.pos[2] - bot.pos[2]) * (1 - f)], true);
+      brain.pushUntil = t + 2.2;
+    }
+  }
+  const lostS = t - P.lastSeenT;
+  brain.huntOn = !!(band.huntAfterS > 0 && !objDrive && !seenNow && P.lastSeenT > -8 && lostS > band.huntAfterS &&
+    bot.hp > 55 && t >= brain.taskLockUntil);
+
   // cover (re)scoring: entry / every 6 s / compromised ≥20 dmg (§5.8)
   const compromised = brain.hpAtCover - bot.hp >= 20;
   if (objDrive) {
-    if (!brain.goal || hdist(brain.goal, obj.anchor) > 1.0) {
+    // BOT-AI PASS cover hop: an objective-driven bot used to fight wherever it
+    // stood (the goal stays the anchor, cover was only "noted"). When it is
+    // shot at / sees the enemy and a node that BLOCKS that enemy's line is
+    // within 5 m, it dashes there, fights from it (peek / hold), and resumes
+    // the order after coverHopS or once the enemy has been gone for 6 s.
+    // Skipped for carriers / grabs (priority >= 0.9) and for bots that keep
+    // no cover habit (recruits: peek 0).
+    const hopping = t < brain.coverHopUntil;
+    if (hopping && (t - P.lastSeenT > 6 || (brain.arrived && t > brain.coverHopUntil - 5.5 && t - P.lastSeenT > 3.5))) brain.coverHopUntil = -9;
+    if (!hopping && (!brain.goal || hdist(brain.goal, obj.anchor) > 1.0)) {
       setGoal(nav, sim, brain, bot, obj.anchor, obj.posture === "press" || hdist(bot.pos, obj.anchor) > 12);
     }
-    if (brain.coverIdx < 0 || t - brain.coverScoreAt >= 6 || compromised) {
+    if (brain.coverIdx < 0 || t - brain.coverScoreAt >= band.coverRescoreS || compromised) {
       brain.coverScoreAt = t;
       brain.hpAtCover = bot.hp;
-      const pick = pickCover(sim, nav, bot, brain, threat, weapon, pushOn, { pathOnly: true, obj, t });
+      const pick = pickCover(sim, nav, bot, brain, threat, weapon, pushOn, { pathOnly: true, obj, t, noise: band.coverNoise, rng });
       if (pick) brain.coverIdx = pick.idx; // note the node; the GOAL stays the anchor
     }
-  } else if (pushOn || lastStand) {
-    // push: close on last-known directly (§5.3 — the engagement ends)
-    setGoal(nav, sim, brain, bot, threat, true);
-    if (brain.arrived && t - P.lastSeenT > 3 && nav) {
-      const p2 = nav.randomPoint(threat, 8, rng);
-      setGoal(nav, sim, brain, bot, p2, true);
+    // (objective runners keep the tempo: no dives for attackers / escorts /
+    // interceptors / returners / carriers — a duel at their feet is theirs to win)
+    const runner = obj && (obj.role === "attack" || obj.role === "escort" || obj.role === "intercept" || obj.role === "return" || obj.role === "carry");
+    if (band.peek > 0 && pri < 0.9 && !runner && !hopping && t >= brain.coverHopNextT && seenNow && brain.coverIdx >= 0 && nav) {
+      const cv = sim.colliders.cover && sim.colliders.cover[brain.coverIdx];
+      const dC = cv ? hdist(bot.pos, cv.pos) : 99;
+      if (cv && dC >= 1.0 && dC <= 5.0 && Math.abs(cv.pos[1] - bot.pos[1]) < 1.0) {
+        brain.coverHopNextT = t + 6;
+        const eye = [cv.pos[0], cv.pos[1] + 1.3, cv.pos[2]];
+        if (sim.world.losBlocked(eye, [threat[0], threat[1] + 1.0, threat[2]]) && (band.peek >= 1 || rng() < band.peek)) {
+          setGoal(nav, sim, brain, bot, cv.pos, true);
+          brain.coverHopUntil = t + 8;
+        }
+      }
     }
-  } else if (brain.coverIdx < 0 || t - brain.coverScoreAt >= 6 || compromised) {
+  } else if (pushOn || lastStand || brain.huntOn) {
+    // push: close on last-known directly (§5.3 — the engagement ends); a
+    // hunter walks (gun up, quieter) and sweeps around the spot once there
+    setGoal(nav, sim, brain, bot, threat, !brain.huntOn || lostS > band.huntAfterS + 6);
+    if (brain.arrived && t - P.lastSeenT > 3 && nav) {
+      const p2 = nav.randomPoint(threat, 8, rng, 1);
+      setGoal(nav, sim, brain, bot, p2, !brain.huntOn);
+    }
+  } else if (brain.coverIdx < 0 || t - brain.coverScoreAt >= band.coverRescoreS || compromised) {
     brain.coverScoreAt = t;
     brain.hpAtCover = bot.hp;
     const pick = pickCover(sim, nav, bot, brain, threat, weapon, pushOn,
-      pri >= 0.40 && obj && obj.anchor ? { obj, t } : { t });
+      pri >= 0.40 && obj && obj.anchor ? { obj, t, noise: band.coverNoise, rng } : { t, noise: band.coverNoise, rng });
     if (pick) {
       brain.coverIdx = pick.idx;
       setGoal(nav, sim, brain, bot, pick.pos, hdist(bot.pos, pick.pos) > 8);
@@ -614,15 +872,20 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     staticFor = rec.staticRef ? t - rec.staticSinceT : 0;
   }
   if (hasFire && !brain.gPlanned && !(obj && obj.noGrenade) &&
+      t >= brain.grenBlockUntil &&
       squad.grenadeReady(bot.id, t) &&
       sim.internal.grenades.length === 0 &&
-      staticFor >= 6 &&
+      staticFor >= band.grenStaticS &&
+      (!seenNow || staticFor >= 6) && // a target in plain view is shot, not fragged (the low hardened/veteran
+                                      // thresholds mean 'flush it out of cover', i.e. out of sight)
       brain.confirmT >= 0 && t >= brain.confirmT + brain.reactionS) {
     const target = [threat[0], sim.world.sphereGround(threat[0], threat[2]), threat[2]];
     const d = hdist(bot.pos, target);
     if (d >= 8 && d <= 30) {
       const pitch = solveArcPitch(eyeOf(bot), target, GRENADE.BOT_THROW_V);
-      if (pitch != null) {
+      if (pitch != null && band.grenP < 1 && rng() >= band.grenP) {
+        brain.grenBlockUntil = t + 15; // decided against it (recruits almost never commit)
+      } else if (pitch != null) {
         brain.gPlanned = true;
         brain.gReleaseT = t + 1.2; // §5.9 telegraph: bark 1.2 s BEFORE release
         brain.gPitch = pitch;
@@ -785,6 +1048,7 @@ function pickCover(sim, nav, bot, brain, threatPos, weapon, pushOn, objOpts) {
       const toNode = Math.atan2(-(c.pos[0] - threatPos[0]), -(c.pos[2] - threatPos[2]));
       if (Math.abs(angDiff(toNode, aimYaw)) < 15 * DEG) s -= 1.5;
     }
+    if (objOpts && objOpts.noise > 0 && objOpts.rng) s += (objOpts.rng() * 2 - 1) * objOpts.noise;
     scored.push({ i, s, pos: c.pos, height: c.height });
   }
   if (!scored.length) return null;
@@ -806,12 +1070,262 @@ function pickCover(sim, nav, bot, brain, threatPos, weapon, pushOn, objOpts) {
   return { idx: top[0].i, pos: top[0].pos.slice(), height: top[0].height };
 }
 
+// ============================================================ BOT-AI PASS helpers
+// ---- weapon choice: the right gun for the range, a swap instead of a reload
+// when the primary is nearly dry, the shotgun for anything inside ~8 m.
+const CLS_MID = { pistol: 9, shotgun: 5, smg: 13, ar: 25, dmr: 55 };
+const CLS_HALF = { pistol: 7, shotgun: 6, smg: 9, ar: 18, dmr: 30 };
+function fitScore(cls, d) {
+  const m = CLS_MID[cls] != null ? CLS_MID[cls] : 20, h = CLS_HALF[cls] != null ? CLS_HALF[cls] : 15;
+  let f = 1 - Math.abs(d - m) / (h * 1.7);
+  if (cls === "pistol") f -= 0.45;          // the sidearm is a fallback, not a plan
+  if (cls === "shotgun" && d > 12) f -= 0.8; // pellets are useless out there
+  return f;
+}
+function ammoOfSlot(bot, id) {
+  if (bot.weapon.id === id) return bot.weapon.mag + bot.weapon.reserve;
+  const a = bot._slotAmmo && bot._slotAmmo[id];
+  return a ? a.mag + a.reserve : 0;
+}
+// returns a weapon id to switch to, or null. Throttled to one look per 0.5 s.
+function chooseWeapon(sim, bot, brain, band, t, rng, dT) {
+  const slots = bot.slots;
+  if (!slots || !slots.length) return null;
+  const w = bot.weapon;
+  if (w.state === "switching" || (brain.burstLeft > 0 && brain.burstSize > 0)) return null;
+  if (t - brain.swapT < 0.5) return null;
+  brain.swapT = t;
+  let nOwned = 0;
+  for (let i = 0; i < slots.length; i++) if (slots[i]) nOwned++;
+  if (nOwned < 2) return null;
+  const cur = w.id;
+  // an EMPTY gun is swapped by everybody (even a recruit): best other with ammo
+  if (w.mag + w.reserve <= 0) {
+    let best = null, bt = -1;
+    for (const id of slots) if (id && id !== cur && ammoOfSlot(bot, id) > 0 && tierOf(id) > bt) { best = id; bt = tierOf(id); }
+    return best;
+  }
+  if (brain.smartSwap === null) brain.smartSwap = band.swapSmart >= 1 ? true : (band.swapSmart > 0 && rng() < band.swapSmart);
+  if (!brain.smartSwap || dT == null) return null;
+  const wt = sim.weapons[cur];
+  // nearly dry primary, a loaded alternative, enemy in view: swap beats reloading
+  if (wt && w.mag <= Math.max(1, wt.mag * 0.12) && w.reserve > 0) {
+    for (const id of slots) {
+      if (!id || id === cur) continue;
+      const a = bot._slotAmmo && bot._slotAmmo[id];
+      if (a && a.mag > 0 && dT < 22) return id;
+    }
+  }
+  let best = cur, bestS = -9;
+  let curS = -9;
+  for (const id of slots) {
+    if (!id) continue;
+    if (ammoOfSlot(bot, id) <= 0) continue;
+    if (id !== cur) { const a = bot._slotAmmo && bot._slotAmmo[id]; if (!a || a.mag <= 0) continue; }
+    const cls = sim.weapons[id] ? sim.weapons[id].class : "ar";
+    const sc = fitScore(cls, dT) + (id === cur ? 0.35 : 0); // hysteresis: the gun in hand gets a bonus
+    if (id === cur) curS = sc;
+    if (sc > bestS) { bestS = sc; best = id; }
+  }
+  return best !== cur && bestS > curS + 0.05 ? best : null;
+}
+
+// ---- pre-aim: face down the far side of an upcoming corner instead of the
+// wall the path is about to turn away from (hardened/veteran)
+function lookAheadYaw(bot, brain) {
+  const path = brain.path;
+  if (!path || brain.pathI >= path.length - 1) return null;
+  const W = path[brain.pathI], N = path[brain.pathI + 1];
+  if (hdist(bot.pos, W) > 3.8) return null;
+  const a1 = yawTo(bot.pos, W), a2 = yawTo(W, N);
+  if (Math.abs(angDiff(a2, a1)) < 35 * DEG) return null;
+  return a2;
+}
+
+// ---- loot: an under-armed bot detours to a rack / drop (PVP primarily)
+function lootNeed(sim, bot) {
+  const slots = bot.slots || [];
+  let bestTier = -1, anyAmmoLow = false, nPrim = 0;
+  for (const id of slots) {
+    if (!id || id === "pike") continue;
+    nPrim++;
+    const a = ammoOfSlot(bot, id);
+    if (a > 0 && tierOf(id) > bestTier) bestTier = tierOf(id);
+    const wt = sim.weapons[id];
+    if (wt && a < (wt.mag + wt.reserve) * 0.3) anyAmmoLow = true;
+  }
+  return { weapon: nPrim === 0 || bestTier < 0, ammo: nPrim > 0 && anyAmmoLow, bestTier };
+}
+function considerLoot(sim, nav, squad, bot, brain, band, t) {
+  const S = sim.state;
+  const loot = S.loot;
+  if (!loot || !loot.length || !nav) { brain.lootUntil = -9; return false; }
+  const x = sim.squad && sim.squad._navx;
+  if (brain.lootUntil > t) {
+    let it = null;
+    for (let i = 0; i < loot.length; i++) if (loot[i].id === brain.lootId) { it = loot[i]; break; }
+    if (it && !brain.arrived && brain.goal && hdist(brain.goal, it.pos) < 1.6) return true; // still walking there
+    brain.lootUntil = -9; brain.lootId = -1; brain.anchor = null; // gone / reached: resume orders
+    return false;
+  }
+  if (t - brain.lootCheckT < 1.5) return false;
+  brain.lootCheckT = t;
+  const obj = bot._obj;
+  if (obj && obj.priority >= 0.9) return false;               // carrying / grabbing / returning: no detours
+  // objective runners keep the tempo: attackers / escorts / interceptors /
+  // returners only detour when a gun is within a few metres of their route
+  const runner = obj && (obj.role === "attack" || obj.role === "escort" || obj.role === "intercept" || obj.role === "return" || obj.role === "carry");
+  const need = lootNeed(sim, bot);
+  if (!need.weapon && !need.ammo) return false;
+  const range = band.lootRange;
+  if (!(range > 0)) return false;
+  let best = null, bestScore = 0;
+  for (let i = 0; i < loot.length; i++) {
+    const it = loot[i];
+    if (S.time < it.armedAt) continue;
+    if (!sim.match && it.src === "placed") continue;         // campaign: placed items are the player's
+    if (Math.abs(it.pos[1] - bot.pos[1]) > 2.5) continue;
+    const d = hdist(bot.pos, it.pos);
+    if (d > range) continue;
+    let val = 0;
+    if (it.kind === "weapon") {
+      if (!owns(bot, it.weapon)) {
+        const tr = tierOf(it.weapon);
+        if (need.weapon || tr > need.bestTier) val = 1 + tr * 0.7;
+        const nat = { rifleman: "ar", cqb: "smg", marksman: "dmr", heavy: "ar" }[bot.archetype];
+        const wt = sim.weapons[it.weapon];
+        if (wt && wt.class === nat) val += 0.8;
+      } else if (need.ammo) val = 0.9;
+    } else if (it.kind === "ammo" && need.ammo) val = 1.0;
+    if (val <= 0) continue;
+    if (x && x.lootClaims) {
+      const cl = x.lootClaims.get(it.id);
+      if (cl && cl.until > t && cl.bot !== bot.id) {
+        const ob = S.bots.find((b) => b.id === cl.bot);
+        if (ob && ob.alive) continue;
+      }
+    }
+    const score = val * 8 - d * 0.35;
+    if (score > bestScore) { bestScore = score; best = it; }
+  }
+  if (!best) return false;
+  if (obj && obj.anchor) {
+    const dA = hdist(bot.pos, obj.anchor), dB = hdist(best.pos, obj.anchor);
+    if (hdist(bot.pos, best.pos) + dB - dA > (runner ? 6 : range * 0.8 + 8)) return false; // too far off the way
+  }
+  if (!nav.reachable(bot.pos, best.pos)) return false;
+  setGoal(nav, sim, brain, bot, best.pos, hdist(bot.pos, best.pos) > 12);
+  if (!brain.path || brain.path.length < 2) { brain.goal = null; brain.arrived = true; return false; }
+  let len = 0;
+  for (let i = 1; i < brain.path.length; i++) len += hdist(brain.path[i - 1], brain.path[i]);
+  if (len > range * 1.7) { brain.goal = null; brain.arrived = true; brain.anchor = null; return false; }
+  brain.lootUntil = t + 16; brain.lootId = best.id;
+  if (sim.squad) {
+    const nx = sim.squad._navx || (sim.squad._navx = { heat: new Map(), tick: 0, plans: 0, replans: 0 });
+    if (!nx.lootClaims) nx.lootClaims = new Map();
+    nx.lootClaims.set(best.id, { bot: bot.id, until: t + 16 });
+  }
+  return true;
+}
+
+// ---- side-peek from cover: hide / lean out / fire / duck back, alternating
+// sides. Returns true while it owns the feet this tick.
+function peekStep(sim, nav, bot, brain, band, t, rng, P, tb, c) {
+  if (brain.coverIdx < 0 || !brain.arrived) return false;
+  const cover = sim.colliders.cover && sim.colliders.cover[brain.coverIdx];
+  if (!cover) return false;
+  const pk = brain.pk;
+  if (pk.coverIdx !== brain.coverIdx) {
+    pk.coverIdx = brain.coverIdx; pk.ph = "hide"; pk.until = t + 0.5;
+    pk.home = [cover.pos[0], cover.pos[1], cover.pos[2]];
+    pk.on = band.peek >= 1 ? true : (band.peek > 0 && rng() < band.peek);
+    pk.spot = null;
+  }
+  if (!pk.on) return false;
+  const home = pk.home;
+  // the hop logic is a 1-2 m affair around the cover node; a bot that has been
+  // sent elsewhere (hunt / objective / flank) and merely shares the cover index
+  // must not walk a straight line "back" to a node across the map
+  if (hdist(bot.pos, home) > 2.2) { pk.coverIdx = -2; pk.ph = "hide"; return false; }
+  const threatP = (P && P.lastKnown && t - P.lastSeenT < 25) ? P.lastKnown : null;
+  const hitJust = (bot.lastHitT ?? -9) > t - 0.35;
+  const lat = (() => {
+    const dx = cover.dir ? cover.dir[0] : 0, dz = cover.dir ? cover.dir[2] : 0;
+    const l = Math.hypot(dx, dz) || 1;
+    return [-dz / l, dx / l];
+  })();
+  if (pk.ph === "hide") {
+    if (hdist(bot.pos, home) > 0.35) { STEER.stepTo(bot, brain, home[0], home[2]); return true; }
+    if (cover.height === "low") c.crouch = true;
+    if (t >= pk.until && threatP && !(P.seesTarget && t - P.lastSeenT < 0.4)) {
+      const first = brain.pk.side;
+      // widen the lean until a firing line exists: covers are 1-6 m wide, so a
+      // fixed 1 m lean often stays behind the same crate
+      search:
+      for (const off of [1.0, 1.7, 2.4, 3.1]) {
+        for (const sd of [first, -first]) {
+          const spot = [home[0] + lat[0] * sd * off, home[1], home[2] + lat[1] * sd * off];
+          if (nav && !nav.lineClear(home, spot, 0)) continue;
+          const eye = [spot[0], spot[1] + 1.5, spot[2]];
+          if (sim.world.losBlocked(eye, [threatP[0], threatP[1] + 1.0, threatP[2]])) continue;
+          pk.ph = "out"; pk.spot = spot; pk.side = sd; pk.until = t + 0.9 + rng() * 0.7 + off * 0.15; pk.outT = t;
+          pk.mark = brain.burstLog.length;
+          break search;
+        }
+      }
+      if (pk.ph !== "out") pk.until = t + 0.9; // no firing line from either side: keep hiding
+    }
+    return false;
+  }
+  if (pk.ph === "out") {
+    const burstDone = brain.burstLog.length > pk.mark && brain.burstLeft <= 0;
+    const bursting = brain.burstLeft > 0 && brain.burstSize > 0 && t < pk.until + 0.7;
+    if (!pk.spot || (!bursting && (t >= pk.until || burstDone || (hitJust && band.peek >= 1)))) {
+      pk.ph = "back";
+      return false;
+    }
+    if (hdist(bot.pos, pk.spot) > 0.22) { STEER.stepTo(bot, brain, pk.spot[0], pk.spot[2]); return true; }
+    return false; // in position: the normal hold-and-fire logic takes over
+  }
+  // back
+  if (hdist(bot.pos, home) > 0.3) { STEER.stepTo(bot, brain, home[0], home[2]); return true; }
+  pk.ph = "hide";
+  const hideT = (0.7 + rng() * 0.8) * (band.name === "veteran" ? 0.8 : band.peek >= 1 ? 1.0 : 1.7);
+  pk.until = t + hideT;
+  // hardened/veteran switch sides most of the time (not predictable); others random
+  pk.side = (band.peek >= 1 ? rng() < 0.7 : rng() < 0.5) ? -pk.side : pk.side;
+  return false;
+}
+
+// ---- strafe between bursts (never while a burst is firing, never in the last
+// 0.12 s before the next one so the bot has stopped when it pulls)
+function strafeStep(sim, nav, bot, brain, band, t, rng, c) {
+  if (t >= brain.strafeUntil) {
+    brain.strafeUntil = t + 0.45 + rng() * 0.5;
+    if (rng() < 0.7) brain.strafeDir = -brain.strafeDir;
+    // the side must be walkable for ~0.9 m and not take us far from where we were
+    if (!brain.strafeHome || hdist(bot.pos, brain.strafeHome) > 3.5) brain.strafeHome = bot.pos.slice();
+    if (nav) {
+      const yaw = bot.yaw;
+      for (let k = 0; k < 2; k++) {
+        const sx = Math.cos(yaw) * brain.strafeDir, sz = -Math.sin(yaw) * brain.strafeDir;
+        const tp = [bot.pos[0] + sx * 0.95, bot.pos[1], bot.pos[2] + sz * 0.95];
+        if (nav.lineClear(bot.pos, tp, 0) && hdist(tp, brain.strafeHome) < 1.6) return void (c.moveX = brain.strafeDir);
+        brain.strafeDir = -brain.strafeDir;
+      }
+      brain.strafeUntil = t + 0.3;
+      return;
+    }
+  }
+  c.moveX = brain.strafeDir;
+}
+
 // ==================================================================== act
 function act(sim, nav, squad, bot, dt, t) {
   if (!bot._brain) bot._brain = mkBrain(bot, t);
   const brain = bot._brain;
   const rng = sim.rng.ai;
-  const band = BANDS[bot.band] || BANDS.regular;
+  const band = kOf(sim, bot, brain);
   const weapon = sim.weapons[bot.weapon.id];
   const P = bot.percept;
   const tb = targetBodyOf(sim, bot); // W3: the CURRENT target's body, or null
@@ -847,6 +1361,7 @@ function act(sim, nav, squad, bot, dt, t) {
   c.moveX = 0; c.moveZ = 0; c.jump = false; c.crouch = false; c.sprint = false;
   c.fire = false; c.ads = false; c.reload = false; c.switchTo = null;
   c.interact = false; c.grenade = false;
+  brain.mvActive = false; // steer.js re-arms it when a path is followed this tick
 
   // ---- live-grenade dodge (any live frag within 6.5 m → sprint away)
   const gl = sim.internal.grenades;
@@ -877,7 +1392,7 @@ function act(sim, nav, squad, bot, dt, t) {
         const v = GRENADE.BOT_THROW_V;
         const vel = [-Math.sin(yaw) * cp * v, sp * v, -Math.cos(yaw) * cp * v];
         spawnGrenade(sim, bot.id, org, vel); // 3.8 s fuse from release
-        squad.noteGrenade(bot.id, t);
+        squad.noteGrenade(bot.id, t, band.grenCdS);
       }
     }
     bot.aimAt = brain.gTarget;
@@ -911,10 +1426,20 @@ function act(sim, nav, squad, bot, dt, t) {
         dest = cand;
         break;
       }
+      // a recruit reloads where it stands (in the open, in the line of fire)
+      if (dest && band.reloadBreak < 1 && rng() >= band.reloadBreak) dest = null;
       brain.reloadDest = dest;
     } else brain.reloadDest = null;
   }
   brain.prevWeaponState = bot.weapon.state;
+
+  // ---- weapon choice (BOT-AI PASS): right gun for the range, no reload when a
+  // loaded sidearm is in the holster, shotgun inside ~8 m
+  {
+    const tbS = P && P.seesTarget && t - P.lastSeenT <= 0.5 ? tb : null;
+    const pick = chooseWeapon(sim, bot, brain, band, t, rng, tbS ? hdist(bot.pos, tbS.pos) : null);
+    if (pick && pick !== bot.weapon.id) c.switchTo = pick;
+  }
 
   // ---- low-hp bark
   if (bot.hp < 40 && !brain.lowHpBarked) { brain.lowHpBarked = true; squad.requestBark(bot.id, "hit"); }
@@ -940,7 +1465,7 @@ function act(sim, nav, squad, bot, dt, t) {
     const route = bot.patrol;
     if (!route && brain.goal && !brain.arrived) {
       // W3 patrol floor / H4: routeless idle bots walk their wander goals
-      followPath(sim, bot, brain, c, dt);
+      followPath(sim, nav, bot, brain, c, dt);
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       moving = true;
       brain.anchorYaw = desYaw;
@@ -956,6 +1481,20 @@ function act(sim, nav, squad, bot, dt, t) {
         if (Math.abs(brain.scanYaw) > 60 * DEG) brain.scanDir *= -1;
         desYaw = brain.anchorYaw + brain.scanYaw;
         turnRate = 25 * DEG * 4;
+      } else if (nav) {
+        // BOT-AI PASS: authored routes walk the nav path to the next waypoint
+        // (the old straight-at-the-waypoint heading pushed into walls)
+        if (!brain.goal || hdist(brain.goal, wp3) > 0.6) setGoal(nav, sim, brain, bot, wp3, false);
+        if (brain.goal && !brain.arrived) {
+          followPath(sim, nav, bot, brain, c, dt);
+          desYaw = brain.moveYaw != null ? brain.moveYaw : yawTo(bot.pos, wp3);
+          moving = true;
+        } else {
+          brain.patrolI = (brain.patrolI + 1) % route.length; // unreachable / reached: next stop
+          brain.goal = null;
+        }
+        brain.anchorYaw = desYaw;
+        turnRate = 2.4;
       } else {
         desYaw = yawTo(bot.pos, wp3);
         c.moveZ = 1;
@@ -971,7 +1510,7 @@ function act(sim, nav, squad, bot, dt, t) {
     }
   } else if (st === "suspicious") {
     if (!brain.arrived && brain.goal) {
-      followPath(sim, bot, brain, c, dt);
+      followPath(sim, nav, bot, brain, c, dt);
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       c.sprint = brain.investT.sprint && hdist(bot.pos, brain.goal) > 6;
       moving = true;
@@ -988,7 +1527,7 @@ function act(sim, nav, squad, bot, dt, t) {
       squad.release(bot.id);
       brain.coverScoreAt = -9;
     } else {
-      followPath(sim, bot, brain, c, dt);
+      followPath(sim, nav, bot, brain, c, dt);
       c.sprint = true;
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       moving = true;
@@ -996,7 +1535,7 @@ function act(sim, nav, squad, bot, dt, t) {
     }
   } else if (st === "retreat") {
     if (!brain.arrived && brain.goal) {
-      followPath(sim, bot, brain, c, dt);
+      followPath(sim, nav, bot, brain, c, dt);
       c.sprint = true;
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       moving = true;
@@ -1026,16 +1565,19 @@ function act(sim, nav, squad, bot, dt, t) {
     // strafe frame, so the fight continues on the move. One-directional:
     // no information, speed, or accuracy is granted (monotonic rule).
     const objPress = obj && obj.anchor && obj.priority >= 0.9 && !brain.arrived;
-    const wantHold = ((visibleFresh && t >= brain.taskLockUntil) || st === "suppress") && !objPress;
+    const hopRun = (t < brain.pushUntil && hdist(bot.pos, brain.goal || bot.pos) > 3) ||
+      (t < brain.coverHopUntil && !brain.arrived && hdist(bot.pos, brain.goal || bot.pos) > 0.8);
+    const wantHold = ((visibleFresh && t >= brain.taskLockUntil) || st === "suppress") && !objPress && !hopRun;
     if (!brain.arrived && brain.goal && !wantHold) {
-      followPath(sim, bot, brain, c, dt);
+      followPath(sim, nav, bot, brain, c, dt);
       c.sprint = brain.sprintMove && hdist(bot.pos, brain.goal) > 6;
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       moving = true;
       turnRate = 5.6;
-    } else if (!brain.arrived && brain.goal && wantHold && hdist(bot.pos, brain.goal) > 14) {
+    } else if (!brain.arrived && brain.goal && wantHold && hdist(bot.pos, brain.goal) > 14 &&
+               !(band.holdWhenSeen && tb && hdist(bot.pos, tb.pos) <= 45)) {
       // far from cover but target visible: keep moving (walk, gun up)
-      followPath(sim, bot, brain, c, dt);
+      followPath(sim, nav, bot, brain, c, dt);
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       moving = true;
       turnRate = 5.6;
@@ -1080,13 +1622,13 @@ function act(sim, nav, squad, bot, dt, t) {
       const aPitch = Math.atan2(ty - eye[1], hl);
       desYaw = aYaw;
       desPitch = aPitch;
-      turnRate = 9.4; // combat turn 540°/s
+      turnRate = band.turnRate; // combat turn cap (rad/s) by skill: 4.0 recruit … 12 veteran
       bot.aimAt = [tx, ty, tz];
 
       // gates — every one must pass on the tick of the pull (§5.5–§5.7)
       const reactionReady = brain.confirmT >= 0 && t >= brain.confirmT + brain.reactionS - 1e-9;
-      const stationary = Math.hypot(bot.vel[0], bot.vel[2]) < 0.75;
-      if (reactionReady && stationary) c.ads = d3 > 12; // steady ADS posture
+      const stationary = Math.hypot(bot.vel[0], bot.vel[2]) < band.fireSpeed;
+      if (reactionReady && stationary) c.ads = d3 > 12 && !(weapon && weapon.class === "shotgun"); // steady ADS posture
       const who = P ? P.target : null;
       const hasToken = st === "suppress"
         ? squad.holdsSuppress(bot.id)
@@ -1133,7 +1675,7 @@ function act(sim, nav, squad, bot, dt, t) {
         squad.noteFireAuth(bot.id, t, who);
         if (weapon && weapon.auto) c.fire = true;
         else { brain.semiToggle = !brain.semiToggle; c.fire = brain.semiToggle; }
-        c.ads = d3 > 12;
+        c.ads = d3 > 12 && !(weapon && weapon.class === "shotgun");
         // apply latched aim errors on the firing aim only
         desYaw = aYaw + brain.jitterY + (brain.missLeft > 0 ? brain.missSign * brain.missOff : 0);
         desPitch = aPitch + brain.jitterP + (brain.missLeft > 0 ? brain.missOff * 0.25 : 0);
@@ -1155,10 +1697,32 @@ function act(sim, nav, squad, bot, dt, t) {
   } else if (!inFireState && !moving && st !== "patrol" && st !== "alert" && st !== "suspicious") {
     // idle-facing fallback for retreat handled above
   }
+  // BOT-AI PASS: top the magazine up in a lull instead of carrying half a mag
+  // into the next fight (and reloading in the middle of it): no enemy seen for
+  // 2.5 s, nothing fired for 2 s, magazine at or under the band's threshold
+  if (!c.reload && !reloading && !c.fire && st !== "retreat" && weapon && bot.weapon.reserve > 0 &&
+      bot.weapon.mag <= weapon.mag * (band.name === "recruit" ? 0.2 : band.name === "regular" ? 0.4 : 0.55) &&
+      t - (P ? P.lastSeenT : -9) > 2.5 && t - (bot.weapon.lastShotT ?? -9) > 2.0 && bot.weapon.state === "idle") {
+    c.reload = !brain.prevReloadCmd;
+  }
   brain.prevReloadCmd = c.reload;
 
+  // ---- BOT-AI PASS: peeking and strafing (combat, not reloading, not firing)
+  if (st === "combat" && !reloading && !brain.gPlanned) {
+    const holdingGround = !moving && !brain.mvActive;
+    if (holdingGround && peekStep(sim, nav, bot, brain, band, t, rng, P, tb, c)) {
+      moving = true;
+    } else if (holdingGround && !c.fire && brain.strafeOn && P && P.seesTarget && t - P.lastSeenT <= 0.4 && tb &&
+               !(brain.pk.on && brain.coverIdx >= 0 && brain.arrived)) {
+      const bursting = brain.burstLeft > 0 && brain.burstSize > 0;
+      const reacting = band.strafeReact !== false && brain.confirmT >= 0 && t < brain.confirmT + brain.reactionS;
+      const pausing = t < brain.pauseUntil - 0.12;
+      if (!bursting && (reacting || pausing) && bot.hp > 0) strafeStep(sim, nav, bot, brain, band, t, rng, c);
+    }
+  }
+
   // ---- peek stance at low cover while engaged (visual peek cycle)
-  if (st === "combat" && brain.arrived && brain.coverIdx >= 0 && !c.fire) {
+  if (st === "combat" && brain.arrived && brain.coverIdx >= 0 && !c.fire && !brain.pk.on) {
     const cover = sim.colliders.cover[brain.coverIdx];
     if (cover && cover.height === "low") {
       if (brain.peekUntil < t) {
@@ -1172,85 +1736,39 @@ function act(sim, nav, squad, bot, dt, t) {
   }
 
   // ---- finalize aim/turn
+  if (brain.mvActive && !bot.aimAt) {
+    // travelling: feet are path-driven now, so facing only needs to look right —
+    // catch up quickly; hardened/veteran bots pre-aim the far side of corners
+    if (band.lookCorners > 0 && ((bot.id * 0.6180339887) % 1) < band.lookCorners) {
+      const ly = lookAheadYaw(bot, brain);
+      if (ly != null) desYaw = ly;
+    }
+    if (turnRate < 5.0) turnRate = 5.0;
+  }
   if (!c.fire) brain.curYaw = approachYaw(brain.curYaw, desYaw, turnRate * dt);
   c.yaw = brain.curYaw;
   c.pitch = desPitch;
-  // W3: when walking a path WHILE aiming at a target (H2 break-off, H1
-  // objective drive), express the move direction in the facing frame —
-  // strafe — so the aim yaw does not hijack the feet toward the target.
-  if (moving && bot.aimAt && brain.moveYaw != null && c.moveZ !== 0) {
+  // BOT-AI PASS: the feet follow steer.js's WORLD-SPACE heading expressed in
+  // the final facing frame, so facing (aim, scan, turn-rate caps) and travel
+  // are independent. Replaces the W3 "strafe only when aiming" special case:
+  // a bot that is walking a path AND aiming (H2 break-off, H1 objective drive)
+  // already strafed through this exact rotation.
+  if (brain.mvActive && brain.moveYaw != null && !(reloading && brain.reloadDest)) {
     const rel = angDiff(brain.moveYaw, brain.curYaw);
     c.moveZ = Math.cos(rel);
     c.moveX = -Math.sin(rel);
   }
   brain.wasFiring = c.fire;
 
-  // ---- stuck watchdog (W3 wedge-escape rework — matchprobe AC-4 finding)
-  // Old behavior randomized around the GOAL — the unreachable thing — and
-  // the objective drive re-asserted its anchor within one think, so a wedged
-  // bot pushed at the same corner for 100+ s. Now: detour around the BOT
-  // (any reachable nav node nearby breaks the wall contact), and hold the
-  // detour via brain.detourUntil (setGoal defers all overrides while it
-  // runs). Escalating radius: repeat wedges walk progressively farther out.
-  {
-    const speed = Math.hypot(bot.vel[0], bot.vel[2]);
-    if ((c.moveZ !== 0 || c.moveX !== 0) && speed < 0.3) {
-      brain.stuckT += dt;
-      if (brain.stuckT > 1.5) {
-        brain.stuckT = 0;
-        brain.stuckN = (brain.stuckN || 0) + 1;
-        // W3 embed tomb (mover-layer defect, recovered here): descending off
-        // a stair-run SIDE embeds the capsule up to 0.14 m into the tall
-        // step (supportAt clears at 0.6xR while blocking uses full R), and
-        // axis-blocked velocity zeroing caps a standstill frame's step at
-        // ~0.01 m — the bot can never generate the exit step and freezes
-        // PERMANENTLY (measured: bot 54 seed 6, 534 s at the alley stair,
-        // capsuleBlocked true at its own pos). After 3 fruitless detours at
-        // zero speed, depenetrate: shortest lateral nudge to a non-blocked
-        // position, compass order (deterministic). The real fix is mover
-        // depenetration in world.js — out of this lane, flagged.
-        if (speed < 0.05 && brain.stuckN >= 3 && sim.world && sim.world.capsuleBlocked) {
-          const h = bot.stance === "crouch" ? 1.35 : 1.8;
-          if (sim.world.capsuleBlocked(bot.pos[0], bot.pos[1], bot.pos[2], 0.35, h)) {
-            outer:
-            for (const rr of [0.12, 0.2, 0.3, 0.45]) {
-              for (let k8 = 0; k8 < 8; k8++) {
-                const ang = k8 * Math.PI / 4;
-                const nx = bot.pos[0] + Math.cos(ang) * rr;
-                const nz = bot.pos[2] + Math.sin(ang) * rr;
-                if (!sim.world.capsuleBlocked(nx, bot.pos[1], nz, 0.35, h)) {
-                  bot.pos[0] = nx; bot.pos[2] = nz;
-                  brain.stuckN = 0;
-                  brain.needRepath = true;
-                  break outer;
-                }
-              }
-            }
-          }
-        }
-        if (nav) {
-          // escalate BOTH knobs with repeat wedges: a cross-wall combat
-          // approach (target euclid-near, nav-far — the pier slit) pulls the
-          // bot straight back after a short detour; by stuckN 4+ the detour
-          // walks far enough to round the obstacle and holds long enough
-          // that the re-approach happens from the far side (measured: the
-          // last AC-4 window was exactly this class, 32 s at the slit).
-          const esc = nav.randomPoint(bot.pos, 3 + Math.min(9, brain.stuckN * 2), rng);
-          if (esc && hdist(esc, bot.pos) > 0.6) {
-            brain.detourUntil = 0; // let this setGoal through its own guard
-            brain.needRepath = true;
-            setGoal(nav, sim, brain, bot, esc, false);
-            brain.detourUntil = t + 1.5 + 0.7 * Math.min(6, brain.stuckN);
-          } else {
-            brain.needRepath = true; // no node nearby: at least force a repath
-          }
-        }
-      }
-    } else {
-      brain.stuckT = 0;
-      if (speed >= 1.0) brain.stuckN = 0; // genuinely moving again
-    }
-  }
+  // ---- stuck ladder (steer.js: sidestep + local replan at 0.7 s, then the
+  // W3 escalating detour, then the embed-tomb depenetration; plus a
+  // displacement detector for orbits). setGoal defers all overrides while a
+  // detour runs (brain.detourUntil) so the objective drive cannot re-assert
+  // its anchor inside the window.
+  STEER.watchStuck(sim, nav, bot, brain, !!brain.mvActive, dt, {
+    replan() { if (brain.goal && !brain.arrived) { brain.needRepath = false; brain.path = STEER.planPath(sim, nav, bot, brain, brain.goal, band); brain.pathI = brain.path ? 1 : 0; } },
+    detour(esc) { setGoal(nav, sim, brain, bot, esc, false); },
+  });
 }
 
 // §1.8 sprint-out (mirrors player.js SPRINT_OUT_S normal column — bots never
@@ -1279,7 +1797,8 @@ function rollJitter(sim, bot, brain, band, rng, t) {
   const tb = P && P.targetBody && P.targetBody.alive ? P.targetBody : null;
   const fresh = !!(tb && P.seesTarget && t - P.lastSeenT <= 0.3);
   const sinceConfirm = brain.confirmT >= 0 ? t - brain.confirmT : 9;
-  const acquire = sinceConfirm < 0.6 ? 3 - 2 * (sinceConfirm / 0.6) : 1;
+  const A = band.acquire != null ? band.acquire : 3;
+  const acquire = sinceConfirm < 0.6 ? A - (A - 1) * (sinceConfirm / 0.6) : 1;
   const pm = fresh ? (tb._m || null) : null;
   const evasive = fresh && ((tb.grounded === false) || (pm && pm.sliding)) ? 1.5 : 1;
   const botMoving = Math.hypot(bot.vel[0], bot.vel[2]) > 0.5 ? 1.5 : 1;
@@ -1314,45 +1833,25 @@ function fireBlocked(sim, bot, eye, dir, distToTarget, targetWho) {
   return false;
 }
 
-function followPath(sim, bot, brain, c, dt) {
-  const goal = brain.goal;
-  if (!goal) { brain.arrived = true; return; }
-  // W3 AC-4 orbit fix: the fixed 0.6 m accept radius is INSIDE the turning
-  // circle at movement speed (walk 4.6 / turn 2.4-5.6 rad/s → radius up to
-  // ~2.7 m sprinting), so a bot that overshot a waypoint veered around it
-  // forever (measured: vel 4-6 m/s, zero net displacement, 30-90 s). Accept
-  // scales with speed, and passing a waypoint (closest approach < 2 m, now
-  // receding) counts as reaching it.
-  const speed = Math.hypot(bot.vel[0], bot.vel[2]);
-  const accept = Math.max(0.6, speed * 0.25);
-  let wp = null;
-  if (brain.path && brain.pathI < brain.path.length) {
-    wp = brain.path[brain.pathI];
-    let d = hdist(bot.pos, wp);
-    if (brain.wpKey !== brain.pathI) { brain.wpKey = brain.pathI; brain.wpMinD = d; }
-    else if (d < brain.wpMinD) brain.wpMinD = d;
-    if (d < accept || (brain.wpMinD < 2.0 && d > brain.wpMinD + 0.5)) {
-      brain.pathI++;
-      brain.wpKey = -1;
-      wp = brain.pathI < brain.path.length ? brain.path[brain.pathI] : null;
-    }
-  }
-  if (!wp) {
-    // direct or path-exhausted: head at the goal itself. The same orbit rule
-    // applies — but the GOAL accept stays inside 1.2 m: flag stands and
-    // pickups trigger at standR/pickupR 1.2 (flags.js), and a speed-scaled
-    // accept parked carriers 1.3-1.6 m from the stand FOREVER (measured:
-    // T-CTF-1 capture never fired after the wide accept landed). Passed-
-    // detection bounds at 1.1: the closest-approach moment was already
-    // inside every 1.2 m trigger.
-    const d = hdist(bot.pos, goal);
-    if (brain.goalKey !== goal) { brain.goalKey = goal; brain.goalMinD = d; }
-    else if (d < brain.goalMinD) brain.goalMinD = d;
-    if (d < 0.8 ||
-        (brain.goalMinD < 1.1 && d > brain.goalMinD + 0.5)) { brain.arrived = true; return; }
-    wp = goal;
-  }
-  brain.moveYaw = yawTo(bot.pos, wp);
-  c.moveZ = 1;
-  void dt; void sim;
+function followPath(sim, nav, bot, brain, c, dt) {
+  // BOT-AI PASS: steer.js owns path following (world-space heading, carrot
+  // lookahead, separation). c.moveZ = 1 only flags "the feet move" for the
+  // callers' `moving` logic; the real move vector is written at the end of
+  // act() from brain.mvx/mvz in the final facing frame.
+  if (STEER.followPath(sim, nav, bot, brain, dt)) c.moveZ = 1;
 }
+
+// Public navigation command (nav_probe.mjs, scripted scenarios): send `bot` to
+// `goal` through the real brain — path planning, steering, stuck ladder — as a
+// non-combat travel order ("suspicious" never gives up on its own).
+export function aiNavGoto(sim, nav, bot, goal, sprint) {
+  if (!bot._brain) bot._brain = mkBrain(bot, sim.state.time);
+  const brain = bot._brain;
+  bot.state = "suspicious";
+  brain.enteredT = sim.state.time;
+  brain.investT = { until: 1e9, sweepUntil: -9, nextSampleT: -9, sprint: !!sprint, target: goal.slice() };
+  brain.detourUntil = -9;
+  brain.goal = null;
+  setGoal(nav, sim, brain, bot, goal, sprint);
+}
+

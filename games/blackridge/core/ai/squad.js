@@ -37,8 +37,28 @@ const BARK_PRI = { grenade: 4, down: 3, lastman: 3, flank: 2, contact: 2, push: 
 // eaten by a flavor bark 2 s earlier.
 const BARK_MANDATORY = { grenade: true, flank: true };
 
+// BOT-AI PASS: difficulty may only TIGHTEN the audited fairness caps (<= 2 fire
+// tokens per squad on the human, <= 3 attackers in any 250 ms window): CASUAL
+// reads content difficulty.casual.ai.humanTokens = 1 / humanWindow = 2. The
+// ceilings below are the original constants; a config can never raise them.
+const TOKEN_CAP = 2;
+
 export function makeSquad() {
   let sim = null;
+  const aiCfgOf = () => {
+    const d = sim && sim.mission && sim.mission.diffCfg;
+    return (d && d.ai) || null;
+  };
+  const tokenCap = () => {
+    const c = aiCfgOf();
+    const v = c && c.humanTokens != null ? c.humanTokens | 0 : TOKEN_CAP;
+    return Math.max(1, Math.min(TOKEN_CAP, v));
+  };
+  const windowMax = () => {
+    const c = aiCfgOf();
+    const v = c && c.humanWindow != null ? c.humanWindow | 0 : FIRE_WINDOW_MAX;
+    return Math.max(1, Math.min(FIRE_WINDOW_MAX, v));
+  };
 
   const squads = new Map(); // squadId → entry
   const fireWindow = new Map(); // botId → last fire-auth time
@@ -110,7 +130,7 @@ export function makeSquad() {
         const prev = e.fireTgt.get(botId);
         if (prev === who) return true;
         // retargeting while holding: bot→human must re-check the human cap
-        if (who === "P" && humanHolders("P", botId) >= 2) {
+        if (who === "P" && humanHolders("P", botId) >= tokenCap()) {
           e.fire.delete(botId);
           e.fireTgt.delete(botId);
           return false;
@@ -128,7 +148,7 @@ export function makeSquad() {
         // ≤2-holders-per-human cap
         let sq = 0;
         for (const [id, tgt] of e.fireTgt) if (tgt === "P" && e.fire.has(id)) sq++;
-        if (sq >= 2 || humanHolders("P", botId) >= 2) return false;
+        if (sq >= tokenCap() || humanHolders("P", botId) >= tokenCap()) return false;
         e.fire.add(botId);
         e.fireTgt.set(botId, "P");
         return true;
@@ -193,7 +213,7 @@ export function makeSquad() {
       const who = targetWho === undefined ? "P" : targetWho;
       if (who !== "P") return true;
       for (const [id, at] of fireWindow) if (t - at > FIRE_WINDOW_S) fireWindow.delete(id);
-      return fireWindow.has(botId) || fireWindow.size < FIRE_WINDOW_MAX;
+      return fireWindow.has(botId) || fireWindow.size < windowMax();
     },
     noteFireAuth(botId, t, targetWho) {
       const who = targetWho === undefined ? "P" : targetWho;
@@ -228,8 +248,9 @@ export function makeSquad() {
       const e = entry(squadIdOf(botId));
       return t >= e.grenadeReadyT;
     },
-    noteGrenade(botId, t) {
-      entry(squadIdOf(botId)).grenadeReadyT = t + GRENADE_COOLDOWN_S;
+    noteGrenade(botId, t, cdS) {
+      // BOT-AI PASS: the squad cooldown is a skill knob (botfsm BANDS.grenCdS)
+      entry(squadIdOf(botId)).grenadeReadyT = t + (cdS > 0 ? cdS : GRENADE_COOLDOWN_S);
     },
     pushActive() { return referee.pushOn; },
     playerStaticFor(t) { return playerStatic.init ? t - playerStatic.sinceT : 0; },
@@ -360,10 +381,10 @@ export function makeSquad() {
         e.fire.clear();
         e.fireTgt.clear();
         for (const bt of botTargeted) { e.fire.add(bt.id); e.fireTgt.set(bt.id, bt.who); }
-        let grant = Math.min(2, humanCands.length);
+        let grant = Math.min(tokenCap(), humanCands.length);
         // the global ≤2-per-human cap binds across squads at re-arb too
         const already = humanHolders("P", null);
-        grant = Math.min(grant, Math.max(0, 2 - already));
+        grant = Math.min(grant, Math.max(0, tokenCap() - already));
         for (let i = 0; i < grant; i++) { e.fire.add(humanCands[i].id); e.fireTgt.set(humanCands[i].id, "P"); }
         e.suppress = humanCands.length > grant ? humanCands[grant].id : null;
       }
