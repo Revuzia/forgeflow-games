@@ -871,6 +871,8 @@ def generate_design_doc(item):
         f"You are a senior game designer. Write a concise but COMPLETE design doc for an original-IP "
         f"{item['genre']} game. Brief: {item.get('brief','')}. Inspired by the FEEL of "
         f"\"{item.get('inspired_by','a classic of the genre')}\" but with your own original name/theme/art. "
+        f"That reference is private design input: never name it or any other game in the title or in any "
+        f"player-facing text, and never describe the game by comparison to other games. "
         f"Return ONLY JSON: {{\"title\":\"original name\",\"core_loop\":\"one tight paragraph\","
         f"\"verbs\":[\"the player actions\"],\"scope\":\"what is IN and explicitly OUT for v1\","
         f"\"art_direction\":\"palette + mood\",\"milestone_plan\":{{\"M1\":\"vertical slice goal\","

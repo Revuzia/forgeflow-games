@@ -825,6 +825,70 @@ def _embedded_key_problem(game_dir):
     return None
 
 
+# 2026-10-13 STORE-COPY GUARD (owner): catalog copy says what the game IS. It never compares the game
+# to, or names, another game: not other studios' titles ("a Pang / Bubble Trouble style", "a hybrid of
+# Magic: The Gathering and Hearthstone", "Diablo-style"), not our own catalog ("the same dice as Tide
+# Breakers"), and not comparison phrasing ("reimagines the classic X", "not a clone of", "in the spirit
+# of the genre classics"). Checked on title-free fields before any upload; ALLOW_GAME_COMPARISON=1
+# overrides on purpose. GAME_DOCTRINE.md carries the same rule for whoever writes the copy.
+_OTHER_GAME_TITLES_CI = [  # matched case-insensitively, whole words
+    "Bubble Trouble", "Buster Bros", "Super Pang", "Magic: The Gathering", "Hearthstone", "MTG", "D&D",
+    "Dungeons & Dragons", "Dungeons and Dragons", "Mario Kart", "Super Mario", "Mario", "Zelda", "Sonic the Hedgehog",
+    "Tetris", "Pac-Man", "Pacman", "Diablo", "Catan", "Carcassonne", "Ticket to Ride", "Minecraft", "Terraria",
+    "Fortnite", "PUBG", "Apex Legends", "Call of Duty", "Counter-Strike", "Overwatch", "Valorant", "Splatoon",
+    "Vampire Survivors", "survivor-like", "survivors-like", "soulslike", "souls-like", "Roblox", "obby", "Dark Souls",
+    "Elden Ring", "Arkanoid", "Bloons", "Plants vs. Zombies", "Plants vs Zombies", "Clash Royale", "Clash of Clans",
+    "Hollow Knight", "Stardew Valley", "Animal Crossing", "SimCity", "Cities: Skylines", "Civilization", "StarCraft",
+    "League of Legends", "Dota", "Street Fighter", "Tekken", "Mortal Kombat", "Smash Bros", "Rocket League",
+    "Among Us", "Fall Guys", "Slither.io", "Agar.io", "Space Invaders", "Galaga", "Frogger", "Donkey Kong",
+    "Crash Bandicoot", "Spyro", "Banjo-Kazooie", "Grand Theft Auto", "GTA", "The Sims", "Pokemon", "Pokémon",
+    "Monopoly", "Scrabble", "Jenga", "Beyblade", "Geometry Wars", "Asteroids", "Lemmings", "Bomberman",
+]
+_OTHER_GAME_TITLES_CS = ["Pang", "Breakout", "Battleship", "Doom", "Halo", "Portal", "Hades", "Pong", "Celeste", "Risk"]  # common words: title-case only
+_COMPARISON_PHRASES = [
+    r"\breimagin\w*\s+the\s+classic\b", r"\bin\s+the\s+spirit\s+of\b", r"\binspired\s+by\b", r"\bspiritual\s+successor\b",
+    r"\bnot\s+an?\s+(?:[\w-]+\s+){0,4}clones?\b", r"\bclones?\s+of\b", r"\bhybrid\s+of\b", r"\bthose\s+games\b",
+    r"\bgenre\s+classics?\b", r"\bunlike\s+(?:other|most|traditional|classic)\b", r"\b\w+\s+family\s+of\s+games\b",
+]
+_GENERIC_CATALOG_TITLES = {"chess", "checkers", "backgammon", "dominoes", "mahjong", "mahjong solitaire", "block breaker"}
+
+
+def _store_copy_problem(metadata, slug, games_root=None):
+    """Why this game's catalog copy must NOT ship, or None: it compares the game to another game."""
+    texts = {f: str(metadata.get(f) or "") for f in ("short_description", "description", "tagline")}
+    texts["tags"] = " | ".join(str(t).replace("-", " ") for t in (metadata.get("tags") or []))
+    own = str(metadata.get("title") or "")
+    own_titles = []
+    root = Path(games_root) if games_root else Path(__file__).resolve().parent.parent / "games"
+    for mp in list(root.glob("*/game_meta.json")) + list(root.glob("*/public/game_meta.json")):
+        try:
+            other_slug = mp.parent.parent.name if mp.parent.name == "public" else mp.parent.name
+            t = json.loads(mp.read_text(encoding="utf-8")).get("title")
+        except Exception:
+            continue
+        if other_slug != slug and t and t != own and t.lower() not in _GENERIC_CATALOG_TITLES and len(t) > 3:
+            own_titles.append(t)
+    for field, text in texts.items():
+        if not text:
+            continue
+        for name in _OTHER_GAME_TITLES_CI:
+            if name.lower() in own.lower():
+                continue
+            if re.search(r"(?<![\w-])" + re.escape(name.replace("-", " ") if field == "tags" else name) + r"(?![\w])", text, re.I):
+                return f"{field} names another game ({name!r}) — describe this game itself, never compare it to others"
+        for name in (["Pang", "Breakout", "Battleship", "Pong"] if field == "tags" else _OTHER_GAME_TITLES_CS) + own_titles:
+            if name.lower() in own.lower():
+                continue
+            hay = text if field != "tags" else text.title()
+            if re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w])", hay):
+                return f"{field} names another game ({name!r}) — describe this game itself, never compare it to others"
+        for rx in _COMPARISON_PHRASES:
+            m = re.search(rx, text, re.I)
+            if m:
+                return f"{field} uses comparison phrasing ({m.group(0)!r}) — describe this game itself, never compare it to others"
+    return None
+
+
 def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, refresh_portal=True,
                status=None):
     """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert,
@@ -892,6 +956,14 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
         metadata["status"] = status
     else:
         metadata.pop("status", None)
+
+    # ── store-copy guard (2026-10-13): catalog copy never compares the game to other games ──────────
+    _cp = _store_copy_problem(metadata, slug)
+    if _cp and not os.environ.get("ALLOW_GAME_COMPARISON"):
+        _safe_print(f"ABORT: {slug} game_meta.json {_cp}.")
+        _safe_print("  Rewrite the description/tags to say what the game is, then deploy again.")
+        _safe_print("  Intentional override (e.g. the game's own licensed name): set ALLOW_GAME_COMPARISON=1.")
+        return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "store copy compares to another game"}
 
     total = sum(1 for _ in game_dir.rglob("*") if _.is_file())
     print(f"Deploying game: {slug}\n  Source: {game_dir}\n  Files: {total}")

@@ -254,6 +254,16 @@ keep every line load-bearing.
   running fight; clicks fired attacks).
 - `boot.js?v=N` cache-bust on EVERY iteration; ES modules cache hard and a
   bumped boot does not bust its imports — serve dev with no-store.
+- Store copy describes THIS game only (owner, 2026-10-13). Title, tagline,
+  short_description, description and tags say what the game is and how it
+  plays. They never compare it to, or name, another game: no "a <Title>-style
+  game", "<Title> meets <Title>", "a hybrid of X and Y", "reimagines the
+  classic X", "in the spirit of the genre classics", "not a clone of X",
+  "unlike grid battleship", and no references to our own other titles ("the
+  same dice as Tide Breakers"). No tags that are another game's name (pang,
+  breakout, battleship, obby, survivor-like). An `inspired_by` seed is internal
+  design input and never reaches player-facing text. deploy_game.py blocks a
+  deploy whose copy breaks this (_store_copy_problem).
 - Store copy is a CONTRACT: never advertise a mode that does not exist in the
   code (Colosseum shipped "mounted jousting" with zero joust code; it took a
   full sim+view build to make the page honest).
@@ -320,4 +330,4 @@ GAME DOCTRINE (paid-for rules — obey; full rationale in pipeline/knowledge/GAM
 7. Rendering: compileAsync pre-warm with an RT bound (then canvas); fixed light pools (count = shader permutation); info.autoReset=false; report p99 + hitch attribution, never averages; crowds are baked-from-real-body unlit impostors; strip GLB lights; DPR ≤1.5; Draco+WebP bodies; never gate boot on a fat asset; procedural geometry fixes winding by construction; emit real UVs (metres/tile).
 8. Shell: window.__PAUSE__ contract; ESC pauses (never destroys); forfeit = real loss through the verdict path; assign screenBefore; gate hotkeys during bouts; bump boot.js?v=N every iteration.
 9. Verify in the LIVE system at the player's layer: headless probes + in-page test surface + capture-to-file screenshots + scripted PLAY with event counters; instrument real input paths; verify the deployed URL with a new-code fingerprint plus one production bout. Done = observed effect.
-10. No primitive hero assets. Store copy never claims a mode the code lacks.
+10. No primitive hero assets. Store copy never claims a mode the code lacks, and never compares the game to (or names) any other game.

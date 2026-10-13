@@ -291,8 +291,46 @@ def test_deploy_declared_list_wins_over_folder():
     _ok(meta.get("screenshot_urls") == declared, f"declared list was overridden: {meta.get('screenshot_urls')!r}")
 
 
+# ── store-copy guard (2026-10-13): catalog copy never compares the game to other games ─────────────
+def _copy(**kw):
+    return dict({"title": "Test Game", "short_description": "", "description": "", "tags": []}, **kw)
+
+
+def test_store_copy_flags_comparisons():
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "tide-breakers").mkdir()
+        (Path(td) / "tide-breakers" / "game_meta.json").write_text(json.dumps({"title": "Tide Breakers"}), encoding="utf-8")
+        cases = [
+            _copy(short_description="A Pang / Bubble Trouble style arcade game in 3D."),
+            _copy(description="A hybrid of Magic: The Gathering and Hearthstone."),
+            _copy(description="Portal back to town Diablo-style."),
+            _copy(description="Gadgets that are NOT Mario Kart clones."),
+            _copy(description="Original civic fantasy — not a clone of any commercial city builder."),
+            _copy(description="It reimagines the classic settle-and-trade game."),
+            _copy(description="A sandbox adventure in the spirit of the genre classics."),
+            _copy(description="Combat uses the same dice as Tide Breakers."),
+            _copy(tags=["arcade", "breakout"]),
+            _copy(tags=["naval", "battleship"]),
+        ]
+        for m in cases:
+            _ok(dg._store_copy_problem(m, "test-game", games_root=td) is not None, f"should flag: {m}")
+
+
+def test_store_copy_allows_plain_descriptions():
+    with tempfile.TemporaryDirectory() as td:
+        ok = [
+            _copy(short_description="A 3D arcade bubble-popper with a harpoon wire.", tags=["arcade", "bubbles"]),
+            _copy(description="Fire a wire up, split the bubbles, clear the stage before the clock runs out."),
+            _copy(description="A neon brick-breaking arcade game. Classic rules, smooth physics.", tags=["brick-breaker"]),
+            _copy(description="Open a portal, take the risk, and drop decoy clones.", tags=["portal", "risk"]),
+            _copy(title="Rummikub", description="A cozy game of Rummikub rendered in clean 3D."),  # its own name is fine
+        ]
+        for m in ok:
+            _ok(dg._store_copy_problem(m, "test-game", games_root=td) is None, f"should pass: {m} -> {dg._store_copy_problem(m, 'test-game', games_root=td)}")
+
+
 def run():
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    fns =[v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
     for fn in fns:
         try:
@@ -304,7 +342,7 @@ def run():
         except Exception as e:
             failed += 1
             print(f"  ERROR {fn.__name__}: {type(e).__name__}: {e}")
-    print(f"DEPLOY-GAME SCREENSHOTS: {'PASS' if not failed else 'FAIL'} ({_checks} checks across {len(fns)} tests)")
+    print(f"DEPLOY-GAME SCREENSHOTS + STORE COPY: {'PASS' if not failed else 'FAIL'} ({_checks} checks across {len(fns)} tests)")
     return failed == 0
 
 
