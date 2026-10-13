@@ -1164,7 +1164,12 @@ export async function buildMap(W, mapId) {
     addBox(x, y + H - 0.4, z + d / 2, doorW, 0.8, T, color, { rotY: rot }); // lintel
     addBox(x, y + H + 0.15, z, w + 0.6, 0.3, d + 0.6, shade(color, 0.75));  // roof
     loot(x, y + 0.5, z, poi);
-    if (rng() < 0.5) chest(x + (rng() - 0.5) * w * 0.5, y + 0.6, z + (rng() - 0.5) * d * 0.5, poi);
+    // A hut has no floor slab: its chest rests on the terrain at ITS OWN spot. Sampling the hut centre hung it 0.70 m over the slope
+    // (deepwood seed 1, wild hut near 320, 213). Same two rng draws in the same order, so nothing else in the world moves.
+    if (rng() < 0.5) {
+      const cx = x + (rng() - 0.5) * w * 0.5, cz = z + (rng() - 0.5) * d * 0.5;
+      chest(cx, (submerged ? y : heightAt0(cx, cz)) + 0.6, cz, poi);
+    }
   }
 
   function tower(x, z, floors, fw, color, poi) {
@@ -2498,9 +2503,20 @@ export async function buildMap(W, mapId) {
       } else if (p.t === "hull") {
         if (p.top * sc < 0.3) continue;
         let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-        for (const q of p.hull) {
-          const u = q[0] * sc, w = q[1] * sc, x = u * c + w * sn, z = -u * sn + w * c;
-          if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+        if (p.byScale) {
+          // a part with a footprint per instance scale (the crooked birch, the bending tree): the outline of the trunk inside the player's 1.8 m body band
+          // depends on it.s (the band reaches table height 1.8 / s), so take the two tabulated scales around s and interpolate the box extents between them
+          // (_tools/bake_prop_colliders.mjs `byScale`). Still ONE axis-aligned box per prop.
+          const L = p.byScale; let k = 0; while (k < L.length - 1 && L[k + 1].s <= sc) k++;
+          const A = L[k], B = L[Math.min(k + 1, L.length - 1)], f = B.s > A.s ? Math.min(1, Math.max(0, (sc - A.s) / (B.s - A.s))) : 0;
+          const ext = (outline) => { let a = Infinity, b = -Infinity, e = Infinity, d = -Infinity; for (const q of outline) { const x = q[0] * c + q[1] * sn, z = -q[0] * sn + q[1] * c; if (x < a) a = x; if (x > b) b = x; if (z < e) e = z; if (z > d) d = z; } return [a, b, e, d]; };
+          const ea = ext(A.hull), eb = ext(B.hull);
+          x0 = (ea[0] + (eb[0] - ea[0]) * f) * sc; x1 = (ea[1] + (eb[1] - ea[1]) * f) * sc; z0 = (ea[2] + (eb[2] - ea[2]) * f) * sc; z1 = (ea[3] + (eb[3] - ea[3]) * f) * sc;
+        } else {
+          for (const q of p.hull) {
+            const u = q[0] * sc, w = q[1] * sc, x = u * c + w * sn, z = -u * sn + w * c;
+            if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+          }
         }
         const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
         // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak

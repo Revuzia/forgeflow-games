@@ -25,6 +25,27 @@
 //          with `prof` (the car) always a chain, one box per slice, each as tall as its slice
 //   hull   a convex outline (one per rock sub-mesh): the AABB of the outline rotated by ry; `peak` = x/z of its highest vertex
 //
+// A TRUNK THAT IS NOT A STRAIGHT POST (the crooked birch, the tree that bends at 2 m) is baked as a `hull` too (config type "footprint"):
+// the convex outline of the SOLID (bark) vertices that lie in the player's body band, so the one box maps.js builds is the tight AABB of that
+// outline at any yaw. The old `round` box was a square around the trunk's base only and left the leaning stem outside it (birch: 78 % of the
+// instances clipped the body > 25 cm into the drawn trunk; the leaning stem is 0.6 m off the base at the player's head height).
+//   * what blocks the 1.8 m capsule is the part of the trunk below 1.8 m of WORLD height (probe_collision.js uses 0.15 .. 1.8), and `it.s`
+//     (maps.js scatterTrees: s = 0.8 + rng() * 0.9) stretches every table coordinate, so the TABLE height that band reaches is 0.15 / s ..
+//     1.8 / s: 0.19 .. 2.25 at s = 0.8, 0.09 .. 1.06 at s = 1.7. The footprint therefore depends on the instance scale.
+//   * `hull` (always written): the outline for the median scale `ref` = 1.25 (band 0.12 .. 1.44). It is the only footprint a maps.js that
+//     scales every part linearly can use: exact at s ~ 1.25, too short on a smaller tree (the stem leaves the box above the band), too long on
+//     a bigger one. Measured (collisioncheck, deepwood seed 7, 321 birches): clip > 25 cm 78 % -> 34 %, sprints into the drawn trunk 47/64 -> 26/64.
+//   * `byScale` (config `byScale`): the same outline for every tabulated s (0.8, 0.9 .. 1.7). A maps.js that reads it (hull branch of
+//     pushPropColliders: take the two tabulated scales around it.s and interpolate the box extents) builds the tight box for THIS instance's
+//     body band: still ONE box per prop, no new collider shape. Older maps.js ignores the key. Measured with that reader (sandbox, same seed):
+//     birch clip p95 0.65 -> 0.08 m, 0 % > 25 cm, gap excess over the tightest box p95 0.08 m, sprints 47/64 -> 1/64; tree (isla_viva, ashgrid)
+//     clip p95 0.35 / 0.41 -> 0.02 / 0.03 m, sprints 9/64 -> 0/64.
+//   * SOLID = the sub-meshes whose material is not foliage (same rule as probe_collision.js SOFT: green / leaf / foliage / frond / needle).
+//     A leaf cluster is walk-through and shoot-through, so it is not in the footprint.
+// `chain` > 1 would cut the band into that many boxes along the lean (each still one axis-aligned `hull` part). It stays 1: maps.js
+// destroyProp() kills ONE collider, so a destructible tree (propHP) with several boxes would leave invisible boxes standing after it falls
+// (and chains measured no better than one box: the scale spread, not the lean, is what a single footprint cannot follow).
+//
 // Pure function of the GLB bytes and the config below: no timestamps, no randomness (the file is byte-stable).
 import fs from "node:fs";
 import path from "node:path";
@@ -46,9 +67,9 @@ const BASE_H = { palm: 7, tree: 6.5, pine: 8, birch: 7, bush: 1.4, rocks: 2.2, c
 // branches); `prim` limits the vertices to one glTF primitive (the pine's foliage starts at 0.97 m, so only its trunk primitive is read).
 const KINDS = {
   palm:      { compact: false, parts: { type: "round", band: [0.8, 1.3] } },     // leaning stylised palm
-  tree:      { compact: false, parts: { type: "round", band: [0.25, 0.9] } },
+  tree:      { compact: false, parts: { type: "footprint", body: [0.15, 1.8], ref: 1.25, chain: 1, byScale: { min: 0.8, max: 1.7, step: 0.1 } } },
   pine:      { compact: false, parts: { type: "round", band: [1.0, 1.2], prim: 0 } },
-  birch:     { compact: false, parts: { type: "round", band: [0.3, 0.8] } },
+  birch:     { compact: false, parts: { type: "footprint", body: [0.15, 1.8], ref: 1.25, chain: 1, byScale: { min: 0.8, max: 1.7, step: 0.1 } } },   // crooked trunk
   bush:      { compact: true,  parts: null },                                    // no collider (walk-through scenery)
   rocks:     { compact: true,  recentre: true, parts: { type: "hull", by: "node" } },
   car:       { compact: true,  parts: { type: "rect", profile: 3 } },            // hood / cabin / trunk: three boxes, each as tall as its slice
@@ -68,6 +89,8 @@ function trs(n) {
   return [(1 - 2 * (yy + zz)) * s[0], 2 * (xy + wz) * s[0], 2 * (xz - wy) * s[0], 0, 2 * (xy - wz) * s[1], (1 - 2 * (xx + zz)) * s[1], 2 * (yz + wx) * s[1], 0,
     2 * (xz + wy) * s[2], 2 * (yz - wx) * s[2], (1 - 2 * (xx + yy)) * s[2], 0, t[0], t[1], t[2], 1];
 }
+// soft foliage: a material named like leaves is walk-through and shoot-through (the same rule as _harness/probe_collision.js SOFT)
+const SOFT = /green|leaf|leaves|foliage|frond|needle/i;
 const app = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
 function readGLB(file) {
   const b = fs.readFileSync(file);
@@ -78,14 +101,15 @@ function readGLB(file) {
   const walk = (ni, pm) => {
     const n = J.nodes[ni], m = mul(pm, trs(n));
     if (n.mesh !== undefined) {
-      const V = [], primOf = [];
+      const V = [], primOf = [], softOf = [];
       for (const [pi, pr] of J.meshes[n.mesh].primitives.entries()) {
         const a = J.accessors[pr.attributes.POSITION], bv = J.bufferViews[a.bufferView];
         if (a.componentType !== 5126 || a.type !== "VEC3") throw new Error(file + ": POSITION is not float VEC3");
         const st = bv.byteStride || 12, off = (bv.byteOffset || 0) + (a.byteOffset || 0);
-        for (let i = 0; i < a.count; i++) { V.push(app(m, [bin.readFloatLE(off + i * st), bin.readFloatLE(off + i * st + 4), bin.readFloatLE(off + i * st + 8)])); primOf.push(pi); }
+        const mat = pr.material !== undefined && J.materials ? J.materials[pr.material] : null, soft = !!(mat && SOFT.test(mat.name || ""));
+        for (let i = 0; i < a.count; i++) { V.push(app(m, [bin.readFloatLE(off + i * st), bin.readFloatLE(off + i * st + 4), bin.readFloatLE(off + i * st + 8)])); primOf.push(pi); softOf.push(soft); }
       }
-      subs.push({ node: n.name || ("node" + ni), V, primOf });
+      subs.push({ node: n.name || ("node" + ni), V, primOf, softOf });
     }
     for (const c of n.children || []) walk(c, m);
   };
@@ -167,6 +191,29 @@ function bakeKind(kind) {
       if (sel.length < 4) throw new Error(kind + ": trunk band holds " + sel.length + " vertices");
       const x0 = Math.min(...sel.map((p) => p[0])), x1 = Math.max(...sel.map((p) => p[0])), z0 = Math.min(...sel.map((p) => p[1])), z1 = Math.max(...sel.map((p) => p[1]));
       parts.push({ t: "round", c: [r4((x0 + x1) / 2), r4((z0 + z1) / 2)], r: r4(Math.max(x1 - x0, z1 - z0) / 2), top: out.height });
+    } else if (P.type === "footprint") {
+      // the convex outline of the SOLID (non-foliage) vertices inside a body band [b0, b1] (table heights at it.s = 1); see the header
+      const solid = [];
+      for (const sb of subs) sb.V.forEach((v, i) => { if (sb.softOf[i]) return; const m = M(v); solid.push([m[0] - anchor[0], m[2] - anchor[1], m[1]]); });
+      const inBand = (b0, b1, last) => solid.filter((p) => p[2] >= b0 && (last ? p[2] <= b1 : p[2] < b1));
+      const outlineOf = (sel, what) => {
+        if (sel.length < 4) throw new Error(kind + ": footprint " + what + " holds " + sel.length + " solid vertices");
+        return simplify(hull2(sel), HULL_MAX).map((p) => [r4(p[0]), r4(p[1])]).filter((p, i, a) => !i || p[0] !== a[i - 1][0] || p[1] !== a[i - 1][1]);
+      };
+      // (1) the fallback `hull`: the band cut at the reference scale, `chain` equal sub-bands (1 = one box)
+      const yLo = P.body[0] / P.ref, yHi = P.body[1] / P.ref, nCh = Math.max(1, P.chain || 1);
+      for (let k = 0; k < nCh; k++) {
+        const a0 = yLo + (yHi - yLo) * k / nCh, a1 = yLo + (yHi - yLo) * (k + 1) / nCh, sel = inBand(a0, a1, k === nCh - 1);
+        const topV = sel.reduce((b, p) => (p[2] > b[2] ? p : b), sel[0] || [0, 0, 0]);        // the highest vertex of the band (only a tilted prop reads `peak`)
+        const part = { t: "hull", name: nCh > 1 ? "trunk" + k : "trunk", hull: outlineOf(sel, "band " + a0.toFixed(2) + ".." + a1.toFixed(2)), peak: [r4(topV[0]), r4(topV[1])], top: out.height };
+        // (2) `byScale`: the same outline for every tabulated instance scale s (band 0.15 .. 1.8 m of WORLD height = table height 0.15 / s .. 1.8 / s)
+        if (P.byScale && nCh === 1) {
+          part.byScale = [];
+          const nS = Math.round((P.byScale.max - P.byScale.min) / P.byScale.step);
+          for (let j = 0; j <= nS; j++) { const sj = r4(P.byScale.min + P.byScale.step * j); part.byScale.push({ s: sj, hull: outlineOf(inBand(P.body[0] / sj, P.body[1] / sj, true), "byScale " + sj) }); }
+        }
+        parts.push(part);
+      }
     } else if (P.type === "rect") {
       const m = all.map(M);
       const x0 = Math.min(...m.map((p) => p[0] - anchor[0])), x1 = Math.max(...m.map((p) => p[0] - anchor[0])), z0 = Math.min(...m.map((p) => p[2] - anchor[1])), z1 = Math.max(...m.map((p) => p[2] - anchor[1]));
@@ -237,7 +284,7 @@ const text = build();
 const mapsErr = checkMapsBaseH();
 if (arg === "--print") { process.stdout.write(text); process.exit(mapsErr ? 1 : 0); }
 if (arg === "--check") {
-  const cur = fs.existsSync(OUT) ? fs.readFileSync(OUT, "utf8") : null;
+  const cur = fs.existsSync(OUT) ? fs.readFileSync(OUT, "utf8").replace(/\r\n/g, "\n") : null;   // git autocrlf may hand a checkout CRLF line ends
   const stale = cur !== text;
   if (stale) console.error("prop_colliders.json is STALE or missing: run  node games/last-circle/_tools/bake_prop_colliders.mjs");
   if (mapsErr) console.error(mapsErr);
