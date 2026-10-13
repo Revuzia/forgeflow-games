@@ -46,16 +46,25 @@ def find_key(explicit: str | None) -> str:
     sys.exit("no xAI key: set XAI_API_KEY or pass --tokens <path to tokens.json with xai_api_key>")
 
 
-def call(key: str, prompt: str, n: int, model: str) -> list[str]:
-    body = {"model": model, "prompt": prompt, "n": n, "response_format": "url"}
-    req = urllib.request.Request(API, method="POST", data=json.dumps(body).encode("utf-8"),
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=180) as r:
-        data = json.loads(r.read().decode("utf-8"))
-    urls = [d.get("url") for d in data.get("data", []) if d.get("url")]
-    if not urls:
-        raise RuntimeError(f"no image urls in response: {str(data)[:300]}")
-    return urls
+def call(key: str, prompt: str, n: int, model: str) -> list[bytes]:
+    """Ask for base64 image data first (only api.x.ai has to be reachable); fall back to URLs."""
+    import base64
+    for fmt in ("b64_json", "url"):
+        body = {"model": model, "prompt": prompt, "n": n, "response_format": fmt}
+        req = urllib.request.Request(API, method="POST", data=json.dumps(body).encode("utf-8"),
+                                     headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=180) as r:
+                data = json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code == 400 and fmt == "b64_json":
+                continue  # this model/account only serves URLs
+            raise
+        out = [base64.b64decode(d["b64_json"]) for d in data.get("data", []) if d.get("b64_json")]
+        out += [fetch(d["url"]) for d in data.get("data", []) if d.get("url") and not d.get("b64_json")]
+        if out:
+            return out
+    raise RuntimeError("xAI returned no image data")
 
 
 def fetch(url: str) -> bytes:
@@ -90,9 +99,8 @@ def main() -> None:
     for k, it in enumerate(todo, 1):
         for attempt in range(3):
             try:
-                urls = call(key, it["prompt"], a.variants, a.model)
-                for vi, u in enumerate(urls):
-                    img = fetch(u)
+                imgs = call(key, it["prompt"], a.variants, a.model)
+                for vi, img in enumerate(imgs):
                     name = f"{it['id']}.png" if vi == 0 else f"{it['id']}__{vi + 1}.png"
                     (RAW / name).write_bytes(img)
                 ok += 1
