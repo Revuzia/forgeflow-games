@@ -59,6 +59,30 @@ Originality rules still hold: nothing copied from any game.
 8. Write the design note, the names-not-used doc, README, game_meta.json and the thumbnail.
    Then run the full end-to-end play-through and review, and push.
 
+## Session log: owner's Mac, 2026-10-13 (paused by the owner mid-run)
+Done and pushed:
+- Toolchain on the Mac (Homebrew, Node 22, Python, ffmpeg, gh, Blender 5.2.2); Cycles on Metal
+  (`scene.cycles_device`, `VALE_CYCLES_DEVICE=CPU` forces CPU).
+- Match HUD assembled (`src/ui/hud/index.tsx`, `shop.tsx`, `world.tsx`, `styles/hud.css`); input in
+  the capture phase; end-banner hold + match-end sting; base shop radius 9 m.
+- HUD art kit 1: `art/blender/ui/hud_kit.py` (Dial Bar, minimap frames, sky strip, 9-slice plate →
+  `src/ui/art/hud/*.webp`, positions → `src/ui/hud/frame_layout.ts`) and painted minimaps
+  `art/blender/ui/minimap_paint.py` → `art/out/maps/<id>/minimap.png`.
+- Dev autopilot (`?dev=1&autopilot=1|match&speed=16&autoflow=1`) and `_harness/e2e.mjs` +
+  `_harness/pw.mjs` (playwright-core driving the installed Chrome, GPU). RIFT journey passes through
+  post-game; the shop step fails because post-game has no nav (go Home first, then Shop).
+- Image pack: 39/39 item icons generated in Grok Imagine (Chrome) and wired; visual prompts for the
+  16 concepts, 39 items, 80 abilities, 22 setup/team-buff icons (`tools/imagegen/*_subjects.json`,
+  `build_*_prompts.py`). Ability icons: 1/80 (ardit_turned_blades) in `tools/imagegen/raw/`.
+
+Resume:
+1. Grok in Chrome: the owner's weekly SuperGrok limit was at ~68% (resets Oct 15, 2:01 PM). Owner's
+   rule: generate in Grok until 90%, then do the rest with the xAI API (`run_xai.py`, needs
+   `XAI_API_KEY` set by the owner). Grok loop: `queue.py next --kind icon`, Quality 2.0, ×4, 1:1,
+   pick by eye (no gems, gold, runes, modern looks), download as `~/Downloads/vale_<id>.jpg`,
+   `queue.py ingest <id> <file>`, then `post.py --apply-refs` and a content build.
+2. Then finish step 1: e2e shop/equip step, BRIDGE and FRAY journeys, draft pick by click.
+
 ## Running it
 ```
 cd games/vale && npm install
