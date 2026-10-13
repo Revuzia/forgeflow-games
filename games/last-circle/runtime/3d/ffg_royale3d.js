@@ -61,9 +61,105 @@ const SIM = window.FFG.sim.Royale;
 // startMatch, and tearing the session down there would eject the squad.
 const MATCH_MODS = [["hud", hudMod], ["fx", fxMod], ["audio", audioMod], ["weapons", weaponsMod], ["bots", botsMod],
   ["loot", lootMod], ["player", playerMod], ["storm", stormMod], ["maps", mapsMod]];
+// Modules the orchestrator does not import statically (touch.js is a dynamic import)
+// join the same two lists once they load. WARM_ONLY holds modules that export
+// warmObjects(W) (contract C-WARM) but must NOT be torn down per match (net.js).
+const EXTRA_MODS = [];
+const WARM_ONLY = [["net", netMod]];
+
+// ── canvas output (the LOW tier draws straight to the canvas: see routePost) ─────
+// With the composer, every scene material renders into a LINEAR render target: three
+// keys tone mapping off and the colour space linear there, so the output chunks are
+// no-ops, blending happens in linear light, and the OutputPass tone-maps + sRGB-encodes
+// the composite once. Straight to the canvas, three runs those chunks per material
+// instead, BEFORE blending. Three kinds of shader come out wrong that way:
+//   1 no output chunks at all (both sky domes, maps.js / hud.js): raw linear values on
+//     the canvas, far too dark. -> append the two chunks.
+//   2 PREMULTIPLIED output (storm wall + bolts, fx quads, loot beams / rings write
+//     vec4(colour * a, a) and only THEN run the chunks): the sRGB encode lands on the
+//     premultiplied colour, and enc(a * c) >> a * enc(c) for a small a (a = 0.1:
+//     0.35 vs 0.10), so faint streaks came out ~3x too hot. -> split the output into
+//     the part a normal blend can show (straight colour, clamped to 1) and the excess
+//     (additive light), run the chunks on the straight colour, premultiply AFTER the
+//     encode (three's own order, premultiplied_alpha_fragment), add the excess as it is.
+//   3 ADDITIVE blending (loot glows, fx sprites) and the excess of 2 (storm bolts are
+//     premultiplied with alpha 0): an encoded colour added to an encoded background,
+//     where the composer adds LINEAR light and encodes the sum. -> add the linear light
+//     unencoded, scaled by CO_ADD_K = the slope of the composer's output curve at the
+//     daylight sky: the sky reads sRGB ~197/255 = linear 0.56 after Neutral tone mapping
+//     (identity below 0.76), and d enc/dx = (1.055/2.4) * 0.56^(1/2.4 - 1) = 0.62. With
+//     k = 1 the lightning showed 6x the composer's halo (2213 vs 362 px brighter than
+//     sky + 25 in one 240x280 crop); on dark ground the true slope is higher (~1.0 at
+//     linear 0.25), so k errs dim there - the owner's glare rule: start low.
+// Done at COMPILE time in Material.prototype.onBeforeCompile, only for programs whose
+// output colour space is sRGB (the canvas); three keys programs on that colour space,
+// so every render-target program (medium / high) is compiled from the untouched source.
+// A material with its own onBeforeCompile (player rim, name tags; loot beams + rings, which define LC_CANVAS themselves)
+// is left alone - the first two are opaque or plain alpha. A premultiplied shader that includes premultiplied_alpha_fragment
+// itself (straight colour, premultiplied after the chunks) is left alone too. ?canvasfix=0 turns off 2 + 3 (A/B and rollback).
+const CANVAS_FIX_EFFECTS = (() => { try { return new URLSearchParams(location.search).get("canvasfix") !== "0"; } catch (e) { return true; } })();
+const CO_TM = /^[ \t]*#include\s*<tonemapping_fragment>[ \t]*$/m;
+const CO_CS = /^[ \t]*#include\s*<colorspace_fragment>[ \t]*$/m;
+const CO_PREMUL_PRE = [
+  "float lcCanvasOutA = gl_FragColor.a;   // ORCH canvas output: premultiplied -> straight + excess",
+  "vec3 lcCanvasOutN = lcCanvasOutA > 0.0 ? min( gl_FragColor.rgb / max( lcCanvasOutA, 1e-4 ), vec3( 1.0 ) ) : vec3( 0.0 );",
+  "vec3 lcCanvasOutL = max( gl_FragColor.rgb - lcCanvasOutN * lcCanvasOutA, vec3( 0.0 ) );",
+  "gl_FragColor.rgb = lcCanvasOutN;", ""].join("\n");
+const CO_ADD_K = "0.62";
+const CO_PREMUL_POST = "\ngl_FragColor.rgb = gl_FragColor.rgb * lcCanvasOutA + lcCanvasOutL * " + CO_ADD_K + ";";
+const CO_ADD_PRE = "vec3 lcCanvasOutL = gl_FragColor.rgb;   // ORCH canvas output: additive light stays linear\n";
+const CO_ADD_POST = "\ngl_FragColor.rgb = lcCanvasOutL * " + CO_ADD_K + ";";
+function wrapOutputChunks(fs, pre, post) {
+  const t = CO_TM.exec(fs), c = CO_CS.exec(fs);
+  if (!c || (t && t.index > c.index)) return null;
+  const first = t || c;
+  const cEnd = c.index + c[0].length;
+  return fs.slice(0, first.index) + pre + fs.slice(first.index, cEnd) + post + fs.slice(cEnd);
+}
+function lcCanvasOutput(parameters) {
+  if (parameters.isRawShaderMaterial || parameters.outputColorSpace !== THREE.SRGBColorSpace) return;   // render targets: untouched
+  const fs = parameters.fragmentShader;
+  if (typeof fs !== "string" || fs.indexOf("lcCanvasOut") !== -1) return;
+  let out = null;
+  if (this.isShaderMaterial && !/tonemapping_fragment|colorspace_fragment|linearToOutputTexel/.test(fs)) {
+    // 1: an #include must start its own line - both sky shaders are one-liners
+    if (/\}\s*$/.test(fs)) out = fs.replace(/\}\s*$/, "\n/* lcCanvasOut: chunks */\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}");
+  } else if (CANVAS_FIX_EFFECTS && this.blending === THREE.AdditiveBlending) {
+    out = wrapOutputChunks(fs, CO_ADD_PRE, CO_ADD_POST);                                                  // 3
+  } else if (CANVAS_FIX_EFFECTS && this.isShaderMaterial && this.premultipliedAlpha && this.blending === THREE.NormalBlending
+             && !/premultiplied_alpha_fragment/.test(fs)) {
+    // (a shader that includes premultiplied_alpha_fragment itself writes STRAIGHT colour, runs the chunks and premultiplies after them:
+    //  three's own order, already right on the canvas - and possibly HDR (> 1), which the clamp below would flatten: loot rings)
+    out = wrapOutputChunks(fs, CO_PREMUL_PRE, CO_PREMUL_POST);                                            // 2
+  }
+  if (out) parameters.fragmentShader = out;
+}
+// true while the scene is drawn straight to the canvas (routePost sets it). three's program cache key has `opaque` and
+// `premultipliedAlpha` but NOT the blending mode, so an additive material and a normal-blend transparent one that are
+// otherwise identical resolve to ONE program, and whichever compiled first decided the source for both (proved by
+// _harness/new/orch_progkey.py: 4 of 4 pairs shared, the second of each drew with the first one's output maths). While the
+// hook is active the additive ones therefore carry their own key part. It is only added on the direct route, so the
+// render-target programs of medium / high are keyed exactly as before (no extra programs there).
+let CANVAS_DIRECT = false;
+function installCanvasOutput() {
+  const P = THREE.Material.prototype;
+  if (P._lcCanvasOutput) return;
+  const prev = P.onBeforeCompile;          // three's default is an empty method; chained in case something else hooked it first
+  P.onBeforeCompile = function (parameters, renderer) {
+    if (prev) prev.call(this, parameters, renderer);
+    lcCanvasOutput.call(this, parameters);
+  };
+  const prevKey = P.customProgramCacheKey; // three's default returns onBeforeCompile.toString(), i.e. one constant for every material
+  P.customProgramCacheKey = function () {
+    const k = prevKey.call(this);
+    return CANVAS_DIRECT && this.blending === THREE.AdditiveBlending ? k + "|lcAdd" : k;
+  };
+  P._lcCanvasOutput = true;
+}
 
 register3d("royale", async function (kernel, content) {
   const setup = content.setup || {};
+  installCanvasOutput();      // before any program is compiled (the menu, the warm-up)
 
   // ── shared world ────────────────────────────────────────────────────────────
   const W = {
@@ -110,7 +206,11 @@ register3d("royale", async function (kernel, content) {
   // Without this line nothing imported it, and because game_controls.js now marks Last
   // Circle "native" (no shared shooter overlay), a phone had NO controls at all.
   import("./royale/touch.js" + V)
-    .then((m) => { if (m && m.install) m.install(W, { hud: hudMod }); })
+    .then((m) => {
+      if (m && m.install) m.install(W, { hud: hudMod });
+      // a touch layer that ever owns GPU objects or per-match state joins C7/C8 like any module
+      if (m && (typeof m.warmObjects === "function" || typeof m.disposeMatch === "function")) EXTRA_MODS.push(["touch", m]);
+    })
     .catch((e) => console.warn("[LC] touch controls unavailable:", e && e.message));
   weaponsMod.init(W);
   lootMod.init(W);
@@ -186,6 +286,68 @@ register3d("royale", async function (kernel, content) {
   // and texture anisotropy — not just supersampling. maps.js reads W._texAniso when
   // it builds the terrain/structure/water textures.
   W._texAniso = 4;
+
+  // ── post-processing route (PLAN next-steps: "Low tier: stop running the composer") ─
+  // The kernel draws through kernel.composer whenever one exists (ffg_kernel_3d.js
+  // _frame), and hud.js builds one for the menu and keeps it for the session. On the
+  // LOW tier bloom is off, so that composer was a RenderPass into a full-size
+  // half-float target plus an OutputPass blit: two extra full-screen passes and ~25 MB
+  // of render targets for an image the canvas can take directly. Low therefore swaps
+  // in DIRECT_POST, a composer-shaped object whose render() is the kernel's own
+  // no-composer draw. It has to be an object, not null: hud.js:823 rebuilds a
+  // composer whenever kernel.composer is falsy. medium/high keep the real composer
+  // exactly as before. `?lowpost=1` keeps the composer on low (A/B and rollback).
+  const LOW_POST = (() => { try { return new URLSearchParams(location.search).get("lowpost") === "1"; } catch (e) { return false; } })();
+  const DIRECT_POST = {
+    isDirectPost: true,
+    passes: [], readBuffer: null, writeBuffer: null,    // warmup binds readBuffer: null = the canvas variant, which is what low draws
+    render() { kernel.renderer.render(kernel.scene, kernel.camera); },
+    setSize() {}, setPixelRatio() {}, dispose() {},
+  };
+  /** GPU side of a detached composer: render targets and the passes' targets and
+   *  materials. Every object stays valid; three re-creates what it needs on the
+   *  next use, so a later switch back to medium/high just works. */
+  function releasePost(c) {
+    try {
+      if (c.renderTarget1) c.renderTarget1.dispose();
+      if (c.renderTarget2) c.renderTarget2.dispose();
+      for (const p of c.passes || []) if (p && typeof p.dispose === "function") p.dispose();
+    } catch (e) { console.warn("[royale] releasing the post-processing targets failed:", e); }
+  }
+  /** Point the kernel at DIRECT_POST (direct = true) or at the real composer. Returns
+   *  "direct" | "composer" | "composer-pending" (medium/high before hud.js built one). */
+  function routePost(direct) {
+    const cur = kernel.composer;
+    CANVAS_DIRECT = !!direct;       // read by customProgramCacheKey (installCanvasOutput) when the next program is keyed
+    if (direct) {
+      if (cur === DIRECT_POST) return "direct";
+      if (cur) { W._postComposer = cur; releasePost(cur); }
+      kernel.composer = DIRECT_POST;
+      return "direct";
+    }
+    if (cur !== DIRECT_POST) return cur ? "composer" : "composer-pending";
+    let real = W._postComposer || null;
+    if (real) kernel.composer = real;
+    else if (typeof kernel.enableBloom === "function") {
+      // low from boot: no composer was ever built. Same values hud.js uses for the
+      // menu (0.45) or maps.js for a match (0.14).
+      kernel.enableBloom({ strength: 0.45, radius: 0.55, threshold: 0.72 });
+      real = kernel.composer;
+      if (kernel.bloom && W.phase !== "menu") kernel.bloom.strength = 0.14;
+    }
+    if (!real) { kernel.composer = DIRECT_POST; return "direct"; }   // an older kernel with no enableBloom
+    // kernel.setDpr / _resize only reach kernel.composer, so a detached one is stale
+    if (real.setPixelRatio) real.setPixelRatio(kernel.renderer.getPixelRatio());
+    // (kernel._sizeW starts at -1 until the kernel's first setSize, so it is only trusted when > 0)
+    if (real.setSize) real.setSize(Math.max(1, kernel._sizeW > 0 ? kernel._sizeW : (kernel.viewW || window.innerWidth || 1)),
+                                   Math.max(1, kernel._sizeH > 0 ? kernel._sizeH : (kernel.viewH || window.innerHeight || 1)));
+    return "composer";
+  }
+  // Canvas output (installCanvasOutput, module level below) makes every material that
+  // reaches the canvas directly - the whole low tier now - come out the way the
+  // composer's OutputPass would have shown it. It is keyed to the program's output
+  // colour space, so the render-target programs of medium/high are never touched.
+
   W.applyGraphics = function (tier) {
     tier = tier || W.settings.graphics || "medium";
     const r = kernel.renderer;
@@ -283,12 +445,16 @@ register3d("royale", async function (kernel, content) {
     // disabled shadows and dropped DPR to 1 but still paid for the full
     // UnrealBloomPass blur chain every frame, even though maps.js turns match
     // bloom down to 0.14 where it is nearly invisible. EffectComposer skips a
-    // pass whose `enabled` is false, so the composer stays allocated and
-    // medium/high keep the menu's 0.45-strength storm-ring glow. kernel.bloom
-    // only exists once the menu world has called enableBloom, hence the guard —
-    // the BOOT-time applyGraphics() below runs before that, and the per-match
-    // re-apply in _startMatch is what actually lands the low tier's setting.
-    if (kernel.bloom) kernel.bloom.enabled = (BLOOM[tier] || 0) > 0;
+    // pass whose `enabled` is false, but the rest of the composer (RenderPass into
+    // a half-float target + OutputPass) kept running on low, so low now leaves the
+    // composer altogether (routePost above) and medium/high keep it, with the
+    // menu's 0.45-strength storm-ring glow. kernel.bloom only exists once the menu
+    // world has called enableBloom, hence the guard - the BOOT-time applyGraphics()
+    // below runs before that, and the per-match re-apply in _startMatch is what
+    // actually lands the tier's setting.
+    const post = routePost(tier === "low" && !LOW_POST);
+    if (kernel.bloom && post !== "direct") kernel.bloom.enabled = (BLOOM[tier] || 0) > 0;
+    W._gfx.post = post;
     // keep the kernel's own quality key in sync (shell buttons + next boot)
     try { const s = JSON.parse(localStorage.getItem("ffg_settings") || "{}"); s.quality = tier === "medium" ? "med" : tier; localStorage.setItem("ffg_settings", JSON.stringify(s)); } catch (e) {}
   };
@@ -418,14 +584,11 @@ register3d("royale", async function (kernel, content) {
     // the mixers in the per-frame update list, so each match played added ~50
     // more skeletons to tick — frame time degraded monotonically, match over
     // match, with no in-game recovery. Nametags are per-actor CanvasTextures
-    // and leak the same way.
+    // and leak the same way. (They are not per-actor any more: a.nameTag is a
+    // { visible, cell, actor } handle into the shared atlas, which player.disposeMatch
+    // frees through nametags.disposeMatch.)
     for (const a of W.actors) {
       if (a.rig && a.rig.mixer && kernel.disposeMixer) kernel.disposeMixer(a.rig.mixer);
-      const tag = a.nameTag;
-      if (tag && tag.material) {
-        if (tag.material.map) tag.material.map.dispose();
-        tag.material.dispose();
-      }
       // Bone textures (Skeleton.boneTexture, one per skinned actor) were the
       // biggest leak in the Stage-0 census: +60 / +49 textures per match. L5's
       // player.disposeMatch owns this; until it exists, free them here.
@@ -436,7 +599,7 @@ register3d("royale", async function (kernel, content) {
     }
     // every module's own teardown (C8), while the groups and the roster still
     // hold what it must find
-    for (const [name, mod] of MATCH_MODS) {
+    for (const [name, mod] of MATCH_MODS.concat(EXTRA_MODS)) {
       if (!mod || typeof mod.disposeMatch !== "function") continue;
       try { out[name] = mod.disposeMatch(W); } catch (e) { console.warn("[royale] " + name + ".disposeMatch threw:", e); out[name] = { error: String(e && e.message || e) }; }
     }
@@ -780,20 +943,31 @@ register3d("royale", async function (kernel, content) {
    *  frame and removes them again. Every provider is feature-detected. */
   async function warmMatch() {
     const extras = [];
+    const seen = new Set();                 // the same object offered by two modules is parented once
+    const by = {};                          // per-provider counts (W._warm.by) so a probe sees who contributed
     const add = (list, who) => {
       if (!list) return;
-      for (const o of list) if (o && o.isObject3D) extras.push(o);
+      if (list.isObject3D) list = [list];
+      if (typeof list[Symbol.iterator] !== "function") return;
+      let n = 0;
+      for (const o of list) if (o && o.isObject3D && !seen.has(o)) { seen.add(o); extras.push(o); n++; }
+      if (who) by[who] = (by[who] || 0) + n;
     };
-    try { if (typeof playerMod.warmObjects === "function") add(playerMod.warmObjects(W), "player"); } catch (e) { console.warn("[royale] player.warmObjects threw:", e); }
-    try { if (typeof fxMod.warmObjects === "function") add(fxMod.warmObjects(W), "fx"); } catch (e) { console.warn("[royale] fx.warmObjects threw:", e); }
-    if (W._weaponProtos) for (const k in W._weaponProtos) add([W._weaponProtos[k]]);
+    // C-WARM: EVERY module that exports warmObjects(W) - feature-detected, one throw
+    // never costs the others their warm-up. Called after loadActorModels/spawnAll,
+    // which player.warmObjects (LOD1 bodies) needs.
+    for (const [name, mod] of MATCH_MODS.concat(EXTRA_MODS, WARM_ONLY)) {
+      if (!mod || typeof mod.warmObjects !== "function") continue;
+      try { add(mod.warmObjects(W), name); } catch (e) { console.warn("[royale] " + name + ".warmObjects threw:", e); by[name] = { error: String(e && e.message || e) }; }
+    }
+    if (W._weaponProtos) for (const k in W._weaponProtos) add([W._weaponProtos[k]], "weaponProtos");
     // pickup models (medkit, bandage, shield potions): already requested by
     // loot.populate; a bounded wait lets the ones that answer join the warm frame
     if (W.itemProto) {
       try {
         const ids = ["medkit", "bandage", "mini_shield", "big_shield"];
         const got = await withTimeout(Promise.all(ids.map((id) => W.itemProto(id).catch(() => null))), 8000);
-        add(got);
+        add(got, "itemProtos");
       } catch (e) { /* bounded wait: the fallback capsules are already warm */ }
     }
     let stats = null;
@@ -809,7 +983,8 @@ register3d("royale", async function (kernel, content) {
       // an optimisation only — never block a match start on it
       console.warn("[royale] warm-up failed (the match starts cold):", e);
     }
-    W._warm = stats ? Object.assign({ extrasIn: extras.length }, stats) : { extrasIn: extras.length, legacy: typeof kernel.warmup !== "function" };
+    const post = W._gfx && W._gfx.post;     // "direct" = low tier drew the warm frame straight to the canvas (stats.target says "composer" either way)
+    W._warm = stats ? Object.assign({ extrasIn: extras.length, by, post }, stats) : { extrasIn: extras.length, by, post, legacy: typeof kernel.warmup !== "function" };
     return W._warm;
   }
 
