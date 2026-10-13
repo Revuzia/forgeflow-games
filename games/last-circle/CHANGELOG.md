@@ -3,6 +3,50 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-10-13 — World foundation: grounded props, real collision, bots that stop sticking (?v=1791894423)
+
+Owner: "bots getting stuck in houses, they need better path finding, floating objects like trees or rocks, they need to be
+grounded ... physics, collisions, placement." Decision: fix our own collision (axis-aligned boxes, no physics engine; a measured
+engine cost 104-138 us per actor against 0.8-2.2 us). Plan: `_spec/world_2026-10/PLAN.md` (Wave 5 of 8; the city/town layout
+and furnished interiors are Waves 6-8, not in this build). Built as four lanes plus a fix round, independently verified.
+
+| measured (5 seeds x 3 maps unless noted) | before (Wave 4) | after |
+|---|---|---|
+| rocks floating / buried | 38-49 % / 22-29 % | 0 % / 0 % |
+| stacked containers floating (uppers off the one below) | 92 % of 63, worst 3.33 m | 0 of 70, worst 0.05 m |
+| other props floating more than 10 cm | measured per kind in `_harness/README.md` | 0.0 % (pine and one bush 0.1 %) |
+| ground-vs-drawn-ground mismatch p99 | 0.28 m | 0.012-0.037 m |
+| live sprints that end inside a palm / barrel / car (of 64) | 15 / 32 / 7 | 0 / 0 / 0 |
+| collision sprints ending inside the drawn mesh, all kinds | 327 of 704 | 23 of 704 (3.3 %) |
+| indoor bot ticks heading the wrong way while healing | 22.5 % | 0.40 % |
+| indoor bot ticks blocked for 0.1 s or more while fighting | 20.5 % | 0.10 % |
+| upper rooms bots can get into (of 83 / of 81) | 35 | 76 |
+| ramps steeper than 45 degrees (375 ramps) | 91 | 0 |
+| bot-match median length, 18 fresh matches | 663.9 s | 736.5 s |
+| matches reaching storm circle 5 (of 18) | 8 | 15 |
+| bot deaths in the first 60 s, worst match | 16 | 7 |
+
+(The three pacing rows were measured one change before the last one - the healer walk-out below; `sim_pacing` 11/11 still passes after it.)
+
+- **Grounding**: every prop kind sits on the drawn ground at its real anchor; container stacks rest on the container below;
+  a hut chest takes the height at its own spot (it hung 0.70 m over a slope on deepwood seed 1).
+- **Colliders**: baked per kind from the model files (`assets/props/prop_colliders.json`, `_tools/bake_prop_colliders.mjs`,
+  deterministic: two fresh loads hash identically on all three maps, so squad clients still rebuild the same world);
+  leaning trunks take their box from the scale of each tree.
+- **Ramps and stairs**: a ramp is a 0.3 m sloped slab you can walk up from its low edge; its sides and underside block you and
+  bullets only test the slab band. Landing on a stair no longer drops you through.
+- **Bots**: wall-aware steering, routes to the top floor, no grinding on walls, a second pin while healing now walks the bot out.
+  Pacing table retuned so the later circles are reached (bots hold and trade fire at range; sim-tested, not yet human-played).
+- **Gates**: three new (`placementcheck`, `collisioncheck`, `navcheck`) plus `worldcheck` / `worldlive`; four gate definitions
+  were corrected where they measured the wrong thing (table in `_harness/README.md`, every one still fails on the Wave-4 build).
+
+Known and NOT fixed in this build (named, small, none worse than Wave 4): containers lean up to 8 degrees on slopes while their
+box stays level (clip p95 0.15 m, 6 of 64 container sprints); rock stairs where a 0.4 m part sits beside a 1.07 m rock (16 of
+192 rock sprints); one ashgrid interior stair at (221.75, 224) cannot be walked down (fails identically on Wave 4); a healer
+tucked beside a tower stair on isla_viva seed 7 now frees itself after 2.45 s (was 11.7 s) - navcheck heal-indoor reads 10.4 %
+on that one event against a 1.5 % bar. The full gate run on this tree is therefore not all-green: collisioncheck (clip,
+sprints), worldlive (ramps-walk) and navcheck (heal-indoor) are red for the reasons above; everything else passed.
+
 ## 2026-10-12 — Look + feel pass toward the BridgeZone reference (?v=1791854656)
 
 Owner: "I want Last Circle to look a little more like this" (a BridgeZone video) and "improve this game based on how well you
