@@ -855,7 +855,7 @@ _GENERIC_CATALOG_TITLES = {"chess", "checkers", "backgammon", "dominoes", "mahjo
 
 def _store_copy_problem(metadata, slug, games_root=None):
     """Why this game's catalog copy must NOT ship, or None: it compares the game to another game."""
-    texts = {f: str(metadata.get(f) or "") for f in ("short_description", "description", "tagline")}
+    texts = {f: str(metadata.get(f) or "") for f in ("short_description", "description", "tagline", "sub_genre")}
     texts["tags"] = " | ".join(str(t).replace("-", " ") for t in (metadata.get("tags") or []))
     own = str(metadata.get("title") or "")
     own_titles = []
@@ -874,13 +874,14 @@ def _store_copy_problem(metadata, slug, games_root=None):
         for name in _OTHER_GAME_TITLES_CI:
             if name.lower() in own.lower():
                 continue
-            if re.search(r"(?<![\w-])" + re.escape(name.replace("-", " ") if field == "tags" else name) + r"(?![\w])", text, re.I):
+            # hyphens count as boundaries so compounds like "kaiju-survivor-like" are caught too
+            if re.search(r"(?<![A-Za-z0-9])" + re.escape(name.replace("-", " ") if field == "tags" else name) + r"(?![A-Za-z0-9])", text, re.I):
                 return f"{field} names another game ({name!r}) — describe this game itself, never compare it to others"
         for name in (["Pang", "Breakout", "Battleship", "Pong"] if field == "tags" else _OTHER_GAME_TITLES_CS) + own_titles:
             if name.lower() in own.lower():
                 continue
             hay = text if field != "tags" else text.title()
-            if re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w])", hay):
+            if re.search(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])", hay):
                 return f"{field} names another game ({name!r}) — describe this game itself, never compare it to others"
         for rx in _COMPARISON_PHRASES:
             m = re.search(rx, text, re.I)

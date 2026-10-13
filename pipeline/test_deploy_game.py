@@ -311,6 +311,7 @@ def test_store_copy_flags_comparisons():
             _copy(description="Combat uses the same dice as Tide Breakers."),
             _copy(tags=["arcade", "breakout"]),
             _copy(tags=["naval", "battleship"]),
+            _copy(sub_genre="kaiju-survivor-like"),
         ]
         for m in cases:
             _ok(dg._store_copy_problem(m, "test-game", games_root=td) is not None, f"should flag: {m}")
