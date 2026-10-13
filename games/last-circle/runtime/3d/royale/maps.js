@@ -31,13 +31,22 @@ import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js"
 // At 0.0018: 4.6% at 120 m (engagement range), 12% at 200 m (sniper full-damage
 // range), 25% at 300 m, 87% at 800 m. The per-map ORDERING is preserved.
 // Nothing gameplay-critical hides behind it — the storm wall, the sky dome and the
-// cloud/bird sprites all set `fog: false`, and both maps are 2D canvases.
+// bird sprites all set `fog: false`, and both maps are 2D canvases.
+// SKY lane (Wave 4, plan P4.2 step A): the sky / zenith / water hues below were
+// desaturated toward steel-blue and muted teal to remove the cyan cast (the
+// prototype recipe: pull each channel toward the colour's luma by 35% in LINEAR
+// space, 42% for Isla Viva's water, 30% for Deepwood's — it reproduces the plan's
+// #9ed0e3 / #5c8dc1 / #80c2ca exactly). Grass, roofs, characters, loot, hemisphere/sun
+// colours, exposure and the Neutral tone mapper are deliberately untouched. Savanna
+// keeps its golden sand horizon (only a 10% pull; its zenith gets the full 35%)
+// because its identity is the dust haze, not a cyan sky. `cloud` is the baked-cloud
+// coverage 0..1 (P1.7), per map for identity.
 export const MAPS = {
-  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", zenith: "#2f8fd8", fog: 0.0018, themeColor: "#22d3a0", water: true,
+  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#9ed0e3", zenith: "#5c8dc1", cloud: 0.66, fog: 0.0018, themeColor: "#22d3a0", water: true,
     sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 } },
-  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e7cf98", zenith: "#4f86bd", fog: 0.0019, themeColor: "#e0854a", water: false,
+  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
     sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 } },
-  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", zenith: "#3a6fae", fog: 0.0020, themeColor: "#7fb069", water: true,
+  deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 } },
 };
 
@@ -338,7 +347,15 @@ function rgb(o, r, g, b) { o[0] = r; o[1] = g; o[2] = b; return o; }
 /** C8 teardown contract: the map's per-match GPU objects (idempotent; see below). */
 export function disposeMatch(W) { return disposeMapResources(W); }
 
+/** C-WARM (Wave 4): maps.js creates NO objects after the map is built — the sky dome, its baked cloud
+ *  texture and the birds are all in the scene when kernel.warmup runs — so there is nothing extra to
+ *  warm. Exported so the orchestrator can call every module's warmObjects feature-detected. */
+export function warmObjects(W) { return []; }
+
 export function disposeMapResources(W) {
+  // C-SKY handles belong to the map being torn down: never leave a consumer (STORMFX's storm tint)
+  // holding the uniforms of a disposed dome between matches. Done before the idempotence guard.
+  W.skyUniforms = null; W.skyDome = null;
   const g = W._groups && W._groups.map;
   if (!g) return { geometries: 0, materials: 0, textures: 0 };
   // Idempotent per build (disposeMatch and the orchestrator's direct call may both
@@ -575,7 +592,13 @@ export async function buildMap(W, mapId) {
 
   // ── water ─────────────────────────────────────────────────────────────────
   if (K.water) {
-    const wgeo = new THREE.PlaneGeometry(SIZE * 1.6, SIZE * 1.6, 1, 1);
+    // P1.10 (SKY lane): the plane was SIZE*1.6 = 2560 m, i.e. its far edge only ~560 m past the island's coast. Full-strength
+    // fog hid that, but with the fog thinned at altitude it showed as a hard band against the dome (measured on Deepwood: seam
+    // step 2.4x the baseline). SIZE*3.5 = 5600 m puts the edge beyond the camera's 2000 m far plane from anywhere on the map,
+    // where even the thinned fog is >= 96% blended, so the horizon is the far-plane clip instead. 2 triangles either way; the
+    // ripple repeat below scales with the plane so the tile stays ~28 m.
+    const WATER_W = SIZE * 3.5;
+    const wgeo = new THREE.PlaneGeometry(WATER_W, WATER_W, 1, 1);
     wgeo.rotateX(-Math.PI / 2);
     // roughness 0.13 + metalness 0.3 was two bugs at once. (a) With NoToneMapping
     // (line 276) nothing compresses highlights, and GGX at roughness 0.13 pushes
@@ -588,13 +611,14 @@ export async function buildMap(W, mapId) {
       // DoubleSide so the surface also exists as a ceiling seen from BELOW — the
       // camera routinely dips under waterY while swimming, and a single-sided
       // plane simply vanished, which is half of why underwater read as "blank".
-      color: mapId === "isla_viva" ? 0x2ec9d6 : 0x2f7d8a, transparent: true, opacity: 0.86,
+      // P4.2 step A (SKY lane): muted teal. Was 0x2ec9d6 / 0x2f7d8a (42% / 30% linear-space desaturation).
+      color: mapId === "isla_viva" ? 0x80c2ca : 0x4b7a84, transparent: true, opacity: 0.86,
       roughness: 0.30, metalness: 0.0, side: THREE.DoubleSide,
     });
     let wN = null;
     try {
       wN = waterNormalTex(aniso);
-      wN.repeat.set(90, 90);
+      wN.repeat.set(90 * WATER_W / (SIZE * 1.6), 90 * WATER_W / (SIZE * 1.6));
       wmat.normalMap = wN; wmat.normalScale = new THREE.Vector2(0.35, 0.35);
     } catch (e) { /* no canvas → flat water */ }
     const water = new THREE.Mesh(wgeo, wmat);
@@ -608,7 +632,7 @@ export async function buildMap(W, mapId) {
     });
   }
 
-  // ── SKY: gradient dome + drifting clouds + looping birds ──────────────────
+  // ── SKY: gradient dome + baked-texture clouds + looping birds ─────────────
   // (owner: "we should have a real sky, with real clouds, and birds")
   {
     const horizon = new THREE.Color(K.sky);
@@ -620,6 +644,65 @@ export async function buildMap(W, mapId) {
     const zenith = new THREE.Color(K.zenith || MAPS.isla_viva.zenith);
     const sp = (K.sun || MAPS.isla_viva.sun).pos;
     const sunDir = new THREE.Vector3(sp[0], sp[1], sp[2]).normalize();
+
+    // ── P1.7 (SKY lane, Wave 4): clouds baked into a tiling texture ───────────
+    // The 24 sprite-cloud groups (96 transparent billboards, ~43 draw calls in view)
+    // are gone. Clouds are shaded in the dome fragment shader, ported from three's
+    // examples/jsm/objects/Sky.js (MIT) — but the fbm is NOT evaluated per pixel: a
+    // procedural fbm measured 7.0-12.8 ms full-screen on this iGPU against
+    // 0.65-4.4 ms for sampling a baked texture. So the noise is baked ONCE per
+    // page session into a 256 px periodic DataTexture (kept in _texCache, so the
+    // per-match teardown treats it as shared and never frees it) and the shader
+    // samples two scrolling layers of it. Channels: R = cloud shape (4 cells per
+    // tile, 5 octaves), G = detail (8 cells, 4 octaves), B = large-scale coverage
+    // variation (2 cells, 3 octaves). Every lattice period divides 256 and the
+    // lattice indices wrap, so the texture tiles with no seam.
+    const bakeCloudNoise = (anisoN) => {
+      if (_texCache.skyNoise) return _texCache.skyNoise;
+      const N = 256, px = new Uint8Array(N * N * 4);
+      const CH = [[4, 5, 101], [8, 4, 577], [2, 3, 933]];          // [cells per tile, octaves, seed]
+      const fields = CH.map(([base, oct, seed]) => {
+        const f = new Float32Array(N * N);
+        let amp = 1, per = base;
+        for (let o = 0; o < oct; o++) {
+          const lat = new Float32Array(per * per), cell = N / per;
+          for (let j = 0; j < per; j++) for (let i = 0; i < per; i++) lat[j * per + i] = _thash(i, j, seed + o * 31);
+          for (let y = 0; y < N; y++) {
+            const gy = y / cell, j0 = Math.floor(gy), fy = gy - j0, sy = fy * fy * (3 - 2 * fy), r0 = j0 * per, r1 = ((j0 + 1) % per) * per;
+            for (let x = 0; x < N; x++) {
+              const gx = x / cell, i0 = Math.floor(gx), fx = gx - i0, sx = fx * fx * (3 - 2 * fx), i1 = (i0 + 1) % per;
+              const a = lat[r0 + i0], b = lat[r0 + i1], c = lat[r1 + i0], d = lat[r1 + i1];
+              f[y * N + x] += ((a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy) * amp;
+            }
+          }
+          amp *= 0.5; per *= 2;
+        }
+        // stretch to the full 0..1 range, then a soft S-curve: fbm of uniform lattice values is a narrow bell, and the
+        // shader's coverage threshold needs real contrast to carve cloud edges
+        let lo = 1e9, hi = -1e9;
+        for (let i = 0; i < f.length; i++) { if (f[i] < lo) lo = f[i]; if (f[i] > hi) hi = f[i]; }
+        const k = 1 / Math.max(1e-6, hi - lo);
+        for (let i = 0; i < f.length; i++) { const v = (f[i] - lo) * k; f[i] = v * v * (3 - 2 * v); }
+        return f;
+      });
+      for (let i = 0; i < N * N; i++) {
+        px[i * 4] = Math.round(fields[0][i] * 255); px[i * 4 + 1] = Math.round(fields[1][i] * 255);
+        px[i * 4 + 2] = Math.round(fields[2][i] * 255); px[i * 4 + 3] = 255;
+      }
+      const t = new THREE.DataTexture(px, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = true;
+      t.anisotropy = anisoN || 4;       // the cloud deck is seen at grazing angles; mip blur would erase the streaking
+      t.needsUpdate = true;
+      _texCache.skyNoise = t;
+      return t;
+    };
+    // Cloud placement is cosmetic but still seeded off the match seed (a separate stream, so the world rng below is untouched).
+    const skyRng = W.SIM.mulberry32(seed ^ 0x5c10d5);
+    const cloudOff = new THREE.Vector2(skyRng(), skyRng());
+    // "low" tier: one cloud layer (a #define, fixed for the whole match, so no mid-match recompile).
+    const twoLayers = (W.settings && W.settings.graphics) !== "low";
+
     // The dome is recentred on the camera every frame but the water plane is
     // SIZE*1.6 wide, so at radius SIZE*0.82 (1312 m) the sphere intersected the
     // waterline in a visible 24-gon — a hard-edged pale polygon floating on the
@@ -631,49 +714,66 @@ export async function buildMap(W, mapId) {
     const skyGeo = new THREE.SphereGeometry(SIZE * 1.15, 48, 24);
     const skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { top: { value: zenith }, bot: { value: horizon }, sunDir: { value: sunDir } },
+      defines: { CLOUD_LAYERS: twoLayers ? 2 : 1 },
+      // THREE.Uniform objects: W.skyUniforms (contract C-SKY) hands out exactly these live objects
+      uniforms: {
+        top: new THREE.Uniform(zenith), bot: new THREE.Uniform(horizon), sunDir: new THREE.Uniform(sunDir),
+        tNoise: new THREE.Uniform(bakeCloudNoise(W._texAniso)), cloudT: new THREE.Uniform(0),
+        cloudOff: new THREE.Uniform(cloudOff), cloudCov: new THREE.Uniform(K.cloud != null ? K.cloud : 0.45),
+      },
       vertexShader: "varying vec3 vp; void main(){ vp = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
-      fragmentShader: "varying vec3 vp; uniform vec3 top; uniform vec3 bot; uniform vec3 sunDir; void main(){ vec3 d = normalize(vp); float h = clamp(d.y, 0.0, 1.0); vec3 col = mix(bot, top, pow(h, 0.62)); float s = max(dot(d, sunDir), 0.0); col += vec3(1.0, 0.94, 0.80) * (pow(s, 1200.0) * 1.6 + pow(s, 10.0) * 0.18); gl_FragColor = vec4(col, 1.0); }",
+      fragmentShader: `varying vec3 vp;
+        uniform vec3 top; uniform vec3 bot; uniform vec3 sunDir;
+        uniform sampler2D tNoise; uniform float cloudT; uniform vec2 cloudOff; uniform float cloudCov;
+        void main(){
+          vec3 d = normalize(vp);
+          float h = clamp(d.y, 0.0, 1.0);
+          vec3 col = mix(bot, top, pow(h, 0.62));
+          float s = max(dot(d, sunDir), 0.0);
+          col += vec3(1.0, 0.94, 0.80) * (pow(s, 1200.0) * 1.6 + pow(s, 10.0) * 0.18);
+          if (d.y > 0.0) {
+            // flat cloud deck (Sky.js): project the view ray onto a plane; +0.12 keeps the zenith finite and the horizon from exploding
+            vec2 uv = d.xz / (d.y + 0.12);
+            vec2 uA = uv * 0.50 + cloudOff + cloudT * vec2(0.0035, 0.0014);
+            float n = texture2D(tNoise, uA).r;
+            float region = texture2D(tNoise, uv * 0.07 + cloudOff * 0.37).b;   // big clearings / overcast patches
+            #if CLOUD_LAYERS > 1
+              vec2 uB = uv * 1.15 + cloudOff.yx + 0.37 - cloudT * vec2(0.0022, 0.0050);
+              n = n * 0.72 + texture2D(tNoise, uB).g * 0.28;                    // second, finer layer drifting the other way
+            #endif
+            float cov = clamp(cloudCov + (region - 0.5) * 0.55, 0.0, 1.0);
+            float th = 1.0 - cov;
+            float m = smoothstep(th, th + 0.40, n) * smoothstep(0.0, 0.10, d.y);
+            float depth = max(0.0, n - th);
+            float beer = exp(-depth * 4.0), powder = 1.0 - beer * beer;
+            float shade = mix(0.70, 1.0, clamp(beer * powder * 2.6, 0.0, 1.0));   // darker, denser cores
+            vec3 cc = mix(bot, vec3(1.0), 0.80) * shade;
+            cc += vec3(1.0, 0.95, 0.85) * clamp(0.51 / pow(1.49 - s * 1.4, 1.5), 0.0, 3.0) * m * (1.0 - m) * 0.35;   // silver lining toward the sun
+            cc = mix(cc, bot, pow(1.0 - h, 6.0) * 0.6);                           // haze the deck into the horizon
+            float a = (1.0 - exp(-depth * 5.0)) * m;
+            col = mix(col, cc, clamp(a * 1.6, 0.0, 0.92));
+          }
+          gl_FragColor = vec4(col, 1.0);
+        }`,
     });
     const sky = new THREE.Mesh(skyGeo, skyMat);
     sky.renderOrder = -10; sky.frustumCulled = false; sky.name = "sky";
     g.add(sky);
+    // Contract C-SKY (SKY -> STORMFX): the live uniform objects + the dome mesh. Cleared again in disposeMapResources.
+    W.skyUniforms = { top: skyMat.uniforms.top, bot: skyMat.uniforms.bot };
+    W.skyDome = sky;
 
-    // soft cloud-puff sprite texture
-    const ccv = document.createElement("canvas"); ccv.width = ccv.height = 128;
-    const cx2 = ccv.getContext("2d");
-    const cgrad = cx2.createRadialGradient(64, 64, 4, 64, 64, 62);
-    cgrad.addColorStop(0, "rgba(255,255,255,0.95)"); cgrad.addColorStop(0.5, "rgba(255,255,255,0.45)"); cgrad.addColorStop(1, "rgba(255,255,255,0)");
-    cx2.fillStyle = cgrad; cx2.fillRect(0, 0, 128, 128);
-    const cloudTex = new THREE.CanvasTexture(ccv); cloudTex.colorSpace = THREE.SRGBColorSpace;
-    // ONE material for all ~96 puffs. Every puff used to allocate its own
-    // identical SpriteMaterial (24 clouds x 3-5 puffs), which is 96 distinct
-    // materials and 96 shader-program lookups a frame for what is one billboard.
-    // disposeMapResources dedupes by identity, so teardown is unaffected.
-    const cloudMat = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.8, depthWrite: false, fog: false });
-    const clouds = [];
-    for (let i = 0; i < 24; i++) {
-      const grp = new THREE.Group();
-      const puffs = 3 + Math.floor(rng() * 3);
-      for (let p = 0; p < puffs; p++) {
-        const s = new THREE.Sprite(cloudMat);
-        const sc = 46 + rng() * 70;
-        s.scale.set(sc, sc * 0.58, 1);
-        s.position.set((rng() - 0.5) * sc * 1.7, (rng() - 0.5) * sc * 0.28, (rng() - 0.5) * sc * 1.3);
-        grp.add(s);
-      }
-      const ang = rng() * Math.PI * 2, rad = 180 + rng() * (HALF * 0.85);
-      grp.position.set(Math.cos(ang) * rad, 320 + rng() * 140, Math.sin(ang) * rad); // 320-460m: above the drop/portal ceiling so you never pass THROUGH a cloud (billboards read as cards up close; fluffy from below)
-      grp.userData.drift = 2.5 + rng() * 4;
-      g.add(grp); clouds.push(grp);
-    }
+    // The sprite clouds consumed rng() here (24 groups: 1 + 4 per puff + 4 draws each), BEFORE the towns, props and loot
+    // are placed. Deleting them without replacing the draws would reshuffle every seeded world (POIs, loot, bot spawns).
+    // Burning the identical number of draws keeps every placement byte-identical to the shipped build.
+    for (let i = 0; i < 24; i++) { const puffs = 3 + Math.floor(rng() * 3); for (let k = 0; k < puffs * 4 + 4; k++) rng(); }
 
     // bird "V" sprite texture + a few looping flocks
     const bcv = document.createElement("canvas"); bcv.width = bcv.height = 32;
     const bx = bcv.getContext("2d"); bx.strokeStyle = "rgba(38,40,52,0.92)"; bx.lineWidth = 3; bx.lineCap = "round";
     bx.beginPath(); bx.moveTo(4, 21); bx.lineTo(16, 11); bx.lineTo(28, 21); bx.stroke();
     const birdTex = new THREE.CanvasTexture(bcv); birdTex.colorSpace = THREE.SRGBColorSpace;
-    const birdMat = new THREE.SpriteMaterial({ map: birdTex, transparent: true, depthWrite: false, fog: false });  // shared, same reason as cloudMat
+    const birdMat = new THREE.SpriteMaterial({ map: birdTex, transparent: true, depthWrite: false, fog: false });  // ONE shared material for every bird (a SpriteMaterial per bird was 96 program lookups a frame)
     const flocks = [];
     for (let f = 0; f < 3; f++) {
       const flock = new THREE.Group();
@@ -692,12 +792,29 @@ export async function buildMap(W, mapId) {
       // keep the sky dome centered on the camera — a skybox should follow the viewer,
       // else it parallaxes as you move and its far shell clips the 2000m far-plane at map corners
       if (W.camera) sky.position.copy(W.camera.position);
-      for (const c of clouds) { c.position.x += c.userData.drift * dt; if (c.position.x > HALF * 1.15) c.position.x = -HALF * 1.15; }
+      skyMat.uniforms.cloudT.value = t;    // scrolls both baked cloud layers (replaces the sprite drift)
       for (const fl of flocks) {
         const u = fl.userData, a = t * u.spd + u.ph;
         fl.position.set(u.cx + Math.cos(a) * u.fr * 6, u.cy + Math.sin(a * 0.7) * 7, u.cz + Math.sin(a) * u.fr * 6);
         for (const s of fl.children) s.position.set((s.userData.ix - fl.children.length / 2) * 4.5, Math.sin(t * 6 + s.userData.ph) * 1.6, (s.userData.ix % 2) * 3);
       }
+    });
+
+    // ── P1.10 (SKY lane, Wave 4): altitude-scaled fog ───────────────────────────
+    // FogExp2.density is a plain uniform, so thinning the haze with camera height needs NO shader recompile (measured: a
+    // runtime density change leaves the program count unchanged; forcing a real height-fog shader recompiled 1,501
+    // materials). Full density at/below FOG_LO m above the terrain (ground play is unchanged), FOG_MIN of it from FOG_HI m
+    // up, smoothstep between: from the plane and the glide the island reads crisply out to the coast instead of a milky haze.
+    // Yields to: the menu / lobby (hud.js owns that fog), and player.js underwaterFx while submerged (it owns density then
+    // and restores fogSurface.density == K.fog itself on surfacing, which this updater then re-scales).
+    const FOG_LO = 40, FOG_HI = 250, FOG_MIN = 0.5;
+    trackUpdater(() => {
+      const fog = W.scene.fog, cam = W.camera, ph = W.phase;
+      if (!fog || !cam || (ph !== "drop" && ph !== "match" && ph !== "over")) return;
+      if (W._underwater || W._uw > 0.001) return;
+      const ag = cam.position.y - Math.max(heightAt0(cam.position.x, cam.position.z), waterY);   // metres above terrain / water
+      const u = ag <= FOG_LO ? 0 : ag >= FOG_HI ? 1 : (ag - FOG_LO) / (FOG_HI - FOG_LO);
+      fog.density = K.fog * (1 - (1 - FOG_MIN) * (u * u * (3 - 2 * u)));
     });
   }
 
