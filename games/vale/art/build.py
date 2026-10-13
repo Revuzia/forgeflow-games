@@ -68,11 +68,29 @@ BYTES_MAX = {"fighter": 1_200_000, "skin": 1_200_000, "minion": 1_500_000, "mons
              "structure": 4_000_000, "map": 48_000_000}
 
 
+# Standard installs, tried when $BLENDER is unset (newest first). macOS keeps the binary inside the
+# app bundle; on Windows the folder carries the version; Linux uses whatever `blender` is on PATH.
+_KNOWN_BLENDERS = [
+    "/Applications/Blender.app/Contents/MacOS/Blender",
+    os.path.expanduser("~/Applications/Blender.app/Contents/MacOS/Blender"),
+    r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe",
+    r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe",
+]
+
+
 def blender_exe() -> str | None:
+    """$BLENDER, else a standard install (macOS app bundle, Windows default, `blender` on PATH),
+    else None — the scripts then run in-process through the `bpy` module (the cloud container)."""
+    import shutil
     exe = os.environ.get("BLENDER")
-    if exe and not os.path.isfile(exe):
-        raise SystemExit(f"$BLENDER={exe!r} does not exist")
-    return exe or None
+    if exe:
+        if not os.path.isfile(exe):
+            raise SystemExit(f"$BLENDER={exe!r} does not exist")
+        return exe
+    for cand in _KNOWN_BLENDERS:
+        if os.path.isfile(cand):
+            return cand
+    return shutil.which("blender")
 
 
 def run_script(script: str, args: list[str]) -> int:

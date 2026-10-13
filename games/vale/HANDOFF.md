@@ -23,7 +23,7 @@ Branch: `claude/youthful-ramanujan-gdud5w`. Spine: `_spec/CONTRACT.md`. Look and
 | Art pipeline v1 (rig, clips, bake, export, parts library, template) | Done, but the owner rejected the mannequin look | `art/README.md` |
 | Art 2.0 hi-fi characters (sculpted volumes → voxel remesh → displacement, cloth draped by simulation, high-to-low bakes, painted albedo, painterly splash) | PAUSED mid-way (`art/blender/common/hifi/` 4 files); proving on Marund | resume |
 | Skies (4) + locked LUT grade | Done | `art/out/maps/*/sky.hdr`, `art/out/grade/` |
-| Painted 2D (icons, key art, mode cards, loading, backdrops, terrain textures, concept sheets) | Pack ready, needs xAI | `tools/imagegen/README.md` |
+| Painted 2D (icons, key art, mode cards, loading, backdrops, terrain textures, concept sheets) | Pack ready: generate with Grok Imagine in Chrome (`queue.py next/ingest`) | `tools/imagegen/README.md` |
 | Units, structures, monsters, map scenes, menu scene (Blender) | Not started (briefs exist) | `_design/maps/*_landmarks.md` |
 | Design note, names-not-used doc, README, game_meta, thumbnail | Not started | |
 
@@ -65,7 +65,7 @@ cd games/vale && npm install
 node tools/build_content.ts --allow-missing-assets   # content build → dist-catalog/
 npm run dev                                           # client at http://localhost:5190 (?dev=1 for debug)
 node _harness/run_probes.ts                           # all probes
-python3 art/build.py <target>                         # Blender builds; on Windows set BLENDER to blender.exe
+python3 art/build.py <target>                         # Blender builds; auto-detects /Applications/Blender.app (or set $BLENDER)
 ```
 
 ## Environment notes
@@ -73,7 +73,9 @@ python3 art/build.py <target>                         # Blender builds; on Windo
   Screenshots use headless Chromium with SwiftShader (slow, around 12 fps; perf numbers there
   are not representative). xAI is blocked unless the owner allows `api.x.ai` and adds
   `XAI_API_KEY`.
-- **Owner PC:** a real GPU (Cycles GPU and EEVEE, true WebGL 1080p60 checks), Blender 5.1+, the
-  xAI key in `state/.secrets/tokens.json`, and Chrome with the Claude extension.
+- **Owner's Mac:** a real GPU (Cycles on Metal and EEVEE, true WebGL 1080p60 checks), and Blender
+  (install it if missing; `art/build.py` auto-detects `/Applications/Blender.app`). Chrome has the
+  Claude extension, and the owner is signed in to Grok Imagine for 2D images
+  (`tools/imagegen/README.md`).
 - **Usage:** session limits have interrupted agent work several times. Keep agents small and
   resume-aware, and checkpoint-commit often.

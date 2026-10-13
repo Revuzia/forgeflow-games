@@ -65,8 +65,7 @@ A person can move through the client, queue each mode, draft or get assigned, pl
   have great effects), characters, scenery, menus and descriptions. The owner reviewed the first
   screenshots and judged that none of these were near that bar yet.
 - **3D art.** No Meshy or any other external 3D generator. Use Blender and make much better models.
-- **2D art.** xAI (Grok image generation) may be used for 2D images: scenery, icons, key art and
-  anything else 2D. It runs on the owner's PC, where the key lives in
-  `state/.secrets/tokens.json`, and Chrome with the Claude extension is available there.
-- **Machine.** Work moves to the owner's PC (local mode) for its GPU, xAI access and real-browser
-  testing.
+- **2D art.** xAI (Grok Imagine) may be used for 2D images: scenery, icons, key art and anything
+  else 2D. Generate them through Chrome with the Claude extension, where the owner is signed in.
+- **Machine.** Work moves to the owner's Mac (local mode) for its GPU, Blender (download it if
+  needed), Grok Imagine in Chrome and real-browser testing.
