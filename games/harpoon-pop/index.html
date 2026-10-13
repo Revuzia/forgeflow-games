@@ -1275,6 +1275,14 @@ const player3d = (() => {
 /* --- Hero: rigged CC0 Quaternius "Ranger" (assets/hero.glb), animation state machine.
        Until it loads (or if it fails) the primitive diver above is shown instead. --- */
 const gltfLoader = new GLTFLoader();
+// Load assets/<name>.glb. Hosts that refuse to serve .glb can ship the same bytes as base64 in <name>.glb.json.
+async function loadGLB(name) {
+  let buf = null;
+  const r = await fetch(`assets/${name}.glb`).catch(() => null);
+  if (r && r.ok) buf = await r.arrayBuffer();
+  else { const j = await (await fetch(`assets/${name}.glb.json`)).json(); buf = Uint8Array.from(atob(j.base64), (c) => c.charCodeAt(0)).buffer; }
+  return gltfLoader.parseAsync(buf, '');
+}
 const assetStatus = { hero: 'loading', bee: 'loading' };
 const clipName = (c) => c.name.split('|').pop();
 const hero = (() => {
@@ -1288,7 +1296,7 @@ const hero = (() => {
   footGlow.rotation.x = -Math.PI / 2; footGlow.position.y = 1; root.add(footGlow);
   let model = null, mixer = null, current = null, lastShot = 0, lastDead = false, shootHold = 0, stepT = 0, face = Math.PI / 2;
   const actions = {};
-  gltfLoader.loadAsync('assets/hero.glb').then((g) => {
+  loadGLB('hero').then((g) => {
     model = g.scene;
     model.traverse((o) => {
       if (!o.isMesh) return;
@@ -1348,7 +1356,7 @@ const hero = (() => {
 
 /* --- Stinger enemy: CC0 Quaternius "Armabee" (assets/bee.glb), cloned per enemy with its own mixer --- */
 let beeProto = null, beeClips = [], beeScale = 1, beeOffsetY = 0;
-gltfLoader.loadAsync('assets/bee.glb').then((g) => {
+loadGLB('bee').then((g) => {
   beeProto = g.scene; beeClips = g.animations;
   beeProto.updateMatrixWorld(true); // skinned rig is scaled ×100 in the file: measure posed vertices, not raw geometry
   const box = new THREE.Box3().setFromObject(beeProto, true), h = box.max.y - box.min.y;

@@ -112,7 +112,7 @@ with sync_playwright() as pw:
     page.evaluate('__hp.advance(0.25)'); shot('05_death')
     page.evaluate('__hp.advance(2.2, false)')
     page.evaluate('__hp.game.enemyT = 0; __hp.game.invuln = 99; __hp.advance(2.6, false)')
-    e = page.evaluate("(() => { const e = __hp.game.enemies.find(e=>!e.dying); if (e) { e.x = 480; e.charge = 0; e.fireT = 9; __hp.game.player.x = 480; __hp.input.pressed = true; } return !!e; })()")
+    e = page.evaluate("(() => { const e = __hp.game.enemies.find(e=>!e.dying); if (e) { e.x = 480; e.charge = 0; e.fireT = 9; __hp.game.bubbles.forEach(b => { b.x = 120; }); __hp.game.player.x = 480; __hp.input.pressed = true; } return !!e; })()")
     page.evaluate('__hp.advance(0.5)')
     check('wire kills stinger (+score)', e and page.evaluate('__hp.game.stats.stingers') >= 1, page.evaluate('__hp.game.stats.stingers'))
 
