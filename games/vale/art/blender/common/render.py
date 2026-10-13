@@ -30,7 +30,7 @@ def setup(w: int, h: int, samples: int, transparent: bool = True, noise: float =
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     c = sc.cycles
-    c.device = "CPU"
+    scene.cycles_device(sc)
     c.samples = samples
     c.use_adaptive_sampling = True
     c.adaptive_threshold = noise

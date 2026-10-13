@@ -105,8 +105,37 @@ def hex_srgb(h: str) -> tuple[float, float, float]:
 
 
 # ── scene ────────────────────────────────────────────────────────────────────────────────────────
+def cycles_device(sc: bpy.types.Scene | None = None) -> str:
+    """Point Cycles at the GPU (Metal, then OptiX/CUDA/HIP) when one is present, else the CPU.
+    VALE_CYCLES_DEVICE=CPU forces the CPU (byte-identical rebuilds across machines). Returns the
+    device in use."""
+    sc = sc or bpy.context.scene
+    want = os.environ.get("VALE_CYCLES_DEVICE", "GPU").upper()
+    device = "CPU"
+    if want != "CPU":
+        try:
+            prefs = bpy.context.preferences.addons["cycles"].preferences
+            for backend in ("METAL", "OPTIX", "CUDA", "HIP", "ONEAPI"):
+                try:
+                    prefs.compute_device_type = backend
+                except TypeError:
+                    continue
+                prefs.refresh_devices()
+                gpus = [d for d in prefs.devices if d.type == backend]
+                if gpus:
+                    for d in prefs.devices:
+                        d.use = d.type == backend
+                    device = "GPU"
+                    break
+        except (KeyError, AttributeError):
+            pass
+    sc.cycles.device = device
+    return device
+
+
 def reset(fps: int = FPS) -> bpy.types.Scene:
-    """Empty factory scene, metric units, 30 fps, Cycles CPU, AgX. Idempotent builds start here."""
+    """Empty factory scene, metric units, 30 fps, Cycles on the GPU when present, AgX. Idempotent
+    builds start here."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
     sc = bpy.context.scene
     sc.name = "vale"
@@ -120,7 +149,7 @@ def reset(fps: int = FPS) -> bpy.types.Scene:
     sc.frame_end = 60
     sc.frame_set(0)
     sc.render.engine = "CYCLES"
-    sc.cycles.device = "CPU"
+    cycles_device(sc)
     sc.cycles.seed = 0
     sc.cycles.use_animated_seed = False
     sc.render.threads_mode = "AUTO"

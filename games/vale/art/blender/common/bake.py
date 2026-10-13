@@ -194,7 +194,7 @@ def save_image(img, path: str, fmt: str = "PNG", quality: int = 90) -> str:
 def _setup_cycles(samples: int):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
-    sc.cycles.device = "CPU"
+    scene.cycles_device(sc)
     sc.cycles.samples = samples
     sc.cycles.use_denoising = False
     sc.cycles.use_adaptive_sampling = False
