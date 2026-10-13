@@ -77,7 +77,7 @@ def main() -> None:
             img.save(out)
         done += 1
         if it.get("ref_from") and a.apply_refs:
-            new_ref = "assets/" + it["out"].split("/", 2)[2] if it["out"].startswith("content/ui/") else None
+            new_ref = "assets/" + it["out"].split("/", 1)[1] if it["out"].startswith("content/ui/") else None
             if new_ref and new_ref != it["ref_from"]:
                 swaps[it["ref_from"]] = new_ref
     print(f"processed {done} images")
