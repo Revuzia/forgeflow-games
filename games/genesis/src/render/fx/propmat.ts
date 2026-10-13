@@ -5,7 +5,7 @@
 // position is rebuilt from the view position (the planet's body → view rotation and camera are shared uniforms), so
 // any mesh under the planet group works, instanced or not.
 
-import { MeshStandardMaterial, type IUniform } from 'three';
+import { MeshStandardMaterial, ShaderMaterial, type IUniform, type Material, type Mesh, type Object3D } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { SHADOW_GLSL } from '../planet/lights.ts';
@@ -61,11 +61,69 @@ export interface PropMatOpts {
   vertexBegin?: string;
   key: string;
   extraUniforms?: Record<string, IUniform>;
+  /** fragment declarations (varyings from vertexPars, samplers in extraUniforms) for `surface` and `alphaTest` */
+  fragmentPars?: string;
+  /** GLSL that may `discard` (alpha-tested leaf cards): run first in the lit fragment and in the shadow caster */
+  alphaTest?: string;
+}
+
+/**
+ * The shadow-pass twin of a prop material: the same vertex placement (instanced debris move in the vertex shader),
+ * depth only. Casters must never draw into the shadow atlas with their lit material: it samples that very atlas (a
+ * GL feedback loop — the draw is dropped and Chromium logs GL_INVALID_OPERATION).
+ */
+function makePropDepth(o: PropMatOpts): ShaderMaterial {
+  const uniforms: Record<string, IUniform> = { ...(o.extraUniforms ?? {}) };
+  return new ShaderMaterial({
+    uniforms,
+    vertexShader: /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+${o.vertexPars ?? ''}
+void main() {
+${o.vertexNormal ?? '  vec3 objectNormal = normal;'}
+${o.vertexBegin ?? '  vec3 transformed = position;'}
+#include <project_vertex>
+#include <logdepthbuf_vertex>
+}`,
+    fragmentShader: /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+${o.fragmentPars ?? ''}
+void main() {
+#include <logdepthbuf_fragment>
+${o.alphaTest ?? ''}
+  gl_FragColor = vec4(1.0);
+}`,
+    colorWrite: false,
+  });
+}
+
+/**
+ * Switch every prop mesh under `root` to its depth twin (`depth` true, before the shadow pass) and back. Meshes whose
+ * material is not a prop material are left alone.
+ */
+export function swapPropDepth(root: Object3D, depth: boolean): void {
+  root.traverse((obj) => {
+    const m = obj as Mesh;
+    if (!m.isMesh) return;
+    if (depth) {
+      const mat = m.material as Material;
+      const twin = !Array.isArray(mat) ? (mat?.userData?.propDepth as Material | undefined) : undefined;
+      if (twin) { m.userData.propLit = mat; m.material = twin; }
+    } else if (m.userData.propLit) {
+      m.material = m.userData.propLit as Material;
+      m.userData.propLit = undefined;
+    }
+  });
 }
 
 /** a MeshStandardMaterial lit by the planet (shared = the planet's uniforms; may be a proxy record) */
 export function makePropMaterial(shared: Record<string, IUniform>, o: PropMatOpts): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ roughness: o.roughness ?? 0.9, metalness: 0, vertexColors: true });
+  const depth = makePropDepth(o);
+  mat.userData.propDepth = depth;
+  // the twin goes when the lit material does
+  mat.addEventListener('dispose', () => depth.dispose());
   mat.onBeforeCompile = (shader) => {
     for (const k of Object.keys(shared)) shader.uniforms[k] = shared[k];
     if (o.extraUniforms) for (const [k, v] of Object.entries(o.extraUniforms)) shader.uniforms[k] = v;
@@ -74,8 +132,8 @@ export function makePropMaterial(shared: Record<string, IUniform>, o: PropMatOpt
     if (o.vertexNormal) shader.vertexShader = shader.vertexShader.replace('#include <beginnormal_vertex>', o.vertexNormal);
     if (o.vertexBegin) shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', o.vertexBegin);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${PARS}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\n  vec3 propEmit = vec3(0.0);\n${o.surface ?? ''}`)
+      .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${PARS}\n${o.fragmentPars ?? ''}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>\n  vec3 propEmit = vec3(0.0);\n${o.alphaTest ?? ''}\n${o.surface ?? ''}`)
       .replace('#include <emissivemap_fragment>', 'totalEmissiveRadiance = propEmit;')
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${AMBIENT}`);

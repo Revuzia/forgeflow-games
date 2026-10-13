@@ -78,7 +78,10 @@ export class FollowCamera implements CameraController {
     const radial: D3 = onWorld ? norm3([s.pos[0], s.pos[1], s.pos[2]]) : [0, 1, 0];
     let fwd: D3;
     const ship = this.ref.kind === 'ship';
-    if (s.fwd && Math.abs(dot(s.fwd, radial)) < 0.98) fwd = norm3([s.fwd[0] - radial[0] * dot(s.fwd, radial), s.fwd[1] - radial[1] * dot(s.fwd, radial), s.fwd[2] - radial[2] * dot(s.fwd, radial)]);
+    // (a ship lying along its path — circling the world, a rocket pitched over toward orbit — travels along its axis,
+    // not its bow: the eye goes behind its motion)
+    const along = ship && onWorld && Math.abs(dot(s.up, radial)) < 0.7 ? s.up : s.fwd;
+    if (along && Math.abs(dot(along, radial)) < 0.98) fwd = norm3([along[0] - radial[0] * dot(along, radial), along[1] - radial[1] * dot(along, radial), along[2] - radial[2] * dot(along, radial)]);
     else { const e: D3 = [0, 0, 0], n: D3 = [0, 0, 0]; tangentBasis(e, n, radial); fwd = n; }
     const side = norm3(cross(fwd, radial));
     const dist = Math.max(4, Math.min(onWorld ? 4000 : 20000, (s.size * (ship ? 2.4 : 3.4) + 4) * this.zoom));

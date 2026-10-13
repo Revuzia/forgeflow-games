@@ -86,10 +86,11 @@ void main() {
   // light flowing up through the body
   float e = snoise(vec3(vP.x * 5.0, vP.y * 4.0 - uTime * 1.3, vP.z * 5.0)) * 0.5 + 0.5;
   float e2 = snoise(vec3(vP * 13.0 + vec3(0.0, -uTime * 2.6, 0.0))) * 0.5 + 0.5;
-  vec3 kind = vec3(1.0, 0.84, 0.58);
-  vec3 pale = vec3(0.72, 0.84, 1.0);
+  // (saturated enough to stay gold / silver / ember after the tone curve, which bleaches bright light toward white)
+  vec3 kind = vec3(1.0, 0.7, 0.32);
+  vec3 pale = vec3(0.66, 0.8, 1.0);
   vec3 dark = vec3(0.95, 0.16, 0.05);
-  vec3 col = good > 0.5 ? mix(pale, kind, (good - 0.5) * 2.0) : mix(dark, pale, good * 2.0);
+  vec3 col = good > 0.5 ? mix(pale, kind, smoothstep(0.5, 0.8, good)) : mix(dark, pale, smoothstep(0.2, 0.5, good));
   // the body: bright for a kind god, a dark shell veined with embers for a feared one
   float body = mix(0.04, 0.85, smoothstep(0.15, 0.75, good)) * (0.55 + 0.45 * e);
   float veins = (1.0 - smoothstep(0.0, 0.08, abs(e2 - 0.5))) * (1.0 - good) * 1.6;

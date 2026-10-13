@@ -26,6 +26,10 @@ import {
   AdditiveBlending, Vector3, type IUniform,
 } from 'three';
 import { makePropMaterial } from './fx/propmat.ts';
+import { treeGeometry } from './gen/treegen.ts';
+import { buildingMesh } from './gen/buildinggen.ts';
+import { leafClusterTexture } from './gen/leaftex.ts';
+import { materialAt, materialIndex } from './life/catalog.ts';
 import { handMesh, type HandMesh } from './gen/handgen.ts';
 import { Rig, RIG_SKIN_GLSL, type V3 } from './gen/rig.ts';
 import { NOISE_GLSL } from './shaders/noise.glsl.ts';
@@ -386,7 +390,10 @@ interface PoseDef { f: [number, number, number, number][]; t: [number, number, n
 const POSES: Record<HandPose, PoseDef> = {
   open: { f: [[0.16, 0.22, 0.12, 0.05], [0.2, 0.28, 0.14, 0], [0.24, 0.31, 0.15, -0.04], [0.3, 0.36, 0.18, -0.06]], t: [0.12, 0.1, 0.05, 0.12, 0.16], w: [0.16, 0] },
   reach: { f: [[0.1, 0.18, 0.1, 0.12], [0.12, 0.2, 0.1, 0.02], [0.15, 0.22, 0.12, -0.08], [0.2, 0.25, 0.14, -0.14]], t: [0.0, 0.32, 0.0, 0.05, 0.1], w: [0.34, 0] },
-  grab: { f: [[0.78, 0.82, 0.42, 0.02], [1.02, 1.18, 0.62, 0], [1.28, 1.38, 0.72, -0.02], [1.38, 1.48, 0.76, -0.04]], t: [0.55, -0.32, 0.32, 0.36, 0.4], w: [0.36, 0] },
+  // a pinch: the thumb's pad meets the index's (fitted on the rig: 0.03 hand-lengths apart, room for a person's
+  // collar), the other three fingers folded into the palm so the pinch is the hand's lowest point and whoever it
+  // holds dangles in sight below it
+  grab: { f: [[1.29, 0.91, 0.42, -0.07], [1.5, 1.7, 0.92, 0], [1.52, 1.7, 0.9, 0], [1.55, 1.7, 0.88, 0]], t: [0.25, -0.02, 0.626, 0.36, 0.167], w: [0.36, 0] },
   claw: { f: [[0.62, 0.78, 0.46, 0.06], [0.66, 0.82, 0.48, 0], [0.7, 0.84, 0.5, -0.05], [0.76, 0.86, 0.52, -0.1]], t: [0.62, -0.18, 0.25, 0.32, 0.32], w: [0.5, 0] },
   fist: { f: [[1.48, 1.68, 0.92, 0], [1.5, 1.7, 0.92, 0], [1.52, 1.7, 0.9, 0], [1.55, 1.7, 0.88, 0]], t: [0.92, -0.6, 0.35, 0.62, 0.42], w: [0.2, 0] },
   point: { f: [[0.04, 0.05, 0.02, 0.02], [1.38, 1.62, 0.86, 0], [1.48, 1.66, 0.86, -0.02], [1.55, 1.7, 0.86, -0.04]], t: [0.66, -0.46, 0.3, 0.46, 0.3], w: [0.08, 0] },
@@ -398,8 +405,8 @@ const POSES: Record<HandPose, PoseDef> = {
 // ───────────────────────────── the visual ─────────────────────────────
 
 const _m = new Matrix4();
-/** a held tree hangs root-up from the grip */
-const TREE_FLIP = new Matrix4().makeRotationX(Math.PI).multiply(new Matrix4().makeTranslation(0, -2.2, 0));
+/** a held tree (unit height) hangs root-up from the grip, held at 70 % of its height (just under the crown) */
+const TREE_FLIP = new Matrix4().makeRotationX(Math.PI).multiply(new Matrix4().makeTranslation(0, -0.42, 0));
 const _v: V3 = [0, 0, 0];
 const _w: V3 = [0, 0, 0];
 
@@ -456,6 +463,8 @@ export class HandVisual {
   private heldMeshes = new Map<string, Mesh>();
   private heldGroup = new Group();
   private heldMat: MeshStandardMaterial | null = null;
+  private heldLeafMat: MeshStandardMaterial | null = null;
+  private sharedU: Record<string, IUniform> = {};
   private building = false;
   private visibleNow = false;
 
@@ -550,6 +559,7 @@ export class HandVisual {
     this.glow = glow;
     this.group.add(mesh, glow);
     this.heldMat = makePropMaterial(shared, { key: 'held', roughness: 0.88 });
+    this.sharedU = shared;
   }
 
   swapDepth(depth: boolean): void {
@@ -582,6 +592,8 @@ export class HandVisual {
     if (altCam > R * 4) want = 0;
     if (this.force != null) want = this.force ? 1 : 0;
     this.presence += (want - this.presence) * Math.min(1, f.dt * (want > this.presence ? 3.2 : 2.2));
+    // forced on (a test, a photo): whole at once, not mid-materialisation
+    if (this.force === true) this.presence = 1;
     if (this.presence < 0.004 && !want) {
       this.presence = 0;
       this.group.visible = false;
@@ -819,7 +831,11 @@ export class HandVisual {
     if (!k || k === 'agent' || k === 'creature' || k === 'animal') return;
     let mesh = this.heldMeshes.get(k);
     if (!mesh && this.heldMat) {
-      mesh = new Mesh(k === 'tree' ? treeGeo() : k === 'rock' ? boulderGeo(7) : k === 'building' ? hutGeo() : bundleGeo(), this.heldMat);
+      // an uprooted tree is the world's own broadleaf (gen/treegen.ts, its leaf sprays alpha-tested), a building the
+      // hut its people build (gen/buildinggen.ts)
+      if (k === 'tree' && !this.heldLeafMat) this.heldLeafMat = makeLeafPropMaterial(this.sharedU);
+      const geo = k === 'tree' ? treeGeometry('broadleaf', 1, 2) : k === 'rock' ? boulderGeo(7) : k === 'building' ? heldHutGeo() : bundleGeo();
+      mesh = new Mesh(geo, k === 'tree' ? this.heldLeafMat! : this.heldMat);
       mesh.matrixAutoUpdate = false;
       mesh.layers.enable(1);
       this.heldMeshes.set(k, mesh);
@@ -831,10 +847,11 @@ export class HandVisual {
     const up = _vec.copy(this.grip).normalize();
     let s = 1;
     if (k === 'rock') s = Math.max(0.5, Math.cbrt((3 * Math.max(50, this.heldId) / 2600) / (4 * Math.PI)));
-    else if (k === 'tree') s = 1;
-    else if (k === 'building') s = 3;
+    else if (k === 'tree') s = 12;
+    else if (k === 'building') s = 1;
     else s = 0.6;
-    const at = k === 'tree' ? _vec2.copy(this.grip).addScaledVector(up, -2.2) : _vec2.copy(this.grip).addScaledVector(up, -s * 0.6);
+    // a tree is held by its trunk a little below the crown and hangs with its roots up; a hut by its roof
+    const at = k === 'tree' ? _vec2.copy(this.grip) : k === 'building' ? _vec2.copy(this.grip).addScaledVector(up, -2.6) : _vec2.copy(this.grip).addScaledVector(up, -s * 0.6);
     _m.makeBasis(_vec3.crossVectors(up, this.fwd).normalize(), up, this.fwd).scale(_s.set(s, s, s));
     if (k === 'tree') _m.multiply(TREE_FLIP);
     _m.setPosition(at.x, at.y, at.z);
@@ -934,8 +951,10 @@ export class HandVisual {
     (this.glow?.material as ShaderMaterial | undefined)?.dispose();
     this.trailGeo.dispose();
     this.arcGeo.dispose();
-    for (const m of this.heldMeshes.values()) m.geometry.dispose();
+    // (the tree and hut geometries are the generators' cached ones: not ours to dispose)
+    for (const [k, m] of this.heldMeshes) if (k !== 'tree' && k !== 'building') m.geometry.dispose();
     this.heldMat?.dispose();
+    this.heldLeafMat?.dispose();
   }
 }
 
@@ -978,28 +997,26 @@ export function boulderGeo(seed: number): BufferGeometry {
   return vcol(g, (x, y, z) => { const k = 0.38 + 0.06 * Math.sin(x * 9 + y * 7 + z * 5); return [k * 1.0, k * 0.95, k * 0.88]; });
 }
 
-/** an uprooted tree: trunk, root ball, a broad crown (radius ~4, 12 m tall) */
-function treeGeo(): BufferGeometry {
-  const parts: BufferGeometry[] = [];
-  const trunk = cylinder(0.35, 0.22, 9, 10);
-  parts.push(vcol(trunk, () => [0.16, 0.11, 0.07]));
-  const roots = icosphere(1); roots.scale(1.2, 0.7, 1.2); roots.translate(0, -0.3, 0);
-  parts.push(vcol(roots, (x, y) => (y < -0.5 ? [0.12, 0.09, 0.06] : [0.2, 0.15, 0.1])));
-  for (let k = 0; k < 7; k++) {
-    const c = icosphere(1);
-    const a = k * 2.4, r = k === 0 ? 0 : 2.2;
-    const s = k === 0 ? 3.2 : 2.3;
-    c.scale(s, s * 0.8, s);
-    c.translate(Math.cos(a) * r, 9.5 + (k === 0 ? 1 : 0.3 * Math.sin(a * 3)), Math.sin(a) * r);
-    parts.push(vcol(c, (x, y, z) => { const v = 0.6 + 0.4 * Math.sin(x * 3 + y * 2 + z * 4); return [0.06 * v, 0.13 * v, 0.04 * v]; }));
-  }
-  return merge(parts);
+/** the hut a people builds (thatch, round), whole, as torn from its footing */
+function heldHutGeo(): BufferGeometry {
+  return buildingMesh({ kind: 'hut', mat: materialAt(materialIndex('thatch')), style: 0, era: 1, mood: 0, w: 4.5, d: 4.5, lod: 1 }).geo;
 }
 
-function hutGeo(): BufferGeometry {
-  const walls = cylinder(1, 1, 1.2, 12); walls.translate(0, 0.6, 0);
-  const roof = cylinder(1.25, 0.05, 1.3, 12); roof.translate(0, 1.85, 0);
-  return merge([vcol(walls, () => [0.36, 0.28, 0.2]), vcol(roof, () => [0.42, 0.34, 0.18])]);
+/** a prop material for treegen meshes: bark and leaf cards from vertex colours, the sprays alpha-tested in the atlas */
+function makeLeafPropMaterial(shared: Record<string, IUniform>): MeshStandardMaterial {
+  const tex = leafClusterTexture();
+  const mat = makePropMaterial(shared, {
+    key: 'held-tree', roughness: 0.85,
+    extraUniforms: { tLeaf: { value: tex } },
+    vertexPars: 'attribute vec2 aLeafUv;\nattribute float aCard;\nvarying vec2 vLeafUv;\nvarying float vCard;',
+    vertexBegin: '  vLeafUv = aLeafUv; vCard = aCard;\n  vec3 transformed = position;',
+    fragmentPars: 'uniform sampler2D tLeaf;\nvarying vec2 vLeafUv;\nvarying float vCard;',
+    alphaTest: '  if (vCard > 0.75) { float la = texture(tLeaf, vLeafUv).a; if ((la - 0.45) / max(fwidth(la), 1e-4) + 0.5 < 0.5) discard; }',
+    surface: '  if (vCard > 0.5) diffuseColor.rgb *= texture(tLeaf, vLeafUv).rgb * 1.7;',
+  });
+  mat.side = DoubleSide;
+  (mat.userData.propDepth as ShaderMaterial).side = DoubleSide;
+  return mat;
 }
 
 function bundleGeo(): BufferGeometry {
@@ -1028,43 +1045,5 @@ function icosphere(sub: number): BufferGeometry {
   g.setAttribute('position', new BufferAttribute(new Float32Array(v.flat()), 3));
   g.setIndex(f.flat());
   g.computeVertexNormals();
-  return g;
-}
-
-function cylinder(r0: number, r1: number, h: number, seg: number): BufferGeometry {
-  const pos: number[] = [], idx: number[] = [];
-  for (let i = 0; i <= seg; i++) {
-    const a = (i / seg) * Math.PI * 2;
-    pos.push(Math.cos(a) * r0, 0, Math.sin(a) * r0, Math.cos(a) * r1, h, Math.sin(a) * r1);
-  }
-  for (let i = 0; i < seg; i++) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
-  const g = new BufferGeometry();
-  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
-}
-
-function merge(parts: BufferGeometry[]): BufferGeometry {
-  let n = 0, m = 0;
-  for (const p of parts) { n += p.getAttribute('position').count; m += p.index ? p.index.count : p.getAttribute('position').count; }
-  const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), col = new Float32Array(n * 3), idx = new Uint32Array(m);
-  let o = 0, io = 0;
-  for (const p of parts) {
-    const P = p.getAttribute('position'), N = p.getAttribute('normal'), C = p.getAttribute('color');
-    for (let i = 0; i < P.count; i++) {
-      pos[(o + i) * 3] = P.getX(i); pos[(o + i) * 3 + 1] = P.getY(i); pos[(o + i) * 3 + 2] = P.getZ(i);
-      if (N) { nrm[(o + i) * 3] = N.getX(i); nrm[(o + i) * 3 + 1] = N.getY(i); nrm[(o + i) * 3 + 2] = N.getZ(i); }
-      if (C) { col[(o + i) * 3] = C.getX(i); col[(o + i) * 3 + 1] = C.getY(i); col[(o + i) * 3 + 2] = C.getZ(i); }
-    }
-    if (p.index) for (let i = 0; i < p.index.count; i++) idx[io++] = p.index.getX(i) + o;
-    else for (let i = 0; i < P.count; i++) idx[io++] = i + o;
-    o += P.count;
-  }
-  const g = new BufferGeometry();
-  g.setAttribute('position', new BufferAttribute(pos, 3));
-  g.setAttribute('normal', new BufferAttribute(nrm, 3));
-  g.setAttribute('color', new BufferAttribute(col, 3));
-  g.setIndex(new BufferAttribute(idx, 1));
   return g;
 }

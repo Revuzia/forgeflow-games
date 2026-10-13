@@ -14,15 +14,15 @@
     {
      "k": "lookdev.hand",
      "pos": "$poi:town",
-     "alt": 6,
+     "alt": 7,
      "alignment": 0.6,
      "pose": "open"
     }
    ],
    "script": [
     "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = true; const p = G.poi('town');",
-    "await G.camera({ mode: 'surface', lat: p.lat - (26 / 3000) * 180 / Math.PI, lon: p.lon, alt: 16, yaw: 0, pitch: -14, fov: 50, hour: 16 });",
-    "await G.frames(1); const a = G.agents(12).sort((x, y) => x.dist - y.dist).map((x) => x.id); const r = await G.cmd({ k: 'lookdev.hand.grab', target: { kind: 'agent', id: a[0] } }); await G.step(1); await G.frames(3);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 24, tilt: 76, yaw: 20, fov: 55, hour: 16 });",
+    "await G.frames(1); const a = G.agents(40).filter((x) => x.dist < 60).map((x) => x.id); const r = await G.cmd({ k: 'lookdev.hand.grab', target: { kind: 'agent', id: a[0] } }); await G.step(1); await G.frames(4);",
     "return { held: [F.fx.hand.heldKind, F.fx.hand.heldId], scale: F.fx.hand.scale };"
    ],
    "frames": 2
@@ -38,10 +38,10 @@
    "canvasOnly": true,
    "frames": 1,
    "script": [
-    "const F = window.__GENESIS_FX__; F.fx.hand.force = true; const p = G.poi('valley');",
-    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 3, alignment: 0.8, pose: 'open', held: null });",
-    "await G.camera({ mode: 'surface', lat: p.lat - (9 / 3000) * 180 / Math.PI, lon: p.lon, alt: 5, yaw: 0, pitch: -12, fov: 45, hour: 15 });",
-    "await G.frames(3); return { scale: F.fx.hand.scale, pres: F.fx.hand.presence };"
+    "const F = window.__GENESIS_FX__; F.fx.hand.force = true; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 2.4, alignment: 0.8, pose: 'open', held: null });",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 7, tilt: 70, yaw: 35, fov: 45, hour: 15.5 });",
+    "await G.frames(4); return { scale: F.fx.hand.scale, pres: F.fx.hand.presence };"
    ]
   },
   {
@@ -105,8 +105,8 @@
    "canvasOnly": true,
    "script": [
     "const F = window.__GENESIS_FX__; F.fx.hand.force = false; const p = G.poi('farm');",
-    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'meteor', pos: p.pos, progress: 0.95, bearing: 270, radius: 120 });",
-    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 3200, tilt: 74, yaw: 0, fov: 55, hour: 17.3 });",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'meteor', pos: p.pos, progress: 0.98, bearing: 270, radius: 120 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 1200, tilt: 76, yaw: 0, fov: 70, hour: 17.3 });",
     "F.advance(0.6); await G.frames(2); return [p.lat, p.lon];"
    ],
    "frames": 1

@@ -4,7 +4,7 @@
 //   building   the hull rises at the pad course by course (a clip line with welding sparks)
 //   fuelling   frost creeps over the tanks, vapour boils off the vents
 //   boarding   venting; the crew walk to the pad (they are agents, drawn by the crowds)
-//   pad        the countdown: venting thickens; the engines light in its last tenth (an ignition flash, the plume
+//   pad        the countdown: venting thickens; the engines light in its last 40 % (an ignition flash, the plume
 //              held down, the ground cloud pouring out of the flame trench)
 //   ascent     the analytic climb of the sim (transit.ts: up, bending east to orbit height) with the plume, Mach
 //              diamonds, the smoke column and trail, the exhaust's light on the ground; stages separate and tumble away,
@@ -486,6 +486,11 @@ function kindInfo(kind: string): KindInfo {
 
 /** the sim's ascent arc (space/transit.ts ASCENT_ARC): how far east the climb bends before orbit (rad) */
 const ASCENT_ARC = 0.35;
+/**
+ * the engines light this far through the pad phase (the countdown, PAD_TICKS): about 1.2 s before lift-off at 1×, so
+ * the ground cloud has poured out of the flame trench and the pad stands lit in its own fire when the clamps let go
+ */
+const IGNITE_AT = 0.6;
 
 function rotY(v: ArrayLike<number>, a: number, out: D3 = [0, 0, 0]): D3 {
   const c = Math.cos(a), s = Math.sin(a);
@@ -971,7 +976,11 @@ export class ShipLayer {
         : ph === 'orbit' || ph === 'transfer' || ph === 'stranded' ? (t.kind === 'rocket' ? 'launch' : 'space')
           : ph === 'lost' ? (t.form) : 'launch';
     this.setForm(t, form);
-    const planet = ph === 'transfer' || ph === 'stranded' || (ph === 'lost' && s.planet < 0) ? -1 : s.planet;
+    // between the worlds: an interplanetary crossing, a ship adrift, one lost out there. A sea vessel's or an airship's
+    // 'transfer' is a voyage over its own world; a gate's crossing happens in its ring (held open at the gate left)
+    const gate = cls === 'gate';
+    const crossing = ph === 'transfer' && cls !== 'sea' && cls !== 'air' && !gate;
+    const planet = crossing || ph === 'stranded' || (ph === 'lost' && s.planet < 0) ? -1 : gate && ph === 'transfer' ? s.from : s.planet;
     const ref = planet >= 0 ? planets.get(planet) : undefined;
     const pv = planet >= 0 ? view.planet(planet) : undefined;
     const own = t.own;
@@ -989,12 +998,14 @@ export class ShipLayer {
     let trail = false;
     if (planet >= 0 && pv) {
       const R = pv.params.radius;
-      if (ph === 'building' || ph === 'fuelling' || ph === 'boarding' || ph === 'pad') {
+      // (a gate stands in its ring at either end: the one it opens from, the one it lets out of on arrival)
+      const atGate = gate && (ph === 'landed' || ph === 'descent' || (ph === 'transfer' && !!t.padDir));
+      if (ph === 'building' || ph === 'fuelling' || ph === 'boarding' || ph === 'pad' || (atGate && ph !== 'transfer')) {
         const key = `${planet}|${s.pos[0].toFixed(6)}|${s.pos[1].toFixed(6)}|${s.pos[2].toFixed(6)}|${pv.buildings?.count ?? 0}`;
         if (key !== t.padKey) { t.padKey = key; this.findPad(t, pv, norm([s.pos[0], s.pos[1], s.pos[2]])); }
       }
       const A = t.info.altitude;
-      if (ph === 'building' || ph === 'fuelling' || ph === 'boarding' || ph === 'pad' || (ph === 'lost' && s.alt < 1 && t.padDir)) {
+      if (ph === 'building' || ph === 'fuelling' || ph === 'boarding' || ph === 'pad' || atGate || (ph === 'lost' && s.alt < 1 && t.padDir)) {
         const d = t.padDir!;
         this.padFrame(d, t.padYaw, up, fwd);
         pos.set(d[0], d[1], d[2]).multiplyScalar(t.padGround + t.deck);
@@ -1002,8 +1013,8 @@ export class ShipLayer {
         if (ph === 'building') u1.z = Math.max(0.2, s.progress) * t.model.height * (t.model.shape === 'airship' ? 2 : 1) - (t.model.shape === 'airship' ? t.model.height * 0.5 : 0);
         if (ph === 'fuelling') u1.y = smooth01(s.progress);
         if (ph === 'boarding' || ph === 'pad') u1.y = 1;
-        if (ph === 'pad' && f > 0.86 && cls !== 'air' && cls !== 'gate') firing = { stages: this.firstStages(t), thrust: 0.55 + 0.45 * smooth01((f - 0.86) / 0.14) };
-        if (ph === 'pad' && f > 0.86 && !t.ignited && ref && cls !== 'air' && cls !== 'gate') {
+        if (ph === 'pad' && f > IGNITE_AT && cls !== 'air' && cls !== 'gate') firing = { stages: this.firstStages(t), thrust: 0.55 + 0.45 * smooth01((f - IGNITE_AT) / (1 - IGNITE_AT)) };
+        if (ph === 'pad' && f > IGNITE_AT && !t.ignited && ref && cls !== 'air' && cls !== 'gate') {
           t.ignited = true;
           this.fx.ignite(planet, this.ctx(ref), pos, Math.max(0.6, t.model.baseRadius / 2));
         }
@@ -1087,7 +1098,9 @@ export class ShipLayer {
           if (f > 0.3) firing = { stages: [0], thrust: 0.55 + 0.45 * smooth01((f - 0.3) / 0.6) };
           if (f > 0.75 && alt < 60 && ref) {
             const ground = _v3.set(dir[0], dir[1], dir[2]).multiplyScalar(g);
-            this.fx.dust(planet, this.ctx(ref), ground, Math.max(0, 1 - alt / 60) * (firing ? firing.thrust : 0), Math.max(0.7, t.model.baseRadius / 3.5));
+            // (the burn began raising dust when the lander came within 60 m: from then on, if this is the first frame seen)
+            const fDust = Math.max(0.75, 1 - Math.pow(60 / Math.max(61, A), 1 / 1.3));
+            this.fx.dust(planet, this.ctx(ref), ground, Math.max(0, 1 - alt / 60) * (firing ? firing.thrust : 0), Math.max(0.7, t.model.baseRadius / 3.5), t.phaseT0 + fDust * t.phaseLen);
           }
         }
         if (ph === 'landed') u1.x = 0.8;
@@ -1298,11 +1311,15 @@ export class ShipLayer {
       const world = local.applyQuaternion(_q).add(pos);
       const dir = _x.copy(up).negate();
       const space = planet < 0;
-      const since = phase === 'ascent' ? (g.st === 1 ? t.phaseT0 + this.sepAt(t).stage1 * t.phaseLen : t.phaseT0 - 0.14 * PAD_TICKS) : undefined;
+      // (when the engines lit: a cluster first seen late — a cut, a paused or stepped capture — lays the smoke and the
+      // pad cloud it has been pouring out since then; on the pad the nozzles stand still)
+      const lit = phase === 'pad' ? t.phaseT0 + IGNITE_AT * t.phaseLen : undefined;
+      const since = phase === 'ascent' ? (g.st === 1 ? t.phaseT0 + this.sepAt(t).stage1 * t.phaseLen : t.phaseT0 - (1 - IGNITE_AT) * PAD_TICKS) : lit;
+      const at = world.clone();
       this.fx.engine({
         key: `${t.id}:${key}`, planet: space ? -1 : planet, pos: world.clone(), dir: dir.clone(), radius: g.r, count: g.n, thrust: firing.thrust,
         vacuum: g.vac, fuel: propellant(t.model, g.st), alt: space ? 1e9 : alt, trail: trail && key !== 'b' ? true : trail,
-        path: path ? (tk: number, out: Vector3) => { path(tk, out); return; } : undefined, since,
+        path: path ? (tk: number, out: Vector3) => { path(tk, out); return; } : lit !== undefined ? (_tk: number, out: Vector3) => { out.copy(at); } : undefined, since,
       });
     }
     void phase;
@@ -1443,7 +1460,7 @@ export class ShipLayer {
       const s = t.view;
       const P = t.pose;
       // glints for every ship off the ground
-      const flying = s.phase === 'ascent' || s.phase === 'orbit' || s.phase === 'transfer' || s.phase === 'descent' || s.phase === 'stranded';
+      const flying = s.phase === 'ascent' || s.phase === 'orbit' || (s.phase === 'transfer' && t.info.cls !== 'sea' && t.info.cls !== 'gate') || s.phase === 'descent' || s.phase === 'stranded';
       if (vis > 0.01 && n < 64 && (flying || s.phase === 'lost')) {
         this.glintPos[n * 3] = P.sys[0] - pose.pos[0]; this.glintPos[n * 3 + 1] = P.sys[1] - pose.pos[1]; this.glintPos[n * 3 + 2] = P.sys[2] - pose.pos[2];
         const c = s.phase === 'stranded' || s.phase === 'lost' ? [3, 0.5, 0.35] : s.phase === 'transfer' ? [3.2, 2.2, 0.8] : [1.2, 2.6, 3.2];
@@ -1452,7 +1469,9 @@ export class ShipLayer {
         n++;
       }
       // its name and where it goes, beside the glint (ships in flight between or around the worlds)
-      const labelled = vis > 0.01 && flying && s.phase !== 'ascent' && s.phase !== 'descent' && t.info.cls !== 'air';
+      // (voyages over one world — a sailing ship, an airship — and a gate's crossing in its ring are not on the system map)
+      const local = t.info.cls === 'air' || t.info.cls === 'sea' || t.info.cls === 'gate';
+      const labelled = vis > 0.01 && flying && s.phase !== 'ascent' && s.phase !== 'descent' && !local;
       if (labelled) {
         if (!t.label) { t.label = makeLabel(); this.overlay.add(t.label); }
         const name = KIND_NAMES.get(t.kind) ?? t.kind;
@@ -1472,7 +1491,7 @@ export class ShipLayer {
         L.visible = true;
       } else if (t.label) t.label.visible = false;
       // the transfer's path: flown (bright) and ahead (dim)
-      const showTrail = vis > 0.01 && s.phase === 'transfer' && t.info.cls !== 'air';
+      const showTrail = vis > 0.01 && s.phase === 'transfer' && !local;
       if (!showTrail) { if (t.trail) t.trail.visible = false; if (t.trailAhead) t.trailAhead.visible = false; continue; }
       const bz = this.transferCurve(t, s, view);
       if (!bz) continue;

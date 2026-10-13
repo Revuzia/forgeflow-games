@@ -98,6 +98,7 @@ uniform float uTime;
 uniform float uScaleM;
 uniform vec3 uEyeA;
 uniform vec3 uEyeB;
+uniform float uFade;
 uniform sampler2D tExposure;
 uniform float uHasExposure;
 varying vec3 vRest;
@@ -123,6 +124,10 @@ vec2 cells(vec3 p) {
 `;
 
 const FRAG_SURFACE = /* glsl */ `
+  // arriving / leaving: the body gathers out of (and dissolves into) motes of light, never pops
+  float fadeN = fbm3(vRest * 7.0) * 0.5 + 0.5;
+  if (fadeN > uFade * 1.08) discard;
+  float fadeEdge = 1.0 - smoothstep(0.0, 0.06, uFade * 1.08 - fadeN);
   float good = csat(uAlign), cruel = csat(-uAlign);
   int region = int(vMark.y + 0.5);
   float eye = vMark.x;
@@ -230,6 +235,8 @@ const FRAG_EMISSIVE = /* glsl */ `
     // a good creature's warm rim
     float nv = abs(dot(normal, normalize(vViewPosition)));
     em += vec3(1.0, 0.78, 0.45) * pow(1.0 - nv, 3.0) * uGlow * 0.35 / ex;
+    // the dissolving edge glows (warm for a good creature, ember red for a cruel one)
+    em += mix(vec3(1.0, 0.8, 0.5), vec3(1.0, 0.25, 0.08), cruel) * fadeEdge * step(uFade, 0.999) * 1.5 / ex;
     totalEmissiveRadiance = em;
   }
 `;
@@ -238,25 +245,33 @@ const DEPTH_VERT = /* glsl */ `
 #include <common>
 uniform mat4 uBones[${MAXB}];
 ${RIG_SKIN_GLSL}
+attribute vec3 aRest;
+varying vec3 vRest;
 #include <logdepthbuf_pars_vertex>
 void main() {
   mat4 sk = rigSkin();
   vec3 p = (sk * vec4(position, 1.0)).xyz;
+  vRest = aRest;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 #include <logdepthbuf_vertex>
 }
 `;
 const DEPTH_FRAG = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
+${NOISE_GLSL}
+uniform float uFade;
+varying vec3 vRest;
 void main() {
 #include <logdepthbuf_fragment>
+  if (uFade < 0.999 && fbm3(vRest * 7.0) * 0.5 + 0.5 > uFade * 1.08) discard;
   gl_FragColor = vec4(1.0);
 }
 `;
 
+/** a creatures.json sRGB hex as linear RGB (three's Color already converts a CSS / hex colour into the linear working
+ *  space: converting again made every coat ~10× too dark — near-black creatures) */
 function hexColor(s: string): [number, number, number] {
   const c = new Color(s);
-  c.convertSRGBToLinear();
   return [c.r, c.g, c.b];
 }
 
@@ -309,7 +324,7 @@ class CreatureVisual {
     uCoat: { value: new Vector3() }, uDark: { value: new Vector3() }, uLight: { value: new Vector3() }, uSkin: { value: new Vector3() },
     uAlign: { value: 0 }, uGlow: { value: 0 }, uSpiky: { value: 0 }, uPattern: { value: 0 }, uTime: { value: 0 }, uScaleM: { value: 10 },
     uFurLen: { value: 0.02 }, uComb: { value: new Vector3(0, -1, -0.5) },
-    uEyeA: { value: new Vector3(9, 9, 9) }, uEyeB: { value: new Vector3(9, 9, 9) },
+    uEyeA: { value: new Vector3(9, 9, 9) }, uEyeB: { value: new Vector3(9, 9, 9) }, uFade: { value: 0 },
   };
   private morphKey = '';
   /** smoothed body-frame position (m), heading, measured speed, gait phase */
@@ -325,6 +340,9 @@ class CreatureVisual {
   private blend = 1;
   private height = 10;
   fade = 0;
+  private lastT = -1;
+  /** the work it is at is a throw (rocks, a person), not tending a village */
+  private throwing = false;
   seen = true;
 
   constructor(id: number, shared: Record<string, IUniform>) {
@@ -359,7 +377,7 @@ class CreatureVisual {
     };
     this.mat = mk(false);
     this.furMat = mk(true);
-    this.depth = new ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, uniforms: { uBones: this.bones }, colorWrite: false });
+    this.depth = new ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, uniforms: { uBones: this.bones, uFade: this.u.uFade }, colorWrite: false });
   }
 
   private ensureMesh(v: CreatureView): void {
@@ -407,6 +425,14 @@ class CreatureVisual {
   /** pose and place for this frame; returns footfalls (positions in the body frame) */
   update(v: CreatureView, pv: PlanetView, dt: number, t: number, held: { x: number; y: number; z: number } | null, falls: FootFall[]): void {
     this.ensureMesh(v);
+    // in over ~1.2 s when it appears, out when the sim no longer lists it (the layer keeps the last view meanwhile)
+    // (by real time or the FX clock, whichever moved more: a paused world still fades, a scripted capture that moves
+    // the FX clock sees the creature whole)
+    const fdt = Math.max(dt, this.lastT >= 0 ? Math.max(0, t - this.lastT) : 0);
+    this.lastT = t;
+    this.throwing = /throw|picking up/.test(v.activity ?? '');
+    this.fade = this.seen ? Math.min(1, this.fade + fdt / 1.2) : Math.max(0, this.fade - fdt / 1.0);
+    this.u.uFade.value = this.fade;
     const cm = this.cm!, rig = this.rig!;
     const R = pv.params.radius;
     this.height = Math.max(1, v.height);
@@ -630,6 +656,17 @@ class CreatureVisual {
         break;
       }
       case AnimState.work: {
+        if (!this.throwing) {
+          // helping a village: head down, working the ground with the forelimbs in turn (digging, scooping, carrying)
+          const k = Math.sin(t * 3.4);
+          rig.rot[b.neck * 3] += 0.55 + 0.1 * Math.sin(t * 1.7); rig.rot[b.head * 3] += 0.3;
+          rig.rootR[0] += body === 'ape' ? -0.1 : 0.12;
+          legRot(0, -0.55 * Math.max(0, k), 0.7 * Math.max(0, k) + 0.2, 0.3 * Math.max(0, k));
+          legRot(1, -0.55 * Math.max(0, -k), 0.7 * Math.max(0, -k) + 0.2, 0.3 * Math.max(0, -k));
+          tailSway(1, 0.15, 2);
+          ears(0.1);
+          break;
+        }
         // throw: the ape rears and hurls overhand; a quadruped tosses its head
         const c = (t * 0.9) % 1;
         if (body === 'ape') {
@@ -691,6 +728,8 @@ function fract(x: number): number { return x - Math.floor(x); }
 export class CreatureLayer {
   readonly group = new Group();
   private visuals = new Map<number, CreatureVisual>();
+  /** the last view of each creature (a creature that left fades out where it was) */
+  private lastView = new Map<number, CreatureView>();
   private shared: Record<string, IUniform>;
   readonly falls: FootFall[] = [];
 
@@ -710,10 +749,16 @@ export class CreatureLayer {
       let vis = this.visuals.get(c.id);
       if (!vis) { vis = new CreatureVisual(c.id, this.shared); this.visuals.set(c.id, vis); this.group.add(vis.group); }
       vis.seen = true;
+      this.lastView.set(c.id, c);
       const pin = pins?.get(c.id);
       vis.update(c, pv, dt, t, heldId === c.id && grip ? grip : pin ?? null, this.falls);
     }
-    for (const [id, v] of this.visuals) if (!v.seen) { this.group.remove(v.group); v.dispose(); this.visuals.delete(id); }
+    for (const [id, v] of this.visuals) {
+      if (v.seen) continue;
+      const last = this.lastView.get(id);
+      if (last && v.fade > 0) { v.update(last, pv, dt, t, null, this.falls); continue; }
+      this.group.remove(v.group); v.dispose(); this.visuals.delete(id); this.lastView.delete(id);
+    }
   }
 
   swapDepth(depth: boolean): void { for (const v of this.visuals.values()) v.swapDepth(depth); }

@@ -189,8 +189,10 @@ void main() {
     sz = size * (0.5 + 2.2 * age) * (0.7 + 0.6 * r4) * mix(1.0, 1.8, top);
     a = smoothstep(0.0, 0.04, age) * (1.0 - smoothstep(0.8, 1.0, age)) * 0.95;
     soft = 0.6 * sz;
-    // lava glows into the column's foot
-    glow = vec3(1.0, 0.32, 0.06) * 9.0 * (1.0 - smoothstep(0.0, 0.12, age)) * p2;
+    // lava glows into the column's foot, and the vent lights the column's underside from below (by day the sun
+    // drowns it; at night the ash stands up orange over the crater)
+    glow = vec3(1.0, 0.32, 0.06) * 9.0 * (1.0 - smoothstep(0.0, 0.12, age)) * p2
+         + vec3(1.0, 0.36, 0.08) * 0.4 * exp(-hgt / max(H * 0.22, 1.0)) * p2;
   } else if (S == 3) {
     // a pyroclastic flow: billows hugging the ground, racing out from the vent and rolling up behind
     float reach = p0;

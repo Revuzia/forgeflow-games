@@ -61,6 +61,13 @@ export interface FxCtx {
   landed?: (e: SimEvent) => void;
   /** the camera's forward axis in the body frame */
   camFwd?: Vector3;
+  /** the radius (body m, from the planet's centre) of the cloud deck's base — a funnel or a bolt reaches up to it */
+  cloudBase?: number;
+  /**
+   * the step for STATE easing (fades in and out, tints, levels): the larger of the FX step and the real frame time, so
+   * a disaster spawned on a paused world still fades in (its particles wait for the clock) and nothing pops
+   */
+  ease: number;
 }
 
 interface DState {
@@ -224,7 +231,7 @@ export class DisasterFx {
     });
     // the mushroom plume, ejecta, rocks
     const H = R * 9 * s;
-    ctx.vfx.emit({ sys: SYS.plume, x: p.x, y: p.y, z: p.z, size: R * 1.1, life: 40, count: Math.round(900 * ctx.q), p0: H, p1: R * 4, duration: 22, r: 0.36, g: 0.31, b: 0.26 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.plume, x: p.x, y: p.y, z: p.z, size: R * 1.1, life: 40, count: Math.round(900 * ctx.q), p0: H, p1: R * 4, duration: 22, r: 0.25, g: 0.21, b: 0.17 }, ctx.now);
     ctx.vfx.emit({ sys: SYS.dust, x: p.x, y: p.y, z: p.z, size: R * 0.9, life: 14, count: Math.round(400 * ctx.q), p0: R * 1.5, p1: R * 4, burst: true, r: 0.44, g: 0.38, b: 0.3 }, ctx.now);
     ctx.vfx.emit({ sys: SYS.sparks, x: p.x, y: p.y, z: p.z, size: Math.max(0.8, R * 0.04), life: 4, count: 320, p1: 30 + R * 0.6, burst: true, r: 1, g: 0.6, b: 0.25 }, ctx.now);
     ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.03), life: 9, count: 256, p0: R, p1: 12 + R * 0.2, burst: true }, ctx.now);
@@ -305,7 +312,7 @@ export class DisasterFx {
     for (const st of this.states.values()) {
       if (!st.seen) st.gone = true;
       const want = st.gone ? 0 : 1;
-      st.fade += (want - st.fade) * Math.min(1, ctx.dt * (want ? 1.4 : 0.7));
+      st.fade += (want - st.fade) * Math.min(1, ctx.ease * (want ? 1.4 : 0.7));
       if (st.gone && st.fade < 0.02) { this.retire(st, ctx); this.states.delete(st.id); continue; }
       this.step(st, ctx);
     }
@@ -417,11 +424,12 @@ export class DisasterFx {
         ctx.decals.add(L);
         // lightning in the plume
         if (ctx.now > st.next && plume > 400 && !far) {
-          st.next = ctx.now + 1.2 + Math.random() * 3;
+          // (a dirty thunderstorm: the charged ash flickers with bolts every second or two, most inside the column)
+          st.next = ctx.now + 0.5 + Math.random() * 1.6;
           const up = _v.copy(u);
           const side = bearing(u, Math.random() * 6.28, new Vector3());
           const a = g.clone().addScaledVector(up, H * (0.45 + 0.3 * Math.random())).addScaledVector(side, H * 0.12).addScaledVector(wind, H * 0.02);
-          const toGround = Math.random() < 0.3;
+          const toGround = Math.random() < 0.25;
           const b = toGround ? g.clone().addScaledVector(side, Rd * (0.4 + Math.random())) : g.clone().addScaledVector(up, H * (0.2 + 0.2 * Math.random())).addScaledVector(side, -H * 0.15);
           if (toGround) groundAt(pv, b.clone().normalize(), b);
           ctx.bolts.strike(a, b, ctx.now, 0.8, toGround ? 5 : 2);
@@ -459,7 +467,9 @@ export class DisasterFx {
         break;
       }
       case 'tornado': {
-        const h = Math.max(100, P.height ?? 900), w = Math.max(10, P.width ?? 60);
+        // the funnel hangs from the storm's cloud base (on a small world that is a few hundred metres up, not 900)
+        const base = ctx.cloudBase !== undefined ? ctx.cloudBase - g.length() + 30 : 1e9;
+        const h = Math.max(100, Math.min(P.height ?? 900, base)), w = Math.max(10, P.width ?? 60);
         let fn = st.extra.funnel as Funnel | undefined;
         if (!fn) { fn = new Funnel(this.fx); st.extra.funnel = fn; fn.u.uSeed.value = d.id * 1.7; this.group.add(fn.group); st.meshes.push({ obj: fn.group, dispose: () => fn!.dispose() }); }
         fn.u.uH.value = h; fn.u.uRBase.value = w * 0.32; fn.u.uRTop.value = w * 2.4; fn.u.uK.value = k;

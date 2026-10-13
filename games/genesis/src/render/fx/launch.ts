@@ -194,8 +194,9 @@ void main() {
     vec3 velV = (modelViewMatrix * vec4(vel, 0.0)).xyz;
     vGlow = vec3(length(velV.xy) > 1e-4 ? normalize(velV.xy) : vec2(0.0, 1.0), clamp(length(velV.xy) * 0.02, 0.0, 1.0));
   } else {
-    // the ignition flash
-    col = vec4(vec3(1.0, 0.78, 0.5) * 80.0 * (1.0 - a) * (1.0 - a), 0.0);
+    // a flash: s0 / s1 carry its size, the seed its strength (an ignition's glow at the nozzles is a fraction of a
+    // failing stage's fireball light)
+    col = vec4(vec3(1.0, 0.78, 0.5) * (6.0 + 60.0 * seed) * (1.0 - a) * (1.0 - a), 0.0);
     soft = 0.5 * sz;
   }
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
@@ -250,7 +251,9 @@ void main() {
   }
   if (vKind > 6.5) {
     if (r > 1.0) discard;
-    float g = exp(-r * r * 5.0);
+    // (windowed to nothing at the quad's edge: a bright flash never shows the disc it is drawn on)
+    float w = 1.0 - r * r;
+    float g = exp(-r * r * 6.0) * w * w;
     gl_FragColor = vec4(vColor.rgb * g * fade * mix(1.0, 1.0 / ex, 0.5), 0.0);
     return;
   }
@@ -703,7 +706,8 @@ export class LaunchFx {
       const altI = e.path && ctx ? _a.length() - ctx.radius : e.alt;
       if (!ctx || altI > ctx.airTop * 1.05) continue;
       const airK = airAt(altI);
-      if (hashFloat(i, Math.floor(t1 * 11), 9) > 0.35 + 0.65 * airK) continue;
+      // (thinner air, fewer puffs — but never so few that a fast climb leaves a string of beads)
+      if (hashFloat(i, Math.floor(t1 * 11), 9) > 0.6 + 0.4 * airK) continue;
       const s = hashFloat(i, t1 * 13, 3);
       // the smoke leaves the plume's tail: a few nozzle-lengths down the exhaust
       const back = scale * (6 + 10 * hashFloat(i, t1, 4));
@@ -712,8 +716,9 @@ export class LaunchFx {
       const jx = (hashFloat(i, t1, 5) - 0.5) * spread, jy = (hashFloat(i, t1, 6) - 0.5) * spread, jz = (hashFloat(i, t1, 7) - 0.5) * spread;
       const kind = altI > ctx.airTop * 0.45 ? PUFF.trail : PUFF.smoke;
       const life = kind === PUFF.trail ? 45 + 30 * s : 22 + 18 * s;
-      const sz0 = (kind === PUFF.trail ? 2.5 : 3.5) * scale;
-      const sz1 = (kind === PUFF.trail ? 16 : 26 + 22 * s) * scale * (0.7 + 0.3 * airK);
+      // (a trail puff is born as wide as the gap the climb leaves between births, so the trail is one ribbon)
+      const sz0 = (kind === PUFF.trail ? 4.5 : 3.5) * scale;
+      const sz1 = (kind === PUFF.trail ? 28 : 26 + 22 * s) * scale * (0.7 + 0.3 * airK);
       P.puffs.spawn(_a.x + _b.x + jx, _a.y + _b.y + jy, _a.z + _b.z + jz, tb,
         e.dir.x * 8 + jx * 0.6, e.dir.y * 8 + jy * 0.6, e.dir.z * 8 + jz * 0.6, kind, sz0, sz1, life, s);
     }
@@ -741,6 +746,23 @@ export class LaunchFx {
         P.puffs.spawn(gx + dx * 3, gy + dy * 3, gz + dz * 3, tb, dx * sp + up.x * 2, dy * sp + up.y * 2, dz * sp + up.z * 2, PUFF.padCloud,
           5 * scale, (34 + 26 * s) * Math.min(1.8, scale), 30 + 20 * s, s);
       }
+      // the flame itself, deflected out of both ends of the trench: fast tongues of fire that cool to smoke within a
+      // second (fireball puffs glow for the first fifth of their life), while the engines are still low over the pad
+      const nf = Math.min(Math.round(26 * e.thrust * lowFor * Math.min(2.5, scale) * (e.path ? 1 : low)), 160);
+      for (let i = 0; i < nf; i++) {
+        const tb = t0 + lowFor * ((i + 0.5) / Math.max(1, nf));
+        const s = hashFloat(i, t1 * 19, 61);
+        const ang = (hashFloat(i, t1, 62) < 0.5 ? 0 : Math.PI) + (hashFloat(i, t1, 63) - 0.5) * 0.5;
+        const e1 = _a.set(0, 1, 0).cross(up);
+        if (e1.lengthSq() < 1e-8) e1.set(1, 0, 0);
+        e1.normalize();
+        const e2 = _b.copy(up).cross(e1);
+        const dx = e1.x * Math.cos(ang) + e2.x * Math.sin(ang), dy = e1.y * Math.cos(ang) + e2.y * Math.sin(ang), dz = e1.z * Math.cos(ang) + e2.z * Math.sin(ang);
+        const sp = (30 + 30 * s) * Math.min(1.6, scale * 0.8);
+        const gx = up.x * (ground + 1.5), gy = up.y * (ground + 1.5), gz = up.z * (ground + 1.5);
+        P.puffs.spawn(gx + dx * 4, gy + dy * 4, gz + dz * 4, tb, dx * sp + up.x * 3, dy * sp + up.y * 3, dz * sp + up.z * 3, PUFF.fireball,
+          2.5 * scale, (12 + 10 * s) * Math.min(1.8, scale), 1.6 + 0.8 * s, s);
+      }
     }
     void tickNow;
   }
@@ -752,9 +774,10 @@ export class LaunchFx {
     const t1 = this.now;
     const key = `vent:${pos.x.toFixed(1)}:${pos.z.toFixed(1)}`;
     const last = this.lastPos.get(key);
-    const t0 = last && t1 - last.t < 5 && t1 >= last.t ? last.t : t1 - 0.05;
+    // (a vent first seen has been boiling off for a while: its plume is whole on the first frame)
+    const t0 = last && t1 - last.t < 5 && t1 >= last.t ? last.t : t1 - 5;
     this.lastPos.set(key, { x: pos.x, y: pos.y, z: pos.z, t: t1 });
-    const n = Math.min(Math.round(rate * (t1 - t0)), 60);
+    const n = Math.min(Math.round(rate * (t1 - t0)), 200);
     for (let i = 0; i < n; i++) {
       const s = hashFloat(i, t1 * 31, pos.x);
       const tb = t0 + (t1 - t0) * ((i + s) / Math.max(1, n));
@@ -763,13 +786,14 @@ export class LaunchFx {
   }
 
   /** landing dust: a radial sheet blown off the ground under a descent engine */
-  dust(planet: number, ctx: LaunchPlanetCtx, ground: Vector3, intensity: number, scale: number): void {
+  dust(planet: number, ctx: LaunchPlanetCtx, ground: Vector3, intensity: number, scale: number, sinceTick?: number): void {
     const P = this.planetFx(planet, ctx);
     if (!P || intensity <= 0.01) return;
     const t1 = this.now;
     const key = `dust:${planet}`;
     const last = this.lastPos.get(key);
-    const t0 = last && t1 - last.t < 5 && t1 >= last.t ? last.t : t1 - 0.05;
+    // (first seen late — a cut, a paused capture: the dust it has been raising since the burn came near the ground)
+    const t0 = last && t1 - last.t < 5 && t1 >= last.t ? last.t : sinceTick !== undefined ? Math.min(t1 - 0.05, Math.max(this.tSec(sinceTick), t1 - 8)) : t1 - 0.05;
     this.lastPos.set(key, { x: ground.x, y: ground.y, z: ground.z, t: t1 });
     const n = Math.min(Math.round(80 * intensity * (t1 - t0) * scale), 300);
     const up = _w.copy(ground).normalize();
@@ -817,7 +841,7 @@ export class LaunchFx {
       const sp = (25 + 70 * s) * Math.sqrt(scale);
       P.puffs.spawn(x, y, z, t, d.x * sp, d.y * sp, d.z * sp, i % 3 === 0 ? PUFF.debris : PUFF.spark, 0.25 + 0.4 * s, 0.25 + 0.4 * s, 2.5 + 3 * s, s);
     }
-    P.puffs.spawn(x, y, z, t, 0, 0, 0, PUFF.flash, 30 * scale, 140 * scale, 0.9, 0.5);
+    P.puffs.spawn(x, y, z, t, 0, 0, 0, PUFF.flash, 30 * scale, 140 * scale, 0.9, 0.9);
     this.flashes.push({ planet: P.planet, x, y, z, t, scale });
     this.shakeKick = Math.max(this.shakeKick, Math.min(1, 0.5 * scale));
   }
@@ -853,7 +877,7 @@ export class LaunchFx {
   ignite(planet: number, ctx: LaunchPlanetCtx, pos: Vector3, scale: number): void {
     const P = this.planetFx(planet, ctx);
     if (!P) return;
-    P.puffs.spawn(pos.x, pos.y, pos.z, this.now, 0, 0, 0, PUFF.flash, 10 * scale, 60 * scale, 0.6, 0.3);
+    P.puffs.spawn(pos.x, pos.y, pos.z, this.now, 0, 0, 0, PUFF.flash, 5 * scale, 26 * scale, 0.7, 0.12);
     this.shakeKick = Math.max(this.shakeKick, 0.35);
   }
 

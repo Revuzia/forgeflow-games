@@ -131,11 +131,11 @@ export class WeatherFx {
     const rainy = type === 1 || type === 5 || type === 6 ? rate : 0;
     const facing = ctx.camFwd ? clamp01(0.45 + ctx.camFwd.dot(u) * 1.4) : 0.5;
     const wantLens = rainy * (1 - smooth(25, 110, alt)) * facing;
-    this.lens += (wantLens - this.lens) * Math.min(1, ctx.dt * (wantLens > this.lens ? 0.3 : 0.1));
+    this.lens += (wantLens - this.lens) * Math.min(1, ctx.ease * (wantLens > this.lens ? 0.3 : 0.1));
     ctx.screen.lens = this.lens;
     // ── fog and tint (eased) ──
     const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, type === 2 && precip > 6 ? 0.5 : 0) * low;
-    this.fogK += (wantFog - this.fogK) * Math.min(1, ctx.dt * 0.8 + 0.02);
+    this.fogK += (wantFog - this.fogK) * Math.min(1, ctx.ease * 0.8 + 0.02);
     if (this.fogK > 0.005) {
       const sunEl = u.dot(ctx.sunDirBody);
       const day = smooth(-0.12, 0.3, sunEl);
@@ -147,7 +147,7 @@ export class WeatherFx {
     }
     const tw = Math.min(1, tintW) * low * 0.85;
     const tgt = tintW > 0 ? _p.set(tint.x / tintW, tint.y / tintW, tint.z / tintW) : _p.set(1, 1, 1);
-    this.tint.lerp(_p.set(1 + (tgt.x - 1) * tw, 1 + (tgt.y - 1) * tw, 1 + (tgt.z - 1) * tw), Math.min(1, ctx.dt * 0.8 + 0.02));
+    this.tint.lerp(_p.set(1 + (tgt.x - 1) * tw, 1 + (tgt.y - 1) * tw, 1 + (tgt.z - 1) * tw), Math.min(1, ctx.ease * 0.8 + 0.02));
     ctx.screen.tintSky.multiply(this.tint);
     ctx.screen.tintGround.multiply(_p.set(1 + (this.tint.x - 1) * 0.3, 1 + (this.tint.y - 1) * 0.3, 1 + (this.tint.z - 1) * 0.3));
     // ── lightning in the storm cells round the camera ──
@@ -160,7 +160,8 @@ export class WeatherFx {
       const nx = u.y * ez, ny = u.z * ex - u.x * ez, nz = -u.y * ex;
       const pu = _p.set(u.x * R + (ex * Math.cos(a) + nx * Math.sin(a)) * r, u.y * R + ny * Math.sin(a) * r, u.z * R + (ez * Math.cos(a) + nz * Math.sin(a)) * r).normalize();
       const gp = pu.clone().multiplyScalar(groundHeight(pv.ground, pu.x, pu.y, pu.z));
-      const top = pu.clone().multiplyScalar(R + Math.max(250, (pv.params.radius * 0) + 260 + Math.random() * 120));
+      // from the cloud deck's base down to the ground
+      const top = pu.clone().multiplyScalar((ctx.cloudBase ?? R + 260) + Math.random() * 60);
       ctx.bolts.strike(top, gp, ctx.now, 0.9 + 0.3 * Math.random(), 6);
       ctx.thunder(gp, 1);
     }

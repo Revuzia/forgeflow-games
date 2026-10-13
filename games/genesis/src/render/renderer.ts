@@ -572,7 +572,11 @@ export class Renderer {
     if (this.cutFrames > 0) post.cutExposure();
     // photo mode: the lens's depth of field on the composited image, its exposure / bloom / vignette / grain
     const finishIn = this.photoPost.apply(r, this.fsq, input, post.linDepth.texture, post.w, post.h);
+    // (additive, god layer: an eclipse darkens the land — the auto-exposure must not simply lift it back to day)
+    const evGod = this.godfx.exposureEV;
+    this.settings.exposureBias += evGod;
     post.finish(r, this.fsq, finishIn, this.photoPost.settings(this.settings, this.photoSettings), sun, dt, time, null);
+    this.settings.exposureBias -= evGod;
     if (this.cutFrames > 0) this.cutFrames--;
     this.updateStats();
     this.stats.frameMs = performance.now() - t0;

@@ -524,6 +524,8 @@ export class Debris {
   private v: Float32Array;
   private s: Float32Array;
   private head = 0;
+  /** slots ever filled (the draw count: an empty pool draws nothing) */
+  private used = 0;
   private readonly n: number;
   readonly gU: IUniform<number> = { value: 9.8 };
 
@@ -547,6 +549,7 @@ export class Debris {
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;
     for (let i = 0; i < n; i++) this.mesh.setMatrixAt(i, _ident);
+    this.mesh.count = 0;
     this.mesh.layers.enable(1);
   }
 
@@ -574,6 +577,8 @@ export class Debris {
       this.s[i * 4] = Math.random() - 0.5; this.s[i * 4 + 1] = Math.random() - 0.5; this.s[i * 4 + 2] = Math.random() - 0.5; this.s[i * 4 + 3] = mode;
     }
     for (const name of ['iO', 'iV', 'iS']) (this.mesh.geometry.getAttribute(name) as InstancedBufferAttribute).needsUpdate = true;
+    this.used = Math.min(this.n, this.used + k);
+    this.mesh.count = this.used;
   }
 
   dispose(): void { this.mesh.geometry.dispose(); (this.mesh.material as MeshStandardMaterial).dispose(); }

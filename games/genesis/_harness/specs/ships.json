@@ -1,5 +1,5 @@
 {
- "$comment": "GENESIS ships, launches, world events and cameras (render lane, phase 4b) on the lookdev world's fabricated missions and world events (src/client/lookdevspace.ts). Each params string is its own page (its own world). Run: node _harness/shots.mjs _harness/specs/ships.json --port=5199",
+ "$comment": "GENESIS ships, launches, world events and cameras (render lane, phase 4b) on the lookdev world's fabricated missions and world events (src/client/lookdevspace.ts). Each params string is its own page (its own world); shots of one page follow one world through time. Scripts on dev=1 pages place cameras from the ship layer's own state. Run: node _harness/shots.mjs _harness/specs/ships.json --port=5199",
  "shots": [
   {
    "name": "moon-falling",
@@ -55,8 +55,8 @@
    "frames": 3
   },
   {
-   "name": "launch-t2",
-   "params": "source=lookdev&page=launch",
+   "name": "launch-t0",
+   "params": "source=lookdev&page=launch&dev=1",
    "size": [
     960,
     540
@@ -67,47 +67,138 @@
      "k": "ship.launch",
      "kind": "rocket",
      "start": "pad",
-     "progress": 0.86,
+     "progress": 0.955,
      "id": 1002
     }
    ],
-   "wait": 24,
    "camera": {
-    "mode": "follow",
+    "mode": "photo",
     "target": {
      "kind": "ship",
      "id": 1002
     },
-    "dist": 260,
-    "pitch": 6,
-    "yaw": 30,
-    "hour": 16.8
+    "dist": 190,
+    "yaw": 210,
+    "alt": 4,
+    "pitch": 9,
+    "fov": 55,
+    "hour": 18.2
    },
    "frames": 4,
-   "script": "const m = await import('/src/render/fx/launch.ts'); return JSON.stringify(m.LAUNCH_FX.last.detail());"
+   "script": "const m = await import('/src/render/fx/launch.ts'); return JSON.stringify(m.LAUNCH_FX.last.stats());"
   },
   {
-   "name": "launch-t8",
-   "params": "source=lookdev&page=launch",
+   "name": "launch-t2",
+   "params": "source=lookdev&page=launch&dev=1",
    "size": [
     960,
     540
    ],
    "canvasOnly": true,
-   "wait": 30,
+   "wait": 20,
    "camera": {
-    "mode": "follow",
+    "mode": "photo",
     "target": {
      "kind": "ship",
      "id": 1002
     },
-    "dist": 380,
-    "pitch": 32,
-    "yaw": 160,
-    "hour": 16.8
+    "dist": 450,
+    "yaw": 120,
+    "alt": 20,
+    "pitch": -27,
+    "fov": 68,
+    "hour": 18.2
    },
    "frames": 4,
-   "script": "const m = await import('/src/render/fx/launch.ts'); return JSON.stringify(m.LAUNCH_FX.last.detail());"
+   "script": "const m = await import('/src/render/fx/launch.ts'); return JSON.stringify(m.LAUNCH_FX.last.stats());"
+  },
+  {
+   "name": "launch-t8",
+   "params": "source=lookdev&page=launch&dev=1",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "wait": 60,
+   "script": [
+    "const A = window.__GENESIS_APP__; const t = A.renderer.ships.tracks.get(1002); const d = t.padDir, g = t.padGround;",
+    "await A.setLocalHour(17.7, Math.atan2(d[0], d[2]) * 180 / Math.PI);",
+    "A.rig.modes.applySpec({ mode: 'photo', planet: 0, lat: 0, lon: 0, target: null, focusPoint: [d[0] * (g + 260), d[1] * (g + 260), d[2] * (g + 260)], dist: 700, yaw: 150, alt: 40, pitch: 1, fov: 62 }, A.sim.view);",
+    "A.setUi(false); A.renderer.cut(); await G.frames(1);",
+    "const sv = A.sim.view.ships.find((s) => s.id === 1002); return JSON.stringify({ phase: sv && sv.phase, progress: sv && sv.progress });"
+   ],
+   "frames": 4
+  },
+  {
+   "name": "launch-staging",
+   "params": "source=lookdev&page=staging",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "rocket",
+     "start": "ascent",
+     "progress": 0.7,
+     "id": 1006
+    }
+   ],
+   "camera": {
+    "mode": "photo",
+    "target": {
+     "kind": "ship",
+     "id": 1006
+    },
+    "dist": 330,
+    "yaw": 70,
+    "alt": 1150,
+    "pitch": -12,
+    "fov": 40,
+    "hour": 15
+   },
+   "frames": 4
+  },
+  {
+   "name": "launch-fail",
+   "params": "source=lookdev&page=fail&dev=1",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "rocket",
+     "start": "ascent",
+     "progress": 0.12,
+     "fail": "ascent",
+     "failAt": 0.3,
+     "id": 1007
+    }
+   ],
+   "camera": {
+    "mode": "photo",
+    "target": {
+     "kind": "ship",
+     "id": 1007
+    },
+    "dist": 520,
+    "yaw": 200,
+    "alt": 8,
+    "pitch": -6,
+    "fov": 55,
+    "hour": 14
+   },
+   "script": [
+    "await G.step(4); await G.frames(1); await G.step(5); await G.frames(1); await G.step(8);",
+    "const sv = window.__GENESIS_APP__.sim.view.ships.find((s) => s.id === 1007); const m = await import('/src/render/fx/launch.ts'); return JSON.stringify({ phase: sv && sv.phase, fx: m.LAUNCH_FX.last.stats() });"
+   ],
+   "frames": 3
   },
   {
    "name": "sailship-sea",
@@ -210,20 +301,22 @@
      "k": "ship.launch",
      "kind": "rocket",
      "start": "descent",
-     "progress": 0.86,
+     "progress": 0.935,
      "id": 1005,
      "to": 2
     }
    ],
    "camera": {
-    "mode": "follow",
+    "mode": "photo",
     "target": {
      "kind": "ship",
      "id": 1005
     },
-    "dist": 120,
-    "pitch": 4,
+    "dist": 140,
     "yaw": 70,
+    "alt": 3,
+    "pitch": 6,
+    "fov": 52,
     "hour": 9.5
    },
    "frames": 4
@@ -328,7 +421,7 @@
   },
   {
    "name": "walk-villagers",
-   "params": "source=lookdev&page=walk",
+   "params": "source=lookdev&page=walk&dev=1",
    "size": [
     960,
     540
@@ -346,7 +439,7 @@
   },
   {
    "name": "photo-dof",
-   "params": "source=lookdev&page=walk",
+   "params": "source=lookdev&page=walk&dev=1",
    "size": [
     960,
     540
@@ -355,17 +448,25 @@
    "camera": {
     "mode": "photo",
     "poi": "town",
-    "alt": 3,
-    "pitch": -4,
-    "focus": 28,
-    "blur": 0.7,
+    "alt": 1.8,
+    "pitch": -3,
+    "fov": 42,
+    "focus": 20,
+    "blur": 0.85,
     "hour": 16.6
    },
-   "frames": 4
+   "frames": 4,
+   "script": [
+    "const A = window.__GENESIS_APP__; let best = null;",
+    "for (let y = 200; y <= 480; y += 16) for (let x = 180; x <= 780; x += 16) { const h = G.pickAt(x, y); if (h && h.kind === 'agent' && h.dist > 4 && (!best || h.dist < best.d)) best = { d: h.dist, x, y }; }",
+    "const { PHOTO } = await import('/src/render/camera/photo.ts');",
+    "if (best) A.rig.modes.lens({ ...PHOTO.lens, focus: best.d, blur: 0.85 });",
+    "return JSON.stringify({ focusOn: best, lens: { focus: PHOTO.lens.focus, blur: PHOTO.lens.blur, on: PHOTO.on } });"
+   ]
   },
   {
    "name": "dolly-town",
-   "params": "source=lookdev&page=walk",
+   "params": "source=lookdev&page=walk&dev=1",
    "size": [
     960,
     540

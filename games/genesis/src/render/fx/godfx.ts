@@ -28,6 +28,7 @@ import type { SimEvent } from '../../sim/types.ts';
 import { AnimState } from '../../sim/types.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import { HandVisual, type HandCursor, type UiHandPose } from '../hand.ts';
+import { handMesh } from '../gen/handgen.ts';
 import { CreatureLayer } from '../life/creature.ts';
 import { Aurora } from '../sky/aurora.ts';
 import { DECAL, DecalPass, decal } from './decals.ts';
@@ -40,6 +41,7 @@ import { WeatherFx } from './weatherfx.ts';
 import { MiracleFx } from './miracles.ts';
 import { Flights } from './flights.ts';
 import { ScreenFx, newScreenState } from './screenfx.ts';
+import { swapPropDepth } from './propmat.ts';
 
 export interface BrushIn {
   planet: number;
@@ -93,6 +95,8 @@ export class GodFx {
   clock = 0;
   /** multiplier on the primary planet's sunlight (eclipse, impact winter, a flare) — applied by the renderer */
   readonly sunTint = new Vector3(1, 1, 1);
+  /** exposure compensation (EV) the god layer asks for (an eclipse's darkness) — added by the renderer */
+  exposureEV = 0;
   brush: BrushIn | null = null;
   quality: Quality | null = null;
   /** the modules that need the planet's uniforms are made on the first frame with a planet */
@@ -161,6 +165,11 @@ export class GodFx {
     }
     if (this.group.parent !== vis.group) { this.group.removeFromParent(); vis.group.add(this.group); }
     if (!this.m) {
+      // the hand's surface takes most of a second to polygonise: build it while the player is still looking around,
+      // not on the first hover over the world
+      const warm = (): void => { handMesh(); };
+      const ric = (globalThis as unknown as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      if (ric) setTimeout(() => ric(warm, { timeout: 6000 }), 3000); else setTimeout(warm, 4000);
       const vfx = new Vfx(this.shared, this.fx, 98304);
       const debris = new Debris(this.shared, this.fx);
       const bolts = new Lightning(this.fx);
@@ -200,7 +209,7 @@ export class GodFx {
   update(view: WorldView, vis: PlanetVisual | null, cam: PerspectiveCamera, dt: number, time: number, q: Quality): void {
     this.quality = q;
     this.view = view;
-    if (!vis) { this.group.visible = false; return; }
+    if (!vis) { this.group.visible = false; this.exposureEV = 0; this.sunTint.set(1, 1, 1); return; }
     this.bindPrimary(vis);
     const M = this.m!;
     this.group.visible = true;
@@ -233,10 +242,12 @@ export class GodFx {
     const qk = Math.max(0.25, Math.min(2, (q.particleBudget || 20000) / 20000));
     const ctx: FxCtx = this.ctx ?? (this.ctx = {
       pv, now: 0, dt: 0, camBody: vis.camBody, vfx: M.vfx, decals: this.decals, debris: M.debris, bolts: M.bolts, screen: S,
-      sunTint: this.sunWant, aurora: this.auroraBoost, q: 1, thunder: (p, k) => this.thunder(p, k), sunDirBody: new Vector3(), sunE: new Vector3(),
+      sunTint: this.sunWant, aurora: this.auroraBoost, q: 1, thunder: (p, k) => this.thunder(p, k), sunDirBody: new Vector3(), sunE: new Vector3(), ease: 0,
       landed: (e) => M.disasters.onEvent(e, this.ctx!),
     });
     ctx.pv = pv; ctx.now = this.clock; ctx.dt = Math.max(fxDt, 1e-4); ctx.camBody = vis.camBody; ctx.q = qk; ctx.camFwd = this.camFwd;
+    ctx.ease = Math.max(ctx.dt, Math.min(0.1, Math.max(0, dt)));
+    ctx.cloudBase = vis.hasClouds ? vis.cloudInner : pv.params.radius + 260;
     ctx.sunDirBody.copy(vis.uniforms.uSunDirBody.value as Vector3);
     ctx.sunE.copy((vis.atmo.uniforms as unknown as { uSunE: { value: Vector3 } }).uSunE.value);
     M.debris.gU.value = pv.params.gravity || 9.8;
@@ -282,10 +293,13 @@ export class GodFx {
     let wAur = 0;
     for (const w of pv.weather) { const a = AURORA_WEATHER.get(w.kind); if (a) wAur = Math.max(wAur, a * w.intensity); }
     if (pv.params.globalWeather && AURORA_WEATHER.has(pv.params.globalWeather)) wAur = Math.max(wAur, AURORA_WEATHER.get(pv.params.globalWeather)!);
-    M.aurora.update(pv.params.radius, vis.atmo.thickness, pv.params.magnetism ?? 0, view.star.activity ?? 0, this.auroraBoost.boost + wAur * 2.5, vis.atmo.has, ctx.dt);
-    // ── the eclipse darkens the land; the sun's tint eases ──
+    M.aurora.update(pv.params.radius, vis.atmo.thickness, pv.params.magnetism ?? 0, view.star.activity ?? 0, this.auroraBoost.boost + wAur * 2.5, vis.atmo.has, ctx.ease);
+    // ── the eclipse darkens the land (the sun dims, and the exposure is held down so it reads as darkness); the
+    // sun's tint eases ──
     if (S.eclipse > 0) this.sunWant.multiplyScalar(1 - 0.94 * Math.pow(S.eclipse, 1.6));
-    this.sunTint.lerp(this.sunWant, Math.min(1, ctx.dt * 2 + 0.02));
+    const evWant = -2.6 * Math.pow(S.eclipse, 2);
+    this.exposureEV += (evWant - this.exposureEV) * Math.min(1, ctx.ease * 1.5 + 0.02);
+    this.sunTint.lerp(this.sunWant, Math.min(1, ctx.ease * 2 + 0.02));
     // ── the brush ──
     this.brushDecal(pv);
     M.vfx.update(this.clock, viewToBody(vis), cam.projectionMatrixInverse, vis.uniforms.uSunDirView.value as Vector3);
@@ -307,11 +321,26 @@ export class GodFx {
     const p = e.pos ? new Vector3(e.pos[0], e.pos[1], e.pos[2]).normalize().multiplyScalar(R) : null;
     switch (e.t) {
       case 'quake': this.addShake(p, Math.min(1.4, 0.15 * Math.max(0, (e.a ?? 5) - 3)), (e.b ?? 400) * 6 + 1500); break;
-      case 'impact':
+      case 'impact': {
+        const sh = p && (e.data as { shielded?: boolean } | undefined)?.shielded ? M.miracles.shieldOver(p) : null;
+        if (sh && p) {
+          // a shield took it: the body bursts on the dome (the crown of light over the place), nothing reaches the ground
+          const up = _w.copy(p).normalize();
+          const at = _v.copy(sh.c).addScaledVector(up, sh.r * 0.92);
+          const R0 = Math.max(6, e.a ?? 40);
+          M.vfx.emit({ sys: SYS.flash, x: at.x, y: at.y, z: at.z, size: R0 * 5, life: 1.4, count: 1, p0: R0 * 0.5, p1: 260, burst: true, r: 1, g: 0.85, b: 0.55 }, this.clock);
+          M.vfx.emit({ sys: SYS.sparks, x: at.x, y: at.y, z: at.z, size: Math.max(0.8, R0 * 0.03), life: 3, count: 360, p1: 40 + R0 * 0.5, burst: true, r: 1, g: 0.75, b: 0.4 }, this.clock);
+          M.vfx.emit({ sys: SYS.smoke, x: at.x, y: at.y, z: at.z, size: R0 * 0.6, life: 16, count: 160, p0: R0 * 2, p1: 1, duration: 2, r: 0.3, g: 0.27, b: 0.24 }, this.clock);
+          this.flashDecay.addScalar(0.05 * (1 - smooth(300, 6000, at.distanceTo(vis.camBody))));
+          this.addShake(at, 0.3, R0 * 30 + 800);
+          M.miracles.hitShield(p);
+          break;
+        }
         this.addShake(p, Math.min(1.5, 0.004 * (e.a ?? 50)), (e.a ?? 50) * 30 + 1200);
         M.disasters.onEvent(e, ctx);
         if (p) M.miracles.hitShield(p);
         break;
+      }
       case 'eruption': this.addShake(p, 0.5, 4000); M.disasters.onEvent(e, ctx); break;
       case 'collapsed': case 'landslide': case 'steam': case 'fireball': M.disasters.onEvent(e, ctx); break;
       case 'thrown': case 'landed': case 'splash':
@@ -363,6 +392,8 @@ export class GodFx {
   swapDepth(depth: boolean): void {
     this.hand.swapDepth(depth);
     this.creatures.swapDepth(depth);
+    // every prop that casts (debris, things in the hand or in flight, a serpent's back) to its depth twin
+    swapPropDepth(this.group, depth);
   }
 
   /** ground decals and FX lights, into the HDR scene (after the opaque pass, before the water and the atmosphere) */

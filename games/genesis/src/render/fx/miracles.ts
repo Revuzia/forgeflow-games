@@ -280,12 +280,12 @@ export class MiracleFx {
     // shields: a dome while it holds, fading in and out
     for (const [id, s] of this.shields) {
       const live = s.until <= 0 || tick < s.until;
-      s.fade += ((live ? 1 : 0) - s.fade) * Math.min(1, ctx.dt * 1.5);
+      s.fade += ((live ? 1 : 0) - s.fade) * Math.min(1, ctx.ease * 1.5);
       if (!live && s.fade < 0.02) { this.group.remove(s.dome.mesh); s.dome.dispose(); this.shields.delete(id); continue; }
       frameAt(s.p, _v.copy(s.p).normalize(), s.r, s.dome.mesh.matrix);
       s.dome.mesh.matrixWorldNeedsUpdate = true;
       s.dome.u.uK.value = s.fade * (0.85 + 0.15 * Math.sin(ctx.now * 1.7));
-      s.hit = Math.max(0, s.hit - ctx.dt * 2);
+      s.hit = Math.max(0, s.hit - ctx.ease * 2);
       s.dome.u.uHit.value = s.hit;
       const ring = decal(DECAL.domeRing, [s.p.x, s.p.y, s.p.z], s.r * 1.1);
       ring.cr = 1; ring.cg = 0.8; ring.cb = 0.45; ring.p0 = s.r; ring.p1 = 2.2 * s.fade; ring.q0 = Math.max(6, s.r * 0.2);
@@ -304,6 +304,13 @@ export class MiracleFx {
 
   /** something struck a shield (an impact inside one): it ripples */
   hitShield(p: Vector3): void { for (const s of this.shields.values()) if (s.p.distanceTo(p) < s.r * 1.2) s.hit = 1; }
+
+  /** the shield standing over ground point p (body m), if any: its centre and radius */
+  shieldOver(p: Vector3): { c: Vector3; r: number } | null {
+    let best: Shield | null = null;
+    for (const s of this.shields.values()) if (s.fade > 0.05 && s.p.distanceTo(p) < s.r * 1.05 && (!best || s.r > best.r)) best = s;
+    return best ? { c: best.p, r: best.r } : null;
+  }
 
   dispose(): void { for (const s of this.shields.values()) s.dome.dispose(); this.shields.clear(); }
 }

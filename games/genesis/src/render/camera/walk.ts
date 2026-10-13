@@ -45,8 +45,10 @@ export class WalkCamera implements CameraController {
   private seenAt = -1e9;
   private seenPos: D3 | null = null;
   private clock = 0;
-  /** −1 cruel .. +1 kind (HandView.alignment, the god's record) */
+  /** −1 cruel .. +1 kind: the god's record (HandView.alignment, read every frame) unless a camera spec pinned it */
   alignment = 0.5;
+  /** a shot's alignment overrides the sim's (null: follow the god's record) */
+  pinnedAlignment: number | null = null;
   /** the gamepad's left stick (−1..1) */
   stickX = 0;
   stickY = 0;
@@ -78,6 +80,9 @@ export class WalkCamera implements CameraController {
     if (!pv) return;
     this.planet = pv.id;
     this.clock += dt;
+    // the body shows what the god has been: kind gold, feared ember-dark (eased: a deed does not flip it in a frame)
+    const want = this.pinnedAlignment ?? view.hand?.alignment ?? this.alignment;
+    this.alignment += (Math.max(-1, Math.min(1, want)) - this.alignment) * Math.min(1, dt * 1.5 + (this.pinnedAlignment != null ? 1 : 0));
     // ── look ──
     this.yaw += (input.dragL[0] + input.dragR[0]) * 0.0034;
     this.pitch = Math.max(-1.3, Math.min(1.25, this.pitch - (input.dragL[1] + input.dragR[1]) * 0.0034));

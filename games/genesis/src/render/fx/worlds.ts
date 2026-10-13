@@ -361,6 +361,7 @@ const GLOW_VERT = /* glsl */ `
 #include <logdepthbuf_pars_vertex>
 uniform vec2 uDir;      // the quad's +y on the screen (view xy)
 uniform float uOffset;  // shift along it (in quad half-sizes): a tail starts at its body
+uniform float uFront;   // depth test against this many metres nearer than the centre (a body's face, not its middle)
 varying vec2 vUv;
 varying float vViewZ;
 void main() {
@@ -370,7 +371,7 @@ void main() {
   float s = length(modelMatrix[0].xyz);
   vec2 p = position.xy;
   mv.xy += (p.x * vec2(uDir.y, -uDir.x) + p.y * uDir + uDir * uOffset) * s;
-  vViewZ = -mv.z;
+  vViewZ = -mv.z - uFront;
   gl_Position = projectionMatrix * mv;
 #include <logdepthbuf_vertex>
 }
@@ -379,7 +380,7 @@ const GLOW_FRAG = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 ${NOISE_GLSL}
 uniform vec3 uColor;
-uniform float uKind;     // 0 flash, 1 shock ring, 2 accretion swirl, 3 ablation shell, 4 plasma tail
+uniform float uKind;     // 0 flash, 1 shock ring, 2 accretion swirl, 3 ablation shell, 4 plasma tail, 5 a burning face
 uniform float uK;        // 0..1 progress / strength
 uniform float uTime;
 uniform sampler2D tSceneDepth;
@@ -411,6 +412,21 @@ void main() {
     float shell = smoothstep(0.55, 0.75, r) * (1.0 - smoothstep(0.75, 1.0, r));
     float n = snoise(vec3(vUv * 5.0, uTime * 2.0)) * 0.5 + 0.5;
     c = uColor * (shell * (0.6 + 0.8 * n) + exp(-r * r * 2.0) * 0.15) * uK * 2.5;
+  } else if (uKind > 4.5) {
+    // the face of a body burning in the air: a dark crust split by molten seams, the limb hottest where the air tears at
+    // it. It COVERS the body's disc (alpha blended, not added): the hazed, cratered rock under it would otherwise show
+    // as a dark, jagged band round the limb and tint the fire violet. The quad is sized so the true silhouette (relief
+    // included) lies at r ≈ 0.93; the edge fades out past it into the burning shell.
+    float rr = min(1.0, r / 0.9);
+    float mu = sqrt(max(0.0, 1.0 - rr * rr));
+    float seams = 1.0 - smoothstep(0.0, 0.09, abs(snoise(vec3(vUv * 3.2, uTime * 0.05)) ));
+    float seams2 = 1.0 - smoothstep(0.0, 0.06, abs(snoise(vec3(vUv * 7.5 + 3.0, uTime * 0.07))));
+    float limb = pow(1.0 - mu, 2.0);
+    vec3 crust = vec3(0.3, 0.06, 0.018) * (0.35 + 0.65 * mu);
+    vec3 fire = vec3(1.0, 0.42, 0.09) * (seams * 1.6 + seams2 * 0.8) * (0.55 + 0.45 * mu) + vec3(1.0, 0.58, 0.22) * limb * 2.4;
+    float cover = (1.0 - smoothstep(0.9, 1.0, r)) * clamp(uK * 2.5, 0.0, 1.0);
+    gl_FragColor = vec4((crust + fire) * (0.5 + 0.9 * uK) * 1.6 * cover, cover);
+    return;
   } else {
     // a tail of plasma along +y of the quad: as wide as the body at its head, streaming back in torn ribbons, white-hot
     // at the root through orange to a dull red as it trails off
@@ -554,7 +570,7 @@ export class WorldFx {
   private bursts: Burst[] = [];
   private known = new Map<number, { sys: D3; R: number; parent: number }>();
   private started = false;
-  private moonGlows = new Map<number, { shell: Mesh; tail: Mesh }>();
+  private moonGlows = new Map<number, { shell: Mesh; tail: Mesh; face: Mesh }>();
   /** moons falling this frame (a falling moon that vanishes has struck: a strike, not an erasure) */
   private falling = new Map<number, { host: number; dir: D3; R: number; Rm: number }>();
   private fellLast = new Map<number, { host: number; dir: D3; R: number; Rm: number }>();
@@ -571,10 +587,11 @@ export class WorldFx {
   }
 
   private glowMat(kind: number, color: [number, number, number], depthTest: boolean): ShaderMaterial {
+    // (light is added; a burning face, kind 5, covers what is under it: premultiplied alpha)
     return new ShaderMaterial({
-      vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: CustomBlending, blendSrc: OneFactor, blendDst: OneFactor,
+      vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: CustomBlending, blendSrc: OneFactor, blendDst: kind === 5 ? OneMinusSrcAlphaFactor : OneFactor,
       uniforms: {
-        uColor: { value: new Vector3(...color) }, uKind: { value: kind }, uDir: { value: new Vector2(0, 1) }, uOffset: { value: 0 }, uK: { value: 0 }, uTime: { value: 0 }, uDepthTest: { value: depthTest ? 1 : 0 },
+        uColor: { value: new Vector3(...color) }, uKind: { value: kind }, uDir: { value: new Vector2(0, 1) }, uOffset: { value: 0 }, uFront: { value: 0 }, uK: { value: 0 }, uTime: { value: 0 }, uDepthTest: { value: depthTest ? 1 : 0 },
         tSceneDepth: this.uniformsShared.tSceneDepth, uResolution: this.uniformsShared.uResolution,
       },
     });
@@ -735,8 +752,9 @@ export class WorldFx {
         if (!mg) {
           const shell = new Mesh(this.glowGeo, this.glowMat(3, [1.0, 0.45, 0.12], true));
           const tail = new Mesh(this.glowGeo, this.glowMat(4, [1.0, 0.55, 0.2], true));
-          for (const m of [shell, tail]) { m.frustumCulled = false; m.layers.set(WORLD_LAYER); m.renderOrder = 4; this.spaceGroup.add(m); }
-          mg = { shell, tail };
+          const face = new Mesh(this.glowGeo, this.glowMat(5, [1.0, 0.5, 0.15], true));
+          for (const m of [shell, tail, face]) { m.frustumCulled = false; m.layers.set(WORLD_LAYER); m.renderOrder = 4; this.spaceGroup.add(m); }
+          mg = { shell, tail, face };
           this.moonGlows.set(moon.id, mg);
         }
         // it burns as it comes down into the air (and the tides tear at it): from ~1.5 radii over the ground to grazing
@@ -744,7 +762,7 @@ export class WorldFx {
         const gap = dm - Rm - Rh;
         const burn = Math.pow(Math.max(0, Math.min(1, 1 - (gap - 0.2 * Rh) / (1.3 * Rh))), 1.5) * Math.min(1, prog * 2);
         this.falling.set(moon.id, { host: pv.id, dir: [dx / dm, dy / dm, dz / dm], R: Rh, Rm });
-        for (const m of [mg.shell, mg.tail]) {
+        for (const m of [mg.shell, mg.tail, mg.face]) {
           m.visible = burn > 0.01;
           m.position.set(moon.center[0] - pose.pos[0], moon.center[1] - pose.pos[1], moon.center[2] - pose.pos[2]);
           const mu = (m.material as ShaderMaterial).uniforms;
@@ -753,6 +771,14 @@ export class WorldFx {
         }
         mg.shell.scale.setScalar(Rm * 1.45);
         mg.tail.scale.setScalar(Rm * 3.2);
+        // (the silhouette seen from here — a near sphere looks bigger than its radius at its centre's depth, and its
+        // craters and ridges stand ~8 % proud — lands at r ≈ 0.93 of the quad: no rock shows round the burning face)
+        const dc = Math.hypot(moon.center[0] - pose.pos[0], moon.center[1] - pose.pos[1], moon.center[2] - pose.pos[2]);
+        const Rs = Rm * 1.08;
+        const proj = Rs * dc / Math.sqrt(Math.max(dc * dc - Rs * Rs, Rs * Rs * 0.04));
+        mg.face.scale.setScalar(proj / 0.93);
+        // (tested just in front of the whole body: its own rock never hides it, a hill or a cloud bank in front does)
+        (mg.face.material as ShaderMaterial).uniforms.uFront.value = Rm * 1.05;
         // the plume trails behind the moon's motion about its world, as seen on the screen
         const tk = view.renderTick;
         const a0 = orbitOffset(moon.params.orbit, tk, _o0), a1 = orbitOffset(moon.params.orbit, tk + 1, _o1);
@@ -767,7 +793,7 @@ export class WorldFx {
     }
     this.fellLast = new Map(this.falling);
     this.falling.clear();
-    for (const [id, mg] of this.moonGlows) if (!liveMoons.has(id)) { for (const m of [mg.shell, mg.tail]) { m.parent?.remove(m); (m.material as ShaderMaterial).dispose(); } this.moonGlows.delete(id); }
+    for (const [id, mg] of this.moonGlows) if (!liveMoons.has(id)) { for (const m of [mg.shell, mg.tail, mg.face]) { m.parent?.remove(m); (m.material as ShaderMaterial).dispose(); } this.moonGlows.delete(id); }
     // ── bursts ──
     for (const b of this.bursts) this.updateBurst(b, view, pose, time, camQuatInv);
     this.bursts = this.bursts.filter((b) => { if (b.done) { b.group.parent?.remove(b.group); this.disposeBurst(b); } return !b.done; });

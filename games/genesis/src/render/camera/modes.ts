@@ -39,6 +39,9 @@ export interface ModeSpec {
   roll?: number;
   /** walk: the god's alignment for the look of the body (−1..1) */
   alignment?: number;
+  /** photo from a stand-off: aim at this body-frame point (m) of `planet` instead of the target (a ship's launch site
+   * after it has gone, a crater) — shot scripts */
+  focusPoint?: [number, number, number];
   blend?: number;
 }
 
@@ -104,6 +107,7 @@ export class CameraModes {
       return;
     }
     r.walk.place(o.planet, o.at, o.heading);
+    r.walk.pinnedAlignment = null;
     r.use(r.walk, 1.4);
   }
 
@@ -158,6 +162,51 @@ export class CameraModes {
     r.use(o, 1.2);
   }
 
+  /**
+   * Photo mode aimed at a thing from a stand-off, like a tracking camera on the ground: the eye stands `dist` metres
+   * (along the ground) from the thing's ground point on bearing `yaw` (deg from north), `alt` over the ground, aimed at
+   * the thing itself (a rocket climbing, a moon falling) with `pitch` added to the aim. Null when the thing is not here.
+   */
+  private standOff(view: WorldView, s: ModeSpec): { planet: number; lat: number; lon: number; yaw: number; pitch: number } | null {
+    const ref = s.target ?? null;
+    let planet = s.planet;
+    let T: D3 | null = s.focusPoint ? [s.focusPoint[0], s.focusPoint[1], s.focusPoint[2]] : null;
+    if (!T && ref && ref.kind === 'ship') {
+      // a ship: where the sim says it is at the snapshot (the ship layer's pose may be a frame or a stepped wait old)
+      const sv = view.ships.find((q) => q.id === ref.id);
+      const pv0 = sv && sv.planet >= 0 ? view.planet(sv.planet) : undefined;
+      if (sv && pv0) {
+        const l = Math.hypot(sv.pos[0], sv.pos[1], sv.pos[2]) || 1;
+        const r0 = view.groundRadius(pv0, sv.pos[0] / l, sv.pos[1] / l, sv.pos[2] / l) + Math.max(0, sv.alt);
+        planet = pv0.id;
+        T = [sv.pos[0] / l * r0, sv.pos[1] / l * r0, sv.pos[2] / l * r0];
+      }
+    }
+    if (!T && ref) {
+      const st = resolveTarget(view, ref);
+      if (st && st.planet >= 0) { planet = st.planet; T = [st.pos[0], st.pos[1], st.pos[2]]; }
+    }
+    const pv = view.planet(planet);
+    if (!T || !pv) return null;
+    const R = pv.params.radius;
+    const u: D3 = [T[0], T[1], T[2]];
+    const ul = Math.hypot(u[0], u[1], u[2]) || 1;
+    u[0] /= ul; u[1] /= ul; u[2] /= ul;
+    const e: D3 = [0, 0, 0], n: D3 = [0, 0, 0];
+    tangentBasis(e, n, u);
+    const b = (s.yaw ?? 0) * DEG, a = (s.dist ?? 300) / R;
+    const c: D3 = [0, 1, 2].map((i) => u[i] * Math.cos(a) + (n[i] * Math.cos(b) + e[i] * Math.sin(b)) * Math.sin(a)) as D3;
+    const cl = Math.hypot(c[0], c[1], c[2]) || 1;
+    c[0] /= cl; c[1] /= cl; c[2] /= cl;
+    const rc = view.groundRadius(pv, c[0], c[1], c[2]) + (s.alt ?? 30);
+    const v: D3 = [T[0] - c[0] * rc, T[1] - c[1] * rc, T[2] - c[2] * rc];
+    const vl = Math.hypot(v[0], v[1], v[2]) || 1;
+    tangentBasis(e, n, c);
+    const yaw = Math.atan2(v[0] * e[0] + v[1] * e[1] + v[2] * e[2], v[0] * n[0] + v[1] * n[1] + v[2] * n[2]) / DEG;
+    const pitch = Math.asin(Math.max(-1, Math.min(1, (v[0] * c[0] + v[1] * c[1] + v[2] * c[2]) / vl))) / DEG + (s.pitch ?? 0);
+    return { planet: pv.id, lat: Math.asin(Math.max(-1, Math.min(1, c[1]))) / DEG, lon: Math.atan2(c[0], c[2]) / DEG, yaw, pitch };
+  }
+
   /** the test surface's camera spec for these modes (lat / lon already resolved from a POI or a target) */
   applySpec(s: ModeSpec, view: WorldView): void {
     this.view = view;
@@ -194,12 +243,15 @@ export class CameraModes {
         if (s.pitch != null) r.walk.pitch = s.pitch * DEG;
         if (s.dist != null) r.walk.dist = Math.max(0.6, s.dist);
         if (s.fov) r.walk.fov = s.fov;
+        r.walk.pinnedAlignment = s.alignment ?? null;
         if (s.alignment != null) r.walk.alignment = s.alignment;
         r.use(r.walk, blend);
         break;
       }
       case 'photo': {
-        r.photoCam.at(view, s.planet, s.lat, s.lon, s.alt ?? 30, s.yaw ?? 0, s.pitch ?? -4);
+        const aim = (s.target || s.focusPoint) && s.dist ? this.standOff(view, s) : null;
+        if (aim) r.photoCam.at(view, aim.planet, aim.lat, aim.lon, s.alt ?? 30, aim.yaw, aim.pitch);
+        else r.photoCam.at(view, s.planet, s.lat, s.lon, s.alt ?? 30, s.yaw ?? 0, s.pitch ?? -4);
         const L = PHOTO.lens;
         if (s.fov) L.fov = s.fov;
         if (s.focus != null) L.focus = s.focus;
