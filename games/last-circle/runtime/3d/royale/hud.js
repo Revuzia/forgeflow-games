@@ -76,15 +76,22 @@ function bandTop() {
   if (phoneShort()) return Math.max(PH_META_TOP + Math.min(R._metaH || 0, PH_META_RESERVE), PH_META_TOP + PH_META_RESERVE) + PH_BAND_GAP;
   return Math.max(META_TOP + (R._metaH || 0), META_TOP + META_RESERVE) + BAND_GAP;
 }
+// The death banner takes the announcement band's place while it is up (a dead
+// player's announcements are dropped - see announce()), so it sits AT bandTop and
+// the storm / pickup lines hang off its measured height instead of the band's.
+const DEATH_H0 = 90;         // px - the banner's height until its ResizeObserver reports
 function placeBand(force) {
   if (!R.annWrap) return;
   const t = Math.round(bandTop()), bh = bandH();
-  if (R._bandTop === t && !force) return;
-  R._bandTop = t;
+  const dead = !!R.deathBox, dh = dead ? Math.round(R._deathH || DEATH_H0) : 0;
+  const key = t + ":" + dh;
+  if (R._bandKey === key && !force) return;
+  R._bandKey = key; R._bandTop = t;
   R.annWrap.style.top = t + "px";
-  if (R.stormMsg) R.stormMsg.style.top = (t + bh + 6) + "px";
-  if (R.pickupMsg) R.pickupMsg.style.top = (t + bh + 40) + "px";
-  if (R.deathBox) R.deathBox.style.top = (t + bh + 16) + "px";
+  if (dead) R.deathBox.style.top = t + "px";
+  const under = dead ? dh + 8 : bh + 6;
+  if (R.stormMsg) R.stormMsg.style.top = (t + under) + "px";
+  if (R.pickupMsg) R.pickupMsg.style.top = (t + under + 34) + "px";
 }
 
 const css = (el, o) => { Object.assign(el.style, o); return el; };
@@ -151,6 +158,157 @@ function ensureAAAStyles() {
       animation: lcScan 7s linear infinite;
     }
   `;
+  document.head.appendChild(st);
+}
+
+// ═══ HUD SKIN (P1.9 / P4.3) ══════════════════════════════════════════════════
+// The in-match widgets are classed DOM now (one stylesheet, injected once) so the
+// phone rules in TOUCH_CSS can reach every part of them. Position and size stay
+// INLINE on the signed-off boxes (bottomLeft left 18 / bottom 16 / width 300; the
+// slot column right 18 / bottom 54; the storm row top 56) - only what is INSIDE
+// them is restyled. No backdrop-filter on any in-match panel: the 3D canvas
+// behind them changes every frame, and a blur there is paid every frame.
+// Icons are inline SVG (currentColor), never emoji. Static strings, no data in them.
+const SVG = (vb, body, extra) => '<svg viewBox="' + vb + '" width="1em" height="1em" aria-hidden="true" focusable="false"' + (extra || "") + '>' + body + '</svg>';
+const IC = {
+  // the closing circle: a dashed ring around a filled core
+  storm: SVG("0 0 24 24", '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="4.2 3"/><circle cx="12" cy="12" r="4" fill="currentColor"/>'),
+  alive: SVG("0 0 24 24", '<circle cx="9" cy="8" r="3.4" fill="currentColor"/><path fill="currentColor" d="M2.5 20c0-3.8 2.9-6.5 6.5-6.5s6.5 2.7 6.5 6.5z"/><circle cx="17.3" cy="9" r="2.7" fill="currentColor" opacity=".65"/><path fill="currentColor" opacity=".65" d="M16.2 13.7c3.1 0 5.3 2.2 5.3 5.3h-4.4c0-2-.5-3.8-.9-5.3z"/>'),
+  skull: SVG("0 0 24 24", '<path fill="currentColor" fill-rule="evenodd" d="M12 2.8c-4.5 0-7.7 3.1-7.7 7.4 0 2.5 1.1 4.1 2.6 5.1V19h2.4v-2h1.4v2h2.6v-2h1.4v2h2.4v-3.7c1.5-1 2.6-2.6 2.6-5.1 0-4.3-3.2-7.4-7.7-7.4zM8.9 8.6a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8zm6.2 0a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8z"/>'),
+  shield: SVG("0 0 24 24", '<path fill="currentColor" d="M12 2.4l8 3v6.2c0 4.7-3.2 8.3-8 10-4.8-1.7-8-5.3-8-10V5.4z"/>'),
+  shieldO: SVG("0 0 24 24", '<path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" d="M12 3.2l7 2.6v5.8c0 4.1-2.8 7.2-7 8.8-4.2-1.6-7-4.7-7-8.8V5.8z"/>'),
+  bandage: SVG("0 0 24 24", '<g transform="rotate(-42 12 12)"><rect x="1.5" y="8" width="21" height="8" rx="4" fill="currentColor"/><rect x="8.6" y="8" width="6.8" height="8" fill="#fff" opacity=".4"/><circle cx="11" cy="10.6" r=".9" fill="#0b1424"/><circle cx="13" cy="13.4" r=".9" fill="#0b1424"/></g>'),
+  medkit: SVG("0 0 24 24", '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M9 7V5.6c0-.9.7-1.6 1.6-1.6h2.8c.9 0 1.6.7 1.6 1.6V7"/><path fill="currentColor" fill-rule="evenodd" d="M5.4 7h13.2A2.4 2.4 0 0 1 21 9.4v8.2a2.4 2.4 0 0 1-2.4 2.4H5.4A2.4 2.4 0 0 1 3 17.6V9.4A2.4 2.4 0 0 1 5.4 7zM11 10.2v2.3H8.7v1.9H11v2.3h2v-2.3h2.3v-1.9H13v-2.3z"/>'),
+  rerun: SVG("0 0 24 24", '<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.6h-4.6"/>'),
+  next: SVG("0 0 24 24", '<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h14M13 6.5l5.5 5.5-5.5 5.5"/>'),
+};
+/** The four consumables, in the order the vitals row shows them. */
+const CON_ORDER = ["bandage", "medkit", "mini_shield", "big_shield"];
+const CON_ICON = { bandage: IC.bandage, medkit: IC.medkit, mini_shield: IC.shieldO, big_shield: IC.shield };
+const CON_COLOR = { bandage: "#e8dcc2", medkit: "#ff7b6b", mini_shield: "#7cc4ff", big_shield: "#4aa8ff" };
+const CON_NAME = { bandage: "BANDAGE", medkit: "MEDKIT", mini_shield: "MINI SHIELD", big_shield: "BIG SHIELD" };
+const AMMO_NAME = { light: "LIGHT AMMO", medium: "MEDIUM AMMO", shells: "SHELLS", heavy: "HEAVY AMMO", grenades: "GRENADES" };
+const MAG_SEGS = 10;         // pooled mag-bar segments (a 30-round mag is 10 x 3 rounds)
+
+function ensureHudStyles() {
+  if (typeof document === "undefined" || document.getElementById("lc-hud-css")) return;
+  const MINFS = (n) => "max(" + n + "px, var(--lc-minfs, 0px))";
+  const st = document.createElement("style");
+  st.id = "lc-hud-css";
+  st.textContent = `
+.lc-gl { background: linear-gradient(165deg, rgba(14,25,46,.80) 0%, rgba(7,14,28,.88) 100%); border: 1px solid rgba(140,200,255,.20);
+  box-shadow: 0 6px 22px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.07); box-sizing: border-box; }
+.lc-gl svg, .lc-ic svg { display: block; }
+/* segmented bars: every segment is a track holding a fill that only ever changes transform */
+.lc-sg { flex: 1; height: 8px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; }
+.lc-sf { display: block; width: 100%; height: 100%; background: var(--lc-c, #fff); transform: scaleX(0); transform-origin: 0 50%; transition: transform .15s ease-out; }
+/* ---- vitals (bottom-left) ---- */
+.lc-vit { padding: 9px 12px 8px; border-radius: 14px; font-family: ${FONT}; }
+.lc-vtop { display: flex; align-items: center; gap: 12px; }
+.lc-hpn { display: flex; align-items: baseline; gap: 3px; min-width: 74px; font-variant-numeric: tabular-nums; }
+.lc-hpn b { font-family: ${FONT}; font-weight: 800; font-size: 36px; line-height: 1; letter-spacing: -1px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.65); }
+.lc-hpn i { font-family: ${FONT}; font-weight: 800; font-style: normal; font-size: ${MINFS(11)}; line-height: 1; letter-spacing: 1.2px; color: rgba(255,255,255,.62); }
+.lc-hpn.lo b { color: #ffd166; } .lc-hpn.cr b { color: #ff6a58; }
+.lc-vbars { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.lc-vb { display: flex; align-items: center; gap: 6px; }
+.lc-vs { flex: 1; display: flex; gap: 3px; }
+.lc-vb.sh { --lc-c: #4aa8ff; } .lc-vb.hp { --lc-c: #f3f6fb; } .lc-vb.hp.lo { --lc-c: #ffd166; } .lc-vb.hp.cr { --lc-c: #ff5544; }
+.lc-vb.hp.cr .lc-sf { animation: lcPulse .55s ease-in-out infinite; }
+.lc-vn { width: 22px; flex: none; text-align: right; font-family: ${FONT}; font-weight: 800; font-size: ${MINFS(11)}; line-height: 1; color: #8ec8ff; font-variant-numeric: tabular-nums; }
+.lc-cons { display: flex; gap: 12px; margin-top: 7px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.09); }
+.lc-con { display: flex; align-items: center; gap: 4px; font-family: ${FONT}; font-weight: 800; font-size: ${MINFS(12)}; line-height: 14px; color: #eaf2ff; }
+.lc-con.z { opacity: .34; }
+.lc-con .ci { display: flex; font-size: 15px; }
+.lc-kc { font-family: ${FONT}; font-weight: 800; font-size: ${MINFS(10)}; line-height: 13px; padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.08); color: #dfe9f7; }
+/* ---- weapon card (bottom-right, above the slot row) ---- */
+/* 316 wide: "GRENADE LAUNCHER" + COMMON + SEMI measured 287 px in a 278 px row at 304 (2026-10-12) */
+.lc-wcard { width: 316px; padding: 8px 12px 9px; border-radius: 14px; display: flex; flex-direction: column; gap: 4px; font-family: ${FONT}; }
+.lc-wrow1 { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-height: 18px; }
+.lc-wname { font-family: ${FONT}; font-weight: 800; font-size: 13px; line-height: 16px; letter-spacing: .8px; text-transform: uppercase; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+.lc-wtag { font-weight: 800; font-size: ${MINFS(10)}; line-height: 12px; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; border: 1px solid currentColor; text-transform: uppercase; }
+.lc-wmode { margin-left: auto; font-weight: 800; font-size: ${MINFS(10)}; line-height: 12px; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.24); color: #dfe9f7; }
+.lc-wrow2 { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; }
+.lc-wsil { width: 104px; height: 36px; object-fit: contain; object-position: left center; opacity: .96; filter: drop-shadow(0 2px 3px rgba(0,0,0,.55)); }
+.lc-ammo { font-family: ${FONT}; font-weight: 900; font-size: 30px; line-height: 36px; letter-spacing: .5px; color: #fff; font-variant-numeric: tabular-nums; text-shadow: 0 2px 6px rgba(0,0,0,.7); white-space: nowrap; }
+.lc-ammo.sm { font-size: 20px; }
+.lc-wrow3 { display: flex; align-items: center; gap: 9px; }
+.lc-atype { font-weight: 800; font-size: ${MINFS(10)}; line-height: 12px; letter-spacing: 1.4px; color: rgba(255,255,255,.62); white-space: nowrap; }
+.lc-mag { flex: 1; display: flex; gap: 2px; --lc-c: #f3f6fb; }
+.lc-mag .lc-sg { height: 5px; }
+/* ---- storm row (top centre, anchor unchanged) ---- */
+.lc-storm { display: flex; align-items: center; gap: 12px; padding: 5px 16px; border-radius: 11px; white-space: nowrap; font-family: ${FONT}; }
+.lc-storm > div { display: flex; align-items: center; gap: 6px; }
+.lc-st-ic { font-size: 16px; color: #9fb6cc; }
+.lc-st-t { font-weight: 800; font-size: 16px; line-height: 20px; min-width: 72px; font-variant-numeric: tabular-nums; }
+.lc-st-c { font-weight: 700; font-size: 13px; line-height: 20px; color: #d9c8ff; }
+.lc-sep { width: 1px; height: 18px; background: rgba(255,255,255,.22); }
+.lc-st-a, .lc-st-k { font-weight: 800; font-size: 16px; line-height: 20px; font-variant-numeric: tabular-nums; }
+.lc-st-a .ic, .lc-st-k .ic { display: flex; font-size: 15px; }
+.lc-st-a .ic { color: #b79bff; } .lc-st-k .ic { color: #ffb0a0; opacity: .9; }
+.lc-circ-s { display: none; }
+html.lc-touch .lc-circ-l { display: none; } html.lc-touch .lc-circ-s { display: inline; }
+/* ---- kill feed ---- */
+.lc-fr { display: flex; align-items: center; gap: 7px; padding: 3px 10px; border-radius: 8px; font-family: ${FONT}; font-weight: 700; font-size: 12px; line-height: 16px; white-space: nowrap; background: rgba(8,14,28,.66); border: 1px solid rgba(140,200,255,.14); }
+.lc-fr.me { color: #ffd54a; border-color: rgba(255,213,74,.65); background: rgba(40,30,6,.62); }
+.lc-fr .dim { opacity: .62; }
+.lc-fr .v { color: #ff9384; }
+.lc-fr .w { height: 14px; width: auto; max-width: 46px; display: none; }
+/* ---- death banner ---- */
+/* max-width: the banner is centred, so it must end before the WIDEST kill feed starts (6 rows of long names + a
+   silhouette measured 272 px, right 16): (272 + 16 + 12) x 2 = 600 px off the width. Measured 2026-10-12 with a 14-char killer
+   name, 100 HP + 100 shield, Grenade Launcher, HEADSHOT, 1203 m: pill 528 px, recap pill 371 px, so the two share a row
+   only from ~1720 px up; below that the recap wraps to a second row, and the metrics here keep that 2-row state <= 115 px
+   (the first version was 130 px tall and 816 wide at 1280x720 and ran into the feed) */
+.lc-death { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 18px 9px; border-radius: 14px; width: max-content; max-width: max(320px, calc(100vw - 600px)); font-family: ${FONT}; text-align: center; }
+.lc-d1 { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.lc-dt { font-family: Orbitron, ${FONT_DISPLAY}; font-weight: 900; font-size: 22px; line-height: 28px; letter-spacing: 3px; color: #ff7a7a; text-shadow: 0 2px 10px rgba(0,0,0,.8); }
+.lc-dn { font-weight: 800; font-size: 22px; line-height: 28px; color: #fff; font-variant-numeric: tabular-nums; }
+.lc-dn small { font-size: ${MINFS(13)}; font-weight: 700; opacity: .65; line-height: 1; }
+.lc-dbtn { font-family: ${FONT}; font-weight: 800; font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; padding: 5px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: #57b0ff; color: #fff; cursor: pointer; }
+.lc-dbtn:hover { filter: brightness(1.1); }
+.lc-d2 { display: flex; align-items: center; justify-content: center; gap: 5px 12px; flex-wrap: wrap; max-width: 100%; }
+.lc-dp { display: flex; align-items: center; gap: 8px; padding: 3px 12px; max-width: 100%; box-sizing: border-box; border-radius: 999px; background: rgba(5,10,20,.55); border: 1px solid rgba(140,200,255,.16); font-weight: 700; font-size: ${MINFS(13)}; line-height: 18px; white-space: nowrap; }
+.lc-dp .lab { font-size: ${MINFS(10)}; letter-spacing: 1.4px; opacity: .6; text-transform: uppercase; }
+.lc-dp b { font-weight: 800; color: #fff; min-width: 0; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.lc-dp .w { height: 15px; width: auto; max-width: 48px; display: none; }
+.lc-dp .hs { font-size: ${MINFS(10)}; font-weight: 900; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; background: #ffc83d; color: #1a1204; }
+.lc-dp.rc { color: #cfe4ff; }
+.lc-dp .lab-s { display: none; }
+/* ---- post-match: summary + standings ---- */
+.lc-pm { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 18px; width: min(1000px, calc(100% - 32px)); max-height: calc(100% - 28px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 4px; }
+.lc-pm-sum { flex: 1 1 360px; max-width: 440px; padding: 28px 30px 24px; border-radius: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; overflow: hidden; }
+.lc-pm-st { flex: 1.25 1 400px; min-width: 0; border-radius: 18px; padding: 16px 18px 12px; display: flex; flex-direction: column; min-height: 0; }
+.lc-pm-h { font-family: Orbitron, ${FONT_DISPLAY}; font-weight: 800; font-size: 17px; letter-spacing: 2px; margin-bottom: 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.lc-pm-h small { font-family: ${FONT}; font-weight: 700; font-size: ${MINFS(12)}; letter-spacing: 1px; opacity: .6; }
+.lc-tiles { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; width: 100%; margin: 4px 0 2px; }
+.lc-tile { min-width: 92px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(140,200,255,.14); }
+.lc-tile .k { font-weight: 800; font-size: ${MINFS(11)}; letter-spacing: 1.6px; opacity: .6; text-transform: uppercase; }
+.lc-tile .v { font-weight: 800; font-size: 24px; line-height: 30px; font-variant-numeric: tabular-nums; }
+.lc-winner { font-weight: 700; font-size: ${MINFS(13)}; color: #ffd873; letter-spacing: .5px; min-height: 18px; }
+.lc-pm-act { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+.lc-pbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: ${FONT}; font-weight: 800; font-size: 15px; letter-spacing: .4px; padding: 12px 22px; border-radius: 999px; cursor: pointer; transition: transform .12s ease, filter .12s; }
+.lc-pbtn .ic { display: flex; font-size: 18px; }
+.lc-pbtn.pri { background: #f4f7fb; color: #0b1220; border: 1px solid #fff; box-shadow: 0 0 22px rgba(160,210,255,.25); }
+.lc-pbtn.sec { background: rgba(255,255,255,.04); color: #eaf2ff; border: 1px solid rgba(255,255,255,.28); }
+.lc-pbtn:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.lc-pbtn:active { transform: translateY(1px); }
+.lc-pm-menu { margin-top: 2px; background: none; border: 0; color: rgba(207,228,255,.7); font-family: ${FONT}; font-weight: 700; font-size: ${MINFS(12)}; letter-spacing: 1.6px; text-transform: uppercase; cursor: pointer; padding: 8px 14px; }
+.lc-pm-menu:hover { color: #fff; text-decoration: underline; }
+.lc-scroll { position: relative; overflow-y: auto; overscroll-behavior: contain; max-height: min(480px, calc(100vh - 150px)); border-radius: 10px; }
+/* every row is EXACTLY --lc-rh tall and the header 28 px (fixed line-heights, no vertical padding, nowrap): the scroller is sized to header + whole rows and scrolled to a
+   row boundary (buildStandings), so no row ever sits half under the sticky header - the first version drifted by a fraction of a row and showed a sliver (2026-10-12) */
+.lc-tbl { --lc-rh: 35px; width: 100%; border-collapse: separate; border-spacing: 0; font-family: ${FONT}; font-variant-numeric: tabular-nums; }
+/* the header is OPAQUE: at .96 the row scrolled under it ghosted through, overlapping "PLAYER" (seen 2026-10-12 at 1280x720) */
+.lc-tbl th { position: sticky; top: 0; z-index: 1; background: #0a1020; text-align: left; font-weight: 800; font-size: ${MINFS(11)}; letter-spacing: 1.6px; color: rgba(255,255,255,.5); padding: 0 10px; height: 28px; line-height: 28px; box-sizing: border-box; white-space: nowrap; }
+.lc-tbl th.n, .lc-tbl td.n { text-align: right; }
+.lc-tbl td { padding: 0 10px; height: var(--lc-rh); line-height: calc(var(--lc-rh) - 1px); box-sizing: border-box; white-space: nowrap; font-weight: 700; font-size: ${MINFS(14)}; border-top: 1px solid rgba(255,255,255,.06); color: #dbe6f6; }
+.lc-tbl td.r { width: 44px; color: rgba(255,255,255,.5); font-weight: 800; }
+.lc-tbl tr.top td.r { color: #ffd54a; }
+.lc-tbl tr.me td { background: rgba(255,213,74,.10); color: #fff; border-top-color: rgba(255,213,74,.28); }
+.lc-tbl tr.me td.r { color: #ffd54a; }
+.lc-tbl .you { font-size: ${MINFS(11)}; font-weight: 700; opacity: .6; margin-left: 6px; line-height: 1; vertical-align: middle; }
+.lc-tbl .live { font-size: ${MINFS(10)}; font-weight: 800; letter-spacing: 1px; color: #7be0a3; margin-left: 8px; line-height: 1; vertical-align: middle; }
+`;
   document.head.appendChild(st);
 }
 
@@ -281,7 +439,17 @@ function initTouch(W) {
   window.addEventListener("touchend", (e) => {
     if (_tap.swallowEnd) { _tap.swallowEnd = false; if (e.cancelable) e.preventDefault(); }
   }, { capture: true, passive: false });
-  const ro = () => updateRotate();
+  // The announcement band - and the death banner that takes its place - hangs at a height that depends on the viewport CLASS (a phone on
+  // its side <= 520 px tall: band 118; a tablet / desktop: 180). placeBand() only ran on an announcement, a touch-mode change or a taller
+  // quest card, so a viewport change (a tablet rotated, a window resized) left it where the OLD class put it - the death banner sat at 118
+  // on a 1180x820 tablet, on top of the LVL stack and the kill feed (hud_checks, 2026-10-12). Re-place it now and once more after the
+  // kernel has taken the new size (its view size lands a tick later on some browsers). A resize is rare: no per-frame cost.
+  const ro = () => {
+    updateRotate();
+    placeBand();
+    clearTimeout(R._bandRsT);
+    R._bandRsT = setTimeout(() => placeBand(), 200);
+  };
   window.addEventListener("resize", ro);
   window.addEventListener("orientationchange", ro);
   try { if (window.visualViewport) window.visualViewport.addEventListener("resize", ro); } catch (e) {}
@@ -453,6 +621,18 @@ html.lc-touch [data-lc=slots] { position: absolute; left: var(--lc-rx); bottom: 
 html.lc-touch [data-lc=slots] > div { width: 44px !important; height: 44px !important; }
 html.lc-touch [data-lc=slots] img { width: 40px !important; height: 30px !important; }
 html.lc-touch [data-lc=ammo] { position: absolute; left: var(--lc-rx); bottom: var(--lc-ab); font-size: 18px !important; line-height: 22px; white-space: nowrap; }
+/* the weapon card is just its count on a phone (the card chrome would be a layout change in
+   the thumb zones): the wrappers dissolve and the count keeps the rule above */
+html.lc-touch [data-lc=wcard], html.lc-touch [data-lc=wrow2] { display: contents !important; }
+html.lc-touch [data-lc=wrow1], html.lc-touch [data-lc=wrow3], html.lc-touch [data-lc=wsil] { display: none !important; }
+/* the vitals card keeps the number and both bars, in <= 46 px: under the minimap with the
+   prompts and the chat below it (the consumables row is the slot row's job on a phone) */
+html.lc-touch [data-lc=cons] { display: none !important; }
+html.lc-touch .lc-vit { padding: 5px 10px !important; border-radius: 12px !important; }
+html.lc-touch .lc-hpn { min-width: 50px !important; }
+html.lc-touch .lc-hpn b { font-size: 26px !important; }
+html.lc-touch .lc-vbars { gap: 5px !important; }
+html.lc-touch .lc-vn { width: 20px !important; }
 html.lc-touch [data-lc=reloadbar], html.lc-touch [data-lc=healbar] { left: var(--lc-rx) !important; top: auto !important; bottom: var(--lc-bb) !important; transform: none !important; width: 180px !important; }
 html.lc-touch [data-lc=wpnpop] { left: calc(var(--lc-rx) + 118px) !important; bottom: var(--lc-pb) !important; font-size: 14px !important; }
 html.lc-touch [data-lc=minimap] { top: calc(env(safe-area-inset-top, 0px) + 12px) !important; left: calc(var(--lc-sl) + 14px) !important; }
@@ -460,6 +640,36 @@ html.lc-touch [data-lc=bars] { left: calc(var(--lc-sl) + 14px) !important; botto
 html.lc-touch [data-lc=chat] { left: calc(var(--lc-sl) + 14px) !important; bottom: auto !important; top: calc(env(safe-area-inset-top, 0px) + 250px) !important; max-width: 300px !important; }
 html.lc-touch [data-lc=feed] { top: 62px !important; right: calc(var(--lc-sr) + 10px) !important; }
 html.lc-touch [data-lc=perf] { top: 16px !important; right: calc(var(--lc-sr) + 64px) !important; }
+/* a tablet (touch, taller than 520 px): the vitals card sits under the minimap (x 14..254)
+   at the death banner's height, so the centred banner keeps 262 px clear on each side
+   (measured 2026-10-12 at 1180x820: it reached x 232 and overlapped the card) AND the widest kill feed (272 px,
+   right 10): (272 + 10 + 8) x 2 = 580 px off the width. At that width the killer pill (worst case ~480 px)
+   no longer fits on a 1024-wide tablet, so the pills stay on ONE line (the killer's name ellipsizes first, the
+   long "ELIMINATED BY" label shortens to "BY") instead of wrapping into a banner 197 px tall (measured at 1024x768) */
+@media not all and (max-height: 520px) {
+  html.lc-touch [data-lc=death] { max-width: calc(100vw - 580px - 2 * max(var(--lc-sl), var(--lc-sr))) !important; }
+  html.lc-touch .lc-dp { flex-wrap: nowrap; justify-content: center; white-space: nowrap; gap: 6px; }
+  html.lc-touch .lc-dp .lab-l { display: none !important; }
+  html.lc-touch .lc-dp .lab-s { display: inline !important; }
+}
+/* a narrow tablet (<= 1100 px wide): the weapon's NAME stays in the pill, its 15 px silhouette goes (the kill feed keeps it) */
+@media (max-width: 1100px) and (min-height: 520.5px) {
+  html.lc-touch .lc-dp .w { display: none !important; }
+  /* row 1 (title, #N of 50, MATCH STATS at the 44 px touch size) is ~500 px at full size: one row of smaller type, not two rows (1024x768: 171 px -> ~125) */
+  html.lc-touch .lc-d1 { flex-wrap: nowrap !important; gap: 10px !important; }
+  html.lc-touch [data-lc=deathtitle], html.lc-touch .lc-dn { font-size: 18px !important; letter-spacing: 1.5px !important; }
+}
+/* a SHORT tablet (521..760 px tall: 1024x600 / 960x600 7-inch, 1133x744, 1024x768): the band
+   starts at 180, so the full-size banner (142 px) would reach the reticle at H/2 - 17 (283 on a
+   600 px screen). Compact type and pills keep it ~100 px tall: 180..~280 */
+@media (min-height: 520.5px) and (max-height: 760px) {
+  html.lc-touch [data-lc=death] { padding: 3px 12px 4px !important; gap: 2px !important; border-radius: 12px !important; }
+  html.lc-touch [data-lc=deathtitle], html.lc-touch .lc-dn { font-size: 17px !important; line-height: 22px !important; letter-spacing: 1.5px !important; }
+  html.lc-touch .lc-d1 { gap: 10px !important; flex-wrap: nowrap !important; }
+  html.lc-touch .lc-d2 { gap: 2px 8px !important; }
+  html.lc-touch .lc-dp { padding: 0 8px !important; line-height: 18px !important; }
+  html.lc-touch .lc-dp .hs { line-height: 14px !important; padding: 1px 5px !important; }
+}
 /* a phone on its side (<= 520 px tall): a compact top stack, the quest card
    off (dailies still pay out and flash), the left column under the minimap
    carries the prompts so the centre stays on the reticle */
@@ -476,11 +686,39 @@ html.lc-touch [data-lc=perf] { top: 16px !important; right: calc(var(--lc-sr) + 
   html.lc-touch [data-lc=interact], html.lc-touch [data-lc=chutehint] { left: calc(var(--lc-sl) + 8px) !important; top: calc(env(safe-area-inset-top, 0px) + 166px) !important; transform: none !important; font-size: 13px !important; max-width: calc(45vw - 16px); overflow: hidden; text-overflow: ellipsis; }
   html.lc-touch [data-lc=pickupmsg] { left: calc(var(--lc-sl) + 8px) !important; top: calc(env(safe-area-inset-top, 0px) + 196px) !important; transform: none !important; font-size: 13px !important; }
   html.lc-touch [data-lc=stormmsg] { font-size: 15px !important; }
-  html.lc-touch [data-lc=death] { top: 52px !important; max-height: calc(100% - 60px); overflow-y: auto; padding: 12px 22px 12px !important; min-width: 0 !important; }
-  html.lc-touch [data-lc=deathtitle] { font-size: 28px !important; }
-  html.lc-touch [data-lc=post] { padding: 14px 28px !important; gap: 6px !important; min-width: 0 !important; max-height: calc(100% - 16px); overflow-y: auto !important; }
-  html.lc-touch [data-lc=posttitle] { font-size: 26px !important; }
+  /* the death banner takes the announcement band's spot, to the RIGHT of the left column
+     (minimap, vitals, prompts: x 8..208) and <= ~50 px tall so it ends above the reticle;
+     the button rides the right edge across both rows and the recap pill is dropped */
+  html.lc-touch [data-lc=death] { left: 216px !important; transform: none !important; width: calc(100vw - 232px) !important; max-width: none !important; box-sizing: border-box !important;
+    padding: 2px 148px 2px 10px !important; gap: 1px !important; border-radius: 10px !important; }
+  html.lc-touch [data-lc=deathtitle], html.lc-touch .lc-dn { font-size: 15px !important; line-height: 18px !important; letter-spacing: 1.5px !important; }
+  html.lc-touch .lc-d1 { gap: 8px !important; flex-wrap: nowrap !important; }
+  html.lc-touch .lc-d2 { flex-wrap: nowrap !important; }
+  html.lc-touch .lc-dp { padding: 0 8px !important; line-height: 18px !important; gap: 6px !important; }
+  html.lc-touch .lc-dp .hs { line-height: 14px !important; padding: 1px 5px !important; }
+  html.lc-touch .lc-dp .lab-l { display: none !important; }
+  html.lc-touch .lc-dp .lab-s { display: inline !important; }
+  html.lc-touch .lc-dp.rc { display: none !important; }
+  html.lc-touch .lc-dbtn { position: absolute !important; right: 6px; top: 50%; transform: translateY(-50%); padding: 0 12px !important; }
+  html.lc-touch [data-lc=post] { gap: 10px !important; flex-wrap: nowrap !important; align-items: stretch !important; width: calc(100% - 16px) !important; height: calc(100% - 12px) !important; max-height: none !important; padding: 0 !important; overflow: hidden !important; }
+  html.lc-touch [data-lc=postsum] { flex: 0 0 300px !important; max-width: 300px !important; padding: 8px 12px !important; gap: 3px !important; overflow-y: auto !important; }
+  html.lc-touch [data-lc=posttitle] { font-size: 20px !important; letter-spacing: 2px !important; }
+  html.lc-touch .lc-tiles { flex-wrap: nowrap !important; gap: 6px !important; margin: 2px 0 !important; }
+  html.lc-touch .lc-tile { min-width: 0 !important; flex: 1 1 0 !important; padding: 3px 4px !important; }
+  html.lc-touch .lc-tile .v { font-size: 17px !important; line-height: 20px !important; }
+  html.lc-touch [data-lc=postcareer] { display: none !important; }
+  html.lc-touch .lc-pm-act { margin-top: 4px !important; gap: 6px !important; }
+  html.lc-touch .lc-pbtn { padding: 0 14px !important; font-size: 14px !important; }
+  html.lc-touch [data-lc=standings] { flex: 1 1 0 !important; min-width: 0 !important; padding: 8px 10px !important; }
+  html.lc-touch .lc-pm-h { margin-bottom: 6px !important; }
+  html.lc-touch .lc-scroll { flex: 1 1 0 !important; min-height: 0 !important; max-height: none !important; }
+  html.lc-touch .lc-tbl { --lc-rh: 33px; }
+  html.lc-touch .lc-tbl th, html.lc-touch .lc-tbl td { padding: 0 6px !important; }
+  html.lc-touch .lc-tbl td.r { width: 30px !important; }
+  html.lc-touch .lc-tbl td.nm { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html.lc-touch .lc-tbl .live { display: none !important; }
 }
+html.lc-touch .lc-dbtn { min-height: 44px; }
 @keyframes lcRotPh { 0%, 30% { transform: rotate(0deg) } 60%, 100% { transform: rotate(-90deg) } }
 #lc-rotate .lc-rot-ph { transform-origin: 60px 54px; animation: lcRotPh 2.2s ease-in-out infinite alternate; }
 @media (prefers-reduced-motion: reduce) { #lc-rotate .lc-rot-ph { animation: none; transform: rotate(-90deg); } }
@@ -497,7 +735,17 @@ function ensureTouchStyles() {
 // Maps rotate RANDOMLY every match — no picker (owner direction: "anytime you
 // play, it randomly chooses").
 export const BATTLE_MAPS = ["isla_viva", "ashgrid", "deepwood"];
-export const randomMap = () => BATTLE_MAPS[Math.floor(Math.random() * BATTLE_MAPS.length)];
+// `_nextMap` is the one-shot seam behind the post-match "Run it back": the
+// orchestrator's onAgain() calls hudMod.randomMap() synchronously for its map, so
+// naming the map just before that call replays the SAME map and mode through the
+// SAME teardown path (net leave, loading screen) as "Find a new match". It is
+// consumed on first read and cleared again by the caller, so a menu start can
+// never inherit it. Everything else still picks at random (no map picker).
+let _nextMap = null;
+export function randomMap() {
+  if (_nextMap) { const m = _nextMap; _nextMap = null; return m; }
+  return BATTLE_MAPS[Math.floor(Math.random() * BATTLE_MAPS.length)];
+}
 const MODE_CARDS = [
   { id: "standard", name: "BATTLE ROYALE", sub: "50 players · random map · last one standing" },
   { id: "quick", name: "QUICK MATCH", sub: "5-minute storm · double loot · hot start" },
@@ -2147,8 +2395,225 @@ function pickChallenges(W) {
 }
 
 
+// ═══ weapon silhouettes (contract C-ART-FX) ══════════════════════════════════
+// assets/hud/wpn_<id>.png: white silhouette on transparent, 160x60, one per gun.
+// Feature-detected: each id is requested at most once, a failed load marks the
+// whole set absent so nothing else is asked for (the contract is all-or-nothing:
+// ONE missing-file request per page, never six), and every consumer falls back
+// (kill feed -> the weapon's name as text; weapon card -> the rendered 3D thumb).
+const _sil = { off: false, all: false, probe: null, st: {} };            // st[id] = "pending" | <url> | "none"
+function silFor(W, id) {
+  if (_sil.off || !id || !K || !K.WEAPONS[id]) return null;
+  const v = _sil.st[id];
+  if (v === "pending" || v === "none") return null;
+  if (v) return v;
+  // ONE probe in flight until the set is known to exist: if the files are absent that is a
+  // single failed request, however many weapons ask in the meantime (they re-ask on repaint)
+  if (!_sil.all && _sil.probe && _sil.probe !== id) return null;
+  if (!_sil.all) _sil.probe = id;
+  _sil.st[id] = "pending";
+  const url = (W && W.assetBase ? W.assetBase : "") + "assets/hud/wpn_" + id + ".png";
+  const im = new Image();
+  im.onload = () => {
+    _sil.st[id] = url; silReady(id);
+    // the set is there: fetch the other guns now (<= 3 KB each) so a weapon switch or a
+    // kill with any gun finds its silhouette decoded already
+    if (!_sil.all) { _sil.all = true; for (const k of K.WEAPON_IDS) silFor(_tW, k); }
+  };
+  im.onerror = () => {
+    _sil.st[id] = "none"; _sil.off = true;
+    if (R._wSilFor) paintCardSil(_tW, R._wSilFor);          // the card falls back to the 3D thumb
+  };
+  im.src = url;
+  return null;
+}
+/** A silhouette finished loading: repaint whatever was waiting for it. */
+function silReady(id) {
+  if (R.feed) { const kids = R.feed.children; for (let i = 0; i < kids.length; i++) if (kids[i]._wid === id) feedMode(kids[i]); }
+  if (R._wSilFor === id) paintCardSil(_tW, id);
+  if (R._dSil && R._dSil.id === id) { R._dSil.el.src = _sil.st[id]; R._dSil.el.style.display = "block"; }
+}
+
+// ═══ vitals + weapon card builders (P1.9) ════════════════════════════════════
+/** n segment tracks in a row; every fill only ever changes transform (scaleX). */
+function mkSegs(parent, n, cls) {
+  const wrap = h("div", null, null, parent);
+  wrap.className = cls;
+  const tracks = [], fills = [];
+  for (let i = 0; i < n; i++) {
+    const tr = h("span", null, null, wrap); tr.className = "lc-sg";
+    const f = h("i", null, null, tr); f.className = "lc-sf";
+    tracks.push(tr); fills.push(f);
+  }
+  return { wrap, tracks, fills };
+}
+/** Write only the segments whose fill changed. cache[i] holds the last written scale. */
+function setSegs(fills, cache, n, v, max) {
+  const per = max / n;
+  for (let i = 0; i < n; i++) {
+    let f = (v - i * per) / per;
+    f = f <= 0 ? 0 : f >= 1 ? 1 : Math.round(f * 100) / 100;
+    if (cache[i] !== f) { cache[i] = f; fills[i].style.transform = "scaleX(" + f + ")"; }
+  }
+}
+function buildVitals(L) {
+  // signed-off anchor: left 18 / bottom 16 / width 300 (inline); the skin is the class
+  const box = h("div", { position: "absolute", left: "18px", bottom: "16px", width: "300px" }, null, L);
+  box.className = "lc-gl lc-vit";
+  box.dataset.lc = "bars";
+  const top = h("div", null, null, box); top.className = "lc-vtop";
+  const num = h("div", null, null, top); num.className = "lc-hpn"; num.dataset.lc = "hpnum";
+  R.hpNum = h("b", null, "100", num);
+  h("i", null, "HP", num);
+  R.hpNumBox = num;
+  const bars = h("div", null, null, top); bars.className = "lc-vbars";
+  // shield on top, health under it (ref t84)
+  const shRow = h("div", null, null, bars); shRow.className = "lc-vb sh"; shRow.dataset.lc = "shieldbar";
+  R.shSegs = mkSegs(shRow, 4, "lc-vs").fills;
+  R.shNum = h("span", null, "0", shRow); R.shNum.className = "lc-vn";
+  const hpRow = h("div", null, null, bars); hpRow.className = "lc-vb hp"; hpRow.dataset.lc = "hpbar";
+  R.hpSegs = mkSegs(hpRow, 4, "lc-vs").fills;
+  h("span", null, null, hpRow).className = "lc-vn";                // spacer: the two bars stay the same length
+  R.hpRow = hpRow;
+  // consumables: icon, how many you carry, the key that selects its slot
+  const cons = h("div", null, null, box); cons.className = "lc-cons"; cons.dataset.lc = "cons";
+  R.cons = CON_ORDER.map((id) => {
+    const el = h("span", null, null, cons); el.className = "lc-con z"; el.title = CON_NAME[id];
+    const ci = h("span", { color: CON_COLOR[id] }, null, el); ci.className = "ci"; ci.innerHTML = CON_ICON[id];
+    const cn = h("span", null, "0", el);
+    const kb = h("kbd", { visibility: "hidden" }, "", el); kb.className = "lc-kc";
+    return { id, el, cn, kb, c: -1, k: -2 };
+  });
+  R._hpS = []; R._shS = []; R._magS = [];
+  return box;
+}
+function buildWeaponCard(parent) {
+  const card = h("div", null, null, parent);
+  card.className = "lc-gl lc-wcard"; card.dataset.lc = "wcard";
+  const r1 = h("div", null, null, card); r1.className = "lc-wrow1"; r1.dataset.lc = "wrow1";
+  R.wName = h("span", null, "", r1); R.wName.className = "lc-wname";
+  R.wTag = h("span", null, "", r1); R.wTag.className = "lc-wtag";
+  R.wMode = h("span", null, "", r1); R.wMode.className = "lc-wmode";
+  const r2 = h("div", null, null, card); r2.className = "lc-wrow2"; r2.dataset.lc = "wrow2";
+  R.wSil = h("img", { visibility: "hidden" }, null, r2); R.wSil.className = "lc-wsil"; R.wSil.dataset.lc = "wsil"; R.wSil.alt = "";
+  R.ammoText = h("div", null, "", r2); R.ammoText.className = "lc-ammo"; R.ammoText.dataset.lc = "ammo";
+  const r3 = h("div", null, null, card); r3.className = "lc-wrow3"; r3.dataset.lc = "wrow3";
+  R.wAType = h("span", null, "", r3); R.wAType.className = "lc-atype";
+  const mg = mkSegs(r3, MAG_SEGS, "lc-mag");
+  R.magSegs = mg.fills; R.magTracks = mg.tracks;
+  R.wCard = card;
+  return card;
+}
+/** The card's picture: the shipped silhouette when it is there, else the weapon's
+ *  own rendered 3D thumb (the one the slot row already makes). */
+function paintCardSil(W, id) {
+  if (!R.wSil || R._wSilFor !== id) return;
+  const u = silFor(W, id);
+  if (u) { R.wSil.src = u; R.wSil.style.filter = ""; R.wSil.style.visibility = "visible"; return; }
+  if (!_sil.off && _sil.st[id] === "pending") return;      // the file may still answer: silReady repaints
+  weaponIcon(W, id).then((url) => {
+    if (url && R._wSilFor === id && R.wSil && R.wSil.isConnected) { R.wSil.src = url; R.wSil.style.visibility = "visible"; }
+  });
+}
+/** Consumable counts + the key that reaches each one. Called from paintSlots only
+ *  (inventory changed), never per frame. */
+function paintCons(W, p) {
+  if (!R.cons) return;
+  const sl = p.inventory && p.inventory.slots;
+  for (let j = 0; j < R.cons.length; j++) {
+    const c = R.cons[j];
+    let cnt = 0, key = -1;
+    if (sl) for (let i = 0; i < sl.length; i++) {
+      const s = sl[i];
+      if (s && s.kind === "consumable" && s.id === c.id) { cnt += s.count || 0; if (key < 0) key = i + 1; }
+    }
+    if (c.c !== cnt) { c.c = cnt; c.cn.textContent = String(cnt); c.el.classList.toggle("z", cnt === 0); }
+    if (c.k !== key) { c.k = key; c.kb.textContent = key > 0 ? keyOf(W, "Digit" + key) : ""; c.kb.style.visibility = key > 0 ? "visible" : "hidden"; }
+  }
+}
+/** Vitals: the numbers and the 4 + 4 segments. Writes only when a value changed. */
+function updateVitals(p, C) {
+  const hpI = p.hp > 0 ? Math.min(100, Math.ceil(p.hp)) : 0;
+  if (C.hpI !== hpI) {
+    C.hpI = hpI;
+    R.hpNum.textContent = hpI;
+    setSegs(R.hpSegs, R._hpS, 4, hpI, 100);
+    // "am I one shot from dead" is a state, not a two-digit number to read mid-fight:
+    // the number and the bar turn yellow at 40 and red + pulsing at 25
+    const st = hpI <= 25 ? 2 : hpI <= 40 ? 1 : 0;
+    if (C.hpSt !== st) {
+      C.hpSt = st;
+      R.hpRow.className = "lc-vb hp" + (st === 2 ? " cr" : st === 1 ? " lo" : "");
+      R.hpNumBox.className = "lc-hpn" + (st === 2 ? " cr" : st === 1 ? " lo" : "");
+    }
+    // Persistent low-HP vignette. Deliberately NOT the lcPulse keyframe: that animates
+    // opacity and would override the inline opacity carrying the ramp.
+    if (R.lowHpTint) R.lowHpTint.style.opacity = hpI < 35 ? String(Math.min(1, (35 - hpI) / 30) * 0.6) : "0";
+  }
+  const shI = p.shield > 0 ? Math.min(100, Math.ceil(p.shield)) : 0;
+  if (C.shI !== shI) {
+    C.shI = shI;
+    R.shNum.textContent = shI;
+    setSegs(R.shSegs, R._shS, 4, shI, 100);
+  }
+}
+/** Weapon card: static parts on a weapon / rarity / consumable change, the count and
+ *  the mag segments on a count change. Nothing here allocates while nothing changed. */
+function updateWeaponCard(W, p, C) {
+  const wpn = p.weapon, wid = wpn ? wpn.id : null;
+  const glide = !!p.gliding;
+  if (C.cGl !== glide) { C.cGl = glide; R.wCard.style.display = glide ? "none" : ""; }
+  if (glide) return;
+  const isCon = !!wid && wid.startsWith("consumable");
+  const def = wid && !isCon ? K.WEAPONS[wid] : null;
+  const rar = wpn ? (wpn.rarity | 0) : 0;
+  if (C.cWid !== wid || C.cRar !== rar) {
+    C.cWid = wid; C.cRar = rar; C.cM = -1; C.cR = -1; C.cTxt = null;
+    if (def) {
+      const rn = K.RARITY[rar] || "common", rc = K.RARITY_COLOR[rn] || "#dfe7f2";
+      R.wName.textContent = K.weaponName(wid); R.wName.style.color = rc;
+      R.wTag.textContent = rn; R.wTag.style.color = rc; R.wTag.style.display = "";
+      // AUTO / SEMI: the same rule weapons.js fires by (SMG + AR hold-to-fire, the rest click)
+      R.wMode.textContent = def.cls === "smg" || def.cls === "ar" ? "AUTO" : "SEMI"; R.wMode.style.display = "";
+      R.wAType.textContent = AMMO_NAME[def.ammo] || String(def.ammo || "").toUpperCase();
+      const n = Math.min(MAG_SEGS, Math.max(1, def.mag | 0));
+      C.cN = n;
+      for (let i = 0; i < MAG_SEGS; i++) R.magTracks[i].style.display = i < n ? "" : "none";
+      R._magS.length = 0;                          // new segment count: write every fill once
+      R.magTracks[0].parentNode.style.display = "";
+      R.wSil.style.visibility = "hidden";          // never the previous gun's picture while this one loads
+      R._wSilFor = wid; paintCardSil(W, wid);
+    } else if (isCon) {
+      const cid = wid.slice(11);
+      R.wName.textContent = CON_NAME[cid] || cid.toUpperCase(); R.wName.style.color = CON_COLOR[cid] || "#dfe7f2";
+      R.wTag.style.display = "none"; R.wMode.style.display = "none";
+      R.wAType.textContent = "FIRE TO USE";
+      R.magTracks[0].parentNode.style.display = "none";
+      R._wSilFor = null; R.wSil.style.visibility = "hidden";
+    } else {
+      R.wName.textContent = ""; R.wTag.style.display = "none"; R.wMode.style.display = "none"; R.wAType.textContent = "";
+      R.magTracks[0].parentNode.style.display = "none"; R._wSilFor = null; R.wSil.style.visibility = "hidden";
+    }
+  }
+  // the count line: "30 / 150", "RELOADING…", "SWIMMING", or "x3" for a held consumable
+  let mag = 0, res = 0, mode = 0;                  // mode: 0 normal, 1 reloading, 2 swimming, 3 consumable
+  if (def) {
+    mag = wpn.magAmmo | 0; res = (p.inventory && p.inventory.ammo && p.inventory.ammo[def.ammo]) | 0;
+    mode = p.swimming ? 2 : wpn.state === "reloading" ? 1 : 0;
+  } else if (isCon) { mag = wpn.slotRef ? wpn.slotRef.count | 0 : 0; mode = p.swimming ? 2 : 3; }
+  else if (p.swimming) mode = 2;
+  if (C.cM !== mag || C.cR !== res || C.cMode !== mode) {
+    const was = C.cMode;
+    C.cM = mag; C.cR = res; C.cMode = mode;
+    R.ammoText.textContent = mode === 2 ? "SWIMMING" : mode === 1 ? "RELOADING…" : mode === 3 ? "x" + mag : def ? mag + " / " + res : "";
+    if (was !== mode) R.ammoText.classList.toggle("sm", mode !== 0);
+    if (def) setSegs(R.magSegs, R._magS, C.cN, mag, def.mag);
+  }
+}
+
 // ═══ HUD ═════════════════════════════════════════════════════════════════════
 export function showHUD(W) {
+  ensureAAAStyles(); ensureHudStyles();
   const L = layer("hud");
   // The scope surround is a 92%-black radial fill over the WHOLE screen. Nothing
   // in the hud layer sets a z-index, so paint order is pure DOM order — created
@@ -2167,22 +2632,9 @@ export function showHUD(W) {
   const bWrap = h("div", { position: "absolute", left: "calc(50% + 120px)", top: "50%", width: "7px", height: "90px", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "4px", overflow: "hidden" }, null, R.scope);
   h("div", { position: "absolute", left: "calc(50% + 132px)", top: "calc(50% - 58px)", fontSize: FS(11), fontFamily: "Rajdhani, " + FONT, fontWeight: "700", letterSpacing: "1px", color: "rgba(255,255,255,0.65)", textShadow: "0 1px 3px #000" }, "BREATH", R.scope);
   R.breathFill = h("div", { position: "absolute", left: "0", bottom: "0", width: "100%", height: "100%", background: "#7fd8ff", transition: "height .1s linear" }, null, bWrap);
-  const bottomLeft = h("div", { position: "absolute", left: "18px", bottom: "16px", width: "300px" }, null, L);
-  bottomLeft.dataset.lc = "bars";
-  // hp/shield — Final Drop style: icon + bar with % inside
-  const mkBar = (icon, color) => {
-    const row = h("div", { display: "flex", alignItems: "center", gap: "6px", marginTop: "5px" }, null, bottomLeft);
-    h("div", { fontSize: "15px", width: "20px", textAlign: "center", filter: "drop-shadow(0 1px 2px #000)" }, icon, row);
-    const wrap = h("div", { flex: "1", height: "16px", background: "rgba(0,0,0,0.55)", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", position: "relative" }, null, row);
-    const fill = h("div", { width: "0%", height: "100%", background: color, transition: "width .15s" }, null, wrap);
-    const pct = h("div", { position: "absolute", inset: "0", textAlign: "center", fontSize: FS(11), fontWeight: "900", lineHeight: "16px", textShadow: "0 1px 2px #000" }, "", wrap);
-    return { fill, pct };
-  };
-  const sb = mkBar("🛡", "#57b0ff");
-  R.shieldBar = sb.fill; R.shieldPct = sb.pct;
-  const hb = mkBar("❤", "#4ade80");
-  R.hpBar = hb.fill; R.hpPct = hb.pct;
-  R.hpText = h("div", { fontSize: "0px", display: "none" }, "", bottomLeft);
+  // vitals (bottom-left, signed-off anchor): a big HP number beside a 4-segment shield
+  // bar over a 4-segment health bar, then the consumables row (buildVitals above)
+  buildVitals(L);
   // heal channel
   R.healBar = h("div", { position: "absolute", left: "50%", top: "58%", transform: "translateX(-50%)", width: "220px", height: "10px", background: "rgba(0,0,0,0.5)", borderRadius: "5px", display: "none", overflow: "hidden" }, null, L);
   R.healBar.dataset.lc = "healbar";
@@ -2208,9 +2660,10 @@ export function showHUD(W) {
   // rule for its own buttons: "bottom:54px ... Never overlap it."
   const br = h("div", { position: "absolute", right: "18px", bottom: "54px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }, null, L);
   br.dataset.lc = "slotcol";
+  // the weapon card sits ABOVE the slot row (name, rarity, AUTO/SEMI, count, ammo type,
+  // mag segments - buildWeaponCard); the count inside it is still data-lc="ammo"
+  buildWeaponCard(br);
   R.slotsRow = h("div", { display: "flex", gap: "6px" }, null, br);
-  R.ammoText = h("div", { fontSize: "22px", fontWeight: "900", textShadow: "0 2px 4px #000" }, "", br);
-  R.ammoText.dataset.lc = "ammo";
   R.slotsRow.dataset.lc = "slots";
 
   // (The old canvas compass ribbon that used to live here is GONE — owner:
@@ -2221,13 +2674,24 @@ export function showHUD(W) {
   // top center: storm timer + alive
   // top 56, not 28: the compass strip above measures 48 px tall, so at 28 it
   // buried the storm clock, alive count and kill count under the ruler.
-  const tc = h("div", { position: "absolute", top: "56px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px", whiteSpace: "nowrap" }, null, L);
+  const tc = h("div", { position: "absolute", top: "56px", left: "50%", transform: "translateX(-50%)" }, null, L);
+  tc.className = "lc-gl lc-storm";
   tc.dataset.lc = "stormrow";
-  R.stormIcon = h("div", { fontSize: "15px" }, "⛈", tc);
-  R.stormTimer = h("div", { fontSize: "17px", fontWeight: "800", minWidth: "72px" }, "", tc);
-  h("div", { width: "1px", height: "18px", background: "rgba(255,255,255,0.25)" }, null, tc);
-  R.aliveText = h("div", { fontSize: "17px", fontWeight: "800" }, "", tc);
-  R.killsText = h("div", { fontSize: "15px", fontWeight: "700", opacity: "0.85" }, "", tc);
+  R.stormIcon = h("div", null, null, tc); R.stormIcon.className = "lc-st-ic"; R.stormIcon.innerHTML = IC.storm;
+  R.stormTimer = h("div", null, "", tc); R.stormTimer.className = "lc-st-t";
+  // "Circle N of 8 · X damage a second" - the long form on a desktop, "Circle N/8" on a phone
+  R.stormSep = h("div", null, null, tc); R.stormSep.className = "lc-sep";
+  R.stormCirc = h("div", null, null, tc); R.stormCirc.className = "lc-st-c"; R.stormCirc.dataset.lc = "stormcirc";
+  R.circL = h("span", null, "", R.stormCirc); R.circL.className = "lc-circ-l";
+  R.circS = h("span", null, "", R.stormCirc); R.circS.className = "lc-circ-s";
+  if (W.mode === "practice") { R.stormSep.style.display = "none"; R.stormCirc.style.display = "none"; }
+  h("div", null, null, tc).className = "lc-sep";
+  const alv = h("div", null, null, tc); alv.className = "lc-st-a"; alv.title = "players alive";
+  const alvI = h("span", null, null, alv); alvI.className = "ic"; alvI.innerHTML = IC.alive;
+  R.aliveText = h("span", null, "", alv);
+  const kil = h("div", null, null, tc); kil.className = "lc-st-k"; kil.title = "your eliminations";
+  const kilI = h("span", null, null, kil); kilI.className = "ic"; kilI.innerHTML = IC.skull;
+  R.killsText = h("span", null, "", kil);
 
   // XP/level bar + active challenge card (Final Drop-style meta), below the storm bar
   if (!W.progress) W.progress = loadProgress();
@@ -2435,7 +2899,8 @@ export function showHUD(W) {
   R.annTitle = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "var(--lc-ann-fs, clamp(20px, 2.9vw, 34px))", fontWeight: "900", letterSpacing: "4px", textShadow: "0 3px 14px #000, 0 0 26px rgba(90,170,255,0.5)" }, "", R.annWrap);
   R.annSub = h("div", { fontSize: "var(--lc-ann-sub, 14px)", fontWeight: "700", letterSpacing: "2px", opacity: "0.85", marginTop: "4px", textShadow: "0 2px 6px #000" }, "", R.annWrap);
   R._annUntil = 0; R._aliveMark = 0; R._annPrio = 0; R._annQ = [];
-  R._bandTop = null; R.deathBox = null;
+  R._bandTop = null; R._bandKey = null; R.deathBox = null; R._deathH = 0;
+  if (R._deathRO) { R._deathRO.disconnect(); R._deathRO = null; }
   placeBand();
   // stepMarks stores absolute W.t; W.t resets to 0 each match, so a stale match-1
   // time (larger than any match-2 time) made `W.t - last < 1.4` permanently true
@@ -2504,6 +2969,7 @@ function bar(parent, color) {
 function hideHUD() {
   ["hud", "death", "post", "bigmap"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
   R.deathBox = null;
+  if (R._deathRO) { R._deathRO.disconnect(); R._deathRO = null; }
 }
 
 // ═══ hit marker ══════════════════════════════════════════════════════════════
@@ -2668,24 +3134,8 @@ export function update(W, dt) {
     if (R._compN !== n) { R._compN = n; R.compassNum.textContent = String(n); }
   }
 
-  const hpPct = Math.max(0, Math.min(100, p.hp)) + "%";
-  if (C.hp !== hpPct) {
-    R.hpBar.style.width = hpPct; R.hpPct.textContent = Math.ceil(Math.max(0, Math.min(100, p.hp))) + "%";
-    // The colour was baked in at creation, so the bar was the same green at 6 HP
-    // as at 100 and "am I one shot from dead" was a two-digit number you had to
-    // read in the bottom-left corner mid-fight. Free: this branch only runs when
-    // the percentage actually changes, and lcPulse is already in ensureAAAStyles.
-    R.hpBar.style.background = p.hp <= 25 ? "#ff5544" : p.hp <= 40 ? "#ffd166" : "#4ade80";
-    R.hpBar.style.animation = p.hp <= 25 ? "lcPulse .55s ease-in-out infinite" : "";
-    // Deliberately NOT the lcPulse keyframe the bar uses: that keyframe animates
-    // opacity 0.55<->1 and would override the inline opacity carrying the ramp.
-    // Driven from this branch because it only runs when the percentage actually
-    // changes, so healing back over 35 clears it for free.
-    if (R.lowHpTint) R.lowHpTint.style.opacity = p.hp < 35 ? String(Math.min(1, (35 - p.hp) / 30) * 0.6) : "0";
-    C.hp = hpPct;
-  }
-  const shPct = Math.max(0, Math.min(100, p.shield)) + "%";
-  if (C.sh !== shPct) { R.shieldBar.style.width = shPct; R.shieldPct.textContent = Math.ceil(Math.max(0, Math.min(100, p.shield))) + "%"; C.sh = shPct; }
+  // vitals: the number + 4 + 4 segments, written only when a value changed (updateVitals)
+  updateVitals(p, C);
 
   // heal channel
   if (p.healing) {
@@ -2705,15 +3155,8 @@ export function update(W, dt) {
     } else R.reloadBar.style.display = "none";
   }
 
-  // ammo + slots
-  const wpn = p.weapon;
-  let ammoT = "";
-  if (wpn && !wpn.id.startsWith("consumable")) {
-    const def = K.WEAPONS[wpn.id];
-    if (def) ammoT = wpn.state === "reloading" ? "RELOADING…" : wpn.magAmmo + " / " + ((p.inventory && p.inventory.ammo[def.ammo]) || 0);
-  }
-  if (p.swimming) ammoT = "SWIMMING";
-  if (C.ammo !== ammoT) { R.ammoText.textContent = ammoT; C.ammo = ammoT; }
+  // weapon card (name, rarity, AUTO/SEMI, count, ammo type, mag segments) + slots
+  updateWeaponCard(W, p, C);
 
   // spectated remote actors can have a partial inventory. slotsDirty compares
   // in place — this used to build two joined signature strings (plus a map()
@@ -2730,12 +3173,26 @@ export function update(W, dt) {
       if (W.mode === "practice") txt = "∞";
       else if (st.done) txt = "CLOSED";
       else txt = (st.phaseState === "waiting" ? "shrinks " : "closing ") + fmtT(st.tToNext);
-      R.stormTimer.textContent = txt;
-      R.stormIcon.style.color = st.closing ? "#d9b3ff" : "#9fb6cc";
+      if (C.stT !== txt) { C.stT = txt; R.stormTimer.textContent = txt; }
+      const sc = st.closing ? 1 : 0;
+      if (C.stC !== sc) { C.stC = sc; R.stormIcon.style.color = sc ? "#d9b3ff" : "#9fb6cc"; }
+      // "Circle N of 8 · X damage a second": N is the circle being waited for / closed,
+      // X is the damage per second outside the circle that is in force right now
+      if (W.mode !== "practice") {
+        const nPh = W.stormCtl.storm.phases ? W.stormCtl.storm.phases.length : 0;
+        const ck = st.phase * 100000 + nPh * 1000 + (st.dps || 0) * 10;
+        if (C.stK !== ck) {
+          C.stK = ck;
+          R.circL.textContent = "Circle " + st.phase + " of " + nPh + (st.dps > 0 ? "  ·  " + st.dps + " damage a second" : "  ·  no damage yet");
+          R.circS.textContent = "Circle " + st.phase + "/" + nPh;
+        }
+      }
     }
     expireFeed(performance.now());
-    R.aliveText.textContent = "👥 " + (W.match ? W.match.aliveCount() : "—");
-    R.killsText.textContent = "☠ " + (W.match ? (W.match.kills[p.id] || 0) : 0);
+    const alN = W.match ? W.match.aliveCount() : -1;
+    if (C.alN !== alN) { C.alN = alN; R.aliveText.textContent = alN < 0 ? "—" : String(alN); }
+    const kiN = W.match ? (W.match.kills[p.id] || 0) : 0;
+    if (C.kiN !== kiN) { C.kiN = kiN; R.killsText.textContent = String(kiN); }
     if (R.specBar) {
       const me = W.player;
       if (me && !me.alive && W._camFocus && W._camFocus !== me) {
@@ -3130,7 +3587,6 @@ function itemIcon(W, id) {
   if (!W.itemProto) return Promise.resolve(null);
   return W.itemProto(id).then((proto) => renderThumb(proto, key, 0.35)).catch(() => null);
 }
-const CONSUMABLE_ICONS = { bandage: "🩹", medkit: "⛑️", mini_shield: "🧪", big_shield: "🛡️" };
 
 // ── per-weapon crosshairs ────────────────────────────────────────────────────
 // Each weapon class gets its own reticle shape sized to its real spread/range:
@@ -3226,7 +3682,8 @@ function paintSlots(W, p) {
         if (def && def.ammo) h("div", { position: "absolute", right: "3px", bottom: "5px", fontSize: FS(10), fontWeight: "900", textShadow: "0 1px 2px #000" }, String(p.inventory.ammo[def.ammo] || 0), cell);
       } else {
         const img = h("img", { width: "40px", height: "36px", objectFit: "contain", display: "none" }, null, cell);
-        const glyph = h("div", { fontSize: "22px", lineHeight: "1" }, CONSUMABLE_ICONS[s.id] || "▣", cell);
+        const glyph = h("div", { fontSize: "24px", lineHeight: "1", color: CON_COLOR[s.id] || "#8fd3a0" }, null, cell);
+        glyph.className = "lc-ic"; glyph.innerHTML = CON_ICON[s.id] || IC.shieldO;
         itemIcon(W, s.id).then((url) => {
           if (url && img.isConnected) { img.src = url; img.style.display = "block"; glyph.remove(); }
         });
@@ -3235,6 +3692,7 @@ function paintSlots(W, p) {
     }
     h("div", { position: "absolute", left: "3px", top: "1px", fontSize: FS(9), opacity: "0.6" }, String(i + 1), cell);
   });
+  paintCons(W, p);       // the vitals row's consumable counts change exactly when the slots do
 }
 function shortName(s) {
   const M = { pistol: "PSTL", smg: "SMG", ar: "AR", shotgun: "SHTG", sniper: "SNPR", glauncher: "GL", bandage: "BAND", medkit: "MED", mini_shield: "MINI", big_shield: "SHLD" };
@@ -3325,7 +3783,7 @@ function drawMinimap(W, ctx, size, big) {
     }
   }
   // your chosen landing zone, while you are still falling toward it
-  if (W.dropTarget && W.phase === "drop") {
+  if (W.dropTarget && W.phase === "drop" && !(W.player && W.player.onGround)) {   // not after touchdown: phase stays "drop" ~15 s
     const dx = toPx(W.dropTarget.x), dz = toPx(W.dropTarget.z), s = big ? 13 : 8;
     ctx.strokeStyle = "#6ec4ff"; ctx.lineWidth = big ? 2.2 : 1.5;
     ctx.beginPath(); ctx.arc(dx, dz, big ? 9 : 5, 0, Math.PI * 2); ctx.stroke();
@@ -3442,8 +3900,7 @@ function wireEvents(W) {
     }
     if (!R.feed) return;
     const killer = killerId ? W.actorById.get(killerId) : null;
-    feedRow((killer ? killer.name + " ⚔ " : "⛈ ") + victim.name + (weaponId ? "  ·  " + K.weaponName(weaponId) : ""),
-      victim === W.player || killer === W.player);
+    feedRow(killer ? killer.name : null, victim.name, weaponId, victim === W.player || killer === W.player);
     // YOUR elimination gets a banner + streak escalation (kills used to land silently)
     if (killer === W.player && victim !== W.player) {
       // Bank the elimination's XP NOW. The kills/damage/placement/victory/time
@@ -3531,14 +3988,38 @@ function wireEvents(W) {
 // (display:none, kept for reuse). Hidden rows are always the oldest, so they
 // sit first and the phone rule "last two rows only" still counts right.
 const FEED_N = 6, FEED_MS = 6000;
-function feedRow(text, mine) {
+function mkFeedRow() {
+  const el = h("div", null, null, R.feed);
+  el.className = "lc-fr";
+  el._k = h("span", null, "", el);                                   // killer
+  el._w = h("img", null, null, el); el._w.className = "w"; el._w.alt = "";   // weapon silhouette (C-ART-FX)
+  el._x = h("span", null, "", el); el._x.className = "dim";          // text fallback: the arrow
+  el._v = h("span", null, "", el); el._v.className = "v";            // victim (red, as in ref t68)
+  el._t = h("span", null, "", el); el._t.className = "dim";          // text fallback: the weapon's name
+  el._wid = null; el._wn = "";
+  return el;
+}
+/** killer [silhouette] victim - or "killer > victim . Weapon name" until / unless
+ *  the silhouette exists. Written on row reuse and when a silhouette finishes loading. */
+function feedMode(el) {
+  const u = el._wid ? silFor(_tW, el._wid) : null;
+  if (u) {
+    if (el._w.src !== u) el._w.src = u;
+    el._w.style.display = "block"; el._x.textContent = ""; el._t.textContent = "";
+  } else {
+    el._w.style.display = "none"; el._x.textContent = "›"; el._t.textContent = el._wn ? "·  " + el._wn : "";
+  }
+}
+function feedRow(killerName, victimName, weaponId, mine) {
   if (!R.feed) return;
   const kids = R.feed.children;
-  const el = kids.length < FEED_N
-    ? h("div", { background: "rgba(0,0,0,0.5)", padding: "3px 10px", borderRadius: "6px" }, null, R.feed)
-    : kids[0];
-  el.textContent = text;
-  el.style.color = mine ? "#ffd54a" : "";
+  const el = kids.length < FEED_N ? mkFeedRow() : kids[0];
+  el._k.textContent = killerName || "the Storm";
+  el._v.textContent = victimName;
+  el._wid = killerName && weaponId ? weaponId : null;     // the storm has no silhouette
+  el._wn = el._wid ? K.weaponName(el._wid) : "";
+  el.className = mine ? "lc-fr me" : "lc-fr";
+  feedMode(el);
   if (el.style.display === "none") el.style.display = "";
   el._exp = performance.now() + FEED_MS;
   if (el !== R.feed.lastChild) R.feed.appendChild(el);
@@ -3582,6 +4063,10 @@ const ANN_PRIO = { victory: 3, elim: 2, level: 2, milestone: 1, deploy: 1 };
 function announce(text, sub, color, ms, prio) {
   if (!R.annWrap) return;
   const p = prio || 0;
+  // a dead player's top banner owns the band's spot: milestone / level cues are not
+  // theirs to act on (the storm row already carries the alive count), so they are
+  // dropped rather than painted over the banner
+  if (R.deathBox && p < ANN_PRIO.victory) return;
   const now = performance.now();
   if (now < (R._annUntil || 0)) {
     if (p > (R._annPrio || 0)) { showAnnouncement(text, sub, color, ms, p, now); return; }
@@ -3635,10 +4120,10 @@ function toggleBigMap(W) {
     const bits = [];
     if (W.stormCtl && W.mode !== "practice") {
       const st = W.stormCtl.storm.stateAt(W.t);
-      bits.push("⛈ " + (st.done ? "CLOSED" : (st.phaseState === "waiting" ? "SHRINKS " : "CLOSING ") + fmtT(st.tToNext)));
+      bits.push("STORM " + (st.done ? "CLOSED" : (st.phaseState === "waiting" ? "SHRINKS " : "CLOSING ") + fmtT(st.tToNext)));
     }
-    if (W.match) bits.push("👥 " + W.match.aliveCount() + " ALIVE");
-    if (W.player) bits.push("❤ " + Math.max(0, Math.ceil(W.player.hp)) + "  🛡 " + Math.max(0, Math.ceil(W.player.shield)));
+    if (W.match) bits.push(W.match.aliveCount() + " ALIVE");
+    if (W.player) bits.push("HP " + Math.max(0, Math.ceil(W.player.hp)) + "  SHIELD " + Math.max(0, Math.ceil(W.player.shield)));
     head.textContent = bits.join("   ·   ");
   };
   paintHead();
@@ -3694,62 +4179,85 @@ function togglePause(W) {
            : "Note: the match keeps running in a real BR — here it pauses (single-player).", box);
 }
 
+/** P4.3: the death card is a banner over the LIVE view now. It takes the announcement
+ *  band's place right under the signed-off top stack (placeBand keeps it there and
+ *  hangs the storm / pickup lines off its height), stays clear of the reticle, and the
+ *  world keeps playing behind it - A / D still switch whom you are watching (the
+ *  spectate bar at the bottom owns that line; the banner never repeats it). */
 function showDeath(W, killerId, weaponId) {
   releaseCursor(W);          // its MATCH STATS button is otherwise unclickable
+  ensureHudStyles();
   const killer = killerId ? W.actorById.get(killerId) : null;
+  // the layer stays a full-screen click sink on purpose: a click on the dead player's
+  // canvas must not re-grab the pointer and hide the very button this banner carries
   const L = layer("death", { pointerEvents: "auto" });
-  // The big match announcement (R.annWrap) can fire while this is up, so the
-  // card sits BELOW the announcement band (placeBand keeps it there). It is a
-  // PANEL now: it used to be bare text on the world, and the victim-side name
-  // tags painted straight through the subtitle (feel-juice-ui G7).
   const bt = (R._bandTop != null ? R._bandTop : META_TOP + META_RESERVE + BAND_GAP);
-  const box = h("div", Object.assign({
-    position: "absolute", top: (bt + bandH() + 16) + "px", left: "50%", transform: "translateX(-50%)", textAlign: "center",
-    padding: "18px 30px 16px", minWidth: "340px", maxWidth: "calc(100vw - 32px)", boxSizing: "border-box",
-  }, PANEL), null, L);
+  const box = h("div", { position: "absolute", top: bt + "px", left: "50%", transform: "translateX(-50%)" }, null, L);
+  box.className = "lc-gl lc-death";
   box.dataset.lc = "death";
-  R.deathBox = box;
-  h("div", { fontSize: "38px", fontWeight: "900", color: "#ff7a7a", textShadow: "0 3px 12px #000", letterSpacing: "3px" }, "ELIMINATED", box).dataset.lc = "deathtitle";
-  const place = W.match.placementOf(W.player.id);
-  h("div", { fontSize: "17px", marginTop: "8px", textShadow: "0 2px 6px #000" },
-    "#" + place + " of " + W.match.totalPlayers + (killer ? "  ·  by " + killer.name + " (" + K.weaponName(weaponId) + ")" : "  ·  the storm got you"), box);
-
-  // DEATH RECAP — "by <name>" alone answers none of the questions you actually
-  // have when you die: how far away were they, did they headshot me, how close
-  // did I come to winning that fight.
-  const hit = W.player.lastHit;
-  const lines = [];
-  if (killer) {
-    const parts = [];
-    if (hit && hit.attackerId === killerId && hit.dist != null) parts.push(hit.dist + "m");
-    if (hit && hit.attackerId === killerId && hit.isHead) parts.push("HEADSHOT");
-    if (parts.length) lines.push({ t: "FINAL BLOW", v: parts.join("  ·  "), c: "#ffb3a7" });
-    // how close you came — the single most-wanted number on a death screen
-    const dealt = Math.round((killer.dmgFrom && killer.dmgFrom[W.player.id]) || 0);
-    const left = Math.max(0, Math.round(killer.hp)) + (killer.shield > 0 ? " + " + Math.round(killer.shield) + " shield" : "");
-    lines.push({ t: "YOU DEALT", v: dealt + " damage", c: dealt > 0 ? "#9fd7ff" : "#8fa4bb" });
-    lines.push({ t: "THEY HAD LEFT", v: killer.alive ? left + " HP" : "nothing — they died too", c: killer.alive && killer.hp <= 25 ? "#ffd166" : "#cfe4ff" });
-    if (killer.alive && killer.hp <= 25 && dealt > 0) lines.push({ t: "", v: "SO CLOSE.", c: "#ffd166" });
+  R.deathBox = box; R._deathH = 0;
+  if (R.annWrap) {                                   // whatever band is showing hands the spot over
+    clearTimeout(R._annT); R._annUntil = 0; R._annPrio = 0; R._annQ = [];
+    R.annWrap.style.opacity = "0";
   }
-  if (lines.length) {
-    const recap = h("div", {
-      marginTop: "14px", display: "inline-grid", gridTemplateColumns: "auto auto", gap: "4px 14px",
-      padding: "10px 18px", borderRadius: "10px", background: "rgba(6,14,28,0.55)",
-      border: "1px solid rgba(140,200,255,0.18)", fontFamily: "Rajdhani, " + FONT, textAlign: "left",
-    }, null, box);
-    for (const l of lines) {
-      h("div", { fontSize: "12px", opacity: "0.65", letterSpacing: "1.5px", alignSelf: "center" }, l.t, recap);
-      h("div", { fontSize: "15px", fontWeight: "700", letterSpacing: "1px", color: l.c }, l.v, recap);
+  if (R._deathRO) { R._deathRO.disconnect(); R._deathRO = null; }
+  if (typeof ResizeObserver !== "undefined") {
+    R._deathRO = new ResizeObserver((ents) => {
+      // the border box (the padding differs per layout: desktop 21 px, tablet 7, phone 4);
+      // contentRect + the desktop padding where borderBoxSize is missing (Safari < 15.4)
+      const e = ents[ents.length - 1], bb = e.borderBoxSize && e.borderBoxSize[0];
+      const hgt = bb ? bb.blockSize : e.contentRect.height + 20;
+      if (Math.abs(hgt - (R._deathH || 0)) > 1) { R._deathH = hgt; placeBand(); }
+    });
+    R._deathRO.observe(box);
+  }
+  placeBand(true);
+
+  // row 1: ELIMINATED  #3 of 50  [MATCH STATS]
+  // row 2: ELIMINATED BY <name> [silhouette] <weapon> HEADSHOT 31 m  ·  what you did to them
+  const place = W.match.placementOf(W.player.id);
+  const d1 = h("div", null, null, box); d1.className = "lc-d1";
+  h("div", null, "ELIMINATED", d1).className = "lc-dt";
+  d1.firstChild.dataset.lc = "deathtitle";
+  const pn = h("div", null, "#" + place, d1); pn.className = "lc-dn";
+  h("small", null, " of " + W.match.totalPlayers, pn);
+  const btn = h("button", null, "MATCH STATS", d1); btn.className = "lc-dbtn";
+  btn.onclick = () => W.endMatch(false);
+
+  const hit = W.player.lastHit;
+  const d2 = h("div", null, null, box); d2.className = "lc-d2";
+  const p1 = h("div", null, null, d2); p1.className = "lc-dp";
+  R._dSil = null;
+  if (killer) {
+    h("span", null, "ELIMINATED BY", p1).className = "lab lab-l";
+    h("span", null, "BY", p1).className = "lab lab-s";
+    h("b", null, killer.name, p1);
+    if (weaponId && K.WEAPONS[weaponId]) {
+      const wi = h("img", null, null, p1); wi.className = "w"; wi.alt = "";
+      const u = silFor(W, weaponId);
+      if (u) { wi.src = u; wi.style.display = "block"; }
+      R._dSil = { id: weaponId, el: wi };
+      h("span", null, K.weaponName(weaponId), p1);
+    } else if (weaponId) h("span", null, K.weaponName(weaponId), p1);
+    const mine = hit && hit.attackerId === killerId;
+    if (mine && hit.isHead) h("span", null, "HEADSHOT", p1).className = "hs";
+    if (mine && hit.dist != null) h("span", null, hit.dist + " m", p1);
+  } else h("span", null, "THE STORM GOT YOU", p1).className = "lab";
+  if (killer) {
+    // how close you came - the single most-wanted number on a death screen
+    const dealt = Math.round((killer.dmgFrom && killer.dmgFrom[W.player.id]) || 0);
+    const hpLeft = Math.max(0, Math.round(killer.hp));
+    const p2 = h("div", null, null, d2); p2.className = "lc-dp rc";
+    h("span", null, "YOU DEALT", p2).className = "lab";
+    const dv = h("b", null, dealt + "", p2); if (dealt > 0) dv.style.color = "#9fd7ff";
+    h("span", null, "·", p2).className = "lab";
+    h("span", null, killer.alive ? "THEY HAD" : "THEY DIED TOO", p2).className = "lab";
+    if (killer.alive) {
+      const lv = h("b", null, hpLeft + " HP" + (killer.shield > 0 ? " + " + Math.round(killer.shield) + " shield" : ""), p2);
+      h("span", null, "LEFT", p2).className = "lab";
+      if (killer.hp <= 25 && dealt > 0) { lv.style.color = "#ffd166"; h("span", null, "SO CLOSE", p2).style.color = "#ffd166"; }
     }
   }
-
-  const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "16px" }, null, box);
-  const btn = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "MATCH STATS", row);
-  btn.onclick = () => W.endMatch(false);
-  // "Spectating <name>" and "A / D — watch someone else" used to be printed
-  // here AND in the spectate bar at the bottom ("SPECTATING X · N ALIVE · [A] /
-  // [D] TO SWITCH") at the same time. The bar is the one that stays true when
-  // you switch targets, so the card no longer repeats it.
 }
 
 /** The winning kill's banner + feed used to be destroyed in the frame they were
@@ -3757,6 +4265,8 @@ function showDeath(W, killerId, weaponId) {
  *  "over" is already whitelisted in the frame gate and already blocks damage, so
  *  the world can safely hold for a beat first. */
 export function announceVictory(W, victory) {
+  // a dead player's banner already says ELIMINATED; repeating it over the banner is noise
+  if (!victory && R.deathBox) return;
   // "VICTORY ROYALE" is Epic Games' Fortnite phrase; the win title is our own
   // line, promoted from what used to be its subtitle.
   const total = (W && W.match && W.match.totalPlayers) || 50;
@@ -3781,6 +4291,20 @@ export function readback(W) {
     },
     reticle: r ? { weapon: R._crossFor, kind: r.kind, arms: r.arms.length, gapPx: r.gapPx, armLenPx: r.len, armThickPx: r.th, bloom: +(R._bloom || 1).toFixed(3) } : null,
     band: { top: R._bandTop, metaBottom: R._metaBottom, height: bandH() },
+    vitals: R.hpNum && R._hudCache ? {
+      hp: R._hudCache.hpI, shield: R._hudCache.shI, hpState: R._hudCache.hpSt,
+      hpSegs: R._hpS.slice(), shieldSegs: R._shS.slice(),
+      cons: R.cons ? R.cons.map((c) => ({ id: c.id, n: c.c, key: c.k })) : null,
+    } : null,
+    card: R.wCard && R._hudCache ? {
+      weapon: R._hudCache.cWid, rarity: R._hudCache.cRar, name: R.wName.textContent, tag: R.wTag.textContent,
+      mode: R.wMode.textContent, count: R.ammoText.textContent, ammoType: R.wAType.textContent,
+      magSegs: R._magS.slice(0, R._hudCache.cN || 0), hidden: R.wCard.style.display === "none",
+      pic: R.wSil && R.wSil.style.visibility === "visible" ? (R.wSil.getAttribute("src") || "").slice(0, 40) : null,
+    } : null,
+    stormLine: R.circL ? R.circL.textContent : null,
+    death: R.deathBox ? { h: Math.round(R._deathH || 0), top: R._bandTop } : null,
+    silhouettes: { off: _sil.off, state: Object.assign({}, _sil.st) },
     touch: { on: touchOn, phone: phoneShort(), rotate: _rotOn, taps: _tap.n, lastTap: _tap.last },
     ring: { radius: R._ringR != null ? Math.round(R._ringR) : null, live: inds.length },
     announcement: R.annWrap ? {
@@ -3804,46 +4328,129 @@ export function disposeMatch(W) {
   if (R._metaRO) { R._metaRO.disconnect(); R._metaRO = null; }
   MK.style = null; MK.latch = 0; MK.hurt = null; MK.breakT = 99;
   _slotC.who = null;
-  R.deathBox = null;
+  R.deathBox = null; R._deathH = 0;
+  if (R._deathRO) { R._deathRO.disconnect(); R._deathRO = null; }
+}
+
+/** Every player's line for the standings table: ranked by final placement, the ones
+ *  still in the circle (the player left early) ahead of the dead, ties by kills then
+ *  damage. Dead players carry the sim's own placement; a player nobody has placed yet
+ *  gets a provisional rank by kills / damage, which is consistent by construction
+ *  (the dead are always placed below everyone still alive). */
+function standingRows(W) {
+  const m = W.match, acts = W.actors;
+  if (!m || !acts || W.mode === "practice") return null;
+  const rows = [];
+  for (let i = 0; i < acts.length; i++) {
+    const a = acts[i];
+    if (!a || m.kills[a.id] == null) continue;
+    const pl = m.placementOf(a.id);
+    rows.push({ name: a.name || String(a.id), you: a === W.player, kills: m.kills[a.id] || 0, dmg: Math.round(m.damage[a.id] || 0), pl, live: pl == null && m.alive.has(a.id), rank: pl });
+  }
+  if (rows.length < 2) return null;
+  const unplaced = rows.filter((r) => r.pl == null);
+  unplaced.sort((x, y) => (y.kills - x.kills) || (y.dmg - x.dmg));
+  unplaced.forEach((r, i) => { r.rank = i + 1; });
+  rows.sort((x, y) => ((x.rank || 999) - (y.rank || 999)) || (y.kills - x.kills) || (y.dmg - x.dmg));
+  return rows;
+}
+function buildStandings(W, parent) {
+  const rows = standingRows(W);
+  if (!rows) return null;
+  const card = h("div", null, null, parent); card.className = "lc-gl lc-pm-st"; card.dataset.lc = "standings";
+  const head = h("div", null, "STANDINGS", card); head.className = "lc-pm-h";
+  h("small", null, rows.length + " players", head);
+  const sc = h("div", null, null, card); sc.className = "lc-scroll"; sc.dataset.lc = "standscroll";
+  const tb = h("table", null, null, sc); tb.className = "lc-tbl";
+  const th = h("thead", null, null, tb), tr0 = h("tr", null, null, th);
+  h("th", null, "#", tr0); h("th", null, "PLAYER", tr0);
+  h("th", null, "KILLS", tr0).className = "n"; h("th", null, "DAMAGE", tr0).className = "n";
+  const body = h("tbody", null, null, tb);
+  let meRow = null;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const tr = h("tr", null, null, body);
+    tr.className = (r.you ? "me " : "") + (r.rank === 1 ? "top" : "");
+    h("td", null, String(r.rank), tr).className = "r";
+    const nm = h("td", null, r.name.length > 22 ? r.name.slice(0, 21) + "…" : r.name, tr); nm.className = "nm";
+    if (r.you && r.name !== "You") h("span", null, "(you)", nm).className = "you";   // the default name already says it
+    if (r.live) h("span", null, "STILL IN", nm).className = "live";
+    h("td", null, String(r.kills), tr).className = "n";
+    h("td", null, String(r.dmg), tr).className = "n";
+    if (r.you) meRow = tr;
+  }
+  // Whole rows only. The scroller is made exactly header + a whole number of rows tall and scrolled to a row boundary with the player's own line mid-window, from the rows' REAL
+  // positions (rows differ by a pixel here and there, so n x one height drifts: 2026-10-12 a row sat 12 px under the sticky header at the end of the list). At the top, in the
+  // middle and at the end of the list no row is ever half under the header. Once, while the screen builds.
+  setTimeout(() => {
+    if (!sc.isConnected || !body.rows.length) return;
+    const R = body.rows, N = R.length, hh = tb.tHead ? tb.tHead.offsetHeight : 0, t0 = tb.getBoundingClientRect().top;
+    const y = new Array(N + 1);                               // y[i] = the top of row i in the table's own coordinates; y[N] = the bottom of the last row
+    for (let i = 0; i < N; i++) y[i] = R[i].getBoundingClientRect().top - t0;
+    y[N] = tb.getBoundingClientRect().height;
+    if (!(y[0] > 0) || !(y[N] > y[0])) return;                // not laid out (hidden)
+    const avail = sc.clientHeight - hh;
+    const fit = (j) => { let n = 0; while (j + n < N && y[j + n + 1] - y[j] <= avail + 0.01) n++; return n; };
+    if (fit(0) >= N) return;                                  // everything fits: nothing to scroll
+    const mi = meRow ? meRow.sectionRowIndex : 0, n0 = Math.max(1, fit(0));
+    const j = Math.max(0, Math.min(N - n0, mi - ((n0 - 1) >> 1)));
+    const n = Math.max(1, fit(j));
+    sc.style.maxHeight = (hh + y[j + n] - y[j]) + "px";
+    sc.scrollTop = y[j] - hh;
+  }, 0);
+  card._rows = rows;
+  return card;
 }
 
 export function showPostMatch(W, res) {
-  releaseCursor(W);          // PLAY AGAIN / MAIN MENU are otherwise unclickable
+  releaseCursor(W);          // the buttons are otherwise unclickable
   hideHUD();
   ["pause", "death"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
-  ensureAAAStyles();
+  ensureAAAStyles(); ensureHudStyles();
   const L = layer("post", {
     pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "center",
     background: "radial-gradient(ellipse at 50% 35%, rgba(12,28,52,0.5) 0%, rgba(4,8,16,0.92) 100%)",
   });
-  const box = h("div", Object.assign({
-    padding: "44px 64px", textAlign: "center", display: "flex", flexDirection: "column",
-    gap: "10px", minWidth: "440px", position: "relative", overflow: "hidden",
-  }, PANEL), null, L);
-  box.className = "lc-glass-scan";
-  box.dataset.lc = "post";
+  // two cards side by side on a desktop (what you did | everyone), stacked and
+  // scrolling on a phone: the wrapper is the one scroller, nothing is pinned
+  const wrap = h("div", null, null, L); wrap.className = "lc-pm"; wrap.dataset.lc = "post";
+  const box = h("div", null, null, wrap);
+  box.className = "lc-gl lc-pm-sum lc-glass-scan";
+  box.dataset.lc = "postsum";
   if (res.victory) {
     h("div", {
-      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "38px", fontWeight: "900", color: "#ffd54a",
-      textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "4px", whiteSpace: "nowrap",
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", color: "#ffd54a",
+      textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "3px", whiteSpace: "nowrap",
     }, "LAST ONE STANDING", box).dataset.lc = "posttitle";   // not "VICTORY ROYALE" — Epic Games' phrase
     confetti(L);
     if (W.hooks && W.hooks.celebrate) W.hooks.celebrate();
   } else {
     h("div", {
-      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", letterSpacing: "4px",
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "32px", fontWeight: "900", letterSpacing: "4px",
     }, "MATCH OVER", box).dataset.lc = "posttitle";
   }
-  h("div", {
-    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "22px", fontWeight: "800",
-    color: "#9fd7ff", marginBottom: "12px", letterSpacing: "2px",
-  }, "#" + res.placement + " OF " + (W.match ? W.match.totalPlayers : 50), box);
+  const total = W.match ? W.match.totalPlayers : 50;
+  const tiles = h("div", null, null, box); tiles.className = "lc-tiles";
+  const tile = (k, v, col) => {
+    const t = h("div", null, null, tiles); t.className = "lc-tile";
+    h("div", null, k, t).className = "k";
+    const vv = h("div", null, String(v), t); vv.className = "v"; if (col) vv.style.color = col;
+  };
+  tile("Placement", res.placement + " / " + total, res.victory ? "#ffd54a" : "#9fd7ff");
+  tile("Kills", res.kills);
+  tile("Damage", res.damage);
+  const stands = buildStandings(W, wrap);
+  // who took it: the winner's line, from the same rows the table prints
+  const win = h("div", null, "", box); win.className = "lc-winner";
+  if (stands) {
+    const top = stands._rows[0];
+    if (W.match && W.match.over && top) win.textContent = (top.you ? "You" : top.name) + " won with " + top.kills + (top.kills === 1 ? " kill" : " kills");
+    else if (W.match) win.textContent = W.match.aliveCount() + " still in the circle";
+  }
   const grid = h("div", {
-    display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 36px", fontSize: "16px",
-    textAlign: "left", margin: "0 auto", fontFamily: "Rajdhani, " + FONT, fontWeight: "600",
+    display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 36px", fontSize: "15px",
+    textAlign: "left", margin: "6px auto 0", fontFamily: "Rajdhani, " + FONT, fontWeight: "600", width: "min(280px, 100%)",
   }, null, box);
-  stat(grid, "Eliminations", res.kills);
-  stat(grid, "Damage dealt", res.damage);
   stat(grid, "Accuracy", res.accuracy + "%");
   stat(grid, "Survived", fmtT(res.timeS));
   // match XP → progression (kills + damage + placement + survival + victory bonus)
@@ -3912,36 +4519,38 @@ export function showPostMatch(W, res) {
       }
     }
     if (c) {
-      h("div", { fontSize: "12.5px", opacity: "0.8", marginTop: "14px", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT },
+      const careerEl = h("div", { fontSize: "12.5px", opacity: "0.8", marginTop: "14px", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT },
         "CAREER · " + c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills · top-10s " + c.top10s + " · best #" + (c.bestPlacement || "—")
         + " · " + Math.round(c.damage / 1000) + "k dmg · " + (c.timeAliveS / 3600).toFixed(1) + "h", box);
+      careerEl.dataset.lc = "postcareer";
     }
     if (W.progress.level > lvlBefore) {
       h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "17px", fontWeight: "900", color: "#ffd54a", marginTop: "8px", letterSpacing: "2px", textShadow: "0 0 18px rgba(255,213,74,0.5)" },
         "LEVEL UP  →  " + W.progress.level, box);
     }
   }
-  const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "24px" }, null, box);
-  // Requeue without the menu round-trip. Going back to the menu tears the match
-  // down, rebuilds the cinematic 3D menu world and re-reads the skin GLBs, just
-  // to press PLAY again — a long wait between two matches of a browser BR.
+  // "Run it back" replays the SAME map and mode, "Find a new match" is a fresh match on a
+  // RANDOM map (no map picker) - both through the orchestrator's onAgain, so net leave,
+  // the loading screen and the world teardown are the one path the old PLAY AGAIN took.
+  // Going back to the menu tears the match down, rebuilds the cinematic menu world and
+  // re-reads the skin GLBs just to press PLAY again, which is why this is not the default.
+  const row = h("div", null, null, box); row.className = "lc-pm-act";
   if (res.onAgain) {
-    const again = h("button", Object.assign({}, BTN, {
-      fontFamily: "Orbitron, " + FONT_DISPLAY,
-      background: "linear-gradient(180deg,#7ef0b0,#2fae76)", color: "#04231a",
-      fontSize: "16px", padding: "14px 44px", letterSpacing: "2px",
-      boxShadow: "0 0 24px rgba(70,220,150,0.35)",
-    }), "PLAY AGAIN", row);
-    again.className = "lc-btn-play";
-    again.onclick = () => { L.remove(); R.post = null; res.onAgain(); };
+    const again = h("button", null, null, row); again.className = "lc-pbtn pri"; again.dataset.lc = "runitback";
+    h("span", null, null, again).className = "ic"; again.firstChild.innerHTML = IC.rerun;
+    h("span", null, "Run it back", again);
+    again.onclick = () => {
+      const m = W.mapId;
+      L.remove(); R.post = null;
+      _nextMap = m || null;
+      try { res.onAgain(); } finally { _nextMap = null; }
+    };
+    const find = h("button", null, null, row); find.className = "lc-pbtn sec"; find.dataset.lc = "findmatch";
+    h("span", null, "Find a new match", find);
+    h("span", null, null, find).className = "ic"; find.lastChild.innerHTML = IC.next;
+    find.onclick = () => { L.remove(); R.post = null; _nextMap = null; res.onAgain(); };
   }
-  const menu = h("button", Object.assign({}, BTN, {
-    fontFamily: "Orbitron, " + FONT_DISPLAY,
-    background: "linear-gradient(180deg,#6ec4ff,#2f7fd6)", color: "#fff",
-    fontSize: "16px", padding: "14px 44px", letterSpacing: "2px",
-    boxShadow: "0 0 24px rgba(60,150,255,0.4)",
-  }), "MAIN MENU", row);
-  menu.className = "lc-btn-play";
+  const menu = h("button", null, "MAIN MENU", box); menu.className = "lc-pm-menu"; menu.dataset.lc = "mainmenu";
   menu.onclick = () => { L.remove(); R.post = null; res.onMenu(); };
 }
 function stat(grid, label, val) {
