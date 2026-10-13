@@ -570,14 +570,14 @@ const P1_FIRE = ['Space', 'ArrowUp', 'KeyZ', 'KeyX', 'KeyJ'];
 const controls = [
   {
     // A / D / W stay with this player unless a LOCAL partner shares the keyboard
-    get left() { return keys.ArrowLeft || ((!game.coop || Net.role) && keys.KeyA) || touch.left; },
-    get right() { return keys.ArrowRight || ((!game.coop || Net.role) && keys.KeyD) || touch.right; },
-    get fire() { return P1_FIRE.some((k) => keys[k]) || ((!game.coop || Net.role) && keys.KeyW) || touch.fire; },
+    get left() { return keys.ArrowLeft || ((!game.coop || Net.role || game.botMatch) && keys.KeyA) || touch.left; },
+    get right() { return keys.ArrowRight || ((!game.coop || Net.role || game.botMatch) && keys.KeyD) || touch.right; },
+    get fire() { return P1_FIRE.some((k) => keys[k]) || ((!game.coop || Net.role || game.botMatch) && keys.KeyW) || touch.fire; },
   },
   { // P2: local keyboard, or the online partner's streamed input when hosting
-    get left() { return Net.role === 'host' ? !!Net.peerIn.l : !!keys.KeyA; },
-    get right() { return Net.role === 'host' ? !!Net.peerIn.r : !!keys.KeyD; },
-    get fire() { return Net.role === 'host' ? !!Net.peerIn.f : !!keys.KeyW; },
+    get left() { return game.botMatch ? bot.l : Net.role === 'host' ? !!Net.peerIn.l : !!keys.KeyA; },
+    get right() { return game.botMatch ? bot.r : Net.role === 'host' ? !!Net.peerIn.r : !!keys.KeyD; },
+    get fire() { return game.botMatch ? bot.f : Net.role === 'host' ? !!Net.peerIn.f : !!keys.KeyW; },
   },
 ];
 const input = {
@@ -613,7 +613,7 @@ function onPress(code) {
     if (CONFIRM_KEYS.includes(code)) confirmAction();
     return;
   }
-  if (game.coop && !Net.role && code === 'KeyW') input.pressed2 = true;
+  if (game.coop && !Net.role && !game.botMatch && code === 'KeyW') input.pressed2 = true;
   else if (P1_FIRE.includes(code) || code === 'KeyW') input.pressed = true;
   if (CONFIRM_KEYS.includes(code)) confirmAction();
 }
@@ -641,7 +641,7 @@ function confirmAction(fromPeer) {
 // Its bar's pause button calls window.__PAUSE__: it opens / closes the Esc menu (online it opens without pausing).
 window.__PAUSE__ = {
   toggle() { if (!menuEl.hidden) closeMenu(); else if (game.state !== 'title') openMenu(); },
-  pause() { if (menuEl.hidden && !Net.started && (game.state === 'play' || game.state === 'intro')) openMenu(); },
+  pause() { if (menuEl.hidden && !onlineLike() && (game.state === 'play' || game.state === 'intro')) openMenu(); },
 };
 // leaving the tab / app: pause an offline game and silence audio until the player is back
 document.addEventListener('visibilitychange', () => {
@@ -702,7 +702,7 @@ function makePlayer(id, lives) {
 }
 
 function newGame(coop = false) {
-  game.coop = coop; game.players = coop ? [makePlayer(0, 3), makePlayer(1, 3)] : [makePlayer(0, 3)];
+  game.coop = coop; game.botMatch = false; game.players = coop ? [makePlayer(0, 3), makePlayer(1, 3)] : [makePlayer(0, 3)];
   game.score = 0; game.level = 1; game.stats = freshStats();
   loadLevel(1);
 }
@@ -761,15 +761,15 @@ const MENU_VIEWS = ['mnMain', 'mnSettingsView', 'mnControlsView', 'mnConfirmView
 let menuConfirm = null;
 function menuView(v) {
   for (const id of MENU_VIEWS) mn(id).hidden = id !== v;
-  mn('mnTitle').textContent = { mnMain: Net.started ? 'MENU' : 'PAUSED', mnSettingsView: 'SETTINGS', mnControlsView: 'CONTROLS', mnConfirmView: 'ARE YOU SURE?' }[v];
+  mn('mnTitle').textContent = { mnMain: onlineLike() ? 'MENU' : 'PAUSED', mnSettingsView: 'SETTINGS', mnControlsView: 'CONTROLS', mnConfirmView: 'ARE YOU SURE?' }[v];
   const first = mn(v).querySelector('button:not([hidden]), input'); if (first) first.focus();
 }
 function openMenu() {
   if (!menuEl.hidden || !lobbyEl.hidden || game.state === 'title') return;
   Sound.init(); for (const k in keys) keys[k] = false; touch.left = touch.right = touch.fire = false;
-  if (!Net.started && game.state !== 'paused') togglePause(); // online the shared game keeps running
-  mn('mnOnline').hidden = !Net.started; mn('mnRestart').hidden = !!Net.started;
-  mn('mnQuit').textContent = Net.started ? 'LEAVE GAME' : 'QUIT TO TITLE';
+  if (!onlineLike() && game.state !== 'paused') togglePause(); // online the shared game keeps running
+  mn('mnOnline').hidden = !onlineLike(); mn('mnRestart').hidden = onlineLike();
+  mn('mnQuit').textContent = onlineLike() ? 'LEAVE GAME' : 'QUIT TO TITLE';
   syncSettingsUI(); menuEl.hidden = false; document.documentElement.classList.add('menu-open'); menuView('mnMain'); Sound.sfx.tick(false);
 }
 function closeMenu() {
@@ -795,7 +795,7 @@ mn('mnResume').addEventListener('click', closeMenu);
 mn('mnRestart').addEventListener('click', () => askConfirm('Restart from stage 1? This run\'s score will be lost.', () => { closeMenu(); newGame(false); }));
 mn('mnSettings').addEventListener('click', () => menuView('mnSettingsView'));
 mn('mnControls').addEventListener('click', () => menuView('mnControlsView'));
-mn('mnQuit').addEventListener('click', () => askConfirm(Net.started ? (Net.role === 'host' ? 'Leave this online game? It ends for your partner too.' : 'Leave this online game? Your partner will carry on alone.') : 'Quit to the title screen? This run\'s score will be lost.', () => { closeMenu(); toTitle(); }));
+mn('mnQuit').addEventListener('click', () => askConfirm(onlineLike() ? (Net.role === 'host' ? 'Leave this online game? It ends for your partner too.' : 'Leave this online game? Your partner will carry on alone.') : 'Quit to the title screen? This run\'s score will be lost.', () => { closeMenu(); toTitle(); }));
 mn('mnYes').addEventListener('click', () => { const fn = menuConfirm; menuConfirm = null; Sound.sfx.select(); if (fn) fn(); });
 mn('mnNo').addEventListener('click', () => { menuConfirm = null; menuView('mnMain'); });
 for (const b of menuEl.querySelectorAll('.mn-back')) b.addEventListener('click', () => menuView('mnMain'));
@@ -832,6 +832,60 @@ function menuKey(e) {
 document.addEventListener('fullscreenchange', () => { if (!menuEl.hidden) syncSettingsUI(); });
 
 /* ============================ §5 PLAYER + WEAPONS ============================ */
+// AI partner for Quick Match (joins when nobody else is searching). It plays like a person: ~0.15 s
+// reaction time, moves under a bubble P1 is not already working on, fires once lined up, and sidesteps
+// a bubble that is coming down on it.
+const bot = { l: false, r: false, f: false, think: 0, tx: 600, fire: false };
+const onlineLike = () => Net.started || !!game.botMatch;
+// Would walking from x0 toward x1 get this diver touched within the next ~0.9 s? Steps every bubble
+// forward with the game's own gravity / wall / floor bounce (platforms ignored) and checks the same box.
+function botHitTime(x0, x1, margin) {
+  const dir = Math.sign(x1 - x0), far = Math.abs(x1 - x0);
+  for (const b of game.bubbles) {
+    if (b.dead) continue;
+    let x = b.x, y = b.y, vx = b.vx, vy = b.vy;
+    for (let t = 0.05; t <= 0.9; t += 0.05) {
+      vy += G * 0.05; x += vx * 0.05; y += vy * 0.05;
+      if (x - b.r < ARENA.l) { x = ARENA.l + b.r; vx = Math.abs(vx); }
+      if (x + b.r > ARENA.r) { x = ARENA.r - b.r; vx = -Math.abs(vx); }
+      if (y + b.r > ARENA.b) { y = ARENA.b - b.r; vy = -bounceV(b.size); }
+      const px = x0 + dir * Math.min(far, PLAYER_SPEED * 0.85 * t);
+      if (circleRectDist(x, y, px - 10 - margin, ARENA.b - 40, 20 + margin * 2, 40) < b.r) return t;
+    }
+  }
+  return 99;
+}
+function botThink(p, dt) {
+  bot.think -= dt;
+  if (bot.think <= 0) {
+    bot.think = rand(0.1, 0.18);
+    const p1 = game.players[0];
+    // where it would like to be: under a bubble P1 is not already working on, or on a dropped item
+    let target = null, best = 1e9;
+    for (const b of game.bubbles) {
+      const share = p1 && !p1.dead && !p1.out ? Math.min(220, Math.abs(b.x - p1.x)) : 220; // leave P1's bubble to P1
+      const score = Math.abs(b.x - p.x) - share + b.size * 18;
+      if (score < best) { best = score; target = b; }
+    }
+    const item = game.items.find((it) => Math.abs(it.x - p.x) < 200 && it.y > ARENA.b - 60);
+    let want = item ? item.x : target ? clamp(target.x + target.vx * 0.3 + rand(-10, 10), ARENA.l + 20, ARENA.r - 20) : W / 2 + rand(-120, 120);
+    // safety first: if that path gets it touched, take the nearest spot that stays clear the longest
+    if (p.invuln <= 0 && botHitTime(p.x, want, 6) < 99) {
+      let bestT = -1, bestX = p.x;
+      for (let k = 0; k <= 12; k++) for (const sgn of k ? [-1, 1] : [1]) {
+        const cx = clamp(p.x + sgn * k * 40, ARENA.l + 16, ARENA.r - 16), ht = botHitTime(p.x, cx, 6);
+        if (ht > bestT + 1e-6) { bestT = ht; bestX = cx; }
+        if (ht >= 99) break;
+      }
+      want = bestX;
+    }
+    bot.tx = want;
+    // a wire stays up until it hits the ceiling, so fire whenever a bubble is about to cross this x
+    bot.fire = !game.harpoons.some((h) => h.owner === p.id && h.state === 'rise') && game.bubbles.some((q) => { const ax = q.x + q.vx * 0.25 - p.x; return Math.abs(ax) < q.r + 26 || (Math.sign(-ax) === Math.sign(q.vx) && Math.abs(ax) < q.r + 90); });
+  }
+  const dx = bot.tx - p.x; bot.l = dx < -6; bot.r = dx > 6; bot.f = bot.fire;
+  if (bot.fire && p.weapon !== 'gun') { input.pressed2 = true; bot.fire = false; }
+}
 function updatePlayers(dt) { for (const p of alivePlayers()) updatePlayer(p, dt); }
 function updatePlayer(p, dt) {
   const c = controls[p.id];
@@ -839,7 +893,7 @@ function updatePlayer(p, dt) {
     const r = Net.peerIn;
     if (r.ep === game.epoch) { p.x += (clamp(r.x, ARENA.l + 14, ARENA.r - 14) - p.x) * Math.min(1, dt * 20); p.vx = r.vx; p.face = r.face || p.face; }
     p.shootT = Math.max(0, p.shootT - dt);
-  } else movePlayer(p, c, dt);
+  } else { if (game.botMatch && p.id === 1) botThink(p, dt); movePlayer(p, c, dt); }
   p.gunCd -= dt; p.invuln -= dt;
   if ((p.id ? input.pressed2 : input.pressed) || (p.weapon === 'gun' && c.fire)) tryFire(p);
 }
@@ -1463,7 +1517,7 @@ function drawHUDTail() {
     ctx.fillStyle = '#ff3d8b'; ctx.fillRect(ARENA.l + 10, ARENA.t + 54, 110 * a, 3);
     ctx.globalAlpha = 1;
   }
-  if (game.state !== 'title' && (Net.started || !isTouch())) { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText(Net.started ? `ONLINE · ${Net.mode === 'p2p' ? 'DIRECT' : 'RELAY'} · ESC MENU · M SOUND · N MUSIC` : 'ESC MENU · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
+  if (game.state !== 'title' && (onlineLike() || !isTouch())) { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText(onlineLike() ? `ONLINE · ${Net.mode === 'relay' ? 'RELAY' : 'DIRECT'} · ESC MENU · M SOUND · N MUSIC` : 'ESC MENU · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
 }
 
 // Co-op HUD: one compact row per player (tag, hearts, weapon + shield), shared slow-mo chip on the left
@@ -2589,19 +2643,18 @@ async function goOnline(kind, code) {
   const np = new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, GAME_ID); Net.np = np;
   np.on('msg', ({ t, d }) => onNetMsg(t, d));
   // a room that can't be joined (service down, network blocked) must say so, never leave the player waiting
-  np.on('error', () => { np.failed = true; netShutdown(); lobbyStatus("The online service isn't responding right now (it may be busy). Please try again in a few minutes.", true); });
+  np.on('error', () => { np.failed = true; netShutdown(); if (kind === 'quick' && qm.on) return; /* the search timer carries on */ lobbyStatus("The online service isn't responding right now (it may be busy). Please try again in a few minutes.", true); });
   np.on('peer', ({ present, count, ids }) => {
     if (count > 2 && ids.sort().indexOf(np.id) > 1) { netShutdown(); lobbyStatus('That room is full. Ask your friend for a new code.', true); return; }
     if (present && !Net.peerSeen) { Net.peerSeen = true; lobbyStatus('Partner found! Connecting…'); if (!np.isHost()) guestHello(); }
     else if (!present && Net.peerSeen) peerLost(Net.role === 'host' ? 'Your partner left.' : 'The host left the game.');
   });
-  try { lobbyStatus('Connecting…'); await np.connect(); }
-  catch (e) { netShutdown(); lobbyStatus('Online play could not load here. Open the game from its full link to play online.', true); return; }
+  if (kind === 'quick') startQuickSearch();
+  try { if (kind !== 'quick') lobbyStatus('Connecting…'); await np.connect(); }
+  catch (e) { netShutdown(); if (kind === 'quick' && qm.on) return; lobbyStatus('Online play could not load here. Open the game from its full link to play online.', true); return; }
   if (kind === 'quick') {
-    lobbyStatus('Looking for a partner…');
-    const r = await np.quickMatch(90000);
+    await np.quickMatch(90000); // a real partner, if one turns up first, takes over via the 'peer' event
     if (np.failed || Net.np !== np) return;
-    if (!r) { netShutdown(); lobbyStatus('Nobody is searching right now. Try again, or create a room and share the code.', true); return; }
   } else if (kind === 'create') {
     const c = makeCode(); await np.joinRoom(c, true);
     if (np.failed || Net.np !== np) return;
@@ -2614,6 +2667,30 @@ async function goOnline(kind, code) {
     lobbyStatus(`Joining room ${code}…`);
     setTimeout(() => { if (Net.np === np && !Net.peerSeen) { netShutdown(); lobbyStatus(`Nobody is in room ${code}. Check the code with your friend.`, true); } }, 9000);
   }
+}
+// Quick Match search: the status shows how long we've been looking. If nobody has matched by a random
+// 30-60 s mark, an AI partner joins and the game starts the way an online match does.
+const qm = { on: false, t0: 0, botAt: 0, timer: 0 };
+function startQuickSearch() {
+  stopQuickSearch(); Object.assign(qm, { on: true, t0: performance.now(), botAt: 30000 + Math.random() * 30000 });
+  const tickSearch = () => {
+    if (!qm.on) return;
+    if (lobbyEl.hidden || Net.started || Net.peerSeen) { stopQuickSearch(); return; } // closed, or a real partner was found
+    const ms = performance.now() - qm.t0, sec = Math.floor(ms / 1000);
+    lb('lbStatus').classList.remove('err'); lb('lbStatus').textContent = `Looking for a partner… ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+    if (ms >= qm.botAt) { stopQuickSearch(); botJoin(); }
+  };
+  tickSearch(); qm.timer = setInterval(tickSearch, 250);
+}
+function stopQuickSearch() { qm.on = false; clearInterval(qm.timer); }
+function botJoin() {
+  netShutdown(); lobbyStatus('Partner found! Connecting…');
+  setTimeout(() => {
+    if (lobbyEl.hidden) return; // the player backed out meanwhile
+    closeLobby(true); newGame(true); game.botMatch = true; Net.mode = null;
+    Object.assign(bot, { l: false, r: false, f: false, think: 0.6, tx: 600, fire: false });
+    toast('ONLINE · DIRECT');
+  }, rand(700, 1500));
 }
 // guest: open the direct link first, then keep saying hello until the host answers with "go"
 function guestHello() {
@@ -2630,7 +2707,7 @@ lb('lbJoin').addEventListener('submit', (e) => {
   if (c.length !== 4) { lobbyStatus('Room codes are 4 letters or numbers.', true); return; }
   goOnline('join', c);
 });
-lb('lbBack').addEventListener('click', () => closeLobby());
+lb('lbBack').addEventListener('click', () => { stopQuickSearch(); closeLobby(); });
 
 /* ============================ §12 LOOP & BOOT ============================ */
 const stageEl = document.getElementById('stage');
@@ -2664,7 +2741,7 @@ function render2D() {
     if (p.out || p.dead) continue;
     const x = p.x, y = ARENA.b - 100, c = HERO_LOOKS[p.id].tag;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '13px Bungee, Impact, sans-serif';
-    const you = (Net.role === 'host' && p.id === 0) || (Net.role === 'guest' && p.id === 1), tag = you ? 'YOU' : `P${p.id + 1}`;
+    const you = ((Net.role === 'host' || game.botMatch) && p.id === 0) || (Net.role === 'guest' && p.id === 1), tag = you ? 'YOU' : `P${p.id + 1}`;
     ctx.lineWidth = 4; ctx.strokeStyle = '#140b26'; ctx.strokeText(tag, x, y); ctx.fillStyle = c; ctx.fillText(tag, x, y);
     ctx.beginPath(); ctx.moveTo(x - 5, y + 9); ctx.lineTo(x + 5, y + 9); ctx.lineTo(x, y + 14); ctx.closePath(); ctx.fill();
   }
@@ -2719,7 +2796,7 @@ function seedTitle() {
   game.def = null; game.backdrop = buildBackdrop(LEVELS[(Math.random() * LEVELS.length) | 0]);
   game.level = 1;
   game.bubbles = [makeBubble(4, 200, 160, 1), makeBubble(3, 700, 200, -1), makeBubble(2, 480, 140, 1), makeBubble(1, 860, 260, -1)];
-  game.platforms = []; game.items = []; game.harpoons = []; game.bullets = []; game.players = []; game.coop = false;
+  game.platforms = []; game.items = []; game.harpoons = []; game.bullets = []; game.players = []; game.coop = false; game.botMatch = false;
 }
 // Title screen: bubbles bounce; an invisible "ghost" occasionally pops one for show.
 function updateTitle(dt) {
@@ -2808,7 +2885,7 @@ function start() {
   joinFromLink();
 }
 // Debug handle for console tinkering (e.g. __hp.loadLevel(9)).
-window.__hp = { game, keys, input, newGame, Net, QUALITY, MOBILE, openLobby, goOnline, buildSnap, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
+window.__hp = { game, keys, input, newGame, Net, qm, bot, botJoin, QUALITY, MOBILE, openLobby, goOnline, buildSnap, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
   gpu: () => ({ ...renderer.info.memory, programs: renderer.info.programs.length }),
   // step the game deterministically (used by the headless test harness); draw=false skips per-step rendering
   setManualClock(on) { manualClock = on; },
