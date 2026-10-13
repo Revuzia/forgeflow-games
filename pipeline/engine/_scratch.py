@@ -119,6 +119,23 @@ def free_bytes(path: str | os.PathLike | None = None) -> int:
     return shutil.disk_usage(Path(path or tempfile.gettempdir())).free
 
 
+def isolate_music_registry() -> Path:
+    """Point ``engine_game_emit``'s music registry at a scratch file for this process.
+
+    Fixture builds (``_good``, ``platformer``, ``variety-a`` ...) go through
+    ``stage_audio`` -> ``_assign_music``, which records every slug in
+    ``state/music_assignments.json``. Run by the suites on every pre-push, that
+    rewrote the LIVE registry and wiped the real games' entries (2026-10-13).
+    Call this before any emit; an override already set (run_all_tests.py sets
+    one for every suite) is kept so one CI run shares one scratch registry.
+    """
+    env = os.environ.get("FFG_MUSIC_REGISTRY", "").strip()
+    if not env:
+        env = str(scratch_dir() / "music_assignments.json")
+        os.environ["FFG_MUSIC_REGISTRY"] = env
+    return Path(env)
+
+
 if __name__ == "__main__":  # pragma: no cover - operator convenience
     n, b = sweep_stale()
     print(f"swept {n} stale {PREFIX}* dirs, reclaimed {b / 1048576:.1f} MB")

@@ -21,7 +21,8 @@ from pathlib import Path
 
 ENGINE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ENGINE_DIR))
-from _scratch import scratch_dir  # noqa: E402
+from _scratch import scratch_dir, isolate_music_registry  # noqa: E402
+isolate_music_registry()   # fixture builds must never touch state/music_assignments.json
 import engine_game_emit as emit  # noqa: E402
 
 GAMES = ENGINE_DIR.parent.parent

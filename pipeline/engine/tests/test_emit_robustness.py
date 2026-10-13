@@ -25,10 +25,14 @@ from pathlib import Path
 ENGINE = Path(__file__).resolve().parents[1]
 GAMES = ENGINE.parents[1]
 sys.path.insert(0, str(ENGINE))
-from _scratch import scratch_dir  # noqa: E402
+from _scratch import scratch_dir, isolate_music_registry  # noqa: E402
+isolate_music_registry()   # fixture builds must never touch state/music_assignments.json
 import engine_game_emit as emit  # noqa: E402
 
 GENRES = [("platformer", "platformer.content.json"), ("shmup", "shmup.content.json")]
+# Snapshot of the LIVE music registry before any build, for test_music_registry_hermetic.
+_LIVE_REG = emit.MUSIC_REGISTRY
+_LIVE_REG_BEFORE = _LIVE_REG.read_bytes() if _LIVE_REG.exists() else None
 _checks = 0
 
 
@@ -103,6 +107,45 @@ def test_perf_telemetry_exposed():
         eng = _read(out / "src" / "engine.js")
         _ok("window.__PERF__" in eng, f"{slug}: engine.js no longer exposes window.__PERF__ (play-tester FPS sampling breaks)")
         _ok("getPerformance" in eng and "fps" in eng, f"{slug}: __PERF__ missing getPerformance()/fps shape")
+
+
+def test_music_registry_hermetic():
+    # Fixture builds go through stage_audio -> _assign_music. They must record into the scratch registry
+    # (FFG_MUSIC_REGISTRY) and leave state/music_assignments.json byte-identical: before 2026-10-13 every
+    # pre-push CI run rewrote the live file with fixture slugs and wiped the real games' music entries.
+    import json
+    scratch = emit.music_registry_path()
+    _ok(scratch.resolve() != _LIVE_REG.resolve(), f"emit still writes the LIVE registry ({scratch})")
+    _build("hermetic-music-probe", GENRES[0][1])
+    reg = json.loads(scratch.read_text(encoding="utf-8")) if scratch.exists() else {}
+    _ok("hermetic-music-probe" in reg.get("assignments", {}), "fixture build did not record into the scratch registry")
+    after = _LIVE_REG.read_bytes() if _LIVE_REG.exists() else None
+    _ok(after == _LIVE_REG_BEFORE, "a fixture build changed the LIVE state/music_assignments.json")
+
+
+def test_music_registry_unreadable_not_overwritten():
+    # An unreadable registry (caught mid-write, typo) must never be replaced by the empty view the emitter
+    # falls back to — that is how the real games' entries were wiped. A readable one is written atomically.
+    import os
+    reg = scratch_dir() / "music_assignments.json"
+    themes = [emit.MUSIC_DIR / n for n in emit.MUSIC_THEMES if (emit.MUSIC_DIR / n).exists()]
+    _ok(themes, "no stock music themes to assign from")
+    prev = os.environ["FFG_MUSIC_REGISTRY"]   # set by isolate_music_registry(); never fall back to the live file
+    os.environ["FFG_MUSIC_REGISTRY"] = str(reg)
+    try:
+        garbage = b'{"assignments": {"real-game": ["a/b/c"]}, "used": {"a/b'
+        reg.write_bytes(garbage)
+        _ok(emit._assign_music("probe-slug", themes) in themes, "unreadable registry: no track picked")
+        _ok(reg.read_bytes() == garbage, "unreadable registry was OVERWRITTEN (real entries would be lost)")
+        reg.write_text('{"assignments": {"real-game": ["a/b/c"]}, "used": {"a/b/c": 1}}', encoding="utf-8")
+        emit._assign_music("probe-slug", themes)
+        import json
+        d = json.loads(reg.read_text(encoding="utf-8"))
+        _ok(d["assignments"].get("real-game") == ["a/b/c"] and "probe-slug" in d["assignments"],
+            "readable registry: existing entry lost or new slug not recorded")
+        _ok(not list(reg.parent.glob("*.tmp*")), "atomic write left a temp file behind")
+    finally:
+        os.environ["FFG_MUSIC_REGISTRY"] = prev
 
 
 def run():

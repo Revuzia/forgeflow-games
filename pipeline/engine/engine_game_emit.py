@@ -22,6 +22,7 @@ Usage:
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -145,6 +146,12 @@ def _pick_sfx(name, keywords, slug):
 
 
 MUSIC_REGISTRY = GAMES.parent / "state" / "music_assignments.json"   # state/music_assignments.json
+def music_registry_path():
+    """The registry _assign_music reads/writes. FFG_MUSIC_REGISTRY overrides it (read at CALL time): the test
+    suites + run_all_tests.py point it at a scratch file, because fixture builds (_good, platformer, variety-a,
+    ...) used to rewrite the LIVE registry on every pre-push CI run and wiped the real games' entries (2026-10-13)."""
+    env = os.environ.get("FFG_MUSIC_REGISTRY", "").strip()
+    return Path(env) if env else MUSIC_REGISTRY
 def _assign_music(slug, themes):
     """BACKGROUND-SONG BLACKLIST (owner 2026-06-14): once a game is assigned a track, that track is
     'used' and no OTHER game gets it until the pool is exhausted — each game's bg song is unique while
@@ -153,12 +160,17 @@ def _assign_music(slug, themes):
     uniqueness comes from generated music; this registry already records generated tracks too.)"""
     import json as _json
     names = [t.name for t in themes]
+    reg_path = music_registry_path()
     reg = {"assignments": {}, "used": {}}
+    readable = True
     try:
-        if MUSIC_REGISTRY.exists():
-            reg = _json.loads(MUSIC_REGISTRY.read_text(encoding="utf-8"))
+        if reg_path.exists():
+            reg = _json.loads(reg_path.read_text(encoding="utf-8"))
     except Exception:
-        pass
+        # Unreadable (mid-write by another process, hand-edit typo, ...): pick from an empty view but do NOT
+        # write it back — saving that empty view over the file is how every real game's entry got wiped.
+        readable = False
+        reg = {"assignments": {}, "used": {}}
     reg.setdefault("assignments", {}); reg.setdefault("used", {})
     prev = reg["assignments"].get(slug)
     if prev and prev in names:
@@ -170,11 +182,14 @@ def _assign_music(slug, themes):
         pick = min(names, key=lambda n: reg["used"].get(n, 0))     # pool exhausted -> least-reused
     reg["assignments"][slug] = pick
     reg["used"][pick] = reg["used"].get(pick, 0) + 1
-    try:
-        MUSIC_REGISTRY.parent.mkdir(parents=True, exist_ok=True)
-        MUSIC_REGISTRY.write_text(_json.dumps(reg, indent=1), encoding="utf-8")
-    except Exception:
-        pass
+    if readable:
+        try:
+            reg_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = reg_path.with_name(reg_path.name + ".tmp%d" % os.getpid())
+            tmp.write_text(_json.dumps(reg, indent=1), encoding="utf-8")
+            os.replace(tmp, reg_path)                           # atomic: a reader never sees a half-written file
+        except Exception:
+            pass
     return next(t for t in themes if t.name == pick)
 
 

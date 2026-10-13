@@ -13,7 +13,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))                 # gates (emit_integrity_gate)
 sys.path.insert(0, str(HERE.parent))          # engine (engine_game_emit)
-from _scratch import scratch_dir  # noqa: E402
+from _scratch import scratch_dir, isolate_music_registry  # noqa: E402
+isolate_music_registry()   # fixture builds must never touch state/music_assignments.json
 import emit_integrity_gate as eig             # noqa: E402
 import engine_game_emit as emit               # noqa: E402
 

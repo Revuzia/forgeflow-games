@@ -9,7 +9,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _scratch import scratch_dir  # noqa: E402
+from _scratch import scratch_dir, isolate_music_registry  # noqa: E402
+isolate_music_registry()   # fixture builds must never touch state/music_assignments.json
 import build_target  # noqa: E402
 
 n = 0
