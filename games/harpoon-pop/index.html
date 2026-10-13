@@ -579,7 +579,9 @@ function onPress(code) {
   if (CONFIRM_KEYS.includes(code)) confirmAction();
 }
 const isTouch = () => !!(window.FFG_DEVICE ? window.FFG_DEVICE.touch : matchMedia('(pointer: coarse)').matches);
-const titleModes = () => (isTouch() ? [1, 2] : [1, 2, 3]);
+// Local 2P (shared keyboard) is switched off in the shipped game; the code stays for later. ?local2p=1 re-enables it for testing.
+const LOCAL_2P = /[?&]local2p=1/.test(location.search);
+const titleModes = () => (isTouch() || !LOCAL_2P ? [1, 2] : [1, 2, 3]);
 const MODE_LABELS = { 1: '1 PLAYER', 2: 'ONLINE CO-OP', 3: 'LOCAL 2P' };
 function confirmAction(fromPeer) {
   Sound.init();
@@ -588,7 +590,7 @@ function confirmAction(fromPeer) {
   if (s === 'title') {
     sfx.select();
     if (game.modeSel === 2) openLobby();
-    else newGame(game.modeSel === 3 && !isTouch());
+    else newGame(game.modeSel === 3 && LOCAL_2P && !isTouch());
   }
   else if (s === 'paused') togglePause();
   else if (s === 'clear' && game.stateT > 1.2) nextLevel();
@@ -1420,7 +1422,7 @@ function drawTitle() {
   ctx.textAlign = 'left'; ctx.font = '700 14px "Chakra Petch", sans-serif';
   const rows = isTouch()
     ? [['STICK  ◀ ▶', 'move'], ['FIRE', 'fire harpoon'], ['TAP A MODE', 'start / continue'], ['BAR  ⏸ 🔊 ⛶', 'pause · sound · fullscreen']]
-    : [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ['A D  +  W', 'local 2P: player 2'], ['P  ·  M  ·  N', 'pause · sound · music']];
+    : [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ...(LOCAL_2P ? [['A D  +  W', 'local 2P: player 2']] : [['ENTER', 'start / continue']]), ['P  ·  M  ·  N', 'pause · sound · music']];
   rows.forEach(([k, v], i) => { ctx.fillStyle = '#ffd23f'; ctx.fillText(k, 120, 372 + i * 22); ctx.fillStyle = '#c8bfe8'; ctx.fillText(v, 290, 372 + i * 22); });
   // item legend
   const types = Object.keys(ITEMS);

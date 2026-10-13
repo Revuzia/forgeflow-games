@@ -162,7 +162,15 @@ with sync_playwright() as pw:
     page.keyboard.press('Escape')
     check('lobby: Escape closes it without going online', page.evaluate("document.getElementById('lobby').hidden && !__hp.Net.np"))
     page.keyboard.press('ArrowRight')
-    check('co-op: title picker moves on to LOCAL 2P', page.evaluate('__hp.game.modeSel') == 3)
+    check('shipped build: LOCAL 2P is not offered (picker wraps to 1 PLAYER)', page.evaluate('__hp.game.modeSel') == 1)
+    page.keyboard.press('Digit3'); page.evaluate('__hp.advance(0.1, false)')
+    check('shipped build: key 3 cannot start LOCAL 2P', page.evaluate("__hp.game.state === 'title' && !__hp.game.coop"))
+    # local 2P stays in the code behind ?local2p=1 -- keep it tested
+    page.goto(URL + '?local2p=1'); errors[:] = [e for e in errors if 'ERR_ABORTED' not in e]  # a reload aborts in-flight font fetches; page.wait_for_function('window.__hp && window.__hp.game', timeout=30000)
+    page.evaluate('__hp.setManualClock(true)'); page.focus('#hud')
+    page.evaluate("(() => { const g = __hp.game; g.state = 'title'; g.modeSel = 2; })()")
+    page.keyboard.press('ArrowRight')
+    check('co-op (?local2p=1): title picker moves on to LOCAL 2P', page.evaluate('__hp.game.modeSel') == 3)
     page.keyboard.press('Space'); page.evaluate('__hp.advance(0.1, false)')
     check('co-op: SPACE on LOCAL 2P starts a 2-player game', page.evaluate('__hp.game.coop && __hp.game.players.length === 2'))
     page.evaluate("__hp.loadLevel(1); __hp.advance(2, false); (() => { const g = __hp.game; g.players.forEach(p => p.invuln = 99); g.bubbles.forEach(b => { b.x = 900; b.y = 120; b.vx = 0; }); })()")
@@ -237,7 +245,7 @@ with sync_playwright() as pw:
 srv.shutdown()
 # Everything is generated in code: the only network traffic allowed is the page itself,
 # three.js from jsDelivr, the two Google Fonts and the shared game_controls.js layer.
-foreign = [u for u in requests if not (u.startswith(URL.rsplit('/', 1)[0]) and u.endswith(('/index.html', '/', '/favicon.ico', '/game_controls.js'))) and 'cdn.jsdelivr.net/npm/three@' not in u and 'fonts.googleapis.com' not in u and 'fonts.gstatic.com' not in u]
+foreign = [u for u in requests if not (u.startswith(URL.rsplit('/', 1)[0]) and u.split('?')[0].endswith(('/index.html', '/', '/favicon.ico', '/game_controls.js'))) and 'cdn.jsdelivr.net/npm/three@' not in u and 'fonts.googleapis.com' not in u and 'fonts.gstatic.com' not in u]
 check('no asset files fetched (all art/audio generated in code)', not foreign, foreign[:10])
 real_errors = [e for e in errors if 'GPU stall' not in e and 'GL Driver Message' not in e and 'WebGL' not in e]
 check('no console errors / page errors / failed requests', not real_errors, real_errors[:12])
