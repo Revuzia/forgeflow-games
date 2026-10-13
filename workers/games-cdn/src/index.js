@@ -84,7 +84,9 @@ export default {
     // change under their name: cache them for a year, immutable, so a relaunch
     // (a home-screen icon included) re-downloads nothing. Opt-in per game: an
     // unhashed name that merely looks hashed must never be pinned.
-    const IMMUTABLE_HASHED_GAMES = new Set(["dyefield", "rimfall"]);
+    // 2026-10-13 (GENESIS): a Vite build too — its entry bundle, the sim's module Web Worker
+    // (assets/worker-<hash>.js), fonts and mod packs are all content-hashed under assets/.
+    const IMMUTABLE_HASHED_GAMES = new Set(["dyefield", "rimfall", "genesis"]);
     const game = key.split("/")[0];
     const hashed = IMMUTABLE_HASHED_GAMES.has(game) &&
       /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/.test(key);
