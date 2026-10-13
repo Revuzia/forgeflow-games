@@ -569,9 +569,26 @@
   // Tier rows BOT_TIERS are NOT touched here: the 5-tier difficulty curve is the owner's, and in combination the softer
   // rows measured no better (444 s vs 477 s).  bots.js reads this table through feature detection (a sim without it
   // plays as before; QUICK mode ignores it).  All lengths are metres, tiers index 1..5.
+  // WAVE-5 RE-TUNE (2026-10-13, lane F3-pacing). The 701 s / 8-of-9 above was measured on the very nine runs the table was
+  // tuned on. On 63 storm-on matches (3 maps, 27 + 36 unseen seeds) BOTH Wave 4 (7f6a9fb2) and Wave 5 (4fdc31d2) reach circle 5
+  // in only 30 of 63 (48 %) with a mean end of 655 s (W4) and 662 s (W5), so the Wave-5 "shift" was set A regressing to its
+  // mean, not a regression. Where the deaths are (identical in both builds): 99 % bot-vs-bot (9 storm kills in 1323), 73 % in circle 1,
+  // 99 % outdoors, killer in ENGAGE 99 %, median 31 m. Levers measured one at a time over 27 matches (mean end, base 657 s):
+  // chaseM x0.7 +35 s and x1.4 -30 s, noticeM x1.3 +37 s and x0.7 -18 s, rotateEdge 0.95 +28 s; pushM, pushPct, dropSepM,
+  // earlyChutePct, rotateLeadS and endgamePhase moved nothing beyond the +-10 s noise. It is the same mechanism as the D8 note
+  // above: a bot that SEES the stranger but may not charge him trades low-hit fire at range instead of being ambushed at 30 m.
+  // Chosen: noticeM x1.5 (tiers 4 and 5 are back at the old 200 m cap) and chaseM x0.6 (four candidates were compared on 36
+  // seeds, this one picked). On 45 further seeds that played no part in choosing it: median end 732 s, circle 5 in 42 of 45,
+  // first-60-s deaths max 8. Over all 108 matches it was run on: circle 5 in 103 (95 % interval 90-98 %), 3 matches under 650 s
+  // (623-638), median end 736 s, first-60-s deaths max 8; Wave 5 on 63 of those same seeds: circle 5 in 30, max 12 dead in 60 s.
+  // Side effect to know about: a bot that holds at range crouch-strafes at 0.4 x 0.45 of walk speed, and _harness/navcheck.py counts
+  // any tick under 1 cm of travel as "blocked". Its ENGAGE-indoor row (bar 3 %) rises from 2.53 % to 3.42 % on the six matches it
+  // plays and from 2.34 % to 2.66 % on 18 others, all of it in blocked runs shorter than 6 ticks (direction reversals): blocked runs
+  // of 6+ ticks, i.e. real grinding, stay 0.50 % -> 0.53 % (Wave 4: 22.25 %). The same pacing was measured with noticeM
+  // [90,115,140,180,200] / chaseM [22,28,32,40,50] (circle 5 in 87 of 90); that row sat at 2.95 % - the proxy is within its noise.
   var BOT_PACE = {
-    noticeM:  [70, 90, 110, 140, 170],    // how far a bot notices a stranger who has not shot it (was 200 for every tier)
-    chaseM:   [45, 55, 65, 80, 100],      // how far it will WALK at one it has not been hit by (was unlimited)
+    noticeM:  [105, 135, 165, 200, 200],  // how far a bot notices a stranger who has not shot it (200 for every tier before D8; 70-170 in D8)
+    chaseM:   [27, 33, 39, 48, 60],       // how far it will WALK at one it has not been hit by (unlimited before D8; 45-100 in D8; 27-60 now)
     pushM:    120, pushPct: 50,           // gunfire answered inside this range, by this share of the aggressive personalities (was 250 m, 100 %)
     dropSepM: 100,                        // landing spots this far apart (was: up to a dozen bots per POI)
     rotateEdge: 0.8, rotateLeadS: 0,      // rotate to 0.8 x the next ring's radius on the bot's own bearing (was a random point inside 25-75 %); no 40-score rotation before the 70 one

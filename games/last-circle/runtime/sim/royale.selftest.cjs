@@ -448,6 +448,16 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(five(P.noticeM) && five(P.chaseM), "pace: one notice reach and one chase reach per tier (5 rows)");
   ok(mono(P.noticeM) && mono(P.chaseM), "pace: a sharper tier never notices or chases LESS far than a softer one");
   ok(P.noticeM.every((v, i) => v <= 200 && v >= P.chaseM[i]), "pace: notice reach <= the 200 m perception cap and >= the chase reach (nobody chases what it cannot see)");
+  // Wave-5 re-tune (lane F3-pacing, 2026-10-13). The D8 table (notice 70-170 m, chase 45-100 m) had been tuned on the nine runs the
+  // gate plays; on 63 matches both Wave 4 and Wave 5 reached circle 5 in only 48 %. Measured one lever at a time over 27 matches,
+  // the two that move the end are how far a bot SEES (noticeM x1.3: +37 s) and how far it will CHARGE an unprovoked stranger
+  // (chaseM x0.7: +35 s, x1.4: -30 s): a bot that sees him but may not charge trades low-hit fire at range instead of an ambush at
+  // 30 m. The rows below are the ones validated on 108 matches (circle 5 in 103, median end 736 s, first-60-s deaths <= 8). The pin is
+  // deliberate, like the BOT_TIERS one: changing either row means re-running _harness/new/sim_pacing.py AND a seed sweep wider than
+  // its nine runs, then updating this line with the new evidence.
+  ok(JSON.stringify(P.noticeM) === "[105,135,165,200,200]" && JSON.stringify(P.chaseM) === "[27,33,39,48,60]",
+     "pace: noticeM / chaseM are the Wave-5 re-tuned rows (105-200 m notice, 27-60 m unprovoked chase)");
+  ok(P.chaseM.every((v, i) => v <= P.noticeM[i] * 0.5), "pace: a bot sees at least twice as far as it will charge an unprovoked stranger (the stand-off that lengthens matches)");
   ok(P.pushM > 0 && P.pushM <= 250 && P.pushPct > 0 && P.pushPct <= 100, "pace: gunfire is answered inside the 250 m hearing range by a share of the aggressive bots");
   ok(P.dropSepM >= 60 && P.dropSepM <= 200, "pace: landing spots are kept 60-200 m apart");
   ok(P.rotateEdge > 0.5 && P.rotateEdge < 0.95, "pace: rotation aims just INSIDE the next ring, not at its centre or its edge");
