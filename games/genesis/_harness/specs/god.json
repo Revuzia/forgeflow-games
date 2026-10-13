@@ -23,11 +23,11 @@
     "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = true; const p = G.poi('town');",
     "await G.camera({ mode: 'surface', lat: p.lat - (13 / 3000) * 180 / Math.PI, lon: p.lon, alt: 7.5, yaw: 0, pitch: -6, fov: 55, hour: 16 });",
     "await G.frames(1); const a = G.agents(40).filter((x) => x.dist < 60).map((x) => x.id); const r = await G.cmd({ k: 'lookdev.hand.grab', target: { kind: 'agent', id: a[0] } }); await G.step(1); await G.frames(4);",
-    "// frame the pinch from 18 m off at about its own height, the village behind it (the ground's radius measured under the eye)",
-    "const q = F.fx.hand.pinch; const L = q.length(); const lat = Math.asin(q.y / L) * 180 / Math.PI, lon = Math.atan2(q.x, q.z) * 180 / Math.PI; const dLat = (18 / 3000) * 180 / Math.PI;",
-    "await G.camera({ mode: 'surface', lat: lat - dLat, lon, alt: 2, yaw: 0, pitch: 0, fov: 50, hour: 16 }); await G.frames(2); const h = L - (F.fx.vis.camBody.length() - 2);",
-    "const alt = Math.max(2, h - 2.5); await G.camera({ mode: 'surface', lat: lat - dLat, lon, alt, yaw: 0, pitch: Math.atan2(h - 1 - alt, 18) * 180 / Math.PI, fov: 50, hour: 16 }); await G.frames(4);",
-    "return { held: [F.fx.hand.heldKind, F.fx.hand.heldId], scale: F.fx.hand.scale, h: +h.toFixed(1) };"
+    "// frame the pinch from 18 m off at about its own height, the village behind it (the ground's radius measured under the eye); twice, as the hand settles where it is going",
+    "const dLat = (18 / 3000) * 180 / Math.PI; let h = 0;",
+    "const frame = async () => { const q = F.fx.hand.pinch; const L = q.length(); const lat = Math.asin(q.y / L) * 180 / Math.PI, lon = Math.atan2(q.x, q.z) * 180 / Math.PI; await G.camera({ mode: 'surface', lat: lat - dLat, lon, alt: 2, yaw: 0, pitch: 0, fov: 50, hour: 16 }); await G.frames(2); h = L - (F.fx.vis.camBody.length() - 2); const alt = Math.max(2, h - 2.5); await G.camera({ mode: 'surface', lat: lat - dLat, lon, alt, yaw: 0, pitch: Math.atan2(h - 1 - alt, 18) * 180 / Math.PI, fov: 50, hour: 16 }); await G.frames(4); };",
+    "await frame(); await frame();",
+    "return { held: [F.fx.hand.heldKind, F.fx.hand.heldId], scale: F.fx.hand.scale, h: +h.toFixed(1), d: Math.round(F.fx.hand.pinch.distanceTo(F.fx.vis.camBody)) };"
    ],
    "frames": 2
   },

@@ -734,12 +734,15 @@ export class DisasterFx {
       st.extra.front = pick;
     }
     const front = (st.extra.front as { c: number; s: number }[] | undefined) ?? [];
-    const P = pv.grid.pos;
+    const P = pv.grid.pos, Sf = pv.fields.get('surface');
     let i = 0;
     for (; i < front.length; i++) {
       const { c, s } = front[i];
       const u = _v.set(P[c * 3], P[c * 3 + 1], P[c * 3 + 2]);
+      // (from the cell's own water level — the drawn surface there — not one interpolated down toward the trough
+      // ahead of the crest, which would start the spray inside the wall of water)
       const g = groundAt(pv, u, _a, true);
+      if (Sf) g.setLength(Math.max(g.length(), pv.params.radius + Sf[c] + W[c]));
       const fl = _w.set(FX[c], FY[c], FZ[c]).normalize();
       // the crest breaking: white water thrown up and forward over the front, and a veil of mist torn off it
       this.em(st, `spray${i}`, { sys: SYS.spray, x: g.x, y: g.y, z: g.z, ax: fl.x, ay: fl.y, az: fl.z, size: 5 + strength * 6, life: 3.2, count: Math.round(200 * ctx.q), p0: 26, p1: Math.min(26, s * 1.4) * strength, r: 0.9, g: 0.93, b: 0.95, power: k * clamp01(s / 5) }, ctx);

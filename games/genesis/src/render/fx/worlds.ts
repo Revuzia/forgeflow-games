@@ -386,6 +386,8 @@ uniform float uTime;
 uniform sampler2D tSceneDepth;
 uniform vec2 uResolution;
 uniform float uDepthTest;
+uniform sampler2D tExposure;
+uniform float uHasExposure;
 varying vec2 vUv;
 varying float vViewZ;
 void main() {
@@ -394,11 +396,15 @@ void main() {
   float r = length(vUv);
   if (r > 1.0) discard;
   vec3 c = vec3(0.0);
+  // (a flash and its shock ring are display-referred, like fire: the exposure of a dark sky must not lift the faint
+  // tail of a fading flash into a haze over the whole frame)
+  float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
+  float dk = mix(1.0, 1.0 / ex, 0.85);
   if (uKind < 0.5) {
-    c = uColor * (exp(-r * r * 9.0) * 3.0 + exp(-r * 3.5) * 0.6) * uK;
+    c = uColor * (exp(-r * r * 9.0) * 3.0 + exp(-r * 3.5) * 0.6 * (1.0 - r * r)) * uK * dk;
   } else if (uKind < 1.5) {
     float ring = exp(-pow((r - uK) / 0.035, 2.0)) * (1.0 - uK);
-    c = uColor * ring * 1.5;
+    c = uColor * ring * 1.5 * dk;
   } else if (uKind < 2.5) {
     // a disc of dust spiralling in: logarithmic arms turning, thinning toward the centre as it gathers
     float a = atan(vUv.y, vUv.x);
@@ -598,10 +604,12 @@ export class WorldFx {
       vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: CustomBlending, blendSrc: OneFactor, blendDst: kind === 5 ? OneMinusSrcAlphaFactor : OneFactor,
       uniforms: {
         uColor: { value: new Vector3(...color) }, uKind: { value: kind }, uDir: { value: new Vector2(0, 1) }, uOffset: { value: 0 }, uFront: { value: 0 }, uK: { value: 0 }, uTime: { value: 0 }, uDepthTest: { value: depthTest ? 1 : 0 },
-        tSceneDepth: this.uniformsShared.tSceneDepth, uResolution: this.uniformsShared.uResolution,
+        tSceneDepth: this.uniformsShared.tSceneDepth, uResolution: this.uniformsShared.uResolution, tExposure: FX_EXPOSURE, uHasExposure: this.hasExposure,
       },
     });
   }
+  /** (shared: whether the post pipeline's exposure texture exists yet) */
+  private hasExposure: IUniform<number> = { value: 0 };
 
   private shellMat(): ShaderMaterial {
     return new ShaderMaterial({
@@ -940,6 +948,7 @@ export class WorldFx {
 
   /** the overlays (dust, flashes, swirls, molten shells, the moon's fire) over the composited image */
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget | null, depth: Texture, w: number, h: number): void {
+    this.hasExposure.value = FX_EXPOSURE.value ? 1 : 0;
     this.uniformsShared.tSceneDepth.value = depth;
     this.uniformsShared.uResolution.value.set(w, h);
     for (const rv of this.rings.values()) { rv.dustMat.uniforms.tSceneDepth.value = depth; (rv.dustMat.uniforms.uResolution.value as Vector2).set(w, h); }

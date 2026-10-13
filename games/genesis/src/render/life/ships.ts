@@ -1314,7 +1314,8 @@ export class ShipLayer {
       g.x += e.pos[0]; g.y += e.pos[1]; g.z += e.pos[2]; g.n++;
     }
     basisQ(up, fwd, _q);
-    const alt = ref ? pos.length() - ref.pv.params.radius : 1e9;
+    // (height over the ground under the ship, not over the datum: a pad on a plateau, a lander over the dunes)
+    const alt = ref ? pos.length() - groundR(ref.pv, [pos.x, pos.y, pos.z]) : 1e9;
     for (const [key, g] of groups) {
       const local = _v3.set(g.x / g.n, g.y / g.n, g.z / g.n);
       // boosters: a ring of plumes around the core; drawn as one wide cluster

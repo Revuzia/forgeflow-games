@@ -498,7 +498,8 @@ void main() {
     vec3 vv = (modelViewMatrix * vec4(vel, 0.0)).xyz;
     vec2 d = length(vv.xy) > 1e-5 ? normalize(vv.xy) : vec2(0.0, 1.0);
     vDir = d;
-    float stretch = kind > 5.1 ? clamp(length(vv.xy) * 0.04, 1.15, 4.0) : kind > 4.5 ? clamp(length(vv.xy) * 0.06, 2.0, 14.0) : 1.0 + clamp(length(vv.xy) * 0.08, 0.0, 10.0);
+    // (a drop smeared over a 1/60 s exposure: its length is its screen speed × the shutter, many times its width)
+    float stretch = kind > 5.1 ? clamp(length(vv.xy) * 0.04, 1.15, 4.0) : kind > 4.5 ? clamp(length(vv.xy) * 0.0083 / max(sz, 1e-3), 2.0, 14.0) : 1.0 + clamp(length(vv.xy) * 0.08, 0.0, 10.0);
     vec2 nrm = vec2(d.y, -d.x);
     mv.xy += nrm * corner.x * sz + d * corner.y * sz * stretch;
   } else if (kind > 7.5) {
