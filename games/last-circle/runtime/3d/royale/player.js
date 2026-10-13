@@ -28,6 +28,18 @@ const R = { W: null, rigs: [], mats: [] };
 
 export function init(W) {
   K = W.SIM;
+  W._camWall = { f: 1, target: 1, dist: 0, free: 0, pulled: false };   // camera wall pull-in readback (probes); one object, written in place
+  W.rimGain = RIM_GAIN;      // the shared rim-strength uniform ({value}); tuning + the edge probe read/write it
+  // read-only window into this module for the browser gates (clip download mode, which canopy is in use,
+  // the death pick as a pure function, the corpse timeline): nothing in the game calls it
+  W._playerProbe = {
+    canopy: canopyStats, clips: clipLoadStats,
+    pickDeath: (v) => pickDeath(W, v),
+    pickLog: PICK_LOG,                           // [victim id, fall, dir, moving, head, heavy weapon] per kill (capped): the death variety gate reads it
+    corpse: (a) => ({ sinkT: a._sinkT, hold: a._sinkHold, y0: a._sinkY0, parented: !!(a.obj && a.obj.parent), anim: a.anim,
+                      fall: a._sinkFall, floor: a._sinkFloor, chute: !!a.chute }),
+    deathClips: DEATH_CLIPS.slice(),
+  };
   W.hurtActor = (victim, dmg, attackerId, weaponId, isHead) => hurtActor(W, victim, dmg, attackerId, weaponId, isHead);
   W.killActor = (victim, killerId, weaponId) => killActor(W, victim, killerId, weaponId);
   W.useConsumable = (a, id) => useConsumable(W, a, id);
@@ -106,6 +118,10 @@ export function createActor(W, opts) {
     _bodyYaw: 0, _hasBodyYaw: false, _tiltX: 0, _tiltZ: 0, _eyeY: 0, _hasEyeY: false,
     _armW: 0, _hasArmW: false, _armMode: null, _animTS: 1, _adsT: 0, _stepAcc: 0,
     hitReactT: 0, _hitReactAt: -9, _portalT: 0, _portalBoost: false, _ovReload: false,
+    // rim light (P1.8): 0 = not applied yet, 1 = the faint cool rim, 2 = SQUAD UP ally rim.
+    // _sinkT: corpse timeline on SIM time (killActor / corpseStep), -1 = not a corpse;
+    // _sinkFall: a corpse that died in the air drops to its floor first (_sinkVy, _sinkFloor).
+    _rimMode: 0, _sinkT: -1, _sinkHold: 3, _sinkY0: 0, _sinkFall: false, _sinkVy: 0, _sinkFloor: 0,
     _gripLocal: null, _gripFor: null, _mFrom: null, _mTo: null,
     lastHit: null, dmgFrom: null, lastHurtByActorT: 0, spectating: null,
     netTarget: null, netChute: false,
@@ -120,6 +136,8 @@ export function createActor(W, opts) {
     _pp: new THREE.Vector3(), _pyaw: 0, _ppT: -1, _vmode: 0,
   };
   a.obj.name = "actor_" + a.id;
+  // yaw outermost: the dive / canopy tilts (syncObj) pitch and roll about the BODY's own axes
+  a.obj.rotation.order = "YXZ";
   W.group("actors").add(a.obj);
   W.actors.push(a);
   W.actorById.set(a.id, a);
@@ -145,6 +163,19 @@ function mkInput() {
 // slouch (every other fighter sits at 1-5°); un-slouchable without regen and
 // the regen risked the same. Owner call: cut him.
 const SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"];
+
+// ── readability rim (P1.8, D12) ──────────────────────────────────────────────
+// Added to a character's OUTGOING light in the zone-tint patch (see the shader in
+// loadActorModels). Emissive glare bar: START LOW. The plan's ceiling is a 0.45
+// term at grazing angles; the first pass peaks at RIM_FAR * RIM_GAIN = 0.36 * 0.8 =
+// 0.29 (a far, up-facing silhouette edge) and is tuned from the edge-vs-body probe,
+// never from a hunch. RIM_GAIN is ONE shared uniform object (every body material
+// points at it), so the strength is a runtime knob: init() exposes it as W.rimGain.
+const RIM_COOL = 0x9cc8ff;               // faint cool edge for everyone
+const RIM_ALLY = 0x3dffa0;               // SQUAD UP teammate edge (friendly green)
+const RIM_NEAR = 0.16, RIM_FAR = 0.36;   // strength at <= 8 m / >= 60 m from the camera
+const RIM_ALLY_NEAR = 0.30, RIM_ALLY_FAR = 0.45;
+const RIM_GAIN = { value: 0.8 };
 // Per-skin weapon-holder rotation (hand-bone local). Meshy rigs DON'T share a
 // hand-bone rest orientation, so one fixed rotation left wraith/juggernaut
 // aiming 35° high. These were auto-calibrated live (measure barrel → rotate to
@@ -279,16 +310,90 @@ function endsUpright(clip, rootName) {
 }
 
 // Base loco + combat set, then Mixamo BR weapon holds + freefall.
-// File names on disk: assets/chars/meshy/{skin}_{clip}.glb
+// File names on disk: assets/chars/clips/{clip}.glb (ONE shared file per clip, P1.1) with
+// assets/chars/meshy/{skin}_{clip}.glb as the per-skin fallback for the names below.
+// death2 / death3 are GONE (P1.6): they were Meshy-library actions 183/184, against the
+// Mixamo-only rule, and two of the three shipped clips that stood the corpse back up. The
+// single `death` stays as the fallback when the seven Mixamo death clips are absent.
 const MESHY_CLIPS = [
   "idle",   // real Mixamo breathing idle — the BASE GLB's baked animations[0]
             // is a 0-duration frozen frame (see the rename below), not an idle
-  "walk", "run", "death", "death2", "death3", "hit", "dance", "cheer", "jump", "swim", "crouch",
+  "walk", "run", "death", "hit", "dance", "cheer", "jump", "swim", "crouch",
   // fall + pistol_* clips deliberately NOT loaded: freefall reverted to the
   // original frozen-run + skydive pose (owner: "falling isnt FREEFALL"), and
   // pistols use the procedural pose system (see gunFamily).
   "rifle_idle", "rifle_walk", "rifle_run", "rifle_reload", "rifle_crouch",
 ];
+// The seven Mixamo death falls (P1.6), shared files only (no per-skin fallback exists):
+// shot from the front / back / right, the same from the head, a crouching headshot, and a
+// walking-to-dying. Chosen per kill in pickDeath from where the last hit came from.
+const DEATH_CLIPS = ["death_front", "death_front_head", "death_back", "death_back_head", "death_right", "death_crouch_head", "death_walking"];
+const ALL_CLIPS = MESHY_CLIPS.concat(DEATH_CLIPS);
+
+// ── P1.1: every clip downloaded ONCE ────────────────────────────────────────────────────
+// The 17 loco clips were md5-identical across the five skins, yet fetched as <skin>_<clip>.glb
+// under five URLs each (8.83 MB, 85 GLB parses). They are now fetched once from
+// assets/chars/clips/<clip>.glb (single animation = animations[0]; translation/scale tracks
+// stripped except the Hips) and each skin gets a CLONE of the AnimationClip, because the
+// per-skin passes below (rebaseRootTracks, stripRootMotion, pruneClipTracks, the reload split)
+// REWRITE the clip for that skin's rig: one shared AnimationClip object would hand skin A's
+// root frame and skin B's missing finger bones to everyone else.
+// A skin whose shared file 404s falls back to its own <skin>_<clip>.glb (the old path), so the
+// game boots whether or not the shared files are on the server. The first request is a PROBE
+// (the smallest clip), so a server that has none costs ONE failed request, not 22.
+// ONCE PER PAGE SESSION, never retried: clips merge into each skin's cached gltf on the first
+// match only (__lcMerged), so a later match would download the files for nobody. A skin whose
+// merge happens later (its base failed in an earlier match) reads the same settled result.
+// ORDER: the shared files are requested only once every skin's BASE mesh has settled, so 22 clip
+// requests never compete with the five base GLBs, which carry the kernel's 30 s per-asset timeout
+// (a base that misses it drops its skin from the match). The old per-skin path was ordered the same
+// way (each skin's clips after its base). Measured 2026-10-12 on the contended harness box: with the
+// clips started in parallel, a 236 s match load lost 4 of 5 skins to that timeout.
+const SHARED = { p: null, mode: "unknown", requests: 0, hits: 0 };
+function sharedClipUrl(W, name) { return W.assetBase + "assets/chars/clips/" + name + ".glb"; }
+/** loader.loadAsync with the kernel's per-asset timeout: a request that never settles rejects
+ *  instead of wedging the match-start await (the kernel's own loads already do this). */
+function loadBounded(W, url) {
+  const p = W.kernel.loader.loadAsync(url);
+  const ms = W.kernel.loadTimeoutMs > 0 ? W.kernel.loadTimeoutMs : 30000;
+  let to = 0;
+  const timer = new Promise((_, rej) => { to = setTimeout(() => rej(new Error("timed out loading " + url)), ms); });
+  return Promise.race([p, timer]).finally(() => clearTimeout(to));
+}
+/** Start (once per page session) the shared clip loads; resolves to a Map name -> gltf.
+ *  `tick` is the loading bar of the match that started it: one tick per file, and the files a
+ *  failed probe will never fetch are ticked off at once so the bar still reaches the end. */
+function loadSharedClips(W, tick) {
+  if (SHARED.p) return SHARED.p;
+  const load = async (name) => {
+    SHARED.requests++;
+    try { const g = await loadBounded(W, sharedClipUrl(W, name)); SHARED.hits++; return g; }
+    catch (e) { return null; }
+    finally { if (tick) tick(); }
+  };
+  SHARED.p = (async () => {
+    const out = new Map();
+    const probe = "hit";
+    const g0 = await load(probe);
+    if (!g0 || !g0.animations || !g0.animations[0]) {
+      SHARED.mode = "per-skin";
+      if (tick) tick(ALL_CLIPS.length - 1);
+      return out;
+    }
+    out.set(probe, g0);
+    const rest = ALL_CLIPS.filter((n) => n !== probe);
+    const got = await Promise.all(rest.map(load));
+    got.forEach((g, i) => { if (g && g.animations && g.animations[0]) out.set(rest[i], g); });
+    SHARED.mode = "shared";
+    return out;
+  })();
+  return SHARED.p;
+}
+/** test / probe read-back */
+export function clipLoadStats() {
+  return { mode: SHARED.mode, requests: SHARED.requests, loaded: SHARED.hits, shared: ALL_CLIPS.length, deathClips: DEATH_CLIPS.slice() };
+}
+
 const _v3 = new THREE.Vector3();
 
 /** "pistol" | "rifle" | null — SMG/AR/shotgun/sniper/GL all use the rifle set. */
@@ -304,9 +409,13 @@ function gunFamily(a) {
   return def.cls === "pistol" ? null : "rifle";
 }
 
-async function preloadMeshySkin(W, key, tick) {
+async function preloadMeshySkin(W, key, tick, sharedP, grow, baseSettled) {
   const url = W.assetBase + "assets/chars/meshy/" + key + ".glb";
-  const rig = await W.kernel.loadCharacter(url);   // caches gltf; registers this throwaway clone's mixer
+  let rig = null;
+  // caches gltf; registers this throwaway clone's mixer. baseSettled (loaded OR failed) opens the
+  // shared clip downloads once every skin's base is through (see SHARED above).
+  try { rig = await W.kernel.loadCharacter(url); }
+  finally { if (baseSettled) baseSettled(!!rig); }
   if (tick) tick();
   rig.scene.visible = false;
   const cached = W.kernel._charCache[url];
@@ -320,46 +429,57 @@ async function preloadMeshySkin(W, key, tick) {
       // under a name nothing selects.
       cached.animations[0].name = cached.animations[0].duration > 0.1 ? "idle" : "baked";
     }
-    // These 8 clip GLBs were fetched with an `await` INSIDE the loop, and this
-    // runs once per skin: 8 round trips deep, five times over, sitting directly
-    // on the path to the drop. They do not depend on each other — same bytes,
-    // one round trip deep. Results are APPLIED in MESHY_CLIPS order after all
-    // settle so the merged clip list stays deterministic, and the "idle" rename
-    // above still happens first so animations[0] remains idle for classifyClips'
-    // names[0] fallbacks. allSettled keeps the old per-clip failure tolerance:
-    // a clip that 404s drops out and the rest of the skin still loads.
+    // The clip files are fetched ONCE for all five skins (loadSharedClips, P1.1: they used
+    // to be 8.83 MB of md5-identical <skin>_<clip>.glb) and are all in flight in ONE round
+    // trip, as the earlier per-skin version was. Results are APPLIED in ALL_CLIPS order after
+    // they settle so the merged clip list stays deterministic, and the "idle" rename above
+    // still happens first so animations[0] remains idle for classifyClips' names[0]
+    // fallbacks. A clip that fails drops out and the rest of the skin still loads.
     // The far LOD body (<skin>_lod1.glb, ~2.5k tris) loads in the same round
     // trip as the clips. Optional by design: a 404 or a body that does not
     // match LOD0 just leaves this skin on LOD0 everywhere (lod1From checks).
     // The handler is attached HERE, not at the await below: lodP is awaited only
-    // after the 8 clip loads settle, so a LOD1 fetch that failed first was an
+    // after the clip loads settle, so a LOD1 fetch that failed first was an
     // unhandled rejection page error (Wave-2 VERIFY run A: "Failed to fetch ...
     // preloadMeshySkin"). A failed LOD1 resolves null = this skin stays on LOD0.
     const lodP = (async () => {
-      try { return await W.kernel.loader.loadAsync(W.assetBase + "assets/chars/meshy/" + key + "_lod1.glb"); }
+      try { return await loadBounded(W, W.assetBase + "assets/chars/meshy/" + key + "_lod1.glb"); }
       finally { if (tick) tick(); }
     })().catch((e) => { console.warn("[chars] LOD1 body not loaded, staying on LOD0:", key, e && e.message); return null; });
-    const loaded = await Promise.allSettled(MESHY_CLIPS.map(async (clip) => {
+    const shared = await sharedP;
+    // what this skin must still fetch ITSELF (the old per-skin path): every MESHY_CLIPS name the
+    // shared set lacks (all of them when the server has no shared files). The death falls have no
+    // per-skin file, so a missing one simply leaves that fall out of the pool.
+    const own = MESHY_CLIPS.filter((n) => !shared.has(n));
+    if (own.length && grow) grow(own.length);   // the loading bar counts these extra files too
+    const ownLoaded = await Promise.allSettled(own.map(async (clip) => {
       // async wrapper, not a bare .finally(): it turns a SYNCHRONOUS throw out of
       // the loader into a rejection too, which is the tolerance the old per-clip
       // try/catch had.
-      try { return await W.kernel.loader.loadAsync(W.assetBase + "assets/chars/meshy/" + key + "_" + clip + ".glb"); }
+      try { return await loadBounded(W, W.assetBase + "assets/chars/meshy/" + key + "_" + clip + ".glb"); }
       finally { if (tick) tick(); }
     }));
-    for (let i = 0; i < loaded.length; i++) {
-      const r = loaded[i];
-      if (r.status !== "fulfilled") { console.warn("[chars] clip load failed", key, MESHY_CLIPS[i], r.reason); continue; }
-      const g = r.value;
-      if (g.animations && g.animations[0]) {
-        g.animations[0].name = MESHY_CLIPS[i];
-        rebaseRootTracks(g.animations[0], g.scene, cached.scene);   // BEFORE the root-motion strip
-        stripRootMotion(g.animations[0]);
-        if (/^death/.test(MESHY_CLIPS[i])) {
-          const rb = rootBone(cached.scene);
-          if (rb && endsUpright(g.animations[0], rb.name)) (cached.__lcRecovers || (cached.__lcRecovers = new Set())).add(MESHY_CLIPS[i]);
-        }
-        cached.animations.push(g.animations[0]);
+    const ownMap = new Map();
+    own.forEach((n, i) => {
+      const r = ownLoaded[i];
+      if (r.status === "fulfilled") ownMap.set(n, r.value);
+      else console.warn("[chars] clip load failed", key, n, r.reason);
+    });
+    for (const name of ALL_CLIPS) {
+      const sg = shared.get(name);
+      const g = sg || ownMap.get(name);
+      if (!g || !g.animations || !g.animations[0]) continue;
+      // a SHARED clip is cloned (AnimationClip.clone copies every track's times + values), so the
+      // rewrites below touch this skin's copy only; a per-skin file is already this skin's own
+      const clip = sg ? g.animations[0].clone() : g.animations[0];
+      clip.name = name;
+      rebaseRootTracks(clip, g.scene, cached.scene);   // BEFORE the root-motion strip
+      stripRootMotion(clip);
+      if (/^death/.test(name)) {
+        const rb = rootBone(cached.scene);
+        if (rb && endsUpright(clip, rb.name)) (cached.__lcRecovers || (cached.__lcRecovers = new Set())).add(name);
       }
+      cached.animations.push(clip);
     }
     // The clip GLBs are shared by all five skins and animate the full 65-bone
     // Mixamo hand; athlete's rig has 34 bones. Every orphan track warned once per
@@ -378,7 +498,7 @@ async function preloadMeshySkin(W, key, tick) {
       const tracks = rl.tracks.filter((t) => /Spine|Neck|Head|Shoulder|Arm|ForeArm|Hand/.test(t.name));
       if (tracks.length) cached.animations.push(new THREE.AnimationClip("rifle_reload_upper", rl.duration, tracks));
     }
-  } else if (tick) tick(MESHY_CLIPS.length + 1);   // warm cache: those files (clips + LOD1) are already done, say so
+  } else if (tick) tick(1);   // warm cache: this skin's LOD1 (the shared clips are once per session) is already done, say so
   // The warm-up clone exists only to populate the gltf cache, but
   // kernel.loadCharacter registers ITS mixer in the per-frame update list too.
   // loadActorModels runs every match, so this leaked 5 mixers per match — the
@@ -427,7 +547,9 @@ export async function loadActorModels(W) {
   // to, so this costs one null check. Clips merge into the cached gltf on the
   // first match only (__lcMerged), so on a requeue the skipped ones tick
   // straight through and the bar completes fast instead of pretending to work.
-  const total = SKINS.length * (2 + MESHY_CLIPS.length);   // mesh + clips + LOD1 body
+  // mesh + LOD1 body per skin, plus the shared clip files once per page session (P1.1). A skin that
+  // has to fetch its own <skin>_<clip>.glb (no shared file on the server) grows the total itself.
+  let total = SKINS.length * 2 + (SHARED.p ? 0 : ALL_CLIPS.length);
   let done = 0;
   // The previous match's rigs are gone from the scene by now (the orchestrator
   // cleared the groups); free what they still hold on the GPU before building
@@ -441,9 +563,22 @@ export async function loadActorModels(W) {
   if (CH.mesh.parent !== actorsGroup) { actorsGroup.add(CH.mesh); actorsGroup.add(CH.lines); }
   installRenderHook(W);
   const tick = (n) => { done += (n || 1); if (W.loadProgress) W.loadProgress(done, total); };
+  const grow = (n) => { total += n; if (W.loadProgress) W.loadProgress(done, total); };
   if (W.loadProgress) W.loadProgress(0, total);
+  // the shared clip files start once every skin's BASE has settled (loaded or failed: see SHARED),
+  // one promise for all five skins; a warm session resolves at once. When NO base loaded (a faulted
+  // network: the match start fails and the menu offers a retry) nothing is requested and the
+  // once-per-session probe is left for the retry, instead of locking the session to per-skin.
+  let basesLeft = SKINS.length, basesOk = 0, openShared = null;
+  const basesP = new Promise((res) => { openShared = res; });
+  const baseSettled = (ok) => { if (ok) basesOk++; if (--basesLeft === 0) openShared(); };
+  const sharedP = basesP.then(() => (basesOk > 0 ? loadSharedClips(W, tick) : new Map()));
+  // the canopy GLB (if the server has one) loads in parallel with the skins and is awaited with them:
+  // it must be in place BEFORE the warm-up uploads the chute buffers
+  const canopyP = loadCanopy(W);
   // tolerant preload: a still-baking skin just drops out of rotation
-  const settled = await Promise.allSettled(SKINS.map((k) => preloadMeshySkin(W, k, tick)));
+  const settled = await Promise.allSettled(SKINS.map((k) => preloadMeshySkin(W, k, tick, sharedP, grow, baseSettled)));
+  await canopyP;
   const urls = settled.filter((r) => r.status === "fulfilled").map((r) => r.value);
   if (!urls.length) throw new Error("no character skins available");
   const vr = K.mulberry32(W.seed ^ 0xfaceb);
@@ -546,9 +681,19 @@ export async function loadActorModels(W) {
         // without a shared cache key this is 50 identical shader COMPILES on the
         // load path. Only the uniform VALUES differ between them, so a constant
         // key is correct — three still folds in maps/skinning/lights itself.
-        m.customProgramCacheKey = () => "lcZoneTint";
+        // "Rim1": the readability rim (P1.8) is part of this program now; the key MUST
+        // change whenever the injected GLSL does, or three would hand a stale program
+        // from the cache to a material expecting the new uniforms
+        m.customProgramCacheKey = () => "lcZoneTintRim1";
         m.onBeforeCompile = (sh) => {
           sh.uniforms.zLegs = { value: zc[0] }; sh.uniforms.zTorso = { value: zc[1] }; sh.uniforms.zHead = { value: zc[2] };
+          // rim light: colour + (near, far) strength per material (SQUAD UP allies get
+          // their own colour, see applyRim), one shared master gain for tuning
+          sh.uniforms.zRimCol = { value: new THREE.Color(RIM_COOL) };
+          sh.uniforms.zRimP = { value: new THREE.Vector2(RIM_NEAR, RIM_FAR) };
+          sh.uniforms.zRimK = RIM_GAIN;
+          m.userData.zRimCol = sh.uniforms.zRimCol;
+          m.userData.zRimP = sh.uniforms.zRimP;
           // The zone tint below divides `diffuse` (= material.color) back out, so
           // ANYTHING animating material.color on these actors cancels algebraically
           // and renders zero pixels — fx.js's hit flash did exactly that and
@@ -559,9 +704,24 @@ export async function loadActorModels(W) {
           // injected AFTER <color_fragment>, which in three r172's meshphysical
           // fragment runs after <map_fragment> — so diffuseColor is already
           // (diffuse * texture) and dividing `diffuse` out leaves the texture.
-          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\n" + sh.fragmentShader.replace(
+          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\n" + sh.fragmentShader.replace(
             "#include <color_fragment>",
             "#include <color_fragment>\n  vec3 zTint = mix(zLegs, zTorso, smoothstep(0.80, 1.00, vZoneY));\n  zTint = mix(zTint, zHead, smoothstep(1.45, 1.60, vZoneY));\n  diffuseColor.rgb = diffuseColor.rgb / max(vec3(0.0001), diffuse) * zTint * zFlash;"
+          ).replace(
+            // RIM (VALORANT-style readability edge): added to the OUTGOING light, so it
+            // is the same everywhere on the cast whatever the sun/shade there, which is
+            // exactly what lifts a black skin off a dark background. pow(1-N.V, 3)
+            // keeps it to the silhouette, the up-facing term puts it on head, shoulders
+            // and arms (not the shins), and the strength grows with distance (the far
+            // read is where a dark skin vanishes). Peak term = zRimP.y * zRimK <= 0.45.
+            "#include <opaque_fragment>",
+            "{\n" +
+            "  vec3 rV = normalize( vViewPosition );\n" +
+            "  float rF = pow( clamp( 1.0 - dot( normal, rV ), 0.0, 1.0 ), 3.0 );\n" +
+            "  float rUp = dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ) * 0.5 + 0.5;\n" +
+            "  float rD = mix( zRimP.x, zRimP.y, smoothstep( 8.0, 60.0, length( vViewPosition ) ) );\n" +
+            "  outgoingLight += zRimCol * ( rF * rUp * rD * zRimK );\n" +
+            "}\n#include <opaque_fragment>"
           );
         };
         m.needsUpdate = true;
@@ -585,7 +745,7 @@ export async function loadActorModels(W) {
     // a fall-and-recover clip is not a death: keep it out of killActor's pool
     // (see endsUpright) — the corpse would otherwise stand back up
     const recovers = W.kernel._charCache && W.kernel._charCache[url] && W.kernel._charCache[url].__lcRecovers;
-    if (recovers) for (const k of ["death", "death2", "death3"]) if (a.clips[k] && recovers.has(a.clips[k])) a.clips[k] = null;
+    if (recovers) for (const k of ["death"].concat(DEATH_CLIPS)) if (a.clips[k] && recovers.has(a.clips[k])) a.clips[k] = null;
     // the capsule only shrinks when this actor can actually be SEEN crouching
     a.hasCrouchClip = !!a.clips.crouch;
     a.armBones = findArmBones(rig.scene);   // runtime arm-pose layer (pose.js)
@@ -667,14 +827,22 @@ function classifyClips(rig) {
     jump: find([/^jump$/i, /jump/i]),
     fall: find([/^fall$/i, /falling/i]),
     // exact-anchored so "death" never swallows the variants
-    death: find([/^death$/i, /death|die|defeat/i]),
-    death2: find([/^death2$/i]),
-    death3: find([/^death3$/i]),
+    death: find([/^death$/i, /^(?!death_).*(death|die|defeat)/i]),
+    // the seven Mixamo death falls (P1.6), each exact-anchored: none may be swallowed by a looser
+    // pattern below (crouch in particular: /crouch/i would otherwise hand a crouching player
+    // "death_crouch_head" the day the real crouch clip is missing)
+    death_front: find([/^death_front$/i]),
+    death_front_head: find([/^death_front_head$/i]),
+    death_back: find([/^death_back$/i]),
+    death_back_head: find([/^death_back_head$/i]),
+    death_right: find([/^death_right$/i]),
+    death_crouch_head: find([/^death_crouch_head$/i]),
+    death_walking: find([/^death_walking$/i]),
     hit: find([/^hit$/i]),
     shoot: find([/shoot|attack|punch|slash|hit/i]),
     dance: find([/^dance$/i, /dance/i]),
     cheer: find([/^cheer$/i, /cheer|wave|victory/i]),
-    crouch: find([/^crouch$/i, /crouch/i]),
+    crouch: find([/^crouch$/i, /^(?!death).*crouch/i]),
     pistol_idle: find([/^pistol_idle$/i]),
     pistol_walk: find([/^pistol_walk$/i]),
     pistol_run: find([/^pistol_run$/i]),
@@ -1364,7 +1532,7 @@ export function tick(W, dt) {
   const actors = W.actors;
   for (let i = 0; i < actors.length; i++) {
     const a = actors[i];
-    if (!a.alive) { a._vmode = 0; continue; }
+    if (!a.alive) { a._vmode = 0; if (a._sinkT >= 0) corpseStep(W, a, dt); continue; }
     a._pp.copy(a.pos); a._pyaw = a.yaw; a._ppT = _tickN;
     a._vmode = 0;
     if (a.netRemote) { interpRemote(W, a, dt); continue; }
@@ -1455,7 +1623,11 @@ function viewPass(W, dt) {
     // backwards" (owner screenshots x2). This line is the ONE authority on
     // weapon visibility per frame — a separate toggle elsewhere just lost the
     // write race against it.
-    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2 && !a.emoting;
+    // && !gliding (P1.5): the raised hand under the canopy / in the dive held a
+    // pistol in the drop shots (LOOK/camera-characters/shots/03_parachute_tpp.png);
+    // nobody shoots from a parachute, and the weapon is back on the first grounded
+    // frame because this line runs every frame. Also one fewer draw per nearby glider.
+    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2 && !a.emoting && !a.gliding;
     if (!a.nameTag) continue;
     // Peers stay tagged out to 250 m — the game's own gunfire-audible radius
     // (hud.js: `if (d < 12 || d > 250) return;` on the direction chevrons), so a
@@ -1471,6 +1643,19 @@ function viewPass(W, dt) {
   }
 }
 
+/** Point one actor's body material at the rim colour/strength for `mode` (1 =
+ *  everyone's faint cool edge, 2 = SQUAD UP ally). The uniform objects exist only
+ *  after the material's first compile (onBeforeCompile), so before that this does
+ *  nothing and the next frame retries; the default values already ARE mode 1. */
+function applyRim(a, mode) {
+  const b = a._bodies && a._bodies[0];
+  const ud = b && b.material && b.material.userData;
+  if (!ud || !ud.zRimCol) return;
+  ud.zRimCol.value.setHex(mode === 2 ? RIM_ALLY : RIM_COOL);
+  ud.zRimP.value.set(mode === 2 ? RIM_ALLY_NEAR : RIM_NEAR, mode === 2 ? RIM_ALLY_FAR : RIM_FAR);
+  a._rimMode = mode;
+}
+
 /** One live actor's view state for this frame. */
 function actorView(W, a, focus, fovK) {
   const p = a.obj.position;
@@ -1479,6 +1664,11 @@ function actorView(W, a, focus, fovK) {
   const dEff = d * fovK;
   a._dEff = dEff;
   const isFocus = a === focus || a === W.player;
+  // RIM (P1.8 / D12): everyone wears the faint cool edge; a SQUAD UP teammate wears
+  // the green one. teamId is set by net.js (null offline), so every offline match
+  // and every bot keeps mode 1 by construction. Two integer compares per actor.
+  const rimWant = (a.teamId && W.player && a !== W.player && a.teamId === W.player.teamId) ? 2 : 1;
+  if (a._rimMode !== rimWant) applyRim(a, rimWant);
   // ON SCREEN: a sphere round the whole actor (canopy included while it is up)
   _vSph.center.copy(p);
   if (a.chute) { _vSph.center.y += 2.4; _vSph.radius = 3.9; } else { _vSph.center.y += BODY_SPHERE_Y; _vSph.radius = BODY_SPHERE_R; }
@@ -1923,7 +2113,8 @@ function clampToMap(W, a) {
 const CHUTE_COLORS = [0xe0685a, 0x57b0ff, 0xf2c14e, 0x7fb069, 0xb05cf0, 0x22d3a0];
 const CHUTE_MAX = 64;
 // suspension lines, chute space: rim -> shoulders (6 pairs)
-const CHUTE_LINES = new Float32Array(36);
+// (a `let`: P2.6 replaces it with the lines of assets/props/canopy.json when that file loads)
+let CHUTE_LINES = new Float32Array(36);
 for (let i = 0; i < 6; i++) {
   const ang = (i / 6) * Math.PI * 2;
   CHUTE_LINES.set([Math.cos(ang) * 1.55, 3.65, Math.sin(ang) * 1.55, Math.cos(ang) * 0.25, 1.55, Math.sin(ang) * 0.18], i * 6);
@@ -1982,7 +2173,7 @@ function ensureChute() {
   mesh.frustumCulled = false;                          // instances are anywhere on the map
   mesh.castShadow = false; mesh.receiveShadow = false; // as the composed canopy (Mesh defaults)
   const lgeo = new THREE.BufferGeometry();
-  const lpos = new THREE.BufferAttribute(new Float32Array(CHUTE_MAX * 36), 3);
+  const lpos = new THREE.BufferAttribute(new Float32Array(CHUTE_MAX * CHUTE_LINES.length), 3);
   lpos.setUsage(THREE.DynamicDrawUsage);
   lgeo.setAttribute("position", lpos);
   lgeo.setDrawRange(0, 0);
@@ -1993,6 +2184,87 @@ function ensureChute() {
   CH.mesh = mesh; CH.lines = lines;
   return CH;
 }
+
+// ── P2.6: the ram-air canopy (assets/props/canopy.glb + canopy.json) ─────────────────────
+// A half-sphere dome was a primitive used as final art. When ART-A's canopy is on the server it
+// REPLACES the dome geometry inside the very same InstancedMesh (still ONE draw for every canopy
+// in the lobby, instanceColor still paints it) and the suspension lines come from canopy.json
+// (still ONE LineSegments). Contract C-ART-CANOPY: one mesh node named Canopy, COLOR_0 = the gore
+// mask (red channel, 1 = white gore), metres, +Y up, nose toward -Z, origin at the harness hang
+// point; canopy.json {lines:[{x,y,z}...], span, hang:{x,y,z}} where `lines` is a list of segment
+// END POINT PAIRS (lines[2i] on the canopy underside, lines[2i+1] on the riser) and `hang` is where
+// the canopy's origin sits in ACTOR space (shoulder height on the centreline). The json is fetched
+// first (tiny): a server without the canopy answers ONE 404, not two. Anything missing, malformed
+// or over budget leaves the dome exactly as it was.
+// hang*: the point (actor space) where the canopy frame hangs from the body = where its risers end
+// (the dome's lines end at the shoulders, 1.55 m; canopy.json `hang` replaces it). refreshChutes reads it.
+const CANOPY = { state: "none", tris: 0, lines: 0, span: 0, hangX: 0, hangY: 1.55, hangZ: 0 };
+const CANOPY_HANG_DEFAULT = { x: 0, y: 1.55, z: 0 };   // the shoulders the dome's lines ended at too
+const CANOPY_MAX_TRIS = 6000;
+async function loadCanopy(W) {
+  if (CANOPY.state !== "none") return;
+  CANOPY.state = "loading";
+  try {
+    const base = W.assetBase + "assets/props/canopy";
+    // bounded like every GLB here: a request that never settles must not wedge the match start
+    const ac = typeof AbortController === "function" ? new AbortController() : null;
+    const abortT = ac ? setTimeout(() => ac.abort(), W.kernel.loadTimeoutMs > 0 ? W.kernel.loadTimeoutMs : 30000) : 0;
+    let r;
+    try { r = await fetch(base + ".json", ac ? { cache: "force-cache", signal: ac.signal } : { cache: "force-cache" }); }
+    finally { clearTimeout(abortT); }
+    if (!r || !r.ok) { CANOPY.state = "absent"; return; }
+    const info = await r.json();
+    const ln = info && info.lines;
+    if (!Array.isArray(ln) || ln.length < 4 || ln.length > 128 || (ln.length & 1) || !ln.every((q) => q && isFinite(q.x) && isFinite(q.y) && isFinite(q.z))) { CANOPY.state = "bad-json"; return; }
+    const hang = info.hang && isFinite(info.hang.x) && isFinite(info.hang.y) && isFinite(info.hang.z) ? info.hang : CANOPY_HANG_DEFAULT;
+    const g = await loadBounded(W, base + ".glb");
+    let mesh = null;
+    g.scene.updateMatrixWorld(true);
+    g.scene.traverse((o) => { if (o.isMesh && (o.name === "Canopy" || !mesh)) mesh = o; });
+    if (!mesh || !mesh.geometry || !mesh.geometry.attributes.position) { CANOPY.state = "no-mesh"; return; }
+    const src = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+    const n = src.attributes.position.count;
+    const tris = src.index ? src.index.count / 3 : n / 3;
+    if (tris > CANOPY_MAX_TRIS || n > 65535) { CANOPY.state = "over-budget"; return; }
+    // the actor faces +Z (rig space) and the canopy's nose points -Z: half a turn, then up to the shoulders it hangs from
+    src.rotateY(Math.PI);
+    src.translate(hang.x, hang.y, hang.z);
+    if (!src.attributes.normal) src.computeVertexNormals();
+    const col = new Float32Array(n * 3);
+    const ca = src.attributes.color;
+    if (ca) for (let i = 0; i < n; i++) col[i * 3] = ca.getX(i);          // the red channel is the gore mask
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(src.attributes.position.array), 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(src.attributes.normal.array), 3));
+    geo.setAttribute("uv", src.attributes.uv ? new THREE.BufferAttribute(new Float32Array(src.attributes.uv.array), 2) : new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    if (src.index) geo.setIndex(new THREE.BufferAttribute(new Uint16Array(src.index.array), 1));
+    src.dispose();
+    // suspension lines: the same half turn and lift as the geometry; consecutive point pairs are segments
+    const L = new Float32Array(ln.length * 3);
+    ln.forEach((q, i) => { L[i * 3] = -q.x + hang.x; L[i * 3 + 1] = q.y + hang.y; L[i * 3 + 2] = -q.z + hang.z; });
+    ensureChute();
+    const old = CH.mesh.geometry;
+    CH.mesh.geometry = geo;
+    old.dispose();
+    CHUTE_LINES = L;
+    // the line batch is sized from CHUTE_LINES: rebuild its buffer for the new segment count
+    const lpos = new THREE.BufferAttribute(new Float32Array(CHUTE_MAX * L.length), 3);
+    lpos.setUsage(THREE.DynamicDrawUsage);
+    const lg = CH.lines.geometry;
+    CH.lines.geometry = new THREE.BufferGeometry();
+    CH.lines.geometry.setAttribute("position", lpos);
+    CH.lines.geometry.setDrawRange(0, 0);
+    lg.dispose();
+    CANOPY.state = "loaded"; CANOPY.tris = tris; CANOPY.lines = ln.length / 2; CANOPY.span = +info.span || 0;
+    CANOPY.hangX = +hang.x; CANOPY.hangY = +hang.y; CANOPY.hangZ = +hang.z;
+  } catch (e) {
+    CANOPY.state = "failed";
+    console.warn("[chars] canopy not loaded, keeping the dome:", e && e.message);
+  }
+}
+/** probe read-back: which canopy is in use */
+export function canopyStats() { return Object.assign({}, CANOPY, { instances: CH.mesh ? CH.mesh.count : 0, triangles: CH.mesh && CH.mesh.geometry.index ? CH.mesh.geometry.index.count / 3 : 0 }); }
 
 function deployChute(W, a) {
   if (a.chute) return;
@@ -2026,22 +2298,33 @@ function removeChute(a) {
 function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 
 /** Pack every deployed canopy into the instance + line buffers from the
- *  actors' CURRENT world matrices. The canopy stays upright against the body's
- *  pitch sway (the old `chute.rotation.x = -tiltX` on the child group). A
- *  corpse keeps its canopy until its group leaves the scene, as before. */
+ *  actors' CURRENT world matrices. The canopy frame is UPRIGHT (the body's yaw,
+ *  plus its bank in turns) and HUNG AT THE BODY'S REAL SHOULDER POINT, so the
+ *  risers end on the shoulders however the body sways under the wing. (It used
+ *  to be the body matrix times Rx(-tiltX), pivoting at the FEET: the body's
+ *  Euler order is XYZ, so that tilt is about the WORLD x axis and the "counter-
+ *  rotation" only cancelled it at yaw 0; at other headings the wing sat ~1 m
+ *  off the shoulders with the lines ending in mid-air, which the symmetric dome
+ *  hid and the ram-air wing shows: player_canopy side view, 2026-10-12.)
+ *  A body killed under its canopy loses it at once (startCorpse). */
+const _cq = new THREE.Vector3(), _cv = new THREE.Vector3();
 function refreshChutes() {
   const mesh = CH.mesh;
   if (!mesh || !mesh.parent) return 0;
   const im = mesh.instanceMatrix.array, lp = CH.lines.geometry.attributes.position.array;
+  const hx = CANOPY.hangX, hy = CANOPY.hangY, hz = CANOPY.hangZ;
   let n = 0;
   for (let i = 0; i < CH.list.length; i++) {
     const a = CH.list[i];
     if (!a.chute || !a.obj.parent) { CH.list.splice(i, 1); i--; continue; }
-    _cm.copy(a.obj.matrixWorld).multiply(_cr.makeRotationX(-(a._tiltX || 0)));
+    _cq.set(hx, hy, hz).applyMatrix4(a.obj.matrixWorld);                      // the shoulders, where the body really is
+    _cm.makeRotationY(a.obj.rotation.y).multiply(_cr.makeRotationZ(a._tiltZ || 0));
+    _cv.set(hx, hy, hz).applyMatrix4(_cm);
+    _cm.setPosition(_cq.x - _cv.x, _cq.y - _cv.y, _cq.z - _cv.z);            // M = T(shoulders) . R . T(-hang)
     _cm.toArray(im, n * 16);
     mesh.setColorAt(n, a.chute.color);
-    const e = _cm.elements, b = n * 36;
-    for (let k = 0; k < 36; k += 3) {
+    const e = _cm.elements, nl = CHUTE_LINES.length, b = n * nl;
+    for (let k = 0; k < nl; k += 3) {
       const x = CHUTE_LINES[k], y = CHUTE_LINES[k + 1], z = CHUTE_LINES[k + 2];
       lp[b + k] = e[0] * x + e[4] * y + e[8] * z + e[12];
       lp[b + k + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
@@ -2052,7 +2335,7 @@ function refreshChutes() {
   mesh.count = n;
   mesh.visible = n > 0;
   CH.lines.visible = n > 0;
-  CH.lines.geometry.setDrawRange(0, n * 12);
+  CH.lines.geometry.setDrawRange(0, n * (CHUTE_LINES.length / 3));
   if (n) {
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor.needsUpdate = true;
@@ -2104,22 +2387,27 @@ function syncObj(W, a, dt) {
   a.obj.rotation.y = a._bodyYaw;
   // body pose: freefall = belly-down skydive with banking; canopy = upright
   // with a gentle pendulum sway; everything else level
+  // The body's Euler order is YXZ (createActor): yaw outermost, so tiltX pitches about the BODY'S
+  // OWN left-right axis and tiltZ rolls about its own forward axis at every heading. (With three's
+  // default XYZ the pitch was about the WORLD x axis: the belly-down dive was right only when the
+  // body faced -Z; at 90 / 270 deg it lay on its side and at 0 deg on its back, measured 2026-10-12
+  // on 40 divers, r2/dive_probe.log. The old "negative = face-down" was tuned at that one heading,
+  // which is why the signs below are the opposite of the old ones: same look there, right everywhere.)
   let wantTiltX = 0, wantTiltZ = 0;
   if (a.gliding && !a.chute) {
-    // NEGATIVE X pitches the model face-down (positive tipped it onto its
-    // back — playtest report: "falling backwards")
-    wantTiltX = a.input.sprint ? -1.15 : -1.35;
+    // POSITIVE X pitches the head forward = face-down (the playtest's "falling backwards" was the
+    // back-down pose)
+    wantTiltX = a.input.sprint ? 1.15 : 1.35;
     wantTiltZ = a.input.mx * 0.45;                           // bank into turns
   } else if (a.gliding && a.chute) {
-    wantTiltX = 0.12 + Math.sin(W.t * 1.7) * 0.06;           // sway under canopy
+    wantTiltX = -0.12 - Math.sin(W.t * 1.7) * 0.06;          // sway under canopy (reclined in the harness)
     wantTiltZ = -a.input.mx * 0.18 + Math.cos(W.t * 1.3) * 0.04;
   }
   a._tiltX = (a._tiltX || 0) + (wantTiltX - (a._tiltX || 0)) * Math.min(1, dt * 4);
   a._tiltZ = (a._tiltZ || 0) + (wantTiltZ - (a._tiltZ || 0)) * Math.min(1, dt * 4);
   a.obj.rotation.x = a._tiltX;
   a.obj.rotation.z = a._tiltZ;
-  // (the canopy's counter-rotation against _tiltX is applied when the chute
-  // instances are packed — refreshChutes)
+  // (the canopy hangs upright from the body's shoulders whatever this tilt is: refreshChutes)
 }
 
 /** Clip selection + the pose layers for one synced actor (view pass, after the
@@ -2505,6 +2793,125 @@ const _uwCol = new THREE.Color(), _uwDeep = new THREE.Color(0x0d4a63);   // unde
 // _shakeOff is last frame's offset, which has to be undone before the lerp.
 let shakeT = 0;
 const _shakeOff = new THREE.Vector3();
+
+// ── camera vs walls (P3.1, owner decision D3 = yes) ──────────────────────────
+// Inside a building the third-person boom (4.2 m, +0.7 m to the right) used to sit
+// BEHIND the wall: a wall filled about half the frame in every probe shot, because
+// the only thing the camera ever tested was the terrain (heightAt). Now the free
+// camera position F (smoothed exactly as before) is cast against the static box
+// colliders FROM THE EYE. The rules, all from the owner's call:
+//   * SNAP IN on contact: the kept fraction of the boom drops to the safe value the
+//     same frame, so the lens is never inside or behind a wall;
+//   * EASE OUT slowly (CAM_EASE_RATE, ~0.45 s time constant) once the view is free;
+//   * NEVER ROTATE: only the position moves, along the boom, and the look target is
+//     translated by the same offset (a pure dolly), so the camera's orientation is
+//     bit-identical to the one it would have had without a wall;
+//   * the reticle stays centred (it is a screen-space element), and shots still go to
+//     the crosshair ray (weapons.js crosshairPoint reads W.camera as it is drawn).
+// The cast is a ray against boxes grown by the lens radius (a sphere cast with the
+// corners squared off: conservative, never optimistic). ONE queryColliders per frame
+// (budget 150/frame for the whole game, framecheck counts them), no allocation: the
+// result array is this module's own and the slab test is inline.
+const CAM_R = 0.28;              // lens sphere radius (m): near plane 0.1 + margin so a wall face never clips the view
+const CAM_EASE_RATE = 2.2;       // 1/s release rate once the view is free (slow on purpose)
+const CAM_HIDE_IN = 0.75, CAM_HIDE_OUT = 0.95;   // the body is hidden when the lens is this close to the eye (hysteresis)
+const CAM_MIN_D = 0.12;          // the lens never comes closer than this to the eye
+const _camWallOff = new THREE.Vector3();         // last frame's pull-in offset (output - free-space position)
+let _camWallF = 1;               // fraction of the free boom kept (1 = nothing in the way)
+let _camWallFocus = null;        // the actor _camWallF belongs to (a focus change resets it)
+let _camHidden = null;           // the actor whose model the pull-in hid (so a focus change can hand it back)
+let _camClose = false;
+const _cwCols = [];              // own out array for queryColliders (never the shared scratch)
+
+/** Earliest t in (0, best) at which the ray o + t*d enters a wall box grown by r, else `best`.
+ *  An eye already inside a box's grown volume (a wall closer than r, e.g. squeezed against a face)
+ *  does not get that box ignored: the lens radius shrinks to what the eye actually has to the real
+ *  face, so the ray still stops at the face and never passes through it. An eye IN the box (a ledge,
+ *  a prop edge) has nothing to pull in from and ignores it. Trunks and barrels (props under 2 m
+ *  wide) never count: a forest must not pump the camera, and a trunk the lens passes through hides
+ *  nothing. */
+function camRayHit(cols, ox, oy, oz, dx, dy, dz, r, best) {
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    if (c.kind !== "box" || c.dead) continue;
+    if (c.prop != null && c.maxX - c.minX < 2.0) continue;
+    let rr = r;
+    for (let pass = 0; pass < 2; pass++) {
+      let t0 = 0, t1 = best, miss = false;
+      // X slab
+      if (dx > -1e-9 && dx < 1e-9) { if (ox < c.minX - rr || ox > c.maxX + rr) miss = true; }
+      else {
+        let a = (c.minX - rr - ox) / dx, b = (c.maxX + rr - ox) / dx;
+        if (a > b) { const t = a; a = b; b = t; }
+        if (a > t0) t0 = a;
+        if (b < t1) t1 = b;
+        if (t0 > t1) miss = true;
+      }
+      // Y slab
+      if (!miss) {
+        if (dy > -1e-9 && dy < 1e-9) { if (oy < c.minY - rr || oy > c.maxY + rr) miss = true; }
+        else {
+          let a = (c.minY - rr - oy) / dy, b = (c.maxY + rr - oy) / dy;
+          if (a > b) { const t = a; a = b; b = t; }
+          if (a > t0) t0 = a;
+          if (b < t1) t1 = b;
+          if (t0 > t1) miss = true;
+        }
+      }
+      // Z slab
+      if (!miss) {
+        if (dz > -1e-9 && dz < 1e-9) { if (oz < c.minZ - rr || oz > c.maxZ + rr) miss = true; }
+        else {
+          let a = (c.minZ - rr - oz) / dz, b = (c.maxZ + rr - oz) / dz;
+          if (a > b) { const t = a; a = b; b = t; }
+          if (a > t0) t0 = a;
+          if (b < t1) t1 = b;
+          if (t0 > t1) miss = true;
+        }
+      }
+      if (miss) break;
+      if (t0 > 0) { best = t0; break; }                    // the lens sphere meets the box at t0
+      if (pass === 1) break;
+      // t0 == 0: the eye is inside the grown volume. Distance from the eye to the REAL box:
+      const ex = ox < c.minX ? c.minX - ox : ox > c.maxX ? ox - c.maxX : 0;
+      const ey = oy < c.minY ? c.minY - oy : oy > c.maxY ? oy - c.maxY : 0;
+      const ez = oz < c.minZ ? c.minZ - oz : oz > c.maxZ ? oz - c.maxZ : 0;
+      const dd = Math.sqrt(ex * ex + ey * ey + ez * ez);
+      if (dd <= 0.03) break;                                // the eye is in the box itself
+      rr = dd - 0.015;                                      // retest with the radius the eye really has
+    }
+  }
+  return best;
+}
+
+/** Pull `cam.position` (the free-space smoothed camera) in along the boom when a wall is in the
+ *  way. Writes the offset to _camWallOff and the state to W._camWall (read by the probes). */
+function camWall(W, cam, focus, dt, snapped) {
+  const st = W._camWall;
+  const ox = camTarget.x, oy = camTarget.y, oz = camTarget.z;
+  const dx = cam.position.x - ox, dy = cam.position.y - oy, dz = cam.position.z - oz;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  let f = 1;
+  if (len > 0.3 && W.map && W.map.queryColliders && !W.noCamWall) {
+    const cols = W.map.queryColliders(ox + dx * 0.5, oz + dz * 0.5, len * 0.5 + CAM_R + 0.1, _cwCols);
+    if (cols.length) {
+      const t = camRayHit(cols, ox, oy, oz, dx, dy, dz, CAM_R, 1);
+      if (t < 1) f = Math.max(CAM_MIN_D / len, t - 0.015);
+    }
+  }
+  if (focus !== _camWallFocus || snapped) { _camWallFocus = focus; _camWallF = f; }       // new subject / teleport: no ease
+  else if (f < _camWallF) _camWallF = f;                                                    // snap IN on contact
+  else if (f > _camWallF) {                                                                 // ease OUT, slowly, never past the safe fraction
+    _camWallF += (f - _camWallF) * Math.min(1, dt * CAM_EASE_RATE);
+    if (f - _camWallF < 0.002) _camWallF = f;
+  }
+  const kept = _camWallF < 1 ? _camWallF : 1;
+  const nx = ox + dx * kept, ny = oy + dy * kept, nz = oz + dz * kept;
+  _camWallOff.set(nx - cam.position.x, ny - cam.position.y, nz - cam.position.z);
+  cam.position.set(nx, ny, nz);
+  if (st) { st.f = kept; st.target = f; st.dist = len * kept; st.free = len; st.pulled = kept < 0.999; }
+}
+
 function updateCamera(W, dt, alpha) {
   const k = alpha == null ? 1 : alpha;
   const cam = W.camera;
@@ -2560,8 +2967,14 @@ function updateCamera(W, dt, alpha) {
   const effPitch = K.clamp(fPitch + pitchBias, -1.35, 1.35);
   const sp = Math.sin(effPitch), cp = Math.cos(effPitch);
   camDir.set(sy * cp, -sp, cy * cp).multiplyScalar(-1); // forward
-  // hide the player's own model in first-person so it never blocks the view
-  if (focus.rig && focus.rig.scene) focus.rig.scene.visible = !firstPerson;
+  // A model THIS function hid (first-person scope, or the lens right at the eye) goes back the
+  // moment the camera follows someone else: the old line only ever wrote the CURRENT focus, so a
+  // spectate switch left the previous one invisible for good. The hide itself is below, after
+  // the wall pull-in has said how close the lens really is.
+  if (_camHidden && _camHidden !== focus) {
+    if (_camHidden.rig && _camHidden.rig.scene) _camHidden.rig.scene.visible = true;
+    _camHidden = null; _camClose = false;
+  }
   // camera sits behind + slightly right (or AT the eye for first-person)
   camPos.copy(camTarget)
     .addScaledVector(camDir, -dist)
@@ -2595,7 +3008,7 @@ function updateCamera(W, dt, alpha) {
   // source of next frame's lerp — so each frame's jitter fed back through the
   // smoothing and the effective amplitude depended on framerate twice over.
   // Undo last frame's offset before the lerp, then re-apply this frame's.
-  cam.position.sub(_shakeOff);
+  cam.position.sub(_shakeOff).sub(_camWallOff);      // back to the FREE smoothed position (shake and wall offset are both re-applied below)
   // `dt * 18` is a first-order lag: the camera settles a constant v/k behind the
   // player, which at the old 9.6 m/s sprint was 0.53 m of permanent trail — read
   // on screen as the camera "not keeping up". It also scaled with framerate, so
@@ -2605,8 +3018,22 @@ function updateCamera(W, dt, alpha) {
   // new 8.0 m/s sprint. Snap outright if we are ever more than 4 m adrift
   // (teleport, respawn, spectate switch) so it never visibly reels itself in.
   const camK = firstPerson ? 1 : 1 - Math.exp(-26 * dt);
-  if (!firstPerson && cam.position.distanceToSquared(camPos) > 16) cam.position.copy(camPos);
+  let camSnapped = false;
+  if (!firstPerson && cam.position.distanceToSquared(camPos) > 16) { cam.position.copy(camPos); camSnapped = true; }
   else cam.position.lerp(camPos, Math.min(1, camK));
+  // WALL PULL-IN (P3.1): not in first-person (the lens is AT the eye) and not under a canopy or in
+  // freefall (open sky; the boom is 9-10 m and nothing but a sky island can be in it).
+  if (!firstPerson && !focus.gliding) camWall(W, cam, focus, dt, camSnapped);
+  else {
+    _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallFocus = focus;
+    const st0 = W._camWall; if (st0) { st0.f = 1; st0.target = 1; st0.pulled = false; st0.dist = 0; st0.free = 0; }
+  }
+  // the body is hidden while the lens is right at the eye (a head filling the screen is worse than
+  // no head), with hysteresis so it cannot flicker on the threshold
+  const stc = W._camWall;
+  _camClose = !!(!firstPerson && stc && stc.pulled && (_camClose ? stc.dist < CAM_HIDE_OUT : stc.dist < CAM_HIDE_IN));
+  if (focus.rig && focus.rig.scene) focus.rig.scene.visible = !(firstPerson || _camClose);
+  _camHidden = (firstPerson || _camClose) ? focus : null;
   shakeT += dt;
   _shakeOff.set(0, 0, 0);
   let roll = 0;
@@ -2631,7 +3058,9 @@ function updateCamera(W, dt, alpha) {
   // bobs +/-0.12, so a bare `<` strobes the whole effect every few seconds.
   const wy = W.map.waterY;
   if (wy != null && wy > -900) underwaterFx(W, cam, wy, dt);
-  cam.lookAt(camTarget.x + camDir.x * 8, camTarget.y + camDir.y * 8, camTarget.z + camDir.z * 8);
+  // the look target moves with the wall offset, so a pull-in is a pure DOLLY: the direction from the
+  // lens to the target is the one it would have had with no wall in the way (nothing rotates)
+  cam.lookAt(camTarget.x + camDir.x * 8 + _camWallOff.x, camTarget.y + camDir.y * 8 + _camWallOff.y, camTarget.z + camDir.z * 8 + _camWallOff.z);
   if (roll) cam.rotateZ(roll);   // lookAt zeroes roll, so it has to go on after
   // Decay HERE rather than in fx.update: fx runs AFTER weapons in the frame
   // order (ffg_royale3d.js), so a shake set by this frame's shot was decayed
@@ -2740,6 +3169,141 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   if (res.dead) killActor(W, victim, attackerId, weaponId);
 }
 
+// ── corpses + death falls (P1.6) ───────────────────────────────────────────────────────────
+const CORPSE_MIN_HOLD_S = 3, CORPSE_MAX_HOLD_S = 6, CORPSE_SINK_S = 1.2, CORPSE_SINK_M = 1.6;
+// ART-A measured the soldier mesh 8-17 cm BELOW the floor in the final pose of every fall (the shipped
+// death: 14.8 cm). The body is raised by this much while it goes down, so it lies on the ground, not in it.
+const CORPSE_LIFT_M = 0.1, CORPSE_LIFT_S = 1.0;
+
+/** Start the corpse timeline: hold the clamped death pose for the clip's length (3-6 s), then sink. */
+const CORPSE_FALL_VMAX = 55;     // m/s: a body dropping from the dive height stops accelerating here
+
+function startCorpse(W, victim) {
+  let dur = CORPSE_MIN_HOLD_S;
+  const cn = victim.anim && victim.clips ? victim.clips[victim.anim] : null;
+  const act = cn && victim.rig && victim.rig.actions ? victim.rig.actions[cn] : null;
+  if (act && act.getClip) dur = act.getClip().duration || dur;
+  victim._sinkHold = Math.min(CORPSE_MAX_HOLD_S, Math.max(CORPSE_MIN_HOLD_S, dur + 0.6));
+  victim._sinkT = 0;
+  // A death in the dive / under the canopy: the canopy goes (it used to ride the corpse) and the
+  // skydive tilt is levelled, so the fall clip plays on an upright root like every other death.
+  removeChute(victim);
+  victim._tiltX = 0; victim._tiltZ = 0;
+  victim.obj.rotation.x = 0; victim.obj.rotation.z = 0;
+  // A body killed in the AIR (a jump, a mantle, the dive) used to hang there for the whole hold and
+  // sink out of mid-air. It now drops to its floor first (the game's gravity, sim time) and the
+  // hold starts when it lands. Floor = the terrain or a roof under it (supportAt), or just under the
+  // water surface when there is water above that floor.
+  const p = victim.pos, vy = victim.obj.position.y;
+  let floor = supportAt(W, p.x, p.z, Math.max(p.y, vy));
+  const wy = W.map ? W.map.waterY : null;
+  if (wy != null && wy > -900 && wy - 0.3 > floor) floor = wy - 0.3;
+  victim._sinkFloor = floor;
+  victim._sinkVy = 0;
+  victim._sinkFall = vy > floor + 0.05;
+  victim._sinkY0 = victim._sinkFall ? floor : vy;
+}
+
+/** One SIM tick of a corpse's timeline (called from tick() for dead actors): paused or hit-stopped
+ *  time does not advance it. The pose itself is the mixer's, as before. */
+function corpseStep(W, a, dt) {
+  if (a._sinkFall) {
+    // still dropping to the floor: the hold has not started
+    a._sinkVy = Math.max(-CORPSE_FALL_VMAX, a._sinkVy + K.MOVE.gravity * dt);
+    const y = a.obj.position.y + a._sinkVy * dt;
+    if (y > a._sinkFloor) { a.obj.position.y = y; return; }
+    a.obj.position.y = a._sinkFloor;
+    a._sinkFall = false; a._sinkVy = 0; a._sinkY0 = a._sinkFloor; a._sinkT = 0;
+    return;
+  }
+  a._sinkT += dt;
+  const t = a._sinkT - a._sinkHold;
+  if (t <= 0) {
+    // going down: ease the body up off the floor it is sinking into (the pose is the mixer's, this is the root)
+    const u = a._sinkT >= CORPSE_LIFT_S ? 1 : a._sinkT / CORPSE_LIFT_S;
+    a.obj.position.y = a._sinkY0 + CORPSE_LIFT_M * (u * u * (3 - 2 * u));
+    return;
+  }
+  if (!a.obj.parent) { a._sinkT = -1; return; }             // its group was cleared (match restart)
+  const k = t >= CORPSE_SINK_S ? 1 : t / CORPSE_SINK_S;
+  a.obj.position.y = a._sinkY0 + CORPSE_LIFT_M - CORPSE_SINK_M * (k * k * (3 - 2 * k));
+  if (k >= 1) {
+    a._sinkT = -1;
+    a.obj.parent.remove(a.obj);
+    // the corpse is gone for good: its mixer stops ticking (it played the clamped death pose for
+    // the whole hold, ~49 per match, until the next match's teardown) and its skeleton's bone
+    // texture is freed now
+    disposeRig(W, a.rig);
+  }
+}
+
+/** Which of the seven Mixamo death falls this kill plays, or null (use the single `death`).
+ *  Names follow Mixamo's: "death from the front" = the victim was SHOT from the front (each clip
+ *  falls the way Mixamo animated it; ART-A's assets/chars/clips/manifest.json lists where each
+ *  one ends). Direction is where the last hit came from relative to the way the victim faces:
+ *  front / back / right (a hit from the left has no clip of its own: it takes a front or back
+ *  fall, seeded). A headshot takes the head variant, a crouching headshot its own clip, and a
+ *  victim on the move may take the walking-to-dying. Every pick that is not forced comes from a
+ *  stream seeded by (match seed, victim, sim tick), never Math.random(). */
+const PICK_LOG = [];                              // probe read-back only (kills are rare: no per-frame cost)
+const _pickWhy = { dir: "-", moving: false, head: false, heavy: false };
+function pickDeath(W, victim) {
+  _pickWhy.dir = "-"; _pickWhy.moving = false; _pickWhy.head = false; _pickWhy.heavy = false;
+  const c = victim.clips;
+  if (!c) return null;
+  let any = false;
+  for (let i = 0; i < DEATH_CLIPS.length; i++) if (c[DEATH_CLIPS[i]]) { any = true; break; }
+  if (!any) return null;
+  const has = (k) => !!c[k];
+  const rng = K.mulberry32((((W.seed | 0) ^ Math.imul(hashCode(String(victim.id)), 2654435761) ^ Math.imul(W.simTick | 0, 40503)) >>> 0));
+  const pick2 = (a, b) => (has(a) && has(b) ? (rng() < 0.5 ? a : b) : has(a) ? a : has(b) ? b : null);
+  const lh = victim.lastHit;
+  const att = lh && lh.attackerId ? W.actorById.get(lh.attackerId) : null;
+  const head = !!(lh && lh.isHead);
+  // where the shot came from, in the victim's own frame (obj.rotation.y = the way it faces; forward
+  // = (sin, cos), right = (-cos, sin))
+  let dir = "none";
+  if (att && att !== victim) {
+    let dx = att.pos.x - victim.pos.x, dz = att.pos.z - victim.pos.z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d > 0.05) {
+      dx /= d; dz /= d;
+      const b = victim.obj.rotation.y;
+      const front = dx * Math.sin(b) + dz * Math.cos(b), side = -dx * Math.cos(b) + dz * Math.sin(b);
+      dir = Math.abs(front) >= Math.abs(side) ? (front > 0 ? "front" : "back") : (side > 0 ? "right" : "left");
+    }
+  }
+  const moving = victim.onGround && !victim.swimming && Math.sqrt(victim.vel.x * victim.vel.x + victim.vel.z * victim.vel.z) > 2.2;
+  // a shotgun blast, a sniper round or a grenade hits hard enough to throw the victim off its feet
+  const wid = lh ? lh.weaponId : null;
+  const heavy = wid === "shotgun" || wid === "sniper" || wid === "glauncher";
+  _pickWhy.dir = dir; _pickWhy.moving = moving; _pickWhy.head = head; _pickWhy.heavy = heavy;
+  let k = null;
+  if (victim.crouching && head && has("death_crouch_head")) return "death_crouch_head";
+  // A runner hit ALONG its line of travel (from the front or the back) stumbles on before it drops: the
+  // walking-to-dying. A hit from the side knocks it sideways, so a lateral hit always takes its own fall.
+  // (Measured on bot kills, 2026-10-12: about half of all deaths are a runner shot from the front and one
+  // in four is lateral. A walking share of .55 made half of every match's corpses the same clip.)
+  if (moving && dir !== "right" && dir !== "left" && has("death_walking") && rng() < (head ? 0.15 : 0.4)) return "death_walking";
+  // the head falls (knocked back face-up / thrown forward face-down) are for headshots AND for a heavy
+  // weapon from the front or the back: half of those throw the victim instead of dropping it
+  const knock = head || (heavy && (dir === "front" || dir === "back") && rng() < 0.5);
+  if (knock) {
+    k = dir === "front" ? "death_front_head" : dir === "back" ? "death_back_head" : pick2("death_front_head", "death_back_head");
+  } else if (dir === "front") {
+    // a runner shot from the front keeps its momentum and tips either way: the crumple or the forward fall
+    // (death_front and death_back both end on the side with the head forward, ART-A manifest)
+    k = moving ? pick2("death_front", "death_back") : "death_front";
+  } else {
+    k = dir === "back" ? "death_back" : dir === "right" ? "death_right" : pick2("death_front", "death_back");
+  }
+  if (k && has(k)) return k;
+  // the variant for this hit is missing from this build: any other fall that is not the crouch-only one
+  const pool = DEATH_CLIPS.filter((n) => n !== "death_crouch_head" && has(n));
+  if (pool.length) return pool[(rng() * pool.length) | 0];
+  return has("death_crouch_head") ? "death_crouch_head" : null;
+}
+
 export function killActor(W, victim, killerId, weaponId) {
   if (!victim.alive) return;
   victim.alive = false;
@@ -2768,33 +3332,19 @@ export function killActor(W, victim, killerId, weaponId) {
   // update() skips dead actors, so nothing else would ever clear the state
   victim.mantleT = null;
   if (victim.rig) {
-    // death VARIETY: random pick among whichever death clips this skin baked
-    // (183 fall-backward / 184 fall-forward joined the original 8 "Dead") —
-    // one identical crumple on all 50 actors was a top visible-quality tell
-    const dk = ["death", "death2", "death3"].filter((k) => victim.clips[k]);
-    if (dk.length) playAnim(victim, dk[(Math.random() * dk.length) | 0], { once: true });
+    // P1.6: one of the seven Mixamo falls, matched to where the last hit came from (pickDeath).
+    // SEEDED, so the same match and the same kill play the same fall (the old Math.random() pick
+    // could not be replayed). None of the seven shipped = the single baked `death`.
+    const dk = pickDeath(W, victim) || (victim.clips.death ? "death" : null);
+    if (PICK_LOG.length < 256) PICK_LOG.push([victim.id, dk, _pickWhy.dir, _pickWhy.moving, _pickWhy.head, _pickWhy.heavy]);
+    if (dk) playAnim(victim, dk, { once: true });
   }
-  // "sink away" was a lie the code told: the group was unparented in ONE frame,
-  // so the corpse popped out of existence. Hold the clamped death pose, then sink
-  // it under the terrain and remove on completion. Actors are rebuilt from
-  // scratch each match and every group is cleared at match start, so a tween
-  // still in flight across a restart writes into a discarded object and its
-  // parent-guarded remove is a no-op.
-  setTimeout(() => {
-    if (!victim.obj.parent) return;
-    W.kernel.tween({
-      target: victim.obj, duration: 1.2,
-      to: { "position.y": victim.obj.position.y - 1.6 },
-      onComplete: () => {
-        if (!victim.obj.parent) return;
-        victim.obj.parent.remove(victim.obj);
-        // the corpse is gone for good: its mixer stops ticking (it played the
-        // clamped death pose for 4 s per kill, ~49 per match, until the next
-        // match's teardown) and its skeleton's bone texture is freed now
-        disposeRig(W, victim.rig);
-      },
-    });
-  }, 3000);
+  // The corpse holds its death pose, then sinks under the terrain and is removed. That timeline
+  // runs on SIM time (corpseStep, from tick): it used to be a wall-clock setTimeout(3000) plus a
+  // kernel tween, which kept going through a pause (the body vanished while the menu was up) and
+  // ignored hit-stop. Actors are rebuilt from scratch each match and every group is cleared at
+  // match start, so a corpse still sinking across a restart finds `obj.parent` null and just stops.
+  startCorpse(W, victim);
   // player death → spectate killer
   if (victim === W.player) {
     // A storm death passes killerId null (storm.js only credits an attacker who
@@ -2878,9 +3428,9 @@ export function warmObjects(W) {
   CH.mesh.count = 1; CH.mesh.visible = true;
   CH.mesh.instanceMatrix.needsUpdate = true;
   const lp = CH.lines.geometry.attributes.position.array;
-  for (let k = 0; k < 36; k += 3) { lp[k] = CHUTE_LINES[k]; lp[k + 1] = CHUTE_LINES[k + 1] - 10000; lp[k + 2] = CHUTE_LINES[k + 2]; }
+  for (let k = 0; k < CHUTE_LINES.length; k += 3) { lp[k] = CHUTE_LINES[k]; lp[k + 1] = CHUTE_LINES[k + 1] - 10000; lp[k + 2] = CHUTE_LINES[k + 2]; }
   CH.lines.geometry.attributes.position.needsUpdate = true;
-  CH.lines.geometry.setDrawRange(0, 12);
+  CH.lines.geometry.setDrawRange(0, CHUTE_LINES.length / 3);
   CH.lines.visible = true;
   out.push(CH.mesh, CH.lines, tagsMod.warmObject());
   const done = new Set();
@@ -2893,6 +3443,23 @@ export function warmObjects(W) {
     m.bind(b.skeleton, b.bindMatrix);
     m.frustumCulled = false;
     out.push(m);
+  }
+  // The zone-tint body program carries the rim light (P1.8, key "lcZoneTintRim1").
+  // Every live rig is already in the scene and the warm frame forces all of it
+  // visible, so that program compiles there; this throwaway body on a LIVE body
+  // material guarantees it even for a roster whose skins have no far LOD (each
+  // match's material clones share the one program, only uniform values differ).
+  if (!done.size) {
+    for (const a of (W && W.actors) || []) {
+      if (!a.rig || !a._lod0Geo || !a._bodies || !a._bodies.length) continue;
+      const b = a._bodies[0];
+      const m = new THREE.SkinnedMesh(a._lod0Geo, b.material);
+      m.name = "lc-warm-rim";
+      m.bind(b.skeleton, b.bindMatrix);
+      m.frustumCulled = false;
+      out.push(m);
+      break;
+    }
   }
   return out;
 }
@@ -2910,6 +3477,9 @@ export function disposeMatch(W) {
   for (const m of R.mats) { m.dispose(); out.materials++; }
   R.rigs.length = 0;
   R.mats.length = 0;
+  PICK_LOG.length = 0;
+  // camera wall pull-in state belongs to the match that is ending (its rigs are gone)
+  _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallFocus = null; _camClose = false; _camHidden = null;
   out.tags = tagsMod.disposeMatch().tags;
   CH.list.length = 0;
   if (CH.mesh) {
