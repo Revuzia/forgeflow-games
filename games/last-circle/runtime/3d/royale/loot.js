@@ -3,9 +3,20 @@
  * and death drops. Loot placement is SEEDED (same seed → same loot) so
  * multiplayer clients agree without item sync.
  *
- * Item visuals: rarity-colored ring + kind mesh (weapon protos from
- * weapons.js when ready), gentle bob+spin. Chests use the treasure chest GLB
- * with a gold shimmer light-ring.
+ * Item visuals: kind mesh (weapon protos from weapons.js when ready), gentle
+ * bob+spin, over a glowing floor ring; floor WEAPONS also get a thin rarity light
+ * beam. Chests use the treasure chest GLB with a gold ring, beam and glow.
+ *
+ * ALL of the ring / beam / glow markers are instanced draws (plan P1.3): ONE
+ * InstancedMesh of beams, ONE of rings, ONE of camera-facing glow billboards - 3
+ * draw calls for the whole map, where it used to be an opaque torus per item plus
+ * 51 additive beam meshes and 55+ additive sprites per chest/death drop. They are
+ * built once per page and re-parented each match (like the contact blobs), a slot
+ * is parked by a zero matrix when its item is taken / opened, and everything that
+ * animates (pulse, dash rotation, distance + storm fades) is in the shader, so the
+ * only per-frame CPU cost is three shared uniforms and a sub-range upload on the
+ * frames a slot actually changed. Beams are CLAMPED at spawn to the first collider
+ * above them (a ray-cast once per item), so none pokes through a roof.
  */
 import * as THREE from "three";
 
@@ -95,6 +106,7 @@ export function init(W) {
   W.lootSyncState = () => ({ taken: takenIds.slice(), opened: [...chests.values()].filter((c) => c.opened).map((c) => c.id) });
   W.debugChests = () => [...chests.values()]; // test hook (preview verification)
   W.debugItems = debugItems;                   // test hook (loot census)
+  W.debugLootFx = debugLootFx;                 // test hook (marker pools: live slots, beam tops, ceilings)
 }
 const takenIds = [];
 
@@ -102,17 +114,18 @@ export function resetSync() { takenIds.length = 0; }
 
 /** Release the GPU resources the LAST match's loot allocated.
  *  disposeMapResources is deliberately scoped to W._groups.map, and match
- *  teardown only .clear()s the other groups — so every chest's glow SpriteMaterial
- *  (a fresh one per chest, chestGlow()), every beam CylinderGeometry +
- *  MeshBasicMaterial, and every death-drop glow was orphaned on the GPU each
- *  match. With ~130 chests a map and PLAY AGAIN as the expected flow, that
- *  compounds without ever passing through a reload.
+ *  teardown only .clear()s the other groups — so what a match builds inside the
+ *  loot group has to be freed here, or it is orphaned on the GPU each match (with
+ *  PLAY AGAIN as the expected flow that compounds without ever passing through a
+ *  reload). Today that is the cloned chest materials of an opened chest; the old
+ *  per-chest glow SpriteMaterials, beam geometries + materials and death-drop glows
+ *  are gone - every marker is a slot in the three page-lifetime instanced pools.
  *
  *  The prototypes are shared across matches ON PURPOSE (itemProtoCache holds the
- *  loaded GLBs; ringGeo/kindGeos/kindMats/ringMats/glowTex are built once, and
- *  THREE's clone() shares geometry and material by reference) — so anything
- *  reachable from them is excluded BY IDENTITY. Disposing those would leave the
- *  next match drawing with dead handles. */
+ *  loaded GLBs; kindGeos/kindMats, the marker pools and the blob mesh are built
+ *  once, and THREE's clone() shares geometry and material by reference) — so
+ *  anything reachable from them is excluded BY IDENTITY. Disposing those would
+ *  leave the next match drawing with dead handles. */
 export function disposeLootResources(W) {
   const g = W._groups && W._groups.loot;
   if (!g) return { geometries: 0, materials: 0, textures: 0 };
@@ -136,10 +149,12 @@ export function disposeLootResources(W) {
       for (const m of mm) keep(m);
     });
   };
-  keep(ringGeo); keep(glowTex); keep(chestProto);
+  keep(chestProto);
   if (blobMesh) { keep(blobMesh.geometry); keep(blobMesh.material); }
+  // the marker pools are page-lifetime (like the blobs): their geometry, shader
+  // material and instance buffers are shared by every match, so teardown leaves them alone
+  if (FX.pools) for (const k in FX.pools) { keep(FX.pools[k].mesh.geometry); keep(FX.pools[k].mesh.material); }
   for (const d of chestDepthMats.values()) keep(d);
-  for (const k in ringMats) keep(ringMats[k]);
   for (const k in kindGeos) keep(kindGeos[k]);
   for (const k in kindMats) keep(kindMats[k]);
   for (const k in itemProtoCache) keep(itemProtoCache[k]);
@@ -194,6 +209,8 @@ export function populate(W) {
   g.userData.disposed = false;
   blobReset();
   g.add(blobInit());
+  fxResetPools();
+  fxAttach(g);                     // the three marker pools (rings, beams, glows) ride in the loot group
 
   let fi = 0;
   const floorPts = [];
@@ -225,11 +242,59 @@ export function populate(W) {
     spawnItem(W, { kind: "ammo", id: "light", count: K.AMMO.light.box }, lp.x - 0.6, lp.y, lp.z + 1.0, "fl:" + i);
   }
   blobFlush();
+  fxFlush();
 }
 
 /** Test hook (read-only by convention): every live ground item, for the loot
  *  census in the lane probes. Same idea as W.debugChests. */
 export function debugItems() { return [...items.values()].filter((it) => !it.taken); }
+
+/** Contract C-WARM: the instanced marker pools (rings, beams, glows), guaranteed to exist
+ *  and to sit in the loot group, so the kernel warm-up compiles their three programs under
+ *  the loading screen. The warm-up forces each empty pool to count >= 1 for its one real
+ *  frame; every vertex shader discards a slot that holds a zero matrix, so that frame
+ *  draws nothing it should not. */
+export function warmObjects(W) {
+  const P = fxInit();
+  const g = W.group("loot");
+  for (const k of ["rings", "beams", "glows"]) if (!P[k].mesh.parent) g.add(P[k].mesh);
+  return [P.rings.mesh, P.beams.mesh, P.glows.mesh];
+}
+
+function slotInfo(P, slot) {
+  if (!P || slot == null || slot < 0) return null;
+  const m = P.mesh.instanceMatrix.array, o = slot * 16;
+  const r0 = Math.hypot(m[o], m[o + 1], m[o + 2]);
+  const info = { slot, alive: r0 > 1e-4, x: m[o + 12], y: m[o + 13], z: m[o + 14], size: r0 };
+  if (P.ex) { info.ex = []; for (let i = 0; i < P.exSize; i++) info.ex.push(P.ex.array[slot * P.exSize + i]); }
+  const c = P.mesh.instanceColor.array;
+  info.color = [c[slot * 3], c[slot * 3 + 1], c[slot * 3 + 2]];
+  return info;
+}
+/** Test hook: the marker pools - live counts, the shared uniforms and (by item or chest id) one
+ *  object's ring / beam / glow slots with the beam's drawn top and the ceiling it was clamped to. */
+export function debugLootFx(id) {
+  const P = FX.pools;
+  if (!P) return null;
+  const live = (p) => p.n - p.free.length;
+  const out = {
+    beams: { live: live(P.beams), high: P.beams.n, count: P.beams.mesh.count, max: P.beams.max },
+    rings: { live: live(P.rings), high: P.rings.n, count: P.rings.mesh.count, max: P.rings.max },
+    glows: { live: live(P.glows), high: P.glows.n, count: P.glows.mesh.count, max: P.glows.max },
+    meshes: [P.rings.mesh, P.beams.mesh, P.glows.mesh],
+    uniforms: FX.U,
+    free: { beams: P.beams.free, rings: P.rings.free, glows: P.glows.free },   // the free lists themselves (read-only by convention)
+  };
+  if (id != null) {
+    const o = items.get(id) || chests.get(id);
+    if (o) {
+      const beam = slotInfo(P.beams, o.beam);
+      if (beam) { beam.top = beam.y + P.beams.ex.array[o.beam * 4]; beam.nominal = P.beams.ex.array[o.beam * 4 + 1]; }
+      out.obj = { id, ring: slotInfo(P.rings, o.ring), beam, glow: slotInfo(P.glows, o.glow), ceil: o.ceil };
+    }
+  }
+  return out;
+}
 
 /** C8 teardown contract: free what THIS match's loot allocated and drop the
  *  module's references to it. Idempotent — the orchestrator may also call
@@ -238,6 +303,7 @@ export function disposeMatch(W) {
   const r = disposeLootResources(W);
   items.clear(); chests.clear(); lootGrid.clear();
   blobReset();
+  fxResetPools();                  // every marker slot back to the free list; the pools themselves are page-lifetime
   takenIds.length = 0;
   supplyState = null;
   chestChannel.id = null; chestChannel.t = 0;
@@ -245,15 +311,6 @@ export function disposeMatch(W) {
 }
 
 // ── visuals ──────────────────────────────────────────────────────────────────
-const ringGeo = new THREE.TorusGeometry(0.55, 0.05, 6, 24);
-const ringMats = {};
-function rarityRing(rarity) {
-  const c = K.RARITY_COLOR[K.RARITY[rarity || 0]] || "#9da5b4";
-  if (!ringMats[c]) ringMats[c] = new THREE.MeshBasicMaterial({ color: c });
-  const m = new THREE.Mesh(ringGeo, ringMats[c]);
-  m.rotation.x = -Math.PI / 2;
-  return m;
-}
 const kindGeos = {
   ammo: new THREE.BoxGeometry(0.34, 0.24, 0.24),
   consumable: new THREE.CylinderGeometry(0.14, 0.14, 0.4, 8),
@@ -334,20 +391,36 @@ function blobInit() {
 }
 function blobReset() { blobN = 0; blobFree.length = 0; blobLo = Infinity; blobHi = -1; if (blobMesh) blobMesh.count = 0; }
 function blobMark(i) { if (i < blobLo) blobLo = i; if (i > blobHi) blobHi = i; }
+/** Queue [start, start + count) of an instance attribute for upload WITHOUT dropping a range an earlier flush queued
+ *  that no frame has uploaded yet. update() runs once per SIM tick - two or three per rendered frame at 30-60 fps, and
+ *  hundreds in a fastForward - while three uploads (and only then clears) the list once per render. The flushes used
+ *  to clearUpdateRanges() first, so a slot parked on tick 1 and a different slot changed on tick 2 of the same frame
+ *  uploaded only tick 2's range: the taken item's ring / beam / blob stayed on the GPU as a ghost (measured: a ghost
+ *  beam above a hut roof, gate run 3). Keeps ONE merged range, so a long fastForward cannot grow the list, and
+ *  merges in place (no allocation once a range is pending). */
+function queueRange(a, start, count) {
+  const r = a.updateRanges;
+  if (r.length) {
+    let s = start, e = start + count;
+    for (let i = 0; i < r.length; i++) { if (r[i].start < s) s = r[i].start; if (r[i].start + r[i].count > e) e = r[i].start + r[i].count; }
+    r.length = 1; r[0].start = s; r[0].count = e - s;
+  } else a.addUpdateRange(start, count);
+  a.needsUpdate = true;
+}
 function blobFlush() {
   if (!blobMesh || blobHi < 0) return;
-  const a = blobMesh.instanceMatrix;
-  a.clearUpdateRanges();
-  a.addUpdateRange(blobLo * 16, (blobHi - blobLo + 1) * 16);
-  a.needsUpdate = true;
+  queueRange(blobMesh.instanceMatrix, blobLo * 16, (blobHi - blobLo + 1) * 16);
   blobLo = Infinity; blobHi = -1;
 }
-/** Slot for a new item at (x, y, z): the matrix sits on the highest surface at or
- *  below the item (a building floor, else the terrain, tilted to its slope).
- *  -1 = no blob (pool full, or nothing within reach under the item). */
-function blobAlloc(W, it) {
-  if (!blobMesh || !W.map) return -1;
-  const M = W.map, x = it.pos.x, y = it.pos.y, z = it.pos.z;
+/** The surface under a point, shared by the contact blob and the floor ring: the
+ *  highest building floor (box top) at or just below `y`, else the terrain, with
+ *  the quaternion that lays a flat quad on it (identity on a box top, the terrain
+ *  normal otherwise). Fills `_surf` and returns false when nothing is within reach
+ *  under the point (a gun that is still in the air). */
+const _surf = { floor: 0, onBox: false, q: new THREE.Quaternion() };
+function surfaceUnder(W, x, y, z) {
+  const M = W.map;
+  if (!M) return false;
   let floor = M.heightAt(x, z), onBox = false;
   if (M.queryColliders) {
     const cs = M.queryColliders(x, z, 0.05, blobCols);
@@ -357,19 +430,29 @@ function blobAlloc(W, it) {
       if (c.maxY <= y + 0.05 && c.maxY > floor) { floor = c.maxY; onBox = true; }
     }
   }
-  if (y - floor > 0.9) return -1;
-  const slot = blobFree.length ? blobFree.pop() : (blobN < BLOB_MAX ? blobN++ : -1);
-  if (slot < 0) return -1;
-  if (blobN > blobMesh.count) blobMesh.count = blobN;
-  if (onBox) _bQ.identity();
+  if (y - floor > 0.9) return false;
+  if (onBox) _surf.q.identity();
   else {
     const e = 0.6;
     _bN.set(M.heightAt(x - e, z) - M.heightAt(x + e, z), 2 * e, M.heightAt(x, z - e) - M.heightAt(x, z + e)).normalize();
-    _bQ.setFromUnitVectors(_bUp, _bN);
+    _surf.q.setFromUnitVectors(_bUp, _bN);
   }
+  _surf.floor = floor; _surf.onBox = onBox;
+  return true;
+}
+/** Slot for a new item at (x, y, z): the matrix sits on the highest surface at or
+ *  below the item (a building floor, else the terrain, tilted to its slope).
+ *  -1 = no blob (pool full, or nothing within reach under the item). */
+function blobAlloc(W, it) {
+  if (!blobMesh || !W.map) return -1;
+  const x = it.pos.x, y = it.pos.y, z = it.pos.z;
+  if (!surfaceUnder(W, x, y, z)) return -1;
+  const slot = blobFree.length ? blobFree.pop() : (blobN < BLOB_MAX ? blobN++ : -1);
+  if (slot < 0) return -1;
+  if (blobN > blobMesh.count) blobMesh.count = blobN;
   // terrain: +5 cm clears the rendered chunk mesh (piecewise-linear between ~2.6 m
   // vertices) where it sits a little above the analytic height; a box top is exact
-  _bM.compose(_bP.set(x, floor + (onBox ? 0.02 : 0.05), z), _bQ, _bS).toArray(blobShown, slot * 16);
+  _bM.compose(_bP.set(x, _surf.floor + (_surf.onBox ? 0.02 : 0.05), z), _surf.q, _bS).toArray(blobShown, slot * 16);
   return slot;
 }
 function blobShow(it, on) {
@@ -385,9 +468,450 @@ function blobRelease(it) {
   it.blob = -1;
 }
 
+// ── rarity beams + floor rings + glow billboards (plan P1.3) ─────────────────
+// THREE instanced draws for every marker on the map, in place of an opaque torus
+// per item + a beam mesh and a glow sprite per chest (51 + 55 additive objects the
+// glider could never cull). All three are page-lifetime objects built once (like
+// the contact blobs), re-parented into the loot group each match, drawn at
+// renderOrder >= 6 so they land after the storm wall (renderOrder 5), and they
+// read the shared storm circle (W.stormU = {cx, cz, r}, contract C-LOOT-RENDER) to
+// fade out beyond it so a beam never glows through the normal-blended
+// wall. A slot is a matrix (+ colour + one small attribute); a taken / opened
+// item parks its slots at a zero matrix, which every vertex shader below discards.
+//
+// GLARE BAR (owner doctrine): every number here was started LOW and judged on
+// screenshots - beam body/core radiance, ring band luminance and glow alpha are the
+// constants right below. Nothing but the core of a rare+ beam crosses the 0.72
+// bloom threshold on a typical surface.
+const BEAM_MAX = 1024, RING_MAX = 2048, GLOW_MAX = 768;
+const RO_RING = 6, RO_BEAM = 7, RO_GLOW = 8;
+//                 common  uncommon  rare   epic   legendary
+const BEAM_H    = [2.0,    4.0,      7.0,   10.5,  14.0];     // nominal height, m (clamped under a roof)
+const BEAM_R    = [0.045,  0.050,    0.060, 0.070, 0.080];    // radius at the base, m (widens with distance, see the shader)
+// x ~1.5 = HDR luminance of the beam axis (core + body, near): common 0.60 / uncommon 0.66 stay under the 0.72 bloom
+// threshold; rare 1.1 .. legendary 1.7 = 3.8-5.2x lit grass (0.4), 2.9-3.8x sand (0.6): the 3-5x glare bar. Legendary was
+// 1.25 (6x grass, a 40 px bloom halo at 7 m) - lowered so it cannot mask what stands behind it.
+const BEAM_GAIN = [0.40,   0.42,     0.75,  0.90,  1.05];
+const BEAM_FAR  = [60,     90,       130,   180,   240];      // m: faded out by here
+const CHEST_BEAM = { h: 9, r: 0.13, gain: 0.85, far: 1800 };   // far: the beacon the glider steers to, visible across the whole map
+const RING_Y_WEAPON = 1.1, RING_Y_SMALL = 0.8;                // target HDR luminance of the ring band (sand sits at ~0.64)
+const RING_GAIN_MAX = 3.6, RING_WHITE = 0.12;
+const RING_D_WEAPON = 2.0, RING_D_SMALL = 1.0, RING_D_CHEST = 3.4;   // quad diameter, m
+const GLOW_GAIN = 0.8;
+const GOLD_HEX = "#ffd254", AMMO_HEX = "#cfa84a", HEAL_HEX = "#59d68a", SHIELD_HEX = "#4aa8ff";
+
+// 1 inside the storm circle (or when there is none), 0 beyond its edge + 18 m. W.stormU.r is 1e9 when no circle exists
+// (practice, before the first circle); in float32 r - 6 and r + 18 both round to 1e9, so smoothstep() would get EQUAL edges, which
+// GLSL leaves undefined (NaN on some GPUs): "no circle" is handled explicitly.
+const FX_STORM_GLSL = /* glsl */`
+float stormK(vec3 st, vec2 p) {
+  return st.z > 1.0e6 ? 1.0 : 1.0 - smoothstep(st.z - 6.0, st.z + 18.0, length(p - st.xy));
+}`;
+const FX_VS_BEAM = /* glsl */`
+${FX_STORM_GLSL}
+attribute vec4 aBeam;               // x drawn height (clamped), y nominal height, z gain, w fade-out distance
+uniform vec3 uStorm;
+varying float vH, vNom, vGain, vFade, vPhase;
+varying vec3 vCol;
+varying vec2 vN, vV;
+varying float vFarK;
+void main() {
+  float r0 = length(instanceMatrix[0].xyz);
+  vec3 base = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
+  vec3 toCam = cameraPosition - base;
+  float d = length(toCam);
+  float dh = length(toCam.xz);
+  float far = aBeam.w;
+  float fDist = 1.0 - smoothstep(0.55 * far, far, d);
+  float fNear = smoothstep(0.7, 2.6, dh);                                    // never a veil when the camera is beside it
+  float fStorm = stormK(uStorm, base.xz);
+  float fade = fDist * fNear * fStorm;
+  if (r0 < 0.0001 || aBeam.x <= 0.0 || fade < 0.002) { gl_Position = vec4(0.0); return; }
+  float rmax = far > 400.0 ? 2.2 : 0.45;
+  float r = clamp(d * 0.0028, r0, max(r0, rmax));                            // ~3.5 px wide at any range (1280 px, 57 deg)
+  vec3 wp = base + vec3(position.x * r, position.y * aBeam.x, position.z * r);
+  gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+  vH = position.y * aBeam.x; vNom = aBeam.y; vGain = aBeam.z; vFade = fade; vCol = instanceColor;
+  vN = position.xz;
+  vV = dh > 0.001 ? toCam.xz / dh : vec2(1.0, 0.0);
+  vPhase = base.x * 0.7 + base.z * 0.3;
+  // far (rarity) beams hand the white core's weight to the coloured body past ~20 m; a CHEST beacon (fade-out > 400 m)
+  // keeps its white-hot core at every range - it is the gold beacon the glider steers to, not a rarity code
+  vFarK = far > 400.0 ? 0.0 : smoothstep(18.0, 80.0, d);
+}`;
+const FX_FS_BEAM = /* glsl */`
+uniform float uTime;
+uniform vec3 uK;
+varying float vH, vNom, vGain, vFade, vPhase;
+varying vec3 vCol;
+varying vec2 vN, vV;
+varying float vFarK;
+void main() {
+  float f = abs(dot(normalize(vN), vV));          // 1 on the axis facing the camera, 0 at the silhouette
+  float body = pow(f, 1.3);
+  float core = pow(f, 6.0);                       // the thin white-hot axis
+  float v = pow(1.0 - clamp(vH / vNom, 0.0, 1.0), 1.1) * smoothstep(0.0, 0.12, vH);
+  float shimmer = 0.93 + 0.07 * sin(uTime * 2.4 + vH * 0.8 + vPhase);
+  vec3 tint = mix(vCol, vec3(1.0), 0.6);
+  // far away the beam is only ~3 px wide and its white core used to swallow the rarity colour (every beam read
+  // white over the sky at 40-100 m): past ~20 m the core hands its weight to the coloured body
+  float far = vFarK;
+  vec3 c = (vCol * ((0.8 + 0.5 * far) * body) + tint * (1.6 * (1.0 - 0.8 * far) * core)) * (vGain * uK.x * v * shimmer * vFade);
+  // EMISSION (rgb) plus a little OCCLUSION (alpha) of what is behind, blended premultiplied (ONE, ONE_MINUS_SRC_ALPHA):
+  // a purely additive beam over the ~0.58 sky or bright sand can only push toward white; dimming 0-38 % of the
+  // background under the body keeps the beam's hue there.
+  float occ = 0.38 * body * v * vFade * min(1.0, vGain * 1.2);
+#ifdef LC_CANVAS
+  // LOW tier: drawn straight to the canvas, so the blend happens on ENCODED values and there is no HDR target to tone-map later.
+  // Adding encoded emission to an encoded background is far too hot (enc(0.3) + enc(0.4) = 1.25 against enc(0.7) = 0.85), so the
+  // linear emission is added scaled by the slope of the composer's output curve at the daylight sky (ORCH's CO_ADD_K, 0.62) -
+  // the same rule its wrapper applies to additive materials.
+  gl_FragColor = vec4(c * 0.62, occ);
+#else
+  gl_FragColor = vec4(c, occ);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+#endif
+}`;
+const FX_VS_RING = /* glsl */`
+${FX_STORM_GLSL}
+attribute vec2 aRing;               // x style (0 weapon double ring, 1 small single ring), y phase
+uniform vec3 uStorm;
+uniform float uCull;
+varying vec2 vP, vS;
+varying vec3 vCol;
+varying float vFade;
+void main() {
+  vec3 ctr = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
+  float d = distance(cameraPosition, ctr);
+  float fCull = 1.0 - smoothstep(uCull - 25.0, uCull, d);                    // fades into the item cull, no pop
+  float fStorm = mix(0.35, 1.0, stormK(uStorm, ctr.xz));
+  vFade = fCull * fStorm;
+  if (length(instanceMatrix[0].xyz) < 0.0001 || vFade < 0.003) { gl_Position = vec4(0.0); return; }
+  gl_Position = projectionMatrix * viewMatrix * (modelMatrix * instanceMatrix * vec4(position, 1.0));
+  vP = position.xz * 2.0; vCol = instanceColor; vS = aRing;
+}`;
+const FX_FS_RING = /* glsl */`
+uniform float uTime;
+uniform vec3 uK;
+varying vec2 vP, vS;
+varying vec3 vCol;
+varying float vFade;
+void main() {
+  float r = length(vP);
+  float aa = max(fwidth(r), 0.0005) * 1.25;
+  float band, dark;
+  if (vS.x < 0.5) {
+    // weapon: a solid inner ring and a thinner dashed outer ring that turns slowly
+    float bi = 1.0 - smoothstep(0.0, aa, abs(r - 0.50) - 0.065);
+    float di = 1.0 - smoothstep(0.0, 0.08, abs(r - 0.50) - 0.065);
+    float seg = fract((atan(vP.y, vP.x) / 6.2831853 + uTime * 0.03 + vS.y) * 12.0);
+    float dash = smoothstep(0.0, 0.05, seg) * (1.0 - smoothstep(0.70, 0.75, seg));      // 12 long dashes, small gaps
+    float bo = (1.0 - smoothstep(0.0, aa, abs(r - 0.86) - 0.035)) * dash;
+    float dOut = (1.0 - smoothstep(0.0, 0.05, abs(r - 0.86) - 0.035)) * dash * 0.45;
+    band = max(bi, bo);
+    dark = max(di, dOut);
+  } else {
+    band = 1.0 - smoothstep(0.0, aa, abs(r - 0.72) - 0.07);
+    dark = 1.0 - smoothstep(0.0, 0.09, abs(r - 0.72) - 0.07);
+  }
+  // light pooling on the floor (ref t84): a tinted disc that brightens toward the band and a soft glow just
+  // outside it - both normal-blended, so the floor under them keeps its colour instead of washing to white
+  float rIn = vS.x < 0.5 ? 0.50 : 0.72;
+  float fillA = (1.0 - smoothstep(rIn - 0.14, rIn, r)) * mix(0.06, 0.26, smoothstep(0.0, rIn - 0.04, r));
+  float glowA = exp(-pow((r - rIn) / 0.16, 2.0)) * 0.30 * step(rIn, r);
+  // four layers, bottom to top, composed over each other PREMULTIPLIED: a dark outline (so the band
+  // reads on bright sand), the outer glow, the tinted disc, the coloured band
+  float aD = dark * 0.5;
+  vec3 c = vec3(0.0);
+  float a = aD;
+  c = c * (1.0 - glowA) + vCol * 0.55 * glowA;  a = glowA + a * (1.0 - glowA);
+  c = c * (1.0 - fillA) + vCol * 0.55 * fillA;  a = fillA + a * (1.0 - fillA);
+  float m = band * (0.92 + 0.08 * sin(uTime * 2.0 + vS.y * 6.2831853));
+  c = c * (1.0 - m) + vCol * m;                 a = m + a * (1.0 - m);
+  if (a < 0.004) discard;
+  // STRAIGHT colour through tone mapping + colour space (both are no-ops into the composer's linear target,
+  // live on the low tier that draws straight to the canvas), premultiplied only after them: tone-mapping an
+  // already premultiplied colour brightened every partly transparent pixel ~3x on the low tier
+  gl_FragColor = vec4(c / a, a * vFade * uK.y);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  #include <premultiplied_alpha_fragment>
+}`;
+const FX_VS_GLOW = /* glsl */`
+${FX_STORM_GLSL}
+uniform float uTime;
+uniform vec3 uStorm;
+varying vec2 vP;
+varying vec3 vCol;
+varying float vFade;
+void main() {
+  vec3 ctr = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
+  float s = length(instanceMatrix[0].xyz);
+  float d = distance(cameraPosition, ctr);
+  float fStorm = stormK(uStorm, ctr.xz);
+  float far = 720.0 * s;                                                     // chest glow (3.2 m) ~2.3 km: the glider's beacon; a death-drop glow (1.3 m) ~0.9 km
+  vFade = smoothstep(1.2, 4.5, d) * (1.0 - smoothstep(0.65 * far, far, d)) * fStorm;
+  if (s < 0.0001 || vFade < 0.003) { gl_Position = vec4(0.0); return; }
+  vec4 mv = viewMatrix * vec4(ctr, 1.0);
+  mv.xy += position.xy * s * (0.85 + 0.15 * sin(uTime * 2.4 + ctr.x));
+  gl_Position = projectionMatrix * mv;
+  vP = position.xy * 2.0; vCol = instanceColor;
+}`;
+const FX_FS_GLOW = /* glsl */`
+uniform vec3 uK;
+varying vec2 vP;
+varying vec3 vCol;
+varying float vFade;
+void main() {
+  float r = length(vP);
+  if (r >= 1.0) discard;
+  float a = 0.9 * pow(1.0 - r, 1.8) * vFade * uK.z;
+  gl_FragColor = vec4(vCol, a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
+const FX = { pools: null, U: null };
+/** The ring and beam shaders write STRAIGHT HDR colour and run tone mapping + colour space themselves, so they are correct on both
+ *  routes. ORCH's low-tier canvas wrapper (ffg_royale3d.js lcCanvasOutput, case 2) rewrites every premultiplied normal-blended
+ *  ShaderMaterial on the direct route as if it wrote vec4(colour * a, a) with colour <= 1: it clamped the ring band (HDR up to ~2.9)
+ *  and the beam core to 1 - rare ring cyan, epic pink, legendary yellow (hue error 25 deg) and every beam near-white. That hook
+ *  leaves a material with its OWN onBeforeCompile alone (its documented exception), and this one defines LC_CANVAS for the programs
+ *  drawn straight to the canvas (output colour space sRGB: the same test ORCH uses; render-target programs are untouched). */
+function ownOutput(mat) {
+  mat.onBeforeCompile = (p) => {
+    if (p.outputColorSpace === THREE.SRGBColorSpace && typeof p.fragmentShader === "string") p.fragmentShader = "#define LC_CANVAS 1\n" + p.fragmentShader;
+  };
+  return mat;
+}
+const _fxC = new THREE.Color(), _fxI = new THREE.Quaternion(), _fxS = new THREE.Vector3();
+/** hex string -> linear working-space colour (shared scratch: read it before the next call). */
+function linCol(hex) { return _fxC.set(hex); }
+
+/** A pool = one InstancedMesh + the slot allocator + the "visible" matrices (so a cull
+ *  toggle can re-show a slot) + the per-slot attributes, uploaded as one sub-range. */
+function makePool(name, geo, mat, max, order, exName, exSize) {
+  const mesh = new THREE.InstancedMesh(geo, mat, max);
+  mesh.name = name;
+  mesh.frustumCulled = false;                       // map-wide by design: one call, never culled
+  mesh.castShadow = false; mesh.receiveShadow = false;
+  mesh.renderOrder = order;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.count = 0;
+  // instanceColor up front: the program variant (USE_INSTANCING_COLOR) must be stable from the warm-up frame on
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
+  mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+  const attrs = [{ a: mesh.instanceMatrix, s: 16 }, { a: mesh.instanceColor, s: 3 }];
+  let ex = null;
+  if (exName) {
+    ex = new THREE.InstancedBufferAttribute(new Float32Array(max * exSize), exSize);
+    ex.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute(exName, ex);
+    attrs.push({ a: ex, s: exSize });
+  }
+  return { mesh, max, n: 0, free: [], lo: Infinity, hi: -1, shown: new Float32Array(max * 16), attrs, ex, exSize: exSize || 0 };
+}
+function poolMark(P, i) { if (i < P.lo) P.lo = i; if (i > P.hi) P.hi = i; }
+function poolReset(P) {
+  P.n = 0; P.free.length = 0; P.lo = Infinity; P.hi = -1; P.mesh.count = 0;
+}
+/** Take a slot and write its matrix / colour / attribute values. -1 = pool full. */
+function poolAlloc(P, m4, col, e0, e1, e2, e3) {
+  const slot = P.free.length ? P.free.pop() : (P.n < P.max ? P.n++ : -1);
+  if (slot < 0) return -1;
+  if (P.n > P.mesh.count) P.mesh.count = P.n;
+  m4.toArray(P.shown, slot * 16);
+  m4.toArray(P.mesh.instanceMatrix.array, slot * 16);
+  const ca = P.mesh.instanceColor.array;
+  ca[slot * 3] = col.r; ca[slot * 3 + 1] = col.g; ca[slot * 3 + 2] = col.b;
+  if (P.ex) {
+    const ea = P.ex.array, o = slot * P.exSize;
+    ea[o] = e0; ea[o + 1] = e1;
+    if (P.exSize > 2) { ea[o + 2] = e2; ea[o + 3] = e3; }
+  }
+  poolMark(P, slot);
+  return slot;
+}
+function poolShow(P, slot, on) {
+  if (!P || slot == null || slot < 0) return;
+  const a = P.mesh.instanceMatrix.array, o = slot * 16;
+  if (on) { for (let i = 0; i < 16; i++) a[o + i] = P.shown[o + i]; } else a.fill(0, o, o + 16);
+  poolMark(P, slot);
+}
+function poolRelease(P, slot) {
+  if (!P || slot == null || slot < 0) return;
+  poolShow(P, slot, false);
+  P.free.push(slot);
+}
+function poolFlush(P) {
+  if (!P || P.hi < 0) return;
+  for (let i = 0; i < P.attrs.length; i++) {
+    const t = P.attrs[i];
+    queueRange(t.a, P.lo * t.s, (P.hi - P.lo + 1) * t.s);   // merges with a range no frame has uploaded yet (see queueRange)
+  }
+  P.lo = Infinity; P.hi = -1;
+}
+
+function fxInit() {
+  if (FX.pools) return FX.pools;
+  const U = FX.U = {
+    time: new THREE.Uniform(0),
+    storm: new THREE.Uniform(new THREE.Vector3(0, 0, 1e9)),   // cx, cz, r (r huge = no circle)
+    cull: new THREE.Uniform(150),
+    k: new THREE.Uniform(new THREE.Vector3(1, 1, 1)),         // beam / ring / glow master gains (test + tuning hook)
+  };
+  const uniforms = () => ({ uTime: U.time, uStorm: U.storm, uCull: U.cull, uK: U.k });
+  const base = { transparent: true, depthWrite: false, depthTest: true, fog: false };
+  const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true); beamGeo.translate(0, 0.5, 0);
+  const beamMat = new THREE.ShaderMaterial(Object.assign({}, base, {
+    name: "LootBeam", vertexShader: FX_VS_BEAM, fragmentShader: FX_FS_BEAM, uniforms: uniforms(),
+    // front faces only: one surface, so the gains above are the axis radiance. Premultiplied normal blending =
+    // emission added + a little of the background occluded (see the fragment shader)
+    blending: THREE.NormalBlending, premultipliedAlpha: true }));
+  const ringGeo = new THREE.PlaneGeometry(1, 1); ringGeo.rotateX(-Math.PI / 2);
+  const ringMat = new THREE.ShaderMaterial(Object.assign({}, base, {
+    name: "LootRing", vertexShader: FX_VS_RING, fragmentShader: FX_FS_RING, uniforms: uniforms(),
+    blending: THREE.NormalBlending, premultipliedAlpha: true,
+    polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+  ownOutput(beamMat); ownOutput(ringMat);
+  const glowGeo = new THREE.PlaneGeometry(1, 1);
+  const glowMat = new THREE.ShaderMaterial(Object.assign({}, base, {
+    name: "LootGlow", vertexShader: FX_VS_GLOW, fragmentShader: FX_FS_GLOW, uniforms: uniforms(),
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  FX.pools = {
+    beams: makePool("loot-beams", beamGeo, beamMat, BEAM_MAX, RO_BEAM, "aBeam", 4),
+    rings: makePool("loot-rings", ringGeo, ringMat, RING_MAX, RO_RING, "aRing", 2),
+    glows: makePool("loot-glows", glowGeo, glowMat, GLOW_MAX, RO_GLOW, null, 0),
+  };
+  return FX.pools;
+}
+function fxAttach(g) {
+  const P = fxInit();
+  g.add(P.rings.mesh, P.beams.mesh, P.glows.mesh);
+}
+function fxResetPools() {
+  if (!FX.pools) return;
+  poolReset(FX.pools.beams); poolReset(FX.pools.rings); poolReset(FX.pools.glows);
+}
+
+/** Height of the first collider ABOVE a point (its underside), or Infinity: the roof /
+ *  upper floor a beam must stop under. Ray-cast once per item at spawn; own scratch
+ *  array (never the shared queryColliders one). A collider counts only when it starts
+ *  well above the floor, so walls and furniture standing on it do not. */
+const _ceilCols = [];
+function ceilingAbove(W, x, z, floor, rad) {
+  const M = W.map;
+  if (!M || !M.queryColliders) return Infinity;
+  const cs = M.queryColliders(x, z, rad, _ceilCols);
+  let ceil = Infinity;
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (c.maxX < x - rad || c.minX > x + rad || c.maxZ < z - rad || c.minZ > z + rad) continue;
+    if (c.minY > floor + 0.6 && c.minY < ceil) ceil = c.minY;
+  }
+  return ceil;
+}
+
+function lum(c) { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
+const _fxOut = new THREE.Color();
+/** Ring band colour: the rarity colour scaled to a target luminance (so a blue ring is
+ *  as visible on sand as an orange one), plus a little white so the scale never has to
+ *  push one channel through the roof. Linear HDR. */
+function ringColour(hex, yTarget) {
+  const c = linCol(hex);
+  const g = Math.min(RING_GAIN_MAX, yTarget / Math.max(0.05, lum(c)));
+  return _fxOut.setRGB(c.r * g + RING_WHITE, c.g * g + RING_WHITE, c.b * g + RING_WHITE);
+}
+function phaseOf(id) { let h2 = 0; for (let i = 0; i < id.length; i++) h2 = (h2 * 31 + id.charCodeAt(i)) | 0; return ((h2 >>> 0) % 1000) / 1000; }
+
+/** Where a marker stands: the surface under the point (as the blob), else - a chest or a
+ *  gun on a stair ramp, a roof edge, or still in the air, none of which has a box top or the
+ *  terrain within 0.9 m below - a flat floor 15 cm under the thing itself. A marker must never
+ *  be skipped for want of a floor: the ring is the item's only ground cue and a chest's beam
+ *  is the beacon the glider steers to. */
+function markerSurface(W, x, y, z) {
+  if (surfaceUnder(W, x, y, z)) return true;
+  _surf.floor = y - 0.15; _surf.onBox = true; _surf.q.identity();
+  return true;
+}
+/** Ring slot for something lying at (x, y, z); -1 only when the pool is full. */
+function ringAlloc(W, x, y, z, hex, small, diameter, id) {
+  const P = FX.pools && FX.pools.rings;
+  if (!P || !markerSurface(W, x, y, z)) return -1;
+  _bM.compose(_bP.set(x, _surf.floor + (_surf.onBox ? 0.035 : 0.065), z), _surf.q, _fxS.set(diameter, 1, diameter));
+  return poolAlloc(P, _bM, ringColour(hex, small ? RING_Y_SMALL : RING_Y_WEAPON), small ? 1 : 0, phaseOf(id));
+}
+/** Beam slot standing on `floor`, clamped under `ceil`; -1 when there is no room for one. */
+function beamAlloc(x, floor, z, hex, nomH, r0, gain, far, ceil) {
+  const P = FX.pools && FX.pools.beams;
+  if (!P) return -1;
+  const base = floor + 0.04;
+  const h = Math.min(nomH, ceil - base - 0.04);
+  if (h < 0.35) return -1;
+  _bM.compose(_bP.set(x, base, z), _fxI, _fxS.set(r0, 1, r0));
+  return poolAlloc(P, _bM, linCol(hex), h, nomH, gain, far);
+}
+function glowAlloc(x, y, z, size, hex, gain) {
+  const P = FX.pools && FX.pools.glows;
+  if (!P) return -1;
+  _bM.compose(_bP.set(x, y, z), _fxI, _fxS.set(size, size, size));
+  const c = linCol(hex);
+  return poolAlloc(P, _bM, _fxOut.setRGB(c.r * gain, c.g * gain, c.b * gain));
+}
+/** The markers of a floor item: a ring for everything, a beam for weapons. */
+function itemFx(W, it) {
+  fxInit();
+  const d = it.data, x = it.pos.x, y = it.pos.y, z = it.pos.z;
+  it.ring = it.beam = it.glow = -1;
+  it.ceil = Infinity;
+  if (d.kind === "weapon") {
+    const rar = d.rarity || 0, hex = K.RARITY_COLOR[K.RARITY[rar]] || K.RARITY_COLOR.common;
+    it.ring = ringAlloc(W, x, y, z, hex, false, RING_D_WEAPON, it.id);
+    if (it.ring >= 0) {
+      it.ceil = ceilingAbove(W, x, z, _surf.floor, BEAM_R[rar] + 0.12);
+      it.beam = beamAlloc(x, _surf.floor, z, hex, BEAM_H[rar], BEAM_R[rar], BEAM_GAIN[rar], BEAM_FAR[rar], it.ceil);
+    }
+  } else {
+    const hex = d.kind === "ammo" ? AMMO_HEX : (d.id && d.id.indexOf("shield") >= 0 ? SHIELD_HEX : HEAL_HEX);
+    it.ring = ringAlloc(W, x, y, z, hex, true, RING_D_SMALL, it.id);
+  }
+}
+function itemFxShow(it, on) { if (FX.pools) poolShow(FX.pools.rings, it.ring, on); }
+function itemFxRelease(it) {
+  const P = FX.pools;
+  if (!P) return;
+  poolRelease(P.rings, it.ring); poolRelease(P.beams, it.beam); poolRelease(P.glows, it.glow);
+  it.ring = it.beam = it.glow = -1;
+}
+function fxFlush() {
+  const P = FX.pools;
+  if (!P) return;
+  poolFlush(P.rings); poolFlush(P.beams); poolFlush(P.glows);
+}
+
+// storm circle for the fades: W.stormU = {cx, cz, r} (plain numbers or {value} uniforms) when
+// the storm lane provides it, else this module's own 3 Hz read of the sim's circle
+const numOf = (v, d) => (v == null ? d : (typeof v === "object" ? (typeof v.value === "number" ? v.value : d) : v));
+let fxStormT = 0;
+function fxFrame(W, dt, cull) {
+  const U = FX.U;
+  if (!U) return;
+  U.time.value = bobT;
+  U.cull.value = cull;
+  const s = U.storm.value, su = W.stormU;
+  if (su) { s.set(numOf(su.cx, 0), numOf(su.cz, 0), numOf(su.r, 1e9)); return; }
+  fxStormT -= dt;
+  if (fxStormT > 0) return;
+  fxStormT = 0.33;
+  const sc = W.stormCtl;
+  if (!sc || !sc.storm || !sc.storm.phases || !sc.storm.phases.length) { s.set(0, 0, 1e9); return; }
+  const st = sc.storm.stateAt(W.t);
+  if (st && st.center && st.radius > 0.5) s.set(st.center.x, st.center.z, st.radius); else s.set(0, 0, 1e9);
+}
+
 function itemMesh(W, data) {
-  const grp = new THREE.Group();
-  grp.add(rarityRing(data.kind === "weapon" ? data.rarity : 0));
+  const grp = new THREE.Group();            // the floor ring + beam live in the instanced pools, not here
   if (data.kind === "weapon") {
     // weapon proto (async — attach when protos ready)
     if (W.weaponProto) {
@@ -422,11 +946,12 @@ export function spawnItem(W, data, x, y, z, id) {
   const gy = Math.max(y, W.map.heightAt(x, z) + 0.15);
   group.position.set(x, gy, z);
   W.group("loot").add(group);
-  const it = { id, data, pos: { x, y: gy, z }, group, taken: false, blob: -1 };
+  const it = { id, data, pos: { x, y: gy, z }, group, taken: false, blob: -1, ring: -1, beam: -1, glow: -1, ceil: Infinity };
   items.set(id, it);
   gridAdd("item", id, { x, z });
   it.blob = blobAlloc(W, it);
   blobShow(it, true);
+  itemFx(W, it);                       // floor ring (+ rarity beam for a weapon), instanced
   return id;
 }
 
@@ -456,46 +981,22 @@ async function ensureChestProto(W) {
   return chestProto;
 }
 
-// golden glow sprite (radial canvas) + light beam so chests read from far away
-let glowTex = null;
-function chestGlow() {
-  if (!glowTex) {
-    const cv = document.createElement("canvas");
-    cv.width = cv.height = 128;
-    const ctx = cv.getContext("2d");
-    const gr = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
-    gr.addColorStop(0, "rgba(255,214,84,0.9)");
-    gr.addColorStop(0.4, "rgba(255,190,50,0.35)");
-    gr.addColorStop(1, "rgba(255,180,40,0)");
-    ctx.fillStyle = gr;
-    ctx.fillRect(0, 0, 128, 128);
-    glowTex = new THREE.CanvasTexture(cv); glowTex.colorSpace = THREE.SRGBColorSpace;
-  }
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  sp.scale.set(3.2, 3.2, 1);
-  sp.position.y = 0.9;
-  return sp;
-}
-
 function spawnChest(W, x, y, z) {
   const id = "c" + (nextId++);
   const group = new THREE.Group();
   const gy = Math.max(y - 0.4, W.map.heightAt(x, z));
   group.position.set(x, gy, z);
   group.rotation.y = (x * 13.7 + z * 7.3) % (Math.PI * 2); // varied facing
-  const ring = rarityRing(4);
-  ring.scale.setScalar(1.6);
-  ring.position.y = 0.06;
-  group.add(ring);
-  const glow = chestGlow();
-  group.add(glow);
-  // vertical light beam (additive open-ended cylinder)
-  const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.28, 0.5, 7, 8, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xffd254, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
-  );
-  beam.position.y = 3.6;
-  group.add(beam);
+  // gold ring, light beam and glow so chests read from far away: three slots in the
+  // shared instanced pools (no per-chest meshes, sprites or materials)
+  fxInit();
+  const ring = ringAlloc(W, x, gy + 0.15, z, K.RARITY_COLOR.legendary, false, RING_D_CHEST, id);
+  let beam = -1, glow = -1, ceil = Infinity;
+  if (ring >= 0) {
+    ceil = ceilingAbove(W, x, z, _surf.floor, CHEST_BEAM.r + 0.12);
+    beam = beamAlloc(x, _surf.floor, z, GOLD_HEX, CHEST_BEAM.h, CHEST_BEAM.r, CHEST_BEAM.gain, CHEST_BEAM.far, ceil);
+    glow = glowAlloc(x, _surf.floor + 0.9, z, 3.2, GOLD_HEX, GLOW_GAIN);
+  }
   // keep a handle on the loaded model so update() can cull it by distance —
   // chests.set below runs synchronously, long before this promise resolves.
   ensureChestProto(W).then((proto) => {
@@ -518,7 +1019,7 @@ function spawnChest(W, x, y, z) {
     }
   });
   W.group("loot").add(group);
-  chests.set(id, { id, pos: { x, y: gy, z }, group, opened: false, glow, beam, ring });
+  chests.set(id, { id, pos: { x, y: gy, z }, group, opened: false, glow, beam, ring, ringOn: true, ceil });
   gridAdd("chest", id, { x, z });
   return id;
 }
@@ -613,9 +1114,8 @@ function openChest(W, a, id) {
   const c = chests.get(id);
   if (!c || c.opened) return false;
   c.opened = true;
-  if (c.glow) c.group.remove(c.glow);
-  if (c.beam) c.group.remove(c.beam);
-  if (c.ring) c.group.remove(c.ring);
+  if (FX.pools) { poolRelease(FX.pools.glows, c.glow); poolRelease(FX.pools.beams, c.beam); poolRelease(FX.pools.rings, c.ring); }
+  c.glow = c.beam = c.ring = -1;
   c.group.traverse((o) => { if (o.isMesh && o.material && o.material.color) { o.material = o.material.clone(); o.material.color.multiplyScalar(0.45); } });
   const rng = K.mulberry32((W.seed ^ 0xc4e57) + parseInt(id.slice(1), 10));
   const drops = K.rollChest(rng);
@@ -629,13 +1129,13 @@ function openChest(W, a, id) {
   return true;
 }
 
-/** Detach a taken item. Its only per-item GPU object is a death drop's glow
- *  SpriteMaterial (everything else is shared proto state), and once detached the
- *  match teardown can no longer reach it — so it is freed here. */
+/** Detach a taken item and park its pooled markers (contact blob, floor ring, beam,
+ *  death-drop glow). It owns no GPU object of its own any more - everything per-item
+ *  is a slot in a shared instanced pool - so nothing here needs disposing. */
 function releaseItem(it) {
   if (it.group.parent) it.group.parent.remove(it.group);
   blobRelease(it);
-  if (it.glow) { it.glow.material.dispose(); it.glow = null; }
+  itemFxRelease(it);
 }
 
 function pickup(W, a, id, opts) {
@@ -895,9 +1395,10 @@ function deathDrop(W, victim) {
     // Death loot got no burst, no beam and no glow, while an untouched CHEST
     // gets a glow sprite plus a 7 m additive beam (spawnChest, above) — so the
     // gun a kill just dropped was harder to spot than loot nobody had touched.
-    // Scaled to 1.3 (chests use 3.2): a marker, not a beacon.
+    // Scaled to 1.3 (chests use 3.2): a marker, not a beacon. Now a slot in the
+    // shared glow pool, on top of the ring + (for a weapon) beam every floor item has.
     const it = items.get(iid);
-    if (it) { const g2 = chestGlow(); g2.scale.set(1.3, 1.3, 1); g2.position.y = 0.55; it.group.add(g2); it.glow = g2; }
+    if (it && it.ring >= 0) it.glow = glowAlloc(it.pos.x, it.pos.y + 0.55, it.pos.z, 1.3, GOLD_HEX, GLOW_GAIN);
   };
   // EVERY carried weapon (including the equipped one) + consumables + ammo
   for (let i = 0; i < inv.slots.length; i++) {
@@ -933,31 +1434,32 @@ export function update(W, dt) {
     const dx = it.pos.x - cp.x, dy = it.pos.y - cp.y, dz = it.pos.z - cp.z;
     const d2 = dx * dx + dy * dy + dz * dz;
     const vis = d2 < cull2;
-    if (it.group.visible !== vis) { it.group.visible = vis; blobShow(it, vis); }
+    if (it.group.visible !== vis) { it.group.visible = vis; blobShow(it, vis); itemFxShow(it, vis); }
     if (!vis || d2 > 90 * 90) continue;
     it.group.rotation.y = bobT * 1.4;
     it.group.position.y = it.pos.y + Math.sin(bobT * 2 + it.pos.x) * 0.08 + 0.08;
   }
   maybeSupplyDrop(W, dt);
 
-  // chest glow pulse (only near camera)
+  // chests: cull the model + ring by distance and hand the shadow back up close
   for (const c of chests.values()) {
     const cdx = c.pos.x - cp.x, cdy = c.pos.y - cp.y, cdz = c.pos.z - cp.z;
     const d2 = cdx * cdx + cdy * cdy + cdz * cdz;
-    // Cull the chest MODEL and its rarity ring only. The glow sprite and the
-    // light beam stay lit at any range — they are the beacon you steer the
-    // glider toward, and hiding them would make chests unfindable on descent.
+    // Cull the chest MODEL and its ring only. The glow billboard and the light
+    // beam stay lit at any range (the shader fades them) — they are the beacon you
+    // steer the glider toward, and hiding them would make chests unfindable on
+    // descent. Their pulse is in the shader: nothing to animate here any more.
     if (c.model) c.model.visible = d2 < cull2;
-    if (c.ring) c.ring.visible = d2 < cull2;
+    if (c.ring >= 0) {
+      const ringOn = d2 < cull2;
+      if (c.ringOn !== ringOn) { c.ringOn = ringOn; if (FX.pools) poolShow(FX.pools.rings, c.ring, ringOn); }
+    }
     if (c.casters) {
       const cast = d2 < (c.cast ? CHEST_SHADOW_OFF2 : CHEST_SHADOW_R2);
       if (c.cast !== cast) { c.cast = cast; for (let i = 0; i < c.casters.length; i++) c.casters[i].castShadow = cast; }
     }
-    if (c.opened || !c.glow) continue;
-    if (d2 > 160 * 160) continue;
-    const k = 0.85 + Math.sin(bobT * 2.4 + c.pos.x) * 0.15;
-    c.glow.scale.set(3.2 * k, 3.2 * k, 1);
   }
+  fxFrame(W, dt, cull);
 
   // human interact:
   //  - walk over items → auto-pickup whenever there's room
@@ -1023,6 +1525,7 @@ export function update(W, dt) {
     botWalkover(W, b);
   }
   blobFlush();                    // this frame's blob slot changes, one sub-range upload
+  fxFlush();                      // ...and the ring / beam / glow slots, one sub-range each
 }
 
 const WALK_R = 1.5, WALK_DY = 2.2;
