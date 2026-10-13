@@ -33,7 +33,19 @@ body {
 /* phones / tablets (html.ffg-touch is set by game_controls.js): the game fills the screen edge to edge */
 html.ffg-touch body { padding-inline: 0; gap: 0; }
 html.ffg-touch #stage { max-width: calc(100vh * 16 / 9); max-width: calc(100dvh * 16 / 9); border-radius: 0; box-shadow: none; }
-html.lobby-open #__ffg_touch__ { display: none; }
+html.lobby-open #__ffg_touch__, html.menu-open #__ffg_touch__ { display: none; }
+/* Esc / pause menu (DOM, like the lobby: keyboard, mouse and touch all work) */
+#menu { position: fixed; inset: 0; z-index: 21; display: grid; place-items: center; padding: 16px; background: rgba(11, 7, 22, 0.72); }
+#menu .lb-card { width: min(380px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
+#menu .mn-list { display: grid; gap: 10px; }
+#menu .mn-note { margin: 0; color: var(--muted); font-size: 13px; }
+#menu .mn-set { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; text-align: left; font-size: 15px; color: var(--fg); }
+#menu .mn-set output { font-family: var(--display); font-size: 13px; color: var(--muted); min-width: 3.2em; text-align: right; }
+#menu .mn-set input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--cyan); }
+#menu .mn-set button { padding: 8px 12px; font-size: 13px; min-width: 5.5em; }
+#menu .mn-keys { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; text-align: left; font-size: 14px; margin: 0; }
+#menu .mn-keys dt { font-family: var(--display); font-size: 13px; color: var(--accent); }
+#menu .mn-keys dd { margin: 0; color: var(--fg); }
 /* portrait phone: ask for landscape (dismissable) */
 #rotate { display: none; }
 html.ffg-touch.ffg-portrait #rotate:not(.dismissed) { display: grid; position: fixed; inset: 0; z-index: 2147483000; place-items: center; padding: 24px; background: rgba(11, 7, 22, 0.92); text-align: center; }
@@ -85,6 +97,34 @@ html.ffg-touch.ffg-portrait #rotate:not(.dismissed) { display: grid; position: f
     <div id="lbInvite" class="lb-invite" hidden><button id="lbCopy" type="button">COPY INVITE LINK</button><code id="lbLink"></code></div>
     <p id="lbStatus" class="lb-status" role="status" aria-live="polite"></p>
     <button id="lbBack" class="lb-back" type="button">BACK</button>
+  </div>
+</div>
+<div id="menu" hidden>
+  <div class="lb-card" role="dialog" aria-modal="true" aria-labelledby="mnTitle">
+    <h2 id="mnTitle">PAUSED</h2>
+    <div id="mnMain" class="mn-list">
+      <p id="mnOnline" class="mn-note" hidden>Online games keep running while this menu is open.</p>
+      <button id="mnResume" class="primary" type="button">RESUME</button>
+      <button id="mnRestart" type="button">RESTART RUN</button>
+      <button id="mnSettings" type="button">SETTINGS</button>
+      <button id="mnControls" type="button">CONTROLS</button>
+      <button id="mnQuit" type="button">QUIT TO TITLE</button>
+    </div>
+    <div id="mnSettingsView" class="mn-list" hidden>
+      <label class="mn-set">Sound effects <output id="mnSfxOut">100%</output><input id="mnSfx" type="range" min="0" max="100" step="5" value="100"></label>
+      <label class="mn-set">Music <output id="mnMusOut">100%</output><input id="mnMus" type="range" min="0" max="100" step="5" value="100"></label>
+      <div class="mn-set">Screen shake <button id="mnShake" type="button" aria-pressed="true">ON</button></div>
+      <div class="mn-set" id="mnFsRow">Fullscreen <button id="mnFs" type="button" aria-pressed="false">OFF</button></div>
+      <button class="lb-back mn-back" type="button">BACK</button>
+    </div>
+    <div id="mnControlsView" class="mn-list" hidden>
+      <dl id="mnKeys" class="mn-keys"></dl>
+      <button class="lb-back mn-back" type="button">BACK</button>
+    </div>
+    <div id="mnConfirmView" class="mn-list" hidden>
+      <p id="mnConfirmText" class="lb-status"></p>
+      <div class="lb-row"><button id="mnNo" type="button">CANCEL</button><button id="mnYes" class="primary" type="button">YES</button></div>
+    </div>
   </div>
 </div>
 <div id="rotate" role="dialog" aria-labelledby="rtTitle">
@@ -240,7 +280,7 @@ function store(key, val) { try { if (val === undefined) return JSON.parse(localS
 const Sound = (() => {
   let ctx = null, master, sfxBus, musBus, musFilter, analyser, noiseBuf, revIn, delIn, delNode, muted = false, musicOn = true;
   const MUSIC_VOL = 0.16; // music sits under the SFX (measured: music RMS ≈ pops RMS or lower)
-  let ducked = false, muffle = 1, trans = 0, tempoMul = 1, wantTrack = null;
+  let ducked = false, muffle = 1, trans = 0, tempoMul = 1, wantTrack = null, sfxVol = 1, musVol = 1; // sfxVol / musVol: player settings 0..1
   const last = {};
 
   function init() {
@@ -249,8 +289,8 @@ const Sound = (() => {
     ctx = new AC();
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -12; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
     master = ctx.createGain(); master.gain.value = muted ? 0 : 0.85;
-    sfxBus = ctx.createGain();
-    musBus = ctx.createGain(); musBus.gain.value = musicOn ? MUSIC_VOL : 0;
+    sfxBus = ctx.createGain(); sfxBus.gain.value = sfxVol;
+    musBus = ctx.createGain(); musBus.gain.value = musicOn ? MUSIC_VOL * musVol : 0;
     musFilter = ctx.createBiquadFilter(); musFilter.type = 'lowpass'; musFilter.frequency.value = 20000; musFilter.Q.value = 0.8;
     analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
     // shared space for the band: generated-impulse reverb + dotted-eighth feedback delay
@@ -495,7 +535,7 @@ const Sound = (() => {
     if (songName === name && song) return;
     startSong(name);
   }
-  function applyMusicGain() { if (musBus) musBus.gain.setTargetAtTime(musicOn ? MUSIC_VOL * (ducked ? 0.3 : 1) : 0, ctx.currentTime, 0.12); }
+  function applyMusicGain() { if (musBus) musBus.gain.setTargetAtTime(musicOn ? MUSIC_VOL * musVol * (ducked ? 0.3 : 1) : 0, ctx.currentTime, 0.12); }
 
   return {
     init, sfx, playTrack,
@@ -508,6 +548,7 @@ const Sound = (() => {
     setMuffle(k) { if (!ctx || Math.abs(k - muffle) < 0.02) return; muffle = k; musFilter.frequency.setTargetAtTime(350 + 19650 * k * k * k, ctx.currentTime, 0.05); },
     toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.85; return muted; },
     toggleMusic() { musicOn = !musicOn; if (ctx) applyMusicGain(); return musicOn; },
+    setVolumes(sv, mv) { sfxVol = sv; musVol = mv; if (sfxBus) sfxBus.gain.setTargetAtTime(sv, ctx.currentTime, 0.03); if (ctx) applyMusicGain(); },
     suspend() { if (ctx && ctx.state === 'running') ctx.suspend().catch(() => {}); },
     resume() { if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); },
     // RMS output level 0..1 (used by the test harness to prove sound is audible)
@@ -547,21 +588,19 @@ const input = {
 const CONFIRM_KEYS = ['Space', 'Enter', 'KeyZ', 'KeyX', 'KeyJ'];
 addEventListener('keydown', (e) => {
   if (!lobbyEl.hidden) { if (e.code === 'Escape') closeLobby(); return; } // the lobby form owns the keyboard
+  if (!menuEl.hidden) { menuKey(e); return; } // so does the Esc menu
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (!keys[e.code]) onPress(e.code);
   keys[e.code] = true;
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (game.state === 'play' && !Net.started) togglePause(); });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (game.state === 'play' && !Net.started) openMenu(); });
 
 function onPress(code) {
   Sound.init();
   if (code === 'KeyM') { const m = Sound.toggleMute(); toast(m ? 'SOUND OFF' : 'SOUND ON'); return; }
   if (code === 'KeyN') { const m = Sound.toggleMusic(); toast(m ? 'MUSIC ON' : 'MUSIC OFF'); return; }
-  if (code === 'KeyP' || code === 'Escape') {
-    if (Net.started) { toast('NO PAUSE ONLINE'); return; }
-    if (['play', 'paused', 'intro'].includes(game.state)) togglePause(); return;
-  }
+  if (code === 'KeyP' || code === 'Escape') { if (game.state !== 'title') openMenu(); return; }
   if (game.state === 'title') { // mode picker: 1 PLAYER · ONLINE CO-OP · LOCAL 2P
     const modes = titleModes();
     if (code === 'ArrowLeft' || code === 'KeyA') { game.modeSel = modes[(modes.indexOf(game.modeSel) + modes.length - 1) % modes.length]; sfx.tick(false); return; }
@@ -592,17 +631,17 @@ function confirmAction(fromPeer) {
     if (game.modeSel === 2) openLobby();
     else newGame(game.modeSel === 3 && LOCAL_2P && !isTouch());
   }
-  else if (s === 'paused') togglePause();
+  else if (s === 'paused') closeMenu();
   else if (s === 'clear' && game.stateT > 1.2) nextLevel();
   else if (s === 'gameover') { if (game.contT > 0 && game.stateT > 0.6) continueGame(); else if (game.contT <= 0 && game.stateT > 1.2) { sfx.select(); toTitle(); } }
 }
 
 // Touch play: the shared control layer (game_controls.js) draws a thumbstick + FIRE button that send
 // ArrowLeft / ArrowRight / Space, so touch rides the same input path as the keyboard.
-// Its bar's pause button calls window.__PAUSE__ (online games have no pause).
+// Its bar's pause button calls window.__PAUSE__: it opens / closes the Esc menu (online it opens without pausing).
 window.__PAUSE__ = {
-  toggle() { if (!Net.started && ['play', 'paused', 'intro'].includes(game.state)) togglePause(); },
-  pause() { if (!Net.started && (game.state === 'play' || game.state === 'intro')) togglePause(); },
+  toggle() { if (!menuEl.hidden) closeMenu(); else if (game.state !== 'title') openMenu(); },
+  pause() { if (menuEl.hidden && !Net.started && (game.state === 'play' || game.state === 'intro')) openMenu(); },
 };
 // leaving the tab / app: pause an offline game and silence audio until the player is back
 document.addEventListener('visibilitychange', () => {
@@ -711,6 +750,86 @@ function togglePause() {
   if (game.state === 'paused') { game.state = game.prevState; Sound.playMusic(true); }
   else { game.prevState = game.state; game.state = 'paused'; Sound.playMusic(false); }
 }
+
+/* --- Esc menu: Resume · Restart run · Settings · Controls · Quit. Offline it pauses the game;
+   online it opens over the running game (the partner keeps playing) and Quit becomes Leave game. --- */
+const settings = Object.assign({ sfx: 1, music: 1, shake: true }, store('harpoonpop.settings') || {});
+Sound.setVolumes(settings.sfx, settings.music);
+const menuEl = document.getElementById('menu');
+const mn = (id) => document.getElementById(id);
+const MENU_VIEWS = ['mnMain', 'mnSettingsView', 'mnControlsView', 'mnConfirmView'];
+let menuConfirm = null;
+function menuView(v) {
+  for (const id of MENU_VIEWS) mn(id).hidden = id !== v;
+  mn('mnTitle').textContent = { mnMain: Net.started ? 'MENU' : 'PAUSED', mnSettingsView: 'SETTINGS', mnControlsView: 'CONTROLS', mnConfirmView: 'ARE YOU SURE?' }[v];
+  const first = mn(v).querySelector('button:not([hidden]), input'); if (first) first.focus();
+}
+function openMenu() {
+  if (!menuEl.hidden || !lobbyEl.hidden || game.state === 'title') return;
+  Sound.init(); for (const k in keys) keys[k] = false; touch.left = touch.right = touch.fire = false;
+  if (!Net.started && game.state !== 'paused') togglePause(); // online the shared game keeps running
+  mn('mnOnline').hidden = !Net.started; mn('mnRestart').hidden = !!Net.started;
+  mn('mnQuit').textContent = Net.started ? 'LEAVE GAME' : 'QUIT TO TITLE';
+  syncSettingsUI(); menuEl.hidden = false; document.documentElement.classList.add('menu-open'); menuView('mnMain'); Sound.sfx.tick(false);
+}
+function closeMenu() {
+  if (menuEl.hidden) return;
+  menuEl.hidden = true; document.documentElement.classList.remove('menu-open');
+  if (game.state === 'paused') togglePause();
+  hud.focus();
+}
+function askConfirm(text, fn) { menuConfirm = fn; mn('mnConfirmText').textContent = text; menuView('mnConfirmView'); mn('mnNo').focus(); }
+function syncSettingsUI() {
+  mn('mnSfx').value = Math.round(settings.sfx * 100); mn('mnSfxOut').textContent = `${mn('mnSfx').value}%`;
+  mn('mnMus').value = Math.round(settings.music * 100); mn('mnMusOut').textContent = `${mn('mnMus').value}%`;
+  mn('mnShake').textContent = settings.shake ? 'ON' : 'OFF'; mn('mnShake').setAttribute('aria-pressed', String(settings.shake));
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement, canFs = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+  mn('mnFsRow').hidden = !canFs; mn('mnFs').textContent = fsEl ? 'ON' : 'OFF'; mn('mnFs').setAttribute('aria-pressed', String(!!fsEl));
+  mn('mnKeys').innerHTML = (isTouch()
+    ? [['STICK', 'move left / right'], ['FIRE', 'fire harpoon'], ['⏸', 'open this menu']]
+    : [['← →  or  A D', 'move'], ['SPACE / ↑ / Z', 'fire harpoon'], ['ESC  or  P', 'open / close this menu'], ['M', 'sound on / off'], ['N', 'music on / off']])
+    .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+}
+function saveSettings() { store('harpoonpop.settings', settings); Sound.setVolumes(settings.sfx, settings.music); }
+mn('mnResume').addEventListener('click', closeMenu);
+mn('mnRestart').addEventListener('click', () => askConfirm('Restart from stage 1? This run\'s score will be lost.', () => { closeMenu(); newGame(false); }));
+mn('mnSettings').addEventListener('click', () => menuView('mnSettingsView'));
+mn('mnControls').addEventListener('click', () => menuView('mnControlsView'));
+mn('mnQuit').addEventListener('click', () => askConfirm(Net.started ? (Net.role === 'host' ? 'Leave this online game? It ends for your partner too.' : 'Leave this online game? Your partner will carry on alone.') : 'Quit to the title screen? This run\'s score will be lost.', () => { closeMenu(); toTitle(); }));
+mn('mnYes').addEventListener('click', () => { const fn = menuConfirm; menuConfirm = null; Sound.sfx.select(); if (fn) fn(); });
+mn('mnNo').addEventListener('click', () => { menuConfirm = null; menuView('mnMain'); });
+for (const b of menuEl.querySelectorAll('.mn-back')) b.addEventListener('click', () => menuView('mnMain'));
+mn('mnSfx').addEventListener('input', (e) => { settings.sfx = e.target.value / 100; mn('mnSfxOut').textContent = `${e.target.value}%`; saveSettings(); });
+mn('mnSfx').addEventListener('change', () => Sound.sfx.pop(1)); // a sample pop at the new level
+mn('mnMus').addEventListener('input', (e) => { settings.music = e.target.value / 100; mn('mnMusOut').textContent = `${e.target.value}%`; saveSettings(); });
+mn('mnShake').addEventListener('click', () => { settings.shake = !settings.shake; saveSettings(); syncSettingsUI(); });
+mn('mnFs').addEventListener('click', () => {
+  const d = document, el = d.documentElement;
+  const p = (d.fullscreenElement || d.webkitFullscreenElement) ? (d.exitFullscreen || d.webkitExitFullscreen).call(d) : (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  Promise.resolve(p).catch(() => {}).then(() => setTimeout(syncSettingsUI, 150));
+});
+menuEl.addEventListener('pointerdown', (e) => { if (e.target === menuEl) closeMenu(); }); // tap outside the card = resume
+// keyboard inside the menu: ↑ ↓ move between controls, Enter / Space press (native), Esc / P = back or resume
+function menuKey(e) {
+  const code = e.code;
+  if (code === 'Escape' || code === 'KeyP') {
+    e.preventDefault();
+    if (!mn('mnMain').hidden) closeMenu(); else if (!mn('mnConfirmView').hidden) mn('mnNo').click(); else menuView('mnMain');
+    return;
+  }
+  if (code === 'KeyM') { const m = Sound.toggleMute(); toast(m ? 'SOUND OFF' : 'SOUND ON'); return; }
+  if (code === 'KeyN') { const m = Sound.toggleMusic(); toast(m ? 'MUSIC ON' : 'MUSIC OFF'); return; }
+  if (code === 'ArrowDown' || code === 'ArrowUp') {
+    const active = document.activeElement;
+    e.preventDefault();
+    const view = MENU_VIEWS.map(mn).find((v) => !v.hidden);
+    const items = [...view.querySelectorAll('button, input')].filter((b) => !b.hidden && !b.closest('[hidden]'));
+    if (!items.length) return;
+    const i = items.indexOf(active), n = items.length;
+    items[(i < 0 ? 0 : i + (code === 'ArrowDown' ? 1 : n - 1)) % n].focus(); Sound.sfx.tick(false);
+  }
+}
+document.addEventListener('fullscreenchange', () => { if (!menuEl.hidden) syncSettingsUI(); });
 
 /* ============================ §5 PLAYER + WEAPONS ============================ */
 function updatePlayers(dt) { for (const p of alivePlayers()) updatePlayer(p, dt); }
@@ -1129,7 +1248,7 @@ function popup(x, y, text, color, size) {
 }
 function banner(big, small, life, color, minor) { netEmit(['b', big, small, life, color, minor]); if (guestMuted()) return; game.banner = { big, small, life, t: 0, color, minor }; }
 function toast(msg) { game.toastMsg = { msg, t: 0 }; }
-function addShake(a) { netEmit(['k', rn(a)]); if (guestMuted()) return; game.shake = Math.min(1, game.shake + a * (reducedMotion ? 0.3 : 1)); }
+function addShake(a) { netEmit(['k', rn(a)]); if (guestMuted()) return; game.shake = Math.min(1, game.shake + a * (reducedMotion ? 0.3 : 1) * (settings.shake ? 1 : 0)); }
 function flash(color, a) { netEmit(['f', color, rn(a)]); if (guestMuted()) return; game.flashColor = color; game.flash = Math.max(game.flash, a * (reducedMotion ? 0.4 : 1)); }
 // Shared team score; each player's share is tracked for the co-op breakdown (credit -1 = team only)
 function addScore(n, credit = game.credit) { game.score += n; const p = game.players[credit]; if (p) p.points += n; }
@@ -1344,7 +1463,7 @@ function drawHUDTail() {
     ctx.fillStyle = '#ff3d8b'; ctx.fillRect(ARENA.l + 10, ARENA.t + 54, 110 * a, 3);
     ctx.globalAlpha = 1;
   }
-  if (game.state !== 'title' && (Net.started || !isTouch())) { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText(Net.started ? `ONLINE · ${Net.mode === 'p2p' ? 'DIRECT' : 'RELAY'} · M SOUND · N MUSIC` : 'P PAUSE · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
+  if (game.state !== 'title' && (Net.started || !isTouch())) { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText(Net.started ? `ONLINE · ${Net.mode === 'p2p' ? 'DIRECT' : 'RELAY'} · ESC MENU · M SOUND · N MUSIC` : 'ESC MENU · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
 }
 
 // Co-op HUD: one compact row per player (tag, hearts, weapon + shield), shared slow-mo chip on the left
@@ -1417,12 +1536,12 @@ function drawTitle() {
   if (Math.floor(t * 2) % 2 === 0) { ctx.font = '16px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText(isTouch() ? 'TAP A MODE TO PLAY' : '← → TO CHOOSE · SPACE TO START', W / 2, 330); }
   // readable backing panels for the info blocks (bubbles bounce behind them)
   ctx.fillStyle = 'rgba(11,7,22,0.78)';
-  roundRect(ctx, 100, 350, 410, 98, 12); ctx.fill(); roundRect(ctx, 540, 344, 250, 128, 12); ctx.fill(); roundRect(ctx, 100, 464, 690, 32, 12); ctx.fill();
+  roundRect(ctx, 100, 350, 410, 98, 12); ctx.fill(); roundRect(ctx, 540, 344, 250, 144, 12); ctx.fill(); roundRect(ctx, 100, 496, 690, 32, 12); ctx.fill();
   // controls card
   ctx.textAlign = 'left'; ctx.font = '700 14px "Chakra Petch", sans-serif';
   const rows = isTouch()
-    ? [['STICK  ◀ ▶', 'move'], ['FIRE', 'fire harpoon'], ['TAP A MODE', 'start / continue'], ['BAR  ⏸ 🔊 ⛶', 'pause · sound · fullscreen']]
-    : [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ...(LOCAL_2P ? [['A D  +  W', 'local 2P: player 2']] : [['ENTER', 'start / continue']]), ['P  ·  M  ·  N', 'pause · sound · music']];
+    ? [['STICK  ◀ ▶', 'move'], ['FIRE', 'fire harpoon'], ['TAP A MODE', 'start / continue'], ['BAR  ⏸ 🔊 ⛶', 'menu · sound · fullscreen']]
+    : [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ...(LOCAL_2P ? [['A D  +  W', 'local 2P: player 2']] : [['ENTER', 'start / continue']]), ['ESC  ·  M  ·  N', 'menu · sound · music']];
   rows.forEach(([k, v], i) => { ctx.fillStyle = '#ffd23f'; ctx.fillText(k, 120, 372 + i * 22); ctx.fillStyle = '#c8bfe8'; ctx.fillText(v, 290, 372 + i * 22); });
   // item legend
   const types = Object.keys(ITEMS);
@@ -1439,7 +1558,7 @@ function drawTitle() {
   ctx.font = '700 11px "Chakra Petch", sans-serif';
   let lx = 118; // laid out by measured label width so nothing overlaps
   types.forEach((k) => {
-    const y = 480;
+    const y = 512; // below the BEST RUNS panel (its 5th row sits at y 476)
     ctx.fillStyle = ITEMS[k].color; ctx.beginPath(); ctx.arc(lx, y, 11, 0, 7); ctx.fill(); drawItemIcon(ctx, k, lx, y, 0.75);
     ctx.fillStyle = '#c8bfe8'; ctx.fillText(ITEMS[k].label, lx + 16, y + 4);
     lx += 16 + ctx.measureText(ITEMS[k].label).width + 20;
@@ -2592,10 +2711,7 @@ function render2D() {
       [game.stateT > 1.5 && Math.floor(game.realT * 2) % 2 === 0 ? 'PRESS SPACE' : '', '18px Bungee, Impact, sans-serif', '#3fe0ff'],
     ], 170);
   }
-  if (game.state === 'paused') {
-    ctx.fillStyle = 'rgba(11,7,22,0.7)'; ctx.fillRect(0, 0, W, H);
-    drawOverlayPanel([['PAUSED', '56px Bungee, Impact, sans-serif', '#efe9ff'], ['P or SPACE to resume', '700 16px "Chakra Petch", sans-serif', '#9a8fc0']], H / 2 - 20);
-  }
+
   if (game.toastMsg) { ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = '14px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText(game.toastMsg.msg, ARENA.r - 8, ARENA.t + 20); }
 }
 /* --- Title-screen attract mode + state machine --- */
