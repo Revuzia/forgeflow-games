@@ -1,0 +1,308 @@
+#!/usr/bin/env python
+"""placementcheck - does everything the player can SEE touch the ground, and does the ground they stand on match the ground they see?
+(Last Circle world-foundation plan, section 4, lane 5D.)  NODE ONLY: no browser, no server, no file edited.
+
+    python _harness/placementcheck.py --disk                      # the working copy (the integration run)
+    python _harness/placementcheck.py --rev 7f6a9fb2              # a frozen commit (the must-fail proof on Wave 4)
+    python _harness/placementcheck.py --disk --quick              # 1 seed per map
+    python _harness/placementcheck.py --disk --plant y-only-recentre     # negative control (must exit 1)
+    python _harness/placementcheck.py --disk --wave 6             # also gate the Wave-6 rows (otherwise information)
+
+It runs placement_census.mjs, which imports the UNMODIFIED runtime/3d/royale/maps.js (and loot.js) in Node through the resolve
+hook in three_hooks.mjs ("three" and "three/addons/" the way index.html's importmap resolves them), builds isla_viva / ashgrid /
+deepwood for seeds 1, 7, 1234, 31337, 2026 and measures, against the REAL rendered terrain triangles (the near-ring chunks the
+map's own LOD updater builds):
+
+  anchor-offset       every instanced prop: the drawn base (or footprint) centre is <= 0.5 m from its colliders (0 = on them)  (Wave 4: rocks p50 33 m, max 92 m)
+  rocks-floating      rocks whose LOWEST vertex is still > 0.2 m above the rendered ground < 5 %      (Wave 4: ~46 %)
+  rocks-buried        rocks with EVERY vertex under the ground < 2 %                                   (Wave 4: ~25 %)
+  props-float         non-rock props: base vertex > 0.10 m above the ground <= 2 % per kind;
+  props-sunk          base vertex > 1.0 m below the ground <= 2 % per kind (embed 0.10-0.15 m + the slope across the base; plan leaves embedMax open)
+  props-float-worst   no non-rock prop base vertex > 0.25 m above the ground (one lifted tree trips it)
+  ground-match        |map.heightAt - rendered near-ring surface| p99 <= 0.05 m on ~20k dry-land samples per seed (Wave 4: 0.28 m)
+  collider-top        collider top within 0.3 m of the drawn top for >= 95 % of the instances of every kind
+  structure-contact   no connected structure piece with no contact (roof 0.20 m over a house, ranger roof 0.97 m, bench legs ...)
+  chest-base          chests on terrain: base gap p50 <= 0.05 m (Wave 4: 0.20 m)       [loot.js populate() run for real]
+  floor-rings         floor-item ring hover p50 <= 0.12 m over the rendered ground     [no regression]
+Wave-6 rows (information unless --wave 6): grounded structure base edges (<= 5 % of any generator over 0.10 m), doorway
+clearance >= 2.0 m, ramp start step <= 0.55 m, road ribbon float <= 1 %.
+
+Exit 0 pass / 1 fail / 2 could-not-judge (the census crashed, a prop kind is missing, loot.js would not run, Node is missing).
+--plant NAME mutates the BUILT map in memory (never a file) and the gate must FAIL on the designated row:
+  y-only-recentre -> anchor-offset + rocks-floating     perimeter-drop -> ground-match     tree-float -> props-float-worst
+In plant mode only the designated rows count: exit 1 = the fault was detected, exit 0 = the gate is blind to it.
+"""
+from __future__ import annotations
+
+import argparse
+import io
+import json
+import os
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import common as C  # noqa: E402
+
+GATE = "placementcheck"
+CENSUS = os.path.join(C.HERE, "placement_census.mjs")
+SEEDS = "1,7,1234,31337,2026"
+EXPECTED_KINDS = {"isla_viva": ["palm", "tree", "bush", "rocks", "car", "barrel"],
+                  "ashgrid": ["tree", "bush", "rocks", "car", "container", "barrel"],
+                  "deepwood": ["birch", "pine", "bush", "rocks", "car"]}
+# thresholds: plan section 4, re-measured on 7f6a9fb2 (see REPORT.md of lane 5D and the README rows)
+OFFSET_MAX = 0.5
+ROCK_HOVER_MAX = 0.05
+ROCK_BURIED_MAX = 0.02
+FLOAT_SHARE_MAX = 0.02
+SUNK_SHARE_MAX = 0.02
+FLOAT_WORST = 0.25
+GROUND_P99 = 0.05
+COLTOP_MISS_MAX = 0.05
+CHEST_GAP_P50 = 0.05
+RING_P50 = 0.12
+PLANT_ROWS = {"y-only-recentre": {"anchor-offset", "rocks-floating"}, "perimeter-drop": {"ground-match"}, "tree-float": {"props-float-worst"}}
+
+
+def rev_root(rev):
+    """Extract runtime/ + assets/props of games/last-circle at a git rev into a temp dir (cached by commit sha)."""
+    sha = subprocess.run(["git", "-C", C.REPO, "rev-parse", rev], capture_output=True, text=True).stdout.strip()
+    if not sha:
+        raise C.HarnessError("unknown git revision %r" % rev)
+    dst = os.path.join(tempfile.gettempdir(), "lc_gate_rev", sha)
+    mark = os.path.join(dst, ".complete")
+    if not os.path.exists(mark):
+        os.makedirs(dst, exist_ok=True)
+        p = subprocess.run(["git", "-C", C.REPO, "archive", sha, "games/last-circle/runtime", "games/last-circle/assets/props"],
+                           capture_output=True)
+        if p.returncode != 0:
+            raise C.HarnessError("git archive %s failed: %s" % (rev, p.stderr.decode("utf-8", "replace")[:300]))
+        with tarfile.open(fileobj=io.BytesIO(p.stdout)) as tf:
+            for m in tf.getmembers():
+                if not m.isfile():
+                    continue
+                rel = m.name[len("games/last-circle/"):] if m.name.startswith("games/last-circle/") else m.name
+                out = os.path.join(dst, rel.replace("/", os.sep))
+                os.makedirs(os.path.dirname(out), exist_ok=True)
+                with open(out, "wb") as fh:
+                    fh.write(tf.extractfile(m).read())
+        open(mark, "w").write(sha)
+    return dst, sha[:8]
+
+
+def run_census(root, vendor, maps, seeds, plants, timeout):
+    out = os.path.join(tempfile.gettempdir(), "lc_gate_census_%d_%s.json" % (os.getpid(), time.strftime("%H%M%S")))
+    cmd = ["node", CENSUS, "--root", root, "--vendor", vendor, "--maps", ",".join(maps), "--seeds", seeds, "--out", out]
+    if plants:
+        cmd += ["--plant", ",".join(plants)]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout, cwd=C.ROOT)
+    except FileNotFoundError:
+        raise C.EnvFailure("node is not on PATH")
+    except subprocess.TimeoutExpired:
+        raise C.EnvFailure("placement_census.mjs still running after %d s" % timeout)
+    if p.returncode != 0 or not os.path.exists(out):
+        raise C.EnvFailure("placement_census.mjs exit %s: %s" % (p.returncode, " | ".join((p.stderr or p.stdout or "").strip().splitlines()[-4:])[:600]))
+    with open(out, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    try:
+        os.remove(out)
+    except OSError:
+        pass
+    doc["stderr"] = (p.stderr or "").strip().splitlines()[-30:]
+    return doc
+
+
+def f(v, nd=3):
+    return "-" if v is None else ("%.*f" % (nd, v))
+
+
+def judge(v, doc, args, plant_rows):
+    S = doc["summary"]
+    wave6 = args.wave >= 6
+
+    def chk(name, ok, detail, expect=None, wave6_row=False):
+        if plant_rows is not None:                          # negative control: only the designated rows decide
+            if name in plant_rows:
+                return v.check(name, ok, detail, expect)
+            v.info(name + " (not counted in plant mode)", detail)
+            return ok
+        if wave6_row and not wave6:
+            v.info(name + " (Wave-6 row, information)", detail)
+            return ok
+        return v.check(name, ok, detail, expect)
+
+    # 0. the census itself
+    missing = []
+    for m, kinds in EXPECTED_KINDS.items():
+        if m not in S:
+            continue
+        for k in kinds:
+            if k not in S[m]["props"] or S[m]["props"][k]["n"] < 5:
+                missing.append("%s:%s" % (m, k))
+    if doc.get("lootNote"):
+        v.cnj("census: loot.js", doc["lootNote"])
+    for m in S:
+        if S[m].get("lootError"):
+            v.cnj("census: loot.js populate() on %s" % m, S[m]["lootError"])
+    if missing:
+        v.cnj("census: every expected prop kind built", "missing or < 5 instances: " + ", ".join(missing))
+    nearC = [S[m]["field"]["near"]["n"] for m in S]
+    if min(nearC or [0]) < 1000:
+        v.cnj("census: rendered terrain sampled", "near-ring samples per map %s" % nearC)
+    per_map = lambda fn: "; ".join("%s %s" % (m, fn(S[m])) for m in S)
+
+    # 1. anchor offset (collider centre vs drawn base centre)
+    worst = []
+    bad = []
+    for m in S:
+        for k, p in S[m]["props"].items():
+            if p["offsetMax"] is not None and p["offsetMax"] > OFFSET_MAX:
+                bad.append("%s:%s p50 %s p90 %s max %s" % (m, k, f(p["offsetP50"], 1), f(p["offsetP90"], 1), f(p["offsetMax"], 1)))
+            worst.append(p["offsetMax"] or 0)
+    for m in S:
+        v.info("anchor-offset centre-to-centre %s" % m, "; ".join("%s p50 %s max %s" % (k, f(p["centreP50"], 2), f(p["centreMax"], 2)) for k, p in S[m]["props"].items()))
+    chk("anchor-offset", not bad, ("<= %.2f m for every instance (worst %.2f m)" % (OFFSET_MAX, max(worst or [0]))) if not bad else
+        "drawn base more than %.2f m from its collider: %s" % (OFFSET_MAX, " | ".join(bad)), "max <= %.2f m" % OFFSET_MAX)
+
+    # 2. rocks
+    hov = [(m, S[m]["props"]["rocks"]) for m in S if "rocks" in S[m]["props"]]
+    bad = ["%s %s%% (n %d)" % (m, f(100 * (p["hoverShare02"] or 0), 1), p["n"]) for m, p in hov if (p["hoverShare02"] or 0) >= ROCK_HOVER_MAX]
+    chk("rocks-floating", not bad, ("lowest vertex > 0.2 m above the ground: " + "; ".join("%s %s%%" % (m, f(100 * (p["hoverShare02"] or 0), 1)) for m, p in hov)) if not bad else
+        "rocks hovering > 0.2 m (wholly in the air %s): %s" % ("; ".join("%s %s%%" % (m, f(100 * (p["airShare"] or 0), 1)) for m, p in hov), " | ".join(bad)), "< %d %%" % (100 * ROCK_HOVER_MAX))
+    bad = ["%s %s%%" % (m, f(100 * (p["buriedFullyShare"] or 0), 1)) for m, p in hov if (p["buriedFullyShare"] or 0) >= ROCK_BURIED_MAX]
+    chk("rocks-buried", not bad, ("every vertex under the ground: " + "; ".join("%s %s%%" % (m, f(100 * (p["buriedFullyShare"] or 0), 1)) for m, p in hov)) if not bad else
+        "rocks fully buried: " + " | ".join(bad), "< %d %%" % (100 * ROCK_BURIED_MAX))
+
+    # 3. other props
+    fl, sk = [], []
+    for m in S:
+        for k, p in S[m]["props"].items():
+            if k == "rocks":
+                continue
+            if (p["floatShare"] or 0) > FLOAT_SHARE_MAX:
+                fl.append("%s:%s %s%% (p90 %s, max %s)" % (m, k, f(100 * p["floatShare"], 1), f(p["floatP90"], 2), f(p["floatMaxMax"], 2)))
+            if (p["sunkShare"] or 0) > SUNK_SHARE_MAX:
+                sk.append("%s:%s %s%% (max %s)" % (m, k, f(100 * p["sunkShare"], 1), f(p["sunkMax"], 2)))
+    chk("props-float", not fl, "base vertex > 0.10 m above the ground, share per kind <= 2 %" if not fl else " | ".join(fl), "<= 2 % per kind")
+    chk("props-sunk", not sk, "base vertex > 1.0 m under the ground, share per kind <= 2 %" if not sk else " | ".join(sk), "<= 2 % per kind")
+    over = ["%s:%s %s m" % (m, k, f(p["floatMaxMax"], 2)) for m in S for k, p in S[m]["props"].items() if k != "rocks" and (p["floatMaxMax"] or 0) > FLOAT_WORST]
+    chk("props-float-worst", not over, "no non-rock prop floats > %.2f m" % FLOAT_WORST if not over else "worst float per kind above %.2f m: %s" % (FLOAT_WORST, " | ".join(over)), "none > %.2f m" % FLOAT_WORST)
+
+    # 4. the ground the player stands on vs the ground they see
+    bad = ["%s p99 %s m (max %s, %s%% > 0.10)" % (m, f(S[m]["field"]["near"]["absP99"]), f(S[m]["field"]["near"]["absMax"]), f(100 * (S[m]["field"]["near"]["shareAbsGt10"] or 0), 1)) for m in S if (S[m]["field"]["near"]["absP99"] or 0) > GROUND_P99]
+    chk("ground-match", not bad, "|heightAt - rendered near ring| p99 " + per_map(lambda s: f(s["field"]["near"]["absP99"], 4)) if not bad else " | ".join(bad), "p99 <= %.2f m" % GROUND_P99)
+    for m in S:
+        fa = S[m]["field"]["far"]
+        v.info("far-chunk ground error %s" % m, "p99 %s m, max %s m, %s%% > 0.10 (n %d)" % (f(fa["absP99"]), f(fa["absMax"]), f(100 * (fa["shareAbsGt10"] or 0), 1), fa["n"]))
+
+    # 5. collider top vs drawn top
+    bad = []
+    seen = 0
+    for m in S:
+        for k, p in S[m]["props"].items():
+            if not p["colTopN"]:
+                continue
+            seen += 1
+            if (p["colTopMissShare"] or 0) > COLTOP_MISS_MAX:
+                bad.append("%s:%s %s%% off by > 0.3 m (p50 %s, max %s)" % (m, k, f(100 * p["colTopMissShare"], 0), f(p["colTopDiffP50"], 2), f(p["colTopDiffMax"], 2)))
+    chk("collider-top", not bad and seen > 0, "collider top within 0.3 m of the drawn top (%d kinds)" % seen if not bad else " | ".join(bad), "<= 5 % per kind")
+    nocol = ["%s:%s" % (m, k) for m in S for k, p in S[m]["props"].items() if p["noCollider"] and not p["colTopN"]]
+    if nocol:
+        v.info("props without a collider", ", ".join(nocol))
+
+    # 6. structure contact
+    fl = []
+    for m in S:
+        for e in S[m]["floating"]:
+            if (e["hoverMax"] or 0) > 0.05:
+                fl.append("%s %s x%d hover p50 %s max %s over %s (e.g. seed %s at %s,%s)" % (m, e["gen"], e["n"], f(e["hoverP50"], 2), f(e["hoverMax"], 2), e["over"], e["e"][0], f(e["e"][1], 0), f(e["e"][2], 0)))
+    chk("structure-contact", not fl, "every connected structure piece touches the ground or another piece" if not fl else "%d groups: %s" % (len(fl), " | ".join(fl)), "0 pieces without contact")
+
+    # 7. loot
+    bad = []
+    for m in S:
+        c = S[m]["chests"]
+        if c["terrainN"] and (c["gapP50"] or 0) > CHEST_GAP_P50:
+            bad.append("%s p50 %s m (p90 %s, n %d)" % (m, f(c["gapP50"]), f(c["gapP90"]), c["terrainN"]))
+    chk("chest-base", not bad and any(S[m]["chests"]["terrainN"] for m in S), "chest base gap p50 " + per_map(lambda s: f(s["chests"]["gapP50"])) if not bad else " | ".join(bad), "p50 <= %.2f m" % CHEST_GAP_P50)
+    for m in S:
+        c = S[m]["chests"]
+        v.info("chests on structures %s" % m, "n %d, gap to floor p50 %s min %s max %s (a chest sunk into a floor reads negative)" % (c["boxN"], f(c["boxGapP50"]), f(c["boxGapMin"]), f(c["boxGapMax"])))
+    bad = ["%s p50 %s m (p99 %s)" % (m, f(S[m]["rings"]["centreP50"]), f(S[m]["rings"]["centreP99"])) for m in S if (S[m]["rings"]["centreP50"] or 0) > RING_P50]
+    chk("floor-rings", not bad and any(S[m]["rings"]["terrainN"] for m in S), "floor-item ring hover p50 " + per_map(lambda s: f(s["rings"]["centreP50"])) if not bad else " | ".join(bad), "p50 <= %.2f m" % RING_P50)
+    for m in S:
+        r = S[m]["rings"]
+        v.info("floor rings %s" % m, "n %d on ground %d: centre hover p50 %s p99 %s, rim worst p99 %s max %s, lowest rim %s" % (r["n"], r["terrainN"], f(r["centreP50"]), f(r["centreP99"]), f(r["maxP99"]), f(r["maxMax"]), f(r["minMin"])))
+
+    # Wave-6 rows
+    bad = []
+    for m in S:
+        for e in S[m]["grounded"]:
+            if e["gen"] in ("house", "hut", "tower", "rangerTower", "waterTower", "steeple", "lighthouse", "farmland") and e["n"] >= 5 and (e["edgeGt10Share"] or 0) > 0.05:
+                bad.append("%s %s %s%% of %d (p50 %s, max %s)" % (m, e["gen"], f(100 * e["edgeGt10Share"], 0), e["n"], f(e["edgeP50"], 2), f(e["edgeMax"], 2)))
+    chk("base-edges", not bad, "grounded structure base edges <= 0.10 m above the ground" if not bad else " | ".join(bad), "<= 5 % per generator", wave6_row=True)
+    d = ["%s min %s (%d < 1.85 capsule, %d < 2.0)" % (m, f(S[m]["doors"]["minClear"], 2), S[m]["doors"]["ltCapsule"], S[m]["doors"]["lt20"]) for m in S if S[m]["doors"]["lt20"]]
+    chk("doorway-clearance", not d, "every doorway >= 2.0 m: min " + per_map(lambda s: f(s["doors"]["minClear"], 2)) if not d else " | ".join(d), ">= 2.0 m", wave6_row=True)
+    d = ["%s %d of %d starts > 0.55 m (max %s)" % (m, S[m]["ramps"]["stepGt055"], S[m]["ramps"]["n"], f(S[m]["ramps"]["stepMax"], 2)) for m in S if S[m]["ramps"]["stepGt055"]]
+    chk("ramp-start-step", not d, "every ramp starts within 0.55 m of the floor" if not d else " | ".join(d), "0 over 0.55 m", wave6_row=True)
+    d = ["%s %s%%" % (m, f(100 * (S[m]["roads"]["floatShare"] or 0), 1)) for m in S if (S[m]["roads"]["floatShare"] or 0) > 0.01]
+    chk("roads-float", not d, "road ribbon float > 0.10 m <= 1 %" if not d else " | ".join(d), "<= 1 %", wave6_row=True)
+    return S
+
+
+def main_fn(v, args):
+    t0 = time.time()
+    plants = [p for p in (args.plant or "").split(",") if p]
+    for p in plants:
+        if p not in PLANT_ROWS:
+            raise C.HarnessError("unknown --plant %r (known: %s)" % (p, ", ".join(sorted(PLANT_ROWS))))
+    root, label = C.ROOT, "working copy"
+    if args.rev:
+        root, sha = rev_root(args.rev)
+        label = "git %s" % sha
+    vendor = os.path.join(C.ROOT, "assets", "vendor", "three")
+    if not os.path.isdir(vendor):
+        raise C.EnvFailure("vendored three not found at %s" % vendor)
+    seeds = args.seeds or SEEDS
+    if args.quick:
+        seeds = "7"
+    maps = [m for m in (args.maps or ",".join(C.MAPS)).split(",") if m]
+    print("%s: census of %s on %s, seeds %s, plants %s" % (GATE, label, ",".join(maps), seeds, plants or "none"), flush=True)
+    doc = run_census(root, vendor, maps, seeds, plants, args.census_timeout)
+    for ln in doc.get("stderr", [])[-len(maps) * len(seeds.split(",")):]:
+        print("  " + ln, flush=True)
+    v.data["root"] = label
+    v.data["seeds"] = seeds
+    v.data["plants"] = plants
+    v.data["census_wall_s"] = doc.get("wallS")
+    plant_rows = None
+    if plants:
+        plant_rows = set()
+        for p in plants:
+            plant_rows |= PLANT_ROWS[p]
+        print("%s: PLANT MODE %s - only %s count; exit 1 = the planted fault was detected" % (GATE, plants, sorted(plant_rows)), flush=True)
+    S = judge(v, doc, args, plant_rows)
+    v.data["summary"] = S
+    v.data["wave"] = args.wave
+    v.info("census wall", "%.0f s (Node, no browser)" % (time.time() - t0))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    C.add_common_args(ap)
+    ap.add_argument("--maps", default=None, help="comma list (default: all three)")
+    ap.add_argument("--seeds", default=None, help="comma list (default %s)" % SEEDS)
+    ap.add_argument("--quick", action="store_true", help="seed 7 only")
+    ap.add_argument("--wave", type=int, default=5, help="6 also gates the Wave-6 rows (base edges, doorways, ramp starts, roads)")
+    ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
+    ap.add_argument("--census-timeout", type=int, default=1800)
+    args = ap.parse_args()
+    return C.run_gate(GATE, lambda v: main_fn(v, args), args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

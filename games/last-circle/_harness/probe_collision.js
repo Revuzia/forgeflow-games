@@ -1,0 +1,526 @@
+() => {
+  // probe_collision.js - the in-page half of collisioncheck.py (lane 5D; promoted from the collision research lane's
+  // analyse.js + live.js, with every maps.js line-number hook and source-patch instrumentation REMOVED: everything below reads
+  // the built map (colliders, instanced matrices, the GLB triangles) and drives the game's own movement and shot code, so it
+  // keeps working when maps.js is edited).
+  //
+  // Returns an object of async functions; collisioncheck.py installs it once per page (window.__LCCOL__) and calls them.
+  //   props(opt)   per prop kind, analytic: how far the body capsule clips into / stands off the DRAWN mesh at the collider
+  //   live(opt)    real stepActor sprints into props, phantom walks, game segment test vs the drawn triangles
+  //   doors(opt)   real walks through house doors (door = a lintel collider over a clear gap, found from the colliders)
+  //   walls(opt)   real sprints into thin walls from both sides at 4 angles
+  //   ramps(opt)   climb and descend every sampled ramp, foot lip of every ramp, standing-and-shielded cells under ramps
+  //   falls(opt)   drops of 5-60 m onto 0.3 m slabs through the real mover
+  // READ-ONLY on the map; the player (PRACTICE: the only actor) is teleported and stepped with C.fastForward.
+  const C = window.__LC__, W = C.W;
+  const S = (window.FFG && window.FFG.sim && window.FFG.sim.Royale) || W.SIM;
+  const R = S.PLAYERK.radius, CAPH = S.PLAYERK.height;
+  const r3 = (v) => Math.round(v * 1000) / 1000;
+  const pct = (a, q) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y); const k = (s.length - 1) * q; const lo = Math.floor(k), hi = Math.min(lo + 1, s.length - 1); return r3(s[lo] + (s[hi] - s[lo]) * (k - lo)); };
+  const share = (a, f) => (a.length ? r3(a.filter(f).length / a.length) : null);
+  const STATE = { hulls: {}, samples: {}, groups: {} };
+  const M = () => W.map;
+
+  // ---------------------------------------------------------------- geometry helpers
+  function hull(P) {
+    if (P.length < 3) return P.slice();
+    P = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = []; for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+    const up = []; for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    up.pop(); lo.pop(); return lo.concat(up);
+  }
+  // signed distance from (px,pz) to a convex polygon: negative inside
+  function sdPoly(px, pz, H) {
+    if (H.length < 3) { let m = 1e9; for (const q of H) m = Math.min(m, Math.hypot(px - q[0], pz - q[1])); return m; }
+    let inside = true, md = 1e9;
+    for (let i = 0; i < H.length; i++) {
+      const a = H[i], b = H[(i + 1) % H.length];
+      const ex = b[0] - a[0], ez = b[1] - a[1], L2 = ex * ex + ez * ez || 1e-12;
+      let t = ((px - a[0]) * ex + (pz - a[1]) * ez) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(px - (a[0] + ex * t), pz - (a[1] + ez * t)); if (d < md) md = d;
+      if (ex * (pz - a[1]) - ez * (px - a[0]) < 0) inside = false;
+    }
+    return inside ? -md : md;
+  }
+  // convex polygons A, B (x,z) overlap or come within `m` metres of each other (separating-axis test over both edge sets)
+  function polysTouch(A, B, m) {
+    if (A.length < 3 || B.length < 3) return true;
+    for (const P of [A, B]) for (let i = 0; i < P.length; i++) {
+      const a = P[i], b = P[(i + 1) % P.length];
+      let nx = b[1] - a[1], nz = a[0] - b[0]; const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L;
+      let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
+      for (const q of A) { const d = q[0] * nx + q[1] * nz; if (d < a0) a0 = d; if (d > a1) a1 = d; }
+      for (const q of B) { const d = q[0] * nx + q[1] * nz; if (d < b0) b0 = d; if (d > b1) b1 = d; }
+      if (a1 + m < b0 || b1 + m < a0) return false;
+    }
+    return true;
+  }
+  // The DRAWN BODIES of a prop: one convex hull per drawn sub-mesh (a rock cluster is four separate rocks; the gaps between them are
+  // not rock), sub-meshes whose hulls touch or overlap merged into one body (a car's wheels, a barrel's bands).
+  function mergeBodies(pointSets) {
+    const hs = pointSets.filter((P) => P.length >= 3).map((P) => ({ pts: P, H: hull(P) })).filter((o) => o.H.length >= 3);
+    const par = hs.map((_, i) => i); const find = (i) => (par[i] === i ? i : (par[i] = find(par[i])));
+    for (let i = 0; i < hs.length; i++) for (let j = i + 1; j < hs.length; j++) if (polysTouch(hs[i].H, hs[j].H, 0.05)) par[find(i)] = find(j);
+    const groups = {};
+    hs.forEach((o, i) => { (groups[find(i)] = groups[find(i)] || []).push(...o.pts); });
+    return Object.values(groups).map((P) => hull(P));
+  }
+  // signed distance from (px,pz) to the nearest drawn body (negative inside one)
+  const sdBodies = (px, pz, bodies) => { let m = 1e9; for (const H of bodies) { const d = sdPoly(px, pz, H); if (d < m) m = d; } return m; };
+  const dRect = (c, x, z) => Math.hypot(Math.max(c.minX - x, 0, x - c.maxX), Math.max(c.minZ - z, 0, z - c.maxZ));
+  // points on the boundary of (AABB (+) disc r): the capsule-centre positions that just touch the collider
+  function rrPts(c, r, k) {
+    const o = [], { minX, maxX, minZ, maxZ } = c;
+    for (let i = 0; i <= k; i++) {
+      const t = i / k;
+      o.push([minX + (maxX - minX) * t, minZ - r], [minX + (maxX - minX) * t, maxZ + r], [minX - r, minZ + (maxZ - minZ) * t], [maxX + r, minZ + (maxZ - minZ) * t]);
+    }
+    for (const [cx, cz, a0, a1] of [[minX, minZ, Math.PI, 1.5 * Math.PI], [maxX, minZ, 1.5 * Math.PI, 2 * Math.PI], [maxX, maxZ, 0, 0.5 * Math.PI], [minX, maxZ, 0.5 * Math.PI, Math.PI]])
+      for (let i = 1; i < k; i++) { const a = a0 + (a1 - a0) * i / k; o.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r]); }
+    return o;
+  }
+  // body-surface gap between a prop's collider SET (one or several AABBs) and the drawn hull H: boundary of the union of the
+  // inflated boxes, signed distance to the hull minus the capsule radius. clip = deepest overlap, gapMax = widest standoff.
+  function contactSet(cs, bodies) {
+    let mn = 1e9, mx = -1e9, sum = 0, n = 0, worst = null, widest = null;
+    for (const c of cs) for (const p of rrPts(c, R, 12)) {
+      let interior = false;
+      for (const o of cs) { if (o !== c && dRect(o, p[0], p[1]) < R - 1e-6) { interior = true; break; } }
+      if (interior) continue;
+      const g = sdBodies(p[0], p[1], bodies) - R; sum += g; n++;
+      if (g < mn) { mn = g; worst = p; } if (g > mx) { mx = g; widest = p; }
+    }
+    return n ? { clip: Math.max(0, -mn), gapMax: mx, gapMean: sum / n, worst, widest } : { clip: 0, gapMax: 0, gapMean: 0, worst: null, widest: null };
+  }
+  const setBox = (cs) => { let a = 1e9, b = -1e9, c = 1e9, d = -1e9, y0 = 1e9, y1 = -1e9; for (const o of cs) { a = Math.min(a, o.minX); b = Math.max(b, o.maxX); c = Math.min(c, o.minZ); d = Math.max(d, o.maxZ); y0 = Math.min(y0, o.minY); y1 = Math.max(y1, o.maxY); } return { minX: a, maxX: b, minZ: c, maxZ: d, minY: y0, maxY: y1, cx: (a + b) / 2, cz: (c + d) / 2 }; };
+  const centroid = (H) => { let x = 0, z = 0; for (const q of H) { x += q[0]; z += q[1]; } return [x / H.length, z / H.length]; };
+  // SOFT foliage (needles, leaves) is walk-through and shoot-through in every shipped battle royale: only the trunk, the rock, the car,
+  // the barrel count as solid. A sub-mesh whose material is named like foliage is left out of the "drawn body" the colliders are judged
+  // against (a pine's skirt of needles reaches the ground and is 5 m wide: no trunk collider can, or should, match it). A kind whose
+  // sub-meshes are ALL soft keeps them all.
+  const SOFT = /green|leaf|leaves|foliage|frond|needle/i;
+  const solidSubs = (subs) => { const s = subs.filter((o) => !(o.material && SOFT.test(o.material.name || ""))); return s.length ? s : subs; };
+
+  // ---------------------------------------------------------------- player driving
+  const p = () => W.player;
+  function place(x, z, y) {
+    const P = p(), m = M();
+    P.alive = true; P.hp = 100; P.shield = 100;
+    P.pos.set(x, y != null ? y : Math.max(m.heightAt(x, z), m.waterY - 5) + 0.02, z); P.vel.set(0, 0, 0);
+    P.onGround = y == null; P.gliding = false; P.swimming = false; P.mantleT = null; P.emoting = null; P.healing = null; P._portalBoost = false;
+    const inp = P.input; inp.mx = 0; inp.mz = 0; inp.jump = false; inp.sprint = false; inp.ads = false; inp.crouch = false; inp.fire = false; inp.pitch = 0;
+    C.fastForward(4 / 60);
+  }
+  function walk(ux, uz, ticks, sprint) {
+    const P = p(), inp = P.input; inp.yaw = Math.atan2(-ux, -uz); inp.mz = 1; inp.mx = 0; inp.sprint = !!sprint;
+    const tr = [];
+    for (let i = 0; i < ticks; i++) { C.fastForward(1 / 60); tr.push([P.pos.x, P.pos.y, P.pos.z]); P.hp = 100; }
+    inp.mz = 0; inp.sprint = false; return tr;
+  }
+  const qc = (x, z, r) => { const out = []; M().queryColliders(x, z, r, out); return out; };
+  // nothing solid within `rad` of (x,z) at the feet height (a start point that is not inside a wall)
+  const freeAt = (x, z, y, rad) => {
+    for (const o of qc(x, z, rad + 2)) {
+      if (o.dead || o.kind === "ramp") continue;
+      if (o.maxY <= y + 0.55 || o.minY >= y + CAPH) continue;
+      if (dRect(o, x, z) < rad) return false;
+    }
+    return true;
+  };
+  // no other collider within `rad` metres (box-to-box, in x,z) of the prop's collider set
+  const isolatedSet = (cs, rad) => {
+    const b = setBox(cs), ext = Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ) / 2;
+    for (const o of qc(b.cx, b.cz, ext + rad + 2)) {
+      if (o.dead || cs.includes(o) || o.kind === "ramp") continue;
+      const gx = Math.max(b.minX - o.maxX, o.minX - b.maxX, 0), gz = Math.max(b.minZ - o.maxZ, o.minZ - b.maxZ, 0);
+      if (Math.hypot(gx, gz) < rad) return false;
+    }
+    return M().heightAt(b.cx, b.cz) > M().waterY + 0.8;
+  };
+
+  // ---------------------------------------------------------------- props: analytic collider vs drawn mesh
+  async function props(opt) {
+    const THREE = await import("three");
+    const m = M();
+    const g = W.group("map");
+    const insts = []; g.traverse((o) => { if (o.isInstancedMesh && !(o.castShadow && !o.receiveShadow)) insts.push(o); });
+    const byKind = {};
+    for (const c of m.colliders) if (c.prop && !c.dead) ((byKind[c.prop] = byKind[c.prop] || {})[c.idx] = byKind[c.prop][c.idx] || []).push(c);
+    const m4 = new THREE.Matrix4(), mw = new THREE.Matrix4(), v = new THREE.Vector3();
+    const out = { kinds: {}, notes: [] };
+    STATE.hulls = {}; STATE.samples = {}; STATE.groups = byKind; STATE.insts = insts;
+    for (const kind of Object.keys(byKind)) {
+      let root; try { root = await W.kernel.loadGLTF(W.assetBase + "assets/props/" + kind + ".glb"); } catch (e) { out.notes.push("no GLB for collider prop kind " + kind); continue; }
+      const geos = new Set(); root.traverse((o) => { if (o.isMesh) geos.add(o.geometry); });
+      const allSubs = insts.filter((o) => geos.has(o.geometry));
+      if (!allSubs.length) { out.notes.push("no instanced mesh for prop kind " + kind); continue; }
+      const subs = solidSubs(allSubs);
+      if (subs.length !== allSubs.length) out.notes.push(kind + ": soft foliage sub-meshes left out of the drawn body: " + allSubs.filter((o) => !subs.includes(o)).map((o) => o.material.name).join(","));
+      const recs = []; STATE.hulls[kind] = {};
+      for (const idx of Object.keys(byKind[kind])) {
+        const i = +idx, cs = byKind[kind][idx], base = Math.min(...cs.map((c) => c.minY));
+        const band = []; const perSub = []; let top = -1e9; let sc = 0;
+        for (let si = 0; si < subs.length; si++) {
+          const o = subs[si]; if (i >= o.count) continue;
+          o.getMatrixAt(i, m4); mw.multiplyMatrices(o.matrixWorld, m4);
+          if (si === 0) { const e = mw.elements; sc = Math.hypot(e[0], e[1], e[2]); }
+          const pa = o.geometry.attributes.position, sp = [];
+          for (let k = 0; k < pa.count; k++) {
+            v.fromBufferAttribute(pa, k).applyMatrix4(mw);
+            if (v.y > top) top = v.y;
+            if (v.y >= base + 0.15 && v.y <= base + 1.8) { band.push([v.x, v.z]); sp.push([v.x, v.z]); }
+          }
+          perSub.push(sp);
+        }
+        const H = hull(band);
+        if (H.length < 3) { recs.push({ i, noBand: true }); continue; }
+        const bodies = mergeBodies(perSub);
+        const ct = contactSet(cs, bodies);
+        const b = setBox(cs);
+        recs.push({ i, x: r3(b.cx), z: r3(b.cz), base: r3(base), s: r3(sc), bodies: bodies.length, clip: r3(ct.clip), gapMax: r3(ct.gapMax), gapMean: r3(ct.gapMean), visTop: r3(top - base), colTop: r3(b.maxY - base), n: cs.length, worst: ct.worst && ct.worst.map(r3), widest: ct.widest && ct.widest.map(r3) });
+        STATE.hulls[kind][i] = { H, bodies, base, cs };
+      }
+      const ok = recs.filter((r) => !r.noBand);
+      STATE.samples[kind] = ok;
+      const clips = ok.map((r) => r.clip), gaps = ok.map((r) => r.gapMax);
+      out.kinds[kind] = {
+        n: Object.keys(byKind[kind]).length, measured: ok.length, noBand: recs.length - ok.length, collidersPerInstance: r3(Object.values(byKind[kind]).reduce((s, a) => s + a.length, 0) / Math.max(1, Object.keys(byKind[kind]).length)), bodiesPerInstance: r3(ok.reduce((s, r) => s + r.bodies, 0) / Math.max(1, ok.length)),
+        clip: { p50: pct(clips, 0.5), p95: pct(clips, 0.95), max: pct(clips, 1), over10: share(clips, (x) => x > 0.10), over25: share(clips, (x) => x > 0.25), over30: share(clips, (x) => x > 0.30) },
+        gapMax: { p50: pct(gaps, 0.5), p95: pct(gaps, 0.95), max: pct(gaps, 1), over30: share(gaps, (x) => x > 0.30) },
+        visTopP50: pct(ok.map((r) => r.visTop), 0.5), colTopP50: pct(ok.map((r) => r.colTop), 0.5),
+        worstClip: ok.slice().sort((a, b) => b.clip - a.clip).slice(0, 2),
+      };
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- live: sprints, phantom walks, bullets vs drawn mesh
+  async function live(opt) {
+    const THREE = await import("three");
+    const m = M(), PERK = (opt && opt.perKind) || 8;
+    const out = { walk: {}, phantom: {}, bullets: {} };
+    const kinds = Object.keys(STATE.hulls);
+    const picked = {};
+    for (const kind of kinds) {
+      const ids = Object.keys(STATE.hulls[kind]).map(Number);
+      const cand = ids.filter((i) => isolatedSet(STATE.hulls[kind][i].cs, 5));
+      const recs = (STATE.samples[kind] || []).filter((r) => cand.includes(r.i)).sort((a, b) => a.clip - b.clip);
+      const pick = []; const N = Math.min(PERK, recs.length);
+      for (let k = 0; k < N; k++) pick.push(recs[Math.round((recs.length - 1) * (N === 1 ? 1 : k / (N - 1)))].i);
+      picked[kind] = [...new Set(pick)];
+      // ---- 1. sprint into the prop from 8 angles at 4.5 m (real stepActor); deepest overlap with the drawn base hull
+      const res = [];
+      for (const i of picked[kind]) {
+        const hh = STATE.hulls[kind][i]; const [cx, cz] = centroid(hh.H);
+        for (let a = 0; a < 8; a++) {
+          const ang = a * Math.PI / 4 + 0.13, ux = Math.cos(ang), uz = Math.sin(ang);
+          place(cx - ux * 4.5, cz - uz * 4.5);
+          const tr = walk(ux, uz, 75, true);
+          let mn = 1e9, at = null;
+          for (const q of tr) { if (q[1] > hh.base + 1.6 || q[1] + CAPH < hh.base + 0.15) continue; const sd = sdBodies(q[0], q[2], hh.bodies) - R; if (sd < mn) { mn = sd; at = q; } }
+          const last = tr[tr.length - 1];
+          res.push({ i, ang: r3(ang), minGap: r3(mn), endGap: r3(sdBodies(last[0], last[2], hh.bodies) - R), at: at && at.map(r3) });
+        }
+      }
+      // ---- 2. phantom walk: walk (no sprint) at the COLLIDER set's centre from 5 m; where does the body stop vs the drawn hull?
+      const ph = [];
+      for (const i of picked[kind].slice(0, 3)) {
+        const hh = STATE.hulls[kind][i], b = setBox(hh.cs);
+        if (!isolatedSet(hh.cs, 4)) continue;
+        for (let a = 0; a < 4; a++) {
+          const ang = a * Math.PI / 2 + 0.31, ux = Math.cos(ang), uz = Math.sin(ang);
+          place(b.cx - ux * 5, b.cz - uz * 5);
+          const tr = walk(ux, uz, 60, false);
+          const last = tr[tr.length - 1];
+          ph.push({ i, stopFromColliderCentre: r3(Math.hypot(last[0] - b.cx, last[2] - b.cz)), bodyGapToVisual: r3(sdBodies(last[0], last[2], hh.bodies) - R), at: last.map(r3) });
+        }
+      }
+      out.phantom[kind] = { runs: ph.length, over30: ph.filter((q) => q.bodyGapToVisual > 0.3).length, gapP50: pct(ph.map((q) => q.bodyGapToVisual), 0.5), gapMax: pct(ph.map((q) => q.bodyGapToVisual), 1), sample: ph.slice(0, 2) };
+      const gaps = res.map((r) => r.minGap);
+      out.walk[kind] = { instances: picked[kind].length, runs: res.length, inside10: res.filter((r) => r.minGap < -0.10).length, endInside10: res.filter((r) => r.endGap < -0.10).length,
+        deepest: r3(-Math.min(...gaps)), minGapP50: pct(gaps, 0.5), widestStop: r3(Math.max(...gaps)), worst: res.slice().sort((a, b) => a.minGap - b.minGap).slice(0, 2) };
+    }
+    // ---- 3. bullets: the game's swept shot test (segmentColliders on the prop's own colliders) vs the drawn triangles
+    const ray = new THREE.Raycaster();
+    const heights = [0.5, 1.2, 1.7, 2.5, 4.0, 5.5];
+    for (const kind of kinds) {
+      const tally = {}; for (const h of heights) tally[h] = { both: 0, visualOnly: 0, colliderOnly: 0, none: 0 };
+      const root = await W.kernel.loadGLTF(W.assetBase + "assets/props/" + kind + ".glb");
+      const geos = new Set(); root.traverse((o) => { if (o.isMesh) geos.add(o.geometry); });
+      for (const i of picked[kind] || []) {
+        const hh = STATE.hulls[kind][i], cs = hh.cs, b = setBox(cs);
+        const tmp = solidSubs(STATE.insts.filter((o) => o.geometry && geos.has(o.geometry) && i < o.count)).map((o) => {
+          const m4 = new THREE.Matrix4(); o.getMatrixAt(i, m4);
+          const mm = new THREE.Mesh(o.geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+          mm.matrixAutoUpdate = false; mm.matrixWorld.multiplyMatrices(o.matrixWorld, m4); mm.matrix.copy(mm.matrixWorld);
+          return mm;
+        });
+        const ctrs = [centroid(hh.H), [b.cx, b.cz]];
+        const far = Math.hypot(ctrs[0][0] - ctrs[1][0], ctrs[0][1] - ctrs[1][1]) > 4;
+        for (const [cx, cz] of (far ? ctrs : ctrs.slice(0, 1))) for (let a = 0; a < 4; a++) {
+          const ang = a * Math.PI / 4 + 0.07, ux = Math.cos(ang), uz = Math.sin(ang), px = -uz, pz = ux;
+          for (let k = -16; k <= 16; k++) {
+            const off = k * 0.2;
+            for (const h of heights) {
+              const y = hh.base + h;
+              const ax = cx - ux * 7 + px * off, az = cz - uz * 7 + pz * off, bx = cx + ux * 7 + px * off, bz = cz + uz * 7 + pz * off;
+              ray.set(new THREE.Vector3(ax, y, az), new THREE.Vector3(ux, 0, uz)); ray.near = 0; ray.far = 14;
+              const vis = ray.intersectObjects(tmp, false).length > 0;
+              const col = !!S.segmentColliders(ax, y, az, bx, y, bz, cs);
+              const t = tally[h]; if (vis && col) t.both++; else if (vis) t.visualOnly++; else if (col) t.colliderOnly++; else t.none++;
+            }
+          }
+        }
+        for (const mm of tmp) mm.material.dispose();
+      }
+      // agreement at body height (0.5 / 1.2 / 1.7 m): of the rays that hit EITHER the drawn mesh or the collider, the share that hit both
+      let both = 0, vo = 0, co = 0;
+      for (const h of [0.5, 1.2, 1.7]) { both += tally[h].both; vo += tally[h].visualOnly; co += tally[h].colliderOnly; }
+      out.bullets[kind] = { tally, bodyAgreement: both + vo + co ? r3(both / (both + vo + co)) : null, bodyBoth: both, bodyVisualOnly: vo, bodyColliderOnly: co };
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- doors: lintel colliders over a clear gap
+  function doorSurvey() {
+    const m = M(), doors = [];
+    for (const c of m.colliders) {
+      if (c.dead || c.kind === "ramp" || c.prop) continue;
+      const hgt = c.maxY - c.minY, w = c.maxX - c.minX, d = c.maxZ - c.minZ;
+      if (hgt < 0.6 || hgt > 1.3) continue;
+      const alongX = w >= 1.2 && w <= 3.2 && d <= 0.5, alongZ = d >= 1.2 && d <= 3.2 && w <= 0.5;
+      if (!alongX && !alongZ) continue;
+      const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2, tc = m.heightAt(cx, cz);
+      if (c.minY - tc < 1.9 || c.minY - tc > 3.6) continue;
+      let floorMax = -1e9;
+      for (const off of [-0.6, 0, 0.6]) {
+        const px = alongX ? cx : cx + off, pz = alongX ? cz + off : cz;
+        let fs = m.heightAt(px, pz);
+        for (const o of qc(px, pz, 0.8)) {
+          if (o === c || o.dead) continue;
+          if (o.kind !== "ramp" && (o.maxX - o.minX < 1.0 || o.maxZ - o.minZ < 1.0)) continue;
+          if (px < o.minX - 0.3 || px > o.maxX + 0.3 || pz < o.minZ - 0.3 || pz > o.maxZ + 0.3) continue;
+          const top = o.kind === "ramp" ? o.maxY : o.maxY;
+          if (top <= c.minY - 0.45 && top > fs) fs = top;
+        }
+        floorMax = Math.max(floorMax, fs);
+      }
+      // the waist band at the floor must be free across the opening centre (a door, not a window)
+      let waist = false;
+      for (const o of qc(cx, cz, 2.5)) {
+        if (o === c || o.dead || o.kind === "ramp") continue;
+        if (cx < o.minX - 0.05 || cx > o.maxX + 0.05 || cz < o.minZ - 0.05 || cz > o.maxZ + 0.05) continue;
+        if (o.maxY > floorMax + 0.6 && o.minY < floorMax + 1.2) { waist = true; break; }
+      }
+      if (waist) continue;
+      doors.push({ c, cx, cz, alongX, floor: floorMax, head: c.minY - floorMax });
+    }
+    return doors;
+  }
+  const roofedAt = (x, z, y) => { for (const o of qc(x, z, 0.4)) { if (o.dead || o.kind === "ramp") continue; if (x < o.minX || x > o.maxX || z < o.minZ || z > o.maxZ) continue; if (o.minY > y + 2.0 && o.minY < y + 12) return true; } return false; };
+  async function doors(opt) {
+    const m = M(), all = doorSurvey();
+    // ground-level doors only (the floor at the door within 0.6 m of the terrain), outside = the unroofed side
+    const usable = [];
+    for (const dr of all) {
+      if (dr.floor - m.heightAt(dr.cx, dr.cz) > 0.6) continue;
+      const n0 = dr.alongX ? [0, 1] : [1, 0];
+      const a = [dr.cx + n0[0] * 3, dr.cz + n0[1] * 3], b = [dr.cx - n0[0] * 3, dr.cz - n0[1] * 3];
+      const ra = roofedAt(a[0], a[1], dr.floor), rb = roofedAt(b[0], b[1], dr.floor);
+      if (ra === rb) continue;
+      const out = ra ? -1 : 1;                           // sign of the outward normal along n0
+      const nx = n0[0] * out, nz = n0[1] * out;
+      if (Math.abs(m.heightAt(dr.cx + nx * 3, dr.cz + nz * 3) - dr.floor) > 0.6) continue;
+      if (m.heightAt(dr.cx + nx * 3, dr.cz + nz * 3) < m.waterY + 0.5) continue;
+      usable.push({ ...dr, nx, nz });
+    }
+    usable.sort((a, b) => a.cx - b.cx || a.cz - b.cz);
+    const want = (opt && opt.max) || 14, pick = [];
+    for (let k = 0; k < Math.min(want, usable.length); k++) pick.push(usable[Math.floor((usable.length - 1) * (want === 1 ? 0 : k / (Math.min(want, usable.length) - 1 || 1)))]);
+    const res = [];
+    for (const L of [...new Set(pick)]) {
+      for (const deg of [0, 20, 35, 50]) {
+        const a = deg * Math.PI / 180, ox = L.nx * Math.cos(a) - L.nz * Math.sin(a), oz = L.nx * Math.sin(a) + L.nz * Math.cos(a);
+        const sx = L.cx + ox * 3.5, sz = L.cz + oz * 3.5;
+        if (!freeAt(sx, sz, m.heightAt(sx, sz), R)) continue;
+        place(sx, sz);
+        const dx = L.cx - L.nx * 2 - sx, dz = L.cz - L.nz * 2 - sz, dl = Math.hypot(dx, dz);
+        const tr = walk(dx / dl, dz / dl, 90, false);
+        let stuck = 0; for (let k = 1; k < tr.length; k++) if (Math.hypot(tr[k][0] - tr[k - 1][0], tr[k][2] - tr[k - 1][2]) < 0.02) stuck++;
+        const last = tr[tr.length - 1];
+        const inside = -((last[0] - L.cx) * L.nx + (last[2] - L.cz) * L.nz);
+        res.push({ x: r3(L.cx), z: r3(L.cz), deg, inside: r3(inside), gotIn: inside > 0.8, stuckTicks: stuck, head: r3(L.head) });
+      }
+    }
+    return { surveyed: all.length, usable: usable.length, doorsTested: new Set(res.map((r) => r.x + "," + r.z)).size, runs: res.length, gotIn: res.filter((r) => r.gotIn).length,
+      stuckP50: pct(res.map((r) => r.stuckTicks), 0.5), stuckMax: pct(res.map((r) => r.stuckTicks), 1), failed: res.filter((r) => !r.gotIn).slice(0, 10) };
+  }
+
+  // ---------------------------------------------------------------- thin walls
+  async function walls(opt) {
+    const m = M();
+    const cand = [];
+    for (const c of m.colliders) {
+      if (c.dead || c.kind === "ramp" || c.prop) continue;
+      const w = c.maxX - c.minX, d = c.maxZ - c.minZ, t = Math.min(w, d), L = Math.max(w, d), h = c.maxY - c.minY;
+      if (t > 0.45 || L < 2.5 || h < 2.4 || h > 12) continue;
+      const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
+      if (c.minY - m.heightAt(cx, cz) > 0.9 || m.heightAt(cx, cz) < m.waterY + 0.5) continue;      // ground-level walls only
+      cand.push({ c, cx, cz, t, L, thinX: w < d });
+    }
+    cand.sort((a, b) => a.cx - b.cx || a.cz - b.cz);
+    const want = (opt && opt.max) || 16, pick = [];
+    for (let k = 0; k < Math.min(want, cand.length); k++) pick.push(cand[Math.floor((cand.length - 1) * (want === 1 ? 0 : k / (Math.min(want, cand.length) - 1 || 1)))]);
+    const res = [];
+    for (const Wl of [...new Set(pick)]) {
+      const nx = Wl.thinX ? 1 : 0, nz = Wl.thinX ? 0 : 1, tx = -nz, tz = nx;
+      for (const side of [1, -1]) for (const deg of [90, 60, 30, 10]) {
+        const a = deg * Math.PI / 180;
+        const ux = -side * nx * Math.sin(a) + tx * Math.cos(a), uz = -side * nz * Math.sin(a) + tz * Math.cos(a);
+        // start 1.6 m off the face (perpendicular offset), 1 m back along the run so the sprint reaches the wall at the middle
+        const sx = Wl.cx + side * nx * 1.6 - ux * 1.0, sz = Wl.cz + side * nz * 1.6 - uz * 1.0;
+        const gy = m.heightAt(sx, sz);
+        if (Math.abs(gy - Wl.c.minY) > 0.9 || !freeAt(sx, sz, gy, R)) continue;
+        place(sx, sz);
+        const tr = walk(ux, uz, 40, true);
+        let crossed = false, maxPen = -1e9;
+        for (const q of tr) {
+          const lat = Math.abs((q[0] - Wl.cx) * tx + (q[2] - Wl.cz) * tz);
+          if (lat > Wl.L / 2 - R) continue;
+          const sd = ((q[0] - Wl.cx) * nx + (q[2] - Wl.cz) * nz) * side;
+          if (sd < 0) crossed = true; maxPen = Math.max(maxPen, (Wl.t / 2 + R) - sd);
+        }
+        res.push({ deg, crossed, maxPen: r3(maxPen), x: r3(Wl.cx), z: r3(Wl.cz) });
+      }
+    }
+    return { candidates: cand.length, walls: new Set(res.map((r) => r.x + "," + r.z)).size, runs: res.length, crossed: res.filter((w) => w.crossed).length, maxCapsuleIntoWallFace: pct(res.map((w) => w.maxPen), 1), crossedAt: res.filter((w) => w.crossed).slice(0, 6) };
+  }
+
+  // ---------------------------------------------------------------- ramps
+  const rampTop = (c, x, z) => {
+    let f;
+    if (c.dir === 0) f = (x - c.minX) / Math.max(0.01, c.maxX - c.minX); else if (c.dir === 1) f = (c.maxX - x) / Math.max(0.01, c.maxX - c.minX);
+    else if (c.dir === 2) f = (z - c.minZ) / Math.max(0.01, c.maxZ - c.minZ); else f = (c.maxZ - z) / Math.max(0.01, c.maxZ - c.minZ);
+    return c.minY + (c.maxY - c.minY) * Math.min(1, Math.max(0, f));
+  };
+  async function ramps(opt) {
+    const m = M();
+    const cols = m.colliders;
+    const rs = cols.map((c, i) => ({ c, i })).filter((o) => o.c.kind === "ramp" && !o.c.dead);
+    const out = { n: rs.length };
+    // ---- foot lip: how far the low edge sits above whatever it starts from (terrain or a floor slab within 0.6 m of it)
+    const lips = [];
+    for (const { c } of rs) {
+      const pts = [];
+      for (let t = 0; t <= 4; t++) {
+        const u = t / 4;
+        if (c.dir === 0) pts.push([c.minX - 0.3, c.minZ + (c.maxZ - c.minZ) * u]); else if (c.dir === 1) pts.push([c.maxX + 0.3, c.minZ + (c.maxZ - c.minZ) * u]);
+        else if (c.dir === 2) pts.push([c.minX + (c.maxX - c.minX) * u, c.minZ - 0.3]); else pts.push([c.minX + (c.maxX - c.minX) * u, c.maxZ + 0.3]);
+      }
+      const sup = (x, z) => { let f = m.heightAt(x, z), box = false; for (const o of qc(x, z, 0.05)) { if (o === c || o.dead || o.kind !== "box" || x < o.minX || x > o.maxX || z < o.minZ || z > o.maxZ) continue; if (o.maxY <= c.minY + 0.6 && o.maxY > f) { f = o.maxY; box = true; } } return [f, box]; };
+      const ss = pts.map((q) => sup(q[0], q[1]));
+      if (ss.every((s2) => !s2[1] && s2[0] < m.waterY)) continue;            // a ramp wading out of the sea
+      lips.push({ lip: r3(Math.max(...ss.map((s2) => c.minY - s2[0]))), x: r3((c.minX + c.maxX) / 2), z: r3((c.minZ + c.maxZ) / 2), rise: r3(c.maxY - c.minY), onBox: ss[2][1] });
+    }
+    out.lip = { n: lips.length, max: pct(lips.map((l) => l.lip), 1), p90: pct(lips.map((l) => l.lip), 0.9), over10: lips.filter((l) => l.lip > 0.1).length, over055: lips.filter((l) => l.lip > 0.55).length, worst: lips.slice().sort((a, b) => b.lip - a.lip).slice(0, 4) };
+    // ---- climb and descend a spread sample with the real mover
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const sample = rs.filter((_, k) => k % Math.max(1, Math.floor(rs.length / ((opt && opt.max) || 14))) === 0).slice(0, (opt && opt.max) || 14);
+    const climb = [], desc = [];
+    for (const { c } of sample) {
+      const [ux, uz] = dirs[c.dir];
+      const along = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
+      const mx = (c.minX + c.maxX) / 2, mz = (c.minZ + c.maxZ) / 2;
+      const sx = c.dir === 0 ? c.minX - 1.2 : c.dir === 1 ? c.maxX + 1.2 : mx, sz = c.dir === 2 ? c.minZ - 1.2 : c.dir === 3 ? c.maxZ + 1.2 : mz;
+      // the start must be standable ground at the ramp foot (a ramp that starts on a slab is climbed from that slab)
+      let f0 = m.heightAt(sx, sz); for (const o of qc(sx, sz, 0.05)) { if (o === c || o.dead || o.kind !== "box" || sx < o.minX || sx > o.maxX || sz < o.minZ || sz > o.maxZ) continue; if (o.maxY <= c.minY + 0.6 && o.maxY > f0) f0 = o.maxY; }
+      if (f0 < m.waterY - 0.1 || c.minY - f0 > 1.2) { climb.push({ skipped: "foot not standable", x: r3(mx), z: r3(mz) }); continue; }
+      place(sx, sz, f0 + 0.02);
+      const tr = walk(ux, uz, Math.ceil((along / 5 + 1.6) * 60), false);
+      const maxY = Math.max(...tr.map((q) => q[1]));
+      climb.push({ x: r3(mx), z: r3(mz), rise: r3(c.maxY - c.minY), slopeDeg: r3(Math.atan2(c.maxY - c.minY, along) * 180 / Math.PI), reachedTop: maxY >= c.maxY - 0.35, maxY: r3(maxY - c.minY), startDy: r3(f0 - c.minY) });
+      // descend: start on the slab surface near the top end, walk back down
+      const tx = c.dir === 0 ? c.maxX - 0.6 : c.dir === 1 ? c.minX + 0.6 : mx, tz = c.dir === 2 ? c.maxZ - 0.6 : c.dir === 3 ? c.minZ + 0.6 : mz;
+      const ty = rampTop(c, tx, tz);
+      place(tx, tz, ty + 0.05);
+      const tr2 = walk(-ux, -uz, Math.ceil((along / 5 + 1.6) * 60), false);
+      const last = tr2[tr2.length - 1];
+      const downTo = Math.min(...tr2.map((q) => q[1]));
+      // "the foot" = the ground the ramp starts from (terrain, or a slab within 0.6 m): a ramp whose foot is sunk into a hill
+      // ends on that higher ground
+      desc.push({ x: r3(mx), z: r3(mz), rise: r3(c.maxY - c.minY), startY: r3(ty), endY: r3(last[1]), footGround: r3(f0), reachedFoot: downTo <= Math.max(c.minY, f0) + 0.6, movedAlong: r3((last[0] - tx) * -ux + (last[2] - tz) * -uz) });
+    }
+    const cl = climb.filter((x) => !x.skipped);
+    out.climb = { sampled: sample.length, runs: cl.length, skipped: climb.length - cl.length, reachedTop: cl.filter((x) => x.reachedTop).length, failed: cl.filter((x) => !x.reachedTop).slice(0, 8) };
+    out.descend = { runs: desc.length, reachedFoot: desc.filter((x) => x.reachedFoot).length, failed: desc.filter((x) => !x.reachedFoot).slice(0, 8) };
+    // ---- the hide area under tall ramps: cells under the slab where a capsule can STAND (real mover) and a chest-high shot is
+    //      stopped by the ramp itself. C-RAMP (movement blocked under a ramp, or shots testing only the slab band) makes it 0.
+    const CELL = 0.5;
+    let hideCells = 0, standCells = 0, cells = 0; const hideEx = [];
+    for (const { c } of rs) {
+      const h = c.maxY - c.minY; if (h < 2.1) continue;
+      const along = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
+      for (let x = c.minX + CELL / 2; x < c.maxX; x += CELL) for (let z = c.minZ + CELL / 2; z < c.maxZ; z += CELL) {
+        const top = rampTop(c, x, z);
+        let floor = m.heightAt(x, z);
+        for (const o of qc(x, z, 0.05)) { if (o === c || o.dead || o.kind !== "box" || x < o.minX || x > o.maxX || z < o.minZ || z > o.maxZ) continue; if (o.maxY <= top - 0.3 - 1.0 && o.maxY > floor) floor = o.maxY; }
+        if ((top - 0.3) - floor < CAPH + 0.05) continue;                      // no standing room under the slab here
+        cells++;
+        place(x, z, floor + 0.02);
+        const P = p();
+        const moved = Math.hypot(P.pos.x - x, P.pos.z - z), rose = P.pos.y - (floor + 0.02);
+        if (moved > 0.25 || rose > 0.3) continue;                             // pushed out / lifted onto the slab: not a place to stand
+        standCells++;
+        const near = qc(x, z, 14), yy = floor + 1.2;
+        let shielded = false;
+        for (const [dx, dz] of dirs) { const hit = S.segmentColliders(x + dx * 10, yy, z + dz * 10, x, yy, z, near); if (hit && hit.c === c) { shielded = true; break; } }
+        if (shielded) { hideCells++; if (hideEx.length < 4) hideEx.push([r3(x), r3(z), r3(floor)]); }
+      }
+    }
+    out.hide = { tallRamps: rs.filter(({ c }) => c.maxY - c.minY >= 2.1).length, cellsUnderSlab: cells, standable: standCells, shielded: hideCells, hideM2: r3(hideCells * CELL * CELL), example: hideEx };
+    return out;
+  }
+
+  // ---------------------------------------------------------------- falls onto 0.3 m slabs
+  async function falls(opt) {
+    const m = M(), P = p();
+    const slabs = [];
+    for (const c of m.colliders) {
+      if (c.dead || c.kind !== "box" || c.prop) continue;
+      const th = c.maxY - c.minY, w = c.maxX - c.minX, d = c.maxZ - c.minZ;
+      if (th < 0.25 || th > 0.45 || w < 3.0 || d < 3.0 || w * d < 16) continue;
+      const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
+      // free sky above the middle: nothing else over it within 70 m
+      let over = false; for (const o of qc(cx, cz, 2)) { if (o === c || o.dead) continue; if (cx >= o.minX - 0.6 && cx <= o.maxX + 0.6 && cz >= o.minZ - 0.6 && cz <= o.maxZ + 0.6 && o.minY > c.maxY - 0.01) { over = true; break; } }
+      if (over) continue;
+      // the standing spot must not be a wall/rail neighbour: no other collider within the capsule at the slab top
+      if (!freeAt(cx, cz, c.maxY, R + 0.2)) continue;
+      slabs.push({ c, cx, cz, th });
+    }
+    slabs.sort((a, b) => a.cx - b.cx || a.cz - b.cz);
+    const want = (opt && opt.slabs) || 6, pick = [];
+    for (let k = 0; k < Math.min(want, slabs.length); k++) pick.push(slabs[Math.floor((slabs.length - 1) * (want === 1 ? 0 : k / (Math.min(want, slabs.length) - 1 || 1)))]);
+    // The mover lands a falling actor only if some tick ends with the feet within STEP_UP (0.55 m) above the slab top, so whether a
+    // drop passes through depends on the sub-tick PHASE of the fall as well as its height: every height is dropped from 8 start
+    // heights 0.07 m apart (one landing window), and a drop counts as passed-through if ANY phase went through.
+    const drops = (opt && opt.drops) || [5, 12, 20, 26, 28, 31, 36, 45, 60];
+    const phases = (opt && opt.phases) || 8;
+    const res = [];
+    for (const sl of [...new Set(pick)]) for (const dh of drops) for (let ph = 0; ph < phases; ph++) {
+      const top = sl.c.maxY;
+      place(sl.cx, sl.cz, top + dh + ph * 0.07);
+      P.onGround = false; P.vel.set(0, 0, 0); P.alive = true;
+      let landed = false, t = 0;
+      for (; t < 60 * 14; t++) {
+        C.fastForward(1 / 60); P.hp = 100; P.shield = 100; P.alive = true;
+        if (P.onGround) { landed = true; break; }
+        if (P.pos.y < top - 6) break;
+      }
+      res.push({ x: r3(sl.cx), z: r3(sl.cz), thick: r3(sl.th), drop: dh, phase: ph, landed, finalDy: r3(P.pos.y - top), passed: P.pos.y < top - 0.5, ticks: t });
+    }
+    return { slabs: slabs.length, tested: new Set(res.map((r) => r.x + "," + r.z)).size, runs: res.length, passed: res.filter((r) => r.passed).length, byDrop: drops.map((d) => ({ drop: d, runs: res.filter((r) => r.drop === d).length, passed: res.filter((r) => r.drop === d && r.passed).length })), failed: res.filter((r) => r.passed).slice(0, 8) };
+  }
+
+  return { props, live, doors, walls, ramps, falls, _state: STATE };
+}

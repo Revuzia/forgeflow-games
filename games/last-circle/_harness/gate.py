@@ -18,12 +18,17 @@ shared box), each as its own process with the same --base / --disk / --rev / --h
     hud_checks   hud_cycle
     player_dlcount   player_deaths   player_canopy   player_camwall   player_rim   player_dive
     orch_lowpost   orch_progkey   sim_pacing (10 whole matches: the long one)
+  then the Wave-5 world-foundation gates (lane 5D, 2026-10-12; each must FAIL on the Wave-4 commit 7f6a9fb2):
+    placementcheck (Node only, ~25 s, runs first)   collisioncheck (one Chrome per map)   navcheck (one Chrome per map)
   perfcheck, orch_lowpost_ab (INFORMATION ONLY: shown, never counted)
 
 --negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
 allow-pointer-lock, bootguard j/k --plant no-card and --plant hidden-card, bootcheck --plant lock-drop, feelcheck --plant
 kill-marker-short, layoutcheck --only phones --plant no-touch-ui, framecheck --plant forced-layout, loot_beams_rings
-(flush-clear, storm-ignore), sky_probe (fog-flat, no-rng-burn, no-handles), sky_lowtier (one-layer-broken); and feelcheck
+(flush-clear, storm-ignore), sky_probe (fog-flat, no-rng-burn, no-handles), sky_lowtier (one-layer-broken); the Wave-5 gates:
+placementcheck (y-only-recentre, perimeter-drop, tree-float: the built map is mutated in memory), collisioncheck served from the
+Wave-4 commit (--rev 7f6a9fb2), navcheck (nav-l3, raw-strafe, heal-yaw: bots.js / ffg_royale3d.js served patched by a page route);
+and feelcheck
 --plant blind-sampler, which must exit 2 (a blinded sampler is could-not-judge, never a verdict).
 
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
@@ -44,8 +49,13 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
 
+WAVE4_REV = "7f6a9fb2"       # the Wave-4 merge commit: the frozen "must fail" build of the Wave-5 gates
+
 # (name, script, extra args, timeout s, informational)
 GATES = [
+    # Wave 5 (lane 5D): the permanent gates that SEE the world-foundation defects. placementcheck is Node only (no browser, ~25 s), so
+    # it runs first; collisioncheck / navcheck load one Chrome per map and run after leaktest.
+    ("placementcheck", "placementcheck.py", [], 1800, False),
     ("bootcheck", "bootcheck.py", [], 3600, False),
     ("bootguard", "bootguard.py", [], 5400, False),
     ("rigcheck", "rigcheck.py", ["--seeds", "7,11,23"], 5400, False),
@@ -58,6 +68,8 @@ GATES = [
     ("mobile", "mobile.py", [], 7200, False),
     ("probe_match", "probe_match.py", ["--farwall"], 14400, False),
     ("leaktest", "leaktest.py", [], 7200, False),
+    ("collisioncheck", "collisioncheck.py", [], 5400, False),
+    ("navcheck", "navcheck.py", [], 5400, False),
     # ---- Wave-4 lane gates: _harness/new/<lane>_<name>.py, registered 2026-10-12. Same convention as every gate above (0 pass /
     # 1 fail / 2 could-not-judge, one VERDICT line, JSON in _reports/); all take the common flags, so --disk / --rev / --base /
     # --headed / --gpu pass through. None needs a rAF (they step frames); each lane gate's --isolate / --overlay-root is a
@@ -116,6 +128,16 @@ NEGATIVE = [
     ("sky_probe-plant-no-rng-burn", "new/sky_probe.py", ["--plant", "no-rng-burn"], 1800),
     ("sky_probe-plant-no-handles", "new/sky_probe.py", ["--plant", "no-handles"], 1800),
     ("sky_lowtier-plant-one-layer-broken", "new/sky_lowtier.py", ["--plant", "one-layer-broken"], 1800),
+    # Wave-5 lane 5D. placementcheck: the BUILT map is mutated in memory (rocks back on their Wave-4 offset, the 0.35 m perimeter drop
+    # back, one tree lifted 0.30 m); collisioncheck: the Wave-4 commit itself is served (pinned: `--rev` in the extra args makes run_gate
+    # skip the integration run's --rev / --disk); navcheck: bots.js / ffg_royale3d.js are served patched by a page route.
+    ("placementcheck-plant-y-only-recentre", "placementcheck.py", ["--plant", "y-only-recentre"], 900),
+    ("placementcheck-plant-perimeter-drop", "placementcheck.py", ["--plant", "perimeter-drop"], 900),
+    ("placementcheck-plant-tree-float", "placementcheck.py", ["--plant", "tree-float"], 900),
+    ("collisioncheck-wave4-commit", "collisioncheck.py", ["--rev", WAVE4_REV], 3600),
+    ("navcheck-plant-nav-l3", "navcheck.py", ["--plant", "nav-l3"], 3600),
+    ("navcheck-plant-raw-strafe", "navcheck.py", ["--plant", "raw-strafe"], 3600),
+    ("navcheck-plant-heal-yaw", "navcheck.py", ["--plant", "heal-yaw"], 3600),
 ]
 
 
@@ -140,7 +162,9 @@ def node_selftests():
 
 def run_gate(name, script, extra, timeout, args, logdir):
     cmd = [sys.executable, "-u", os.path.join(C.HERE, script)] + list(extra)
-    if args.rev:
+    if "--rev" in extra:
+        pass                                    # pinned to a frozen commit (a negative control): the run's own --rev / --disk do not apply
+    elif args.rev:
         cmd += ["--rev", args.rev]
     elif args.disk:
         cmd += ["--disk"]
