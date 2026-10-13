@@ -113,6 +113,7 @@ export function disposeMatch(W) {
   const n = brains.length;
   brains.length = 0;
   navCols.length = 0;
+  _wq.length = 0; _mq.length = 0;     // (Wave 5) the wall probes' collider scratch: references to the old map's colliders
   return { brains: n };
 }
 
@@ -217,6 +218,12 @@ export function attachBrain(W, actor, nBots) {
       lootType: null, supply: null, path: null, pathGoal: null, nextPathT: 0, badLoot: null,
       progGoal: null, progBest: null, progT: 0, wallSide: 0, detourDir: 0, nextJumpT: 0,
       anchor: null, anchorT: 0, breaks: 0,
+      // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
+      // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
+      // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
+      progKind: 0, wallCols: [], wallT: -99, wallX: 0, wallZ: 0,
+      hdX: 0, hdZ: 0, hdT: -99, healSide: 1, hdBadX: 0, hdBadZ: 0, hdBadUntil: 0, unstickT: -99,
+      slideX: 0, slideZ: 0, slideUntil: -99, slideFlips: 0, routeId: null, pinX: 0, pinZ: 0, pinT: 0, pinIntent: 0, pinN: 0,
       fightTarget: undefined, fightT: 0, aimHigh: false, errPhase: 0, closeInUntil: 0,
       avoidId: null, avoidUntil: 0, swapT: -99, healBlockedUntil: 0,
       threatFor: undefined, threatT: -99, threatAt: null,
@@ -752,7 +759,7 @@ function onEnter(W, b, state) {
     bb.moveTo = bb.supply ? { x: bb.supply.x, z: bb.supply.z } : randNear(W, a, 40, rng);
   } else if (state === "CLOSEIN") {
     const t = bb.target && W.actorById.get(bb.target);
-    bb.moveTo = t ? { x: t.pos.x, z: t.pos.z } : randNear(W, a, 30, rng);
+    bb.moveTo = t ? { x: t.pos.x, z: t.pos.z, y: t.pos.y } : randNear(W, a, 30, rng);   // (Wave 5) y: arrive on HIS floor
   } else if (state === "HUNT") {
     // head for the NEAREST living enemy's rough area — ±22m of fuzz makes it a
     // sixth sense for direction, not a wallhack; re-planned every arrival so it
@@ -764,9 +771,13 @@ function onEnter(W, b, state) {
       const d2 = hyp(t2.pos.x - a.pos.x, t2.pos.z - a.pos.z);
       if (d2 < nd) { nd = d2; nearT = t2; }
     }
-    bb.moveTo = nearT
-      ? { x: nearT.pos.x + (rng() - 0.5) * 44, z: nearT.pos.z + (rng() - 0.5) * 44 }
-      : randNear(W, a, 50, rng);
+    if (nearT) {
+      const hx = nearT.pos.x + (rng() - 0.5) * 44, hz = nearT.pos.z + (rng() - 0.5) * 44;   // (same two draws, same order)
+      // (Wave 5) the floor of the fuzzed point at HIS height: the goal is a place on his storey, not a column through the
+      // map. NaN (water, a wall, a floor more than a step below him) -> a floor-blind goal, as before.
+      const hy = standAt(W, hx, hz, nearT.pos.y);
+      bb.moveTo = hy === hy ? { x: hx, z: hz, y: hy } : { x: hx, z: hz };
+    } else bb.moveTo = randNear(W, a, 50, rng);
   } else if (state === "WANDER") {
     bb.moveTo = randNear(W, a, 50, rng);
   } else if (state === "HEAL") {
@@ -995,18 +1006,39 @@ function act(W, b, dt) {
   if (_wasStuckPos.distanceToSquared(a.pos) < 0.02 * 0.02 && (inp.mz || inp.mx)) bb.stuckT += dt;
   else bb.stuckT = 0;
 
+  // PIN DETECTOR (Wave 5): trying to move for most of a half-second and ending it within 15 cm of where it began. stuckT
+  // needs a frame under 2 cm, which a bot wiggling a centimetre a frame (a slide that flip-flops, a strafe against a corner)
+  // never has, so none of the recovery ran for it; the net displacement of a window cannot be gamed that way.
+  if ((inp.mz || inp.mx) && a.onGround && !bb.chestId) bb.pinIntent += dt;
+  if (W.t - bb.pinT >= 0.5 || W.t < bb.pinT) {
+    const dxp = a.pos.x - bb.pinX, dzp = a.pos.z - bb.pinZ;
+    if (bb.pinIntent >= 0.4 && dxp * dxp + dzp * dzp < 0.15 * 0.15) bb.pinN++; else bb.pinN = 0;
+    bb.pinT = W.t; bb.pinX = a.pos.x; bb.pinZ = a.pos.z; bb.pinIntent = 0;
+    if (bb.pinN >= 2) { bb.pinN = 0; pinRecover(W, b); }
+  }
+
+  // PROGRESS BREAKER for the fight and the heal (Wave 5; Unreal's path follower does block detection the same way). The
+  // hard breaker below exempts them - standing still is their job - but a bot that is TRYING to move (strafe, back off,
+  // retreat) and is pinned solid is not standing still by choice. guardMove keeps most of these from happening; this is
+  // what frees the ones it cannot see (a corner the held list missed, a prop that was spawned after it).
+  if ((b.state === "ENGAGE" || b.state === "HEAL") && bb.stuckT > FIGHT_UNSTICK_S && W.t - bb.unstickT > FIGHT_UNSTICK_GAP_S) unstickFight(W, b);
+
   // HARD BREAKER (audit S7: one bot sat in a Coco Village corner for 329 s while
   // every softer recovery kept firing). A bot that has meant to be travelling but
   // stayed inside the same 2 m for 12 s abandons its goal and walks OUT: the
   // nearest reachable open-sky ground (via the stairs, the door, or a drop), found
-  // at its own floor height. Fights, camps, heals and chest channels are exempt:
-  // standing still is their job.
-  if (MOVING_STATES[b.state] && !bb.chestId && !a.healing && !a.emoting) {
+  // at its own floor height. Fights, heals and chest channels are exempt:
+  // standing still is their job. A CAMP bot is exempt only once it is AT its spot
+  // (Wave 5): on its way there it is a traveller like any other, and a camp spot
+  // behind a wall was a goal it re-tried for the rest of the match.
+  const campWalk = b.state === "CAMP" && bb.campSpot && hyp(bb.campSpot.x - a.pos.x, bb.campSpot.z - a.pos.z) > 4;
+  if ((MOVING_STATES[b.state] || campWalk) && !bb.chestId && !a.healing && !a.emoting) {
     if (!bb.anchor || hyp(a.pos.x - bb.anchor.x, a.pos.z - bb.anchor.z) > 2) {
       if (!bb.anchor) bb.anchor = { x: 0, z: 0 };
       bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; bb.anchorT = W.t;
     } else if (W.t - bb.anchorT > 12) {
-      breakOut(W, b);
+      if (campWalk) { bb.path = null; bb.pathGoal = null; bb.progGoal = null; onEnter(W, b, "CAMP"); }   // another spot (seeded draw)
+      else breakOut(W, b);
       bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; bb.anchorT = W.t;
     }
   } else if (bb.anchor) { bb.anchorT = W.t; bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; }
@@ -1026,6 +1058,35 @@ function act(W, b, dt) {
 }
 
 const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1 };
+/** (Wave 5) A fighter / healer pinned solid with a move intent for FIGHT_UNSTICK_S. First time: ENGAGE flips its strafe, HEAL
+ *  bans the heading that pinned it for 1.5 s (pickRetreat takes the next one). Pinned again within 8 s: ENGAGE closes in on a
+ *  PATH for 3 s when its target was seen in the last 3 s (CLOSEIN: moveToward's A* and shoot-on-the-move, the exit the
+ *  endgame stalemate breaker already uses), else walks out the way the hard breaker does. */
+/** (Wave 5) Pinned for a second (see the pin detector in act). The fight states take their own recovery; every other state
+ *  runs moveToward's hard-stuck branch NOW instead of waiting for the 3 s progress test: a fresh A* path (or the nearest exit),
+ *  and the sidestep + hop that branch starts with. */
+function pinRecover(W, b) {
+  const bb = b.bb;
+  if (b.state === "ENGAGE" || b.state === "HEAL") { if (W.t - bb.unstickT > FIGHT_UNSTICK_GAP_S) unstickFight(W, b); return; }
+  bb.stuckT = Math.max(bb.stuckT, 2.3);
+  bb.nextPathT = 0;
+  bb.wallSide = 0;
+}
+function unstickFight(W, b) {
+  const bb = b.bb;
+  const again = W.t - bb.unstickT < 8;
+  bb.unstickT = W.t;
+  bb.stuckT = 0;
+  if (b.state === "ENGAGE") {
+    bb.strafeDir = -bb.strafeDir; bb.strafeT = Math.max(bb.strafeT, 0.8);
+    if (again) {
+      if (bb.target && W.t - bb.targetSeenT < 3) { bb.closeInUntil = W.t + 3; b.nextThink = 0; }
+      else { breakOut(W, b); b.state = "WANDER"; b.nextThink = W.t + 2; }
+    }
+  } else {
+    bb.hdBadX = bb.hdX; bb.hdBadZ = bb.hdZ; bb.hdBadUntil = W.t + 1.5;
+  }
+}
 /** (T-tick-actors B4) findExit stops at the FIRST open-sky cell past the door, and
  *  the movers count "arrived" at 1.6-3 m (path shift 1.6, actMove 3, actLoot 1.8):
  *  a bot in a hut corner was told it had arrived while still inside the doorway,
@@ -1121,17 +1182,46 @@ function steerYaw(a, want, dt, speed) {
  *  NOT supportAt: that returns walkable surfaces at-or-below y+STEP_UP by
  *  definition, so "supportAt > y+2.2" was mathematically impossible and the
  *  old probe NEVER fired (found by scanning a whole map for hits: zero).
- *  A wall blocks when its box spans the hop-to-headroom band. Ramps are
- *  walkable by design and never block. */
+ *  A wall blocks when its box spans the hop-to-headroom band. A ramp blocks by
+ *  the C-RAMP contract (rampBlocks): its sides and underside, not its slope. */
 function obstacleAt(W, x, z, y) {
   const cols = W.map.queryColliders(x, z, 0.6);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
-    if (c.kind === "ramp") continue;
+    if (c.dead) continue;
     if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
+    if (c.kind === "ramp") { if (rampBlocks(c, x, z, y)) return true; continue; }
     if (c.minY < y + 2.0 && c.maxY > y + 0.55) return true;
   }
   return false;
+}
+
+/** THE C-RAMP SWITCH (Wave 5, lane 5B). true = the planner and the standing-point probes treat a ramp's sides and underside as
+ *  blocked, as the plan's contract says player.js (lane 5C) and the sim's segment tests do. Set it false if 5C's mover does NOT
+ *  block them in the merged build: the planner would then refuse routes the mover allows (measured on the Wave-4 maps, where
+ *  the mover still lets bots walk under stairs, before the lenient retry in findPath: 2.8-4.2 points of ground and upper
+ *  door-walk reachability, all of it barns and huts whose stair starts at the door and stair wedges whose low edge is more than
+ *  a step above the ground). Everything else in this file works with either value. */
+const C_RAMP = true;
+/** sim rampTopAt, inlined here once for the helpers below (the nav inlines its own copy). */
+function rampTopAt(c, x, z) {
+  let f;
+  if (c.dir === 0) f = (x - c.minX) / Math.max(0.01, c.maxX - c.minX);
+  else if (c.dir === 1) f = (c.maxX - x) / Math.max(0.01, c.maxX - c.minX);
+  else if (c.dir === 2) f = (z - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
+  else f = (c.maxZ - z) / Math.max(0.01, c.maxZ - c.minZ);
+  return c.minY + (c.maxY - c.minY) * (f < 0 ? 0 : f > 1 ? 1 : f);
+}
+/** C-RAMP (contract shared with player.js blockedIn and the sim's segment tests, plan Wave 5): a ramp is a 0.3 m sloped slab,
+ *  walkable from its low edge; its SIDES and UNDERSIDE block movement. The underside is the WEDGE between the plane of the low
+ *  edge (minY) and the slab - not a column down to the ground: the room on the floor below a stair is open. Point form, for a
+ *  standing point (x,z) whose floor is y: the wedge reaches the body (minY below the head band, y + 2.0) and the slab there is
+ *  above step reach (y + STEP_UP), i.e. the point is under the slope or beside it. A point ON the slab has the slab as its floor
+ *  (the caller took supportAt for y), so it is never blocked, and a bot climbing from the low edge is on the slab, not beside it.
+ *  Only STANDING points use this (standAt: cover candidates, landing spots); a look-ahead probe 3 m up a ramp is above step
+ *  reach by construction, so wallAhead and the steering probes take ramps as floor and leave the contract to the planner. */
+function rampBlocks(c, x, z, y) {
+  return C_RAMP && c.minY < y + 2.0 && rampTopAt(c, x, z) > y + NAV_STEP_UP;
 }
 
 /** Is a wall too tall to hop blocking the path `look` metres along `yaw`?
@@ -1141,8 +1231,214 @@ function obstacleAt(W, x, z, y) {
  *  bots walked uphill inside an isla_viva house until the 2nd-floor slab pinned
  *  them (blockedHoriz then refuses every direction) for 200+ s. */
 function wallAhead(W, a, yaw, look) {
-  const px = a.pos.x - Math.sin(yaw) * look, pz = a.pos.z - Math.cos(yaw) * look;
-  return obstacleAt(W, px, pz, Math.max(a.pos.y, supportAt(W, px, pz, a.pos.y)));
+  /* (Wave 5) The FLOOR is marched, the wall is tested where it always was. This used to test ONE point `look` m out, at
+     max(feet, support there): on a stair that point is far above step reach of the feet, so the band was tested at the wrong
+     floor (a false wall on the way UP), and on a descent that passes under the slab it came from the feet-height band caught
+     the slab above (a false wall on the way DOWN) - 17-22 % / 9-12 % of the samples on the ramps of the 3 maps (research
+     probe_verify), and a plan dropped the moment a bot stepped onto a stair. Now the leg is walked in 0.5 m steps (1 m where no
+     ramp is near) from the
+     feet with the player.js support rule (a step up to STEP_UP, ramps with the allowance a half-metre step needs, any drop),
+     so the floor at the END of the leg is the floor a bot following it would stand on - navWalk's walk. The wall test stays
+     the end-point test with its 0.3 m margin: testing every step as well (tried, with and without the margin) reads a leg that clips a corner
+     the planner's own leg missed by centimetres as a wall and drops good plans (ground-floor door walks 99 % -> 75-93 %).
+     A drop is tested at the old height too (a slab edge in that band blocks the capsule before it falls). Ramps are floor
+     here, never a wall (see headingBlocked). One query for the whole leg; written inline - it runs for every moving bot
+     every frame, and a call with double arguments boxes them. */
+  const dx = -Math.sin(yaw), dz = -Math.cos(yaw);
+  const ax = a.pos.x, az = a.pos.z, ex = ax + dx * look, ez = az + dz * look;
+  const got = W.map.queryColliders((ax + ex) * 0.5, (az + ez) * 0.5, look * 0.5 + 0.9, _wq);
+  const x0 = (ax < ex ? ax : ex) - 0.35, x1 = (ax < ex ? ex : ax) + 0.35, z0 = (az < ez ? az : ez) - 0.35, z1 = (az < ez ? ez : az) + 0.35;
+  _mq.length = 0;
+  let ramps = false;
+  for (let i = 0; i < got.length; i++) {
+    const c = got[i];
+    if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) { _mq.push(c); if (c.kind === "ramp") ramps = true; }
+  }
+  if (!_mq.length) return false;
+  // 0.5 m steps where a ramp is near (a steep stair rises ~1 m per step at 0.5 m), 1.5 m steps elsewhere (a plain floor)
+  const stepM = ramps ? 0.5 : 1.5;
+  const n = look > stepM ? Math.ceil(look / stepM) : 1;
+  // the floor along the leg, player.js supportIn at every step: the terrain, or the highest collider top within step reach of
+  // the floor so far (which may be LOWER than it: a descent along a stair). The terrain must be followed, not just read at
+  // the end: a hut on a slope has its floor 1.5 m above its doorstep, and a leg that "drops" 1.5 m in one probe tests the
+  // door's lintel at the OLD feet height (as navWalk does for a real drop) and calls the door a wall - a bot looped in such a
+  // hut for 80 s.
+  let h = a.pos.y;
+  for (let k = 1; k < n; k++) {
+    const px = ax + dx * look * k / n, pz = az + dz * look * k / n;
+    let s = -1e9;
+    for (let i = 0; i < _mq.length; i++) {
+      const c = _mq[i];
+      if (c.dead || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
+      const ramp = c.kind === "ramp", top = ramp ? rampTopAt(c, px, pz) : c.maxY;
+      if (top > s && top <= h + NAV_STEP_UP + (ramp ? NAV_RAMP_EXTRA : 0)) s = top;
+    }
+    const tg = W.map.heightAt(px, pz);
+    h = s > tg ? s : tg;
+  }
+  let s = W.map.heightAt(ex, ez);
+  for (let i = 0; i < _mq.length; i++) {
+    const c = _mq[i];
+    if (c.dead || ex < c.minX - 0.3 || ex > c.maxX + 0.3 || ez < c.minZ - 0.3 || ez > c.maxZ + 0.3) continue;
+    const ramp = c.kind === "ramp", top = ramp ? rampTopAt(c, ex, ez) : c.maxY;
+    if (top > s && top <= h + NAV_STEP_UP + (ramp ? NAV_RAMP_EXTRA : 0)) s = top;
+  }
+  for (let i = 0; i < _mq.length; i++) {
+    const c = _mq[i];
+    if (c.dead || c.kind === "ramp" || ex < c.minX - 0.3 || ex > c.maxX + 0.3 || ez < c.minZ - 0.3 || ez > c.maxZ + 0.3) continue;
+    if (c.minY < s + 2.0 && c.maxY > s + 0.55) return true;
+    if (s < h && c.minY < h + 2.0 && c.maxY > h + 0.55) return true;
+  }
+  return false;
+}
+const _mq = [];                   // wallAhead's swept-box subset
+
+// ── LOCAL WALL PROBE: fight / heal / reload steering (Wave 5, lane 5B) ───────────────────────────────────────
+// A grid version of Detour's moveAlongSurface (https://recastnav.com/classdtNavMeshQuery.html): before a state writes raw
+// inp.mx / inp.mz, ask whether the WORLD heading that input produces meets a wall within WALL_LOOK metres - probed at the
+// floor height THERE, wallAhead's rule - and if it does, try the mirrored strafe, then slide along the wall (its tangent),
+// else stand still on that axis. Unreal's path follower does the same block detection
+// (https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/AIModule/UPathFollowingComponent).
+// Measured on the Wave-4 build (7 storm-on matches, 3 maps): 25.7 % of the indoor ENGAGE + HEAL movement ticks were blocked
+// (ENGAGE strafed / backed / hopped into walls, HEAL backed into them) against 1.2 % outdoors, because those states steer
+// by raw input and only moveToward ever looked at a wall.
+const WALL_LOOK = 0.9;            // metres ahead the steering probes
+const WALL_REUSE_S = 0.1;         // a held collider list stays valid this long (sim time) ...
+const WALL_REUSE_M = 0.45;        // ... and while the bot has moved less than this
+const WALL_QR = 2.4;              // list radius: capsule 0.45 + look 0.9 + margin 0.3 + the reuse drift, with slack
+const FIGHT_UNSTICK_S = 0.8;      // pinned this long with a move intent in ENGAGE / HEAL -> recover (the hard breaker skips them)
+const FIGHT_UNSTICK_GAP_S = 1.6;
+const _wq = [];                   // queryColliders out-param scratch
+const _wn = { x: 0, z: 0 };       // wall face normal scratch
+const _gh = { x: 0, z: 0 };       // heading scratch
+
+/** This bot's colliders within WALL_QR of it. ONE queryColliders per bot per 0.1 s of sim time (the budget is <= 150 a frame):
+ *  every probe of the frame, any number of headings, reads the held list. queryColliders hands back every collider of the
+ *  16 m cells its box touches, so the list is cut down to those within reach. A pure function of sim state (the clock is W.t). */
+function wallCols(W, b) {
+  const a = b.actor, bb = b.bb, list = bb.wallCols;
+  const dx = a.pos.x - bb.wallX, dz = a.pos.z - bb.wallZ;
+  if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M) return list;
+  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq);
+  const x0 = a.pos.x - WALL_QR, x1 = a.pos.x + WALL_QR, z0 = a.pos.z - WALL_QR, z1 = a.pos.z + WALL_QR;
+  list.length = 0;
+  for (let i = 0; i < got.length; i++) {
+    const c = got[i];
+    if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) list.push(c);
+  }
+  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z;
+  return list;
+}
+
+const _hd = { x: 0, z: 0 };       // headingBlocked's heading (a call with double arguments boxes them: framecheck allocation)
+/** Does walking WALL_LOOK m along the world heading _hd (unit) meet a wall? Probed at the floor height there - never below the
+ *  current feet, so a railing at a ledge edge still counts - exactly wallAhead's rule: the floor is the highest top within step
+ *  reach of the feet (player.js supportIn: terrain always counts; a ramp's slab with the allowance a half-metre probe step
+ *  needs on a steep one), and a wall is a box (0.3 m margin) whose span meets the band from the knee to the head there.
+ *  Ramps are floor, never a wall, here and in wallAhead: the steering must not refuse a heading the planner's own (lenient)
+ *  route takes under a stair the Wave-4 mover still lets a bot walk under, and it is the planner that keeps strict routes off
+ *  them. Returns the blocking collider or null. Everything inline: this runs for every fighting bot every frame. */
+function headingBlocked(W, list, a) {
+  const px = a.pos.x + _hd.x * WALL_LOOK, pz = a.pos.z + _hd.z * WALL_LOOK, y0 = a.pos.y;
+  let s = W.map.heightAt(px, pz);
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c.dead || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
+    const top = c.kind === "ramp" ? rampTopAt(c, px, pz) : c.maxY;
+    if (top > s && top <= y0 + NAV_STEP_UP + (c.kind === "ramp" ? NAV_RAMP_EXTRA : 0)) s = top;
+  }
+  const fy = s > y0 ? s : y0;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c.dead || c.kind === "ramp" || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
+    if (c.minY < fy + 2.0 && c.maxY > fy + 0.55) return c;
+  }
+  return null;
+}
+
+/** Outward unit normal (into _wn) of the face of c's 0.3-inflated box that (x,z) is nearest to leaving by. */
+function faceNormal(c, x, z) {
+  let m = x - (c.minX - 0.3), nx = -1, nz = 0;
+  const r = (c.maxX + 0.3) - x, f = z - (c.minZ - 0.3), k = (c.maxZ + 0.3) - z;
+  if (r < m) { m = r; nx = 1; nz = 0; }
+  if (f < m) { m = f; nx = 0; nz = -1; }
+  if (k < m) { nx = 0; nz = 1; }
+  _wn.x = nx; _wn.z = nz;
+}
+
+/** Wall-aware version of the move input the caller just wrote (inp.mz / inp.mx, in the CURRENT yaw frame; call it AFTER the
+ *  yaw has been steered for the frame). Rewrites them in place:
+ *    1. the intended heading is free -> untouched;
+ *    2. else the MIRRORED strafe (fight states: and the bot's strafeDir flips, so it keeps going that way);
+ *    3. else the wall TANGENT (the intent minus its push into the wall), the side it was already leaning to;
+ *    4. else stand still: a bot cornered in a closet holds its corner and shoots.
+ *  The magnitude of the intent is kept. Returns 0 untouched / 1 mirrored / 2 slid / 3 held. */
+function guardMove(W, b, mirror) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const mz0 = inp.mz, mx0 = inp.mx;
+  const m = Math.sqrt(mz0 * mz0 + mx0 * mx0);
+  if (m < 0.1 || !a.onGround) return 0;
+  const B = K.moveBasis(inp.yaw, _mb0);
+  const wx = (B.fx * mz0 + B.rx * mx0) / m, wz = (B.fz * mz0 + B.rz * mx0) / m;
+  const list = wallCols(W, b);
+  if (!list.length) return 0;
+  _hd.x = wx; _hd.z = wz;
+  const hit = headingBlocked(W, list, a);
+  if (!hit) return 0;
+  let mode = 3, hx = 0, hz = 0;
+  // 2. mirrored strafe
+  if (mirror && mx0 !== 0 && Math.abs(mx0) > 0.1) {
+    const mxx = (B.fx * mz0 - B.rx * mx0) / m, mzz = (B.fz * mz0 - B.rz * mx0) / m;
+    _hd.x = mxx; _hd.z = mzz;
+    if (!headingBlocked(W, list, a)) { mode = 1; hx = mxx; hz = mzz; bb.strafeDir = -bb.strafeDir; bb.strafeT = Math.max(bb.strafeT, 0.5); }
+  }
+  // 3. the wall tangent
+  if (mode === 3) {
+    const px = a.pos.x + wx * WALL_LOOK, pz = a.pos.z + wz * WALL_LOOK;
+    faceNormal(hit, px, pz);
+    let tx = -_wn.z, tz = _wn.x;                                  // a tangent of the face
+    let side = tx * wx + tz * wz;                                  // lean the way the intent already leans
+    if (Math.abs(side) < 0.15) side = (tx * B.rx + tz * B.rz) * (bb.strafeDir || 1);   // head-on: keep the strafe's side
+    // COMMIT: a slide, once chosen, is kept for 0.8 s along the same wall until it is blocked. Choosing afresh every frame
+    // flip-flopped a bot in a room corner between the two ends of the wall at 60 Hz (measured: 3 s of +-0.01 m jitter that
+    // the stuck detectors read as "moving"), because the probe at the corner flips between free and blocked as the bot
+    // creeps a centimetre.
+    const kept = W.t < bb.slideUntil ? bb.slideX * tx + bb.slideZ * tz : 0;
+    if (Math.abs(kept) > 0.5) side = kept;
+    if (side < 0) { tx = -tx; tz = -tz; }
+    _hd.x = tx; _hd.z = tz;
+    if (!headingBlocked(W, list, a)) { mode = 2; hx = tx; hz = tz; }
+    else { _hd.x = -tx; _hd.z = -tz; if (!headingBlocked(W, list, a)) { mode = 2; hx = -tx; hz = -tz; } }
+    if (mode === 2) {
+      // PING-PONG: a slide that has to reverse (the wall ended in a corner) twice inside a few seconds is a bot walking back
+      // and forth along a wall with its goal on the far side of it - net displacement ~0 over 3 s although it never stops
+      // (probe_match "stuck episodes": 6 for one bot). Reversing again cannot help; it needs a way round: the recovery the
+      // pin detector runs (a fresh route / the nearest exit).
+      if (W.t < bb.slideUntil + 1.2 && bb.slideX * hx + bb.slideZ * hz < -0.5) {
+        if (++bb.slideFlips >= 2) { bb.slideFlips = 0; pinRecover(W, b); }
+      } else if (W.t > bb.slideUntil + 2.5) bb.slideFlips = 0;
+      bb.slideX = hx; bb.slideZ = hz; bb.slideUntil = W.t + 0.8;
+    }
+  }
+  if (mode === 3) { inp.mz = 0; inp.mx = 0; inp.sprint = false; return 3; }
+  inp.mz = (hx * B.fx + hz * B.fz) * m;
+  inp.mx = (hx * B.rx + hz * B.rz) * m;
+  if (inp.mz <= 0.5) inp.sprint = false;
+  return mode;
+}
+
+/** Under a roof (indoors): any slab over the bot's footprint 1 m or more above its head, up to a storey and a half. The random
+ *  dodge hop is an outdoor move: under a low ceiling the head meets the slab and a capsule jammed under it is blocked in every
+ *  direction, and under a high one it is a bot pogo-ing in a house (the plan: "no random fight hop under a roof"). */
+function roofedForJump(W, b) {
+  const a = b.actor, list = wallCols(W, b);
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c.dead || c.kind === "ramp") continue;
+    if (a.pos.x < c.minX - 0.45 || a.pos.x > c.maxX + 0.45 || a.pos.z < c.minZ - 0.45 || a.pos.z > c.maxZ + 0.45) continue;
+    if (c.minY > a.pos.y + 1.0 && c.minY < a.pos.y + 12.0) return true;
+  }
+  return false;
 }
 
 // ── PATHFINDING — layered A* over a BOT-CENTRED, FLOOR-AWARE walk grid ──────
@@ -1164,7 +1460,7 @@ function wallAhead(W, a, yaw, look) {
 //     standing at, found by walking there: each edge is marched in ~0.5 m steps
 //     with the same support rule player.js uses (highest surface at or below
 //     feet + STEP_UP, terrain always counts), walls are tested in the walk band
-//     at THAT height, and a cell can hold up to three stacked floors (layers).
+//     at THAT height, and a cell can hold up to NAV_L stacked floors (layers).
 //     Drops are legal edges (this game has no fall damage: hardLand is audio and
 //     camera only) but cost extra, so stairs win when both exist; drops over
 //     6 m and open water are blocked.
@@ -1174,7 +1470,7 @@ function wallAhead(W, a, yaw, look) {
 const CELL = 1.5, GRID_R = 21;           // 43 x 43 cells = a ~64 m window around the bot
 const NAV_N = GRID_R * 2 + 1;
 const NAV_CELLS = NAV_N * NAV_N;
-const NAV_L = 3;                          // stacked floors per cell
+const NAV_L = 6;                          // stacked floors per cell (a 4-storey tower is terrain + 3 slabs + roof; 3 layers returned null from/to its top floors)
 const NAV_NODES = NAV_CELLS * NAV_L;
 const NAV_STEP_UP = 0.55;                 // player.js STEP_UP
 const NAV_RAMP_EXTRA = 0.45;              // a ramp may rise faster than a step per 0.5 m sub-step
@@ -1325,13 +1621,33 @@ function navSupport(W, ci) {
 const NAV_SWIM_DEPTH = 1.1;               // sim PLAYERK.swimDepth
 const NAV_SWIM_UP = 0.9;                  // player.js haul-out: a ledge up to chest height (+0.9)
 const NAV_WET_COST = 1.5;                 // per cell of water: swimming/wading is slow
-/** A wall in the walk band (knee to head) at feet height h. Ramps never block. */
+/** Set per search: the START is itself under a ramp slab (a bot that landed, spawned or was left there while the mover still
+ *  let it walk under stairs). The contract blocks ENTERING that zone; a bot already in it has to be planned OUT, so this
+ *  search treats ramps as it always did (never blocking) rather than returning no path from a start cell it cannot leave. */
+let navRampFree = false;
+/** The retry switch of findPath / findExit: no route under C-RAMP, so run the search again the way it ran before the contract
+ *  (ramps never block) - see findPath. navRampHits counts the ramp blocks a search ran into, so the retry only happens when it
+ *  could change the answer. */
+let navLenient = false, navRampHits = 0;
+/** A wall in the walk band (knee to head) at feet height h. A ramp blocks by the C-RAMP contract: where its slab is above
+ *  step reach of the floor this point stands on (h), the point is under the slab or beside it. The slab as a FLOOR is
+ *  navSupport's job (it already made h the slab top when the slab is reachable, so a bot climbing it is never blocked). */
 function navWall(ci) {
   const x = NF[4], z = NF[5], h = NF[0];
   for (let k = navBStart[ci], e = navBStart[ci + 1]; k < e; k++) {
     const c = navCols[navBItems[k]];
-    if (c.dead || c.kind === "ramp") continue;
+    if (c.dead) continue;
     if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
+    if (c.kind === "ramp") {
+      if (!C_RAMP || navRampFree) continue;
+      let f;     // sim rampTopAt, inlined (this runs ~10^5 times per search)
+      if (c.dir === 0) f = (x - c.minX) / Math.max(0.01, c.maxX - c.minX);
+      else if (c.dir === 1) f = (c.maxX - x) / Math.max(0.01, c.maxX - c.minX);
+      else if (c.dir === 2) f = (z - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
+      else f = (c.maxZ - z) / Math.max(0.01, c.maxZ - c.minZ);
+      if (c.minY < h + 2.0 && c.minY + (c.maxY - c.minY) * (f < 0 ? 0 : f > 1 ? 1 : f) > h + NAV_STEP_UP + 0.05) { navRampHits++; return true; }
+      continue;
+    }
     if (c.minY < h + 2.0 && c.maxY > h + 0.55) return true;
   }
   return false;
@@ -1401,6 +1717,12 @@ function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
   // time; the half-cell-shifted retry always has a row inside it.
   const o = off || 0, oz = offZ === undefined ? o : offZ;
   navPrepare(W, sx + o, sz + oz);
+  navRampFree = navLenient;
+  for (let k = 0; k < navCols.length && !navRampFree; k++) {
+    const c = navCols[k];
+    if (c.kind !== "ramp" || c.dead || sx < c.minX || sx > c.maxX || sz < c.minZ || sz > c.maxZ) continue;
+    if (c.minY < sy + 2.0 && rampTopAt(c, sx, sz) > sy + NAV_STEP_UP + 0.05) { navRampFree = true; break; }
+  }
   const S = GRID_R * NAV_N + GRID_R;
   const sc = navCellOf(sx, sz);
   NF[4] = sx; NF[5] = sz; NF[6] = sy + NAV_STEP_UP;
@@ -1510,6 +1832,22 @@ function navRoofed(x, z, h, ci) {
  *  a bot inside a palm_bay hut with two 1.4 m doors got null from BOTH findPath
  *  and findExit and stayed inside for a minute. */
 function findPath(W, sx, sy, sz, tx, tz, ty) {
+  navRampHits = 0;
+  const p = findPathPass(W, sx, sy, sz, tx, tz, ty);
+  if (p && !p.partial) return p;
+  if (navRampHits === 0) return p;
+  /* (Wave 5, C-RAMP) A ramp's sides and underside block the planner now, and the Wave-4 mover does not block them yet: a bot
+     can walk in under a stair (a barn's front half, a hut's loft) and then find itself in a pocket the strict planner
+     cannot leave - measured: one bot ground against a barn wall for the rest of a 700 s match. When the strict search found
+     no COMPLETE route and ramps were what stopped it, search again the way it ran before the contract. The strict answer
+     is kept when the retry is no better. Once the mover blocks the same volumes the retry's route simply is not walkable,
+     which is no worse than the null it replaces. */
+  navLenient = true;
+  const q = findPathPass(W, sx, sy, sz, tx, tz, ty);
+  navLenient = false;
+  return q && !q.partial ? q : (p || q);
+}
+function findPathPass(W, sx, sy, sz, tx, tz, ty) {
   const p = navSearch(W, sx, sy, sz, tx, tz, ty, 0, 0, 0);
   if (p && !p.partial) return p;
   let best = p;
@@ -1526,13 +1864,22 @@ function findPath(W, sx, sy, sz, tx, tz, ty) {
 }
 /** Nearest reachable spot OUTSIDE (on open ground, no roof) at least minDist away. */
 function findExit(W, sx, sy, sz, minDist) {
+  navRampHits = 0;
+  let e = findExitPass(W, sx, sy, sz, minDist);
+  if (e || navRampHits === 0) return e;
+  navLenient = true;                       // the C-RAMP retry, as in findPath
+  e = findExitPass(W, sx, sy, sz, minDist);
+  navLenient = false;
+  return e;
+}
+function findExitPass(W, sx, sy, sz, minDist) {
   let e = navSearch(W, sx, sy, sz, 0, 0, null, 1, minDist || 4, 0);
   for (let k = 0; !e && k < 4; k++) e = navSearch(W, sx, sy, sz, 0, 0, null, 1, minDist || 4, k & 1 ? -NAV_HALF : NAV_HALF, k & 2 ? -NAV_HALF : NAV_HALF);
   return e;
 }
 const NAV_HALF = CELL * 0.5 - 0.01;
 /** Test hook for the lane probes: the live pathfinder, read-only. */
-export function debugNav() { return { findPath, findExit, CELL, GRID_R }; }
+export function debugNav() { return { findPath, findExit, CELL, GRID_R, wallAhead }; }
 
 /** Floor-aware "can I stand here" for local probes (cover candidates): the
  *  support a bot at feet height y would have at (x,z), or NaN when that spot is
@@ -1570,15 +1917,38 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
     bb.progGoal.x = tx; bb.progGoal.z = tz; bb.progBest = null; bb.progT = 0;
   }
   const goalD = hyp(tx - a.pos.x, tz - a.pos.z);
-  if (bb.progBest == null || goalD < bb.progBest - 0.5) { bb.progBest = goalD; bb.progT = 0; }
+  /* (Wave 5) FLOOR-AWARE. A goal on another floor (ty given, a metre and a half or more above or below the feet) is not
+     "near" however close it is on the map, and getting there means walking AWAY from it to the stairs: horizontal
+     distance rises on the way. Measured (Wave-4, 3 maps): 3 in 4 upstairs rooms were never reached, and 10 of 13 failed
+     walks ended within 0.1 m horizontally of the goal - the bot stood under it. So on the wrong floor the progress is the
+     length of the ROUTE left (when there is one), and the test applies however near the goal is. */
+  const wrongFloor = ty != null && (ty - a.pos.y >= ARRIVE_DY || a.pos.y - ty >= ARRIVE_DY);
+  const onRoute = wrongFloor && bb.path && bb.path.length > 0;
+  const prog = onRoute ? routeLeft(a, bb.path) : goalD;
+  const progKind = onRoute ? 1 : 0;
+  if (bb.progKind !== progKind) { bb.progKind = progKind; bb.progBest = null; bb.progT = 0; }
+  if (bb.progBest == null || prog < bb.progBest - 0.5) { bb.progBest = prog; bb.progT = 0; }
   else bb.progT = (bb.progT || 0) + dt;
-  if (bb.progT > 3.0 && goalD > 2.0) {
+  if (bb.progT > 3.0 && (goalD > 2.0 || wrongFloor)) {
     bb.stuckT = Math.max(bb.stuckT || 0, 2.3);   // trip the hard-stuck branch
     bb.progT = 0; bb.progBest = null;
+    /* (Wave 5) A bot with NO route that makes no progress has not met an unreachable goal, it has met a missing plan (it
+       slid along a wall for 3 s because nothing ever asked the planner, or the last ask came back inside the 2.5 s
+       cool-down). Ask now, ignoring the cool-down: a complete route means the goal IS reachable, so keep it. Parking the
+       item instead re-picks a goal 8+ m from the one the route was made for, and moveToward drops a route whose goal moved
+       (measured: ashgrid seed 12, a bot in a hut's west end got a good route out four times in 20 s and threw each one
+       away on the next frame; 36 s indoors). A bot that HAD a route and still made no progress is parked as before. */
+    const hadRoute = !!(bb.path && bb.path.length);
+    bb.nextPathT = 0;
+    requestPath(W, b, tx, tz, ty);
+    // ... ONCE per item: the same item tripping again is parked, whatever the planner says (a route a bot cannot follow must
+    // not keep it on the item for the rest of the match: measured, one bot looped 80 s on one item with a "good" route)
+    const routed = !hadRoute && bb.path && !bb.path.partial && !(bb.lootId && bb.lootId === bb.routeId);
+    if (routed && bb.lootId) bb.routeId = bb.lootId;
     /* And stop choosing the thing it cannot reach. onEnter('LOOT') re-picked
        the SAME item every time, so the bot escaped the wall and walked straight
        back into it. Park this id for 30 s and let it pick something else. */
-    if (bb.lootId) {
+    if (bb.lootId && !routed) {
       if (!bb.badLoot) bb.badLoot = {};
       bb.badLoot[bb.lootId] = W.t + 30;
       bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
@@ -1588,10 +1958,23 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // Drop the plan when the caller's goal has moved well away from the one the
   // path was computed for (a re-planned rotation, a moving target).
   if (bb.path && bb.pathGoal && hyp(tx - bb.pathGoal.x, tz - bb.pathGoal.z) > 8) { bb.path = null; bb.pathGoal = null; }
+  // (Wave 5) a goal on another floor needs a ROUTE (the stairs), not a straight walk at it: plan one as soon as it is in
+  // reach of the planner's window instead of waiting for a wall to stop the bot (requestPath is rate-limited to 2.5 s)
+  if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) requestPath(W, b, tx, tz, ty);
   // (T-tick-actors B2) a waypoint is reached on ITS floor: horizontal distance alone
-  // consumed the ground-floor waypoint of a stair descent while the bot was upstairs
-  if (bb.path && bb.path.length && hyp(bb.path[0].x - a.pos.x, bb.path[0].z - a.pos.z) < 1.6 &&
-      !(bb.path[0].y != null && a.pos.y - bb.path[0].y > 1.5)) bb.path.shift();
+  // consumed the ground-floor waypoint of a stair descent while the bot was upstairs.
+  // (Wave 5) and the same on the way UP: the first-floor waypoint of a stair climb is not reached from the room below it.
+  if (bb.path && bb.path.length) {
+    const wp0 = bb.path[0], dwp = hyp(wp0.x - a.pos.x, wp0.z - a.pos.z);
+    if (dwp < 1.6 && !(wp0.y != null && Math.abs(a.pos.y - wp0.y) > ARRIVE_DY)) {
+      // (Wave 5) CORNER-CUT PROTECTION. A waypoint is a corner the planner hugged (0.3 m off the wall), and 1.6 m is a long
+      // way from one: shifting it at 1.6 m turned the bot onto the straight line to the NEXT waypoint through the building
+      // it was rounding (measured: a bot looting through a hut window threw away a good route at the hut's corner, every
+      // time, for 16 s). Keep the corner until the walk to the next waypoint is clear, or the bot is on top of it.
+      const nx = bb.path[1];
+      if (!nx || dwp < 0.6 || !wallAhead(W, a, Math.atan2(-(nx.x - a.pos.x), -(nx.z - a.pos.z)), Math.min(3.2, Math.max(0.8, hyp(nx.x - a.pos.x, nx.z - a.pos.z))))) bb.path.shift();
+    }
+  }
   if (bb.path && !bb.path.length) { bb.path = null; bb.pathGoal = null; }
   const gx = bb.path ? bb.path[0].x : tx, gz = bb.path ? bb.path[0].z : tz;
   let want = Math.atan2(-(gx - a.pos.x), -(gz - a.pos.z));
@@ -1675,6 +2058,12 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
       bb.stuckT = 0;
     }
   } else bb.detourDir = 0;
+  // (Wave 5) The yaw above is STEERED (a turn rate), so for a few frames after every change of mind the bot walks along its
+  // old heading: into the wall it has just detected, or into the one beside a doorway it is being routed through. 12-15 % of
+  // the indoor loot / rotate / cover-run ticks of the Wave-4 matches were that: pinned for 5-30 ticks, again and again.
+  // Same primitive as the fight steering: a heading that meets a wall within 0.9 m slides along it instead. A hop the state
+  // asked for (a crate in the way) is its own business.
+  if (!inp.jump) guardMove(W, b, false);
   return hyp(tx - a.pos.x, tz - a.pos.z);
 }
 
@@ -1718,14 +2107,30 @@ function fireOnTheMove(W, b, dt) {
   inp.mz = wx * b1.fx + wz * b1.fz;
   inp.mx = wx * b1.rx + wz * b1.rz;
   inp.fire = true;
+  // (Wave 5) the intent came from moveToward, whose wall probes look along `want`; the legs follow the yaw, which lags
+  // `want` through a turn. A hop the state asked for (a crate in the way) is its own business.
+  if (!inp.jump) guardMove(W, b, false);
 }
 
 function actMove(W, b, dt, sprint) {
   const bb = b.bb;
   if (!bb.moveTo) { onEnter(W, b, b.state); return; }
-  const d = moveToward(W, b, bb.moveTo.x, bb.moveTo.z, dt, sprint);
-  if (d < 3) { bb.moveTo = null; b.nextThink = 0; }
+  // (Wave 5) the goal's floor rides along (CLOSEIN / HUNT carry the enemy's), and "arrived" means on that floor too
+  const ty = bb.moveTo.y;
+  const d = moveToward(W, b, bb.moveTo.x, bb.moveTo.z, dt, sprint, ty);
+  if (d < 3 && onFloorOf(b.actor, ty)) { bb.moveTo = null; b.nextThink = 0; }
 }
+
+/** A goal's floor test: no floor given (the goal is floor-blind) or the feet are within ARRIVE_DY of it. */
+function onFloorOf(a, ty) { return ty == null || Math.abs(a.pos.y - ty) < ARRIVE_DY; }
+/** Length of the walk left along `path` from the bot (to its first waypoint, then waypoint to waypoint). */
+function routeLeft(a, path) {
+  let d = hyp(path[0].x - a.pos.x, path[0].z - a.pos.z);
+  for (let i = 1; i < path.length; i++) d += hyp(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z);
+  return d;
+}
+const ARRIVE_DY = 1.5;            // metres: a goal is on this floor when the feet are this close to its height (nav useTy uses 1.8)
+const WRONG_FLOOR_PLAN_M = 40;    // plan a route to a goal on another floor once it is this close (the planner window is ~31 m)
 
 function actLoot(W, b, dt) {
   const a = b.actor, bb = b.bb;
@@ -1749,8 +2154,9 @@ function actLoot(W, b, dt) {
   bb.chestId = null; bb.chestT = 0;
   if (bb.moveTo) {
     const far = hyp(bb.moveTo.x - a.pos.x, bb.moveTo.z - a.pos.z) > 12;
-    const d = moveToward(W, b, bb.moveTo.x, bb.moveTo.z, dt, far, bb.moveTo.y); // sprint the long hauls
-    if (d < 1.8) bb.moveTo = null;
+    const gy = bb.moveTo.y;     // (moveToward can clear moveTo itself: a parked loot id)
+    const d = moveToward(W, b, bb.moveTo.x, bb.moveTo.z, dt, far, gy); // sprint the long hauls
+    if (d < 1.8 && onFloorOf(a, gy)) bb.moveTo = null;   // (Wave 5) arrived = on the item's floor too
   } else {
     // plan exhausted → re-plan NOW (state may stay LOOT, so onEnter must be
     // re-run explicitly or the bot stands idle forever)
@@ -2029,13 +2435,58 @@ function actHeal(W, b, dt) {
   if (away) {
     const dx = a.pos.x - away.x, dz = a.pos.z - away.z;
     const d = hyp(dx, dz) || 1;
-    a.yaw = Math.atan2(-dx / d, -dz / d);   // face the threat while backing off
-    a.input.mz = -1;                        // retreat, at the slowed heal speed
-    a.input.mx = 0;
+    const ux = dx / d, uz = dz / d;                          // threat -> bot: the way to retreat
+    // (Wave 5) This used to write `a.yaw = atan2(-dx/d, -dz/d)` and then `inp.mz = -1` ("face the threat while backing
+    // off"). player.js stepActor does `a.yaw = inp.yaw` every tick, so the write never took, and `mz = -1` backed the bot
+    // up along its OLD input yaw - TOWARDS the threat whenever the threat was behind it (20 % of the heal ticks of 7
+    // Wave-4 matches moved toward a known threat; the same atan2 also faced the wrong way). Fixed in the one place the
+    // mover listens: steer INPUT yaw to face the threat (or the way of travel when there is none), pick a heading that is
+    // free of walls and not toward the threat, and express that WORLD heading in the yaw frame the mover will use.
+    const fan = pickRetreat(W, b, wallCols(W, b), ux, uz);
+    const face = bb.targetPos ? Math.atan2(dx, dz) : (fan ? Math.atan2(-_gh.x, -_gh.z) : Math.atan2(-ux, -uz));
+    steerYaw(a, face, dt, 8);
+    if (fan) {
+      const B = K.moveBasis(a.input.yaw, _mb0);
+      a.input.mz = _gh.x * B.fx + _gh.z * B.fz;              // backing off at the slowed heal speed
+      a.input.mx = _gh.x * B.rx + _gh.z * B.rz;
+    } else { a.input.mz = 0; a.input.mx = 0; }               // walled in: hold the corner and finish the heal there
   } else {
     a.input.mz = 0; a.input.mx = 0;
   }
   a.input.sprint = false;                   // the sim blocks it anyway; be explicit
+}
+
+const RETREAT_FAN = [0, 0.61, -0.61, 1.22, -1.22, 1.75, -1.75];   // radians off straight-away: 0, 35, 70, 100 degrees, both sides
+/** The heal retreat heading: the first FREE heading in a fan of +-100 degrees around straight-away-from-the-threat (never a
+ *  heading with a component toward it). The fan opens on the side last used first, so the choice does not dither. Writes the
+ *  unit heading to _gh (and bb.hdX/hdZ, for the pin recovery); false = every heading in the fan is walled. */
+function pickRetreat(W, b, list, ux, uz) {
+  const a = b.actor, bb = b.bb;
+  // COMMIT: the heading chosen last is kept for 0.6 s while it is still free and still a retreat. Choosing afresh every frame
+  // flip-flopped a healing bot in a small room between two headings 135 degrees apart (measured: 14 % of the indoor heal
+  // ticks blocked, a bot shuffling in place for the whole channel), because each step it takes changes which of the fan's
+  // headings is free.
+  if (W.t - bb.hdT < 0.6 && bb.hdX * ux + bb.hdZ * uz > -0.17) {
+    _hd.x = bb.hdX; _hd.z = bb.hdZ;
+    if (!headingBlocked(W, list, a)) { _gh.x = bb.hdX; _gh.z = bb.hdZ; return true; }
+  }
+  const side = bb.healSide;
+  for (let k = 0; k < RETREAT_FAN.length; k++) {
+    const off = RETREAT_FAN[k] * side;
+    const c = Math.cos(off), s = Math.sin(off);
+    const hx = ux * c - uz * s, hz = ux * s + uz * c;
+    if (W.t < bb.hdBadUntil && hx * bb.hdBadX + hz * bb.hdBadZ > 0.9) continue;    // the heading a pin just proved wrong
+    _hd.x = hx; _hd.z = hz;
+    if (headingBlocked(W, list, a)) continue;
+    // a REVERSAL of the retreat inside a second (the way it was going just closed): the room has no way back, so hold the
+    // corner instead of pacing - the heal finishes either way, and a bot that stands still does not look stuck
+    if (W.t - bb.hdT < 1.0 && bb.hdX * hx + bb.hdZ * hz < -0.3) { bb.hdT = W.t; return false; }
+    _gh.x = hx; _gh.z = hz;
+    bb.hdX = hx; bb.hdZ = hz; bb.hdT = W.t;
+    if (k > 0) bb.healSide = off < 0 ? -1 : 1;
+    return true;
+  }
+  return false;
 }
 
 function actCamp(W, b, dt) {
@@ -2233,6 +2684,7 @@ function actEngage(W, b, dt) {
     inp.mz = -0.5;
     inp.sprint = true;
     steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 10);
+    guardMove(W, b, true);        // (Wave 5) the strafe / back-off must not go into a wall
     return;
   }
   // BOT_PACE.chaseM: nobody walks 100 m across open ground at a man who has not touched him. Past the tier's
@@ -2245,7 +2697,10 @@ function actEngage(W, b, dt) {
   if (dist > prefer * 1.5 && chaseOk) { inp.mz = 1; inp.sprint = dist > prefer * 3; }
   else if (dist < prefer * 0.5) inp.mz = -0.7;
   inp.mx = bb.strafeDir * (dist < 50 ? 1 : a.personality === "flanker" ? 0.8 : 0.4);
-  if (a.onGround && b.actor.tier >= 3 && b.rng() < dt * 0.35) inp.jump = true;
+  // (Wave 5) the dodge hop is for open air: indoors it is a bot pogo-ing in a house, and under a low ceiling the head meets
+  // the slab and a capsule jammed under it is blocked in every direction (the draw is kept either way, so the rng stream does
+  // not depend on the roof)
+  if (a.onGround && b.actor.tier >= 3 && b.rng() < dt * 0.35 && !roofedForJump(W, b)) inp.jump = true;
 
   // aiming with human error model
   const eye = eyePos(a, _eye_actEngage);
@@ -2342,4 +2797,7 @@ function actEngage(W, b, dt) {
   if (!seen && bb.targetPos && (bb.coverState === "NONE" || !bb.coverState)) {
     moveToward(W, b, bb.targetPos.x, bb.targetPos.z, dt, false);
   }
+  // (Wave 5) wall-aware fight steering: the strafe / approach / back-off above are raw input; this is the one place they
+  // meet the walls. After the yaw has been steered, so the heading it judges is the one the mover will use this tick.
+  guardMove(W, b, true);
 }
