@@ -18,7 +18,7 @@
   const r3 = (v) => Math.round(v * 1000) / 1000;
   const pct = (a, q) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y); const k = (s.length - 1) * q; const lo = Math.floor(k), hi = Math.min(lo + 1, s.length - 1); return r3(s[lo] + (s[hi] - s[lo]) * (k - lo)); };
   const share = (a, f) => (a.length ? r3(a.filter(f).length / a.length) : null);
-  const STATE = { hulls: {}, samples: {}, groups: {} };
+  const STATE = { hulls: {}, samples: {}, groups: {}, subsByKind: {} };
   const M = () => W.map;
 
   // ---------------------------------------------------------------- geometry helpers
@@ -58,16 +58,41 @@
   }
   // The DRAWN BODIES of a prop: one convex hull per drawn sub-mesh (a rock cluster is four separate rocks; the gaps between them are
   // not rock), sub-meshes whose hulls touch or overlap merged into one body (a car's wheels, a barrel's bands).
-  function mergeBodies(pointSets) {
-    const hs = pointSets.filter((P) => P.length >= 3).map((P) => ({ pts: P, H: hull(P) })).filter((o) => o.H.length >= 3);
+  // entries: [{ pts: band points [x,z][], top: the sub-mesh's highest vertex above the base, sub: its index }]. Returns the merged bodies as
+  // [{ H: hull, top: highest vertex above the base over the members, subs: [member sub-mesh indices] }].
+  // `separate`: every sub-mesh is its own body (a kind whose sub-meshes are SEPARATE objects: the four rocks of a cluster. Merging two rocks that
+  // touch would let their convex hull fill the empty notch between them, and the plan builds one box per rock).
+  function mergeBodies(entries, separate) {
+    const hs = entries.filter((e) => e.pts.length >= 3).map((e) => ({ ...e, H: hull(e.pts) })).filter((o) => o.H.length >= 3);
     const par = hs.map((_, i) => i); const find = (i) => (par[i] === i ? i : (par[i] = find(par[i])));
-    for (let i = 0; i < hs.length; i++) for (let j = i + 1; j < hs.length; j++) if (polysTouch(hs[i].H, hs[j].H, 0.05)) par[find(i)] = find(j);
+    if (!separate) for (let i = 0; i < hs.length; i++) for (let j = i + 1; j < hs.length; j++) if (polysTouch(hs[i].H, hs[j].H, 0.05)) par[find(i)] = find(j);
     const groups = {};
-    hs.forEach((o, i) => { (groups[find(i)] = groups[find(i)] || []).push(...o.pts); });
-    return Object.values(groups).map((P) => hull(P));
+    hs.forEach((o, i) => { const g = (groups[find(i)] = groups[find(i)] || { pts: [], subs: [], top: -1e9 }); g.pts.push(...o.pts); g.subs.push(o.sub); if (o.top > g.top) g.top = o.top; });
+    return Object.values(groups).map((g) => ({ H: hull(g.pts), top: g.top, subs: g.subs }));
   }
+  // The mover steps over anything up to STEP_UP (player.js STEP_UP = 0.55 m): a drawn body whose highest vertex is under it (the pebbles
+  // beside a rock) is not an obstacle and has no collider, so it is not part of "the drawn body" colliders are judged against. If EVERY body
+  // of an instance is that low, they all stay (a collider standing over nothing but pebbles is a phantom wall: Wave 4 had 6 m of it).
+  const STEP_UP = 0.55;
+  const SEPARATE_PARTS = new Set(["rocks"]);
+  // horizontal ray (origin (ax, ay, az), direction (ux, 0, uz), length len) vs an axis-aligned box with a y range
+  function rayBox(ax, ay, az, ux, uz, len, b) {
+    if (ay < b.minY || ay > b.maxY) return false;
+    let t0 = 0, t1 = len;
+    for (const [o, d, lo, hi] of [[ax, ux, b.minX, b.maxX], [az, uz, b.minZ, b.maxZ]]) {
+      if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return false; continue; }
+      let a = (lo - o) / d, c = (hi - o) / d; if (a > c) { const t = a; a = c; c = t; }
+      if (a > t0) t0 = a; if (c < t1) t1 = c; if (t0 > t1) return false;
+    }
+    return true;
+  }
+  // the tightest axis-aligned box of each body: what the best C-COLL collider (axis-aligned boxes only) could do for this mesh
+  const idealBoxes = (bodies) => bodies.map((Hb) => { let a = 1e9, b = -1e9, c = 1e9, d = -1e9; for (const q of Hb) { if (q[0] < a) a = q[0]; if (q[0] > b) b = q[0]; if (q[1] < c) c = q[1]; if (q[1] > d) d = q[1]; } return { minX: a, maxX: b, minZ: c, maxZ: d }; });
   // signed distance from (px,pz) to the nearest drawn body (negative inside one)
   const sdBodies = (px, pz, bodies) => { let m = 1e9; for (const H of bodies) { const d = sdPoly(px, pz, H); if (d < m) m = d; } return m; };
+  // ... but a capsule whose feet are at or above a body's top is standing ON it (the mover steps onto anything up to 0.55 m and mantles higher
+  // ledges): that is not walking through it. 1e9 when every body is under the feet.
+  const sdBodiesAt = (px, pz, y, hh) => { let m = 1e9; for (let b = 0; b < hh.bodies.length; b++) { if (y >= hh.tops[b] - 0.10) continue; const d = sdPoly(px, pz, hh.bodies[b]); if (d < m) m = d; } return m; };
   const dRect = (c, x, z) => Math.hypot(Math.max(c.minX - x, 0, x - c.maxX), Math.max(c.minZ - z, 0, z - c.maxZ));
   // points on the boundary of (AABB (+) disc r): the capsule-centre positions that just touch the collider
   function rrPts(c, r, k) {
@@ -115,7 +140,7 @@
   function walk(ux, uz, ticks, sprint) {
     const P = p(), inp = P.input; inp.yaw = Math.atan2(-ux, -uz); inp.mz = 1; inp.mx = 0; inp.sprint = !!sprint;
     const tr = [];
-    for (let i = 0; i < ticks; i++) { C.fastForward(1 / 60); tr.push([P.pos.x, P.pos.y, P.pos.z]); P.hp = 100; }
+    for (let i = 0; i < ticks; i++) { C.fastForward(1 / 60); tr.push([P.pos.x, P.pos.y, P.pos.z, P.mantleT != null]); P.hp = 100; }
     inp.mz = 0; inp.sprint = false; return tr;
   }
   const qc = (x, z, r) => { const out = []; M().queryColliders(x, z, r, out); return out; };
@@ -149,7 +174,7 @@
     for (const c of m.colliders) if (c.prop && !c.dead) ((byKind[c.prop] = byKind[c.prop] || {})[c.idx] = byKind[c.prop][c.idx] || []).push(c);
     const m4 = new THREE.Matrix4(), mw = new THREE.Matrix4(), v = new THREE.Vector3();
     const out = { kinds: {}, notes: [] };
-    STATE.hulls = {}; STATE.samples = {}; STATE.groups = byKind; STATE.insts = insts;
+    STATE.hulls = {}; STATE.samples = {}; STATE.groups = byKind; STATE.insts = insts; STATE.subsByKind = {};
     for (const kind of Object.keys(byKind)) {
       let root; try { root = await W.kernel.loadGLTF(W.assetBase + "assets/props/" + kind + ".glb"); } catch (e) { out.notes.push("no GLB for collider prop kind " + kind); continue; }
       const geos = new Set(); root.traverse((o) => { if (o.isMesh) geos.add(o.geometry); });
@@ -160,34 +185,60 @@
       const recs = []; STATE.hulls[kind] = {};
       for (const idx of Object.keys(byKind[kind])) {
         const i = +idx, cs = byKind[kind][idx], base = Math.min(...cs.map((c) => c.minY));
-        const band = []; const perSub = []; let top = -1e9; let sc = 0;
+        const perSub = []; let top = -1e9; let sc = 0;
         for (let si = 0; si < subs.length; si++) {
           const o = subs[si]; if (i >= o.count) continue;
           o.getMatrixAt(i, m4); mw.multiplyMatrices(o.matrixWorld, m4);
           if (si === 0) { const e = mw.elements; sc = Math.hypot(e[0], e[1], e[2]); }
-          const pa = o.geometry.attributes.position, sp = [];
+          const pa = o.geometry.attributes.position, sp = []; let subTop = -1e9;
           for (let k = 0; k < pa.count; k++) {
             v.fromBufferAttribute(pa, k).applyMatrix4(mw);
             if (v.y > top) top = v.y;
-            if (v.y >= base + 0.15 && v.y <= base + 1.8) { band.push([v.x, v.z]); sp.push([v.x, v.z]); }
+            if (v.y > subTop) subTop = v.y;
+            if (v.y >= base + 0.15 && v.y <= base + 1.8) sp.push([v.x, v.z]);
           }
-          perSub.push(sp);
+          perSub.push({ pts: sp, top: subTop, sub: si });
         }
-        const H = hull(band);
+        // merge touching sub-meshes into bodies, then drop the pebbles (bodies the mover steps over) unless nothing else is left. "Steps over" is
+        // relative to the ground the body stands on (a small rock on the uphill side of a cluster on a slope is low to a walker): its highest
+        // vertex above the mean terrain height under its outline
+        const groups = mergeBodies(perSub, SEPARATE_PARTS.has(kind));
+        for (const gr of groups) { let sg = 0; for (const q of gr.H) sg += m.heightAt(q[0], q[1]); gr.h = gr.top - sg / gr.H.length; }
+        const tall = groups.filter((gr) => gr.h >= STEP_UP);
+        // the same rule on the collider side: a collider whose top is under the step height above the ground it stands on is a step the mover
+        // climbs onto, not a wall (maps.js builds boxes for rock parts from 0.3 m up; the shot test sees them all, so `csAll` still goes to the
+        // bullet rays)
+        const csTall = cs.filter((c) => c.maxY - m.heightAt((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2) >= STEP_UP);
+        // nothing here that a walker can't step over, drawn or collided: not an obstacle at all, nothing to judge
+        if (!tall.length && !csTall.length) { recs.push({ i, stepOnly: true }); continue; }
+        // a collider that stands over nothing but pebbles is a phantom wall: the pebbles stay as the (low) drawn body it is judged against
+        const pebbleOnly = groups.length > 0 && tall.length === 0;
+        const kept = pebbleOnly ? groups : tall;
+        const bodies = kept.map((gr) => gr.H);
+        const H = hull(bodies.flat());
         if (H.length < 3) { recs.push({ i, noBand: true }); continue; }
-        const bodies = mergeBodies(perSub);
-        const ct = contactSet(cs, bodies);
-        const b = setBox(cs);
-        recs.push({ i, x: r3(b.cx), z: r3(b.cz), base: r3(base), s: r3(sc), bodies: bodies.length, clip: r3(ct.clip), gapMax: r3(ct.gapMax), gapMean: r3(ct.gapMean), visTop: r3(top - base), colTop: r3(b.maxY - base), n: cs.length, worst: ct.worst && ct.worst.map(r3), widest: ct.widest && ct.widest.map(r3) });
-        STATE.hulls[kind][i] = { H, bodies, base, cs };
+        const keepSubs = kept.flatMap((gr) => gr.subs);
+        const csUse = csTall.length ? csTall : cs;
+        const ct = contactSet(csUse, bodies);
+        // what the best axis-aligned boxes (one tight AABB per drawn body) would score on the same mesh: a box cannot hug a round or a leaning
+        // body, so the standoff the C-COLL contract cannot avoid is subtracted from the gap (gapExcess = how much worse than the best box)
+        const ctI = contactSet(idealBoxes(bodies), bodies);
+
+        const b = setBox(csUse);
+        recs.push({ i, x: r3(b.cx), z: r3(b.cz), base: r3(base), s: r3(sc), bodies: bodies.length, pebbles: groups.length - kept.length, stepColliders: cs.length - csUse.length, pebbleOnly, clip: r3(ct.clip), gapMax: r3(ct.gapMax), gapMean: r3(ct.gapMean), gapIdeal: r3(ctI.gapMax), gapExcess: r3(Math.max(0, ct.gapMax - ctI.gapMax)), visTop: r3(top - base), colTop: r3(b.maxY - base), n: cs.length, worst: ct.worst && ct.worst.map(r3), widest: ct.widest && ct.widest.map(r3) });
+        STATE.hulls[kind][i] = { H, bodies, tops: kept.map((gr) => gr.top), base, cs: csUse, csAll: cs, keepSubs };
       }
-      const ok = recs.filter((r) => !r.noBand);
+      STATE.subsByKind[kind] = subs;
+      const ok = recs.filter((r) => !r.noBand && !r.stepOnly);
       STATE.samples[kind] = ok;
       const clips = ok.map((r) => r.clip), gaps = ok.map((r) => r.gapMax);
       out.kinds[kind] = {
-        n: Object.keys(byKind[kind]).length, measured: ok.length, noBand: recs.length - ok.length, collidersPerInstance: r3(Object.values(byKind[kind]).reduce((s, a) => s + a.length, 0) / Math.max(1, Object.keys(byKind[kind]).length)), bodiesPerInstance: r3(ok.reduce((s, r) => s + r.bodies, 0) / Math.max(1, ok.length)),
+        n: Object.keys(byKind[kind]).length, measured: ok.length, noBand: recs.filter((r) => r.noBand).length, stepOnly: recs.filter((r) => r.stepOnly).length, collidersPerInstance: r3(Object.values(byKind[kind]).reduce((s, a) => s + a.length, 0) / Math.max(1, Object.keys(byKind[kind]).length)), bodiesPerInstance: r3(ok.reduce((s, r) => s + r.bodies, 0) / Math.max(1, ok.length)),
         clip: { p50: pct(clips, 0.5), p95: pct(clips, 0.95), max: pct(clips, 1), over10: share(clips, (x) => x > 0.10), over25: share(clips, (x) => x > 0.25), over30: share(clips, (x) => x > 0.30) },
         gapMax: { p50: pct(gaps, 0.5), p95: pct(gaps, 0.95), max: pct(gaps, 1), over30: share(gaps, (x) => x > 0.30) },
+        gapIdeal: { p50: pct(ok.map((r) => r.gapIdeal), 0.5), p95: pct(ok.map((r) => r.gapIdeal), 0.95), max: pct(ok.map((r) => r.gapIdeal), 1) },
+        gapExcess: { p50: pct(ok.map((r) => r.gapExcess), 0.5), p95: pct(ok.map((r) => r.gapExcess), 0.95), max: pct(ok.map((r) => r.gapExcess), 1), over15: share(ok, (r) => r.gapExcess > 0.15) },
+        pebblesDropped: ok.reduce((s, r) => s + r.pebbles, 0), stepCollidersSkipped: ok.reduce((s, r) => s + r.stepColliders, 0), pebbleOnly: ok.filter((r) => r.pebbleOnly).length,
         visTopP50: pct(ok.map((r) => r.visTop), 0.5), colTopP50: pct(ok.map((r) => r.colTop), 0.5),
         worstClip: ok.slice().sort((a, b) => b.clip - a.clip).slice(0, 2),
       };
@@ -204,7 +255,7 @@
     const picked = {};
     for (const kind of kinds) {
       const ids = Object.keys(STATE.hulls[kind]).map(Number);
-      const cand = ids.filter((i) => isolatedSet(STATE.hulls[kind][i].cs, 5));
+      const cand = ids.filter((i) => isolatedSet(STATE.hulls[kind][i].csAll, 5));
       const recs = (STATE.samples[kind] || []).filter((r) => cand.includes(r.i)).sort((a, b) => a.clip - b.clip);
       const pick = []; const N = Math.min(PERK, recs.length);
       for (let k = 0; k < N; k++) pick.push(recs[Math.round((recs.length - 1) * (N === 1 ? 1 : k / (N - 1)))].i);
@@ -217,17 +268,17 @@
           const ang = a * Math.PI / 4 + 0.13, ux = Math.cos(ang), uz = Math.sin(ang);
           place(cx - ux * 4.5, cz - uz * 4.5);
           const tr = walk(ux, uz, 75, true);
-          let mn = 1e9, at = null;
-          for (const q of tr) { if (q[1] > hh.base + 1.6 || q[1] + CAPH < hh.base + 0.15) continue; const sd = sdBodies(q[0], q[2], hh.bodies) - R; if (sd < mn) { mn = sd; at = q; } }
+          let mn = 9, at = null;
+          for (const q of tr) { if (q[3] || q[1] > hh.base + 1.6 || q[1] + CAPH < hh.base + 0.15) continue; const sd = sdBodiesAt(q[0], q[2], q[1], hh) - R; if (sd < mn) { mn = sd; at = q; } }
           const last = tr[tr.length - 1];
-          res.push({ i, ang: r3(ang), minGap: r3(mn), endGap: r3(sdBodies(last[0], last[2], hh.bodies) - R), at: at && at.map(r3) });
+          res.push({ i, ang: r3(ang), minGap: r3(mn), endGap: r3(sdBodiesAt(last[0], last[2], last[1], hh) - R), onTop: sdBodiesAt(last[0], last[2], last[1], hh) > 1e8, at: at && at.map(r3) });
         }
       }
       // ---- 2. phantom walk: walk (no sprint) at the COLLIDER set's centre from 5 m; where does the body stop vs the drawn hull?
       const ph = [];
       for (const i of picked[kind].slice(0, 3)) {
         const hh = STATE.hulls[kind][i], b = setBox(hh.cs);
-        if (!isolatedSet(hh.cs, 4)) continue;
+        if (!isolatedSet(hh.csAll, 4)) continue;
         for (let a = 0; a < 4; a++) {
           const ang = a * Math.PI / 2 + 0.31, ux = Math.cos(ang), uz = Math.sin(ang);
           place(b.cx - ux * 5, b.cz - uz * 5);
@@ -246,16 +297,22 @@
     const heights = [0.5, 1.2, 1.7, 2.5, 4.0, 5.5];
     for (const kind of kinds) {
       const tally = {}; for (const h of heights) tally[h] = { both: 0, visualOnly: 0, colliderOnly: 0, none: 0 };
+      const ideal = { both: 0, visualOnly: 0, colliderOnly: 0 };       // the same rays against the tightest axis-aligned box of each drawn body (body heights only)
       const root = await W.kernel.loadGLTF(W.assetBase + "assets/props/" + kind + ".glb");
       const geos = new Set(); root.traverse((o) => { if (o.isMesh) geos.add(o.geometry); });
       for (const i of picked[kind] || []) {
-        const hh = STATE.hulls[kind][i], cs = hh.cs, b = setBox(cs);
-        const tmp = solidSubs(STATE.insts.filter((o) => o.geometry && geos.has(o.geometry) && i < o.count)).map((o) => {
+        // obstacles on both sides: the colliders that stand for a body the walker cannot step over (hh.cs), the way the drawn side leaves out the pebbles.
+        // (maps.js also builds boxes for rock parts of 0.3-0.55 m; those are steps for the mover and the shot test sees them - a known, minor
+        // disagreement at knee height that this comparison does not judge)
+        const hh = STATE.hulls[kind][i], cs = hh.cs, b = setBox(hh.cs);
+        // the drawn side of the comparison = the sub-meshes of the kept bodies (props() drops the pebbles the mover steps over)
+        const tmp = (hh.keepSubs || []).map((si) => (STATE.subsByKind[kind] || [])[si]).filter((o) => o && i < o.count).map((o) => {
           const m4 = new THREE.Matrix4(); o.getMatrixAt(i, m4);
           const mm = new THREE.Mesh(o.geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
           mm.matrixAutoUpdate = false; mm.matrixWorld.multiplyMatrices(o.matrixWorld, m4); mm.matrix.copy(mm.matrixWorld);
           return mm;
         });
+        const ibox = idealBoxes(hh.bodies).map((bx, bi) => ({ ...bx, minY: hh.base, maxY: hh.tops[bi] }));
         const ctrs = [centroid(hh.H), [b.cx, b.cz]];
         const far = Math.hypot(ctrs[0][0] - ctrs[1][0], ctrs[0][1] - ctrs[1][1]) > 4;
         for (const [cx, cz] of (far ? ctrs : ctrs.slice(0, 1))) for (let a = 0; a < 4; a++) {
@@ -269,6 +326,7 @@
               const vis = ray.intersectObjects(tmp, false).length > 0;
               const col = !!S.segmentColliders(ax, y, az, bx, y, bz, cs);
               const t = tally[h]; if (vis && col) t.both++; else if (vis) t.visualOnly++; else if (col) t.colliderOnly++; else t.none++;
+              if (h <= 1.7) { const ci = ibox.some((bx) => rayBox(ax, y, az, ux, uz, 14, bx)); if (vis && ci) ideal.both++; else if (vis) ideal.visualOnly++; else if (ci) ideal.colliderOnly++; }
             }
           }
         }
@@ -277,7 +335,11 @@
       // agreement at body height (0.5 / 1.2 / 1.7 m): of the rays that hit EITHER the drawn mesh or the collider, the share that hit both
       let both = 0, vo = 0, co = 0;
       for (const h of [0.5, 1.2, 1.7]) { both += tally[h].both; vo += tally[h].visualOnly; co += tally[h].colliderOnly; }
-      out.bullets[kind] = { tally, bodyAgreement: both + vo + co ? r3(both / (both + vo + co)) : null, bodyBoth: both, bodyVisualOnly: vo, bodyColliderOnly: co };
+      out.bullets[kind] = { tally, bodyAgreement: both + vo + co ? r3(both / (both + vo + co)) : null, bodyBoth: both, bodyVisualOnly: vo, bodyColliderOnly: co,
+        // shots that pass through a drawn solid (the mesh is hit, the collider is not): the part of the disagreement a box can always avoid
+        bodyThroughShare: both + vo ? r3(vo / (both + vo)) : null,
+        // what the tightest axis-aligned boxes would score on the same rays: the ceiling for a collider that must stay an axis-aligned box
+        idealAgreement: ideal.both + ideal.visualOnly + ideal.colliderOnly ? r3(ideal.both / (ideal.both + ideal.visualOnly + ideal.colliderOnly)) : null };
     }
     return out;
   }
@@ -457,7 +519,8 @@
     // ---- the hide area under tall ramps: cells under the slab where a capsule can STAND (real mover) and a chest-high shot is
     //      stopped by the ramp itself. C-RAMP (movement blocked under a ramp, or shots testing only the slab band) makes it 0.
     const CELL = 0.5;
-    let hideCells = 0, standCells = 0, cells = 0; const hideEx = [];
+    let hideCells = 0, anyCells = 0, standCells = 0, cells = 0; const hideEx = [];
+    const dirs8 = []; for (let k = 0; k < 8; k++) dirs8.push([Math.cos(k * Math.PI / 4 + 0.1), Math.sin(k * Math.PI / 4 + 0.1)]);
     for (const { c } of rs) {
       const h = c.maxY - c.minY; if (h < 2.1) continue;
       const along = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
@@ -472,13 +535,18 @@
         const moved = Math.hypot(P.pos.x - x, P.pos.z - z), rose = P.pos.y - (floor + 0.02);
         if (moved > 0.25 || rose > 0.3) continue;                             // pushed out / lifted onto the slab: not a place to stand
         standCells++;
-        const near = qc(x, z, 14), yy = floor + 1.2;
-        let shielded = false;
-        for (const [dx, dz] of dirs) { const hit = S.segmentColliders(x + dx * 10, yy, z + dz * 10, x, yy, z, near); if (hit && hit.c === c) { shielded = true; break; } }
-        if (shielded) { hideCells++; if (hideEx.length < 4) hideEx.push([r3(x), r3(z), r3(floor)]); }
+        // A hide cell is bullet-proof: a chest-high shot from EVERY direction is stopped by this ramp (a cell that is shielded from one side
+        // only - the slab dips to chest height further down the run - is exposed from the other seven). The Wave-5 gate counted a cell as
+        // shielded when ANY ONE of four axis shots was stopped by the slab: that is a definition error, not a hide area.
+        // (the ramp alone is the candidate: a wall of the building that happens to stand there is not what makes the ramp a hiding place)
+        const yy = floor + 1.2;
+        let stopped = 0;
+        for (const [dx, dz] of dirs8) { if (S.segmentColliders(x + dx * 10, yy, z + dz * 10, x, yy, z, [c])) stopped++; }
+        if (stopped > 0) anyCells++;
+        if (stopped === dirs8.length) { hideCells++; if (hideEx.length < 4) hideEx.push([r3(x), r3(z), r3(floor)]); }
       }
     }
-    out.hide = { tallRamps: rs.filter(({ c }) => c.maxY - c.minY >= 2.1).length, cellsUnderSlab: cells, standable: standCells, shielded: hideCells, hideM2: r3(hideCells * CELL * CELL), example: hideEx };
+    out.hide = { tallRamps: rs.filter(({ c }) => c.maxY - c.minY >= 2.1).length, cellsUnderSlab: cells, standable: standCells, shielded: hideCells, hideM2: r3(hideCells * CELL * CELL), shieldedFromSomeSide: anyCells, anySideM2: r3(anyCells * CELL * CELL), example: hideEx };
     return out;
   }
 

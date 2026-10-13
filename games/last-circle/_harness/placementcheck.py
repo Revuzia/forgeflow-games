@@ -19,10 +19,17 @@ map's own LOD updater builds):
   props-float         non-rock props: base vertex > 0.10 m above the ground <= 2 % per kind;
   props-sunk          base vertex > 1.0 m below the ground <= 2 % per kind (embed 0.10-0.15 m + the slope across the base; plan leaves embedMax open)
   props-float-worst   no non-rock prop base vertex > 0.25 m above the ground (one lifted tree trips it)
+                      (an UPPER container of a stack rests on the drawn top of the LOWER one - maps.js marks it `onTop` - so for
+                      containers a lower container's top counts as support: a vertex whose x,z is inside another container's
+                      footprint, with that container's top at or below the vertex + 0.10 m, is measured against that top)
+  stack-contact       every container that rests on another sits within 0.10 m of the lower one's top (an upper that really floats
+                      still fails: a stack-float plant lifts one by 0.30 m)
   ground-match        |map.heightAt - rendered near-ring surface| p99 <= 0.05 m on ~20k dry-land samples per seed (Wave 4: 0.28 m)
   collider-top        collider top within 0.3 m of the drawn top for >= 95 % of the instances of every kind
   structure-contact   no connected structure piece with no contact (roof 0.20 m over a house, ranger roof 0.97 m, bench legs ...)
+  ramp-slope          every ramp's plank climbs at 45 degrees at most                                 (Wave 4: 17 / 39 / 35 ramps over, up to 60 deg)
   chest-base          chests on terrain: base gap p50 <= 0.05 m (Wave 4: 0.20 m)       [loot.js populate() run for real]
+  chest-base-worst    no chest on terrain hovers more than 0.10 m (the median misses one in ~190)  (Wave 4: up to 5.6 m)
   floor-rings         floor-item ring hover p50 <= 0.12 m over the rendered ground     [no regression]
 Wave-6 rows (information unless --wave 6): grounded structure base edges (<= 5 % of any generator over 0.10 m), doorway
 clearance >= 2.0 m, ramp start step <= 0.55 m, road ribbon float <= 1 %.
@@ -30,6 +37,7 @@ clearance >= 2.0 m, ramp start step <= 0.55 m, road ribbon float <= 1 %.
 Exit 0 pass / 1 fail / 2 could-not-judge (the census crashed, a prop kind is missing, loot.js would not run, Node is missing).
 --plant NAME mutates the BUILT map in memory (never a file) and the gate must FAIL on the designated row:
   y-only-recentre -> anchor-offset + rocks-floating     perimeter-drop -> ground-match     tree-float -> props-float-worst
+  stack-float -> stack-contact + props-float-worst
 In plant mode only the designated rows count: exit 1 = the fault was detected, exit 0 = the gate is blind to it.
 """
 from __future__ import annotations
@@ -63,8 +71,11 @@ FLOAT_WORST = 0.25
 GROUND_P99 = 0.05
 COLTOP_MISS_MAX = 0.05
 CHEST_GAP_P50 = 0.05
+CHEST_GAP_MAX = 0.10
 RING_P50 = 0.12
-PLANT_ROWS = {"y-only-recentre": {"anchor-offset", "rocks-floating"}, "perimeter-drop": {"ground-match"}, "tree-float": {"props-float-worst"}}
+FLOAT_TOL = 0.10          # the "resting on" tolerance (also the census FLOAT): a stacked upper may hover this much over its lower's top
+PLANT_ROWS = {"y-only-recentre": {"anchor-offset", "rocks-floating"}, "perimeter-drop": {"ground-match"}, "tree-float": {"props-float-worst"},
+              "stack-float": {"stack-contact", "props-float-worst"}}
 
 
 def rev_root(rev):
@@ -191,6 +202,32 @@ def judge(v, doc, args, plant_rows):
     chk("props-sunk", not sk, "base vertex > 1.0 m under the ground, share per kind <= 2 %" if not sk else " | ".join(sk), "<= 2 % per kind")
     over = ["%s:%s %s m" % (m, k, f(p["floatMaxMax"], 2)) for m in S for k, p in S[m]["props"].items() if k != "rocks" and (p["floatMaxMax"] or 0) > FLOAT_WORST]
     chk("props-float-worst", not over, "no non-rock prop floats > %.2f m" % FLOAT_WORST if not over else "worst float per kind above %.2f m: %s" % (FLOAT_WORST, " | ".join(over)), "none > %.2f m" % FLOAT_WORST)
+    # 3b. stacks: an upper container rests on the drawn top of the LOWER one (maps.js marks it `onTop`), so props-float above counts a
+    # lower container's top as support (a vertex of an instance whose footprint holds it, top at or below the vertex + 0.10 m). That
+    # forgiveness must not hide an upper that really floats: this row judges ONLY the supported ones, with the 0.10 m bar itself.
+    stk = [(m, k, p) for m in S for k, p in S[m]["props"].items() if (p.get("stackedN") or 0) > 0]
+    for m, k, p in stk:
+        v.info("stacked %s %s" % (k, m), "%d resting on a lower one, float vs the lower's top max %s m, share > 0.10 m %s %%" % (p["stackedN"], f(p["stackedFloatMax"], 3), f(100 * (p["stackedFloatShare"] or 0), 1)))
+    badstk = ["%s:%s %s m (%s %% over, n %d)" % (m, k, f(p["stackedFloatMax"], 2), f(100 * (p["stackedFloatShare"] or 0), 1), p["stackedN"]) for m, k, p in stk if (p["stackedFloatMax"] or 0) > FLOAT_TOL]
+    has_ct = [m for m in S if "container" in S[m]["props"]]
+    no_stack = [m for m in has_ct if not any(mm == m for mm, _k, _p in stk)]
+    if not has_ct:
+        v.info("stack-contact (no container is built on these maps)", "nothing to judge")
+    elif no_stack:
+        chk("stack-contact", None, "no container rests on another in %s - the stack rule measured nothing (the yard no longer stacks, or the footprint test lost them)" % ", ".join(no_stack))
+    else:
+        chk("stack-contact", not badstk, ("%d stacked uppers rest on their lower container within %.2f m (worst %s m)" % (sum(p["stackedN"] for _m, _k, p in stk), FLOAT_TOL, f(max([p["stackedFloatMax"] or 0 for _m, _k, p in stk] or [0]), 3))) if not badstk else
+            "an upper container floats above the lower one: " + " | ".join(badstk), "every stacked upper within %.2f m of its lower's top" % FLOAT_TOL)
+
+    # 3c. ramps (C-RAMP authoring, lane 5A): the plank climbs at 45 degrees at most (a 60 degree ranger-tower ramp could not be climbed)
+    rs = {m: S[m].get("rampSlope") for m in S if S[m].get("rampSlope")}
+    nr = sum(r["n"] for r in rs.values())
+    if nr == 0:
+        chk("ramp-slope", None, "no ramp on the maps")
+    else:
+        over = sum(r["gt45"] for r in rs.values())
+        chk("ramp-slope", over == 0, ("every ramp climbs at <= 45 degrees: " + "; ".join("%s %d ramps, steepest %s deg" % (m, r["n"], f(r["max"], 1)) for m, r in rs.items())) if not over else
+            "%d of %d ramps climb steeper than 45 degrees: %s" % (over, nr, "; ".join("%s %d of %d (steepest %s deg)" % (m, r["gt45"], r["n"], f(r["max"], 1)) for m, r in rs.items() if r["gt45"])), "0 ramps over 45 degrees")
 
     # 4. the ground the player stands on vs the ground they see
     bad = ["%s p99 %s m (max %s, %s%% > 0.10)" % (m, f(S[m]["field"]["near"]["absP99"]), f(S[m]["field"]["near"]["absMax"]), f(100 * (S[m]["field"]["near"]["shareAbsGt10"] or 0), 1)) for m in S if (S[m]["field"]["near"]["absP99"] or 0) > GROUND_P99]
@@ -229,6 +266,10 @@ def judge(v, doc, args, plant_rows):
         if c["terrainN"] and (c["gapP50"] or 0) > CHEST_GAP_P50:
             bad.append("%s p50 %s m (p90 %s, n %d)" % (m, f(c["gapP50"]), f(c["gapP90"]), c["terrainN"]))
     chk("chest-base", not bad and any(S[m]["chests"]["terrainN"] for m in S), "chest base gap p50 " + per_map(lambda s: f(s["chests"]["gapP50"])) if not bad else " | ".join(bad), "p50 <= %.2f m" % CHEST_GAP_P50)
+    # the median hides one hovering chest in 190: every chest on terrain must rest on it (the worst is a visible defect: deepwood seed 1 hovers 0.70 m)
+    bad = ["%s worst %s m" % (m, f(S[m]["chests"]["gapMax"])) for m in S if (S[m]["chests"]["gapMax"] or 0) > CHEST_GAP_MAX]
+    chk("chest-base-worst", not bad and any(S[m]["chests"]["terrainN"] for m in S), "no chest on terrain hovers more than %.2f m: worst %s" % (CHEST_GAP_MAX, per_map(lambda s: f(s["chests"]["gapMax"]))) if not bad else
+        "a chest hovers over the ground (terrain chests per map: %s): %s" % (per_map(lambda s: str(s["chests"]["terrainN"])), " | ".join(bad)), "every chest <= 0.10 m")
     for m in S:
         c = S[m]["chests"]
         v.info("chests on structures %s" % m, "n %d, gap to floor p50 %s min %s max %s (a chest sunk into a floor reads negative)" % (c["boxN"], f(c["boxGapP50"]), f(c["boxGapMin"]), f(c["boxGapMax"])))
@@ -278,6 +319,10 @@ def main_fn(v, args):
     v.data["root"] = label
     v.data["seeds"] = seeds
     v.data["plants"] = plants
+    # a planted fault that could not be applied (the census records `<plant>:NO-...`) must never read as a blind gate: could-not-judge
+    unapplied = sorted({x for m in doc["summary"].values() for x in (m.get("planted") or []) if ":NO-" in x})
+    if unapplied:
+        v.cnj("planted fault applied", "the plant did not apply to the built map: %s" % ", ".join(unapplied))
     v.data["census_wall_s"] = doc.get("wallS")
     plant_rows = None
     if plants:

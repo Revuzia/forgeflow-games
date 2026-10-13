@@ -13,7 +13,9 @@ own readback(W) (hud.js / fx.js / audio.js, contract C9, lanes L7 / L8), else th
 element, numeric damage-number nodes, the reticle's child rects).
 
   kill marker    pistol kill: the marker's LAST state is the kill style (red) and it is held at opacity >= 0.99 for
-                 >= 250 ms (was: overwritten white 26 px in the same frame, hidden 113 ms later)
+                 >= 250 ms (was: overwritten white 26 px in the same frame, hidden 113 ms later). The sampler is only a BOUND on
+                 the hold (a 350 ms hold read 249 and 204 ms): >= 250 ms seen = PASS, provably < 250 ms (seen + the two edge sample
+                 intervals) = FAIL, otherwise the game's own hud readback killHeldMs decides (see judge_kill)
   reticle        every arm >= 2 px thick and >= 6 px long at rest, crouched-still (REAL C held) and sprinting (REAL
                  Shift toggle + W) (was: ~0.9 px x 3.7 px - scale(0.457) of the whole element)
   SMG burst      REAL LMB held --burst s on a shielded pinned bot: <= 1 live damage number per victim at every sample,
@@ -122,12 +124,12 @@ TICK_JS = r"""(on) => {
       let h = null;
       if (mods.hud && mods.hud.readback) { h = mods.hud.readback(W); s.src = 'module'; }
       else if (feel) { h = fl().hud; s.src = 'feel'; }
-      if (h) s.mk = h.marker ? { style: h.marker.style, op: h.marker.opacity } : null;
+      if (h) s.mk = h.marker ? { style: h.marker.style, op: h.marker.opacity, khMs: h.marker.killHeldMs } : null;
       else { s.src = 'dom'; const el = [...document.querySelectorAll('div')].find((d) => d.textContent === '✕'); if (el) s.mk = { style: /255, 77, 77|255, ?7[0-9], ?7[0-9]|ff4d4d/i.test(el.style.color) ? 'kill' : 'hit', op: parseFloat(el.style.opacity || '0'), color: el.style.color }; }
       let f = null;
       if (mods.fx && mods.fx.readback) f = mods.fx.readback(W);
       else if (feel) f = fl().fx;
-      if (f) { s.nums = f.dmg ? f.dmg.maxPerVictim : null; s.breaks = f.shieldBreaks; }
+      if (f) { s.nums = f.dmg ? f.dmg.maxPerVictim : null; s.breaks = f.shieldBreaks; s.breakId = f.lastShieldBreak ? f.lastShieldBreak.id : null; }
       else { let n = 0; for (const e of document.querySelectorAll('div')) { if ((e.style.willChange || '').includes('transform') && /^\d/.test(e.textContent || '') && parseFloat(getComputedStyle(e).opacity) > 0.05) n++; } s.nums = n; }
     } catch (e) { s.err = String(e); }
     if (window.__FJ_S__.length < 6000) window.__FJ_S__.push(s);
@@ -197,7 +199,17 @@ def _sources(samples):
 
 def judge_kill(samples, t_kill):
     """(ok, detail): ok True / False, or None = could-not-judge when the sampler collected 0 marker readings after the
-    kill (a blind sampler must never report a verdict on the game - Wave-2 VERIFY.md 4a)."""
+    kill (a blind sampler must never report a verdict on the game - Wave-2 VERIFY.md 4a).
+
+    The hold is measured by a 20 ms setInterval sampler on a box where one pumped frame can cost 600 ms, so a sample-to-sample
+    figure is only a BOUND: the kill style (opacity >= 0.99) was seen from the first to the last sample of its run (`held`, a
+    LOWER bound on the true hold) and the true hold can be longer by at most the sample interval before the run's first sample plus
+    the one after its last (`upper`). Wave-5 verification: a 350 ms hold read 249 ms once and 204 ms once. So:
+      held >= 250 ms                      -> PASS, certified by the sampler alone
+      upper < 250 ms                      -> FAIL, provably shorter (a planted 50 ms hold lands here)
+      otherwise (the sampler cannot tell) -> the game's own accounting decides: hud readback marker.killHeldMs (the frame-dt time the
+                                             kill style was held; >= hold - 50 ms, i.e. >= 300 ms for the shipped 350 ms), and
+                                             could-not-judge when that number was not read."""
     after = [x for x in samples if x.get("t", -1e18) >= t_kill - 50]
     marked = [x for x in after if x.get("mk")]
     det = {"samples": len(after), "markerSamples": len(marked), "sources": _sources(after)}
@@ -206,17 +218,39 @@ def judge_kill(samples, t_kill):
         return None, det
     shown = [x for x in marked if (x["mk"].get("op") or 0) >= 0.99]
     last = shown[-1]["mk"] if shown else None
-    held, run0 = 0.0, None
-    for x in marked:
+    best = None                                   # (held, i0, i1): the longest run of kill-style, full-opacity samples
+    run0 = None
+    for i, x in enumerate(marked):
         ok = x["mk"].get("style") == "kill" and (x["mk"].get("op") or 0) >= 0.99
         if ok and run0 is None:
-            run0 = x["t"]
+            run0 = i
         if ok:
-            held = max(held, x["t"] - run0)
+            held_i = x["t"] - marked[run0]["t"]
+            if best is None or held_i > best[0]:
+                best = (held_i, run0, i)
         else:
             run0 = None
-    det.update({"lastVisible": last, "killHeldMs": round(held)})
-    return bool(last and last.get("style") == "kill") and held >= KILL_HOLD_MS, det
+    held, i0, i1 = best if best else (0.0, 0, 0)
+    gap_before = (marked[i0]["t"] - marked[i0 - 1]["t"]) if (best and i0 > 0) else 20.0
+    gap_after = (marked[i1 + 1]["t"] - marked[i1]["t"]) if (best and i1 + 1 < len(marked)) else 20.0
+    upper = held + gap_before + gap_after
+    game = [x["mk"].get("khMs") for x in marked if isinstance(x["mk"].get("khMs"), (int, float))]
+    game_ms = max(game) if game else None
+    det.update({"lastVisible": last, "killHeldMs": round(held), "upperBoundMs": round(upper) if best else None, "gapBeforeMs": round(gap_before), "gapAfterMs": round(gap_after),
+                "gameKillHeldMs": game_ms})
+    if not (last and last.get("style") == "kill"):
+        return False, det
+    if held >= KILL_HOLD_MS:
+        det["decidedBy"] = "sampler (lower bound >= %d ms)" % KILL_HOLD_MS
+        return True, det
+    if upper < KILL_HOLD_MS:
+        det["decidedBy"] = "sampler (upper bound < %d ms)" % KILL_HOLD_MS
+        return False, det
+    if game_ms is None:
+        det["why"] = "the sampler's resolution (%d..%d ms) straddles %d ms and the game's own killHeldMs was not read" % (round(held), round(upper), KILL_HOLD_MS)
+        return None, det
+    det["decidedBy"] = "the game's own killHeldMs (sampler resolution %d..%d ms straddles %d ms)" % (round(held), round(upper), KILL_HOLD_MS)
+    return game_ms >= KILL_HOLD_MS, det
 
 
 def judge_live_numbers(samples, hits=0):
@@ -232,16 +266,28 @@ def judge_live_numbers(samples, hits=0):
 
 
 def selftest():
-    """Offline proof of the judging rules (no browser): 0 samples -> CNJ, a 280 ms kill hold -> PASS, 50 ms -> FAIL."""
+    """Offline proof of the judging rules (no browser): 0 samples -> CNJ, a 280 ms kill hold -> PASS, 50 ms -> FAIL, a coarse sampler
+    -> decided by the game's own number (or could-not-judge without it)."""
     t = 1000.0
-    run = lambda ms, style="kill": [{"t": t + i * 20, "src": "module", "mk": {"style": style, "op": 1.0}} for i in range(int(ms / 20) + 1)]
-    fade = [{"t": t + 400 + i * 20, "src": "module", "mk": {"style": "kill", "op": 0.5}} for i in range(5)]
+
+    def run(ms, style="kill", step=20, kh=None):
+        n = int(ms / step) + 1
+        return [{"t": t + i * step, "src": "module", "mk": {"style": style, "op": 1.0, **({"khMs": kh} if kh is not None else {})}} for i in range(n)]
+
+    def fade(after_ms, step=20, kh=None):                     # the fade phase: kill style, opacity < 0.99, dense samples
+        return [{"t": t + after_ms + i * step, "src": "module", "mk": {"style": "kill", "op": 0.5, **({"khMs": kh} if kh is not None else {})}} for i in range(1, 12)]
+
     cases = [
         ("0 samples", judge_kill([], t)[0], None),
         ("samples but no marker reading (blind DOM path)", judge_kill([{"t": t + i * 20, "src": "dom"} for i in range(30)], t)[0], None),
-        ("kill held 280 ms", judge_kill(run(280) + fade, t)[0], True),
-        ("kill held 60 ms (planted short hold)", judge_kill(run(60) + fade, t)[0], False),
-        ("marker overwritten white (hit style)", judge_kill(run(300, "body") + fade, t)[0], False),
+        ("kill held 280 ms", judge_kill(run(280) + fade(280), t)[0], True),
+        ("kill held 60 ms (planted short hold, dense sampler)", judge_kill(run(60) + fade(60), t)[0], False),
+        ("marker overwritten white (hit style)", judge_kill(run(300, "body") + fade(300), t)[0], False),
+        # coarse sampler (a 600 ms pumped frame): 249 ms seen, true hold 350 ms: the game's own number decides
+        ("sampler saw 240 ms with 100 ms gaps, game says 340", judge_kill(run(240, step=80, kh=340) + fade(240, step=80, kh=340), t)[0], True),
+        ("same, game number not read -> could-not-judge", judge_kill(run(240, step=80) + fade(240, step=80), t)[0], None),
+        ("planted 50 ms hold seen by a coarse sampler (240 ms gaps), game says 50", judge_kill(run(0, step=240, kh=50) + fade(0, step=240, kh=50), t)[0], False),
+        ("sampler saw 60 ms with dense gaps but the game claims 340 (upper bound < 250 wins)", judge_kill(run(60, kh=340) + fade(60, kh=340), t)[0], False),
         ("live numbers: 0 samples", judge_live_numbers([])[0], None),
         ("live numbers: max 1", judge_live_numbers([{"nums": 1}, {"nums": 0}])[0], True),
         ("live numbers: max 3", judge_live_numbers([{"nums": 3}])[0], False),
@@ -476,7 +522,8 @@ def main():
                     s.js("(id) => { const W = window.__LC__.W, b = W.actorById.get(id); if (!b) return; b.pos.x += 40; b.pos.z += 40;"
                          " b.pos.y = Math.max(W.map.heightAt(b.pos.x, b.pos.z), W.map.waterY); b.obj.position.copy(b.pos); }", tgt2["id"])
                 s.sleep(0.5)
-                s.js(PLACE_JS, {"d": 8, "hp": 100, "shield": 20, "skip": [tgt["id"], tgt2["id"] if tgt2 else None]})
+                tgt3 = s.js(PLACE_JS, {"d": 8, "hp": 100, "shield": 20, "skip": [tgt["id"], tgt2["id"] if tgt2 else None]})
+                n_sb = s.js("() => (window.__FJ_S__ || []).length")
                 s.sleep(0.3)
                 f_s = s.js("() => window.__LC__.W.stats.shotsFired")
                 s.page.mouse.down()
@@ -489,12 +536,36 @@ def main():
                 fx1 = (s.js(READ_JS).get("r") or {}).get("fx")
                 hurt3 = s.js("() => window.__FJ_HURT__")
                 breaks = [h for h in hurt3 if h.get("broke")]
-                nb = fx1["shieldBreaks"] - fx0["shieldBreaks"]
+                nb_all = fx1["shieldBreaks"] - fx0["shieldBreaks"]
+                # fx.js counts EVERY shield break within 80 m of the camera, bots shooting each other included, so the global delta flakes (a
+                # second burst once in ~17 runs: "bursts 2, breakingHits 1"). The burst the row is about is the pinned target's: attribute each
+                # increment of the sampler's running count to fx's `lastShieldBreak.id` of that sample
+                nb = nb_all
+                attributed = None
+                try:
+                    smp = s.js("(n) => (window.__FJ_S__ || []).slice(n)", n_sb)
+                    prev, mine, others, seen_id = fx0["shieldBreaks"], 0, 0, False
+                    for x in smp:
+                        b = x.get("breaks")
+                        if not isinstance(b, (int, float)):
+                            continue
+                        if b > prev:
+                            seen_id = seen_id or x.get("breakId") is not None
+                            if tgt3 and x.get("breakId") == tgt3["id"]:
+                                mine += 1
+                            else:
+                                others += int(b - prev)
+                        prev = max(prev, b)
+                    if seen_id and tgt3:
+                        attributed = {"target": mine, "others": others}
+                        nb = mine
+                except Exception as e:                                # a sampler that could not be read keeps the global count
+                    attributed = {"error": str(e)[:80]}
                 if not breaks:
                     v.cnj("shield break: exactly one burst, on the breaking hit", "no breaking hit landed (%d hits, %d rounds fired)" % (
                         len(hurt3), s.js("() => window.__LC__.W.stats.shotsFired") - f_s))
                 else:
-                    v.check("shield break: exactly one burst, on the breaking hit", nb == 1, {"bursts": nb, "breakingHits": len(breaks), "hits": len(hurt3)})
+                    v.check("shield break: exactly one burst, on the breaking hit", nb == 1, {"bursts": nb, "burstsAnywhere": nb_all, "attributed": attributed, "breakingHits": len(breaks), "hits": len(hurt3)})
             s.js(TICK_JS, False)
             errs = s.safe_js("() => window.__FJ_ERR__ || []", default=[])
             d = s.diagnostics()

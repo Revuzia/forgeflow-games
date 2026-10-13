@@ -23,6 +23,7 @@
 //                    origin offset left in: 20-90 m away)
 //   perimeter-drop   every near-ring chunk's perimeter vertices that sit on the true height drop 0.35 m again
 //   tree-float       the first tree is lifted 0.30 m
+//   stack-float      the first stacked UPPER container is lifted 0.30 m (the stack-support rule must not forgive it)
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -267,26 +268,49 @@ function applyPlants(ctx) {
     done.push("y-only-recentre:" + n);
   }
   if (PLANTS.has("tree-float")) {
-    // lift ONE well-grounded tree (lowest vertex within 3 cm of the physics ground, 6 m from any chunk border) by 0.30 m
+    // lift ONE tree so its lowest vertex sits 0.31 m above the physics ground (> the 0.25 m float bar by more than the ground-match error).
+    // The candidate is the best-grounded tree 6 m from any chunk border (its lowest vertex closest to the ground, embedded or not: since Wave 5
+    // trees are sunk 0.12 m into the ground, so "within 3 cm of the ground" matches nothing and the plant used to apply to NO tree at all)
     const kind = ["tree", "pine", "palm", "birch"].find((k) => byKind[k]);
     if (kind) {
       const ims = byKind[kind], Mx = new THREE.Matrix4(), vv = new THREE.Vector3();
-      let pick = -1;
-      for (let i = 0; i < ims[0].count && pick < 0; i++) {
+      let pick = -1, bestD = 1e9, pickDy = 0;
+      const bd = (c) => { const d = (((c + 800) % 200) + 200) % 200; return Math.min(d, 200 - d); };
+      for (let i = 0; i < ims[0].count; i++) {
         let by = 1e9, bx = 0, bz = 0;
         for (const im of ims) {
           im.getMatrixAt(i, Mx); const pos = im.geometry.attributes.position;
           for (let k = 0; k < pos.count; k++) { vv.fromBufferAttribute(pos, k).applyMatrix4(Mx); if (vv.y < by) { by = vv.y; bx = vv.x; bz = vv.z; } }
         }
-        const bd = (c) => { const d = (((c + 800) % 200) + 200) % 200; return Math.min(d, 200 - d); };
-        if (Math.abs(by - H0(bx, bz)) < 0.03 && bd(bx) > 6 && bd(bz) > 6) pick = i;
+        if (bd(bx) <= 6 || bd(bz) <= 6) continue;
+        const dy = by - H0(bx, bz);
+        if (Math.abs(dy) < bestD) { bestD = Math.abs(dy); pick = i; pickDy = dy; }
       }
       if (pick >= 0) {
         const Mx2 = new THREE.Matrix4();
-        for (const im of ims) { im.getMatrixAt(pick, Mx2); Mx2.elements[13] += 0.3; im.setMatrixAt(pick, Mx2); im.instanceMatrix.needsUpdate = true; }
+        for (const im of ims) { im.getMatrixAt(pick, Mx2); Mx2.elements[13] += 0.31 - pickDy; im.setMatrixAt(pick, Mx2); im.instanceMatrix.needsUpdate = true; }
         done.push("tree-float:" + kind + "#" + pick);
-      } else done.push("tree-float:NO-WELL-GROUNDED-TREE");
+      } else done.push("tree-float:NO-TREE-AWAY-FROM-A-CHUNK-BORDER");
+    } else done.push("tree-float:NO-TREE-KIND");
+  }
+  if (PLANTS.has("stack-float") && byKind.container) {
+    // lift ONE stacked UPPER container (its lowest vertex > 1 m above the ground: it rests on a lower container) by 0.30 m: the
+    // stack-support rule must not forgive an upper that really floats
+    const ims = byKind.container, Mx = new THREE.Matrix4(), vv = new THREE.Vector3();
+    let pick = -1;
+    for (let i = 0; i < ims[0].count && pick < 0; i++) {
+      let by = 1e9, bx = 0, bz = 0;
+      for (const im of ims) {
+        im.getMatrixAt(i, Mx); const pos = im.geometry.attributes.position;
+        for (let k = 0; k < pos.count; k++) { vv.fromBufferAttribute(pos, k).applyMatrix4(Mx); if (vv.y < by) { by = vv.y; bx = vv.x; bz = vv.z; } }
+      }
+      if (by - H0(bx, bz) > 1.0) pick = i;
     }
+    if (pick >= 0) {
+      const Mx2 = new THREE.Matrix4();
+      for (const im of ims) { im.getMatrixAt(pick, Mx2); Mx2.elements[13] += 0.3; im.setMatrixAt(pick, Mx2); im.instanceMatrix.needsUpdate = true; }
+      done.push("stack-float:container#" + pick);
+    } else done.push("stack-float:NO-STACKED-UPPER");
   }
   if (PLANTS.has("perimeter-drop")) {
     let n = 0;
@@ -328,6 +352,7 @@ function sdPoly(px, pz, H) {
 
 // ── the census of one (map, seed) ──────────────────────────────────────────────────────────────────────────────
 const FLOAT = 0.10, SINK = 1.0;
+const STACKABLE = new Set(["container"]);      // kinds whose instances can rest on another instance of the same kind (maps.js `onTop`)
 async function censusOne(mapId, seed, lootMod) {
   globalThis.__LC_BOXES = [];
   const W = makeW(seed);
@@ -396,7 +421,8 @@ async function censusOne(mapId, seed, lootMod) {
     const ims = byKind[kind], n = ims[0].count;
     const ml0 = geomLocal.get(ims[0].geometry).meshLocal;
     const out = [];
-    for (let i = 0; i < n; i++) {
+    // world vertices of drawn instance i (all sub-meshes) + its lowest / highest y
+    const collect = (i) => {
       let minY = 1e9, maxY = -1e9;
       const vs = [];
       for (const im of ims) {
@@ -404,6 +430,33 @@ async function censusOne(mapId, seed, lootMod) {
         const pos = im.geometry.attributes.position;
         for (let k = 0; k < pos.count; k++) { v.fromBufferAttribute(pos, k).applyMatrix4(mT); vs.push(v.x, v.y, v.z); if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y; }
       }
+      return { vs, minY, maxY };
+    };
+    // STACKABLE kinds (a container yard stacks a smaller container on a lower one; maps.js marks that upper `onTop`): a vertex that
+    // rests on the drawn TOP of another instance of the same kind is supported by it, not by the ground. Support is the highest top
+    // of another instance whose footprint holds the vertex and whose top is at or below the vertex (+ the 0.10 m float tolerance),
+    // so an upper that really floats above its lower still reads as floating, an upper sunk into a lower still reads against the
+    // ground (not supported), and a ground container that merely overlaps another container's footprint is judged on the ground.
+    const stackable = STACKABLE.has(kind);
+    const foot = [];
+    if (stackable) for (let i = 0; i < n; i++) {
+      const c = collect(i); let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (let k = 0; k < c.vs.length; k += 3) { const x = c.vs[k], z = c.vs[k + 2]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+      foot.push({ x0, x1, z0, z1, top: c.maxY, base: c.minY });
+    }
+    const supportTop = (i, x, z, y) => {
+      let best = -1e9;
+      for (let j = 0; j < foot.length; j++) {
+        if (j === i) continue;
+        const f = foot[j];
+        if (x < f.x0 - 0.02 || x > f.x1 + 0.02 || z < f.z0 - 0.02 || z > f.z1 + 0.02) continue;
+        if (f.top <= y + FLOAT && f.top > best) best = f.top;
+      }
+      return best;
+    };
+    for (let i = 0; i < n; i++) {
+      const { vs, minY, maxY } = collect(i);
+      let onLower = false;
       // TRS anchor = M_i * meshLocal^-1
       ims[0].getMatrixAt(i, mT); mInv.copy(ml0).invert(); mT.multiply(mInv); pA.setFromMatrixPosition(mT);
       const cols = (propCols[kind] || {})[i] || [];
@@ -422,7 +475,11 @@ async function censusOne(mapId, seed, lootMod) {
         if (y < minY + 0.5) { sx += vs[k]; sz += vs[k + 2]; nb++; if (vs[k] < bx0) bx0 = vs[k]; if (vs[k] > bx1) bx1 = vs[k]; if (vs[k + 2] < bz0) bz0 = vs[k + 2]; if (vs[k + 2] > bz1) bz1 = vs[k + 2]; }
         const contact = y < minY + 0.05;
         if (contact || rock) {
-          const s = nearAt(vs[k], vs[k + 2]);
+          let s = nearAt(vs[k], vs[k + 2]);
+          if (stackable && contact) {
+            const st = supportTop(i, vs[k], vs[k + 2], y);
+            if (st > -1e8 && (Number.isNaN(s) || st > s)) { s = st; onLower = true; }
+          }
           if (!Number.isNaN(s)) {
             const gap = y - s;
             if (contact) { nc++; if (gap > floatMax) floatMax = gap; if (-gap > sinkMax) sinkMax = -gap; }
@@ -445,7 +502,7 @@ async function censusOne(mapId, seed, lootMod) {
         offsetCentre: r3(Math.min(Math.hypot(visX - cenX, visZ - cenZ), Math.hypot(whX - cenX, whZ - cenZ))),
         top: r3(maxY), base: r3(minY),
         colTop: hasCol ? r3(ctop) : null, colBase: hasCol ? r3(cbot) : null, colN: cols.length,
-        floatMax: nc ? r3(floatMax) : null, sinkMax: nc ? r3(sinkMax) : null,
+        floatMax: nc ? r3(floatMax) : null, sinkMax: nc ? r3(sinkMax) : null, stacked: onLower,
         allMin: rock && allMin < 1e8 ? r3(allMin) : null, allMax: rock && allMax > -1e8 ? r3(allMax) : null,
         slope: r3(Math.hypot(H0(cenX + 1, cenZ) - H0(cenX - 1, cenZ), H0(cenX, cenZ + 1) - H0(cenX, cenZ - 1)) / 2),
         over: waterY > -100 && physAtAnchor < waterY - 0.05,
@@ -536,6 +593,8 @@ async function censusOne(mapId, seed, lootMod) {
       if (!onWater) rampsOut.push({ step: r3(Math.max(...sups.map((s2) => c.minY - s2[0]))), onBox: sups[2][1] === "box", climb: r3(c.maxY - c.minY) });
     }
     rec.ramps = rampsOut;
+    // slope of every ramp's plank (C-RAMP authoring: <= 45 degrees), water or not
+    rec.rampSlopes = M.colliders.filter((c) => c.kind === "ramp").map((c) => r3(Math.atan2(c.maxY - c.minY, c.dir < 2 ? c.maxX - c.minX : c.maxZ - c.minZ) * 180 / Math.PI));
     // doorways: lintel boxes of house / hut / tower / lighthouse / steeple / farmland -> clearance under the lintel
     const LINTEL = [["house", 1.4, 0.7], ["hut", 1.4, 0.8], ["tower", 1.8, 1], ["lighthouse", 1.5, 0.7], ["steeple", 2, 3.2], ["farmland", 3, 1.2]];
     const doors = [];
@@ -655,7 +714,7 @@ function summarise(results) {
     for (const kind in R.props) (S.props[kind] = S.props[kind] || []).push(...R.props[kind].filter((p) => !p.over));
     S.floating.push(...R.structures.floating.map((f) => ({ ...f, seed: R.seed })));
     S.grounded.push(...R.structures.grounded);
-    S.ramps.push(...R.ramps); S.doors.push(...R.doors);
+    S.ramps.push(...R.ramps); S.doors.push(...R.doors); (S.rampSlopes = S.rampSlopes || []).push(...(R.rampSlopes || []));
     S.rot.turned += R.rotWalls.turned; S.rot.list.push(...R.rotWalls.list.map((r) => ({ ...r, seed: R.seed })));
     if (R.roads) { S.roads.n += R.roads.n; S.roads.floatN += R.roads.floatN; S.roads.pokeN += R.roads.pokeN; }
     if (R.loot && R.loot.error) S.lootError = R.loot.error;
@@ -677,6 +736,9 @@ function summarise(results) {
         centreP50: q(L.map((p) => p.offsetCentre), 0.5), centreMax: q(L.map((p) => p.offsetCentre), 1),
         floatShare: share(has, (p) => p.floatMax > FLOAT), floatP50: q(has.map((p) => p.floatMax), 0.5), floatP90: q(has.map((p) => p.floatMax), 0.9), floatMaxMax: q(has.map((p) => p.floatMax), 1),
         sunkShare: share(has, (p) => p.sinkMax > SINK), sunkMax: q(has.map((p) => p.sinkMax), 1),
+        stackedN: has.filter((p) => p.stacked).length,                                                       // instances resting on another instance's top
+        stackedFloatMax: q(has.filter((p) => p.stacked).map((p) => p.floatMax), 1),
+        stackedFloatShare: share(has.filter((p) => p.stacked), (p) => p.floatMax > FLOAT),
         hoverShare02: rock ? share(L.filter((p) => p.allMin != null), (p) => p.allMin > 0.2) : null,        // lowest vertex still > 0.2 m above the surface
         airShare: rock ? share(L.filter((p) => p.allMin != null), (p) => p.allMin > 0) : null,             // wholly in the air
         buriedFullyShare: rock ? share(L.filter((p) => p.allMax != null), (p) => p.allMax < 0) : null,     // every vertex under the surface
@@ -694,6 +756,7 @@ function summarise(results) {
     const gg = {};
     for (const s2 of S.grounded) { (gg[s2.gen] = gg[s2.gen] || []).push(s2.edge); }
     o.grounded = Object.keys(gg).sort().map((k) => ({ gen: k, n: gg[k].length, edgeGt10Share: share(gg[k], (e) => e > 0.1), edgeP50: q(gg[k], 0.5), edgeMax: q(gg[k], 1) }));
+    o.rampSlope = { n: (S.rampSlopes || []).length, gt45: (S.rampSlopes || []).filter((d) => d > 45.05).length, max: q(S.rampSlopes || [], 1), p50: q(S.rampSlopes || [], 0.5) };
     o.ramps = { n: S.ramps.length, stepGt055: S.ramps.filter((r) => r.step > 0.55).length, stepMax: q(S.ramps.map((r) => r.step), 1) };
     o.doors = { n: S.doors.length, minClear: q(S.doors.map((d) => d.clearance), 0), ltCapsule: S.doors.filter((d) => d.clearance < 1.85).length, lt20: S.doors.filter((d) => d.clearance < 2.0).length };
     o.roads = { n: S.roads.n, floatShare: S.roads.n ? +(S.roads.floatN / S.roads.n).toFixed(5) : null, pokeShare: S.roads.n ? +(S.roads.pokeN / S.roads.n).toFixed(5) : null };

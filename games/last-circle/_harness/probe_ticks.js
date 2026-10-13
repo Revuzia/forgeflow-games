@@ -54,7 +54,7 @@ async (opt) => {
     return false;
   };
   const inc = (o, k, n) => { o[k] = (o[k] || 0) + (n || 1); };
-  const R = { intent: {}, blocked: {}, cause: {}, intentSL: {}, blockedSL: {}, blockedEdgeSL: {}, causeSL: {}, runHist: {}, runTicksGE30: {}, runTicksGE30SL: {}, runTicksGE90: {},
+  const R = { intent: {}, blocked: {}, cause: {}, intentSL: {}, blockedSL: {}, blockedRunSL: {}, blockedEdgeSL: {}, causeSL: {}, runHist: {}, runTicksGE30: {}, runTicksGE30SL: {}, runTicksGE90: {},
     jumpsSL: {}, heal: { ticks: 0, withThreat: 0, away: 0, toward: 0, still: 0, side: 0, ticksIn: 0, withThreatIn: 0, awayIn: 0, towardIn: 0 } };
   const loc = new Map(), prev = new Map(), run = new Map();
   let tickN = 0;
@@ -62,6 +62,7 @@ async (opt) => {
     const r = run.get(id); if (!r) return;
     const L = r.n, k = r.loc;
     inc(R.runHist, k + ":" + (L < 6 ? "1-5" : L < 30 ? "6-29" : L < 90 ? "30-89" : "90+"));
+    if (L >= 6) inc(R.blockedRunSL, r.st + "@" + k, L);   // F3: blocked ticks that belong to a run of >= 6 ticks (0.1 s): a one-tick pause at a strafe reversal is not a wall
     if (L >= 30) { inc(R.runTicksGE30, k, L); inc(R.runTicksGE30SL, r.st + "@" + k, L); }
     if (L >= 90) inc(R.runTicksGE90, k, L);
     run.delete(id);

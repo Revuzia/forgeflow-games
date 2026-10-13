@@ -23,8 +23,8 @@ Rows (thresholds from the plan, section 4; baselines re-measured on 7f6a9fb2 in 
   upper-rooms         upper floors (>= 40 rooms across the 3 maps): walk in >= 85 % and out >= 85 %  (Wave 4: 6/19 in, 9/19 out)
   top-floor-paths     the planner finds a path from open ground to the 4th storey of a tower >= 95 % (NAV_L 3 runs out of layers)
   long-trips          street -> street trips of 120-180 m >= 95 %                                    (Wave 4: 30/30)
-  engage-indoor       ENGAGE ticks indoors: blocked <= 3 %                                           (raw strafe into walls fails it)
-  heal-indoor         HEAL ticks indoors: blocked <= 3 %
+  engage-indoor       ENGAGE ticks indoors: blocked (runs >= 6 ticks) <= 1.5 %                                           (raw strafe into walls fails it)
+  heal-indoor         HEAL ticks indoors: blocked (runs >= 6 ticks) <= 1.5 %
   visible-grind       blocked runs >= 0.5 s <= 1.5 % of indoor movement ticks                         (Wave 4: 5.26 %)
   outdoor-blocked     outdoor blocked share has not regressed vs the Wave-4 baseline (0.72 % on 6 matches; limit 1.5 x)
   heal-direction      heal ticks moving TOWARD a known threat <= 5 %                                  (Wave 4: 34 %; the dead a.yaw write)
@@ -70,7 +70,7 @@ TOP_PATH_MIN = 0.95
 TOP_PATH_N_MIN = 10
 LONG_MIN = 0.95
 LONG_N_MIN = 8
-BLOCKED_MAX = 0.03
+BLOCKED_MAX = 0.015   # was 0.03 on the per-tick count; the count is now blocked ticks inside runs of >= 6 ticks (blockedRunSL), so the bar is halved: final 0.53 %, raw-strafe 10.4 %, Wave 4 20.5 %
 GRIND_MAX = 0.015
 HEAL_TOWARD_MAX = 0.05
 # outdoor blocked share (blocked ticks / movement-intent ticks outdoors): the Wave-4 baseline is measured by this gate on 7f6a9fb2
@@ -311,14 +311,14 @@ def judge(v, per_map, args, plant_rows):
         grind_in = sum(t["runTicksGE30"].get(k, 0) for _, t in tk for k in IN)
         intent_out = sum(t["intent"].get("out", 0) for _, t in tk)
         blocked_out = sum(t["blocked"].get("out", 0) for _, t in tk)
-        ei, eb = sl("intentSL", "ENGAGE"), sl("blockedSL", "ENGAGE")
-        hi, hb = sl("intentSL", "HEAL"), sl("blockedSL", "HEAL")
+        ei, eb = sl("intentSL", "ENGAGE"), sl("blockedRunSL", "ENGAGE")
+        hi, hb = sl("intentSL", "HEAL"), sl("blockedRunSL", "HEAL")
         if ei >= MIN_ENGAGE_INTENT:
-            chk("engage-indoor", eb / ei <= BLOCKED_MAX, "ENGAGE ticks indoors: %d of %d blocked (%.2f%%)" % (eb, ei, 100.0 * eb / ei), "<= 3 %")
+            chk("engage-indoor", eb / ei <= BLOCKED_MAX, "ENGAGE ticks indoors: %d of %d blocked (%.2f%%)" % (eb, ei, 100.0 * eb / ei), "<= 1.5 %")
         else:
             cnj("engage-indoor", "only %d indoor ENGAGE movement ticks (need >= %d): add --tick-matches" % (ei, MIN_ENGAGE_INTENT))
         if hi >= MIN_HEAL_INTENT:
-            chk("heal-indoor", hb / hi <= BLOCKED_MAX, "HEAL ticks indoors: %d of %d blocked (%.2f%%)" % (hb, hi, 100.0 * hb / hi), "<= 3 %")
+            chk("heal-indoor", hb / hi <= BLOCKED_MAX, "HEAL ticks indoors: %d of %d blocked (%.2f%%)" % (hb, hi, 100.0 * hb / hi), "<= 1.5 %")
         else:
             cnj("heal-indoor", "only %d indoor HEAL movement ticks (need >= %d): add --tick-matches" % (hi, MIN_HEAL_INTENT))
         if intent_in >= MIN_INDOOR_INTENT:

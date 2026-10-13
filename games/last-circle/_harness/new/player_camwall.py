@@ -71,9 +71,10 @@ PROBE_JS = r"""() => {
       if (bad) { out.violations++; if (out.examples.length < 4) out.examples.push({ tag, bad, eye: [e.x, e.y, e.z].map((v) => +v.toFixed(2)), cam: [cp.x, cp.y, cp.z].map((v) => +v.toFixed(2)), box: [c.minX, c.maxX, c.minY, c.maxY, c.minZ, c.maxZ].map((v) => +v.toFixed(2)), f: +st.f.toFixed(3) }); break; }
     }
   }
+  const BUF = 1000;
   function teleport(x, y, z) {
     p.pos.set(x, y, z); p.obj.position.copy(p.pos); p._pp.copy(p.pos); p.vel.set(0, 0, 0);
-    p.hp = 100; p.shield = 100;
+    p.hp = BUF; p.shield = BUF;
   }
   function look(yaw, pitch) { p.input.yaw = yaw; p.input.pitch = pitch; p.yaw = yaw; p.pitch = pitch; }
   const covered = (x, y, z) => W.map.colliders.some((c) => ok(c) && x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ && c.minY > y + 2.0 && c.minY < y + 7);
@@ -100,7 +101,19 @@ PROBE_JS = r"""() => {
     }
     return false;
   }
-  window.__PL_CAM__ = { W, p, cam, walls, step, eyeOf, checkFrame, teleport, look, spots, covered, wedged };
+  // The test subject must stay alive for the whole tour (a dead human's camera is the spectate camera, hundreds of metres away: every
+  // camera row would then measure a different object). guard_player keeps hp / shield topped up, but a single bot hit above 200
+  // still kills, so the death is RECORDED here, every tour below stops at once on a dead subject, and the gate reports it (never a verdict).
+  // The buffer: 1000 hp + 1000 shield, topped up on every kernel frame (a grenade launcher splash from 84 m, a sniper headshot or a rocket
+  // is a single hit that the guard_player 100 + 100 does not survive: Wave-5 run 2 died at t 285 s to a bot glauncher).
+  window.__PL_BUF_GUARD__ = () => { if (p.alive) { if (p.hp < BUF) p.hp = BUF; if ((p.shield || 0) < BUF) p.shield = BUF; } };
+  if (W.kernel && Array.isArray(W.kernel._updaters) && !W.kernel._updaters.includes(window.__PL_BUF_GUARD__)) W.kernel._updaters.push(window.__PL_BUF_GUARD__);
+  window.__PL_DEATH__ = null;
+  W.events.on('actorDied', (victim, killerId, weaponId) => {
+    if (victim === p && !window.__PL_DEATH__) window.__PL_DEATH__ = { t: +W.t.toFixed(2), killerId, weaponId, lastHit: p.lastHit ? { w: p.lastHit.weaponId, head: !!p.lastHit.isHead, dist: p.lastHit.dist } : null, pos: [p.pos.x, p.pos.y, p.pos.z].map((v) => +v.toFixed(1)) };
+  });
+  const dead = () => !p.alive;
+  window.__PL_CAM__ = { W, p, cam, walls, step, eyeOf, checkFrame, teleport, look, spots, covered, wedged, dead };
   return { walls: walls.length, lootPoints: W.map.lootPoints.length };
 }"""
 
@@ -150,6 +163,7 @@ OPEN_JS = r"""() => {
     teleport(spot[0], spot[1], spot[2]); look(0.3, 0.1); step(70);
     const rec = [];
     let idle = true, maxDy = 0, prevDy = null, maxLenErr = 0;
+    const dmg0 = p.lastDamageT == null ? -1 : p.lastDamageT;
     for (let i = 0; i < 90; i++) {
       look(0.3 + i * (4 * Math.PI / 180), 0.1);
       W.camShake = 0;                       // bots shooting the (protected) player would shake the lens and blur the A/B
@@ -165,13 +179,15 @@ OPEN_JS = r"""() => {
       }
       const dy = cp.y - e.y; if (prevDy != null) maxDy = Math.max(maxDy, Math.abs(dy - prevDy)); prevDy = dy;
     }
-    return { rec, idle, maxDy, maxLenErr };
+    // a bot HIT inside the window flinches the head and kicks the camera: the lens is then off the free boom by centimetres (3.6 cm on ashgrid
+    // once F3's re-tune made bots notice the subject from farther). That is the hit reaction, not the wall pull-in: reported as `hurt`
+    return { rec, idle, maxDy, maxLenErr, hurt: (p.lastDamageT == null ? -1 : p.lastDamageT) !== dmg0 };
   };
   const a = run(false), b = run(true);
   W.noCamWall = false;
   let maxDiff = 0; for (let i = 0; i < a.rec.length; i++) for (let k = 0; k < 3; k++) maxDiff = Math.max(maxDiff, Math.abs(a.rec[i][k] - b.rec[i][k]));
   return { spot: spot.map((v) => +v.toFixed(1)), idle: a.idle, lensOnFreeBoomErr: a.maxLenErr, maxFrameToFrameDy: +a.maxDy.toFixed(4), frames: a.rec.length,
-           infoDiffToWallOffRun: maxDiff };
+           infoDiffToWallOffRun: maxDiff, hurt: a.hurt };
 }"""
 
 EASE_JS = r"""() => {
@@ -204,24 +220,33 @@ EASE_JS = r"""() => {
 }"""
 
 ROT_JS = r"""() => {
-  const { W, p, cam, step, teleport, look, spots } = window.__PL_CAM__;
-  const sp = spots(8).out; const out = { tested: 0, maxAngle: 0, minPosDiff: 1e9 };
+  const { W, p, cam, step, teleport, look, spots, dead } = window.__PL_CAM__;
+  const sp = spots(8).out; const out = { tested: 0, maxAngle: 0, minPosDiff: 1e9, subjectDied: false, skippedDead: 0, skippedHurt: 0 };
   const q = (a) => ({ x: a.x, y: a.y, z: a.z, w: a.w });
   for (const s of sp) {
+    if (dead()) { out.subjectDied = true; break; }
     teleport(s[0], s[1], s[2]); look(0, 0); step(8);
     for (const yaw of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
       W.noCamWall = false; look(yaw, 0.1); step(40); W.camShake = 0;
+      // a subject that died during this config is on the spectate camera (it follows a bot hundreds of metres away): not a measurement
+      if (dead()) { out.subjectDied = true; out.skippedDead++; break; }
       if (!(W._camWall.f < 0.9)) continue;
       W.camShake = 0; step(1);
       const qa = q(cam.quaternion), pa = cam.position.clone();
+      const dmg0 = p.lastDamageT == null ? -1 : p.lastDamageT, pos0 = p.pos.clone();
       // wall off: the lens EASES out (that is the point), so give it a second; the free camera does not move meanwhile
       W.noCamWall = true;
       for (let i = 0; i < 60; i++) { W.camShake = 0; step(1); }
       const qb = q(cam.quaternion), pb = cam.position.clone();
       W.noCamWall = false;
+      if (dead()) { out.subjectDied = true; out.skippedDead++; break; }
       const dot = Math.abs(qa.x * qb.x + qa.y * qb.y + qa.z * qb.z + qa.w * qb.w);
       const ang = 2 * Math.acos(Math.min(1, dot));
-      out.tested++; out.maxAngle = Math.max(out.maxAngle, ang); out.minPosDiff = Math.min(out.minPosDiff, pa.distanceTo(pb));
+      // A bot HIT inside the 60-frame window kicks the camera (the hit reaction): 0.006-0.009 rad on deepwood in every failing run, 0.0013 rad
+      // without. That is the flinch, not the wall pull-in rotating the camera, so such a config is skipped and counted (never judged).
+      if ((p.lastDamageT == null ? -1 : p.lastDamageT) !== dmg0) { out.skippedHurt++; continue; }
+      out.tested++; out.minPosDiff = Math.min(out.minPosDiff, pa.distanceTo(pb));
+      if (ang > out.maxAngle) { out.maxAngle = ang; out.worst = { spot: s.map((v) => +v.toFixed(1)), yaw: +yaw.toFixed(2), movedM: +p.pos.distanceTo(pos0).toFixed(3) }; }
     }
   }
   W.noCamWall = false;
@@ -293,9 +318,16 @@ def main():
                 v.info("%s CONTROL sweep (W.noCamWall = true)" % mid, {k: off[k] for k in ("configs", "frames", "violations", "examples")})
                 control_viol += off["violations"]
                 op = s.js(OPEN_JS)
+                for _attempt in range(3):          # the same turn again when a bot hit the subject inside it (never judged hurt)
+                    if not (op.get("spot") and op.get("hurt")):
+                        break
+                    v.info("%s open field: the subject was hit inside the window (attempt %d), repeating" % (mid, _attempt + 1), op)
+                    op = s.js(OPEN_JS)
                 v.info("%s open field" % mid, op)
                 if not op.get("spot"):
                     v.cnj("%s: open field idle" % mid, "no open flat spot with no collider within 30 m")
+                elif op.get("hurt"):
+                    v.cnj("%s: open field idle" % mid, "the subject was hit by a bot inside the turn on all 4 attempts (the hit reaction kicks the camera)")
                 else:
                     v.check("%s: open field: wall state idle on all %d turn frames, the lens sits exactly on the free boom, no vertical heave (< 0.05 m/frame)" % (mid, op["frames"]),
                             op["idle"] and op["lensOnFreeBoomErr"] <= 1e-6 and op["maxFrameToFrameDy"] < 0.05, op)
@@ -308,8 +340,11 @@ def main():
                     v.check("%s: ease out slowly (<10%% of the gap after 1 frame, <40%% after 6, 63%% in 20-45 frames = ~0.45 s, >=95%% after 160, monotone), snap in within one frame" % mid, good, ea)
                 ro = s.js(ROT_JS)
                 v.info("%s rotation" % mid, ro)
+                death = s.js("() => window.__PL_DEATH__")
+                if death:
+                    v.info("%s the test subject DIED during the tour (never a verdict: configs after the death are skipped, not judged)" % mid, death)
                 if not ro["tested"]:
-                    v.cnj("%s: orientation unchanged by the pull-in" % mid, "no blocked config to compare")
+                    v.cnj("%s: orientation unchanged by the pull-in" % mid, "no blocked config to compare" + ("; the subject died at t=%s" % death["t"] if death else ""))
                 else:
                     v.check("%s: never rotates: orientation equals the wall-off orientation (<= 0.002 rad) while the lens moves > 5 cm" % mid,
                             ro["maxAngle"] <= 0.002 and ro["minPosDiff"] > 0.05, ro)
@@ -317,6 +352,7 @@ def main():
                 v.info("%s queryColliders per frame" % mid, qy)
                 v.check("%s: the pull-in makes exactly 1 queryColliders call per frame (0 when off; counted by caller) and no frame exceeds 150 in total" % mid,
                         qy["ownPerFrameOn"] == [1, 1] and qy["ownPerFrameOffMax"] == 0 and qy["maxInOneFrame"] <= 150, qy)
+                s.js("() => { const k = window.__LC__.W.kernel, i = k._updaters.indexOf(window.__PL_BUF_GUARD__); if (i >= 0) k._updaters.splice(i, 1); }")
                 s.guard_player(False)
                 d = s.diagnostics()
                 diag_all.append(d)

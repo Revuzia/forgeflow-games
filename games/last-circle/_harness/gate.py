@@ -20,14 +20,18 @@ shared box), each as its own process with the same --base / --disk / --rev / --h
     orch_lowpost   orch_progkey   sim_pacing (10 whole matches: the long one)
   then the Wave-5 world-foundation gates (lane 5D, 2026-10-12; each must FAIL on the Wave-4 commit 7f6a9fb2):
     placementcheck (Node only, ~25 s, runs first)   collisioncheck (one Chrome per map)   navcheck (one Chrome per map)
+  and the Wave-5 fix-round gates promoted from the lanes' scratch probes (lane F1, 2026-10-13; each also FAILS on 7f6a9fb2):
+    worldcheck (Node only, runs second: baked table current, deterministic builds, GLB-failure / table-404 paths, RNG stream vs Wave 4)
+    worldlive (one Chrome per map: chests, every ramp, ranger towers, ramp sides, fine fall scan, crosshair)
   perfcheck, orch_lowpost_ab (INFORMATION ONLY: shown, never counted)
 
 --negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
 allow-pointer-lock, bootguard j/k --plant no-card and --plant hidden-card, bootcheck --plant lock-drop, feelcheck --plant
 kill-marker-short, layoutcheck --only phones --plant no-touch-ui, framecheck --plant forced-layout, loot_beams_rings
 (flush-clear, storm-ignore), sky_probe (fog-flat, no-rng-burn, no-handles), sky_lowtier (one-layer-broken); the Wave-5 gates:
-placementcheck (y-only-recentre, perimeter-drop, tree-float: the built map is mutated in memory), collisioncheck served from the
-Wave-4 commit (--rev 7f6a9fb2), navcheck (nav-l3, raw-strafe, heal-yaw: bots.js / ffg_royale3d.js served patched by a page route);
+placementcheck (y-only-recentre, perimeter-drop, tree-float, stack-float: the built map is mutated in memory; and the Wave-4 commit itself), collisioncheck served from the
+Wave-4 commit (--rev 7f6a9fb2), navcheck (nav-l3, raw-strafe, heal-yaw: bots.js / ffg_royale3d.js served patched by a page route), worldcheck
+(the Wave-4 commit, stale-table, rng-shift: scratch copies), worldlive (the Wave-4 commit; ramp-sides-open: player.js served patched);
 and feelcheck
 --plant blind-sampler, which must exit 2 (a blinded sampler is could-not-judge, never a verdict).
 
@@ -56,6 +60,8 @@ GATES = [
     # Wave 5 (lane 5D): the permanent gates that SEE the world-foundation defects. placementcheck is Node only (no browser, ~25 s), so
     # it runs first; collisioncheck / navcheck load one Chrome per map and run after leaktest.
     ("placementcheck", "placementcheck.py", [], 1800, False),
+    # Wave-5 fix round (lane F1): worldcheck is Node only too (same reason, runs second); worldlive loads one Chrome per map (PRACTICE: ~40 s)
+    ("worldcheck", "worldcheck.py", [], 1800, False),
     ("bootcheck", "bootcheck.py", [], 3600, False),
     ("bootguard", "bootguard.py", [], 5400, False),
     ("rigcheck", "rigcheck.py", ["--seeds", "7,11,23"], 5400, False),
@@ -69,6 +75,7 @@ GATES = [
     ("probe_match", "probe_match.py", ["--farwall"], 14400, False),
     ("leaktest", "leaktest.py", [], 7200, False),
     ("collisioncheck", "collisioncheck.py", [], 5400, False),
+    ("worldlive", "worldlive.py", [], 5400, False),
     ("navcheck", "navcheck.py", [], 5400, False),
     # ---- Wave-4 lane gates: _harness/new/<lane>_<name>.py, registered 2026-10-12. Same convention as every gate above (0 pass /
     # 1 fail / 2 could-not-judge, one VERDICT line, JSON in _reports/); all take the common flags, so --disk / --rev / --base /
@@ -138,6 +145,16 @@ NEGATIVE = [
     ("navcheck-plant-nav-l3", "navcheck.py", ["--plant", "nav-l3"], 3600),
     ("navcheck-plant-raw-strafe", "navcheck.py", ["--plant", "raw-strafe"], 3600),
     ("navcheck-plant-heal-yaw", "navcheck.py", ["--plant", "heal-yaw"], 3600),
+    # Wave-5 fix round (lane F1). placementcheck stack-float: ONE stacked upper container is lifted 0.30 m (the stack-support rule must not forgive
+    # it). worldcheck: the Wave-4 commit itself (a client whose GLBs fail builds other colliders), a stale table (edited in a scratch copy), one
+    # extra RNG draw (a scratch copy of maps.js). worldlive: the Wave-4 commit, and player.js served with ramps that never block.
+    ("placementcheck-plant-stack-float", "placementcheck.py", ["--plant", "stack-float"], 900),
+    ("placementcheck-wave4-commit", "placementcheck.py", ["--rev", WAVE4_REV], 900),
+    ("worldcheck-wave4-commit", "worldcheck.py", ["--rev", WAVE4_REV], 900),
+    ("worldcheck-plant-stale-table", "worldcheck.py", ["--plant", "stale-table"], 900),
+    ("worldcheck-plant-rng-shift", "worldcheck.py", ["--plant", "rng-shift"], 900),
+    ("worldlive-wave4-commit", "worldlive.py", ["--rev", WAVE4_REV], 3600),
+    ("worldlive-plant-ramp-sides-open", "worldlive.py", ["--plant", "ramp-sides-open"], 3600),
 ]
 
 
