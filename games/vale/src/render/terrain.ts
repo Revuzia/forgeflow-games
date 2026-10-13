@@ -1,24 +1,30 @@
 // VALE render — procedural terrain from the map JSON (CONTRACT §0: terrain, scatter and trim are
-// allowed to be procedural). Used when `map.art.scene` is missing or empty, and in dev.
+// procedural-allowed). Used while `map.art.scene` is missing or empty (the art lane's Blender scene
+// replaces it as soon as it loads). Everything is derived from MapDef, deterministically:
 //
-// What it builds, all from MapDef (walls, thickets, lanes, bases, structures, camps, pickups, shops):
-//   ground   one large quad; a CPU-baked splat (RGBA8, ≤ 0.5 m texels) of DISTANCES — lane centre,
-//            clearing edge, wall edge, thicket edge — shaded in the fragment shader: carved flagstone
-//            roads (lighter, quieter: L* 62–68), dark mossy Dialwood floor (L* 30–40), dusty
-//            clearings (L* 45–50) around camps / bases / structures, wall-foot occlusion and faint
-//            carved hour-lines (the Vale is one sundial). Roughness ≥ 0.5 everywhere walkable.
-//   cliffs   every wall polygon extruded 2.6–3.4 m with a carved bevel: lit tops (L* 55–62), dark
-//            faces (L* 18–25) cut with horizontal courses; an outer rim closes the world.
-//   brush    Needlegrass: instanced clumps of SOLID tapered blades (no alpha cards) on a carved curb.
-//   scatter  (quality: 0 none · 1 half · 2 full) fan-leaved Dialwood trees of bevelled plates on cliff
-//            tops, and stones on the jungle floor. Never inside lanes, clearings or brush.
-// Every material is patched with the world chunk (fog of war + edge haze). Deterministic layout.
+//   ground    one plane; a CPU-baked splat of DISTANCES (lane centre, clearing edge, wall edge, thicket
+//             edge) shaded in the fragment shader: honed irregular pavers on the roads (lighter, quieter:
+//             L* 62–68), a dark mossy Dialwood floor with leaf litter (L* 30–40), packed-dust clearings
+//             around camps / bases / structures (L* 45–50), wall-foot occlusion and quiet carved hour-lines.
+//             Roughness ≥ 0.5 everywhere walkable.
+//   cliffs    every wall polygon, outline resampled at ~0.9 m with a deterministic wobble, extruded
+//             1.6–3.4 m and chiselled (position-based displacement, flat facets): lit tops with moss
+//             (L* 55–62) and a bright worn rim, dark stratified faces (L* 18–25). An outer rim closes the
+//             world. `terrain.wallStyle: "gorge"` (Needlespan) turns large walls into a chasm instead:
+//             the ground opens, sheer walls drop into the gorge mist.
+//   brush     Needlegrass: instanced clumps of SOLID tapered blades (no alpha cards) on a carved curb.
+//   scatter   (quality 0 sparse · 1 half · 2 full) rounded Dialwood canopies on the cliff tops, boulders at
+//             the cliff feet and stones on the jungle floor; never in lanes, clearings or brush.
+//   marks     the Standing Shadow floor (keeps its colour under fog, hard engraved edge) and the
+//             Fallen Shaft's shallow water, when the map's terrain block describes them.
+// Instanced scatter is chunked (24 m cells) so off-screen chunks are culled from the main and shadow
+// passes. Every material is patched with the world chunk (fog of war + edge haze).
 
 import {
-  BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide,
-  ExtrudeGeometry, Group, IcosahedronGeometry, InstancedMesh, LinearFilter, Matrix4, Mesh,
-  MeshStandardMaterial, PlaneGeometry, Quaternion, RGBAFormat, Shape, ShapeUtils, UnsignedByteType, Vector2, Vector3,
-  type WebGLProgramParametersWithUniforms,
+  BackSide, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide,
+  ExtrudeGeometry, Group, IcosahedronGeometry, InstancedMesh, LinearFilter, type Material, Matrix4, Mesh,
+  MeshStandardMaterial, PlaneGeometry, Quaternion, RedFormat, RGBAFormat, Shape, ShapeGeometry, ShapeUtils, UnsignedByteType,
+  Vector2, Vector3, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { MapDefT } from '../contracts/catalog.ts';
@@ -30,8 +36,9 @@ type Poly = readonly V2[];
 
 const LANE_HALF = 3.6;
 const MARGIN = 60;
+const CHUNK = 24;
 
-// ── deterministic random ───────────────────────────────────────────────────────────────────────
+// ── deterministic random / noise ─────────────────────────────────────────────────────────────────
 function mulberry(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -41,6 +48,16 @@ function mulberry(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+function hash2(x: number, y: number): number {
+  const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+function vnoise(x: number, y: number): number {
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const a = hash2(ix, iy), b = hash2(ix + 1, iy), c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
+  return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
 }
 
 // ── geometry helpers ───────────────────────────────────────────────────────────────────────────
@@ -75,19 +92,90 @@ function boxDist(x: number, y: number, b: Box): number {
   const dx = Math.max(b.minX - x, 0, x - b.maxX), dy = Math.max(b.minY - y, 0, y - b.maxY);
   return Math.sqrt(dx * dx + dy * dy);
 }
-function polyArea(poly: Poly): number { return Math.abs(ShapeUtils.area(poly.map(([x, y]) => new Vector2(x, y)))); }
+function signedArea(poly: Poly): number {
+  let a = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) a += (poly[j][0] * poly[i][1] - poly[i][0] * poly[j][1]);
+  return a / 2;
+}
 
-// ── palette (tokens.json colors.terrain-ref + bible valueLstar), overridable by map.art.terrain ─────
-interface TerrainColors { lane: string; laneGrout: string; jungle: string; moss: string; clearing: string; inscription: string;
-  cliffTop: string; cliffFace: string; curb: string; grassRoot: string; grassTip: string; leaf: string; trunk: string; stone: string }
+/** resample the outline at ~step m with a deterministic outward/inward wobble (map-border edges stay straight) */
+function organicOutline(poly: Poly, step: number, amp: number, size: V2, seed: number): V2[] {
+  const out: V2[] = [];
+  const ccw = signedArea(poly) > 0;
+  const onBorder = (p: V2): boolean => Math.abs(p[0]) < 0.01 || Math.abs(p[1]) < 0.01 || Math.abs(p[0] - size[0]) < 0.01 || Math.abs(p[1] - size[1]) < 0.01;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-4) continue;
+    const border = onBorder(a) && onBorder(b) && (Math.abs(a[0] - b[0]) < 0.01 || Math.abs(a[1] - b[1]) < 0.01);
+    const n = border ? 1 : Math.max(1, Math.ceil(len / step));
+    const nx = (ccw ? dy : -dy) / len, ny = (ccw ? -dx : dx) / len; // outward
+    for (let k = 0; k < n; k++) {
+      const t = k / n;
+      const x = a[0] + dx * t, y = a[1] + dy * t;
+      let w = 0;
+      if (!border && k > 0) w = ((vnoise(x * 0.55 + seed, y * 0.55) - 0.5) * 2 * 0.7 + (vnoise(x * 1.7, y * 1.7 + seed) - 0.5) * 2 * 0.3) * amp;
+      out.push([x + nx * w, y + ny * w]);
+    }
+  }
+  return out;
+}
+
+/** naive polygon inset (for convex-ish shapes) */
+function insetPolygon(pts: Vector2[], d: number): Vector2[] {
+  const n = pts.length;
+  const out: Vector2[] = [];
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+    const e0 = p1.clone().sub(p0).normalize(), e1 = p2.clone().sub(p1).normalize();
+    const n0 = new Vector2(-e0.y, e0.x), n1 = new Vector2(-e1.y, e1.x);
+    const bis = n0.add(n1).normalize();
+    out.push(p1.clone().addScaledVector(bis, d));
+  }
+  return out;
+}
+
+/** shape in the extrusion plane: sim (x, y) → shape (x, −y) so rotateX(−π/2) lands it on (x, ·, y) */
+function shapeOf(poly: Poly, inset = 0): Shape {
+  let pts = poly.map(([x, y]) => new Vector2(x, -y));
+  if (ShapeUtils.isClockWise(pts)) pts = pts.reverse();
+  if (inset !== 0) pts = insetPolygon(pts, inset);
+  return new Shape(pts);
+}
+
+/** instanced scatter split into CHUNK-sized cells so each cell frustum-culls on its own */
+function chunked(geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Color }[], name: string, shadows = true): Group {
+  const g = new Group();
+  g.name = name;
+  const buckets = new Map<string, { m: Matrix4; c?: Color }[]>();
+  for (const it of items) {
+    const key = `${Math.floor(it.m.elements[12] / CHUNK)}:${Math.floor(it.m.elements[14] / CHUNK)}`;
+    let b = buckets.get(key);
+    if (!b) { b = []; buckets.set(key, b); }
+    b.push(it);
+  }
+  for (const list of buckets.values()) {
+    const im = new InstancedMesh(geo, mat, list.length);
+    list.forEach((it, i) => { im.setMatrixAt(i, it.m); if (it.c) im.setColorAt(i, it.c); });
+    im.castShadow = shadows; im.receiveShadow = true;
+    im.computeBoundingSphere();
+    g.add(im);
+  }
+  return g;
+}
+
+// ── palette (tokens.json colors.terrain-ref + bible valueLstar), overridable by map.art.terrain.colors ─
+interface TerrainColors { lane: string; laneGrout: string; jungle: string; moss: string; earth: string; clearing: string; inscription: string;
+  cliffTop: string; cliffFace: string; curb: string; grassRoot: string; grassTip: string; leaf: string; trunk: string; stone: string; chasm: string; mist: string }
 const DEFAULT_COLORS: TerrainColors = {
-  lane: '#9A927F', laneGrout: '#6A6456', jungle: '#4E5547', moss: '#435040', clearing: '#7A766A', inscription: '#B7B0A0',
-  cliffTop: '#8E8979', cliffFace: '#3B3934', curb: '#8A8476', grassRoot: '#2E3A2F', grassTip: '#8C9B80', leaf: '#46624A',
-  trunk: '#4A3F36', stone: '#6E6A60',
+  lane: '#9A927F', laneGrout: '#6F685A', jungle: '#4E5547', moss: '#475A43', earth: '#5C5446', clearing: '#7A766A', inscription: '#B7B0A0',
+  cliffTop: '#8E8979', cliffFace: '#45423C', curb: '#8A8476', grassRoot: '#2F3B30', grassTip: '#8A9A7C', leaf: '#3F5A45',
+  trunk: '#4A3F36', stone: '#77726A', chasm: '#2A2D33', mist: '#5E6C93',
 };
 function colorsFrom(terrain: Record<string, unknown> | undefined): TerrainColors {
   const c: TerrainColors = { ...DEFAULT_COLORS };
-  const src = (terrain?.colors && typeof terrain.colors === 'object' ? terrain.colors : terrain) as Record<string, unknown> | undefined;
+  const src = (terrain?.colors && typeof terrain.colors === 'object' ? terrain.colors : undefined) as Record<string, unknown> | undefined;
   if (src) for (const k of Object.keys(c) as (keyof TerrainColors)[]) {
     const v = src[k];
     if (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) c[k] = v;
@@ -95,9 +183,22 @@ function colorsFrom(terrain: Record<string, unknown> | undefined): TerrainColors
   return c;
 }
 
+/** polygons from a terrain block entry like { floor: [[[x,y],…]] } (defensive: content is data) */
+function polysOf(v: unknown): Poly[] {
+  const out: Poly[] = [];
+  const isPt = (p: unknown): p is [number, number] => Array.isArray(p) && p.length >= 2 && typeof p[0] === 'number' && typeof p[1] === 'number';
+  const walk = (x: unknown): void => {
+    if (!Array.isArray(x)) return;
+    if (x.length >= 3 && x.every(isPt)) { out.push(x.map((p) => [p[0], p[1]] as V2)); return; }
+    for (const y of x) walk(y);
+  };
+  walk(v);
+  return out;
+}
+
 export interface TerrainBuild {
   group: Group;
-  /** cliff tops / props: heights of every wall polygon, for picking and VFX */
+  /** heights of every wall polygon (0 for chasm walls) */
   wallHeights: number[];
   setScatter(level: 0 | 1 | 2): void;
   update(time: number): void;
@@ -110,13 +211,18 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const group = new Group();
   group.name = 'vale_terrain';
   const [SX, SY] = map.size;
-  const colors = colorsFrom(map.art.terrain as Record<string, unknown>);
+  const tr = (map.art.terrain ?? {}) as Record<string, unknown>;
+  const colors = colorsFrom(tr);
+  const gorge = tr.wallStyle === 'gorge';
   const rand = mulberry(0x5eed ^ Math.round(SX * 131 + SY * 17));
   const walls: Poly[] = map.walls.map((w) => w.map((p) => [p[0], p[1]] as V2));
   const thickets: Poly[] = (map.thickets ?? []).map((w) => w.map((p) => [p[0], p[1]] as V2));
   const wallBoxes = walls.map(bbox);
+  const chasm = walls.map((w) => gorge && Math.abs(signedArea(w)) > 60);
   const thicketBoxes = thickets.map(bbox);
   const lanes = map.lanes.map((l) => l.path.map((p) => [p[0], p[1]] as V2));
+  const disposables: { dispose(): void }[] = [];
+  const lin = (hex: string): Color => new Color().setStyle(hex);
 
   // clearings: bases, shops, structures, camps, pickups, spawns
   const clearings: Clearing[] = [];
@@ -142,6 +248,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const texel = Math.max(0.5, Math.max(SX, SY) / 384);
   const W = Math.ceil(SX / texel) + 1, H = Math.ceil(SY / texel) + 1;
   const splat = new Uint8Array(W * H * 4);
+  const chasmMask = gorge ? new Uint8Array(W * H) : null;
   for (let j = 0; j < H; j++) {
     const y = j * texel;
     for (let i = 0; i < W; i++) {
@@ -153,7 +260,9 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       let wd = 8;
       for (let k = 0; k < walls.length; k++) {
         if (boxDist(x, y, wallBoxes[k]) >= wd) continue;
-        if (pointInPolygon(x, y, walls[k])) { wd = 0; break; }
+        const inside = pointInPolygon(x, y, walls[k]);
+        if (inside && chasmMask && chasm[k]) chasmMask[j * W + i] = 255;
+        if (inside) { wd = 0; break; }
         wd = Math.min(wd, polyEdgeDist(x, y, walls[k]));
       }
       let td = 4;
@@ -172,23 +281,33 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const splatTex = new DataTexture(splat, W, H, RGBAFormat, UnsignedByteType);
   splatTex.magFilter = LinearFilter; splatTex.minFilter = LinearFilter; splatTex.generateMipmaps = false;
   splatTex.needsUpdate = true;
+  disposables.push(splatTex);
+  const maskTex = new DataTexture(chasmMask ?? new Uint8Array(4), chasmMask ? W : 2, chasmMask ? H : 2, RedFormat, UnsignedByteType);
+  maskTex.magFilter = LinearFilter; maskTex.minFilter = LinearFilter; maskTex.generateMipmaps = false; maskTex.unpackAlignment = 1;
+  maskTex.needsUpdate = true;
+  disposables.push(maskTex);
 
-  const disposables: { dispose(): void }[] = [splatTex];
-  const lin = (hex: string): Color => new Color().setStyle(hex);
+  // hour-line centre (the dial): terrain.hourLines.centre, else the map centre
+  const hl = tr.hourLines as { centre?: unknown; ring?: unknown } | undefined;
+  const centre = Array.isArray(hl?.centre) && typeof hl!.centre[0] === 'number' ? new Vector2(hl!.centre[0] as number, hl!.centre[1] as number) : new Vector2(SX / 2, SY / 2);
+  const ring = typeof hl?.ring === 'number' ? hl.ring : 0;
+  const seat = tr.seat as { at?: unknown; radius?: unknown } | undefined;
+  const seatV = Array.isArray(seat?.at) ? new Vector3(seat!.at[0] as number, seat!.at[1] as number, typeof seat?.radius === 'number' ? seat.radius : 0) : new Vector3(0, 0, 0);
 
   // ── ground ───────────────────────────────────────────────────────────────────────────────────
-  const groundGeo = new PlaneGeometry(SX + MARGIN * 2, SY + MARGIN * 2, 1, 1);
+  const gz0 = gorge ? 0 : -MARGIN, gz1 = gorge ? SY : SY + MARGIN;
+  const groundGeo = new PlaneGeometry(SX + MARGIN * 2, gz1 - gz0, 1, 1);
   groundGeo.rotateX(-Math.PI / 2);
-  groundGeo.translate(SX / 2, 0, SY / 2);
+  groundGeo.translate(SX / 2, 0, (gz0 + gz1) / 2);
   const groundMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
   const gu = {
-    uSplat: { value: splatTex },
+    uSplat: { value: splatTex }, uChasm: { value: maskTex }, uGorge: { value: gorge ? 1 : 0 },
     uSplatScale: { value: new Vector2(1 / (W * texel), 1 / (H * texel)) },
     uLaneHalf: { value: LANE_HALF },
     uLane: { value: lin(colors.lane) }, uGrout: { value: lin(colors.laneGrout) }, uJungle: { value: lin(colors.jungle) },
-    uMoss: { value: lin(colors.moss) }, uClearing: { value: lin(colors.clearing) }, uInscription: { value: lin(colors.inscription) },
-    uThicketFloor: { value: lin(colors.grassRoot) },
-    uCenter: { value: new Vector2(SX / 2, SY / 2) },
+    uMoss: { value: lin(colors.moss) }, uEarth: { value: lin(colors.earth) }, uClearing: { value: lin(colors.clearing) },
+    uInscription: { value: lin(colors.inscription) }, uThicketFloor: { value: lin(colors.grassRoot) },
+    uCenter: { value: centre }, uRing: { value: ring }, uSeat: { value: seatV },
   };
   groundMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     Object.assign(shader.uniforms, gu);
@@ -198,65 +317,63 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
 varying vec3 vGroundW;
-uniform sampler2D uSplat; uniform vec2 uSplatScale; uniform float uLaneHalf;
-uniform vec3 uLane, uGrout, uJungle, uMoss, uClearing, uInscription, uThicketFloor; uniform vec2 uCenter;
+uniform sampler2D uSplat; uniform sampler2D uChasm; uniform float uGorge; uniform vec2 uSplatScale; uniform float uLaneHalf;
+uniform vec3 uLane, uGrout, uJungle, uMoss, uEarth, uClearing, uInscription, uThicketFloor; uniform vec2 uCenter; uniform float uRing; uniform vec3 uSeat;
 float gHeight; float gRough;
-${NOISE_GLSL}
-// running-bond flagstones in world space: returns (stone value jitter, grout mask, cell hash)
-vec3 valeFlags( vec2 p ) {
-  vec2 sz = vec2( 1.7, 1.15 );
-  float row = floor( p.y / sz.y );
-  vec2 q = vec2( p.x / sz.x + 0.5 * mod( row, 2.0 ) + 0.13 * valeHash12( vec2( row, 7.0 ) ), p.y / sz.y );
-  vec2 id = floor( q ); vec2 f = fract( q );
-  vec2 e = min( f, 1.0 - f ) * sz;
-  float edge = min( e.x, e.y );
-  float grout = 1.0 - smoothstep( 0.025, 0.06, edge );
-  float h = valeHash12( id + row * 3.1 );
-  return vec3( h, grout, edge );
-}`)
+${NOISE_GLSL}`)
       .replace('#include <map_fragment>', `
 {
   vec2 p = vGroundW.xz;
+  if ( uGorge > 0.5 && texture( uChasm, p * uSplatScale ).r > 0.5 ) discard;
   vec4 s = texture( uSplat, p * uSplatScale );
   float laneD = s.r * 16.0, clearD = s.g * 24.0 - 8.0, wallD = s.b * 8.0, thickD = s.a * 8.0 - 4.0;
-  float n1 = valeFbm( p * 0.21 ), n2 = valeNoise( p * 1.9 ), n3 = valeNoise( p * 7.3 ), n4 = valeFbm( p * 0.06 + 3.7 );
-  float wob = ( n1 - 0.5 ) * 1.1 + ( n2 - 0.5 ) * 0.35;
-  float lane = 1.0 - smoothstep( uLaneHalf - 0.08, uLaneHalf + 0.08, laneD + wob * 0.55 );
-  float clearing = 1.0 - smoothstep( -0.6, 0.9, clearD + wob * 1.4 );
-  // Dialwood floor: dark, mossy, quiet
-  vec3 jungle = uJungle * ( 0.78 + 0.34 * n1 + 0.10 * ( n3 - 0.5 ) );
-  jungle = mix( jungle, uMoss * ( 0.85 + 0.2 * n2 ), smoothstep( 0.52, 0.7, n4 ) * 0.7 );
-  // clearings: packed dust with scattered grit
-  vec3 clearC = uClearing * ( 0.9 + 0.16 * ( n1 - 0.5 ) + 0.08 * ( n3 - 0.5 ) );
-  // carved road: flagstones, worn toward the centre line
-  vec3 fl = valeFlags( p );
+  float nBig = valeFbm( p * 0.07 + 3.7 ), nMid = valeFbm( p * 0.29 ), n2 = valeNoise( p * 1.9 ), n3 = valeNoise( p * 7.3 );
+  float wob = ( nMid - 0.5 ) * 1.2 + ( n2 - 0.5 ) * 0.35;
+  float lane = 1.0 - smoothstep( uLaneHalf - 0.12, uLaneHalf + 0.12, laneD + wob * 0.6 );
+  float laneDust = 1.0 - smoothstep( uLaneHalf, uLaneHalf + 1.3, laneD + wob * 0.9 );
+  float clearing = 1.0 - smoothstep( -0.8, 1.0, clearD + wob * 1.6 );
+  // Dialwood floor: dark, mossy, quiet, with leaf litter
+  vec3 jungle = uJungle * ( 0.8 + 0.3 * nMid + 0.08 * ( n3 - 0.5 ) );
+  jungle = mix( jungle, uMoss * ( 0.9 + 0.25 * n2 ), smoothstep( 0.5, 0.68, nBig ) * 0.75 );
+  jungle = mix( jungle, uEarth * ( 0.85 + 0.2 * n2 ), smoothstep( 0.55, 0.72, valeFbm( p * 0.18 + 11.0 ) ) * 0.5 );
+  float litter = step( 0.9, valeHash12( floor( p * 5.0 ) ) ) * smoothstep( 0.3, 0.7, valeNoise( p * 5.0 + 2.0 ) );
+  jungle *= 1.0 - litter * 0.22;
+  // clearings: packed dust with grit
+  vec3 clearC = uClearing * ( 0.9 + 0.14 * ( nMid - 0.5 ) + 0.1 * ( n3 - 0.5 ) );
+  // roads: honed irregular pavers, joints quiet, worn toward the centre line
+  vec4 pv = valePavers( p, 1.15 );
+  float joint = 1.0 - smoothstep( 0.02, 0.06, pv.y );
   float wear = 1.0 - smoothstep( 0.0, uLaneHalf, laneD );
-  vec3 laneC = uLane * ( 0.92 + 0.11 * ( fl.x - 0.5 ) + 0.06 * ( n3 - 0.5 ) + 0.05 * wear );
-  laneC = mix( laneC, uGrout, fl.y * 0.85 );
-  // carved road edge: a slim darker kerb line just inside the edge
-  float kerb = smoothstep( uLaneHalf - 0.55, uLaneHalf - 0.35, laneD + wob * 0.55 ) * ( 1.0 - smoothstep( uLaneHalf - 0.2, uLaneHalf, laneD + wob * 0.55 ) );
-  laneC = mix( laneC, uGrout * 0.9, kerb * 0.6 );
+  vec3 laneC = uLane * ( 0.9 + 0.12 * ( pv.x - 0.5 ) + 0.05 * ( n3 - 0.5 ) + 0.06 * wear + 0.06 * ( nMid - 0.5 ) );
+  laneC = mix( laneC, uGrout, joint * 0.65 );
+  // dusty margin between road and floor
+  vec3 dust = mix( uClearing, uEarth, 0.35 ) * ( 0.88 + 0.16 * n2 );
   vec3 col = mix( jungle, clearC, clearing );
+  col = mix( col, dust, laneDust * ( 1.0 - lane ) * 0.85 );
   col = mix( col, laneC, lane );
-  // carved hour-lines radiating from the dial's centre (quiet inscription)
+  // carved hour-lines radiating from the dial's centre, and the hour-ring (quiet inscription)
   vec2 rc = p - uCenter; float rr = length( rc );
   float ang = atan( rc.x, -rc.y );
   float seg = 6.2831853 / 12.0;
   float al = abs( mod( ang + seg * 0.5, seg ) - seg * 0.5 ) * rr;
-  float hour = ( 1.0 - smoothstep( 0.06, 0.11, al ) ) * smoothstep( 7.0, 12.0, rr );
-  col = mix( col, uInscription * ( 0.9 + 0.1 * n2 ), hour * mix( 0.22, 0.45, lane ) );
-  // wall-foot occlusion and brush floor
-  col *= mix( 0.58, 1.0, smoothstep( 0.0, 1.8, wallD ) );
+  float hour = ( 1.0 - smoothstep( 0.05, 0.09, al ) ) * smoothstep( 8.0, 14.0, rr );
+  if ( uRing > 0.0 ) hour = max( hour, 1.0 - smoothstep( 0.06, 0.1, abs( rr - uRing ) ) );
+  if ( uSeat.z > 0.0 ) { float sr = length( p - uSeat.xy ); hour = max( hour, ( 1.0 - smoothstep( 0.08, 0.13, abs( sr - uSeat.z ) ) ) * 1.3 ); }
+  col = mix( col, col * 0.78, hour * mix( 0.5, 0.8, lane ) );
+  col = mix( col, uInscription * ( 0.9 + 0.1 * n2 ), hour * 0.12 * lane );
+  // wall-foot occlusion and the brush floor
+  col *= mix( 0.55, 1.0, smoothstep( 0.0, 2.2, wallD + ( n2 - 0.5 ) * 0.6 ) );
   float brush = 1.0 - smoothstep( -0.3, 0.25, thickD );
   col = mix( col, uThicketFloor * ( 0.85 + 0.3 * n2 ), brush * 0.85 );
   diffuseColor.rgb *= col;
-  gHeight = mix( ( n2 - 0.5 ) * 0.03 + ( n3 - 0.5 ) * 0.015, -fl.y * 0.03 + ( n3 - 0.5 ) * 0.006, lane ) - hour * 0.012;
-  gRough = mix( mix( 0.94, 0.88, clearing ), 0.74 + 0.08 * fl.x, lane );
+  float paverH = smoothstep( 0.0, 0.07, pv.y ) * 0.03 + ( pv.x - 0.5 ) * 0.006;
+  gHeight = mix( ( nMid - 0.5 ) * 0.05 + ( n3 - 0.5 ) * 0.02 - litter * 0.01, paverH + ( n3 - 0.5 ) * 0.004, lane ) - hour * 0.015;
+  gRough = mix( mix( 0.95, 0.9, clearing ), 0.7 + 0.1 * pv.x, lane );
 }`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRough;')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, gHeight, 1.0 );');
   };
-  groundMat.customProgramCacheKey = () => 'vale_ground_v2';
+  groundMat.customProgramCacheKey = () => 'vale_ground_v3';
   patchWorldMaterial(groundMat);
   const ground = new Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
@@ -264,89 +381,156 @@ vec3 valeFlags( vec2 p ) {
   group.add(ground);
   disposables.push(groundGeo, groundMat);
 
-  // ── cliffs ───────────────────────────────────────────────────────────────────────────────────
+  // ── cliffs (raised walls) ──────────────────────────────────────────────────────────────────────
   const wallHeights: number[] = [];
   const cliffGeos: BufferGeometry[] = [];
-  const shapeOf = (poly: Poly, inset = 0): Shape => {
-    let pts = poly.map(([x, y]) => new Vector2(x, -y));
-    if (ShapeUtils.isClockWise(pts)) pts = pts.reverse();
-    if (inset !== 0) pts = insetPolygon(pts, inset);
-    return new Shape(pts);
+  const addCliff = (poly: Poly, h: number, seed: number, amp: number): void => {
+    const outline = organicOutline(poly, 0.9, amp, [SX, SY], seed);
+    if (outline.length < 3) return;
+    const geo = new ExtrudeGeometry(shapeOf(outline), { depth: h, steps: 3, bevelEnabled: false, curveSegments: 1 });
+    geo.rotateX(-Math.PI / 2);
+    geo.deleteAttribute('uv');
+    const g = geo.index ? geo.toNonIndexed() : geo;
+    // chisel: position-based displacement (identical for coincident vertices → no cracks), flat facets
+    const pos = g.getAttribute('position') as BufferAttribute;
+    const hs = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const onB = Math.abs(x) < 0.02 || Math.abs(z) < 0.02 || Math.abs(x - SX) < 0.02 || Math.abs(z - SY) < 0.02;
+      const k = onB ? 0 : amp * 0.9;
+      const dx = (vnoise(x * 0.9 + y * 1.3, z * 0.9) - 0.5) * k + (vnoise(x * 2.3, z * 2.3 + y * 2.0) - 0.5) * k * 0.4;
+      const dz = (vnoise(z * 0.9 - y * 1.1 + 17.0, x * 0.9) - 0.5) * k + (vnoise(z * 2.3 + 5.0, x * 2.3 - y * 1.7) - 0.5) * k * 0.4;
+      const dy = y > h - 0.01 ? (vnoise(x * 0.7, z * 0.7) - 0.5) * 0.18 : 0;
+      pos.setXYZ(i, x + dx, y + dy, z + dz);
+      hs[i] = h;
+    }
+    g.setAttribute('aH', new BufferAttribute(hs, 1));
+    g.computeVertexNormals();
+    cliffGeos.push(g);
+    if (g !== geo) geo.dispose();
   };
   walls.forEach((poly, i) => {
-    const area = polyArea(poly);
-    const b = wallBoxes[i];
-    const minSide = Math.min(b.maxX - b.minX, b.maxY - b.minY);
-    const h = 2.6 + 0.8 * ((Math.sin(i * 12.9898 + area) * 43758.5453) % 1 + 1) % 1;
+    if (chasm[i]) { wallHeights.push(0); return; }
+    const area = Math.abs(signedArea(poly));
+    const small = area < 25;
+    const h = small ? 1.6 + 0.6 * hash2(i, area) : 2.6 + 0.8 * hash2(i * 3.1, area);
     wallHeights.push(h);
-    const bevel = Math.min(0.35, minSide * 0.18);
-    const geo = new ExtrudeGeometry(shapeOf(poly), {
-      depth: Math.max(0.2, h - bevel), steps: 1, bevelEnabled: bevel > 0.05, bevelThickness: bevel, bevelSize: bevel,
-      bevelOffset: -bevel, bevelSegments: 2, curveSegments: 1,
-    });
-    geo.rotateX(-Math.PI / 2);
-    geo.translate(0, bevel > 0.05 ? 0 : 0, 0);
-    // ExtrudeGeometry has uv; drop it to merge cleanly
-    geo.deleteAttribute('uv');
-    cliffGeos.push(geo.toNonIndexed());
-    geo.dispose();
+    addCliff(poly, h, i * 7.3, small ? 0.12 : 0.32);
   });
-  // outer rim: a carved wall all around the playable plate
+  // outer rim: a carved wall all around the playable plate (gorge maps: only the terrace ends)
   const RIM = 14, RH = 3.4;
-  const rimPolys: Poly[] = [
+  const rimPolys: Poly[] = gorge ? [
+    [[-RIM, 0], [0, 0], [0, SY], [-RIM, SY]],
+    [[SX, 0], [SX + RIM, 0], [SX + RIM, SY], [SX, SY]],
+  ] : [
     [[-RIM, -RIM], [SX + RIM, -RIM], [SX + RIM, 0], [-RIM, 0]],
     [[-RIM, SY], [SX + RIM, SY], [SX + RIM, SY + RIM], [-RIM, SY + RIM]],
     [[-RIM, 0], [0, 0], [0, SY], [-RIM, SY]],
     [[SX, 0], [SX + RIM, 0], [SX + RIM, SY], [SX, SY]],
   ];
-  for (const poly of rimPolys) {
-    const geo = new ExtrudeGeometry(shapeOf(poly), { depth: RH - 0.4, bevelEnabled: true, bevelThickness: 0.4, bevelSize: 0.4, bevelOffset: -0.4, bevelSegments: 2 });
-    geo.rotateX(-Math.PI / 2);
-    geo.deleteAttribute('uv');
-    cliffGeos.push(geo.toNonIndexed());
-    geo.dispose();
-  }
-  const cliffGeo = mergeGeometries(cliffGeos, false);
+  rimPolys.forEach((poly, i) => addCliff(poly, RH, 100 + i, 0));
+  const cliffGeo = cliffGeos.length ? mergeGeometries(cliffGeos, false) : new BufferGeometry();
   for (const g of cliffGeos) g.dispose();
-  const cliffMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, metalness: 0 });
+  const cliffMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.84, metalness: 0 });
   const cu = { uTop: { value: lin(colors.cliffTop) }, uFace: { value: lin(colors.cliffFace) }, uMossC: { value: lin(colors.moss) } };
   cliffMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     Object.assign(shader.uniforms, cu);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vCliffW; varying vec3 vCliffN;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvCliffW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz; vCliffN = normalize( mat3( modelMatrix ) * objectNormal );');
+      .replace('#include <common>', '#include <common>\nattribute float aH; varying vec3 vCliffW; varying vec3 vCliffN; varying float vH;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvCliffW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz; vCliffN = normalize( mat3( modelMatrix ) * objectNormal ); vH = aH;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-varying vec3 vCliffW; varying vec3 vCliffN; uniform vec3 uTop, uFace, uMossC; float cH;
+varying vec3 vCliffW; varying vec3 vCliffN; varying float vH; uniform vec3 uTop, uFace, uMossC; float cH;
 ${NOISE_GLSL}`)
       .replace('#include <map_fragment>', `
 {
   vec3 n = normalize( vCliffN );
-  float top = smoothstep( 0.55, 0.92, n.y );
-  vec2 hp = vCliffW.xz + vec2( vCliffW.y * 0.37 );
+  float top = smoothstep( 0.6, 0.9, n.y );
+  vec2 hp = vCliffW.xz;
   float along = dot( vCliffW.xz, normalize( vec2( n.z, -n.x ) + 1e-4 ) );
-  float n1 = valeFbm( vCliffW.xz * 0.35 ), n2 = valeNoise( vec2( along * 0.9, vCliffW.y * 3.0 ) ), n3 = valeNoise( hp * 6.0 );
-  // carved courses: horizontal grooves every ~0.55 m with jittered block joints
-  float course = fract( vCliffW.y / 0.55 + 0.15 );
-  float groove = 1.0 - smoothstep( 0.0, 0.07, min( course, 1.0 - course ) );
-  float block = fract( along / 1.3 + floor( vCliffW.y / 0.55 ) * 0.5 );
-  float joint = 1.0 - smoothstep( 0.0, 0.03, min( block, 1.0 - block ) );
-  vec3 face = uFace * ( 0.85 + 0.3 * n2 + 0.08 * ( n3 - 0.5 ) );
-  face *= mix( 0.62, 1.0, smoothstep( 0.0, 1.6, vCliffW.y ) );
-  face = mix( face, face * 0.55, max( groove, joint * 0.7 ) );
-  vec3 topC = uTop * ( 0.86 + 0.22 * n1 + 0.08 * ( n3 - 0.5 ) );
-  topC = mix( topC, uMossC * 1.15, smoothstep( 0.6, 0.78, valeFbm( vCliffW.xz * 0.18 + 9.0 ) ) * 0.45 );
+  float n1 = valeFbm( hp * 0.35 ), n3 = valeNoise( hp * 6.0 + vCliffW.y );
+  // strata: wavy horizontal beds, darker seams, a few vertical fractures
+  float bed = vCliffW.y * 2.4 + ( valeNoise( vec2( along * 0.25, 1.7 ) ) - 0.5 ) * 1.6;
+  float seam = 1.0 - smoothstep( 0.0, 0.12, abs( fract( bed ) - 0.5 ) - 0.38 );
+  float frac = 1.0 - smoothstep( 0.0, 0.05, abs( valeNoise( vec2( along * 0.8, vCliffW.y * 0.3 ) ) - 0.5 ) );
+  vec3 face = uFace * ( 0.82 + 0.3 * valeNoise( vec2( along * 0.6, vCliffW.y * 1.5 ) ) + 0.08 * ( n3 - 0.5 ) );
+  face *= mix( 0.55, 1.0, smoothstep( 0.0, 1.8, vCliffW.y ) );
+  face = mix( face, face * 0.6, max( seam * 0.7, frac * 0.5 ) );
+  // lit, worn rim just under the top edge
+  float rim = smoothstep( vH - 0.45, vH - 0.05, vCliffW.y ) * ( 1.0 - top );
+  face = mix( face, uTop * 0.82, rim * 0.6 );
+  vec3 topC = uTop * ( 0.84 + 0.22 * n1 + 0.08 * ( n3 - 0.5 ) );
+  topC = mix( topC, uMossC * 1.1, smoothstep( 0.52, 0.7, valeFbm( vCliffW.xz * 0.16 + 9.0 ) ) * 0.6 );
   diffuseColor.rgb *= mix( face, topC, top );
-  cH = ( 1.0 - top ) * ( -max( groove, joint * 0.7 ) * 0.035 + ( n2 - 0.5 ) * 0.02 ) + top * ( n3 - 0.5 ) * 0.01;
+  cH = ( 1.0 - top ) * ( -seam * 0.03 - frac * 0.02 + ( n3 - 0.5 ) * 0.02 ) + top * ( n3 - 0.5 ) * 0.012;
 }`)
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, cH, 1.0 );');
   };
-  cliffMat.customProgramCacheKey = () => 'vale_cliff_v2';
+  cliffMat.customProgramCacheKey = () => 'vale_cliff_v3';
   patchWorldMaterial(cliffMat);
   const cliffs = new Mesh(cliffGeo, cliffMat);
   cliffs.castShadow = true; cliffs.receiveShadow = true; cliffs.name = 'vale_cliffs';
   group.add(cliffs);
   disposables.push(cliffGeo, cliffMat);
+
+  // ── chasms (gorge style): the ground opens; sheer walls drop into the mist ─────────────────────
+  if (gorge) {
+    const DEPTH = 22;
+    const chasmPolys: Poly[] = walls.filter((_, i) => chasm[i]);
+    const nWalls = chasmPolys.length;
+    chasmPolys.push([[-MARGIN, -MARGIN], [SX + MARGIN, -MARGIN], [SX + MARGIN, 0], [-MARGIN, 0]]);
+    chasmPolys.push([[-MARGIN, SY], [SX + MARGIN, SY], [SX + MARGIN, SY + MARGIN], [-MARGIN, SY + MARGIN]]);
+    const geos: BufferGeometry[] = [];
+    chasmPolys.forEach((poly, i) => {
+      const outline = i < nWalls ? organicOutline(poly, 1.0, 0.25, [SX, SY], 40 + i) : poly.slice();
+      const geo = new ExtrudeGeometry(shapeOf(outline), { depth: DEPTH, steps: 4, bevelEnabled: false, curveSegments: 1 });
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(0, -DEPTH, 0);
+      geo.deleteAttribute('uv');
+      const g = geo.index ? geo.toNonIndexed() : geo;
+      const pos = g.getAttribute('position') as BufferAttribute;
+      for (let k = 0; k < pos.count; k++) {
+        const x = pos.getX(k), y = pos.getY(k), z = pos.getZ(k);
+        if (y > -0.05) continue;
+        const a = Math.min(1, -y / 3) * 0.6;
+        pos.setXYZ(k, x + (vnoise(x * 0.6 + y, z * 0.6) - 0.5) * a, y, z + (vnoise(z * 0.6 - y, x * 0.6 + 3.0) - 0.5) * a);
+      }
+      g.computeVertexNormals();
+      geos.push(g);
+      if (g !== geo) geo.dispose();
+    });
+    const chasmGeo = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    const chasmMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: BackSide });
+    const ch = { uFaceC: { value: lin(colors.cliffFace) }, uMist: { value: lin(colors.mist) } };
+    chasmMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+      Object.assign(shader.uniforms, ch);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vChW;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvChW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\nvarying vec3 vChW; uniform vec3 uFaceC, uMist;\n${NOISE_GLSL}`)
+        .replace('#include <map_fragment>', `
+{
+  float bed = 1.0 - smoothstep( 0.0, 0.1, abs( fract( vChW.y * 1.6 + valeNoise( vChW.xz * 0.3 ) ) - 0.5 ) - 0.4 );
+  vec3 c = uFaceC * ( 0.75 + 0.3 * valeNoise( vChW.xz * 0.8 + vChW.y ) ) * ( 1.0 - bed * 0.35 );
+  diffuseColor.rgb *= c;
+}`)
+        .replace('#include <opaque_fragment>', `
+{
+  // gorge mist: the deeper, the more the stone dissolves into the gorge colour (height fog, never camera distance)
+  float m = 1.0 - exp( -max( 0.0, -vChW.y - 1.5 ) * 0.16 );
+  outgoingLight = mix( outgoingLight, uMist * 0.55, m );
+}
+#include <opaque_fragment>`);
+    };
+    chasmMat.customProgramCacheKey = () => 'vale_chasm_v1';
+    patchWorldMaterial(chasmMat);
+    const chasmMesh = new Mesh(chasmGeo, chasmMat);
+    chasmMesh.receiveShadow = true; chasmMesh.name = 'vale_chasm';
+    group.add(chasmMesh);
+    disposables.push(chasmGeo, chasmMat);
+  }
 
   // ── Needlegrass (brush) + curb ───────────────────────────────────────────────────────────────
   const clump = needlegrassClump(lin(colors.grassRoot), lin(colors.grassTip));
@@ -365,43 +549,37 @@ ${NOISE_GLSL}`)
   #endif
   float hf = clamp( position.y / 1.25, 0.0, 1.0 );
   float ph = base.x * 0.37 + base.y * 0.53;
-  // T0 ambient: slow sway, 0.35 Hz (bible cap 0.5 Hz)
+  // T0 ambient: slow sway, at most 0.5 Hz
   float sway = sin( uWindT * 2.2 + ph ) * 0.05 + sin( uWindT * 1.3 + ph * 1.7 ) * 0.03;
   transformed.x += sway * hf * hf;
   transformed.z += sway * 0.6 * hf * hf;
 }`);
   };
-  grassMat.customProgramCacheKey = () => 'vale_grass_v1';
+  grassMat.customProgramCacheKey = () => 'vale_grass_v2';
   patchWorldMaterial(grassMat);
-  const grassPts: { x: number; y: number }[] = [];
-  thickets.forEach((poly, k) => {
-    const b = thicketBoxes[k];
-    const step = 0.5;
-    for (let y = b.minY + step / 2; y < b.maxY; y += step) {
-      for (let x = b.minX + step / 2; x < b.maxX; x += step) {
-        const jx = x + (rand() - 0.5) * step * 0.9, jy = y + (rand() - 0.5) * step * 0.9;
-        if (!pointInPolygon(jx, jy, poly)) continue;
-        if (polyEdgeDist(jx, jy, poly) < 0.18) continue;
-        grassPts.push({ x: jx, y: jy });
+  const grassItems: { m: Matrix4 }[] = [];
+  {
+    const q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0);
+    thickets.forEach((poly, k) => {
+      const b = thicketBoxes[k];
+      const step = 0.48;
+      for (let y = b.minY + step / 2; y < b.maxY; y += step) {
+        for (let x = b.minX + step / 2; x < b.maxX; x += step) {
+          const jx = x + (rand() - 0.5) * step * 0.9, jy = y + (rand() - 0.5) * step * 0.9;
+          if (!pointInPolygon(jx, jy, poly)) continue;
+          const e = polyEdgeDist(jx, jy, poly);
+          if (e < 0.15) continue;
+          q.setFromAxisAngle(up, rand() * Math.PI * 2);
+          const kk = 0.8 + rand() * 0.45;
+          const hh = (0.85 + rand() * 0.35) * (e < 0.6 ? 0.8 : 1);
+          s.set(kk, hh, kk);
+          pos.set(jx, 0, jy);
+          grassItems.push({ m: new Matrix4().compose(pos, q, s) });
+        }
       }
-    }
-  });
-  if (grassPts.length > 0) {
-    const grass = new InstancedMesh(clump, grassMat, grassPts.length);
-    const m = new Matrix4(), q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0);
-    grassPts.forEach((p, i) => {
-      q.setFromAxisAngle(up, rand() * Math.PI * 2);
-      const k = 0.8 + rand() * 0.45;
-      s.set(k, 0.85 + rand() * 0.35, k);
-      pos.set(p.x, 0, p.y);
-      m.compose(pos, q, s);
-      grass.setMatrixAt(i, m);
     });
-    grass.castShadow = true; grass.receiveShadow = true; grass.name = 'vale_needlegrass';
-    grass.computeBoundingSphere();
-    group.add(grass);
-    disposables.push(grass);
   }
+  if (grassItems.length) group.add(chunked(clump, grassMat, grassItems, 'vale_needlegrass'));
   disposables.push(clump, grassMat);
   // curb: thin carved stone band along every brush outline
   const curbGeos: BufferGeometry[] = [];
@@ -410,9 +588,9 @@ ${NOISE_GLSL}`)
       const ax = poly[j][0], ay = poly[j][1], bx = poly[i][0], by = poly[i][1];
       const len = Math.hypot(bx - ax, by - ay);
       if (len < 0.05) continue;
-      const g = new BoxGeometry(len + 0.22, 0.16, 0.22);
+      const g = new BoxGeometry(len + 0.2, 0.12, 0.2);
       g.rotateY(-Math.atan2(by - ay, bx - ax));
-      g.translate((ax + bx) / 2, 0.08, (ay + by) / 2);
+      g.translate((ax + bx) / 2, 0.05, (ay + by) / 2);
       g.deleteAttribute('uv');
       curbGeos.push(g);
     }
@@ -423,9 +601,50 @@ ${NOISE_GLSL}`)
     const curbMat = new MeshStandardMaterial({ color: lin(colors.curb), roughness: 0.8 });
     patchWorldMaterial(curbMat);
     const curb = new Mesh(curbGeo, curbMat);
-    curb.receiveShadow = true; curb.castShadow = true; curb.name = 'vale_curb';
+    curb.receiveShadow = true; curb.castShadow = false; curb.name = 'vale_curb';
     group.add(curb);
     disposables.push(curbGeo, curbMat);
+  }
+
+  // ── Standing Shadow + Fallen Shaft (terrain marks from the map's terrain block) ────────────────
+  const noon = tr.noonline as Record<string, unknown> | undefined;
+  const shadowDef = noon?.standingShadow as { floor?: unknown; tint?: unknown } | undefined;
+  for (const poly of polysOf(shadowDef?.floor)) {
+    const tint = typeof shadowDef?.tint === 'string' ? shadowDef.tint : '#4A4560';
+    const fill = new ShapeGeometry(shapeOf(poly), 1);
+    fill.rotateX(-Math.PI / 2);
+    fill.translate(0, 0.012, 0);
+    const mat = new MeshStandardMaterial({ color: lin(tint), roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    patchWorldMaterial(mat, { keepColor: true });
+    const mesh = new Mesh(fill, mat);
+    mesh.receiveShadow = true; mesh.name = 'vale_standing_shadow';
+    group.add(mesh);
+    // engraved edge: a darker band just inside the outline (hard edge)
+    const outer = shapeOf(poly);
+    const inner = insetPolygon(outer.getPoints(), 0.16);
+    outer.holes.push(new Shape(inner.slice().reverse()));
+    const band = new ShapeGeometry(outer, 1);
+    band.rotateX(-Math.PI / 2);
+    band.translate(0, 0.016, 0);
+    const bmat = new MeshStandardMaterial({ color: lin(tint).multiplyScalar(0.45), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    patchWorldMaterial(bmat, { keepColor: true });
+    const bm = new Mesh(band, bmat);
+    bm.receiveShadow = true;
+    group.add(bm);
+    disposables.push(fill, mat, band, bmat);
+  }
+  const shaftDef = noon?.fallenShaft as { floor?: unknown } | undefined;
+  for (const poly of polysOf(shaftDef?.floor)) {
+    const geo = new ShapeGeometry(shapeOf(poly), 1);
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, 0.014, 0);
+    // shallow water over pale stone: a glossy film (roughness 0.12 reflects the sky)
+    const mat = new MeshStandardMaterial({ color: lin('#8E8C86'), roughness: 0.12, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    patchWorldMaterial(mat);
+    const mesh = new Mesh(geo, mat);
+    mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';
+    group.add(mesh);
+    disposables.push(geo, mat);
   }
 
   // ── scatter (quality dependent) ─────────────────────────────────────────────────────────────
@@ -434,15 +653,40 @@ ${NOISE_GLSL}`)
   group.add(scatterGroup);
   const treeSpots: { x: number; y: number; h: number; s: number; r: number; tint: number }[] = [];
   walls.forEach((poly, i) => {
+    if (chasm[i] || wallHeights[i] < 2.2) return;
     const b = wallBoxes[i];
-    const step = 3.2;
+    const step = 2.7;
     for (let y = b.minY + step / 2; y < b.maxY; y += step) {
       for (let x = b.minX + step / 2; x < b.maxX; x += step) {
-        const jx = x + (rand() - 0.5) * step * 0.8, jy = y + (rand() - 0.5) * step * 0.8;
-        if (!pointInPolygon(jx, jy, poly) || polyEdgeDist(jx, jy, poly) < 1.4) continue;
-        if (jx < 0 || jy < 0 || jx > SX || jy > SY) continue;
-        treeSpots.push({ x: jx, y: jy, h: wallHeights[i], s: 0.75 + rand() * 0.5, r: rand() * Math.PI * 2, tint: rand() });
+        const jx = x + (rand() - 0.5) * step * 0.85, jy = y + (rand() - 0.5) * step * 0.85;
+        if (!pointInPolygon(jx, jy, poly)) continue;
+        const e = polyEdgeDist(jx, jy, poly);
+        if (e < 1.3) continue;
+        if (jx < -2 || jy < -2 || jx > SX + 2 || jy > SY + 2) continue;
+        // thin out deep interiors (they are never seen up close)
+        if (e > 9 && rand() < 0.6) continue;
+        treeSpots.push({ x: jx, y: jy, h: wallHeights[i], s: 0.75 + rand() * 0.55, r: rand() * Math.PI * 2, tint: rand() });
       }
+    }
+  });
+  const boulderSpots: { x: number; y: number; s: number; r: number }[] = [];
+  walls.forEach((poly, i) => {
+    if (chasm[i]) return;
+    const out = organicOutline(poly, 2.4, 0, [SX, SY], i);
+    const ccw = signedArea(poly) > 0;
+    for (let k = 0; k < out.length; k++) {
+      if (rand() > 0.45) continue;
+      const a = out[k], b = out[(k + 1) % out.length];
+      const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      const nx = (ccw ? dy : -dy) / l, ny = (ccw ? -dx : dx) / l;
+      const off = 0.25 + rand() * 0.6;
+      const t = rand();
+      const x = a[0] + nx * off + dx * t, y = a[1] + ny * off + dy * t;
+      if (x < 0.5 || y < 0.5 || x > SX - 0.5 || y > SY - 0.5) continue;
+      let ok = true;
+      for (const ln of lanes) for (let j = 1; j < ln.length && ok; j++) if (segDist(x, y, ln[j - 1][0], ln[j - 1][1], ln[j][0], ln[j][1]) < LANE_HALF + 0.6) ok = false;
+      for (const c of clearings) if (ok && Math.hypot(x - c.x, y - c.y) < c.r) ok = false;
+      if (ok) boulderSpots.push({ x, y, s: 0.35 + Math.pow(rand(), 1.6) * 0.75, r: rand() * Math.PI * 2 });
     }
   });
   const stoneSpots: { x: number; y: number; s: number; r: number }[] = [];
@@ -454,52 +698,52 @@ ${NOISE_GLSL}`)
     for (const c of clearings) if (ok && Math.hypot(x - c.x, y - c.y) < c.r + 0.8) ok = false;
     for (let w = 0; w < walls.length && ok; w++) if (boxDist(x, y, wallBoxes[w]) < 0.6 && (pointInPolygon(x, y, walls[w]) || polyEdgeDist(x, y, walls[w]) < 0.6)) ok = false;
     for (let t = 0; t < thickets.length && ok; t++) if (boxDist(x, y, thicketBoxes[t]) < 0.5 && pointInPolygon(x, y, thickets[t])) ok = false;
-    if (ok) stoneSpots.push({ x, y, s: 0.12 + Math.pow(rand(), 2.2) * 0.5, r: rand() * Math.PI * 2 });
+    if (ok) stoneSpots.push({ x, y, s: 0.1 + Math.pow(rand(), 2.2) * 0.32, r: rand() * Math.PI * 2 });
   }
-  const trunkGeo = new CylinderGeometry(0.11, 0.2, 1, 6, 1);
+  const trunkGeo = new CylinderGeometry(0.1, 0.2, 1, 5, 1);
   trunkGeo.translate(0, 0.5, 0);
-  const canopyGeo = fanCanopy();
-  const stoneGeo = new IcosahedronGeometry(1, 0);
-  stoneGeo.scale(1, 0.55, 1);
-  const leafMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0 });
+  const canopyGeo = dialwoodCanopy(lin(colors.leaf));
+  const rockGeo = rockGeometry(11);
+  const leafMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, flatShading: true });
   const trunkMat = new MeshStandardMaterial({ color: lin(colors.trunk), roughness: 0.85 });
-  const stoneMat = new MeshStandardMaterial({ color: lin(colors.stone), roughness: 0.9, flatShading: true });
+  const stoneMat = new MeshStandardMaterial({ color: lin(colors.stone), roughness: 0.88, flatShading: true });
   for (const mt of [leafMat, trunkMat, stoneMat]) patchWorldMaterial(mt);
-  disposables.push(trunkGeo, canopyGeo, stoneGeo, leafMat, trunkMat, stoneMat);
-  const leafBase = lin(colors.leaf);
-  let scatterMeshes: InstancedMesh[] = [];
+  disposables.push(trunkGeo, canopyGeo, rockGeo, leafMat, trunkMat, stoneMat);
+  let scatterParts: Group[] = [];
   const setScatter = (level: 0 | 1 | 2): void => {
-    for (const m of scatterMeshes) { scatterGroup.remove(m); m.dispose(); }
-    scatterMeshes = [];
-    if (level === 0) return;
-    const keep = level === 1 ? 0.5 : 1;
-    const trees = treeSpots.filter((_, i) => (i * 0.618034) % 1 < keep);
-    const stones = stoneSpots.filter((_, i) => (i * 0.618034) % 1 < keep);
-    const m = new Matrix4(), q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0), c = new Color();
+    for (const g of scatterParts) { scatterGroup.remove(g); g.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); }); }
+    scatterParts = [];
+    // level 0 keeps a sparse tree line so cliff tops never read as empty slabs
+    const keepT = level === 0 ? 0.35 : level === 1 ? 0.7 : 1;
+    const keepS = level === 0 ? 0 : level === 1 ? 0.5 : 1;
+    const pick = <T,>(arr: T[], keep: number): T[] => arr.filter((_, i) => (i * 0.618034) % 1 < keep);
+    const trees = pick(treeSpots, keepT), boulders = pick(boulderSpots, level === 0 ? 0.5 : 1), stones = pick(stoneSpots, keepS);
+    const q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0);
     if (trees.length) {
-      const trunks = new InstancedMesh(trunkGeo, trunkMat, trees.length);
-      const canopies = new InstancedMesh(canopyGeo, leafMat, trees.length);
-      trees.forEach((t, i) => {
-        const th = 1.1 + t.s * 0.9;
+      const trunks: { m: Matrix4 }[] = [], canopies: { m: Matrix4; c: Color }[] = [];
+      for (const t of trees) {
+        const th = 1.0 + t.s * 0.8;
         q.setFromAxisAngle(up, t.r);
-        s.set(t.s, th, t.s); pos.set(t.x, t.h, t.y);
-        m.compose(pos, q, s); trunks.setMatrixAt(i, m);
-        s.set(t.s * 1.15, t.s * 1.0, t.s * 1.15); pos.set(t.x, t.h + th * 0.92, t.y);
-        m.compose(pos, q, s); canopies.setMatrixAt(i, m);
-        c.copy(leafBase).multiplyScalar(0.8 + t.tint * 0.4);
-        canopies.setColorAt(i, c);
-      });
-      for (const im of [trunks, canopies]) { im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); scatterGroup.add(im); scatterMeshes.push(im); }
+        s.set(t.s, th, t.s); pos.set(t.x, t.h - 0.1, t.y);
+        trunks.push({ m: new Matrix4().compose(pos, q, s) });
+        s.set(t.s * 1.25, t.s * 1.15, t.s * 1.25); pos.set(t.x, t.h + th * 0.82, t.y);
+        canopies.push({ m: new Matrix4().compose(pos, q, s), c: new Color(0.82 + t.tint * 0.3, 0.86 + t.tint * 0.24, 0.84 + t.tint * 0.2) });
+      }
+      scatterParts.push(chunked(trunkGeo, trunkMat, trunks, 'vale_trunks'), chunked(canopyGeo, leafMat, canopies, 'vale_canopies'));
+    }
+    if (boulders.length) {
+      scatterParts.push(chunked(rockGeo, stoneMat, boulders.map((b) => {
+        q.setFromAxisAngle(up, b.r); s.set(b.s * 1.2, b.s * 0.8, b.s); pos.set(b.x, b.s * 0.15, b.y);
+        return { m: new Matrix4().compose(pos, q, s) };
+      }), 'vale_boulders'));
     }
     if (stones.length) {
-      const st = new InstancedMesh(stoneGeo, stoneMat, stones.length);
-      stones.forEach((p, i) => {
-        q.setFromAxisAngle(up, p.r); s.set(p.s, p.s, p.s * 0.8); pos.set(p.x, p.s * 0.12, p.y);
-        m.compose(pos, q, s); st.setMatrixAt(i, m);
-      });
-      st.castShadow = true; st.receiveShadow = true; st.computeBoundingSphere();
-      scatterGroup.add(st); scatterMeshes.push(st);
+      scatterParts.push(chunked(rockGeo, stoneMat, stones.map((p) => {
+        q.setFromAxisAngle(up, p.r); s.set(p.s, p.s * 0.6, p.s * 0.85); pos.set(p.x, p.s * 0.1, p.y);
+        return { m: new Matrix4().compose(pos, q, s) };
+      }), 'vale_stones', false));
     }
+    for (const g of scatterParts) scatterGroup.add(g);
   };
   setScatter(2);
 
@@ -509,7 +753,7 @@ ${NOISE_GLSL}`)
     setScatter,
     update(time: number): void { worldUniforms.valeTime.value = time; },
     dispose(): void {
-      for (const m of scatterMeshes) m.dispose();
+      group.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); });
       for (const d of disposables) d.dispose();
     },
   };
@@ -519,22 +763,21 @@ ${NOISE_GLSL}`)
 function needlegrassClump(root: Color, tip: Color): BufferGeometry {
   const pos: number[] = [], col: number[] = [], nor: number[] = [];
   const rand = mulberry(77);
-  const SEG = 3;
+  const SEG = 2;
   for (let b = 0; b < 7; b++) {
     const a = (b / 7) * Math.PI * 2 + rand() * 0.6;
     const r0 = b === 0 ? 0 : 0.05 + rand() * 0.12;
     const bx = Math.cos(a) * r0, bz = Math.sin(a) * r0;
     const lean = 0.18 + rand() * 0.3;
     const h = 0.85 + rand() * 0.45;
-    const w = 0.055 + rand() * 0.03;
+    const w = 0.06 + rand() * 0.03;
     const dirx = Math.cos(a + 0.3), dirz = Math.sin(a + 0.3);
-    const px = -dirz, pz = dirx; // blade width axis
+    const px = -dirz, pz = dirx;
     const ring: [number, number, number][][] = [];
     for (let k = 0; k <= SEG; k++) {
       const t = k / SEG;
       const cx = bx + dirx * lean * t * t * h, cz = bz + dirz * lean * t * t * h, cy = h * t;
       const ww = w * (1 - t * 0.92);
-      // V fold: centre ridge raised toward the blade's outward side
       ring.push([[cx - px * ww, cy, cz - pz * ww], [cx + dirx * ww * 0.35, cy, cz + dirz * ww * 0.35], [cx + px * ww, cy, cz + pz * ww]]);
     }
     for (let k = 0; k < SEG; k++) {
@@ -547,7 +790,6 @@ function needlegrassClump(root: Color, tip: Color): BufferGeometry {
           pos.push(...tris[v]);
           const c = root.clone().lerp(tip, Math.pow(ts[v], 0.8));
           col.push(c.r, c.g, c.b);
-          // normals biased upward for a soft top-lit read
           nor.push(dirx * 0.35 * (side ? 1 : -1) + px * 0.2, 0.9, dirz * 0.35 + pz * 0.2);
         }
       }
@@ -562,40 +804,51 @@ function needlegrassClump(root: Color, tip: Color): BufferGeometry {
   return g;
 }
 
-/** Dialwood canopy: 5 lacquered fan plates (bevel-ish boxes) radiating from the trunk top */
-function fanCanopy(): BufferGeometry {
+/** Dialwood canopy: four chiselled, flat-faceted lobes; darker underneath, sun-warm on top */
+function dialwoodCanopy(leaf: Color): BufferGeometry {
   const parts: BufferGeometry[] = [];
-  const rand = mulberry(1234);
-  for (let i = 0; i < 5; i++) {
-    const g = new BoxGeometry(1.25, 0.09, 0.62, 1, 1, 1);
-    g.translate(0.62, 0, 0);
-    g.rotateZ(0.32 + rand() * 0.35);
-    g.rotateY((i / 5) * Math.PI * 2 + rand() * 0.4);
-    g.translate(0, rand() * 0.25, 0);
-    g.deleteAttribute('uv');
-    parts.push(g.toNonIndexed());
-    g.dispose();
+  const lobes = [[0, 0.35, 0, 1.0], [0.55, 0.05, 0.25, 0.72], [-0.45, 0.1, -0.35, 0.78], [0.05, 0.75, -0.1, 0.62]];
+  for (const [x, y, z, r] of lobes) {
+    const g = new IcosahedronGeometry(r, 1);
+    const p = g.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const k = 1 + (hash2(p.getX(i) * 3.1 + x, p.getZ(i) * 2.7 + p.getY(i)) - 0.5) * 0.28;
+      p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.82, p.getZ(i) * k);
+    }
+    g.translate(x, y, z);
+    const n = g.index ? g.toNonIndexed() : g;
+    if (n !== g) g.dispose();
+    n.deleteAttribute('uv');
+    parts.push(n);
   }
-  const cap = new BoxGeometry(0.7, 0.12, 0.7);
-  cap.rotateY(0.4); cap.translate(0, 0.3, 0); cap.deleteAttribute('uv');
-  parts.push(cap.toNonIndexed());
-  cap.dispose();
   const g = mergeGeometries(parts, false);
   for (const p of parts) p.dispose();
+  const pos = g.getAttribute('position') as BufferAttribute;
+  const col = new Float32Array(pos.count * 3);
+  const c = new Color();
+  for (let i = 0; i < pos.count; i++) {
+    const t = Math.min(1, Math.max(0, (pos.getY(i) + 0.6) / 2.0));
+    c.copy(leaf).multiplyScalar(0.55 + 0.75 * t);
+    c.r += 0.02 * t; // a touch warmer where the sun sits
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  g.setAttribute('color', new BufferAttribute(col, 3));
+  g.computeVertexNormals();
   return g;
 }
 
-/** naive polygon inset (for convex-ish wall shapes) */
-function insetPolygon(pts: Vector2[], d: number): Vector2[] {
-  const n = pts.length;
-  const out: Vector2[] = [];
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
-    const e0 = p1.clone().sub(p0).normalize(), e1 = p2.clone().sub(p1).normalize();
-    const n0 = new Vector2(-e0.y, e0.x), n1 = new Vector2(-e1.y, e1.x);
-    const bis = n0.add(n1).normalize();
-    out.push(p1.clone().addScaledVector(bis, d));
+/** a chiselled boulder (jittered icosahedron, flat facets) */
+function rockGeometry(seed: number): BufferGeometry {
+  const g = new IcosahedronGeometry(1, 1);
+  const p = g.getAttribute('position') as BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const k = 0.78 + hash2(x * 5.1 + seed, z * 4.3 + y * 3.7) * 0.4;
+    p.setXYZ(i, x * k, Math.max(-0.3, y * k), z * k);
   }
-  return out;
+  const n = g.index ? g.toNonIndexed() : g;
+  if (n !== g) g.dispose();
+  n.deleteAttribute('uv');
+  n.computeVertexNormals();
+  return n;
 }
-

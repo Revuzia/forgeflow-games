@@ -22,6 +22,29 @@ float valeFbm( vec2 p ) {
   for ( int i = 0; i < 4; i ++ ) { s += a * valeNoise( p ); p = mat2( 1.6, 1.2, -1.2, 1.6 ) * p; a *= 0.5; }
   return s;
 }
+// irregular honed pavers (Voronoi with exact border distance): x = cell hash, y = distance to the
+// nearest joint in metres, zw = cell id
+vec4 valePavers( vec2 p, float size ) {
+  vec2 q = p / size;
+  vec2 i = floor( q ), f = fract( q );
+  float d1 = 8.0;
+  vec2 mr = vec2( 0.0 ), mg = vec2( 0.0 );
+  for ( int y = -1; y <= 1; y ++ ) for ( int x = -1; x <= 1; x ++ ) {
+    vec2 g = vec2( float( x ), float( y ) );
+    vec2 r = g + valeHash22( i + g ) * 0.76 + 0.12 - f;
+    float d = dot( r, r );
+    if ( d < d1 ) { d1 = d; mr = r; mg = g; }
+  }
+  float md = 8.0;
+  for ( int y = -2; y <= 2; y ++ ) for ( int x = -2; x <= 2; x ++ ) {
+    vec2 g = mg + vec2( float( x ), float( y ) );
+    vec2 r = g + valeHash22( i + g ) * 0.76 + 0.12 - f;
+    vec2 dr = r - mr;
+    if ( dot( dr, dr ) > 1e-5 ) md = min( md, dot( 0.5 * ( mr + r ), normalize( dr ) ) );
+  }
+  vec2 id = i + mg;
+  return vec4( valeHash12( id * 1.37 + 0.5 ), md * size, id );
+}
 // Mikkelsen-style derivative bump: perturb a view-space normal by a scalar height field
 vec3 valeBump( vec3 surfPos, vec3 surfNorm, float h, float scale ) {
   vec3 sx = dFdx( surfPos ), sy = dFdy( surfPos );

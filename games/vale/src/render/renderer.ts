@@ -1,0 +1,791 @@
+// VALE render — createRenderer (CONTRACT §9). The one presentation entry the boot and UI call.
+//
+//   createRenderer(canvas, catalog, settings, assetUrl, options?) → Renderer
+//     setScene('menu' | MatchClient)  menu world, or a live match (the renderer only READS the client:
+//                                     whoever owns the loop calls client.pump(dt) before render(dt))
+//     resize(w?, h?)                  CSS pixels (default: the canvas' client size)
+//     render(dt)                      one frame; dt in seconds (honours fpsCap, menu idle cap, hidden tab)
+//     setQuality(video)               §9.4 ladder (Settings.video) + dynamic resolution
+//     setSettings(patch)              colourblind palette, camera lock / edge pan / pan speed,
+//                                     reduce motion, screen shake, HUD scale, health bar ticks
+//     pickGround(x, y)                CSS px → sim (x, y) on the walkable plane, or null
+//     pickEntity(x, y)                CSS px → the visible entity under the cursor, or null
+//     worldToScreen(x, y, h?)         sim (x, y, height) → CSS px
+//     setAim(aim | null)              your own aim indicator (8 % fill, 60 % edge, dashed range ring)
+//     setHover(id) · setTarget(id)    enemy outline on hover; minion bars when targeted
+//     camera                          lock mode, scout, pointer (edge pan), key pan, zoom, focus
+//     setStation(name) · setMenuView  menu camera moves (720 ms) and the plinth fighter
+//     preload(setup, onProgress)      loading screen: every model, the sky and the grade of a match
+//     stats() · dispose()
+//
+// Frame: sim views → actors (interpolated with MatchClient.alpha) → director (events → VFX,
+// telegraphs) → camera → fog of war → sun fit → overlay buffers → EffectComposer (N8AO → bloom →
+// Neutral tone map → LUT → vignette → overlay → SMAA).
+
+import {
+  Color, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, SRGBColorSpace, Vector2, Vector3,
+  WebGLRenderer,
+} from 'three';
+import type { CatalogT, MapDefT } from '../contracts/catalog.ts';
+import type { MatchClient, Settings } from '../contracts/session.ts';
+import type { EntityId, EntityView, MatchSetup, SimEvent, WorldView } from '../contracts/sim.ts';
+import { TICK_DT } from '../contracts/sim.ts';
+import { Actor, accentHexFor, ModelLibrary } from './actors.ts';
+import { Assets, type AssetUrlFn } from './assets.ts';
+import { CameraRig, type CameraMode } from './camera.ts';
+import { Director, type EventVfxMap, type StatusVfxMap } from './director.ts';
+import { FogOfWar } from './fog.ts';
+import { Sun } from './lighting.ts';
+import { MenuWorld } from './menu.ts';
+import { BAR_KIND, BarLayer, GLYPH, SHAPE } from './overlay/bars.ts';
+import { OverlayContext, overlayUniforms } from './overlay/context.ts';
+import { RING, RingLayer } from './overlay/rings.ts';
+import { TELE_SHAPE, TelegraphLayer, type TeleSpec } from './overlay/telegraphs.ts';
+import { FRAY_SEATS, Palette, type ColorblindMode } from './palette.ts';
+import { PostChain } from './post.ts';
+import { DynamicResolution, resolveQuality, type ResolvedQuality } from './quality.ts';
+import { Sky } from './sky.ts';
+import { buildTerrain, type TerrainBuild } from './terrain.ts';
+import { VfxSystem } from './vfx/system.ts';
+import { patchWorldMaterial, worldUniforms } from './world_material.ts';
+
+export interface RendererOptions {
+  /** dev-only fallbacks (proof mannequin, debug geometry). Default: dev build AND ?dev=1 */
+  dev?: boolean;
+  /** URL of the proof mannequin GLB used for fighters without art in dev */
+  devModelUrl?: string | null;
+  /** world-event → VfxDef id map (events that carry no id); from data */
+  eventVfx?: EventVfxMap;
+  statusVfx?: StatusVfxMap;
+  /** dynamic resolution (default on) */
+  dynamicResolution?: boolean;
+  /** keep the drawing buffer (screenshots / pixel read-back) */
+  preserveDrawingBuffer?: boolean;
+  /** silence missing-asset warnings */
+  quiet?: boolean;
+}
+
+export interface AimSpec {
+  shape: 'circle' | 'ring' | 'cone' | 'rect' | 'line';
+  /** anchor in sim coordinates (circle centre, cone apex, rect/line origin) */
+  x: number; y: number;
+  /** aim direction (sim radians) for cone / rect / line */
+  dir?: number;
+  radius?: number; inner?: number; angleDeg?: number; length?: number; width?: number;
+  /** dashed range ring around the caster */
+  range?: number; casterX?: number; casterY?: number;
+  heal?: boolean;
+}
+
+export interface RenderStats {
+  fps: number; frameMs: number; calls: number; triangles: number; sceneCalls: number; sceneTriangles: number;
+  programs: number; geometries: number; textures: number;
+  renderScale: number; pixelRatio: number; tier: string; width: number; height: number;
+  particles: number; vfx: number; actors: number; telegraphs: number; mode: 'menu' | 'match' | 'none';
+}
+
+export interface CameraControl {
+  setMode(m: CameraMode): void;
+  readonly mode: CameraMode;
+  scout(on: boolean): void;
+  setPointer(x: number, y: number, inside: boolean): void;
+  setKeyPan(x: number, z: number): void;
+  zoomBy(steps: number): void;
+  setZoom(distance: number): void;
+  focusOn(x: number, y: number): void;
+  centerOnSelf(): void;
+  setSpectator(on: boolean): void;
+}
+
+export interface Renderer {
+  readonly canvas: HTMLCanvasElement;
+  readonly camera: CameraControl;
+  setScene(scene: 'menu' | MatchClient): void;
+  resize(width?: number, height?: number): void;
+  render(dt: number): void;
+  setQuality(video: Settings['video']): void;
+  setSettings(patch: Partial<Settings>): void;
+  pickGround(x: number, y: number): { x: number; y: number } | null;
+  pickEntity(x: number, y: number): EntityId | null;
+  worldToScreen(x: number, y: number, height?: number): { x: number; y: number; visible: boolean };
+  setAim(aim: AimSpec | null): void;
+  setHover(id: EntityId | null): void;
+  setTarget(id: EntityId | null): void;
+  setStation(name: string): void;
+  setMenuView(view: { screen: string; fighter?: string; skin?: string; mode?: string }): void;
+  preload(setup: MatchSetup, onProgress?: (p: number) => void): Promise<void>;
+  stats(): RenderStats;
+  /** harness seam: feed synthetic events (telegraph / VFX tests) */
+  injectEvents(events: SimEvent[]): void;
+  dispose(): void;
+}
+
+const HARD_CC = new Set(['stun', 'root', 'airborne', 'taunt', 'fear', 'sleep', 'silence']);
+const _v = new Vector3();
+const _v2 = new Vector3();
+const _ndc = new Vector2();
+
+function devDefault(): boolean {
+  let dev = false;
+  try { dev = !!import.meta.env?.DEV; } catch { dev = false; }
+  if (!dev) return false;
+  try { return new URLSearchParams(location.search).get('dev') === '1'; } catch { return false; }
+}
+
+class ValeRenderer implements Renderer {
+  readonly canvas: HTMLCanvasElement;
+  readonly gl: WebGLRenderer;
+  private readonly catalog: CatalogT;
+  private settings: Settings;
+  private readonly assets: Assets;
+  private readonly lib: ModelLibrary;
+  private readonly opts: RendererOptions;
+  private q: ResolvedQuality;
+  private readonly dyn = new DynamicResolution();
+  // match world
+  private readonly scene = new Scene();
+  private readonly rig = new CameraRig();
+  private readonly sun = new Sun();
+  private readonly sky: Sky;
+  private readonly fog = new FogOfWar();
+  private terrain: TerrainBuild | null = null;
+  private mapScene: import('three').Object3D | null = null;
+  private readonly vfx: VfxSystem;
+  private readonly director: Director;
+  private readonly actors = new Map<number, Actor>();
+  private client: MatchClient | null = null;
+  private offEvents: (() => void) | null = null;
+  private readonly pending: SimEvent[] = [];
+  private lastTick = -1;
+  private palette: Palette;
+  private map: MapDefT | null = null;
+  private matchGen = 0;
+  // menu
+  private readonly menu: MenuWorld;
+  private mode: 'menu' | 'match' | 'none' = 'none';
+  // overlay
+  private readonly overlay = new OverlayContext();
+  private readonly bars = new BarLayer();
+  private readonly rings = new RingLayer();
+  private readonly teles = new TelegraphLayer();
+  private aim: AimSpec | null = null;
+  private hover: EntityId | null = null;
+  private target: EntityId | null = null;
+  // post
+  private readonly post: PostChain;
+  private cssW = 1;
+  private cssH = 1;
+  private time = 0;
+  private lastFrameAt = 0;
+  private fpsEma = 0;
+  private frameMs = 0;
+  private sceneCalls = 0;
+  private sceneTris = 0;
+  private skipAcc = 0;
+  private readonly resources = new Map<string, { color: Color; model: string }>();
+  private readonly tmpColor = new Color();
+  private readonly raycaster = new Raycaster();
+  private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
+  private hudScale = 1;
+  private ticks = true;
+  readonly camera: CameraControl;
+
+  constructor(canvas: HTMLCanvasElement, catalog: CatalogT, settings: Settings, assetUrl: AssetUrlFn, opts: RendererOptions) {
+    this.canvas = canvas;
+    this.catalog = catalog;
+    this.settings = settings;
+    this.opts = opts;
+    this.gl = new WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: false, depth: true, powerPreference: 'high-performance', preserveDrawingBuffer: !!opts.preserveDrawingBuffer });
+    this.gl.outputColorSpace = SRGBColorSpace;
+    this.gl.toneMapping = NoToneMapping;
+    this.gl.shadowMap.enabled = true;
+    this.gl.shadowMap.type = PCFShadowMap;
+    this.gl.info.autoReset = false;
+    this.assets = new Assets(this.gl, assetUrl);
+    this.assets.quiet = !!opts.quiet;
+    const dev = opts.dev ?? devDefault();
+    const devModelUrl = opts.devModelUrl ?? (dev ? new URL('art/out/_proof/_proof_mannequin.glb', document.baseURI).href : null);
+    this.lib = new ModelLibrary(catalog, this.assets, { dev, devModelUrl });
+    this.sky = new Sky(this.gl);
+    this.palette = new Palette(catalog, null, -1, settings.access.colorblind as ColorblindMode);
+    for (const r of catalog.resources) this.resources.set(r.id, { color: new Color().setStyle(r.color), model: r.model });
+    this.scene.name = 'vale_match';
+    this.scene.add(this.sun.light, this.sun.target);
+    this.vfx = new VfxSystem(catalog.vfx, { entityPos: (id, out) => this.bodyPos(id, out) });
+    this.vfx.setCamera(this.rig.camera);
+    this.scene.add(this.vfx.group);
+    this.director = new Director(catalog, this.vfx, {
+      view: () => this.client?.view ?? null,
+      palette: () => this.palette,
+      bodyPos: (id, out) => this.bodyPos(id, out),
+      visibleAt: (x, y) => this.visibleAt(x, y),
+      entityVisible: (e) => this.entityVisible(e),
+      skinTint: (e) => this.skinTint(e),
+      now: () => this.time,
+      shake: (px, ms) => this.rig.shake(px, ms),
+    });
+    this.director.eventVfx = opts.eventVfx ?? {};
+    this.director.statusVfx = opts.statusVfx ?? {};
+    this.menu = new MenuWorld(this.gl);
+    this.overlay.teleScene.add(this.teles.mesh);
+    this.overlay.scene.add(this.rings.mesh, this.bars.mesh, this.bars.labels);
+    this.post = new PostChain(this.gl, this.scene, this.rig.camera, (r, target, depth) => this.overlay.draw(r, target, depth));
+    this.q = resolveQuality(settings.video);
+    this.dyn.enabled = opts.dynamicResolution !== false;
+    const rig = this.rig;
+    this.camera = {
+      setMode: (m) => rig.setMode(m),
+      get mode() { return rig.mode; },
+      scout: (on) => rig.scout(on),
+      setPointer: (x, y, inside) => rig.setPointer(x, y, inside),
+      setKeyPan: (x, z) => rig.setKeyPan(x, z),
+      zoomBy: (s) => rig.zoomBy(s),
+      setZoom: (d) => rig.setZoom(d),
+      focusOn: (x, y) => rig.focusOn(x, y),
+      centerOnSelf: () => rig.centerOnSelf(),
+      setSpectator: (on) => { rig.spectator = on; },
+    };
+    this.applySettings(settings);
+    this.setQuality(settings.video);
+    this.resize();
+  }
+
+  // ── settings / quality ─────────────────────────────────────────────────────────────────────────
+  setSettings(patch: Partial<Settings>): void {
+    this.settings = { ...this.settings, ...patch } as Settings;
+    this.applySettings(this.settings);
+    if (patch.video) this.setQuality(patch.video);
+  }
+
+  private applySettings(s: Settings): void {
+    this.palette.setColorblind(s.access.colorblind as ColorblindMode);
+    for (const a of this.actors.values()) a.setAccentColor('', this.tmpColor.set(0, 0, 0));
+    this.rig.edgePan = s.controls.edgePan;
+    this.rig.panSpeed = s.controls.panSpeed;
+    this.rig.reduceMotion = s.access.reduceMotion;
+    this.rig.shakeScale = s.access.reduceMotion ? 0 : s.access.screenShake;
+    if (s.controls.cameraLock && this.rig.mode !== 'locked') this.rig.setMode('locked');
+    if (!s.controls.cameraLock && this.rig.mode === 'locked') this.rig.setMode('semi');
+    this.menu.reduceMotion = s.access.reduceMotion;
+    this.hudScale = Math.max(0.75, Math.min(1.25, s.access.hudScale || 1));
+    this.ticks = s.gameplay.healthBarTicks;
+  }
+
+  setQuality(video: Settings['video']): void {
+    this.q = resolveQuality(video);
+    this.dyn.configure(this.q.renderScale, this.q.fpsCap);
+    this.sun.setQuality(this.gl, this.q.shadows);
+    this.menu.sun.setQuality(this.gl, this.q.shadows);
+    this.post.setQuality({ ao: this.q.ao, bloom: this.q.bloom, aa: this.q.aa, tier: this.q.tier });
+    this.vfx.budget = this.q.particleBudget;
+    this.vfx.density = this.q.particleDensity;
+    this.vfx.setLightCount(this.q.flashLights);
+    this.terrain?.setScatter(this.q.scatter);
+    this.menu.setScatter(this.q.scatter);
+    this.applySize();
+  }
+
+  resize(width?: number, height?: number): void {
+    const w = Math.max(1, Math.round(width ?? (this.canvas.clientWidth || this.canvas.width || 1)));
+    const h = Math.max(1, Math.round(height ?? (this.canvas.clientHeight || this.canvas.height || 1)));
+    this.cssW = w; this.cssH = h;
+    this.rig.setViewport(w, h);
+    this.menu.setAspect(w / h);
+    this.applySize();
+  }
+
+  private applySize(): void {
+    const dpr = Math.min(typeof devicePixelRatio === 'number' ? devicePixelRatio : 1, this.q.maxDpr);
+    const pr = Math.max(0.25, dpr * this.dyn.scale);
+    this.gl.setPixelRatio(pr);
+    this.post.setSize(this.cssW, this.cssH);
+  }
+
+  // ── scenes ─────────────────────────────────────────────────────────────────────────────────────
+  setScene(scene: 'menu' | MatchClient): void {
+    if (scene === 'menu') {
+      this.teardownMatch();
+      this.menu.build(this.catalog, this.assets);
+      this.mode = 'menu';
+      this.post.setScene(this.menu.scene, this.menu.camera);
+      this.overlay.camera = this.menu.camera;
+      this.assets.lut(this.menu.lut).then((l) => { if (this.mode === 'menu') this.post.setLUT(l); });
+      return;
+    }
+    this.teardownMatch();
+    this.setupMatch(scene);
+  }
+
+  private setupMatch(client: MatchClient): void {
+    const gen = ++this.matchGen;
+    this.client = client;
+    this.mode = 'match';
+    const view = client.view;
+    const map = this.catalog.maps.find((m) => m.id === (view.map || client.setup.map)) ?? this.catalog.maps[0];
+    this.map = map ?? null;
+    this.palette = new Palette(this.catalog, client.setup, client.you, this.settings.access.colorblind as ColorblindMode);
+    this.post.setScene(this.scene, this.rig.camera);
+    this.overlay.camera = this.rig.camera;
+    if (!map) return;
+    // camera per the map (the bible's numbers are the map's numbers)
+    const cam = map.camera;
+    this.rig.camera.fov = cam.fovDeg;
+    this.rig.camera.updateProjectionMatrix();
+    this.rig.setBounds(map.size[0], map.size[1]);
+    worldUniforms.valeBounds.value.set(0, 0, map.size[0], map.size[1]);
+    const tr = map.art.terrain as Record<string, unknown>;
+    const edge = (tr.edgeFog ?? null) as { color?: string; startOutsideM?: number; fullOutsideM?: number } | null;
+    worldUniforms.valeEdgeColor.value.setStyle(edge?.color ?? map.art.lighting.fogColor);
+    worldUniforms.valeEdgeRange.value.set(edge?.startOutsideM ?? 4, edge?.fullOutsideM ?? 18);
+    // light + sky
+    const L = map.art.lighting;
+    this.sun.configure({ sunDir: L.sunDir, sunColor: L.sunColor, sunIntensity: L.sunIntensity });
+    const sc = new Color().setStyle(L.sunColor);
+    this.sky.makeFallback(L.sunDir, sc, new Color(0.16, 0.25, 0.42), new Color().setStyle(L.fogColor).multiplyScalar(0.9));
+    this.sky.apply(this.scene, null, L.ambient);
+    this.assets.hdr(map.art.sky).then((t) => { if (gen === this.matchGen && t) this.sky.apply(this.scene, t, L.ambient); });
+    this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
+    // world: procedural terrain now; the Blender scene replaces it when it exists
+    this.terrain = buildTerrain(map);
+    this.terrain.setScatter(this.q.scatter);
+    this.scene.add(this.terrain.group);
+    this.assets.model(map.art.scene).then((m) => {
+      if (gen !== this.matchGen || !m?.renderable) return;
+      const root = m.gltf.scene;
+      root.traverse((o) => {
+        const mesh = o as import('three').Mesh;
+        if (!mesh.isMesh) return;
+        mesh.castShadow = true; mesh.receiveShadow = true;
+        for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) patchWorldMaterial(mat);
+      });
+      if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
+      this.mapScene = root;
+      this.scene.add(root);
+    });
+    // fog of war for the local team (spectators: off)
+    this.fog.enabled = this.palette.viewer.team >= 0;
+    // camera starts on your fighter
+    const me = view.players.find((p) => p.player === client.you);
+    const e = me ? view.entity(me.entity) : undefined;
+    if (e) this.rig.focusOn(e.x, e.y); else this.rig.focusOn(map.size[0] / 2, map.size[1] / 2);
+    this.rig.spectator = this.palette.viewer.team < 0;
+    this.rig.setZoom(cam.distance);
+    this.offEvents = client.onEvents((evs) => { for (const ev of evs) this.pending.push(ev); });
+    this.lastTick = -1;
+  }
+
+  private teardownMatch(): void {
+    this.matchGen++;
+    this.offEvents?.();
+    this.offEvents = null;
+    this.pending.length = 0;
+    for (const a of this.actors.values()) a.dispose();
+    this.actors.clear();
+    this.director.clear();
+    this.vfx.clear();
+    if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
+    if (this.mapScene) { this.scene.remove(this.mapScene); this.mapScene = null; }
+    this.fog.dispose();
+    this.client = null;
+    this.map = null;
+    this.mode = 'none';
+  }
+
+  // ── helpers ────────────────────────────────────────────────────────────────────────────────────
+  private bodyPos(id: number, out: Vector3): boolean {
+    const a = this.actors.get(id);
+    if (a && a.leaving < 0) { out.set(a.x, a.h + Math.min(1.3, a.artHeight * 0.55), a.y); return true; }
+    const e = this.client?.view.entity(id);
+    if (!e || (!e.alive && e.kind !== 'fighter')) return false;
+    // projectiles / zones / not-yet-built actors: interpolate along the velocity
+    const k = (this.client?.alpha ?? 0) * TICK_DT;
+    const h = e.kind === 'projectile' ? 1.05 + e.height : 1 + e.height;
+    out.set(e.x - e.vx * (TICK_DT - k), h, e.y - e.vy * (TICK_DT - k));
+    return true;
+  }
+
+  private visibleAt(x: number, y: number): boolean {
+    const team = this.palette.viewer.team;
+    if (team < 0 || !this.client) return true;
+    try {
+      const g = this.client.view.visionGrid(team);
+      const i = Math.floor(x / g.cell), j = Math.floor(y / g.cell);
+      if (i < 0 || j < 0 || i >= g.width || j >= g.height) return false;
+      return g.data[j * g.width + i] > 0;
+    } catch { return true; }
+  }
+
+  private entityVisible(e: EntityView): boolean {
+    const team = this.palette.viewer.team;
+    if (team < 0) return true;
+    if (e.team === team) return true;
+    return ((e.visibleMask >>> team) & 1) === 1;
+  }
+
+  private skinTint(e: EntityView): Color | null {
+    if (!e.skin) return null;
+    const s = this.catalog.skins.find((x) => x.id === e.skin);
+    return s?.vfxTint ? new Color().setStyle(s.vfxTint) : null;
+  }
+
+  // ── per-frame match update ─────────────────────────────────────────────────────────────────────
+  private syncActors(view: WorldView): void {
+    const tick = view.tick;
+    const newTick = tick !== this.lastTick;
+    this.lastTick = tick;
+    const seen = new Set<number>();
+    for (const e of view.entities) {
+      if (e.kind === 'projectile' || e.kind === 'zone') continue;
+      seen.add(e.id);
+      let a = this.actors.get(e.id);
+      if (!a) {
+        a = new Actor(e);
+        this.actors.set(e.id, a);
+        this.scene.add(a.root);
+        const actor = a;
+        if (e.kind === 'fighter') {
+          const def = this.lib.fighter(e.def);
+          if (def) {
+            a.configureFighter(def);
+            this.lib.fighterTemplate(e.def, e.skin).then((t) => actor.attach(t, def.art.scale, def.art.accentMaterial));
+          }
+        } else {
+          const def = this.lib.unit(e.def);
+          if (def) {
+            a.configureUnit(def);
+            this.lib.unitTemplate(e.def).then((t) => actor.attach(t, def.art.scale, 'accent'));
+          }
+        }
+        a.pushTick(e, tick);
+      } else if (newTick || a.view !== e) a.pushTick(e, tick);
+    }
+    for (const [id, a] of this.actors) {
+      if (seen.has(id)) continue;
+      if (a.leaving < 0) a.leaving = 0;
+      if (a.leaving > 0.6) { a.dispose(); this.actors.delete(id); }
+    }
+  }
+
+  private updateActors(dt: number, alpha: number): void {
+    const hoverOn = this.hover;
+    for (const a of this.actors.values()) {
+      const v = a.view;
+      if (!v) continue;
+      const vis = this.entityVisible(v) && (v.alive || v.kind === 'fighter' || a.leaving >= 0 || v.state === 'dead');
+      a.visible = vis;
+      a.root.visible = vis;
+      if (!vis) continue;
+      const hex = accentHexFor(this.palette, v);
+      a.setAccentColor(hex, this.palette.get(hex));
+      a.update(dt, alpha);
+      if (a.model) {
+        const rel = this.palette.relation(v.team, v.owner, v.kind === 'fighter');
+        const outline = hoverOn === a.id && v.alive && (rel === 'enemy' || rel === 'neutral');
+        if (outline) a.setOutline(true, this.palette.relationColor(rel), _ndc.set(this.cssW, this.cssH)); else a.hideOutline();
+      }
+    }
+  }
+
+  private buildOverlay(view: WorldView): void {
+    const p = this.palette;
+    const bars = this.bars, rings = this.rings;
+    // 1 reference px (1080p) in BUFFER px: fixed screen size, 720p floor 0.8, × HUD scale
+    const bufH = this.gl.getDrawingBufferSize(_ndc).y;
+    const pxScale = Math.max(0.8, this.cssH / 1080) * this.hudScale * (bufH / this.cssH);
+    bars.begin(pxScale);
+    rings.begin();
+    const you = p.viewer.you;
+    const players = new Map(view.players.map((pl) => [pl.player, pl]));
+    const meEntity = you >= 0 ? players.get(you)?.entity : undefined;
+    const me = meEntity !== undefined ? view.entity(meEntity) : undefined;
+    for (const a of this.actors.values()) {
+      const v = a.view;
+      if (!v || !a.visible || a.leaving >= 0) continue;
+      const isF = v.kind === 'fighter';
+      const rel = p.relation(v.team, v.owner, isF);
+      const hex = p.unitHex(v.team, v.owner, isF || v.kind === 'summon');
+      const col = p.get(hex);
+      // damage trail (150 ms hold, 450 ms shrink)
+      const total = Math.max(v.maxHp, v.hp + v.shield, 1);
+      const hpF = Math.max(0, v.hp) / total;
+      if (hpF < a.lastHpFrac - 1e-4) {
+        if (a.trail < a.lastHpFrac) a.trail = a.lastHpFrac;
+        if (this.time >= a.trailHoldUntil + 0.45 || a.trail <= hpF) a.trailFrom = a.trail;
+        a.trailFrom = Math.max(a.trailFrom, a.trail);
+        a.trailHoldUntil = this.time + 0.15;
+      }
+      a.lastHpFrac = hpF;
+      if (this.time > a.trailHoldUntil) a.trail = a.trailFrom + (hpF - a.trailFrom) * Math.min(1, (this.time - a.trailHoldUntil) / 0.45);
+      if (a.trail < hpF) { a.trail = hpF; a.trailFrom = hpF; }
+      const alive = v.alive && v.state !== 'dead';
+      // ── rings
+      if (alive) {
+        if (isF) {
+          const code = rel === 'self' ? RING.self : rel === 'ally' ? RING.ally : rel === 'enemy' ? RING.enemy : RING.neutral;
+          rings.push(a.x, a.y, v.radius + 0.22, a.facing, code, col, 1, a.id === this.hover ? 1 : 0);
+        } else if (v.kind === 'monster') {
+          const aggro = v.state !== 'idle' && v.state !== 'move' ? true : v.hp < v.maxHp - 1e-3;
+          if (aggro || a.id === this.hover) rings.push(a.x, a.y, v.radius + 0.18, a.facing, RING.neutral, col, 0.9, a.id === this.hover ? 1 : 0);
+        } else if (a.id === this.hover || a.id === this.target) {
+          const code = rel === 'ally' ? RING.ally : rel === 'enemy' ? RING.enemy : RING.neutral;
+          rings.push(a.x, a.y, v.radius + 0.15, a.facing, code, col, 0.9, 1);
+        }
+        // structures: the attack-range ring while your fighter is within 4 m of it
+        if (v.kind === 'structure' && me && me.alive && rel === 'enemy') {
+          const ud = this.lib.unit(v.def);
+          const range = (ud?.attack?.range ?? 0) + v.radius;
+          if (range > 0 && Math.hypot(me.x - v.x, me.y - v.y) < range + me.radius + 4) rings.push(a.x, a.y, range, 0, RING.range, col, 0.85, 0);
+        }
+      }
+      // ── bars
+      if (!alive) continue;
+      let kind: number = BAR_KIND.fighter;
+      let show = true;
+      if (v.kind === 'minion' || v.kind === 'summon') { kind = BAR_KIND.minion; show = v.hp < v.maxHp - 1e-3 || a.id === this.hover || a.id === this.target; }
+      else if (v.kind === 'structure') { kind = BAR_KIND.structure; }
+      else if (v.kind === 'monster') { kind = BAR_KIND.monster; show = v.hp < v.maxHp - 1e-3 || v.state !== 'idle' || a.id === this.hover; }
+      else if (v.kind === 'ward' || v.kind === 'pickup') show = false;
+      if (!show) continue;
+      const shape = rel === 'self' ? SHAPE.self : rel === 'ally' ? SHAPE.ally : rel === 'enemy' ? SHAPE.enemy : SHAPE.neutral;
+      let resColor = this.tmpColor.set(0, 0, 0), showRes = false, hatch = false;
+      let level = 0, nameSlot = -1, seatLine: Color | null = null, keyline: 0 | 1 | 2 = 0;
+      if (isF) {
+        const fd = this.lib.fighter(v.def);
+        const r = fd ? this.resources.get(fd.resource) : undefined;
+        if (r && r.model !== 'none' && v.maxRes > 0) { resColor = r.color; showRes = true; hatch = r.model === 'heat'; }
+        level = v.level;
+        const pl = players.get(v.owner);
+        if (pl) nameSlot = bars.nameSlot(pl.name);
+        if (p.ffa) {
+          if (rel === 'self') seatLine = p.get(p.seatHexOf(v.owner));
+          else {
+            const seat = FRAY_SEATS.find((s) => s.color.toLowerCase() === hex.toLowerCase());
+            keyline = seat?.keyline === 'chalk' ? 1 : seat?.keyline === 'ink' ? 2 : 0;
+          }
+        }
+      }
+      let cc = 0;
+      for (const s of v.statuses) if (HARD_CC.has(s.kind) && s.duration > 0) cc = Math.max(cc, s.remaining / s.duration);
+      bars.push({
+        x: a.x, y: a.h + a.barHeight, z: a.y, kind, shape,
+        hp: hpF, trail: a.trail, shieldEnd: Math.min(1, (Math.max(0, v.hp) + v.shield) / total), total: this.ticks ? total : 1e9,
+        res: v.maxRes > 0 ? v.res / v.maxRes : 0, showRes, resHatch: hatch, cc,
+        color: col, resColor, glyph: kind === BAR_KIND.structure ? (v.team === 0 ? GLYPH.spire : GLYPH.dome) : isF ? GLYPH.chip : GLYPH.none,
+        keyline, seatLine, alpha: 1, nameSlot, level,
+      });
+    }
+    bars.end();
+    rings.end();
+    this.buildTelegraphs();
+  }
+
+  private buildTelegraphs(): void {
+    const p = this.palette;
+    const t = this.teles;
+    t.begin();
+    const now = this.time;
+    const spec: TeleSpec = { x: 0, z: 0, dir: 0, shape: 0, radius: 1, inner: 0, halfAngle: 0.5, length: 1, width: 1, color: this.tmpColor, fill: 0, edge: 0, edgePx: 2, sweep: 1, dashed: false, tick: null };
+    for (const tg of this.director.telegraphs) {
+      if (now < tg.start) continue;
+      const rel = p.relation(tg.team, tg.owner, true);
+      const s = tg.shape;
+      spec.x = tg.x; spec.z = tg.y; spec.dir = tg.dir;
+      spec.shape = s.kind === 'circle' ? TELE_SHAPE.circle : s.kind === 'ring' ? TELE_SHAPE.ring : s.kind === 'cone' ? TELE_SHAPE.cone : TELE_SHAPE.rect;
+      spec.radius = s.radius ?? 1; spec.inner = s.inner ?? 0; spec.halfAngle = (s.angle ?? Math.PI / 3) / 2;
+      spec.length = s.length ?? 1; spec.width = s.width ?? 1;
+      spec.dashed = false;
+      const dur = Math.max(1e-3, tg.land - tg.start);
+      const landing = tg.zone < 0 && tg.land > tg.start;
+      const prog = landing ? Math.min(1, (now - tg.start) / dur) : 1;
+      const flash = now >= tg.land && tg.zone < 0;
+      spec.sweep = landing && !flash ? prog : 1;
+      spec.tick = p.ffa && tg.owner >= 0 && rel !== 'self' ? p.get(p.seatHexOf(tg.owner)) : null;
+      if (rel === 'enemy' || (p.viewer.team < 0)) {
+        // spectators see the caster's side colour with the enemy treatment
+        spec.color = p.get(p.viewer.team < 0 ? p.unitHex(tg.team, tg.owner, true) : p.relationHex('enemy'));
+        spec.fill = flash ? 0.4 : tg.zone >= 0 ? 0.16 : 0.16 + 0.14 * prog;
+        spec.edge = 0.9; spec.edgePx = 3;
+      } else if (rel === 'neutral') {
+        spec.color = p.relationColor('neutral'); spec.fill = 0.12; spec.edge = 0.8; spec.edgePx = 2;
+      } else {
+        spec.color = tg.heal ? p.get('#63D88B') : p.relationColor(rel === 'self' ? 'self' : 'ally');
+        spec.fill = rel === 'self' ? 0.08 : 0; spec.edge = tg.heal ? 0.5 : rel === 'self' ? 0.6 : 0.45; spec.edgePx = 2;
+        if (flash) spec.fill = Math.max(spec.fill, 0.12);
+      }
+      t.push(spec);
+    }
+    // your own aim
+    const aim = this.aim;
+    if (aim) {
+      const self = p.relationColor('self');
+      if (aim.range && aim.range > 0) {
+        t.push({ ...spec, x: aim.casterX ?? aim.x, z: aim.casterY ?? aim.y, dir: 0, shape: TELE_SHAPE.circle, radius: aim.range, inner: 0, color: self, fill: 0, edge: 0.25, edgePx: 2, sweep: 1, dashed: true, tick: null });
+      }
+      const sh = aim.shape === 'circle' ? TELE_SHAPE.circle : aim.shape === 'ring' ? TELE_SHAPE.ring : aim.shape === 'cone' ? TELE_SHAPE.cone : TELE_SHAPE.rect;
+      t.push({
+        ...spec, x: aim.x, z: aim.y, dir: aim.dir ?? 0, shape: sh, radius: aim.radius ?? 1, inner: aim.inner ?? 0,
+        halfAngle: ((aim.angleDeg ?? 60) * Math.PI) / 360, length: aim.length ?? 6, width: aim.shape === 'line' ? Math.min(aim.width ?? 0.4, 0.6) : aim.width ?? 1.2,
+        color: aim.heal ? p.get('#63D88B') : self, fill: 0.08, edge: 0.6, edgePx: 2, sweep: 1, dashed: false, tick: null,
+      });
+    }
+    t.end();
+  }
+
+  // ── frame ──────────────────────────────────────────────────────────────────────────────────────
+  render(dt: number): void {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    const d = Math.max(0, Math.min(0.25, Number.isFinite(dt) ? dt : 0));
+    // fps cap (and the menu's 30 fps idle cap after 4 s)
+    const cap = this.mode === 'menu' && this.menu.idle > 4 ? 30 : this.q.fpsCap;
+    if (cap > 0) {
+      this.skipAcc += d;
+      if (this.skipAcc < 1 / cap - 0.002) return;
+      this.skipAcc = 0;
+    }
+    const t0 = performance.now();
+    if (this.lastFrameAt > 0) {
+      const iv = t0 - this.lastFrameAt;
+      this.fpsEma = this.fpsEma > 0 ? this.fpsEma * 0.9 + (1000 / Math.max(1, iv)) * 0.1 : 1000 / Math.max(1, iv);
+      if (this.dyn.sample(iv)) this.applySize();
+    }
+    this.lastFrameAt = t0;
+    this.time += d;
+    worldUniforms.valeTime.value = this.time;
+    overlayUniforms.uTime.value = this.time;
+
+    if (this.mode === 'match' && this.client) this.frameMatch(d);
+    else if (this.mode === 'menu') { this.menu.update(d); this.vfx.update(d); }
+
+    const info = this.gl.info;
+    info.reset();
+    this.post.render(d);
+    this.sceneCalls = info.render.calls;
+    this.sceneTris = info.render.triangles;
+    this.frameMs = performance.now() - t0;
+  }
+
+  private frameMatch(d: number): void {
+    const client = this.client!;
+    const view = client.view;
+    const alpha = client.alpha;
+    this.syncActors(view);
+    // events → VFX / telegraphs
+    if (this.pending.length) { const evs = this.pending.splice(0, this.pending.length); this.director.handle(evs); }
+    this.director.update(view);
+    this.updateActors(d, alpha);
+    // camera follows your fighter
+    const me = view.players.find((p) => p.player === client.you);
+    const a = me ? this.actors.get(me.entity) : undefined;
+    if (a && a.view?.alive) this.rig.setSelf(a.x, a.y); else this.rig.setSelf(null, null);
+    this.rig.update(d);
+    // fog of war
+    this.fog.update(view, this.palette.viewer.team, d);
+    this.sun.fit(this.rig.camera);
+    this.terrain?.update(this.time);
+    this.vfx.update(d);
+    this.buildOverlay(view);
+  }
+
+  // ── picking ────────────────────────────────────────────────────────────────────────────────────
+  private activeCamera(): PerspectiveCamera { return this.mode === 'menu' ? this.menu.camera : this.rig.camera; }
+
+  pickGround(x: number, y: number): { x: number; y: number } | null {
+    const cam = this.activeCamera();
+    _ndc.set((x / this.cssW) * 2 - 1, -(y / this.cssH) * 2 + 1);
+    this.raycaster.setFromCamera(_ndc, cam);
+    const hit = this.raycaster.ray.intersectPlane(this.ground, _v);
+    if (!hit) return null;
+    return { x: hit.x, y: hit.z };
+  }
+
+  pickEntity(x: number, y: number): EntityId | null {
+    if (this.mode !== 'match') return null;
+    const cam = this.rig.camera;
+    let best: EntityId | null = null, bestScore = Infinity;
+    for (const a of this.actors.values()) {
+      const v = a.view;
+      if (!v || !a.visible || !v.alive || !v.targetable || a.leaving >= 0) continue;
+      if (v.kind === 'pickup') continue;
+      _v.set(a.x, a.h, a.y).project(cam);
+      _v2.set(a.x, a.h + a.artHeight, a.y).project(cam);
+      if (_v.z > 1) continue;
+      const fx = (_v.x * 0.5 + 0.5) * this.cssW, fy = (-_v.y * 0.5 + 0.5) * this.cssH;
+      const hy = (-_v2.y * 0.5 + 0.5) * this.cssH;
+      const ppm = Math.abs(fy - hy) / Math.max(0.3, a.artHeight);
+      const rx = Math.max(16, (v.radius + 0.15) * ppm);
+      const top = Math.min(hy, fy - 24) - 6, bottom = fy + rx * 0.6;
+      if (y < top || y > bottom) continue;
+      const dx = Math.abs(x - fx);
+      if (dx > rx) continue;
+      // nearest to the cursor wins; fighters before units at equal distance
+      const score = dx + Math.abs(y - (fy + hy) / 2) * 0.3 + (v.kind === 'fighter' ? 0 : 8);
+      if (score < bestScore) { bestScore = score; best = a.id; }
+    }
+    return best;
+  }
+
+  worldToScreen(x: number, y: number, height = 0): { x: number; y: number; visible: boolean } {
+    const cam = this.activeCamera();
+    _v.set(x, height, y).project(cam);
+    const sx = (_v.x * 0.5 + 0.5) * this.cssW, sy = (-_v.y * 0.5 + 0.5) * this.cssH;
+    return { x: sx, y: sy, visible: _v.z < 1 && _v.z > -1 && sx >= 0 && sy >= 0 && sx <= this.cssW && sy <= this.cssH };
+  }
+
+  setAim(aim: AimSpec | null): void { this.aim = aim; }
+  setHover(id: EntityId | null): void { this.hover = id; }
+  setTarget(id: EntityId | null): void { this.target = id; }
+
+  // ── menu ───────────────────────────────────────────────────────────────────────────────────────
+  setStation(name: string): void { this.menu.setStation(name); }
+  setMenuView(view: { screen: string; fighter?: string; skin?: string; mode?: string }): void {
+    this.menu.build(this.catalog, this.assets);
+    this.menu.setStation(view.screen);
+    this.menu.setShowcase(view.fighter ? this.lib : null, view.fighter ?? null, view.skin ?? null);
+  }
+
+  async preload(setup: MatchSetup, onProgress?: (p: number) => void): Promise<void> {
+    const map = this.catalog.maps.find((m) => m.id === setup.map);
+    const units = new Set<string>();
+    if (map) { for (const s of map.structures) units.add(s.unit); for (const c of map.camps) for (const u of c.units) units.add(u.unit); for (const pk of map.pickups) units.add(pk.unit); }
+    const mode = this.catalog.modes.find((m) => m.id === setup.mode);
+    for (const w of mode?.rules.minionWaves?.composition ?? []) units.add(w.unit);
+    const refs = this.lib.refsFor(setup.seats.map((s) => ({ fighter: s.fighter, skin: s.skin })), units);
+    const jobs: Promise<unknown>[] = refs.map((r) => this.assets.model(r));
+    if (map) { jobs.push(this.assets.hdr(map.art.sky), this.assets.lut(map.art.lut), this.assets.model(map.art.scene)); }
+    for (const s of setup.seats) jobs.push(this.lib.fighterTemplate(s.fighter, s.skin));
+    let done = 0;
+    onProgress?.(0);
+    await Promise.all(jobs.map((j) => j.then(() => { done++; onProgress?.(done / jobs.length); })));
+    onProgress?.(1);
+  }
+
+  stats(): RenderStats {
+    const info = this.gl.info;
+    const size = this.gl.getDrawingBufferSize(new Vector2());
+    return {
+      fps: Math.round(this.fpsEma * 10) / 10, frameMs: Math.round(this.frameMs * 100) / 100,
+      calls: info.render.calls, triangles: info.render.triangles, sceneCalls: this.sceneCalls, sceneTriangles: this.sceneTris,
+      programs: info.programs?.length ?? 0, geometries: info.memory.geometries, textures: info.memory.textures,
+      renderScale: this.dyn.scale, pixelRatio: this.gl.getPixelRatio(), tier: this.q.tier, width: size.x, height: size.y,
+      particles: this.vfx.particleCount, vfx: this.vfx.instanceCount, actors: this.actors.size, telegraphs: this.teles.size, mode: this.mode,
+    };
+  }
+
+  injectEvents(events: SimEvent[]): void { for (const e of events) this.pending.push(e); }
+
+  dispose(): void {
+    this.teardownMatch();
+    this.menu.dispose();
+    this.vfx.dispose();
+    this.bars.dispose(); this.rings.dispose(); this.teles.dispose();
+    this.overlay.dispose();
+    this.post.dispose();
+    this.sky.dispose();
+    this.gl.dispose();
+  }
+}
+
+/** CONTRACT §9 entry point. `assetUrl` resolves catalog AssetRefs (boot: LoadedCatalog.assetUrl). */
+export function createRenderer(canvas: HTMLCanvasElement, catalog: CatalogT, settings: Settings, assetUrl: AssetUrlFn, options: RendererOptions = {}): Renderer {
+  return new ValeRenderer(canvas, catalog, settings, assetUrl, options);
+}

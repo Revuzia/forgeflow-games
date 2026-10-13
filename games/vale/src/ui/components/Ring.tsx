@@ -3,7 +3,7 @@
 // own rAF and turns HARM (relationship enemy colour, --team-enemy) in the last 5 s. Shape codes from
 // the bible: `dash12` (ally), `notch4` (enemy), `solid` (self / neutral state).
 
-import type { ComponentChildren, JSX } from 'preact';
+import type { ComponentChildren, CSSProperties, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { reducedMotion } from '../motion.ts';
 
@@ -80,7 +80,7 @@ export function Ring(p: RingProps): JSX.Element {
   const color = toneVar(p.tone);
   const dashes = p.kind === 'dash12';
   return (
-    <div ref={root} class={`ring ${p.class ?? ''}`} style={{ '--ring-size': p.size, '--ring-color': color } as JSX.CSSProperties}
+    <div ref={root} class={`ring ${p.class ?? ''}`} style={{ '--ring-size': p.size, '--ring-color': color } as CSSProperties}
       role={p.label ? 'img' : undefined} aria-label={p.label}>
       <svg viewBox="-56 -56 112 112" class="ring__svg" aria-hidden="true">
         <circle r={R} class="ring__track" stroke-width={vbStroke} />

@@ -3,11 +3,11 @@
 //   empty    one drawing (the uncarved dial), one sentence, one action
 //   error    a HARM rule, the wedge "!" glyph, a plain message and Retry — never a dead end
 
-import type { ComponentChildren, JSX } from 'preact';
+import type { ComponentChildren, CSSProperties, JSX } from 'preact';
 import { Button } from './Button.tsx';
 import { Icon } from './Glyphs.tsx';
 
-export function Skeleton(p: { w?: string; h?: string; r?: 'plate' | 'round' | 'line'; class?: string; style?: JSX.CSSProperties }): JSX.Element {
+export function Skeleton(p: { w?: string; h?: string; r?: 'plate' | 'round' | 'line'; class?: string; style?: CSSProperties }): JSX.Element {
   return <span class={`skel skel--${p.r ?? 'plate'} ${p.class ?? ''}`} style={{ width: p.w, height: p.h, ...p.style }} aria-hidden="true" />;
 }
 

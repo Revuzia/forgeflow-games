@@ -2,7 +2,7 @@
 // screen and component through one Preact context.
 
 import { createContext, type ComponentChildren, type VNode } from 'preact';
-import { useContext } from 'preact/hooks';
+import { useContext, useEffect, useRef } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import type { Session } from '../contracts/session.ts';
 import type { CatalogView } from './catalog_view.ts';
@@ -62,3 +62,22 @@ export interface AppCtx {
 
 export const AppContext = createContext<AppCtx>(null as unknown as AppCtx);
 export const useApp = (): AppCtx => useContext(AppContext);
+
+// ── Esc: screens (and panels) claim it while mounted; the newest claim answers first. A handler returns
+// true when it handled the key. Unclaimed Esc goes Back (app.tsx), except where the bible says not to
+// (ready check, match, rebinding) — those screens claim it and decide.
+const escStack: { fn: () => boolean }[] = [];
+export function handleEsc(): boolean {
+  for (let i = escStack.length - 1; i >= 0; i--) if (escStack[i].fn()) return true;
+  return false;
+}
+export function useEsc(fn: () => boolean, active = true): void {
+  const ref = useRef(fn);
+  ref.current = fn;
+  useEffect(() => {
+    if (!active) return;
+    const entry = { fn: () => ref.current() };
+    escStack.push(entry);
+    return () => { const i = escStack.indexOf(entry); if (i >= 0) escStack.splice(i, 1); };
+  }, [active]);
+}

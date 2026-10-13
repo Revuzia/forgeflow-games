@@ -4,7 +4,7 @@
 
 import { batch, computed, signal } from '@preact/signals';
 import type {
-  DraftState, GrantSummary, MatchClient, PartyMember, Profile, Session, SessionEvent, Settings,
+  DraftState, GrantSummary, MatchClient, PartyMember, Profile, QueueRequest, Session, SessionEvent, Settings,
 } from '../contracts/session.ts';
 import type { MatchResult, MatchSetup, PlayerId } from '../contracts/sim.ts';
 import type { CatalogView } from './catalog_view.ts';
@@ -28,8 +28,13 @@ function loadPrefs(): UiPrefs {
   return d;
 }
 
+/** what the UI uses of the renderer (CONTRACT §9; src/render/renderer.ts implements all of it) */
 export interface RendererPort {
   setScene?(scene: 'menu' | MatchClient): void;
+  resize?(width?: number, height?: number): void;
+  render?(dt: number): void;
+  setQuality?(video: Settings['video']): void;
+  setSettings?(patch: Partial<Settings>): void;
   /** OPTIONAL (requested): point the menu camera at a station / show a fighter on the plinth */
   setMenuView?(view: { screen: string; fighter?: string; skin?: string; mode?: string }): void;
   /** OPTIONAL (requested): load a match's assets, reporting 0..1 */
@@ -58,6 +63,14 @@ export class AppState {
   readonly lastError = signal<string | null>(null);
   /** true from accept until the draft opens */
   readonly accepted = signal(false);
+  /** the last re-queue lockout the session gave (seconds): the next is double, capped at 60 (CONTRACT §7) */
+  lastLockoutS = 0;
+  /** re-queue lockout end (performance.now() ms); 0 = none */
+  readonly lockoutUntil = signal(0);
+  /** the request the player last queued with (play again, queue screen labels) */
+  readonly lastRequest = signal<QueueRequest | null>(null);
+  /** 1 Hz clock for countdowns that are not rings (lockout lines) */
+  readonly now = signal(performance.now());
 
   private toastSeq = 1;
   private off: (() => void) | null = null;
@@ -67,6 +80,27 @@ export class AppState {
     this.profile.value = o.session.profile();
     this.party.value = o.session.party();
     this.off = o.session.on((e) => this.onEvent(e));
+    setInterval(() => { this.now.value = performance.now(); }, 500);
+  }
+
+  /** seconds left on the re-queue lockout */
+  readonly lockoutLeft = computed(() => Math.max(0, (this.lockoutUntil.value - this.now.value) / 1000));
+
+  /** queue with a request; matchmade queues go to the search screen, custom/practice straight to their draft */
+  queueFor(req: QueueRequest): void {
+    const q = this.cv.queue(req.queue);
+    this.lastRequest.value = req;
+    this.lastError.value = null;
+    this.session.queue(req);
+    if (q && q.kind !== 'custom' && q.kind !== 'practice' && this.queue.value?.state === 'searching') {
+      this.sound.play('queue_search');
+      if (this.router.route.value.screen !== 'queue') this.router.go('queue', {}, { transition: 'forward' });
+    }
+  }
+  /** Play again: Session.playAgain when offered, else the last request */
+  playAgain(): void {
+    if (this.session.playAgain) { this.session.playAgain(); this.sound.play('queue_search'); }
+    else if (this.lastRequest.value) this.queueFor(this.lastRequest.value);
   }
 
   dispose(): void { this.off?.(); this.off = null; }
@@ -97,7 +131,14 @@ export class AppState {
     const cv = this.cv, r = this.router;
     switch (e.type) {
       case 'profile': this.profile.value = e.profile; break;
-      case 'error': this.lastError.value = e.message; console.warn('[vale] session:', e.message); break;
+      case 'error': {
+        this.lastError.value = e.message;
+        console.warn('[vale] session:', e.message);
+        // draft refusals carry a reason code the strings localise (error.draft.<reason>)
+        const m = /^draft: (\w+)$/.exec(e.message);
+        if (m) this.toast(cv.t(`error.draft.${m[1]}`, cv.t('error.draft.unknown_action', "You can't do that right now.")), 'error');
+        break;
+      }
       case 'queue': {
         const prev = this.queue.value;
         batch(() => {
@@ -106,7 +147,12 @@ export class AppState {
           if (e.state === 'found' && prev?.state !== 'found') { this.accepted.value = false; this.sound.play('queue_pop'); }
           if (e.state === 'accepted') this.accepted.value = true;
         });
-        if (e.state === 'found' && prev?.state !== 'found') this.flashTitle(cv.t('ready.title', 'Match found'));
+        if (e.state === 'found' && prev?.state !== 'found') { this.flashTitle(cv.t('ready.title', 'Match found')); this.sound.duck(true); }
+        if (e.state !== 'found') this.sound.duck(false);
+        if (e.lockout && e.lockout > 0) { this.lockoutUntil.value = performance.now() + e.lockout * 1000; if (e.reason) this.lastLockoutS = e.lockout; }
+        if (e.state === 'accepted') this.lastLockoutS = 0;
+        if ((e.state === 'searching' || e.state === 'found') && r.route.value.screen !== 'queue') r.reset('queue', {}, 'forward');
+        if (e.state === 'idle' && !e.reason && e.lockout) this.toast(cv.t('queue.lockout_banner', 'You can queue again in {t}.', { t: fmtWait(e.lockout) }), 'warn');
         if (e.state === 'declined' || (e.state === 'idle' && e.reason)) {
           this.accepted.value = false;
           const lock = e.lockout && e.lockout > 0 ? cv.t('queue.lockout', ' You can queue again in {t}.', { t: fmtWait(e.lockout) }) : '';

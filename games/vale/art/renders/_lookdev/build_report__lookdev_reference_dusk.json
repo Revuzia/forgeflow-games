@@ -1,0 +1,145 @@
+{
+  "id": "_lookdev_reference_dusk",
+  "fighter": "_lookdev_reference",
+  "skin": true,
+  "parts": {
+    "bind_body": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": []
+    },
+    "tris_body": 5598,
+    "tris_mask": 1596,
+    "tris_mask_beak": 304,
+    "tris_resin_brow": 180,
+    "tris_hood": 1562,
+    "tris_crest_fin": 320,
+    "tris_collar": 800,
+    "tris_pauldron.L": 864,
+    "tris_pauldron_inlay.L": 180,
+    "tris_pauldron.R": 864,
+    "tris_pauldron_inlay.R": 180,
+    "tris_harness": 384,
+    "tris_clasp": 360,
+    "tris_clasp_gnomon": 120,
+    "tris_belt": 648,
+    "tris_buckle": 288,
+    "tris_lantern": 288,
+    "tris_lantern_frame": 472,
+    "tris_tasset.L": 316,
+    "tris_tasset.R": 316,
+    "tris_drape_f": 618,
+    "tris_drape_b": 630,
+    "tris_bracer.L": 320,
+    "tris_greave.L": 636,
+    "tris_knee.L": 240,
+    "tris_bracer.R": 320,
+    "tris_greave.R": 636,
+    "tris_knee.R": 240,
+    "tris_gn_blade": 1428,
+    "tris_gn_guard": 248,
+    "tris_gn_grip": 420,
+    "tris_gn_wraps": 96,
+    "tris_gn_pommel": 180,
+    "armour_conform": {
+      "covered": 900,
+      "culled_faces": 466,
+      "body_tris_before": 5598,
+      "body_tris_after": 5132
+    },
+    "validate__lookdev_reference": "12980->12969"
+  },
+  "uv_coverage": 0.604,
+  "bake": {
+    "base": 5.63,
+    "rough_metal": 3.3,
+    "normal": 6.5,
+    "ao": 16.23,
+    "normal_fixed_px": 3007,
+    "pack_save": 0.43,
+    "total": 32.32
+  },
+  "tris": 21175,
+  "mesh_top_m": 1.969,
+  "glb_bytes_raw": 3067228,
+  "optimize": {
+    "ok": true,
+    "before": 3067228,
+    "after": 905104
+  },
+  "glb_bytes": 905104,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /home/user/forgeflow-games/games/vale/art/out/_lookdev/_lookdev_reference_dusk.glb (884 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: _lookdev_reference_dusk_base 1024x1024 108K, _lookdev_reference_dusk_normal 1024x1024 38K, _lookdev_reference_dusk_orm 1024x1024 108K",
+      "  skinned meshes: _lookdev_reference_accent(408v), _lookdev_reference_dusk(17686v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip thighL shinL footL toeL thighR shinR footR toeR x_drape_b_1 x_drape_f_1)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=1024x1024, body.normalMap=1024x1024, body.roughnessMap=1024x1024, body.metalnessMap=1024x1024, body.aoMap=1024x1024",
+      "  tris: 21175; bind-pose bounds (three units, Y up): 1.64 x 1.97 x 1.65; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.45",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/_lookdev/_lookdev_reference_dusk_splash.png",
+      "portrait": "art/out/_lookdev/_lookdev_reference_dusk_portrait.png"
+    },
+    "seconds": {
+      "splash": 78.22,
+      "portrait": 49.39
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "facing": [
+      0,
+      1
+    ],
+    "bindBox": [
+      [
+        -0.819,
+        0,
+        -0.248
+      ],
+      [
+        0.819,
+        1.969,
+        1.406
+      ]
+    ],
+    "headY": 1.642,
+    "accentPct": 3.49,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 105,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/_lookdev/three__lookdev_reference_dusk.png",
+    "seconds": 9.8,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.84,
+      "model": 14.83,
+      "lows_bind": 6.12,
+      "uv": 17.34,
+      "bake": 32.32,
+      "export": 0.18,
+      "optimize": 1.0,
+      "load_test": 0.27,
+      "render": 127.75,
+      "three_qa": 9.99
+    },
+    "total_s": 210.73
+  },
+  "run_ref_speed": 3.45,
+  "height_m": 1.9
+}

@@ -46,7 +46,16 @@ export class CatalogView {
   }
 
   get version(): string { return this.c.version; }
-  asset(ref: string | undefined | null): string | null { return ref ? this.assetFn(ref) : null; }
+  /** URL of a catalog asset, or null when the asset does not exist. The content build rewrites every
+   *  asset it found to a content-addressed path (`assets/<12 hex>-<name>`) and leaves a missing one's ref
+   *  as authored (`--allow-missing-assets`), so an un-rewritten ref is a known-missing asset: the UI
+   *  shows its designed placeholder without requesting it (no 404 storm while the art lane works). */
+  asset(ref: string | undefined | null): string | null {
+    if (!ref) return null;
+    if (!CatalogView.isBuilt(ref)) return null;
+    return this.assetFn(ref);
+  }
+  static isBuilt(ref: string): boolean { return /^assets\/[0-9a-f]{12}-/.test(ref) || /^(https?:|data:|blob:)/.test(ref); }
 
   private get<T>(kind: string, id: string | undefined | null): T | undefined { return id ? this.byId.get(`${kind}:${id}`) as T | undefined : undefined; }
   fighter(id?: string | null): FighterDefT | undefined { return this.get('fighter', id); }
@@ -107,6 +116,27 @@ export class CatalogView {
   }
   rankIndex(r: RankTierT | undefined): number { return r ? [...this.c.ranks].sort((a, b) => a.minRating - b.minRating).findIndex((x) => x.id === r.id) : -1; }
   ratingTier(rec: RatingRecord | undefined): RankTierT | undefined { return rec && !rec.provisional ? this.tierFor(rec.rating) : undefined; }
+
+  /** effective rules of a queue (mode rules with the queue's partial overrides, one level deep) */
+  rulesOf(q: QueueDefT): ModeDefT['rules'] {
+    const base = this.mode(q.mode)?.rules ?? ({} as ModeDefT['rules']);
+    const out: Record<string, unknown> = { ...base };
+    for (const [k, v] of Object.entries(q.rules ?? {})) {
+      const b = (base as Record<string, unknown>)[k];
+      out[k] = v && typeof v === 'object' && !Array.isArray(v) && b && typeof b === 'object' ? { ...(b as object), ...(v as object) } : v;
+    }
+    return out as ModeDefT['rules'];
+  }
+  /** setup pool rule (session/setup.ts): an empty pools list means every pool */
+  inPool(pools: readonly string[] | undefined, pool: string | undefined): boolean { return !pool || !pools || pools.length === 0 || pools.includes(pool); }
+  /** battle-spell slots the session fills (session/setup.ts sanitizeLoadout: at most 2) */
+  spellSlots(): number { return Math.max(1, Math.min(2, this.c.setup.spellSlots)); }
+  boonSlots(pool?: string): number { return this.c.setup.boons.some((b) => this.inPool(b.pools, pool)) ? Math.max(0, this.c.setup.boonSlots) : 0; }
+  /** the ranked rating ids the catalog uses (one per ranked queue) */
+  rankedQueues(): QueueDefT[] { return this.c.queues.filter((q) => q.ranked).sort((a, b) => a.order - b.order); }
+  /** origin tags (collection filter) from fighter tags that have a collection.origin.<tag> string */
+  originOf(f: FighterDefT): string | undefined { return f.tags.find((t) => `collection.origin.${t}` in this.c.strings); }
+  ordinal(n: number): string { return this.t(`ordinal.${n}`, '', {}) || this.t('ordinal.n', '{n}th', { n }); }
 
   /** localised string: catalog.strings[key] with {param} substitution, else the English fallback */
   t(key: string, fallback: string, params?: Record<string, string | number>): string {

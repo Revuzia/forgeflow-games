@@ -639,6 +639,10 @@ def backdrop_plate(cam, cfg: dict, light: dict, w: int, h: int, path: str, fast:
     plate[..., :3] *= (0.975 + 0.05 * tooth[..., None])
     yy = np_.linspace(0, 1, h, dtype=np_.float32)[:, None, None]
     plate[..., :3] *= (1.02 - 0.06 * yy)
+    # painter's foreground: the floor below the horizon band darkens (and warms a touch) toward the
+    # bottom edge, so the empty ground frames the subject instead of competing with it
+    fgd = np_.clip((yy - 0.80) / 0.20, 0.0, 1.0) ** 1.4
+    plate[..., :3] *= 1.0 - fgd * np_.array([0.20, 0.22, 0.26], np_.float32)
     plate[..., 3] = 1.0
     return plate
 

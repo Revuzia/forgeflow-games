@@ -7,9 +7,10 @@
 //     Identical on every quality tier (it is competitive information).
 //   * map-edge haze: outside the playable bounds only (world space, NEVER camera distance — the
 //     bible bans camera-distance fog), fading to the map's fog colour.
-// FIGHTER materials additionally get their own key light (view-space azimuth 225°, elevation 45°,
-// 0.9 × sun) and a shadow floor (the sun's shadow only removes 25 % of its light: ≥ 75 % brightness
-// in shadow), plus a faint sun-side rim for separation from the ground.
+// FIGHTER materials replace the sun's direction with their own key (view-space azimuth 225°, elevation
+// 45°, 0.9 × the sun's colour and intensity), so every fighter reads the same on every map, and take a
+// shadow floor (the sun's shadow removes at most 25 % of the key: ≥ 75 % brightness in shadow, bible
+// `shadow = mix(1.0, s, 0.25)`), plus a faint sun-side rim for separation from the ground.
 //
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
@@ -32,7 +33,6 @@ export const worldUniforms = {
   valeTime: { value: 0 },
   // fighter key light (view space) and sun-side rim
   valeKeyDir: { value: new Vector3(-0.5, 0.7071, 0.5).normalize() },
-  valeKeyColor: { value: new Color(2.7, 2.6, 2.5) },
   valeSunDirView: { value: new Vector3(0, 1, 0) },
   valeRimColor: { value: new Color(0.25, 0.24, 0.22) },
 };
@@ -58,12 +58,20 @@ float valeVision( vec2 xz ) {
   // crisp, but not blocky: the grid is 2 m; the edge resolves over ~0.6 m
   return smoothstep( 0.38, 0.62, v );
 }
+// value x0.55 is a DISPLAY-space figure: 0.55^2.2 = 0.268 in the linear working space
 vec3 valeApplyWorldFog( vec3 c, vec3 wp ) {
   float vis = valeVision( wp.xz );
   float lum = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-  vec3 fogged = mix( vec3( lum ), c, 0.4 ) * 0.55;
+  #ifdef VALE_KEEP_COLOR
+  vec3 fogged = c * 0.268;
+  #else
+  vec3 fogged = mix( vec3( lum ), c, 0.4 ) * 0.268;
+  #endif
   float tl = max( dot( valeFogTint, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 );
-  fogged = mix( fogged, valeFogTint / tl * dot( fogged, vec3( 0.2126, 0.7152, 0.0722 ) ), 0.15 );
+  #ifndef VALE_KEEP_COLOR
+  // 15 % toward the fog tint (absolute, so the darkest stone keeps a readable floor)
+  fogged = mix( fogged, valeFogTint, 0.15 );
+  #endif
   c = mix( fogged, c, vis );
   if ( valeEdgeOn > 0.5 ) {
     vec2 d2 = max( valeBounds.xy - wp.xz, wp.xz - valeBounds.zw );
@@ -94,21 +102,15 @@ const VERT_MAIN = /* glsl */`
 
 const FIGHTER_PARS = /* glsl */`
 uniform vec3 valeKeyDir;
-uniform vec3 valeKeyColor;
 uniform vec3 valeSunDirView;
 uniform vec3 valeRimColor;
 `;
-/** the fighter's own key light, run through the material's own BRDF */
-const FIGHTER_KEY = /* glsl */`
+/** after the material's direct lights: a faint sun-side rim (separation from the ground) */
+const FIGHTER_RIM = /* glsl */`
 #if defined( RE_Direct )
 {
-  IncidentLight valeKey;
-  valeKey.direction = normalize( valeKeyDir );
-  valeKey.color = valeKeyColor;
-  valeKey.visible = true;
-  RE_Direct( valeKey, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
   float valeRim = pow( 1.0 - saturate( dot( geometryNormal, geometryViewDir ) ), 3.0 ) * saturate( dot( geometryNormal, normalize( valeSunDirView ) ) * 0.6 + 0.4 );
-  reflectedLight.directDiffuse += valeRimColor * valeRim;
+  reflectedLight.directDiffuse += valeRimColor * valeRim * material.diffuseColor;
 }
 #endif
 `;
@@ -118,6 +120,8 @@ export interface WorldPatchOptions {
   fog?: boolean;
   /** fighter shading: own key light, shadow floor, rim */
   fighter?: boolean;
+  /** fog of war darkens but does not desaturate (the Standing Shadow keeps its colour) */
+  keepColor?: boolean;
 }
 
 const PATCHED = Symbol('valePatched');
@@ -127,7 +131,8 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
   const m = material as Material & { [PATCHED]?: string };
   const fog = opts.fog !== false;
   const fighter = opts.fighter === true;
-  const key = `${fog ? 'f' : ''}${fighter ? 'k' : ''}`;
+  const keep = opts.keepColor === true;
+  const key = `${fog ? 'f' : ''}${fighter ? 'k' : ''}${keep ? 'c' : ''}`;
   if (m[PATCHED] === key) return;
   m[PATCHED] = key;
   if (!fog && !fighter) return;
@@ -140,15 +145,19 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
         .replace('#include <common>', `#include <common>\n${VERT_PARS}`)
         .replace('#include <project_vertex>', `#include <project_vertex>\n${VERT_MAIN}`);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\nvarying vec3 vValeWorld;\n${WORLD_FOG_PARS}`)
+        .replace('#include <common>', `#include <common>\n${keep ? '#define VALE_KEEP_COLOR\n' : ''}varying vec3 vValeWorld;\n${WORLD_FOG_PARS}`)
         .replace('#include <opaque_fragment>', `outgoingLight = valeApplyWorldFog( outgoingLight, vValeWorld );\n#include <opaque_fragment>`);
     }
     if (fighter) {
+      // the one directional light (the sun) becomes the fighter's view-space key at 0.9 × its colour;
+      // its shadow keeps ≥ 75 % of the key
       const lights = ShaderChunk.lights_fragment_begin
+        .split('getDirectionalLightInfo( directionalLight, directLight );')
+        .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.direction = normalize( valeKeyDir );\n\t\tdirectLight.color *= 0.9;')
         .split('directionalLightShadow.shadowIntensity').join('( directionalLightShadow.shadowIntensity * 0.25 )');
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${FIGHTER_PARS}`)
-        .replace('#include <lights_fragment_begin>', `${lights}\n${FIGHTER_KEY}`);
+        .replace('#include <lights_fragment_begin>', `${lights}\n${FIGHTER_RIM}`);
     }
   };
   const prevKey = material.customProgramCacheKey;

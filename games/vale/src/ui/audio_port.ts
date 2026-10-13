@@ -9,7 +9,16 @@ import { TOKENS } from './tokens.ts';
 export interface AudioPort {
   /** play a cue by id (ui_ + a UiCueKind, see uiCueId); unknown ids are ignored by the engine */
   play(cueId: string): void;
+  /** OPTIONAL (requested from AUDIO): crossfade the music bed to a MusicDef id, or fade it out (null).
+   *  The UI calls it on every route change; the engine ignores a repeat of the current bed. */
+  music?(musicId: string | null): void;
+  /** OPTIONAL: duck the bed under a moment (the ready check) and restore it */
+  duck?(on: boolean): void;
 }
+
+/** music bed kinds for the client's own screens; match beds come from MapDef.art.music (data) */
+export type MusicKind = 'menu' | 'draft' | 'postgame';
+export const musicId = (kind: MusicKind): string => `mus_${kind}`;
 
 export type UiCueKind =
   | 'hover' | 'click' | 'confirm' | 'back' | 'error' | 'tab' | 'toggle' | 'slider'
@@ -26,6 +35,19 @@ export class UiSound {
   private last = new Map<UiCueKind, number>();
   constructor(port: AudioPort | null | undefined) { this.port = port ?? null; }
 
+  music(id: string | null): void {
+    if (id === this.bed) return;
+    this.bed = id;
+    try { this.port?.music?.(id); } catch { /* never breaks the UI */ }
+  }
+  duck(on: boolean): void { try { this.port?.duck?.(on); } catch { /* never breaks the UI */ } }
+  private bed: string | null | undefined = undefined;
+
+  /** a non-UI cue the client itself owns (the post-game sting): `m_<kind>_sting` assembled at runtime */
+  sting(kind: 'victory' | 'defeat' | 'placement'): void {
+    try { this.port?.play(`m_${kind}_sting`); } catch { /* never breaks the UI */ }
+  }
+
   play(kind: UiCueKind, minIntervalMs = 0): void {
     if (!this.port) return;
     const now = performance.now();
@@ -40,12 +62,11 @@ export class UiSound {
 /** a port that remembers what was played (dev + harness: window.__valeUiCues) */
 export function recordingPort(inner?: AudioPort | null): AudioPort & { log: { id: string; t: number }[] } {
   const log: { id: string; t: number }[] = [];
+  const rec = (id: string): void => { log.push({ id, t: Math.round(performance.now()) }); if (log.length > 200) log.shift(); };
   return {
     log,
-    play(id: string): void {
-      log.push({ id, t: Math.round(performance.now()) });
-      if (log.length > 200) log.shift();
-      inner?.play(id);
-    },
+    play(id: string): void { rec(id); inner?.play(id); },
+    music(id: string | null): void { rec(`music:${id ?? 'off'}`); inner?.music?.(id); },
+    duck(on: boolean): void { rec(`duck:${on}`); inner?.duck?.(on); },
   };
 }

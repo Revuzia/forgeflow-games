@@ -4,17 +4,17 @@
 // class mass glyphs (Plinth block, Breaker inverted wedge, Striker forward diagonal, Slinger
 // horizontal, Caster line + disc, Tender round with a light vessel); the gnomon wedge; utility icons.
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import { TOKENS } from '../tokens.ts';
 import type { ModeMark } from '../catalog_view.ts';
 
-type SvgProps = { size?: number | string; class?: string; title?: string; style?: JSX.CSSProperties };
+type SvgProps = { size?: number | string; class?: string; title?: string; style?: CSSProperties };
 const sz = (s: number | string | undefined, d: string): string => (s === undefined ? d : typeof s === 'number' ? `calc(${s}px * var(--k))` : s);
 
 function Svg(p: SvgProps & { vb?: string; children: JSX.Element | JSX.Element[] | (JSX.Element | null | false)[]; fill?: string }): JSX.Element {
   const s = sz(p.size, '1em');
   return (
-    <svg viewBox={p.vb ?? '0 0 24 24'} width={s} height={s} class={`glyph ${p.class ?? ''}`} style={{ width: s, height: s, ...p.style }}
+    <svg viewBox={p.vb ?? '0 0 24 24'} class={`glyph ${p.class ?? ''}`} style={{ width: s, height: s, ...p.style }}
       aria-hidden={p.title ? undefined : 'true'} role={p.title ? 'img' : undefined} fill={p.fill ?? 'currentColor'}>
       {p.title ? <title>{p.title}</title> : null}
       {p.children}

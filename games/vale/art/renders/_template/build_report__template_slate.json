@@ -1,0 +1,149 @@
+{
+  "id": "_template_slate",
+  "fighter": "_template",
+  "skin": true,
+  "parts": {
+    "bind_body": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": []
+    },
+    "tris_body": 4598,
+    "tris_glove.L": 1184,
+    "tris_glove.L_cuff": 288,
+    "tris_glove.R": 1184,
+    "tris_glove.R_cuff": 288,
+    "tris_boot_wrap.L": 672,
+    "tris_boot_wrap.R": 672,
+    "tris_mask": 1544,
+    "tris_visor": 700,
+    "tris_visor_frame_top": 228,
+    "tris_visor_frame_bot": 228,
+    "tris_visor_inlay": 180,
+    "tris_hood": 1618,
+    "tris_hood_crest": 320,
+    "tris_halo": 384,
+    "tris_halo_rim": 336,
+    "tris_halo_inlay": 672,
+    "tris_mantle": 1396,
+    "tris_belt": 648,
+    "tris_belt_dial": 360,
+    "tris_belt_dial_gnomon": 120,
+    "tris_belt_pouch0": 252,
+    "tris_belt_pouch0_flap": 192,
+    "tris_belt_pouch0_toggle": 192,
+    "tris_belt_pouch1": 252,
+    "tris_belt_pouch1_flap": 192,
+    "tris_belt_pouch1_toggle": 192,
+    "tris_tabard_f": 564,
+    "tris_tabard_b": 578,
+    "tris_bracer.R": 1008,
+    "tris_bracer.L": 1008,
+    "tris_stole_band": 512,
+    "tris_stole.L": 284,
+    "tris_stole.R": 284,
+    "tris_staff": 272,
+    "tris_staff_head": 336,
+    "tris_staff_lens": 168,
+    "armour_conform": {
+      "covered": 898,
+      "culled_faces": 251,
+      "body_tris_before": 4598,
+      "body_tris_after": 4347
+    },
+    "validate__template": "13649->13645"
+  },
+  "uv_coverage": 0.585,
+  "bake": {
+    "base": 7.95,
+    "rough_metal": 3.42,
+    "normal": 8.92,
+    "ao": 20.41,
+    "normal_fixed_px": 25354,
+    "pack_save": 0.69,
+    "total": 41.69
+  },
+  "tris": 23651,
+  "mesh_top_m": 2.026,
+  "glb_bytes_raw": 3361428,
+  "optimize": {
+    "ok": true,
+    "before": 3361428,
+    "after": 1062872
+  },
+  "glb_bytes": 1062872,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /home/user/forgeflow-games/games/vale/art/out/_template/_template_slate.glb (1038 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: _template_slate_base 1024x1024 124K, _template_slate_normal 1024x1024 81K, _template_slate_orm 1024x1024 123K",
+      "  skinned meshes: _template_accent(652v), _template_slate(19884v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_staff_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_b_1 x_tabard_f_1)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=1024x1024, body.normalMap=1024x1024, body.roughnessMap=1024x1024, body.metalnessMap=1024x1024, body.aoMap=1024x1024",
+      "  tris: 23651; bind-pose bounds (three units, Y up): 1.50 x 2.03 x 1.87; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.5",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/_template/_template_slate_splash.png",
+      "portrait": "art/out/_template/_template_slate_portrait.png"
+    },
+    "seconds": {
+      "splash": 70.15,
+      "portrait": 71.4
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "facing": [
+      0,
+      1
+    ],
+    "bindBox": [
+      [
+        -0.755,
+        0,
+        -0.667
+      ],
+      [
+        0.744,
+        2.026,
+        1.202
+      ]
+    ],
+    "headY": 1.642,
+    "accentPct": 3.09,
+    "accentTopHalfPct": 99.1,
+    "heightPx1080": 108,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/_template/three__template_slate.png",
+    "seconds": 15.8,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.76,
+      "model": 13.83,
+      "lows_bind": 5.49,
+      "uv": 20.4,
+      "bake": 41.69,
+      "export": 0.23,
+      "optimize": 1.5,
+      "load_test": 0.25,
+      "render": 141.65,
+      "three_qa": 15.96
+    },
+    "total_s": 241.9
+  },
+  "run_ref_speed": 3.5,
+  "height_m": 1.9
+}

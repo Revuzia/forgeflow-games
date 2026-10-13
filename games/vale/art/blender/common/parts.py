@@ -31,6 +31,8 @@ collars, belts), so call order matters: body -> collar/mantle -> pauldrons -> be
 CATALOG (what exists; see art/renders/parts/sheet.png):
   faces      mask(style= oval | plate | slit | half | beak | keel)  visor(style= band | chimney | dome)
   head       hood(style= deep | peaked | wide)  cowl()  head_wrap()  crest_fin()  halo(style= disc | ring)
+  BUDGET     a fighter is 10-25k tris: body ~5k + face ~2.5k + 6-10 parts at 0.3-1.5k + weapon 1-2.5k. The
+             parts sheet labels every part's tris; tessellation defaults are tuned for 96 px reads.
   shoulders  mantle(style= shawl | capelet)  stole()  collar()  pauldron(kind= stone | wood | cloth)
   limbs      bracer(kind= wood | stone | leather | wrap)  greave(kind= ironstone | wood) (+ knee block)
              glove(style= fingers | mitt | wrap, pose= fist | open)  boot(style=...) + boot_trim(...)
@@ -126,7 +128,7 @@ def _set(o, ctx, mat):
     return o
 
 
-def closed_tube(points, axis, rx, ry, *, segments: int = 8, exp: float = 3.0, name: str = "tube", col=None):
+def closed_tube(points, axis, rx, ry, *, segments: int = 6, exp: float = 3.0, name: str = "tube", col=None):
     """A closed tube through `points` (a loop, first != last) whose section is oriented by `axis`
     at every point (ry along the axis, rx across it): bands, rims, wraps. Frames are computed per
     point, so the seam never twists (parallel transport round a non-planar loop does)."""
@@ -154,7 +156,7 @@ def closed_tube(points, axis, rx, ry, *, segments: int = 8, exp: float = 3.0, na
     return mesh.bm_to_obj(bm, name, col)
 
 
-def ring(center, axis, radius: float, section=(0.012, 0.012), n: int = 24, name: str = "ring", col=None,
+def ring(center, axis, radius: float, section=(0.012, 0.012), n: int = 20, name: str = "ring", col=None,
          ref=None, exp: float = 2.0):
     """Closed torus-like loop (bands, rims, wraps) around `axis` through `center`."""
     a = V(axis).normalized()
@@ -167,7 +169,7 @@ def ring(center, axis, radius: float, section=(0.012, 0.012), n: int = 24, name:
     return closed_tube(pts, a, section[1], section[0], exp=exp, name=name, col=col)
 
 
-def surface_ring(proj: Cylindrical, v: float, target, lift: float, section=(0.012, 0.01), n: int = 24,
+def surface_ring(proj: Cylindrical, v: float, target, lift: float, section=(0.012, 0.01), n: int = 16,
                  name: str = "band", col=None, u0: float = 0.0, u1: float = 360.0, wobble: float = 0.0):
     """A band hugging `target` around a Cylindrical projection at height/axis distance `v`
     (bracer straps, boot cuffs, wraps). section = (half width along the axis, radial thickness);
@@ -690,17 +692,19 @@ def halo(ctx, style: str = "disc", *, radius: float = 0.20, mat="dawnglass", rim
         mesh.set_material(d, _m(ctx, mat))
         objs.append((name, d))
         if rim:
-            r_ = ring(cen, (0, 1, 0), R + 0.004, section=(0.016, 0.012), n=40, name=f"{name}_rim", col=col)
+            r_ = ring(cen, (0, 1, 0), R + 0.004, section=(0.016, 0.012), n=28, name=f"{name}_rim", col=col)
             mesh.set_material(r_, _m(ctx, rim))
             objs.append((f"{name}_rim", r_))
     else:
-        r_ = ring(cen, (0, 1, 0), R, section=(0.016, 0.022), n=40, name=name, col=col)
+        r_ = ring(cen, (0, 1, 0), R, section=(0.016, 0.022), n=28, name=name, col=col)
         mesh.set_material(r_, _m(ctx, rim or mat))
         objs.append((name, r_))
-    a = _acc(accent, r=0.85)
-    if a:
-        o = ring(cen + V((0, -0.016 if style == "disc" else -0.02, 0)), (0, 1, 0), R * a["r"], section=(0.004, 0.009), n=36,
-                 name=f"{name}_inlay", col=col)
+    a = _acc(accent, r=0.85, width=0.011)
+    if a:                                              # an inlay ring on BOTH faces (readable from any facing)
+        dy = 0.016 if style == "disc" else 0.02
+        inl = [ring(cen + V((0, sg * dy, 0)), (0, 1, 0), R * a["r"], section=(0.004, a["width"]), n=28,
+                    name=f"{name}_inlay{i}", col=col) for i, sg in enumerate((-1.0, 1.0))]
+        o = mesh.join(inl, f"{name}_inlay")
         mesh.set_material(o, ctx.mats["accent"])
         objs.append((f"{name}_inlay", o))
     if tilt:
@@ -743,7 +747,7 @@ def mantle(ctx, style: str = "shawl", *, mat="cloth2", rim=None, accent=None, ta
         return f + flare * t * t + cw
 
     o = mesh.plate(proj, [(v_top, -180, 180), ((v_top + v_bot) * 0.5, -180, 180), (v_bot, -180, 180)],
-                   target=_targets(ctx, target), offset=0.028, thickness=0.022, cols=36, rows_n=9, smooth_iters=10,
+                   target=_targets(ctx, target), offset=0.028, thickness=0.022, cols=28, rows_n=7, smooth_iters=10,
                    wrap=True, shape_fn=shape, rim=0.014, rim_height=0.006, bevel_w=bevel_w(bevel, 0.022) * 0.4,
                    bevel_segments=1, name=name, col=ctx.col, mat=_m(ctx, mat), rim_mat=_m(ctx, rim or mat), inner=True)
     ctx.targets = list(ctx.targets or [ctx.body_high]) + [o]
@@ -892,7 +896,7 @@ def bracer(ctx, kind: str = "wood", *, sides=("L", "R"), mat=None, accent=None, 
             n = straps or 6
             for i in range(n):
                 v = L * (t0 + (t1 - t0) * (i + 0.5) / n)
-                objs.append(surface_ring(cyl, v, tree, 0.002 + 0.002 * (i % 2), section=(L * (t1 - t0) / n * 0.62, 0.005), n=20,
+                objs.append(surface_ring(cyl, v, tree, 0.002 + 0.002 * (i % 2), section=(L * (t1 - t0) / n * 0.62, 0.005), n=14,
                                          name=f"{nm}_w{i}", col=ctx.col, wobble=0.012))
         else:
             th = thickness or {"wood": 0.022, "stone": 0.03, "leather": 0.012}[kind]
@@ -903,7 +907,7 @@ def bracer(ctx, kind: str = "wood", *, sides=("L", "R"), mat=None, accent=None, 
             if kind in ("wood", "stone"):                  # carved lips: the bracer reads as a cuff, not a sleeve
                 tree = mesh.bvh_of([sh])
                 for t, w_ in ((t0 + 0.02, 0.012), (t1 - 0.025, 0.016)):
-                    objs.append(surface_ring(cyl, L * t, tree, -0.004, section=(w_, th * 0.55), n=22,
+                    objs.append(surface_ring(cyl, L * t, tree, -0.004, section=(w_, th * 0.55), n=16,
                                              name=f"{nm}_lip", col=ctx.col))
             if kind == "leather" or straps:
                 tree = mesh.bvh_of([sh])
@@ -985,7 +989,7 @@ def glove(ctx, style: str = "fingers", *, sides=("L", "R"), pose: str = "fist", 
         palm = mesh.loft([{"p": wr - d * 0.006 + back * 0.004, "rx": 0.026 * k, "ry": 0.036 * k, "exp": 2.6},
                           {"p": wr + d * L * 0.24 + back * 0.004, "rx": 0.025 * k, "ry": 0.045 * k, "exp": 3.2},
                           {"p": wr + d * L * 0.40 + back * 0.002, "rx": 0.023 * k, "ry": 0.044 * k, "exp": 3.4}],
-                         segments=14, caps=("round", "round"), up=tuple(fr), name=f"{nm}_palm", col=ctx.col, cap_len=0.6)
+                         segments=12, caps=("round", "round"), up=tuple(fr), name=f"{nm}_palm", col=ctx.col, cap_len=0.6, rings=6)
         objs.append(palm)
         P = wr + d * L * 0.40 + pn * 0.022                         # prop bone head: the grip axis passes here
         offs = [0.033, 0.0115, -0.0095, -0.029]
@@ -1023,8 +1027,8 @@ def glove(ctx, style: str = "fingers", *, sides=("L", "R"), pose: str = "fist", 
                 st = [{"p": p, "rx": r_ * (1.0 - 0.22 * j / (len(pts) - 1)), "ry": r_ * (1.05 - 0.22 * j / (len(pts) - 1)),
                        "exp": 2.4} for j, p in enumerate(pts)]
                 up = fr
-            f = mesh.loft(st, segments=10 if style != "mitt" else 14, caps=("round", "round"), up=tuple(up),
-                          name=f"{nm}_f{i}", col=ctx.col, rings=12, cap_len=0.8)
+            f = mesh.loft(st, segments=7 if style != "mitt" else 10, caps=("round", "round"), up=tuple(up),
+                          name=f"{nm}_f{i}", col=ctx.col, rings=7, cap_len=0.8)
             objs.append(f)
         # thumb: from the heel of the palm over the front of the grip
         t0 = wr + d * L * 0.10 + fr * 0.030 * k + pn * 0.010 * k
@@ -1032,8 +1036,8 @@ def glove(ctx, style: str = "fingers", *, sides=("L", "R"), pose: str = "fist", 
         t2 = (wr + d * L * 0.40 + fr * 0.040 * k + pn * 0.050 * k) if pose == "fist" else \
             (wr + d * L * 0.38 + fr * 0.075 * k + pn * 0.030 * k)
         thumb = mesh.loft([{"p": t0, "rx": 0.017 * k, "ry": 0.019 * k}, {"p": t1, "rx": 0.015 * k, "ry": 0.016 * k},
-                           {"p": t2, "rx": 0.013 * k, "ry": 0.013 * k}], segments=10, caps=("round", "round"),
-                          up=tuple(pn), name=f"{nm}_thumb", col=ctx.col, cap_len=0.8)
+                           {"p": t2, "rx": 0.013 * k, "ry": 0.013 * k}], segments=7, caps=("round", "round"),
+                          up=tuple(pn), name=f"{nm}_thumb", col=ctx.col, cap_len=0.8, rings=6)
         objs.append(thumb)
         if style == "wrap":
             for i, z in enumerate((0.12, 0.30)):
@@ -1046,7 +1050,7 @@ def glove(ctx, style: str = "fingers", *, sides=("L", "R"), pose: str = "fist", 
             d2 = J[f"forearm_dir.{s}"]
             cf = mesh.loft([{"p": wr - d2 * 0.085, "rx": 0.052 * k, "ry": 0.046 * k},
                             {"p": wr - d2 * 0.03, "rx": 0.056 * k, "ry": 0.05 * k},
-                            {"p": wr + d2 * 0.004, "rx": 0.064 * k, "ry": 0.058 * k}], segments=16,
+                            {"p": wr + d2 * 0.004, "rx": 0.064 * k, "ry": 0.058 * k}], segments=12,
                            caps=(None, None), up=(0, -1, 0), name=f"{nm}_cuff", col=ctx.col, rings=4, smooth_path=False)
             mesh.solidify(cf, 0.008, offset=1.0)
             mesh.bevel(cf, 0.003, 1, angle=40)
@@ -1112,10 +1116,10 @@ def boot_trim(ctx, style: str = "heavy", *, sides=("L", "R"), mat="ironstone", b
             mesh.set_material(b, _m(ctx, band))
             out.append(Part(f"{name}_cuff.{s}", low=b, bind=f"bone:shin.{s}"))
         elif style == "wrapped":
-            nb_ = 5
+            nb_ = 4
             sp = top_v * 0.78 / nb_
             bands = [surface_ring(cyl, top_v * 0.2 + sp * (i + 0.5), tree, 0.001 + 0.003 * (i % 2),
-                                  section=(sp * 0.62, 0.005), n=22, name=f"{name}_w{i}.{s}", col=ctx.col,
+                                  section=(sp * 0.62, 0.005), n=14, name=f"{name}_w{i}.{s}", col=ctx.col,
                                   wobble=0.012 * (1 if i % 2 else -1)) for i in range(nb_)]
             b = mesh.join(bands, f"{name}_wrap.{s}")
             mesh.set_material(b, _m(ctx, "cloth" if band == "leather" else band))

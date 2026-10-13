@@ -107,7 +107,7 @@ MOTION = anim.motion_profile(weight="light", weapon="staff", stance="neutral", r
 
 # 10/11 ── EXPORT + RENDER settings ───────────────────────────────────────────────────────────────
 SOCKETS = {"weapon_tip": "x_staff_tip"}          # FighterArt.sockets extras (VFX attach points)
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.95}   # see common/render.py SPLASH_DEFAULTS
+SPLASH = {"map": "map_rift", "clip": "idle_lobby", "t": 0.25}   # a clean hero read (head + hook clear); render.SPLASH_DEFAULTS
 TEXTURE_SIZE = 1024
 GLB_COMPRESS = True                   # quantize + WebP + int16 rotations (budget <= 1.2 MB)
 
@@ -144,7 +144,7 @@ def model(ctx) -> list:
         bp.append(b)
     hi = mesh.union_fillet(bp, voxel=0.0058, fillet=0.03, name="body_high", col=col)
     ctx.body_high, ctx.targets = hi, [hi]
-    P.append(fighter.Part("body", high=hi, tris=5200, bind="auto", uv_weight=0.85))
+    P.append(fighter.Part("body", high=hi, tris=4600, bind="auto", uv_weight=0.85))   # ~5k: most of it hides under parts
     P += parts.glove(ctx, "fingers", pose="fist", mat="leather")
     P += parts.boot_trim(ctx, "wrapped", band="cloth2")
 
@@ -153,7 +153,7 @@ def model(ctx) -> list:
     P += parts.visor(ctx, "band", accent=True)                 # 7 accent: a channel along the visor top
 
     # 4 PARTS. The HOOK (caster "line + disc"): a tall peaked hood (line) and the dial halo (disc)
-    P += parts.hood(ctx, "peaked", mat="cloth2")
+    P += parts.hood(ctx, "peaked", mat="cloth2", accent=True)           # 7 accent: the crest fin (crown read)
     P += parts.halo(ctx, "disc", radius=0.19, back=0.26, accent=True)   # 7 accent: the inlay ring on its face
     P += parts.mantle(ctx, "capelet", mat="cloth2")
     P += parts.belt(ctx, buckle="dial", pouches=[(64, 0.9), (-64, 0.9)])

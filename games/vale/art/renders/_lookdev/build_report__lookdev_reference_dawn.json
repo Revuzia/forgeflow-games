@@ -10,12 +10,12 @@
       "empty_groups": []
     },
     "tris_body": 5598,
-    "tris_mask": 1560,
+    "tris_mask": 1596,
     "tris_mask_beak": 304,
     "tris_visor": 640,
     "tris_hood": 1562,
     "tris_crest_fin": 320,
-    "tris_collar": 720,
+    "tris_collar": 800,
     "tris_pauldron.L": 864,
     "tris_pauldron_inlay.L": 180,
     "tris_pauldron.R": 864,
@@ -43,40 +43,53 @@
     "tris_gn_wraps": 96,
     "tris_gn_pommel": 180,
     "armour_conform": {
-      "covered": 898,
+      "covered": 900,
       "culled_faces": 466,
       "body_tris_before": 5598,
       "body_tris_after": 5132
     },
-    "validate__lookdev_reference": "13144->13133"
+    "validate__lookdev_reference": "13202->13191"
   },
-  "uv_coverage": 0.614,
+  "uv_coverage": 0.603,
   "bake": {
-    "base": 8.32,
-    "rough_metal": 5.15,
-    "normal": 10.37,
-    "ao": 29.84,
-    "normal_fixed_px": 3610,
-    "pack_save": 0.36,
-    "total": 54.34
+    "base": 5.23,
+    "rough_metal": 2.91,
+    "normal": 6.39,
+    "ao": 15.86,
+    "normal_fixed_px": 3459,
+    "pack_save": 0.31,
+    "total": 30.92
   },
-  "tris": 21519,
+  "tris": 21635,
   "mesh_top_m": 1.969,
-  "glb_bytes_raw": 3068572,
+  "glb_bytes_raw": 3107052,
   "optimize": {
     "ok": true,
-    "before": 3068572,
-    "after": 915552
+    "before": 3107052,
+    "after": 927144
   },
-  "glb_bytes": 915552,
+  "glb_bytes": 927144,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /home/user/forgeflow-games/games/vale/art/out/_lookdev/_lookdev_reference_dawn.glb (905 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: _lookdev_reference_dawn_base 1024x1024 112K, _lookdev_reference_dawn_normal 1024x1024 38K, _lookdev_reference_dawn_orm 1024x1024 109K",
+      "  skinned meshes: _lookdev_reference_accent(408v), _lookdev_reference_dawn(18198v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip thighL shinL footL toeL thighR shinR footR toeR x_drape_b_1 x_drape_f_1)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=1024x1024, body.normalMap=1024x1024, body.roughnessMap=1024x1024, body.metalnessMap=1024x1024, body.aoMap=1024x1024",
+      "  tris: 21635; bind-pose bounds (three units, Y up): 1.64 x 1.97 x 1.65; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.45",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
   "renders": {
     "files": {
       "splash": "art/out/_lookdev/_lookdev_reference_dawn_splash.png",
       "portrait": "art/out/_lookdev/_lookdev_reference_dawn_portrait.png"
     },
     "seconds": {
-      "splash": 125.99,
-      "portrait": 115.64
+      "splash": 76.58,
+      "portrait": 50.89
     }
   },
   "three_qa": {
@@ -99,7 +112,7 @@
       ]
     ],
     "headY": 1.642,
-    "accentPct": 3.46,
+    "accentPct": 3.49,
     "accentTopHalfPct": 100,
     "heightPx1080": 105,
     "size": [
@@ -108,23 +121,24 @@
     ],
     "clips": 0,
     "out": "art/renders/_lookdev/three__lookdev_reference_dawn.png",
-    "seconds": 16,
+    "seconds": 8.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.82,
-      "model": 16.48,
-      "lows_bind": 6.59,
-      "uv": 15.84,
-      "bake": 54.34,
-      "export": 0.2,
-      "optimize": 1.06,
-      "render": 241.74,
-      "three_qa": 16.25
+      "materials": 0.79,
+      "model": 14.63,
+      "lows_bind": 5.78,
+      "uv": 17.68,
+      "bake": 30.92,
+      "export": 0.22,
+      "optimize": 1.09,
+      "load_test": 0.21,
+      "render": 127.54,
+      "three_qa": 8.85
     },
-    "total_s": 353.43
+    "total_s": 207.8
   },
   "run_ref_speed": 3.45,
   "height_m": 1.9

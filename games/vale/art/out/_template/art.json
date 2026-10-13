@@ -3,7 +3,7 @@
   "portrait": "assets/_template/portrait.png",
   "splash": "assets/_template/splash.png",
   "icon": "assets/_template/icon.png",
-  "height": 2.18,
+  "height": 2.03,
   "scale": 1,
   "runRefSpeed": 3.5,
   "clips": {

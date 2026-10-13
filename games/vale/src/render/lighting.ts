@@ -51,9 +51,7 @@ export class Sun {
     const up = Math.abs(this.dir.y) > 0.999 ? new Vector3(0, 0, -1) : new Vector3(0, 1, 0);
     this.basis.lookAt(this.dir, new Vector3(0, 0, 0), up);
     this.basisInv.copy(this.basis).invert();
-    // fighters' own key light = 0.9 × sun, in the sun's colour (world_material.ts)
-    const c = new Color().setStyle(spec.sunColor).multiplyScalar(spec.sunIntensity * 0.9);
-    worldUniforms.valeKeyColor.value.copy(c);
+    // fighters re-aim this light to their own view-space key at 0.9 × (world_material.ts)
     worldUniforms.valeRimColor.value.setStyle(spec.sunColor).multiplyScalar(0.18 * spec.sunIntensity / 3);
   }
 

@@ -9,42 +9,60 @@
       "fixed_vertices": 0,
       "empty_groups": []
     },
-    "tris_body": 5600,
-    "tris_mask": 1588,
-    "tris_visor": 624,
-    "tris_hood": 1656,
-    "tris_spire": 176,
-    "tris_halo": 336,
-    "tris_halo_inlay": 492,
-    "tris_collar": 1032,
-    "tris_sash": 420,
-    "tris_robe_f": 698,
-    "tris_robe_b": 612,
-    "tris_bracer.L": 252,
-    "tris_bracer.R": 252,
+    "tris_body": 4598,
+    "tris_glove.L": 1184,
+    "tris_glove.L_cuff": 288,
+    "tris_glove.R": 1184,
+    "tris_glove.R_cuff": 288,
+    "tris_boot_wrap.L": 672,
+    "tris_boot_wrap.R": 672,
+    "tris_mask": 1544,
+    "tris_visor": 700,
+    "tris_visor_frame_top": 228,
+    "tris_visor_frame_bot": 228,
+    "tris_visor_inlay": 180,
+    "tris_hood": 1618,
+    "tris_hood_crest": 320,
+    "tris_halo": 384,
+    "tris_halo_rim": 336,
+    "tris_halo_inlay": 672,
+    "tris_mantle": 1396,
+    "tris_belt": 648,
+    "tris_belt_dial": 360,
+    "tris_belt_dial_gnomon": 120,
+    "tris_belt_pouch0": 252,
+    "tris_belt_pouch0_flap": 192,
+    "tris_belt_pouch0_toggle": 192,
+    "tris_belt_pouch1": 252,
+    "tris_belt_pouch1_flap": 192,
+    "tris_belt_pouch1_toggle": 192,
+    "tris_tabard_f": 564,
+    "tris_tabard_b": 578,
+    "tris_bracer.R": 1008,
+    "tris_bracer.L": 1008,
     "tris_staff": 272,
     "tris_staff_head": 336,
     "tris_staff_lens": 168,
     "armour_conform": {
-      "covered": 602,
-      "culled_faces": 302,
-      "body_tris_before": 5600,
-      "body_tris_after": 5298
+      "covered": 856,
+      "culled_faces": 237,
+      "body_tris_before": 4598,
+      "body_tris_after": 4361
     },
-    "validate__template": "9587->9584"
+    "validate__template": "13117->13113"
   },
-  "uv_coverage": 0.618,
+  "uv_coverage": 0.604,
   "bake": {
-    "base": 4.88,
-    "rough_metal": 3.79,
-    "normal": 4.72,
-    "ao": 6.69,
-    "normal_fixed_px": 5804,
-    "pack_save": 0.6,
-    "total": 20.84
+    "base": 4.86,
+    "rough_metal": 2.03,
+    "normal": 5.72,
+    "ao": 15.68,
+    "normal_fixed_px": 28187,
+    "pack_save": 0.42,
+    "total": 28.92
   },
-  "tris": 14209,
-  "mesh_top_m": 2.177,
+  "tris": 22585,
+  "mesh_top_m": 2.026,
   "clips": {
     "idle": {
       "frames": 72,
@@ -86,8 +104,8 @@
       "impact": 0.4
     },
     "cast_a3": {
-      "frames": 30,
-      "duration_s": 1.0,
+      "frames": 25,
+      "duration_s": 0.8333,
       "loop": false,
       "impact": 0.4
     },
@@ -140,26 +158,25 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3037440,
+  "glb_bytes_raw": 3736132,
   "optimize": {
     "ok": true,
-    "before": 3037440,
-    "after": 892688
+    "before": 3736132,
+    "after": 1187444
   },
-  "glb_bytes": 892688,
+  "glb_bytes": 1187444,
   "three_load_test": {
-    "ok": false,
+    "ok": true,
     "log": [
-      "[three] /home/user/forgeflow-games/games/vale/art/out/_template/_template.glb (872 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: _template_base 1024x1024 139K, _template_normal 1024x1024 43K, _template_orm 1024x1024 105K",
-      "  skinned meshes: _template(11984v), _template_accent(252v)",
-      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_staff_tip thighL shinL footL toeL thighR shinR footR toeR x_robe_b_1 x_robe_f_1)",
-      "  clips: attack1:0.667s/22tr, attack2:0.667s/22tr, cast_a1:0.833s/22tr, cast_a2:0.833s/22tr, cast_a3:1.000s/22tr, cast_ult:1.333s/22tr, channel:1.333s/22tr, dash:0.500s/23tr, death:1.333s/22tr, idle:2.400s/22tr, idle_lobby:3.200s/22tr, recall:2.000s/22tr, run:0.533s/24tr, stunned:1.333s/22tr, victory:2.000s/22tr",
-      "  tracks checked: 333; materials: body, accent; textures: body.map=1024x1024, body.normalMap=1024x1024, body.roughnessMap=1024x1024, body.metalnessMap=1024x1024, body.aoMap=1024x1024",
-      "  tris: 14209; bind-pose bounds (three units, Y up): 1.54 x 2.18 x 1.86; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.5",
-      "  run: 16 f, planted samples 0, max foot-speed error null%",
-      "[three] FAIL (1)",
-      "  - run: no planted-foot frames found"
+      "[three] /home/user/forgeflow-games/games/vale/art/out/_template/_template.glb (1160 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: _template_base 1024x1024 129K, _template_normal 1024x1024 80K, _template_orm 1024x1024 119K",
+      "  skinned meshes: _template(18914v), _template_accent(652v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_staff_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_b_1 x_tabard_f_1)",
+      "  clips: attack1:0.667s/22tr, attack2:0.667s/22tr, cast_a1:0.833s/23tr, cast_a2:0.833s/22tr, cast_a3:0.833s/22tr, cast_ult:1.333s/22tr, channel:1.333s/22tr, dash:0.500s/23tr, death:1.333s/22tr, idle:2.400s/22tr, idle_lobby:3.200s/22tr, recall:2.000s/23tr, run:0.533s/24tr, stunned:1.333s/22tr, victory:2.000s/22tr",
+      "  tracks checked: 335; materials: body, accent; textures: body.map=1024x1024, body.normalMap=1024x1024, body.roughnessMap=1024x1024, body.metalnessMap=1024x1024, body.aoMap=1024x1024",
+      "  tris: 22585; bind-pose bounds (three units, Y up): 1.50 x 2.03 x 1.87; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.5",
+      "  run: 16 f, planted samples 2, max foot-speed error 1.4%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
   "renders": {
@@ -170,10 +187,10 @@
       "turntable": "art/renders/_template/turntable.png"
     },
     "seconds": {
-      "splash": 80.79,
-      "portrait": 34.46,
-      "icon": 4.52,
-      "turntable": 24.81
+      "splash": 65.84,
+      "portrait": 45.5,
+      "icon": 8.73,
+      "turntable": 26.06
     }
   },
   "three_qa": {
@@ -185,46 +202,47 @@
     ],
     "bindBox": [
       [
-        -0.771,
+        -0.755,
         0,
-        -0.663
+        -0.667
       ],
       [
-        0.771,
-        2.177,
+        0.744,
+        2.026,
         1.202
       ]
     ],
     "headY": 1.642,
-    "accentPct": 1.09,
-    "accentTopHalfPct": 100,
-    "heightPx1080": 117,
+    "accentPct": 3.22,
+    "accentTopHalfPct": 99.1,
+    "heightPx1080": 108,
     "size": [
       2400,
       900
     ],
     "clips": 15,
     "out": "art/renders/_template/three__template.png",
-    "seconds": 13.3,
-    "exit": 0
+    "seconds": 9.1,
+    "exit": 0,
+    "clip_sheet": "art/renders/_template/three_clips__template.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.82,
-      "model": 9.49,
-      "lows_bind": 6.04,
-      "uv": 18.13,
-      "bake": 20.84,
-      "clips": 0.4,
-      "export": 3.65,
-      "optimize": 1.78,
-      "load_test": 0.47,
-      "render": 144.7,
-      "three_qa": 13.55,
-      "cache": 0.07
+      "rig": 0.0,
+      "materials": 0.81,
+      "model": 8.94,
+      "lows_bind": 4.67,
+      "uv": 11.07,
+      "bake": 28.92,
+      "clips": 0.41,
+      "export": 2.83,
+      "optimize": 1.21,
+      "load_test": 0.25,
+      "render": 146.22,
+      "three_qa": 47.16,
+      "cache": 0.12
     },
-    "total_s": 220.04
+    "total_s": 252.73
   },
   "run_ref_speed": 3.5,
   "height_m": 1.9

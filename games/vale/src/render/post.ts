@@ -36,8 +36,10 @@ export type OverlayDraw = (renderer: WebGLRenderer, target: WebGLRenderTarget | 
 /** draws the overlay scene into the graded buffer (no swap); receives the composer's stable depth */
 class OverlayPass extends Pass {
   private depth: Texture | null = null;
-  constructor(private readonly draw: OverlayDraw) {
+  private readonly draw: OverlayDraw;
+  constructor(draw: OverlayDraw) {
     super('OverlayPass');
+    this.draw = draw;
     this.needsSwap = false;
     this.needsDepthTexture = true;
   }
@@ -60,7 +62,10 @@ export class PostChain {
   private width = 1;
   private height = 1;
 
-  constructor(private readonly renderer: WebGLRenderer, scene: Scene, camera: Camera, overlayDraw: OverlayDraw) {
+  private readonly renderer: WebGLRenderer;
+
+  constructor(renderer: WebGLRenderer, scene: Scene, camera: Camera, overlayDraw: OverlayDraw) {
+    this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
     this.composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType, depthBuffer: true, stencilBuffer: false, multisampling: 0 });

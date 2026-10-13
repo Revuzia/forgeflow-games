@@ -51,13 +51,13 @@
   },
   "uv_coverage": 0.611,
   "bake": {
-    "base": 5.93,
-    "rough_metal": 3.23,
+    "base": 6.09,
+    "rough_metal": 3.32,
     "normal": 6.89,
-    "ao": 15.89,
+    "ao": 20.2,
     "normal_fixed_px": 2657,
-    "pack_save": 0.36,
-    "total": 32.49
+    "pack_save": 0.41,
+    "total": 37.14
   },
   "tris": 20995,
   "mesh_top_m": 1.969,
@@ -185,10 +185,10 @@
       "turntable": "art/renders/_lookdev/turntable.png"
     },
     "seconds": {
-      "splash": 80.03,
-      "portrait": 50.99,
-      "icon": 8.13,
-      "turntable": 23.98
+      "splash": 78.12,
+      "portrait": 55.34,
+      "icon": 9.54,
+      "turntable": 24.34
     }
   },
   "three_qa": {
@@ -220,27 +220,27 @@
     ],
     "clips": 15,
     "out": "art/renders/_lookdev/three__lookdev_reference.png",
-    "seconds": 11.2,
+    "seconds": 11.1,
     "exit": 0,
     "clip_sheet": "art/renders/_lookdev/three_clips__lookdev_reference.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.74,
-      "model": 15.62,
-      "lows_bind": 6.04,
-      "uv": 17.4,
-      "bake": 32.49,
-      "clips": 0.46,
-      "export": 2.78,
-      "optimize": 1.18,
-      "load_test": 0.27,
-      "render": 163.22,
-      "three_qa": 39.59,
-      "cache": 0.1
+      "rig": 0.01,
+      "materials": 0.83,
+      "model": 16.27,
+      "lows_bind": 6.39,
+      "uv": 19.26,
+      "bake": 37.14,
+      "clips": 0.43,
+      "export": 2.56,
+      "optimize": 1.23,
+      "load_test": 0.28,
+      "render": 167.42,
+      "three_qa": 36.73,
+      "cache": 0.09
     },
-    "total_s": 279.97
+    "total_s": 288.75
   },
   "run_ref_speed": 3.45,
   "height_m": 1.9

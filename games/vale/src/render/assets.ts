@@ -28,11 +28,18 @@ export class Assets {
   private readonly hdrs = new Map<string, Promise<DataTexture | null>>();
   private readonly luts = new Map<string, Promise<LookupTexture | null>>();
   readonly failed = new Set<string>();
+  /** silence per-asset warnings (missing art is expected while the art lane works) */
+  quiet = false;
   private pending = 0;
   private done = 0;
   onProgress: ((done: number, total: number) => void) | null = null;
 
-  constructor(private readonly renderer: WebGLRenderer, private readonly url: AssetUrlFn) {
+  private readonly renderer: WebGLRenderer;
+  private readonly url: AssetUrlFn;
+
+  constructor(renderer: WebGLRenderer, url: AssetUrlFn) {
+    this.renderer = renderer;
+    this.url = url;
     this.gltfLoader = new GLTFLoader();
     this.gltfLoader.setMeshoptDecoder(MeshoptDecoder);
     this.hdrLoader = new HDRLoader();
@@ -49,9 +56,18 @@ export class Assets {
 
   model(ref: string | undefined | null): Promise<LoadedModel | null> {
     if (!ref) return Promise.resolve(null);
-    let p = this.models.get(ref);
+    return this.loadModel(ref, this.url(ref));
+  }
+
+  /** a model by absolute URL (dev-only stand-ins that are not catalog assets) */
+  modelUrl(url: string): Promise<LoadedModel | null> { return this.loadModel(`url:${url}`, url); }
+
+  /** true when a model ref is known to have failed or to be empty */
+  missing(ref: string): boolean { return this.failed.has(ref); }
+
+  private loadModel(key: string, url: string): Promise<LoadedModel | null> {
+    let p = this.models.get(key);
     if (!p) {
-      const url = this.url(ref);
       p = this.track(this.gltfLoader.loadAsync(url).then((gltf) => {
         let renderable = false, skinned = false;
         gltf.scene.traverse((o: Object3D) => {
@@ -59,14 +75,14 @@ export class Assets {
           if (m.isMesh) renderable = true;
           if (m.isSkinnedMesh) skinned = true;
         });
-        if (!renderable) this.failed.add(ref);
+        if (!renderable) this.failed.add(key);
         return { gltf, renderable, skinned };
       }).catch((err: unknown) => {
-        this.failed.add(ref);
-        console.warn(`[vale/render] model ${ref} failed: ${err instanceof Error ? err.message : String(err)}`);
+        this.failed.add(key);
+        if (!this.quiet) console.warn(`[vale/render] model ${key} unavailable: ${err instanceof Error ? err.message.slice(0, 120) : String(err)}`);
         return null;
       }));
-      this.models.set(ref, p);
+      this.models.set(key, p);
     }
     return p;
   }

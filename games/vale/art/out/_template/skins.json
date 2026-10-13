@@ -5,5 +5,12 @@
     "model": "assets/_template/_template_dusk.glb",
     "portrait": "assets/_template/_template_dusk_portrait.png",
     "splash": "assets/_template/_template_dusk_splash.png"
+  },
+  {
+    "id": "_template_slate",
+    "fighter": "_template",
+    "model": "assets/_template/_template_slate.glb",
+    "portrait": "assets/_template/_template_slate_portrait.png",
+    "splash": "assets/_template/_template_slate_splash.png"
   }
 ]

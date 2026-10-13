@@ -3,12 +3,12 @@
 // inlay (selected / ready only). Ornaments (HourTicks, HourLine) tell time, rank or rarity — ≤ 2 per
 // panel, never on scrolling lists.
 
-import type { ComponentChildren, JSX } from 'preact';
+import type { ComponentChildren, CSSProperties, JSX } from 'preact';
 
 export function Plate(p: {
   as?: 'div' | 'section' | 'article' | 'aside' | 'header' | 'li';
   class?: string; lit?: boolean; selected?: boolean; tone?: 'normal' | 'error' | 'quiet' | 'raised';
-  children?: ComponentChildren; style?: JSX.CSSProperties; label?: string; id?: string;
+  children?: ComponentChildren; style?: CSSProperties; label?: string; id?: string;
 }): JSX.Element {
   const Tag = p.as ?? 'div';
   return (

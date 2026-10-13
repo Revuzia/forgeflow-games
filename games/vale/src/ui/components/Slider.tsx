@@ -1,7 +1,7 @@
 // VALE UI — slider (role=slider). Pointer drag, ←/→ ↑/↓ step, PageUp/PageDown ×10, Home/End. The value
 // is a live number, so it prints in the Mono face with tabular figures.
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import { useRef } from 'preact/hooks';
 import { useApp } from '../app_ctx.ts';
 
@@ -44,7 +44,7 @@ export function Slider(p: {
         aria-valuemin={p.min} aria-valuemax={p.max} aria-valuenow={p.value} aria-valuetext={fmt(p.value)} aria-disabled={p.disabled ? 'true' : undefined}
         title={p.disabled}
         onPointerDown={onDown} onPointerMove={(e) => { if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) fromX(e.clientX); }}
-        onKeyDown={onKey} style={{ '--pct': `${pct}%` } as JSX.CSSProperties}>
+        onKeyDown={onKey} style={{ '--pct': `${pct}%` } as CSSProperties}>
         <span class="slider__track"><span class="slider__fill" />{(p.marks ?? []).map((m) => <i class="slider__mark" style={{ left: `${((m - p.min) / (p.max - p.min)) * 100}%` }} />)}</span>
         <span class="slider__thumb" />
       </div>
