@@ -21,9 +21,17 @@ import { fmtInt, fmtNum } from '../format.ts';
 import { cdText, useHud } from './ctx.ts';
 import { AbilityGlyph, GleamGlyph, ItemGlyph } from './glyphs.tsx';
 import { ItemTip } from './itemtip.tsx';
+import { FRAME } from './frame_layout.ts';
+import FRAME_URL from '../art/hud/dialbar.webp?url';
 
 const ABILITY_SLOTS: SlotT[] = ['a1', 'a2', 'a3', 'ult'];
 const SPELL_SLOTS: SlotT[] = ['spell1', 'spell2'];
+const F = FRAME.dialbar;
+/** absolute placement in the frame's 1080p coordinates (scaled by --px) */
+const at = (x: number, y: number, w?: number, h?: number): CSSProperties => ({
+  left: `calc(${x} * var(--px))`, top: `calc(${y} * var(--px))`,
+  ...(w !== undefined ? { width: `calc(${w} * var(--px))` } : {}), ...(h !== undefined ? { height: `calc(${h} * var(--px))` } : {}),
+});
 
 export function DialBar(): JSX.Element | null {
   const { model } = useHud();
@@ -33,20 +41,13 @@ export function DialBar(): JSX.Element | null {
   if (!me) return null;
   const dead = !body || !body.alive;
   return (
-    <section class={`dbar plate ${dead ? 'is-dead' : ''}`} aria-label="Dial Bar">
+    <section class={`dbar ${dead ? 'is-dead' : ''}`} aria-label="Dial Bar">
       <DialPortrait me={me} body={body} />
-      <div class="dbar__mid">
-        <div class="dbar__abilities">
-          {ABILITY_SLOTS.map((s) => <AbilitySlot slot={s} me={me} body={body} />)}
-          <span class="dbar__sep" aria-hidden="true" />
-          {SPELL_SLOTS.map((s) => <AbilitySlot slot={s} me={me} body={body} />)}
-        </div>
-        <Bars me={me} body={body} />
-      </div>
-      <div class="dbar__right">
-        <div class="dbar__items">{[0, 1, 2, 3, 4, 5].map((i) => <ItemSlot i={i} me={me} />)}</div>
-        <Utility me={me} />
-      </div>
+      {[...ABILITY_SLOTS, ...SPELL_SLOTS].map((s) => <AbilitySlot slot={s} me={me} body={body} />)}
+      <Bars me={me} body={body} />
+      {[0, 1, 2, 3, 4, 5].map((i) => <ItemSlot i={i} me={me} />)}
+      <Utility me={me} />
+      <img class="dbar__frame" src={FRAME_URL} alt="" draggable={false} />
     </section>
   );
 }
@@ -66,7 +67,7 @@ function DialPortrait(p: { me: PlayerView; body: EntityView | undefined }): JSX.
   if (!dead) respawnMax.current = 1;
   const recall = p.me.recallProgress;
   const ring = dead ? 1 - p.me.respawnIn / Math.max(1, respawnMax.current) : recall > 0 ? recall : xp;
-  const C = 2 * Math.PI * 46;
+  const C = 2 * Math.PI * F.medallion.ring;
   const flash = useRef<HTMLDivElement>(null);
   const lv = model.levelUp.value;
   useEffect(() => {
@@ -77,15 +78,18 @@ function DialPortrait(p: { me: PlayerView; body: EntityView | undefined }): JSX.
   const lives = p.me.lives;
   const rules = cv.mode(client.setup.mode)?.rules;
   return (
-    <div class="dport">
+    <>
+    <div class="dport__under" style={at(F.medallion.c[0] - F.medallion.face, F.medallion.c[1] - F.medallion.face, 2 * F.medallion.face, 2 * F.medallion.face)}>
+      <Portrait fighter={f} skin={p.me.skin} size="fill" round class="dport__img" />
+    </div>
+    <div class="dport" style={at(F.medallion.c[0] - F.medallion.r, F.medallion.c[1] - F.medallion.r, 2 * F.medallion.r, 2 * F.medallion.r)}>
       <div class={`dport__face ${recall > 0 ? 'is-recall' : ''}`}>
-        <svg class="dport__ring" viewBox="-50 -50 100 100" aria-hidden="true">
-          <circle r="46" class="dport__track" />
-          <circle r="46" class={`dport__arc ${dead ? 'is-respawn' : recall > 0 ? 'is-recall' : ''}`} transform="rotate(-90)"
+        <svg class="dport__ring" viewBox={`${-F.medallion.r} ${-F.medallion.r} ${2 * F.medallion.r} ${2 * F.medallion.r}`} aria-hidden="true">
+          <circle r={F.medallion.ring} class="dport__track" />
+          <circle r={F.medallion.ring} class={`dport__arc ${dead ? 'is-respawn' : recall > 0 ? 'is-recall' : ''}`} transform="rotate(-90)"
             style={{ strokeDasharray: `${C * ring} ${C}` }} />
-          <path d="M0 -50 L3.4 -41 L0 -43.5 L-3.4 -41 Z" class="dport__gnomon" />
+          <circle cx={(Math.sin(2 * Math.PI * ring) * F.medallion.ring).toFixed(2)} cy={(-Math.cos(2 * Math.PI * ring) * F.medallion.ring).toFixed(2)} r="3.2" class={`dport__tip ${dead ? 'is-respawn' : ''}`} />
         </svg>
-        <Portrait fighter={f} skin={p.me.skin} size="fill" round class="dport__img" />
         <div ref={flash} class="dport__flash" aria-hidden="true" />
         {dead ? <span class="dport__respawn num">{Math.ceil(p.me.respawnIn)}</span> : null}
         <span class="dport__level num" title={cv.t('hud.xp', '{xp} / {next} XP', { xp: fmtInt(p.me.xp), next: fmtInt(p.me.xpToNext) })}>{level}</span>
@@ -98,6 +102,7 @@ function DialPortrait(p: { me: PlayerView; body: EntityView | undefined }): JSX.
         </div>
       ) : null}
     </div>
+    </>
   );
 }
 
@@ -153,11 +158,12 @@ function AbilitySlot(p: { slot: SlotT; me: PlayerView; body: EntityView | undefi
     </div>
   ) : null, { place: 'above', wide: true });
 
-  if (!av) return <span class={`aslot aslot--${ult ? 'ult' : spell ? 'spell' : 'basic'} is-empty`} />;
+  const [sx, sy, ss] = F.abilities[p.slot as keyof typeof F.abilities];
+  if (!av) return <div class="aslot__wrap" style={at(sx, sy, ss, ss)}><span class={`aslot aslot--${ult ? 'ult' : spell ? 'spell' : 'basic'} is-empty`} /></div>;
   const elapsed = onCd ? Math.max(0, Math.min(1, 1 - cd / cdMax)) : 1;
   const cls = ['aslot', `aslot--${ult ? 'ult' : spell ? 'spell' : 'basic'}`, onCd ? 'is-cd' : 'is-ready', noRes ? 'is-nores' : '', !learned && !spell ? 'is-unlearned' : '', aiming ? 'is-aiming' : '', silenced ? 'is-silenced' : '', recast ? 'is-recast' : ''].join(' ');
   return (
-    <div class="aslot__wrap">
+    <div class="aslot__wrap" style={at(sx, sy, ss, ss)}>
       {av.canLevel ? (
         <button type="button" class="aslot__lvl" aria-label={`${cv.t('hud.ability.level_up', 'Level up')} ${def?.name ?? ''}`}
           onPointerDown={(e) => { e.stopPropagation(); }} onClick={() => input.levelUp(p.slot as 'a1')}>
@@ -213,7 +219,7 @@ function Bars(p: { me: PlayerView; body: EntityView | undefined }): JSX.Element 
   const hpTip = useTip(() => <TipText text={`${cv.t('hud.hp', 'Health')} ${fmtInt(hp)} / ${fmtInt(maxHp)}`} sub={shield > 0 ? `${cv.t('hud.shield', 'Shield')} ${fmtInt(shield)}` : undefined} />, { place: 'above' });
   const resTip = useTip(res ? () => <TipText text={`${res.name} ${fmtInt(b?.res ?? 0)} / ${fmtInt(b?.maxRes ?? 0)}`} sub={res.desc} /> : null, { place: 'above' });
   return (
-    <div class="dbars">
+    <div class="dbars" style={at(F.hp[0], F.hp[1], F.hp[2], F.res[1] + F.res[3] - F.hp[1])}>
       <div class="hpbar" {...hpTip}>
         <span class="hpbar__trail" ref={trail} />
         <span class="hpbar__fill" style={{ width: `${hpPct}%` }} />
@@ -244,9 +250,11 @@ function ItemSlot(p: { i: number; me: PlayerView }): JSX.Element {
   if (cd > max.current) max.current = cd;
   if (cd <= 0) max.current = 1;
   const slot = `item${p.i + 1}` as SlotT;
+  const G = F.items;
+  const ix = G.x + (p.i % G.cols) * (G.size + G.gap), iy = G.y + Math.floor(p.i / G.cols) * (G.size + G.gap);
   const tip = useTip(it ? () => <ItemTip item={it} keyLabel={key(slot)} sell={p.me.canShop} /> : () => <TipText text={cv.t('hud.item.empty', 'Empty slot')} />, { place: 'above', wide: !!it });
   return (
-    <button type="button" class={`islot ${it ? '' : 'is-empty'} ${cd > 0 ? 'is-cd' : ''}`} {...tip}
+    <button type="button" class={`islot ${it ? '' : 'is-empty'} ${cd > 0 ? 'is-cd' : ''}`} {...tip} style={at(ix, iy, G.size, G.size)}
       aria-label={it ? it.name : cv.t('hud.item.empty', 'Empty slot')}
       onPointerDown={(e) => {
         e.preventDefault();
@@ -273,19 +281,19 @@ function Utility(p: { me: PlayerView }): JSX.Element {
   const gleamTip = useTip(() => <TipText text={cv.t('hud.gleam', 'Gleam')} sub={cv.t('hud.gleam_tip', '')} />, { place: 'above' });
   const recallTip = useTip(() => <TipText text={canRecall ? `${cv.t('hud.recall', 'Recall')} · ${key('recall')}` : cv.t('hud.no_recall', 'There is no recall in this mode.')} />, { place: 'above' });
   return (
-    <div class="dbar__util">
-      <button type="button" class={`gleambtn ${p.me.canShop ? 'is-shop' : ''} ${shopOpen.value ? 'is-open' : ''}`} {...gleamTip}
+    <>
+      <button type="button" style={at(F.gleam[0], F.gleam[1], F.gleam[2], F.gleam[3])} class={`gleambtn ${p.me.canShop ? 'is-shop' : ''} ${shopOpen.value ? 'is-open' : ''}`} {...gleamTip}
         aria-label={`${cv.t('hud.gleam', 'Gleam')} ${fmtInt(p.me.gold)}. ${cv.t('hud.shop_open', 'Open the shop')}`}
         onClick={() => { shopOpen.value = !shopOpen.value; input.cancelAim(); }}>
         <GleamGlyph size={14} />
         <span class="num gleambtn__n">{fmtInt(p.me.gold)}</span>
         <span class="gleambtn__key">{key('shop')}</span>
       </button>
-      <button type="button" class={`recallbtn ${canRecall ? '' : 'is-off'} ${p.me.recallProgress > 0 ? 'is-on' : ''}`} {...recallTip}
+      <button type="button" style={at(F.recall[0], F.recall[1], F.recall[2], F.recall[3])} class={`recallbtn ${canRecall ? '' : 'is-off'} ${p.me.recallProgress > 0 ? 'is-on' : ''}`} {...recallTip}
         aria-label={cv.t('hud.recall', 'Recall')} aria-disabled={canRecall ? undefined : 'true'}
         onClick={() => { if (canRecall) client.send({ type: 'recall' }); }}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v10" /><path d="M7.5 9.5L12 14l4.5-4.5" /><path d="M5 19.5h14" /><path d="M7.5 17h9" opacity="0.6" /></svg>
       </button>
-    </div>
+    </>
   );
 }

@@ -15,8 +15,13 @@ import type { MapDefT } from '../../contracts/catalog.ts';
 import type { EntityView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
 import { cdText, useHud } from './ctx.ts';
+import { FRAME } from './frame_layout.ts';
+import MM_RECT from '../art/hud/minimap_rect.webp?url';
+import MM_STRIP from '../art/hud/minimap_strip.webp?url';
+import MM_DISC from '../art/hud/minimap_disc.webp?url';
 
-const SIZES = { rect: [352, 198], strip: [384, 96], disc: [232, 232] } as const;
+const SIZES = { rect: FRAME.minimap.rect, strip: FRAME.minimap.strip, disc: FRAME.minimap.disc } as const;
+const FRAME_ART = { rect: MM_RECT, strip: MM_STRIP, disc: MM_DISC } as const;
 const DRAW_MS = 50;
 const FOG_MS = 250;
 
@@ -77,7 +82,7 @@ export function Minimap(): JSX.Element {
       const dpr = Math.min(2, devicePixelRatio || 1);
       const W = Math.max(1, Math.round(rect.width * dpr)), H = Math.max(1, Math.round(rect.height * dpr));
       if (el.width !== W || el.height !== H) { el.width = W; el.height = H; stat = null; }
-      const pad = mapShape === 'disc' ? 0.04 * W : 2 * dpr;
+      const pad = mapShape === 'disc' ? 0.02 * W : 0;
       const s = Math.min((W - 2 * pad) / map.size[0], (H - 2 * pad) / map.size[1]);
       fit = { s, ox: (W - map.size[0] * s) / 2, oy: (H - map.size[1] * s) / 2, w: W, h: H, dpr: W / Math.max(1, rect.width) };
     };
@@ -109,7 +114,7 @@ export function Minimap(): JSX.Element {
     if (!el || !map) return null;
     const rect = el.getBoundingClientRect();
     const dpr = el.width / Math.max(1, rect.width);
-    const pad = mapShape === 'disc' ? 0.04 * el.width : 2 * dpr;
+    const pad = mapShape === 'disc' ? 0.02 * el.width : 0;
     const s = Math.min((el.width - 2 * pad) / map.size[0], (el.height - 2 * pad) / map.size[1]);
     const ox = (el.width - map.size[0] * s) / 2, oy = (el.height - map.size[1] * s) / 2;
     const x = ((e.clientX - rect.left) * dpr - ox) / s, y = ((e.clientY - rect.top) * dpr - oy) / s;
@@ -147,9 +152,10 @@ export function Minimap(): JSX.Element {
   };
 
   return (
-    <section class={`mmap mmap--${mapShape}`} style={{ '--mw': bw, '--mh': bh, '--mk': mk } as CSSProperties}
+    <section class={`mmap mmap--${mapShape}`} style={{ '--mw': bw, '--mh': bh, '--mk': mk, '--mb': FRAME.minimap.border } as CSSProperties}
       aria-label={cv.t('hud.minimap', 'Minimap')} title={cv.t('hud.minimap_hint', 'Click to move the camera. Right-click to move your fighter.')}>
       <canvas ref={canvas} class="mmap__canvas" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onContextMenu={(e) => e.preventDefault()} />
+      <img class="mmap__frame" src={FRAME_ART[mapShape]} alt="" draggable={false} />
     </section>
   );
 }

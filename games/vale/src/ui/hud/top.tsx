@@ -36,7 +36,7 @@ export function SkyStrip(): JSX.Element {
     const left = Math.max(0, limit - Math.max(0, v.time));
     const first = rules?.end.killScore ?? 0;
     return (
-      <header class="sky sky--ffa plate" aria-label={cv.t('hud.score', 'Score')}>
+      <header class="sky sky--ffa" aria-label={cv.t('hud.score', 'Score')}>
         <span class="sky__side t-caption">{first ? cv.t('hud.fray.first_to', 'First to {n}', { n: first }) : ''}</span>
         {pre ? clock : <span class={`sky__clock num ${left <= 60 && limit ? 'is-harm' : ''}`}>{limit ? fmtClock(left) : fmtClock(Math.max(0, v.time))}</span>}
         <span class="sky__side t-caption">{limit && !pre ? cv.t('hud.fray.clock', 'Ends at {t}', { t: fmtClock(limit) }) : ''}</span>
@@ -47,7 +47,7 @@ export function SkyStrip(): JSX.Element {
   const mine = v.teams.find((t) => t.team === model.myTeam);
   const theirs = v.teams.find((t) => t.team !== model.myTeam);
   return (
-    <header class="sky plate" aria-label={cv.t('hud.score', 'Score')}>
+    <header class="sky" aria-label={cv.t('hud.score', 'Score')}>
       <div class="sky__team sky__team--ally">
         <span class="sky__mark" style={{ color: REL_VAR.ally }}><SideGlyph team={model.myTeam} size={14} /></span>
         <span class="sky__struct num" title={cv.t('score.structures_down', 'Structures down')}><StructGlyph />{mine?.structuresDestroyed ?? 0}</span>
