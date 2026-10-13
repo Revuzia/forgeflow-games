@@ -506,19 +506,27 @@ function crosshairPoint(W, shooter, out) {
     if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.actorHeight(t) + 0.15) continue;
     bestT = u;
   }
-  // terrain + static boxes: coarse march (0.75m steps up to bestT)
-  const step = 0.75;
-  for (let d = 3; d < bestT; d += step) {
-    const x = o.x + _camDir.x * d, y = o.y + _camDir.y * d, z = o.z + _camDir.z * d;
-    if (W.map.heightAt(x, z) > y) { bestT = d; break; }
-    let solid = false;
-    for (const c of W.map.queryColliders(x, z, 0.3)) {
-      if (c.kind === "box" && x > c.minX && x < c.maxX && y > c.minY && y < c.maxY && z > c.minZ && z < c.maxZ) { solid = true; break; }
-    }
-    if (solid) { bestT = d; break; }
-  }
+  // terrain + static colliders. Colliders are SWEPT (boxes and ramps, exactly as bullets
+  // test them) instead of point-tested every 0.75 m, which stepped over a 0.32 m house
+  // wall 57 % of the time and never saw a ramp. The march starts at the ray's closest
+  // approach to the shooter's eye, not at a fixed 3 m past the lens: with the Wave-4
+  // wall pull-in the lens can sit a few decimetres behind the eye, and a wall 1-3 m in
+  // front of it used to be skipped (the shot then flew at a point BEHIND the wall and
+  // landed a shoulder-width off the reticle); with the 4.2 m boom the old 3 m start
+  // also read things beside the shooter's own back as the aim point.
+  eyePos(shooter, _aimEye);
+  const dEye = (_aimEye.x - o.x) * _camDir.x + (_aimEye.y - o.y) * _camDir.y + (_aimEye.z - o.z) * _camDir.z;
+  const d0 = dEye < 0.05 ? 0.05 : dEye > 8 ? 8 : dEye;
+  _aimW = W;
+  bestT = K.aimRayDist(o.x, o.y, o.z, _camDir.x, _camDir.y, _camDir.z, d0, bestT, _aimHeight, _aimQuery, _aimCols);
+  _aimW = null;
   return out.copy(o).addScaledVector(_camDir, bestT);
 }
+// the map's own functions, called as methods (no `this` assumption), with the caller's own scratch array
+let _aimW = null;
+const _aimEye = { x: 0, y: 0, z: 0 }, _aimCols = [];
+const _aimHeight = (x, z) => _aimW.map.heightAt(x, z);
+const _aimQuery = (x, z, r, buf) => _aimW.map.queryColliders(x, z, r, buf);
 
 // Per-shot tables, hoisted: fire() built three object literals per trigger pull.
 const VM_KICK = { pistol: 0.7, smg: 0.5, ar: 0.75, shotgun: 1.6, sniper: 1.9, launcher: 1.2 };

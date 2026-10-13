@@ -246,21 +246,116 @@
     return c.minY + (c.maxY - c.minY) * clamp(f, 0, 1);
   }
 
-  /** Segment vs a sloped ramp: clip to the ramp's box, then walk the clipped
-   *  span looking for the first sample under the sloped surface. */
-  function segmentRamp(ax, ay, az, bx, by, bz, c, samples) {
-    var box = segmentBox(ax, ay, az, bx, by, bz, c);
-    if (!box) return null;
-    var n = samples || 8;
+  // ── C-RAMP (Wave 5, lane 5C): a ramp is a 0.3 m SLOPED SLAB ─────────────────
+  // The collider record is a box (footprint x minY..maxY) plus `dir`, but the thing
+  // drawn is a plank (maps.js addRamp: BoxGeometry(w, 0.3, run), tilted, centred on
+  // the walk line minY -> maxY). Bullets and sight used to treat the WHOLE wedge
+  // under the surface as solid, so anyone who walked in under a ramp (movement
+  // skipped ramps entirely) sat bullet-proof, and the sides could be walked through.
+  //   walkable : the walk line rampTopAt (support: step <= stepUp, from any edge)
+  //   bullets / sight : the plank only, |y - line| <= half its vertical thickness
+  //   movement : the sides and the underside block (rampBlocks); the open space
+  //              under a high ramp is walkable where a standing capsule fits
+  var RAMP_THICK = 0.3;
+
+  /** Half the plank's VERTICAL thickness: 0.15 / cos(slope). */
+  function rampHalfV(c) {
+    var along = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
+    var k = (c.maxY - c.minY) / Math.max(0.01, along);
+    return RAMP_THICK * 0.5 * Math.sqrt(1 + k * k);
+  }
+
+  /** Segment vs the ramp's PLANK (not the wedge under it). Exact: inside the
+   *  footprint the walk line is linear in t, so the band |y - line| <= halfV is
+   *  one interval of t. null on miss, else {t, tExit, nx, ny, nz}; the normal is
+   *  the plank's face normal on the side the segment arrives from (up for a shot
+   *  from above, down for one from underneath); t = 0 when it starts inside. */
+  function segmentRamp(ax, ay, az, bx, by, bz, c) {
     var dx = bx - ax, dy = by - ay, dz = bz - az;
-    for (var i = 0; i <= n; i++) {
-      var t = box.t + (box.tExit - box.t) * (i / n);
-      var x = ax + dx * t, y = ay + dy * t, z = az + dz * t;
-      if (y <= rampTopAt(c, x, z) && y >= c.minY - 0.05) {
-        return { t: t, nx: 0, ny: 1, nz: 0 };   // treat the slope as ground-ish
-      }
+    var along = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
+    var k = (c.maxY - c.minY) / Math.max(0.01, along);
+    var s = Math.sqrt(1 + k * k);
+    var hv = RAMP_THICK * 0.5 * s;
+    // clip to the footprint prism; the plank never leaves minY - hv .. maxY + hv
+    _sbMin = 0; _sbMax = 1; _sbAxis = -1;
+    if (!_slab(ax, dx, c.minX, c.maxX, 0)) return null;
+    if (!_slab(az, dz, c.minZ, c.maxZ, 2)) return null;
+    if (!_slab(ay, dy, c.minY - hv, c.maxY + hv, 1)) return null;
+    var lo = _sbMin, hi = _sbMax;
+    var u0, du;                                   // run coordinate from the low edge, and its rate along the segment
+    if (c.dir === 0) { u0 = ax - c.minX; du = dx; }
+    else if (c.dir === 1) { u0 = c.maxX - ax; du = -dx; }
+    else if (c.dir === 2) { u0 = az - c.minZ; du = dz; }
+    else { u0 = c.maxZ - az; du = -dz; }
+    var g0 = ay - c.minY - k * u0, g1 = dy - k * du;   // height above the walk line at t = 0, and its rate
+    if (g1 > -1e-12 && g1 < 1e-12) { if (g0 < -hv || g0 > hv) return null; }
+    else {
+      var ta = (-hv - g0) / g1, tb = (hv - g0) / g1;
+      if (ta > tb) { var sw = ta; ta = tb; tb = sw; }
+      if (ta > lo) lo = ta;
+      if (tb < hi) hi = tb;
+      if (lo > hi) return null;
     }
-    return null;
+    var m = k / s, ny = 1 / s, nx = 0, nz = 0;
+    if (c.dir === 0) nx = -m; else if (c.dir === 1) nx = m; else if (c.dir === 2) nz = -m; else nz = m;
+    if (g0 + g1 * lo < 0) { nx = -nx; ny = -ny; nz = -nz; }   // arriving from underneath
+    return { t: lo, tExit: hi, nx: nx, ny: ny, nz: nz };
+  }
+
+  /** C-RAMP movement test: does this ramp stop a capsule (radius r, feet at yd,
+   *  height h) centred on (x, z)? It blocks like a wall where
+   *    - the capsule overlaps the footprint (nearest footprint point closer than r),
+   *    - the walk line there is above the step height (yd + stepUp), so it cannot
+   *      be stepped onto (the same rule the support test uses), and
+   *    - the plank's underside, at the lowest point the capsule disc reaches, is
+   *      below the head (yd + h): the side face, and the underside, of the plank.
+   *  So a ramp is climbed from its low edge (and from any side while the line is
+   *  within a step), its sides are not walked through, and the open space under a
+   *  high ramp is walkable exactly where a standing capsule fits under the plank.
+   *  Pure; player.js blockedIn calls it with its own STEP_UP. */
+  function rampBlocks(c, x, z, yd, h, r, stepUp) {
+    var nx = x < c.minX ? c.minX : x > c.maxX ? c.maxX : x;
+    var nz = z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z;
+    var ex = x - nx, ez = z - nz;
+    if (ex * ex + ez * ez >= r * r) return false;
+    var along, uc, ev;                            // run length, the centre's run coordinate, its distance outside the footprint across the run
+    if (c.dir === 0) { along = c.maxX - c.minX; uc = x - c.minX; ev = ez; }
+    else if (c.dir === 1) { along = c.maxX - c.minX; uc = c.maxX - x; ev = ez; }
+    else if (c.dir === 2) { along = c.maxZ - c.minZ; uc = z - c.minZ; ev = ex; }
+    else { along = c.maxZ - c.minZ; uc = c.maxZ - z; ev = ex; }
+    var al = along > 0.01 ? along : 0.01;
+    var k = (c.maxY - c.minY) / al;
+    var uN = uc < 0 ? 0 : uc > al ? al : uc;      // the nearest footprint point's run coordinate
+    if (c.minY + k * uN <= yd + stepUp) return false;   // low enough to step onto or over
+    var reach = r * r - ev * ev;
+    reach = reach > 0 ? Math.sqrt(reach) : 0;
+    var uLow = uc - reach;
+    if (uLow < 0) uLow = 0; else if (uLow > al) uLow = al;
+    return c.minY + k * uLow - rampHalfV(c) < yd + h;
+  }
+
+  /** LANDING SWEEP. The support test is a POINT test: the highest top <= feet + stepUp.
+   *  A faller moves g*t*dt per tick, past stepUp at ~33 m/s (a drop of ~27 m), so
+   *  a 0.3 m roof slab fell wholly between two ticks and the actor landed on the
+   *  ground INSIDE the building (first pass-through at a 26.7 m drop, about 1 drop in 4 from 40 m up).
+   *  This returns the highest top under (x, z) that the feet segment y0 -> y1 crossed
+   *  this tick and the point test at y1 cannot see: y1 + stepUp < top <= y0, using
+   *  the same footprint margin and the same ramp walk line as the support test. -Infinity
+   *  when there is none, and always for a tick that moved no more than stepUp, so
+   *  every ordinary tick is byte-identical to the point test. cols = queryColliders
+   *  output (dead colliders are already skipped there). */
+  function sweepSupport(cols, x, z, y0, y1, stepUp) {
+    var best = -Infinity;
+    if (!(y0 - y1 > stepUp)) return best;
+    var floor = y1 + stepUp;
+    for (var i = 0; i < cols.length; i++) {
+      var c = cols[i];
+      if (c.dead) continue;
+      if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
+      var top = c.kind === "ramp" ? rampTopAt(c, x, z) : c.maxY;
+      if (top > floor && top <= y0 && top > best) best = top;
+    }
+    return best;
   }
 
   /** First blocking collider along a segment. `cols` is any iterable of
@@ -274,6 +369,47 @@
         ? segmentRamp(ax, ay, az, bx, by, bz, c)
         : c.kind === "box" ? segmentBox(ax, ay, az, bx, by, bz, c) : null;
       if (h && (!best || h.t < best.t)) { best = h; best.c = c; }
+    }
+    return best;
+  }
+
+  /** CROSSHAIR MARCH (weapons.js crosshairPoint). Distance along the unit ray
+   *  (ox,oy,oz) + d*(dx,dy,dz) of the first solid thing between d0 and dMax, else
+   *  dMax. The shot flies muzzle -> this point, so it has to find what the bullets
+   *  will hit, and it did not:
+   *    - colliders were POINT-tested every 0.75 m, which steps over a 0.32 m house
+   *      wall 57 % of the time (0.40 m tower wall 47 %, 0.5 m rubble 34 %), and
+   *    - only kind "box" counted, so a ramp slope was invisible to it.
+   *  Colliders are now swept exactly like bullets and sight lines are (segmentBox /
+   *  segmentRamp over spans of 24 m, nearest hit of the first span that has one);
+   *  the terrain keeps its 0.75 m heightfield march. A collider the ray STARTS inside
+   *  (t = 0) is skipped: d0 is the camera ray's closest approach to the shooter's eye,
+   *  and a lens or eye grazing a trunk or ledge must not collapse the aim point onto
+   *  the shooter. heightAt(x, z) and query(x, z, r, out) are the map's own functions;
+   *  `out` is the caller's scratch array for query. Pure given those. */
+  function aimRayDist(ox, oy, oz, dx, dy, dz, d0, dMax, heightAt, query, out) {
+    var best = dMax;
+    var d, x, y, z;
+    for (d = d0; d < best; d += 0.75) {
+      x = ox + dx * d; y = oy + dy * d; z = oz + dz * d;
+      if (heightAt(x, z) > y) { best = d; break; }
+    }
+    var SPAN = 24;
+    for (var s0 = d0; s0 < best; s0 += SPAN) {
+      var s1 = s0 + SPAN < best ? s0 + SPAN : best;
+      var ax = ox + dx * s0, ay = oy + dy * s0, az = oz + dz * s0;
+      var bx = ox + dx * s1, by = oy + dy * s1, bz = oz + dz * s1;
+      var hx = (bx - ax) * 0.5, hz = (bz - az) * 0.5;
+      var cols = query((ax + bx) * 0.5, (az + bz) * 0.5, Math.sqrt(hx * hx + hz * hz) + 0.6, out);
+      var bt = 2, minT = s0 === d0 ? 1e-9 : -1;       // only the FIRST span skips a collider the ray starts inside
+      for (var i = 0; i < cols.length; i++) {
+        var c = cols[i];
+        if (c.dead) continue;
+        var h = c.kind === "ramp" ? segmentRamp(ax, ay, az, bx, by, bz, c)
+              : c.kind === "box" ? segmentBox(ax, ay, az, bx, by, bz, c) : null;
+        if (h && h.t > minT && h.t < bt) bt = h.t;
+      }
+      if (bt <= 1) { best = s0 + (s1 - s0) * bt; break; }
     }
     return best;
   }
@@ -878,6 +1014,7 @@
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
     segmentColliders: segmentColliders,
+    RAMP_THICK: RAMP_THICK, rampHalfV: rampHalfV, rampBlocks: rampBlocks, sweepSupport: sweepSupport, aimRayDist: aimRayDist,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
     BOT_TIER_BANDS: BOT_TIER_BANDS, skillMix: skillMix, mixRating: mixRating, interpTierK: interpTierK, BOT_PACE: BOT_PACE,

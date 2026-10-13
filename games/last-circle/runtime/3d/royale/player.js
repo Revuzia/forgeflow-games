@@ -1448,7 +1448,21 @@ function blockedIn(W, cols, x0, z0, x, z, y, h, isMove) {
   const yd = isMove ? Math.max(y, supportIn(W, cols, x, z, y)) : y;
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
-    if (c.kind === "ramp") continue;
+    if (c.kind === "ramp") {
+      // C-RAMP (Wave 5, 5C): a ramp used to be skipped here, so its sides and
+      // underside were walk-through (and the wedge under it a bullet-proof pocket).
+      // It is a sloped slab: walkable from its low edge (supportIn lifts the capsule
+      // onto it, so rampBlocks reads false there), its sides and underside block.
+      // Same "already held" rule as a box: a capsule that is already inside the
+      // slab's zone may leave, or slide, but not go deeper.
+      if (!K.rampBlocks(c, x, z, yd, h, r, STEP_UP)) continue;
+      if (isMove && K.rampBlocks(c, x0, z0, y, h, r, STEP_UP)) {
+        const ex0 = x - K.clamp(x, c.minX, c.maxX), ez0 = z - K.clamp(z, c.minZ, c.maxZ);
+        const ex1 = x0 - K.clamp(x0, c.minX, c.maxX), ez1 = z0 - K.clamp(z0, c.minZ, c.maxZ);
+        if (ex0 * ex0 + ez0 * ez0 >= ex1 * ex1 + ez1 * ez1) continue;
+      }
+      return c;
+    }
     if (c.maxY <= yd + STEP_UP || c.minY >= yd + h) continue;
     let ex = x - K.clamp(x, c.minX, c.maxX), ez = z - K.clamp(z, c.minZ, c.maxZ);
     const d2 = ex * ex + ez * ez;
@@ -1871,12 +1885,22 @@ function stepActor(W, a, dt) {
       if (hitWall && !a.onGround && !a.isBot && !a.netRemote && !a.gliding &&
           !a.swimming && inp.mz > 0 && a.vel.y < 6) mantleTrigger(W, a, h);
     }
+    const feetY0 = a.pos.y;
     a.pos.y += a.vel.y * dt;
 
     // `cols` is still this frame's list: the mantle probes above use their own
     // queries (and only on the rare frame a human pushes into a ledge), which
     // never touch this module-owned array
-    const sup = supportIn(W, cols, a.pos.x, a.pos.z, a.pos.y);
+    let sup = supportIn(W, cols, a.pos.x, a.pos.z, a.pos.y);
+    // LANDING SWEEP (Wave 5, 5C). supportIn is a POINT test (tops <= feet + STEP_UP), and
+    // a faller covers more than STEP_UP per tick past ~33 m/s (a drop of ~27 m: a sky
+    // island, the crane), so a 0.3 m roof slab fell between two ticks and the actor
+    // landed on the ground inside the building. Test the feet SEGMENT: a top the feet
+    // crossed this tick wins. Ticks that moved <= STEP_UP are untouched (-Infinity).
+    if (feetY0 - a.pos.y > STEP_UP) {
+      const swept = K.sweepSupport(cols, a.pos.x, a.pos.z, feetY0, a.pos.y, STEP_UP);
+      if (swept > sup) sup = swept;
+    }
     // in deep water the "support" is the swim surface, not the seabed
     if (deepWater && a.pos.y <= wy + 0.05) {
       a.pos.y = wy - 0.55;   // enter swim next frame

@@ -531,6 +531,272 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
      "sweep: destroyed colliders are ignored");
 }
 
+// ── C-RAMP (Wave 5, lane 5C): a ramp is a 0.3 m sloped slab ──────────────────
+// Bullets and sight test the PLANK, not the wedge under it (nobody hides
+// bullet-proof under a ramp), and the mover blocks the plank's sides and underside
+// but still climbs it from the low edge. Dimensions are the real ones: the
+// Savanna tower exterior ramp (2.2 m wide, 8.45 m climb), a 2.4 m wide 25 deg stair.
+{
+  const mk = (dir, minX, maxX, minY, maxY, minZ, maxZ) => ({ kind: "ramp", dir, minX, maxX, minY, maxY, minZ, maxZ, dead: false });
+  const ramp = mk(0, 0, 4, 0, 3, -2, 2);                // up-end +X, 36.87 deg
+  const hv = R.rampHalfV(ramp);
+  ok(approx(R.RAMP_THICK, 0.3), "c-ramp: the plank is the drawn 0.3 m (maps.js addRamp)");
+  ok(approx(hv, 0.15 * Math.sqrt(1 + 0.75 * 0.75), 1e-12), "c-ramp: half the vertical thickness is 0.15 / cos(slope) (" + hv.toFixed(4) + " m at 36.87 deg)");
+  ok(approx(R.rampHalfV(mk(2, -1, 1, 0, 0, 0, 5)), 0.15, 1e-12), "c-ramp: a flat plank is 0.3 m thick");
+
+  // bullets: the plank is hit, the open wedge under it is not
+  const into = R.segmentRamp(-1, 0.5, 0, 5, 0.5, 0, ramp);
+  ok(!!into && into.t > 0 && into.ny > 0, "c-ramp: a shot into the slope hits the plank, normal up (" + (into && into.ny.toFixed(3)) + ")");
+  ok(into && approx(into.nx * into.nx + into.ny * into.ny + into.nz * into.nz, 1, 1e-12) && into.nx < 0, "c-ramp: the hit normal is the unit plank normal, tilted back against the climb");
+  ok(R.segmentRamp(3.5, 1.0, -5, 3.5, 1.0, 0, ramp) === null, "c-ramp: a shot along the ground into the wedge under the plank passes (was blocked: bullet-proof pocket)");
+  ok(R.segmentRamp(3.5, 1.0, -5, 3.5, 1.0, 5, ramp) === null, "c-ramp: ...and out the other side");
+  ok(R.segmentRamp(3.5, 0.0, 0, 3.5, 4.0, 0, ramp) !== null, "c-ramp: a shot from the ground UP through the plank hits it");
+  const up = R.segmentRamp(3.5, 0.0, 0, 3.5, 4.0, 0, ramp);
+  ok(up && up.ny < 0 && approx(up.t * 4, 2.625 - hv, 1e-9), "c-ramp: from underneath the normal points down and the hit is the plank's underside (y " + (up && (up.t * 4).toFixed(3)) + ")");
+  ok(R.segmentRamp(3.5, 5, 0, 3.5, 0, 0, ramp).ny > 0 && approx(R.segmentRamp(3.5, 5, 0, 3.5, 0, 0, ramp).t * -5 + 5, 2.625 + hv, 1e-9), "c-ramp: from above the hit is the plank's top face");
+  ok(R.segmentRamp(-1, 3.5, 0, 5, 3.5, 0, ramp) === null, "c-ramp: a shot clearing the high end passes");
+  ok(R.segmentRamp(-3, 0.3, 0, -1, 0.3, 0, ramp) === null, "c-ramp: a shot stopping short misses");
+  ok(R.segmentRamp(1, 0.5, 9, 3, 0.5, 9, ramp) === null, "c-ramp: a shot past the side misses");
+  const inside = R.segmentRamp(2, 1.5, 0, 2, 1.0, 0, ramp);
+  ok(inside && inside.t === 0, "c-ramp: a segment that starts inside the plank reports t = 0");
+  // every dir hits the right way round (up-end +X, -X, +Z, -Z), mirrored from the dir 0 ramp
+  const dirs = [mk(0, 0, 4, 0, 3, -2, 2), mk(1, -4, 0, 0, 3, -2, 2), mk(2, -2, 2, 0, 3, 0, 4), mk(3, -2, 2, 0, 3, -4, 0)];
+  const probes = [[[-1, 0.5, 0, 5, 0.5, 0], 1], [[1, 0.5, 0, -5, 0.5, 0], 1], [[0, 0.5, -1, 0, 0.5, 5], 1], [[0, 0.5, 1, 0, 0.5, -5], 1]];
+  let dirOk = true;
+  for (let i = 0; i < 4; i++) {
+    const p = probes[i][0], h = R.segmentRamp(p[0], p[1], p[2], p[3], p[4], p[5], dirs[i]);
+    // the climb is toward the up end, so the plank crosses y = 0.5 at u = 0.667 (4 m run, 3 m rise)
+    const hx = h && (p[0] + (p[3] - p[0]) * h.t), hz = h && (p[2] + (p[5] - p[2]) * h.t);
+    const u = h && (i === 0 ? hx : i === 1 ? -hx : i === 2 ? hz : -hz);
+    if (!h || Math.abs(h.nx * (i < 2 ? (i === 0 ? 1 : -1) : 0) + h.nz * (i >= 2 ? (i === 2 ? 1 : -1) : 0)) < 0.5 || u < 0.4 || u > 0.95) dirOk = false;
+  }
+  ok(dirOk, "c-ramp: all four dirs rise toward their up-end and tilt the normal back against the climb");
+
+  // property: the exact solve agrees with a brute-force march of the plank (1/4000 steps)
+  {
+    const rng = R.mulberry32(77);
+    const refHit = (ax, ay, az, bx, by, bz, c) => {
+      const N = 4000, h2 = R.rampHalfV(c);
+      for (let i = 0; i <= N; i++) {
+        const t = i / N, x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t;
+        if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
+        if (Math.abs(y - R.rampTopAt(c, x, z)) <= h2) return t;
+      }
+      return -1;
+    };
+    let agree = 0, hits = 0, N = 6000, bad = 0, worstDt = 0;
+    for (let i = 0; i < N; i++) {
+      const c = dirs[i & 3], q = (s) => (rng() - 0.5) * s;
+      const ax = q(12), ay = q(7) + 1.5, az = q(12), bx = q(12), by = q(7) + 1.5, bz = q(12);
+      const e = R.segmentRamp(ax, ay, az, bx, by, bz, c), r = refHit(ax, ay, az, bx, by, bz, c);
+      const len = Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2 + (bz - az) ** 2);
+      if (e) hits++;
+      if (!e && r < 0) agree++;
+      else if (e && r >= 0) { const dt = Math.abs(e.t - r); worstDt = Math.max(worstDt, dt); if (dt <= 1.5 / 4000 + 1e-9) agree++; else bad++; }
+      else if (e && r < 0 && (e.tExit - e.t) * len < 0.02) agree++;      // a graze thinner than the brute force's step
+      else bad++;
+    }
+    ok(bad === 0 && agree === N && hits > N * 0.1, "c-ramp: exact plank solve = brute-force march on " + N + " random segments (" + hits + " hits, worst entry error " + worstDt.toExponential(1) + ")");
+  }
+
+  // movement: climbed from the low edge, sides and underside block (capsule r 0.45, h 1.8, STEP_UP 0.55)
+  const P = R.PLAYERK, SU = 0.55;
+  const blocks = (c, x, z, yd) => R.rampBlocks(c, x, z, yd, P.height, P.radius, SU);
+  const line = (c, u) => c.minY + (c.maxY - c.minY) * (u / (c.maxX - c.minX));
+  ok(!blocks(ramp, -0.3, 0, 0), "c-ramp mover: walking onto the low edge from the ground is free");
+  ok(!blocks(ramp, 0.2, 0, 0), "c-ramp mover: ...and the first step up the slope");
+  let climbOk = true;
+  for (let u = 0; u <= 4; u += 0.05) if (blocks(ramp, u, 0, line(ramp, u))) climbOk = false;        // feet on the walk line, centre line
+  for (let u = 0; u <= 4; u += 0.05) if (blocks(ramp, u, 1.7, line(ramp, u))) climbOk = false;      // feet on the walk line, hugging the side
+  ok(climbOk, "c-ramp mover: a capsule standing on the walk line is never blocked, anywhere on the ramp (80 + 80 steps)");
+  let descendOk = true;
+  for (let u = 4; u >= 0; u -= 0.05) if (blocks(ramp, u, 0, line(ramp, u) + 0.02)) descendOk = false;   // walking down: feet a hair above the line
+  ok(descendOk, "c-ramp mover: ...and neither walking down it");
+  ok(!blocks(ramp, 6, 0, 0) && !blocks(ramp, 1, 3, 0) && !blocks(ramp, 1, -2.46, 0), "c-ramp mover: a capsule clear of the footprint (r 0.45) is never blocked");
+  // the side face: ground feet beside the plank where its line is above a step and its underside below the head
+  ok(blocks(ramp, 2.0, 2.2, 0), "c-ramp mover: its SIDE blocks (line 1.5 m, underside 1.3 m, 0.25 m from the face)");
+  ok(blocks(ramp, 2.0, -2.2, 0), "c-ramp mover: ...on both sides");
+  ok(!blocks(ramp, 0.3, 2.2, 0), "c-ramp mover: ...but the low corner within a step (line 0.22 m) is stepped onto, not a wall");
+  ok(!blocks(ramp, 2.0, 2.2, 1.0), "c-ramp mover: a capsule that has already jumped onto the line (feet 1.0, line 1.5) is not stopped by the side");
+  ok(!blocks(ramp, 2.0, 0, 1.5), "c-ramp mover: ...nor one standing on it");
+  // under the plank: walkable only where a standing capsule fits beneath it
+  ok(!blocks(ramp, 3.4, 0, 0), "c-ramp mover: high under the plank (line 2.55 m, underside 2.36 m) a standing capsule walks through");
+  ok(blocks(ramp, 1.5, 0, 0), "c-ramp mover: low under the plank (underside 0.94 m) it is a wall: the head would go into the slab");
+  // the threshold is the underside at the LOWEST point the disc reaches, not at its centre
+  {
+    // find the centre u where the centre-only underside is just clear (>= 1.8) but the disc's lowest point is not
+    const clearC = (u) => line(ramp, u) - hv >= P.height;
+    let u = 0; while (!clearC(u)) u += 0.001;                         // first u whose centre underside clears the head
+    ok(blocks(ramp, u + 0.01, 0, 0), "c-ramp mover: the disc's low edge (0.45 m down-slope) still hits the plank where the centre's underside is just clear");
+    ok(!blocks(ramp, u + 0.45 + 0.01, 0, 0), "c-ramp mover: one radius further up the plank the whole disc clears (" + (u + 0.46).toFixed(2) + " m along)");
+  }
+  // a lip: stepping from the ground onto a low edge that sits above it
+  const lip3 = mk(0, 0, 4, 0.5, 3.5, -2, 2), lip8 = mk(0, 0, 4, 0.8, 3.8, -2, 2);
+  ok(!blocks(lip3, -0.3, 0, 0), "c-ramp mover: a 0.5 m lip is within the 0.55 step: walkable from the ground");
+  ok(blocks(lip8, -0.3, 0, 0), "c-ramp mover: a 0.8 m lip is a wall to a walker...");
+  ok(!blocks(lip8, -0.3, 0, 0.4), "c-ramp mover: ...and free to a jumper whose feet are 0.4 m up");
+  // a ramp whose line never reaches a step is never a wall (a 0.3 m ground ramp)
+  ok(!blocks(mk(2, -1, 1, 0, 0.3, 0, 3), 0, 1.5, 0), "c-ramp mover: a 0.3 m rise anywhere is stepped, never a wall");
+  // every dir gives the same answer when the geometry is mirrored
+  {
+    let same = true;
+    const probe = (u, v, yd) => [blocks(dirs[0], u, v, yd), blocks(dirs[1], -u, v, yd), blocks(dirs[2], v, u, yd), blocks(dirs[3], v, -u, yd)];
+    for (let u = -0.6; u <= 4.6; u += 0.3) for (let v = -2.6; v <= 2.6; v += 0.3) for (const yd of [0, 0.7, 1.6]) {
+      const a = probe(u, v, yd);
+      if (a[0] !== a[1] || a[0] !== a[2] || a[0] !== a[3]) same = false;
+    }
+    ok(same, "c-ramp mover: all four dirs agree on a mirrored grid (rampBlocks has no dir bias)");
+  }
+}
+
+// ── LANDING SWEEP (Wave 5, 5C): a fast faller cannot tunnel a slab ───────────
+// player.js tested the feet as a POINT: the highest top <= feet + STEP_UP. Past ~33 m/s
+// a tick moves the feet further than that, so a 0.3 m roof slab fell between two
+// ticks (the research probe: first pass-through at a 26.7 m drop, about 1 drop in 4
+// from 40 m up). The mirror below is player.js's vertical step, line for line; the sweep
+// is the new term. The live game is checked in a real browser (the 5C probes).
+{
+  const g = R.MOVE.gravity, dt = 1 / 60, SU = 0.55;
+  const slab = (top) => ({ kind: "box", minX: -3, maxX: 3, minY: top - 0.3, maxY: top, minZ: -3, maxZ: 3, dead: false });
+  const point = (cols, x, z, y, ground) => {                          // player.js supportIn (box part)
+    let s = ground;
+    for (const c of cols) { if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue; if (c.maxY <= y + SU && c.maxY > s) s = c.maxY; }
+    return s;
+  };
+  function fall(h0, cols, ground, sweep) {                             // returns the y the actor stops at
+    let y = h0, vy = 0;
+    for (let i = 0; i < 20000; i++) {
+      vy += g * dt;
+      const y0 = y; y += vy * dt;
+      let sup = point(cols, 0, 0, y, ground);
+      if (sweep && y0 - y > SU) { const s = R.sweepSupport(cols, 0, 0, y0, y, SU); if (s > sup) sup = s; }
+      if (y <= sup + 0.02) return sup;
+    }
+    return NaN;
+  }
+  // a 0.3 m roof slab at y = 6 over ground at 0: drops of 5 .. 60 m onto it, in 1 cm steps
+  const roof = [slab(6)];
+  let oldThrough = 0, newThrough = 0, n = 0, firstOld = null, nHigh = 0, oldHigh = 0;
+  for (let drop = 5; drop <= 60; drop += 0.01) {
+    n++;
+    const lost = fall(6 + drop, roof, 0, false) !== 6;
+    if (lost) { oldThrough++; if (firstOld === null) firstOld = drop; }
+    if (drop >= 30) { nHigh++; if (lost) oldHigh++; }
+    if (fall(6 + drop, roof, 0, true) !== 6) newThrough++;
+  }
+  ok(oldHigh > nHigh * 0.15 && firstOld > 26 && firstOld < 27.5,
+     "landing sweep: CONTROL: the point test lets " + oldThrough + " of " + n + " drops through the slab (" + oldHigh + " of the " + nHigh + " from 30 m up), the first at " + firstOld.toFixed(2) + " m");
+  ok(newThrough === 0, "landing sweep: drops of 5-60 m onto a 0.3 m slab: 0 pass-through (" + n + " drops, 1 cm apart)");
+  // thicker or thinner makes no difference to a top-only support test, but pin it
+  let thin = 0;
+  for (const th of [0.05, 0.3, 1]) for (let drop = 20; drop <= 60; drop += 0.37) {
+    const c = [{ kind: "box", minX: -3, maxX: 3, minY: 6 - th, maxY: 6, minZ: -3, maxZ: 3, dead: false }];
+    if (fall(6 + drop, c, 0, true) !== 6) thin++;
+  }
+  ok(thin === 0, "landing sweep: slab thickness (5 cm, 30 cm, 1 m) does not matter: 0 pass-through");
+  // two slabs stacked 3 m apart: the HIGHEST one the feet crossed wins
+  let stack = 0;
+  for (let drop = 20; drop <= 70; drop += 0.31) if (fall(9 + drop, [slab(6), slab(9)], 0, true) !== 9) stack++;
+  ok(stack === 0, "landing sweep: with two decks the faller lands on the upper one (0 of 161 wrong)");
+  // the ground is still the floor, and the terrain case without any slab is unchanged
+  ok(fall(80, [], 2.5, true) === 2.5 && fall(80, [], 2.5, false) === 2.5, "landing sweep: no slab: lands on the terrain, same with and without the sweep");
+  // off the footprint (beyond the 0.3 m margin) there is nothing to land on
+  ok(R.sweepSupport(roof, 3.4, 0, 7, 5.4, SU) === -Infinity, "landing sweep: past the footprint margin the slab is not there");
+  ok(R.sweepSupport(roof, 3.2, 0, 7, 5.4, SU) === 6, "landing sweep: inside the 0.3 m margin it is (same as the support test)");
+  // a top ABOVE the feet is not crossed, a top the feet never reached is not either
+  ok(R.sweepSupport([slab(40)], 0, 0, 38, 36, SU) === -Infinity && R.sweepSupport([slab(30)], 0, 0, 38, 36, SU) === -Infinity, "landing sweep: tops above the start or below the end are not crossed");
+  // a slow tick is the old test exactly: -Infinity, so nothing about ordinary walking changes
+  ok(R.sweepSupport(roof, 0, 0, 6.5, 6.1, SU) === -Infinity && R.sweepSupport(roof, 0, 0, 6.5, 5.96, SU) === -Infinity, "landing sweep: a tick that moves <= STEP_UP never sweeps (walking, jumping, short falls are byte-identical)");
+  // ramps: the walk line, not the box top
+  const rp = { kind: "ramp", dir: 2, minX: -1, maxX: 1, minY: 4, maxY: 8, minZ: -2, maxZ: 2, dead: false };
+  ok(approx(R.sweepSupport([rp], 0, 0, 7, 5.3, SU), 6, 1e-9), "landing sweep: a ramp's top is its walk line at (x, z) (6.0 m at mid-run), crossed by the feet segment 7 -> 5.3");
+  ok(R.sweepSupport([{ kind: "box", dead: true, minX: -3, maxX: 3, minY: 5, maxY: 6, minZ: -3, maxZ: 3 }], 0, 0, 30, 20, SU) === -Infinity, "landing sweep: destroyed colliders are skipped");
+  // landing on a ramp at speed: from 35 m up onto a 4 m climb ramp's mid-run
+  {
+    let y = 40, vy = 0, landed = NaN;
+    for (let i = 0; i < 20000 && isNaN(landed); i++) {
+      vy += g * dt; const y0 = y; y += vy * dt;
+      let sup = Math.max(0, R.rampTopAt(rp, 0, 0) <= y + SU ? R.rampTopAt(rp, 0, 0) : 0);
+      const s = R.sweepSupport([rp], 0, 0, y0, y, SU); if (s > sup) sup = s;
+      if (y <= sup + 0.02) landed = sup;
+    }
+    ok(approx(landed, 6, 1e-9), "landing sweep: a 34 m drop onto a ramp lands on its surface (" + landed.toFixed(3) + " m), not the ground under it");
+  }
+}
+
+// ── CROSSHAIR MARCH (Wave 5, 5C): swept like the bullets ──────────────────────
+{
+  const flat = () => 0;
+  const world = (cols) => (x, z, r, out) => { out.length = 0; for (const c of cols) out.push(c); return out; };
+  const scratch = [];
+  const march = (o, d, d0, dMax, cols) => R.aimRayDist(o[0], o[1], o[2], d[0], d[1], d[2], d0, dMax, flat, world(cols), scratch);
+  const house = { kind: "box", minX: 20, maxX: 20.32, minY: 0, maxY: 3, minZ: -6, maxZ: 6, dead: false };     // a 0.32 m house wall (re-placed per ray below)
+  // the old march, verbatim, as the control (point test every 0.75 m from 3 m, boxes only)
+  const oldMarch = (o, d, cols, dMax) => {
+    for (let t = 3; t < dMax; t += 0.75) {
+      const x = o[0] + d[0] * t, y = o[1] + d[1] * t, z = o[2] + d[2] * t;
+      if (flat(x, z) > y) return t;
+      for (const c of cols) if (c.kind === "box" && x > c.minX && x < c.maxX && y > c.minY && y < c.maxY && z > c.minZ && z < c.maxZ) return t;
+    }
+    return dMax;
+  };
+  const rng = R.mulberry32(404);
+  let oldMiss = 0, newMiss = 0, N = 0, worst = 0;
+  for (let i = 0; i < 8000; i++) {
+    const ang = (rng() - 0.5) * 2 * 70 * Math.PI / 180, o = [0, 1.6, (rng() - 0.5) * 8];
+    const d = [Math.cos(ang), 0, Math.sin(ang)];
+    const D = 5 + rng() * 35;                                          // the wall plane x = D, 5 .. 40 m out (the sampling phase differs per ray)
+    const wall = Object.assign({}, house, { minX: D, maxX: D + 0.32 });
+    const wallT = (D - o[0]) / d[0];                                   // the ray certainly crosses the plane inside z in -6..6
+    if (Math.abs(o[2] + d[2] * wallT) > 5.5) continue;
+    N++;
+    if (oldMarch(o, d, [wall], 300) > wallT + 0.75) oldMiss++;
+    const t = march(o, d, 0.12, 300, [wall]);
+    if (t > wallT + 1e-6) newMiss++;
+    worst = Math.max(worst, Math.abs(t - wallT));
+  }
+  ok(oldMiss > N * 0.3 && oldMiss < N * 0.7, "crosshair: CONTROL: the old 0.75 m point march steps over the 0.32 m wall on " + oldMiss + " of " + N + " rays (" + (100 * oldMiss / N).toFixed(0) + " %)");
+  ok(newMiss === 0 && worst < 1e-6, "crosshair: the swept march reads the wall on every ray (" + N + " rays, 0-70 deg, worst error " + worst.toExponential(1) + " m)");
+  // a wall 1.5 m ahead of the eye with the lens pulled in right behind it: the old 3 m start never saw it
+  const near = { kind: "box", minX: 1.5, maxX: 1.82, minY: 0, maxY: 3, minZ: -6, maxZ: 6, dead: false };
+  ok(oldMarch([0, 1.6, 0], [1, 0, 0], [near], 300) > 100, "crosshair: CONTROL: the old march started at 3 m and skipped a wall 1.5 m ahead");
+  ok(approx(march([0, 1.6, 0], [1, 0, 0], 0.12, 300, [near]), 1.5, 1e-9), "crosshair: ...the new one starts at the eye's closest approach and reads it at 1.5 m");
+  // a collider the ray starts INSIDE is skipped (a lens grazing a trunk), the next thing is still found
+  const trunk = { kind: "box", minX: -0.5, maxX: 0.5, minY: 0, maxY: 7, minZ: -0.5, maxZ: 0.5, dead: false };
+  ok(approx(march([0, 1.6, 0], [1, 0, 0], 0.12, 300, [trunk, near]), 1.5, 1e-9), "crosshair: a box the march starts inside is skipped, the wall beyond it is read");
+  ok(march([0, 1.6, 0], [1, 0, 0], 0.12, 300, [trunk]) === 300, "crosshair: ...and with nothing beyond it the far point (never a point on the shooter)");
+  // ramps count (the old march ignored every kind but "box"), and only the plank
+  const rmp = { kind: "ramp", dir: 0, minX: 10, maxX: 14, minY: 0, maxY: 3, minZ: -2, maxZ: 2, dead: false };
+  const tr = march([0, 1.0, 0], [1, 0, 0], 0.12, 300, [rmp]);
+  ok(tr > 10 && tr < 14 && Math.abs(1.0 - R.rampTopAt(rmp, tr, 0)) <= R.rampHalfV(rmp) + 1e-9,
+     "crosshair: a ramp slope is read, at the plank (" + tr.toFixed(3) + " m)");
+  ok(march([12, 0.4, -6], [0, 0, 1], 0.12, 300, [rmp]) === 300, "crosshair: ...but a ray along the ground under the plank does not stop on the open wedge");
+  // terrain still counts, and the nearer of terrain / collider wins
+  const hill = (x) => (x > 30 ? (x - 30) * 0.5 : 0);
+  const th = R.aimRayDist(0, 1.6, 0, 1, 0, 0, 0.12, 300, (x) => hill(x), world([near]), scratch);
+  ok(approx(th, 1.5, 1e-9), "crosshair: the wall (1.5 m) beats the hill (30 m+)");
+  const th2 = R.aimRayDist(0, 1.6, 0, 1, 0, 0, 0.12, 300, (x) => hill(x), world([]), scratch);
+  ok(th2 > 30 && th2 < 36, "crosshair: with no collider the hill is read within one 0.75 m step (" + th2.toFixed(2) + " m)");
+  ok(march([0, 1.6, 0], [1, 0, 0], 0.12, 300, [{ kind: "box", dead: true, minX: 5, maxX: 6, minY: 0, maxY: 3, minZ: -5, maxZ: 5 }]) === 300, "crosshair: a destroyed prop is not an aim point");
+  // a target hit nearer than the start (an actor point): the march leaves it alone
+  ok(march([0, 1.6, 0], [1, 0, 0], 2.0, 1.2, [near]) === 1.2, "crosshair: an actor hit nearer than the march start is returned untouched");
+  // long rays cross the 24 m spans: a wall at 150 m
+  const far = { kind: "box", minX: 150, maxX: 150.32, minY: 0, maxY: 3, minZ: -6, maxZ: 6, dead: false };
+  ok(approx(march([0, 1.6, 0], [1, 0, 0], 4.2, 300, [far]), 150, 1e-9), "crosshair: a wall 150 m out is read across the 24 m query spans");
+  // a wall exactly on a 24 m span boundary is neither skipped nor read twice (span k ends where span k+1 starts)
+  {
+    let missed = 0, tried = 0;
+    for (const d0 of [0.05, 0.12, 4.2, 1.7, 3]) for (let k = 1; k <= 11; k++) for (const e of [0, 1e-12, -1e-12, 1e-9, -1e-9]) {
+      const x = d0 + 24 * k + e, wl = { kind: "box", minX: x, maxX: x + 0.32, minY: 0, maxY: 3, minZ: -6, maxZ: 6, dead: false };
+      tried++;
+      if (Math.abs(march([0, 1.6, 0], [1, 0, 0], d0, 300, [wl]) - x) > 1e-6) missed++;
+    }
+    ok(missed === 0, "crosshair: a wall on a 24 m span boundary (and 1e-9 / 1e-12 either side) is read every time (" + tried + " cases)");
+  }
+  // deterministic: same inputs, same answer
+  ok(march([0, 1.6, 1], [0.9, -0.01, 0.4358898943540674], 0.12, 300, [far, near, house]) === march([0, 1.6, 1], [0.9, -0.01, 0.4358898943540674], 0.12, 300, [far, near, house]), "crosshair: pure: the same ray gives the same distance");
+}
+
 // ── Spread model ─────────────────────────────────────────────────────────────
 // fire() computed spread inline and the crosshair guessed with a DIFFERENT
 // formula, so the reticle never showed crouch, airborne, rarity, first-shot
