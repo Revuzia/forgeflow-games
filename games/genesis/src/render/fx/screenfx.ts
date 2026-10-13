@@ -119,7 +119,7 @@ vec4 drops(vec2 uv, float scale, float t, float seed, float wet) {
   vec2 f = fract(p) - 0.5;
   float r1 = h21(id + seed), r2 = h21(id + seed + 7.3), r3 = h21(id + seed + 13.1);
   // a cell holds a drop when it is wet enough (more cells fill as the lens gets wetter)
-  float on = step(r1, wet * 0.85);
+  float on = step(r1, wet * 0.5);
   // runners: some drops slide down, quickly then pausing, wobbling a little
   float run = step(0.72, r2);
   float tt = t * (0.25 + r3 * 0.5) + r1 * 10.0;

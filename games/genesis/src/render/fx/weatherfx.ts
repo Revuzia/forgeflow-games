@@ -32,7 +32,7 @@ const DEFS = new Map<string, WDef>(
 
 /** what falls, by the sim's precipType: 0 none, 1 rain, 2 snow, 3 hail, 4 ash, 5 acid, 6 blood, 7 sand */
 const FALL: Record<number, { sys: number; speed: number; size: number; col: [number, number, number]; splash: boolean }> = {
-  1: { sys: SYS.precip, speed: 9.5, size: 0.012, col: [0.7, 0.74, 0.8], splash: true },
+  1: { sys: SYS.precip, speed: 9.5, size: 0.02, col: [0.7, 0.74, 0.8], splash: true },
   2: { sys: SYS.snowfall, speed: 1.2, size: 0.06, col: [0.95, 0.96, 1.0], splash: false },
   3: { sys: SYS.snowfall, speed: 13, size: 0.03, col: [0.9, 0.92, 0.95], splash: true },
   4: { sys: SYS.snowfall, speed: 0.9, size: 0.06, col: [0.32, 0.31, 0.3], splash: false },
@@ -45,6 +45,10 @@ const _u = new Vector3(), _w = new Vector3(), _p = new Vector3();
 
 export class WeatherFx {
   private fall = 0;
+  private fallPower = 0;
+  /** precipitation that stopped (or changed kind) fading out: the box of drops round the eye has nowhere to fall to,
+   *  so it is dimmed away over a moment instead of wrapping round the camera for the rest of its particles' lives */
+  private fading: { id: number; p: number; t: number }[] = [];
   private splash = 0;
   private kind = -1;
   private next = 0;
@@ -112,21 +116,33 @@ export class WeatherFx {
         wind.normalize().multiplyScalar(galeV);
       }
       const windK = type === 7 ? 3.5 : type === 2 ? 1.2 : 0.6;
-      const B = type === 2 || type === 4 ? 13 : 30;
-      const count = Math.round((type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 2200) * ctx.q * (0.35 + 0.65 * rate));
+      // (rain: a box close round the eye, dense — the streaks are only seen within a few tens of metres; beyond them
+      // the weather's haze is the rain)
+      const B = type === 2 || type === 4 ? 13 : type === 7 ? 30 : 16;
+      // (a blizzard drives far more snow past the eye than a quiet snowfall drifts down)
+      const count = Math.round((driven ? 9000 : type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 5200) * ctx.q * (0.35 + 0.65 * rate));
       const def = {
         sys: driven ? SYS.precip : f.sys, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * windK, ay: wind.y * windK, az: wind.z * windK,
-        size: driven ? 0.03 : f.size * (type === 1 && precip > 15 ? 1.5 : 1), life: 10, count, p0: B, p1: driven ? 2.2 : f.speed * (type === 1 ? 0.8 + 0.4 * rate : 1),
+        size: driven ? 0.03 : f.size * (type === 1 && precip > 15 ? 1.4 : 1), life: 10, count, p0: driven ? 9 : B, p1: driven ? 2.2 : f.speed * (type === 1 ? 0.8 + 0.4 * rate : 1), p2: driven ? 1 : 0,
         r: f.col[0], g: f.col[1], b: f.col[2], power: Math.min(1, 0.25 + rate),
       };
-      if (!this.fall || !ctx.vfx.alive(this.fall)) this.fall = ctx.vfx.emit(def, ctx.now);
+      // (it was already falling when the camera came: a full box at once)
+      if (!this.fall || !ctx.vfx.alive(this.fall)) this.fall = ctx.vfx.emit({ ...def, prewarm: def.life }, ctx.now);
       else ctx.vfx.set(this.fall, def);
+      this.fallPower = def.power;
       if (f.splash && alt < 200) {
-        const sd = { sys: SYS.splash, x: cam.x, y: cam.y, z: cam.z, size: 0.18 + 0.1 * rate, life: 0.4, count: Math.round(260 * ctx.q * rate), p0: 70, r: f.col[0], g: f.col[1], b: f.col[2], power: rate };
-        if (!this.splash || !ctx.vfx.alive(this.splash)) this.splash = ctx.vfx.emit(sd, ctx.now);
+        const sd = { sys: SYS.splash, x: cam.x, y: cam.y, z: cam.z, size: 0.07 + 0.05 * rate, life: 0.35, count: Math.round(320 * ctx.q * rate), p0: 70, r: f.col[0], g: f.col[1], b: f.col[2], power: rate };
+        if (!this.splash || !ctx.vfx.alive(this.splash)) this.splash = ctx.vfx.emit({ ...sd, prewarm: sd.life }, ctx.now);
         else ctx.vfx.set(this.splash, sd);
       } else if (this.splash) { ctx.vfx.stop(this.splash, ctx.now); this.splash = 0; }
     } else this.stop(ctx);
+    if (this.fading.length) {
+      for (const f of this.fading) {
+        f.t -= ctx.ease / 0.8;
+        if (f.t <= 0 || !ctx.vfx.alive(f.id)) { ctx.vfx.stop(f.id, ctx.now, true); f.t = 0; } else ctx.vfx.set(f.id, { power: f.p * f.t * f.t });
+      }
+      this.fading = this.fading.filter((f) => f.t > 0);
+    }
     // ── rain on the lens: near the ground, more when looking up into it; it dries slowly when the rain stops ──
     const rainy = type === 1 || type === 5 || type === 6 ? rate : 0;
     const facing = ctx.camFwd ? clamp01(0.45 + ctx.camFwd.dot(u) * 1.4) : 0.5;
@@ -168,7 +184,7 @@ export class WeatherFx {
   }
 
   private stop(ctx: FxCtx): void {
-    if (this.fall) { ctx.vfx.stop(this.fall, ctx.now); this.fall = 0; }
+    if (this.fall) { this.fading.push({ id: this.fall, p: this.fallPower, t: 1 }); this.fall = 0; }
     if (this.splash) { ctx.vfx.stop(this.splash, ctx.now); this.splash = 0; }
     this.kind = -1;
   }

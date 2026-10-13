@@ -153,11 +153,11 @@
      "kind": "ship",
      "id": 1006
     },
-    "dist": 330,
+    "dist": 110,
     "yaw": 70,
-    "alt": 1150,
-    "pitch": -12,
-    "fov": 40,
+    "alt": 980,
+    "pitch": -6,
+    "fov": 36,
     "hour": 15
    },
    "frames": 4
@@ -223,9 +223,9 @@
      "kind": "ship",
      "id": 1101
     },
-    "dist": 70,
-    "pitch": 14,
-    "yaw": 50,
+    "dist": 58,
+    "pitch": 2,
+    "yaw": 55,
     "hour": 15.5
    },
    "frames": 4
@@ -301,7 +301,7 @@
      "k": "ship.launch",
      "kind": "rocket",
      "start": "descent",
-     "progress": 0.935,
+     "progress": 0.955,
      "id": 1005,
      "to": 2
     }
@@ -312,11 +312,11 @@
      "kind": "ship",
      "id": 1005
     },
-    "dist": 140,
+    "dist": 95,
     "yaw": 70,
-    "alt": 3,
-    "pitch": 6,
-    "fov": 52,
+    "alt": 10,
+    "pitch": -7,
+    "fov": 42,
     "hour": 9.5
    },
    "frames": 4
@@ -348,7 +348,7 @@
   },
   {
    "name": "cracked-world",
-   "params": "source=lookdev&page=crack",
+   "params": "source=lookdev&page=crack&dev=1",
    "size": [
     960,
     540
@@ -371,6 +371,24 @@
     "hour": 10.5
    },
    "frames": 4
+  },
+  {
+   "name": "cracked-rift",
+   "params": "source=lookdev&page=crack&dev=1",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "script": [
+    "const m = await import('/src/render/fx/worlds.ts'); const cv = m.WORLD_FX.last.cracks.get(0);",
+    "const p = cv.mesh.geometry.getAttribute('position'); const i = Math.floor(p.count * 0.12) & ~1;",
+    "const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const l = Math.hypot(x, y, z);",
+    "const lat = Math.asin(y / l) * 180 / Math.PI, lon = Math.atan2(x, z) * 180 / Math.PI;",
+    "await G.camera({ mode: 'orbit', planet: 0, lat, lon, dist: 1600, tilt: 55, yaw: 20, hour: 21.5 }); await G.frames(2);",
+    "return JSON.stringify({ lat: +lat.toFixed(1), lon: +lon.toFixed(1), fx: m.WORLD_FX.last.stats() });"
+   ],
+   "frames": 3
   },
   {
    "name": "world-erase-flash",

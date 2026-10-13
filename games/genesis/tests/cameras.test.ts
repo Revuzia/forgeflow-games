@@ -220,6 +220,12 @@ test('photo mode from a stand-off aims at the thing, and the lens rolls the fram
   w.rig.modes.photo(false);
   w.frames(2);
   assert.ok(!PHOTO.on && w.rig.mode !== 'photo', 'photo mode ends');
+  // a shot's photo then a dolly: the lens's blur does not follow the camera into the dolly
+  w.rig.modes.applySpec({ mode: 'photo', planet: w.pv.id, lat: at.lat, lon: at.lon, alt: 3, blur: 0.8, focus: 10 }, w.view);
+  w.frames(1);
+  w.rig.modes.applySpec({ mode: 'dolly', planet: w.pv.id, lat: at.lat, lon: at.lon, radius: 100, t: 0.3 }, w.view);
+  w.frames(1);
+  assert.ok(!PHOTO.on, 'the lens is photo mode\'s alone');
 });
 
 test('switching modes blends from the last pose; a blend of 0 cuts', () => {

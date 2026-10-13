@@ -11,6 +11,7 @@ import { nearestPlanet } from '../frame.ts';
 import type { CameraRig } from './rig.ts';
 import { PHOTO, type Lens } from './photo.ts';
 import { resolveTarget } from './targets.ts';
+import { surfaceRadius } from './common.ts';
 import type { SeenEvent } from './walk.ts';
 
 const DEG = Math.PI / 180;
@@ -167,7 +168,7 @@ export class CameraModes {
    * (along the ground) from the thing's ground point on bearing `yaw` (deg from north), `alt` over the ground, aimed at
    * the thing itself (a rocket climbing, a moon falling) with `pitch` added to the aim. Null when the thing is not here.
    */
-  private standOff(view: WorldView, s: ModeSpec): { planet: number; lat: number; lon: number; yaw: number; pitch: number } | null {
+  private standOff(view: WorldView, s: ModeSpec): { planet: number; lat: number; lon: number; alt: number; yaw: number; pitch: number } | null {
     const ref = s.target ?? null;
     let planet = s.planet;
     let T: D3 | null = s.focusPoint ? [s.focusPoint[0], s.focusPoint[1], s.focusPoint[2]] : null;
@@ -198,13 +199,25 @@ export class CameraModes {
     const c: D3 = [0, 1, 2].map((i) => u[i] * Math.cos(a) + (n[i] * Math.cos(b) + e[i] * Math.sin(b)) * Math.sin(a)) as D3;
     const cl = Math.hypot(c[0], c[1], c[2]) || 1;
     c[0] /= cl; c[1] /= cl; c[2] /= cl;
-    const rc = view.groundRadius(pv, c[0], c[1], c[2]) + (s.alt ?? 30);
+    // the eye over the ground (or the water) at its place; raised until nothing — a dune, a hill, a roof line of the
+    // world's own curve — stands between it and the thing
+    const g0 = surfaceRadius(pv, c);
+    let alt = s.alt ?? 30, rc = g0 + alt;
+    let need = 0;
+    for (let j = 1; j < 16; j++) {
+      const f = j / 16;
+      const q: D3 = [c[0] * rc + (T[0] - c[0] * rc) * f, c[1] * rc + (T[1] - c[1] * rc) * f, c[2] * rc + (T[2] - c[2] * rc) * f];
+      const ql = Math.hypot(q[0], q[1], q[2]) || 1;
+      const clear = surfaceRadius(pv, [q[0] / ql, q[1] / ql, q[2] / ql]) + 1.5;
+      if (ql < clear) need = Math.max(need, (clear - ql) / Math.max(0.1, 1 - f));
+    }
+    alt += need; rc += need;
     const v: D3 = [T[0] - c[0] * rc, T[1] - c[1] * rc, T[2] - c[2] * rc];
     const vl = Math.hypot(v[0], v[1], v[2]) || 1;
     tangentBasis(e, n, c);
     const yaw = Math.atan2(v[0] * e[0] + v[1] * e[1] + v[2] * e[2], v[0] * n[0] + v[1] * n[1] + v[2] * n[2]) / DEG;
     const pitch = Math.asin(Math.max(-1, Math.min(1, (v[0] * c[0] + v[1] * c[1] + v[2] * c[2]) / vl))) / DEG + (s.pitch ?? 0);
-    return { planet: pv.id, lat: Math.asin(Math.max(-1, Math.min(1, c[1]))) / DEG, lon: Math.atan2(c[0], c[2]) / DEG, yaw, pitch };
+    return { planet: pv.id, lat: Math.asin(Math.max(-1, Math.min(1, c[1]))) / DEG, lon: Math.atan2(c[0], c[2]) / DEG, alt, yaw, pitch };
   }
 
   /** the test surface's camera spec for these modes (lat / lon already resolved from a POI or a target) */
@@ -250,7 +263,7 @@ export class CameraModes {
       }
       case 'photo': {
         const aim = (s.target || s.focusPoint) && s.dist ? this.standOff(view, s) : null;
-        if (aim) r.photoCam.at(view, aim.planet, aim.lat, aim.lon, s.alt ?? 30, aim.yaw, aim.pitch);
+        if (aim) r.photoCam.at(view, aim.planet, aim.lat, aim.lon, aim.alt, aim.yaw, aim.pitch);
         else r.photoCam.at(view, s.planet, s.lat, s.lon, s.alt ?? 30, s.yaw ?? 0, s.pitch ?? -4);
         const L = PHOTO.lens;
         if (s.fov) L.fov = s.fov;

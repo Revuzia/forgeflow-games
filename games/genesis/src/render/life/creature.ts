@@ -161,9 +161,11 @@ const FRAG_SURFACE = /* glsl */ `
     rough = 0.5;
   } else if (region == 5) { alb = mix(vec3(0.12, 0.1, 0.09), vec3(0.25, 0.04, 0.03), cruel); rough = 0.4; }
   // the morph's colour: a good creature brighter and warmer, a cruel one dark and drained
-  alb = mix(alb, alb * vec3(1.4, 1.22, 0.95) + vec3(0.075, 0.052, 0.016), good * 0.75);
+  // (a good creature turns a warm, sunlit tan even when its template is a dark beast; a cruel one goes ash-black with a
+  // cold, bloodless cast)
+  alb = mix(alb, alb * vec3(1.7, 1.45, 1.05) + vec3(0.13, 0.085, 0.03), good * 0.85);
   float l = dot(alb, vec3(0.3, 0.55, 0.15));
-  alb = mix(alb, vec3(l * 0.8 + 0.022) * vec3(0.8, 0.7, 0.7), cruel * 0.7);
+  alb = mix(alb, vec3(l * 0.62 + 0.012) * vec3(0.82, 0.8, 0.86), cruel * 0.8);
   // scars on a cruel hide
   float scar = cruel * smoothstep(0.985, 1.0, 1.0 - abs(snoise(vec3(R.x * 6.0, R.y * 2.0, R.z * 9.0))));
   alb = mix(alb, vec3(0.32, 0.12, 0.1), scar * 0.8);
@@ -184,8 +186,12 @@ const FRAG_SURFACE = /* glsl */ `
   vec3 qf = fract(q) - 0.5 + (gn_hash33(qi) - 0.5) * 0.6;
   float strand = 1.0 - length(qf.xz) * 1.6 - length(qf.xy) * 0.5;
   float thr = vShell * (0.85 + 0.3 * gn_hash13(qi + 7.0));
+  // strands finer than a pixel cannot be drawn as strands (they alias into a black-and-white fuzz): far away the
+  // shells become a soft coat instead — the inner half solid, the outer half gone
+  float strandAA = smoothstep(0.45, 1.4, length(fwidth(q)));
+  float cutF = mix(strand < thr ? 1.0 : 0.0, vShell > 0.45 ? 1.0 : 0.0, strandAA);
   // (no shells over bare skin, horn, the eyes or the spines)
-  if (vShell > 0.02 && (strand < thr || vMark.z < 0.05)) discard;
+  if (vShell > 0.02 && (cutF > 0.5 || vMark.z < 0.05)) discard;
   alb *= mix(0.55, 1.15, vShell);
 #endif
   diffuseColor.rgb = alb;
@@ -229,7 +235,7 @@ const FRAG_EMISSIVE = /* glsl */ `
     float line = (1.0 - smoothstep(0.03, 0.1, band)) + 0.12 * (1.0 - smoothstep(0.1, 0.3, band));
     // over the shoulders, back and flanks (not the legs and belly), fading in where the coat is thickest
     line *= smoothstep(0.4, 0.68, vRest.y) * step(float(region), 0.5);
-    em += vec3(1.0, 0.76, 0.36) * line * uGlow * (0.65 + 0.35 * sin(uTime * 1.3 + n * 9.0)) * 0.7 / ex;
+    em += vec3(1.0, 0.66, 0.26) * line * uGlow * (0.65 + 0.35 * sin(uTime * 1.3 + n * 9.0)) * 0.32 / ex;
     // eyes: the iris (FRAG_SURFACE) glows: warm and soft for a good creature, a red ember for a cruel one
     em += mix(vec3(1.0, 0.66, 0.25) * 0.35 * good, vec3(1.0, 0.07, 0.02) * 1.6, cruel) * iris / ex;
     // a good creature's warm rim

@@ -8,8 +8,8 @@
 // light), lights its cloud from inside (a flash), and is heard (the sim's lightning event; bolts the renderer adds on
 // its own — in thunderstorm cells, in an ash plume, over a glass storm — post a thunder event for the audio).
 
-import { AdditiveBlending, BufferAttribute, BufferGeometry, DoubleSide, Mesh, ShaderMaterial, Vector3, type IUniform } from 'three';
-import { FX_DEPTH_GLSL, FX_LAYER, clamp01 } from './fxcommon.ts';
+import { BufferAttribute, BufferGeometry, DoubleSide, Mesh, ShaderMaterial, Vector3, type IUniform } from 'three';
+import { ADD_LIGHT, FX_DEPTH_GLSL, FX_LAYER, clamp01 } from './fxcommon.ts';
 
 const VERT = /* glsl */ `
 attribute float aK;
@@ -41,7 +41,7 @@ void main() {
 `;
 
 interface Channel { pts: Vector3[]; w: number; k: number }
-interface Bolt { ch: Channel[]; t0: number; strokes: number[]; ground: Vector3; top: Vector3; power: number }
+interface Bolt { ch: Channel[]; t0: number; strokes: number[]; ground: Vector3; top: Vector3; power: number; grown: number }
 
 const MAX_Q = 6000;
 
@@ -62,7 +62,7 @@ export class Lightning {
     this.geo.setIndex(new BufferAttribute(idx, 1));
     this.mesh = new Mesh(this.geo, new ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG, uniforms: { ...fx }, transparent: true, depthTest: false, depthWrite: false,
-      blending: AdditiveBlending, side: DoubleSide,
+      ...ADD_LIGHT, side: DoubleSide,
     }));
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;
@@ -73,7 +73,7 @@ export class Lightning {
   /** a strike from `top` (body m, in the cloud) to `ground` at FX time t; returns the stroke times */
   strike(top: Vector3, ground: Vector3, t: number, power = 1, branches = 6): void {
     const len = top.distanceTo(ground);
-    const main = jag(top, ground, len * 0.11, 7);
+    const main = jag(top, ground, len * 0.16, 7);
     const ch: Channel[] = [{ pts: main, w: Math.max(0.6, len * 0.004) * (0.7 + 0.3 * power), k: 1 }];
     for (let b = 0; b < branches; b++) {
       const i = 4 + Math.floor(Math.random() * (main.length * 0.7));
@@ -94,7 +94,7 @@ export class Lightning {
     const n = 1 + Math.floor(Math.random() * 3);
     const strokes = [0];
     for (let s = 0; s < n; s++) strokes.push(0.06 + s * 0.07 + Math.random() * 0.04);
-    this.bolts.push({ ch, t0: t, strokes, ground: ground.clone(), top: top.clone(), power });
+    this.bolts.push({ ch, t0: t, strokes, ground: ground.clone(), top: top.clone(), power, grown: 0 });
     if (this.bolts.length > 24) this.bolts.shift();
   }
 
@@ -103,9 +103,13 @@ export class Lightning {
     for (const b of this.bolts) { const k = brightness(b, t); if (k > 0.01) f(b.ground, b.top, k, b.power); }
   }
 
-  /** rebuild the ribbons for this frame (camera at camB, body frame) */
-  update(t: number, camB: Vector3): void {
+  /**
+   * rebuild the ribbons for this frame (camera at camB, body frame); `ease` is the frame's real-or-FX step: the leader
+   * grows by it, so a bolt struck on a paused world (its FX clock frozen at the stroke) still reaches the ground
+   */
+  update(t: number, camB: Vector3, ease = 0): void {
     this.bolts = this.bolts.filter((b) => t - b.t0 < 0.9);
+    for (const b of this.bolts) b.grown = Math.max(b.grown + ease, t - b.t0);
     let q = 0;
     for (const b of this.bolts) {
       const kb = brightness(b, t);
@@ -113,7 +117,7 @@ export class Lightning {
       for (const c of b.ch) {
         const pts = c.pts;
         // the leader grows down first (the first 40 ms)
-        const grow = clamp01((t - b.t0) / 0.04);
+        const grow = clamp01(b.grown / 0.04);
         const nShow = Math.max(2, Math.floor(pts.length * grow));
         for (let i = 0; i < nShow - 1 && q < MAX_Q; i++, q++) {
           const a = pts[i], e = pts[i + 1];

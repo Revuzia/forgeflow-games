@@ -190,7 +190,7 @@ export class DisasterFx {
     const up = _v.copy(p).normalize();
     const pc = p.clone();
     // the flash (and the light it throws)
-    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * 7, life: big ? 2.2 : 0.8, count: 1, p0: R * 0.6, p1: big ? 400 : 60, burst: true, r: 1, g: 0.85, b: 0.6 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * (big ? 5 : 7), life: big ? 1.1 : 0.8, count: 1, p0: R * 0.6, p1: big ? 400 : 60, burst: true, r: 1, g: 0.85, b: 0.6 }, ctx.now);
     this.transients.push({
       t0: ctx.now, dur: big ? 14 : 3, step: (age, k, c) => {
         const flash = Math.exp(-age * 3.5);
@@ -215,11 +215,11 @@ export class DisasterFx {
     this.group.add(shell.mesh);
     const shellUp = up.clone();
     this.transients.push({
-      t0: ctx.now, dur: 1.6, step: (age) => {
+      t0: ctx.now, dur: 1.3, step: (age) => {
         const r = R * 2 + age * 340;
         frameAt(pc, shellUp, r, shell.mesh.matrix);
         shell.mesh.matrixWorldNeedsUpdate = true;
-        shell.u.uK.value = Math.sin(Math.min(1, age / 1.6) * Math.PI) * 0.8;
+        shell.u.uK.value = Math.sin(Math.min(1, age / 1.3) * Math.PI) * Math.exp(-age * 1.2) * 0.9;
         (shell.u.uLight.value as Vector3).copy(ctx.sunE).multiplyScalar(0.25).addScalar(0.05);
       }, end: () => { this.group.remove(shell.mesh); shell.dispose(); },
     });
@@ -228,6 +228,20 @@ export class DisasterFx {
         const r = Math.min(R * 16, R * 1.5 + age * 160);
         c.decals.add(Object.assign(decal(DECAL.ring, [pc.x, pc.y, pc.z], r + R * 2), { cr: 0.45, cg: 0.38, cb: 0.3, ca: (1 - k) * 0.7, p0: r, p1: R * (0.4 + age * 0.15), q0: R * 3 }));
       },
+    });
+    // the fireball: a ball of incandescent rock vapour swelling and rising off the crater, cooling into the plume's
+    // dark stem (the light it throws is the flash's, above)
+    const fb = new Fireball(this.fx);
+    this.group.add(fb.mesh);
+    this.transients.push({
+      t0: ctx.now, dur: 7, step: (age, k) => {
+        const r = R * (0.45 + 1.15 * (1 - Math.exp(-age * 1.6)));
+        const lift = r * 0.55 + age * R * 0.35;
+        _m.makeScale(r, r, r).setPosition(pc.x + shellUp.x * lift, pc.y + shellUp.y * lift, pc.z + shellUp.z * lift);
+        fb.mesh.matrix.copy(_m); fb.mesh.matrixWorldNeedsUpdate = true;
+        fb.u.uHeat.value = Math.max(0, 1 - age / 5);
+        fb.u.uK.value = Math.min(1, age * 12) * (1 - smooth(0.55, 1, k));
+      }, end: () => { this.group.remove(fb.mesh); fb.dispose(); },
     });
     // the mushroom plume, ejecta, rocks
     const H = R * 9 * s;
@@ -336,7 +350,11 @@ export class DisasterFx {
     let id = st.emit.get(key);
     if (id && !ctx.vfx.alive(id)) id = undefined;
     if (!id) {
-      id = ctx.vfx.emit(def, ctx.now);
+      // the view met a disaster already under way (it was there before the camera, or the world is paused): its
+      // columns, curtains and swarms stand full at once instead of growing from nothing
+      const under = st.view.progress < 0 || st.view.progress > 0.04;
+      const prewarm = under && ctx.now - st.t0 < 0.5 ? def.life : 0;
+      id = ctx.vfx.emit(prewarm ? { ...def, prewarm } : def, ctx.now);
       if (id) st.emit.set(key, id);
       return id;
     }
@@ -472,21 +490,26 @@ export class DisasterFx {
         const h = Math.max(100, Math.min(P.height ?? 900, base)), w = Math.max(10, P.width ?? 60);
         let fn = st.extra.funnel as Funnel | undefined;
         if (!fn) { fn = new Funnel(this.fx); st.extra.funnel = fn; fn.u.uSeed.value = d.id * 1.7; this.group.add(fn.group); st.meshes.push({ obj: fn.group, dispose: () => fn!.dispose() }); }
-        fn.u.uH.value = h; fn.u.uRBase.value = w * 0.32; fn.u.uRTop.value = w * 2.4; fn.u.uK.value = k;
-        // light on the funnel: the sun through the air and the sky
+        // a rope, whatever the cloud base allows: thin over most of its height (a few hundredths of it), flaring into
+        // the wall cloud at the top
+        fn.u.uH.value = h; fn.u.uRBase.value = Math.min(w * 0.32, h * 0.05); fn.u.uRTop.value = Math.min(w * 2.4, h * 0.26); fn.u.uK.value = k;
+        // light on the funnel: the storm's dim, diffuse light under the deck (a little of the sun through its edges)
         const el = clamp01(u.dot(ctx.sunDirBody) * 2 + 0.2);
-        (fn.u.uLight.value as Vector3).copy(ctx.sunE).multiplyScalar(0.08 * el).addScalar(0.035 + 0.08 * el);
+        (fn.u.uLight.value as Vector3).copy(ctx.sunE).multiplyScalar(0.035 * el).addScalar(0.02 + 0.05 * el);
         frameAt(g, u, 1, _m);
         fn.place(g, _m);
         // motion: the smoothed position's drift sets the path ahead
         const prev = st.extra.prev as Vector3 | undefined;
         if (prev) { const mv = _a.copy(g).sub(prev); if (mv.length() > 0.01) st.axis.lerp(mv.normalize(), 0.1); }
         st.extra.prev = g.clone();
-        this.em(st, 'skirt', { sys: SYS.skirt, x: g.x, y: g.y, z: g.z, size: w * 0.45, life: 6, count: Math.round(520 * q), p0: w * 1.1, p1: h * 0.12, r: 0.36, g: 0.29, b: 0.21, power: k }, ctx);
+        // the dust and debris whirled up round its foot: a skirt a little wider than the rope, not a cloud (its puffs
+        // are lit as if in the open; under the deck they get about a fifth of that, as the funnel does)
+        this.em(st, 'skirt', { sys: SYS.skirt, x: g.x, y: g.y, z: g.z, size: Math.min(w * 0.18, h * 0.045), life: 6, count: Math.round(520 * q), p0: Math.min(w * 0.7, h * 0.16), p1: h * 0.14, r: 0.075, g: 0.068, b: 0.062, power: k * 0.7 }, ctx);
         this.em(st, 'debris', { sys: SYS.swarm, x: g.x, y: g.y, z: g.z, size: Math.max(0.8, camD * 0.002), life: 30, count: Math.round(260 * q), p0: w * 1.4, p1: h * 0.08, r: 0.12, g: 0.09, b: 0.06, power: k }, ctx);
         if (st.axis.lengthSq() > 0.5) {
           const pa = decal(DECAL.path, [g.x, g.y, g.z], w * 12);
-          pa.ax = st.axis.x; pa.ay = st.axis.y; pa.az = st.axis.z; pa.cr = 1.5; pa.cg = 0.5; pa.cb = 0.2; pa.ca = 0.6 * k; pa.p0 = w * 10; pa.p1 = w * 0.9; pa.q0 = w;
+          // (a map-reading aid: seen from high up; at the ground the funnel itself says where it goes)
+          pa.ax = st.axis.x; pa.ay = st.axis.y; pa.az = st.axis.z; pa.cr = 1.5; pa.cg = 0.5; pa.cb = 0.2; pa.ca = 0.6 * k * smooth(900, 2600, camD); pa.p0 = w * 10; pa.p1 = w * 0.9; pa.q0 = w;
           ctx.decals.add(pa);
         }
         if (ctx.now > st.next && !far) {
@@ -694,8 +717,21 @@ export class DisasterFx {
         const dx = P[c * 3] * R - ctx.camBody.x, dy = P[c * 3 + 1] * R - ctx.camBody.y, dz = P[c * 3 + 2] * R - ctx.camBody.z;
         cand.push({ c, s, d: Math.hypot(dx, dy, dz) });
       }
-      cand.sort((a, b) => a.d / (1 + a.s * 0.2) - b.d / (1 + b.s * 0.2));
-      st.extra.front = cand.slice(0, 18);
+      // (the crest — the fastest water — first, then nearness; spread out along the front so the spray traces its
+      // line instead of bunching at the one stretch nearest the camera)
+      cand.sort((a, b) => a.d / (1 + a.s * 0.6) - b.d / (1 + b.s * 0.6));
+      const pick: { c: number; s: number; d: number }[] = [];
+      const gap = Math.max(40, Math.min(160, reach * 0.06)) / R;
+      for (const a of cand) {
+        if (pick.length >= 24) break;
+        let near = false;
+        for (const b of pick) {
+          const dx = P[a.c * 3] - P[b.c * 3], dy = P[a.c * 3 + 1] - P[b.c * 3 + 1], dz = P[a.c * 3 + 2] - P[b.c * 3 + 2];
+          if (dx * dx + dy * dy + dz * dz < gap * gap) { near = true; break; }
+        }
+        if (!near) pick.push(a);
+      }
+      st.extra.front = pick;
     }
     const front = (st.extra.front as { c: number; s: number }[] | undefined) ?? [];
     const P = pv.grid.pos;
@@ -705,9 +741,11 @@ export class DisasterFx {
       const u = _v.set(P[c * 3], P[c * 3 + 1], P[c * 3 + 2]);
       const g = groundAt(pv, u, _a, true);
       const fl = _w.set(FX[c], FY[c], FZ[c]).normalize();
-      this.em(st, `spray${i}`, { sys: SYS.spray, x: g.x, y: g.y, z: g.z, ax: fl.x, ay: fl.y, az: fl.z, size: 3 + strength * 3, life: 2.6, count: Math.round(90 * ctx.q), p0: 22, p1: Math.min(18, s * 0.9) * strength, r: 0.88, g: 0.91, b: 0.93, power: k * clamp01(s / 6) }, ctx);
+      // the crest breaking: white water thrown up and forward over the front, and a veil of mist torn off it
+      this.em(st, `spray${i}`, { sys: SYS.spray, x: g.x, y: g.y, z: g.z, ax: fl.x, ay: fl.y, az: fl.z, size: 5 + strength * 6, life: 3.2, count: Math.round(200 * ctx.q), p0: 26, p1: Math.min(26, s * 1.4) * strength, r: 0.9, g: 0.93, b: 0.95, power: k * clamp01(s / 5) }, ctx);
+      this.em(st, `mist${i}`, { sys: SYS.steam, x: g.x, y: g.y, z: g.z, ax: fl.x, ay: fl.y, az: fl.z, size: 9 + strength * 6, life: 6, count: Math.round(40 * ctx.q), p0: 40, r: 0.86, g: 0.89, b: 0.92, power: k * 0.7 * clamp01(s / 6) }, ctx);
     }
-    for (let j = i; j < 18; j++) this.stopEm(st, `spray${j}`, ctx);
+    for (let j = i; j < 24; j++) { this.stopEm(st, `spray${j}`, ctx); this.stopEm(st, `mist${j}`, ctx); }
   }
 
   /** a sea serpent's back: dark arches rising and sinking along its way, spray where they break the water */

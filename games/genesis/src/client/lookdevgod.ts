@@ -415,7 +415,9 @@ export class LookdevGod {
         const dd = dx * u[0] + dy * u[1] + dz * u[2];
         dx -= u[0] * dd; dy -= u[1] * dd; dz -= u[2] * dd;
         const l = Math.hypot(dx, dy, dz) || 1;
-        const sp = 60 * 14 * Math.max(0, prof);
+        // (fast — white, foaming — only on the crest's breaking front face and the bore; the swell behind it runs
+        // smooth)
+        const sp = 60 * 14 * Math.max(0, (prof - 0.3) / 0.7) * Math.min(1, Math.max(0, (x + 0.35) / 0.5));
         FX[c] = (dx / l) * sp; FY[c] = (dy / l) * sp; FZ[c] = (dz / l) * sp;
       }
     }

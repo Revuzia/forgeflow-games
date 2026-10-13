@@ -2,8 +2,17 @@
 // the scene's linear depth (FX are drawn over the composited image, after the atmosphere, like render/fx/particles.ts),
 // display-referred emission (the adapted exposure), and small vector helpers in a planet's body frame.
 
-import type { IUniform } from 'three';
+import { CustomBlending, OneFactor, ZeroFactor, type Blending, type BlendingDstFactor, type BlendingSrcFactor, type IUniform } from 'three';
 import { FX_EXPOSURE } from './particles.ts';
+
+/**
+ * Material blend settings for emitted light (bolts, auroras, glows, beams, haloes): one-one additive on colour, the
+ * target's alpha untouched. (three's AdditiveBlending weights the source by its ALPHA — SRC_ALPHA, ONE — and these
+ * shaders write light with alpha 0, so with it they added nothing at all.)
+ */
+export const ADD_LIGHT: { blending: Blending; blendSrc: BlendingSrcFactor; blendDst: BlendingDstFactor; blendSrcAlpha: BlendingSrcFactor; blendDstAlpha: BlendingDstFactor } = {
+  blending: CustomBlending, blendSrc: OneFactor, blendDst: OneFactor, blendSrcAlpha: ZeroFactor, blendDstAlpha: OneFactor,
+};
 
 /** render layer of the god-layer FX drawn over the composited image (fx/godfx.ts renders it after the atmosphere) */
 export const FX_LAYER = 4;

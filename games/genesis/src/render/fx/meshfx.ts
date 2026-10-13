@@ -10,12 +10,12 @@
 // which are opaque, lit and shadowed in the scene itself. Every one fades in and out by a `k` uniform.
 
 import {
-  AdditiveBlending, BufferAttribute, BufferGeometry, CustomBlending, DoubleSide, Group, InstancedBufferAttribute, InstancedMesh,
+  BufferAttribute, BufferGeometry, CustomBlending, DoubleSide, Group, InstancedBufferAttribute, InstancedMesh,
   Matrix4, Mesh, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, SphereGeometry, Vector3, type IUniform, type MeshStandardMaterial,
 } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
-import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
+import { ADD_LIGHT, FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
 import { makePropMaterial } from './propmat.ts';
 import { boulderGeo } from '../hand.ts';
 
@@ -33,7 +33,7 @@ function fxMaterial(vert: string, frag: string, uniforms: Record<string, IUnifor
   if (shared) for (const k of Object.keys(shared)) if (!(k in u)) u[k] = shared[k];
   return new ShaderMaterial({
     vertexShader: vert, fragmentShader: frag, uniforms: u, transparent: true, depthTest: false, depthWrite: false, side: DoubleSide,
-    blending: additive ? AdditiveBlending : CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor,
+    ...(additive ? ADD_LIGHT : { blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor }),
   });
 }
 
@@ -53,7 +53,7 @@ void main() {
   float y = position.y;              // 0 foot .. 1 cloud base
   float ang = atan(position.z, position.x);
   // the rope: thin over most of its height, flaring into the wall cloud at the top, a wider foot
-  float r = mix(uRBase, uRTop, pow(y, 3.2)) * (1.0 + 0.6 * exp(-y * 14.0));
+  float r = mix(uRBase, uRTop, pow(y, 4.5)) * (1.0 + 0.6 * exp(-y * 14.0));
   r *= 1.0 + 0.12 * sin(y * 23.0 - uFxTime * 6.0 + uSeed) + 0.08 * uLayer;
   // it snakes: a slow bend that grows with height, swaying in time
   vec2 bend = vec2(sin(y * 2.6 + uFxTime * 0.35 + uSeed), cos(y * 2.1 + uFxTime * 0.28 + uSeed * 1.7)) * uH * 0.06 * y * y;
@@ -96,7 +96,7 @@ void main() {
   // fade at the very top into the cloud, and at the foot into the dust skirt
   a *= smoothstep(1.0, 0.86, vY) * mix(0.6, 1.0, smoothstep(0.0, 0.08, vY));
   // colour: dust brown at the foot, grey condensation above, darker in the core
-  vec3 c = mix(uDust, vec3(0.52, 0.54, 0.56), smoothstep(0.05, 0.4, vY));
+  vec3 c = mix(uDust, vec3(0.34, 0.35, 0.37), smoothstep(0.05, 0.4, vY));
   c *= 0.55 + 0.45 * n + 0.2 * (1.0 - nv);
   vec3 col = c * uLight;
   gl_FragColor = vec4(col * a, a);
@@ -182,7 +182,7 @@ void main() {
   // ripples running up from the ground and from hits
   float rip = 0.5 + 0.5 * sin(vLocal.y * 30.0 - uFxTime * 3.0);
   float shimmer = 0.6 + 0.4 * snoise(vec3(uv * 0.5, uFxTime * 0.4));
-  float k = (rim * 1.2 + hex * 0.35 * shimmer + 0.06 + rip * 0.06 + uHit * 0.6 * (1.0 - nv)) * uK * vis;
+  float k = (rim * 0.8 + hex * 0.16 * shimmer + 0.025 + rip * 0.03 + uHit * 0.6 * (1.0 - nv)) * uK * vis;
   // brighter at the base where it meets the ground
   k *= 1.0 + 1.5 * smoothstep(0.12, 0.0, vLocal.y);
   gl_FragColor = vec4(uCol * k * fxDisplay(0.7), 0.0);
@@ -190,6 +190,7 @@ void main() {
 `;
 
 const SHELL_FRAG = /* glsl */ `
+${NOISE_GLSL}
 ${FX_DEPTH_GLSL}
 ${COMMON_VERT}
 uniform float uK;
@@ -198,8 +199,10 @@ void main() {
   if (vLocal.y < -0.05) discard;
   float vis = fxSoft(vZ, 4.0);
   float nv = abs(dot(normalize(vN), normalize(vV)));
-  float rim = pow(1.0 - nv, 4.0);
-  float a = rim * uK * vis * 0.85;
+  // a condensation shell is a thin skin of vapour: seen only near its silhouette, torn into wisps and streaks
+  float rim = pow(1.0 - nv, 5.0);
+  float wisp = smoothstep(-0.15, 0.55, snoise(vLocal * 5.0 + vec3(0.0, uFxTime * 0.6, 0.0)) * 0.7 + snoise(vLocal * 13.0) * 0.3);
+  float a = rim * wisp * uK * vis * 0.6 * smoothstep(0.0, 0.25, vLocal.y + 0.05);
   gl_FragColor = vec4(uLight * 1.2 * a, a);
 }
 `;

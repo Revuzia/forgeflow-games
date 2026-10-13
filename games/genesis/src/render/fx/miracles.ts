@@ -13,14 +13,14 @@
 //   wood       logs tumbling down into a stack
 // The hand casts: GodFx turns the hand to its cast pose when a miracle lands near it.
 
-import { AdditiveBlending, BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3, type IUniform } from 'three';
+import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3, type IUniform } from 'three';
 import type { SimEvent } from '../../sim/types.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { DECAL, decal } from './decals.ts';
 import { SYS } from './vfx.ts';
 import { Dome, Fireball } from './meshfx.ts';
 import { frameAt, type FxCtx } from './disasters.ts';
-import { FX_DEPTH_GLSL, FX_LAYER, clamp01, smooth } from './fxcommon.ts';
+import { ADD_LIGHT, FX_DEPTH_GLSL, FX_LAYER, clamp01, smooth } from './fxcommon.ts';
 
 interface Shield { id: number; p: Vector3; r: number; until: number; dome: Dome; fade: number; hit: number }
 interface Moment { t0: number; dur: number; step(age: number, k: number, ctx: FxCtx): void; end?(): void }
@@ -77,7 +77,7 @@ class Beams {
     this.geo.setAttribute('aT', new BufferAttribute(t, 1));
     this.geo.setAttribute('aSide', new BufferAttribute(side, 1));
     this.geo.setIndex(idx);
-    this.mesh = new Mesh(this.geo, new ShaderMaterial({ vertexShader: BEAM_VERT, fragmentShader: BEAM_FRAG, uniforms: { ...this.u, ...fx }, transparent: true, depthTest: false, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
+    this.mesh = new Mesh(this.geo, new ShaderMaterial({ vertexShader: BEAM_VERT, fragmentShader: BEAM_FRAG, uniforms: { ...this.u, ...fx }, transparent: true, depthTest: false, depthWrite: false, ...ADD_LIGHT, side: DoubleSide }));
     this.mesh.frustumCulled = false; this.mesh.matrixAutoUpdate = false; this.mesh.layers.set(FX_LAYER);
   }
   /** threads from tops to heads (body m), width w */

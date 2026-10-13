@@ -23,7 +23,7 @@
 
 import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, Group, Matrix4, Mesh, MeshStandardMaterial, Points, ShaderMaterial,
-  AdditiveBlending, Vector3, type IUniform,
+  Vector3, type IUniform,
 } from 'three';
 import { makePropMaterial } from './fx/propmat.ts';
 import { treeGeometry } from './gen/treegen.ts';
@@ -36,7 +36,7 @@ import { NOISE_GLSL } from './shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from './shaders/atmosphere.glsl.ts';
 import { SHADOW_GLSL } from './planet/lights.ts';
 import { MOON_PARS, moonDirect } from './shaders/moon.glsl.ts';
-import { FX_DEPTH_GLSL, FX_EXPOSURE, FX_LAYER, clamp01, smooth } from './fx/fxcommon.ts';
+import { ADD_LIGHT, FX_DEPTH_GLSL, FX_EXPOSURE, FX_LAYER, clamp01, smooth } from './fx/fxcommon.ts';
 import { DECAL, decal, type DecalPass } from './fx/decals.ts';
 import type { PlanetView } from '../client/worldview.ts';
 import type { HandView } from '../sim/types.ts';
@@ -128,9 +128,9 @@ float skinHeight(vec3 P, vec4 M, vec2 part, float fine) {
   float palmar = hsat(-dors * 2.0);
   float dorsal = hsat(dors * 2.0 - 0.2);
   if (finger < 4.5) {
-    h -= 0.0045 * palmar * (exp(-pow((c - 0.004) / 0.0028, 2.0)) + 0.8 * exp(-pow((c + 0.005) / 0.0028, 2.0)));
+    h -= 0.0026 * palmar * (exp(-pow((c - 0.004) / 0.0032, 2.0)) + 0.8 * exp(-pow((c + 0.005) / 0.0032, 2.0)));
     float wr = exp(-pow(c / 0.022, 2.0));
-    h -= 0.0016 * dorsal * wr * (0.5 + 0.5 * sin(c * 520.0 + snoise(P * 60.0) * 2.0)) * fine;
+    h -= 0.001 * dorsal * wr * (0.5 + 0.5 * sin(c * 520.0 + snoise(P * 60.0) * 2.0)) * fine;
   }
   // the palm: tendons fanning from the wrist to the knuckles on the back, the three great lines on the front
   if (finger > 4.5 && finger < 5.5) {
@@ -178,11 +178,12 @@ const SKIN_SURFACE = /* glsl */ `
   float keep = arm * uPresence;
   float fwRest = length(fwidth(vRest));
   if (dn > keep * 1.05) discard;
-  float edge = 1.0 - smoothstep(0.0, 0.09, keep * 1.05 - dn);
+  // the glowing seam only where the body is still dissolving (the forearm, or the whole hand as it materialises)
+  float edge = (1.0 - smoothstep(0.0, 0.09, keep * 1.05 - dn)) * smoothstep(1.0, 0.9, keep);
   float good = hsat(uAlign), cruel = hsat(-uAlign);
   float fine = 1.0 - smoothstep(0.0008, 0.004, fwRest);
   // albedo: warm, alive skin; ashen and cold for a cruel god
-  vec3 skin = mix(vec3(0.47, 0.31, 0.23), vec3(0.53, 0.35, 0.24), good);
+  vec3 skin = mix(vec3(0.4, 0.255, 0.18), vec3(0.45, 0.285, 0.19), good);
   skin = mix(skin, vec3(0.2, 0.2, 0.235), cruel * 0.85);
   float palmar = hsat(-vMark.y * 1.5);
   skin = mix(skin, skin * vec3(1.12, 1.04, 1.0), palmar * 0.7);
@@ -226,11 +227,11 @@ const SKIN_LIGHT = /* glsl */ `
     vec3 sssCol = mix(vec3(1.0, 0.38, 0.22), vec3(0.45, 0.4, 0.9), hsat(-uAlign));
     float ndl = dot(geometryNormal, uSunDirView);
     float wrap = max(0.0, (ndl + 0.55) / 1.55) - max(0.0, ndl);
-    reflectedLight.directDiffuse += sunCol * diffuseColor.rgb * sssCol * wrap * 0.35;
+    reflectedLight.directDiffuse += sunCol * diffuseColor.rgb * sssCol * wrap * 0.28;
     // light through the thin parts (fingers, the webs) when the sun is behind them
     float thin = vMark.w;
     float tr = pow(hsat(dot(geometryViewDir, -normalize(uSunDirView + geometryNormal * 0.35))), 3.0) * thin;
-    reflectedLight.directDiffuse += sunRaw * mix(sh, 1.0, 0.6) * sssCol * diffuseColor.rgb * tr * 1.4;
+    reflectedLight.directDiffuse += sunRaw * mix(sh, 1.0, 0.6) * sssCol * diffuseColor.rgb * tr * 0.7;
   }
 `;
 
@@ -248,7 +249,7 @@ const SKIN_EMISSIVE = /* glsl */ `
     float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 1e-4) : 1.0;
     float nv = abs(dot(normal, normalize(vViewPosition)));
     float rim = pow(1.0 - nv, 2.6);
-    vec3 g = uGlowCol * (rim * 0.28 + 0.012 + edge * 2.5) * uGlowK / ex;
+    vec3 g = uGlowCol * (rim * 0.12 + 0.003 + edge * 2.5) * uGlowK / ex;
     // a cruel god's veins smoulder
     g += uGlowCol * vein * hsat(-uAlign) * 0.35 * uGlowK / ex;
     totalEmissiveRadiance = g;
@@ -317,8 +318,9 @@ void main() {
   // the halo shows where the shell stands in front of the scene (its silhouette over the ground and the sky)
   if (vZ > sz + 0.02 * vZ) discard;
   float nv = abs(dot(normalize(vN), normalize(vV)));
-  float k = pow(1.0 - nv, 3.0) * smoothstep(-0.5, -0.1, vRest.z) * uPresence;
-  gl_FragColor = vec4(uGlowCol * k * uGlowK * 0.2 * fxDisplay(0.85), 0.0);
+  // a soft aura hugging the silhouette (the light the god gives off), not an outline
+  float k = pow(1.0 - nv, 2.2) * smoothstep(-0.5, -0.1, vRest.z) * uPresence;
+  gl_FragColor = vec4(uGlowCol * k * uGlowK * 0.05 * fxDisplay(0.85), 0.0);
 }
 `;
 
@@ -483,7 +485,7 @@ export class HandVisual {
     this.trailGeo.setIndex(idx);
     this.trailMesh = new Mesh(this.trailGeo, new ShaderMaterial({
       vertexShader: TRAIL_VERT, fragmentShader: TRAIL_FRAG, uniforms: { uGlowCol: this.u.uGlowCol, uTrailK: this.u.uTrailK },
-      transparent: true, depthTest: false, depthWrite: false, blending: AdditiveBlending, side: DoubleSide,
+      transparent: true, depthTest: false, depthWrite: false, ...ADD_LIGHT, side: DoubleSide,
     }));
     this.trailMesh.frustumCulled = false;
     this.trailMesh.layers.set(FX_LAYER);
@@ -493,7 +495,7 @@ export class HandVisual {
     this.arcGeo.setAttribute('aT', new BufferAttribute(new Float32Array(96), 1));
     this.arcMesh = new Points(this.arcGeo, new ShaderMaterial({
       vertexShader: ARC_VERT, fragmentShader: ARC_FRAG, uniforms: { uArcCol: this.u.uArcCol, uArcK: this.u.uArcK, uSize: this.u.uSize },
-      transparent: true, depthTest: false, depthWrite: false, blending: AdditiveBlending,
+      transparent: true, depthTest: false, depthWrite: false, ...ADD_LIGHT,
     }));
     this.arcMesh.frustumCulled = false;
     this.arcMesh.layers.set(FX_LAYER);
@@ -551,7 +553,7 @@ export class HandVisual {
     const glow = new Mesh(hm.geo, new ShaderMaterial({
       vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG,
       uniforms: { uBones: this.bones, uInflate: u.uInflate, uGlowCol: u.uGlowCol, uGlowK: u.uGlowK, uPresence: u.uPresence, ...this.fxU },
-      transparent: true, depthTest: false, depthWrite: false, blending: AdditiveBlending,
+      transparent: true, depthTest: false, depthWrite: false, ...ADD_LIGHT,
     }));
     glow.matrixAutoUpdate = false;
     glow.frustumCulled = false;
@@ -689,7 +691,7 @@ export class HandVisual {
     this.u.uPresence.value = this.presence;
     this.u.uHandTime.value = t;
     this.u.uHandScale.value = this.scale;
-    this.u.uInflate.value = 0.022;
+    this.u.uInflate.value = 0.035;
     this.heldVisual(f, R);
     this.trailUpdate(f);
     this.arcUpdate(f, hv);
@@ -745,7 +747,9 @@ export class HandVisual {
     // the ground point it goes to
     let u: V3;
     let hoverWant: number;
-    if (cursor) { u = [cursor.dir[0], cursor.dir[1], cursor.dir[2]]; }
+    // (aiming a throw, the hand holds still where the sim's hand is and the cursor picks the target)
+    const aimingHere = f.aiming && !!hv && !!this.heldKind;
+    if (cursor && !aimingHere) { u = [cursor.dir[0], cursor.dir[1], cursor.dir[2]]; }
     else if (hv) { u = [hv.pos[0], hv.pos[1], hv.pos[2]]; }
     else { u = this.placed ? normalized(this.pos) : [0, 1, 0]; }
     const ul = Math.hypot(u[0], u[1], u[2]) || 1;
@@ -782,6 +786,13 @@ export class HandVisual {
     // ── orientation: fingers away from the camera, palm down, leaning into its motion ──
     const up = _vec.copy(this.pos).normalize();
     const fw = _vec2.copy(f.camFwd).addScaledVector(up, -f.camFwd.dot(up));
+    // aiming: the fingers point at the target
+    if (aimingHere && cursor) {
+      const R = pv.params.radius;
+      fw.set(cursor.dir[0] * R - this.pos.x, cursor.dir[1] * R - this.pos.y, cursor.dir[2] * R - this.pos.z);
+      fw.addScaledVector(up, -fw.dot(up));
+      if (fw.lengthSq() < 1) fw.copy(f.camFwd).addScaledVector(up, -f.camFwd.dot(up));
+    }
     if (fw.lengthSq() < 1e-6) fw.copy(f.camUp).addScaledVector(up, -f.camUp.dot(up));
     fw.normalize();
     this.fwd.lerp(fw, this.placed ? Math.min(1, dt * 8) : 1).addScaledVector(up, -this.fwd.dot(up)).normalize();
@@ -834,7 +845,7 @@ export class HandVisual {
       // an uprooted tree is the world's own broadleaf (gen/treegen.ts, its leaf sprays alpha-tested), a building the
       // hut its people build (gen/buildinggen.ts)
       if (k === 'tree' && !this.heldLeafMat) this.heldLeafMat = makeLeafPropMaterial(this.sharedU);
-      const geo = k === 'tree' ? treeGeometry('broadleaf', 1, 2) : k === 'rock' ? boulderGeo(7) : k === 'building' ? heldHutGeo() : bundleGeo();
+      const geo = heldPropGeometry(k);
       mesh = new Mesh(geo, k === 'tree' ? this.heldLeafMat! : this.heldMat);
       mesh.matrixAutoUpdate = false;
       mesh.layers.enable(1);
@@ -997,13 +1008,22 @@ export function boulderGeo(seed: number): BufferGeometry {
   return vcol(g, (x, y, z) => { const k = 0.38 + 0.06 * Math.sin(x * 9 + y * 7 + z * 5); return [k * 1.0, k * 0.95, k * 0.88]; });
 }
 
+/**
+ * The mesh of a thing the god holds or throws, by kind: an uprooted broadleaf (unit height, draw it with
+ * makeLeafPropMaterial), a thatched hut (metres), a boulder (radius ~1) or a bundle of goods. The tree and the hut are
+ * the generators' cached meshes (do not dispose them).
+ */
+export function heldPropGeometry(kind: string): BufferGeometry {
+  return kind === 'tree' ? treeGeometry('broadleaf', 1, 2) : kind === 'rock' ? boulderGeo(7) : kind === 'building' ? heldHutGeo() : bundleGeo();
+}
+
 /** the hut a people builds (thatch, round), whole, as torn from its footing */
 function heldHutGeo(): BufferGeometry {
   return buildingMesh({ kind: 'hut', mat: materialAt(materialIndex('thatch')), style: 0, era: 1, mood: 0, w: 4.5, d: 4.5, lod: 1 }).geo;
 }
 
 /** a prop material for treegen meshes: bark and leaf cards from vertex colours, the sprays alpha-tested in the atlas */
-function makeLeafPropMaterial(shared: Record<string, IUniform>): MeshStandardMaterial {
+export function makeLeafPropMaterial(shared: Record<string, IUniform>): MeshStandardMaterial {
   const tex = leafClusterTexture();
   const mat = makePropMaterial(shared, {
     key: 'held-tree', roughness: 0.85,

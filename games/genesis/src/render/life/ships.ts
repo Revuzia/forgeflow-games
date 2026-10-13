@@ -510,6 +510,8 @@ const smooth01 = (f: number) => { const t = Math.max(0, Math.min(1, f)); return 
 
 /** the era the owner's people are at (their settlement on the world the ship left), or the kind's natural era */
 function eraOf(view: WorldView, s: ShipView): string {
+  // the builders' era as the sim tells it (ShipView.era), else their settlement's, else the kind's natural one
+  if (s.era) return s.era;
   for (const pv of view.planets) for (const st of pv.settlements) if (st.id === s.owner && (pv.id === s.from || pv.id === s.planet)) return st.era;
   return s.kind === 'airship' ? 'steam' : s.kind === 'raft' ? 'stone' : s.kind === 'boat' ? 'bronze' : s.kind === 'sailship' ? 'medieval' : 'space';
 }
@@ -544,6 +546,9 @@ interface Track {
   nodes: PartNode[];
   own: Record<string, IUniform>;
   hullMat: MeshStandardMaterial | null;
+  /** the separated stages' own hull material: their engines cool as they fall away (the ship's keep burning) */
+  spentMat: MeshStandardMaterial | null;
+  spentShip2: Vector4;
   sailMat: MeshStandardMaterial | null;
   hullDepth: ShaderMaterial;
   sailDepth: ShaderMaterial;
@@ -725,6 +730,8 @@ export class ShipLayer {
     const shared = space ? this.spaceUniforms : ref!.uniforms;
     t.hullMat = makeShipMaterial(shared, t.own, 'hull', space);
     t.sailMat = makeShipMaterial(shared, t.own, 'sail', space);
+    t.spentMat?.dispose();
+    t.spentMat = makeShipMaterial(shared, { ...t.own, uShip2: { value: t.spentShip2 } }, 'hull', space);
     t.matPlanet = planet;
     for (const n of t.nodes) n.mesh.material = n.part.cloth ? t.sailMat : t.hullMat;
   }
@@ -747,7 +754,7 @@ export class ShipLayer {
     root.name = `ship-${s.id}`;
     const t: Track = {
       id: s.id, view: s, kind: s.kind, info, era, form: 'launch', model: shipModel(s.kind, era, 'launch', s.id), root, nodes: [], own,
-      hullMat: null, sailMat: null, hullDepth: makeShipDepth(own, 'hull'), sailDepth: makeShipDepth(own, 'sail'), matPlanet: -99,
+      hullMat: null, spentMat: null, spentShip2: new Vector4(0, 0, 0, 0), sailMat: null, hullDepth: makeShipDepth(own, 'hull'), sailDepth: makeShipDepth(own, 'sail'), matPlanet: -99,
       samples: [], phase: s.phase, phaseT0: 0, phaseLen: 1, padDir: null, padYaw: 0, padGround: 0, deck: 0, rig: null, fired: new Set(),
       lastLost: s.phase === 'lost', seenAt: 0, trail: null, trailAhead: null, trailKey: '', label: null, ignited: s.phase !== 'building' && s.phase !== 'fuelling' && s.phase !== 'boarding' && s.phase !== 'pad',
       phaseSeen: view.renderTick, lostAt: -1e9, padKey: '',
@@ -870,9 +877,12 @@ export class ShipLayer {
     a.pose(time, ref.uniforms.uSunDirView ? (ref.uniforms.uSunDirView.value as Vector3) : null);
     // its light on the ground and the people (kind: gold; feared: ember red)
     const good = Math.max(0, Math.min(1, s.alignment * 0.5 + 0.5));
-    // (about the sun's own light on the ground at its feet, falling off over some twenty metres: a pool of light by
-    // day, a lantern among the houses by night)
-    const I = 300;
+    // (a lantern among the houses by night; by day only a warm touch on the ground at its feet — sunlight already
+    // floods the street, and a god's glow that out-shines it bleaches the people round it)
+    const sunB = ref.uniforms.uSunDirBody?.value as Vector3 | undefined;
+    const sinEl = sunB ? s.up.dot(sunB) : -1;
+    const dark = Math.max(0, Math.min(1, (0.12 - sinEl) / 0.24));
+    const I = 28 + 190 * dark * dark;
     const c = good > 0.5 ? [1, 0.82 + 0.1 * (1 - good), 0.55 + 0.25 * (1 - good)] : [1, 0.25 + 0.5 * good, 0.12 + 0.6 * good];
     _v3.copy(s.up).multiplyScalar(1.4).add(s.pos);
     this.fx.light(s.planet, this.ctx(ref), _v3.x, _v3.y, _v3.z, 22, c[0] * I, c[1] * I, c[2] * I);
@@ -1212,7 +1222,7 @@ export class ShipLayer {
     } else if (ph === 'ascent') u2.x = 1;
     // vents on the pad
     if (ref && (ph === 'fuelling' || ph === 'boarding' || ph === 'pad') && t.info.cls !== 'air' && t.info.cls !== 'gate' && P.visible) {
-      const rate = ph === 'pad' ? 14 + 20 * f : ph === 'boarding' ? 10 : 6 * s.progress;
+      const rate = ph === 'pad' ? 8 + 12 * f : ph === 'boarding' ? 7 : 5 * s.progress;
       for (const h of t.model.stageTops) {
         const r = t.model.baseRadius * 0.9;
         const side = _v3.copy(fwd).cross(up).normalize();
@@ -1320,6 +1330,7 @@ export class ShipLayer {
         key: `${t.id}:${key}`, planet: space ? -1 : planet, pos: world.clone(), dir: dir.clone(), radius: g.r, count: g.n, thrust: firing.thrust,
         vacuum: g.vac, fuel: propellant(t.model, g.st), alt: space ? 1e9 : alt, trail: trail && key !== 'b' ? true : trail,
         path: path ? (tk: number, out: Vector3) => { path(tk, out); return; } : lit !== undefined ? (_tk: number, out: Vector3) => { out.copy(at); } : undefined, since,
+        fromPad: phase === 'pad' || (phase === 'ascent' && (g.st === 0 || g.st <= -2)),
       });
     }
     void phase;
@@ -1381,9 +1392,11 @@ export class ShipLayer {
         _q.setFromAxisAngle(d.axis, Math.min(2.4, d.spin * tau * tau * 0.5 + d.spin * tau * 6));
         n.pivot.quaternion.copy(_q).multiply(d.q);
         n.mesh.visible = tau < 60;
-        // the separated stage's dying engines glow for a moment; a puff of separation
+        // the separated stage's engines die: their bells glow for a moment and cool
+        if (t.spentMat) { n.mesh.material = t.spentMat; t.spentShip2.set(0.75 * Math.exp(-tau / 12), 0, 0, 0); }
         continue;
       }
+      if (n.mesh.material === t.spentMat && t.hullMat) n.mesh.material = t.hullMat;
       if (!n.detached && n.pivot.parent !== t.root) t.root.add(n.pivot);
       if (!n.detached) n.pivot.position.set(n.part.pivot[0], n.part.pivot[1], n.part.pivot[2]);
       let ang = 0;
@@ -1580,7 +1593,7 @@ export class ShipLayer {
   private disposeTrack(t: Track): void {
     t.root.parent?.remove(t.root);
     for (const n of t.nodes) n.pivot.parent?.remove(n.pivot);
-    t.hullMat?.dispose(); t.sailMat?.dispose(); t.hullDepth.dispose(); t.sailDepth.dispose();
+    t.hullMat?.dispose(); t.spentMat?.dispose(); t.sailMat?.dispose(); t.hullDepth.dispose(); t.sailDepth.dispose();
     if (t.rig) { t.rig.parent?.remove(t.rig); for (const c of t.rig.children) (c as Mesh).geometry?.dispose(); }
     for (const l of [t.trail, t.trailAhead]) if (l) { l.parent?.remove(l); l.geometry.dispose(); (l.material as LineMaterial).dispose(); }
     if (t.label) { t.label.parent?.remove(t.label); const m = t.label.material as SpriteMaterial; m.map?.dispose(); m.dispose(); }

@@ -40,6 +40,8 @@ export class FollowCamera implements CameraController {
   private lastPlanet = -2;
   /** the subject is gone (died, burned out, a ship that ended): the camera holds where it was */
   lost = false;
+  /** the eye jumped this frame (a new subject framed): the rig reports a cut */
+  jumped = false;
 
   /** follow a thing (keeps the current turn when re-targeting the same thing) */
   set(ref: EntityRef | null): void {
@@ -113,7 +115,8 @@ export class FollowCamera implements CameraController {
       want = [0, 1, 2].map((i) => (-fwd[i] * cp * cy + side[i] * cp * sy + radial[i] * sp) * dist) as D3;
     }
     // ── smoothing in the subject's frame ──
-    if (!this.off) this.off = [...want] as D3;
+    // (a new subject, or one just found: the eye jumps to it — a cut, so the temporal passes drop their history)
+    if (!this.off) { this.off = [...want] as D3; this.jumped = true; }
     const kk = 1 - Math.exp(-dt * (this.idle < 0.2 ? 12 : 2.6));
     for (let i = 0; i < 3; i++) this.off[i] += (want[i] - this.off[i]) * kk;
     let eye: D3 = [s.pos[0] + this.off[0], s.pos[1] + this.off[1], s.pos[2] + this.off[2]];

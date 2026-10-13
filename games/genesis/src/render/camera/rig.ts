@@ -18,7 +18,7 @@ import { SystemCamera } from './system.ts';
 import { FollowCamera } from './follow.ts';
 import { DollyCamera } from './dolly.ts';
 import { WalkCamera } from './walk.ts';
-import { PhotoCamera } from './photo.ts';
+import { PHOTO, PhotoCamera } from './photo.ts';
 import { CameraModes } from './modes.ts';
 
 export class CameraRig {
@@ -88,6 +88,9 @@ export class CameraRig {
 
   update(dt: number, view: WorldView, input: InputState): CameraPose {
     this.modes.frame(view);
+    // the lens (depth of field, exposure, grain) is photo mode's alone: any other camera — a cinematic dolly after a
+    // photo, a follow the interface started — renders without it
+    if (PHOTO.on && this.active !== this.photoCam) PHOTO.on = false;
     // a followed thing that is gone (died, burned out) for a while, a cinematic the player took over: back to orbit
     if (this.active === this.followCam && this.followCam.lost) {
       this.lostFor += dt;
@@ -97,14 +100,21 @@ export class CameraRig {
     if (this.active !== this.walk) this.walk.leave();
     // the world under the camera was unmade (world.erase, a moon that struck): hold where the eye was — the collapse,
     // the flash and the debris play in front of it (render/fx/worlds.ts) — then rise over the nearest world left
+    // (held on the slower of the two clocks, like the collapse itself: seven seconds of real time and of the world's
+    // time — paused, the eye waits with the frozen debris; a drag or the wheel takes the camera back at once)
     const dp = this.desired.planet;
     if (dp >= 0 && view.snapshots > 0 && !view.planet(dp) && view.planets.length) {
       this.goneFor += dt;
-      if (this.goneFor < 7) { if (this.blendT >= 1) copyPose(this.pose, this.desired); return this.pose; }
+      if (this.goneTick < 0) this.goneTick = view.renderTick;
+      const touched = input.dragL[0] || input.dragL[1] || input.dragR[0] || input.dragR[1] || input.wheel;
+      if (!touched && (this.goneFor < 7 || view.renderTick - this.goneTick < 70)) { if (this.blendT >= 1) copyPose(this.pose, this.desired); return this.pose; }
       this.goneFor = 0;
+      this.goneTick = -1;
       this.modes.backToOrbit();
-    } else this.goneFor = 0;
+    } else { this.goneFor = 0; this.goneTick = -1; }
     this.active.update(dt, view, input, this.desired);
+    // a follow that jumped to a newly found subject without a blend is a cut (exposure, clouds, reflections reset)
+    if (this.followCam.jumped) { this.followCam.jumped = false; if (this.active === this.followCam && this.blendT >= 1) this.cut = true; }
     if (this.blendT >= 1) {
       copyPose(this.pose, this.desired);
       return this.pose;
@@ -134,8 +144,9 @@ export class CameraRig {
     return this.pose;
   }
 
-  /** seconds the camera has held over a world that is gone */
+  /** seconds the camera has held over a world that is gone, and the render tick it went */
   private goneFor = 0;
+  private goneTick = -1;
 
   blending(): boolean { return this.blendT < 1; }
 }

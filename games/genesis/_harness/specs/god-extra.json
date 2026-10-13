@@ -1,0 +1,142 @@
+{
+ "_doc": "More god-layer stills beyond god.json (CONTRACT \u00a715.6\u201315.8): the throw arc while aiming, an uprooted tree in the hand, a firestorm at dusk, a locust swarm, plague over a town, a glowing rift and a sinkhole, a comet over the night side, the sky-paint brush. Lookdev world, staged by script; FX time moved with window.__GENESIS_FX__.advance. Run: node _harness/shots.mjs _harness/specs/god-extra.json",
+ "shots": [
+  {
+   "name": "godx-throw-arc",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = true; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 14, alignment: 0.5, pose: 'open' }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'rock', mass: 2600 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 120, tilt: 58, yaw: 0, fov: 55, hour: 15 });",
+    "await G.frames(2); window.__GENESIS_APP__.ui.hand.beginAim(); G.ui_.pointer(640, 120); await G.frames(4);",
+    "return { aiming: window.__GENESIS_APP__.ui.hand.isAiming, held: [F.fx.hand.heldKind, F.fx.hand.heldId], arc: F.fx.hand.u.uArcK.value };"
+   ]
+  },
+  {
+   "name": "godx-hand-tree",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; window.__GENESIS_APP__.ui.hand.cancelAim(); window.__GENESIS_APP__.ui.pointerLeave(); G.ui_.closeAll(); F.fx.hand.force = true; const p = G.poi('forest-edge');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 22, alignment: 0.7, pose: 'open' }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'tree', mass: 1 });",
+    "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat - (40 / 3000) * 180 / Math.PI, lon: p.lon, alt: 16, yaw: 0, pitch: 4, fov: 55, hour: 15.5 });",
+    "await G.frames(4); return { held: [F.fx.hand.heldKind, F.fx.hand.heldId], scale: F.fx.hand.scale };"
+   ]
+  },
+  {
+   "name": "godx-firestorm",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.hand.force = false; const p = G.poi('forest');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'firestorm', pos: p.pos, progress: 0.5 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 900, tilt: 74, yaw: 30, fov: 60, hour: 18.6 });",
+    "await G.frames(2); F.advance(15); await G.frames(2);"
+   ]
+  },
+  {
+   "name": "godx-swarm",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'swarm', pos: p.pos, progress: 0.5, radius: 260 });",
+    "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat - (320 / 3000) * 180 / Math.PI, lon: p.lon, alt: 18, yaw: 0, pitch: 3, fov: 60, hour: 14 });",
+    "await G.frames(2); F.advance(10); await G.frames(2);"
+   ]
+  },
+  {
+   "name": "godx-plague",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('town');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'plague', pos: p.pos, progress: 0.5, radius: 180 });",
+    "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat - (60 / 3000) * 180 / Math.PI, lon: p.lon, alt: 6, yaw: 0, pitch: -4, fov: 60, hour: 17.5 });",
+    "await G.frames(2); F.advance(20); await G.frames(2);"
+   ]
+  },
+  {
+   "name": "godx-rift-sinkhole",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('valley');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' });",
+    "await G.cmd({ k: 'lookdev.disaster', kind: 'rift', pos: p.pos, offset: [0, 300], progress: 0.5 }); await G.cmd({ k: 'lookdev.disaster', kind: 'sinkhole', pos: p.pos, offset: [450, -200], progress: 0.5, radius: 90 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 1500, tilt: 58, yaw: 0, fov: 60, hour: 19.6 });",
+    "await G.frames(2); F.advance(10); await G.frames(2);"
+   ]
+  },
+  {
+   "name": "godx-comet",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'comet', pos: p.pos, progress: 0.75, bearing: 120 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 7000, tilt: 40, yaw: 300, fov: 60, hour: 21 });",
+    "await G.frames(2); F.advance(4); await G.frames(2);"
+   ]
+  },
+  {
+   "name": "godx-sky-brush",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); F.advance(30); await G.frames(1);",
+    "await G.camera({ mode: 'orbit', poi: 'farm', dist: 700, tilt: 50, hour: 13 });",
+    "const ok = G.ui_.arm('weather-thunderstorm'); G.ui_.pointer(400, 240); await G.frames(3); return { ok, brush: !!F.fx.brush };"
+   ]
+  }
+ ]
+}

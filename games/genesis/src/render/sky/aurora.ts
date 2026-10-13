@@ -9,8 +9,8 @@
 // strength is magnetism × (a quiet glow + the star's activity + storms: GodFx adds solar flares, magnetic storms and
 // aurora-storm weather), and it fades where the sun is up.
 
-import { AdditiveBlending, BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3, type IUniform } from 'three';
-import { FX_DEPTH_GLSL, FX_LAYER } from '../fx/fxcommon.ts';
+import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3, type IUniform } from 'three';
+import { ADD_LIGHT, FX_DEPTH_GLSL, FX_LAYER } from '../fx/fxcommon.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 
 const VERT = /* glsl */ `
@@ -108,7 +108,7 @@ export class Aurora {
         const uni: Record<string, IUniform> = { ...this.u, uK: lat > 0.4 ? this.uK2 : this.u.uK, uPole: { value: pole }, uLat: { value: lat } };
         for (const k of Object.keys(fx)) uni[k] = fx[k];
         uni.uSunDirBody = shared.uSunDirBody;
-        const m = new Mesh(geo, new ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: uni, transparent: true, depthTest: false, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
+        const m = new Mesh(geo, new ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: uni, transparent: true, depthTest: false, depthWrite: false, ...ADD_LIGHT, side: DoubleSide }));
         m.frustumCulled = false;
         m.matrixAutoUpdate = false;
         m.layers.set(FX_LAYER);

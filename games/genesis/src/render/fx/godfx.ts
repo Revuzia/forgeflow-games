@@ -281,7 +281,7 @@ export class GodFx {
     }
     for (const [id, p] of M.flights.agentPins) crowds.pinned.set(id, p);
     // ── lightning: ribbons, the light they throw on the ground ──
-    M.bolts.update(this.clock, vis.camBody);
+    M.bolts.update(this.clock, vis.camBody, ctx.ease);
     M.bolts.forEachLive(this.clock, (gp, top, k, power) => {
       const d = decal(DECAL.light, [gp.x, gp.y, gp.z], 900);
       d.cr = 0.75; d.cg = 0.8; d.cb = 1; d.p0 = 900; d.p1 = 6e5 * k * power; d.p2 = Math.min(200, top.distanceTo(gp) * 0.4); d.p3 = 40;

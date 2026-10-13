@@ -21,6 +21,7 @@ import {
   NearestFilter, OneFactor, OneMinusSrcAlphaFactor, RGBAFormat, ShaderMaterial, Vector3, type IUniform,
 } from 'three';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
+import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
 
@@ -49,6 +50,12 @@ export interface EmitterDef {
   /** FX time of birth (default now) and how long it emits (default for ever) */
   t0?: number;
   duration?: number;
+  /**
+   * seconds of history a continuous emitter starts with (rain the camera walks into, an ash column already standing
+   * when the view arrives): it is born that much earlier, so it is full at once — even on a paused world, whose FX
+   * clock does not move. Bursts ignore it.
+   */
+  prewarm?: number;
 }
 
 const BLOCK = 64;
@@ -71,6 +78,10 @@ uniform float uFxTime;
 uniform float uPass;
 uniform vec3 uSunDirBody;
 uniform vec3 uMoonE;
+${CLOUD_DENSITY_GLSL}
+uniform samplerCube uCloudCov;
+uniform vec2 uCloudShell;
+uniform float uCloudOn;
 attribute vec2 corner;
 attribute vec2 iBlock;     // block, index in the block
 varying vec2 vCorner;
@@ -88,6 +99,25 @@ varying vec3 vAirIn;
 float h1(float a, float b) { return fract(sin(a * 127.1 + b * 311.7) * 43758.5453); }
 vec4 emit(float row, float k) { return texelFetch(tEmit, ivec2(int(k), int(row)), 0); }
 void hideMe() { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); vColor = vec4(0.0); }
+// the cloud deck's shade on a particle under it: the sun through the deck (as the ground gets it), and the dimmer sky
+// under an overcast (a tornado's dust skirt, a blizzard's flakes, the smoke under a storm are not sunlit)
+vec2 fxCloudShade(vec3 P, float rP) {
+  if (uCloudOn < 0.5 || rP > uCloudShell.y) return vec2(1.0);
+  float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
+  vec2 hit = raySphere(P, uSunDirBody, mid);
+  float sun = 1.0;
+  if (hit.y > 0.0) {
+    vec3 q = P + uSunDirBody * hit.y;
+    vec2 cs = textureLod(uCloudCov, normalize(q), 0.0).rg;
+    cl_fp = 0.0;
+    sun = max(exp(-cloudDensityAt(q, 0.35, cs.x, cs.y, false) * (uCloudShell.y - uCloudShell.x) * 0.4), 0.3);
+  }
+  float over = clamp(textureLod(uCloudCov, P / rP, 0.0).r, 0.0, 1.0);
+  float sky = mix(1.0, 0.6, smoothstep(0.4, 0.95, over));
+  // (inside the deck, half way to its top, the shade lifts)
+  float k = smoothstep(uCloudShell.x, uCloudShell.y, rP);
+  return mix(vec2(sun, sky), vec2(1.0), k);
+}
 
 void main() {
   vec4 blk = texelFetch(tBlocks, ivec2(int(mod(iBlock.x, 64.0)), int(iBlock.x / 64.0)), 0);
@@ -192,7 +222,7 @@ void main() {
     // lava glows into the column's foot, and the vent lights the column's underside from below (by day the sun
     // drowns it; at night the ash stands up orange over the crater)
     glow = vec3(1.0, 0.32, 0.06) * 9.0 * (1.0 - smoothstep(0.0, 0.12, age)) * p2
-         + vec3(1.0, 0.36, 0.08) * 0.4 * exp(-hgt / max(H * 0.22, 1.0)) * p2;
+         + vec3(1.0, 0.36, 0.08) * 1.1 * exp(-hgt / max(H * 0.35, 1.0)) * p2;
   } else if (S == 3) {
     // a pyroclastic flow: billows hugging the ground, racing out from the vent and rolling up behind
     float reach = p0;
@@ -333,6 +363,8 @@ void main() {
     a = edge * power;
     kind = S == 19 ? 7.0 : 5.0;
     if (S == 19) { sz *= 0.6 + 0.8 * r4; }
+    // (p2: a driven snow — flakes, white and soft, smeared along the gale, not rain's long thin streaks)
+    if (S == 16 && p2 > 0.5) { kind = 5.25; sz *= 0.7 + 0.6 * r4; }
   } else if (S == 17) {
     // splashes: on whatever surface lies under a random point of the screen (the depth buffer, read here)
     vec2 suv = vec2(r1, r2);
@@ -341,9 +373,20 @@ void main() {
     vec4 rd4 = uInvProj * vec4(suv * 2.0 - 1.0, -1.0, 1.0);
     vec3 rd = rd4.xyz / rd4.w;
     vec3 Sv = rd * (sz0 / max(-rd.z, 1e-6));
+    // only on surfaces that face the sky (the ground, a roof, a table): not up a wall or down someone's back — the
+    // surface's slope from two neighbouring depth samples
+    vec2 suvX = suv + vec2(0.004, 0.0), suvY = suv + vec2(0.0, 0.004);
+    vec4 rx4 = uInvProj * vec4(suvX * 2.0 - 1.0, -1.0, 1.0), ry4 = uInvProj * vec4(suvY * 2.0 - 1.0, -1.0, 1.0);
+    vec3 rx = rx4.xyz / rx4.w, ry = ry4.xyz / ry4.w;
+    vec3 Sx = rx * (textureLod(tSceneDepth, suvX, 0.0).r / max(-rx.z, 1e-6));
+    vec3 Sy = ry * (textureLod(tSceneDepth, suvY, 0.0).r / max(-ry.z, 1e-6));
+    vec3 Nv = cross(Sx - Sv, Sy - Sv);
+    vec3 upV = normalize(normalize(uCamBody) * uViewToBody);
+    if (dot(Nv, Nv) < 1e-12 || abs(dot(normalize(Nv), upV)) < 0.75) { hideMe(); return; }
     p = uViewToBody * Sv + uCamBody;
-    sz = size * (0.3 + 1.2 * age) * mix(0.6, 1.0, r3);
-    a = (1.0 - smoothstep(0.1, 1.0, age)) * power * 0.8;
+    // (a crown a few centimetres across that opens and is gone in a blink; never larger than the drops would throw)
+    sz = size * (0.25 + 0.9 * sqrt(age)) * mix(0.6, 1.0, r3);
+    a = (1.0 - smoothstep(0.05, 1.0, age)) * power * 0.55;
     kind = 8.0;
   } else if (S == 20) {
     // embers: glowing bits flung up from the fire or the vent, drifting down as they cool
@@ -429,9 +472,10 @@ void main() {
   if (litSys) {
     float rP = length(p);
     vec3 upP = p / rP;
-    vec3 sun = uSunE * sunTransmittance(rP, dot(upP, uSunDirBody));
-    vec3 sky = skyIrradiance(upP, upP, uSunDirBody);
-    vLight = sun * 0.24 + sky * 0.3 + vec3(0.002, 0.003, 0.005) + uMoonE * 0.15;
+    vec2 shade = fxCloudShade(p, rP);
+    vec3 sun = uSunE * sunTransmittance(rP, dot(upP, uSunDirBody)) * shade.x;
+    vec3 sky = skyIrradiance(upP, upP, uSunDirBody) * shade.y;
+    vLight = sun * 0.24 + sky * 0.3 + vec3(0.002, 0.003, 0.005) + uMoonE * 0.15 * shade.x;
   }
   // ── aerial perspective: the air between the camera and the particle dims it and veils it in the sky's colour
   // (density averaged along the path between the two heights; the veil is the sky's radiance that way) ──
@@ -454,7 +498,7 @@ void main() {
     vec3 vv = (modelViewMatrix * vec4(vel, 0.0)).xyz;
     vec2 d = length(vv.xy) > 1e-5 ? normalize(vv.xy) : vec2(0.0, 1.0);
     vDir = d;
-    float stretch = kind > 4.5 ? clamp(length(vv.xy) * 0.06, 2.0, 14.0) : 1.0 + clamp(length(vv.xy) * 0.08, 0.0, 10.0);
+    float stretch = kind > 5.1 ? clamp(length(vv.xy) * 0.04, 1.15, 4.0) : kind > 4.5 ? clamp(length(vv.xy) * 0.06, 2.0, 14.0) : 1.0 + clamp(length(vv.xy) * 0.08, 0.0, 10.0);
     vec2 nrm = vec2(d.y, -d.x);
     mv.xy += nrm * corner.x * sz + d * corner.y * sz * stretch;
   } else if (kind > 7.5) {
@@ -524,8 +568,15 @@ void main() {
   } else if (vKind > 4.5 && vKind < 5.5) {
     // a rain streak: thin, brightest in the middle, lit by the sky
     float k = (1.0 - smoothstep(0.0, 1.0, abs(vCorner.x))) * (1.0 - smoothstep(0.6, 1.0, abs(vCorner.y)));
+    float bright = 1.6;
+    if (vKind > 5.1) {
+      // a driven flake: a soft, rounded smear (no hard-edged card), a diffuse white body
+      float rr = length(vec2(vCorner.x, max(abs(vCorner.y) - 0.3, 0.0) / 0.7));
+      k = exp(-rr * rr * 3.2) * (1.0 - smoothstep(0.75, 1.0, rr));
+      bright = 1.25;
+    }
     float a = vColor.a * k * fade * 0.55;
-    gl_FragColor = vec4((vColor.rgb * (vLight * 1.6 + 0.01) * vAirT + vAirIn) * a, a);
+    gl_FragColor = vec4((vColor.rgb * (vLight * bright + 0.01) * vAirT + vAirIn) * a, a);
   } else if (vKind > 5.5 && vKind < 6.5) {
     // a leaf: a little lit ellipse turning in the air
     vec2 q = vCorner * vec2(1.0, 0.55);
@@ -539,10 +590,13 @@ void main() {
     float a = vColor.a * smoothstep(1.0, 0.75, r) * fade;
     gl_FragColor = vec4((vColor.rgb * vLight * 1.6 * sh * vAirT + vAirIn) * a, a);
   } else if (vKind > 7.5) {
-    // a splash crown
-    float k = (1.0 - smoothstep(0.7, 1.0, abs(vCorner.x))) * smoothstep(-1.0, -0.6, vCorner.y) * (1.0 - smoothstep(0.2, 1.0, vCorner.y));
-    float ring = smoothstep(0.35, 0.85, abs(vCorner.x));
-    float a = vColor.a * k * (0.4 + 0.6 * ring) * 0.6;
+    // a splash crown: a thin rim of droplets thrown up and out (the arc of a ring seen side-on), open in the middle
+    vec2 cq = vec2(vCorner.x, (vCorner.y + 1.0) * 0.9);
+    float rim = abs(length(cq) - 0.85);
+    float k = (1.0 - smoothstep(0.0, 0.16, rim)) * step(0.0, cq.y) * (1.0 - smoothstep(0.6, 1.0, abs(vCorner.x)) * 0.5);
+    // droplets along the rim, not a solid band
+    float drops = step(0.35, fract(atan(cq.y, cq.x) * 3.1 + vSeed));
+    float a = vColor.a * k * drops * 0.5;
     gl_FragColor = vec4((vColor.rgb * vLight * 1.8 * vAirT + vAirIn) * a, a);
   } else if (vKind > 0.5 && vKind < 1.5) {
     // an emissive streak: hottest at its head
@@ -645,8 +699,9 @@ export class Vfx {
     while (blocks.length < want && this.freeBlocks.length) blocks.push(this.freeBlocks.pop()!);
     if (!blocks.length) { this.freeRows.push(row); return 0; }
     const id = this.nextId++;
-    const t0 = d.t0 ?? now;
-    const tEnd = d.duration !== undefined ? t0 + d.duration : d.burst ? t0 : 1e9;
+    const pre = !d.burst && d.prewarm ? Math.max(0, d.prewarm) : 0;
+    const t0 = (d.t0 ?? now) - pre;
+    const tEnd = d.duration !== undefined ? t0 + pre + d.duration : d.burst ? t0 : 1e9;
     const until = d.burst ? t0 + d.life * 1.35 + 0.3 : tEnd + d.life * 1.2;
     const lv: Live = { row, blocks, def: { ...d }, t0, tEnd, until };
     this.live.set(id, lv);

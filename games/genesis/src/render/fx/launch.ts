@@ -75,6 +75,9 @@ export interface EngineFire {
   path?: (tick: number, out: Vector3) => void;
   /** the ship is in the air and leaves a smoke trail (a launcher climbing; not a lander hovering) */
   trail: boolean;
+  /** lit on the pad (a first stage, the boosters): a late first sight backfills the ground cloud it poured there — an
+   * upper stage lit high in the sky never does */
+  fromPad?: boolean;
   /**
    * the tick the engine lit: a cluster seen for the first time (a camera cut, a stepped or paused capture) emits its
    * smoke back to then along `path`, so the column and the trail are whole however few frames were drawn
@@ -133,7 +136,7 @@ void main() {
   float rise = 0.0;
   if (uSpace < 0.5) {
     // buoyancy: hot smoke climbs, cold vapour sinks, dust settles; sparks and debris fall
-    rise = kind < 0.5 ? 2.8 * age : kind < 1.5 ? 1.6 * max(0.0, age - 2.0) : kind < 2.5 ? -0.9 * age : kind < 3.5 ? 5.0 * age : kind < 4.5 ? -4.9 * age * age : kind < 5.5 ? 0.35 * age : kind < 6.5 ? 0.2 * age : kind < 7.5 ? 0.0 : -4.9 * age * age;
+    rise = kind < 0.5 ? 2.8 * age : kind < 1.5 ? 1.6 * max(0.0, age - 2.0) : kind < 2.5 ? -2.4 * age : kind < 3.5 ? 5.0 * age : kind < 4.5 ? -4.9 * age * age : kind < 5.5 ? 0.35 * age : kind < 6.5 ? 0.2 * age : kind < 7.5 ? 0.0 : -4.9 * age * age;
     p += up * rise;
     // the wind carries the smoke (more as it rises out of the ground's shelter)
     float wk = kind < 2.5 || kind > 4.5 && kind < 6.5 ? 1.0 : kind < 3.5 ? 0.6 : 0.2;
@@ -152,18 +155,22 @@ void main() {
   if (kind < 0.5 || kind > 0.5 && kind < 1.5 || kind > 1.5 && kind < 2.5 || kind > 4.5 && kind < 6.5 || kind > 2.5 && kind < 3.5) {
     float alpha;
     vec3 c;
-    if (kind < 0.5) { c = mix(vec3(0.62, 0.6, 0.57), vec3(0.78, 0.77, 0.75), seed); alpha = smoothstep(0.0, 0.06, a) * (1.0 - smoothstep(0.35, 1.0, a)) * 0.82; }
-    else if (kind < 1.5) { c = mix(vec3(0.74, 0.73, 0.71), vec3(0.86, 0.86, 0.85), seed); alpha = smoothstep(0.0, 0.05, a) * (1.0 - smoothstep(0.4, 1.0, a)) * 0.9; }
-    else if (kind < 2.5) { c = vec3(0.9, 0.92, 0.95); alpha = smoothstep(0.0, 0.15, a) * (1.0 - smoothstep(0.3, 1.0, a)) * 0.42; }
+    // (smoke is there as soon as it leaves the flame — a fade-in over a fraction of a long life left the newest stretch
+    // of a column, the part next to the rocket, invisible for seconds)
+    if (kind < 0.5) { c = mix(vec3(0.62, 0.6, 0.57), vec3(0.78, 0.77, 0.75), seed); alpha = smoothstep(0.0, 0.3, age) * (1.0 - smoothstep(0.35, 1.0, a)) * 0.82; }
+    else if (kind < 1.5) { c = mix(vec3(0.74, 0.73, 0.71), vec3(0.86, 0.86, 0.85), seed); alpha = smoothstep(0.0, 0.3, age) * (1.0 - smoothstep(0.4, 1.0, a)) * 0.9; }
+    else if (kind < 2.5) { c = vec3(0.9, 0.92, 0.95); alpha = smoothstep(0.0, 0.15, a) * (1.0 - smoothstep(0.3, 1.0, a)) * 0.2; }
     else if (kind < 3.5) {
       // fireball → dark smoke: the glow fades within the first fifth of its life
       c = mix(vec3(0.08, 0.07, 0.06), vec3(0.22, 0.2, 0.18), smoothstep(0.2, 1.0, a));
       alpha = smoothstep(0.0, 0.03, a) * (1.0 - smoothstep(0.5, 1.0, a)) * 0.92;
-      vGlow = vec3(1.0, 0.42, 0.1) * 40.0 * pow(1.0 - smoothstep(0.0, 0.22, a), 2.0) * (0.6 + 0.4 * seed);
+      // (many puffs overlap in a fireball: each glows a saturated orange, so their sum stays fire, not cream; a few are
+      // still white-hot at the start)
+      vGlow = mix(vec3(1.0, 0.3, 0.05), vec3(1.0, 0.62, 0.3), step(0.8, seed) * (1.0 - smoothstep(0.0, 0.06, a))) * 7.0 * pow(1.0 - smoothstep(0.0, 0.22, a), 2.0) * (0.12 + 0.88 * seed * seed);
       if (uSpace > 0.5) { alpha *= 1.0 - smoothstep(0.1, 0.5, a); c *= 0.5; }
     }
     else if (kind < 5.5) { c = mix(vec3(0.32, 0.26, 0.19), vec3(0.45, 0.38, 0.29), seed); alpha = smoothstep(0.0, 0.08, a) * (1.0 - smoothstep(0.3, 1.0, a)) * 0.75; }
-    else { c = vec3(0.92, 0.93, 0.95); alpha = smoothstep(0.0, 0.1, a) * (1.0 - smoothstep(0.25, 1.0, a)) * 0.45; }
+    else { c = vec3(0.92, 0.93, 0.95); alpha = smoothstep(0.0, 0.3, age) * (1.0 - smoothstep(0.25, 1.0, a)) * 0.45; }
     col = vec4(c, alpha);
     // light: the sun through the air at this height, the sky, a little night ambient
     float rP = length(p);
@@ -723,14 +730,23 @@ export class LaunchFx {
         e.dir.x * 8 + jx * 0.6, e.dir.y * 8 + jy * 0.6, e.dir.z * 8 + jz * 0.6, kind, sz0, sz1, life, s);
     }
     // the pad's ground cloud: steam and smoke shot out sideways along the flame trench and rolling over the ground
-    if ((low > 0.02 || (e.path && (!last || last.t <= t0) && t0 < t1 - 0.06)) && ctx && ctx.hasAir && (low > 0.02 || !space || e.path)) {
+    if ((low > 0.02 || (e.path && e.fromPad && (!last || last.t <= t0) && t0 < t1 - 0.06)) && ctx && ctx.hasAir && (low > 0.02 || !space || e.path)) {
       // (backfilled from ignition: the cloud was poured while the engine was low, at the pad — where the path began)
       const padAt = _v.copy(e.pos);
       if (e.path && e.since !== undefined) e.path(e.since, padAt);
       const up = _w.copy(padAt).normalize();
-      const lowFor = e.path ? Math.min(t1 - t0, 4 + 0.4 * Math.sqrt(Math.max(0, scale))) : t1 - t0;
-      const nc = Math.min(Math.round(55 * e.thrust * lowFor * Math.min(2.5, scale) * (e.path ? 1 : low)), 600);
       const ground = e.path && e.since !== undefined ? padAt.length() - 3 : e.pos.length() - e.alt;
+      let lowFor = e.path ? Math.min(t1 - t0, 4 + 0.4 * Math.sqrt(Math.max(0, scale))) : t1 - t0;
+      if (e.path) {
+        // only while the engines were still low over the pad: from ignition until the climb took them ~60 m up (a
+        // capture that first sees the rocket high in the sky must not pour fresh cloud and fire at the pad)
+        for (let k = 1; k <= 24; k++) {
+          const tk = t0 + (lowFor * k) / 24;
+          e.path((tk + this.epoch) * tickPerSec, _b);
+          if (_b.length() - ground > 60) { lowFor = (lowFor * k) / 24; break; }
+        }
+      }
+      const nc = Math.min(Math.round(55 * e.thrust * lowFor * Math.min(2.5, scale) * (e.path ? 1 : low)), 600);
       for (let i = 0; i < nc; i++) {
         const tb = t0 + lowFor * ((i + 0.5) / Math.max(1, nc));
         const s = hashFloat(i, t1 * 17, 11);
@@ -781,7 +797,8 @@ export class LaunchFx {
     for (let i = 0; i < n; i++) {
       const s = hashFloat(i, t1 * 31, pos.x);
       const tb = t0 + (t1 - t0) * ((i + s) / Math.max(1, n));
-      P.puffs.spawn(pos.x, pos.y, pos.z, tb, dir.x * (1.2 + s) + (s - 0.5) * 0.6, dir.y * (1.2 + s), dir.z * (1.2 + s) + (0.5 - s) * 0.6, PUFF.vent, size * 0.4, size * (2.5 + 2 * s), 3.5 + 2.5 * s, s);
+      // (thin wisps jetted off the skin that spread, then fall along it — not a ball sitting on the vent)
+      P.puffs.spawn(pos.x, pos.y, pos.z, tb, dir.x * (3 + 2.5 * s) + (s - 0.5) * 1.2, dir.y * (3 + 2.5 * s), dir.z * (3 + 2.5 * s) + (0.5 - s) * 1.2, PUFF.vent, size * 0.22, size * (1.0 + 1.1 * s), 2.5 + 2 * s, s);
     }
   }
 

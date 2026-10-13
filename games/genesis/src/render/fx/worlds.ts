@@ -404,9 +404,14 @@ void main() {
     float a = atan(vUv.y, vUv.x);
     float arms = 0.5 + 0.5 * sin(3.0 * a - 7.0 * log(max(r, 0.02)) + uTime * 1.6);
     float n = snoise(vec3(vUv * 6.0, uTime * 0.3)) * 0.5 + 0.5;
+    // filaments wound along the arms (dust lanes, not a smooth glow)
+    // (noise of the arm's phase through its cosine and sine: no seam where the angle wraps)
+    float ph = 3.0 * a - 7.0 * log(max(r, 0.02));
+    float fil = 0.45 + 0.55 * smoothstep(0.2, 0.8, snoise(vec3(r * 18.0 - uTime * 0.4, cos(ph) * 1.6, sin(ph) * 1.6)) * 0.5 + 0.5);
     float inner = smoothstep(0.08 + 0.25 * uK, 0.3 + 0.3 * uK, r);
     float outer = 1.0 - smoothstep(0.6 * (1.0 - uK) + 0.2, 1.0 - 0.5 * uK, r);
-    c = uColor * pow(arms, 2.0) * (0.4 + 0.6 * n) * inner * outer * (1.0 - uK * 0.85) * 1.6;
+    vec3 dustC = mix(uColor * vec3(0.8, 0.55, 0.45), uColor, smoothstep(0.6, 0.15, r));
+    c = dustC * pow(arms, 2.0) * (0.4 + 0.6 * n) * fil * inner * outer * (1.0 - uK * 0.85) * 1.3;
   } else if (uKind < 3.5) {
     // ablation: a burning shell round the falling body
     float shell = smoothstep(0.55, 0.75, r) * (1.0 - smoothstep(0.75, 1.0, r));
@@ -490,9 +495,10 @@ void main() {
   vec3 col = rock * (lam * 3.0 + 0.02);
   // molten: the whole surface glows, crusting over as it cools (dark plates, bright seams)
   float crust = smoothstep(0.2, 0.9, 1.0 - uHeat) * smoothstep(0.35, 0.65, n1 * 0.7 + n2 * 0.3);
-  vec3 lava = mix(vec3(1.0, 0.35, 0.06), vec3(1.0, 0.8, 0.45), uHeat * n2) * (0.6 + 0.8 * uHeat);
+  // (deep reds and oranges at a moderate level: the tone curve bleaches a bright molten ball to cream)
+  vec3 lava = mix(vec3(1.0, 0.24, 0.03), vec3(1.0, 0.58, 0.18), uHeat * n2) * (0.5 + 0.7 * uHeat);
   float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
-  float k = mix(1.0, 1.0 / ex, 0.5) * 4.0;
+  float k = mix(1.0, 1.0 / ex, 0.5) * 2.0;
   col = mix(lava * k * uHeat, col, crust) + vec3(1.0, 0.3, 0.05) * (cells * 0.6 + cracks) * (uCracks + uHeat * 0.4) * k;
   float a = uAlpha;
   gl_FragColor = vec4(col * a, a);
@@ -815,7 +821,7 @@ export class WorldFx {
       const ring = new Mesh(this.glowGeo, this.glowMat(1, [0.9, 0.7, 1.0], false));
       glows.push(flash, ring);
     } else if (!moon) {
-      glows.push(new Mesh(this.glowGeo, this.glowMat(2, [1.0, 0.62, 0.32], false)));
+      glows.push(new Mesh(this.glowGeo, this.glowMat(2, [1.0, 0.5, 0.2], false)));
     }
     for (const g of glows) { g.layers.set(WORLD_LAYER); g.frustumCulled = false; g.renderOrder = 3; group.add(g); }
     let debris: InstancedMesh | null = null, debrisMat: ShaderMaterial | null = null;
@@ -842,7 +848,9 @@ export class WorldFx {
 
   private updateBurst(b: Burst, view: WorldView, pose: CameraPose, time: number, camQuatInv: Quaternion): void {
     const t = Math.max(0, Math.min(time - b.t0, (view.renderTick - b.tick0) / 10));
-    if (b.kind === 'birth') {
+    // a world being born is followed along its orbit; one being erased too, for as long as the view still carries it
+    // (a snapshot or two with alive = false) — the eye over it holds where it was when it went, and so does the wreck
+    if (b.kind === 'birth' || b.kind === 'erase') {
       const pv = view.planet(b.planet);
       if (pv) b.sys = [pv.center[0], pv.center[1], pv.center[2]];
     }
@@ -861,7 +869,9 @@ export class WorldFx {
       sm.uniforms.uHeat.value = c * 0.8;
       sm.uniforms.uAlpha.value = 1;
       const [flash, ring] = b.glows;
-      const fk = t < 1.4 ? 0 : Math.exp(-(t - 1.4) * 1.6);
+      // (the flash is over in a few seconds: its faint tail, filling the frame of an eye that stood near the world,
+      // would otherwise be lifted to a beige haze by the exposure of the dark sky)
+      const fk = t < 1.4 ? 0 : Math.exp(-(t - 1.4) * 2.2) * Math.max(0, Math.min(1, (4.4 - t) / 1.5));
       flash.scale.setScalar(b.R * (2 + 5 * Math.min(1, (t - 1.2) * 2)));
       (flash.material as ShaderMaterial).uniforms.uK.value = Math.max(0, fk) * 6;
       flash.visible = t > 1.2;
