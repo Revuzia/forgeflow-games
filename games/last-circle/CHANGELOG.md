@@ -3,6 +3,38 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-10-13 (later) — Wave 5 leftovers closed: healers out of stair pockets, walkable stairs, level containers, solid rocks (?v=1791925742)
+
+The four residuals named in the entry below are fixed and the full gate run is now all green: `gate.py --disk --negative-controls`
+OVERALL PASS, 31 of 31 planted-fault controls caught (7 of them new).
+
+| measured | live before this build | now |
+|---|---|---|
+| healers blocked indoors (navcheck heal-indoor, 9 matches) | 264 of 2285 ticks (11.55 %) | 0 of 3663 |
+| ramp-pocket probe: healer placed beside / under every stair gets out within 2 s | 16.23 % | 98.69 % (2495 of 2528) |
+| stairs walkable down (worldlive, 81 ramps) | 80 of 81 | 81 of 81 (up 80 of 80) |
+| stairs failing a walk, 5 fresh seeds x 3 maps (420 ramps) | 21 walks on 14 ramps | 3 walks on 2 ramps |
+| containers drawn leaning on a slope | 25, up to 8 degrees, clip p95 0.16 m | 0 (all level), clip p95 0.00 m |
+| sprints ending inside the drawn mesh | 23 of 704 | 1 of 704 |
+| rock sprints ending inside a rock (of 192) | 2 (16 under the old definition) | 0 |
+| bot-match median length, 27 fresh matches | 729.5 s | 734.4 s |
+| matches reaching storm circle 5 (of 27) | 26 | 25 |
+
+- **Healers**: the retreat no longer picks a heading into a stair's side or underside, and a healer pinned twice walks out.
+- **Stairs**: the Ashgrid stair that could not be walked down is fixed at its geometry; the same walk now passes on 5 more seeds per map.
+- **Containers** are placed level; the low side is sunk instead of tipping the box (Ashgrid has 149 containers, was 162, because
+  slope spots that cannot hold a level box are skipped). The world's other props, loot points and POIs are identical to the live build.
+- **Rocks**: a low rock part beside a taller one no longer forms a two-step staircase into the tall box.
+- **Gates**: four new rows (heal-pockets, ramps-walk-fine, container-lean, sprints-rocks), each failing on the live build and on
+  Wave 4; the kill-marker hold is judged in game time (it flaked under load), the hud_cycle guard race is fixed, navcheck reads 9 matches.
+  The rock-sprint definition now ignores hull-only overlaps with no drawn rock (checked independently: 0 of 192 real overlaps).
+- Download +22 KB (maps.js, bots.js, the collider table).
+
+Known and NOT fixed: two stairs on fresh seeds (isla_viva seed 23 at (-41.35, -30.8) cannot be climbed - same on the live build;
+deepwood seed 65537 at (46.15, 39.2) lifts a sprinting player); a bot on isla_viva seed 23 holds still with no input for a while
+(no gate row sees it); a deepwood bot stalls 2.3 s on seed 902 at (35.6, 6.6, 40.7) on both builds; outdoor-blocked sits at 0.92-1.06 %
+against its 1.08 % limit on both builds; a client that fails to fetch the collider table now also differs in which containers exist.
+
 ## 2026-10-13 — World foundation: grounded props, real collision, bots that stop sticking (?v=1791894423)
 
 Owner: "bots getting stuck in houses, they need better path finding, floating objects like trees or rocks, they need to be
