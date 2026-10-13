@@ -2,6 +2,7 @@
   // probe_world.js - the in-page half of worldlive.py (lane F1, 2026-10-13). Promoted from the Wave-5 lanes' scratch probes:
   //   lane 5A  chestgap_all.py      -> chests()   every chest rests on the surface it is authored on
   //   lane 5A  ramptest2.py         -> ramps()    EVERY ramp walked up and down with the real mover; towers() every ranger tower foot -> deck
+  //   lane L2  stairs_all.py        -> rampsFine() the FINE scan (2026-10-13): walk AND sprint, every start phase, a lifted descent is not clean
   //   lane 5C  live5c.js 'ramp'     -> sides()    walking into a ramp's side from outside is blocked (the plank is solid at body height)
   //   lane 5C  live5c.js 'fall'     -> fallsFine() 0.2 m-spaced drop heights onto thin slabs (>= 800 drops per map)
   //   lane 5C  live5c.js 'aim'      -> aim()      the REAL fire() path: where the shot lands vs where the crosshair ray meets a near wall
@@ -121,6 +122,79 @@
     p.input.mz = 0;
     const fail = (a) => a.filter((r) => !r.ok);
     return { n, upN: up.length, skippedUp, skippedEx, upOk: up.filter((r) => r.ok).length, downOk: down.filter((r) => r.ok).length, upFailed: fail(up).slice(0, 8), downFailed: fail(down).slice(0, 8) };
+  }
+
+  // ---------------------------------------------------------------- ramps, fine scan (lane L2's stairs_all.py): the climb and the descent as a player does them
+  // Differences from ramps() above, each one found by a defect the coarse scan passed (ashgrid seed 1234 / 31337, isla_viva seed 1234 / 31337 on the Wave-5 release):
+  //   * walk AND sprint (a sprinting actor covers 1.6x the ground per tick and reaches the lip of a stair a different way);
+  //   * 'up' passes when ANY of the run-ups (1.3, 0.8, 0.45, 0.15 m before the low edge) climbs: a run-up longer than the room starts outside its wall;
+  //     'down' must pass from EVERY start phase (0.5, 0.9, 1.6 m from the top edge): a hop can begin anywhere in its arc, and a stair that only
+  //     works from one phase drops the player or a bot on it;
+  //   * a descent that was LIFTED (an auto-mantle onto the floor above, or the feet ended above the start height) is not a clean walk down,
+  //     even if the actor got down later (the ashgrid stair at (221.75, 224) mantled the player onto the upper floor).
+  function walkRampFine(c, mode, off, sprint) {
+    const D = DIRS[c.dir], alongX = c.dir < 2;
+    const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
+    const lowA = alongX ? (c.dir === 0 ? c.minX : c.maxX) : (c.dir === 2 ? c.minZ : c.maxZ);
+    const topA = alongX ? (c.dir === 0 ? c.maxX : c.minX) : (c.dir === 2 ? c.maxZ : c.minZ);
+    const run = Math.abs(topA - lowA);
+    const footX = alongX ? lowA - D[0] * 0.3 : cx, footZ = alongX ? cz : lowA - D[1] * 0.3;
+    const foot = support(footX, footZ, c.minY + 0.3, c);
+    let sx, sz, yaw;
+    if (mode === 'up') { sx = alongX ? lowA - D[0] * off : cx; sz = alongX ? cz : lowA - D[1] * off; yaw = Math.atan2(-D[0], -D[1]); }
+    else { sx = alongX ? topA - D[0] * off : cx; sz = alongX ? cz : topA - D[1] * off; yaw = Math.atan2(D[0], D[1]); }
+    let y0 = M().heightAt(sx, sz);
+    for (const o of M().queryColliders(sx, sz, 0.3, [])) {
+      if (o.kind === 'ramp') { if (mode === 'down') { const f = Math.min(1, Math.max(0, Math.abs(topA - (alongX ? sx : sz)) / Math.max(0.01, run))); y0 = Math.max(y0, c.maxY - (c.maxY - c.minY) * f); } continue; }
+      if (sx >= o.minX && sx <= o.maxX && sz >= o.minZ && sz <= o.maxZ && o.maxY <= (mode === 'up' ? c.minY + 0.6 : c.maxY + 0.6) && o.maxY > y0) y0 = o.maxY;
+    }
+    setPlayer(sx, y0 + 0.1, sz);
+    p.input.yaw = yaw; p.input.pitch = 0;
+    C.fastForward(0.25, 1 / 60);
+    p.input.mz = 1; p.input.sprint = !!sprint;
+    let best = p.pos.y, bestLow = p.pos.y, still = 0, t = 0, last = [p.pos.x, p.pos.z], mant = 0;
+    for (; t < 14; t += 0.1) {
+      p.hp = 100; p.shield = 100;
+      C.fastForward(0.1, 1 / 60);
+      if (p.mantleT != null) mant++;
+      if (p.pos.y > best) best = p.pos.y;
+      if (p.pos.y < bestLow) bestLow = p.pos.y;
+      const moved = Math.hypot(p.pos.x - last[0], p.pos.z - last[1]); last = [p.pos.x, p.pos.z];
+      still = moved < 0.02 ? still + 0.1 : 0;
+      if (mode === 'up' && p.pos.y >= c.maxY - 0.35) break;
+      if (mode === 'down' && p.pos.y <= c.minY + 0.5) break;
+      if (still > 1.5) break;
+    }
+    p.input.mz = 0; p.input.sprint = false;
+    const ok = mode === 'up' ? best >= c.maxY - 0.6 : bestLow <= Math.max(c.minY, foot, M().waterY - 0.6) + 0.7;
+    const lifted = mode === 'down' && (mant > 0 || best > Math.max(y0, c.maxY) + 0.2);
+    return { ok: ok && !lifted, lifted, mode, off, sprint: !!sprint, dir: c.dir, minY: r3(c.minY), maxY: r3(c.maxY), run: r3(run), at: [r3(cx), r3(cz)], startY: r3(y0), best: r3(best), bestLow: r3(bestLow), mant, stuck: still > 1.5 };
+  }
+  function rampsFine(opt) {
+    const rs = rampList(), n = Math.min(rs.length, (opt && opt.max) || 1e9);
+    const res = { n, walks: 0, skippedUp: 0, upWalks: 0, downWalks: 0, fails: [], failedRamps: 0 };
+    const failedIdx = new Set();
+    for (let i = 0; i < n; i++) {
+      const c = rs[i], D = DIRS[c.dir], alongX = c.dir < 2, lowA = alongX ? (c.dir === 0 ? c.minX : c.maxX) : (c.dir === 2 ? c.minZ : c.maxZ);
+      // a foot in the sea / on no standable ground (or its low edge more than 1.2 m above any ground within reach) is not climbed from the ground
+      const g0 = support(alongX ? lowA - D[0] * 1.3 : (c.minX + c.maxX) / 2, alongX ? (c.minZ + c.maxZ) / 2 : lowA - D[1] * 1.3, c.minY + 0.3, c);
+      const upOK = !(g0 < M().waterY - 0.1 || c.minY - g0 > 1.2);
+      if (!upOK) res.skippedUp++;
+      if (upOK) for (const sp of [false, true]) {
+        let r = null;
+        for (const off of [1.3, 0.8, 0.45, 0.15]) { r = walkRampFine(c, 'up', off, sp); res.walks++; res.upWalks++; if (r.ok) break; }
+        if (!r.ok) { r.i = i; res.fails.push(r); failedIdx.add(i); }
+      }
+      for (const sp of [false, true]) for (const off of [0.5, 0.9, 1.6]) {
+        const r = walkRampFine(c, 'down', off, sp); res.walks++; res.downWalks++;
+        if (!r.ok) { r.i = i; res.fails.push(r); failedIdx.add(i); }
+      }
+    }
+    p.input.mz = 0; p.input.sprint = false;
+    res.failedRamps = failedIdx.size;
+    res.failCount = res.fails.length;
+    res.fails = res.fails.slice(0, 24);
+    return res;
   }
 
   // ---------------------------------------------------------------- ranger towers: foot -> deck by waypoints (switchback when two ramps serve the deck)
@@ -305,5 +379,5 @@
     return { shots: shots.length, measured: errs.length, errMax: pct(errs, 1), errP50: pct(errs, 0.5), over015: errs.filter((e) => e > 0.15).length, rows: shots.slice(0, 16) };
   }
 
-  return { chests, ramps, towers, sides, fallsFine, aim };
+  return { chests, ramps, rampsFine, towers, sides, fallsFine, aim };
 }

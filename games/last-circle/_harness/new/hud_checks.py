@@ -189,10 +189,13 @@ def step(s, n=3, render=False):
     s.step_frames(n, 1 / 60, render=render)
 
 
-def start_landed(s, seed=7, map_id="isla_viva", mode="standard"):
-    s.start_match(mode, seed, map_id, enter=True)
+def start_landed(s, seed=7, map_id="isla_viva", mode="standard", guard_first=False):
+    # guard_first: install the guard in the lobby, BEFORE the Enter that starts the drop (hud_cycle's race fix, L4-gates 2026-10-13)
+    st = s.start_match(mode, seed, map_id, enter=True, guard=guard_first)
     s.guard_player(True)
     info = s.land(120, protect=True)
+    if guard_first:
+        info["guardBeforeEnter"] = st.get("guardBeforeEnter")
     return info
 
 

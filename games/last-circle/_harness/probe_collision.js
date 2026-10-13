@@ -94,6 +94,42 @@
   // ledges): that is not walking through it. 1e9 when every body is under the feet.
   const sdBodiesAt = (px, pz, y, hh) => { let m = 1e9; for (let b = 0; b < hh.bodies.length; b++) { if (y >= hh.tops[b] - 0.10) continue; const d = sdPoly(px, pz, hh.bodies[b]); if (d < m) m = d; } return m; };
   const dRect = (c, x, z) => Math.hypot(Math.max(c.minX - x, 0, x - c.maxX), Math.max(c.minZ - z, 0, z - c.maxZ));
+  // (sprints, rocks; L4-gates 2026-10-13) The drawn body of a rock is a CONVEX HULL of its vertices in the player's body band, and a rock is not convex: the hull
+  // fills the empty angle between the lobes and the flare of its foot. A capsule standing on a low shoulder of a rock, or walking through an open angle of its
+  // hull, read "0.4-0.8 m inside the body" with no drawn solid under it (vertical rays through the capsule centre: every one of the 11 sprints that stayed red on
+  // the Wave-5 leftovers tree was either standing on the drawn surface or over an open gap; none ended inside). So a point the hull flags counts only when the
+  // DRAWN triangles confirm that the body overlaps drawn solid:
+  //   (a) the capsule's centre column: the topmost drawn surface under the centre is more than 0.10 m above the feet (the centre is INSIDE a solid that rises over
+  //       the feet: sinking into a rock, or lifted late. A legitimate step-up has the feet on the surface by the time the centre is over it: the mover's support
+  //       footprint (0.3 m) catches the edge before the centre arrives), or
+  //   (b) a ring of 12 points at R - 0.10 m: a drawn surface more than STEP_UP (0.55 m) above the feet (a wall the mover will not step onto, overlapped by more
+  //       than 10 cm at the disc's edge; a lower surface there is a step the mover climbs, which overlaps the disc edge by up to 0.15 m on the way).
+  // In both, solid that starts above the head (bottom hit > feet + body height - 0.05) is not in the way. A build whose triangles cannot be read keeps the hull verdict.
+  const CONFIRM_KINDS = new Set(["rocks"]);
+  const CONFIRM_RING = Array.from({ length: 12 }, (_, k) => [Math.cos(k * Math.PI / 6), Math.sin(k * Math.PI / 6)]);
+  let _confirmRay = null, _confirmTHREE = null;
+  function drawnMeshes(kind, i, hh) {
+    if (hh._drawn) return hh._drawn;
+    hh._drawn = (hh.keepSubs || []).map((si) => (STATE.subsByKind[kind] || [])[si]).filter((o) => o && i < o.count).map((o) => {
+      const m4 = new _confirmTHREE.Matrix4(); o.getMatrixAt(i, m4);
+      const mm = new _confirmTHREE.Mesh(o.geometry, new _confirmTHREE.MeshBasicMaterial({ side: _confirmTHREE.DoubleSide }));
+      mm.matrixAutoUpdate = false; mm.matrixWorld.multiplyMatrices(o.matrixWorld, m4); mm.matrix.copy(mm.matrixWorld);
+      return mm;
+    });
+    return hh._drawn;
+  }
+  const rayDown = (meshes, px, pz, y) => {
+    _confirmRay.set(new _confirmTHREE.Vector3(px, y + CAPH + 4, pz), new _confirmTHREE.Vector3(0, -1, 0)); _confirmRay.near = 0; _confirmRay.far = CAPH + 30;
+    return _confirmRay.intersectObjects(meshes, false).map((h) => h.point.y);
+  };
+  function drawnOverlap(kind, i, hh, x, y, z) {
+    const meshes = drawnMeshes(kind, i, hh);
+    if (!meshes.length) return true;
+    const inTheWay = (hits, rise) => hits.length > 0 && hits[0] > y + rise && (hits.length < 2 || hits[hits.length - 1] < y + CAPH - 0.05);
+    if (inTheWay(rayDown(meshes, x, z, y), 0.10)) return true;
+    for (const [cx, cz] of CONFIRM_RING) if (inTheWay(rayDown(meshes, x + cx * (R - 0.10), z + cz * (R - 0.10), y), STEP_UP)) return true;
+    return false;
+  }
   // points on the boundary of (AABB (+) disc r): the capsule-centre positions that just touch the collider
   function rrPts(c, r, k) {
     const o = [], { minX, maxX, minZ, maxZ } = c;
@@ -185,11 +221,11 @@
       const recs = []; STATE.hulls[kind] = {};
       for (const idx of Object.keys(byKind[kind])) {
         const i = +idx, cs = byKind[kind][idx], base = Math.min(...cs.map((c) => c.minY));
-        const perSub = []; let top = -1e9; let sc = 0;
+        const perSub = []; let top = -1e9; let sc = 0; let tilt = 0;
         for (let si = 0; si < subs.length; si++) {
           const o = subs[si]; if (i >= o.count) continue;
           o.getMatrixAt(i, m4); mw.multiplyMatrices(o.matrixWorld, m4);
-          if (si === 0) { const e = mw.elements; sc = Math.hypot(e[0], e[1], e[2]); }
+          if (si === 0) { const e = mw.elements; sc = Math.hypot(e[0], e[1], e[2]); tilt = Math.acos(Math.max(-1, Math.min(1, e[5] / (Math.hypot(e[4], e[5], e[6]) || 1)))) * 180 / Math.PI; }
           const pa = o.geometry.attributes.position, sp = []; let subTop = -1e9;
           for (let k = 0; k < pa.count; k++) {
             v.fromBufferAttribute(pa, k).applyMatrix4(mw);
@@ -225,7 +261,7 @@
         const ctI = contactSet(idealBoxes(bodies), bodies);
 
         const b = setBox(csUse);
-        recs.push({ i, x: r3(b.cx), z: r3(b.cz), base: r3(base), s: r3(sc), bodies: bodies.length, pebbles: groups.length - kept.length, stepColliders: cs.length - csUse.length, pebbleOnly, clip: r3(ct.clip), gapMax: r3(ct.gapMax), gapMean: r3(ct.gapMean), gapIdeal: r3(ctI.gapMax), gapExcess: r3(Math.max(0, ct.gapMax - ctI.gapMax)), visTop: r3(top - base), colTop: r3(b.maxY - base), n: cs.length, worst: ct.worst && ct.worst.map(r3), widest: ct.widest && ct.widest.map(r3) });
+        recs.push({ i, x: r3(b.cx), z: r3(b.cz), base: r3(base), s: r3(sc), tilt: r3(tilt), bodies: bodies.length, pebbles: groups.length - kept.length, stepColliders: cs.length - csUse.length, pebbleOnly, clip: r3(ct.clip), gapMax: r3(ct.gapMax), gapMean: r3(ct.gapMean), gapIdeal: r3(ctI.gapMax), gapExcess: r3(Math.max(0, ct.gapMax - ctI.gapMax)), visTop: r3(top - base), colTop: r3(b.maxY - base), n: cs.length, worst: ct.worst && ct.worst.map(r3), widest: ct.widest && ct.widest.map(r3) });
         STATE.hulls[kind][i] = { H, bodies, tops: kept.map((gr) => gr.top), base, cs: csUse, csAll: cs, keepSubs };
       }
       STATE.subsByKind[kind] = subs;
@@ -241,6 +277,14 @@
         pebblesDropped: ok.reduce((s, r) => s + r.pebbles, 0), stepCollidersSkipped: ok.reduce((s, r) => s + r.stepColliders, 0), pebbleOnly: ok.filter((r) => r.pebbleOnly).length,
         visTopP50: pct(ok.map((r) => r.visTop), 0.5), colTopP50: pct(ok.map((r) => r.colTop), 0.5),
         worstClip: ok.slice().sort((a, b) => b.clip - a.clip).slice(0, 2),
+        // lean: how far the drawn instance's up axis is off vertical (a container laid on a slope leans up to 8 deg while its collider stays level).
+        // clip is split into the level and the leaned (>= 1.5 deg) instances so a leaned minority cannot hide in an all-instance p95
+        lean: (() => {
+          const lv = ok.filter((r) => (r.tilt || 0) < 1.5), ln = ok.filter((r) => (r.tilt || 0) >= 1.5);
+          const part = (a) => ({ n: a.length, p95: pct(a.map((r) => r.clip), 0.95), max: pct(a.map((r) => r.clip), 1), over25: share(a.map((r) => r.clip), (x) => x > 0.25), maxTilt: a.length ? pct(a.map((r) => r.tilt || 0), 1) : null,
+            worst: a.slice().sort((x, y) => y.clip - x.clip).slice(0, 2).map((r) => ({ i: r.i, x: r.x, z: r.z, tilt: r.tilt, clip: r.clip })) });
+          return { level: part(lv), leaned: part(ln) };
+        })(),
       };
     }
     return out;
@@ -251,6 +295,7 @@
     const THREE = await import("three");
     const m = M(), PERK = (opt && opt.perKind) || 8;
     const out = { walk: {}, phantom: {}, bullets: {} };
+    _confirmTHREE = THREE; _confirmRay = new THREE.Raycaster();
     const kinds = Object.keys(STATE.hulls);
     const picked = {};
     for (const kind of kinds) {
@@ -262,6 +307,7 @@
       picked[kind] = [...new Set(pick)];
       // ---- 1. sprint into the prop from 8 angles at 4.5 m (real stepActor); deepest overlap with the drawn base hull
       const res = [];
+      let hullOnly = 0;          // trace points the hull flagged (> 10 cm inside) that the drawn triangles did not confirm (rocks only)
       for (const i of picked[kind]) {
         const hh = STATE.hulls[kind][i]; const [cx, cz] = centroid(hh.H);
         for (let a = 0; a < 8; a++) {
@@ -269,7 +315,12 @@
           place(cx - ux * 4.5, cz - uz * 4.5);
           const tr = walk(ux, uz, 75, true);
           let mn = 9, at = null;
-          for (const q of tr) { if (q[3] || q[1] > hh.base + 1.6 || q[1] + CAPH < hh.base + 0.15) continue; const sd = sdBodiesAt(q[0], q[2], q[1], hh) - R; if (sd < mn) { mn = sd; at = q; } }
+          for (const q of tr) {
+            if (q[3] || q[1] > hh.base + 1.6 || q[1] + CAPH < hh.base + 0.15) continue;
+            const sd = sdBodiesAt(q[0], q[2], q[1], hh) - R;
+            if (sd < -0.10 && CONFIRM_KINDS.has(kind) && !drawnOverlap(kind, i, hh, q[0], q[1], q[2])) { hullOnly++; continue; }
+            if (sd < mn) { mn = sd; at = q; }
+          }
           const last = tr[tr.length - 1];
           res.push({ i, ang: r3(ang), minGap: r3(mn), endGap: r3(sdBodiesAt(last[0], last[2], last[1], hh) - R), onTop: sdBodiesAt(last[0], last[2], last[1], hh) > 1e8, at: at && at.map(r3) });
         }
@@ -289,7 +340,7 @@
       }
       out.phantom[kind] = { runs: ph.length, over30: ph.filter((q) => q.bodyGapToVisual > 0.3).length, gapP50: pct(ph.map((q) => q.bodyGapToVisual), 0.5), gapMax: pct(ph.map((q) => q.bodyGapToVisual), 1), sample: ph.slice(0, 2) };
       const gaps = res.map((r) => r.minGap);
-      out.walk[kind] = { instances: picked[kind].length, runs: res.length, inside10: res.filter((r) => r.minGap < -0.10).length, endInside10: res.filter((r) => r.endGap < -0.10).length,
+      out.walk[kind] = { hullOnlyPoints: hullOnly, instances: picked[kind].length, runs: res.length, inside10: res.filter((r) => r.minGap < -0.10).length, endInside10: res.filter((r) => r.endGap < -0.10).length,
         deepest: r3(-Math.min(...gaps)), minGapP50: pct(gaps, 0.5), widestStop: r3(Math.max(...gaps)), worst: res.slice().sort((a, b) => a.minGap - b.minGap).slice(0, 2) };
     }
     // ---- 3. bullets: the game's swept shot test (segmentColliders on the prop's own colliders) vs the drawn triangles

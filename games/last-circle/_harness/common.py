@@ -827,9 +827,14 @@ class Session:
     def phase(self):
         return self.safe_js("() => window.__LC__ && window.__LC__.W ? window.__LC__.W.phase : null")
 
-    def start_match(self, mode="standard", seed=7, map_id=None, enter=True, timeout_s=None):
+    def start_match(self, mode="standard", seed=7, map_id=None, enter=True, timeout_s=None, guard=False):
         """__LC__.startMatch(...) (resolves when the lobby is shown), then a REAL Enter key press skips the
-        lobby (hud.js finishLobby) so W.phase reaches 'drop' (standard/quick) or 'match' (practice)."""
+        lobby (hud.js finishLobby) so W.phase reaches 'drop' (standard/quick) or 'match' (practice).
+
+        guard=True installs guard_player(True) in the LOBBY, before the Enter press (L4-gates, 2026-10-13): installed after Enter,
+        the human is unprotected for the first drop frames and a bot sniper killed it once in a full hud_cycle run (the drop-phase
+        death that left a [data-lc=death] overlay behind). The guard counts the frames it saw per phase (window.__H_GUARD_N__),
+        so a gate can prove it ran in the lobby AND the drop."""
         self.stage("load")
         timeout_s = timeout_s or getattr(self.args, "load_timeout", 1500)
         opts = {"mode": mode, "seed": seed}
@@ -847,6 +852,8 @@ class Session:
         if err:
             raise HarnessError("startMatch rejected: %s" % err[:400])
         res = {"load_s": round(time.time() - t0, 1), "phaseAfterLoad": self.phase()}
+        if guard:
+            res["guardBeforeEnter"] = self.guard_player(True)
         if enter:
             self.stage("lobby")
             self.sleep(0.3)
@@ -887,7 +894,8 @@ class Session:
             const i = window.__H_GUARD__ ? k._updaters.indexOf(window.__H_GUARD__) : -1;
             if (!on) { if (i >= 0) k._updaters.splice(i, 1); window.__H_GUARD__ = null; return 'off'; }
             if (i >= 0) return 'already';
-            window.__H_GUARD__ = () => { const p = W.player; if (p && p.alive) { if (p.hp < 100) p.hp = 100; if ((p.shield || 0) < 100) p.shield = 100; } };
+            const seen = window.__H_GUARD_N__ = window.__H_GUARD_N__ || {};
+            window.__H_GUARD__ = () => { seen[W.phase] = (seen[W.phase] || 0) + 1; const p = W.player; if (p && p.alive) { if (p.hp < 100) p.hp = 100; if ((p.shield || 0) < 100) p.shield = 100; } };
             k._updaters.push(window.__H_GUARD__); return 'on'; }""", bool(on))
 
     # input

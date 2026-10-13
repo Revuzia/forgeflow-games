@@ -7,6 +7,7 @@
     python _harness/navcheck.py --disk --only rooms --plant nav-l3          # negative controls (each must exit 1)
     python _harness/navcheck.py --disk --only ticks --plant raw-strafe
     python _harness/navcheck.py --disk --only ticks --plant heal-yaw
+    python _harness/navcheck.py --disk --only pockets --plant pocket-raw
 
 One Chrome per map (isla_viva, ashgrid, deepwood; the map load is 5-200 s on this shared box and a load that times out is
 could-not-judge). Per map, two matches:
@@ -16,6 +17,10 @@ could-not-judge). Per map, two matches:
   2. a throwaway match for the door-reachability walk (probe_rooms.js): every ROOM on the map is found from the colliders, then the
      REAL bot controller + physics walks street -> room and room -> street (30 s each way); the game's own planner (bots.js
      debugNav) is asked for the same trips; and long street -> street trips.
+
+  3. the heal-pocket probe (probe_pockets.js, promoted from lane L1's pocket_probe): for EVERY ramp of the map, seeds 1, 7, 1234, a REAL bot (the game's
+     brain + mover) is placed 0.3 m outside each side of the ramp (slab top 0.8 m and 1.4 m over its feet) and under the slab (underside 1.8 m and 2.4 m
+     over its feet), put in HEAL with a threat behind it so the retreat heading points INTO the ramp, and stepped 120 ticks (2 s).
 
 Rows (thresholds from the plan, section 4; baselines re-measured on 7f6a9fb2 in lane 5D's REPORT.md):
   ground-rooms        ground-floor rooms: walk in >= 96 % and walk out >= 96 %   (plan 98 %, Wave 4: 53/53 in, 52/53 out on 53 rooms;
@@ -28,6 +33,15 @@ Rows (thresholds from the plan, section 4; baselines re-measured on 7f6a9fb2 in 
   visible-grind       blocked runs >= 0.5 s <= 1.5 % of indoor movement ticks                         (Wave 4: 5.26 %)
   outdoor-blocked     outdoor blocked share has not regressed vs the Wave-4 baseline (0.72 % on 6 matches; limit 1.5 x)
   heal-direction      heal ticks moving TOWARD a known threat <= 5 %                                  (Wave 4: 34 %; the dead a.yaw write)
+  heal-pockets        (L4-gates 2026-10-13) healing bots tucked against a ramp (side / underside) that end >= 2 m from where they started within
+                      2 s: >= 98 % of the placements (placements the real mover cannot leave in any of 16 directions are walled-in and not counted;
+                      >= 150 counted). The tick rows above see a stuck healer only if it happens in a match: isla_viva seed 7's single healer under a
+                      tower stair stood 147 ticks and read 10.4 % of 1409 indoor HEAL ticks; this row places the healer on purpose, on every ramp
+                      (Wave 5 release: 16.2 % of 2520 placements got out). A build with no C-RAMP (Wave 4: the sim has no rampBlocks, ramp sides and
+                      undersides are walk-through) is judged on geometry-only placements and says so in the detail: 94.0 % there
+  (engage-indoor / heal-indoor divide a rare event by a small sample - 9 standard matches, three per map since 2026-10-13 - so their detail also names the
+  blocked runs >= 30 ticks behind the count, and an INFO row lists the longest ones with where and when: one stall in a small sample is then visible as one event.
+  The bars are unchanged.)
 A row with too few samples is could-not-judge (exit 2), never a pass. Not implemented: "phantom ramp walls <= 2 %" (the plan makes it
 conditional on lane 5B shipping a marched wallAhead probe; the research version re-implements Wave 4's wallAhead formula and so
 cannot judge a changed bots.js).
@@ -39,6 +53,8 @@ Negative controls (--plant; the served files are patched IN MEMORY by a page rou
               target, no look at the walls                   -> engage-indoor must fail
   heal-yaw    every healing bot's input yaw frozen at its heal-start value and mz = -1 (the Wave-4 dead `a.yaw` write: the retreat
               follows the OLD input yaw)                    -> heal-direction must fail
+  pocket-raw  every healing bot's input overwritten after the brains: face the threat, back-pedal straight away from it, no look at the
+              walls (what a retreat that does not see the stair side does)           -> heal-pockets must fail
 In plant mode only the designated rows count: exit 1 = the planted fault was detected, exit 0 = the gate is blind to it.
 
 Exit 0 pass / 1 fail / 2 could-not-judge.
@@ -59,6 +75,8 @@ import common as C  # noqa: E402
 GATE = "navcheck"
 ROOMS_JS = os.path.join(C.HERE, "probe_rooms.js")
 TICKS_JS = os.path.join(C.HERE, "probe_ticks.js")
+POCKETS_JS = os.path.join(C.HERE, "probe_pockets.js")
+POCKET_SEEDS = [1, 7, 1234]       # three of the five placement-census seeds, every map (the probe is ~1 s a build once the match is loaded)
 # (tick-match seed, walk-match seeds) per map: seeds the research lane used on that map
 SEEDS = {"isla_viva": (7, [7, 1]), "ashgrid": (5, [11, 5]), "deepwood": (13, [13, 23])}
 
@@ -81,10 +99,13 @@ MIN_ENGAGE_INTENT = 300
 MIN_HEAL_INTENT = 150
 MIN_HEAL_THREAT = 300
 MIN_INDOOR_INTENT = 3000
+POCKET_MIN = 0.98             # heal-pockets: placements whose healer ends >= 2 m away within 2 s / counted placements
+POCKET_MIN_TRIALS = 150
 
 PLANT_ROWS = {"nav-l3": {"top-floor-paths", "upper-rooms"}, "raw-strafe": {"engage-indoor"}, "heal-yaw": {"heal-direction"},
+              "pocket-raw": {"heal-pockets"},
               "nav-l6": {"top-floor-paths"}}   # nav-l6 = a POSITIVE control for calibration (Wave-4 bots.js with 6 layers): its row must PASS
-PLANT_ONLY = {"nav-l3": "rooms", "raw-strafe": "ticks", "heal-yaw": "ticks", "nav-l6": "rooms"}
+PLANT_ONLY = {"nav-l3": "rooms", "raw-strafe": "ticks", "heal-yaw": "ticks", "pocket-raw": "pockets", "nav-l6": "rooms"}
 
 # the hook the raw-strafe / heal-yaw plants ride on: simTick calls it between the brains and the mover
 HOOK_ANCHOR = "botsMod.update(W, h);"
@@ -107,6 +128,11 @@ PLANT_INIT = r"""
         let mz = 0;
         if (tp) { const d = Math.hypot(tp.x - a.pos.x, tp.z - a.pos.z); mz = d > 37 ? 1 : d < 12.5 ? -0.7 : 0; }
         inp.mx = sd; inp.mz = mz; inp.jump = false;
+      } else if (mode === 'pocket-raw' && b.state === 'HEAL' && a.healing) {
+        // a retreat that does not look at the walls: face the threat and back-pedal straight away from it (forward = (-sin yaw, -cos yaw))
+        const tp = b.bb && b.bb.targetPos;
+        if (tp) inp.yaw = Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z));
+        inp.mz = -1; inp.mx = 0; inp.jump = false;
       } else if (mode === 'heal-yaw' && b.state === 'HEAL' && a.healing) {
         if (!stale.has(a.id)) stale.set(a.id, inp.yaw);
         inp.yaw = stale.get(a.id); inp.mz = -1; inp.mx = 0;
@@ -174,6 +200,11 @@ def install_plant(s, args, plant):
     return "ffg_royale3d.js served with a post-brains hook; mode %s" % plant
 
 
+def wrap_pockets():
+    src = open(POCKETS_JS, encoding="utf-8").read()
+    return "(arg) => { return (" + src[src.index("async ("):] + ")(arg); }"
+
+
 def measure_map(v, args, map_id, lib, rooms_body, ticks_src):
     res = {"map": map_id}
     t0 = time.time()
@@ -220,6 +251,21 @@ def measure_map(v, args, map_id, lib, rooms_body, ticks_src):
                     json.dumps(w.get("upperIn")), json.dumps(w.get("upperOut")), json.dumps(w.get("topIn")), json.dumps(w.get("topOut")),
                     (w.get("long") or {}).get("ok"), (w.get("long") or {}).get("n")), flush=True)
                 res["rooms"].append(r)
+        if only in (None, "pockets"):
+            res["pockets"] = []
+            psrc = wrap_pockets()
+            for seed in POCKET_SEEDS:
+                st = s.start_match("standard", seed, map_id, enter=True)
+                s.freeze_loop()
+                t1 = time.time()
+                r = s.page.evaluate(psrc, {"ticks": 120, "minDisp": 2.0, "rows": False})
+                if r.get("error"):
+                    raise C.HarnessError("pocket probe: %s" % r["error"])
+                r["seed"] = seed
+                print("  [%s] pockets seed %d loaded in %s s: ramps %s, %s trials, %s escaped, %s walled-in, %s failed, %s with a blocked run >= 30 ticks, %s dead-bot trials%s, %s s wall" % (
+                    map_id, seed, st.get("load_s"), r.get("ramps"), r.get("trials"), r.get("ok"), r.get("notEscapable"), r.get("fails"), r.get("longRuns"), r.get("invalid"),
+                    " (NO C-RAMP in this build: geometry-only placements)" if r.get("noCRamp") else "", round(time.time() - t1, 1)), flush=True)
+                res["pockets"].append(r)
         d = s.diagnostics()
         res["problems"] = C.diag_problems(d, rig=False)
         res["diag"] = {k: (x[:6] if isinstance(x, list) else x) for k, x in d.items()}
@@ -299,6 +345,37 @@ def judge(v, per_map, args, plant_rows):
                 json.dumps(x.get("roomsByLevel")), pl.get("exitOk"), pl.get("rooms"), pl.get("inOk"), pl.get("inTried"), x.get("pockets"),
                 (x.get("doors") or {}).get("n"), (x.get("doors") or {}).get("headroomLow"), (x.get("doors") or {}).get("widthLow")))
 
+    # ---------------- pockets
+    pk = [(m, r) for m in maps for r in (per_map[m].get("pockets") or [])]
+    no_cramp = bool(pk) and any(r.get("noCRamp") for _, r in pk)
+    if pk and sum(r.get("invalid", 0) for _, r in pk):
+        cnj("heal-pockets", "the test bot died in %d trials (%s): a measurement failure, not a verdict (the old probe read these as walled-in)" % (
+            sum(r.get("invalid", 0) for _, r in pk), ", ".join("%s s%s %d" % (m, r.get("seed"), r["invalid"]) for m, r in pk if r.get("invalid"))))
+        pk = []
+    if pk:
+        n = sum(r.get("trials", 0) for _, r in pk)
+        ok = sum(r.get("ok", 0) for _, r in pk)
+        walled = sum(r.get("notEscapable", 0) for _, r in pk)
+        counted = n - walled
+        grind = sum(r.get("longRuns", 0) for _, r in pk)
+        if counted >= POCKET_MIN_TRIALS:
+            fails = ["%s s%s ramp %s %s T=%s hs=%s at (%.1f, %.1f, %.1f): moved %s m, blocked %s ticks (longest run %s)" % (
+                m, r.get("seed"), x["ramp"], x["kind"], x.get("tgt"), x.get("hs"), x["x"], x["y"], x["z"], x.get("disp"), x.get("blocked"), x.get("maxRun")) for m, r in pk for x in (r.get("failRows") or [])[:3]]
+            chk("heal-pockets", ok / counted >= POCKET_MIN, "%s%d of %d counted placements ended >= 2 m from where the healer started within 2 s (%.2f%%); %d walled-in placements not counted; %d placements on %d ramps in %d builds; %d had a blocked run >= 30 ticks%s" % (
+                ("NO C-RAMP in this build (the sim has no rampBlocks: ramp sides and undersides are walk-through), so these are geometry-only placements beside a stair, not pockets, and the misses are other stalls; " if no_cramp else ""),
+                ok, counted, 100.0 * ok / counted, walled, n, sum(r.get("ramps", 0) for _, r in pk), len(pk), grind, (" ; e.g. " + " | ".join(fails[:3])) if ok / counted < POCKET_MIN else ""), ">= 98 %")
+            by = {}
+            for _, r in pk:
+                for k, e in (r.get("byKind") or {}).items():
+                    a = by.setdefault(k.rsplit(":hs", 1)[0], [0, 0, 0])
+                    a[0] += e["n"]; a[1] += e["ok"]; a[2] += e["notEscapable"]
+            v.info("heal-pockets by placement (slab top T over the feet for a side, headroom for under)", " ; ".join("%s %d/%d escaped%s" % (k, a[1], a[0] - a[2], (" (+%d walled-in)" % a[2]) if a[2] else "") for k, a in sorted(by.items())))
+            for m, r in pk:
+                v.info("pockets %s seed %s" % (m, r.get("seed")), "ramps %s, placements %s (skipped %s), trials %s, escaped %s, walled-in %s, failed %s, runs >= 30 ticks %s" % (
+                    r.get("ramps"), r.get("placements"), json.dumps(r.get("skipped")), r.get("trials"), r.get("ok"), r.get("notEscapable"), r.get("fails"), r.get("longRuns")))
+        else:
+            cnj("heal-pockets", "only %d counted placements (%d trials, %d walled-in; need >= %d)" % (counted, n, walled, POCKET_MIN_TRIALS))
+
     # ---------------- ticks
     tk = [(m, t) for m in maps for t in (per_map[m].get("ticks") or [])]
     if tk:
@@ -313,12 +390,19 @@ def judge(v, per_map, args, plant_rows):
         blocked_out = sum(t["blocked"].get("out", 0) for _, t in tk)
         ei, eb = sl("intentSL", "ENGAGE"), sl("blockedRunSL", "ENGAGE")
         hi, hb = sl("intentSL", "HEAL"), sl("blockedRunSL", "HEAL")
+
+        def runs_note(st):
+            # the blocked runs >= 30 ticks (0.5 s) of this state indoors: how many, and the longest, so a single stall is visible as one event
+            n30 = sum(t.get("runsGE30SL", {}).get(st + "@" + k, 0) for _, t in tk for k in IN)
+            n6 = sum(t.get("runsGE6SL", {}).get(st + "@" + k, 0) for _, t in tk for k in IN)
+            longest = max([r["n"] for _, t in tk for r in t.get("longRuns", []) if r["st"] == st and r["loc"] in IN] or [0])
+            return "; %d blocked runs >= 6 ticks, %d >= 30 ticks (longest %d ticks)" % (n6, n30, longest)
         if ei >= MIN_ENGAGE_INTENT:
-            chk("engage-indoor", eb / ei <= BLOCKED_MAX, "ENGAGE ticks indoors: %d of %d blocked (%.2f%%)" % (eb, ei, 100.0 * eb / ei), "<= 1.5 %")
+            chk("engage-indoor", eb / ei <= BLOCKED_MAX, "ENGAGE ticks indoors: %d of %d blocked (%.2f%%)%s" % (eb, ei, 100.0 * eb / ei, runs_note("ENGAGE")), "<= 1.5 %")
         else:
             cnj("engage-indoor", "only %d indoor ENGAGE movement ticks (need >= %d): add --tick-matches" % (ei, MIN_ENGAGE_INTENT))
         if hi >= MIN_HEAL_INTENT:
-            chk("heal-indoor", hb / hi <= BLOCKED_MAX, "HEAL ticks indoors: %d of %d blocked (%.2f%%)" % (hb, hi, 100.0 * hb / hi), "<= 1.5 %")
+            chk("heal-indoor", hb / hi <= BLOCKED_MAX, "HEAL ticks indoors: %d of %d blocked (%.2f%%)%s" % (hb, hi, 100.0 * hb / hi, runs_note("HEAL")), "<= 1.5 %")
         else:
             cnj("heal-indoor", "only %d indoor HEAL movement ticks (need >= %d): add --tick-matches" % (hi, MIN_HEAL_INTENT))
         if intent_in >= MIN_INDOOR_INTENT:
@@ -344,6 +428,16 @@ def judge(v, per_map, args, plant_rows):
                 a = keys.setdefault(k, [0, 0, 0]); a[0] += n; a[1] += t["blockedSL"].get(k, 0); a[2] += t["runTicksGE30SL"].get(k, 0)
         rows = sorted(keys.items(), key=lambda kv: -kv[1][0])[:18]
         v.info("state@location (intent / blocked % / grind-run %)", " ; ".join("%s %d / %.1f%% / %.1f%%" % (k, a[0], 100.0 * a[1] / max(1, a[0]), 100.0 * a[2] / max(1, a[0])) for k, a in rows))
+        # a single stall in a small sample, made visible: blocked runs >= 30 ticks per state, and the longest ones with where / when
+        r30 = {}
+        for _, t in tk:
+            for k, n in t.get("runsGE30SL", {}).items():
+                if k.split("@")[-1] in IN:
+                    r30[k] = r30.get(k, 0) + n
+        v.info("indoor blocked runs >= 30 ticks per state@location (a run = one bot blocked 0.5 s or more)", ", ".join("%s %d" % (k, n) for k, n in sorted(r30.items(), key=lambda kv: -kv[1])) or "none")
+        longest = sorted([dict(r, m=m, seed=t["summary"]["seed"]) for m, t in tk for r in t.get("longRuns", []) if r["loc"] in IN], key=lambda r: -r["n"])
+        v.info("longest indoor blocked runs", " ; ".join("%s s%s %s@%s %d ticks (%.1f s) from t %s at (%s, %s, %s) hp %s -> %s" % (
+            r["m"], r["seed"], r["st"], r["loc"], r["n"], r["n"] / 60.0, r["t0"], r["x"], r["y"], r["z"], r["hp"], r["endSt"]) for r in longest[:6]) or "none >= 30 ticks")
         v.info("blocked causes", json.dumps({k: sum(t["cause"].get(k, 0) for _, t in tk) for k in sorted({k for _, t in tk for k in t["cause"]})}))
         v.info("jumps by state@location (fight hops under a roof)", json.dumps({k: sum(t["jumpsSL"].get(k, 0) for _, t in tk) for k in sorted({k for _, t in tk for k in t["jumpsSL"]}) if "@in_" in k}))
         for m, t in tk:
@@ -391,10 +485,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
     ap.add_argument("--maps", default=None, help="comma list (default: all three)")
-    ap.add_argument("--only", choices=["ticks", "rooms"], default=None, help="run one half only")
+    ap.add_argument("--only", choices=["ticks", "rooms", "pockets"], default=None, help="run one half only")
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--tick-seed", type=int, default=None, help="override the standard-match seed of the tick metric (all maps)")
-    ap.add_argument("--tick-matches", type=int, default=2, help="standard matches per map for the tick metric (seed, seed+1, ...)")
+    ap.add_argument("--tick-matches", type=int, default=3, help="standard matches per map for the tick metric (seed, seed+1, seed+2); 3 since 2026-10-13 (2 before): "
+                    "a tick match is ~5 s of wall, so 9 matches are ~15 s more than 6 and the indoor HEAL sample grows by half (1409 ticks over 6 matches was one stall of 147)")
     ap.add_argument("--walk-seeds", default=None, help="comma list of walk-match seeds (all maps)")
     ap.add_argument("--walk-matches", type=int, default=2, help="walk matches per map (the first N seeds of the map's list)")
     ap.add_argument("--max-upper", type=int, default=40, help="upper-floor rooms walked per match")

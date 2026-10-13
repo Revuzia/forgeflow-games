@@ -7,7 +7,9 @@
 //             recomputed every 30 ticks per bot. roofEdge = a roof/no-roof change within 1.6 m (the old probe called this "door")
 //   blocked = horizontal displacement this tick < 0.01 m
 //   cause   = "wall" (a non-ramp collider overlapping the walk band within 0.65 m) | "actor" (another live actor within 1 m) | "other"
-//   runs    = contiguous blocked ticks per bot; a run of >= 30 ticks (0.5 s) is a VISIBLE grind (a player sees a bot run into a wall)
+//   runs    = contiguous blocked ticks per bot; a run of >= 30 ticks (0.5 s) is a VISIBLE grind (a player sees a bot run into a wall).
+//             runsGE6SL / runsGE30SL count the RUNS per state@loc (not their ticks) and longRuns lists the 16 longest with where and when,
+//             so one stall in a small sample is visible as one event (L4-gates 2026-10-13: heal-indoor read 10.4 % from a single 147-tick run)
 //   state   = the brain state of the tick (ENGAGE, HEAL, LOOT, ...): every counter is also kept per state@loc
 // HEAL direction: for a healing bot with a known threat (bb.targetPos), is the per-tick displacement AWAY from the threat (dot > 0.3),
 // TOWARD it (dot < -0.3) or sideways / still?
@@ -55,15 +57,20 @@ async (opt) => {
   };
   const inc = (o, k, n) => { o[k] = (o[k] || 0) + (n || 1); };
   const R = { intent: {}, blocked: {}, cause: {}, intentSL: {}, blockedSL: {}, blockedRunSL: {}, blockedEdgeSL: {}, causeSL: {}, runHist: {}, runTicksGE30: {}, runTicksGE30SL: {}, runTicksGE90: {},
+    runsGE6SL: {}, runsGE30SL: {}, longRuns: [],
     jumpsSL: {}, heal: { ticks: 0, withThreat: 0, away: 0, toward: 0, still: 0, side: 0, ticksIn: 0, withThreatIn: 0, awayIn: 0, towardIn: 0 } };
   const loc = new Map(), prev = new Map(), run = new Map();
   let tickN = 0;
-  const closeRun = (id) => {
+  const closeRun = (id, endSt) => {
     const r = run.get(id); if (!r) return;
     const L = r.n, k = r.loc;
     inc(R.runHist, k + ":" + (L < 6 ? "1-5" : L < 30 ? "6-29" : L < 90 ? "30-89" : "90+"));
-    if (L >= 6) inc(R.blockedRunSL, r.st + "@" + k, L);   // F3: blocked ticks that belong to a run of >= 6 ticks (0.1 s): a one-tick pause at a strafe reversal is not a wall
-    if (L >= 30) { inc(R.runTicksGE30, k, L); inc(R.runTicksGE30SL, r.st + "@" + k, L); }
+    if (L >= 6) { inc(R.blockedRunSL, r.st + "@" + k, L); inc(R.runsGE6SL, r.st + "@" + k); }   // F3: blocked ticks that belong to a run of >= 6 ticks (0.1 s): a one-tick pause at a strafe reversal is not a wall
+    if (L >= 30) {
+      inc(R.runTicksGE30, k, L); inc(R.runTicksGE30SL, r.st + "@" + k, L); inc(R.runsGE30SL, r.st + "@" + k);
+      const e = { id, st: r.st, endSt: endSt || r.st, loc: k, n: L, t0: +r.t0.toFixed(1), x: +r.x.toFixed(2), y: +r.y.toFixed(2), z: +r.z.toFixed(2), hp: Math.round(r.hp) };
+      R.longRuns.push(e); R.longRuns.sort((p, q) => q.n - p.n); if (R.longRuns.length > 16) R.longRuns.length = 16;
+    }
     if (L >= 90) inc(R.runTicksGE90, k, L);
     run.delete(id);
   };
@@ -75,7 +82,7 @@ async (opt) => {
     tickN++;
     for (const b of brains) {
       const a = b.actor, id = a.id;
-      if (!a.alive || a.gliding) { prev.delete(id); closeRun(id); continue; }
+      if (!a.alive || a.gliding) { prev.delete(id); closeRun(id, b.state); continue; }
       if (tickN % 30 === 0 || !loc.has(id)) loc.set(id, locOf(a));
       const p = prev.get(id);
       const want = Math.abs(a.input.mz || 0) + Math.abs(a.input.mx || 0) > 0.1 && !a.emoting && a.mantleT == null;
@@ -88,8 +95,8 @@ async (opt) => {
           if (L0.edge) inc(R.blockedEdgeSL, sl);
           const cause = wallNear(a) ? "wall" : actorNear(a) ? "actor" : "other";
           inc(R.cause, k + ":" + cause); inc(R.causeSL, sl + ":" + cause);
-          const r = run.get(id); if (r) r.n++; else run.set(id, { n: 1, loc: k, st: b.state });
-        } else closeRun(id);
+          const r = run.get(id); if (r) r.n++; else run.set(id, { n: 1, loc: k, st: b.state, t0: W.t, x: a.pos.x, y: a.pos.y, z: a.pos.z, hp: a.hp });
+        } else closeRun(id, b.state);
         if (b.state === "HEAL" && a.healing) {
           R.heal.ticks++; if (k !== "out") R.heal.ticksIn++;
           const tp = b.bb.targetPos;
@@ -105,7 +112,7 @@ async (opt) => {
             }
           }
         }
-      } else closeRun(id);
+      } else closeRun(id, b.state);
       if (p) { p.x = a.pos.x; p.z = a.pos.z; } else prev.set(id, { x: a.pos.x, z: a.pos.z });
     }
   };
@@ -116,7 +123,7 @@ async (opt) => {
       if (W.match && W.match.over) break;
     }
   } finally { W._tickHook = prevHook; window.__navGen++; }
-  for (const id of [...run.keys()]) closeRun(id);
+  for (const id of [...run.keys()]) closeRun(id, byId.get(id) && byId.get(id).state);
   const pct = (a, b) => (b ? +(100 * a / b).toFixed(2) : null);
   const sum = (o, keys) => keys.reduce((s, k) => s + (o[k] || 0), 0);
   const IN = ["in_ground", "in_upper"];

@@ -4,6 +4,8 @@
     python _harness/collisioncheck.py --disk                    # the working copy (the integration run)
     python _harness/collisioncheck.py --rev 7f6a9fb2            # a frozen commit: the must-fail proof on Wave 4 (the registered negative control)
     python _harness/collisioncheck.py --disk --maps isla_viva --quick
+    python _harness/collisioncheck.py --disk --plant container-narrow    # negative controls (each must exit 1)
+    python _harness/collisioncheck.py --disk --plant rocks-small
 
 One Chrome per map (map load 58-197 s on this shared box; a load that times out is could-not-judge, never a pass). In a PRACTICE
 match (the player is the only actor) it drives the game's REAL movement (stepActor through C.fastForward) and the game's REAL
@@ -19,6 +21,16 @@ rotated-wall rows come from the Node census (placement_census.mjs: every box map
   sprints        real sprints into props from 8 angles: the body ends > 10 cm inside the drawn mesh in <= 2 % of runs (Wave 4: 52 %); a point
                  counts only while the feet are below the body's top - 0.10 m (stepping onto a low rock is not walking through it) and not in
                  a mantle
+  container-lean (L4-gates 2026-10-13) containers, level (< 1.5 deg off vertical) and leaned (>= 1.5 deg: maps.js lays a container on a slope at
+                 up to 8 deg while its collider stays level) apart: clip p95 <= 0.10 m and > 25 cm in < 5 % in each group on every map. The all-kind
+                 clip row has the same limits; this row names the leaned minority so it cannot hide in an all-instance p95 (Wave 5 release: ashgrid
+                 containers p95 0.15 m, 6 of 64 container sprints end inside)
+  sprints-rocks  (L4-gates 2026-10-13) real sprints into ROCKS end > 10 cm inside the drawn mesh in <= 1 % of runs (192 runs: at most 1). The 2 % bar of
+                 the sprints row is over all kinds, so it hid the rocks. A point the convex hull flags counts only when the DRAWN triangles confirm it (a rock is
+                 not convex: standing on a low shoulder of a cluster, or crossing an open angle of its hull, read 0.4-0.8 m "inside" with no drawn solid under the
+                 capsule; see probe_collision.js drawnOverlap): the capsule's centre column under a surface more than 0.10 m above the feet, or a wall higher than
+                 the step height inside the capsule's rim. Wave-5 release: 2 of 192 (isla_viva rock 11, 2 angles, 1.19 m deep: a 0.40 m part beside a 1.07 m rock
+                 is a staircase the mover accepts, then the capsule walks off the step box and sinks into the tall box); the hull-only count was 16
   phantom-rocks  walking at a rock collider on open ground: 0 stops > 0.3 m from a drawn rock (Wave 4: every one)
   bullets        the game's shot test vs the drawn triangles at body height, over the rays that hit either: box kinds (container) agree on
                  >= 85 %; hull kinds on >= what the tightest axis-aligned boxes of the same mesh score on the same rays - 10 points
@@ -45,6 +57,7 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
@@ -56,6 +69,9 @@ CLIP_P95 = 0.10
 CLIP25_MAX = 0.05
 GAP_P95 = 0.15          # gap row: p95 of the collider standoff in EXCESS of what the tightest axis-aligned boxes of the same mesh would have (see judge())
 SPRINT_MAX = 0.02
+ROCK_SPRINT_MAX = 0.01   # sprints-rocks: rocks only, half the all-kind bar (192 runs -> at most 1)
+ROCK_SPRINT_MIN_RUNS = 60
+LEAN_MIN_DEG = 1.5       # probe_collision.js props(): a drawn instance leaning >= this is "leaned"
 PHANTOM_MAX = 0
 # bullets: the game's shot test vs the drawn triangles at body height. The plan's C-COLL contract keeps every collider an axis-aligned box, and
 # a box cannot match a round trunk, a rock or a car hull (the corners are solid to the shot test, the mesh is not). So:
@@ -72,6 +88,13 @@ ROT_GAP = 0.5
 LIP_MAX = 0.10
 DOOR_MIN = 0.99
 MIN_KIND_N = 5
+# negative controls (--plant): the rows that must FAIL, and the prop kind whose baked collider table is edited in memory (served through a page route;
+# no file is touched). container-narrow: container boxes 0.30 m narrower than the drawn body on each side (what a leaned container does to a level box);
+# rocks-small: every rock box shrunk to 35 % of its outline, so the capsule walks into the drawn rock.
+PLANTS = {"container-narrow": {"container-lean"}, "rocks-small": {"sprints-rocks"}}
+PLANT_KIND = {"container-narrow": "container", "rocks-small": "rocks"}
+PLANT_SKIP = "doors,walls,ramps,falls"       # a plant run needs props + live only
+PLANT_MAPS = "ashgrid"                       # containers and rocks are both plentiful there
 
 
 def f(v, nd=3):
@@ -83,11 +106,81 @@ def read_probe():
         return fh.read()
 
 
+class PlantView:
+    """Verdict wrapper for --plant: only the designated rows count (exit 1 = the planted fault was seen); every other row is printed as information."""
+
+    def __init__(self, v, rows):
+        self._v, self._rows = v, rows
+
+    def check(self, name, ok, detail="", expect=None):
+        if name in self._rows:
+            return self._v.check(name, ok, detail, expect)
+        self._v.info(name + " (not counted in plant mode)", detail)
+        return ok
+
+    def cnj(self, name, why):
+        return self.check(name, None, why)
+
+    def __getattr__(self, k):
+        return getattr(self._v, k)
+
+
+def shrink_part(p, kind_plant):
+    """Edit one baked collider part in place for the planted fault (table metres at it.s = 1)."""
+    if kind_plant == "container-narrow":
+        if p.get("t") == "rect":
+            p["h"] = [p["h"][0], max(0.2, p["h"][1] - 0.30)]     # the width only: h[0] (the length) also spaces the stacks in maps.js, which the plant must not move
+    elif kind_plant == "rocks-small":
+        def pull(poly):
+            cx = sum(q[0] for q in poly) / len(poly)
+            cz = sum(q[1] for q in poly) / len(poly)
+            return [[cx + (q[0] - cx) * 0.35, cz + (q[1] - cz) * 0.35] for q in poly]
+        if p.get("t") == "hull":
+            p["hull"] = pull(p["hull"])
+            for e in p.get("byScale") or []:
+                e["hull"] = pull(e["hull"])
+        elif p.get("t") == "round":
+            p["r"] = p["r"] * 0.35
+        elif p.get("t") == "rect":
+            p["h"] = [h * 0.35 for h in p["h"]]
+
+
+def install_plant(s, args, plant):
+    """Serve assets/props/prop_colliders.json with the planted kind's parts edited (in memory, by a page route); needs --disk or --rev."""
+    rel = "assets/props/prop_colliders.json"
+    if args.rev:
+        b = s.disk.git.read(rel)
+    else:
+        with open(os.path.join(C.ROOT, rel.replace("/", os.sep)), "rb") as fh:
+            b = fh.read()
+    if b is None:
+        raise C.EnvFailure("plant: %s is not in the served tree" % rel)
+    table = json.loads(b.decode("utf-8"))
+    kind = PLANT_KIND[plant]
+    k = (table.get("kinds") or {}).get(kind)
+    if not k or not k.get("parts"):
+        raise C.EnvFailure("plant %s: the baked table has no %s parts" % (plant, kind))
+    before = json.dumps(k["parts"])
+    for part in k["parts"]:
+        shrink_part(part, plant)
+    if json.dumps(k["parts"]) == before:
+        raise C.EnvFailure("plant %s: the %s parts were not changed (unknown part shape)" % (plant, kind))
+    body = json.dumps(table).encode("utf-8")
+    s.disk.overrides.append((lambda url: urllib.parse.urlparse(url).path.endswith("/" + rel),
+                             lambda route: route.fulfill(status=200, body=body, headers={"Content-Type": "application/json", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})))
+    return "prop_colliders.json served with the %s parts edited (%s)" % (kind, plant)
+
+
 def measure_map(v, args, map_id, src, quick):
     """One Chrome, one PRACTICE match, every in-page probe. Returns the raw measurements for the map."""
     res = {"map": map_id, "seed": args.seed}
     t0 = time.time()
     with C.Session(args, "collision_" + map_id, viewport={"width": 960, "height": 600}) as s:
+        if args.plant:                   # BEFORE boot: the page fetches the table during startMatch, through the route
+            if not (args.disk or args.rev):
+                raise C.EnvFailure("--plant needs --disk or --rev (it patches the served table)")
+            res["plant"] = install_plant(s, args, args.plant)
+            print("  [%s] plant %s: %s" % (map_id, args.plant, res["plant"]), flush=True)
         s.boot()
         s.freeze_loop()
         st = s.start_match(mode="practice", seed=args.seed, map_id=map_id)
@@ -157,6 +250,30 @@ def judge(v, per_map, rot, args):
         v.check("gap", not bad_gap, "collider standoff beyond the tightest axis-aligned box <= %.2f m at p95, all %d (map,kind) pairs" % (GAP_P95, seen) if not bad_gap else " | ".join(bad_gap), "excess p95 <= 0.15 m")
         v.info("per kind clip / gap", " ;; ".join(rows))
 
+    # ---- container-lean: the container clip, level and leaned instances apart (the all-kind clip row has the same limits)
+    lean_rows, lean_bad, lean_seen, lean_n = [], [], 0, 0
+    for m in maps:
+        k = ((per_map[m].get("props") or {}).get("kinds") or {}).get("container")
+        if not k or k["measured"] < MIN_KIND_N or not k.get("lean"):
+            continue
+        lean_seen += 1
+        for tag in ("level", "leaned"):
+            g = k["lean"].get(tag) or {}
+            if not g.get("n"):
+                continue
+            lean_n += g["n"] if tag == "leaned" else 0
+            lean_rows.append("%s:%s n %d clip p95 %s max %s over25 %s%%%s" % (m, tag, g["n"], f(g["p95"], 2), f(g["max"], 2), f(100 * (g["over25"] or 0), 0),
+                             (" max tilt %s deg" % f(g["maxTilt"], 1)) if tag == "leaned" else ""))
+            if (g["p95"] or 0) > CLIP_P95 or (g["over25"] or 0) >= CLIP25_MAX:
+                lean_bad.append("%s %s containers (n %d%s): clip p95 %s m, max %s m, %s%% > 25 cm; worst %s" % (m, tag, g["n"], (", up to %s deg off vertical" % f(g["maxTilt"], 1)) if tag == "leaned" else "",
+                                 f(g["p95"], 2), f(g["max"], 2), f(100 * (g["over25"] or 0), 0), json.dumps(g.get("worst"))[:160]))
+    if lean_seen:
+        v.check("container-lean", not lean_bad, ("container clip into the drawn body <= %.2f m at p95, < 5%% over 25 cm, level and leaned apart, %d maps; %d containers lean >= %.1f deg" % (CLIP_P95, lean_seen, lean_n, LEAN_MIN_DEG)) if not lean_bad else " | ".join(lean_bad),
+                "p95 <= 0.10 m, > 25 cm in < 5 %, level and leaned")
+        v.info("container clip by lean", " ;; ".join(lean_rows))
+    else:
+        v.cnj("container-lean", "no container with a lean split was measured (>= %d containers on a map needed)" % MIN_KIND_N)
+
     # ---- sprints / phantom / bullets
     runs = inside = 0
     kinds = {}
@@ -168,6 +285,20 @@ def judge(v, per_map, rot, args):
         v.check("sprints", inside / runs <= SPRINT_MAX, "%d of %d sprints (%.1f%%) ended > 10 cm inside the drawn mesh (limit %d%%); by kind %s" % (inside, runs, 100.0 * inside / runs, 100 * SPRINT_MAX, ", ".join("%s %d/%d" % (k, a[1], a[0]) for k, a in sorted(kinds.items()))), "<= 2 %")
     else:
         v.cnj("sprints", "no sprint was run")
+    # ---- sprints-rocks: rocks alone (the all-kind row above is 2 % over every kind; rocks were 16 of 192 there while the other kinds read 0)
+    rr = ri = 0
+    rock_by = []
+    for m in maps:
+        w = ((per_map[m].get("live") or {}).get("walk") or {}).get("rocks")
+        if w:
+            rr += w["runs"]; ri += w["inside10"]
+            rock_by.append("%s %d/%d (deepest %s m)" % (m, w["inside10"], w["runs"], f(w.get("deepest"), 2)))
+    if rr >= ROCK_SPRINT_MIN_RUNS:
+        hull_only = sum((((per_map[m].get("live") or {}).get("walk") or {}).get("rocks") or {}).get("hullOnlyPoints", 0) for m in maps)
+        v.check("sprints-rocks", ri / rr <= ROCK_SPRINT_MAX, "%d of %d rock sprints (%.2f%%) ended > 10 cm inside the drawn rock (limit %d%%): %s; %d hull-flagged trace points were not confirmed by the drawn triangles (standing on a shoulder / over an open angle of the hull)" % (
+            ri, rr, 100.0 * ri / rr, round(100 * ROCK_SPRINT_MAX), ", ".join(rock_by), hull_only), "<= 1 %")
+    else:
+        v.cnj("sprints-rocks", "only %d rock sprints were run (need >= %d)" % (rr, ROCK_SPRINT_MIN_RUNS))
     pr = po = 0
     pother = []
     for m in maps:
@@ -264,12 +395,24 @@ def judge(v, per_map, rot, args):
 
 
 def main_fn(v, args):
+    plant_rows = None
+    if args.plant:
+        if args.plant not in PLANTS:
+            raise C.HarnessError("unknown --plant %r (known: %s)" % (args.plant, ", ".join(sorted(PLANTS))))
+        plant_rows = PLANTS[args.plant]
+        args.maps = args.maps or PLANT_MAPS
+        args.skip = args.skip or PLANT_SKIP
+        print("%s: PLANT MODE %s - only %s count; exit 1 = the planted fault was detected (maps %s, skipping %s)" % (GATE, args.plant, sorted(plant_rows), args.maps, args.skip), flush=True)
+        v = PlantView(v, plant_rows)
     maps = [m for m in (args.maps or ",".join(C.MAPS)).split(",") if m]
     src = read_probe()
     v.data["seed"] = args.seed
+    v.data["plant"] = args.plant
     # Node census: the rotated-wall rows (no browser)
     rot = {}
     try:
+        if args.plant:
+            raise C.EnvFailure("skipped in plant mode")
         root, label = C.ROOT, "working copy"
         if args.rev:
             root, sha = PC.rev_root(args.rev)
@@ -280,7 +423,10 @@ def main_fn(v, args):
         v.data["rotWalls"] = rot
         print("%s: rotated walls from the Node census (%s): %s" % (GATE, label, {m: (r["owned"], r["gapMax"]) for m, r in rot.items()}), flush=True)
     except C.EnvFailure as e:
-        v.cnj("rotated-walls census", str(e))
+        if args.plant:
+            v.info("rotated-walls census", str(e))
+        else:
+            v.cnj("rotated-walls census", str(e))
     per_map = {}
     for m in maps:
         try:
@@ -312,6 +458,7 @@ def main():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--quick", action="store_true", help="fewer instances / runs per section (development)")
     ap.add_argument("--skip", default="", help="comma list of sections to skip: props,live,doors,walls,ramps,falls")
+    ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANTS)))
     args = ap.parse_args()
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)
 

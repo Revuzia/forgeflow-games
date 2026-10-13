@@ -23,6 +23,9 @@ shared box), each as its own process with the same --base / --disk / --rev / --h
   and the Wave-5 fix-round gates promoted from the lanes' scratch probes (lane F1, 2026-10-13; each also FAILS on 7f6a9fb2):
     worldcheck (Node only, runs second: baked table current, deterministic builds, GLB-failure / table-404 paths, RNG stream vs Wave 4)
     worldlive (one Chrome per map: chests, every ramp, ranger towers, ramp sides, fine fall scan, crosshair)
+  and the leftovers-round rows (lane L4-gates, 2026-10-13; each FAILS on the Wave-5 release 3fce7529 and on 7f6a9fb2; heal-pockets reads 94.0 % there on geometry-only
+  placements: the Wave-4 sim has no ramp-side collision, so no healer can be pocketed and the misses are other stalls): navcheck heal-pockets (a healer tucked against a ramp gets out within
+  2 s; on 7f6a9fb2 it is judged on geometry-only placements: the Wave-4 sim has no ramp-side collision), collisioncheck container-lean + sprints-rocks, worldlive ramps-walk-fine (every ramp of 5 seeds x 3 maps, walk and sprint, every start phase)
   perfcheck, orch_lowpost_ab (INFORMATION ONLY: shown, never counted)
 
 --negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
@@ -32,6 +35,10 @@ kill-marker-short, layoutcheck --only phones --plant no-touch-ui, framecheck --p
 placementcheck (y-only-recentre, perimeter-drop, tree-float, stack-float: the built map is mutated in memory; and the Wave-4 commit itself), collisioncheck served from the
 Wave-4 commit (--rev 7f6a9fb2), navcheck (nav-l3, raw-strafe, heal-yaw: bots.js / ffg_royale3d.js served patched by a page route), worldcheck
 (the Wave-4 commit, stale-table, rng-shift: scratch copies), worldlive (the Wave-4 commit; ramp-sides-open: player.js served patched);
+the leftovers-round rows (each pinned to the Wave-5 release 3fce7529, which has the residual they cover): collisioncheck-wave5-release,
+collisioncheck --plant container-narrow / rocks-small (the baked table served with the container / rock boxes edited), worldlive-wave5-release,
+worldlive --plant ramp-solid (player.js served with every ramp blocking), navcheck-wave5-release, navcheck --plant pocket-raw (ffg_royale3d.js served with
+a hook: healers back straight away from their threat);
 and feelcheck
 --plant blind-sampler, which must exit 2 (a blinded sampler is could-not-judge, never a verdict).
 
@@ -54,6 +61,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
 
 WAVE4_REV = "7f6a9fb2"       # the Wave-4 merge commit: the frozen "must fail" build of the Wave-5 gates
+WAVE5_REV = "3fce7529"       # the Wave-5 release ("Wave 5", live): the frozen "must fail" build of the 2026-10-13 leftovers-round rows
+                             # (heal-pockets, container-lean, sprints-rocks, ramps-walk-fine): each fails here AND on the Wave-4 commit (heal-pockets there on geometry-only placements: no C-RAMP)
 
 # (name, script, extra args, timeout s, informational)
 GATES = [
@@ -155,6 +164,18 @@ NEGATIVE = [
     ("worldcheck-plant-rng-shift", "worldcheck.py", ["--plant", "rng-shift"], 900),
     ("worldlive-wave4-commit", "worldlive.py", ["--rev", WAVE4_REV], 3600),
     ("worldlive-plant-ramp-sides-open", "worldlive.py", ["--plant", "ramp-sides-open"], 3600),
+    # Leftovers round (lane L4-gates, 2026-10-13). The release-pinned runs prove each new row still SEES the residual it was written for on the build that
+    # had it (a `--rev` in the extra args pins the run: the integration run's own --rev / --disk do not apply); the plants prove it sees a fresh fault
+    # on the working tree: the baked collider table served with the container / rock boxes edited, player.js with every ramp blocking.
+    ("collisioncheck-wave5-release", "collisioncheck.py", ["--rev", WAVE5_REV], 3600),
+    ("collisioncheck-plant-container-narrow", "collisioncheck.py", ["--plant", "container-narrow"], 1800),
+    ("collisioncheck-plant-rocks-small", "collisioncheck.py", ["--plant", "rocks-small"], 1800),
+    ("worldlive-wave5-release", "worldlive.py", ["--rev", WAVE5_REV], 3600),
+    ("worldlive-plant-ramp-solid", "worldlive.py", ["--plant", "ramp-solid"], 3600),
+    ("navcheck-wave5-release", "navcheck.py", ["--rev", WAVE5_REV], 3600),
+    # heal-pockets: the same hook as heal-yaw serves ffg_royale3d.js; every healing bot backs straight away from its threat with no look at the walls.
+    # (heal-pockets also fails on the Wave-4 commit, at 94.0 % on geometry-only placements: its sim has no ramp-side collision; not registered, ~90 s.)
+    ("navcheck-plant-pocket-raw", "navcheck.py", ["--plant", "pocket-raw"], 3600),
 ]
 
 

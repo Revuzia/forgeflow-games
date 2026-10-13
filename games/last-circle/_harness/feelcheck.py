@@ -13,9 +13,12 @@ own readback(W) (hud.js / fx.js / audio.js, contract C9, lanes L7 / L8), else th
 element, numeric damage-number nodes, the reticle's child rects).
 
   kill marker    pistol kill: the marker's LAST state is the kill style (red) and it is held at opacity >= 0.99 for
-                 >= 250 ms (was: overwritten white 26 px in the same frame, hidden 113 ms later). The sampler is only a BOUND on
-                 the hold (a 350 ms hold read 249 and 204 ms): >= 250 ms seen = PASS, provably < 250 ms (seen + the two edge sample
-                 intervals) = FAIL, otherwise the game's own hud readback killHeldMs decides (see judge_kill)
+                 >= 250 ms of GAME time (was: overwritten white 26 px in the same frame, hidden 113 ms later). hud.js advances the
+                 marker by the frame dt (MK.t += dt), and this gate steps 3 + 3 frames synchronously around the click, so ~100 ms of
+                 the hold passes with no wall time and no sampler reading: wall-clock samples can only see the rest (a 350 ms hold
+                 read 249, 204 and 198 ms). The sampler therefore reads the game's own marker age (readback ageMs) and judges in it:
+                 age of the last full-opacity sample >= 250 ms = PASS, the age at which it was first seen fading < 250 ms = FAIL,
+                 otherwise the game's own killHeldMs decides (see judge_kill)
   reticle        every arm >= 2 px thick and >= 6 px long at rest, crouched-still (REAL C held) and sprinting (REAL
                  Shift toggle + W) (was: ~0.9 px x 3.7 px - scale(0.457) of the whole element)
   SMG burst      REAL LMB held --burst s on a shielded pinned bot: <= 1 live damage number per victim at every sample,
@@ -124,7 +127,8 @@ TICK_JS = r"""(on) => {
       let h = null;
       if (mods.hud && mods.hud.readback) { h = mods.hud.readback(W); s.src = 'module'; }
       else if (feel) { h = fl().hud; s.src = 'feel'; }
-      if (h) s.mk = h.marker ? { style: h.marker.style, op: h.marker.opacity, khMs: h.marker.killHeldMs } : null;
+      // age / clk = the GAME's own time (hud.js MK.t and MK.clk, advanced by the frame dt): the kill-marker hold is judged in it, not in wall time
+      if (h) s.mk = h.marker ? { style: h.marker.style, op: h.marker.opacity, khMs: h.marker.killHeldMs, age: h.marker.ageMs, clk: h.marker.clockMs } : null;
       else { s.src = 'dom'; const el = [...document.querySelectorAll('div')].find((d) => d.textContent === '✕'); if (el) s.mk = { style: /255, 77, 77|255, ?7[0-9], ?7[0-9]|ff4d4d/i.test(el.style.color) ? 'kill' : 'hit', op: parseFloat(el.style.opacity || '0'), color: el.style.color }; }
       let f = null;
       if (mods.fx && mods.fx.readback) f = mods.fx.readback(W);
@@ -197,19 +201,55 @@ def _sources(samples):
     return out
 
 
+def _game_bounds(marked):
+    """(lower, upper) of the kill marker's full-opacity hold in the GAME's own milliseconds, from the first kill-style sample on; None when the
+    samples carry no game time (the DOM path, or a build whose readback has no ageMs).
+
+    hud.js holds opacity at 1 while MK.t < hold, then fades; MK.t is the time since the marker was shown, advanced by the frame dt. Opacity is
+    therefore 1 for the whole of [0, age] when a sample reads full opacity at `age`: the hold is AT LEAST the age of the last full-opacity
+    sample (lower), and AT MOST the age at which the next sample already reads fading (upper) - or, when the next sample finds the marker
+    hidden (age null), the last full age plus the game-clock gap to that sample. Both are in game time, so how long the box took to run the
+    frames cannot move them; only the game-time gap between two samples (<= 50 ms per pumped frame, 1/60 per stepped one) widens them."""
+    num = (int, float)
+    i0 = next((i for i, x in enumerate(marked) if x["mk"].get("style") == "kill" and isinstance(x["mk"].get("age"), num)), None)
+    if i0 is None:
+        return None
+    lower, last_i, i = 0.0, None, i0
+    while i < len(marked):
+        mk = marked[i]["mk"]
+        if not (mk.get("style") == "kill" and (mk.get("op") or 0) >= 0.99 and isinstance(mk.get("age"), num)):
+            break
+        if mk["age"] < lower:                   # the age went back down: a NEW show of the marker (a second kill), not this hold
+            break
+        lower, last_i = float(mk["age"]), i
+        i += 1
+    upper = None
+    if i < len(marked):
+        mk = marked[i]["mk"]
+        if mk.get("style") == "kill" and isinstance(mk.get("age"), num):
+            upper = float(mk["age"])            # the first sample that already reads fading: the hold ended before this age
+        elif last_i is not None:
+            ref = marked[last_i]["mk"]
+            if isinstance(ref.get("clk"), num) and isinstance(mk.get("clk"), num):
+                upper = lower + max(0.0, float(mk["clk"]) - float(ref["clk"]))
+    return lower, upper
+
+
 def judge_kill(samples, t_kill):
     """(ok, detail): ok True / False, or None = could-not-judge when the sampler collected 0 marker readings after the
     kill (a blind sampler must never report a verdict on the game - Wave-2 VERIFY.md 4a).
 
-    The hold is measured by a 20 ms setInterval sampler on a box where one pumped frame can cost 600 ms, so a sample-to-sample
-    figure is only a BOUND: the kill style (opacity >= 0.99) was seen from the first to the last sample of its run (`held`, a
-    LOWER bound on the true hold) and the true hold can be longer by at most the sample interval before the run's first sample plus
-    the one after its last (`upper`). Wave-5 verification: a 350 ms hold read 249 ms once and 204 ms once. So:
-      held >= 250 ms                      -> PASS, certified by the sampler alone
-      upper < 250 ms                      -> FAIL, provably shorter (a planted 50 ms hold lands here)
-      otherwise (the sampler cannot tell) -> the game's own accounting decides: hud readback marker.killHeldMs (the frame-dt time the
-                                             kill style was held; >= hold - 50 ms, i.e. >= 300 ms for the shipped 350 ms), and
-                                             could-not-judge when that number was not read."""
+    The hold is judged in the GAME's own time (see _game_bounds). Wave-5 verification and the 2026-10-13 full run: the sampler's WALL time read
+    a 350 ms hold as 249, 204 and 198 ms, while the game's own counters read killHeldMs 339 and a last full-opacity age of 324 ms. The
+    sampler was right about what it saw and wrong about what it measured: hud.js moves the marker by the frame dt, the gate steps 3 + 3 frames
+    synchronously around the click (pump paused), so about 100 ms of the hold passes with no wall time and no reading at all. So:
+      lower (age of the last full-opacity sample, game ms) >= 250   -> PASS
+      upper (age at which it was first seen fading)        < 250   -> FAIL, provably shorter (a planted 50 ms hold lands here)
+      otherwise (two samples straddle 250 game ms)                 -> the game's own accounting decides: hud readback marker.killHeldMs
+                                                                      (>= hold - one frame dt, i.e. >= 300 ms for the shipped 350 ms), and
+                                                                      could-not-judge when that number was not read.
+    Samples with no game time at all (the DOM path, an old build) fall back to the wall-clock rule: seen >= 250 ms PASS, seen + the two edge
+    sample intervals < 250 ms FAIL, otherwise the game's killHeldMs decides."""
     after = [x for x in samples if x.get("t", -1e18) >= t_kill - 50]
     marked = [x for x in after if x.get("mk")]
     det = {"samples": len(after), "markerSamples": len(marked), "sources": _sources(after)}
@@ -218,7 +258,7 @@ def judge_kill(samples, t_kill):
         return None, det
     shown = [x for x in marked if (x["mk"].get("op") or 0) >= 0.99]
     last = shown[-1]["mk"] if shown else None
-    best = None                                   # (held, i0, i1): the longest run of kill-style, full-opacity samples
+    best = None                                   # (held, i0, i1): the longest run of kill-style, full-opacity samples (WALL ms; information, and the legacy rule)
     run0 = None
     for i, x in enumerate(marked):
         ok = x["mk"].get("style") == "kill" and (x["mk"].get("op") or 0) >= 0.99
@@ -236,20 +276,37 @@ def judge_kill(samples, t_kill):
     upper = held + gap_before + gap_after
     game = [x["mk"].get("khMs") for x in marked if isinstance(x["mk"].get("khMs"), (int, float))]
     game_ms = max(game) if game else None
-    det.update({"lastVisible": last, "killHeldMs": round(held), "upperBoundMs": round(upper) if best else None, "gapBeforeMs": round(gap_before), "gapAfterMs": round(gap_after),
-                "gameKillHeldMs": game_ms})
+    gb = _game_bounds(marked)
+    det.update({"lastVisible": last, "wallHeldMs": round(held), "wallUpperBoundMs": round(upper) if best else None, "gapBeforeMs": round(gap_before), "gapAfterMs": round(gap_after),
+                "gameKillHeldMs": game_ms,
+                "gameLowerMs": round(gb[0]) if gb else None, "gameUpperMs": round(gb[1]) if gb and gb[1] is not None else None,
+                # game ms that had already passed when the sampler FIRST saw the kill style (the synchronously stepped frames): why wall time under-reads
+                "firstSeenAgeMs": next((x["mk"].get("age") for x in marked if x["mk"].get("style") == "kill" and isinstance(x["mk"].get("age"), (int, float))), None)})
     if not (last and last.get("style") == "kill"):
         return False, det
+    if gb is not None:
+        lo, up = gb
+        if lo >= KILL_HOLD_MS:
+            det["decidedBy"] = "the game's own marker age (full opacity seen up to %d game ms >= %d)" % (round(lo), KILL_HOLD_MS)
+            return True, det
+        if up is not None and up < KILL_HOLD_MS:
+            det["decidedBy"] = "the game's own marker age (already fading at %d game ms < %d)" % (round(up), KILL_HOLD_MS)
+            return False, det
+        if game_ms is None:
+            det["why"] = "two samples straddle %d game ms (%d..%s) and the game's own killHeldMs was not read" % (KILL_HOLD_MS, round(lo), "?" if up is None else round(up))
+            return None, det
+        det["decidedBy"] = "the game's own killHeldMs (samples straddle %d game ms: %d..%s)" % (KILL_HOLD_MS, round(lo), "?" if up is None else round(up))
+        return game_ms >= KILL_HOLD_MS, det
     if held >= KILL_HOLD_MS:
-        det["decidedBy"] = "sampler (lower bound >= %d ms)" % KILL_HOLD_MS
+        det["decidedBy"] = "sampler wall clock (lower bound >= %d ms; no game time in the samples)" % KILL_HOLD_MS
         return True, det
     if upper < KILL_HOLD_MS:
-        det["decidedBy"] = "sampler (upper bound < %d ms)" % KILL_HOLD_MS
+        det["decidedBy"] = "sampler wall clock (upper bound < %d ms; no game time in the samples)" % KILL_HOLD_MS
         return False, det
     if game_ms is None:
         det["why"] = "the sampler's resolution (%d..%d ms) straddles %d ms and the game's own killHeldMs was not read" % (round(held), round(upper), KILL_HOLD_MS)
         return None, det
-    det["decidedBy"] = "the game's own killHeldMs (sampler resolution %d..%d ms straddles %d ms)" % (round(held), round(upper), KILL_HOLD_MS)
+    det["decidedBy"] = "the game's own killHeldMs (sampler wall resolution %d..%d ms straddles %d ms)" % (round(held), round(upper), KILL_HOLD_MS)
     return game_ms >= KILL_HOLD_MS, det
 
 
@@ -277,6 +334,36 @@ def selftest():
     def fade(after_ms, step=20, kh=None):                     # the fade phase: kill style, opacity < 0.99, dense samples
         return [{"t": t + after_ms + i * step, "src": "module", "mk": {"style": "kill", "op": 0.5, **({"khMs": kh} if kh is not None else {})}} for i in range(1, 12)]
 
+    def game_run(rows, kh=None, clk_gap=None, then_style=None):
+        """rows = [(wall t ms, marker age ms or None, opacity)]: samples that carry the game's own marker age and clock. A None age is a hidden
+        marker; its clock is the previous sample's + clk_gap. then_style: the style of the LAST sample (the marker got overwritten)."""
+        out, clk = [], 5000.0
+        for k, (tw, age, op) in enumerate(rows):
+            if k and age is not None:
+                clk += age - (rows[k - 1][1] or 0)
+            elif age is None and clk_gap is not None:
+                clk += clk_gap
+            style = (then_style if (then_style and k == len(rows) - 1) else ("kill" if age is not None else None))
+            out.append({"t": t + tw - 1000, "src": "module", "mk": {"style": style, "op": op, "age": age, "clk": clk, **({"khMs": kh} if kh is not None else {})}})
+        return out
+
+    def wall_run_198(game=True):
+        """3 stepped frames + 3 stepped frames after the click advance the game ~100 ms with no sampler running; then the 20 ms pump/sampler sees
+        198 wall ms of full-opacity kill style (ages 126..324) and the marker fades at 350."""
+        out = []
+        for k in range(11):
+            age = 126 + k * 20
+            mk = {"style": "kill", "op": 1.0, "khMs": 324 if age >= 324 else age}
+            if game:
+                mk.update({"age": min(age, 324), "clk": 7000 + age})
+            out.append({"t": t + 100 + k * 19.8, "src": "module", "mk": mk})
+        for k in range(1, 6):
+            mk = {"style": "kill", "op": 0.8 - 0.15 * k, "khMs": 339}
+            if game:
+                mk.update({"age": 340 + k * 20, "clk": 7000 + 340 + k * 20})
+            out.append({"t": t + 100 + 198 + k * 20, "src": "module", "mk": mk})
+        return out
+
     cases = [
         ("0 samples", judge_kill([], t)[0], None),
         ("samples but no marker reading (blind DOM path)", judge_kill([{"t": t + i * 20, "src": "dom"} for i in range(30)], t)[0], None),
@@ -288,6 +375,18 @@ def selftest():
         ("same, game number not read -> could-not-judge", judge_kill(run(240, step=80) + fade(240, step=80), t)[0], None),
         ("planted 50 ms hold seen by a coarse sampler (240 ms gaps), game says 50", judge_kill(run(0, step=240, kh=50) + fade(0, step=240, kh=50), t)[0], False),
         ("sampler saw 60 ms with dense gaps but the game claims 340 (upper bound < 250 wins)", judge_kill(run(60, kh=340) + fade(60, kh=340), t)[0], False),
+        # ---- game time (2026-10-13): samples carry the marker's age / clock, so the judge no longer depends on how long the box took ----
+        # the full-run failure: ~100 game ms passed in synchronously stepped frames (no wall time, no sample), the sampler saw 198 wall ms
+        # (+20 +21 edge intervals = 239 < 250 on the old rule) of a hold the game timed at 324-339 ms
+        ("wall run 198 ms (old rule: upper bound 239 -> FAIL), game age 324 ms -> PASS", judge_kill(wall_run_198(), t)[0], True),
+        ("the same samples WITHOUT game time still FAIL on the legacy wall rule (the rule for builds with no ageMs)", judge_kill(wall_run_198(game=False), t)[0], False),
+        ("planted 50 ms hold: last full age 40, fading at 90 (coarse 50 ms game steps) -> FAIL", judge_kill(game_run([(1000, 20, 1.0), (1030, 40, 1.0), (1060, 90, 0.7), (1090, 140, 0.3)], kh=40), t)[0], False),
+        ("a real 150 ms hold (a regression, not the plant): full to 140, fading at 170 -> FAIL", judge_kill(game_run([(1000, 20, 1.0), (1030, 80, 1.0), (1060, 140, 1.0), (1090, 170, 0.9)], kh=150), t)[0], False),
+        ("shipped 350 ms hold: full to 300 then hidden 80 game ms later (upper 380) -> PASS on lower alone", judge_kill(game_run([(1000, 20, 1.0), (1030, 150, 1.0), (1060, 300, 1.0), (1090, None, 0.0)], clk_gap=80, kh=339), t)[0], True),
+        ("full to 200 game ms, next sample fading at 380: straddles 250, game says 339 -> PASS", judge_kill(game_run([(1000, 20, 1.0), (1030, 200, 1.0), (1060, 380, 0.5)], kh=339), t)[0], True),
+        ("the same straddle with the game number not read -> could-not-judge", judge_kill(game_run([(1000, 20, 1.0), (1030, 200, 1.0), (1060, 380, 0.5)]), t)[0], None),
+        ("full to 200 game ms, hidden after an 80 ms clock gap (upper 280) and the game says 200 -> FAIL", judge_kill(game_run([(1000, 20, 1.0), (1030, 200, 1.0), (1060, None, 0.0)], clk_gap=80, kh=200), t)[0], False),
+        ("kill style then overwritten by a white body marker at full opacity -> FAIL (the latch bug)", judge_kill(game_run([(1000, 20, 1.0), (1030, 120, 1.0)], then_style="body", kh=120), t)[0], False),
         ("live numbers: 0 samples", judge_live_numbers([])[0], None),
         ("live numbers: max 1", judge_live_numbers([{"nums": 1}, {"nums": 0}])[0], True),
         ("live numbers: max 3", judge_live_numbers([{"nums": 3}])[0], False),

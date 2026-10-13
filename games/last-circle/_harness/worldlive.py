@@ -5,7 +5,9 @@ the crosshair.  (Last Circle world-foundation plan, Wave 5; promoted by lane F1 
     python _harness/worldlive.py --disk                      # the working copy (the integration run)
     python _harness/worldlive.py --rev 7f6a9fb2              # a frozen commit: the must-fail proof on Wave 4 (the registered negative control)
     python _harness/worldlive.py --disk --maps ashgrid --only ramps,towers
-    python _harness/worldlive.py --disk --plant ramp-sides-open        # negative control (must exit 1)
+    python _harness/worldlive.py --disk --plant ramp-sides-open        # negative controls (each must exit 1)
+    python _harness/worldlive.py --disk --plant ramp-solid
+    python _harness/worldlive.py --disk --only rampsfine --maps ashgrid   # the five-seed fine ramp scan alone
 
 One Chrome per map, one PRACTICE match (seed 7, the player + five range actors: nobody to kill the subject), probe_world.js:
 
@@ -17,6 +19,11 @@ One Chrome per map, one PRACTICE match (seed 7, the player + five range actors: 
   ramp-sides     walking into a ramp's side from outside never puts the capsule inside the plank (C-RAMP); promoted from lane 5C's
                  live5c.js. Wave 4 passed this (its sides were not walkable-through here), so the registered control is a PLANT:
                  `--plant ramp-sides-open` serves player.js with `K.rampBlocks` never blocking
+  ramps-walk-fine  (L4-gates 2026-10-13, promoted from lane L2's stairs_all.py) the FINE ramp scan on EVERY ramp of 5 seeds x 3 maps (seeds 1, 7, 1234,
+                 31337, 2026: the placement census seeds; one Chrome per map and a fresh PRACTICE match per seed): the real mover WALKS and SPRINTS up
+                 (any of 4 run-ups climbs) and down from EVERY start phase (0.5, 0.9, 1.6 m from the top edge); a descent that was lifted (mantled onto
+                 the floor above) is not clean. Seed 7 alone passed ramps-walk while seeds 1234 / 31337 had isla_viva and ashgrid ramps nobody could
+                 climb or leave on the Wave-5 release
   falls-fine     a drop every 0.2 m from 5 to 60 m onto thin open slabs (>= 800 drops per map, 3 slabs): 0 pass-through; promoted from
                  lane 5C's live5c.js (collisioncheck's falls row samples 9 heights x 8 sub-tick phases)           (Wave 4: ~100 through)
   aim            the REAL fire() path at a near thin wall: the impact lands within 0.15 m of where the crosshair ray meets the wall
@@ -47,8 +54,13 @@ AIM_ERR_MAX = 0.15
 AIM_MIN_SHOTS = 10
 SIDES_MIN = 20
 FALL_MIN_DROPS = 800
-SECTIONS = ["chests", "ramps", "towers", "sides", "falls", "aim"]
-PLANTS = {"ramp-sides-open": {"ramp-sides"}}
+SECTIONS = ["chests", "ramps", "towers", "sides", "falls", "aim", "rampsfine"]
+RAMP_SEEDS = [1, 7, 1234, 31337, 2026]       # the placement census seeds: the five-seed fine ramp scan (ramps-walk-fine)
+# --plant -> (rows that must FAIL, sections to run). ramp-sides-open: player.js with K.rampBlocks never blocking (sides walk-through);
+# ramp-solid: player.js where EVERY ramp blocks (no ramp can be walked onto), so the ramp walks fail everywhere
+PLANTS = {"ramp-sides-open": ({"ramp-sides"}, {"sides"}), "ramp-solid": ({"ramps-walk-fine", "ranger-towers"}, {"rampsfine", "towers"})}
+PLANT_REPLACE = {"ramp-sides-open": "continue;   /* PLANT ramp-sides-open: a ramp never blocks */",
+                 "ramp-solid": "/* PLANT ramp-solid: every ramp blocks, none can be walked onto */"}
 
 
 def f(v, nd=3):
@@ -69,10 +81,10 @@ def install_plant(s, args, plant):
     anchor = "if (!K.rampBlocks(c, x, z, yd, h, r, STEP_UP)) continue;"
     if src.count(anchor) != 1:
         raise C.EnvFailure("plant %s: anchor %r found %d times in %s (the plant needs the Wave-5 mover)" % (plant, anchor, src.count(anchor), rel))
-    body = src.replace(anchor, "continue;   /* PLANT ramp-sides-open: a ramp never blocks */").encode("utf-8")
+    body = src.replace(anchor, PLANT_REPLACE[plant]).encode("utf-8")
     s.disk.overrides.append((lambda url: urllib.parse.urlparse(url).path.endswith("/" + rel),
                              lambda route: route.fulfill(status=200, body=body, headers={"Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})))
-    return "player.js served with ramp blocking disabled"
+    return "player.js served with ramp blocking disabled" if plant == "ramp-sides-open" else "player.js served with every ramp blocking"
 
 
 def measure_map(args, map_id, src, only):
@@ -90,10 +102,12 @@ def measure_map(args, map_id, src, only):
         s.freeze_loop()
         res["load"] = st
         print("  [%s] loaded in %s s (%s)" % (map_id, st.get("load_s"), st.get("phaseAfterEnter")), flush=True)
-        keys = s.js("() => { window.__LCWORLD__ = (" + src + ")(); return Object.keys(window.__LCWORLD__); }")
-        if "ramps" not in keys:
-            raise C.HarnessError("probe_world.js did not install: %s" % keys)
-        s.js("() => window.__LC__.stepFrames(14, 1/60, false)")
+        def install_probe():
+            keys = s.js("() => { window.__LCWORLD__ = (" + src + ")(); return Object.keys(window.__LCWORLD__); }")
+            if "ramps" not in keys:
+                raise C.HarnessError("probe_world.js did not install: %s" % keys)
+            s.js("() => window.__LC__.stepFrames(14, 1/60, false)")
+        install_probe()
 
         def run(name, call, opt=None):
             if name not in only:
@@ -109,6 +123,19 @@ def measure_map(args, map_id, src, only):
         res["sides"] = run("sides", "sides")
         res["falls"] = run("falls", "fallsFine", {"slabs": 1 if args.quick else 3})
         res["aim"] = run("aim", "aim", {"shots": 12})
+        if "rampsfine" in only:
+            # the five-seed fine scan: this match first (it is loaded), then a fresh PRACTICE match per other seed in the same Chrome. LAST: it replaces the match.
+            res["rampSeeds"] = {}
+            for sd in [args.seed] + [x for x in RAMP_SEEDS if x != args.seed]:
+                t1 = time.time()
+                if sd != args.seed:
+                    st2 = s.start_match(mode="practice", seed=sd, map_id=map_id)
+                    s.freeze_loop()
+                    install_probe()
+                r = s.js("(o) => window.__LCWORLD__.rampsFine(o)", {"max": 6 if (args.quick or args.plant) else 1000})
+                r["wallS"] = round(time.time() - t1, 1)
+                res["rampSeeds"][str(sd)] = r
+                print("  [%s] fine ramp scan seed %s: %d ramps, %d walks (%d up, %d down), %d failed walks on %d ramps (%.0f s)" % (map_id, sd, r["n"], r["walks"], r["upWalks"], r["downWalks"], r["failCount"], r["failedRamps"], time.time() - t1), flush=True)
         d = s.diagnostics()
         res["diag"] = {k: (x[:6] if isinstance(x, list) else x) for k, x in d.items()}
         res["problems"] = C.diag_problems(d, rig=False)
@@ -153,6 +180,24 @@ def judge(v, per_map, args, plant_rows):
             if fl:
                 detail += " | failed: " + json.dumps([{k: x[k] for k in ("m", "mode", "dir", "minY", "maxY", "at", "startY", "best", "bestLow", "stuck")} for x in fl[:6]])[:700]
             chk("ramps-walk", up == nu and dn == n and nu > 0, detail, "every ramp climbed and descended")
+
+    if "rampsfine" in only:
+        rs = [(m, sd, r) for m, rm in per_map.items() for sd, r in sorted((rm.get("rampSeeds") or {}).items(), key=lambda kv: int(kv[0])) if r]
+        seeds_by_map = {m: len(rm.get("rampSeeds") or {}) for m, rm in per_map.items()}
+        n = sum(r["n"] for _, _, r in rs)
+        walks = sum(r["walks"] for _, _, r in rs)
+        if n == 0 or (any(k < len(RAMP_SEEDS) for k in seeds_by_map.values()) and not (args.quick or args.plant)):
+            chk("ramps-walk-fine", None, "only %s seeds were scanned per map (need %d) / %d ramps" % (seeds_by_map, len(RAMP_SEEDS), n))
+        else:
+            failed = sum(r["failCount"] for _, _, r in rs)
+            fr = sum(r["failedRamps"] for _, _, r in rs)
+            skipped = sum(r["skippedUp"] for _, _, r in rs)
+            per = "; ".join("%s: %s" % (m, ", ".join("s%s %d/%d ramps clean" % (sd, r["n"] - r["failedRamps"], r["n"]) for mm, sd, r in rs if mm == m)) for m in per_map)
+            detail = "%d ramps over %d (map, seed) builds, %d walks (walk and sprint; up from any of 4 run-ups, down from every start phase; %d ramps not climbed from the ground: foot in the sea / on no standable ground): %d failed walks on %d ramps | %s" % (n, len(rs), walks, skipped, failed, fr, per)
+            fl = [{"m": m, "seed": sd, **{k: x.get(k) for k in ("mode", "sprint", "off", "dir", "at", "minY", "maxY", "best", "bestLow", "lifted", "mant", "stuck")}} for m, sd, r in rs for x in r["fails"][:3]]
+            if fl:
+                detail += " | e.g. " + json.dumps(fl[:6])[:900]
+            chk("ramps-walk-fine", failed == 0 and walks > 0, detail, "0 failed walks: every ramp of 5 seeds x 3 maps, walk and sprint, up and down from every phase")
 
     if "towers" in only:
         rows = {m: r["towers"] for m, r in per_map.items() if r.get("towers")}
@@ -212,8 +257,8 @@ def main_fn(v, args):
     if args.plant:
         if args.plant not in PLANTS:
             raise C.HarnessError("unknown --plant %r (known: %s)" % (args.plant, ", ".join(sorted(PLANTS))))
-        plant_rows = PLANTS[args.plant]
-        only = {"sides"} if args.only == ",".join(SECTIONS) else only
+        plant_rows, plant_only = PLANTS[args.plant]
+        only = set(plant_only) if args.only == ",".join(SECTIONS) else only
         print("%s: PLANT MODE %s - only %s count; exit 1 = the planted fault was detected" % (GATE, args.plant, sorted(plant_rows)), flush=True)
     args.only = ",".join(sorted(only))
     with open(PROBE, encoding="utf-8") as fh:

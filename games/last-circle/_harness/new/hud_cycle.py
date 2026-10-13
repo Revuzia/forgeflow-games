@@ -48,9 +48,14 @@ def main():
         census = []          # one per lobby
         in_match = []
         storm = {}
+        guard_runs = []      # every round: the guard call made in the LOBBY (before Enter) and whether the human survived the drop + landing
         with C.Session(args, "hud_cycle", viewport={"width": 1280, "height": 720}) as s:
             s.boot()
-            HC.start_landed(s)
+            # RACE FIX (L4-gates 2026-10-13): the guard goes up in the LOBBY, before the Enter that starts the drop. It used to be installed
+            # after Enter reached phase 'drop', and in 1 of 9 full-run rounds a bot sniper (HEADSHOT, 52 m) killed the unprotected human in
+            # those frames, leaving a [data-lc=death] overlay behind ("0 leftover death / post overlays" red, then 8 of 8 green on re-run).
+            first = HC.start_landed(s, guard_first=True)
+            guard_runs.append({"round": 1, "guardCallBeforeEnter": first.get("guardBeforeEnter"), "alive": first.get("alive"), "phase": first.get("phase")})
             for rnd in range(1, args.rounds + 1):
                 s.freeze_loop()
                 HC.step(s, 6)
@@ -91,10 +96,16 @@ def main():
                 census.append(cl)
                 v.info("round %d lobby after '%s'" % (rnd, want), cl)
                 if rnd < args.rounds:
+                    s.js("() => { window.__H_GUARD_N__ = {}; }")      # fresh per-phase frame counts for this round
+                    lobby_phase = s.phase()
+                    guard_call = s.guard_player(True)                 # BEFORE Enter (the race fix)
                     s.page.keyboard.press("Enter")
                     s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 20, 0.1)
                     s.guard_player(True)
-                    s.land(120, protect=True)
+                    land = s.land(120, protect=True)
+                    seen = s.js("() => Object.assign({}, window.__H_GUARD_N__ || {})")
+                    guard_runs.append({"round": rnd + 1, "guardCallBeforeEnter": guard_call, "phaseAtThatCall": lobby_phase, "framesPerPhase": seen, "alive": land.get("alive"), "phase": land.get("phase")})
+                    v.info("round %d guard (installed in the lobby, before Enter)" % (rnd + 1), guard_runs[-1])
             d = s.diagnostics()
             probs = C.diag_problems(d, rig=False)
 
@@ -114,6 +125,9 @@ def main():
         v.info("maps seen (Run it back keeps the map; Find a new match is random)", maps)
         if len(census) >= 1 and len(in_match) >= 1:
             v.check("'Run it back' (round 1) loaded the SAME map as the match it ended", census[0]["map"] == in_match[0]["map"], {"before": in_match[0]["map"], "after": census[0]["map"]})
+        # the guard call made before Enter must have happened in the lobby and installed (or found) the guard; the human must be alive when landed
+        bad_g = [g for g in guard_runs if not g.get("alive") or g.get("guardCallBeforeEnter") not in ("on", "already") or g.get("phaseAtThatCall", "lobby") != "lobby"]
+        v.check("guard: up in the lobby before every Enter (race fix) and the human is alive when landed, all %d rounds" % len(guard_runs), bool(guard_runs) and not bad_g, bad_g[:2] or guard_runs)
         v.check("0 console / page errors, 0 failed requests over the cycle", not probs, {"problems": probs[:6]})
     return C.run_gate("hud_cycle", body, args)
 
