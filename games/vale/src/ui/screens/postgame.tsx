@@ -30,16 +30,10 @@ export function PostgameScreen(p: { params: Record<string, string> }): JSX.Eleme
   const { cv, state, router, sound } = useApp();
   const pg = state.postgame.value;
   const tab = p.params.tab ?? 'summary';
-  const played = useRef(false);
   const res = pg?.result;
   const me = res?.players.find((x) => x.player === pg!.you);
   const mode = cv.mode(res?.mode);
   const ffa = cv.isFfa(mode);
-  useEffect(() => {
-    if (!pg || !me || played.current) return;
-    played.current = true;
-    sound.sting(ffa ? 'placement' : me.won ? 'victory' : 'defeat');
-  }, [pg]);
   if (!pg || !res || !me) {
     return (
       <Screen title={cv.t('postgame.title', 'Match summary')}>

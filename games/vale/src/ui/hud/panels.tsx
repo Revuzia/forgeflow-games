@@ -72,6 +72,7 @@ export function Scoreboard(): JSX.Element | null {
 function PlayerCell(p: { p: PlayerView }): JSX.Element {
   const { cv } = useApp();
   const { model } = useHud();
+  model.frame.value;
   const f = cv.fighter(p.p.fighter);
   const role = cv.role(p.p.role);
   return (
@@ -86,10 +87,12 @@ function PlayerCell(p: { p: PlayerView }): JSX.Element {
 }
 function Items(p: { p: PlayerView }): JSX.Element {
   const { cv } = useApp();
+  useHud().model.frame.value;
   return <td class="l"><span class="score__items">{p.p.items.map((id) => <span class="score__item">{id ? <ItemGlyph item={cv.item(id)} src={cv.asset(cv.item(id)?.icon)} /> : null}</span>)}</span></td>;
 }
 function TeamRow(p: { p: PlayerView; enemy: boolean }): JSX.Element {
   const { model } = useHud();
+  model.frame.value;
   const e = model.view.entity(p.p.entity);
   const dead = !e || !e.alive;
   const you = p.p.player === model.you;
@@ -109,6 +112,7 @@ function TeamRow(p: { p: PlayerView; enemy: boolean }): JSX.Element {
 function FrayRow(p: { p: PlayerView; place: number }): JSX.Element {
   const { cv, state } = useApp();
   const { model, client } = useHud();
+  model.frame.value;
   const e = model.view.entity(p.p.entity);
   const you = p.p.player === model.you;
   const seat = (p.p.colorIndex % 10) + 1;

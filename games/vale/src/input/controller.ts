@@ -116,6 +116,8 @@ export class InputController {
   }
 
   setSettings(s: Settings): void { this.settings = s; this.keymap.set(s.controls); }
+  /** the element that receives world clicks (set before attach()) */
+  setSurface(el: HTMLElement): void { this.surface = el; }
 
   // ── views ──────────────────────────────────────────────────────────────────────────────────────
   private get me(): PlayerView | undefined { return this.client.view.players[this.client.you]; }
@@ -144,8 +146,10 @@ export class InputController {
     const onEl = <K extends keyof HTMLElementEventMap>(k: K, f: (e: HTMLElementEventMap[K]) => void, opt?: AddEventListenerOptions): void => {
       s.addEventListener(k, f as EventListener, opt); this.off.push(() => s.removeEventListener(k, f as EventListener, opt));
     };
-    on(window, 'keydown', (e) => this.onKeyDown(e));
-    on(window, 'keyup', (e) => this.onKeyUp(e));
+    // capture phase: the match answers its keys (Esc cancels an aim, closes the shop) before the app's
+    // bubbling handlers open the in-match menu
+    on(window, 'keydown', (e) => this.onKeyDown(e), { capture: true });
+    on(window, 'keyup', (e) => this.onKeyUp(e), { capture: true });
     on(window, 'pointermove', (e) => this.onMove(e), { passive: true });
     on(window, 'pointerup', (e) => this.onUp(e));
     on(window, 'blur', () => this.releaseAll());

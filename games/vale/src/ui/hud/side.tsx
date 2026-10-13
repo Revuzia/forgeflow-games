@@ -33,6 +33,7 @@ export function AllyFrames(): JSX.Element | null {
 function AllyFrame(p: { p: PlayerView }): JSX.Element {
   const { cv } = useApp();
   const { model, r } = useHud();
+  model.frame.value;
   const e = model.view.entity(p.p.entity);
   const f = cv.fighter(p.p.fighter);
   const res = cv.resource(f?.resource);

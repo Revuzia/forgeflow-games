@@ -33,18 +33,18 @@ export function DialBar(): JSX.Element | null {
   if (!me) return null;
   const dead = !body || !body.alive;
   return (
-    <section class={`dial plate ${dead ? 'is-dead' : ''}`} aria-label="Dial Bar">
+    <section class={`dbar plate ${dead ? 'is-dead' : ''}`} aria-label="Dial Bar">
       <DialPortrait me={me} body={body} />
-      <div class="dial__mid">
-        <div class="dial__abilities">
+      <div class="dbar__mid">
+        <div class="dbar__abilities">
           {ABILITY_SLOTS.map((s) => <AbilitySlot slot={s} me={me} body={body} />)}
-          <span class="dial__sep" aria-hidden="true" />
+          <span class="dbar__sep" aria-hidden="true" />
           {SPELL_SLOTS.map((s) => <AbilitySlot slot={s} me={me} body={body} />)}
         </div>
         <Bars me={me} body={body} />
       </div>
-      <div class="dial__right">
-        <div class="dial__items">{[0, 1, 2, 3, 4, 5].map((i) => <ItemSlot i={i} me={me} />)}</div>
+      <div class="dbar__right">
+        <div class="dbar__items">{[0, 1, 2, 3, 4, 5].map((i) => <ItemSlot i={i} me={me} />)}</div>
         <Utility me={me} />
       </div>
     </section>
@@ -55,6 +55,7 @@ export function DialBar(): JSX.Element | null {
 function DialPortrait(p: { me: PlayerView; body: EntityView | undefined }): JSX.Element {
   const { cv } = useApp();
   const { model, client } = useHud();
+  model.frame.value;   // live view objects keep their identity across ticks: re-render per tick
   const f = cv.fighter(p.me.fighter);
   const passive = f?.kit.passive;
   const level = p.body?.level ?? 1;
@@ -104,6 +105,7 @@ function DialPortrait(p: { me: PlayerView; body: EntityView | undefined }): JSX.
 function AbilitySlot(p: { slot: SlotT; me: PlayerView; body: EntityView | undefined }): JSX.Element | null {
   const { cv } = useApp();
   const { model, input, index, key } = useHud();
+  model.frame.value;
   const av: AbilityView | undefined = p.me.abilities.find((a) => a.slot === p.slot);
   const def: AbilityCore | undefined = index.get(av?.id);
   const el = useRef<HTMLButtonElement>(null);
@@ -186,6 +188,7 @@ function AbilitySlot(p: { slot: SlotT; me: PlayerView; body: EntityView | undefi
 // ── bars ─────────────────────────────────────────────────────────────────────────────────────────
 function Bars(p: { me: PlayerView; body: EntityView | undefined }): JSX.Element {
   const { cv, state } = useApp();
+  useHud().model.frame.value;
   const b = p.body;
   const hp = b?.hp ?? 0, maxHp = Math.max(1, b?.maxHp ?? 1), shield = b?.shield ?? 0;
   const denom = Math.max(maxHp, hp + shield);
@@ -233,6 +236,7 @@ let dragFrom = -1;
 function ItemSlot(p: { i: number; me: PlayerView }): JSX.Element {
   const { cv } = useApp();
   const { input, client, key, shopOpen } = useHud();
+  useHud().model.frame.value;
   const id = p.me.items[p.i] ?? null;
   const it = cv.item(id);
   const cd = p.me.itemCooldowns[p.i] ?? 0;
@@ -262,13 +266,14 @@ function ItemSlot(p: { i: number; me: PlayerView }): JSX.Element {
 function Utility(p: { me: PlayerView }): JSX.Element {
   const { cv } = useApp();
   const { client, shopOpen, key, input } = useHud();
+  useHud().model.frame.value;
   const q = cv.queue(client.setup.queue);
   const rules = q ? cv.rulesOf(q) : cv.mode(client.setup.mode)?.rules;
   const canRecall = rules?.recall !== false;
   const gleamTip = useTip(() => <TipText text={cv.t('hud.gleam', 'Gleam')} sub={cv.t('hud.gleam_tip', '')} />, { place: 'above' });
   const recallTip = useTip(() => <TipText text={canRecall ? `${cv.t('hud.recall', 'Recall')} · ${key('recall')}` : cv.t('hud.no_recall', 'There is no recall in this mode.')} />, { place: 'above' });
   return (
-    <div class="dial__util">
+    <div class="dbar__util">
       <button type="button" class={`gleambtn ${p.me.canShop ? 'is-shop' : ''} ${shopOpen.value ? 'is-open' : ''}`} {...gleamTip}
         aria-label={`${cv.t('hud.gleam', 'Gleam')} ${fmtInt(p.me.gold)}. ${cv.t('hud.shop_open', 'Open the shop')}`}
         onClick={() => { shopOpen.value = !shopOpen.value; input.cancelAim(); }}>

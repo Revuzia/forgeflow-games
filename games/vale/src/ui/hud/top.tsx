@@ -71,6 +71,7 @@ const StructGlyph = (): JSX.Element => <svg class="sky__sg" viewBox="0 0 12 12" 
 function ObjectiveChips(): JSX.Element | null {
   const { cv } = useApp();
   const { model } = useHud();
+  model.frame.value;
   const objs = model.view.objectives;
   if (!objs.length) return null;
   // one chip per objective unit kind (camps of the same unit share a chip: the soonest one)

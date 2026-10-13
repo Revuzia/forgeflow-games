@@ -19,6 +19,8 @@ export type FrayColors = 'standard' | 'stamp' | 'simple';
 export interface UiPrefs { frayColors: FrayColors | 'auto'; seenScreens: string[]; lastMode?: string; lastQueue?: string; roles?: [string?, string?] }
 
 const PREFS_KEY = 'vale.ui.v1';
+/** how long the end banner holds over the last frame before the shadow-line wipe to the post-game */
+export const END_HOLD_MS = 3800;
 function loadPrefs(): UiPrefs {
   const d: UiPrefs = { frayColors: 'auto', seenScreens: [] };
   try {
@@ -69,6 +71,8 @@ export class AppState {
   readonly lockoutUntil = signal(0);
   /** the request the player last queued with (play again, queue screen labels) */
   readonly lastRequest = signal<QueueRequest | null>(null);
+  /** the match has ended and its last frame is held under the end banner (END_HOLD_MS) */
+  readonly ending = signal(false);
   /** 1 Hz clock for countdowns that are not rings (lockout lines) */
   readonly now = signal(performance.now());
 
@@ -184,11 +188,20 @@ export class AppState {
         this.renderer?.setScene?.(e.client);
         r.reset('match', {}, 'fade');
         break;
-      case 'postgame':
-        batch(() => { this.postgame.value = { result: e.result, grants: e.grants, you: e.you }; this.match.value = null; this.loading.value = null; this.queue.value = null; });
-        this.renderer?.setScene?.('menu');
-        r.reset('postgame', {}, 'wipe');
+      case 'postgame': {
+        // the match-end sting plays over the end banner; the last frame holds before the wipe
+        const me = e.result.players.find((p) => p.player === e.you);
+        const ffa = cv.isFfa(cv.mode(e.result.mode));
+        if (me && e.result.reason !== 'abandon') this.sound.sting(ffa ? 'placement' : me.won ? 'victory' : 'defeat');
+        const show = (): void => {
+          batch(() => { this.postgame.value = { result: e.result, grants: e.grants, you: e.you }; this.match.value = null; this.loading.value = null; this.queue.value = null; this.ending.value = false; });
+          this.renderer?.setScene?.('menu');
+          r.reset('postgame', {}, 'wipe');
+        };
+        if (this.match.value && r.route.value.screen === 'match' && e.result.reason !== 'abandon') { this.ending.value = true; setTimeout(show, END_HOLD_MS); }
+        else show();
         break;
+      }
     }
   }
 
