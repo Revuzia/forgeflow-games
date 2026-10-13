@@ -1037,8 +1037,16 @@ export async function buildMap(W, mapId) {
   // a slab: its stairwell hole is placed for a ramp that starts at the BUILDING-CENTRE height, and a foot raised 0.9 m above that leaves a
   // climber's head 0.05 m into the slab edge before the hole: walked, the Mill tower stair on a slope stopped 1.8 m short). Returns { cy, rise, run, cx, cz }.
   const RAMP_DIR = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const rectsMeet = (a, b) => !(a[1] <= b[0] || a[0] >= b[1] || a[3] <= b[2] || a[2] >= b[3]);   // two [x0, x1, z0, z1] rectangles overlap
   const rampOverlap = (slope) => Math.min(0.3, Math.max(0.02, 0.5 / Math.max(0.05, slope) - 0.45));
   function addRampSnap(faceX, faceZ, w, topY, run, dir, color, opts) {
+    const rp = planRampSnap(faceX, faceZ, w, topY, run, dir, opts);
+    addRamp(rp.cx, rp.cy, rp.cz, w, rp.rise, rp.run, dir, color);
+    return rp;
+  }
+  // The ramp addRampSnap would build, without building it (pure: reads the terrain only): { cy, rise, run, cx, cz } (cx, cz = the centre).
+  // A caller that must know where a ramp will run BEFORE it lays other things out (the container yard) plans first and adds after.
+  function planRampSnap(faceX, faceZ, w, topY, run, dir, opts) {
     opts = opts || {};
     const dx = RAMP_DIR[dir][0], dz = RAMP_DIR[dir][1], px = -dz, pz = dx;
     let r = run, cy = topY - 1;
@@ -1053,7 +1061,6 @@ export async function buildMap(W, mapId) {
     }
     const rise = Math.max(0.3, topY - cy), o = opts.o != null ? opts.o : rampOverlap(rise / r);
     const run2 = r + o, cx = faceX + dx * o - dx * run2 / 2, cz = faceZ + dz * o - dz * run2 / 2;   // the foot stays where it was; the high end moves o past the face
-    addRamp(cx, cy, cz, w, rise, run2, dir, color);
     return { cy, rise, run: run2, cx, cz };
   }
   // The lowest ground under an axis-aligned rectangle (centre + 4 corners), and a vertical post that reaches down to it: legs, stilts and poles
@@ -1172,9 +1179,28 @@ export async function buildMap(W, mapId) {
     }
   }
 
-  function tower(x, z, floors, fw, color, poi) {
+  // STAIRWELL HEADROOM (Wave 5 leftovers, lane L2). How far back from a stair's TOP end the hole in the slab above it must begin, measured along the
+  // run, so that a capsule going DOWN the stair at a sprint is already under the slab-edge-clear zone when its leading edge reaches the strip beyond
+  // the hole. The mover does not snap to a ramp going down (player.js: x/z first, then y by gravity, onGround only when the feet reach the support):
+  // on a ramp of slope m = rise / run a capsule at speed v is carried off the surface and falls 0.5 g t^2 while the surface drops m v t, so it
+  // flies in arcs up to (m v)^2 / 2 g above the stair (0.6 m walking, 1.05 m sprinting on the 7 m clock-tower stair, m 0.85). Its head (height h)
+  // then meets the slab edge although the stair itself had headroom: blockedIn jams the capsule on the strip's face, a human's auto-mantle reads
+  // that as a ledge and lifts the player onto the upper floor, and the stair "cannot be walked down" (ashgrid (221.75, 224), all 5 seeds). The
+  // old fixed edge (0.10 x run before the middle of the stair) only cleared a stair whose slope is low enough that the arc stays under ~0.3 m.
+  // The capsule centre is at most d - r from the top end when its leading edge touches the strip (r = radius), and the stair surface is then
+  // m (d - r) under the slab: the head clears the edge when m (d - r) >= h + arc + a 0.1 m margin, i.e. d = (h + arc + 0.1) / m + r. Never nearer
+  // the top than the old edge (long gentle stairs keep their hole), and capped by the slab footprint (addSlabHole clamps): a very steep short
+  // stair opens its whole run.
+  const MV_ = (W.SIM && W.SIM.MOVE) || { sprint: 8, gravity: -22 }, PK_ = (W.SIM && W.SIM.PLAYERK) || { height: 1.8, radius: 0.45 };
+  function stairHeadroomRun(rise, run) {
+    const m = Math.max(0.05, rise / run), mv = m * MV_.sprint, arc = mv * mv / (2 * Math.abs(MV_.gravity));
+    return (PK_.height + arc + 0.10) / m + PK_.radius;
+  }
+
+  function tower(x, z, floors, fw, color, poi, avoid) {
     const y = heightAt0(x, z);
     const FH = 4, T = 0.4, W2 = fw / 2;
+    let stair = null;       // the interior ramp of the floor below: { rise, run } as BUILT (the ground-floor one is snapped to the terrain: rise >= FH)
     for (let f = 0; f < floors; f++) {
       const fy = y + f * FH;
       // slab (skip ground floor slab). For upper floors, cut a stairwell hole over
@@ -1193,8 +1219,11 @@ export async function buildMap(W, mapId) {
         // slab top at 4.30, overlap -> stuck. Starting the hole at z-0.1*rrun
         // puts the edge where the capsule top is still UNDER the slab (3.66 <
         // 4.00), so you pass beneath the lip and rise through the opening.
-        const hz0 = pdir === 2 ? z - rrun * 0.10 : z - rrun * 0.55;
-        const hz1 = pdir === 2 ? z + rrun * 0.55 : z + rrun * 0.10;
+        // Going DOWN needs more (the capsule flies in arcs, see stairHeadroomRun): the near edge is the nearer of the old one and that one.
+        const nearD = stairHeadroomRun(stair ? stair.rise : FH, stair ? stair.run : rrun);
+        let hz0, hz1;
+        if (pdir === 2) { hz0 = Math.min(z - rrun * 0.10, z + rrun / 2 - nearD); hz1 = z + rrun * 0.55; }     // up-end at z + rrun/2: the near (foot) side is -Z
+        else { hz0 = z - rrun * 0.55; hz1 = Math.max(z + rrun * 0.10, z - rrun / 2 + nearD); }               // up-end at z - rrun/2: the near side is +Z
         addSlabHole(x, fy + 0.15, z, fw, 0.3, shade(color, 0.8), rx - 1.6, rx + 1.6, hz0, hz1);
       }
       // 4 walls with a window band on upper floors + a door gap on the ground floor.
@@ -1231,8 +1260,8 @@ export async function buildMap(W, mapId) {
       if (f < floors - 1) {
         // (the ground-floor ramp's foot is snapped to the terrain it starts on; the upper ones start on a slab, unchanged)
         const rx2 = x + (f % 2 ? -fw / 4 : fw / 4), rdir = f % 2 ? 3 : 2, rrun2 = fw * 0.7;
-        if (f === 0) addRampSnap(rx2, z + (rdir === 2 ? rrun2 / 2 : -rrun2 / 2), 2.2, fy + FH, rrun2, rdir, shade(color, 0.7), { keepRun: true, o: 0, maxCy: fy });
-        else addRamp(rx2, fy, z, 2.2, FH, rrun2, rdir, shade(color, 0.7));
+        if (f === 0) { const rp = addRampSnap(rx2, z + (rdir === 2 ? rrun2 / 2 : -rrun2 / 2), 2.2, fy + FH, rrun2, rdir, shade(color, 0.7), { keepRun: true, o: 0, maxCy: fy }); stair = { rise: rp.rise, run: rp.run }; }
+        else { addRamp(rx2, fy, z, 2.2, FH, rrun2, rdir, shade(color, 0.7)); stair = { rise: FH, run: rrun2 }; }
       }
       loot(x + (rng() - 0.5) * fw * 0.5, fy + 0.5, z + (rng() - 0.5) * fw * 0.5, poi);
     }
@@ -1245,7 +1274,24 @@ export async function buildMap(W, mapId) {
     // reachable on foot (playtest: "are there ramps to get up there?"); ends
     // short of the parapet so you can step sideways onto the slab
     // (foot on the terrain it starts on; lengthened until it climbs <= 45 degrees: a 3-storey tower was 12.45 m in 9.4 m = 53)
-    addRampSnap(x + W2 + 1.15, z + fw / 2 - 1.6, 2.2, y + floors * FH + 0.45, fw - 1.6, 2, shade(color, 0.72), { o: 0 });
+    // `avoid` ([x0, x1, z0, z1] rectangles, optional): the ramp keeps this +X side unless its corridor (the plank, 0.5 m either side, 0.6 m beyond the
+    // foot) meets one of them (the Cliff Temples keep stands among five random stone cubes whose caps overhang a 12.5 m plank: isla_viva seed 12 could
+    // not be climbed to the roof); it then tries the -X wall, then both walls rising the other way. No random draw, so nothing else moves.
+    {
+      const topY = y + floors * FH + 0.45, run0 = fw - 1.6;
+      let pick = null;
+      for (const [sx, dir] of [[1, 2], [-1, 2], [1, 3], [-1, 3]]) {
+        const rp = planRampSnap(x + sx * (W2 + 1.15), dir === 2 ? z + fw / 2 - 1.6 : z - fw / 2 + 1.6, 2.2, topY, run0, dir, { o: 0 });
+        if (!pick) pick = { dir, rp };                                                    // the original +X ramp is the fallback
+        let clear = true;
+        if (avoid && avoid.length) {
+          const corr = [rp.cx - 1.6, rp.cx + 1.6, rp.cz - rp.run / 2 - (dir === 2 ? 0.6 : 0), rp.cz + rp.run / 2 + (dir === 3 ? 0.6 : 0)];
+          for (const r of avoid) if (rectsMeet(corr, r)) { clear = false; break; }
+        }
+        if (clear) { pick = { dir, rp }; break; }
+      }
+      addRamp(pick.rp.cx, pick.rp.cy, pick.rp.cz, 2.2, pick.rp.rise, pick.rp.run, pick.dir, shade(color, 0.72));
+    }
   }
 
   function rangerTower(x, z, color, poi) {
@@ -1309,6 +1355,7 @@ export async function buildMap(W, mapId) {
   const landmarks = [];             // {x,z,r} unnamed inter-POI structures — trees keep clear
   const lampPts = [];               // {x,y,z} emissive lamp heads — the near-lamp light pool follows these
   const props = { palm: [], tree: [], pine: [], birch: [], bush: [], rocks: [], car: [], container: [], barrel: [] };
+  let yardInfo = null;               // ashgrid's container yard: what the ramp-corridor pass dropped (see the yard block)
 
   // ── prop grounding (Wave 5, lane 5A) ──────────────────────────────────────────────────────────────────────────────
   // Every placed prop is {x, y, z, s, ry} where (x, z) is its ANCHOR: the spot the seeded generator picked, the one nearPoi() tested and
@@ -1319,14 +1366,19 @@ export async function buildMap(W, mapId) {
   //      (x, z, s, ry) already happened, so the shared map RNG stream is untouched and every client drops the same entries;
   //   2. sets y = (lowest ground under the baked base-contact points) - embed: nothing floats, and the high side sinks a few cm (Unreal's
   //      foliage "Z Offset"). Trees 0.12 m, bushes and rocks 0.15 m (the near-ring triangles can sit 0.17 m under heightAt on a steep curve: one bush in 7,000 measured 0.27 m up at 0.10), hard props 0.05 m;
-  //   3. for cars and containers (8 degrees) and rock clusters (35) fits a plane through those points and tilts the mesh to it, about the
+  //   3. for cars (8 degrees) and rock clusters (35) fits a plane through those points and tilts the mesh to it, about the
   //      anchor. The colliders stay axis-aligned boxes (contract C-COLL), each spanning the lowest and highest point of its part.
   // Everything is a pure function of (kind, x, z, s, ry) and the baked table.
   const PROP_EMBED = { palm: 0.12, tree: 0.12, pine: 0.12, birch: 0.12, bush: 0.15, rocks: 0.15, car: 0.05, container: 0.05, barrel: 0.05 };
   const PROP_SLOPE_MAX = { palm: 40, tree: 35, pine: 42, birch: 35, bush: 50, rocks: 55, car: 14, barrel: 22 };   // degrees
-  // Max tilt to the ground plane, degrees. Cars and containers are rigid and upright: 8. A rock cluster laid flat on a hillside buries its
+  // Max tilt to the ground plane, degrees. Cars are rigid and upright: 8. CONTAINERS ARE LEVEL (no entry): a container's collider is an axis-aligned
+  // box, and a container leaned up to 8 degrees onto a slope has its walls 0.14 m off vertical per metre of height, so at body height the drawn
+  // wall stuck out of the level box (collisioncheck: clip p95 0.152 m, 6 of 64 sprints ended inside the drawn mesh). A level container rests on
+  // the LOWEST ground under its base (settleProp: y = lowest contact point - embed) and the uphill end sinks into the slope, which is what a
+  // container set on a graded yard looks like and what the box can honour exactly (collider top = drawn top, every wall vertical).
+  // A rock cluster laid flat on a hillside buries its
   // uphill rocks (at 25 degrees the whole cluster vanished into the slope), so it follows the slope up to 35 degrees like boulders do.
-  const PROP_TILT_DEG = { car: 8, container: 8, rocks: 35 };
+  const PROP_TILT_DEG = { car: 8, rocks: 35 };
   const _sx = new Float64Array(64), _sz = new Float64Array(64), _sg = new Float64Array(64);
   function groundSlopeDeg(x, z) {
     const e = 1.5, gx = (heightAt0(x + e, z) - heightAt0(x - e, z)) / (2 * e), gz = (heightAt0(x, z + e) - heightAt0(x, z - e)) / (2 * e);
@@ -1367,13 +1419,26 @@ export async function buildMap(W, mapId) {
     it.y = y0 - (PROP_EMBED[kind] || 0.1);
     it.tx = gx; it.tz = gz;                                                    // the ground plane's slope (0 = untilted); the instance matrix and the collider boxes both read it
   }
+  // How much the ground rises under a prop's base contact points (highest minus lowest). A LEVEL prop (containers) sits on the lowest point, so
+  // this is how deep its uphill end sinks (plus the embed): finalizeProps drops an entry that asks for a `reliefMax` smaller than this.
+  function groundRelief(kind, it) {
+    const tk = PT && PT.kinds[kind];
+    if (!tk) return 0;
+    const ry = it.ry || 0, c = Math.cos(ry), sn = Math.sin(ry), sc = it.s, B = tk.base;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < B.length; i++) {
+      const u = B[i][0] * sc, w = B[i][1] * sc, g = heightAt0(it.x + u * c + w * sn, it.z - u * sn + w * c);
+      if (g < lo) lo = g; if (g > hi) hi = g;
+    }
+    return hi - lo;
+  }
   function finalizeProps() {
     const stats = {};
     for (const kind in props) {
       const list = props[kind];
       if (!list.length) continue;
       const lim = PROP_SLOPE_MAX[kind], keep = [];
-      for (const it of list) { if (it.rej && lim != null && groundSlopeDeg(it.x, it.z) > lim) continue; keep.push(it); }
+      for (const it of list) { if (it.drop || (it.rej && lim != null && groundSlopeDeg(it.x, it.z) > lim) || (it.reliefMax != null && groundRelief(kind, it) > it.reliefMax)) continue; keep.push(it); }
       props[kind] = keep;
       for (const it of keep) settleProp(kind, it);
       stats[kind] = { generated: list.length, rejected: list.length - keep.length };
@@ -1877,12 +1942,26 @@ export async function buildMap(W, mapId) {
     farmland(pois[7], { minH: 0.6 });                                          // Banana Farm → actual farmland
     lighthouse(pois[3].x - 55, pois[3].z + 55, pois[3].id);                     // Shipwreck Cove lighthouse (coastal landmark)
     // cliff temples: stone block structures
+    const templeBlockers = [];       // the cubes' caps and their ramp planks, [x0, x1, z0, z1]: the keep's roof ramp keeps clear of them
     {
       const p = pois[4];
+      // All five cubes are drawn first (the same draws in the same order: nothing between them consumes the stream), then built: a cube's ramp
+      // must know where the keep (below) and the other cubes stand. Its ramp (up to 10 m long since the <= 45 degree rule) used to be fixed on the
+      // +Z face and ran through the keep's wall or under its first-floor slab on 2 seeds of 5 (isla_viva 1234, 31337: the ramp could not be
+      // climbed and the keep's own ground-floor stair came out onto it). The ramp now takes the first face (+Z, -Z, +X, -X) whose corridor is
+      // clear of the keep and of the other cubes; no further draw is made, so the stream and every anchor are unchanged.
+      const temples = [];
       for (let i = 0; i < 5; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.2, z = p.z + (rng() - 0.5) * p.r * 1.2;
-        const y = heightAt0(x, z);
         const s = 3 + rng() * 3;
+        temples.push({ x, z, s });
+        templeBlockers.push([x - s * 0.65, x + s * 0.65, z - s * 0.65, z + s * 0.65]);
+      }
+      const keepOn = heightAt0(p.x, p.z) > waterY + 0.8;                         // the keep below is only built on dry ground
+      const keep = keepOn ? [p.x - 6.8, p.x + 8.9, p.z - 6.8, p.z + 6.8] : null;   // its walls (+- 6.2), plus its exterior roof ramp along the +X wall, plus a capsule
+      for (let i = 0; i < 5; i++) {
+        const { x, z, s } = temples[i];
+        const y = heightAt0(x, z);
         addBox(x, y + s / 2, z, s, s, s, C_STONE, { tex: "block" });
         addBox(x, y + s + 0.8, z, s * 1.3, 1.6, s * 1.3, shade(C_STONE, 0.85), { tex: "block" });
         if (i % 2 === 0) chest(x, y + s + 1.9, z, p.id);
@@ -1895,7 +1974,22 @@ export async function buildMap(W, mapId) {
         // with the top surface, so the walk-off steps straight onto the cap.
         // Run lengthened to keep the old ~34-degree slope.
         const trun = s * 1.5 + 2.4;
-        addRampSnap(x, z + s * 0.65, 2.4, y + s + 1.6, trun, 3, shade(C_STONE, 0.9));    // face = the cap's +Z face
+        // faces: dir 3 = the cap's +Z face (the foot lies toward +Z), 2 = -Z, 1 = +X, 0 = -X. corridor = plank + a capsule's width either side + 0.6 m
+        // beyond the foot. The first face with a clear corridor wins; none clear (never measured) keeps the old +Z one.
+        let pick = null;
+        for (const dir of [3, 2, 1, 0]) {
+          const dx = RAMP_DIR[dir][0], dz = RAMP_DIR[dir][1], f = s * 0.65;
+          const rp = planRampSnap(x - dx * f, z - dz * f, 2.4, y + s + 1.6, trun, dir);
+          const alongX = dir < 2, hr = rp.run / 2;
+          const corr = alongX ? [rp.cx - hr - (dx > 0 ? 0.6 : 0), rp.cx + hr + (dx < 0 ? 0.6 : 0), rp.cz - 1.7, rp.cz + 1.7]
+                              : [rp.cx - 1.7, rp.cx + 1.7, rp.cz - hr - (dz > 0 ? 0.6 : 0), rp.cz + hr + (dz < 0 ? 0.6 : 0)];
+          let clear = !(keep && rectsMeet(corr, keep));
+          for (let j = 0; clear && j < 5; j++) if (j !== i) { const o = temples[j], h = o.s * 0.65; if (rectsMeet(corr, [o.x - h, o.x + h, o.z - h, o.z + h])) clear = false; }
+          if (clear) { pick = { dir, rp }; break; }
+          if (!pick && dir === 3) pick = { dir, rp, fallback: true };
+        }
+        addRamp(pick.rp.cx, pick.rp.cy, pick.rp.cz, 2.4, pick.rp.rise, pick.rp.run, pick.dir, shade(C_STONE, 0.9));
+        { const hr = pick.rp.run / 2; templeBlockers.push(pick.dir < 2 ? [pick.rp.cx - hr, pick.rp.cx + hr, pick.rp.cz - 1.2, pick.rp.cz + 1.2] : [pick.rp.cx - 1.2, pick.rp.cx + 1.2, pick.rp.cz - hr, pick.rp.cz + hr]); }
       }
     }
     // Isla Viva had NOT ONE multi-storey interior: the whole branch was towns of
@@ -1904,7 +1998,7 @@ export async function buildMap(W, mapId) {
     // both do. tower() already emits per-floor slabs, a stairwell hole over each
     // interior ramp and a roof chest. Guarded on dry ground so these do not
     // repeat the Lagoon Docks waterline bug — the coast is close at both spots.
-    if (heightAt0(pois[4].x, pois[4].z) > waterY + 0.8) tower(pois[4].x, pois[4].z, 3, 12, C_STONE, pois[4].id);          // Cliff Temples keep
+    if (heightAt0(pois[4].x, pois[4].z) > waterY + 0.8) tower(pois[4].x, pois[4].z, 3, 12, C_STONE, pois[4].id, templeBlockers);          // Cliff Temples keep
     if (heightAt0(pois[1].x, pois[1].z - 40) > waterY + 0.8) tower(pois[1].x, pois[1].z - 40, 2, 14, C_BAMBOO, pois[1].id); // Coco Village market hall
     // Volcano Rim: an r=130 named landing zone that emitted FOUR CHESTS and no
     // geometry at all — and because scatterTrees rejects nearPoi(x, z, 26) it also
@@ -2017,30 +2111,63 @@ export async function buildMap(W, mapId) {
       // upper used to sit at b.y + 2.8 whatever the lower's scale was (the lower is 2.04 .. 2.81 m tall, median gap 0.39 m, up to 0.76),
       // the ramp ended 0.4-2.5 m short of the lower's end face, and the loot was authored inside the upper container.
       const CT = PT && PT.kinds.container;
-      const cH = CT ? CT.height : 1.277, cL = CT ? CT.parts[0].h[0] : 1.4;
-      const base = [];
+      const cH = CT ? CT.height : 1.277, cL = CT ? CT.parts[0].h[0] : 1.4, cW = CT ? CT.parts[0].h[1] : 0.628;
+      const base = [], yardClash = [];
+      yardInfo = null;
       for (let i = 0; i < 40; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.6, z = p.z + (rng() - 0.5) * p.r * 1.6;
         const it = { x, y: heightAt0(x, z), z, s: 1.6 + rng() * 0.6, ry: Math.floor(rng() * 4) * Math.PI / 2 };
+        if (i % 3 !== 0) it.reliefMax = 0.9;     // a single container is LEVEL now: on ground that rises more than this under its base it would be half buried, so it is dropped (a stack base carries its upper, ramp and loot and stays)
         props.container.push(it);
         base.push(it);
       }
+      // The yard's other containers are scattered by the seeded generator without knowing where a stack's ramp will run (6 m, longer on a slope), so
+      // on 3 seeds of 5 a container lay across a ramp's foot, its side or its plank and the ramp could not be climbed or descended (ashgrid seeds
+      // 1234, 31337: 5 ramps, measured with the real mover). PLAN every stack first (settle its base, plan its ramp: both pure), clear the corridor
+      // of each ramp (the plank, a capsule's width either side, 0.6 m of approach beyond the foot), THEN build. Draw first, drop after, like the
+      // trees' `rej`: every random draw happens in the same order (the build pass draws for a dropped stack too), so the shared RNG stream and
+      // every kept container's anchor are exactly what they were; only the colliders of a dropped container go.
+      //   * a single container (index not a multiple of 3) whose footprint meets a corridor is dropped (finalizeProps);
+      //   * a stack whose base meets another stack's corridor or plank loses ITS ramp, upper and base only if it carries no loot (every
+      //     second stack does, i % 6 === 0: its loot point is part of the seeded world and stays); two looted stacks that clash stay, and are counted in yardClash.
+      const half = (it) => [(Math.abs(Math.cos(it.ry)) * cL + Math.abs(Math.sin(it.ry)) * cW) * it.s, (Math.abs(Math.sin(it.ry)) * cL + Math.abs(Math.cos(it.ry)) * cW) * it.s];
+      const LAT = 0.5, FOOT = 0.6;                                                    // a capsule's radius + slack either side; the approach beyond the foot
+      const stacks = [];
       for (let i = 0; i < base.length; i += 3) {
         const b = base[i];
-        const s2 = 1.6 + rng() * 0.6;
-        rng();                                                           // (the upper's old random yaw: still drawn, so the stream is unchanged; the upper now lies along its base)
         b.flat = true;                                                   // a stack base stays level
         settleProp("container", b);
         const topY = b.y + cH * b.s;                                     // the real top of the lower container
         const alongZ = Math.abs(Math.sin(b.ry)) > 0.5, hl = cL * b.s;    // long axis along z when yawed a quarter turn; half length
+        // the ramp comes up the + end of the long axis (+Z for a container lying along z, +X for one along x) and lands 0.3 m onto the roof
+        const rp = alongZ ? planRampSnap(b.x, b.z + hl, 2.2, topY, 6, 3) : planRampSnap(b.x + hl, b.z, 2.2, topY, 6, 1);
+        const plank = alongZ ? [b.x - 1.1, b.x + 1.1, rp.cz - rp.run / 2, rp.cz + rp.run / 2] : [rp.cx - rp.run / 2, rp.cx + rp.run / 2, b.z - 1.1, b.z + 1.1];   // [x0, x1, z0, z1]
+        const corr = alongZ ? [plank[0] - LAT, plank[1] + LAT, plank[2], plank[3] + FOOT] : [plank[0], plank[1] + FOOT, plank[2] - LAT, plank[3] + LAT];
+        stacks.push({ i, b, topY, alongZ, hl, rp, plank, corr, looted: i % 6 === 0, dead: false });
+      }
+      const meets = (r, it) => { const [hx, hz] = half(it); return !(it.x + hx <= r[0] || it.x - hx >= r[1] || it.z + hz <= r[2] || it.z - hz >= r[3]); };
+      for (let a = 0; a < stacks.length; a++) for (let c = a + 1; c < stacks.length; c++) {
+        const A = stacks[a], B = stacks[c];
+        if (A.dead || B.dead) continue;
+        if (!(meets(A.corr, B.b) || meets(B.corr, A.b) || rectsMeet(A.corr, B.plank) || rectsMeet(B.corr, A.plank))) continue;
+        if (!B.looted) B.dead = true; else if (!A.looted) A.dead = true; else yardClash.push([A.i, B.i]);
+      }
+      for (const S of stacks) {
+        if (S.dead) continue;
+        for (let j = 0; j < base.length; j++) if (j % 3 !== 0 && meets(S.corr, base[j])) base[j].drop = true;
+      }
+      for (const S of stacks) {
+        const { i, b, topY, alongZ, hl, rp } = S;
+        const s2 = 1.6 + rng() * 0.6;
+        rng();                                                           // (the upper's old random yaw: still drawn, so the stream is unchanged; the upper now lies along its base)
+        if (S.dead) { b.drop = true; continue; }
         // the upper container: along the base, never wider than it, set back so the last 1.2 m of the base's top (at the ramp end) stays free
         const sUp = Math.min(s2, b.s - 0.43), tc = hl - 1.2 - cL * sUp;
         props.container.push({ x: b.x + (alongZ ? 0 : tc), y: topY, z: b.z + (alongZ ? tc : 0), s: sUp, ry: b.ry, flat: true, set: true, onTop: true });   // onTop: rests on the lower container, not on the ground
-        // the ramp comes up the + end of the long axis (+Z for a container lying along z, +X for one along x) and lands 0.3 m onto the roof
-        if (alongZ) addRampSnap(b.x, b.z + hl, 2.2, topY, 6, 3, shade(C_METAL, 0.8));
-        else addRampSnap(b.x + hl, b.z, 2.2, topY, 6, 1, shade(C_METAL, 0.8));
+        addRamp(rp.cx, rp.cy, rp.cz, 2.2, rp.rise, rp.run, alongZ ? 3 : 1, shade(C_METAL, 0.8));
         if (i % 6 === 0) loot(alongZ ? b.x : b.x + hl - 0.6, topY + 0.5, alongZ ? b.z + hl - 0.6 : b.z, p.id);
       }
+      yardInfo = { stacks: stacks.length, stacksDropped: stacks.filter((S) => S.dead).length, singlesDropped: base.filter((o, j) => j % 3 !== 0 && o.drop).length, singlesTooSteep: base.filter((o) => !o.drop && o.reliefMax != null && groundRelief("container", o) > o.reliefMax).length, unresolvedClashes: yardClash };   // (read by the gates via propStats.yard)
       for (let i = 0; i < 3; i++) {
         const cx = p.x + (rng() - 0.5) * p.r, cz = p.z + (rng() - 0.5) * p.r;
         chest(cx, heightAt0(cx, cz) + 0.6, cz, p.id);       // was sampled at the POI centre — floated on the slope
@@ -2454,6 +2581,7 @@ export async function buildMap(W, mapId) {
 
   // ── instanced props from GLBs ─────────────────────────────────────────────
   const propStats = finalizeProps();   // slope rejection + ground fit for every placed prop (see the grounding block above scatterTrees)
+  if (yardInfo) propStats.yard = yardInfo;
   const instRefs = {};   // kind -> [{inst, baseMatrixes}]
   // Which kinds collide. The SHAPE of every collider comes from the baked table (pushPropColliders); these radii are only the legacy
   // fallback for a client whose table did not load.
