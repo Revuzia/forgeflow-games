@@ -984,7 +984,10 @@ async function ensureChestProto(W) {
 function spawnChest(W, x, y, z) {
   const id = "c" + (nextId++);
   const group = new THREE.Group();
-  const gy = Math.max(y - 0.4, W.map.heightAt(x, z));
+  // The chest rests ON the surface under it (the highest floor at or just below its authored height, else the terrain). Every authoring
+  // site passes surface + 0.6, so the old `y - 0.4` hung it 0.20 m over the grass (all 193-245 terrain chests per 5 seeds) and sank it
+  // 0.10 m into a roof slab. Nothing within 0.9 m under it (a chest on a hull over the sea, a sky island) keeps the old formula.
+  const gy = surfaceUnder(W, x, y, z) ? _surf.floor : Math.max(y - 0.4, W.map.heightAt(x, z));
   group.position.set(x, gy, z);
   group.rotation.y = (x * 13.7 + z * 7.3) % (Math.PI * 2); // varied facing
   // gold ring, light beam and glow so chests read from far away: three slots in the

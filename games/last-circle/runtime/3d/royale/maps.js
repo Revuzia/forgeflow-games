@@ -229,6 +229,76 @@ function mkCollider(kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp
   return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0 };
 }
 
+// ── baked prop collider table (Wave 5, lane 5A) ──────────────────────────────────────────────────────────────────
+// assets/props/prop_colliders.json is generated offline from the prop GLBs by _tools/bake_prop_colliders.mjs: per kind the footprint
+// anchor, the drawn height, the base-contact points and the collider parts, in metres at it.s = 1. Colliders and ground-fitting are
+// built FROM THE TABLE, never from the loaded GLB: before this a squad client whose GLB request failed (the `catch ... continue` in the
+// instancing loop) built no colliders for that kind while its squad-mates did, and every prop box was a fixed radius that had nothing to
+// do with the mesh (rocks 1.4 m radius x 6 m tall around a mesh that was 0.7 m tall and drawn 35 m away).
+// Fetched once per page session (the file is immutable within a build), with `cache: "no-cache"` so a deploy that changes the table is
+// revalidated and never served stale. Two attempts, then the legacy fixed-radius colliders and centre-height placement: a missing table
+// must never stop a match from starting (it can only make this client disagree with squad-mates that did load it, the pre-Wave-5
+// situation; the squad-room version guard of Wave 7 is the real fix for cross-build rooms).
+const PROP_TABLE_URL = "assets/props/prop_colliders.json";
+let _propTable = null;                 // { url, table }
+async function loadPropTable(W) {
+  const url = (W.assetBase || "") + PROP_TABLE_URL;
+  if (_propTable && _propTable.url === url) return _propTable.table;
+  let table = null;
+  for (let attempt = 0; attempt < 2 && !table; attempt++) {
+    try {
+      const ac = typeof AbortController === "function" ? new AbortController() : null;
+      const t = ac ? setTimeout(() => ac.abort(), W.kernel && W.kernel.loadTimeoutMs > 0 ? W.kernel.loadTimeoutMs : 30000) : 0;
+      let r;
+      try { r = await fetch(url, ac ? { cache: "no-cache", signal: ac.signal } : { cache: "no-cache" }); } finally { clearTimeout(t); }
+      if (!r || !r.ok) throw new Error("HTTP " + (r ? r.status : "none"));
+      const j = await r.json();
+      if (!j || j.version !== 1 || !j.kinds || typeof j.kinds !== "object") throw new Error("not a version-1 prop table");
+      for (const k in j.kinds) { const e = j.kinds[k]; if (!(e.norm > 0) || !Array.isArray(e.base) || !e.base.length || !Array.isArray(e.anchor)) throw new Error("kind " + k + " is malformed"); }
+      table = j;
+    } catch (e) { console.warn("[maps] prop collider table " + (attempt ? "unavailable, using legacy prop colliders" : "failed, retrying") + ":", e && e.message || e); }
+  }
+  if (table) _propTable = { url, table };
+  return table;
+}
+
+// ── near-LOD terrain skirt (Wave 5, lane 5A) ───────────────────────────────────────────────────────────────────────
+/** Hang a vertical wall SKIRT_DEPTH under the perimeter of a near-LOD terrain chunk, inside the SAME BufferGeometry (no extra draw call, 4 x seg
+ *  vertices and 8 x seg triangles per chunk; 5.5k triangles for the whole 3 x 3 ring). The chunk's own surface stays exactly heightAt0 on the
+ *  lattice, so the drawn ground and the physics ground agree up to the 2.6 m triangle interpolation; the wall only has to close the sliver
+ *  between this edge and the far-LOD neighbour's, whose edge is a linear interpolation of the same function (up to ~0.12 m off). Leadwerks'
+ *  terrain notes call this the standard cure for LOD cracks: "a small skirt around every patch". `vAt` maps lattice (ix, iz) to a vertex index. */
+const SKIRT_DEPTH = 0.8;
+function addSkirt(geo, vAt, seg) {
+  const S1 = seg + 1, loop = [];
+  for (let i = 0; i < seg; i++) loop.push(vAt[i]);                       // iz = 0,   ix = 0 .. seg-1   (west -> east along the north edge)
+  for (let j = 0; j < seg; j++) loop.push(vAt[j * S1 + seg]);            // ix = seg, iz = 0 .. seg-1   (north -> south along the east edge)
+  for (let i = seg; i > 0; i--) loop.push(vAt[seg * S1 + i]);            // iz = seg, ix = seg .. 1
+  for (let j = seg; j > 0; j--) loop.push(vAt[j * S1]);                  // ix = 0,   iz = seg .. 1
+  const L = loop.length, n0 = geo.attributes.position.count, n1 = n0 + L;
+  const grow = (name, comps) => {
+    const src = geo.attributes[name].array, out = new Float32Array(n1 * comps);
+    out.set(src);
+    for (let k = 0; k < L; k++) for (let c = 0; c < comps; c++) out[(n0 + k) * comps + c] = src[loop[k] * comps + c];
+    return out;
+  };
+  const pos = grow("position", 3), nrm = grow("normal", 3), col = grow("color", 3), uv = grow("uv", 2);
+  for (let k = 0; k < L; k++) pos[(n0 + k) * 3 + 1] -= SKIRT_DEPTH;
+  const old = geo.index.array, idx = new (n1 > 65535 ? Uint32Array : Uint16Array)(old.length + L * 6);
+  idx.set(old);
+  let o = old.length;
+  for (let k = 0; k < L; k++) {                                          // loop order runs clockwise seen from above: (a, b, b') faces OUTWARD on every edge
+    const a = loop[k], b = loop[(k + 1) % L], a2 = n0 + k, b2 = n0 + (k + 1) % L;
+    idx[o++] = a; idx[o++] = b; idx[o++] = b2;
+    idx[o++] = a; idx[o++] = b2; idx[o++] = a2;
+  }
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+}
+
 // ── height functions per map ────────────────────────────────────────────────
 function mkHeightFn(mapId, seed) {
   if (mapId === "isla_viva") {
@@ -393,6 +463,7 @@ export async function buildMap(W, mapId) {
   const rng = W.SIM.mulberry32(seed ^ 0xabcdef);
   const heightAt0 = mkHeightFn(mapId, seed);
   const waterY = K.water ? 0 : -999;
+  const propTablePromise = loadPropTable(W);   // never rejects (null = legacy colliders); awaited just before the first placement
 
   const g = W.group("map");
   let mapWater = null;   // exposed on the returned map so the camera can test submersion
@@ -531,12 +602,17 @@ export async function buildMap(W, mapId) {
     const posA = geo.attributes.position, uvA = geo.attributes.uv;
     const cols = new Float32Array(posA.count * 3);
     const nrm = new Float32Array(posA.count * 3);
+    const vAt = skirt ? new Int32Array((seg + 1) * (seg + 1)) : null;   // lattice (ix, iz) -> vertex index, for the skirt loop below
     for (let i = 0; i < posA.count; i++) {
       const x = posA.getX(i), z = posA.getZ(i);
       const gx = Math.round((x - cx0) / pitch) + 1, gz = Math.round((z - cz0) / pitch) + 1;
       const h = H[gz * N + gx];
-      const edge = skirt && (gx === 1 || gx === N - 2 || gz === 1 || gz === N - 2);
-      posA.setY(i, edge ? h - 0.35 : h);
+      // The perimeter keeps its TRUE height. (It used to be dropped 0.35 m so the near/far step "hid underground"; the cost was a
+      // groove along every near-chunk border where the drawn ground sat up to 0.35 m below the ground players, bots, loot and props
+      // stand on - 3.5% of all dry samples were more than 10 cm off. The crack against the far-LOD neighbour is closed by a skirt
+      // wall below instead, built after this loop.)
+      posA.setY(i, h);
+      if (vAt) vAt[(gz - 1) * (seg + 1) + (gx - 1)] = i;
       const c = colorAt(mapId, h, x, z, seed);
       cols[i * 3] = c[0]; cols[i * 3 + 1] = c[1]; cols[i * 3 + 2] = c[2];
       uvA.setXY(i, x / TILE, z / TILE);              // world-planar UV → tiles every 8m
@@ -546,6 +622,7 @@ export async function buildMap(W, mapId) {
     geo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
     uvA.needsUpdate = true;
+    if (skirt) addSkirt(geo, vAt, seg);
     const mesh = new THREE.Mesh(geo, terrMat);
     mesh.receiveShadow = true;
     return mesh;
@@ -841,8 +918,65 @@ export async function buildMap(W, mapId) {
   const ROAD_TILE = 6.0;      // asphalt tiles slower — it is a broad flat surface
 
   // ── structures: batched boxes + colliders ─────────────────────────────────
+  const PT = await propTablePromise;    // baked prop collider table (null = legacy fixed-radius prop colliders)
   const colliders = [];             // mkCollider(): {kind:'box'|'ramp', minX..maxZ, dir, prop, idx, hp, dead, _qs}
   const batches = {};               // colorHex -> geometry list
+  // Axis-aligned colliders for a (possibly yawed) box. A quarter turn is exact. Any other yaw used to become ONE AABB of the rotated box: 8.4 m
+  // of invisible wall beside the 18 m shipwreck hull, 1,100-2,500 m2 of phantom collider per match, and the invisible walkable floor beside
+  // a rotated pier deck. Contract C-COLL: no OBB narrowphase and no new collider shape, so the box is cut into small AABBs whose union hugs
+  // it. The error of an AABB piece against the rotated box is at most its edge / 2 (a 1 m cell turned 45 degrees pokes out 0.5 m), so
+  //   * a THIN box (<= 1 m across: walls, planks, log piles) is a chain of <= 1 m segments along its length, same height;
+  //   * a WIDE box (the hull, a pier deck) is cut into strips <= 0.5 m deep across the SHORTER of its two extents, each strip as wide as the
+  //     box is inside that slice (a strip's error is at most its depth, whatever the angle of the box's edges).
+  // What is left over is a staircase of at most ~0.5 m (was up to 8.4 m).
+  function boxColliders(cx, cy, cz, w, h, d, rotY) {
+    let c = Math.cos(rotY), s = Math.sin(rotY);
+    if (Math.abs(s) < 1e-9) s = 0;
+    if (Math.abs(c) < 1e-9) c = 0;
+    const y0 = cy - h / 2, y1 = cy + h / 2;
+    if (s === 0 || c === 0) {
+      const hw = (Math.abs(c) * w + Math.abs(s) * d) / 2, hd = (Math.abs(s) * w + Math.abs(c) * d) / 2;
+      colliders.push(mkCollider("box", cx - hw, cx + hw, y0, y1, cz - hd, cz + hd, -1, null, -1, 0));
+      return;
+    }
+    if (Math.min(w, d) <= 1.0) {                                           // thin: chain along the long axis
+      const longX = w >= d, L = longX ? w : d, n = Math.max(1, Math.ceil(L - 1e-9));
+      const sa = L / n / 2, sb = (longX ? d : w) / 2;                                      // segment half-length (along) / half-width (across)
+      const ax = Math.abs(c) * (longX ? sa : sb) + Math.abs(s) * (longX ? sb : sa);      // AABB half extents of one segment
+      const az = Math.abs(s) * (longX ? sa : sb) + Math.abs(c) * (longX ? sb : sa);
+      for (let k = 0; k < n; k++) {
+        const u = -L / 2 + (k + 0.5) * (L / n);                                            // offset along the long axis, box-local
+        const ox = longX ? u * c : u * s, oz = longX ? -u * s : u * c;                    // rotateY(rotY): x' = x c + z s, z' = -x s + z c
+        colliders.push(mkCollider("box", cx + ox - ax, cx + ox + ax, y0, y1, cz + oz - az, cz + oz + az, -1, null, -1, 0));
+      }
+      return;
+    }
+    // wide: strips across the shorter AABB extent. Corners of the rotated rectangle:
+    const P = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].map(([lx, lz]) => [cx + lx * c + lz * s, cz - lx * s + lz * c]);
+    const ex = (Math.abs(c) * w + Math.abs(s) * d), ez = (Math.abs(s) * w + Math.abs(c) * d);
+    const U = ex <= ez ? 0 : 1, V = 1 - U;                                 // U = the slicing axis (0 = x, 1 = z)
+    let umin = Infinity, umax = -Infinity;
+    for (const q of P) { if (q[U] < umin) umin = q[U]; if (q[U] > umax) umax = q[U]; }
+    const n = Math.min(64, Math.max(1, Math.ceil((umax - umin) / 0.5 - 1e-9)));
+    const rangeAt = (u, out) => {                                          // [vmin, vmax] of the rectangle on the line U = u
+      for (let i = 0; i < 4; i++) {
+        const a = P[i], b = P[(i + 1) % 4];
+        if (a[U] === b[U]) { if (a[U] === u) { out[0] = Math.min(out[0], a[V], b[V]); out[1] = Math.max(out[1], a[V], b[V]); } continue; }
+        if ((a[U] - u) * (b[U] - u) > 0) continue;
+        const t = (u - a[U]) / (b[U] - a[U]), v = a[V] + t * (b[V] - a[V]);
+        if (v < out[0]) out[0] = v;
+        if (v > out[1]) out[1] = v;
+      }
+    };
+    for (let k = 0; k < n; k++) {
+      const u0 = umin + (umax - umin) * k / n, u1 = umin + (umax - umin) * (k + 1) / n, r = [Infinity, -Infinity];
+      rangeAt(u0, r); rangeAt(u1, r);
+      for (const q of P) if (q[U] > u0 && q[U] < u1) { if (q[V] < r[0]) r[0] = q[V]; if (q[V] > r[1]) r[1] = q[V]; }
+      if (!(r[1] > r[0])) continue;
+      if (U === 0) colliders.push(mkCollider("box", u0, u1, y0, y1, r[0], r[1], -1, null, -1, 0));
+      else colliders.push(mkCollider("box", r[0], r[1], y0, y1, u0, u1, -1, null, -1, 0));
+    }
+  }
   function addBox(cx, cy, cz, w, h, d, color, opts) {
     opts = opts || {};
     const geo = new THREE.BoxGeometry(w, h, d);
@@ -853,12 +987,7 @@ export async function buildMap(W, mapId) {
     // default "s" = the struct brick) — the merge loop below splits it back out
     const bkey = color + "|" + (opts.tex || "s");
     (batches[bkey] = batches[bkey] || []).push(geo);
-    if (opts.collide !== false) {
-      // AABB of the (possibly rotated) box — conservative
-      const hw = opts.rotY ? (Math.abs(Math.cos(opts.rotY)) * w + Math.abs(Math.sin(opts.rotY)) * d) / 2 : w / 2;
-      const hd = opts.rotY ? (Math.abs(Math.sin(opts.rotY)) * w + Math.abs(Math.cos(opts.rotY)) * d) / 2 : d / 2;
-      colliders.push(mkCollider("box", cx - hw, cx + hw, cy - h / 2, cy + h / 2, cz - hd, cz + hd, -1, null, -1, 0));
-    }
+    if (opts.collide !== false) boxColliders(cx, cy, cz, w, h, d, opts.rotY || 0);
   }
   // addBox rotates a box about its OWN centre (rotateY then translate on an
   // origin-centred BoxGeometry), so a caller that also wants the box MOVED around
@@ -891,6 +1020,73 @@ export async function buildMap(W, mapId) {
     const hx = (dir === 0 || dir === 1) ? d / 2 : w / 2;
     const hz = (dir === 0 || dir === 1) ? w / 2 : d / 2;
     colliders.push(mkCollider("ramp", cx - hx, cx + hx, cy, cy + h, cz - hz, cz + hz, dir, null, -1, 0));
+  }
+  // C-RAMP authoring (Wave 5, lane 5A). A ramp is a 0.3 m sloped slab: walkable from its low edge, 45 degrees at most, and it must meet the
+  // thing it climbs to. The old call sites passed the height at the BUILDING CENTRE as the ramp's foot, so on any slope the low edge hung
+  // in the air or was buried (start step > 0.55 m on 11 / 22 / 14 ramps of 83 / 222 / 70, up to 5.9 m), 17-39 ramps per map climbed
+  // steeper than 45 degrees (a ranger tower: 11.3 m in 6.4 m = 60), and the tops stopped short of the deck or at its face.
+  // addRampSnap takes the deck FACE: (faceX, faceZ) = the centre of the edge the ramp climbs onto, `topY` = the surface it lands on, `run` = the
+  // preferred length, `dir` = the direction it rises (0 +X, 1 -X, 2 +Z, 3 -Z). It puts the low edge on the lowest ground under the foot (5 points
+  // across the width, on the edge and 0.3 m beyond it: lip <= 0.02 m), lengthens the run until the slope is <= 45 degrees (the foot moves out
+  // and the ground there is re-read; 4 passes), and runs the high end `o` metres ONTO the deck. `o` is the most the capsule can still walk
+  // over: the deck's side face is a wall for a capsule (r 0.45) whose feet are more than STEP_UP (0.55) under the deck top, and at the moment
+  // it touches that face the ramp is (o + 0.45) x slope under the top, so o = 0.5 / slope - 0.45, clamped to 0.02 .. 0.3 (walked with the real
+  // mover: 0.2 m of overlap on a 43-degree ramp left every ranger-tower leg 0.03 m short of the landing). `opts.o` overrides (0 = the ramp
+  // ends exactly at the face, e.g. beside a roof edge it is stepped onto sideways), `opts.keepRun` (inside a building, where the length is
+  // fixed) only snaps the foot, `opts.cy` fixes the foot height (a landing slab, a floor), `opts.maxCy` caps it (a ground-floor stair under
+  // a slab: its stairwell hole is placed for a ramp that starts at the BUILDING-CENTRE height, and a foot raised 0.9 m above that leaves a
+  // climber's head 0.05 m into the slab edge before the hole: walked, the Mill tower stair on a slope stopped 1.8 m short). Returns { cy, rise, run, cx, cz }.
+  const RAMP_DIR = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const rampOverlap = (slope) => Math.min(0.3, Math.max(0.02, 0.5 / Math.max(0.05, slope) - 0.45));
+  function addRampSnap(faceX, faceZ, w, topY, run, dir, color, opts) {
+    opts = opts || {};
+    const dx = RAMP_DIR[dir][0], dz = RAMP_DIR[dir][1], px = -dz, pz = dx;
+    let r = run, cy = topY - 1;
+    for (let pass = 0; pass < 4; pass++) {
+      const fx = faceX - dx * r, fz = faceZ - dz * r;
+      let g = Infinity;
+      for (let k = 0; k < 5; k++) for (const o of [0, 0.3]) g = Math.min(g, heightAt0(fx + px * (k / 4 - 0.5) * w - dx * o, fz + pz * (k / 4 - 0.5) * w - dz * o));
+      cy = opts.cy != null ? opts.cy : opts.maxCy != null ? Math.min(g, opts.maxCy) : g;
+      const rise = Math.max(0.3, topY - cy);
+      if (opts.keepRun || rise <= r + 1e-6) break;               // already <= 45 degrees
+      r = rise * 1.02;
+    }
+    const rise = Math.max(0.3, topY - cy), o = opts.o != null ? opts.o : rampOverlap(rise / r);
+    const run2 = r + o, cx = faceX + dx * o - dx * run2 / 2, cz = faceZ + dz * o - dz * run2 / 2;   // the foot stays where it was; the high end moves o past the face
+    addRamp(cx, cy, cz, w, rise, run2, dir, color);
+    return { cy, rise, run: run2, cx, cz };
+  }
+  // The lowest ground under an axis-aligned rectangle (centre + 4 corners), and a vertical post that reaches down to it: legs, stilts and poles
+  // were cut at ONE height sampled at the structure's centre, so on a slope the downhill ones hung in the air.
+  const gMinRect = (x, z, hx, hz) => Math.min(heightAt0(x, z), heightAt0(x - hx, z - hz), heightAt0(x + hx, z - hz), heightAt0(x - hx, z + hz), heightAt0(x + hx, z + hz));
+  function addStilt(x, z, w, top, color, collide) {
+    const g0 = gMinRect(x, z, w / 2, w / 2) - 0.06;
+    addBox(x, (g0 + top) / 2, z, w, top - g0, w, color, collide ? undefined : { collide: false });
+  }
+  // A cosmetic board between two world points, standing on the ground at both ends: a box h tall and t thick whose long axis follows the 3D
+  // vector a -> b (pitched with the ground, never rolled), no collider. Fences used to be ONE level box per side, 22 m (paddock) to 150 m (farm)
+  // long, at the height of its midpoint: floating at one end and buried at the other on any slope (up to 5.7 m of float at the far end).
+  const _fbM = new THREE.Matrix4(), _fbU = new THREE.Vector3(), _fbN = new THREE.Vector3(), _fbS = new THREE.Vector3(), _fbUp = new THREE.Vector3(0, 1, 0);
+  function addFenceBoard(ax, ay, az, bx, by, bz, h, t, color) {
+    const L = Math.hypot(bx - ax, by - ay, bz - az);
+    if (L < 1e-3) return;
+    _fbU.set((bx - ax) / L, (by - ay) / L, (bz - az) / L);
+    _fbN.copy(_fbUp).addScaledVector(_fbU, -_fbU.y).normalize();            // "up", perpendicular to the board's long axis
+    _fbS.crossVectors(_fbU, _fbN);
+    const geo = new THREE.BoxGeometry(L, h, t);
+    scaleBoxUV(geo, L, h, t, STRUCT_TILE);
+    geo.applyMatrix4(_fbM.makeBasis(_fbU, _fbN, _fbS));
+    geo.translate((ax + bx) / 2 + _fbN.x * h / 2, (ay + by) / 2 + _fbN.y * h / 2, (az + bz) / 2 + _fbN.z * h / 2);
+    const bkey = color + "|s";
+    (batches[bkey] = batches[bkey] || []).push(geo);
+  }
+  // a fence run in <= 3 m panels, each standing 5 cm into the ground at both of its ends
+  function addFence(x0, z0, x1, z1, h, t, color) {
+    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 3));
+    for (let k = 0; k < n; k++) {
+      const ax = x0 + (x1 - x0) * k / n, az = z0 + (z1 - z0) * k / n, bx = x0 + (x1 - x0) * (k + 1) / n, bz = z0 + (z1 - z0) * (k + 1) / n;
+      addFenceBoard(ax, heightAt0(ax, az) - 0.05, az, bx, heightAt0(bx, bz) - 0.05, bz, h, t, color);
+    }
   }
 
   // A square floor slab MINUS a rectangular stairwell hole (world coords), built
@@ -1027,7 +1223,12 @@ export async function buildMap(W, mapId) {
         addBox(x + W2, SILL_Y, z, T, SILL_H, fw, color, { tex: "block" }); addBox(x + W2, HEAD_Y, z, T, HEAD_H, fw, color, { tex: "block" });
       }
       // interior ramp to next floor
-      if (f < floors - 1) addRamp(x + (f % 2 ? -fw / 4 : fw / 4), fy, z, 2.2, FH, fw * 0.7, f % 2 ? 3 : 2, shade(color, 0.7));
+      if (f < floors - 1) {
+        // (the ground-floor ramp's foot is snapped to the terrain it starts on; the upper ones start on a slab, unchanged)
+        const rx2 = x + (f % 2 ? -fw / 4 : fw / 4), rdir = f % 2 ? 3 : 2, rrun2 = fw * 0.7;
+        if (f === 0) addRampSnap(rx2, z + (rdir === 2 ? rrun2 / 2 : -rrun2 / 2), 2.2, fy + FH, rrun2, rdir, shade(color, 0.7), { keepRun: true, o: 0, maxCy: fy });
+        else addRamp(rx2, fy, z, 2.2, FH, rrun2, rdir, shade(color, 0.7));
+      }
       loot(x + (rng() - 0.5) * fw * 0.5, fy + 0.5, z + (rng() - 0.5) * fw * 0.5, poi);
     }
     addBox(x, y + floors * FH + 0.15, z, fw, 0.3, fw, shade(color, 0.65)); // roof slab
@@ -1038,31 +1239,62 @@ export async function buildMap(W, mapId) {
     // exterior ramp along the +X wall up to the roof — rooftop chests must be
     // reachable on foot (playtest: "are there ramps to get up there?"); ends
     // short of the parapet so you can step sideways onto the slab
-    addRamp(x + W2 + 1.15, y, z - 0.8, 2.2, floors * FH + 0.45, fw - 1.6, 2, shade(color, 0.72));
+    // (foot on the terrain it starts on; lengthened until it climbs <= 45 degrees: a 3-storey tower was 12.45 m in 9.4 m = 53)
+    addRampSnap(x + W2 + 1.15, z + fw / 2 - 1.6, 2.2, y + floors * FH + 0.45, fw - 1.6, 2, shade(color, 0.72), { o: 0 });
   }
 
   function rangerTower(x, z, color, poi) {
     const y = heightAt0(x, z);
     const H = 11, P = 3.4;
+    // each 11 m leg reaches the ground under ITSELF (all four were cut at the centre height: a leg in the air on 21-28% of the towers)
     for (const [dx, dz] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]])
-      addBox(x + dx, y + H / 2, z + dz, 0.4, H, 0.4, color);
+      addStilt(x + dx, z + dz, 0.4, y + H, color, true);
     addBox(x, y + H + 0.15, z, P + 1.4, 0.3, P + 1.4, shade(color, 0.85));    // deck
     // The +Z rail is split into two 1.6 m stubs to leave a gateway where the ramp
     // arrives. It used to be one solid 4.8 m rail across all four sides: the ramp
     // top ended at z+3.6 while the deck edge is z+2.4, so you climbed 11 m, hit a
     // 1.15 m gap of air and then a 1.2 m wall. STEP_UP is 0.55 (player.js) and the
     // jump apex is 1.38 m, so the deck chest on all three Deepwood towers was
-    // unreachable on foot. The ramp start moves to z+P+2.2 to meet the deck edge.
+    // unreachable on foot. (The access is now a switchback that arrives on that gateway, see below.)
     for (const [dx, dz, w, d] of [[0, -(P + 1.2) / 2, P + 1.4, 0.3], [-(P + 1.4) / 2 + 0.8, (P + 1.2) / 2, 1.6, 0.3], [(P + 1.4) / 2 - 0.8, (P + 1.2) / 2, 1.6, 0.3], [-(P + 1.2) / 2, 0, 0.3, P + 1.4], [(P + 1.2) / 2, 0, 0.3, P + 1.4]])
       addBox(x + dx, y + H + 0.9, z + dz, w, 1.2, d, color);
     addBox(x, y + H + 2.6, z, P + 2, 0.25, P + 2, shade(color, 0.7), { collide: false }); // little roof
-    addRamp(x, y, z + P + 2.2, 2.0, H + 0.3, 6.4, 3, shade(color, 0.8));      // access ramp
+    // ...which floated 0.97 m above the rails on nothing: four corner posts carry it from the deck to its underside (y+H+2.475)
+    for (const [dx, dz] of [[-2.3, -2.3], [2.3, -2.3], [-2.3, 2.3], [2.3, 2.3]]) addBox(x + dx, y + H + 1.4, z + dz, 0.25, 2.2, 0.25, shade(color, 0.9), { collide: false });
+    // ACCESS: a two-leg switchback. The single ramp climbed 11.3 m in 6.4 m (60 degrees); C-RAMP walks 45 at most. Lower leg: foot beside
+    // the tower, rising AWAY from it (+Z) to a landing at half the climb; upper leg: from the landing back toward the tower, on the
+    // gateway lane, onto the deck. Legs are 1.6 m wide (the gateway), side by side with a 0.2 m slot between; the landing is 3.8 x 3.1 m.
+    {
+      const deckTop = y + H + 0.3, LW = 1.6, xU = x, xL = x + 1.8, zFoot = z + 2.9;
+      let g = Infinity;
+      for (let k = 0; k < 5; k++) for (const o of [0, 0.3]) g = Math.min(g, heightAt0(xL + (k / 4 - 0.5) * LW, zFoot - o));
+      const landing = g + (deckTop - g) / 2;                                    // landing surface: half the climb above the lower foot
+      const runL = Math.max(6.0, (landing - g) * 1.03), zTop = zFoot + runL;    // 6 m on level ground; longer when the foot is downhill (<= 45 degrees)
+      const oL = rampOverlap((landing - g) / runL);
+      addRamp(xL, g, zFoot + (runL + oL) / 2, LW, landing - g, runL + oL, 2, shade(color, 0.8));   // lower leg, rises toward +Z, ends oL onto the landing
+      addBox(x + 0.9, landing - 0.15, zTop + 1.55, 3.8, 0.3, 3.1, shade(color, 0.85));      // landing slab: z = zTop .. zTop+3.1, its top = the legs' ends
+      for (const px of [x - 0.85, x + 2.65]) addStilt(px, zTop + 2.9, 0.3, landing - 0.3, color, true);   // landing posts (far corners)
+      const zLow = zTop + 1.5, zFace = z + 2.4;                                                 // upper leg: low edge on the landing, high end onto the deck's +Z edge
+      const rU = zLow - zFace, oU = rampOverlap((deckTop - landing) / rU);
+      addRamp(xU, landing, (zLow + zFace - oU) / 2, LW, deckTop - landing, rU + oU, 3, shade(color, 0.8));  // rises toward -Z
+    }
     chest(x, y + H + 0.6, z, poi);
   }
 
   function pier(x, z, len, rot, color, poi) {
     const y = waterY + 0.5;
     addBox(x, y, z, 3, 0.3, len, color, { rotY: rot, tex: "plank" });   // a dock reads as boards, not brick
+    // piles: the deck hovered 0.35 m over the water on nothing at all. A pair every ~4.5 m, from the seabed (or the shore) up into the deck's
+    // underside; cosmetic like the deck's other trim (a swimmer clipping a 0.3 m pile is not worth a collider)
+    {
+      const c = Math.cos(rot), sn = Math.sin(rot);
+      const n = Math.max(2, Math.round(len / 4.5) + 1);
+      for (let k = 0; k < n; k++) for (const lat of [-1.35, 1.35]) {
+        const u = -len / 2 + 0.6 + k * (len - 1.2) / (n - 1);                  // along the deck, box-local; rotateY(rot): x' = x c + z s, z' = -x s + z c
+        const px = x + lat * c + u * sn, pz = z - lat * sn + u * c, bot = heightAt0(px, pz) - 0.3, top = y - 0.1;
+        if (top - bot > 0.3) addBox(px, (bot + top) / 2, pz, 0.3, top - bot, 0.3, shade(color, 0.7), { collide: false });
+      }
+    }
     loot(x, y + 0.6, z, poi);
     if (rng() < 0.6) chest(x, y + 0.6, z + len * 0.35, poi);
   }
@@ -1072,6 +1304,77 @@ export async function buildMap(W, mapId) {
   const landmarks = [];             // {x,z,r} unnamed inter-POI structures — trees keep clear
   const lampPts = [];               // {x,y,z} emissive lamp heads — the near-lamp light pool follows these
   const props = { palm: [], tree: [], pine: [], birch: [], bush: [], rocks: [], car: [], container: [], barrel: [] };
+
+  // ── prop grounding (Wave 5, lane 5A) ──────────────────────────────────────────────────────────────────────────────
+  // Every placed prop is {x, y, z, s, ry} where (x, z) is its ANCHOR: the spot the seeded generator picked, the one nearPoi() tested and
+  // the one its collider belongs to. Its y was the ground at that single point, so a prop on a slope hung in the air on the downhill side
+  // (palms 11-16%, bushes 12-18%, cars 18-63%, containers 89% of instances had a base vertex more than 10 cm above the drawn ground).
+  // finalizeProps() runs ONCE after all placement and
+  //   1. drops a `rej` entry whose ground is steeper than its kind tolerates (Unreal's foliage "Ground Slope Angle"). The seeded draws
+  //      (x, z, s, ry) already happened, so the shared map RNG stream is untouched and every client drops the same entries;
+  //   2. sets y = (lowest ground under the baked base-contact points) - embed: nothing floats, and the high side sinks a few cm (Unreal's
+  //      foliage "Z Offset"). Trees 0.12 m, bushes and rocks 0.15 m (the near-ring triangles can sit 0.17 m under heightAt on a steep curve: one bush in 7,000 measured 0.27 m up at 0.10), hard props 0.05 m;
+  //   3. for cars and containers (8 degrees) and rock clusters (35) fits a plane through those points and tilts the mesh to it, about the
+  //      anchor. The colliders stay axis-aligned boxes (contract C-COLL), each spanning the lowest and highest point of its part.
+  // Everything is a pure function of (kind, x, z, s, ry) and the baked table.
+  const PROP_EMBED = { palm: 0.12, tree: 0.12, pine: 0.12, birch: 0.12, bush: 0.15, rocks: 0.15, car: 0.05, container: 0.05, barrel: 0.05 };
+  const PROP_SLOPE_MAX = { palm: 40, tree: 35, pine: 42, birch: 35, bush: 50, rocks: 55, car: 14, barrel: 22 };   // degrees
+  // Max tilt to the ground plane, degrees. Cars and containers are rigid and upright: 8. A rock cluster laid flat on a hillside buries its
+  // uphill rocks (at 25 degrees the whole cluster vanished into the slope), so it follows the slope up to 35 degrees like boulders do.
+  const PROP_TILT_DEG = { car: 8, container: 8, rocks: 35 };
+  const _sx = new Float64Array(64), _sz = new Float64Array(64), _sg = new Float64Array(64);
+  function groundSlopeDeg(x, z) {
+    const e = 1.5, gx = (heightAt0(x + e, z) - heightAt0(x - e, z)) / (2 * e), gz = (heightAt0(x, z + e) - heightAt0(x, z - e)) / (2 * e);
+    return Math.atan(Math.hypot(gx, gz)) * 180 / Math.PI;
+  }
+  function settleProp(kind, it) {
+    if (it.set) return;
+    it.set = true;
+    const tk = PT && PT.kinds[kind];
+    if (!tk) { it.y = heightAt0(it.x, it.z); return; }          // legacy: ground at the anchor
+    const ry = it.ry || 0, c = Math.cos(ry), sn = Math.sin(ry), sc = it.s, B = tk.base, n = B.length;
+    const vx = _sx, vz = _sz, g = _sg;                                       // shared scratch (n <= 36): no allocation per placed prop
+    for (let i = 0; i < n; i++) {
+      const u = B[i][0] * sc, w = B[i][1] * sc;
+      vx[i] = u * c + w * sn; vz[i] = -u * sn + w * c;                       // rotateY(ry): x' = x c + z s, z' = -x s + z c
+      g[i] = heightAt0(it.x + vx[i], it.z + vz[i]);
+    }
+    let gx = 0, gz = 0;
+    const tiltDeg = PROP_TILT_DEG[kind];
+    if (tiltDeg && !it.flat) {
+      // least-squares plane  g = a + gx*vx + gz*vz  through the contact points (3x3 normal equations, Cramer); collinear points -> no tilt
+      let sx = 0, sz = 0, sxx = 0, sxz = 0, szz = 0, sg = 0, sxg = 0, szg = 0;
+      for (let i = 0; i < n; i++) { sx += vx[i]; sz += vz[i]; sxx += vx[i] * vx[i]; sxz += vx[i] * vz[i]; szz += vz[i] * vz[i]; sg += g[i]; sxg += vx[i] * g[i]; szg += vz[i] * g[i]; }
+      const det3 = (a, b, cc, d, e, f, gg, h, i2) => a * (e * i2 - f * h) - b * (d * i2 - f * gg) + cc * (d * h - e * gg);
+      const D = det3(n, sx, sz, sx, sxx, sxz, sz, sxz, szz);
+      if (Math.abs(D) > 1e-6) {
+        gx = det3(n, sg, sz, sx, sxg, sxz, sz, szg, szz) / D;
+        gz = det3(n, sx, sg, sx, sxx, sxg, sz, sxz, szg) / D;
+        const mag = Math.hypot(gx, gz), cap = Math.tan(tiltDeg * Math.PI / 180);
+        if (mag > cap) { gx *= cap / mag; gz *= cap / mag; }
+      }
+    }
+    let y0 = Infinity;
+    for (let i = 0; i < n; i++) {
+      const dy = gx * vx[i] + gz * vz[i];                                      // height of this base point above the instance origin once tilted
+      if (g[i] - dy < y0) y0 = g[i] - dy;
+    }
+    it.y = y0 - (PROP_EMBED[kind] || 0.1);
+    it.tx = gx; it.tz = gz;                                                    // the ground plane's slope (0 = untilted); the instance matrix and the collider boxes both read it
+  }
+  function finalizeProps() {
+    const stats = {};
+    for (const kind in props) {
+      const list = props[kind];
+      if (!list.length) continue;
+      const lim = PROP_SLOPE_MAX[kind], keep = [];
+      for (const it of list) { if (it.rej && lim != null && groundSlopeDeg(it.x, it.z) > lim) continue; keep.push(it); }
+      props[kind] = keep;
+      for (const it of keep) settleProp(kind, it);
+      stats[kind] = { generated: list.length, rejected: list.length - keep.length };
+    }
+    return stats;
+  }
   // Scatter is STRATIFIED (grid-jittered), not uniform-random: `g` is a grid
   // dimension, not an attempt count. Uniform placement left huge holes — measured
   // on Ashgrid seed 1234, mean distance from open ground to the nearest solid-collider
@@ -1089,7 +1392,9 @@ export async function buildMap(W, mapId) {
       if (h < minH || h > maxH) continue;
       if (nearPoi(x, z, 26) || nearLandmark(x, z)) continue;
       const s = 0.8 + rng() * 0.9;
-      props[kind].push({ x, y: h, z, s, ry: rng() * Math.PI * 2 });
+      // `rej`: this entry may be dropped on a slope too steep for the kind (finalizeProps). Both draws above happen first, and the
+      // rejection happens after ALL placement, so the shared map RNG stream is exactly what it was.
+      props[kind].push({ x, y: h, z, s, ry: rng() * Math.PI * 2, rej: 1 });
     }
   }
   function nearPoi(x, z, pad) {
@@ -1256,20 +1561,26 @@ export async function buildMap(W, mapId) {
     addBoxR(x, z, -pier, d / 2, y + H / 2, segW, H, T, wallC, rot);                 // front L of door
     addBoxR(x, z, pier, d / 2, y + H / 2, segW, H, T, wallC, rot);                  // front R of door
     addBoxR(x, z, 0, d / 2, y + H - 0.35, doorW, 0.7, T, wallC, rot);               // door lintel
-    addBoxR(x, z, 0, 0, y + H + 0.35, w + 0.7, 0.3, d + 0.7, roofC, rot, { tex: "shingle" });   // roof deck (overhangs)
-    addBoxR(x, z, 0, 0, y + H + 0.85, w * 0.5, 0.7, d + 0.5, shade(roofC, 0.88), rot, { tex: "shingle" }); // ridge cap
+    // The deck used to sit at y+H+0.35 (spanning H+0.20..H+0.50): a 20 cm slit of daylight between the walls' top (y+H) and the roof, on every
+    // house in every match. Resting it ON the walls (H+0.00..H+0.30) puts the roof surface 0.20 m lower, the ridge cap with it.
+    addBoxR(x, z, 0, 0, y + H + 0.15, w + 0.7, 0.3, d + 0.7, roofC, rot, { tex: "shingle" });   // roof deck (overhangs)
+    addBoxR(x, z, 0, 0, y + H + 0.65, w * 0.5, 0.7, d + 0.5, shade(roofC, 0.88), rot, { tex: "shingle" }); // ridge cap
     loot(x, y + 0.5, z, poiId);
     if (rng() < 0.5) chest(x + (rng() - 0.5) * w * 0.4, y + 0.6, z + (rng() - 0.5) * d * 0.4, poiId);
   }
   // street dressing along a town's main street: lamp posts, market stalls, benches,
   // hydrants (all cosmetic — collide:false — so they add life without snagging players).
+  // Street dressing is cosmetic (collide:false) but it is what the eye measures the ground against, and every piece used to hang off ONE
+  // height sampled at its centre: lamp posts, stall posts and bench seats floated 10-40 cm on a slope (benches had no legs at all, the awning
+  // sat 10 cm above its posts, the counter 55 cm above the ground). Now each leg / post / pole reaches down to the ground under ITSELF, and a
+  // slab sits on the lowest ground under its footprint.
   function streetFurniture(cx, cz, A, span, minH) {
     const half = span / 2;
     for (const s of [-1, 1]) {
       for (let t = -half + 8; t <= half - 8; t += 16) {
         const lx = A ? cx + t : cx + s * 5.5, lz = A ? cz + s * 5.5 : cz + t, y = heightAt0(lx, lz);
         if (y < minH) continue;
-        addBox(lx, y + 2.4, lz, 0.22, 4.8, 0.22, "#3a3d42", { collide: false });   // lamp pole
+        addStilt(lx, lz, 0.22, y + 4.8, "#3a3d42", false);                                  // lamp pole
         addBox(lx, y + 4.9, lz, 0.5, 0.3, 0.5, "#ffe9a8", { collide: false });      // warm lamp head
         lampPts.push({ x: lx, y: y + 4.9, z: lz });
       }
@@ -1277,17 +1588,27 @@ export async function buildMap(W, mapId) {
     for (let i = 0; i < 2; i++) {                                                    // market stalls
       const sx = A ? cx + (i ? 12 : -12) : cx + 9, sz = A ? cz + 9 : cz + (i ? 12 : -12), y = heightAt0(sx, sz);
       if (y < minH) continue;
-      for (const [dx, dz] of [[-1.5, -1], [1.5, -1], [-1.5, 1], [1.5, 1]]) addBox(sx + dx, y + 1.1, sz + dz, 0.15, 2.2, 0.15, "#8a6a3a", { collide: false });
+      for (const [dx, dz] of [[-1.5, -1], [1.5, -1], [-1.5, 1], [1.5, 1]]) addStilt(sx + dx, sz + dz, 0.15, y + 2.35, "#8a6a3a", false);   // posts run up INTO the awning (2.30..2.50)
       addBox(sx, y + 2.4, sz, 3.6, 0.2, 2.6, i ? "#c0563a" : "#3a7a9a", { collide: false });  // awning
-      addBox(sx, y + 0.9, sz - 1, 3.4, 0.7, 0.5, "#a8794f", { collide: false });               // counter
+      const cg = gMinRect(sx, sz - 1, 1.7, 0.25) - 0.06;                                       // counter: a solid from the ground up to 1.25 m
+      addBox(sx, (cg + y + 1.25) / 2, sz - 1, 3.4, y + 1.25 - cg, 0.5, "#a8794f", { collide: false });
       loot(sx, y + 0.5, sz, null);
     }
     for (let i = 0; i < 4; i++) {                                                    // benches + hydrants
       const t = -half + rng() * span, s = rng() < 0.5 ? -1 : 1;
       const bx = A ? cx + t : cx + s * 7.5, bz = A ? cz + s * 7.5 : cz + t, y = heightAt0(bx, bz);
       if (y < minH) continue;
-      if (rng() < 0.55) { addBox(bx, y + 0.5, bz, 2, 0.28, 0.6, "#8a6a3a", { collide: false }); addBox(bx, y + 0.9, bz - 0.25, 2, 0.55, 0.15, "#8a6a3a", { collide: false }); }
-      else addBox(bx, y + 0.5, bz, 0.4, 1.0, 0.4, "#c23b3b", { collide: false });    // hydrant
+      if (rng() < 0.55) {
+        // seat on two legs (the seat is 0.36..0.64 above the centre ground); each leg reaches the ground under it; the backrest rests on the seat
+        for (const lxo of [-0.8, 0.8]) {
+          const lg = gMinRect(bx + lxo, bz, 0.06, 0.25) - 0.06;
+          addBox(bx + lxo, (lg + y + 0.4) / 2, bz, 0.12, y + 0.4 - lg, 0.5, "#8a6a3a", { collide: false });
+        }
+        addBox(bx, y + 0.5, bz, 2, 0.28, 0.6, "#8a6a3a", { collide: false }); addBox(bx, y + 0.9, bz - 0.25, 2, 0.55, 0.15, "#8a6a3a", { collide: false });
+      } else {                                                                      // hydrant
+        const hg = gMinRect(bx, bz, 0.2, 0.2) - 0.06;
+        addBox(bx, (hg + y + 1.0) / 2, bz, 0.4, y + 1.0 - hg, 0.4, "#c23b3b", { collide: false });
+      }
     }
   }
   // a town: a main street through the POI with houses in lots on both sides facing
@@ -1392,10 +1713,10 @@ export async function buildMap(W, mapId) {
         loot(x, y + 0.5, z, null);
       } else {                                              // fenced paddock (cosmetic, never traps)
         const F = 11, fh = 1.0;
-        addBox(x, heightAt0(x, z - F) + fh / 2, z - F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
-        addBox(x, heightAt0(x, z + F) + fh / 2, z + F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
-        addBox(x - F, heightAt0(x - F, z) + fh / 2, z, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
-        addBox(x + F, heightAt0(x + F, z) + fh / 2, z, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
+        addFence(x - F, z - F, x + F, z - F, fh, 0.2, "#9a7a4a");
+        addFence(x - F, z + F, x + F, z + F, fh, 0.2, "#9a7a4a");
+        addFence(x - F, z - F, x - F, z + F, fh, 0.2, "#9a7a4a");
+        addFence(x + F, z - F, x + F, z + F, fh, 0.2, "#9a7a4a");
         hut(x, z, 4.5, 4, 0, wallCs[0], null);
       }
       const lx = x + (rng() - 0.5) * 16, lz = z + (rng() - 0.5) * 16;
@@ -1434,7 +1755,7 @@ export async function buildMap(W, mapId) {
   }
   function waterTower(x, z, poi) {
     const y = heightAt0(x, z), legH = 12;
-    for (const [dx, dz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) addBox(x + dx, y + legH / 2, z + dz, 0.5, legH, 0.5, "#8a8378");
+    for (const [dx, dz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) addStilt(x + dx, z + dz, 0.5, y + legH, "#8a8378", true);   // each leg reaches the ground under ITSELF
     addBox(x, y + legH * 0.55, z - 3, 6.6, 0.3, 0.3, "#8a8378", { collide: false });
     addBox(x, y + legH * 0.55, z + 3, 6.6, 0.3, 0.3, "#8a8378", { collide: false });
     addBox(x, y + legH + 2.6, z, 8.2, 5.2, 8.2, "#b6ad8c");            // tank
@@ -1464,6 +1785,9 @@ export async function buildMap(W, mapId) {
     addBox(x - TW / 2, y + 9, tz, T, TH, TW, "#9a9488");
     addBox(x + TW / 2, y + 9, tz, T, TH, TW, "#9a9488");
     addBox(x, y + 13.5, tz + TW / 2, TW, 9, T, "#9a9488");              // open below y+9 so the nave feeds it
+    // The tapered spire's first stage (3.2 m wide) hovered 0.15 m over the shell's top AND sat inside the 4.2 m shell's hollow, touching nothing: a
+    // belfry cap (4.6 m, resting on the wall tops at y+18) now carries it, and the stages overlap the cap and each other.
+    addBox(x, y + 18.15, tz, TW + 0.4, 0.3, TW + 0.4, "#8a8478", { collide: false });
     for (let i = 0; i < 4; i++) addBox(x, y + 19 + i * 1.6, tz, 3.2 - i * 0.75, 1.7, 3.2 - i * 0.75, "#6a4028", { collide: false });  // tapered spire (cosmetic cap)
     chest(x, y + 0.6, z, poi); loot(x, y + 0.5, z, poi); loot(x + 4, y + 0.5, z, poi);
   }
@@ -1494,23 +1818,26 @@ export async function buildMap(W, mapId) {
       addBox(bx + (cart + bs) / 2, by + BH / 2, bz + BD / 2, bs, BH, BT, "#b0623c");   // front, R
       addBox(bx, by + BH - 0.6, bz + BD / 2, cart, 1.2, BT, "#b0623c");  // header over the 3.6 m opening
       addBox(bx, by + 2.6, bz - 3, BW - BT * 2, 0.3, 6, shade("#b0623c", 0.9));       // hayloft over the back half
-      addRamp(bx, by, bz + 3, 2.2, 2.75, 5.5, 3, "#8a4d2f");             // loft ramp, in the open front half
+      // loft ramp: foot on the barn floor, top 0.2 m ONTO the loft slab (it ended 0.25 m short of it)
+      addRampSnap(bx, bz, 2.2, by + 2.75, 5.5, 3, "#8a4d2f", { keepRun: true });             // face = the loft slab's front edge (z = bz)
       addBox(bx, by + 5.4, bz, 8.5, 1.2, 12.5, shade("#b0623c", 0.8));   // barn roof
       // The hay ramp used to start at bz+7 and run 9 m, which put its top INSIDE the
       // barn — fine against a solid block, but it now cuts straight through the cart
       // door and the front gable. Pushed out so its top lands at the wall face.
-      addRamp(bx, by, bz + 11, 3, 5.1, 9, 3, "#8a4d2f");                 // hay ramp to the roof chest
-      chest(bx, by + 5.4, bz, p.id);
+      // The roof slab is 1.2 m thick (by+4.8 .. by+6.0) but the ramp stopped at by+5.1, 0.9 m under its top, against its side face (STEP_UP is
+      // 0.55) and the chest was authored INSIDE the slab: the ramp now lands on the roof top, 0.3 m onto the slab, and the chest sits on it.
+      addRampSnap(bx, bz + 6.25, 3, by + 6.0, 9, 3, "#8a4d2f");          // hay ramp to the roof chest; face = the roof slab's front edge (z = bz + 6.25)
+      chest(bx, by + 6.6, bz, p.id);
       loot(bx, by + 0.5, bz + 3, p.id); loot(bx, by + 3.1, bz - 3, p.id);   // barn floor + hayloft
       const sx = bx, sz = bz - 15, sy = heightAt0(sx, sz);
       addBox(sx, sy + 5, sz, 4, 10, 4, "#c8b48a");                       // silo
       addBox(sx, sy + 10.4, sz, 4.6, 1.2, 4.6, shade("#c8b48a", 0.72));
     }
-    const F = R * 0.95, fh = 1.0;                                        // cosmetic fence (never traps players)
-    addBox(cx, heightAt0(cx, cz - F) + fh / 2, cz - F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
-    addBox(cx, heightAt0(cx, cz + F) + fh / 2, cz + F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
-    addBox(cx - F, heightAt0(cx - F, cz) + fh / 2, cz, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
-    addBox(cx + F, heightAt0(cx + F, cz) + fh / 2, cz, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
+    const F = R * 0.95, fh = 1.0;                                        // cosmetic fence (never traps players); follows the ground in 3 m panels
+    addFence(cx - F, cz - F, cx + F, cz - F, fh, 0.2, "#9a7a4a");
+    addFence(cx - F, cz + F, cx + F, cz + F, fh, 0.2, "#9a7a4a");
+    addFence(cx - F, cz - F, cx - F, cz + F, fh, 0.2, "#9a7a4a");
+    addFence(cx + F, cz - F, cx + F, cz + F, fh, 0.2, "#9a7a4a");
     // per-chest ground sample — Meadow Farm measured the worst floaters in the game
     // (27% of its chests over 1 m up, worst case 5.3 m) off the POI-centre height
     for (let i = 0; i < 2; i++) {
@@ -1563,7 +1890,7 @@ export async function buildMap(W, mapId) {
         // with the top surface, so the walk-off steps straight onto the cap.
         // Run lengthened to keep the old ~34-degree slope.
         const trun = s * 1.5 + 2.4;
-        addRamp(x, y, z + s * 0.65 + trun / 2, 2.4, s + 1.6, trun, 3, shade(C_STONE, 0.9));
+        addRampSnap(x, z + s * 0.65, 2.4, y + s + 1.6, trun, 3, shade(C_STONE, 0.9));    // face = the cap's +Z face
       }
     }
     // Isla Viva had NOT ONE multi-storey interior: the whole branch was towns of
@@ -1603,8 +1930,13 @@ export async function buildMap(W, mapId) {
       addBox(p.x, y + 1.6, p.z, 6, 3.2, 18, "#7a5233", { rotY: 0.6 });
       addBox(p.x + 3, y + 4.2, p.z + 2, 0.5, 6, 0.5, "#6b4326", { rotY: 0.6 });
       addRamp(p.x - 4.2, y, p.z - 8.6, 2.4, 3.5, 7.5, 2, "#6b4326"); // boarding plank to the deck chest
-      chest(p.x, y + 3.4, p.z, p.id); chest(p.x + 4, y + 0.8, p.z - 6, p.id);
-      loot(p.x - 4, y + 0.8, p.z + 6, p.id);
+      // the two loose points used to sit 6.7 m off the hull centreline, inside the old rotated-AABB phantom
+      // wall; the hull collider is its true outline now, so they would hover over open water. Hull-local
+      // (+1.4, -4.5) / (-1.4, +4.5) puts them on the deck (rotY 0.6: x' = lx c + lz s, z' = -lx s + lz c).
+      const wc = Math.cos(0.6), ws = Math.sin(0.6);
+      chest(p.x, y + 3.4, p.z, p.id);
+      chest(p.x + 1.4 * wc - 4.5 * ws, y + 3.4, p.z - 1.4 * ws - 4.5 * wc, p.id);
+      loot(p.x - 1.4 * wc + 4.5 * ws, y + 4.0, p.z + 1.4 * ws + 4.5 * wc, p.id);
     }
     // docks
     pier(120, 640, 22, 0.2, C_WOODP, "lagoon_docks");
@@ -1657,7 +1989,10 @@ export async function buildMap(W, mapId) {
       {
         const gBase = heightAt0(p.x - 78, p.z);
         const deckTop = heightAt0(p.x - 60, p.z) + 9.2;
-        addRamp(p.x - 78, gBase, p.z, 9, Math.max(8.2, deckTop - gBase), 26, 0, C_CONC);
+        // The ramp's high end used to be 11 m INSIDE the first deck's footprint: its surface met the deck's west face 5 m below the deck top
+        // and then rose under the deck's underside (head clearance gone 2.4 m later), so nobody could climb the last 8 m. It now climbs to the
+        // deck's WEST FACE (x = p.x - 76, deck spans p.x - 76 .. p.x - 44) and lands on the deck top.
+        addRampSnap(p.x - 76, p.z, 9, Math.max(gBase + 8.2, deckTop), 26, 0, C_CONC);
       }
       chest(p.x, heightAt0(p.x, p.z) + 9.9, p.z, p.id);
       loot(p.x + 30, heightAt0(p.x + 30, p.z) + 9.9, p.z, p.id);
@@ -1673,18 +2008,33 @@ export async function buildMap(W, mapId) {
       // a second tier over a third of them, each stack given a ramp so the high
       // ground is holdable on foot. The +2.8 lift matches the collider top offset
       // the instancing loop already uses for this kind.
+      // A stack is laid out from the REAL lower container (baked table: height 1.277 x s, half length 1.40 x s, half width 0.628 x s). The
+      // upper used to sit at b.y + 2.8 whatever the lower's scale was (the lower is 2.04 .. 2.81 m tall, median gap 0.39 m, up to 0.76),
+      // the ramp ended 0.4-2.5 m short of the lower's end face, and the loot was authored inside the upper container.
+      const CT = PT && PT.kinds.container;
+      const cH = CT ? CT.height : 1.277, cL = CT ? CT.parts[0].h[0] : 1.4;
       const base = [];
       for (let i = 0; i < 40; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.6, z = p.z + (rng() - 0.5) * p.r * 1.6;
-        const y = heightAt0(x, z);
-        props.container.push({ x, y, z, s: 1.6 + rng() * 0.6, ry: Math.floor(rng() * 4) * Math.PI / 2 });
-        base.push({ x, y, z });
+        const it = { x, y: heightAt0(x, z), z, s: 1.6 + rng() * 0.6, ry: Math.floor(rng() * 4) * Math.PI / 2 };
+        props.container.push(it);
+        base.push(it);
       }
       for (let i = 0; i < base.length; i += 3) {
         const b = base[i];
-        props.container.push({ x: b.x, y: b.y + 2.8, z: b.z, s: 1.6 + rng() * 0.6, ry: Math.floor(rng() * 4) * Math.PI / 2 });
-        addRamp(b.x, b.y, b.z + 6.5, 2.2, 2.8, 6, 3, shade(C_METAL, 0.8));
-        if (i % 6 === 0) loot(b.x, b.y + 3.0, b.z, p.id);
+        const s2 = 1.6 + rng() * 0.6;
+        rng();                                                           // (the upper's old random yaw: still drawn, so the stream is unchanged; the upper now lies along its base)
+        b.flat = true;                                                   // a stack base stays level
+        settleProp("container", b);
+        const topY = b.y + cH * b.s;                                     // the real top of the lower container
+        const alongZ = Math.abs(Math.sin(b.ry)) > 0.5, hl = cL * b.s;    // long axis along z when yawed a quarter turn; half length
+        // the upper container: along the base, never wider than it, set back so the last 1.2 m of the base's top (at the ramp end) stays free
+        const sUp = Math.min(s2, b.s - 0.43), tc = hl - 1.2 - cL * sUp;
+        props.container.push({ x: b.x + (alongZ ? 0 : tc), y: topY, z: b.z + (alongZ ? tc : 0), s: sUp, ry: b.ry, flat: true, set: true, onTop: true });   // onTop: rests on the lower container, not on the ground
+        // the ramp comes up the + end of the long axis (+Z for a container lying along z, +X for one along x) and lands 0.3 m onto the roof
+        if (alongZ) addRampSnap(b.x, b.z + hl, 2.2, topY, 6, 3, shade(C_METAL, 0.8));
+        else addRampSnap(b.x + hl, b.z, 2.2, topY, 6, 1, shade(C_METAL, 0.8));
+        if (i % 6 === 0) loot(alongZ ? b.x : b.x + hl - 0.6, topY + 0.5, alongZ ? b.z + hl - 0.6 : b.z, p.id);
       }
       for (let i = 0; i < 3; i++) {
         const cx = p.x + (rng() - 0.5) * p.r, cz = p.z + (rng() - 0.5) * p.r;
@@ -1699,7 +2049,10 @@ export async function buildMap(W, mapId) {
       const p = pois[5]; const y = heightAt0(p.x, p.z);
       addBox(p.x, y + 14, p.z, 3.4, 28, 3.4, "#c8b24a");
       addBox(p.x, y + 28.6, p.z + 8, 2.6, 1.2, 26, "#c8b24a");
-      addRamp(p.x + 5, y, p.z, 2.6, 28, 34, 2, "#a89432");
+      // the ramp ran up BESIDE the jib (2.4 m of air between its top and the jib's side, and the jib is 1.2 m higher): it now climbs to the jib's
+      // top (y+29.2) and a short gangway joins its high end to the jib
+      addRampSnap(p.x + 5, p.z + 17, 2.6, y + 29.2, 34, 2, "#a89432", { o: 0 });
+      addBox(p.x + 2.6, y + 28.6, p.z + 16.6, 3.2, 1.2, 2.6, "#c8b24a");
       chest(p.x, y + 29.6, p.z + 14, p.id);
       tower(p.x + 40, p.z + 20, 3, 11, C_CONC, p.id);
     }
@@ -1797,9 +2150,9 @@ export async function buildMap(W, mapId) {
         const x = p.x + (rng() - 0.5) * p.r * 1.4, z = p.z + (rng() - 0.5) * p.r * 1.4;
         const y = heightAt0(x, z);
         addBox(x, y + 2.6, z, 2.6, 2.4, 2.6, C_PLANK);
-        addBox(x - 1, y + 1.4, z, 0.4, 2.8, 0.4, shade(C_PLANK, 0.8));
-        addBox(x + 1, y + 1.4, z, 0.4, 2.8, 0.4, shade(C_PLANK, 0.8));
-        addRamp(x, y, z + 3.4, 1.6, 3.8, 4.4, 3, shade(C_PLANK, 0.85));
+        addStilt(x - 1, z, 0.4, y + 2.8, shade(C_PLANK, 0.8), true);      // legs reach the ground under each one
+        addStilt(x + 1, z, 0.4, y + 2.8, shade(C_PLANK, 0.8), true);
+        addRampSnap(x, z + 1.3, 1.6, y + 3.8, 4.4, 3, shade(C_PLANK, 0.85));   // face = the blind's front (z + 1.3)
         if (i % 2 === 0) chest(x, y + 4.2, z, p.id);
       }
     }
@@ -1932,7 +2285,13 @@ export async function buildMap(W, mapId) {
       // walkable top collider — 0.92·rad matches the visible disc's octagon flat-to-flat
       // (was 0.86·rad, leaving the outer ~14% of grass unsupported → rim fall-through on
       // a hero feature that carries premium loot).
-      colliders.push(mkCollider("box", ix - rad * 0.92, ix + rad * 0.92, topY - 2.2, topY, iz - rad * 0.92, iz + rad * 0.92, -1, null, -1, 0));
+      // The 9-sided disc (circumradius `rad`, 0.94 .. 1.0 rad to its edge) used to get ONE square 0.92 rad each side: its corners stood 1.30 rad from
+      // the centre, so every island carried ~19% of its area as invisible floor out over the void at four diagonals (a player could stand on air).
+      // The plan's plus of TWO arms alone (0.95 x 0.42) leaves 15% of the walkable disc without a collider = rim fall-through, the thing the
+      // 0.92 widening was made to cure. Two arms (0.95 x 0.55) plus a 0.78 hub are three plain boxes (contract C-COLL), measured on the real
+      // 9-gon (offline fit over the polygon's area): invisible floor 19% -> 10% of the disc area, disc (r <= 0.94) without support 0.86% -> 0.00%.
+      for (const [hx, hz] of [[0.95, 0.55], [0.55, 0.95], [0.78, 0.78]])
+        colliders.push(mkCollider("box", ix - rad * hx, ix + rad * hx, topY - 2.2, topY, iz - rad * hz, iz + rad * hz, -1, null, -1, 0));
       // premium loot: every island gets a chest + a couple of floor items
       chest(ix + (rng() - 0.5) * rad * 0.6, topY + 0.4, iz + (rng() - 0.5) * rad * 0.6, "sky_island");
       loot(ix + (rng() - 0.5) * rad, topY + 0.3, iz + (rng() - 0.5) * rad, "sky_island");
@@ -2089,69 +2448,145 @@ export async function buildMap(W, mapId) {
   }
 
   // ── instanced props from GLBs ─────────────────────────────────────────────
+  const propStats = finalizeProps();   // slope rejection + ground fit for every placed prop (see the grounding block above scatterTrees)
   const instRefs = {};   // kind -> [{inst, baseMatrixes}]
+  // Which kinds collide. The SHAPE of every collider comes from the baked table (pushPropColliders); these radii are only the legacy
+  // fallback for a client whose table did not load.
   const propColliderKinds = { palm: 0.5, tree: 0.6, pine: 0.55, birch: 0.5, rocks: 1.4, car: 1.6, container: 2.2, barrel: 0.55 };
   // destructible props: hp per prop; 0/undefined = indestructible cover (rock/car/container).
   // barrel hp 1 = pops on any hit (explodes); trees take a few rounds then fall.
   const propHP = { barrel: 1, tree: 46, pine: 58, palm: 42, birch: 40 };
   const SHADOW_KINDS = { palm: 1, tree: 1, pine: 1, birch: 1 };
   const shadowSrc = [];   // {kind, list, geo, mat, mats} — source for the near-caster proxies
+  /** The colliders of one prop instance, from its baked table entry (contract C-COLL: every one an axis-aligned box from mkCollider).
+   *  Metres in the table are at it.s = 1 and relative to the anchor (it.x, it.z); y = 0 is the drawn base. A part below 0.3 m cannot stop
+   *  a walker (STEP_UP is 0.55) or a body-height bullet, so it gets no box. All of this is a pure function of (table, it): a squad client
+   *  derives exactly the same boxes whether or not the GLB loaded. */
+  function pushPropColliders(kind, tk, it, idx) {
+    const hp = propHP[kind] || 0, sc = it.s, ry = it.ry || 0;
+    let c = Math.cos(ry), sn = Math.sin(ry);
+    if (Math.abs(sn) < 1e-9) sn = 0;
+    if (Math.abs(c) < 1e-9) c = 0;                                        // quarter turns are EXACT
+    const tg = it.tx || it.tz ? it : null;                                 // a prop laid on a ground plane (cars, containers): each box spans the lowest and highest point of its part
+    // y range of a box centred (ox, oz) from the anchor with half extents (ex, ez): level, or the tilted part's own lowest .. highest point
+    const yLo = (ox, oz, ex, ez) => it.y + (tg ? tg.tx * ox + tg.tz * oz - Math.abs(tg.tx) * ex - Math.abs(tg.tz) * ez : 0);
+    const yHi = (ox, oz, ex, ez, top) => it.y + top + (tg ? tg.tx * ox + tg.tz * oz + Math.abs(tg.tx) * ex + Math.abs(tg.tz) * ez : 0);
+    for (const p of tk.parts) {
+      const top = p.top * sc;
+      if (p.t === "round") {
+        const cx = it.x + (p.c[0] * c + p.c[1] * sn) * sc, cz = it.z + (-p.c[0] * sn + p.c[1] * c) * sc, r = p.r * sc;   // a round trunk: the same square at any yaw
+        colliders.push(mkCollider("box", cx - r, cx + r, it.y, it.y + top, cz - r, cz + r, -1, kind, idx, hp));
+      } else if (p.t === "rect") {
+        const hx = p.h[0] * sc, hz = p.h[1] * sc;
+        const wx = it.x + (p.c[0] * c + p.c[1] * sn) * sc, wz = it.z + (-p.c[0] * sn + p.c[1] * c) * sc;
+        if (!p.prof && (sn === 0 || c === 0)) {
+          const ex = Math.abs(c) * hx + Math.abs(sn) * hz, ez = Math.abs(sn) * hx + Math.abs(c) * hz, ox = wx - it.x, oz = wz - it.z;
+          colliders.push(mkCollider("box", wx - ex, wx + ex, yLo(ox, oz, ex, ez), yHi(ox, oz, ex, ez, top), wz - ez, wz + ez, -1, kind, idx, hp));
+        } else {
+          // a yawed car: a chain of <= 3 boxes along the body instead of one AABB of the whole rotated rectangle. A part with a height profile
+          // (the car: hood 0.83 m, cabin 1.30 m, trunk 0.89 m) is ALWAYS a chain of its slices, each box as tall as its slice, so a body-height
+          // shot passes over the hood the way it passes over the drawn mesh. (At a quarter turn the same formulas give exact boxes.)
+          const longX = hx >= hz, Lh = longX ? hx : hz, Sh = longX ? hz : hx;
+          const n = p.prof ? p.prof.length : Math.min(3, Math.max(1, Math.ceil(Lh * 2 / 1.6))), sa = Lh / n;
+          const ax = Math.abs(c) * (longX ? sa : Sh) + Math.abs(sn) * (longX ? Sh : sa);
+          const az = Math.abs(sn) * (longX ? sa : Sh) + Math.abs(c) * (longX ? Sh : sa);
+          for (let k = 0; k < n; k++) {
+            const u = -Lh + (k + 0.5) * (2 * Lh / n), ox = longX ? u * c : u * sn, oz = longX ? -u * sn : u * c, tk2 = p.prof ? p.prof[k] * sc : top;
+            colliders.push(mkCollider("box", wx + ox - ax, wx + ox + ax, yLo(wx - it.x + ox, wz - it.z + oz, ax, az), yHi(wx - it.x + ox, wz - it.z + oz, ax, az, tk2), wz + oz - az, wz + oz + az, -1, kind, idx, hp));
+          }
+        }
+      } else if (p.t === "hull") {
+        if (p.top * sc < 0.3) continue;
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (const q of p.hull) {
+          const u = q[0] * sc, w = q[1] * sc, x = u * c + w * sn, z = -u * sn + w * c;
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+        }
+        const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
+        // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak
+        const pk = p.peak, pdy = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
+        colliders.push(mkCollider("box", it.x + x0, it.x + x1, yLo(ox, oz, ex, ez), it.y + top + pdy, it.z + z0, it.z + z1, -1, kind, idx, hp));
+      }
+    }
+  }
+  const _upV = new THREE.Vector3(0, 1, 0), _qTilt = new THREE.Quaternion(), _vTilt = new THREE.Vector3(), _tAnch = new THREE.Matrix4();
   for (const kind in props) {
     const list = props[kind];
     if (!list.length) continue;
+    const tk = PT && PT.kinds[kind];
     const url = W.assetBase + "assets/props/" + kind + ".glb";
-    let root;
-    try { root = await W.kernel.loadGLTF(url); } catch (e) { console.warn("[maps] prop load failed", kind, e); continue; }
-    root.updateMatrixWorld(true);
-    // normalize: find overall bbox to scale to a sane base height
-    const bbox = new THREE.Box3().setFromObject(root);
-    const size = bbox.getSize(new THREE.Vector3());
-    const baseH = { palm: 7, tree: 6.5, pine: 8, birch: 7, bush: 1.4, rocks: 2.2, car: 1.6, container: 2.8, barrel: 1.1 }[kind] || 3;
-    // trees normalize by height; compact/wide props (rock clusters, cars) by
-    // their LARGEST dimension — height-normalizing a flat rock cluster blew it
-    // up into a house-sized blob
-    const compact = kind === "rocks" || kind === "bush" || kind === "car" || kind === "container" || kind === "barrel";
-    const norm = baseH / Math.max(0.001, compact ? Math.max(size.x, size.y, size.z) : size.y);
-    const meshes = [];
-    root.traverse((o) => { if (o.isMesh) meshes.push(o); });
-    instRefs[kind] = [];
-    for (const m of meshes) {
-      const inst = new THREE.InstancedMesh(m.geometry, m.material, list.length);
-      // NOTHING map-wide casts any more. Each of these InstancedMeshes is sized to
-      // the whole 1600 m map (measured bounding radii 850-1,011 m), so three derives
-      // one bounding sphere spanning the map and the shadow camera's ±55 m frustum
-      // can never reject it — the depth pass re-rendered EVERY car, container,
-      // barrel, rock AND tree on the map every frame. The cars/rocks half was
-      // already fixed by exempting them; trees were the deliberate exception,
-      // because their canopy shadow is the one that matters for readability.
-      // Toggling shadowMap.enabled on the Deepwood ground view moved the frame from
-      // 3,716,659 to 2,379,359 triangles — 1,337,300 of them, which is the pine
-      // (943,605) plus birch (344,208) instance totals almost exactly. A small mesh
-      // rebuilt around the camera focus casts instead (built after this loop).
-      inst.castShadow = false;
-      inst.receiveShadow = true;
-      const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3();
-      const meshLocal = new THREE.Matrix4().copy(m.matrixWorld); // transform within GLB
-      const mats = SHADOW_KINDS[kind] ? [] : null;
-      for (let i = 0; i < list.length; i++) {
-        const it = list[i];
-        const s = norm * it.s;
-        M.compose(P.set(it.x, it.y - bbox.min.y * s, it.z), Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), it.ry || 0), S.set(s, s, s));
-        M.multiply(meshLocal);
-        inst.setMatrixAt(i, M);
-        if (mats) mats.push(M.clone());
+    let root = null;
+    // A failed GLB used to `continue` here and skip the colliders too, so that client alone had no cover from this kind. The colliders are
+    // built from the baked table below, loaded or not; only the DRAWING is skipped.
+    try { root = await W.kernel.loadGLTF(url); } catch (e) { console.warn("[maps] prop load failed", kind, e); }
+    if (root) {
+      root.updateMatrixWorld(true);
+      // normalize: find overall bbox to scale to a sane base height
+      const bbox = new THREE.Box3().setFromObject(root);
+      const size = bbox.getSize(new THREE.Vector3());
+      // car: 1.6 on the longest side made a 3.5 x 1.5 x 1.0 m toy at the s = 2.2 every call site uses; 2.05 is 4.5 x 1.9 x 1.3 m.
+      // (_tools/bake_prop_colliders.mjs checks this literal against its own config.)
+      const baseH = { palm: 7, tree: 6.5, pine: 8, birch: 7, bush: 1.4, rocks: 2.2, car: 2.05, container: 2.8, barrel: 1.1 }[kind] || 3;
+      // trees normalize by height; compact/wide props (rock clusters, cars) by
+      // their LARGEST dimension — height-normalizing a flat rock cluster blew it
+      // up into a house-sized blob
+      const compact = kind === "rocks" || kind === "bush" || kind === "car" || kind === "container" || kind === "barrel";
+      const norm = baseH / Math.max(0.001, compact ? Math.max(size.x, size.y, size.z) : size.y);
+      if (tk && Math.abs(tk.norm - norm) > 0.005 * norm) console.warn("[maps] prop table is stale for " + kind + " (norm " + tk.norm + " vs " + norm.toFixed(6) + "): run _tools/bake_prop_colliders.mjs");
+      // The anchor (it.x, it.z) is the spot the seeded generator picked: the one nearPoi() tested and the one the collider belongs to. A GLB
+      // whose origin sits far from its geometry (rocks.glb: its four rocks are modelled 27 m from the origin at norm scale) was drawn
+      // there, 20-90 m from the collider and the loot logic around it: half the rocks hung in the air, a quarter were buried, every one
+      // left an invisible 6 m pillar on empty grass. A re-centred kind is drawn ON its anchor (footprint centre minus the anchor, rotated
+      // by ry). Trees NEVER move their mesh: palm/birch bbox centres are canopy-weighted, so a bbox re-centre would push the trunk away
+      // from its collider; the trunk collider moves to the trunk instead (table part `c`).
+      const recentre = tk ? !!tk.recentre : kind === "rocks";
+      const anchor = !recentre ? [0, 0] : tk ? tk.anchor : [((bbox.min.x + bbox.max.x) / 2) * norm, ((bbox.min.z + bbox.max.z) / 2) * norm];
+      const meshes = [];
+      root.traverse((o) => { if (o.isMesh) meshes.push(o); });
+      instRefs[kind] = [];
+      for (const m of meshes) {
+        const inst = new THREE.InstancedMesh(m.geometry, m.material, list.length);
+        // NOTHING map-wide casts any more. Each of these InstancedMeshes is sized to
+        // the whole 1600 m map (measured bounding radii 850-1,011 m), so three derives
+        // one bounding sphere spanning the map and the shadow camera's ±55 m frustum
+        // can never reject it — the depth pass re-rendered EVERY car, container,
+        // barrel, rock AND tree on the map every frame. The cars/rocks half was
+        // already fixed by exempting them; trees were the deliberate exception,
+        // because their canopy shadow is the one that matters for readability.
+        // Toggling shadowMap.enabled on the Deepwood ground view moved the frame from
+        // 3,716,659 to 2,379,359 triangles — 1,337,300 of them, which is the pine
+        // (943,605) plus birch (344,208) instance totals almost exactly. A small mesh
+        // rebuilt around the camera focus casts instead (built after this loop).
+        inst.castShadow = false;
+        inst.receiveShadow = true;
+        const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3();
+        const meshLocal = new THREE.Matrix4().copy(m.matrixWorld); // transform within GLB
+        const mats = SHADOW_KINDS[kind] ? [] : null;
+        for (let i = 0; i < list.length; i++) {
+          const it = list[i];
+          const s = norm * it.s, ry = it.ry || 0;
+          Q.setFromAxisAngle(_upV, ry);
+          if (it.tx || it.tz) { _qTilt.setFromUnitVectors(_upV, _vTilt.set(-it.tx, 1, -it.tz).normalize()); Q.premultiply(_qTilt); }   // lay a car / container on its (<= 8 degree) ground plane
+          // rotate (yaw, then the ground tilt) about the ANCHOR: translate the footprint centre to the origin first (raw GLB units: anchor / norm)
+          M.compose(P.set(it.x, it.y - bbox.min.y * s, it.z), Q, S.set(s, s, s));
+          if (anchor[0] || anchor[1]) M.multiply(_tAnch.makeTranslation(-anchor[0] / norm, 0, -anchor[1] / norm));
+          M.multiply(meshLocal);
+          inst.setMatrixAt(i, M);
+          if (mats) mats.push(M.clone());
+        }
+        inst.instanceMatrix.needsUpdate = true;
+        g.add(inst);
+        instRefs[kind].push(inst);
+        if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: m.material, mats });
       }
-      inst.instanceMatrix.needsUpdate = true;
-      g.add(inst);
-      instRefs[kind].push(inst);
-      if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: m.material, mats });
     }
     // colliders for solid props
     const rad = propColliderKinds[kind];
     if (rad) {
       for (let i = 0; i < list.length; i++) {
         const it = list[i];
-        const topY = it.y + (kind === "car" ? 1.6 : kind === "container" ? 2.8 : kind === "barrel" ? 1.6 : 6);
+        if (tk && tk.parts) { pushPropColliders(kind, tk, it, i); continue; }
+        const topY = it.y + (kind === "car" ? 1.6 : kind === "container" ? 2.8 : kind === "barrel" ? 1.6 : 6);       // legacy fixed boxes
         colliders.push(mkCollider("box", it.x - rad, it.x + rad, it.y, topY, it.z - rad, it.z + rad, -1, kind, i, propHP[kind] || 0));
       }
     }
@@ -2480,6 +2915,9 @@ export async function buildMap(W, mapId) {
     id: mapId, K, half: HALF * 0.98, size: SIZE, waterY,
     heightAt: heightAt0, groundAt: heightAt0, surfaceAt,
     colliders, queryColliders, destroyProp,
+    // the placed prop lists ({x, y, z, s, ry, ...} per kind: the ANCHOR, the final base y, the seeded scale and yaw) and what the slope
+    // limits dropped - read-only, for the placement / collision gates (_harness) and for debugging
+    propInstances: props, propStats,
     lootPoints: lootAll, pois, portals,
     randomGroundPos, losBlocked,
     minimap: mm, themeColor: K.themeColor,
