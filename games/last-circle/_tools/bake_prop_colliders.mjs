@@ -24,6 +24,22 @@
 //   rect   a rectangle (car, container, barrel): exact AABB at quarter turns, otherwise a chain of <= 3 boxes along the long axis;
 //          with `prof` (the car) always a chain, one box per slice, each as tall as its slice
 //   hull   a convex outline (one per rock sub-mesh): the AABB of the outline rotated by ry; `peak` = x/z of its highest vertex
+//          with `lip` (rocks) the main body of a cluster also gets a COMPANION part: the same outline, `top` lower by lip.drop (see "LIP" below)
+//
+// LIP (rocks, Wave 5 leftovers 3b "rock stairs"). The mover (runtime/3d/royale/player.js) decides "this box is a step, not a wall" in TWO places that
+// disagree by 6 mm: blockedIn() lets the capsule into a box whose top is <= feet + STEP_UP (0.55) with the feet as they were BEFORE this tick, and the
+// support test that lifts the capsule onto it runs AFTER gravity (-22 * dt = 6 mm lower on the ground). A box top 0.544 .. 0.550 m above the feet is
+// therefore "not a wall" and "not liftable": the capsule walks into the box, is never raised, and sinks down through it. Measured by replaying the
+// real mover over every isolated rock of 3 maps x 3 seeds (8,640 sprints): 119 end more than 0.2 m inside the drawn rock, 110 of them this way
+// (isla_viva rock 11: the small rock's box top 0.547 m under the big one's; isla_viva rock 0: the big box 0.546 m above the slope the capsule
+// arrives on). Terrain does it as much as a neighbouring part: a rock sits 0.2 .. 0.4 m below its uphill side, so a 0.8 m rock is a ~0.55 m rise
+// exactly where a walker arrives. A `lip` part is the same outline 3 cm lower: for a rise in that window the lip is the box the support test CAN
+// lift onto (its rise is 3 cm smaller), the capsule stands on it, and the main box is then a 3 cm step; for a rise over 0.550 the main box is a wall
+// and the lip is unreachable behind it. No new collider shape (one more axis-aligned box per tall rock: +1 collider per rock cluster); the 119
+// become 13. If player.js makes its two tests consistent (probe the support from max(feet, feet before gravity): the 119 become 9) the lip is
+// redundant and `lip` can be dropped from the config.
+// Only a part that can be a wall at the instance scales (table top >= lip.minTop: the big rock of a cluster, 0.73 m at s = 1) gets one; the
+// smaller parts are steps whatever the terrain does.
 //
 // A TRUNK THAT IS NOT A STRAIGHT POST (the crooked birch, the tree that bends at 2 m) is baked as a `hull` too (config type "footprint"):
 // the convex outline of the SOLID (bark) vertices that lie in the player's body band, so the one box maps.js builds is the tight AABB of that
@@ -71,7 +87,7 @@ const KINDS = {
   pine:      { compact: false, parts: { type: "round", band: [1.0, 1.2], prim: 0 } },
   birch:     { compact: false, parts: { type: "footprint", body: [0.15, 1.8], ref: 1.25, chain: 1, byScale: { min: 0.8, max: 1.7, step: 0.1 } } },   // crooked trunk
   bush:      { compact: true,  parts: null },                                    // no collider (walk-through scenery)
-  rocks:     { compact: true,  recentre: true, parts: { type: "hull", by: "node" } },
+  rocks:     { compact: true,  recentre: true, parts: { type: "hull", by: "node", lip: { minTop: 0.5, drop: 0.03 } } },
   car:       { compact: true,  parts: { type: "rect", profile: 3 } },            // hood / cabin / trunk: three boxes, each as tall as its slice
   container: { compact: true,  parts: { type: "rect" } },
   barrel:    { compact: true,  parts: { type: "rect" } },                        // a drum lying on its side (axis along x)
@@ -232,7 +248,10 @@ function bakeKind(kind) {
         const outline = simplify(hull2(pts.map((p) => [p[0] - anchor[0], p[2] - anchor[1]])), HULL_MAX);
         const rounded = outline.map((p) => [r4(p[0]), r4(p[1])]).filter((p, i, a) => !i || p[0] !== a[i - 1][0] || p[1] !== a[i - 1][1]);
         const topV = pts.reduce((b, p) => (p[1] > b[1] ? p : b), pts[0]);       // the highest vertex: where a tilted rock's top actually is
-        parts.push({ t: "hull", name: s.node, hull: rounded, peak: [r4(topV[0] - anchor[0]), r4(topV[2] - anchor[1])], top: r4(topV[1]) });
+        const peak = [r4(topV[0] - anchor[0]), r4(topV[2] - anchor[1])];
+        parts.push({ t: "hull", name: s.node, hull: rounded, peak, top: r4(topV[1]) });
+        // the companion (see LIP in the header): same outline, a lower top, so maps.js builds a second box of exactly the same footprint
+        if (P.lip && topV[1] >= P.lip.minTop) parts.push({ t: "hull", name: s.node + "_lip", hull: rounded, peak, top: r4(topV[1] - P.lip.drop) });
       }
     }
     out.parts = parts;
