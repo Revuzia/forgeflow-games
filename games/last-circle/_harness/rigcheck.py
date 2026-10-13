@@ -80,9 +80,10 @@ RIG_JS = r"""(opts) => {
     // tracks the aim yaw only while |aimDelta| <= 0.6 rad (body within the twist clamp of the camera)
     const bodyFwdYaw = a._bodyYaw != null ? a._bodyYaw - Math.PI : a.yaw;
     let aimDelta = a.yaw - bodyFwdYaw; while (aimDelta > Math.PI) aimDelta -= Math.PI * 2; while (aimDelta < -Math.PI) aimDelta += Math.PI * 2;
+    let crouchW = 0; for (const k of ['crouch', 'rifle_crouch']) { const c = a.clips && a.clips[k], act = c && a.rig && a.rig.actions && a.rig.actions[c]; if (act && act.getEffectiveWeight) crouchW = Math.max(crouchW, act.getEffectiveWeight()); }
     rows.push({ id: a.id, skin: a.skin, bot: !!a.isBot, player: a === W.player, onGround: !!a.onGround, gliding: !!a.gliding, chute: !!(a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false),
       aimDelta: +aimDelta.toFixed(3),
-      swimming: !!a.swimming, emoting: !!a.emoting, crouching: !!a.crouching, weapon: a.weapon ? a.weapon.id : null, armed,
+      swimming: !!a.swimming, emoting: !!a.emoting, crouching: !!a.crouching || crouchW > 0.05, weapon: a.weapon ? a.weapon.id : null, armed,
       wstate: a.weapon ? a.weapon.state : null, combat: !!(a.input && (a.input.ads || (W.t - a.lastShotT < 1.5))), armMode: a._armMode || null,
       span: span == null ? null : +span.toFixed(3), hasHead: !!head, holderParent: holder && holder.parent ? holder.parent.name : null, parentOk,
       holderToHand: holderToHand == null ? null : +holderToHand.toFixed(3),

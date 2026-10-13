@@ -175,7 +175,7 @@ def main():
                 s.release_all()
                 s.stage("loop")
                 s.start_match("quick", 3, None, enter=True)
-                for rnd, button in ((1, "PLAY AGAIN"), (2, "MAIN MENU")):
+                for rnd, button in ((1, "Run it back"), (2, "MAIN MENU")):
                     for _ in range(200):
                         st = s.js("() => { const C = window.__LC__; if (C.W.match && C.W.match.over) return 'over'; C.fastForward(5, 1 / 30); return C.W.match && C.W.match.over ? 'over' : 'on'; }")
                         if st == "over":
@@ -196,9 +196,9 @@ def main():
                         v.check("post-match panel offers %s (round %d)" % (button, rnd), False, {"phase": s.phase(), "screen": (s.safe_js("() => document.body.innerText.slice(0, 200)") or "")})
                         break
                     s.page.mouse.click(btn["x"], btn["y"])
-                    if button == "PLAY AGAIN":
+                    if button == "Run it back":
                         ok = s.wait_js("() => window.__LC__.W.phase === 'lobby' && !window.__LC__.W._starting", args.load_timeout, 0.25)
-                        v.check("a REAL click on PLAY AGAIN reaches the next lobby", ok is not None, {"s": ok, "phase": s.phase()})
+                        v.check("a REAL click on Run it back (was PLAY AGAIN) reaches the next lobby", ok is not None, {"s": ok, "phase": s.phase()})
                         if ok is None:
                             break
                         s.sleep(0.3)

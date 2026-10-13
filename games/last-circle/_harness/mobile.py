@@ -68,8 +68,8 @@ SLOT_PREP_JS = r"""() => { const W = window.__LC__.W, p = W.player, sl = p.inven
 SLOTS_JS = r"""() => {
   const own = (e) => Array.from(e.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
   const am = [...document.querySelectorAll('div')].find((e) => /^(\d+|∞)\s*\/\s*(\d+|∞)$/.test(own(e)) && e.offsetParent !== null);
-  let row = null;
-  for (let n = am ? am.previousElementSibling : null; n; n = n.previousElementSibling) if (n.children.length >= 3) { row = n; break; }
+  let row = document.querySelector('[data-lc=slots]');   // the restyled HUD marks its slot row; the ammo-count walk below is the legacy fallback
+  for (let n = (!row && am) ? am.previousElementSibling : null; n; n = n.previousElementSibling) if (n.children.length >= 3) { row = n; break; }
   const slots = row ? [...row.children].map((c) => { const r = c.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }) : [];
   let mm = null;
   for (const c of document.querySelectorAll('canvas')) { if (c === window.__LC__.W.kernel.renderer.domElement) continue;

@@ -334,6 +334,7 @@ def main():
             s.land(120)
             s.freeze_loop()
             s.install_pump()
+            s.guard_player(True)          # a bot must not kill the test subject mid-burst (it fired 0 shots when it did)
             s.step_frames(30, 1 / 60, render=False)
             rb = s.js(READ_JS)
             v.info("read-back source", rb.get("via"))

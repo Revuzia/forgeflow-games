@@ -12,12 +12,19 @@ shared box), each as its own process with the same --base / --disk / --rev / --h
 
   bootcheck   bootguard   rigcheck (3 seeds)   playtest   portalcheck (--matrix)   framecheck   lifecycle   feelcheck
   layoutcheck (desktop + phones)   mobile (4 devices)   probe_match (>= 6 seeds, storm on)   leaktest (3 ashgrid)
-  perfcheck (INFORMATION ONLY: shown, never counted)
+  then the Wave-4 lane gates (_harness/new/<lane>_<name>.py, registered 2026-10-12; the same exit-code convention):
+    artb_check   art_a_clips   art_a_canopy   art_a_integration   artb_decode   artb_integration
+    stormfx_fx   stormfx_storm   loot_beams_rings   sky_probe (--merged)   sky_lowtier (--merged)
+    hud_checks   hud_cycle
+    player_dlcount   player_deaths   player_canopy   player_camwall   player_rim   player_dive
+    orch_lowpost   orch_progkey   sim_pacing (10 whole matches: the long one)
+  perfcheck, orch_lowpost_ab (INFORMATION ONLY: shown, never counted)
 
 --negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
 allow-pointer-lock, bootguard j/k --plant no-card and --plant hidden-card, bootcheck --plant lock-drop, feelcheck --plant
-kill-marker-short, layoutcheck --only phones --plant no-touch-ui, framecheck --plant forced-layout; and feelcheck --plant
-blind-sampler, which must exit 2 (a blinded sampler is could-not-judge, never a verdict).
+kill-marker-short, layoutcheck --only phones --plant no-touch-ui, framecheck --plant forced-layout, loot_beams_rings
+(flush-clear, storm-ignore), sky_probe (fog-flat, no-rng-burn, no-handles), sky_lowtier (one-layer-broken); and feelcheck
+--plant blind-sampler, which must exit 2 (a blinded sampler is could-not-judge, never a verdict).
 
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
 0 pass / 1 fail / 2 could-not-judge; a timeout or a crash of the gate process is could-not-judge. The overall verdict:
@@ -51,7 +58,39 @@ GATES = [
     ("mobile", "mobile.py", [], 7200, False),
     ("probe_match", "probe_match.py", ["--farwall"], 14400, False),
     ("leaktest", "leaktest.py", [], 7200, False),
+    # ---- Wave-4 lane gates: _harness/new/<lane>_<name>.py, registered 2026-10-12. Same convention as every gate above (0 pass /
+    # 1 fail / 2 could-not-judge, one VERDICT line, JSON in _reports/); all take the common flags, so --disk / --rev / --base /
+    # --headed / --gpu pass through. None needs a rAF (they step frames); each lane gate's --isolate / --overlay-root is a
+    # lane-development convenience and is NOT used here: the integration run judges the whole working copy (or --rev).
+    # ART-B first: artb_check reads files on disk (no browser), so a bad manifest fails in seconds.
+    ("artb_check", "new/artb_check.py", [], 600, False),
+    ("art_a_clips", "new/art_a_clips.py", [], 3600, False),
+    ("art_a_canopy", "new/art_a_canopy.py", [], 3600, False),
+    ("art_a_integration", "new/art_a_integration.py", [], 5400, False),
+    ("artb_decode", "new/artb_decode.py", [], 3600, False),
+    ("artb_integration", "new/artb_integration.py", [], 3600, False),
+    ("stormfx_fx", "new/stormfx_fx.py", [], 3600, False),
+    ("stormfx_storm", "new/stormfx_storm.py", [], 5400, False),
+    ("loot_beams_rings", "new/loot_beams_rings.py", [], 5400, False),
+    # sky_*: by default they serve git HEAD + ONLY the working-copy maps.js (a before/after rig that ignores --disk/--rev);
+    # --merged = a plain working-copy run, one browser, absolute rows only (the integration pass their docstrings name)
+    ("sky_probe", "new/sky_probe.py", ["--merged"], 5400, False),
+    ("sky_lowtier", "new/sky_lowtier.py", ["--merged"], 3600, False),
+    ("hud_checks", "new/hud_checks.py", [], 5400, False),
+    ("hud_cycle", "new/hud_cycle.py", [], 5400, False),
+    ("player_dlcount", "new/player_dlcount.py", [], 5400, False),
+    ("player_deaths", "new/player_deaths.py", [], 5400, False),
+    ("player_canopy", "new/player_canopy.py", [], 5400, False),
+    ("player_camwall", "new/player_camwall.py", [], 5400, False),
+    ("player_rim", "new/player_rim.py", [], 3600, False),
+    ("player_dive", "new/player_dive.py", [], 3600, False),
+    ("orch_lowpost", "new/orch_lowpost.py", [], 5400, False),
+    ("orch_progkey", "new/orch_progkey.py", [], 3600, False),
+    ("sim_pacing", "new/sim_pacing.py", [], 14400, False),
     ("perfcheck", "perfcheck.py", [], 7200, True),
+    # information only (never exits 1): LOW tier with vs without the composer, interleaved ABAB. --no-lp drops its lc_liveprobe
+    # arms (rAF windows - perfcheck above already reports those); the stepped GPU-synced bench stays
+    ("orch_lowpost_ab", "new/orch_lowpost_ab.py", ["--no-lp"], 5400, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
 NEGATIVE = [
@@ -69,6 +108,14 @@ NEGATIVE = [
     ("layoutcheck-plant-no-touch-ui", "layoutcheck.py", ["--only", "phones", "--plant", "no-touch-ui"], 3600),
     # forced layouts are counted from a stack-traced trace now: a planted style-write + offsetWidth updater must FAIL both rows
     ("framecheck-plant-forced-layout", "framecheck.py", ["--plant", "forced-layout"], 3600),
+    # Wave-4 lane falsifiers (each documented "MUST fail", each measured to exit 1 on 2026-10-12). The sky plants run WITHOUT
+    # --merged: --merged skips the maps.js override the plant rides on
+    ("loot_beams_rings-plant-flush-clear", "new/loot_beams_rings.py", ["--only", "gpusync", "--plant", "flush-clear"], 1800),
+    ("loot_beams_rings-plant-storm-ignore", "new/loot_beams_rings.py", ["--only", "stormfade", "--plant", "storm-ignore"], 1800),
+    ("sky_probe-plant-fog-flat", "new/sky_probe.py", ["--plant", "fog-flat"], 1800),
+    ("sky_probe-plant-no-rng-burn", "new/sky_probe.py", ["--plant", "no-rng-burn"], 1800),
+    ("sky_probe-plant-no-handles", "new/sky_probe.py", ["--plant", "no-handles"], 1800),
+    ("sky_lowtier-plant-one-layer-broken", "new/sky_lowtier.py", ["--plant", "one-layer-broken"], 1800),
 ]
 
 
@@ -101,7 +148,7 @@ def run_gate(name, script, extra, timeout, args, logdir):
         cmd += ["--base", args.base]
     if args.headed:
         cmd += ["--headed"]
-    if args.gpu and args.gpu != "d3d11" and name not in ("mobile",):
+    if args.gpu and args.gpu != "d3d11" and name != "mobile":
         cmd += ["--gpu", args.gpu]
     log = os.path.join(logdir, name + ".log")
     t0 = time.time()
