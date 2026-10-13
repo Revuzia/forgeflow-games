@@ -24,6 +24,7 @@ import { tell } from './story.ts';
 import { vars, settlementRef } from './util.ts';
 // SIM perf push 3 — the peoples' time-lapse (stretched tasks, batched walks: perf/plapse.ts)
 import { batch, batchHops, ctxOf, goalCellOf, legOf, mergeArrival, storeIn, stretchFor, wearOf, workTicks } from '../perf/plapse.ts';
+import { FIRE_HERE, FLEE_SPRINT, heat } from './danger.ts';
 
 const _path: number[] = [];
 /** the longest a walker goes without waking (ticks): longer legs are walked in parts */
@@ -113,10 +114,18 @@ function planRoute(x: PCtx, s: number, from: number, to: number): void {
   const A = x.A;
   const st = x.ps.settlement(A.settlement[s]);
   let ok = false;
-  // the home flow field routes through home: right for errands at home, wrong for a caravan's leg or a boat at sea
-  if (st && st.flow && from !== to && !A.mission[s] && A.boat[s] < 0) ok = flowPath(st.flow, from, to, _path);
+  // the home flow field routes through home: right for errands at home, wrong for a caravan's leg or a boat at sea — and
+  // for a flight from fire, or an errand whose way home leads through one (the field was built before the flames: the
+  // search below goes around burning cells where it can — people/danger.ts)
+  const flee = A.task[s] === TASK.flee;
+  let hot = flee;
+  if (st && st.flow && from !== to && !A.mission[s] && A.boat[s] < 0 && !flee) {
+    ok = flowPath(st.flow, from, to, _path);
+    if (ok && throughFire(x.p, _path)) { ok = false; hot = true; }
+  }
   if (!ok && from !== to) {
     const opts = pathOptsFor(x, A.species[s]);
+    if (hot) opts.extra = fireCost(x.p);
     if (A.boat[s] >= 0) opts.swim = Math.max(opts.swim, boatSwim(x, A.boat[s]));
     // short hops need little search; long journeys a bit more (bounded either way)
     opts.maxExpand = 1500;
@@ -128,6 +137,17 @@ function planRoute(x: PCtx, s: number, from: number, to: number): void {
   for (let i = 0; i < n; i++) A.path[base + i] = _path[i];
   A.pathLen[s] = n;
   A.pathPos[s] = 0;
+}
+
+/** does a route step into a burning cell (where the fire step would stop the walker: people/danger.ts FIRE_HERE)? */
+function throughFire(p: PCtx['p'], path: number[]): boolean {
+  for (let i = 0; i < path.length; i++) if (heat(p, path[i]) > FIRE_HERE) return true;
+  return false;
+}
+
+/** a route's extra cost in a fire: a burning cell costs up to ~13 times its way, so a path goes around the flames */
+function fireCost(p: PCtx['p']): (c: number) => number {
+  return (c) => { const h = heat(p, c); return h > FIRE_HERE ? 1 + 12 * Math.min(1, h) : 1; };
 }
 
 /** at a segment end: walk on, or arrive */
@@ -176,7 +196,9 @@ export function nextSegment(x: PCtx, s: number): void {
     return;
   }
   const age = A.flags[s] & AgentFlag.child ? 0.75 : A.flags[s] & AgentFlag.elder ? 0.7 : 1;
-  const speed = sp.speed * speedEffect(x, A.settlement[s]), ageF = age * (0.45 + 0.55 * A.health[s]);
+  // running for their lives: a flight from fire is a sprint (people/danger.ts FLEE_SPRINT; a fire front outruns a walk)
+  const sprint = A.task[s] === TASK.flee ? FLEE_SPRINT : 1;
+  const speed = sp.speed * speedEffect(x, A.settlement[s]) * sprint, ageF = age * (0.45 + 0.55 * A.health[s]);
   const v = walkSpeed(p, to, speed, ageF) / k;
   let dur = Math.max(1, Math.round(d / Math.max(0.01, v)));
   // SIM perf push 3 (perf/plapse.ts): legs are longer at 100x / 1000x and on land one segment walks on through several
@@ -257,6 +279,37 @@ function adjacentCells(p: PCtx['p'], a: number, b: number): boolean {
   return false;
 }
 
+/** the cell an agent stands in, from where its body really is */
+export function syncCell(x: PCtx, s: number): void {
+  const A = x.A;
+  A.posAt(s, x.tick, _a);
+  const c = x.p.cellAt(_a);
+  if (c !== A.cell[s]) { A.cell[s] = c; x.ps.buckets.move(s, c); }
+}
+
+/**
+ * Re-book an agent that has drifted more than a cell from its body; true if it moved. A leg books its walker into the
+ * leg's far cell when it sets out (nextSegment) and decisions start from that cell — one step ahead of the body at
+ * most, which is the walk's own plan (planning from the body instead marooned people in a meteor crater: from its
+ * floor every way out is a wall, 4 days for a cell, and they died of thirst under the rim they were booked on). But a
+ * flight interrupted and re-planned from its booked cell again and again (people.ts fireCheck) left the body two cells
+ * behind: it planned a drink "right here" at the booked cell, beginWork set the true cell, the drink found no water,
+ * and a band that had outrun a wildfire died of thirst beside a spring.
+ */
+export function rebookIfAdrift(x: PCtx, s: number, body: number): boolean {
+  const A = x.A;
+  if (body === A.cell[s] || adjacentCells(x.p, body, A.cell[s])) return false;
+  A.cell[s] = body;
+  x.ps.buckets.move(s, body);
+  return true;
+}
+
+/** the cell an agent's body is in now (its booked cell, A.cell, is the far cell of the leg it walks) */
+export function bodyCell(x: PCtx, s: number): number {
+  x.A.posAt(s, x.tick, _a);
+  return x.p.cellAt(_a);
+}
+
 /** reached the goal: start the work phase */
 export function arrive(x: PCtx, s: number): void {
   const A = x.A;
@@ -272,11 +325,7 @@ function beginWork(x: PCtx, s: number, at = x.tick): void {
   const A = x.A;
   A.phase[s] = PHASE.working;
   A.anim[s] = workAnim(A.task[s]);
-  if (at === x.tick) {
-    A.posAt(s, x.tick, _a);
-    const c = x.p.cellAt(_a);
-    if (c !== A.cell[s]) { A.cell[s] = c; x.ps.buckets.move(s, c); }
-  }
+  if (at === x.tick) syncCell(x, s);
   // under a roof: sleeping at home, warming up inside
   const k = A.task[s];
   // (occupancy is kept against the building entered, A.inside — not A.home, which findShelter / assignHomes may change

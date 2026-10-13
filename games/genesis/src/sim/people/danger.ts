@@ -7,15 +7,27 @@
 //   * standing in fire (> FIRE_HERE) or lava: flight is the ONLY candidate; drinking waits for a safe cell;
 //   * beside a cell burning hard (> FIRE_NEAR): flight outranks every need (utility 8+; a drink tops out ~7.4);
 //   * the fire step interrupts people in burning cells and beside hard-burning ones, mid-task, at the same thresholds;
-//   * flight picks a safe cell (not burning, no hard-burning neighbour) AWAY from the local fire, within 6 rings, with a
-//     one-step escape gradient when nothing safe is in reach; drinking places that are burning are skipped.
+//   * flight picks a safe cell (not burning, no hard-burning neighbour) AWAY from the local fire, within 6 rings and not
+//     past the front, upwind and onto burnt-out ground where it can, with a one-step escape gradient when nothing safe is
+//     in reach; the route is searched live (not the settlement's pre-built flow field); drinking places that burn are
+//     skipped;
+//   * a fire front outruns a walk 12-50x: people fleeing sprint (FLEE_SPRINT), burns grow with the intensity above
+//     FIRE_BURN rather than starting at full strength, and a flight whose goal catches fire turns elsewhere.
 
 import type { Planet } from '../world/planet.ts';
+import { stepFactor } from './world.ts';
 
 /** fire intensity at which a cell counts as burning for the people standing in it */
 export const FIRE_HERE = 0.05;
 /** a neighbour burning this hard puts the people beside it in danger */
 export const FIRE_NEAR = 0.25;
+/** fleeing people run: a cell (50-150 m) is crossed before the flames finish it, where a walk was overrun (the front
+ * moves 1 cell per 5-15 ticks, 12-50x a walk) */
+export const FLEE_SPRINT = 4;
+/** burns begin above this intensity and grow with it (people.ts fireCheck: health −= (fire − FIRE_BURN) × FIRE_HURT per
+ * fire step): a cell that has just caught scorches, a full blaze (1.0) kills in ~25 fire steps (~125 ticks) */
+export const FIRE_BURN = 0.2;
+export const FIRE_HURT = 0.05;
 
 /** 1 + intensity when the cell burns (2 for lava), 0.5 × the hottest neighbour when one burns hard, else 0 */
 export function fireDanger(p: Planet, c: number): number {
@@ -31,6 +43,33 @@ export function fireDanger(p: Planet, c: number): number {
   }
   return m > FIRE_NEAR ? 0.5 * m : 0;
 }
+
+/** how hot cell c is to stand in: its fire intensity, 2 for lava */
+export function heat(p: Planet, c: number): number {
+  return p.f.lava[c] > 0.01 ? 2 : p.f.fire[c];
+}
+
+/**
+ * A flight's goal has caught fire since it was chosen (`chosen`: its heat then, ×1000, kept in the task's data): run
+ * somewhere else. A fleeing person was never re-checked, so a band committed to a 2-hour leg into a cell the front
+ * reached 9 ticks later stood in it at 0.9 for the whole leg; a fallback goal (already smouldering) re-plans only as it
+ * flares, so flight does not thrash every fire step.
+ */
+export function fleeGoalAlight(p: Planet, goal: number, chosen: number): boolean {
+  if (goal < 0) return false;
+  const h = heat(p, goal);
+  return h > FIRE_HERE && h > chosen / 1000 + 0.1;
+}
+
+/** the terrain's toll on a step c -> o and back (slope, wading, snow, sand — the flames left out: fleeTarget weighs
+ * those itself); Infinity where a walker cannot go or cannot get back */
+function terrainToll(p: Planet, c: number, o: number): number {
+  const burn = (q: number): number => (p.f.lava[q] > 0.01 || p.f.fire[q] > 0.3 ? 6 : 1);
+  return Math.max(stepFactor(p, c, o, 0, false) / burn(o), stepFactor(p, o, c, 0, false) / burn(c));
+}
+/** a step a fleeing body can take in time, and climb back from: a crater or a cliff is a trap, not a refuge (scorched
+ * and unburnable, a meteor's crater drew a whole town onto its floor, 4 days' climb from water) */
+const TOLL_MAX = 3;
 
 /** no fire, no lava, solid ground */
 function safeGround(p: Planet, c: number): boolean {
@@ -52,12 +91,17 @@ export function fleeTarget(p: Planet, c0: number, rings = 6): number {
   let fr = [c0];
   let fx = 0, fy = 0, fz = 0, fw = 0;
   const all: number[] = [];
+  // the way out runs through nothing hotter than where they stand (beside the fire: nothing past FIRE_NEAR), so a
+  // refuge on the far side of the front is out of reach — the fire's centre still counts every cell it covers
+  const pass = Math.max(FIRE_NEAR, heat(p, c0));
   for (let d = 1; d <= rings; d++) {
     const nf: number[] = [];
     for (const c of fr) {
+      if (c !== c0 && heat(p, c) > pass) continue;
       for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
         const o = g.nbr[e];
         if (_seen.has(o)) continue;
+        if (terrainToll(p, c, o) > TOLL_MAX) continue;
         _seen.set(o, d);
         nf.push(o);
       }
@@ -82,13 +126,28 @@ export function fleeTarget(p: Planet, c0: number, rings = 6): number {
   // the nearest clear cell that lies away from the flames: each ring walked costs 1.5, each cell farther from the fire's
   // centre than where they stand gains 1, a clear cell (no hard-burning neighbour) outranks any merely unburnt one, and a
   // cell nearer the fire than they are is a last resort (running through the fire to a gap on the far side kills)
+  // the wind at c0: fire runs downwind fast and upwind barely (fields/fire.ts), so flight upwind outlasts the front
+  const wx = f.windX[c0], wy = f.windY[c0], wz = f.windZ[c0];
+  const ws = Math.sqrt(wx * wx + wy * wy + wz * wz);
+  const px = P[c0 * 3], py = P[c0 * 3 + 1], pz = P[c0 * 3 + 2];
   let best = -1, bv = -Infinity;
   for (const o of all) {
     if (!safeGround(p, o)) continue;
     const clear = fireDanger(p, o) === 0;
     const d = _seen.get(o)!;
     const gain = awayOf(o) - a0;
-    const v = (clear ? 100 : 0) + (gain >= 0 ? 50 : 0) + gain - d * 1.5;
+    // burnt-out ground (no flames, its fuel gone) cannot burn again: the safest refuge — worth under two rings' walk
+    // (a refuge a cell farther is a leg of 50-150 m more, and the front crosses a cell in 5-15 ticks)
+    const burntOut = f.burnt[o] > 0.5 && f.fire[o] <= 0.02 ? 2.5 : 0;
+    // upwind of where they stand (−1 downwind .. +1 upwind), in a wind worth the name
+    let up = 0;
+    if (ws > 2) {
+      const dx = P[o * 3] - px, dy = P[o * 3 + 1] - py, dz = P[o * 3 + 2] - pz;
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      up = -(dx * wx + dy * wy + dz * wz) / (dl * ws);
+    }
+    // (upwind breaks ties between cells as near: worth less than a ring)
+    const v = (clear ? 100 : 0) + (gain >= 0 ? 50 : 0) + gain + burntOut + up * 1.2 * Math.min(1, ws / 8) - d * 1.5;
     if (v > bv) { bv = v; best = o; }
   }
   if (best >= 0) return best;
@@ -96,7 +155,7 @@ export function fleeTarget(p: Planet, c0: number, rings = 6): number {
   let m = Infinity;
   for (let e = g.nbrStart[c0]; e < g.nbrStart[c0 + 1]; e++) {
     const o = g.nbr[e];
-    if (f.water[o] >= 0.6) continue;
+    if (f.water[o] >= 0.6 || terrainToll(p, c0, o) === Infinity) continue;
     const v = f.fire[o] + (f.lava[o] > 0.01 ? 2 : 0);
     if (v < m) { m = v; best = o; }
   }

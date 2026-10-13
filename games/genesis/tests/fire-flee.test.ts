@@ -4,9 +4,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { igniteArea } from '../src/sim/fields/fire.ts';
-import { TASK } from '../src/sim/people/defs.ts';
+import { PATH_MAX, TASK } from '../src/sim/people/defs.ts';
 import { NEED_N, WATER } from '../src/sim/people/needs.ts';
-import { world, people, membersOf } from './helpers/peoples.ts';
+import { FIRE_HERE, fleeGoalAlight } from '../src/sim/people/danger.ts';
+import { FIRE_CHECK } from '../src/sim/people/people.ts';
+import { startTask } from '../src/sim/people/tasks.ts';
+import { world, people, membersOf, ctx } from './helpers/peoples.ts';
 
 /** a settled band, parched to the bone, its village set alight with fuel underfoot */
 function burningVillage(seed = 20261008) {
@@ -110,4 +113,61 @@ test('people beside a fire move away before it reaches them; people far away do 
     for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (p.f.fire[g.nbr[e]] > 0.05) near = true;
     assert.ok(near, `agent ${A.id[s]} flees with no fire in or beside its cell`);
   }
+});
+
+test('a flight whose goal catches fire turns elsewhere within a fire step', () => {
+  const { sim, st, p, A } = burningVillage(11);
+  // since when each fleeing agent's goal has been alight (the fire step looks every FIRE_CHECK ticks; the decision follows)
+  const since = new Map<number, { goal: number; t: number }>();
+  let fled = 0;
+  let stuck = 0;
+  for (let t = 0; t < 300; t++) {
+    sim.step(1);
+    for (const s of membersOf(sim, st)) {
+      if (!A.alive[s] || A.task[s] !== TASK.flee) { since.delete(s); continue; }
+      fled++;
+      const goal = A.gcell[s];
+      if (!fleeGoalAlight(p, goal, A.tData[s])) { since.delete(s); continue; }
+      const was = since.get(s);
+      if (!was || was.goal !== goal) { since.set(s, { goal, t }); continue; }
+      if (t - was.t > FIRE_CHECK + 2) { stuck++; since.delete(s); }
+    }
+  }
+  assert.ok(fled > 0, 'people fled (the test exercises the case)');
+  assert.equal(stuck, 0, `flights that kept running into a goal the fire had reached: ${stuck}`);
+});
+
+test('an errand goes around a burning cell when there is a way round', () => {
+  const sim = world(24, 5);
+  const st = people(sim, 'plains-folk', 12, { settled: true });
+  sim.step(30);
+  const p = sim.u.planets[0];
+  const A = p.people.agents;
+  const g = p.grid;
+  const P = g.pos;
+  const land = (c: number): boolean => p.f.water[c] < 0.05 && !p.s.ocean[c];
+  const nbrs = (c: number): number[] => { const o: number[] = []; for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) o.push(g.nbr[e]); return o; };
+  const s = membersOf(sim, st).find((m) => A.alive[m] && !(A.flags[m] & 1))!;
+  let checked = 0;
+  for (let attempt = 0; attempt < 6 && checked < 3; attempt++) {
+    const c0 = A.cell[s];
+    // a land cell two steps away and the cells between (set alight); a way round must exist over unburnt land
+    const ring1 = nbrs(c0).filter(land);
+    const ring2 = [...new Set(ring1.flatMap(nbrs))].filter((c) => c !== c0 && !nbrs(c0).includes(c) && land(c)).sort((a, b) => a - b);
+    const goal = ring2[attempt % Math.max(1, ring2.length)];
+    if (goal === undefined) break;
+    const middle = nbrs(c0).filter((c) => nbrs(goal).includes(c));
+    for (const c of middle) { p.f.fire[c] = 0.8; p.f.grass[c] = 0.8; }
+    const round = ring1.filter((c) => !middle.includes(c)).some((c) => nbrs(c).some((d) => !middle.includes(d) && land(d) && nbrs(d).includes(goal)));
+    if (round && middle.length) {
+      startTask(ctx(sim), s, { kind: TASK.wander, goal: [P[goal * 3], P[goal * 3 + 1], P[goal * 3 + 2]], goalCell: goal, work: 5 });
+      const path = Array.from(A.path.slice(s * PATH_MAX, s * PATH_MAX + A.pathLen[s]));
+      const hot = [A.cell[s], ...path].filter((c) => p.f.fire[c] > FIRE_HERE);
+      assert.deepEqual(hot, [], `the way to ${goal} runs through the fire at ${hot.join(', ')} (path ${path.join(' ')})`);
+      checked++;
+    }
+    for (const c of middle) p.f.fire[c] = 0;
+    sim.step(40);
+  }
+  assert.ok(checked > 0, 'at least one errand had a way round the fire');
 });

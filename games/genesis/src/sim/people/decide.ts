@@ -11,7 +11,7 @@ import { hashFloat } from '../core/rng.ts';
 import { DEATH, NS, NT, PHASE, ROLE, SKILL, TASK, TRAIT } from './defs.ts';
 import { BELONG, CURIO, FAITH, FOOD, REST, SAFETY, WARMTH, WATER, WET, NEED_N, fireAt, lastStress, updateNeeds } from './needs.ts';
 import { ageFlags, die } from './lifecycle.ts';
-import { startTask, nextSegment, storePoint, type TaskSpec } from './tasks.ts';
+import { startTask, nextSegment, storePoint, rebookIfAdrift, bodyCell, type TaskSpec } from './tasks.ts';
 import { airTemp, cellPos, distM, drinkable, freshWater, isLand, snowWater, spotInCell, sunElevation, ticksUntilSun, wellFlows } from './world.ts';
 import { availability, itemIdx, pathOptsFor } from './resources.ts';
 import { findPath } from '../grid/pathfind.ts';
@@ -26,7 +26,7 @@ import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
 import { godHooks } from './hooks.ts';
-import { FIRE_HERE, fireDanger, fleeTarget } from './danger.ts';
+import { FIRE_HERE, fireDanger, fleeTarget, heat } from './danger.ts';
 // SIM perf push 3 — the peoples' time-lapse (stretched tasks, per-settlement context caches: perf/plapse.ts)
 import { ctxOf, finishStretched, inPassing, litOf, lowHearthOf, penIn, rival, templeIn } from '../perf/plapse.ts';
 
@@ -124,6 +124,11 @@ export function decide(x: PCtx, s: number): void {
   ageFlags(x, s);
   const h = updateNeeds(x, s);
   if (h <= 0) { die(x, s, A.cause[s] || DEATH.injury); return; }
+  // plan from the booked cell (one step ahead of the body at most), unless the body has fallen further behind
+  // (tasks.ts rebookIfAdrift); fire counts where the body stands as well as where it was heading (below)
+  const booked = A.cell[s];
+  const body = bodyCell(x, s);
+  rebookIfAdrift(x, s, body);
   const home = x.ps.settlement(A.settlement[s]);
   if (A.flags[s] & AgentFlag.possessed) {
     // the player drives this one (god/possess.ts): its next order, else it stands and waits
@@ -138,7 +143,12 @@ export function decide(x: PCtx, s: number): void {
   // (SIM perf push 3: at 100x / 1000x water and food at hand are taken in passing — perf/plapse.ts; nothing at 1x.
   // Round 2: a drink takes its time — the task decided below starts that many ticks later)
   // danger before needs (people/danger.ts): in the flames, flight is the only candidate; beside them it outranks all
-  const danger = fireDanger(x.p, A.cell[s]);
+  // (a walker's body can stand in flames while the cell it is booked into is not yet alight, and the other way round:
+  // judged by the booked cell alone, villagers walking out of a burning cell chose a drink over flight)
+  const dBooked = fireDanger(x.p, booked);
+  const dBody = body !== booked ? fireDanger(x.p, body) : 0;
+  const danger = Math.max(dBooked, dBody);
+  _fleeFrom = dBody > dBooked ? body : A.cell[s];
   const sip = danger >= 1 ? 0 : inPassing(x, s, st, waterHere, eat);
   const nb = s * NEED_N;
   const N = A.needs;
@@ -167,7 +177,7 @@ export function decide(x: PCtx, s: number): void {
     // food, parched and hungry coastal folk walked to the store again and again and died of thirst beside a lake), and
     // water at hand is drunk at once
     if (w < 0.15) U[C.drink] += 1.6;
-    if (w < 0.6 && waterHere(x, s)) U[C.drink] += 0.6;
+    if (w < 0.6 && waterHere(x, s, body)) U[C.drink] += 0.6;
   }
   if (sp.needW[FOOD] > 0) U[C.eat] = sq(1 - N[nb + FOOD]) * 3 * sp.needW[FOOD] + (N[nb + FOOD] < 0.2 ? 1 : 0);
   const stress = lastStress;
@@ -350,12 +360,14 @@ function nearestCell(x: PCtx, from: number, rings: number, pred: (c: number) => 
 function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | null {
   const p = x.p, A = x.A;
   const c0 = A.cell[s];
-  if (p.f.precip[c0] > 1.5 && p.f.precipType[c0] === 1) return { kind: TASK.drink, goal: null, goalCell: c0, work: 15 };
+  // (rain and water at hand are judged where the body is: waterHere)
+  const here = bodyCell(x, s);
+  if (p.f.precip[here] > 1.5 && p.f.precipType[here] === 1) return { kind: TASK.drink, goal: null, goalCell: here, work: 15 };
   // water at hand — in this cell, or the next one a few steps away — is drunk there, not at the village's usual spot
   // (cold folk walked 400 m past snow they could melt to the settlement's drinking place and died of thirst on the way)
   // (water in the next cell counts as at hand: a cell is ~50–150 m across and people walk ~15 m an hour here — they
   // fetch it in a skin, the drink is not a half-day's walk)
-  if (waterHere(x, s)) return { kind: TASK.drink, goal: null, goalCell: c0, work: 20 };
+  if (waterHere(x, s, here)) return { kind: TASK.drink, goal: null, goalCell: here, work: 20 };
   let c = -1;
   if (st && !st.band && st.res && st.res.water.length) {
     // nearest drinking spot to where the agent is that still holds water (the list is hours old: a rain pool dries)
@@ -374,16 +386,23 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
   return { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
 }
 
-/** can agent s drink where it stands (water at or beside its cell, rain, a well, snow to melt, a boat's casks)? */
-export function waterHere(x: PCtx, s: number): boolean {
+/**
+ * Can agent s drink where its body stands (water at or beside that cell, rain, a well, snow to melt, a boat's casks)?
+ * Judged from the BODY's cell (`at`, when the caller has it: tasks.ts bodyCell), not the booked one: a walker is booked a
+ * cell ahead of its body (nextSegment), and a drink started "right here" from the booked cell's water was worked in the
+ * body's cell (beginWork), where there was none — townsfolk on a meteor crater's floor, booked onto its rim beside a
+ * spring, went back and forth between a failed drink and a walk the other way until they died of thirst.
+ */
+export function waterHere(x: PCtx, s: number, at = -1): boolean {
   const A = x.A;
   // a boat carries casks, a caravan or war band its skins
   if (A.boat[s] >= 0 || A.mission[s]) return true;
-  if (x.p.f.precip[A.cell[s]] > 1 && x.p.f.precipType[A.cell[s]] === 1) return true;
+  const c = at >= 0 ? at : bodyCell(x, s);
+  if (x.p.f.precip[c] > 1 && x.p.f.precipType[c] === 1) return true;
   // the cell or one beside it (cells are ~50 m across: water in the next one is a few steps away)
-  if (waterAtCell(x, s, A.cell[s])) return true;
+  if (waterAtCell(x, s, c)) return true;
   const g = x.p.grid;
-  for (let e = g.nbrStart[A.cell[s]]; e < g.nbrStart[A.cell[s] + 1]; e++) if (waterAtCell(x, s, g.nbr[e])) return true;
+  for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (waterAtCell(x, s, g.nbr[e])) return true;
   return false;
 }
 
@@ -540,11 +559,16 @@ function planBathe(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
   return { kind: TASK.bathe, goal: spot(x, s, c, 13), goalCell: c, work: 40 };
 }
 
+/** where this decision's flight starts from: the body's cell when that burns hotter than the booked one (decide) */
+let _fleeFrom = -1;
+
 function planFlee(x: PCtx, s: number): TaskSpec | null {
   // away from the flames, to the nearest clear ground (people/danger.ts fleeTarget)
-  const c = fleeTarget(x.p, x.A.cell[s]);
-  if (c < 0 || c === x.A.cell[s]) return null;
-  return { kind: TASK.flee, goal: spot(x, s, c, 17), goalCell: c, work: 20 };
+  const from = _fleeFrom >= 0 ? _fleeFrom : x.A.cell[s];
+  const c = fleeTarget(x.p, from);
+  if (c < 0 || c === from) return null;
+  // (the goal's heat now: if it catches fire on the way, people.ts fireCheck turns them elsewhere — danger.ts)
+  return { kind: TASK.flee, goal: spot(x, s, c, 17), goalCell: c, work: 20, data: Math.round(heat(x.p, c) * 1000) };
 }
 
 // ───────────────────────────── work ─────────────────────────────

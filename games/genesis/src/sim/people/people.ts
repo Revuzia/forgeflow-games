@@ -39,7 +39,7 @@ import { politicsDaily } from './war.ts';
 import { contactsDaily, flushReadings } from './culture.ts';
 import { finishTask } from './work.ts';
 import { creditStretched } from '../perf/plapse.ts';
-import { FIRE_HERE, FIRE_NEAR } from './danger.ts';
+import { FIRE_BURN, FIRE_HERE, FIRE_HURT, FIRE_NEAR, fleeGoalAlight } from './danger.ts';
 
 export const FIRE_CHECK = 5;
 
@@ -124,17 +124,20 @@ function fireCheck(x: PCtx): void {
     const c = list[i];
     const fi = p.f.fire[c];
     if (fi <= FIRE_HERE) continue;
-    // in the flames: burned (from 0.1), and turned to flight mid-task at the same threshold decide() flees at
+    // in the flames: burned (above FIRE_BURN, growing with the blaze), and turned to flight mid-task at the threshold
+    // decide() flees at
     if (x.ps.buckets.any(c)) {
       x.ps.agentsIn(c, _cell);
       for (const s of _cell) {
         if (!A.alive[s]) continue;
-        if (fi > 0.1) {
-          A.health[s] -= fi * 0.08;
+        if (fi > FIRE_BURN) {
+          // burns build with the flames (people/danger.ts): a cell just caught (~0.25-0.55) scorches; a blaze kills in ~100 ticks
+          A.health[s] -= (fi - FIRE_BURN) * FIRE_HURT;
           A.flags[s] |= AgentFlag.onFire;
           if (A.health[s] <= 0) { die(x, s, DEATH.fire); continue; }
         }
-        if (A.task[s] !== TASK.flee) interrupt(x, s);
+        // (already fleeing: turned elsewhere only if the place they run to has caught fire since — danger.ts)
+        if (A.task[s] !== TASK.flee || fleeGoalAlight(p, A.gcell[s], A.tData[s])) interrupt(x, s);
       }
     }
     // beside a cell burning hard: move away before it spreads (decide() gives flight 8+ there)
@@ -143,7 +146,10 @@ function fireCheck(x: PCtx): void {
       const o = g.nbr[e];
       if (p.f.fire[o] > FIRE_HERE || !x.ps.buckets.any(o)) continue;
       x.ps.agentsIn(o, _cell);
-      for (const s of _cell) if (A.alive[s] && A.task[s] !== TASK.flee && !(A.flags[s] & AgentFlag.possessed)) interrupt(x, s);
+      for (const s of _cell) {
+        if (!A.alive[s] || A.flags[s] & AgentFlag.possessed) continue;
+        if (A.task[s] !== TASK.flee || fleeGoalAlight(p, A.gcell[s], A.tData[s])) interrupt(x, s);
+      }
     }
   }
 }
@@ -161,6 +167,8 @@ export function interrupt(x: PCtx, s: number): void {
   if (A.dmg[s] !== 0) { creditStretched(x, s, finishTask); if (!A.alive[s]) return; }
   const pos = [0, 0, 0];
   A.posAt(s, x.tick, pos);
+  // (still booked into the cell its leg was heading for: the decision next tick weighs the danger there — and books
+  // the body where it stands if it has fallen more than a cell behind: decide.ts, tasks.ts rebookIfAdrift)
   A.place(s, pos[0], pos[1], pos[2], x.tick);
   if (A.inside[s] >= 0) leaveShelter(x, s);
   A.task[s] = TASK.idle;
