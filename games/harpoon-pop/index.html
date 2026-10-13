@@ -468,13 +468,22 @@ const sfx = Sound.sfx;
 /* ============================ §3 INPUT ============================ */
 const keys = {};
 const touch = { left: false, right: false, fire: false };
+// Per-player controls. Solo keeps every original binding (A / D / W also drive P1).
+// In 2-player co-op, A / D / W belong to P2 and P1 keeps the arrows + Space / ↑ / Z.
+const P1_FIRE = ['Space', 'ArrowUp', 'KeyZ', 'KeyX', 'KeyJ'];
+const controls = [
+  {
+    get left() { return keys.ArrowLeft || (!game.coop && keys.KeyA) || touch.left; },
+    get right() { return keys.ArrowRight || (!game.coop && keys.KeyD) || touch.right; },
+    get fire() { return P1_FIRE.some((k) => keys[k]) || (!game.coop && keys.KeyW) || touch.fire; },
+  },
+  { get left() { return !!keys.KeyA; }, get right() { return !!keys.KeyD; }, get fire() { return !!keys.KeyW; } },
+];
 const input = {
-  get left() { return keys.ArrowLeft || keys.KeyA || touch.left; },
-  get right() { return keys.ArrowRight || keys.KeyD || touch.right; },
-  get fire() { return keys.Space || keys.ArrowUp || keys.KeyW || keys.KeyZ || keys.KeyX || keys.KeyJ || touch.fire; },
-  pressed: false, // edge-triggered fire, consumed by the physics step
+  get left() { return controls[0].left; }, get right() { return controls[0].right; }, get fire() { return controls[0].fire; },
+  pressed: false,  // P1 edge-triggered fire, consumed by the physics step
+  pressed2: false, // P2 edge-triggered fire (co-op)
 };
-const FIRE_KEYS = ['Space', 'ArrowUp', 'KeyW', 'KeyZ', 'KeyX', 'KeyJ'];
 const CONFIRM_KEYS = ['Space', 'Enter', 'KeyZ', 'KeyX', 'KeyJ'];
 addEventListener('keydown', (e) => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
@@ -489,13 +498,19 @@ function onPress(code) {
   if (code === 'KeyM') { const m = Sound.toggleMute(); toast(m ? 'SOUND OFF' : 'SOUND ON'); return; }
   if (code === 'KeyN') { const m = Sound.toggleMusic(); toast(m ? 'MUSIC ON' : 'MUSIC OFF'); return; }
   if (code === 'KeyP' || code === 'Escape') { if (['play', 'paused', 'intro'].includes(game.state)) togglePause(); return; }
-  if (FIRE_KEYS.includes(code)) input.pressed = true;
+  if (game.state === 'title' && !isTouch()) { // 1 PLAYER / 2 PLAYERS picker
+    if (['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(code)) { game.modeSel = game.modeSel === 1 ? 2 : 1; sfx.tick(false); return; }
+    if (code === 'Digit1' || code === 'Digit2') { game.modeSel = code === 'Digit1' ? 1 : 2; confirmAction(); return; }
+  }
+  if (game.coop && code === 'KeyW') input.pressed2 = true;
+  else if (P1_FIRE.includes(code) || code === 'KeyW') input.pressed = true;
   if (CONFIRM_KEYS.includes(code)) confirmAction();
 }
+const isTouch = () => document.body.classList.contains('touch');
 function confirmAction() {
   Sound.init();
   const s = game.state;
-  if (s === 'title') { sfx.select(); newGame(); }
+  if (s === 'title') { sfx.select(); newGame(game.modeSel === 2 && !isTouch()); }
   else if (s === 'paused') togglePause();
   else if (s === 'clear' && game.stateT > 1.2) nextLevel();
   else if (s === 'gameover') { if (game.contT > 0 && game.stateT > 0.6) continueGame(); else if (game.contT <= 0 && game.stateT > 1.2) { sfx.select(); toTitle(); } }
@@ -516,15 +531,22 @@ addEventListener('touchstart', () => document.body.classList.add('touch'), { onc
 /* ============================ §4 GAME STATE ============================ */
 const game = {
   state: 'title', stateT: 0, realT: 0,
-  level: 1, def: null, score: 0, lives: 3,
-  player: null, bubbles: [], harpoons: [], bullets: [], items: [], platforms: [], pending: [],
+  level: 1, def: null, score: 0,
+  players: [], coop: false, modeSel: 1, credit: 0, bubbles: [], harpoons: [], bullets: [], items: [], platforms: [], pending: [],
   enemies: [], shots: [], enemyT: 0, contT: 0, fireworks: [], shotId: 0,
   particles: [], texts: [], banner: null, toastMsg: null,
-  weapon: 'wire', gunCd: 0, shield: false, invuln: 0, slowT: 0,
+  slowT: 0, dynaOwner: 0,
   slowmoT: 0, timeScale: 1, hitstop: 0, shake: 0, flash: 0, flashColor: '#fff',
   combo: 0, comboT: 0, nearCd: 0, timeLeft: 0, lastTick: 99, dyna: 0, dynaCd: 0,
   backdrop: null, stats: freshStats(), clearInfo: null, scores: store('harpoonpop.scores') || [],
 };
+// Per-player state lives on the player objects. These aliases point at P1 so single-player code
+// paths, tools and the test harness can keep reading game.player / game.lives / game.weapon / ...
+Object.defineProperty(game, 'player', { get() { return game.players[0] || null; } });
+for (const k of ['lives', 'weapon', 'shield', 'invuln', 'gunCd']) {
+  Object.defineProperty(game, k, { get() { return game.players[0] ? game.players[0][k] : undefined; }, set(v) { if (game.players[0]) game.players[0][k] = v; } });
+}
+const alivePlayers = () => game.players.filter((p) => !p.dead && !p.out);
 function freshStats() { return { pops: 0, bestCombo: 0, apex: 0, juggles: 0, close: 0, chains: 0, stingers: 0 }; }
 
 function getLevelDef(n) {
@@ -547,10 +569,17 @@ function makeBubble(size, x, y, dir, opts = {}) {
     squash: 0, squashAxis: 0, dead: false, nearDone: false, wob: Math.random() * 6,
   };
 }
-function makePlayer() { return { x: W / 2, vx: 0, face: 1, run: 0, shootT: 0, dead: false, dx: 0, dy: 0, dvx: 0, dvy: 0, rot: 0, land: 0 }; }
+function makePlayer(id, lives) {
+  return {
+    id, x: game.coop ? (id ? 600 : 360) : W / 2, vx: 0, face: id ? -1 : 1, run: 0, shootT: 0, land: 0,
+    dead: false, out: false, deadT: 0, dx: 0, dy: 0, dvx: 0, dvy: 0, rot: 0,
+    lives, weapon: 'wire', shield: false, invuln: 0, gunCd: 0, shotId: 0, points: 0,
+  };
+}
 
-function newGame() {
-  game.score = 0; game.lives = 3; game.level = 1; game.stats = freshStats();
+function newGame(coop = false) {
+  game.coop = coop; game.players = coop ? [makePlayer(0, 3), makePlayer(1, 3)] : [makePlayer(0, 3)];
+  game.score = 0; game.level = 1; game.stats = freshStats();
   loadLevel(1);
 }
 function loadLevel(n) {
@@ -570,8 +599,9 @@ function resetStage() {
   }
   game.harpoons = []; game.bullets = []; game.items = []; game.pending = [];
   game.enemies = []; game.shots = []; game.enemyT = rand(7, 11);
-  game.player = makePlayer();
-  game.weapon = 'wire'; game.shield = false; game.slowT = 0; game.dyna = 0; game.invuln = 0;
+  // every player with lives left (re)spawns with fresh gear; lives and points carry over
+  game.players = game.players.map((p) => Object.assign(makePlayer(p.id, p.lives), { points: p.points, out: p.lives <= 0 }));
+  game.slowT = 0; game.dyna = 0;
   game.combo = 0; game.comboT = 0; game.timeLeft = def.time; game.lastTick = 99;
   game.slowmoT = 0; game.timeScale = 1;
   setState('intro');
@@ -583,7 +613,7 @@ function toTitle() { setState('title'); Sound.playMusic(true); Sound.playTrack('
 // Music per stage: two alternating stage themes, the boss theme every 4th stage.
 const trackFor = (n) => (n % 4 === 0 ? 'boss' : n % 2 ? 'stage1' : 'stage2');
 // Arcade-style CONTINUE: same stage, 3 fresh lives, score back to zero.
-function continueGame() { sfx.select(); game.score = 0; game.lives = 3; game.stats = freshStats(); game.contT = 0; resetStage(); }
+function continueGame() { sfx.select(); game.score = 0; game.players.forEach((p) => { p.lives = 3; p.points = 0; }); game.stats = freshStats(); game.contT = 0; resetStage(); }
 function setState(s) { game.state = s; game.stateT = 0; }
 function togglePause() {
   if (game.state === 'paused') { game.state = game.prevState; Sound.playMusic(true); }
@@ -591,9 +621,10 @@ function togglePause() {
 }
 
 /* ============================ §5 PLAYER + WEAPONS ============================ */
-function updatePlayer(dt) {
-  const p = game.player;
-  const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+function updatePlayers(dt) { for (const p of alivePlayers()) updatePlayer(p, dt); }
+function updatePlayer(p, dt) {
+  const c = controls[p.id];
+  const dir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
   // Snappy accel/decel: reaches top speed in ~0.06s, stops in ~0.04s
   p.vx = approach(p.vx, dir * PLAYER_SPEED, (dir ? 5200 : 7500) * dt);
   p.x += p.vx * dt;
@@ -606,24 +637,24 @@ function updatePlayer(dt) {
   // dust when changing direction at speed
   if (dir && Math.sign(p.vx) !== dir && Math.abs(p.vx) > 150 && Math.random() < 0.5) spawn({ x: p.x, y: ARENA.b - 2, vx: -dir * rand(30, 90), vy: rand(-60, -20), life: 0.35, size: rand(2, 4), color: '#d9c9ff', g: 200 });
 
-  game.gunCd -= dt;
-  if (input.pressed || (game.weapon === 'gun' && input.fire)) tryFire();
+  p.gunCd -= dt; p.invuln -= dt;
+  if ((p.id ? input.pressed2 : input.pressed) || (p.weapon === 'gun' && c.fire)) tryFire(p);
 }
 
-function tryFire() {
-  const p = game.player;
-  if (game.weapon === 'gun') {
-    if (game.gunCd > 0 || game.bullets.length >= 8) return;
-    const side = (game.bullets.length % 2 ? 1 : -1) * 5;
-    game.bullets.push({ x: p.x + side, y: ARENA.b - 50, dead: false }); game.shotId++;
-    game.gunCd = 0.085; p.shootT = 0.12; sfx.gun();
+function tryFire(p) {
+  if (p.weapon === 'gun') {
+    const mine = game.bullets.filter((u) => u.owner === p.id).length;
+    if (p.gunCd > 0 || mine >= 8) return;
+    const side = (mine % 2 ? 1 : -1) * 5;
+    game.bullets.push({ x: p.x + side, y: ARENA.b - 50, dead: false, owner: p.id }); p.shotId++; game.shotId++;
+    p.gunCd = 0.085; p.shootT = 0.12; sfx.gun();
     spawn({ x: p.x + side, y: ARENA.b - 52, type: 'flash', size: 9, life: 0.06, color: '#ffd9a0' });
     return;
   }
-  const max = { double: 2, triple: 3 }[game.weapon] || 1;
-  if (game.harpoons.length >= max) return;
-  game.harpoons.push({ x: p.x, tip: ARENA.b - 46, state: 'rise', stuckT: 0, kind: game.weapon === 'power' ? 'power' : 'wire', dead: false });
-  game.shotId++;
+  const max = { double: 2, triple: 3 }[p.weapon] || 1;
+  if (game.harpoons.filter((h) => h.owner === p.id).length >= max) return;
+  game.harpoons.push({ x: p.x, tip: ARENA.b - 46, state: 'rise', stuckT: 0, kind: p.weapon === 'power' ? 'power' : 'wire', dead: false, owner: p.id });
+  p.shotId++; game.shotId++;
   p.shootT = 0.2; sfx.shoot();
   for (let i = 0; i < 5; i++) spawn({ x: p.x, y: ARENA.b - 46, vx: rand(-80, 80), vy: rand(-160, -40), life: 0.25, size: 2, color: '#fff6c8', type: 'spark' });
 }
@@ -639,6 +670,7 @@ function updateWeapons(dt) {
   for (const h of game.harpoons) {
     // crackling energy along the whole wire
     if (Math.random() < 0.5) spawn({ x: h.x + rand(-3, 3), y: rand(h.tip, ARENA.b), vx: rand(-50, 50), vy: rand(-50, 50), life: 0.22, size: rand(1, 2.2), color: h.kind === 'power' ? '#ffd23f' : '#9fdcff', type: 'spark' });
+    game.credit = h.owner;
     if (h.state === 'rise') {
       h.tip -= HARPOON_SPEED * dt;
       if (Math.random() < 0.6) spawn({ x: h.x + rand(-2, 2), y: h.tip + rand(0, 10), vx: rand(-30, 30), vy: rand(20, 80), life: 0.3, size: rand(1, 2.5), color: h.kind === 'power' ? '#ffd23f' : '#bfe9ff', type: 'spark' });
@@ -664,6 +696,7 @@ function updateWeapons(dt) {
   game.harpoons = game.harpoons.filter((h) => !h.dead);
 
   for (const u of game.bullets) {
+    game.credit = u.owner;
     u.y -= BULLET_SPEED * dt;
     const c = ceilingAt(u.x);
     if (u.y <= c.y) { u.dead = true; if (c.plat && c.plat.kind === 'glass') breakPlatform(c.plat); continue; }
@@ -764,11 +797,11 @@ function explode(x, y, radius) {
   for (const o of game.bubbles) {
     if (o.dead) continue;
     const d = Math.hypot(o.x - x, o.y - y) - o.r;
-    if (d < radius && !game.pending.some((p) => p.b === o)) game.pending.push({ b: o, t: 0.06 + Math.max(0, d) / 1600 });
+    if (d < radius && !game.pending.some((p) => p.b === o)) game.pending.push({ b: o, t: 0.06 + Math.max(0, d) / 1600, credit: game.credit });
   }
 }
 function updatePending(dt) {
-  for (const p of game.pending) { p.t -= dt; if (p.t <= 0) { if (!p.b.dead) hitBubble(p.b, 'chain', p.b.x, p.b.y); p.done = true; } }
+  for (const p of game.pending) { p.t -= dt; if (p.t <= 0) { game.credit = p.credit; if (!p.b.dead) hitBubble(p.b, 'chain', p.b.x, p.b.y); p.done = true; } }
   game.pending = game.pending.filter((p) => !p.done);
 }
 
@@ -786,7 +819,7 @@ function maybeSpawnEnemy(dt) {
   sfx.enemyIn();
 }
 function updateEnemies(dt) {
-  const p = game.player;
+  const live = alivePlayers();
   for (const e of game.enemies) {
     if (e.dying) { e.dying += dt; e.vy += G * 0.7 * dt; e.y += e.vy * dt; e.x += e.dir * 30 * dt; if (e.y > ARENA.b + 60) e.dead = true; continue; }
     e.t += dt;
@@ -795,7 +828,7 @@ function updateEnemies(dt) {
     e.y = e.baseY + Math.sin(e.t * 2.6) * 16;
     if ((e.dir > 0 && e.x > ARENA.r + 50) || (e.dir < 0 && e.x < ARENA.l - 50)) { e.dead = true; continue; }
     if (e.charge > 0) { e.charge -= dt; if (e.charge <= 0) fireStinger(e); }
-    else if ((e.fireT -= dt) <= 0 && e.x > ARENA.l + 40 && e.x < ARENA.r - 40 && p && !p.dead && game.state === 'play') { e.charge = 0.5; e.fireT = rand(1.8, 2.8); sfx.enemyCharge(); }
+    else if ((e.fireT -= dt) <= 0 && e.x > ARENA.l + 40 && e.x < ARENA.r - 40 && live.length && game.state === 'play') { e.charge = 0.5; e.fireT = rand(1.8, 2.8); sfx.enemyCharge(); }
   }
   game.enemies = game.enemies.filter((e) => !e.dead);
   for (const s of game.shots) {
@@ -806,14 +839,15 @@ function updateEnemies(dt) {
       for (let i = 0; i < 8; i++) spawn({ x: s.x, y: Math.min(s.y, ARENA.b - 2), vx: rand(-160, 160), vy: rand(-200, -40), life: 0.3, size: 2, color: '#ff8a3d', type: 'spark', g: 600 });
       continue;
     }
-    for (const h of game.harpoons) if (Math.abs(s.x - h.x) < 7 && s.y > h.tip) { s.dead = true; blockFx(s); break; }
+    for (const h of game.harpoons) if (Math.abs(s.x - h.x) < 7 && s.y > h.tip) { s.dead = true; game.credit = h.owner; blockFx(s); break; }
     if (s.dead) continue;
-    if (p && !p.dead && game.invuln <= 0 && circleRectDist(s.x, s.y, p.x - 10, ARENA.b - 40, 20, 40) < 5) { s.dead = true; playerHit({ x: s.x }); }
+    for (const p of live) if (!p.dead && p.invuln <= 0 && circleRectDist(s.x, s.y, p.x - 10, ARENA.b - 40, 20, 40) < 5) { s.dead = true; playerHit(p, { x: s.x }); break; }
   }
   game.shots = game.shots.filter((s) => !s.dead);
 }
 function fireStinger(e) {
-  const p = game.player, T = 1.05, dx = p.x - e.x, dy = (ARENA.b - 22) - (e.y + 16);
+  const live = alivePlayers(); if (!live.length) return;
+  const p = live.reduce((a, q) => (Math.abs(q.x - e.x) < Math.abs(a.x - e.x) ? q : a)), T = 1.05, dx = p.x - e.x, dy = (ARENA.b - 22) - (e.y + 16);
   game.shots.push({ x: e.x, y: e.y + 16, vx: dx / T, vy: dy / T - 150 * T, dead: false }); // lands where you stood ~1s later
   sfx.enemyShot();
   spawn({ x: e.x, y: e.y + 16, type: 'flash', size: 16, life: 0.1, color: '#ff6a3a' });
@@ -835,54 +869,69 @@ function killEnemy(e) {
 }
 
 /* ============================ §7 COLLISIONS / RULES ============================ */
-function checkPlayer() {
-  const p = game.player; if (p.dead) return;
-  const rx = p.x - 10, ry = ARENA.b - 40;
-  for (const b of game.bubbles) {
-    if (b.dead) continue;
-    const d = circleRectDist(b.x, b.y, rx, ry, 20, 40);
-    if (d < b.r * 0.94 && game.invuln <= 0) { playerHit(b); return; }
-    // Near miss: a bubble grazes you → bullet-time + bonus (once per bubble)
-    if (d < b.r + 15 && !b.nearDone && game.nearCd <= 0 && game.invuln <= 0) {
-      b.nearDone = true; game.nearCd = 1.2; game.slowmoT = 0.45; game.stats.close++;
-      const pts = 250 * comboMult(); addScore(pts);
-      popup(p.x, ARENA.b - 70, 'CLOSE! +' + pts, '#9d86ff', 20); sfx.near();
-      spawn({ x: p.x, y: ARENA.b - 22, type: 'ring', size: 20, r2: 70, life: 0.35, color: '#9d86ff', width: 3 });
+function checkPlayers() {
+  for (const p of alivePlayers()) {
+    const rx = p.x - 10, ry = ARENA.b - 40;
+    for (const b of game.bubbles) {
+      if (b.dead) continue;
+      const d = circleRectDist(b.x, b.y, rx, ry, 20, 40);
+      if (d < b.r * 0.94 && p.invuln <= 0) { playerHit(p, b); break; }
+      // Near miss: a bubble grazes you → bullet-time + bonus (once per bubble)
+      if (d < b.r + 15 && !b.nearDone && game.nearCd <= 0 && p.invuln <= 0) {
+        b.nearDone = true; game.nearCd = 1.2; game.slowmoT = 0.45; game.stats.close++;
+        game.credit = p.id; const pts = 250 * comboMult(); addScore(pts);
+        popup(p.x, ARENA.b - 70, 'CLOSE! +' + pts, '#9d86ff', 20); sfx.near();
+        spawn({ x: p.x, y: ARENA.b - 22, type: 'ring', size: 20, r2: 70, life: 0.35, color: '#9d86ff', width: 3 });
+      }
     }
   }
 }
-function playerHit(b) {
-  const p = game.player;
-  if (game.shield) {
-    game.shield = false; game.invuln = 1.6; sfx.shieldBreak(); addShake(0.35); game.hitstop = 0.08;
+function playerHit(p, b) {
+  if (p.shield) {
+    p.shield = false; p.invuln = 1.6; sfx.shieldBreak(); addShake(0.35); game.hitstop = 0.08;
     spawn({ x: p.x, y: ARENA.b - 22, type: 'ring', size: 26, r2: 120, life: 0.45, color: '#7cff6b', width: 6 });
     for (let i = 0; i < 18; i++) { const a = rand(0, Math.PI * 2); spawn({ x: p.x + Math.cos(a) * 28, y: ARENA.b - 22 + Math.sin(a) * 28, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, life: 0.4, size: 3, color: '#7cff6b', type: 'shard', drag: 2 }); }
     popup(p.x, ARENA.b - 70, 'SHIELD BROKE', '#7cff6b', 18);
     return;
   }
-  killPlayer(Math.sign(p.x - b.x) || 1, 'OUCH!');
+  killPlayer(p, Math.sign(p.x - b.x) || 1, 'OUCH!');
 }
-function killPlayer(dir, reason) {
-  const p = game.player; p.dead = true; p.dx = p.x; p.dy = ARENA.b; p.dvx = dir * 230; p.dvy = -560;
-  game.lives--; game.harpoons = []; game.bullets = [];
-  sfx.death(); Sound.playMusic(false);
-  addShake(0.8); flash('#ff3d5a', 0.5); game.hitstop = 0.18; game.slowmoT = 0.5; game.shots = [];
+function killPlayer(p, dir, reason) {
+  p.dead = true; p.deadT = 0; p.dx = p.x; p.dy = ARENA.b; p.dvx = dir * 230; p.dvy = -560;
+  p.lives--;
+  game.harpoons = game.harpoons.filter((h) => h.owner !== p.id); game.bullets = game.bullets.filter((u) => u.owner !== p.id);
+  sfx.death();
+  addShake(0.8); flash('#ff3d5a', 0.5); game.hitstop = 0.18; game.slowmoT = 0.5;
   spawn({ x: p.x, y: ARENA.b - 24, type: 'ring', size: 20, r2: 160, life: 0.5, color: '#ff3d5a', width: 8 });
   spawn({ x: p.x, y: ARENA.b - 24, type: 'light', size: 6, life: 0.5, color: '#ff3d5a' });
   for (let i = 0; i < 24; i++) { const a = rand(0, Math.PI * 2), s = rand(100, 380); spawn({ x: p.x, y: ARENA.b - 24, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), size: rand(2, 4), color: i % 2 ? '#ff3d5a' : '#ffffff', type: 'spark', drag: 2 }); }
-  banner(reason, game.lives > 0 ? `${game.lives} ${game.lives === 1 ? 'LIFE' : 'LIVES'} LEFT` : 'NO LIVES LEFT', 1.6, '#ff3d5a');
+  // Co-op: while a partner is still standing the stage carries on; the downed diver returns next stage.
+  if (alivePlayers().length) {
+    banner(`P${p.id + 1} DOWN`, p.lives > 0 ? 'BACK NEXT STAGE' : 'OUT OF LIVES', 1.4, '#ff3d5a', true);
+    return;
+  }
+  Sound.playMusic(false); game.shots = [];
+  const left = game.coop ? game.players.some((q) => q.lives > 0) : p.lives > 0;
+  banner(reason, game.coop ? (left ? 'TRY AGAIN' : 'NO LIVES LEFT') : left ? `${p.lives} ${p.lives === 1 ? 'LIFE' : 'LIVES'} LEFT` : 'NO LIVES LEFT', 1.6, '#ff3d5a');
   setState('dying');
 }
-function updateDying(dt) {
-  const p = game.player;
+// knocked-out tumble (shared by 'dying' and a co-op partner going down mid-stage)
+function tumble(p, dt) {
+  p.deadT += dt;
   p.dvy += G * dt; p.dx += p.dvx * dt; p.dy += p.dvy * dt; p.rot += dt * 11 * Math.sign(p.dvx);
   if (p.dx < ARENA.l + 10 || p.dx > ARENA.r - 10) { p.dvx *= -0.7; p.dx = clamp(p.dx, ARENA.l + 10, ARENA.r - 10); }
   if (p.dy > ARENA.b && p.dvy > 0) { p.dy = ARENA.b; p.dvy *= -0.45; p.dvx *= 0.6; if (Math.abs(p.dvy) > 60) addShake(0.15); }
+}
+// a co-op partner who went down tumbles off, then sits out until the next stage
+function updateDowned(dt) { for (const p of game.players) if (p.dead && !p.out) { tumble(p, dt); if (p.deadT > 2.1) p.out = true; } }
+function updateDying(dt) {
+  for (const p of game.players) if (p.dead && !p.out) tumble(p, dt);
   if (game.stateT > 2.1) {
-    if (game.lives > 0) resetStage();
+    if (game.players.some((p) => p.lives > 0)) resetStage();
     else gameOver();
   }
 }
+function timeOver() { sfx.timeout(); alivePlayers().forEach((p, i) => killPlayer(p, i ? -1 : 1, 'TIME OVER')); }
 function gameOver() {
   setState('gameover'); game.contT = 9.99; sfx.gameover(); Sound.playMusic(true); Sound.playTrack('over');
   const entry = { score: game.score, stage: game.level, date: new Date().toISOString().slice(0, 10) };
@@ -892,7 +941,7 @@ function gameOver() {
 }
 function levelClear() {
   const t = Math.ceil(Math.max(0, game.timeLeft)), timeBonus = t * 50;
-  addScore(timeBonus);
+  addScore(timeBonus, -1); // team bonus: counts toward the shared score only
   game.clearInfo = { timeBonus, secs: t };
   setState('clear'); sfx.clear();
   game.shots = []; game.enemies.forEach((e) => { if (!e.dying) killEnemy(e); });
@@ -912,7 +961,7 @@ function updateFireworks() {
   });
 }
 function updatePlay(dt, pdt) {
-  updatePlayer(pdt);
+  updatePlayers(pdt);
   updateWeapons(pdt);
   if (game.slowT > 0) game.slowT -= dt;
   updateBubbles(dt * (game.slowT > 0 ? 0.4 : 1));
@@ -922,20 +971,21 @@ function updatePlay(dt, pdt) {
   updateEnemies(dt); maybeSpawnEnemy(dt);
   game.bubbles = game.bubbles.filter((b) => !b.dead);
   if (game.comboT > 0) { game.comboT -= dt; if (game.comboT <= 0) game.combo = 0; }
-  game.invuln -= dt; game.nearCd -= dt;
-  checkPlayer();
+  game.nearCd -= dt;
+  updateDowned(dt);
+  checkPlayers();
   if (game.state !== 'play') return;
   if (!game.bubbles.length && !game.pending.length && game.dyna <= 0) { levelClear(); return; }
   game.timeLeft -= dt;
   const sec = Math.ceil(game.timeLeft);
   if (sec <= 10 && sec !== game.lastTick && sec > 0) { game.lastTick = sec; sfx.tick(sec <= 5); }
-  if (game.timeLeft <= 0) { sfx.timeout(); killPlayer(1, 'TIME OVER'); }
+  if (game.timeLeft <= 0) timeOver();
 }
 
 /* ============================ §8 POWER-UPS ============================ */
 function dropItem(x, y) { game.items.push({ type: pickWeighted(ITEMS), x: clamp(x, ARENA.l + 16, ARENA.r - 16), y, vy: -160, t: 0, landed: false, dead: false }); }
 function updateItems(dt) {
-  const p = game.player;
+  const live = alivePlayers();
   for (const it of game.items) {
     it.t += dt;
     if (!it.landed) {
@@ -944,21 +994,23 @@ function updateItems(dt) {
       for (const pl of game.platforms) if (it.vy > 0 && it.x > pl.x && it.x < pl.x + pl.w && prevY + 14 <= pl.y && it.y + 14 >= pl.y) { it.y = pl.y - 14; it.landed = true; it.plat = pl; }
     } else if (it.plat && !game.platforms.includes(it.plat)) { it.landed = false; it.plat = null; it.vy = 0; }
     if (it.t > 8) it.dead = true;
-    if (!p.dead && Math.abs(it.x - p.x) < 24 && it.y > ARENA.b - 64) { applyItem(it); it.dead = true; }
+    const p = live.find((q) => Math.abs(it.x - q.x) < 24 && it.y > ARENA.b - 64);
+    if (p) { applyItem(it, p); it.dead = true; }
   }
   game.items = game.items.filter((i) => !i.dead);
 }
-function applyItem(it) {
-  const p = game.player, def = ITEMS[it.type];
+function applyItem(it, p = game.player) {
+  const def = ITEMS[it.type];
+  game.credit = p.id;
   switch (it.type) {
-    case 'double': case 'power': case 'gun': game.weapon = it.type === 'double' && (game.weapon === 'double' || game.weapon === 'triple') ? 'triple' : it.type; game.harpoons = game.harpoons.filter((h) => h.state === 'rise'); break;
+    case 'double': case 'power': case 'gun': p.weapon = it.type === 'double' && (p.weapon === 'double' || p.weapon === 'triple') ? 'triple' : it.type; game.harpoons = game.harpoons.filter((h) => h.owner !== p.id || h.state === 'rise'); break;
     case 'slow': game.slowT = 7; break;
-    case 'shield': game.shield = true; break;
-    case 'life': game.lives = Math.min(9, game.lives + 1); break;
-    case 'dyna': game.dyna = 1; game.dynaCd = 0.15; break;
+    case 'shield': p.shield = true; break;
+    case 'life': p.lives = Math.min(9, p.lives + 1); break;
+    case 'dyna': game.dyna = 1; game.dynaCd = 0.15; game.dynaOwner = p.id; break;
   }
   it.type === 'life' ? sfx.life() : sfx.item();
-  popup(p.x, ARENA.b - 80, game.weapon === 'triple' && it.type === 'double' ? 'TRIPLE WIRE' : def.label, def.color, 20);
+  popup(p.x, ARENA.b - 80, p.weapon === 'triple' && it.type === 'double' ? 'TRIPLE WIRE' : def.label, def.color, 20);
   for (let i = 0; i < 18; i++) spawn({ x: p.x + rand(-14, 14), y: ARENA.b - rand(0, 40), vx: rand(-20, 20), vy: rand(-420, -160), life: rand(0.4, 0.7), size: rand(2, 3.5), color: def.color, type: 'spark', drag: 1.5 });
   spawn({ x: it.x, y: it.y, type: 'ring', size: 10, r2: 60, life: 0.35, color: def.color, width: 4 });
   // Risk/reward: grabbing a power-up with a bubble right on top of you pays out
@@ -972,6 +1024,7 @@ function updateDynamite(dt) {
   const big = game.bubbles.filter((b) => !b.dead && b.size > 0);
   if (!big.length) { game.dyna = 0; return; }
   addShake(0.3); flash('#ff4b3a', 0.12);
+  game.credit = game.dynaOwner;
   big.forEach((b) => hitBubble(b, 'dyna', b.x, b.y));
 }
 
@@ -986,7 +1039,8 @@ function banner(big, small, life, color, minor) { game.banner = { big, small, li
 function toast(msg) { game.toastMsg = { msg, t: 0 }; }
 function addShake(a) { game.shake = Math.min(1, game.shake + a * (reducedMotion ? 0.3 : 1)); }
 function flash(color, a) { game.flashColor = color; game.flash = Math.max(game.flash, a * (reducedMotion ? 0.4 : 1)); }
-function addScore(n) { game.score += n; }
+// Shared team score; each player's share is tracked for the co-op breakdown (credit -1 = team only)
+function addScore(n, credit = game.credit) { game.score += n; const p = game.players[credit]; if (p) p.points += n; }
 
 function popFx(b, hx, hy) {
   const c = SIZES[b.size].color, n = 10 + b.size * 6;
@@ -1118,6 +1172,7 @@ function drawHUD() {
   ctx.fillStyle = '#efe9ff'; ctx.font = '17px Bungee, Impact, sans-serif'; ctx.fillText(game.def ? game.def.name : '', W / 2, 37);
   // lives
   ctx.textAlign = 'right'; const R = ARENA.r - 4;
+  if (game.coop) { drawCoopHUD(R); return drawHUDTail(); }
   for (let i = 0; i < Math.min(game.lives, 5); i++) { ctx.fillStyle = '#ff3d8b'; ctx.save(); ctx.translate(R - 8 - i * 20, 26); ctx.beginPath(); ctx.moveTo(0, 7); ctx.bezierCurveTo(-10, 0, -7, -9, 0, -4); ctx.bezierCurveTo(7, -9, 10, 0, 0, 7); ctx.fill(); ctx.restore(); }
   if (game.lives > 5) { ctx.fillStyle = '#efe9ff'; ctx.font = '13px Bungee, Impact, sans-serif'; ctx.fillText('×' + game.lives, R - 104, 32); }
   // weapon + status chips
@@ -1126,6 +1181,9 @@ function drawHUD() {
   if (game.weapon !== 'wire') chip(game.weapon);
   if (game.shield) chip('shield');
   if (game.slowT > 0) chip('slow', game.slowT / 7);
+  drawHUDTail();
+}
+function drawHUDTail() {
   // timer bar
   if (game.def && game.state !== 'title') {
     const frac = clamp(game.timeLeft / game.def.time, 0, 1), urgent = game.timeLeft < 10;
@@ -1146,6 +1204,30 @@ function drawHUD() {
   }
   if (game.state !== 'title') { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText('P PAUSE · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
 }
+
+// Co-op HUD: one compact row per player (tag, hearts, weapon + shield), shared slow-mo chip on the left
+function drawCoopHUD(R) {
+  const heart = (x, y, k, col) => { ctx.fillStyle = col; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.beginPath(); ctx.moveTo(0, 7); ctx.bezierCurveTo(-10, 0, -7, -9, 0, -4); ctx.bezierCurveTo(7, -9, 10, 0, 0, 7); ctx.fill(); ctx.restore(); };
+  game.players.forEach((p, i) => {
+    const y = 14 + i * 19, look = HERO_LOOKS[p.id];
+    ctx.globalAlpha = p.out || p.lives <= 0 ? 0.4 : 1;
+    ctx.textAlign = 'right'; ctx.font = '12px Bungee, Impact, sans-serif'; ctx.fillStyle = look.tag; ctx.fillText(`P${p.id + 1}`, R - 128, y + 5);
+    for (let k = 0; k < Math.min(p.lives, 5); k++) heart(R - 8 - k * 14, y, 0.62, i ? '#7fe9ff' : '#ff3d8b');
+    if (p.lives > 5) { ctx.font = '11px Bungee, Impact, sans-serif'; ctx.fillStyle = '#efe9ff'; ctx.fillText('×' + p.lives, R - 74, y + 5); }
+    let cx = R - 160;
+    const mini = (type) => { const c = (ITEMS[type] || ITEMS.double).color; ctx.fillStyle = rgba(c, 0.25); ctx.beginPath(); ctx.arc(cx, y, 8, 0, 7); ctx.fill(); drawItemIcon(ctx, type, cx, y, 0.5); cx -= 20; };
+    if (p.weapon !== 'wire') mini(p.weapon);
+    if (p.shield) mini('shield');
+    ctx.globalAlpha = 1;
+  });
+  if (game.slowT > 0) {
+    const cx = R - 220, c = ITEMS.slow.color;
+    ctx.fillStyle = rgba(c, 0.25); ctx.beginPath(); ctx.arc(cx, 24, 13, 0, 7); ctx.fill();
+    ctx.strokeStyle = c; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(cx, 24, 13, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (game.slowT / 7)); ctx.stroke();
+    drawItemIcon(ctx, 'slow', cx, 24, 0.85);
+  }
+}
+const pointsLine = () => game.players.map((p) => `P${p.id + 1}  ${p.points.toLocaleString()}`).join('      ');
 
 function drawBanner() {
   const bn = game.banner; if (!bn) return;
@@ -1183,13 +1265,22 @@ function drawTitle() {
   word('POP!', 212, 84, '#ff7ab6', '#ff3d8b');
   ctx.font = '700 17px "Chakra Petch", sans-serif'; ctx.fillStyle = '#efe9ff';
   ctx.fillText('Split every bubble. Don’t get touched. Beat the clock.', W / 2, 268);
-  if (Math.floor(t * 2) % 2 === 0) { ctx.font = '22px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText(document.body.classList.contains('touch') ? 'TAP FIRE TO START' : 'PRESS SPACE TO START', W / 2, 314); }
+  if (isTouch()) { if (Math.floor(t * 2) % 2 === 0) { ctx.font = '22px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText('TAP FIRE TO START', W / 2, 314); } }
+  else {
+    // 1 PLAYER / 2 PLAYERS picker (← → or 1 / 2), then start
+    [['1 PLAYER', 1, W / 2 - 120], ['2 PLAYERS', 2, W / 2 + 120]].forEach(([label, m, x]) => {
+      const on = game.modeSel === m;
+      ctx.font = `${on ? 20 : 17}px Bungee, Impact, sans-serif`; ctx.fillStyle = on ? '#ffd23f' : '#6f6596';
+      ctx.fillText(on ? `▶ ${label} ◀` : label, x, 300);
+    });
+    if (Math.floor(t * 2) % 2 === 0) { ctx.font = '16px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText('← → TO CHOOSE · SPACE TO START', W / 2, 330); }
+  }
   // readable backing panels for the info blocks (bubbles bounce behind them)
   ctx.fillStyle = 'rgba(11,7,22,0.78)';
   roundRect(ctx, 100, 350, 410, 98, 12); ctx.fill(); roundRect(ctx, 540, 344, 250, 128, 12); ctx.fill(); roundRect(ctx, 100, 464, 690, 32, 12); ctx.fill();
   // controls card
   ctx.textAlign = 'left'; ctx.font = '700 14px "Chakra Petch", sans-serif';
-  const rows = [['← →  /  A D', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ['P', 'pause'], ['M  /  N', 'sound / music']];
+  const rows = [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ['P2:  A D  +  W', 'co-op player 2'], ['P  ·  M  ·  N', 'pause · sound · music']];
   rows.forEach(([k, v], i) => { ctx.fillStyle = '#ffd23f'; ctx.fillText(k, 120, 372 + i * 22); ctx.fillStyle = '#c8bfe8'; ctx.fillText(v, 290, 372 + i * 22); });
   // item legend
   const types = Object.keys(ITEMS);
@@ -1383,19 +1474,24 @@ function canvasTex(w, h, draw, repeat) {
        Brass helmet with a glowing porthole and expressive eyes behind the glass, canvas suit with a
        bubble emblem, twin air tanks + hose, and a harpoon launcher. Procedural rig: run cycle,
        idle breathing/blinks/glances, aim-and-recoil, victory hop, knock-out tumble. --- */
-const hero = (() => {
+// Per-player looks. P1: brass helmet, canvas suit, teal tanks. P2: silver helmet, pale-blue suit, orange tanks.
+const HERO_LOOKS = [
+  { brass: 0xc58a34, brassDark: 0x9a6420, suit: 0xd8ccb4, tank: 0x18c4b2, emblem: '#ff3d5a', glow: '#3fe0ff', tag: '#ffd23f' },
+  { brass: 0xb4c0cc, brassDark: 0x6c7886, suit: 0x7fa8f0, tank: 0xff8a3d, emblem: '#2fb8ff', glow: '#ff3d8b', tag: '#7fe9ff' },
+];
+function makeHero(V) {
   // --- materials
   const weave = canvasTex(64, 64, (g, w, h) => {
     g.fillStyle = '#f3e6c8'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 64; i += 2) { g.fillStyle = i % 4 ? 'rgba(120,90,50,0.10)' : 'rgba(255,255,255,0.10)'; g.fillRect(0, i, w, 1); g.fillRect(i, 0, 1, h); }
   }, [3, 3]);
   const M = {
-    suit: new THREE.MeshStandardMaterial({ map: weave, color: 0xd8ccb4, roughness: 0.9 }),
-    brass: new THREE.MeshPhysicalMaterial({ color: 0xc58a34, metalness: 1, roughness: 0.32, clearcoat: 0.4, clearcoatRoughness: 0.2, envMapIntensity: 0.85 }),
-    brassDark: new THREE.MeshStandardMaterial({ color: 0x9a6420, metalness: 1, roughness: 0.38 }),
+    suit: new THREE.MeshStandardMaterial({ map: weave, color: V.suit, roughness: 0.9 }),
+    brass: new THREE.MeshPhysicalMaterial({ color: V.brass, metalness: 1, roughness: 0.32, clearcoat: 0.4, clearcoatRoughness: 0.2, envMapIntensity: 0.85 }),
+    brassDark: new THREE.MeshStandardMaterial({ color: V.brassDark, metalness: 1, roughness: 0.38 }),
     rubber: new THREE.MeshStandardMaterial({ color: 0x2b2340, roughness: 0.55 }),
     leather: new THREE.MeshStandardMaterial({ color: 0x8a4a26, roughness: 0.7 }),
-    tank: new THREE.MeshPhysicalMaterial({ color: 0x18c4b2, roughness: 0.3, metalness: 0.2, clearcoat: 1 }),
+    tank: new THREE.MeshPhysicalMaterial({ color: V.tank, roughness: 0.3, metalness: 0.2, clearcoat: 1 }),
     gun: new THREE.MeshStandardMaterial({ color: 0x3a3352, roughness: 0.35, metalness: 0.6 }),
     rope: new THREE.MeshStandardMaterial({ color: 0xff3d5a, roughness: 0.8 }),
     visorBack: new THREE.MeshBasicMaterial({ color: 0x0a2236 }),
@@ -1406,10 +1502,10 @@ const hero = (() => {
     portGlow: neon('#5ff2ff', 1.4),
   };
   const emblem = canvasTex(128, 128, (g) => {
-    g.fillStyle = '#ff3d5a'; g.beginPath(); g.arc(64, 64, 60, 0, 7); g.fill();
+    g.fillStyle = V.emblem; g.beginPath(); g.arc(64, 64, 60, 0, 7); g.fill();
     g.strokeStyle = '#140b26'; g.lineWidth = 6; g.stroke();
     g.fillStyle = '#fff'; g.beginPath(); g.arc(56, 70, 26, 0, 7); g.fill();
-    g.fillStyle = '#ff3d5a'; g.beginPath(); g.arc(56, 70, 18, 0, 7); g.fill();
+    g.fillStyle = V.emblem; g.beginPath(); g.arc(56, 70, 18, 0, 7); g.fill();
     g.fillStyle = '#fff'; g.beginPath(); g.arc(48, 62, 6, 0, 7); g.fill();
     g.strokeStyle = '#fff'; g.lineWidth = 7; g.beginPath(); g.moveTo(92, 108); g.lineTo(92, 26); g.stroke();
     g.beginPath(); g.moveTo(80, 40); g.lineTo(92, 18); g.lineTo(104, 40); g.closePath(); g.fillStyle = '#fff'; g.fill();
@@ -1507,7 +1603,7 @@ const hero = (() => {
   const shieldRing = new THREE.Mesh(new THREE.TorusGeometry(38, 1.3, 8, 64), neon('#7cff6b', 2));
   shield.position.y = shieldRing.position.y = 34; root.add(shield, shieldRing);
   const heroLight = new THREE.PointLight(0xfff1dc, 0.8, 240, 0); heroLight.position.set(30, 70, 90); root.add(heroLight);
-  const footGlow = new THREE.Mesh(new THREE.CircleGeometry(26, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color('#3fe0ff').multiplyScalar(0.8), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  const footGlow = new THREE.Mesh(new THREE.CircleGeometry(26, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(V.glow).multiplyScalar(0.8), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
   footGlow.rotation.x = -Math.PI / 2; footGlow.position.y = 1; root.add(footGlow);
   rig.scale.setScalar(1.08);
 
@@ -1516,17 +1612,15 @@ const hero = (() => {
   const lerp = (a, b, k) => a + (b - a) * k;
   return {
     root, ready: true,
-    // pose(p, dt, mode): mode 'game' follows the player; 'show' is the title-screen showcase
-    sync(dt) {
-      const p = game.player;
-      const show = game.state === 'title';
-      root.visible = show || (!!p);
+    // sync(dt, p, show): follow player p, or pose as the title-screen showcase when show is true
+    sync(dt, p, show) {
+      root.visible = show || (!!p && !p.out && game.state !== 'title');
       if (!root.visible) return;
       const t = game.realT, dead = !show && p.dead;
       const vx = show ? 0 : p.vx, faceDir = show ? 1 : p.face;
       if (show) root.position.set(X(862), Y(ARENA.b), 30); // title showcase: on the open floor right of the info panels
       else root.position.set(X(dead ? p.dx : p.x), Y(dead ? Math.min(p.dy, ARENA.b) : ARENA.b), 0);
-      rig.visible = !(!dead && !show && game.invuln > 0 && Math.floor(t * 20) % 2);
+      rig.visible = !(!dead && !show && p.invuln > 0 && Math.floor(t * 20) % 2);
       // facing: three-quarter view toward the camera; the title showcase slowly turns
       const target = show ? -0.35 + Math.sin(t * 0.8) * 0.5 : faceDir * (Math.PI / 2 - 0.95);
       facing += (target - facing) * Math.min(1, dt * 14);
@@ -1535,7 +1629,7 @@ const hero = (() => {
       speedS += (speed - speedS) * Math.min(1, dt * 12);
       const moving = speedS > 0.08;
       phase += dt * (7 + 9 * speedS) * (moving ? 1 : 0);
-      if (!show && game.shotId !== lastShot) { lastShot = game.shotId; shootK = 1; }
+      if (!show && p.shotId !== lastShot) { lastShot = p.shotId; shootK = 1; }
       shootK = Math.max(0, shootK - dt * 4);
       const cheering = game.state === 'clear';
       const aim = Math.max(Math.min(1, shootK * 2.5), cheering ? 1 : 0);
@@ -1575,12 +1669,14 @@ const hero = (() => {
       const stepIdx = Math.floor(phase / Math.PI);
       if (moving && stepIdx !== lastStep && game.state === 'play') sfx.step();
       lastStep = stepIdx;
-      shield.visible = shieldRing.visible = !show && game.shield && !dead;
+      shield.visible = shieldRing.visible = !show && p.shield && !dead;
       if (shield.visible) { const k = 1 + Math.sin(t * 6) * 0.05; shield.scale.setScalar(k); shieldRing.scale.setScalar(k); shieldRing.rotation.x = t * 2; shieldRing.rotation.y = t * 1.3; }
       footGlow.visible = !dead;
     },
   };
-})();
+}
+const heroes = HERO_LOOKS.map(makeHero);
+const hero = heroes[0]; // P1 (also the title-screen showcase)
 
 /* --- Stinger drone: original mechanical wasp. Gunmetal thorax, banded abdomen that curls forward to
        aim the stinger, a single red eye that heats up while it charges, iridescent wings beating fast. --- */
@@ -1867,14 +1963,14 @@ let camX = 0, shakeX = 0, shakeY = 0;
 function render3D(dt) {
   if (game.backdrop && game.backdrop !== shownBackdrop) applyBackdrop(game.backdrop);
   // camera: gentle parallax follow + trauma-based shake
-  const p = game.player;
-  const follow = p && game.state !== 'title' ? ((p.dead ? p.dx : p.x) - W / 2) * 0.045 : Math.sin(game.realT * 0.35) * 18;
+  const inPlay = game.players.filter((q) => !q.out);
+  const follow = inPlay.length && game.state !== 'title' ? (inPlay.reduce((a, q) => a + (q.dead ? q.dx : q.x), 0) / inPlay.length - W / 2) * 0.045 : Math.sin(game.realT * 0.35) * 18;
   camX += (follow - camX) * Math.min(1, dt * 3);
   const s = game.shake * game.shake * 14;
   shakeX = rand(-s, s); shakeY = rand(-s, s);
   camera.position.set(camX + shakeX, shakeY, CAM_D);
   camera.rotation.z = rand(-1, 1) * game.shake * game.shake * 0.012;
-  syncBubbles(dt); hero.sync(dt); syncEnemies(dt); syncShots(); syncImpacts(); syncHarpoons(); syncBullets(); syncPlatforms(); syncItems(); syncParticles(dt);
+  syncBubbles(dt); heroes.forEach((h, i) => h.sync(dt, game.players[i] || null, game.state === 'title' && i === 0)); syncEnemies(dt); syncShots(); syncImpacts(); syncHarpoons(); syncBullets(); syncPlatforms(); syncItems(); syncParticles(dt);
   floorGlow.intensity = 0.5 + game.flash * 2;
   fxPass.uniforms.uSlow.value = clamp((1 - game.timeScale) / 0.7, 0, 1);
   fxPass.uniforms.uAberr.value = game.shake * 1.6 + game.flash * 0.6;
@@ -1900,7 +1996,15 @@ hud.addEventListener('pointerdown', () => { hud.focus(); confirmAction(); });
 function render2D() {
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  ctx.save(); ctx.translate(-(camX + shakeX), shakeY); drawTexts(); ctx.restore();
+  ctx.save(); ctx.translate(-(camX + shakeX), shakeY); drawTexts();
+  if (game.coop && game.state !== 'title') for (const p of game.players) {
+    if (p.out || p.dead) continue;
+    const x = p.x, y = ARENA.b - 100, c = HERO_LOOKS[p.id].tag;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '13px Bungee, Impact, sans-serif';
+    ctx.lineWidth = 4; ctx.strokeStyle = '#140b26'; ctx.strokeText(`P${p.id + 1}`, x, y); ctx.fillStyle = c; ctx.fillText(`P${p.id + 1}`, x, y);
+    ctx.beginPath(); ctx.moveTo(x - 5, y + 9); ctx.lineTo(x + 5, y + 9); ctx.lineTo(x, y + 14); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
   for (const e of game.enemies) if (!e.dying && (e.x < ARENA.l + 10 || e.x > ARENA.r - 10)) { // incoming-enemy warning
     ctx.globalAlpha = 0.6 + 0.4 * Math.sin(game.realT * 20); ctx.fillStyle = '#ff3a22'; ctx.font = '28px Bungee, Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('!', e.x < W / 2 ? ARENA.l + 16 : ARENA.r - 16, e.y); ctx.globalAlpha = 1;
@@ -1916,10 +2020,11 @@ function render2D() {
   drawBanner();
   if (game.state === 'clear' && game.stateT > 0.6) {
     const s = game.stats, ci = game.clearInfo;
-    ctx.fillStyle = 'rgba(11,7,22,0.7)'; ctx.fillRect(W / 2 - 280, 300, 560, 150);
+    ctx.fillStyle = 'rgba(11,7,22,0.7)'; ctx.fillRect(W / 2 - 280, 300, 560, game.coop ? 180 : 150);
     drawOverlayPanel([
       [`TIME BONUS   ${ci.secs}s × 50 = ${ci.timeBonus}`, '700 17px "Chakra Petch", sans-serif', '#efe9ff'],
       [`BEST COMBO ${s.bestCombo}   ·   APEX ${s.apex}   ·   JUGGLE ${s.juggles}   ·   CLOSE ${s.close}   ·   STINGERS ${s.stingers}`, '700 14px "Chakra Petch", sans-serif', '#c8bfe8'],
+      ...(game.coop ? [[pointsLine(), '15px Bungee, Impact, sans-serif', '#c8bfe8']] : []),
       [`SCORE ${game.score}`, '20px Bungee, Impact, sans-serif', '#ffd23f'],
       [game.stateT > 1.2 && Math.floor(game.realT * 2) % 2 === 0 ? 'PRESS SPACE FOR NEXT STAGE' : '', '14px Bungee, Impact, sans-serif', '#3fe0ff'],
     ], 324);
@@ -1930,7 +2035,7 @@ function render2D() {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = '52px Bungee, Impact, sans-serif'; ctx.lineWidth = 8; ctx.strokeStyle = '#140b26'; ctx.strokeText('CONTINUE?', W / 2, 160); ctx.fillStyle = '#ffd23f'; ctx.fillText('CONTINUE?', W / 2, 160);
     ctx.save(); ctx.translate(W / 2, 265); ctx.scale(pulse, pulse); ctx.font = '110px Bungee, Impact, sans-serif'; ctx.lineWidth = 10; ctx.strokeText(n, 0, 0); ctx.fillStyle = '#ff3d8b'; ctx.fillText(n, 0, 0); ctx.restore();
-    drawOverlayPanel([[Math.floor(game.realT * 2) % 2 === 0 ? 'PRESS SPACE TO CONTINUE' : '', '20px Bungee, Impact, sans-serif', '#3fe0ff'], [`Retry ${game.def.name} with 3 lives. Score resets to 0.`, '700 15px "Chakra Petch", sans-serif', '#c8bfe8']], 380);
+    drawOverlayPanel([[Math.floor(game.realT * 2) % 2 === 0 ? 'PRESS SPACE TO CONTINUE' : '', '20px Bungee, Impact, sans-serif', '#3fe0ff'], [`Retry ${game.def.name} with 3 lives${game.coop ? ' each' : ''}. Score resets to 0.`, '700 15px "Chakra Petch", sans-serif', '#c8bfe8']], 380);
   } else if (game.state === 'gameover') {
     ctx.fillStyle = 'rgba(11,7,22,0.72)'; ctx.fillRect(0, 0, W, H);
     drawOverlayPanel([
@@ -1938,7 +2043,7 @@ function render2D() {
       [`FINAL SCORE  ${game.score}`, '24px Bungee, Impact, sans-serif', '#efe9ff'],
       [game.newHigh ? 'NEW HIGH SCORE!' : `REACHED STAGE ${game.level}`, '18px Bungee, Impact, sans-serif', game.newHigh ? '#ffd23f' : '#9a8fc0'],
       [`pops ${game.stats.pops} · best combo ${game.stats.bestCombo} · close calls ${game.stats.close} · chain pops ${game.stats.chains}`, '700 15px "Chakra Petch", sans-serif', '#c8bfe8'],
-      ['', '', ''],
+      [game.coop ? pointsLine() : '', '15px Bungee, Impact, sans-serif', '#c8bfe8'],
       [game.stateT > 1.5 && Math.floor(game.realT * 2) % 2 === 0 ? 'PRESS SPACE' : '', '18px Bungee, Impact, sans-serif', '#3fe0ff'],
     ], 170);
   }
@@ -1953,7 +2058,7 @@ function seedTitle() {
   game.def = null; game.backdrop = buildBackdrop(LEVELS[(Math.random() * LEVELS.length) | 0]);
   game.level = 1;
   game.bubbles = [makeBubble(4, 200, 160, 1), makeBubble(3, 700, 200, -1), makeBubble(2, 480, 140, 1), makeBubble(1, 860, 260, -1)];
-  game.platforms = []; game.items = []; game.harpoons = []; game.bullets = []; game.player = null;
+  game.platforms = []; game.items = []; game.harpoons = []; game.bullets = []; game.players = []; game.coop = false;
 }
 // Title screen: bubbles bounce; an invisible "ghost" occasionally pops one for show.
 function updateTitle(dt) {
@@ -1974,13 +2079,13 @@ function update(dt) {
   switch (game.state) {
     case 'title': updateTitle(dt); break;
     case 'intro':
-      updatePlayer(pdt); game.harpoons = []; game.bullets = [];
+      updatePlayers(pdt); game.harpoons = []; game.bullets = [];
       if (game.stateT > 1.55 && game.stateT - dt <= 1.55) sfx.go();
       if (game.stateT > 1.8) setState('play');
       break;
     case 'play': updatePlay(dt, pdt); break;
     case 'dying': updateDying(dt); break;
-    case 'clear': updatePlayer(pdt); updateWeapons(pdt); updateEnemies(dt); updateFireworks(); break;
+    case 'clear': updatePlayers(pdt); updateWeapons(pdt); updateDowned(dt); updateEnemies(dt); updateFireworks(); break;
     case 'gameover':
       if (game.contT > 0) { const before = Math.ceil(game.contT); game.contT -= dt; if (game.contT <= 0) { game.contT = 0; setState('gameover'); } else if (Math.ceil(game.contT) !== before) sfx.tick(false); }
       break;
@@ -2001,7 +2106,7 @@ function tick(dt) {
   let n = 0;
   while (acc >= STEP && n < 12) { update(STEP); acc -= STEP; n++; }
   if (n >= 12) acc = 0;
-  if (n > 0) input.pressed = false;
+  if (n > 0) { input.pressed = false; input.pressed2 = false; }
 }
 function frame(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
@@ -2019,7 +2124,7 @@ function start() {
   hud.focus();
 }
 // Debug handle for console tinkering (e.g. __hp.loadLevel(9)).
-window.__hp = { game, keys, input, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
+window.__hp = { game, keys, input, newGame, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
   gpu: () => ({ ...renderer.info.memory, programs: renderer.info.programs.length }),
   // step the game deterministically (used by the headless test harness); draw=false skips per-step rendering
   setManualClock(on) { manualClock = on; },

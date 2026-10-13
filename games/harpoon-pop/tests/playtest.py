@@ -148,6 +148,72 @@ with sync_playwright() as pw:
     page.evaluate('__hp.advance(1.3, false)'); page.keyboard.press('Space'); page.evaluate('__hp.advance(0.1)')
     check('Space → back to title', page.evaluate('__hp.game.state') == 'title')
 
+    # --- Solo keeps the original A/D binding for P1
+    page.evaluate("__hp.newGame(false); __hp.advance(2, false); __hp.game.invuln = 99;")
+    x0 = page.evaluate('__hp.game.player.x'); page.keyboard.down('KeyD'); page.evaluate('__hp.advance(0.3, false)'); page.keyboard.up('KeyD')
+    check('solo: D still moves P1 (unchanged controls)', page.evaluate('__hp.game.player.x') - x0 > 60)
+
+    # --- 2-player co-op
+    page.evaluate("(() => { const g = __hp.game; g.state = 'title'; g.modeSel = 1; })()")
+    page.keyboard.press('ArrowRight')
+    check('co-op: title picker toggles to 2 PLAYERS', page.evaluate('__hp.game.modeSel') == 2)
+    page.keyboard.press('Space'); page.evaluate('__hp.advance(0.1, false)')
+    check('co-op: SPACE on 2 PLAYERS starts a 2-player game', page.evaluate('__hp.game.coop && __hp.game.players.length === 2'))
+    page.evaluate("__hp.loadLevel(1); __hp.advance(2, false); (() => { const g = __hp.game; g.players.forEach(p => p.invuln = 99); g.bubbles.forEach(b => { b.x = 900; b.y = 120; b.vx = 0; }); })()")
+    shot('20_coop_start')
+    a0, b0 = page.evaluate('[__hp.game.players[0].x, __hp.game.players[1].x]')
+    page.keyboard.down('ArrowRight'); page.evaluate('__hp.advance(0.3, false)'); page.keyboard.up('ArrowRight'); page.evaluate('__hp.advance(0.15, false)')  # let P1 stop
+    a1, b1 = page.evaluate('[__hp.game.players[0].x, __hp.game.players[1].x]')
+    check('co-op: arrows move only P1', a1 - a0 > 60 and abs(b1 - b0) < 1, f'P1 {a0:.0f}->{a1:.0f}, P2 {b0:.0f}->{b1:.0f}')
+    page.keyboard.down('KeyA'); page.evaluate('__hp.advance(0.3, false)'); page.keyboard.up('KeyA')
+    a2, b2 = page.evaluate('[__hp.game.players[0].x, __hp.game.players[1].x]')
+    check('co-op: A/D move only P2', b1 - b2 > 60 and abs(a2 - a1) < 1, f'P1 {a1:.0f}->{a2:.0f}, P2 {b1:.0f}->{b2:.0f}')
+    page.keyboard.press('Space'); page.keyboard.press('KeyW'); page.evaluate('__hp.advance(0.05, false)')
+    owners = page.evaluate('__hp.game.harpoons.map(h => h.owner).sort()')
+    check('co-op: SPACE fires P1, W fires P2 (one wire each at once)', owners == [0, 1], owners)
+    page.evaluate('__hp.advance(0.03)'); shot('21_coop_both_fire')
+    # P2 pops a bubble -> points credited to P2
+    page.evaluate("__hp.advance(1, false); (() => { const g = __hp.game, b = g.bubbles[0]; b.x = g.players[1].x; b.y = 250; b.vx = 0; b.vy = 0; })()")
+    page.keyboard.press('KeyW'); page.evaluate('__hp.advance(0.4, false)')
+    pts = page.evaluate('__hp.game.players.map(p => p.points)')
+    check('co-op: score credited to the player who popped', pts[1] > 0, pts)
+    # item goes to the player who grabs it
+    page.evaluate("(() => { const g = __hp.game; g.items.push({ type: 'gun', x: g.players[1].x, y: 478, vy: 0, t: 0, landed: true }); })(); __hp.advance(0.05, false)")
+    w = page.evaluate("[__hp.game.players[0].weapon, __hp.game.players[1].weapon].join()")
+    check('co-op: P2 grabs an item and only P2 gets it', w == 'wire,gun', w)
+    # one player down: stage continues
+    page.evaluate("(() => { const g = __hp.game; g.players[1].invuln = 0; g.players[1].shield = false; const b = g.bubbles.find(b => !b.dead); b.x = g.players[1].x; b.y = 460; b.vx = 0; })(); __hp.advance(0.1, false)")
+    st = page.evaluate("[__hp.game.state, __hp.game.players[1].dead, __hp.game.players[1].lives, __hp.game.bubbles.length]")
+    check('co-op: one player down does NOT restart the stage', st[0] == 'play' and st[1] and st[2] == 2, st)
+    page.evaluate('__hp.advance(0.4)'); shot('22_coop_p2_down')
+    page.evaluate('__hp.advance(2.2, false)')
+    check('co-op: downed player sits out the rest of the stage', page.evaluate('__hp.game.state') == 'play' and page.evaluate('__hp.game.players[1].out'))
+    # both down: stage restarts and the partner is back
+    page.evaluate("(() => { const g = __hp.game; g.players[0].invuln = 0; g.players[0].shield = false; const b = g.bubbles.find(b => !b.dead); b.x = g.players[0].x; b.y = 460; b.vx = 0; })(); __hp.advance(0.1, false)")
+    check('co-op: last player down -> dying', page.evaluate('__hp.game.state') == 'dying')
+    page.evaluate('__hp.advance(3.5, false)')  # death slow-mo stretches the tumble
+    st = page.evaluate("[__hp.game.state, __hp.game.players.map(p => [p.out, p.dead, p.lives].join('/')).join(' ')]")
+    check('co-op: both down -> stage restarts with both players back', st[0] == 'intro' and st[1] == 'false/false/2 false/false/2', st)
+    # partner down mid-stage comes back on the next stage
+    page.evaluate("__hp.game.players.forEach(p => p.invuln = 99); __hp.advance(2, false); (() => { const g = __hp.game; g.players[1].invuln = 0; const b = g.bubbles[0]; b.x = g.players[1].x; b.y = 460; b.vx = 0; })(); __hp.advance(2.6, false);")
+    page.evaluate("(() => { const g = __hp.game; g.bubbles.forEach(b => b.dead = true); g.pending = []; })(); __hp.advance(0.1, false)")
+    check('co-op: stage clears with one player out', page.evaluate('__hp.game.state') == 'clear', page.evaluate('__hp.game.state'))
+    page.evaluate('__hp.advance(1.5)'); shot('23_coop_clear')
+    page.keyboard.press('Space'); page.evaluate('__hp.advance(0.1, false)')
+    check('co-op: downed partner respawns on the next stage', page.evaluate('__hp.game.level') == 2 and not page.evaluate('__hp.game.players[1].out'))
+    # co-op game over -> continue restores both
+    page.evaluate("(() => { const g = __hp.game; g.players.forEach(p => { p.lives = 1; p.invuln = 0; p.shield = false; }); })(); __hp.advance(2, false)")
+    for _ in range(2):
+        page.evaluate("(() => { const g = __hp.game; for (const p of g.players) if (!p.dead && !p.out) { p.invuln = 0; const b = g.bubbles.find(b => !b.dead); if (b) { b.x = p.x; b.y = 460; b.vx = 0; } } })(); __hp.advance(0.2, false)")
+    page.evaluate('__hp.advance(3, false)')
+    check('co-op: both out of lives -> CONTINUE', page.evaluate('__hp.game.state') == 'gameover' and page.evaluate('__hp.game.contT') > 0, page.evaluate('__hp.game.state'))
+    page.evaluate('__hp.advance(1, false)'); shot('24_coop_continue')
+    page.keyboard.press('Space'); page.evaluate('__hp.advance(0.1, false)')
+    check('co-op: CONTINUE gives both players 3 lives', page.evaluate("__hp.game.players.map(p => p.lives).join()") == '3,3' and page.evaluate('__hp.game.state') == 'intro')
+    page.evaluate("__hp.advance(2.2, false); (() => { const g = __hp.game; g.players.forEach(p => p.invuln = 0); g.players[0].x = 330; g.players[1].x = 470; g.bubbles.forEach(b => { b.x = 780; b.y = 130; }); })()")
+    page.evaluate('__hp.advance(0.4)'); page.evaluate("(() => { const g = __hp.game; __hp.closeup((g.players[0].x + g.players[1].x) / 2 - 480, -222 + 44, 300); })()"); shot('25_coop_divers_closeup')
+    page.evaluate("__hp.newGame(false); __hp.advance(0.1, false);")
+
     # --- Gameplay hero close-up for the visual review
     page.evaluate("__hp.loadLevel(7); __hp.advance(2.2, false); __hp.game.invuln=0;")
     page.keyboard.down('ArrowLeft'); page.evaluate('__hp.advance(0.35)'); page.keyboard.up('ArrowLeft'); shot('11_hero_run')

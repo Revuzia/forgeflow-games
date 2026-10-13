@@ -5,6 +5,7 @@ One `index.html`, no build step, no asset files. Open it directly or from any st
 
 ## Play
 - **Move:** ← → or A / D. **Fire:** Space, ↑ or Z. **Pause:** P. **Sound / music:** M / N.
+- **2-player co-op:** on the title screen press ← → to pick **2 PLAYERS** (or press 2). P1 uses ← → and Space / ↑ / Z. P2 uses A / D and W. Each diver has their own lives, weapon and shield. The score is shared, with a per-player breakdown on the stage-clear screen. If one diver goes down, the stage continues and they return next stage. The stage restarts only when both are down. P2 is the silver-helmeted diver with the pink foot glow.
 - Touch devices get on-screen ◀ ▶ FIRE buttons.
 
 ## What's in it
@@ -20,7 +21,7 @@ One `index.html`, no build step, no asset files. Open it directly or from any st
 Gameplay runs in a 960×540 2D space; the renderer only reads `game` state, so logic and visuals stay independent.
 
 ## Tests
-`python tests/playtest.py <this folder> <out dir>` drives the real game in headless Chromium on the GPU. It checks input, every power-up, enemies, continue/game-over, audio output level and all stages, and writes screenshots. Set `HP_GL=swiftshader` to force software GL (it can't handle very long sessions). Add `--quick` to run 3 stages instead of 15.
+`python tests/playtest.py <this folder> <out dir>` drives the real game in headless Chromium on the GPU. It checks input, every power-up, enemies, continue/game-over, audio output level, all stages and the co-op rules, and writes screenshots. Set `HP_GL=swiftshader` to force software GL (it can't handle very long sessions). Add `--quick` to run 3 stages instead of 15.
 
 ## Originality
 Everything is original and generated in code. The page loads no asset files: only three.js from jsDelivr and two Google Fonts. The test harness fails if anything else is fetched.
