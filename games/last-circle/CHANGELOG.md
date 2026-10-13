@@ -3,6 +3,47 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-10-12 — Look + feel pass toward the BridgeZone reference (?v=1791854656)
+
+Owner: "I want Last Circle to look a little more like this" (a BridgeZone video) and "improve this game based on how well you
+have been building games". Third-person stays (owner decision). Plan: `_spec/look_2026-10/PLAN.md`; evidence + before numbers:
+`_spec/look_2026-10/wave4_wip/`. Built as nine file-disjoint lanes, independently verified, then the full gate suite
+(`_harness/gate.py --disk --negative-controls`) on this exact tree: every gate PASS and all 15 planted-fault controls caught.
+
+| measured | before | after |
+|---|---|---|
+| download to first match | 24.3 MB | 16.3 MB |
+| drop-cluster draw calls | 175 | 127 |
+| ground-view draw calls (isla_viva) | 130 / 135 | 107 / 83 |
+| KB allocated per frame | 96.5 | 66.9 |
+| median bot-match length | 320 s | 701 s |
+| bot deaths in the first 60 s (median / worst) | 16 / 21 | 2 / 9 |
+| matches reaching storm circle 5 | 0 of 9 | 8 of 9 |
+| camera ending inside a wall (pull-in off vs on) | 3,857 | 0 |
+| death falls | 1 | 7 (Mixamo, seeded pick by hit direction) |
+
+- **Storm you can see**: a lavender wall with falling streaks and a brighter ground band (ground delta 21.7-26.7/255, was a faint
+  cast), purple lightning, and a hazy purple-grey grade while you are inside it.
+- **Loot**: rarity-coloured light beams (clamped under roofs) and glowing floor rings, as instanced draws (3 extra calls total).
+- **Sky**: baked-texture clouds (sprite clouds deleted, same seeded world), altitude-scaled fog, steel-blue sky/water. The
+  exposure/darker-albedo option ("step B") is NOT shipped; the A/B sheet is for the owner to judge.
+- **HUD** restyled inside the signed-off anchors: big HP number with segmented shield/health bars, weapon card (rarity, AUTO/SEMI,
+  ammo), "Circle N of 8" storm card, kill feed with gun silhouettes, a top "Eliminated #N" banner, and a standings table with
+  "Run it back" / "Find a new match" (random map). The landing marker no longer lingers after touchdown.
+- **Camera**: pulls in when a wall blocks it and eases back out; it never rotates (pure dolly; reticle stays centred).
+- **Characters**: a faint cool rim light so dark skins stop reading as black cut-outs (green for squad allies); gun hidden under
+  the parachute; ram-air canopy replaces the half-sphere; animation files loaded once instead of five times.
+- **Effects**: hit sparks, muzzle flash and tracers are soft textured quads, not cubes. Muzzle flash re-tuned after measuring: its
+  brightest pixel was 8.1-8.4x the surface behind it (glare bar is 8x). The three muzzle sparks made up ~0.5 of a ~1.3 peak, so they
+  now have their own dimmer style row; the check reads 2.6-4.1x over five runs with the same look.
+- **Low graphics tier** draws straight to the screen (no post-processing composer): -13 textures, -5 programs.
+- **Bot pacing**: pacing table (notice/chase/push ranges, landing separation, endgame from circle 5) and the storm timeline
+  x1.12, so matches reach the late circles. Quick mode keeps legacy pacing.
+- **Decoders**: wasm Draco decoder with the JS decoder as fallback, and a lazy meshopt decoder for the town kit.
+- **Staged, not used yet**: the Kenney city kit (81 types with baked colliders), cars, road/ground textures. The towns themselves
+  are Wave 7.
+- Gate scripts under `_harness/new/`; four stale harness locators fixed (the post-match button is now "Run it back").
+
 ## 2026-10-01 — Built to the DYEFIELD / BLOCKTOOTH bar (?v=1790866476)
 
 Owner: "Improve this game based on how well you have been building games — ie DYEFIELD and
