@@ -150,7 +150,12 @@ export interface MatchClient {
   setTimeScale(s: number): void;
   readonly timeScale: number;
   leave(): void;
+  /** CHANGED(UI), additive optional (feature-check before calling): the death recap's source — damage your
+   *  fighter took in the last 15 s, newest last (SimApi.damageLog of `you`; a remote host streams it). */
+  damageLog?(): readonly DamageLogEntry[];
 }
+/** CHANGED(UI), additive: one death-recap row (same shape as SimApi.damageLog entries) */
+export interface DamageLogEntry { t: number; src: number; srcName: string; srcDef: string; ability?: string; amount: number; dtype: 'phys' | 'magic' | 'true' }
 
 export type SessionEvent =
   | { type: 'queue'; state: 'idle' | 'searching' | 'found' | 'accepted' | 'declined'; queue?: string; elapsed?: number; estimate?: number;

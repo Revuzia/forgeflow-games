@@ -462,6 +462,8 @@ CHANGED(SESSION), additive (no existing signature changed; `src/contracts/sessio
 - `DraftState.trades?` — pending finalize trade requests involving the viewer.
 - Optional `Session` methods (feature-check before calling): `declineMatch()`, `setPartyBots(n)`,
   `playAgain()`.
+CHANGED(UI), additive: optional `MatchClient.damageLog?(): DamageLogEntry[]` — the death recap for your seat
+(last 15 s, newest last; `LocalMatchHost` returns `SimApi.damageLog(you)`). Feature-check before calling.
 Semantics of `LocalSession` (`src/session/`, details in each file header):
 - Flow: `queue()` → searching (2–6 s, `estimate` shown) → found (10 s ready check; bots accept) →
   `acceptMatch()` → draft → `loading` (progress 0, then 1 once the sim is built) → `matchReady()` →

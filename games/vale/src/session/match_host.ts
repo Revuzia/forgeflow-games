@@ -117,6 +117,11 @@ export class LocalMatchHost implements MatchClient {
     this.opts.onForfeit?.();
   }
 
+  /** CHANGED(UI): the death recap for your seat (MatchClient.damageLog, optional in the contract) */
+  damageLog(): ReturnType<Sim['damageLog']> {
+    try { return this.sim.damageLog(this.you); } catch { return []; }
+  }
+
   /** stop for good (session teardown) */
   dispose(): void { this._ended = true; this.listeners = []; this.drivers.clear(); }
 
