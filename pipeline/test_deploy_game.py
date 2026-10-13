@@ -330,6 +330,120 @@ def test_store_copy_allows_plain_descriptions():
             _ok(dg._store_copy_problem(m, "test-game", games_root=td) is None, f"should pass: {m} -> {dg._store_copy_problem(m, 'test-game', games_root=td)}")
 
 
+# ── staged-content guard (fails closed, 2026-10-13) ─────────────────────────────────────────────
+# The list of games holding unreleased content used to live in untracked state/ and was read with
+# `except: {}`; when the nightly reaper erased it the guard silently passed and an unreleased
+# expansion went live. These lock in: tracked list, missing/unreadable list blocks every deploy,
+# marker found in the pinned file or anywhere it moved to, explicit override still works.
+
+def _guard_deploy(gd, manifest_dir, staged, allow=False):
+    """deploy_one with every external edge replaced and STAGED_SLUGS_PATH = `staged`.
+    Returns (result, keys put, metadata upserts)."""
+    import os
+    put, sent = [], []
+
+    def fake_put(key, path):
+        put.append(key)
+        return True, ""
+
+    def no_network(*a, **k):
+        raise AssertionError("deploy_one reached the real network")
+    prev = os.environ.pop("ALLOW_STAGED_DEPLOY", None)
+    if allow:
+        os.environ["ALLOW_STAGED_DEPLOY"] = "1"
+    try:
+        with _patched(dg, _r2_put=fake_put, R2_MANIFEST_DIR=Path(manifest_dir), STAGED_SLUGS_PATH=Path(staged),
+                      purge_cf_cache=lambda keys, host="forgeflowgames.com": True,
+                      insert_game_metadata=lambda slug, md: sent.append(slug) or True,
+                      refresh_portal_prerender=no_network), \
+                _patched(dg.urllib.request, urlopen=no_network):
+            with redirect_stdout(io.StringIO()):
+                res = dg.deploy_one(gd, SLUG, refresh_portal=False)
+    finally:
+        os.environ.pop("ALLOW_STAGED_DEPLOY", None)
+        if prev is not None:
+            os.environ["ALLOW_STAGED_DEPLOY"] = prev
+    return res, put, sent
+
+
+def _staged_game(td, marker_at=None):
+    gd = _make_game(td)
+    (gd / "runtime").mkdir()
+    (gd / "runtime" / "cards.js").write_text("export const BASE_IDS = [1, 2, 3];\n", encoding="utf-8")
+    if marker_at:
+        p = gd / marker_at
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("export const EXPANSION_X_IDS = [9];\n", encoding="utf-8")
+    return gd
+
+
+def _staged_list(td, content):
+    p = Path(td) / "staged_slugs.json"
+    p.write_text(content if isinstance(content, str) else json.dumps(content), encoding="utf-8")
+    return p
+
+
+PIN = {SLUG: {"file": "runtime/cards.js", "marker": "EXPANSION_X_IDS", "note": "test expansion is staged"}}
+
+
+def _blocked(res, put, sent):
+    return res.get("reason") == "staged-content guard" and not res.get("ok") and put == [] and sent == []
+
+
+def test_staged_guard_blocks_marker_in_pinned_file():
+    with tempfile.TemporaryDirectory() as td:
+        res, put, sent = _guard_deploy(_staged_game(td, "runtime/cards.js"), td, _staged_list(td, PIN))
+        _ok(_blocked(res, put, sent), f"staged marker in the pinned file must block the deploy: {res}, put={put}")
+
+
+def test_staged_guard_blocks_marker_moved_or_bundled():
+    with tempfile.TemporaryDirectory() as td:
+        res, put, sent = _guard_deploy(_staged_game(td, "assets/bundle-abc123.js"), td, _staged_list(td, PIN))
+        _ok(_blocked(res, put, sent), f"marker found outside the pinned file must still block: {res}, put={put}")
+
+
+def test_staged_guard_fails_closed_without_a_readable_list():
+    with tempfile.TemporaryDirectory() as td:
+        gd = _staged_game(td)                                  # no marker anywhere
+        for label, staged in (("missing", Path(td) / "nope.json"), ("bad json", _staged_list(td, "{not json")),
+                              ("not an object", _staged_list(td, "[1, 2]"))):
+            res, put, sent = _guard_deploy(gd, td, staged)
+            _ok(_blocked(res, put, sent), f"{label} staged list must block every deploy: {res}, put={put}")
+
+
+def test_staged_guard_pin_without_marker_blocks():
+    with tempfile.TemporaryDirectory() as td:
+        res, put, sent = _guard_deploy(_staged_game(td), td, _staged_list(td, {SLUG: {"file": "runtime/cards.js"}}))
+        _ok(_blocked(res, put, sent), f"a pin with no marker cannot be checked, so it must block: {res}")
+
+
+def test_staged_guard_lets_clean_and_unpinned_trees_through():
+    with tempfile.TemporaryDirectory() as td:
+        res, put, sent = _guard_deploy(_staged_game(td), td, _staged_list(td, PIN))
+        _ok(res.get("ok") and sent == [SLUG], f"pinned slug without the marker must deploy: {res}")
+    with tempfile.TemporaryDirectory() as td:
+        other = {"some-other-game": PIN[SLUG]}
+        res, put, sent = _guard_deploy(_staged_game(td, "runtime/cards.js"), td, _staged_list(td, other))
+        _ok(res.get("ok") and sent == [SLUG], f"a slug not in the list must deploy: {res}")
+
+
+def test_staged_guard_explicit_override():
+    with tempfile.TemporaryDirectory() as td:
+        res, put, sent = _guard_deploy(_staged_game(td, "runtime/cards.js"), td, _staged_list(td, PIN), allow=True)
+        _ok(res.get("ok") and sent == [SLUG], f"ALLOW_STAGED_DEPLOY=1 is the intentional reveal: {res}")
+
+
+def test_tracked_staged_list_is_valid():
+    p = PIPELINE / "staged_slugs.json"
+    _ok(p.is_file(), "pipeline/staged_slugs.json must be tracked next to deploy_game.py")
+    pins = json.loads(p.read_text(encoding="utf-8"))
+    _ok(isinstance(pins, dict), "staged list must be a JSON object")
+    for slug, pin in pins.items():
+        _ok(isinstance(pin, dict) and pin.get("marker") and pin.get("file") and pin.get("note"),
+            f"staged entry {slug!r} needs file, marker and note")
+    _ok(Path(dg.STAGED_SLUGS_PATH) == p, "deploy_game must read the tracked list")
+
+
 def run():
     fns =[v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

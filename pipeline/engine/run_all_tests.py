@@ -31,6 +31,7 @@ SUITES = [
     "gates/test_emit_integrity.py",
     "tests/test_perf_gate.py",
     "tests/test_emit_robustness.py",
+    "../test_deploy_game.py",          # deploy gates incl. the staged-release guard (fails closed)
 ]
 
 

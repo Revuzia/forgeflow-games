@@ -890,6 +890,56 @@ def _store_copy_problem(metadata, slug, games_root=None):
     return None
 
 
+STAGED_SLUGS_PATH = Path(__file__).resolve().parent / "staged_slugs.json"
+_MARKER_SCAN_SUFFIXES = (".js", ".mjs", ".cjs", ".html", ".json", ".ts", ".map")
+
+
+def _staged_content_problem(game_dir, slug):
+    """Lines explaining why this tree must NOT be deployed live, or None.
+
+    FAILS CLOSED (2026-10-13). The list used to live in untracked state/staged_slugs.json and was
+    read with `except: {}`; the nightly reaper's stash erased the file on 2026-07-16, the guard
+    silently passed, and the unreleased Aetherbound expansion (arcane-realms) reached the live CDN.
+    Now the list is tracked here (pipeline/staged_slugs.json) and a missing or unreadable list
+    blocks every deploy until it is fixed. A pinned slug is blocked when its marker is in the
+    pinned file - or, if that file moved or was bundled, anywhere in the tree's text files."""
+    try:
+        pins = json.loads(Path(STAGED_SLUGS_PATH).read_text(encoding="utf-8"))
+        if not isinstance(pins, dict):
+            raise ValueError(f"expected a JSON object, got {type(pins).__name__}")
+    except Exception as e:
+        return [f"ABORT: the staged-release list {STAGED_SLUGS_PATH} is missing or unreadable ({type(e).__name__}: {e}).",
+                "  It says which games hold unreleased content; without it no deploy can be checked."]
+    pin = pins.get(slug)
+    if not pin:
+        return None
+    marker = (pin.get("marker") or "") if isinstance(pin, dict) else ""
+    if not marker:
+        return [f"ABORT: '{slug}' is pinned in {STAGED_SLUGS_PATH.name} without a marker to check."]
+    game_dir = Path(game_dir)
+    pinned = game_dir / (pin.get("file") or "")
+    where = None
+    try:
+        if pinned.is_file() and marker in pinned.read_text(encoding="utf-8", errors="ignore"):
+            where = pin.get("file")
+    except OSError as e:
+        return [f"ABORT: cannot read {pinned} to check '{slug}' for staged content ({e})."]
+    if where is None:
+        for fp in game_dir.rglob("*"):
+            if fp.suffix.lower() not in _MARKER_SCAN_SUFFIXES or "node_modules" in fp.parts or not fp.is_file():
+                continue
+            try:
+                if marker in fp.read_text(encoding="utf-8", errors="ignore"):
+                    where = fp.relative_to(game_dir).as_posix()
+                    break
+            except OSError as e:
+                return [f"ABORT: cannot read {fp} to check '{slug}' for staged content ({e})."]
+    if where is None:
+        return None
+    return [f"ABORT: '{slug}' tree contains the staged marker '{marker}' in {where}.",
+            f"  Reason: {pin.get('note') or 'staged content is not cleared for live'}"]
+
+
 def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, refresh_portal=True,
                status=None):
     """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert,
@@ -902,26 +952,15 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
         return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "missing dir"}
 
     # ── staged-content guard (owner-deferred releases) ────────────────────
-    # Slugs listed in state/staged_slugs.json have unreleased content STAGED on
-    # master that must NOT reach the live hub. If this tree still contains the
-    # staged marker, abort — deploy that slug from its release branch (e.g. the
-    # 'live' worktree) instead. Guards against bulk fleet redeploys from master
-    # silently leaking a staged expansion (happened 2026-07-13, arcane-realms).
-    # Intentional override (the actual reveal): set ALLOW_STAGED_DEPLOY=1.
-    try:
-        _pins = json.loads((Path("C:\\Users\\TestRun\\Claude Claw\\state") / "staged_slugs.json").read_text(encoding="utf-8"))
-    except Exception:
-        _pins = {}
-    _pin = _pins.get(slug)
-    if _pin and not os.environ.get("ALLOW_STAGED_DEPLOY"):
-        _pf = game_dir / _pin.get("file", "")
-        try:
-            _hit = _pf.exists() and _pin.get("marker", "") in _pf.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            _hit = False
-        if _hit:
-            _safe_print(f"ABORT: '{slug}' tree contains the staged marker '{_pin.get('marker')}' in {_pin.get('file')}.")
-            _safe_print(f"  Reason: {_pin.get('note', 'staged content is not cleared for live')}")
+    # Slugs listed in pipeline/staged_slugs.json have unreleased content STAGED on
+    # master that must NOT reach the live hub; deploy them from their release
+    # branch (e.g. 'live') instead. Intentional override (the actual reveal):
+    # ALLOW_STAGED_DEPLOY=1. See _staged_content_problem for why it fails closed.
+    if not os.environ.get("ALLOW_STAGED_DEPLOY"):
+        _staged = _staged_content_problem(game_dir, slug)
+        if _staged:
+            for _line in _staged:
+                _safe_print(_line)
             _safe_print("  Deploy this slug from its release branch/worktree, or set ALLOW_STAGED_DEPLOY=1 to override intentionally.")
             return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "staged-content guard"}
 
