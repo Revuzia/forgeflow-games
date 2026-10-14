@@ -76,6 +76,17 @@ Originality rules still hold: nothing copied from any game.
    composite over the painted backdrops (`art/out/backdrops/`) instead.
 
 ## Session log: owner's Mac, 2026-10-14
+- Step 4 engine: the v2 VFX runtime (src/render/vfx/system.ts) replaces v1; VFX draw in a post pass after AO
+  (soft depth, bloom, grade); the content build validates the v2 vocabulary (CONTRACT §9.5); authoring kit
+  tools/vfx/ (vfxkit.py, lib_defs.py = the 50 lib_*, bespoke/<fighter>.py, build_vfx.py → content/vfx.json);
+  gallery: node _harness/vfx_gallery.mjs [prefix] (contact sheets at the real camera).
+- Step 5 so far: painted terrain textures + vertex-painted scatter props (art/blender/props/scatter.py), the
+  five structures (art/blender/units/structures.py), the four Wicks on the fighter pipeline
+  (art/blender/units/wicks.py, spec.KIND), the menu's painted set (client.menuScene.backdrop) with a live 3D
+  showcase on a plinth. Still to do: monsters (10), pickups/ward/sparring post, map landmarks (Glass Belfry,
+  Lamp Dome, numerals, noon stone, fallen drum), the Blender menu scene.
+- Step 6 runtime: src/audio/index.ts (WebAudio engine; silent until cues render). Still to do: the 94 cue
+  recipes + 6 beds (audio/cuelib.py, bedlib.py exist; no cue is defined yet) and an audio build → audio/out.
 - Step 1 DONE: the HUD stylesheet leaked into the menus (`.shop`/`.score`/`.hrow`/`.stile` clashed with
   the Shop and post-game screens) -> HUD classes renamed; full e2e PASS (rift/bridge/fray/store);
   menus get an ink scrim over the live scene.

@@ -193,6 +193,12 @@ sight in metres; omitted = 12) and `RulesParams.tuning` = `{ assistWindow, xpSha
 multiKillWindow, fountainHealPerSec, suddenDeathRespawnMult }`, every key optional, defaults = the numbers in
 §5.5/§5.6 (10 s, 16 m, 0.6, 10 s, 0.15/s, ×1.5). Queues override them key by key like any rules.
 
+CHANGED(RENDER), additive optional: `client.menuScene.backdrop` (AssetRef) is a painted matte the menu
+world draws (cover-fit at the far plane, slow drift, a small pan per screen) while `menuScene.model` is
+missing; the showcase fighter then stands on a plinth in the stage columns. `map.art.terrain` (free-form art
+hints) may name `textures` (road, floor, clearing, dust, cliff, cliffTop → tiling images) and `props` (tree,
+rock, stone → GLB variants) that the procedural terrain samples / instances.
+
 **Mode slot from data:** `client.modeSlots` lists the mode-select tiles. A reserved slot
 (`mode: null, status: 'reserved'`) renders as a designed "future mode" tile. Adding a mode later =
 new ModeDef + QueueDefs + map + filling the slot; no client change.
