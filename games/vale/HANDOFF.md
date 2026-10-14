@@ -105,9 +105,10 @@ Originality rules still hold: nothing copied from any game.
 ### Adversarial review (10-14, `_harness/_reports/adversarial_review.md`, git-ignored)
 0 blockers, 6 major, 14 minor, 8 nits. Fixed: all 6 majors (GPU bone-texture leak, world/status VFX
 never played in the shipped boot, audio leaking hidden units, Ctrl+W tab close, the Play funnel), and
-F08 F10 F11 F12 F14 F16 F17 F18 F20 F21-F25 F27 F28. Not a bug: F15 (the self-cast row exists), F19
-(FRAY 9.3 min over 10 seeds), F26 (normal tab wrap). Open polish: F09 screen transitions draw the
-outgoing and incoming screens together for a moment; F13 UI/menu cue ids are built from a fixed
+F07 F08 F10 F11 F12 F14 F16 F17 F18 F20 F21-F25 F27 F28. Not a bug: F15 (the self-cast row exists), F19
+(FRAY 9.3 min over 10 seeds), F26 (normal tab wrap). F09 partly: the Draft board holds through its exit and
+screens cut away into a match; still open: the ready modal over the leaving queue screen, practice's
+brief draft screen. Open: F13 UI/menu cue ids are built from a fixed
 vocabulary in code (all exist; a build check tying UiCueKind to audio.cues would harden it).
 
 ### Pacing (10-14, `node _harness/pacing.ts --seeds 10`: all-bot matches on the real catalog, ~2 s each)
