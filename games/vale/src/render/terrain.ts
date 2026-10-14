@@ -203,14 +203,46 @@ export interface TerrainBuild {
   setScatter(level: 0 | 1 | 2): void;
   /** painted tiling textures by role (map.art.terrain.textures): road, floor, clearing, dust, cliff, cliffTop */
   setTextures(t: Partial<Record<TerrainTexRole, Texture>>): void;
+  /** authored scatter props (map.art.terrain.props: tree / rock / stone → GLB variants), vertex-coloured,
+   *  real size, origin at the ground contact; they replace the procedural shapes and re-scatter */
+  setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void;
   update(time: number): void;
   dispose(): void;
 }
 
 export type TerrainTexRole = 'road' | 'floor' | 'clearing' | 'dust' | 'cliff' | 'cliffTop';
+export type TerrainPropRole = 'tree' | 'rock' | 'stone';
+export const TERRAIN_PROP_ROLES: readonly TerrainPropRole[] = ['tree', 'rock', 'stone'];
 export const TERRAIN_TEX_ROLES: readonly TerrainTexRole[] = ['road', 'floor', 'clearing', 'dust', 'cliff', 'cliffTop'];
 /** world metres per texture repeat, by role */
 const TEX_SCALE: Record<TerrainTexRole, number> = { road: 3.6, floor: 5.0, clearing: 4.5, dust: 4.0, cliff: 3.4, cliffTop: 6.5 };
+
+/** load map.art.terrain.props (role → GLB refs) into vertex-coloured geometries (each GLB merged, its
+ *  node transforms applied); null when the map names none */
+export async function loadTerrainProps(map: MapDefT, load: (ref: string) => Promise<{ gltf: { scene: import('three').Object3D }; renderable: boolean } | null>):
+  Promise<Partial<Record<TerrainPropRole, BufferGeometry[]>> | null> {
+  const refs = ((map.art.terrain ?? {}) as { props?: Record<string, unknown> }).props ?? {};
+  const out: Partial<Record<TerrainPropRole, BufferGeometry[]>> = {};
+  let any = false;
+  for (const role of TERRAIN_PROP_ROLES) {
+    const list = Array.isArray(refs[role]) ? (refs[role] as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+    const geos = (await Promise.all(list.map(load))).map((m) => {
+      if (!m?.renderable) return null;
+      const parts: BufferGeometry[] = [];
+      m.gltf.scene.updateMatrixWorld(true);
+      m.gltf.scene.traverse((o) => {
+        const mesh = o as Mesh;
+        if (!mesh.isMesh) return;
+        const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
+        parts.push(g);
+      });
+      return parts.length ? (parts.length === 1 ? parts[0] : mergeGeometries(parts, false)) : null;
+    }).filter((g): g is BufferGeometry => !!g);
+    if (geos.length) { out[role] = geos; any = true; }
+  }
+  return any ? out : null;
+}
 
 /** a 1×1 stand-in so the samplers exist from the first compile (textures swap in without a recompile) */
 function whiteTex(): DataTexture {
@@ -773,7 +805,19 @@ ${TEX_GLSL}`)
   for (const mt of [leafMat, trunkMat, stoneMat]) patchWorldMaterial(mt);
   disposables.push(trunkGeo, canopyGeo, rockGeo, leafMat, trunkMat, stoneMat);
   let scatterParts: Group[] = [];
+  let props: Partial<Record<TerrainPropRole, BufferGeometry[]>> = {};
+  let scatterLevel: 0 | 1 | 2 = 2;
+  const propMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0 });
+  patchWorldMaterial(propMat);
+  disposables.push(propMat);
+  /** instanced props by variant (a spot's variant is a hash of its position: stable across quality changes) */
+  const propParts = (geos: BufferGeometry[], items: { x: number; y: number; m: Matrix4; c?: Color }[], name: string, shadows = true): Group[] => {
+    const by: { m: Matrix4; c?: Color }[][] = geos.map(() => []);
+    for (const it of items) by[Math.floor(hash2(it.x * 1.7, it.y * 2.3) * geos.length) % geos.length].push(it);
+    return geos.map((g, i) => chunked(g, propMat, by[i], `${name}_${i}`, shadows)).filter((g) => g.children.length > 0);
+  };
   const setScatter = (level: 0 | 1 | 2): void => {
+    scatterLevel = level;
     for (const g of scatterParts) { scatterGroup.remove(g); g.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); }); }
     scatterParts = [];
     // level 0 keeps a sparse tree line so cliff tops never read as empty slabs
@@ -782,7 +826,12 @@ ${TEX_GLSL}`)
     const pick = <T,>(arr: T[], keep: number): T[] => arr.filter((_, i) => (i * 0.618034) % 1 < keep);
     const trees = pick(treeSpots, keepT), boulders = pick(boulderSpots, level === 0 ? 0.5 : 1), stones = pick(stoneSpots, keepS);
     const q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0);
-    if (trees.length) {
+    if (trees.length && props.tree?.length) {
+      scatterParts.push(...propParts(props.tree, trees.map((t) => {
+        q.setFromAxisAngle(up, t.r); s.setScalar(0.56 + t.s * 0.24); pos.set(t.x, t.h - 0.12, t.y);
+        return { x: t.x, y: t.y, m: new Matrix4().compose(pos, q, s), c: new Color(0.86 + t.tint * 0.22, 0.9 + t.tint * 0.14, 0.86 + t.tint * 0.12) };
+      }), 'vale_trees'));
+    } else if (trees.length) {
       const trunks: { m: Matrix4 }[] = [], canopies: { m: Matrix4; c: Color }[] = [];
       for (const t of trees) {
         const th = 1.0 + t.s * 0.8;
@@ -794,13 +843,23 @@ ${TEX_GLSL}`)
       }
       scatterParts.push(chunked(trunkGeo, trunkMat, trunks, 'vale_trunks'), chunked(canopyGeo, leafMat, canopies, 'vale_canopies'));
     }
-    if (boulders.length) {
+    if (boulders.length && props.rock?.length) {
+      scatterParts.push(...propParts(props.rock, boulders.map((b) => {
+        q.setFromAxisAngle(up, b.r); s.set(b.s * 1.25, b.s * 1.1, b.s * 1.25); pos.set(b.x, -0.04, b.y);
+        return { x: b.x, y: b.y, m: new Matrix4().compose(pos, q, s) };
+      }), 'vale_boulders'));
+    } else if (boulders.length) {
       scatterParts.push(chunked(rockGeo, stoneMat, boulders.map((b) => {
         q.setFromAxisAngle(up, b.r); s.set(b.s * 1.2, b.s * 0.8, b.s); pos.set(b.x, b.s * 0.15, b.y);
         return { m: new Matrix4().compose(pos, q, s) };
       }), 'vale_boulders'));
     }
-    if (stones.length) {
+    if (stones.length && (props.stone?.length || props.rock?.length)) {
+      scatterParts.push(...propParts(props.stone?.length ? props.stone : props.rock!, stones.map((p) => {
+        q.setFromAxisAngle(up, p.r); s.set(p.s * 1.1, p.s * 0.9, p.s); pos.set(p.x, -0.02, p.y);
+        return { x: p.x, y: p.y, m: new Matrix4().compose(pos, q, s) };
+      }), 'vale_stones', false));
+    } else if (stones.length) {
       scatterParts.push(chunked(rockGeo, stoneMat, stones.map((p) => {
         q.setFromAxisAngle(up, p.r); s.set(p.s, p.s * 0.6, p.s * 0.85); pos.set(p.x, p.s * 0.1, p.y);
         return { m: new Matrix4().compose(pos, q, s) };
@@ -823,6 +882,10 @@ ${TEX_GLSL}`)
       if (t.cliff) cu.uTexCliff.value = t.cliff;
       if (t.cliffTop) cu.uTexTop.value = t.cliffTop;
       cu.uUseTex.value = t.cliff && t.cliffTop ? 1 : 0;
+    },
+    setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void {
+      props = p;
+      setScatter(scatterLevel);
     },
     update(time: number): void { worldUniforms.valeTime.value = time; },
     dispose(): void {

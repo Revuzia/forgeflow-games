@@ -17,7 +17,7 @@ import { Actor, type ModelLibrary } from './actors.ts';
 import type { Assets } from './assets.ts';
 import { Sun } from './lighting.ts';
 import { Sky } from './sky.ts';
-import { buildTerrain, TERRAIN_TEX_ROLES, type TerrainBuild, type TerrainTexRole } from './terrain.ts';
+import { buildTerrain, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainBuild, type TerrainTexRole } from './terrain.ts';
 import { patchWorldMaterial } from './world_material.ts';
 
 /** tokens.json grade.maps.menu (design tokens, not content) */
@@ -93,6 +93,7 @@ export class MenuWorld {
         for (const [r, t] of pairs) if (t) set[r] = t;
         terrain.setTextures(set);
       });
+      void loadTerrainProps(map, (r) => assets.model(r)).then((p) => { if (p) terrain.setProps(p); });
       this.scene.add(this.terrain.group);
       this.generateStations(map);
     }
