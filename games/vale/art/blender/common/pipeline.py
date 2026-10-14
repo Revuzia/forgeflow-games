@@ -57,6 +57,14 @@ def main(spec) -> None:
         build(spec, args, skin)
 
 
+def _role_of(part) -> str | None:
+    """a part's material role (bible_set names its materials by role)"""
+    for ob in (part.high, part.low):
+        if ob is not None and ob.data.materials and ob.data.materials[0] is not None:
+            return ob.data.materials[0].name.split(".")[0]
+    return None
+
+
 def _palette(spec, skin) -> dict:
     pal = dict(spec.PALETTE)
     if skin:
@@ -250,7 +258,24 @@ def build(spec, args, skin=None) -> dict:
         # ART 2.0: the concept painting projected onto the game mesh is the base colour
         from .hifi import project
         names = [p.name for p in parts]
-        base_fn = lambda low, sz: project.paint_object(low, sz, spec.PROJECTION, names, log=scene.log)  # noqa: E731
+        if skin is None:
+            base_fn = lambda low, sz: project.paint_object(low, sz, spec.PROJECTION, names, log=scene.log)  # noqa: E731
+        else:
+            # a skin re-colours the base painting part by part (material role -> the skin palette); skin-only
+            # extras (not in the concept) paint flat in their role's skin colour (spec.SKIN_FLAT part -> role)
+            roles = {p.name: _role_of(p) for p in parts}
+            cfg = dict(spec.PROJECTION)
+            flat = dict(cfg.get("flat") or {})
+            for pn, role in (getattr(spec, "SKIN_FLAT", None) or {}).items():
+                if pn in names and (ctx.palette.get(role) or _palette(spec, None).get(role)):
+                    flat[pn] = ctx.palette.get(role) or _palette(spec, None)[role]
+            cfg["flat"] = flat
+            base_pal = _palette(spec, None)
+
+            def base_fn(low, sz):
+                img, maps = project.paint_object(low, sz, cfg, names, log=scene.log, return_maps=True)
+                return project.recolour(img, maps, names, roles, base_pal, ctx.palette,
+                                        skip=set(getattr(spec, "SKIN_FLAT", None) or {}), log=scene.log)
     if not args.no_bake:
         with T.step("bake"):
             res = bake.bake_asset(body, highs, tex_dir, name=tex_name, size=size, base_fn=base_fn,

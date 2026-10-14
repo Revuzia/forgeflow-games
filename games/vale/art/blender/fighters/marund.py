@@ -55,7 +55,18 @@ TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
 ARMOUR_CONFORM = False
 AO_INTO_BASE = 0.25       # the projected painting already carries its painted occlusion; only deepen creases
-SKINS: list = []          # ART 2.0 skins need their own painted concepts (palette swaps cannot repaint a painting)
+# ART 2.0 skins re-colour the projected painting part by part (each part's mean moves onto the skin's role
+# colour, its painted detail kept; pipeline -> project.recolour), plus skin-only extras painted flat
+# (SKIN_FLAT part -> role). Palettes: _design/fighters/marund.md section 9.
+SKINS: list = [
+    {"id": "marund_gorgewalk", "extra": {"rope_coil": True}, "card": {"primary": "#4A4F55", "secondary": "#9A8F7A"},
+     "palette": {"stone": "#BAC0C6", "ironstone": "#3F4349", "wood": "#B09478", "cloth": "#6E747C", "cloth2": "#CDC6B6",
+                 "under": "#33363A", "leather": "#463A31", "rope": "#9A8F7A"}},
+    {"id": "marund_long_evening", "extra": {"lamp_finial": True}, "card": {"primary": "#4A3550", "secondary": "#9C8566"},
+     "palette": {"stone": "#D0BCCB", "ironstone": "#5B3A5E", "wood": "#B99B78", "cloth": "#8E6E98", "cloth2": "#D6CAD3",
+                 "under": "#2F2630", "leather": "#3E2E36", "lampresin": "#9C8566"}},
+]
+SKIN_FLAT = {"rope_coil": "rope", "finial_post": "wood", "finial_vessel": "lampresin"}
 
 HEIGHT = 2.35             # crown of the cap (the projection plates' scale)
 PROJECTION = {"concept": "marund", "height": HEIGHT, "tops": {"cap": ("marund_captop.png", 0.7)},
@@ -240,9 +251,32 @@ def sculpts() -> list:
     return out
 
 
+def skin_extras(extra: dict) -> list:
+    """skin-only geometry: Gorgewalk's rope coil on the left shoulder, Long Evening's lamp finial on the crown"""
+    out = []
+    if extra.get("rope_coil"):
+        coil = Sculpt("rope_coil")
+        tilt = sdf.rot_y(-22)                                            # lies on the shoulder's outward slope
+        for k, z in enumerate((1.455, 1.49)):
+            coil.add(Torus((0.50 - 0.012 * k, 0.02, z), 0.062 - 0.008 * k, 0.021, axes=tilt, rz=0.021).displaced(
+                lambda P: 0.004 * np.sin(np.arctan2(P[:, 1] - 0.02, P[:, 0] - 0.5) * 9), 0.004), k=0.004)
+        coil.add(Capsule((0.44, 0.075, 1.47), (0.44, 0.075, 1.52), 0.011), k=0.003)   # an iron pin at the rope's end
+        out.append(("rope_coil", coil, 0.6, "cloth2", "bone:shoulder.L", 500))
+    if extra.get("lamp_finial"):
+        post, vessel = Sculpt("finial_post"), Sculpt("finial_vessel")
+        post.add(Lathe((0, 0, 0), lambda r, z: np.maximum(r - (0.032 - 0.012 * np.clip((z - 2.30) / 0.06, 0, 1)), np.maximum(2.30 - z, z - 2.365)),
+                       0.04, 2.29, 2.37), k=0.0)
+        post.add(Torus((0, 0, 2.362), 0.03, 0.007), k=0.004)
+        vessel.add(Ellipsoid((0, 0, 2.383), (0.03, 0.03, 0.026)), k=0.0)        # top 2.409: +0.094 m over the crown
+        out.append(("finial_post", post, 0.5, "wood", "bone:head", 160))
+        out.append(("finial_vessel", vessel, 0.5, "lampresin", "bone:head", 120))
+    return out
+
+
 def model(ctx) -> list:
     P = []
-    for name, S, vs, role, bind, tris in sculpts():
+    extra = (ctx.skin or {}).get("extra") or {}
+    for name, S, vs, role, bind, tris in sculpts() + skin_extras(extra):
         v, q = S.mesh(VOXEL * vs)
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
         ob.data.materials.append(ctx.mats[role])

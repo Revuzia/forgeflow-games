@@ -357,7 +357,7 @@ def paint(maps: dict, plates: Plates, vis: VisibilityMaps, names: list[str], top
     return out
 
 
-def paint_object(obj, size: int, cfg: dict, names: list[str], part_attr: str = "vale_part", log=print) -> np.ndarray:
+def paint_object(obj, size: int, cfg: dict, names: list[str], part_attr: str = "vale_part", log=print, return_maps: bool = False):
     """The whole projection pass for one game mesh (the fighter pipeline's base-colour hook).
     cfg: {"concept": id, "height": m, "tops": {part: (file, ext)}, "flat": {part: "#hex"}};
     plates and top plates are read from art/.cache/concept/. Returns (size, size, 3), row 0 = top."""
@@ -368,4 +368,41 @@ def paint_object(obj, size: int, cfg: dict, names: list[str], part_attr: str = "
     vis = VisibilityMaps.build(obj, plates, step=2, part_attr=part_attr)
     tops = {k: (load_rgb(os.path.join(cache, f)), ext) for k, (f, ext) in (cfg.get("tops") or {}).items()}
     flat = {k: scene.hex_srgb(h) for k, h in (cfg.get("flat") or {}).items()}
-    return paint(maps, plates, vis, names, tops=tops, flat=flat, log=log)
+    img = paint(maps, plates, vis, names, tops=tops, flat=flat, log=log)
+    return (img, maps) if return_maps else img
+
+
+def _lin(c):
+    c = np.asarray(c, dtype=np.float32)
+    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+
+def _srgb(c):
+    c = np.clip(c, 0.0, 1.0)
+    return np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(c, 1 / 2.4) - 0.055)
+
+
+def recolour(img: np.ndarray, maps: dict, names: list[str], roles: dict, base_pal: dict, skin_pal: dict,
+             skip: set | None = None, log=print) -> np.ndarray:
+    """A skin from the base painting: each part whose material role the skin re-colours takes the palette's
+    own change, skin role / base role per channel in linear light, so the painted values and detail keep
+    their relationships (the same painting in the skin's colours). Parts in `skip` (skin-only extras already
+    painted flat in their skin colour) are left alone; empty texels (island padding) follow their nearest part."""
+    from .. import scene
+    part = maps["part"]
+    iy, ix = nearest_index(part >= 0)
+    pid = part[iy, ix]                                   # every texel, padding included, belongs to a part
+    lin = _lin(img)
+    out = lin.copy()
+    skip = skip or set()
+    for i, n in enumerate(names):
+        r = roles.get(n)
+        if n in skip or not r or r == "accent" or r not in skin_pal or r not in base_pal:
+            continue
+        if str(base_pal[r]).lower() == str(skin_pal[r]).lower():
+            continue
+        gain = np.clip(_lin(scene.hex_srgb(skin_pal[r])) / np.maximum(_lin(scene.hex_srgb(base_pal[r])), 1e-4), 0.05, 8.0)
+        m = pid == i
+        out[m] = lin[m] * gain
+        log(f"  recolour {n} ({r}): {base_pal[r]} -> {skin_pal[r]}, gain {np.round(gain, 2).tolist()}")
+    return _srgb(out).astype(np.float32)
