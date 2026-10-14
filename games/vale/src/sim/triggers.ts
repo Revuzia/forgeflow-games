@@ -83,6 +83,8 @@ function tryFire(w: World, e: Entity, ti: TriggerInst, hit: Entity | null, depth
   if (t.cooldown) ti.cd = t.cooldown;
   if (hit && t.perTargetCooldown) (ti.per ??= new Map()).set(hit.id, w.time + t.perTargetCooldown);
   runEffects(w, t.effects, ctx);
+  if (hit) w.emit({ e: 'proc', t: w.time, src: e.id, ability: ti.passive.id, on: t.on, dst: hit.id });
+  else w.emit({ e: 'proc', t: w.time, src: e.id, ability: ti.passive.id, on: t.on });
   return true;
 }
 

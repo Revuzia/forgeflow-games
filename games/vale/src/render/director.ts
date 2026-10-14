@@ -63,7 +63,7 @@ export class Director {
   private readonly tmpB = new Vector3();
   private readonly tmpC = new Vector3();
   private readonly zonesSeen = new Set<number>();
-  /** passive ability ids: their procs arrive as damage events carrying the passive's id */
+  /** fighter passive ids: their procs arrive as `proc` events */
   private readonly passives = new Set<string>();
   private readonly passiveLast = new Map<string, number>();
 
@@ -168,21 +168,25 @@ export class Director {
           this.fire(ev.vfx, ev.src, info?.tier ?? 2, { origin: A, target: B, ground: B, targetId: ev.dst, anchor: 'target', dir: Math.atan2(B.z - A.z, B.x - A.x) });
           break;
         }
+        case 'proc': {
+          // a fighter passive fired: its own look on the subject (else on the owner). Periodic triggers
+          // (interval, moveDistance) show at most every 6 s per owner so an aura reminds, never nags;
+          // the rest at most every 0.4 s per passive and subject.
+          const info = this.passives.has(ev.ability) ? this.abilities.get(ev.ability) : undefined;
+          if (!info?.vfx) break;
+          const periodic = ev.on === 'interval' || ev.on === 'moveDistance';
+          const subj = ev.dst ?? ev.src;
+          const key = periodic ? `${ev.ability}:${ev.src}` : `${ev.ability}:${subj}`;
+          const now = this.host.now();
+          const at = view.entity(subj);
+          if (!at || !this.host.entityVisible(at) || now - (this.passiveLast.get(key) ?? -1e9) < (periodic ? 6 : 0.4)) break;
+          this.passiveLast.set(key, now);
+          this.host.bodyPos(subj, B);
+          if (!this.host.bodyPos(ev.src, A)) A.copy(B);
+          this.fire(info.vfx, ev.src, 1, { origin: A, target: B, ground: B, targetId: subj, anchor: 'target', dir: Math.atan2(B.z - A.z, B.x - A.x) });
+          break;
+        }
         case 'damage': {
-          if (ev.ability && this.passives.has(ev.ability)) {
-            // a passive proc: its own look on the target (at most every 0.4 s per passive and target)
-            const info = this.abilities.get(ev.ability);
-            const key = `${ev.ability}:${ev.dst}`;
-            const now = this.host.now();
-            const dst = view.entity(ev.dst);
-            if (info?.vfx && dst && this.host.entityVisible(dst) && now - (this.passiveLast.get(key) ?? -1e9) >= 0.4) {
-              this.passiveLast.set(key, now);
-              this.host.bodyPos(ev.dst, B);
-              if (!this.host.bodyPos(ev.src, A)) A.copy(B);
-              this.fire(info.vfx, ev.src, 1, { origin: A, target: B, ground: B, targetId: ev.dst, anchor: 'target', dir: Math.atan2(B.z - A.z, B.x - A.x) });
-            }
-            break;
-          }
           if (ev.ability) break; // ability hits arrive as 'hit'
           const src = view.entity(ev.src), dst = view.entity(ev.dst);
           if (!src || !dst || !this.host.entityVisible(dst)) break;

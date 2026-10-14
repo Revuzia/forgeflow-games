@@ -209,6 +209,9 @@ new ModeDef + QueueDefs + map + filling the slot; no client change.
 `src/sim/sim.ts` exports `createSim(catalog: CatalogT, setup: MatchSetup): SimApi` (see
 `src/contracts/sim.ts`). 30 Hz fixed tick (`TICK_DT`). `step()` applies queued commands, runs
 systems in a fixed order, returns that tick's `SimEvent[]`. `view` is live and read-only.
+CHANGED(SIM): a `proc` event (`src`, `ability` = the passive's id, `on` = its trigger, `dst` when it fired
+for a subject) follows every passive trigger that ran its effects. Presentation only (the director plays the
+passive's `present.vfx`; periodic `interval` / `moveDistance` procs show at most every 6 s per owner).
 
 System order per tick: commands → statuses/buffs → regen → casts/channels → attacks → projectiles
 → zones/areas → movement (steering + nav) → minion/monster/structure AI → bots (they emit
