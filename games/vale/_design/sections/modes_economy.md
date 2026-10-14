@@ -221,7 +221,7 @@ PvP queues pay the same rate, about **8–9 Candles a minute**. No queue is the 
 | skin tier | price | how long |
 |---|---|---|
 | `base` | free (`starterOwnership`) | — |
-| `standard` (new model, textures, some VFX) | **900 Candles** | 4.5 Draft matches (3.9 with the first win of the day), 5.7 Quick, 6.3 Bridge, or about 1 h 50 min of any PvP queue |
+| `standard` (new model, textures, some VFX) | **600 Candles** (lowered from 900 on 2026-10-13 so a new player's first skin comes after 2–3 matches; deluxe 1,500) | 4.5 Draft matches (3.9 with the first win of the day), 5.7 Quick, 6.3 Bridge, or about 1 h 50 min of any PvP queue |
 | `deluxe` (new model, animations, VFX, sounds) | **2,250 Candles** | about 11 Draft matches |
 | `legend` (full reimagining) | **1,350 Prisms**, Prisms only | — |
 

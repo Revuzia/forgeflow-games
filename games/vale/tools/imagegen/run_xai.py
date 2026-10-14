@@ -46,11 +46,20 @@ def find_key(explicit: str | None) -> str:
     sys.exit("no xAI key: set XAI_API_KEY or pass --tokens <path to tokens.json with xai_api_key>")
 
 
-def call(key: str, prompt: str, n: int, model: str) -> list[bytes]:
+# the record's size class -> the API's aspect ratio (same table as queue.py); icons at the default
+# resolution (1024²), everything else at "2k" (16:9 = 2816×1584) so key art and backdrops are not upscaled
+ASPECT = {"square": "1:1", "landscape": "4:3", "wide": "16:9", "portrait": "2:3"}
+
+
+def call(key: str, prompt: str, n: int, model: str, aspect: str | None = None, resolution: str | None = None) -> list[bytes]:
     """Ask for base64 image data first (only api.x.ai has to be reachable); fall back to URLs."""
     import base64
     for fmt in ("b64_json", "url"):
         body = {"model": model, "prompt": prompt, "n": n, "response_format": fmt}
+        if aspect:
+            body["aspect_ratio"] = aspect
+        if resolution:
+            body["resolution"] = resolution
         req = urllib.request.Request(API, method="POST", data=json.dumps(body).encode("utf-8"),
                                      headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
         try:
@@ -99,7 +108,8 @@ def main() -> None:
     for k, it in enumerate(todo, 1):
         for attempt in range(3):
             try:
-                imgs = call(key, it["prompt"], a.variants, a.model)
+                imgs = call(key, it["prompt"], a.variants, a.model, ASPECT.get(it.get("size", "square"), "1:1"),
+                            None if it["kind"] == "icon" else "2k")
                 for vi, img in enumerate(imgs):
                     name = f"{it['id']}.png" if vi == 0 else f"{it['id']}__{vi + 1}.png"
                     (RAW / name).write_bytes(img)

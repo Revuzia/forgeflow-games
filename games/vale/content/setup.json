@@ -5,7 +5,7 @@
       "id": "glint_step",
       "name": "Glint Step",
       "desc": "Blink up to 4.5 m toward the target point.",
-      "icon": "assets/ui/icons/setup/glint_step.svg",
+      "icon": "assets/ui/icons/setup/glint_step.webp",
       "maxRank": 1,
       "cooldown": 270,
       "cost": 0,
@@ -46,7 +46,7 @@
       "id": "saplight",
       "name": "Saplight",
       "desc": "Heal 80 + 16 per level. Allied fighters within 6 m heal 40 + 8 per level.",
-      "icon": "assets/ui/icons/setup/saplight.svg",
+      "icon": "assets/ui/icons/setup/saplight.webp",
       "maxRank": 1,
       "cooldown": 220,
       "cost": 0,
@@ -120,7 +120,7 @@
       "id": "hairline",
       "name": "Hairline",
       "desc": "Crack an enemy fighter within 6 m: deal 20 + 8 per level damage that ignores armor and resist, and for 4 s its armor and resist are 20% lower and healing on it is 40% weaker.",
-      "icon": "assets/ui/icons/setup/hairline.svg",
+      "icon": "assets/ui/icons/setup/hairline.webp",
       "maxRank": 1,
       "cooldown": 180,
       "cost": 0,
@@ -192,7 +192,7 @@
       "id": "hourstrike",
       "name": "Hourstrike",
       "desc": "Strike a monster or Wick within 5 m for 450 + 30 per level damage that ignores armor and resist, and heal 60 + 6 per level. Holds 2 charges; one returns every 90 s.",
-      "icon": "assets/ui/icons/setup/hourstrike.svg",
+      "icon": "assets/ui/icons/setup/hourstrike.webp",
       "maxRank": 1,
       "cooldown": 15,
       "cost": 0,
@@ -251,7 +251,7 @@
       "id": "running_light",
       "name": "Running Light",
       "desc": "Move 45% faster, fading over 6 s.",
-      "icon": "assets/ui/icons/setup/running_light.svg",
+      "icon": "assets/ui/icons/setup/running_light.webp",
       "maxRank": 1,
       "cooldown": 200,
       "cost": 0,
@@ -290,7 +290,7 @@
       "id": "shake_loose",
       "name": "Shake Loose",
       "desc": "Break free of roots and ignore stuns, roots and knockbacks for 0.5 s, then gain 50% tenacity for 3 s and move 25% faster for 1.5 s. You cannot cast it while stunned, airborne, asleep, taunted or feared.",
-      "icon": "assets/ui/icons/setup/shake_loose.svg",
+      "icon": "assets/ui/icons/setup/shake_loose.webp",
       "maxRank": 1,
       "cooldown": 210,
       "cost": 0,
@@ -341,7 +341,7 @@
       "id": "glass_pane",
       "name": "Glass Pane",
       "desc": "Gain a shield of 90 + 20 per level for 2.5 s.",
-      "icon": "assets/ui/icons/setup/glass_pane.svg",
+      "icon": "assets/ui/icons/setup/glass_pane.webp",
       "maxRank": 1,
       "cooldown": 180,
       "cost": 0,
@@ -381,7 +381,7 @@
       "id": "calling_bell",
       "name": "Calling Bell",
       "desc": "You and allied fighters within 7 m move 20% faster for 3 s, and enemy fighters within 9 m are revealed for 4 s.",
-      "icon": "assets/ui/icons/setup/calling_bell.svg",
+      "icon": "assets/ui/icons/setup/calling_bell.webp",
       "maxRank": 1,
       "cooldown": 150,
       "cost": 0,
@@ -471,7 +471,7 @@
       "id": "first_cut",
       "name": "First Cut",
       "desc": "Your first damage to an enemy fighter deals an extra 12 + 3 per level damage that ignores armor and resist. Once every 10 s per fighter.",
-      "icon": "assets/ui/icons/setup/first_cut.svg",
+      "icon": "assets/ui/icons/setup/first_cut.webp",
       "triggers": [
         {
           "on": "damageDealt",
@@ -509,7 +509,7 @@
       "id": "keen_edge",
       "name": "Keen Edge",
       "desc": "Your damage ignores 6% of the target's armor and resist.",
-      "icon": "assets/ui/icons/setup/keen_edge.svg",
+      "icon": "assets/ui/icons/setup/keen_edge.webp",
       "stats": {
         "armorPenPct": 0.06,
         "magicPenPct": 0.06
@@ -525,7 +525,7 @@
       "id": "next_hour",
       "name": "Next Hour",
       "desc": "When you take down an enemy fighter, your ability cooldowns drop by 20% of the time left and you move 25% faster for 2 s.",
-      "icon": "assets/ui/icons/setup/next_hour.svg",
+      "icon": "assets/ui/icons/setup/next_hour.webp",
       "triggers": [
         {
           "on": "takedown",
@@ -558,7 +558,7 @@
       "id": "dense_stone",
       "name": "Dense Stone",
       "desc": "+50 health, and 10 more for each level after the first (220 at level 18).",
-      "icon": "assets/ui/icons/setup/dense_stone.svg",
+      "icon": "assets/ui/icons/setup/dense_stone.webp",
       "stats": {
         "hp": 50
       },
@@ -576,7 +576,7 @@
       "id": "second_shadow",
       "name": "Second Shadow",
       "desc": "When damage drops you below 35% health, gain a shield of 50 + 14 per level for 3 s. Once every 75 s.",
-      "icon": "assets/ui/icons/setup/second_shadow.svg",
+      "icon": "assets/ui/icons/setup/second_shadow.webp",
       "triggers": [
         {
           "on": "lowHp",
@@ -612,7 +612,7 @@
       "id": "slow_heat",
       "name": "Slow Heat",
       "desc": "While you are below 60% health, heal 3 + 1% of your max health every 4 s.",
-      "icon": "assets/ui/icons/setup/slow_heat.svg",
+      "icon": "assets/ui/icons/setup/slow_heat.webp",
       "triggers": [
         {
           "on": "interval",
@@ -643,7 +643,7 @@
       "id": "quick_hour",
       "name": "Quick Hour",
       "desc": "+6 ability haste, rising by 0.4 for each level after the first (12.8 at level 18).",
-      "icon": "assets/ui/icons/setup/quick_hour.svg",
+      "icon": "assets/ui/icons/setup/quick_hour.webp",
       "stats": {
         "haste": 6
       },
@@ -661,7 +661,7 @@
       "id": "long_stride",
       "name": "Long Stride",
       "desc": "+4% move speed.",
-      "icon": "assets/ui/icons/setup/long_stride.svg",
+      "icon": "assets/ui/icons/setup/long_stride.webp",
       "stats": {
         "moveSpeedPct": 0.04
       },
@@ -676,7 +676,7 @@
       "id": "echo_bell",
       "name": "Echo Bell",
       "desc": "Every 4th ability you cast, each within 20 s of the last, takes 1.5 s off all your ability cooldowns.",
-      "icon": "assets/ui/icons/setup/echo_bell.svg",
+      "icon": "assets/ui/icons/setup/echo_bell.webp",
       "triggers": [
         {
           "on": "abilityCast",

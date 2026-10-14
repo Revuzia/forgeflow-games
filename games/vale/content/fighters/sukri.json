@@ -52,7 +52,7 @@
     "passive": {
       "id": "sukri_spare_hour",
       "name": "Spare Hour",
-      "icon": "assets/ui/icons/abilities/sukri_spare_hour.svg",
+      "icon": "assets/ui/icons/abilities/sukri_spare_hour.webp",
       "desc": "Once every 90 s, when Sukri drops below 30% health, he and allied fighters within 6 m cannot be targeted for 1 s.",
       "triggers": [
         {
@@ -101,7 +101,7 @@
     "a1": {
       "id": "sukri_mote_toss",
       "name": "Mote Toss",
-      "icon": "assets/ui/icons/abilities/sukri_mote_toss.svg",
+      "icon": "assets/ui/icons/abilities/sukri_mote_toss.webp",
       "desc": "Sukri tosses a mote up to 8 m. After 0.5 s, allies within 2.5 m are healed for {effects.0.onHit.0.amount} and enemies take {effects.1.onHit.0.amount} magic damage.",
       "maxRank": 5,
       "cooldown": [
@@ -220,7 +220,7 @@
     "a2": {
       "id": "sukri_draw_near",
       "name": "Draw Near",
-      "icon": "assets/ui/icons/abilities/sukri_draw_near.svg",
+      "icon": "assets/ui/icons/abilities/sukri_draw_near.webp",
       "desc": "Sukri draws an allied fighter within 7 m up to 5 m toward him and shields them for {effects.1.amount} for 2 s. Cast on himself, it only shields. The pull knocks the ally airborne for 0.25 s, which interrupts a cast in progress.",
       "maxRank": 5,
       "cooldown": [
@@ -312,7 +312,7 @@
     "a3": {
       "id": "sukri_wrap_cast",
       "name": "Wrap Cast",
-      "icon": "assets/ui/icons/abilities/sukri_wrap_cast.svg",
+      "icon": "assets/ui/icons/abilities/sukri_wrap_cast.webp",
       "desc": "Sukri throws a weighted wrap up to 8 m. The first enemy fighter it hits takes {effects.0.onHit.0.amount} magic damage and is rooted for {effects.0.onHit.1.duration}.",
       "maxRank": 5,
       "cooldown": [
@@ -407,7 +407,7 @@
     "ult": {
       "id": "sukri_gather_in",
       "name": "Gather In",
-      "icon": "assets/ui/icons/abilities/sukri_gather_in.svg",
+      "icon": "assets/ui/icons/abilities/sukri_gather_in.webp",
       "desc": "Every allied fighter within 10 m is drawn up to 4 m toward Sukri and shielded for {effects.0.onHit.1.amount} for 4 s. A 4 m ring of dust then slows enemies around him by 30% for 2 s. The pull knocks allies airborne for 0.25 s.",
       "maxRank": 3,
       "cooldown": [

@@ -49,7 +49,7 @@
     "passive": {
       "id": "rishal_split_glass",
       "name": "Split Glass",
-      "icon": "assets/ui/icons/abilities/rishal_split_glass.svg",
+      "icon": "assets/ui/icons/abilities/rishal_split_glass.webp",
       "desc": "Enemies who cross Rishal's glass tracks are Cut (up to 3, for 5 s). His next basic attack on a Cut enemy spends every Cut: each deals {triggers.0.effects.0.perStack.0.amount} bonus physical damage and vents 8 Heat.",
       "triggers": [
         {
@@ -90,7 +90,7 @@
     "a1": {
       "id": "rishal_glass_dash",
       "name": "Glass Dash",
-      "icon": "assets/ui/icons/abilities/rishal_glass_dash.svg",
+      "icon": "assets/ui/icons/abilities/rishal_glass_dash.webp",
       "desc": "Rishal dashes 5 m and leaves a glass track on the ground behind him for 3 s. Enemies on the track when it forms, and enemies who step onto it later, take {effects.0.onEnter.0.amount} physical damage and are Cut. Holds 2 charges.",
       "maxRank": 5,
       "cooldown": 0.5,
@@ -188,7 +188,7 @@
     "a2": {
       "id": "rishal_glint_cut",
       "name": "Glint Cut",
-      "icon": "assets/ui/icons/abilities/rishal_glint_cut.svg",
+      "icon": "assets/ui/icons/abilities/rishal_glint_cut.webp",
       "desc": "Rishal slashes an adjacent enemy twice, {effects.0.effects.0.amount} physical damage each. A Cut target is also slowed by 60%, fading over 1 s.",
       "maxRank": 5,
       "cooldown": [
@@ -266,7 +266,7 @@
     "a3": {
       "id": "rishal_feint",
       "name": "Feint",
-      "icon": "assets/ui/icons/abilities/rishal_feint.svg",
+      "icon": "assets/ui/icons/abilities/rishal_feint.webp",
       "desc": "Rishal springs 4 m in the opposite direction to his aim, then lays a glass track over the ground he covered: enemies on it, or who step onto it within 3 s, take {effects.0.onArrive.0.onEnter.0.amount} physical damage and are Cut.",
       "maxRank": 5,
       "cooldown": [
@@ -360,7 +360,7 @@
     "ult": {
       "id": "rishal_long_glint",
       "name": "Long Glint",
-      "icon": "assets/ui/icons/abilities/rishal_long_glint.svg",
+      "icon": "assets/ui/icons/abilities/rishal_long_glint.webp",
       "desc": "Rishal rushes 9 m, unstoppable. Every enemy he passes takes {effects.1.onPass.0.amount} physical damage, gains 3 Cuts and is slowed by 50% for 1 s. The whole line stays a glass track for 4 s that Cuts enemies who step onto it.",
       "maxRank": 3,
       "cooldown": [

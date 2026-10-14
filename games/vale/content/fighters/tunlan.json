@@ -51,7 +51,7 @@
     "passive": {
       "id": "tunlan_startle",
       "name": "Startle",
-      "icon": "assets/ui/icons/abilities/tunlan_startle.svg",
+      "icon": "assets/ui/icons/abilities/tunlan_startle.webp",
       "desc": "The first time each 8 s that Tunlan hits an enemy fighter with an ability, they are slowed by 40% for 1 s.",
       "triggers": [
         {
@@ -80,7 +80,7 @@
     "a1": {
       "id": "tunlan_hound_shadow",
       "name": "Hound Shadow",
-      "icon": "assets/ui/icons/abilities/tunlan_hound_shadow.svg",
+      "icon": "assets/ui/icons/abilities/tunlan_hound_shadow.webp",
       "desc": "A shadow hound runs 9 m along the ground, dealing {effects.0.onHit.0.amount} magic damage to every enemy it touches and sending them running in fear for {effects.0.onHit.1.duration}.",
       "maxRank": 5,
       "cooldown": [
@@ -165,7 +165,7 @@
     "a2": {
       "id": "tunlan_hand_shadow",
       "name": "Hand Shadow",
-      "icon": "assets/ui/icons/abilities/tunlan_hand_shadow.svg",
+      "icon": "assets/ui/icons/abilities/tunlan_hand_shadow.webp",
       "desc": "A shadow hand grips an enemy within 7 m for {effects.0.amount} magic damage and a 60% slow that fades over 1.5 s. A feared enemy is stunned for {effects.1.then.0.duration} instead of slowed.",
       "maxRank": 5,
       "cooldown": [
@@ -251,7 +251,7 @@
     "a3": {
       "id": "tunlan_lamp_flare",
       "name": "Lamp Flare",
-      "icon": "assets/ui/icons/abilities/tunlan_lamp_flare.svg",
+      "icon": "assets/ui/icons/abilities/tunlan_lamp_flare.webp",
       "desc": "Tunlan flares her lamp: enemies within 3 m are pushed back 1.5 m and slowed by 30% for {effects.0.onHit.1.duration}.",
       "maxRank": 5,
       "cooldown": [
@@ -321,7 +321,7 @@
     "ult": {
       "id": "tunlan_shadow_play",
       "name": "Shadow Play",
-      "icon": "assets/ui/icons/abilities/tunlan_shadow_play.svg",
+      "icon": "assets/ui/icons/abilities/tunlan_shadow_play.webp",
       "desc": "After 0.6 s an enormous shadow beast fills a 9 m, 50° cone, dealing {effects.0.onHit.0.amount} magic damage and sending enemies running in fear for {effects.0.onHit.1.duration}.",
       "maxRank": 3,
       "cooldown": [

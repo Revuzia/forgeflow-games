@@ -50,12 +50,17 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply-refs", action="store_true")
     ap.add_argument("--pick", action="append", default=[], help="id=variant")
+    ap.add_argument("--kind", help="only this kind (icon | concept | keyart | backdrop | texture)")
     a = ap.parse_args()
-    picks = dict(p.split("=", 1) for p in a.pick)
+    pf = HERE / "picks.json"
+    picks = {k: str(v) for k, v in json.loads(pf.read_text(encoding="utf-8")).items() if not k.startswith("$")} if pf.exists() else {}
+    picks.update(dict(p.split("=", 1) for p in a.pick))
     man = json.loads((HERE / "manifest.json").read_text(encoding="utf-8"))
     sizes = man["sizes"]
     done, swaps = 0, {}
     for it in man["items"]:
+        if a.kind and it["kind"] != a.kind:
+            continue
         v = picks.get(it["id"])
         src = RAW / (f"{it['id']}__{v}.png" if v and v != "1" else f"{it['id']}.png")
         if not src.exists():

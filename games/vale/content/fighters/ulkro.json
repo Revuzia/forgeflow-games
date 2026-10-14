@@ -51,7 +51,7 @@
     "passive": {
       "id": "ulkro_run_up",
       "name": "Run-up",
-      "icon": "assets/ui/icons/abilities/ulkro_run_up.svg",
+      "icon": "assets/ui/icons/abilities/ulkro_run_up.webp",
       "desc": "Every 4 m Ulkro runs adds a Run-up stack, up to 4; stacks fade 8 s after the last one. While Long Run is active, every 3 m she runs also sends a dart at the nearest enemy fighter within 7 m for {triggers.1.effects.0.onHit.0.onHit.0.amount} physical damage.",
       "triggers": [
         {
@@ -138,7 +138,7 @@
     "a1": {
       "id": "ulkro_hurl",
       "name": "Hurl",
-      "icon": "assets/ui/icons/abilities/ulkro_hurl.svg",
+      "icon": "assets/ui/icons/abilities/ulkro_hurl.webp",
       "desc": "Ulkro throws a long dart up to 10 m. The first enemy it hits takes {effects.0.onHit.0.amount} physical damage, plus 25% more for every Run-up stack she holds. The throw spends all her stacks.",
       "maxRank": 5,
       "cooldown": [
@@ -235,7 +235,7 @@
     "a2": {
       "id": "ulkro_bound",
       "name": "Bound",
-      "icon": "assets/ui/icons/abilities/ulkro_bound.svg",
+      "icon": "assets/ui/icons/abilities/ulkro_bound.webp",
       "desc": "Ulkro leaps up to 4 m and gains 2 Run-up stacks.",
       "maxRank": 5,
       "cooldown": [
@@ -290,7 +290,7 @@
     "a3": {
       "id": "ulkro_hamstring_dart",
       "name": "Hamstring Dart",
-      "icon": "assets/ui/icons/abilities/ulkro_hamstring_dart.svg",
+      "icon": "assets/ui/icons/abilities/ulkro_hamstring_dart.webp",
       "desc": "Ulkro darts an enemy within 6 m for {effects.0.amount} physical damage. They are slowed by 40% for {effects.1.duration} and revealed for 4 s.",
       "maxRank": 5,
       "cooldown": [
@@ -362,7 +362,7 @@
     "ult": {
       "id": "ulkro_long_run",
       "name": "Long Run",
-      "icon": "assets/ui/icons/abilities/ulkro_long_run.svg",
+      "icon": "assets/ui/icons/abilities/ulkro_long_run.webp",
       "desc": "For {effects.1.duration} Ulkro runs 35% faster, and every 3 m she runs a dart flies at the nearest enemy fighter within 7 m. The darts grow with her level and Attack.",
       "maxRank": 3,
       "cooldown": [

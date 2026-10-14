@@ -49,7 +49,7 @@
     "passive": {
       "id": "nurrow_quiet_kill",
       "name": "Quiet Kill",
-      "icon": "assets/ui/icons/abilities/nurrow_quiet_kill.svg",
+      "icon": "assets/ui/icons/abilities/nurrow_quiet_kill.webp",
       "desc": "When Nurrow gets a takedown, every enemy fighter within 5 m of her falls asleep for 1 s. Damage wakes a sleeper.",
       "triggers": [
         {
@@ -90,7 +90,7 @@
     "a1": {
       "id": "nurrow_felt_step",
       "name": "Felt Step",
-      "icon": "assets/ui/icons/abilities/nurrow_felt_step.svg",
+      "icon": "assets/ui/icons/abilities/nurrow_felt_step.webp",
       "desc": "Nurrow lunges up to 4 m toward a point and stops at the first enemy fighter she reaches, dealing {effects.0.onPass.0.amount} magic damage.",
       "maxRank": 5,
       "cooldown": [
@@ -167,7 +167,7 @@
     "a2": {
       "id": "nurrow_lullaby_dart",
       "name": "Lullaby Dart",
-      "icon": "assets/ui/icons/abilities/nurrow_lullaby_dart.svg",
+      "icon": "assets/ui/icons/abilities/nurrow_lullaby_dart.webp",
       "desc": "Nurrow throws a dart up to 8 m. The first enemy fighter it hits falls asleep for {effects.0.onHit.0.duration}. The dart deals no damage. Damage wakes the sleeper, with no bonus on waking.",
       "maxRank": 5,
       "cooldown": [
@@ -241,7 +241,7 @@
     "a3": {
       "id": "nurrow_snuff",
       "name": "Snuff",
-      "icon": "assets/ui/icons/abilities/nurrow_snuff.svg",
+      "icon": "assets/ui/icons/abilities/nurrow_snuff.webp",
       "desc": "Nurrow snuffs an adjacent enemy for {effects.0.amount} magic damage and silences them for {effects.1.duration}.",
       "maxRank": 5,
       "cooldown": [
@@ -308,7 +308,7 @@
     "ult": {
       "id": "nurrow_lull_the_rest",
       "name": "Lull the Rest",
-      "icon": "assets/ui/icons/abilities/nurrow_lull_the_rest.svg",
+      "icon": "assets/ui/icons/abilities/nurrow_lull_the_rest.webp",
       "desc": "Nurrow names an enemy fighter within 6 m and lunges at them for {effects.1.onArrive.0.amount} magic damage. Every other enemy fighter within 5 m of that target falls asleep for 2 s.",
       "maxRank": 3,
       "cooldown": [

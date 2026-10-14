@@ -5,7 +5,8 @@
 // Per mode: Home → Play → pick the mode on the Mode Dial → a queue → Find match → Ready → draft /
 // assignment / pick (real clicks) → loading → the match (your seat on the dev autopilot at time scale
 // --speed, so it reaches a REAL win condition; a few real inputs are sent in-match first) → the end
-// banner → post-game with grants → Shop → buy a skin → Equip it. Screenshots per step go to
+// banner → post-game with grants → Home. All modes share one profile, so after the last one the
+// Candles earned buy a skin in the Shop and it is equipped (one STORE journey at the end). Screenshots per step go to
 // _harness/_shots/e2e_<mode>_<nn>_<step>.png; a JSON report to _harness/_reports/e2e.json.
 // Needs the dev server (npm run dev) and a content build. Exit 0 = every journey passed.
 
@@ -29,10 +30,12 @@ async function controls(page) {
     .map((b) => `${(b.getAttribute('aria-label') || b.textContent || '').trim().slice(0, 40)}${b.getAttribute('aria-disabled') === 'true' || b.disabled ? ' [disabled]' : ''}`));
 }
 
+let session = null;
 async function journey(mode) {
   const steps = [];
   let n = 0;
-  const { browser, page, logs } = await open(`/?dev=1&autopilot=match&speed=${speed}`);
+  session ??= await open(`/?dev=1&autopilot=match&speed=${speed}`);
+  const { page, logs } = session;
   const step = async (name, fn) => {
     const t0 = Date.now();
     try {
@@ -74,16 +77,23 @@ async function journey(mode) {
       return { route: await route() };
     });
     await step('pick', async () => {
-      const d = await vale(page, (v) => { const s = v.state.draft.value; return s ? { phase: s.phase, turn: s.turn, mine: s.seats.find((x) => x.isYou) ?? null } : null; });
-      if (d && d.phase !== 'done') {
-        // a pick protocol where you choose: hover the first available fighter card, then lock in
-        const card = page.locator(".fcard:not(.is-taken):not(.is-locked):not(.is-banned):not([aria-disabled=\"true\"])").first();
-        if (await card.count()) { await card.click(); await page.waitForTimeout(200); }
-        const lock = page.getByRole('button', { name: /Lock in/i });
-        if (await lock.count() && !(await lock.first().getAttribute('aria-disabled'))) await lock.first().click();
+      const mine = () => vale(page, (v) => { const s = v.state.draft.value; const m = s?.seats.find((x) => x.isYou); return s ? { phase: s.phase, turn: s.turn?.action ?? null, myTurn: !!s.turn?.players.includes(m?.player), hover: m?.hover ?? null, locked: m?.locked ?? null } : null; });
+      const before = await mine();
+      let after = before;
+      if (before && before.phase !== 'done' && !before.locked) {
+        // wait for a pick turn that includes you (blind / FFA pick: everyone at once; draft: in order)
+        await waitFor(page, (v) => { const s = v.state.draft.value; const m = s?.seats.find((x) => x.isYou); return !s || (s.phase !== 'pick' && s.phase !== 'ban') || !!m?.locked || (s.turn?.action !== 'ban' && !!s.turn?.players.includes(m?.player)); }, 90000);
+        const now = await mine();
+        if (!now || now.phase !== 'pick' || now.locked) { await waitFor(page, (v) => !!v.state.loading.value || !!v.state.match.value, 120000); return { before, after: now, assigned: true }; }
+        const card = page.locator('.scr--draft .fcard:not(.is-taken):not(.is-locked):not(.is-banned):not([aria-disabled="true"])').first();
+        if (await card.count()) { await card.click(); await page.waitForTimeout(250); }
+        const lock = page.locator('.scr--draft').getByRole('button', { name: /Lock in/i }).first();
+        if (await lock.count()) { await lock.click(); await page.waitForTimeout(400); }
+        after = await mine();
+        if (after && after.phase !== 'done' && !after.locked && after.turn !== 'ban') throw new Error(`could not lock a fighter: ${JSON.stringify(after)}`);
       }
       await waitFor(page, (v) => !!v.state.loading.value || !!v.state.match.value, 120000);
-      return { draft: d ? { phase: d.phase, fighter: d.mine?.locked ?? d.mine?.hover ?? null } : null };
+      return { before, after };
     });
     await step('loading', async () => { await waitFor(page, (v) => v.state.match.value?.view.phase === 'pregame' || v.state.match.value?.view.phase === 'live', 60000); return { route: await route() }; });
     await step('match_input', async () => {
@@ -110,6 +120,43 @@ async function journey(mode) {
       await page.waitForTimeout(1500);
       return await vale(page, (v) => { const pg = v.state.postgame.value; const me = pg.result.players.find((x) => x.player === pg.you); return { reason: pg.result.reason, won: me.won, placement: me.placement, duration: Math.round(pg.result.duration), grants: pg.grants.currency, xp: pg.grants.xp }; });
     });
+    await step('home_again', async () => {
+      await click(page.getByRole('button', { name: /Return home/i }).first());
+      await page.waitForTimeout(800);
+      return { route: await route(), wallet: await vale(page, (v) => v.state.profile.value.wallet) };
+    });
+  } catch {
+    ok = false;
+  }
+  const errors = logs.splice(0).filter((l) => !/404|unavailable|Failed to load resource/.test(l));
+  report.journeys.push({ mode, ok, steps, consoleErrors: errors.slice(0, 20) });
+  return ok;
+}
+
+async function store() {
+  const steps = [];
+  let n = 0;
+  const { page, logs } = session;
+  const mode = 'store';
+  const step = async (name, fn) => {
+    const t0 = Date.now();
+    try {
+      const info = await fn();
+      const file = await shot(page, `e2e_${mode}_${String(++n).padStart(2, '0')}_${name}`);
+      steps.push({ name, ok: true, ms: Date.now() - t0, info: info ?? null, shot: file });
+      console.log(`  ✓ ${name} (${Date.now() - t0} ms)${info ? ' ' + JSON.stringify(info) : ''}`);
+    } catch (e) {
+      const file = await shot(page, `e2e_${mode}_${String(++n).padStart(2, '0')}_${name}_FAIL`).catch(() => null);
+      steps.push({ name, ok: false, ms: Date.now() - t0, error: String(e?.message ?? e).slice(0, 400), controls: await controls(page).catch(() => []), shot: file });
+      console.log(`  ✗ ${name}: ${String(e?.message ?? e).split('\n')[0]}`);
+      throw e;
+    }
+  };
+  const route = () => vale(page, (v) => v.router.route.value.screen);
+  const click = async (locator) => { await locator.waitFor({ state: 'visible', timeout: 15000 }); await locator.click(); };
+  console.log('\nSTORE');
+  let ok = true;
+  try {
     await step('shop', async () => {
       await click(page.locator('.nav__item', { hasText: 'Shop' }));
       await page.waitForTimeout(800);
@@ -143,14 +190,14 @@ async function journey(mode) {
   } catch {
     ok = false;
   }
-  const errors = logs.filter((l) => !/404|unavailable|Failed to load resource/.test(l));
-  report.journeys.push({ mode, ok, steps, consoleErrors: errors.slice(0, 20) });
-  await browser.close();
+  report.journeys.push({ mode, ok, steps, consoleErrors: logs.splice(0).filter((l) => !/404|unavailable|Failed to load resource/.test(l)).slice(0, 20) });
   return ok;
 }
 
 let all = true;
 for (const m of MODES) all = (await journey(m)) && all;
+all = (await store()) && all;
+await session?.browser.close();
 report.finished = new Date().toISOString();
 mkdirSync(join(HERE, '_reports'), { recursive: true });
 writeFileSync(join(HERE, '_reports', 'e2e.json'), JSON.stringify(report, null, 2));

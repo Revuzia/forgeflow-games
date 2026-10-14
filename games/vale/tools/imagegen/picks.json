@@ -1,0 +1,17 @@
+{
+  "$comment": "Which raw variant ships for each image (default 1 = raw/<id>.png; 2 = raw/<id>__2.png). post.py reads this on every run; --pick on the command line overrides. Picked by eye per the README review rules.",
+  "ability_marund_mortar_pail": 2,
+  "ability_marund_shoulder_in": 2,
+  "ability_nurrow_lull_the_rest": 2,
+  "ability_rishal_feint": 2,
+  "ability_rishal_long_glint": 2,
+  "ability_sukri_mote_toss": 2,
+  "ability_sukri_wrap_cast": 2,
+  "ability_ulkro_hamstring_dart": 2,
+  "ability_vashil_peal": 2,
+  "boon_slow_heat": 2,
+  "boon_long_stride": 2,
+  "buff_splinters": 2,
+  "spell_calling_bell": 2,
+  "spell_glass_pane": 2
+}

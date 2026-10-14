@@ -53,7 +53,7 @@
     "passive": {
       "id": "vashil_hum",
       "name": "Hum",
-      "icon": "assets/ui/icons/abilities/vashil_hum.svg",
+      "icon": "assets/ui/icons/abilities/vashil_hum.webp",
       "desc": "Vashil's abilities leave an enemy fighter humming for 3 s. Hitting a humming enemy with another ability stuns them for 0.75 s and ends the hum, and that enemy cannot hum again for 8 s.",
       "triggers": [
         {
@@ -148,7 +148,7 @@
     "a1": {
       "id": "vashil_peal",
       "name": "Peal",
-      "icon": "assets/ui/icons/abilities/vashil_peal.svg",
+      "icon": "assets/ui/icons/abilities/vashil_peal.webp",
       "desc": "After 0.4 s a ring of sound lands at a point up to 9 m away. Enemies between 1.5 m and 3.5 m from its centre take {effects.0.onHit.0.amount} magic damage and are slowed by 30% for 1.5 s; the centre stays quiet.",
       "maxRank": 5,
       "cooldown": [
@@ -236,7 +236,7 @@
     "a2": {
       "id": "vashil_glass_chime",
       "name": "Glass Chime",
-      "icon": "assets/ui/icons/abilities/vashil_glass_chime.svg",
+      "icon": "assets/ui/icons/abilities/vashil_glass_chime.webp",
       "desc": "Vashil strikes a fast chime-bolt that flies up to 9 m and deals {effects.0.onHit.0.amount} magic damage to the first enemy it hits.",
       "maxRank": 5,
       "cooldown": [
@@ -314,7 +314,7 @@
     "a3": {
       "id": "vashil_ring_out",
       "name": "Ring Out",
-      "icon": "assets/ui/icons/abilities/vashil_ring_out.svg",
+      "icon": "assets/ui/icons/abilities/vashil_ring_out.webp",
       "desc": "Vashil swings the rod: enemies in a 3.5 m, 90° cone take {effects.0.onHit.0.amount} magic damage and are pushed back 2 m.",
       "maxRank": 5,
       "cooldown": [
@@ -398,7 +398,7 @@
     "ult": {
       "id": "vashil_morning_toll",
       "name": "Morning Toll",
-      "icon": "assets/ui/icons/abilities/vashil_morning_toll.svg",
+      "icon": "assets/ui/icons/abilities/vashil_morning_toll.webp",
       "desc": "Vashil tolls a great bell over a 4.5 m area up to 9 m away, three times, 0.75 s apart. Each toll deals {effects.0.effects.0.onHit.0.amount} magic damage, and the second toll stuns through Hum.",
       "maxRank": 3,
       "cooldown": [

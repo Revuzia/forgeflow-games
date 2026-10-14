@@ -92,7 +92,7 @@
     "a1": {
       "id": "marund_shoulder_in",
       "name": "Shoulder In",
-      "icon": "assets/ui/icons/abilities/marund_shoulder_in.svg",
+      "icon": "assets/ui/icons/abilities/marund_shoulder_in.webp",
       "desc": "Marund charges up to 4.5 m and stops at the first enemy, dealing {effects.0.onPass.0.amount} magic damage and knocking them back 2 m. The target is slowed by 30% for 1.5 s, or rooted for 1.25 s instead if it is Mortared (this spends the Mortar).",
       "maxRank": 5,
       "cooldown": [
@@ -208,7 +208,7 @@
     "a2": {
       "id": "marund_shelter_dome",
       "name": "Shelter Dome",
-      "icon": "assets/ui/icons/abilities/marund_shelter_dome.svg",
+      "icon": "assets/ui/icons/abilities/marund_shelter_dome.webp",
       "desc": "Marund raises a 3 m dome around himself for {effects.1.duration}. Enemies inside are pushed 2.5 m away from him, and no enemy can walk in while it stands; allies come and go freely. Allied fighters inside, Marund included, gain {effects.1.onTick.0.statScaling.armor} armor and magic resist.",
       "maxRank": 5,
       "cooldown": [
@@ -332,7 +332,7 @@
     "a3": {
       "id": "marund_mortar_pail",
       "name": "Mortar Pail",
-      "icon": "assets/ui/icons/abilities/marund_mortar_pail.svg",
+      "icon": "assets/ui/icons/abilities/marund_mortar_pail.webp",
       "desc": "Marund lobs wet mortar up to 8 m. After 0.5 s, enemies within 2 m take {effects.0.onHit.0.amount} magic damage, are slowed by 35% for 1.5 s and are Mortared for 4 s. Shoulder In roots a Mortared enemy.",
       "maxRank": 5,
       "cooldown": [
@@ -426,7 +426,7 @@
     "ult": {
       "id": "marund_domefall",
       "name": "Domefall",
-      "icon": "assets/ui/icons/abilities/marund_domefall.svg",
+      "icon": "assets/ui/icons/abilities/marund_domefall.webp",
       "desc": "Marund leaps up to 7 m, unstoppable. Where he lands, enemies within 3.5 m take {effects.0.onArrive.0.onHit.0.amount} magic damage, are flung 2.5 m outward and are stunned for 1 s, and allied fighters there, Marund included, gain a {effects.0.onArrive.1.onHit.0.amount} shield for 3 s.",
       "maxRank": 3,
       "cooldown": [

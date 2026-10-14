@@ -53,7 +53,7 @@
     "passive": {
       "id": "odrum_cracked_amber",
       "name": "Cracked Amber",
-      "icon": "assets/ui/icons/abilities/odrum_cracked_amber.svg",
+      "icon": "assets/ui/icons/abilities/odrum_cracked_amber.webp",
       "desc": "When Odrum roots an enemy, or slows one that is already rooted, the amber cracks: they lose {triggers.0.effects.0.power} armor and {triggers.0.effects.1.power} magic resist for 2.5 s (once per 2 s per enemy).",
       "triggers": [
         {
@@ -89,7 +89,7 @@
     "a1": {
       "id": "odrum_resin_shot",
       "name": "Resin Shot",
-      "icon": "assets/ui/icons/abilities/odrum_resin_shot.svg",
+      "icon": "assets/ui/icons/abilities/odrum_resin_shot.webp",
       "desc": "Odrum lobs resin up to 9 m. It lands after 0.5 s as a 2.5 m pool that slows enemies by 35%. After 1.5 s it sets: enemies still inside take {effects.0.onExpire.0.onHit.0.amount} physical damage and are rooted for 1 s.",
       "maxRank": 5,
       "cooldown": [
@@ -201,7 +201,7 @@
     "a2": {
       "id": "odrum_swing_out",
       "name": "Swing Out",
-      "icon": "assets/ui/icons/abilities/odrum_swing_out.svg",
+      "icon": "assets/ui/icons/abilities/odrum_swing_out.webp",
       "desc": "Odrum whirls the sling: enemies within 3 m take {effects.0.onHit.0.amount} physical damage and are slowed by 30% for 1.5 s, and he gains 25% move speed for 1.5 s.",
       "maxRank": 5,
       "cooldown": [
@@ -285,7 +285,7 @@
     "a3": {
       "id": "odrum_step_and_load",
       "name": "Step and Load",
-      "icon": "assets/ui/icons/abilities/odrum_step_and_load.svg",
+      "icon": "assets/ui/icons/abilities/odrum_step_and_load.webp",
       "desc": "Odrum hops up to 3.5 m. His next basic attack within 3 s carries a resin pellet: {effects.1.empowerAttacks.effects.0.amount} bonus physical damage and a 25% slow for 1.5 s.",
       "maxRank": 5,
       "cooldown": [
@@ -371,7 +371,7 @@
     "ult": {
       "id": "odrum_amber_hour",
       "name": "Amber Hour",
-      "icon": "assets/ui/icons/abilities/odrum_amber_hour.svg",
+      "icon": "assets/ui/icons/abilities/odrum_amber_hour.webp",
       "desc": "Odrum hurls a great ball of resin up to 12 m. It lands after 0.75 s as a 5 m pool that slows enemies by 45%. After 2 s it sets: everyone still inside takes {effects.0.onExpire.0.onHit.0.amount} physical damage and is rooted for 1.5 s, so the whole group cracks.",
       "maxRank": 3,
       "cooldown": [
