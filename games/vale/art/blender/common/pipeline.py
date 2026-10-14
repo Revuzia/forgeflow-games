@@ -265,7 +265,7 @@ def build(spec, args, skin=None) -> dict:
             o.hide_viewport = True
     body.name = sid if skin else spec.ID
     arm = ctx.info.armature
-    arm["vale_kind"] = "skin" if skin else "fighter"
+    arm["vale_kind"] = "skin" if skin else getattr(spec, "KIND", "fighter")
     arm["vale_id"] = sid
     arm["vale_fighter"] = spec.ID
     arm["vale_height"] = float(spec.PROPORTIONS["height"])
@@ -296,7 +296,7 @@ def build(spec, args, skin=None) -> dict:
     with T.step("load_test"):
         report["three_load_test"] = export.load_test(glb, skin=skin is not None,
                                                      budget_kb=1172 if getattr(spec, "GLB_COMPRESS", True) else None)
-    if skin is None:
+    if skin is None and getattr(spec, "KIND", "fighter") == "fighter":
         frag = art_fragment(spec, clips_info, report["mesh_top_m"])
         scene.write_json(os.path.join(P["out"], "art.json"), frag)
         if getattr(spec, "SKINS", None):
