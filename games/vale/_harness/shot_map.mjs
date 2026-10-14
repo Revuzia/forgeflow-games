@@ -1,5 +1,5 @@
 // VALE harness — map look-dev shots: the real renderer at the gameplay camera over named spots.
-//   node _harness/shot_map.mjs [rift|bridge|fray] [--name map] [--q high] [--at x,y;x,y…  (extra spots, named at0, at1…)]
+//   node _harness/shot_map.mjs [rift|bridge|fray] [--name map] [--q high] [--at x,y;x,y…  (extra spots, named at0, at1…)] [--nofog]
 import { open, shot } from './pw.mjs';
 const args = process.argv.slice(2);
 const mode = args.find((a) => !a.startsWith('--')) ?? 'rift';
@@ -9,7 +9,8 @@ const { browser, page } = await open(`/_harness/web/render_bench.html?mode=${mod
 await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 120000 });
 const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
 await B((b) => b.frames(60, 1 / 30));
-await new Promise((r) => setTimeout(r, 5000));                      // async models (props, landmarks) land in real time
+await new Promise((r) => setTimeout(r, 5000));
+if (args.includes('--nofog')) await B((b) => { b.renderer.fog.enabled = false; });               // look-dev: everything lit                      // async models (props, landmarks) land in real time
 await B((b) => b.frames(10, 1 / 30));
 const m = await B((b) => { const m = b.catalog.maps.find((x) => x.id === b.host.setup.map); return { size: m.size, bases: m.bases.map((x) => x.spawn) }; });
 const [W, H] = m.size;

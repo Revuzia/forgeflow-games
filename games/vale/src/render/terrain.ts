@@ -746,6 +746,8 @@ ${TEX_GLSL}`)
   // ── Standing Shadow + Fallen Shaft (terrain marks from the map's terrain block) ────────────────
   const noon = tr.noonline as Record<string, unknown> | undefined;
   const shadowDef = noon?.standingShadow as { floor?: unknown; tint?: unknown } | undefined;
+  /** the shadow floor takes the painted road stone under its tint once textures land (ShapeGeometry UVs are metres) */
+  const shadowFills: { mat: MeshStandardMaterial; tint: Color }[] = [];
   for (const poly of polysOf(shadowDef?.floor)) {
     const tint = typeof shadowDef?.tint === 'string' ? shadowDef.tint : '#4A4560';
     const fill = new ShapeGeometry(shapeOf(poly), 1);
@@ -753,6 +755,7 @@ ${TEX_GLSL}`)
     fill.translate(0, 0.012, 0);
     const mat = new MeshStandardMaterial({ color: lin(tint), roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     patchWorldMaterial(mat, { keepColor: true });
+    shadowFills.push({ mat, tint: lin(tint) });
     const mesh = new Mesh(fill, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_standing_shadow';
     group.add(mesh);
@@ -940,6 +943,14 @@ ${TEX_GLSL}`)
       if (t.cliff) cu.uTexCliff.value = t.cliff;
       if (t.cliffTop) cu.uTexTop.value = t.cliffTop;
       cu.uUseTex.value = t.cliff && t.cliffTop ? 1 : 0;
+      if (t.road && shadowFills.length) {
+        const tx = t.road.clone();                                       // the pit is paved: the dial's own stone
+        tx.repeat.set(1 / TEX_SCALE.road, 1 / TEX_SCALE.road);
+        tx.needsUpdate = true;
+        disposables.push(tx);
+        // lift the tint a little so the textured mean keeps the designed value (L* 30-36)
+        for (const f of shadowFills) { f.mat.map = tx; f.mat.color.copy(f.tint).multiplyScalar(1.3); f.mat.needsUpdate = true; }
+      }
     },
     setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void {
       props = p;
