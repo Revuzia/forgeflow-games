@@ -20,5 +20,15 @@
   "concept_ilsheta": 2,
   "concept_kemdo": 2,
   "concept_nurrow": 2,
-  "concept_ulkro": 2
+  "concept_ulkro": 2,
+  "tex_dirt_path": 2,
+  "tex_plaster_chalk": 2,
+  "tex_stone_road_engraved": 2,
+  "backdrop_seat_center": 2,
+  "backdrop_serenade_dusk": 2,
+  "home_tile_collection_highlight": 2,
+  "loading_map_bridge": 2,
+  "mode_bridge": 2,
+  "store_banner": 2,
+  "mode_fray": 2
 }

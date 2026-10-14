@@ -18,7 +18,7 @@ const HUD_LOADERS = import.meta.glob<HudModule>('../hud/index.tsx');
 let hudCache: ComponentType<{ client: MatchClient }> | null | undefined;
 
 function useHud(): ComponentType<{ client: MatchClient }> | null {
-  const [hud, setHud] = useState<ComponentType<{ client: MatchClient }> | null>(hudCache ?? null);
+  const [hud, setHud] = useState<ComponentType<{ client: MatchClient }> | null>(() => hudCache ?? null);   // a function argument is a lazy initializer: wrap the component
   useEffect(() => {
     if (hudCache !== undefined) return;
     const load = Object.values(HUD_LOADERS)[0];
