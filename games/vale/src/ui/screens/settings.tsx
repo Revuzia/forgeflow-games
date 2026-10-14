@@ -219,7 +219,7 @@ function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
         <Toggle id="c-am" label={cv.t('settings.controls.attackMoveOnClick.label', 'Attack on move')} checked={c.attackMoveOnClick} onChange={(x) => p.set('controls', { attackMoveOnClick: x })} />
       </Row>
       <Row id="c-self" label={cv.t('settings.controls.selfCastModifier.label', 'Self-cast key')} desc={cv.t('settings.controls.selfCastModifier.desc', '')}>
-        <KeybindCapture label={cv.t('settings.controls.selfCastModifier.label', 'Self-cast key')} code={c.selfCastModifier} onChange={(code) => bind('selfCastMod', code)} />
+        <KeybindCapture modifier label={cv.t('settings.controls.selfCastModifier.label', 'Self-cast key')} code={c.selfCastModifier} onChange={(code) => bind('selfCastMod', code)} />
       </Row>
     </div>
   );

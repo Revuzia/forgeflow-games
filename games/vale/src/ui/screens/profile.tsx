@@ -129,7 +129,7 @@ function Overview(): JSX.Element {
         <Section title={cv.t('profile.record', 'Record')} class="plate pad-l">
           <dl class="stats stats--2">
             <div><dt class="t-caption">{cv.t('profile.record', 'Record')}</dt><dd class="t-body">{cv.t('profile.record_line', '{wins} wins · {losses} losses', { wins, losses })}</dd></div>
-            <div><dt class="t-caption">{cv.t('profile.matches', '{n} matches played', { n: profile.history.length })}</dt><dd class="num">{profile.history.length}</dd></div>
+            <div><dt class="t-caption">{cv.t('profile.matches_label', 'Matches played')}</dt><dd class="num">{profile.history.length}</dd></div>
             <div><dt class="t-caption">{cv.t('profile.favourite', 'Most played')}</dt><dd class="t-body">{favF ? <span class="row row--s row--nowrap"><Portrait fighter={favF} size="xs" />{favF.name}</span> : '—'}</dd></div>
             <div><dt class="t-caption">{cv.t('collection.tab.skins', 'Skins')}</dt><dd class="t-body">{cv.t('collection.skins_owned', '{n} of {m} skins owned', { n: owned, m: total })}</dd></div>
           </dl>

@@ -8,11 +8,18 @@
     <title>VALE</title>
     <!-- runtime config (catalog URL); public/config.js, editable after deploy -->
     <script src="./config.js"></script>
+    <!-- the Forgeflow portal's control bar (mute, fullscreen, pause, report a bug); public/game_controls.js is the
+         shared portal copy, unmodified. VALE binds F (battle spell 2), so the bar's F hotkey is off. -->
+    <script>window.GAME_CONFIG = { fs_hotkey: false };</script>
+    <script src="./game_controls.js"></script>
     <style>
       /* first paint before the UI's stylesheets arrive: ink backdrop, no flash */
       html, body { margin: 0; height: 100%; background: #0B0D11; color: #EDE6D6; overflow: hidden; }
       #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
       #ui { position: fixed; inset: 0; }
+      /* the portal bar sits bottom-left in the menus (bottom-right is the match minimap) and steps aside in a match */
+      #__ff_controls__ { right: auto !important; left: 8px !important; }
+      body:has(.app.is-match) #__ff_controls__ { display: none !important; }
     </style>
   </head>
   <body>

@@ -8,7 +8,12 @@ import { useApp } from '../app_ctx.ts';
 import { keyLabel } from '../keys.ts';
 import { Icon } from './Glyphs.tsx';
 
-export function KeybindCapture(p: { code: string; onChange: (code: string) => void; label: string; conflict?: string; isDefault?: boolean }): JSX.Element {
+const MODIFIERS = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
+/** never an action key: Enter confirms, the modifiers are chords (Ctrl levels up, Alt self-casts) */
+const RESERVED = new Set(['Enter', 'NumpadEnter', ...MODIFIERS]);
+
+/** `modifier`: this bind takes a modifier key only (the self-cast key) */
+export function KeybindCapture(p: { code: string; onChange: (code: string) => void; label: string; conflict?: string; isDefault?: boolean; modifier?: boolean }): JSX.Element {
   const { sound } = useApp();
   const [armed, setArmed] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -16,8 +21,11 @@ export function KeybindCapture(p: { code: string; onChange: (code: string) => vo
   useEffect(() => {
     if (!armed) return;
     const key = (e: KeyboardEvent): void => {
+      // Tab leaves the control as it would anywhere else (a keyboard user is moving on, not binding Tab)
+      if (e.code === 'Tab') { setArmed(false); return; }
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       if (e.code === 'Escape') { setArmed(false); sound.play('back'); return; }
+      if (p.modifier ? !MODIFIERS.has(e.code) : RESERVED.has(e.code)) return;   // not bindable here: stay armed
       setArmed(false);
       sound.play('confirm');
       p.onChange(e.code);

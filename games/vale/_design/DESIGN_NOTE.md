@@ -33,9 +33,9 @@ The catalog holds 16 fighters (each a passive, three abilities and an ultimate; 
 **State of the slice (2026-10-14).**
 
 - **Playable end to end.** Home → Play → queue → draft or Lot → match to a real win condition → post-game with grants → shop → buy and equip a skin passes in real Chrome for all three modes (§6).
-- **Fighter models: one of sixteen.** Marund is built with the Art 2.0 method (sculpted, painted by concept projection, rigged, 15 clips, a 1.16 MB GLB) and awaits the owner's sign-off. His alternate skins and the other 15 fighters are next. Until their models land, a production build draws those fighters as overlays only (ring, bars, telegraphs); dev builds behind `?dev=1`, which every harness run uses, draw a stand-in proof mannequin (`src/render/actors.ts`).
-- **Monsters in progress.** The ten camp and objective monsters are being modelled (`art/blender/units/creatures.py`). Structures, the four Wicks, pickups, the ward, the sparring post, the four skies, 18 map landmarks and the menu's painted set are built.
-- **Audio.** The 91 non-music cues are rendered and committed. The six music beds and the end stings were being rendered when this note was written (`audio/build_music.py`).
+- **Fighter models: one of sixteen.** Marund is built with the Art 2.0 method (sculpted, painted by concept projection, rigged, 15 clips, a 1.16 MB GLB) with both alternate skins (re-coloured from the same painting), and awaits the owner's sign-off. The other 15 fighters and their skins are next. Until their models land, a production build draws those fighters as overlays only (ring, bars, telegraphs); dev builds behind `?dev=1`, which every harness run uses, draw a stand-in proof mannequin (`src/render/actors.ts`).
+- **Units and scenery built.** All ten camp and objective monsters (`art/blender/units/creatures.py`, `creatures_b.py`), the structures, the four Wicks, pickups, the ward, the sparring post, every unit icon, the four skies, 18 map landmarks and the menu's painted set.
+- **Audio.** The 91 non-music cues, the music beds (menu, draft, three match beds with combat layers, post-game) and the three end stings are rendered and committed (`audio/build.py`, `audio/build_music.py`).
 - **Bots** fill every open seat in every mode. Their own probes and review are still to do (`HANDOFF.md`).
 
 ---
@@ -293,4 +293,4 @@ Both team matches ran past their target lengths (RIFT 22–28 min, BRIDGE 14–2
 | High | 58.0 | 17.23 | 17.0 | 18.2 | 1.0 | 410 | 1.77 M |
 | Ultra | 39.9 | 25.04 | 34.7 | 35.4 | 1.0 | 415 | 1.78 M |
 
-Low, Medium and High hold the display's 60 Hz (vsync-capped, p95 about 17 ms), which meets CONTRACT §9.4's target of a stable 1080p60 on High. Ultra does not (40 fps). Limits of this result: one machine, an Apple M5 rather than a Windows gaming GPU; RIFT only; and the bench runs with `?dev=1`, so 15 fighters are the proof mannequin, not their final models, and most monsters are missing. Measure again once the Art 2.0 fighters (10–25k triangles and ≤ 1.2 MB each) and the monsters are in.
+Low, Medium and High hold the display's 60 Hz (vsync-capped, p95 about 17 ms), which meets CONTRACT §9.4's target of a stable 1080p60 on High. Ultra does not (40 fps). Limits of this result: one machine, an Apple M5 rather than a Windows gaming GPU; RIFT only; and the bench runs with `?dev=1`, so 15 fighters are the proof mannequin, not their final models, and the monsters were not all in yet. Measure again once the Art 2.0 fighters (10–25k triangles and ≤ 1.2 MB each) and the monsters are in.

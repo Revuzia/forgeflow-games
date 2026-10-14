@@ -73,7 +73,9 @@ export function mount(root: HTMLElement, o: MountOptions): MountedApp {
   const kb = (navigator as Navigator & { keyboard?: { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void } }).keyboard;
   const onFs = (): void => {
     if (!kb?.lock) return;
-    if (document.fullscreenElement) void kb.lock(['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyN', 'KeyT', 'Tab', 'Escape']).catch(() => {}); else kb.unlock?.();
+    // after the portal bar's own Escape-only lock (a later lock() replaces the earlier key set)
+    if (document.fullscreenElement) setTimeout(() => { if (document.fullscreenElement) void kb.lock?.(['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyN', 'KeyT', 'Tab', 'Escape']).catch(() => {}); }, 80);
+    else kb.unlock?.();
   };
   document.addEventListener('fullscreenchange', onFs);
   if (o.dev) (window as unknown as { __vale?: unknown }).__vale = { ...ctx, audioLog: (port as { log?: unknown }).log, cueLog: (o.audio as { log?: unknown } | null)?.log, screens: Object.keys(SCREENS) };

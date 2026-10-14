@@ -32,7 +32,7 @@ Every kit below can be built with the EffectT ops that already exist. No kit nee
 | 15 | `vashil` | Vashil | Aubade | Caster | Dialcross / Shaftlight | Light | ranged 5.3 m, magic | magic | 1 | Rings wide notes over the enemy front line; anyone struck by two of them stops cold. |
 | 16 | `sukri` | Sukri | Hourless | Tender | Lampglass / none | Light | ranged 5.0 m, magic | magic | 2 | Draws a caught ally back to the group; when he falls low, nobody beside him can be touched for a breath. |
 
-UI tags are `Name · Class` (for example "Ardit · Plinth"). The short collection title in each entry below is the `title` field. It is never shown as an epithet.
+UI tags are `Name · Class` (for example "Ardit · Plinth"). The short collection title in each entry below is the `title` field. It shows as a small italic line under the fighter's name on the Collection page, never as a "the [Adjective] [Noun]" epithet.
 
 ---
 

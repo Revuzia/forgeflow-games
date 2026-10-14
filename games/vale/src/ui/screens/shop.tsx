@@ -107,7 +107,14 @@ export function ShopScreen(p: { params: Record<string, string> }): JSX.Element {
   let cta: JSX.Element | null = null;
   if (sel && selSkin) {
     if (owned(sel)) cta = <Button variant="chalk" size="l" wedge cue={null} disabled={equipped(sel)} reason={cv.t('shop.equipped', 'Equipped')} onPress={() => equip(sel)}>{equipped(sel) ? cv.t('shop.equipped', 'Equipped') : cv.t('shop.equip', 'Equip')}</Button>;
-    else cta = <Button variant="chalk" size="l" wedge cue="click" onPress={() => void buy(sel)}>{cv.t('shop.buy_for', 'Buy for {price}', { price: priceText(sel) })}</Button>;
+    else {
+      // an unaffordable offer says what is missing (pressing it explains how to earn the rest)
+      const short = sel.price.amount - balance(sel.price.currency);
+      const cur = cv.currency(sel.price.currency);
+      cta = <Button variant={short > 0 ? 'secondary' : 'chalk'} size="l" wedge cue="click" onPress={() => void buy(sel)}>
+        {short > 0 ? cv.t('shop.need_more', '{missing} more {currency} needed', { missing: fmtInt(short), currency: cur?.name ?? '' }) : cv.t('shop.buy_for', 'Buy for {price}', { price: priceText(sel) })}
+      </Button>;
+    }
   }
   return (
     <Screen title={cv.t('shop.title', 'Shop')}

@@ -103,12 +103,12 @@ function ReadyCheck(): JSX.Element {
         </div>
         <h2 id="ready-title" class="t-display-m ready__title">{cv.t('ready.title', 'Match found')}</h2>
         <p id="ready-sub" class="t-body ready__sub">
-          {cv.t('ready.sub', '{mode} · {queue}. Ready in {t}.', { mode: mode?.name ?? '', queue: queue?.name ?? '', t: fmtWait(left) })}
+          {cv.t('ready.sub', '{mode} · {queue}. Ready in {t}.', { mode: mode?.name ?? '', queue: queue?.name ?? '', t: fmtWait(Math.ceil(left)) })}
         </p>
         {accepted ? (
           <div class="ready__wait" role="status">
             <span class="t-label">{cv.t('ready.accepted', 'You are ready.')}</span>
-            {q.total ? <span class="t-body-s muted">{cv.t('ready.waiting', 'Waiting for the others · {n} of {m} ready', { n: q.accepted ?? 1, m: q.total })}</span> : null}
+            {q.total ? <span class="t-body-s muted">{(q.accepted ?? 1) >= q.total ? cv.t('ready.all', 'Everyone is ready. Starting.') : cv.t('ready.waiting', 'Waiting for the others · {n} of {m} ready', { n: q.accepted ?? 1, m: q.total })}</span> : null}
             {q.total ? <span class="ready__pips" aria-hidden="true">{Array.from({ length: q.total }, (_, i) => <i class={i < (q.accepted ?? 1) ? 'is-on' : ''} />)}</span> : null}
           </div>
         ) : (

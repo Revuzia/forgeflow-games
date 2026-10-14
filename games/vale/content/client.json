@@ -27,23 +27,16 @@
       {
         "id": "ranked_season",
         "title": "Ranked season",
-        "body": "Ranked RIFT opens at account level 20. Your first 5 matches place you on the ladder.",
+        "body": "Opens at account level 20. Five placement matches set your rank.",
         "art": "assets/ui/home/ranked_season.webp",
         "screen": "play",
         "params": { "mode": "rift", "queue": "rift_ranked" }
       },
-      {
-        "id": "almanac_teaser",
-        "title": "The Almanac",
-        "body": "A season of rewards is being written. It is not open yet.",
-        "art": "assets/ui/home/almanac_teaser.webp",
-        "screen": "profile",
-        "params": { "tab": "overview" }
-      },
+      { "id": "shop_skins", "title": "Skins in the shop", "body": "Spend the Candles you earn on new looks for your fighters.", "art": "assets/ui/home/store_banner.webp", "screen": "shop", "params": {} },
       {
         "id": "practice_tool",
         "title": "Sparring practice",
-        "body": "Try any fighter alone on the full map. Add gold and levels, set up training targets, refresh cooldowns.",
+        "body": "Any fighter, the full map, alone. Add gold and levels, reset cooldowns.",
         "art": "assets/ui/home/practice_tool.webp",
         "screen": "practice",
         "params": {}
@@ -51,7 +44,7 @@
       {
         "id": "collection_highlight",
         "title": "Your collection",
-        "body": "Every fighter is free to play. Skins change how a fighter looks, never how they play.",
+        "body": "Every fighter is free. Skins change how they look, never how they play.",
         "art": "assets/ui/home/collection_highlight.webp",
         "screen": "collection",
         "params": { "tab": "skins" }
