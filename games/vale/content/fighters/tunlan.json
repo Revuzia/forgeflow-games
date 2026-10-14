@@ -74,7 +74,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_slow_glass"
+        "vfx": "tunlan_passive_startle"
       }
     },
     "a1": {
@@ -244,7 +244,7 @@
       "present": {
         "anim": "cast_a2",
         "sfx": "c_cast_shade",
-        "hitVfx": "lib_hit_magic",
+        "hitVfx": "tunlan_a2_grip",
         "hitSfx": "c_hit_magic"
       }
     },
@@ -302,7 +302,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_ring_pulse",
+            "vfx": "tunlan_a3_flare",
             "sfx": "c_burst_shade"
           }
         }
@@ -396,7 +396,8 @@
         "sfx": "c_ult_windup",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "vfx": "tunlan_ult_raise"
       }
     }
   },

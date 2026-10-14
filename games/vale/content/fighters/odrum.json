@@ -83,7 +83,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_hit_phys_heavy"
+        "vfx": "odrum_passive_crack"
       }
     },
     "a1": {
@@ -169,7 +169,7 @@
                 }
               ],
               "present": {
-                "vfx": "lib_root_bind",
+                "vfx": "odrum_a1_set",
                 "sfx": "c_root"
               }
             }
@@ -254,7 +254,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_ring_pulse",
+            "vfx": "odrum_a2_whirl",
             "sfx": "c_swing_heavy",
             "telegraph": "ally_only"
           }
@@ -315,7 +315,7 @@
           "speed": 14,
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "odrum_a3_hop"
           }
         },
         {
@@ -441,7 +441,7 @@
                 }
               ],
               "present": {
-                "vfx": "lib_root_bind",
+                "vfx": "odrum_ult_set",
                 "sfx": "c_root"
               }
             }

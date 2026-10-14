@@ -84,7 +84,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_crit"
+        "vfx": "rishal_passive_split"
       }
     },
     "a1": {
@@ -166,7 +166,7 @@
           "speed": 16,
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "rishal_a1_dash"
           }
         }
       ],
@@ -258,7 +258,7 @@
       "present": {
         "anim": "cast_a2",
         "sfx": "c_swing_light",
-        "hitVfx": "lib_hit_phys_light",
+        "hitVfx": "rishal_a2_cut",
         "hitSfx": "c_hit_phys_light",
         "telegraph": "ally_only"
       }
@@ -333,14 +333,14 @@
                 }
               ],
               "present": {
-                "vfx": "rishal_a1_track",
+                "vfx": "rishal_a3_feint",
                 "telegraph": "ally_only"
               }
             }
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "rishal_a3_spring"
           }
         }
       ],
@@ -447,7 +447,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "rishal_ult_rush"
           }
         }
       ],
@@ -463,7 +463,8 @@
         "sfx": "c_ult_release",
         "hitVfx": "lib_crit",
         "hitSfx": "c_crit",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "vfx": "rishal_ult_coil"
       }
     }
   },

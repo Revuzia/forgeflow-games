@@ -142,7 +142,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_mark_stack"
+        "vfx": "vashil_passive_hum"
       }
     },
     "a1": {
@@ -291,7 +291,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_bolt_lumen",
+            "vfx": "vashil_a2_chime",
             "sfx": "c_proj_whoosh"
           }
         }
@@ -376,7 +376,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_cone_sweep",
+            "vfx": "vashil_a3_ringout",
             "sfx": "c_cast_lumen"
           }
         }

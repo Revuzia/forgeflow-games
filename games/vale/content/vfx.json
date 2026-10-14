@@ -37815,11 +37815,11 @@
           ],
           [
             0.2,
-            0.7
+            0.6
           ],
           [
             0.8,
-            0.65
+            0.55
           ],
           [
             1,
@@ -37827,9 +37827,9 @@
           ]
         ],
         "emissive": 0,
-        "rim": "team",
-        "rimPow": 4.5,
-        "rimEmissive": 4.0,
+        "rim": "#F4EFE2",
+        "rimPow": 9,
+        "rimEmissive": 1.0,
         "noise": 0.95,
         "noiseScale": 2.2,
         "scroll": [

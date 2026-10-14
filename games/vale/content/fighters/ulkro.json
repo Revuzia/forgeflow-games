@@ -111,7 +111,7 @@
                     }
                   ],
                   "present": {
-                    "vfx": "lib_arrow",
+                    "vfx": "ulkro_passive_dart",
                     "sfx": "c_thrown"
                   }
                 }
@@ -132,7 +132,7 @@
         }
       },
       "present": {
-        "vfx": "lib_mark_stack"
+        "vfx": "ulkro_passive_runup"
       }
     },
     "a1": {
@@ -212,7 +212,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_arrow",
+            "vfx": "ulkro_a1_hurl",
             "sfx": "c_proj_whoosh"
           }
         }
@@ -265,7 +265,7 @@
           "speed": 16,
           "present": {
             "anim": "dash",
-            "vfx": "lib_leap"
+            "vfx": "ulkro_a2_bound"
           }
         },
         {
@@ -355,7 +355,7 @@
       "present": {
         "anim": "cast_a3",
         "sfx": "c_thrown",
-        "hitVfx": "lib_reveal_mark",
+        "hitVfx": "ulkro_a3_hamstring",
         "hitSfx": "c_slow"
       }
     },

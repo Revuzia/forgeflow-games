@@ -162,7 +162,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_heal_rise",
+            "vfx": "sukri_a1_mend",
             "sfx": "c_heal",
             "telegraph": "ally_only"
           }
@@ -193,7 +193,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_burst_lumen",
+            "vfx": "sukri_a1_mote",
             "sfx": "c_burst_lumen",
             "telegraph": "ally_only"
           }
@@ -210,7 +210,7 @@
       },
       "present": {
         "anim": "cast_a1",
-        "vfx": "lib_lob",
+        "vfx": "sukri_a1_toss",
         "sfx": "c_thrown",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
@@ -304,9 +304,10 @@
       },
       "present": {
         "anim": "cast_a2",
-        "vfx": "lib_shield_up",
+        "vfx": "sukri_a2_beckon",
         "sfx": "c_shield",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "hitVfx": "sukri_a2_draw"
       }
     },
     "a3": {
@@ -384,7 +385,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_lob",
+            "vfx": "sukri_a3_wrap",
             "sfx": "c_proj_whoosh"
           }
         }
@@ -399,7 +400,7 @@
       "present": {
         "anim": "cast_a3",
         "sfx": "c_thrown",
-        "hitVfx": "lib_root_bind",
+        "hitVfx": "sukri_a3_bind",
         "hitSfx": "c_root",
         "telegraph": "everyone"
       }
@@ -506,7 +507,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_zone_glass",
+            "vfx": "sukri_ult_dust",
             "sfx": "c_zone_loop",
             "telegraph": "everyone"
           }
