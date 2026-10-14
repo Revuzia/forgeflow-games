@@ -198,7 +198,7 @@ async function fetchMapBytes(def: MapDef, onProgress: (f: number) => void): Prom
   return out.buffer;
 }
 
-export const VERSION = 'dyefield-1.5.1';
+export const VERSION = 'dyefield-1.5.2';
 
 declare global {
   interface Window {
@@ -876,7 +876,7 @@ async function boot(): Promise<void> {
         // CONTRACT_FFA F3: FFA → the human's crew is the LOADOUT colour pick
         const ffa = sel.mode === 'ffa';
         const cfg: MatchConfig = {
-          kit: sel.kit, skill: sel.skill, seed: randomSeed(), durationS: devSeconds(), humanName: sel.name || undefined,
+          kit: sel.kit, skill: sel.skill, seed: sel.seed ?? randomSeed(), durationS: devSeconds(), humanName: sel.name || undefined,
           crew: ffa ? ffaCrew(sel.ffaColor) : sel.crew, devBrush: false, ...(ffa ? { mode: 'ffa' as const } : {}),
           ...(sel.rule === 'washout' ? { rule: 'washout' as const } : {}),   // CONTRACT_WASHOUT W4: the RULE pick
         };
@@ -985,11 +985,11 @@ async function boot(): Promise<void> {
       }
     };
     /** PLAY VS BOTS from the online screens: the normal offline match with that mode / rule */
-    const playOffline = (mode: MatchMode, rule: MatchRule): void => {
+    const playOffline = (mode: MatchMode, rule: MatchRule, seed?: number): void => {
       const pr = profile.get();
       const maps = playableMaps();
       const pick = maps[Math.floor(Math.random() * maps.length)] ?? mapById(LOBBY_MAP);
-      void startMatch({ map: pick.id, random: true, preset: pr.preset, skill: pr.skill, kit: pr.kit, crew: pr.crew, name: pr.name, mode, ffaColor: pr.ffaColor, rule });
+      void startMatch({ map: pick.id, random: true, preset: pr.preset, skill: pr.skill, kit: pr.kit, crew: pr.crew, name: pr.name, mode, ffaColor: pr.ffaColor, rule, ...(seed !== undefined ? { seed } : {}) });
     };
     const openOnline = async (join?: string): Promise<void> => {
       if (!onlineCtl) {

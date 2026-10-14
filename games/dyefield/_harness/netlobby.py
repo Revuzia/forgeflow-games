@@ -596,25 +596,45 @@ def step_lobby(g: Gate):
         g.mock("m.leave();")
         g.js("() => window.__DFO__.open()")
         g.wait_screen("home")
-    # solo → KEEP WAITING → PLAY VS BOTS
-    g.mock("m.o.solo = true;")
+    # QUICK MATCH with nobody else queued (owner 2026-10-13): the court fills as runners join (20-60 s; pinned to 4 s here),
+    # the matchmaker's `solo` never shows NO ONE ELSE YET / PLAY VS BOTS, then MATCH FOUND lists all 8 and the match starts
+    g.mock("m.o.solo = true; m.o.soloS = 0.5;")
+    g.js("() => { window.__DF_QM_FILL_S = 4; }")
     g.tap("#dfo-door-qm", 0.05)
-    s = g.wait(lambda: ((g.scr().get("search") or {}).get("state") == "solo") and g.scr(), 8)
-    g.ok(bool(s), "%s: no NO ONE ELSE YET card (%s)" % (g.key, g.scr().get("search")))
-    if s:
-        g.record("search_solo")
-        g.tap("#dfo-keep", 0.3)
-        q = g.wait(lambda: ((g.scr().get("search") or {}).get("state") in ("queue", "solo")) and g.scr(), 4)
-        g.ok(bool(q) and "keepWaiting" in (g.st().get("calls") or []), "%s: KEEP WAITING did not re-queue (%s)" % (g.key, g.st().get("calls")))
-        s = g.wait(lambda: ((g.scr().get("search") or {}).get("state") == "solo") and g.scr(), 6)
-        if s:
-            g.tap("#dfo-bots", 0.4)
-            hk = g.hooks()
-            # the solo prompt goes through api.playBotsInstead() ONLY (the api's driver starts the offline match; the dev mount's
-            # onBots stands in for it): a hooks.playOffline on top would start the offline match twice
-            g.ok(any(x.startswith("onBots:teams,turf") for x in hk) and not any(x.startswith("playOffline") for x in hk)
-                 and not g.scr().get("visible") and g.js("() => document.getElementById('df-menus').hidden") is False,
-                 "%s: PLAY VS BOTS did not hand over to ONE offline match (%s; screens %s)" % (g.key, hk[-4:], g.scr().get("visible")))
+    seen_solo, seen_bots, counts = False, False, set()
+    t_end = time.time() + 20
+    f = None
+    while time.time() < t_end:
+        sc = g.scr().get("search") or {}
+        if sc.get("state") == "solo": seen_solo = True
+        if any("BOTS" in (x or "").upper() for x in (sc.get("actions") or [])) or "bots" in (sc.get("line") or "").lower(): seen_bots = True
+        if sc.get("state") == "queue": counts.add((sc.get("stats") or "").split("waiting")[0].strip())
+        if sc.get("state") == "found": f = sc; break
+        time.sleep(0.15)
+    g.ok(not seen_solo and not seen_bots, "%s: the quick search showed NO ONE ELSE YET / a bots offer (solo=%s bots=%s)" % (g.key, seen_solo, seen_bots))
+    g.ok("keepWaiting" in (g.st().get("calls") or []), "%s: the matchmaker's solo was not answered by queueing on (%s)" % (g.key, g.st().get("calls")))
+    g.ok(len(counts) >= 3, "%s: the waiting count did not climb as players joined (%s)" % (g.key, sorted(counts)))
+    g.ok(bool(f) and len(f.get("people") or []) == 8 and "starting" in (f.get("stats") or ""),
+         "%s: the filled court did not read MATCH FOUND with 8 players + a countdown (%s)" % (g.key, f))
+    if f:
+        g.record("search_filled")
+        seed = (f.get("fill") or {}).get("seed")
+        hk0 = len(g.hooks())
+        ok = g.wait(lambda: any(x.startswith("playOffline:teams,turf,%s" % seed) for x in g.hooks()) and not g.scr().get("visible"), 14)
+        hk = g.hooks()
+        g.ok(bool(ok) and len([x for x in hk if x.startswith("playOffline")]) == 1 and not any(x.startswith("onBots") for x in hk),
+             "%s: the filled court did not start exactly ONE match with its seed (%s)" % (g.key, hk[-5:]))
+    # CANCEL during the fill: nothing starts later
+    g.js("() => window.__DFO__.open()")
+    g.wait_screen("home")
+    g.js("() => { window.__DF_QM_FILL_S = 2; }")
+    n0 = len([x for x in g.hooks() if x.startswith("playOffline")])
+    g.tap("#dfo-door-qm", 0.05)
+    g.wait_screen("search")
+    g.tap("#dfo-cancel", 0.2)
+    time.sleep(3.5)
+    g.ok(len([x for x in g.hooks() if x.startswith("playOffline")]) == n0, "%s: CANCEL during the fill still started a match (%s)" % (g.key, g.hooks()[-4:]))
+    g.js("() => { delete window.__DF_QM_FILL_S; }")
     g.mock("m.o.solo = false; m.leave();")
     # a migration while a quick room loads: HOST LEFT on the waiting card
     g.js("() => window.__DFO__.open()")

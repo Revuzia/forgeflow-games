@@ -3,14 +3,15 @@
 // Runner ids equal roster indexes. TEAMS: humans split so the human counts differ by ≤ 1 (each human's crew preference
 // honoured while balance allows, lowest slots first), SUNCREW ids 0..3, GULF CREW ids 4..7, bots fill each side to 4.
 // FFA: one runner per crew; each human keeps its FFA colour first-come by slot (a taken colour → the lowest free one);
-// humans take ids 0.., bots the remaining crews in ascending crew order. Bot names come from the same original pool and
-// seeded draw as defaultRoster (minus every human name), bot kits from the mixed lineup. EVERY entry is built bot: true
+// humans take ids 0.., bots the remaining crews in ascending crew order. Bot names are random handles from the match seed
+// (core/match/handles.ts; never a human's name), bot kits from the mixed lineup. EVERY entry is built bot: true
 // (the BotDirector then has a brain for every runner, ready for a takeover); the host marks the human-driven ones with
 // BotDirector.setHuman.
 
-import { hash32, mulberry32 } from '../core/rng.ts';
+import { hash32 } from '../core/rng.ts';
 import { FFA_CREWS_MAX, TEAM_GULF, TEAM_SUN, type TeamId } from '../core/types.ts';
-import { NAME_POOL, TEAM_SIZE, type BotSkill, type RosterEntry } from '../core/match/roster.ts';
+import { TEAM_SIZE, type BotSkill, type RosterEntry } from '../core/match/roster.ts';
+import { randomHandles } from '../core/match/handles.ts';
 import { WEAPONS } from '../core/data.ts';
 import { sanitizeName, type WireMember, type WireSeat } from './proto.ts';
 
@@ -28,15 +29,9 @@ export interface OnlineRoster { roster: RosterEntry[]; seats: WireSeat[] }
 
 const validKit = (k: string): string => (WEAPONS.kits.some((x) => x.id === k) ? k : 'mist-rasp');
 
+/** random player handles for the seats bots fill (owner 2026-10-13: never a fixed pool), none equal to a human's name */
 function botNames(humans: readonly string[], seed: number): string[] {
-  const lower = new Set(humans.map((h) => h.toLowerCase()));
-  const pool = NAME_POOL.filter((n) => !lower.has(n.toLowerCase()));
-  const rnd = mulberry32(hash32(seed | 0, 0x6e616d65));
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
-  }
-  return pool;
+  return randomHandles(seed, 12, humans);
 }
 
 /** the roster + seats for `members` (connected humans, any order) */

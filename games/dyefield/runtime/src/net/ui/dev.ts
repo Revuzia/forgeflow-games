@@ -39,7 +39,7 @@ export function mountDev(o: { mock?: MockOptions } = {}): DevMount {
     api: mock, profile, settings,
     screens: {
       close: () => { rec('close'); if (menusRoot) menusRoot.hidden = false; },
-      playOffline: (mode, rule) => { rec('playOffline', mode, rule); if (menusRoot) menusRoot.hidden = false; },
+      playOffline: (mode, rule, seed) => { rec('playOffline', mode, rule, seed); if (menusRoot) menusRoot.hidden = false; },
       matchPhase: (phase: string | null, room: RoomView | null) => rec('matchPhase', phase, room ? room.code : null),
       sound: (s) => rec('sound', s),
       reload: () => rec('reload'),

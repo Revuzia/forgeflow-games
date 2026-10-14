@@ -21,6 +21,7 @@ import './ui.css';
 import { WEAPONS, playableMaps } from '../../core/data.ts';
 import { KIT_ICONS, MAP_THUMBS } from '../../ui/icons.ts';
 import { crewLook } from '../../ui/slates.ts';
+import { namePool } from '../../core/match/roster.ts';
 import { touchModeOn, watchTouchMode } from '../../ui/boot.ts';
 import { cleanName } from '../../ui/settings.ts';
 import { MODE_LABELS, RULE_LABELS } from '../../ui/menus.ts';
@@ -106,7 +107,7 @@ export interface OnlineScreensHooks {
   /** BACK from the PLAY ONLINE root: show the title again (Menus.returnFromOnline) */
   close(): void;
   /** PLAY VS BOTS (solo prompt, quota / unsupported cards): the normal offline match with this mode and rule */
-  playOffline(mode: OnlineMode, rule: OnlineRule): void;
+  playOffline(mode: OnlineMode, rule: OnlineRule, seed?: number): void;
   /** the screens hid for a match (loading / live / post) or came back (null): SYNC switches the backdrop */
   matchPhase?(phase: 'loading' | 'live' | 'post' | null, room: RoomView | null): void;
   sound?(s: UiSound): void;
@@ -229,6 +230,11 @@ export class OnlineScreens {
   private searchState: SearchState = 'connecting';
   private queue = { waiting: 0, waitedS: 0, at: 0 };
   private foundAt = 0;
+  /** Quick Match slow fill (owner, 2026-10-13): the waiting count climbs as runners join over a random 20-60 s; when the
+   *  court is full it reads MATCH FOUND with their names, counts down, and the match starts with those runners (bot-driven,
+   *  under the names shown; `seed` makes the match roster draw the same names). A real match found first takes over. */
+  private fill = { on: false, t0: 0, joins: [] as number[], seed: 0, fullAt: 0, devices: [] as Array<'kbm' | 'touch'> };
+  private fillTimer = 0;
   private ticker = 0;
   // room
   private readonly roomCode: HTMLElement;
@@ -700,6 +706,57 @@ export class OnlineScreens {
     this.queue = { waiting: 0, waitedS: 0, at: performance.now() };
     this.showSearch('connecting');
     this.api.quickMatch(mode, rule, this.profileNow());
+    this.startFill();
+  }
+
+  // ───────────────────────────── QUICK MATCH FILL ─────────────────────────────
+  private startFill(): void {
+    this.stopFill();
+    // window.__DF_QM_FILL_S (harness only) pins the fill time so a gate does not wait 20-60 s
+    const forced = Number((window as { __DF_QM_FILL_S?: number }).__DF_QM_FILL_S) || 0;
+    const total = forced > 0 ? forced * 1000 : 20000 + Math.random() * 40000, n = MAX_HUMANS - 1, first = Math.min(2500, total * 0.1);
+    const joins = Array.from({ length: n - 1 }, () => first + Math.random() * (total - first)).sort((a, b) => a - b);
+    joins.push(total);
+    const devices = joins.map((): 'kbm' | 'touch' => (Math.random() < 0.3 ? 'touch' : 'kbm'));
+    this.fill = { on: true, t0: performance.now(), joins, seed: (Math.random() * 0x7fffffff) >>> 0, fullAt: 0, devices };
+    this.fillTimer = window.setInterval(() => this.tickFill(), 250);
+  }
+  private stopFill(): void { this.fill.on = false; clearInterval(this.fillTimer); this.fillTimer = 0; }
+  private fillJoined(): number { const e = performance.now() - this.fill.t0; return this.fill.joins.filter((t) => t <= e).length; }
+  private tickFill(): void {
+    const f = this.fill;
+    if (!f.on) return;
+    if (this.root.hidden || this.screen !== 'search' || this.lastDoor.door !== 'qm') { this.stopFill(); return; }
+    const now = performance.now();
+    if (!f.fullAt) {
+      // still reaching the matchmaker (or it is unreachable): the search reads as searching all the same
+      if (this.searchState === 'connecting' && now - f.t0 > 2200) { this.queue = { waiting: 1, waitedS: (now - f.t0) / 1000, at: now }; this.showSearch('queue'); }
+      if (this.fillJoined() >= f.joins.length) { f.fullAt = now; this.showSearch('found', this.fillRoom()); }
+    } else if (now - f.fullAt >= QM_AUTOSTART_S * 1000) this.launchFill();
+  }
+  /** the filled court as a quick room: you + the runners who joined, on the crews / colours the match roster gives them */
+  private fillRoom(): RoomView {
+    const { mode, rule } = this.lastDoor, me = this.profileNow(), raw = this.profile.get();
+    const names = namePool((raw.name || '').trim() || 'YOU', this.fill.seed);
+    const mine = mode === 'ffa' ? (me.ffaColor || 1) : (me.crew === 2 ? 2 : 1);
+    const others: number[] = [];
+    for (let c = 1; c <= MAX_HUMANS; c++) if (c !== mine) others.push(c);
+    const member = (slot: number, name: string, crew: number, color: number, device: 'kbm' | 'touch'): RoomMember => ({
+      slot, name, kit: '', crew, color, device, conn: true, owner: slot === 0, host: slot === 0, rttMs: null });
+    const members = [member(0, me.name, mode === 'ffa' ? 1 : mine, mode === 'ffa' ? mine : 1, this.touch ? 'touch' : 'kbm')];
+    for (let i = 0; i < this.fill.joins.length; i++) {
+      const crew = mode === 'ffa' ? 1 : (i < 3 ? mine : 3 - mine);
+      members.push(member(i + 1, names[i % names.length], crew, mode === 'ffa' ? others[i] : 1, this.fill.devices[i]));
+    }
+    return { code: '', quick: true, mode, rule, map: 'random', preset: 'noon', skill: 'swell', phase: 'room', matchNo: 0, members, mySlot: 0, ownerSlot: 0, hostSlot: 0 };
+  }
+  private launchFill(): void {
+    const { mode, rule } = this.lastDoor, seed = this.fill.seed;
+    this.stopFill();
+    this.sound('start');
+    this.hideAll();                       // first, so the idle status the api emits meanwhile finds the screens closed
+    this.api.leave();
+    this.hooks.playOffline(mode, rule, seed);
   }
 
   private doCreate(): void {
@@ -824,9 +881,11 @@ export class OnlineScreens {
     const st = this.searchState;
     this.searchStats.replaceChildren();
     if (st === 'queue') {
-      const el1 = Math.max(0, this.queue.waitedS + (performance.now() - this.queue.at) / 1000);
+      const fill = this.fill.on && this.lastDoor.door === 'qm';
+      const el1 = fill ? (performance.now() - this.fill.t0) / 1000 : Math.max(0, this.queue.waitedS + (performance.now() - this.queue.at) / 1000);
+      const waiting = Math.max(1, this.queue.waiting, fill ? 1 + this.fillJoined() : 0);
       const w = el('span', 'stat');
-      w.append(el('b', '', String(Math.max(1, this.queue.waiting))), el('span', '', this.queue.waiting === 1 ? 'waiting (you)' : 'waiting'));
+      w.append(el('b', '', fill ? `${waiting} / ${MAX_HUMANS}` : String(waiting)), el('span', '', waiting === 1 ? 'waiting (you)' : 'waiting'));
       const t = el('span', 'stat');
       t.append(el('b', 'clock', fmtClock(el1)), el('span', '', 'searching'));
       this.searchStats.append(w, t);
@@ -846,6 +905,7 @@ export class OnlineScreens {
   private stopTicker(): void { if (this.ticker) clearInterval(this.ticker); this.ticker = 0; }
 
   private cancelSearch(): void {
+    this.stopFill();
     this.sound('back');
     this.homeFocus = this.lastDoor.door;
     this.api.leave();
@@ -1072,6 +1132,12 @@ export class OnlineScreens {
     // matchPhase(null) lets the integrator tear the match UI down, once. (A quick REMATCH that found no partner re-queues:
     // the api goes connecting → queue straight from `post`.)
     const fromMatch = this.matchHidden && s.kind !== 'room';
+    if (this.fill.on && !fromMatch && s.kind !== 'room') {
+      if (s.kind === 'solo') { this.api.keepWaiting(); return; }        // nobody real yet: keep queueing behind the fill
+      if (s.kind === 'queue' && !this.fill.fullAt) { this.queue = { waiting: s.waiting, waitedS: s.waitedS, at: performance.now() }; if (this.searchState !== 'queue') this.showSearch('queue'); }
+      return;                                                            // connecting / idle / error / closed: the fill carries on
+    }
+    if (s.kind === 'room' && this.fill.on) this.stopFill();               // a real match was found first: it takes over
     if (fromMatch) { this.matchHidden = false; this.root.hidden = false; this.hooks.matchPhase?.(null, null); }
     switch (s.kind) {
       case 'idle':
@@ -1166,7 +1232,9 @@ export class OnlineScreens {
     const a = document.activeElement as HTMLElement | null;
     return {
       visible: this.visible, screen: this.screen, status: this.st.kind, matchHidden: this.matchHidden,
-      search: this.screen === 'search' ? { state: this.searchState, title: this.searchTitle.textContent, stats: this.searchStats.textContent, line: this.searchLine.textContent } : null,
+      search: this.screen === 'search' ? { state: this.searchState, title: this.searchTitle.textContent, stats: this.searchStats.textContent, line: this.searchLine.textContent,
+        people: [...this.searchPeople.querySelectorAll('.dfo-person b')].map((b) => b.textContent ?? ''), actions: [...this.searchActions.querySelectorAll('button')].map((b) => b.textContent ?? ''),
+        fill: { on: this.fill.on, joined: this.fill.on ? this.fillJoined() : 0, full: this.fill.fullAt > 0, seed: this.fill.seed } } : null,
       notice: this.screen === 'notice' ? { kind: this.noticeKind, title: this.noticeTitle.textContent, text: this.noticeText.textContent } : null,
       room: this.screen === 'room' && this.lastRoom ? { code: this.lastRoom.code, owner: this.lastRoom.mySlot === this.lastRoom.ownerSlot,
         seats: this.seats.map((s) => (s.li.classList.contains('bot') ? 'BOT' : s.name.textContent)), start: { shown: !this.startBtn.hidden, enabled: !this.startBtn.disabled },

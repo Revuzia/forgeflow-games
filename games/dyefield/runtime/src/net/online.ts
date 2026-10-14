@@ -58,7 +58,7 @@ export interface OnlineEnv {
   loadMatch(cfg: OnlineMatchConfig, map: string, preset: string): Promise<OnlineSessionParts>;
   /** back to the lobby backdrop; `online` → leave the menus hidden (the online screens stay up) */
   toLobby(online: boolean): Promise<void>;
-  playOffline(mode: OnlineMode, rule: OnlineRule): void;
+  playOffline(mode: OnlineMode, rule: OnlineRule, seed?: number): void;
   /** the lobby Game's mean sim ms per tick (0 = unknown) */
   lobbySimMs(): number;
   stats: StatsSeam | null;
@@ -152,7 +152,7 @@ export function createOnline(env: OnlineEnv): OnlineController {
       void spec;
     },
     toLobby: () => { ui.hud.detach(); ui.hud.hidePost(); parts = null; void env.toLobby(true); },
-    playOffline: (mode, rule) => env.playOffline(mode, rule),
+    playOffline: (mode, rule, seed) => env.playOffline(mode, rule, seed),
     simMs: () => env.lobbySimMs() || 4,
     device: () => env.device(),
     migrated: (w, spec, role) => {
@@ -175,7 +175,7 @@ export function createOnline(env: OnlineEnv): OnlineController {
     api, profile: env.profile,
     screens: {
       close: () => env.menus.returnFromOnline(),
-      playOffline: (mode, rule) => { api.leave(false); env.playOffline(mode, rule); },
+      playOffline: (mode, rule, seed) => { api.leave(false); env.playOffline(mode, rule, seed); },
       matchPhase: (phase) => {
         // back on the room screen (a code room's PLAY AGAIN) or an error mid-match: the lobby backdrop behind the screens
         if (phase === null && parts) { parts = null; ui.hud.detach(); ui.hud.hidePost(); void env.toLobby(true); }

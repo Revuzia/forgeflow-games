@@ -88,7 +88,7 @@ export interface OnlineDriver {
   /** back to the lobby menus (LEAVE / a fatal error mid-match) */
   toLobby(): void;
   /** PLAY VS BOTS: the normal offline match with the same mode / rule */
-  playOffline(mode: OnlineMode, rule: OnlineRule): void;
+  playOffline(mode: OnlineMode, rule: OnlineRule, seed?: number): void;
   /** the lobby Game's measured mean sim ms per tick (host capacity) */
   simMs(): number;
   device(): Device;

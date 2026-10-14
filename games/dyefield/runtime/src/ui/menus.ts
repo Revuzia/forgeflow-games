@@ -198,6 +198,8 @@ export interface StartSelection {
   ffaColor: number;
   /** CONTRACT_WASHOUT W4: the match rule picked on PLAY */
   rule: ProfileRule;
+  /** a fixed match seed (Quick Match's filled court: the runners' names were shown before the start); absent = random */
+  seed?: number;
 }
 
 export interface MenuHooks {
