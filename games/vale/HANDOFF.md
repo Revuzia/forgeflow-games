@@ -16,7 +16,7 @@ Branch: `claude/youthful-ramanujan-gdud5w`. Spine: `_spec/CONTRACT.md`. Look and
 | Session (queue, ready check, draft/Lot/pick, match host, grants, Glicko-2, store, equip, profile) | Done | `probe_session_*` |
 | Bots (utility AI + draft brain) | Built; its own probes and review still to do | `src/sim/bots/`, `probe_session_botslane` |
 | Renderer (post stack, sky, fog of war, actors, overlay, menu scene) | Core done; typecheck clean at last full run | `_harness/web/render_bench.html` |
-| VFX engine v2 + bespoke effects | Done: v2 runtime (post pass, soft depth), 50 lib_* + bespoke effects for all 16 fighters (~196 defs); passives fire on the sim `proc` event | `node _harness/vfx_gallery.mjs <prefix>` |
+| VFX engine v2 + bespoke effects | Done: v2 runtime (post pass, soft depth), 50 lib_* + bespoke effects for all 16 fighters (162 defs in content/vfx.json); passives fire on the sim `proc` event | `node _harness/vfx_gallery.mjs <prefix>` |
 | Client UI (15 screens, components) | Done to first pass | `npm run dev` → http://localhost:5190 |
 | HUD + input + end-to-end flow | Done: DONE journey passes in real Chrome (RIFT, BRIDGE, FRAY, shop buy + equip) | `node _harness/e2e.mjs all` |
 | Audio (numpy synthesis + WebAudio engine) | Runtime done (`src/audio/index.ts`, event roles bound in `audio.events`); cue + music renders in progress (agents) | `audio/build.py` |
