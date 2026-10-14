@@ -214,6 +214,108 @@ function clutterTex() {
   _texCache.clutter = t; return t;
 }
 
+// ── P2.5 textured ground (Wave 6, lane 6A) ────────────────────────────────────────────────────────────────────────
+// Poly Haven CC0 photographs, 1024 px, in assets/tex/ (CREDITS.md): ground_grass_rock, ground_beach, ground_sand under the terrain, road_asphalt
+// under the road ribbons. They are DETAIL, not colour: the biome tint every consumer already agrees on (the vertex colour, the minimap, the
+// grass tufts, the footstep surface) stays the hue of the ground, and the photograph only modulates it - the sampled texel is divided by the
+// texture's own average colour, so a ground that was tinted C still averages C and the minimap / clutter / tufts still match what is drawn.
+// ZERO extra draw calls (one terrain material, as before), no extra programs on the drop frame (the patched program is the terrain program from
+// the first frame; customProgramCacheKey makes every match reuse it), and the three terrain photographs are cached for the page session in
+// _texCache (disposeMapResources leaves those). Three fetches per fragment at most, each only where its weight is non-zero; a 'low' tier,
+// a missing renderer (the Node gates) or a failed download falls back to the procedural grain alone.
+const PHOTO_FILES = {
+  photoGrass: { url: "assets/tex/ground_grass_rock.jpg", avg: [0.1712, 0.1233, 0.0273] },   // avg = the LINEAR mean of the file (tools: numpy over the decoded pixels)
+  photoBeach: { url: "assets/tex/ground_beach.jpg", avg: [0.2826, 0.2384, 0.1956] },
+  photoSand: { url: "assets/tex/ground_sand.jpg", avg: [0.3523, 0.263, 0.2243] },
+  photoAsphalt: { url: "assets/tex/road_asphalt.jpg", avg: [0.1397, 0.1261, 0.1422] },
+};
+let _photoLoad = null;
+async function loadPhotoTextures(W) {
+  const r = W.kernel && W.kernel.renderer;
+  if (!r || typeof THREE.TextureLoader !== "function" || (W.settings && W.settings.graphics === "low")) return null;
+  const have = (k) => !!_texCache[k];
+  if (!Object.keys(PHOTO_FILES).every(have)) {
+    if (!_photoLoad) {
+      _photoLoad = (async () => {
+        const loader = new THREE.TextureLoader();
+        const maxA = r.capabilities && r.capabilities.getMaxAnisotropy ? r.capabilities.getMaxAnisotropy() : 4;
+        await Promise.all(Object.keys(PHOTO_FILES).map(async (k) => {
+          if (_texCache[k]) return;
+          const ac = typeof AbortController === "function" ? new AbortController() : null;
+          let to = 0;
+          const url = (W.assetBase || "") + PHOTO_FILES[k].url;
+          try {
+            const t = await Promise.race([loader.loadAsync(url), new Promise((_, rej) => { to = setTimeout(() => rej(new Error("timeout")), 25000); })]);
+            t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            t.anisotropy = Math.min(maxA, Math.max(2, W._texAniso || 4));
+            _texCache[k] = t;
+          } catch (err) { console.warn("[maps] ground photo " + k + " unavailable, procedural ground only:", err && err.message || err); }
+          finally { if (to) clearTimeout(to); }
+        }));
+      })();
+    }
+    await _photoLoad; _photoLoad = null;
+  }
+  if (!_texCache.photoGrass || !_texCache.photoBeach || !_texCache.photoSand) return null;
+  return { grass: _texCache.photoGrass, beach: _texCache.photoBeach, sand: _texCache.photoSand, asphalt: _texCache.photoAsphalt || null };
+}
+const PH_LUM = "vec3(0.2126, 0.7152, 0.0722)";
+const glslV3 = (a) => "vec3(" + a.map((v) => v.toFixed(5)).join(", ") + ")";
+/** Patch a MeshStandardMaterial so `map_fragment` also multiplies the albedo by the photo detail (see the block above). */
+function patchTerrainPhoto(mat, ph) {
+  mat.userData.photo = true;
+  mat.customProgramCacheKey = () => "lc-terrain-photo-v1";
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.tGrass = { value: ph.grass }; sh.uniforms.tBeach = { value: ph.beach }; sh.uniforms.tSand = { value: ph.sand };
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec3 splat;\nvarying vec3 vSplat;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSplat = splat;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", `#include <common>
+varying vec3 vSplat;
+uniform sampler2D tGrass; uniform sampler2D tBeach; uniform sampler2D tSand;
+vec3 lcDetail(sampler2D t, vec2 p, vec3 avg, float chroma, float gain) {
+  vec3 r = clamp(texture2D(t, p).rgb / avg, 0.25, 3.0);
+  r = 1.0 + (r - 1.0) * gain;                            // contrast of the photograph (the beach is nearly flat: gain > 1)
+  return mix(vec3(dot(r, ${PH_LUM})), r, chroma);        // mostly its light/dark, a share of its hue drift (the biome tint stays the hue)
+}`)
+      .replace("#include <map_fragment>", `#include <map_fragment>
+{
+  vec2 wxz = vMapUv * 8.0;                                // world metres (the terrain's grain uv is world / 8)
+  float ws = vSplat.x + vSplat.y + vSplat.z;
+  if (ws > 0.003) {
+    vec3 d = vec3(0.0);
+    if (vSplat.x > 0.003) {                               // grass / rock: two samples at unrelated scales + a turn, so the tile never reads
+      vec3 a = lcDetail(tGrass, wxz / 15.0, ${glslV3(PHOTO_FILES.photoGrass.avg)}, 0.15, 1.1);
+      vec3 b = lcDetail(tGrass, mat2(0.8, 0.6, -0.6, 0.8) * wxz / 23.0 + 0.37, ${glslV3(PHOTO_FILES.photoGrass.avg)}, 0.15, 1.1);
+      d += vSplat.x * (0.5 * (a + b));
+    }
+    if (vSplat.y > 0.003) d += vSplat.y * lcDetail(tBeach, wxz / 18.0, ${glslV3(PHOTO_FILES.photoBeach.avg)}, 0.3, 2.4);
+    if (vSplat.z > 0.003) d += vSplat.z * lcDetail(tSand, wxz / 21.0, ${glslV3(PHOTO_FILES.photoSand.avg)}, 0.25, 0.8);
+    diffuseColor.rgb *= mix(vec3(1.0), d / ws, min(1.0, ws));
+  }
+}`);
+  };
+}
+/** the photo splat of a terrain vertex: weights of (grass/rock, beach, sand) - the same biome zones colorAt tints, so the detail and the colour agree */
+function splatAt(mapId, h, x, z, seed, out) {
+  let g = 1, b = 0, s = 0;
+  if (mapId === "isla_viva") {
+    b = h <= 1.4 ? 1 : h >= 2.6 ? 0 : 1 - smooth((h - 1.4) / 1.2);                  // the sand band of colorAt (h < 2.2) fades into the grass
+    g = 1 - b;
+  } else if (mapId === "ashgrid") {
+    const edge = fbm(x / 260, z / 260, seed + 61, 2, 2, 0.5) * 120;
+    const desert = Math.max(0, Math.min(1, (x - 40 + edge) / 320));                    // colorAt's savanna -> desert blend
+    s = desert; if (h < 0.5) s = 1; g = 1 - s;
+  } else if (mapId === "deepwood") {
+    const edge = fbm(x / 240, z / 240, seed + 91, 2, 2, 0.5) * 90;
+    const snow = Math.max(0, Math.min(1, (-z - 100 + edge) / 260));                    // the snow biome: the smooth beach photograph reads as packed snow
+    b = snow; g = 1 - snow;
+  }
+  out[0] = g; out[1] = b; out[2] = s;
+  return out;
+}
+
 /** EVERY static collider is built here, with every field it will ever carry present
  *  from birth and in one order, so all of them share ONE hidden class. They were
  *  four object-literal shapes (box, ramp, island box, prop box) that then grew
@@ -282,7 +384,7 @@ function addSkirt(geo, vAt, seg) {
     for (let k = 0; k < L; k++) for (let c = 0; c < comps; c++) out[(n0 + k) * comps + c] = src[loop[k] * comps + c];
     return out;
   };
-  const pos = grow("position", 3), nrm = grow("normal", 3), col = grow("color", 3), uv = grow("uv", 2);
+  const pos = grow("position", 3), nrm = grow("normal", 3), col = grow("color", 3), uv = grow("uv", 2), spl = geo.attributes.splat ? grow("splat", 3) : null;
   for (let k = 0; k < L; k++) pos[(n0 + k) * 3 + 1] -= SKIRT_DEPTH;
   const old = geo.index.array, idx = new (n1 > 65535 ? Uint32Array : Uint16Array)(old.length + L * 6);
   idx.set(old);
@@ -296,6 +398,7 @@ function addSkirt(geo, vAt, seg) {
   geo.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
   geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  if (spl) geo.setAttribute("splat", new THREE.BufferAttribute(spl, 3));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
 }
 
@@ -353,6 +456,273 @@ function mkHeightFn(mapId, seed) {
   }
   // fallback: gentle plains
   return (x, z) => 1 + fbm(x / 200, z / 200, seed, 2, 2, 0.5) * 2;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// C-PAD: TERRAIN GROUND TRUTH (Wave 6, lane 6A)
+// ═══════════════════════════════════════════════════════════════════════════
+// The ground used to be an analytic function (mkHeightFn) that gameplay read directly while the screen drew a LINEAR interpolation of it
+// sampled on per-chunk lattices (the physics floor and the drawn floor differed by up to 0.04 m, 0.28 m before the Wave-5 skirt fix), and the
+// terrain mesh was built BEFORE any building existed, so every house, hut and tower was dropped on whatever slope was there (86-94 % of
+// houses and 98-100 % of towers had a base edge more than 10 cm off the ground, towers up to 6 m).
+//
+// Now ONE function is the ground everywhere. TerrainField holds the analytic base plus the pads and road corridors the generators register,
+// and `bake()` evaluates all of it once on the 609 x 609 lattice that the near-ring terrain chunks draw (2.63 m pitch; the far chunks draw
+// every second node). `at(x, z)` is TRIANGLE-EXACT on that lattice with the diagonal three's PlaneGeometry uses, so physics, loot, bots,
+// props, roads and the drawn surface are the same numbers (what Unreal calls collision mip 0 and Unity's TerrainCollider "matches the
+// geometry of the Terrain").
+//
+//   registerPad(shape, height, falloffM)    shape = { x0, x1, z0, z1 } (a rectangle) or { poly: [[x, z], ...] } or [[x, z], ...]
+//        a FLAT area at `height` under the shape - a rectangle grown out to the lattice nodes of every cell it touches (so each of those cells is
+//        exactly level; a polygon is grown by one pitch) - then a smoothstep falloff to the natural ground over `falloffM` metres (3 on level
+//        ground; 12 is the working maximum: the falloff slope is 1.5 x cut/fill / falloffM, so pick it from the cut: buildMap's groundPad() uses
+//        2.5 + 2.2 x cut). Pads win over corridors, and a pad's own core is exact (the other pads' weights are raised to the 32nd power, so a
+//        neighbour's falloff at 70 % moves a core by 0.001 % of the height difference). Two cores that share a lattice node must share a level:
+//        groundPad() joins the later one to the earlier.
+//   registerCorridor(polyline, width, opts) a road: the cross-slope is removed across `width` (+ one lattice pitch) and the centreline follows
+//        a SMOOTHED profile of the natural ground (+-16 m moving average, at most 2.5 m from it), then a falloff that grows with the lateral
+//        cut (4-12 m, per vertex). One nearest segment per corridor decides at a point.
+//   live(x, z)        base + everything registered so far (generation time: lets a generator read the ground its neighbours already shaped)
+//   bake()            freeze into the Float32 lattice; from then on at(x, z) is the ground
+// Everything is deterministic: pads come from the seeded layout only and the bake is plain IEEE arithmetic (+, -, *, /, sqrt), the same on
+// every client.
+export const MAP_GEN_VERSION = 2;                   // see map.genVersion
+export const LAT_CELLS = 608;                       // 8 chunks x 76 near-LOD cells (see CHUNKS / NEAR_SEG in buildMap)
+export const LAT_N = LAT_CELLS + 1;                 // 609 nodes per side
+export const LAT_PITCH = SIZE / LAT_CELLS;          // 2.6316 m
+const PAD_MARGIN = LAT_PITCH + 0.01;                // a footprint point's lattice cell has all four corners within one pitch of it
+const PAD_HASH = 32;                                // metres per spatial-hash cell
+const CORR_STEP = 4;                                // metres between profile samples along a corridor
+export class TerrainField {
+  constructor(baseFn, size) {
+    this.base = baseFn;
+    this.size = size || SIZE; this.half = this.size / 2;
+    this.pads = [];                                 // { x0, x1, z0, z1, poly, h, fo, bb } in registration order
+    this.segs = [];                                 // corridor segments { ax, az, bx, bz, ha, hb, hw, fo }
+    this.corridors = 0;
+    this._ph = new Map(); this._sh = new Map();    // spatial hashes: cell key -> [pad | seg]
+    this.lat = null;
+  }
+  /** lattice node position (metres) of index k along either axis */
+  static node(k) { return (k * SIZE) / LAT_CELLS - SIZE / 2; }
+  /** the rectangle grown outward to the nearest lattice nodes (the nodes of every cell the rectangle touches) */
+  static snapRect(x0, x1, z0, z1) {
+    const k = LAT_CELLS / SIZE, lo = (v) => Math.max(0, Math.floor((v + 800) * k - 1e-9)), hi = (v) => Math.min(LAT_CELLS, Math.ceil((v + 800) * k + 1e-9));
+    return { x0: TerrainField.node(lo(x0)), x1: TerrainField.node(hi(x1)), z0: TerrainField.node(lo(z0)), z1: TerrainField.node(hi(z1)) };
+  }
+  _bucket(map, bb, item) {
+    const c = PAD_HASH, kx0 = Math.floor(bb[0] / c), kx1 = Math.floor(bb[1] / c), kz0 = Math.floor(bb[2] / c), kz1 = Math.floor(bb[3] / c);
+    for (let kx = kx0; kx <= kx1; kx++) for (let kz = kz0; kz <= kz1; kz++) {
+      const k = (kx + 512) * 1024 + (kz + 512);
+      const l = map.get(k);
+      if (l) l.push(item); else map.set(k, [item]);
+    }
+  }
+  /** Flatten the ground under `shape` to `height`; returns the height as stored (rounded to float32, so a caller that builds on it
+   *  agrees with the lattice to the last bit). */
+  registerPad(shape, height, falloffM) {
+    const fo = Math.max(1, +falloffM || 3), h = Math.fround(height);
+    const pad = { x0: 0, x1: 0, z0: 0, z1: 0, poly: null, h, fo, bb: null, id: this.pads.length };
+    const pts = Array.isArray(shape) ? shape : shape.poly || null;
+    if (pts) {
+      pad.poly = pts.map((p) => [p[0], p[1]]);
+      let a = 1e9, b = -1e9, c = 1e9, d = -1e9;
+      for (const p of pad.poly) { if (p[0] < a) a = p[0]; if (p[0] > b) b = p[0]; if (p[1] < c) c = p[1]; if (p[1] > d) d = p[1]; }
+      pad.x0 = a; pad.x1 = b; pad.z0 = c; pad.z1 = d;
+    } else {
+      // a rectangle's flat core is the footprint SNAPPED OUT to the lattice nodes (every cell that touches the footprint is level, no more):
+      // on average 1.3 m beyond the footprint instead of a full pitch, so two buildings 5 m apart no longer fight over the same nodes
+      const s = TerrainField.snapRect(shape.x0, shape.x1, shape.z0, shape.z1);
+      pad.x0 = s.x0; pad.x1 = s.x1; pad.z0 = s.z0; pad.z1 = s.z1;
+    }
+    const r = PAD_MARGIN + fo;
+    pad.bb = [pad.x0 - r, pad.x1 + r, pad.z0 - r, pad.z1 + r];
+    this.pads.push(pad);
+    this._bucket(this._ph, pad.bb, pad);
+    return h;
+  }
+  /** the natural ground along a polyline, resampled every CORR_STEP m: [{ x, z, s, b, p }] with b the base height and p the smoothed
+   *  profile (a +-16 m moving average, never more than 2.5 m from b). Pure: reads only the analytic base. */
+  profile(poly) {
+    const out = [];
+    let run = 0;
+    for (let i = 0; i + 1 < poly.length; i++) {
+      const ax = poly[i][0], az = poly[i][1], bx = poly[i + 1][0], bz = poly[i + 1][1];
+      const L = Math.sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az)), n = Math.max(1, Math.ceil(L / CORR_STEP - 1e-9));
+      for (let k = i === 0 ? 0 : 1; k <= n; k++) { const t = k / n; out.push({ x: ax + (bx - ax) * t, z: az + (bz - az) * t, s: run + L * t, b: 0, p: 0 }); }
+      run += L;
+    }
+    for (const q of out) q.b = this.base(q.x, q.z);
+    const W = 4;
+    for (let i = 0; i < out.length; i++) {
+      let s = 0, n = 0;
+      for (let j = Math.max(0, i - W); j <= Math.min(out.length - 1, i + W); j++) { s += out[j].b; n++; }
+      const m = s / n, b = out[i].b;
+      out[i].p = Math.abs(m - b) > 2.5 ? b + Math.sign(m - b) * 2.5 : m;
+    }
+    return out;
+  }
+  /** Flatten a road across `width` along `polyline` ([[x, z], ...], world metres). `profile` (optional) = the points profile() returned,
+   *  to register only part of it (the dry sections). */
+  registerCorridor(polyline, width, opts) {
+    opts = opts || {};
+    const prof = opts.profile || this.profile(polyline);
+    if (prof.length < 2) return 0;
+    const hw = width / 2, off = hw + PAD_MARGIN;
+    // the falloff follows the cut the flat road bed asks for: the natural ground at the edge of the core (both sides, every sample) against the
+    // profile height. 4 m on level ground, +2.4 m per metre of departure beyond 0.5 m, 12 m at most; smoothed (max over +-2 samples) and
+    // interpolated along each segment, so the nearest-segment switch at a joint never jumps.
+    const n = prof.length, fv = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = prof[Math.max(0, i - 1)], b = prof[Math.min(n - 1, i + 1)];
+      let dx = b.x - a.x, dz = b.z - a.z; const L = Math.sqrt(dx * dx + dz * dz) || 1; dx /= L; dz /= L;
+      let dev = 0;
+      for (const sd of [-1, 1]) dev = Math.max(dev, Math.abs(this.base(prof[i].x - dz * off * sd, prof[i].z + dx * off * sd) - prof[i].p));
+      fv[i] = Math.min(12, Math.max(opts.falloff || 4, (opts.falloff || 4) + 2.4 * Math.max(0, dev - 0.5)));
+    }
+    const fs = fv.map((v, i) => { let m = v; for (let k = Math.max(0, i - 2); k <= Math.min(n - 1, i + 2); k++) if (fv[k] > m) m = fv[k]; return m; });
+    for (let i = 0; i + 1 < n; i++) {
+      const A = prof[i], B = prof[i + 1], r = off + Math.max(fs[i], fs[i + 1]);
+      const sg = { ax: A.x, az: A.z, bx: B.x, bz: B.z, ha: Math.fround(A.p), hb: Math.fround(B.p), hw, fa: fs[i], fb: fs[i + 1], cid: this.corridors };
+      this.segs.push(sg);
+      this._bucket(this._sh, [Math.min(A.x, B.x) - r, Math.max(A.x, B.x) + r, Math.min(A.z, B.z) - r, Math.max(A.z, B.z) + r], sg);
+    }
+    this.corridors++;
+    return prof.length - 1;
+  }
+  /** base + corridors + pads registered so far */
+  live(x, z) {
+    let h = this.base(x, z);
+    const key = (Math.floor(x / PAD_HASH) + 512) * 1024 + (Math.floor(z / PAD_HASH) + 512);
+    const sl = this._sh.get(key);
+    if (sl !== undefined) {
+      // ONE segment per corridor decides: the nearest (a corridor's segments are consecutive in the cell list). Averaging every segment inside
+      // the core instead blurred the profile by a different amount at every offset from the centreline and put a 0.25 m dip across the road.
+      let sw = 0, swh = 0, mw = 0, cid = -1, bd2 = 1e18, bt = 0, bs = null;
+      for (let i = 0; i <= sl.length; i++) {
+        const s = i < sl.length ? sl[i] : null;
+        if (s === null || s.cid !== cid) {
+          if (bs !== null) {
+            let d = Math.sqrt(bd2) - (bs.hw + PAD_MARGIN);
+            const fo = bs.fa + (bs.fb - bs.fa) * bt;
+            if (d < fo) {
+              if (d < 0) d = 0;
+              const u = 1 - d / fo, w = u * u * (3 - 2 * u), w2 = w * w, w4 = w2 * w2, w8 = w4 * w4, w16 = w8 * w8, w32 = w16 * w16;
+              sw += w32; swh += w32 * (bs.ha + (bs.hb - bs.ha) * bt);
+              if (w > mw) mw = w;
+            }
+          }
+          if (s === null) break;
+          cid = s.cid; bd2 = 1e18; bs = null;
+        }
+        const dx = s.bx - s.ax, dz = s.bz - s.az, L2 = dx * dx + dz * dz;
+        let t = L2 > 0 ? ((x - s.ax) * dx + (z - s.az) * dz) / L2 : 0;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const ex = x - (s.ax + dx * t), ez = z - (s.az + dz * t), d2 = ex * ex + ez * ez;
+        if (d2 < bd2) { bd2 = d2; bt = t; bs = s; }
+      }
+      if (mw > 0) h += (swh / sw - h) * mw;
+    }
+    const pl = this._ph.get(key);
+    if (pl !== undefined) {
+      let sw = 0, swh = 0, mw = 0, cw = 0, cwh = 0;          // cw / cwh: the pads whose flat CORE holds this point (they alone decide it)
+      for (let i = 0; i < pl.length; i++) {
+        const p = pl[i];
+        let d;
+        if (p.poly === null) {
+          const ex = x < p.x0 ? p.x0 - x : x > p.x1 ? x - p.x1 : 0;
+          const ez = z < p.z0 ? p.z0 - z : z > p.z1 ? z - p.z1 : 0;
+          d = Math.sqrt(ex * ex + ez * ez);
+        } else d = TerrainField._polyDist(p.poly, x, z) - PAD_MARGIN;
+        if (d >= p.fo) continue;
+        if (d <= 0) { cw += 1; cwh += p.h; continue; }
+        const u = 1 - d / p.fo, w = u * u * (3 - 2 * u), w2 = w * w, w4 = w2 * w2, w8 = w4 * w4, w16 = w8 * w8, w32 = w16 * w16;
+        sw += w32; swh += w32 * p.h;
+        if (w > mw) mw = w;
+      }
+      // inside a flat core ONLY the cores count: a neighbour's wide falloff (up to 12 m) would still pull a core by 0.01-0.03 m through the
+      // 32nd-power blend (two huts 12 m apart on a 3 m step), and a footprint must be level to 0.02 m
+      if (cw > 0) h += (cwh / cw - h);
+      else if (mw > 0) h += (swh / sw - h) * mw;
+    }
+    return h;
+  }
+  /** GENERATION-TIME ground: `live` sampled on the lattice nodes and interpolated exactly the way at() will, so a generator that reads the ground
+   *  here sees what the baked ground will hold at that spot (a pad's falloff is a steep smoothstep, and its straight lattice interpolation
+   *  differs from the smooth curve by up to 0.5 m, which hung every lamp post on a falloff slope in the air). Exact wherever no pad or
+   *  corridor is registered afterwards. */
+  liveLat(x, z) {
+    let fx = (x + 800) * (LAT_CELLS / SIZE), fz = (z + 800) * (LAT_CELLS / SIZE);
+    fx = fx < 0 ? 0 : fx > LAT_CELLS ? LAT_CELLS : fx; fz = fz < 0 ? 0 : fz > LAT_CELLS ? LAT_CELLS : fz;
+    let ix = fx | 0, iz = fz | 0;
+    if (ix >= LAT_CELLS) ix = LAT_CELLS - 1;
+    if (iz >= LAT_CELLS) iz = LAT_CELLS - 1;
+    const u = fx - ix, v = fz - iz;
+    const x0 = TerrainField.node(ix), x1 = TerrainField.node(ix + 1), z0 = TerrainField.node(iz), z1 = TerrainField.node(iz + 1);
+    if (u + v <= 1) {
+      const h00 = Math.fround(this.live(x0, z0));
+      return h00 + u * (Math.fround(this.live(x1, z0)) - h00) + v * (Math.fround(this.live(x0, z1)) - h00);
+    }
+    const h11 = Math.fround(this.live(x1, z1));
+    return h11 + (1 - u) * (Math.fround(this.live(x0, z1)) - h11) + (1 - v) * (Math.fround(this.live(x1, z0)) - h11);
+  }
+  /** The earliest registered pad whose flat core shares a lattice node with the core of a footprint [x0, x1] x [z0, z1] ({ pad, same } with
+   *  same = the cores are identical; `all` = every pad touched), or null. Two buildings that close can only both stand on exactly level ground if they share one level. */
+  overlapPad(x0, x1, z0, z1) {
+    const c = PAD_HASH, s = TerrainField.snapRect(x0, x1, z0, z1);
+    let best = null;
+    const all = [];
+    for (let kx = Math.floor((s.x0 - 1) / c); kx <= Math.floor((s.x1 + 1) / c); kx++) for (let kz = Math.floor((s.z0 - 1) / c); kz <= Math.floor((s.z1 + 1) / c); kz++) {
+      const l = this._ph.get((kx + 512) * 1024 + (kz + 512));
+      if (!l) continue;
+      for (let i = 0; i < l.length; i++) {
+        const p = l[i];
+        if (p.poly === null && s.x0 <= p.x1 && p.x0 <= s.x1 && s.z0 <= p.z1 && p.z0 <= s.z1) {       // the flat cores share a node
+          if (all.indexOf(p) < 0) all.push(p);
+          if (best === null || p.id < best.id) best = p;
+        }
+      }
+    }
+    return best === null ? null : { pad: best, all, same: best.x0 === s.x0 && best.x1 === s.x1 && best.z0 === s.z0 && best.z1 === s.z1 };
+  }
+  /** distance from (x, z) to the polygon: 0 inside, else to the nearest edge */
+  static _polyDist(poly, x, z) {
+    let inside = false, best = 1e18;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const ax = poly[j][0], az = poly[j][1], bx = poly[i][0], bz = poly[i][1];
+      if ((az > z) !== (bz > z) && x < ((bx - ax) * (z - az)) / (bz - az) + ax) inside = !inside;
+      const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+      let t = L2 > 0 ? ((x - ax) * dx + (z - az) * dz) / L2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const ex = x - (ax + dx * t), ez = z - (az + dz * t), d2 = ex * ex + ez * ez;
+      if (d2 < best) best = d2;
+    }
+    return inside ? 0 : Math.sqrt(best);
+  }
+  /** evaluate everything on the lattice (Float32). After this at() is the ground. */
+  bake() {
+    const L = new Float32Array(LAT_N * LAT_N);
+    for (let iz = 0; iz < LAT_N; iz++) {
+      const z = TerrainField.node(iz);
+      for (let ix = 0; ix < LAT_N; ix++) L[iz * LAT_N + ix] = this.live(TerrainField.node(ix), z);
+    }
+    this.lat = L;
+    return L;
+  }
+  /** Triangle-exact ground height: the lattice cell (ix, iz) is two triangles split along the diagonal (ix, iz+1)-(ix+1, iz) exactly as
+   *  three's PlaneGeometry indexes them ((a, b, d) where u + v <= 1, then (b, c, d)); outside the lattice the edge value is held. */
+  at(x, z) {
+    const L = this.lat;
+    let fx = (x + 800) * (LAT_CELLS / SIZE), fz = (z + 800) * (LAT_CELLS / SIZE);
+    fx = fx < 0 ? 0 : fx > LAT_CELLS ? LAT_CELLS : fx; fz = fz < 0 ? 0 : fz > LAT_CELLS ? LAT_CELLS : fz;
+    let ix = fx | 0, iz = fz | 0;
+    if (ix >= LAT_CELLS) ix = LAT_CELLS - 1;
+    if (iz >= LAT_CELLS) iz = LAT_CELLS - 1;
+    const u = fx - ix, v = fz - iz, i = iz * LAT_N + ix;
+    if (u + v <= 1) return L[i] + u * (L[i + 1] - L[i]) + v * (L[i + LAT_N] - L[i]);
+    const h11 = L[i + LAT_N + 1];
+    return h11 + (1 - u) * (L[i + LAT_N] - h11) + (1 - v) * (L[i + 1] - h11);
+  }
 }
 
 // ── palette / biome coloring per map ────────────────────────────────────────
@@ -461,9 +831,18 @@ export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
   const seed = W.seed;
   const rng = W.SIM.mulberry32(seed ^ 0xabcdef);
-  const heightAt0 = mkHeightFn(mapId, seed);
+  const baseH = mkHeightFn(mapId, seed);
+  const field = new TerrainField(baseH, SIZE);          // C-PAD: the analytic ground + the pads and corridors the generators register (see the section above mkHeightFn's palette)
+  // GENERATION-TIME ground = base + every pad / corridor registered so far. After the bake (below, once every POI, building and road has
+  // registered) this is rebound to the lattice, and from then on it IS the ground: physics, bots, loot, props, roads and the drawn surface.
+  let heightAt0 = (x, z) => field.liveLat(x, z);
+  // DECISIONS that gate a seeded random draw (does this lot / landmark / tree / portal / loot spot exist?) read baseH, the analytic ground, NOT
+  // heightAt0: a pad, a corridor or the lattice interpolation moves a height by a few cm, which near a waterline flips a yes/no, and one
+  // conditional draw more or less reshuffles every placement after it (the shared map RNG stream must see the same draws in the same order as
+  // the Wave-5 build: worldcheck rng-stream). Positions that are BUILT on read heightAt0.
   const waterY = K.water ? 0 : -999;
   const propTablePromise = loadPropTable(W);   // never rejects (null = legacy colliders); awaited just before the first placement
+  const photoPromise = loadPhotoTextures(W).catch(() => null);   // P2.5: the ground photographs (null = procedural grain only); awaited before the terrain is built
 
   const g = W.group("map");
   let mapWater = null;   // exposed on the returned map so the camera can test submersion
@@ -559,21 +938,17 @@ export async function buildMap(W, mapId) {
   }
 
   // ── terrain mesh (vertex-colored biome tint × tiled grain texture) ────────
+  // CHUNKED TERRAIN (2026-07-28). 8x8 chunks of 200 m: FAR LOD draws every SECOND lattice node (~5.3 m), a lazy 3x3 near ring around the
+  // camera rebuilds at EVERY node (~2.6 m) for the close-up silhouette. WAVE 6 (lane 6A): the chunks are built from the baked ground lattice
+  // (TerrainField.bake: the analytic ground + every pad and road corridor), AFTER the whole layout exists - they used to be built first,
+  // before any POI, from the bare analytic function. A near chunk's vertices ARE lattice nodes and TerrainField.at() is triangle-exact on
+  // them with PlaneGeometry's diagonal, so the drawn near surface and the physics ground are the same numbers (p99 <= 1e-4 m, was
+  // 0.012-0.037); the far LOD is the same surface sampled at every second node. Near-LOD perimeters keep their TRUE height and a 0.8 m
+  // skirt (addSkirt) closes the crack against a far neighbour. Normals are central differences ON THE LATTICE (apron of one vertex step
+  // beyond the chunk, clamped at the map edge), so lighting is identical across chunks and LODs.
   const aniso = W._texAniso || 4;
-  // CHUNKED TERRAIN (2026-07-28; plan + live baseline in RESEARCH_INBOUND.md).
-  // The single 301x301 mesh was 180k tris = 12.3% of the frame drawn from
-  // EVERY viewpoint — Three culls per-mesh, so one map-wide plane can never be
-  // rejected. 8x8 chunks of 200 m: FAR LOD keeps the old density (the distant
-  // silhouette must not regress) and a lazy 3x3 near ring around the camera
-  // rebuilds at 2x density for the close-up silhouette. Same-LOD neighbours
-  // sample identical edge coordinates (no cracks); near-LOD perimeters drop a
-  // 0.35 m skirt lip so near/far borders hide their step underground. Normals
-  // are ANALYTIC (central differences on heightAt0, fixed 2 m eps) so lighting
-  // is identical across chunks and LODs — computeVertexNormals per chunk would
-  // seam at every border. The mesh remains PURELY VISUAL: gameplay reads the
-  // analytic heightAt0 and nothing else consumes it.
   const CHUNKS = 8, CSZ = SIZE / CHUNKS;
-  const FAR_SEG = 38, NEAR_SEG = 76;                 // ~5.3 / ~2.6 m per vertex
+  const FAR_SEG = 38, NEAR_SEG = 76;                 // ~5.3 / ~2.6 m per vertex; NEAR_SEG * CHUNKS === LAT_CELLS
   const TILE = 8;                                    // meters per texture tile
   const terrMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0 });
   try {
@@ -582,90 +957,95 @@ export async function buildMap(W, mapId) {
     terrMat.normalScale = new THREE.Vector2(0.55, 0.55);
   } catch (e) { /* canvas unavailable → flat vertex-color fallback */ }
   const _tn = new THREE.Vector3();
+  const _sp = [1, 0, 0];
+  let photo = null;                                  // set by buildTerrain before the first chunk
+  let terrain = null;
   function buildChunk(ci, cj, seg, skirt) {
-    const cx0 = -SIZE / 2 + ci * CSZ, cz0 = -SIZE / 2 + cj * CSZ;
+    const L = field.lat, step = NEAR_SEG / seg;      // lattice nodes per vertex step: 1 near, 2 far
+    const gx0 = ci * NEAR_SEG, gz0 = cj * NEAR_SEG;  // lattice index of the chunk's low corner
     const pitch = CSZ / seg;
-    // heights sampled ONCE into an apron grid (one ring beyond the chunk on
-    // every side) — normals then come from central differences ON THE GRID,
-    // so no vertex costs more than one heightAt0. The first version sampled
-    // heightAt0 five times per vertex for analytic normals and turned the map
-    // build into a 15s hang. Neighbours' aprons sample the same world coords,
-    // so normals agree across chunk borders — no lighting seams.
-    const N = seg + 3;                               // apron grid dimension
+    const N = seg + 3;                               // apron grid dimension (one vertex step beyond the chunk on every side)
     const H = new Float32Array(N * N);
-    for (let gz = 0; gz < N; gz++) for (let gx = 0; gx < N; gx++) {
-      H[gz * N + gx] = heightAt0(cx0 + (gx - 1) * pitch, cz0 + (gz - 1) * pitch);
+    for (let gz = 0; gz < N; gz++) {
+      let iz = gz0 + (gz - 1) * step; iz = iz < 0 ? 0 : iz > LAT_CELLS ? LAT_CELLS : iz;
+      for (let gx = 0; gx < N; gx++) {
+        let ix = gx0 + (gx - 1) * step; ix = ix < 0 ? 0 : ix > LAT_CELLS ? LAT_CELLS : ix;
+        H[gz * N + gx] = L[iz * LAT_N + ix];
+      }
     }
     const geo = new THREE.PlaneGeometry(CSZ, CSZ, seg, seg);
     geo.rotateX(-Math.PI / 2);
-    geo.translate(cx0 + CSZ / 2, 0, cz0 + CSZ / 2);
     const posA = geo.attributes.position, uvA = geo.attributes.uv;
     const cols = new Float32Array(posA.count * 3);
     const nrm = new Float32Array(posA.count * 3);
-    const vAt = skirt ? new Int32Array((seg + 1) * (seg + 1)) : null;   // lattice (ix, iz) -> vertex index, for the skirt loop below
+    const spl = photo ? new Float32Array(posA.count * 3) : null;
+    const S1 = seg + 1;
+    const vAt = skirt ? new Int32Array(S1 * S1) : null;   // lattice (ix, iz) -> vertex index, for the skirt loop below
     for (let i = 0; i < posA.count; i++) {
-      const x = posA.getX(i), z = posA.getZ(i);
-      const gx = Math.round((x - cx0) / pitch) + 1, gz = Math.round((z - cz0) / pitch) + 1;
+      const vx = i % S1, vz = (i / S1) | 0;               // PlaneGeometry order: rows (z) outer, columns (x) inner
+      const gx = vx + 1, gz = vz + 1;
+      const x = TerrainField.node(gx0 + vx * step), z = TerrainField.node(gz0 + vz * step);
       const h = H[gz * N + gx];
-      // The perimeter keeps its TRUE height. (It used to be dropped 0.35 m so the near/far step "hid underground"; the cost was a
-      // groove along every near-chunk border where the drawn ground sat up to 0.35 m below the ground players, bots, loot and props
-      // stand on - 3.5% of all dry samples were more than 10 cm off. The crack against the far-LOD neighbour is closed by a skirt
-      // wall below instead, built after this loop.)
-      posA.setY(i, h);
-      if (vAt) vAt[(gz - 1) * (seg + 1) + (gx - 1)] = i;
+      // the vertex sits EXACTLY on its lattice node (float32 of the double node position: <= 3e-5 m)
+      posA.setXYZ(i, x, h, z);
+      if (vAt) vAt[vz * S1 + vx] = i;
       const c = colorAt(mapId, h, x, z, seed);
       cols[i * 3] = c[0]; cols[i * 3 + 1] = c[1]; cols[i * 3 + 2] = c[2];
+      if (spl) { splatAt(mapId, h, x, z, seed, _sp); spl[i * 3] = _sp[0]; spl[i * 3 + 1] = _sp[1]; spl[i * 3 + 2] = _sp[2]; }
       uvA.setXY(i, x / TILE, z / TILE);              // world-planar UV → tiles every 8m
       _tn.set(H[gz * N + gx - 1] - H[gz * N + gx + 1], 2 * pitch, H[(gz - 1) * N + gx] - H[(gz + 1) * N + gx]).normalize();
       nrm[i * 3] = _tn.x; nrm[i * 3 + 1] = _tn.y; nrm[i * 3 + 2] = _tn.z;
     }
     geo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
+    if (spl) geo.setAttribute("splat", new THREE.BufferAttribute(spl, 3));
     uvA.needsUpdate = true;
     if (skirt) addSkirt(geo, vAt, seg);
     const mesh = new THREE.Mesh(geo, terrMat);
     mesh.receiveShadow = true;
     return mesh;
   }
-  const terrain = new THREE.Group();
-  terrain.name = "terrain";
-  const tChunks = [];
-  for (let cj = 0; cj < CHUNKS; cj++) for (let ci = 0; ci < CHUNKS; ci++) {
-    const farM = buildChunk(ci, cj, FAR_SEG, false);
-    terrain.add(farM);
-    tChunks.push({ ci, cj, far: farM, near: null });
-  }
-  g.add(terrain);
-  // near-ring LOD swapper: ring follows the camera-focus cell; high-LOD chunks
-  // build LAZILY at most one per frame (a 77x77 fbm fill is a few ms — queued,
-  // never a burst), then swap by visibility flips only.
-  let _lodCi = -9, _lodCj = -9;
-  const _lodQueue = [];
-  trackUpdater(() => {
-    const f = W._camFocus || W.player;
-    if (!f || !f.pos) return;
-    const ci = Math.max(0, Math.min(CHUNKS - 1, Math.floor((f.pos.x + SIZE / 2) / CSZ)));
-    const cj = Math.max(0, Math.min(CHUNKS - 1, Math.floor((f.pos.z + SIZE / 2) / CSZ)));
-    if (ci !== _lodCi || cj !== _lodCj) {
-      _lodCi = ci; _lodCj = cj;
-      for (const c of tChunks) {
-        const ring = Math.abs(c.ci - ci) <= 1 && Math.abs(c.cj - cj) <= 1;
-        if (ring && !c.near && _lodQueue.indexOf(c) < 0) _lodQueue.push(c);
-        const useNear = ring && !!c.near;
-        c.far.visible = !useNear;
-        if (c.near) c.near.visible = useNear;
+  function buildTerrain() {
+    if (photo && terrMat.map) patchTerrainPhoto(terrMat, photo); else photo = null;     // the splat attribute only exists with the patched program
+    terrain = new THREE.Group();
+    terrain.name = "terrain";
+    const tChunks = [];
+    for (let cj = 0; cj < CHUNKS; cj++) for (let ci = 0; ci < CHUNKS; ci++) {
+      const farM = buildChunk(ci, cj, FAR_SEG, false);
+      terrain.add(farM);
+      tChunks.push({ ci, cj, far: farM, near: null });
+    }
+    g.add(terrain);
+    // near-ring LOD swapper: ring follows the camera-focus cell; high-LOD chunks
+    // build LAZILY at most one per frame (a 77x77 lattice fill is a fraction of a ms - queued,
+    // never a burst), then swap by visibility flips only.
+    let _lodCi = -9, _lodCj = -9;
+    const _lodQueue = [];
+    trackUpdater(() => {
+      const f = W._camFocus || W.player;
+      if (!f || !f.pos) return;
+      const ci = Math.max(0, Math.min(CHUNKS - 1, Math.floor((f.pos.x + SIZE / 2) / CSZ)));
+      const cj = Math.max(0, Math.min(CHUNKS - 1, Math.floor((f.pos.z + SIZE / 2) / CSZ)));
+      if (ci !== _lodCi || cj !== _lodCj) {
+        _lodCi = ci; _lodCj = cj;
+        for (const c of tChunks) {
+          const ring = Math.abs(c.ci - ci) <= 1 && Math.abs(c.cj - cj) <= 1;
+          if (ring && !c.near && _lodQueue.indexOf(c) < 0) _lodQueue.push(c);
+          const useNear = ring && !!c.near;
+          c.far.visible = !useNear;
+          if (c.near) c.near.visible = useNear;
+        }
       }
-    }
-    if (_lodQueue.length) {
-      const c = _lodQueue.shift();
-      c.near = buildChunk(c.ci, c.cj, NEAR_SEG, true);
-      terrain.add(c.near);
-      const ring = Math.abs(c.ci - _lodCi) <= 1 && Math.abs(c.cj - _lodCj) <= 1;
-      c.near.visible = ring;
-      if (ring) c.far.visible = false;
-    }
-  });
-  await yieldPhase();                                // phase 1/3 done — let the loader paint
+      if (_lodQueue.length) {
+        const c = _lodQueue.shift();
+        c.near = buildChunk(c.ci, c.cj, NEAR_SEG, true);
+        terrain.add(c.near);
+        const ring = Math.abs(c.ci - _lodCi) <= 1 && Math.abs(c.cj - _lodCj) <= 1;
+        c.near.visible = ring;
+        if (ring) c.far.visible = false;
+      }
+    });
+  }
 
   // ── water ─────────────────────────────────────────────────────────────────
   if (K.water) {
@@ -1119,8 +1499,13 @@ export async function buildMap(W, mapId) {
   // ground under it is deliberate: it drops the submerged town/farm placements while
   // keeping every INTENTIONAL over-water one — pier loot sits at waterY+1.1, the
   // stilt hut's at waterY+0.85/0.95 and the shipwreck's at waterY+0.8 and +3.4.
-  function loot(x, y, z, poi) { if (y < waterY + 0.4) return; lootPoints.push({ x, y, z, kind: "floor", poi }); }
-  function chest(x, y, z, poi) { if (y < waterY + 0.4) return; chestPoints.push({ x, y, z, kind: "chest", poi }); }
+  // C-PAD: loot authored `heightAt0(x, z) + offset` was authored against the generation-time ground (analytic + the pads registered so far),
+  // and the ground players stand on is the baked lattice, up to a few cm different between lattice nodes. lootG/chestG keep the ground each
+  // point was authored on; after the bake a point that sat 0-1 m above it (terrain loot) is re-seated by the difference, so a floor item
+  // or a chest rests on the ground it will be tested against. Loot on a floor, a roof or a pad is unchanged (its ground did not move).
+  const lootG = [], chestG = [];
+  function loot(x, y, z, poi) { if (y < waterY + 0.4) return; lootPoints.push({ x, y, z, kind: "floor", poi }); lootG.push(heightAt0(x, z)); }
+  function chest(x, y, z, poi) { if (y < waterY + 0.4) return; chestPoints.push({ x, y, z, kind: "chest", poi }); chestG.push(heightAt0(x, z)); }
 
   // — building generators (shared) —
   function hut(x, z, w, d, rot, color, poi) {
@@ -1141,12 +1526,18 @@ export async function buildMap(W, mapId) {
     // seabed. The building always exists, its loot is always reachable, and a
     // shack on posts over the water is what a dock should have looked like.
     const submerged = ground < waterY + 0.6;
-    const y = submerged ? waterY + 0.35 : ground;
+    // C-PAD: a hut on dry land stands on a level pad under its roof (a stilt hut over water has no pad)
+    // The deck of a stilt hut is at the waterline, or at the highest bank under it when part of the footprint is dry land (Riverside Mill's hut:
+    // the centre 0.2 m, the door side 1.6 m up a river bank, so the door was 1.2 m clear of the ground - under the capsule). Each leg now reaches
+    // the ground under ITSELF.
+    let yDeck = waterY + 0.35;
+    if (submerged) for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) yDeck = Math.max(yDeck, heightAt0(x - w / 2 + w * i / 4, z - d / 2 + d * j / 4));
+    const y = submerged ? yDeck : groundPad(x, z, w / 2 + 0.4, d / 2 + 0.4, { gen: "hut" });
     const T = 0.35;
     if (submerged) {
-      const legY = (ground + y) / 2, legH = Math.max(0.6, y - ground);
       for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        addBox(x + sx * (w / 2 - 0.3), legY, z + sz * (d / 2 - 0.3), 0.32, legH, 0.32, shade(color, 0.7));
+        const lx = x + sx * (w / 2 - 0.3), lz = z + sz * (d / 2 - 0.3), gl = heightAt0(lx, lz) - 0.3, legH = Math.max(0.6, y - gl);
+        addBox(lx, y - legH / 2, lz, 0.32, legH, 0.32, shade(color, 0.7));
       }
       addBox(x, y - 0.12, z, w + 0.5, 0.24, d + 0.5, shade(color, 0.85));   // deck
     }
@@ -1198,8 +1589,8 @@ export async function buildMap(W, mapId) {
   }
 
   function tower(x, z, floors, fw, color, poi, avoid) {
-    const y = heightAt0(x, z);
     const FH = 4, T = 0.4, W2 = fw / 2;
+    const y = groundPad(x, z, W2 + 0.4, W2 + 0.4, { gen: "tower" });     // C-PAD: the whole footprint on one level (towers stood up to 6 m off the ground on slopes)
     let stair = null;       // the interior ramp of the floor below: { rise, run } as BUILT (the ground-floor one is snapped to the terrain: rise >= FH)
     for (let f = 0; f < floors; f++) {
       const fy = y + f * FH;
@@ -1292,11 +1683,12 @@ export async function buildMap(W, mapId) {
       }
       addRamp(pick.rp.cx, pick.rp.cy, pick.rp.cz, 2.2, pick.rp.rise, pick.rp.run, pick.dir, shade(color, 0.72));
     }
+    return y;
   }
 
   function rangerTower(x, z, color, poi) {
-    const y = heightAt0(x, z);
     const H = 11, P = 3.4;
+    const y = groundPad(x, z, 2.1, 2.1, { gen: "rangerTower" });         // C-PAD: the four legs (+-1.4 m) on one level; every leg still reaches the ground under itself
     // each 11 m leg reaches the ground under ITSELF (all four were cut at the centre height: a leg in the air on 21-28% of the towers)
     for (const [dx, dz] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]])
       addStilt(x + dx, z + dz, 0.4, y + H, color, true);
@@ -1458,7 +1850,7 @@ export async function buildMap(W, mapId) {
     const EX = HALF - 40, step = (EX * 2) / g;
     for (let i = 0; i < g; i++) for (let j = 0; j < g; j++) {
       const x = -EX + (i + rng()) * step, z = -EX + (j + rng()) * step;
-      const h = heightAt0(x, z);
+      const h = baseH(x, z);
       if (h < minH || h > maxH) continue;
       if (nearPoi(x, z, 26) || nearLandmark(x, z)) continue;
       const s = 0.8 + rng() * 0.9;
@@ -1488,10 +1880,10 @@ export async function buildMap(W, mapId) {
     let k = 0, n = 0;
     for (let ring = 1; ring <= 3; ring++) for (let i = 0; i < 8; i++) {
       const a = i / 8 * Math.PI * 2 + ring * 0.4, rr = R * ring / 3;
-      if (heightAt0(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr) > minH) k++;
+      if (baseH(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr) > minH) k++;
       n++;
     }
-    if (heightAt0(cx, cz) > minH) k++;
+    if (baseH(cx, cz) > minH) k++;
     n++;
     return k / n;
   }
@@ -1509,41 +1901,42 @@ export async function buildMap(W, mapId) {
   // Roads are COSMETIC flat ribbons laid on the terrain (no collider — you walk
   // over them). Towns place houses in lots along a street with front doors to the
   // road + a coloured roof, replacing the old "identical huts at random offsets".
+  //
+  // WAVE 6 (lane 6A, C-PAD): a road is two things now. road() registers a CORRIDOR in the ground field (the cross-slope is flattened across
+  // the width and the centreline follows a smoothed profile of the natural ground, so the ribbon has no berm or gully to float over or
+  // poke through - 16 % of Savanna's road triangles floated more than 10 cm over the drawn ground), and queues the ribbon. The ribbons
+  // are BUILT after the bake (emitRoads), their vertices on the same triangle-exact ground the player stands on. Only the DRY sections are
+  // kept: a street used to run into the sea (Jungle Market's was partly under water in 99.5 % of seeds); a section whose smoothed
+  // centreline is below waterY + 0.35 is dropped, and a stub shorter than 8 m with it.
   const roadGeos = [];                                  // merged into one asphalt mesh after structures
-  // The rendered terrain is a LINEAR interpolation of heightAt0 sampled on the SEG
-  // grid, not heightAt0 itself — over one 5.3 m cell the two differ by up to ~0.12 m
-  // on curved ground. Ground-hugging geometry that samples heightAt0 directly
-  // therefore buries itself in every ridge; sample the same bilinear surface the
-  // terrain mesh actually draws.
-  // (chunked-terrain update: the drawn lattice is now PER-CHUNK — far chunks
-  // sample FAR_SEG cells across each 200 m chunk, so the bilinear surface must
-  // use that chunk-local lattice. Near-ring chunks draw at half pitch and sit
-  // strictly CLOSER to heightAt0 than this far-lattice estimate, so the error
-  // is bounded by the old global-grid behaviour.)
-  const CELLW = CSZ / FAR_SEG;
-  function meshY(x, z) {
-    const ci = Math.max(0, Math.min(CHUNKS - 1, Math.floor((x + HALF) / CSZ)));
-    const cj = Math.max(0, Math.min(CHUNKS - 1, Math.floor((z + HALF) / CSZ)));
-    const cx0 = -HALF + ci * CSZ, cz0 = -HALF + cj * CSZ;
-    const gx = Math.max(0, Math.min(FAR_SEG - 1e-6, (x - cx0) / CELLW));
-    const gz = Math.max(0, Math.min(FAR_SEG - 1e-6, (z - cz0) / CELLW));
-    const i0 = Math.floor(gx), j0 = Math.floor(gz);
-    const fx = gx - i0, fz = gz - j0;
-    const x0 = cx0 + i0 * CELLW, z0 = cz0 + j0 * CELLW, x1 = x0 + CELLW, z1 = z0 + CELLW;
-    const h00 = heightAt0(x0, z0), h10 = heightAt0(x1, z0), h01 = heightAt0(x0, z1), h11 = heightAt0(x1, z1);
-    return (h00 + (h10 - h00) * fx) * (1 - fz) + (h01 + (h11 - h01) * fx) * fz;
-  }
-  // Roads used to be a chain of BoxGeometry slabs, one per ~9 m, each rotated in
-  // YAW ONLY and dropped at heightAt0(midpoint)+0.07. On anything but flat ground
-  // that is a staircase of floating rectangles: the Ranger Ridge network read as
-  // scattered brown slabs and the Isla Viva volcano climb as a dashed line. One
-  // conforming ribbon instead — the terrain is sampled at EVERY cross-section
-  // vertex, so the surface bends with the ground and no edge can float. Roads carry
-  // no collider (they only ever reach roadGeos), so this is pure render.
-  const ROAD_STEP = 4;      // metres between cross-sections
+  const roadQueue = [];                                 // { x0, z0, x1, z1, width } dry sections waiting for the bake
+  const lotQueue = [];                                  // { cx, cz, w, d } parking lots waiting for the bake
+  const ROAD_STEP = 2;      // metres between cross-sections (the lattice pitch is 2.63: the ribbon samples the ground at its own resolution)
   const ROAD_LIFT = 0.06;   // above the mesh; well under STEP_UP (0.55) either way
   const ROAD_XS = [-1, -0.5, 0, 0.5, 1];   // cross-section offsets, x half-width
+  const ROAD_DRY = 0.35;    // a road section needs its centreline this far above the waterline
+  const roadStats = { registered: 0, sections: 0, droppedWet: 0, metres: 0, metresDropped: 0 };
+  const roadLog = [];       // the dry sections as built, kept for the gates and the screenshot tools
   function road(x0, z0, x1, z1, width) {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    if (len < 1) return;
+    roadStats.registered++;
+    const prof = field.profile([[x0, z0], [x1, z1]]);
+    let run = [];
+    const flush = () => {
+      if (run.length >= 3) {                              // >= 8 m
+        field.registerCorridor(null, width, { profile: run });
+        const a = run[0], b = run[run.length - 1];
+        roadQueue.push({ x0: a.x, z0: a.z, x1: b.x, z1: b.z, width });
+        roadStats.sections++; roadStats.metres += b.s - a.s;
+      } else if (run.length) { roadStats.droppedWet++; roadStats.metresDropped += run[run.length - 1].s - run[0].s; }
+      run = [];
+    };
+    for (const q of prof) { if (q.p >= waterY + ROAD_DRY) run.push(q); else flush(); }
+    flush();
+  }
+  // the ribbon itself: one conforming strip, the ground sampled at EVERY cross-section vertex of the lattice ground (never at a centre)
+  function roadRibbon(x0, z0, x1, z1, width) {
     const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
     if (len < 1) return;
     const n = Math.max(1, Math.ceil(len / ROAD_STEP));
@@ -1558,7 +1951,16 @@ export async function buildMap(W, mapId) {
       const t = i / n, cx = x0 + dx * t, cz = z0 + dz * t;
       for (let j = 0; j < W2; j++) {
         const vx = cx + px * ROAD_XS[j] * hw, vz = cz + pz * ROAD_XS[j] * hw;
-        posA[k * 3] = vx; posA[k * 3 + 1] = meshY(vx, vz) + ROAD_LIFT; posA[k * 3 + 2] = vz;
+        // The ribbon's triangles span 2 m x 1.75 m, the lattice cells 2.63 m: on a CURVED stretch (a pad's falloff, a road cut into a slope) the
+        // ground half-way between two vertices bulges above the straight chord and pokes through. A vertex is lifted by the largest bulge of
+        // the chords that end at it (the ground at their midpoint minus the mean of their ends): 0 on a plane, so a slope costs nothing.
+        const sa = len / n, sc = hw * 0.5, g0 = heightAt0(vx, vz);
+        let lift = 0, b;
+        b = heightAt0(vx + ux * sa * 0.5, vz + uz * sa * 0.5) - 0.5 * (g0 + heightAt0(vx + ux * sa, vz + uz * sa)); if (b > lift) lift = b;
+        b = heightAt0(vx - ux * sa * 0.5, vz - uz * sa * 0.5) - 0.5 * (g0 + heightAt0(vx - ux * sa, vz - uz * sa)); if (b > lift) lift = b;
+        b = heightAt0(vx + px * sc * 0.5, vz + pz * sc * 0.5) - 0.5 * (g0 + heightAt0(vx + px * sc, vz + pz * sc)); if (b > lift) lift = b;
+        b = heightAt0(vx - px * sc * 0.5, vz - pz * sc * 0.5) - 0.5 * (g0 + heightAt0(vx - px * sc, vz - pz * sc)); if (b > lift) lift = b;
+        posA[k * 3] = vx; posA[k * 3 + 1] = g0 + Math.min(0.15, lift * 0.4) + ROAD_LIFT; posA[k * 3 + 2] = vz;
         uvA[k * 2] = vx / ROAD_TILE; uvA[k * 2 + 1] = vz / ROAD_TILE;   // world-planar, same texel density as before
         k++;
       }
@@ -1574,6 +1976,27 @@ export async function buildMap(W, mapId) {
     geo.computeVertexNormals();
     roadGeos.push(geo);
   }
+  function lotPlane(cx, cz, w, d) {
+    // A subdivided conforming plane on the (padded, level) ground.
+    const nx = Math.max(2, Math.round(w / 4)), nz = Math.max(2, Math.round(d / 4));
+    const geo = new THREE.PlaneGeometry(w, d, nx, nz);
+    geo.rotateX(-Math.PI / 2);
+    const pp = geo.attributes.position, pu = geo.attributes.uv;
+    for (let i = 0; i < pp.count; i++) {
+      const vx = cx + pp.getX(i), vz = cz + pp.getZ(i);
+      pp.setY(i, heightAt0(vx, vz) + ROAD_LIFT);
+      pu.setXY(i, vx / ROAD_TILE, vz / ROAD_TILE);
+    }
+    geo.translate(cx, 0, cz);
+    geo.computeVertexNormals();
+    roadGeos.push(geo);
+  }
+  // runs once, after the bake: every queued ribbon and lot on the final ground
+  function emitRoads() {
+    for (const r of roadQueue) { roadRibbon(r.x0, r.z0, r.x1, r.z1, r.width); roadLog.push(r); }
+    for (const l of lotQueue) lotPlane(l.cx, l.cz, l.w, l.d);
+    roadQueue.length = 0; lotQueue.length = 0;
+  }
   // greedy nearest-neighbour tree over the POIs → a connected road network
   function buildRoads(width) {
     for (let i = 1; i < pois.length; i++) {
@@ -1583,24 +2006,74 @@ export async function buildMap(W, mapId) {
     }
   }
   function parkingLot(cx, cz, w, d, poi) {
-    // Same defect as road(): one flat slab dropped at the centre's height floated
-    // (or buried) at every corner on a sloped lot. A subdivided conforming plane.
-    const nx = Math.max(2, Math.round(w / 4)), nz = Math.max(2, Math.round(d / 4));
-    const geo = new THREE.PlaneGeometry(w, d, nx, nz);
-    geo.rotateX(-Math.PI / 2);
-    const pp = geo.attributes.position, pu = geo.attributes.uv;
-    for (let i = 0; i < pp.count; i++) {
-      const vx = cx + pp.getX(i), vz = cz + pp.getZ(i);
-      pp.setY(i, meshY(vx, vz) + ROAD_LIFT);
-      pu.setXY(i, vx / ROAD_TILE, vz / ROAD_TILE);
-    }
-    geo.translate(cx, 0, cz);
-    geo.computeVertexNormals();
-    roadGeos.push(geo);
+    // a level pad under the whole lot (the plane used to hug a slope; before that one slab dropped at the centre floated or buried at the
+    // corners); the asphalt is laid after the bake
+    // a lot that is partly under water is not built (Palm Bay's lay in the surf on a third of the seeds: asphalt and cars below the waterline)
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if (heightAt0(cx + (i - 1) * w / 2, cz + (j - 1) * d / 2) < waterY + 0.25) return;
+    // ...nor one that touches two pads on different levels (it can join only one level, and the other building would then stand 0.1 m off a level
+    // floor: Savanna Outpost seed 53 - a lot is asphalt and four cars, a building is never moved or dropped for it)
+    const op = field.overlapPad(cx - w / 2 - 0.3, cx + w / 2 + 0.3, cz - d / 2 - 0.3, cz + d / 2 + 0.3);
+    if (op !== null && op.all.some((q) => Math.abs(q.h - op.pad.h) > 0.02)) return;
+    groundPad(cx, cz, w / 2 + 0.3, d / 2 + 0.3, { gen: "parkingLot" });
+    lotQueue.push({ cx, cz, w, d });
     for (let i = 0; i < 4; i++) {
       const px = cx - w / 2 + 3 + (i % 2) * (w - 6), pz = cz - d / 2 + 3 + Math.floor(i / 2) * (d - 6);
       props.car.push({ x: px, y: heightAt0(px, pz), z: pz, s: 2.1, ry: 0 });
     }
+  }
+  // ── C-PAD in the generators ───────────────────────────────────────────────────────────────────────────────────────
+  // groundPad(cx, cz, hx, hz): level the ground under an axis-aligned footprint (centre + half extents; every building here is a quarter
+  // turn, so its footprint is a rectangle) at the MEDIAN of a 5 x 5 sample of the ground under it, and return that height: the generator
+  // builds on it (y = groundPad(...)), so walls, floors, door lintels and loot are authored on the level the lattice really holds under
+  // them (the lattice cell is flat there: PAD_MARGIN). The falloff grows with the cut/fill the flat core asks for (the worst departure of the
+  // natural ground from the pad level over footprint + margin): 3 m on level ground, 4.7 m at 1 m, 9 m at 3 m, capped at 12 m. The steepest
+  // slope of a smoothstep falloff is 1.5 x cut / falloff, so a 4 m cut ends at ~0.65 (a 6.5 m cap left a steeple on a river bank in a 72 degree wall). A lot is never rejected or moved for its relief: that would change which
+  // houses exist and with them the loot census. `gen` only labels the pad in the stats.
+  const padLog = [];
+  // THE C-PAD CONTRACT (6A provides; 6B's towngen output and Wave-7 wiring call these): both must run BEFORE `field.bake()` below (that is
+  // "before the terrain is built"); they return the stored height / the number of corridor segments. A polygon pad takes `{ poly: [[x, z], ...] }`.
+  //   registerPad(shape, height, falloffM)        a flat area; shape = { x0, x1, z0, z1 } | { poly } | [[x, z], ...]
+  //   registerCorridor(polyline, width, opts)     a road; opts.profile = TerrainField.profile() samples to register part of one
+  const registerPad = (shape, height, falloffM) => field.registerPad(shape, height, falloffM);
+  const registerCorridor = (polyline, width, opts) => field.registerCorridor(polyline, width, opts);
+  void registerPad; void registerCorridor;                 // (no caller until Wave 7: groundPad() and road() are the callers today)
+  function groundPad(cx, cz, hx, hz, opts) {
+    opts = opts || {};
+    const hs = [];
+    let lo = 1e9, hi = -1e9;
+    for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
+      const h = heightAt0(cx - hx + (2 * hx) * i / 4, cz - hz + (2 * hz) * j / 4);
+      hs.push(h); if (h < lo) lo = h; if (h > hi) hi = h;
+    }
+    hs.sort((a, b) => a - b);
+    // A footprint whose flat core shares a lattice node with an earlier pad's joins that level, whatever the difference: one node cannot hold
+    // two heights, so two buildings that close (a house at the corner of a crossroads stood 1.5 m up one doorway when each pad kept its own
+    // median; two huts 5 m apart on a slope left one 0.14 m off) are either one level or neither is exact. The same core asked for twice (a tower
+    // whose pad was laid early, see the isla_viva branch) is the same pad.
+    const op = field.overlapPad(cx - hx, cx + hx, cz - hz, cz + hz);
+    if (op !== null && op.same) return op.pad.h;
+    const lvl = op !== null ? op.pad.h : null;
+    const H = lvl !== null ? lvl : hs[12], relief = hi - lo;
+    // the cut / fill the flat core really asks for: the ground over the footprint AND the margin that makes the lattice cells level (7 x 7 samples)
+    const mg = LAT_PITCH + 0.01;
+    let cut = 0;
+    for (let i = 0; i < 7; i++) for (let j = 0; j < 7; j++) cut = Math.max(cut, Math.abs(heightAt0(cx - hx - mg + (2 * (hx + mg)) * i / 6, cz - hz - mg + (2 * (hz + mg)) * j / 6) - H));
+    const fo = Math.min(12, Math.max(3, 2.5 + 2.2 * cut));
+    const h = field.registerPad({ x0: cx - hx, x1: cx + hx, z0: cz - hz, z1: cz + hz }, H, fo);
+    padLog.push({ gen: opts.gen || "?", x: cx, z: cz, hx, hz, h, relief, fo, merged: lvl !== null, cut });
+    return h;
+  }
+  // The lowest ground under a turned w x d box (5 x 3 samples over its outline): a wall or a plank cut from there never hangs in the air
+  // on the downhill end (rubble slabs, log piles and ruin fragments hung up to 0.9 m over a slope at their centre height).
+  function lowGround(cx, cz, w, d, rot) {
+    const c = Math.cos(rot), s = Math.sin(rot);
+    let lo = Infinity;
+    for (let i = 0; i < 5; i++) for (let j = 0; j < 3; j++) {
+      const u = (i / 4 - 0.5) * w, v = (j / 2 - 0.5) * d;
+      const g = heightAt0(cx + u * c + v * s, cz - u * s + v * c);
+      if (g < lo) lo = g;
+    }
+    return lo;
   }
   // a house: textured walls + a distinct COLOURED roof (reads as a town from the air)
   // Every wall goes through addBoxR in LOCAL space so `rot` moves the slab as well
@@ -1616,7 +2089,10 @@ export async function buildMap(W, mapId) {
   // the capsule at y+1.38..y+3.18, overlapping the header at y+2.30 — blockedHoriz
   // still blocks. It is a firing port; the back door is the second entrance.
   function house(x, z, w, d, rot, wallC, roofC, poiId) {
-    const y = heightAt0(x, z), H = 3.4, T = 0.32, doorW = 1.4, winW = 1.2;
+    const H = 3.4, T = 0.32, doorW = 1.4, winW = 1.2;
+    // C-PAD: the roof deck (w + 0.7 by d + 0.7, turned by the quarter turn `rot`) is the widest thing in the footprint
+    const rc = Math.abs(Math.cos(rot)), rs = Math.abs(Math.sin(rot));
+    const y = groundPad(x, z, (rc * (w + 0.7) + rs * (d + 0.7)) / 2 + 0.05, (rs * (w + 0.7) + rc * (d + 0.7)) / 2 + 0.05, { gen: "house" });
     const segW = w / 2 - doorW / 2, segD = d / 2 - winW / 2;
     const jamb = d / 4 + winW / 4, pier = w / 4 + doorW / 4;
     addBoxR(x, z, -pier, -d / 2, y + H / 2, segW, H, T, wallC, rot);                // back, L of back door
@@ -1649,7 +2125,7 @@ export async function buildMap(W, mapId) {
     for (const s of [-1, 1]) {
       for (let t = -half + 8; t <= half - 8; t += 16) {
         const lx = A ? cx + t : cx + s * 5.5, lz = A ? cz + s * 5.5 : cz + t, y = heightAt0(lx, lz);
-        if (y < minH) continue;
+        if (baseH(lx, lz) < minH) continue;
         addStilt(lx, lz, 0.22, y + 4.8, "#3a3d42", false);                                  // lamp pole
         addBox(lx, y + 4.9, lz, 0.5, 0.3, 0.5, "#ffe9a8", { collide: false });      // warm lamp head
         lampPts.push({ x: lx, y: y + 4.9, z: lz });
@@ -1657,7 +2133,7 @@ export async function buildMap(W, mapId) {
     }
     for (let i = 0; i < 2; i++) {                                                    // market stalls
       const sx = A ? cx + (i ? 12 : -12) : cx + 9, sz = A ? cz + 9 : cz + (i ? 12 : -12), y = heightAt0(sx, sz);
-      if (y < minH) continue;
+      if (baseH(sx, sz) < minH) continue;
       for (const [dx, dz] of [[-1.5, -1], [1.5, -1], [-1.5, 1], [1.5, 1]]) addStilt(sx + dx, sz + dz, 0.15, y + 2.35, "#8a6a3a", false);   // posts run up INTO the awning (2.30..2.50)
       addBox(sx, y + 2.4, sz, 3.6, 0.2, 2.6, i ? "#c0563a" : "#3a7a9a", { collide: false });  // awning
       const cg = gMinRect(sx, sz - 1, 1.7, 0.25) - 0.06;                                       // counter: a solid from the ground up to 1.25 m
@@ -1667,7 +2143,7 @@ export async function buildMap(W, mapId) {
     for (let i = 0; i < 4; i++) {                                                    // benches + hydrants
       const t = -half + rng() * span, s = rng() < 0.5 ? -1 : 1;
       const bx = A ? cx + t : cx + s * 7.5, bz = A ? cz + s * 7.5 : cz + t, y = heightAt0(bx, bz);
-      if (y < minH) continue;
+      if (baseH(bx, bz) < minH) continue;
       if (rng() < 0.55) {
         // seat on two legs (the seat is 0.36..0.64 above the centre ground); each leg reaches the ground under it; the backrest rests on the seat
         for (const lxo of [-0.8, 0.8]) {
@@ -1712,7 +2188,7 @@ export async function buildMap(W, mapId) {
         for (const mul of [1, 1.5, 2.1, 2.7]) {
           const set = side * base * mul;
           const tx = A ? p.x + a0 : p.x + set, tz = A ? p.z + set : p.z + a0;
-          if (heightAt0(tx, tz) >= minH) { hx = tx; hz = tz; okSet = true; break; }
+          if (baseH(tx, tz) >= minH) { hx = tx; hz = tz; okSet = true; break; }
         }
         if (!okSet) continue;
         const rot = A ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);   // door faces the street
@@ -1724,10 +2200,10 @@ export async function buildMap(W, mapId) {
     streetFurniture(p.x, p.z, A, span, minH);
     if (cross) streetFurniture(p.x, p.z, !A, span, minH);
     // one distinctive structure per town, drawn from the kit already in this file
-    const sy = heightAt0(p.x, p.z);
+    const sy = baseH(p.x, p.z);
     if (opts.signature === "clocktower" && sy >= minH) {
-      tower(p.x, p.z - 26, 2, 7, wallCs[0], p.id);
-      addBox(p.x, heightAt0(p.x, p.z - 26) + 8.9, p.z - 26 + 3.6, 3, 3, 0.3, "#e8e0c8");   // clock face, visible down the street
+      const ty = tower(p.x, p.z - 26, 2, 7, wallCs[0], p.id);
+      addBox(p.x, ty + 8.9, p.z - 26 + 3.6, 3, 3, 0.3, "#e8e0c8");   // clock face, visible down the street
     } else if (opts.signature === "depot" && sy >= minH) {
       for (let c = 0; c < 3; c++) {
         const dx = p.x + (c - 1) * 7, dz = p.z - 30;
@@ -1760,7 +2236,7 @@ export async function buildMap(W, mapId) {
     let placed = 0;
     for (let tries = 0; tries < n * 14 && placed < n; tries++) {
       const x = (rng() * 2 - 1) * (HALF - 90), z = (rng() * 2 - 1) * (HALF - 90);
-      if (heightAt0(x, z) < minH) continue;
+      if (baseH(x, z) < minH) continue;
       if (nearPoi(x, z, 60)) continue;
       let tooClose = false;
       for (const l of landmarks) { if (Math.hypot(x - l.x, z - l.z) < 120) { tooClose = true; break; } }
@@ -1778,7 +2254,8 @@ export async function buildMap(W, mapId) {
       } else if (kind === 3) {                              // ruin — same fragment pattern as Rubble Row
         for (let i = 0; i < 4; i++) {
           const rx = x + (rng() - 0.5) * 14, rz = z + (rng() - 0.5) * 14, ry2 = heightAt0(rx, rz);
-          addBox(rx, ry2 + 1.1, rz, 3.5 + rng() * 3, 2.2 + rng() * 1.4, 0.5, shade(wallCs[0], 0.8 + Math.floor(rng() * 4) * 0.1), { rotY: rng() * Math.PI });
+          const fw = 3.5 + rng() * 3, fh = 2.2 + rng() * 1.4, fc = shade(wallCs[0], 0.8 + Math.floor(rng() * 4) * 0.1), fr = rng() * Math.PI;   // same draws, same order
+          addBox(rx, Math.min(ry2 + 1.1, lowGround(rx, rz, fw, 0.5, fr) + fh / 2), rz, fw, fh, 0.5, fc, { rotY: fr });
         }
         loot(x, y + 0.5, z, null);
       } else {                                              // fenced paddock (cosmetic, never traps)
@@ -1804,7 +2281,8 @@ export async function buildMap(W, mapId) {
   // to 2.7 m by the top band, which only fits a ~66-degree flight — a wall you
   // happen to be able to walk up. The interior loot is on the floor.
   function lighthouse(x, z, poi) {
-    const y = heightAt0(x, z), H = 22, seg = 6, sh = H / seg, T = 0.4;
+    const H = 22, seg = 6, sh = H / seg, T = 0.4;
+    const y = groundPad(x, z, 3.5, 3.5, { gen: "lighthouse" });          // C-PAD: the 6.2 m base band on one level
     for (let i = 0; i < seg; i++) {
       const w = 6.2 - i * 0.7, hw = w / 2, c = i % 2 ? "#dcdcdc" : "#c23b3b", cy = y + i * sh + sh / 2;
       if (i === 0) {                                    // door gap on the -Z face of the bottom band
@@ -1824,7 +2302,8 @@ export async function buildMap(W, mapId) {
     chest(x, y + 0.6, z, poi); loot(x - 4, y + 0.5, z, poi); loot(x, y + 0.5, z, poi);
   }
   function waterTower(x, z, poi) {
-    const y = heightAt0(x, z), legH = 12;
+    const legH = 12;
+    const y = groundPad(x, z, 3.5, 3.5, { gen: "waterTower" });          // C-PAD: the four legs (+-3 m) on one level
     for (const [dx, dz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) addStilt(x + dx, z + dz, 0.5, y + legH, "#8a8378", true);   // each leg reaches the ground under ITSELF
     addBox(x, y + legH * 0.55, z - 3, 6.6, 0.3, 0.3, "#8a8378", { collide: false });
     addBox(x, y + legH * 0.55, z + 3, 6.6, 0.3, 0.3, "#8a8378", { collide: false });
@@ -1836,7 +2315,8 @@ export async function buildMap(W, mapId) {
   // Deepwood and you could not get inside it. Four walls around an 8 x 11 nave with
   // a door at each gable end, and a ramp inside the bell tower up to a deck.
   function steeple(x, z, poi) {
-    const y = heightAt0(x, z), T = 0.4, NW = 8, ND = 11, WH = 8, dw = 2;
+    const T = 0.4, NW = 8, ND = 11, WH = 8, dw = 2;
+    const y = groundPad(x, z - 0.5, 4.6, 6.5, { gen: "steeple" });       // C-PAD: nave + bell tower (x +-4.3, z -6.8 .. +5.9)
     const sw = (NW - dw) / 2;
     for (const sz of [-1, 1]) {                                         // gable ends, door gap in each
       addBox(x - (dw + sw) / 2, y + WH / 2, z + sz * ND / 2, sw, WH, T, "#8f8a80");
@@ -1870,11 +2350,12 @@ export async function buildMap(W, mapId) {
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const x = cx - R * 0.75 + i * step + (rng() - 0.5), z = cz - R * 0.75 + j * step + (rng() - 0.5);
       const y = heightAt0(x, z);
-      if (y < minH) continue;
+      if (baseH(x, z) < minH) continue;
       props.bush.push({ x, y, z, s: 0.45 + rng() * 0.3, ry: rng() * Math.PI });
     }
-    const bx = cx + R * 0.9, bz = cz, by = heightAt0(bx, bz);
-    if (by >= minH) {
+    const bx = cx + R * 0.9, bz = cz;
+    if (baseH(bx, bz) >= minH) {
+      const by = groundPad(bx, bz, 4.6, 6.6, { gen: "farmland" });         // C-PAD: the barn (8.5 x 12.5 roof) on one level
       // Was a SOLID 8 x 4.8 x 12 box whose only affordance was the hay ramp to a
       // roof chest — the barn you can see from the whole field and not walk into.
       // Four walls around the same footprint with a 3 m cart door on the +Z gable,
@@ -1899,7 +2380,7 @@ export async function buildMap(W, mapId) {
       addRampSnap(bx, bz + 6.25, 3, by + 6.0, 9, 3, "#8a4d2f");          // hay ramp to the roof chest; face = the roof slab's front edge (z = bz + 6.25)
       chest(bx, by + 6.6, bz, p.id);
       loot(bx, by + 0.5, bz + 3, p.id); loot(bx, by + 3.1, bz - 3, p.id);   // barn floor + hayloft
-      const sx = bx, sz = bz - 15, sy = heightAt0(sx, sz);
+      const sx = bx, sz = bz - 15, sy = groundPad(sx, sz, 2.6, 2.6, { gen: "farmland" });   // the silo
       addBox(sx, sy + 5, sz, 4, 10, 4, "#c8b48a");                       // silo
       addBox(sx, sy + 10.4, sz, 4.6, 1.2, 4.6, shade("#c8b48a", 0.72));
     }
@@ -1935,6 +2416,13 @@ export async function buildMap(W, mapId) {
       const p = pois.find((q) => q.id === id);
       if (p) snapPoiToLand(p, waterY + 0.8);
     }
+    buildRoads(7);                                // connect every POI into a road network (cosmetic ribbons; the corridors go into the ground NOW, before anything is built on them)
+    // C-PAD ORDER: three towers below (the Cliff Temples keep, the Coco Village market hall, the volcano-rim observatory) are built AFTER things that
+    // stand where their pads reshape the ground (the five temple cubes and their ramps, the rim slabs). Their pads - the very rectangles tower()
+    // asks for, so tower() finds them and builds on the same level - are laid first, under the same dry-land conditions.
+    if (baseH(pois[4].x, pois[4].z) > waterY + 0.8) groundPad(pois[4].x, pois[4].z, 12 / 2 + 0.4, 12 / 2 + 0.4, { gen: "tower" });
+    if (baseH(pois[1].x, pois[1].z - 40) > waterY + 0.8) groundPad(pois[1].x, pois[1].z - 40, 14 / 2 + 0.4, 14 / 2 + 0.4, { gen: "tower" });
+    if (baseH(pois[2].x - 88, pois[2].z + 30) > waterY + 0.8) groundPad(pois[2].x - 88, pois[2].z + 30, 11 / 2 + 0.4, 11 / 2 + 0.4, { gen: "tower" });
     // villages → real towns (houses on a street with front doors to the road)
     town(pois[0], [C_WOODP, C_BAMBOO], "#c0563a", { along: "z", nPer: 4, signature: "depot" });        // Palm Bay
     town(pois[1], [C_BAMBOO, C_WOODP], "#cf6b3a", { along: "x", nPer: 5 });                            // Coco Village (its market hall is the tower below)
@@ -1957,11 +2445,11 @@ export async function buildMap(W, mapId) {
         temples.push({ x, z, s });
         templeBlockers.push([x - s * 0.65, x + s * 0.65, z - s * 0.65, z + s * 0.65]);
       }
-      const keepOn = heightAt0(p.x, p.z) > waterY + 0.8;                         // the keep below is only built on dry ground
+      const keepOn = baseH(p.x, p.z) > waterY + 0.8;                         // the keep below is only built on dry ground
       const keep = keepOn ? [p.x - 6.8, p.x + 8.9, p.z - 6.8, p.z + 6.8] : null;   // its walls (+- 6.2), plus its exterior roof ramp along the +X wall, plus a capsule
       for (let i = 0; i < 5; i++) {
         const { x, z, s } = temples[i];
-        const y = heightAt0(x, z);
+        const y = groundPad(x, z, s * 0.65 + 0.2, s * 0.65 + 0.2, { gen: "temple" });   // C-PAD: the cube and its 1.3 x cap on one level
         addBox(x, y + s / 2, z, s, s, s, C_STONE, { tex: "block" });
         addBox(x, y + s + 0.8, z, s * 1.3, 1.6, s * 1.3, shade(C_STONE, 0.85), { tex: "block" });
         if (i % 2 === 0) chest(x, y + s + 1.9, z, p.id);
@@ -1998,8 +2486,8 @@ export async function buildMap(W, mapId) {
     // both do. tower() already emits per-floor slabs, a stairwell hole over each
     // interior ramp and a roof chest. Guarded on dry ground so these do not
     // repeat the Lagoon Docks waterline bug — the coast is close at both spots.
-    if (heightAt0(pois[4].x, pois[4].z) > waterY + 0.8) tower(pois[4].x, pois[4].z, 3, 12, C_STONE, pois[4].id, templeBlockers);          // Cliff Temples keep
-    if (heightAt0(pois[1].x, pois[1].z - 40) > waterY + 0.8) tower(pois[1].x, pois[1].z - 40, 2, 14, C_BAMBOO, pois[1].id); // Coco Village market hall
+    if (baseH(pois[4].x, pois[4].z) > waterY + 0.8) tower(pois[4].x, pois[4].z, 3, 12, C_STONE, pois[4].id, templeBlockers);          // Cliff Temples keep
+    if (baseH(pois[1].x, pois[1].z - 40) > waterY + 0.8) tower(pois[1].x, pois[1].z - 40, 2, 14, C_BAMBOO, pois[1].id); // Coco Village market hall
     // Volcano Rim: an r=130 named landing zone that emitted FOUR CHESTS and no
     // geometry at all — and because scatterTrees rejects nearPoi(x, z, 26) it also
     // cleared every tree out to 156 m, so the drop screen advertised a place that
@@ -2012,11 +2500,13 @@ export async function buildMap(W, mapId) {
       for (let i = 0; i < 10; i++) {
         const a = (i / 10) * Math.PI * 2 + rng() * 0.5, rr = 60 + rng() * 50;
         const x = p.x + Math.cos(a) * rr, z = p.z + Math.sin(a) * rr, y = heightAt0(x, z);
-        addBox(x, y + 1.1, z, 3.5 + rng() * 3, 2.2 + rng() * 1.6, 0.6, shade(C_OBS, 0.8 + Math.floor(rng() * 4) * 0.1), { rotY: rng() * Math.PI });
+        // (the same draws in the same order: width, height, tint, yaw) - lowered to the ground under the DOWNHILL end when the slope would leave it hanging
+        const fw = 3.5 + rng() * 3, fh = 2.2 + rng() * 1.6, fc = shade(C_OBS, 0.8 + Math.floor(rng() * 4) * 0.1), fr = rng() * Math.PI;
+        addBox(x, Math.min(y + 1.1, lowGround(x, z, fw, 0.6, fr) + fh / 2), z, fw, fh, 0.6, fc, { rotY: fr });
         if (i % 3 === 0) loot(x + 2, y + 0.5, z, p.id);
       }
       const ox = p.x - 88, oz = p.z + 30;
-      if (heightAt0(ox, oz) > waterY + 0.8) tower(ox, oz, 2, 11, C_STONE, p.id);   // rim observatory
+      if (baseH(ox, oz) > waterY + 0.8) tower(ox, oz, 2, 11, C_STONE, p.id);   // rim observatory
       for (let i = 0; i < 4; i++) {
         const a = rng() * Math.PI * 2, rr = p.r * 0.6;
         const cx = p.x + Math.cos(a) * rr, cz = p.z + Math.sin(a) * rr;
@@ -2064,6 +2554,7 @@ export async function buildMap(W, mapId) {
     poi("rubble", "Rubble Row", -60, 430, 110);
     poi("motorpool", "Motor Pool", -430, 380, 90);
     poi("outpost", "Savanna Outpost", 220, 250, 95);
+    buildRoads(8);
     // downtown towers
     const dt = pois[0];
     for (let i = 0; i < 6; i++) {
@@ -2077,24 +2568,26 @@ export async function buildMap(W, mapId) {
     // overpass: elevated road on pillars
     {
       const p = pois[2];
+      const hP = {};                                   // C-PAD: each pillar stands on its own level pad; the deck above it is built off the same height
       for (let s = -2; s <= 2; s++) {
         const x = p.x + s * 30;
-        addBox(x, heightAt0(x, p.z) + 4, p.z, 3, 8, 3, C_CONC2);
-        addBox(x, heightAt0(x, p.z) + 8.6, p.z, 32, 1.2, 9, C_CONC);
+        const gy = hP[s] = groundPad(x, p.z, 1.7, 1.7, { gen: "overpass" });
+        addBox(x, gy + 4, p.z, 3, 8, 3, C_CONC2);
+        addBox(x, gy + 8.6, p.z, 32, 1.2, 9, C_CONC);
       }
       // ramp must reach the DECK TOP (nearest pillar deck center+8.6 + half-thick 0.6
       // ≈ ground+9.2); the old fixed 8.2 climb left a ~1m step > STEP_UP so the deck
       // + its rooftop loot were unreachable on foot.
       {
         const gBase = heightAt0(p.x - 78, p.z);
-        const deckTop = heightAt0(p.x - 60, p.z) + 9.2;
+        const deckTop = hP[-2] + 9.2;
         // The ramp's high end used to be 11 m INSIDE the first deck's footprint: its surface met the deck's west face 5 m below the deck top
         // and then rose under the deck's underside (head clearance gone 2.4 m later), so nobody could climb the last 8 m. It now climbs to the
         // deck's WEST FACE (x = p.x - 76, deck spans p.x - 76 .. p.x - 44) and lands on the deck top.
         addRampSnap(p.x - 76, p.z, 9, Math.max(gBase + 8.2, deckTop), 26, 0, C_CONC);
       }
-      chest(p.x, heightAt0(p.x, p.z) + 9.9, p.z, p.id);
-      loot(p.x + 30, heightAt0(p.x + 30, p.z) + 9.9, p.z, p.id);
+      chest(p.x, hP[0] + 9.9, p.z, p.id);
+      loot(p.x + 30, hP[1] + 9.9, p.z, p.id);
       // a station building under the deck — the POI was five pillars and a slab,
       // i.e. nothing to fight over once you had taken the deck. Slotted between the
       // pillars at p.x and p.x+30 (both 3 m square) so it fouls neither.
@@ -2178,7 +2671,7 @@ export async function buildMap(W, mapId) {
     hut(pois[4].x - 30, pois[4].z + 20, 8, 6, 0, C_CONC2, "mall");
     // crane heights: tallest structure
     {
-      const p = pois[5]; const y = heightAt0(p.x, p.z);
+      const p = pois[5]; const y = groundPad(p.x, p.z, 2.2, 2.2, { gen: "crane" });
       addBox(p.x, y + 14, p.z, 3.4, 28, 3.4, "#c8b24a");
       addBox(p.x, y + 28.6, p.z + 8, 2.6, 1.2, 26, "#c8b24a");
       // the ramp ran up BESIDE the jib (2.4 m of air between its top and the jib's side, and the jib is 1.2 m higher): it now climbs to the jib's
@@ -2206,7 +2699,8 @@ export async function buildMap(W, mapId) {
           // gave every wall a unique key — one merged mesh each, with its own
           // MeshStandardMaterial + map + normalMap, for one pile of rubble.
           // This is the only shade() call site in the file that passes a random k.
-          addBox(x, y + 0.9, z, 3.5 + rng() * 3, 1.8 + rng() * 1.6, 0.5, shade(C_BRICKB, 0.8 + Math.floor(rng() * 4) * 0.1), { rotY: rng() * Math.PI });
+          const fw = 3.5 + rng() * 3, fh = 1.8 + rng() * 1.6, fc = shade(C_BRICKB, 0.8 + Math.floor(rng() * 4) * 0.1), fr = rng() * Math.PI;   // same draws, same order
+          addBox(x, Math.min(y + 0.9, lowGround(x, z, fw, 0.5, fr) + fh / 2), z, fw, fh, 0.5, fc, { rotY: fr });
         }
         if (k % 2 === 0) loot(kx, heightAt0(kx, kz) + 0.5, kz, p.id);
       }
@@ -2258,6 +2752,7 @@ export async function buildMap(W, mapId) {
     poi("mill", "Riverside Mill", 40, 40, 90);
     poi("firewatch", "Fire Watch", 60, -520, 80);
     poi("meadow", "Meadow Farm", 430, 430, 100);
+    buildRoads(7);
     // logging camp → a small mill town (+ its signature log piles)
     town(pois[0], [C_LOG, C_PLANK], "#7a4a2a", { along: "x", nPer: 4 });
     {
@@ -2265,7 +2760,8 @@ export async function buildMap(W, mapId) {
       for (let i = 0; i < 8; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.5, z = p.z + (rng() - 0.5) * p.r * 1.5;
         const y = heightAt0(x, z);
-        addBox(x, y + 0.5, z, 1, 1, 4.5, shade(C_LOG, 0.9), { rotY: rng() * Math.PI }); // log piles
+        const lr = rng() * Math.PI;
+        addBox(x, Math.min(y + 0.5, lowGround(x, z, 1, 4.5, lr) + 0.5), z, 1, 1, 4.5, shade(C_LOG, 0.9), { rotY: lr }); // log piles
       }
     }
     // ranger ridge + fire watch towers
@@ -2321,8 +2817,23 @@ export async function buildMap(W, mapId) {
     scatterTrees("rocks", 12, 2, 60, "brick");
   }
 
-  // connect every POI into a road network (cosmetic ribbons on the terrain)
-  buildRoads(mapId === "ashgrid" ? 8 : 7);
+  // (the road network between the POIs is registered right after each branch declares its POIs, above: its corridors must be in the ground
+  // BEFORE any building or piece of street furniture is built on it)
+
+  // ── C-PAD: BAKE THE GROUND ─────────────────────────────────────────────────────────────────────────────────────────
+  // Every POI, building and road has registered its pad or corridor. Freeze base + pads + corridors into the 609 x 609 Float32 lattice;
+  // from here heightAt0 IS the lattice (triangle-exact, the diagonal three's PlaneGeometry draws), and everything that follows reads it:
+  // the terrain chunks, the road ribbons, sky islands, wild loot, prop grounding, bots, the camera, the minimap.
+  const _bk0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  field.bake();
+  const bakeMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _bk0;
+  heightAt0 = (x, z) => field.at(x, z);
+  photo = await photoPromise;
+  buildTerrain();
+  emitRoads();
+  for (let i = 0; i < lootPoints.length; i++) { const p = lootPoints[i], d = p.y - lootG[i]; if (d >= 0 && d <= 1) p.y += heightAt0(p.x, p.z) - lootG[i]; }
+  for (let i = 0; i < chestPoints.length; i++) { const p = chestPoints[i], d = p.y - chestG[i]; if (d >= 0 && d <= 1) p.y += heightAt0(p.x, p.z) - chestG[i]; }
+  await yieldPhase();                                // phase 1/3 done — let the loader paint
 
   // ── FLOATING SKY-ISLANDS (Final Drop's signature look) ────────────────────
   // Hovering rock islands with grassy tops, trees, and premium loot. Each one
@@ -2390,7 +2901,7 @@ export async function buildMap(W, mapId) {
       const ang = rng() * Math.PI * 2;
       const rr = 180 + rng() * (HALF - 320);
       const ix = Math.cos(ang) * rr, iz = Math.sin(ang) * rr;
-      const groundH = heightAt0(ix, iz);
+      const groundH = baseH(ix, iz);
       if (groundH < waterY - 2) continue;                      // not over deep ocean
       const topY = Math.max(groundH, waterY) + 26 + rng() * 26; // 26-52m up
       const rad = 9 + rng() * 8;
@@ -2443,7 +2954,7 @@ export async function buildMap(W, mapId) {
       const p = pois[Math.floor(rng() * pois.length)];
       const px = p.x + 14 + (rng() - 0.5) * 24, pz = p.z + 14 + (rng() - 0.5) * 24;
       const py = heightAt0(px, pz);
-      if (py < waterY + 0.5) continue;
+      if (baseH(px, pz) < waterY + 0.5) continue;
       addPortal(px, py, pz, rng() * Math.PI * 2);
     }
   }
@@ -2457,7 +2968,7 @@ export async function buildMap(W, mapId) {
   for (let i = 0, tries = 0; i < wildN && tries < wildN * 6; tries++) {
     const x = (rng() * 2 - 1) * (HALF - 60), z = (rng() * 2 - 1) * (HALF - 60);
     const y = heightAt0(x, z);
-    if (y < waterY + 0.5) continue;
+    if (baseH(x, z) < waterY + 0.5) continue;
     i++;
     loot(x, y + 0.5, z, null);
     if (rng() < 0.12) chest(x, y + 0.6, z, null);
@@ -2574,6 +3085,22 @@ export async function buildMap(W, mapId) {
     const rmerged = BufferGeometryUtils.mergeGeometries(roadGeos, false);
     const rmat = new THREE.MeshStandardMaterial({ color: roadCol, roughness: 0.98, metalness: 0 });
     try { const gt = groundTex(aniso); rmat.map = gt.map; rmat.normalMap = gt.normal; rmat.normalScale = new THREE.Vector2(0.3, 0.3); } catch (e) {}
+    if (photo && photo.asphalt && rmat.map) {
+      // P2.5: the road_asphalt photograph as DETAIL over the road colour (the same divide-by-its-own-average rule as the terrain): grit and
+      // wear in the road colour of the map, one tile per ROAD_TILE (6 m, the uv the ribbons already carry)
+      const A = PHOTO_FILES.photoAsphalt.avg;
+      rmat.customProgramCacheKey = () => "lc-road-photo-v1";
+      rmat.onBeforeCompile = (sh) => {
+        sh.uniforms.tAsph = { value: photo.asphalt };
+        sh.fragmentShader = sh.fragmentShader
+          .replace("#include <common>", "#include <common>\nuniform sampler2D tAsph;")
+          .replace("#include <map_fragment>", `#include <map_fragment>
+{
+  vec3 r = clamp(texture2D(tAsph, vMapUv).rgb / ${glslV3(A)}, 0.3, 2.6);
+  diffuseColor.rgb *= mix(vec3(dot(r, ${PH_LUM})), r, 0.35);
+}`);
+      };
+    }
     const rmesh = new THREE.Mesh(rmerged, rmat);
     rmesh.receiveShadow = true; rmesh.name = "roads";
     g.add(rmesh);
@@ -3066,6 +3593,11 @@ export async function buildMap(W, mapId) {
     randomGroundPos, losBlocked,
     minimap: mm, themeColor: K.themeColor,
     terrain, water: mapWater, sky: K.sky,
+    // C-PAD (Wave 6): what the ground is made of - read-only, for the gates and for debugging. `genVersion` names the world GENERATOR: 1 = the
+    // Wave-5 build (analytic ground, the terrain built before any POI), 2 = baked lattice + pads + road corridors. Two clients with different
+    // versions build different ground from the same seed - the squad-room handshake should compare it (net.js, lane 7C).
+    genVersion: MAP_GEN_VERSION,
+    ground: { lattice: field.lat, latN: LAT_N, pitch: LAT_PITCH, pads: field.pads.length, corridors: field.corridors, corridorSegments: field.segs.length, bakeMs, roads: roadStats, roadSections: roadLog, padLog },
     // the look to restore to when the camera surfaces (underwater overrides it)
     fogSurface: { color: K.sky, density: K.fog },
   };
