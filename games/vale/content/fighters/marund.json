@@ -87,7 +87,10 @@
             }
           ]
         }
-      ]
+      ],
+      "present": {
+        "vfx": "marund_passive_hearth"
+      }
     },
     "a1": {
       "id": "marund_shoulder_in",
@@ -185,7 +188,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "marund_a1_shoulder"
           }
         }
       ],
@@ -252,7 +255,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_ring_pulse",
+            "vfx": "marund_a2_raise",
             "sfx": "c_slam"
           }
         },
@@ -401,7 +404,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_slam_ground",
+            "vfx": "marund_a3_mortar",
             "sfx": "c_slam",
             "telegraph": "ally_only"
           }
@@ -417,6 +420,7 @@
       },
       "present": {
         "anim": "cast_a3",
+        "vfx": "marund_a3_fling",
         "sfx": "c_thrown",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
@@ -531,7 +535,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_leap"
+            "vfx": "marund_ult_leap"
           }
         }
       ],

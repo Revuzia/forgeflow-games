@@ -79,7 +79,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_empower"
+        "vfx": "lisvel_passive_reach"
       }
     },
     "a1": {
@@ -198,7 +198,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_arrow",
+            "vfx": "lisvel_a1_arrow",
             "sfx": "c_proj_whoosh"
           }
         }
@@ -259,7 +259,7 @@
           "speed": 16,
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "lisvel_a2_backstep"
           }
         },
         {
@@ -339,7 +339,7 @@
             }
           },
           "present": {
-            "vfx": "lib_empower"
+            "vfx": "lisvel_a3_draw"
           }
         }
       ],
@@ -350,6 +350,7 @@
       },
       "present": {
         "anim": "cast_a3",
+        "vfx": "lisvel_a3_draw",
         "sfx": "c_buff"
       }
     },

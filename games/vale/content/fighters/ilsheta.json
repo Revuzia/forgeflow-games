@@ -56,7 +56,7 @@
       "desc": "Ilsheta's heals restore 40% more to allies who are stunned, rooted, slowed, airborne, asleep, feared or taunted, and give them 15% move speed for 1.5 s (once per 4 s per ally).",
       "triggers": [],
       "present": {
-        "vfx": "lib_heal_rise"
+        "vfx": "ilsheta_passive_warm"
       }
     },
     "a1": {
@@ -124,7 +124,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_bolt_lumen",
+            "vfx": "ilsheta_a1_glint",
             "sfx": "c_proj_whoosh"
           }
         }
@@ -415,7 +415,8 @@
       },
       "present": {
         "anim": "cast_a3",
-        "vfx": "lib_shield_up",
+        "vfx": "ilsheta_a3_kindle",
+        "hitVfx": "ilsheta_a3_shell",
         "sfx": "c_shield",
         "telegraph": "ally_only"
       }
@@ -584,7 +585,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_heal_rise",
+            "vfx": "ilsheta_ult_dawn",
             "sfx": "c_ult_release"
           }
         }

@@ -76,7 +76,7 @@
                 }
               ],
               "present": {
-                "vfx": "nurrow_a2_drowse",
+                "vfx": "nurrow_passive_hush",
                 "sfx": "c_cast_shade"
               }
             }
@@ -84,7 +84,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_ring_pulse"
+        "vfx": "nurrow_passive_hush"
       }
     },
     "a1": {
@@ -145,7 +145,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "nurrow_a1_step"
           }
         }
       ],
@@ -301,7 +301,7 @@
       "present": {
         "anim": "cast_a3",
         "sfx": "c_swing_light",
-        "hitVfx": "lib_silence",
+        "hitVfx": "nurrow_a3_snuff",
         "hitSfx": "c_hit_magic"
       }
     },
@@ -402,7 +402,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "nurrow_ult_lunge"
           }
         }
       ],

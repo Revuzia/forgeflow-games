@@ -63,7 +63,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_burst_lumen"
+        "vfx": "kemdo_passive_cool"
       }
     },
     "a1": {
@@ -143,7 +143,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_line_cleave",
+            "vfx": "kemdo_a1_thrust",
             "sfx": "c_swing_heavy",
             "telegraph": "ally_only"
           }
@@ -210,7 +210,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_zone_glass",
+            "vfx": "kemdo_a2_shimmer",
             "telegraph": "ally_only"
           }
         },
@@ -221,7 +221,7 @@
           "speed": 15,
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "kemdo_a2_dash"
           }
         }
       ],
