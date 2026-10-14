@@ -254,6 +254,16 @@ keep every line load-bearing.
   running fight; clicks fired attacks).
 - `boot.js?v=N` cache-bust on EVERY iteration; ES modules cache hard and a
   bumped boot does not bust its imports — serve dev with no-store.
+- Bot / AI-filled players carry RANDOM player handles, drawn fresh every match
+  (owner, 2026-10-13) — never a fixed list of names that repeats match after
+  match, never "Bot 1" / "CPU" / "AI" labels on a filled seat. Mix the shapes
+  people type into a name box (SaltyPelican, otter42, sneaky_squid, Wren2011,
+  KELPKING, the game's own GUEST-XXXX), from original word lists, within the
+  game's name length limit. Reference: games/dyefield/runtime/src/core/match/
+  handles.ts. Online Quick Match never strands a player: a search shows its
+  count/clock and the seats fill as players "join" (2-player: one partner at a
+  random 30-60 s; bigger rooms: one by one over 20-60 s), then the match starts —
+  never a "no one is online / play vs bots" dead end.
 - Store copy describes THIS game only (owner, 2026-10-13). Title, tagline,
   short_description, description and tags say what the game is and how it
   plays. They never compare it to, or name, another game: no "a <Title>-style
