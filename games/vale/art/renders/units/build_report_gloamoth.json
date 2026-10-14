@@ -1,0 +1,166 @@
+{
+  "id": "gloamoth",
+  "rest_solve_err": 2.498001805406602e-16,
+  "heat_body": {
+    "heat_ok": true,
+    "unweighted": 0,
+    "fixed_vertices": 0
+  },
+  "tris": 4700,
+  "parts": {
+    "body": 0,
+    "wings_f": 1,
+    "wings_h": 2
+  },
+  "uv_coverage": 0.755,
+  "bake": {
+    "base": 0.8,
+    "rough_metal": 0.54,
+    "normal": 0.66,
+    "ao": 0.72,
+    "normal_fixed_px": 6354,
+    "pack_save": 0.09,
+    "total": 2.86
+  },
+  "bake_holes_filled": 0,
+  "no_ao_wings_f": 362225,
+  "no_ao_wings_h": 175519,
+  "clips": {
+    "idle": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "run": {
+      "frames": 18,
+      "duration_s": 0.6,
+      "loop": true,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "attack1": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "death": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    }
+  },
+  "mesh_top_m": 1.614,
+  "min_z": {
+    "idle": [
+      0.76,
+      [
+        52,
+        [
+          0.1,
+          -0.12,
+          0.76
+        ]
+      ]
+    ],
+    "run": [
+      0.716,
+      [
+        2,
+        [
+          0.09,
+          -0.07,
+          0.72
+        ]
+      ]
+    ],
+    "attack1": [
+      0.397,
+      [
+        14,
+        [
+          0.1,
+          -0.57,
+          0.4
+        ]
+      ]
+    ],
+    "death": [
+      -0.01,
+      [
+        34,
+        [
+          0.29,
+          0.42,
+          -0.01
+        ]
+      ]
+    ]
+  },
+  "glb_bytes_raw": 1639084,
+  "optimize": {
+    "ok": true,
+    "before": 1639084,
+    "after": 391480
+  },
+  "glb_bytes": 391480,
+  "inspect": [
+    "    prim material=gloamoth_body tris=2300 verts=2161 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
+    "    prim material=gloamoth_wing tris=1200 verts=799 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
+    "    prim material=gloamoth_wing tris=1200 verts=839 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
+    "  material gloamoth_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
+    "  material gloamoth_wing: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.30,0.30,0.30 base=1,1,1,1",
+    "  texture gloamoth_normal: image/webp ? 81.4 KiB",
+    "  texture gloamoth_orm: image/webp ? 25.3 KiB",
+    "  texture gloamoth_base: image/webp ? 104.6 KiB",
+    "  clip attack1      1.000 s (30 f) channels=14 bones=13",
+    "  clip death        1.500 s (45 f) channels=15 bones=14",
+    "  clip idle         2.000 s (60 f) channels=15 bones=14",
+    "  clip run          0.600 s (18 f) channels=15 bones=14"
+  ],
+  "load_test": {
+    "ok": true,
+    "log": [
+      "[three] art/out/units/gloamoth.glb (382 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: gloamoth_base 1024x1024 105K, gloamoth_normal 1024x1024 81K, gloamoth_orm 512x512 25K",
+      "  skinned meshes: gloamoth_1(2161v), gloamoth_2(799v), gloamoth_3(839v)",
+      "  bones: 15 (root hips abdomen abdomen2 head antennaL antennaR wing_fL wing_f2L wing_fR wing_f2R wing_hL wing_h2L wing_hR wing_h2R)",
+      "  clips: attack1:1.000s/14tr, death:1.500s/15tr, idle:2.000s/15tr, run:0.600s/15tr",
+      "  tracks checked: 59; materials: gloamoth_body, gloamoth_wing; textures: gloamoth_body.map=1024x1024, gloamoth_body.normalMap=1024x1024, gloamoth_body.roughnessMap=512x512, gloamoth_body.metalnessMap=512x512, gloamoth_body.aoMap=512x512, gloamoth_wing.map=1024x1024, gloamoth_wing.normalMap=1024x1024, gloamoth_wing.roughnessMap=512x512, gloamoth_wing.metalnessMap=512x512, gloamoth_wing.aoMap=512x512, gloamoth_wing.emissiveMap=1024x1024",
+      "  tris: 4700; bind-pose bounds (three units, Y up): 1.60 x 0.79 x 1.09; facing (-0.00, 1.00); head bone y 1.15; runRefSpeed -",
+      "  run: 18 f, planted samples undefined, max foot-speed error undefined%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "sheet": {
+    "ok": true,
+    "out": "art/renders/units/gloamoth.png",
+    "log": [
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.798,0.819,-0.671],[0.798,1.614,0.416]],\"facing\":[0,1],\"headY\":1.15,\"heightPx1080\":85,\"rows\":[\"facings\",\"attack1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1500],\"clips\":4,\"out\":\"art/renders/units/gloamoth.png\",\"seconds\":6.5}"
+    ]
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "sculpt": 1.98,
+      "bind": 0.03,
+      "uv": 4.18,
+      "bake": 3.16,
+      "clips": 0.04,
+      "ground_qa": 0.03,
+      "export": 0.14,
+      "optimize": 0.36,
+      "qa": 6.79
+    },
+    "total_s": 16.75
+  }
+}

@@ -279,6 +279,13 @@ export class Actor {
     this.barHeight = this.artHeight + 0.35;
     this.runRef = Math.max(0.5, def.base.moveSpeed ?? 3);
     this.attackWindup = def.attack?.windup ?? 0.3;
+    // a unit ability whose blow lands as a delayed area (a boss's telegraphed slam): its cast clip keeps playing
+    // through the delay and its impact lands on release + delay, not on release
+    this.castHold.clear();
+    def.abilities.forEach((a, i) => {
+      const area = (a.effects as { op?: string; delay?: number }[] | undefined)?.find((e) => e.op === 'area' && (e.delay ?? 0) > 0);
+      if (area) this.castHold.set(`cast_a${i + 1}`, area.delay ?? 0);
+    });
   }
 
   /** attach the loaded template (async); safe after dispose */
@@ -419,14 +426,33 @@ export class Actor {
     }
   }
 
+  /** unit cast role -> its delayed area's delay (s) */
+  private readonly castHold = new Map<string, number>();
+  /** a held cast clip playing on after its cast state: role, seconds since the cast began, impact time */
+  private hold: { role: string; t: number; impact: number } | null = null;
+
   /** drive the clip for one frame */
   private animate(v: EntityView, dt: number, alpha: number): void {
-    const role = this.roleOf(v);
+    let role = this.roleOf(v);
+    // held casts: entering a held cast starts the hold; afterwards idle/run keep the cast clip until it ends
+    const delay = this.castHold.get(role);
+    if (v.state === 'cast' && delay !== undefined) {
+      if (!this.hold || this.hold.role !== role || v.stateTime < this.hold.t - 0.25) {
+        this.hold = { role, t: v.stateTime, impact: Math.max(0.05, v.stateDuration) + delay };
+      } else this.hold.t = v.stateTime;
+    } else if (this.hold) {
+      this.hold.t += dt;
+      const clip = this.action(this.hold.role)?.getClip();
+      const end = this.hold.impact / IMPACT_AT * (clip ? 1 : 0);
+      if ((v.state === 'idle' || v.state === 'move') && this.hold.t < end) role = this.hold.role;
+      else this.hold = null;
+    }
     const restarted = v.stateTime + 1e-6 < this.lastStateTime;
     this.lastStateTime = v.stateTime;
     const key = role;
     let act = this.current;
-    if (key !== this.currentKey || (restarted && !LOOPING.has(role) && role !== 'run' && role !== 'death')) {
+    const held = !!this.hold && v.state !== 'cast' && role === this.hold.role;     // a held cast must not restart
+    if (key !== this.currentKey || (restarted && !held && !LOOPING.has(role) && role !== 'run' && role !== 'death')) {
       const next = this.action(role);
       if (next) {
         const fade = role.startsWith('attack') || role === 'crit' ? 0.06 : 0.1;
@@ -451,6 +477,10 @@ export class Actor {
         const impact = Math.max(0.05, this.attackWindup * (v.stateDuration || 1));
         act.timeScale = 0;
         act.time = Math.min(clipDur - 1e-3, st * (IMPACT_AT * clipDur) / impact);
+      } else if (this.hold && role === this.hold.role) {
+        // a held cast: the clip's impact (40 %) lands on release + the area's delay, then follows through
+        act.timeScale = 0;
+        act.time = Math.min(clipDur - 1e-3, this.hold.t * (IMPACT_AT * clipDur) / this.hold.impact);
       } else if (role.startsWith('cast_') && v.state === 'cast') {
         const impact = v.stateDuration > 0.02 ? v.stateDuration : 0.25;
         act.timeScale = 0;

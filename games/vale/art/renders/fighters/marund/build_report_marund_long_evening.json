@@ -1,0 +1,257 @@
+{
+  "id": "marund_long_evening",
+  "fighter": "marund",
+  "skin": true,
+  "parts": {
+    "bind_shirt": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "hand.L",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_shirt": 2598,
+    "bind_forearms": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "shoulder.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_forearms": 800,
+    "bind_apron": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "upper_arm.L",
+        "shin.L",
+        "foot.L",
+        "shin.R",
+        "foot.R"
+      ]
+    },
+    "tris_apron": 1800,
+    "bind_tunic": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_tunic": 1700,
+    "bind_belt": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_belt": 900,
+    "bind_legs": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "toe.L",
+        "toe.R"
+      ]
+    },
+    "tris_legs": 896,
+    "bind_boots": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R"
+      ]
+    },
+    "tris_boots": 1198,
+    "tris_cap": 3600,
+    "tris_cap_band": 1098,
+    "tris_windows_frame": 600,
+    "tris_windows_glass": 240,
+    "tris_head": 1000,
+    "tris_mask": 1498,
+    "tris_hand_R": 600,
+    "tris_hand_L": 600,
+    "tris_knee_R": 250,
+    "tris_knee_L": 250,
+    "tris_maul_haft": 200,
+    "tris_maul_head": 400,
+    "tris_rod_l": 150,
+    "tris_pail": 900,
+    "tris_finial_post": 258,
+    "tris_finial_vessel": 120,
+    "validate_marund": "21416->21407",
+    "validate_marund_accent": "240->236"
+  },
+  "uv_coverage": 0.639,
+  "bake": {
+    "base": 2.45,
+    "rough_metal": 1.91,
+    "normal": 1.44,
+    "ao": 2.19,
+    "normal_fixed_px": 35022,
+    "projection": 31.94,
+    "pack_save": 32.19,
+    "total": 40.39
+  },
+  "tris": 21643,
+  "mesh_top_m": 2.408,
+  "glb_bytes_raw": 2506744,
+  "optimize": {
+    "ok": true,
+    "before": 2506744,
+    "after": 1059180
+  },
+  "glb_bytes": 1059180,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_long_evening.glb (1034 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: marund_long_evening_base 2048x2048 307K, marund_long_evening_normal 512x512 38K, marund_long_evening_orm 512x512 59K",
+      "  skinned meshes: marund_accent(126v), marund_long_evening(17892v)",
+      "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 21643; bind-pose bounds (three units, Y up): 1.62 x 2.41 x 1.28; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/marund/marund_long_evening_splash.png",
+      "portrait": "art/out/fighters/marund/marund_long_evening_portrait.png"
+    },
+    "seconds": {
+      "splash": 9.8,
+      "portrait": 5.76
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.77,
+        0,
+        -0.638
+      ],
+      [
+        0.852,
+        2.408,
+        0.638
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.579,
+    "accentPct": 2.11,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 130,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/marund/three_marund_long_evening.png",
+    "seconds": 12.8,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.11,
+      "model": 3.67,
+      "lows_bind": 6.08,
+      "uv": 6.68,
+      "bake": 40.39,
+      "export": 0.17,
+      "optimize": 0.95,
+      "load_test": 0.18,
+      "render": 15.6,
+      "three_qa": 13.06
+    },
+    "total_s": 86.93
+  },
+  "run_ref_speed": 3.35,
+  "height_m": 1.88
+}

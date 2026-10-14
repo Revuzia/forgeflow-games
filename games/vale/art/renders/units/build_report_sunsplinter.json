@@ -1,0 +1,220 @@
+{
+  "id": "sunsplinter",
+  "rest_solve_err": 4.440892098500626e-16,
+  "tris": 8214,
+  "parts": {
+    "stone": 0,
+    "core": 1,
+    "glass": 2
+  },
+  "uv_coverage": 0.637,
+  "bake": {
+    "base": 1.31,
+    "rough_metal": 1.15,
+    "normal": 0.73,
+    "ao": 0.58,
+    "normal_fixed_px": 3291,
+    "pack_save": 0.08,
+    "total": 4.03
+  },
+  "bake_holes_filled": 372,
+  "clips": {
+    "idle": {
+      "frames": 120,
+      "duration_s": 4.0,
+      "loop": true,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "run": {
+      "frames": 24,
+      "duration_s": 0.8,
+      "loop": true,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "attack1": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "cast_a1": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "cast_a2": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "cast_a3": {
+      "frames": 35,
+      "duration_s": 1.1667,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "death": {
+      "frames": 50,
+      "duration_s": 1.6667,
+      "loop": false,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    }
+  },
+  "mesh_top_m": 3.201,
+  "min_z": {
+    "idle": [
+      0.534,
+      [
+        102,
+        [
+          0.3,
+          -0.42,
+          0.53
+        ]
+      ]
+    ],
+    "run": [
+      0.497,
+      [
+        22,
+        [
+          0.4,
+          0.11,
+          0.5
+        ]
+      ]
+    ],
+    "attack1": [
+      0.498,
+      [
+        14,
+        [
+          0.4,
+          -0.79,
+          0.5
+        ]
+      ]
+    ],
+    "cast_a1": [
+      0.332,
+      [
+        10,
+        [
+          -0.01,
+          0.16,
+          0.33
+        ]
+      ]
+    ],
+    "cast_a2": [
+      0.387,
+      [
+        38,
+        [
+          0.49,
+          -0.29,
+          0.39
+        ]
+      ]
+    ],
+    "cast_a3": [
+      0.336,
+      [
+        20,
+        [
+          -0.21,
+          -5.05,
+          0.34
+        ]
+      ]
+    ],
+    "death": [
+      -0.42,
+      [
+        28,
+        [
+          0.08,
+          -1.45,
+          -0.42
+        ]
+      ]
+    ]
+  },
+  "glb_bytes_raw": 2471188,
+  "optimize": {
+    "ok": true,
+    "before": 2471188,
+    "after": 779816
+  },
+  "glb_bytes": 779816,
+  "icon": {
+    "out": "art/out/units/sunsplinter_icon.png"
+  },
+  "inspect": [
+    "  material sunsplinter_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
+    "  material sunsplinter_noon: maps=[] emissive=0.80,0.48,0.10 base=1,0.597,0.122,1",
+    "  texture sunsplinter_normal: image/webp ? 106.8 KiB",
+    "  texture sunsplinter_orm: image/webp ? 33.4 KiB",
+    "  texture sunsplinter_base: image/webp ? 119.9 KiB",
+    "  clip attack1      1.000 s (30 f) channels=55 bones=28",
+    "  clip cast_a1      1.333 s (40 f) channels=68 bones=28",
+    "  clip cast_a2      1.500 s (45 f) channels=54 bones=28",
+    "  clip cast_a3      1.167 s (35 f) channels=68 bones=28",
+    "  clip death        1.667 s (50 f) channels=54 bones=28",
+    "  clip idle         4.000 s (120 f) channels=42 bones=28",
+    "  clip run          0.800 s (24 f) channels=54 bones=28"
+  ],
+  "load_test": {
+    "ok": true,
+    "log": [
+      "[three] art/out/units/sunsplinter.glb (762 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sunsplinter_base 1024x1024 120K, sunsplinter_normal 1024x1024 107K, sunsplinter_orm 512x512 33K",
+      "  skinned meshes: sunsplinter_1(7018v), sunsplinter_2(306v)",
+      "  bones: 29 (root hips c0 c1 c2 c3 c4 c5 core g0 g1 g2 g3 g4 g5 g6 head s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11)",
+      "  clips: attack1:1.000s/55tr, cast_a1:1.333s/68tr, cast_a2:1.500s/54tr, cast_a3:1.167s/68tr, death:1.667s/54tr, idle:4.000s/42tr, run:0.800s/54tr",
+      "  tracks checked: 395; materials: sunsplinter_body, sunsplinter_noon; textures: sunsplinter_body.map=1024x1024, sunsplinter_body.normalMap=1024x1024, sunsplinter_body.roughnessMap=512x512, sunsplinter_body.metalnessMap=512x512, sunsplinter_body.aoMap=512x512",
+      "  tris: 8214; bind-pose bounds (three units, Y up): 3.29 x 2.55 x 3.45; facing (-0.00, 1.00); head bone y 2.50; runRefSpeed -",
+      "  run: 24 f, planted samples undefined, max foot-speed error undefined%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "sheet": {
+    "ok": true,
+    "out": "art/renders/units/sunsplinter.png",
+    "log": [
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-1.644,0.648,-1.635],[1.646,3.201,1.813]],\"facing\":[-0.001,1],\"headY\":2.503,\"heightPx1080\":177,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/sunsplinter.png\",\"seconds\":8}"
+    ]
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "sculpt": 14.51,
+      "bind": 0.02,
+      "uv": 8.47,
+      "bake": 4.53,
+      "clips": 0.32,
+      "ground_qa": 0.12,
+      "export": 0.48,
+      "optimize": 0.37,
+      "icon": 0.53,
+      "qa": 8.35
+    },
+    "total_s": 37.77
+  }
+}
