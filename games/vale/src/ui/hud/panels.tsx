@@ -26,9 +26,9 @@ export function Scoreboard(): JSX.Element | null {
   if (model.ffa) {
     const rows = rankFray(v.players);
     return (
-      <section class="score plate plate--raised" aria-label={cv.t('hourboard.title', 'Hour Board')}>
-        <header class="score__head"><span class="t-h2">{cv.t('hourboard.title', 'Hour Board')}</span><span class="t-caption muted">{cv.t('hourboard.hint', '')}</span></header>
-        <table class="score__table">
+      <section class="hscore plate plate--raised" aria-label={cv.t('hourboard.title', 'Hour Board')}>
+        <header class="hscore__head"><span class="t-h2">{cv.t('hourboard.title', 'Hour Board')}</span><span class="t-caption muted">{cv.t('hourboard.hint', '')}</span></header>
+        <table class="hscore__table">
           <thead><tr>
             <th>{cv.t('hourboard.col.place', 'Place')}</th><th>{cv.t('hourboard.col.seat', 'Seat')}</th><th class="l">{cv.t('hourboard.col.player', 'Player')}</th>
             <th>{cv.t('score.col.level', 'Lv')}</th><th>{cv.t('hourboard.col.lives', 'Lives')}</th><th>{cv.t('hourboard.col.takedowns', 'Takedowns')}</th>
@@ -44,19 +44,19 @@ export function Scoreboard(): JSX.Element | null {
   const tm = v.teams.find((t) => t.team === model.myTeam), tt = v.teams.find((t) => t.team !== model.myTeam);
   const lead = (tm?.gold ?? 0) - (tt?.gold ?? 0);
   return (
-    <section class="score plate plate--raised" aria-label={cv.t('score.title', 'Scoreboard')}>
-      <header class="score__head">
+    <section class="hscore plate plate--raised" aria-label={cv.t('score.title', 'Scoreboard')}>
+      <header class="hscore__head">
         <span class="t-h2">{cv.t('score.title', 'Scoreboard')}</span>
         <span class="t-caption muted num">{cv.t('score.gold_lead', 'Gleam lead')} {lead >= 0 ? '+' : '−'}{fmtInt(Math.abs(lead))}</span>
       </header>
       {[{ list: mine, rel: 'ally' as const, team: tm }, { list: theirs, rel: 'enemy' as const, team: tt }].map((blk) => (
-        <div class={`score__block score__block--${blk.rel}`}>
-          <div class="score__bhead">
+        <div class={`hscore__block hscore__block--${blk.rel}`}>
+          <div class="hscore__bhead">
             <span style={{ color: REL_VAR[blk.rel] }}><SideGlyph team={blk.team?.team ?? (blk.rel === 'ally' ? model.myTeam : 1 - model.myTeam)} size={14} /></span>
             <span class="t-label">{blk.rel === 'ally' ? cv.t('score.team.ally', 'Your team') : cv.t('score.team.enemy', 'The other team')}</span>
             <span class="t-caption muted num">{cv.t('hud.takedowns', 'Takedowns')} {blk.team?.kills ?? 0} · {cv.t('score.structures_down', 'Structures down')} {blk.team?.structuresDestroyed ?? 0}</span>
           </div>
-          <table class="score__table">
+          <table class="hscore__table">
             <thead><tr>
               <th class="l">{cv.t('score.col.player', 'Player')}</th><th>{cv.t('score.col.level', 'Lv')}</th><th>{cv.t('score.col.kda', 'T / F / A')}</th>
               <th>{cv.t('score.col.cs', 'Wicks')}</th><th>{cv.t('score.col.gold', 'Gleam')}</th><th>{cv.t('score.col.damage', 'Damage')}</th><th class="l">{cv.t('score.col.items', 'Items')}</th>
@@ -76,9 +76,9 @@ function PlayerCell(p: { p: PlayerView }): JSX.Element {
   const f = cv.fighter(p.p.fighter);
   const role = cv.role(p.p.role);
   return (
-    <td class="l score__player">
-      <Portrait fighter={f} skin={p.p.skin} size="fill" round class="score__face" />
-      <span class="score__names">
+    <td class="l hscore__player">
+      <Portrait fighter={f} skin={p.p.skin} size="fill" round class="hscore__face" />
+      <span class="hscore__names">
         <span class="t-body-s">{p.p.player === model.you ? `${p.p.name}` : p.p.name}{p.p.controller === 'bot' ? <span class="chip chip--bot">{cv.t('score.bot', 'Bot')}</span> : null}</span>
         <span class="t-caption muted">{f?.name}{role ? ` · ${role.name}` : ''}</span>
       </span>
@@ -88,7 +88,7 @@ function PlayerCell(p: { p: PlayerView }): JSX.Element {
 function Items(p: { p: PlayerView }): JSX.Element {
   const { cv } = useApp();
   useHud().model.frame.value;
-  return <td class="l"><span class="score__items">{p.p.items.map((id) => <span class="score__item">{id ? <ItemGlyph item={cv.item(id)} src={cv.asset(cv.item(id)?.icon)} /> : null}</span>)}</span></td>;
+  return <td class="l"><span class="hscore__items">{p.p.items.map((id) => <span class="hscore__item">{id ? <ItemGlyph item={cv.item(id)} src={cv.asset(cv.item(id)?.icon)} /> : null}</span>)}</span></td>;
 }
 function TeamRow(p: { p: PlayerView; enemy: boolean }): JSX.Element {
   const { model } = useHud();
@@ -105,7 +105,7 @@ function TeamRow(p: { p: PlayerView; enemy: boolean }): JSX.Element {
       <td class="num">{p.enemy ? '—' : fmtInt(p.p.gold)}</td>
       <td class="num">{fmtInt(p.p.damageToFighters)}</td>
       <Items p={p.p} />
-      {dead && p.p.respawnIn > 0 ? <td class="num score__down">{Math.ceil(p.p.respawnIn)}</td> : <td />}
+      {dead && p.p.respawnIn > 0 ? <td class="num hscore__down">{Math.ceil(p.p.respawnIn)}</td> : <td />}
     </tr>
   );
 }
@@ -122,10 +122,10 @@ function FrayRow(p: { p: PlayerView; place: number }): JSX.Element {
   return (
     <tr class={`${you ? 'is-you' : ''} ${p.p.placement !== undefined ? 'is-dead' : ''}`} style={{ '--c': color } as CSSProperties}>
       <td class="num">{p.place}</td>
-      <td><span class="score__seat"><SeatGlyph seat={seat} size={14} color={color} keyline={!you} /><span class="num t-caption">{roman(seat)}</span></span></td>
+      <td><span class="hscore__seat"><SeatGlyph seat={seat} size={14} color={color} keyline={!you} /><span class="num t-caption">{roman(seat)}</span></span></td>
       <PlayerCell p={p.p} />
       <td class="num">{e?.level ?? '—'}</td>
-      <td><span class="hrow__lives">{Array.from({ length: lives }, (_, k) => <i class={k < (p.p.lives ?? 0) ? 'is-on' : ''} />)}</span></td>
+      <td><span class="frow__lives">{Array.from({ length: lives }, (_, k) => <i class={k < (p.p.lives ?? 0) ? 'is-on' : ''} />)}</span></td>
       <td class="num">{fmtInt(p.p.score ?? 0)}</td>
       <td class="num">{p.p.kills} / {p.p.deaths} / {p.p.assists}</td>
       <td class="num">{fmtInt(p.p.damageToFighters)}</td>

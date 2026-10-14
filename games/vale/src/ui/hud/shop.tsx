@@ -106,13 +106,13 @@ export function ShopPanel(): JSX.Element | null {
   const sellSlot = (i: number): void => { if (!me.items[i]) return; sound.play('back'); client.send({ type: 'sell', slot: i }); };
 
   return (
-    <section class="shop plate plate--raised" role="dialog" aria-label={cv.t('hud.shopui.title', 'Lampwright')} onContextMenu={(e) => e.preventDefault()}>
-      <header class="shop__head">
+    <section class="lshop plate plate--raised" role="dialog" aria-label={cv.t('hud.shopui.title', 'Lampwright')} onContextMenu={(e) => e.preventDefault()}>
+      <header class="lshop__head">
         <span class="t-h1">{cv.t('hud.shopui.title', 'Lampwright')}</span>
-        <span class="shop__gold num t-num-gold"><GleamGlyph size={16} /> {fmtInt(me.gold)}</span>
-        {!me.canShop ? <span class="shop__access t-caption" role="status">{accessLine(cv, client.setup.mode)}</span> : null}
-        <span class="shop__spacer" />
-        <label class="shop__search">
+        <span class="lshop__gold num t-num-gold"><GleamGlyph size={16} /> {fmtInt(me.gold)}</span>
+        {!me.canShop ? <span class="lshop__access t-caption" role="status">{accessLine(cv, client.setup.mode)}</span> : null}
+        <span class="lshop__spacer" />
+        <label class="lshop__search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" /><path d="M15 15l5 5" /></svg>
           <input type="search" value={query} placeholder={cv.t('hud.shopui.search', 'Search items')} aria-label={cv.t('hud.shopui.search', 'Search items')}
             onInput={(e) => setQuery((e.currentTarget as HTMLInputElement).value)}
@@ -120,20 +120,20 @@ export function ShopPanel(): JSX.Element | null {
         </label>
         <button type="button" class="hbtn" onClick={() => { shopOpen.value = false; sound.play('back'); }}>{cv.t('hud.shopui.close', 'Close')} <span class="keycap keycap--quiet">{key('shop')}</span></button>
       </header>
-      <div class="shop__body">
-        <nav class="shop__tags" aria-label={cv.t('hud.shopui.filter', 'Filter')}>
-          <button type="button" class={`shop__tag t-label ${tag === 'all' ? 'is-on' : ''}`} aria-pressed={tag === 'all'} onClick={() => setTag('all')}>{cv.t('hud.shopui.all', 'All items')}</button>
+      <div class="lshop__body">
+        <nav class="lshop__tags" aria-label={cv.t('hud.shopui.filter', 'Filter')}>
+          <button type="button" class={`lshop__tag t-label ${tag === 'all' ? 'is-on' : ''}`} aria-pressed={tag === 'all'} onClick={() => setTag('all')}>{cv.t('hud.shopui.all', 'All items')}</button>
           {tags.map((t) => (
-            <button type="button" class={`shop__tag t-label ${tag === t ? 'is-on' : ''}`} aria-pressed={tag === t} onClick={() => { setTag(t); sound.play('tab'); }}>
+            <button type="button" class={`lshop__tag t-label ${tag === t ? 'is-on' : ''}`} aria-pressed={tag === t} onClick={() => { setTag(t); sound.play('tab'); }}>
               {cv.t(`hud.shopui.tag.${t}`, TAG_LABEL[t])}
             </button>
           ))}
         </nav>
-        <div class="shop__grid">
+        <div class="lshop__grid">
           {suggested.length ? (
-            <section class="shop__sec shop__sec--suggest">
-              <h3 class="shop__sech t-label">{cv.t('hud.shopui.recommended', 'Suggested')}{fighter ? <span class="t-caption muted"> · {fighter.name}</span> : null}</h3>
-              <div class="shop__tiles">{suggested.map((it) => <Tile it={it} me={me} sel={selected?.id === it.id} onSel={() => setSel(it.id)} onBuy={() => buy(it)} />)}</div>
+            <section class="lshop__sec lshop__sec--suggest">
+              <h3 class="lshop__sech t-label">{cv.t('hud.shopui.recommended', 'Suggested')}{fighter ? <span class="t-caption muted"> · {fighter.name}</span> : null}</h3>
+              <div class="lshop__tiles">{suggested.map((it) => <Tile it={it} me={me} sel={selected?.id === it.id} onSel={() => setSel(it.id)} onBuy={() => buy(it)} />)}</div>
             </section>
           ) : null}
           {TIER_ORDER.map((tier) => {
@@ -141,22 +141,22 @@ export function ShopPanel(): JSX.Element | null {
             if (!list.length) return null;
             const hour = itemHour(tier);
             return (
-              <section class="shop__sec">
-                <h3 class="shop__sech t-label">
+              <section class="lshop__sec">
+                <h3 class="lshop__sech t-label">
                   <span class="hourticks" style={{ color: HOUR_COLOR[hour] }}>{Array.from({ length: hour }, () => <i />)}</span>
                   {cv.t(`hud.shopui.tier.${tier}`, TIER_LABEL[tier])}
                 </h3>
-                <div class="shop__tiles">{list.map((it) => <Tile it={it} me={me} sel={selected?.id === it.id} onSel={() => setSel(it.id)} onBuy={() => buy(it)} />)}</div>
+                <div class="lshop__tiles">{list.map((it) => <Tile it={it} me={me} sel={selected?.id === it.id} onSel={() => setSel(it.id)} onBuy={() => buy(it)} />)}</div>
               </section>
             );
           })}
           {!shown.length ? <p class="empty empty--compact t-body-s">{cv.t('hud.shopui.none', 'No items match.')}</p> : null}
         </div>
-        <aside class="shop__detail">
+        <aside class="lshop__detail">
           {selected ? <Detail it={selected} me={me} onBuy={() => buy(selected)} onSel={setSel} onSell={sellSlot} /> : null}
-          <div class="shop__inv">
+          <div class="lshop__inv">
             <span class="t-caption muted">{cv.t('hud.shopui.inventory', 'Your items')} · {cv.t('hud.shopui.sell_hint', 'Right-click an item to sell it.')}</span>
-            <div class="shop__invrow">
+            <div class="lshop__invrow">
               {Array.from({ length: SLOTS }, (_, i) => {
                 const it = cv.item(me.items[i]);
                 return (
@@ -167,7 +167,7 @@ export function ShopPanel(): JSX.Element | null {
                 );
               })}
             </div>
-            <button type="button" class="hbtn shop__undo" title={cv.t('hud.shopui.undo_hint', 'Undo returns your last purchase for the full price.')}
+            <button type="button" class="hbtn lshop__undo" title={cv.t('hud.shopui.undo_hint', 'Undo returns your last purchase for the full price.')}
               onClick={() => { sound.play('back'); client.send({ type: 'undo' }); }}>{cv.t('hud.item.undo', 'Undo purchase')}</button>
           </div>
         </aside>
@@ -187,12 +187,12 @@ function Tile(p: { it: ItemDefT; me: PlayerView; sel: boolean; onSel(): void; on
   const qt = quoteItem(cv, p.me, p.it);
   const owned = p.me.items.filter((x) => x === p.it.id).length;
   return (
-    <button type="button" class={`stile ${p.sel ? 'is-selected' : ''} ${qt.why === 'gold' ? 'is-short' : ''} ${qt.why && qt.why !== 'gold' ? 'is-blocked' : ''}`}
+    <button type="button" class={`istile ${p.sel ? 'is-selected' : ''} ${qt.why === 'gold' ? 'is-short' : ''} ${qt.why && qt.why !== 'gold' ? 'is-blocked' : ''}`}
       aria-label={`${p.it.name}, ${fmtInt(qt.price)} Gleam`} aria-pressed={p.sel}
       onClick={p.onSel} onDblClick={p.onBuy} onContextMenu={(e) => { e.preventDefault(); p.onSel(); p.onBuy(); }}>
       <ItemGlyph item={p.it} src={cv.asset(p.it.icon)} />
-      <span class="stile__price num">{fmtInt(qt.price)}</span>
-      {owned ? <span class="stile__owned num" title={cv.t('hud.item.owned', 'Owned')}>{owned > 1 ? `×${owned}` : '✓'}</span> : null}
+      <span class="istile__price num">{fmtInt(qt.price)}</span>
+      {owned ? <span class="istile__owned num" title={cv.t('hud.item.owned', 'Owned')}>{owned > 1 ? `×${owned}` : '✓'}</span> : null}
     </button>
   );
 }

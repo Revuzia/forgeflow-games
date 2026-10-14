@@ -118,6 +118,11 @@ img, svg { display: block; }
 
 /* ── screens ────────────────────────────────────────────────────────────────────────────────── */
 .stage { position: absolute; inset: 0; }
+/* over the live menu scene, an ink scrim behind the UI zone (columns 1-6) keeps type legible on bright skies;
+   the stage columns (7-12) stay clear for the subject */
+.app.has-scene:not(.is-match) .stage::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, rgba(11, 13, 17, 0.82) 0%, rgba(11, 13, 17, 0.7) calc(var(--margin) + var(--zone) * 0.7), rgba(11, 13, 17, 0.25) calc(var(--margin) + var(--zone) + var(--gutter)), rgba(11, 13, 17, 0) 78%),
+    linear-gradient(180deg, rgba(11, 13, 17, 0.35) 0%, rgba(11, 13, 17, 0) 22%, rgba(11, 13, 17, 0) 80%, rgba(11, 13, 17, 0.45) 100%); }
 .scr { position: absolute; inset: 0; }
 .scr.is-leaving { pointer-events: none; }
 .scr__zone { position: absolute; left: var(--margin); top: calc(var(--bar-h) + 2 * var(--u)); bottom: calc(4 * var(--u)); width: var(--zone); display: flex; flex-direction: column; min-height: 0; }

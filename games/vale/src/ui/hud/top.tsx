@@ -211,14 +211,14 @@ export function HourBoard(): JSX.Element {
           const out = p.placement !== undefined;
           const color = you ? 'var(--team-self)' : colours === 'simple' ? 'var(--team-enemy)' : `var(--seat-${seat})`;
           return (
-            <li class={`hrow ${you ? 'is-you' : ''} ${out ? 'is-out' : ''}`} style={{ '--c': color } as CSSProperties}>
-              <span class="hrow__place num">{out ? p.placement : i + 1}</span>
-              <span class="hrow__seat" title={`${roman(seat)}`}><SeatGlyph seat={seat} size={colours === 'stamp' && !you ? 15 : 11} color={color} keyline={!you} /></span>
-              <span class="hrow__name t-caption">{you ? cv.t('hourboard.you', 'You') : p.name}</span>
-              {out ? <span class="hrow__out t-caption">{cv.t('hourboard.out', 'Out')}</span> : (
-                <span class="hrow__lives" aria-label={cv.t('fray.lives_n', '{n} lives', { n: p.lives ?? 0 })}>{Array.from({ length: lives }, (_, k) => <i class={k < (p.lives ?? 0) ? 'is-on' : ''} />)}</span>
+            <li class={`frow ${you ? 'is-you' : ''} ${out ? 'is-out' : ''}`} style={{ '--c': color } as CSSProperties}>
+              <span class="frow__place num">{out ? p.placement : i + 1}</span>
+              <span class="frow__seat" title={`${roman(seat)}`}><SeatGlyph seat={seat} size={colours === 'stamp' && !you ? 15 : 11} color={color} keyline={!you} /></span>
+              <span class="frow__name t-caption">{you ? cv.t('hourboard.you', 'You') : p.name}</span>
+              {out ? <span class="frow__out t-caption">{cv.t('hourboard.out', 'Out')}</span> : (
+                <span class="frow__lives" aria-label={cv.t('fray.lives_n', '{n} lives', { n: p.lives ?? 0 })}>{Array.from({ length: lives }, (_, k) => <i class={k < (p.lives ?? 0) ? 'is-on' : ''} />)}</span>
               )}
-              <span class="hrow__score num">{fmtInt(p.score ?? 0)}{p === lead && !out && (p.score ?? 0) > 0 ? <span class="hrow__lead" aria-label={cv.t('hourboard.leader', 'Leading')} /> : null}</span>
+              <span class="frow__score num">{fmtInt(p.score ?? 0)}{p === lead && !out && (p.score ?? 0) > 0 ? <span class="frow__lead" aria-label={cv.t('hourboard.leader', 'Leading')} /> : null}</span>
             </li>
           );
         })}

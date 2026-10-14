@@ -99,10 +99,10 @@ async function journey(mode) {
     await step('match_input', async () => {
       // real input while the autopilot drives: open and close the shop, hold the scoreboard, ping
       await page.keyboard.press('KeyP'); await page.waitForTimeout(300);
-      const shopOpen = await page.locator('.hud .shop').count();
+      const shopOpen = await page.locator('.hud .lshop').count();
       await page.keyboard.press('Escape'); await page.waitForTimeout(200);
       await page.keyboard.down('Tab'); await page.waitForTimeout(250);
-      const board = await page.locator('.hud .score').count();
+      const board = await page.locator('.hud .hscore').count();
       await page.keyboard.up('Tab');
       return { shopOpen: !!shopOpen, scoreboard: !!board, hud: await page.locator('.hud .dbar').count() > 0 };
     });
@@ -172,9 +172,11 @@ async function store() {
       });
       if (!sku) throw new Error('no affordable skin offer (grants too low?)');
       const name = await vale(page, (v, s) => v.cv.skin(v.cv.offer(s).ref).name, sku);
-      await click(page.locator('button, [role=button]', { hasText: name }).first());
-      await page.waitForTimeout(400);
-      await click(page.getByRole('button', { name: /^Buy/ }).first());
+      const card = page.locator(`.offer[aria-label^="${name},"]`).first();
+      await card.scrollIntoViewIfNeeded();
+      await click(card);
+      await waitFor(page, (v, s) => v.router.route.value.params?.sku === s, 5000, sku);
+      await click(page.locator('.scr__foot').getByRole('button', { name: /^Buy/ }));
       await page.waitForTimeout(300);
       const confirm = page.locator('.modal').getByRole('button', { name: /^Buy/ });
       if (await confirm.count()) await confirm.first().click();
@@ -182,9 +184,10 @@ async function store() {
       return { sku, skin: name };
     });
     await step('equip', async () => {
-      const eq = page.getByRole('button', { name: /^Equip/ });
-      await click(eq.first());
-      await page.waitForTimeout(400);
+      // the post-purchase modal offers "Equip now"; fall back to the screen's Equip CTA
+      const eq = page.locator('.modal').getByRole('button', { name: /^Equip/ });
+      await click((await eq.count()) ? eq.first() : page.locator('.scr__foot').getByRole('button', { name: /^Equip/ }));
+      await waitFor(page, (v) => { const r = v.router.route.value.params?.sku; const s = r && v.cv.skin(v.cv.offer(r)?.ref); return !!s && v.state.profile.value.equipped[s.fighter] === s.id; }, 5000);
       return await vale(page, (v) => v.state.profile.value.equipped);
     });
   } catch {
