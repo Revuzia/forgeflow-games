@@ -137,6 +137,15 @@
 .rich__r { color: var(--text-2); white-space: normal; }
 .rich__ratio--physical { color: var(--dmg-physical); }
 .rich__ratio--magic { color: var(--dmg-magic); }
+.rich__k { font-weight: 650; }
+.rich__k--cc { color: var(--warn); }
+.rich__k--slow { color: var(--info); }
+.rich__k--physical { color: var(--dmg-physical); }
+.rich__k--magic { color: var(--dmg-magic); }
+.rich__k--true { color: var(--dmg-true); }
+.rich__k--heal { color: var(--dmg-heal); }
+.rich__k--shield { color: var(--dmg-shield); }
+.rich__k--state { color: var(--chalk-hi); }
 
 /* ── modals ─────────────────────────────────────────────────────────────────────────────────── */
 .modal-layer { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: calc(4 * var(--u)) var(--margin); }

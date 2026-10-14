@@ -103,7 +103,7 @@ function FighterDetail(p: { f: FighterDefT; preview?: string }): JSX.Element {
     </Button>;
   return (
     <Screen kicker={[cls?.name, role?.name].filter(Boolean).join(' · ')} title={f.name}
-      headSide={<span class="t-body-s muted">{f.title}</span>}
+      sub={f.title}
       foot={<div class="row">
         <Button variant="secondary" size="s" onPress={() => router.go('play', { fighter: f.id })}>{cv.t('collection.play_as', 'Play as {fighter}', { fighter: f.name })}</Button>
         <Button variant="quiet" size="s" iconAfter="arrow" onPress={() => router.go('loadout', { fighter: f.id })}>{cv.t('loadout.title', 'Loadout')}</Button>

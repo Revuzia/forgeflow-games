@@ -133,6 +133,7 @@ img, svg { display: block; }
 .scr__title { color: var(--text-1); }
 .scr__kicker { color: var(--text-2); margin-bottom: calc(0.5 * var(--u)); }
 .scr__headside { margin-left: auto; display: flex; align-items: center; gap: calc(2 * var(--u)); }
+.scr__sub { font-family: var(--font-display); font-style: italic; font-size: var(--fs-body-l); color: var(--text-2); margin-top: calc(0.5 * var(--u)); }
 .scr__body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 4px 6px 4px 4px; margin: -4px -6px -4px -4px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
 .scr__foot { display: flex; align-items: center; gap: calc(2 * var(--u)); padding-top: calc(2 * var(--u)); min-height: calc(9 * var(--u)); }
 .scr__foot > .grow { flex: 1; min-width: 0; }

@@ -77,7 +77,7 @@ export function TooltipLayer(): JSX.Element | null {
 export function RichSegs(p: { segs: Seg[] }): JSX.Element {
   return (
     <span class="rich">
-      {p.segs.map((s) => s.kind === 'text' ? s.text : (
+      {p.segs.map((s) => s.kind === 'text' ? s.text : s.kind === 'kw' ? <span class={`rich__k rich__k--${s.tone}`}>{s.text}</span> : (
         <span class={`rich__v rich__v--${s.tone} ${s.missing ? 'rich__v--missing' : ''}`}>
           <span class="rich__n">{s.tone === 'heal' ? '+' : ''}{s.text}</span>
           {s.ratios.length ? <span class="rich__r"> ({s.ratios.map((r, i) => <span class={`rich__ratio rich__ratio--${r.tone}`}>{i ? ', ' : ''}{r.text}</span>)})</span> : null}

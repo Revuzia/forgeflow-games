@@ -51,7 +51,33 @@ export function fmtWhen(iso: string, now = Date.now()): string {
 
 export type DmgTone = 'physical' | 'magic' | 'true' | 'heal' | 'shield' | 'plain';
 export interface ValueSeg { kind: 'value'; text: string; ratios: { text: string; tone: DmgTone }[]; tone: DmgTone; missing?: boolean }
-export type Seg = { kind: 'text'; text: string } | ValueSeg;
+export type KwTone = 'cc' | 'slow' | 'physical' | 'magic' | 'true' | 'heal' | 'shield' | 'state';
+export type Seg = { kind: 'text'; text: string } | ValueSeg | { kind: 'kw'; text: string; tone: KwTone };
+
+// keywords (engine vocabulary: status kinds and damage types, never content ids) light up in running text
+const KEYWORDS: [RegExp, KwTone][] = [
+  [/^(physical|magic|true) damage$/i, 'physical'],
+  [/^(stun(s|ned)?|root(s|ed)?|airborne|knock(s|ed|ing)? (back|up|aside|away)|knockback|taunt(s|ed)?|fear(s|ed)?|sleep(s|ing)?|asleep|silence(s|d)?|disarm(s|ed)?)$/i, 'cc'],
+  [/^slow(s|ed|ing)?$/i, 'slow'],
+  [/^heal(s|ed|ing)?$/i, 'heal'],
+  [/^shield(s|ed)?$/i, 'shield'],
+  [/^(unstoppable|untargetable|invisible|revealed?)$/i, 'state'],
+];
+const KW_RE = /\b((?:physical|magic|true) damage|knock(?:s|ed|ing)? (?:back|up|aside|away)|knockback|stun(?:s|ned)?|root(?:s|ed)?|airborne|taunt(?:s|ed)?|fear(?:s|ed)?|sleep(?:s|ing)?|asleep|silence(?:s|d)?|disarm(?:s|ed)?|slow(?:s|ed|ing)?|heal(?:s|ed|ing)?|shield(?:s|ed)?|unstoppable|untargetable|invisible|revealed?)\b/gi;
+
+function keywordSegs(text: string, out: Seg[]): void {
+  let last = 0;
+  for (const m of text.matchAll(KW_RE)) {
+    if (m.index! > last) out.push({ kind: 'text', text: text.slice(last, m.index) });
+    const w = m[0];
+    let tone: KwTone = 'state';
+    for (const [re, t] of KEYWORDS) if (re.test(w)) { tone = t; break; }
+    if (tone === 'physical') tone = (/^magic/i.test(w) ? 'magic' : /^true/i.test(w) ? 'true' : 'physical');
+    out.push({ kind: 'kw', text: w, tone });
+    last = m.index! + w.length;
+  }
+  if (last < text.length) out.push({ kind: 'text', text: text.slice(last) });
+}
 
 const PCT_KEYS = /^(power|percent|.*Pct|crit|lifesteal|omnivamp|tenacity|healShieldPower|assistShare|sellRatio|p)$/;
 const SEC_KEYS = /^(duration|cooldown|castTime|delay|interval|recharge|window|windup)$/;
@@ -120,7 +146,7 @@ export function richText(cv: CatalogView, record: unknown, desc: string): Seg[] 
   const re = /\{([A-Za-z0-9_.]+)\}/g;
   let last = 0;
   for (const m of desc.matchAll(re)) {
-    if (m.index! > last) out.push({ kind: 'text', text: desc.slice(last, m.index) });
+    if (m.index! > last) keywordSegs(desc.slice(last, m.index), out);
     last = m.index! + m[0].length;
     const path = m[1].split('.');
     const f = walkPath(record, path) ?? (path.length === 1 ? findKey(record, path[0]) : null);
@@ -144,11 +170,11 @@ export function richText(cv: CatalogView, record: unknown, desc: string): Seg[] 
       out.push({ kind: 'value', text: ranked(v, f.key) || String(v), ratios: [], tone });
     }
   }
-  if (last < desc.length) out.push({ kind: 'text', text: desc.slice(last) });
+  if (last < desc.length) keywordSegs(desc.slice(last), out);
   return out;
 }
 
 /** plain-text version (aria labels, search) */
 export function richPlain(segs: Seg[]): string {
-  return segs.map((s) => (s.kind === 'text' ? s.text : s.text + (s.ratios.length ? ` (${s.ratios.map((r) => r.text).join(', ')})` : ''))).join('');
+  return segs.map((s) => (s.kind !== 'value' ? s.text : s.text + (s.ratios.length ? ` (${s.ratios.map((r) => r.text).join(', ')})` : ''))).join('');
 }

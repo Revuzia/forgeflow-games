@@ -10,6 +10,8 @@ export interface ScreenProps {
   title?: ComponentChildren;
   kicker?: ComponentChildren;
   titleSize?: 'm' | 'l';
+  /** a line under the title (a fighter's title, a subtitle) */
+  sub?: ComponentChildren;
   headSide?: ComponentChildren;
   layout?: 'zone' | 'wide';
   /** left part of the footer (secondary actions, the reason a CTA is disabled) */
@@ -31,6 +33,7 @@ export function Screen(p: ScreenProps): JSX.Element {
             <div class="scr__headmain">
               {p.kicker ? <div class="scr__kicker t-label">{p.kicker}</div> : null}
               {p.title ? <h1 class={`scr__title t-display-${p.titleSize ?? 'm'}`}>{p.title}</h1> : null}
+              {p.sub ? <div class="scr__sub">{p.sub}</div> : null}
             </div>
             {p.headSide ? <div class="scr__headside">{p.headSide}</div> : null}
           </header>
