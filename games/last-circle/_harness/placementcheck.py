@@ -6,7 +6,8 @@
     python _harness/placementcheck.py --rev 7f6a9fb2              # a frozen commit (the must-fail proof on Wave 4)
     python _harness/placementcheck.py --disk --quick              # 1 seed per map
     python _harness/placementcheck.py --disk --plant y-only-recentre     # negative control (must exit 1)
-    python _harness/placementcheck.py --disk --wave 6             # also gate the Wave-6 rows (otherwise information)
+    python _harness/placementcheck.py --disk --wave 5             # the Wave-5 gate: the Wave-6 rows below are information only
+    python _harness/placementcheck.py --rev bd523284 --rows base-edges,doorway-clearance,roads-float,pads,ground-match   # only these rows count
 
 It runs placement_census.mjs, which imports the UNMODIFIED runtime/3d/royale/maps.js (and loot.js) in Node through the resolve
 hook in three_hooks.mjs ("three" and "three/addons/" the way index.html's importmap resolves them), builds isla_viva / ashgrid /
@@ -31,14 +32,22 @@ map's own LOD updater builds):
   chest-base          chests on terrain: base gap p50 <= 0.05 m (Wave 4: 0.20 m)       [loot.js populate() run for real]
   chest-base-worst    no chest on terrain hovers more than 0.10 m (the median misses one in ~190)  (Wave 4: up to 5.6 m)
   floor-rings         floor-item ring hover p50 <= 0.12 m over the rendered ground     [no regression]
-Wave-6 rows (information unless --wave 6): grounded structure base edges (<= 5 % of any generator over 0.10 m), doorway
-clearance >= 2.0 m, ramp start step <= 0.55 m, road ribbon float <= 1 %.
+Wave-6 rows (lane 6E; gating since the default is --wave 6, information with --wave 5):
+  base-edges          grounded structure base edges <= 0.10 m over the rendered ground: <= 1 % of any plan generator over it   (Wave 5: house 85-93 %, hut 76-90 %, tower 98-100 %)
+  doorway-clearance   every doorway >= 2.0 m under its lintel                                                              (Wave 5: min 1.16 m, 8 under 2.0)
+  ramp-start-step     every ramp starts within 0.55 m of the floor                                                        (Wave 4: 42 over; Wave 5 release: 0, kept as a guard)
+  roads-float         road ribbon > 0.10 m over the ground <= 1 % of the samples                                          (Wave 5: 2.3 / 16.3 / 6.6 %)
+  ground-match        |heightAt - rendered near ring| p99 <= 1e-4 m (Wave 5 bar: 0.05 m)                                  (Wave 5: 0.012 / 0.037 / 0.023 m)
+  pads                the ground under every pad rect (M.ground.padLog) and under every pad-generator footprint is flat within 0.02 m (physics AND drawn)   (Wave 5: slopes of 0.1-3 m)
 
 Exit 0 pass / 1 fail / 2 could-not-judge (the census crashed, a prop kind is missing, loot.js would not run, Node is missing).
 --plant NAME mutates the BUILT map in memory (never a file) and the gate must FAIL on the designated row:
   y-only-recentre -> anchor-offset + rocks-floating     perimeter-drop -> ground-match     tree-float -> props-float-worst
   stack-float -> stack-contact + props-float-worst
+  Wave 6: no-pads -> base-edges + pads (the drawn ground is 0.35 m lower on half of every footprint)   door-buried -> doorway-clearance
+          ramp-lip -> ramp-start-step   roads-lifted -> roads-float   ground-shift -> ground-match (3 mm)
 In plant mode only the designated rows count: exit 1 = the fault was detected, exit 0 = the gate is blind to it.
+--rows a,b,c does the same for a named set of rows without planting anything (a frozen revision must FAIL them).
 """
 from __future__ import annotations
 
@@ -68,14 +77,23 @@ ROCK_BURIED_MAX = 0.02
 FLOAT_SHARE_MAX = 0.02
 SUNK_SHARE_MAX = 0.02
 FLOAT_WORST = 0.25
-GROUND_P99 = 0.05
+GROUND_P99 = 0.05           # the Wave-5 bar (--wave 5)
+GROUND_P99_W6 = 1e-4        # the Wave-6 bar: physics ground == drawn ground (the plan: <= 1e-4 m after Wave 6)
+EDGE_SHARE_MAX = 0.01       # base-edges: share of a plan generator's grounded structures with an edge > 0.10 m over the ground (Wave 5 allowed 5 %; tightened with 6A at 0 %)
+PAD_FLAT = 0.02             # a pad is flat when the ground under it varies by <= 0.02 m
+PADS_GATING = True          # lane 6E decision on 6A's final numbers (see REPORT / README): False leaves the pads row information
+EDGE_GENS = ("house", "hut", "tower", "rangerTower", "waterTower", "steeple", "lighthouse", "farmland")
 COLTOP_MISS_MAX = 0.05
 CHEST_GAP_P50 = 0.05
 CHEST_GAP_MAX = 0.10
 RING_P50 = 0.12
 FLOAT_TOL = 0.10          # the "resting on" tolerance (also the census FLOAT): a stacked upper may hover this much over its lower's top
 PLANT_ROWS = {"y-only-recentre": {"anchor-offset", "rocks-floating"}, "perimeter-drop": {"ground-match"}, "tree-float": {"props-float-worst"},
-              "stack-float": {"stack-contact", "props-float-worst"}}
+              "stack-float": {"stack-contact", "props-float-worst"},
+              # Wave 6 (lane 6E)
+              "no-pads": {"base-edges", "pads"}, "door-buried": {"doorway-clearance"}, "ramp-lip": {"ramp-start-step"}, "roads-lifted": {"roads-float"},
+              "ground-shift": {"ground-match"}}
+WAVE6_ROWS = ("base-edges", "doorway-clearance", "ramp-start-step", "roads-float", "ground-match", "pads")
 
 
 def rev_root(rev):
@@ -136,13 +154,16 @@ def judge(v, doc, args, plant_rows):
     wave6 = args.wave >= 6
 
     def chk(name, ok, detail, expect=None, wave6_row=False):
-        if plant_rows is not None:                          # negative control: only the designated rows decide
+        if plant_rows is not None:                          # negative control / --rows: only the designated rows decide
             if name in plant_rows:
                 return v.check(name, ok, detail, expect)
             v.info(name + " (not counted in plant mode)", detail)
             return ok
         if wave6_row and not wave6:
-            v.info(name + " (Wave-6 row, information)", detail)
+            v.info(name + " (Wave-6 row, information with --wave 5)", detail)
+            return ok
+        if name == "pads" and not PADS_GATING:
+            v.info(name + " (Wave-6 row, information: 6A's pads are not flat everywhere yet)", detail)
             return ok
         return v.check(name, ok, detail, expect)
 
@@ -229,9 +250,12 @@ def judge(v, doc, args, plant_rows):
         chk("ramp-slope", over == 0, ("every ramp climbs at <= 45 degrees: " + "; ".join("%s %d ramps, steepest %s deg" % (m, r["n"], f(r["max"], 1)) for m, r in rs.items())) if not over else
             "%d of %d ramps climb steeper than 45 degrees: %s" % (over, nr, "; ".join("%s %d of %d (steepest %s deg)" % (m, r["gt45"], r["n"], f(r["max"], 1)) for m, r in rs.items() if r["gt45"])), "0 ramps over 45 degrees")
 
-    # 4. the ground the player stands on vs the ground they see
-    bad = ["%s p99 %s m (max %s, %s%% > 0.10)" % (m, f(S[m]["field"]["near"]["absP99"]), f(S[m]["field"]["near"]["absMax"]), f(100 * (S[m]["field"]["near"]["shareAbsGt10"] or 0), 1)) for m in S if (S[m]["field"]["near"]["absP99"] or 0) > GROUND_P99]
-    chk("ground-match", not bad, "|heightAt - rendered near ring| p99 " + per_map(lambda s: f(s["field"]["near"]["absP99"], 4)) if not bad else " | ".join(bad), "p99 <= %.2f m" % GROUND_P99)
+    # 4. the ground the player stands on vs the ground they see (Wave 5: p99 <= 0.05 m; Wave 6: the physics ground IS the drawn ground, <= 1e-4 m)
+    gbar = GROUND_P99_W6 if wave6 else GROUND_P99
+    gfmt = (lambda x: "%.2e" % x) if wave6 else (lambda x: f(x, 4))
+    bad = ["%s p99 %s m (max %s, %s%% > 0.10, %s%% > 1e-4)" % (m, gfmt(S[m]["field"]["near"]["absP99"]), gfmt(S[m]["field"]["near"]["absMax"]), f(100 * (S[m]["field"]["near"]["shareAbsGt10"] or 0), 1), f(100 * (S[m]["field"]["near"].get("shareAbsGt1e4") or 0), 2)) for m in S if (S[m]["field"]["near"]["absP99"] or 0) > gbar]
+    chk("ground-match", not bad, ("|heightAt - rendered near ring| p99 " + per_map(lambda s: gfmt(s["field"]["near"]["absP99"])) + "; max " + per_map(lambda s: gfmt(s["field"]["near"]["absMax"]))) if not bad else " | ".join(bad),
+        "p99 <= %s m" % ("1e-4" if wave6 else "0.05"))
     for m in S:
         fa = S[m]["field"]["far"]
         v.info("far-chunk ground error %s" % m, "p99 %s m, max %s m, %s%% > 0.10 (n %d)" % (f(fa["absP99"]), f(fa["absMax"]), f(100 * (fa["shareAbsGt10"] or 0), 1), fa["n"]))
@@ -283,15 +307,40 @@ def judge(v, doc, args, plant_rows):
     bad = []
     for m in S:
         for e in S[m]["grounded"]:
-            if e["gen"] in ("house", "hut", "tower", "rangerTower", "waterTower", "steeple", "lighthouse", "farmland") and e["n"] >= 5 and (e["edgeGt10Share"] or 0) > 0.05:
+            if e["gen"] in EDGE_GENS and e["n"] >= 5 and (e["edgeGt10Share"] or 0) > EDGE_SHARE_MAX:
                 bad.append("%s %s %s%% of %d (p50 %s, max %s)" % (m, e["gen"], f(100 * e["edgeGt10Share"], 0), e["n"], f(e["edgeP50"], 2), f(e["edgeMax"], 2)))
-    chk("base-edges", not bad, "grounded structure base edges <= 0.10 m above the ground" if not bad else " | ".join(bad), "<= 5 % per generator", wave6_row=True)
+    judged = sum(e["n"] for m in S for e in S[m]["grounded"] if e["gen"] in EDGE_GENS and e["n"] >= 5)
+    chk("base-edges", not bad and judged > 0, ("grounded structure base edges <= 0.10 m over the ground (%d structures of %s)" % (judged, "/".join(EDGE_GENS[:3]) + "...")) if not bad else " | ".join(bad), "<= %d %% per generator" % (100 * EDGE_SHARE_MAX), wave6_row=True)
+    oth = []
+    for m in S:
+        for e in S[m]["grounded"]:
+            if e["gen"] not in EDGE_GENS and e["n"] >= 1 and (e["edgeGt10Share"] or 0) > 0:
+                oth.append("%s %s %s%% of %d (max %s%s)" % (m, e["gen"], f(100 * e["edgeGt10Share"], 1), e["n"], f(e["edgeMax"], 2), (" e.g. seed %s at %s,%s" % (e["worst"][0]["seed"], f(e["worst"][0]["x"], 0), f(e["worst"][0]["z"], 0))) if e.get("worst") else ""))
+    if oth:
+        v.info("base-edges, other generators (not judged by the plan row)", " | ".join(oth))
     d = ["%s min %s (%d < 1.85 capsule, %d < 2.0)" % (m, f(S[m]["doors"]["minClear"], 2), S[m]["doors"]["ltCapsule"], S[m]["doors"]["lt20"]) for m in S if S[m]["doors"]["lt20"]]
     chk("doorway-clearance", not d, "every doorway >= 2.0 m: min " + per_map(lambda s: f(s["doors"]["minClear"], 2)) if not d else " | ".join(d), ">= 2.0 m", wave6_row=True)
     d = ["%s %d of %d starts > 0.55 m (max %s)" % (m, S[m]["ramps"]["stepGt055"], S[m]["ramps"]["n"], f(S[m]["ramps"]["stepMax"], 2)) for m in S if S[m]["ramps"]["stepGt055"]]
     chk("ramp-start-step", not d, "every ramp starts within 0.55 m of the floor" if not d else " | ".join(d), "0 over 0.55 m", wave6_row=True)
     d = ["%s %s%%" % (m, f(100 * (S[m]["roads"]["floatShare"] or 0), 1)) for m in S if (S[m]["roads"]["floatShare"] or 0) > 0.01]
-    chk("roads-float", not d, "road ribbon float > 0.10 m <= 1 %" if not d else " | ".join(d), "<= 1 %", wave6_row=True)
+    chk("roads-float", not d, ("road ribbon float > 0.10 m <= 1 %%: %s" % per_map(lambda s: f(100 * (s["roads"]["floatShare"] or 0), 2) + " %")) if not d else " | ".join(d), "<= 1 %", wave6_row=True)
+    v.info("roads below the surface", per_map(lambda s: "%s %% of %d samples under the rendered ground" % (f(100 * (s["roads"]["pokeShare"] or 0), 2), s["roads"]["n"])))
+    # pads: the ground under every pad rect the map reports, and under every pad-generator footprint, is one level
+    P = {m: S[m]["pads"] for m in S}
+    nstruct = sum(p["n"] for p in P.values())
+    bad = []
+    for m, p in P.items():
+        if p["over02Phys"] or p["over02Draw"]:
+            bad.append("%s footprints %s%% of %d flat only within %s m (drawn) / %s m (physics): %s" % (m, f(100 * max(p["over02Phys"] or 0, p["over02Draw"] or 0), 1), p["n"], f(p["maxDraw"], 3), f(p["maxPhys"], 3),
+                       ", ".join("%s %s%% (max %s)" % (g["gen"], f(100 * (g["over02Draw"] or 0), 0), f(g["maxDraw"], 3)) for g in p["byGen"] if g["over02Draw"])))
+        if p["api"] and (p["rectsOver02Phys"] or p["rectsOver02Draw"]):
+            bad.append("%s pad rects %s%% of %d not flat (max %s m physics, %s m drawn; by generator %s; worst %s)" % (m, f(100 * max(p["rectsOver02Phys"] or 0, p["rectsOver02Draw"] or 0), 1), p["rects"], f(p["rectsMaxPhys"], 3), f(p["rectsMaxDraw"], 3),
+                       ", ".join("%s %d of %d" % (g["gen"], g["over"], g["n"]) for g in p.get("rectsByGen", [])), "; ".join("seed %s %s at %s,%s %s m" % (w["seed"], w["gen"], f(w["x"], 0), f(w["z"], 0), f(w["flatPhys"], 3)) for w in p.get("rectsWorst", [])[:2])))
+    api = [m for m, p in P.items() if p["api"]]
+    for m, p in P.items():
+        v.info("pads %s" % m, "%d footprints: max range %s m drawn / %s m physics, p90 %s m; %s" % (p["n"], f(p["maxDraw"], 3), f(p["maxPhys"], 3), f(p["p90Draw"], 3),
+               ("%d pad rects (M.ground.padLog): max range %s m physics / %s m drawn, level error max %s m" % (p["rects"], f(p["rectsMaxPhys"], 3), f(p["rectsMaxDraw"], 3), f(p["rectsOffLevelMax"], 3))) if p["api"] else "no M.ground.padLog on this build"))
+    chk("pads", not bad and nstruct > 0, ("%d structure footprints%s flat within %.2f m" % (nstruct, (" and %d pad rects" % sum(p["rects"] for p in P.values())) if api else "", PAD_FLAT)) if not bad else " | ".join(bad), "every pad flat within %.2f m" % PAD_FLAT, wave6_row=True)
     return S
 
 
@@ -330,6 +379,9 @@ def main_fn(v, args):
         for p in plants:
             plant_rows |= PLANT_ROWS[p]
         print("%s: PLANT MODE %s - only %s count; exit 1 = the planted fault was detected" % (GATE, plants, sorted(plant_rows)), flush=True)
+    elif args.rows:
+        plant_rows = set(x for x in args.rows.split(",") if x)
+        print("%s: ROWS %s - only these count (a frozen revision is expected to FAIL them)" % (GATE, sorted(plant_rows)), flush=True)
     S = judge(v, doc, args, plant_rows)
     v.data["summary"] = S
     v.data["wave"] = args.wave
@@ -342,7 +394,8 @@ def main():
     ap.add_argument("--maps", default=None, help="comma list (default: all three)")
     ap.add_argument("--seeds", default=None, help="comma list (default %s)" % SEEDS)
     ap.add_argument("--quick", action="store_true", help="seed 7 only")
-    ap.add_argument("--wave", type=int, default=5, help="6 also gates the Wave-6 rows (base edges, doorways, ramp starts, roads)")
+    ap.add_argument("--wave", type=int, default=6, help="6 (default) gates the Wave-6 rows (base edges, doorways, ramp starts, roads, ground match 1e-4, pads); 5 leaves them information and keeps the 0.05 m ground bar")
+    ap.add_argument("--rows", default=None, help="comma list: ONLY these rows count (the others are information): the must-fail proof on a frozen revision")
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--census-timeout", type=int, default=1800)
     args = ap.parse_args()

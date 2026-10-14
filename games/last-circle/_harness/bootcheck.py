@@ -50,8 +50,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
     ap.add_argument("--mode", default="standard", choices=sorted(MODE_RE))
-    ap.add_argument("--plant", default=None, choices=["lock-drop"],
-                    help="FALSIFIER: lock-drop = exitPointerLock() while focused and alive; the lock row MUST then fail")
+    ap.add_argument("--plant", default=None, choices=["lock-drop", "w-dead"],
+                    help="FALSIFIER: lock-drop = exitPointerLock() while focused and alive; the lock row MUST then fail. w-dead = the W key never reaches the game (the walk row MUST fail on all 4 headings)")
     args = ap.parse_args()
     if args.plant and not args.report:
         args.report = "bootcheck_plant_" + args.plant.replace("-", "_")
@@ -131,18 +131,31 @@ def main():
                 s.sleep(0.5)
             p0 = s.js("() => { const p = window.__LC__.W.player; return { x: p.pos.x, y: p.pos.y, z: p.pos.z, alive: p.alive, onGround: p.onGround }; }")
             s.stage("walk")
-            s.page.keyboard.down("KeyW")
-            try:
-                s.step_frames(90, 1 / 60, render=30)
-            finally:
-                s.page.keyboard.up("KeyW")
-            p1 = s.js("() => { const p = window.__LC__.W.player; return { x: p.pos.x, y: p.pos.y, z: p.pos.z, alive: p.alive, onGround: p.onGround }; }")
-            dist = math.hypot(p1["x"] - p0["x"], p1["z"] - p0["z"])
+            # A landing can end FACING A WALL (the landing cell is a random grid point; ashgrid (220, 228) is one: 0.0 m on the live build too, 1 run in 12 on both builds).
+            # That is the world, not an input fault, so a blocked walk is retried after a quarter turn (up to 4 headings). A W key that never reaches the game moves 0 m on all four and still fails.
+            POS_JS = "() => { const p = window.__LC__.W.player; return { x: p.pos.x, y: p.pos.y, z: p.pos.z, alive: p.alive, onGround: p.onGround }; }"
+            attempts = []
+            p0_first = p0
+            for turn in range(4):
+                if args.plant != "w-dead":
+                    s.page.keyboard.down("KeyW")
+                try:
+                    s.step_frames(90, 1 / 60, render=30)
+                finally:
+                    s.page.keyboard.up("KeyW")
+                p1 = s.js(POS_JS)
+                dist = math.hypot(p1["x"] - p0["x"], p1["z"] - p0["z"])
+                attempts.append(round(dist, 2))
+                if dist > 3.0 or not p0.get("alive") or not p1.get("alive"):
+                    break
+                s.js("() => { const p = window.__LC__.W.player; const y = p.input.yaw + Math.PI / 2; p.input.yaw = y; p.yaw = y; }")
+                s.step_frames(5, 1 / 60, render=0)
+                p0 = s.js(POS_JS)
             if not p0.get("alive") or not p1.get("alive"):
                 v.cnj("a REAL W held for 1.5 s (stepped) moves the player > 3 m", "the player died %s the walk despite the guard (%s)" % (
                     "before" if not p0.get("alive") else "during", land))
             else:
-                v.check("a REAL W held for 1.5 s (stepped) moves the player > 3 m", dist > 3.0, {"moved_m": round(dist, 2), "from": p0, "to": p1})
+                v.check("a REAL W held for 1.5 s (stepped) moves the player > 3 m", dist > 3.0, {"moved_m": round(dist, 2), "from": p0, "to": p1, "attempts_m": attempts, "first_from": p0_first})
             lk2 = s.js("() => window.__H_LOCK__")
             # a loss while the player is dead is the death screen releasing the cursor (by design), not a lock defect
             focused_losses = [l for l in (lk2.get("losses") or []) if l.get("hasFocus") and l.get("visibility") != "hidden"]

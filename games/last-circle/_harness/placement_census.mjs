@@ -24,6 +24,16 @@
 //   perimeter-drop   every near-ring chunk's perimeter vertices that sit on the true height drop 0.35 m again
 //   tree-float       the first tree is lifted 0.30 m
 //   stack-float      the first stacked UPPER container is lifted 0.30 m (the stack-support rule must not forgive it)
+//   Wave-6 rows (lane 6E):
+//   no-pads          the RENDERED ground is 0.35 m lower on the +x half of every structure footprint (a hillside under a house that was never
+//                    levelled: the structure still touches the physics ground, one edge hangs in the air over the drawn one)
+//   door-buried      the first 3 doorways read as if the ground rose 0.9 m under their lintel
+//   ramp-lip         the first ramp's low edge stands 0.8 m over the floor it starts from
+//   roads-lifted     every road ribbon vertex is 0.30 m over the ground
+//   ground-shift     the physics ground reads 3 mm higher than the rendered one everywhere
+//
+// --mode city (lane 6E, Wave 6) runs probe_city.js's measure() on each built map instead (citycheck.py's Node half; see cityMode below);
+// --mode towngen scores lane 6B's towngen.js as a Wave-7 forecast on the same rows (see towngenMode below).
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -238,6 +248,7 @@ class Surface {
 
 // ── small stats ────────────────────────────────────────────────────────────────────────────────────────────────
 const q = (a, p) => { if (!a.length) return null; const s = Float64Array.from(a).sort(); return +s[Math.min(s.length - 1, Math.floor(p * s.length))].toFixed(4); };
+const q6 = (a, p) => { if (!a.length) return null; const s = Float64Array.from(a).sort(); return +s[Math.min(s.length - 1, Math.floor(p * s.length))].toFixed(7); };       // the Wave-6 ground bar is 1e-4 m: 4 decimals cannot resolve it
 const share = (a, f) => (a.length ? +(a.filter(f).length / a.length).toFixed(5) : null);
 const r3 = (v) => (v == null || !Number.isFinite(v) ? null : +v.toFixed(3));
 
@@ -395,16 +406,18 @@ async function censusOne(mapId, seed, lootMod) {
 
   const bbN = bbAll(nearMeshes), bbF = bbAll(farMeshes);
   const near = new Surface(nearMeshes, ...bbN, 2.0), far = new Surface(farMeshes, ...bbF, 4.0);
-  const nearAt = (x, z) => { const y = near.at(x, z); return Number.isNaN(y) ? far.at(x, z) : y; };
+  let dip = null;                                           // plant no-pads: set once the structure boxes are known
+  const nearAt = (x, z) => { let y = near.at(x, z); if (Number.isNaN(y)) y = far.at(x, z); return dip ? y - dip(x, z) : y; };
 
   const rec = { mapId, seed, planted, terrain: { nearChunks: nearMeshes.length, farChunks: farMeshes.length, farCountAtBuild: farCount, nearTris: near.nTri, farTris: far.nTri } };
 
   // ground error field over dry land: phys - rendered
+  if (PLANTS.has("ground-shift")) planted.push("ground-shift:3mm");
   {
     const rnd = SIM.mulberry32((seed ^ 0x77) >>> 0);
     const en = [], ef = [];
     for (let k = 0; k < NSAMP; k++) {
-      const x = (rnd() * 2 - 1) * 780, z = (rnd() * 2 - 1) * 780, h = H0(x, z);
+      const x = (rnd() * 2 - 1) * 780, z = (rnd() * 2 - 1) * 780, h = H0(x, z) + (PLANTS.has("ground-shift") ? 0.003 : 0);
       if (waterY > -100 && h < waterY + 0.35) continue;
       const a = near.at(x, z), b = far.at(x, z);
       if (!Number.isNaN(a)) en.push(h - a);
@@ -546,7 +559,19 @@ async function censusOne(mapId, seed, lootMod) {
     }
     const comps = {};
     boxes.forEach((b, i) => (comps[find(i)] = comps[find(i)] || []).push(i));
-    const floating = [], grounded = [];
+    if (PLANTS.has("no-pads")) {
+      dip = (x, z) => {
+        for (const i of (grid.get(Math.floor(x / 8) * 100000 + Math.floor(z / 8)) || [])) {
+          const b = boxes[i]; if (b.isRamp) continue;
+          const bb = b.bb;
+          if (x >= bb.minX && x <= bb.maxX && z >= bb.minZ && z <= bb.maxZ && x > (bb.minX + bb.maxX) / 2) return 0.35;
+        }
+        return 0;
+      };
+      planted.push("no-pads:" + boxes.length);
+    }
+    const floating = [], grounded = [], pads = [];
+    const GEN_PAD = new Set(["house", "hut", "tower", "rangerTower", "waterTower", "steeple", "lighthouse", "farmland"]);
     for (const r in comps) {
       const list = comps[r].map((i) => boxes[i]);
       let touches = false;
@@ -574,13 +599,49 @@ async function censusOne(mapId, seed, lootMod) {
         const baseY = Math.min(...(nonRamp.length ? nonRamp : list).map((b) => b.bb.minY));
         let worst = -1e9;
         for (const b of nonRamp) if (Math.abs(b.bb.minY - baseY) < 0.01) for (const p of b.pts) { const gp = p[1] - nearAt(p[0], p[2]); if (gp > worst) worst = gp; }
-        grounded.push({ gen: gens.split("|")[0], edge: r3(worst) });
+        grounded.push({ gen: gens.split("|")[0], edge: r3(worst), x: r3(cxm), z: r3(czm) });
+        // pads (Wave 6): the ground under the structure's own footprint (the base-level boxes of its first generator, inset 0.15 m) is one level:
+        // the range of the physics ground and of the rendered ground over a <= 1 m grid, the slope the pad was meant to remove
+        const g0 = gens.split("|")[0];
+        if (GEN_PAD.has(g0)) {
+          const base = nonRamp.filter((b) => b.gen === g0 && Math.abs(b.bb.minY - baseY) < 0.01);
+          if (base.length) {
+            let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+            for (const b of base) { x0 = Math.min(x0, b.bb.minX); x1 = Math.max(x1, b.bb.maxX); z0 = Math.min(z0, b.bb.minZ); z1 = Math.max(z1, b.bb.maxZ); }
+            x0 += 0.15; x1 -= 0.15; z0 += 0.15; z1 -= 0.15;
+            if (x1 > x0 && z1 > z0) {
+              const nx = Math.max(2, Math.ceil(x1 - x0) + 1), nz = Math.max(2, Math.ceil(z1 - z0) + 1);
+              let pLo = 1e9, pHi = -1e9, dLo = 1e9, dHi = -1e9;
+              for (let a = 0; a < nx; a++) for (let c = 0; c < nz; c++) {
+                const x = x0 + (x1 - x0) * a / (nx - 1), z = z0 + (z1 - z0) * c / (nz - 1);
+                const hp = H0(x, z), hd = nearAt(x, z);
+                if (hp < pLo) pLo = hp; if (hp > pHi) pHi = hp;
+                if (!Number.isNaN(hd)) { if (hd < dLo) dLo = hd; if (hd > dHi) dHi = hd; }
+              }
+              pads.push({ gen: g0, w: r3(x1 - x0), d: r3(z1 - z0), flatPhys: r3(pHi - pLo), flatDraw: dHi >= dLo ? r3(dHi - dLo) : null });
+            }
+          }
+        }
       }
     }
-    rec.structures = { boxes: boxes.length, comps: Object.keys(comps).length, floating, grounded };
+    // the pad rects the map itself reports (Wave 6: M.ground.padLog = { gen, x, z, hx, hz, h }); a revision without pads has none
+    const padRects = [];
+    if (M.ground && Array.isArray(M.ground.padLog)) for (const pl of M.ground.padLog) {
+      let lo = 1e9, hi = -1e9, dlo = 1e9, dhi = -1e9;
+      const nx = Math.max(2, Math.ceil(pl.hx * 2) + 1), nz = Math.max(2, Math.ceil(pl.hz * 2) + 1);
+      for (let a = 0; a < nx; a++) for (let c = 0; c < nz; c++) {
+        const x = pl.x - pl.hx + 2 * pl.hx * a / (nx - 1), z = pl.z - pl.hz + 2 * pl.hz * c / (nz - 1);
+        const hp = H0(x, z); if (hp < lo) lo = hp; if (hp > hi) hi = hp;
+        const hd = nearAt(x, z); if (!Number.isNaN(hd)) { if (hd < dlo) dlo = hd; if (hd > dhi) dhi = hd; }
+      }
+      padRects.push({ gen: pl.gen, x: r3(pl.x), z: r3(pl.z), flatPhys: r3(hi - lo), flatDraw: dhi >= dlo ? r3(dhi - dlo) : null, offLevel: r3(Math.abs((hi + lo) / 2 - pl.h)) });
+    }
+    rec.structures = { boxes: boxes.length, comps: Object.keys(comps).length, floating, grounded, pads, padRects, padApi: !!(M.ground && Array.isArray(M.ground.padLog)) };
     // ramps: step from the supporting floor onto the ramp's low edge (physics ground, or a box top within 0.6 m)
     const rampsOut = [];
+    let rampPlanted = false;
     for (const c of M.colliders) if (c.kind === "ramp") {
+      if (PLANTS.has("ramp-lip") && !rampPlanted) { c.minY += 0.8; rampPlanted = true; planted.push("ramp-lip:1"); }
       const pts = [];
       for (let t = 0; t <= 4; t++) {
         const u = t / 4;
@@ -592,6 +653,7 @@ async function censusOne(mapId, seed, lootMod) {
       const onWater = waterY > -100 && sups.every((s2) => s2[1] === "ground" && s2[0] < waterY);
       if (!onWater) rampsOut.push({ step: r3(Math.max(...sups.map((s2) => c.minY - s2[0]))), onBox: sups[2][1] === "box", climb: r3(c.maxY - c.minY) });
     }
+    if (PLANTS.has("ramp-lip") && !rampPlanted) planted.push("ramp-lip:NO-RAMP");
     rec.ramps = rampsOut;
     // slope of every ramp's plank (C-RAMP authoring: <= 45 degrees), water or not
     rec.rampSlopes = M.colliders.filter((c) => c.kind === "ramp").map((c) => r3(Math.atan2(c.maxY - c.minY, c.dir < 2 ? c.maxX - c.minX : c.maxZ - c.minZ) * 180 / Math.PI));
@@ -608,8 +670,10 @@ async function censusOne(mapId, seed, lootMod) {
         const x = thinX ? (bb.minX + bb.maxX) / 2 + s * 0.6 : bb.minX + (bb.maxX - bb.minX) * u, z = thinX ? bb.minZ + (bb.maxZ - bb.minZ) * u : (bb.minZ + bb.maxZ) / 2 + s * 0.6;
         gMax = Math.max(gMax, H0(x, z));
       }
+      if (PLANTS.has("door-buried") && doors.length < 3) { gMax += 0.9; if (doors.length === 0) planted.push("door-buried:3"); }
       doors.push({ sub: L[0], clearance: r3(bb.minY - gMax) });
     }
+    if (PLANTS.has("door-buried") && doors.length === 0) planted.push("door-buried:NO-DOOR");
     rec.doors = doors;
     // rotated walls: every drawn box whose x,z outline is a turned rectangle, against the AABB colliders that stand for it.
     // A collider belongs to the drawn box with the SAME bounding box (maps.js addBox: collider = AABB of the turned box), else
@@ -659,11 +723,13 @@ async function censusOne(mapId, seed, lootMod) {
         for (const [u, w] of BARY) {
           const x = p.getX(a) + (p.getX(b) - p.getX(a)) * u + (p.getX(c) - p.getX(a)) * w, y = p.getY(a) + (p.getY(b) - p.getY(a)) * u + (p.getY(c) - p.getY(a)) * w, z = p.getZ(a) + (p.getZ(b) - p.getZ(a)) * u + (p.getZ(c) - p.getZ(a)) * w;
           const s = near.at(x, z); if (Number.isNaN(s)) continue;
-          n++; if (y - s > FLOAT) { floatN++; worstF = Math.max(worstF, y - s); } if (y - s < 0) pokeN++;
+          const yy = PLANTS.has("roads-lifted") ? y + 0.3 : y;
+          n++; if (yy - s > FLOAT) { floatN++; worstF = Math.max(worstF, yy - s); } if (yy - s < 0) pokeN++;
         }
       }
+      if (PLANTS.has("roads-lifted")) planted.push("roads-lifted:" + n);
       rec.roads = { n, floatN, pokeN, worstFloat: r3(worstF) };
-    }
+    } else if (PLANTS.has("roads-lifted")) planted.push("roads-lifted:NO-ROADS");
   }
 
   // ---- loot: chests and floor-item rings, from the game's own loot.js populate() ----
@@ -713,7 +779,8 @@ function summarise(results) {
     S.field.near.push(...R.field.near); S.field.far.push(...R.field.far);
     for (const kind in R.props) (S.props[kind] = S.props[kind] || []).push(...R.props[kind].filter((p) => !p.over));
     S.floating.push(...R.structures.floating.map((f) => ({ ...f, seed: R.seed })));
-    S.grounded.push(...R.structures.grounded);
+    S.grounded.push(...R.structures.grounded.map((g2) => ({ ...g2, seed: R.seed })));
+    (S.pads = S.pads || []).push(...(R.structures.pads || [])); (S.padRects = S.padRects || []).push(...(R.structures.padRects || []).map((r4) => ({ ...r4, seed: R.seed }))); S.padApi = S.padApi || R.structures.padApi;
     S.ramps.push(...R.ramps); S.doors.push(...R.doors); (S.rampSlopes = S.rampSlopes || []).push(...(R.rampSlopes || []));
     S.rot.turned += R.rotWalls.turned; S.rot.list.push(...R.rotWalls.list.map((r) => ({ ...r, seed: R.seed })));
     if (R.roads) { S.roads.n += R.roads.n; S.roads.floatN += R.roads.floatN; S.roads.pokeN += R.roads.pokeN; }
@@ -724,7 +791,7 @@ function summarise(results) {
   for (const mapId in per) {
     const S = per[mapId];
     const o = { seeds: S.seeds, planted: S.planted };
-    const fe = (a) => ({ n: a.length, p50: q(a, 0.5), p95: q(a, 0.95), p99: q(a, 0.99), p999: q(a, 0.999), max: q(a, 1), min: q(a, 0), shareGt10: share(a, (e) => e > 0.1), shareAbsGt10: share(a, (e) => Math.abs(e) > 0.1), absP99: q(a.map(Math.abs), 0.99), absMax: q(a.map(Math.abs), 1) });
+    const fe = (a) => ({ n: a.length, p50: q(a, 0.5), p95: q(a, 0.95), p99: q(a, 0.99), p999: q(a, 0.999), max: q(a, 1), min: q(a, 0), shareGt10: share(a, (e) => e > 0.1), shareAbsGt10: share(a, (e) => Math.abs(e) > 0.1), absP99: q6(a.map(Math.abs), 0.99), absMax: q6(a.map(Math.abs), 1), absP999: q6(a.map(Math.abs), 0.999), shareAbsGt1e4: share(a, (e) => Math.abs(e) > 1e-4) });
     o.field = { near: fe(S.field.near), far: fe(S.field.far) };
     o.props = {};
     for (const kind in S.props) {
@@ -755,7 +822,21 @@ function summarise(results) {
     o.floating = Object.keys(fg).sort().map((k) => ({ gen: k, n: fg[k].length, hoverP50: q(fg[k].map((f) => f.hover), 0.5), hoverMax: q(fg[k].map((f) => f.hover), 1), over: fg[k][0].over, overWater: fg[k][0].overWater, e: [fg[k][0].seed, fg[k][0].x, fg[k][0].z] }));
     const gg = {};
     for (const s2 of S.grounded) { (gg[s2.gen] = gg[s2.gen] || []).push(s2.edge); }
-    o.grounded = Object.keys(gg).sort().map((k) => ({ gen: k, n: gg[k].length, edgeGt10Share: share(gg[k], (e) => e > 0.1), edgeP50: q(gg[k], 0.5), edgeMax: q(gg[k], 1) }));
+    o.grounded = Object.keys(gg).sort().map((k) => ({ gen: k, n: gg[k].length, edgeGt10Share: share(gg[k], (e) => e > 0.1), edgeP50: q(gg[k], 0.5), edgeMax: q(gg[k], 1),
+      worst: S.grounded.filter((s3) => s3.gen === k).sort((a2, b2) => b2.edge - a2.edge).slice(0, 3).map((s3) => ({ seed: s3.seed, x: s3.x, z: s3.z, edge: s3.edge })) }));
+    // Wave 6 pads: the flatness (max - min of the ground) under every pad-generator structure's footprint, physics and drawn; and of every pad
+    // rect the map reports (M.ground.padLog). A pad is flat when the range is <= 0.02 m.
+    const pr = (a, k) => a.map((e) => e[k]).filter((v2) => v2 != null);
+    const flatShare = (a, k, lim) => (a.length ? +(a.filter((e) => e[k] != null && e[k] > lim).length / a.length).toFixed(5) : null);
+    const byGenP = {};
+    for (const e of (S.pads || [])) (byGenP[e.gen] = byGenP[e.gen] || []).push(e);
+    o.pads = { n: (S.pads || []).length, over02Phys: flatShare(S.pads || [], "flatPhys", 0.02), over02Draw: flatShare(S.pads || [], "flatDraw", 0.02),
+      maxPhys: q(pr(S.pads || [], "flatPhys"), 1), maxDraw: q(pr(S.pads || [], "flatDraw"), 1), p50Draw: q(pr(S.pads || [], "flatDraw"), 0.5), p90Draw: q(pr(S.pads || [], "flatDraw"), 0.9),
+      byGen: Object.keys(byGenP).sort().map((g) => ({ gen: g, n: byGenP[g].length, over02Draw: flatShare(byGenP[g], "flatDraw", 0.02), maxDraw: q(pr(byGenP[g], "flatDraw"), 1), maxPhys: q(pr(byGenP[g], "flatPhys"), 1) })),
+      api: !!S.padApi, rects: (S.padRects || []).length, rectsOver02Phys: flatShare(S.padRects || [], "flatPhys", 0.02), rectsOver02Draw: flatShare(S.padRects || [], "flatDraw", 0.02),
+      rectsMaxPhys: q(pr(S.padRects || [], "flatPhys"), 1), rectsMaxDraw: q(pr(S.padRects || [], "flatDraw"), 1), rectsOffLevelMax: q(pr(S.padRects || [], "offLevel"), 1),
+      rectsWorst: (S.padRects || []).slice().sort((a2, b2) => b2.flatPhys - a2.flatPhys).slice(0, 5).map((r4) => ({ seed: r4.seed, gen: r4.gen, x: r4.x, z: r4.z, flatPhys: r4.flatPhys, flatDraw: r4.flatDraw })),
+      rectsByGen: Object.entries((S.padRects || []).reduce((m3, r4) => { const b3 = m3[r4.gen] || (m3[r4.gen] = { n: 0, over: 0 }); b3.n++; if (r4.flatPhys > 0.02) b3.over++; return m3; }, {})).filter(([, b3]) => b3.over).map(([g, b3]) => ({ gen: g, n: b3.n, over: b3.over })) };
     o.rampSlope = { n: (S.rampSlopes || []).length, gt45: (S.rampSlopes || []).filter((d) => d > 45.05).length, max: q(S.rampSlopes || [], 1), p50: q(S.rampSlopes || [], 0.5) };
     o.ramps = { n: S.ramps.length, stepGt055: S.ramps.filter((r) => r.step > 0.55).length, stepMax: q(S.ramps.map((r) => r.step), 1) };
     o.doors = { n: S.doors.length, minClear: q(S.doors.map((d) => d.clearance), 0), ltCapsule: S.doors.filter((d) => d.clearance < 1.85).length, lt20: S.doors.filter((d) => d.clearance < 2.0).length };
@@ -772,6 +853,142 @@ function summarise(results) {
   }
   return out;
 }
+
+// ── --mode city (lane 6E, Wave 6): the Node half of citycheck.py ───────────────────────────────────────────────────
+//   node placement_census.mjs --mode city --root <game dir> --vendor <three vendor dir> --maps ashgrid --seeds 7,1,2 --out city.json
+//        [--legacy-seeds 7,1234] [--grid 4] [--buildings] [--towngen]
+// Builds each (map, seed) with the UNMODIFIED maps.js and runs probe_city.js's measure() on the BUILT map: enterable buildings (the pinned
+// door-checked detector), land distance to them, town-road wetness, per-town enterable counts, the endgame cover counts. The same function
+// runs in the page (citycheck.py's live half), so a mismatch between the two is a harness defect, not a game one. Nothing is written but --out.
+async function cityMode() {
+  const API = (0, eval)("(" + fs.readFileSync(path.join(HERE, "probe_city.js"), "utf8") + ")()");
+  const legacySeeds = new Set((args["legacy-seeds"] || "").split(",").filter(Boolean).map(Number));
+  const grid = Number(args.grid || 4);
+  const rows = [];
+  const t0 = Date.now();
+  for (const mapId of MAPS) for (const seed of SEEDS) {
+    const t1 = Date.now();
+    globalThis.__LC_BOXES = null;
+    const W = makeW(seed);
+    const warn = console.warn; console.warn = () => {};
+    let M;
+    try { M = await buildMap(W, mapId); } finally { console.warn = warn; }
+    let roadMesh = null;
+    W.group("map").traverse((o) => { if (o.name === "roads") roadMesh = o; });
+    const rec = API.measure(M, { SIM, seed, mapId, roadMesh, grid, legacy: legacySeeds.has(seed), withBuildings: !!args.buildings });
+    rec.buildMs = Date.now() - t1 - rec.ms;
+    rows.push(rec);
+    try { if (typeof M.dispose === "function") M.dispose(); } catch (e) { /* ignore */ }
+    process.stderr.write(`city ${mapId} seed ${seed}: build ${rec.buildMs} ms, measure ${rec.ms} ms, enterable ${rec.enterable} (sealed ${rec.sealed}), median ${rec.cover.median} m\n`);
+  }
+  const doc = { tool: "placement_census.mjs --mode city", root: ROOT, maps: MAPS, seeds: SEEDS, probe: API.PIN, wallS: +((Date.now() - t0) / 1000).toFixed(1), rows };
+  const text = JSON.stringify(doc);
+  if (OUT) { fs.mkdirSync(path.dirname(path.resolve(OUT)), { recursive: true }); fs.writeFileSync(OUT, text); process.stderr.write("placement_census city: wrote " + OUT + " (" + text.length + " bytes)\n"); }
+  else process.stdout.write(text);
+  process.exit(0);
+}
+if (args.mode === "city") await cityMode();
+
+// ── --mode towngen (lane 6E, Wave 6): a pre-wiring FORECAST of Wave 7 ───────────────────────────────────────────────
+//   node placement_census.mjs --mode towngen --root <game dir> --vendor <three vendor dir> --maps ashgrid --seeds 7,1,2 --out tg.json
+// Lane 6B's runtime/3d/royale/towngen.js is not wired into the live game in Wave 6. This scores what Wave 7 would give: the CURRENT world (built by
+// the unmodified maps.js, real heightAt, snapped POIs) with the contents of every POI that towngen fills (a layout with >= 1 enterable parcel)
+// REPLACED by the generator's layout, plus the compounds:
+//   enterable buildings = the pinned detector's buildings on the current map that lie outside the replaced POI circles (poi.r + 15 m)
+//                         + every enterable parcel of every town and compound layout (parcel.building.aabb)
+//   per town            = the layout's own enterable count (a POI the generator leaves empty keeps its current count)
+//   town roads          = every street corridor of every town layout (the polyline C-PAD would flatten, 10 m wide) sampled every 4 m at 5 cross-section
+//                         offsets, on the CURRENT ground: a vertex whose ground is under waterY is wet (the same rule as the live row)
+//   endgame cover       = the current map's static cover pieces outside the replaced circles + K per enterable parcel whose middle lies in the circle,
+//                         K = the MEDIAN number of pieces (>= 1.2 m tall static colliders) that today's enterable buildings hold, at least 4 (a FORECAST:
+//                         the generator emits no collider list yet; Kp10 is recorded too)
+// The record has the shape of --mode city's, so citycheck.py judges it with the same rows.
+async function towngenMode() {
+  const TG_JS = path.join(ROOT, "runtime", "3d", "royale", "towngen.js");
+  if (!fs.existsSync(TG_JS)) { console.error("placement_census: no towngen.js at " + TG_JS); process.exit(4); }
+  const TG = await import(pathToFileURL(TG_JS).href);
+  const API = (0, eval)("(" + fs.readFileSync(path.join(HERE, "probe_city.js"), "utf8") + ")()");
+  const grid = Number(args.grid || 4);
+  const rows = [];
+  const t0 = Date.now();
+  for (const mapId of MAPS) for (const seed of SEEDS) {
+    const t1 = Date.now();
+    globalThis.__LC_BOXES = null;
+    const W = makeW(seed);
+    const warn = console.warn; console.warn = () => {};
+    let M;
+    try { M = await buildMap(W, mapId); } finally { console.warn = warn; }
+    const base = API.measure(M, { SIM, seed, mapId, roadMesh: null, grid, legacy: false, withBuildings: true });
+    const wy = M.waterY, dryMap = wy < -100;
+    const pois = M.pois.map((p) => ({ id: p.id, name: p.name, x: p.x, z: p.z, r: p.r }));
+    const t2 = Date.now();
+    const lay = TG.layoutMap(seed, mapId, pois.map((p) => ({ id: p.id, x: p.x, z: p.z, r: p.r })), M.heightAt, wy);
+    const tgMs = Date.now() - t2;
+    const sites = lay.towns.concat(lay.compounds);
+    const replaced = pois.filter((p) => { const T = lay.towns.find((q) => q.id === p.id); return T && T.stats.enterable > 0; });
+    const inReplaced = (x, z) => replaced.some((p) => Math.hypot(x - p.x, z - p.z) < p.r + 15);
+    // K: static cover pieces per enterable building today (10th percentile, at least 4)
+    const cols = M.colliders.filter((c) => !c.prop && !c.dead && c.kind !== "ramp" && c.maxY - c.minY >= 1.2);
+    const perB = base.buildings.map((b) => cols.filter((c) => { const mx = (c.minX + c.maxX) / 2, mz = (c.minZ + c.maxZ) / 2; return mx >= b[2] - 0.6 && mx <= b[3] + 0.6 && mz >= b[4] - 0.6 && mz <= b[5] + 0.6; }).length).sort((a, b) => a - b);
+    const K = Math.max(4, perB.length ? perB[perB.length >> 1] : 4), Kp10 = perB.length ? perB[Math.floor(perB.length * 0.1)] : 0;
+    const kept = base.buildings.filter((b) => !inReplaced(b[0], b[1]));
+    const fresh = [];
+    for (const T of sites) for (const par of T.parcels) if (par.building && par.building.enterable) { const a = par.building.aabb; fresh.push({ x0: a[0], z0: a[1], x1: a[2], z1: a[3], cx: (a[0] + a[2]) / 2, cz: (a[1] + a[3]) / 2, site: T.id }); }
+    const rects = kept.map((b) => ({ x0: b[2], x1: b[3], z0: b[4], z1: b[5] })).concat(fresh.map((f) => ({ x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1 })));
+    const cover = API.landDistance(rects, M.heightAt, wy, M.half || 800, grid);
+    // per town
+    const perPoi = {};
+    for (const p of pois) { const T = lay.towns.find((q) => q.id === p.id); perPoi[p.id] = T && T.stats.enterable > 0 ? T.stats.enterable : (base.perPoi[p.id] || 0); }
+    // town roads on the current ground
+    const roads = { meshFound: true, verts: 0, townVerts: 0, wetTown: 0, wetAll: 0, wetByPoi: {}, townByPoi: {}, linkWet: lay.links.reduce((a, l) => a + (l.wetVerts || 0), 0), links: lay.links.length };
+    for (const T of lay.towns) for (const c of T.corridors || []) {
+      const hw = (c.width || 10) / 2;
+      for (let i = 0; i + 1 < c.points.length; i++) {
+        const ax = c.points[i][0], az = c.points[i][1], bx = c.points[i + 1][0], bz = c.points[i + 1][1], len = Math.hypot(bx - ax, bz - az) || 1;
+        const n = Math.max(1, Math.ceil(len / 4)), ux = (bx - ax) / len, uz = (bz - az) / len;
+        for (let k = 0; k <= n; k++) for (const off of [-1, -0.5, 0, 0.5, 1]) {
+          const x = ax + (bx - ax) * k / n + (-uz) * off * hw, z = az + (bz - az) * k / n + ux * off * hw;
+          roads.verts++; roads.townVerts++; roads.townByPoi[T.id] = (roads.townByPoi[T.id] || 0) + 1;
+          if (!dryMap && M.heightAt(x, z) < wy) { roads.wetTown++; roads.wetAll++; roads.wetByPoi[T.id] = (roads.wetByPoi[T.id] || 0) + 1; }
+        }
+      }
+    }
+    // endgame
+    let endgame = null;
+    if (SIM && typeof SIM.Storm === "function") {
+      const St = new SIM.Storm({ seed, mode: "standard", half: M.half });
+      const cs = St.circles, idx = [cs.length - 3, cs.length - 2, cs.length - 1];
+      const cols2 = M.colliders.filter((c) => !c.prop && !c.dead && c.kind !== "ramp");
+      endgame = {};
+      for (const i of idx) {
+        const c = cs[i]; let pieces = 0, roofs = 0;
+        for (const k of cols2) {
+          const mx = (k.minX + k.maxX) / 2, mz = (k.minZ + k.maxZ) / 2;
+          if (Math.hypot(mx - c.x, mz - c.z) > c.r || inReplaced(mx, mz)) continue;
+          if (k.maxY - k.minY >= 1.2) pieces++;
+          if (Math.abs((k.maxY - k.minY) - 0.3) < 0.01 && (k.maxX - k.minX) * (k.maxZ - k.minZ) > 20) roofs++;
+        }
+        const nb = fresh.filter((f) => Math.hypot(f.cx - c.x, f.cz - c.z) <= c.r).length;
+        endgame["c" + i] = { x: Math.round(c.x * 10) / 10, z: Math.round(c.z * 10) / 10, r: Math.round(c.r * 10) / 10, pieces: pieces + K * nb, roofs: roofs + nb, forecastBuildings: nb };
+      }
+      endgame.final = "c" + (cs.length - 1); endgame.finalPieces = endgame[endgame.final].pieces; endgame.finalRoofs = endgame[endgame.final].roofs;
+    }
+    const ent = kept.length + fresh.length;
+    rows.push({ map: mapId, seed, half: M.half, waterY: wy, enterable: ent, sealed: 0, pois, perPoi, cover, roads, endgame, legacyCluster: null,
+      tg: { version: TG.VERSION, ms: tgMs, towns: lay.towns.length, compounds: lay.compounds.length, enterableTowns: lay.towns.reduce((a, T) => a + T.stats.enterable, 0), enterableCompounds: lay.compounds.reduce((a, T) => a + T.stats.enterable, 0),
+        keptCurrent: kept.length, replacedPois: replaced.map((p) => p.id), K, Kp10, shellsTowns: lay.towns.reduce((a, T) => a + T.stats.shells, 0), buildingsAll: lay.stats.buildings, enterableAll: lay.stats.enterable,
+        maxFloors: Math.max(0, ...sites.flatMap((T) => T.parcels.filter((q) => q.building && q.building.enterable).map((q) => q.building.floors))) },
+      currentEnterable: base.enterable });
+    try { if (typeof M.dispose === "function") M.dispose(); } catch (e) { /* ignore */ }
+    process.stderr.write(`towngen ${mapId} seed ${seed}: build ${t2 - t1} ms, layoutMap ${tgMs} ms, enterable ${ent} (current ${base.enterable}), median ${cover.median} m\n`);
+  }
+  const doc = { tool: "placement_census.mjs --mode towngen", root: ROOT, maps: MAPS, seeds: SEEDS, towngenVersion: TG.VERSION, wallS: +((Date.now() - t0) / 1000).toFixed(1), rows };
+  const text = JSON.stringify(doc);
+  if (OUT) { fs.mkdirSync(path.dirname(path.resolve(OUT)), { recursive: true }); fs.writeFileSync(OUT, text); process.stderr.write("placement_census towngen: wrote " + OUT + " (" + text.length + " bytes)\n"); }
+  else process.stdout.write(text);
+  process.exit(0);
+}
+if (args.mode === "towngen") await towngenMode();
 
 // ── main ───────────────────────────────────────────────────────────────────────────────────────────────────────
 let lootMod = null, lootNote = null;

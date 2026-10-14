@@ -144,7 +144,11 @@ TICK_JS = r"""(on) => {
 PLACE_JS = r"""(args) => { const W = window.__LC__.W, p = W.player, cam = W.camera;
   cam.updateMatrixWorld(true);
   const dir = new W.THREE.Vector3(); cam.getWorldDirection(dir);
-  const d = args.d; const x = cam.position.x + dir.x * d, z = cam.position.z + dir.z * d, y = cam.position.y + dir.y * d;
+  let d = args.d;
+  // args.clear: the pin must have a clear line of fire (a fence or wall between the camera and the pin turns a legitimate cover block into a false 'no kill'):
+  // walk the distance in until nothing stands between the camera and the pin (never closer than 4 m)
+  if (args.clear && W.map.losBlocked) { while (d > 4 && W.map.losBlocked(cam.position.x, cam.position.y, cam.position.z, cam.position.x + dir.x * d, cam.position.y + dir.y * d, cam.position.z + dir.z * d)) d -= 1; }
+  const x = cam.position.x + dir.x * d, z = cam.position.z + dir.z * d, y = cam.position.y + dir.y * d;
   const bot = W.actors.find((a) => a !== p && a.alive && !(args.skip || []).includes(a.id));
   if (!bot) return null;
   bot.isDummy = true; bot.netRemote = true; bot.gliding = false; if (bot.vel) bot.vel.set(0, 0, 0);
@@ -528,7 +532,7 @@ def main():
             k0 = s.js("() => window.__FJ__.log.length")
             for tries in range(1, 4):
                 s.js("() => { window.__FJ_PAUSE__ = true; }")
-                tgt = s.js(PLACE_JS, {"d": 11, "hp": 5, "shield": 0, "live": True, "skip": []})
+                tgt = s.js(PLACE_JS, {"d": 11, "hp": 5, "shield": 0, "live": True, "skip": [], "clear": True})
                 if not tgt:
                     break
                 f0 = s.js("() => window.__LC__.W.stats.shotsFired")

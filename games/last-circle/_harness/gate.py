@@ -26,6 +26,10 @@ shared box), each as its own process with the same --base / --disk / --rev / --h
   and the leftovers-round rows (lane L4-gates, 2026-10-13; each FAILS on the Wave-5 release 3fce7529 and on 7f6a9fb2; heal-pockets reads 94.0 % there on geometry-only
   placements: the Wave-4 sim has no ramp-side collision, so no healer can be pocketed and the misses are other stalls): navcheck heal-pockets (a healer tucked against a ramp gets out within
   2 s; on 7f6a9fb2 it is judged on geometry-only placements: the Wave-4 sim has no ramp-side collision), collisioncheck container-lean + sprints-rocks, worldlive ramps-walk-fine (every ramp of 5 seeds x 3 maps, walk and sprint, every start phase)
+  and the Wave-6 city / perf gates (lane 6E, 2026-10-13): placementcheck now also gates the Wave-6 rows (base-edges, doorway-clearance, ramp-start-step, roads-float,
+  ground-match at 1e-4 m, pads); citycheck_selftest (the pinned enterable-building detector on a synthetic village, offline); perf_district (calls / triangles at three
+  fixed cameras vs the Wave-5 leftovers release bd523284); citykit_probe (lane 6C's C-KIT browser gate); citycheck (INFORMATION in Wave 6: no town is wired into the live
+  game yet, so its coverage rows are expected to fail; --city-blocking makes it count: the Wave-7 switch)
   perfcheck, orch_lowpost_ab (INFORMATION ONLY: shown, never counted)
 
 --negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
@@ -40,7 +44,10 @@ collisioncheck --plant container-narrow / rocks-small (the baked table served wi
 worldlive --plant ramp-solid (player.js served with every ramp blocking), navcheck-wave5-release, navcheck --plant pocket-raw (ffg_royale3d.js served with
 a hook: healers back straight away from their threat);
 and feelcheck
---plant blind-sampler, which must exit 2 (a blinded sampler is could-not-judge, never a verdict).
+--plant blind-sampler, which must exit 2 (a blinded sampler is could-not-judge, never a verdict);
+the Wave-6 controls (lane 6E): placementcheck --plant no-pads / door-buried / ramp-lip / roads-lifted / ground-shift (the built map mutated in memory; --quick), placementcheck
+--rev bd523284 --rows <the promoted rows> and --rev 7f6a9fb2 --rows ramp-start-step (frozen builds), perf_district --plant extra-calls / extra-tris and --rev bbd6aeae (Isla Viva drop view 525 calls), citycheck --rev bd523284
+--blocking (the Wave-5 release has no towns), citykit_probe --plant <each of lane 6C's six>.
 
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
 0 pass / 1 fail / 2 could-not-judge; a timeout or a crash of the gate process is could-not-judge. The overall verdict:
@@ -61,6 +68,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
 
 WAVE4_REV = "7f6a9fb2"       # the Wave-4 merge commit: the frozen "must fail" build of the Wave-5 gates
+WAVE5B_REV = "bd523284"      # the Wave-5 leftovers release (live; the build Wave 6 starts from): the frozen "must fail" build of the Wave-6 rows and the perf_district baseline
 WAVE5_REV = "3fce7529"       # the Wave-5 release ("Wave 5", live): the frozen "must fail" build of the 2026-10-13 leftovers-round rows
                              # (heal-pockets, container-lean, sprints-rocks, ramps-walk-fine): each fails here AND on the Wave-4 commit (heal-pockets there on geometry-only placements: no C-RAMP)
 
@@ -71,6 +79,8 @@ GATES = [
     ("placementcheck", "placementcheck.py", [], 1800, False),
     # Wave-5 fix round (lane F1): worldcheck is Node only too (same reason, runs second); worldlive loads one Chrome per map (PRACTICE: ~40 s)
     ("worldcheck", "worldcheck.py", [], 1800, False),
+    # Wave 6 (lane 6E): the detector's own selftest (Node only, ~2 s) runs with the other Node gates
+    ("citycheck_selftest", "citycheck.py", ["--selftest"], 300, False),
     ("bootcheck", "bootcheck.py", [], 3600, False),
     ("bootguard", "bootguard.py", [], 5400, False),
     ("rigcheck", "rigcheck.py", ["--seeds", "7,11,23"], 5400, False),
@@ -86,6 +96,11 @@ GATES = [
     ("collisioncheck", "collisioncheck.py", [], 5400, False),
     ("worldlive", "worldlive.py", [], 5400, False),
     ("navcheck", "navcheck.py", [], 5400, False),
+    # ---- Wave 6 (lane 6E). perf_district: calls + triangles at 3 fixed cameras vs bd523284 (the baseline numbers are cached per commit, so the run loads ONE match);
+    # citykit_probe is lane 6C's C-KIT gate; citycheck is INFORMATION until Wave 7 wires the towns (flip with --city-blocking: see main()).
+    ("perf_district", "perf_district.py", [], 3600, False),
+    ("citykit_probe", "citykit_probe.py", [], 3600, False),
+    ("citycheck", "citycheck.py", [], 3600, True),
     # ---- Wave-4 lane gates: _harness/new/<lane>_<name>.py, registered 2026-10-12. Same convention as every gate above (0 pass /
     # 1 fail / 2 could-not-judge, one VERDICT line, JSON in _reports/); all take the common flags, so --disk / --rev / --base /
     # --headed / --gpu pass through. None needs a rAF (they step frames); each lane gate's --isolate / --overlay-root is a
@@ -129,6 +144,7 @@ NEGATIVE = [
     ("bootguard-plant-no-card", "bootguard.py", ["--cases", "j,k", "--plant", "no-card"], 1800),
     ("bootguard-plant-hidden-card", "bootguard.py", ["--cases", "j,k", "--plant", "hidden-card"], 1800),
     ("bootcheck-plant-lock-drop", "bootcheck.py", ["--plant", "lock-drop"], 3600),
+    ("bootcheck-plant-w-dead", "bootcheck.py", ["--plant", "w-dead"], 3600),
     # Wave-3 H-harness: the kill-marker row must FAIL on a 50 ms kill hold; a blind sampler (the Wave-2 ordering defect)
     # must be COULD-NOT-JUDGE (expected exit 2), never a verdict; the phone overlap rows must not pass with no touch controls
     ("feelcheck-plant-kill-marker-short", "feelcheck.py", ["--plant", "kill-marker-short"], 1800),
@@ -176,6 +192,29 @@ NEGATIVE = [
     # heal-pockets: the same hook as heal-yaw serves ffg_royale3d.js; every healing bot backs straight away from its threat with no look at the walls.
     # (heal-pockets also fails on the Wave-4 commit, at 94.0 % on geometry-only placements: its sim has no ramp-side collision; not registered, ~90 s.)
     ("navcheck-plant-pocket-raw", "navcheck.py", ["--plant", "pocket-raw"], 3600),
+    # ---- Wave 6 (lane 6E). placementcheck: the five new rows each see a planted fault (the built map mutated in memory, seed 7 only) and the promoted rows FAIL on the
+    # frozen Wave-5 leftovers release; ramp-start-step already passes there (lane 5A / L2 fixed the ramp authoring in Wave 5) so its frozen proof is the Wave-4 commit.
+    ("placementcheck-plant-no-pads", "placementcheck.py", ["--plant", "no-pads", "--quick"], 900),
+    ("placementcheck-plant-door-buried", "placementcheck.py", ["--plant", "door-buried", "--quick"], 900),
+    ("placementcheck-plant-ramp-lip", "placementcheck.py", ["--plant", "ramp-lip", "--quick"], 900),
+    ("placementcheck-plant-roads-lifted", "placementcheck.py", ["--plant", "roads-lifted", "--quick"], 900),
+    ("placementcheck-plant-ground-shift", "placementcheck.py", ["--plant", "ground-shift", "--quick"], 900),
+    ("placementcheck-wave5-release-wave6-rows", "placementcheck.py", ["--rev", WAVE5B_REV, "--rows", "base-edges,doorway-clearance,roads-float,pads,ground-match"], 900),
+    ("placementcheck-wave4-commit-ramp-start", "placementcheck.py", ["--rev", WAVE4_REV, "--rows", "ramp-start-step"], 900),
+    # perf_district: +60 always-drawn meshes (calls) and +820k always-drawn triangles (the cost rows); the Wave-5 release is itself the baseline, so there is no frozen proof
+    ("perf_district-plant-extra-calls", "perf_district.py", ["--plant", "extra-calls"], 1800),
+    ("perf_district-plant-extra-tris", "perf_district.py", ["--plant", "extra-tris"], 1800),
+    # a frozen proof: the research HEAD of the world plan (bbd6aeae, before Wave 4's cloud / loot-beam savings) on Isla Viva reads 525 drop-view calls (464 world alone, +235 over bd523284)
+    ("perf_district-bbd6aeae-isla-viva", "perf_district.py", ["--rev", "bbd6aeae", "--baseline", WAVE5B_REV, "--maps", "isla_viva"], 1800),
+    # citycheck: the Wave-5 leftovers release has no towns: every coverage / town / endgame row of Savanna must FAIL (Node only, 30 seeds: a quick control)
+    ("citycheck-wave5-release-blocking", "citycheck.py", ["--rev", WAVE5B_REV, "--blocking", "--quick"], 1800),
+    # citykit_probe: lane 6C's own planted faults (a patched citykit.js served by a page route)
+    ("citykit_probe-plant-no-spheres", "citykit_probe.py", ["--plant", "no-spheres"], 1800),
+    ("citykit_probe-plant-leak", "citykit_probe.py", ["--plant", "leak"], 1800),
+    ("citykit_probe-plant-glb-colliders", "citykit_probe.py", ["--plant", "glb-colliders"], 1800),
+    ("citykit_probe-plant-q1-sign", "citykit_probe.py", ["--plant", "q1-sign"], 1800),
+    ("citykit_probe-plant-mesh-flip", "citykit_probe.py", ["--plant", "mesh-flip"], 1800),
+    ("citykit_probe-plant-no-far", "citykit_probe.py", ["--plant", "no-far"], 1800),
 ]
 
 
@@ -246,6 +285,7 @@ def main():
     ap.add_argument("--skip", default="", help="comma list of gate names to skip")
     ap.add_argument("--no-node", action="store_true", help="skip the Node selftests")
     ap.add_argument("--negative-controls", action="store_true", help="also run the planted-fault runs (each must exit 1)")
+    ap.add_argument("--city-blocking", action="store_true", help="Wave 7: citycheck counts (runs with --blocking on Savanna, ashgrid) instead of being information")
     args = ap.parse_args()
     only = set(x for x in (args.only or "").split(",") if x) or None
     skip = set(x for x in args.skip.split(",") if x)
@@ -262,6 +302,8 @@ def main():
     for name, script, extra, timeout, info in GATES:
         if (only is not None and name not in only) or name in skip:
             continue
+        if name == "citycheck" and args.city_blocking:
+            extra, info = list(extra) + ["--blocking"], False
         r = run_gate(name, script, extra, timeout, args, logdir)
         r["info"] = info
         rows.append(r)
