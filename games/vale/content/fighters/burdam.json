@@ -94,7 +94,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_mark_stack"
+        "vfx": "burdam_passive_grudge"
       }
     },
     "a1": {
@@ -162,7 +162,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "burdam_a1_beardown"
           }
         }
       ],
@@ -176,7 +176,7 @@
       "present": {
         "anim": "cast_a1",
         "sfx": "c_dash",
-        "hitVfx": "lib_hit_phys_heavy",
+        "hitVfx": "burdam_a1_chop",
         "hitSfx": "c_hit_phys_heavy",
         "telegraph": "ally_only"
       }
@@ -259,13 +259,13 @@
                 }
               ],
               "present": {
-                "vfx": "lib_slam_ground",
+                "vfx": "burdam_a2_stamp",
                 "sfx": "c_slam"
               }
             }
           ],
           "present": {
-            "vfx": "lib_empower"
+            "vfx": "burdam_a2_brace"
           }
         }
       ],
@@ -279,7 +279,8 @@
         "sfx": "c_buff",
         "hitVfx": "lib_hit_phys_heavy",
         "hitSfx": "c_hit_phys_heavy",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "vfx": "burdam_a2_brace"
       }
     },
     "a3": {
@@ -366,7 +367,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_cone_sweep",
+            "vfx": "burdam_a3_wound",
             "sfx": "c_swing_heavy",
             "telegraph": "ally_only"
           }

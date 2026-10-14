@@ -69,6 +69,8 @@ export interface SpawnOpts {
   /** horizontal facing (radians, sim convention) */
   dir?: number;
   follow?: number;
+  /** stop following after this many seconds (a dash's duration); omitted = while the entity exists */
+  followFor?: number;
   targetId?: number;
   /** the source entity (sockets, `at: caster` tracking) */
   sourceId?: number;
@@ -110,6 +112,7 @@ class Inst {
   dir = 0;
   follow = -1;
   following = false;
+  followFor = -1;
   targetId = -1;
   sourceId = -1;
   loopWhile = -1;
@@ -351,6 +354,7 @@ export class VfxSystem {
     // entity ids are >= 0; the renderer's test movers (VFX gallery) use ids <= -1000
     it.follow = o.follow ?? -1;
     it.following = it.follow !== -1;
+    it.followFor = o.followFor ?? -1;
     it.targetId = o.targetId ?? -1;
     it.sourceId = o.sourceId ?? -1;
     it.loopWhile = o.loopWhile ?? -1;
@@ -706,6 +710,11 @@ export class VfxSystem {
     for (let k = this.insts.length - 1; k >= 0; k--) {
       const it = this.insts[k];
       it.t += d;
+      if (it.following && it.followFor >= 0 && it.t > it.followFor) {
+        it.following = false;                       // let go: path elements stop tracking and fade out
+        for (const e of this.meshEls) if (e.inst === it) { e.inst = null; e.follow = false; }
+        for (const r of this.ribbons) if (r.inst === it) r.inst = null;
+      }
       if (it.following) {
         it.prevHead.copy(it.head);
         if (this.world.entityPos(it.follow, it.head)) {

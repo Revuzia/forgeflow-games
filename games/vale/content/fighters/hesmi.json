@@ -96,7 +96,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_mark_stack"
+        "vfx": "hesmi_passive_shade"
       }
     },
     "a1": {
@@ -186,7 +186,7 @@
                 }
               ],
               "present": {
-                "vfx": "lib_slam_ground",
+                "vfx": "hesmi_a1_topple",
                 "sfx": "c_slam"
               }
             }
@@ -281,7 +281,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "hesmi_a2_shoulder"
           }
         }
       ],
@@ -350,7 +350,7 @@
             }
           },
           "present": {
-            "vfx": "lib_shield_up"
+            "vfx": "hesmi_a3_firm"
           }
         },
         {
@@ -369,7 +369,8 @@
       "present": {
         "anim": "cast_a3",
         "sfx": "c_buff",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "vfx": "hesmi_a3_firm"
       }
     },
     "ult": {
@@ -460,7 +461,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_zone_shade",
+            "vfx": "hesmi_ult_shadow",
             "telegraph": "everyone"
           }
         },

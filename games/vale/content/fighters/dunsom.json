@@ -76,7 +76,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_mark_stack"
+        "vfx": "dunsom_passive_settle"
       }
     },
     "a1": {
@@ -162,7 +162,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_burst_shade",
+            "vfx": "dunsom_a1_draw",
             "sfx": "c_burst_shade",
             "telegraph": "everyone"
           }
@@ -263,7 +263,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_orb_shade",
+            "vfx": "dunsom_a2_sweep",
             "sfx": "c_proj_whoosh"
           }
         }
@@ -323,7 +323,7 @@
       },
       "present": {
         "anim": "cast_a3",
-        "vfx": "lib_blink",
+        "vfx": "dunsom_a3_step",
         "sfx": "c_blink",
         "telegraph": "ally_only"
       }
@@ -369,7 +369,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_ring_pulse",
+            "vfx": "dunsom_ult_herd",
             "sfx": "c_ult_release",
             "telegraph": "everyone"
           }

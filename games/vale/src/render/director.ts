@@ -63,6 +63,9 @@ export class Director {
   private readonly tmpB = new Vector3();
   private readonly tmpC = new Vector3();
   private readonly zonesSeen = new Set<number>();
+  /** passive ability ids: their procs arrive as damage events carrying the passive's id */
+  private readonly passives = new Set<string>();
+  private readonly passiveLast = new Map<string, number>();
 
   constructor(catalog: CatalogT, vfx: VfxSystem, host: DirectorHost) {
     this.vfx = vfx;
@@ -83,6 +86,7 @@ export class Director {
         if (a.recast) add(a.recast.ability, slot === 'ult' ? 4 : 2);
       }
       add({ id: f.kit.passive.id, present: f.kit.passive.present }, 1);
+      this.passives.add(f.kit.passive.id);
     }
     for (const it of catalog.items) if (it.active) add(it.active, 2);
     for (const s of catalog.setup.spells) add(s, 2);
@@ -106,7 +110,7 @@ export class Director {
   }
 
   /** spawn a def anchored on/around a source entity */
-  private fire(id: string | undefined, srcId: number, tier: Tier, o: { origin?: Vector3 | null; target?: Vector3 | null; ground?: Vector3 | null; scale?: number; dir?: number; follow?: number; targetId?: number; anchor?: 'origin' | 'target' | 'path' | 'ground'; loopWhile?: number }): void {
+  private fire(id: string | undefined, srcId: number, tier: Tier, o: { origin?: Vector3 | null; target?: Vector3 | null; ground?: Vector3 | null; scale?: number; dir?: number; follow?: number; followFor?: number; targetId?: number; anchor?: 'origin' | 'target' | 'path' | 'ground'; loopWhile?: number }): void {
     if (!id || !this.vfx.has(id)) return;
     const view = this.host.view();
     const src = view?.entity(srcId);
@@ -115,7 +119,7 @@ export class Director {
     this.vfx.spawn(id, {
       tier, team: c, element: this.elementOf(src), ally: rel === 'ally', ownT1: rel === 'self' && tier <= 1,
       origin: o.origin ?? null, target: o.target ?? null, ground: o.ground ?? null, scale: o.scale, dir: o.dir,
-      follow: o.follow, targetId: o.targetId, sourceId: srcId, anchor: o.anchor, loopWhile: o.loopWhile,
+      follow: o.follow, followFor: o.followFor, targetId: o.targetId, sourceId: srcId, anchor: o.anchor, loopWhile: o.loopWhile,
     });
   }
 
@@ -165,6 +169,20 @@ export class Director {
           break;
         }
         case 'damage': {
+          if (ev.ability && this.passives.has(ev.ability)) {
+            // a passive proc: its own look on the target (at most every 0.4 s per passive and target)
+            const info = this.abilities.get(ev.ability);
+            const key = `${ev.ability}:${ev.dst}`;
+            const now = this.host.now();
+            const dst = view.entity(ev.dst);
+            if (info?.vfx && dst && this.host.entityVisible(dst) && now - (this.passiveLast.get(key) ?? -1e9) >= 0.4) {
+              this.passiveLast.set(key, now);
+              this.host.bodyPos(ev.dst, B);
+              if (!this.host.bodyPos(ev.src, A)) A.copy(B);
+              this.fire(info.vfx, ev.src, 1, { origin: A, target: B, ground: B, targetId: ev.dst, anchor: 'target', dir: Math.atan2(B.z - A.z, B.x - A.x) });
+            }
+            break;
+          }
           if (ev.ability) break; // ability hits arrive as 'hit'
           const src = view.entity(ev.src), dst = view.entity(ev.dst);
           if (!src || !dst || !this.host.entityVisible(dst)) break;
@@ -215,7 +233,8 @@ export class Director {
           const src = view.entity(ev.src);
           if (!src || !this.host.entityVisible(src) || !ev.vfx) break;
           A.set(ev.fromX, 1, ev.fromY);
-          this.fire(ev.vfx, ev.src, 3, { origin: A, ground: A, follow: ev.src, anchor: 'path', dir: Math.atan2(ev.toY - ev.fromY, ev.toX - ev.fromX) });
+          // the trail follows the fighter for the dash only (then it lets go and fades)
+          this.fire(ev.vfx, ev.src, 3, { origin: A, ground: A, follow: ev.src, followFor: ev.duration + 0.05, anchor: 'path', dir: Math.atan2(ev.toY - ev.fromY, ev.toX - ev.fromX) });
           break;
         }
         case 'blink': {

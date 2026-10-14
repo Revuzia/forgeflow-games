@@ -192,7 +192,7 @@
                   ],
                   "present": {
                     "anim": "dash",
-                    "vfx": "lib_dash_trail"
+                    "vfx": "ervet_a1_jab"
                   }
                 }
               ],
@@ -278,7 +278,7 @@
                     }
                   ],
                   "present": {
-                    "vfx": "lib_shard_volley",
+                    "vfx": "ervet_a2_kick",
                     "sfx": "c_proj_whoosh"
                   }
                 }
@@ -342,7 +342,7 @@
                     }
                   ],
                   "present": {
-                    "vfx": "lib_burst_lumen",
+                    "vfx": "ervet_a3_reform",
                     "sfx": "c_burst_lumen"
                   }
                 },
@@ -372,7 +372,7 @@
         }
       },
       "present": {
-        "vfx": "lib_empower"
+        "vfx": "ervet_passive_edge"
       }
     },
     "a1": {
@@ -441,7 +441,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_cone_sweep",
+            "vfx": "ervet_a1_arc",
             "sfx": "c_swing_heavy"
           }
         }
@@ -511,7 +511,7 @@
       },
       "present": {
         "anim": "cast_a2",
-        "vfx": "lib_shield_up",
+        "vfx": "ervet_a2_guard",
         "sfx": "c_shield"
       }
     },
@@ -577,7 +577,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_slam_ground",
+            "vfx": "ervet_a3_smash",
             "sfx": "c_slam"
           }
         },
@@ -697,7 +697,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_leap"
+            "vfx": "ervet_ult_leap"
           }
         }
       ],

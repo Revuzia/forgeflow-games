@@ -82,7 +82,7 @@
         }
       ],
       "present": {
-        "vfx": "lib_empower"
+        "vfx": "ardit_passive_turned"
       }
     },
     "a1": {
@@ -156,7 +156,7 @@
           ],
           "present": {
             "anim": "dash",
-            "vfx": "lib_dash_trail"
+            "vfx": "ardit_a1_lance"
           }
         }
       ],
@@ -334,7 +334,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_slam_ground",
+            "vfx": "ardit_a3_spire",
             "sfx": "c_slam"
           }
         }
