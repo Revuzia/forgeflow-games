@@ -102,6 +102,17 @@ Originality rules still hold: nothing copied from any game.
 - Next: owner sign-off on Marund -> roll out to the other 15 fighters (+ skin concepts), then VFX
   (step 4), map scenes + menu scene (step 5: the placeholder low-poly scenery is now the weakest read).
 
+### Art 2.0 rollout prep (10-14, waiting on the owner's sign-off)
+- Skins: `pipeline.build` re-colours the projected painting per part (skin role / base role per channel,
+  `project.recolour`); skin-only extras paint flat via `spec.SKIN_FLAT`. Proven on Marund's two skins
+  (`art/renders/_art2/marund_skins.jpg`). Copy each fighter's skin palettes from `_design/fighters/<id>.md` §9.
+- Concept plates exist for all 16 (`art/.cache/concept/`, not committed; rerun `concept_plates.py <id> --height
+  <content art.height>`). Fix before projecting: pale background kept between the legs (Ardit, Dunsom, Lisvel,
+  Tunlan, Sukri) and pale cloth cut as background (Ilsheta's and Sukri's hoods/backs): tune per fighter
+  (threshold / erode / erase options) and check `<id>_mask.png`.
+- Build env: `export PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:$PATH` first, or the GLB is not
+  optimised (over budget), renders are not denoised and the three.js QA is skipped.
+
 ## Session log: owner's Mac, 2026-10-13 (paused by the owner mid-run)
 Done and pushed:
 - Toolchain on the Mac (Homebrew, Node 22, Python, ffmpeg, gh, Blender 5.2.2); Cycles on Metal
