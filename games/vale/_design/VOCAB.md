@@ -8,7 +8,7 @@ records (content/vfx.json, content/audio.json); authors reference ids. New ids n
 - Skin: id `<fighter>_<variant>` → `assets/fighters/<fighter>/<skin_id>.glb`, `…/<skin_id>_portrait.png`, `…/<skin_id>_splash.png`. The base skin id is `<fighter>_base` and points at the base files.
 - Units: `assets/units/<unit_id>.glb` (+ `assets/units/<unit_id>_icon.png` when it needs one)
 - Maps: `assets/maps/<map_id>/scene.glb`, `…/sky.hdr`, `…/minimap.png`; the locked grade `assets/grade/vale_grade_01.cube`
-- Icons (SVG, authored by the UI icon lane): abilities `assets/ui/icons/abilities/<ability_id>.svg` · items `assets/ui/icons/items/<item_id>.svg` · spells/boons `assets/ui/icons/setup/<id>.svg` · roles/classes/resources/currency/ranks/team buffs/paths `assets/ui/icons/<family>/<id>.svg`
+- Icons (painted WebP from the image pack `tools/imagegen`, else the authored SVG placeholder): abilities `assets/ui/icons/abilities/<ability_id>.webp|.svg` · items `assets/ui/icons/items/<item_id>.svg` · spells/boons `assets/ui/icons/setup/<id>.svg` · roles/classes/resources/currency/ranks/team buffs/paths `assets/ui/icons/<family>/<id>.svg`
 - Mode cards: `assets/ui/modes/<mode>_card.webp`, glyph `assets/ui/modes/<mode>_glyph.svg`; home art `assets/ui/home/<id>.webp`
 - Audio: cue `assets/audio/<cue_id>.ogg`; music `assets/audio/music/<music_id>.ogg`
 

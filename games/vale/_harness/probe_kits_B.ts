@@ -148,7 +148,7 @@ section('content lint', () => {
         isUlt ? cds.length === 3 && cds.every((x) => x >= 70 && x <= 130) && cds[0] >= cds[2]
           : cds.every((x) => x >= 5 && x <= 16), cds);
       check(`${id} ${s}: maxRank ${isUlt ? 3 : 5}`, a.maxRank === (isUlt ? 3 : 5), a.maxRank);
-      check(`${id} ${s}: icon path follows VOCAB`, a.icon === `assets/ui/icons/abilities/${a.id as string}.svg`, a.icon);
+      check(`${id} ${s}: icon path follows VOCAB`, [`assets/ui/icons/abilities/${a.id as string}.svg`, `assets/ui/icons/abilities/${a.id as string}.webp`].includes(a.icon as string), a.icon);
       // rank-1 primary damage 30-95 (+ratio <= 0.9): utility hits and multi-hit shards sit at the low end
       let firstDamage: Any | undefined;
       walk(a.effects, 'effects', (n) => { if (!firstDamage && n.op === 'damage') firstDamage = n; });
