@@ -28,6 +28,7 @@ import { breakInvisibility, canCast } from './status.ts';
 import { markStatsDirty, computeStats } from './stats.ts';
 import { addPassive, fireTrigger, removePassives } from './triggers.ts';
 import type { World } from './world.ts';
+import { datan2, dcos, dsin } from './dmath.ts';
 
 export type CastResult = 'ok' | 'moving' | 'no_slot' | 'dead' | 'rank' | 'busy' | 'cc' | 'silenced' | 'cooldown' | 'cost' | 'target';
 /** channel onTick runs at most this many times in one sim step */
@@ -231,7 +232,7 @@ export function tryCast(w: World, e: Entity, slotIndex: number, x?: number, y?: 
   const def = s.def;
   const tk = def.targeting.kind;
   let target: Entity | null = null;
-  let px = x ?? e.x + Math.cos(e.facing), py = y ?? e.y + Math.sin(e.facing);
+  let px = x ?? e.x + dcos(e.facing), py = y ?? e.y + dsin(e.facing);
   if (tk === 'unit') {
     target = targetId !== undefined ? w.live(targetId) : null;
     if (!target) return 'target';
@@ -246,7 +247,7 @@ export function tryCast(w: World, e: Entity, slotIndex: number, x?: number, y?: 
       const dx = px - e.x, dy = py - e.y;
       const d = Math.sqrt(dx * dx + dy * dy);
       if (d < def.targeting.minRange) {
-        const ux = d > 1e-6 ? dx / d : Math.cos(e.facing), uy = d > 1e-6 ? dy / d : Math.sin(e.facing);
+        const ux = d > 1e-6 ? dx / d : dcos(e.facing), uy = d > 1e-6 ? dy / d : dsin(e.facing);
         px = e.x + ux * def.targeting.minRange; py = e.y + uy * def.targeting.minRange;
       }
     }
@@ -266,7 +267,7 @@ export function tryCast(w: World, e: Entity, slotIndex: number, x?: number, y?: 
 
 function startCast(w: World, e: Entity, s: AbilitySlot, def: AbilityCoreT, target: Entity | null, px: number, py: number): void {
   const ctx = makeCtx(e, sourceOf(s, def), Math.max(1, slotRank(e, s)), target, px, py, def.present, s.slot);
-  if (def.targeting.kind !== 'none' && def.targeting.kind !== 'self') e.facing = Math.atan2(ctx.dy, ctx.dx);
+  if (def.targeting.kind !== 'none' && def.targeting.kind !== 'self') e.facing = datan2(ctx.dy, ctx.dx);
   e.atkWindup = -1;
   e.atkAnim = 0;
   if (e.order === ORDER_CAST) { e.order = ORDER_NONE; e.pendingSlot = -1; }

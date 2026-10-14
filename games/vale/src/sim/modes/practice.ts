@@ -23,6 +23,7 @@ import { seatHome, seatState, setSeatLevel } from '../units/fighters.ts';
 import { behaviorOf, getExt, setExt } from '../units/common.ts';
 import type { World } from '../world.ts';
 import { matchOf } from './match.ts';
+import { dcos, dsin } from '../dmath.ts';
 
 export const PRACTICE_GOLD_GRANT = 5000;
 export const PRACTICE_GOLD_FLOOR = 50000;
@@ -77,7 +78,7 @@ export function practiceCommand(w: World, p: Player, cmd: Extract<Command, { typ
       break;
     case 'spawnDummy': {
       const a = e.facing;
-      spawnDummy(w, e.x + Math.cos(a) * DUMMY_DISTANCE, e.y + Math.sin(a) * DUMMY_DISTANCE, enemyTeam(w, e.team));
+      spawnDummy(w, e.x + dcos(a) * DUMMY_DISTANCE, e.y + dsin(a) * DUMMY_DISTANCE, enemyTeam(w, e.team));
       break;
     }
     case 'heal':

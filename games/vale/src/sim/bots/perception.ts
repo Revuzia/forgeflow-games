@@ -19,6 +19,7 @@ import type { Entity } from '../entity.ts';
 import { damageMultHook } from '../units/common.ts';
 import type { World } from '../world.ts';
 import { laneProject, progress, proj, type Knowledge } from './knowledge.ts';
+import { dasin, dcos, dhypot, dsin } from '../dmath.ts';
 
 export interface LastSeen { x: number; y: number; t: number; id: EntityId }
 /** how much a last-seen sighting still counts (1 fresh → 0 after `span` s) */
@@ -184,7 +185,7 @@ export function inTelegraph(t: Telegraph, px: number, py: number, pr: number): b
       if (d2 < pr * pr) return true;
       const d = Math.sqrt(d2);
       const cos = (dx * t.dirX + dy * t.dirY) / d;
-      return cos >= Math.cos(Math.min(Math.PI, t.half + Math.asin(Math.min(1, pr / d))));
+      return cos >= dcos(Math.min(Math.PI, t.half + dasin(Math.min(1, pr / d))));
     }
     case 'rect': {
       const along = dx * t.dirX + dy * t.dirY;
@@ -203,7 +204,7 @@ export function telegraphFromEvent(w: World, ev: Extract<SimEvent, { e: 'area' }
   const f = src ? src.facing : 0;
   const kind = sh.kind;
   return {
-    id: teleSeq++, src: ev.src, srcTeam: team, ability: ev.ability, x: ev.x, y: ev.y, dirX: Math.cos(f), dirY: Math.sin(f), kind,
+    id: teleSeq++, src: ev.src, srcTeam: team, ability: ev.ability, x: ev.x, y: ev.y, dirX: dcos(f), dirY: dsin(f), kind,
     radius: sh.radius ?? 0, inner: sh.inner ?? 0, half: (sh.angle ?? Math.PI * 2) / 2, length: sh.length ?? 0, width: sh.width ?? 0,
     at: ev.t, resolveAt: ev.t + ev.delay, visibility: ev.telegraph,
   };
@@ -251,7 +252,7 @@ export class IncomingIndex {
         const src = pd.src;
         const raw = src.stats.ad * (pd.crit ? src.stats.critDamage : 1);
         const dmg = mitigated(src, t, damageMultHook(w, src, t, raw), pd.dtype);
-        const d = Math.max(0, Math.hypot(t.x - e.x, t.y - e.y) - t.radius);
+        const d = Math.max(0, dhypot(t.x - e.x, t.y - e.y) - t.radius);
         this.add(t.id, d / Math.max(1, pd.speed), dmg, src.visibleMask, false);
         continue;
       }
@@ -259,7 +260,7 @@ export class IncomingIndex {
       const t = w.live(e.atkTarget);
       if (!t || (t.kind !== 'minion' && t.kind !== 'monster' && t.kind !== 'summon')) continue;
       const ad = e.attackDef;
-      const flight = ad.projectileSpeed ? Math.max(0, Math.hypot(t.x - e.x, t.y - e.y) - t.radius) / ad.projectileSpeed : 0;
+      const flight = ad.projectileSpeed ? Math.max(0, dhypot(t.x - e.x, t.y - e.y) - t.radius) / ad.projectileSpeed : 0;
       const dmg = mitigated(e, t, damageMultHook(w, e, t, e.stats.ad), ad.damageType);
       if (e.atkWindup >= 0) { this.add(t.id, e.atkWindup + flight, dmg, e.visibleMask, false); continue; }
       const period = 1 / Math.max(0.05, e.stats.attackSpeed);

@@ -21,6 +21,7 @@ import { indexCatalog, resolveRules, type AbilityCoreT, type CatalogIndex, type 
 import { mitigated } from '../combat.ts';
 import { ranked } from '../effects.ts';
 import type { Entity } from '../entity.ts';
+import { dhypot } from '../dmath.ts';
 
 export type GameKind = 'rift' | 'bridge' | 'fray' | 'brawl' | 'practice';
 export type Style = FighterDefT['ai']['style'];
@@ -509,7 +510,7 @@ export function buildKnowledge(catalog: CatalogT, setup: MatchSetup, idx?: Catal
     const xs = new Float64Array(n), ys = new Float64Array(n), cum = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       xs[i] = l.path[i][0]; ys[i] = l.path[i][1];
-      if (i > 0) cum[i] = cum[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]);
+      if (i > 0) cum[i] = cum[i - 1] + dhypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]);
     }
     return { id: l.id, index, xs, ys, cum, length: cum[n - 1] };
   });

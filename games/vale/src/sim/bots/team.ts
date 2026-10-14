@@ -19,6 +19,7 @@ import type { Entity } from '../entity.ts';
 import type { World } from '../world.ts';
 import { lanePoint, progress, fromProgress, proj, type CampInfo, type Knowledge, type StructInfo } from './knowledge.ts';
 import type { TeamPerc } from './perception.ts';
+import { dhypot, sq } from '../dmath.ts';
 
 export interface LaneAssign { lane: number; jungle: boolean; support: boolean }
 
@@ -193,9 +194,9 @@ export class TeamBrain {
       if (!st.alive) continue;
       const reach = Math.max(8, st.stats.range + st.radius + 5);
       let fighters = 0, minions = 0, mine = 0;
-      for (const f of tp.enemyFighters) if (f.alive && (f.x - st.x) ** 2 + (f.y - st.y) ** 2 <= reach * reach) fighters++;
-      for (const u of tp.enemyUnits) if (u.alive && (u.x - st.x) ** 2 + (u.y - st.y) ** 2 <= reach * reach) minions++;
-      for (const u of tp.allyUnits) if (u.alive && (u.x - st.x) ** 2 + (u.y - st.y) ** 2 <= reach * reach) mine++;
+      for (const f of tp.enemyFighters) if (f.alive && sq(f.x - st.x) + sq(f.y - st.y) <= reach * reach) fighters++;
+      for (const u of tp.enemyUnits) if (u.alive && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) minions++;
+      for (const u of tp.allyUnits) if (u.alive && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) mine++;
       if (fighters === 0 && minions < 3) continue;
       const hurt = st.hp < st.maxHp * 0.98 ? 1 : 0.6;
       const info = this.structInfoOf(st);
@@ -250,7 +251,7 @@ export class TeamBrain {
       if (!info) continue;
       let score: number;
       if (info.isCore) score = 1000;
-      else if (this.respawning(info)) score = towersLeft === 0 ? 500 - Math.hypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 : -1;
+      else if (this.respawning(info)) score = towersLeft === 0 ? 500 - dhypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 : -1;
       else {
         // the least-pushed lane first: towers nearer our side score higher
         const l = info.lane >= 0 ? k.lanes[info.lane] : null;
@@ -285,7 +286,7 @@ export class TeamBrain {
       }
       void gatesUp; void gatesTotal;
       let ready = 0;
-      for (const f of tp.allyFighters) if (f.alive && f.hp > f.maxHp * 0.5 && (f.x - this.groupX) ** 2 + (f.y - this.groupY) ** 2 < 18 * 18) ready++;
+      for (const f of tp.allyFighters) if (f.alive && f.hp > f.maxHp * 0.5 && sq(f.x - this.groupX) + sq(f.y - this.groupY) < 18 * 18) ready++;
       const need = Math.min(4, Math.max(1, this.aliveAllies));
       if (clock || ready >= need || this.aliveEnemies <= 2) this.rush = aliveDiff >= -1 || this.aliveEnemies <= 2;
       else this.stage = true;
@@ -305,7 +306,7 @@ export class TeamBrain {
       } else {
         const base = k.bases.find((b) => b.team === this.team);
         const bx = base ? base.spawnX : k.mapCenterX, by = base ? base.spawnY : k.mapCenterY;
-        const dx = bx - s.x, dy = by - s.y, d = Math.hypot(dx, dy) || 1;
+        const dx = bx - s.x, dy = by - s.y, d = dhypot(dx, dy) || 1;
         this.groupX = s.x + (dx / d) * stand; this.groupY = s.y + (dy / d) * stand;
       }
       if (info.lane >= 0) this.push[info.lane] = Math.max(this.push[info.lane], this.group ? 0.9 : 0.5);
@@ -363,7 +364,7 @@ export class TeamBrain {
       let t = ((x - ax) * vx + (y - ay) * vy) / L2;
       if (t < 0) t = 0; else if (t > 1) t = 1;
       const px = ax + vx * t, py = ay + vy * t;
-      const d2 = (px - x) ** 2 + (py - y) ** 2;
+      const d2 = sq(px - x) + sq(py - y);
       if (d2 < bestD2) { bestD2 = d2; bestS = l.cum[i - 1] + Math.sqrt(L2) * t; }
     }
     return { s: bestS, d2: bestD2 };

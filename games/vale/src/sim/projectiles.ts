@@ -23,6 +23,7 @@ import { anchorPoint, matchesFilter, onEffectHit, runEffects } from './effects.t
 import type { EffOf, EffectCtx, Entity, ProjData } from './entity.ts';
 import { DEG, segmentCircleT } from './math.ts';
 import type { World } from './world.ts';
+import { datan2, dcos, dsin } from './dmath.ts';
 
 const scratch: Entity[] = [];
 const hitT: number[] = [];
@@ -61,10 +62,10 @@ export function spawnProjectiles(w: World, eff: EffOf<'projectile'>, ctx: Effect
   const homing = !!eff.homing && target !== null;
   const count = Math.max(1, eff.count ?? 1);
   const spread = (eff.spreadDeg ?? 0) * DEG;
-  const baseA = Math.atan2(by, bx);
+  const baseA = datan2(by, bx);
   for (let i = 0; i < count; i++) {
     const a = count > 1 ? baseA - spread / 2 + (spread * i) / (count - 1) : baseA;
-    const dx = Math.cos(a), dy = Math.sin(a);
+    const dx = dcos(a), dy = dsin(a);
     const p = newProjectile(w, c, ctx.source.id, ox, oy, eff.width, eff.present?.vfx);
     p.facing = a;
     p.vx = dx * eff.speed; p.vy = dy * eff.speed;
@@ -88,7 +89,7 @@ export function spawnAttackProjectile(w: World, src: Entity, target: Entity, cri
   const dx = target.x - src.x, dy = target.y - src.y;
   const l = Math.sqrt(dx * dx + dy * dy) || 1;
   const speed = ad.projectileSpeed ?? 20;
-  p.facing = Math.atan2(dy, dx);
+  p.facing = datan2(dy, dx);
   p.vx = (dx / l) * speed; p.vy = (dy / l) * speed;
   p.proj = {
     attack: true, eff: null, ctx: empCtx, src, target: target.id, targetLife: target.lifeSeq, homing: true, speed, range: Infinity, traveled: 0, width: 0.3,
@@ -144,7 +145,7 @@ export function projectileSystem(w: World): void {
       pd.dirX = dx / d; pd.dirY = dy / d;
       p.x += pd.dirX * step; p.y += pd.dirY * step;
       p.vx = pd.dirX * pd.speed; p.vy = pd.dirY * pd.speed;
-      p.facing = Math.atan2(pd.dirY, pd.dirX);
+      p.facing = datan2(pd.dirY, pd.dirX);
       pd.traveled += step;
       if (pd.traveled >= pd.range) endProjectile(w, p, pd);
       continue;
@@ -205,7 +206,7 @@ export function projectileSystem(w: World): void {
     if (stopped) { endProjectile(w, p, pd); continue; }
     p.x = ex; p.y = ey;
     p.vx = pd.dirX * pd.speed; p.vy = pd.dirY * pd.speed;
-    p.facing = Math.atan2(pd.dirY, pd.dirX);
+    p.facing = datan2(pd.dirY, pd.dirX);
     pd.traveled += adv;
     if (wallStop) { endProjectile(w, p, pd); continue; }
     if (adv >= remaining - 1e-9) {

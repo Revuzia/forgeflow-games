@@ -22,6 +22,7 @@ import {
 import { evalCondition, matchesFilter, runEffects } from './effects.ts';
 import { markStatsDirty } from './stats.ts';
 import type { World } from './world.ts';
+import { dcos, dsin } from './dmath.ts';
 
 export const MAX_TRIGGER_DEPTH = 4;
 const LOW_HP_DEFAULT = 0.3;
@@ -62,7 +63,7 @@ function triggerCtx(e: Entity, ti: TriggerInst, hit: Entity | null, depth: numbe
   const tx = hit ? hit.x : e.x, ty = hit ? hit.y : e.y;
   let dx = tx - e.x, dy = ty - e.y;
   const l = Math.sqrt(dx * dx + dy * dy);
-  if (l > 1e-6) { dx /= l; dy /= l; } else { dx = Math.cos(e.facing); dy = Math.sin(e.facing); }
+  if (l > 1e-6) { dx /= l; dy /= l; } else { dx = dcos(e.facing); dy = dsin(e.facing); }
   return {
     caster: e, rank: Math.max(1, e.level), target: hit, px: tx, py: ty, dx, dy, hit,
     ex: tx, ey: ty, hasEnd: false, source: { kind: ti.passive.kind, id: ti.passive.id },

@@ -37,6 +37,7 @@ import {
 import type { BotMatch } from './match.ts';
 import { inTelegraph, type TeamPerc } from './perception.ts';
 import type { TeamBrain } from './team.ts';
+import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
 export type Mode = 'lane' | 'farm' | 'trade' | 'allin' | 'retreat' | 'recall' | 'push' | 'defend' | 'objective' | 'roam'
   | 'teamfight' | 'hunt' | 'pickup' | 'return';
@@ -211,10 +212,10 @@ export abstract class BotBase {
         const side = -(e.x - t.x) * t.dirY + (e.y - t.y) * t.dirX;
         const sg = side >= 0 ? 1 : -1;
         ux = -t.dirY * sg; uy = t.dirX * sg;
-        need = t.kind === 'rect' ? t.width * 0.5 + myR - Math.abs(side) + 0.3 : Math.max(1, t.radius * Math.sin(t.half) + myR - Math.abs(side));
+        need = t.kind === 'rect' ? t.width * 0.5 + myR - Math.abs(side) + 0.3 : Math.max(1, t.radius * dsin(t.half) + myR - Math.abs(side));
       } else {
-        const dx = e.x - t.x, dy = e.y - t.y, d = Math.hypot(dx, dy);
-        if (d < 0.05) { const a = this.rng.float() * Math.PI * 2; ux = Math.cos(a); uy = Math.sin(a); } else { ux = dx / d; uy = dy / d; }
+        const dx = e.x - t.x, dy = e.y - t.y, d = dhypot(dx, dy);
+        if (d < 0.05) { const a = this.rng.float() * Math.PI * 2; ux = dcos(a); uy = dsin(a); } else { ux = dx / d; uy = dy / d; }
         need = t.radius + myR + 0.3 - d;
       }
       if (need <= 0) continue;
@@ -241,7 +242,7 @@ export abstract class BotBase {
       } else if (h.kind === 'zone' && h.zone && h.zone.active) {
         const zd = h.zone;
         if (!inShape(zd.shape, e.x, e.y, e.radius, h.x, h.y, zd.dirX, zd.dirY)) continue;
-        const dx = e.x - h.x, dy = e.y - h.y, d = Math.hypot(dx, dy) || 1;
+        const dx = e.x - h.x, dy = e.y - h.y, d = dhypot(dx, dy) || 1;
         const reach = h.radius + myR + 0.4 - d;
         if (reach > 0) { this.dodgeX = e.x + (dx / d) * reach; this.dodgeY = e.y + (dy / d) * reach; this.dodgeUntil = now + Math.min(1, reach / ms + 0.1); this.moveTo(this.dodgeX, this.dodgeY); return true; }
       }
@@ -270,7 +271,7 @@ export abstract class BotBase {
       if (!s || !s.ready) continue;
       const info = abilityInfo(s.def);
       if (!(info.use & U_ESCAPE)) continue;
-      const dx = x - e.x, dy = y - e.y, d = Math.hypot(dx, dy) || 1;
+      const dx = x - e.x, dy = y - e.y, d = dhypot(dx, dy) || 1;
       if (info.delivery === 'dash' || info.delivery === 'blink') {
         const reach = Math.max(info.dashDist, info.blinkDist, info.range);
         if (reach < minDist) continue;
@@ -324,7 +325,7 @@ export abstract class BotBase {
     // heading error
     const err = gauss(this.rng) * this.diff.aimErrorDeg * Math.PI / 180;
     if (err !== 0) {
-      const dx = px - e.x, dy = py - e.y, c = Math.cos(err), s = Math.sin(err);
+      const dx = px - e.x, dy = py - e.y, c = dcos(err), s = dsin(err);
       px = e.x + dx * c - dy * s; py = e.y + dx * s + dy * c;
     }
     out.x = px; out.y = py;
@@ -334,16 +335,16 @@ export abstract class BotBase {
   protected countIn(x: number, y: number, r: number, fightersOnly: boolean, monsters: boolean): number {
     let n = 0;
     const tp = this.perc;
-    for (const f of tp.enemyFighters) if (f.alive && this.dist2(f, x, y) <= (r + f.radius) ** 2) n++;
+    for (const f of tp.enemyFighters) if (f.alive && this.dist2(f, x, y) <= sq(r + f.radius)) n++;
     if (!fightersOnly) {
-      for (const u of tp.enemyUnits) if (u.alive && this.dist2(u, x, y) <= (r + u.radius) ** 2) n++;
-      if (monsters) for (const u of tp.monsters) if (u.alive && this.dist2(u, x, y) <= (r + u.radius) ** 2) n++;
+      for (const u of tp.enemyUnits) if (u.alive && this.dist2(u, x, y) <= sq(r + u.radius)) n++;
+      if (monsters) for (const u of tp.monsters) if (u.alive && this.dist2(u, x, y) <= sq(r + u.radius)) n++;
     }
     return n;
   }
   protected alliesIn(x: number, y: number, r: number, below: number): number {
     let n = 0;
-    for (const f of this.perc.allyFighters) if (f.alive && f.hp / f.maxHp < below && this.dist2(f, x, y) <= (r + f.radius) ** 2) n++;
+    for (const f of this.perc.allyFighters) if (f.alive && f.hp / f.maxHp < below && this.dist2(f, x, y) <= sq(r + f.radius)) n++;
     return n;
   }
 
@@ -351,12 +352,12 @@ export abstract class BotBase {
   protected fighterInReach(reach: number): Entity | null {
     const e = this.e;
     const f = this.pFight;
-    if (f && f.kind === 'fighter' && this.isNoticed(f) && this.dist2(f, e.x, e.y) <= (reach + f.radius) ** 2) return f;
+    if (f && f.kind === 'fighter' && this.isNoticed(f) && this.dist2(f, e.x, e.y) <= sq(reach + f.radius)) return f;
     let best: Entity | null = null, bestS = Infinity;
     for (const g of this.perc.enemyFighters) {
       if (!this.isNoticed(g)) continue;
       const d2 = this.dist2(g, e.x, e.y);
-      if (d2 > (reach + g.radius) ** 2) continue;
+      if (d2 > sq(reach + g.radius)) continue;
       const s = (g.hp + g.shield) + Math.sqrt(d2) * 30;
       if (s < bestS) { bestS = s; best = g; }
     }
@@ -394,7 +395,7 @@ export abstract class BotBase {
         for (const f of this.perc.allyFighters) {
           if (!f.alive || (f === e && !info.filter?.self)) continue;
           const fF = f.hp / f.maxHp;
-          if (fF >= bestF || this.dist2(f, e.x, e.y) > (info.range + f.radius + 0.5) ** 2) continue;
+          if (fF >= bestF || this.dist2(f, e.x, e.y) > sq(info.range + f.radius + 0.5)) continue;
           if (!matchesFilter(this.w, e, f, info.filter)) continue;
           bestF = fF; best = f;
         }
@@ -412,7 +413,7 @@ export abstract class BotBase {
     if ((u & U_ESCAPE) && !(u & U_OFFENSE & ~U_DAMAGE) && (this.mode === 'retreat' || (hpF < 0.25 && threatened))) {
       const chaser = this.nearestEnemyFighter(7);
       if (chaser || this.mode === 'retreat') {
-        const dx = this.safeX - e.x, dy = this.safeY - e.y, d = Math.hypot(dx, dy) || 1;
+        const dx = this.safeX - e.x, dy = this.safeY - e.y, d = dhypot(dx, dy) || 1;
         const reach = Math.max(info.dashDist, info.blinkDist, info.range, 3);
         if (info.tk === 'self' || info.tk === 'none') { this.cast(s, info, e, e.x, e.y); return true; }
         if (d > 3 && chaser) { this.cast(s, info, null, e.x + (dx / d) * reach, e.y + (dy / d) * reach); return true; }
@@ -482,7 +483,7 @@ export abstract class BotBase {
       }
       case 'point': case 'direction': {
         this.aim(t, info, o);
-        const dx = o.x - e.x, dy = o.y - e.y, dd = Math.hypot(dx, dy) || 1;
+        const dx = o.x - e.x, dy = o.y - e.y, dd = dhypot(dx, dy) || 1;
         if (info.delivery === 'projectile') {
           if (dd > info.projRange + t.radius * 0.5) return false;
         } else if (info.delivery === 'dash' || info.delivery === 'blink') {
@@ -574,7 +575,7 @@ export abstract class BotBase {
     for (const u of this.perc.enemyUnits) {
       if (!u.alive) continue;
       const d2 = this.dist2(u, e.x, e.y);
-      if (d2 > (r + u.radius) ** 2) continue;
+      if (d2 > sq(r + u.radius)) continue;
       if (d2 < bs) { bs = d2; best = u; }
     }
     return best;
@@ -582,7 +583,7 @@ export abstract class BotBase {
 
   private wardSpot(range: number): { x: number; y: number } | null {
     const e = this.e, map = this.k.map;
-    let best: { x: number; y: number } | null = null, bd = (range + 4) ** 2;
+    let best: { x: number; y: number } | null = null, bd = sq(range + 4);
     for (const poly of map.thickets) {
       let cx = 0, cy = 0;
       for (const pt of poly) { cx += pt[0]; cy += pt[1]; }
@@ -662,7 +663,7 @@ export abstract class BotBase {
     for (const u of this.perc.enemyUnits) {
       if (!u.alive || !u.targetable) continue;
       const d2 = this.dist2(u, e.x, e.y);
-      if (d2 > (r + u.radius) ** 2) continue;
+      if (d2 > sq(r + u.radius)) continue;
       const s = u.hp + Math.sqrt(d2) * 25;
       if (s < bs) { bs = s; best = u; }
     }
@@ -718,7 +719,7 @@ export abstract class BotBase {
         if (soon) {
           // drift into range of it, but stay where the plan says otherwise
           const r = e.stats.range + e.radius + soon.radius - 0.3;
-          const dx = e.x - soon.x, dy = e.y - soon.y, d = Math.hypot(dx, dy) || 1;
+          const dx = e.x - soon.x, dy = e.y - soon.y, d = dhypot(dx, dy) || 1;
           if (d > r + 0.6 && this.towerSafe(soon.x, soon.y, 0)) { this.moveTo(soon.x + (dx / d) * r, soon.y + (dy / d) * r); return; }
         }
       }
@@ -739,7 +740,7 @@ export abstract class BotBase {
         if (e.atkWindup >= 0) return;                        // never cancel the swing
         const period = 1 / Math.max(0.05, e.stats.attackSpeed);
         if (e.atkCd > period * 0.35) {
-          const dx = e.x - f.x, dy = e.y - f.y, d = Math.hypot(dx, dy) || 1;
+          const dx = e.x - f.x, dy = e.y - f.y, d = dhypot(dx, dy) || 1;
           const comfy = e.stats.range + e.radius + f.radius - 0.4;
           if (d < comfy) {
             const tx = e.x + (dx / d) * 1.6, ty = e.y + (dy / d) * 1.6;

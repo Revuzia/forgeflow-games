@@ -35,6 +35,7 @@ import { CC_FEAR, CC_HARD, CC_TAUNT, ORDER_NONE, type Entity, type Player } from
 import { issueStop } from '../movement.ts';
 import { respawnFighter, seatSpawnPoint, spawnFighter } from '../spawn.ts';
 import type { World } from '../world.ts';
+import { dcos, dsin } from '../dmath.ts';
 
 // defaults: rules.recallTime, rules.tuning.fountainHealPerSec / suddenDeathRespawnMult
 export const DEFAULT_RECALL_TIME = 8;
@@ -69,7 +70,7 @@ export function seatHome(w: World, seat: SeatSetup): [number, number] {
   const k = mates.findIndex((s) => s.player === seat.player);
   if (mates.length <= 1 || k < 0) return [base.spawn[0], base.spawn[1]];
   const a = (k / mates.length) * Math.PI * 2;
-  return [base.spawn[0] + Math.cos(a) * SPAWN_RING, base.spawn[1] + Math.sin(a) * SPAWN_RING];
+  return [base.spawn[0] + dcos(a) * SPAWN_RING, base.spawn[1] + dsin(a) * SPAWN_RING];
 }
 
 /** FFA respawn: the map spawn point farthest from every living enemy fighter (ties: lower index) */

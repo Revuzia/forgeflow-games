@@ -19,6 +19,7 @@
 
 import type { MapDefT } from '../contracts/catalog.ts';
 import { pointInPolygon, polygonAabb, polygonEdgeDist2, type Poly, type V2 } from './math.ts';
+import { dhypot } from './dmath.ts';
 
 /** extra metres around wall polygons that count as blocked for unit centres */
 export const WALL_CLEARANCE = 0.25;
@@ -418,9 +419,9 @@ export class NavGrid {
         const e1x = v[0] - p[0], e1y = v[1] - p[1], e2x = q[0] - v[0], e2y = q[1] - v[1];
         if ((e1x * e2y - e1y * e2x) * sign <= 0) continue; // concave or straight: never a turning point
         // outward normals of both edges (for CCW: (dy, −dx)), bisected
-        const l1 = Math.hypot(e1x, e1y) || 1, l2 = Math.hypot(e2x, e2y) || 1;
+        const l1 = dhypot(e1x, e1y) || 1, l2 = dhypot(e2x, e2y) || 1;
         let bx = (e1y / l1 + e2y / l2) * sign, by = (-e1x / l1 - e2x / l2) * sign;
-        const bl = Math.hypot(bx, by);
+        const bl = dhypot(bx, by);
         if (bl < 1e-9) continue;
         bx /= bl; by /= bl;
         // place the node far enough from BOTH edges that a body of 0.45 cells passes it on
@@ -446,7 +447,7 @@ export class NavGrid {
     for (let i = 0; i < V; i++) {
       for (let j = i + 1; j < V; j++) {
         if (!this.lineIn(this.wall, xs[i], ys[i], xs[j], ys[j], r)) continue;
-        const d = Math.hypot(xs[j] - xs[i], ys[j] - ys[i]);
+        const d = dhypot(xs[j] - xs[i], ys[j] - ys[i]);
         lists[i].push(j); costs[i].push(d);
         lists[j].push(i); costs[j].push(d);
       }
@@ -473,10 +474,10 @@ export class NavGrid {
     const cs = this.componentAt(sx, sy);
     for (let i = 0; i < V; i++) {
       const xi = X[i], yi = Y[i];
-      Hh[i] = Math.hypot(tx - xi, ty - yi);
+      Hh[i] = dhypot(tx - xi, ty - yi);
       // nodes covered by a structure (or cut off by one) are unusable right now
       if (this.componentAt(xi, yi) !== cs) { S[i] = Infinity; T[i] = Infinity; G[i] = Infinity; P[i] = -1; D[i] = 1; continue; }
-      S[i] = this.march(this.wall, sx, sy, xi, yi) > 1 ? Math.hypot(xi - sx, yi - sy) : Infinity;
+      S[i] = this.march(this.wall, sx, sy, xi, yi) > 1 ? dhypot(xi - sx, yi - sy) : Infinity;
       T[i] = this.march(this.wall, xi, yi, tx, ty) > 1 ? Hh[i] : Infinity;
       if (S[i] < Infinity) anyS = true;
       if (T[i] < Infinity) anyT = true;

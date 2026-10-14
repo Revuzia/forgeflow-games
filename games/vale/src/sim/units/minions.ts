@@ -26,6 +26,7 @@ import { issueAttack, issueMove } from '../movement.ts';
 import { spawnUnit } from '../spawn.ts';
 import type { World } from '../world.ts';
 import { behaviorOf, bestTargetNear, dist2, getExt, setExt, shouldSwitch, useUnitAbilities } from './common.ts';
+import { datan2 } from '../dmath.ts';
 
 export const MINION_THINK_TICKS = 6;
 /** metres from a waypoint that count as reaching it */
@@ -90,7 +91,7 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
       let dx = nx - sx, dy = ny - sy;
       const l = Math.sqrt(dx * dx + dy * dy) || 1;
       dx /= l; dy /= l;
-      const facing = Math.atan2(dy, dx);
+      const facing = datan2(dy, dx);
       for (let i = 0; i < units.length; i++) {
         const row = Math.floor(i / 3), col = (i % 3) - 1;
         const x = sx - dx * row * ROW_GAP - dy * col * COL_GAP, y = sy - dy * row * ROW_GAP + dx * col * COL_GAP;

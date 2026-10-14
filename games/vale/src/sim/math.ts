@@ -5,6 +5,7 @@
 // a unit whose edge overlaps a shape counts as inside (generous hits read better than exact ones).
 
 import type { ShapeT } from '../contracts/catalog.ts';
+import { dacos, dasin, datan2, dcos, dsin } from './dmath.ts';
 
 export interface V2 { x: number; y: number }
 export type Poly = readonly (readonly [number, number])[];
@@ -27,12 +28,12 @@ export function cross(ax: number, ay: number, bx: number, by: number): number { 
 /** unit vector of (x, y) into `out`; a zero vector becomes `fallback` angle's direction (default +x) */
 export function normInto(out: V2, x: number, y: number, fallbackAngle = 0): V2 {
   const l = Math.sqrt(x * x + y * y);
-  if (l < 1e-9) { out.x = Math.cos(fallbackAngle); out.y = Math.sin(fallbackAngle); return out; }
+  if (l < 1e-9) { out.x = dcos(fallbackAngle); out.y = dsin(fallbackAngle); return out; }
   out.x = x / l; out.y = y / l; return out;
 }
 
 // ── angles ──────────────────────────────────────────────────────────────────────────────────────
-export function angleOf(x: number, y: number): number { return Math.atan2(y, x); }
+export function angleOf(x: number, y: number): number { return datan2(y, x); }
 /** wrap to (-π, π] */
 export function wrapAngle(a: number): number {
   a = a % TAU;
@@ -41,9 +42,9 @@ export function wrapAngle(a: number): number {
 }
 /** signed shortest turn from a to b */
 export function angleDiff(a: number, b: number): number { return wrapAngle(b - a); }
-export function dirFromAngle(out: V2, a: number): V2 { out.x = Math.cos(a); out.y = Math.sin(a); return out; }
+export function dirFromAngle(out: V2, a: number): V2 { out.x = dcos(a); out.y = dsin(a); return out; }
 export function rotateInto(out: V2, x: number, y: number, a: number): V2 {
-  const c = Math.cos(a), s = Math.sin(a);
+  const c = dcos(a), s = dsin(a);
   const rx = x * c - y * s, ry = x * s + y * c;
   out.x = rx; out.y = ry; return out;
 }
@@ -120,9 +121,9 @@ export function inCone(px: number, py: number, pr: number, ox: number, oy: numbe
   const d = Math.sqrt(d2);
   if (d <= pr) return true;                    // the unit overlaps the apex
   const cosA = (vx * dx + vy * dy) / d;
-  const a = Math.acos(clamp(cosA, -1, 1));
+  const a = dacos(clamp(cosA, -1, 1));
   // widen by the angular size of the unit so edge-overlap counts
-  return a <= half + Math.asin(clamp(pr / d, 0, 1));
+  return a <= half + dasin(clamp(pr / d, 0, 1));
 }
 /** rectangle from o along unit dir (dx, dy): u ∈ [0, length], |v| ≤ width/2 (both inflated by pr) */
 export function inRect(px: number, py: number, pr: number, ox: number, oy: number, dx: number, dy: number, length: number, width: number): boolean {

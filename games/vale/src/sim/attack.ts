@@ -26,6 +26,7 @@ import { computeStats } from './stats.ts';
 import { breakInvisibility, canAttack, consumeEmpower, empowerRangeBonus, peekEmpower, statusFrom } from './status.ts';
 import { fireTrigger } from './triggers.ts';
 import type { World } from './world.ts';
+import { datan2, dcos, dsin } from './dmath.ts';
 
 const scratch: Entity[] = [];
 
@@ -106,7 +107,7 @@ function startAttack(w: World, e: Entity, t: Entity): void {
   e.atkAnim = period;
   e.atkAlt = !e.atkAlt;
   e.actionSeq++;
-  e.facing = Math.atan2(t.y - e.y, t.x - e.x);
+  e.facing = datan2(t.y - e.y, t.x - e.x);
   breakInvisibility(w, e);
   w.emit({ e: 'attack', t: w.time, src: e.id, dst: t.id, windup: e.atkWindup, crit: e.atkCrit });
 }
@@ -133,7 +134,7 @@ export function applyAttackHit(w: World, src: Entity, t: Entity, crit: boolean, 
     const base = empCtx;
     const ctx: EffectCtx = base
       ? { ...base, caster: src, target: t, hit: t, px: t.x, py: t.y, ex: t.x, ey: t.y, hasEnd: true, depth: base.depth + 1 }
-      : { caster: src, rank: Math.max(1, src.level), target: t, px: t.x, py: t.y, dx: Math.cos(src.facing), dy: Math.sin(src.facing),
+      : { caster: src, rank: Math.max(1, src.level), target: t, px: t.x, py: t.y, dx: dcos(src.facing), dy: dsin(src.facing),
           hit: t, ex: t.x, ey: t.y, hasEnd: true, source: { kind: 'passive', id: src.def }, present: undefined, depth: 1, slot: null };
     runEffects(w, empower, ctx);
   }

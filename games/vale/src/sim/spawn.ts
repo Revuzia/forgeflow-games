@@ -14,6 +14,7 @@ import { clearStatuses } from './status.ts';
 import { addPassive, fireTrigger } from './triggers.ts';
 import { FIGHTER_SIGHT } from './vision.ts';
 import type { World } from './world.ts';
+import { datan2, dcos, dsin } from './dmath.ts';
 
 const tmp = { x: 0, y: 0 };
 /** structures block nav cells within their radius + this, so paths go around them */
@@ -74,7 +75,7 @@ export function spawnFighter(w: World, seat: SeatSetup, x?: number, y?: number):
   e.dmgLog = new DamageLog();
   const [sx, sy] = x !== undefined && y !== undefined ? [x, y] : seatSpawnPoint(w, seat);
   placeWalkable(w, e, sx, sy);
-  e.facing = Math.atan2(w.mapDef.size[1] / 2 - e.y, w.mapDef.size[0] / 2 - e.x);
+  e.facing = datan2(w.mapDef.size[1] / 2 - e.y, w.mapDef.size[0] / 2 - e.x);
 
   const practiceLevel = w.queueDef.kind === 'practice' ? w.setup.practice?.startLevel : undefined;
   const lvl = typeof practiceLevel === 'number' && Number.isFinite(practiceLevel) ? Math.floor(practiceLevel) : w.rules.startLevel;
@@ -163,7 +164,7 @@ export function summonUnits(w: World, eff: EffOf<'summon'>, ctx: EffectCtx): voi
   for (let i = 0; i < n; i++) {
     const a = c.facing + (i * Math.PI * 2) / n;
     const off = n > 1 ? 1 : 0;
-    spawnUnit(w, eff.unit, c.team, ox + Math.cos(a) * off, oy + Math.sin(a) * off,
+    spawnUnit(w, eff.unit, c.team, ox + dcos(a) * off, oy + dsin(a) * off,
       { owner: c.owner, ownerEid: c.id, level: c.level, duration, facing: c.facing });
   }
   if (eff.maxAlive !== undefined) {

@@ -37,6 +37,7 @@ import {
 import { fireTrigger } from './triggers.ts';
 import type { World } from './world.ts';
 import { doArea, spawnZone } from './zones.ts';
+import { dcos, dsin } from './dmath.ts';
 
 /** nesting cap for effect lists (data is finite, but a projectile whose onHit spawns itself is not) */
 export const MAX_EFFECT_DEPTH = 12;
@@ -80,7 +81,7 @@ export function makeCtx(caster: Entity, source: SourceRef, rank: number, target:
   present: PresentT | undefined, slot: SlotT | null, depth = 0): EffectCtx {
   let dx = px - caster.x, dy = py - caster.y;
   const l = Math.sqrt(dx * dx + dy * dy);
-  if (l > 1e-6) { dx /= l; dy /= l; } else { dx = Math.cos(caster.facing); dy = Math.sin(caster.facing); }
+  if (l > 1e-6) { dx /= l; dy /= l; } else { dx = dcos(caster.facing); dy = dsin(caster.facing); }
   return { caster, rank, target, px, py, dx, dy, hit: target, ex: px, ey: py, hasEnd: false, source, present, depth, slot };
 }
 export function withHit(ctx: EffectCtx, hit: Entity): EffectCtx { return { ...ctx, hit, depth: ctx.depth + 1 }; }

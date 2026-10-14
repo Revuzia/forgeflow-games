@@ -28,6 +28,7 @@ import { abilityInfo, estimateDamage, fromProgress, lanePoint, progress, proj, t
 import type { BotMatch } from './match.ts';
 import { BotBase, gauss, type Mode } from './micro.ts';
 import { memoryWeight } from './perception.ts';
+import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
 const MODE_TICKS = 6;
 const MIN_MODE_TIME = 1.5;
@@ -153,7 +154,7 @@ export class Bot extends BotBase implements BotController {
       const f = this.w.entity(ls.id);
       if (!f || !f.alive || this.isNoticed(f)) continue;
       const wgt = memoryWeight(ls, this.now, 6);
-      if (wgt > 0 && (ls.x - e.x) ** 2 + (ls.y - e.y) ** 2 <= R * R) powE += this.power(f) * wgt * 0.6;
+      if (wgt > 0 && sq(ls.x - e.x) + sq(ls.y - e.y) <= R * R) powE += this.power(f) * wgt * 0.6;
     }
     this.nearE = nE; this.nearA = nA;
     if (this.k.ffa) {
@@ -218,7 +219,7 @@ export class Bot extends BotBase implements BotController {
     consider('retreat', retreat);
     // recall / shop
     const base = k.bases.find((x) => x.team === this.team);
-    const atBase = !!base && this.dist2(e, base.fx, base.fy) <= (base.fr + 1.5) ** 2;
+    const atBase = !!base && this.dist2(e, base.fx, base.fy) <= sq(base.fr + 1.5);
     const nextPrice = this.eco.nextPrice(this.w, this.p);
     let recall = 0;
     if (kind !== 'fray') {
@@ -344,7 +345,7 @@ export class Bot extends BotBase implements BotController {
         if (d2 < bd) { bd = d2; best = st; }
       }
       if (best && this.hpF > 0.2) {
-        const dx = base.fx - best.x, dy = base.fy - best.y, d = Math.hypot(dx, dy) || 1;
+        const dx = base.fx - best.x, dy = base.fy - best.y, d = dhypot(dx, dy) || 1;
         this.safeX = best.x + (dx / d) * 3; this.safeY = best.y + (dy / d) * 3;
       } else { this.safeX = base.fx; this.safeY = base.fy; }
       return;
@@ -359,7 +360,7 @@ export class Bot extends BotBase implements BotController {
       ax += dx * wgt; ay += dy * wgt; n++;
     }
     if (n === 0) { this.safeX = e.x; this.safeY = e.y; return; }
-    const d = Math.hypot(ax, ay) || 1;
+    const d = dhypot(ax, ay) || 1;
     let tx = e.x + (ax / d) * 8, ty = e.y + (ay / d) * 8;
     // pull toward the map centre so a bot does not pin itself on the edge
     tx = tx * 0.8 + this.k.mapCenterX * 0.2; ty = ty * 0.8 + this.k.mapCenterY * 0.2;
@@ -451,7 +452,7 @@ export class Bot extends BotBase implements BotController {
     const e = this.e;
     // ranged styles keep their preferred range; melee walk in
     const want = this.prof.ranged ? Math.max(this.prof.prefRange, this.prof.attackRange) : 0;
-    const dx = e.x - t.x, dy = e.y - t.y, d = Math.hypot(dx, dy) || 1;
+    const dx = e.x - t.x, dy = e.y - t.y, d = dhypot(dx, dy) || 1;
     this.pMove = true;
     if (want > 0 && d < want - 1) { this.pMoveX = t.x + (dx / d) * want; this.pMoveY = t.y + (dy / d) * want; }
     else { this.pMoveX = t.x; this.pMoveY = t.y; }
@@ -476,7 +477,7 @@ export class Bot extends BotBase implements BotController {
       this.selfDefense();
       return;
     }
-    const atBase = this.dist2(e, base.fx, base.fy) <= (base.fr - 0.5) ** 2;
+    const atBase = this.dist2(e, base.fx, base.fy) <= sq(base.fr - 0.5);
     if (atBase) { this.pMove = true; this.pMoveX = base.fx; this.pMoveY = base.fy; return; }
     const threat = this.nearestEnemyFighter(10) !== null || this.recentDps > 0;
     if (k.rules.recall && !threat) {
@@ -582,7 +583,7 @@ export class Bot extends BotBase implements BotController {
       // wait outside its reach for the team
       const base = this.k.bases.find((x) => x.team === this.team);
       if (base) {
-        const dx = base.fx - c.x, dy = base.fy - c.y, d = Math.hypot(dx, dy) || 1;
+        const dx = base.fx - c.x, dy = base.fy - c.y, d = dhypot(dx, dy) || 1;
         this.pMoveX = c.x + (dx / d) * 10; this.pMoveY = c.y + (dy / d) * 10;
       }
     }
@@ -648,7 +649,7 @@ export class Bot extends BotBase implements BotController {
     // no target: drift toward the centre of the arena (where fights and pickups are)
     const e = this.e;
     const a = (this.player * 1.7) % (Math.PI * 2);
-    this.pMove = true; this.pMoveX = this.k.mapCenterX + Math.cos(a) * 6; this.pMoveY = this.k.mapCenterY + Math.sin(a) * 6;
+    this.pMove = true; this.pMoveX = this.k.mapCenterX + dcos(a) * 6; this.pMoveY = this.k.mapCenterY + dsin(a) * 6;
     const f = this.nearestEnemyFighter(this.prof.attackRange + 4);
     if (f && this.recentDps > 0) { this.pFight = f; this.pAggro = 0.6; }
     void e;

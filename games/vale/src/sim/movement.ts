@@ -39,6 +39,7 @@ import { computeStats } from './stats.ts';
 import { noteMoved } from './triggers.ts';
 import type { World } from './world.ts';
 import { zoneBlocks } from './zones.ts';
+import { datan2, dcos, dsin } from './dmath.ts';
 
 /** goal drift (m) that forces a new path */
 export const REPATH_DIST = 1;
@@ -130,7 +131,7 @@ export function startDash(w: World, eff: EffOf<'dash'>, ctx: EffectCtx): void {
     passed: eff.onPass || eff.stopOnFirstHit ? [] : null, unstoppable: !!eff.unstoppable, arc: 0,
   };
   e.actionSeq++;
-  if (len > 1e-6) e.facing = Math.atan2(toY - e.y, toX - e.x);
+  if (len > 1e-6) e.facing = datan2(toY - e.y, toX - e.x);
   if (eff.unstoppable) applyStatus(w, e, e, 'unstoppable', dur + TICK_DT);
   e.path.length = 0; e.pathGoalX = NaN;
   w.emit({ e: 'dash', t: w.time, src: e.id, fromX: e.x, fromY: e.y, toX, toY, duration: dur, vfx: eff.present?.vfx });
@@ -217,7 +218,7 @@ export function doBlink(w: World, eff: EffOf<'blink'>, ctx: EffectCtx): void {
   if (eff.to === 'behindTarget' && t && t !== e) {
     let dx = t.x - e.x, dy = t.y - e.y;
     const l = Math.sqrt(dx * dx + dy * dy);
-    if (l > 1e-6) { dx /= l; dy /= l; } else { dx = Math.cos(e.facing); dy = Math.sin(e.facing); }
+    if (l > 1e-6) { dx /= l; dy /= l; } else { dx = dcos(e.facing); dy = dsin(e.facing); }
     const off = t.radius + e.radius + 0.3;
     tx = t.x + dx * off; ty = t.y + dy * off;
   } else {
@@ -232,7 +233,7 @@ export function doBlink(w: World, eff: EffOf<'blink'>, ctx: EffectCtx): void {
     tx = tmp.x; ty = tmp.y;
   }
   const fx = e.x, fy = e.y;
-  if (Math.abs(tx - fx) + Math.abs(ty - fy) > 1e-6) e.facing = Math.atan2(ty - fy, tx - fx);
+  if (Math.abs(tx - fx) + Math.abs(ty - fy) > 1e-6) e.facing = datan2(ty - fy, tx - fx);
   setPos(w, e, tx, ty);
   e.atkWindup = -1;
   e.path.length = 0; e.pathGoalX = NaN;
@@ -274,7 +275,7 @@ function goalOf(w: World, e: Entity): boolean {
   if ((e.ccMask & CC_FEAR) !== 0) {
     const s = statusFrom(e, 'fear');
     const src = s ? w.entity(s.src) : undefined;
-    let dx = Math.cos(e.facing), dy = Math.sin(e.facing);
+    let dx = dcos(e.facing), dy = dsin(e.facing);
     if (src) { const ux = e.x - src.x, uy = e.y - src.y; const l = Math.sqrt(ux * ux + uy * uy); if (l > 1e-6) { dx = ux / l; dy = uy / l; } }
     tmp.x = e.x + dx * 3; tmp.y = e.y + dy * 3;
     return true;
@@ -391,7 +392,7 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   const mdx = nx - e.x, mdy = ny - e.y;
   const moved = Math.sqrt(mdx * mdx + mdy * mdy);
   if (moved < 1e-6) { if (--e.pathCheck <= 0) { e.pathGoalX = NaN; e.pathCheck = DIRECT_RECHECK_TICKS; } return; } // stuck: repath soon
-  e.facing = Math.atan2(mdy, mdx);
+  e.facing = datan2(mdy, mdx);
   e.vx = mdx / TICK_DT; e.vy = mdy / TICK_DT;
   setPos(w, e, nx, ny);
   e.moved = true;

@@ -21,6 +21,7 @@ import { anchorPoint, anchorUnit, matchesFilter, onEffectHit, ranked, runEffects
 import type { EffOf, EffectCtx, Entity, ZoneData } from './entity.ts';
 import { DEG, inShape, shapeReach } from './math.ts';
 import type { World } from './world.ts';
+import { datan2 } from './dmath.ts';
 
 const tmp = { x: 0, y: 0 };
 
@@ -87,7 +88,7 @@ export function spawnZone(w: World, eff: EffOf<'zone'>, ctx: EffectCtx): Entity 
   z.x = tmp.x; z.y = tmp.y;
   z.radius = shapeReach(eff.shape);
   z.targetable = false;
-  z.facing = Math.atan2(ctx.dy, ctx.dx);
+  z.facing = datan2(ctx.dy, ctx.dx);
   z.shape = shapeView(eff.shape);
   z.vfx = eff.present?.vfx;
   z.visibleMask = c.team >= 0 && c.team < 31 ? 1 << c.team : 0;
