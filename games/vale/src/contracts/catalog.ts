@@ -584,7 +584,7 @@ export const ClientDef = z.object({
     cta: z.object({ label: z.string(), screen: Id, params: z.record(z.string(), z.string()).default({}) }).strict() }).strict(),
     tiles: z.array(z.object({ id: Id, title: z.string(), body: z.string(), art: AssetRef, screen: Id,
       params: z.record(z.string(), z.string()).default({}) }).strict()) }).strict(),
-  menuScene: z.object({ model: AssetRef, sky: AssetRef, lut: AssetRef }).strict(),
+  menuScene: z.object({ model: AssetRef, sky: AssetRef, lut: AssetRef, backdrop: AssetRef.optional() }).strict(),
   tips: z.array(z.string()).default([]),
 }).strict();
 

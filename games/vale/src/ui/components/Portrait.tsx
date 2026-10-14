@@ -95,3 +95,11 @@ export function SetupIcon(p: { icon: string | undefined; kind: 'spell' | 'boon' 
 }
 
 export { Icon };
+
+/** the stage subject (columns 7-12): over the live menu scene the stage is open and the 3D showcase
+ *  fighter on its plinth is the subject; without a scene, the painted splash (or its designed frame) */
+export function StageArt(p: { fighter: FighterDefT | undefined; skin?: string; class?: string }): JSX.Element | null {
+  const { hasScene } = useApp();
+  if (hasScene) return null;
+  return <Portrait fighter={p.fighter} skin={p.skin} kind="splash" size="fill" class={p.class ?? 'stagecard__art'} />;
+}

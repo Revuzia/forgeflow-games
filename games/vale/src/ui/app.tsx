@@ -111,8 +111,11 @@ function bindRenderer(state: AppState, router: Router, r: RendererPort | null): 
     const route = router.route.value;
     if (state.match.value) return;
     const p = route.params;
-    const fighter = p.fighter ?? (route.screen === 'shop' ? state.cv.skin(state.cv.offer(p.sku)?.ref)?.fighter : undefined);
-    const skin = route.screen === 'shop' ? state.cv.offer(p.sku)?.ref : p.skin ?? (fighter ? state.profile.peek().equipped[fighter] : undefined);
+    // the shop previews its selected offer, or (like the screen) the first available one
+    const cv = state.cv;
+    const offer = route.screen === 'shop' ? (cv.offer(p.sku) ?? cv.c.store.offers.find((o) => cv.offerAvailable(o) && cv.skin(o.ref))) : undefined;
+    const fighter = p.fighter ?? (offer ? cv.skin(offer.ref)?.fighter : undefined);
+    const skin = offer ? offer.ref : p.skin ?? (fighter ? state.profile.peek().equipped[fighter] : undefined);
     try { r.setMenuView?.({ screen: route.screen, ...(fighter ? { fighter } : {}), ...(skin ? { skin } : {}), ...(p.mode ? { mode: p.mode } : {}) }); } catch (e) { console.error('[vale] renderer menu view', e); }
   });
 }

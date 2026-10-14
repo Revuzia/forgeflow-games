@@ -61,7 +61,8 @@
   "menuScene": {
     "model": "assets/maps/menu_rim/scene.glb",
     "sky": "assets/maps/menu_rim/sky.hdr",
-    "lut": "assets/grade/vale_grade_01.cube"
+    "lut": "assets/grade/vale_grade_01.cube",
+    "backdrop": "assets/backdrops/seat_center.webp"
   },
   "tips": [
     "By default, allies glow azure and enemies glow marigold on every map. Settings let you change both.",

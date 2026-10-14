@@ -11,7 +11,7 @@ import { Button } from '../components/Button.tsx';
 import { ClassMark } from '../components/FighterCard.tsx';
 import { FighterGrid } from '../components/FighterGrid.tsx';
 import { LoadoutPanel } from '../components/LoadoutPanel.tsx';
-import { Portrait } from '../components/Portrait.tsx';
+import { Portrait, StageArt } from '../components/Portrait.tsx';
 import { Screen } from '../components/Screen.tsx';
 
 export function LoadoutScreen(p: { params: Record<string, string> }): JSX.Element {
@@ -51,7 +51,7 @@ function LoadoutFor(p: { fighter: string }): JSX.Element {
         <Button variant="quiet" size="s" onPress={() => { setDraft(defaults); sound.play('toggle'); }}>{cv.t('loadout.reset_default', 'Use the default')}</Button>
       </div>}
       cta={<Button variant="chalk" size="l" wedge disabled={!!reason} reason={reason ?? undefined} onPress={save}>{cv.t('common.save', 'Save')}</Button>}
-      stage={<div class="stagecard"><Portrait fighter={f} skin={equipped} kind="splash" size="fill" class="stagecard__art" />
+      stage={<div class="stagecard"><StageArt fighter={f} skin={equipped} />
         <div class="stagecard__cap plate"><span class="t-label muted"><ClassMark classId={f.class} withName /></span><span class="t-body-s">{f.job}</span></div></div>}>
       <LoadoutPanel fighter={f} skin={equipped} loadout={draft} pool={undefined} modeName=""
         onSkin={(s) => {

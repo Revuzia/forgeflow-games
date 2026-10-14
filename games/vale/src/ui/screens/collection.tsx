@@ -13,7 +13,7 @@ import { ClassMark } from '../components/FighterCard.tsx';
 import { FighterGrid, type GridFilter } from '../components/FighterGrid.tsx';
 import { HourTicks } from '../components/Plate.tsx';
 import { ownsSkin, SkinStrip } from '../components/LoadoutPanel.tsx';
-import { Portrait, SetupIcon } from '../components/Portrait.tsx';
+import { Portrait, SetupIcon, StageArt } from '../components/Portrait.tsx';
 import { Screen, Section } from '../components/Screen.tsx';
 import { EmptyState } from '../components/States.tsx';
 import { Tabs } from '../components/Tabs.tsx';
@@ -111,7 +111,7 @@ function FighterDetail(p: { f: FighterDefT; preview?: string }): JSX.Element {
       cta={cta}
       stage={
         <div class="stagecard">
-          <Portrait fighter={f} skin={shown} kind="splash" size="fill" class="stagecard__art" />
+          <StageArt fighter={f} skin={shown} />
           <div class="stagecard__cap plate">
             <span class="t-label">{skin?.tier === 'base' ? cv.t('collection.skin.default', 'Base skin') : skin?.name}</span>
             <span class="t-caption muted">{owned ? (shown === equipped ? cv.t('collection.skin.equipped', 'Equipped') : cv.t('collection.skin.owned', 'Owned')) : offer ? cv.t('collection.skin.locked', 'In the shop for {price}', { price: `${offer.price.amount.toLocaleString('en-US')} ${cv.currency(offer.price.currency)?.name ?? ''}` }) : ''}</span>

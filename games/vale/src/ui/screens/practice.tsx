@@ -12,7 +12,7 @@ import { Screen, Section } from '../components/Screen.tsx';
 import { Slider } from '../components/Slider.tsx';
 import { EmptyState } from '../components/States.tsx';
 import { Toggle } from '../components/Toggle.tsx';
-import { Portrait } from '../components/Portrait.tsx';
+import { Portrait, StageArt } from '../components/Portrait.tsx';
 import { ClassMark } from '../components/FighterCard.tsx';
 
 export function PracticeScreen(): JSX.Element {
@@ -38,7 +38,7 @@ export function PracticeScreen(): JSX.Element {
     <Screen kicker={`${mode?.name ?? ''} · ${cv.map(mode?.map)?.name ?? ''}`} title={cv.t('practice.title', 'Practice')}
       foot={<span class="t-body-s muted">{cv.t('practice.no_rewards', 'No rewards are given in practice.')}</span>}
       cta={<Button variant="chalk" size="l" wedge onPress={start} data-autofocus="">{cv.t('btn.start_practice', 'Start practice')}</Button>}
-      stage={f ? <div class="stagecard"><Portrait fighter={f} skin={state.profile.value.equipped[f.id]} kind="splash" size="fill" class="stagecard__art" />
+      stage={f ? <div class="stagecard"><StageArt fighter={f} skin={state.profile.value.equipped[f.id]} />
         <div class="stagecard__cap plate"><span class="t-h1">{f.name}</span><span class="t-caption muted"><ClassMark classId={f.class} withName /></span></div></div> : undefined}>
       <p class="t-body-l muted stg">{cv.t('practice.hint', 'Try any fighter alone on the full map.')}</p>
       <div class="srows">

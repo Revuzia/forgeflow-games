@@ -10,8 +10,14 @@
 //   * setStation(name): 720 ms camera move with the `dawn` ease (0.16, 1, 0.3, 1); reduced motion cuts.
 //   * a fighter can stand on the station's plinth (setShowcase) playing `idle_lobby`.
 //   * budget: the renderer caps the menu at 30 fps after 4 s without a station change.
+//   * PAINTED SET (client.menuScene.backdrop, until the GLB exists): the painting fills the frame at the
+//     far plane (cover fit), drifting slowly and panning a little per screen; no procedural terrain; the
+//     showcase fighter stands on a stone plinth in the stage columns (7-12), lit by the menu sun.
 
-import { Color, Group, type Object3D, PerspectiveCamera, Scene, Vector3 } from 'three';
+import {
+  Color, CylinderGeometry, Group, Mesh, MeshStandardMaterial, type Object3D, PerspectiveCamera, PlaneGeometry, Scene, ShaderMaterial, type Texture,
+  Vector2, Vector3,
+} from 'three';
 import type { CatalogT, MapDefT } from '../contracts/catalog.ts';
 import { Actor, type ModelLibrary } from './actors.ts';
 import type { Assets } from './assets.ts';
@@ -60,6 +66,11 @@ export class MenuWorld {
   private showcaseKey = '';
   private readonly showcaseRoot = new Group();
   private map: MapDefT | null = null;
+  private backdrop: Mesh | null = null;
+  private readonly bdUniforms = { uTex: { value: null as Texture | null }, uScreen: { value: new Vector2(16, 9) }, uImg: { value: new Vector2(16, 9) },
+    uTime: { value: 0 }, uPan: { value: new Vector2(0, 0) } };
+  private readonly panTo = new Vector2();
+  private plinth: Mesh | null = null;
   lut: string | null = null;
   private built = false;
 
@@ -80,10 +91,20 @@ export class MenuWorld {
     this.sky.makeFallback(MENU_SUN.dir, sc, new Color(0.18, 0.26, 0.42), new Color(0.75, 0.62, 0.5));
     this.sky.apply(this.scene, null, MENU_SUN.env);
     assets.hdr(ms.sky).then((t) => { if (t) this.sky.apply(this.scene, t, MENU_SUN.env); });
-    // backdrop: a team map's terrain (procedural), replaced by the menu GLB when it exists
+    // backdrop: the painted set (menuScene.backdrop) or a team map's terrain (procedural), replaced by the
+    // menu GLB when it exists
     const map = catalog.maps.find((m) => m.lanes.length >= 3) ?? catalog.maps.find((m) => m.lanes.length > 0) ?? catalog.maps[0];
     this.map = map ?? null;
-    if (map) {
+    if (ms.backdrop) {
+      this.buildPaintedSet();
+      assets.texture(ms.backdrop).then((t) => {
+        if (!t) return;
+        this.bdUniforms.uTex.value = t;
+        const img = t.image as { width?: number; height?: number } | undefined;
+        if (img?.width && img.height) this.bdUniforms.uImg.value.set(img.width, img.height);
+        if (this.backdrop) this.backdrop.visible = true;
+      });
+    } else if (map) {
       this.terrain = buildTerrain(map);
       const refs = ((map.art.terrain ?? {}) as { textures?: Record<string, string> }).textures ?? {};
       const roles = TERRAIN_TEX_ROLES.filter((r) => typeof refs[r] === 'string');
@@ -119,6 +140,7 @@ export class MenuWorld {
         found.set(m2[2], st);
       });
       if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
+      if (this.backdrop) { this.scene.remove(this.backdrop); this.backdrop = null; }
       this.model = root;
       this.scene.add(root);
       if (found.size) {
@@ -128,6 +150,43 @@ export class MenuWorld {
       this.setStation(this.station, true);
     });
     this.setStation(this.station, true);
+  }
+
+  /** the painted set: a cover-fit painting at the far plane + a plinth for the showcase; fixed stations */
+  private buildPaintedSet(): void {
+    const mat = new ShaderMaterial({
+      uniforms: this.bdUniforms, depthWrite: false, depthTest: false, toneMapped: false,
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4( position.xy, 0.99999, 1.0 ); }',
+      fragmentShader: `uniform sampler2D uTex; uniform vec2 uScreen, uImg, uPan; uniform float uTime; varying vec2 vUv;
+        void main() {
+          // cover fit with 6 % headroom for the drift and the per-screen pan
+          float sa = uScreen.x / uScreen.y, ia = uImg.x / uImg.y;
+          vec2 sc = sa > ia ? vec2( 1.0, ia / sa ) : vec2( sa / ia, 1.0 );
+          sc *= 0.94 - 0.012 * sin( uTime * 0.05 );
+          vec2 drift = vec2( sin( uTime * 0.031 ), cos( uTime * 0.023 ) ) * 0.008;
+          vec2 uv = ( vUv - 0.5 ) * sc + 0.5 + uPan + drift;
+          gl_FragColor = vec4( texture2D( uTex, uv ).rgb, 1.0 );
+          #include <colorspace_fragment>
+        }`,
+    });
+    const quad = new Mesh(new PlaneGeometry(2, 2), mat);
+    quad.frustumCulled = false;
+    quad.renderOrder = -100;
+    quad.visible = false;
+    this.backdrop = quad;
+    this.scene.add(quad);
+    const plinthMat = new MeshStandardMaterial({ color: new Color().setStyle('#6B6459'), roughness: 0.9, metalness: 0 });
+    const plinth = new Mesh(new CylinderGeometry(0.82, 0.92, 0.2, 48), plinthMat);
+    plinth.position.y = -0.11;
+    plinth.receiveShadow = true;
+    plinth.visible = false;
+    this.plinth = plinth;
+    this.scene.add(plinth);
+    const st = (pos: [number, number, number], target: [number, number, number]): Station => ({ pos: new Vector3(...pos), target: new Vector3(...target) });
+    for (const n of ['home', 'play', 'queue', 'lobby', 'draft', 'loading', 'postgame', 'profile', 'settings', 'practice', 'custom']) {
+      this.stations.set(n, st([-2.2, 2.0, 7.8], [-2.2, 1.2, 0]));
+    }
+    for (const n of ['collection', 'shop', 'loadout']) this.stations.set(n, st([-1.2, 2.1, 9.0], [-1.2, 1.15, 0]));
   }
 
   private generateStations(map: MapDefT): void {
@@ -154,6 +213,11 @@ export class MenuWorld {
   setStation(name: string, cut = false): void {
     this.station = name;
     this.idle = 0;
+    // the painted set pans a little per screen (a hand-held feel between stations)
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    this.panTo.set(((h % 97) / 97 - 0.5) * 0.04, (((h >> 7) % 89) / 89 - 0.5) * 0.02);
+    if (cut) this.bdUniforms.uPan.value.copy(this.panTo);
     const s = this.stationOf(name);
     if (!s) return;
     this.from.pos.copy(this.camera.position);
@@ -182,7 +246,10 @@ export class MenuWorld {
     lib.fighterTemplate(fighter, skin ?? undefined).then((t) => { if (this.showcase === a) a.attach(t, def.art.scale, def.art.accentMaterial); });
   }
 
-  setAspect(aspect: number): void { this.camera.aspect = aspect; this.camera.updateProjectionMatrix(); }
+  setAspect(aspect: number): void {
+    this.camera.aspect = aspect; this.camera.updateProjectionMatrix();
+    this.bdUniforms.uScreen.value.set(aspect * 1000, 1000);
+  }
 
   update(dt: number): void {
     this.elapsed += dt;
@@ -203,7 +270,19 @@ export class MenuWorld {
     this.sun.configure({ sunDir: [x * c - z * s, y, x * s + z * c], sunColor: MENU_SUN.color, sunIntensity: MENU_SUN.intensity });
     this.sun.fit(this.camera);
     this.terrain?.update(this.elapsed);
-    if (this.showcase) {
+    this.bdUniforms.uTime.value = this.elapsed;
+    this.bdUniforms.uPan.value.lerp(this.panTo, 1 - Math.exp(-dt * 3));
+    if (this.plinth) this.plinth.visible = !!this.showcase && !this.model;
+    if (this.showcase && this.backdrop && !this.model) {
+      // painted set: the plinth sits right of the look-at point so the subject lands in columns 7-12
+      const t = this.target;
+      const px = t.x + 1.9, pz = t.z + 1.8;   // ~76 % across the frame, the subject ~55 % of its height
+      this.plinth!.position.set(px, -0.11, pz);
+      this.showcase.root.position.set(px, 0, pz);
+      const toCam = new Vector3(this.camera.position.x - px, 0, this.camera.position.z - pz).normalize();
+      this.showcase.root.rotation.y = Math.atan2(toCam.x, toCam.z) - 0.35;
+      this.showcase.pose('idle_lobby', dt);
+    } else if (this.showcase) {
       // stand on the plinth in front of the station's look-at point, facing the camera
       const t = this.target;
       const toCam = new Vector3().subVectors(this.camera.position, t).setY(0).normalize();

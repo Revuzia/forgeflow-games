@@ -14,7 +14,7 @@ import { Currency } from '../components/Currency.tsx';
 import { ownsSkin } from '../components/LoadoutPanel.tsx';
 import { confirmDialog } from '../components/Modal.tsx';
 import { HourTicks } from '../components/Plate.tsx';
-import { Portrait } from '../components/Portrait.tsx';
+import { Portrait, StageArt } from '../components/Portrait.tsx';
 import { Screen } from '../components/Screen.tsx';
 import { EmptyState } from '../components/States.tsx';
 import type { OfferT, ShelfT } from '../catalog_view.ts';
@@ -116,7 +116,7 @@ export function ShopScreen(p: { params: Record<string, string> }): JSX.Element {
       cta={cta}
       stage={sel && selSkin ? (
         <div class="stagecard">
-          <Portrait fighter={selFighter} skin={selSkin.id} kind="splash" size="fill" class="stagecard__art" />
+          <StageArt fighter={selFighter} skin={selSkin.id} />
           <div class="stagecard__cap plate">
             <span class="row row--s"><HourTicks n={TIER_TICKS[selSkin.tier]} label={cv.t(`shop.tier.${selSkin.tier}`, selSkin.tier)} /><span class="t-label muted">{cv.t(`shop.tier.${selSkin.tier}`, selSkin.tier)}</span></span>
             <span class="t-h1">{selSkin.name}</span>
