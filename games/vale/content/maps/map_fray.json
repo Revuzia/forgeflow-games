@@ -343,6 +343,7 @@
   "lut": "assets/grade/vale_grade_01.cube",
   "minimap": "assets/maps/map_fray/minimap.png",
   "terrain": {
+   "textures": { "$comment": "painted tiling textures by role (render/terrain.ts maps each texture's mean onto the band colour)", "road": "assets/textures/stone_road.webp", "floor": "assets/textures/grass_dark.webp", "clearing": "assets/textures/dirt_path.webp", "dust": "assets/textures/gravel_light.webp", "cliff": "assets/textures/chalk_cliff.webp", "cliffTop": "assets/textures/moss_stone.webp" },
    "$comment": "honed basalt plate; hour-lines from the centre to each hour-mark; the cart ring at the centre",
    "colors": {
     "lane": "#8E887C",

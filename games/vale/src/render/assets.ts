@@ -5,7 +5,10 @@
 // e.g. a placeholder written before the art lands) resolves to null: callers then skip the visual
 // (or draw the ?dev=1 debug placeholder) — never a crash, never a primitive shipped as art.
 
-import { type DataTexture, FloatType, HalfFloatType, type Object3D, type WebGLRenderer } from 'three';
+import {
+  type DataTexture, FloatType, HalfFloatType, LinearMipmapLinearFilter, type Object3D, RepeatWrapping, SRGBColorSpace, type Texture,
+  TextureLoader, type WebGLRenderer,
+} from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -27,6 +30,8 @@ export class Assets {
   private readonly models = new Map<string, Promise<LoadedModel | null>>();
   private readonly hdrs = new Map<string, Promise<DataTexture | null>>();
   private readonly luts = new Map<string, Promise<LookupTexture | null>>();
+  private readonly textures = new Map<string, Promise<Texture | null>>();
+  private readonly texLoader = new TextureLoader();
   readonly failed = new Set<string>();
   /** silence per-asset warnings (missing art is expected while the art lane works) */
   quiet = false;
@@ -98,6 +103,24 @@ export class Assets {
           return null;
         }));
       this.hdrs.set(ref, p);
+    }
+    return p;
+  }
+
+  /** a tiling colour texture (sRGB, repeat, trilinear + anisotropic); null when missing */
+  texture(ref: string | undefined | null): Promise<Texture | null> {
+    if (!ref) return Promise.resolve(null);
+    let p = this.textures.get(ref);
+    if (!p) {
+      p = this.track(this.texLoader.loadAsync(this.url(ref)).then((t) => {
+        t.colorSpace = SRGBColorSpace;
+        t.wrapS = t.wrapT = RepeatWrapping;
+        t.minFilter = LinearMipmapLinearFilter;
+        t.generateMipmaps = true;
+        t.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+        return t as Texture | null;
+      }).catch(() => { this.failed.add(ref); if (!this.quiet) console.warn(`[vale] texture missing: ${ref}`); return null; }));
+      this.textures.set(ref, p);
     }
     return p;
   }

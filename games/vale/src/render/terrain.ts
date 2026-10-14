@@ -24,7 +24,7 @@ import {
   BackSide, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide,
   ExtrudeGeometry, Group, IcosahedronGeometry, InstancedMesh, LinearFilter, type Material, Matrix4, Mesh,
   MeshStandardMaterial, PlaneGeometry, Quaternion, RedFormat, RGBAFormat, Shape, ShapeGeometry, ShapeUtils, UnsignedByteType,
-  Vector2, Vector3, type WebGLProgramParametersWithUniforms,
+  type Texture, Vector2, Vector3, Vector4, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { MapDefT } from '../contracts/catalog.ts';
@@ -201,9 +201,44 @@ export interface TerrainBuild {
   /** heights of every wall polygon (0 for chasm walls) */
   wallHeights: number[];
   setScatter(level: 0 | 1 | 2): void;
+  /** painted tiling textures by role (map.art.terrain.textures): road, floor, clearing, dust, cliff, cliffTop */
+  setTextures(t: Partial<Record<TerrainTexRole, Texture>>): void;
   update(time: number): void;
   dispose(): void;
 }
+
+export type TerrainTexRole = 'road' | 'floor' | 'clearing' | 'dust' | 'cliff' | 'cliffTop';
+export const TERRAIN_TEX_ROLES: readonly TerrainTexRole[] = ['road', 'floor', 'clearing', 'dust', 'cliff', 'cliffTop'];
+/** world metres per texture repeat, by role */
+const TEX_SCALE: Record<TerrainTexRole, number> = { road: 3.6, floor: 5.0, clearing: 4.5, dust: 4.0, cliff: 3.4, cliffTop: 6.5 };
+
+/** a 1×1 stand-in so the samplers exist from the first compile (textures swap in without a recompile) */
+function whiteTex(): DataTexture {
+  const t = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat, UnsignedByteType);
+  t.needsUpdate = true;
+  return t;
+}
+
+/** GLSL: anti-tiled painted sample calibrated so its MEAN colour lands on the designed band colour (the
+ *  bible's value law holds; the painting supplies the detail). The mean is the texture's smallest mip. */
+const TEX_GLSL = /* glsl */`
+// organic surfaces (grass, moss, dirt): two rotated samples blended by noise hide the repeat
+vec3 valeTexBand( sampler2D t, vec2 p, float scale, vec3 band, float n ) {
+  vec2 uv = p / scale;
+  vec3 a = texture( t, uv ).rgb;
+  vec2 r = vec2( 0.8 * uv.x - 0.6 * uv.y, 0.6 * uv.x + 0.8 * uv.y ) * 0.61 + vec2( 0.37, 0.71 );
+  vec3 b = texture( t, r ).rgb;
+  vec3 c = mix( a, b, smoothstep( 0.35, 0.65, n ) );
+  vec3 m = max( textureLod( t, vec2( 0.5 ), 16.0 ).rgb, vec3( 0.02 ) );
+  return c / m * band;
+}
+// structured surfaces (cobbles, strata): one aligned sample (a rotated copy would cross the grid);
+// macro tone variation from the caller hides the repeat; contrast eased by k
+vec3 valeTexGrid( sampler2D t, vec2 p, float scale, vec3 band, float k ) {
+  vec3 c = texture( t, p / scale ).rgb;
+  vec3 m = max( textureLod( t, vec2( 0.5 ), 16.0 ).rgb, vec3( 0.02 ) );
+  return mix( vec3( 1.0 ), c / m, k ) * band;
+}`;
 
 interface Clearing { x: number; y: number; r: number }
 
@@ -294,6 +329,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const seat = tr.seat as { at?: unknown; radius?: unknown } | undefined;
   const seatV = Array.isArray(seat?.at) ? new Vector3(seat!.at[0] as number, seat!.at[1] as number, typeof seat?.radius === 'number' ? seat.radius : 0) : new Vector3(0, 0, 0);
 
+  const white: Texture = whiteTex();
+  disposables.push(white);
   // ── ground ───────────────────────────────────────────────────────────────────────────────────
   const gz0 = gorge ? 0 : -MARGIN, gz1 = gorge ? SY : SY + MARGIN;
   const groundGeo = new PlaneGeometry(SX + MARGIN * 2, gz1 - gz0, 1, 1);
@@ -308,6 +345,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     uMoss: { value: lin(colors.moss) }, uEarth: { value: lin(colors.earth) }, uClearing: { value: lin(colors.clearing) },
     uInscription: { value: lin(colors.inscription) }, uThicketFloor: { value: lin(colors.grassRoot) },
     uCenter: { value: centre }, uRing: { value: ring }, uSeat: { value: seatV },
+    uUseTex: { value: 0 }, uTexRoad: { value: white }, uTexFloor: { value: white }, uTexClear: { value: white }, uTexDust: { value: white },
+    uTexScale: { value: new Vector4(TEX_SCALE.road, TEX_SCALE.floor, TEX_SCALE.clearing, TEX_SCALE.dust) },
   };
   groundMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     Object.assign(shader.uniforms, gu);
@@ -319,8 +358,10 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
 varying vec3 vGroundW;
 uniform sampler2D uSplat; uniform sampler2D uChasm; uniform float uGorge; uniform vec2 uSplatScale; uniform float uLaneHalf;
 uniform vec3 uLane, uGrout, uJungle, uMoss, uEarth, uClearing, uInscription, uThicketFloor; uniform vec2 uCenter; uniform float uRing; uniform vec3 uSeat;
+uniform float uUseTex; uniform sampler2D uTexRoad, uTexFloor, uTexClear, uTexDust; uniform vec4 uTexScale;
 float gHeight; float gRough;
-${NOISE_GLSL}`)
+${NOISE_GLSL}
+${TEX_GLSL}`)
       .replace('#include <map_fragment>', `
 {
   vec2 p = vGroundW.xz;
@@ -348,6 +389,17 @@ ${NOISE_GLSL}`)
   laneC = mix( laneC, uGrout, joint * 0.65 );
   // dusty margin between road and floor
   vec3 dust = mix( uClearing, uEarth, 0.35 ) * ( 0.88 + 0.16 * n2 );
+  float texH = 0.0;
+  if ( uUseTex > 0.5 ) {
+    // painted surfaces: the procedural colour stays the band (value law), the painting adds the detail
+    vec3 laneBand = uLane * ( 0.92 + 0.06 * wear + 0.08 * ( nMid - 0.5 ) + 0.05 * ( nBig - 0.5 ) );
+    vec3 tRoad = valeTexGrid( uTexRoad, p, uTexScale.x, laneBand, 1.0 );
+    vec3 tFloor = valeTexBand( uTexFloor, p, uTexScale.y, jungle, nBig );
+    vec3 tClear = valeTexBand( uTexClear, p, uTexScale.z, clearC, nMid );
+    vec3 tDust = valeTexBand( uTexDust, p, uTexScale.w, dust, n2 );
+    laneC = mix( laneC, tRoad, 0.9 ); jungle = mix( jungle, tFloor, 0.85 ); clearC = mix( clearC, tClear, 0.85 ); dust = mix( dust, tDust, 0.8 );
+    texH = ( dot( tRoad / max( laneC, vec3( 0.02 ) ), vec3( 0.333 ) ) - 1.0 ) * 0.025 * lane;
+  }
   vec3 col = mix( jungle, clearC, clearing );
   col = mix( col, dust, laneDust * ( 1.0 - lane ) * 0.85 );
   col = mix( col, laneC, lane );
@@ -367,13 +419,13 @@ ${NOISE_GLSL}`)
   col = mix( col, uThicketFloor * ( 0.85 + 0.3 * n2 ), brush * 0.85 );
   diffuseColor.rgb *= col;
   float paverH = smoothstep( 0.0, 0.07, pv.y ) * 0.03 + ( pv.x - 0.5 ) * 0.006;
-  gHeight = mix( ( nMid - 0.5 ) * 0.05 + ( n3 - 0.5 ) * 0.02 - litter * 0.01, paverH + ( n3 - 0.5 ) * 0.004, lane ) - hour * 0.015;
+  gHeight = mix( ( nMid - 0.5 ) * 0.05 + ( n3 - 0.5 ) * 0.02 - litter * 0.01, mix( paverH, texH, uUseTex ) + ( n3 - 0.5 ) * 0.004, lane ) - hour * 0.015;
   gRough = mix( mix( 0.95, 0.9, clearing ), 0.7 + 0.1 * pv.x, lane );
 }`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRough;')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, gHeight, 1.0 );');
   };
-  groundMat.customProgramCacheKey = () => 'vale_ground_v3';
+  groundMat.customProgramCacheKey = () => 'vale_ground_v5';
   patchWorldMaterial(groundMat);
   const ground = new Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
@@ -432,7 +484,10 @@ ${NOISE_GLSL}`)
   const cliffGeo = cliffGeos.length ? mergeGeometries(cliffGeos, false) : new BufferGeometry();
   for (const g of cliffGeos) g.dispose();
   const cliffMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.84, metalness: 0 });
-  const cu = { uTop: { value: lin(colors.cliffTop) }, uFace: { value: lin(colors.cliffFace) }, uMossC: { value: lin(colors.moss) } };
+  const cu = {
+    uTop: { value: lin(colors.cliffTop) }, uFace: { value: lin(colors.cliffFace) }, uMossC: { value: lin(colors.moss) },
+    uUseTex: { value: 0 }, uTexCliff: { value: white }, uTexTop: { value: white }, uTexScale2: { value: new Vector2(TEX_SCALE.cliff, TEX_SCALE.cliffTop) },
+  };
   cliffMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     Object.assign(shader.uniforms, cu);
     shader.vertexShader = shader.vertexShader
@@ -441,7 +496,9 @@ ${NOISE_GLSL}`)
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
 varying vec3 vCliffW; varying vec3 vCliffN; varying float vH; uniform vec3 uTop, uFace, uMossC; float cH;
-${NOISE_GLSL}`)
+uniform float uUseTex; uniform sampler2D uTexCliff, uTexTop; uniform vec2 uTexScale2;
+${NOISE_GLSL}
+${TEX_GLSL}`)
       .replace('#include <map_fragment>', `
 {
   vec3 n = normalize( vCliffN );
@@ -461,12 +518,18 @@ ${NOISE_GLSL}`)
   face = mix( face, uTop * 0.82, rim * 0.6 );
   vec3 topC = uTop * ( 0.84 + 0.22 * n1 + 0.08 * ( n3 - 0.5 ) );
   topC = mix( topC, uMossC * 1.1, smoothstep( 0.52, 0.7, valeFbm( vCliffW.xz * 0.16 + 9.0 ) ) * 0.6 );
+  if ( uUseTex > 0.5 ) {
+    // faces: the strata painting runs along the wall (u = along the face, v = height); tops: planar
+    vec3 tFace = valeTexGrid( uTexCliff, vec2( along, vCliffW.y * 1.4 ), uTexScale2.x, face, 0.9 );
+    vec3 tTop = valeTexBand( uTexTop, vCliffW.xz, uTexScale2.y, topC, n1 );
+    face = mix( face, tFace, 0.85 ); topC = mix( topC, mix( topC, tTop, 0.55 ), 0.9 );
+  }
   diffuseColor.rgb *= mix( face, topC, top );
   cH = ( 1.0 - top ) * ( -seam * 0.03 - frac * 0.02 + ( n3 - 0.5 ) * 0.02 ) + top * ( n3 - 0.5 ) * 0.012;
 }`)
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, cH, 1.0 );');
   };
-  cliffMat.customProgramCacheKey = () => 'vale_cliff_v3';
+  cliffMat.customProgramCacheKey = () => 'vale_cliff_v5';
   patchWorldMaterial(cliffMat);
   const cliffs = new Mesh(cliffGeo, cliffMat);
   cliffs.castShadow = true; cliffs.receiveShadow = true; cliffs.name = 'vale_cliffs';
@@ -751,6 +814,16 @@ ${NOISE_GLSL}`)
     group,
     wallHeights,
     setScatter,
+    setTextures(t: Partial<Record<TerrainTexRole, Texture>>): void {
+      if (t.road) gu.uTexRoad.value = t.road;
+      if (t.floor) gu.uTexFloor.value = t.floor;
+      if (t.clearing) gu.uTexClear.value = t.clearing;
+      if (t.dust) gu.uTexDust.value = t.dust;
+      gu.uUseTex.value = t.road && t.floor && t.clearing && t.dust ? 1 : 0;
+      if (t.cliff) cu.uTexCliff.value = t.cliff;
+      if (t.cliffTop) cu.uTexTop.value = t.cliffTop;
+      cu.uUseTex.value = t.cliff && t.cliffTop ? 1 : 0;
+    },
     update(time: number): void { worldUniforms.valeTime.value = time; },
     dispose(): void {
       group.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); });

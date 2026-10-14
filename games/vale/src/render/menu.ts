@@ -17,7 +17,7 @@ import { Actor, type ModelLibrary } from './actors.ts';
 import type { Assets } from './assets.ts';
 import { Sun } from './lighting.ts';
 import { Sky } from './sky.ts';
-import { buildTerrain, type TerrainBuild } from './terrain.ts';
+import { buildTerrain, TERRAIN_TEX_ROLES, type TerrainBuild, type TerrainTexRole } from './terrain.ts';
 import { patchWorldMaterial } from './world_material.ts';
 
 /** tokens.json grade.maps.menu (design tokens, not content) */
@@ -85,6 +85,14 @@ export class MenuWorld {
     this.map = map ?? null;
     if (map) {
       this.terrain = buildTerrain(map);
+      const refs = ((map.art.terrain ?? {}) as { textures?: Record<string, string> }).textures ?? {};
+      const roles = TERRAIN_TEX_ROLES.filter((r) => typeof refs[r] === 'string');
+      const terrain = this.terrain;
+      void Promise.all(roles.map((r) => assets.texture(refs[r]).then((t) => [r, t] as const))).then((pairs) => {
+        const set: Partial<Record<TerrainTexRole, import('three').Texture>> = {};
+        for (const [r, t] of pairs) if (t) set[r] = t;
+        terrain.setTextures(set);
+      });
       this.scene.add(this.terrain.group);
       this.generateStations(map);
     }

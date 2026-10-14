@@ -45,7 +45,7 @@ import { FRAY_SEATS, Palette, type ColorblindMode } from './palette.ts';
 import { PostChain } from './post.ts';
 import { DynamicResolution, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
-import { buildTerrain, type TerrainBuild } from './terrain.ts';
+import { buildTerrain, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
 import { VfxSystem } from './vfx/system.ts';
 import { patchWorldMaterial, worldUniforms } from './world_material.ts';
 
@@ -358,6 +358,7 @@ class ValeRenderer implements Renderer {
     this.terrain = buildTerrain(map);
     this.terrain.setScatter(this.q.scatter);
     this.scene.add(this.terrain.group);
+    this.loadTerrainTextures(map, gen);
     this.assets.model(map.art.scene).then((m) => {
       if (gen !== this.matchGen || !m?.renderable) return;
       const root = m.gltf.scene;
@@ -398,6 +399,19 @@ class ValeRenderer implements Renderer {
     this.client = null;
     this.map = null;
     this.mode = 'none';
+  }
+
+  /** the map's painted tiling textures (map.art.terrain.textures: role → asset ref) into the terrain */
+  private loadTerrainTextures(map: MapDefT, gen: number): void {
+    const refs = ((map.art.terrain ?? {}) as { textures?: Record<string, string> }).textures ?? {};
+    const roles = TERRAIN_TEX_ROLES.filter((r) => typeof refs[r] === 'string');
+    if (!roles.length) return;
+    void Promise.all(roles.map((r) => this.assets.texture(refs[r]).then((t) => [r, t] as const))).then((pairs) => {
+      if (gen !== this.matchGen || !this.terrain) return;
+      const set: Partial<Record<TerrainTexRole, import('three').Texture>> = {};
+      for (const [r, t] of pairs) if (t) set[r] = t;
+      this.terrain.setTextures(set);
+    });
   }
 
   // ── VFX test movers (gallery): ids <= -1000 travel a straight line ─────────────────────────────
