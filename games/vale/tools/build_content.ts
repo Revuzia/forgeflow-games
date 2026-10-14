@@ -62,6 +62,8 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Catalog, ClipRole, Effect, SCHEMA_VERSION, type CatalogT } from '../src/contracts/catalog.ts';
 import { BEHAVIOR_KEYS, DAMAGE_MULT_KINDS, PRIORITY_TOKENS } from '../src/sim/units/behavior_keys.ts';
+import { VFX_TEXTURE_NAMES } from '../src/render/vfx/atlas.ts';
+import { VFX_SHAPES } from '../src/render/vfx/shapes.ts';
 import { MANIFEST_FORMAT, MANIFEST_PRODUCT, type CatalogManifest, type ManifestHistoryEntry } from '../src/contracts/manifest.ts';
 import { checkNames, DEFAULT_DESIGN_DIR, formatHit, loadDenyList, type NameInput, type TextKind } from './names_check.ts';
 import { MIGRATIONS, type CatalogData, type MigrationRegistry } from './schema_migrations.ts';
@@ -656,40 +658,94 @@ function checkBehavior(u: CatalogT['units'][number], path: Seg[], dg: Diagnostic
   }
 }
 
-// ── 3b. VFX layer vocabulary (CONTRACT §9.5) ──────────────────────────────────────────────────────
+// ── 3b. VFX layer vocabulary (CONTRACT §9.5, v1 + CHANGED(RENDER) v2) ──────────────────────────────
 // VfxDef.layers is z.record(unknown) in the schema; §9.5 is its real contract. The renderer ignores
-// unknown keys, so the build is the only place a typo ("lifetime", "colour") gets caught.
-type VfxKind = 'num' | 'range' | 'pair' | 'color' | 'color2' | 'blend' | 'texture' | 'meshShape' | 'decalShape' | 'at';
-const VFX_COMMON: Record<string, VfxKind> = { delay: 'num', at: 'at' };
-const VFX_LAYERS: Record<string, Record<string, VfxKind>> = {
-  burst: { count: 'num', life: 'range', speed: 'range', spreadDeg: 'num', size: 'pair', color: 'color2', alpha: 'pair', gravity: 'num', drag: 'num', blend: 'blend', texture: 'texture' },
-  trail: { width: 'num', life: 'num', color: 'color', alpha: 'num', texture: 'texture', blend: 'blend' },
-  ring: { radius: 'pair', width: 'num', life: 'num', color: 'color', alpha: 'pair', blend: 'blend' },
-  beam: { width: 'num', life: 'num', color: 'color', texture: 'texture', blend: 'blend' },
-  flash: { radius: 'num', life: 'num', color: 'color', intensity: 'num' },
-  mesh: { shape: 'meshShape', scale: 'pair', life: 'num', color: 'color', alpha: 'pair', spinDeg: 'num', blend: 'blend' },
-  decal: { shape: 'decalShape', radius: 'num', life: 'num', color: 'color', alpha: 'pair', texture: 'texture' },
+// unknown keys, so the build is the only place a typo ("lifetime", "colour") gets caught. Texture and
+// mesh-shape names come from the renderer itself (one list, no drift).
+type VfxKind = 'num' | 'nonneg' | 'unit' | 'int' | 'bool' | 'str' | 'range' | 'pair' | 'vec3' | 'curve' | 'gradient' | 'color' | 'color2'
+  | 'bursts' | 'enum';
+type VfxKey = VfxKind | [ 'enum', readonly string[] ];
+const E = (...v: string[]): VfxKey => ['enum', v];
+const AT = E('origin', 'caster', 'target', 'path', 'ground');
+const BLEND = E('add', 'alpha', 'ink', 'chip');
+const TEX: VfxKey = ['enum', VFX_TEXTURE_NAMES];
+const VFX_COMMON: Record<string, VfxKey> = {
+  delay: 'nonneg', at: AT, phase: E('main', 'windup'), socket: 'str', offset: 'vec3', follow: 'bool', fit: 'bool', secondary: 'bool', chance: 'unit',
 };
-const VFX_ENUMS: Partial<Record<VfxKind, string[]>> = {
-  blend: ['add', 'alpha'],
-  texture: ['spark', 'glow', 'smoke', 'shard', 'ring', 'streak', 'petal', 'ember', 'drop', 'rune', 'crack', 'dust', 'mote'],
-  meshShape: ['orb', 'blade', 'shard', 'cone', 'pillar', 'disc', 'spiral', 'crescent', 'spike'],
-  decalShape: ['circle', 'ring', 'cone', 'rect', 'line'],
-  at: ['origin', 'target', 'path', 'ground'],
+const EMITTER: Record<string, VfxKey> = {
+  count: 'int', rate: 'nonneg', perMeter: 'nonneg', bursts: 'bursts', duration: 'num',
+  shape: E('point', 'sphere', 'ring', 'disc', 'cone', 'line', 'path', 'aura'), radius: 'nonneg', radiusInner: 'nonneg', angleDeg: 'num',
+  length: 'nonneg', width: 'nonneg', surface: 'bool', height: 'nonneg',
+  dir: E('up', 'out', 'in', 'forward', 'back', 'down', 'normal', 'random', 'none'), spreadDeg: 'num', speed: 'range', velocity: 'vec3', inherit: 'num',
+  life: 'range', gravity: 'num', drag: 'nonneg', turbulence: 'nonneg', turbulenceScale: 'nonneg', orbitDeg: 'num', radial: 'num', bounce: 'unit', collide: 'bool',
+  size: 'curve', sizeVar: 'range', stretch: 'nonneg', rotDeg: 'range', spinDeg: 'range',
+  color: 'gradient', alpha: 'curve', emissive: 'curve', erode: 'curve',
+  texture: TEX, frame: 'int', fps: 'nonneg', blend: BLEND, soft: 'nonneg', rim: 'color', rimAlpha: 'unit',
+  align: E('camera', 'velocity', 'ground', 'axis'), aspect: 'nonneg', space: E('world', 'local'), hold: 'unit', max: 'int',
+};
+const RIBBON: Record<string, VfxKey> = {
+  width: 'curve', life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'nonneg', noise: 'unit', scroll: 'num', tile: 'nonneg',
+  blend: BLEND, rim: 'color', rimAlpha: 'unit', minDist: 'nonneg', face: E('camera', 'ground'), texture: TEX,
+};
+const SHOCKWAVE: Record<string, VfxKey> = {
+  radius: 'curve', width: 'curve', life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'curve', sharp: 'nonneg', noise: 'unit',
+  inner: 'unit', blend: BLEND, distort: 'nonneg', mode: E('flat', 'vertical'),
+};
+const VFX_LAYERS: Record<string, Record<string, VfxKey>> = {
+  // v1 (still valid; parsed with their v1 meaning) — burst also takes every emitter key
+  burst: { ...EMITTER, color: 'color2' },
+  trail: { ...RIBBON, width: 'nonneg', alpha: 'unit' },
+  ring: { ...SHOCKWAVE, radius: 'pair' },
+  // v2
+  emitter: EMITTER,
+  sprite: { ...EMITTER, life: 'nonneg' },
+  ribbon: RIBBON,
+  shockwave: SHOCKWAVE,
+  beam: {
+    width: 'nonneg', life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'nonneg', noise: 'nonneg', freq: 'nonneg', scroll: 'num',
+    flare: 'nonneg', flareTexture: TEX, taper: 'pair', core: 'nonneg', blend: BLEND, from: AT, to: AT, texture: TEX,
+  },
+  flash: { radius: 'nonneg', life: 'nonneg', color: 'color', intensity: 'nonneg', texture: TEX, core: 'color', light: 'bool' },
+  mesh: {
+    shape: ['enum', VFX_SHAPES], scale: 'curve', stretch: 'vec3', life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'curve',
+    rim: 'color', rimPow: 'nonneg', rimEmissive: 'nonneg', noiseScale: 'nonneg', scroll: 'pair', noise: 'unit', dissolve: 'curve',
+    edge: 'color', edgeWidth: 'nonneg', edgeEmissive: 'nonneg', mask: E('none', 'band', 'top', 'sweep', 'ends', 'edge'), maskParam: 'curve',
+    blend: BLEND, spinDeg: 'num', rotateDeg: 'vec3', align: E('dir', 'flat', 'velocity', 'camera', 'up'), wobble: 'nonneg', twist: 'num',
+    angleDeg: 'nonneg', hold: 'unit',
+  },
+  decal: {
+    shape: E('circle', 'ring', 'cone', 'rect', 'line'), style: E('plain', 'scorch', 'crack', 'ink', 'frost', 'light'), radius: 'curve',
+    life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'curve', rim: 'color', texture: TEX, angleDeg: 'nonneg', length: 'nonneg', width: 'nonneg',
+  },
+  light: { color: 'color', intensity: 'nonneg', radius: 'nonneg', life: 'nonneg', attack: 'nonneg', flicker: 'unit' },
+  distort: { mode: E('ring', 'haze', 'bulge'), size: 'curve', strength: 'curve', life: 'nonneg', align: E('camera', 'ground') },
+  feel: { shake: 'unit', who: E('self', 'all'), hitFlash: 'nonneg', hitStop: 'nonneg', squash: 'nonneg' },
+  bind: { event: 'str' },
 };
 const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element');
-const isNumPair = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'number' && Number.isFinite(x));
-function vfxValueError(kind: VfxKind, v: unknown): string | null {
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isNumPair = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && v.every(isNum);
+const isKeys = (v: unknown, val: (x: unknown) => boolean): boolean => Array.isArray(v) && v.length > 0 && v.every((k) => Array.isArray(k) && k.length === 2 && isNum(k[0]) && k[0] >= 0 && k[0] <= 1 && val(k[1]));
+function vfxValueError(kind: VfxKey, v: unknown): string | null {
+  if (Array.isArray(kind)) return typeof v === 'string' && kind[1].includes(v) ? null : `expected one of ${kind[1].join(' | ')}`;
   switch (kind) {
-    case 'num': return typeof v === 'number' && Number.isFinite(v) ? null : 'expected a number';
+    case 'num': return isNum(v) ? null : 'expected a number';
+    case 'nonneg': return isNum(v) && v >= 0 ? null : 'expected a number ≥ 0';
+    case 'unit': return isNum(v) && v >= 0 && v <= 1 ? null : 'expected a number in 0..1';
+    case 'int': return isNum(v) && Number.isInteger(v) ? null : 'expected an integer';
+    case 'bool': return typeof v === 'boolean' ? null : 'expected true or false';
+    case 'str': return typeof v === 'string' && v.length > 0 ? null : 'expected a name';
     case 'range': return isNumPair(v) ? ((v as number[])[0] <= (v as number[])[1] ? null : 'range is [min, max] with min ≤ max') : 'expected a [min, max] range';
     case 'pair': return isNumPair(v) ? null : 'expected a [start, end] pair';
+    case 'vec3': return Array.isArray(v) && v.length === 3 && v.every(isNum) ? null : 'expected [x, y, z]';
+    case 'curve': return isNum(v) || (Array.isArray(v) && v.length >= 2 && v.every(isNum)) || isKeys(v, isNum) ? null
+      : 'expected a curve: a number, [start, end], evenly spaced numbers, or [[t, value], …] keys (t in 0..1)';
+    case 'gradient': return isColor(v) || (Array.isArray(v) && v.length >= 1 && v.every(isColor)) || isKeys(v, isColor) ? null
+      : 'expected a gradient: a color, colors evenly spaced, or [[t, color], …] keys ("#rrggbb" | "team" | "element")';
     case 'color': return isColor(v) ? null : 'expected "#rrggbb", "team" or "element"';
-    case 'color2': return Array.isArray(v) && v.length === 2 && v.every(isColor) ? null : 'expected two colors [start, end] ("#rrggbb" | "team" | "element")';
-    default: {
-      const allowed = VFX_ENUMS[kind] ?? [];
-      return typeof v === 'string' && allowed.includes(v) ? null : `expected one of ${allowed.join(' | ')}`;
-    }
+    case 'color2': return isColor(v) || (Array.isArray(v) && v.length >= 1 && v.every(isColor)) || isKeys(v, isColor) ? null : 'expected colors [start, end] or a gradient';
+    case 'bursts': return Array.isArray(v) && v.every((b) => Array.isArray(b) && b.length === 2 && isNum(b[0]) && b[0] >= 0 && isNum(b[1]) && b[1] >= 0) ? null : 'expected [[time s, count], …]';
+    default: return null;
   }
 }
 function checkVfx(c: CatalogT, dg: Diagnostics): void {

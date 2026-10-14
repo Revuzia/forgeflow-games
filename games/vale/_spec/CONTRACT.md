@@ -538,9 +538,43 @@ over a particle's life. Layer types and their keys:
 - `flash`: `radius, life, color, intensity` (short point light + glow sprite)
 - `mesh`: `shape ('orb'|'blade'|'shard'|'cone'|'pillar'|'disc'|'spiral'|'crescent'|'spike'), scale[2], life, color, alpha[2], spinDeg, blend`
 - `decal`: `shape ('circle'|'ring'|'cone'|'rect'|'line'), radius, life, color, alpha[2], texture` (ground mark)
-Textures (procedural, render/vfx/textures.ts): `spark, glow, smoke, shard, ring, streak, petal, ember, drop, rune, crack, dust, mote`.
 Shared library presets are named `lib_*`; bespoke ones `<fighter>_<slot>_*`. Unknown keys are ignored
 by the renderer but flagged by the content build.
+
+CHANGED(RENDER), additive — the **v2 vocabulary** (`src/render/vfx/defs.ts` parses it; the v1 types
+above keep their meaning; `tools/build_content.ts` validates every key):
+- Common keys on drawable layers: `delay`, `at` (adds `caster`: the source body, tracked), `phase`
+  (`main`|`windup`: anticipation layers fire on the cast's windup), `socket` (a fighter socket: `weapon`,
+  `head`, `hand_r` …), `offset [forward, up, right]` m in the facing frame, `follow` (track the anchor),
+  `fit` (radius-like values × the area radius; default on at `ground`), `secondary` (allies spawn
+  half), `chance` (0..1).
+- **Curves** (`size, alpha, emissive, erode, scale, radius, width, …`): a number · `[start, end]` ·
+  ≥ 3 evenly spaced numbers · `[[t, v], …]` keys (t 0..1). **Gradients** (`color`): a color · colors
+  evenly spaced · `[[t, color], …]`. `emissive` is HDR (> 1 blooms), capped per tier T0–T4 = 0.8 ·
+  1.5 · 3 · 6 · ≥ 10; near-white below T4 becomes Dawnglass.
+- `emitter`: `count, bursts [[t, n]], rate, perMeter, duration, shape (point|sphere|ring|disc|cone|line|path|aura),
+  radius, radiusInner, angleDeg, length, width, surface, height, dir (up|out|in|forward|back|down|normal|random|none),
+  spreadDeg, speed[], velocity [f,u,r], inherit, life[], gravity, drag, turbulence, turbulenceScale, orbitDeg,
+  radial, bounce, collide, size~, sizeVar[], stretch, rotDeg[], spinDeg[], color~, alpha~, emissive~, erode~,
+  texture, frame, fps, blend (add|alpha|ink|chip), soft, rim, rimAlpha, align (camera|velocity|ground|axis),
+  aspect, space (world|local), hold, max`. `burst` takes every emitter key too. `sprite` = one emitter particle.
+- `ribbon`: `width~ (tail → head), life, color~, alpha~, emissive, noise, scroll, tile, blend, rim, rimAlpha,
+  minDist, face (camera|ground)`. `shockwave`: `radius~, width~, life, color~, alpha~, emissive~, sharp, noise,
+  inner, blend, distort, mode (flat|vertical)`. `beam`: `width, life, color~, alpha~, emissive, noise, freq, scroll,
+  flare, flareTexture, taper[], core, blend, from, to`.
+- `mesh` shapes `orb blade shard cone pillar disc spiral crescent spike dome ringwave wall column tornado fan`:
+  `scale~, stretch [x,y,z], life, color~, alpha~, emissive~, rim, rimPow, rimEmissive, noiseScale, scroll[],
+  noise, dissolve~, edge, edgeWidth, edgeEmissive, mask (none|band|top|sweep|ends|edge), maskParam~, blend,
+  spinDeg, rotateDeg [x,y,z], align (dir|flat|velocity|camera|up), wobble, twist, angleDeg, hold`.
+- `decal`: `shape, style (plain|scorch|crack|ink|frost|light), radius~, life, color~, alpha~, emissive~, rim,
+  texture, angleDeg, length, width`. `flash` adds `texture, core, light`. `light`: `color, intensity, radius,
+  life, attack, flicker`. `distort`: `mode (ring|haze|bulge), size~, strength~, life, align`. `feel`:
+  `shake, who (self|all), hitFlash, hitStop, squash`. `bind`: `event` (a world event / status this def plays for).
+- Textures (generated on the GPU, `render/vfx/atlas.ts`): flipbooks `ink_puff light_puff dust_puff splash`;
+  statics `spark glow shard ring streak petal ember drop rune crack mote flare wisp chip glint ring_thin frost
+  caustic scorch splat`; v1 aliases `smoke dust shard_set`.
+- Draw: VFX render in a post pass after AO and before bloom / tone map / LUT (premultiplied, soft
+  depth against the scene), so emissive blooms and the grade applies; lights are pooled per tier.
 
 ### §9.6 Fixed internal ids (code vocabulary, not player-facing)
 Mode ids `rift`, `bridge`, `fray` · queue ids `rift_standard`, `rift_quick`, `rift_ranked`,
