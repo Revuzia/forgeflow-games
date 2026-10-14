@@ -44,14 +44,15 @@ for (const m of MODES) {
   const lens: number[] = [];
   for (let s = 1; s <= SEEDS; s++) {
     const setup = setupFor(m, s);
-    let end: { reason: string; duration: number; winningTeam: number } | null = null;
+    const got: { end: { reason: string; duration: number; winningTeam: number } | null } = { end: null };
     const host = new LocalMatchHost(catalog, setup, 0, { bots: createBots(catalog, setup), autopilot: true, maxTimeScale: 64, pregameSeconds: 0,
-      onEnd: (r) => { end = r as unknown as typeof end; } });
+      onEnd: (r) => { got.end = r; } });
     host.start();
     host.setTimeScale(64);
     const t0 = Date.now();
     let guard = 0;
     while (!host.ended && guard++ < 400000) host.pump(1);
+    const end = got.end;
     const d = end?.duration ?? NaN;
     lens.push(d);
     console.log(`${m} seed ${s}: ${end ? `${end.reason} at ${(d / 60).toFixed(1)} min, winner ${end.winningTeam}` : 'no end in 60 min'}  (${((Date.now() - t0) / 1000).toFixed(1)} s wall)`);
