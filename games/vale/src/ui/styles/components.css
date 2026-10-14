@@ -46,6 +46,7 @@
 
 /* ── currency ───────────────────────────────────────────────────────────────────────────────── */
 .cur { display: inline-flex; align-items: center; gap: calc(0.75 * var(--u)); white-space: nowrap; }
+.cur__icon { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .cur__glyph--earned { color: #E8C27A; }
 .cur__glyph--premium { color: var(--brand-gloam); }
 .cur__n { font-family: var(--font-numeric); font-variant-numeric: tabular-nums; font-weight: 700; }

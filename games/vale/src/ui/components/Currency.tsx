@@ -14,7 +14,9 @@ export function CurrencyGlyph(p: { id: string; size?: number }): JSX.Element {
   const c = cv.currency(p.id);
   const earned = c?.earnedOnly ?? true;
   const fallback = earned ? <CandleGlyph size={p.size ?? 18} class="cur__glyph cur__glyph--earned" /> : <PrismGlyph size={p.size ?? 18} class="cur__glyph cur__glyph--premium" />;
-  return <AssetImg src={cv.asset(c?.icon)} class="cur__img" style={{ width: `calc(${p.size ?? 18}px * var(--k))`, height: `calc(${p.size ?? 18}px * var(--k))` }} fallback={fallback} alt="" />;
+  const box = { width: `calc(${p.size ?? 18}px * var(--k))`, height: `calc(${p.size ?? 18}px * var(--k))` };
+  // the icon sits in its own positioned box so the loading skeleton covers the icon, not the bar around it
+  return <span class="cur__icon" style={box}><AssetImg src={cv.asset(c?.icon)} class="cur__img" style={box} fallback={fallback} alt="" /></span>;
 }
 
 export function Currency(p: { id: string; amount: number; tick?: boolean; size?: 's' | 'm' | 'l'; showName?: boolean; class?: string; signed?: boolean }): JSX.Element {

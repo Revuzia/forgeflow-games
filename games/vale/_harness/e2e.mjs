@@ -51,11 +51,29 @@ async function journey(mode) {
     }
   };
   const route = () => vale(page, (v) => v.router.route.value.screen);
-  const click = async (locator) => { await locator.waitFor({ state: 'visible', timeout: 15000 }); await locator.click(); };
+  // the first frames after a load (shader compiles in the GPU process) can stall Playwright's scroll-into-view
+  // without blocking the page: wait until frames flow, and retry a click once
+  const frames = () => page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { timeout: 60000 });
+  const click = async (locator) => {
+    await locator.waitFor({ state: 'visible', timeout: 15000 });
+    await frames();
+    try { await locator.click({ timeout: 15000 }); } catch {
+      // diagnose what sits on the target before the retry (overlays, scroll, focus traps)
+      const box = await locator.boundingBox().catch(() => null);
+      const diag = box ? await page.evaluate(([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        const d = (e) => e ? `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${[...e.classList].join('.')}` : 'null';
+        return { top: d(el), parent: d(el?.parentElement), scrollY: window.scrollY, docH: document.documentElement.scrollHeight, active: d(document.activeElement),
+          inert: !!el?.closest('[inert]'), pe: el ? getComputedStyle(el).pointerEvents : '' };
+      }, [box.x + box.width / 2, box.y + box.height / 2]) : 'no box';
+      console.log('    click diag:', JSON.stringify({ box, diag }));
+      await frames(); await locator.click({ timeout: 15000 });
+    }
+  };
   console.log(`\n${mode.toUpperCase()}`);
   let ok = true;
   try {
-    await step('home', async () => { await page.waitForTimeout(800); return { route: await route() }; });
+    await step('home', async () => { await page.waitForTimeout(800); await frames(); await page.waitForTimeout(1200); return { route: await route() }; });
     await step('play', async () => {
       await click(page.locator('.nav__item', { hasText: 'Play' }));
       await page.waitForTimeout(500);

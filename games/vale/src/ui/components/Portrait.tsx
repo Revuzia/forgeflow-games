@@ -5,7 +5,7 @@
 // Known-missing refs (CatalogView.asset → null) are never requested.
 
 import type { ComponentChildren, CSSProperties, JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { useApp } from '../app_ctx.ts';
 import type { FighterDefT, ModeMark } from '../catalog_view.ts';
 import { ClassGlyph, classShapeOf, Icon, ModeMarkGlyph, Wedge } from './Glyphs.tsx';
@@ -15,12 +15,20 @@ const failed = new Set<string>();
 
 export function AssetImg(p: { src: string | null; alt: string; class?: string; style?: CSSProperties; fallback?: ComponentChildren; fit?: 'cover' | 'contain'; position?: string }): JSX.Element {
   const [state, setState] = useState<'loading' | 'ok' | 'fail'>(p.src && !failed.has(p.src) ? 'loading' : 'fail');
+  const ref = useRef<HTMLImageElement>(null);
   useEffect(() => { setState(p.src && !failed.has(p.src) ? 'loading' : 'fail'); }, [p.src]);
+  // a cached image can finish before its load event is seen: settle from `complete` after every render
+  useEffect(() => {
+    const i = ref.current;
+    if (state !== 'loading' || !i || !i.complete) return;
+    if (i.naturalWidth > 0) setState('ok');
+    else { failed.add(p.src!); setState('fail'); }
+  });
   if (state === 'fail' || !p.src) return <>{p.fallback ?? null}</>;
   return (
     <>
       {state === 'loading' ? <span class="skel aimg__skel" aria-hidden="true" /> : null}
-      <img src={p.src} alt={p.alt} class={`aimg ${state === 'ok' ? 'is-ok' : ''} ${p.class ?? ''}`} draggable={false} decoding="async"
+      <img ref={ref} src={p.src} alt={p.alt} class={`aimg ${state === 'ok' ? 'is-ok' : ''} ${p.class ?? ''}`} draggable={false} decoding="async"
         style={{ objectFit: p.fit ?? 'cover', objectPosition: p.position, ...p.style }}
         onLoad={() => setState('ok')} onError={() => { failed.add(p.src!); setState('fail'); }} />
     </>

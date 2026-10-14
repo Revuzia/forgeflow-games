@@ -24,7 +24,7 @@
 .artframe__fb::before { content: ''; position: absolute; inset: -40%; background: linear-gradient(120deg, transparent 49.7%, rgba(11, 13, 17, 0.45) 50%); }
 .artframe__fb::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 40%; background: radial-gradient(120% 100% at 0% 100%, rgba(255, 194, 126, 0.10), transparent 70%); }
 .artframe__mark { position: relative; width: 44% !important; height: 44% !important; color: var(--text-3); }
-.aimg__skel { position: absolute; inset: 0; }
+.aimg__skel { position: absolute; inset: 0; pointer-events: none; }   /* covers its own (positioned) box only, never takes clicks */
 
 /* ── home ───────────────────────────────────────────────────────────────────────────────────── */
 .home { display: flex; flex-direction: column; gap: calc(2.5 * var(--u)); padding-top: calc(1 * var(--u)); }
