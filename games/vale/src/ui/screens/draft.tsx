@@ -38,7 +38,11 @@ function viewOf(d: DraftState, ffa: boolean): View {
 
 export function DraftScreen(): JSX.Element {
   const { cv, state, session, overlay, router } = useApp();
-  const d = state.draft.value;
+  // when the draft ends the state clears before this screen has finished leaving: keep drawing the last
+  // board through the exit (it never flashes into the loading skeleton)
+  const last = useRef(state.draft.value);
+  if (state.draft.value) last.current = state.draft.value;
+  const d = state.draft.value ?? last.current;
   const queue = cv.queue(d?.queue);
   const mode = cv.mode(d?.mode);
   const free = queue?.kind === 'practice' || queue?.kind === 'custom';

@@ -165,7 +165,7 @@ const fmtTimer = (s: number): string => (s >= 60 ? `${Math.floor(s / 60)}:${Stri
 // ── drawing ──────────────────────────────────────────────────────────────────────────────────────
 function clipShape(ctx: CanvasRenderingContext2D, f: Fit, shape: 'rect' | 'strip' | 'disc'): void {
   ctx.beginPath();
-  if (shape === 'disc') ctx.arc(f.w / 2, f.h / 2, Math.min(f.w, f.h) / 2 - 1, 0, Math.PI * 2);
+  if (shape === 'disc') ctx.arc(f.w / 2, f.h / 2, Math.max(0, Math.min(f.w, f.h) / 2 - 1), 0, Math.PI * 2);
   else ctx.rect(0, 0, f.w, f.h);
   ctx.clip();
 }
@@ -192,14 +192,14 @@ function buildStatic(map: MapDefT, f: Fit, c: Record<string, string>, shape: 're
     // ground
     ctx.globalAlpha = 1;
     ctx.fillStyle = shape === 'disc' ? c.floor : shape === 'strip' ? c.ink1 : c.jungle;
-    if (shape === 'disc') { ctx.beginPath(); ctx.arc(f.w / 2, f.h / 2, Math.min(mw, mh) / 2, 0, Math.PI * 2); ctx.fill(); }
+    if (shape === 'disc') { ctx.beginPath(); ctx.arc(f.w / 2, f.h / 2, Math.max(0, Math.min(mw, mh) / 2), 0, Math.PI * 2); ctx.fill(); }
     else ctx.fillRect(f.ox, f.oy, mw, mh);
     if (shape === 'rect') { const g = ctx.createLinearGradient(f.ox, 0, f.ox + mw, 0); g.addColorStop(0, 'rgba(184,198,217,0.10)'); g.addColorStop(1, 'rgba(217,194,160,0.10)'); ctx.fillStyle = g; ctx.fillRect(f.ox, f.oy, mw, mh); }
     // the inscription band and the hour-marks on the rim (FRAY)
     if (shape === 'disc') {
       const R = Math.min(mw, mh) / 2;
       ctx.strokeStyle = c.band; ctx.globalAlpha = 0.35; ctx.lineWidth = Math.max(2, R * 0.05);
-      ctx.beginPath(); ctx.arc(f.w / 2, f.h / 2, R * 0.9, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(f.w / 2, f.h / 2, Math.max(0, R * 0.9), 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 0.9; ctx.lineWidth = Math.max(1.5, R * 0.02); ctx.strokeStyle = c.chalk;
       const cx = map.size[0] / 2, cy = map.size[1] / 2;
       for (const sp of map.spawns) {
@@ -244,7 +244,7 @@ function buildStatic(map: MapDefT, f: Fit, c: Record<string, string>, shape: 're
   ctx.restore();
   // frame
   ctx.strokeStyle = c.line2; ctx.lineWidth = Math.max(1, f.w / 400);
-  if (shape === 'disc') { ctx.beginPath(); ctx.arc(f.w / 2, f.h / 2, Math.min(f.w, f.h) / 2 - 1, 0, Math.PI * 2); ctx.stroke(); }
+  if (shape === 'disc') { ctx.beginPath(); ctx.arc(f.w / 2, f.h / 2, Math.max(0, Math.min(f.w, f.h) / 2 - 1), 0, Math.PI * 2); ctx.stroke(); }
   return cnv;
 }
 
