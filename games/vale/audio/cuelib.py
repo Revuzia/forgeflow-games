@@ -96,7 +96,7 @@ def master(x: np.ndarray, spec: CueSpec, ceiling: float = CEILING_DBTP) -> tuple
         out = fx.limit(z, ceiling, circular=spec.loop) if kind != 'pk' else z
         got = measure(out, kind, spec.loop)
         gr = db_(np.max(np.abs(z))) - db_(np.max(np.abs(out)))
-        gr_total = max(gr_total, gr)
+        gr_total = gr                    # the reduction of the pass that ships, not the worst trial pass
         err = tgt - got
         if abs(err) < 0.25 or kind == 'pk':
             break
