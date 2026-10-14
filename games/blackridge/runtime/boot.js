@@ -7,6 +7,12 @@
 
 const V = new URL(import.meta.url).search; // "?v=N"
 const VN = (V.match(/[?&]v=(\d+)/) || [, "0"])[1];
+// Build number for ASSET urls too (weapon GLBs). The CDN serves assets with
+// `Cache-Control: public, max-age=86400` and no version in the URL, so a browser
+// that played the previous build kept its old weapon models for a day while running
+// the new viewmodel code — doubled/misplaced hands and a blocked scope on that
+// machine only (owner report 2026-10-13, Mac vs PC). Loaders append ?v=<this>.
+globalThis.__BR_V__ = VN;
 const PARAMS = new URLSearchParams(location.search);
 
 // Boot forensics: every uncaught error and rejection lands here so a stalled

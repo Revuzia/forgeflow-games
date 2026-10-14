@@ -2954,7 +2954,7 @@ def _srgb_lin(c):
 GLOVE_COL = {
     "back": _srgb_lin((70, 61, 45)),      # coyote knit back of hand
     "pad":  _srgb_lin((24, 23, 22)),      # knuckle shell, fingertip caps
-    "palm": _srgb_lin((32, 29, 26)),      # suede palm
+    "palm": _srgb_lin((54, 48, 40)),      # suede palm (2026-10-13: lifted — a curled finger shows mostly palm side)
     "cuff": _srgb_lin((20, 20, 21)),      # neoprene wrist cuff
 }
 SLEEVE_COL = {"cloth": _srgb_lin((31, 35, 29)), "band": _srgb_lin((14, 15, 14))}
@@ -3097,17 +3097,26 @@ def build_hand(tag, hand, prm):
     # knuckle shell: one flat hard guard over the four MCP joints, back side
     _bm_ball(bm, X((-0.0010, 0.0880, 0.0100)), 0.0420, 0.0125, 0.0070)
     # ---- fingers ----------------------------------------------------------
+    # 2026-10-13 (owner: "this is not a NORMAL hand with fingers"): every finger is its
+    # OWN mesh now. They used to go into the palm's voxel union, and at a 3 mm voxel +
+    # 5 smoothing passes + 40 % decimate the four curled fingers (sitting < 6 mm apart)
+    # fused into one mitten. Separate meshes keep a real crease between fingers; each is
+    # remeshed on its own at a fine voxel so its joints stay smooth.
+    fr = prm.get("finger_r", 0.90)          # slimmer than the old union so the gaps read
+    finger_bms = []
     for nm, f in HAND_FINGERS.items():
+        fb = bmesh.new()
+        finger_bms.append((nm, fb))
         degs = fcurl[nm]
         dirs = _hand_rot_curl(degs, f["spread"] * spread_mul, sx)
         p = X((f["x"], f["y"], f["z"]))
         joints.append(p.copy())
-        _bm_ball(bm, p, f["r"][0] * 1.04)
+        _bm_ball(fb, p, f["r"][0] * 1.04 * fr)
         for i in range(3):
             d = dirs[i]
             q = p + d * f["L"][i]
-            _bm_cone(bm, p, q, f["r"][i], f["r"][min(i + 1, 2)] * (0.96 if i == 2 else 1.0))
-            _bm_ball(bm, q, f["r"][min(i + 1, 2)] * (0.98 if i == 2 else 1.03))
+            _bm_cone(fb, p, q, f["r"][i] * fr, f["r"][min(i + 1, 2)] * fr * (0.96 if i == 2 else 1.0))
+            _bm_ball(fb, q, f["r"][min(i + 1, 2)] * fr * (0.98 if i == 2 else 1.03))
             if i < 2:
                 joints.append(q.copy())
             else:
@@ -3158,9 +3167,35 @@ def build_hand(tag, hand, prm):
     dc.ratio = prm.get("decimate", 0.40)
     bpy.ops.object.modifier_apply(modifier=dc.name)
 
+    finger_objs = []
+    for nm, fb in finger_bms:
+        me_f = bpy.data.meshes.new(f"finger_{nm}_{tag}")
+        fb.to_mesh(me_f)
+        fb.free()
+        of = bpy.data.objects.new(f"finger_{nm}_{tag}", me_f)
+        link(of)
+        for o2 in bpy.context.selected_objects:
+            o2.select_set(False)
+        bpy.context.view_layer.objects.active = of
+        of.select_set(True)
+        frm = of.modifiers.new("rm", "REMESH")
+        frm.mode = "VOXEL"
+        frm.voxel_size = prm.get("finger_voxel", 0.0014)
+        frm.adaptivity = 0.0
+        frm.use_smooth_shade = True
+        bpy.ops.object.modifier_apply(modifier=frm.name)
+        fsm = of.modifiers.new("sm", "SMOOTH")
+        fsm.factor = 0.5
+        fsm.iterations = 2
+        bpy.ops.object.modifier_apply(modifier=fsm.name)
+        fdc = of.modifiers.new("dc", "DECIMATE")
+        fdc.ratio = prm.get("finger_decimate", 0.30)
+        bpy.ops.object.modifier_apply(modifier=fdc.name)
+        finger_objs.append(of)
+
     # --- sleeve (separate, tapered along the elbow axis) --------------------
     bs = bmesh.new()
-    r0, r1, L = 0.0425, prm.get("sleeve_r", 0.060), prm.get("sleeve_len", 1.0)
+    r0, r1, L = 0.0400, prm.get("sleeve_r", 0.047), prm.get("sleeve_len", 1.0)
     _bm_cone(bs, e * 0.034, e * L, r0, r1, seg=28)
     _bm_cone(bs, e * 0.030, e * 0.058, 0.0452, 0.0452, seg=28)       # elastic cuff band
     me_s = bpy.data.meshes.new(f"sleeve_{tag}")
@@ -3201,11 +3236,13 @@ def build_hand(tag, hand, prm):
         dt = np.sqrt(((co[:, None, :] - T[None]) ** 2).sum(2)).min(1)
         back = np.clip(no[:, 2] * 2.0 + 0.15, 0, 1)
         palm = np.clip(-no[:, 2] * 2.0 + 0.15, 0, 1)
-        knuckle = _ss(0.016, 0.006, dj) * back          # shell over every back-side joint
+        # (2026-10-13) tight pads only: at 16 mm the "shell" covered every whole finger and the
+        # fingers rendered as one dark lump; real gloves have a small pad over each knuckle
+        knuckle = _ss(0.0085, 0.0035, dj) * back        # pad over every back-side joint
         # the MCP row is a continuous guard, not four dots
         guard = _ss(0.064, 0.080, co[:, 1]) * _ss(0.118, 0.100, co[:, 1]) * back * \
             (np.abs(co[:, 0]) < 0.047)
-        tipcap = _ss(0.014, 0.006, dt)
+        tipcap = _ss(0.0075, 0.0030, dt)
         cuffm = _ss(0.020, 0.034, ax)
         c_back = np.array(GLOVE_COL["back"])[None]
         c_pad = np.array(GLOVE_COL["pad"])[None]
@@ -3235,7 +3272,18 @@ def build_hand(tag, hand, prm):
         return np.clip(col, 0, 1)
 
     _vcol(og, paint_glove)
+    for of in finger_objs:
+        _vcol(of, paint_glove)
     _vcol(osl, paint_sleeve)
+    if finger_objs:
+        for o2 in bpy.context.selected_objects:
+            o2.select_set(False)
+        og.select_set(True)
+        for of in finger_objs:
+            of.select_set(True)
+        bpy.context.view_layer.objects.active = og
+        bpy.ops.object.join()
+        og = bpy.context.view_layer.objects.active
 
     # --- join into one mesh: slot 0 glove, slot 1 sleeve ---------------------
     og.data.materials.clear()
@@ -3270,8 +3318,8 @@ def build_hand(tag, hand, prm):
 
 def _ensure_arm_materials():
     nrm = fabric_normal_path()
-    _mat_vcol("br_glove", 0.80, nrm, nstrength=0.55)
-    _mat_vcol("br_sleeve", 0.92, nrm, nstrength=0.45)
+    _mat_vcol("br_glove", 0.72, nrm, nstrength=0.18)
+    _mat_vcol("br_sleeve", 0.90, nrm, nstrength=0.22)
 
 
 def place_arms(wid, mats, pose_override=None):

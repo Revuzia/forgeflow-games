@@ -275,7 +275,10 @@ export async function loadWeaponGLB(id) {
   const p = (async () => {
     const w = WEAPONS[id];
     const rel = (w && w.view && w.view.glb) ? w.view.glb.split("/").pop() : `${id}.glb`;
-    const url = new URL(rel, GLB_BASE).href;
+    // ?v=<build> so a browser holding last build's GLB (CDN max-age 1 day) cannot pair
+    // it with this build's viewmodel code — see runtime/boot.js __BR_V__
+    const bv = globalThis.__BR_V__ || new URL(import.meta.url).searchParams.get("v");
+    const url = new URL(rel, GLB_BASE).href + (bv ? `?v=${bv}` : "");
     try {
       const gltf = await loader().loadAsync(url);
       const group = gltf.scene || (gltf.scenes && gltf.scenes[0]);
