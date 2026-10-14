@@ -102,6 +102,11 @@ Originality rules still hold: nothing copied from any game.
 - Next: owner sign-off on Marund -> roll out to the other 15 fighters (+ skin concepts), then VFX
   (step 4), map scenes + menu scene (step 5: the placeholder low-poly scenery is now the weakest read).
 
+### Pacing (10-14, `node _harness/pacing.ts --seeds 10`: all-bot matches on the real catalog, ~2 s each)
+RIFT mean 24.8 min (19-31; target about 25) · FRAY 9.3 (6-11; target 8-11) · BRIDGE 21.3 (16-28; target 14-20,
+card says about 17). Moving BRIDGE's sudden death 20:00 -> 16:00 changed nothing (21.7), so the lever is
+elsewhere (Needle/Hourbell health on the Span, wave strength, respawn ramp). A balance follow-up.
+
 ### Art 2.0 rollout prep (10-14, waiting on the owner's sign-off)
 - Skins: `pipeline.build` re-colours the projected painting per part (skin role / base role per channel,
   `project.recolour`); skin-only extras paint flat via `spec.SKIN_FLAT`. Proven on Marund's two skins
