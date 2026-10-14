@@ -467,3 +467,134 @@ test('the Touch: a named person thrown, a held one dropped over a town', () => {
   sim.step(5);
   assert.ok(distM(p, (sim.query('agent', { id: hesh }) as { pos: number[] }).pos, lune.pos) < 400, 'Hesh came down at Lune');
 });
+
+// ── LIVING.md §5.3: the 62 phrases (the audit's 50 requests + 12 for prophets, signs, the creature's removal and the
+// restyle), each with what it must resolve to on this world — the table of _harness/scratch/living/spec/freeform.ts ──
+type Want62 = (c: Command[], r: CommandResult, sim: Sim, w: W) => boolean;
+const LIVING_62: [string, Want62][] = (() => {
+  const isV3 = (a: unknown): a is number[] => Array.isArray(a) && a.length === 3 && typeof a[0] === 'number';
+  const P = (sim: Sim) => sim.u.planets[0];
+  const far = (sim: Sim, a: unknown, sid: number, m: number) => isV3(a) && distM(P(sim), a, posOf(sim, sid)) >= m;
+  const nr = (sim: Sim, a: unknown, sid: number, m: number) => isV3(a) && distM(P(sim), a, posOf(sim, sid)) <= m;
+  const wet = (sim: Sim, a: unknown) => { if (!isV3(a)) return false; const c = P(sim).cellAt(a); return !!P(sim).s.ocean[c] || P(sim).f.water[c] > 0.5; };
+  const has = (c: Command[], k: string, f: (x: Command) => boolean = () => true) => c.some((x) => x.k === k && f(x));
+  const noJunk = (c: Command[]) => !c.some((x) => x.k === 'content.item');
+  const msg = (r: CommandResult) => String(r.msg ?? '');
+  return [
+    // place words (the audit's harmful misreads)
+    ['drop a meteor on the sea near Lune', (c, _r, s, w) => has(c, 'disaster.spawn', (x) => x.kind === 'meteor' && wet(s, x.pos) && nr(s, x.pos, w.lune, 2500))],
+    ['create a mountain between Aru and Lune', (c, _r, s, w) => has(c, 'terrain.mountain-range', (x) => (x.from ? far(s, x.from, w.aru, 150) && far(s, x.from, w.lune, 150) : true) && (x.pos ? far(s, x.pos, w.aru, 150) && far(s, x.pos, w.lune, 150) : true))],
+    ['drop a meteor near Aru but not on it', (c, _r, s, w) => has(c, 'disaster.spawn', (x) => x.kind === 'meteor' && far(s, x.pos, w.aru, 120) && nr(s, x.pos, w.aru, 1500))],
+    ['make the river flood', (c) => (has(c, 'disaster.spawn', (x) => x.kind === 'flood') || has(c, 'water.flood')) && !has(c, 'terrain.river')],
+    ['turn the desert into a jungle', (c) => has(c, 'life.paint-biome', (x) => x.biome === 'rainforest')],
+    ['make a new ocean world', (c) => has(c, 'world.birth', (x) => x.kind === 'ocean') && !has(c, 'terrain.dig-sea')],
+    ['make a swamp near Aru', (c) => has(c, 'life.paint-biome', (x) => x.biome === 'wetland') && noJunk(c)],
+    ['make a marsh near Aru', (c) => has(c, 'life.paint-biome', (x) => x.biome === 'wetland') && noJunk(c)],
+    ['turn the forest near Lune into grassland', (c) => has(c, 'life.paint-biome', (x) => x.biome === 'grassland')],
+    // verbs of Populous / WorldBox / Universim the audit found missing
+    ['armageddon', (c, r) => c.length >= 2 || /sure|confirm|everything/i.test(msg(r))],
+    ['make Hesh a knight', (c, _r, _s, w) => has(c, 'agent.role', (x) => x.id === w.hesh && x.role === 'soldier')],
+    ['make Hesh a hero', (c, _r, _s, w) => has(c, 'agent.role', (x) => x.id === w.hesh && x.role === 'soldier') || has(c, 'agent.inspire', (x) => x.id === w.hesh)],
+    ['send every disaster at once', (c, r) => c.filter((x) => x.k === 'disaster.spawn').length >= 3 || /sure|confirm/i.test(msg(r))],
+    ['create a new kingdom', (c) => has(c, 'settlement.found') || has(c, 'settlement.split')],
+    ['advance Aru to the next era', (c, _r, _s, w) => has(c, 'settlement.teach', (x) => x.settlement === w.aru && (x.era === 'next' || x.force === true || Array.isArray(x.knowledge)))],
+    ['terraform this world', (c, r) => has(c, 'planet.add-air') || /already|alive|habitable/i.test(msg(r))],
+    ['grow a blueberry bush near Aru', (c) => has(c, 'life.plant', (x) => x.species === 'berry-bush')],
+    // fantasy nouns: a real animal, or a polite refusal — never an item
+    ['summon a dragon', (c) => has(c, 'life.spawn-animal', (x) => x.species === 'komodo-dragon' || x.species === 'crocodile') && !has(c, 'content.animal')],
+    ['spawn zombies', (c, r) => c.length === 0 && /real|cannot|no such/i.test(msg(r))],
+    ['send the four horsemen', (c, r) => (has(c, 'disaster.spawn', (x) => x.kind === 'plague') && (has(c, 'disaster.spawn', (x) => x.kind === 'drought') || has(c, 'settlement.war'))) || /sure|confirm/i.test(msg(r))],
+    ['create a new species of people', (c, r) => noJunk(c) && (has(c, 'content.species') || /not yet|after/i.test(msg(r)))],
+    ['release a kraken near Lune', (c) => has(c, 'life.spawn-animal', (x) => ['giant-squid', 'whale'].includes(String(x.species))) && !has(c, 'content.animal')],
+    ['bring unicorns to Aru', (c, r) => (has(c, 'life.spawn-animal', (x) => ['wild-horse', 'horse'].includes(String(x.species))) || /real|no unicorns/i.test(msg(r))) && !has(c, 'content.animal')],
+    ['spawn ice beasts in the north', (c) => has(c, 'life.spawn-animal', (x) => x.species === 'musk-ox')],
+    ['set loose sand crawlers in the desert', (c) => has(c, 'life.spawn-animal', (x) => x.species === 'caracal')],
+    ['unleash a plague of frogs', (c) => !has(c, 'disaster.spawn', (x) => x.kind === 'plague') && (has(c, 'life.spawn-animal') || has(c, 'content.weather') || has(c, 'content.animal'))],
+    ['spawn lions on the savanna', (c) => has(c, 'life.spawn-animal', (x) => x.species === 'lion')],
+    ['give Aru chickens', (c) => has(c, 'settlement.introduce', (x) => x.animal === 'chicken') || has(c, 'settlement.gift')],
+    // new materials, ores, plants
+    ['put gold in the hills near Lune', (c, _r, s, w) => has(c, 'terrain.seed-ore', (x) => x.ore === 'gold' && nr(s, x.pos, w.lune, 2500))],
+    ['put iron ore in the hills', (c) => has(c, 'terrain.seed-ore', (x) => x.ore === 'iron')],
+    ['seed a vein of copper near Aru', (c, _r, s, w) => has(c, 'terrain.seed-ore', (x) => x.ore === 'copper' && nr(s, x.pos, w.aru, 2500))],
+    ['create a new metal called mithril and put it in the mountains', (c) => has(c, 'content.material', (x) => /mithril/i.test(String(x.name))) && has(c, 'terrain.seed-ore')],
+    ['invent a stone called glowstone that people build with', (c) => has(c, 'content.material', (x) => /glowstone/i.test(String(x.name)) && ((x.uses as string[] | undefined) ?? []).includes('building'))],
+    ['grow a new plant called silverleaf', (c) => has(c, 'content.plant', (x) => /silverleaf/i.test(String(x.name)))],
+    ['invent a new crop called sunroot', (c) => has(c, 'content.plant', (x) => /sunroot/i.test(String(x.name)) && x.type === 'crop')],
+    ['plant apple trees near Aru', (c) => has(c, 'life.plant', (x) => x.species === 'apple')],
+    ['introduce potatoes to Lune', (c) => has(c, 'settlement.introduce', (x) => x.crop === 'potato')],
+    // wrath and survivable disasters
+    ['set the wrath to 0.8', (c) => has(c, 'set', (x) => x.path === 'god.wrath' && Number(x.value) === 0.8)],
+    ['be gentle with them', (c) => has(c, 'set', (x) => x.path === 'god.wrath' && Number(x.value) <= 0.25)],
+    ['send a huge meteor on Lune', (c) => has(c, 'disaster.spawn', (x) => x.kind === 'meteor' && (Number(x.scale ?? x.size ?? 1) >= 2 || Number(x.radius ?? 0) >= 240))],
+    ['an apocalyptic earthquake under Aru', (c) => has(c, 'disaster.spawn', (x) => x.kind === 'quake' && (x.apocalyptic === true || Number(x.wrath) >= 1))],
+    ['a small tornado near Lune', (c) => has(c, 'disaster.spawn', (x) => x.kind === 'tornado' && (Number(x.scale ?? 1) < 1 || (x.radius !== undefined && Number(x.radius) < 60)))],
+    ['warn Aru of the coming fire', (c, _r, _s, w) => has(c, 'god.omen', (x) => x.settlement === w.aru) || has(c, 'weather.paint', (x) => x.kind === 'blood-rain')],
+    // prayers
+    ['answer the prayers of Aru', (c, _r, _s, w) => has(c, 'prayer.answer', (x) => x.settlement === w.aru)],
+    ['what does Lune pray for?', (c, r) => has(c, 'query.prayers') || /pray/i.test(msg(r))],
+    ['ignore their prayers', (c, r) => c.length === 0 || /nothing|ignore/i.test(msg(r))],
+    // time
+    ['speed up time', (c) => has(c, 'time.speed', (x) => Number(x.speed) > 1 && Number(x.speed) <= 3000)],
+    ['run time at 30x', (c) => has(c, 'time.speed', (x) => Number(x.speed) === 30)],
+    ['slow time down to real speed', (c) => has(c, 'time.speed', (x) => Number(x.speed) === 1)],
+    ['let a year pass', (c) => has(c, 'time.speed') || has(c, 'time.step')],
+    // no creature: prophets and signs, sacred places and animals; the restyle keeps the old words as synonyms
+    ['give me a creature', (c, r) => !c.some((x) => String(x.k).startsWith('creature.')) && /prophet/i.test(msg(r))],
+    ['leash the creature to Aru', (c, r) => !c.some((x) => String(x.k).startsWith('creature.')) && /prophet|no creature/i.test(msg(r))],
+    ['make Hesh my prophet', (c, _r, _s, w) => has(c, 'prophet.call', (x) => (x.agent ?? x.id) === w.hesh)],
+    ['make Hesh a prophet', (c, _r, _s, w) => has(c, 'prophet.call', (x) => (x.agent ?? x.id) === w.hesh)],
+    ['tell Aru through Hesh that rain will come in two days', (c, _r, _s, w) => has(c, 'prophet.foretell', (x) => (x.agent ?? x.id) === w.hesh && x.what === 'rain' && Number(x.days) === 2)],
+    ['abandon the prophet Hesh', (c, _r, _s, w) => has(c, 'prophet.abandon', (x) => (x.agent ?? x.id) === w.hesh)],
+    ['send a sign to Aru', (c, _r, _s, w) => has(c, 'god.omen', (x) => x.settlement === w.aru)],
+    ['make a rainbow over Lune', (c, _r, s, w) => has(c, 'weather.paint', (x) => x.kind === 'rainbow' && nr(s, x.pos, w.lune, 2500))],
+    ['make deer sacred in Aru', (c, _r, _s, w) => has(c, 'settlement.sacred', (x) => x.settlement === w.aru && x.animal === 'deer')],
+    ['make the spring near Aru a holy place', (c, _r, s, w) => has(c, 'place.sacred', (x) => nr(s, x.pos, w.aru, 2500))],
+    ['make Hesh one of the called', (c, _r, _s, w) => has(c, 'agent.make-disciple', (x) => x.id === w.hesh)],
+    ['lift Hesh with the touch', (c) => has(c, 'hand.grab')],
+  ];
+})();
+
+test(`LIVING §5.3: all ${LIVING_62.length} phrases of the living-world table resolve as meant, and parsing changes nothing`, () => {
+  const { sim, st, lune, hesh } = twoTowns();
+  const w: W = { aru: st.id, lune: lune.id, hesh };
+  const h = sim.hash();
+  const fails: string[] = [];
+  for (const [text, want] of LIVING_62) {
+    const r = sim.parse(text);
+    let ok = false;
+    try { ok = want(r.resolved ?? [], r, sim, w); } catch { ok = false; }
+    if (!ok) fails.push(`"${text}": ${json(r.resolved ?? [])} | ${String(r.msg ?? '').slice(0, 120)}`);
+  }
+  assert.equal(LIVING_62.length, 62);
+  assert.deepEqual(fails, [], fails.join('\n'));
+  assert.equal(sim.hash(), h, 'parse() changed nothing');
+});
+
+test('LIVING §5.3: a blow on a town the words did not name is asked about first; a named one, or a harmless act, is not', () => {
+  const { sim, st, lune } = twoTowns();
+  const p = sim.u.planets[0];
+  must(sim, { k: 'focus', pos: [...st.pos] });
+  // the camera on Aru, "drop a meteor": it would land on Aru — the preview asks
+  const unnamed = sim.parse('drop a meteor') as CommandResult & { confirm?: string };
+  assert.ok(unnamed.ok && unnamed.resolved?.some((c) => c.kind === 'meteor'), JSON.stringify(unnamed));
+  assert.match(String(unnamed.confirm), new RegExp(st.name.split(' ')[0]), 'the town under it is named in the question');
+  // naming it is enough; so is a blow far from every town, or a gift
+  assert.equal((sim.parse(`drop a meteor on ${st.name}`) as { confirm?: string }).confirm, undefined);
+  assert.equal((sim.parse(`drop a meteor near ${lune.name} but not on it`) as { confirm?: string }).confirm, undefined);
+  assert.equal((sim.parse('make it rain') as { confirm?: string }).confirm, undefined);
+  // the end of days and every disaster at once always ask
+  assert.match(String((sim.parse('armageddon') as { confirm?: string }).confirm), /sure/i);
+  assert.match(String((sim.parse('send every disaster at once') as { confirm?: string }).confirm), /sure/i);
+  void p;
+});
+
+test('LIVING §5.3: one Firestorm (the two duplicate powers merged); the old fire.firestorm command still runs', () => {
+  const { sim } = twoTowns();
+  const fs = sim.content.powers.list.filter((pw) => pw.name === 'Firestorm');
+  assert.equal(fs.length, 1, fs.map((pw) => pw.id).join(', '));
+  assert.equal(fs[0].command, 'disaster.spawn');
+  for (const syn of ['firestorm', 'storm of fire', 'inferno']) assert.ok(fs[0].synonyms.includes(syn), syn);
+  const r = sim.parse('raise a firestorm near Lune');
+  assert.ok(r.resolved?.some((c) => c.k === 'disaster.spawn' && c.kind === 'firestorm'), JSON.stringify(r.resolved));
+  assert.ok(sim.applyNow({ k: 'fire.firestorm', pos: [...sim.u.planets[0].people.settlements[1].pos] }).ok, 'an old log still replays');
+});

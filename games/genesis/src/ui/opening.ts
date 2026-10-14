@@ -57,6 +57,8 @@ export interface OpeningDeps {
   /** arm a power as the tool (the people's drop), and put it away once they stand there */
   arm(p: Power, preset?: Record<string, unknown>): void;
   disarm?(): void;
+  /** the power armed now (its id), if any */
+  armed?(): string | null;
   /** the HUD while the whispers speak: quiet (a few speeds, no key strip) or whole again */
   hudQuiet?(quiet: boolean): void;
 }
@@ -335,10 +337,14 @@ export class Opening {
       }
       case 'whisper': {
         this.hear();
+        // (the band put back — Esc, a right click, another power — the whisper comes back)
+        if (this.armedPeople && this.deps.armed && this.deps.armed() !== 'people') this.armedPeople = false;
         if (now - this.lastCheck > 600) { this.lastCheck = now; this.check(false); }
         if (this.cur && !this.laterShown && this.cur.later && now - this.curAt > IDLE_LATER) { this.laterShown = true; this.render(); }
         // the whispers step back while a window, a list or a menu is up (the camera modes, the step menu too)
-        this.card.classList.toggle('gn-away', this.deps.menuOpen() || document.querySelector('.gn-pal:not([hidden]), .gn-rad:not([hidden]), .gn-win:not([hidden]), .gn-cam-menu:not([hidden]), .gn-stepmenu:not([hidden])') !== null);
+        // — and while the band it put in the hand waits to be set down: the ring and the tool's card say what to do, the
+        // words would only cover the ground being chosen
+        this.card.classList.toggle('gn-away', this.armedPeople || this.deps.menuOpen() || document.querySelector('.gn-pal:not([hidden]), .gn-rad:not([hidden]), .gn-win:not([hidden]), .gn-cam-menu:not([hidden]), .gn-stepmenu:not([hidden])') !== null);
         this.placeRing();
         // the last words, then the end (the farewell is only ever said once they have fire)
         if (this.cur?.beat === 'rest' && now - this.curAt > 16000) this.end();

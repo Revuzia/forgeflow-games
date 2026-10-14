@@ -951,8 +951,9 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-hidden-note { position: fixed; left: 50%; bottom: 28px; z-index: 30; transform: translateX(-50%); pointer-events: none; font: 600 11px var(--gn-sans); letter-spacing: .22em; text-transform: uppercase;
   color: var(--gn-ivory); background: rgba(8, 10, 16, .6); border: 1px solid var(--gn-line); border-radius: 999px; padding: 8px 18px; opacity: 0; }
 .gn-hidden-note[hidden] { display: none; }
-.gn-hidden-note.gn-on { animation: gnNote 4.2s ease both; }
-@keyframes gnNote { 0% { opacity: 0; transform: translate(-50%, 6px); } 10%, 72% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+/* (a transition, not a keyframed animation: a machine drawing a frame every few seconds still shows it) */
+.gn-hidden-note { transition: opacity .45s ease; }
+.gn-hidden-note.gn-on { opacity: 1; }
 
 /* ── the opening: the spot the people's whisper suggests, ringed on the ground ── */
 .gn-open-ring { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; width: 0; height: 0; will-change: transform; }

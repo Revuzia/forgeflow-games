@@ -276,6 +276,7 @@ export class Shell {
       arm: (p, preset) => this.arm(p, preset),
       disarm: () => { if (this.tools.state().armed === 'people') this.tools.disarm(); },
       hudQuiet: (q) => this.hud.setQuiet(q),
+      armed: () => this.tools.armed?.id ?? null,
     });
     this.hiddenNote = document.createElement('div');
     this.hiddenNote.className = 'gn-hidden-note';
@@ -479,7 +480,7 @@ export class Shell {
       case 'ui.quickload': void this.saves.quickload(); return;
       case 'ui.help': if (this.help.isOpen) this.help.close(); else this.openWindow('help'); return;
       case 'ui.menu': if (this.menu.isOpen) this.menu.close(); else this.openWindow('menu'); return;
-      case 'ui.hide': this.hideUi(!this.deps.uiVisible()); return;
+      case 'ui.hide': this.hideUi(this.deps.uiVisible()); return;
     }
   }
 
@@ -981,7 +982,12 @@ export class Shell {
     this.hud.toasts.muteMilestones = this.opening.isActive;
     this.cam.frame(this.pad.active);
     this.photo.frame();
-    if (!this.hiddenNote.hidden && (this.deps.uiVisible() || performance.now() - this.hiddenNoteAt > 4200)) { this.hiddenNote.hidden = true; this.hiddenNote.classList.remove('gn-on'); }
+    // (the note says it for six seconds, then fades; it goes at once when the interface comes back)
+    if (!this.hiddenNote.hidden) {
+      const age = performance.now() - this.hiddenNoteAt;
+      if (this.deps.uiVisible() || age > 6800) { this.hiddenNote.hidden = true; this.hiddenNote.classList.remove('gn-on'); }
+      else if (age > 6000) this.hiddenNote.classList.remove('gn-on');
+    }
     void dt;
     const f = this.deps.hudFrame();
     this.hud.update({

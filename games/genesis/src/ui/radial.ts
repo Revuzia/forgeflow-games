@@ -1,5 +1,5 @@
 // GENESIS — the radial menu (CONTRACT.md §16.3; hold Q, right-stick click, or a long press on the ground): the
-// categories on an inner ring (Shape, Water, Sky, Life, Peoples, Ideas, Fire, Disasters, Hand, Creature, Worlds, Time,
+// categories on an inner ring (Shape, Water, Sky, Life, Peoples, Ideas, Fire, Disasters, Hand, Signs, Worlds, Time,
 // Laws), and the chosen category's powers around it on one or two outer rings — the most basic ones (powers.json
 // `ring` 0) nearest the category's own direction. Generated from the power catalogue, so mods' powers appear too.
 //

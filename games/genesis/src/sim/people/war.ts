@@ -23,7 +23,7 @@ import { hash32, hashFloat } from '../core/rng.ts';
 import { DEATH, INV, MEMK, NS, NT, SKILL, TRAIT } from './defs.ts';
 import { foodDays, storeAdd, storeHas, storeTake } from './store.ts';
 import { cohortTotal } from './cohorts.ts';
-import { die } from './lifecycle.ts';
+import { die, worldSalt } from './lifecycle.ts';
 import { accident, libraryEffect } from './knowledge.ts';
 import { tell, remember } from './story.ts';
 import { agentName, agentRef, settlementRef, vars } from './util.ts';
@@ -44,7 +44,11 @@ export function polityOf(x: PCtx, st: Settlement): Polity | undefined {
   if (st.polity < 0) return undefined;
   let pl = x.ps.polity(st.polity);
   if (!pl) {
-    pl = { id: st.polity, name: '', capital: st.id, founded: x.tick, overlord: -1, color: st.color };
+    // its capital is the town that founded it, while that stands (whichever of its towns is asked about first: a daughter
+    // stepped before its mother once became the capital of a polity it had not founded)
+    const founder = x.ps.settlement(st.polity);
+    const capital = founder && founder.polity === st.polity && founder.fallen < 0 && !founder.band ? founder.id : st.id;
+    pl = { id: st.polity, name: '', capital, founded: x.tick, overlord: -1, color: st.color };
     x.ps.polities.push(pl);
     x.ps.polities.sort((a, b) => a.id - b.id);
   }
@@ -503,7 +507,8 @@ function independence(x: PCtx): void {
     const schism = st.recent.schism !== undefined;
     const conquered = st.recent.conquered !== undefined && x.tick - st.recent.conquered > 2 * x.year && st.culture.alignment < cap.culture.alignment - 0.2;
     const p = (schism ? 0.08 : 0) + (conquered ? 0.02 : 0);
-    if (p > 0 && hashFloat(st.id, x.tick, 0x1d3) < p) secede(x, st, pl, conquered ? 'revolt' : '');
+    // (salted with the world: every world's daughters used to break away on the same days)
+    if (p > 0 && hashFloat(st.id, x.tick, worldSalt(x, 0x1d3)) < p) secede(x, st, pl, conquered ? 'revolt' : '');
   }
 }
 

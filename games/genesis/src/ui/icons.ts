@@ -357,10 +357,12 @@ const ICONS: Record<string, string> = {
   dice: P('M5 4.5h14a.5.5 0 0 1 .5.5v14a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5z') + DOT(8.4, 8.4, 1.2) + DOT(15.6, 8.4, 1.2) + DOT(12, 12, 1.2) + DOT(8.4, 15.6, 1.2) + DOT(15.6, 15.6, 1.2),
 };
 ICONS['cat-creature'] = ICONS.creature;
+// the Signs: an omen in the sky (prophets, omens, sacred places, prayers answered)
+ICONS['cat-signs'] = ICONS.sign;
 
 const CATEGORY_ICON: Record<string, string> = {
   Shape: 'cat-shape', Water: 'cat-water', Sky: 'cat-sky', Life: 'cat-life', Peoples: 'cat-peoples', Ideas: 'cat-ideas', Fire: 'cat-fire',
-  Disasters: 'cat-disasters', Hand: 'cat-hand', Creature: 'cat-creature', Worlds: 'cat-worlds', Time: 'cat-time', Laws: 'cat-laws',
+  Disasters: 'cat-disasters', Hand: 'cat-hand', Creature: 'cat-creature', Signs: 'cat-signs', Worlds: 'cat-worlds', Time: 'cat-time', Laws: 'cat-laws',
 };
 
 /** an icon's SVG markup; an unknown key falls back to its category's glyph, else a star */

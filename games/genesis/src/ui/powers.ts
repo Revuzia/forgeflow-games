@@ -45,7 +45,8 @@ export interface Power {
 }
 
 /** radial / palette order of categories (CONTRACT §16.3, + Laws) */
-export const CATEGORIES = ['Shape', 'Water', 'Sky', 'Life', 'Peoples', 'Ideas', 'Fire', 'Disasters', 'Hand', 'Creature', 'Worlds', 'Time', 'Laws'];
+// (LIVING.md §3.5 / §7 H4: the creature is gone; its place on the radial is the Signs — prophets, omens, sacred places, answered prayers)
+export const CATEGORIES = ['Shape', 'Water', 'Sky', 'Life', 'Peoples', 'Ideas', 'Fire', 'Disasters', 'Hand', 'Signs', 'Worlds', 'Time', 'Laws'];
 
 /** registries by name for enum values when the sim cannot be asked (the lookdev world) */
 function baseRegistry(name: string): string[] {

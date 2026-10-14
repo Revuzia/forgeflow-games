@@ -40,7 +40,7 @@ export interface ToolDeps {
 
 const CAT_COLOR: Record<string, [number, number, number]> = {
   Water: [0.45, 0.85, 1.4], Sky: [0.75, 0.9, 1.3], Fire: [1.5, 0.6, 0.2], Disasters: [1.5, 0.35, 0.25], Life: [0.55, 1.3, 0.45],
-  Peoples: [1.3, 1.05, 0.6], Ideas: [1.05, 0.95, 1.5], Hand: [1.3, 1.1, 0.8], Creature: [1.1, 1.3, 0.6], Worlds: [0.9, 0.9, 1.4],
+  Peoples: [1.3, 1.05, 0.6], Ideas: [1.05, 0.95, 1.5], Hand: [1.3, 1.1, 0.8], Signs: [1.4, 1.25, 0.85], Worlds: [0.9, 0.9, 1.4],
 };
 
 /** brush sizes (m): a log scale from a garden to a continent */

@@ -72,6 +72,17 @@ function nearestBiome(u: Universe, p: Planet, from: V3, biome: string): V3 | nul
   return best >= 0 ? cellPos3(p, best) : null;
 }
 
+/** the driest land within 4 km of a point (for "the desert" on a world that has none) */
+function driest(p: Planet, from: V3): V3 | null {
+  let best = -1, bv = Infinity;
+  for (const c of p.cellsNear(from, 4000)) {
+    if (p.s.ocean[c] || p.f.water[c] > 0.1) continue;
+    const v = p.f.moisture[c];
+    if (v < bv || (v === bv && c < best)) { bv = v; best = c; }
+  }
+  return best >= 0 ? cellPos3(p, best) : null;
+}
+
 function focus(c: HistoryClause): V3 | undefined {
   const u = c.cx.u;
   return u.focus && c.cx.p && u.focus.planet === c.cx.p.id ? [...u.focus.pos] as V3 : undefined;
@@ -149,8 +160,8 @@ function intentTurnInto(c: HistoryClause): boolean {
   const b = biomeOf(u, lexicon, m[2]);
   if (!a || !b || a === b) return false;
   const from = mods.place?.pos ?? focus(c) ?? [0, 0, 1] as V3;
-  const at = nearestBiome(u, p, from, a);
-  if (!at) return c.ask(`There is no ${u.content.biomes.get(a).name.toLowerCase()} on ${p.name} to turn into ${u.content.biomes.get(b).name.toLowerCase()}.`);
+  // the nearest country of that kind; a world with none: the driest land for a desert, else where the words point
+  const at = nearestBiome(u, p, from, a) ?? (a === 'desert' || a === 'dune' ? driest(p, from) : null) ?? from;
   mods.place = { pos: at, planet: p.id, label: `the ${u.content.biomes.get(a).name.toLowerCase()}` };
   c.add({ k: 'life.paint-biome', biome: b, pos: at, radius: Math.round(600 * (mods.size ?? 1)) }, `${u.content.biomes.get(a).name.toLowerCase()} into ${u.content.biomes.get(b).name.toLowerCase()}`);
   if (b === 'wetland' || b === 'rainforest') c.add({ k: 'water.add', pos: at, radius: Math.round(450 * (mods.size ?? 1)), depth: 0.3 }, 'and water in it');

@@ -396,7 +396,14 @@ export class HandInput {
     if (!text) { this.hint.hidden = true; return; }
     this.hint.hidden = false;
     if (this.hint.textContent !== text) this.hint.textContent = text;
-    this.hint.style.transform = `translate(${pointer[0] + 18}px, ${pointer[1] + 16}px)`;
+    // beside the pointer, kept whole on screen and off the inspector's card (flipped to the pointer's left near an edge)
+    const w = this.hint.offsetWidth, hh = this.hint.offsetHeight;
+    const insp = document.querySelector('.gn-insp:not([hidden])')?.getBoundingClientRect();
+    const right = Math.min(window.innerWidth, insp && insp.width > 0 && insp.left > pointer[0] ? insp.left : window.innerWidth) - 8;
+    let x = pointer[0] + 18;
+    if (x + w > right) x = Math.max(8, Math.min(right - w, pointer[0] - 14 - w));
+    const y = Math.min(window.innerHeight - hh - 8, pointer[1] + 16);
+    this.hint.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
 
   /** the slap modifier's name for hints */

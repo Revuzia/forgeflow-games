@@ -573,10 +573,10 @@ function lift(u: Universe, p: Planet | undefined, L: Lex, live: Live[], clause: 
     }
   }
   // (LIVING HISTORY §5.3) "on the sea near Lune": the nearest water to the town named, not the town; "near Aru but not
-  // on it", "beside Aru", "just outside Lune": a place clear of the town, on dry land
+  // on it", "near Lune but clear of it": a place clear of the town, on dry land
   if (p && mods.place?.settlement !== undefined && mods.place.pos && !mods.other) {
     const wm = s.match(/\b(?:on|in|into|onto|over|upon|at|across) (?:the )?(open )?(sea|ocean|seas|waters?|lake|bay|deep)\b/);
-    const nm = s.match(/\b(?:but )?not (?:on|onto|upon|into|in|over) (?:it|them|the (?:town|village|city|settlement|houses)|its houses)\b|\b(?:beside|next to|just outside|outside|close to but not on|clear of|away from)\b/);
+    const nm = s.match(/\b(?:but )?not (?:on|onto|upon|into|in|over|at) (?:it|them|the (?:town|village|city|settlement|houses|people)|its houses|their houses)\b|\b(?:but )?(?:clear of|missing) (?:it|them|the (?:town|village|city))\b/);
     const st = p.people?.settlement(mods.place.settlement);
     if (wm && st) {
       const at = nearestWater(p, mods.place.pos, /sea|ocean|deep|bay/.test(wm[2]));
@@ -1953,7 +1953,9 @@ function intentLand(c: Clause): boolean {
   // runs — never a new river carved
   if (/\b(rivers?|streams?|lakes?)\b/.test(s) && /\b(flood|floods|flooding|flooded|overflow|overflows|burst|bursts|break its banks|breaks its banks|rise|rises|swell|swells)\b/.test(s)) {
     const kind = /\blakes?\b/.test(s) ? 'lake' : 'river';
-    const at = (mods.place?.pos && mods.place.settlement === undefined ? mods.place.pos : null) ?? nearestPlaceKind(u, p, here ?? [0, 0, 1], kind);
+    // (no river on the world: its nearest standing water rises instead, else the low ground where the words point)
+    const at = (mods.place?.pos && mods.place.settlement === undefined ? mods.place.pos : null) ?? nearestPlaceKind(u, p, here ?? [0, 0, 1], kind)
+      ?? nearestPlaceKind(u, p, here ?? [0, 0, 1], kind === 'river' ? 'lake' : 'river') ?? nearestWater(p, here ?? [0, 0, 1], false) ?? here;
     if (!at) return c.ask(`There is no ${kind} on ${p.name} to flood.`);
     if (mods.place?.settlement !== undefined) mods.place = { ...mods.place, pos: at, settlement: undefined, label: `the ${kind} by ${mods.place.label}` };
     c.add({ k: 'disaster.spawn', kind: 'flood', pos: at }, `the ${kind} floods`);
@@ -2080,8 +2082,9 @@ function intentLand(c: Clause): boolean {
       const radius = Math.round(Math.max(60, Math.min(220, half - Math.max(ra, rb) - 120)));
       const len = Math.round(Math.max(300, Math.min(1200, half * 1.2)));
       const from = moveBy(m, side, len / 2, p.st.radius), to = moveBy(m, [-side[0], -side[1], -side[2]], len / 2, p.st.radius);
-      c.add({ k: 'terrain.mountain-range', pos: from, to, radius, height: amount ?? Math.round(260 * Math.min(2, mods.size ?? 1)) }, `a mountain range between ${mods.place.label} and ${mods.other.label}`);
-      mods.place = { pos: m, planet: p.id, label: `between ${mods.place.label} and ${mods.other.label}` };
+      const label = `between ${mods.place.label} and ${mods.other.label}`;
+      mods.place = { pos: m, planet: p.id, label };
+      c.add({ k: 'terrain.mountain-range', pos: from, to, radius, height: amount ?? Math.round(260 * Math.min(2, mods.size ?? 1)) }, 'a mountain range');
       return true;
     }
     if (mods.place?.pos && mods.other?.pos) { c.add({ k: 'terrain.mountain-range', pos: mods.place.pos, to: mods.other.pos, height: amount ?? Math.round(260 * Math.min(2, mods.size ?? 1)) }, `a mountain range from ${mods.place.label} to ${mods.other.label}`); return true; }

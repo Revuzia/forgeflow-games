@@ -8,7 +8,8 @@
 //   pace    a people works out the ideas of the next era only after DWELL years in its present one (the era clock: the
 //           tick each era index was first reached, kept per settlement and handed down to daughter towns), and builds
 //           on an idea only once it has PRACTISED it: known for PRACTICE years of its era or made PRACTICE_USES times
-//           (the LAND ledger's crafts). Both gate invention — experiments, and accidents of everyday life (a fire on
+//           (the LAND ledger's crafts); an age's institutions (writing, law, money, mathematics ...: CIVIC) only once
+//           the people has reached that era and lived in it half its dwell. All of it gates invention — experiments, and accidents of everyday life (a fire on
 //           clay, spilled seed, green stones in the fire); wonders (star iron fallen from the sky, a miracle, a comet,
 //           an eclipse, lightning in the dunes) and everything learned from others (teaching, watching, talk, trade,
 //           books, the god) are not gated: diffusion and the god's gifts are how a people outruns its own pace.
@@ -27,10 +28,16 @@ import { tell } from './story.ts';
 import { settlementRef, vars } from './util.ts';
 
 /** years a settlement must have held era e before the ideas of era e + 1 become its own to find (index = e) */
-export const DWELL = [0, 2, 14, 22, 10, 18, 14, 24, 12, 12, 0];
+export const DWELL = [0, 4, 16, 26, 10, 18, 14, 24, 12, 12, 0];
 /** years an idea of era e must be known before it can be built on — or PRACTICE_USES crafts of it */
 export const PRACTICE = [0, 0.5, 1, 3, 3, 3, 3, 2, 2, 1.5, 1.5];
 export const PRACTICE_USES = 24;
+/**
+ * The institutions of an age come after its crafts: these ideas are found only by a people that has REACHED their era
+ * (its era index) and lived in it half that era's dwell — writing after the first smelting, law and money after
+ * writing's age has begun, mathematics and astronomy once the classical crafts are theirs.
+ */
+export const CIVIC = new Set(['writing', 'law', 'money', 'calendar', 'diplomacy', 'mathematics', 'astronomy', 'schooling', 'medicine', 'quarantine']);
 /** triggers that are wonders, not everyday life: they open an idea whatever the era clock says */
 export const WONDERS = new Set(['meteor-iron', 'miracle', 'miracle-heal', 'miracle-forest', 'fireball', 'comet', 'eclipse', 'lightning-dune', 'flare']);
 
@@ -73,6 +80,10 @@ export function inventable(x: PCtx, st: Settlement, r: CRecipe, trigger?: string
     }
   }
   if (trigger !== undefined && WONDERS.has(trigger)) return true;
+  if (CIVIC.has(r.id)) {
+    const at = h.eraAt[String(r.era)];
+    if (st.era < r.era || at === undefined || x.tick - at < 0.5 * DWELL[Math.min(DWELL.length - 1, r.era)] * x.year) return false;
+  }
   for (const q of r.preList) if (!practised(x, st, q, h)) return false;
   return true;
 }

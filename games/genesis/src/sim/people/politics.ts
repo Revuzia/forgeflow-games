@@ -3,19 +3,21 @@
 // high; hungry towns raid even their kin; neighbours whose fields and hunting grounds touch grow cold. war.ts calls
 // `historyDaily` once a day per planet (before the relations between polities are weighed).
 //
-//   grievance + tribute paid (a tithe of food and goods to the capital each season of 3 days)
-//             + a famine the capital did not relieve while it had food to spare (judged after 2 days: +0.2)
-//             + a leaders' feud, or a rival faction leading the daughter against the capital's (+0.1, once a leader)
-//             + distance: more than a day's walk from the capital (+0.002 a day for each day of walking beyond the first)
+//   grievance + tribute paid (a tithe of food and goods to the capital each season of 3 days: +0.0012)
+//             + a famine (under a day of food a head, or a death of hunger) the capital did not relieve while it had food to
+//               spare (judged after 2 days: +0.45 — the strongest of them)
+//             + a leaders' feud, or a rival faction leading the daughter against the capital's (+0.12, once a leader)
+//             + distance: more than a day's walk from the capital (+0.0002 a day for each day of walking beyond half a day)
 //             + a tongue drifting apart: a generation (20 game years) with little contact adds a drift to the daughter's
 //               speech (people/culture.ts langDistance), and every 0.18 of distance weighs a little each day
 //             + raided by kin (+0.3), border friction over touching fields and hunting grounds (+0.001 a day)
-//             − kin visits (trade, gifts, tribute bearers: −0.01), aid in hard times (−0.15), time (−1 % a day)
+//             + a daughter grown as large as its capital (0.9 of it and more: +0.0006 a day at 1.2 times its size, up to 0.0015)
+//             − kin visits (trade caravans and gifts: −0.0005 each), aid in hard times (−0.15), time (−0.3 % a day)
 //   secession grievance > 0.6: a daily chance rising to 0.02 at 0.9, carried by the independence party's strength
-//             (the hawks and the seekers of the new) — a bitter one (raids, unrelieved famine, grievance > 0.85 with a
-//             strong war party) is a revolt (war.ts declareWar); otherwise a peaceful parting
-//   kin raids a town with less than a day of food raids a neighbour within a day's walk that has 5 days a head and whom it
-//             holds below 0.3 — inside one polity too (missions.ts raid; the battle in war.ts)
+//             (the hawks and the seekers of the new) — a bitter one (most of it raids or unrelieved famine, or grievance
+//             > 0.85 with a strong war party) is a revolt and war (war.ts secede / declareWar); otherwise a peaceful parting
+//   kin raids a town with less than a day of food raids a neighbour within two days' walk (a raid is a march of a day or
+//             two) that has 5 days a head and whom it holds below 0.3 — inside one polity too (missions.ts raid; war.ts)
 //   aid       the capital relieves a hungry daughter when it has food to spare, more readily under a generous leader
 //             (`sendAid`: a gift mission of food; the kin fixture's control sends it in every famine)
 //
@@ -35,6 +37,7 @@ import { newMission, routeBetween, volunteers, bestBoat } from './missions.ts';
 import { langDistance } from './culture.ts';
 import { factionShare } from './social.ts';
 import { driftLanguage } from './names.ts';
+import { worldSalt } from './lifecycle.ts';
 import { relationOf, secede, polityName, polityOf } from './war.ts';
 import { syncEra } from './eras.ts';
 
@@ -44,8 +47,10 @@ export interface HistState {
   grievance: number;
   /** what the grievance is made of (each part decays with it): tribute, famine, feud, distance, tongue, raids, friction */
   why: Record<string, number>;
-  /** a hard time in progress: the tick it began (-1 none), whether the capital had food to spare, the tick aid was sent */
+  /** a hard time in progress: the tick it began (-1 none), whether the capital had food to spare, the tick aid was sent;
+   * the starvation deaths counted so far (a death of hunger is a hard time whatever the stores say) */
   famine: number;
+  starved?: number;
   spare: boolean;
   aid: number;
   /** the hard time was judged (the grievance counted once) */
@@ -69,21 +74,28 @@ export interface HistState {
 
 /** the tunable weights (a probe may change them in its own process; the game never does) */
 export const POLITICS = {
-  /** daily fade of a grievance */
-  decay: 0.01,
-  tributeDays: 3, tributeShare: 0.1, tribute: 0.006,
+  /** daily fade of a grievance (a famine left unrelieved is remembered for a generation: half-life ~19 game years) */
+  decay: 0.003,
+  tributeDays: 3, tributeShare: 0.1, tribute: 0.0012,
   /** a hard time: under this many days of food a head; the capital has food to spare above this */
-  leanDays: 1, spareDays: 4, judgeDays: 2, famine: 0.2, aid: 0.15, aidP: 0.3,
-  feud: 0.1,
+  leanDays: 1, spareDays: 4, judgeDays: 2, famine: 0.45, aid: 0.15, aidP: 0.2,
+  feud: 0.12,
   /** a day's walk (game minutes of walking × BASE_WALK) and the grievance a day for each day beyond it */
-  dayWalkMin: 600, distance: 0.002,
+  dayWalkMin: 600, distance: 0.0002,
+  /** a daughter grown as large as its capital (from 0.9 of it) no longer bows to it: a day, at 1.2 times its size */
+  outgrown: 0.0006,
   generationYears: 20, rareVisits: 4, drift: 0.05, tongue: 0.0015,
   kinRaid: 0.3, raider: 0.15, friction: 0.001, frictionOp: 0.01,
-  visit: 0.01,
+  /** how far a hungry town's raiders go (days of walking: a raid is a march of a day or two) */
+  raidDays: 2,
+  /** a trade caravan or a gift between them (they come often: a little each) */
+  visit: 0.0005,
   threshold: 0.6, maxP: 0.02, revolt: 0.85,
 };
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
+/** grievances move by small daily steps: kept to a millionth */
+const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
 /** the history record of a settlement (made on first use; a daughter starts from her mother's era clock) */
 export function histOf(x: PCtx, st: Settlement): HistState {
@@ -127,8 +139,8 @@ export function kinOpinion(x: PCtx, st: Settlement, o: Settlement): number {
 }
 
 function addG(h: HistState, why: string, v: number): void {
-  h.grievance = r3(Math.max(0, Math.min(1, h.grievance + v)));
-  if (v > 0) h.why[why] = r3((h.why[why] ?? 0) + v);
+  h.grievance = r6(Math.max(0, Math.min(1, h.grievance + v)));
+  if (v > 0) h.why[why] = r6((h.why[why] ?? 0) + v);
 }
 
 function leaderTrait(x: PCtx, st: Settlement, t: number, dflt = 0.4): number {
@@ -167,8 +179,8 @@ export function historyDaily(x: PCtx): void {
 
 function decayAll(h: HistState): void {
   const f = 1 - POLITICS.decay;
-  if (h.grievance > 0) h.grievance = r3(h.grievance * f);
-  for (const k of Object.keys(h.why)) { const v = r3(h.why[k] * f); if (v < 0.001) delete h.why[k]; else h.why[k] = v; }
+  if (h.grievance > 0) h.grievance = r6(h.grievance * f);
+  for (const k of Object.keys(h.why)) { const v = r6(h.why[k] * f); if (v < 1e-5) delete h.why[k]; else h.why[k] = v; }
   for (const k of Object.keys(h.kin)) h.kin[k] = r3(h.kin[k] + (0.5 - h.kin[k]) * 0.01);
 }
 
@@ -182,24 +194,29 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
     if (payTithe(x, d, cap, P)) addG(h, 'tribute', G.tribute);
   }
   // hard times: did the capital, with food to spare, relieve them?
-  const lean = foodDays(x, d) < P * G.leanDays;
+  const hungerDeaths = d.stats.starved - (h.starved ?? d.stats.starved);
+  h.starved = d.stats.starved;
+  const lean = foodDays(x, d) < P * G.leanDays || hungerDeaths > 0;
   const spare = foodDays(x, cap) - Pc * G.spareDays >= P * 2;
+  // (aid sent the day before the hard time was noticed counts for it: relieved = aid since a day before it began)
   if (lean) {
-    if (h.famine < 0) { h.famine = x.tick; h.spare = false; h.judged = false; h.aid = -1; }
+    if (h.famine < 0) { h.famine = x.tick; h.spare = false; h.judged = false; }
     if (spare) h.spare = true;
     // the capital's own choice: a generous leader sends food sooner
-    if (spare && h.aid < h.famine && !h.judged) {
+    if (spare && h.aid < h.famine - x.day && !h.judged) {
       const gen = Math.max(0.1, 0.5 + leaderTrait(x, cap, TRAIT.sociability) - 0.6 * leaderTrait(x, cap, TRAIT.aggression));
-      if (hashFloat(cap.id, d.id, x.tick, 0xa1d) < G.aidP * gen) sendAid(x, cap, d, 'famine');
+      if (hashFloat(cap.id, d.id, x.tick, worldSalt(x, 0xa1d)) < G.aidP * gen) sendAid(x, cap, d, 'famine');
     }
     if (!h.judged && x.tick - h.famine >= G.judgeDays * x.day) {
       h.judged = true;
-      if (h.spare && h.aid < h.famine) {
+      if (h.spare && h.aid < h.famine - x.day) {
         addG(h, 'famine', G.famine);
         tell(x.u, x.p, 'grievance.famine', vars(x, d, -1, { other: cap.name }), d, [settlementRef(x, d), settlementRef(x, cap)], 1);
       }
     }
-  } else if (h.famine >= 0 && foodDays(x, d) >= P * G.leanDays * 1.5) h.famine = -1;
+  } else if (h.famine >= 0 && foodDays(x, d) >= P * G.leanDays * 1.5 && x.tick - h.famine >= G.judgeDays * x.day) h.famine = -1;
+  // a daughter grown as large as its mother
+  if (P >= Pc * 0.9) addG(h, 'outgrown', G.outgrown * Math.min(2.5, (P / Pc - 0.8) / 0.4));
   // the leaders: a feud between them, or a rival party leading the daughter (weighed once for each pair of leaders)
   const pair = `${d.leader}:${cap.leader}`;
   if (d.leader && cap.leader && pair !== h.feud) {
@@ -207,7 +224,7 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
     const ours = leadingFaction(d), theirs = leadingFaction(cap);
     const rival = ours !== '' && RIVAL[ours] === theirs;
     const hot = Math.max(leaderTrait(x, d, TRAIT.aggression), leaderTrait(x, cap, TRAIT.aggression));
-    if (rival || hashFloat(d.id, cap.id, x.tick, 0xfe0d) < Math.max(0, hot - 0.45) * 1.6) {
+    if (rival || hashFloat(d.id, cap.id, x.tick, worldSalt(x, 0xfe0d)) < Math.max(0, hot - 0.45) * 1.6) {
       addG(h, 'feud', G.feud);
       tell(x.u, x.p, 'grievance.feud', vars(x, d, -1, { other: cap.name }), d, [settlementRef(x, d), settlementRef(x, cap)], 1);
     }
@@ -297,7 +314,7 @@ export function sendAid(x: PCtx, from: Settlement, to: Settlement, why: string):
 }
 
 function relieve(h: HistState): void {
-  h.grievance = r3(Math.max(0, h.grievance - POLITICS.aid));
+  h.grievance = r6(Math.max(0, h.grievance - POLITICS.aid));
 }
 
 /** a mission between two towns ended at its target (missions.ts): kin visits, aid and tribute weigh on a grievance */
@@ -308,7 +325,9 @@ export function missionArrived(x: PCtx, m: Mission, from: Settlement, to: Settle
     const h = histOf(x, a);
     h.visits++;
     if (m.kind === 'gift' && a === to) { relieve(h); continue; }
-    h.grievance = r3(Math.max(0, h.grievance - POLITICS.visit));
+    // (tribute carried is a visit — the tongue stays shared — but no kindness)
+    if (m.kind === 'tribute') continue;
+    h.grievance = r6(Math.max(0, h.grievance - POLITICS.visit));
   }
 }
 
@@ -319,11 +338,13 @@ function secessionCheck(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   if (h.grievance <= G.threshold) return;
   const strength = Math.max(0.2, Math.min(1, 0.45 + factionShare(d, 'hawks') + 0.5 * factionShare(d, 'seekers') + (h.grievance - G.threshold)));
   const p = G.maxP * Math.min(1, (h.grievance - G.threshold) / 0.3 + 0.1) * strength;
-  if (hashFloat(d.id, x.tick, 0x5ece) >= p) return;
+  if (hashFloat(d.id, x.tick, worldSalt(x, 0x5ece)) >= p) return;
   const pl = x.ps.polity(d.polity);
   if (!pl) return;
   const top = Object.entries(h.why).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0] ?? 'distance';
-  const bitter = h.grievance > G.revolt && (factionShare(d, 'hawks') > 0.25 || leaderTrait(x, d, TRAIT.aggression) > 0.6 || top === 'raids' || top === 'famine');
+  // a parting in anger (a revolt, and war: war.ts) when the grievance is of neglect or blood, or runs very high with a war
+  // party to carry it; otherwise a peaceful one
+  const bitter = top === 'raids' || top === 'famine' || (h.grievance > G.revolt && (factionShare(d, 'hawks') > 0.25 || leaderTrait(x, d, TRAIT.aggression) > 0.6));
   const from = pl.id;
   secede(x, d, pl, bitter ? 'revolt' : '');
   tell(x.u, x.p, `secession.${top}`, vars(x, d, -1, { other: cap.name, polity: polityName(x, polityOf(x, d)) }), d, [settlementRef(x, d), settlementRef(x, cap)], 2);
@@ -368,7 +389,7 @@ function kinRaid(x: PCtx, st: Settlement): void {
   for (const id of st.contacts) {
     const o = x.ps.settlement(id);
     if (!o || o.fallen >= 0 || o.band) continue;
-    if (walkDays(x, st, o) > 1) continue;
+    if (walkDays(x, st, o) > POLITICS.raidDays) continue;
     let op: number;
     if (o.polity === st.polity) op = kinOpinion(x, st, o);
     else {
@@ -382,7 +403,7 @@ function kinRaid(x: PCtx, st: Settlement): void {
   }
   if (!target) return;
   const bold = 0.3 + factionShare(st, 'hawks') + leaderTrait(x, st, TRAIT.aggression) * 0.6;
-  if (hashFloat(st.id, x.tick, 0x4a1e) > 0.35 * bold) return;
+  if (hashFloat(st.id, x.tick, worldSalt(x, 0x4a1e)) > 0.35 * bold) return;
   const route = routeBetween(x, st, target);
   if (!route.land && !(route.sea && bestBoat(x, st) >= 0)) return;
   const who = volunteers(x, st, Math.min(6, Math.max(3, Math.floor(P / 8))), true);
