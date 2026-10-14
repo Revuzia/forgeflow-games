@@ -378,7 +378,10 @@ section('ervet', () => {
     a.me.x = 10; a.me.y = Y; foe.x = 12; foe.y = Y; foe.statuses.length = 0; a.w.hashDirty = true;
     const k = cast(a, 'a2', { x: 20, y: Y }, 0.8);
     check('Shard Kick: three shards hit a target at 2 m (magic damage x3, slow)', dmgOn(k.evs, 'ervet_shard_kick', foe, 'magic').length === 3 && hasStatus(foe, 'slow'), dmgOn(k.evs, 'ervet_shard_kick', foe).length);
-    check('Shard Kick: projectile events carry lib_shard_volley', ofType(k.evs, 'projectile').filter((p) => p.ability === 'ervet_shard_kick').length === 3 && ofType(k.evs, 'projectile').some((p) => p.vfx === 'lib_shard_volley'));
+    // the projectile carries whatever effect the content names for the kick (bespoke since the VFX pass)
+    const kickVfx = (catalog.fighters.find((f) => f.id === 'ervet')?.kit.passive as { forms?: Record<string, { kit: Record<string, { effects: { present?: { vfx?: string } }[] }> }> })
+      ?.forms?.hilt?.kit.a2?.effects[0]?.present?.vfx;
+    check('Shard Kick: projectile events carry the kick\'s vfx', !!kickVfx && ofType(k.evs, 'projectile').filter((p) => p.ability === 'ervet_shard_kick').length === 3 && ofType(k.evs, 'projectile').some((p) => p.vfx === kickVfx), kickVfx);
     // Reform: area damage and back to the whole blade; Shatter's cooldown kept ticking while she held the hilt
     a.me.x = 10; a.me.y = Y; foe.x = 11.5; foe.y = Y; a.w.hashDirty = true;
     const r = cast(a, 'a3', {}, 0.5);

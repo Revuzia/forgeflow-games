@@ -96,6 +96,21 @@
     "c_monster_hit": {"files": ["assets/audio/c_monster_hit.ogg"], "bus": "sfx", "gain": 0.55, "pitchVar": 0.08, "maxVoices": 3, "priority": 4, "spatial": true, "loop": false, "cooldown": 0.05},
     "c_death_shatter": {"files": ["assets/audio/c_death_shatter.ogg"], "bus": "sfx", "gain": 0.8, "pitchVar": 0.04, "maxVoices": 3, "priority": 7, "spatial": true, "loop": false, "cooldown": 0.1}
   },
+  "events": {
+    "cast": "c_cast_lumen", "castUlt": "c_ult_windup", "enemyUltWindup": "m_enemy_windup", "projectile": "c_proj_whoosh",
+    "hitAbility": "c_hit_magic", "attack": "c_swing_light", "crit": "c_crit", "hitPhysical": "c_hit_phys_light",
+    "hitMagic": "c_hit_magic", "hitTrue": "c_hit_true", "heal": "c_heal", "shield": "c_shield",
+    "status": "c_buff", "status.stun": "c_stun", "status.root": "c_root", "status.slow": "c_slow",
+    "dash": "c_dash", "blink": "c_blink", "fighterDeath": "c_death_shatter", "selfDown": "m_self_down",
+    "allyDown": "m_ally_down", "minionDeath": "c_wick_die", "monsterDeath": "c_monster_hit", "takedown": "m_takedown",
+    "respawn": "m_respawn", "levelUp": "m_level_up", "gold": "m_gleam", "structureFall": "c_structure_fall",
+    "structureAllyFall": "m_structure_ally_fall", "structureEnemyFall": "m_structure_enemy_fall", "objectiveAlly": "m_objective_ally", "objectiveEnemy": "m_objective_enemy",
+    "waveSpawn": "m_wave_spawn", "recallStart": "m_recall_start", "recallDone": "m_recall_done", "recallCancel": "ui_back",
+    "pickup": "m_sunmote", "announceMajor": "m_announce_major", "announceMinor": "m_announce_minor", "eliminated": "m_eliminated",
+    "suddenDeath": "m_sudden_death", "ping.alert": "m_ping_alert", "ping.danger": "m_ping_danger", "ping.onmyway": "m_ping_onmyway",
+    "ping.missing": "m_ping_missing", "ping.assist": "m_ping_assist", "ping.push": "m_ping_push", "ping.vision": "m_ping_vision",
+    "ping.objective": "m_ping_objective", "ping.retreat": "m_ping_retreat"
+  },
   "music": {
     "mus_menu": {"file": "assets/audio/music/mus_menu.ogg", "bpm": 60, "loopStart": 0, "gain": 0.8, "layers": []},
     "mus_draft": {"file": "assets/audio/music/mus_draft.ogg", "bpm": 90, "loopStart": 0, "gain": 0.8, "layers": []},

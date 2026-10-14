@@ -390,6 +390,7 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   checkUnique(c.client.home.tiles, (t) => t.id, ['client', 'home', 'tiles'], 'home tile id', dg);
   const cues = new Set(Object.keys(c.audio.cues));
   const music = new Set(Object.keys(c.audio.music));
+  for (const [role, cue] of Object.entries(c.audio.events)) if (!cues.has(cue)) dg.err(['audio', 'events', role], unknownRef('audio cue', cue, cues));
   const unitKind = new Map(c.units.map((u) => [u.id, u.kind] as const));
   const clipRoles = new Set<string>(ClipRole.options);
 

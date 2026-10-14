@@ -22,7 +22,7 @@ type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
 interface CueDef { files: string[]; bus: Bus; gain: number; pitchVar: number; maxVoices: number; priority: number; spatial: boolean; loop: boolean; cooldown: number }
 interface MusicDefT { file: string; bpm: number; loopStart: number; loopEnd?: number; gain: number; layers: { id: string; file: string }[] }
 interface CatalogLike {
-  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT> };
+  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string> };
   fighters: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } }; kit: Record<string, { id: string; present?: { sfx?: string; hitSfx?: string } } | undefined> }[];
 }
 interface AudioSettings { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean }
@@ -51,6 +51,8 @@ class Engine implements ValeAudioPort {
   private readonly lastPlay = new Map<string, number>();
   private vol: AudioSettings;
   private readonly cues: Record<string, CueDef>;
+  /** engine event role → cue id (content/audio.json `events`) */
+  private readonly events: Record<string, string>;
   private readonly beds: Record<string, MusicDefT>;
   private readonly url: (ref: string) => string;
   private bed: { id: string; main: AudioBufferSourceNode | null; layer: AudioBufferSourceNode | null; gain: GainNode; layerGain: GainNode } | null = null;
@@ -68,6 +70,7 @@ class Engine implements ValeAudioPort {
 
   constructor(cat: CatalogLike, url: (ref: string) => string, settings: AudioSettings) {
     this.cues = cat.audio.cues;
+    this.events = cat.audio.events ?? {};
     this.beds = cat.audio.music;
     this.url = url;
     this.vol = { ...settings };
@@ -147,7 +150,11 @@ class Engine implements ValeAudioPort {
   }
 
   /** play a cue; `pos` (world x, y) makes a spatial cue pan/attenuate around your fighter */
-  private cue(cueId: string, pos: { x: number; y: number } | null, gainMul = 1): void {
+  /** the cue bound to an engine event role, if the catalog binds one */
+  private ev(role: string): string | undefined { return this.events[role]; }
+
+  private cue(cueId: string | undefined, pos: { x: number; y: number } | null, gainMul = 1): void {
+    if (!cueId) return;
     const c = this.cues[cueId];
     if (!c) return;
     const ctx = this.ensure();
@@ -273,64 +280,64 @@ class Engine implements ValeAudioPort {
     switch (kind) {
       case 'cast': {
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue(pr?.sfx ?? (e.slot === 'ult' ? 'c_ult_windup' : 'c_cast_lumen'), at(src));
-        if (src && src.team !== this.myTeam() && e.slot === 'ult' && near(at(src))) this.cue('m_enemy_windup', null);
+        this.cue(pr?.sfx ?? this.ev(e.slot === 'ult' ? 'castUlt' : 'cast'), at(src));
+        if (src && src.team !== this.myTeam() && e.slot === 'ult' && near(at(src))) this.cue(this.ev('enemyUltWindup'), null);
         break;
       }
-      case 'projectile': this.cue('c_proj_whoosh', at(src), 0.7); break;
+      case 'projectile': this.cue(this.ev('projectile'), at(src), 0.7); break;
       case 'hit': {
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue((e.sfx as string) ?? pr?.hitSfx ?? 'c_hit_magic', at(dst));
+        this.cue((e.sfx as string) ?? pr?.hitSfx ?? this.ev('hitAbility'), at(dst));
         break;
       }
       case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }); break;
-      case 'attack': this.cue('c_swing_light', at(src), src?.kind === 'fighter' ? 0.6 : 0.3); break;
+      case 'attack': this.cue(this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : 0.3); break;
       case 'damage': {
         const p = at(dst);
         if (near(p)) this.intensity = Math.min(1, this.intensity + (src?.kind === 'fighter' && dst?.kind === 'fighter' ? 0.12 : 0.02));
         if (e.ability) break;                         // ability hits voice through `hit`
-        if (e.crit) this.cue('c_crit', p);
-        else this.cue(e.dtype === 'magic' ? 'c_hit_magic' : e.dtype === 'true' ? 'c_hit_true' : 'c_hit_phys_light', p, src?.kind === 'fighter' ? 0.8 : 0.45);
+        if (e.crit) this.cue(this.ev('crit'), p);
+        else this.cue(this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45);
         break;
       }
-      case 'heal': this.cue('c_heal', at(dst), 0.7); break;
-      case 'shield': this.cue('c_shield', at(dst)); break;
+      case 'heal': this.cue(this.ev('heal'), at(dst), 0.7); break;
+      case 'shield': this.cue(this.ev('shield'), at(dst)); break;
       case 'status': {
         const s = e.status as string;
-        this.cue(s === 'stun' ? 'c_stun' : s === 'root' ? 'c_root' : s === 'slow' ? 'c_slow' : 'c_buff', at(dst), 0.8);
+        this.cue(this.ev(`status.${s}`) ?? this.ev('status'), at(dst), 0.8);
         break;
       }
-      case 'dash': this.cue('c_dash', at(src)); break;
-      case 'blink': this.cue('c_blink', at(src)); break;
+      case 'dash': this.cue(this.ev('dash'), at(src)); break;
+      case 'blink': this.cue(this.ev('blink'), at(src)); break;
       case 'death': {
         const k = e.kind as string;
         if (k === 'fighter') {
-          this.cue('c_death_shatter', at(dst));
+          this.cue(this.ev('fighterDeath'), at(dst));
           const youEnt = this.client?.view.players.find((x) => x.player === this.client?.you)?.entity;
-          if (e.dst === youEnt) this.cue('m_self_down', null);
-          else if (dst && dst.team === this.myTeam()) this.cue('m_ally_down', null);
-        } else if (k === 'minion') this.cue('c_wick_die', at(dst), 0.6);
-        else if (k === 'monster') this.cue('c_monster_hit', at(dst));
+          if (e.dst === youEnt) this.cue(this.ev('selfDown'), null);
+          else if (dst && dst.team === this.myTeam()) this.cue(this.ev('allyDown'), null);
+        } else if (k === 'minion') this.cue(this.ev('minionDeath'), at(dst), 0.6);
+        else if (k === 'monster') this.cue(this.ev('monsterDeath'), at(dst));
         break;
       }
-      case 'takedown': if (e.killer === this.client?.you) this.cue('m_takedown', null); break;
-      case 'respawn': if (e.player === this.client?.you) this.cue('m_respawn', null); break;
-      case 'levelUp': if (e.player === this.client?.you) this.cue('m_level_up', null); break;
-      case 'gold': if (e.player === this.client?.you && (e.reason === 'cs' || e.reason === 'kill')) this.cue('m_gleam', null, 0.6); break;
+      case 'takedown': if (e.killer === this.client?.you) this.cue(this.ev('takedown'), null); break;
+      case 'respawn': if (e.player === this.client?.you) this.cue(this.ev('respawn'), null); break;
+      case 'levelUp': if (e.player === this.client?.you) this.cue(this.ev('levelUp'), null); break;
+      case 'gold': if (e.player === this.client?.you && (e.reason === 'cs' || e.reason === 'kill')) this.cue(this.ev('gold'), null, 0.6); break;
       case 'structure': {
         const p = this.ent(e.id);
-        this.cue('c_structure_fall', at(p));
-        this.cue(e.team === this.myTeam() ? 'm_structure_ally_fall' : 'm_structure_enemy_fall', null);
+        this.cue(this.ev('structureFall'), at(p));
+        this.cue(this.ev(e.team === this.myTeam() ? 'structureAllyFall' : 'structureEnemyFall'), null);
         break;
       }
-      case 'objective': this.cue(e.team === this.myTeam() ? 'm_objective_ally' : 'm_objective_enemy', null); break;
-      case 'wave': if ((e.n as number) <= 1) this.cue('m_wave_spawn', null); break;
-      case 'recall': if (e.player === this.client?.you) this.cue(e.state === 'done' ? 'm_recall_done' : e.state === 'start' ? 'm_recall_start' : 'ui_back', null); break;
-      case 'ping': this.cue(`m_ping_${e.kind as string}`, null); break;
-      case 'pickup': if (e.player === this.client?.you) this.cue('m_sunmote', null); break;
-      case 'announce': this.cue(/first|ace|objective|structure|inhib|core/i.test(e.key as string) ? 'm_announce_major' : 'm_announce_minor', null); break;
-      case 'eliminated': if (e.player === this.client?.you) this.cue('m_eliminated', null); break;
-      case 'suddenDeath': this.cue('m_sudden_death', null); break;
+      case 'objective': this.cue(this.ev(e.team === this.myTeam() ? 'objectiveAlly' : 'objectiveEnemy'), null); break;
+      case 'wave': if ((e.n as number) <= 1) this.cue(this.ev('waveSpawn'), null); break;
+      case 'recall': if (e.player === this.client?.you) this.cue(this.ev(e.state === 'done' ? 'recallDone' : e.state === 'start' ? 'recallStart' : 'recallCancel'), null); break;
+      case 'ping': this.cue(this.ev(`ping.${e.kind as string}`), null); break;
+      case 'pickup': if (e.player === this.client?.you) this.cue(this.ev('pickup'), null); break;
+      case 'announce': this.cue(this.ev(/first|ace|objective|structure|inhib|core/i.test(e.key as string) ? 'announceMajor' : 'announceMinor'), null); break;
+      case 'eliminated': if (e.player === this.client?.you) this.cue(this.ev('eliminated'), null); break;
+      case 'suddenDeath': this.cue(this.ev('suddenDeath'), null); break;
       default: break;
     }
   }

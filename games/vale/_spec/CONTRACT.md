@@ -616,6 +616,14 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   stingers (tonal, no voice in this slice; subtitles carry the text).
 - `src/audio/engine.ts`: buses music/sfx/ui/voice/ambience → master, ducking (voice > sfx > music),
   voice limits per cue, listener at the camera target, muting via settings.
+- CHANGED(AUDIO): `audio.events` (content/audio.json) binds the engine's event roles to cue ids so
+  no cue id lives in `src/` (an unbound role is silent; the build checks every bound cue exists).
+  Roles: `cast, castUlt, enemyUltWindup, projectile, hitAbility, attack, crit, hitPhysical, hitMagic,
+  hitTrue, heal, shield, status, status.<status id>, dash, blink, fighterDeath, selfDown, allyDown,
+  minionDeath, monsterDeath, takedown, respawn, levelUp, gold, structureFall, structureAllyFall,
+  structureEnemyFall, objectiveAlly, objectiveEnemy, waveSpawn, recallStart, recallDone, recallCancel,
+  pickup, announceMajor, announceMinor, eliminated, suddenDeath, ping.<ping kind>`. An ability's own
+  `present.sfx` / `hitSfx` wins over `cast` / `hitAbility`.
 
 ## §12 Art pipeline (`art/`, lane ART)
 - Blender 5.2, `--background --factory-startup`, deterministic (fixed seeds). `art/build.py`

@@ -599,7 +599,10 @@ export const MusicDef = z.object({
   file: AssetRef, bpm: z.number().positive(), loopStart: z.number().default(0), loopEnd: z.number().optional(),
   gain: z.number().default(1), layers: z.array(z.object({ id: Id, file: AssetRef }).strict()).default([]),
 }).strict();
-export const AudioDef = z.object({ cues: z.record(Id, AudioCue), music: z.record(Id, MusicDef) }).strict();
+/** `events` binds the audio engine's event roles (CONTRACT §11: cast, castUlt, hitPhysical, takedown,
+ *  ping.<kind>, …) to cue ids, so no cue id lives in code; an unbound role is silent */
+export const AudioDef = z.object({ cues: z.record(Id, AudioCue), music: z.record(Id, MusicDef),
+  events: z.record(z.string(), Id).default({}) }).strict();
 
 export const VfxDef = z.object({
   id: Id,
