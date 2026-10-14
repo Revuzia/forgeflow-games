@@ -197,6 +197,8 @@ export class VfxSystem {
     seed: new Float32Array(P_MAX), slot: new Int32Array(P_MAX), layer: new Int32Array(P_MAX), op: new Float32Array(P_MAX), cap: new Float32Array(P_MAX),
     cx: new Float32Array(P_MAX), cy: new Float32Array(P_MAX), cz: new Float32Array(P_MAX), cell: new Float32Array(P_MAX), rim: new Int32Array(P_MAX),
   };
+  /** local-space particles ride their instance's anchor (sprites, `space: local`, `follow`) */
+  private readonly pInst: (Inst | null)[] = new Array(P_MAX).fill(null);
   /** emitter layers referenced by particles (index → layer); rim colours resolved per spawn */
   private readonly emitters: EmitterL[] = [];
   private readonly emitterIndex = new Map<EmitterL, number>();
@@ -525,6 +527,7 @@ export class VfxSystem {
       P.cap[i] = it.tier >= 4 ? 1e3 : this.cap(it);
       P.cell[i] = l.tex.cell + (l.tex.variants ? Math.floor(Math.random() * l.tex.frames) : 0) + (l.frame >= 0 && !l.tex.variants ? Math.min(l.frame, l.tex.frames - 1) : 0);
       P.rim[i] = rim;
+      this.pInst[i] = l.local || l.follow ? it : null;
     }
   }
 
@@ -764,6 +767,15 @@ export class VfxSystem {
         continue;
       }
       const l = this.emitters[P.layer[i]];
+      const owner = this.pInst[i];
+      if (owner) {
+        if (owner.active && owner.def.layers.includes(l)) {
+          const a = this.anchorPos(owner, l, _v);
+          if (this.atOf(owner, l) === 'ground') a.y = Math.max(a.y, 0.06);
+          P.x[i] += a.x - P.cx[i]; P.y[i] += a.y - P.cy[i]; P.z[i] += a.z - P.cz[i];
+          P.cx[i] = a.x; P.cy[i] = a.y; P.cz[i] = a.z;
+        } else this.pInst[i] = null;
+      }
       const dr = l.drag > 0 ? Math.exp(-l.drag * d) : 1;
       P.vx[i] *= dr; P.vy[i] *= dr; P.vz[i] *= dr;
       P.vy[i] -= l.gravity * d;
@@ -818,6 +830,8 @@ export class VfxSystem {
   private moveParticle(from: number, to: number): void {
     const P = this.P;
     for (const k of Object.keys(P) as (keyof typeof P)[]) P[k][to] = P[k][from];
+    this.pInst[to] = this.pInst[from];
+    this.pInst[from] = null;
   }
 
   private updateRibbons(): void {
@@ -1009,6 +1023,7 @@ export class VfxSystem {
     for (const it of this.insts) { it.active = false; this.free.push(it); }
     this.insts.length = 0;
     this.pn = 0;
+    this.pInst.fill(null);
     for (const r of this.ribbons) { r.on = false; r.inst = null; r.n = 0; }
     for (const b of this.beams) { b.on = false; b.inst = null; }
     for (const r of this.rings) r.on = false;
