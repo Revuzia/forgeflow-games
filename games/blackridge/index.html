@@ -220,6 +220,13 @@
   AFTER this script, so Mute reaches them all (driftwake convention).
   Classic parser-inserted script, never injected, so ordering is guaranteed.
 -->
+<script>
+/* BLACKRIDGE ships its own touch layer (core/hud/touch_controls.js: move stick,
+   drag-look, fire-and-aim, killstreak taps). Opt out of game_controls.js's generic
+   keyboard-synthesizing overlay so phones do not get two sets of buttons; the
+   fullscreen / mute / pause / bug bar and the FFG_DEVICE signal stay. */
+window.GAME_CONFIG = Object.assign(window.GAME_CONFIG || {}, { touch: false });
+</script>
 <script src="./game_controls.js?v=1789530264"></script>
 
 <script>
@@ -285,7 +292,7 @@
 
     var s = document.createElement("script");
     s.type = "module";
-    s.src = "./runtime/boot.js?v=133";   /* ?v=N — BUMP EVERY ITERATION */
+    s.src = "./runtime/boot.js?v=139";   /* ?v=N — BUMP EVERY ITERATION */
     document.body.appendChild(s);
 })();
 </script>

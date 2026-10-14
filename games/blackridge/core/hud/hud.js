@@ -428,6 +428,17 @@ export function ensureShellStyle() {
   padding:6px 14px;background:rgba(232,232,228,.06);color:rgba(232,232,228,.6);
   border:1px solid var(--a10-hair);cursor:pointer;text-transform:uppercase;}
 .a10-seg button.on{color:#0a0c10;background:var(--a10-amber);border-color:var(--a10-amber);}
+/* SHORT SCREENS (2026-10-14, mobile landscape ~360-430 px tall): the title rail and
+   panels were laid out for >=700 px and ran off the bottom (CREDITS unreachable) */
+@media (max-height:520px){
+  .a10-rail .wm{font-size:24px;letter-spacing:.34em;margin-bottom:2px;}
+  .a10-rail .tag{margin-bottom:12px;}
+  .a10-item{padding:7px 0 7px 16px;font-size:12.5px;}
+  .a10-vmark{bottom:8px;}
+  .a10-panel{max-height:88vh;width:min(560px,58vw);}
+  .a10-panel h2{margin-bottom:8px;}
+  .a10-row{padding:7px 2px;}
+}
 `;
   document.head.appendChild(el);
 }

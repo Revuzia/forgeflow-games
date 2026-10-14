@@ -236,6 +236,15 @@ export function createInput(canvas, settings) {
     get designate() { return designate; },
     cancelDesignate() { designate = 0; },
     canDesignate: null,   // boot wires (tier) => has stock && none in flight
+    // ---- touch layer (core/hud/touch_controls.js) — same verbs as the keys ----
+    touchPress(k) { press(k); },
+    touchRelease(k) { release(k); },
+    designateTier(tier) {
+      if (input.canDesignate && !input.canDesignate(tier)) { designate = 0; state.streak = tier; }
+      else designate = designate === tier ? 0 : tier;
+    },
+    confirmDesignate() { if (designate) { state.streak = designate; designate = 0; } },
+    _keysHeld() { return !!(keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD); },
   };
 
   function refreshMove() {

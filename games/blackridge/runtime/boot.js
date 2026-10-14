@@ -66,12 +66,21 @@ try {
   const isBench = PARAMS.get("bench") === "1";
   const seedParam = parseInt(PARAMS.get("seed") || "1", 10) || 1;
 
-  const [gfxMod, settingsMod] = await Promise.all([
+  const [gfxMod, settingsMod, touchMod] = await Promise.all([
     import(`../core/gfx.js${V}`),
     import(`../core/settings.js${V}`),
+    import(`../core/hud/touch_controls.js${V}`),
   ]);
   const { initRenderer } = gfxMod;
   const { S, set: setSetting, onChange } = settingsMod;
+  // MOBILE (2026-10-14): phones/tablets get the touch layer, and a first run on one
+  // starts at LOW quality (dynres still scales from there); a saved choice wins.
+  const isTouch = touchMod.isTouchDevice();
+  try {
+    if (isTouch && typeof localStorage !== "undefined" && !localStorage.getItem("blackridge.settings.v1")) {
+      setSetting("quality", "low");
+    }
+  } catch (e) { /* private mode: defaults stand */ }
 
   const canvas = document.getElementById("view");
   const renderer = initRenderer(canvas);
@@ -316,6 +325,8 @@ try {
   const streakFx = createStreakFx(ctx);
   const streakAudio = createStreakAudio(ctx);
   const grenadeFx = createGrenadeFx(ctx);
+  const touch = isTouch ? touchMod.createTouchControls(ctx) : null;
+  ctx.touch = touch;
   ctx.cue = (n) => streakAudio.cue(n);   // match_hud clock warnings
   // designate mode only opens for a call-in you can actually use
   input.canDesignate = (tier) => {
@@ -644,6 +655,7 @@ try {
     lootFx.update(dt);
     streakFx.update(dt);
     grenadeFx.update(dt);
+    if (touch) touch.update(dt);
     audio.update(dt);
     sky.update(dt);
     weather.update(dt);
