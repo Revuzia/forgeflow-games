@@ -72,13 +72,13 @@
 .play__mode { display: flex; flex-direction: column; gap: calc(0.5 * var(--u)); text-align: center; align-items: center; margin-top: calc(-1 * var(--u)); }
 .play__mode .t-body-l { color: var(--text-1); }
 .play__links { display: flex; gap: var(--u); margin-top: var(--u); flex-wrap: wrap; }
-.qcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(30 * var(--u)), 1fr)); gap: calc(1.5 * var(--u)); }
+.qcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(1.5 * var(--u)); }   /* 2 x 2: all four queues above the fold */
 .qcard { display: flex; flex-direction: column; gap: var(--u); padding: calc(2 * var(--u)); text-align: left; transition: background-color 100ms var(--ease-std), transform 60ms linear; }
 .qcard:hover, .qcard:focus-visible { background: var(--plate-bg-raised); box-shadow: var(--ring); }
 .qcard:active { transform: translateY(1px); }
 .qcard.is-selected { box-shadow: inset 0 0 0 2px var(--chalk); }
 .qcard.is-selected:hover, .qcard.is-selected:focus-visible { box-shadow: inset 0 0 0 2px var(--chalk), var(--ring); }
-.qcard.is-locked { background: transparent; outline: 1px dashed var(--line-2); outline-offset: -1px; }
+.qcard.is-locked { background: rgba(11, 13, 17, 0.8); outline: 1px dashed var(--line-2); outline-offset: -1px; }   /* readable over the bright needle */
 .qcard__head { display: flex; align-items: center; justify-content: space-between; gap: var(--u); }
 .qcard__name { color: var(--text-1); }
 .qcard__desc { color: var(--text-2); }

@@ -102,6 +102,14 @@ Originality rules still hold: nothing copied from any game.
 - Next: owner sign-off on Marund -> roll out to the other 15 fighters (+ skin concepts), then VFX
   (step 4), map scenes + menu scene (step 5: the placeholder low-poly scenery is now the weakest read).
 
+### Adversarial review (10-14, `_harness/_reports/adversarial_review.md`, git-ignored)
+0 blockers, 6 major, 14 minor, 8 nits. Fixed: all 6 majors (GPU bone-texture leak, world/status VFX
+never played in the shipped boot, audio leaking hidden units, Ctrl+W tab close, the Play funnel), and
+F08 F10 F11 F12 F14 F16 F17 F18 F20 F21-F25 F27 F28. Not a bug: F15 (the self-cast row exists), F19
+(FRAY 9.3 min over 10 seeds), F26 (normal tab wrap). Open polish: F09 screen transitions draw the
+outgoing and incoming screens together for a moment; F13 UI/menu cue ids are built from a fixed
+vocabulary in code (all exist; a build check tying UiCueKind to audio.cues would harden it).
+
 ### Pacing (10-14, `node _harness/pacing.ts --seeds 10`: all-bot matches on the real catalog, ~2 s each)
 RIFT mean 24.8 min (19-31; target about 25) · FRAY 9.3 (6-11; target 8-11) · BRIDGE 21.3 (16-28; target 14-20,
 card says about 17). Moving BRIDGE's sudden death 20:00 -> 16:00 changed nothing (21.7), so the lever is
