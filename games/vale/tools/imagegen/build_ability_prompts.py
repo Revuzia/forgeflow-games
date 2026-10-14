@@ -41,6 +41,14 @@ def main() -> None:
         kit = json.loads(path.read_text())["kit"]
         for slot in ("passive", "a1", "a2", "a3", "ult"):
             slots[f"ability_{kit[slot]['id']}"] = slot
+        for form in (kit["passive"].get("forms") or {}).values():     # a form's own kit (Ervet's hilt)
+            for slot, ab in (form.get("kit") or {}).items():
+                slots[f"ability_{ab['id']}"] = slot if slot in KIND else "a1"
+    for u in json.loads((GAME / "content" / "units.json").read_text())["units"]:   # monster abilities
+        for ab in u.get("abilities") or []:
+            slots[f"ability_{ab['id']}"] = "a1"
+        if u.get("passive"):
+            slots[f"ability_{u['passive']['id']}"] = "passive"
     mpath = HERE / "manifest.json"
     raw = mpath.read_text(encoding="utf-8")
     m = json.loads(raw)

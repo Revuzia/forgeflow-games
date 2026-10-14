@@ -1,7 +1,7 @@
 {
  "version": 1,
  "generator": "xai:grok-imagine-image",
- "count": 188,
+ "count": 202,
  "sizes": {
   "square": [
    1024,
@@ -1711,6 +1711,132 @@
    "out": "art/out/textures/plaster_chalk.webp",
    "size": "square",
    "ref_from": null,
+   "note": ""
+  },
+  {
+   "id": "ability_ervet_quick_jab",
+   "kind": "icon",
+   "prompt": "Game ability icon: a short jagged glass sword hilt, its blade broken off near the crossguard, thrust forward in a fast lunge with a pale blue-grey speed streak trailing behind it and a small burst of glass chips at the point. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/ervet_quick_jab.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/ervet_quick_jab.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_ervet_shard_kick",
+   "kind": "icon",
+   "prompt": "Game ability icon: three sharp pale blue-grey glass shards flung forward in a spreading fan, kicked off a stone floor by an armoured boot, each shard trailing a thin streak of light. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/ervet_shard_kick.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/ervet_shard_kick.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_ervet_reform",
+   "kind": "icon",
+   "prompt": "Game ability icon: scattered glass shards flying back together in a spiral around a chalk-white crossguard and reforming a whole translucent greatsword blade, a ring of pale light where they meet. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/ervet_reform.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/ervet_reform.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_glasshorn_bellow",
+   "kind": "icon",
+   "prompt": "Game ability icon: the head of a pale stag with tall branching antlers of clear faceted glass, mouth open in a roar, a cone of shimmering pale air rippling out ahead of it. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/glasshorn_bellow.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/glasshorn_bellow.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_resinback_spit",
+   "kind": "icon",
+   "prompt": "Game ability icon: a glob of molten amber resin arcing through the air and splashing into a burning pool of glowing honey-orange resin on dark stone. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/resinback_spit.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/resinback_spit.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_stilltusk_stamp",
+   "kind": "icon",
+   "prompt": "Game ability icon: a stocky bristled boar with carved stone tusks rearing up and stamping a heavy hoof down, a ring of cracked stone and dust bursting out around the hoof. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/stilltusk_stamp.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/stilltusk_stamp.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_stray_topple",
+   "kind": "icon",
+   "prompt": "Game ability icon: a giant carved chalk-stone Roman numeral toppling forward like a falling slab, its long shadow and a line of dust rushing ahead of it across the ground. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/stray_topple.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/stray_topple.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_sunsplinter_shard_rain",
+   "kind": "icon",
+   "prompt": "Game ability icon: a rain of long bright glass splinters falling point-first into a marked circle on pale stone, sparks of light where they strike. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/sunsplinter_shard_rain.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/sunsplinter_shard_rain.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_sunsplinter_noon_glare",
+   "kind": "icon",
+   "prompt": "Game ability icon: a broken stone spire tip floating above the ground and flaring with blinding white noon light, a wide bright ring of light expanding outward with a dark safe gap at its centre. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/sunsplinter_noon_glare.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/sunsplinter_noon_glare.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_sunsplinter_splinter_spray",
+   "kind": "icon",
+   "prompt": "Game ability icon: a broken bright stone spire tip turned sideways and spraying a wide cone of sharp glass splinters forward. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/sunsplinter_splinter_spray.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/sunsplinter_splinter_spray.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_longshade_shadow_sweep",
+   "kind": "icon",
+   "prompt": "Game ability icon: a huge long shadow beast of dark ink and smoke dragging a vast curved claw of shadow across the ground in a wide sweeping arc. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/longshade_shadow_sweep.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/longshade_shadow_sweep.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_longshade_pooled_shade",
+   "kind": "icon",
+   "prompt": "Game ability icon: a pool of thick dark ink-violet shade spreading on pale stone, wisps of smoke rising from it and a faint cold rim of light at its edge. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/longshade_pooled_shade.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/longshade_pooled_shade.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_longshade_full_length",
+   "kind": "icon",
+   "prompt": "Game ability icon: a towering shadow beast rearing up to its full height against a pale sky, about to crash down, its long dark form stretching high above a small ring on the ground. Dynamic action at the moment of impact. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/longshade_full_length.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/longshade_full_length.svg",
+   "note": ""
+  },
+  {
+   "id": "ability_longshade_lengthen",
+   "kind": "icon",
+   "prompt": "Game ability icon: a long dark shadow stretching longer and longer across pale stone, layered rings of growing shadow behind it, emblematic and calm. Calm, emblematic composition. Square game ability icon: one bold centred subject in a dynamic three-quarter view that reads clearly at 48 pixels, strong value contrast against a dark ink-blue painted background with a soft vignette, light from the top-left. Premium hand-painted stylized fantasy illustration, confident painterly brushwork, clean readable shapes, strong silhouette, soft dramatic light with crisp rim light, rich but restrained palette, high polish, shipped AAA game quality. No text, no letters, no numbers, no logo, no watermark, no signature, no UI, no border or frame. No gears, no clock hands, no clock faces, no gems or jewels, no glowing runes or glyphs, no gold, no gold filigree, no shiny chrome or polished metal, no teal-and-gold colour scheme, no red-versus-green.",
+   "out": "content/ui/icons/abilities/longshade_lengthen.webp",
+   "size": "square",
+   "ref_from": "assets/ui/icons/abilities/longshade_lengthen.svg",
    "note": ""
   }
  ]

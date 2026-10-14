@@ -136,7 +136,7 @@
             "a1": {
               "id": "ervet_quick_jab",
               "name": "Quick Jab",
-              "icon": "assets/ui/icons/abilities/ervet_quick_jab.svg",
+              "icon": "assets/ui/icons/abilities/ervet_quick_jab.webp",
               "desc": "Ervet jabs with the hilt, dashing 3 m and stopping at the first enemy for {effects.0.onPass.0.amount} magic damage.",
               "maxRank": 5,
               "cooldown": [
@@ -214,7 +214,7 @@
             "a2": {
               "id": "ervet_shard_kick",
               "name": "Shard Kick",
-              "icon": "assets/ui/icons/abilities/ervet_shard_kick.svg",
+              "icon": "assets/ui/icons/abilities/ervet_shard_kick.webp",
               "desc": "Ervet kicks three shards in a 30° fan up to 6 m. Each deals {effects.0.onHit.0.amount} magic damage and slows by 15% for 1.5 s.",
               "maxRank": 5,
               "cooldown": [
@@ -302,7 +302,7 @@
             "a3": {
               "id": "ervet_reform",
               "name": "Reform",
-              "icon": "assets/ui/icons/abilities/ervet_reform.svg",
+              "icon": "assets/ui/icons/abilities/ervet_reform.webp",
               "desc": "Ervet swings the blade whole again before its time, dealing {effects.0.onHit.0.amount} magic damage to enemies within 2 m.",
               "maxRank": 5,
               "cooldown": 5,

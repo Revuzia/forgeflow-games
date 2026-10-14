@@ -30,5 +30,13 @@
   "loading_map_bridge": 2,
   "mode_bridge": 2,
   "store_banner": 2,
-  "mode_fray": 2
+  "mode_fray": 2,
+  "ability_ervet_shard_kick": 2,
+  "ability_ervet_reform": 2,
+  "ability_glasshorn_bellow": 2,
+  "ability_resinback_spit": 2,
+  "ability_stilltusk_stamp": 2,
+  "ability_sunsplinter_noon_glare": 2,
+  "ability_longshade_shadow_sweep": 2,
+  "ability_longshade_full_length": 2
 }
