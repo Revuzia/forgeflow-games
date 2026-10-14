@@ -1684,6 +1684,14 @@
       0.22
     ]
   },
+  "biomeWords": {
+    "jungle": "rainforest", "jungles": "rainforest", "rain forest": "rainforest", "tropical forest": "rainforest",
+    "swamp": "wetland", "swamps": "wetland", "marsh": "wetland", "marshes": "wetland", "marshland": "wetland", "swampland": "wetland",
+    "bog": "wetland", "bogs": "wetland", "fen": "wetland", "fens": "wetland", "mire": "wetland", "morass": "wetland", "quagmire": "wetland", "wetlands": "wetland",
+    "savannah": "savanna", "prairie": "grassland", "meadows": "grassland", "plains": "grassland", "woodland": "forest", "woods": "forest",
+    "wasteland": "barren", "badlands": "barren", "dunes": "dune", "sand sea": "dune", "glacier": "ice", "ice sheet": "ice", "icecap": "ice",
+    "shrubland": "scrub", "scrubland": "scrub", "heath": "scrub", "pine forest": "taiga", "boreal forest": "taiga"
+  },
   "weatherWords": {
     "foggy": "fog",
     "misty": "fog",

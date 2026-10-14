@@ -852,8 +852,7 @@ function unnamedVictims(cx: PCtx2, cmds: Command[], raw: string): string | undef
   const hit = new Map<number, string>();
   for (const c of cmds) {
     if (!DESTRUCTIVE.has(c.k) || (c.k === 'disaster.spawn' && BENIGN_DISASTERS.has(String(c.kind)))) continue;
-    const w = typeof c.planet === 'number' ? cx.u.planet(c.planet) ?? p : p;
-    if (w !== p) continue;
+    if (typeof c.planet === 'number' && c.planet !== p.id) continue;
     const at = (Array.isArray(c.pos) ? c.pos : c.settlement !== undefined ? p.people.settlement(Number(c.settlement))?.pos : cx.u.focus && cx.u.focus.planet === p.id ? cx.u.focus.pos : null) as ArrayLike<number> | null | undefined;
     if (!at) continue;
     const reach = typeof c.radius === 'number' ? c.radius : 200;
