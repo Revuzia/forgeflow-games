@@ -3,6 +3,53 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-10-13 (night) — Wave 6: the ground tells the truth, textured terrain, and the town toolkit (?v=1791946668)
+
+Plan `_spec/world_2026-10/PLAN.md`, Wave 6 of 8. One player-visible lane (the ground) and three new modules that are NOT wired into the
+game yet: the towns themselves are Wave 7.
+
+**What players see**
+- Textured ground: moss and pebbles on grass and rock, rippled sand, cracked asphalt on roads (four CC0 textures, 792 KB, no extra draw calls).
+- Every house, hut, tower and landmark stands on a flat pad with no gap under a wall; doorways clear the player (minimum 2.39 m, was 1.16 m);
+  ramps start at the floor; roads lie on the ground and no longer run into the sea; the thin dark crack at the Ashgrid chunk border is gone.
+- Deepwood's steeple used to stand in the river; it now stands on a dry bank and the river pinches to a pond beside it.
+
+| measured (5 seeds x 3 maps unless noted) | live before | now |
+|---|---|---|
+| placementcheck rows | 14 pass, 5 fail | 19 of 19 (and 19 of 19 on 15 fresh seeds, 1,539 structures) |
+| drawn ground vs walkable ground, p99 | 0.012 / 0.037 / 0.023 m | 0.0000016 - 0.0000036 m |
+| house / tower base edges more than 10 cm in the air | 85-93 % / 98-100 % | 0 % |
+| pads flat within 1 mm | - | 679 of 679 |
+| seeds with a town road under water (200 seeds) | 200 of 200 (Isla Viva, Deepwood) | 0 of 200 |
+| draw calls (drop view, three maps) | - | unchanged (-7 to +7 is noise); 311 / 281 / 178 with actors, limit 450 |
+| map build | - | lattice 1.48 MB, bake 77-101 ms; match load +0.8-1.0 s (one sample) |
+| bot-match median length, 36 fresh matches | 721.1 s | 729.8 s |
+| deaths in the first 60 s, worst match | 8 | 6 |
+
+**Town toolkit (unwired, each tested alone)**
+- `towngen.js`: street-grid towns, house clusters and compounds as pure data. 200 seeds x 3 maps: 0 failures; enterable buildings 97.3 / 93.0 / 99.7 %;
+  every town at least 6 enterable buildings; same seed gives a byte-identical layout (600 of 600).
+- `citykit.js`: places the CC0 city kit as instanced districts with exact quarter-turn colliders; identical colliders when every kit file fails to
+  load; no leak over 3 dispose cycles; in a match +16 draw calls and +117k triangles at street level.
+- `navgrid.js`: a layered nav grid for towns. Misses its own bars, named below.
+
+**Gates**: ground-match now 1e-4 m (was 0.05), base-edges, doorway-clearance, roads-float and pads are blocking rows that fail on the live build; new
+`perf_district`, `citykit_probe`, `citycheck` (information until Wave 7) and three module selftests; bootcheck's walk row retries after a quarter
+turn when a random landing ends facing a wall (it failed 1 run in 12 on the live build too; a planted dead W key still fails all four headings);
+the kill-marker pin now has a clear line of fire (the taller Ashgrid pad turned a fence into legitimate cover).
+
+**Known and NOT fixed**
+- Squad rooms have no map-version guard (`net.js` hello/start carry none): a guest on a stale page builds different ground from the host, so remote
+  players can look floating or buried. Wave 5 had the same exposure; the guard is Wave 7's.
+- `navgrid.js`: 13 of 360,000 checked segments are grid-walkable but blocked for the real mover (0.0036 %, bar was 0); the 8 ms tile bake is missed
+  (building tiles 4.1 / 8.6 / 3.8 ms median, 17-32 ms at p90) and town memory is 0.29-6.1 MB against 1-2 MB. Fix before it is wired.
+- `towngen.js`: link roads between towns still cross water on 124 of 200 Isla Viva and 157 of 200 Deepwood seeds; the endgame area has too little
+  cover on Isla Viva and Deepwood (23.0 % and 41.5 % of seeds pass; endgame-cover is judged at the second-last circle and stays information-only).
+- Storm circle 5 was reached in 31 of 36 fresh matches (live: 35 of 36; p about 0.10, not significant) - watch it. Bots dropped into the ocean never
+  get out (Isla Viva seeds 33 and 34 exceed 2 % stuck on both builds). Isla Viva roads-float reads 0.74 % against the 1 % bar (thin margin);
+  Deepwood fence boards float up to 0.99 m on 1 of 17.
+- The two Wave-5 stairs on fresh seeds (Isla Viva seed 23, Deepwood seed 65537) are unchanged.
+
 ## 2026-10-13 (later) — Wave 5 leftovers closed: healers out of stair pockets, walkable stairs, level containers, solid rocks (?v=1791925742)
 
 The four residuals named in the entry below are fixed and the full gate run is now all green: `gate.py --disk --negative-controls`
