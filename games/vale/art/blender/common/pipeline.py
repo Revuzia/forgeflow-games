@@ -245,9 +245,16 @@ def build(spec, args, skin=None) -> dict:
     size = getattr(spec, "TEXTURE_SIZE", 1024)
     tex_dir = P["textures"]                    # bake sources live in the cache; the GLB embeds them
     tex_name = sid
+    base_fn = None
+    if getattr(spec, "PROJECTION", None):
+        # ART 2.0: the concept painting projected onto the game mesh is the base colour
+        from .hifi import project
+        names = [p.name for p in parts]
+        base_fn = lambda low, sz: project.paint_object(low, sz, spec.PROJECTION, names, log=scene.log)  # noqa: E731
     if not args.no_bake:
         with T.step("bake"):
-            res = bake.bake_asset(body, highs, tex_dir, name=tex_name, size=size,
+            res = bake.bake_asset(body, highs, tex_dir, name=tex_name, size=size, base_fn=base_fn,
+                                  sizes=getattr(spec, "TEXTURE_SIZES", None),
                                   fast=args.fast, ao_extra=[accent] if accent else [],
                                   ao_into_base=getattr(spec, "AO_INTO_BASE",
                                                        materials.BIBLE_BAKE["ao"] if _bible(spec) else 0.0))

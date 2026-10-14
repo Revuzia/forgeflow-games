@@ -149,6 +149,25 @@ class Plates:
 
 
 # ── texel maps from the UVs ──────────────────────────────────────────────────────────────────────
+def poly_parts(me, attr: str) -> np.ndarray:
+    """Part id per polygon from an int attribute on the FACE or POINT domain (the fighter pipeline tags
+    vertices: `vale_part`); 0 when absent."""
+    out = np.zeros(len(me.polygons), dtype=np.int64)
+    a = me.attributes.get(attr)
+    if a is None:
+        return out
+    if a.domain == "FACE":
+        a.data.foreach_get("value", out)
+        return out
+    vals = np.empty(len(me.vertices), dtype=np.int64)
+    a.data.foreach_get("value", vals)
+    ls = np.empty(len(me.polygons), dtype=np.int64)
+    me.polygons.foreach_get("loop_start", ls)
+    lv = np.empty(len(me.loops), dtype=np.int64)
+    me.loops.foreach_get("vertex_index", lv)
+    return vals[lv[ls]]
+
+
 def rasterize(obj, size: int, part_attr: str = "part"):
     """Rasterise the active UV map of `obj` (world = local; apply transforms first) into texel maps:
     P (size, size, 3) world position, N (size, size, 3) smooth normal, part (size, size) int16
@@ -173,9 +192,7 @@ def rasterize(obj, size: int, part_attr: str = "part"):
     ln = np.empty(nl * 3, dtype=np.float32)
     me.corner_normals.foreach_get("vector", ln) if hasattr(me, "corner_normals") else me.loops.foreach_get("normal", ln)
     ln = ln.reshape(nl, 3)
-    part_of_poly = np.zeros(len(me.polygons), dtype=np.int64)
-    if part_attr in me.attributes:
-        me.attributes[part_attr].data.foreach_get("value", part_of_poly)
+    part_of_poly = poly_parts(me, part_attr)
     P = np.zeros((size, size, 3), dtype=np.float32)
     N = np.zeros((size, size, 3), dtype=np.float32)
     part = np.full((size, size), -1, dtype=np.int16)
@@ -229,9 +246,7 @@ class VisibilityMaps:
         verts = [v.co.copy() for v in me.vertices]
         polys = [tuple(p.vertices) for p in me.polygons]
         bvh = BVHTree.FromPolygons(verts, polys)
-        part_of_poly = np.zeros(len(me.polygons), dtype=np.int64)
-        if part_attr in me.attributes:
-            me.attributes[part_attr].data.foreach_get("value", part_of_poly)
+        part_of_poly = poly_parts(me, part_attr)
         co = np.array([v[:] for v in verts])
         W, H = plates.size
         for side, y0, d in (("front", -50.0, Vector((0, 1, 0))), ("back", 50.0, Vector((0, -1, 0)))):
@@ -340,3 +355,17 @@ def paint(maps: dict, plates: Plates, vis: VisibilityMaps, names: list[str], top
         iy, ix = nearest_index(have)
         out = out[iy, ix]
     return out
+
+
+def paint_object(obj, size: int, cfg: dict, names: list[str], part_attr: str = "vale_part", log=print) -> np.ndarray:
+    """The whole projection pass for one game mesh (the fighter pipeline's base-colour hook).
+    cfg: {"concept": id, "height": m, "tops": {part: (file, ext)}, "flat": {part: "#hex"}};
+    plates and top plates are read from art/.cache/concept/. Returns (size, size, 3), row 0 = top."""
+    from .. import scene
+    cache = os.path.join(scene.CACHE_DIR, "concept")
+    plates = Plates(cache, cfg["concept"], cfg["height"])
+    maps = rasterize(obj, size, part_attr)
+    vis = VisibilityMaps.build(obj, plates, step=2, part_attr=part_attr)
+    tops = {k: (load_rgb(os.path.join(cache, f)), ext) for k, (f, ext) in (cfg.get("tops") or {}).items()}
+    flat = {k: scene.hex_srgb(h) for k, h in (cfg.get("flat") or {}).items()}
+    return paint(maps, plates, vis, names, tops=tops, flat=flat, log=log)

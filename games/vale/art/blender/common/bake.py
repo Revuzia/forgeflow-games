@@ -279,12 +279,14 @@ def _joined_high(highs: dict, slot: dict, col) -> bpy.types.Object:
 def bake_asset(low, highs: dict, out_dir: str, name: str = "body", size: int = 1024, samples: int = 4,
                ao_samples: int = 48, ao_distance: float = 0.25, ao_lift: float = 0.25, cage: float = 0.012,
                ray: float = 0.05, mat_name: str = "body", fast: bool = False, ao_extra=(),
-               base_quality: int = 90, ao_into_base: float = 0.0) -> dict:
+               base_quality: int = 90, ao_into_base: float = 0.0, base_fn=None, sizes: dict | None = None) -> dict:
     """Bake `highs` ({part: [objects]}) onto `low` into `<out_dir>/<name>_{base,orm,normal}`.
     `ao_into_base` (bible: 0.6, tokens.json fighter.bakeIntoBaseColor.aoStrength) multiplies the
     whole-body AO into the base colour (painted occlusion that survives direct light; three's
     aoMap only darkens indirect light); the ORM occlusion channel is then lifted so the two do not
-    double up. Returns {'material', 'images': {kind: path}, 'timings': {...}}."""
+    double up. `base_fn(low, size)` (ART 2.0 concept projection) replaces the baked base colour with
+    its own painted atlas (row 0 = top) before the AO multiply. Returns {'material', 'images':
+    {kind: path}, 'timings': {...}}."""
     t0 = time.perf_counter()
     T = {}
     if fast:
@@ -375,6 +377,13 @@ def bake_asset(low, highs: dict, out_dir: str, name: str = "body", size: int = 1
     if bad.any():
         nrm[bad] = (0.5, 0.5, 1.0, 1.0)
         set_image_array(normal, nrm)
+    if base_fn is not None:
+        t1 = time.perf_counter()
+        rgb = base_fn(low, size)
+        b = image_array(base)
+        b[..., :3] = rgb[::-1]
+        set_image_array(base, b)
+        T["projection"] = round(time.perf_counter() - t1, 2)
     a = image_array(ao)[..., 0]
     if ao_into_base > 0:
         # soft painted occlusion: AO is eased (a^0.8) so creases darken but broad forms keep their colour
@@ -388,6 +397,10 @@ def bake_asset(low, highs: dict, out_dir: str, name: str = "body", size: int = 1
     orm_arr = np.stack([a, rm[..., 0], rm[..., 1], np.ones_like(a)], axis=-1)
     orm = new_image(f"{name}_orm", size, True)
     set_image_array(orm, orm_arr)
+    for kind, img in (("orm", orm), ("normal", normal)):
+        s_ = (sizes or {}).get(kind)
+        if s_ and s_ < size:
+            img.scale(s_, s_)          # the painted base keeps full size; data maps carry less detail
     paths = {
         "base": save_image(base, os.path.join(out_dir, f"{name}_base.jpg"), "JPEG", base_quality),
         "orm": save_image(orm, os.path.join(out_dir, f"{name}_orm.png"), "PNG"),

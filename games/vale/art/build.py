@@ -388,8 +388,10 @@ def check_glb(path: str) -> dict:
         warns.append(f"{tris} tris < {kind} budget floor {lo}")
     tmax = TEX_MAX.get(kind, TEX_DEFAULT)
     for t in textures:
-        if t["size"] and max(t["size"]) > tmax:
-            errs.append(f"texture {t['name']} {t['size']} > {tmax}")
+        # ART 2.0: a fighter's painted base colour may be 2048 (CONTRACT §12 Materials); the byte budget holds
+        cap = 2048 if kind in ("fighter", "skin") and "base" in (t.get("name") or "") else tmax
+        if t["size"] and max(t["size"]) > cap:
+            errs.append(f"texture {t['name']} {t['size']} > {cap}")
         if t["size"] and any(v & (v - 1) for v in t["size"]):
             warns.append(f"texture {t['name']} {t['size']} is not power-of-two")
     bmax = BYTES_MAX.get(kind)

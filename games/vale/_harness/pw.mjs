@@ -30,7 +30,7 @@ export async function open(path = '/?dev=1', o = {}) {
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__vale, null, { timeout: 30000 });
+  if (o.wait !== false) await page.waitForFunction(() => !!window.__vale, null, { timeout: 30000 });
   return { browser, context, page, logs };
 }
 

@@ -9,6 +9,7 @@
 //     manual  1 = no rAF loop; drive frames from Playwright with __VALE_BENCH__.frames(n, dt)
 //     hud     0 hides the stats box (screenshots)
 //     cb      off | deutan | protan | tritan
+//     you     fighter id for seat 0 (your seat), e.g. you=marund
 //
 // window.__VALE_BENCH__: { ready, stats(), frames(n, dt), ff(sec), fight(), focus(x, y), focusEntity(id),
 //   setQuality(tier), telegraphTest(), clearAim(), zoom(d), entities(kind), you(), menu(station) }
@@ -51,7 +52,8 @@ function buildSetup(catalog: CatalogT, modeArg: string | null, seed: number): Ma
   const fighters = catalog.fighters.map((f) => f.id);
   const seats: SeatSetup[] = [];
   for (let i = 0; i < n; i++) {
-    const fighter = fighters[(i * 7 + 3) % fighters.length];
+    const pinned = i === 0 ? qs.get('you') : null;
+    const fighter = pinned && fighters.includes(pinned) ? pinned : fighters[(i * 7 + 3) % fighters.length];
     const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
     const team = ffa ? i : Math.floor(i / mode.perTeam);
     const roles = catalog.roles.filter((r) => r.assign).sort((a, b) => (a.assign?.order ?? 0) - (b.assign?.order ?? 0));

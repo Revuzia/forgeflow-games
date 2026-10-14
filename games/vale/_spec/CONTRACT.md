@@ -590,7 +590,9 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   stunned, spawn, taunt`. Impact frame at 40 % of attack/cast clips. `run` authored for a stated
   reference speed in m/s (written to the fighter JSON).
 - **Materials:** PBR (base color / ORM / normal baked from Blender materials at 1024², 2048² for
-  landmarks); an emissive material named `accent` on every fighter (team/player readability tint).
+  landmarks; ART 2.0 fighters carry a 2048² hand-painted base colour (concept projection) with ORM and
+  normal at 1024², inside the same 1.2 MB GLB budget); an emissive material named `accent` on every
+  fighter (team/player readability tint).
 - **Budgets:** fighter 10–25k tris, skin same rig, minion 1.5–4k, monster 4–12k, structure 4–20k,
   a map scene ≤ 700k tris (scatter instanced via EXT_mesh_gpu_instancing).
 - **Outputs:** `art/out/fighters/<id>/<id>.glb`, `…/<skin>.glb`, `…/portrait.png` (512²),
