@@ -78,8 +78,8 @@ def blend(S: Sculpt) -> sdf.Blend:
 def needle(h: float, w: float, bands: int, bell: bool) -> dict:
     stone, iron, glass = Sculpt("stone"), Sculpt("ironstone"), Sculpt("accent")
     # stepped plinth (two tiers, chipped)
-    stone.add(cyl(0.0, 0.32, w * 2.9).displaced(chip(0.03, 3.0), 0.03), k=0.0)
-    stone.add(cyl(0.3, 0.6, w * 2.3).displaced(chip(0.025, 3.5), 0.025), k=0.02)
+    stone.add(cyl(0.0, 0.32, w * 2.9).displaced(chip(0.01, 2.0), 0.01), k=0.0)
+    stone.add(cyl(0.3, 0.6, w * 2.3).displaced(chip(0.008, 2.5), 0.008), k=0.02)
     cap0 = h * 0.8
     shaft = TaperBox(0.55, cap0, w, w * 0.66, r=0.05)
     stone.add(shaft.displaced(lambda P: 0.01 * N(P, 4.0), 0.012), k=0.04)
@@ -121,8 +121,8 @@ def needle(h: float, w: float, bands: int, bell: bool) -> dict:
 
 def lantern() -> dict:
     stone, iron, glass = Sculpt("stone"), Sculpt("ironstone"), Sculpt("accent")
-    stone.add(cyl(0.0, 0.35, 1.5).displaced(chip(0.03, 3.0), 0.03), k=0.0)
-    stone.add(cyl(0.35, 0.6, 1.15).displaced(chip(0.025, 3.5), 0.025), k=0.02)
+    stone.add(cyl(0.0, 0.35, 1.5).displaced(chip(0.01, 2.0), 0.01), k=0.0)
+    stone.add(cyl(0.35, 0.6, 1.15).displaced(chip(0.008, 2.5), 0.008), k=0.02)
     stone.add(TaperBox(0.6, 2.0, 0.42, 0.34, r=0.05), k=0.04)                       # column
     stone.add(RoundBox((0, 0, 2.08), (0.7, 0.7, 0.1), 0.04), k=0.02)                 # lamp floor
     for sx in (-1, 1):                                                                # chamber posts
@@ -143,8 +143,8 @@ def lantern() -> dict:
 
 def hourbell() -> dict:
     stone, iron, glass = Sculpt("stone"), Sculpt("ironstone"), Sculpt("accent")
-    stone.add(cyl(0.0, 0.4, 3.4).displaced(chip(0.035, 2.5), 0.035), k=0.0)
-    stone.add(cyl(0.4, 0.75, 2.8).displaced(chip(0.03, 3.0), 0.03), k=0.02)
+    stone.add(cyl(0.0, 0.4, 3.4).displaced(chip(0.012, 1.8), 0.012), k=0.0)
+    stone.add(cyl(0.4, 0.75, 2.8).displaced(chip(0.01, 2.2), 0.01), k=0.02)
     for sx in (-1, 1):
         for sy in (-1, 1):
             stone.add(TaperBox(0.75, 6.2, 0.36, 0.3, r=0.05, c=(sx * 1.55, sy * 1.55)), k=0.04)
@@ -153,8 +153,8 @@ def hourbell() -> dict:
         q = np.sqrt((r / 1.85) ** 2 + ((z - 6.55) / 1.9) ** 2)
         return np.maximum((q - 1.0) * 1.6, 6.5 - z)
     stone.add(Lathe((0, 0, 0), dome, 1.95, 6.4, 8.6), k=0.06)
-    stone.add(Capsule((0, 0, 8.4), (0, 0, 9.0), 0.13), k=0.06)                       # finial spike
-    iron.add(Torus((0, 0, 6.62), 1.82, 0.06), k=0.0)
+    stone.add(Capsule((0, 0, 8.45), (0, 0, 9.0), 0.13), k=0.06)                      # finial spike
+    stone.sub(Ellipsoid((0, 0, 8.36), (0.5, 0.5, 0.16)), k=0.04)                    # the oculus
     # the bell: lathe profile (shoulder, waist, flared lip), hollow mouth, hung from a beam
     def bell(r, z):
         zz = (z - 3.2)
@@ -166,6 +166,10 @@ def hourbell() -> dict:
     iron.add(RoundBox((0, 0, 5.75), (1.6, 0.12, 0.12), 0.03), k=0.0)                 # beam
     iron.add(Capsule((0, 0, 5.2), (0, 0, 5.7), 0.07), k=0.04)
     glass.add(Sphere((0, 0, 3.75), 0.42), k=0.0)                                       # lamp core in the mouth
+    # the core's relationship light must read from the 52-degree camera: a lit band at the dome's foot
+    # and a lit oculus at its crown (the dome hides the bell from above)
+    glass.add(Torus((0, 0, 6.6), 1.86, 0.07, rz=0.09), k=0.0)
+    glass.add(Ellipsoid((0, 0, 8.32), (0.42, 0.42, 0.1)), k=0.0)
     return {"stone": stone, "ironstone": iron, "accent": glass}
 
 
