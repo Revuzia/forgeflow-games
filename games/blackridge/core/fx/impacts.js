@@ -389,6 +389,16 @@ export function makeImpacts(env, pools, decals) {
       burstAt(pools.dust, p, n, 11, 0.9, 2.0, 0.8, 0.34, 0.12, 0.10, 0.22,
         0.42, 0.07, 0.06, 0.25, 0.80, -4, 0, 1.2);
     },
+    // 2026-10-14: the exit SPRAY — a short fan of droplets thrown ALONG the bullet,
+    // out the far side of the target (fx.js also stamps KIND_BLOOD on whatever is
+    // behind him). Small, fast, heavy (they fall), gone in ~0.4 s.
+    fleshExit(p, n, dir, k) {
+      if (!dir) return;
+      burstAt(pools.dust, p, dir, Math.max(6, Math.round(10 * k)), 2.4, 5.2, 0.35, 0.40, 0.12, 0.035, 0.07,
+        0.36, 0.035, 0.03, 0.15, 0.85, -9.5, 0, 0.6);
+      burstAt(pools.dust, p, dir, 2, 0.6, 1.2, 0.5, 0.55, 0.15, 0.14, 0.30,
+        0.30, 0.04, 0.04, 0.12, 0.45, -1.5, 0, 1.4);
+    },
   };
 
   // Loose puffs for non-shot events (hurt/death/land/grenade-bounce).

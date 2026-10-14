@@ -11,6 +11,7 @@
 // this file only draws the lead-in.
 
 import * as THREE from "three";
+import { streakTarget, STREAK_TIERS } from "../sim/streaks.js";
 
 const COL = { mortar: 0xff5a3a, airstrike: 0xff9a3a, orbital: 0xff3a6a };
 
@@ -145,6 +146,46 @@ export function createStreakFx(ctx) {
     void d;
   }
 
+  // ---- DESIGNATOR preview (2026-10-14): while input.designate is set, a ring sits
+  // where the strike will land (streakTarget — the sim's own math) with the
+  // strike's real footprint: mortar = salvo scatter, airstrike = the bomb lane
+  // along the view, orbital = the saturation circle.
+  const desG = new THREE.Group();
+  desG.visible = false;
+  root.add(desG);
+  const desRing = new THREE.Mesh(ringG, addMat(rTex, 0xff5a3a, 0.7));
+  desRing.renderOrder = 7;
+  const desFill = new THREE.Mesh(ringG, new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.045,
+    depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false, side: THREE.DoubleSide }));
+  desFill.renderOrder = 6;
+  desG.add(desFill, desRing);
+  function updateDesignator(s) {
+    const inp = ctx.input;
+    const tier = inp && inp.designate;
+    if (!tier || !s || !s.state.player.alive) { desG.visible = false; return; }
+    const def = STREAK_TIERS[tier - 1];
+    const p = s.state.player;
+    const yaw = inp.state ? inp.state.yaw : p.yaw, pitch = inp.state ? inp.state.pitch : p.pitch;
+    let t;
+    try { t = streakTarget(s, yaw, pitch); } catch (e) { desG.visible = false; return; }
+    desG.visible = true;
+    const col = COL[def.id] || 0xff4a3a;
+    desRing.material.color.setHex(col);
+    const pulse = 0.85 + 0.15 * Math.sin(s.state.time * 8);
+    desG.position.set(t[0], t[1] + 0.07, t[2]);
+    desG.rotation.set(0, yaw, 0);
+    if (def.id === "airstrike") {
+      // the lane runs from 0.2 L before the mark out along the view
+      const L = def.length || 34;
+      desG.scale.set(def.radius * 0.9, 1, L * 0.5);
+      desG.position.x += -Math.sin(yaw) * L * 0.3;
+      desG.position.z += -Math.cos(yaw) * L * 0.3;
+    } else {
+      const r = (def.scatter || 0) + (def.radius || 5) * 0.5;
+      desG.scale.set(r * pulse, 1, r * pulse);
+    }
+  }
+
   return {
     attach(bridge) {
       this.clear();
@@ -155,6 +196,7 @@ export function createStreakFx(ctx) {
       const s = ctx.sim ? ctx.sim() : null;
       if (!s) return;
       if (s !== lastSim) { this.clear(); lastSim = s; }
+      updateDesignator(s);
       const t = s.state.time;
       const pulse = 0.6 + 0.4 * Math.sin(t * 7);
       for (let i = calls.length - 1; i >= 0; i--) {

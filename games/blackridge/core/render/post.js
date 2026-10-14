@@ -446,6 +446,7 @@ export function createPost(ctx) {
   let quality = ctx.settings.quality || "med";
   let time = 0;
   let caBoostT = 0;
+  let lastFrameMs = null; // render-to-render wall time (grain + CA decay)
 
   function build(w, h, pr) {
     // full teardown — rebuilds happen on capture/dynres size changes and the
@@ -592,7 +593,13 @@ export function createPost(ctx) {
       renderPass.scene = scene;
       renderPass.camera = camera;
 
-      time += 1 / 60; // grain phase; monotonic is all it needs
+      // (2026-10-14) real frame time, not an assumed 60 fps: at 144 Hz the grain ran
+      // 2.4x fast and the explosion CA pulse lasted 62 ms instead of 150 ms; at 30 fps
+      // the pulse dragged to 300 ms. Clamped so a stalled tab cannot jump it.
+      const nowMs = (typeof performance !== "undefined" ? performance.now() : Date.now());
+      const fdt = lastFrameMs == null ? 1 / 60 : Math.min(0.1, Math.max(0, (nowMs - lastFrameMs) / 1000));
+      lastFrameMs = nowMs;
+      time += fdt; // grain phase; monotonic is all it needs
       const u = compositePass.uniforms;
       u.uTime.value = time;
       u.uRes.value.set(gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -610,7 +617,7 @@ export function createPost(ctx) {
 
       // CA kick decay (×3 for ~150 ms — explosions hook via api.caKick())
       if (caBoostT > 0) {
-        caBoostT = Math.max(0, caBoostT - 1 / 60);
+        caBoostT = Math.max(0, caBoostT - fdt);
         u.uCABoost.value = 1 + 2 * (caBoostT / 0.15);
       } else {
         u.uCABoost.value = 1;

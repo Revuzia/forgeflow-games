@@ -18,6 +18,32 @@
 import { relDegTo } from "./hud.js";
 const STYLE_ID = "ld-style";
 
+// ---- MEDAL EMBLEMS (2026-10-14: medals were text only). Inline SVG, one per kind,
+// on a shared hexagon badge — no image assets, crisp at any DPI.
+const MEDAL_ICONS = (() => {
+  const hex = (stroke, fill) => `<path d="M32 3 L57 17.5 L57 46.5 L32 61 L7 46.5 L7 17.5 Z" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>`;
+  const wrap = (body, stroke = "#d9a441", fill = "rgba(20,16,8,.78)") =>
+    `<svg viewBox="0 0 64 64" width="58" height="58">${hex(stroke, fill)}${body}</svg>`;
+  const A = "#f0c46a", R = "#ff4a3a";
+  return {
+    multi: wrap(`<path d="M18 38 L32 26 L46 38" fill="none" stroke="${A}" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M18 48 L32 36 L46 48" fill="none" stroke="${A}" stroke-width="5" stroke-linejoin="round" opacity=".7"/>
+      <path d="M18 28 L32 16 L46 28" fill="none" stroke="${A}" stroke-width="5" stroke-linejoin="round" opacity=".45"/>`),
+    streak: wrap(`<path d="M32 12 L36.5 26 L51 26 L39.5 34.5 L44 48.5 L32 40 L20 48.5 L24.5 34.5 L13 26 L27.5 26 Z" fill="${R}"/>`, R, "rgba(40,6,4,.8)"),
+    headshot: wrap(`<circle cx="32" cy="32" r="13" fill="none" stroke="${A}" stroke-width="3"/>
+      <path d="M32 12 V24 M32 40 V52 M12 32 H24 M40 32 H52" stroke="${A}" stroke-width="3"/>
+      <circle cx="32" cy="32" r="3.5" fill="${R}"/>`),
+    longshot: wrap(`<circle cx="32" cy="32" r="17" fill="none" stroke="${A}" stroke-width="2.5"/>
+      <path d="M32 15 V49 M15 32 H49" stroke="${A}" stroke-width="1.6"/>
+      <path d="M27 37 H37 M28.5 41 H35.5 M30 45 H34" stroke="${A}" stroke-width="2"/>`),
+    revenge: wrap(`<path d="M20 22 L44 46 M44 22 L20 46" stroke="${A}" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M16 18 L24 18 L16 26 Z M48 18 L40 18 L48 26 Z" fill="${A}"/>`),
+    firstblood: wrap(`<path d="M32 13 C32 13 19 30 19 38 A13 13 0 0 0 45 38 C45 30 32 13 32 13 Z" fill="${R}"/>
+      <path d="M26 39 A6 6 0 0 0 31 45" fill="none" stroke="rgba(255,220,210,.6)" stroke-width="2.5" stroke-linecap="round"/>`, R, "rgba(40,6,4,.8)"),
+  };
+})();
+
+
 const NAMES = { warden: "WARDEN", vesper: "VESPER", breaker: "BREAKER", corvus: "CORVUS", pike: "PIKE" };
 const FULL_NAMES = { warden: "M-72 WARDEN", vesper: "KS-23 VESPER", breaker: "B-12 BREAKER", corvus: "LR-1 CORVUS", pike: "GS-9 PIKE" };
 const SLOT_ORDER = ["warden", "vesper", "breaker", "corvus", "pike"];
@@ -90,16 +116,23 @@ function css() {
 #ld-count b{display:block;font-size:22px;font-weight:400;line-height:1;color:var(--a10-amber,#d9a441);}
 #ld-count.on{opacity:.95;}
 /* ---- call-in countdown + marker ---- */
-#ld-call{position:absolute;left:50%;top:86px;transform:translateX(-50%);text-align:center;font-size:14px;letter-spacing:.2em;opacity:0;transition:opacity .2s;color:#ffd9d4;text-shadow:0 0 8px rgba(255,59,48,.6);}
+#ld-call{position:absolute;left:50%;top:150px;transform:translateX(-50%);text-align:center;font-size:14px;letter-spacing:.2em;opacity:0;transition:opacity .2s;color:#ffd9d4;text-shadow:0 0 8px rgba(255,59,48,.6);}
 #ld-call.on{opacity:1;}
 #ld-call b{font-weight:400;font-size:22px;display:block;letter-spacing:.12em;color:#fff;}
-#ld-mark{position:absolute;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;opacity:0;transition:opacity .15s;}
-#ld-mark.on{opacity:1;}
-#ld-mark svg{width:100%;height:100%;display:block;animation:ldspin 2.4s linear infinite;}
-#ld-mark span{position:absolute;left:50%;top:38px;transform:translateX(-50%);font-size:11px;letter-spacing:.1em;white-space:nowrap;color:#ffd9d4;}
+.ld-mark{position:absolute;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;opacity:0;transition:opacity .15s;}
+.ld-mark.on{opacity:1;}
+.ld-mark svg{width:100%;height:100%;display:block;animation:ldspin 2.4s linear infinite;}
+.ld-mark.edge svg{animation:none;}
+.ld-mark .ar{position:absolute;left:50%;top:50%;width:0;height:0;margin:-9px 0 0 -7px;border-left:7px solid transparent;
+  border-right:7px solid transparent;border-bottom:18px solid #ff3b30;opacity:0;filter:drop-shadow(0 0 6px rgba(255,59,48,.7));}
+.ld-mark.edge .ar{opacity:1;}
+.ld-mark.edge svg{opacity:.35;}
+.ld-mark span{position:absolute;left:50%;top:38px;transform:translateX(-50%);font-size:11px;letter-spacing:.1em;white-space:nowrap;color:#ffd9d4;}
 @keyframes ldspin{to{transform:rotate(360deg);}}
 /* ---- medals ---- */
 #ld-medal{position:absolute;left:50%;top:22%;transform:translate(-50%,0);text-align:center;opacity:0;pointer-events:none;}
+#ld-medal .i{height:58px;margin:0 auto 4px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.7));}
+#ld-medal .i:empty{display:none;}
 #ld-medal .m{font-size:38px;letter-spacing:.22em;font-weight:400;text-shadow:0 2px 14px rgba(0,0,0,.8),0 0 22px rgba(217,164,65,.35);}
 #ld-medal .s{font-size:14px;letter-spacing:.2em;opacity:.85;margin-top:2px;}
 #ld-medal.streak .m{color:var(--a10-kill,#ff3b30);text-shadow:0 2px 14px rgba(0,0,0,.8),0 0 26px rgba(255,59,48,.5);}
@@ -151,8 +184,11 @@ export function createLoadoutHud(ctx) {
     return { t, e, bar: e.querySelector(".bar i"), b: e.querySelector(".t b"), cache: "" };
   });
   const call = el("div", "ld-call");
-  const mark = el("div", "ld-mark", null, `<svg viewBox="0 0 34 34"><circle cx="17" cy="17" r="12" fill="none" stroke="#ff3b30" stroke-width="2" stroke-dasharray="6 5"/><path d="M17 3v6M17 25v6M3 17h6M25 17h6" stroke="#ffd9d4" stroke-width="2"/></svg><span></span>`);
-  const medal = el("div", "ld-medal", null, `<div class="m"></div><div class="s"></div>`);
+  const MARK_HTML = `<svg viewBox="0 0 34 34"><circle cx="17" cy="17" r="12" fill="none" stroke="#ff3b30" stroke-width="2" stroke-dasharray="6 5"/><path d="M17 3v6M17 25v6M3 17h6M25 17h6" stroke="#ffd9d4" stroke-width="2"/></svg><i class="ar"></i><span></span>`;
+  const mark = el("div", "ld-mark", "ld-mark", MARK_HTML);
+  const marks = [mark];
+  for (let i = 0; i < 2; i++) marks.push(el("div", null, "ld-mark", MARK_HTML));
+  const medal = el("div", "ld-medal", null, `<div class="i"></div><div class="m"></div><div class="s"></div>`);
   const score = el("div", "ld-score");
   // SIGNAL SWEEP overlay. Markers are SNAPSHOTS (position at the sweep, fading before
   // the next one) — intel, not a wallhack that tracks a man through a wall.
@@ -168,7 +204,7 @@ export function createLoadoutHud(ctx) {
     rcEls.push({ w, c, span: w.querySelector("span"), txt: "" });
   }
   let reconContacts = [], reconT = -99, reconEndT = -1;
-  [recon, bar, toast, lootEl, streaks, call, mark, medal, score].forEach((n) => root.appendChild(n));
+  [recon, bar, toast, lootEl, streaks, call, ...marks, medal, score].forEach((n) => root.appendChild(n));
 
   let mounted = false;
   function mount() {
@@ -183,7 +219,7 @@ export function createLoadoutHud(ctx) {
   let toastT = 0;
   let medalQueue = [];
   let medalBusy = 0;
-  let activeCall = null; // {name, target:[3], endT, id}
+  const activeCalls = new Map(); // id -> {name, target:[3], endT, id} — every strike in flight
   let flyingIds = new Set();
   let scoreN = 0;
   let proj = null;
@@ -196,13 +232,16 @@ export function createLoadoutHud(ctx) {
 
   function popMedal(m) {
     medal.className = "ld-medal " + (m.kind === "streak" ? "streak" : "");
+    medal.querySelector(".i").innerHTML = MEDAL_ICONS[m.kind] || MEDAL_ICONS.multi;
     medal.querySelector(".m").textContent = m.text;
     medal.querySelector(".s").textContent = m.sub || "";
     // restart the CSS animation
     medal.classList.remove("show");
     void medal.offsetWidth;
     medal.classList.add("show");
-    medalBusy = 1.5;
+    // a kill can now earn several medals at once (multi + headshot + longshot...):
+    // a backlog cycles faster so the last one is not shown seconds late
+    medalBusy = medalQueue.length > 0 ? 0.85 : 1.5;
   }
 
   function projectToScreen(x, y, z) {
@@ -252,12 +291,12 @@ export function createLoadoutHud(ctx) {
       showToast(`<b>SIGNAL SWEEP</b> ONLINE  <small>hostiles ping on your compass every sweep</small>`);
     } else if (d.phase === "call" && s) {
       // the first impact's absolute sim time (events can reach us a few ticks late)
-      activeCall = { id: d.id, name: d.name, target: d.target, endT: d.plan && d.plan.length ? d.plan[0].t : s.state.time + d.eta };
+      activeCalls.set(d.id, { id: d.id, name: d.name, target: d.target, endT: d.plan && d.plan.length ? d.plan[0].t : s.state.time + d.eta });
       flyingIds.add(d.id);
     } else if (d.phase === "done") {
       flyingIds.delete(d.id);
       if (d.id === "recon") { reconContacts = []; reconEndT = -1; }
-      if (activeCall && activeCall.id === d.id) activeCall = null;
+      activeCalls.delete(d.id);
     } else if (d.phase === "earned") {
       // the medal banner already reads "<n> KILL STREAK / NAME READY [key]" — the toast
       // only adds HOW it is used, after the banner has had its moment
@@ -394,31 +433,60 @@ export function createLoadoutHud(ctx) {
       }
     }
 
-    // call-in countdown + target marker
-    if (activeCall) {
-      const left = Math.max(0, activeCall.endT - s.state.time);
+    // DESIGNATE prompt / call-in countdown (soonest strike) / one marker per strike.
+    // A strike off-screen (behind you, or beyond the frame edge) pins its marker to
+    // the screen edge with an arrow pointing at it (2026-10-14 — it used to vanish).
+    const des = ctx.input && ctx.input.designate;
+    let soonest = null;
+    for (const c of activeCalls.values()) if (!soonest || c.endT < soonest.endT) soonest = c;
+    if (des) {
+      const def = TIERS[des - 1];
       call.classList.add("on");
-      const html = left > 0.05 ? `${activeCall.name} INBOUND<b>${left.toFixed(1)}</b>` : `${activeCall.name}<b>DANGER CLOSE</b>`;
+      const html = `${def ? def.name : "STRIKE"} — MARK TARGET<b>[LMB] CONFIRM  ·  [RMB] CANCEL</b>`;
       if (call.dataset.h !== html) { call.innerHTML = html; call.dataset.h = html; }
-      const t = activeCall.target;
+    } else if (soonest) {
+      const left = Math.max(0, soonest.endT - s.state.time);
+      call.classList.add("on");
+      const html = left > 0.05 ? `${soonest.name} INBOUND<b>${left.toFixed(1)}</b>` : `${soonest.name}<b>DANGER CLOSE</b>`;
+      if (call.dataset.h !== html) { call.innerHTML = html; call.dataset.h = html; }
+    } else call.classList.remove("on");
+
+    let mi = 0;
+    const W = window.innerWidth, H = window.innerHeight;
+    for (const c of activeCalls.values()) {
+      if (mi >= marks.length) break;
+      const m = marks[mi++];
+      const t = c.target;
+      const dist = Math.hypot(t[0] - p.pos[0], t[2] - p.pos[2]);
+      const txt = Math.round(dist) + " m";
       const sp = projectToScreen(t[0], t[1] + 0.5, t[2]);
-      if (sp) {
-        mark.style.left = sp[0] + "px"; mark.style.top = sp[1] + "px";
-        const dist = Math.hypot(t[0] - p.pos[0], t[2] - p.pos[2]);
-        mark.querySelector("span").textContent = Math.round(dist) + " m";
-        mark.classList.add("on");
-      } else mark.classList.remove("on");
-    } else {
-      call.classList.remove("on");
-      mark.classList.remove("on");
+      const onScreen = sp && sp[0] > 24 && sp[0] < W - 24 && sp[1] > 24 && sp[1] < H - 24;
+      if (onScreen) {
+        m.style.left = sp[0] + "px"; m.style.top = sp[1] + "px";
+        m.classList.remove("edge");
+        const ar = m.querySelector(".ar"); ar.style.transform = "";
+      } else {
+        // bearing on screen: 0 deg = straight ahead (top edge), clockwise
+        const rel = relDegTo(s, t) * Math.PI / 180;
+        const rx = W * 0.5 - 46, ry = H * 0.5 - 46;
+        const x = W * 0.5 + Math.sin(rel) * rx, y = H * 0.5 - Math.cos(rel) * ry;
+        m.style.left = x + "px"; m.style.top = y + "px";
+        m.classList.add("edge");
+        m.querySelector(".ar").style.transform = `rotate(${rel}rad)`;
+      }
+      const sEl = m.querySelector("span");
+      if (sEl.textContent !== txt) sEl.textContent = txt;
+      m.classList.add("on");
     }
+    for (; mi < marks.length; mi++) marks[mi].classList.remove("on");
   }
 
   function reset() {
-    medalQueue = []; medalBusy = 0; activeCall = null; flyingIds = new Set();
+    medalQueue = []; medalBusy = 0; activeCalls.clear(); flyingIds = new Set();
     reconContacts = []; reconT = -99; reconEndT = -1;
     toast.classList.remove("on"); toastT = 0; medal.classList.remove("show");
-    mark.classList.remove("on"); call.classList.remove("on"); lootEl.classList.remove("on");
+    for (const m of marks) m.classList.remove("on");
+    call.classList.remove("on"); lootEl.classList.remove("on");
     score.innerHTML = "";
     for (const se of slotEls) se.cache = "";
     for (const te of tierEls) te.cache = "";

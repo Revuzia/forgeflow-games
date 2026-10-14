@@ -926,6 +926,14 @@ export function createHud(ctx) {
   function nameOf(who) {
     if (who === "P" || who == null) return callsign;
     const sim = ctx.sim();
+    // PVP: the roster callsign (KESTREL, HOLT...) — the kill banner used to fall
+    // through to the campaign archetype label ("SLATE POINTMAN"), which reads as
+    // a scripted unit rather than a player (2026-10-14)
+    try {
+      const mm = sim && sim.match && (sim.match.m || sim.match);
+      const a = mm && mm.actorOf && mm.actorOf(who);
+      if (a && a.name) return a.name;
+    } catch (e) { /* campaign */ }
     const b = sim && sim.state.bots.find((b) => b.id === who);
     return b ? archLabel(b.archetype) : "HOSTILE";
   }

@@ -55,7 +55,8 @@ export const KIND_SCUFF = 4;
 export const KIND_GLASS = 5;   // star-cracked pane
 export const KIND_WOOD = 6;    // splintered hole
 export const KIND_DIRT = 7;    // scuffed earth
-const FRAMES = 8;
+export const KIND_BLOOD = 8;   // spatter on the surface behind a hit soldier (2026-10-14)
+const FRAMES = 9;
 const CELL = 256;
 
 function atlasTexture() {
@@ -436,6 +437,49 @@ function atlasTexture() {
   glassCrack(KIND_GLASS);
   woodHole(KIND_WOOD);
   dirtScuff(KIND_DIRT);
+
+  // ---- cell 8: BLOOD SPATTER ----------------------------------------------
+  // An exit spray thrown onto the wall/floor behind a hit: a dense irregular core,
+  // satellite droplets flung to one side (the decal's random roll varies which),
+  // and a few elongated streaks. Dark
+  // arterial red with a slightly brighter wet rim so it reads at night (decals
+  // are unlit — same bi-tonal reasoning as the strike cells above).
+  (function blood(cell) {
+    const cx = cell * CELL + R * 0.82, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+    const blob = (x, y, r, a, rim) => {
+      const bg = g.createRadialGradient(x, y, r * 0.15, x, y, r);
+      bg.addColorStop(0.0, `rgba(58,4,5,${a})`);
+      bg.addColorStop(0.75, `rgba(78,7,8,${a * 0.95})`);
+      bg.addColorStop(0.92, `rgba(${rim ? 120 : 70},${rim ? 16 : 8},${rim ? 14 : 8},${a * 0.8})`);
+      bg.addColorStop(1.0, "rgba(60,5,5,0)");
+      g.fillStyle = bg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    };
+    // core: overlapping lobes
+    for (let i = 0; i < 7; i++) {
+      blob(cx + (rnd() - 0.5) * R * 0.22, cy + (rnd() - 0.5) * R * 0.22, R * (0.10 + rnd() * 0.10), 0.92, true);
+    }
+    // streaks flung along +x
+    for (let i = 0; i < 9; i++) {
+      const a = (rnd() - 0.5) * 1.3;
+      const len = R * (0.25 + rnd() * 0.55);
+      const x0 = cx + Math.cos(a) * R * 0.12, y0 = cy + Math.sin(a) * R * 0.12;
+      const x1 = cx + Math.cos(a) * len, y1 = cy + Math.sin(a) * len;
+      const lg = g.createLinearGradient(x0, y0, x1, y1);
+      lg.addColorStop(0, "rgba(70,6,7,0.85)"); lg.addColorStop(1, "rgba(70,6,7,0)");
+      g.strokeStyle = lg; g.lineWidth = 2 + rnd() * 5; g.lineCap = "round";
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      blob(x1 - Math.cos(a) * 4, y1 - Math.sin(a) * 4, 3 + rnd() * 5, 0.85, false);
+    }
+    // fine mist droplets, denser forward
+    for (let i = 0; i < 60; i++) {
+      const a = (rnd() - 0.5) * (rnd() < 0.7 ? 1.6 : 6.0);
+      const d = R * (0.15 + Math.pow(rnd(), 0.7) * 0.7);
+      blob(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 1.2 + rnd() * 3.2, 0.8, false);
+    }
+    g.restore();
+  })(KIND_BLOOD);
 
   const t = new THREE.CanvasTexture(cv);
   // Mipmapped: a 0.40 m decal is ~19 px at 20 m against a 256 px cell, i.e.

@@ -232,6 +232,10 @@ export function createInput(canvas, settings) {
     _lookScale() { return LOOK_SCALE * (settings ? settings.sens : 1) * aimZoomScale(); },
     _zoom() { return aimZoomScale(); },
     get _latch() { return { ...latch }; },
+    // killstreak designate mode: 0 none, 2..4 = the tier being aimed (see keydown)
+    get designate() { return designate; },
+    cancelDesignate() { designate = 0; },
+    canDesignate: null,   // boot wires (tier) => has stock && none in flight
   };
 
   function refreshMove() {
@@ -239,6 +243,7 @@ export function createInput(canvas, settings) {
     state.moveZ = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
   }
 
+  let designate = 0; // killstreak designate mode (see the Digit7-9 keys)
   window.addEventListener("keydown", (e) => {
     if (e.repeat) return;
     keys[e.code] = true;
@@ -257,12 +262,22 @@ export function createInput(canvas, settings) {
       case "Digit4": state.switchTo = "slot4"; break;
       case "Digit5": state.switchTo = "slot5"; break;
       case "KeyQ": state.switchTo = "last"; break;
-      // KILLSTREAK specials (core/sim/streaks.js): 6 sweep · 7 mortar · 8 airstrike · 9 orbital
-      case "Digit6": state.streak = 1; break;
-      case "Digit7": state.streak = 2; break;
-      case "Digit8": state.streak = 3; break;
-      case "Digit9": state.streak = 4; break;
+      // KILLSTREAK specials (core/sim/streaks.js): 6 sweep · 7 mortar · 8 airstrike · 9 orbital.
+      // 6 launches at once (no target). 7/8/9 enter DESIGNATE mode (2026-10-14): a
+      // preview ring follows the crosshair; LMB confirms, RMB / Esc / the same key
+      // cancels. With nothing in stock the key fires straight through so the sim
+      // answers with its own "no call-in" denial.
+      case "Digit6": designate = 0; state.streak = 1; break;
+      case "Digit7": case "Digit8": case "Digit9": {
+        const tier = e.code === "Digit7" ? 2 : e.code === "Digit8" ? 3 : 4;
+        if (designate === tier) designate = 0;
+        else if (input.canDesignate && !input.canDesignate(tier)) { designate = 0; state.streak = tier; }
+        else designate = tier;
+        break;
+      }
+      case "Escape": designate = 0; break;
     }
+    if (designate && /^(Digit[1-5]|KeyQ|KeyG|KeyR)$/.test(e.code)) designate = 0; // switching hands cancels
   });
 
   window.addEventListener("keyup", (e) => {
@@ -279,6 +294,13 @@ export function createInput(canvas, settings) {
   });
 
   canvas.addEventListener("mousedown", (e) => {
+    if (designate) {
+      // designate mode owns the mouse: LMB confirms the call-in, RMB cancels
+      if (e.button === 0) { state.streak = designate; designate = 0; }
+      else if (e.button === 2) designate = 0;
+      if (input.enabled && !input.pointerLocked) input.lock();
+      return;
+    }
     if (e.button === 0) press("fire");
     if (e.button === 2) state.ads = true;
     // Pointer lock on first canvas click while a mission is live.

@@ -206,6 +206,47 @@ async function main() {
       "dying resets the count but keeps earned call-ins");
   }
 
+  section("skill medals: first blood, headshot, longshot, revenge + bonus points");
+  {
+    const DM = await import(u("core/sim/damage.js"));
+    const { sim, events } = mk({ colliders: flat() });
+    const medals = () => events.filter((e) => e.type === "medal").map((e) => e.data.text);
+    const near = sim.spawnBot("rifleman", 0, -15, {});
+    DM.applyDamage(sim, near, 999, "P", "head", "shot");
+    ok(medals().indexOf("FIRST BLOOD") >= 0, "the match's first kill (yours) -> FIRST BLOOD");
+    ok(medals().indexOf("HEADSHOT") >= 0, "a head kill -> HEADSHOT medal");
+    ok(medals().indexOf("LONGSHOT") < 0, "15 m is not a longshot");
+    const far = sim.spawnBot("rifleman", 0, -55, {});
+    sim.damage(far, 999, "test", "P");
+    ok(medals().indexOf("LONGSHOT") >= 0, "a kill past 40 m -> LONGSHOT");
+    ok(medals().filter((m) => m === "FIRST BLOOD").length === 1, "first blood is awarded once");
+    // revenge: the bot that kills you, then dies to you
+    const killer = sim.spawnBot("rifleman", 6, -10, {});
+    sim.setGod(false);
+    sim.damage("P", 9999, "test", killer);
+    ok(sim.state.streak.nemesis === killer, "your killer is remembered");
+    sim.damage(killer, 999, "test", "P");
+    ok(medals().indexOf("REVENGE") >= 0 && sim.state.streak.nemesis == null, "killing him back -> REVENGE (once)");
+    const pts = events.filter((e) => e.type === "score").map((e) => e.data.why);
+    ok(pts.indexOf("FIRST BLOOD") >= 0 && pts.indexOf("LONGSHOT") >= 0 && pts.indexOf("REVENGE") >= 0,
+      "each skill medal pays its bonus as a score event");
+  }
+
+  section("designator preview == strike landing point");
+  {
+    const { sim } = mk({ colliders: flat() });
+    sim.streaks.give(2, 1);
+    sim.aimAt(0, 0.0, -30);
+    const p = sim.state.player;
+    const pre = ST.streakTarget(sim, p.yaw, p.pitch);
+    let callTarget = null;
+    const orig = sim.emit;
+    sim.emit = (t, d) => { if (t === "streak" && d && d.phase === "call") callTarget = d.target; return orig.call(sim, t, d); };
+    sim.step(cmd({ streak: 2, yaw: p.yaw, pitch: p.pitch }));
+    ok(callTarget && Math.hypot(callTarget[0] - pre[0], callTarget[2] - pre[2]) < 1e-6,
+      "streakTarget() (the view's preview ring) is exactly where the mortar is called");
+  }
+
   section("airstrike + orbital geometry");
   {
     const { sim, events } = mk({ colliders: flat() });

@@ -27,8 +27,10 @@
 // takes damage.
 //
 // MEDALS ride the same hook: DOUBLE/TRIPLE/QUAD/MULTI KILL inside a 3.5 s window,
-// HEADSHOT, plus a score toast per kill — the HUD only renders what these
-// events say.
+// plus (2026-10-14) HEADSHOT, LONGSHOT (> 40 m), REVENGE (the man who last killed
+// you) and FIRST BLOOD (the first kill of the match/mission by anyone, if it is
+// yours) — each with its bonus points — plus a score toast per kill. The HUD only
+// renders what these events say.
 //
 // Events (all additive, bridge-visible):
 //   streak {phase:"earned", tier, id, name, count, stock}
@@ -62,6 +64,30 @@ const KILL_POINTS = 100;
 const HEADSHOT_BONUS = 50;
 const MAX_RANGE = 140;
 
+// Where a call-in aimed from (yaw, pitch) lands: first thing under the crosshair
+// (pulled back off a wall), else the ground 45 m out; clamped inside the map and
+// dropped onto the walkable surface. SHARED with the view (streakfx designator
+// preview), so the ring the player confirms is exactly where the strike lands.
+export function streakTarget(sim, yaw, pitch) {
+  const p = sim.state.player;
+  const eye = [p.pos[0], p.pos[1] + (p.stance === "crouch" ? 1.10 : 1.62), p.pos[2]];
+  const cp = Math.cos(pitch);
+  const dir = [-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp];
+  const hit = sim.world.raycast(eye, dir, MAX_RANGE);
+  let target;
+  if (hit) {
+    target = [hit.pos[0] + hit.normal[0] * 0.6, hit.pos[1] + hit.normal[1] * 0.6, hit.pos[2] + hit.normal[2] * 0.6];
+  } else {
+    target = [eye[0] + dir[0] * 45, p.pos[1], eye[2] + dir[2] * 45];
+  }
+  const b = sim.colliders.bounds;
+  target[0] = Math.max(b.min[0] + 2, Math.min(b.max[0] - 2, target[0]));
+  target[2] = Math.max(b.min[2] + 2, Math.min(b.max[2] - 2, target[2]));
+  const y0 = hit ? hit.pos[1] : p.pos[1];
+  target[1] = sim.world.supportAt ? sim.world.supportAt(target[0], target[2], y0, 0.3) : sim.world.sphereGround(target[0], target[2]);
+  return target;
+}
+
 function mulberry(a) {
   return function () {
     a |= 0; a = (a + 0x6d2b79f5) | 0;
@@ -79,6 +105,8 @@ export function makeStreaks(sim) {
     flights: [],            // call-ins in the air: {tier, plan:[{t,pos}], i, endT}
     medalChain: [],         // kill times inside the multi-kill window
     totalScore: 0,
+    nemesis: null,          // id of whoever last killed the player (REVENGE)
+    anyKill: false,         // has anyone drawn first blood yet
   };
   const st = S.streak;
 
@@ -114,12 +142,23 @@ export function makeStreaks(sim) {
   }
 
   const MULTI_NAMES = { 2: "DOUBLE KILL", 3: "TRIPLE KILL", 4: "QUAD KILL" };
+  const LONGSHOT_M = 40;
+
+  function bonus(points, why, text, kind) {
+    st.totalScore += points;
+    medal(text, "+" + points, kind);
+    sim.emit("score", { points, why, headshot: kind === "headshot" });
+  }
 
   const api = {
     onDeath(simRef, d) {
       void simRef;
       if (!d) return;
+      // first blood: the first death anyone CAUSED (no attacker = environment)
+      const firstBlood = !st.anyKill && d.attacker != null && d.victim != null && d.attacker !== d.victim;
+      if (firstBlood) st.anyKill = true;
       if (d.victim === "P") {
+        if (d.attacker != null && d.attacker !== "P") st.nemesis = d.attacker;
         // dying ends the streak; earned call-ins survive
         st.count = 0;
         st.medalChain.length = 0;
@@ -133,6 +172,18 @@ export function makeStreaks(sim) {
       const pts = KILL_POINTS + (hs ? HEADSHOT_BONUS : 0);
       st.totalScore += pts;
       sim.emit("score", { points: pts, why: hs ? "HEADSHOT" : "KILL", headshot: hs });
+      // ---- skill medals (streak-made kills earn points but not these)
+      if (!sim.internal.streakBlast) {
+        if (firstBlood) bonus(100, "FIRST BLOOD", "FIRST BLOOD", "firstblood");
+        if (st.nemesis != null && d.victim === st.nemesis) { st.nemesis = null; bonus(50, "REVENGE", "REVENGE", "revenge"); }
+        const vb = S.bots.find((b) => b.id === d.victim);
+        if (vb) {
+          const pp = S.player.pos;
+          const dist = Math.hypot(vb.pos[0] - pp[0], vb.pos[1] - pp[1], vb.pos[2] - pp[2]);
+          if (dist > LONGSHOT_M) bonus(50, "LONGSHOT", "LONGSHOT", "longshot");
+        }
+        if (hs) medal("HEADSHOT", "+" + HEADSHOT_BONUS, "headshot");
+      }
       if (sim.internal.streakBlast) return; // a call-in's own kills never feed the streak
 
       // ---- multi-kill medals
@@ -184,26 +235,10 @@ export function makeStreaks(sim) {
       }
 
       // ---- target: first thing under the crosshair, else the ground 45 m out
-      const eye = [p.pos[0], p.pos[1] + (p.stance === "crouch" ? 1.10 : 1.62), p.pos[2]];
-      const cp = Math.cos(p.pitch);
-      const dir = [-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp];
-      const hit = sim.world.raycast(eye, dir, MAX_RANGE);
-      let target;
-      if (hit) {
-        // pull back off the surface so a wall hit lands in front of it, not inside
-        target = [hit.pos[0] + hit.normal[0] * 0.6, hit.pos[1] + hit.normal[1] * 0.6, hit.pos[2] + hit.normal[2] * 0.6];
-      } else {
-        const fx = eye[0] + dir[0] * 45, fz = eye[2] + dir[2] * 45;
-        target = [fx, p.pos[1], fz];
-      }
+      // (streakTarget — the designator preview draws the same point)
+      const target = streakTarget(sim, p.yaw, p.pitch);
       const b = sim.colliders.bounds;
-      target[0] = Math.max(b.min[0] + 2, Math.min(b.max[0] - 2, target[0]));
-      target[2] = Math.max(b.min[2] + 2, Math.min(b.max[2] - 2, target[2]));
-      // height of the walkable surface at the target, measured from where the crosshair
-      // landed (so a mark on a rooftop stays on the roof, one in the street stays down)
       const gy = (x, z, y0) => (sim.world.supportAt ? sim.world.supportAt(x, z, y0, 0.3) : sim.world.sphereGround(x, z));
-      const y0 = hit ? hit.pos[1] : p.pos[1];
-      target[1] = gy(target[0], target[2], y0);
 
       const rng = mulberry((S.tick * 2654435761 + tier * 40503) >>> 0);
       const fwd = [-Math.sin(p.yaw), -Math.cos(p.yaw)]; // flat view direction

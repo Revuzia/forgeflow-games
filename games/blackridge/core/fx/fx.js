@@ -27,7 +27,7 @@ import { mulberry32 } from "../rng.js";
 import { makeParticlePools, makeImpacts, SURFACE_ALIAS } from "./impacts.js";
 import { makeMuzzle } from "./muzzle.js";
 import { makeTracers } from "./tracers.js";
-import { makeDecals } from "./decals.js";
+import { makeDecals, KIND_BLOOD } from "./decals.js";
 import { makeCasings } from "./casings.js";
 import { makeExplosions } from "./explosions.js";
 import { makeGrounding } from "./grounding.js";
@@ -214,6 +214,12 @@ export function createFx(ctx) {
       // distance.
       if (hit.entity === "P") return;
       const key = hit.entity == null ? "?" : hit.entity;
+      // The sim emits `hurt` BEFORE this round's `shot`, so onHurt has usually
+      // already taken fleshGate and drawn the puff. The exit spray + spatter are
+      // directional — only this event knows the bullet — so they take their own
+      // gate and still run when the puff gate is closed (measured 2026-10-14:
+      // with one shared gate the spatter never fired at all).
+      if (d.dir && bloodGate(key)) bloodBehind(hit.pos, d.dir, profFor(d));
       if (!fleshGate(key)) return;
     }
     // ---- snap the sim's collider hit onto the VISIBLE surface (surfaceindex.js)
@@ -262,6 +268,67 @@ export function createFx(ctx) {
     const prof = (wt && IMPACT_BY_CLASS[wt.class]) || IMPACT_DEFAULT;
     impacts.spawn(pos, normal, surface, d.dir, prof);
     counters.impacts++;
+  }
+
+  function profFor(d) {
+    const s = ctx.sim && ctx.sim();
+    const wt = s && s.weapons ? s.weapons[d.weaponId] : null;
+    return (wt && IMPACT_BY_CLASS[wt.class]) || IMPACT_DEFAULT;
+  }
+  const lastBlood = new Map();
+  function bloodGate(victim) {
+    const t = simNow();
+    const last = lastBlood.get(victim);
+    if (last !== undefined && t - last < 0.06) return false;   // one per shotgun volley
+    lastBlood.set(victim, t);
+    return true;
+  }
+
+  // Exit spray + spatter on the surface BEHIND a hit soldier (2026-10-14 review:
+  // hits on enemies were only red puffs, with no mark anywhere). The ray carries on
+  // through the body up to 2.4 m; whatever it meets (wall, crate, floor below a
+  // downward shot) takes a KIND_BLOOD decal, snapped to the visible surface the
+  // same way bullet holes are.
+  const bloodStats = { calls: 0, wall: 0, floor: 0, none: 0, phantom: 0, placed: 0, dropped: 0 };
+  function bloodBehind(pos, dir, prof) {
+    bloodStats.calls++;
+    impacts.spawn(pos, null, "fleshExit", dir, prof);
+    const s = ctx.sim && ctx.sim();
+    if (!s || !s.world || !s.world.raycast) return;
+    const start = [pos[0] + dir[0] * 0.30, pos[1] + dir[1] * 0.30, pos[2] + dir[2] * 0.30];
+    const hit = s.world.raycast(start, dir, 2.4);
+    let bp = null, bn = null, guardDir = dir;
+    if (hit) {
+      bloodStats.wall++;
+      const r = surfaceIndex.snap(start, hit.pos, snapOut);
+      if (r) { bp = snapOut.pos; bn = snapOut.normal; } else if (r === undefined) { bp = hit.pos; bn = hit.normal; } else bloodStats.phantom++;
+    } else {
+      // nothing behind him: the spray lands on the floor a stride back. Found the
+      // way a bullet hole on a floor is: a downward ray onto the colliders, then
+      // snapped to the VISIBLE surface (a terrain-only height put it under or off
+      // the real floor mesh and the coverage clipper rejected every one).
+      const ex = pos[0] + dir[0] * 1.1, ez = pos[2] + dir[2] * 1.1, ey = pos[1] + 0.2;
+      const down = s.world.raycast([ex, ey, ez], [0, -1, 0], 3.0);
+      if (!down) bloodStats.none++;
+      if (down) {
+        bloodStats.floor++;
+        const r = surfaceIndex.snap([ex, ey, ez], down.pos, snapOut);
+        if (r) { bp = snapOut.pos; bn = snapOut.normal; } else if (r === undefined) { bp = down.pos; bn = down.normal; }
+        // the floor normal is MEASURED, not a fallback, so decals.spawn's edge-on guard
+        // (meant for fallback normals) must not see the near-horizontal bullet here
+        guardDir = null;
+      }
+    }
+    if (bp && bn) {
+      // coverage clipper: a cobbled floor is many small stone meshes, so a full-size
+      // spatter is rarely fully backed — step down until it fits (or give up)
+      const big = 0.42 + Math.random() * 0.26;
+      let ok = false;
+      for (const sz of [big, big * 0.62, big * 0.40]) {
+        if (decals.spawn(bp, bn, KIND_BLOOD, sz, guardDir) !== -1) { ok = true; break; }
+      }
+      if (ok) bloodStats.placed++; else bloodStats.dropped++;
+    }
   }
 
   // ---- event handlers -------------------------------------------------------
@@ -335,6 +402,7 @@ export function createFx(ctx) {
     casings.clear();
     explosions.clear();
     lastFlesh.clear();
+    lastBlood.clear();
     // A fresh sim restarts state.time at 0; re-latch so the first simDt() after
     // a mission start is 0 rather than a large negative (which would clamp to
     // 0 anyway, but latching keeps the intent explicit).
@@ -418,6 +486,7 @@ export function createFx(ctx) {
         muzzle: muzzle.stats(),
         casings: casings.stats(),
         decalsSpawned: decals.spawnedCount(),
+        blood: { ...bloodStats },
         decalsRejected: decals.rejectedCount(),
         decalsClipped: decals.clippedCount(),
         surface: { ...surfaceIndex.stats(), ...snapCounters },

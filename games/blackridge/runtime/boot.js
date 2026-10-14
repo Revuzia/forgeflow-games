@@ -317,6 +317,12 @@ try {
   const streakAudio = createStreakAudio(ctx);
   const grenadeFx = createGrenadeFx(ctx);
   ctx.cue = (n) => streakAudio.cue(n);   // match_hud clock warnings
+  // designate mode only opens for a call-in you can actually use
+  input.canDesignate = (tier) => {
+    const s = sim && sim.state && sim.state.streak;
+    if (!s || !sim.state.player.alive) return false;
+    return (s.stock[tier - 1] | 0) > 0 && !s.flights.some((f) => f.tier === tier);
+  };
   const post = createPost(ctx);
   ctx.post = post; // v2.2 (A11: capture()/post.resize seam)
   const dynres = createDynres(renderer, perf);
