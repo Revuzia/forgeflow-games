@@ -650,7 +650,9 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   a map scene ≤ 700k tris (scatter instanced via EXT_mesh_gpu_instancing).
 - **Outputs:** `art/out/fighters/<id>/<id>.glb`, `…/<skin>.glb`, `…/portrait.png` (512²),
   `…/splash.png` (1600×900), `…/icon.png` (128²); `art/out/units/<id>.glb`;
-  `art/out/maps/<id>/scene.glb`, `minimap.png`, `sky.hdr`; `art/out/ui/*`. Cycles renders for
+  `art/out/maps/<id>/minimap.png`, `sky.hdr` (CHANGED(ART): `scene.glb` is optional — the renderer generates
+  the terrain from map data + `art.terrain` textures, props and landmark models; `client.menuScene.model` likewise);
+  `art/out/ui/*`. Cycles renders for
   portraits/splashes (no OIDN in the bpy wheel: use ≥ 128 samples + ffmpeg `nlmeans` denoise).
 - QA: every build writes a turntable contact sheet to `art/renders/` for review.
 

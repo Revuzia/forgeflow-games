@@ -484,7 +484,6 @@
  ],
  "shops": [],
  "art": {
-  "scene": "assets/maps/map_bridge/scene.glb",
   "sky": "assets/maps/map_bridge/sky.hdr",
   "lut": "assets/grade/vale_grade_01.cube",
   "minimap": "assets/maps/map_bridge/minimap.png",

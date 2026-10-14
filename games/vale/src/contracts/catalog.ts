@@ -477,7 +477,9 @@ export const MapDef = z.object({
   /** shared shops on the map (Fray) */
   shops: z.array(z.object({ at: Vec2, radius: z.number() }).strict()).default([]),
   art: z.object({
-    scene: AssetRef,          // Blender-authored landmarks + terrain GLB
+    /** optional hand-built scene GLB that replaces the runtime terrain; without it the terrain is generated from
+     *  the map data + art.terrain (painted textures, scatter props, landmark models) */
+    scene: AssetRef.optional(),
     sky: AssetRef,            // equirect HDR
     lut: AssetRef,            // locked color grade (.cube)
     minimap: AssetRef,        // painted minimap image
@@ -584,7 +586,7 @@ export const ClientDef = z.object({
     cta: z.object({ label: z.string(), screen: Id, params: z.record(z.string(), z.string()).default({}) }).strict() }).strict(),
     tiles: z.array(z.object({ id: Id, title: z.string(), body: z.string(), art: AssetRef, screen: Id,
       params: z.record(z.string(), z.string()).default({}) }).strict()) }).strict(),
-  menuScene: z.object({ model: AssetRef, sky: AssetRef, lut: AssetRef, backdrop: AssetRef.optional() }).strict(),
+  menuScene: z.object({ model: AssetRef.optional(), sky: AssetRef, lut: AssetRef, backdrop: AssetRef.optional() }).strict(),
   tips: z.array(z.string()).default([]),
 }).strict();
 
