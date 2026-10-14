@@ -19,13 +19,13 @@ Branch: `claude/youthful-ramanujan-gdud5w`. Spine: `_spec/CONTRACT.md`. Look and
 | VFX engine v2 + bespoke effects | Done: v2 runtime (post pass, soft depth), 50 lib_* + bespoke effects for all 16 fighters (162 defs in content/vfx.json); passives fire on the sim `proc` event | `node _harness/vfx_gallery.mjs <prefix>` |
 | Client UI (15 screens, components) | Done to first pass | `npm run dev` → http://localhost:5190 |
 | HUD + input + end-to-end flow | Done: DONE journey passes in real Chrome (RIFT, BRIDGE, FRAY, shop buy + equip) | `node _harness/e2e.mjs all` |
-| Audio (numpy synthesis + WebAudio engine) | Runtime done (`src/audio/index.ts`, event roles bound in `audio.events`); cue + music renders in progress (agents) | `audio/build.py` |
+| Audio (numpy synthesis + WebAudio engine) | Done: 91 cues + 7 beds (3 with combat layers) + 3 stings, Ogg Opus; runtime with event roles in `audio.events` | `audio/build.py`, `audio/build_music.py` |
 | Art pipeline v1 (rig, clips, bake, export, parts library, template) | Done, but the owner rejected the mannequin look | `art/README.md` |
 | Art 2.0 characters: SDF-sculpted volumes fitted to the concept sheet, base colour = the concept painting projected occlusion-aware onto the game mesh | Marund DONE as a full fighter, AWAITING OWNER SIGN-OFF (`art/renders/_art2/marund_signoff.jpg`); 15 fighters to go | `python3 art/build.py fighter marund --no-skins` |
 | Skies (4) + locked LUT grade | Done | `art/out/maps/*/sky.hdr`, `art/out/grade/` |
 | Painted 2D (icons, key art, mode cards, loading, backdrops, terrain textures, concept sheets) | Done: 202 images (Grok in Chrome + xAI API for the last 14) | `tools/imagegen/README.md` |
-| Units, structures, monsters, map scenes, menu scene (Blender) | Structures, Wicks, pickups/ward/post, scatter props, 18 landmarks on all 3 maps, menu painted set: done. Monsters (10): in progress | `art/blender/{units,props,maps}/`, `_harness/shot_map.mjs --nofog --at x,y` |
-| Design note, names-not-used doc, README, game_meta, thumbnail | Not started | |
+| Units, structures, monsters, map scenes, menu scene (Blender) | Done: structures, Wicks, pickups/ward/post, scatter props, 18 landmarks on all 3 maps, menu painted set, all 10 monsters (`creatures.py`, `creatures_b.py`) and every unit icon | `art/blender/{units,props,maps}/`, `_harness/shot_map.mjs --nofog --at x,y` |
+| Design note, names-not-used doc, README, game_meta, thumbnail | Done (`_design/DESIGN_NOTE.md`, `_design/NAMES_NOT_USED.md`, `public/game_meta.json`); 1080p60 check done | `_harness/perf_1080.mjs` |
 
 Typecheck, content check (`--allow-missing-assets` until the remaining fighters/monsters land) and all 37 probes are green.
 
