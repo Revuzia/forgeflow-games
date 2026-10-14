@@ -217,31 +217,47 @@ CFG = {
 # the handguard: palm faces up, fingers stacked along the barrel and wrapping
 # the right side, thumb forward.
 ARM_POSE = {
+    # (2026-10-13, owner: "that left arm looks like a right arm on the barrel")
+    # Re-posed for the REAL hands against the industry-standard first-person holds
+    # (MW2019 / BF rifle idles): support hand UNDER the handguard — palm up and
+    # canted toward the gun, thumb along the near (left) side pointing at the
+    # muzzle, fingers wrapping under and up the far side — with the forearm entering
+    # from the lower-left, aimed in the build frame by elbow_world. Wrist positions
+    # are seated on each gun's MEASURED handguard underside (warden z 0.031, vesper
+    # ~0.005, corvus -0.030, breaker pump 0.028-0.041). Pistol = two-handed
+    # thumbs-forward: support palm on the open left side of the grip, fingers
+    # canted down over the firing hand's fingers. Judge with tools/_a4_dev/pose_lab.py.
     "warden": [
         ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
-         {"index_curl": (12, 16, 8)}),
-        ("L", (-0.085, 0.235, 0.012), (1.0, 0.05, 0.25), (0.15, 0.0, 1.0), {"elbow": (0.26, -0.56, 0.78)}),
+         {"index_curl": (12, 16, 8), "elbow_world": (0.35, -0.70, -0.62)}),
+        ("L", (-0.062, 0.215, 0.025), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.62, -0.45, -0.64), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
     ],
     "vesper": [
         ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
-         {"index_curl": (12, 16, 8)}),
-        ("L", (-0.085, 0.200, 0.000), (1.0, 0.05, 0.25), (0.15, 0.0, 1.0), {"elbow": (0.26, -0.56, 0.78)}),
+         {"index_curl": (12, 16, 8), "elbow_world": (0.35, -0.70, -0.62)}),
+        ("L", (-0.056, 0.170, -0.002), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.62, -0.45, -0.64), "curl": (42, 72, 36), "thumb_rot": (0, 0, 5, 5)}),
     ],
     "corvus": [
-        ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
-         {"index_curl": (12, 16, 8)}),
-        ("L", (-0.085, 0.235, -0.010), (1.0, 0.05, 0.25), (0.15, 0.0, 1.0), {"elbow": (0.26, -0.56, 0.78)}),
+        # the Corvus grip sits ~7 cm further back than the AR's (measured slices y -0.14..-0.08)
+        ("R", (0.035, -0.148, -0.055), (0.0, 0.97, -0.2), (-1.0, 0.0, 0.0),
+         {"index_curl": (12, 16, 8), "elbow_world": (0.35, -0.70, -0.62)}),
+        ("L", (-0.060, 0.190, -0.034), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.62, -0.45, -0.64), "curl": (42, 72, 36), "thumb_rot": (0, 0, 5, 5)}),
     ],
     "breaker": [
         ("R", (0.036, -0.085, -0.020), (0.0, 1.0, 0.10), (-1.0, 0.0, 0.0),
-         {"index_curl": (10, 14, 8)}),
-        ("L", (-0.085, 0.340, 0.020), (1.0, 0.05, 0.25), (0.15, 0.0, 1.0), {"elbow": (0.26, -0.56, 0.78)}),
+         {"index_curl": (10, 14, 8), "elbow_world": (0.35, -0.70, -0.62)}),
+        ("L", (-0.062, 0.315, 0.030), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.60, -0.50, -0.62), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
     ],
     "pike": [
-        ("R", (0.034, -0.050, -0.020), (0.0, 1.0, 0.10), (-1.0, 0.0, 0.0),
-         {"index_curl": (8, 12, 6)}),
-        ("L", (-0.034, -0.060, -0.040), (0.15, 1.0, 0.10), (1.0, 0.0, 0.0),
-         {"curl": (62, 84, 46), "thumb": ((0.40, 0.80, -0.20), (0.20, 0.90, -0.20), (0.05, 0.98, -0.12))}),
+        # high grip: web under the slide, metacarpals canted down along the raked grip
+        ("R", (0.028, -0.060, 0.000), (0.0, 0.90, -0.43), (-1.0, 0.0, 0.0),
+         {"index_curl": (8, 12, 6), "elbow_world": (0.20, -0.95, -0.20)}),
+        ("L", (-0.043, -0.022, 0.0025), (0.1, 0.7, -0.7), (1.0, 0.0, 0.0),
+         {"elbow_world": (-0.35, -0.90, -0.25), "curl": (50, 70, 40), "thumb_rot": (0, 0, 5, 5)}),
     ],
 }
 
@@ -2952,9 +2968,9 @@ def _srgb_lin(c):
     return tuple(out)
 
 GLOVE_COL = {
-    "back": _srgb_lin((70, 61, 45)),      # coyote knit back of hand
+    "back": _srgb_lin((54, 47, 36)),      # coyote knit back of hand (2026-10-14: darker — read cream in game)
     "pad":  _srgb_lin((24, 23, 22)),      # knuckle shell, fingertip caps
-    "palm": _srgb_lin((54, 48, 40)),      # suede palm (2026-10-13: lifted — a curled finger shows mostly palm side)
+    "palm": _srgb_lin((44, 40, 34)),      # suede palm (2026-10-13: lifted — a curled finger shows mostly palm side)
     "cuff": _srgb_lin((20, 20, 21)),      # neoprene wrist cuff
 }
 SLEEVE_COL = {"cloth": _srgb_lin((31, 35, 29)), "band": _srgb_lin((14, 15, 14))}
@@ -2992,6 +3008,40 @@ def _bm_cone(bm, p, q, r1, r2, seg=14):
     M = Matrix.Translation((p + q) * 0.5) @ _frame_z(d)
     bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=seg,
                           radius1=r1, radius2=r2, depth=d.length, matrix=M, calc_uvs=False)
+
+
+def _bm_sleeve(bm, axis, a0, a1, r0, r1, seg=32):
+    """Fabric sleeve along `axis` from a0 to a1 (m): a lofted tube that tapers
+    r0 -> r1 over the first 0.22 m and carries soft folds — tight bunching near
+    the cuff, long diagonal drapes further up. Capped at the far end."""
+    ax = Vector(axis).normalized()
+    ref = Vector((0, 0, 1)) if abs(ax.z) < 0.9 else Vector((1, 0, 0))
+    u = ref.cross(ax).normalized()
+    w = ax.cross(u).normalized()
+    ts = []
+    t = a0
+    while t < a1:
+        ts.append(t)
+        t += 0.006 if t < 0.12 else (0.015 if t < 0.35 else 0.06)
+    ts.append(a1)
+    rings = []
+    for t in ts:
+        k = min(1.0, (t - a0) / 0.22)
+        base = r0 + (r1 - r0) * (k * k * (3 - 2 * k))
+        bunch = math.exp(-((t - a0) / 0.06) ** 2)            # folds pile up at the cuff
+        ring = []
+        for j in range(seg):
+            th = 2 * math.pi * j / seg
+            f = (0.055 * bunch * math.sin(t * 260.0 + 1.3 * math.sin(3 * th))
+                 + 0.030 * math.sin(3 * th + t * 22.0)
+                 + 0.018 * math.sin(5 * th - t * 37.0 + 0.7))
+            r = base * (1.0 + f)
+            ring.append(bm.verts.new(ax * t + (u * math.cos(th) + w * math.sin(th)) * r))
+        rings.append(ring)
+    for a, b in zip(rings, rings[1:]):
+        for j in range(seg):
+            bm.faces.new((a[j], a[(j + 1) % seg], b[(j + 1) % seg], b[j]))
+    bm.faces.new(rings[-1])
 
 
 def _bm_ball(bm, c, rx, ry=None, rz=None, seg=14):
@@ -3069,6 +3119,154 @@ def _hand_rot_curl(deg_list, spread_deg, sx):
         d = Matrix.Rotation(D(spread_deg) * sx, 3, "Z") @ d
         out.append(d)
     return out
+
+
+
+# =============================================================================
+# REAL HANDS (2026-10-13, owner: "this is not a NORMAL hand with fingers" / "that
+# left arm looks like a right arm on the barrel"). The capsule glove above can be
+# posed but it never LOOKS like a hand. This builds each hand from an actual
+# sculpted, rigged human — Quaternius "Universal Base Characters" (CC0, already in
+# pipeline/assets/3d-models/base-characters) — posed through its finger bones, cut
+# at the forearm, and expressed in the SAME canonical frame the capsule hand used
+# (wrist at origin, fingers +Y, palm -Z, thumb -X for the right hand / +X for the
+# left), so ARM_POSE placement, the glove/sleeve painting and viewmodel.js's hand
+# nodes all keep working unchanged. Bone facts (probed, Blender 5.1 import):
+#   finger _01.._03  +rotation_euler.X curls toward the palm (both sides)
+#   thumb_01         +X sweeps across the palm (opposition, both sides)
+# =============================================================================
+QUAT_SRC = os.path.normpath(os.path.join(GAME, "..", "..", "pipeline", "assets", "3d-models",
+                                         "base-characters", "Universal Base Characters[Standard]",
+                                         "Base Characters", "Godot - UE", "Superhero_Male_FullBody.gltf"))
+USE_REAL_HANDS = os.path.exists(QUAT_SRC) and "--capsule-hands" not in ARGS
+PALM_WIDTH_M = 0.062          # index-MCP to pinky-MCP, gloved (sets the scale)
+REAL_FOREARM_KEEP_M = 0.10    # forearm kept above the wrist (the sleeve covers the rest)
+# default thumb pose: (thumb_01 X opposition, thumb_01 Z, _02 X, _03 X), degrees
+THUMB_DEFAULT = (30.0, 0.0, 18.0, 14.0)
+
+
+def build_real_hand(tag, hand, prm, e):
+    """Posed real hand + short forearm in the canonical frame. Returns
+    (object, joints[], tips[], landmarks{}) with joints/tips as canonical Vectors."""
+    from mathutils import Quaternion
+    side = "l" if hand == "L" else "r"
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=QUAT_SRC)
+    new = [o for o in bpy.data.objects if o not in before]
+    arm = next(o for o in new if o.type == "ARMATURE")
+    body = next(o for o in new if o.type == "MESH" and "superhero" in o.name.lower())
+    W = arm.matrix_world
+    pb = arm.pose.bones
+    for b in pb:
+        b.rotation_mode = "XYZ"
+        b.rotation_euler = (0.0, 0.0, 0.0)
+    bpy.context.view_layer.update()
+
+    def head(n):
+        return (W @ pb[n].head).copy()
+
+    # rest basis from the metacarpal heads (finger posing does not move them)
+    wrist = head("hand_" + side)
+    mid, idx, pky = head("middle_01_" + side), head("index_01_" + side), head("pinky_01_" + side)
+    thb = head("thumb_02_" + side)
+    y = (mid - wrist).normalized()
+    n0 = y.cross(idx - pky).normalized()
+    palm = n0 if (thb - wrist).dot(n0) > 0 else -n0       # the thumb hangs to the palm side
+    z = -palm
+    x = y.cross(z).normalized()
+    z = x.cross(y).normalized()
+    M = Matrix(((x.x, y.x, z.x, wrist.x), (x.y, y.y, z.y, wrist.y), (x.z, y.z, z.z, wrist.z), (0, 0, 0, 1)))
+    Minv = M.inverted()
+    scale = PALM_WIDTH_M / (idx - pky).length
+    fore_dir = (head("lowerarm_" + side) - wrist).normalized()
+    rest_co = [body.matrix_world @ v.co for v in body.data.vertices]
+
+    # ---- pose ---------------------------------------------------------------
+    curl = prm.get("curl", GRIP_CURL)
+    fcurl = {"index": prm.get("index_curl", curl), "middle": curl, "ring": prm.get("ring_curl", curl),
+             "pinky": prm.get("pinky_curl", tuple(c * 1.05 for c in curl))}
+    spread = prm.get("spread_deg", {"index": 0.0, "middle": 0.0, "ring": 0.0, "pinky": 0.0})
+    for nm, c in fcurl.items():
+        for i in range(3):
+            pb[f"{nm}_{i + 1:02d}_{side}"].rotation_euler = (
+                math.radians(c[i]), 0.0, math.radians(spread.get(nm, 0.0)) if i == 0 else 0.0)
+    tx, tz, t2, t3 = prm.get("thumb_rot", THUMB_DEFAULT)
+    pb["thumb_01_" + side].rotation_euler = (math.radians(tx), 0.0, math.radians(tz))
+    pb["thumb_02_" + side].rotation_euler = (math.radians(t2), 0.0, 0.0)
+    pb["thumb_03_" + side].rotation_euler = (math.radians(t3), 0.0, 0.0)
+    bpy.context.view_layer.update()
+
+    def canon(v):
+        return (Minv @ v) * scale
+
+    joints, tips, lm = [], [], {"wrist": [0.0, 0.0, 0.0]}
+    for nm in ("index", "middle", "ring", "pinky", "thumb"):
+        for i in (1, 2, 3):
+            if nm == "thumb" and i == 1:
+                continue
+            joints.append(canon(head(f"{nm}_{i:02d}_{side}")))
+        t = canon(head(f"{nm}_04_leaf_{side}"))
+        tips.append(t)
+        lm[nm + "_tip"] = [round(c, 4) for c in t]
+
+    # ---- evaluated (posed) mesh, cut to hand + short forearm ------------------
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(body.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
+    me.transform(body.matrix_world)
+    gname = {g.index: g.name for g in body.vertex_groups}
+    hand_set = {"hand_" + side} | {f"{f}_{i:02d}_{side}" for f in ("index", "middle", "ring", "pinky", "thumb")
+                                   for i in (1, 2, 3)}
+    keep, wfore = set(), {}
+    for v in body.data.vertices:
+        wh = wl = 0.0
+        for g in v.groups:
+            nm = gname.get(g.group, "")
+            if nm in hand_set:
+                wh += g.weight
+            elif nm.startswith("lowerarm") and nm.endswith("_" + side):
+                wl += g.weight
+        along = (rest_co[v.index] - wrist).dot(fore_dir) * scale
+        if wh >= 0.30 or (wl >= 0.30 and along < REAL_FOREARM_KEEP_M):
+            keep.add(v.index)
+            # bend weight: 0 in the hand, 1 ~6 cm up the forearm — smoothstep, so the
+            # wrist reads as a joint and not a kink
+            t = max(0.0, min(1.0, (along + 0.008) / 0.065))
+            wfore[v.index] = t * t * (3.0 - 2.0 * t)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    fd_c = (Minv.to_3x3() @ fore_dir).normalized()          # rest forearm axis, canonical
+    q = fd_c.rotation_difference(Vector(e).normalized())
+    I = Quaternion()
+    for v in bm.verts:
+        c = canon(v.co)
+        w = wfore.get(v.index, 0.0)
+        if w > 0.0:
+            c = I.slerp(q, w) @ c
+        v.co = c
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.index not in keep], context="VERTS")
+    out_me = bpy.data.meshes.new(f"hand_{tag}")
+    bm.to_mesh(out_me)
+    bm.free()
+    bpy.data.meshes.remove(me)
+    og = bpy.data.objects.new(f"hand_{tag}", out_me)
+    link(og)
+    for o in new:
+        if o.name in bpy.data.objects:
+            bpy.data.objects.remove(o, do_unlink=True)
+    for o2 in bpy.context.selected_objects:
+        o2.select_set(False)
+    bpy.context.view_layer.objects.active = og
+    og.select_set(True)
+    sub = og.modifiers.new("sub", "SUBSURF")
+    sub.levels = prm.get("subsurf", 1)
+    bpy.ops.object.modifier_apply(modifier=sub.name)
+    lm["palm"] = [round(c, 4) for c in canon(wrist + (mid - wrist) * 0.55 + palm * 0.012)]
+    lm["middle_mcp"] = [round(c, 4) for c in canon(mid)]
+    print("A4REAL %s: %d verts, scale %.3f, thumb tip x %+.3f (%s expects %s), fore axis %s" % (
+        tag, len(og.data.vertices), scale, lm["thumb_tip"][0], hand, "-" if hand == "R" else "+",
+        tuple(round(c, 2) for c in fd_c)))
+    return og, joints, tips, lm
 
 
 def build_hand(tag, hand, prm):
@@ -3193,11 +3391,41 @@ def build_hand(tag, hand, prm):
         bpy.ops.object.modifier_apply(modifier=fdc.name)
         finger_objs.append(of)
 
+    if USE_REAL_HANDS:
+        # drop the capsule glove; keep only a wrist cuff (rebuilt as its own mesh)
+        for o in [og] + finger_objs:
+            bpy.data.objects.remove(o, do_unlink=True)
+        finger_objs = []
+        real, joints, tips, rlm = build_real_hand(tag, hand, prm, e)
+        lm.update(rlm)
+        bc = bmesh.new()
+        cr = prm.get("cuff_r", 0.0300)
+        _bm_cone(bc, e * 0.010, e * 0.062, cr, cr * 1.12, seg=24)
+        _bm_cone(bc, e * 0.046, e * 0.054, cr * 1.18, cr * 1.18, seg=24)       # velcro strap, proud
+        me_c = bpy.data.meshes.new(f"cuff_{tag}")
+        bc.to_mesh(me_c)
+        bc.free()
+        oc = bpy.data.objects.new(f"cuff_{tag}", me_c)
+        link(oc)
+        for o2 in bpy.context.selected_objects:
+            o2.select_set(False)
+        real.select_set(True)
+        oc.select_set(True)
+        bpy.context.view_layer.objects.active = real
+        bpy.ops.object.join()
+        og = bpy.context.view_layer.objects.active
+
     # --- sleeve (separate, tapered along the elbow axis) --------------------
     bs = bmesh.new()
     r0, r1, L = 0.0400, prm.get("sleeve_r", 0.047), prm.get("sleeve_len", 1.0)
-    _bm_cone(bs, e * 0.034, e * L, r0, r1, seg=28)
-    _bm_cone(bs, e * 0.030, e * 0.058, 0.0452, 0.0452, seg=28)       # elastic cuff band
+    if USE_REAL_HANDS:
+        # (2026-10-13) a perfect cylinder read as a stovepipe next to a real hand:
+        # lofted tube, tapered wrist -> forearm, with bunched folds at the cuff
+        _bm_sleeve(bs, e, 0.040, L, prm.get("sleeve_r0", 0.0355), prm.get("sleeve_r", 0.0460))
+        _bm_cone(bs, e * 0.036, e * 0.060, 0.0392, 0.0398, seg=32)       # elastic cuff band
+    else:
+        _bm_cone(bs, e * 0.034, e * L, r0, r1, seg=28)
+        _bm_cone(bs, e * 0.030, e * 0.058, 0.0452, 0.0452, seg=28)       # elastic cuff band
     me_s = bpy.data.meshes.new(f"sleeve_{tag}")
     bs.to_mesh(me_s)
     bs.free()
@@ -3332,13 +3560,23 @@ def place_arms(wid, mats, pose_override=None):
     placed = []
     for ent in (pose_override or ARM_POSE.get(wid, [])):
         hand, loc, fingers, palm = ent[0], ent[1], ent[2], ent[3]
-        prm = ent[4] if len(ent) > 4 else {}
-        dup = build_hand(f"{hand}_{wid}", hand, prm)
-        dup.name = f"arms_{hand}_{wid}"
+        prm = dict(ent[4]) if len(ent) > 4 else {}
         y = Vector(fingers).normalized()
         z = -Vector(palm)                 # canonical -Z is the palm
         x = y.cross(z).normalized()
         z = x.cross(y).normalized()
+        if "elbow_world" in prm:
+            # (2026-10-13) the forearm is aimed in the BUILD frame (where the camera
+            # and the gun are) and converted to the hand's canonical frame here —
+            # hand-converting it per pose is how the support arm ended up pointing
+            # straight down out of frame. The wrist bend is printed so a pose that
+            # breaks a wrist (> ~65 deg) is visible in the build log.
+            ew = Vector(prm.pop("elbow_world")).normalized()
+            ec = Vector((ew.dot(x), ew.dot(y), ew.dot(z)))
+            prm["elbow"] = (-ec.x if hand == "L" else ec.x, ec.y, ec.z)
+            print("A4WRIST %s %s bend %.0f deg" % (wid, hand, math.degrees(math.acos(max(-1.0, min(1.0, -ec.y))))))
+        dup = build_hand(f"{hand}_{wid}", hand, prm)
+        dup.name = f"arms_{hand}_{wid}"
         M = Matrix((
             (x.x, y.x, z.x, loc[0]),
             (x.y, y.y, z.y, loc[1]),

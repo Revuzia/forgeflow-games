@@ -117,12 +117,12 @@ export const WEAPONS = {
     muzzleVel: 700, tracerEvery: 2, // §3.1: 1-in-2 rounds
     penetration: { classes: ["soft", "metal_thin"], retain: 0.70, maxThickM: 0.25 },
     view: {
-      // MEASURED from the built GLB (tools/a4_build_fp_weapons.py A4BUILD
+      // MEASURED from the built GLB (tools/a5_build_guns.py A5BUILD
       // report — single source; posAds.y = -sightY puts the sight line on
       // the vm camera's center ray BY CONSTRUCTION)
       glb: "assets/weapons/warden.glb",
       posHip: [0.14, -0.105, -0.33], posAds: [0, -0.134, -0.34],
-      muzzle: [0, 0.064, -0.6834], eject: [0.0432, -0.004, -0.045], sightY: 0.134,
+      muzzle: [0, 0.062, -0.683], eject: [0.016, 0.061, 0.019], sightY: 0.134,
       scale: 1,
     },
   },
@@ -147,7 +147,7 @@ export const WEAPONS = {
     view: {
       glb: "assets/weapons/vesper.glb",
       posHip: [0.135, -0.10, -0.30], posAds: [0, -0.0997, -0.31],
-      muzzle: [0, 0.0417, -0.6094], eject: [0.0282, -0.004, -0.035], sightY: 0.0997,
+      muzzle: [0, 0.042, -0.609], eject: [0.016, 0.041, 0.01], sightY: 0.0997,
       scale: 1,
       anim: { kind: "gripmag", tilt: [20, 8, -34], lift: [-0.045, 0.09, 0.02], magDrop: 0.10 },
     },
@@ -183,8 +183,8 @@ export const WEAPONS = {
       // world zoom: adsFov 34 -> 21.5 = 3.9x (was 2.2x, which read as barely
       // magnified). Mouse look scales with it automatically (input.js zoom law).
       scope: true,
-      posHip: [0.15, -0.115, -0.36], posAds: [0, -0.123, -0.34],
-      muzzle: [0, 0.025, -0.8635], eject: [0.046, -0.002, -0.10], sightY: 0.123,
+      posHip: [0.15, -0.115, -0.36], posAds: [0, -0.139, -0.34],
+      muzzle: [0, 0.06, -0.867], eject: [0.017, 0.059, 0.027], sightY: 0.139,
       scale: 1,
       // the scope owns the frame at full ADS, so the gun takes none of the world's zoom
       adsZoom: 0,
@@ -225,7 +225,7 @@ export const WEAPONS = {
       // `pump` forend node, SOCKET_eject on the receiver window.
       glb: "assets/weapons/breaker.glb",
       posHip: [0.15, -0.11, -0.34], posAds: [0, -0.1237, -0.25],
-      muzzle: [0, 0.0877, -0.7469], eject: [0.0317, 0.082, -0.15], sightY: 0.1237,
+      muzzle: [0, 0.088, -0.75], eject: [0.02, 0.083, -0.1], sightY: 0.1237,
       scale: 1,
       // hand animation (viewmodel.js): per-shell loading with the gun canted
       anim: { kind: "shell", tilt: [8, 0, -26], lift: [-0.03, 0.055, 0.0],
@@ -253,8 +253,8 @@ export const WEAPONS = {
     penetration: null, // §3.2: Pike penetrates nothing
     view: {
       glb: "assets/weapons/pike.glb",
-      posHip: [0.095, -0.085, -0.26], posAds: [0, -0.0843, -0.34],
-      muzzle: [0, 0.047, -0.1854], eject: [0.0269, -0.002, -0.01], sightY: 0.0843,
+      posHip: [0.10, -0.095, -0.34], posAds: [0, -0.0843, -0.34],
+      muzzle: [0, 0.047, -0.186], eject: [0.014, 0.066, -0.04], sightY: 0.0843,
       scale: 1,
       anim: { kind: "gripmag", tilt: [26, 10, -38], lift: [-0.045, 0.10, 0.02], magDrop: 0.09 },
     },
