@@ -12,7 +12,7 @@ world sheet, the content records and the fighter art briefs.
 
 | kind | count | goes to | used for |
 |---|---|---|---|
-| concept | 16 | `_design/concept/<fighter>.png` | turnaround references for the Blender modellers (not shipped) |
+| concept | 16 | `_design/concept/<fighter>.webp` | turnaround references for the Blender modellers (not shipped) |
 | texture | 12 | `art/out/textures/<id>.webp` (made seamless) | hand-painted terrain and material sets for maps |
 | backdrop | 6 | `art/out/backdrops/<id>.webp` | painted backgrounds behind the Blender fighter splashes and menus |
 | keyart | 13 | `content/ui/{home,modes,loading}/…webp`, `public/thumbnail.png` | home feature + tiles, mode cards, loading screens, store banner, portal cover |

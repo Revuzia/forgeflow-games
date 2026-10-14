@@ -76,6 +76,8 @@ def main() -> None:
         elif k in ("keyart", "backdrop"):
             w, h = sizes[it["size"]]
             img = cover(img, w, h)
+        elif k == "concept" and img.width > 2048:   # modelling reference: 2048 wide is plenty
+            img = img.resize((2048, round(img.height * 2048 / img.width)), Image.LANCZOS)
         if out.suffix == ".webp":
             img.save(out, "WEBP", quality=88, method=6)
         else:
