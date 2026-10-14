@@ -60,6 +60,12 @@ export function mount(root: HTMLElement, o: MountOptions): MountedApp {
   const ctx: AppCtx = { cv, session: o.session, state, router, sound, overlay, hasScene: !!o.renderer };
   const stopLoop = startFrameLoop(state, o);
   bindRenderer(state, router, o.renderer ?? null);
+  // the audio engine follows the live match (spatial combat cues) and the audio settings
+  if (o.audio) {
+    const a = o.audio;
+    effect(() => { a.attach?.(state.match.value ?? null); });
+    effect(() => { a.settings?.(state.settings.value.audio); });
+  }
   if (o.dev) (window as unknown as { __vale?: unknown }).__vale = { ...ctx, audioLog: (port as { log?: unknown }).log, screens: Object.keys(SCREENS) };
   root.textContent = '';
   void loadFonts().then(() => render(<AppContext.Provider value={ctx}><App /></AppContext.Provider>, root));

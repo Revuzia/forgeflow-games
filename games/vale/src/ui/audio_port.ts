@@ -14,6 +14,10 @@ export interface AudioPort {
   music?(musicId: string | null): void;
   /** OPTIONAL: duck the bed under a moment (the ready check) and restore it */
   duck?(on: boolean): void;
+  /** OPTIONAL: the live match (its SimEvents become spatial cues), or null after it */
+  attach?(client: import('../contracts/session.ts').MatchClient | null): void;
+  /** OPTIONAL: Settings.audio volumes changed */
+  settings?(s: import('../contracts/session.ts').Settings['audio']): void;
 }
 
 /** music bed kinds for the client's own screens; match beds come from MapDef.art.music (data) */

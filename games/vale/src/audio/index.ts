@@ -1,0 +1,360 @@
+// VALE audio — the WebAudio engine (CONTRACT §11; tokens.json `audio`). Implements the UI's AudioPort.
+//
+//   buses       music · sfx · ui · voice · ambience → master → limiter → out (Settings.audio volumes;
+//               `muteInBackground` silences a hidden tab)
+//   cues        AudioCue: random variant file, ±pitchVar semitones, gain, maxVoices (the quietest-
+//               priority oldest voice is stolen), cooldown (s), loop; files decode lazily on first use,
+//               UI cues preload; an unknown or missing cue is silently ignored (art may still be rendering)
+//   music       MusicDef beds crossfade (1.2 s); `layers` start sample-aligned with the main stem and
+//               fade by the match's combat intensity (enter above 0.6, leave below 0.35 after 8 s,
+//               quantised to the bar); duck() pulls the bed −8 dB under a moment (the ready check)
+//   match       attach(client): SimEvents become cues. Spatial cues pan and attenuate by their world
+//               position relative to YOUR fighter (the camera's subject); ability cues come from the
+//               catalog (`present.sfx` / `hitSfx` / event `sfx`), the rest from the generic set
+//               (c_* combat, m_* match events), so content can re-voice any ability without code.
+// The context starts suspended (browser autoplay rules) and resumes on the first pointer/key gesture.
+
+import type { MatchClient } from '../contracts/session.ts';
+import type { SimEvent } from '../contracts/sim.ts';
+import type { AudioPort } from '../ui/audio_port.ts';
+
+type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
+interface CueDef { files: string[]; bus: Bus; gain: number; pitchVar: number; maxVoices: number; priority: number; spatial: boolean; loop: boolean; cooldown: number }
+interface MusicDefT { file: string; bpm: number; loopStart: number; loopEnd?: number; gain: number; layers: { id: string; file: string }[] }
+interface CatalogLike {
+  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT> };
+  fighters: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } }; kit: Record<string, { id: string; present?: { sfx?: string; hitSfx?: string } } | undefined> }[];
+}
+interface AudioSettings { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean }
+interface EntityLike { id: number; kind: string; team: number; x: number; y: number }
+
+export interface ValeAudioPort extends AudioPort {
+  attach(client: MatchClient | null): void;
+  settings(s: AudioSettings): void;
+  readonly log: string[];
+}
+
+const BUSES: Bus[] = ['music', 'sfx', 'ui', 'voice', 'ambience'];
+const XFADE_S = 1.2;
+const HEAR_M = 26;           // beyond this a spatial cue is silent
+const NEAR_M = 6;            // inside this it is full volume
+
+interface Voice { src: AudioBufferSourceNode; gain: GainNode; cue: string; priority: number; started: number }
+
+class Engine implements ValeAudioPort {
+  readonly log: string[] = [];
+  private ctx: AudioContext | null = null;
+  private master!: GainNode;
+  private readonly bus = new Map<Bus, GainNode>();
+  private readonly buffers = new Map<string, Promise<AudioBuffer | null>>();
+  private readonly voices: Voice[] = [];
+  private readonly lastPlay = new Map<string, number>();
+  private vol: AudioSettings;
+  private readonly cues: Record<string, CueDef>;
+  private readonly beds: Record<string, MusicDefT>;
+  private readonly url: (ref: string) => string;
+  private bed: { id: string; main: AudioBufferSourceNode | null; layer: AudioBufferSourceNode | null; gain: GainNode; layerGain: GainNode } | null = null;
+  private wantBed: string | null = null;
+  private duckGain!: GainNode;
+  private hidden = false;
+  // match
+  private client: MatchClient | null = null;
+  private off: (() => void) | null = null;
+  private readonly abilitySfx = new Map<string, { sfx?: string; hitSfx?: string }>();
+  private intensity = 0;
+  private combat = false;
+  private calmFor = 0;
+  private tick: number | null = null;
+
+  constructor(cat: CatalogLike, url: (ref: string) => string, settings: AudioSettings) {
+    this.cues = cat.audio.cues;
+    this.beds = cat.audio.music;
+    this.url = url;
+    this.vol = { ...settings };
+    for (const f of cat.fighters) {
+      for (const a of Object.values(f.kit)) if (a?.present) this.abilitySfx.set(a.id, a.present);
+      if (f.attack?.present) this.abilitySfx.set(`attack:${f.id}`, f.attack.present);
+    }
+    const resume = (): void => { this.ensure(); void this.ctx?.resume(); };
+    addEventListener('pointerdown', resume, { capture: true });
+    addEventListener('keydown', resume, { capture: true });
+    document.addEventListener('visibilitychange', () => { this.hidden = document.hidden; this.applyVolumes(); });
+  }
+
+  // ── setup ──────────────────────────────────────────────────────────────────────────────────────
+  private ensure(): AudioContext | null {
+    if (this.ctx) return this.ctx;
+    const AC = (globalThis as { AudioContext?: typeof AudioContext }).AudioContext;
+    if (!AC) return null;
+    const ctx = new AC({ latencyHint: 'interactive' });
+    this.ctx = ctx;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.12;
+    this.master = ctx.createGain();
+    this.master.connect(limiter).connect(ctx.destination);
+    this.duckGain = ctx.createGain();
+    this.duckGain.connect(this.master);
+    for (const b of BUSES) {
+      const g = ctx.createGain();
+      g.connect(b === 'music' ? this.duckGain : this.master);
+      this.bus.set(b, g);
+    }
+    this.applyVolumes();
+    // preload the UI set (they must answer the first click)
+    for (const c of Object.values(this.cues)) if (c.bus === 'ui') for (const f of c.files) void this.buffer(f);
+    if (this.wantBed) this.startBed(this.wantBed);
+    if (this.tick === null) this.tick = window.setInterval(() => this.update(0.25), 250);
+    return ctx;
+  }
+
+  private applyVolumes(): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const mute = this.hidden && this.vol.muteInBackground;
+    this.master.gain.setTargetAtTime(mute ? 0 : this.vol.master, t, 0.05);
+    for (const b of BUSES) this.bus.get(b)!.gain.setTargetAtTime(this.vol[b], t, 0.05);
+  }
+
+  private buffer(ref: string): Promise<AudioBuffer | null> {
+    let p = this.buffers.get(ref);
+    if (!p) {
+      const ctx = this.ctx;
+      p = !ctx ? Promise.resolve(null) : fetch(this.url(ref))
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+        .then((b) => ctx.decodeAudioData(b))
+        .catch(() => null);
+      if (ctx) this.buffers.set(ref, p);
+    }
+    return p;
+  }
+
+  // ── AudioPort ─────────────────────────────────────────────────────────────────────────────────
+  play(cueId: string): void { this.cue(cueId, null); }
+
+  settings(s: AudioSettings): void { this.vol = { ...s }; this.applyVolumes(); }
+
+  duck(on: boolean): void {
+    if (!this.ctx) return;
+    this.duckGain.gain.setTargetAtTime(on ? Math.pow(10, -8 / 20) : 1, this.ctx.currentTime, 0.15);
+  }
+
+  music(id: string | null): void {
+    if (id === this.wantBed) return;
+    this.wantBed = id;
+    if (!this.ctx) return;
+    this.stopBed();
+    if (id) this.startBed(id);
+  }
+
+  /** play a cue; `pos` (world x, y) makes a spatial cue pan/attenuate around your fighter */
+  private cue(cueId: string, pos: { x: number; y: number } | null, gainMul = 1): void {
+    const c = this.cues[cueId];
+    if (!c) return;
+    const ctx = this.ensure();
+    if (!ctx || ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    if (c.cooldown > 0 && now - (this.lastPlay.get(cueId) ?? -1e9) < c.cooldown) return;
+    let pan = 0, att = 1;
+    if (pos && c.spatial) {
+      const me = this.youPos();
+      if (me) {
+        const dx = pos.x - me.x, dy = pos.y - me.y, d = Math.hypot(dx, dy);
+        if (d > HEAR_M) return;
+        att = d <= NEAR_M ? 1 : Math.max(0, 1 - (d - NEAR_M) / (HEAR_M - NEAR_M)) ** 1.5;
+        pan = Math.max(-0.85, Math.min(0.85, dx / 14));
+      }
+    }
+    // voice limit: steal the oldest voice of the lowest priority
+    const mine = this.voices.filter((v) => v.cue === cueId);
+    if (mine.length >= c.maxVoices) {
+      const v = mine.sort((a, b) => a.started - b.started)[0];
+      this.stopVoice(v, 0.03);
+    }
+    this.lastPlay.set(cueId, now);
+    const file = c.files[Math.floor(Math.random() * c.files.length)];
+    void this.buffer(file).then((buf) => {
+      if (!buf || !this.ctx) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = c.loop;
+      if (c.pitchVar) src.playbackRate.value = Math.pow(2, ((Math.random() * 2 - 1) * c.pitchVar) / 12);
+      const g = this.ctx.createGain();
+      g.gain.value = c.gain * att * gainMul;
+      let node: AudioNode = src;
+      if (pan) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; }
+      node.connect(g).connect(this.bus.get(c.bus)!);
+      const v: Voice = { src, gain: g, cue: cueId, priority: c.priority, started: this.ctx.currentTime };
+      this.voices.push(v);
+      src.onended = () => { const i = this.voices.indexOf(v); if (i >= 0) this.voices.splice(i, 1); };
+      src.start();
+      if (this.log.length < 400) this.log.push(cueId);
+    });
+  }
+
+  private stopVoice(v: Voice, fade: number): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    v.gain.gain.setTargetAtTime(0, t, fade / 3);
+    try { v.src.stop(t + fade + 0.02); } catch { /* already stopped */ }
+  }
+
+  // ── music beds ────────────────────────────────────────────────────────────────────────────────
+  private startBed(id: string): void {
+    const def = this.beds[id];
+    const ctx = this.ctx;
+    if (!def || !ctx) return;
+    const gain = ctx.createGain();
+    const layerGain = ctx.createGain();
+    gain.gain.value = 0;
+    layerGain.gain.value = 0;
+    gain.connect(this.bus.get('music')!);
+    layerGain.connect(gain);
+    const bed = { id, main: null as AudioBufferSourceNode | null, layer: null as AudioBufferSourceNode | null, gain, layerGain };
+    this.bed = bed;
+    const layerRef = def.layers[0]?.file;
+    void Promise.all([this.buffer(def.file), layerRef ? this.buffer(layerRef) : Promise.resolve(null)]).then(([main, layer]) => {
+      if (this.bed !== bed || !main || !this.ctx) return;
+      const t0 = this.ctx.currentTime + 0.05;
+      const mk = (buf: AudioBuffer, out: AudioNode): AudioBufferSourceNode => {
+        const s = this.ctx!.createBufferSource();
+        s.buffer = buf; s.loop = true;
+        s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? buf.duration;
+        s.connect(out); s.start(t0);
+        return s;
+      };
+      bed.main = mk(main, gain);
+      if (layer) bed.layer = mk(layer, layerGain);
+      gain.gain.setTargetAtTime(def.gain, t0, XFADE_S / 3);
+    });
+  }
+
+  private stopBed(): void {
+    const b = this.bed;
+    if (!b || !this.ctx) return;
+    this.bed = null;
+    const t = this.ctx.currentTime;
+    b.gain.gain.setTargetAtTime(0, t, XFADE_S / 3);
+    for (const s of [b.main, b.layer]) if (s) try { s.stop(t + XFADE_S * 1.5); } catch { /* not started */ }
+  }
+
+  // ── match ─────────────────────────────────────────────────────────────────────────────────────
+  attach(client: MatchClient | null): void {
+    if (client === this.client) return;
+    this.off?.();
+    this.off = null;
+    this.client = client;
+    this.intensity = 0; this.combat = false; this.calmFor = 0;
+    if (client) this.off = client.onEvents((evs: SimEvent[]) => { for (const e of evs) this.onEvent(e as unknown as Record<string, unknown>); });
+  }
+
+  private youPos(): { x: number; y: number } | null {
+    const c = this.client;
+    if (!c) return null;
+    const p = c.view.players.find((x) => x.player === c.you);
+    const e = p ? c.view.entity(p.entity) : undefined;
+    return e ? { x: e.x, y: e.y } : null;
+  }
+
+  private ent(id: unknown): EntityLike | undefined {
+    return typeof id === 'number' ? this.client?.view.entity(id) : undefined;
+  }
+
+  private myTeam(): number {
+    const c = this.client;
+    return c?.view.players.find((x) => x.player === c.you)?.team ?? -1;
+  }
+
+  private onEvent(e: Record<string, unknown>): void {
+    const kind = e.e as string;
+    const src = this.ent(e.src), dst = this.ent(e.dst);
+    const at = (x: EntityLike | undefined): { x: number; y: number } | null => (x ? { x: x.x, y: x.y } : null);
+    const me = this.youPos();
+    const near = (p: { x: number; y: number } | null): boolean => !!p && !!me && Math.hypot(p.x - me.x, p.y - me.y) < 14;
+    switch (kind) {
+      case 'cast': {
+        const pr = this.abilitySfx.get(e.ability as string);
+        this.cue(pr?.sfx ?? (e.slot === 'ult' ? 'c_ult_windup' : 'c_cast_lumen'), at(src));
+        if (src && src.team !== this.myTeam() && e.slot === 'ult' && near(at(src))) this.cue('m_enemy_windup', null);
+        break;
+      }
+      case 'projectile': this.cue('c_proj_whoosh', at(src), 0.7); break;
+      case 'hit': {
+        const pr = this.abilitySfx.get(e.ability as string);
+        this.cue((e.sfx as string) ?? pr?.hitSfx ?? 'c_hit_magic', at(dst));
+        break;
+      }
+      case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }); break;
+      case 'attack': this.cue('c_swing_light', at(src), src?.kind === 'fighter' ? 0.6 : 0.3); break;
+      case 'damage': {
+        const p = at(dst);
+        if (near(p)) this.intensity = Math.min(1, this.intensity + (src?.kind === 'fighter' && dst?.kind === 'fighter' ? 0.12 : 0.02));
+        if (e.ability) break;                         // ability hits voice through `hit`
+        if (e.crit) this.cue('c_crit', p);
+        else this.cue(e.dtype === 'magic' ? 'c_hit_magic' : e.dtype === 'true' ? 'c_hit_true' : 'c_hit_phys_light', p, src?.kind === 'fighter' ? 0.8 : 0.45);
+        break;
+      }
+      case 'heal': this.cue('c_heal', at(dst), 0.7); break;
+      case 'shield': this.cue('c_shield', at(dst)); break;
+      case 'status': {
+        const s = e.status as string;
+        this.cue(s === 'stun' ? 'c_stun' : s === 'root' ? 'c_root' : s === 'slow' ? 'c_slow' : 'c_buff', at(dst), 0.8);
+        break;
+      }
+      case 'dash': this.cue('c_dash', at(src)); break;
+      case 'blink': this.cue('c_blink', at(src)); break;
+      case 'death': {
+        const k = e.kind as string;
+        if (k === 'fighter') {
+          this.cue('c_death_shatter', at(dst));
+          const youEnt = this.client?.view.players.find((x) => x.player === this.client?.you)?.entity;
+          if (e.dst === youEnt) this.cue('m_self_down', null);
+          else if (dst && dst.team === this.myTeam()) this.cue('m_ally_down', null);
+        } else if (k === 'minion') this.cue('c_wick_die', at(dst), 0.6);
+        else if (k === 'monster') this.cue('c_monster_hit', at(dst));
+        break;
+      }
+      case 'takedown': if (e.killer === this.client?.you) this.cue('m_takedown', null); break;
+      case 'respawn': if (e.player === this.client?.you) this.cue('m_respawn', null); break;
+      case 'levelUp': if (e.player === this.client?.you) this.cue('m_level_up', null); break;
+      case 'gold': if (e.player === this.client?.you && (e.reason === 'cs' || e.reason === 'kill')) this.cue('m_gleam', null, 0.6); break;
+      case 'structure': {
+        const p = this.ent(e.id);
+        this.cue('c_structure_fall', at(p));
+        this.cue(e.team === this.myTeam() ? 'm_structure_ally_fall' : 'm_structure_enemy_fall', null);
+        break;
+      }
+      case 'objective': this.cue(e.team === this.myTeam() ? 'm_objective_ally' : 'm_objective_enemy', null); break;
+      case 'wave': if ((e.n as number) <= 1) this.cue('m_wave_spawn', null); break;
+      case 'recall': if (e.player === this.client?.you) this.cue(e.state === 'done' ? 'm_recall_done' : e.state === 'start' ? 'm_recall_start' : 'ui_back', null); break;
+      case 'ping': this.cue(`m_ping_${e.kind as string}`, null); break;
+      case 'pickup': if (e.player === this.client?.you) this.cue('m_sunmote', null); break;
+      case 'announce': this.cue(/first|ace|objective|structure|inhib|core/i.test(e.key as string) ? 'm_announce_major' : 'm_announce_minor', null); break;
+      case 'eliminated': if (e.player === this.client?.you) this.cue('m_eliminated', null); break;
+      case 'suddenDeath': this.cue('m_sudden_death', null); break;
+      default: break;
+    }
+  }
+
+  /** combat intensity → the bed's combat layer (bar-quantised enter/leave, tokens.audio.beds.match) */
+  private update(dt: number): void {
+    this.intensity = Math.max(0, this.intensity - dt * 0.12);
+    const b = this.bed;
+    if (!b || !this.ctx || !b.layer) return;
+    if (!this.combat && this.intensity > 0.6) { this.combat = true; this.calmFor = 0; }
+    else if (this.combat) {
+      this.calmFor = this.intensity < 0.35 ? this.calmFor + dt : 0;
+      if (this.calmFor > 8) this.combat = false;
+    }
+    const def = this.beds[b.id];
+    const bar = def ? (60 / def.bpm) * 4 : 2;
+    const t = this.ctx.currentTime;
+    const at = Math.ceil(t / bar) * bar;
+    b.layerGain.gain.cancelScheduledValues(t);
+    b.layerGain.gain.setTargetAtTime(this.combat ? 1 : 0, at, 0.6);
+  }
+}
+
+export function createAudioEngine(o: { catalog: unknown; assetUrl: (ref: string) => string; settings: unknown }): ValeAudioPort {
+  const s = (o.settings as { audio?: AudioSettings }).audio ?? { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true };
+  return new Engine(o.catalog as CatalogLike, o.assetUrl, s);
+}
