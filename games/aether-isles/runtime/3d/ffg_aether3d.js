@@ -8,6 +8,7 @@
  * Greedy Skyfarer AI. Next: N seats (2–5), trade, Storm Spirit, art, online via ffg_seatplay.
  */
 import * as THREE from "three";
+import { randomHandles } from "../ffg_handles.js";
 const _V = new URL(import.meta.url).search;
 const { register3d } = await import("./ffg_kernel_3d.js" + _V);
 const A = await import("./ffg_aether_rules.js" + _V);
@@ -171,13 +172,14 @@ register3d("aether3d", async (kernel, content) => {
   function buildEMarks() { eMarks = board.edges.map((e) => { const va = board.vertices[e.a], vb = board.vertices[e.b]; const ax = va.x * SCALE, az = va.z * SCALE, bx = vb.x * SCALE, bz = vb.z * SCALE; const m = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(bx - ax, bz - az) * 0.7, 0.14, 0.32), new THREE.MeshBasicMaterial({ color: 0x7CFC9A, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false })); m.position.set((ax + bx) / 2, TOPY + 0.28, (az + bz) / 2); m.rotation.y = -Math.atan2(bz - az, bx - ax); m.userData = { edge: e }; m.visible = false; world.add(m); return m; }); }
   buildEMarks();
 
-  const SEAT_COLORS = [0x7CFC9A, 0xff9a6a, 0x9bb8ff, 0xffe27a, 0xd08cff], AI_NAMES = ["Skyfarer", "Nimbus", "Zephyr", "Cirrus"];
-  let SEATS = [{ name: "You", ai: false, color: SEAT_COLORS[0] }, { name: "Skyfarer AI", ai: true, color: SEAT_COLORS[1] }];
+  const SEAT_COLORS = [0x7CFC9A, 0xff9a6a, 0x9bb8ff, 0xffe27a, 0xd08cff];
+  let SEATS = [{ name: "You", ai: false, color: SEAT_COLORS[0] }, { name: randomHandles(1, { avoid: ["You"] })[0], ai: true, color: SEAT_COLORS[1] }];
   let gcfg = { total: 3, ais: 2 };   // creator-chosen roster: total 2–5, `ais` filled by AI, rest human (hotseat)
   function buildSeats() {
     SEATS = []; const humans = gcfg.total - gcfg.ais;
     for (let i = 0; i < humans; i++) SEATS.push({ name: i === 0 ? "You" : "Player " + (i + 1), ai: false, color: SEAT_COLORS[SEATS.length] });
-    for (let i = 0; i < gcfg.ais; i++) SEATS.push({ name: AI_NAMES[i % 4] + " AI", ai: true, color: SEAT_COLORS[SEATS.length] });
+    const aiNames = randomHandles(gcfg.ais, { avoid: SEATS.map((s) => s.name) });   // random player handles, new every game (owner 2026-10-13)
+    for (let i = 0; i < gcfg.ais; i++) SEATS.push({ name: aiNames[i], ai: true, color: SEAT_COLORS[SEATS.length] });
     res = SEATS.map(() => emptyRes());
   }
   let phase = "menu", curSeat = 0, rolled = false, buildMode = null, setupOrder = [], setupIdx = 0, lastRoll = 0, setupSub = "settle", pendingV = -1;

@@ -3,6 +3,7 @@
 // human or not — plays through the identical data-driven kits.
 
 import { rand, dist2, clamp } from "../core/util.js";
+import { randomHandles } from "../ffg_handles.js";
 
 export class ControllerBase {
   moveVec() { return { x: 0, z: 0, mag: 0 }; }
@@ -171,10 +172,11 @@ export class BotController extends ControllerBase {
   }
 }
 
-const BOT_NAMES = [
-  "Kaelen", "Vyra", "Dorn", "Sableth", "Miriv", "Orsk", "Thessaly", "Brann",
-  "Nyxa", "Corvin", "Ashka", "Ferros", "Lunet", "Gorwin", "Zephra", "Haldric",
-];
-let nameCursor = Math.floor(Math.random() * BOT_NAMES.length);
-export function botName() { return BOT_NAMES[nameCursor++ % BOT_NAMES.length]; }
+// random player handles, never repeating within the last 40 (owner 2026-10-13: bot names are always random)
+const recentNames = [];
+export function botName() {
+  const n = randomHandles(1, { maxLen: 14, avoid: recentNames })[0];
+  recentNames.push(n); if (recentNames.length > 40) recentNames.shift();
+  return n;
+}
 export function botClass() { return ["warrior", "archer", "mage"][Math.floor(Math.random() * 3)]; }

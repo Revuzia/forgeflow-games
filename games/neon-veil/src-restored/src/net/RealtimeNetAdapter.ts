@@ -10,12 +10,12 @@ import type { INetAdapter } from './INetAdapter';
 import type { KillEvent, PlayerState, TeamId, WeaponId } from '../core/types';
 // @ts-expect-error — plain-JS relay, no type decls (bundled by Vite)
 import { NetPlay } from './ffg_netplay.js';
+import { randomHandles, handleRng } from './handles';
 
 const SUPABASE_URL = 'https://wugoxdewcdxzfppgzohy.supabase.co';
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves';
 
-const BOT_NAMES = ['VEX-9', 'NULLSTAR', 'KITE', 'PHANTOM', 'RYU-0', 'GHOSTLINE', 'HEXA', 'ORBIT', 'SAKURA', 'DRIFT', 'NOVA', 'REDLINE'];
 const STATE_MS = 66; // ~15 Hz own-ship broadcast
 const BOTS_MS = 83; // ~12 Hz host bot batch
 const TARGET_PILOTS = 8; // shared pilots per map: humans + host-simulated bots fill to this
@@ -77,10 +77,14 @@ export class RealtimeNetAdapter implements INetAdapter {
     for (const [id, p] of this.players) if (p.isBot) this.players.delete(id);
     const host = this.net.isHost();
     const want = Math.max(0, TARGET_PILOTS - this.roster.length);
+    // random callsigns, new every match (owner 2026-10-13), seeded from the agreed roster so every client draws the same names
+    let h = 0x811c9dc5;
+    for (const ch of this.roster.map((r) => r.peer).sort().join('|')) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    const names = randomHandles(want, { rng: handleRng(h), upper: true, maxLen: 12, avoid: this.roster.map((r) => r.name) });
     for (let i = 0; i < want; i++) {
       const id = `bot-${i}`; // deterministic → identical on host + every guest
       const team: TeamId = teamMode ? (((i % 2) + 1) as TeamId) : 0;
-      const p = this._make(id, BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? `-${i}` : ''), true, team);
+      const p = this._make(id, names[i], true, team);
       p.netRemote = !host; // host simulates the bots; guests wire-render them
       this.players.set(id, p);
     }

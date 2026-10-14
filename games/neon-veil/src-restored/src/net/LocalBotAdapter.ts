@@ -1,26 +1,7 @@
 import type { KillEvent, PlayerState, TeamId, WeaponId } from '../core/types';
 import type { INetAdapter } from './INetAdapter';
+import { randomHandles } from './handles';
 
-const BOT_NAMES = [
-  'VEX-9',
-  'NULLSTAR',
-  'KITE',
-  'PHANTOM',
-  'RYU-0',
-  'GHOSTLINE',
-  'HEXA',
-  'ORBIT',
-  'SAKURA',
-  'DRIFT',
-  'NOVA',
-  'REDLINE',
-  'ASH-7',
-  'VECTOR',
-  'MIRAGE',
-  'ION',
-  'WRAITH',
-  'PULSE',
-];
 
 export class LocalBotAdapter implements INetAdapter {
   readonly localId = 'local';
@@ -42,10 +23,13 @@ export class LocalBotAdapter implements INetAdapter {
     for (const [id, p] of this.players) {
       if (p.isBot) this.players.delete(id);
     }
+    // random pilot callsigns, new every match (owner 2026-10-13: bot names are always random)
+    const local = this.players.get(this.localId);
+    const names = randomHandles(count, { upper: true, maxLen: 12, avoid: local ? [local.callsign] : [] });
     for (let i = 0; i < count; i++) {
       const id = `bot-${i}`;
       const team: TeamId = teamMode ? ((i % 2) + 1) as TeamId : 0;
-      const name = BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? `-${i}` : '');
+      const name = names[i];
       this.players.set(id, this.makePlayer(id, name, true, team));
     }
   }

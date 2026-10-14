@@ -5,6 +5,7 @@
  * are quantized to keep messages small at 10 Hz; roster assignment maps connected
  * peers + fill bots onto slots with roles. chromanet.js does only transport glue.
  */
+import { randomHandles, handleRng } from '../ffg_handles.js';
 import { assignRoles, ROLE, POSE_IDS } from "./match_core.js";
 import { makeRng } from "./util.js";
 
@@ -75,9 +76,10 @@ export function buildRoster(peerIds, lobbySize, seekerCount, seed, localPeerId) 
   const rng = makeRng(seed >>> 0);
   const humans = peerIds.slice(0, lobbySize);
   const nBots = Math.max(0, lobbySize - humans.length);
-  const botNames = ["Vex", "Rune", "Mica", "Pip", "Sol", "Wisp", "Bram", "Kite", "Fen", "Ivo"];
+  // random player handles from the match seed — every client builds the same roster; new every match (owner 2026-10-13)
+  const botNames = randomHandles(nBots, { rng: handleRng(seed >>> 0) });
   const slots = humans.map((id) => ({ id, isBot: false }))
-    .concat(Array.from({ length: nBots }, (_, i) => ({ id: "bot" + i, isBot: true, name: botNames[i % botNames.length] })));
+    .concat(Array.from({ length: nBots }, (_, i) => ({ id: "bot" + i, isBot: true, name: botNames[i] })));
   const roleInfo = assignRoles(slots.map((s) => s.id), seekerCount, [], rng);
   const players = slots.map((s) => ({ id: s.id, isBot: s.isBot, role: roleInfo.roles[s.id], name: s.name, isLocal: s.id === localPeerId }));
   return { players, seed };

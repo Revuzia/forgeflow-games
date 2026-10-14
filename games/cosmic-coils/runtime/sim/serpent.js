@@ -1,3 +1,4 @@
+import { randomHandles } from '../ffg_handles.js';
 /**
  * Cosmic Coils — runtime/sim/serpent.js
  * Deterministic spherical-planet snake-battle simulation. Pure ESM, zero deps
@@ -345,6 +346,13 @@ export const SKINS = [
 ];
 export const BOT_NAMES = ["Zix", "Korath", "Mamba", "Noodle", "Sly", "Vypra", "Coilin", "Fang", "Sizzle", "Loop", "Twist", "Naga", "Basil", "Wyrm", "Kaa", "Slink", "Ouro", "Vex", "Hiss", "Rattle", "Momo", "Glide"];
 
+// a random player handle, new every spawn (owner 2026-10-13). Still draws ONE value from the world rng, exactly as the
+// old pool pick did, so the sim stream (spawn points, skins, weather) is unchanged; the host's names reach peers in its snapshot.
+function botHandle(W, rng) {
+  rng();
+  return randomHandles(1, { maxLen: 14, avoid: W.snakes.filter((s) => s.alive && s.name).map((s) => s.name) })[0];
+}
+
 export function spawnSnake(W, slot, o = {}) {
   let sn = W.snakes.find((s) => s.slot === slot);
   if (!sn) { sn = { slot }; W.snakes.push(sn); }
@@ -363,7 +371,7 @@ export function spawnSnake(W, slot, o = {}) {
     alive: true,
     isBot: o.isBot !== false,
     netRemote: !!o.netRemote,
-    name: o.name || BOT_NAMES[(slot * 7 + Math.floor(rng() * BOT_NAMES.length)) % BOT_NAMES.length],
+    name: o.name || botHandle(W, rng),
     skinId: o.skinId != null ? o.skinId : (slot + Math.floor(rng() * SKINS.length)) % SKINS.length,
     u, t,
     mass: o.mass != null ? o.mass : CONST.START_MASS,

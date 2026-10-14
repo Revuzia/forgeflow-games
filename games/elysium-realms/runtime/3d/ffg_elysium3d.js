@@ -9,6 +9,7 @@
  * bonuses fold in. Next: N seats (2–5), then art decals, then online via ffg_seatplay.
  */
 import * as THREE from "three";
+import { randomHandles } from "../ffg_handles.js";
 const _V = new URL(import.meta.url).search;
 const { register3d } = await import("./ffg_kernel_3d.js" + _V);
 const R = await import("./ffg_elysium_rules.js" + _V);
@@ -148,13 +149,14 @@ register3d("elysium3d", async (kernel, content) => {
   (kernel.parent || document.body).appendChild(tilePanel);
 
   // ── seats + turn/meeple state ──
-  const SEAT_COLORS = [0x7CFC9A, 0xff9a6a, 0x9bb8ff, 0xffe27a, 0xd08cff], AI_NAMES = ["Ashen", "Umbral", "Cinder", "Verdant"];
-  let SEATS = [{ name: "You", ai: false, color: SEAT_COLORS[0] }, { name: "Ashen AI", ai: true, color: SEAT_COLORS[1] }];
+  const SEAT_COLORS = [0x7CFC9A, 0xff9a6a, 0x9bb8ff, 0xffe27a, 0xd08cff];
+  let SEATS = [{ name: "You", ai: false, color: SEAT_COLORS[0] }, { name: randomHandles(1, { avoid: ["You"] })[0], ai: true, color: SEAT_COLORS[1] }];
   let gcfg = { total: 2, ais: 1 };   // creator-chosen roster: total 2–5, `ais` AI-filled, rest hotseat humans
   function buildSeats() {
     SEATS = []; const humans = gcfg.total - gcfg.ais;
     for (let i = 0; i < humans; i++) SEATS.push({ name: i === 0 ? "You" : "Player " + (i + 1), ai: false, color: SEAT_COLORS[SEATS.length] });
-    for (let i = 0; i < gcfg.ais; i++) SEATS.push({ name: AI_NAMES[i % 4] + " AI", ai: true, color: SEAT_COLORS[SEATS.length] });
+    const aiNames = randomHandles(gcfg.ais, { avoid: SEATS.map((s) => s.name) });   // random player handles, new every game (owner 2026-10-13)
+    for (let i = 0; i < gcfg.ais; i++) SEATS.push({ name: aiNames[i], ai: true, color: SEAT_COLORS[SEATS.length] });
   }
   let phase = "menu", board = null, deck = null, di = 0, cur = null, rot = 0, curAff = "lumen";
   let curSeat = 0, turnState = "place", lastPlaced = null, hoverCell = null, ghost = null;

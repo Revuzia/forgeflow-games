@@ -1,7 +1,7 @@
+import { randomHandles } from './ffg_handles.js';
 import * as THREE from 'three';
 import {
   AI_COLORS,
-  AI_NAMES,
   CIRCUIT_MUSIC,
   ITEMS,
   LAPS,
@@ -568,10 +568,11 @@ export class GridRushGame {
     this.racers.push(player);
     this.scene.add(player.mesh);
 
+    const rivalNames = randomHandles(rivalCount, { upper: true, maxLen: 12 });   // random handles every race (owner 2026-10-13)
     for (let i = 0; i < rivalCount; i++) {
       const vids = Object.keys(VEHICLES);
       const vid = vids[(i + 1) % vids.length];
-      const r = new Racer(`bot-${i}`, AI_NAMES[i % AI_NAMES.length], vid, false);
+      const r = new Racer(`bot-${i}`, rivalNames[i], vid, false);
       r.skill = 0.78 + (i / Math.max(1, rivalCount)) * 0.28;
       const marker = new THREE.Mesh(
         new THREE.ConeGeometry(0.35, 0.7, 3),

@@ -18,6 +18,7 @@
  * contract-C9 test surface: stepFrames(n, dt, render), prof(), feel()).
  */
 import * as THREE from "three";
+import { randomHandles, handleRng } from "../ffg_handles.js";
 
 const V = new URL(import.meta.url).search;
 // IMPORTANT: import the kernel WITH the same ?v= query as the boot module —
@@ -1350,10 +1351,15 @@ function loadSettings() {
     return s;
   } catch (e) { return def; }
 }
+// Bot names: random player handles, new every match (owner 2026-10-13). The old pool shuffle still runs so the world rng
+// stream (and so every sim result) is exactly what it was; the handles are seeded from that shuffled order, so every peer
+// of an online match draws the same names.
 function shuffledNames(W) {
   const pool = window.FFG.sim.Royale.BOT_NAMES.slice();
   for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(W.rng() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
-  return pool;
+  let h = 0x811c9dc5;
+  for (const ch of pool.join("|")) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return randomHandles(64, { rng: handleRng(h) });
 }
 function nextFrame() { return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); }
 /** Reject after `ms` (a bounded wait on an optional asset; never a hang). */

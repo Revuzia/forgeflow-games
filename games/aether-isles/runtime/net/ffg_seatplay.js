@@ -25,6 +25,7 @@
  *   end(result), onPeerDrop(seat), boardHash()->string, testPlayOne() }
  */
 
+import { randomHandles } from "../ffg_handles.js";
 export const SUPABASE_URL = "https://wugoxdewcdxzfppgzohy.supabase.co";
 // ANON key is PUBLIC by design (Realtime Broadcast/Presence only — no tables).
 export const SUPABASE_ANON_KEY =
@@ -36,7 +37,6 @@ const { NetPlay, TurnClock } = await import("./ffg_netplay.js" + V);
 const SEND_GAP_MS = 90;      // ≥ 1000/12 so a burst never trips the eps limiter
 const HELLO_MS = 3000;       // heartbeat cadence
 const DEAD_MS = 10000;       // no hello in 10s → peer considered gone
-const AI_NAMES = ["Ashen", "Umbral", "Cinder", "Verdant"];
 
 // ── DOM helpers (COPIED from ffg_online.js — those are module-private there; kept in sync by hand) ──
 function el(tag, css, html) { const e = document.createElement(tag); if (css) e.style.cssText = css; if (html != null) e.innerHTML = html; return e; }
@@ -180,7 +180,9 @@ export class SeatPlay {
     const humans = this.gcfg.total - this.gcfg.ais, peers = [...this._lobbyPeers.keys()].sort();
     const seats = [{ seat: 0, kind: "human", peerId: this.myPeerId, name: "Host", color: 0 }];
     for (let s = 1; s < humans; s++) { const pid = peers[s - 1]; if (!pid) return; seats.push({ seat: s, kind: "human", peerId: pid, name: this._lobbyPeers.get(pid).name || "Player", color: s }); }
-    for (let s = humans; s < this.gcfg.total; s++) seats.push({ seat: s, kind: "ai", peerId: null, name: AI_NAMES[(s - humans) % 4] + " AI", color: s });
+    // AI seats get random player handles, new every match (owner 2026-10-13); the host draws them and the start message carries them
+    const aiNames = randomHandles(this.gcfg.total - humans, { avoid: seats.map((x) => x.name) });
+    for (let s = humans; s < this.gcfg.total; s++) seats.push({ seat: s, kind: "ai", peerId: null, name: aiNames[s - humans], color: s });
     // random per-match map seed — every client builds the same board from it
     const start = { seed: (Math.floor(Math.random() * 0xFFFFFFFF) >>> 0), seats, turnSeat: 0, cfg: this.gcfg };
     this._enqueue({ t: "start", d: start });
