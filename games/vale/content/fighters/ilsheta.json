@@ -52,7 +52,7 @@
     "passive": {
       "id": "ilsheta_warm_hands",
       "name": "Warm Hands",
-      "icon": "assets/ui/icons/abilities/ilsheta_warm_hands.svg",
+      "icon": "assets/ui/icons/abilities/ilsheta_warm_hands.webp",
       "desc": "Ilsheta's heals restore 40% more to allies who are stunned, rooted, slowed, airborne, asleep, feared or taunted, and give them 15% move speed for 1.5 s (once per 4 s per ally).",
       "triggers": [],
       "present": {
@@ -62,7 +62,7 @@
     "a1": {
       "id": "ilsheta_glint_bolt",
       "name": "Glint Bolt",
-      "icon": "assets/ui/icons/abilities/ilsheta_glint_bolt.svg",
+      "icon": "assets/ui/icons/abilities/ilsheta_glint_bolt.webp",
       "desc": "Ilsheta throws a dawnglass bolt up to 9 m. The first enemy hit takes {effects.0.onHit.0.amount} magic damage and is slowed by 25% for 1.5 s.",
       "maxRank": 5,
       "cooldown": [
@@ -147,7 +147,7 @@
     "a2": {
       "id": "ilsheta_hung_lamp",
       "name": "Hung Lamp",
-      "icon": "assets/ui/icons/abilities/ilsheta_hung_lamp.svg",
+      "icon": "assets/ui/icons/abilities/ilsheta_hung_lamp.webp",
       "desc": "Ilsheta hangs a lamp on an allied fighter or herself for 4 s. Every 0.5 s it heals allied fighters within 3 m of its bearer for {effects.0.onTick.0.amount}, and enemies in its light are revealed and slowed by 10%.",
       "maxRank": 5,
       "cooldown": [
@@ -348,7 +348,7 @@
     "a3": {
       "id": "ilsheta_dawnglass_shell",
       "name": "Dawnglass Shell",
-      "icon": "assets/ui/icons/abilities/ilsheta_dawnglass_shell.svg",
+      "icon": "assets/ui/icons/abilities/ilsheta_dawnglass_shell.webp",
       "desc": "Ilsheta shields an allied fighter or herself for {effects.0.amount} for 2.5 s and gives them 20% move speed for 1 s.",
       "maxRank": 5,
       "cooldown": [
@@ -423,7 +423,7 @@
     "ult": {
       "id": "ilsheta_every_window_lit",
       "name": "Every Window Lit",
-      "icon": "assets/ui/icons/abilities/ilsheta_every_window_lit.svg",
+      "icon": "assets/ui/icons/abilities/ilsheta_every_window_lit.webp",
       "desc": "Ilsheta lights a lamp on every allied fighter within 9 m, herself included, for 5 s. Each lamp heals its bearer for {effects.0.onHit.0.effects.0.amount} every 0.5 s (Warm Hands applies) and reveals enemy fighters within 2.5 m of it.",
       "maxRank": 3,
       "cooldown": [

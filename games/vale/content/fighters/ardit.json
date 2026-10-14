@@ -51,7 +51,7 @@
     "passive": {
       "id": "ardit_turned_blades",
       "name": "Turned Blades",
-      "icon": "assets/ui/icons/abilities/ardit_turned_blades.svg",
+      "icon": "assets/ui/icons/abilities/ardit_turned_blades.webp",
       "desc": "Each time Ardit disarms an enemy fighter (at most once per 1.5 s from each enemy), he gains {triggers.0.effects.0.stats.armor} armor and magic resist for 5 s. This stacks up to 3 times.",
       "triggers": [
         {
@@ -88,7 +88,7 @@
     "a1": {
       "id": "ardit_lancing_run",
       "name": "Lancing Run",
-      "icon": "assets/ui/icons/abilities/ardit_lancing_run.svg",
+      "icon": "assets/ui/icons/abilities/ardit_lancing_run.webp",
       "desc": "Ardit runs up to 7 m behind the pavise and stops at the first enemy fighter he meets. They take {effects.0.onPass.0.amount} magic damage and are knocked airborne for 0.75 s.",
       "maxRank": 5,
       "cooldown": [
@@ -178,7 +178,7 @@
     "a2": {
       "id": "ardit_glare",
       "name": "Glare",
-      "icon": "assets/ui/icons/abilities/ardit_glare.svg",
+      "icon": "assets/ui/icons/abilities/ardit_glare.webp",
       "desc": "Ardit tilts the pavise to catch the dawn. Enemies in a 5 m, 70° cone take {effects.0.onHit.0.amount} magic damage, are slowed by 25% for 1.5 s and are disarmed for {effects.0.onHit.2.duration}.",
       "maxRank": 5,
       "cooldown": [
@@ -274,7 +274,7 @@
     "a3": {
       "id": "ardit_spire_strike",
       "name": "Spire Strike",
-      "icon": "assets/ui/icons/abilities/ardit_spire_strike.svg",
+      "icon": "assets/ui/icons/abilities/ardit_spire_strike.webp",
       "desc": "Ardit drives the pavise's spire into the ground. Enemies within 2.5 m take {effects.0.onHit.0.amount} magic damage (60% more against monsters) and are slowed by 20% for 1.5 s.",
       "maxRank": 5,
       "cooldown": [
@@ -355,7 +355,7 @@
     "ult": {
       "id": "ardit_muster",
       "name": "Muster",
-      "icon": "assets/ui/icons/abilities/ardit_muster.svg",
+      "icon": "assets/ui/icons/abilities/ardit_muster.webp",
       "desc": "Ardit raises the pavise as a beacon for 5 s. Allied fighters within 6 m, himself included, gain 20% move speed and {effects.0.onTick.0.statScaling.armor} armor and magic resist, and every enemy fighter that enters the 6 m radius is disarmed for 1 s.",
       "maxRank": 3,
       "cooldown": [

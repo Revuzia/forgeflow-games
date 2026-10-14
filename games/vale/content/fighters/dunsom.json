@@ -53,7 +53,7 @@
     "passive": {
       "id": "dunsom_settling",
       "name": "Settling",
-      "icon": "assets/ui/icons/abilities/dunsom_settling.svg",
+      "icon": "assets/ui/icons/abilities/dunsom_settling.webp",
       "desc": "Enemies Dunsom displaces are Settled for {triggers.0.effects.0.duration}. Each time his abilities damage a Settled enemy, they take 12 bonus magic damage, plus 3 per level and 10% of his Power.",
       "triggers": [
         {
@@ -82,7 +82,7 @@
     "a1": {
       "id": "dunsom_draw_in",
       "name": "Draw In",
-      "icon": "assets/ui/icons/abilities/dunsom_draw_in.svg",
+      "icon": "assets/ui/icons/abilities/dunsom_draw_in.webp",
       "desc": "After 0.4 s, enemies within 3 m of a point up to 9 m away take {effects.0.onHit.0.amount} magic damage and are drawn up to 2 m toward its centre.",
       "maxRank": 5,
       "cooldown": [
@@ -188,7 +188,7 @@
     "a2": {
       "id": "dunsom_crook_sweep",
       "name": "Crook Sweep",
-      "icon": "assets/ui/icons/abilities/dunsom_crook_sweep.svg",
+      "icon": "assets/ui/icons/abilities/dunsom_crook_sweep.webp",
       "desc": "Dunsom sweeps a wave of dusk 7 m along the ground. Every enemy it touches takes {effects.0.onHit.0.amount} magic damage and is pushed up to 2.5 m toward the point he aimed at.",
       "maxRank": 5,
       "cooldown": [
@@ -286,7 +286,7 @@
     "a3": {
       "id": "dunsom_step_through_dusk",
       "name": "Step Through Dusk",
-      "icon": "assets/ui/icons/abilities/dunsom_step_through_dusk.svg",
+      "icon": "assets/ui/icons/abilities/dunsom_step_through_dusk.webp",
       "desc": "Dunsom steps through the dusk and reappears up to {effects.0.distance} away.",
       "maxRank": 5,
       "cooldown": [
@@ -331,7 +331,7 @@
     "ult": {
       "id": "dunsom_driving_hour",
       "name": "Driving Hour",
-      "icon": "assets/ui/icons/abilities/dunsom_driving_hour.svg",
+      "icon": "assets/ui/icons/abilities/dunsom_driving_hour.webp",
       "desc": "Dunsom picks a point within 9 m. Every enemy within 5 m of him is hurled up to 5 m toward it, and 0.6 s later the point erupts: enemies within 2.5 m take {effects.2.onHit.0.amount} magic damage and are rooted for 1.25 s.",
       "maxRank": 3,
       "cooldown": [

@@ -53,7 +53,7 @@
     "passive": {
       "id": "lisvel_reach_of_morning",
       "name": "Reach of Morning",
-      "icon": "assets/ui/icons/abilities/lisvel_reach_of_morning.svg",
+      "icon": "assets/ui/icons/abilities/lisvel_reach_of_morning.webp",
       "desc": "Each ability that hits an enemy fighter adds 0.4 m to Lisvel's attack range for 5 s, up to 3 times (once per 1.5 s from each enemy).",
       "triggers": [
         {
@@ -85,7 +85,7 @@
     "a1": {
       "id": "lisvel_dawn_line",
       "name": "Dawn Line",
-      "icon": "assets/ui/icons/abilities/lisvel_dawn_line.svg",
+      "icon": "assets/ui/icons/abilities/lisvel_dawn_line.webp",
       "desc": "Lisvel looses an arrow up to 10 m that passes through every enemy on its path, dealing {effects.2.onHit.0.amount} physical damage to each. The path stays lit for 3 s: allies on it, Lisvel included, move {effects.0.onTick.0.power} faster, and enemies crossing it are slowed by 15%.",
       "maxRank": 5,
       "cooldown": [
@@ -223,7 +223,7 @@
     "a2": {
       "id": "lisvel_backstep",
       "name": "Backstep",
-      "icon": "assets/ui/icons/abilities/lisvel_backstep.svg",
+      "icon": "assets/ui/icons/abilities/lisvel_backstep.webp",
       "desc": "Lisvel hops 3 m away from the cursor. Her next attack within 3 s reaches 2 m farther and slows the target by 25% for 1.5 s.",
       "maxRank": 5,
       "cooldown": [
@@ -299,7 +299,7 @@
     "a3": {
       "id": "lisvel_morning_draw",
       "name": "Morning Draw",
-      "icon": "assets/ui/icons/abilities/lisvel_morning_draw.svg",
+      "icon": "assets/ui/icons/abilities/lisvel_morning_draw.webp",
       "desc": "Lisvel draws faster, gaining 30/35/40/45/50% attack speed for 4 s.",
       "maxRank": 5,
       "cooldown": [
@@ -356,7 +356,7 @@
     "ult": {
       "id": "lisvel_sun_corridor",
       "name": "Sun Corridor",
-      "icon": "assets/ui/icons/abilities/lisvel_sun_corridor.svg",
+      "icon": "assets/ui/icons/abilities/lisvel_sun_corridor.webp",
       "desc": "After 0.75 s a 14 m by 3 m shaft of light lands, dealing {effects.0.onHit.0.amount} physical damage and slowing enemies by 40%. It stays for 5 s: allies inside move 30% faster, and Lisvel gains 20% attack speed while she stands in it.",
       "maxRank": 3,
       "cooldown": [

@@ -51,7 +51,7 @@
     "passive": {
       "id": "ervet_dawnglass_edge",
       "name": "Dawnglass Edge",
-      "icon": "assets/ui/icons/abilities/ervet_dawnglass_edge.svg",
+      "icon": "assets/ui/icons/abilities/ervet_dawnglass_edge.webp",
       "desc": "Ervet's attacks deal an extra 2% of her max Health as magic damage. With the blade whole she has +15 armor and magic resist; in Hilt form she has 15 less than her base armor and resist, but moves 20% faster and attacks 30% faster (reach 1.7 m).",
       "stats": {
         "armor": 15,
@@ -378,7 +378,7 @@
     "a1": {
       "id": "ervet_heavy_arc",
       "name": "Heavy Arc",
-      "icon": "assets/ui/icons/abilities/ervet_heavy_arc.svg",
+      "icon": "assets/ui/icons/abilities/ervet_heavy_arc.webp",
       "desc": "Ervet sweeps the blade through a 3.5 m, 140° arc, dealing {effects.0.onHit.0.amount} magic damage and slowing enemies by 25% for 1.5 s.",
       "maxRank": 5,
       "cooldown": [
@@ -463,7 +463,7 @@
     "a2": {
       "id": "ervet_glass_guard",
       "name": "Glass Guard",
-      "icon": "assets/ui/icons/abilities/ervet_glass_guard.svg",
+      "icon": "assets/ui/icons/abilities/ervet_glass_guard.webp",
       "desc": "Ervet braces behind the blade and shields herself for {effects.0.amount} for 2 s.",
       "maxRank": 5,
       "cooldown": [
@@ -518,7 +518,7 @@
     "a3": {
       "id": "ervet_shatter",
       "name": "Shatter",
-      "icon": "assets/ui/icons/abilities/ervet_shatter.svg",
+      "icon": "assets/ui/icons/abilities/ervet_shatter.webp",
       "desc": "Ervet smashes the blade into the ground: enemies within 3 m take {effects.0.onHit.0.amount} magic damage and are slowed by 40% for 1.5 s. Shards slow by 20% for 2 s and the blade breaks into its Hilt for up to 6 s.",
       "maxRank": 5,
       "cooldown": [
@@ -628,7 +628,7 @@
     "ult": {
       "id": "ervet_whole_again",
       "name": "Whole Again",
-      "icon": "assets/ui/icons/abilities/ervet_whole_again.svg",
+      "icon": "assets/ui/icons/abilities/ervet_whole_again.webp",
       "desc": "Ervet leaps up to 6 m. Where she lands, enemies within 3.5 m take {effects.0.onArrive.0.onHit.0.amount} magic damage and are knocked airborne for 0.75 s, and the blade reforms oversized for 6 s: her attacks reach 0.6 m farther and cleave a 120° arc.",
       "maxRank": 3,
       "cooldown": [

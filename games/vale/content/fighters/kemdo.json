@@ -49,7 +49,7 @@
     "passive": {
       "id": "kemdo_cooling_kill",
       "name": "Cooling Kill",
-      "icon": "assets/ui/icons/abilities/kemdo_cooling_kill.svg",
+      "icon": "assets/ui/icons/abilities/kemdo_cooling_kill.webp",
       "desc": "When Kemdo takes part in an enemy fighter's takedown, all her Heat vents at once. It does not shorten an overheat already under way.",
       "triggers": [
         {
@@ -69,7 +69,7 @@
     "a1": {
       "id": "kemdo_long_thrust",
       "name": "Long Thrust",
-      "icon": "assets/ui/icons/abilities/kemdo_long_thrust.svg",
+      "icon": "assets/ui/icons/abilities/kemdo_long_thrust.webp",
       "desc": "Kemdo thrusts along a 4.5 m line, dealing {effects.0.onHit.0.amount} physical damage. Slowed enemies also take {effects.0.onHit.1.then.0.amount} damage that ignores armor and resist (half against monsters).",
       "maxRank": 5,
       "cooldown": [
@@ -166,7 +166,7 @@
     "a2": {
       "id": "kemdo_heat_shimmer",
       "name": "Heat Shimmer",
-      "icon": "assets/ui/icons/abilities/kemdo_heat_shimmer.svg",
+      "icon": "assets/ui/icons/abilities/kemdo_heat_shimmer.webp",
       "desc": "Kemdo dashes 5 m and leaves a heat shimmer along her path for 2 s that slows enemies inside by 25%.",
       "maxRank": 5,
       "cooldown": [
@@ -241,7 +241,7 @@
     "a3": {
       "id": "kemdo_vent",
       "name": "Vent",
-      "icon": "assets/ui/icons/abilities/kemdo_vent.svg",
+      "icon": "assets/ui/icons/abilities/kemdo_vent.webp",
       "desc": "Kemdo releases 50 Heat in a 3 m blast: enemies take {effects.1.onHit.0.amount} physical damage and are knocked back 1 m, and she gains {effects.2.statScaling.armor} armor and magic resist for 1.5 s. Vent costs no Heat and can be cast while overheated.",
       "maxRank": 5,
       "cooldown": [
@@ -347,7 +347,7 @@
     "ult": {
       "id": "kemdo_held_focus",
       "name": "Held Focus",
-      "icon": "assets/ui/icons/abilities/kemdo_held_focus.svg",
+      "icon": "assets/ui/icons/abilities/kemdo_held_focus.webp",
       "desc": "Kemdo focuses the stopped sun on an enemy fighter within 6 m for 3 s. A 2 m spot follows them and deals {effects.0.onTick.0.amount} damage that ignores armor and resist every 0.5 s to every enemy in it, and Kemdo gains {effects.1.stats.omnivamp} omnivamp for the duration.",
       "maxRank": 3,
       "cooldown": [

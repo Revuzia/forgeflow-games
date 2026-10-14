@@ -49,7 +49,7 @@
     "passive": {
       "id": "hesmi_shade_fed",
       "name": "Shade-Fed",
-      "icon": "assets/ui/icons/abilities/hesmi_shade_fed.svg",
+      "icon": "assets/ui/icons/abilities/hesmi_shade_fed.webp",
       "desc": "Hesmi's basic attacks against Shaded enemies deal {triggers.0.effects.0.amount} bonus physical damage (60% against monsters). While Stand Firm lasts, enemy fighters who hit her become Shaded.",
       "triggers": [
         {
@@ -102,7 +102,7 @@
     "a1": {
       "id": "hesmi_plant_shard",
       "name": "Plant Shard",
-      "icon": "assets/ui/icons/abilities/hesmi_plant_shard.svg",
+      "icon": "assets/ui/icons/abilities/hesmi_plant_shard.webp",
       "desc": "Hesmi drives a shard into the ground up to 6 m away. For 3 s it casts a 9 m by 2.5 m shadow pointing away from her: enemies in it are slowed by 25% and Shaded. Then the shard topples along its shadow: enemies still in it take {effects.0.onExpire.0.onHit.0.amount} physical damage and are stunned for 0.75 s.",
       "maxRank": 5,
       "cooldown": [
@@ -218,7 +218,7 @@
     "a2": {
       "id": "hesmi_shoulder_the_stone",
       "name": "Shoulder the Stone",
-      "icon": "assets/ui/icons/abilities/hesmi_shoulder_the_stone.svg",
+      "icon": "assets/ui/icons/abilities/hesmi_shoulder_the_stone.webp",
       "desc": "Hesmi lunges 4.5 m. Enemies she passes take {effects.0.onPass.0.amount} physical damage, are knocked 1.5 m aside and become Shaded.",
       "maxRank": 5,
       "cooldown": [
@@ -304,7 +304,7 @@
     "a3": {
       "id": "hesmi_stand_firm",
       "name": "Stand Firm",
-      "icon": "assets/ui/icons/abilities/hesmi_stand_firm.svg",
+      "icon": "assets/ui/icons/abilities/hesmi_stand_firm.webp",
       "desc": "For 2.5 s Hesmi gains {effects.0.statScaling.armor} armor and magic resist and 30% tenacity. Enemy fighters who hit her meanwhile become Shaded.",
       "maxRank": 5,
       "cooldown": [
@@ -375,7 +375,7 @@
     "ult": {
       "id": "hesmi_felled_shard",
       "name": "Felled Shard",
-      "icon": "assets/ui/icons/abilities/hesmi_felled_shard.svg",
+      "icon": "assets/ui/icons/abilities/hesmi_felled_shard.webp",
       "desc": "Hesmi drops a great shard at a point within 9 m. After 0.75 s, enemies under it (2 m) take {effects.0.onHit.0.amount} physical damage and are stunned for 1.25 s. It then throws a 12 m by 5 m shadow for 5 s that slows enemies by 40% and Shades them, while allied fighters in it gain 15% move speed.",
       "maxRank": 3,
       "cooldown": [

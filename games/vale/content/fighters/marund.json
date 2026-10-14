@@ -52,7 +52,7 @@
     "passive": {
       "id": "marund_hearthside",
       "name": "Hearthside",
-      "icon": "assets/ui/icons/abilities/marund_hearthside.svg",
+      "icon": "assets/ui/icons/abilities/marund_hearthside.webp",
       "desc": "Allied fighters within 5 m of Marund, himself included, regenerate 0.4% of Marund's max Health every second.",
       "triggers": [
         {

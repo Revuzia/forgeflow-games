@@ -49,7 +49,7 @@
     "passive": {
       "id": "burdam_long_memory",
       "name": "Long Memory",
-      "icon": "assets/ui/icons/abilities/burdam_long_memory.svg",
+      "icon": "assets/ui/icons/abilities/burdam_long_memory.webp",
       "desc": "When an enemy fighter damages Burdam, they gain a Grudge stack for 6 s (up to 5; at most one stack per 0.5 s from each enemy). Burdam's basic attacks against a Grudge-bearer heal him for 1.2% of his max Health and give him {triggers.1.effects.1.amount} Tally.",
       "triggers": [
         {
@@ -100,7 +100,7 @@
     "a1": {
       "id": "burdam_bear_down",
       "name": "Bear Down",
-      "icon": "assets/ui/icons/abilities/burdam_bear_down.svg",
+      "icon": "assets/ui/icons/abilities/burdam_bear_down.webp",
       "desc": "Burdam lunges up to 5 m at an enemy and chops them for {effects.0.onArrive.0.amount} physical damage. A Grudge-bearer is also slowed by 40% for 1.5 s.",
       "maxRank": 5,
       "cooldown": [
@@ -184,7 +184,7 @@
     "a2": {
       "id": "burdam_stubborn",
       "name": "Stubborn",
-      "icon": "assets/ui/icons/abilities/burdam_stubborn.svg",
+      "icon": "assets/ui/icons/abilities/burdam_stubborn.webp",
       "desc": "For 3 s Burdam gains {effects.0.statScaling.armor} armor and magic resist and 30% tenacity. When it ends he stamps, dealing {effects.0.onExpire.0.onHit.0.amount} physical damage to enemies within 3 m.",
       "maxRank": 5,
       "cooldown": [
@@ -285,7 +285,7 @@
     "a3": {
       "id": "burdam_old_wound",
       "name": "Old Wound",
-      "icon": "assets/ui/icons/abilities/burdam_old_wound.svg",
+      "icon": "assets/ui/icons/abilities/burdam_old_wound.webp",
       "desc": "Burdam cleaves a 4 m, 100° arc for {effects.0.onHit.0.amount} physical damage. Grudge-bearers hit take {effects.0.onHit.1.then.0.amount} more physical damage and are slowed by 50%, fading over 2 s.",
       "maxRank": 5,
       "cooldown": [
@@ -389,7 +389,7 @@
     "ult": {
       "id": "burdam_settled_account",
       "name": "Settled Account",
-      "icon": "assets/ui/icons/abilities/burdam_settled_account.svg",
+      "icon": "assets/ui/icons/abilities/burdam_settled_account.webp",
       "desc": "Every Grudge-bearer within 7 m is dragged 3 m toward Burdam and stunned for 0.5 s. Each pays {effects.0.onHit.0.then.0.perStack.0.amount} physical damage per Grudge stack, and Burdam heals 3% of his max Health per stack. This spends the Grudges.",
       "maxRank": 3,
       "cooldown": [
