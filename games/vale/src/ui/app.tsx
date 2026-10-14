@@ -66,7 +66,7 @@ export function mount(root: HTMLElement, o: MountOptions): MountedApp {
     effect(() => { a.attach?.(state.match.value ?? null); });
     effect(() => { a.settings?.(state.settings.value.audio); });
   }
-  if (o.dev) (window as unknown as { __vale?: unknown }).__vale = { ...ctx, audioLog: (port as { log?: unknown }).log, screens: Object.keys(SCREENS) };
+  if (o.dev) (window as unknown as { __vale?: unknown }).__vale = { ...ctx, audioLog: (port as { log?: unknown }).log, cueLog: (o.audio as { log?: unknown } | null)?.log, screens: Object.keys(SCREENS) };
   root.textContent = '';
   void loadFonts().then(() => render(<AppContext.Provider value={ctx}><App /></AppContext.Provider>, root));
   return {

@@ -108,7 +108,7 @@ async function journey(mode) {
     });
     await step('match_live', async () => {
       await waitFor(page, (v) => (v.state.match.value?.view.time ?? 0) > 60, 180000);
-      return await vale(page, (v) => { const c = v.state.match.value; const p = c.view.players[c.you]; return { t: Math.round(c.view.time), scale: c.timeScale, kda: `${p.kills}/${p.deaths}/${p.assists}`, gold: p.gold, level: c.view.entity(p.entity)?.level }; });
+      return await vale(page, (v) => { const c = v.state.match.value; const p = c.view.players[c.you]; return { t: Math.round(c.view.time), scale: c.timeScale, kda: `${p.kills}/${p.deaths}/${p.assists}`, gold: p.gold, level: c.view.entity(p.entity)?.level, cues: [...new Set(v.cueLog ?? [])].length }; });
     });
     await step('match_end', async () => {
       await waitFor(page, (v) => v.state.ending.value || v.router.route.value.screen === 'postgame', 1500000);

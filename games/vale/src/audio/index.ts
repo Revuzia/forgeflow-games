@@ -38,6 +38,7 @@ const BUSES: Bus[] = ['music', 'sfx', 'ui', 'voice', 'ambience'];
 const XFADE_S = 1.2;
 const HEAR_M = 26;           // beyond this a spatial cue is silent
 const NEAR_M = 6;            // inside this it is full volume
+const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 
 interface Voice { src: AudioBufferSourceNode; gain: GainNode; cue: string; priority: number; started: number }
 
@@ -61,6 +62,8 @@ class Engine implements ValeAudioPort {
   private hidden = false;
   // match
   private client: MatchClient | null = null;
+  /** match time at the last update: the pre-game countdown (negative time) ticks the last 3 s, 0 starts */
+  private lastT: number | null = null;
   private off: (() => void) | null = null;
   private readonly abilitySfx = new Map<string, { sfx?: string; hitSfx?: string }>();
   private intensity = 0;
@@ -149,11 +152,12 @@ class Engine implements ValeAudioPort {
     if (id) this.startBed(id);
   }
 
-  /** play a cue; `pos` (world x, y) makes a spatial cue pan/attenuate around your fighter */
   /** the cue bound to an engine event role, if the catalog binds one */
   private ev(role: string): string | undefined { return this.events[role]; }
 
-  private cue(cueId: string | undefined, pos: { x: number; y: number } | null, gainMul = 1): void {
+  /** play a cue; `pos` (world x, y) makes a spatial cue pan/attenuate around your fighter. A looping cue
+   *  stops after `hold` seconds (a zone's delay + life), else after LOOP_DEFAULT_S. */
+  private cue(cueId: string | undefined, pos: { x: number; y: number } | null, gainMul = 1, hold = 0): void {
     if (!cueId) return;
     const c = this.cues[cueId];
     if (!c) return;
@@ -184,7 +188,7 @@ class Engine implements ValeAudioPort {
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       src.loop = c.loop;
-      if (c.pitchVar) src.playbackRate.value = Math.pow(2, ((Math.random() * 2 - 1) * c.pitchVar) / 12);
+      if (c.pitchVar) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * c.pitchVar;   // a playback-rate fraction
       const g = this.ctx.createGain();
       g.gain.value = c.gain * att * gainMul;
       let node: AudioNode = src;
@@ -194,13 +198,14 @@ class Engine implements ValeAudioPort {
       this.voices.push(v);
       src.onended = () => { const i = this.voices.indexOf(v); if (i >= 0) this.voices.splice(i, 1); };
       src.start();
+      if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
     });
   }
 
-  private stopVoice(v: Voice, fade: number): void {
+  private stopVoice(v: Voice, fade: number, after = 0): void {
     if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const t = this.ctx.currentTime + after;
     v.gain.gain.setTargetAtTime(0, t, fade / 3);
     try { v.src.stop(t + fade + 0.02); } catch { /* already stopped */ }
   }
@@ -251,6 +256,7 @@ class Engine implements ValeAudioPort {
     this.off = null;
     this.client = client;
     this.intensity = 0; this.combat = false; this.calmFor = 0;
+    this.lastT = client ? client.view.time : null;
     if (client) this.off = client.onEvents((evs: SimEvent[]) => { for (const e of evs) this.onEvent(e as unknown as Record<string, unknown>); });
   }
 
@@ -280,7 +286,7 @@ class Engine implements ValeAudioPort {
     switch (kind) {
       case 'cast': {
         const pr = this.abilitySfx.get(e.ability as string);
-        this.cue(pr?.sfx ?? this.ev(e.slot === 'ult' ? 'castUlt' : 'cast'), at(src));
+        this.cue(pr?.sfx ?? this.ev(e.slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src));
         if (src && src.team !== this.myTeam() && e.slot === 'ult' && near(at(src))) this.cue(this.ev('enemyUltWindup'), null);
         break;
       }
@@ -290,7 +296,7 @@ class Engine implements ValeAudioPort {
         this.cue((e.sfx as string) ?? pr?.hitSfx ?? this.ev('hitAbility'), at(dst));
         break;
       }
-      case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }); break;
+      case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0)); break;
       case 'attack': this.cue(this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : 0.3); break;
       case 'damage': {
         const p = at(dst);
@@ -344,6 +350,13 @@ class Engine implements ValeAudioPort {
 
   /** combat intensity → the bed's combat layer (bar-quantised enter/leave, tokens.audio.beds.match) */
   private update(dt: number): void {
+    const view = this.client?.view;
+    if (view && this.lastT !== null) {
+      const t0 = this.lastT, t1 = view.time;
+      for (const s of [-3, -2, -1]) if (t0 < s && t1 >= s) this.cue(this.ev('countdown'), null);
+      if (t0 < 0 && t1 >= 0) this.cue(this.ev('matchStart'), null);
+    }
+    this.lastT = view ? view.time : null;
     this.intensity = Math.max(0, this.intensity - dt * 0.12);
     const b = this.bed;
     if (!b || !this.ctx || !b.layer) return;

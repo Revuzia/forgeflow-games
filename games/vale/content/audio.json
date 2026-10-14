@@ -107,7 +107,7 @@
     "structureAllyFall": "m_structure_ally_fall", "structureEnemyFall": "m_structure_enemy_fall", "objectiveAlly": "m_objective_ally", "objectiveEnemy": "m_objective_enemy",
     "waveSpawn": "m_wave_spawn", "recallStart": "m_recall_start", "recallDone": "m_recall_done", "recallCancel": "ui_back",
     "pickup": "m_sunmote", "announceMajor": "m_announce_major", "announceMinor": "m_announce_minor", "eliminated": "m_eliminated",
-    "suddenDeath": "m_sudden_death", "ping.alert": "m_ping_alert", "ping.danger": "m_ping_danger", "ping.onmyway": "m_ping_onmyway",
+    "suddenDeath": "m_sudden_death", "countdown": "m_countdown", "matchStart": "m_match_start", "castMonster": "c_cast_big", "ping.alert": "m_ping_alert", "ping.danger": "m_ping_danger", "ping.onmyway": "m_ping_onmyway",
     "ping.missing": "m_ping_missing", "ping.assist": "m_ping_assist", "ping.push": "m_ping_push", "ping.vision": "m_ping_vision",
     "ping.objective": "m_ping_objective", "ping.retreat": "m_ping_retreat"
   },

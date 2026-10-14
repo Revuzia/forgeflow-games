@@ -625,7 +625,9 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   hitTrue, heal, shield, status, status.<status id>, dash, blink, fighterDeath, selfDown, allyDown,
   minionDeath, monsterDeath, takedown, respawn, levelUp, gold, structureFall, structureAllyFall,
   structureEnemyFall, objectiveAlly, objectiveEnemy, waveSpawn, recallStart, recallDone, recallCancel,
-  pickup, announceMajor, announceMinor, eliminated, suddenDeath, ping.<ping kind>`. An ability's own
+  pickup, announceMajor, announceMinor, eliminated, suddenDeath, countdown (each of the last 3 s of
+  the pre-game countdown), matchStart, castMonster, ping.<ping kind>`. `pitchVar` is a playback-rate fraction;
+  a looping cue stops after its zone's `delay + life` (the `area` event carries `life` for zones), else 2.5 s. An ability's own
   `present.sfx` / `hitSfx` wins over `cast` / `hitAbility`.
 
 ## §12 Art pipeline (`art/`, lane ART)

@@ -106,7 +106,7 @@ export function spawnZone(w: World, eff: EffOf<'zone'>, ctx: EffectCtx): Entity 
   const p = eff.present;
   w.emit({
     e: 'area', t: w.time, src: c.id, ability: ctx.source.id, x: z.x, y: z.y, shape: z.shape, delay: eff.delay,
-    vfx: p?.vfx, sfx: p?.sfx, telegraph: p?.telegraph ?? (eff.delay > 0 ? 'everyone' : 'none'),
+    vfx: p?.vfx, sfx: p?.sfx, telegraph: p?.telegraph ?? (eff.delay > 0 ? 'everyone' : 'none'), life: duration,
   });
   return z;
 }

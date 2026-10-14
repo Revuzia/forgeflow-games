@@ -176,7 +176,7 @@ export type SimEvent =
   | { e: 'cast'; t: number; src: EntityId; slot: SlotT; ability: string; x: number; y: number; target?: EntityId; castTime: number }
   | { e: 'projectile'; t: number; id: EntityId; src: EntityId; ability: string; vfx?: string }
   | { e: 'hit'; t: number; src: EntityId; dst: EntityId; ability?: string; vfx?: string; sfx?: string }
-  | { e: 'area'; t: number; src: EntityId; ability: string; x: number; y: number; shape: EntityView['shape']; delay: number; vfx?: string; sfx?: string; telegraph: 'none' | 'ally_only' | 'everyone' }
+  | { e: 'area'; t: number; src: EntityId; ability: string; x: number; y: number; shape: EntityView['shape']; delay: number; vfx?: string; sfx?: string; telegraph: 'none' | 'ally_only' | 'everyone'; /** zones: seconds it stays after the delay */ life?: number }
   | { e: 'status'; t: number; dst: EntityId; status: StatusKindT; duration: number }
   | { e: 'dash'; t: number; src: EntityId; fromX: number; fromY: number; toX: number; toY: number; duration: number; vfx?: string }
   | { e: 'blink'; t: number; src: EntityId; fromX: number; fromY: number; toX: number; toY: number }

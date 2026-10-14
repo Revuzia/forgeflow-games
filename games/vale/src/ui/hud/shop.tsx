@@ -100,10 +100,10 @@ export function ShopPanel(): JSX.Element | null {
   const buy = (it: ItemDefT): void => {
     const qt = quoteItem(cv, me, it);
     if (qt.why) { sound.play('error'); model.denied.value = { n: model.denied.peek().n + 1, slot: 'shop', why: qt.why }; return; }
-    sound.play('confirm');
+    sound.play('shop_buy');
     client.send({ type: 'buy', item: it.id });
   };
-  const sellSlot = (i: number): void => { if (!me.items[i]) return; sound.play('back'); client.send({ type: 'sell', slot: i }); };
+  const sellSlot = (i: number): void => { if (!me.items[i]) return; sound.play('shop_sell'); client.send({ type: 'sell', slot: i }); };
 
   return (
     <section class="lshop plate plate--raised" role="dialog" aria-label={cv.t('hud.shopui.title', 'Lampwright')} onContextMenu={(e) => e.preventDefault()}>
@@ -168,7 +168,7 @@ export function ShopPanel(): JSX.Element | null {
               })}
             </div>
             <button type="button" class="hbtn lshop__undo" title={cv.t('hud.shopui.undo_hint', 'Undo returns your last purchase for the full price.')}
-              onClick={() => { sound.play('back'); client.send({ type: 'undo' }); }}>{cv.t('hud.item.undo', 'Undo purchase')}</button>
+              onClick={() => { sound.play('shop_undo'); client.send({ type: 'undo' }); }}>{cv.t('hud.item.undo', 'Undo purchase')}</button>
           </div>
         </aside>
       </div>
