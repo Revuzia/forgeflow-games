@@ -16,18 +16,18 @@ Branch: `claude/youthful-ramanujan-gdud5w`. Spine: `_spec/CONTRACT.md`. Look and
 | Session (queue, ready check, draft/Lot/pick, match host, grants, Glicko-2, store, equip, profile) | Done | `probe_session_*` |
 | Bots (utility AI + draft brain) | Built; its own probes and review still to do | `src/sim/bots/`, `probe_session_botslane` |
 | Renderer (post stack, sky, fog of war, actors, overlay, menu scene) | Core done; typecheck clean at last full run | `_harness/web/render_bench.html` |
-| VFX engine "AAA" upgrade | PAUSED mid-way (7 files in `src/render/vfx/`) | resume: same goal, see below |
+| VFX engine v2 + bespoke effects | Done: v2 runtime (post pass, soft depth), 50 lib_* + bespoke effects for all 16 fighters (~196 defs); passives fire on the sim `proc` event | `node _harness/vfx_gallery.mjs <prefix>` |
 | Client UI (15 screens, components) | Done to first pass | `npm run dev` → http://localhost:5190 |
 | HUD + input + end-to-end flow | Done: DONE journey passes in real Chrome (RIFT, BRIDGE, FRAY, shop buy + equip) | `node _harness/e2e.mjs all` |
-| Audio (numpy synthesis + WebAudio engine) | Library only; no rendered files, no runtime | resume |
+| Audio (numpy synthesis + WebAudio engine) | Runtime done (`src/audio/index.ts`, event roles bound in `audio.events`); cue + music renders in progress (agents) | `audio/build.py` |
 | Art pipeline v1 (rig, clips, bake, export, parts library, template) | Done, but the owner rejected the mannequin look | `art/README.md` |
 | Art 2.0 characters: SDF-sculpted volumes fitted to the concept sheet, base colour = the concept painting projected occlusion-aware onto the game mesh | Marund DONE as a full fighter, AWAITING OWNER SIGN-OFF (`art/renders/_art2/marund_signoff.jpg`); 15 fighters to go | `python3 art/build.py fighter marund --no-skins` |
 | Skies (4) + locked LUT grade | Done | `art/out/maps/*/sky.hdr`, `art/out/grade/` |
-| Painted 2D (icons, key art, mode cards, loading, backdrops, terrain textures, concept sheets) | Pack ready: generate with Grok Imagine in Chrome (`queue.py next/ingest`) | `tools/imagegen/README.md` |
-| Units, structures, monsters, map scenes, menu scene (Blender) | Not started (briefs exist) | `_design/maps/*_landmarks.md` |
+| Painted 2D (icons, key art, mode cards, loading, backdrops, terrain textures, concept sheets) | Done: 202 images (Grok in Chrome + xAI API for the last 14) | `tools/imagegen/README.md` |
+| Units, structures, monsters, map scenes, menu scene (Blender) | Structures, Wicks, pickups/ward/post, scatter props, 18 landmarks on all 3 maps, menu painted set: done. Monsters (10): in progress | `art/blender/{units,props,maps}/`, `_harness/shot_map.mjs --nofog --at x,y` |
 | Design note, names-not-used doc, README, game_meta, thumbnail | Not started | |
 
-The typecheck has a few errors in the paused HUD and VFX files. Fix those first.
+Typecheck, content check (`--allow-missing-assets` until the remaining fighters/monsters land) and all 37 probes are green.
 
 ## Owner's quality bar (2026-10-13)
 
@@ -76,6 +76,14 @@ Originality rules still hold: nothing copied from any game.
    composite over the painted backdrops (`art/out/backdrops/`) instead.
 
 ## Session log: owner's Mac, 2026-10-14
+- Later on 10-14: bespoke VFX for all 16 fighters committed; passives show via a presentation-only sim
+  `proc` event (CONTRACT §5.1). Landmarks: `art/blender/maps/landmarks.py` (18 GLBs) placed by the renderer
+  from `map.art.terrain.landmarks[].model` on the ground there (cliff tops, the rim), scatter kept out of
+  their footprint, a landmark covering a whole wall polygon replaces its block; numerals laid back 52 deg to
+  read from the camera. Fallen Shaft water and the Standing Shadow pit re-surfaced. Audio cue ids moved out
+  of `src/` into `audio.events` (probe_content_ids was failing). 14 more painted icons via xAI (Ervet's hilt
+  form, monster abilities). Tooltip keywords highlighted. Monsters: an agent is building the four quadruped
+  camps (`art/blender/units/creatures.py`, progress in `art/renders/units/_creatures_progress.md`).
 - Step 4 engine: the v2 VFX runtime (src/render/vfx/system.ts) replaces v1; VFX draw in a post pass after AO
   (soft depth, bloom, grade); the content build validates the v2 vocabulary (CONTRACT §9.5); authoring kit
   tools/vfx/ (vfxkit.py, lib_defs.py = the 50 lib_*, bespoke/<fighter>.py, build_vfx.py → content/vfx.json);
