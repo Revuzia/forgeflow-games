@@ -117,6 +117,13 @@ export interface Renderer {
   stats(): RenderStats;
   /** harness seam: feed synthetic events (telegraph / VFX tests) */
   injectEvents(events: SimEvent[]): void;
+  /** harness seam (VFX gallery): spawn a def at ground (x, y); with `to` a test mover travels there over
+   *  `travel` s and path / ribbon layers follow it */
+  vfxTest(id: string, x: number, y: number, o?: { to?: [number, number]; travel?: number; tier?: 0 | 1 | 2 | 3 | 4; dir?: number; scale?: number; color?: string; anchor?: 'origin' | 'target' | 'path' | 'ground'; phase?: 'main' | 'windup' }): boolean;
+  /** the VFX ids the renderer knows */
+  vfxIds(): string[];
+  /** a def's duration, span and whether it rides a path (projectiles, dashes) */
+  vfxInfo(id: string): { duration: number; span: number; path: boolean; layers: string[] } | null;
   dispose(): void;
 }
 
@@ -214,6 +221,7 @@ class ValeRenderer implements Renderer {
     this.vfx = new VfxSystem(catalog.vfx, { entityPos: (id, out) => this.bodyPos(id, out) });
     this.vfx.setCamera(this.rig.camera);
     this.scene.add(this.vfx.group);
+    this.vfx.onFeel = (e) => { if (e.shake > 0) this.rig.shake(e.shake * 4, 90 + e.shake * 60); };
     this.director = new Director(catalog, this.vfx, {
       view: () => this.client?.view ?? null,
       palette: () => this.palette,
@@ -229,7 +237,8 @@ class ValeRenderer implements Renderer {
     this.menu = new MenuWorld(this.gl);
     this.overlay.teleScene.add(this.teles.mesh);
     this.overlay.scene.add(this.rings.mesh, this.bars.mesh, this.bars.labels);
-    this.post = new PostChain(this.gl, this.scene, this.rig.camera, (r, target, depth) => this.overlay.draw(r, target, depth));
+    this.post = new PostChain(this.gl, this.scene, this.rig.camera, (r, target, depth) => this.overlay.draw(r, target, depth),
+      (r, target, depth, cam) => { this.vfx.setCamera(cam as import('three').PerspectiveCamera); this.vfx.draw(r, target, depth); });
     this.q = resolveQuality(settings.video);
     this.dyn.enabled = opts.dynamicResolution !== false;
     const rig = this.rig;
@@ -391,8 +400,42 @@ class ValeRenderer implements Renderer {
     this.mode = 'none';
   }
 
+  // ── VFX test movers (gallery): ids <= -1000 travel a straight line ─────────────────────────────
+  private readonly movers = new Map<number, { x0: number; y0: number; x1: number; y1: number; t0: number; dur: number }>();
+  private moverSeq = -1000;
+
+  vfxTest(id: string, x: number, y: number, o: { to?: [number, number]; travel?: number; tier?: 0 | 1 | 2 | 3 | 4; dir?: number; scale?: number; color?: string; anchor?: 'origin' | 'target' | 'path' | 'ground'; phase?: 'main' | 'windup' } = {}): boolean {
+    const team = new Color().setStyle(o.color ?? '#3F9CFF');
+    const to = o.to ?? [x + Math.cos(o.dir ?? 0) * 6, y + Math.sin(o.dir ?? 0) * 6];
+    let follow: number | undefined;
+    if (o.travel && o.travel > 0) {
+      follow = this.moverSeq--;
+      this.movers.set(follow, { x0: x, y0: y, x1: to[0], y1: to[1], t0: this.time, dur: o.travel });
+    }
+    return this.vfx.spawn(id, {
+      tier: o.tier ?? 3, team, element: team, ally: false, origin: new Vector3(x, 1.1, y), target: new Vector3(to[0], 1.1, to[1]),
+      ground: new Vector3(x, 0, y), scale: o.scale ?? 2.5, dir: o.dir ?? Math.atan2(to[1] - y, to[0] - x), follow, anchor: o.anchor ?? (follow !== undefined ? 'path' : 'origin'),
+      phase: o.phase,
+    });
+  }
+
+  vfxIds(): string[] { return this.vfx.ids; }
+
+  vfxInfo(id: string): { duration: number; span: number; path: boolean; layers: string[] } | null {
+    const d = this.vfx.def(id);
+    return d ? { duration: d.duration, span: d.span, path: d.layers.some((l) => l.at === 'path' || l.type === 'ribbon'), layers: d.layers.map((l) => l.type) } : null;
+  }
+
   // ── helpers ────────────────────────────────────────────────────────────────────────────────────
   private bodyPos(id: number, out: Vector3): boolean {
+    if (id <= -1000) {
+      const m = this.movers.get(id);
+      if (!m) return false;
+      const t = (this.time - m.t0) / m.dur;
+      if (t > 1) { this.movers.delete(id); return false; }
+      out.set(m.x0 + (m.x1 - m.x0) * t, 1.1, m.y0 + (m.y1 - m.y0) * t);
+      return true;
+    }
     const a = this.actors.get(id);
     if (a && a.leaving < 0) { out.set(a.x, a.h + Math.min(1.3, a.artHeight * 0.55), a.y); return true; }
     const e = this.client?.view.entity(id);

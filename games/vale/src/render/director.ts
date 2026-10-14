@@ -115,7 +115,7 @@ export class Director {
     this.vfx.spawn(id, {
       tier, team: c, element: this.elementOf(src), ally: rel === 'ally', ownT1: rel === 'self' && tier <= 1,
       origin: o.origin ?? null, target: o.target ?? null, ground: o.ground ?? null, scale: o.scale, dir: o.dir,
-      follow: o.follow, targetId: o.targetId, anchor: o.anchor, loopWhile: o.loopWhile,
+      follow: o.follow, targetId: o.targetId, sourceId: srcId, anchor: o.anchor, loopWhile: o.loopWhile,
     });
   }
 

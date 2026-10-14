@@ -3,6 +3,9 @@
 //
 //   RenderPass(world)                       HalfFloat buffers, renderer.toneMapping = NoToneMapping
 //   N8AOPostPass                            ao 1 = half resolution "Medium", ao 2 = full "High"; off on Low
+//   VfxPass                                 the VFX scene drawn into the HDR buffer (premultiplied, soft
+//                                           depth against the stable scene depth), so emissive blooms
+//                                           and the grade applies to effects like the world
 //   EffectPass(Bloom?, ToneMapping NEUTRAL, LUT3D vale_grade_01, Vignette)
 //                                           bloom: mipmap, threshold 1.0, smoothing 0.05, intensity 0.6,
 //                                           radius 0.7 (off when video.bloom is false); exposure 1.0;
@@ -49,11 +52,32 @@ class OverlayPass extends Pass {
   }
 }
 
+export type VfxDraw = (renderer: WebGLRenderer, target: WebGLRenderTarget | null, sceneDepth: Texture | null, camera: Camera) => void;
+
+/** draws the VFX into the current HDR buffer (no swap) */
+class VfxPass extends Pass {
+  private depth: Texture | null = null;
+  private readonly draw: VfxDraw;
+  private readonly cam: () => Camera;
+  constructor(draw: VfxDraw, cam: () => Camera) {
+    super('VfxPass');
+    this.draw = draw;
+    this.cam = cam;
+    this.needsSwap = false;
+    this.needsDepthTexture = true;
+  }
+  override setDepthTexture(depthTexture: Texture): void { this.depth = depthTexture; }
+  override render(renderer: WebGLRenderer, inputBuffer: WebGLRenderTarget): void {
+    this.draw(renderer, inputBuffer, this.depth, this.cam());
+  }
+}
+
 export class PostChain {
   readonly composer: EffectComposer;
   private scene: Scene;
   private camera: Camera;
   private readonly overlay: OverlayPass;
+  private readonly vfx: VfxPass | null;
   private lutTex: Texture;
   private readonly identity: LookupTexture;
   private lutEffect: LUT3DEffect | null = null;
@@ -64,12 +88,13 @@ export class PostChain {
 
   private readonly renderer: WebGLRenderer;
 
-  constructor(renderer: WebGLRenderer, scene: Scene, camera: Camera, overlayDraw: OverlayDraw) {
+  constructor(renderer: WebGLRenderer, scene: Scene, camera: Camera, overlayDraw: OverlayDraw, vfxDraw?: VfxDraw) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
     this.composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType, depthBuffer: true, stencilBuffer: false, multisampling: 0 });
     this.overlay = new OverlayPass(overlayDraw);
+    this.vfx = vfxDraw ? new VfxPass(vfxDraw, () => this.camera) : null;
     this.identity = LookupTexture.createNeutral(33);
     this.lutTex = this.identity;
     this.build();
@@ -120,6 +145,7 @@ export class PostChain {
       c.addPass(ao);
       this.aoPass = ao;
     }
+    if (this.vfx) c.addPass(this.vfx);
     const effects = [];
     if (q.bloom) {
       effects.push(new BloomEffect({
