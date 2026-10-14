@@ -44,3 +44,7 @@ Buildings, street props, cars, furniture and wall modules are repacked offline (
 - SFX: Kenney interface-sounds / impact-sounds / rpg-audio packs — CC0
 
 (Keep this file shipped with the game per CC-BY attribution requirements.)
+
+## City kit module (runtime/3d/royale/citykit.js) — Wave 6, lane 6C
+- No new third-party asset, library or download: citykit.js places and draws the Kenney / Quaternius CC0 kit listed under "Town kit" above with its own colormaps; the slate / brick / sand variants are the recoloured colormaps already shipped in assets/props/city/palettes/, and the O2 theme tints are multiplied on at run time (no new texture).
+- Derived data inside citykit.js, both computed offline from the CC0 files above: `COLLIDER_BOXES` (a literal copy of manifest.json's collider boxes, baked from the same geometry) and `PROXY_COLORS` (average wall / roof colours of each building type, sampled from the Kenney colormaps through the models' UVs, used only for the far-LOD box proxy). CC0, like their source.
