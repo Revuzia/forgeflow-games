@@ -495,7 +495,7 @@
    "wallStyle": "gorge",
    "landmarks": [
     {
-     "id": "dawn_arch",
+     "id": "dawn_arch", "model": "assets/maps/landmarks/dawn_arch.glb",
      "name": "Dawn Arch",
      "at": [-4.0, 22.0],
      "size": [3.0, 24.0],
@@ -503,7 +503,7 @@
      "note": "Aubade end: dawnglass arch spanning the terrace's back, beyond the west edge"
     },
     {
-     "id": "lamp_gate",
+     "id": "lamp_gate", "model": "assets/maps/landmarks/lamp_gate.glb",
      "name": "Lamp Gate",
      "at": [160.0, 22.0],
      "size": [5.0, 24.0],
@@ -511,7 +511,7 @@
      "note": "Serenade end: low banded ironstone gate with drum towers and a lampresin lamp"
     },
     {
-     "id": "snap_stub_n",
+     "id": "snap_stub_n", "model": "assets/maps/landmarks/snap_stub.glb",
      "name": "Snap stub",
      "at": [78.0, 15.8],
      "size": [2.6, 4.2],
@@ -519,7 +519,7 @@
      "note": "broken stub of the shaft on the crack line (a wall)"
     },
     {
-     "id": "snap_stub_s",
+     "id": "snap_stub_s", "model": "assets/maps/landmarks/snap_stub.glb", "rot": 180,
      "name": "Snap stub",
      "at": [78.0, 28.2],
      "size": [2.6, 4.2],
@@ -536,7 +536,7 @@
      "flush": true
     },
     {
-     "id": "lampwright_stall_a",
+     "id": "lampwright_stall_a", "model": "assets/maps/landmarks/lampwright_stall.glb",
      "name": "Lampwright stall",
      "at": [5.0, 8.5],
      "size": [3.0, 2.5],
@@ -544,7 +544,7 @@
      "note": "Aubade shop kiosk on the gorge lip north of the shop circle"
     },
     {
-     "id": "lampwright_stall_s",
+     "id": "lampwright_stall_s", "model": "assets/maps/landmarks/lampwright_stall.glb",
      "name": "Lampwright stall",
      "at": [151.0, 8.5],
      "size": [3.0, 2.5],

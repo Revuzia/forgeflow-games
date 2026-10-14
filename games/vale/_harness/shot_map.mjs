@@ -14,7 +14,7 @@ if (args.includes('--nofog')) await B((b) => { b.renderer.fog.enabled = false; }
 await B((b) => b.frames(10, 1 / 30));
 const m = await B((b) => { const m = b.catalog.maps.find((x) => x.id === b.host.setup.map); return { size: m.size, bases: m.bases.map((x) => x.spawn) }; });
 const [W, H] = m.size;
-const spots = { centre: [W / 2, H / 2], lane_w: [W * 0.3, H * 0.5], jungle_nw: [W * 0.33, H * 0.28], base_w: [m.bases[0][0] + 6, m.bases[0][1]] };
+const spots = { centre: [W / 2, H / 2], lane_w: [W * 0.3, H * 0.5], jungle_nw: [W * 0.33, H * 0.28], ...(m.bases[0] ? { base_w: [m.bases[0][0] + 6, m.bases[0][1]] } : {}) };
 const extra = opt('at', '');
 if (extra) { for (const k of Object.keys(spots)) delete spots[k]; extra.split(';').forEach((p, i) => { spots[`at${i}`] = p.split(',').map(Number); }); }
 for (const [k, [x, y]] of Object.entries(spots)) {

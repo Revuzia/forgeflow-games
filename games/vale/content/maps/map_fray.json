@@ -360,7 +360,7 @@
    },
    "landmarks": [
     {
-     "id": "lampwright_cart",
+     "id": "lampwright_cart", "model": "assets/maps/landmarks/lampwright_cart.glb",
      "name": "Lampwright's cart",
      "at": [32.0, 32.0],
      "size": [2.6, 2.6],
@@ -458,7 +458,7 @@
      "flush": true
     },
     {
-     "id": "hour_stone_1",
+     "id": "hour_stone_1", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 162.0,
      "name": "hour-stone",
      "at": [38.0, 13.5],
      "size": [1.8, 1.8],
@@ -466,7 +466,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_2",
+     "id": "hour_stone_2", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 126.0,
      "name": "hour-stone",
      "at": [47.8, 20.5],
      "size": [1.8, 1.8],
@@ -474,7 +474,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_3",
+     "id": "hour_stone_3", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 90.0,
      "name": "hour-stone",
      "at": [51.5, 32.0],
      "size": [1.8, 1.8],
@@ -482,7 +482,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_4",
+     "id": "hour_stone_4", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 54.0,
      "name": "hour-stone",
      "at": [47.8, 43.5],
      "size": [1.8, 1.8],
@@ -490,7 +490,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_5",
+     "id": "hour_stone_5", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 18.0,
      "name": "hour-stone",
      "at": [38.0, 50.5],
      "size": [1.8, 1.8],
@@ -498,7 +498,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_6",
+     "id": "hour_stone_6", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -18.0,
      "name": "hour-stone",
      "at": [26.0, 50.5],
      "size": [1.8, 1.8],
@@ -506,7 +506,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_7",
+     "id": "hour_stone_7", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -54.0,
      "name": "hour-stone",
      "at": [16.2, 43.5],
      "size": [1.8, 1.8],
@@ -514,7 +514,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_8",
+     "id": "hour_stone_8", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -90.0,
      "name": "hour-stone",
      "at": [12.5, 32.0],
      "size": [1.8, 1.8],
@@ -522,7 +522,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_9",
+     "id": "hour_stone_9", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -126.0,
      "name": "hour-stone",
      "at": [16.2, 20.5],
      "size": [1.8, 1.8],
@@ -530,7 +530,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "hour_stone_10",
+     "id": "hour_stone_10", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -162.0,
      "name": "hour-stone",
      "at": [26.0, 13.5],
      "size": [1.8, 1.8],
@@ -538,7 +538,7 @@
      "note": "low carved block (a wall)"
     },
     {
-     "id": "fair_stand_nw",
+     "id": "fair_stand_nw", "model": "assets/maps/landmarks/fair_stand_high.glb",
      "name": "fair stand",
      "at": [4.0, 4.0],
      "size": [6.0, 6.0],
@@ -546,7 +546,7 @@
      "note": "stepped stone terrace of the Shadowless Noon fair, pale, inside the glare"
     },
     {
-     "id": "fair_stand_ne",
+     "id": "fair_stand_ne", "model": "assets/maps/landmarks/fair_stand_high.glb",
      "name": "fair stand",
      "at": [60.0, 4.0],
      "size": [6.0, 6.0],
@@ -554,7 +554,7 @@
      "note": "as NW"
     },
     {
-     "id": "fair_stand_sw",
+     "id": "fair_stand_sw", "model": "assets/maps/landmarks/fair_stand_low.glb",
      "name": "fair stand",
      "at": [4.0, 60.0],
      "size": [6.0, 6.0],
@@ -562,7 +562,7 @@
      "note": "south of the plate: kept low"
     },
     {
-     "id": "fair_stand_se",
+     "id": "fair_stand_se", "model": "assets/maps/landmarks/fair_stand_low.glb",
      "name": "fair stand",
      "at": [60.0, 60.0],
      "size": [6.0, 6.0],
