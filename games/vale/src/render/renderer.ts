@@ -45,7 +45,7 @@ import { FRAY_SEATS, Palette, type ColorblindMode } from './palette.ts';
 import { PostChain } from './post.ts';
 import { DynamicResolution, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
-import { buildTerrain, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
+import { buildTerrain, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
 import { VfxSystem } from './vfx/system.ts';
 import { patchWorldMaterial, worldUniforms } from './world_material.ts';
 
@@ -360,6 +360,7 @@ class ValeRenderer implements Renderer {
     this.scene.add(this.terrain.group);
     this.loadTerrainTextures(map, gen);
     void loadTerrainProps(map, (r) => this.assets.model(r)).then((p) => { if (gen === this.matchGen && this.terrain && p) this.terrain.setProps(p); });
+    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) this.terrain.group.add(o); });
     this.assets.model(map.art.scene).then((m) => {
       if (gen !== this.matchGen || !m?.renderable) return;
       const root = m.gltf.scene;

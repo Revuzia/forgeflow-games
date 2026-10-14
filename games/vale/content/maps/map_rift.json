@@ -1539,7 +1539,7 @@
    },
    "landmarks": [
     {
-     "id": "glass_belfry",
+     "id": "glass_belfry", "model": "assets/maps/landmarks/glass_belfry.glb",
      "name": "Glass Belfry",
      "at": [-5.0, 55.0],
      "size": [7.0, 7.0],
@@ -1547,7 +1547,7 @@
      "note": "Aubade base; spire, chalk + dawnglass; beyond the west edge"
     },
     {
-     "id": "lamp_dome",
+     "id": "lamp_dome", "model": "assets/maps/landmarks/lamp_dome.glb",
      "name": "Lamp Dome",
      "at": [180.0, 55.0],
      "size": [18.0, 18.0],
@@ -1555,7 +1555,7 @@
      "note": "Serenade base; low banded ironstone dome, lampresin oculus; beyond the east edge"
     },
     {
-     "id": "lampwright_stall_a",
+     "id": "lampwright_stall_a", "model": "assets/maps/landmarks/lampwright_stall.glb",
      "name": "Lampwright stall",
      "at": [5.5, 41.5],
      "size": [3.0, 3.0],
@@ -1563,7 +1563,7 @@
      "note": "Aubade shop kiosk on the wall lip north of the shop circle"
     },
     {
-     "id": "lampwright_stall_s",
+     "id": "lampwright_stall_s", "model": "assets/maps/landmarks/lampwright_stall.glb",
      "name": "Lampwright stall",
      "at": [164.5, 41.5],
      "size": [3.0, 3.0],
@@ -1580,7 +1580,7 @@
      "flush": true
     },
     {
-     "id": "shadow_slab_w",
+     "id": "shadow_slab_w", "model": "assets/maps/landmarks/shadow_slab.glb",
      "name": "shadow slab",
      "at": [79.4, 19.6],
      "size": [2.0, 3.0],
@@ -1588,7 +1588,7 @@
      "note": "leaning basalt slab framing Longshade's north choke"
     },
     {
-     "id": "shadow_slab_e",
+     "id": "shadow_slab_e", "model": "assets/maps/landmarks/shadow_slab.glb",
      "name": "shadow slab",
      "at": [90.6, 19.6],
      "size": [2.0, 3.0],
@@ -1605,7 +1605,7 @@
      "flush": true
     },
     {
-     "id": "shaft_drum",
+     "id": "shaft_drum", "model": "assets/maps/landmarks/shaft_drum.glb",
      "name": "needle drum",
      "at": [85.0, 66.6],
      "size": [3.0, 6.4],
@@ -1613,7 +1613,7 @@
      "note": "lying drum of the fallen needle (it IS the wall there); broken face south"
     },
     {
-     "id": "numeral_xi",
+     "id": "numeral_xi", "model": "assets/maps/landmarks/numeral_xi.glb",
      "name": "Elevenmark numeral XI",
      "at": [55.3, 28.2],
      "size": [9.0, 4.0],
@@ -1621,7 +1621,7 @@
      "note": "half-buried, tilted 20 degrees"
     },
     {
-     "id": "numeral_ii",
+     "id": "numeral_ii", "model": "assets/maps/landmarks/numeral_ii.glb",
      "name": "Twomark numeral II",
      "at": [114.7, 28.2],
      "size": [6.0, 4.0],
@@ -1629,7 +1629,7 @@
      "note": "half-buried"
     },
     {
-     "id": "numeral_vii",
+     "id": "numeral_vii", "model": "assets/maps/landmarks/numeral_vii.glb",
      "name": "Sevenmark numeral VII",
      "at": [55.3, 81.8],
      "size": [10.0, 4.0],
@@ -1637,7 +1637,7 @@
      "note": "half-buried"
     },
     {
-     "id": "numeral_iiii",
+     "id": "numeral_iiii", "model": "assets/maps/landmarks/numeral_iiii.glb",
      "name": "Fourmark numeral IIII",
      "at": [114.7, 81.8],
      "size": [9.0, 4.0],
@@ -1645,7 +1645,7 @@
      "note": "half-buried"
     },
     {
-     "id": "noon_stone",
+     "id": "noon_stone", "model": "assets/maps/landmarks/noon_stone.glb",
      "name": "noon stone XII",
      "at": [85.0, 3.0],
      "size": [3.0, 1.5],
@@ -1653,7 +1653,7 @@
      "note": "upright stele where the Noonline meets the north rim"
     },
     {
-     "id": "vi_slab",
+     "id": "vi_slab", "model": "assets/maps/landmarks/vi_slab.glb",
      "name": "VI slab",
      "at": [85.0, 107.0],
      "size": [6.0, 2.0],

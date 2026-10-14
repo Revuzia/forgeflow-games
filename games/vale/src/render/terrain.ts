@@ -23,7 +23,7 @@
 import {
   BackSide, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide,
   ExtrudeGeometry, Group, IcosahedronGeometry, InstancedMesh, LinearFilter, type Material, Matrix4, Mesh,
-  MeshStandardMaterial, PlaneGeometry, Quaternion, RedFormat, RGBAFormat, Shape, ShapeGeometry, ShapeUtils, UnsignedByteType,
+  MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion, RedFormat, RGBAFormat, Shape, ShapeGeometry, ShapeUtils, UnsignedByteType,
   type Texture, Vector2, Vector3, Vector4, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -206,6 +206,8 @@ export interface TerrainBuild {
   /** authored scatter props (map.art.terrain.props: tree / rock / stone → GLB variants), vertex-coloured,
    *  real size, origin at the ground contact; they replace the procedural shapes and re-scatter */
   setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void;
+  /** standing height at a map point: a cliff block's top inside a wall polygon, else 0 */
+  groundAt(x: number, y: number): number;
   update(time: number): void;
   dispose(): void;
 }
@@ -242,6 +244,35 @@ export async function loadTerrainProps(map: MapDefT, load: (ref: string) => Prom
     if (geos.length) { out[role] = geos; any = true; }
   }
   return any ? out : null;
+}
+
+/** load map.art.terrain.landmarks entries that name a `model` (real-size GLB, origin at its ground
+ *  contact) and stand each at its `at` (map x, y) on the ground there (a cliff block's top inside a wall),
+ *  turned `rot` degrees about the vertical; flush entries
+ *  carry no model. The models are shared with the asset cache, so callers drop them without disposing. */
+export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => Promise<{ gltf: { scene: Object3D }; renderable: boolean } | null>,
+  ground: (x: number, y: number) => number = () => 0): Promise<Object3D[]> {
+  const list = ((map.art.terrain ?? {}) as { landmarks?: unknown }).landmarks;
+  if (!Array.isArray(list)) return [];
+  const out: Object3D[] = [];
+  await Promise.all(list.map(async (raw: unknown) => {
+    const l = raw as { model?: unknown; at?: unknown; rot?: unknown };
+    if (typeof l.model !== 'string' || !Array.isArray(l.at)) return;
+    const m = await load(l.model);
+    if (!m?.renderable) return;
+    const o = m.gltf.scene.clone();
+    const x = Number(l.at[0]), y = Number(l.at[1]);
+    o.position.set(x, ground(x, y), y);
+    o.rotation.y = typeof l.rot === 'number' ? (l.rot * Math.PI) / 180 : 0;
+    o.traverse((c) => {
+      const mesh = c as Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) patchWorldMaterial(mat);
+    });
+    out.push(o);
+  }));
+  return out;
 }
 
 /** a 1×1 stand-in so the samplers exist from the first compile (textures swap in without a recompile) */
@@ -466,6 +497,17 @@ ${TEX_GLSL}`)
   disposables.push(groundGeo, groundMat);
 
   // ── cliffs (raised walls) ──────────────────────────────────────────────────────────────────────
+  // authored landmarks (map.art.terrain.landmarks with a model): scatter keeps out of their footprint (and
+  // well clear on the camera side, +y, so canopies never hide them); a landmark that covers a whole wall
+  // polygon IS that wall (a fallen drum, a slab), so the polygon gets no cliff block of its own
+  const marks = (Array.isArray(tr.landmarks) ? (tr.landmarks as { model?: unknown; at?: unknown; size?: unknown }[]) : [])
+    .filter((l) => typeof l.model === 'string' && Array.isArray(l.at))
+    .map((l) => { const at = l.at as number[], sz = Array.isArray(l.size) ? (l.size as number[]) : [2, 2]; return { x: at[0], y: at[1], sx: sz[0] / 2, sy: sz[1] / 2 }; });
+  const onMark = (x: number, y: number): boolean => marks.some((m) => Math.abs(x - m.x) < m.sx + 1.6 && y > m.y - m.sy - 1.6 && y < m.y + m.sy + 5);
+  const replaced = walls.map((_, i) => marks.some((m) => {
+    const b = wallBoxes[i];
+    return b.minX >= m.x - m.sx - 0.3 && b.maxX <= m.x + m.sx + 0.3 && b.minY >= m.y - m.sy - 0.3 && b.maxY <= m.y + m.sy + 0.3;
+  }));
   const wallHeights: number[] = [];
   const cliffGeos: BufferGeometry[] = [];
   const addCliff = (poly: Poly, h: number, seed: number, amp: number): void => {
@@ -494,7 +536,7 @@ ${TEX_GLSL}`)
     if (g !== geo) geo.dispose();
   };
   walls.forEach((poly, i) => {
-    if (chasm[i]) { wallHeights.push(0); return; }
+    if (chasm[i] || replaced[i]) { wallHeights.push(0); return; }
     const area = Math.abs(signedArea(poly));
     const small = area < 25;
     const h = small ? 1.6 + 0.6 * hash2(i, area) : 2.6 + 0.8 * hash2(i * 3.1, area);
@@ -733,8 +775,21 @@ ${TEX_GLSL}`)
     const geo = new ShapeGeometry(shapeOf(poly), 1);
     geo.rotateX(-Math.PI / 2);
     geo.translate(0, 0.014, 0);
-    // shallow water over pale stone: a glossy film (roughness 0.12 reflects the sky)
-    const mat = new MeshStandardMaterial({ color: lin('#8E8C86'), roughness: 0.12, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    // shallow water over pale stone: a thin tinted film the floor shows through, slow crossing ripples
+    // catching the sky (an opaque gloss only mirrored the flat sky as a grey sheet)
+    const mat = new MeshStandardMaterial({ color: lin('#4F6B70'), roughness: 0.16, metalness: 0, transparent: true, opacity: 0.5, depthWrite: false,
+      envMapIntensity: 0.45, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+      shader.uniforms.uWaterT = worldUniforms.valeTime;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\nuniform float uWaterT;\n${NOISE_GLSL}`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  {
+    vec2 wp = vValeWorld.xz;
+    float h = valeNoise( wp * 1.7 + vec2( uWaterT * 0.35, uWaterT * 0.21 ) ) + 0.55 * valeNoise( wp * 3.9 - vec2( uWaterT * 0.47, -uWaterT * 0.29 ) );
+    normal = valeBump( -vViewPosition, normal, h, 0.06 );
+  }`);
+    };
     patchWorldMaterial(mat);
     const mesh = new Mesh(geo, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';
@@ -760,13 +815,14 @@ ${TEX_GLSL}`)
         if (jx < -2 || jy < -2 || jx > SX + 2 || jy > SY + 2) continue;
         // thin out deep interiors (they are never seen up close)
         if (e > 9 && rand() < 0.6) continue;
+        if (onMark(jx, jy)) continue;
         treeSpots.push({ x: jx, y: jy, h: wallHeights[i], s: 0.75 + rand() * 0.55, r: rand() * Math.PI * 2, tint: rand() });
       }
     }
   });
   const boulderSpots: { x: number; y: number; s: number; r: number }[] = [];
   walls.forEach((poly, i) => {
-    if (chasm[i]) return;
+    if (chasm[i] || replaced[i]) return;
     const out = organicOutline(poly, 2.4, 0, [SX, SY], i);
     const ccw = signedArea(poly) > 0;
     for (let k = 0; k < out.length; k++) {
@@ -781,6 +837,7 @@ ${TEX_GLSL}`)
       let ok = true;
       for (const ln of lanes) for (let j = 1; j < ln.length && ok; j++) if (segDist(x, y, ln[j - 1][0], ln[j - 1][1], ln[j][0], ln[j][1]) < LANE_HALF + 0.6) ok = false;
       for (const c of clearings) if (ok && Math.hypot(x - c.x, y - c.y) < c.r) ok = false;
+      if (ok && onMark(x, y)) ok = false;
       if (ok) boulderSpots.push({ x, y, s: 0.35 + Math.pow(rand(), 1.6) * 0.75, r: rand() * Math.PI * 2 });
     }
   });
@@ -793,6 +850,7 @@ ${TEX_GLSL}`)
     for (const c of clearings) if (ok && Math.hypot(x - c.x, y - c.y) < c.r + 0.8) ok = false;
     for (let w = 0; w < walls.length && ok; w++) if (boxDist(x, y, wallBoxes[w]) < 0.6 && (pointInPolygon(x, y, walls[w]) || polyEdgeDist(x, y, walls[w]) < 0.6)) ok = false;
     for (let t = 0; t < thickets.length && ok; t++) if (boxDist(x, y, thicketBoxes[t]) < 0.5 && pointInPolygon(x, y, thickets[t])) ok = false;
+    if (ok && onMark(x, y)) ok = false;
     if (ok) stoneSpots.push({ x, y, s: 0.1 + Math.pow(rand(), 2.2) * 0.32, r: rand() * Math.PI * 2 });
   }
   const trunkGeo = new CylinderGeometry(0.1, 0.2, 1, 5, 1);
@@ -886,6 +944,16 @@ ${TEX_GLSL}`)
     setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void {
       props = p;
       setScatter(scatterLevel);
+    },
+    groundAt(x: number, y: number): number {
+      for (let i = 0; i < walls.length; i++) {
+        if (chasm[i] || replaced[i]) continue;
+        const b = wallBoxes[i];
+        if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) continue;
+        if (pointInPolygon(x, y, walls[i])) return wallHeights[i];
+      }
+      const out = gorge ? x < 0 || x > SX : x < 0 || x > SX || y < 0 || y > SY;
+      return out ? RH : 0;                                                   // the carved rim round the plate
     },
     update(time: number): void { worldUniforms.valeTime.value = time; },
     dispose(): void {
