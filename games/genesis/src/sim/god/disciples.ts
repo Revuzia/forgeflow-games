@@ -1,15 +1,18 @@
-// GENESIS — disciples (CONTRACT.md §11.1, pillar 4): people made the god's own carry its will before their own wants
-// (only hunger, thirst, cold and exhaustion come first). A standing order per disciple:
+// GENESIS — the Called (CONTRACT.md §11.1, pillar 4; LIVING.md §3.6 — internally still `disciple`): people the god
+// calls to its service carry its will before their own wants (only hunger, thirst, cold and exhaustion come first), as
+// far as they are loyal: each turn the order is followed with a probability equal to the person's loyalty to their god
+// (LIVING §3.2). A standing order per one of the Called:
 //
 //   worship     pray at the temple (worship flows to their god all day)
 //   farm        work the fields (the farmer's role, held)
 //   build       raise the village's buildings (the builder's role, held)
 //   teach       teach what they know (the teacher's role, held)
-//   preach      preach at the temple: those who hear grow in faith toward the disciple's god — and away from others
+//   preach      preach at the temple: those who hear grow in faith toward their god — and away from others
 //   missionary  walk to another settlement and preach there until it turns
 //
-// Rival gods make disciples the same way (they act through the same commands). Conversions are chronicled when a
-// settlement's god changes (rivals.ts).
+// Rival gods call their own the same way (they act through the same commands). Conversions are chronicled when a
+// settlement's god changes (rivals.ts). (A prophet — god/prophets.ts — is a different thing: a voice the god's acts make
+// credible or not; one of the Called may succeed a dead prophet.)
 
 import type { CommandRegistry } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
@@ -28,6 +31,7 @@ import { agentName, agentRef, settlementRef, vars } from '../people/util.ts';
 import { distM, spotInCell } from '../people/world.ts';
 import { actor, fail, ok } from './util.ts';
 import { godAct } from './belief.ts';
+import { hashFloat } from '../core/rng.ts';
 
 export const DISCIPLE_MODES = ['worship', 'farm', 'build', 'teach', 'preach', 'missionary'] as const;
 
@@ -51,6 +55,8 @@ function discipleTask(x: PCtx, s: number, st: Settlement | undefined, night: boo
   if (role !== undefined) A.role[s] = role;
   // every other turn they live their own life a little (eat, talk, sleep): the god's will is most of the day, not all
   if ((x.tick + A.id[s]) % 3 === 0) return null;
+  // LIVING §3.2: the order is followed as far as they are loyal
+  if (hashFloat(A.id[s], x.tick, 0xca11) >= Math.max(0.05, A.loyalty[s * GODS + Math.max(0, Math.min(GODS - 1, o.god))])) return null;
   switch (o.mode) {
     case 'worship':
     case 'preach': {
@@ -73,8 +79,9 @@ function discipleTask(x: PCtx, s: number, st: Settlement | undefined, night: boo
 godHooks.disciple = discipleTask;
 
 /**
- * Hourly: preaching converts. Everyone within earshot of a disciple at work preaching (or a missionary at its target)
- * grows in love for the disciple's god and cools toward the others; a missionary whose target now believes goes home.
+ * Hourly: preaching converts. Everyone within earshot of one of the Called at work preaching (or a missionary at its
+ * target) grows in faith in their god (a little in trust and loyalty) and cools toward the others; a missionary whose
+ * target now believes goes home. (LIVING §3.1: gently — no meter pinned; a prophet's word weighs by its credibility.)
  */
 export function disciplesHourly(u: Universe, p: Planet): void {
   const list = u.god.disciples.filter((d) => d.planet === p.id);
@@ -95,16 +102,20 @@ export function disciplesHourly(u: Universe, p: Planet): void {
       A.posAt(o, u.tick, q);
       if (distM(p, pt, q) > 70) continue;
       const i = o * GODS;
-      A.love[i + g] = Math.min(1, Math.round((A.love[i + g] + (A.task[s] === TASK.preach ? 0.03 : 0.01)) * 1e4) / 1e4);
-      for (let k = 0; k < GODS; k++) if (k !== g) A.love[i + k] = Math.round(A.love[i + k] * 0.985 * 1e4) / 1e4;
-      if (A.love[i + g] > 0.5 && hashed(A.id[o], u.tick) < 0.02) A.remember(o, MEMK.converted, u.tick, g);
+      const k0 = A.task[s] === TASK.preach ? 1 : 0.35;
+      A.faith[i + g] = Math.min(1, Math.round((A.faith[i + g] + 0.02 * k0) * 1e4) / 1e4);
+      A.love[i + g] = Math.min(1, Math.round((A.love[i + g] + 0.006 * k0) * 1e4) / 1e4);
+      A.loyalty[i + g] = Math.min(1, Math.round((A.loyalty[i + g] + 0.006 * k0) * 1e4) / 1e4);
+      for (let k = 0; k < GODS; k++) if (k !== g) { A.love[i + k] = Math.round(A.love[i + k] * 0.99 * 1e4) / 1e4; A.loyalty[i + k] = Math.round(A.loyalty[i + k] * 0.99 * 1e4) / 1e4; }
+      if (A.faith[i + g] > 0.5 && hashed(A.id[o], u.tick) < 0.02) A.remember(o, MEMK.converted, u.tick, g);
       heard++;
     }
     d.converted += heard;
     if (d.mode === 'missionary') {
       const t = x.ps.settlement(d.target);
       if (t && t.god === g) {
-        tell(u, p, 'disciple.converted', vars(x, t, s, { god: u.god.god(g)?.name ?? 'the god', text: `${agentName(x, s)} preached in ${t.name} until it turned to ${u.god.god(g)?.name ?? 'the god'}.` }), t, [agentRef(x, s), settlementRef(x, t)], 2);
+        const gname = g === 0 ? 'the god' : u.god.god(g)?.name ?? 'the god';
+        tell(u, p, 'disciple.converted', vars(x, t, s, { god: gname, text: `${agentName(x, s)}, one of the Called, preached in ${t.name} until it turned to ${gname}.` }), t, [agentRef(x, s), settlementRef(x, t)], 2);
         d.mode = 'preach';
         d.target = -1;
       }
@@ -125,8 +136,11 @@ export function registerDiscipleCommands(r: CommandRegistry): void {
     if (s < 0) return fail('That person is not alive.');
     const A = x.A;
     A.flags[s] |= AgentFlag.disciple | AgentFlag.sees_god;
-    A.love[s * GODS + g] = 1;
-    for (let k = 0; k < GODS; k++) if (k !== g) A.love[s * GODS + k] = Math.round(A.love[s * GODS + k] * 0.3 * 1e4) / 1e4;
+    // the Called believe, follow and trust their god (LIVING §3.6)
+    A.faith[s * GODS + g] = 1;
+    A.loyalty[s * GODS + g] = Math.max(A.loyalty[s * GODS + g], 0.9);
+    A.love[s * GODS + g] = Math.max(A.love[s * GODS + g], 0.8);
+    for (let k = 0; k < GODS; k++) if (k !== g) { A.love[s * GODS + k] = Math.round(A.love[s * GODS + k] * 0.3 * 1e4) / 1e4; A.loyalty[s * GODS + k] = Math.round(A.loyalty[s * GODS + k] * 0.3 * 1e4) / 1e4; }
     A.remember(s, MEMK.disciple, u.tick, 0);
     const mode = String(a.mode ?? 'preach');
     const st = x.ps.settlement(A.settlement[s]);
@@ -142,23 +156,23 @@ export function registerDiscipleCommands(r: CommandRegistry): void {
     const pt = [0, 0, 0];
     A.posAt(s, u.tick, pt);
     godAct(u, p, pt, 150, { wonder: 0.3 }, g);
-    const gname = g === 0 ? 'your' : `${u.god.god(g)?.name ?? 'a rival'}'s`;
-    return ok(`${agentName(x, s)} becomes ${gname} disciple (${mode}${target >= 0 ? ` to ${x.ps.settlement(target)?.name}` : ''}).`);
+    const gname = g === 0 ? 'you' : u.god.god(g)?.name ?? 'a rival';
+    return ok(`${agentName(x, s)} is Called by ${gname}: one of the Called, charged to ${mode}${target >= 0 ? ` to ${x.ps.settlement(target)?.name}` : ''}.`);
   }, {
-    desc: 'Make a disciple (with a standing order)', category: 'Peoples',
+    desc: 'Call a person: one of the Called, with a standing order', category: 'Peoples',
     params: { id: { type: 'int', required: true, min: 1 }, mode: { type: 'enum', values: [...DISCIPLE_MODES], default: 'preach' }, target: { type: 'int', min: 0, desc: 'missionary: a settlement id' } },
   });
   r.register('disciple.order', ({ u, p, cmd }, a) => {
     const g = actor(cmd);
     const x = makeCtx(u, p);
     const list = typeof a.id === 'number' ? u.god.disciples.filter((d) => d.agent === a.id) : u.god.disciples.filter((d) => d.god === g && d.planet === p.id);
-    if (!list.length) return fail('There is no such disciple. Make one first (agent.make-disciple).');
+    if (!list.length) return fail('There are none of the Called by that name. Call one first ("call Hesh to me").');
     for (const d of list) {
       d.mode = String(a.mode);
       if (d.mode === 'missionary') d.target = typeof a.target === 'number' ? a.target : d.target;
       const s = x.A.slotOf(d.agent);
       if (s >= 0) interrupt(x, s);
     }
-    return ok(`${list.length} disciple${list.length === 1 ? '' : 's'}: ${a.mode}.`);
-  }, { desc: 'Give disciples a standing order', category: 'Peoples', params: { id: { type: 'int', min: 1 }, mode: { type: 'enum', values: [...DISCIPLE_MODES], required: true }, target: { type: 'int', min: 0 } } });
+    return ok(`${list.length} of the Called: ${a.mode}.`);
+  }, { desc: 'Charge the Called with a standing order', category: 'Peoples', params: { id: { type: 'int', min: 1 }, mode: { type: 'enum', values: [...DISCIPLE_MODES], required: true }, target: { type: 'int', min: 0 } } });
 }

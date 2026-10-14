@@ -19,4 +19,22 @@ export const godHooks: {
    * fuelling or crewing it at the pad); null lets it live as usual this turn
    */
   crew: ((x: PCtx, s: number, st: Settlement | undefined) => TaskSpec | null) | null;
-} = { possessed: null, disciple: null, held: null, crew: null };
+  /**
+   * additive (LIVING RELATIONSHIP, god/relationship.ts): the people and their god in a settled agent's decision — prayer
+   * from faith and hardship (U is decide.ts's utility table, C its candidate indices: adjusted in place), shelter from a
+   * storm, an evacuation, evening worship, a pilgrimage, a prophet's preaching. A task returned is started at once.
+   */
+  relation: ((x: PCtx, s: number, st: Settlement, U: Float64Array, C: Readonly<Record<string, number>>, night: boolean) => TaskSpec | null) | null;
+  /** additive (LIVING RELATIONSHIP): the worship a finished prayer / worship / sermon yields (null: the old rule) */
+  worship: ((x: PCtx, s: number, st: Settlement, kind: number) => number) | null;
+  /** additive (LIVING RELATIONSHIP): a settlement raises a temple only where faith and loyalty hold (else a shrine) */
+  templeWanted: ((x: PCtx, st: Settlement) => boolean) | null;
+  /**
+   * additive (LIVING RELATIONSHIP, god/wrath.ts): the scale on harm done now by the people code's own area harm (an
+   * impact's blast, people.ts harmArea / damageArea) — L lethality, R reach, B on buildings — inside a god's act sent with a wrath; null
+   * outside one (nature's harm, its own law alone)
+   */
+  harmScale: (() => { L: number; R: number; B: number } | null) | null;
+  /** additive (LIVING RELATIONSHIP, god/regard.ts): a person of settlement sid was killed by the act in progress */
+  noteDeath: ((planet: number, sid: number) => void) | null;
+} = { possessed: null, disciple: null, held: null, crew: null, relation: null, worship: null, templeWanted: null, harmScale: null, noteDeath: null };

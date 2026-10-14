@@ -4,7 +4,9 @@
 // wide weather over everything.
 //   precipitation  a box of particles round the camera (it wraps as the camera moves, thinning toward its edge):
 //                  rain streaks (drizzle → monsoon by rate), snow tumbling and drifting, hail, grey ash flakes,
-//                  driven sand, blood-red or sickly acid rain; it leans with the wind
+//                  driven sand, blood-red or sickly acid rain; it leans with the wind. A blizzard drives dense snow
+//                  nearly level along the gale, big out-of-focus flakes sweep past the lens and a sheet of blowing snow
+//                  streams along the ground
 //   splashes       little crowns on whatever surface is under the rain (roofs, streets, the sea), from the depth buffer
 //   fog            height fog by the weather's fog (a fog bank, a blizzard's white-out, a sandstorm, ash)
 //   tints          the weather's sky tint over the sky (a blood-red sky, a sandstorm's ochre, a no-air black)
@@ -19,6 +21,7 @@ import { BASE_PACK } from '../../data/index.ts';
 import { SYS } from './vfx.ts';
 import type { FxCtx } from './disasters.ts';
 import { clamp01, smooth } from './fxcommon.ts';
+import { CAMERA_NOW } from '../camera/common.ts';
 
 interface WDef { particles: string; fog: number; lightning: number; tint: [number, number, number] | null; airless: boolean; wind: number }
 const DEFS = new Map<string, WDef>(
@@ -100,17 +103,22 @@ export class WeatherFx {
     this.local = { precip, type, fog, lightning: light };
     // ── precipitation round the camera ──
     const f = FALL[type];
-    const rate = f ? clamp01(precip / (type === 2 ? 4 : type === 4 ? 3 : 8)) * low : 0;
-    if (f && rate > 0.01 && pv.params.atmosphere.pressure > 0.02) {
+    // (additive, ships lane) no rain out of a clear sky: a trace of precipitation under a cloudless sky is a field's
+    // fading tail, not weather — wet weather needs cloud over the camera (blown sand and ash need none)
+    const cf = pv.fields.get('cloud');
+    const skyK = type === 7 || type === 4 ? 1 : cf ? smooth(0.12, 0.35, pv.grid.sample(cf, u.x, u.y, u.z)) : 1;
+    const rate = f ? clamp01(precip / (type === 2 ? 4 : type === 4 ? 3 : 8)) * low * skyK : 0;
+    if (f && rate > 0.04 && pv.params.atmosphere.pressure > 0.02) {
       // a driven snow (a blizzard) streaks along the wind; a quiet one tumbles (a different system: its own emitter)
-      const driven = type === 2 && gust > 0.6;
+      // (a blizzard's own system, or snow heavy enough to be one, wherever its cell reaches the camera)
+      const driven = type === 2 && (gust > 0.35 || precip > 6);
       const key = driven ? -2 : type;
       if (this.kind !== key) { this.stop(ctx); this.kind = key; }
       const wx = pv.fields.get('windX'), wy = pv.fields.get('windY'), wz = pv.fields.get('windZ');
       const wind = wx && wy && wz ? _p.set(pv.grid.sample(wx, u.x, u.y, u.z), pv.grid.sample(wy, u.x, u.y, u.z), pv.grid.sample(wz, u.x, u.y, u.z)) : _p.set(0, 0, 0);
       // a gale the fields do not carry (a painted blizzard, a sandstorm): the system's own wind, along the field's
       // direction if it has one, else from the west
-      const galeV = gust * 10;
+      const galeV = Math.max(gust * 10, driven ? 13 : 0);
       if (wind.length() < galeV) {
         if (wind.lengthSq() < 1e-6) { const ex = u.z, ez = -u.x, el = Math.hypot(ex, ez) || 1; wind.set(ex / el, 0, ez / el); }
         wind.normalize().multiplyScalar(galeV);
@@ -120,16 +128,24 @@ export class WeatherFx {
       // the weather's haze is the rain)
       const B = type === 2 || type === 4 ? 13 : type === 7 ? 30 : 16;
       // (a blizzard drives far more snow past the eye than a quiet snowfall drifts down)
-      const count = Math.round((driven ? 9000 : type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 5200) * ctx.q * (0.35 + 0.65 * rate));
+      const count = Math.round((driven ? 20000 : type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 5200) * ctx.q * (0.35 + 0.65 * rate));
       const def = {
         sys: driven ? SYS.precip : f.sys, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * windK, ay: wind.y * windK, az: wind.z * windK,
-        size: driven ? 0.03 : f.size * (type === 1 && precip > 15 ? 1.4 : 1), life: 10, count, p0: driven ? 9 : B, p1: driven ? 2.2 : f.speed * (type === 1 ? 0.8 + 0.4 * rate : 1), p2: driven ? 1 : 0,
-        r: f.col[0], g: f.col[1], b: f.col[2], power: Math.min(1, 0.25 + rate),
+        size: driven ? 0.045 : f.size * (type === 1 && precip > 15 ? 1.4 : 1), life: 10, count, p0: driven ? 9 : B, p1: driven ? 2.2 : f.speed * (type === 1 ? 0.8 + 0.4 * rate : 1), p2: driven ? 1 : 0,
+        r: f.col[0], g: f.col[1], b: f.col[2], power: Math.min(1, 0.25 + rate) * smooth(0.04, 0.15, rate),
       };
       // (it was already falling when the camera came: a full box at once)
       if (!this.fall || !ctx.vfx.alive(this.fall)) this.fall = ctx.vfx.emit({ ...def, prewarm: def.life }, ctx.now);
       else ctx.vfx.set(this.fall, def);
       this.fallPower = def.power;
+      // a blizzard at the lens: big flakes out of focus sweeping past, and a sheet of snow streaming along the ground
+      if (driven) {
+        const near = { sys: SYS.snowfall, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * 1.1, ay: wind.y * 1.1, az: wind.z * 1.1, size: 0.22, life: 10, count: Math.round(220 * ctx.q), p0: 3, p1: 2.2, p2: 1, r: 0.95, g: 0.96, b: 1, power: Math.min(1, 0.4 + rate) };
+        if (!this.nearFlakes || !ctx.vfx.alive(this.nearFlakes)) this.nearFlakes = ctx.vfx.emit({ ...near, prewarm: near.life }, ctx.now); else ctx.vfx.set(this.nearFlakes, near);
+        const sheetOn = alt < 40;
+        const sheet = { sys: SYS.drift, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * 1.7, ay: wind.y * 1.7, az: wind.z * 1.7, size: 0.24, life: 10, count: Math.round(3200 * ctx.q), p0: 16, p1: Math.max(0.2, alt), r: 0.93, g: 0.95, b: 1, power: sheetOn ? Math.min(1, 0.3 + rate) : 0 };
+        if (!this.drift || !ctx.vfx.alive(this.drift)) this.drift = ctx.vfx.emit({ ...sheet, prewarm: sheet.life }, ctx.now); else ctx.vfx.set(this.drift, sheet);
+      } else this.stopBlizzard(ctx);
       if (f.splash && alt < 200) {
         const sd = { sys: SYS.splash, x: cam.x, y: cam.y, z: cam.z, size: 0.07 + 0.05 * rate, life: 0.35, count: Math.round(320 * ctx.q * rate), p0: 70, r: f.col[0], g: f.col[1], b: f.col[2], power: rate };
         if (!this.splash || !ctx.vfx.alive(this.splash)) this.splash = ctx.vfx.emit({ ...sd, prewarm: sd.life }, ctx.now);
@@ -146,8 +162,13 @@ export class WeatherFx {
     // ── rain on the lens: near the ground, more when looking up into it; it dries slowly when the rain stops ──
     const rainy = type === 1 || type === 5 || type === 6 ? rate : 0;
     const facing = ctx.camFwd ? clamp01(0.45 + ctx.camFwd.dot(u) * 1.4) : 0.5;
-    const wantLens = rainy * (1 - smooth(25, 110, alt)) * facing;
-    this.lens += (wantLens - this.lens) * Math.min(1, ctx.ease * (wantLens > this.lens ? 0.3 : 0.1));
+    // (additive, cameras lane) rain beads only on an eye down among things — walking, a photo, a follow camera near
+    // the ground (under ~10 m) — never on the god's orbit or fly cameras; and it dries within a few seconds
+    const mode = CAMERA_NOW.mode;
+    const eye = mode === 'walk' || mode === 'photo' ? 1 - smooth(8, 25, alt) : mode === 'follow' ? 1 - smooth(6, 10, alt) : 0;
+    const wantLens = rainy * eye * facing;
+    this.lens += (wantLens - this.lens) * Math.min(1, ctx.ease * (wantLens > this.lens ? 0.3 : 0.8));
+    if (this.lens < 0.01 && wantLens === 0) this.lens = 0;
     ctx.screen.lens = this.lens;
     // ── fog and tint (eased) ──
     const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, type === 2 && precip > 6 ? 0.5 : 0) * low;
@@ -176,14 +197,22 @@ export class WeatherFx {
       const nx = u.y * ez, ny = u.z * ex - u.x * ez, nz = -u.y * ex;
       const pu = _p.set(u.x * R + (ex * Math.cos(a) + nx * Math.sin(a)) * r, u.y * R + ny * Math.sin(a) * r, u.z * R + (ez * Math.cos(a) + nz * Math.sin(a)) * r).normalize();
       const gp = pu.clone().multiplyScalar(groundHeight(pv.ground, pu.x, pu.y, pu.z));
-      // from the cloud deck's base down to the ground
-      const top = pu.clone().multiplyScalar((ctx.cloudBase ?? R + 260) + Math.random() * 60);
-      ctx.bolts.strike(top, gp, ctx.now, 0.9 + 0.3 * Math.random(), 6);
+      // out of the deck down to the ground (GodFx: the cloud lit from inside, the bolt if near)
+      if (ctx.strike) ctx.strike(pu, 0.9 + 0.3 * Math.random());
+      else ctx.bolts.strike(pu.clone().multiplyScalar((ctx.cloudBase ?? R + 260) + 60), gp, ctx.now, 0.9 + 0.3 * Math.random(), 6);
       ctx.thunder(gp, 1);
     }
   }
 
+  private nearFlakes = 0;
+  private drift = 0;
+  private stopBlizzard(ctx: FxCtx): void {
+    if (this.nearFlakes) { this.fading.push({ id: this.nearFlakes, p: 0.8, t: 1 }); this.nearFlakes = 0; }
+    if (this.drift) { this.fading.push({ id: this.drift, p: 0.8, t: 1 }); this.drift = 0; }
+  }
+
   private stop(ctx: FxCtx): void {
+    this.stopBlizzard(ctx);
     if (this.fall) { this.fading.push({ id: this.fall, p: this.fallPower, t: 1 }); this.fall = 0; }
     if (this.splash) { ctx.vfx.stop(this.splash, ctx.now); this.splash = 0; }
     this.kind = -1;

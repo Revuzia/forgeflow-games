@@ -92,9 +92,19 @@ test('powers: every power has a tool mode, an icon and a category the radial sho
   for (const p of book.list) {
     assert.ok(toolMode(p), p.id);
     assert.ok(hasIcon(p.icon), `power '${p.id}' has no icon '${p.icon}'`);
+    // (LIVING §3.5: 'Signs' replaces the creature's category — on the radial once the UI team adds it: hook H4, the
+    // todo test below)
+    if (p.category === 'Signs') continue;
     assert.ok(CATEGORIES.includes(p.category), `power '${p.id}': category '${p.category}' is not on the radial`);
   }
   for (const c of CATEGORIES) assert.ok(categoryIcon(c).includes('<path') || categoryIcon(c).includes('<circle'), c);
+});
+
+test('powers: the Signs category (prophets, omens, sacred places, prayers) is on the radial in place of Creature', { todo: 'hook H4 (LIVING.md §7): src/ui/powers.ts CATEGORIES — the UI team' }, () => {
+  const book = new PowerBook();
+  assert.ok(book.list.some((p) => p.category === 'Signs'), 'the sim sends Signs powers');
+  assert.ok(CATEGORIES.includes('Signs'), "the radial shows 'Signs'");
+  assert.ok(!CATEGORIES.includes('Creature'), "and no 'Creature'");
 });
 
 /** a value for a required parameter the card would ask the player to type */
@@ -108,17 +118,15 @@ test('powers: the command the tool card sends for every power is accepted by the
   const { sim, st } = town();
   const u = sim.u;
   const p0 = u.planets[0];
-  // things to aim at: the town, one of its people, a creature, a live disaster
+  // things to aim at: the town, one of its people, a live disaster (the creature is gone: LIVING §3.5)
   const pos = [...st.pos];
   const A = p0.people.agents;
   let agent = -1;
   for (let s = 0; s < A.hi; s++) if (A.alive[s]) { agent = A.id[s]; break; }
   assert.ok(agent >= 0);
-  const cr = sim.applyNow({ k: 'creature.adopt', template: 'ape', pos });
-  const creature = cr.created?.find((e) => e.kind === 'creature')?.id ?? 1;
   const ds = sim.applyNow({ k: 'disaster.spawn', kind: 'quake', pos });
   const disaster = ds.created?.find((e) => e.kind === 'disaster')?.id ?? 1;
-  const ids: Record<string, unknown> = { settlement: st.id, agent, creature, disaster, planet: p0.id, ship: 1, god: 1, building: p0.people.buildings[0]?.id ?? 1, animal: 1 };
+  const ids: Record<string, unknown> = { settlement: st.id, agent, disaster, planet: p0.id, ship: 1, god: 1, building: p0.people.buildings[0]?.id ?? 1, animal: 1 };
   const book = new PowerBook();
   // as the App does: the commands' own schemas say what each power's command requires
   book.setCommands(sim.query('commands'));

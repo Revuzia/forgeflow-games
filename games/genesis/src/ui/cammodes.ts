@@ -38,6 +38,11 @@ export class CameraUi {
   private revealUntil = 0;
   private subjectKey = '';
   private menuSel = 0;
+  /** when the chip's row was last chosen (ms), and whether the window is too narrow for its key hints */
+  private placedAt = 0;
+  private forcedShort = false;
+  /** frames drawn since the mode changed */
+  private framesSince = 0;
   private items: MenuItem[] = [];
 
   constructor(parent: HTMLElement, deps: CameraUiDeps) {
@@ -77,23 +82,43 @@ export class CameraUi {
     const mode = cam.mode();
     const now = performance.now();
     const sub = cam.subject();
-    const key = `${mode}|${sub ? `${sub.kind}:${sub.id}` : ''}`;
+    // (the name too: a person's comes back from the world a moment after they are followed)
+    const nm = sub && (mode === 'follow' || mode === 'dolly') ? this.deps.nameOf(sub) ?? '' : '';
+    const key = `${mode}|${sub ? `${sub.kind}:${sub.id}` : ''}|${nm}`;
     if (key !== this.subjectKey) {
       this.subjectKey = key;
-      if (mode !== this.mode) { this.mode = mode; this.since = now; }
+      if (mode !== this.mode) { this.mode = mode; this.since = now; this.framesSince = 0; }
       this.renderChip(mode, sub);
       if (mode === 'dolly') this.renderTitle(sub);
     }
     const cine = mode === 'dolly';
     this.layer.classList.toggle('gn-cine', cine);
-    // the title rises, holds and fades; the hint under it comes back when the pointer moves
+    // the title rises, holds and fades; the hint under it comes back when the pointer moves (held for a few dozen
+    // frames as well as six seconds: a machine that draws a frame a second still shows it)
     const t = (now - this.since) / 1000;
-    this.title.classList.toggle('gn-on', cine && (t < 6 || now < this.revealUntil));
-    this.title.classList.toggle('gn-cine-hint-only', cine && t >= 6);
+    this.framesSince++;
+    const held = t < 6 || this.framesSince < 24;
+    this.title.classList.toggle('gn-on', cine && (held || now < this.revealUntil));
+    this.title.classList.toggle('gn-cine-hint-only', cine && !held);
     const showChip = mode === 'follow' || mode === 'walk';
     this.chip.hidden = !showChip || !this.deps.uiVisible();
-    // the walking chip shortens after a while
-    this.chip.classList.toggle('gn-cam-chip-short', mode === 'walk' && t > 9);
+    // the chip shortens after a while (its keys learnt)
+    const timeShort = (mode === 'walk' && t > 9) || (mode === 'follow' && t > 7);
+    // it keeps clear of the time panel (top left) and the worlds strip (top right): on a narrow window it drops its key
+    // hints first (the controls card has them), and only if even then it would touch them it sits under that row
+    if (!this.chip.hidden && now - this.placedAt > 400) {
+      this.placedAt = now;
+      const W = window.innerWidth;
+      const rects: DOMRect[] = [];
+      for (const sel of ['.gn-time', '.gn-topright']) { const r = document.querySelector(sel)?.getBoundingClientRect(); if (r && r.width > 0) rects.push(r); }
+      const clashes = (): boolean => { const half = this.chip.getBoundingClientRect().width / 2; return rects.some((r) => r.left < W / 2 + half + 8 && r.right > W / 2 - half - 8); };
+      // (measured on the top row: the chip's width does not depend on its row)
+      this.chip.classList.toggle('gn-cam-chip-short', timeShort);
+      this.forcedShort = !timeShort && clashes();
+      if (this.forcedShort) this.chip.classList.add('gn-cam-chip-short');
+      this.chip.classList.toggle('gn-cam-chip-low', clashes());
+    }
+    this.chip.classList.toggle('gn-cam-chip-short', timeShort || this.forcedShort);
     // the crosshair: where powers land while the gamepad drives the walking eye
     this.cross.hidden = !(mode === 'walk' && padActive);
   }
@@ -105,6 +130,7 @@ export class CameraUi {
     if (mode === 'follow') {
       const stop = h('button', { class: 'gn-btn', text: 'Stop', on: { click: () => this.host.follow(null) } });
       this.chip.append(h('span', { class: 'gn-cam-ic', html: icon('follow') }), h('span', { class: 'gn-cam-k', text: 'Following' }), h('span', { class: 'gn-cam-n', text: name ?? '…' }),
+        h('span', { class: 'gn-cam-keys gn-cam-long' }, 'drag to circle · wheel nearer / farther · '),
         h('span', { class: 'gn-cam-keys' }, h('kbd', { text: kb.hint('cam.follow') || 'L' }), ' or ', h('kbd', { text: 'Esc' }), ' stops'), stop);
     } else if (mode === 'walk') {
       const k = (id: string, d: string) => kb.hint(id) || d;
@@ -112,7 +138,8 @@ export class CameraUi {
       this.chip.append(h('span', { class: 'gn-cam-ic', html: icon('walk') }), h('span', { class: 'gn-cam-k', text: 'Walking among them' }),
         h('span', { class: 'gn-cam-keys gn-cam-long' },
           h('kbd', { text: `${k('cam.forward', 'W')} ${k('cam.left', 'A')} ${k('cam.back', 'S')} ${k('cam.right', 'D')}` }), ' walk · ', h('kbd', { text: '⇧' }), ' run · drag to look · ',
-          h('kbd', { text: `${k('cam.turnLeft', 'Z')} ${k('cam.turnRight', 'X')}` }), ' turn · your powers work here too · '),
+          h('kbd', { text: `${k('cam.turnLeft', 'Z')} ${k('cam.turnRight', 'X')}` }), ' turn · ', h('kbd', { text: k('walk.float', 'R') }), ' jump, hold to float · ',
+          h('kbd', { text: k('walk.sink', 'F') }), ' down · wheel: in to their eye level · your powers work here too · '),
         h('span', { class: 'gn-cam-keys' }, h('kbd', { text: k('walk.exit', 'K') }), ' or ', h('kbd', { text: 'Esc' }), ' rises'), leave);
     }
   }
@@ -173,7 +200,7 @@ export class CameraUi {
     const kb = this.host.keybinds;
     this.menu.append(h('div', { class: 'gn-cam-mh', text: 'Camera' }));
     this.items.forEach((it, i) => {
-      const b = h('button', { class: `gn-cam-mi${i === this.menuSel ? ' gn-sel' : ''}`, role: 'menuitem', disabled: !it.ok, title: it.ok ? '' : it.why ?? '' },
+      const b = h('button', { class: `gn-cam-mi${i === this.menuSel ? ' gn-cam-on' : ''}`, role: 'menuitem', disabled: !it.ok, title: it.ok ? '' : it.why ?? '' },
         h('span', { class: 'gn-cam-ic', html: icon(it.icon) }), h('span', { class: 'gn-cam-ml', text: it.label }), h('kbd', { text: kb.hint(it.action) || '' }));
       b.addEventListener('click', () => this.pick(i));
       b.addEventListener('pointerenter', () => { this.menuSel = i; this.mark(); });
@@ -182,7 +209,7 @@ export class CameraUi {
   }
 
   private mark(): void {
-    this.menu.querySelectorAll('.gn-cam-mi').forEach((b, i) => b.classList.toggle('gn-sel', i === this.menuSel));
+    this.menu.querySelectorAll('.gn-cam-mi').forEach((b, i) => b.classList.toggle('gn-cam-on', i === this.menuSel));
   }
 
   private pick(i: number): void {

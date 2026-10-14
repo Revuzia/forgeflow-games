@@ -34,15 +34,17 @@ const EXPECT: Record<string, string[]> = {
   'gravity-slip': ['gravity', 'damage', 'hurt'], 'magnetic-storm': ['magnetism', 'radiation'], eclipse: ['light'], 'moon-fall': ['water', 'damage', 'moons'],
   'rogue-flyby': ['water', 'magnetism', 'ecc'], 'acid-rain': ['pollution', 'tree', 'shrub'], 'ice-age': ['climate', 'snow'],
   'heat-wave': ['moisture', 'tpot'], 'dust-bowl': ['sand', 'moisture', 'soil'], 'glass-storm': ['sand', 'rock', 'fire', 'items'],
-  overgrowth: ['tree', 'shrub', 'grass', 'road'], leviathan: ['damage', 'water', 'hurt'], 'forgetting-fog': ['know'], stampede: ['crop', 'grass', 'hurt'],
+  overgrowth: ['tree', 'shrub', 'grass', 'road'], 'rogue-wave': ['damage', 'water', 'hurt'], 'forgetting-fog': ['know'], stampede: ['crop', 'grass', 'hurt'],
 };
 
-let control: Record<string, number> | null = null;
-function controlMeasure(): Record<string, number> {
+const controls = new Map<number, Record<string, number>>();
+function controlMeasure(steps = STEPS): Record<string, number> {
+  let control = controls.get(steps);
   if (!control) {
     const { sim } = town();
-    sim.step(STEPS);
+    sim.step(steps);
     control = measureAll(sim);
+    controls.set(steps, control);
   }
   return control;
 }
@@ -73,9 +75,12 @@ test('every disaster kind spawns, is drawn, and changes the world', () => {
       assert.equal(v!.kind, kind);
       assert.ok(v!.radius > 0 && Object.keys(v!.params).length > 0, `${kind} has render params`);
     }
-    sim.step(STEPS);
+    // (LIVING §3.7: a god-sent volcano rumbles for its warning phase first — ≥ 12 game hours at the default wrath — so its
+    // effects are measured STEPS after the blow, against the untouched world stepped as long)
+    const warned = sim.u.god.disaster(id)?.st.Wn ?? 0;
+    sim.step(STEPS + warned);
     const m = measureAll(sim);
-    const diff = changed(base, m, 1e-7);
+    const diff = changed(warned ? controlMeasure(STEPS + warned) : base, m, 1e-7);
     const want = EXPECT[kind] ?? [];
     if (!diff.some((k) => want.includes(k))) fails.push(`${kind}: changed [${diff.join(', ')}], expected one of [${want.join(', ')}]`);
   }

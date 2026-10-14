@@ -18,6 +18,8 @@
 // strength changes flash on the card instead of toasting. Y casts the armed power at the cursor; T casts the armed one
 // too, or — with nothing armed — the last power again, once, without arming it. A one-shot cast (Shift+Enter in the
 // palette, T, a gesture) never replaces what is armed. A cast that killed or ruined many offers "Undo" on its toast.
+// Setting a people down warns at the cursor where they could not live: no air to breathe, deep water, too cold (they
+// would freeze) or too hot — from the cell's temperature and the species' own tolerance (it never refuses: the god may).
 
 import type { Command, CommandResult, EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
@@ -86,6 +88,11 @@ export class Tools {
   private line: SVGLineElement;
   private head: SVGPathElement;
   private dot: SVGCircleElement;
+  /** the warning at the cursor (a people where they cannot live) */
+  private warn: HTMLDivElement;
+  private warnKey = '';
+  /** species' tolerances as the sim reports them (temp [min, comfortLo, comfortHi, max] °C, breath, swimming) */
+  private speciesInfo = new Map<string, { temp: number[]; breathes: string; swim: number; name: string } | null>();
   /** the card's own layout: extra settings shown, or the whole card folded to its title line */
   private view = store.get<{ more: boolean; min: boolean }>(CARD_KEY, { more: false, min: false });
   /** told when a tool is armed / disarmed (HUD dock) */
@@ -116,6 +123,9 @@ export class Tools {
     this.overlay.append(this.line, this.head, this.dot);
     this.overlay.style.display = 'none';
     overlayLayer.appendChild(this.overlay);
+    this.warn = h('div', { class: 'gn-tool-warn', role: 'status' });
+    this.warn.hidden = true;
+    overlayLayer.appendChild(this.warn);
   }
 
   get isArmed(): boolean { return !!this.armed; }
@@ -191,6 +201,7 @@ export class Tools {
     this.press = null;
     this.card.hidden = true;
     this.overlay.style.display = 'none';
+    this.warn.hidden = true;
     this.deps.setBrush(null);
     this.onChange?.();
   }
@@ -689,7 +700,8 @@ export class Tools {
   /** brush ring under the cursor, line / aim previews */
   frame(cursor: GroundHit | null, pointer: [number, number] | null): void {
     const p = this.armed;
-    if (!p) return;
+    if (!p) { this.warn.hidden = true; return; }
+    this.peopleWarning(p, cursor, pointer);
     const ringModes = this.mode === 'brush' || this.mode === 'front' || this.mode === 'once' || this.mode === 'aim' || (this.mode === 'line' && !!p.schema.radius);
     if (cursor && ringModes && p.schema.radius) {
       const col = CAT_COLOR[p.category] ?? [1.2, 0.95, 0.55];
@@ -717,6 +729,51 @@ export class Tools {
       const p2 = [pointer[0] - Math.cos(ang + 0.45) * L, pointer[1] - Math.sin(ang + 0.45) * L];
       this.head.setAttribute('d', this.mode === 'aim' || this.mode === 'move' ? `M${p1[0]} ${p1[1]}L${pointer[0]} ${pointer[1]}L${p2[0]} ${p2[1]}` : '');
     } else this.overlay.style.display = 'none';
+  }
+
+  /**
+   * A people about to be set down: can they live under the cursor? No air to breathe, water over their heads, colder
+   * than their bodies bear (they would freeze), hotter — said at the cursor in red; merely cold (they will need fire),
+   * in the quiet colours.
+   */
+  private peopleWarning(p: Power, cursor: GroundHit | null, pointer: [number, number] | null): void {
+    let text = '', mild = false;
+    if (p.command === 'life.spawn-people' && cursor && pointer && !this.press?.moved) {
+      const id = String(this.values.species ?? p.params?.species ?? 'plains-folk');
+      const sp = this.species(id, cursor.planet);
+      const pv = this.host.view.planet(cursor.planet);
+      if (sp && pv) {
+        const t = pv.fields.get('temperature')?.[cursor.cell];
+        const w = pv.fields.get('water')?.[cursor.cell] ?? 0;
+        const airless = pv.params.atmosphere.pressure <= 0.05;
+        const deg = (x: number) => `${Math.round(x)} °C`;
+        if (sp.breathes !== 'none' && airless) text = 'No air: they cannot breathe here';
+        else if (w > 1.2 && !(sp.swim > 0)) text = 'Deep water: they would drown';
+        else if (t !== undefined && sp.temp.length >= 4 && t < sp.temp[0]) text = `Too cold (${deg(t)}): they would freeze`;
+        else if (t !== undefined && sp.temp.length >= 4 && t > sp.temp[3]) text = `Too hot (${deg(t)}): the heat would kill them`;
+        else if (t !== undefined && sp.temp.length >= 4 && t < sp.temp[1]) { text = `Cold here (${deg(t)}): they will need fire`; mild = true; }
+      }
+    }
+    if (!text || !pointer) { this.warn.hidden = true; return; }
+    const key = `${text}|${mild}`;
+    if (key !== this.warnKey) { this.warnKey = key; this.warn.textContent = text; this.warn.classList.toggle('gn-mild', mild); }
+    this.warn.hidden = false;
+    // beside the cursor, kept on screen
+    const x = Math.min(pointer[0] + 18, window.innerWidth - this.warn.offsetWidth - 8), y = Math.min(pointer[1] + 20, window.innerHeight - this.warn.offsetHeight - 8);
+    this.warn.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  }
+
+  /** a species' tolerances (asked of the sim once per species and world; null while unknown) */
+  private species(id: string, planet: number): { temp: number[]; breathes: string; swim: number; name: string } | null {
+    const key = `${planet}:${id}`;
+    if (this.speciesInfo.has(key)) return this.speciesInfo.get(key) ?? null;
+    this.speciesInfo.set(key, null);
+    void this.host.query('species', { id, planet }).then((d) => {
+      const s = d as { temp?: unknown; breathes?: unknown; swim?: unknown; name?: unknown } | null;
+      if (!s || !Array.isArray(s.temp)) { this.speciesInfo.delete(key); return; }
+      this.speciesInfo.set(key, { temp: (s.temp as unknown[]).map(Number), breathes: String(s.breathes ?? 'o2'), swim: Number(s.swim ?? 0), name: String(s.name ?? id) });
+    }).catch(() => this.speciesInfo.delete(key));
+    return null;
   }
 
   /** where a live thing is now (the line a move tool draws starts there) */

@@ -23,12 +23,24 @@ import { distM, spotInCell } from './world.ts';
 import { seedItems, FOOD_SESSION, waterHere, planDrinkNear } from './decide.ts';
 import { emitAt, agentRef } from './util.ts';
 import { missionTaskDone } from './missions.ts';
+import { godHooks } from './hooks.ts';
 import { addWorship, meet } from './culture.ts';
 import { formCouple } from './social.ts';
 import { breathable } from '../space/habitat.ts';
+import { FOOD_YIELD, endTrip, foodSessionDone } from '../perf/pace.ts';
+// LIVING LAND (LIVING.md §2): the hunt's encounters, herds, crops, fish stocks, children's days and gatherings, the
+// books, and needs that can be met
+import { huntEncounter } from './hunt.ts';
+import { herdWork } from './herding.ts';
+import { farmWork } from './crops.ts';
+import { fishWork } from './fishing.ts';
+import { choreDone, gatherDone, playDone, raiseDone } from './gatherings.ts';
+import { noteCraft, noteGathered } from './ledger.ts';
+import { craftOutlet, curiosityGain, statusGain, talkOutlet } from './outlets.ts';
 
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
+const _near: number[] = [];
 
 /** base units a session at full availability yields, by item id */
 const BASE_YIELD: Record<string, number> = {
@@ -62,8 +74,9 @@ export function finishTask(x: PCtx, s: number): boolean {
   const kind = A.task[s];
   const nb = s * NEED_N;
   switch (kind) {
-    case TASK.sleep: {
+    case TASK.sleep: case TASK.camp: {
       A.needs[nb + REST] = Math.min(1, A.needs[nb + REST] + (A.tWork[s] / 480) * 1.05);
+      A.dayWork[s] = 0; // (LIVING PACE: a new working day — perf/pace.ts)
       if (A.flags[s] & AgentFlag.sleepingIndoors) leaveShelter(x, s);
       return false;
     }
@@ -76,7 +89,9 @@ export function finishTask(x: PCtx, s: number): boolean {
       // only where there is water: a drink whose route was blocked ended wherever the walk stopped, and quenched them
       if (waterHere(x, s)) { A.needs[nb + WATER] = 1; return false; }
       // the spot was out of reach: the nearest other one, else home's best drinking spot (sorted by the way from home:
-      // reachable from there), once (tData 1 = already a second try)
+      // reachable from there), once (tData 1 = already a second try). (LIVING LAND §2.7: the settlement looks again for
+      // where the water is — its list is refreshed at the next settlement step)
+      if (st && !st.band) st.recent.waterStale = x.tick;
       if (A.tData[s] !== 1) {
         let t = planDrinkNear(x, s, A.gcell[s]);
         if (!t && st && !st.band && st.res) {
@@ -94,8 +109,10 @@ export function finishTask(x: PCtx, s: number): boolean {
       return false;
     case TASK.forage: case TASK.chop: case TASK.quarry: case TASK.dig: case TASK.mine: case TASK.cutIce: case TASK.collectAir: case TASK.secrete:
       gather(x, s, st, kind); return false;
-    case TASK.fish: fish(x, s, st); return false;
-    case TASK.hunt: hunt(x, s, st); return false;
+    // (LIVING LAND: the catch from a shoal or the water's own stock — people/fishing.ts; the hunting party's encounter —
+    // people/hunt.ts)
+    case TASK.fish: fishWork(x, s, st, toolFactor(x, s, TASK.fish), nearCell.bind(null, x)); return false;
+    case TASK.hunt: huntEncounter(x, s, st); return false;
     case TASK.store:
       if (A.mission[s] && A.tData[s] === 4) { missionTaskDone(x, s); return false; }
       if (st) deposit(x, s, st);
@@ -116,18 +133,29 @@ export function finishTask(x: PCtx, s: number): boolean {
       const res = craft(x, s, st, A.tData[s], A.cell[s]);
       // (a rocket made at the launchpad is a hull in the store: the first orbit is told when a ship reaches orbit —
       // space/flight.ts — not when it is made)
-      if (res.ok) equipFromStore(x, s, st);
+      if (res.ok) {
+        equipFromStore(x, s, st);
+        // (LIVING LAND: the books; those standing by watch the craft — people/ledger.ts, outlets.ts)
+        noteCraft(x, st, A.tData[s]);
+        craftOutlet(x, s, x.ps.agentsIn(A.cell[s], _near));
+      }
       return false;
     }
-    case TASK.farm: farm(x, s, st); return false;
-    case TASK.herd: herd(x, s, st); return false;
+    // (LIVING LAND: crops on the season's clock — people/crops.ts; herds kept and tamed — people/herding.ts)
+    case TASK.farm: farmWork(x, s, st, toolFactor(x, s, TASK.farm)); return false;
+    case TASK.herd: herdWork(x, s, st); return false;
     case TASK.tendFire: tendFire(x, s, st); return false;
     case TASK.teach: {
       const l = A.slotOf(A.tTarget[s]);
       if (l >= 0 && A.alive[l] && A.cell[l] !== undefined) {
         A.posAt(l, x.tick, _p);
         A.posAt(s, x.tick, _q);
-        if (distM(x.p, _p, _q) < 3 * x.p.edgeM) teachSession(x, s, l, A.tData[s]);
+        if (distM(x.p, _p, _q) < 3 * x.p.edgeM) {
+          teachSession(x, s, l, A.tData[s]);
+          // (LIVING LAND: being taught feeds curiosity; teaching is a thing to be known for — people/outlets.ts)
+          curiosityGain(x, l, 0.2);
+          statusGain(x, s, 0.03);
+        }
       }
       practise(x, s, SKILL.lore, 0.01);
       return false;
@@ -137,6 +165,7 @@ export function finishTask(x: PCtx, s: number): boolean {
       const r = x.rt.list[k];
       if (r && st && st.written.includes(k) && hashFloat(A.id[s], k, x.tick, 0xb00c) < (1 - r.teach * 0.6) * 0.45 * learnBoost(x, st)) learn(x, s, k, 'book');
       practise(x, s, SKILL.lore, 0.02);
+      curiosityGain(x, s, 0.25); // (LIVING LAND: a book read)
       return false;
     }
     case TASK.experiment: experiment(x, s, st); return false;
@@ -146,6 +175,8 @@ export function finishTask(x: PCtx, s: number): boolean {
     case TASK.socialize: {
       A.needs[nb + BELONG] = Math.min(1, A.needs[nb + BELONG] + 0.45);
       talk(x, s, A.cell[s]);
+      // (LIVING LAND: someone here knows what they do not — the news of the talk: people/outlets.ts)
+      talkOutlet(x, s, x.ps.agentsIn(A.cell[s], _near));
       return false;
     }
     case TASK.court: court(x, s, st); return false;
@@ -165,6 +196,11 @@ export function finishTask(x: PCtx, s: number): boolean {
       if (A.flags[s] & AgentFlag.sleepingIndoors) leaveShelter(x, s);
       return false;
     }
+    // (LIVING LAND: a child's play and chores, a gathering of the settlement, raising an infant — people/gatherings.ts)
+    case TASK.play: playDone(x, s); return false;
+    case TASK.chore: choreDone(x, s, st); return false;
+    case TASK.gather: gatherDone(x, s, st); return false;
+    case TASK.raiseChild: raiseDone(x, s, st, (m) => eat(x, m, st, true)); return false;
     default: return false;
   }
 }
@@ -214,6 +250,8 @@ function gather(x: PCtx, s: number, st: Settlement | undefined, kind: number): v
   const perFood = FOOD_SESSION[item.id];
   const base = perFood !== undefined && item.food ? perFood / item.food : BASE_YIELD[item.id] ?? 2.5;
   let units = base * Math.min(1, av) * (0.6 + 1.1 * A.skills[s * NS + SKILL.gather]) * toolFactor(x, s, kind);
+  // (LIVING PACE: a day's food work is a few sessions — perf/pace.ts)
+  if (item.food) { units *= FOOD_YIELD; foodSessionDone(x, s); }
   if (kind === TASK.forage) units *= effect(x, st, 'yield.forage');
   if (kind === TASK.mine) {
     const known = st && st.library.includes(x.rt.byId.get('mining') ?? -1);
@@ -223,6 +261,7 @@ function gather(x: PCtx, s: number, st: Settlement | undefined, kind: number): v
   if (units <= 0) return;
   const left = A.give(s, it, units);
   if (left > 0 && st && !st.band) storeAdd(x, st, it, left);
+  if (st) noteGathered(x, st, it, units, !!item.food); // (LIVING LAND: the books — people/ledger.ts)
   practise(x, s, SKILL.gather, 0.012);
   // the land gives it up
   const f = x.p.f;
@@ -236,74 +275,18 @@ function gather(x: PCtx, s: number, st: Settlement | undefined, kind: number): v
   if (st && !st.band && (id === 'wild-grain') && hashFloat(A.id[s], x.tick, 0x5eed) < 0.02) st.recent['spilled-seed'] = x.tick;
 }
 
-function fish(x: PCtx, s: number, st: Settlement | undefined): void {
-  const A = x.A;
-  let target = A.tTarget[s] >= 0 ? A.tTarget[s] : A.cell[s];
-  // out of reach of the water they meant: fish where they stand, if anything swims there
-  if (target !== A.cell[s] && !nearCell(x, A.cell[s], target)) target = A.cell[s];
-  const av = availability(x, itemIdx(x, 'fish'), target);
-  if (av <= 0) return;
-  // a shoal nearby fills the nets
-  let shoal = 1;
-  const P = x.p.grid.pos;
-  for (const h of x.ps.herds) {
-    if (animalDef(x, h.species).kind !== 'fish' || h.count < 1) continue;
-    const d = P[h.cell * 3] * P[target * 3] + P[h.cell * 3 + 1] * P[target * 3 + 1] + P[h.cell * 3 + 2] * P[target * 3 + 2];
-    if (d > Math.cos((2 * x.p.edgeM) / x.p.st.radius)) { shoal = 1.6; h.count = Math.max(0, h.count - 0.5); break; }
-  }
-  const sp = x.info[A.species[s]].def;
-  const it = itemIdx(x, 'fish');
-  const perUnit = x.c.items.list[it]?.food || 0.5;
-  const units = Math.round((FOOD_SESSION.fish / perUnit) * av * shoal * (0.55 + 1.1 * A.skills[s * NS + SKILL.fish]) * toolFactor(x, s, TASK.fish) * effect(x, st, 'yield.fish') * (sp.swim >= 1 ? 1.3 : 1) * 100) / 100;
-  const left = A.give(s, it, units);
-  if (left > 0 && st && !st.band) storeAdd(x, st, it, left);
-  practise(x, s, SKILL.fish, 0.015);
-}
-
 function nearCell(x: PCtx, a: number, b: number): boolean {
   const g = x.p.grid;
   for (let e = g.nbrStart[a]; e < g.nbrStart[a + 1]; e++) if (g.nbr[e] === b) return true;
   return a === b;
 }
 
-function hunt(x: PCtx, s: number, st: Settlement | undefined): void {
-  const A = x.A;
-  const h = x.ps.herd(A.tTarget[s]);
-  if (!h || h.count < 1) return;
-  herdPos(h, x.tick, _p);
-  A.posAt(s, x.tick, _q);
-  if (distM(x.p, _p, _q) > 2.5 * x.p.edgeM) return; // it got away
-  const a = animalDef(x, h.species);
-  const skill = A.skills[s * NS + SKILL.hunt];
-  const pr = 0.32 * (0.6 + 1.1 * skill) * toolFactor(x, s, TASK.hunt) * (1 - a.flee * 0.45) * effect(x, st, 'yield.hunt');
-  h.scared = x.tick;
-  practise(x, s, SKILL.hunt, 0.02);
-  if (hashFloat(A.id[s], h.id, x.tick, 0x4a7) < pr) {
-    h.count = Math.max(0, h.count - 1);
-    for (const io of a.products) {
-      const it = io.item ? x.c.items.idx(io.item) : -1;
-      if (it < 0) continue;
-      const left = A.give(s, it, io.qty);
-      if (left > 0 && st && !st.band) storeAdd(x, st, it, left);
-    }
-    A.remember(s, MEMK.hunted, x.tick, h.species);
-    // in a famine, the beast that feeds them may become sacred to them (culture.ts)
-    if (st && st.recent.famineAt !== undefined && x.tick - st.recent.famineAt < 6 * x.day) st.recent.savedBy = h.species;
-  }
-  // the hunted may fight back
-  if (a.danger > 0 && hashFloat(A.id[s], h.id, x.tick, 0x4a8) < a.danger * (1 - skill * 0.6) * 0.45) {
-    A.health[s] -= 0.2 + a.danger * 0.35;
-    A.flags[s] |= AgentFlag.sick;
-    A.remember(s, MEMK.injured, x.tick, h.species);
-    if (st) accident(x, st, 'injury', A.cell[s]);
-    if (A.health[s] <= 0) die(x, s, DEATH.predator);
-  }
-}
-
 // ───────────────────────────── store, haul, build ─────────────────────────────
 
 function deposit(x: PCtx, s: number, st: Settlement): void {
   const A = x.A;
+  // (LIVING PACE: home from a trip — perf/pace.ts)
+  if (A.camp[s] >= 0) endTrip(x, s);
   for (let k = 0; k < INV; k++) {
     const it = A.invItem[s * INV + k];
     if (it < 0) continue;
@@ -405,75 +388,7 @@ function repair(x: PCtx, s: number, st: Settlement | undefined): void {
 
 // ───────────────────────────── farming & herding ─────────────────────────────
 
-function farm(x: PCtx, s: number, st: Settlement | undefined): void {
-  const A = x.A;
-  if (!st || st.crop < 0) return;
-  const c = A.tTarget[s];
-  if (c < 0) return;
-  const f = x.p.f;
-  const mode = A.tData2[s];
-  const skill = A.skills[s * NS + SKILL.farm];
-  if (mode === 0) {
-    // clear, till and sow
-    if (storeTakeAny(st, seedItems(x), 1) < 1) return;
-    f.tree[c] = 0; f.shrub[c] = 0; f.grass[c] *= 0.3;
-    f.cropSpecies[c] = st.crop;
-    f.crop[c] = Math.max(f.crop[c], 0.06);
-    if (!st.fields.includes(c)) { st.fields.push(c); st.fields.sort((a, b) => a - b); }
-    x.p.bump('crop'); x.p.bump('cropSpecies'); x.p.bump('tree'); x.p.bump('shrub');
-    x.p.vegDirty = true;
-  } else if (mode === 1) {
-    if (f.cropSpecies[c] === st.crop) f.crop[c] = Math.min(1, f.crop[c] + 0.05 * (0.6 + 1.1 * skill) * toolFactor(x, s, TASK.farm));
-  } else {
-    if (f.cropSpecies[c] !== st.crop || f.crop[c] < 0.3) return;
-    const units = Math.round(f.crop[c] * 26 * (0.6 + 1.1 * skill) * toolFactor(x, s, TASK.farm) * effect(x, st, 'yield.farm') * 100) / 100;
-    const grain = itemIdx(x, 'grain');
-    const left = A.give(s, grain, units);
-    if (left > 0) storeAdd(x, st, grain, left);
-    f.crop[c] = 0.04;
-    x.p.bump('crop');
-  }
-  practise(x, s, SKILL.farm, 0.015);
-}
-
-function herd(x: PCtx, s: number, st: Settlement | undefined): void {
-  const A = x.A;
-  if (!st) return;
-  const h = x.ps.herd(A.tTarget[s]);
-  if (!h) return;
-  const skill = A.skills[s * NS + SKILL.herd];
-  if (A.tData2[s] === 1) {
-    // taming a wild herd
-    const a = animalDef(x, h.species);
-    if (h.owner >= 0 || !a.domesticatesTo) return;
-    if (hashFloat(A.id[s], h.id, x.tick, 0x7a3e) < 0.12 + skill * 0.3) {
-      const dom = x.c.animals.idx(a.domesticatesTo);
-      if (dom >= 0) {
-        h.species = dom;
-        h.owner = st.id;
-        h.count = Math.min(h.count, 6);
-        h.state = 4;
-        st.recent['tame-young'] = x.tick;
-      }
-    }
-    practise(x, s, SKILL.herd, 0.02);
-    return;
-  }
-  if (h.owner !== st.id) return;
-  const a = animalDef(x, h.species);
-  for (const io of a.products) {
-    const it = io.item ? x.c.items.idx(io.item) : -1;
-    if (it < 0) continue;
-    const id = x.c.items.list[it].id;
-    // renewable products every visit; meat only from a herd large enough to spare one
-    if (id === 'milk' || id === 'wool' || id === 'eggs') storeAdd(x, st, it, Math.round(io.qty * Math.min(10, h.count) * 0.12 * (0.6 + skill) * 100) / 100);
-  }
-  if (h.count > 7 && hashFloat(h.id, x.tick, 0xb07c) < 0.25) {
-    h.count -= 1;
-    for (const io of a.products) { const it = io.item ? x.c.items.idx(io.item) : -1; if (it >= 0 && x.c.items.list[it].id !== 'milk') storeAdd(x, st, it, io.qty); }
-  }
-  practise(x, s, SKILL.herd, 0.015);
-}
+// (LIVING LAND: farming and herding are people/crops.ts farmWork and people/herding.ts herdWork)
 
 function tendFire(x: PCtx, s: number, st: Settlement | undefined): void {
   const A = x.A;
@@ -506,6 +421,7 @@ function experiment(x: PCtx, s: number, st: Settlement | undefined): void {
   // a place with a trigger present (or one that happened here lately) helps
   const ok = resolveExperiment(x, s, k, A.tData2[s] === 1);
   if (ok && r.outItems.length) for (const [it, q] of r.outItems) storeAdd(x, st, it, q);
+  if (ok) statusGain(x, s, 0.3); // (LIVING LAND: a discovery — people/outlets.ts)
   A.needs[s * NEED_N + 7] = Math.min(1, A.needs[s * NEED_N + 7] + 0.25);
 }
 
@@ -569,7 +485,8 @@ function worship(x: PCtx, s: number, st: Settlement | undefined, kind: number): 
   // devotion turns toward the god they know
   if (A.love[s * 4] > 0.02) A.love[s * 4] = Math.min(1, A.love[s * 4] + 0.003 * piety);
   // worship flows to the god they believe in (none: to no one)
-  if (st) addWorship(x, st, s, (kind === TASK.worship ? 2 : 1) * (0.5 + piety));
+  // (LIVING RELATIONSHIP: worship by faith and fear and the place; a prophet's sermon by credibility — god/relationship.ts)
+  if (st) addWorship(x, st, s, godHooks.worship ? godHooks.worship(x, s, st, kind) : (kind === TASK.worship ? 2 : 1) * (0.5 + piety));
   if (kind === TASK.preach && st) {
     const others: number[] = [];
     x.ps.agentsIn(A.cell[s], others);

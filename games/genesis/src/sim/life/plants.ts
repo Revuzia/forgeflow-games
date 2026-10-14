@@ -13,6 +13,9 @@ import { hash32, hashFloat } from '../core/rng.ts';
 import { tell } from '../people/story.ts';
 import { accident, libraryEffect } from '../people/knowledge.ts';
 import { settlementRef, vars } from '../people/util.ts';
+import type { Content } from '../content.ts';
+import type { Planet } from '../world/planet.ts';
+import { suitability } from '../fields/vegetation.ts';
 
 /** blight multiplier from what a settlement knows (crop rotation, ...) */
 function rotation(x: PCtx, st: Settlement | undefined): number {
@@ -136,4 +139,120 @@ export function blightedShare(x: PCtx, st: Settlement): number {
   let n = 0;
   for (const c of st.fields) if (x.p.f.blight[c] > 0.1) n++;
   return n / st.fields.length;
+}
+
+// ───────────────────────────── LIVING CONTENT (§4.3): what the wild plants give ─────────────────────────────
+//
+// Fruit trees give their fruit in season (plants.json `fruit`), wild herbs, mushrooms and the seed of wild grasses
+// are gathered where they grow (`gather`). A plant that holds its layer's dominant slot at a cell gives there in full; a
+// plant that suits a cell without holding it grows scattered through the cover (wild apples in the woods, figs along
+// the scrub, mushrooms under the trees): a share by how well it suits the place. Understory plants (mushrooms, wild
+// herbs) never hold the slot (content.ts compilePlants): they are always the scattered kind. people/resources.ts asks
+// plantYield for every item that has no availability rule of its own.
+
+
+/** one plant source of an item: the plant, its layer (0 grass, 1 shrub, 2 tree), how much it gives, its season */
+interface PlantSource { sp: number; layer: number; qty: number; season: [number, number] | null; understory: boolean; shade: boolean }
+
+const srcCache = new WeakMap<Content, Map<number, PlantSource[]>>();
+
+/** item index -> its plant sources (fruit and gather of every plant), per content */
+export function plantSources(c: Content): Map<number, PlantSource[]> {
+  let m = srcCache.get(c);
+  if (m) return m;
+  m = new Map();
+  const add = (it: number, s: PlantSource) => { if (it < 0) return; let l = m!.get(it); if (!l) m!.set(it, (l = [])); l.push(s); };
+  c.plants.list.forEach((pl, sp) => {
+    if (pl.type === 'crop') return;
+    const layer = pl.type === 'tree' ? 2 : pl.type === 'shrub' ? 1 : 0;
+    const base = { sp, layer, understory: !!pl.understory, shade: !!pl.understory && pl.light < 0.1 };
+    if (pl.fruit) add(c.items.idx(pl.fruit.item), { ...base, qty: pl.fruit.qty, season: pl.fruit.season ?? null });
+    for (const g of pl.gather ?? []) add(c.items.idx(g.item), { ...base, qty: g.qty, season: g.season ?? null });
+  });
+  srcCache.set(c, m);
+  return m;
+}
+
+/** does item `it` come from a plant (a fruit or something gathered) */
+export function plantSourced(c: Content, it: number): boolean {
+  return plantSources(c).has(it);
+}
+
+/** the wild grasses whose seed is gathered as `item` (people/resources.ts: wild grain from wild barley, sorghum, lentils) */
+export function plantsGiving(c: Content, item: string): number[] {
+  const it = c.items.idx(item);
+  return (plantSources(c).get(it) ?? []).map((s) => s.sp);
+}
+
+const phaseCache = new WeakMap<Planet, { hour: number; ph: number }>();
+
+/**
+ * The local year's phase at cell c of p (0 spring equinox, 0.25 midsummer, 0.5 autumn, 0.75 midwinter of the cell's own
+ * hemisphere), from the sun's declination and where it is heading (as people/crops.ts yearPhase, computed once an hour
+ * per world); -1 where the year has no seasons (no axial tilt, or within 15° of the equator).
+ */
+export function seasonPhase(u: { sun(p: Planet, tick: number): { dir: ArrayLike<number> } }, p: Planet, tick: number, c: number): number {
+  const tilt = Math.abs(p.st.axialTilt || 0);
+  if (tilt < 0.05) return -1;
+  const lat = p.grid.pos[c * 3 + 1];
+  if (Math.abs(lat) < 0.26) return -1;
+  const hour = Math.floor(tick / 60);
+  let e = phaseCache.get(p);
+  if (!e || e.hour !== hour) {
+    const t = hour * 60;
+    const d = u.sun(p, t).dir[1];
+    const d2 = u.sun(p, t + Math.max(60, Math.round(p.st.orbit.period / 50))).dir[1];
+    const s = Math.max(-1, Math.min(1, d / Math.sin(tilt)));
+    const a = Math.asin(s) / (Math.PI * 2);
+    const ph = d2 >= d ? (a < 0 ? a + 1 : a) : 0.5 - a;
+    e = { hour, ph: ph - Math.floor(ph) };
+    phaseCache.set(p, e);
+  }
+  let ph = e.ph;
+  if (lat < 0) ph += 0.5;
+  return ph - Math.floor(ph);
+}
+
+function inSeason(ph: number, w: [number, number]): boolean {
+  return w[0] <= w[1] ? ph >= w[0] && ph <= w[1] : ph >= w[0] || ph <= w[1];
+}
+
+/** the share of a full stand a plant that suits a cell gives where it grows scattered through other cover */
+export const SCATTERED = 0.18;
+
+/**
+ * How much of item `it` a gatherer finds at cell c from the wild plants (0 none .. 1 rich): for each plant source, its
+ * stand where it holds the layer (the layer's cover), else its scattered share (SCATTERED × suitability × the cover it
+ * grows under: the woods for shade plants, the herb and shrub layers for the rest); fruit only in its season (half as
+ * much all year where the year has no seasons), nothing on frozen ground.
+ */
+export function plantYield(x: PCtx, it: number, c: number): number {
+  const srcs = plantSources(x.c).get(it);
+  if (!srcs) return 0;
+  const p = x.p, f = p.f;
+  if (f.temperature[c] < 1 || f.water[c] > 0.3) return 0;
+  const t = x.c.plantTable;
+  let v = 0;
+  let ph = -2;
+  for (const s of srcs) {
+    let k = 1;
+    if (s.season) {
+      if (ph === -2) ph = seasonPhase(x.u, p, x.tick, c);
+      k = ph < 0 ? 0.5 : inSeason(ph, s.season) ? 1 : 0;
+      if (!k) continue;
+    }
+    const cover = s.layer === 2 ? f.tree[c] : s.layer === 1 ? f.shrub[c] : f.grass[c];
+    const dom = s.layer === 2 ? f.treeSpecies[c] : s.layer === 1 ? f.shrubSpecies[c] : f.grassSpecies[c];
+    let a: number;
+    if (!s.understory && dom === s.sp) a = cover * 0.9;
+    else {
+      const under = s.shade ? f.tree[c] : s.understory ? Math.max(f.grass[c], f.shrub[c]) : Math.max(cover, s.layer === 2 ? f.shrub[c] * 0.5 : 0);
+      if (under < 0.05) continue;
+      const suit = suitability(p, t, s.sp, c);
+      if (suit < 0.2) continue;
+      a = SCATTERED * suit * under * (s.understory ? 3 : 1);
+    }
+    v += a * k * Math.min(1.5, s.qty);
+  }
+  return v > 1 ? 1 : v;
 }

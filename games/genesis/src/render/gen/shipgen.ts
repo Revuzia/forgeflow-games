@@ -34,7 +34,7 @@ type RGB = [number, number, number];
 /** ship surface codes (the ship material, render/life/ships.ts); wood, cloth and rope use the building kit's codes */
 export const SS = {
   paint: 40, metal: 41, tile: 42, foam: 43, foil: 44, solar: 45, glass: 46, bell: 47, fabric: 48, checker: 49,
-  rivet: 50, rubber: 51, brass: 52, paper: 53, lamp: 54, black: 55, sailcloth: 56, steel: 57, horizon: 58,
+  rivet: 50, rubber: 51, brass: 52, paper: 53, lamp: 54, black: 55, sailcloth: 56, steel: 57, horizon: 58, landingLight: 59,
   planks: SURF.planks, beam: SURF.beam, bark: SURF.bark, rope: SURF.rope, iron: SURF.iron, lacquer: SURF.lacquer, cloth: SURF.cloth,
 } as const;
 
@@ -279,16 +279,51 @@ function spaceRocket(P: Parts, rng: Rng, lander: boolean): Omit<ShipModel, 'shap
   bell(ks, 0, 0, base - (lander ? 1.3 : 0.4) , lander ? 1.3 : 0.9, lander ? 0.62 : 0.55, 0.14, 18);
   engines.push({ pos: [0, base - (lander ? 1.3 : 0.4), 0], radius: lander ? 0.62 : 0.55, stage: lander ? 0 : 2, vacuum: !lander });
   if (lander) {
-    // four landing legs: struts from the module's skirt to round foot pads, hinged at the top (pivot) to fold up
+    // the descent stage: an octagonal bay clad in crinkled gold and silver foil blankets round the module's foot, a
+    // black thermal band at its top, RCS quads (four nozzles each: up, down, either side) on outriggers at the four
+    // corners, landing lights looking down past the skirt
+    ks.cylinder(0, 0, base - 0.05, base + 1.55, 1.78, 1.72, 8, SS.foil, SPART.hull, GOLD, { bottom: true });
+    ks.cylinder(0, 0, base + 1.55, base + 1.75, 1.74, 1.68, 8, SS.foil, SPART.hull, mulc(ALU, 1.1), {});
+    ks.cylinder(0, 0, base + 1.75, base + 1.9, 1.66, 1.62, 8, SS.black, SPART.hull, BLACK, {});
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * TAU + Math.PI / 4;
+      ks.push(0, 0, 0, -a);
+      const y = smTop - 0.9, x = 1.95;
+      ks.box(1.6, y - 0.08, -0.06, x - 0.12, y + 0.08, 0.06, SS.metal, SPART.hull, mulc(ALU, 0.8), {});
+      ks.box(x - 0.14, y - 0.16, -0.16, x + 0.12, y + 0.16, 0.16, SS.metal, SPART.hull, mulc(ALU, 0.85), {});
+      // four thrusters: up, down, and the two tangents
+      ks.cylinder(x, 0, y + 0.16, y + 0.36, 0.035, 0.075, 8, SS.bell, SPART.engine, BELLC, {});
+      ks.cylinder(x, 0, y - 0.36, y - 0.16, 0.075, 0.035, 8, SS.bell, SPART.engine, BELLC, {});
+      ks.tube([[x, y, 0.16], [x, y, 0.38]], [0.035, 0.075], 8, SS.bell, SPART.engine, BELLC, {});
+      ks.tube([[x, y, -0.16], [x, y, -0.38]], [0.035, 0.075], 8, SS.bell, SPART.engine, BELLC, {});
+      ks.pop();
+    }
+    // two landing lights under the skirt, between the legs (a lens looking down: its own surface code, lit while crewed)
+    for (const a of [Math.PI / 4, (5 * Math.PI) / 4]) {
+      const cx = Math.cos(a) * 1.35, cz = Math.sin(a) * 1.35;
+      ks.cylinder(cx, cz, base - 0.16, base - 0.04, 0.17, 0.2, 12, SS.metal, SPART.hull, mulc(ALU, 0.6), { top: true });
+      ks.quad([cx - 0.13, base - 0.161, cz - 0.13], [cx + 0.13, base - 0.161, cz - 0.13], [cx + 0.13, base - 0.161, cz + 0.13], [cx - 0.13, base - 0.161, cz + 0.13], SS.landingLight, SPART.lamp, rgb(0.9, 0.9, 0.88), 1);
+    }
+    // four landing legs: a primary strut with its shock absorber (a fat sleeve over a polished rod) from the hinge to a
+    // round foot pad, two secondary struts back to the bay; hinged at the top (pivot) to fold up
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * TAU;
       const ca = Math.cos(a), sa = Math.sin(a);
       const hinge: V3 = [ca * 1.55, smTop - 0.6, sa * 1.55];
       const kl = P.part(`leg${i}`, 'leg', -1, hinge, [-sa, 0, ca]);
       const foot: V3 = [ca * 3.4, -0.05, sa * 3.4];
-      kl.tube([hinge, [ca * 2.9, 0.9, sa * 2.9], foot], [0.11, 0.1, 0.09], 8, SS.metal, SPART.hull, ALU, {});
-      kl.beam([ca * 1.6, base + 0.4, sa * 1.6], [ca * 2.9, 0.9, sa * 2.9], 0.08, 0.08, SS.metal, SPART.hull, mulc(ALU, 0.8), 0.9);
+      const knee: V3 = [ca * 2.9, 0.9, sa * 2.9];
+      const mid: V3 = [hinge[0] + (knee[0] - hinge[0]) * 0.55, hinge[1] + (knee[1] - hinge[1]) * 0.55, hinge[2] + (knee[2] - hinge[2]) * 0.55];
+      kl.tube([hinge, mid], [0.15, 0.14], 10, SS.foil, SPART.hull, mulc(GOLD, 0.95), { cap: true });
+      kl.tube([mid, knee], [0.085, 0.08], 10, SS.steel, SPART.hull, STEELC, {});
+      kl.tube([knee, foot], [0.1, 0.09], 8, SS.metal, SPART.hull, ALU, {});
+      for (const side of [-1, 1]) {
+        const off: V3 = [-sa * side * 0.9, 0, ca * side * 0.9];
+        kl.beam([ca * 1.6 + off[0], base + 0.4, sa * 1.6 + off[2]], knee, 0.07, 0.07, SS.metal, SPART.hull, mulc(ALU, 0.8), 0.9);
+      }
       kl.cylinder(foot[0], foot[2], -0.12, 0.02, 0.42, 0.36, 12, SS.foil, SPART.hull, GOLD, { top: true });
+      // a contact probe hanging under the pad
+      kl.beam([foot[0], -0.05, foot[2]], [foot[0], -0.9, foot[2]], 0.025, 0.025, SS.metal, SPART.hull, mulc(ALU, 0.7), 0.9);
     }
   }
   // ── capsule ──

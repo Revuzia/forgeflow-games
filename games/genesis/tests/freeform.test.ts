@@ -35,7 +35,9 @@ const PHRASES: [string, Want][] = [
   ['plague in Aru', (c) => c[0].kind === 'plague' || JSON.stringify(c)],
   ['tornado heading for Aru', (c, sim) => (c[0].kind === 'tornado' && near(sim, c[0].toward, aru(sim), 1) && !near(sim, c[0].pos, aru(sim), 300)) || JSON.stringify(c)],
   ['earthquake under Aru', (c) => c[0].kind === 'quake' || JSON.stringify(c)], ['tsunami', 'disaster.spawn'],
-  ['summon a leviathan off the coast', (c) => c[0].kind === 'leviathan' || JSON.stringify(c)],
+  // real animals only (LIVING §4.4): a leviathan is the nearest real thing, a whale; the sea's own disaster is the rogue wave
+  ['summon a leviathan off the coast', (c) => (c[0].k === 'life.spawn-animal' && c[0].species === 'whale') || JSON.stringify(c)],
+  ['summon a rogue wave off the coast', (c) => c[0].kind === 'rogue-wave' || JSON.stringify(c)],
   // peoples, ideas, laws
   ['teach Aru bronze', (c) => (c[0].k === 'settlement.teach' && c[0].knowledge === 'bronze' && c[0].settlement !== undefined) || JSON.stringify(c)],
   ['give Aru the wheel', (c) => (c[0].k === 'settlement.introduce' && c[0].idea === 'wheel') || JSON.stringify(c)],
@@ -44,17 +46,14 @@ const PHRASES: [string, Want][] = [
   ['rename Aru to Bright Haven', (c) => (c[0].k === 'settlement.rename' && c[0].name === 'Bright Haven') || JSON.stringify(c)],
   ['raze Aru', 'settlement.raze'], ['split Aru', 'settlement.split'], ['found a city here', 'settlement.found'], ['bless Aru', 'life.bless'], ['curse Aru', 'life.curse'],
   ['possess someone in Aru', (c) => (c[0].k === 'agent.possess' && typeof c[0].id === 'number') || JSON.stringify(c)],
-  ['make a prophet in Aru', (c) => (c[0].k === 'agent.make-disciple' && typeof c[0].id === 'number') || JSON.stringify(c)],
+  ['make a prophet in Aru', (c) => (c[0].k === 'prophet.call' && typeof c[0].agent === 'number') || JSON.stringify(c)],
   ['inspire the smith of Aru', 'agent.inspire'], ['silence Aru', 'settlement.silence'], ['silence the priest of Aru', 'agent.silence'],
   ['invent the steam engine', (c) => (c[0].knowledge === 'steam-engine') || JSON.stringify(c)],
   // miracles
   ['cast heal on Aru', 'miracle.heal'], ['forest miracle here', 'miracle.forest'], ['fireball at Aru', 'miracle.fireball'], ['shield Aru', 'miracle.shield'],
-  // the hand, the creature
+  // the Touch (the creature is gone: LIVING §3.5, tests/creature.test.ts)
   ['grab a person', (c) => (c[0].k === 'hand.grab' && c[0].kind === 'agent') || JSON.stringify(c)], ['throw it at Aru', 'hand.throw'],
-  ['adopt an ape', (c) => (c[0].k === 'creature.adopt' && c[0].template === 'ape') || JSON.stringify(c)],
-  ['leash the creature to Aru', (c) => (c[0].k === 'creature.leash' && c[0].settlement !== undefined) || JSON.stringify(c)],
-  ['teach the creature to heal', (c) => (c[0].k === 'creature.teach-by-example' && c[0].miracle === 'heal') || JSON.stringify(c)],
-  ['slap the creature', 'creature.punish'], ['stroke the creature', 'creature.reward'],
+  ['lift a person', (c) => (c[0].k === 'hand.grab' && c[0].kind === 'agent') || JSON.stringify(c)], ['hurl it at Aru', 'hand.throw'],
   // meta, worlds, the past
   ['restraint on', 'meta.restraint'], ['add a rival god', 'rival.add'], ['a moon', 'world.moon-add'], ['crack the world', 'world.crack'],
   ['three days ago, send a meteor at Aru', (c) => (c[0].k === 'time.edit-past' && (c[0].cmd as Command).k === 'disaster.spawn') || JSON.stringify(c)],
@@ -63,7 +62,7 @@ const PHRASES: [string, Want][] = [
   ['introduce cats to Aru', (c) => (c[0].k === 'content.animal' && c[1]?.k === 'settlement.introduce' && c[1].animal === 'cat') || JSON.stringify(c)],
   ['invent telepathy', (c) => (c[0].k === 'content.idea' && c[0].name === 'telepathy') || JSON.stringify(c)],
   ['rain frogs over Aru', (c) => (c[0].k === 'content.weather' && c[0].animal === 'frog') || JSON.stringify(c)],
-  ['unicorns', (c) => (c[0].k === 'content.animal' && c[0].name === 'unicorn') || JSON.stringify(c)],
+  ['unicorns', (c) => (c[0].k === 'life.spawn-animal' && c[0].species === 'wild-horse') || JSON.stringify(c)],
 ];
 
 function aru(sim: Sim): number[] {
@@ -173,10 +172,12 @@ test('unknown nouns become new content when the words are carried out', () => {
   assert.ok(sim.u.content.weather.idx('rain-of-frogs') >= 0, 'a weather that rains frogs');
   sim.step(130);
   assert.ok(sim.u.planets[0].people.herds.some((h) => /frog/i.test(sim.u.planets[0].people.species.find((d) => d.idx === h.species)?.def.name ?? sim.u.content.animals.list[h.species]?.name ?? '')), 'frogs landed');
-  // a new animal by its plural alone
+  // a fantasy animal by its plural alone: the nearest real one comes (LIVING §4.4: real animals only)
   sim = run('unicorns');
   const ps = sim.u.planets[0].people;
-  assert.ok(ps.species.some((d) => d.def.id === 'unicorn') || sim.u.content.animals.idx('unicorn') >= 0, 'unicorns exist');
+  assert.ok(!ps.species.some((d) => d.def.id === 'unicorn') && sim.u.content.animals.idx('unicorn') < 0, 'no unicorns');
+  const horses = (q: Sim) => q.u.planets[0].people.herds.filter((h) => h.species === q.u.content.animals.idx('wild-horse')).length;
+  assert.equal(horses(sim), horses(town().sim) + 1, 'a herd of wild horses came');
   // an animal given to a town
   sim = run('introduce cats to Aru');
   assert.ok(sim.u.planets[0].people.species.some((d) => d.def.id === 'cat') || sim.u.content.animals.idx('cat') >= 0, 'cats exist');

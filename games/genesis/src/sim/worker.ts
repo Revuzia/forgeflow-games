@@ -1,6 +1,7 @@
 // GENESIS — the sim Web Worker host (CONTRACT.md §14): one Sim, the ToWorker / FromWorker protocol of types.ts.
 //
-// Pacing: the sim runs in short slices, each owing `10 × speed` ticks per real second since the last slice (capped so a
+// Pacing: the sim runs in short slices, each owing `TICKS_PER_SECOND_1X × speed` ticks per real second since the last
+// slice — the speed preset is ticks per real second (LIVING PACE: 1x = 1 tick, a game minute, per second) — (capped so a
 // stall never turns into a burst of minutes) and stopping at a time budget so messages (commands, snapshot requests)
 // are handled between slices. When the sim keeps up, the worker SLEEPS until the next tick is due (setTimeout, ≥ 4 ms:
 // at high speeds one wake runs a batch of ticks) — it never spins a core for a sim that needs 1 % of it. Only when it
@@ -16,11 +17,12 @@
 // With the init option `grad: true` every snapshot that carries `surface` also carries the ground's curvature data
 // (PlanetSnap.grad, the sim's own Planet.ground() gradients), so the main thread need not refit them.
 //
-// Time-lapse (SIM perf push 2, perf/lapse.ts): the speed preset decides the sim's time-lapse level (1x / 10x real time,
-// 100x and 1000x coarser fixed cadences). The level is a LOGGED sim input: whenever the preset (or a god-layer
-// `time.speed` act, or a load / rewind that restored another level) leaves the sim on a level that differs from the
-// preset's, the worker issues `time.scale` at the current tick boundary — recorded in the command log, saved, replayed.
-// Pausing keeps the level (stepping a paused 1000x world steps it in time-lapse).
+// Time-lapse (SIM perf push 2, perf/lapse.ts): the speed preset decides the sim's time-lapse level (LIVING PACE:
+// 1x–300x the plain sim, 1000x and 3000x coarser fixed cadences — perf/lapse.ts levelOfTps). The level is a LOGGED sim
+// input: whenever the preset (or a god-layer `time.speed` act, or a load / rewind that restored another level) leaves
+// the sim on a level that differs from the preset's, the worker issues `time.scale { tps }` at the current tick
+// boundary — recorded in the command log, saved, replayed. Pausing keeps the level (stepping a paused 3000x world steps
+// it in time-lapse).
 //
 // This is the one sim file allowed to touch timers and performance.now (_harness/detban.ts): it only paces the sim; it
 // never feeds time into it.
@@ -30,7 +32,7 @@ import { TICKS_PER_SECOND_1X } from './types.ts';
 import { Sim } from './sim.ts';
 import { FAST_FIELDS } from './world/planet.ts';
 import { loadContent, type ContentPack } from './content.ts';
-import { lapseLevel, levelOfScale } from './perf/lapse.ts';
+import { lapseLevel, levelOfTps } from './perf/lapse.ts';
 import { BASE_PACK } from '../data/index.ts';
 
 const FAST_MS = 100;
@@ -75,7 +77,7 @@ function fail(e: unknown): void {
 
 // ───────────────────────────── pacing ─────────────────────────────
 
-/** never sleep less than this (ms): browsers clamp nested timers to 4 ms anyway, and at 100x a wake runs ~4 ticks */
+/** never sleep less than this (ms): browsers clamp nested timers to 4 ms anyway, and at 1000x a wake runs ~4 ticks */
 const MIN_SLEEP_MS = 4;
 /** while paused, look at the clock this often (ms) */
 const IDLE_MS = 50;
@@ -115,7 +117,7 @@ function wake(ms: number): void {
 function pace(): void {
   if (!sim) return;
   const t = now();
-  const dt = Math.min(MAX_DEBT_S, Math.max(0, (t - lastPace) / 1000));
+  const elapsed = Math.max(0, (t - lastPace) / 1000);
   lastPace = t;
   if (speed <= 0) {
     debt = 0;
@@ -124,6 +126,9 @@ function pace(): void {
     return;
   }
   const rate = TICKS_PER_SECOND_1X * speed;
+  // a stall owes at most MAX_DEBT_S of ticks — or two ticks, at the presets where a tick takes longer than that (LIVING
+  // PACE: at 1x a tick is a whole second; capped at half a second, every tick waited a wake and a half: 1x ran at 0.7)
+  const dt = Math.min(elapsed, MAX_DEBT_S * rate > 2 ? MAX_DEBT_S : 2 / rate);
   debt = Math.min(debt + dt * rate, rate * MAX_DEBT_S + 1);
   let done = 0;
   const t0 = now();
@@ -141,8 +146,10 @@ function pace(): void {
   }
   const t1 = now();
   if (done > 0) msPerTick = msPerTick * 0.9 + ((t1 - t0) / done) * 0.1;
-  // if we could not pay the debt within the slice, we are running slow: drop the excess (never skip sim work)
-  if (debt > rate * 0.1) debt = Math.min(debt, rate * 0.1);
+  // if we could not pay the debt within the slice, we are running slow: drop the excess (never skip sim work). (At least
+  // a whole tick is kept: at 1x-5x a tenth of a second is under one tick, and clamping the fraction owed lost time.)
+  const keep = rate * 0.1 > 1 ? rate * 0.1 : 1;
+  if (debt > keep) debt = keep;
   measure(t1, done);
   if (debt >= 1) wake(0); // behind: continue as soon as messages are handled
   else wake(Math.max(MIN_SLEEP_MS, ((1 - debt) / rate) * 1000)); // keeping up: sleep until the next tick is due
@@ -189,8 +196,8 @@ function measure(t: number, ticks: number): void {
 /** put the sim on the time-lapse level of the current speed preset (a logged `time.scale` command when it differs) */
 function syncLapse(): void {
   if (!sim || speed <= 0) return; // paused: the level stays (a step at 1000x is a time-lapse step)
-  if (lapseLevel(sim.u) === levelOfScale(speed)) return;
-  const r = sim.applyNow({ k: 'time.scale', scale: speed });
+  if (lapseLevel(sim.u) === levelOfTps(speed)) return;
+  const r = sim.applyNow({ k: 'time.scale', tps: speed });
   if (!r.ok) post({ type: 'error', msg: `time.scale: ${r.msg ?? 'refused'}` });
 }
 

@@ -569,7 +569,23 @@ uniform float uCirrus;    // cirrus cover 0..1
 uniform float uCirrusR;   // cirrus sheet radius (m)
 uniform vec3 uMoonDir;    // world frame
 uniform vec3 uMoonE;      // moon illuminance (0 when no moon is up)
+uniform vec4 uAurora;     // (additive, world-events lane) the auroral ovals: magnetic axis (body frame, xyz), strength (w)
 uniform float uDebugView; // 1 first-hit distance, 2 transmittance, 3 samples taken
+// (additive, the god layer — render/fx/godfx.ts) lightning inside the deck lights the cloud from within, in the cloud's
+// own shape: up to four flashes, body-frame point (xyz) and radiance (w), reach (m)
+uniform vec4 uFlash[4];
+uniform float uFlashR[4];
+uniform int uFlashN;
+vec3 cloudFlash(vec3 p) {
+  vec3 e = vec3(0.0);
+  for (int i = 0; i < 4; i++) {
+    if (i >= uFlashN) break;
+    vec3 q = p - uFlash[i].xyz;
+    float d2 = dot(q, q) / max(uFlashR[i] * uFlashR[i], 1.0);
+    e += vec3(uFlash[i].w * exp(-d2 * 2.5));
+  }
+  return e * vec3(0.78, 0.82, 1.0);
+}
 
 float hg(float nu, float g) { float g2 = g * g; return (1.0 - g2) / (4.0 * PI * pow(max(1.0 + g2 - 2.0 * g * nu, 1e-4), 1.5)); }
 
@@ -579,6 +595,11 @@ float hg(float nu, float g) { float g2 = g * g; return (1.0 - g2) / (4.0 * PI * 
 // clouds a few km away are near their own sunset at noon here) and a slight grey-out just before the cloud's sunset
 vec3 cloudSun(float r, float muC) {
   float dip = sqrt(max(0.0, 1.0 - (uRg / r) * (uRg / r)));
+  // (additive, world-events lane) seen from space the deck's twilight band is narrowed to an Earth-like few degrees:
+  // this small world's deck stands a tenth of a radius high, so its cloud tops keep the sun ~25° past the terminator —
+  // over the night side the scattered cumulus in that band were lone sunlit puffs on a black disc, clipped by the
+  // night exposure into white dots along the limb. From inside the air (sunsets, afterglow) nothing changes.
+  dip *= mix(0.3, 1.0, uInsideAir);
   float h = muC + dip;
   // in daylight at the camera, distant clouds (several km round this small world: near their own sunset at noon) are
   // not shown much redder than the sky overhead — salmon clouds on a noon horizon read as a grading error
@@ -866,9 +887,18 @@ void main() {
       // ambient: the cloud hides half of the sky from its own surface and more toward the base; storm cores darker still
       float ambOcc = mix(0.25, 0.75, smoothstep(0.0, 0.9, hn)) * (1.0 - 0.45 * smoothstep(0.3, 1.0, wx.y));
       S += mix(ambBot, ambTop, smoothstep(0.0, 1.0, hn)) * ambOcc;
+      // (additive) the aurora overhead lights the cloud tops under its ovals green on the night side
+      if (uAurora.w > 0.0) {
+        vec3 upB = normalize(uWorldToBody * up);
+        float colat = acos(clamp(abs(dot(upB, uAurora.xyz)), 0.0, 1.0));
+        float under = exp(-pow((colat - 0.39) / 0.13, 2.0)) + 0.35 * exp(-pow((colat - 0.25) / 0.16, 2.0));
+        S += vec3(0.1, 0.62, 0.3) * (0.0045 * uAurora.w * under * smoothstep(0.06, -0.14, dot(up, sun))) * mix(0.35, 1.0, hn);
+      }
       // sunset underglow: with the sun low for the cloud, its base and flanks take the warm light of the sunlit air
       // and of the neighbouring clouds (pink-orange undersides rather than brown-grey)
       S += sunCol * (0.035 * (1.0 - smoothstep(0.05, 0.4, dot(up, sun))) * (1.0 - 0.6 * hn) * uInsideAir);
+      // (additive) a lightning flash inside the deck
+      if (uFlashN > 0) S += cloudFlash(p);
       float stepT = exp(-dens * dt);
       float w = T * (1.0 - stepT);
       L += S * w;
@@ -934,6 +964,13 @@ uniform vec2 uShell;
 uniform float uCirrusR;
 uniform float uFar;
 uniform mat4 uPrevBodyToClip;
+// (additive, quality pass) the coarsest interleave (k = 4, 'low'): the spatial reconstruction is a depth-aware
+// bilinear at a blue-noise jittered position (a new rank each frame) instead of a Catmull-Rom of the sparse samples —
+// a sharp cubic of a near-binary 1/16 grid draws every sample as a rounded square, and on a slow machine whose camera
+// keeps moving the history never gets the frames to hide them. Grain that averages out, not a mosaic.
+uniform float uSoftUp;
+uniform sampler2D tBlue;
+uniform float uFrameR;
 
 float zAt(ivec2 p) {
   float dz = texelFetch(tDepth, p, 0).r;
@@ -1015,6 +1052,12 @@ void main() {
   vec2 cw3 = f * f * (-0.5 + 0.5 * f);
   float wxs[4] = float[4](cw0.x, cw1.x, cw2.x, cw3.x);
   float wys[4] = float[4](cw0.y, cw1.y, cw2.y, cw3.y);
+  // (soft upsample) the jittered sampling position, in raw texels relative to qb: within ±0.5 of this pixel's own
+  vec2 qj = f;
+  if (uSoftUp > 0.5) {
+    float b1 = texelFetch(tBlue, P & 63, 0).r, b2 = texelFetch(tBlue, (P + ivec2(37, 23)) & 63, 0).r;
+    qj += vec2(fract(b1 + uFrameR * 0.618034), fract(b2 + uFrameR * 0.754878)) - 0.5;
+  }
   vec4 acc = vec4(0.0);
   float wsum = 0.0;
   vec4 m1 = vec4(0.0), m2 = vec4(0.0);
@@ -1031,8 +1074,10 @@ void main() {
     vec4 c = texelFetch(tCur, Rj, 0);
     vec4 a = texelFetch(tCurAux, Rj, 0);
     float wz = exp(-abs(a.w - z0) * 3.0);
-    // depth-aware Catmull-Rom reconstruction
-    float w = wxs[i] * wys[j] * (wz + 1e-4);
+    // depth-aware Catmull-Rom reconstruction (soft upsample: depth-aware bilinear at the jittered position)
+    float w = uSoftUp > 0.5
+      ? max(0.0, 1.0 - abs(float(i - 1) - qj.x)) * max(0.0, 1.0 - abs(float(j - 1) - qj.y)) * (wz + 1e-4)
+      : wxs[i] * wys[j] * (wz + 1e-4);
     acc += c * w;
     wsum += w;
     // statistics for the clip box and the sample's cross-bilateral filter: a Gaussian over the nearest samples
@@ -1096,7 +1141,9 @@ void main() {
     if (marched) {
       // a cross-bilateral filter on the new sample before it enters history: strong while the pixel has few samples
       // (a static view converges in a few visits instead of showing the jitter), light once history has built up
-      vec4 sf = gw > 1e-6 ? mix(self, gm / gw, 0.45 - 0.3 * smoothstep(2.0, 8.0, n)) : self;
+      // (soft upsample: leaning harder on the neighbours while the pixel is young — no lone fresh samples beading the edges)
+      float nb = uSoftUp > 0.5 ? 0.7 - 0.35 * smoothstep(2.0, 8.0, n) : 0.45 - 0.3 * smoothstep(2.0, 8.0, n);
+      vec4 sf = gw > 1e-6 ? mix(self, gm / gw, nb) : self;
       n = min(n + 1.0, uMaxN);
       outc = mix(h, sf, 1.0 / n);
     } else {
@@ -1104,7 +1151,7 @@ void main() {
       outc = mix(spatial, h, clamp(n * 0.5, 0.0, 1.0));
     }
   } else {
-    outc = marched ? self : spatial;
+    outc = marched && uSoftUp < 0.5 ? self : spatial;
     n = marched ? 1.0 : 0.0;
   }
   oCol = vec4(max(outc.rgb, vec3(0.0)), clamp(outc.a, 0.0, 1.0));
@@ -1132,6 +1179,13 @@ export interface CloudInputs {
   /** world-frame direction to the moon and its illuminance at the planet (zero vector: no moonlight) */
   moonDir?: Vector3;
   moonE?: Vector3;
+  /** (additive, world-events lane) the aurora's ovals: body-frame magnetic axis and strength (render/sky/aurora.ts) */
+  aurora?: Vector4;
+  /**
+   * (additive, the god layer: render/fx/godfx.ts `cloudFlashes`) lightning inside the deck: body-frame point, radiance w
+   * and reach r (m) of up to four flashes lighting the cloud from within
+   */
+  flashes?: readonly { x: number; y: number; z: number; w: number; r: number }[];
 }
 
 /**
@@ -1247,7 +1301,9 @@ export class CloudPass {
       uLightSteps: { value: 5 }, uFrame: { value: 0 }, uCloudBright: { value: 1.9 }, uNearR: { value: 35 }, uCamFog: { value: 0 },
       uInsideAir: { value: 1 }, uCamMuS: { value: 1 }, uFullRes: { value: new Vector2(4, 4) }, uOffset: { value: new Vector2() }, uK: { value: 2 },
       uPixelAngle: { value: 0.001 }, uNearDetail: { value: 1 }, uCirrus: { value: 0.4 }, uCirrusR: { value: 3528 },
-      uMoonDir: { value: new Vector3(0, 1, 0) }, uMoonE: { value: new Vector3() }, uDebugView: { value: 0 },
+      uMoonDir: { value: new Vector3(0, 1, 0) }, uMoonE: { value: new Vector3() }, uDebugView: { value: 0 }, uAurora: { value: new Vector4() },
+      // (additive, the god layer) lightning flashes inside the deck
+      uFlash: { value: Array.from({ length: 4 }, () => new Vector4()) }, uFlashR: { value: [1, 1, 1, 1] }, uFlashN: { value: 0 },
       uRg: { value: 0 }, uRt: { value: 0 }, uBetaR: { value: new Vector3() }, uHR: { value: 1 }, uBetaMs: { value: new Vector3() },
       uBetaMe: { value: new Vector3() }, uHM: { value: 1 }, uMieG: { value: 0.8 }, uBetaO: { value: new Vector3() },
       uOzone: { value: new Vector2(1, 1) }, uSunE: { value: new Vector3() }, uHasAtmo: { value: 1 },
@@ -1261,6 +1317,8 @@ export class CloudPass {
       uWorldToBody: { value: new Matrix3() }, uPlanetPos: { value: new Vector3() }, uPrevCamBody: { value: new Vector3() },
       uShell: { value: new Vector2(3180, 3420) }, uCirrusR: { value: 3528 }, uFar: { value: 2e7 },
       uPrevBodyToClip: { value: new Matrix4() }, uRg: { value: 0 }, uRt: { value: 0 },
+      // (additive, quality pass) soft upsample at the coarsest interleave
+      uSoftUp: { value: 0 }, tBlue: { value: blueNoiseTexture() }, uFrameR: { value: 0 },
     });
     this.resolveMat.glslVersion = GLSL3;
   }
@@ -1420,6 +1478,15 @@ export class CloudPass {
     u.uInsideAir.value = 1 - Math.min(1, Math.max(0, (i.altitude - thickAir) / thickAir));
     (u.uMoonDir.value as Vector3).copy(i.moonDir ?? _zero);
     (u.uMoonE.value as Vector3).copy(i.moonE ?? _zero);
+    if (i.aurora) (u.uAurora.value as Vector4).copy(i.aurora); else (u.uAurora.value as Vector4).set(0, 1, 0, 0);
+    {
+      // (additive) lightning flashes inside the deck
+      const fl = i.flashes ?? [];
+      const n = Math.min(4, fl.length);
+      const F = u.uFlash.value as Vector4[], FR = u.uFlashR.value as number[];
+      for (let j = 0; j < n; j++) { F[j].set(fl[j].x, fl[j].y, fl[j].z, fl[j].w); FR[j] = fl[j].r; }
+      u.uFlashN.value = n;
+    }
     fsq.render(renderer, this.material, this.raw);
     // temporal resolve into the other history buffer (full resolution)
     if (i.planetId !== this.prevPlanet) this.histValid = false;
@@ -1435,6 +1502,8 @@ export class CloudPass {
     r.uRawRes.value.set(this.raw.width, this.raw.height);
     r.uOffset.value.set(off[0], off[1]);
     r.uK.value = k;
+    r.uSoftUp.value = k >= 4 ? 1 : 0;
+    r.uFrameR.value = i.frame % 1024;
     r.uHistValid.value = this.histValid ? 1 : 0;
     // samples per pixel the history may hold while reprojection holds (k = 1 marches every pixel every frame)
     r.uMaxN.value = k === 1 ? 8 : 12;

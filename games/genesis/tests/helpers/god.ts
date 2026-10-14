@@ -6,6 +6,8 @@ import { Sim } from '../../src/sim/sim.ts';
 import type { Command, CommandResult } from '../../src/sim/types.ts';
 import type { Settlement } from '../../src/sim/people/state.ts';
 import { BuildingFlag } from '../../src/sim/types.ts';
+import { makeCtx } from '../../src/sim/people/ctx.ts';
+import { landingCell } from '../../src/sim/people/spawn.ts';
 
 export interface Town {
   sim: Sim;
@@ -55,14 +57,23 @@ export function twoTowns(): TwoTowns {
     const { sim, st } = town();
     const p = sim.u.planets[0];
     const g = p.grid;
-    let best = -1, bs = -1;
+    const dist = (c: number) => Math.acos(Math.max(-1, Math.min(1, g.pos[c * 3] * st.pos[0] + g.pos[c * 3 + 1] * st.pos[1] + g.pos[c * 3 + 2] * st.pos[2]))) * p.st.radius;
+    const cands: [number, number][] = [];
     for (let c = 0; c < g.count; c++) {
       if (p.f.water[c] > 0.05) continue;
-      const q = [g.pos[c * 3], g.pos[c * 3 + 1], g.pos[c * 3 + 2]];
-      const d = Math.acos(Math.max(-1, Math.min(1, q[0] * st.pos[0] + q[1] * st.pos[1] + q[2] * st.pos[2]))) * p.st.radius;
+      const d = dist(c);
       if (d < 900 || d > 1600) continue;
-      const v = p.f.fertility[c] + p.f.tree[c] * 0.3;
-      if (v > bs) { bs = v; best = c; }
+      cands.push([c, p.f.fertility[c] + p.f.tree[c] * 0.3]);
+    }
+    cands.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+    // the best such cell whose landing site (the people settle the best site within a few rings of the drop:
+    // people/spawn.ts landingCell) is still 0.9–1.6 km from Aru — a wetter world once moved Lune to 759 m
+    const x = makeCtx(sim.u, p);
+    const coastal = x.c.species.idx('coastal-folk');
+    let best = cands[0][0];
+    for (const [c] of cands) {
+      const l = landingCell(x, coastal, c);
+      if (dist(l) >= 900 && dist(l) <= 1600) { best = c; break; }
     }
     const r = must(sim, { k: 'life.spawn-people', species: 'coastal-folk', count: 20, era: 'bronze', settled: true, pos: [g.pos[best * 3], g.pos[best * 3 + 1], g.pos[best * 3 + 2]] });
     const lune = r.created!.find((e) => e.kind === 'settlement')!.id;

@@ -8,7 +8,7 @@ import type { PCtx } from './ctx.ts';
 import type { Building, Settlement } from './state.ts';
 import { AgentFlag } from '../types.ts';
 import { hashFloat } from '../core/rng.ts';
-import { DEATH, NS, NT, PHASE, ROLE, SKILL, TASK, TRAIT } from './defs.ts';
+import { BASE_WALK, DEATH, NS, NT, PHASE, ROLE, SKILL, TASK, TRAIT } from './defs.ts';
 import { BELONG, CURIO, FAITH, FOOD, REST, SAFETY, WARMTH, WATER, WET, NEED_N, fireAt, lastStress, updateNeeds } from './needs.ts';
 import { ageFlags, die } from './lifecycle.ts';
 import { startTask, nextSegment, storePoint, rebookIfAdrift, bodyCell, type TaskSpec } from './tasks.ts';
@@ -26,9 +26,21 @@ import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
 import { godHooks } from './hooks.ts';
-import { FIRE_HERE, fireDanger, fleeTarget, heat } from './danger.ts';
+import { FIRE_BURN, fireDanger, fleeTarget, heat } from './danger.ts';
 // SIM perf push 3 — the peoples' time-lapse (stretched tasks, per-settlement context caches: perf/plapse.ts)
 import { ctxOf, finishStretched, inPassing, litOf, lowHearthOf, penIn, rival, templeIn } from '../perf/plapse.ts';
+// LIVING PACE — the working day: day trips, camps, the dusk rule, loads carried home when full (perf/pace.ts)
+import { LEAN_DAYS, PLENTY_DAYS, REACH_DAY, REACH_TRIP, SESSION, campWork, camping, foodSessionsLeft, keptFood, paceSleep, paceUtilities, paceWork, reachOf, storeFull, walkRate } from '../perf/pace.ts';
+// LIVING LAND — living off the land: hunting parties, herds, fish stocks, crops on the season's clock, children's play
+// and chores, raising infants, gatherings, company within reach (people/land.ts and its modules)
+import { landUtilities, planLand } from './land.ts';
+import { wantPick } from './wants.ts';
+import { nextGathering } from './gatherings.ts';
+import { huntTask } from './hunt.ts';
+import { herdTask } from './herding.ts';
+import { farmTask } from './crops.ts';
+import { fishTask } from './fishing.ts';
+import { companyNear } from './gatherings.ts';
 
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
@@ -76,7 +88,7 @@ function urgent(x: PCtx, s: number): boolean {
   // on a long way to a drinking place with water right here after all: drink now
   if (k === TASK.drink && N[nb + WATER] < 0.2 && A.gcell[s] !== A.cell[s] && waterHere(x, s)) return true;
   if (sp.needW[FOOD] > 0 && N[nb + FOOD] < 0.06 && k !== TASK.eat && k !== TASK.forage && k !== TASK.fish && k !== TASK.hunt && k !== TASK.store) return true;
-  if (sp.needW[WARMTH] > 0 && N[nb + WARMTH] < 0.1 && lastStress > 0.3 && k !== TASK.warm && k !== TASK.sleep && k !== TASK.flee) return true;
+  if (sp.needW[WARMTH] > 0 && N[nb + WARMTH] < 0.1 && lastStress > 0.3 && k !== TASK.warm && k !== TASK.sleep && k !== TASK.camp && k !== TASK.flee) return true;
   return false;
 }
 
@@ -113,8 +125,10 @@ function jitter(x: PCtx, s: number, salt: number): number {
 const C = {
   flee: 0, drink: 1, eat: 2, warm: 3, sleep: 4, bathe: 5, fearWarm: 6, follow: 7, bandGather: 8, work: 9, tendFire: 10,
   store: 11, social: 12, pray: 13, curious: 14, court: 15, mourn: 16, bury: 17, wander: 18, exhausted: 19,
+  // LIVING LAND: a gathering of the settlement, a child's play or chores, raising an infant (people/land.ts picks which)
+  land: 20,
 } as const;
-const NC = 20;
+const NC = 21;
 const _u = new Float64Array(NC);
 const _order: number[] = [];
 
@@ -221,6 +235,13 @@ export function decide(x: PCtx, s: number): void {
     U[C.curious] = 0;
   }
   U[C.wander] = mission ? 0 : 0.15;
+  // (LIVING PACE: provisions, the camp of a trip, loads carried home when full — perf/pace.ts)
+  if (st && !st.band && !mission) paceUtilities(x, s, st, U, C, night);
+  // (LIVING LAND: gatherings, children's play and chores, raising infants; the parched leave far work — people/land.ts)
+  if (st && !st.band && !mission) landUtilities(x, s, st, U, C, night, child);
+  // (LIVING RELATIONSHIP: prayer from faith and hardship, shelter from storms, evacuations, evening worship, pilgrims,
+  // prophets — god/relationship.ts through people/hooks.ts)
+  if (st && !mission && godHooks.relation) { const t = godHooks.relation(x, s, st, U, C, night); if (t) { startTask(x, s, t); return; } }
   // a disciple carries its god's will (god/disciples.ts) unless a body's need is pressing
   if (A.flags[s] & AgentFlag.disciple && godHooks.disciple && !mission) {
     const pressing = Math.max(U[C.flee], U[C.drink], U[C.eat], U[C.warm], U[C.sleep], U[C.exhausted]);
@@ -240,9 +261,13 @@ export function decide(x: PCtx, s: number): void {
   _order.sort((a, b) => U[b] - U[a] || a - b);
   for (let o = 0; o < _order.length; o++) {
     const k = _order[o];
-    const t = k === C.work && mission && home ? planMission(x, s, home, mission) : plan(x, s, st, k, night);
+    let t = k === C.work && mission && home ? planMission(x, s, home, mission) : plan(x, s, st, k, night);
+    // (LIVING PACE: day trips, trips with a camp, no far work begun after dusk — perf/pace.ts)
+    if (t && k === C.work && !mission && st && !st.band) t = paceWork(x, s, st, t);
     if (t) {
       if (lapsed) noteRivals(x, s, k, o, !!st && !st.band && !mission, night, child);
+      // (LIVING LAND: a gathering the agent is called to cuts the stretch at its evening — people/gatherings.ts)
+      if (lapsed && st && !st.band && !mission) { const g = nextGathering(x, s, st); if (g < rival.ticks) rival.ticks = g; }
       if (sip > 0) { x.tick += sip; startTask(x, s, t); x.tick -= sip; } else startTask(x, s, t);
       return;
     }
@@ -315,6 +340,7 @@ function plan(x: PCtx, s: number, st: Settlement | undefined, k: number, night: 
     case C.court: return st ? planCourt(x, s, st) : null;
     case C.mourn: return st ? planMourn(x, s, st) : null;
     case C.bury: return st ? planBury(x, s, st) : null;
+    case C.land: return st ? planLand(x, s, st) : null;
     default: return planWander(x, s, st);
   }
 }
@@ -365,7 +391,7 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
   if (p.f.precip[here] > 1.5 && p.f.precipType[here] === 1) return { kind: TASK.drink, goal: null, goalCell: here, work: 15 };
   // water at hand — in this cell, or the next one a few steps away — is drunk there, not at the village's usual spot
   // (cold folk walked 400 m past snow they could melt to the settlement's drinking place and died of thirst on the way)
-  // (water in the next cell counts as at hand: a cell is ~50–150 m across and people walk ~15 m an hour here — they
+  // (water in the next cell counts as at hand: a cell is ~50–150 m across, under an hour's walk — they
   // fetch it in a skin, the drink is not a half-day's walk)
   if (waterHere(x, s, here)) return { kind: TASK.drink, goal: null, goalCell: here, work: 20 };
   let c = -1;
@@ -374,14 +400,14 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
     let bd = Infinity;
     A.posAt(s, x.tick, _p);
     for (const w of st.res.water) {
-      if (!waterAtCell(x, s, w) || p.f.fire[w] > FIRE_HERE) continue;
+      if (!waterAtCell(x, s, w) || p.f.fire[w] > FIRE_BURN) continue;
       const d = distM(p, _p, cellPos(p, w, _q));
       if (d < bd) { bd = d; c = w; }
     }
   }
   // nothing known: search around, farther the thirstier
   const melt = x.info[A.species[s]].def.habitat.includes('cold');
-  if (c < 0) c = nearestCell(x, c0, A.needs[s * NEED_N + WATER] < 0.3 ? 7 : 4, (o) => p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_HERE && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
+  if (c < 0) c = nearestCell(x, c0, A.needs[s * NEED_N + WATER] < 0.3 ? 7 : 4, (o) => p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_BURN && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
   if (c < 0) return null;
   return { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
 }
@@ -395,8 +421,8 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
  */
 export function waterHere(x: PCtx, s: number, at = -1): boolean {
   const A = x.A;
-  // a boat carries casks, a caravan or war band its skins
-  if (A.boat[s] >= 0 || A.mission[s]) return true;
+  // a boat carries casks, a caravan or war band its skins — and a worker out for the day or on a trip theirs (perf/pace.ts)
+  if (A.boat[s] >= 0 || A.mission[s] || A.trip[s] > x.tick) return true;
   const c = at >= 0 ? at : bodyCell(x, s);
   if (x.p.f.precip[c] > 1 && x.p.f.precipType[c] === 1) return true;
   // the cell or one beside it (cells are ~50 m across: water in the next one is a few steps away)
@@ -428,7 +454,7 @@ function waterAtCell(x: PCtx, s: number, c: number): boolean {
 export function planDrinkNear(x: PCtx, s: number, not: number): TaskSpec | null {
   const p = x.p, A = x.A;
   const melt = x.info[A.species[s]].def.habitat.includes('cold');
-  const c = nearestCell(x, A.cell[s], 4, (o) => o !== not && p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_HERE && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
+  const c = nearestCell(x, A.cell[s], 4, (o) => o !== not && p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_BURN && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
   if (c < 0) return null;
   return { kind: TASK.drink, goal: spot(x, s, c, 5), goalCell: c, work: 15, data: 1 };
 }
@@ -500,6 +526,9 @@ function planSleep(x: PCtx, s: number, st: Settlement | undefined, night: boolea
   let dur = night ? ticksUntilSun(x.u, x.p, x.tick, _p, nocturnal ? 'set' : 'rise', 8 * 60) : 150 + Math.floor(hashFloat(A.id[s], x.tick, 0x51ee) * 90);
   dur = Math.max(60, Math.min(14 * 60, dur + Math.floor(hashFloat(A.id[s], x.tick, 0x51ef) * 30)));
   if (st && !st.band) {
+    // (LIVING PACE: at the camp of a trip, or where night fell far from home — perf/pace.ts)
+    const camp = paceSleep(x, s, st, night, dur);
+    if (camp) return camp;
     let home: Building | null | undefined = x.ps.building(A.home[s]);
     if (!home || home.progress < 1 || home.flags & 2) home = findShelter(x, s, st);
     if (home) return { kind: TASK.sleep, goal: [home.pos[0], home.pos[1], home.pos[2]], goalCell: home.cell, work: dur, target: home.id };
@@ -576,12 +605,21 @@ function planFlee(x: PCtx, s: number): TaskSpec | null {
 function planWork(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   const role = x.A.role[s];
   let t: TaskSpec | null = null;
+  // (LIVING PACE: a trip's work goes on around its camp — perf/pace.ts campWork)
+  if (camping(x, s)) {
+    t = campWork(x, s, st, { gather: (it) => gatherItemAt(x, s, st, it), fish: () => planFish(x, s, st), hunt: () => planHunt(x, s, st) });
+    if (t) return t;
+  }
   // keepers of lore: now and then anyone who holds an idea few others know passes it on in the course of the day
   if (role !== ROLE.teacher && hashFloat(x.A.id[s], x.tick, 0x10e) < 0.1) { t = planTeach(x, s, st, true); if (t) return t; }
   // the role's own work first, then the fall-backs (no closures: this runs at every working agent's turn)
   switch (role) {
+    // (LIVING PACE: with the store full the nets and spears rest — food gathered per adult-day stays what it was when
+    // the walking ate the hours: perf/pace.ts plenty)
+    // (LIVING LAND: a hunter hunts with the party once it is out — whether a party sets out at all is the settlement's
+    // call, made when meat runs low: people/hunt.ts huntHourly)
     case ROLE.hunter: t = planHunt(x, s, st); break;
-    case ROLE.fisher: t = planFish(x, s, st); break;
+    case ROLE.fisher: t = plenty(x, st) || foodSessionsLeft(x, s, st) <= 0 ? null : planFish(x, s, st); break;
     case ROLE.farmer: t = planFarm(x, s, st); break;
     case ROLE.herder: t = planHerd(x, s, st) ?? planFarm(x, s, st); break;
     case ROLE.crafter: t = planCraft(x, s, st) ?? planBuild(x, s, st); break;
@@ -599,9 +637,16 @@ function planWork(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   return t ?? gatherWork(x, s, st);
 }
 
+/** (LIVING PACE) the store (with what the gatherers carry home) holds PLENTY_DAYS of food a head */
+function plenty(x: PCtx, st: Settlement): boolean {
+  return keptFood(x, st) >= pop(x, st) * PLENTY_DAYS || storeFull(x, st);
+}
+
 /** gathering as work: a store of four days a head carries a people through a short winter */
 function gatherWork(x: PCtx, s: number, st: Settlement): TaskSpec | null {
-  const lean = foodDays(x, st) < pop(x, st) * 4;
+  // (LIVING PACE: what the gatherers carry counts — the hauls of trips come home — and fresh food counts for more, it
+  // rots; a day's food work is a few sessions: perf/pace.ts keptFood, foodSessionsLeft)
+  const lean = keptFood(x, st) < pop(x, st) * LEAN_DAYS && foodSessionsLeft(x, s, st) > 0 && !storeFull(x, st);
   // firewood even in lean times: while the store is short of food every gatherer forages, and a people that knew how
   // to keep fire sat by a cold hearth for years (no wood ever came home). One gatherer in four (by turns) fetches fuel
   // while the hearth's woodpile is low.
@@ -640,61 +685,107 @@ export function planGather(x: PCtx, s: number, st: Settlement | undefined, food:
   const R = x.p.st.radius;
   const travel = (c: number) => {
     const d = _p[0] * P[c * 3] + _p[1] * P[c * 3 + 1] + _p[2] * P[c * 3 + 2];
-    return (Math.acos(d > 1 ? 1 : d) * R) / (0.25 * sp.def.speed) * 1.6;
+    return (Math.acos(d > 1 ? 1 : d) * R) / (BASE_WALK * sp.def.speed) * 1.6;
   };
+  // under siege nobody goes beyond the walls (~60 m)
+  const walls = (62.5 * 1.6) / (BASE_WALK * sp.def.speed);
+  const W = SESSION.gather;
+  // (LIVING PACE, perf/pace.ts: a settled people's everyday work lies within a day trip of home — at a trip's camp,
+  // around the camp — and work beyond it is a trip, taken only when nothing within a day trip will do)
+  const reach = (c: number) => (settled ? reachOf(x, s, st!, c) : REACH_DAY);
   const c0 = A.cell[s];
   const g = x.p.grid;
+  const atCamp = settled && camping(x, s);
   if (food || !settled || !st!.wants.length) {
     const cand: number[] = [c0];
     for (let e = g.nbrStart[c0]; e < g.nbrStart[c0 + 1]; e++) cand.push(g.nbr[e]);
-    if (settled) for (const it of sp.foods) for (const c of st!.res!.items[String(it)] ?? []) if (!cand.includes(c)) cand.push(c);
-    let best = -1, bit = -1, bv = 0;
+    if (settled && !atCamp) for (const it of sp.foods) for (const c of st!.res!.items[String(it)] ?? []) if (!cand.includes(c)) cand.push(c);
+    let best = -1, bit = -1, bv = 0, far = -1, fit = -1, fv = 0;
     const fishIt = itemIdx(x, 'fish');
     const swimmer = sp.def.swim >= 1 || !!sp.def.fly;
     for (const it of sp.foods) {
-      if (!knownItems.has(it) || it === fishIt) continue; // fishing has its own planning (banks, boats)
-      const per = FOOD_SESSION[x.c.items.list[it].id] ?? 0;
+      if (!knownItems.has(it) || it === fishIt) continue;
+      // (LIVING CONTENT: a food from a plant the god invented is gathered like the wild foods — god/plantsrt.ts)
+      const per = FOOD_SESSION[x.c.items.list[it].id] ?? (x.c.items.list[it].food && x.c.items.list[it].tags.includes('invented') ? 3.6 : 0);
       if (per <= 0) continue;
       for (const c of cand) {
         if (!swimmer && x.p.f.water[c] > 0.6) continue;
-        if (settled && st!.besieged >= 0 && travel(c) > 400) continue;
+        if (settled && st!.besieged >= 0 && travel(c) > walls) continue;
+        const r = reach(c);
+        if (r === 0) continue;
         const av = availability(x, it, c);
         if (av < 0.05) continue;
-        const v = (av * per) / (110 + 2 * travel(c));
-        if (v > bv) { bv = v; best = c; bit = it; }
+        // (LIVING LAND §2.6: a varied larder — a food the store is already full of is worth less to bring in)
+        const v = ((av * per) / (W + 2 * travel(c))) * (settled ? 1 / (1 + storeHas(st!, it) / (pop(x, st!) * 1.5 + 1)) : 1);
+        if (r === REACH_TRIP) { if (v > fv) { fv = v; far = c; fit = it; } } else if (v > bv) { bv = v; best = c; bit = it; }
       }
     }
+    // nothing within a day trip: a trip to the best food farther out
+    if ((bit < 0 || bv * 600 <= 0.15) && fit >= 0) { bv = fv; best = far; bit = fit; }
     // the sea may be richer than the land
-    if (sp.sea && settled && st!.res!.fish.length && st!.library.includes(x.rt.byId.get('fishing') ?? -1)) {
+    if (sp.sea && settled && !atCamp && st!.res!.fish.length && st!.library.includes(x.rt.byId.get('fishing') ?? -1)) {
       const fc = st!.res!.fish[0];
-      const v = (availability(x, itemIdx(x, 'fish'), fc) * FOOD_SESSION.fish) / (120 + 2 * travel(fc));
+      const v = (availability(x, itemIdx(x, 'fish'), fc) * FOOD_SESSION.fish) / (SESSION.fish + 2 * travel(fc));
       if (v > bv) return planFish(x, s, st);
     }
-    if (bit >= 0 && bv * 600 > 0.15) return { kind: gatherTaskOf(x, bit), goal: spot(x, s, best, bit + 19), goalCell: best, work: 110, data: bit };
-    if (sp.sea && food) { const t = planFish(x, s, st); if (t) return t; }
+    if (bit >= 0 && bv * 600 > 0.15) return { kind: gatherTaskOf(x, bit), goal: spot(x, s, best, bit + 19), goalCell: best, work: W, data: bit };
+    if (sp.sea && food && !atCamp) { const t = planFish(x, s, st); if (t) return t; }
     if (food && (!settled || onlyFood)) return null;
   }
   if (!settled) return null;
-  for (const it of st!.wants) {
+  // (LIVING LAND §2.6: the gatherers share out the wanted things — each starts at one of them, the most wanted most often;
+  // a builder fetches the most wanted, the material of the site, first)
+  const nw = st!.wants.length, off = nw && A.role[s] !== ROLE.builder ? wantPick(hashFloat(A.id[s], Math.floor(x.tick / 240), 0x3a17), nw) : 0;
+  for (let wi = 0; wi < nw; wi++) {
+    const it = st!.wants[(wi + off) % nw];
     if (!knownItems.has(it)) continue;
     const cells = st!.res!.items[String(it)];
     if (!cells || !cells.length) continue;
-    let best = -1, bv = 0;
-    for (const c of cells) {
+    let best = -1, bv = 0, far = -1, fv = 0;
+    const one = (c: number) => {
       // under siege nobody goes beyond the walls
-      if (st!.besieged >= 0 && travel(c) > 400) continue;
-      const v = availability(x, it, c) / (110 + 2 * travel(c));
-      if (v > bv) { bv = v; best = c; }
-    }
+      if (st!.besieged >= 0 && travel(c) > walls) return;
+      const r = reach(c);
+      if (r === 0) return;
+      const v = availability(x, it, c) / (W + 2 * travel(c));
+      if (r === REACH_TRIP) { if (v > fv) { fv = v; far = c; } } else if (v > bv) { bv = v; best = c; }
+    };
+    for (const c of cells) one(c);
+    // at a trip's camp: the land around the camp
+    if (atCamp) { one(c0); for (let e = g.nbrStart[c0]; e < g.nbrStart[c0 + 1]; e++) one(g.nbr[e]); }
+    if (best < 0) best = far;
     if (best < 0) continue;
-    return { kind: gatherTaskOf(x, it), goal: spot(x, s, best, it + 23), goalCell: best, work: 110, data: it };
+    return { kind: gatherTaskOf(x, it), goal: spot(x, s, best, it + 23), goalCell: best, work: W, data: it };
   }
   return null;
+}
+
+/** (LIVING PACE) gather item `it` around the camp of agent s's trip: the camp cell and the cells beside it */
+function gatherItemAt(x: PCtx, s: number, st: Settlement, it: number): TaskSpec | null {
+  const A = x.A, g = x.p.grid, c0 = A.cell[s];
+  let best = -1, bv = 0;
+  A.posAt(s, x.tick, _p);
+  const P = g.pos, R = x.p.st.radius, v = walkRate(x, s);
+  // (the best of it for the session and the walk there: where they stand, unless a cell beside it is clearly richer)
+  const one = (c: number) => {
+    if (reachOf(x, s, st, c) !== REACH_DAY || x.p.f.water[c] > 0.6) return;
+    const av = availability(x, it, c);
+    if (av < 0.05) return;
+    const d = _p[0] * P[c * 3] + _p[1] * P[c * 3 + 1] + _p[2] * P[c * 3 + 2];
+    const val = av / (SESSION.gather + 2 * ((Math.acos(d > 1 ? 1 : d) * R) / v) * 2);
+    if (val > bv) { bv = val; best = c; }
+  };
+  one(c0);
+  for (let e = g.nbrStart[c0]; e < g.nbrStart[c0 + 1]; e++) one(g.nbr[e]);
+  if (best < 0) return null;
+  return { kind: gatherTaskOf(x, it), goal: spot(x, s, best, it + 23), goalCell: best, work: SESSION.gather, data: it };
 }
 
 /** food-days a full session at availability 1 yields, per food item gathered from the land or the air */
 export const FOOD_SESSION: Record<string, number> = {
   berries: 4.6, 'wild-grain': 4.2, roots: 3.2, nuts: 3.6, honey: 1.2, tholin: 4.5, fish: 4.0,
+  // (LIVING CONTENT §4.3: the fruit of wild trees in season, mushrooms under the woods — life/plants.ts plantYield)
+  apples: 4.4, figs: 4.0, dates: 5.0, olives: 3.0, mushrooms: 2.0,
 };
 
 /** items this agent's people know how to gather (settlement library, or the agent's own knowledge in a band) */
@@ -716,68 +807,19 @@ function gatherKnown(x: PCtx, s: number, st: Settlement | undefined): ReadonlySe
   return out;
 }
 
+/** (LIVING LAND: the hunter's leg — with the party, tracking its herd, stalking it when near: people/hunt.ts) */
 function planHunt(x: PCtx, s: number, st: Settlement): TaskSpec | null {
-  const A = x.A;
-  if (!libHas(st, x.rt.byId.get('hunting') ?? -1) || st.besieged >= 0) return null;
-  const P = x.p.grid.pos;
-  const bold = A.traits[s * NT + TRAIT.boldness];
-  let best = -1, bd = Infinity;
-  const maxD = 7 * x.p.edgeM;
-  for (let i = 0; i < x.ps.herds.length; i++) {
-    const h = x.ps.herds[i];
-    if (h.owner >= 0 || h.count < 1) continue;
-    const a = animalDef(x, h.species);
-    if (a.kind === 'insect' || a.kind === 'fish' || a.habitat === 'air' || a.habitat === 'sea') continue;
-    if (a.danger > 0.3 + bold * 0.5) continue;
-    if (sacredAnimal(x, st, h.species)) continue;
-    const d = Math.acos(Math.min(1, P[h.cell * 3] * st.pos[0] + P[h.cell * 3 + 1] * st.pos[1] + P[h.cell * 3 + 2] * st.pos[2])) * x.p.st.radius;
-    if (d < bd && d < maxD) { bd = d; best = i; }
-  }
-  if (best < 0) return null;
-  const h = x.ps.herds[best];
-  herdPos(h, x.tick, _q);
-  const c = x.p.cellAt(_q);
-  return { kind: TASK.hunt, goal: [_q[0], _q[1], _q[2]], goalCell: c, work: 90, target: h.id };
+  return huntTask(x, s, st);
 }
 
+/** (LIVING LAND: the water to fish, passing over waters fished out: people/fishing.ts) */
 export function planFish(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | null {
-  const A = x.A;
-  const knows = st ? libHas(st, x.rt.byId.get('fishing') ?? -1) : A.knows(s, x.rt.byId.get('fishing') ?? -1);
-  if (!knows) return null;
-  const p = x.p;
-  let c = -1;
-  if (st && st.res && st.res.fish.length) c = st.res.fish[Math.floor(hashFloat(A.id[s], x.tick, 0xf15) * Math.min(3, st.res.fish.length))];
-  else c = nearestCell(x, A.cell[s], 4, (o) => p.f.water[o] > 0.3);
-  if (c < 0) return null;
-  // stand on the bank unless a swimmer
-  const sp = x.info[A.species[s]].def;
-  let stand = c;
-  if (sp.swim < 1 && p.f.water[c] > 0.6) {
-    const g = p.grid;
-    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (p.f.water[g.nbr[e]] < 0.4) { stand = g.nbr[e]; break; }
-  }
-  return { kind: TASK.fish, goal: spot(x, s, stand, 29), goalCell: stand, work: 120, target: c };
+  return fishTask(x, s, st, (rings, pred) => nearestCell(x, x.A.cell[s], rings, pred));
 }
 
+/** (LIVING LAND: the fields on the season's clock — harvest, sow, lay out, tend: people/crops.ts) */
 function planFarm(x: PCtx, s: number, st: Settlement): TaskSpec | null {
-  const ag = x.rt.byId.get('agriculture');
-  if (ag === undefined || !libHas(st, ag) || st.crop < 0) return null;
-  const f = x.p.f;
-  const A = x.A;
-  // harvest ripe fields first
-  for (const c of st.fields) if (f.crop[c] >= 0.55 && f.cropSpecies[c] === st.crop) return { kind: TASK.farm, goal: spot(x, s, c, 31), goalCell: c, work: 120, data2: 2, target: c };
-  const seed = seedItems(x);
-  const haveSeed = storeAny(st, seed) >= 1;
-  for (const c of st.fields) if (f.crop[c] < 0.04 && haveSeed) return { kind: TASK.farm, goal: spot(x, s, c, 31), goalCell: c, work: 100, data2: 0, target: c };
-  const want = Math.min(14, 1 + Math.ceil(pop(x, st) / 3));
-  if (st.fields.length < want && haveSeed && st.res) {
-    for (const c of st.res.fertile) if (!st.fields.includes(c)) return { kind: TASK.farm, goal: spot(x, s, c, 31), goalCell: c, work: 140, data2: 0, target: c };
-  }
-  if (st.fields.length) {
-    const c = st.fields[Math.floor(hashFloat(A.id[s], x.tick, 0xfa2) * st.fields.length)];
-    if (f.crop[c] > 0.03 && f.crop[c] < 0.55) return { kind: TASK.farm, goal: spot(x, s, c, 31), goalCell: c, work: 90, data2: 1, target: c };
-  }
-  return null;
+  return farmTask(x, s, st);
 }
 
 const seedCache = new WeakMap<object, number[]>();
@@ -787,26 +829,9 @@ export function seedItems(x: PCtx): number[] {
   return l;
 }
 
+/** (LIVING LAND: keep the settlement's herds, or tame a first one within hunting range: people/herding.ts) */
 function planHerd(x: PCtx, s: number, st: Settlement): TaskSpec | null {
-  const hu = x.rt.byId.get('animal-husbandry');
-  if (hu === undefined || !libHas(st, hu)) return null;
-  const cx = ctxOf(x, st); // (perf/plapse.ts)
-  const pen = cx ? penIn(cx) : x.ps.of(st.id).find((b) => b.progress >= 1 && x.c.buildings.list[b.type].function === 'pen');
-  if (!pen) return null;
-  const owned = x.ps.herds.find((h) => h.owner === st.id && h.count >= 1);
-  if (owned) return { kind: TASK.herd, goal: spotNear(x, s, pen.pos, 4), goalCell: pen.cell, work: 120, target: owned.id, data2: 0 };
-  // tame a wild herd that can be domesticated
-  const P = x.p.grid.pos;
-  for (const h of x.ps.herds) {
-    if (h.owner >= 0 || h.count < 2) continue;
-    const a = animalDef(x, h.species);
-    if (!a.domesticable || !a.domesticatesTo) continue;
-    const d = Math.acos(Math.min(1, P[h.cell * 3] * st.pos[0] + P[h.cell * 3 + 1] * st.pos[1] + P[h.cell * 3 + 2] * st.pos[2])) * x.p.st.radius;
-    if (d > 6 * x.p.edgeM) continue;
-    herdPos(h, x.tick, _q);
-    return { kind: TASK.herd, goal: [_q[0], _q[1], _q[2]], goalCell: x.p.cellAt(_q), work: 150, target: h.id, data2: 1 };
-  }
-  return null;
+  return herdTask(x, s, st);
 }
 
 function planCraft(x: PCtx, s: number, st: Settlement): TaskSpec | null {
@@ -876,7 +901,7 @@ function planBuild(x: PCtx, s: number, st: Settlement): TaskSpec | null {
         const cells = missing >= 0 && st.res ? st.res.items[String(missing)] : undefined;
         if (cells && cells.length) {
           const c = cells[Math.floor(hashFloat(A.id[s], x.tick, 0xb11) * Math.min(3, cells.length))];
-          return { kind: gatherTaskOf(x, missing), goal: spot(x, s, c, missing + 29), goalCell: c, work: 110, data: missing };
+          return { kind: gatherTaskOf(x, missing), goal: spot(x, s, c, missing + 29), goalCell: c, work: SESSION.gather, data: missing };
         }
         // (a material nobody can fetch: the settlement revises the site, settlement.ts planConstruction)
         continue;
@@ -1029,15 +1054,14 @@ function planHeal(x: PCtx, s: number, st: Settlement): TaskSpec | null {
 
 function planSocial(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   const A = x.A;
-  // gather at a lit hearth, else near someone of the household, else the centre
+  // (LIVING LAND: company within reach — someone within 100 m, at leisure first — not a member across the territory:
+  // people/gatherings.ts companyNear)
+  const m = companyNear(x, s, st);
+  if (m >= 0) { A.posAt(m, x.tick, _q); return { kind: TASK.socialize, goal: spotNear(x, s, _q, 1.4), goalCell: x.p.cellAt(_q), work: 50, target: A.id[m] }; }
+  // else gather at a lit hearth, else the centre
   const cx = ctxOf(x, st); // (perf/plapse.ts)
   const fire = cx ? litOf(cx) : x.ps.of(st.id).find((b) => b.fuel > 0 && b.progress >= 1);
   if (fire) return { kind: TASK.socialize, goal: spotNear(x, s, fire.pos, 2 + hashFloat(A.id[s], 7) * 3.5), goalCell: fire.cell, work: 60 };
-  const members = x.ps.members.get(st.id) ?? [];
-  if (members.length > 1) {
-    const m = members[Math.floor(hashFloat(A.id[s], x.tick, 0x50c) * members.length)];
-    if (m !== s) { A.posAt(m, x.tick, _q); return { kind: TASK.socialize, goal: spotNear(x, s, _q, 1.4), goalCell: x.p.cellAt(_q), work: 50, target: A.id[m] }; }
-  }
   return { kind: TASK.socialize, goal: spot(x, s, st.cell, 53), goalCell: st.cell, work: 50 };
 }
 
@@ -1170,8 +1194,8 @@ function planFollow(x: PCtx, s: number, st: Settlement): TaskSpec | null {
     // there already: stay close, forage, rest
     return { kind: TASK.follow, goal: spotNear(x, s, target, 4 + hashFloat(A.id[s], 9) * 10), goalCell: x.p.cellAt(target), work: 40 };
   }
-  // walk a leg toward the target, one cell at a time: people walk ~15 m per game hour, so a longer leg kept a band on
-  // the move for half a day or more without stopping to drink or sleep (decisions are made only when a task ends).
+  // walk a leg toward the target, one cell at a time: a longer leg kept a band on the move for half a day or more
+  // without stopping to drink or sleep when people walked ~15 m per game hour (decisions are made only when a task ends).
   // The leg follows a walkable route (A*: round lakes, up gentle slopes); a straight line led into deep water — a
   // 165 m swim that took four days. Swimmers and boat crews may cross water as their route planner allows.
   const opts = pathOptsFor(x, A.species[s]);

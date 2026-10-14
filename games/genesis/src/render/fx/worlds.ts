@@ -16,8 +16,8 @@
 // flashes, swirls and molten shells are drawn after the atmosphere (WORLD_LAYER), soft against the linear depth.
 
 import {
-  BufferAttribute, BufferGeometry, CustomBlending, DoubleSide, Group, IcosahedronGeometry,
-  InstancedBufferAttribute, InstancedMesh, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, Quaternion, RingGeometry,
+  BackSide, BufferAttribute, BufferGeometry, CustomBlending, DoubleSide, DstColorFactor, Group, IcosahedronGeometry,
+  InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Matrix4, ZeroFactor, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, Quaternion, RingGeometry,
   ShaderMaterial, SphereGeometry, Vector2, Vector3, Vector4, type Camera, type IUniform, type Scene, type Texture,
   type WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
@@ -43,6 +43,7 @@ attribute vec4 aSpin;    // tumble axis xyz, rate (rad/s)
 uniform float uT;        // seconds
 uniform float uOmega;    // angular rate (rad/s) at radius uR0
 uniform float uR0;
+uniform float uResY;     // the render height (px): rocks under a pixel are left to the dust
 varying vec3 vN;
 varying vec3 vLocal;
 varying vec3 vRingPos;
@@ -63,6 +64,10 @@ void main() {
   vN = normalize(normalMatrix * n);
   vec4 mv = modelViewMatrix * vec4(c + p, 1.0);
   gl_Position = projectionMatrix * mv;
+  // a rock smaller than a pixel would only sparkle as a uniform speck: the dust stands for it
+  vec4 mc = modelViewMatrix * vec4(c, 1.0);
+  float px = aOrbit.w * projectionMatrix[1][1] * uResY * 0.5 / max(-mc.z, 1.0);
+  if (px < 0.8) gl_Position = vec4(0.0, 0.0, -2.0, 1.0);
 #include <logdepthbuf_vertex>
 }
 `;
@@ -83,7 +88,7 @@ void main() {
 #include <logdepthbuf_fragment>
   vec3 n = normalize(vN);
   float m = snoise(vLocal * 3.0 + vSeed * 9.0) * 0.5 + 0.5;
-  vec3 alb = mix(vec3(0.07, 0.065, 0.06), vec3(0.2, 0.17, 0.14), m) * (0.8 + 0.4 * vSeed);
+  vec3 alb = mix(vec3(0.07, 0.065, 0.06), vec3(0.2, 0.17, 0.14), m) * (0.55 + 0.9 * vSeed * vSeed);
   // the planet's shadow on the ring: does the ray toward the sun hit the world?
   vec3 P = vRingPos;
   float b = dot(P, uSunRing);
@@ -112,15 +117,47 @@ void main() {
 }
 `;
 
-const DUST_FRAG = /* glsl */ `
-#include <logdepthbuf_pars_fragment>
-${NOISE_GLSL}
-uniform vec3 uSunRing;
-uniform vec3 uSunE;
-uniform float uPlanetR;
+/** the ring's optical depth at radius r (ring frame) and angle: ringlets of differing depth, clear lanes, clumps */
+const RING_DENS_GLSL = /* glsl */ `
 uniform float uInner;
 uniform float uOuter;
 uniform float uDensity;
+uniform vec4 uGaps;
+uniform vec4 uGapW;
+float ringBand(float x) { return snoise(vec3(x * 9.0, 0.0, 1.0)) * 0.5 + 0.5; }
+float ringDens(float r, float ang, float t) {
+  float x = (r - uInner) / (uOuter - uInner);
+  if (x < 0.0 || x > 1.0) return 0.0;
+  // ringlets: sharp-edged bands of differing optical depth, finer grooves inside them
+  float band = ringBand(x);
+  float ringlet = 0.25 + 0.75 * smoothstep(0.3, 0.7, band);
+  float fine = 0.72 + 0.28 * sin(x * 150.0 + snoise(vec3(x * 23.0, 2.0, 0.0)) * 4.0);
+  float micro = 0.82 + 0.18 * snoise(vec3(x * 340.0, 3.0, 0.0));
+  // clear lanes of differing widths (the moonlets' resonances sweep them)
+  float gap = 1.0;
+  for (int i = 0; i < 4; i++) gap *= smoothstep(uGapW[i] * 0.45, uGapW[i], abs(x - uGaps[i]));
+  float edge = smoothstep(0.0, 0.05, x) * (1.0 - smoothstep(0.86, 1.0, x));
+  // the ring's architecture: a faint inner sheet, a broad dense belt, one wide dark division, a middling outer ring
+  // with its own lane, a tenuous fringe — not even bands
+  float zone = 0.22 + 0.78 * smoothstep(0.16, 0.26, x);
+  zone *= 1.0 - 0.92 * smoothstep(0.585, 0.6, x) * (1.0 - smoothstep(0.655, 0.67, x));
+  zone *= mix(1.0, 0.55, smoothstep(0.66, 0.7, x));
+  zone *= 1.0 - 0.8 * smoothstep(0.84, 0.85, x) * (1.0 - smoothstep(0.865, 0.875, x));
+  zone *= mix(1.0, 0.3, smoothstep(0.9, 0.94, x));
+  // clumps sheared by the orbits (inner faster)
+  float w = t / pow(r / uInner, 1.5);
+  float clump = 0.72 + 0.28 * snoise(vec3(cos(ang + w) * 4.0, sin(ang + w) * 4.0, x * 12.0));
+  return ringlet * fine * micro * gap * edge * zone * clump * uDensity;
+}
+`;
+
+const DUST_FRAG = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+${NOISE_GLSL}
+${RING_DENS_GLSL}
+uniform vec3 uSunRing;
+uniform vec3 uSunE;
+uniform float uPlanetR;
 uniform float uT;
 uniform vec3 uCamRing;
 uniform sampler2D tSceneDepth;
@@ -132,31 +169,70 @@ void main() {
   float sceneZ = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r;
   if (vViewZ > sceneZ) discard;
   float r = length(vRingPos.xz);
-  float x = (r - uInner) / (uOuter - uInner);
-  if (x < 0.0 || x > 1.0) discard;
-  // bands and gaps: broad soft ringlets with finer structure in them (no groove-like regularity), thinning at both edges
-  float bands = 0.62 + 0.38 * (snoise(vec3(x * 7.0, 0.0, 1.0)) * 0.5 + 0.5);
-  bands *= 0.82 + 0.18 * sin(x * 37.0 + snoise(vec3(x * 5.0, 2.0, 0.0)) * 3.0);
-  bands *= 0.85 + 0.15 * (snoise(vec3(x * 60.0, 3.0, 0.0)) * 0.5 + 0.5);
-  float gap = smoothstep(0.02, 0.06, abs(x - 0.38)) * smoothstep(0.01, 0.03, abs(x - 0.71));
-  float edge = smoothstep(0.0, 0.08, x) * (1.0 - smoothstep(0.85, 1.0, x));
-  // clumps orbiting (a slow shear pattern around the ring)
   float ang = atan(vRingPos.z, vRingPos.x);
-  float clump = 0.75 + 0.25 * snoise(vec3(cos(ang + uT * 0.02 / pow(r / uInner, 1.5)) * 3.0, sin(ang) * 3.0, x * 8.0));
-  float dens = bands * gap * edge * clump * uDensity;
-  // the planet's shadow
+  float dens = ringDens(r, ang, uT * 0.02);
+  if (dens <= 0.002) discard;
+  float x = (r - uInner) / (uOuter - uInner);
+  // the planet's shadow across the ring
   vec3 P = vRingPos;
   float b = dot(P, uSunRing);
   float c = dot(P, P) - uPlanetR * uPlanetR;
   float disc = b * b - c;
   float shadow = (disc > 0.0 && -b - sqrt(disc) > 0.0) ? 0.0 : 1.0;
-  // dust scatters forward: brighter seen toward the sun (backlit), the lit face a dusty grey-brown
+  // dust scatters forward: a ring seen against the sun glows (a narrow bright lobe and a broad one); the lit face is
+  // the grey-tan of its rubble, each ringlet its own shade
   vec3 V = normalize(P - uCamRing);
-  float fwd = pow(max(0.0, dot(V, uSunRing)), 6.0);
-  // (albedo ~0.3 grey-brown rubble; the lit face back-scatters like the ground, a backlit ring glows)
-  vec3 col = vec3(0.32, 0.27, 0.22) * uSunE * (0.12 + 0.9 * fwd) * shadow + vec3(0.002);
-  float a = clamp(dens * 0.75, 0.0, 0.85);
+  float cs = max(0.0, dot(V, uSunRing));
+  float fwd = pow(cs, 10.0) * 1.6 + pow(cs, 3.0) * 0.35;
+  vec3 tint = mix(vec3(0.3, 0.26, 0.21), vec3(0.36, 0.34, 0.31), ringBand(x * 1.7 + 0.3));
+  // (a thin ring seen edge-on lets more of the sun through: the lit face dims as the view grazes it)
+  vec3 col = tint * uSunE * (0.12 + fwd) * shadow + vec3(0.002);
+  float a = clamp(dens * 0.8, 0.0, 0.9);
   gl_FragColor = vec4(col * a, a);
+}
+`;
+
+/** the ring's shadow on the world: where the sun's ray from a point on the ground crosses the ring, it dims */
+const RINGSHADOW_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+varying vec3 vViewPos;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vViewPos = mv.xyz;
+  gl_Position = projectionMatrix * mv;
+#include <logdepthbuf_vertex>
+}
+`;
+const RINGSHADOW_FRAG = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+${NOISE_GLSL}
+${RING_DENS_GLSL}
+uniform vec3 uSunRing;
+uniform float uPlanetR;
+uniform float uT;
+uniform mat4 uViewToRing;
+uniform sampler2D tSceneDepth;
+uniform vec2 uResolution;
+varying vec3 vViewPos;
+void main() {
+#include <logdepthbuf_fragment>
+  float sceneZ = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r;
+  if (sceneZ > 1e6) discard;
+  vec3 dir = normalize(vViewPos);
+  vec3 S = dir * (sceneZ / max(-dir.z, 1e-5));
+  vec3 P = (uViewToRing * vec4(S, 1.0)).xyz;
+  // only the world's own surface (not a ship or a moon in front)
+  if (length(P) > uPlanetR * 1.25) discard;
+  if (abs(uSunRing.y) < 1e-4) discard;
+  float t = -P.y / uSunRing.y;
+  if (t <= 0.0) discard;
+  vec3 H = P + uSunRing * t;
+  float d = ringDens(length(H.xz), atan(H.z, H.x), uT * 0.02);
+  // and the sun must be up there (the night side has no ring shadow to show)
+  float day = smoothstep(-0.05, 0.1, dot(normalize(P), uSunRing));
+  float k = clamp(d * 0.95, 0.0, 0.85) * day;
+  gl_FragColor = vec4(vec3(1.0 - k), 1.0);
 }
 `;
 
@@ -166,6 +242,9 @@ interface RingVis {
   dust: Mesh;
   rockMat: ShaderMaterial;
   dustMat: ShaderMaterial;
+  /** the ring's shadow on its world (a multiply over the composited ground) */
+  shadow: Mesh;
+  shadowMat: ShaderMaterial;
   key: string;
 }
 
@@ -186,27 +265,41 @@ function rockGeometry(seed: number): BufferGeometry {
 function buildRing(R: number, ring: { inner: number; outer: number; density: number }, count: number, seed: number): RingVis {
   const group = new Group();
   group.name = 'debris-ring';
+  const rng = new Rng(seed);
+  // clear lanes: four, of differing widths, where the rubble is swept away (shared by the dust, the rocks, the shadow)
+  const gaps = new Vector4(), gapW = new Vector4();
+  for (let i = 0; i < 4; i++) { gaps.setComponent(i, 0.12 + 0.78 * rng.float()); gapW.setComponent(i, 0.004 + 0.03 * Math.pow(rng.float(), 2)); }
+  const inGap = (x: number) => {
+    if (x > 0.595 && x < 0.66) return true;
+    for (let i = 0; i < 4; i++) if (Math.abs(x - gaps.getComponent(i)) < gapW.getComponent(i) * 0.7) return true;
+    return false;
+  };
+  // (the ringlets' strength on the CPU: a smooth value noise of the radius, so the boulders crowd the dense bands)
+  const bandAt = (x: number) => { const f = x * 9, i = Math.floor(f), t = f - i, a = hashFloat(i, seed, 0xb1), b = hashFloat(i + 1, seed, 0xb1); return a + (b - a) * t * t * (3 - 2 * t); };
   const rockMat = new ShaderMaterial({
     vertexShader: ROCK_VERT, fragmentShader: ROCK_FRAG,
     uniforms: {
       uT: { value: 0 }, uOmega: { value: 0.012 }, uR0: { value: ring.inner }, uSunView: { value: new Vector3(1, 0, 0) }, uSunRing: { value: new Vector3(1, 0, 0) },
-      uSunE: { value: new Vector3(6, 6, 6) }, uPlanetR: { value: R }, uHeat: { value: 0 },
+      uSunE: { value: new Vector3(6, 6, 6) }, uPlanetR: { value: R }, uHeat: { value: 0 }, uResY: { value: 720 },
     },
   });
   const rocks: InstancedMesh[] = [];
-  const rng = new Rng(seed);
   for (let v = 0; v < 3; v++) {
     const n = Math.round(count / 3);
     const geo = rockGeometry(seed * 7 + v);
     const orbit = new Float32Array(n * 4), spin = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) {
-      // radii: denser toward the middle of the band, a few strays
-      const u = rng.float();
-      const x = u < 0.92 ? 0.5 + (rng.float() + rng.float() + rng.float() - 1.5) * 0.4 : rng.float();
-      const r = ring.inner + (ring.outer - ring.inner) * Math.max(0, Math.min(1, x));
-      // sizes: a power law (many pebbles of a few metres, a few boulders the size of a hill)
-      const s = 3 + 70 * Math.pow(rng.float(), 6);
-      orbit.set([r, rng.float() * Math.PI * 2, (rng.float() - 0.5) * (ring.outer - ring.inner) * 0.025, s], i * 4);
+      // radii: the dense belt and the strong ringlets get the most, the lanes none (rejection against both)
+      let x = 0.5;
+      for (let tries = 0; tries < 8; tries++) {
+        x = rng.float() < 0.85 ? 0.5 + (rng.float() + rng.float() + rng.float() - 1.5) * 0.42 : rng.float();
+        x = Math.max(0, Math.min(1, x));
+        if (!inGap(x) && rng.float() < 0.3 + 0.7 * bandAt(x)) break;
+      }
+      const r = ring.inner + (ring.outer - ring.inner) * x;
+      // sizes: a steep power law (pebbles of a few metres, a rare boulder the size of a hill)
+      const s = 1.5 + 45 * Math.pow(rng.float(), 7) + (rng.float() < 0.006 ? 25 + 35 * rng.float() : 0);
+      orbit.set([r, rng.float() * Math.PI * 2, (rng.float() - 0.5) * (ring.outer - ring.inner) * 0.02 * (0.4 + bandAt(x)), s], i * 4);
       const ax = [rng.float() - 0.5, rng.float() - 0.5, rng.float() - 0.5];
       spin.set([ax[0], ax[1], ax[2], (rng.float() - 0.5) * 0.6], i * 4);
     }
@@ -217,12 +310,13 @@ function buildRing(R: number, ring: { inner: number; outer: number; density: num
     group.add(mesh);
     rocks.push(mesh);
   }
+  const dens = { uInner: { value: ring.inner }, uOuter: { value: ring.outer }, uDensity: { value: ring.density }, uGaps: { value: gaps }, uGapW: { value: gapW } };
   const dustMat = new ShaderMaterial({
     vertexShader: DUST_VERT, fragmentShader: DUST_FRAG, transparent: true, depthWrite: false, depthTest: false, side: DoubleSide,
     blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor,
     uniforms: {
-      uSunRing: rockMat.uniforms.uSunRing, uSunE: rockMat.uniforms.uSunE, uPlanetR: { value: R }, uInner: { value: ring.inner }, uOuter: { value: ring.outer },
-      uDensity: { value: ring.density }, uT: rockMat.uniforms.uT, uCamRing: { value: new Vector3() }, tSceneDepth: { value: null }, uResolution: { value: new Vector2(1, 1) },
+      ...dens, uSunRing: rockMat.uniforms.uSunRing, uSunE: rockMat.uniforms.uSunE, uPlanetR: { value: R },
+      uT: rockMat.uniforms.uT, uCamRing: { value: new Vector3() }, tSceneDepth: { value: null }, uResolution: { value: new Vector2(1, 1) },
     },
   });
   const dg = new RingGeometry(ring.inner * 0.98, ring.outer * 1.02, 384, 6);
@@ -232,7 +326,22 @@ function buildRing(R: number, ring: { inner: number; outer: number; density: num
   dust.layers.set(WORLD_LAYER);
   dust.renderOrder = 1;
   group.add(dust);
-  return { group, rocks, dust, rockMat, dustMat, key: `${ring.inner}|${ring.outer}|${ring.density}|${count}` };
+  // its shadow: a sphere round the world (front faces cover its disc on the screen) that dims the ground under the ring
+  const shadowMat = new ShaderMaterial({
+    // (back faces: one layer over the world's disc from outside, the whole view from inside the sphere)
+    vertexShader: RINGSHADOW_VERT, fragmentShader: RINGSHADOW_FRAG, transparent: true, depthWrite: false, depthTest: false, side: BackSide,
+    blending: CustomBlending, blendSrc: DstColorFactor, blendDst: ZeroFactor,
+    uniforms: {
+      ...dens, uSunRing: rockMat.uniforms.uSunRing, uPlanetR: { value: R }, uT: rockMat.uniforms.uT, uViewToRing: { value: new Matrix4() },
+      tSceneDepth: dustMat.uniforms.tSceneDepth, uResolution: dustMat.uniforms.uResolution,
+    },
+  });
+  const shadow = new Mesh(new SphereGeometry(R * 1.2, 64, 40), shadowMat);
+  shadow.frustumCulled = false;
+  shadow.layers.set(WORLD_LAYER);
+  shadow.renderOrder = 0;
+  group.add(shadow);
+  return { group, rocks, dust, rockMat, dustMat, shadow, shadowMat, key: `${ring.inner}|${ring.outer}|${ring.density}|${count}` };
 }
 
 // ───────────────────────────── fissures ─────────────────────────────
@@ -240,13 +349,27 @@ function buildRing(R: number, ring: { inner: number; outer: number; density: num
 const CRACK_VERT = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
-attribute vec2 aRib;    // across (-1..1), along (m)
+attribute vec2 aRib;    // across (−1..1 over the ribbon, which is three rift half-widths each side), along (m)
+attribute vec3 aSide;   // the across direction on the ground (body frame, unit)
+attribute float aW;     // the rift's half-width here (m)
+uniform vec3 uSunDirBody;
 varying vec2 vRib;
 varying float vViewZ;
+varying vec3 vRay;      // the eye's ray in the rift's own frame: (across, along, up)
+varying vec3 vSunL;     // the sun in that frame
+varying float vW;
 void main() {
   vRib = aRib;
+  vW = aW;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vViewZ = -mv.z;
+  vec3 up = normalize(position);
+  vec3 side = normalize(aSide - up * dot(aSide, up));
+  vec3 along = cross(up, side);
+  // (the planet group carries no scale: the body frame is the world's turned)
+  vec3 eyeB = transpose(mat3(modelMatrix)) * ((modelMatrix * vec4(position, 1.0)).xyz - cameraPosition);
+  vRay = vec3(dot(eyeB, side), dot(eyeB, along), dot(eyeB, up));
+  vSunL = vec3(dot(uSunDirBody, side), dot(uSunDirBody, along), dot(uSunDirBody, up));
   gl_Position = projectionMatrix * mv;
 #include <logdepthbuf_vertex>
 }
@@ -256,54 +379,230 @@ const CRACK_FRAG = /* glsl */ `
 ${NOISE_GLSL}
 uniform float uHeat;
 uniform float uTime;
+uniform vec3 uSunE;
 uniform sampler2D tExposure;
 uniform float uHasExposure;
 uniform sampler2D tSceneDepth;
 uniform vec2 uResolution;
 varying vec2 vRib;
 varying float vViewZ;
+varying vec3 vRay;
+varying vec3 vSunL;
+varying float vW;
+// the chasm's cross-section (s: across in rift half-widths, already divided by the wandering width): steep walls
+// falling from the lips to a narrow molten floor; depth in units of the half-width
+float floorZ(float s) { float a = min(abs(s), 1.0); float a2 = a * a; return -(1.0 - a2 * a2 * a2); }
 void main() {
 #include <logdepthbuf_fragment>
   // drawn over the composited image, on the ground: hidden only where something stands clearly in front (a hill, a
   // wall) — the terrain's coarse far LODs may lie a little above the true ground the ribbon is draped on
+  // (from orbit the terrain's coarse far LODs lie tens of metres off the true ground the ribbon is draped on: the
+  // tolerance grows with distance, else a rift seen from 15 km is cut away by its own ground)
   float sceneZ = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r;
-  if (vViewZ > sceneZ * 1.004 + 4.0) discard;
-  // the ribbon is three rift half-widths each side: the chasm in the middle third, its glow on the ground beyond
+  if (vViewZ > sceneZ * 1.015 + 6.0) discard;
   float u = vRib.x * 3.0, v = vRib.y;
   // a ragged rift: its width wanders along it, its lips break up
   float wv = 0.7 + 0.3 * snoise(vec3(v * 0.006, 1.0, 0.0)) + 0.15 * snoise(vec3(v * 0.03, 2.0, 0.0));
-  float lip = abs(u) / wv + 0.14 * snoise(vec3(v * 0.08, u * 0.7, 5.0));
+  float rag = 0.14 * snoise(vec3(v * 0.08, u * 0.7, 5.0));
+  float lip = abs(u) / wv + rag;
   if (lip > 3.0) discard;
   float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
   float K = mix(1.0, 1.0 / ex, 0.6) * 3.0;
   float flow = snoise(vec3(v * 0.03 - uTime * 0.15, u * 0.6, 3.0)) * 0.5 + 0.5;
+  // how many pixels the chasm spans: from afar it is a line of fire, its walls under a pixel
+  float px = fwidth(u);
   if (lip > 1.0) {
-    // the glow of the fire on the ground either side (additive), and the scorched lips
-    float g = exp(-(lip - 1.0) * 2.2) * uHeat;
-    float sc = (1.0 - smoothstep(1.0, 1.6, lip)) * 0.6;
-    gl_FragColor = vec4(vec3(1.0, 0.32, 0.07) * g * 0.35 * K + vec3(0.02, 0.017, 0.014) * sc, sc);
+    // the glow of the fire on the ground either side (additive), the scorched, cracked lips, a halo that carries the
+    // rift's light far (the bloom finds it from orbit)
+    float g = exp(-(lip - 1.0) * 2.6) * uHeat;
+    float sc = (1.0 - smoothstep(1.0, 1.7, lip)) * 0.7;
+    float halo = exp(-(lip - 1.0) * 0.9) * uHeat * smoothstep(0.3, 1.0, px) * 0.4;
+    gl_FragColor = vec4(vec3(1.0, 0.32, 0.07) * (g * 0.16 + halo) * K + vec3(0.02, 0.017, 0.014) * sc, sc);
     return;
   }
-  float core = 1.0 - smoothstep(0.0, 0.55, lip);
-  float crust = smoothstep(0.35, 0.95, lip);
-  vec3 hot = mix(vec3(0.9, 0.12, 0.02), vec3(1.0, 0.55, 0.12), core * (0.6 + 0.4 * flow));
-  hot = mix(hot, vec3(1.0, 0.85, 0.5), pow(core, 4.0) * uHeat);
-  float I = (0.5 + 2.6 * core) * uHeat * (0.75 + 0.25 * flow) * K;
-  // (premultiplied: the dark lips cover the ground, the fire adds its light)
-  float a = crust * 0.85;
-  vec3 col = hot * I * (1.0 - crust) + vec3(0.02, 0.017, 0.014) * a;
-  gl_FragColor = vec4(col, a);
+  // ── inside: march the eye's ray down into the chasm (walls, floor) ──
+  vec3 rd = normalize(vRay);
+  float W = max(vW * wv, 1.0);
+  float D = 0.95;                       // depth / half-width
+  float x0 = u / wv + rag;              // where the ray enters, in half-widths
+  vec2 dir = normalize(vec2(rd.x, rd.z));
+  // (units: half-widths across, depth in half-widths; the march steps in t along that 2-D section)
+  float t = 0.0, tPrev = 0.0;
+  float hitT = -1.0;
+  float tMax = 2.4 + D / max(0.05, -dir.y);
+  for (int i = 1; i <= 20; i++) {
+    float tt = tMax * float(i) / 20.0;
+    float x = x0 + dir.x * tt, z = dir.y * tt;
+    if (z < D * floorZ(x)) { hitT = tt; tPrev = tMax * float(i - 1) / 20.0; break; }
+  }
+  if (hitT < 0.0) hitT = tMax;
+  for (int i = 0; i < 5; i++) {
+    float tm = 0.5 * (tPrev + hitT);
+    float x = x0 + dir.x * tm, z = dir.y * tm;
+    if (z < D * floorZ(x)) hitT = tm; else tPrev = tm;
+  }
+  float xh = x0 + dir.x * hitT;
+  float h = clamp(-(dir.y * hitT) / D, 0.0, 1.0);         // 0 at the lips .. 1 on the floor
+  // the wall's slope there, its normal in the (across, up) section
+  float a = min(abs(xh), 1.0);
+  float slope = D * 6.0 * a * a * a * a * a * sign(xh);
+  vec2 n2 = normalize(vec2(-slope, 1.0));
+  vec3 nL = vec3(n2.x, 0.0, n2.y);
+  // rock: dark basalt strata in the walls, lit by the sun (when it reaches down) and by the fire below
+  float strata = 0.5 + 0.5 * snoise(vec3(h * 9.0, v * 0.02, xh * 0.5 + 7.0));
+  vec3 rock = mix(vec3(0.03, 0.026, 0.024), vec3(0.09, 0.075, 0.065), strata);
+  float sunIn = max(0.0, dot(nL, vSunL)) * (1.0 - smoothstep(0.15, 0.8, h)) * step(0.0, vSunL.z);
+  vec3 lit = rock * (uSunE * sunIn * 0.3 + vec3(0.004, 0.005, 0.007));
+  // the glow climbing the walls from the magma, hotter with depth; cracks in the walls glowing through
+  float cracks = smoothstep(0.62, 0.86, snoise(vec3(xh * 3.0, v * 0.05, h * 4.0)) * 0.5 + 0.5);
+  float hot = pow(h, 3.0);
+  vec3 magma = mix(vec3(0.9, 0.12, 0.02), vec3(1.0, 0.55, 0.12), hot * (0.6 + 0.4 * flow));
+  magma = mix(magma, vec3(1.0, 0.86, 0.55), smoothstep(0.96, 1.0, h) * flow * uHeat);
+  float I = (0.22 * hot + 2.8 * smoothstep(0.94, 1.0, h) * (0.7 + 0.3 * flow) + cracks * 0.45 * h) * uHeat;
+  // from afar the chasm is mostly its fire (the walls under a pixel): the floor's light spreads over its whole width
+  float far = smoothstep(0.5, 1.2, px);
+  I = mix(I, (0.9 + 0.8 * flow) * uHeat, far);
+  vec3 col = lit * (1.0 - far) + rock * magma * hot * 2.0 + magma * I * K;
+  gl_FragColor = vec4(col, 1.0);
 }
 `;
 
-interface CrackVis { mesh: Mesh; mat: ShaderMaterial; t0: number; group: Group | null }
+/** steam and smoke rising from the rifts: looping puffs over each vent, lit by the sun above and the magma below */
+const VENT_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+attribute vec2 corner;
+attribute vec4 iV;      // vent (body frame), the rift's half-width there
+attribute vec2 iS;      // puff index phase (0..1), seed
+uniform float uT;
+uniform float uHeat;
+uniform vec3 uWindB;
+uniform vec3 uSunDirBody;
+uniform vec3 uSunE;
+varying vec2 vC;
+varying float vA;
+varying vec3 vLight;
+varying vec3 vGlow;
+varying float vViewZ;
+varying float vSeed;
+varying float vSize;
+void main() {
+  float life = 70.0 + 50.0 * iS.y;
+  float a = fract(uT / life + iS.x + iS.y * 0.37);
+  vec3 up = normalize(iV.xyz);
+  float W = iV.w;
+  float H = 140.0 + W * 6.0;
+  vec3 p = iV.xyz + up * (H * pow(a, 0.75) + 4.0) + uWindB * (a * life * 0.6) + cross(up, vec3(0.3, 1.0, 0.2)) * (iS.y - 0.5) * W * 0.8;
+  float sz = W * 0.55 + (W * 1.2 + 40.0) * sqrt(a);
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  float rot = iS.y * 6.2831 + a * 1.5;
+  vec2 c = vec2(cos(rot) * corner.x - sin(rot) * corner.y, sin(rot) * corner.x + cos(rot) * corner.y);
+  mv.xy += c * sz;
+  gl_Position = projectionMatrix * mv;
+  vC = corner;
+  vSeed = iS.y;
+  vSize = sz;
+  vViewZ = -mv.z;
+  vA = smoothstep(0.0, 0.08, a) * (1.0 - smoothstep(0.45, 1.0, a)) * (0.35 + 0.65 * uHeat);
+  float sunUp = dot(up, uSunDirBody);
+  vLight = uSunE * max(0.0, sunUp + 0.15) * 0.22 + vec3(0.006, 0.008, 0.012);
+  // the magma's light from below, strongest low in the column
+  vGlow = vec3(1.0, 0.36, 0.08) * exp(-a * 3.5) * uHeat;
+#include <logdepthbuf_vertex>
+}
+`;
+const VENT_FRAG = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+${NOISE_GLSL}
+uniform sampler2D tSceneDepth;
+uniform sampler2D tExposure;
+uniform float uHasExposure;
+uniform vec2 uResolution;
+varying vec2 vC;
+varying float vA;
+varying vec3 vLight;
+varying vec3 vGlow;
+varying float vViewZ;
+varying float vSeed;
+varying float vSize;
+void main() {
+#include <logdepthbuf_fragment>
+  float sceneZ = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r;
+  if (vViewZ > sceneZ + 0.1) discard;
+  float fade = clamp((sceneZ - vViewZ) / max(1.0, vSize * 0.5), 0.0, 1.0);
+  float r = length(vC);
+  float n = snoise(vec3(vC * 1.7, vSeed * 23.0));
+  float puff = smoothstep(1.0, 0.25, r * (1.0 - 0.25 * n));
+  float a = vA * puff * fade * 0.42;
+  if (a < 0.003) discard;
+  float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
+  vec3 steam = vec3(0.7, 0.7, 0.72) * (vLight * (0.75 + 0.25 * n));
+  vec3 under = vGlow * mix(1.0, 1.0 / ex, 0.6) * 0.5 * smoothstep(0.6, -0.4, vC.y);
+  gl_FragColor = vec4((steam + under) * a, a);
+}
+`;
+/** the rifts' light on the cloud deck above them (where the sim's clouds are), added over the composited sky */
+const CLOUDGLOW_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+attribute vec2 aRib;
+attribute vec3 aSide;
+attribute float aW;
+uniform float uCloudR;
+varying vec3 vB;
+varying float vAcross;
+varying float vViewZ;
+void main() {
+  vec3 centre = position - aSide * aRib.x * 3.0 * aW;
+  vec3 q = centre + aSide * aRib.x * 3.0 * aW * 2.6;
+  vec3 p = normalize(q) * uCloudR;
+  vB = p;
+  vAcross = aRib.x;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  vViewZ = -mv.z;
+  gl_Position = projectionMatrix * mv;
+#include <logdepthbuf_vertex>
+}
+`;
+const CLOUDGLOW_FRAG = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+uniform samplerCube uCloudCov;
+uniform float uCloudOn;
+uniform float uHeat;
+uniform sampler2D tSceneDepth;
+uniform sampler2D tExposure;
+uniform float uHasExposure;
+uniform vec2 uResolution;
+varying vec3 vB;
+varying float vAcross;
+varying float vViewZ;
+void main() {
+#include <logdepthbuf_fragment>
+  if (uCloudOn < 0.5) discard;
+  float sceneZ = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r;
+  if (vViewZ > sceneZ * 1.002 + 10.0) discard;
+  float cov = texture(uCloudCov, normalize(vB)).r;
+  float k = smoothstep(0.15, 0.7, cov) * exp(-vAcross * vAcross * 4.0) * uHeat;
+  float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
+  gl_FragColor = vec4(vec3(1.0, 0.34, 0.08) * k * 0.6 * mix(1.0, 1.0 / ex, 0.6), 0.0);
+}
+`;
 
-/** fissures across a world: meandering great-circle paths draped on the ground, as ribbons with across / along coords */
-function buildCracks(pv: PlanetView, seed: number): BufferGeometry {
+interface CrackVis { mesh: Mesh; mat: ShaderMaterial; t0: number; group: Group | null; vents: Mesh | null; ventMat: ShaderMaterial | null; glow: Mesh | null; glowMat: ShaderMaterial | null }
+
+/**
+ * fissures across a world: meandering great-circle paths draped on the ground, as ribbons with across / along coords,
+ * seven vertices across (each on its own ground height, so a wide rift follows the land); returns the vents (points on
+ * the rifts, body frame + their half-width) where steam and smoke rise
+ */
+function buildCracks(pv: PlanetView, seed: number): { geo: BufferGeometry; vents: Float32Array } {
   const R = pv.params.radius;
   const sea = pv.fields.get('water') ? R + pv.params.seaLevel : -Infinity;
   const rng = new Rng(seed);
-  const pos: number[] = [], rib: number[] = [], idx: number[] = [];
+  const pos: number[] = [], rib: number[] = [], side3: number[] = [], wid: number[] = [], idx: number[] = [];
+  const vents: number[] = [];
+  const ACROSS = [-1, -2 / 3, -1 / 3, 0, 1 / 3, 2 / 3, 1];
+  const NA = ACROSS.length;
   const paths = 7;
   for (let k = 0; k < paths; k++) {
     // two long rifts run from pole to pole; the rest branch off
@@ -316,27 +615,34 @@ function buildCracks(pv: PlanetView, seed: number): BufferGeometry {
     const e: D3 = [0, 0, 0], no: D3 = [0, 0, 0];
     tangentBasis(e, no, p);
     let h = main ? Math.PI + (rng.float() - 0.5) * 0.6 : rng.float() * Math.PI * 2;
-    // (rift half-widths: the ribbon is three times as wide, for the glow on the ground either side)
-    const width = (main ? 36 : 12 + rng.float() * 12) * 3;
+    // rift half-widths (wide magma chasms: they read from orbit); the ribbon is three times as wide, for the glow
+    const W0 = main ? 58 : 20 + rng.float() * 16;
     let along = 0;
     let prev = -1;
     for (let i = 0; i <= n; i++) {
       tangentBasis(e, no, p);
       const d: D3 = [no[0] * Math.cos(h) + e[0] * Math.sin(h), no[1] * Math.cos(h) + e[1] * Math.sin(h), no[2] * Math.cos(h) + e[2] * Math.sin(h)];
       const side: D3 = [p[1] * d[2] - p[2] * d[1], p[2] * d[0] - p[0] * d[2], p[0] * d[1] - p[1] * d[0]];
-      const w = width * (0.6 + 0.4 * Math.sin(i * 0.11 + k)) * (i < 4 || i > n - 4 ? 0.3 : 1);
+      const W = W0 * (0.6 + 0.4 * Math.sin(i * 0.11 + k)) * (i < 4 || i > n - 4 ? 0.3 : 1);
+      const w = W * 3;
       const base = pos.length / 3;
-      for (const sx of [-1, 1]) {
+      let wet = false;
+      for (const sx of ACROSS) {
         const q: D3 = [p[0] + side[0] * (sx * w) / R, p[1] + side[1] * (sx * w) / R, p[2] + side[2] * (sx * w) / R];
         const ql = Math.hypot(q[0], q[1], q[2]);
         const u: D3 = [q[0] / ql, q[1] / ql, q[2] / ql];
         const g0 = groundHeight(pv.ground, u[0], u[1], u[2]);
         const g = g0 + 0.6;
         pos.push(u[0] * g, u[1] * g, u[2] * g);
-        // under the sea the rift goes on unseen (its ribbon is cut there: beyond the lips, discarded)
-        rib.push(g0 < sea ? sx * 3 : sx, along);
+        if (g0 < sea) wet = true;
+        rib.push(sx, along);
+        side3.push(side[0], side[1], side[2]);
+        wid.push(W);
       }
-      if (prev >= 0) idx.push(prev, prev + 1, base + 1, prev, base + 1, base);
+      // under the sea the rift goes on unseen (its ribbon is cut there: beyond the lips, discarded)
+      if (wet) for (let j = 0; j < NA; j++) rib[(base + j) * 2] = ACROSS[j] < 0 ? -1.2 : 1.2;
+      else if (i % 9 === 4 && W > 10) { const g = groundHeight(pv.ground, p[0], p[1], p[2]); vents.push(p[0] * g, p[1] * g, p[2] * g, W); }
+      if (prev >= 0) for (let j = 0; j < NA - 1; j++) idx.push(prev + j, prev + j + 1, base + j + 1, prev + j, base + j + 1, base + j);
       prev = base;
       // walk on: the heading meanders
       h += (rng.float() - 0.5) * 0.35;
@@ -349,9 +655,11 @@ function buildCracks(pv: PlanetView, seed: number): BufferGeometry {
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
   g.setAttribute('aRib', new BufferAttribute(new Float32Array(rib), 2));
+  g.setAttribute('aSide', new BufferAttribute(new Float32Array(side3), 3));
+  g.setAttribute('aW', new BufferAttribute(new Float32Array(wid), 1));
   g.setIndex(pos.length / 3 > 65535 ? new BufferAttribute(new Uint32Array(idx), 1) : new BufferAttribute(new Uint16Array(idx), 1));
   g.computeBoundingSphere();
-  return g;
+  return { geo: g, vents: new Float32Array(vents) };
 }
 
 // ───────────────────────────── erase, birth, the falling moon (overlays) ─────────────────────────────
@@ -424,19 +732,21 @@ void main() {
     float n = snoise(vec3(vUv * 5.0, uTime * 2.0)) * 0.5 + 0.5;
     c = uColor * (shell * (0.6 + 0.8 * n) + exp(-r * r * 2.0) * 0.15) * uK * 2.5;
   } else if (uKind > 4.5) {
-    // the face of a body burning in the air: a dark crust split by molten seams, the limb hottest where the air tears at
-    // it. It COVERS the body's disc (alpha blended, not added): the hazed, cratered rock under it would otherwise show
-    // as a dark, jagged band round the limb and tint the fire violet. The quad is sized so the true silhouette (relief
-    // included) lies at r ≈ 0.93; the edge fades out past it into the burning shell.
+    // a moon breaking up inside the Roche limit: the grey, sunlit body stays itself, split by a web of fractures —
+    // dark rifts with a dull red glow deep in them, widening as it comes apart (uK: the break-up). The quad is sized so
+    // the silhouette lies at r ≈ 0.93; nothing is drawn between the rifts
     float rr = min(1.0, r / 0.9);
     float mu = sqrt(max(0.0, 1.0 - rr * rr));
-    float seams = 1.0 - smoothstep(0.0, 0.09, abs(snoise(vec3(vUv * 3.2, uTime * 0.05)) ));
-    float seams2 = 1.0 - smoothstep(0.0, 0.06, abs(snoise(vec3(vUv * 7.5 + 3.0, uTime * 0.07))));
-    float limb = pow(1.0 - mu, 2.0);
-    vec3 crust = vec3(0.3, 0.06, 0.018) * (0.35 + 0.65 * mu);
-    vec3 fire = vec3(1.0, 0.42, 0.09) * (seams * 1.6 + seams2 * 0.8) * (0.55 + 0.45 * mu) + vec3(1.0, 0.58, 0.22) * limb * 2.4;
-    float cover = (1.0 - smoothstep(0.9, 1.0, r)) * clamp(uK * 2.5, 0.0, 1.0);
-    gl_FragColor = vec4((crust + fire) * (0.5 + 0.9 * uK) * 1.6 * cover, cover);
+    // the rifts run over the visible face (a 3-D noise on the sphere point under this pixel: they curve with it)
+    vec3 sp = vec3(vUv / 0.9, mu);
+    float w = 0.012 + 0.05 * uK;
+    float f1 = 1.0 - smoothstep(0.0, w, abs(snoise(sp * 2.6 + 1.7)));
+    float f2 = (1.0 - smoothstep(0.0, w * 0.7, abs(snoise(sp * 6.1 + 4.2)))) * smoothstep(0.25, 0.8, uK);
+    float rift = max(f1, f2 * 0.8) * (1.0 - smoothstep(0.86, 0.93, r));
+    float glowK = rift * (0.35 + 0.65 * smoothstep(0.3, 1.0, uK)) * (0.5 + 0.5 * mu);
+    vec3 col = vec3(0.012, 0.009, 0.008) + vec3(1.0, 0.28, 0.06) * glowK * 0.9;
+    float a = rift * clamp(uK * 3.0, 0.0, 1.0) * 0.92;
+    gl_FragColor = vec4(col * a, a);
     return;
   } else {
     // a tail of plasma along +y of the quad: as wide as the body at its head, streaming back in torn ribbons, white-hot
@@ -561,7 +871,99 @@ void main() {
 }
 `;
 
+// ───────────────────────────── a moon torn apart (the Roche break-up) ─────────────────────────────
+
+/**
+ * Fragments peeling off a falling moon in its last hours, in the host's frame (system axes, host at the origin): two
+ * tidal streams along the moon's orbit — the leading one sinking inward ahead of it (into the air, where its pieces
+ * burn), the trailing one lagging outward behind. Each piece's place is a function of the break-up progress, so a
+ * capture, a pause or a step shows the same stream.
+ */
+const SHARD_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+attribute vec4 aF;   // side (+1 leading, −1 trailing), how far along the stream it goes (0..1), radial jitter, vertical jitter
+attribute vec4 aG;   // size (m), onset (0..1 of the break-up), spin seed, spin rate
+uniform vec3 uE1;
+uniform vec3 uE2;
+uniform vec3 uNrm;
+uniform float uA;
+uniform float uB;
+uniform float uRm;
+uniform float uR;
+uniform float uAir;
+uniform float uT;
+varying vec3 vN;
+varying vec3 vLocal;
+varying vec3 vP;
+varying float vHeat;
+varying float vSeed;
+vec3 rotA(vec3 v, vec3 a, float t) { float c = cos(t), s = sin(t); return v * c + cross(a, v) * s + a * dot(a, v) * (1.0 - c); }
+void main() {
+  float q = clamp((uB - 0.6 * aG.y) / max(1.0 - 0.6 * aG.y, 1e-3), 0.0, 1.0);
+  float side = aF.x;
+  float dth = side * (uRm / uA * 1.05 + q * aF.y * 0.9);
+  // (the leading stream loses its height and falls toward the world — the farthest along reach the air and burn; the
+  // trailing one is flung outward)
+  float r = side > 0.0 ? max(uR + 20.0, uR + (uA - uR) * (1.0 - q * aF.y * 0.98) + aF.z * uRm * 0.3) : uA * (1.0 + q * aF.y * 0.25) + aF.z * uRm * 0.45;
+  float h = aF.w * uRm * 0.55 * (1.0 - 0.4 * q);
+  vec3 c = (cos(dth) * uE1 + sin(dth) * uE2) * r + uNrm * h;
+  float sz = aG.x * step(0.001, q);
+  vec3 ax = normalize(vec3(fract(aG.z * 7.13) - 0.5, fract(aG.z * 13.71) - 0.5, fract(aG.z * 3.37) - 0.5) + vec3(1e-3));
+  float ang = uT * aG.w + aG.z * 10.0;
+  vec3 p = rotA(position * sz, ax, ang);
+  vN = normalize(normalMatrix * rotA(normal, ax, ang));
+  vLocal = position;
+  vP = c + p;
+  vSeed = aG.z;
+  vHeat = smoothstep(uAir * 1.3, uAir * 0.1, length(c) - uR) * q;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(c + p, 1.0);
+#include <logdepthbuf_vertex>
+}
+`;
+
+const SHARD_FRAG = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+${NOISE_GLSL}
+uniform vec3 uSunView;
+uniform vec3 uSunSys;
+uniform vec3 uSunE;
+uniform float uR;
+varying vec3 vN;
+varying vec3 vLocal;
+varying vec3 vP;
+varying float vHeat;
+varying float vSeed;
+void main() {
+#include <logdepthbuf_fragment>
+  vec3 n = normalize(vN);
+  float m = snoise(vLocal * 3.0 + vSeed * 9.0) * 0.5 + 0.5;
+  // the moon's own grey regolith over darker fresh rock from inside it
+  vec3 alb = mix(vec3(0.09, 0.088, 0.085), vec3(0.24, 0.235, 0.225), m);
+  // the host's shadow
+  float b = dot(vP, uSunSys);
+  float c = dot(vP, vP) - uR * uR;
+  float disc = b * b - c;
+  float shadow = (disc > 0.0 && -b - sqrt(disc) > 0.0) ? 0.0 : 1.0;
+  vec3 col = alb * (uSunE * max(0.0, dot(n, uSunView)) * shadow * 0.32 + vec3(0.004, 0.005, 0.007));
+  // a piece in the air burns: its face toward the flow white-hot, the rest glowing through cracks
+  float cr = smoothstep(0.55, 0.8, snoise(vLocal * 4.0 + vSeed * 5.0) * 0.5 + 0.5);
+  col += vec3(1.0, 0.36, 0.08) * vHeat * (2.0 + 6.0 * cr);
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+interface MoonBreak { group: Group; mesh: InstancedMesh; mat: ShaderMaterial; streaks: Mesh[]; params: Float32Array; sizes: Float32Array }
+
+const SHARDS = 640;
+const STREAKS = 14;
+
 const _v = new Vector3();
+const _v2 = new Vector3();
+const _bA = new Vector3();
+const _bB = new Vector3();
+const _bC = new Vector3();
+const _bD = new Vector3();
 const _q = new Quaternion();
 const _bb: D3 = [1, 1, 1];
 const _o0: D3 = [0, 0, 0];
@@ -583,6 +985,10 @@ export class WorldFx {
   private known = new Map<number, { sys: D3; R: number; parent: number }>();
   private started = false;
   private moonGlows = new Map<number, { shell: Mesh; tail: Mesh; face: Mesh }>();
+  /** moons breaking up (their rubble streams), and those seen this frame */
+  private breaks = new Map<number, MoonBreak>();
+  private breakSeen = new Set<number>();
+  private rockGeo: BufferGeometry | null = null;
   /** moons falling this frame (a falling moon that vanishes has struck: a strike, not an erasure) */
   private falling = new Map<number, { host: number; dir: D3; R: number; Rm: number }>();
   private fellLast = new Map<number, { host: number; dir: D3; R: number; Rm: number }>();
@@ -667,7 +1073,7 @@ export class WorldFx {
       const count = Math.max(300, Math.round(this.rockBudget * Math.min(1, ring.density)));
       const key = `${ring.inner}|${ring.outer}|${ring.density}|${count}`;
       if (!rv || rv.key !== key) {
-        if (rv) { rv.group.parent?.remove(rv.group); for (const m of rv.rocks) m.geometry.dispose(); rv.rockMat.dispose(); rv.dustMat.dispose(); rv.dust.geometry.dispose(); }
+        if (rv) { rv.group.parent?.remove(rv.group); for (const m of rv.rocks) m.geometry.dispose(); rv.rockMat.dispose(); rv.dustMat.dispose(); rv.dust.geometry.dispose(); rv.shadow.geometry.dispose(); rv.shadowMat.dispose(); }
         rv = buildRing(pv.params.radius, ring, count, pv.seed + 77);
         this.rings.set(pv.id, rv);
       }
@@ -698,24 +1104,84 @@ export class WorldFx {
       const ref = planets.get(pv.id);
       let cv = this.cracks.get(pv.id);
       if (!cv && ref && pv.fields.get('surface')) {
-        const geo = buildCracks(pv, pv.seed + 31);
+        const { geo, vents } = buildCracks(pv, pv.seed + 31);
         const mat = new ShaderMaterial({
           vertexShader: CRACK_VERT, fragmentShader: CRACK_FRAG, side: DoubleSide, transparent: true, depthWrite: false, depthTest: false,
           blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor,
           uniforms: {
             uHeat: { value: 1 }, uTime: { value: 0 }, tExposure: FX_EXPOSURE, uHasExposure: { value: 1 },
             tSceneDepth: this.uniformsShared.tSceneDepth, uResolution: this.uniformsShared.uResolution,
+            uSunDirBody: ref.uniforms.uSunDirBody ?? { value: new Vector3(0, 1, 0) }, uSunE: ref.uniforms.uSunE ?? { value: new Vector3(6, 6, 6) },
           },
         });
         const mesh = new Mesh(geo, mat);
         mesh.frustumCulled = false;
         mesh.layers.set(WORLD_LAYER);
         mesh.name = 'fissures';
-        cv = { mesh, mat, t0: ca, group: null };
+        // steam and smoke over the vents; the fire's light on the clouds above
+        const ventGeo = new InstancedBufferGeometry();
+        ventGeo.setAttribute('corner', new BufferAttribute(new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]), 2));
+        ventGeo.setIndex([0, 1, 2, 0, 2, 3]);
+        const PUFFS = 9;
+        const nv = vents.length / 4;
+        const iV = new Float32Array(nv * PUFFS * 4), iS = new Float32Array(nv * PUFFS * 2);
+        for (let i = 0; i < nv; i++) for (let j = 0; j < PUFFS; j++) {
+          const k = i * PUFFS + j;
+          iV.set([vents[i * 4], vents[i * 4 + 1], vents[i * 4 + 2], vents[i * 4 + 3]], k * 4);
+          iS.set([j / PUFFS, hashFloat(i, j, 0x5e7)], k * 2);
+        }
+        ventGeo.setAttribute('iV', new InstancedBufferAttribute(iV, 4));
+        ventGeo.setAttribute('iS', new InstancedBufferAttribute(iS, 2));
+        ventGeo.instanceCount = nv * PUFFS;
+        const ventMat = new ShaderMaterial({
+          vertexShader: VENT_VERT, fragmentShader: VENT_FRAG, transparent: true, depthWrite: false, depthTest: false,
+          blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor,
+          uniforms: {
+            uT: { value: 0 }, uHeat: { value: 1 }, uWindB: { value: new Vector3() }, uSunDirBody: mat.uniforms.uSunDirBody, uSunE: mat.uniforms.uSunE,
+            tSceneDepth: this.uniformsShared.tSceneDepth, uResolution: this.uniformsShared.uResolution, tExposure: FX_EXPOSURE, uHasExposure: this.hasExposure,
+          },
+        });
+        const ventMesh = new Mesh(ventGeo, ventMat);
+        ventMesh.frustumCulled = false;
+        ventMesh.layers.set(WORLD_LAYER);
+        ventMesh.renderOrder = 2;
+        let glow: Mesh | null = null, glowMat: ShaderMaterial | null = null;
+        if (ref.uniforms.uCloudCov && ref.uniforms.uCloudShell) {
+          glowMat = new ShaderMaterial({
+            vertexShader: CLOUDGLOW_VERT, fragmentShader: CLOUDGLOW_FRAG, transparent: true, depthWrite: false, depthTest: false, side: DoubleSide,
+            blending: CustomBlending, blendSrc: OneFactor, blendDst: OneFactor,
+            uniforms: {
+              uCloudCov: ref.uniforms.uCloudCov, uCloudOn: ref.uniforms.uCloudOn ?? { value: 1 }, uCloudR: { value: pv.params.radius + 260 }, uHeat: mat.uniforms.uHeat,
+              tSceneDepth: this.uniformsShared.tSceneDepth, uResolution: this.uniformsShared.uResolution, tExposure: FX_EXPOSURE, uHasExposure: this.hasExposure,
+            },
+          });
+          glow = new Mesh(geo, glowMat);
+          glow.frustumCulled = false;
+          glow.layers.set(WORLD_LAYER);
+          glow.renderOrder = 3;
+        }
+        cv = { mesh, mat, t0: ca, group: null, vents: ventMesh, ventMat, glow, glowMat };
         this.cracks.set(pv.id, cv);
       }
       if (cv && ref) {
-        if (cv.group !== ref.group) { cv.mesh.parent?.remove(cv.mesh); ref.group.add(cv.mesh); cv.group = ref.group; }
+        if (cv.group !== ref.group) {
+          for (const m of [cv.mesh, cv.vents, cv.glow]) if (m) { m.parent?.remove(m); ref.group.add(m); }
+          cv.group = ref.group;
+        }
+        if (cv.ventMat) {
+          const vu = cv.ventMat.uniforms;
+          vu.uT.value = (tick / 10) % 1e5;
+          vu.uHeat.value = cv.mat.uniforms.uHeat.value;
+          const wx = pv.fields.get('windX'), wy = pv.fields.get('windY'), wz = pv.fields.get('windZ');
+          // (a gentle drift: the mean wind over the world's face, or none)
+          if (wx && wy && wz && !(vu.uWindB.value as Vector3).lengthSq()) {
+            let sx = 0, sy = 0, sz = 0;
+            for (let i = 0; i < wx.length; i += 97) { sx += wx[i]; sy += wy[i]; sz += wz[i]; }
+            const n = Math.ceil(wx.length / 97);
+            (vu.uWindB.value as Vector3).set(sx / n, sy / n, sz / n).clampLength(0, 6);
+          }
+        }
+        if (cv.glowMat && ref.uniforms.uCloudShell) { const sh = ref.uniforms.uCloudShell.value as Vector2; cv.glowMat.uniforms.uCloudR.value = 0.5 * (sh.x + sh.y); }
         // the rifts cool over three days to a dull red glow, never quite out
         cv.mat.uniforms.uHeat.value = 0.28 + 0.72 * Math.exp(-Math.max(0, tick - ca) / 1440);
         cv.mat.uniforms.uTime.value = time % 1000;
@@ -727,7 +1193,7 @@ export class WorldFx {
       rv.group.parent?.remove(rv.group);
       this.rings.delete(id);
       const cv = this.cracks.get(id);
-      if (cv) { cv.mesh.parent?.remove(cv.mesh); cv.mesh.geometry.dispose(); cv.mat.dispose(); this.cracks.delete(id); }
+      if (cv) this.disposeCrack(id, cv);
     }
     // ── falling moons: tides on the host's sea, fire round the moon near the end ──
     for (const ref of planets.values()) {
@@ -751,16 +1217,16 @@ export class WorldFx {
         const dx = moon.center[0] - pv.center[0], dy = moon.center[1] - pv.center[1], dz = moon.center[2] - pv.center[2];
         const dm = Math.hypot(dx, dy, dz) || 1;
         // tides: the sea heaps toward the moon and away from it (the equilibrium tide grows as m / d³: a moon a quarter of
-        // the world's size at a few radii raises it a metre; at the end, grazing, ten), and the water roughens
+        // the world's size at a few radii raises it a metre); in the last day it is a surge tens of metres high, the
+        // water wild (ocean.ts roughens with it)
         const ref = planets.get(pv.id);
         const tide = ref?.uniforms.uTide?.value as Vector4 | undefined;
         if (tide) {
           _q.set(pv.quat[0], pv.quat[1], pv.quat[2], pv.quat[3]).invert();
           _v.set(dx / dm, dy / dm, dz / dm).applyQuaternion(_q);
           const k = (moon.params.radius / pv.params.radius) ** 3 * (pv.params.radius / dm) ** 3 * 600;
-          tide.set(_v.x, _v.y, _v.z, Math.min(10, 0.6 + k + 9 * prog * prog * prog));
+          tide.set(_v.x, _v.y, _v.z, Math.min(36, 0.6 + k + 30 * prog ** 4));
         }
-        // the fire of the last fifth: the moon grazes the air and burns, a plume of plasma streaming behind it
         liveMoons.add(moon.id);
         let mg = this.moonGlows.get(moon.id);
         if (!mg) {
@@ -771,46 +1237,168 @@ export class WorldFx {
           mg = { shell, tail, face };
           this.moonGlows.set(moon.id, mg);
         }
-        // it burns as it comes down into the air (and the tides tear at it): from ~1.5 radii over the ground to grazing
+        // the moon stays a grey, cratered, sunlit body (its own planet visual, growing in the sky as it comes): it burns
+        // only where its lower limb tears into the air at the very end; in its last hours, inside the Roche limit, it
+        // fractures and sheds two streams of rubble along its orbit, whose leading pieces sink into the air and burn
         const Rm = moon.params.radius, Rh = pv.params.radius;
         const gap = dm - Rm - Rh;
-        const burn = Math.pow(Math.max(0, Math.min(1, 1 - (gap - 0.2 * Rh) / (1.3 * Rh))), 1.5) * Math.min(1, prog * 2);
+        const airTop = pv.params.atmosphere.pressure > 0.02 ? Rh * 0.2 : 0;
+        const burn = airTop > 0 ? Math.pow(Math.max(0, Math.min(1, 1 - gap / airTop)), 1.5) : 0;
+        const breakK = Math.max(0, Math.min(1, (prog - 0.9) / 0.1));
+        const brk = breakK * breakK * (3 - 2 * breakK);
         this.falling.set(moon.id, { host: pv.id, dir: [dx / dm, dy / dm, dz / dm], R: Rh, Rm });
-        for (const m of [mg.shell, mg.tail, mg.face]) {
+        for (const m of [mg.shell, mg.tail]) {
           m.visible = burn > 0.01;
           m.position.set(moon.center[0] - pose.pos[0], moon.center[1] - pose.pos[1], moon.center[2] - pose.pos[2]);
           const mu = (m.material as ShaderMaterial).uniforms;
           mu.uK.value = burn;
           mu.uTime.value = time % 1000;
         }
+        mg.face.visible = brk > 0.01;
+        mg.face.position.set(moon.center[0] - pose.pos[0], moon.center[1] - pose.pos[1], moon.center[2] - pose.pos[2]);
+        { const fu = (mg.face.material as ShaderMaterial).uniforms; fu.uK.value = brk; fu.uTime.value = time % 1000; }
         mg.shell.scale.setScalar(Rm * 1.45);
         mg.tail.scale.setScalar(Rm * 3.2);
         // (the silhouette seen from here — a near sphere looks bigger than its radius at its centre's depth, and its
-        // craters and ridges stand ~8 % proud — lands at r ≈ 0.93 of the quad: no rock shows round the burning face)
+        // craters and ridges stand ~8 % proud — lands at r ≈ 0.93 of the quad)
         const dc = Math.hypot(moon.center[0] - pose.pos[0], moon.center[1] - pose.pos[1], moon.center[2] - pose.pos[2]);
         const Rs = Rm * 1.08;
         const proj = Rs * dc / Math.sqrt(Math.max(dc * dc - Rs * Rs, Rs * Rs * 0.04));
         mg.face.scale.setScalar(proj / 0.93);
         // (tested just in front of the whole body: its own rock never hides it, a hill or a cloud bank in front does)
         (mg.face.material as ShaderMaterial).uniforms.uFront.value = Rm * 1.05;
-        // the plume trails behind the moon's motion about its world, as seen on the screen
+        // the moon's motion about its world (its orbit's tangent), for the plume and the streams
         const tk = view.renderTick;
         const a0 = orbitOffset(moon.params.orbit, tk, _o0), a1 = orbitOffset(moon.params.orbit, tk + 1, _o1);
         _v.set(a0[0] - a1[0], a0[1] - a1[1], a0[2] - a1[2]);
-        // (orbit offsets are system-frame displacements from the parent)
+        const back = _v2.copy(_v).normalize();
         _v.applyQuaternion(camQuatInv);
         const sl = Math.hypot(_v.x, _v.y) || 1;
         const tu = (mg.tail.material as ShaderMaterial).uniforms;
         (tu.uDir.value as Vector2).set(_v.x / sl, _v.y / sl);
         tu.uOffset.value = 0.85;
+        // the break-up's streams
+        if (brk > 0.001) this.breakUp(moon.id, pv, moon, dm, back, brk, pose, view, camQuatInv, time, airTop);
       }
     }
     this.fellLast = new Map(this.falling);
     this.falling.clear();
     for (const [id, mg] of this.moonGlows) if (!liveMoons.has(id)) { for (const m of [mg.shell, mg.tail, mg.face]) { m.parent?.remove(m); (m.material as ShaderMaterial).dispose(); } this.moonGlows.delete(id); }
+    for (const [id, mb] of this.breaks) if (!liveMoons.has(id) || !this.breakSeen.has(id)) this.disposeBreak(id, mb);
+    this.breakSeen.clear();
     // ── bursts ──
     for (const b of this.bursts) this.updateBurst(b, view, pose, time, camQuatInv);
     this.bursts = this.bursts.filter((b) => { if (b.done) { b.group.parent?.remove(b.group); this.disposeBurst(b); } return !b.done; });
+  }
+
+  /** a falling moon's rubble streams (instanced, lit, burning where they sink into the air) and their entry streaks */
+  private breakUp(id: number, host: PlanetView, moon: PlanetView, dm: number, back: Vector3, brk: number, pose: CameraPose, view: WorldView, camQuatInv: Quaternion, time: number, airTop: number): void {
+    this.breakSeen.add(id);
+    let mb = this.breaks.get(id);
+    if (!mb) {
+      if (!this.rockGeo) this.rockGeo = rockGeometry(4242);
+      const geo = new InstancedBufferGeometry();
+      geo.index = this.rockGeo.index;
+      geo.setAttribute('position', this.rockGeo.getAttribute('position'));
+      geo.setAttribute('normal', this.rockGeo.getAttribute('normal'));
+      const F = new Float32Array(SHARDS * 4), G = new Float32Array(SHARDS * 4);
+      const rng = new Rng(moon.seed + 913);
+      const Rm = moon.params.radius;
+      for (let i = 0; i < SHARDS; i++) {
+        // leading pieces first among the ones that go far (they make the burning stream); sizes by a power law
+        const side = i < SHARDS * 0.55 ? 1 : -1;
+        F.set([side, Math.pow(rng.float(), 0.8), rng.float() * 2 - 1, (rng.float() + rng.float() - 1)], i * 4);
+        G.set([Rm * (0.012 + 0.11 * Math.pow(rng.float(), 5)), rng.float(), rng.float(), (rng.float() - 0.5) * 0.8], i * 4);
+      }
+      // (the streaks: the leading pieces that travel farthest along the stream, i.e. lowest into the air)
+      const order = [...Array(SHARDS).keys()].filter((i) => F[i * 4] > 0).sort((a, b) => F[b * 4 + 1] - F[a * 4 + 1]).slice(0, STREAKS);
+      const params = new Float32Array(STREAKS * 8);
+      order.forEach((i, k) => { params.set([F[i * 4], F[i * 4 + 1], F[i * 4 + 2], F[i * 4 + 3], G[i * 4], G[i * 4 + 1], 0, 0], k * 8); });
+      geo.setAttribute('aF', new InstancedBufferAttribute(F, 4));
+      geo.setAttribute('aG', new InstancedBufferAttribute(G, 4));
+      geo.instanceCount = SHARDS;
+      const mat = new ShaderMaterial({
+        vertexShader: SHARD_VERT, fragmentShader: SHARD_FRAG,
+        uniforms: {
+          uE1: { value: new Vector3() }, uE2: { value: new Vector3() }, uNrm: { value: new Vector3() }, uA: { value: 1 }, uB: { value: 0 }, uRm: { value: Rm },
+          uR: { value: host.params.radius }, uAir: { value: Math.max(1, airTop) }, uT: { value: 0 },
+          uSunView: { value: new Vector3() }, uSunSys: { value: new Vector3() }, uSunE: { value: new Vector3(6, 6, 6) },
+        },
+      });
+      const mesh = new InstancedMesh(geo, mat, SHARDS);
+      mesh.frustumCulled = false;
+      const group = new Group();
+      group.name = `moon-breakup-${id}`;
+      group.add(mesh);
+      this.spaceGroup.add(group);
+      const streaks: Mesh[] = [];
+      for (let k = 0; k < STREAKS; k++) {
+        const st = new Mesh(this.glowGeo, this.glowMat(4, [1.0, 0.6, 0.25], true));
+        st.frustumCulled = false; st.layers.set(WORLD_LAYER); st.renderOrder = 4;
+        this.spaceGroup.add(st);
+        streaks.push(st);
+      }
+      mb = { group, mesh, mat, streaks, params, sizes: G };
+      this.breaks.set(id, mb);
+    }
+    // the moon's orbital frame about its world, now: e1 toward it, e2 along its motion, the orbit's normal
+    const e1 = _bA.set(moon.center[0] - host.center[0], moon.center[1] - host.center[1], moon.center[2] - host.center[2]).normalize();
+    const e2 = _bB.copy(back).negate().addScaledVector(e1, back.dot(e1)).normalize();
+    const nrm = _bC.crossVectors(e1, e2);
+    const u = mb.mat.uniforms;
+    (u.uE1.value as Vector3).copy(e1); (u.uE2.value as Vector3).copy(e2); (u.uNrm.value as Vector3).copy(nrm);
+    u.uA.value = dm; u.uB.value = brk; u.uT.value = (view.renderTick / 10) % 1e4; u.uAir.value = Math.max(1, airTop);
+    const sun = _bD.set(-host.center[0], -host.center[1], -host.center[2]).normalize();
+    (u.uSunSys.value as Vector3).copy(sun);
+    (u.uSunView.value as Vector3).copy(sun).applyQuaternion(camQuatInv);
+    const E = sunIlluminance(view.star.luminosity, Math.hypot(host.center[0], host.center[1], host.center[2]));
+    const sc = blackbody(view.star.temperature || 5800, _bb);
+    (u.uSunE.value as Vector3).set(sc[0] * E, sc[1] * E, sc[2] * E);
+    mb.group.position.set(host.center[0] - pose.pos[0], host.center[1] - pose.pos[1], host.center[2] - pose.pos[2]);
+    // entry streaks behind the burning pieces (the same placement as the shader's)
+    const R = host.params.radius, Rm = moon.params.radius;
+    for (let k = 0; k < STREAKS; k++) {
+      const P = mb.params;
+      const side = P[k * 8], along = P[k * 8 + 1], jr = P[k * 8 + 2], jh = P[k * 8 + 3], size = P[k * 8 + 4], onset = P[k * 8 + 5];
+      const q = Math.max(0, Math.min(1, (brk - 0.6 * onset) / Math.max(1e-3, 1 - 0.6 * onset)));
+      const dth = side * (Rm / dm * 1.05 + q * along * 0.9);
+      const r = side > 0 ? Math.max(R + 20, R + (dm - R) * (1 - q * along * 0.98) + jr * Rm * 0.3) : dm * (1 + q * along * 0.25) + jr * Rm * 0.45;
+      const h = jh * Rm * 0.55 * (1 - 0.4 * q);
+      const cx = (Math.cos(dth) * e1.x + Math.sin(dth) * e2.x) * r + nrm.x * h;
+      const cy = (Math.cos(dth) * e1.y + Math.sin(dth) * e2.y) * r + nrm.y * h;
+      const cz = (Math.cos(dth) * e1.z + Math.sin(dth) * e2.z) * r + nrm.z * h;
+      const alt = Math.hypot(cx, cy, cz) - R;
+      const heat = airTop > 0 ? Math.max(0, Math.min(1, (airTop * 1.3 - alt) / (airTop * 1.2))) * q : 0;
+      const st = mb.streaks[k];
+      st.visible = heat > 0.05;
+      if (!st.visible) continue;
+      st.position.set(host.center[0] + cx - pose.pos[0], host.center[1] + cy - pose.pos[1], host.center[2] + cz - pose.pos[2]);
+      st.scale.setScalar(Math.max(size * 6, 25) * (0.6 + 0.4 * heat));
+      // the tail streams back along the piece's path (opposite its motion along the orbit at its place)
+      const tx = -(-Math.sin(dth) * e1.x + Math.cos(dth) * e2.x), ty = -(-Math.sin(dth) * e1.y + Math.cos(dth) * e2.y), tz = -(-Math.sin(dth) * e1.z + Math.cos(dth) * e2.z);
+      _bD.set(tx, ty, tz).applyQuaternion(camQuatInv);
+      const l = Math.hypot(_bD.x, _bD.y) || 1;
+      const su = (st.material as ShaderMaterial).uniforms;
+      (su.uDir.value as Vector2).set(_bD.x / l, _bD.y / l);
+      su.uOffset.value = 0.85;
+      su.uK.value = heat;
+      su.uTime.value = time % 1000;
+    }
+  }
+
+  private disposeCrack(id: number, cv: CrackVis): void {
+    for (const m of [cv.mesh, cv.vents, cv.glow]) m?.parent?.remove(m);
+    cv.mesh.geometry.dispose(); cv.mat.dispose();
+    cv.vents?.geometry.dispose(); cv.ventMat?.dispose(); cv.glowMat?.dispose();
+    this.cracks.delete(id);
+  }
+
+  private disposeBreak(id: number, mb: MoonBreak): void {
+    mb.group.parent?.remove(mb.group);
+    mb.mesh.geometry.dispose();
+    mb.mat.dispose();
+    for (const st of mb.streaks) { st.parent?.remove(st); (st.material as ShaderMaterial).dispose(); }
+    this.breaks.delete(id);
   }
 
   private burst(kind: 'erase' | 'birth' | 'strike', planet: number, sys: D3, R: number, time: number, moon: boolean, up: D3 | null = null): void {
@@ -879,7 +1467,7 @@ export class WorldFx {
       const [flash, ring] = b.glows;
       // (the flash is over in a few seconds: its faint tail, filling the frame of an eye that stood near the world,
       // would otherwise be lifted to a beige haze by the exposure of the dark sky)
-      const fk = t < 1.4 ? 0 : Math.exp(-(t - 1.4) * 2.2) * Math.max(0, Math.min(1, (4.4 - t) / 1.5));
+      const fk = t < 1.4 ? 0 : Math.exp(-(t - 1.4) * 4) * Math.max(0, Math.min(1, (3.0 - t) / 0.8));
       flash.scale.setScalar(b.R * (2 + 5 * Math.min(1, (t - 1.2) * 2)));
       (flash.material as ShaderMaterial).uniforms.uK.value = Math.max(0, fk) * 6;
       flash.visible = t > 1.2;
@@ -951,7 +1539,12 @@ export class WorldFx {
     this.hasExposure.value = FX_EXPOSURE.value ? 1 : 0;
     this.uniformsShared.tSceneDepth.value = depth;
     this.uniformsShared.uResolution.value.set(w, h);
-    for (const rv of this.rings.values()) { rv.dustMat.uniforms.tSceneDepth.value = depth; (rv.dustMat.uniforms.uResolution.value as Vector2).set(w, h); }
+    for (const rv of this.rings.values()) {
+      rv.dustMat.uniforms.tSceneDepth.value = depth; (rv.dustMat.uniforms.uResolution.value as Vector2).set(w, h);
+      rv.rockMat.uniforms.uResY.value = h;
+      // view → ring frame (the ring group's world matrix is current: placed this frame)
+      (rv.shadowMat.uniforms.uViewToRing.value as Matrix4).copy(rv.group.matrixWorld).invert().multiply(camera.matrixWorld);
+    }
     if (!this.rings.size && !this.bursts.length && !this.moonGlows.size) return;
     const prevAuto = renderer.autoClear;
     const prevMask = camera.layers.mask;
@@ -972,16 +1565,19 @@ export class WorldFx {
   detail(): Record<string, unknown> {
     const glow = (m: Mesh) => ({ visible: m.visible, k: +(m.material as ShaderMaterial).uniforms.uK.value.toFixed(3), scale: Math.round(m.scale.x), dist: Math.round(m.position.length()) });
     return {
-      moons: [...this.moonGlows].map(([id, g]) => ({ id, shell: glow(g.shell), tail: glow(g.tail) })),
+      moons: [...this.moonGlows].map(([id, g]) => ({ id, shell: glow(g.shell), tail: glow(g.tail), face: glow(g.face) })),
+      breaks: [...this.breaks].map(([id, b]) => ({ id, b: +(b.mat.uniforms.uB.value as number).toFixed(3), burning: b.streaks.filter((st) => st.visible).length })),
       bursts: this.bursts.map((b) => ({ kind: b.kind, planet: b.planet, R: Math.round(b.R), tick0: Math.round(b.tick0) })),
       rings: [...this.rings.keys()], cracks: [...this.cracks.keys()],
     };
   }
 
   dispose(): void {
-    for (const rv of this.rings.values()) { for (const m of rv.rocks) m.geometry.dispose(); rv.rockMat.dispose(); rv.dustMat.dispose(); rv.dust.geometry.dispose(); }
-    for (const cv of this.cracks.values()) { cv.mesh.geometry.dispose(); cv.mat.dispose(); }
+    for (const rv of this.rings.values()) { for (const m of rv.rocks) m.geometry.dispose(); rv.rockMat.dispose(); rv.dustMat.dispose(); rv.dust.geometry.dispose(); rv.shadow.geometry.dispose(); rv.shadowMat.dispose(); }
+    for (const [id, cv] of this.cracks) this.disposeCrack(id, cv);
     for (const b of this.bursts) this.disposeBurst(b);
+    for (const [id, mb] of this.breaks) this.disposeBreak(id, mb);
+    this.rockGeo?.dispose();
     this.glowGeo.dispose();
     this.sphereGeo.dispose();
   }

@@ -3,7 +3,7 @@
   "recipes": [
     { "id": "foraging", "name": "Foraging lore", "kind": "gather", "inputs": [], "tools": [], "place": {}, "knowledge": [], "outputs": [], "time": 0, "skill": "gather",
       "discover": { "base": 0.25, "triggers": ["grass", "berries"], "curiosity": 0.2 }, "teach": 0.05, "era": "stone", "enables": ["forage"],
-      "gather": { "task": "forage", "items": ["berries", "wild-grain", "roots", "nuts", "herbs", "honey", "fiber", "reeds", "stick"] } },
+      "gather": { "task": "forage", "items": ["berries", "wild-grain", "roots", "nuts", "herbs", "honey", "fiber", "reeds", "stick", "apples", "figs", "dates", "olives", "mushrooms", "cotton"] } },
     { "id": "woodcutting", "name": "Woodcutting", "kind": "gather", "inputs": [], "tools": [], "place": {}, "knowledge": [], "outputs": [], "time": 0, "skill": "gather",
       "discover": { "base": 0.25, "triggers": ["forest", "wood"], "curiosity": 0.2 }, "teach": 0.05, "era": "stone", "enables": ["chop"],
       "gather": { "task": "chop", "items": ["wood", "stick", "bark", "resin"] } },
@@ -133,7 +133,7 @@
       "discover": { "base": 0.05, "triggers": ["kiln"], "curiosity": 0.4 }, "teach": 0.3, "era": "bronze" },
     { "id": "mining", "name": "Mining", "kind": "gather", "inputs": [], "tools": [], "place": {}, "knowledge": ["copper-smelting"], "outputs": [{ "building": "mine" }], "time": 0, "skill": "gather",
       "discover": { "base": 0.03, "triggers": ["mountain", "copper", "tin", "iron"], "curiosity": 0.4 }, "teach": 0.3, "era": "bronze", "enables": ["mine"],
-      "gather": { "task": "mine", "items": ["copper-ore", "tin-ore", "iron-ore", "coal", "gold", "silver", "sulfur", "saltpeter", "obsidian", "flint", "crude-oil", "salt"] } },
+      "gather": { "task": "mine", "items": ["copper-ore", "tin-ore", "iron-ore", "coal", "gold", "silver", "sulfur", "saltpeter", "obsidian", "flint", "crude-oil", "salt", "gemstones"] } },
     { "id": "tin-smelting", "name": "Tin smelting", "kind": "craft", "inputs": [{ "item": "tin-ore", "qty": 2 }, { "item": "charcoal", "qty": 1 }], "tools": [], "place": { "needs": ["kiln"], "heat": 1000 }, "knowledge": ["copper-smelting"], "outputs": [{ "item": "tin", "qty": 1 }], "time": 200, "skill": "smith", "difficulty": 0.4,
       "discover": { "base": 0.02, "triggers": ["tin"], "curiosity": 0.6 }, "teach": 0.4, "era": "bronze", "secret": 0.4 },
     { "id": "bronze", "name": "Bronze", "kind": "craft", "inputs": [{ "item": "copper", "qty": 2 }, { "item": "tin", "qty": 1 }, { "item": "charcoal", "qty": 1 }], "tools": [], "place": { "needs": ["furnace"], "heat": 1000 }, "knowledge": ["copper-smelting", "tin-smelting"], "outputs": [{ "item": "bronze", "qty": 3 }], "time": 240, "skill": "smith", "difficulty": 0.5,
@@ -320,6 +320,11 @@
     {"id": "pressure-suits", "name": "Pressure suits", "kind": "craft", "desc": "Sealed clothes with a glass face and air of your own: breath and warmth on a world that gives neither.", "inputs": [{"item": "cloth", "qty": 4},{"item": "leather", "qty": 2},{"item": "glass", "qty": 1},{"item": "steel", "qty": 1}], "tools": [], "place": {"needs": ["workshop"]}, "knowledge": ["chemistry", "glassmaking", "tailoring"], "outputs": [{"item": "pressure-suit", "qty": 1}], "time": 420, "skill": "craft", "difficulty": 0.5, "discover": {"base": 0.004, "triggers": ["lab", "launchpad"], "curiosity": 0.8}, "teach": 0.5, "era": "space"},
     {"id": "habitat-domes", "name": "Habitat domes", "kind": "build", "desc": "A sealed dome of glass and concrete holding the air (and the warmth or cold) of home.", "inputs": [], "tools": [], "place": {}, "knowledge": ["pressure-suits", "concrete", "glassmaking"], "outputs": [{"building": "habitat-dome"}], "time": 0, "skill": "build", "discover": {"base": 0.01, "triggers": ["launchpad", "lab"], "curiosity": 0.7}, "teach": 0.55, "era": "space"},
     {"id": "gate-theory", "name": "Folded space", "kind": "idea", "desc": "Space can be folded so two places touch: the theory of the gate.", "inputs": [], "tools": [], "place": {}, "knowledge": ["orbital-rocket", "electricity", "mathematics"], "outputs": [], "time": 0, "skill": "lore", "difficulty": 0.9, "discover": {"base": 0.0008, "triggers": ["comet", "eclipse", "flare", "observatory"], "curiosity": 1}, "teach": 0.85, "era": "space"},
-    {"id": "star-gates", "name": "Star gates", "kind": "build", "desc": "A ring of steel and lightning that folds space: step through it and stand on another world.", "inputs": [], "tools": [], "place": {}, "knowledge": ["gate-theory", "dynamo"], "outputs": [{"building": "star-gate"}], "time": 0, "skill": "build", "discover": {"base": 0.02, "triggers": ["launchpad", "lab"], "curiosity": 0.9}, "teach": 0.8, "era": "space"}
+    {"id": "star-gates", "name": "Star gates", "kind": "build", "desc": "A ring of steel and lightning that folds space: step through it and stand on another world.", "inputs": [], "tools": [], "place": {}, "knowledge": ["gate-theory", "dynamo"], "outputs": [{"building": "star-gate"}], "time": 0, "skill": "build", "discover": {"base": 0.02, "triggers": ["launchpad", "lab"], "curiosity": 0.9}, "teach": 0.8, "era": "space"},
+    { "id": "olive-pressing", "name": "Pressing olives", "kind": "craft", "inputs": [{ "item": "olives", "qty": 6 }], "tools": ["pound"], "place": {}, "knowledge": ["pottery"], "outputs": [{ "item": "olive-oil", "qty": 1 }], "time": 120, "skill": "cook", "difficulty": 0.2,
+      "discover": { "base": 0.03, "triggers": ["store"], "curiosity": 0.5 }, "teach": 0.25, "era": "clay", "desc": "Crushing olives in a stone press and settling the oil in jars: a food that keeps, and light for the lamps." },
+    { "id": "uranium-mining", "name": "Mining uranium", "kind": "gather", "inputs": [], "tools": [], "place": {}, "knowledge": ["electricity", "mining"], "outputs": [], "time": 0, "skill": "gather",
+      "discover": { "base": 0.01, "triggers": ["uranium"], "curiosity": 0.8 }, "teach": 0.4, "era": "electric", "desc": "Digging the heavy yellow-green ore that darkens photographic plates.",
+      "gather": { "task": "mine", "items": ["uranium-ore"] } }
   ]
 }

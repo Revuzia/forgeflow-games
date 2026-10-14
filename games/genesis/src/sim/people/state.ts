@@ -305,6 +305,16 @@ export interface Settlement {
   leaderSince: number;
   /** worship generated per god since founding (CONTRACT §8.8) */
   worshipBy: number[];
+  /**
+   * LIVING LAND (LIVING.md §2): how it lives off the land — the ledger of its years, its hunting party, its crop fields on
+   * the seasonal clock, its gatherings (people/ledger.ts LandState; made the first time it is touched: landOf)
+   */
+  land?: import('./ledger.ts').LandState;
+  /**
+   * LIVING HISTORY (LIVING.md §5.1, §5.2): its grievance against its capital, its kin, its era clock and era label
+   * (people/politics.ts HistState; made the first time it is touched: histOf — absent in older saves)
+   */
+  hist?: import('./politics.ts').HistState;
 }
 
 /** fill the society fields of a settlement saved before they existed (and of fresh objects built elsewhere) */
@@ -420,6 +430,8 @@ export interface PeopleJson {
   worship?: number[];
   firsts?: Record<string, number>;
   pending?: { sid: number; kind: string; mag: number; god: number }[];
+  /** LIVING LAND: the world's fish stocks in its rivers, lakes and seas (people/ledger.ts LandWorld; absent until fished) */
+  land?: import('./ledger.ts').LandWorld;
 }
 
 const NO_BUILDINGS: readonly Building[] = Object.freeze([]) as readonly Building[];
@@ -453,6 +465,8 @@ export class PeopleState {
   firsts: Record<string, number> = {};
   /** god acts witnessed since the last step, waiting to be read by the settlements that saw them (chronicle) */
   pending: { sid: number; kind: string; mag: number; god: number }[] = [];
+  /** LIVING LAND: the world's fish stocks (people/ledger.ts landWorld; null until the first fishing session) */
+  land: import('./ledger.ts').LandWorld | null = null;
   /** the tick the peoples system is at (transient: set by every step and command; hooks without a universe read it) */
   now = 0;
 
@@ -516,6 +530,7 @@ export class PeopleState {
       worship: this.worship.slice(),
       firsts: { ...this.firsts },
       pending: this.pending.map((r) => ({ ...r })),
+      ...(this.land ? { land: JSON.parse(JSON.stringify(this.land)) as import('./ledger.ts').LandWorld } : {}),
     };
   }
 
@@ -540,6 +555,7 @@ export class PeopleState {
     ps.worship = (j.worship ?? [0, 0, 0, 0]).slice();
     ps.firsts = { ...(j.firsts ?? {}) };
     ps.pending = (j.pending ?? []).map((r) => ({ ...r }));
+    ps.land = j.land ? (JSON.parse(JSON.stringify(j.land)) as import('./ledger.ts').LandWorld) : null;
     for (const st of ps.settlements) normaliseSettlement(st);
     return ps;
   }

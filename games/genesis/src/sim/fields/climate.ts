@@ -995,7 +995,18 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
       if (airy) {
         const veg = tree[c] + 0.6 * grass[c] + 0.5 * shrub[c] + 0.6 * crop[c];
         const et = 0.0009 * Math.min(1.3, Math.max(0.03, (T + 5) * INV_30)) * (0.4 + veg) * (1 - 0.7 * q[c]);
-        moisture[c] = Math.max(0, moisture[c] - et / cap * 0.25 * H);
+        // (LIVING CONTENT §4.5: plants draw less from a drier soil — below SOIL_BALANCE.dry their draw falls with the
+        // water left — and a soil wetter than field capacity drains to the aquifer below; without both every soil ran to
+        // saturation or to dust, whichever its rain favoured, and willow swamps spread for years after a world was made)
+        const m0 = moisture[c];
+        const beta = m0 >= SOIL_BALANCE.dry ? 1 : m0 / SOIL_BALANCE.dry;
+        let m1 = m0 - et / cap * SOIL_BALANCE.et * beta * H;
+        if (m1 > SOIL_BALANCE.fc && SOIL_BALANCE.perc > 0) {
+          const d = (m1 - SOIL_BALANCE.fc) * (H === 1 ? SOIL_BALANCE.perc : 1 - Math.pow(1 - SOIL_BALANCE.perc, H));
+          m1 -= d;
+          aquifer[c] += d * cap;
+        }
+        moisture[c] = m1 < 0 ? 0 : m1;
         // the banks of fresh water stay moist (seepage): green strips along desert rivers, oases round desert lakes
         // (the riparian flags are this pass's: compounded over the hours it stands for, soilHour leaves them out)
         if (rip[c] && moisture[c] < RIPARIAN) moisture[c] += (RIPARIAN - moisture[c]) * kRip;
@@ -1080,6 +1091,18 @@ function soilKernel(
 }
 
 const SOLAR = 1361;
+
+/**
+ * LIVING CONTENT (§4.5): the soil's water balance. `et` scales how much of the plants' evapotranspiration comes out of
+ * the soil each hour; below `dry` the plants draw less, in proportion to the water left (a dry soil holds its last
+ * water); above field capacity `fc` the soil drains to the aquifer (`perc` of the excess an hour). Before (et 0.25, no
+ * dry, no drainage) every soil ran to saturation or to dust, whichever its rain favoured, and a world's soils drifted
+ * for years after it was built (saturated ground +194-324 % in three years, willow +376-562 %, oak −66-80 %). `spin`
+ * days of each land cell's bucket are run when a world is built (spinUpSoil: `rk` × the climate's rain + `rw` mm/h of
+ * the weather's, a plant cover of `veg`), so the plants are sown on the soil the climate keeps. Measured in
+ * `_harness/scratch/living/content/live/etprobe.ts` and `content.ts ecology` (_spec/LIVING.md §4.7).
+ */
+export const SOIL_BALANCE = { et: 0.25, dry: 0.5, fc: 0.72, perc: 0.02, spin: 365, rk: 3, rw: 0.07, veg: 0.9 };
 
 /**
  * The altitude datum of the lapse rate (m): fixed at generation — the sea level of a world with seas, the mean ground
@@ -1269,7 +1292,46 @@ export function initClimate(u: Universe, p: Planet): void {
   seedSwings(p, sc, qHi, qLo, dust, airy ? greenhouse(p, 0.62) : greenhouse(p, 0));
   // one day of hourly steps so the sky, winds and day-night state are alive at tick 0 (it measures the day's swing)
   for (let k = steps; k >= 1; k--) climateStep(u, p, -k * CLIMATE_CADENCE);
+  if (airy && SOIL_BALANCE.spin > 0) spinUpSoil(p, SOIL_BALANCE.spin);
   p.updAllSurface();
+}
+
+/**
+ * LIVING CONTENT (§4.5): the soil's water spun up before plants are sown. The analytic estimate above (latitude, coast,
+ * noise) is blind to where the climate rains — over a world's first year the rainiest third of its land ran from 0.61 to
+ * 0.75-0.97 moisture while the estimate was uncorrelated with the year's rain (r 0.03; `_harness/scratch/living/content/
+ * live/rainprobe.ts`) — so willows took the oak country for years after the world was made. This runs each land cell's
+ * soil bucket for `days` days, a day at a time: the climate's rain (its mean over the spin-up hours, × `rk`, plus `rw` mm/h
+ * of the weather systems' rain the build has none of yet) soaks in up to field capacity, the plants (a full cover) draw
+ * it as the running model does (SOIL_BALANCE), the excess drains. No lateral flow: rivers and seeps keep their own banks.
+ */
+export function spinUpSoil(p: Planet, days: number): void {
+  const f = p.f, s = p.s, cfg = p.cfg;
+  if (cfg.infiltration <= 0) return;
+  const freeze = p.st.liquid.freeze;
+  const B = SOIL_BALANCE;
+  const rainK = (cfg.rainScale / 1000) * 24; // mm/h -> m per day
+  for (let c = 0; c < p.count; c++) {
+    if (s.ocean[c] || f.water[c] >= 0.05) continue;
+    const T = s.tempYear[c];
+    if (T <= freeze) continue;
+    const so = f.soil[c], sa = f.sand[c];
+    const cap = 0.4 * (so + sa + 0.08);
+    const perm = 0.004 * (0.25 + Math.min(1, so) + 2.5 * Math.min(1, sa)) * cfg.infiltration * 24;
+    const rain = (s.precipMean[c] * B.rk + B.rw) * rainK;
+    const et = 0.0009 * Math.min(1.3, Math.max(0.03, (T + 5) * INV_30)) * (0.4 + B.veg) * (1 - 0.7 * f.humidity[c]) * 24 * B.et;
+    let m = f.moisture[c];
+    for (let d = 0; d < days; d++) {
+      const inf = Math.min(rain, perm * (1.15 - m));
+      if (inf > 0) m += inf / cap;
+      if (m > 1) m = 1;
+      const beta = m >= B.dry ? 1 : m / B.dry;
+      m -= (et / cap) * beta;
+      if (m > B.fc && B.perc > 0) m -= (m - B.fc) * (1 - Math.pow(1 - B.perc, 24));
+      if (m < 0) m = 0;
+    }
+    f.moisture[c] = Math.max(0.02, m);
+  }
 }
 
 /**

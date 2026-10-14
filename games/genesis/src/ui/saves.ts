@@ -4,8 +4,9 @@
 // interval is a setting, here and in Settings). The god's own "save" / "load" acts (meta.save / meta.load) land here.
 //
 // A save needs the packs its world was made with (the sim refuses it without them, in words). A slot keeps those packs'
-// JSON beside the bytes, and a file exported from a world with packs is a bundle (.genesis: the packs, then the save) —
-// so a save always carries what it needs. A plain save (.gnss) whose packs are nowhere — not in this world, not in the
+// JSON beside the bytes, and an exported file is always a bundle (.genesis: its name, calendar, summary and picture, the
+// packs, then the save) — so a save always carries what it needs, and an imported one reads as it did when kept. A
+// slot's calendar is the world's own date at the saved tick (not the screen's clock, which runs a moment behind). A plain save (.gnss) whose packs are nowhere — not in this world, not in the
 // slot, not in the mod library — is refused with the packs named and the way to load them. A save that needs a
 // different set of packs than this world runs with (one of ours would change what it holds) opens in a fresh simulation
 // (the page reloads into it, ?load=<slot>), made with exactly its packs.
@@ -14,6 +15,7 @@ import type { ContentPack } from '../sim/content.ts';
 import { SAVE_MAJOR, SAVE_MINOR } from '../sim/core/serialize.ts';
 import type { UiHost } from './host.ts';
 import type { ModLibrary } from './mods.ts';
+import { ver } from './mods.ts';
 import { Panel } from './panel.ts';
 import { h, clear, download } from './dom.ts';
 import { icon } from './icons.ts';
@@ -63,6 +65,9 @@ export interface SaveHeader {
   /** how long the world had been living ("day 12 of this world"); a bundle carries the world's own calendar */
   calendar: string;
   version: string;
+  /** the individuals living and the settlements standing when it was kept (a plain file's summary) */
+  living: number;
+  settlements: number;
 }
 
 /** the header of a save (GNSS) without its bulk arrays; throws a readable error for anything that is not one */
@@ -81,7 +86,12 @@ export function readSaveHeader(buf: ArrayBuffer): SaveHeader {
   if (12 + hlen > bytes.length) throw new Error('The save is cut short (its header is incomplete): the file was not copied whole.');
   let j: Record<string, unknown>;
   try { j = JSON.parse(new TextDecoder().decode(bytes.subarray(12, 12 + hlen))) as Record<string, unknown>; } catch { throw new Error('The save is damaged: its header cannot be read.'); }
-  const planets = (j.planets as { name?: string; st?: { dayHours?: number; orbit?: { parent?: number; period?: number } } }[] | undefined) ?? [];
+  const planets = (j.planets as { name?: string; st?: { dayHours?: number; orbit?: { parent?: number; period?: number } }; people?: { agents?: { count?: number }; settlements?: { fallen?: number }[] } }[] | undefined) ?? [];
+  let living = 0, settlements = 0;
+  for (const p of planets) {
+    living += Number(p.people?.agents?.count) || 0;
+    settlements += (p.people?.settlements ?? []).filter((st) => (st.fallen ?? -1) < 0).length;
+  }
   const tick = Number(j.tick) || 0;
   let calendar = '';
   // (the world's own calendar starts wherever its orbit put it: the header says only how long it has lived)
@@ -93,8 +103,16 @@ export function readSaveHeader(buf: ArrayBuffer): SaveHeader {
     packs: Array.isArray(j.packs) ? (j.packs as PackRef[]) : [],
     // (the worlds, not their moons)
     worlds: planets.filter((p) => (p.st?.orbit?.parent ?? -1) < 0).map((p) => p.name ?? '?'),
-    calendar, version: `${major}.${minor}`,
+    calendar, version: `${major}.${minor}`, living, settlements,
   };
+}
+
+/** a plain save's summary from its header ("312 living · 4 settlements") */
+export function headerSummary(hd: SaveHeader): string {
+  const parts: string[] = [];
+  if (hd.living) parts.push(`${hd.living} living`);
+  if (hd.settlements) parts.push(`${hd.settlements} settlement${hd.settlements > 1 ? 's' : ''}`);
+  return parts.join(' · ');
 }
 
 /** packs a save needs that are not part of the save itself (the base, the god's inventions travel inside it) */
@@ -300,7 +318,8 @@ export class Saves {
 
   private row(m: SaveMeta): HTMLDivElement {
     const when = new Date(m.date);
-    const packs = m.packs.length ? ` · ${m.packs.length === 1 ? `+ ${m.packs[0].name}` : `+ ${m.packs.length} packs`}` : '';
+    // the content packs the world needs, by name and id (a save opens only where they are)
+    const packList = m.packs.map((p) => `${p.name}${p.name !== p.id ? ` (${p.id}${p.version ? ` ${ver(p.version)}` : ''})` : p.version ? ` ${ver(p.version)}` : ''}`);
     const del = h('button', { class: 'gn-btn', title: 'Delete', aria: { label: `Delete ${m.name}` }, html: icon('close') });
     const acts = h('div', { class: 'gn-save-acts' },
       h('button', { class: 'gn-btn gn-btn-gold', text: 'Load', on: { click: () => void this.loadSlot(m.id) } }),
@@ -319,20 +338,21 @@ export class Saves {
       h('div', { class: 'gn-save-t' },
         h('div', { class: 'gn-save-name', text: m.name }),
         h('div', { class: 'gn-save-cal', text: [m.world, m.calendar].filter(Boolean).join(' · ') }),
-        h('div', { class: 'gn-save-sub', text: `${m.worlds.length > 1 ? `${m.worlds.filter((x) => x !== m.world).join(', ')} · ` : ''}${scenarioName(m.scenario)} · seed ${m.seed}${packs}` }),
+        h('div', { class: 'gn-save-sub', text: `${m.worlds.length > 1 ? `${m.worlds.filter((x) => x !== m.world).join(', ')} · ` : ''}${scenarioName(m.scenario)} · seed ${m.seed}` }),
+        packList.length ? h('div', { class: 'gn-save-sub gn-save-packs', title: packList.join('\n'), text: `with ${packList.join(', ')}` }) : null,
         h('div', { class: 'gn-save-sub gn-save-dim', text: `${m.summary ? `${m.summary} · ` : ''}${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${(m.size / 1048576).toFixed(1)} MB` })),
       acts);
   }
 
-  /** what this moment is: the world on screen, its calendar, how many live */
-  private describe(): { world: string; worlds: string[]; calendar: string; summary: string } {
+  /** what this moment is: the world on screen, its calendar at the saved tick (else the screen's), how many live */
+  private describe(tick?: number): { world: string; worlds: string[]; calendar: string; summary: string } {
     const v = this.host.view;
     const pv = v.planet(this.host.primary());
     let pop = 0, towns = 0;
     for (const p of v.planets) { for (const n of p.population) pop += n; towns += p.settlements.filter((s) => !(s.flags & 2)).length; }
     let calendar = '';
     if (pv) {
-      const c = v.calendar(pv);
+      const c = v.calendar(pv, tick ?? v.renderTick);
       const hh = Math.floor(c.hour), mm = Math.floor((c.hour - hh) * 60);
       calendar = `Year ${c.year} · ${c.season.toLowerCase()} · day ${c.day} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
     }
@@ -354,7 +374,7 @@ export class Saves {
       const need = new Set(neededPacks(hdr));
       const packJson = this.deps.packs().filter((p) => need.has(p.id));
       const w = this.deps.world();
-      await this.store.put({ id, name, scenario: hdr.scenario || w.scenario, seed: hdr.seed, tick: hdr.tick, date: Date.now(), ...this.describe(), thumb, size: bytes.byteLength, packs: hdr.packs.filter((p) => need.has(p.id)), packJson, auto, bytes });
+      await this.store.put({ id, name, scenario: hdr.scenario || w.scenario, seed: hdr.seed, tick: hdr.tick, date: Date.now(), ...this.describe(hdr.tick), thumb, size: bytes.byteLength, packs: hdr.packs.filter((p) => need.has(p.id)), packJson, auto, bytes });
       this.last = { ok: true, msg: name };
       if (!quiet) { this.host.toast({ text: `Kept: ${name}.`, kind: 'info' }); this.host.sound('save.kept'); }
       if (this.isOpen) { this.alert('ok', `Kept: ${name}.`); void this.refresh(); }
@@ -436,9 +456,8 @@ export class Saves {
     const r = await this.store.get(id).catch(() => undefined);
     if (!r) { this.alert('bad', 'That save is gone.'); return; }
     const packs = r.packJson ?? [];
-    // a world with packs goes out as a bundle (it carries them, and its picture and date); one without as a plain save
-    if (packs.length) download(this.fileName(r, 'genesis'), bundle(r.bytes, packs, { name: r.name, thumb: r.thumb, calendar: r.calendar, summary: r.summary, world: r.world }), 'application/octet-stream');
-    else download(this.fileName(r, 'gnss'), r.bytes, 'application/octet-stream');
+    // always a bundle: the packs it needs (if any), and its name, date, summary and picture — an import reads as it did
+    download(this.fileName(r, 'genesis'), bundle(r.bytes, packs, { name: r.name, thumb: r.thumb, calendar: r.calendar, summary: r.summary, world: r.world }), 'application/octet-stream');
     this.alert('ok', `Exported ${r.name}${packs.length ? ` with the pack${packs.length > 1 ? 's' : ''} it needs` : ''}.`);
   }
 
@@ -449,9 +468,9 @@ export class Saves {
     const hdr = readSaveHeader(bytes);
     const need = new Set(neededPacks(hdr));
     const packs = this.deps.packs().filter((p) => need.has(p.id));
-    const d = this.describe();
-    if (packs.length) download(this.fileName({ name: d.calendar, world: d.world }, 'genesis'), bundle(bytes, packs, { name: d.calendar, calendar: d.calendar, summary: d.summary, world: d.world }), 'application/octet-stream');
-    else download(this.fileName({ name: d.calendar, world: d.world }, 'gnss'), bytes, 'application/octet-stream');
+    const d = this.describe(hdr.tick);
+    const thumb = await this.deps.thumb().catch(() => null);
+    download(this.fileName({ name: d.calendar, world: d.world }, 'genesis'), bundle(bytes, packs, { name: d.calendar, thumb, calendar: d.calendar, summary: d.summary, world: d.world }), 'application/octet-stream');
   }
 
   /** a file from outside: read it, keep it (with the packs it carries), open it */
@@ -468,12 +487,15 @@ export class Saves {
     const name = m.name || f.name.replace(/\.(gnss|genesis)$/i, '');
     const rec: SaveRecord = {
       id: `s${Date.now().toString(36)}`, name, scenario: hdr.scenario, seed: hdr.seed, tick: hdr.tick, date: Date.now(),
-      world: m.world ?? hdr.worlds[0] ?? '', worlds: hdr.worlds, calendar: m.calendar ?? hdr.calendar, summary: m.summary ? `${m.summary} · imported` : 'imported', thumb: m.thumb ?? null, size: parts.save.byteLength,
+      world: m.world ?? hdr.worlds[0] ?? '', worlds: hdr.worlds, calendar: m.calendar ?? hdr.calendar, summary: [m.summary ?? headerSummary(hdr), 'imported'].filter(Boolean).join(' · '), thumb: m.thumb ?? null, size: parts.save.byteLength,
       packs: hdr.packs.filter((p) => need.has(p.id)), packJson: parts.packs.filter((p) => need.has(p.id)), bytes: parts.save,
     };
-    // kept before it is opened, so a fresh world can be made for it if this one cannot take it
+    // kept before it is opened, so a fresh world can be made for it if this one cannot take it (and a save refused for
+    // a missing pack stays in the list, its packs named, to open once they are loaded)
     await this.store.put(rec).catch(() => null);
-    return this.loadRecord(rec);
+    const ok = await this.loadRecord(rec);
+    if (!ok && this.isOpen) void this.refresh();
+    return ok;
   }
 
   /** autosave on its timer (called every frame) */

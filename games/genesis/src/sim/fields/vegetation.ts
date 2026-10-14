@@ -187,6 +187,7 @@ export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
   const fertility = f.fertility, pollution = f.pollution, blight = f.blight;
   const growth = t.growth, deciduous = t.deciduous, spread = t.spread;
   const cropA = f.crop, grassSp = f.grassSpecies, shrubSp = f.shrubSpecies, treeSp = f.treeSpecies;
+  const cropSp = f.cropSpecies, nitro = t.nitrogen && t.nitrogen.some((v) => v > 0) ? t.nitrogen : null;
   const wDead = drownDepth(t);
   ENV[E_TOTAL] = 0;
   // a lifeless world has nothing to grow or seed: only the derived fields need refreshing
@@ -310,6 +311,8 @@ export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
       const soilF = Math.min(1, (soil[c] + 0.2 * ash[c]) / 0.5);
       let fert = soilF * (0.3 + 0.7 * mo) * (1 - 0.8 * sal);
       if (ash[c] > 0.01 && mo > 0.2) fert += 0.25 * Math.min(1, ash[c] / 0.15);
+      // (LIVING CONTENT: a field of a crop that feeds the soil — lentils, plants.json `nitrogen` — is richer while it grows)
+      if (nitro && cropA[c] > 0.03 && cropSp[c] >= 0 && nitro[cropSp[c]]) fert += 0.2;
       fert -= 0.5 * pollution[c];
       fertility[c] = fert < 0 ? 0 : fert > 1 ? 1 : fert;
     }

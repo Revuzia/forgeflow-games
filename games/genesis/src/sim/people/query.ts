@@ -19,13 +19,19 @@ import { speciesCount } from '../life/herds.ts';
 import { musicOf, styleVariant } from './culture.ts';
 import { leaderTitle } from './social.ts';
 import { animalDef, herdPos } from '../life/herds.ts';
+import { ledgerQuery } from './ledger.ts';
+import { eraClock, labelOf } from './eras.ts';
+import { grievanceView } from './politics.ts';
 
 export const PEOPLE_QUERIES = ['agent', 'agents', 'settlement', 'settlements', 'species', 'recipes', 'knowledge', 'buildings', 'building', 'herds', 'animals', 'items', 'materials',
-  'polities', 'relations', 'missions', 'prices', 'ecology', 'diseases'];
+  'polities', 'relations', 'missions', 'prices', 'ecology', 'diseases',
+  // LIVING LAND: the books of how each settlement lives off the land, year by year (people/ledger.ts)
+  'ledger'];
 
 export function peopleQuery(u: Universe, p: Planet, q: string, args: Record<string, unknown>): unknown {
   const x = makeCtx(u, p);
   switch (q) {
+    case 'ledger': return ledgerQuery(x, args);
     case 'agent': return agentBio(x, Number(args.id));
     case 'agents': return agentList(x, args);
     case 'settlement': return settlementInfo(x, Number(args.id));
@@ -49,7 +55,11 @@ export function peopleQuery(u: Universe, p: Planet, q: string, args: Record<stri
     });
     case 'polities': return x.ps.polities.filter((pl) => pl.capital >= 0).map((pl) => ({
       id: pl.id, name: polityName(x, pl), capital: pl.capital, overlord: pl.overlord,
-      settlements: x.ps.settlements.filter((st) => st.polity === pl.id && st.fallen < 0 && !st.band).map((st) => ({ id: st.id, name: st.name })),
+      // (LIVING HISTORY: each town's grievance against the capital — 0..1, secession above 0.6 — and its parts)
+      settlements: x.ps.settlements.filter((st) => st.polity === pl.id && st.fallen < 0 && !st.band).map((st) => {
+        const g = grievanceView(x, st);
+        return { id: st.id, name: st.name, eraLabel: labelOf(x, st), ...(g ? { grievance: g.grievance, why: g.why } : {}) };
+      }),
       enemies: enemiesOf(x, pl.id), strength: Math.round(polityStrength(x, pl.id) * 10) / 10,
     }));
     case 'relations': return x.ps.relations.map((r) => ({
@@ -227,6 +237,8 @@ function settlementInfo(x: PCtx, id: number): unknown {
     roles, fields: st.fields.length, crop: st.crop >= 0 ? x.c.plants.list[st.crop].name : null,
     jobs: st.jobs.map((j) => x.rt.list[j.k].name), wants: st.wants.map((i) => x.c.items.list[i].name),
     stats: st.stats, territory: st.territory, parent: st.parent, pos: st.pos,
+    // (LIVING HISTORY: the era clock and label, a daughter's grievance against its capital and what it is made of)
+    history: { ...eraClock(x, st), grievance: grievanceView(x, st), kin: { ...(st.hist?.kin ?? {}) } },
   };
 }
 

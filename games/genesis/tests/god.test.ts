@@ -127,7 +127,7 @@ test('the god layer is deterministic: the same acts give the same world, chunked
     const at = (b: number, m: number) => moveBy(st.pos, bearingDir(st.pos, b), m, p.st.radius);
     must(sim, { k: 'set', path: 'disasters.natural', value: 3 });
     must(sim, { k: 'disaster.spawn', kind: 'tornado', pos: at(0.5, 900), toward: st.pos });
-    must(sim, { k: 'creature.adopt', template: 'ape', pos: at(1, 100) });
+    must(sim, { k: 'prophet.call', agent: sim.u.planets[0].people.agents.id[(sim.u.planets[0].people.members.get(st.id) ?? []).find((s) => !(sim.u.planets[0].people.agents.flags[s] & 1))!] });
     must(sim, { k: 'rival.add', temperament: 'trickster', settlement: st.id });
     must(sim, { k: 'hand.grab', kind: 'rock', mass: 300, pos: at(3, 800) });
     must(sim, { k: 'hand.move', pos: st.pos, alt: 5 });
@@ -141,7 +141,7 @@ test('the god layer is deterministic: the same acts give the same world, chunked
   assert.equal(a.hash(), b.hash(), 'one step of 600 = 600 steps of 1');
   assert.equal(a.hash(), c.hash(), '= 12 steps of 50');
   // a save while things fly, burn and spread: the copy lives the same future
-  a.applyNow({ k: 'hand.grab', kind: 'rock', mass: 100, pos: a.u.god.creatures[0].pos });
+  a.applyNow({ k: 'hand.grab', kind: 'rock', mass: 100, pos: moveBy(a.u.planets[0].people.settlements[0].pos, bearingDir(a.u.planets[0].people.settlements[0].pos, 1), 100, a.u.planets[0].st.radius) });
   a.applyNow({ k: 'hand.throw', speed: 200, angle: 80 });
   a.step(1);
   const copy = SimClass.load(a.save());

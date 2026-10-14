@@ -50,7 +50,7 @@
     "alt": 25,
     "fov": 75,
     "pitchBias": -14,
-    "hour": 13
+    "hour": 18.0
    },
    "frames": 3
   },
@@ -85,7 +85,13 @@
     "hour": 18.2
    },
    "frames": 4,
-   "script": "const m = await import('/src/render/fx/launch.ts'); return JSON.stringify(m.LAUNCH_FX.last.stats());"
+   "script": [
+    "await G.frames(2); const A = window.__GENESIS_APP__; const t = A.renderer.ships.tracks.get(1002);",
+    "// the hero framing: from the side of the flame trench's main exit, swung round so the gantry stands beside the rocket and the tanks show",
+    "const yaw = t.padYaw * 180 / Math.PI + 220;",
+    "await G.camera({ mode: 'photo', target: { kind: 'ship', id: 1002 }, dist: 190, yaw, alt: 4, pitch: 9, fov: 55, hour: 18.2 }); await G.frames(3);",
+    "const m = await import('/src/render/fx/launch.ts'); return JSON.stringify({ yaw: Math.round(yaw), st: m.LAUNCH_FX.last && m.LAUNCH_FX.last.stats() });"
+   ]
   },
   {
    "name": "launch-t2",
@@ -123,7 +129,7 @@
    "wait": 60,
    "script": [
     "const A = window.__GENESIS_APP__; const t = A.renderer.ships.tracks.get(1002); const d = t.padDir, g = t.padGround;",
-    "await A.setLocalHour(17.7, Math.atan2(d[0], d[2]) * 180 / Math.PI);",
+    "await A.setLocalHour(19.6, Math.atan2(d[0], d[2]) * 180 / Math.PI);",
     "A.rig.modes.applySpec({ mode: 'photo', planet: 0, lat: 0, lon: 0, target: null, focusPoint: [d[0] * (g + 260), d[1] * (g + 260), d[2] * (g + 260)], dist: 700, yaw: 150, alt: 40, pitch: 1, fov: 62 }, A.sim.view);",
     "A.setUi(false); A.renderer.cut(); await G.frames(1);",
     "const sv = A.sim.view.ships.find((s) => s.id === 1002); return JSON.stringify({ phase: sv && sv.phase, progress: sv && sv.progress });"
@@ -284,7 +290,7 @@
     },
     "dist": 90,
     "pitch": 10,
-    "yaw": 150
+    "yaw": 240
    },
    "frames": 4
   },
@@ -301,7 +307,7 @@
      "k": "ship.launch",
      "kind": "rocket",
      "start": "descent",
-     "progress": 0.955,
+     "progress": 0.98,
      "id": 1005,
      "to": 2
     }
@@ -382,7 +388,7 @@
    "canvasOnly": true,
    "script": [
     "const m = await import('/src/render/fx/worlds.ts'); const cv = m.WORLD_FX.last.cracks.get(0);",
-    "const p = cv.mesh.geometry.getAttribute('position'); const i = Math.floor(p.count * 0.12) & ~1;",
+    "const p = cv.mesh.geometry.getAttribute('position'); const i = Math.floor(p.count * 0.12 / 7) * 7 + 3;",
     "const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const l = Math.hypot(x, y, z);",
     "const lat = Math.asin(y / l) * 180 / Math.PI, lon = Math.atan2(x, z) * 180 / Math.PI;",
     "await G.camera({ mode: 'orbit', planet: 0, lat, lon, dist: 1600, tilt: 55, yaw: 20, hour: 21.5 }); await G.frames(2);",

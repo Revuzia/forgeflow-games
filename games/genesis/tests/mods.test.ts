@@ -116,7 +116,9 @@ test('a modded disaster strikes, and a chronicle set re-voices the history', () 
   const p = sim.u.planets[0];
   const sum = (a: Float32Array) => a.reduce((q, v) => q + v, 0);
   const grass0 = sum(p.f.grass), salt0 = sum(p.f.pollution);
-  must(sim, { k: pw.command, ...pw.params, lat: 5, lon: 10, radius: 600 });
+  // (LIVING §3.7: at the default wrath a god-sent disaster reaches 0.7 of its radius at 0.6 of its strength — +0.25 of
+  // salt here; the mod's full salt wind, +1.05, is the one cast at full wrath)
+  must(sim, { k: pw.command, ...pw.params, lat: 5, lon: 10, radius: 600, wrath: 1 });
   const view = sim.snapshot().planets[0].disasters!.find((d) => d.kind === 'salt-wind');
   assert.ok(view, 'the salt wind blows');
   sim.step(300);
@@ -201,13 +203,13 @@ test('the worker takes packs before the world is made (and refuses a broken one 
   }
 });
 
-test('saves are versioned: this build writes 1.4; an older save migrates, a newer or foreign one is refused in words', () => {
+test('saves are versioned: this build writes 1.5; an older save migrates, a newer or foreign one is refused in words', () => {
   const sim = new Sim({ seed: 6, scenario: 'sandbox', overrides: { n: 12 } });
   sim.step(20);
   const bytes = sim.save();
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   assert.equal(dv.getUint16(4, true), (SAVE_MAJOR << 8) | SAVE_MINOR);
-  assert.equal(SAVE_MINOR, 4);
+  assert.equal(SAVE_MINOR, 5);
   // an older save (1.0: no space, no god, no pack list) migrates
   const old = rewrite(bytes, 0, (h) => { delete h.space; delete h.packs; delete h.god; });
   const back = Sim.load(old);
@@ -216,7 +218,7 @@ test('saves are versioned: this build writes 1.4; an older save migrates, a newe
   assert.equal(back.tick, sim.tick);
   back.step(30);
   // a newer minor, another major: refused in words
-  assert.throws(() => Sim.load(rewrite(bytes, 9, () => {})), /newer GENESIS \(format 1\.9.*reads up to 1\.4\)/);
+  assert.throws(() => Sim.load(rewrite(bytes, 9, () => {})), /newer GENESIS \(format 1\.9.*reads up to 1\.5\)/);
   // a phase-4 save of the first pass (1.3: ships without set-aside goods) migrates too
   const p13 = rewrite(bytes, 3, (h) => { delete h.frozen; });
   assert.equal(readSave(p13).header.migratedFrom, '1.3');

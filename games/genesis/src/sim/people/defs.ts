@@ -3,8 +3,17 @@
 
 import { NEEDS, SKILLS, TRAITS, type NeedName, type SkillName, type TraitName } from '../content.ts';
 
-/** base walking speed, metres per tick (CONTRACT §8.3: ≈ 2.5 m/s at 1x) */
-export const BASE_WALK = 0.25;
+/**
+ * base walking speed, metres per tick = per game minute (LIVING.md §1.3: 2 m per game minute, 120 m a game hour — 2 m/s
+ * on screen at 1x, a brisk walk; was 0.25, 15 m a game hour, when 1x was 10 ticks a second). Children, elders, the sick
+ * and the loaded keep their slower factors (tasks.ts nextSegment); everyday work lies within a DAY_TRIP of it (perf/pace.ts).
+ */
+export const BASE_WALK = 2;
+/**
+ * LIVING.md §1.3 rule 1: everyday work (forage, fields, water, firewood, clay, stone, fishing from the bank) lies within
+ * this many game minutes of walking from home (120 m at BASE_WALK); farther work is a trip with a camp (perf/pace.ts)
+ */
+export const DAY_TRIP = 60;
 /** waypoints an agent can hold (longer journeys re-plan when the path runs out) */
 export const PATH_MAX = 40;
 /** inventory slots */
@@ -29,6 +38,15 @@ export const TASK = {
   experiment: 23, explore: 24, trade: 25, raid: 26, fight: 27, flee: 28, guard: 29, pray: 30, worship: 31, preach: 32,
   mourn: 33, bury: 34, court: 35, raiseChild: 36, migrate: 37, found: 38, sail: 39, launch: 40, board: 41, socialize: 42,
   warm: 43, heal: 44, cutIce: 45, secrete: 46, collectAir: 47, follow: 48, bathe: 49, possessed: 50, reverse: 51,
+  // LIVING (appended; 52 play, 53 chore and 55 gather are LAND's, 56-58 RELATIONSHIP's — LIVING.md §6.3): a night at a
+  // camp at far work, or where night fell on the road (perf/pace.ts)
+  camp: 54,
+  // LIVING LAND (people/gatherings.ts): a child's play (ages 2-10), a child's chore (ages 6-14), a gathering of the
+  // settlement — a festival, a wedding, a funeral (tData says which: gatherings.ts GATHER_KIND)
+  play: 52, chore: 53, gather: 55,
+  // LIVING RELATIONSHIP (people/shelter.ts, god/sacred.ts, god/precursors.ts): sheltering from a storm (home, else the
+  // nearest building, else the lee of trees), a pilgrimage to a sacred place, an evacuation out of a disaster's reach
+  shelter: 56, pilgrimage: 57, evacuate: 58,
 } as const;
 export type TaskKind = (typeof TASK)[keyof typeof TASK];
 export const TASK_NAMES: string[] = [];
@@ -48,6 +66,9 @@ export const TASK_VERBS: Record<number, string> = {
   [TASK.board]: 'boarding', [TASK.socialize]: 'talking', [TASK.warm]: 'warming up', [TASK.heal]: 'healing the sick',
   [TASK.cutIce]: 'cutting ice', [TASK.secrete]: 'building comb', [TASK.collectAir]: 'grazing the haze', [TASK.follow]: 'following the band',
   [TASK.bathe]: 'swimming', [TASK.possessed]: 'moved by the god', [TASK.reverse]: 'studying a strange object',
+  [TASK.camp]: 'sleeping at a camp',
+  [TASK.play]: 'playing', [TASK.chore]: 'doing chores', [TASK.gather]: 'at a gathering',
+  [TASK.shelter]: 'sheltering from the storm', [TASK.pilgrimage]: 'on pilgrimage', [TASK.evacuate]: 'fleeing the danger',
 };
 
 /** task phase */
@@ -67,16 +88,25 @@ export const MEMK = {
   froze: 11, injured: 12, refused: 13, gift: 14, founded: 15, built: 16, sick: 17, healed: 18, burned: 19, moved: 20,
   silenced: 21, disciple: 22, lightning: 23, hunted: 24, migrated: 25, mourned: 26, forgot: 27,
   traded: 28, fought: 29, raided: 30, sailed: 31, conquered: 32, exiled: 33, stole: 34, wounded: 35, led: 36, converted: 37,
+  // LIVING LAND (appended; 40-42 are RELATIONSHIP's — LIVING.md §6.3): danced at a festival / wedding (memA: its kind), a
+  // great hunt they were part of (memA: the species)
+  festival: 38, huntFeat: 39,
+  // LIVING RELATIONSHIP: heard a prophecy come true (memA: the prophet's id), walked to a sacred place (memA: its id), saw
+  // an omen (memA: the omen's index in god/omens.ts OMEN_KINDS)
+  prophecy: 40, pilgrimage: 41, omen: 42,
 } as const;
 
 /** causes of death (memories, chronicle, inspector) */
 export const DEATH = {
   age: 1, starvation: 2, thirst: 3, cold: 4, heat: 5, injury: 6, disease: 7, suffocation: 8, god: 9, fire: 10, predator: 11,
   disaster: 12, drowning: 13, war: 14, punished: 15,
+  // LIVING LAND (people/demography.ts): the deaths of childhood (LIVING.md §2.8)
+  childhood: 16,
 } as const;
 export const DEATH_NAMES: Record<number, string> = {
   1: 'old age', 2: 'starvation', 3: 'thirst', 4: 'cold', 5: 'heat', 6: 'wounds', 7: 'sickness', 8: 'bad air', 9: 'the god',
   10: 'fire', 11: 'a predator', 12: 'disaster', 13: 'drowning', 14: 'war', 15: 'the punishment of thieves',
+  16: 'a childhood fever',
 };
 
 /** per-planet seconds-free time helpers */

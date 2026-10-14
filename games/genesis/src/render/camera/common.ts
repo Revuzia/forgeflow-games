@@ -8,6 +8,12 @@ import { groundHeight } from '../../sim/grid/surface.ts';
 
 export type CameraMode = 'orbit' | 'surface' | 'system' | 'fly' | 'follow' | 'dolly' | 'walk' | 'photo';
 
+/**
+ * the camera's mode this frame (set by the rig): effects that belong to an eye on the ground, not to a god's camera
+ * — rain beading on the lens — read it (render/fx/weatherfx.ts)
+ */
+export const CAMERA_NOW: { mode: CameraMode } = { mode: 'orbit' };
+
 export interface InputState {
   /** pixels moved this frame with each button held */
   dragL: [number, number];

@@ -1,11 +1,13 @@
 // GENESIS — ecology (CONTRACT.md §10): predators and prey live together on a world nobody touches; take the predators
-// away and the prey boom (and overshoot); a herd cut off from its kind for years becomes a species of its own.
+// away and the prey boom (and overshoot); a herd cut off from its kind for years in a new home becomes a species of its own.
 // Closed worlds (no herds drifting in), so what is measured is the dynamics, not immigration.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
 import { animalDef, habitatFit } from '../src/sim/life/herds.ts';
+import { newHome } from '../src/sim/life/ecology.ts';
+import type { Herd } from '../src/sim/people/state.ts';
 
 /** a small living world emptied of animals, with a patch of good country for deer and wolves; returns spots in it */
 function closedWorld(seed = 11): { sim: Sim; at: (k: number) => number[] } {
@@ -84,20 +86,34 @@ test('without predators the prey boom', () => {
   assert.ok(free > hunted * 1.2, `prey peak without predators ${free.toFixed(0)} vs with ${hunted.toFixed(0)}`);
 });
 
-test('a herd cut off from its kind for years becomes a new species', () => {
-  const { sim, at } = closedWorld(5);
-  assert.ok(sim.applyNow({ k: 'life.spawn-animal', species: 'deer', count: 10, pos: at(3) }).ok);
+test('a herd cut off from its kind for years in a country its kind is not made for becomes a new species', () => {
+  // (LIVING §4.5: 6-12 years of isolation, and a home outside its kind's biomes or comfort — here a forest warmer than a
+  // deer's: the year it splits is the lineage's own, 6-12 years in)
+  const { sim } = closedWorld(5);
   const p = sim.u.planets[0];
-  for (const h of p.people.herds) h.inv = -1;
   const x = makeCtx(sim.u, p);
+  const P = p.grid.pos;
+  const deer = x.c.animals.idx('deer');
+  const away = (c: number) => habitatFit(x, deer, c) > 0.4 && newHome(x, { cell: c, envT: p.s.tempMean[c] } as Herd, animalDef(x, deer));
+  let centre = -1, best = -1;
+  for (let c = 0; c < p.count; c += 5) {
+    if (!away(c)) continue;
+    let v = 0;
+    for (const o of p.cellsNear([P[c * 3], P[c * 3 + 1], P[c * 3 + 2]], 900)) if (away(o)) v++;
+    if (v > best) { best = v; centre = c; }
+  }
+  assert.ok(best > 40, `a patch of new country (${best} cells)`);
+  assert.ok(sim.applyNow({ k: 'life.spawn-animal', species: 'deer', count: 10, pos: [P[centre * 3], P[centre * 3 + 1], P[centre * 3 + 2]] }).ok);
+  for (const h of p.people.herds) h.inv = -1;
   const year = p.st.orbit.period;
-  let born: string | null = null;
-  for (let q = 1; q <= 28 && !born; q++) {
+  let born: string | null = null, when = 0;
+  for (let q = 1; q <= 52 && !born; q++) {
     sim.step(Math.round(year / 4));
     const d = p.people.species[0];
-    if (d) born = d.def.name;
+    if (d) { born = d.def.name; when = q / 4; }
   }
-  assert.ok(born, 'a new species arose within seven years of isolation');
+  assert.ok(born, 'a new species arose within thirteen years of isolation');
+  assert.ok(when >= 6, `not before six years (${when})`);
   const d = p.people.species[0];
   assert.equal(animalDef(x, d.idx).name, born);
   assert.ok(d.idx >= x.c.animals.size, 'a species index of its own');

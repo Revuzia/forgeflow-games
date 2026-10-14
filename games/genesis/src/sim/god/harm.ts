@@ -1,7 +1,11 @@
 // GENESIS — what disasters, thrown things and wrathful gods do to the living and the built (CONTRACT.md §11.3): hurt
 // and kill people (by distance and severity), scatter and kill herds, wreck buildings by their material's strength,
-// strip crops and trees. Shields (the shield miracle) keep everything inside them safe. Every function returns tallies
-// so the chronicle can say what happened ("12 dead, 9 buildings in ruins").
+// strip crops and trees. Wards (the ward sigil) keep everything inside them safe. Every function returns tallies so the
+// chronicle can say what happened ("12 dead, 9 buildings in ruins").
+//
+// LIVING §3.7: harm the GOD sends falls as hard as its wrath allows — severity × L(w), reach × R(w) (god/wrath.ts; the
+// wrath of the act in progress). Nature's harm keeps its own law. A death by the god's act makes the act harm to every
+// witness of it (god/regard.ts noteDeath), and the survivors see their dead.
 
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
@@ -14,6 +18,9 @@ import { ruin } from '../people/buildings.ts';
 import { distM } from '../people/world.ts';
 import { herdPos, reindexHerds } from '../life/herds.ts';
 import { hashFloat } from '../core/rng.ts';
+import { harmScale } from './wrath.ts';
+import { currentAct, noteDeath } from './regard.ts';
+import { witness } from '../people/culture.ts';
 
 /** is a point inside a live shield on this planet */
 export function shielded(u: Universe, p: Planet, pos: ArrayLike<number>): boolean {
@@ -35,28 +42,51 @@ const _pt = [0, 0, 0];
  * everywhere inside), frightens them and breaks off what they were doing. `chance` < 1 hits only some (a plague of
  * collapses, not a blast).
  */
-export function hurtPeople(u: Universe, p: Planet, pos: ArrayLike<number>, radius: number, severity: number, cause: number = DEATH.disaster, o: { flat?: boolean; chance?: number; salt?: number; fear?: number } = {}): HurtResult {
+export function hurtPeople(u: Universe, p: Planet, pos: ArrayLike<number>, radius: number, severity: number, cause: number = DEATH.disaster, o: { flat?: boolean; chance?: number; salt?: number; fear?: number; max?: number } = {}): HurtResult {
   const out = { hurt: 0, dead: 0 };
   if (!p.people || p.people.agents.count === 0 || severity <= 0) return out;
   const x = makeCtx(u, p);
   const A = x.A;
   const harmK = u.god.lawAt('disasters.harm', p.id);
+  // the god's wrath (null: nature's harm, its own law alone)
+  const ws = harmScale();
+  const R = radius * ws.R;
+  const sev = severity * ws.L;
+  // (o.max: at most that many people, the nearest first — a bolt strikes one to three, not everyone within 30 m: LIVING
+  // §3.7; ties by id, so it is the same people on every machine)
+  let only: Set<number> | null = null;
+  if (o.max !== undefined) {
+    const near: [number, number][] = [];
+    for (let s = 0; s < A.hi; s++) {
+      if (!A.alive[s]) continue;
+      A.posAt(s, u.tick, _pt);
+      const d = distM(p, _pt, pos);
+      if (d <= R) near.push([d, s]);
+    }
+    near.sort((a, b) => a[0] - b[0] || A.id[a[1]] - A.id[b[1]]);
+    only = new Set(near.slice(0, Math.max(0, o.max)).map((e) => e[1]));
+  }
   for (let s = 0; s < A.hi; s++) {
-    if (!A.alive[s]) continue;
+    if (!A.alive[s] || (only && !only.has(s))) continue;
     A.posAt(s, u.tick, _pt);
     const d = distM(p, _pt, pos);
-    if (d > radius) continue;
+    if (d > R) continue;
     if (o.chance !== undefined && o.chance < 1 && hash01(A.id[s], u.tick, o.salt ?? 0x4a7) >= o.chance) continue;
     if (shielded(u, p, _pt)) continue;
-    const k = severity * harmK * (o.flat ? 1 : (1 - d / Math.max(1, radius)) * 1.4);
+    const k = sev * harmK * (o.flat ? 1 : (1 - d / Math.max(1, R)) * 1.4);
     if (k <= 0.005) continue;
     A.health[s] -= k;
-    A.fear[s * 4] = Math.min(1, A.fear[s * 4] + (o.fear ?? 0.15) * Math.min(1, severity));
+    // (the god's harm frightens through its witnesses' reading, god/regard.ts; nature's frightens the hurt themselves —
+    // as the god's only to those who believe it acts)
+    if (ws.w === null && A.faith[s * 4] > 0.3) A.fear[s * 4] = Math.min(1, A.fear[s * 4] + (o.fear ?? 0.15) * Math.min(1, severity) * 0.5);
     A.remember(s, MEMK.injured, u.tick, 0);
     out.hurt++;
-    if (A.health[s] <= 0) { die(x, s, cause); out.dead++; }
+    if (A.health[s] <= 0) { noteDeath(p, A.settlement[s]); die(x, s, cause); out.dead++; }
     else if (!(A.flags[s] & AgentFlag.possessed) && !u.god.isHeld('agent', A.id[s])) interrupt(x, s);
   }
+  // the survivors see their dead: a killing act is harm to all who saw it (LIVING §3.1)
+  const act = currentAct();
+  if (out.dead > 0 && act && !act.natural) witness(p, pos, R * 1.5 + 150, 'harm', Math.min(1, 0.3 + 0.05 * out.dead), act.god);
   return out;
 }
 
@@ -69,14 +99,16 @@ export function wreckBuildings(u: Universe, p: Planet, pos: ArrayLike<number>, r
   const x = makeCtx(u, p);
   let n = 0;
   const harmK = u.god.lawAt('disasters.harm', p.id);
+  const ws = harmScale();
+  const R = radius * ws.R;
   for (const b of x.ps.buildings.slice()) {
     if (b.flags & BuildingFlag.ruined) continue;
     const d = distM(p, b.pos, pos);
-    if (d > radius) continue;
+    if (d > R) continue;
     if (shielded(u, p, b.pos)) continue;
     const mat = x.c.materials.list[b.material];
     const str = Math.max(0.3, mat?.strength ?? 1);
-    const k = severity * harmK * (o.flat ? 1 : (1 - d / Math.max(1, radius)) * 1.5) / Math.pow(str, o.byStrength ?? 1);
+    const k = severity * ws.B * harmK * (o.flat ? 1 : (1 - d / Math.max(1, R)) * 1.5) / Math.pow(str, o.byStrength ?? 1);
     if (k <= 0.002) continue;
     b.damage = Math.min(1, Math.round((b.damage + k) * 10000) / 10000);
     x.ps.version++;

@@ -13,12 +13,21 @@
 //      with no air, a people set down before anything grows, green before rain — each is answered before the next
 //      suggestion.
 //   4. The first night: with fire their hearths glow and the whisper says so; without it they huddle cold in the dark,
-//      the whisper notes it — and offers fire. When fire comes after a cold night, it is noticed.
-//   5. "Leave them. Come back in a hundred years." Then the opening ends.
-// Esc opens the scenario menu (stay here, or another world, or a saved one); "hush" ends the whispers for good.
+//      the whisper notes it — and offers fire, and keeps offering it (by day: "their night was cold, they still have no
+//      fire") until they have fire or are gone. When fire comes after a cold night, it is noticed; when they die, it is
+//      said, and someone may be set down again.
+//   5. "Leave them. Come back in a hundred years." — only once they have fire. Then the opening ends.
+// The opening's own acts stay gentle: its storm passes once a sea has gathered (or after two days of the world), and
+// the people are set down at a ringed spot on the morning side that is green, near water and warm enough. While it
+// speaks the interface is quiet (the HUD's few speeds, no key strip), and the camera keeps the lit face of the world
+// toward the eye (src/app.ts openingCamera 'turn') until the player turns it.
+// Esc during the star and the fall opens the scenario menu (stay here, or another world, or a saved one); while the
+// whispers speak, Esc first puts away whatever is open or armed (src/ui/shell.ts cancel) and only then offers the menu.
+// "hush" ends the whispers for good.
 
 import type { PlanetView } from '../client/worldview.ts';
-import type { Command, SimEvent } from '../sim/types.ts';
+import type { Command, CommandResult, SimEvent } from '../sim/types.ts';
+import { findPoi } from '../client/poi.ts';
 import type { UiHost } from './host.ts';
 import type { Power } from './powers.ts';
 import { h, clear } from './dom.ts';
@@ -31,11 +40,16 @@ export interface OpeningDeps {
   openMenu(): void;
   /** is the scenario menu (or another window) up: the opening waits */
   menuOpen(): boolean;
-  /** the camera's part: 'star' (the star from close, in the dark), 'world' (fall to the home world), 'turn' (let the
-   * world turn under the camera for a few breaths), 'done' (the system as it is) */
-  camera?(shot: 'star' | 'world' | 'turn' | 'done'): void;
+  /** the camera's part: 'star' (the star from close, in the dark), 'world' (fall to the home world), 'turn' (arrived:
+   * the whispers begin — the world turns under the camera, its lit face held toward the eye; a fall a slow machine has
+   * not finished is cut short), 'hold' (a new whisper: the lit face again, if the player has let the camera be), 'done'
+   * (the camera is the player's) */
+  camera?(shot: 'star' | 'world' | 'turn' | 'hold' | 'done'): void;
   /** the light of the opening: exposure (stops, added) and a bloom multiplier */
   light?(ev: number, bloom: number): void;
+  /** is the camera still on its way (the fall is a blend the renderer runs on its own clock: on a slow machine it can
+   * outlast the opening's real seconds — the whispers wait for the world to be in view) */
+  cameraBusy?(): boolean;
   /** is the page allowed to play sound yet (else the dark waits for a touch) */
   audioRunning?(): boolean;
   /** the interface: hidden in the dark, faded in as the world turns into view */
@@ -43,9 +57,11 @@ export interface OpeningDeps {
   /** arm a power as the tool (the people's drop), and put it away once they stand there */
   arm(p: Power, preset?: Record<string, unknown>): void;
   disarm?(): void;
+  /** the HUD while the whispers speak: quiet (a few speeds, no key strip) or whole again */
+  hudQuiet?(quiet: boolean): void;
 }
 
-type Beat = 'air' | 'water' | 'green' | 'people' | 'gone' | 'wait' | 'night' | 'fire' | 'rest';
+type Beat = 'air' | 'water' | 'green' | 'people' | 'gone' | 'wait' | 'night' | 'kindle' | 'fire' | 'rest';
 type Stage = 'off' | 'dark' | 'ignite' | 'fall' | 'whisper';
 
 interface Whisper {
@@ -65,6 +81,12 @@ const IGNITE_CRACK = 2.5;
 const FALL_AT = 5.2;
 const FALL_SECONDS = 6.4;
 const IDLE_LATER = 20000;
+/** after fire was given, the days of their own world before the whisper adds another way to bring fire */
+const KINDLE_DAYS = 3;
+/** the opening's storm ("let it rain") passes after this many days of the world if no sea has gathered by then */
+const STORM_DAYS = 2;
+/** water (or ice) deeper than this on a cell of an airless rock is "water poured on the rock" */
+const ROCK_WATER = 0.2;
 
 export class Opening {
   readonly root: HTMLDivElement;
@@ -88,8 +110,22 @@ export class Opening {
   private nightSaid = false;
   private coldNight = false;
   private fireSaid = false;
+  /** the world's tick when the whisper's 'give them fire' was taken (−1: not given), and the night the kindling line
+   * was said at (it changes with the night) */
+  private fireGivenAt = -1;
+  private curNight = false;
+  /** when the whisper on screen was last (re)worded */
+  private renderedAt = 0;
   private lastCheck = 0;
   private hushed = false;
+  /** the world's tick when the opening's storm began (−1: none of the opening's own) */
+  private stormAt = -1;
+  /** cells of the airless rock already wet or icy when the opening began (a poured sea is counted beyond them) */
+  private rockWet0 = -1;
+  /** where the whisper suggests setting the people down (the morning side: green, near water, warm enough) */
+  private spot: { planet: number; pos: [number, number, number] } | null = null;
+  private ring: HTMLDivElement;
+  private quiet = false;
   private gestureListener: ((e: Event) => void) | null = null;
   /** the opening's clock (real time; a test can hold it and step it, a software-rendered frame takes seconds) */
   now: () => number = () => performance.now();
@@ -108,9 +144,20 @@ export class Opening {
     this.card.hidden = true;
     parent.appendChild(this.card);
     this.root = this.card;
+    // the spot the people's whisper points at, ringed on the ground (it never takes a click: the ground under it does)
+    this.ring = h('div', { class: 'gn-open-ring', aria: { hidden: 'true' } }, h('div', { class: 'gn-open-ring-o' }), h('div', { class: 'gn-open-ring-l', text: 'Here: green, near water, warm enough' }));
+    this.ring.hidden = true;
+    world.appendChild(this.ring);
   }
 
   get isActive(): boolean { return this.stage !== 'off'; }
+  /** the cinematic is on screen (the star igniting, the fall to the world): the interface is still hidden */
+  get cinematic(): boolean { return this.stage === 'ignite' || this.stage === 'fall'; }
+  /**
+   * a power or a window was asked for during the cinematic: it gives way at once — the world where it would have been,
+   * the interface up — so every power works from the first frame (the whispers go on from there)
+   */
+  skip(): void { if (this.cinematic) this.skipCinematic(); }
   /** the dark and the fall: names and markers stay hidden */
   get hush(): boolean { return this.stage === 'dark' || this.stage === 'ignite' || this.stage === 'fall'; }
   /** the opening never blocks the world: it is never modal (the scenario menu is its own window) */
@@ -127,7 +174,13 @@ export class Opening {
     this.hushed = false;
     this.uiShown = false;
     this.nightSaid = this.coldNight = this.fireSaid = false;
+    this.fireGivenAt = -1;
+    this.stormAt = -1;
+    this.rockWet0 = -1;
+    this.spot = null;
+    this.ring.hidden = true;
     this.pendingAck = null;
+    this.setQuiet(true);
     this.veil.hidden = false;
     this.veil.style.opacity = '1';
     this.veil.classList.remove('gn-lit');
@@ -140,10 +193,17 @@ export class Opening {
     this.gestureListener = (e: Event) => {
       if (this.stage !== 'dark') return;
       if (e instanceof KeyboardEvent && (e.code === 'Escape' || e.repeat)) return;
+      // a power or a window key (/, Enter, F1, Q …) in the dark is the touch AND the way straight to the world: the
+      // star gives way at once and the key does what it says (time keys only light the star: they meant "go on")
+      if (e instanceof KeyboardEvent) {
+        const ids = this.host.keybinds.pressActions(e).concat(this.host.keybinds.holdActions(e));
+        if (ids.some((id) => !id.startsWith('time.') && !id.startsWith('cam.') && id !== 'tool.cancel')) { this.ignite(); this.skipCinematic(); return; }
+      }
       // (other listeners on the window still hear it — the sound engine unlocks on this very touch — but the world
-      // does not: no pause, no drag)
+      // does not: no pause, no drag, no skipping the star it just lit: the shell asks tookTouch)
       e.stopPropagation();
       if (e instanceof KeyboardEvent) e.preventDefault();
+      this.touchEvent = e;
       this.ignite();
     };
     window.addEventListener('keydown', this.gestureListener, true);
@@ -168,6 +228,10 @@ export class Opening {
   }
   private soundPending = false;
   private armedPeople = false;
+  /** the event that lit the star (it is the touch, nothing else) */
+  private touchEvent: Event | null = null;
+  /** was this event the touch that lit the star (the shell then ignores it) */
+  tookTouch(e: Event): boolean { return e === this.touchEvent; }
 
   /** Esc: the scenario menu; true when the opening took the key */
   cancel(): boolean {
@@ -183,7 +247,8 @@ export class Opening {
     this.veil.hidden = true;
     this.deps.light?.(0, 1);
     this.deps.camera?.('world');
-    this.deps.camera?.('done');
+    // (the whispers begin at once: the camera keeps the lit face of the world toward the eye while they speak)
+    this.deps.camera?.('turn');
     this.deps.setUi(true);
     this.stage = 'whisper';
     this.stageAt = this.now();
@@ -194,12 +259,23 @@ export class Opening {
   end(): void {
     if (this.stage === 'off') return;
     this.dropGesture();
-    if (this.stage !== 'whisper') { this.deps.light?.(0, 1); this.deps.camera?.('done'); this.deps.setUi(true); }
+    if (this.stage !== 'whisper') { this.deps.light?.(0, 1); this.deps.setUi(true); }
+    // (the camera is the player's again: the lit-face hold lets go)
+    this.deps.camera?.('done');
     this.stage = 'off';
     this.card.classList.remove('gn-on');
     this.card.hidden = true;
     this.veil.hidden = true;
+    this.ring.hidden = true;
     this.cur = null;
+    this.setQuiet(false);
+  }
+
+  /** the HUD quiets while the whispers speak (a few speeds, no key strip) and is whole again for the farewell */
+  private setQuiet(q: boolean): void {
+    if (this.quiet === q) return;
+    this.quiet = q;
+    this.deps.hudQuiet?.(q);
   }
 
   // ───────────────────────────── per frame ─────────────────────────────
@@ -246,8 +322,10 @@ export class Opening {
         return;
       }
       case 'fall': {
-        if (t >= FALL_SECONDS - 0.6 && !this.uiShown) { this.uiShown = true; this.deps.setUi(true); }
-        if (t >= FALL_SECONDS) {
+        // (the fall ends when the camera has arrived — never later than half a minute, whatever the machine)
+        const arrived = !this.deps.cameraBusy?.() || t > 30;
+        if (t >= FALL_SECONDS - 0.6 && arrived && !this.uiShown) { this.uiShown = true; this.deps.setUi(true); }
+        if (t >= FALL_SECONDS && arrived) {
           this.deps.camera?.('turn');
           this.stage = 'whisper';
           this.stageAt = now;
@@ -259,9 +337,10 @@ export class Opening {
         this.hear();
         if (now - this.lastCheck > 600) { this.lastCheck = now; this.check(false); }
         if (this.cur && !this.laterShown && this.cur.later && now - this.curAt > IDLE_LATER) { this.laterShown = true; this.render(); }
-        // the whispers step back while a window or a list is up
-        this.card.classList.toggle('gn-away', this.deps.menuOpen() || document.querySelector('.gn-pal:not([hidden]), .gn-rad:not([hidden]), .gn-win:not([hidden])') !== null);
-        // the last words, then the end
+        // the whispers step back while a window, a list or a menu is up (the camera modes, the step menu too)
+        this.card.classList.toggle('gn-away', this.deps.menuOpen() || document.querySelector('.gn-pal:not([hidden]), .gn-rad:not([hidden]), .gn-win:not([hidden]), .gn-cam-menu:not([hidden]), .gn-stepmenu:not([hidden])') !== null);
+        this.placeRing();
+        // the last words, then the end (the farewell is only ever said once they have fire)
         if (this.cur?.beat === 'rest' && now - this.curAt > 16000) this.end();
         return;
       }
@@ -295,12 +374,32 @@ export class Opening {
 
   /** what the mirror shows now (milestones come hourly; the eye sees at once) */
   private look(pv: PlanetView): void {
-    if (pv.params.atmosphere.pressure > 0.05) this.note('air');
-    if (fraction(pv, 'water', 0.5) > 0.015) this.note(this.met.has('air') ? 'first-sea' : 'water-on-rock');
+    const airless = pv.params.atmosphere.pressure <= 0.05;
+    if (!airless) this.note('air');
+    // water poured on the airless rock: any cell holding some (or its ice), beyond what the rock already had when the
+    // opening began — a 250 m pour on a 3 km world wets a fraction of a percent of it, so this is a count, not a share
+    if (airless && !this.met.has('air')) {
+      const wet = wetCells(pv, ROCK_WATER);
+      if (this.rockWet0 < 0) this.rockWet0 = wet;
+      else if (wet > this.rockWet0) this.note('water-on-rock');
+    }
+    if (fraction(pv, 'water', 0.5) > 0.015 && this.met.has('air')) this.note('first-sea');
     if (mean(pv, 'grass') + mean(pv, 'tree') + mean(pv, 'shrub') > 0.02) this.note('first-green');
     const live = pv.settlements.filter((s) => !(s.flags & 2) && s.population > 0);
     if (live.length) this.note('first-people');
     if (live.some((s) => s.nightLight > 0.02)) this.note('first-fire');
+  }
+
+  /**
+   * an act of the player's (every command, src/app.ts cmd): water poured, a flood or a spring on the airless rock is
+   * answered at once, before the next suggestion (the field shows it a moment later, the act is known now)
+   */
+  heard(c: Command, r: CommandResult): void {
+    if (this.stage !== 'whisper' || !r.ok || this.met.has('air') || this.met.has('water-on-rock')) return;
+    const pv = this.host.view.planet(this.planet);
+    if (!pv || pv.params.atmosphere.pressure > 0.05) return;
+    if (typeof c.planet === 'number' && c.planet !== this.planet) return;
+    if (/^water\.|^miracle\.(water|flood|rain)|spring|tsunami|flood/.test(c.k) && !/(remove|drain|sea-level)/.test(c.k)) this.note('water-on-rock');
   }
 
   /** the answer to a beat met, shaped by what came before it */
@@ -336,6 +435,7 @@ export class Opening {
     const sid = live[0]?.id ?? -1;
     const now = this.now();
     if (this.armedPeople && live.length) { this.armedPeople = false; this.deps.disarm?.(); }
+    this.stormCheck(pv);
     const cur = this.cur?.beat ?? null;
     // the order a dead rock meets them in; what the player did out of order is answered (ackFor) before the next
     let next: Beat;
@@ -345,26 +445,94 @@ export class Opening {
     else if (!has('first-people') && !live.length) next = 'people';
     // they died (the cold, thirst, hunger on a world still too young): it is said, and someone may be set down again
     else if (!live.length && !pv.population.some((n) => n > 0)) next = 'gone';
-    else if (!this.nightSaid && !this.fireSaid) {
-      // their first night: with fire the hearths glow; without it they are cold in the dark
-      if (night) next = fire ? 'fire' : 'night';
-      else if (fire && has('first-night')) next = 'fire';
-      else next = 'wait';
-    } else if (this.coldNight && fire && !this.fireSaid) next = 'fire';
-    else if (cur === 'night' && !fire && (night || now - this.curAt < 30000)) next = 'night';
+    else if (!fire) {
+      // no fire of their own: the whispers stay with them until they have it (or are gone) — never the farewell
+      if (this.fireGivenAt >= 0) next = 'kindle'; // they know of fire; the first hearth is still to be built and lit
+      else if (night || has('first-night') || this.coldNight) next = 'night'; // cold in the dark, or still cold by day
+      else next = 'wait'; // their first night is coming
+    } else if (!this.fireSaid) next = night || has('first-night') || this.coldNight ? 'fire' : 'wait';
     else if (cur === 'fire' && now - this.curAt < 9000) next = 'fire';
     else next = 'rest';
-    if (!force && cur === next && !this.pendingAck) return;
-    if (next === 'gone') { this.nightSaid = this.fireSaid = this.coldNight = false; }
-    if (next === 'night') { this.nightSaid = true; this.coldNight = true; }
+    // (a night / day turn re-words the cold and the kindling whispers — not more often than every few seconds: at
+    // 100× a day passes in a breath)
+    const turned = (next === 'kindle' || next === 'night') && night !== this.curNight && now - this.renderedAt > 8000;
+    const kindleLate = next === 'kindle' && cur === 'kindle' && !this.laterShown && this.kindleLate(pv);
+    if (!force && cur === next && !this.pendingAck && !turned && !kindleLate) return;
+    if (next === 'gone') { this.nightSaid = this.fireSaid = this.coldNight = false; this.fireGivenAt = -1; }
+    if (next === 'night') { this.nightSaid = true; if (night || has('first-night')) this.coldNight = true; }
     if (next === 'fire') this.fireSaid = true;
+    const same = cur === next;
     this.cur = this.whisper(next, pv, sid, night);
+    this.curNight = night;
     if (this.pendingAck) this.cur.ack = this.pendingAck;
     this.pendingAck = null;
-    this.curAt = this.now();
-    this.laterShown = false;
+    // (a re-worded whisper of the same beat keeps its clock: its other way still comes after a while with nothing done)
+    if (!same) this.curAt = this.now();
+    this.renderedAt = this.now();
+    this.laterShown = kindleLate || (same && this.laterShown);
+    if (next === 'people' || next === 'gone') this.spot ??= this.findSpot(pv);
+    else this.spot = null;
+    if (next === 'rest') this.setQuiet(false);
+    // (the camera eases back to the lit face if the player has let it be)
+    if (!same) this.deps.camera?.('hold');
     this.host.sound('whisper');
     this.render();
+  }
+
+  /** fire given, and still no hearth after a few of their days: the whisper offers another way */
+  private kindleLate(pv: PlanetView): boolean {
+    return this.fireGivenAt >= 0 && this.host.view.renderTick - this.fireGivenAt > KINDLE_DAYS * pv.params.dayHours * 60;
+  }
+
+  /** the opening's own storm passes once a sea has gathered, or after a couple of days of the world */
+  private stormCheck(pv: PlanetView): void {
+    if (this.stormAt < 0) return;
+    const sea = this.met.has('first-sea');
+    const long = this.host.view.renderTick - this.stormAt > STORM_DAYS * pv.params.dayHours * 60;
+    if (!sea && !long) return;
+    this.stormAt = -1;
+    // (only if the planet-wide weather is still the storm it began: the player may have chosen another since)
+    if (pv.params.globalWeather !== 'storm') return;
+    this.cmd({ k: 'weather.global', planet: pv.id, kind: 'none' });
+    if (!sea && !this.met.has('first-rain')) this.pendingAck = 'The storm passes. The rock is still too cold to hold a sea.';
+    else if (!sea) this.pendingAck = 'The storm passes.';
+  }
+
+  /**
+   * where the people's whisper suggests setting them down: the best homestead (src/client/poi.ts — fresh water, food,
+   * wood, a mild climate, room) on the morning side of the world, where the sun stands well up, so their first day is
+   * long; anywhere if the morning side has none
+   */
+  private findSpot(pv: PlanetView): { planet: number; pos: [number, number, number] } | null {
+    const temp = pv.fields.get('temperature');
+    const P = pv.grid.pos;
+    let poi = null;
+    if (temp) {
+      const sun = bodySun(pv);
+      const t = new Float32Array(temp.length);
+      for (let c = 0; c < t.length; c++) {
+        const el = P[c * 3] * sun[0] + P[c * 3 + 1] * sun[1] + P[c * 3 + 2] * sun[2];
+        // (the morning side: the sun up, and its way across the sky still ahead — east of the subsolar meridian)
+        // (east of the sun's meridian is afternoon: longitude grows eastward with the local hour)
+        const eastOfSun = P[c * 3] * sun[2] - P[c * 3 + 2] * sun[0];
+        t[c] = el > 0.25 && eastOfSun < 0.15 ? temp[c] : -99;
+      }
+      const masked = { ...pv, fields: new Map(pv.fields).set('temperature', t) } as PlanetView;
+      poi = findPoi(masked, 'homestead');
+    }
+    poi ??= findPoi(pv, 'homestead');
+    if (!poi) return null;
+    return { planet: pv.id, pos: [P[poi.cell * 3], P[poi.cell * 3 + 1], P[poi.cell * 3 + 2]] };
+  }
+
+  /** the ring on the suggested spot, while the people's whisper speaks and the spot is in view */
+  private placeRing(): void {
+    const sp = this.spot;
+    const beat = this.cur?.beat;
+    const p = sp && (beat === 'people' || beat === 'gone') && !this.card.classList.contains('gn-away') ? this.host.screenOf(sp.planet, sp.pos, 2) : null;
+    if (!p) { this.ring.hidden = true; return; }
+    this.ring.hidden = false;
+    this.ring.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
   }
 
   private cmd(...cs: Command[]): void {
@@ -378,13 +546,14 @@ export class Opening {
     const here = () => this.host.focusGround()?.dir ?? [0, 0, 1];
     switch (beat) {
       case 'air': return {
-        beat, line: this.met.has('first-people') ? 'They cannot breathe. Breathe on it — now?' : 'It is quiet. Breathe on it?',
+        beat, line: this.met.has('first-people') ? 'They cannot breathe. Breathe on it — now?' : this.met.has('water-on-rock') ? 'Breathe on it, and the water can stay?' : 'It is quiet. Breathe on it?',
         act: { label: 'breathe', run: () => this.cmd({ k: 'planet.add-air', planet, amount: 1 }) },
         later: `Or press ${k('ui.freeform', 'Enter')} and say it: “breathe air onto the world”.`,
       };
       case 'water': return {
         beat, line: this.met.has('air') ? 'Water?' : 'Water — though it will not stay without air.',
-        act: { label: 'let it rain', run: () => this.cmd({ k: 'weather.global', planet, kind: 'storm' }, { k: 'water.sea-level', planet, value: -40 }) },
+        // (the opening's storm passes by itself once a sea has gathered — stormCheck — so it never snows the world under)
+        act: { label: 'let it rain', run: () => { this.stormAt = this.host.view.renderTick; this.cmd({ k: 'weather.global', planet, kind: 'storm' }, { k: 'water.sea-level', planet, value: -40 }); } },
         later: `The air warms the rock slowly; rain on frozen ground lies as snow. Let time run (${k('time.speed100', '3')}), or hold ${k('ui.gesture', 'G')} and draw a spiral for water where you point.`,
       };
       case 'green': return {
@@ -401,13 +570,26 @@ export class Opening {
       case 'people': return {
         beat, line: 'Someone to see it?',
         act: { label: 'set them down', run: () => this.dropPeople(planet) },
-        later: `Click where they should stand, on green ground near water — or press ${k('ui.palette', '/')} and search “people”.`,
+        later: `Click where they should stand: green ground near water, warm enough — the ring is one such place. Or press ${k('ui.palette', '/')} and search “people”.`,
       };
       case 'night': return {
-        beat, line: night ? 'Night. They have no fire. They huddle in the dark, cold.' : 'Their first night was cold: they have no fire.',
-        act: sid >= 0 ? { label: 'give them fire', run: () => this.cmd({ k: 'idea.teach', planet, knowledge: 'fire-keeping', settlement: sid }, { k: 'idea.teach', planet, knowledge: 'fire-making', settlement: sid }) } : undefined,
+        beat, line: night ? 'Night. They have no fire. They huddle in the dark, cold.' : this.coldNight ? 'Their night was cold. They still have no fire.' : 'Night is coming, and they have no fire.',
+        act: sid >= 0 ? { label: 'give them fire', run: () => { this.fireGivenAt = this.host.view.renderTick; this.lastCheck = 0; this.cmd({ k: 'idea.teach', planet, knowledge: 'fire-keeping', settlement: sid }, { k: 'idea.teach', planet, knowledge: 'fire-making', settlement: sid }); } } : undefined,
         later: `A lightning strike might teach them. Hold ${k('ui.gesture', 'G')} and draw a triangle: fire from the sky.`,
       };
+      case 'kindle': {
+        // (fire is in their heads; a hearth has to be built and fed before it glows — the whisper waits with them as
+        // long as it takes, and after a few of their days offers the miracle that lights it)
+        const late = this.kindleLate(pv);
+        return {
+          beat, ack: late ? undefined : 'They know of fire now.',
+          line: late ? 'Still no hearth. They know of fire, but none burns yet.' : night ? 'Night. Their first hearth is not lit yet.' : 'Watch for their first hearth.',
+          act: this.host.view.speed < 10 ? { label: 'let the day pass', run: () => this.host.setSpeed(10) } : undefined,
+          later: late
+            ? `Hold ${k('ui.gesture', 'G')} over them and draw a triangle: Kindling lights their hearths — or press ${k('ui.palette', '/')} and search “kindling”.`
+            : `Time runs faster with ${k('time.speed10', '2')} and ${k('time.speed100', '3')}.`,
+        };
+      }
       case 'fire': return {
         beat, line: night ? 'Night. Their fire glows.' : 'When night comes, their fire will glow.',
       };
@@ -419,7 +601,8 @@ export class Opening {
       case 'wait': return {
         beat, line: 'Watch them. Their first night is coming.',
         act: { label: 'let the day pass', run: () => this.host.setSpeed(10) },
-        later: `Time runs faster with ${k('time.speed10', '2')} and ${k('time.speed100', '3')}; ${k('time.pause', 'Space')} stops it.`,
+        // (the hand, suggested once there is someone to hold)
+        later: `Time runs faster with ${k('time.speed10', '2')} and ${k('time.speed100', '3')}; ${k('time.pause', 'Space')} stops it. Or come close and pick one up — drag them, and set them down gently.`,
       };
       case 'rest': return {
         beat, line: 'Leave them. Come back in a hundred years.',
@@ -428,12 +611,21 @@ export class Opening {
     }
   }
 
-  /** the people's whisper: the hand holds a band of plains folk — the next click on the ground sets them down */
+  /**
+   * the people's whisper: the hand holds a band of plains folk — the next click on the ground sets them down. The camera
+   * goes down to the ringed spot (green, near water, warm enough, the morning side), and time that was racing slows to
+   * 10× so their first day can be watched.
+   */
   private dropPeople(planet: number): void {
+    const pv = this.host.view.planet(planet);
+    if (pv) this.spot ??= this.findSpot(pv);
+    const sp = this.spot;
+    if (sp) this.host.lookAt(sp.planet, sp.pos, 520);
+    if (this.host.view.speed > 10) this.host.setSpeed(10);
     const p = this.host.powers.get('people');
     if (p) { this.deps.arm(p, { species: 'plains-folk', count: 30 }); this.armedPeople = true; return; }
     const poi = this.host.poi?.('homestead');
-    const pos = poi?.pos ?? this.host.focusGround()?.dir;
+    const pos = sp?.pos ?? poi?.pos ?? this.host.focusGround()?.dir;
     void this.host.cmd({ k: 'life.spawn-people', planet, species: 'plains-folk', count: 30, ...(pos ? { pos } : {}) }).then((r) => {
       const made = r.created?.find((e) => e.kind === 'settlement');
       if (made) this.host.lookAtEntity({ ...made, planet });
@@ -469,8 +661,17 @@ export class Opening {
   state(): { active: boolean; stage: Stage; step: string | null; line: string | null; ack: string | null; later: boolean; met: string[]; order: string[] } {
     return { active: this.stage !== 'off', stage: this.stage, step: this.cur?.beat ?? null, line: this.cur?.line ?? null, ack: this.cur?.ack ?? null, later: this.laterShown, met: [...this.met], order: [...this.order] };
   }
+  /** where the whisper is on screen while it speaks (names over the world keep out of it), else null */
+  speaking(): DOMRect | null {
+    if (this.stage !== 'whisper' || this.card.hidden || !this.card.classList.contains('gn-on') || this.card.classList.contains('gn-away')) return null;
+    const r = this.card.getBoundingClientRect();
+    return r.width > 0 ? r : null;
+  }
+
   /** test surface: light the star now (as the first touch would) */
   touchDark(): void { this.ignite(); }
+  /** test surface: the stage's clock begins again now (after the opening's clock was swapped for a held one) */
+  restartStageClock(): void { this.stageAt = this.now(); if (this.stage === 'dark') this.t0 = this.stageAt; }
 }
 
 function mean(pv: PlanetView, f: Parameters<PlanetView['fields']['get']>[0]): number {
@@ -481,6 +682,15 @@ function mean(pv: PlanetView, f: Parameters<PlanetView['fields']['get']>[0]): nu
   return s / Math.ceil(a.length / 7);
 }
 
+/** cells holding water or ice deeper than `over` (every cell: a poured pool is small) */
+function wetCells(pv: PlanetView, over: number): number {
+  const w = pv.fields.get('water'), ice = pv.fields.get('ice');
+  let n = 0;
+  const N = Math.max(w?.length ?? 0, ice?.length ?? 0);
+  for (let i = 0; i < N; i++) if ((w ? w[i] : 0) > over || (ice ? ice[i] : 0) > over) n++;
+  return n;
+}
+
 function fraction(pv: PlanetView, f: Parameters<PlanetView['fields']['get']>[0], over: number): number {
   const a = pv.fields.get(f);
   if (!a || !a.length) return 0;
@@ -489,11 +699,16 @@ function fraction(pv: PlanetView, f: Parameters<PlanetView['fields']['get']>[0],
   return n / Math.max(1, m);
 }
 
-/** is it night at a point of a world (the sun below its horizon) */
-function isNight(pv: PlanetView, u: ArrayLike<number>): boolean {
+/** the direction of the sun in a world's body frame (unit) */
+function bodySun(pv: PlanetView): [number, number, number] {
   const q = pv.quat, s = pv.sunDir;
   const x = s[0], y = s[1], z = s[2], qx = -q[0], qy = -q[1], qz = -q[2], qw = q[3];
   const ix = qw * x + qy * z - qz * y, iy = qw * y + qz * x - qx * z, iz = qw * z + qx * y - qy * x, iw = -qx * x - qy * y - qz * z;
-  const bx = ix * qw + iw * -qx + iy * -qz - iz * -qy, by = iy * qw + iw * -qy + iz * -qx - ix * -qz, bz = iz * qw + iw * -qz + ix * -qy - iy * -qx;
-  return bx * u[0] + by * u[1] + bz * u[2] < -0.04;
+  return [ix * qw + iw * -qx + iy * -qz - iz * -qy, iy * qw + iw * -qy + iz * -qx - ix * -qz, iz * qw + iw * -qz + ix * -qy - iy * -qx];
+}
+
+/** is it night at a point of a world (the sun below its horizon) */
+function isNight(pv: PlanetView, u: ArrayLike<number>): boolean {
+  const b = bodySun(pv);
+  return b[0] * u[0] + b[1] * u[1] + b[2] * u[2] < -0.04;
 }

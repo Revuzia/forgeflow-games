@@ -19,7 +19,7 @@ import type { TaskSpec } from './tasks.ts';
 import { AgentFlag } from '../types.ts';
 import { hashFloat } from '../core/rng.ts';
 import { findPath } from '../grid/pathfind.ts';
-import { INV, MEMK, NT, ROLE, TASK, TRAIT } from './defs.ts';
+import { BASE_WALK, INV, MEMK, NT, ROLE, TASK, TRAIT } from './defs.ts';
 import { storeAdd, storeHas, storeTake, bestFood } from './store.ts';
 import { storePoint } from './tasks.ts';
 import { cellPos, distM, offsetPoint, spotInCell } from './world.ts';
@@ -28,9 +28,10 @@ import { schedule } from './sched.ts';
 import { contact } from '../life/disease.ts';
 import { tradeExchange, tradeDone } from './economy.ts';
 import { resolveArrival, warDone } from './war.ts';
+import { missionArrived } from './politics.ts';
 import { meet } from './culture.ts';
 
-/** a leg along a route is about this many metres (people walk ~15 m an hour: a leg is half a day) */
+/** a leg along a route is about this many metres (an hour and a bit at BASE_WALK: a few decisions a day on the road) */
 const LEG_M = 160;
 /** give up a journey after this many days (or four times the expected walk) */
 const MAX_DAYS = 9;
@@ -41,7 +42,7 @@ function legCells(x: PCtx): number {
 
 /** expected ticks to walk a route of n cells (a little slower than flat ground) */
 export function travelTicks(x: PCtx, n: number): number {
-  return Math.round((n * x.p.edgeM * 1.4) / 0.25);
+  return Math.round((n * x.p.edgeM * 1.4) / BASE_WALK);
 }
 
 const _p = [0, 0, 0];
@@ -351,6 +352,7 @@ export function missionStep(x: PCtx): void {
         if (done >= m.members.length || x.tick - m.tPhase > 900) {
           if (m.kind === 'trade') tradeDone(x, m, from, to);
           else giftDone(x, m, from, to);
+          missionArrived(x, m, from, to); // (LIVING HISTORY: kin visits, aid and tribute weigh on a grievance — politics.ts)
           homeward(x, m, '');
         }
       } else if (warDone(x, m, from, to)) homeward(x, m, m.note);
@@ -387,7 +389,7 @@ function depart(x: PCtx, m: Mission, from: Settlement): void {
     for (const s of slots) { const left = A.give(s, it, each); if (left > 0) storeAdd(x, from, it, left); }
   }
   // food for the road: a day and a half each, plus the journey
-  const days = Math.min(4, 1.5 + ((m.path?.length ?? 0) * x.p.edgeM) / (0.25 * x.day) * 2);
+  const days = Math.min(4, 1.5 + ((m.path?.length ?? 0) * x.p.edgeM) / (BASE_WALK * x.day) * 2);
   const sp = x.info[from.species];
   for (const s of slots) {
     const food = bestFood(x, from);

@@ -2,8 +2,9 @@
 // through the WorldView, into the world-event layer:
 //   * a cracked world gets its debris ring (instanced rocks in its equatorial frame, still hot) and its fissures
 //     (on the planet's own group, drawn in the overlay pass);
-//   * a falling moon heaps the host's sea toward it (the ocean's uTide) and burns as it comes down; when it strikes it
-//     is a strike (flash, shock, ejecta at the point of contact), not an erasure;
+//   * a falling moon heaps the host's sea toward it (the ocean's uTide), breaks up inside the Roche limit in its last
+//     hours (fractures, rubble streams, burning pieces); when it strikes it is a strike (flash, shock, ejecta at the
+//     point of contact), not an erasure;
 //   * an erased world collapses where it was; a born one
 //     gathers out of its swirl;
 //   * a whole new universe (a load) is neither: no bursts.
@@ -99,15 +100,21 @@ test('a falling moon heaps the sea toward it, burns as it comes down, and strike
   const dir = new Quaternion(b.x / l, b.y / l, b.z / l, 0);
   const bd = q.clone().multiply(dir).multiply(q.clone().invert());
   assert.ok(Math.abs(bd.x * tide.x + bd.y * tide.y + bd.z * tide.z) > 0.98, 'the bulge points at the moon');
-  // late in the fall: the moon burns
+  // late in the fall, inside the Roche limit, the moon breaks up: it stays a grey moon (no burning face) split by
+  // fractures, shedding streams of rubble whose leading pieces sink into the air and burn
   const life = (sim.u.god.disasters.find((x) => x.kind === 'moon-fall')?.life ?? 4320);
-  let burning = false;
-  for (let i = 0; i < 40 && !burning; i++) {
+  let broken = 0, burning = 0, fractured = false;
+  for (let i = 0; i < 39 && burning === 0; i++) {
     h.frame(false, Math.ceil(life / 40));
-    const m = (h.fx.detail().moons as { shell: { visible: boolean } }[])[0];
-    burning = !!m && m.shell.visible;
+    const det = h.fx.detail();
+    const br = (det.breaks as { b: number; burning: number }[])[0];
+    const m = (det.moons as { face: { visible: boolean } }[])[0];
+    if (br) { broken = Math.max(broken, br.b); burning = Math.max(burning, br.burning); }
+    if (m && m.face.visible) fractured = true;
   }
-  assert.ok(burning, 'the moon burns as it grazes the air');
+  assert.ok(broken > 0.2, `the moon breaks up in its last hours (${broken})`);
+  assert.ok(fractured, 'its face shows the fractures');
+  assert.ok(burning > 0, 'pieces of it burn as they sink into the air');
   // it strikes: a strike at the point of contact, never an erasure
   const gone = () => { const m = view.planet(1); return !m || m.alive === false; };
   for (let i = 0; i < 12 && !gone(); i++) h.frame(true, Math.ceil(life / 40));

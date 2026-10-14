@@ -11,6 +11,10 @@
 // world (the world layer's `gn-busy`); while the radial, the palette or a gesture card is up they hide (`gn-hush`).
 // The frame rate shows only on request (?dev=1 or the setting): it is the developer's number, not the player's. Worship
 // spent on a miracle pulses the worship card with what was spent.
+// The calendar is the local one where the camera looks: the hour, the day, the season and the year roll over together
+// (a day begins at local midnight). The speed presets carry their keys (1 2 3 4 for 1× 10× 100× 1000×). While the
+// opening speaks the HUD is quiet (`setQuiet`: pause, 1×, 10×, 100× only, no key strip); the key strip under it forgets
+// each control once it has been used (`used`), and goes when all are learnt.
 
 /// <reference types="vite/client" />
 import '@fontsource/cormorant-garamond/latin-500.css';
@@ -97,6 +101,15 @@ function installDigits(): void {
 }
 installDigits();
 
+/** the key strip's controls, in order: the id `used` takes, the key (or its action), what it does */
+const HINTS: [string, string, string][] = [
+  ['drag', 'drag', 'turn'], ['wheel', 'wheel', 'descend'], ['click', 'click', 'inspect'], ['ui.palette', '/', 'powers'], ['ui.freeform', 'Enter', 'do this'],
+  ['ui.radial', 'Q', 'radial'], ['ui.gesture', 'G', 'gesture'], ['ui.help', 'F1', 'controls'],
+];
+const HINTS_KEY = 'genesis.hints.learnt.v1';
+/** the presets the quiet HUD keeps (the opening) */
+const QUIET_SPEEDS = new Set<number>([0, 1, 10, 100]);
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -155,6 +168,11 @@ export class Hud {
   private lastText = '';
   private v2 = new Vector2();
   private actions: HudActions;
+  private speedIds: Record<number, string> = { 0: 'time.pause', 1: 'time.speed1', 10: 'time.speed10', 100: 'time.speed100', 1000: 'time.speed1000' };
+  /** the key strip's controls already used (kept in this browser) */
+  private learnt = new Set<string>();
+  private hintOn = true;
+  private quiet = false;
 
   constructor(parent: HTMLElement, actions: HudActions, devOverlay: boolean) {
     this.actions = actions;
@@ -174,10 +192,11 @@ export class Hud {
     this.clock = el('span', 'gn-clock');
     cal.append(this.skyDot, this.calText, this.clock);
     const speeds = el('div', 'gn-speeds');
-    const speedIds: Record<number, string> = { 0: 'time.pause', 1: 'time.speed1', 10: 'time.speed10', 100: 'time.speed100', 1000: 'time.speed1000' };
+    const speedIds = this.speedIds;
     for (const s of SPEED_PRESETS) {
-      const b = el('button', 'gn-btn', s === 0 ? ICON_PAUSE : `${s}×`) as HTMLButtonElement;
+      const b = el('button', 'gn-btn gn-spd', s === 0 ? ICON_PAUSE : `${s}×`) as HTMLButtonElement;
       b.type = 'button';
+      b.dataset.s = String(s);
       b.setAttribute('aria-label', s === 0 ? 'Pause' : `Speed ${s} times`);
       b.addEventListener('mouseenter', () => { const k = actions.hint(speedIds[s]); b.title = `${s === 0 ? 'Pause' : `Speed ${s}×`}${k ? ` (${k})` : ''}`; });
       b.addEventListener('click', () => actions.setSpeed(s));
@@ -212,10 +231,12 @@ export class Hud {
     caret.addEventListener('click', () => { this.stepMenu.hidden = !this.stepMenu.hidden; caret.setAttribute('aria-expanded', String(!this.stepMenu.hidden)); });
     document.addEventListener('pointerdown', (e) => { if (!this.stepMenu.hidden && !stepWrap.contains(e.target as Node)) this.stepMenu.hidden = true; });
     stepWrap.append(step, caret, this.stepMenu);
-    speeds.appendChild(stepWrap);
+    // (the presets are one segmented row; the step and the speed the worlds keep sit under it)
+    const row = el('div', 'gn-timerow');
+    row.appendChild(stepWrap);
     this.achieved = el('div', 'gn-achieved');
-    speeds.appendChild(this.achieved);
-    time.append(world, cal, speeds);
+    row.appendChild(this.achieved);
+    time.append(world, cal, speeds, row);
     this.root.appendChild(time);
     // ── top right: worlds strip + worship / belief ──
     const right = el('div', 'gn-topright');
@@ -269,6 +290,9 @@ export class Hud {
     this.root.appendChild(this.dock);
     this.hint = el('div', 'gn-hint');
     this.root.appendChild(this.hint);
+    try { for (const id of JSON.parse(localStorage.getItem(HINTS_KEY) ?? '[]') as string[]) this.learnt.add(id); } catch { /* a fresh strip */ }
+    this.refreshSpeedKeys();
+    this.clock.title = 'The local hour where you look';
     if (devOverlay) {
       this.dev = el('div', 'gn-panel gn-dev');
       this.root.appendChild(this.dev);
@@ -282,6 +306,38 @@ export class Hud {
   refreshKeys(): void {
     const k = this.actions.hint('ui.chronicle');
     this.ticker.title = `The chronicle${k ? ` (${k})` : ''}`;
+    this.refreshSpeedKeys();
+  }
+
+  /** each speed preset with a key of its own shows it in its corner (a short key only: "3", not "Shift Space") */
+  private refreshSpeedKeys(): void {
+    for (const [s, b] of this.speedBtns) {
+      const id = this.speedIds[s];
+      const k = id && s !== 0 ? this.actions.hint(id) : '';
+      if (k && k.length <= 2) b.dataset.key = k; else delete b.dataset.key;
+    }
+  }
+
+  /**
+   * The opening's quiet HUD: pause, 1×, 10×, 100× and nothing of the key strip, so the first whispers are not read
+   * through a list of controls (every power still works; the dock stays)
+   */
+  setQuiet(q: boolean): void {
+    this.quiet = q;
+    this.root.classList.toggle('gn-quiet', q);
+    for (const [s, b] of this.speedBtns) b.hidden = q && !QUIET_SPEEDS.has(s);
+    this.setHint(this.hintOn);
+  }
+
+  /** a control of the key strip was used: it fades from the strip (and stays learnt in this browser) */
+  used(id: string): void {
+    if (this.learnt.has(id) || !HINTS.some((x) => x[0] === id)) return;
+    this.learnt.add(id);
+    try { localStorage.setItem(HINTS_KEY, JSON.stringify([...this.learnt])); } catch { /* learnt for this visit only */ }
+    const item = this.hint.querySelector<HTMLElement>(`[data-hint="${id}"]`);
+    if (!item) return;
+    item.classList.add('gn-gone');
+    setTimeout(() => this.setHint(this.hintOn), 650);
   }
 
   /** Esc: close a popover (the step menu); true when one was open */
@@ -321,16 +377,15 @@ export class Hud {
     this.toasts.show({ text, ms, kind });
   }
 
-  /** refresh the controls hint line (keys may have been rebound) */
+  /** refresh the controls hint line (keys may have been rebound; controls used are left out) */
   setHint(show: boolean): void {
-    this.hint.hidden = !show;
-    if (!show) return;
+    this.hintOn = show;
     const a = this.actions;
-    const k = (id: string, fallback: string) => a.hint(id) || fallback;
-    this.hint.innerHTML = [
-      ['drag', 'turn'], ['wheel', 'descend'], ['click', 'inspect'], [k('ui.palette', '/'), 'powers'], [k('ui.freeform', 'Enter'), 'do this'],
-      [k('ui.radial', 'Q'), 'radial'], [k('ui.gesture', 'G'), 'gesture'], [k('ui.help', 'F1'), 'controls'],
-    ].map(([key, what]) => `<kbd>${key}</kbd> ${what}`).join('<span class="gn-sep">·</span>');
+    const items = HINTS.filter(([id]) => !this.learnt.has(id));
+    this.hint.hidden = !show || this.quiet || !items.length;
+    if (this.hint.hidden) return;
+    const esc = (t: string) => t.replace(/[&<>"]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;'));
+    this.hint.innerHTML = items.map(([id, key, what]) => `<span class="gn-hint-i" data-hint="${id}"><kbd>${esc(id.startsWith('ui.') ? a.hint(id) || key : key)}</kbd> ${what}</span>`).join('<span class="gn-sep">·</span>');
   }
 
   private syncWorlds(view: WorldView, primary: number): void {
@@ -412,6 +467,9 @@ export class Hud {
 
   private syncMarkers(f: HudFrame): void {
     const show = f.systemView;
+    // where each world is on screen (a moon close to its world keeps its ring but not its name: the two would overlap)
+    const at = new Map<number, [number, number]>();
+    if (show) for (const pv of f.view.planets) { const q = f.project(pv.center, this.v2); if (q) at.set(pv.id, [q.x, q.y]); }
     for (const pv of f.view.planets) {
       let m = this.markerEls.get(pv.id);
       if (!m) {
@@ -428,6 +486,8 @@ export class Hud {
       m.style.pointerEvents = 'auto';
       m.style.left = `${p.x.toFixed(1)}px`;
       m.style.top = `${p.y.toFixed(1)}px`;
+      const parent = pv.params.orbit.parent >= 0 ? at.get(pv.params.orbit.parent) : undefined;
+      m.classList.toggle('gn-near', !!parent && Math.hypot(parent[0] - p.x, parent[1] - p.y) < 64);
       const label = m.lastElementChild as HTMLDivElement;
       let pop = 0;
       for (const v of pv.population) pop += v;
@@ -441,8 +501,12 @@ export class Hud {
    * Settlement names over the primary world, from a few hundred metres up to low orbit: name, people and age (the
    * nearest dozen, fading with distance; a band's label follows its people). Click: select the settlement.
    */
+  /** a screen rectangle names stay out of (the opening's whisper while it speaks), or null */
+  keepOut: DOMRect | null = null;
+
   private syncLabels(f: HudFrame, pv: PlanetView | undefined): void {
     const seen = new Set<string>();
+    const ko = this.keepOut;
     const alt = f.altitude;
     if (pv && f.labels !== false && !f.systemView && alt > 70 && alt < 9000 && pv.settlements.length) {
       const R = pv.params.radius;
@@ -492,7 +556,9 @@ export class Hud {
           (rec.el.firstElementChild as HTMLElement).textContent = s.name;
           (rec.el.lastElementChild as HTMLElement).textContent = sub;
         }
-        const fade = Math.max(0.25, Math.min(1, 1.4 - d / Math.max(900, alt * 2.2)));
+        // (under the whisper's words a name steps back: the two would read as one)
+        const under = !!ko && p.x > ko.left - 90 && p.x < ko.right + 90 && p.y > ko.top - 10 && p.y < ko.bottom + 44;
+        const fade = under ? 0 : Math.max(0.25, Math.min(1, 1.4 - d / Math.max(900, alt * 2.2)));
         rec.el.style.opacity = fade.toFixed(2);
         rec.el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%)`;
       }
@@ -529,9 +595,12 @@ export class Hud {
     this.syncTicker(view, f.ticker !== false, now);
     if (pv) {
       this.dayH = pv.params.dayHours;
-      const cal = view.calendar(pv);
+      // the local time where the camera looks: the calendar a quarter of a turn east is that many hours later — its
+      // day, season and year roll over at its own midnight (a sun stood still keeps the world's day, its hour shifted)
       const lonHours = this.cameraLonHours(f, pv);
-      let hour = cal.hour + lonHours;
+      const frozen = !!pv.params.sunFrozen;
+      const cal = frozen ? view.calendar(pv) : view.calendar(pv, view.renderTick + lonHours * 60);
+      let hour = frozen ? cal.hour + lonHours : cal.hour;
       hour = ((hour % pv.params.dayHours) + pv.params.dayHours) % pv.params.dayHours;
       const hh = Math.floor(hour);
       const mm = Math.floor((hour - hh) * 60);
@@ -551,8 +620,12 @@ export class Hud {
     for (const [s, b] of this.speedBtns) b.classList.toggle('gn-on', view.speed === s);
     const behind = view.speed > 0 && view.achievedSpeed < view.speed * 0.9;
     this.achieved.classList.toggle('gn-behind', behind);
-    this.achieved.innerHTML = `<b>${view.speed === 0 ? 'paused' : '×' + fmtSpeed(view.achievedSpeed)}</b>${f.showFps ? ` · ${f.fps < 10 ? f.fps.toFixed(1) : f.fps.toFixed(0)} fps` : ''}`;
-    this.achieved.title = view.speed > 0 ? `Asked for ×${view.speed}; the worlds are keeping ×${fmtSpeed(view.achievedSpeed)}` : 'Time stands still';
+    // the time-lapse the sim runs at (the snapshot's lapseLevel when the mirror carries it, else from the preset:
+    // 1x–300x the plain sim, 1000x time-lapse, 3000x deep time-lapse — sim/perf/lapse.ts)
+    const lv = (view as unknown as { lapseLevel?: number }).lapseLevel ?? (view.speed >= 3000 ? 2 : view.speed >= 1000 ? 1 : 0);
+    const lapse = view.speed > 0 && lv > 0 ? ` <i class="gn-lapse">${lv > 1 ? 'deep time-lapse' : 'time-lapse'}</i>` : '';
+    this.achieved.innerHTML = `<b>${view.speed === 0 ? 'paused' : '×' + fmtSpeed(view.achievedSpeed)}</b>${lapse}${f.showFps ? ` · ${f.fps < 10 ? f.fps.toFixed(1) : f.fps.toFixed(0)} fps` : ''}`;
+    this.achieved.title = view.speed > 0 ? `Asked for ×${view.speed}; the worlds are keeping ×${fmtSpeed(view.achievedSpeed)}${lv > 0 ? ' — in time-lapse: the slow systems take longer steps, the same world' : ''}` : 'Time stands still';
     if (f.open) {
       const o = f.open;
       this.dockBtns.get('palette')?.classList.toggle('gn-on', o.palette);

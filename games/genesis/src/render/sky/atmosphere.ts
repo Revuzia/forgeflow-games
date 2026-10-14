@@ -444,7 +444,10 @@ void main() {
     if (r0 < uRt) L += skyRadiance(o / r0, d, normalize(uMoonDir)) * uMoonK;
   }
   // stars drown in a bright sky (contrast): sky pixels fainter than the in-scattered light fade out (the sun stays)
-  if (!geo) {
+  // (additive, world-events lane: only where nothing was drawn — a moon or a neighbour world beyond the air has depth
+  // and stays, seen through the sky's in-scatter like a daytime moon; it was erased with the stars, leaving only a
+  // falling moon's glowing fractures hanging in a blue sky)
+  if (!geo && tScene > 1e29) {
     float ls = dot(scene, vec3(0.2126, 0.7152, 0.0722));
     float lsky = dot(L, vec3(0.2126, 0.7152, 0.0722));
     if (ls < 40.0) scene *= clamp(1.0 - lsky / 0.008, 0.0, 1.0);

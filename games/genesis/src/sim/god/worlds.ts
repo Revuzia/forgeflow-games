@@ -273,7 +273,6 @@ export function registerWorldCommands(r: CommandRegistry): void {
     w.alive = false;
     for (const m of u.planets) if (m.st.orbit.parent === w.id && m.alive) { killAll(u, m); m.alive = false; }
     u.god.disasters = u.god.disasters.filter((d) => d.planet !== w.id);
-    u.god.creatures = u.god.creatures.filter((c) => c.planet !== w.id);
     for (const h of u.god.hands) if (h.planet === w.id) { h.held = null; const other = u.planets.find((q) => q.alive); if (other) h.planet = other.id; }
     if (u.focus && u.focus.planet === w.id) { const other = u.planets.find((q) => q.alive)!; u.focus = { planet: other.id, pos: [0, 0, 1] }; }
     u.chronicleAdd(w, 'world', `${w.name} was unmade${dead ? `, and ${dead} souls with it` : ''}. Where it turned there is only dark.`, 3);

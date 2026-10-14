@@ -44,10 +44,22 @@ const LAYOUT: [string, ArrCtor, number][] = [
   ['inside', Int32Array, 1],
   // fix pass: discoveries this agent made by experiment (each one makes the next less likely: no lone genius races eras)
   ['found', Uint8Array, 1],
+  // LIVING PACE (perf/pace.ts): provisioned for work away from home until this tick (food in hand, a water skin; 0 none),
+  // and the camp cell of a trip (far work, with nights at the site; -1 a day trip or none)
+  ['trip', Int32Array, 1], ['camp', Int32Array, 1],
+  // LIVING PACE: what a trip went out for — its task kind | (item + 1) << 8 (0 none): the work goes on around the camp
+  ['tripTask', Int32Array, 1],
+  // LIVING PACE: sessions of food work (foraging, fishing) since the agent last slept — a day's food work is a few of them
+  ['dayWork', Uint8Array, 1],
+  // LIVING RELATIONSHIP (god/regard.ts): per god, faith (conviction that it is real and acts) and loyalty (whose word they
+  // follow, whose shrine they keep); `love` is the trust, `fear` the dread (LIVING §3.1)
+  ['faith', Float32Array, GODS], ['loyalty', Float32Array, GODS],
+  // LIVING LAND (people/demography.ts): the tick a mother last gave birth (0: none recorded) — births are spaced 2-3 years
+  ['lastBirth', Int32Array, 1],
 ];
 
 /** arrays whose empty value is -1 */
-const NEG = new Set(['invItem', 'disease', 'gear', 'tool', 'gcell', 'boat', 'inside']);
+const NEG = new Set(['invItem', 'disease', 'gear', 'tool', 'gcell', 'boat', 'inside', 'camp']);
 
 export class AgentStore {
   cap: number;
@@ -94,6 +106,20 @@ export class AgentStore {
   inside!: Int32Array;
   /** experiments this agent has turned into discoveries */
   found!: Uint8Array;
+  /** LIVING PACE: provisioned for work away from home until this tick (0 none) — perf/pace.ts */
+  trip!: Int32Array;
+  /** LIVING PACE: the camp cell of a trip to far work (-1 none: a day trip, or at home) — perf/pace.ts */
+  camp!: Int32Array;
+  /** LIVING PACE: what a trip went out for: task kind | (item + 1) << 8 (0 none) — perf/pace.ts campWork */
+  tripTask!: Int32Array;
+  /** LIVING PACE: sessions of food work since the agent last slept (perf/pace.ts FOOD_SESSIONS) */
+  dayWork!: Uint8Array;
+  /** LIVING RELATIONSHIP: faith per god 0..1 (god/regard.ts) */
+  faith!: Float32Array;
+  /** LIVING RELATIONSHIP: loyalty per god 0..1 (god/regard.ts) */
+  loyalty!: Float32Array;
+  /** LIVING LAND: the tick a mother last gave birth (0 none recorded) — people/demography.ts */
+  lastBirth!: Int32Array;
   know!: Uint32Array;
 
   constructor(cap: number, kw: number) {
@@ -108,6 +134,7 @@ export class AgentStore {
     this.tool.fill(-1);
     this.boat.fill(-1);
     this.inside.fill(-1);
+    this.camp.fill(-1);
   }
 
   /** every saved / hashed array, in a fixed order */

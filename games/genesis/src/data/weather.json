@@ -89,6 +89,10 @@
     { "id": "no-atmosphere", "name": "No atmosphere", "precipType": "none", "precip": 0, "cloud": -1, "fog": 0, "wind": -100, "spin": 0,
       "lightning": 0, "tempDelta": 0, "humidityDelta": -1, "radius": [1000, 3000], "life": [1440, 1440], "speed": 0,
       "spawn": null,
-      "render": { "particles": "none", "cloud": 0.0, "fog": 0.0, "wind": 0.0, "lightning": 0, "skyTint": [0, 0, 0], "airless": true } }
+      "render": { "particles": "none", "cloud": 0.0, "fog": 0.0, "wind": 0.0, "lightning": 0, "skyTint": [0, 0, 0], "airless": true } },
+    { "id": "rainbow", "name": "Rainbow", "precipType": "none", "precip": 0, "cloud": -0.3, "fog": 0, "wind": 0, "spin": 0,
+      "lightning": 0, "tempDelta": 0, "humidityDelta": 0, "radius": [600, 1200], "life": [45, 120], "speed": 0.4,
+      "spawn": null, "effects": { "omen": 1, "painted": 1 },
+      "render": { "particles": "none", "cloud": 0.0, "fog": 0.0, "wind": 0.0, "lightning": 0, "skyTint": null, "rainbow": 1.0 } }
   ]
 }

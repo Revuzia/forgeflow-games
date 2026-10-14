@@ -113,7 +113,8 @@ test('with the chain: a rocket is built, fuelled, crewed, launched, crosses, mee
   const lines = told(sim, from).join('\n');
   assert.match(lines, /first ship ever to leave Gaia|For the first time a ship left Gaia/);
   assert.match(lines, /first orbit/);
-  assert.match(lines, /another world/);
+  // (space.landing.first, either of its two tellings — events.json)
+  assert.match(lines, /another world|people of one world stood on another/);
   assert.match(lines, /two worlds met|First contact between worlds/);
   assert.equal(sh().outcome, 'trade');
   assert.ok(u.space.relations.length === 1 && u.space.relations[0].trade > 0, 'a relation between the worlds, with trade');
@@ -137,7 +138,8 @@ test('with the chain: a rocket is built, fuelled, crewed, launched, crosses, mee
   const homeStore0 = home.store.slice();
   sim.step(1);
   assert.equal(sh().phase, 'landed');
-  assert.match(told(sim, from).join('\n'), /came home to .* from Rust, laden with/);
+  // (space.return, either of its two tellings — events.json)
+  assert.match(told(sim, from).join('\n'), /came home to .* from Rust, laden with|came home to .* back from Rust with/);
   for (const [i, q] of back) assert.ok((home.store[i] ?? 0) - (homeStore0[i] ?? 0) >= q * 0.9, `${u.content.items.list[i].id} in the home store`);
   const x = ctx(sim, gaia.id);
   const returned = (x.ps.members.get(home.id) ?? []).filter((s) => x.A.love[s * GODS + 1] >= 0.1);
@@ -213,7 +215,8 @@ test('flights can fail: no reliability and the ship is lost with all aboard; an 
   assert.ok(sh.dead >= 3, `${sh.dead} died`);
   assert.equal(sh.crew.length, 0);
   assert.ok(sh.lostAt, 'where it was lost');
-  assert.match(told(sim, from).join('\n'), /exploded|broke apart|lost|crashed|never reached|fell silent/);
+  // (space.lost.pad has two tellings: "exploded on its pad" and "Fire took the … before it left the ground" — events.json)
+  assert.match(told(sim, from).join('\n'), /exploded|broke apart|lost|crashed|never reached|fell silent|before it left the ground/);
   assert.ok(sim.snapshot().ships.some((v) => v.id === sid && v.phase === 'lost'), 'the wreck is drawn');
   // skill matters: the same crew with no skill flies less reliably
   const x = ctx(sim, gaia.id);
@@ -263,8 +266,10 @@ test('the hull\'s goods are set aside at the pad: a town that spends every bar o
   const set = (it: number) => sh.stock.filter(([i]) => i === it).reduce((q, [, n]) => q + n, 0);
   assert.equal(set(steel), 20);
   assert.equal(set(engine), 3);
-  // the builders and smiths take every bar left in the store, day after day
-  for (let d = 0; d < 4 && sh.phase === 'building'; d++) { storeTake(home, steel, 1e9); sim.step(DAY); }
+  // the builders and smiths take every bar left in the store, hour after hour (LIVING PACE: at 2 m a minute the ground
+  // crew reach the pad in minutes — the hull is made, fuelled and away within a day: the chain is read while it stands
+  // on the pad, the hour it leaves the builders' hands)
+  for (let h = 0; h < 4 * 24 && sh.phase === 'building'; h++) { storeTake(home, steel, 1e9); sim.step(60); }
   assert.notEqual(sh.phase, 'building', `the hull was made of the steel set aside (${sh.log.join(' | ')})`);
   assert.ok(sh.hull >= 0);
   // a chain read for the launch counts what is set aside as theirs
@@ -356,9 +361,13 @@ test('a visit waits for fuel to fly home; with fuel for one way only it goes onl
   storeAdd(ctx(sim, gaia.id), home, fuel, 40);
   const r = must(sim, { k: 'ship.launch', planet: gaia.id, settlement: home.id, to: selene.id, purpose: 'curiosity' });
   const sid = r.created![0].id;
-  // (and no more fuel will come: the god takes refining away from them)
+  // (and no more fuel will come: the god takes refining away from them — and again each day: with the hours fast
+  // walking frees, a curious people worked it out anew within three days and refined the oil it dug — LIVING PACE)
   must(sim, { k: 'settlement.withdraw', planet: gaia.id, settlement: home.id, idea: 'oil-refining' });
-  for (let d = 0; d < 16; d++) sim.step(DAY);
+  for (let d = 0; d < 16; d++) {
+    sim.step(DAY);
+    sim.applyNow({ k: 'settlement.withdraw', planet: gaia.id, settlement: home.id, idea: 'oil-refining' });
+  }
   const sh = ship(sim, sid);
   assert.equal(sh.launchTick, -1, `never launched toward an airless moon on one way's fuel (${sh.phase}: ${sh.log.join(' | ')})`);
   assert.ok(['fuelling', 'done'].includes(sh.phase));
@@ -375,7 +384,8 @@ test('a visit waits for fuel to fly home; with fuel for one way only it goes onl
   const r2 = must(sim2, { k: 'ship.launch', planet: g2.id, settlement: h2.id, to: haven, purpose: 'curiosity' });
   const s2 = r2.created![0].id;
   must(sim2, { k: 'settlement.withdraw', planet: g2.id, settlement: h2.id, idea: 'oil-refining' });
-  until(sim2, () => ship(sim2, s2).launchTick >= 0, 25, 'one way to Haven');
+  // (and kept from them while they wait: worked out anew, refining would fill the tanks for the way home)
+  until(sim2, () => { sim2.applyNow({ k: 'settlement.withdraw', planet: g2.id, settlement: h2.id, idea: 'oil-refining' }); return ship(sim2, s2).launchTick >= 0; }, 25, 'one way to Haven');
   assert.match(ship(sim2, s2).log.join(' | '), /Fuel for the way out only: they mean to stay/);
   until(sim2, () => ship(sim2, s2).visits.includes(haven), 15, 'on Haven');
   until(sim2, () => ship(sim2, s2).crew.length === 0, 3, 'they stay');

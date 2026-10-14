@@ -9,7 +9,7 @@
 // never touched. New entries are appended, so every existing index (items, recipes, weather) stays where it was.
 
 import type { Universe } from '../world/universe.ts';
-import type { ContentPack, ItemDef, RecipeDef, SpeciesDef, WeatherDef } from '../content.ts';
+import type { BuildingDef, ContentPack, ItemDef, MaterialDef, OreDef, PlantDef, RecipeDef, SpeciesDef, WeatherDef } from '../content.ts';
 import { loadContent, RUNTIME_PACK } from '../content.ts';
 import { recipeTable } from '../recipes/recipes.ts';
 
@@ -17,7 +17,10 @@ import { recipeTable } from '../recipes/recipes.ts';
 export function runtimePack(u: Universe): ContentPack | null {
   const r = u.god.runtime;
   const speciesIds = Object.keys(r.species).sort();
-  if (!r.items.length && !r.recipes.length && !r.weather.length && !speciesIds.length) return null;
+  // (LIVING CONTENT: deposit kinds, building materials and plants, and the building types that take an invented material)
+  const bm = r.buildingMats ?? {};
+  const bIds = Object.keys(bm).sort();
+  if (!r.items.length && !r.recipes.length && !r.weather.length && !speciesIds.length && !r.ores?.length && !r.materials?.length && !r.plants?.length && !bIds.length) return null;
   const base = u.content;
   const species: SpeciesDef[] = [];
   for (const id of speciesIds) {
@@ -27,11 +30,34 @@ export function runtimePack(u: Universe): ContentPack | null {
     species.push({ ...JSON.parse(JSON.stringify(orig)) as SpeciesDef, ...JSON.parse(JSON.stringify(r.species[id])) as Partial<SpeciesDef>, id });
   }
   void base;
+  const buildings: BuildingDef[] = [];
+  for (const id of bIds) {
+    const orig = originalOf<BuildingDef>(u, 'buildings', id);
+    if (!orig) continue;
+    const first = bm[id].filter((m) => !orig.materials.includes(m));
+    buildings.push({ ...(JSON.parse(JSON.stringify(orig)) as BuildingDef), materials: [...first, ...orig.materials] });
+  }
+  const copy = <T>(l: T[] | undefined): T[] => (l ?? []).map((x) => JSON.parse(JSON.stringify(x)) as T);
   return {
     id: RUNTIME_PACK, name: 'Made by the god', version: '1',
     items: r.items.map((x) => ({ ...x })), recipes: r.recipes.map((x) => JSON.parse(JSON.stringify(x)) as RecipeDef),
     weather: r.weather.map((x) => JSON.parse(JSON.stringify(x)) as WeatherDef), species,
+    ...(r.ores?.length ? { ores: copy<OreDef>(r.ores) } : {}),
+    ...(r.materials?.length ? { materials: copy<MaterialDef>(r.materials) } : {}),
+    ...(r.plants?.length ? { plants: copy<PlantDef>(r.plants) } : {}),
+    ...(buildings.length ? { buildings } : {}),
   };
+}
+
+/** an entry of a section as the packs below the runtime one define it */
+function originalOf<T extends { id: string }>(u: Universe, section: string, id: string): T | undefined {
+  for (let i = u.content.sources.length - 1; i >= 0; i--) {
+    const pk = u.content.sources[i];
+    if (pk.id === RUNTIME_PACK) continue;
+    const hit = ((pk[section] ?? []) as T[]).find((s) => s.id === id);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 function originalSpecies(u: Universe, id: string): SpeciesDef | undefined {

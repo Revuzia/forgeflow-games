@@ -22,6 +22,7 @@ import { animalIdx, habitatFit, spawnHerd } from '../life/herds.ts';
 import { plural } from '../life/ecology.ts';
 import { paintWeather } from '../fields/weather.ts';
 import { inventItem, inventRecipe, inventWeather, itemFrom, slug, titleCase, weatherLike } from './runtime.ts';
+import { animalWord, nearestReal, noSuchAnimal } from '../life/fauna.ts';
 import { fail, herePos, norm, ok } from './util.ts';
 
 /** what a new item is made from, by its tags (inputs every early people can gather) */
@@ -63,38 +64,40 @@ export function makeIdea(u: Universe, name: string, effect: string, mult: number
   return id;
 }
 
-/** a new animal species of this world (derived from the closest known body) */
+/**
+ * A new animal species of this world (LIVING CONTENT §4.4: real animals only). The word must name a real animal: a
+ * content animal (or an old id of one) is that animal; a real species the lexicon knows (`realAnimals`: zebra, otter,
+ * elephant …) becomes a species of this world with the body (and the size) of its nearest base species; a fantasy noun
+ * is its nearest real kind (`fantasyAnimals`: dragon → crocodile, unicorn → wild horse …); anything else is refused (-1:
+ * life/fauna.ts noSuchAnimal says why).
+ */
 export function makeAnimal(u: Universe, p: Planet, name: string, like?: string): number {
   const x = makeCtx(u, p);
-  const id = slug(name);
+  const w = animalWord(u.content, name);
+  if (w.kind === 'none') {
+    // a word the god already made a species of on this world (a save from before the rule) stays what it is
+    const had = animalIdx(x, slug(name));
+    return had >= 0 ? had : -1;
+  }
+  if (w.kind === 'base' || w.kind === 'fantasy') return u.content.animals.idx(w.id);
+  const id = slug(w.name);
   const have = animalIdx(x, id);
   if (have >= 0) return have;
-  const baseId = like && u.content.animals.has(like) ? like : guessBase(name);
-  const base = Math.max(0, u.content.animals.idx(baseId));
+  const base = Math.max(0, u.content.animals.idx(like && u.content.animals.has(like) ? like : w.base));
   const parent = u.content.animals.list[base];
+  const size = w.size ?? parent.size;
   const def: AnimalDef = {
-    ...parent, id, name: titleCase(name), domestic: false, domesticable: false,
+    ...parent, id, name: titleCase(w.name), domestic: false, domesticable: false, size,
+    mass: Math.round((parent.mass ?? 60 * parent.size ** 3) * Math.pow(size / Math.max(1e-3, parent.size), 3) * 10) / 10,
     biomes: u.content.biomes.ids(), temp: [parent.temp[0] - 10, parent.temp[1] - 8, parent.temp[2] + 8, parent.temp[3] + 10],
   };
+  delete def.aliases;
+  delete def.domesticatesTo;
   const idx = x.c.animals.size + x.ps.species.length;
   x.ps.species.push({ idx, def, base, parent: base, born: u.tick });
   x.ps.eco.seen[String(idx)] = u.tick;
   x.ps.version++;
   return idx;
-}
-
-/** the body a new animal borrows (by what its name sounds like) */
-function guessBase(name: string): string {
-  const n = name.toLowerCase();
-  const table: [RegExp, string][] = [
-    [/frog|toad|newt|lizard|snake|serpent|salamander|turtle|croc/, 'desert-lizard'], [/fish|eel|carp|trout|cod|salmon|shark/, 'fish-shoal'],
-    [/bird|crow|raven|dove|hawk|eagle|owl|bat|dragon/, 'vulture'], [/bug|insect|beetle|locust|ant|bee|wasp|moth|butterfl|spider/, 'locust-swarm'],
-    [/whale|leviathan|kraken|squid|octop/, 'whale'], [/cat|lion|tiger|leopard|panther/, 'wolf'], [/dog|wolf|hound|fox|jackal|hyena/, 'wolf'],
-    [/bear|ape|monkey|gorilla/, 'bear'], [/horse|unicorn|zebra|donkey|camel/, 'wild-horse'], [/cow|ox|bull|buffalo|bison|yak/, 'aurochs'],
-    [/pig|hog|boar/, 'boar'], [/goat|sheep|ram|llama/, 'wild-goat'], [/rabbit|hare|mouse|rat|squirrel|mole/, 'rabbit'], [/deer|elk|moose|antelope|gazelle/, 'deer'],
-  ];
-  for (const [re, id] of table) if (re.test(n)) return id;
-  return 'rabbit';
 }
 
 /** a herd of a species dropped near pos where it can live */
@@ -136,6 +139,7 @@ export function registerInventionCommands(r: CommandRegistry): void {
     let animal: string | undefined;
     if (typeof a.animal === 'string' && a.animal) {
       const sp = makeAnimal(u, p, a.animal, typeof a.like === 'string' ? a.like : undefined);
+      if (sp < 0) return fail(noSuchAnimal(String(a.animal)));
       animal = makeCtx(u, p).ps.species.find((d) => d.idx === sp)?.def.id ?? (sp < u.content.animals.size ? u.content.animals.list[sp].id : undefined);
     }
     if (!u.content.weather.has(id)) inventWeather(u, weatherLike(u, String(a.base ?? 'rain'), id, titleCase(name), precip, Array.isArray(a.tint) ? a.tint as [number, number, number] : null), animal);
@@ -156,11 +160,17 @@ export function registerInventionCommands(r: CommandRegistry): void {
   r.register('content.animal', ({ u, p }, a) => {
     const name = String(a.name).trim().slice(0, 40);
     if (!name) return fail('Name the animal.');
+    // (LIVING CONTENT §4.4: a real world — a real animal, the nearest real kind of a fantasy one, or a polite refusal)
+    const w = animalWord(u.content, name);
     const sp = makeAnimal(u, p, name, typeof a.like === 'string' ? a.like : undefined);
+    if (sp < 0) return fail(noSuchAnimal(name));
     const n = Math.max(1, Math.round(Number(a.count ?? 8)));
     const h = dropHerd(u, p, sp, norm(a.pos ?? herePos(u, p)), n);
-    return h ? ok(`${titleCase(plural(name.toLowerCase()))} walk the world: a herd of ${n}.`, [{ kind: 'animal', id: h, planet: p.id }]) : ok(`${titleCase(plural(name.toLowerCase()))} now exist, but nowhere there can hold them.`);
-  }, { desc: 'Invent a new animal', category: 'Life', params: { name: { type: 'string', required: true }, like: { type: 'enum', values: (u) => u.content.animals.ids() }, count: { type: 'int', min: 1, max: 10000, default: 8 }, pos: iPos } });
+    const def = sp < u.content.animals.size ? u.content.animals.list[sp] : makeCtx(u, p).ps.species.find((d) => d.idx === sp)?.def;
+    const shown = def ? plural(def.name.toLowerCase()) : plural(name.toLowerCase());
+    const pre = w.kind === 'fantasy' && def ? `${nearestReal(w.word, def)} ` : '';
+    return h ? ok(`${pre}${titleCase(shown)} walk the world: a herd of ${n}.`, [{ kind: 'animal', id: h, planet: p.id }]) : ok(`${pre}${titleCase(shown)} now exist, but nowhere there can hold them.`);
+  }, { desc: 'Bring a real animal into the world (a species of its own when the world never had it)', category: 'Life', params: { name: { type: 'string', required: true }, like: { type: 'enum', values: (u) => u.content.animals.ids() }, count: { type: 'int', min: 1, max: 10000, default: 8 }, pos: iPos } });
 }
 
 /** hourly: invented weathers that rain animals drop them where they fall */

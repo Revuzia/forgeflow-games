@@ -341,6 +341,8 @@ export class Renderer {
         if (!def || def.cloud <= 0.3) continue;
         _storms.push({ pos: w.pos, radius: w.radius, intensity: w.intensity * Math.min(1, def.cloud), eye: def.eye, style: def.style, vel: w.vel });
       }
+      // (additive, the god layer) storm cells it adds at once: a live tornado's thunderstorm, a hurricane's spiral
+      for (const st of this.godfx.cloudStorms) _storms.push(st);
       const g = pv.params.globalWeather ? WEATHER_LOOK.get(pv.params.globalWeather) : undefined;
       this.clouds.setWeather(_storms, pv.params.radius, g && g.cloud > 0.5 ? 1 : 0, 0.15 + 0.6 * Math.min(1, Math.max(0, pv.params.cloudiness)));
       this.clouds.bake(r, this.fsq, cloudVis.cloudCube!.texture, cloudVis.cloudInner, cloudVis.cloudOuter, this.cutFrames > 0);
@@ -464,6 +466,9 @@ export class Renderer {
           // (clouds take a fifth of the art-directed moonlight: at full strength the night side from orbit was a field
           // of bright grey cloud blocks around the cities, which should be what the night shows)
           bodyToClip: _bodyToClip, planetId: pv.id, moonDir: moonOn ? _moonDir : undefined, moonE: moonOn ? _moonEc.copy(_moonE).multiplyScalar(MOON_CLOUD_SHARE) : undefined,
+          aurora: (vis.uniforms.uAurora?.value as Vector4 | undefined),
+          // (additive, the god layer) lightning lighting the deck from inside
+          flashes: vis === primaryVis ? this.godfx.cloudFlashes : undefined,
         }, q.cloudSteps, q.cloudLightSteps);
       }
       const m = this.atmoPass.material;
@@ -522,6 +527,8 @@ export class Renderer {
     // the god layer's FX over the composited image (plumes, funnels, bolts, domes, auroras, the hand's glow…)
     this.godfx.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post, this.fsq);
     // launch plumes, exhaust smoke, pad clouds, landing dust, explosions and the exhaust's light (render/fx/launch.ts)
+    // (additive, ships lane: the opaque colour copy, for the heat shimmer over a lander's flame)
+    this.ships.fx.sceneCopy = post.sceneCopy.texture;
     this.ships.fx.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
     // the dust of debris rings, erasure flashes, birth swirls and molten shells, a falling moon's fire
     this.worlds.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
@@ -545,14 +552,18 @@ export class Renderer {
       let key = el >= 0 ? 0.095 + 0.038 * smoothstepN(0.0, 0.25, el) : 0.095 + (0.013 - 0.095) * night;
       // from orbit over the night side (the sun's elevation at the camera reads 1 there): a darker key, or the auto
       // exposure meters the few lit pixels — the cities — up to mid-grey and their cores clip to a white blob
+      let orbitNight = 0;
       if (primaryVis && primaryVis.atmo.has && primaryVis.altitude >= primaryVis.atmo.thickness * 1.5) {
         const sub = _up.copy(primaryVis.camBody).normalize().dot(primaryVis.uniforms.uSunDirBody.value as Vector3);
-        const orbitNight = (1 - smoothstepN(-0.35, 0.05, sub)) * smoothstepN(primaryVis.atmo.thickness * 1.5, primaryVis.atmo.thickness * 3, primaryVis.altitude);
+        orbitNight = (1 - smoothstepN(-0.35, 0.05, sub)) * smoothstepN(primaryVis.atmo.thickness * 1.5, primaryVis.atmo.thickness * 3, primaryVis.altitude);
         // (0.05 still metered a lamp-lit city up into AgX's cream: its streets and houses read white, not lamplight)
         key += (0.022 - key) * orbitNight;
       }
       post.setKey(key);
-      post.setMetering(0.02, Math.exp(Math.log(6) + (Math.log(5) - Math.log(6)) * night), Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * night));
+      // (additive, world-events lane) over the night side from orbit the exposure may open further: the starlit,
+      // moonlit ground, the airglow on the limb and the aurora's light under its ovals read as a dim world, not a hole
+      const ceil = Math.exp(Math.log(6) + (Math.log(5) - Math.log(6)) * night);
+      post.setMetering(0.02, ceil + (10 - ceil) * orbitNight, Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * night));
     }
     // bloom: half by day (a veil), full at dusk and night where lamps, windows and fire should glow
     post.bloomScale = 0.5 + 0.5 * (1 - smoothstepN(-0.02, 0.15, this.sunElevation));

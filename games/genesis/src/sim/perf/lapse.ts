@@ -1,8 +1,13 @@
 // GENESIS — SIM perf push 2: the deterministic TIME-LAPSE level of detail (CONTRACT.md §5 note, sim.ts header).
 //
 // The player's speed preset is a LOGGED sim input: the worker issues `time.scale` when the preset changes the level
-// (1x / 10x → level 0, 100x → 1, 1000x → 2). It is recorded in the command log, saved (Universe.settings.lapse) and
-// replayed by rewind, so the same seed + the same command log (speed changes included) give the same hash.
+// (LIVING PACE, presets in ticks per real second: 1x–300x → level 0, 1000x → 1, 3000x → 2 — `time.scale { tps }`,
+// levelOfTps; the legacy `time.scale { scale }` keeps its old meaning, levelOfScale: old 1x / 10x → 0, 100x → 1,
+// 1000x → 2, so every old save, command log and test means what it meant). It is recorded in the command log, saved
+// (Universe.settings.lapse) and replayed by rewind, so the same seed + the same command log (speed changes included)
+// give the same hash. 1000x runs exactly the old 100x code path and 3000x the old 1000x one (the same state: a
+// `{ tps }` level is saved as the legacy multiplier of that level, LEVEL_SCALE, so `{ tps: 1000 }` and the legacy
+// `{ scale: 100 }` give the same hash).
 //
 // At level 0 nothing differs from a sim that never heard of time-lapse: every system runs on its base cadence and no
 // state is kept (settings.lapse is absent) — except the coarse schedule of DEAD worlds (below, `dormant`), which holds at
@@ -50,13 +55,17 @@ import type { Planet } from '../world/planet.ts';
 import type { CommandRegistry } from '../god/commands.ts';
 import { anyFlag, countCommonBits } from '../core/activeset.ts';
 
-/** 0 plain · 1 time-lapse (100x) · 2 deep time-lapse (1000x) · 3 a living world the camera is not on, at 100x or 1000x
- * (SIM perf push 3: `planetLevel`) */
+/** 0 plain · 1 time-lapse (1000x; the old 100x) · 2 deep time-lapse (3000x; the old 1000x) · 3 a living world the camera
+ * is not on, at level 1 or 2 (SIM perf push 3: `planetLevel`) */
 export type LapseLevel = 0 | 1 | 2 | 3;
 
 /** saved time-lapse state (Universe.settings.lapse; absent = level 0 with nothing pending) */
 export interface LapseState {
-  /** the requested speed multiplier the level came from (the worker's preset) */
+  /**
+   * the legacy speed multiplier the level came from (old 1x = 10 ticks per second: levelOfScale). A `time.scale { tps }`
+   * (LIVING PACE) stores the legacy multiplier of its level (LEVEL_SCALE), not the tps: a world run at 1000x is then
+   * the very state of one run at the old 100x (same hash), and a preset change within a level is not a state change
+   */
   scale: number;
   /** last run tick of each scheduled system, by `${planet}:${system}` */
   run: Record<string, number>;
@@ -142,10 +151,21 @@ const SYSTEMS: { sys: LapseSys; phase: number; stagger: boolean }[] = [
  * days doubled the worst rewind replay to ~11 500 ticks, ~8 s of CPU blocking the worker with 1 500 agents) */
 export const KEYFRAME_MULT: readonly [number, number, number] = [1, 1, 2];
 
-/** the level a speed multiplier asks for */
+/** the level a LEGACY speed multiplier asks for (old 1x = 10 ticks per second; `time.scale { scale }`, LapseState) */
 export function levelOfScale(scale: number): 0 | 1 | 2 {
   return scale >= 1000 ? 2 : scale >= 100 ? 1 : 0;
 }
+
+/**
+ * The level a speed preset in ticks per real second asks for (LIVING.md §1.2; the worker's preset, `time.scale { tps }`):
+ * 1x–300x the plain sim, 1000x the time-lapse (the old 100x path), 3000x the deep time-lapse (the old 1000x path).
+ */
+export function levelOfTps(tps: number): 0 | 1 | 2 {
+  return tps >= 3000 ? 2 : tps >= 1000 ? 1 : 0;
+}
+
+/** the legacy multiplier saved for each level (LapseState.scale: levelOfScale(LEVEL_SCALE[lv]) === lv) */
+export const LEVEL_SCALE: readonly [number, number, number] = [1, 100, 1000];
 
 /** the current time-lapse level (the logged one: 0..2) */
 export function lapseLevel(u: Universe): 0 | 1 | 2 {
@@ -332,16 +352,25 @@ export function setTimeScale(u: Universe, scale: number): 0 | 1 | 2 {
   return lv;
 }
 
-const LEVEL_NAMES = ['real time', 'time-lapse (100x)', 'deep time-lapse (1000x)'];
+const LEVEL_NAMES = ['real time (1x-300x)', 'time-lapse (1000x)', 'deep time-lapse (3000x)'];
 
-/** register `time.scale` (the worker issues it when the speed preset changes the level) */
+/**
+ * register `time.scale` (the worker issues it when the speed preset changes the level): `{ tps }` — the preset in ticks
+ * per real second (LIVING PACE) — or the legacy `{ scale }` (old multiplier, old 1x = 10 ticks per second)
+ */
 export function registerTimeScale(r: CommandRegistry): void {
   r.register('time.scale', ({ u }, a) => {
-    const scale = Number(a.scale);
+    let scale: number;
+    if (a.tps !== undefined) scale = LEVEL_SCALE[levelOfTps(Number(a.tps))];
+    else if (a.scale !== undefined) scale = Number(a.scale);
+    else return { ok: false, msg: 'time.scale needs { tps } (ticks per real second) or the legacy { scale }.' };
     const lv = setTimeScale(u, scale);
     return { ok: true, msg: `The sim runs in ${LEVEL_NAMES[lv]}.` };
   }, {
-    desc: 'Time-lapse level from the speed preset (logged: coarser cadences at 100x and 1000x)', category: 'Time',
-    params: { scale: { type: 'number', required: true, min: 0, max: 1e6, desc: 'speed multiplier' } },
+    desc: 'Time-lapse level from the speed preset (logged: coarser cadences at 1000x and 3000x)', category: 'Time',
+    params: {
+      tps: { type: 'number', min: 0, max: 1e6, desc: 'speed preset, ticks per real second (1x-300x plain, 1000x time-lapse, 3000x deep)' },
+      scale: { type: 'number', min: 0, max: 1e6, desc: 'legacy speed multiplier (old 1x = 10 ticks per second: 100x time-lapse, 1000x deep)' },
+    },
   });
 }

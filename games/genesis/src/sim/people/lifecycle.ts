@@ -19,6 +19,9 @@ import { schedule } from './sched.ts';
 import { onTheRoad, release } from './missions.ts';
 import { dropItem } from './people.ts';
 import { leaveShelter } from './tasks.ts';
+// LIVING LAND: the books (births and their spacing, deaths by cause and age) and funerals (people/ledger.ts, gatherings.ts)
+import { noteBirth, noteDeath } from './ledger.ts';
+import { funeralFor } from './gatherings.ts';
 
 const _pt = [0, 0, 0];
 
@@ -168,6 +171,10 @@ export function birth(x: PCtx, st: Settlement, mother: number, father: number): 
   upbringing(x, child, [mother, father]);
   A.remember(mother, MEMK.birth, x.tick, A.id[child]);
   if (father >= 0) A.remember(father, MEMK.birth, x.tick, A.id[child]);
+  // (LIVING LAND: the spacing of a mother's births, and the books — people/demography.ts, ledger.ts)
+  const last = A.lastBirth[mother];
+  A.lastBirth[mother] = x.tick;
+  noteBirth(x, st, last > 0 ? (x.tick - last) / x.year : null);
   st.stats.births++;
   if (st.stats.births === 1 && !st.band) tell(x.u, x.p, 'birth.first', vars(x, st, child), st, [agentRef(x, child)]);
   emitAt(x, child, { t: 'birth', ref: agentRef(x, child), data: { settlement: st.id, species: x.c.species.list[st.species].id } });
@@ -224,6 +231,12 @@ export function die(x: PCtx, s: number, cause: number): void {
     A.remember(k, MEMK.death, x.tick, id);
     A.needs[k * 12 + BELONG] = Math.max(0, A.needs[k * 12 + BELONG] - 0.35);
     if (A.partner[k] === id) A.partner[k] = 0;
+  }
+  // (LIVING LAND: the books, by cause and age; a funeral the evening after for a death at home — people/ledger.ts,
+  // gatherings.ts)
+  if (st) {
+    noteDeath(x, st, DEATH_NAMES[cause] ?? String(cause), (x.tick - A.birth[s]) / x.year, keep);
+    if (keep) funeralFor(x, st, id, [...kin].sort((a, b) => a - b));
   }
   // leave the world (and the shelter they lay in: its count leaked and kept an empty hut 'full' for years)
   if (A.inside[s] >= 0) leaveShelter(x, s);

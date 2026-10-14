@@ -10,6 +10,8 @@ import { cellContexts } from './context.ts';
 import { drinkable, freshWater, isLand, snowWater, wellFlows } from './world.ts';
 import { BuildingFlag } from '../types.ts';
 import { animalDef } from '../life/herds.ts';
+import { BASE_WALK, DAY_TRIP } from './defs.ts';
+import { plantSourced, plantsGiving, plantYield } from '../life/plants.ts';
 
 /** gather task -> items it can yield (the recipe table adds species-specific ones) */
 export const GATHER_TASKS = ['forage', 'chop', 'quarry', 'dig', 'mine', 'cut-ice', 'collect-air', 'secrete'] as const;
@@ -44,11 +46,15 @@ function ids(x: PCtx): Ids {
       sulfur: 'sulfur', obsidian: 'obsidian', saltpeter: 'saltpeter', salt: 'salt', 'glass-sand': 'sand', oil: 'crude-oil',
     };
     const oreOf = new Map<number, number>();
-    x.c.ores.list.forEach((o, i) => { const it = item.get(oreItem[o.id] ?? ''); if (it !== undefined) oreOf.set(it, i + 1); });
+    // (LIVING CONTENT: an ore names its item in ores.json — uranium and gems, and the god's own ores, god/materials.ts)
+    x.c.ores.list.forEach((o, i) => { const it = item.get(o.item ?? oreItem[o.id] ?? ''); if (it !== undefined && !oreOf.has(it)) oreOf.set(it, i + 1); });
     v = {
-      berry: pl(['berry-bush']), grain: pl(['wild-grain', 'wild-rice', 'teosinte']), reeds: pl(['reeds']), conifer: pl(['pine', 'spruce']),
+      // (LIVING CONTENT: the seed of every wild grass that gives wild grain — wild barley, sorghum, lentils: life/plants.ts)
+      berry: pl(['berry-bush']), grain: new Set([...pl(['wild-grain', 'wild-rice', 'teosinte']), ...plantsGiving(x.c, 'wild-grain')]), reeds: pl(['reeds']), conifer: pl(['pine', 'spruce']),
       flax: pl(['flax']), nutTree: pl(['oak', 'beech', 'kapok', 'baobab']), item, oreOf, name: x.c.items.list.map((i) => i.id),
-      code: Int8Array.from(x.c.items.list.map((i) => AV[i.id] ?? 0)),
+      // (LIVING CONTENT: an item with no rule of its own that a plant gives — fruit, mushrooms, cotton — is found where
+      // the plant grows: rule 20, life/plants.ts plantYield)
+      code: Int8Array.from(x.c.items.list.map((i, k) => AV[i.id] ?? (plantSourced(x.c, k) ? 20 : 0))),
       ore: Int16Array.from(x.c.items.list.map((_, i) => oreOf.get(i) ?? 0)),
     };
     idCache.set(x.c, v);
@@ -66,11 +72,11 @@ export function itemIdx(x: PCtx, id: string): number {
 export function availability(x: PCtx, it: number, c: number): number {
   const I = ids(x);
   if (it < 0 || it >= I.code.length) return 0;
-  return availOf(x, I, I.code[it], I.ore[it], c);
+  return availOf(x, I, I.code[it], I.ore[it], c, it);
 }
 
 /** availability by rule code (see AV) and ore type + 1 of an item at cell c */
-function availOf(x: PCtx, I: Ids, code: number, ore: number, c: number): number {
+function availOf(x: PCtx, I: Ids, code: number, ore: number, c: number, it = -1): number {
   const p = x.p, f = p.f;
   const warm = f.temperature[c] > 4;
   const land = isLand(p, c);
@@ -96,6 +102,7 @@ function availOf(x: PCtx, I: Ids, code: number, ore: number, c: number): number 
     case 17: return f.snow[c] > 0.2 || f.ice[c] > 0.1 || p.s.seaIce[c] > 0.05 ? Math.min(1, f.snow[c] + f.ice[c] + p.s.seaIce[c]) : 0;
     case 18: { const a = p.st.atmosphere; return a.methane * a.pressure >= 0.02 ? 0.7 : 0; }
     case 19: return f.water[c] > 0.3 ? Math.min(1, 0.25 + f.water[c] * 0.08) : 0;
+    case 20: return land ? Math.max(v, plantYield(x, it, c)) : 0;
     default: return land || ore > 0 ? v : 0;
   }
 }
@@ -140,8 +147,25 @@ export function reachCells(x: PCtx, st: Settlement, rings: number): number[] {
   return [...seen].sort((a, b) => a - b);
 }
 
-/** the farthest a routine trip goes from home, in flow-field cost (metres × terrain factor) */
+/**
+ * the farthest work goes from home, in flow-field cost (metres × terrain factor). LIVING PACE: everyday work lies within
+ * a day trip of home (DAY_TRIP_COST, perf/pace.ts: an hour's walk); work beyond it, up to this, is a trip with a camp.
+ */
 export const MAX_WORK_COST = 280;
+/** LIVING PACE (defs.ts DAY_TRIP × BASE_WALK): the flow cost of an hour's walk from home — everyday work lies within it */
+export const DAY_TRIP_COST = DAY_TRIP * BASE_WALK;
+
+/**
+ * The day-trip reach of planet p in flow cost: an hour's walk, and never less than the ring of cells around home (on a
+ * coarse world — a moon, a small test world — a cell is ~140 m across: the land beside one's own cell is everyday
+ * reach however long the walk to its centre)
+ */
+export function dayTripCost(p: { edgeM: number }): number {
+  const ring = p.edgeM * 1.6;
+  return ring > DAY_TRIP_COST ? ring : DAY_TRIP_COST;
+}
+/** best cells kept per item within a day trip, and beyond it (for trips) */
+const NEAR_BEST = 6, FAR_BEST = 3;
 
 /** compare two costs that may be Infinity (a plain subtraction gives NaN and an unstable sort) */
 export function cmpCost(a: number, b: number): number {
@@ -189,25 +213,32 @@ export function updateResources(x: PCtx, st: Settlement): void {
   // routine work stays within a few hours' walk of home (the flow field's travel cost, metre-equivalents): the cells
   // and their costs once, then every item over them
   const ff = st.flow;
-  const nearC: number[] = [], nearK: number[] = [];
+  const nearC: number[] = [], nearK: number[] = [], dayTrip: boolean[] = [];
+  const day = dayTripCost(p);
   for (let i = 0; i < cells.length; i++) {
     const c = cells[i];
     const k = ff && cells === ff.cells ? ff.cost[i] : flowCost(st, c);
-    if (k <= MAX_WORK_COST) { nearC.push(c); nearK.push(1 / (1 + k / 400)); }
+    if (k <= MAX_WORK_COST) { nearC.push(c); nearK.push(1 / (1 + k / 400)); dayTrip.push(k <= day); }
   }
   const I = ids(x);
+  // (LIVING PACE: the best cells within a day trip first — everyday work, nearest first by the nearness weight — then the
+  // best few beyond it, which are trips with a camp: perf/pace.ts)
+  const far: [number, number][] = [];
   for (const [, list] of g) {
     for (const it of list) {
       if (items[String(it)]) continue;
       scored.length = 0;
+      far.length = 0;
       const code = I.code[it], ore = I.ore[it];
       for (let i = 0; i < nearC.length; i++) {
-        const a = availOf(x, I, code, ore, nearC[i]);
-        if (a > 0.06) scored.push([nearC[i], a * nearK[i]]);
+        const a = availOf(x, I, code, ore, nearC[i], it);
+        if (a > 0.06) (dayTrip[i] ? scored : far).push([nearC[i], a * nearK[i]]);
       }
       scored.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+      far.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
       const best: number[] = [];
-      for (let i = 0; i < scored.length && i < 6; i++) best.push(scored[i][0]);
+      for (let i = 0; i < scored.length && i < NEAR_BEST; i++) best.push(scored[i][0]);
+      for (let i = 0; i < far.length && i < FAR_BEST; i++) best.push(far[i][0]);
       items[String(it)] = best;
     }
   }

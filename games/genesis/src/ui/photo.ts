@@ -1,8 +1,11 @@
 // GENESIS — photo mode (CONTRACT.md §15.8 "photo (free camera, UI hidden, DOF/exposure/filters/frame, capture PNG)";
 // P, or the camera modes menu). The camera flies free, the interface and the portal's control bar go away, time stands
-// still (unless let run), and a small panel holds the lens: focal length, focus (click the world to focus there), depth
-// blur, exposure, bloom, vignette, grain, roll; a colour filter; a frame (screen, 16:9, cinema 2.39:1, portrait 4:5,
-// square, tall 9:16) with composition guides; the sun's hour; and the shutter. H hides the panel for a clean look.
+// still (unless let run), and a small panel holds the lens: focal length, focus (click the world to focus there — on
+// whatever is drawn there: a person, a tree, a roof, the ground; it autofocuses on the middle of the picture when photo
+// mode opens), aperture (f/22 … f/1.4, or off: the depth of field of a real lens of that focal length focused at that
+// distance, with the range that is sharp shown under it), exposure, bloom, vignette, grain, roll; a colour filter; a
+// frame (screen, 16:9, cinema 2.39:1, portrait 4:5, square, tall 9:16) with composition guides; the sun's hour; and the
+// shutter. H hides the panel for a clean look.
 //
 // The picture is the rendered frame (no interface), cropped to the frame, graded by the filter, and — where the renderer
 // draws no depth of field yet (src/ui/host.ts RenderCameraModes.dof) — given a tilt-shift band of focus at the focus
@@ -39,12 +42,61 @@ export const GUIDES: { id: string; name: string }[] = [
 ];
 
 export function defaultLens(fov = 50): PhotoLens {
-  return { exposure: 0, fov, focus: 220, blur: 0, filter: 'none', frame: 'free', guides: 'thirds', bloom: 1, vignette: 0.22, grain: 0.02, roll: 0 };
+  return { exposure: 0, fov, focus: 220, aperture: 0, blur: 0, filter: 'none', frame: 'free', guides: 'thirds', bloom: 1, vignette: 0.22, grain: 0.02, roll: 0 };
 }
 
 /** 35 mm-equivalent focal length of a vertical field of view (a 24 mm-tall frame) */
 const focal = (fovDeg: number): number => 12 / Math.tan((fovDeg * Math.PI) / 360);
 const fovOf = (mm: number): number => (2 * Math.atan(12 / mm) * 180) / Math.PI;
+
+/** the lens's full stops, from deep focus to wide open (the slider's notches; 0 is "off") */
+export const STOPS = [22, 16, 11, 8, 5.6, 4, 2.8, 2, 1.4] as const;
+/**
+ * How much stronger than a full-frame lens the depth of field is drawn: a world you can hold is seen through a lens that
+ * shows its smallness (a 26 mm lens at f/2.8 on someone 10 m away blurs the far hills by ~4 px at 720p instead of
+ * under one). Everything else is the thin lens.
+ */
+const DOF_GAIN = 6;
+/** the renderer's full blur: a wide-open lens blurs an infinitely far point by 2.2 % of the frame's height */
+const FULL_BLUR = 0.022;
+/** the render lane's extra weight on the near side of the focus (render/camera/photo.ts uNearK) */
+const NEAR_K = 1.2;
+
+/**
+ * The renderer's blur (0..1: the circle of confusion of an infinitely far point over FULL_BLUR of the frame) for an
+ * aperture (f-number, 0 = off), a vertical field of view (deg) and a focus distance (m): the thin lens, c∞ = f² / (N (S −
+ * f)) on a 24 mm-tall frame.
+ */
+export function blurOf(aperture: number, fovDeg: number, focusM: number): number {
+  if (!(aperture > 0)) return 0;
+  const f = focal(fovDeg) / 1000;
+  const S = Math.max(focusM, f * 1.5);
+  const coc = (f * f) / (aperture * (S - f));
+  return Math.min(1, (DOF_GAIN * coc) / 0.024 / FULL_BLUR);
+}
+
+/** the aperture (f-number) whose depth of field is that blur (0 for none) */
+export function apertureOf(blur: number, fovDeg: number, focusM: number): number {
+  if (!(blur > 0.0005)) return 0;
+  const f = focal(fovDeg) / 1000;
+  const S = Math.max(focusM, f * 1.5);
+  return Math.min(32, Math.max(0.7, (DOF_GAIN * f * f) / ((S - f) * 0.024 * FULL_BLUR * blur)));
+}
+
+/**
+ * What is sharp: the near and far distances (m) whose blur stays under ~1.5 px on a frame `heightPx` tall (far = ∞
+ * past the hyperfocal distance); null with no depth of field
+ */
+export function sharpRange(blur: number, focusM: number, heightPx: number): { near: number; far: number } | null {
+  if (!(blur > 0.0005)) return null;
+  const a = 1.5 / (blur * FULL_BLUR * Math.max(200, heightPx));
+  return { near: focusM / (1 + a / NEAR_K), far: a >= 1 ? Infinity : focusM / (1 - a) };
+}
+
+const fmtDist = (m: number): string => (!Number.isFinite(m) ? '∞' : m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${m >= 10 ? Math.round(m) : m.toFixed(1)} m`);
+const fmtStop = (n: number): string => (n > 0 ? `f/${n >= 10 ? Math.round(n) : Number(n.toFixed(1))}` : 'off');
+/** the slider's notch nearest an aperture (0 = off) */
+const notchOf = (n: number): number => (n > 0 ? 1 + STOPS.reduce((bi, v, i) => (Math.abs(Math.log(v / n)) < Math.abs(Math.log(STOPS[bi] / n)) ? i : bi), 0) : 0);
 
 export interface PhotoDeps {
   host: UiHost;
@@ -82,6 +134,7 @@ export class Photo {
   private lensKey = '';
   private hintUntil = 0;
   private sliders = new Map<string, HTMLDivElement & { setValue?: (v: number) => void }>();
+  private sharp: HTMLDivElement | null = null;
   private busy = false;
   /** the last picture (test surface): its file name, size in pixels, bytes */
   last: { name: string; w: number; h: number; bytes: number } | null = null;
@@ -138,7 +191,7 @@ export class Photo {
   private showHint(ms: number): void {
     const kb = this.host.keybinds;
     const k = (id: string, d: string) => kb.hint(id) || d;
-    this.hint.textContent = `drag to look · W A S D move · ${k('cam.tiltUp', 'R')} ${k('cam.tiltDown', 'F')} rise and sink · wheel zoom · click to focus · ${k('photo.capture', 'Space')} take the picture · ${k('photo.panel', 'H')} ${this.panelOn ? 'hide' : 'show'} the panel · ${k('photo.exit', 'P')} leave`;
+    this.hint.textContent = `drag to look · W A S D move · ${k('photo.rise', 'R')} ${k('photo.sink', 'F')} rise and sink · wheel zoom · click to focus · ${k('photo.capture', 'Space')} take the picture · ${k('photo.panel', 'H')} ${this.panelOn ? 'hide' : 'show'} the panel · ${k('photo.exit', 'P')} leave`;
     this.hintUntil = performance.now() + ms;
   }
 
@@ -151,8 +204,9 @@ export class Photo {
       case 'photo.exit': this.host.cam?.photo(false); return true;
       case 'photo.focusNear': this.set({ focus: Math.max(0.5, L.focus / 1.25) }); return true;
       case 'photo.focusFar': this.set({ focus: Math.min(20000, L.focus * 1.25) }); return true;
-      case 'photo.blurLess': this.set({ blur: Math.max(0, Math.round((L.blur - 0.1) * 10) / 10) }); return true;
-      case 'photo.blurMore': this.set({ blur: Math.min(1, Math.round((L.blur + 0.1) * 10) / 10) }); return true;
+      // a stop at a time: less blur closes the lens (f/22, then off), more opens it (from off: f/8)
+      case 'photo.blurLess': { const i = notchOf(L.aperture); this.set({ aperture: i <= 1 ? 0 : STOPS[i - 2] }); this.say(`Aperture ${fmtStop(this.lens().aperture)}`); return true; }
+      case 'photo.blurMore': { const i = notchOf(L.aperture); this.set({ aperture: i === 0 ? 8 : STOPS[Math.min(STOPS.length - 1, i)] }); this.say(`Aperture ${fmtStop(this.lens().aperture)}`); return true; }
       case 'photo.exposureDown': this.set({ exposure: Math.max(-3, Math.round((L.exposure - 0.2) * 10) / 10) }); return true;
       case 'photo.exposureUp': this.set({ exposure: Math.min(3, Math.round((L.exposure + 0.2) * 10) / 10) }); return true;
       case 'photo.zoomIn': this.set({ fov: Math.max(6, L.fov / 1.15) }); return true;
@@ -165,11 +219,21 @@ export class Photo {
     return false;
   }
 
-  /** a click on the world in photo mode: focus there */
-  focusAt(x: number, y: number): void {
-    const d = this.host.cam?.depthAt(x, y);
+  /** photo mode opened: focus on what is in the middle of the frame (the sky leaves the focus where it was) */
+  autofocus(): void {
+    const f = this.frameRect();
+    const d = this.host.cam?.depthAt(f.x + f.w / 2, f.y + f.h / 2);
+    if (d == null) return;
+    this.focusAt(f.x + f.w / 2, f.y + f.h / 2, d);
+    this.say(`Focused on the middle of the picture: ${fmtDist(this.lens().focus)}`);
+  }
+
+  /** a click on the world in photo mode: focus there (on whatever is drawn there) */
+  focusAt(x: number, y: number, known?: number): void {
+    const d = known ?? this.host.cam?.depthAt(x, y);
     if (d == null) { this.say('The sky: nothing there to focus on.'); return; }
     this.set({ focus: Math.max(0.5, d) });
+    if (known === undefined) this.say(`Focus: ${fmtDist(this.lens().focus)}`);
     this.bandY = y;
     this.bandFocus = this.lens().focus;
     this.bandAt = performance.now();
@@ -200,14 +264,15 @@ export class Photo {
       for (const x of list) w.append(h('button', { class: `gn-ph-chip${x.id === cur ? ' gn-on' : ''}`, text: x.name, on: { click: () => { on(x.id); this.host.sound('ui.tick'); this.render(); } } }));
       return w;
     };
-    const fmtDist = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${m >= 10 ? Math.round(m) : m.toFixed(1)} m`);
     const day = this.deps.dayHours();
+    this.sharp = h('div', { class: 'gn-ph-sharp' });
     this.body.append(
       h('div', { class: 'gn-ph-sec', text: 'Lens' }),
       row('Focal length', 'fov', slider({ min: 14, max: 400, step: 1, log: true, value: focal(L.fov), fmt: (v) => `${Math.round(v)} mm`, on: (v) => this.set({ fov: fovOf(v) }) })),
       row('Focus', 'focus', slider({ min: 0.5, max: 20000, step: 0, log: true, value: L.focus, fmt: fmtDist, on: (v) => this.set({ focus: v }) })),
-      row('Depth blur', 'blur', slider({ min: 0, max: 1, step: 0.05, value: L.blur, fmt: (v) => (v ? `${Math.round(v * 100)}%` : 'off'), on: (v) => this.set({ blur: v }) })),
-      h('div', { class: 'gn-ph-note', text: cam?.realDof() ? 'Click the world to focus there.' : 'Click the world to focus there: a band of sharpness at that distance.' }),
+      row('Aperture', 'aperture', slider({ min: 0, max: STOPS.length, step: 1, value: notchOf(L.aperture), fmt: (v) => fmtStop(v > 0 ? STOPS[Math.round(v) - 1] : 0), on: (v) => this.set({ aperture: v > 0 ? STOPS[Math.round(v) - 1] : 0 }) })),
+      this.sharp,
+      h('div', { class: 'gn-ph-note', text: cam?.realDof() ? 'Click the world to focus there. A longer lens, a nearer focus or a wider aperture: less is sharp.' : 'Click the world to focus there: a band of sharpness at that distance.' }),
       h('div', { class: 'gn-ph-sec', text: 'Light' }),
       row('Exposure', 'exposure', slider({ min: -3, max: 3, step: 0.1, value: L.exposure, fmt: (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)} EV`, on: (v) => this.set({ exposure: v }) })),
       row('Bloom', 'bloom', slider({ min: 0, max: 3, step: 0.05, value: L.bloom, fmt: (v) => `${Math.round(v * 100)}%`, on: (v) => this.set({ bloom: v }) })),
@@ -231,7 +296,11 @@ export class Photo {
     const s = this.sliders;
     s.get('fov')?.setValue?.(focal(L.fov));
     s.get('focus')?.setValue?.(L.focus);
-    s.get('blur')?.setValue?.(L.blur);
+    s.get('aperture')?.setValue?.(notchOf(L.aperture));
+    if (this.sharp) {
+      const r = sharpRange(L.blur, L.focus, window.innerHeight);
+      this.sharp.textContent = r ? `Sharp from ${fmtDist(r.near)} to ${fmtDist(r.far)}` : 'Everything sharp (no depth of field)';
+    }
     s.get('exposure')?.setValue?.(L.exposure);
     s.get('bloom')?.setValue?.(L.bloom);
     s.get('vignette')?.setValue?.(L.vignette);
@@ -281,7 +350,7 @@ export class Photo {
     if (!this.active) return;
     const L = this.lens();
     // the lens changed elsewhere (the wheel, the pad): the panel follows
-    const lk = `${L.fov.toFixed(2)}|${L.focus.toFixed(2)}|${L.blur}|${L.exposure}|${L.bloom}|${L.vignette}|${L.grain}|${L.roll}|${L.filter}|${L.frame}|${L.guides}`;
+    const lk = `${L.fov.toFixed(2)}|${L.focus.toFixed(2)}|${L.aperture}|${L.blur.toFixed(4)}|${L.exposure}|${L.bloom}|${L.vignette}|${L.grain}|${L.roll}|${L.filter}|${L.frame}|${L.guides}`;
     if (lk !== this.lensKey) { this.lensKey = lk; this.sync(); }
     const W = window.innerWidth, H = window.innerHeight;
     const f = this.frameRect(W, H);

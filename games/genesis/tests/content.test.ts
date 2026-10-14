@@ -2,9 +2,9 @@
 // phase-1 floors hold (plants, weather, biomes, stars, planet kinds, scenarios), every command kind validates, and a
 // mod pack merges (new ids appended, existing ids replaced in place) while a broken one is refused with reasons.
 // Phase 2+ extends this file: ≥ 40 recipes; the god layer's content — ≥ 120 powers across every category, each mapped
-// to a registered handler whose defaults validate; the floor list of disasters plus inventions; ≥ 5 creature
-// templates; a god mod pack (a power, a disaster, a creature, lexicon words) that loads and works; broken god content
-// refused readably.
+// to a registered handler whose defaults validate; the floor list of disasters plus inventions; the fourteen sigils
+// (LIVING.md §3.6; the creature is gone, §3.5); a god mod pack (a power, a disaster, lexicon words — and a creature it
+// brings, ignored with a readable warning) that loads and works; broken god content refused readably.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -138,7 +138,7 @@ test('the parser previews phase-1 phrases without applying them, and never throw
 
 // ───────────────────────────── the god layer's content ─────────────────────────────
 
-test('god content: >= 40 recipes, >= 120 powers in every category each with a working handler, the disaster floor, >= 5 creatures', () => {
+test('god content: >= 40 recipes, >= 120 powers in every category each with a working handler, the disaster floor, the fourteen sigils', () => {
   const c = loadContent([BASE_PACK]);
   assert.ok(c.recipes.size >= 40, `recipes: ${c.recipes.size}`);
   assert.ok(c.powers.size >= 120, `powers: ${c.powers.size}`);
@@ -176,28 +176,30 @@ test('god content: >= 40 recipes, >= 120 powers in every category each with a wo
     assert.ok(c.powers.list.some((pw) => pw.command === 'disaster.spawn' && pw.params.kind === d.id), `${d.id}: a power calls it`);
   }
   assert.ok(c.disasters.list.filter((d) => d.natural && d.natural.rate > 0).length >= 8, 'nature sends many of them on its own');
-  // creatures
-  for (const k of ['ape', 'ox', 'great-cat', 'tortoise', 'wolf']) assert.ok(c.creatures.has(k), `creature ${k}`);
-  assert.ok(new Set(c.creatures.list.map((t) => t.body)).size >= 5, 'each its own body');
+  // LIVING §3.6: the sigils — original one-stroke glyphs, one power each (and no creature, §3.5)
+  const sigils = new Map(c.powers.list.filter((pw) => pw.sigil).map((pw) => [pw.sigil!, pw.id]));
+  for (const k of ['drop', 'anvil', 'fork', 'ripple', 'sprout', 'knot', 'basket', 'seed', 'log', 'eye', 'flame', 'trail', 'arch', 'fall']) assert.ok(sigils.has(k), `sigil ${k}`);
+  assert.equal(sigils.size, 14);
+  assert.ok(!('creatures' in c), 'no creature registry');
 });
 
-test('a god mod pack adds a power, a disaster, a creature and words — and they work', () => {
+test('a god mod pack adds a power, a disaster and words — and they work; a creature it brings is ignored, with a warning', () => {
   const c = loadContent([BASE_PACK, GOD_MOD]);
   assert.deepEqual(c.packs, ['base', 'ember-gods']);
-  assert.ok(c.disasters.has('ember-rain') && c.creatures.has('salamander') && c.powers.has('disaster-ember-rain') && c.powers.has('creature-salamander'));
+  assert.ok(c.disasters.has('ember-rain') && c.powers.has('disaster-ember-rain') && c.powers.has('sign-ember-comet'));
+  assert.ok((c.warnings ?? []).some((w) => /ember-gods: its 1 creature is ignored/.test(w)), JSON.stringify(c.warnings));
   const sim = new Sim({ seed: 4, scenario: 'sandbox', content: [GOD_MOD], overrides: { n: 12 } });
   assert.deepEqual(validatePowers(sim.registry, sim.content), []);
   const pw = sim.content.powers.get('disaster-ember-rain');
   const r = sim.applyNow({ k: pw.command, ...pw.params, lat: 5, lon: 5 });
   assert.ok(r.ok, r.msg);
   assert.equal(sim.snapshot().planets[0].disasters![0].kind, 'ember-rain');
-  const a = sim.applyNow({ k: 'creature.adopt', template: 'salamander', lat: 5, lon: 6 });
-  assert.ok(a.ok, a.msg);
-  assert.equal(sim.snapshot().creatures[0].body, 'lizard');
+  assert.equal(sim.applyNow({ k: 'creature.adopt', template: 'salamander', lat: 5, lon: 6 }).ok, false, 'no creature to adopt');
+  assert.equal(sim.snapshot().creatures, undefined);
   // the parser knows the new words
   assert.equal(sim.parse('ember rain at lat 3 lon 3').resolved?.[0].kind, 'ember-rain');
   assert.equal(sim.parse('cinder fall at lat 3 lon 3').resolved?.[0].kind, 'ember-rain');
-  assert.equal(sim.parse('adopt a salamander').resolved?.[0].template, 'salamander');
+  assert.match(sim.parse('adopt a salamander').msg ?? '', /no great creature/);
   assert.equal(sim.parse('introduce ember lung').resolved?.[0].disease, 'wasting-cough');
   sim.step(60);
   // and the world saves and loads with it
@@ -219,15 +221,12 @@ test('broken god content is refused, every problem named', () => {
   refuse({ id: 'bad-param', powers: [{ ...power, id: 'p4', params: { kind: 'meteor' }, schema: { ...power.schema, flavour: { type: 'string' } } }] }, /'flavour' is not a parameter of 'disaster.spawn'/);
   const dis = GOD_MOD.disasters![0];
   refuse({ id: 'bad-disaster', disasters: [{ ...dis, id: 'd1', effectors: [{ type: 'explode' as never }], natural: { rate: 1, needs: ['volcanik'] } }] }, /effectors\[0\]\.type/, /did you mean 'volcanic'/);
-  const cre = GOD_MOD.creatures![0];
-  refuse({ id: 'bad-creature', creatures: [{ ...cre, id: 'c1', desires: { dance: 1 } }] }, /unknown behaviour 'dance'/);
-  refuse({ id: 'bad-creature-ref', creatures: [{ ...cre, id: 'c2', animals: ['desert-lizzard'] }] }, /did you mean 'desert-lizard'/);
+  refuse({ id: 'bad-sigil', powers: [{ ...power, id: 'p5', params: { kind: 'meteor' }, sigil: 5 as never }] }, /"sigil" must be a string/);
 });
 
 test('every power name and synonym, said alone, reaches that power (or its equivalent, or asks for the target it lacks)', () => {
-  // a rich world, so every power has something to act on: two peoples, a creature, a live tornado, a disciple, a war
+  // a rich world, so every power has something to act on: two peoples, a live tornado, one of the Called, a war
   const { sim, st, lune, hesh } = twoTowns();
-  must(sim, { k: 'creature.adopt', template: 'ape' });
   must(sim, { k: 'disaster.spawn', kind: 'tornado', pos: lune.pos, duration: 20000 });
   must(sim, { k: 'agent.make-disciple', id: hesh });
   must(sim, { k: 'settlement.start-war', settlement: st.id, other: lune.id });

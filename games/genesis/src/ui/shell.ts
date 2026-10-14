@@ -9,8 +9,12 @@
 // window is open the world takes no acts — no palette, no "do this", no casting — only the window keys and time.
 // Esc (or B) closes the innermost thing: a popover, the aim of a throw, the radial, a gesture, the palette, the "do
 // this" field, a tool's second pick, the armed tool, a window, the selection — and with nothing left, opens the game
-// menu, but never within 0.4 s of having closed something (pressing Esc twice to be sure nothing is armed must not land
-// in the menu).
+// menu (while the opening's whispers speak: its scenario menu, "Another world?"), but never within 0.4 s of having
+// closed something (pressing Esc twice to be sure nothing is armed must not land in the menu). Only the opening's star
+// and fall take Esc first (the scenario menu at once: there is nothing else on screen to close).
+// H hides the whole interface (never while a window is open: a hidden window would still hold the world); a note says
+// how to bring it back. The key strip over the dock forgets each control once it has been used (and stays away while
+// the opening speaks).
 //
 // Every frame the shell lays out what shares the bottom of the screen (toasts sit above the dock and the tool card;
 // the ticker stops short of the dock), marks the world layer busy while a tool, a gesture or the hand owns the pointer
@@ -20,6 +24,7 @@
 import type { IUniform } from 'three';
 import type { InputState } from '../render/camera/common.ts';
 import type { CommandResult, EntityRef } from '../sim/types.ts';
+import { SPEED_PRESETS } from '../sim/types.ts';
 import type { ContentPack } from '../sim/content.ts';
 import type { UiHost, InspectRef, GroundHit } from './host.ts';
 import type { Power } from './powers.ts';
@@ -46,7 +51,7 @@ import { Mods, type ModLibrary, type BootProblem } from './mods.ts';
 import { Photo } from './photo.ts';
 import { CameraUi } from './cammodes.ts';
 import type { LoadOutcome } from './saves.ts';
-import { ACTION_BY_ID, comboLabel, splitCombo, type Context } from './keybinds.ts';
+import { ACTION_BY_ID, LAYER_HOLD_CODES, comboLabel, splitCombo, type Context } from './keybinds.ts';
 import { isTyping } from './dom.ts';
 import { humanize } from './words.ts';
 
@@ -66,9 +71,11 @@ export interface ShellDeps {
   cloudFade(k: number): void;
   /** the opening's camera: 'star' (the star from close, in the dark), 'world' (fall to the home world), 'turn' (the
    * world turning under the camera), 'done' */
-  openingCamera?(shot: 'star' | 'world' | 'turn' | 'done'): void;
+  openingCamera?(shot: 'star' | 'world' | 'turn' | 'hold' | 'done'): void;
   /** the opening's light: exposure (stops, added) and a bloom multiplier */
   openingLight?(ev: number, bloom: number): void;
+  /** is the camera still blending toward where it was sent (the opening's fall waits for it) */
+  cameraBusy?(): boolean;
   /** may the page play sound yet */
   audioRunning?(): boolean;
   save(): Promise<ArrayBuffer | null>;
@@ -104,7 +111,7 @@ const CAM_KEYS: Record<string, [string, string]> = {
 };
 
 /** what still works while a veiled window (settings, saves, the controls card, the menu) is open */
-const MODAL_OK = new Set(['ui.settings', 'ui.saves', 'ui.help', 'ui.menu', 'ui.newWorld', 'ui.mods', 'ui.quicksave', 'ui.quickload', 'ui.chronicle', 'ui.hide', 'tool.cancel',
+const MODAL_OK = new Set(['ui.settings', 'ui.saves', 'ui.help', 'ui.menu', 'ui.newWorld', 'ui.mods', 'ui.quicksave', 'ui.quickload', 'ui.chronicle', 'tool.cancel',
   'time.pause', 'time.speed1', 'time.speed10', 'time.speed100', 'time.speed1000', 'time.faster', 'time.slower', 'time.stepTick', 'time.stepHour', 'time.stepDay']);
 
 type PressKind = 'none' | 'tool' | 'hand' | 'camera' | 'gesture' | 'right' | 'photo';
@@ -162,6 +169,9 @@ export class Shell {
   private aimCode: string | null = null;
   private layoutAt = 0;
   private layoutKey = '';
+  /** "Interface hidden — H or Esc brings it back" (beside the panels: it shows while they are hidden) */
+  private hiddenNote: HTMLDivElement;
+  private hiddenNoteAt = 0;
 
   constructor(parent: HTMLElement, deps: ShellDeps) {
     this.deps = deps;
@@ -257,14 +267,21 @@ export class Shell {
       openFreeform: (text) => this.openFreeform(text),
       openPalette: (q) => this.openPalette(q),
       openMenu: () => { this.newWorld.open({ fromOpening: true }); },
-      menuOpen: () => this.modal(),
+      menuOpen: () => this.modal() || this.cam.menuOpen,
       camera: (shot) => deps.openingCamera?.(shot),
       light: (ev, bloom) => deps.openingLight?.(ev, bloom),
+      cameraBusy: () => deps.cameraBusy?.() ?? false,
       audioRunning: () => deps.audioRunning?.() ?? false,
       setUi: (v) => deps.setUi(v),
       arm: (p, preset) => this.arm(p, preset),
       disarm: () => { if (this.tools.state().armed === 'people') this.tools.disarm(); },
+      hudQuiet: (q) => this.hud.setQuiet(q),
     });
+    this.hiddenNote = document.createElement('div');
+    this.hiddenNote.className = 'gn-hidden-note';
+    this.hiddenNote.setAttribute('role', 'status');
+    this.hiddenNote.hidden = true;
+    parent.appendChild(this.hiddenNote);
     this.pad.onButton = (name, down) => this.padButton(name, down);
     // preferences that are the interface's own
     host.prefs.onChange((p, what) => { if (what.startsWith('ui') || what.startsWith('pad') || what === '*') this.applyUiPrefs(); });
@@ -371,12 +388,15 @@ export class Shell {
   action(id: string): void {
     const host = this.host;
     const cur = this.cursor();
+    // the opening's star and fall give way to any power or window (time keys and Esc keep their own meaning there)
+    if (this.opening.cinematic && id !== 'tool.cancel' && !id.startsWith('time.')) this.opening.skip();
     // a veiled window is up: the world waits (time and the window keys still work)
     if (this.modal() && !MODAL_OK.has(id)) { host.sound('ui.error'); return; }
     // photo mode: its own keys, time, and the way out
     if (id.startsWith('photo.')) { this.photo.action(id); return; }
     if (this.photo.isActive && !PHOTO_OK.has(id)) return;
-    if (id.startsWith('ui.radial@')) { const [x, y] = id.slice(10).split(',').map(Number); this.radial.open(x, Math.max(300, y), 'click'); return; }
+    if (id.startsWith('ui.radial@')) { const [x, y] = id.slice(10).split(',').map(Number); this.radial.open(x, Math.max(300, y), 'click'); this.hud.used('ui.radial'); return; }
+    this.hud.used(id);
     switch (id) {
       case 'cam.system': this.deps.camera.system(); return;
       case 'cam.fly': this.deps.camera.fly(); return;
@@ -403,7 +423,7 @@ export class Shell {
       case 'time.speed100': host.setSpeed(100); return;
       case 'time.speed1000': host.setSpeed(1000); return;
       case 'time.faster': case 'time.slower': {
-        const presets = [0, 1, 10, 100, 1000];
+        const presets: readonly number[] = SPEED_PRESETS;
         const i = presets.indexOf(host.view.speed);
         host.setSpeed(presets[Math.max(0, Math.min(presets.length - 1, (i < 0 ? 1 : i) + (id === 'time.faster' ? 1 : -1)))]);
         return;
@@ -459,8 +479,21 @@ export class Shell {
       case 'ui.quickload': void this.saves.quickload(); return;
       case 'ui.help': if (this.help.isOpen) this.help.close(); else this.openWindow('help'); return;
       case 'ui.menu': if (this.menu.isOpen) this.menu.close(); else this.openWindow('menu'); return;
-      case 'ui.hide': this.deps.setUi(!this.deps.uiVisible()); return;
+      case 'ui.hide': this.hideUi(!this.deps.uiVisible()); return;
     }
+  }
+
+  /** H: the interface away (with a note saying how it comes back) or back */
+  private hideUi(hide: boolean): void {
+    this.deps.setUi(!hide);
+    if (!hide) { this.hiddenNote.hidden = true; return; }
+    const k = this.host.keybinds.hint('ui.hide') || 'H';
+    this.hiddenNote.textContent = `Interface hidden — ${k} or Esc brings it back`;
+    this.hiddenNote.hidden = false;
+    this.hiddenNote.classList.remove('gn-on');
+    void this.hiddenNote.offsetWidth;
+    this.hiddenNote.classList.add('gn-on');
+    this.hiddenNoteAt = performance.now();
   }
   private lastSpeed = 1;
 
@@ -473,7 +506,10 @@ export class Shell {
     const done = (): void => { this.noteDismiss(); };
     if (this.cam.menuOpen) { this.cam.closeMenu(); return done(); }
     if (this.photo.isActive) { this.host.cam?.photo(false); return done(); }
-    if (!this.modal() && this.opening.cancel()) return done();
+    // the cinematic hides the interface: Esc ends the film first (not an unseen deselect)
+    if (this.host.cam?.mode() === 'dolly') { this.host.cam.dolly(null); return done(); }
+    // the opening's star and fall: nothing else is on screen yet — the scenario menu at once
+    if (!this.modal() && this.opening.hush && this.opening.cancel()) return done();
     if (this.hud.closePopovers()) return done();
     if (this.hand.isAiming) { this.hand.cancelAim(); return done(); }
     if (this.radial.isOpen) { this.radial.back(); return done(); }
@@ -492,8 +528,10 @@ export class Shell {
     if (cm === 'walk') { this.host.cam!.walk(null, true); return done(); }
     if (cm === 'dolly') { this.host.cam!.dolly(null); return done(); }
     if (cm === 'follow') { this.host.follow(null); return done(); }
-    if (!this.deps.uiVisible()) { this.deps.setUi(true); return done(); }
+    if (!this.deps.uiVisible()) { this.hideUi(false); return done(); }
     if (performance.now() - this.dismissedAt < 400) return;
+    // nothing left to close: while the opening's whispers speak, its scenario menu ("Another world?"); else the game menu
+    if (this.opening.isActive && this.opening.cancel()) return done();
     this.openWindow('menu');
   }
 
@@ -535,6 +573,8 @@ export class Shell {
   // ───────────────────────────── keyboard ─────────────────────────────
 
   keyDown(e: KeyboardEvent): void {
+    // the key that lit the opening's star was only that
+    if (this.opening.tookTouch(e)) return;
     if (isTyping(e)) {
       // Esc in a window's field leaves the field and closes the window (the "do this" field and the palette handle
       // their own Esc)
@@ -542,6 +582,13 @@ export class Shell {
       return;
     }
     const kb = this.host.keybinds;
+    // the opening's star and fall (the interface still hidden): a key gives way to the world at once — a power or a
+    // window key then acts; a time key (Space among them) only skips: it meant "go on", not "pause" (Esc: the menu)
+    if (this.opening.cinematic && e.code !== 'Escape') {
+      this.opening.skip();
+      const ids = kb.pressActions(e);
+      if (!ids.length || ids[0].startsWith('time.')) { e.preventDefault(); return; }
+    }
     // the camera modes menu takes the arrows, Enter and Esc while it is up
     if (this.cam.menuOpen) {
       if (e.code === 'ArrowDown' || e.code === 'ArrowUp') { e.preventDefault(); this.cam.move(e.code === 'ArrowDown' ? 1 : -1); return; }
@@ -561,13 +608,20 @@ export class Shell {
     if (e.code === 'Escape') { e.preventDefault(); if (!e.repeat) this.cancel(); return; }
     kb.down.add(e.code);
     if (e.repeat) { if (this.holdAllowed(e)) e.preventDefault(); return; }
-    // hold actions start
-    for (const id of kb.holdActions(e)) {
+    // hold actions start (a camera mode's own hold keys — walking's float, photo mode's rise — among them)
+    const live = layer && !this.modal() ? layer : undefined;
+    let layerHold = false;
+    for (const id of kb.holdActions(e, live)) {
+      if (ACTION_BY_ID.get(id)?.context) layerHold = true;
       if (this.heldKeys.has(id)) continue;
       this.heldKeys.add(id);
-      if (id === 'ui.radial' && !this.modal()) { const p = this.cursor() ?? [window.innerWidth / 2, window.innerHeight / 2]; this.radial.open(p[0], p[1], 'hold'); e.preventDefault(); }
-      if (id === 'ui.gesture' && !this.modal() && !this.gestures.active) { const p = this.cursor(); this.gestures.begin(p?.[0], p?.[1]); this.gestureByKey = true; e.preventDefault(); }
+      // (in photo mode the hand, the radial and gestures wait)
+      if (this.photo.isActive) continue;
+      if (id === 'ui.radial' && !this.modal()) { const p = this.cursor() ?? [window.innerWidth / 2, window.innerHeight / 2]; this.radial.open(p[0], p[1], 'hold'); this.hud.used(id); e.preventDefault(); }
+      if (id === 'ui.gesture' && !this.modal() && !this.gestures.active) { const p = this.cursor(); this.gestures.begin(p?.[0], p?.[1]); this.gestureByKey = true; this.hud.used(id); e.preventDefault(); }
     }
+    // a camera mode's hold key shadows whatever the world presses with it
+    if (layerHold) { e.preventDefault(); return; }
     const press = kb.pressActions(e);
     if (press.length) {
       e.preventDefault();
@@ -578,7 +632,7 @@ export class Shell {
 
   /** the browser's own use of a key the game holds (Space scrolls, arrows scroll) is suppressed */
   private holdAllowed(e: KeyboardEvent): boolean {
-    return this.host.keybinds.holdActions(e).length > 0;
+    return this.host.keybinds.holdActions(e, this.modal() ? undefined : this.layer()).length > 0;
   }
 
   keyUp(e: KeyboardEvent): void {
@@ -622,6 +676,8 @@ export class Shell {
    */
   pointerDown(x: number, y: number, button: number, mods: { altKey: boolean; ctrlKey: boolean; shiftKey: boolean; metaKey: boolean }, t = performance.now(), label: { planet: number; id: number } | null = null): void {
     this.pointer = [x, y];
+    // the click that lit the opening's star was only that
+    if (mods instanceof Event && this.opening.tookTouch(mods)) return;
     this.downX = x; this.downY = y;
     this.pressLabel = label;
     if (this.radial.isOpen) return;
@@ -655,7 +711,7 @@ export class Shell {
         if (!this.tools.wantsDrag()) { input.dragL[0] += dx; input.dragL[1] += dy; }
         break;
       case 'hand': this.hand.move(x, y, t, pts); break;
-      case 'camera': this.hand.move(x, y, t, pts); input.dragL[0] += dx; input.dragL[1] += dy; break;
+      case 'camera': this.hand.move(x, y, t, pts); input.dragL[0] += dx; input.dragL[1] += dy; if (Math.abs(x - this.downX) + Math.abs(y - this.downY) > 24) this.hud.used('drag'); break;
       case 'right': this.rightMoved += Math.abs(dx) + Math.abs(dy); break;
       case 'photo': input.dragL[0] += dx; input.dragL[1] += dy; break;
     }
@@ -684,6 +740,7 @@ export class Shell {
     if (kind === 'hand' || kind === 'camera') {
       const r = this.hand.up(x, y, t);
       if (r === 'click') {
+        this.hud.used('click');
         if (label) this.host.select({ kind: 'settlement', id: label.id, planet: label.planet });
         else this.deps.click(x, y);
       }
@@ -698,6 +755,7 @@ export class Shell {
     if (mods.ctrlKey && this.tools.isArmed) { this.tools.resize(dy > 0 ? 1 / 1.12 : 1.12); return; }
     if (mods.altKey && this.tools.isArmed) { this.tools.strengthen(dy > 0 ? -1 : 1); return; }
     this.deps.input.wheel += dy;
+    this.hud.used('wheel');
   }
 
   // ───────────────────────────── gamepad ─────────────────────────────
@@ -712,11 +770,17 @@ export class Shell {
       if (name === 'A') { this.cam.accept(); return; }
       if (name === 'B') { this.cam.closeMenu(); this.noteDismiss(); return; }
     }
-    // a camera mode's own buttons come first (photo: A takes the picture, B leaves; walking: B rises)
+    // a camera mode's own buttons come first (photo: A takes the picture, B leaves, the triggers rise and sink;
+    // walking: B rises, the D-pad floats up and comes down)
     const layer = this.layer();
     if (layer && !this.modal()) {
       const own = kb.padActions(name, layer);
-      if (own.length) { if (down) this.action(own[0]); return; }
+      if (own.length) {
+        const a = ACTION_BY_ID.get(own[0]);
+        if (a?.hold) { if (down) this.heldPad.add(a.id); else this.heldPad.delete(a.id); }
+        else if (down) this.action(own[0]);
+        return;
+      }
     }
     const ids = kb.padActions(name);
     // menus first: the radial, the palette, panels
@@ -846,8 +910,13 @@ export class Shell {
     for (const [id, codes] of Object.entries(CAM_KEYS)) if (held(id)) input.keys.add(fly ? codes[1] : codes[0]);
     if (held('cam.zoomIn')) input.wheel -= dt * 600;
     if (held('cam.zoomOut')) input.wheel += dt * 600;
-    // walking and photo mode: the left stick moves the body / the camera, not the cursor (it stays in the middle)
+    // walking and photo mode: the left stick moves the body / the camera, not the cursor (it stays in the middle); the
+    // mode's own hold keys (float, sink, rise) become the keys its camera reads
     const layer = this.layer();
+    for (const [id, code] of Object.entries(LAYER_HOLD_CODES)) {
+      if (!layer) { this.heldPad.delete(id); continue; }
+      if (ACTION_BY_ID.get(id)?.context === layer && held(id)) input.keys.add(code);
+    }
     this.pad.locked = !!layer && !this.modal() && !this.radial.isOpen && !this.palette.isOpen;
     this.host.cam?.stick(layer === 'walk' && this.pad.locked ? pf.lx : 0, layer === 'walk' && this.pad.locked ? pf.ly : 0);
     if (layer === 'photo' && this.pad.locked) {
@@ -908,9 +977,11 @@ export class Shell {
     this.creatures.frame(hush);
     // (before the toasts drain the events: the opening reads the sim's milestones)
     this.opening.frame();
+    this.hud.keepOut = this.opening.speaking();
     this.hud.toasts.muteMilestones = this.opening.isActive;
     this.cam.frame(this.pad.active);
     this.photo.frame();
+    if (!this.hiddenNote.hidden && (this.deps.uiVisible() || performance.now() - this.hiddenNoteAt > 4200)) { this.hiddenNote.hidden = true; this.hiddenNote.classList.remove('gn-on'); }
     void dt;
     const f = this.deps.hudFrame();
     this.hud.update({

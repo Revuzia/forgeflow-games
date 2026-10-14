@@ -3,12 +3,12 @@
 // beside a burning cell move away before it reaches them; people far from the fire carry on as before.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { igniteArea } from '../src/sim/fields/fire.ts';
+import { igniteArea, igniteCell } from '../src/sim/fields/fire.ts';
 import { PATH_MAX, TASK } from '../src/sim/people/defs.ts';
-import { NEED_N, WATER } from '../src/sim/people/needs.ts';
-import { FIRE_HERE, fleeGoalAlight } from '../src/sim/people/danger.ts';
+import { FOOD, NEED_N, WATER } from '../src/sim/people/needs.ts';
+import { FIRE_BURN, FIRE_HERE, fleeGoalAlight } from '../src/sim/people/danger.ts';
 import { FIRE_CHECK } from '../src/sim/people/people.ts';
-import { startTask } from '../src/sim/people/tasks.ts';
+import { startTask, storePoint } from '../src/sim/people/tasks.ts';
 import { world, people, membersOf, ctx } from './helpers/peoples.ts';
 
 /** a settled band, parched to the bone, its village set alight with fuel underfoot */
@@ -39,7 +39,8 @@ test('parched people standing in a fire flee instead of drinking there', () => {
     sim.step(1);
     for (const s of membersOf(sim, st)) {
       if (!A.alive[s]) continue;
-      const burning = p.f.fire[A.cell[s]] > 0.05 || p.f.lava[A.cell[s]] > 0.01;
+      // (in the flames: above FIRE_BURN, where they burn — smoulder below it is walked and drunk in: people/danger.ts)
+      const burning = p.f.fire[A.cell[s]] > FIRE_BURN || p.f.lava[A.cell[s]] > 0.01;
       if (!burning) { burningStreak.delete(s); continue; }
       inFireTicks++;
       const k = (burningStreak.get(s) ?? 0) + 1;
@@ -56,7 +57,7 @@ test('people caught in a fire get out of it, then drink where it is safe', () =>
   const { sim, st, p, A } = burningVillage(7);
   sim.step(180);
   const alive = membersOf(sim, st).filter((s) => A.alive[s]);
-  const stillIn = alive.filter((s) => p.f.fire[A.cell[s]] > 0.05);
+  const stillIn = alive.filter((s) => p.f.fire[A.cell[s]] > FIRE_BURN);
   assert.ok(stillIn.length <= Math.max(1, Math.floor(alive.length * 0.1)), `${stillIn.length} of ${alive.length} still stand in the fire after 3 h`);
   // they were parched: within the next day the survivors drink, and never at a burning spot
   let drankSafe = 0;
@@ -65,7 +66,7 @@ test('people caught in a fire get out of it, then drink where it is safe', () =>
     sim.step(5);
     for (const s of membersOf(sim, st)) {
       if (!A.alive[s] || A.task[s] !== TASK.drink) continue;
-      if (p.f.fire[A.cell[s]] > 0.05) drankInFire++;
+      if (p.f.fire[A.cell[s]] > FIRE_BURN) drankInFire++;
       else drankSafe++;
     }
   }
@@ -170,4 +171,44 @@ test('an errand goes around a burning cell when there is a way round', () => {
     sim.step(40);
   }
   assert.ok(checked > 0, 'at least one errand had a way round the fire');
+});
+
+test('a town whose core smoulders still eats and drinks there: smoulder is not flame', () => {
+  // the store, the well and the houses in a cell burning down (fire 0.05-0.2: embers and smoke, below the burns) once
+  // turned every walk home into a flight — after a fireball 24 of 30 starved beside 180 units of food (people/danger.ts)
+  const sim = world(24, 20261008);
+  const st = people(sim, 'plains-folk', 20, { settled: true });
+  sim.step(30);
+  const p = sim.u.planets[0];
+  const A = p.people.agents;
+  const g = p.grid;
+  const ps = p.people;
+  const x = ctx(sim);
+  const core = storePoint(x, st, [0, 0, 0]);
+  const foods = x.info[st.species].foods;
+  const edible = (): number => foods.reduce((q, i) => q + (st.store[i] ?? 0), 0);
+  const grain = foods.find((i) => x.c.items.list[i].id === 'grain') ?? foods[0];
+  st.store[grain] = (st.store[grain] ?? 0) + 300;
+  for (const s of membersOf(sim, st)) A.needs[s * NEED_N + FOOD] = 0.08;
+  // the core's buildings three-quarters burned: what is left smoulders for most of a day (wet ground around: no spread)
+  for (let e = g.nbrStart[core]; e < g.nbrStart[core + 1]; e++) p.f.moisture[g.nbr[e]] = 1;
+  for (const id of ps.bByCell.get(core)) { const b = ps.building(id); if (b) b.damage = Math.max(b.damage, 0.75); }
+  p.f.grass[core] = 0; p.f.tree[core] = 0;
+  assert.ok(igniteCell(sim.u, p, core, 0.15, 'test'), 'the core smoulders');
+  const food0 = edible();
+  let maxFlee = 0, hottest = 0, smoulderTicks = 0;
+  for (let t = 0; t < 720; t++) {
+    sim.step(1);
+    hottest = Math.max(hottest, p.f.fire[core]);
+    if (p.f.fire[core] > FIRE_HERE) smoulderTicks++;
+    let flee = 0;
+    for (const s of membersOf(sim, st)) if (A.alive[s] && A.task[s] === TASK.flee) flee++;
+    maxFlee = Math.max(maxFlee, flee);
+  }
+  assert.ok(hottest <= FIRE_BURN && smoulderTicks > 360, `the core smouldered below the burns (max ${hottest.toFixed(2)}, ${smoulderTicks} ticks)`);
+  const alive = membersOf(sim, st).filter((s) => A.alive[s]);
+  const fed = alive.filter((s) => A.needs[s * NEED_N + FOOD] > 0.3).length;
+  assert.ok(edible() < food0 - 5, `they ate from the store in the smouldering core (${food0.toFixed(0)} -> ${edible().toFixed(0)})`);
+  assert.ok(fed >= alive.length * 0.8, `${fed} of ${alive.length} are fed after half a day beside their smouldering store`);
+  assert.equal(maxFlee, 0, 'nobody runs from smoulder');
 });

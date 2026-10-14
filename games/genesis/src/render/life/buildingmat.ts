@@ -243,14 +243,27 @@ BSurf surfaceOf(int s, vec2 uv, vec3 base, float seed, float fw, float isRoof) {
     o.h = m * 0.6 * k * la;
     o.rough = 0.85;
   } else if (s == 4) {
-    // mudbrick: big soft bricks, eroded joints, patches of plaster
+    // mudbrick: big soft bricks laid by hand — courses that wander in height and run off level, joints eroded deep,
+    // each brick's arrises worn round; a coat of mud plaster over most of it, fallen away in patches (the bricks show
+    // through), crazed with hairline cracks and stained in broad blotches
     float la;
-    float m = courses(uv, vec2(0.42, 0.13), 0.025, 0.5, seed, fw, id, f, la);
+    // (uneven courses: the wall's rows drift up and down along it and differ in height by a few centimetres)
+    vec2 wuv = vec2(uv.x, uv.y + 0.035 * sin(uv.x * 0.9 + seed * 7.0) + 0.02 * snoise(vec3(uv.x * 0.35, floor(uv.y / 0.13), seed)));
+    float m = courses(wuv, vec2(0.42, 0.13), 0.025, 0.5, seed, fw, id, f, la);
     float k = aaK(fw, 0.08) * mix(0.5, 1.0, la);
-    float plaster = smoothstep(0.1, 0.35, fbm3(vec3(uv * 0.6, seed * 5.0)));
-    vec3 bc = base * (0.85 + 0.25 * id);
-    o.col = mix(base, mix(mix(base * 0.7, bc, m), base * 1.12, plaster), k);
-    o.h = mix(m * 0.5, 0.25, plaster) * k;
+    vec2 eb = min(f, 1.0 - f) * vec2(0.42, 0.13);
+    float worn = (1.0 - smoothstep(0.012, 0.05, min(eb.x, eb.y))) * m * aaL(fw, 0.05);
+    float plaster = smoothstep(0.08, 0.32, fbm3(vec3(uv * 0.6, seed * 5.0)));
+    // the plaster's edge where it has spalled: a dark lip, a little relief
+    float edgeP = (1.0 - smoothstep(0.0, 0.08, abs(plaster - 0.5))) * aaK(fw, 0.06);
+    // hairline cracks crazing the plaster (the Voronoi network's borders, broken up)
+    vec3 cv = voronoi3(vec3(uv * vec2(1.6, 2.1), seed * 11.0));
+    float crack = (1.0 - smoothstep(0.0, 0.035, cv.y - cv.x)) * smoothstep(0.3, 0.6, snoise(vec3(uv * 1.3, seed * 2.0)) * 0.5 + 0.5) * aaK(fw, 0.04) * plaster;
+    float blot = fbm3(vec3(uv * vec2(0.4, 0.25), seed * 9.0)) * 0.5 + 0.5;
+    vec3 bc = base * (0.82 + 0.28 * id) * (1.0 - 0.18 * worn);
+    vec3 pl = base * (1.05 + 0.1 * blot) * (1.0 - 0.45 * crack) * (1.0 - 0.25 * edgeP);
+    o.col = mix(base, mix(mix(base * 0.66, bc, m), pl, plaster), k) * mix(1.0, 0.86 + 0.18 * blot, aaK(fw, 0.5));
+    o.h = mix(m * 0.55 - worn * 0.2, 0.3 - crack * 0.15, plaster) * k + edgeP * 0.15;
     o.rough = 0.95;
   } else if (s == 5) {
     // planks: boards 0.2 m wide with dark gaps and grain along them
@@ -485,6 +498,11 @@ const FRAG_SURFACE = /* glsl */ `
     alb *= mix(0.72, 1.0, smoothstep(-0.2, 0.9, vLocal.y));
     float streak = snoise(vec3(vKUv.x * 2.2, vKUv.y * 0.12, seed * 5.0));
     alb *= 1.0 - 0.08 * smoothstep(0.2, 0.8, streak) * aaK(fwUv, 0.4);
+    // (additive, close-up pass) the top of a wall under its roof or parapet: shade and grime where the eaves keep
+    // the sky off and water runs down from the roof edge — dark drip lines hanging from it
+    float top = smoothstep(H - 1.1, H - 0.15, vLocal.y) * step(isRoof, 0.5);
+    float drip = smoothstep(0.55, 0.95, snoise(vec3(vKUv.x * 3.4, 0.0, seed * 3.0)) * 0.5 + 0.5) * smoothstep(H - 2.4, H - 0.3, vLocal.y);
+    alb *= 1.0 - (0.18 * top + 0.16 * drip * step(isRoof, 0.5)) * aaK(fwUv, 0.3);
   }
   if (progress < 0.999) alb = mix(alb, alb * 1.25 + 0.03, smoothstep(0.6, 0.0, abs(vLocal.y - H * progress / 0.9)) * 0.5);
   // a wall still rising has no roof: its inner faces are daylit raw wall (rough core, unplastered), not the dark of a

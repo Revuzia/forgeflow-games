@@ -110,11 +110,9 @@ const PHRASES: [string, Want][] = [
   ['turn Hesh into a frog', (c, _s, w) => (c.some((x) => x.k === 'agent.transform' && x.id === w.hesh && x.into === 'frog')) || json(c)],
   ['send a meteor at Hesh', (c) => (c[0].k === 'disaster.spawn' && c[0].kind === 'meteor') || json(c)],
   ['teach Aru iron', (c) => (c[0].k === 'settlement.teach' && c[0].knowledge === 'iron-smelting') || json(c)],
-  // the hand, the creature, the rivals, saves
+  // the Touch, the rivals, saves (the creature is gone: LIVING §3.5 — tests/creature.test.ts)
   ['throw Hesh at Lune', (c, _s, w) => (c[0].k === 'hand.grab' && (c[0].target as { id: number })?.id === w.hesh && c[1]?.k === 'hand.throw') || json(c)],
   ['conjure 20 bread into my hand', (c) => (c[0].k === 'hand.grab' && c[0].item === 'bread' && c[0].qty === 20) || json(c)],
-  ['give me a creature', 'creature.adopt'], ['adopt a great cat near Lune', (c) => (c[0].k === 'creature.adopt' && c[0].template === 'great-cat') || json(c)],
-  ['make the creature bigger', 'creature.grow'],
   ['give Lune a jealous god', (c) => (c[0].k === 'rival.add' && c[0].temperament === 'jealous') || json(c)],
   ['save the game', 'meta.save'], ['load the game', 'meta.load'], ['resume', (c) => (c[0].k === 'time.speed' && c[0].speed === 1) || json(c)],
   // verbs that look like nouns
@@ -461,16 +459,11 @@ test('a road laid by the god stays: road = 1, unworn by time', () => {
   assert.ok(cells.every((c) => p.f.road[c] === 1), 'not one has faded');
 });
 
-test('the hand: a named person thrown, a held one dropped over a town; the creature grown', () => {
+test('the Touch: a named person thrown, a held one dropped over a town', () => {
   const { sim, lune, hesh } = twoTowns();
   const p = sim.u.planets[0];
   run(sim, 'pick up Hesh');
   run(sim, 'drop him on Lune');
   sim.step(5);
   assert.ok(distM(p, (sim.query('agent', { id: hesh }) as { pos: number[] }).pos, lune.pos) < 400, 'Hesh came down at Lune');
-  run(sim, 'adopt an ape');
-  const c = sim.u.god.creatures.find((x) => x.alive)!;
-  const h = c.height;
-  run(sim, 'make the creature bigger');
-  assert.ok(c.height > h, `grew ${h} -> ${c.height}`);
 });

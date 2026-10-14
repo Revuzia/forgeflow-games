@@ -1,0 +1,291 @@
+{
+ "_doc": "The god layer on the REAL sim (worker, scenario lookdev): the Touch holding a villager and hurling a boulder, the miracles (ward, mending, plenty), plague and swarm over a town, a tornado under its storm, a thunderstorm, a blizzard at street level, a tsunami at a coast, an eclipse. The art review's staging (_harness/scratch/godspace-review/gen.mjs), re-shot on the live tree. Run: node _harness/shots.mjs _harness/specs/god-real.json",
+ "shots": [
+  {
+   "name": "real-touch-village",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "await G.step(1440); F.fx.hand.force = true; const p = T();",
+    "await G.camera({ mode: 'surface', lat: p.lat - (16 / R) * D, lon: p.lon, alt: 3, yaw: 0, pitch: 6, fov: 60, hour: 16 }); await G.frames(1);",
+    "const near = G.agents(80).filter((x) => x.dist < 90); await G.cmd({ k: 'hand.move', pos: p.pos, alt: 7 });",
+    "const r = near.length ? await G.cmd({ k: 'hand.grab', target: { kind: 'agent', id: near[0].id } }) : await G.cmd({ k: 'hand.grab', kind: 'agent', radius: 300 });",
+    "await G.step(1); const hp = A.sim.view.hand.pos; const hl = { lat: Math.asin(hp[1] / Math.hypot(...hp)) * D, lon: Math.atan2(hp[0], hp[2]) * D }; await G.camera({ mode: 'surface', lat: hl.lat - (22 / R) * D, lon: hl.lon, alt: 2.5, yaw: 0, pitch: 12, fov: 60, hour: 16 }); await G.frames(3);",
+    "return { grab: r.msg, held: [F.fx.hand.heldKind, F.fx.hand.heldId], regard: A.sim.view.hand && A.sim.view.hand.regard, L: +F.fx.hand.scale.toFixed(1), d: Math.round(F.fx.hand.grip.distanceTo(F.fx.vis.camBody)) };"
+   ]
+  },
+  {
+   "name": "real-throw-rock",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const at = (p, east, north) => { const lat = (p.lat + (north / R) * D) / D, lon = (p.lon + (east / R) * D / Math.cos(p.lat / D)) / D; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)]; };",
+    "const ll = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return { lat: Math.asin(v[1] / l) * D, lon: Math.atan2(v[0], v[2]) * D }; };",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "await G.cmd({ k: 'hand.release' }); await G.step(1); F.fx.hand.force = null; const p = T();",
+    "await G.cmd({ k: 'hand.move', pos: at(p, 0, -200), alt: 16 }); const g = await G.cmd({ k: 'hand.grab', kind: 'rock', mass: 2600, pos: at(p, 0, -200) }); await G.step(1); await G.frames(1);",
+    "// (a command's `pos` left out means the world's focus — the camera's — so the grab names its place: without it the Touch jumped to the focus and the throw was staged off screen, the review's 'Touch not drawn after a throw')",
+    "const hp = at(p, 0, -200); const hl = ll(hp); const hlen = Math.hypot(...hp); const up = hp.map((x) => x / hlen); const E0 = [up[2], 0, -up[0]]; const el = Math.hypot(...E0); const v = [E0[0] / el * 20 + up[0] * 20, E0[1] / el * 20 + up[1] * 20, E0[2] / el * 20 + up[2] * 20];",
+    "await G.camera({ mode: 'orbit', lat: hl.lat, lon: hl.lon + (40 / R) * D / Math.cos(hl.lat / D), dist: 230, tilt: 45, yaw: 0, fov: 55, hour: 15.5 }); await G.frames(2);",
+    "const t = await G.cmd({ k: 'hand.throw', vel: v }); await G.frames(1); const age = () => { let a = -1; F.fx.m.flights.forEach((id, kind, pp, vv, ag) => { a = Math.max(a, ag); }, F.fx.clock); return a; }; for (let i = 0; i < 6 && age() < 0; i++) await G.frames(1); if (age() < 0) { await G.step(1); await G.frames(2); } for (let i = 0; i < 10 && age() < 1.0; i++) { F.advance(0.3); await G.frames(1); }",
+    "let fl = []; F.fx.m.flights.forEach((id, kind, pp, vv, age) => fl.push({ id, kind, age: +age.toFixed(2), d: Math.round(pp.distanceTo(F.fx.vis.camBody)), vr: +(vv.dot(pp) / pp.length()).toFixed(1) }), F.fx.clock);",
+    "return { grab: g.msg, thr: t.msg, flights: fl, touch: { vis: F.fx.hand.visible, pres: +F.fx.hand.presence.toFixed(2), held: F.fx.hand.heldKind } };"
+   ]
+  },
+  {
+   "name": "real-miracles",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const at = (p, east, north) => { const lat = (p.lat + (north / R) * D) / D, lon = (p.lon + (east / R) * D / Math.cos(p.lat / D)) / D; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)]; };",
+    "const ll = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return { lat: Math.asin(v[1] / l) * D, lon: Math.atan2(v[0], v[2]) * D }; };",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "F.fx.hand.force = false; const p = T(); await G.cmd({ k: 'disaster.cancel', all: true }); await G.cmd({ k: 'weather.clear', everywhere: true });",
+    "const a = await G.cmd({ k: 'miracle.cast', kind: 'shield', pos: p.pos, radius: 90 });",
+    "const b = await G.cmd({ k: 'miracle.cast', kind: 'heal', pos: at(p, 140, 40), radius: 70 });",
+    "const c = await G.cmd({ k: 'miracle.cast', kind: 'food', pos: at(p, -150, -20), radius: 70 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 430, tilt: 38, yaw: 0, fov: 55, hour: 16.5 }); await G.frames(1); F.advance(3.4); await G.frames(2);",
+    "return [a.msg, b.msg, c.msg];"
+   ]
+  },
+  {
+   "name": "real-plague",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const at = (p, east, north) => { const lat = (p.lat + (north / R) * D) / D, lon = (p.lon + (east / R) * D / Math.cos(p.lat / D)) / D; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)]; };",
+    "const ll = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return { lat: Math.asin(v[1] / l) * D, lon: Math.atan2(v[0], v[2]) * D }; };",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "const p = T(); await G.cmd({ k: 'disaster.cancel', all: true });",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'plague', pos: p.pos }); await G.step(60);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 230, tilt: 50, yaw: 0, fov: 55, hour: 17.8 }); await G.frames(1); F.advance(20); await G.frames(2);",
+    "const st = [...F.fx.m.disasters.states.values()].find((x) => x.kind === 'plague'); return { msg: r.msg, spots: st && (st.extra.spots || []).length };"
+   ]
+  },
+  {
+   "name": "real-swarm",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const at = (p, east, north) => { const lat = (p.lat + (north / R) * D) / D, lon = (p.lon + (east / R) * D / Math.cos(p.lat / D)) / D; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)]; };",
+    "const ll = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return { lat: Math.asin(v[1] / l) * D, lon: Math.atan2(v[0], v[2]) * D }; };",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "await G.cmd({ k: 'disaster.cancel', all: true }); const p = T();",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'swarm', pos: at(p, 0, -300), radius: 300 }); await G.step(20);",
+    "const d = pv().disasters.find((x) => x.kind === 'swarm'); const c = ll(d ? d.pos : at(p, 0, -300));",
+    "await G.camera({ mode: 'orbit', lat: c.lat, lon: c.lon, dist: 520, tilt: 52, yaw: 0, fov: 55, hour: 14 }); await G.frames(1); F.advance(10); await G.frames(2);",
+    "return { msg: r.msg, at: d && d.pos };"
+   ]
+  },
+  {
+   "name": "real-tornado",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const ll = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return { lat: Math.asin(v[1] / l) * D, lon: Math.atan2(v[0], v[2]) * D }; };",
+    "const at = (p, east, north) => { const lat = (p.lat + (north / R) * D) / D, lon = (p.lon + (east / R) * D / Math.cos(p.lat / D)) / D; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)]; };",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "await G.cmd({ k: 'disaster.cancel', all: true }); await G.cmd({ k: 'weather.clear', everywhere: true }); const p = T(); const q = at(p, 0, -500);",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'tornado', pos: q, intensity: 1.1 }); await G.step(12);",
+    "const d = pv().disasters.find((x) => x.kind === 'tornado'); const qq = d ? ll(d.pos) : ll(q);",
+    "await G.camera({ mode: 'surface', lat: qq.lat - (520 / R) * D, lon: qq.lon, alt: 60, yaw: 0, pitch: 6, fov: 56, hour: 16.5 }); await G.frames(2); F.advance(6); await G.frames(2);",
+    "return { msg: r.msg, d: d && d.params };"
+   ]
+  },
+  {
+   "name": "real-lightning-storm",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const at = (p, east, north) => { const lat = (p.lat + (north / R) * D) / D, lon = (p.lon + (east / R) * D / Math.cos(p.lat / D)) / D; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)]; };",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "await G.cmd({ k: 'disaster.cancel', all: true }); await G.cmd({ k: 'weather.clear', everywhere: true }); await G.step(1); await G.frames(1); F.advance(12); await G.frames(1); const p = T();",
+    "const r = await G.cmd({ k: 'weather.paint', kind: 'thunderstorm', pos: p.pos, radius: 2000, intensity: 1 }); await G.step(90);",
+    "await G.camera({ mode: 'surface', lat: p.lat - (700 / R) * D, lon: p.lon, alt: 45, yaw: 0, pitch: 7, fov: 60, hour: 18.2 }); await G.frames(2);",
+    "const l = await G.cmd({ k: 'miracle.cast', kind: 'lightning', pos: at(p, 60, 120) }); await G.step(1); await G.frames(1); F.advance(0.03); await G.frames(1);",
+    "return { msg: r.msg, bolt: l.msg, flashes: F.fx.cloudFlashes.length, bolts: F.fx.m.bolts.live };"
+   ]
+  },
+  {
+   "name": "real-blizzard-street",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0];",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "await G.cmd({ k: 'weather.clear', everywhere: true }); const p = T();",
+    "const r = await G.cmd({ k: 'weather.paint', kind: 'blizzard', pos: p.pos, radius: 2500, intensity: 1 }); await G.step(300);",
+    "await G.camera({ mode: 'surface', lat: T().lat, lon: T().lon, alt: 2.2, pitch: 3, hour: 11 }); await G.frames(1); F.advance(8); await G.frames(2);",
+    "return { msg: r.msg, local: F.fx.m && F.fx.m.weather.local };"
+   ]
+  },
+  {
+   "name": "real-tsunami",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius;",
+    "await G.cmd({ k: 'weather.clear', everywhere: true }); F.fx.m.weather.lens = 0;",
+    "await G.camera({ mode: 'surface', poi: 'coast', alt: 25, yaw: 0, pitch: -1, fov: 65, hour: 10.5 }); await G.frames(1);",
+    "const c = F.fx.vis.camBody.clone().normalize(); const fw = F.fx.camFwd.clone(); fw.addScaledVector(c, -fw.dot(c)).normalize(); const o = c.clone().addScaledVector(fw, 60 / R).normalize();",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'tsunami', pos: [o.x, o.y, o.z], toward: [c.x, c.y, c.z], intensity: 1.5 }); await G.step(3); await G.frames(1); F.advance(1.5); await G.frames(1); F.advance(5); await G.frames(2);",
+    "const st = [...F.fx.m.disasters.states.values()].find((x) => x.kind === 'tsunami'); return { msg: r.msg, crest: st && st.extra.crest ? st.extra.crest.crest.length : null };"
+   ]
+  },
+  {
+   "name": "real-eclipse",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0];",
+    "await G.cmd({ k: 'disaster.cancel', all: true }); F.fx.m.weather.lens = 0; const p = G.poi('valley');",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'eclipse', pos: p.pos }); await G.step(720);",
+    "await G.camera({ mode: 'surface', poi: 'valley', alt: 40, pitch: 6, fov: 40, sunElevation: 12, faceSun: true }); await G.frames(2); F.advance(4); await G.frames(2);",
+    "const d = pv().disasters.find((x) => x.kind === 'eclipse'); return { msg: r.msg, d: d && { progress: d.progress, params: d.params }, ecl: F.fx.screenState.eclipse, ev: F.fx.exposureEV };"
+   ]
+  },
+  {
+   "name": "real-storm-orbit-100x",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0];",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "await G.cmd({ k: 'disaster.cancel', all: true }); const p = T(); await G.cmd({ k: 'weather.paint', kind: 'thunderstorm', pos: p.pos, radius: 2500, intensity: 1 });",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 7000, tilt: 20, yaw: 0, fov: 50, hour: 15 }); await G.frames(1);",
+    "G.setSpeed(100); const t0 = performance.now(); let maxFl = 0, maxW = 0; while (performance.now() - t0 < 9000) { await G.frames(1); maxFl = Math.max(maxFl, F.fx.cloudFlashes.length); for (const f of F.fx.cloudFlashes) maxW = Math.max(maxW, f.w); }",
+    "G.setSpeed(0); await G.frames(1); return { flashesMax: maxFl, wMax: +maxW.toFixed(2), bolts: F.fx.m.bolts.live, alt: Math.round(F.fx.vis.camBody.length() - pv().params.radius) };"
+   ]
+  },
+  {
+   "name": "real-meteor-impact",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const at = (p, east, north) => { const lat = (p.lat + (north / R) * D) / D, lon = (p.lon + (east / R) * D / Math.cos(p.lat / D)) / D; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)]; };",
+    "const ll = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return { lat: Math.asin(v[1] / l) * D, lon: Math.atan2(v[0], v[2]) * D }; };",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "F.fx.hand.force = false; await G.cmd({ k: 'disaster.cancel', all: true }); await G.cmd({ k: 'weather.clear', everywhere: true }); const p = T(); const q = at(p, 380, -260); const c = ll(q);",
+    "await G.camera({ mode: 'orbit', lat: c.lat, lon: c.lon, dist: 1400, tilt: 70, yaw: 0, fov: 65, hour: 15.5 }); await G.frames(1);",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'meteor', pos: q, radius: 120 }); const life = (() => { const d = pv().disasters.find((x) => x.kind === 'meteor'); return d ? d.params : null; })(); for (let i = 0; i < 90 && pv().disasters.some((x) => x.kind === 'meteor'); i++) await G.step(1); await G.frames(2); F.advance(1.1); await G.frames(1);",
+    "return { msg: r.msg, left: pv().disasters.filter((d) => d.kind === 'meteor').length, life };"
+   ]
+  },
+  {
+   "name": "real-meteor-after",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "window.__GENESIS_FX__.advance(9); await G.frames(1);"
+   ]
+  },
+  {
+   "name": "real-volcano-night",
+   "params": "scenario=lookdev&page=r&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const at = (p, east, north) => { const lat = (p.lat + (north / R) * D) / D, lon = (p.lon + (east / R) * D / Math.cos(p.lat / D)) / D; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)]; };",
+    "const ll = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return { lat: Math.asin(v[1] / l) * D, lon: Math.atan2(v[0], v[2]) * D }; };",
+    "const T = () => { const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; return G.poi('settlement:' + s.id); };",
+    "await G.cmd({ k: 'disaster.cancel', all: true }); const pk = G.poi('peak'); const p = T(); const pos = pk ? pk.pos : at(p, 0, 900); const c = ll(pos);",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'volcano', pos, intensity: 0.6 }); await G.step(300); const dv = pv().disasters.find((x) => x.kind === 'volcano');",
+    "await G.camera({ mode: 'orbit', lat: c.lat, lon: c.lon, dist: 1800, tilt: 80, yaw: 200, fov: 65, hour: 23.5 }); await G.frames(2); F.advance(20); await G.frames(1); F.advance(3); await G.frames(1);",
+    "return { msg: r.msg, peak: !!pk, params: dv && dv.params, progress: dv && dv.progress };"
+   ]
+  }
+ ]
+}

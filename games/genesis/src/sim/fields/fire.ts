@@ -15,6 +15,17 @@ import { collectFlags } from '../core/activeset.ts';
 
 export const FIRE_CADENCE = 5;
 
+/**
+ * (LIVING PACE) the ash a burn leaves, at most (m): a skin under a centimetre — the wind's threshold for moving ash
+ * (terrain.ts sandKernel: 1 cm). A forest burn used to leave up to 4 cm, which the wind then drifted cell by cell for
+ * days over the land downwind, every drift re-levelling the ground under the sleeping water films: the hydrology woke
+ * across ~10 000 cells and a world with a lightning fire ran at a fifth of its time-lapse speed (_harness/scratch/
+ * living/pace, pace.ts throughput, the sandbox without people after one dry strike: level 2 at 407 ticks per CPU second
+ * against 2 328 without the fire; 1 941 with this cap). Fire was rare before the living-world program; dry lightning
+ * now lights a few a world-year.
+ */
+export const FIRE_ASH_M = 0.009;
+
 /** extra fuel providers (buildings, stores) — phase 2 registers one; each returns fuel 0..∞ at a cell */
 export const fuelHooks: ((p: Planet, c: number) => number)[] = [];
 
@@ -156,7 +167,9 @@ export function fireStep(u: Universe, p: Planet): void {
     f.crop[c] = Math.max(0, c0 - burn * 2.2);
     const burned = (g0 - f.grass[c]) * 0.3 + (s0 - f.shrub[c]) * 0.6 + (t0 - f.tree[c]) + (c0 - f.crop[c]) * 0.4;
     if (burned > 0) {
-      f.ash[c] += burned * 0.02;
+      // (a burn's ash tops out at FIRE_ASH_M; a cell already deeper in ash — a volcano's — gets none from it)
+      const ash = f.ash[c] + burned * 0.02;
+      f.ash[c] = ash < FIRE_ASH_M ? ash : f.ash[c] > FIRE_ASH_M ? f.ash[c] : FIRE_ASH_M;
       ashAdded = true;
       p.updSurface(c);
     }

@@ -167,7 +167,10 @@ function spawn(u: Universe, p: Planet, dt: number): void {
   if (natural >= cap) return;
   const rng = p.rng.weather;
   const f = p.f, s = p.s, st = p.st;
-  const list = u.content.weather.list;
+  // (LIVING RELATIONSHIP: a weather marked `effects.painted` — the rainbow — is only ever painted, after rain or by the
+  // god, and is not in this draw: the draw stays over the kinds it had, so a world's weather is what it was before the
+  // rainbow was appended)
+  const list = u.content.weather.list.filter((d) => !d.effects?.painted);
   for (let tries = 0; tries < 3; tries++) {
     const c = rng.int(0, p.count - 1);
     const k = rng.int(0, list.length - 1);
@@ -394,21 +397,12 @@ function lightning(u: Universe, p: Planet, dt: number): void {
   // raining system now reads the cell as that system leaves it — raining, and as wet as the hourly pass makes a cell
   // under its rain (climate.ts: 0.5 + 0.08 × the rate, rain only, not frozen). Level 0 reads the fields as before)
   const lapsed = u.settings.lapse !== undefined && planetLevel(u, p) > 0;
-  const strike = (cx: number, cy: number, cz: number, intensity: number, rain = 0, code = 0) => {
+  // (LIVING PACE, LIVING.md §1.4: DRY LIGHTNING — `fresh` strikes read the ground as it was before the storm's rain: on
+  // the storm's leading edge, a cell its disc entered within the last half hour, and under a storm that brings no rain.
+  // Every strike used to fall on a cell its own storm wetted, and 31 690 strikes over 64 world-years lit three fires)
+  const strike = (cx: number, cy: number, cz: number, intensity: number, rain = 0, code = 0, fresh = false) => {
     const c = p.grid.nearestCell(cx, cy, cz);
-    u.emit({ t: 'lightning', planet: p.id, pos: [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]], a: intensity, data: { cell: c } });
-    // dry fuel catches
-    const f = p.f;
-    const fuel = f.grass[c] * 0.3 + f.shrub[c] * 0.6 + f.tree[c] + f.crop[c] * 0.4;
-    let wet = f.wetness[c];
-    if (rain > 0 && (code === 5 || code === 6 || (code === 1 && f.temperature[c] >= p.st.liquid.freeze))) {
-      const ww = 0.5 + rain * 0.08;
-      if (ww > wet) wet = ww > 1 ? 1 : ww;
-    }
-    const dry = 1 - Math.min(1, f.moisture[c] * 1.3 + wet * 0.6 + (rain > 0 || f.precip[c] > 0 ? 0.5 : 0));
-    let ignited = false;
-    if (fuel > 0.1 && dry > 0.15 && hashFloat(c, u.tick, 0x11e7) < 0.35 * dry * Math.min(1, fuel)) ignited = igniteCell(u, p, c, 0.5 + 0.4 * intensity, 'lightning');
-    for (const h of strikeHooks) h(u, p, c, ignited);
+    strikeCell(u, p, c, intensity, rain, code, fresh ? 1 : 0);
   };
   for (const w of p.weather) {
     const def = content.weather.list[w.kind];
@@ -419,6 +413,14 @@ function lightning(u: Universe, p: Planet, dt: number): void {
     if (rng.chance(expected - n)) n++;
     const rains = lapsed && def.precip > 0 && I > 0;
     const code = rains ? precipCode(def) : 0, eyed = !!def.render.eye;
+    // (LIVING PACE: a storm that brings no rain strikes dry ground; elsewhere the cells its disc entered within the last
+    // half hour are still dry under its first strikes — where it stood DRY_EDGE ticks ago, and its disc then)
+    const dryStorm = def.precip * I < DRY_STORM_PRECIP;
+    let ox = w.pos[0] - w.vel[0] * DRY_EDGE, oy = w.pos[1] - w.vel[1] * DRY_EDGE, oz = w.pos[2] - w.vel[2] * DRY_EDGE;
+    const ol = Math.hypot(ox, oy, oz) || 1;
+    ox /= ol; oy /= ol; oz /= ol;
+    const moved = !w.pinned && (w.vel[0] !== 0 || w.vel[1] !== 0 || w.vel[2] !== 0);
+    const cosOld = Math.cos(w.radius / p.st.radius);
     for (let i = 0; i < n; i++) {
       // a random point in the disc (uniform by area)
       const u01 = rng.float();
@@ -439,9 +441,12 @@ function lightning(u: Universe, p: Planet, dt: number): void {
       const nx = w.pos[1] * ez, ny = w.pos[2] * ex - w.pos[0] * ez, nz = -w.pos[1] * ex;
       const cs = Math.cos(r), sn = Math.sin(r);
       const dx = Math.cos(th) * ex + Math.sin(th) * nx, dy = Math.sin(th) * ny, dz = Math.cos(th) * ez + Math.sin(th) * nz;
-      strike(w.pos[0] * cs + dx * sn, w.pos[1] * cs + dy * sn, w.pos[2] * cs + dz * sn, I, rain, code);
+      const sx = w.pos[0] * cs + dx * sn, sy = w.pos[1] * cs + dy * sn, sz = w.pos[2] * cs + dz * sn;
+      const edge = moved && sx * ox + sy * oy + sz * oz < cosOld;
+      strike(sx, sy, sz, I, rain, code, dryStorm || edge);
     }
   }
+  heatLightning(u, p, dt);
   const gk = p.st.globalWeather ? content.weather.find(p.st.globalWeather) : undefined;
   if (gk && gk.lightning > 0 && p.airy) {
     const expected = gk.lightning * 0.6 * (dt / 60);
@@ -451,6 +456,80 @@ function lightning(u: Universe, p: Planet, dt: number): void {
       const c = rng.int(0, p.count - 1);
       strike(P[c * 3], P[c * 3 + 1], P[c * 3 + 2], 0.8);
     }
+  }
+}
+
+/** (LIVING PACE) a storm raining less than this (mm/h) strikes dry ground: a dry thunderstorm, a heat storm */
+export const DRY_STORM_PRECIP = 0.5;
+/** (LIVING PACE) ticks a storm's leading edge stays dry under its first strikes */
+export const DRY_EDGE = 30;
+/** (LIVING PACE) fire seasons: dry strikes drawn per game hour over a world (stateless draws; only the cells of grass and
+ * scrub country in their dry season take them) — calibrated with _harness/scratch/living/pace (pace.ts fire) */
+export const HEAT_STRIKES_PER_HOUR = 60;
+/** (LIVING PACE) a dry strike lights cured fuel only below this soil moisture */
+export const CURED_MOISTURE = 0.3;
+
+/** a strike at cell c: the event, a fire in dry fuel, and the peoples' hooks (`dryKind`: 0 a storm's strike on its own
+ * rain, 1 a dry strike from a storm — its leading edge, or a storm without rain — 2 a fire season's dry strike: the
+ * ground as before any rain). Exported as `strikeAt` (tests; the god's lightning omen of the RELATIONSHIP lane) */
+export function strikeAt(u: Universe, p: Planet, c: number, intensity: number, rain: number, code: number, dryKind: number): void {
+  strikeCell(u, p, c, intensity, rain, code, dryKind);
+}
+function strikeCell(u: Universe, p: Planet, c: number, intensity: number, rain: number, code: number, dryKind: number): void {
+  const P = p.grid.pos;
+  const fresh = dryKind > 0;
+  u.emit({ t: 'lightning', planet: p.id, pos: [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]], a: intensity, data: fresh ? { cell: c, dry: dryKind } : { cell: c } });
+  // dry fuel catches
+  const f = p.f;
+  const fuel = f.grass[c] * 0.3 + f.shrub[c] * 0.6 + f.tree[c] + f.crop[c] * 0.4;
+  let dry: number;
+  if (fresh) {
+    // dry lightning: no rain on the ground yet; fuel catches where it is cured (dry soil, or the dry season's grass)
+    dry = f.moisture[c] < CURED_MOISTURE + 0.15 ? 1 - Math.min(1, f.moisture[c] * 1.3 + f.wetness[c] * 0.6) : 0;
+  } else {
+    let wet = f.wetness[c];
+    if (rain > 0 && (code === 5 || code === 6 || (code === 1 && f.temperature[c] >= p.st.liquid.freeze))) {
+      const ww = 0.5 + rain * 0.08;
+      if (ww > wet) wet = ww > 1 ? 1 : ww;
+    }
+    dry = 1 - Math.min(1, f.moisture[c] * 1.3 + wet * 0.6 + (rain > 0 || f.precip[c] > 0 ? 0.5 : 0));
+  }
+  let ignited = false;
+  if (fuel > 0.1 && dry > 0.15 && hashFloat(c, u.tick, 0x11e7) < 0.35 * dry * Math.min(1, fuel)) ignited = igniteCell(u, p, c, 0.5 + 0.4 * intensity, 'lightning');
+  for (const h of strikeHooks) h(u, p, c, ignited);
+}
+
+/** biome indices of grass and scrub country (fire seasons), per content */
+const seasonBiomes = new WeakMap<object, Uint8Array>();
+const FIRE_SEASON_BIOMES = ['grassland', 'savanna', 'steppe', 'scrub'];
+
+/**
+ * (LIVING PACE, LIVING.md §1.4 rule 2) FIRE SEASONS: in grass and scrub country (savanna, steppe, grassland, scrub — and
+ * any forest gone dry) the dry season's heat brings dry strikes without a storm in sight, so grassland burns every few
+ * years as real savanna does. HEAT_STRIKES_PER_HOUR cells are drawn per hour with a stateless hash (the weather's own
+ * dice are untouched); a drawn cell takes a dry strike only in its dry season: warm (> 15 °C), no rain falling, cured
+ * (soil moisture below CURED_MOISTURE), with fuel on it. Fires so lit are lightning fires (cause 'lightning').
+ */
+function heatLightning(u: Universe, p: Planet, dt: number): void {
+  if (!p.airy || p.vegTotal <= 0) return;
+  const content = u.content;
+  let set = seasonBiomes.get(content);
+  if (!set) {
+    set = new Uint8Array(content.biomes.list.length);
+    content.biomes.list.forEach((b, i) => { if (FIRE_SEASON_BIOMES.includes(b.id)) set![i] = 1; else if (b.id === 'forest' || b.id === 'taiga') set![i] = 2; });
+    seasonBiomes.set(content, set);
+  }
+  const expected = (HEAT_STRIKES_PER_HOUR * dt) / 60;
+  let n = Math.floor(expected);
+  if (hashFloat(u.tick, p.id, 0xd1e5) < expected - n) n++;
+  const f = p.f, N = p.count;
+  for (let i = 0; i < n; i++) {
+    const c = Math.min(N - 1, Math.floor(hashFloat(u.tick, p.id, i, 0xd1e6) * N));
+    const kind = set[f.biome[c]];
+    if (!kind || p.s.ocean[c] || f.water[c] > 0.03 || f.precip[c] > 0) continue;
+    if (f.temperature[c] < 15 || f.moisture[c] >= (kind === 2 ? CURED_MOISTURE * 0.6 : CURED_MOISTURE)) continue;
+    if (f.grass[c] * 0.3 + f.shrub[c] * 0.6 + f.tree[c] < 0.15) continue;
+    strikeCell(u, p, c, 0.6, 0, 0, 2);
   }
 }
 

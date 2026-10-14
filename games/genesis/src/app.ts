@@ -17,7 +17,7 @@ import { AgentFlag } from './sim/types.ts';
 import { SimClient } from './client/simclient.ts';
 import { findPoi, type Poi } from './client/poi.ts';
 import type { PlanetView } from './client/worldview.ts';
-import { qMul, qRotate, qRotateInv } from './client/orbits.ts';
+import { qRotate, qRotateInv } from './client/orbits.ts';
 import { tangentBasis } from './sim/core/vec3.ts';
 import { Renderer } from './render/renderer.ts';
 import { capturePhoto } from './render/camera/photo.ts';
@@ -27,15 +27,13 @@ import { detectQuality, isQualityName, QUALITY, type QualityName } from './rende
 import { pick, rayDirection, type PickHit } from './render/picking.ts';
 import type { GenesisAudio } from './audio/engine.ts';
 import { Shell } from './ui/shell.ts';
-import type { GroundHit, InspectRef, UiHost, CameraHost, CameraModeName, PhotoLens, RenderCameraModes } from './ui/host.ts';
-import { WalkCamera, DollyDriver } from './ui/camfallback.ts';
-import { defaultLens } from './ui/photo.ts';
+import type { GroundHit, InspectRef, UiHost, CameraHost, CameraModeName, PhotoLens } from './ui/host.ts';
+import { defaultLens, blurOf, apertureOf } from './ui/photo.ts';
 import { ModLibrary, bootPacks, validatePacks, type BootProblem } from './ui/mods.ts';
 import { customScenarioPack, decodeWorlds, type CustomSpec } from './ui/newworld.ts';
 import { SaveStore, readSaveHeader, neededPacks, type LoadOutcome, type SaveRecord, type PackRef } from './ui/saves.ts';
 import { BASE_PACK } from './data/index.ts';
 import type { StarDef, PlanetKindDef } from './sim/content.ts';
-import type { CameraController } from './render/camera/common.ts';
 import { PowerBook } from './ui/powers.ts';
 import { Keybinds } from './ui/keybinds.ts';
 import { PrefsStore } from './ui/prefs.ts';
@@ -152,9 +150,8 @@ export class App implements UiHost {
   readonly prefs = new PrefsStore();
   audio: GenesisAudio | null = null;
   private audioCues = new Set<string>();
-  /** the selected thing (inspector + marker) and the thing the camera follows */
+  /** the selected thing (inspector + marker) */
   private sel: InspectRef | null = null;
-  following: EntityRef | null = null;
   private selEl: HTMLDivElement | null = null;
   private selName = '';
   onFatal: ((title: string, err: unknown) => void) | null = null;
@@ -192,14 +189,15 @@ export class App implements UiHost {
   private bootNotes: string[] = [];
   /** the world now: its scenario ('custom' for your own system) and seed (a loaded save changes them) */
   private world = { scenario: '', seed: 0 };
-  // ── camera modes (CONTRACT §15.8): the render lane's when bound, else the fallbacks (src/ui/camfallback.ts) ──
-  /** the render lane's follow / dolly / walk / photo, bound by the integration step (empty: every mode falls back) */
-  modeApi: RenderCameraModes = {};
-  private walkCam = new WalkCamera();
-  private dollyDrv = new DollyDriver();
-  private camMode: 'walk' | 'dolly' | 'photo' | null = null;
+  // ── camera modes (CONTRACT §15.8): the render lane's follow / dolly / walk / photo (render/camera/modes.ts, through
+  // rig.modes). The rig is the truth of which mode is live: it also leaves one by itself (a drag takes the cinematic
+  // back, a followed thing that is gone, a world unmade under the camera) and syncModes() lets the interface follow. ──
+  /** the place the cinematic circles, or the thing the walk began beside (the camera chip and the film title) */
   private camSubject: InspectRef | null = null;
-  private photoPrev: { ctrl: CameraController; ui: boolean; speed: number; walk: boolean } | null = null;
+  /** photo mode entered from the interface: the interface's visibility and the speed to give back when it ends */
+  private photoPrev: { ui: boolean; speed: number } | null = null;
+  /** where the walk began (the metres walked since are in state()) */
+  private walkFrom: { planet: number; dir: [number, number, number] } | null = null;
   private lensState: PhotoLens = defaultLens();
   private lensInit = false;
   private photoFrozen = true;
@@ -211,23 +209,39 @@ export class App implements UiHost {
   /** the opening: seconds the world still turns under the camera, and the orbit lines it hid */
   private turnT = 0;
   private orbitsShown: boolean | null = null;
+  /**
+   * the opening's hold on the lit face: while its whispers speak, the orbit camera keeps the sunlit hemisphere toward
+   * the eye (the world turning under it, the terminator near the limb) — let go while the player turns the camera, taken
+   * up again (eased) with the next whisper once the camera has been left alone; -1: none
+   */
+  private litHold = -1;
+  private litHoldOn = false;
+  private camTouchedAt = -1e9;
+  /** a pixel of the renderer's linear depth (photo mode's focus) */
+  private depthPx = new Float32Array(4);
 
   /** the camera modes, as the interface asks for them (src/ui/host.ts CameraHost) */
   readonly cam: CameraHost = {
     mode: () => this.camModeName(),
-    subject: () => (this.camMode ? this.camSubject : this.following ? { ...this.following } : null),
+    subject: () => this.camSubjectNow(),
     dolly: (ref) => this.dolly(ref),
     walk: (ref, leave) => this.walk(ref, leave),
     photo: (on) => this.photo(on),
     lens: () => this.lensState,
     setLens: (p) => this.setLens(p),
-    realDof: () => !!this.modeApi.dof,
-    depthAt: (x, y) => this.pickGround(x, y)?.dist ?? null,
+    realDof: () => this.rig.modes.dof,
+    depthAt: (x, y) => this.depthAt(x, y),
     grab: () => this.photoGrab(),
     frozen: () => this.photoFrozen,
     freeze: (on) => this.freeze(on),
-    stick: (x, y) => { this.walkCam.stickX = x; this.walkCam.stickY = y; },
+    stick: (x, y) => { this.rig.walk.stickX = x; this.rig.walk.stickY = y; },
   };
+
+  /** the thing the camera follows (the render lane's follow camera), or null */
+  get following(): EntityRef | null {
+    const r = this.rig.mode === 'follow' ? this.rig.followCam.ref : null;
+    return r ? { ...r } : null;
+  }
 
   constructor(canvas: HTMLCanvasElement, opts: AppOptions) {
     this.canvas = canvas;
@@ -281,6 +295,7 @@ export class App implements UiHost {
       hudFrame: () => this.hudFrame(),
       openingCamera: (shot) => this.openingCamera(shot),
       openingLight: (ev, bloom) => { this.fx.ev = ev; this.fx.bloom = bloom; },
+      cameraBusy: () => this.rig.blending(),
       audioRunning: () => { try { return !!this.audio?.state().running; } catch { return false; } },
       world: () => this.world,
       packs: () => this.packs,
@@ -322,13 +337,14 @@ export class App implements UiHost {
     this.installInput();
     void this.startAudio();
     // the render lane's camera modes (render/camera/modes.ts: follow, dolly, walk in the god's body, photo with real
-    // depth of field) bound to the interface's camera host; walking among the people tells the sim they saw the god
-    this.modeApi = this.rig.modes;
+    // depth of field) drive the interface's camera host; walking among the people tells the sim they saw the god
     this.rig.modes.onSeen = (e) => { void this.cmd({ k: 'god.seen', planet: e.planet, pos: e.pos, radius: e.radius }, { quiet: true }); };
-    // initial camera: the home world from orbit, or a URL preset
+    // initial camera: the scenario's focus world from orbit (a living system opens on its peopled home, not on the
+    // first rock of the list; a save on the world it was kept on), or a URL preset
     const view = this.sim.view;
     view.update(performance.now());
-    const home = view.planets[0];
+    const focusId = await this.focusWorld();
+    const home = view.planet(focusId) ?? view.planets[0];
     if (home) {
       this.rig.orbit.setFromLatLon(home.id, 18, -35, home.params.radius * 2.6);
       this.rig.use(this.rig.orbit, 0);
@@ -396,7 +412,9 @@ export class App implements UiHost {
   }
 
   private async startSim(boot: { scenario: string; packs: ContentPack[]; slot: SaveRecord | null }): Promise<void> {
-    const base = { source: this.opts.source, seed: this.opts.seed };
+    // (the living sim is the game: a slow machine building a big system waits for it rather than failing at 20 s; the
+    // 'auto' source keeps the short wait before it falls back to the lookdev world)
+    const base = { source: this.opts.source, seed: this.opts.seed, readyTimeoutMs: this.opts.source === 'worker' ? 120000 : 20000 };
     try {
       await this.sim.start({ ...base, scenario: boot.scenario, options: boot.packs.length ? { mods: boot.packs } : {} });
     } catch (e) {
@@ -423,6 +441,21 @@ export class App implements UiHost {
     }
   }
 
+  /**
+   * The world the game opens on: the sim's focus (the scenario's `focus`, or where a saved world's camera dwelt —
+   * query 'planet' without a planet answers for it), else the most populous world, else the first.
+   */
+  private async focusWorld(): Promise<number> {
+    const view = this.sim.view;
+    if (this.sim.source === 'worker') {
+      const info = await this.sim.query('planet', {}).catch(() => null) as { id?: unknown } | null;
+      if (info && typeof info.id === 'number' && view.planet(info.id)) return info.id;
+    }
+    let best = view.planets[0]?.id ?? 0, bp = 0;
+    for (const pv of view.planets) { let n = 0; for (const x of pv.population) n += x; if (n > bp) { bp = n; best = pv.id; } }
+    return best;
+  }
+
   /** this page's address with some parameters set (the quality, dev and source switches are kept, the rest dropped) */
   private keepParams(set: Record<string, string>): string {
     const old = new URLSearchParams(location.search);
@@ -447,9 +480,11 @@ export class App implements UiHost {
   /**
    * The opening's camera: 'star' — the young star from close, in the dark (the system camera at ~8 star radii, the orbit
    * lines hidden); 'world' — the fall to the home world, its lit side turning toward the eye in the afternoon light;
-   * 'turn' — the world keeps turning under the camera for a few breaths (any touch of the camera stops it); 'done'.
+   * 'turn' — arrived, the whispers begin: the lit face of the world held toward the eye while it turns under the camera
+   * (any touch of the camera lets go; a fall still under way is cut short); 'hold' — a new whisper takes the lit face up
+   * again if the camera has been left alone; 'done' — the camera is the player's.
    */
-  private openingCamera(shot: 'star' | 'world' | 'turn' | 'done'): void {
+  private openingCamera(shot: 'star' | 'world' | 'turn' | 'hold' | 'done'): void {
     const view = this.sim.view;
     const home = view.planets.find((p) => p.params.orbit.parent < 0) ?? view.planets[0];
     if (!home) return;
@@ -470,13 +505,24 @@ export class App implements UiHost {
       this.sunLock = home.id;
       this.rig.orbit.setFromLatLon(home.id, 16, this.afternoonLon(home), home.params.radius * 2.7, 0, null);
       this.rig.use(this.rig.orbit, 6.4);
-    } else if (shot === 'turn') {
+    } else if (shot === 'turn' || shot === 'hold') {
+      // the whispers speak: hold the lit face toward the eye (eased in) — unless the player is turning the camera now.
+      // Arriving ('turn') with the fall unfinished (a machine too slow to draw it in time, or the cinematic skipped):
+      // the fall is cut short — a whisper must never speak over the star with the world still out of view.
+      if (shot === 'turn' && this.rig.mode === 'orbit' && this.rig.blending()) {
+        this.rig.use(this.rig.system, 0);
+        this.rig.use(this.rig.orbit, 0);
+        this.renderer.cut();
+      }
       this.sunLock = -1;
-      this.turnT = 9;
+      this.litHold = home.id;
+      if (performance.now() - this.camTouchedAt > 4000) this.litHoldOn = true;
       if (this.orbitsShown !== null) { this.renderer.showOrbits = this.orbitsShown; this.orbitsShown = null; }
     } else {
       this.turnT = 0;
       this.sunLock = -1;
+      this.litHold = -1;
+      this.litHoldOn = false;
       this.fx.ev = 0; this.fx.bloom = 1;
       if (this.orbitsShown !== null) { this.renderer.showOrbits = this.orbitsShown; this.orbitsShown = null; }
     }
@@ -485,10 +531,10 @@ export class App implements UiHost {
   /** the opening holds its view of the home world in the afternoon light while it falls (-1: no) */
   private sunLock = -1;
 
-  /** the longitude (deg) a little east of the subsolar point: afternoon, the terminator in view */
-  private afternoonLon(pv: PlanetView): number {
+  /** the longitude (deg) a little east of the subsolar point: afternoon, the terminator in view (`east` degrees on) */
+  private afternoonLon(pv: PlanetView, east = 52): number {
     const sunB = qRotateInv(pv.quat, pv.sunDir);
-    return (Math.atan2(sunB[0], sunB[2]) * 180) / Math.PI + 52;
+    return (Math.atan2(sunB[0], sunB[2]) * 180) / Math.PI + east;
   }
 
   /** the live power catalogue (base + mods + inventions) from the sim */
@@ -537,15 +583,16 @@ export class App implements UiHost {
     this.applyLook();
   }
 
-  /** the settings' look, with the opening's light and photo mode's lens on top (every frame: plain assignments) */
+  /**
+   * the settings' look with the opening's light on top (every frame: plain assignments). Photo mode's lens (exposure,
+   * bloom, vignette, grain) is laid over this by the renderer's photo post (render/camera/photo.ts PhotoPost.settings)
+   */
   private applyLook(): void {
     const s = this.renderer.settings;
-    const L = this.lensState;
-    const ph = this.camMode === 'photo';
-    s.exposureBias = this.look.exposure + this.fx.ev + (ph ? L.exposure : 0);
-    s.bloom = this.look.bloom * this.fx.bloom * (ph ? L.bloom : 1);
-    s.vignette = ph ? L.vignette : this.look.vignette;
-    s.grain = ph ? L.grain : this.look.grain;
+    s.exposureBias = this.look.exposure + this.fx.ev;
+    s.bloom = this.look.bloom * this.fx.bloom;
+    s.vignette = this.look.vignette;
+    s.grain = this.look.grain;
   }
 
   // ── audio (src/audio/**, the audio lane's module; wired only through its published API) ──
@@ -590,16 +637,9 @@ export class App implements UiHost {
       const view = this.sim.view;
       view.update(now);
       this.ui.preFrame(dt);
-      if (this.following) this.updateFollow(dt);
       this.cameraModesFrame(dt);
       const pose = this.rig.update(dt, view, this.input);
-      // photo mode's roll: about the view axis, after the camera has placed itself (the render lane's photo camera
-      // rolls itself from the lens: render/camera/photo.ts)
-      if (this.camMode === 'photo' && this.rig.mode !== 'photo' && this.lensState.roll) {
-        const a = (this.lensState.roll * Math.PI) / 360;
-        const r = qMul(pose.quat as [number, number, number, number], [0, 0, Math.sin(a), Math.cos(a)]);
-        pose.quat[0] = r[0]; pose.quat[1] = r[1]; pose.quat[2] = r[2]; pose.quat[3] = r[3];
-      }
+      this.syncModes();
       this.applyLook();
       if (this.rig.cut) { this.renderer.cut(); this.rig.cut = false; }
       this.updateHover();
@@ -807,7 +847,7 @@ export class App implements UiHost {
       if (sv) {
         const ref: EntityRef = { kind: 'ship', id: sv.id, planet: sv.planet >= 0 ? sv.planet : sv.from };
         this.select(ref);
-        this.rig.modes.follow(ref);
+        this.follow(ref);
         return;
       }
     }
@@ -872,6 +912,8 @@ export class App implements UiHost {
     }
     const r = await this.sim.cmd(c);
     if (c.k !== 'focus') this.freshAfter = performance.now();
+    // (the opening answers an act at once: water poured on the airless rock, before the field shows it)
+    if (c.k !== 'focus' && !c.k.startsWith('hand.move')) this.ui?.opening.heard(c, r);
     const ctl = r.control;
     if (ctl) {
       if (ctl.rewind !== undefined || ctl.edit !== undefined) this.sim.requestFull();
@@ -1014,64 +1056,83 @@ export class App implements UiHost {
   /** select a thing (opens the inspector and the marker), or null to let go */
   select(ref: InspectRef | null): void {
     this.sel = ref ? { ...ref, planet: ref.planet ?? this.renderer.primaryId } as InspectRef : null;
-    if (this.following && (!ref || this.following.kind !== ref.kind || this.following.id !== ref.id)) this.following = null;
+    // letting go of the followed thing (or choosing another) stops following: the orbit takes over where it was
+    const f = this.following;
+    if (f && (!ref || f.kind !== ref.kind || f.id !== ref.id)) this.follow(null);
     this.ui.selected(this.sel);
     this.selName = '';
     if (ref) this.sound('ui.open');
   }
 
-  /** keep the camera on a thing (null stops); an orbit camera is used, at its current distance */
+  /**
+   * keep the camera on a thing (null stops: the orbit takes over over where it was) — the render lane's follow camera
+   * (render/camera/follow.ts): it rides behind the thing's motion, a drag circles it, the wheel moves in and out
+   */
   follow(ref: EntityRef | null): void {
-    if (ref) { this.leaveModes(null); this.rig.orbit.tiltFixed = this.rig.orbit.tiltFixed ?? 58; }
-    this.following = ref ? { kind: ref.kind, id: ref.id, planet: ref.planet ?? this.renderer.primaryId } : null;
-    if (!ref) return;
-    this.sound('cam.follow');
-    const pv = this.sim.view.planet(this.following!.planet!);
-    const b = pv ? this.entityBodyPos(pv, this.following!) : null;
-    if (!pv || !b) return;
-    if (this.rig.mode !== 'orbit' || this.rig.orbit.planet !== pv.id) {
-      const l = Math.hypot(b[0], b[1], b[2]);
-      this.rig.orbit.planet = pv.id;
-      this.rig.orbit.focus = [b[0] / l, b[1] / l, b[2] / l];
-      this.rig.orbit.dist = Math.min(this.rig.orbit.dist, 120);
-      this.rig.orbit.tiltFixed = 58;
-      this.rig.use(this.rig.orbit, 1.2);
+    if (!ref) {
+      if (this.rig.mode === 'follow') this.rig.modes.follow(null);
+      return;
     }
+    const r: EntityRef = { kind: ref.kind, id: ref.id, planet: ref.planet ?? this.renderer.primaryId };
+    if (this.isFollowing(r)) return;
+    this.leaveModes('follow');
+    this.rig.modes.follow(r);
+    this.sound('cam.follow');
   }
 
   isFollowing(ref: EntityRef): boolean {
-    return !!this.following && this.following.kind === ref.kind && this.following.id === ref.id;
-  }
-
-  private updateFollow(dt: number): void {
-    const f = this.following!;
-    const pv = this.sim.view.planet(f.planet ?? -1);
-    const b = pv ? this.entityBodyPos(pv, f) : null;
-    if (!pv || !b || this.rig.orbit.planet !== pv.id) return;
-    const l = Math.hypot(b[0], b[1], b[2]) || 1;
-    const fo = this.rig.orbit.focus;
-    // ease toward them (a person walks on; a snap every snapshot would shake the view)
-    const k = 1 - Math.exp(-dt * 5);
-    fo[0] += (b[0] / l - fo[0]) * k; fo[1] += (b[1] / l - fo[1]) * k; fo[2] += (b[2] / l - fo[2]) * k;
-    const fl = Math.hypot(fo[0], fo[1], fo[2]) || 1;
-    fo[0] /= fl; fo[1] /= fl; fo[2] /= fl;
+    const f = this.following;
+    return !!f && f.kind === ref.kind && f.id === ref.id;
   }
 
   // ── camera modes: follow, cinematic (dolly), walk, photo ──
 
   camModeName(): CameraModeName {
-    if (this.camMode) return this.camMode;
-    if (this.following) return 'follow';
     const m = this.rig.mode;
-    return m === 'system' ? 'system' : m === 'fly' || m === 'surface' ? 'fly' : 'orbit';
+    if (m === 'follow' || m === 'dolly' || m === 'walk' || m === 'photo' || m === 'system') return m;
+    return m === 'fly' || m === 'surface' ? 'fly' : 'orbit';
   }
 
-  /** per frame, before the rig: the cinematic's arc, the opening's turning world, photo mode's lens on the wheel */
+  /** the thing the camera's mode is about: the one followed, the place circled, the one the walk began beside */
+  private camSubjectNow(): InspectRef | null {
+    const m = this.rig.mode;
+    if (m === 'follow') return this.following;
+    return m === 'dolly' || m === 'walk' ? this.camSubject : null;
+  }
+
+  /**
+   * after the rig: it may have left a mode by itself (a drag took the cinematic back, a followed thing is gone, the
+   * world under the camera was unmade) — the interface follows: the cinematic gives the interface back, photo mode's
+   * panel goes, the subject is forgotten
+   */
+  private syncModes(): void {
+    const m = this.rig.mode;
+    if (this.cineUi !== null && m !== 'dolly' && m !== 'photo') { this.setUi(this.cineUi); this.cineUi = null; }
+    if (this.photoPrev && m !== 'photo') this.photoEnded();
+    if (m !== 'dolly' && m !== 'walk' && m !== 'photo') { this.camSubject = null; this.walkFrom = null; }
+  }
+
+  /** per frame, before the rig: the opening's turning world, photo mode's lens on the wheel */
   private cameraModesFrame(dt: number): void {
     const input = this.input;
-    if (this.camMode === 'dolly' && !this.modeApi.dolly) {
-      const pv = this.sim.view.planet(this.dollyDrv.planet);
-      if (!this.dollyDrv.update(dt, this.rig.orbit, input, pv?.params.radius ?? 3000)) this.dolly(null);
+    const touched = !!(input.dragL[0] || input.dragL[1] || input.dragR[0] || input.dragR[1] || input.wheel || input.keys.size);
+    if (touched) this.camTouchedAt = performance.now();
+    if (this.litHold >= 0) {
+      // the opening's whispers: the lit face toward the eye, the terminator a gentle edge near the limb (the world turns
+      // under the camera; at 100× it no longer strobes day / night). A touch of the camera lets go; the next whisper
+      // takes it up again once the camera has been left alone — only from afar (a close look is the player's).
+      const pv = this.sim.view.planet(this.litHold);
+      const o = this.rig.orbit;
+      if (touched || !pv) this.litHoldOn = false;
+      else if (this.litHoldOn && this.rig.mode === 'orbit' && o.planet === pv.id && o.dist > pv.params.radius * 1.2) {
+        const lon = (this.afternoonLon(pv, 32) * Math.PI) / 180, lat = (14 * Math.PI) / 180;
+        const t: [number, number, number] = [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)];
+        const f = o.focus;
+        const k = 1 - Math.exp(-dt * 1.6);
+        const x = f[0] + (t[0] - f[0]) * k, y = f[1] + (t[1] - f[1]) * k, z = f[2] + (t[2] - f[2]) * k;
+        const l = Math.hypot(x, y, z) || 1;
+        o.focus = [x / l, y / l, z / l];
+      }
     }
     if (this.sunLock >= 0) {
       const pv = this.sim.view.planet(this.sunLock);
@@ -1081,7 +1142,6 @@ export class App implements UiHost {
       } else this.sunLock = -1;
     }
     if (this.turnT > 0) {
-      const touched = !!(input.dragL[0] || input.dragL[1] || input.dragR[0] || input.dragR[1] || input.wheel || input.keys.size);
       if (touched || this.rig.mode !== 'orbit') this.turnT = 0;
       else {
         // the world turns under the eye (east to west, the way it spins), easing to a stop
@@ -1093,12 +1153,10 @@ export class App implements UiHost {
         f[0] = x; f[2] = z;
       }
     }
-    if (this.camMode === 'photo') {
-      // the wheel is the lens; a right drag looks like a left one
-      if (input.wheel) { this.setLens({ fov: this.lensState.fov * Math.exp(input.wheel * 0.0011) }); input.wheel = 0; }
-      input.dragL[0] += input.dragR[0]; input.dragL[1] += input.dragR[1];
-      input.dragR[0] = input.dragR[1] = 0;
-      this.rig.fly.fov = this.lensState.fov;
+    // photo mode: the wheel (and the pad's shoulder buttons) is the lens's focal length, not a dolly
+    if (this.rig.mode === 'photo' && input.wheel) {
+      this.setLens({ fov: this.lensState.fov * Math.exp(input.wheel * 0.0011) });
+      input.wheel = 0;
     }
   }
 
@@ -1124,35 +1182,32 @@ export class App implements UiHost {
     return { planet: pv.id, dir, reach };
   }
 
-  /** leave the camera modes other than `keep` without moving the camera (a new mode takes over from the pose) */
-  private leaveModes(keep: 'walk' | 'dolly' | 'photo' | null): void {
-    if (this.camMode === 'photo' && keep !== 'photo') this.photo(false);
-    if (this.camMode === 'dolly' && keep !== 'dolly') { this.dollyDrv.active = false; this.modeApi.dolly?.(null); this.camMode = null; if (this.cineUi !== null) { this.setUi(this.cineUi); this.cineUi = null; } }
-    if (this.camMode === 'walk' && keep !== 'walk') { this.modeApi.walk?.(null); this.camMode = null; }
+  /**
+   * leave the camera modes other than `keep` (the caller's new camera takes over from the pose on screen, blended):
+   * photo mode first (it may hand back to the mode it was entered from), then the cinematic, walking, following
+   */
+  private leaveModes(keep: 'follow' | 'walk' | 'dolly' | 'photo' | null): void {
+    if (this.rig.mode === 'photo' && keep !== 'photo') this.photo(false);
+    const m = this.rig.mode;
+    if (m === 'dolly' && keep !== 'dolly') this.rig.modes.dolly(null);
+    else if (m === 'walk' && keep !== 'walk') this.rig.modes.walk(null);
+    else if (m === 'follow' && keep !== 'follow') this.rig.modes.follow(null);
+    this.syncModes();
   }
 
-  /** the cinematic: an arc around a place (null ends it: the orbit camera stays where the arc left it) */
+  /** the cinematic: the render lane's crane move around a place (null ends it: the orbit takes over over the place) */
   dolly(ref: EntityRef | null): void {
     if (!ref) {
-      if (this.camMode !== 'dolly') return;
-      this.camMode = null;
-      this.camSubject = null;
-      this.dollyDrv.active = false;
-      this.modeApi.dolly?.(null);
-      if (this.cineUi !== null) { this.setUi(this.cineUi); this.cineUi = null; }
-      // the tilt is the zoom's again (blended, not snapped)
-      this.rig.orbit.tiltFixed = null;
-      this.rig.use(this.rig.orbit, 0.9);
+      if (this.rig.mode !== 'dolly') return;
+      this.rig.modes.dolly(null);
+      this.syncModes();
       return;
     }
     const at = this.placeOf(ref);
     if (!at) return;
     this.leaveModes('dolly');
-    this.following = null;
-    this.camMode = 'dolly';
+    this.rig.modes.dolly({ planet: at.planet, center: at.dir, radius: at.reach });
     this.camSubject = { ...ref, planet: at.planet };
-    if (this.modeApi.dolly) this.modeApi.dolly({ planet: at.planet, center: at.dir, radius: at.reach });
-    else { this.dollyDrv.begin(this.rig.orbit, at.planet, at.dir, at.reach); this.rig.use(this.rig.orbit, 2.6); }
     // the interface steps aside for the film (Esc or a drag brings it back)
     if (this.cineUi === null) { this.cineUi = this.uiVisible; this.setUi(false); }
     this.sound('cam.cinematic');
@@ -1179,18 +1234,10 @@ export class App implements UiHost {
    * cursor (or the camera) points; `leave` rises back to an orbit over the spot */
   walk(ref: EntityRef | null, leave = false): void {
     if (leave) {
-      if (this.camMode !== 'walk') return;
-      this.camMode = null;
-      this.camSubject = null;
-      this.modeApi.walk?.(null);
-      const o = this.rig.orbit;
-      o.planet = this.walkCam.planet;
-      o.focus = [this.walkCam.dir[0], this.walkCam.dir[1], this.walkCam.dir[2]];
-      o.dist = 140;
-      o.heading = this.walkCam.yaw;
-      o.tiltBias = 0;
-      o.tiltFixed = null;
-      this.rig.use(o, 1.8);
+      if (this.rig.mode !== 'walk') return;
+      // the render lane's walk rises to an orbit over where the body stands now
+      this.rig.modes.walk(null);
+      this.syncModes();
       this.sound('cam.rise');
       return;
     }
@@ -1222,11 +1269,8 @@ export class App implements UiHost {
     }
     const yaw = face ? this.headingAt(planet, dir, face) : this.cameraHeading(planet, dir);
     this.leaveModes('walk');
-    this.following = null;
-    this.walkCam.place(planet, dir, yaw, -0.05);
-    if (this.modeApi.walk) this.modeApi.walk({ planet, at: dir, heading: yaw });
-    else this.rig.use(this.walkCam, 2.2);
-    this.camMode = 'walk';
+    this.rig.modes.walk({ planet, at: dir, heading: yaw });
+    this.walkFrom = { planet, dir: [dir[0], dir[1], dir[2]] };
     this.camSubject = ref ? { ...ref, planet } : null;
     this.sound('cam.walk');
   }
@@ -1259,57 +1303,109 @@ export class App implements UiHost {
     return true;
   }
 
-  /** photo mode: the free camera from the pose on screen, the interface and the portal bar away, time still */
+  /**
+   * photo mode: the render lane's free photo camera from the pose on screen (render/camera/photo.ts: real depth of
+   * field, the lens's exposure, bloom, vignette, grain and roll), the interface and the portal bar away, time still
+   */
   photo(on: boolean): void {
-    if (on === (this.camMode === 'photo')) return;
     if (on) {
-      const wasWalk = this.camMode === 'walk';
-      const ui = this.cineUi ?? this.uiVisible;
-      if (this.camMode === 'dolly') { this.dollyDrv.active = false; this.modeApi.dolly?.(null); this.camMode = null; this.cineUi = null; }
-      if (!this.flyFromPose()) return;
-      this.photoPrev = { ctrl: wasWalk ? this.walkCam : this.rig.active, ui, speed: this.sim.view.speed, walk: wasWalk };
+      if (this.photoPrev) return;
+      // from the cinematic: the interface it hid is what comes back after
+      let ui = this.uiVisible;
+      if (this.cineUi !== null) { ui = this.cineUi; this.cineUi = null; }
+      this.photoPrev = { ui, speed: this.sim.view.speed };
       if (!this.lensInit) { this.lensInit = true; this.lensState.vignette = this.look.vignette; this.lensState.grain = this.look.grain; }
-      this.lensState.fov = this.rig.fly.fov;
-      this.rig.use(this.rig.fly, 0);
-      this.camMode = 'photo';
-      this.following = null;
+      this.lensState.fov = this.rig.pose.fov;
+      this.rig.modes.photo(true);
+      this.setLens({});
       this.setUi(false);
       if (this.photoFrozen) this.sim.setSpeed(0);
-      this.modeApi.photo?.(true);
-      this.modeApi.lens?.(this.lensState);
       this.ui.photo.enter();
+      // autofocus: what is in the middle of the picture (the photo camera starts from the view on screen, so the last
+      // frame's depth is the picture's)
+      this.ui.photo.autofocus();
       this.sound('cam.photo');
       return;
     }
+    // (back to the camera it was entered from: the orbit, the follow, the walk, the cinematic)
+    if (this.rig.mode === 'photo') this.rig.modes.photo(false);
+    if (this.photoPrev) this.photoEnded();
+    else this.setUi(true);
+  }
+
+  /** photo mode is over (left, or the rig left it): its panel goes, the interface and time come back */
+  private photoEnded(): void {
     const p = this.photoPrev;
+    if (!p) return;
     this.photoPrev = null;
-    this.camMode = null;
-    this.modeApi.photo?.(false);
     this.ui.photo.leave();
-    if (p) {
-      if (p.walk) { this.camMode = 'walk'; this.rig.use(this.walkCam, 0.7); }
-      else this.rig.use(p.ctrl === this.rig.fly ? this.rig.orbit : p.ctrl, 0.7);
-      this.setUi(p.ui);
-      if (this.photoFrozen && this.sim.view.speed === 0) this.sim.setSpeed(p.speed);
-    } else this.setUi(true);
+    // back in the cinematic, the interface stays aside for it
+    if (this.rig.mode === 'dolly') { this.cineUi = p.ui; this.setUi(false); } else this.setUi(p.ui);
+    if (this.photoFrozen && this.sim.view.speed === 0) this.sim.setSpeed(p.speed);
     this.applyLook();
   }
 
+  /**
+   * The lens: the depth of field follows a physical aperture (f-number, 0 = off) — the blur the renderer draws is the
+   * thin lens's circle of confusion for the focal length and the focus distance (src/ui/photo.ts blurOf), so a wide lens
+   * focused on someone near keeps a usable band of sharpness and a long one at f/1.4 isolates them. A blur asked for
+   * directly (the test surface) sets the aperture that gives it.
+   */
   private setLens(p: Partial<PhotoLens>): void {
     const L = this.lensState;
     Object.assign(L, p);
     const c = (v: number, a: number, b: number) => Math.min(b, Math.max(a, Number.isFinite(v) ? v : a));
-    L.fov = c(L.fov, 6, 100); L.focus = c(L.focus, 0.5, 20000); L.blur = c(L.blur, 0, 1); L.exposure = c(L.exposure, -3, 3);
+    L.fov = c(L.fov, 6, 100); L.focus = c(L.focus, 0.5, 20000); L.exposure = c(L.exposure, -3, 3);
     L.bloom = c(L.bloom, 0, 3); L.vignette = c(L.vignette, 0, 0.8); L.grain = c(L.grain, 0, 0.15); L.roll = c(L.roll, -35, 35);
-    if (this.camMode === 'photo') this.rig.fly.fov = L.fov;
-    this.modeApi.lens?.(L);
+    if (p.blur !== undefined && p.aperture === undefined) { L.blur = c(L.blur, 0, 1); L.aperture = apertureOf(L.blur, L.fov, L.focus); }
+    else { L.aperture = L.aperture > 0 ? c(L.aperture, 0.7, 32) : 0; L.blur = blurOf(L.aperture, L.fov, L.focus); }
+    this.rig.modes.lens(L);
+  }
+
+  /**
+   * View depth (m, along the camera's axis: what the depth of field measures) of what is drawn under a screen point,
+   * or null for the sky: the nearest of the renderer's own linear depth there (trees, rocks, roofs — everything opaque),
+   * a person, a herd or a building picked under it (a few pixels of grace round a small figure), and the ground (the
+   * water's surface too).
+   */
+  private depthAt(x: number, y: number): number | null {
+    const ndcX = (x / window.innerWidth) * 2 - 1, ndcY = 1 - (y / window.innerHeight) * 2;
+    const dir = rayDirection(this.renderer.camera, ndcX, ndcY, [0, 0, 0]);
+    const fwd = rotate(this.rig.pose.quat, [0, 0, -1]);
+    const cos = Math.max(0.05, dir[0] * fwd[0] + dir[1] * fwd[1] + dir[2] * fwd[2]);
+    let best = Infinity;
+    const lin = this.linearDepthAt(x, y);
+    if (lin !== null) best = lin;
+    const ent = this.pickEntity(x, y);
+    if (ent) best = Math.min(best, ent.dist * cos);
+    const g = this.pickGround(x, y);
+    if (g) best = Math.min(best, g.dist * cos);
+    return Number.isFinite(best) ? best : null;
+  }
+
+  /** the renderer's linear view depth under a screen point (the last frame drawn), or null (the sky, or unreadable) */
+  private linearDepthAt(x: number, y: number): number | null {
+    const rt = this.renderer.post.linDepth;
+    if (!rt) return null;
+    const px = Math.floor((x / window.innerWidth) * rt.width), py = Math.floor((1 - y / window.innerHeight) * rt.height);
+    if (px < 0 || py < 0 || px >= rt.width || py >= rt.height) return null;
+    const r = this.renderer.three;
+    const gl = r.getContext() as WebGL2RenderingContext;
+    const prev = r.getRenderTarget();
+    try {
+      r.setRenderTarget(rt);
+      // (RGBA / FLOAT is the read every float colour buffer allows; the depth is in red)
+      gl.readPixels(px, py, 1, 1, gl.RGBA, gl.FLOAT, this.depthPx);
+    } catch { return null; } finally { r.setRenderTarget(prev); }
+    const z = this.depthPx[0];
+    return Number.isFinite(z) && z > 0.01 && z < 1e8 ? z : null;
   }
 
   private freeze(on: boolean): void {
     this.photoFrozen = on;
-    if (this.camMode !== 'photo') return;
+    if (!this.photoPrev) return;
     if (on) this.sim.setSpeed(0);
-    else if (this.sim.view.speed === 0) this.sim.setSpeed(this.photoPrev?.speed || 1);
+    else if (this.sim.view.speed === 0) this.sim.setSpeed(this.photoPrev.speed || 1);
   }
 
   /** the local solar hour at the camera (photo mode's sun) */
@@ -1521,8 +1617,8 @@ export class App implements UiHost {
     this.rig.use(this.rig.system, 2.6);
   }
   private toggleFly(): void {
-    if (this.camMode === 'photo') return;
-    if (this.camMode === 'walk' || this.rig.mode === 'fly' || this.rig.mode === 'surface') { this.leaveModes(null); this.rig.use(this.rig.orbit, 1.2); return; }
+    if (this.rig.mode === 'photo') return;
+    if (this.rig.mode === 'walk' || this.rig.mode === 'fly' || this.rig.mode === 'surface') { this.leaveModes(null); this.rig.use(this.rig.orbit, 1.2); return; }
     this.leaveModes(null);
     // start flying from the current pose: position + level orientation looking where the camera looks
     if (this.flyFromPose()) this.rig.use(this.rig.fly, 0.4);
@@ -1580,7 +1676,6 @@ export class App implements UiHost {
     this.leaveModes(null);
     this.sim.requestFull();
     this.select(null);
-    this.following = null;
     this.turnT = 0;
     void this.loadPowers();
     return { ok: true };
@@ -1654,21 +1749,9 @@ export class App implements UiHost {
     const mode = spec.mode ?? 'orbit';
     // the render lane's modes take their whole spec when bound (render/camera/modes.ts applySpec: the lens, the dolly's
     // phase, the follow distance, the walking body's alignment)
-    if ((mode === 'follow' || mode === 'dolly' || mode === 'walk' || mode === 'photo') && this.modeApi === this.rig.modes) { await this.renderModeSpec(spec, mode); return; }
-    // a camera mode that takes a thing: follow it, circle it, walk beside it (CONTRACT §18 camera(spec))
-    if ((mode === 'follow' || mode === 'dolly' || mode === 'walk') && isTargetRef(spec.target)) {
-      const ref: EntityRef = { kind: spec.target.kind, id: spec.target.id, planet: spec.target.planet ?? spec.planet ?? this.primary() };
-      for (let i = 0; i < 60; i++) { const pv = this.sim.view.planet(ref.planet!); if (pv && this.entityBodyPos(pv, ref)) break; await this.waitFrames(1); }
-      if (mode === 'follow') this.follow(ref);
-      else if (mode === 'dolly') this.dolly(ref);
-      else this.walk(ref);
-      if (spec.blend === 0) { this.rig.update(0, view, newInput()); this.renderer.cut(); }
-      return;
-    }
+    if (mode === 'follow' || mode === 'dolly' || mode === 'walk' || mode === 'photo') { await this.renderModeSpec(spec, mode); return; }
     // any other spec takes the camera out of its modes first
-    if (this.camMode === 'photo' && mode !== 'photo') this.photo(false);
-    if (this.camMode === 'dolly') this.dolly(null);
-    if (this.camMode === 'walk' && mode !== 'walk') { this.modeApi.walk?.(null); this.camMode = null; }
+    this.leaveModes(null);
     const planet = spec.planet ?? (this.renderer.primaryId >= 0 ? this.renderer.primaryId : view.planets[0]?.id ?? 0);
     const pv = view.planet(planet);
     let lat = spec.lat ?? 20, lon = spec.lon ?? 0, heading = spec.yaw ?? 0;
@@ -1696,7 +1779,7 @@ export class App implements UiHost {
       if (spec.pitch != null) this.rig.system.pitch = (spec.pitch * Math.PI) / 180;
       if (spec.fov) this.rig.system.fov = spec.fov;
       this.rig.use(this.rig.system, blend);
-    } else if (mode === 'surface' || mode === 'fly' || mode === 'walk' || mode === 'photo') {
+    } else if (mode === 'surface' || mode === 'fly') {
       this.rig.fly.setSurface(planet, view, lat, lon, spec.alt ?? 30, heading, spec.pitch ?? -4);
       if (spec.fov) this.rig.fly.fov = spec.fov;
       this.rig.use(this.rig.fly, blend);
@@ -1709,17 +1792,6 @@ export class App implements UiHost {
       this.rig.orbit.setFromLatLon(planet, lat, lon, dist, heading, tilt);
       if (spec.fov) this.rig.orbit.fov = spec.fov;
       this.rig.use(this.rig.orbit, blend);
-    }
-    if (mode === 'walk') {
-      // the walking body at a point (lat / lon / poi), looking along the heading
-      const d2r = Math.PI / 180;
-      const dir: [number, number, number] = [Math.cos(lat * d2r) * Math.sin(lon * d2r), Math.sin(lat * d2r), Math.cos(lat * d2r) * Math.cos(lon * d2r)];
-      this.leaveModes('walk');
-      this.walkCam.place(planet, dir, heading * d2r, ((spec.pitch ?? -3) * Math.PI) / 180);
-      if (spec.fov) this.walkCam.fov = spec.fov;
-      this.rig.use(this.walkCam, blend);
-      this.camMode = 'walk';
-      this.camSubject = null;
     }
     if (blend === 0) this.renderer?.cut();
     let hour = spec.hour;
@@ -1754,11 +1826,9 @@ export class App implements UiHost {
         const yaw = az + ((spec.turn ?? 0) * Math.PI) / 180;
         if (this.rig.active === this.rig.fly) this.rig.fly.yaw = yaw;
         else if (this.rig.active === this.rig.orbit) this.rig.orbit.heading = yaw;
-        else if (this.rig.active === this.walkCam) this.walkCam.yaw = yaw;
         this.renderer.cut();
       }
     }
-    if (mode === 'photo' && this.camMode !== 'photo') { this.rig.update(0, this.sim.view, newInput()); this.photo(true); }
   }
 
   /** camera(spec) for the render lane's follow / dolly / walk / photo (the place from a POI, a target or lat / lon) */
@@ -1836,12 +1906,14 @@ export class App implements UiHost {
       }
     }
     this.leaveModes(null);
-    this.following = null;
     this.rig.modes.applySpec({
       mode, planet, lat, lon, yaw: heading, pitch, alt: spec.alt, dist: spec.dist, fov: spec.fov, target: ref, blend: spec.blend,
       t: num('t'), radius: num('radius'), duration: num('duration'), focus: num('focus'), blur: num('blur'), exposure: num('exposure'), roll: num('roll'), alignment: num('alignment'),
     }, view);
     if (mode === 'photo') this.setUi(false);
+    // the chip's subject and the walk's start, as when the interface starts these modes
+    if (mode === 'dolly' || mode === 'walk') this.camSubject = ref ? { ...ref, planet } : null;
+    if (mode === 'walk') { const la = (lat * Math.PI) / 180, lo = (lon * Math.PI) / 180; this.walkFrom = { planet, dir: [Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)] }; }
     if ((spec.blend ?? 0) === 0) { this.rig.update(0, view, newInput()); this.renderer.cut(); }
     // (a frame or two so the renderer's primary world is the one framed: the hour is set there — a ship on another
     // world, a ship launched this tick that the follow camera finds on its first drawn frame)
@@ -1897,6 +1969,15 @@ export class App implements UiHost {
     return best;
   }
 
+  /** metres the walking body has gone from where the walk began (as the crow flies; 0 when not walking) */
+  private walkedMetres(): number {
+    const w = this.walkFrom;
+    const pv = w && this.rig.mode === 'walk' ? this.sim.view.planet(w.planet) : undefined;
+    if (!w || !pv) return 0;
+    const d = this.rig.walk.dir;
+    return Math.acos(Math.max(-1, Math.min(1, d[0] * w.dir[0] + d[1] * w.dir[1] + d[2] * w.dir[2]))) * pv.params.radius;
+  }
+
   /** URL ?cam= presets */
   async applyCameraPreset(name: string): Promise<void> {
     const presets: Record<string, CameraSpec> = {
@@ -1920,7 +2001,7 @@ export class App implements UiHost {
     return {
       tick: v.renderTick, snapTick: v.snapTick, speed: v.speed, achievedSpeed: v.achievedSpeed, fps: this.fps,
       scenario: this.world.scenario, seed: this.world.seed, source: this.sim.source, quality: this.quality, frames: this.frames,
-      camera: { mode: this.camModeName(), rig: this.rig.mode, planet: pose.planet, pos: [...pose.pos], quat: [...pose.quat], fov: pose.fov, altitude: this.renderer.stats.altitude, walked: this.walkCam.walked },
+      camera: { mode: this.camModeName(), rig: this.rig.mode, planet: pose.planet, pos: [...pose.pos], quat: [...pose.quat], fov: pose.fov, altitude: this.renderer.stats.altitude, walked: this.walkedMetres() },
       packs: this.packs.map((p) => p.id), content: [...this.sim.view.content],
       render: { ...this.renderer.stats },
       planets: v.planets.map((p) => ({

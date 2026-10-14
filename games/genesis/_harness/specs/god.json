@@ -1,5 +1,5 @@
 {
- "_doc": "God layer stills (CONTRACT §15.6–15.8): the hand, creatures, disasters, weather, aurora, eclipse. Each scene is staged by its script (lookdev god commands + window.__GENESIS_FX__.advance(s) to move the FX clock, which otherwise only runs with sim time). Run: node _harness/shots.mjs _harness/specs/god.json",
+ "_doc": "God layer stills (CONTRACT §15.6–15.8; LIVING §3.6 the Touch): the Touch holding a villager, disasters, weather, aurora, eclipse, miracles. Each scene is staged by its script (lookdev god commands + window.__GENESIS_FX__.advance(s) to move the FX clock, which otherwise only runs with sim time). The creature left the game (LIVING §0.1.6, hook H6): no creature shot. Run: node _harness/shots.mjs _harness/specs/god.json",
  "shots": [
   {
    "name": "god-hand-village",
@@ -15,17 +15,17 @@
      "k": "lookdev.hand",
      "pos": "$poi:town",
      "alt": 7,
-     "alignment": 0.6,
-     "pose": "open"
+     "pose": "open",
+     "regard": 0.6
     }
    ],
    "script": [
     "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = true; const p = G.poi('town');",
     "await G.camera({ mode: 'surface', lat: p.lat - (13 / 3000) * 180 / Math.PI, lon: p.lon, alt: 7.5, yaw: 0, pitch: -6, fov: 55, hour: 16 });",
     "await G.frames(1); const a = G.agents(40).filter((x) => x.dist < 60).map((x) => x.id); const r = await G.cmd({ k: 'lookdev.hand.grab', target: { kind: 'agent', id: a[0] } }); await G.step(1); await G.frames(4);",
-    "// frame the pinch from 18 m off at about its own height, the village behind it (the ground's radius measured under the eye); twice, as the hand settles where it is going",
-    "const dLat = (18 / 3000) * 180 / Math.PI; let h = 0;",
-    "const frame = async () => { const q = F.fx.hand.pinch; const L = q.length(); const lat = Math.asin(q.y / L) * 180 / Math.PI, lon = Math.atan2(q.x, q.z) * 180 / Math.PI; await G.camera({ mode: 'surface', lat: lat - dLat, lon, alt: 2, yaw: 0, pitch: 0, fov: 50, hour: 16 }); await G.frames(2); h = L - (F.fx.vis.camBody.length() - 2); const alt = Math.max(2, h - 2.5); await G.camera({ mode: 'surface', lat: lat - dLat, lon, alt, yaw: 0, pitch: Math.atan2(h - 1 - alt, 18) * 180 / Math.PI, fov: 50, hour: 16 }); await G.frames(4); };",
+    "// frame the pinch from 11 m off at about its own height, the village behind it (the ground's radius measured under the eye); twice, as the hand settles where it is going",
+    "const dLat = (11 / 3000) * 180 / Math.PI; let h = 0;",
+    "const frame = async () => { const q = F.fx.hand.pinch; const L = q.length(); const lat = Math.asin(q.y / L) * 180 / Math.PI, lon = Math.atan2(q.x, q.z) * 180 / Math.PI; await G.camera({ mode: 'surface', lat: lat - dLat, lon, alt: 2, yaw: 0, pitch: 0, fov: 50, hour: 16 }); await G.frames(2); h = L - (F.fx.vis.camBody.length() - 2); const alt = Math.max(2, h - 2.5); await G.camera({ mode: 'surface', lat: lat - dLat, lon, alt, yaw: 0, pitch: Math.atan2(h - 1.2 - alt, 11) * 180 / Math.PI, fov: 50, hour: 16 }); await G.frames(4); };",
     "await frame(); await frame();",
     "return { held: [F.fx.hand.heldKind, F.fx.hand.heldId], scale: F.fx.hand.scale, h: +h.toFixed(1), d: Math.round(F.fx.hand.pinch.distanceTo(F.fx.vis.camBody)) };"
    ],
@@ -43,60 +43,10 @@
    "frames": 1,
    "script": [
     "const F = window.__GENESIS_FX__; F.fx.hand.force = true; const p = G.poi('farm');",
-    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 2.4, alignment: 0.8, pose: 'open', held: null });",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 2.4, regard: 0.8, pose: 'open', held: null });",
     "await G.camera({ mode: 'surface', lat: p.lat - (6 / 3000) * 180 / Math.PI, lon: p.lon, alt: 3.2, yaw: 0, pitch: -9, fov: 45, hour: 15.5 });",
     "await G.frames(4); return { scale: F.fx.hand.scale, pres: F.fx.hand.presence };"
    ]
-  },
-  {
-   "name": "god-creatures",
-   "params": "source=lookdev",
-   "size": [
-    960,
-    540
-   ],
-   "quality": "medium",
-   "canvasOnly": true,
-   "commands": [
-    {
-     "k": "lookdev.clear"
-    },
-    {
-     "k": "lookdev.creature",
-     "id": 7,
-     "template": "ape",
-     "pos": "$poi:forest-edge",
-     "offset": [
-      -6,
-      0
-     ],
-     "height": 9,
-     "alignment": 0.95,
-     "anim": "idle",
-     "heading": 2.55
-    },
-    {
-     "k": "lookdev.creature",
-     "id": 8,
-     "template": "ape",
-     "pos": "$poi:forest-edge",
-     "offset": [
-      6,
-      0
-     ],
-     "height": 9,
-     "alignment": -0.95,
-     "anim": "idle",
-     "heading": 3.75
-    }
-   ],
-   "wait": 1,
-   "script": [
-    "const F = window.__GENESIS_FX__; F.fx.hand.force = false; const p = G.poi('forest-edge');",
-    "await G.camera({ mode: 'surface', lat: p.lat - (30 / 3000) * 180 / Math.PI, lon: p.lon, alt: 5, yaw: 0, pitch: -3, hour: 15 });",
-    "await G.frames(2); F.advance(2); await G.frames(2); return F.fx.creatures.count;"
-   ],
-   "frames": 2
   },
   {
    "name": "god-meteor-1-before",
@@ -198,7 +148,7 @@
     "const R = F.fx.ctx.pv.params.radius; const c = F.fx.vis.camBody.clone().normalize(); const f = F.fx.camFwd.clone(); f.addScaledVector(c, -f.dot(c)).normalize(); const o = c.clone().addScaledVector(f, 950 / R).normalize();",
     "await G.cmd({ k: 'lookdev.disaster', kind: 'tsunami', pos: [o.x, o.y, o.z], progress: 0.62, radius: 420, intensity: 1.5 });",
     "await G.step(1); await G.frames(2); F.advance(6); await G.frames(2);",
-    "const st = [...F.fx.m.disasters.states.values()].find((x) => x.kind === 'tsunami'); return { front: st && (st.extra.front || []).length, camToOrigin: st && Math.round(st.g.distanceTo(F.fx.vis.camBody)) };"
+    "const st = [...F.fx.m.disasters.states.values()].find((x) => x.kind === 'tsunami'); return { crest: st && st.extra.crest ? st.extra.crest.crest.length : null, camToOrigin: st && Math.round(st.g.distanceTo(F.fx.vis.camBody)) };"
    ],
    "frames": 1
   },
@@ -254,7 +204,7 @@
     "window.__GENESIS_FX__.fx.hand.force = false; const F = window.__GENESIS_FX__; const p = G.poi('town');",
     "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.field', field: 'snow', pos: p.pos, radius: 2500, value: 0 });",
     "await G.cmd({ k: 'lookdev.weather', kind: 'thunderstorm', pos: p.pos, radius: 2500, intensity: 1 });",
-    "await G.step(1); await G.camera({ mode: 'surface', poi: 'town', alt: 1.8, pitch: 6, hour: 14 });",
+    "await G.step(1); /* (the lookdev world regrows its clouds and rain every few ticks: paint the storm's rain again after that) */ await G.cmd({ k: 'lookdev.field', field: 'precip', pos: p.pos, radius: 2500, value: 22 }); await G.cmd({ k: 'lookdev.field', field: 'precipType', pos: p.pos, radius: 2500, value: 1 }); await G.step(1); await G.camera({ mode: 'surface', poi: 'town', alt: 1.8, pitch: 6, hour: 14 });",
     "await G.frames(2); F.advance(30); await G.frames(1); F.advance(1.6); await G.frames(2); return { local: F.fx.m && F.fx.m.weather.local, lens: F.fx.screenState.lens };"
    ]
   },
@@ -291,7 +241,7 @@
     "await G.cmd({ k: 'lookdev.miracle.heal', pos: p.pos, offset: [140, 40], radius: 70 });",
     "await G.cmd({ k: 'lookdev.miracle.food', pos: p.pos, offset: [-150, -20], radius: 70 });",
     "await G.step(1); await G.camera({ mode: 'orbit', poi: 'town', dist: 240, tilt: 62, hour: 16.5 });",
-    "await G.frames(2); F.advance(1.8); await G.frames(2);"
+    "await G.frames(2); F.advance(3.4); await G.frames(2);"
    ]
   },
   {

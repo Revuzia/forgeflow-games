@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WorldView } from '../src/client/worldview.ts';
 import { Rng } from '../src/sim/core/rng.ts';
-import type { Snapshot } from '../src/sim/types.ts';
+import { TICKS_PER_SECOND_1X, type Snapshot } from '../src/sim/types.ts';
 
 function snap(tick: number, speed: number, achieved: number): Snapshot {
   return {
@@ -19,7 +19,7 @@ function snap(tick: number, speed: number, achieved: number): Snapshot {
 
 interface Run { meanRate: number; jitter: number; backward: number; maxLagS: number }
 
-/** speed = requested multiplier; simRate = ticks per real second the sim actually manages */
+/** speed = requested multiplier (preset); simRate = ticks per real second the sim actually manages */
 function run(speed: number, simRate: number, seed: number): Run {
   const rng = new Rng(seed);
   const view = new WorldView();
@@ -36,7 +36,7 @@ function run(speed: number, simRate: number, seed: number): Run {
     now += 16.667 + (rng.float() - 0.5) * 4;
     // deliver replies that have arrived
     for (let i = pending.length - 1; i >= 0; i--) {
-      if (pending[i].at <= now) { view.apply(snap(pending[i].tick, speed, simRate / 10), pending[i].at); pending.splice(i, 1); inFlight = false; }
+      if (pending[i].at <= now) { view.apply(snap(pending[i].tick, speed, simRate / TICKS_PER_SECOND_1X), pending[i].at); pending.splice(i, 1); inFlight = false; }
     }
     view.update(now);
     if (now > 2000) {
@@ -63,7 +63,9 @@ function run(speed: number, simRate: number, seed: number): Run {
   return { meanRate: mean, jitter: sd / Math.max(1e-9, mean), backward, maxLagS: maxLag };
 }
 
-for (const [label, speed, simRate] of [['1x', 1, 10], ['10x', 10, 100], ['100x', 100, 1000], ['1000x held at 300x', 1000, 3000]] as const) {
+// (LIVING PACE: presets are ticks per real second — 1x is 1 tick a second, 3000x the top preset. The sim rates are the
+// ones this test always held to — 10, 100, 1 000 and 3 000 ticks a second, the old 1x … 1000x)
+for (const [label, speed, simRate] of [['10x', 10, 10 * TICKS_PER_SECOND_1X], ['100x', 100, 100 * TICKS_PER_SECOND_1X], ['1000x', 1000, 1000 * TICKS_PER_SECOND_1X], ['3000x held at 3000x', 3000, 3000 * TICKS_PER_SECOND_1X], ['3000x held at 1000x', 3000, 1000 * TICKS_PER_SECOND_1X]] as const) {
   test(`render clock at ${label}: smooth, monotonic, close behind the sim`, () => {
     const r = run(speed, simRate, 7 + speed);
     assert.equal(r.backward, 0, 'the clock ran backwards');
@@ -73,3 +75,15 @@ for (const [label, speed, simRate] of [['1x', 1, 10], ['10x', 10, 100], ['100x',
     assert.ok(r.maxLagS < 0.25, `render clock strays ${r.maxLagS.toFixed(3)} s from the sim`);
   });
 }
+
+// LIVING PACE hook H1 (the client team's): at the new 1x — ONE tick per real second — the render clock's 0.6 s cap on
+// extrapolation past the last snapshot (src/client/worldview.ts update) is 0.6 of a tick, so the integer snapshot ticks
+// show as a sawtooth: measured 32.8 % per-frame rate jitter (target < 20 %). Kept as a todo here so it shows in every
+// run until src/client/worldview.ts paces its extrapolation by time, not ticks; then drop the todo.
+test('render clock at 1x (1 tick per real second): smooth, monotonic, close behind the sim', { todo: 'hook H1: src/client/worldview.ts at 1 tick per second' }, () => {
+  const r = run(1, 1 * TICKS_PER_SECOND_1X, 8);
+  assert.equal(r.backward, 0, 'the clock ran backwards');
+  assert.ok(Math.abs(r.meanRate - TICKS_PER_SECOND_1X) / TICKS_PER_SECOND_1X < 0.03, `mean rate ${r.meanRate.toFixed(2)} vs sim ${TICKS_PER_SECOND_1X}`);
+  assert.ok(r.jitter < 0.2, `per-frame rate jitter ${(r.jitter * 100).toFixed(1)} %`);
+  assert.ok(r.maxLagS < 1.25, `render clock strays ${r.maxLagS.toFixed(3)} s from the sim`);
+});

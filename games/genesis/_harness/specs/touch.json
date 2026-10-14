@@ -1,0 +1,56 @@
+{
+ "_doc": "The Touch (LIVING §0.1.7, §3.6, hook H7; CONTRACT §11.4): the god's presence drawn as light and weather — a shaft let down through a whorl in the cloud deck, a wind vortex at its grip — in each of its behaviours (lift, rebuke, soothe, a sigil traced, point) and by regard (trusted gold and still air … feared storm-dark with a cold rim and static), holding a villager, a boulder, from orbit. Lookdev world; F.fx.hand.hold pins the Touch's clock so a moment can be pulsed at a chosen age. Run: node _harness/shots.mjs _harness/specs/touch.json",
+ "shots": [
+  { "name": "touch-trusted-lift", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = true; F.fx.hand.hold = null; const p = G.poi('farm');",
+      "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' });",
+      "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.85, pose: 'open' }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'rock', mass: 2600 }); await G.step(1);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 95, tilt: 74, yaw: 20, fov: 55, hour: 15.5 }); F.fx.hand.regard = 0.85; await G.frames(3);",
+      "return { b: F.fx.hand.behaviour, L: +F.fx.hand.scale.toFixed(1), regard: +F.fx.hand.regard.toFixed(2) };"
+    ] },
+  { "name": "touch-feared-lift", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+      "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: -0.9, pose: 'grab' }); F.fx.hand.regard = -0.9; await G.step(1); await G.frames(3);",
+      "return { b: F.fx.hand.behaviour, regard: +F.fx.hand.regard.toFixed(2) };"
+    ] },
+  { "name": "touch-rebuke", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+      "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.1, pose: 'open', held: null }); F.fx.hand.regard = 0.1; await G.step(1); await G.frames(2);",
+      "F.fx.hand.hold = 1000; F.fx.hand.pulse('slap', 1000 - 0.22); await G.frames(2);",
+      "return { b: F.fx.hand.behaviour };"
+    ] },
+  { "name": "touch-soothe", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; F.fx.hand.hold = 1010; F.fx.hand.pulse('stroke', 1009.2); F.fx.hand.regard = 0.8;",
+      "await G.cmd({ k: 'lookdev.hand', pos: G.poi('farm').pos, alt: 0, regard: 0.8, pose: 'stroke', held: null }); await G.step(1); await G.frames(3);",
+      "return { b: F.fx.hand.behaviour };"
+    ] },
+  { "name": "touch-sigil", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; await G.cmd({ k: 'lookdev.hand', pos: G.poi('farm').pos, alt: 0, regard: 0.8, pose: 'open', held: null }); await G.step(1);",
+      "F.fx.hand.hold = 1020; F.fx.hand.pulse('cast', 1020 - 0.75, 'heal'); await G.frames(3);",
+      "return { b: F.fx.hand.behaviour };"
+    ] },
+  { "name": "touch-point", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; F.fx.hand.hold = null; await G.cmd({ k: 'lookdev.hand', pos: G.poi('farm').pos, alt: 0, regard: 0.4, pose: 'point', held: null }); await G.step(1); await G.frames(4);",
+      "return { b: F.fx.hand.behaviour };"
+    ] },
+  { "name": "touch-villager-street", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; F.fx.hand.hold = null; const p = G.poi('town'); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.7, pose: 'open', held: null }); F.fx.hand.regard = 0.7;",
+      "await G.camera({ mode: 'surface', lat: p.lat - (16 / 3000) * 180 / Math.PI, lon: p.lon, alt: 3, yaw: 0, pitch: 6, fov: 60, hour: 16 }); await G.frames(1);",
+      "const a = G.agents(40).filter((x) => x.dist < 70).map((x) => x.id); await G.cmd({ k: 'lookdev.hand.grab', target: { kind: 'agent', id: a[0] } }); await G.step(1); await G.frames(2);",
+      "return { b: F.fx.hand.behaviour, held: [F.fx.hand.heldKind, F.fx.hand.heldId], L: +F.fx.hand.scale.toFixed(1), d: Math.round(F.fx.hand.grip.distanceTo(F.fx.vis.camBody)) };"
+    ] },
+  { "name": "touch-orbit", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; F.fx.hand.hold = null; const p = G.poi('farm'); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.7, pose: 'open', held: null });",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 8000, tilt: 20, yaw: 0, fov: 50, hour: 14 }); await G.frames(3);",
+      "return { L: +F.fx.hand.scale.toFixed(1), vis: F.fx.hand.visible };"
+    ] }
+ ]
+}

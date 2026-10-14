@@ -2,7 +2,9 @@
 // through the WorldView, driven the way the interface and the test surface drive them (rig.modes):
 //   * walking in the god's body keeps the feet on the curved ground (and the eye above it), walks at its pace, jumps
 //     and comes down, and the people near it see it: the onSeen hook fires and the sim's 'god.seen' takes it;
-//   * the body's look follows the god's record (HandView.alignment) unless a shot pins it;
+//   * the body's look follows how the people see the god (HandView.regard, else alignment) unless a shot pins it —
+//     warm light when trusted, cold when feared;
+//   * the rig publishes its mode (CAMERA_NOW): rain beads on the lens of an eye on the ground, never a god's camera;
 //   * follow keeps a person framed, above the ground, looking at them;
 //   * the dolly is a crane move: above the ground, high and wide at its ends, low over the middle, aimed at the place;
 //   * photo mode from a stand-off aims at the thing; the lens rolls the frame;
@@ -17,7 +19,8 @@ import { WorldView, type PlanetView } from '../src/client/worldview.ts';
 import { qRotate, qRotateInv, type D3 } from '../src/client/orbits.ts';
 import { CameraRig } from '../src/render/camera/rig.ts';
 import { newInput, surfaceRadius, type InputState } from '../src/render/camera/common.ts';
-import { AVATAR_STATE } from '../src/render/camera/avatar.ts';
+import { AVATAR_STATE, regardColour } from '../src/render/camera/avatar.ts';
+import { CAMERA_NOW } from '../src/render/camera/common.ts';
 import { PHOTO } from '../src/render/camera/photo.ts';
 import type { SeenEvent } from '../src/render/camera/walk.ts';
 import { QUALITY, QUALITY_NAMES, detectQuality } from '../src/render/quality.ts';
@@ -138,11 +141,31 @@ test('the body shows the god\'s record unless a shot pins it', () => {
   w.view.hand = { planet: w.pv.id, pos: at.u, alt: 8, held: null, pose: 'open', alignment: -0.9 };
   w.frames(90);
   assert.ok(AVATAR_STATE.alignment < -0.7, `a feared god's body: ${AVATAR_STATE.alignment.toFixed(2)}`);
+  // the regard, when the sim sends it, wins over the old alignment field
+  w.view.hand = { planet: w.pv.id, pos: at.u, alt: 8, held: null, pose: 'open', alignment: -0.9, regard: 0.8 };
+  w.frames(120);
+  assert.ok(AVATAR_STATE.alignment > 0.6, `the regard: ${AVATAR_STATE.alignment.toFixed(2)}`);
   w.rig.modes.applySpec({ mode: 'walk', planet: w.pv.id, lat: at.lat, lon: at.lon, alignment: 0.7 }, w.view);
   w.frames(2);
   assert.ok(Math.abs(AVATAR_STATE.alignment - 0.7) < 0.02, `pinned by the shot: ${AVATAR_STATE.alignment.toFixed(2)}`);
   w.rig.modes.walk(null);
   w.frames(1);
+  // trusted: warm light (red over blue); feared: cold (blue over red)
+  const warm = regardColour(1), cold = regardColour(-1);
+  assert.ok(warm[0] > warm[2] && cold[2] > cold[0], `warm ${warm.map((v) => v.toFixed(2))}, cold ${cold.map((v) => v.toFixed(2))}`);
+});
+
+test('the rig publishes its mode for the effects of an eye on the ground', () => {
+  const w = new World();
+  const at = w.dryPlace();
+  w.frames(2);
+  assert.equal(CAMERA_NOW.mode, 'orbit');
+  w.rig.modes.walk({ planet: w.pv.id, at: at.u, heading: 0 });
+  w.frames(2);
+  assert.equal(CAMERA_NOW.mode, 'walk');
+  w.rig.modes.walk(null);
+  w.frames(2);
+  assert.notEqual(CAMERA_NOW.mode, 'walk');
 });
 
 test('follow keeps a person framed from above the ground', () => {

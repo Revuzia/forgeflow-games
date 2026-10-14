@@ -372,7 +372,7 @@ test('every disaster kind, every miracle and every hand act has a sound', () => 
 test('every event the sim emits maps to a sound the catalog has (or deliberately to none)', () => {
   const types = [
     'impact', 'lightning', 'quake', 'eruption', 'landslide', 'steam', 'splash', 'landed', 'thrown', 'lost', 'fireball', 'shield',
-    'miracle', 'gift', 'creature.reward', 'creature.punish', 'creature.learned', 'rewind', 'fire.start', 'fire.lit', 'healed',
+    'miracle', 'gift', 'rewind', 'fire.start', 'fire.lit', 'healed',
     'built', 'ship.built', 'trade', 'theft', 'attack', 'launch', 'ship.countdown', 'battle', 'disaster', 'disaster.end',
     'discovery', 'loss', 'refusal', 'birth', 'death', 'settlement.founded', 'settlement.fallen', 'settlement.split', 'war',
     'siege', 'conquest', 'treaty', 'plague', 'blight', 'extinction', 'speciation', 'age', 'milestone', 'orbit.first',

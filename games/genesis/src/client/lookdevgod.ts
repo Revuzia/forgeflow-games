@@ -1,12 +1,14 @@
-// GENESIS — lookdev's god layer: a fabricated hand, creatures, disasters, weather systems, projectiles and events for
-// developing and screenshotting the god-layer visuals (render/hand.ts, render/life/creature.ts, render/fx/**) without
-// the sim. It answers the sim's own command names where it can (hand.move / hand.pose / hand.grab / hand.release,
-// creature.adopt, disaster.spawn / cancel, weather.paint / clear, miracle.<kind>) so a shot spec reads the same on
-// both backends, plus lookdev.* commands that pin a state exactly (a meteor at 40 % of its fall, a creature mid-stride,
-// a field painted with lava). The UI host only lets 'lookdev.*' through on this backend, so every god command is also
-// reachable as 'lookdev.<command>' (lookdev.hand.grab, lookdev.disaster.cancel, lookdev.miracle.heal). Disasters age with the lookdev tick and act on the fabricated fields: a meteor carves a
-// crater and lights its rim when it lands, a volcano pours lava, a tsunami's wall of water runs at the coast, a
-// wildfire burns, a weather system paints cloud and precipitation. It is not the sim: nothing here is deterministic
+// GENESIS — lookdev's god layer: a fabricated Touch (the god's hand entity), disasters, weather systems, projectiles
+// and events for developing and screenshotting the god-layer visuals (render/hand.ts, render/fx/**) without the sim.
+// It answers the sim's own command names where it can (hand.move / hand.pose / hand.grab / hand.release,
+// disaster.spawn / cancel, weather.paint / clear, miracle.<kind>) so a shot spec reads the same on both backends, plus
+// lookdev.* commands that pin a state exactly (a meteor at 40 % of its fall, a field painted with lava). The Touch takes
+// `regard` (−1 feared … +1 trusted, LIVING §3.1) as the sim's HandView does. There is no creature (LIVING §0.1.6, hook
+// H6): creature commands are refused as the sim refuses them. The UI host only lets 'lookdev.*' through on this
+// backend, so every god command is also reachable as 'lookdev.<command>' (lookdev.hand.grab, lookdev.disaster.cancel,
+// lookdev.miracle.heal). Disasters age with the lookdev tick and act on the fabricated fields: a meteor carves a crater
+// and lights its rim when it lands, a volcano pours lava, a tsunami's wall of water runs at the coast, a wildfire
+// burns, a weather system paints cloud and precipitation. It is not the sim: nothing here is deterministic
 // or conserved — it only has to look like the god at work.
 
 import type {
@@ -41,16 +43,11 @@ interface LookDisaster {
   base?: { cells: number[]; water: Float32Array; surface: Float32Array };
 }
 
-interface LookCreature { view: CreatureView; speed: number; t0: number; from: UnitVec; heading0: number }
 interface LookProjectile { view: ProjectileView; t0: number; pos0: UnitVec; alt0: number; vel0: [number, number, number] }
 
 const DIS = new Map<string, { render: Record<string, number>; radius: number; intensity: number; life: [number, number]; speed?: number; name: string }>(
   ((BASE_PACK as unknown as { disasters?: { id: string; name: string; render: Record<string, number>; radius: number; intensity: number; life: [number, number]; speed?: number }[] }).disasters ?? [])
     .map((d) => [d.id, { render: d.render ?? {}, radius: d.radius, intensity: d.intensity, life: d.life, speed: d.speed, name: d.name }]),
-);
-const CREATURES = new Map<string, { body: string; size: [number, number]; name: string; speed: number }>(
-  ((BASE_PACK as unknown as { creatures?: { id: string; body: string; size: [number, number]; name: string; speed: number }[] }).creatures ?? [])
-    .map((c) => [c.id, c]),
 );
 
 function unit(v: ArrayLike<number>): UnitVec {
@@ -91,7 +88,6 @@ function angle(a: ArrayLike<number>, b: ArrayLike<number>): number {
 export class LookdevGod {
   private hand: HandView | null = null;
   private handPoseUntil = 0;
-  private creatures: LookCreature[] = [];
   private disasters = new Map<number, LookDisaster[]>();
   private weather = new Map<number, (WeatherView & { lightning: number })[]>();
   private projectiles: LookProjectile[] = [];
@@ -109,14 +105,16 @@ export class LookdevGod {
     switch (c.k) {
       case 'hand.move': case 'lookdev.hand': {
         const p = posOf(c, 'pos', R) ?? this.hand?.pos ?? [0, 1, 0];
-        this.hand = { planet: lp.snap.id, pos: p, alt: typeof c.alt === 'number' ? c.alt : this.hand?.alt ?? 8, held: this.hand?.held ?? null, pose: typeof c.pose === 'string' ? c.pose : this.hand?.pose ?? 'open', alignment: typeof c.alignment === 'number' ? c.alignment : this.hand?.alignment ?? 0 };
+        // (regard: how the people see their god, −1 feared … +1 trusted; `alignment` is its old name and still sets it)
+        const regard = typeof c.regard === 'number' ? c.regard : typeof c.alignment === 'number' ? c.alignment : this.hand?.regard ?? this.hand?.alignment ?? 0;
+        this.hand = { planet: lp.snap.id, pos: p, alt: typeof c.alt === 'number' ? c.alt : this.hand?.alt ?? 8, held: this.hand?.held ?? null, pose: typeof c.pose === 'string' ? c.pose : this.hand?.pose ?? 'open', alignment: regard, regard };
         if (c.k === 'lookdev.hand' && c.held && typeof c.held === 'object') this.hand.held = { kind: String((c.held as { kind: string }).kind) as EntityRef['kind'], id: Number((c.held as { id: number }).id) };
         if (c.k === 'lookdev.hand' && c.held === null) this.hand.held = null;
         this.handPoseUntil = 0;
         return { ok: true, msg: 'The hand moves.' };
       }
       case 'hand.pose': {
-        if (!this.hand) this.hand = { planet: lp.snap.id, pos: [0, 1, 0], alt: 8, held: null, pose: 'open', alignment: 0 };
+        if (!this.hand) this.hand = { planet: lp.snap.id, pos: [0, 1, 0], alt: 8, held: null, pose: 'open', alignment: 0, regard: 0 };
         this.hand.pose = String(c.pose ?? 'open');
         this.handPoseUntil = typeof c.ticks === 'number' ? tick + c.ticks : 0;
         return { ok: true };
@@ -151,25 +149,8 @@ export class LookdevGod {
         return { ok: true };
       }
       case 'creature.adopt': case 'lookdev.creature': {
-        const tplId = String(c.template ?? c.body ?? 'ape');
-        const tpl = CREATURES.get(tplId) ?? [...CREATURES.values()].find((q) => q.body === tplId) ?? { body: tplId, size: [4, 16] as [number, number], name: tplId, speed: 1.5 };
-        const id = typeof c.id === 'number' ? c.id : this.nextId++;
-        const p = posOf(c, 'pos', R) ?? [0, 1, 0];
-        const ex = this.creatures.find((q) => q.view.id === id);
-        const align = typeof c.alignment === 'number' ? c.alignment : 0;
-        const morph: [number, number, number, number] = Array.isArray(c.morph) ? (c.morph as [number, number, number, number]) : [
-          Math.max(0, Math.min(1, 0.45 + align * 0.3)), Math.min(1, 0.5), Math.max(0, -align), Math.max(0, align),
-        ];
-        const anim = typeof c.anim === 'string' ? (AnimState as Record<string, number>)[c.anim] ?? AnimState.idle : typeof c.anim === 'number' ? c.anim : AnimState.idle;
-        const view: CreatureView = {
-          id, planet: lp.snap.id, name: String(c.name ?? tpl.name), body: tpl.body, pos: p, heading: typeof c.heading === 'number' ? c.heading : 0,
-          height: typeof c.height === 'number' ? c.height : tpl.size[0] + (tpl.size[1] - tpl.size[0]) * 0.5, alignment: align,
-          anim: anim as CreatureView['anim'], phase: hashFloat(id, 5), activity: String(c.activity ?? 'standing'), leash: -1, held: null,
-          hunger: 0.3, energy: 0.8, morph,
-        };
-        const lc: LookCreature = { view, speed: typeof c.speed === 'number' ? c.speed : 0, t0: tick, from: [...p], heading0: view.heading };
-        if (ex) Object.assign(ex, lc); else this.creatures.push(lc);
-        return { ok: true, msg: `${view.name} stands.`, created: [{ kind: 'creature', id, planet: lp.snap.id }] };
+        // (the creature left the game: LIVING §0.1.6, hook H6 — as the sim answers)
+        return { ok: false, msg: "There is no great creature in this world. Choose a prophet: 'make Hesh my prophet'." };
       }
       case 'disaster.spawn': case 'lookdev.disaster': {
         const kind = String(c.kind ?? 'meteor');
@@ -267,7 +248,7 @@ export class LookdevGod {
         return { ok: true };
       }
       case 'lookdev.clear': {
-        this.creatures = []; this.disasters.clear(); this.weather.clear(); this.projectiles = []; this.hand = null;
+        this.disasters.clear(); this.weather.clear(); this.projectiles = []; this.hand = null;
         return { ok: true };
       }
     }
@@ -498,20 +479,11 @@ export class LookdevGod {
     }
   }
 
-  /** the global part: creatures (walking their headings), the hand, and the events since the last snapshot */
-  global(tick: number, R: number): { creatures: CreatureView[]; hand: HandView | null; events: SimEvent[] } {
-    for (const c of this.creatures) {
-      if (c.speed > 0) {
-        const t = tick - c.t0;
-        const dir = bearingDir(c.from, c.heading0);
-        const k = (c.speed * 60 * t) / R / 10;
-        c.view.pos = unit([c.from[0] + dir[0] * k, c.from[1] + dir[1] * k, c.from[2] + dir[2] * k]);
-        c.view.heading = c.heading0;
-      }
-    }
+  /** the global part: the hand (the Touch's entity) and the events since the last snapshot (no creatures: H6) */
+  global(tick: number, _R: number): { creatures: CreatureView[]; hand: HandView | null; events: SimEvent[] } {
     if (this.hand && this.handPoseUntil && tick > this.handPoseUntil) { this.hand.pose = this.hand.held ? 'grab' : 'open'; this.handPoseUntil = 0; }
     const ev = this.events;
     this.events = [];
-    return { creatures: this.creatures.map((c) => ({ ...c.view, pos: [...c.view.pos] as UnitVec, morph: [...c.view.morph] as [number, number, number, number] })), hand: this.hand ? { ...this.hand, pos: [...this.hand.pos] as UnitVec } : null, events: ev };
+    return { creatures: [], hand: this.hand ? { ...this.hand, pos: [...this.hand.pos] as UnitVec } : null, events: ev };
   }
 }

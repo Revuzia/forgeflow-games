@@ -46,7 +46,10 @@ import { agentName } from '../people/util.ts';
 import { distM } from '../people/world.ts';
 import { MIRACLES } from './miracles.ts';
 import { LAWS } from './acts.ts';
-import { LEASH_MODES } from './creature.ts';
+import { NO_CREATURE } from './creature.ts';
+import { intentSigns, signsWrath } from './freeform-signs.ts';
+import { intentContent } from './freeform-content.ts';
+import { intentHistory } from './freeform-history.ts';
 import { TEMPERAMENTS } from './rivals.ts';
 import { ACTS } from './possess.ts';
 import { DISCIPLE_MODES } from './disciples.ts';
@@ -62,6 +65,11 @@ import { habitability } from '../space/ships.ts';
 
 export interface ParseOut extends CommandResult {
   resolved?: Command[];
+  /**
+   * LIVING HISTORY (§5.3): the preview must ask before running this — a destructive act on a settlement the sentence did
+   * not name ("drop a meteor" with the camera on Aru), an end of days, every disaster at once. The question to show.
+   */
+  confirm?: string;
 }
 
 // ───────────────────────────── lexicon access ─────────────────────────────
@@ -89,12 +97,14 @@ interface Lex {
   colours: Record<string, [number, number, number]>;
   /** weather adjectives and plurals -> weather kind ("foggy" -> fog) */
   weatherWords: Record<string, string>;
-  /** words for the god's creature: never an invented animal */
+  /** words that ask for a great creature (LIVING §3.5: there is none — answered with the prophet hint, never an invented animal) */
   creatureWords: string[];
   /** everyday animal words -> content animals ("fish" -> fish-shoal) */
   animalAliases: Record<string, string>;
   /** words never taken as a name unless capitalised mid-sentence */
   reserved: Set<string>;
+  /** everyday biome words -> biomes ("jungle" -> rainforest, "swamp" / "marsh" / "bog" -> wetland) */
+  biomeWords: Record<string, string>;
 }
 
 const lexCache = new WeakMap<Content, Lex>();
@@ -111,6 +121,7 @@ function lexOf(c: Content): Lex {
     places: obj('places'), verbs: obj('verbs'), tags: obj('tags'), effects: obj('effects'), laws: obj('laws'), rains: obj('rains'),
     animalish: new Set(arr('animalish')), abstract: new Set(arr('abstract')), diseases: obj('diseases'), colours: obj('colours'),
     weatherWords: obj('weatherWords'), creatureWords: arr('creatureWords'), animalAliases: obj('animalAliases'), reserved: new Set(arr('reserved')),
+    biomeWords: obj('biomeWords'),
   };
   lexCache.set(c, l);
   return l;
@@ -118,7 +129,7 @@ function lexOf(c: Content): Lex {
 
 // ───────────────────────────── nouns ─────────────────────────────
 
-type NounType = 'disaster' | 'weather' | 'animal' | 'species' | 'plant' | 'item' | 'recipe' | 'creature' | 'biome' | 'disease' | 'star' | 'planetkind' | 'miracle' | 'law' | 'material' | 'building';
+type NounType = 'disaster' | 'weather' | 'animal' | 'species' | 'plant' | 'item' | 'recipe' | 'biome' | 'disease' | 'star' | 'planetkind' | 'miracle' | 'law' | 'material' | 'building';
 
 interface Phrase { text: string; type: NounType; id: string }
 
@@ -173,8 +184,8 @@ function vocab(c: Content): Phrase[] {
   named(c.plants.list, 'plant');
   named(c.items.list, 'item');
   for (const r of c.recipes.list) { add(r.id.replace(/-/g, ' '), 'recipe', r.id); add(r.name, 'recipe', r.id); }
-  named(c.creatures.list, 'creature');
   named(c.biomes.list, 'biome', false);
+  for (const [w, id] of Object.entries(L.biomeWords)) if (c.biomes.find(id)) add(w, 'biome', id);
   named(c.diseases.list, 'disease', false);
   for (const [w, id] of Object.entries(L.diseases)) if (c.diseases.find(id)) add(w, 'disease', id);
   for (const s of c.stars.list) { add(s.name, 'star', s.id); add(`${s.id} star`, 'star', s.id); }
@@ -285,9 +296,11 @@ interface Mods {
   pct?: boolean;
   /** "by N" (a change, not a level) */
   by?: number;
+  /** "between A and B": the middle of the two, where an act on neither of them lands (a town's radius clear of both) */
+  mid?: V3;
 }
 
-interface Live { name: string; kind: 'settlement' | 'planet' | 'creature' | 'god' | 'agent' | 'ship'; id: number; planet: number; pos?: V3 }
+interface Live { name: string; kind: 'settlement' | 'planet' | 'god' | 'agent' | 'ship'; id: number; planet: number; pos?: V3 }
 
 /** may a name stand for a live thing in this sentence? (an ordinary word only when capitalised mid-sentence) */
 function nameUsable(name: string, raw: string, reserved: Set<string>): boolean {
@@ -313,7 +326,6 @@ function liveNames(u: Universe, raw: string): Live[] {
       if (first.length >= 3 && first !== n) push({ name: first, kind: 'settlement', id: st.id, planet: p.id, pos: [st.pos[0], st.pos[1], st.pos[2]] });
     }
   }
-  for (const c of u.god.creatures) if (c.alive) push({ name: c.name.toLowerCase(), kind: 'creature', id: c.id, planet: c.planet, pos: [...c.pos] as V3 });
   for (const g of u.god.gods) if (g.alive && g.kind === 'rival') push({ name: g.name.toLowerCase(), kind: 'god', id: g.id, planet: g.home.planet });
   // ships by name (every ship not yet finished: building, flying, landed)
   for (const sh of u.space.ships) if (sh.phase !== 'done' && sh.name) push({ name: sh.name.toLowerCase(), kind: 'ship', id: sh.id, planet: sh.home });
@@ -464,6 +476,47 @@ function highGround(p: Planet, from: V3, within: number): V3 | null {
   return best >= 0 ? cellPos3(p, best) : null;
 }
 
+/** the nearest water to a point (the open sea when asked for and within 5 km; else any standing water) */
+function nearestWater(p: Planet, from: V3, sea: boolean): V3 | null {
+  let best = -1, bd = Infinity, bestSea = -1, bs = Infinity;
+  for (const c of p.cellsNear(from, 6000)) {
+    const wet = !!p.s.ocean[c] || p.f.water[c] > 0.5;
+    if (!wet) continue;
+    const d = distM(p, cellPos3(p, c), from);
+    if (d < bd || (d === bd && c < best)) { bd = d; best = c; }
+    if (p.s.ocean[c] && (d < bs || (d === bs && c < bestSea))) { bs = d; bestSea = c; }
+  }
+  const c = sea && bestSea >= 0 && bs <= 5000 ? bestSea : best;
+  return c >= 0 ? cellPos3(p, c) : null;
+}
+
+/** a point beside a town and clear of it: dry land a little beyond its edge (bearings tried in a fixed order) */
+function besideTown(p: Planet, at: V3, territory: number): V3 {
+  const d = Math.max(300, territory + 220);
+  for (let k = 0; k < 8; k++) {
+    const q = moveBy(at, bearingDir(at, (k * Math.PI) / 4 + 0.4), d, p.st.radius);
+    const c = p.cellAt(q);
+    if (!p.s.ocean[c] && p.f.water[c] < 0.3 && p.f.territory[c] < 0) return q;
+  }
+  return moveBy(at, bearingDir(at, 0.4), d, p.st.radius);
+}
+
+/** the middle of two towns, a town's radius clear of both (pushed sideways when they stand close) */
+function midBetween(p: Planet, a: Live, b: Live): V3 {
+  const A = a.pos!, B = b.pos!;
+  let m = norm([A[0] + B[0], A[1] + B[1], A[2] + B[2]]);
+  const ra = p.people?.settlement(a.id)?.territory ?? 150, rb = p.people?.settlement(b.id)?.territory ?? 150;
+  const need = Math.max(ra, rb) + 150;
+  const half = distM(p, A, B) / 2;
+  if (half < need) {
+    // sideways from the line between them until clear of both
+    const ab: V3 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+    const side = norm([m[1] * ab[2] - m[2] * ab[1], m[2] * ab[0] - m[0] * ab[2], m[0] * ab[1] - m[1] * ab[0]]);
+    m = moveBy(m, side, Math.sqrt(Math.max(0, need * need - half * half)) + 50, p.st.radius);
+  }
+  return m;
+}
+
 /** lift the modifiers out of a clause; returns the core left and the modifiers */
 function lift(u: Universe, p: Planet | undefined, L: Lex, live: Live[], clause: string): { core: string; mods: Mods } {
   let s = ` ${clause} `.replace(/\s+/g, ' ').trim();
@@ -487,6 +540,7 @@ function lift(u: Universe, p: Planet | undefined, L: Lex, live: Live[], clause: 
     if (a && b) {
       mods.place = { pos: a.pos, settlement: a.id, planet: a.planet, label: a.name };
       mods.other = { pos: b.pos, settlement: b.id, planet: b.planet, label: b.name };
+      if (p && a.pos && b.pos && a.planet === b.planet && pair[0].startsWith('between')) mods.mid = midBetween(p, a, b);
       const end = pair[0].indexOf(pair[2]) + pair[2].indexOf(b.name) + b.name.length;
       const start = pair[0].startsWith('between') ? 0 : pair[1].indexOf(a.name);
       s = s.replace(pair[0].slice(start, end), pair[0].startsWith('between') ? ' ' : ' them ').replace(/\s+/g, ' ').trim();
@@ -496,7 +550,7 @@ function lift(u: Universe, p: Planet | undefined, L: Lex, live: Live[], clause: 
   // directions: "the north coast of aru", "north of aru", "on the east coast"
   const dir = s.match(/\b(?:on |at |along |to |off )?(?:the )?(north|south|east|west|northeast|north-east|northwest|north-west|southeast|south-east|southwest|south-west)(?!(?:ern)?\s+(?:lights?|star)\b)(?:ern)?( coast| shore| side| edge| shores| coasts)?(?: of ([a-z0-9' -]+))?/);
   if (dir && p && !(dir[2] === undefined && !dir[3] && /\b(wind|winds|gale|breeze|blow|blows|blowing)\b/.test(s))) {
-    const ofLive = dir[3] ? findLive(dir[3], live, ['settlement', 'creature']) : null;
+    const ofLive = dir[3] ? findLive(dir[3], live, ['settlement']) : null;
     const base: V3 | undefined = ofLive?.pos ?? (mods.place?.pos) ?? focus();
     if (base) {
       const coast = !!dir[2] && /coast|shore/.test(dir[2]);
@@ -512,10 +566,25 @@ function lift(u: Universe, p: Planet | undefined, L: Lex, live: Live[], clause: 
   }
   // a named place: settlement / creature / planet (after a preposition, or anywhere)
   if (!mods.place || mods.place.here) {
-    const l = findLive(s, live, ['settlement', 'creature']);
+    const l = findLive(s, live, ['settlement']);
     if (l) {
       mods.place = { pos: l.pos, planet: l.planet, settlement: l.kind === 'settlement' ? l.id : undefined, label: l.name };
       s = remove(s, l.name).replace(/\b(over|on|at|near|around|in|to|upon|onto|into|above|by|beside|outside|inside|under|beneath)\s*$/, '').replace(/\b(over|on|at|near|around|upon|above|by|beside|outside|inside|under|beneath) (?=(and|for|with|then|by)\b|$)/g, '').trim();
+    }
+  }
+  // (LIVING HISTORY §5.3) "on the sea near Lune": the nearest water to the town named, not the town; "near Aru but not
+  // on it", "beside Aru", "just outside Lune": a place clear of the town, on dry land
+  if (p && mods.place?.settlement !== undefined && mods.place.pos && !mods.other) {
+    const wm = s.match(/\b(?:on|in|into|onto|over|upon|at|across) (?:the )?(open )?(sea|ocean|seas|waters?|lake|bay|deep)\b/);
+    const nm = s.match(/\b(?:but )?not (?:on|onto|upon|into|in|over) (?:it|them|the (?:town|village|city|settlement|houses)|its houses)\b|\b(?:beside|next to|just outside|outside|close to but not on|clear of|away from)\b/);
+    const st = p.people?.settlement(mods.place.settlement);
+    if (wm && st) {
+      const at = nearestWater(p, mods.place.pos, /sea|ocean|deep|bay/.test(wm[2]));
+      if (at) { mods.place = { pos: at, planet: p.id, label: `the ${wm[2]} near ${mods.place.label}` }; s = s.replace(wm[0], ' ').replace(/\s+/g, ' ').trim(); }
+    } else if (nm && st) {
+      const at = besideTown(p, st.pos, st.territory);
+      mods.place = { pos: at, planet: p.id, label: `beside ${mods.place.label}` };
+      s = s.replace(nm[0], ' ').replace(/\s+/g, ' ').trim();
     }
   }
   // a world named is where the act lands ("teach Rust rockets", "make Rust warmer"); of two, the one the act goes to
@@ -542,7 +611,7 @@ function lift(u: Universe, p: Planet | undefined, L: Lex, live: Live[], clause: 
   }
   // toward a place (fronts, throws)
   if (tw && p) {
-    const t = findLive(tw[tw.length - 1], live, ['settlement', 'creature']);
+    const t = findLive(tw[tw.length - 1], live, ['settlement']);
     if (t) mods.toward = { pos: t.pos, settlement: t.kind === 'settlement' ? t.id : undefined, planet: t.planet, label: t.name };
   }
   // durations ("for three days", "for a year"); forever in its many words
@@ -603,6 +672,8 @@ interface PCtx2 {
   multi: boolean;
   /** a question was answered from the world (the reply is the answer: nothing to do, nothing refused) */
   answered?: boolean;
+  /** the preview must ask before this runs (an end of days, every disaster at once): ParseOut.confirm */
+  confirm?: string;
 }
 
 function put(c: Command, mods: Mods, schema: CommandSchema | undefined, o: { place?: boolean; radiusDefault?: number } = {}): Command {
@@ -610,8 +681,12 @@ function put(c: Command, mods: Mods, schema: CommandSchema | undefined, o: { pla
   const pl = mods.place;
   if (pl && o.place !== false) {
     if (pl.planet !== undefined && c.planet === undefined) c.planet = pl.planet;
-    if ('pos' in sp && pl.pos && c.pos === undefined) c.pos = pl.pos;
-    if ('settlement' in sp && pl.settlement !== undefined && c.settlement === undefined) c.settlement = pl.settlement;
+    // (LIVING HISTORY: an act "between A and B" that is not about the two of them lands between them, on neither)
+    if (mods.mid && c.pos === undefined && c.settlement === undefined && 'pos' in sp) c.pos = mods.mid;
+    else {
+      if ('pos' in sp && pl.pos && c.pos === undefined) c.pos = pl.pos;
+      if ('settlement' in sp && pl.settlement !== undefined && c.settlement === undefined) c.settlement = pl.settlement;
+    }
   }
   if ('radius' in sp && mods.size && c.radius === undefined) {
     const d = (sp.radius.default as number | undefined) ?? o.radiusDefault ?? 300;
@@ -758,7 +833,40 @@ function parseText(u: Universe, reg: CommandRegistry, raw: string, depth = 0): P
   if (!cmds.length) return notes.length ? { ok: false, msg: notes.join(' '), ...(cx.asked.length ? { resolved: cx.asked } : {}) } : nothing(cx, text0);
   const out = finish(cx, cmds, cx.why);
   if (notes.length) out.msg = `${out.msg} (${notes.join(' ')})`;
+  // (LIVING HISTORY §5.3: the preview asks before an end of days, or before a blow lands on a town nobody named)
+  const ask = cx.confirm ?? unnamedVictims(cx, cmds, raw);
+  if (ask && out.ok) out.confirm = ask;
   return out;
+}
+
+/** command kinds that hurt where they land (a town under them that the sentence did not name is asked about first) */
+const DESTRUCTIVE = new Set(['disaster.spawn', 'miracle.lightning', 'miracle.fireball', 'miracle.meteor', 'miracle.storm', 'fire.ignite', 'fire.firestorm',
+  'terrain.crater', 'terrain.lower', 'terrain.dig-sea', 'water.flood', 'water.tsunami', 'life.kill', 'settlement.raze', 'hand.throw', 'world.moon-fall']);
+const BENIGN_DISASTERS = new Set(['eclipse', 'comet', 'overgrowth', 'rogue-flyby']);
+
+/** "This would strike Aru (31 people)": the standing towns a destructive act lands on whose names the words never said */
+function unnamedVictims(cx: PCtx2, cmds: Command[], raw: string): string | undefined {
+  const p = cx.p;
+  if (!p?.people) return undefined;
+  const text = raw.toLowerCase();
+  const hit = new Map<number, string>();
+  for (const c of cmds) {
+    if (!DESTRUCTIVE.has(c.k) || (c.k === 'disaster.spawn' && BENIGN_DISASTERS.has(String(c.kind)))) continue;
+    const w = typeof c.planet === 'number' ? cx.u.planet(c.planet) ?? p : p;
+    if (w !== p) continue;
+    const at = (Array.isArray(c.pos) ? c.pos : c.settlement !== undefined ? p.people.settlement(Number(c.settlement))?.pos : cx.u.focus && cx.u.focus.planet === p.id ? cx.u.focus.pos : null) as ArrayLike<number> | null | undefined;
+    if (!at) continue;
+    const reach = typeof c.radius === 'number' ? c.radius : 200;
+    for (const st of p.people.settlements) {
+      if (st.fallen >= 0 || st.band || hit.has(st.id)) continue;
+      if (distM(p, at, st.pos) > st.territory + reach) continue;
+      const name = st.name.toLowerCase();
+      if (wordAt(text, name) >= 0 || wordAt(text, name.split(' ')[0]) >= 0) continue;
+      hit.set(st.id, `${st.name} (${(p.people.members.get(st.id)?.length ?? 0)} people)`);
+    }
+  }
+  if (!hit.size) return undefined;
+  return `This would strike ${[...hit.values()].join(', ')}, which you did not name. Go ahead?`;
 }
 
 function esc(s: string): string {
@@ -778,7 +886,7 @@ function coerceValue(s: string): unknown {
 function question(c: Command, param: string, label: string): string {
   const k = c.k;
   const Q: Record<string, string> = {
-    id: k.startsWith('agent.') || k.startsWith('possess.') ? `${label} — whom? Name a person (${({ 'agent.make-disciple': '"make Hesh a disciple"', 'agent.kill': '"smite Hesh"', 'agent.possess': '"possess Hesh"', 'agent.move': '"move Hesh to Lune"', 'agent.silence': '"silence Hesh"', 'agent.teach': '"teach Hesh bronze"', 'agent.rename': '"rename Hesh to Asha"', 'agent.role': '"make Hesh the chief"', 'agent.transform': '"turn Hesh into a frog"', 'agent.age': '"make Hesh younger"' } as Record<string, string>)[k] ?? `"${label.toLowerCase().split(' ')[0]} Hesh"`}) or click one.` : k.startsWith('creature.') ? 'Which creature? Adopt one first ("adopt an ape").' : `${label} — which one? Name it.`,
+    id: k.startsWith('agent.') || k.startsWith('possess.') ? `${label} — whom? Name a person (${({ 'agent.make-disciple': '"make Hesh a disciple"', 'agent.kill': '"smite Hesh"', 'agent.possess': '"possess Hesh"', 'agent.move': '"move Hesh to Lune"', 'agent.silence': '"silence Hesh"', 'agent.teach': '"teach Hesh bronze"', 'agent.rename': '"rename Hesh to Asha"', 'agent.role': '"make Hesh the chief"', 'agent.transform': '"turn Hesh into a frog"', 'agent.age': '"make Hesh younger"' } as Record<string, string>)[k] ?? `"${label.toLowerCase().split(' ')[0]} Hesh"`}) or click one.` : `${label} — which one? Name it.`,
     items: 'Give what? ("give Aru 20 bread", "give Lune a telescope")',
     settlement: 'Which settlements? Name them ("make Aru and Lune allies", "merge Aru into Lune").',
     other: 'With whom? Name the other settlement ("make peace between Aru and Lune").',
@@ -801,7 +909,6 @@ function question(c: Command, param: string, label: string): string {
     mode: 'What should they do? (worship, farm, build, teach, preach, or go as a missionary).',
     biome: 'Paint which land? ("turn the land around Aru into desert").',
     law: 'Which law? (peace, worship, learning, labour, hospitality, tradition, war, no fire, no hunting, sharing).',
-    template: 'Which creature? (ape, ox, great cat, tortoise, wolf, bear).',
     miracle: 'Which miracle? (water, food, heal, forest, storm, fire, fireball, shield, lightning, wood, fertility, calm, teach, meteor).',
     from: 'Blow from where? ("make the wind blow from the east").',
     act: 'Do what? (gather, wood, fish, hunt, build, pray, preach, teach, eat, drink, sleep, dance, fight, rest, explore).',
@@ -956,14 +1063,16 @@ function resolveClause(cx: PCtx2, core: string, mods: Mods, full: string): Comma
   for (const intent of INTENTS) {
     if (intent(c)) break;
   }
-  return synonymOverride(c);
+  const res = synonymOverride(c);
+  signsWrath(res, full, mods.size); // (LIVING RELATIONSHIP: size words set a harmful cast's wrath — god/freeform-signs.ts)
+  return res;
 }
 
 /** "creature", "my creature", or a live creature's name alone */
 function isVocative(cx: PCtx2, s: string): boolean {
   const t = s.replace(/^(o|oh|hey|you|my)\s+/, '').trim();
   if (cx.L.creatureWords.includes(t)) return true;
-  return cx.live.some((l) => l.kind === 'creature' && l.name === t);
+  return false;
 }
 
 // ───────────────────────────── relative words ─────────────────────────────
@@ -1324,7 +1433,7 @@ function intentWithdraw(c: Clause): boolean {
     return true;
   }
   if (/\b(world|planet)\b/.test(s) && /\b(erase|unmake|destroy|remove|obliterate|wipe out)\b/.test(s) && !/\bfrom the (world|planet)\b/.test(s)) { c.add({ k: 'world.erase', ...(mods.place?.planet !== undefined ? { world: mods.place.planet } : {}) }, 'erase the world'); return true; }
-  if (has(s, ...cx.L.creatureWords) || findLive(full, cx.live, ['creature'])) { const cr = findLive(full, cx.live, ['creature']); c.add({ k: 'creature.release', ...(cr ? { id: cr.id } : {}) }, 'release the creature'); return true; }
+  if (has(s, ...cx.L.creatureWords)) return c.ask(NO_CREATURE);
   const n = findNoun(u.content, p, s, ['disaster', 'weather', 'animal', 'species', 'plant', 'item', 'recipe', 'building']);
   if (n) {
     switch (n.type) {
@@ -1459,7 +1568,7 @@ function intentTime(c: Clause): boolean {
     if (t !== null && t > 0) {
       if (t <= STEP_CAP) { c.add({ k: 'time.step', ticks: Math.max(1, Math.round(t)) }, `let ${spanWords(cx, t)} pass`); return true; }
       c.add({ k: 'time.step', ticks: STEP_CAP }, `let a week pass at once`);
-      c.add({ k: 'time.speed', speed: 1000 }, `then time runs at 1000× (the rest of the ${spanWords(cx, t)} passes in minutes; "resume" to slow it)`);
+      c.add({ k: 'time.speed', speed: 3000 }, `then time runs at 3000× (the rest of the ${spanWords(cx, t)} passes in minutes; "resume" to slow it)`);
       return true;
     }
     if (/^(wait|step|skip|pass)$/.test(s.trim())) { c.add({ k: 'time.step', ticks: 60 }, 'let an hour pass'); return true; }
@@ -1565,7 +1674,7 @@ function intentDisaster(c: Clause): boolean {
   }
   const explicitNew = /\b(another|a new|new|second|one more|more)\b/.test(s);
   const pron = has(s, 'it', 'that', 'them', 'this');
-  const otherNoun = findNoun(cx.u.content, cx.p, s, ['weather', 'animal', 'species', 'plant', 'item', 'biome', 'material', 'miracle', 'creature', 'building']);
+  const otherNoun = findNoun(cx.u.content, cx.p, s, ['weather', 'animal', 'species', 'plant', 'item', 'biome', 'material', 'miracle', 'building']);
   const target = dNoun ? lastDisaster(cx, dNoun.id) : (generic || (pron && !otherNoun && !/\b(rain|snow|hail)\b/.test(s))) && anyLive ? lastDisaster(cx) : undefined;
   if (dNoun && target === undefined && stopV) { c.add({ k: 'disaster.cancel', kind: dNoun.id }, 'stop'); return true; }
   if (generic && !dNoun && target === undefined && !anyLive && !stopV && /\b(send|unleash|bring|cause|start|make|summon|call down|drop)\b/.test(s)) {
@@ -1625,8 +1734,6 @@ const LAW_WORDS: [RegExp, string, { step?: number; invert?: boolean }?][] = [
   [/\bdisasters?\b.*\b(harmless|deadl|harm|kill|gentle|mild|lethal)/, 'disasters.harm'],
   [/\b(faith|belief|worship)\b.*\b(grow|grows|spread|gain|faster|slower|more|less)\b|\bbelief gain\b/, 'belief.gain'],
   [/\b(hand)\b.*\b(stronger|weaker|strength|stronger)\b|\bhand strength\b/, 'hand.strength'],
-  [/\bcreatures?\b.*\b(learn|learning)\b/, 'creature.learning'],
-  [/\bcreatures?\b.*\b(grow|growth)\b/, 'creature.growth'],
   [/\bmiracles?\b.*\b(stronger|weaker|potent|power)\b/, 'miracles.potency'],
   [/\brival gods?\b.*\b(active|activity|busier|quieter)\b/, 'rivals.activity'],
   [/\b(clouds|cloudiness|cloud cover|cloudier)\b/, 'planet.cloudiness'],
@@ -1816,7 +1923,7 @@ function pointOf(c: Clause, words: string, base: V3 | undefined): V3 | null {
   const { cx } = c;
   const { u, p, L } = cx;
   if (!p) return null;
-  const l = findLive(words, cx.live, ['settlement', 'creature']);
+  const l = findLive(words, cx.live, ['settlement']);
   if (l?.pos) return l.pos;
   for (const [w, kind] of Object.entries(L.places).sort((a, b) => b[0].length - a[0].length)) {
     if (wordAt(words, w) < 0) continue;
@@ -1843,6 +1950,16 @@ function intentLand(c: Clause): boolean {
     return true;
   }
   // ── rivers: carved from X to Y; moved; turned back ──
+  // (LIVING HISTORY §5.3) "make the river flood", "flood the river", "the river bursts its banks": a flood where the river
+  // runs — never a new river carved
+  if (/\b(rivers?|streams?|lakes?)\b/.test(s) && /\b(flood|floods|flooding|flooded|overflow|overflows|burst|bursts|break its banks|breaks its banks|rise|rises|swell|swells)\b/.test(s)) {
+    const kind = /\blakes?\b/.test(s) ? 'lake' : 'river';
+    const at = (mods.place?.pos && mods.place.settlement === undefined ? mods.place.pos : null) ?? nearestPlaceKind(u, p, here ?? [0, 0, 1], kind);
+    if (!at) return c.ask(`There is no ${kind} on ${p.name} to flood.`);
+    if (mods.place?.settlement !== undefined) mods.place = { ...mods.place, pos: at, settlement: undefined, label: `the ${kind} by ${mods.place.label}` };
+    c.add({ k: 'disaster.spawn', kind: 'flood', pos: at }, `the ${kind} floods`);
+    return true;
+  }
   if (/\b(river|rivers|stream|canal|channel)\b/.test(s)) {
     const fromTo = full.match(/\bfrom (.+?) (?:to|into|toward|towards|down to) (.+)$/);
     const toOnly = full.match(/\b(?:to|into|toward|towards|down to) (.+)$/);
@@ -1953,6 +2070,21 @@ function intentLand(c: Clause): boolean {
       return true;
     }
     if (/\bin the mountains\b|\bon the mountains?\b/.test(full)) return false;
+    if (mods.place?.pos && mods.other?.pos && /\bbetween\b/.test(full) && mods.mid) {
+      // (LIVING HISTORY §5.3) between two towns: a ridge ACROSS the way from one to the other, through the middle, its
+      // ends and flanks a town's radius clear of both (it once ran from one town to the other, starting under the first)
+      const A = mods.place.pos, B = mods.other.pos, m = mods.mid;
+      const ab: V3 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+      const side = norm([m[1] * ab[2] - m[2] * ab[1], m[2] * ab[0] - m[0] * ab[2], m[0] * ab[1] - m[1] * ab[0]]);
+      const half = distM(p, A, B) / 2;
+      const ra = p.people?.settlement(mods.place.settlement ?? -1)?.territory ?? 150, rb = p.people?.settlement(mods.other.settlement ?? -1)?.territory ?? 150;
+      const radius = Math.round(Math.max(60, Math.min(220, half - Math.max(ra, rb) - 120)));
+      const len = Math.round(Math.max(300, Math.min(1200, half * 1.2)));
+      const from = moveBy(m, side, len / 2, p.st.radius), to = moveBy(m, [-side[0], -side[1], -side[2]], len / 2, p.st.radius);
+      c.add({ k: 'terrain.mountain-range', pos: from, to, radius, height: amount ?? Math.round(260 * Math.min(2, mods.size ?? 1)) }, `a mountain range between ${mods.place.label} and ${mods.other.label}`);
+      mods.place = { pos: m, planet: p.id, label: `between ${mods.place.label} and ${mods.other.label}` };
+      return true;
+    }
     if (mods.place?.pos && mods.other?.pos) { c.add({ k: 'terrain.mountain-range', pos: mods.place.pos, to: mods.other.pos, height: amount ?? Math.round(260 * Math.min(2, mods.size ?? 1)) }, `a mountain range from ${mods.place.label} to ${mods.other.label}`); return true; }
     const f = here ?? [0, 0, 1];
     const lon = Math.atan2(f[0], f[2]) + 0.45;
@@ -2074,7 +2206,7 @@ const ROLE_OF_WORD: [RegExp, string][] = [
   [/\b(chief|leader|king|queen|ruler|head|headman|headwoman|lord|lady|monarch|emperor|empress|elder of)\b/, 'leader'], [/\b(priest|priestess|shaman|oracle|high priest)\b/, 'priest'],
   [/\b(healer|doctor|physician|herbalist|medicine man|medicine woman)\b/, 'healer'], [/\b(teacher|sage|tutor|master)\b/, 'teacher'], [/\b(scholar|scribe|librarian)\b/, 'scholar'],
   [/\b(smith|crafter|craftsman|craftswoman|artisan|potter|weaver|maker)\b/, 'crafter'], [/\b(builder|mason|architect)\b/, 'builder'], [/\b(farmer|peasant|planter)\b/, 'farmer'],
-  [/\b(hunter|huntress)\b/, 'hunter'], [/\b(fisher|fisherman|fisherwoman)\b/, 'fisher'], [/\b(trader|merchant)\b/, 'trader'], [/\b(soldier|warrior|guard|general|champion)\b/, 'soldier'],
+  [/\b(hunter|huntress)\b/, 'hunter'], [/\b(fisher|fisherman|fisherwoman)\b/, 'fisher'], [/\b(trader|merchant)\b/, 'trader'], [/\b(soldier|warrior|guard|general|champion|knight|hero|heroine|paladin|defender)\b/, 'soldier'],
   [/\b(herder|shepherd|herdsman)\b/, 'herder'], [/\b(sailor|captain|navigator)\b/, 'sailor'], [/\b(gatherer|forager)\b/, 'gatherer'],
 ];
 
@@ -2139,7 +2271,7 @@ function intentPerson(c: Clause): boolean {
     const t = full.match(/\b(?:to|into|toward|towards|onto|over to|next to|near|beside|by) (.+)$/);
     if (t) {
       const words = t[1].replace(new RegExp(`\\b${esc(who.name)}\\b`), '').trim();
-      const l = findLive(words, cx.live, ['settlement', 'creature']);
+      const l = findLive(words, cx.live, ['settlement']);
       if (l?.pos && p) return moveBy(l.pos, bearingDir(l.pos, 2.4), 40, p.st.radius);
       const pt = pointOf(c, words, who.pos);
       if (pt) return pt;
@@ -2151,7 +2283,7 @@ function intentPerson(c: Clause): boolean {
   const intoM = full.match(/\b(?:turn|transform|change|make|shape)\b.+?\b(?:into|to)\b (?:a |an |the )?([a-z' -]+)$/) ?? full.match(/\bmake\b.+?\b(?:a|an) ([a-z' -]+)$/);
   if (intoM) {
     const word = intoM[1].trim();
-    const an = findNoun(u.content, p, word, ['animal', 'creature']);
+    const an = findNoun(u.content, p, word, ['animal']);
     const sing = singular(word.split(' ').pop() ?? word);
     if (an?.type === 'animal') { c.add({ k: 'agent.transform', id, into: an.id, planet: pl }, `${nm} becomes a ${an.text}`); return true; }
     if (!an && (cx.L.animalish.has(sing) || cx.L.animalish.has(word)) && !cx.L.creatureWords.includes(word)) {
@@ -2187,6 +2319,8 @@ function intentPerson(c: Clause): boolean {
   const roleW = ROLE_OF_WORD.find(([re]) => re.test(s));
   if ((roleW && /\b(make|crown|appoint|name|anoint|choose|elect|raise|promote)\b/.test(s)) || /\bcrown\b/.test(s)) {
     c.add({ k: 'agent.role', id, role: roleW ? roleW[1] : 'leader', planet: pl }, `${nm}: ${roleW ? roleW[1] : 'leader'}`);
+    // (LIVING HISTORY: a hero or a champion is a fighter the god has lifted up — inspired too)
+    if (/\b(hero|heroine|champion)\b/.test(s)) c.add({ k: 'agent.inspire', id, planet: pl }, 'and inspired');
     return true;
   }
   if (verb(cx, s, 'inspire')) { c.add({ k: 'agent.inspire', id, planet: pl }, 'inspire'); return true; }
@@ -2428,57 +2562,21 @@ function intentPossession(c: Clause): boolean {
   return false;
 }
 
+/**
+ * LIVING §3.5: there is no great creature in this world. Asking for one ("give me a creature", "adopt an ape", "leash
+ * the creature to Aru", "make the creature bigger") is answered with the prophet hint — never an invented animal.
+ */
 function intentCreature(c: Clause): boolean {
-  const { s, cx, mods, full } = c;
-  const { u, p } = cx;
-  const tpl = findNoun(u.content, p, s, ['creature']);
-  const creWord = has(s, ...cx.L.creatureWords) || has(s, 'pet');
-  const mine = u.god.creatures.filter((q) => q.alive && q.god === 0);
-  const creVerb = /\b(leash|tie|tether|guard|protect|watch over|unleash|set free|roam|good|well done|clever|bad|naughty|stop that|reward|punish|praise|scold|send|release|name|call|come|go|follow|bigger|larger|taller|grow|grown|smaller|shrink|shorter)\b/.test(s) || verb(cx, s, 'stroke') !== null || verb(cx, s, 'slap') !== null
-    || (MIRACLES.some((m) => has(s, m) || has(s, plural(m))) && has(s, 'teach', 'show', 'learn', 'watch')) || /^(?:rename|call|name)\b/.test(s);
-  const liveCre = findLive(full, cx.live, ['creature']) ?? (creWord && mine.length ? { id: mine[0].id, kind: 'creature' as const } : null);
-  // a new creature: "adopt a great cat", "give me a creature", "I want a pet"
-  const adoptV = verb(cx, s, 'adopt') || /\b(give me|i want|get me|bring me|find me)\b/.test(full);
-  if (tpl && (adoptV || (!creVerb && has(s, 'creature', 'my creature', 'titan', 'pet', 'giant')))) { c.add({ k: 'creature.adopt', template: tpl.id }, 'adopt'); return true; }
-  if (!tpl && creWord && adoptV && !/\b(teach|leash|reward|punish)\b/.test(s)) { c.add({ k: 'creature.adopt' }, 'adopt a creature'); return true; }
-  // "the creature" with no creature yet: the command still goes (and says "adopt one first" when it runs)
-  const cre = liveCre ?? (creWord && creVerb ? { id: -1, kind: 'creature' as const } : null);
-  if (!cre) return false;
-  const idOf = (): Record<string, number> => (cre.id >= 0 ? { id: cre.id } : {});
-  const rnc = full.match(/\b(?:rename|call|name)\s+(?:.+?\s+)?(?:to|as)\s+([a-z0-9' -]+)$/) ?? full.match(/\b(?:name|call)\s+(?:the |my )?creature\s+([a-z0-9' -]+)$/);
-  if (rnc && !/\b(here|over|to me|back)\b/.test(rnc[1])) { c.add({ k: 'creature.rename', ...idOf(), to: rnc[1].trim().replace(/\b\w/g, (m) => m.toUpperCase()) }, 'rename'); return true; }
-  if (/^name\s+(?:the |my )?creature$/.test(s)) { cx.asked.push({ k: 'creature.rename', ...idOf() }); return c.ask('Name it what? ("name the creature Grom").'); }
-  // its size at once: "make the creature bigger", "grow my creature to full size", "shrink it"
-  if (/\b(bigger|larger|taller|grow|grows|huge|giant|enormous|full size|full-size|full grown|fully grown|smaller|shrink|shorter|tiny|little)\b/.test(s) && !/\b(teach|leash|crops?|forest|trees?)\b/.test(s)) {
-    const down = /\b(smaller|shrink|shorter|tiny|little)\b/.test(s);
-    const amount = /\b(full size|full-size|full grown|fully grown|giant|enormous|as big as it can)\b/.test(s) ? 1 : /\b(much|far|twice|double|a lot)\b/.test(s) ? 0.5 : 0.25;
-    c.add({ k: 'creature.grow', ...idOf(), amount: down ? -amount : amount }, down ? 'the creature shrinks' : 'the creature grows');
-    return true;
-  }
-  if (/\b(good|well done|good boy|good girl|clever|reward|praise)\b/.test(s) || verb(cx, s, 'stroke')) { c.add({ k: 'creature.reward', ...idOf() }, 'reward'); return true; }
-  if (/\b(bad|no|naughty|stop that|bad boy|bad girl|punish|scold)\b/.test(s) || verb(cx, s, 'slap')) { c.add({ k: 'creature.punish', ...idOf() }, 'punish'); return true; }
-  const mode = LEASH_MODES.find((m) => has(s, m) || has(s, m + 's'));
-  if (has(s, 'leash', 'tie', 'tether', 'guard', 'protect', 'watch over') || mode) {
-    c.add({ k: 'creature.leash', ...idOf(), ...(mods.place?.settlement !== undefined ? { settlement: mods.place.settlement } : mods.place?.pos ? { pos: mods.place.pos } : {}), mode: mode ?? (has(s, 'guard', 'protect') ? 'defend' : 'tend') }, 'leash');
-    return true;
-  }
-  if (has(s, 'release', 'let it go', 'free it', 'set it free for good', 'abandon')) { c.add({ k: 'creature.release', ...idOf() }, 'release'); return true; }
-  if (has(s, 'unleash', 'set free', 'free', 'roam')) { c.add({ k: 'creature.unleash', ...idOf() }, 'unleash'); return true; }
-  // teach a miracle by example: the longest miracle named, plurals too, never the verb "teach" itself
-  const mir = MIRACLES.slice().sort((a, b) => b.length - a.length).find((m) => m !== 'teach' && (has(s, m) || has(s, plural(m)))) ?? (/\bteach\b.*\b(the )?teach(ing)? miracle\b/.test(s) ? 'teach' : undefined);
-  if (mir && has(s, 'teach', 'show', 'learn', 'watch')) { c.add({ k: 'creature.teach-by-example', ...idOf(), miracle: mir }, 'teach by example'); return true; }
-  if (has(s, 'teach', 'show') && !mir) return c.ask('Teach it which miracle? (water, food, heal, forest, storm, fire, fireball, shield, lightning, wood, fertility, calm, teach, meteor) — cast it near the creature and it learns by watching.');
-  if (has(s, 'go', 'come', 'walk', 'move', 'send', 'call', 'follow', 'here')) {
-    const to = mods.place?.pos ?? focusPos(cx);
-    if (to) { c.add({ k: 'creature.move', ...idOf(), pos: to }, 'go'); return true; }
-  }
-  return false;
+  const { s, cx } = c;
+  const creWord = has(s, ...cx.L.creatureWords) || /\b(titan|my pet|a pet|great beast)\b/.test(s);
+  if (!creWord && !has(s, 'adopt')) return false;
+  return c.ask(NO_CREATURE);
 }
 
 function intentHand(c: Clause): boolean {
   const { s, cx, mods } = c;
   const { u, p } = cx;
-  const kinds: [RegExp, string][] = [[/\b(rock|rocks|boulder|boulders|stone|stones)\b/, 'rock'], [/\b(tree|trees)\b/, 'tree'], [/\b(person|man|woman|child|someone|villager|somebody)\b/, 'agent'], [/\b(hut|house|building|shrine)\b/, 'building'], [/\b(animal|sheep|cow|deer|beast)\b/, 'animal'], [/\bcreature\b/, 'creature']];
+  const kinds: [RegExp, string][] = [[/\b(rock|rocks|boulder|boulders|stone|stones)\b/, 'rock'], [/\b(tree|trees)\b/, 'tree'], [/\b(person|man|woman|child|someone|villager|somebody)\b/, 'agent'], [/\b(hut|house|building|shrine)\b/, 'building'], [/\b(animal|sheep|cow|deer|beast)\b/, 'animal']];
   const intoHand = /\b(in|into|to|for) (my|the) hand\b|\bthe hand\b.*\b(a|an|some)\b|\bin my palm\b/.test(c.full) || /\bgive the hand\b/.test(c.full);
   // "conjure 20 bread into my hand", "give the hand a rock"
   if (intoHand && /\b(conjure|give|put|place|bring|summon|make|create|fill)\b/.test(s)) {
@@ -2767,7 +2865,7 @@ function intentSky(c: Clause): boolean {
   }
   // ash falling, acid rain, auroras, fog ... as weather (planet-wide when everywhere)
   const ashFall = /\bash\b/.test(s) && /\b(fall|falls|falling|rain|rains|snow|drift|drifts|cover)\b/.test(s);
-  const covering = findNoun(u.content, p, s, ['species', 'animal', 'plant', 'item', 'creature', 'disease', 'recipe', 'building']);
+  const covering = findNoun(u.content, p, s, ['species', 'animal', 'plant', 'item', 'disease', 'recipe', 'building']);
   const ww = Object.keys(L.weatherWords).sort((a, b) => b.length - a.length).find((w) => wordAt(s, w) >= 0 && !(covering && covering.text.length > w.length && wordAt(covering.text, w.split(' ')[0]) >= 0));
   const wn0 = findNoun(u.content, p, s, ['weather']);
   const wn = wn0 && covering && covering.text.length > wn0.text.length && covering.at <= wn0.at && covering.at + covering.text.length >= wn0.at + wn0.text.length ? null : wn0;
@@ -3056,7 +3154,7 @@ function intentNoun(c: Clause): boolean {
     return true;
   }
   const createV = verb(cx, s, 'create');
-  const noun = findNoun(u.content, p, s, ['disaster', 'weather', 'animal', 'species', 'plant', 'creature', 'miracle', 'biome', 'material', 'star', 'item', 'building']);
+  const noun = findNoun(u.content, p, s, ['disaster', 'weather', 'animal', 'species', 'plant', 'miracle', 'biome', 'material', 'star', 'item', 'building']);
   if (noun) {
     const r = byNoun(cx, noun, s, mods, !!createV);
     if (r) { c.add(r[0], r[1]); return true; }
@@ -3075,7 +3173,7 @@ function intentNoun(c: Clause): boolean {
   if (!createV && /^[a-z' -]+$/.test(s) && s.split(' ').filter((w) => !L.stop.has(w)).length <= 2) {
     const ws = s.split(' ').filter((w) => !L.stop.has(w));
     const last = singular(ws[ws.length - 1] ?? '');
-    if (last && L.animalish.has(last) && !L.creatureWords.includes(last) && !findNoun(u.content, p, s, ['animal', 'creature', 'species'])) {
+    if (last && L.animalish.has(last) && !L.creatureWords.includes(last) && !findNoun(u.content, p, s, ['animal', 'species'])) {
       const name = ws.length > 1 ? `${ws[0]} ${last}` : last;
       if (plausibleNew(cx, name)) {
         cx.made.add(slug(name));
@@ -3182,7 +3280,8 @@ function intentFound(c: Clause): boolean {
 }
 
 const INTENTS: ((c: Clause) => boolean)[] = [
-  intentAsk, intentControl, intentShip, intentWorldNamed, intentSet, intentLetGo, intentForbid, intentWithdraw, intentExtinguish, intentLight, intentParadise, intentTime, intentDisaster, intentPlanetLaws, intentAir, intentSea,
+  // (LIVING RELATIONSHIP first: prophets, the Called, sacred things, omens, prayers asked about, wrath — freeform-signs.ts)
+  intentSigns, intentContent as (c: Clause) => boolean, intentHistory as (c: Clause) => boolean, intentAsk, intentControl, intentShip, intentWorldNamed, intentSet, intentLetGo, intentForbid, intentWithdraw, intentExtinguish, intentLight, intentParadise, intentTime, intentDisaster, intentPlanetLaws, intentAir, intentSea,
   intentLand, intentPeaceWar, intentPerson, intentSpeciesLaw, intentPlain, intentFound, intentSettlement, intentSomeone, intentPossession, intentCreature, intentHand, intentRival, intentLaw,
   intentWorld, intentSky, intentIdeas, intentMiracle, intentDeath, intentLawNumber, intentNoun, intentPowers, intentInvent,
 ];
@@ -3271,7 +3370,7 @@ function synonymOverride(c: Clause): Command[] {
   return c.out;
 }
 
-/** targets a power's command needs that the clause implies: a person of a named settlement, the god's creature */
+/** targets a power's command needs that the clause implies: a person of a named settlement */
 function fillTargets(c: Clause, cmd: Command): void {
   const { cx, mods } = c;
   const sc = cx.reg.schema(cmd.k)?.params ?? {};
@@ -3444,7 +3543,6 @@ function byNoun(cx: PCtx2, n: Found, s: string, mods: Mods, making: boolean): [C
       if (pl?.type === 'tree' && has(s, 'forest', 'woods', 'grove')) return [{ k: 'life.forest', species: n.id }, `forest of ${n.id}`];
       return [{ k: 'life.plant', species: n.id }, `plant ${n.id}`];
     }
-    case 'creature': return making || has(s, 'adopt', 'creature') ? [{ k: 'creature.adopt', template: n.id }, `adopt a ${n.id}`] : null;
     case 'miracle': return [{ k: `miracle.${n.id}` }, `${n.id} miracle`];
     case 'biome': {
       // a biome undone is not a biome painted: "make the desert bloom", "melt the ice", "make the ocean boil"

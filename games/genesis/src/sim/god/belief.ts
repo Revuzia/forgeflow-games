@@ -1,7 +1,7 @@
 // GENESIS — belief (CONTRACT.md §8.8, §11.1, §11.4): every god act is WITNESSED. Help adds love, harm adds fear, wonder
 // some of both, by distance, species bias and each witness's piety and nerve (people/culture.ts witness). This module
 // is the god layer's door to that hook: it tallies each god's own record (help / harm / wonder -> the god's alignment,
-// which tints the hand and steers rivals), lets the creature watch, and keeps the worship pool:
+// which steers rivals; the Touch's look follows the people's regard, god/regard.ts) and keeps the worship pool:
 //
 //   worship    generated at shrines and temples (people/work.ts) into each planet's pool per god. Miracles SPEND what is
 //              there for bonus potency (up to +50 %) and NEVER fail for lack of it in the default mode.
@@ -12,7 +12,6 @@ import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import type { PowerDef } from '../content.ts';
 import { witness, type WitnessKind } from '../people/culture.ts';
-import { creaturesWatch } from './watch.ts';
 
 export interface ActMagnitudes {
   help?: number;
@@ -21,8 +20,8 @@ export interface ActMagnitudes {
 }
 
 /**
- * A god act at `pos` on planet p: the people around see it (love / fear), the god's own record moves, creatures nearby
- * watch (a miracle cast near a creature can be learned). Returns the number of witnesses.
+ * A god act at `pos` on planet p: the people around see it (faith, fear, trust, loyalty: god/regard.ts) and the god's own
+ * record moves. Returns the number of witnesses. (`miracle` names the act for the omens and prayers that read it.)
  */
 export function godAct(u: Universe, p: Planet, pos: ArrayLike<number> | null, radius: number, m: ActMagnitudes, god = 0, miracle?: string): number {
   const g = u.god.god(god);
@@ -40,7 +39,7 @@ export function godAct(u: Universe, p: Planet, pos: ArrayLike<number> | null, ra
     const delta = (m.help ?? 0) - (m.harm ?? 0);
     g.alignment = round3(Math.max(-1, Math.min(1, g.alignment * 0.985 + delta * 0.08)));
   }
-  if (pos && miracle) creaturesWatch(u, p, pos, miracle, god);
+  void miracle;
   return n;
 }
 

@@ -1718,9 +1718,9 @@
    ]
   },
   {
-   "id": "leviathan",
-   "name": "Leviathan",
-   "desc": "Something vast rises from the deep and walks the shallows, wrecking boats and harbours.",
+   "id": "rogue-wave",
+   "name": "Rogue wave",
+   "desc": "A wall of water far taller than the swell around it runs along the coast, smashing boats and harbours and flooding the shore.",
    "category": "water",
    "life": [
     1440,
@@ -1758,11 +1758,14 @@
    "triggers": [
     "storm-at-sea"
    ],
+   "aliases": [
+    "leviathan"
+   ],
    "synonyms": [
-    "sea monster",
-    "kraken",
-    "sea serpent",
-    "monster from the deep"
+    "rogue wave",
+    "freak wave",
+    "monster wave",
+    "killer wave"
    ]
   },
   {

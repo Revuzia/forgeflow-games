@@ -12,7 +12,7 @@ import { AgentFlag, AnimState } from '../types.ts';
 import { flowPath, findPath } from '../grid/pathfind.ts';
 import { PATH_MAX, PHASE, TASK, NS, SKILL } from './defs.ts';
 import { distM, spotInCell, stepFactor, walkSpeed } from './world.ts';
-import { pathOptsFor } from './resources.ts';
+import { itemIdx, pathOptsFor } from './resources.ts';
 import { schedule } from './sched.ts';
 import { wearRoad } from './roads.ts';
 import { boatSwim } from './missions.ts';
@@ -24,7 +24,7 @@ import { tell } from './story.ts';
 import { vars, settlementRef } from './util.ts';
 // SIM perf push 3 — the peoples' time-lapse (stretched tasks, batched walks: perf/plapse.ts)
 import { batch, batchHops, ctxOf, goalCellOf, legOf, mergeArrival, storeIn, stretchFor, wearOf, workTicks } from '../perf/plapse.ts';
-import { FIRE_HERE, FLEE_SPRINT, heat } from './danger.ts';
+import { FIRE_BURN, FIRE_HERE, FLEE_SPRINT, heat } from './danger.ts';
 
 const _path: number[] = [];
 /** the longest a walker goes without waking (ticks): longer legs are walked in parts */
@@ -35,13 +35,13 @@ const _b = [0, 0, 0];
 /** the animation a task shows while working */
 export function workAnim(kind: number): number {
   switch (kind) {
-    case TASK.sleep: return AnimState.sleep;
+    case TASK.sleep: case TASK.camp: return AnimState.sleep;
     case TASK.eat: case TASK.drink: return AnimState.eat;
     case TASK.forage: case TASK.dig: case TASK.cutIce: case TASK.collectAir: case TASK.farm: return AnimState.dig;
     case TASK.chop: return AnimState.chop;
     case TASK.quarry: case TASK.mine: return AnimState.dig;
     case TASK.fish: return AnimState.fish;
-    case TASK.hunt: return AnimState.fight;
+    case TASK.hunt: return AnimState.hunt; // (LIVING LAND: stalking, closing on the game)
     case TASK.craft: case TASK.cook: case TASK.experiment: case TASK.reverse: case TASK.tendFire: case TASK.secrete: case TASK.repair: return AnimState.work;
     case TASK.build: return AnimState.build;
     case TASK.teach: case TASK.preach: return AnimState.teach;
@@ -53,7 +53,12 @@ export function workAnim(kind: number): number {
     case TASK.bathe: return AnimState.swim;
     case TASK.warm: return AnimState.sit;
     case TASK.store: case TASK.haul: return AnimState.carry;
-    case TASK.herd: return AnimState.walk;
+    case TASK.herd: return AnimState.herd; // (LIVING LAND: with the flock)
+    // LIVING LAND: a child at play, at chores (fetching, picking, minding, watching a parent work); a gathering is a dance
+    // or a mourning (beginWork: by its kind — people/gatherings.ts gatherAnim)
+    case TASK.play: return AnimState.play;
+    case TASK.chore: return AnimState.work;
+    case TASK.gather: return AnimState.dance;
     case TASK.guard: return AnimState.idle;
     case TASK.heal: return AnimState.work;
     case TASK.trade: return AnimState.work;
@@ -62,6 +67,11 @@ export function workAnim(kind: number): number {
     // a ship's ground crew at work on the pad; its crew waiting to board (space/ships.ts)
     case TASK.launch: return AnimState.build;
     case TASK.board: return AnimState.idle;
+    // LIVING RELATIONSHIP: hunched in shelter from a storm; waiting out a disaster at a safe distance; praying at a
+    // sacred place at a pilgrimage's end
+    case TASK.shelter: return AnimState.shelter;
+    case TASK.evacuate: return AnimState.sit;
+    case TASK.pilgrimage: return AnimState.pray;
     default: return AnimState.idle;
   }
 }
@@ -96,7 +106,7 @@ export function startTask(x: PCtx, s: number, t: TaskSpec): void {
   A.tx[s] = _a[0]; A.ty[s] = _a[1]; A.tz[s] = _a[2];
   A.t0[s] = x.tick; A.t1[s] = x.tick;
   // out of the shelter, unless staying in the very same one (a second sleep, warming up at home)
-  if (A.inside[s] >= 0 && !(t.target === A.inside[s] && (t.kind === TASK.sleep || t.kind === TASK.warm))) leaveShelter(x, s);
+  if (A.inside[s] >= 0 && !(t.target === A.inside[s] && (t.kind === TASK.sleep || t.kind === TASK.warm || t.kind === TASK.shelter))) leaveShelter(x, s);
   if (!t.goal || distM(x.p, _a, t.goal) < 2.5) {
     if (t.goal) { A.gx[s] = t.goal[0]; A.gy[s] = t.goal[1]; A.gz[s] = t.goal[2]; A.gcell[s] = A.cell[s]; }
     beginWork(x, s);
@@ -139,9 +149,9 @@ function planRoute(x: PCtx, s: number, from: number, to: number): void {
   A.pathPos[s] = 0;
 }
 
-/** does a route step into a burning cell (where the fire step would stop the walker: people/danger.ts FIRE_HERE)? */
+/** does a route step into flames (where the fire step would turn the walker back: people/danger.ts FIRE_BURN)? */
 function throughFire(p: PCtx['p'], path: number[]): boolean {
-  for (let i = 0; i < path.length; i++) if (heat(p, path[i]) > FIRE_HERE) return true;
+  for (let i = 0; i < path.length; i++) if (heat(p, path[i]) > FIRE_BURN) return true;
   return false;
 }
 
@@ -197,7 +207,8 @@ export function nextSegment(x: PCtx, s: number): void {
   }
   const age = A.flags[s] & AgentFlag.child ? 0.75 : A.flags[s] & AgentFlag.elder ? 0.7 : 1;
   // running for their lives: a flight from fire is a sprint (people/danger.ts FLEE_SPRINT; a fire front outruns a walk)
-  const sprint = A.task[s] === TASK.flee ? FLEE_SPRINT : 1;
+  // (LIVING RELATIONSHIP: out of a disaster's reach and in out of a storm, people hurry — people/shelter.ts)
+  const sprint = A.task[s] === TASK.flee ? FLEE_SPRINT : A.task[s] === TASK.evacuate || A.task[s] === TASK.shelter ? 2 : 1;
   const speed = sp.speed * speedEffect(x, A.settlement[s]) * sprint, ageF = age * (0.45 + 0.55 * A.health[s]);
   const v = walkSpeed(p, to, speed, ageF) / k;
   let dur = Math.max(1, Math.round(d / Math.max(0.01, v)));
@@ -235,7 +246,9 @@ export function nextSegment(x: PCtx, s: number): void {
     if (p.f.precip[to] > 5 && capsize(x, s, to)) return;
   } else {
     A.flags[s] &= ~AgentFlag.boat;
-    A.anim[s] = A.task[s] === TASK.flee ? AnimState.flee : onWater ? AnimState.swim : sp.fly ? AnimState.fly : A.carryItem(s) >= 0 ? AnimState.carry : AnimState.walk;
+    A.anim[s] = A.task[s] === TASK.flee ? AnimState.flee : A.task[s] === TASK.evacuate || A.task[s] === TASK.shelter ? AnimState.run : onWater ? AnimState.swim : sp.fly ? AnimState.fly : A.carryItem(s) >= 0 ? AnimState.carry : AnimState.walk;
+    // (LIVING LAND: a hunter home with the kill shoulders the game)
+    if (A.anim[s] === AnimState.carry && A.carryItem(s) === itemIdx(x, 'meat')) A.anim[s] = AnimState.carryGame;
   }
   if (to !== A.cell[s]) {
     A.cell[s] = to;
@@ -325,15 +338,25 @@ function beginWork(x: PCtx, s: number, at = x.tick): void {
   const A = x.A;
   A.phase[s] = PHASE.working;
   A.anim[s] = workAnim(A.task[s]);
+  // (LIVING LAND: a funeral is mourned, not danced — people/gatherings.ts GATHER_KIND.funeral = 3)
+  if (A.task[s] === TASK.gather && A.tData[s] === 3) A.anim[s] = AnimState.mourn;
   if (at === x.tick) syncCell(x, s);
   // under a roof: sleeping at home, warming up inside
   const k = A.task[s];
   // (occupancy is kept against the building entered, A.inside — not A.home, which findShelter / assignHomes may change
   // while they are in: the count then leaked into the wrong building)
-  if ((k === TASK.sleep || (k === TASK.warm && A.tData2[s] === 1)) && A.tTarget[s] >= 0 && A.inside[s] < 0) {
+  if ((k === TASK.sleep || (k === TASK.warm && A.tData2[s] === 1)) && A.tTarget[s] >= 0 && (A.inside[s] < 0 || A.inside[s] === A.tTarget[s])) {
     const b = x.ps.building(A.tTarget[s]);
     if (b && b.progress >= 1 && !(b.flags & 2)) {
       A.flags[s] |= AgentFlag.sleepingIndoors;
+      // (already in it — sheltered from a storm there, LIVING §3.7 — counted once)
+      if (A.inside[s] < 0) { A.inside[s] = b.id; b.occupants++; }
+    }
+  }
+  // (LIVING RELATIONSHIP §3.7: sheltering from a storm under a roof — inside, not asleep: people/shelter.ts)
+  if (k === TASK.shelter && A.tTarget[s] >= 0 && A.inside[s] < 0) {
+    const b = x.ps.building(A.tTarget[s]);
+    if (b && b.progress >= 1 && !(b.flags & 2)) {
       A.inside[s] = b.id;
       b.occupants++;
     }

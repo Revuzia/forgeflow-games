@@ -32,6 +32,8 @@ interface Flight {
   size: number;
   landing: SimEvent | null;
   trail: number;
+  /** set down, not thrown (the Touch let it go barely moving): a person comes down on their feet */
+  gentle: boolean;
 }
 
 const _m = new Matrix4(), _q = new Vector3(), _up = new Vector3();
@@ -46,6 +48,11 @@ export class Flights {
   /** agents and creatures flying now: id → body-frame point and tumble (crowds / creature layers draw them) */
   readonly agentPins = new Map<number, { x: number; y: number; z: number; tumble: number; anim: number }>();
   readonly creaturePins = new Map<number, Vector3>();
+  /**
+   * (additive, the god layer: render/fx/throwfx.ts) the drawn scale of a flying prop — present.ts raises it so a hurled
+   * boulder reads from the god's height and eases it back to its true size before it lands; null draws its true size
+   */
+  sizeOf: ((kind: string, trueSize: number, age: number, p: Vector3, v: Vector3, id: number) => number) | null = null;
   private holdLanding = new Map<number, SimEvent>();
   private nextLocal = 1e9;
 
@@ -53,6 +60,11 @@ export class Flights {
     this.shared = shared;
     this.group.name = 'flights';
     this.group.matrixAutoUpdate = false;
+  }
+
+  /** (additive) every flight in the air now: id, kind, body-frame position and velocity, FX age (s) */
+  forEach(f: (id: number, kind: string, p: Vector3, v: Vector3, age: number) => void, now: number): void {
+    for (const [id, fl] of this.flights) f(id, fl.kind, fl.p, fl.v, now - fl.t0);
   }
 
   /** a 'thrown' event: fly it; a 'landed' / 'splash' for a flight in the air: hold it until the flight lands */
@@ -82,7 +94,7 @@ export class Flights {
 
   private start(id: number, kind: string, what: number, p: Vector3, v: Vector3, ctx: FxCtx): void {
     if (this.flights.has(id)) return;
-    const f: Flight = { id, kind, what, p: p.clone(), v: v.clone(), t0: ctx.now, last: ctx.now, mesh: null, spin: new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(), size: 1, landing: null, trail: 0 };
+    const f: Flight = { id, kind, what, p: p.clone(), v: v.clone(), t0: ctx.now, last: ctx.now, mesh: null, spin: new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(), size: 1, landing: null, trail: 0, gentle: v.length() < 3.5 };
     if (kind === 'rock' || kind === 'tree' || kind === 'item' || kind === 'building') {
       if (!this.mat) this.mat = makePropMaterial(this.shared, { key: 'flight', roughness: 0.9 });
       let geo = this.geos.get(kind);
@@ -142,11 +154,13 @@ export class Flights {
       }
       const age = ctx.now - f.t0;
       if (f.kind === 'agent') {
-        this.agentPins.set(id, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: age * 5.5, anim: AnimState.thrown });
+        // (set down gently: upright, feet first, standing — not the flailing tumble of a throw)
+        if (f.gentle) this.agentPins.set(id, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: 0, anim: AnimState.idle });
+        else this.agentPins.set(id, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: age * 5.5, anim: AnimState.thrown });
       } else if (f.kind === 'creature') {
         this.creaturePins.set(id, f.p.clone());
       } else if (f.mesh) {
-        const s = f.size;
+        const s = this.sizeOf ? this.sizeOf(f.kind, f.size, age, f.p, f.v, id) : f.size;
         _m.makeRotationAxis(f.spin, age * 6).scale(_q.set(s, s, s)).setPosition(f.p);
         f.mesh.matrix.copy(_m);
         f.mesh.matrixWorldNeedsUpdate = true;

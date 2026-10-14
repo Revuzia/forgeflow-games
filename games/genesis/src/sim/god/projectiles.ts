@@ -1,4 +1,4 @@
-// GENESIS — things in flight (CONTRACT.md §11.4, §6.3 cadence 1): what the hand throws, what a tornado lifts, what a
+// GENESIS — things in flight (CONTRACT.md §11.4, §6.3 cadence 1): what the Touch hurls, what a tornado lifts, what a
 // gravity slip lets go of. A projectile is a point on a planet (unit vector + altitude) with a velocity in m/s, flying
 // a true ballistic arc on the SPHERE under the planet's gravity (and a little air drag), integrated in half-second
 // steps inside each one-minute tick; a long flight carries over to the next tick. Where it comes down it IMPACTS:
@@ -10,8 +10,8 @@
 //   food / wood   landing in a settlement is a GIFT to its store — which it may refuse (taboo, terror): left to rot
 //   any item      else lies on the ground (a thing to wonder at)
 //   a building    set down gently it stands again where it lands; thrown, it is rubble and a wrecking blow
-//   the creature  comes down hurt and less trusting
-// Near the landing people are afraid; far off, they wonder. Water breaks the fall (and splashes).
+// Near the landing people are afraid; far off, they wonder (a landing that killed someone is harm to all who saw it:
+// god/regard.ts). Water breaks the fall (and splashes).
 
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
@@ -28,6 +28,8 @@ import { spawnHerd } from '../life/herds.ts';
 import { brush } from '../fields/terrain.ts';
 import { waterImpulse } from '../fields/hydrology.ts';
 import { hurtPeople, wreckBuildings } from './harm.ts';
+import { beginAct, currentAct, endAct, noteDeath } from './regard.ts';
+import { harmScale, popWrath, pushWrath, wrathLaw } from './wrath.ts';
 import { godAct } from './belief.ts';
 import { giveTo } from './gifts.ts';
 import { nearestSettlement, norm, r3 } from './util.ts';
@@ -45,6 +47,9 @@ export function launch(u: Universe, p: Planet, payload: Payload, pos: V3, alt: n
   const c0 = p.cellAt(at);
   const ground = p.f.surface[c0] + Math.max(0, p.f.water[c0]);
   const pr: ProjectileState = { id: u.ids.alloc('projectile'), planet: p.id, pos: at, alt: ground + Math.max(0, alt), vel: [vel[0], vel[1], vel[2]], payload, god, t0: u.tick, from: [...at] as V3 };
+  // (LIVING §3.1: lifted by a disaster, its landing is part of the disaster's act)
+  const act = currentAct();
+  if (act && act.key.startsWith('d')) pr.src = act.key;
   u.god.projectiles.push(pr);
   // a person in flight is out of the world's hands: no decisions until they land
   if (payload.kind === 'agent' && p.people) {
@@ -93,8 +98,15 @@ export function projectilesStep(u: Universe): void {
     pr.vel = [vx, vy, vz];
     if (landed) {
       u.god.projectiles = u.god.projectiles.filter((q) => q !== pr);
-      land(u, p, pr, Math.hypot(vx, vy, vz));
-    } else if (rr > R * ESCAPE_RADII && pr.payload.kind !== 'creature' && g > 0) {
+      // the landing is an act of whoever threw it (LIVING §3.1: a landing that kills is harm, never a wonder) — or part of
+      // the act of the disaster that lifted it, under its wrath
+      const d = pr.src ? u.god.disasters.find((q) => `d${q.id}` === pr.src) : undefined;
+      const natural = d ? !(d.god >= 0 && d.cause !== 'nature') : pr.god < 0;
+      const act = beginAct(u, { key: d ? pr.src! : `pr${pr.id}`, god: Math.max(0, d ? d.god : pr.god), natural, store: d?.st, what: 'thrown' });
+      // (a thing the god hurled lands under its wrath law — LIVING §3.7; nature's (a storm's) under none)
+      pushWrath(d ? (natural ? null : d.st.Wr ?? 1) : pr.god >= 0 ? wrathLaw(u) : null);
+      try { land(u, p, pr, Math.hypot(vx, vy, vz)); } finally { popWrath(); endAct(u, act); }
+    } else if (rr > R * ESCAPE_RADII && g > 0) {
       // far out and still faster than the world's pull can bring back: thrown off the world for good
       const v2 = vx * vx + vy * vy + vz * vz;
       const radial = (vx * X + vy * Y + vz * Z) / rr;
@@ -178,7 +190,8 @@ function land(u: Universe, p: Planet, pr: ProjectileState, speed: number): void 
     }
     case 'rock': {
       const energy = 0.5 * pl.mass * hit * hit;
-      const radius = Math.max(4, Math.min(120, Math.cbrt(energy) * 0.05));
+      // (LIVING §3.7: the crater of a thing the god hurled reaches R(w) of its size — the blast inside scales again)
+      const radius = Math.max(4, Math.min(120, Math.cbrt(energy) * 0.05) * harmScale().R);
       if (hit > 12) brush(u, p, 'crater', pos, radius, Math.min(2, 0.4 + hit / 80));
       hurtPeople(u, p, pos, radius * 2, Math.min(2, hit / 30), DEATH.god, { fear: 0.4 });
       wreckBuildings(u, p, pos, radius * 2, Math.min(2, hit / 25), 'rock');
@@ -221,18 +234,6 @@ function land(u: Universe, p: Planet, pr: ProjectileState, speed: number): void 
       } else note = 'stands where it was set down';
       break;
     }
-    case 'creature': {
-      const cr = u.god.creature(pl.id);
-      if (cr) {
-        cr.pos = [pos[0], pos[1], pos[2]];
-        cr.from = [...cr.pos]; cr.to = [...cr.pos]; cr.t0 = u.tick; cr.t1 = u.tick;
-        cr.held = null;
-        if (hit > 10) { cr.energy = Math.max(0, cr.energy - Math.min(0.6, hit / 60)); cr.trust = Math.max(-1, cr.trust - 0.2); note = 'lands hard and glares at you'; }
-        else note = 'lands lightly';
-        cr.next = u.tick + 1;
-      }
-      break;
-    }
   }
   // fear near, wonder far
   if (pr.god >= 0) {
@@ -253,12 +254,13 @@ function landAgent(u: Universe, p: Planet, pr: ProjectileState, id: number, hit:
   A.place(s, pos[0], pos[1], pos[2], u.tick);
   A.cell[s] = c;
   x.ps.buckets.move(s, c);
-  A.fear[s * 4] = Math.min(1, A.fear[s * 4] + Math.min(0.6, 0.15 + hit / 40));
+  // (the fright of it is the landing's witnessing — LIVING §3.1, within the act's budget)
   A.remember(s, MEMK.injured, u.tick, 0);
   // the speed of the fall: ~8 m/s is a hard jump, ~20 m/s is lethal for most
-  const harm = hit <= 7 ? 0 : (hit - 7) / 14;
+  // (LIVING §3.7: thrown by a disaster the god sent, the fall hurts as its wrath allows)
+  const harm = (hit <= 7 ? 0 : (hit - 7) / 14) * harmScale().L;
   if (harm > 0) A.health[s] -= harm;
-  if (A.health[s] <= 0) { die(x, s, pr.god >= 0 ? DEATH.god : DEATH.disaster); return 'dies in the fall'; }
+  if (A.health[s] <= 0) { noteDeath(p, A.settlement[s]); die(x, s, pr.god >= 0 ? DEATH.god : DEATH.disaster); return 'dies in the fall'; }
   interrupt(x, s);
   return harm > 0.3 ? 'is badly hurt' : harm > 0 ? 'picks themself up' : 'lands unhurt';
 }
@@ -278,7 +280,7 @@ export function projectileViews(u: Universe, p: Planet): ProjectileView[] {
       case 'item': what = pl.item; content = u.content.items.list[pl.item]?.id ?? ''; break;
       case 'animal': what = pl.species; content = u.content.animals.list[pl.species]?.id ?? ''; break;
       case 'building': what = pl.b.type; content = u.content.buildings.list[pl.b.type]?.id ?? ''; break;
-      case 'creature': case 'agent': what = pl.id; break;
+      case 'agent': what = pl.id; break;
     }
     out.push({
       id: pr.id, planet: p.id, kind: pl.kind, what, content, pos: [pr.pos[0], pr.pos[1], pr.pos[2]],

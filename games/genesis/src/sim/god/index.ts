@@ -2,27 +2,31 @@
 // runs each tick, hourly and daily), the god parts of a snapshot, and the time controls that act on the Sim itself
 // (speed, step, rewind, edit-past).
 //
-// Cadences (ticks; CONTRACT §6.3): projectiles, disasters and creatures every tick (each cheap when there are none);
-// hourly per world (staggered): disaster upkeep (dust settles, radiation fades), disciples' preaching, invented rains;
-// rival gods hourly; daily per world: natural disasters, settlements raising creatures, conversions and faith,
-// forestry. Rival gods and creatures act through the same registry the player uses.
+// Cadences (ticks; CONTRACT §6.3): projectiles and disasters every tick (each cheap when there are none); hourly per
+// world (staggered): disaster upkeep (dust settles, radiation fades), the Called's preaching, invented rains, the
+// relationship's hour (prayers raised and lapsed, prophets, omens read, warnings — god/relationship.ts); rival gods
+// hourly; daily per world: natural disasters, conversions and faith, the relationship's day (persecution, pilgrimage,
+// revolt, migration away), forestry. Rival gods act through the same registry the player uses. (LIVING §3.5: the
+// creature is gone.)
 
 import type { CommandRegistry } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
-import type { Command, CommandResult, CreatureView, HandView, MoverBlock, PlanetSnap } from '../types.ts';
+import type { Command, CommandResult, HandView, MoverBlock, PlanetSnap } from '../types.ts';
 import { AnimState } from '../types.ts';
 import { makeCtx } from '../people/ctx.ts';
 import { registerHandCommands, handView } from './hand.ts';
 import { registerMiracleCommands } from './miracles.ts';
-import { registerCreatureCommands, creaturesStep, creatureViews, raiseCreatures } from './creature.ts';
 import { registerActCommands } from './acts.ts';
 import { registerWorldCommands } from './worlds.ts';
 import { registerRivalCommands, rivalsStep, faithDaily } from './rivals.ts';
 import { registerDiscipleCommands, disciplesHourly } from './disciples.ts';
 import { registerPossessionCommands } from './possess.ts';
 import { registerInventionCommands, rainsHourly } from './inventions.ts';
+import { registerMaterialCommands, materialsDaily, oresQuery, materialsQuery, contentQuery } from './materials.ts';
+import { registerPlantCommands } from './plantsrt.ts';
 import { registerCivicCommands } from './civic.ts';
+import { registerHistoryCommands } from './history.ts';
 import { registerShapingCommands, windStep } from './shaping.ts';
 import { registerSpaceCommands } from '../space/index.ts';
 import { registerSeenCommands } from './seen.ts';
@@ -33,6 +37,7 @@ import { worshipOf } from './belief.ts';
 import { registerGodParams } from './godparams.ts';
 import { rebuildContent } from './runtime.ts';
 import { GodState } from './state.ts';
+import { registerRelationship, relationshipTick, relationshipHourly, relationshipDaily, relSnapPlanet, relSnapGlobal, relQuery, REL_QUERIES } from './relationship.ts';
 import { distM } from '../people/world.ts';
 import { r3 } from './util.ts';
 
@@ -41,18 +46,23 @@ export function registerGodCommands(r: CommandRegistry): void {
   registerGodParams();
   registerHandCommands(r);
   registerMiracleCommands(r);
-  registerCreatureCommands(r);
   registerActCommands(r);
   registerWorldCommands(r);
   registerRivalCommands(r);
   registerDiscipleCommands(r);
   registerPossessionCommands(r);
   registerInventionCommands(r);
+  // (LIVING CONTENT: new materials and veins of ore, new plants and crops — god/materials.ts, god/plantsrt.ts)
+  registerMaterialCommands(r);
+  registerPlantCommands(r);
   registerCivicCommands(r);
+  registerHistoryCommands(r); // (LIVING HISTORY: settlement.advance, settlement.teach { era }, world.terraform — god/history.ts)
   registerShapingCommands(r);
   registerSpaceCommands(r); // worlds and space (phase 4): ship.launch / cancel / destroy, star.flare (space/index.ts)
   registerSeenCommands(r); // (render lane, additive) god.seen: the people near the walking body see the god (god/seen.ts)
   installPowerHooks(r);
+  // (LIVING RELATIONSHIP, last: its commands, the wrath on the casts registered above, the acts around every command)
+  registerRelationship(r);
 }
 
 /** the god layer's share of a tick (after the worlds have run) */
@@ -60,15 +70,15 @@ export function godTick(u: Universe, reg: CommandRegistry, t: number): void {
   const g = u.god;
   if (g.projectiles.length) projectilesStep(u);
   if (g.disasters.length) disastersStep(u);
-  if (g.creatures.length) creaturesStep(u);
+  relationshipTick(u);
   if (g.shields.length && t % 10 === 0) g.shields = g.shields.filter((s) => s.until > t);
   if (g.winds.length || Object.keys(g.windsOn).length) windStep(u);
   for (const p of u.planets) {
     if (!p.alive) continue;
     const ts = t + p.id * 17;
-    if (ts % 60 === 23) { disastersHourly(u, p); disciplesHourly(u, p); rainsHourly(u, p); }
+    if (ts % 60 === 23) { disastersHourly(u, p); disciplesHourly(u, p); rainsHourly(u, p); relationshipHourly(u, p); }
     const day = Math.max(60, Math.round(p.st.dayHours * 60));
-    if (ts % day === 911 % day) { naturalDisasters(u, p); raiseCreatures(u, p); faithDaily(u, p); forestryDaily(u, p); }
+    if (ts % day === 911 % day) { naturalDisasters(u, p); faithDaily(u, p); relationshipDaily(u, p); forestryDaily(u, p); materialsDaily(u, p); }
   }
   if (t % 60 === 37 && g.gods.length > 1) rivalsStep(u, reg);
 }
@@ -99,10 +109,12 @@ export function godSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
   const fl = projectileViews(u, p);
   if (fl.length) snap.projectiles = fl;
   if (snap.agents) overlayMovers(u, p, snap.agents);
+  relSnapPlanet(u, p, snap); // (LIVING RELATIONSHIP: settlement regard / prayers / prophet / sacred, agents' flags2)
 }
 
-export function godSnapGlobal(u: Universe): { creatures: CreatureView[]; hand: HandView | null } {
-  return { creatures: creatureViews(u), hand: handView(u) };
+/** the god's global parts of a snapshot (LIVING §3.5: `Snapshot.creatures` is never sent; the client reads it optionally) */
+export function godSnapGlobal(u: Universe): { hand: HandView | null; regard: number; wrath: number } {
+  return { hand: handView(u), ...relSnapGlobal(u) };
 }
 
 function overlayMovers(u: Universe, p: Planet, b: MoverBlock): void {
@@ -128,16 +140,16 @@ function overlayMovers(u: Universe, p: Planet, b: MoverBlock): void {
 
 // ───────────────────────────── queries (inspector, palette, radial, gestures) ─────────────────────────────
 
-export const GOD_QUERIES = ['powers', 'gestures', 'gods', 'creatures', 'creature', 'disasters', 'disaster', 'disaster-kinds', 'hand', 'worship', 'laws', 'inventions', 'shields'];
+export const GOD_QUERIES = ['powers', 'gestures', 'gods', 'disasters', 'disaster', 'disaster-kinds', 'hand', 'worship', 'laws', 'inventions', 'shields', ...REL_QUERIES,
+  // (LIVING CONTENT: deposit kinds, building materials with the invented ones, what the god made — god/materials.ts)
+  'ores', 'materials', 'content'];
 
 export function godQuery(u: Universe, q: string, args: Record<string, unknown>): unknown {
   const g = u.god;
   switch (q) {
     case 'powers': return powersQuery(u);
     case 'gestures': return gesturePowers(u.content);
-    case 'gods': return g.gods.map((x) => ({ ...x, worship: worshipOf(u, x.id), disciples: g.disciples.filter((d) => d.god === x.id).length }));
-    case 'creatures': return g.creatures.filter((c) => c.alive);
-    case 'creature': return g.creature(Number(args.id)) ?? null;
+    case 'gods': return g.gods.map((x) => ({ ...x, title: x.epithet ? `${x.name} ${x.epithet}` : x.name, worship: worshipOf(u, x.id), called: g.disciples.filter((d) => d.god === x.id).length, disciples: g.disciples.filter((d) => d.god === x.id).length }));
     case 'disasters': return g.disasters.map((d) => ({ ...d, name: u.content.disasters.find(d.kind)?.name ?? d.kind }));
     case 'disaster': { const d = g.disaster(Number(args.id)); return d ? { ...d, name: u.content.disasters.find(d.kind)?.name ?? d.kind, def: u.content.disasters.find(d.kind) } : null; }
     case 'disaster-kinds': return u.content.disasters.list;
@@ -146,7 +158,10 @@ export function godQuery(u: Universe, q: string, args: Record<string, unknown>):
     case 'laws': return { laws: g.laws, settlements: g.settlementLaws, restraint: u.settings.restraint };
     case 'inventions': return g.runtime;
     case 'shields': return g.shields;
-    default: return null;
+    case 'ores': return oresQuery(u, u.planetFor(args.planet));
+    case 'materials': return materialsQuery(u, u.planetFor(args.planet));
+    case 'content': return contentQuery(u);
+    default: return REL_QUERIES.includes(q) ? relQuery(u, q, args) : null;
   }
 }
 

@@ -84,6 +84,7 @@ uniform vec3 uRockB;
 uniform vec3 uSandCol;
 uniform vec3 uRegolith;
 uniform vec3 uNightAmbient;
+uniform vec4 uAurora;          // (additive, world-events lane) the auroral ovals' light: magnetic axis (xyz), strength (w)
 uniform float uCityLights;
 uniform samplerCube uCityTex;  // night lights from afar (citylights.ts), bound by the renderer
 uniform samplerCube uCloudCov;
@@ -334,8 +335,14 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float inst = uVegFade.x > 1e8 ? 0.0 : 1.0 - smoothstep(uVegFade.x, uVegFade.y, camDist);
       float cover = tw * mix(0.8, 1.0, crown) * (1.0 - inst);
       vcol = mix(vcol, tc, cover);
-      vb = mix(vb, crown * 1.8 * crownAA + leaf * 0.15, tw * (1.0 - inst));
-      vao *= mix(1.0, mix(0.45, 1.0, crown), tw * crownAA * (1.0 - inst));
+      // (additive, quality pass) the crowns' relief rounds off into the gaps between them (the border distance's
+      // smoothstep has no slope at the border: no crease for the screen-derivative normals to turn into dotted black
+      // seams), and both the relief and the gaps' shade fade out while a crown is still several pixels across — at
+      // distance the canopy is a soft texture, not quilted scales
+      float crownH = (1.0 - smoothstep(0.0, rad, tv.x)) * smoothstep(0.0, 0.3, tv.y - tv.x);
+      float reliefAA = aaF(fw * 2.5, 1.0 / scale);
+      vb = mix(vb, crownH * 1.6 * reliefAA + leaf * 0.15, tw * (1.0 - inst));
+      vao *= mix(1.0, mix(0.62, 1.0, crown), tw * reliefAA * (1.0 - inst));
       if (inst > 0.0) {
         // the forest floor (groundfloor.ts): litter / duff, twigs, roots, stones, moss, canopy sky occlusion — wherever
         // the instanced trees really shade the ground (ff_canopy), not only where the cell's tree field is high
@@ -857,6 +864,14 @@ const FRAG_AMBIENT = /* glsl */ `
     vec3 nB = normalize(viewToBody * normal);
     vec3 vB = normalize(viewToBody * geometryViewDir);
     vec3 skyE = skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient * (0.6 + 0.4 * max(dot(nB, upB), 0.0));
+    // the aurora overhead lights the ground under its ovals green (snow and ice show it most) where the sun is down
+    if (uAurora.w > 0.0) {
+      float ca = abs(dot(upB, uAurora.xyz));
+      float colat = acos(clamp(ca, 0.0, 1.0));
+      float under = exp(-pow((colat - 0.39) / 0.13, 2.0)) + 0.35 * exp(-pow((colat - 0.25) / 0.16, 2.0));
+      float nightA = smoothstep(0.06, -0.14, dot(upB, uSunDirBody));
+      skyE += vec3(0.1, 0.62, 0.3) * 0.006 * uAurora.w * under * nightA * (0.55 + 0.45 * max(dot(nB, upB), 0.0));
+    }
     // the sky enters ONCE: three r186's RE_IndirectSpecular adds a full Lambert term from iblIrradiance itself, so
     // adding skyE to 'irradiance' as well (RE_IndirectDiffuse) doubled the ambient — milky, shadowless ground
     // under a canopy the sky light arrives through leaves: less of it, and neutral-green rather than sky blue
@@ -969,6 +984,8 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
     // additive (render lane, phase 4b: a falling moon): the tidal bulge on the water — body-frame direction to the moon
     // (xyz) and the bulge's height in metres (w); render/fx/worlds.ts sets it, planet/ocean.ts raises the sea by it
     uTide: { value: new Vector4(0, 1, 0, 0) },
+    // additive (world-events lane): the aurora's light on the ground under its ovals (render/sky/aurora.ts sets it)
+    uAurora: { value: new Vector4(0, 1, 0, 0) },
   };
 }
 

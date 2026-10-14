@@ -6,7 +6,7 @@
 // living world. The dynamics (grazing, hunting, breeding, migrating, speciating, dying out) live in life/ecology.ts.
 
 import type { PCtx } from '../people/ctx.ts';
-import type { Herd } from '../people/state.ts';
+import type { Herd, Settlement } from '../people/state.ts';
 import type { AnimalDef } from '../content.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
 import { airSupportsLife } from '../fields/vegetation.ts';
@@ -144,40 +144,300 @@ export function herdTarget(x: PCtx, density = 1): number {
   return Math.min(80, Math.round((Math.floor(x.p.vegTotal / 600) + 2) * density));
 }
 
+/** LIVING CONTENT: the herds of the waters, the air and the swarms a world holds — the share of herdTarget that was not
+ * the land's game (about a quarter of a census world's herds were); the land's own follow the guilds (guildTargets) */
+export function otherTarget(x: PCtx, density = 1): number {
+  return Math.round(herdTarget(x, density) * 0.7);
+}
+
+// ───────────────────────────── LIVING CONTENT (§4.5): the land's game by biome ─────────────────────────────
+//
+// The herd target used to be one number for the whole world (its green cover), filled by herds of whatever suited a
+// random cell: a handful of land herds on a world (10-17 on the census worlds), the nearest a median 2 km from a band at
+// its founding, and five biomes with grazers and no hunter. Now every biome big enough to hold a guild (GUILD_KM2, the
+// area of 200 cells of the census grid) holds at least one herd of each grazer that can live there, more by its area
+// (PREY_PER_KM2), and one hunter for about every four herds of game (PREY_PER_HUNTER); new herds drift in where a
+// biome falls short, toward the country 300-1 500 m from the peoples (the game at the edge of the fields). The herds
+// of the waters, the air and the swarms keep the old green-cover target (herdTarget).
+
+/** the least area of a biome (km²) that holds a guild of its own: 200 cells of the census grid (n = 64, r = 3 km) */
+export const GUILD_KM2 = 0.62;
+/** herds of game per km² of a biome (at least one of each grazer that fits it), and herds of game per hunter */
+export const PREY_PER_KM2 = 0.6, PREY_PER_HUNTER = 4;
+/** land herds a world keeps at most (the hourly ecology reads every herd against every other) */
+export const MAX_LAND_HERDS = 90;
+/** game arrives this far from a people (m) */
+export const ARRIVE_NEAR: [number, number] = [300, 1500];
+
+export interface Guild {
+  biome: number;
+  /** land cells of the biome (ascending) */
+  cells: number[];
+  /** grazers and hunters that can live in it (species indices, ascending) */
+  prey: number[];
+  pred: number[];
+  /** herds it should hold */
+  preyTarget: number;
+  predTarget: number;
+}
+
+/** is this species game of the land (a grazer that walks: not a swarm, an insect or a beast of the water) */
+export function landGame(a: AnimalDef): boolean {
+  return !a.domestic && a.habitat === 'land' && a.kind === 'herbivore' && !a.swarm;
+}
+
+/** a hunter of land game (a beast of prey that walks, or a raptor of the air) */
+export function landHunter(a: AnimalDef): boolean {
+  return !a.domestic && a.kind === 'predator' && (a.habitat === 'land' || a.habitat === 'air');
+}
+
+/** the biome guilds of planet x.p now (biomes move with the climate; asked once a game day, by herdArrivals) */
+export function guildTargets(x: PCtx): Guild[] {
+  const p = x.p;
+  const byBiome = new Map<number, number[]>();
+  const f = p.f;
+  for (let c = 0; c < p.count; c++) {
+    if (p.s.ocean[c] || f.water[c] > 0.5) continue;
+    const b = f.biome[c];
+    let l = byBiome.get(b);
+    if (!l) byBiome.set(b, (l = []));
+    l.push(c);
+  }
+  const cellKm2 = (4 * Math.PI * p.st.radius * p.st.radius) / 1e6 / p.count;
+  const n = speciesCount(x);
+  const guilds: Guild[] = [];
+  for (const b of [...byBiome.keys()].sort((q, w) => q - w)) {
+    const cells = byBiome.get(b)!;
+    const km2 = cells.length * cellKm2;
+    if (km2 < GUILD_KM2) continue;
+    const id = x.c.biomes.list[b]?.id ?? '';
+    const fits = (sp: number) => {
+      // lives somewhere in the biome: a few cells of it, sampled by a hash
+      for (let k = 0; k < 24; k++) if (habitatFit(x, sp, cells[hash32(b, sp, k, 0x6d1) % cells.length]) > 0.35) return true;
+      return false;
+    };
+    const prey: number[] = [], pred: number[] = [];
+    for (let sp = 0; sp < n; sp++) {
+      const a = animalDef(x, sp);
+      if (!a.biomes.includes(id) || x.ps.eco.extinct[String(sp)] !== undefined) continue;
+      if (landGame(a) && fits(sp)) prey.push(sp);
+      else if (landHunter(a) && fits(sp)) pred.push(sp);
+    }
+    if (!prey.length) continue;
+    const preyTarget = Math.max(prey.length, Math.round(km2 * PREY_PER_KM2));
+    const predTarget = pred.length ? Math.max(1, Math.round(preyTarget / PREY_PER_HUNTER)) : 0;
+    guilds.push({ biome: b, cells, prey, pred, preyTarget, predTarget });
+  }
+  // a world of many biomes: the land herds it can carry, shared out by the guilds' sizes
+  const total = guilds.reduce((q, g) => q + g.preyTarget + g.predTarget, 0);
+  if (total > MAX_LAND_HERDS) {
+    const k = MAX_LAND_HERDS / total;
+    for (const g of guilds) {
+      g.preyTarget = Math.max(1, Math.round(g.preyTarget * k));
+      g.predTarget = g.pred.length ? Math.max(1, Math.round(g.predTarget * k)) : 0;
+    }
+  }
+  return guilds;
+}
+
+/** the wild land herds now in each guild's biome: [game, hunters] by biome index */
+function guildCounts(x: PCtx): Map<number, [number, number]> {
+  const out = new Map<number, [number, number]>();
+  const f = x.p.f;
+  for (const h of x.ps.herds) {
+    if (h.owner >= 0 || h.count < 0.5) continue;
+    const a = animalDef(x, h.species);
+    const game = landGame(a), hunt = landHunter(a);
+    if (!game && !hunt) continue;
+    const b = f.biome[h.cell];
+    let v = out.get(b);
+    if (!v) out.set(b, (v = [0, 0]));
+    if (game) v[0]++; else v[1]++;
+  }
+  return out;
+}
+
+/** metres from cell c to the nearest standing settlement (Infinity none) */
+function nearestPeopleM(x: PCtx, c: number): number {
+  const P = x.p.grid.pos;
+  let best = -2;
+  for (const st of x.ps.settlements) {
+    if (st.fallen >= 0) continue;
+    const d = P[c * 3] * st.pos[0] + P[c * 3 + 1] * st.pos[1] + P[c * 3 + 2] * st.pos[2];
+    if (d > best) best = d;
+  }
+  return best < -1 ? Infinity : Math.acos(Math.min(1, best)) * x.p.st.radius;
+}
+
+/**
+ * A cell of guild g for a herd of species sp: of a few cells drawn by a hash, the one it suits best — where peoples
+ * live, preferring the country ARRIVE_NEAR from the nearest of them (or -1: none suits it).
+ */
+function guildCell(x: PCtx, g: Guild, sp: number, salt: number, nearPeople: boolean): number {
+  let best = -1, bv = 0.35;
+  for (let k = 0; k < 10; k++) {
+    const c = g.cells[hash32(salt, sp, k, 0x6d2) % g.cells.length];
+    let v = habitatFit(x, sp, c);
+    if (v <= 0.35) continue;
+    // a world's first herds are spread over the country that can feed them (the first such cell drawn), not heaped on
+    // its best pasture: wherever a people sets down, game is not far
+    if (!nearPeople) return c;
+    if (nearPeople) {
+      const d = nearestPeopleM(x, c);
+      if (d >= ARRIVE_NEAR[0] && d <= ARRIVE_NEAR[1]) v += 0.5;
+      else if (d < ARRIVE_NEAR[0]) v -= 0.3;
+    }
+    if (v > bv) { bv = v; best = c; }
+  }
+  return best;
+}
+
+function herdOf(x: PCtx, sp: number, c: number, salt: number): Herd {
+  const a = animalDef(x, sp);
+  return spawnHerd(x, sp, c, a.herd[0] + (hash32(c, sp, salt) % Math.max(1, a.herd[1] - a.herd[0] + 1)));
+}
+
+/** the herds of the waters, the air and the swarms (everything that is not land game or its hunters) */
+function otherKind(x: PCtx, sp: number): boolean {
+  const a = animalDef(x, sp);
+  return !landGame(a) && !landHunter(a);
+}
+
 /** daily: herds drift into a living world where pasture is plentiful and animals few */
 export function herdArrivals(x: PCtx): void {
   const p = x.p;
   if (!x.ps.eco.immigration) return;
   if (!airSupportsLife(p) || p.vegTotal < p.count * 0.08) return;
-  const target = herdTarget(x);
+  // the land's game and its hunters: the guild that falls shortest first, toward the peoples
+  const guilds = guildTargets(x);
+  if (guilds.length) {
+    const have = guildCounts(x);
+    let landNow = 0;
+    for (const v of have.values()) landNow += v[0] + v[1];
+    const short = guilds.map((g) => { const v = have.get(g.biome) ?? [0, 0]; return { g, prey: g.preyTarget - v[0], pred: g.predTarget - v[1] }; })
+      .filter((q) => q.prey > 0 || q.pred > 0).sort((a, b) => (b.prey + b.pred) - (a.prey + a.pred) || a.g.biome - b.g.biome);
+    let made = 0;
+    for (const q of short) {
+      if (made >= 2 || landNow + made >= MAX_LAND_HERDS) break;
+      // game before hunters: a hunter comes to a guild with game enough for it
+      const hunters = q.prey <= 0 && q.pred > 0;
+      const list = hunters ? q.g.pred : q.g.prey;
+      const sp = list[hash32(x.tick, p.seed, q.g.biome, 0x6d3) % list.length];
+      const c = guildCell(x, q.g, sp, hash32(x.tick, q.g.biome, 0x6d4), !hunters);
+      if (c < 0) continue;
+      herdOf(x, sp, c, 0x4e7f);
+      made++;
+    }
+  }
+  // a people with no game within a day's hunting (GAME_NEAR_M) draws a herd of its country's game toward it
+  gameToPeople(x, guilds);
+  const target = otherTarget(x);
   let wild = 0;
-  for (const h of x.ps.herds) if (h.owner < 0) wild++;
+  for (const h of x.ps.herds) if (h.owner < 0 && otherKind(x, h.species)) wild++;
   if (wild >= target) return;
   const tries = Math.min(4, target - wild);
   for (let t = 0; t < tries; t++) {
     const c = hash32(x.tick, p.seed, t, 0x4e7d) % p.count;
     candidates(x, c, 0.3, _cands);
+    for (let i = _cands.length - 1; i >= 0; i--) if (!otherKind(x, _cands[i].sp)) _cands.splice(i, 1);
     if (!_cands.length) continue;
     const sp = pick(_cands, hashFloat(c, x.tick, 0x4e7e));
-    const a = animalDef(x, sp);
-    spawnHerd(x, sp, c, a.herd[0] + (hash32(c, sp, 0x4e7f) % Math.max(1, a.herd[1] - a.herd[0] + 1)));
+    herdOf(x, sp, c, 0x4e7f);
   }
 }
 
-/** initial herds of a living world (scenario build) */
+/** a people with no wild game nearer than this (m) draws a herd toward it (herdArrivals), from this far out (m) */
+export const GAME_NEAR_M = 1000;
+export const DRAW_FROM: [number, number] = [300, 900];
+
+/**
+ * Daily: every standing settlement with no wild land game within GAME_NEAR_M draws one herd of the game of its own
+ * country (the guild of its biome), DRAW_FROM it — never beyond MAX_LAND_HERDS or half again a guild's target (game
+ * comes to the edge of the fields; it is not made from nothing everywhere).
+ */
+function gameToPeople(x: PCtx, guilds: Guild[], only?: Settlement[]): void {
+  const ps = x.ps, P = x.p.grid.pos;
+  if (!guilds.length || !ps.settlements.length) return;
+  let land = 0;
+  const game: Herd[] = [];
+  for (const h of ps.herds) {
+    if (h.owner >= 0 || h.count < 0.5) continue;
+    const a = animalDef(x, h.species);
+    if (landGame(a)) { game.push(h); land++; } else if (landHunter(a)) land++;
+  }
+  if (land >= MAX_LAND_HERDS) return;
+  const have = guildCounts(x);
+  const reach = Math.cos(GAME_NEAR_M / x.p.st.radius);
+  for (const st of only ?? ps.settlements) {
+    if (st.fallen >= 0) continue;
+    if (game.some((h) => P[h.cell * 3] * st.pos[0] + P[h.cell * 3 + 1] * st.pos[1] + P[h.cell * 3 + 2] * st.pos[2] >= reach)) continue;
+    const g = guilds.find((q) => q.biome === x.p.f.biome[st.cell]) ?? guilds.slice().sort((a, b) => b.cells.length - a.cells.length)[0];
+    if ((have.get(g.biome)?.[0] ?? 0) >= g.preyTarget * 1.5) continue;
+    const sp = g.prey[hash32(x.tick, st.id, 0x6d5) % g.prey.length];
+    // the cells ARRIVE_NEAR out from it where the herd can live: the best of a few drawn
+    const ring = x.p.cellsNear(st.pos, DRAW_FROM[1]);
+    let c = -1, bv = 0.3;
+    for (let k = 0; k < 16 && ring.length; k++) {
+      const o = ring[hash32(x.tick, st.id, k, 0x6d6) % ring.length];
+      const d = nearestPeopleM(x, o);
+      if (d < DRAW_FROM[0] || d > DRAW_FROM[1]) continue;
+      const v = habitatFit(x, sp, o);
+      if (v > bv) { bv = v; c = o; }
+    }
+    if (c < 0) continue;
+    game.push(herdOf(x, sp, c, 0x4e80));
+    if (++land >= MAX_LAND_HERDS) return;
+  }
+}
+
+/**
+ * Hourly (ecoStep): a settlement founded within the last HERD_CADENCE ticks with no game near draws its herd at once, as
+ * gameToPeople does daily — a people sets down where game is (LIVING §4.5: a wild land herd within 1 km at founding).
+ * Stateless: the founding tick says which settlements are new.
+ */
+export function gameForNew(x: PCtx): void {
+  let fresh: Settlement[] | null = null;
+  for (const st of x.ps.settlements) {
+    const age = x.tick - st.founded;
+    if (st.fallen < 0 && age >= 0 && age < HERD_CADENCE) (fresh ??= []).push(st);
+  }
+  if (fresh) gameToPeople(x, guildTargets(x), fresh);
+}
+
+/** initial herds of a living world (scenario build): every guild's game and hunters, then the waters, air and swarms */
 export function initHerds(x: PCtx, density = 1): number {
   const p = x.p;
   if (!airSupportsLife(p) || p.vegTotal <= 0) return 0;
-  const target = herdTarget(x, density);
   let n = 0;
-  for (let t = 0; t < target * 6 && n < target; t++) {
+  for (const g of guildTargets(x)) {
+    const preyN = Math.max(1, Math.round(g.preyTarget * density));
+    for (let k = 0; k < preyN; k++) {
+      // one of each grazer first, then by a roll
+      const sp = k < g.prey.length ? g.prey[k] : g.prey[hash32(p.seed, g.biome, k, 0x1e50) % g.prey.length];
+      const c = guildCell(x, g, sp, hash32(p.seed, g.biome, k, 0x1e51), false);
+      if (c < 0) continue;
+      herdOf(x, sp, c, 0x1e4f);
+      n++;
+    }
+    const predN = g.predTarget ? Math.max(1, Math.round(g.predTarget * density)) : 0;
+    for (let k = 0; k < predN; k++) {
+      const sp = g.pred[hash32(p.seed, g.biome, k, 0x1e52) % g.pred.length];
+      const c = guildCell(x, g, sp, hash32(p.seed, g.biome, k, 0x1e53), false);
+      if (c < 0) continue;
+      herdOf(x, sp, c, 0x1e4f);
+      n++;
+    }
+  }
+  const target = otherTarget(x, density);
+  let m = 0;
+  for (let t = 0; t < target * 6 && m < target; t++) {
     const c = hash32(p.seed, t, 0x1e4d) % p.count;
     candidates(x, c, 0.35, _cands);
+    for (let i = _cands.length - 1; i >= 0; i--) if (!otherKind(x, _cands[i].sp)) _cands.splice(i, 1);
     if (!_cands.length) continue;
     const sp = pick(_cands, hashFloat(c, t, 0x1e4e));
-    const a = animalDef(x, sp);
-    spawnHerd(x, sp, c, a.herd[0] + (hash32(c, sp, 0x1e4f) % Math.max(1, a.herd[1] - a.herd[0] + 1)));
-    n++;
+    herdOf(x, sp, c, 0x1e4f);
+    m++;
   }
-  return n;
+  return n + m;
 }

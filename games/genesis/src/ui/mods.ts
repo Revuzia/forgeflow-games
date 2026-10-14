@@ -337,7 +337,12 @@ export class Mods {
       }
       const res = await this.deps.addToWorld(pack);
       if (res.ok) {
-        this.say('ok', res.msg ?? `'${name}' is part of this world now.`);
+        // (the sim's own line counts raw sections — "1 names, 1 species"; the words here are the pack's, in the singular
+        // where it is one; anything the sim adds after its list — a warning — is kept)
+        const tail = (res.msg ?? '').replace(/^[^]*?\)\.\s*/, '');
+        const own = { ...pack } as ContentPack & { creatures?: unknown };
+        delete own.creatures;
+        this.say('ok', `'${name}' is part of this world now (${packSummary(own)}).${tail && tail !== res.msg ? ` ${tail}` : ''}`);
         this.host.sound('ui.confirm');
       } else if (res.deferred) {
         await this.deps.library.keep(pack, source, { url, include: true }).catch(() => null);

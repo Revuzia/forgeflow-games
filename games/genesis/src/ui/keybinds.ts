@@ -105,8 +105,8 @@ export const ACTIONS: ActionDef[] = [
   { id: 'photo.exit', label: 'Leave photo mode', group: 'Photo mode', keys: ['KeyP'], pad: ['B'], context: 'photo' },
   { id: 'photo.focusNear', label: 'Focus nearer', group: 'Photo mode', keys: ['BracketLeft'], pad: ['Down'], context: 'photo' },
   { id: 'photo.focusFar', label: 'Focus farther', group: 'Photo mode', keys: ['BracketRight'], pad: ['Up'], context: 'photo' },
-  { id: 'photo.blurLess', label: 'Less depth blur', group: 'Photo mode', keys: ['Shift+BracketLeft'], context: 'photo' },
-  { id: 'photo.blurMore', label: 'More depth blur', group: 'Photo mode', keys: ['Shift+BracketRight'], context: 'photo' },
+  { id: 'photo.blurLess', label: 'Close the lens a stop (less depth blur)', group: 'Photo mode', keys: ['Shift+BracketLeft'], context: 'photo' },
+  { id: 'photo.blurMore', label: 'Open the lens a stop (more depth blur)', group: 'Photo mode', keys: ['Shift+BracketRight'], context: 'photo' },
   { id: 'photo.exposureDown', label: 'Darker', group: 'Photo mode', keys: ['Comma'], pad: ['Left'], context: 'photo' },
   { id: 'photo.exposureUp', label: 'Brighter', group: 'Photo mode', keys: ['Period'], pad: ['Right'], context: 'photo' },
   { id: 'photo.zoomIn', label: 'Longer lens (zoom in)', group: 'Photo mode', keys: ['Equal', 'NumpadAdd'], context: 'photo' },
@@ -115,9 +115,17 @@ export const ACTIONS: ActionDef[] = [
   { id: 'photo.frame', label: 'Next frame', group: 'Photo mode', keys: ['KeyG'], pad: ['Y'], context: 'photo' },
   { id: 'photo.panel', label: 'Show / hide the photo panel', group: 'Photo mode', keys: ['KeyH'], pad: ['Start'], context: 'photo' },
   { id: 'photo.time', label: 'Freeze time / let it run', group: 'Photo mode', keys: ['KeyY'], context: 'photo' },
-  // walking among them (the world's keys still work: powers, the hand, time)
+  { id: 'photo.rise', label: 'Move the camera up (hold)', group: 'Photo mode', keys: ['KeyR'], pad: ['RT'], hold: true, context: 'photo' },
+  { id: 'photo.sink', label: 'Move the camera down (hold)', group: 'Photo mode', keys: ['KeyF'], pad: ['LT'], hold: true, context: 'photo' },
+  // walking among them (the world's keys still work: powers, the hand, time); W A S D walk, Shift runs, the camera's
+  // turn keys turn, the wheel (or the pad's shoulders) brings the eye in to the shoulder and to first person
   { id: 'walk.exit', label: 'Rise from the ground (leave walking)', group: 'Walking', keys: ['KeyK'], pad: ['B'], context: 'walk' },
+  { id: 'walk.float', label: 'Jump; hold to float up', group: 'Walking', keys: ['KeyR'], pad: ['Up'], hold: true, context: 'walk' },
+  { id: 'walk.sink', label: 'Come down (hold)', group: 'Walking', keys: ['KeyF'], pad: ['Down'], hold: true, context: 'walk' },
 ];
+
+/** a hold action of a camera mode's layer → the key code its camera reads (render/camera/walk.ts, photo.ts) */
+export const LAYER_HOLD_CODES: Record<string, string> = { 'walk.float': 'KeyR', 'walk.sink': 'KeyF', 'photo.rise': 'KeyR', 'photo.sink': 'KeyF' };
 
 export const ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 
@@ -249,12 +257,15 @@ export class Keybinds {
     return out;
   }
 
-  /** hold actions this key starts (Shift allowed; Ctrl / Alt / Meta not) */
-  holdActions(e: KeyLike): string[] {
+  /**
+   * hold actions this key starts (Shift allowed; Ctrl / Alt / Meta not): the world's, and with a `context` that camera
+   * mode's layer's too (a layer's hold actions are never live outside their mode)
+   */
+  holdActions(e: KeyLike, context?: Context): string[] {
     if (e.ctrlKey || e.altKey || e.metaKey) return [];
     const out: string[] = [];
     for (const a of ACTIONS) {
-      if (!a.hold) continue;
+      if (!a.hold || (a.context && a.context !== context)) continue;
       for (const k of this.keysOf(a.id)) {
         const { mods, code } = splitCombo(k);
         if (code === e.code && !mods.has('Ctrl') && !mods.has('Alt') && !mods.has('Meta')) { out.push(a.id); break; }

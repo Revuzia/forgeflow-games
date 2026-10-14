@@ -27,6 +27,13 @@
 //
 // Cadence: every tick for live disasters (cheap when there are none); effectors on their own `every`; natural rolls
 // once a planet-day. Randomness is stateless (hash of disaster id, tick, salt): the same log gives the same disasters.
+//
+// LIVING §3.7 — survivable by default: a disaster the god sends keeps the wrath it was sent with (`st.Wr`, god/wrath.ts)
+// and its harm falls by it; a god-sent drought lasts 2–3 days at the default wrath; a volcano rumbles and smokes for
+// ≥ 12 game hours first, the sea draws back before a tsunami, a meteor streaks the sky before it strikes — and the
+// settlements in reach are told to get out (god/precursors.ts: the warning phase, `params.warning = 1`, and the
+// evacuation orders). Each disaster is one ACT over its whole life (god/regard.ts): what its witnesses make of it, and
+// the anti-saturation budget, are kept in its own state.
 
 import type { Universe } from '../world/universe.ts';
 import { meanAnomaly } from '../world/orbits.ts';
@@ -57,6 +64,9 @@ import { BuildingFlag } from '../types.ts';
 import { godAct } from './belief.ts';
 import { hurtPeople, hurtHerds, shielded, stripPlants, wreckBuildings } from './harm.ts';
 import { launch } from './projectiles.ts';
+import { currentWarning, currentWrath, harmScale, popWrath, pushWrath, wrathLaw } from './wrath.ts';
+import { beginAct, endAct } from './regard.ts';
+import { warningTicks, warningStart, warningTick, warningEnd, seenComing } from './precursors.ts';
 import { bearingDir, cellPos3, clamp, frame, herePos, moveBy, nearestSettlement, norm, placeName, r3, tangent } from './util.ts';
 
 // ───────────────────────────── spawning ─────────────────────────────
@@ -78,6 +88,8 @@ export interface SpawnOpts {
   target?: number;
   /** do not write the start to the chronicle (natural minor ones) */
   quiet?: boolean;
+  /** LIVING §3.7: the warning phase in ticks (undefined: by kind and wrath; 0 none — an apocalyptic cast) */
+  warning?: number;
 }
 
 const START = 'start';
@@ -131,11 +143,29 @@ export function spawnDisaster(u: Universe, p: Planet, kind: string, o: SpawnOpts
     d.params.dirX = r3(d.dir[0]); d.params.dirY = r3(d.dir[1]); d.params.dirZ = r3(d.dir[2]);
     d.st.alt0 = def.render.alt;
   }
+  // LIVING §3.7: the god's disaster keeps the wrath it was sent with (nature's has none: its own law alone)
+  const godSent = d.god >= 0 && d.cause !== 'nature';
+  if (godSent) {
+    const w = currentWrath() ?? wrathLaw(u);
+    d.st.Wr = w;
+    // a god-sent drought at the default wrath lasts 2-3 days, the full weeks only at wrath 1
+    if (def.id === 'drought' && o.life === undefined && d.life > 0) {
+      const short = 2880 + 1440 * hashFloat(salt, 5);
+      d.life = Math.round(w <= 0.3 ? short * (0.5 + w / 0.6) : short + (d.life - short) * ((w - 0.3) / 0.7));
+    }
+    // the warning phase (a volcano's rumbling, the sea drawing back, a streak in the sky): effects wait for it
+    const warn = warningTicks(u, def.id, w, o.warning ?? currentWarning());
+    if (warn > 0) { d.st.Wn = warn; if (d.life > 0) d.life += warn; }
+  }
   u.god.disasters.push(d);
   u.god.disasters.sort((a, b) => a.id - b.id);
   u.god.stat('disasters');
-  // what happens at once
-  def.effectors.forEach((e, i) => { if (e.at === START) { d.fired.push(i); applyEffector(u, p, d, def, e, i); } });
+  // what happens at once (after the warning, when there is one)
+  if (d.st.Wn) warningStart(u, p, d, def);
+  else {
+    if (godSent) seenComing(u, p, d, def);
+    actOf(u, d, () => def.effectors.forEach((e, i) => { if (e.at === START) { d.fired.push(i); applyEffector(u, p, d, def, e, i); } }));
+  }
   updateParams(u, p, d, def);
   u.emit({ t: 'disaster', planet: p.id, pos: [...pos], a: effR(d), b: effI(d), text: def.name, ref: { kind: 'disaster', id, planet: p.id }, data: { kind: def.id, id, god: d.god, cause: d.cause, life } });
   // the people far and wide see it coming (awe at a distance; fear is per hour of it, near)
@@ -195,6 +225,28 @@ export function disastersStep(u: Universe): void {
     if (d.frozen) continue;
     const def = defOf(u, d);
     d.age++;
+    // LIVING §3.7: the warning phase — nothing strikes yet; the people are told to get out
+    if (d.st.Wn && d.age <= d.st.Wn) {
+      warningTick(u, p, d, def);
+      if (d.age === d.st.Wn) { warningEnd(u, p, d); actOf(u, d, () => def.effectors.forEach((e, i) => { if (e.at === START && !d.fired.includes(i)) { d.fired.push(i); applyEffector(u, p, d, def, e, i); } })); }
+      updateParams(u, p, d, def);
+      continue;
+    }
+    actOf(u, d, () => stepOne(u, p, d, def));
+  }
+}
+
+/** one disaster as one act of its god (LIVING §3.1), under the wrath it was sent with (§3.7) */
+function actOf(u: Universe, d: DisasterState, f: () => void): void {
+  const natural = !(d.god >= 0 && d.cause !== 'nature');
+  const act = beginAct(u, { key: `d${d.id}`, god: Math.max(0, d.god), natural, store: d.st, what: `disaster:${d.kind}` });
+  pushWrath(natural ? null : d.st.Wr ?? 1);
+  try { f(); } finally { popWrath(); endAct(u, act); }
+}
+
+/** a live disaster's tick: move, act, end */
+function stepOne(u: Universe, p: Planet, d: DisasterState, def: DisasterDef): void {
+  {
     const vl = Math.hypot(d.vel[0], d.vel[1], d.vel[2]);
     if (vl > 0) {
       d.pos = norm([d.pos[0] + d.vel[0], d.pos[1] + d.vel[1], d.pos[2] + d.vel[2]]);
@@ -221,7 +273,8 @@ export function disastersStep(u: Universe): void {
 }
 
 function finish(u: Universe, p: Planet, d: DisasterState, def: DisasterDef): void {
-  def.effectors.forEach((e, i) => { if (e.at === 'end' && !d.fired.includes(i)) { d.fired.push(i); applyEffector(u, p, d, def, e, i); } });
+  // (LIVING §3.4.4: a comet sent as an omen passes — `Ps` — and does not strike)
+  if (!d.st.Ps) def.effectors.forEach((e, i) => { if (e.at === 'end' && !d.fired.includes(i)) { d.fired.push(i); applyEffector(u, p, d, def, e, i); } });
   cleanup(u, p, d);
   u.god.disasters = u.god.disasters.filter((x) => x !== d);
   consequences(u, p, d, def);
@@ -255,7 +308,10 @@ function consequences(u: Universe, p: Planet, d: DisasterState, def: DisasterDef
     // the place itself is gone — under water, under lava, a pit: the survivors leave to found anew elsewhere
     const c = st.cell;
     const drowned = p.f.water[c] > 0.4 || !!p.s.ocean[c];
-    if (drowned || p.f.lava[c] > 0.05 || p.f.surface[c] < p.st.seaLevel - 0.2) {
+    // (LIVING §3.7: below full wrath a dry pit does not drive them out — they rebuild around the crater; water and lava
+    // still do. Nature's impacts and the god's at wrath 1 keep the old rule)
+    const pit = p.f.surface[c] < p.st.seaLevel - 0.2 && (d.st.Wr === undefined || d.st.Wr >= 1);
+    if (drowned || p.f.lava[c] > 0.05 || pit) {
       if ((x.ps.members.get(st.id)?.length ?? 0) > 0) { abandon(x, st, drowned ? 'flood' : 'disaster'); continue; }
     }
     const bs = x.ps.of(st.id).filter((b) => b.progress >= 1);
@@ -284,6 +340,8 @@ function updateParams(u: Universe, p: Planet, d: DisasterState, def: DisasterDef
   if (def.render.width !== undefined) P.width = Math.round(def.render.width * Math.sqrt(d.scale));
   P.radius = Math.round(effR(d));
   P.intensity = r3(effI(d));
+  // LIVING §3.7 (render hook H5): 1 during a warning phase
+  if (d.st.Wn && d.age < d.st.Wn) P.warning = 1; else delete P.warning;
   if (def.id === 'moon-fall' && d.target >= 0) spiralMoon(u, p, d, prog);
 }
 
@@ -363,8 +421,11 @@ function impact(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, e: E
   }
   const c = p.cellAt(pos);
   const sea = p.s.ocean[c] && p.f.water[c] > 3;
-  const craterR = R * num(e, 'craterK', 1);
-  if (num(e, 'crater') > 0) crater(u, p, pos, sea ? craterR * 0.6 : craterR, num(e, 'crater') * Math.sqrt(I));
+  // (LIVING §3.7: a god-sent impact's crater, fire and ejecta shrink with its wrath — reach and lethality; the blast's
+  // harm scales inside hurtPeople / wreckBuildings; nature's keeps its size)
+  const ws = harmScale();
+  const craterR = R * num(e, 'craterK', 1) * ws.R;
+  if (num(e, 'crater') > 0) crater(u, p, pos, sea ? craterR * 0.6 : craterR, num(e, 'crater') * Math.sqrt(I) * ws.L);
   else u.emit({ t: 'impact', planet: p.id, pos: [...pos], a: R, b: I, data: { kind: d.kind } });
   if (sea && num(e, 'sea') > 0) waterImpulse(p, pos, R * 1.6, num(e, 'sea') * Math.sqrt(I), null, -1);
   const shockR = R * num(e, 'shockK', 2);
@@ -374,9 +435,11 @@ function impact(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, e: E
   }
   if (num(e, 'kill') > 0) hurtHerds(u, p, pos, shockR, num(e, 'kill') * Math.min(1, I));
   stripPlants(p, pos, shockR * 0.8, { tree: 0.6 * Math.min(1, I), shrub: 0.7, grass: 0.5, crop: 0.8 }, 0.8);
-  if (num(e, 'fire') > 0 && p.airy) igniteArea(u, p, pos, R * num(e, 'fireK', 1.5), clamp(num(e, 'fire'), 0.05, 1));
+  // (the fire it lights burns a town's roofs: it scales as the buildings do — B(w); at L(w) a meteor at the default
+  // wrath left 65 % standing at the blow and its fire took the rest down to 45–55 % in ten days)
+  if (num(e, 'fire') > 0 && p.airy) igniteArea(u, p, pos, R * num(e, 'fireK', 1.5) * ws.R, clamp(num(e, 'fire') * ws.B, 0.05, 1));
   if (num(e, 'dust') > 0 && p.airy) addDust(u, p, num(e, 'dust') * Math.sqrt(I));
-  const ej = Math.round(num(e, 'ejecta') * Math.min(3, Math.sqrt(I)));
+  const ej = Math.round(num(e, 'ejecta') * Math.min(3, Math.sqrt(I)) * ws.L);
   for (let k = 0; k < ej; k++) {
     const b = hashFloat(d.seed, k, 0xe1ec) * Math.PI * 2;
     const dist = R * (1.6 + 2.6 * hashFloat(d.seed, k, 0xe1ed));
@@ -433,7 +496,11 @@ export function addDust(u: Universe, p: Planet, k: number): void {
 function area(u: Universe, p: Planet, d: DisasterState, e: EffectorDef, i: number): void {
   const R = effR(d), I = effI(d);
   const f = p.f;
-  const cells = p.cellsNear(d.pos, R).slice();
+  // (LIVING §3.7: what a god-sent disaster does to the land — water drained, crops withered, lava, fires — reaches R(w)
+  // of its radius at L(w) of its strength; the harm to people and buildings scales inside hurtPeople / wreckBuildings)
+  const ws = harmScale();
+  const Re = R * ws.R;
+  const cells = p.cellsNear(d.pos, Re).slice();
   const r0 = ruinsCount(p);
   const sunlit = !!e.sunlit;
   const sun = sunlit ? u.sun(p, u.tick).dir : null;
@@ -451,8 +518,8 @@ function area(u: Universe, p: Planet, d: DisasterState, e: EffectorDef, i: numbe
     if (sun && cp[0] * sun[0] + cp[1] * sun[1] + cp[2] * sun[2] <= 0) continue;
     if (poleward && Math.abs(cp[1]) < 0.5 && f.temperature[c] > 2) continue;
     if (shielded(u, p, cp)) continue;
-    const dd = Math.min(1, distM(p, cp, d.pos) / Math.max(1, R));
-    const w = (1 - dd * dd) * Math.min(3, I);
+    const dd = Math.min(1, distM(p, cp, d.pos) / Math.max(1, Re));
+    const w = (1 - dd * dd) * Math.min(3, I) * ws.L;
     if (temp) p.s.tPot[c] += temp * w;
     if (moist !== 1) { f.moisture[c] *= Math.pow(moist, w); f.humidity[c] *= Math.pow(moist, w * 0.5); }
     if (aq) f.aquifer[c] = Math.max(0, f.aquifer[c] - aq * w);
@@ -491,13 +558,13 @@ function area(u: Universe, p: Planet, d: DisasterState, e: EffectorDef, i: numbe
   if (fert) p.bump('fertility');
   if (roads) p.bump('road');
   if (deposits) { p.bump('surface'); p.bump('sand'); p.bump('ash'); p.bump('snow'); p.bump('soil'); p.bump('rock'); }
-  if (num(e, 'lava') > 0) brush(u, p, 'paint-material', d.pos, Math.max(p.edgeM, R * num(e, 'lavaK', 0.3)), num(e, 'lava') * Math.sqrt(I), { material: 'lava' });
+  if (num(e, 'lava') > 0) brush(u, p, 'paint-material', d.pos, Math.max(p.edgeM, Re * num(e, 'lavaK', 0.3)), num(e, 'lava') * Math.sqrt(I) * ws.L, { material: 'lava' });
   if (num(e, 'fire') > 0 && p.airy) {
     // fires start where the fuel is dry: a few random cells per step
     const n = Math.max(1, Math.round(cells.length * 0.02));
     for (let k = 0; k < n; k++) {
       const c = cells[Math.floor(hashFloat(d.seed, d.age, k, 0xf1) * cells.length)];
-      if (c !== undefined && hashFloat(d.seed, d.age, k, 0xf2) < num(e, 'fire') * Math.min(1, I) && fuelAt(p, c) > 0.05) igniteCell(u, p, c, 0.7, d.kind);
+      if (c !== undefined && hashFloat(d.seed, d.age, k, 0xf2) < num(e, 'fire') * Math.min(1, I) * ws.L && fuelAt(p, c) > 0.05) igniteCell(u, p, c, 0.7, d.kind);
     }
   }
   if (num(e, 'lightning') > 0 && p.airy) {
@@ -639,7 +706,8 @@ function spread(u: Universe, p: Planet, d: DisasterState, e: EffectorDef): void 
     d.st.reach = Math.min(p.st.radius * Math.PI, (d.st.reach ?? R) * (1 + rate * 0.5));
     for (const st of x.ps.settlements) {
       if (st.fallen >= 0 || distM(p, st.pos, d.pos) > d.st.reach + st.territory || shielded(u, p, st.pos)) continue;
-      const n = seedDisease(x, st, dis, Math.max(1, Math.round(num(e, 'strength', 2) * I)), d.god > 0 ? 'a rival god' : d.cause === 'nature' ? null : 'the god');
+      // (LIVING §3.7: a god-sent plague seeds L(w) of its cases a round)
+      const n = seedDisease(x, st, dis, Math.max(1, Math.round(num(e, 'strength', 2) * I * harmScale().L)), d.god > 0 ? 'a rival god' : d.cause === 'nature' ? null : 'the god');
       if (n > 0) accident(x, st, 'plague', st.cell);
     }
     return;

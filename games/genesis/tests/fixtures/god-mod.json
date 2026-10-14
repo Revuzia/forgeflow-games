@@ -1,5 +1,5 @@
 {
-  "$comment": "A god-layer mod pack for tests/content.test.ts: a new disaster (composed of the built-in effectors), a new creature template, a power for each (so the palette, radial menu, gestures and the parser pick them up), and lexicon words. Loads as Sim({ content: [pack] }).",
+  "$comment": "A god-layer mod pack for tests/content.test.ts: a new disaster (composed of the built-in effectors) with its power, a Signs power, and lexicon words (so the palette, radial menu, sigils and the parser pick them up) — and a creature template, which this build ignores with a warning (LIVING.md §3.5: there is no great creature). Loads as Sim({ content: [pack] }).",
   "id": "ember-gods",
   "name": "Ember gods",
   "version": "1.0.0",
@@ -36,11 +36,11 @@
       "desc": "Let burning cinders fall where you point.", "cost": 40, "cooldown": 60, "witness": { "harm": 0.3, "wonder": 0.3, "radius": 600 }
     },
     {
-      "id": "creature-salamander", "name": "Adopt a salamander", "category": "Creature", "icon": "c-salamander", "ring": 2, "gesture": null,
-      "command": "creature.adopt", "params": { "template": "salamander" },
-      "schema": { "pos": { "type": "pos", "target": "point" }, "name": { "type": "string" } },
-      "target": "point", "synonyms": ["fire lizard", "salamander"],
-      "desc": "A young salamander, warm to the touch, yours to raise."
+      "id": "sign-ember-comet", "name": "Ember comet", "category": "Signs", "icon": "c-ember", "ring": 2, "gesture": null,
+      "command": "god.omen", "params": { "kind": "comet" },
+      "schema": { "settlement": { "type": "entity", "entity": ["settlement"] }, "pos": { "type": "pos", "target": "point" } },
+      "target": "settlement", "synonyms": ["ember comet", "a burning messenger"],
+      "desc": "A comet the colour of embers hangs over a town, and passes."
     }
   ],
   "lexicon": {

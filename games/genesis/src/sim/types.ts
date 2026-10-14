@@ -10,10 +10,17 @@
 
 /** 1 tick = 1 game minute. */
 export const TICKS_PER_HOUR = 60;
-/** At 1x the sim advances this many ticks per real second (a 24 h day = 144 s at 1x). */
-export const TICKS_PER_SECOND_1X = 10;
-/** Speed presets offered by the UI (multipliers of TICKS_PER_SECOND_1X). 0 = paused. */
-export const SPEED_PRESETS = [0, 1, 10, 100, 1000] as const;
+/**
+ * At 1x the sim advances this many ticks per real second (LIVING.md §1.1: 1 — a game hour lasts a real minute, a day
+ * 24 real minutes, a 12-day year 4.8 real hours; until the living-world program it was 10, a day in 144 s).
+ */
+export const TICKS_PER_SECOND_1X = 1;
+/**
+ * Speed presets offered by the UI (multipliers of TICKS_PER_SECOND_1X, i.e. ticks per real second). 0 = paused.
+ * 1x–300x run the plain sim (time-lapse level 0), 1000x the time-lapse (level 1, the old 100x code path), 3000x the
+ * deep time-lapse (level 2, the old 1000x path): perf/lapse.ts levelOfTps. The HUD shows `Snapshot.achievedSpeed`.
+ */
+export const SPEED_PRESETS = [0, 1, 2, 3, 5, 10, 30, 100, 300, 1000, 3000] as const;
 
 // ───────────────────────────────── refs ─────────────────────────────────
 
@@ -233,6 +240,11 @@ export interface MoverBlock {
   scale: Float32Array;
   /** packed RGB tint (clothing / fur / caste colour) */
   tint: Uint32Array;
+  /**
+   * additive (LIVING.md §6.5): more per-agent flags (AgentFlag2 — the 16-bit `flags` are full); agents only, absent on
+   * animal blocks and from older sims
+   */
+  flags2?: Uint8Array;
 }
 
 /** animation states shared by agents, animals and creatures */
@@ -240,6 +252,11 @@ export const AnimState = {
   idle: 0, walk: 1, run: 2, work: 3, carry: 4, pray: 5, sleep: 6, flee: 7, fight: 8, dance: 9, swim: 10,
   dead: 11, held: 12, thrown: 13, eat: 14, build: 15, chop: 16, dig: 17, fish: 18, teach: 19, sit: 20, cheer: 21,
   graze: 22, fly: 23, mourn: 24, sail: 25,
+  // additive (LIVING LAND, LIVING.md §6.3): a child at play, a hunter stalking or closing on game, a herder with the
+  // flock, a hunter carrying a carcass home
+  play: 26, hunt: 27, herd: 28, carryGame: 29,
+  // additive (LIVING RELATIONSHIP): hunched against a storm in shelter, or hurrying to it (people/shelter.ts)
+  shelter: 30,
 } as const;
 export type AnimStateId = (typeof AnimState)[keyof typeof AnimState];
 
@@ -249,6 +266,12 @@ export const AgentFlag = {
   // additive (SIM phase 2b): afloat in a boat — `carry` holds the boat item (raft / boat / sailship), anim is `sail`
   boat: 32768,
 } as const;
+
+/**
+ * additive (LIVING.md §6.5): MoverBlock.flags2 bits of agents. LAND sets festive (at a festival or wedding), camp (asleep
+ * at a camp or out on a trip), hunter (a hunter, or out with a hunting party), herder; RELATIONSHIP the others.
+ */
+export const AgentFlag2 = { prophet: 1, sheltering: 2, pilgrim: 4, festive: 8, camp: 16, hunter: 32, herder: 64, called: 128 } as const;
 
 /** additive (SIM phase 2): flags of animal movers (PlanetSnap.animals.flags) */
 export const AnimalFlag = { domestic: 1, predator: 2, swarm: 4, fish: 8, flying: 16, fleeing: 32, penned: 64, young: 128 } as const;
@@ -331,11 +354,34 @@ export interface SettlementView {
   disbelief?: number;
   /** names of its parties ("hawks", "devout", ...) with shares */
   factions?: { kind: string; share: number }[];
+  /**
+   * additive (LIVING LAND, LIVING.md §6.5): how it lives off the land this game year — the share of the food it brought
+   * in by source (0..1 each, summing to 1 once anything came in), the head of livestock it keeps, and the share of its
+   * people under 15 (the settlement card; the full year-by-year books are query 'ledger')
+   */
+  livelihood?: { food: Record<'forage' | 'hunt' | 'fish' | 'farm' | 'herd', number>; herds: number; under15: number };
+  // ── additive (LIVING RELATIONSHIP, LIVING.md §3, §6.5) ──
+  /** how its people hold the player god: member means of faith, fear, trust and loyalty, 0..1 each */
+  regard?: { faith: number; fear: number; trust: number; loyalty: number };
+  /** its open prayers (prayer.answer { settlement, prayer: id } answers one): kind, since / until (ticks), urgency 0..1 */
+  prayers?: { id: number; kind: string; since: number; until: number; urgency: number }[];
+  /** its prophet (agent id, name, credibility 0..1) */
+  prophet?: { agent: number; name: string; credibility: number };
+  /** sacred places it keeps, and the animal it reveres (an animal id) */
+  sacred?: { places: number; animal?: string };
+  // ── additive (LIVING HISTORY, LIVING.md §5.1, §5.2, §6.5; hook H11) ──
+  /** what its people can do, as an age: 'stone age', 'fire-keepers', 'first farmers', 'potters', 'copper age', 'bronze age',
+   * 'iron age', 'classical age', 'middle ages', 'age of gunpowder', 'age of steam', 'electric age', 'space age' (`era`
+   * stays the era index's name) */
+  eraLabel?: string;
+  /** a daughter town's grievance against its capital, 0..1 (secession above 0.6; absent for a capital or a town alone) */
+  grievance?: number;
 }
 
 /** SettlementView.flags bits */
 export const SettlementFlag = { band: 1, fallen: 2, atWar: 4, besieged: 8, port: 16, market: 32, golden: 64, dark: 128, tributary: 256 } as const;
 
+/** @deprecated LIVING.md §3.5: the creature is gone; `Snapshot.creatures` is never sent (kept until the client drops it) */
 export interface CreatureView {
   id: number;
   planet: number;
@@ -424,9 +470,9 @@ export interface ShipView {
 export interface ProjectileView {
   id: number;
   planet: number;
-  /** 'rock' | 'tree' | 'item' | 'animal' | 'building' | 'creature' | 'agent' */
+  /** 'rock' | 'tree' | 'item' | 'animal' | 'building' | 'agent' (never 'creature': LIVING §3.5) */
   kind: string;
-  /** what it is: item / plant / animal species content index, building type, creature or agent id; rock: kg */
+  /** what it is: item / plant / animal species content index, building type, agent id; rock: kg */
   what: number;
   /** content id of the item / plant / animal / building type ('' for rock, creature, agent) */
   content: string;
@@ -444,7 +490,13 @@ export interface HandView {
   held: EntityRef | null;
   /** 'open' | 'grab' | 'point' | 'slap' | 'stroke' | 'cast' */
   pose: string;
+  /** the same value as `regard` (LIVING §3.6) until the client reads `regard` */
   alignment: number;
+  /**
+   * additive (LIVING RELATIONSHIP): how the people see the god, −1 feared … +1 trusted (trust − fear of the believers,
+   * god/regard.ts): the Touch's look follows it (storm-dark when feared, warm light when trusted)
+   */
+  regard?: number;
 }
 
 export interface PlanetSnap {
@@ -492,13 +544,19 @@ export interface StarView {
 export interface Snapshot {
   /** game tick (integer part = completed ticks; may carry a fraction for interpolation) */
   tick: number;
-  /** current speed multiplier (0 = paused) and the measured achieved multiplier */
+  /** current speed multiplier (0 = paused) and the measured achieved multiplier — both in presets (= ticks per second) */
   speed: number;
   achievedSpeed: number;
+  /**
+   * additive (LIVING PACE): the logged time-lapse level the sim runs at (perf/lapse.ts) — 0 the plain sim (1x–300x),
+   * 1 time-lapse (1000x), 2 deep time-lapse (3000x): the HUD's "time-lapse" badge
+   */
+  lapseLevel?: 0 | 1 | 2;
   star: StarView;
   planets: PlanetSnap[];
   ships: ShipView[];
-  creatures: CreatureView[];
+  /** @deprecated LIVING.md §3.5: the creature is gone — always absent */
+  creatures?: CreatureView[];
   hand: HandView | null;
   events: SimEvent[];
   chronicle: ChronicleEntry[];
@@ -510,6 +568,10 @@ export interface Snapshot {
   restraint: boolean;
   /** god stats: worship pool per god (0 = player) */
   worship: number[];
+  /** additive (LIVING RELATIONSHIP): how the people of every world see the player god, −1 feared … +1 trusted */
+  regard?: number;
+  /** additive (LIVING RELATIONSHIP): the wrath law, 0 gentle … 0.3 survivable (default) … 1 total destruction */
+  wrath?: number;
 }
 
 // ─────────────────────────────── worker protocol ───────────────────────────────

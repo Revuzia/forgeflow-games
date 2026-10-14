@@ -345,7 +345,7 @@ export class Palette {
     clear(this.list);
     if (!this.rows.length) {
       this.list.append(h('div', { class: 'gn-pal-empty' }, h('div', { class: 'gn-pal-empty-t', text: 'Begin typing.' }),
-        h('div', { text: 'Powers, laws of the world, places, people, creatures, disasters, actions — or anything at all, in words.' })));
+        h('div', { text: 'Powers, laws of the world, places, people, disasters, actions — or anything at all, in words.' })));
     }
     let lastKind = '';
     this.rows.forEach((r, i) => {

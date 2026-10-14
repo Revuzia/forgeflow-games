@@ -39,6 +39,29 @@ export interface PlantDef {
   domestic?: boolean;
   domesticatesTo?: string;
   colors: { leaf: string; leafAutumn?: string; dry?: string; bark?: string; flower?: string };
+  /**
+   * LIVING (LIVING.md §2.4, crops): the sowing window as fractions of the local year from the spring equinox ([from, to],
+   * may wrap past 1; in the tropics sowing follows the rains) and the game days from sowing to ripeness at full
+   * suitability (people/crops.ts)
+   */
+  season?: { sow: [number, number]; grow: number };
+  /** LIVING (§2.4): what a ripe field of this crop yields (items.json ids, units at full health and average skill) */
+  harvest?: { item: string; qty: number }[];
+  /**
+   * LIVING CONTENT (§4.3): the fruit a tree or bush gives, gathered in season (`season`: [from, to] fractions of the local
+   * year from the spring equinox, may wrap; absent = all year) — life/plants.ts plantYield
+   */
+  fruit?: { item: string; qty: number; season?: [number, number] };
+  /** LIVING CONTENT (§4.3): what gatherers take where it grows (wild herbs, mushrooms, the seed of wild grasses) */
+  gather?: { item: string; qty: number; season?: [number, number] }[];
+  /**
+   * LIVING CONTENT: an understory plant never holds the dominant slot of its layer (it is not in PlantTable.byType, so
+   * vegetation never seeds or succeeds to it): it grows under the cover that suits it (mushrooms in woods, herbs in
+   * meadows) and is found there by gatherers (life/plants.ts plantYield)
+   */
+  understory?: boolean;
+  /** LIVING CONTENT: a crop that feeds the soil it grows in (lentils: fields/vegetation.ts deepens the soil under it) */
+  nitrogen?: number;
 }
 
 export const PRECIP_TYPES = ['none', 'rain', 'snow', 'hail', 'ash', 'acid', 'blood', 'sand'] as const;
@@ -115,6 +138,8 @@ export interface OreDef {
   color: string;
   rarity: number;
   geology: Record<string, number>;
+  /** LIVING CONTENT (§4.2): the item a miner takes from a deposit of it (people/resources.ts; absent = none) */
+  item?: string;
 }
 
 export interface ReliefDef {
@@ -228,7 +253,7 @@ export interface SpeciesDef {
   /** adult height, m */
   size: number;
   mass?: number;
-  /** × base walk (0.25 m/tick) */
+  /** × base walk (people/defs.ts BASE_WALK, 2 m/tick) */
   speed: number;
   /** × speed in water (0 = cannot swim) */
   swim: number;
@@ -348,6 +373,8 @@ export interface MaterialDef {
   strength: number;
   insulation: number;
   era: Era;
+  /** LIVING CONTENT (§4.1): a material that gives light at night (a glowing stone the god invented): 0..1 */
+  light?: number;
 }
 
 export interface AnimalDef {
@@ -373,6 +400,11 @@ export interface AnimalDef {
   swarm?: boolean;
   nocturnal?: boolean;
   colors: string[];
+  /**
+   * LIVING CONTENT (§4.4): ids this species used to have (a kind that was not real, replaced in place by a real one:
+   * ice-beast → musk-ox): the registry answers to them, so saves, mods and logged commands keep their meaning
+   */
+  aliases?: string[];
 }
 
 export interface DiseaseDef {
@@ -412,7 +444,8 @@ export interface EventTemplateDef {
 // ───────────────────────────── the god layer (phase 3) ─────────────────────────────
 
 /** radial / palette categories of powers (CONTRACT §16.3) */
-export const POWER_CATEGORIES = ['Shape', 'Water', 'Sky', 'Life', 'Peoples', 'Ideas', 'Fire', 'Disasters', 'Hand', 'Creature', 'Worlds', 'Time', 'Laws'] as const;
+// (LIVING §3.5: 'Signs' — omens, prophets, sacred places — in place of the creature's category; 'Hand' is the Touch)
+export const POWER_CATEGORIES = ['Shape', 'Water', 'Sky', 'Life', 'Peoples', 'Ideas', 'Fire', 'Disasters', 'Hand', 'Signs', 'Worlds', 'Time', 'Laws'] as const;
 /** how a power picks where / what it acts on */
 export const POWER_TARGETS = ['point', 'region', 'line', 'entity', 'settlement', 'agent', 'planet', 'none'] as const;
 export const PARAM_TYPES = ['number', 'int', 'string', 'boolean', 'enum', 'pos', 'entity', 'vec3', 'items', 'any'] as const;
@@ -441,8 +474,12 @@ export interface PowerDef {
   icon: string;
   /** radial ring: 0 inner (the everyday powers) .. 2 outer */
   ring: number;
-  /** unistroke gesture that casts it ('spiral', 'zigzag', 'circle', 'triangle', 'v', 'wave', 'square', 'star', ...) */
+  /** unistroke gesture that casts it ('spiral', 'zigzag', 'circle', 'triangle', 'v', 'wave', 'square', 'star', ...) —
+   *  kept until the UI recogniser switches to `sigil` (LIVING §3.6, hook H8), then removed */
   gesture?: string | null;
+  /** LIVING §3.6: the sigil — an original one-stroke glyph id ('drop', 'anvil', 'fork', 'ripple', 'sprout', 'knot',
+   *  'basket', 'seed', 'log', 'eye', 'flame', 'trail', 'arch', 'fall') — that draws this power */
+  sigil?: string | null;
   /** the command kind it issues (must be a registered handler) */
   command: string;
   /** default parameters merged into the command */
@@ -494,31 +531,10 @@ export interface DisasterDef {
   /** how it comes about on its own: expected events per planet-year where the conditions hold (0 = only by the god) */
   natural?: { rate: number; needs: string[] };
   synonyms?: string[];
+  /** LIVING CONTENT (§4.4): ids it used to have (leviathan → rogue-wave): the registry answers to them */
+  aliases?: string[];
 }
 
-export interface CreatureDef {
-  id: string;
-  name: string;
-  /** body plan for the renderer's creaturegen ('ape', 'ox', 'cat', 'tortoise', 'wolf', ...) */
-  body: string;
-  /** height (m) when adopted and when fully grown */
-  size: [number, number];
-  /** walking speed m/s */
-  speed: number;
-  strength: number;
-  intelligence: number;
-  /** hunger per hour 0..1 */
-  appetite: number;
-  /** what it eats by preference ('animal', 'crop', 'tree', 'store', 'people', 'fish') */
-  diet: string[];
-  /** starting behaviour desires (weights 0..1) */
-  desires: Record<string, number>;
-  /** miracles it knows from the start (skill 0..1) */
-  miracles?: Record<string, number>;
-  /** content animal(s) a settlement's sacred beast must be for its people to raise one of this kind */
-  animals?: string[];
-  colors: string[];
-}
 
 // ───────────────────────────── worlds and space (phase 4) ─────────────────────────────
 
@@ -571,7 +587,8 @@ export interface ContentPack {
   version?: string;
   powers?: PowerDef[];
   disasters?: DisasterDef[];
-  creatures?: CreatureDef[];
+  /** LIVING §3.5: ignored — there is no great creature in this world (a pack with one still loads, with a warning) */
+  creatures?: unknown[];
   lexicon?: Lexicon;
   plants?: PlantDef[];
   weather?: WeatherDef[];
@@ -603,6 +620,8 @@ export interface ContentPack {
 export class Registry<T extends { id: string }> {
   readonly list: T[] = [];
   private index = new Map<string, number>();
+  /** LIVING CONTENT (§4.4): old ids an entry answers to (`aliases` in its data: ice-beast → musk-ox), never listed by ids() */
+  private alias = new Map<string, number>();
   readonly kind: string;
   constructor(kind: string) {
     this.kind = kind;
@@ -613,26 +632,40 @@ export class Registry<T extends { id: string }> {
     const at = this.index.get(item.id);
     if (at !== undefined) {
       this.list[at] = item;
+      this.putAliases(item, at);
       return at;
     }
     this.list.push(item);
     this.index.set(item.id, this.list.length - 1);
+    this.alias.delete(item.id);
+    this.putAliases(item, this.list.length - 1);
     return this.list.length - 1;
   }
 
-  has(id: string): boolean {
-    return this.index.has(id);
+  private putAliases(item: T, at: number): void {
+    const al = (item as { aliases?: unknown }).aliases;
+    if (Array.isArray(al)) for (const a of al) if (typeof a === 'string' && !this.index.has(a)) this.alias.set(a, at);
   }
 
-  /** index of an id, or -1 */
+  has(id: string): boolean {
+    return this.index.has(id) || this.alias.has(id);
+  }
+
+  /** index of an id (or of the entry an old id now names), or -1 */
   idx(id: string): number {
-    const i = this.index.get(id);
+    const i = this.index.get(id) ?? this.alias.get(id);
     return i === undefined ? -1 : i;
+  }
+
+  /** the canonical id an id or an old id names ('' none) */
+  canonical(id: string): string {
+    const i = this.idx(id);
+    return i < 0 ? '' : this.list[i].id;
   }
 
   /** the item for an id; throws a readable error when missing */
   get(id: string): T {
-    const i = this.index.get(id);
+    const i = this.index.get(id) ?? this.alias.get(id);
     if (i === undefined) {
       const hint = suggest(id, this.ids());
       throw new ContentError([`unknown ${this.kind} '${id}'${hint ? ` — did you mean '${hint}'?` : ''}`]);
@@ -641,7 +674,7 @@ export class Registry<T extends { id: string }> {
   }
 
   find(id: string): T | undefined {
-    const i = this.index.get(id);
+    const i = this.index.get(id) ?? this.alias.get(id);
     return i === undefined ? undefined : this.list[i];
   }
 
@@ -681,8 +714,10 @@ export interface PlantTable {
   flammability: Float32Array;
   deciduous: Uint8Array;
   domestic: Uint8Array;
-  /** plant indices of each functional type, wild ones first */
+  /** plant indices of each functional type, wild ones first (LIVING CONTENT: understory plants are never listed) */
   byType: number[][];
+  /** LIVING CONTENT: 1 for a crop that feeds the soil it grows in (plants.json `nitrogen`) */
+  nitrogen?: Uint8Array;
 }
 
 export interface Content {
@@ -714,8 +749,9 @@ export interface Content {
   // ── the god layer (phase 3) ──
   powers: Registry<PowerDef>;
   disasters: Registry<DisasterDef>;
-  creatures: Registry<CreatureDef>;
   lexicon: Lexicon;
+  /** readable notes about what a pack holds that this build ignores (LIVING §3.5: creatures) */
+  warnings?: string[];
   /** the packs this content was built from, in order (the god layer rebuilds content with a runtime pack on top) */
   sources: ContentPack[];
   // ── worlds and space (phase 4) ──
@@ -760,8 +796,8 @@ export function loadContent(packs: ContentPack[]): Content {
     extra: {},
     powers: new Registry('power'),
     disasters: new Registry('disaster'),
-    creatures: new Registry('creature'),
     lexicon: {},
+    warnings: [],
     sources: packs.slice(),
     ships: new Registry('ship kind'),
   };
@@ -812,7 +848,8 @@ export function loadContent(packs: ContentPack[]): Content {
     section('events', c.events, checkEventTemplate);
     section('powers', c.powers, checkPower);
     section('disasters', c.disasters, checkDisaster);
-    section('creatures', c.creatures, checkCreature);
+    // LIVING §3.5: the creature is gone — a pack that brings creatures loads, and says they are ignored
+    if (Array.isArray(pack.creatures) && pack.creatures.length && pid !== 'base') c.warnings!.push(`${pid}: its ${pack.creatures.length} creature${pack.creatures.length === 1 ? ' is' : 's are'} ignored — there is no great creature in this world (choose a prophet instead).`);
     section('ships', c.ships, checkShip);
     if (pack.lexicon !== undefined) {
       if (!pack.lexicon || typeof pack.lexicon !== 'object' || Array.isArray(pack.lexicon)) problems.push(`${pid} › 'lexicon' must be an object`);
@@ -929,6 +966,23 @@ function checkPlant(x: PlantDef, w: string, p: string[]): void {
   num(o, 'flammability', w, p, 0, 1);
   if (!x.colors || typeof x.colors !== 'object' || !COLOR.test(String(x.colors.leaf))) p.push(`${w}: "colors.leaf" must be a #rrggbb colour`);
   else for (const [k, v] of Object.entries(x.colors)) if (v != null && !COLOR.test(String(v))) p.push(`${w}: colors.${k} '${String(v)}' is not a #rrggbb colour`);
+  // LIVING CONTENT (§4.3): fruit in season, what gatherers take, crops' harvests (item ids are checked after the merge)
+  const yields = (k: string, v: unknown) => {
+    if (!v || typeof v !== 'object' || typeof (v as { item?: unknown }).item !== 'string' || !((v as { qty?: unknown }).qty as number > 0)) { p.push(`${w}: "${k}" needs an item and a positive qty`); return; }
+    const se = (v as { season?: unknown }).season;
+    if (se !== undefined && (!Array.isArray(se) || se.length !== 2 || se.some((q) => typeof q !== 'number' || q < 0 || q > 1))) p.push(`${w}: ${k}.season must be [from, to], fractions of the year 0..1`);
+  };
+  if (x.fruit !== undefined) yields('fruit', x.fruit);
+  if (x.gather !== undefined) { if (!Array.isArray(x.gather)) p.push(`${w}: "gather" must be an array of { item, qty }`); else x.gather.forEach((g, i) => yields(`gather[${i}]`, g)); }
+  if (x.harvest !== undefined) { if (!Array.isArray(x.harvest)) p.push(`${w}: "harvest" must be an array of { item, qty }`); else x.harvest.forEach((g, i) => yields(`harvest[${i}]`, g)); }
+  if (x.understory !== undefined && typeof x.understory !== 'boolean') p.push(`${w}: "understory" must be true or false`);
+  if (x.nitrogen !== undefined && (typeof x.nitrogen !== 'number' || x.nitrogen < 0)) p.push(`${w}: "nitrogen" must be a number >= 0`);
+}
+
+/** LIVING CONTENT (§4.4): `aliases` are old ids, strings, none of them a live id of the same registry */
+function checkAliases(x: { id: string; aliases?: unknown }, w: string, p: string[]): void {
+  if (x.aliases === undefined) return;
+  if (!Array.isArray(x.aliases) || x.aliases.some((a) => typeof a !== 'string' || !a)) p.push(`${w}: "aliases" must be an array of old ids (strings)`);
 }
 
 function checkWeather(x: WeatherDef, w: string, p: string[]): void {
@@ -963,6 +1017,7 @@ function checkOre(x: OreDef, w: string, p: string[]): void {
   const o = x as unknown as Record<string, unknown>;
   str(o, 'name', w, p);
   num(o, 'rarity', w, p, 0, 10);
+  if (x.item !== undefined && (typeof x.item !== 'string' || !x.item)) p.push(`${w}: "item" must be the id of the item mined from it`);
   if (!x.geology || typeof x.geology !== 'object') p.push(`${w}: "geology" weights object is required`);
   else for (const k of Object.keys(x.geology)) if (!GEOLOGY.includes(k)) p.push(`${w}: unknown geology '${k}' (use ${GEOLOGY.join(', ')})`);
 }
@@ -1010,7 +1065,7 @@ function compilePlants(reg: Registry<PlantDef>): PlantTable {
     type: new Uint8Array(n), habitat: new Uint8Array(n), temp: new Float32Array(n * 4), moist: new Float32Array(n * 4),
     soil: new Float32Array(n), salinity: new Float32Array(n), waterMin: new Float32Array(n), waterMax: new Float32Array(n),
     growth: new Float32Array(n), spread: new Float32Array(n), light: new Float32Array(n), fuel: new Float32Array(n),
-    flammability: new Float32Array(n), deciduous: new Uint8Array(n), domestic: new Uint8Array(n),
+    flammability: new Float32Array(n), deciduous: new Uint8Array(n), domestic: new Uint8Array(n), nitrogen: new Uint8Array(n),
     byType: [[], [], [], []],
   };
   reg.list.forEach((p, i) => {
@@ -1029,11 +1084,12 @@ function compilePlants(reg: Registry<PlantDef>): PlantTable {
     t.flammability[i] = p.flammability;
     t.deciduous[i] = p.deciduous ? 1 : 0;
     t.domestic[i] = p.domestic ? 1 : 0;
+    t.nitrogen![i] = p.nitrogen && p.nitrogen > 0 ? 1 : 0;
   });
   for (let ti = 0; ti < 4; ti++) {
     const wild: number[] = [];
     const dom: number[] = [];
-    for (let i = 0; i < n; i++) if (t.type[i] === ti) (t.domestic[i] ? dom : wild).push(i);
+    for (let i = 0; i < n; i++) if (t.type[i] === ti && !reg.list[i].understory) (t.domestic[i] ? dom : wild).push(i);
     t.byType[ti] = [...wild, ...dom];
   }
   return t;
@@ -1206,6 +1262,7 @@ function checkAnimal(x: AnimalDef, w: string, p: string[]): void {
   num(o, 'flee', w, p, 0, 1);
   num(o, 'breed', w, p, 0, 100);
   if (!Array.isArray(x.colors) || x.colors.some((col) => !COLOR.test(col))) p.push(`${w}: "colors" must be #rrggbb strings`);
+  checkAliases(x, w, p);
 }
 
 function checkDisease(x: DiseaseDef, w: string, p: string[]): void {
@@ -1239,6 +1296,11 @@ export const TEMPLATE_VARS = [
   'adj', 'agent', 'ally', 'animal', 'back', 'building', 'cause', 'clan', 'count', 'crop', 'days', 'desc', 'disease', 'era', 'faction', 'god',
   'goods', 'home', 'item', 'knowledge', 'name', 'old', 'other', 'others', 'parent', 'people', 'place', 'planet', 'polity', 'pron', 'pron2',
   'settlement', 'ship', 'terms', 'text', 'title', 'why', 'years',
+  // LIVING RELATIONSHIP (god/prayers.ts, prophets.ts, omens.ts, precursors.ts): what a prayer is for, an omen seen, what
+  // a prophet foretold (and the same capitalised), the ruler who persecutes, the disaster fled
+  'prayer', 'omen', 'what', 'What', 'ruler', 'disaster',
+  // LIVING HISTORY (people/eras.ts): a settlement's era label ("the copper age", "potters")
+  'label',
 ] as const;
 
 function checkEventTemplate(x: EventTemplateDef, w: string, p: string[]): void {
@@ -1354,6 +1416,12 @@ function crossCheckPeoples(c: Content, problems: string[]): void {
     for (const io of m.items ?? []) itemRef(`material ${m.id}`, io, 'items');
     if (m.knowledge && !c.recipes.has(m.knowledge)) problems.push(ref('material', m.id, 'knowledge', m.knowledge, c.recipes));
   }
+  // LIVING CONTENT: what plants give and what ores yield are items; an old id is never another entry's live id
+  for (const pl of c.plants.list) {
+    for (const g of [...(pl.fruit ? [pl.fruit] : []), ...(pl.gather ?? []), ...(pl.harvest ?? [])]) if (g && typeof g.item === 'string' && !c.items.has(g.item)) problems.push(ref('plant', pl.id, 'fruit / gather / harvest', g.item, c.items));
+  }
+  for (const o of c.ores.list) if (o.item && !c.items.has(o.item)) problems.push(ref('ore', o.id, 'item', o.item, c.items));
+  for (const a of c.animals.list) for (const al of a.aliases ?? []) if (c.animals.list.some((b) => b.id === al)) problems.push(`animal '${a.id}': alias '${al}' is the id of another animal`);
   for (const a of c.animals.list) {
     for (const io of a.products ?? []) itemRef(`animal ${a.id}`, io, 'products');
     if (a.domesticatesTo && !c.animals.has(a.domesticatesTo)) problems.push(ref('animal', a.id, 'domesticatesTo', a.domesticatesTo, c.animals));
@@ -1386,10 +1454,6 @@ export const DISASTER_NEEDS = [
   'air', 'volcanic', 'rift', 'mountain', 'coast', 'sea', 'dry', 'wet', 'hot', 'cold', 'forest', 'grass', 'crops', 'people', 'herds',
   'sand', 'moon', 'magnetism', 'storms', 'pole', 'settled',
 ];
-const CREATURE_DIET = ['animal', 'crop', 'tree', 'store', 'people', 'fish', 'grass', 'rock'];
-export const CREATURE_BEHAVIOURS = [
-  'eat', 'sleep', 'play', 'throw', 'help', 'attack', 'cast', 'impress', 'terrify', 'poop', 'explore', 'follow', 'eat-people', 'throw-people',
-];
 
 function checkPower(x: PowerDef, w: string, p: string[]): void {
   const o = x as unknown as Record<string, unknown>;
@@ -1409,11 +1473,13 @@ function checkPower(x: PowerDef, w: string, p: string[]): void {
     if (s.min !== undefined && s.max !== undefined && s.min > s.max) p.push(`${w}: schema.${k} has min > max`);
   }
   if (x.gesture !== undefined && x.gesture !== null && typeof x.gesture !== 'string') p.push(`${w}: "gesture" must be a string or null`);
+  if (x.sigil !== undefined && x.sigil !== null && typeof x.sigil !== 'string') p.push(`${w}: "sigil" must be a string or null`);
   for (const k of ['cost', 'cooldown'] as const) if (x[k] !== undefined) num(o, k, w, p, 0, 1e7);
 }
 
 function checkDisaster(x: DisasterDef, w: string, p: string[]): void {
   const o = x as unknown as Record<string, unknown>;
+  checkAliases(x, w, p);
   str(o, 'name', w, p);
   str(o, 'desc', w, p);
   str(o, 'category', w, p);
@@ -1431,21 +1497,6 @@ function checkDisaster(x: DisasterDef, w: string, p: string[]): void {
   }
 }
 
-function checkCreature(x: CreatureDef, w: string, p: string[]): void {
-  const o = x as unknown as Record<string, unknown>;
-  str(o, 'name', w, p);
-  str(o, 'body', w, p);
-  tuple(o, 'size', 2, w, p);
-  num(o, 'speed', w, p, 0.05, 50);
-  num(o, 'strength', w, p, 0, 10);
-  num(o, 'intelligence', w, p, 0, 10);
-  num(o, 'appetite', w, p, 0, 1);
-  strArr(o, 'diet', w, p, false);
-  for (const d of x.diet ?? []) if (!CREATURE_DIET.includes(d)) p.push(`${w}: diet '${d}' is not one of ${CREATURE_DIET.join(', ')}`);
-  if (!x.desires || typeof x.desires !== 'object') p.push(`${w}: "desires" must map behaviours to weights`);
-  else for (const k of Object.keys(x.desires)) if (!CREATURE_BEHAVIOURS.includes(k)) p.push(`${w}: unknown behaviour '${k}'${suggest(k, CREATURE_BEHAVIOURS) ? ` — did you mean '${suggest(k, CREATURE_BEHAVIOURS)}'?` : ''}`);
-  if (!Array.isArray(x.colors) || x.colors.some((col) => !COLOR.test(col))) p.push(`${w}: "colors" must be #rrggbb strings`);
-}
 
 /** deep merge: objects merge key by key, arrays concatenate (deduplicated), scalars replace */
 function mergeLexicon(into: Record<string, unknown>, add: Record<string, unknown>): void {
@@ -1475,13 +1526,11 @@ function crossCheckGod(c: Content, problems: string[]): void {
       if (typeof e.material === 'string' && !['soil', 'sand', 'snow', 'ash', 'ice', 'rock', 'lava'].includes(e.material)) problems.push(`disaster '${d.id}': material '${e.material}' is not a terrain material`);
     }
   }
-  for (const cr of c.creatures.list) for (const a of cr.animals ?? []) if (!c.animals.has(a)) problems.push(ref('creature', cr.id, 'animals', a, c.animals));
   for (const pw of c.powers.list) {
     // a disaster power must name a known disaster; a weather power a known weather kind
     const kind = pw.params?.kind;
     if (pw.command === 'disaster.spawn' && typeof kind === 'string' && kind !== 'random' && !c.disasters.has(kind)) problems.push(ref('power', pw.id, 'params.kind', kind, c.disasters));
     if ((pw.command === 'weather.paint' || pw.command === 'weather.global') && typeof kind === 'string' && kind !== 'none' && !c.weather.has(kind)) problems.push(ref('power', pw.id, 'params.kind', kind, c.weather));
-    if (pw.command === 'creature.adopt' && typeof pw.params?.template === 'string' && !c.creatures.has(pw.params.template)) problems.push(ref('power', pw.id, 'params.template', pw.params.template as string, c.creatures));
   }
 }
 

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
-import type { FromWorker, Snapshot, ToWorker } from '../src/sim/types.ts';
+import { TICKS_PER_SECOND_1X, type FromWorker, type Snapshot, type ToWorker } from '../src/sim/types.ts';
 
 class Client {
   readonly w: Worker;
@@ -85,12 +85,13 @@ test('worker protocol round trip', async () => {
     assert.ok(loaded.ok, loaded.msg);
     const hashAfter = await c.call<{ type: 'answer'; id: number; data: string }>({ type: 'query', id: 9, q: 'hash' });
     assert.equal(hashAfter.data, hashBefore.data);
-    // run at speed: ticks advance on their own, and the achieved multiplier is measured
-    c.send({ type: 'speed', speed: 100 });
+    // run at speed: ticks advance on their own, and the achieved multiplier is measured (LIVING PACE: 1000x = 1 000 ticks
+    // a second, the pace this step always ran at — the old 100x)
+    c.send({ type: 'speed', speed: 1000 / TICKS_PER_SECOND_1X });
     await new Promise((ok) => setTimeout(ok, 1500));
     const live = await c.snapshot(false);
     assert.ok(live.tick > 300, `paced stepping advanced to ${live.tick}`);
-    assert.ok(live.achievedSpeed > 10, `achieved ${live.achievedSpeed.toFixed(0)}x`);
+    assert.ok(live.achievedSpeed > 100 / TICKS_PER_SECOND_1X, `achieved ${live.achievedSpeed.toFixed(0)}x`);
     assert.ok(live.msPerTick > 0);
     c.send({ type: 'speed', speed: 0 });
     // rewind: the save carried its rewind history, so the loaded world reaches back past the load point (tick 120)
@@ -112,14 +113,16 @@ test('worker protocol round trip', async () => {
   }
 });
 
-test('worker pacing: sleeps when it keeps up (no busy spin at 10x / 100x), answers promptly when it cannot keep up', async () => {
+test('worker pacing: sleeps when it keeps up (no busy spin at 100x / 1000x), answers promptly when it cannot keep up', async () => {
   const c = new Client();
   await c.next((m) => (m as { type: string }).type === '__booted');
   const ready = c.next((m) => m.type === 'ready');
   c.send({ type: 'init', scenario: 'barren', seed: 3, options: { overrides: { n: 16 }, speed: 0 } });
   await ready;
   try {
-    for (const speed of [10, 100]) {
+    // (LIVING PACE: presets are ticks per real second — 100x and 1000x are the 100 and 1 000 ticks a second this test
+    // always ran: the old 10x and 100x)
+    for (const speed of [100, 1000]) {
       c.send({ type: 'speed', speed });
       await new Promise((ok) => setTimeout(ok, 600));
       const s0 = await c.snapshot(false);
@@ -128,7 +131,7 @@ test('worker pacing: sleeps when it keeps up (no busy spin at 10x / 100x), answe
       const u1 = c.w.performance.eventLoopUtilization(u0);
       const s1 = await c.snapshot(false);
       const tps = (s1.tick - s0.tick) / 1.5;
-      assert.ok(tps > 10 * speed * 0.7, `${speed}x runs ${tps.toFixed(0)} ticks/s`);
+      assert.ok(tps > TICKS_PER_SECOND_1X * speed * 0.7, `${speed}x runs ${tps.toFixed(0)} ticks/s`);
       // the barren n=16 sim needs ~1 % of a core here; a self-reposting loop showed 100 %
       assert.ok(u1.utilization < 0.5, `${speed}x: worker busy ${(u1.utilization * 100).toFixed(0)} % of the time`);
     }
@@ -145,6 +148,13 @@ test('worker pacing: sleeps when it keeps up (no busy spin at 10x / 100x), answe
     await new Promise((ok) => setTimeout(ok, 3500));
     const s = await c.snapshot(false);
     assert.equal(s.achievedSpeed, 1, `a steady 1x reads ${s.achievedSpeed}`);
+    // (LIVING PACE) and it IS a tick every real second: 4-5 ticks in 4.5 s. The half-second cap on the debt a wake may
+    // add once made every 1x tick wait a wake and a half (3 ticks in 4.5 s, while the reading said 1x)
+    const t1 = performance.now();
+    await new Promise((ok) => setTimeout(ok, 4500));
+    const s2 = await c.snapshot(false);
+    const secs = (performance.now() - t1) / 1000;
+    assert.ok(s2.tick - s.tick >= Math.floor(secs * 0.9), `1x ran ${s2.tick - s.tick} ticks in ${secs.toFixed(1)} s`);
   } finally {
     await c.w.terminate();
   }

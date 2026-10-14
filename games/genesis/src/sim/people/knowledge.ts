@@ -17,6 +17,8 @@ import { CURIO } from './needs.ts';
 import { tell } from './story.ts';
 import { agentRef, emitAt, emitSt, kName, settlementRef, vars } from './util.ts';
 import { clanOf } from '../chronicle.ts';
+import { inventable, noteLearned, syncEra } from './eras.ts';
+import { histOf } from './politics.ts';
 
 export type LearnHow = 'teach' | 'observe' | 'talk' | 'experiment' | 'accident' | 'reverse' | 'god' | 'upbringing' | 'spawn' | 'hive' | 'book';
 
@@ -96,6 +98,8 @@ export function learn(x: PCtx, s: number, k: number, how: LearnHow, meta: { trig
   A.skills[sk] = Math.min(1, A.skills[sk] + 0.06);
   const st = x.ps.settlement(A.settlement[s]);
   const newToSettlement = st ? libAdd(st, k) : true;
+  // (LIVING HISTORY §5.2: the settlement's practice clock for k starts — people/eras.ts)
+  if (st && newToSettlement && how !== 'spawn' && how !== 'hive') noteLearned(x, st, k);
   const discovered = how === 'experiment' || how === 'accident' || how === 'reverse';
   A.remember(s, discovered ? MEMK.discovered : how === 'teach' ? MEMK.taught : MEMK.learned, x.tick, k);
   if (how !== 'spawn' && how !== 'upbringing' && how !== 'hive') {
@@ -122,13 +126,12 @@ export function learn(x: PCtx, s: number, k: number, how: LearnHow, meta: { trig
     const era = computeEra(x, st);
     if (era > st.era) {
       st.era = era;
-      // each age is announced once per settlement (a lost and regained idea does not begin it again)
+      // each age is announced once per settlement (a lost and regained idea does not begin it again) — by the era LABEL
+      // of what the town can now do ("the copper age", "potters": LIVING HISTORY §5.2, people/eras.ts), not the index
       const key = `era:${ERAS[era]}`;
-      if (st.firsts[key] === undefined) {
-        st.firsts[key] = x.tick;
-        tell(x.u, x.p, 'era', vars(x, st, -1, { era: ERAS[era] }), st, [settlementRef(x, st)]);
-      }
+      if (st.firsts[key] === undefined) st.firsts[key] = x.tick;
     }
+    if (!st.band) syncEra(x, st, histOf(x, st));
   } else if (st && newToSettlement) {
     const era = computeEra(x, st);
     if (era > st.era) st.era = era;
@@ -360,6 +363,8 @@ export function planExperiment(x: PCtx, s: number, st: Settlement, present: (ctx
   // nobody works out how to make a thing from stuff they have never seen: every input must be in the store, in hand
   // or known to be gatherable nearby (thinking alone carried cities from bronze to steam in four years)
   for (let i = _cands.length - 1; i >= 0; i--) if (!inputsSeen(x, s, st, _cands[i].r)) _cands.splice(i, 1);
+  // (LIVING HISTORY §5.2: the next era's ideas only after the era clock's dwell, and only on practised groundwork — eras.ts)
+  for (let i = _cands.length - 1; i >= 0; i--) if (!inventable(x, st, _cands[i].r)) _cands.splice(i, 1);
   if (!_cands.length) return null;
   let total = 0;
   for (const c of _cands) total += c.w;
@@ -413,6 +418,8 @@ export function accident(x: PCtx, st: Settlement, trigger: string, near = -1): n
   for (const k of list) {
     if (libHas(st, k)) continue;
     const r = x.rt.list[k];
+    // (LIVING HISTORY §5.2: an accident of everyday life teaches only what the era clock allows; a wonder opens the next era)
+    if (!inventable(x, st, r, trigger)) continue;
     for (const m of members) {
       if (!A.alive[m] || A.knows(m, k)) continue;
       if (r.species && !r.species.includes(A.species[m])) continue;

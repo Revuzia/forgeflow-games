@@ -35,6 +35,7 @@ import { langDistance, refugees } from './culture.ts';
 import { factionShare } from './social.ts';
 import { ERAS } from '../content.ts';
 import { NEED_N } from './needs.ts';
+import { historyDaily, kinRaided } from './politics.ts';
 
 // ───────────────────────────── polities ─────────────────────────────
 
@@ -268,6 +269,8 @@ export function politicsDaily(x: PCtx): void {
     if (pl.overlord >= 0 && !settlementsOf(x, pl.overlord).length) pl.overlord = -1;
   }
   independence(x);
+  // (LIVING HISTORY §5.1: grievances against the capital, secession, kin raids, border friction; the era clock — politics.ts)
+  historyDaily(x);
   // relations
   for (const r of ps.relations) {
     const as = settlementsOf(x, r.a), bs = settlementsOf(x, r.b);
@@ -486,18 +489,20 @@ function treaties(x: PCtx, r: Relation): void {
   }
 }
 
-/** daughter towns far from their capital, or speaking another tongue, go their own way */
+/**
+ * daughter towns split by a schism, or conquered and never reconciled, go their own way (LIVING HISTORY: distance and a
+ * drifting tongue are no longer a flat daily chance of their own — they weigh in the daughter's grievance against its
+ * capital with tribute, unrelieved famine, feuds and raids: politics.ts)
+ */
 function independence(x: PCtx): void {
   for (const st of x.ps.settlements) {
     if (st.fallen >= 0 || st.band || st.polity === st.id) continue;
     const pl = x.ps.polity(st.polity);
     const cap = pl ? x.ps.settlement(pl.capital) : undefined;
     if (!pl || !cap || cap.fallen >= 0 || cap.id === st.id) { if (pl && pl.capital !== st.id) secede(x, st, pl, ''); continue; }
-    const far = distM(x.p, st.pos, cap.pos) > 1400;
-    const tongue = langDistance(st, cap) > 0.45;
     const schism = st.recent.schism !== undefined;
     const conquered = st.recent.conquered !== undefined && x.tick - st.recent.conquered > 2 * x.year && st.culture.alignment < cap.culture.alignment - 0.2;
-    const p = (far ? 0.01 : 0) + (tongue ? 0.01 : 0) + (schism ? 0.08 : 0) + (conquered ? 0.02 : 0);
+    const p = (schism ? 0.08 : 0) + (conquered ? 0.02 : 0);
     if (p > 0 && hashFloat(st.id, x.tick, 0x1d3) < p) secede(x, st, pl, conquered ? 'revolt' : '');
   }
 }
@@ -661,6 +666,8 @@ function battle(x: PCtx, m: Mission, from: Settlement, to: Settlement, walls: nu
   }
   if (m.kind === 'raid') {
     grieve(x, to.polity, from.polity, 0.35);
+    // (LIVING HISTORY: a raid among kin, inside one polity — politics.ts)
+    if (from.polity === to.polity) kinRaided(x, from, to);
     // a raid is remembered (watch kept, walls raised) and is a lesson in itself: the 'raid' trigger of recipes
     to.recent.raided = x.tick;
     accident(x, to, 'raid', to.cell);

@@ -8,6 +8,9 @@
 //   wrathful    smites unbelievers (lightning, fireball, plague), starts holy wars
 //   trickster   storms, strange weather, gifts and thefts, odd lessons
 //   jealous     smites the faithful of the player most of all, converts with missionaries
+//
+// LIVING §3.6: rivals have original names and epithets ("Vael the Undertow", "Oruk Who Gnaws the Hills"); a rival's
+// revelation gives its first people faith and loyalty as well as trust (god/regard.ts).
 
 import type { CommandRegistry } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
@@ -26,7 +29,17 @@ import { distM } from '../people/world.ts';
 import { fail, ok } from './util.ts';
 
 export const TEMPERAMENTS = ['benevolent', 'wrathful', 'trickster', 'jealous'] as const;
-const NAMES = ['Vael', 'Oruk', 'Seshet', 'Imra', 'Tannu', 'Khoros', 'Lilet', 'Durn'];
+/** LIVING §3.6: original rival names and their epithets (two of the old names were real deities') */
+export const RIVAL_NAMES: [string, string][] = [
+  ['Vael', 'the Undertow'], ['Oruk', 'Who Gnaws the Hills'], ['Tannu', 'of the Long Dry'], ['Lilet', 'the Lamplighter'],
+  ['Durn', 'the Unsleeping'], ['Asho', 'Many-Voices'], ['Corrin', 'of the Thaw'], ['Pell', 'the Gleaner'],
+];
+
+/** a god's full title ("Vael the Undertow") */
+export function godTitle(g: GodRecord | undefined): string {
+  if (!g) return 'a god';
+  return g.epithet ? `${g.name} ${g.epithet}` : g.name;
+}
 const COLORS = [0x8fd6ff, 0xff6a4a, 0xb48cff, 0x7be08a];
 
 /** settlements on a planet that hold god g (dominant) */
@@ -51,7 +64,7 @@ export function rivalsStep(u: Universe, reg: CommandRegistry): void {
     const res = reg.dispatch(u, { ...cmd, god: g.id, planet: p.id });
     if (res.ok) {
       g.acts++;
-      u.emit({ t: 'rival.act', planet: p.id, text: res.msg, data: { god: g.id, name: g.name, k: cmd.k } });
+      u.emit({ t: 'rival.act', planet: p.id, text: res.msg, data: { god: g.id, name: g.name, title: godTitle(g), k: cmd.k } });
     }
   }
 }
@@ -114,8 +127,8 @@ export function faithDaily(u: Universe, p: Planet): void {
     const before = u.god.lastGod[key];
     u.god.lastGod[key] = st.god;
     if (before === undefined || before === st.god || !rivals) continue;
-    const from = before >= 0 ? u.god.god(before)?.name ?? 'an old god' : 'no god';
-    const to = st.god >= 0 ? u.god.god(st.god)?.name ?? 'a new god' : 'no god at all';
+    const from = before === 0 ? 'you' : before > 0 ? godTitle(u.god.god(before)) : 'no god';
+    const to = st.god === 0 ? 'you' : st.god > 0 ? godTitle(u.god.god(st.god)) : 'no god at all';
     const text = st.god === 0 ? `${st.name} turned from ${from} to you.` : before === 0 ? `${st.name} turned away from you, to ${to}.` : `${st.name} turned from ${from} to ${to}.`;
     tell(u, p, 'conversion', vars(x, st, -1, { god: to, text }), st, [settlementRef(x, st)], 2);
     u.emit({ t: 'conversion', planet: p.id, pos: [...st.pos], a: before, b: st.god, ref: settlementRef(x, st), data: { from: before, to: st.god } });
@@ -137,7 +150,10 @@ export function registerRivalCommands(r: CommandRegistry): void {
     for (let k = 1; k < GODS; k++) if (!used.has(k)) { id = k; break; }
     if (id < 0) return fail(`There can be at most ${GODS - 1} rival gods at once (remove one first).`);
     const temperament = String(a.temperament ?? TEMPERAMENTS[Math.floor(hashFloat(u.tick, id, 0x7e3) * TEMPERAMENTS.length)]);
-    const name = (typeof a.name === 'string' && a.name.trim()) ? a.name.trim().slice(0, 24) : NAMES[(id * 3 + u.tick) % NAMES.length];
+    const pick = RIVAL_NAMES[(id * 3 + u.tick) % RIVAL_NAMES.length];
+    const named = typeof a.name === 'string' && a.name.trim();
+    const name = named ? (a.name as string).trim().slice(0, 24) : pick[0];
+    const epithet = named ? undefined : pick[1];
     // its first people: the settlement named, else the one least devoted to you
     const sts = (p.people?.settlements ?? []).filter((s) => s.fallen < 0 && !s.band);
     let home: Settlement | undefined;
@@ -147,28 +163,33 @@ export function registerRivalCommands(r: CommandRegistry): void {
     const align = typeof a.alignment === 'number' ? a.alignment : temperament === 'benevolent' ? 0.6 : temperament === 'trickster' ? 0 : -0.5;
     const rec: GodRecord = {
       id, name, kind: 'rival', alignment: align, temperament, home: { planet: p.id, settlement: home?.id ?? -1 }, nextAct: u.tick + 30,
-      acts: 0, help: 0, harm: 0, wonder: 0, color: COLORS[id % COLORS.length], alive: true,
+      acts: 0, help: 0, harm: 0, wonder: 0, color: COLORS[id % COLORS.length], alive: true, ...(epithet ? { epithet } : {}),
     };
+    const title = godTitle(rec);
     u.god.gods = u.god.gods.filter((g) => g.id !== id);
     u.god.gods.push(rec);
     u.god.gods.sort((q, w) => q.id - w.id);
     // a revelation in its home: the people there come to know it
     if (home && p.people) {
       const x = makeCtx(u, p);
-      for (const m of x.ps.members.get(home.id) ?? []) x.A.love[m * GODS + id] = Math.min(1, x.A.love[m * GODS + id] + 0.35);
-      tell(u, p, 'rival.arrives', vars(x, home, -1, { god: name, text: `A new god, ${name} the ${temperament}, spoke to the people of ${home.name}.` }), home, [settlementRef(x, home)], 3);
-    } else u.chronicleAdd(p, 'god', `A new god, ${name} the ${temperament}, stirred in the sky of ${p.name}.`, 3);
-    return ok(`${name}, a ${temperament} god, now walks ${p.name}${home ? ` (worshipped first at ${home.name})` : ''}.`);
+      for (const m of x.ps.members.get(home.id) ?? []) {
+        x.A.love[m * GODS + id] = Math.min(1, x.A.love[m * GODS + id] + 0.35);
+        x.A.faith[m * GODS + id] = Math.min(1, x.A.faith[m * GODS + id] + 0.4);
+        x.A.loyalty[m * GODS + id] = Math.min(1, x.A.loyalty[m * GODS + id] + 0.2);
+      }
+      tell(u, p, 'rival.arrives', vars(x, home, -1, { god: title, text: `A new god, ${title}, spoke to the people of ${home.name}.` }), home, [settlementRef(x, home)], 3);
+    } else u.chronicleAdd(p, 'god', `A new god, ${title}, stirred in the sky of ${p.name}.`, 3);
+    return ok(`${title}, a ${temperament} god, now walks ${p.name}${home ? ` (worshipped first at ${home.name})` : ''}.`);
   }, {
     desc: 'Add a rival god', category: 'Laws',
     params: { name: { type: 'string' }, temperament: { type: 'enum', values: [...TEMPERAMENTS] }, alignment: { type: 'number', min: -1, max: 1 }, settlement: { type: 'any' } },
   });
   r.register('rival.remove', ({ u, p }, a) => {
-    const g = typeof a.id === 'number' ? u.god.god(a.id) : typeof a.name === 'string' ? u.god.gods.find((q) => q.name.toLowerCase() === String(a.name).toLowerCase()) : u.god.gods.find((q) => q.kind === 'rival' && q.alive);
+    const g = typeof a.id === 'number' ? u.god.god(a.id) : typeof a.name === 'string' ? u.god.gods.find((q) => q.name.toLowerCase() === String(a.name).toLowerCase() || godTitle(q).toLowerCase() === String(a.name).toLowerCase()) : u.god.gods.find((q) => q.kind === 'rival' && q.alive);
     if (!g || g.kind !== 'rival' || !g.alive) return fail('There is no such rival god.');
     g.alive = false;
     u.god.disciples = u.god.disciples.filter((d) => d.god !== g.id);
-    u.chronicleAdd(p, 'god', `${g.name} fell silent and was forgotten by degrees.`, 2);
-    return ok(`${g.name} is gone; those who loved it will forget in time.`);
+    u.chronicleAdd(p, 'god', `${godTitle(g)} fell silent and was forgotten by degrees.`, 2);
+    return ok(`${godTitle(g)} is gone; those who loved it will forget in time.`);
   }, { desc: 'Remove a rival god', category: 'Laws', params: { id: { type: 'int', min: 1, max: GODS - 1 }, name: { type: 'string' } } });
 }

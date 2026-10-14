@@ -1,6 +1,6 @@
 // GENESIS — the god layer's laws in the parameter registry (CONTRACT.md §11.7): every tunable god number by path, so
-// `set <path> <value>`, the freeform parser and the "Laws of this world" inspector reach them: belief, creatures, the
-// hand, rivals, restraint, miracles, disasters (also per world: world.disasters / world.harm), the light of a world,
+// `set <path> <value>`, the freeform parser and the "Laws of this world" inspector reach them: belief, the god's wrath
+// (LIVING §3.7), the Touch, rivals, restraint, miracles, disasters (also per world: world.disasters / world.harm), the light of a world,
 // its orbit's inclination, its look, and every species' parameters (species.<id>.fertility, .lifespan, .speed, .size,
 // .maturity, .elder, .swim) — species laws are content (god/runtime.ts) so the peoples' own tables follow at once.
 
@@ -67,9 +67,12 @@ export function registerGodParams(): void {
     law('disasters.harm', 'Disaster harm', '×', 10, 'How much disasters hurt and wreck.', ['disaster harm']),
     law('belief.gain', 'Belief gain', '×', 10, 'How strongly people answer what the gods do.', ['belief gain', 'faith gain']),
     law('belief.decay', 'Belief decay', '×', 10, 'How fast neglected faith fades.', ['faith decay']),
-    law('creature.learning', 'Creature learning', '×', 10, 'How fast creatures learn from rewards, slaps and watching.', ['creature learning']),
-    law('creature.growth', 'Creature growth', '×', 50, 'How fast creatures grow.', ['creature growth']),
-    law('hand.strength', 'Hand strength', '×', 20, 'How hard the hand throws.', ['throw strength', 'hand strength']),
+    {
+      // LIVING §3.7: survivable by default — 0 gentle (a tenth of the harm) .. 0.3 (default) .. 1 today's full lethality
+      ...law('god.wrath', 'Wrath', '', 1, 'How hard the god\'s harm falls: 0 gentle, 0.3 survivable (the default), 1 total destruction.', ['wrath', 'the wrath', 'god wrath', 'anger', 'severity']),
+      set: (u: Universe, _p: Planet, v: number | boolean | string | null) => { const w = Math.max(0, Math.min(1, Number(v))); u.god.laws['god.wrath'] = w; return `Wrath: ${fmt(w)} — ${w <= 0.15 ? 'gentle' : w <= 0.45 ? 'survivable' : w < 0.95 ? 'severe' : 'total destruction allowed'}.`; },
+    } as ParamDef,
+    law('hand.strength', 'Strength of the Touch', '×', 20, 'How hard the Touch hurls what it lifts.', ['throw strength', 'hand strength', 'touch strength']),
     law('rivals.activity', 'Rival activity', '×', 20, 'How often rival gods act.', ['rival activity']),
     law('restraint.costScale', 'Restraint costs', '×', 20, 'Worship costs of powers in restraint mode.', ['restraint cost']),
     law('miracles.potency', 'Miracle potency', '×', 10, 'How strong miracles are.', ['miracle strength', 'miracle potency']),

@@ -14,8 +14,9 @@
 // Snow melt and freezing run inside the hourly climate pass (temperature only changes hourly).
 //
 // Time-lapse (SIM perf push 2, perf/lapse.ts): the speed preset is a LOGGED input (`time.scale`, issued by the worker
-// when the preset changes level; saved in settings.lapse, replayed by rewind). Level 0 (1x, 10x) is exactly the above.
-// Level 1 (100x) / 2 (1000x): climate every 120 / 360 ticks and vegetation every 120 / 480 (each pass integrates the
+// when the preset changes level; saved in settings.lapse, replayed by rewind). Level 0 (LIVING PACE: the presets 1x–300x,
+// in ticks per real second — the old 1x / 10x) is exactly the above.
+// Level 1 (1000x; the old 100x) / 2 (3000x; the old 1000x): climate every 120 / 360 ticks and vegetation every 120 / 480 (each pass integrates the
 // hours it stands for; the climate steps its energy balance hour by hour under each hour's sun), weather systems and
 // rain batches every 20 / 30, hydrology every 2 / 4 — 4 only while the sea is calm (same per-step gain, half the
 // per-step friction: same steady discharge; with waves on the sea, 2 as at 1x), thin overland sheet flow every 4 / 8
@@ -69,10 +70,14 @@ import { peopleStep } from './people/people.ts';
 import { agentBlock, animalBlock, buildingBlock, populationBySpecies, settlementViews } from './people/snapshot.ts';
 import { peopleQuery, PEOPLE_QUERIES } from './people/query.ts';
 import { KEYFRAME_MULT, LAPSE_BIOME, LAPSE_CLIMATE, LAPSE_HYDRO, LAPSE_TERRAIN, LAPSE_VEG, LAPSE_WEATHER, lapseDue, lapseLevel, registerTimeScale } from './perf/lapse.ts';
+import { paceQuery } from './perf/pace.ts'; // LIVING PACE: what a speed preset means in real time
 // the god layer (phase 3): its step, its snapshot parts, its save state, the time controls (god/index.ts)
 import { godTick, godSnapPlanet, godSnapGlobal, godRestore, godQuery, GOD_QUERIES, installSimControls, runControl, controlRequested } from './god/index.ts';
+import { terraformStep } from './god/history.ts';
+import { relAfterLoad } from './god/regard.ts';
 import { validatePowers } from './god/powers.ts';
 import { rebuildContent } from './god/runtime.ts';
+import { contentAfterLoad, contentIdsOf } from './life/fauna.ts';
 import { ContentError } from './content.ts';
 // worlds and space (phase 4): ships, contact, colonies across worlds (space/index.ts)
 import { spaceTick, shipViews, spaceQuery, SPACE_QUERIES } from './space/index.ts';
@@ -292,7 +297,9 @@ export class Sim {
     const added: string[] = [];
     for (const [k, v] of Object.entries(pack)) if (Array.isArray(v) && v.length && !k.startsWith('$')) added.push(`${v.length} ${k}`);
     this.u.chronicleAdd(null, 'god', `New things came into the world: ${pack.name ?? pack.id}.`, 1);
-    return { ok: true, msg: `Mod '${pack.name ?? pack.id}' is part of this world now (${added.join(', ') || 'words'}).`, tick: this.u.tick };
+    // (LIVING §3.5: a pack's creatures are ignored — say so)
+    const warn = (next.warnings ?? []).filter((w) => w.startsWith(`${pack.id}:`));
+    return { ok: true, msg: `Mod '${pack.name ?? pack.id}' is part of this world now (${added.filter((a) => !/creatures$/.test(a)).join(', ') || 'words'}).${warn.length ? ` ${warn.join(' ')}` : ''}`, tick: this.u.tick };
   }
 
   drainEvents(): SimEvent[] {
@@ -335,7 +342,7 @@ export class Sim {
     const chronicle = drain ? u.chronicle.slice(this.chronicleSent) : [];
     if (drain) this.chronicleSent = u.chronicle.length;
     return {
-      tick: u.tick, speed: this.speed, achievedSpeed: this.achievedSpeed, star: starView(u.star), planets,
+      tick: u.tick, speed: this.speed, achievedSpeed: this.achievedSpeed, lapseLevel: lapseLevel(u), star: starView(u.star), planets,
       ships: shipViews(u), ...godSnapGlobal(u), events, chronicle, content: this.content.packs, msPerTick: this.msPerTick,
       restraint: u.settings.restraint, worship: worshipPool(u),
     };
@@ -377,7 +384,8 @@ export class Sim {
     for (const p of this.u.planets) for (const [name, arr] of planetArrays(p)) w.blob(`p${p.id}.${name}`, arr);
     // the rewind ring goes with it (history.ts): a loaded world can still be rewound and its past edited
     const history = writeHistory(w, trimHistory(this.historyForSave()));
-    return w.finish({ ...this.header(true), ...(history.length ? { history } : {}) });
+    // (LIVING CONTENT §4.4: each registry's id list, so a later build that appends content remaps by id — life/fauna.ts)
+    return w.finish({ ...this.header(true), contentIds: contentIdsOf(this.u.content), ...(history.length ? { history } : {}) });
   }
 
   /** the rewind ring as a save keeps it: older keyframes as they are, the newest encoded against the live arrays */
@@ -645,11 +653,13 @@ export class Sim {
         return this.content.stars.list;
       case 'hash':
         return this.hash();
+      case 'pace':
+        return paceQuery(u, this.speed, p);
       default:
         if (GOD_QUERIES.includes(q)) return godQuery(u, q, args); // powers, gestures, gods, creatures, disasters (god/index.ts)
         if (SPACE_QUERIES.includes(q)) return spaceQuery(u, q, args); // ships, a ship, the sky, the chain (space/index.ts)
         if (PEOPLE_QUERIES.includes(q)) return p ? peopleQuery(u, p, q, args) : null;
-        return { error: `unknown query '${q}'`, known: ['cell', 'planet', 'planets', 'params', 'commands', 'chronicle', 'scenario', 'weather', 'plants', 'biomes', 'stars', 'hash', ...PEOPLE_QUERIES, ...GOD_QUERIES, ...SPACE_QUERIES] };
+        return { error: `unknown query '${q}'`, known: ['cell', 'planet', 'planets', 'params', 'commands', 'chronicle', 'scenario', 'weather', 'plants', 'biomes', 'stars', 'hash', 'pace', ...PEOPLE_QUERIES, ...GOD_QUERIES, ...SPACE_QUERIES] };
     }
   }
 }
@@ -715,6 +725,8 @@ export function runPlanet(u: Universe, p: Planet, t: number): void {
   const dtB = lapseDue(u, p, LAPSE_BIOME, ts, 360); // (daily at 1000x)
   if (dtB) biomeStep(u, p, dtB / BIOME_CADENCE);
   peopleStep(u, p, t);
+  // (LIVING HISTORY: a world being terraformed moves on to its next stage when its time comes — god/history.ts)
+  if (p.st.terraform && p.st.terraform.stage < 4 && ts % 60 === 37) terraformStep(u, p);
 }
 
 /** a Float32 copy of a published field (ice = ground ice + floating ice) */
@@ -752,6 +764,8 @@ function universeFromHeader(content: Content, h: Record<string, unknown>, blobs:
   }
   // transient people indices (time wheel, buckets, members) rebuilt at the restored tick
   for (const p of u.planets) { p.people.contentRef = u.content; p.people.reindex(u.tick); }
+  relAfterLoad(u, blobs); // (LIVING RELATIONSHIP: a save before 1.5 has no faith / loyalty columns — god/regard.ts)
+  if (withLog) contentAfterLoad(u, h); // (LIVING CONTENT: indices that moved since the save was made — life/fauna.ts)
   // the restored stamp must stay above every field version
   let maxVer = u.stamp;
   for (const p of u.planets) for (const v of Object.values(p.fieldVer)) if (v > maxVer) maxVer = v;
@@ -835,7 +849,7 @@ export function replacedIds(c: Content, pack: ContentPack): string[] {
   const regs: Record<string, { has(id: string): boolean }> = {
     plants: c.plants, weather: c.weather, biomes: c.biomes, stars: c.stars, planetkinds: c.planetkinds, ores: c.ores, scenarios: c.scenarios,
     species: c.species, items: c.items, recipes: c.recipes, buildings: c.buildings, materials: c.materials, animals: c.animals, diseases: c.diseases,
-    phonologies: c.phonologies, names: c.phonologies, events: c.events, powers: c.powers, disasters: c.disasters, creatures: c.creatures, ships: c.ships,
+    phonologies: c.phonologies, names: c.phonologies, events: c.events, powers: c.powers, disasters: c.disasters, ships: c.ships,
   };
   const out: string[] = [];
   for (const [sec, reg] of Object.entries(regs)) {

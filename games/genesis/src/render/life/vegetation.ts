@@ -36,6 +36,7 @@ import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from '../planet/lights.ts';
 import { MOON_PARS, moonDirect } from '../shaders/moon.glsl.ts';
+import { GOD_WIND } from '../camera/avatar.ts';
 
 const KINDS: TreeKind[] = TREE_KINDS;
 const K = (k: TreeKind): number => KINDS.indexOf(k);
@@ -106,6 +107,7 @@ varying float vCrownIn;       // 1 when the camera is inside this tree's crown (
 varying vec2 vNearFade;       // foliage nearer the camera than x is gone, fading out to y (m): further up in the trees
 uniform float uTime;
 uniform vec3 uWindDir;
+uniform vec4 uGodWind;        // (additive, ships/cameras lane) the walking god's feet (body frame) and its wind's strength
 uniform vec3 uCamBody;
 uniform vec2 uFade;          // (start, end) of the hand-over band, metres from the camera
 varying vec3 vBodyPos;
@@ -192,6 +194,20 @@ const VEG_WIND = /* glsl */ `
     vec3 wl = vec3(dot(uWindDir, vec3(1.0, 0.0, 0.0)), 0.0, dot(uWindDir, vec3(0.0, 0.0, 1.0)));
     // the trees lean a little with the wind and sway more the stronger it blows (leaves flutter on top)
     transformed += (wl * (sway + 0.6 * (uWindK - 0.5)) * 0.035 * uWindK + vec3(sin(uTime * 4.1 + ph * 3.0 + position.y * 9.0), 0.0, cos(uTime * 3.7 + ph * 2.0)) * 0.006 * uWindK) * aWind * aWind;
+    // the god's wind round its body (camera/avatar.ts GOD_WIND): grass and low growth bow away from its feet in a slow
+    // ripple running outward (the push turned into the instance's own frame: its basis is a rotation times a scale)
+    if (uGodWind.w > 0.0) {
+      vec3 gd = ip - uGodWind.xyz;
+      vec3 gup = normalize(ip);
+      gd -= gup * dot(gd, gup);
+      float gl = length(gd);
+      if (gl < 7.0 && gl > 1e-3) {
+        float gk = uGodWind.w * (1.0 - gl / 7.0) * (1.0 - gl / 7.0) * (0.65 + 0.35 * sin(uTime * 5.0 - gl * 1.6 + ph));
+        mat3 ib = mat3(instanceMatrix);
+        float sc2 = max(dot(ib[1], ib[1]), 1e-6);
+        transformed += (transpose(ib) * (gd / gl)) / sc2 * gk * 0.22 * aWind * aWind;
+      }
+    }
     vExtra = iExtra;
     vLocalP = position;
     // the camera inside (or brushing) a tree's crown: its foliage fades out, rather than filling half the frame with
@@ -289,6 +305,7 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
     shader.uniforms.uLeafTex = leafTex;
     shader.uniforms.uWindK = WIND_K;
     shader.uniforms.uLodBand = LOD_BAND;
+    shader.uniforms.uGodWind = GOD_WIND;
     shader.vertexShader = shader.vertexShader
       .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VEG_VERT_PARS}\n${VEG_VERT_CLOUD}`)
       .replace('#include <begin_vertex>', VEG_WIND)
@@ -444,7 +461,7 @@ export class Vegetation {
     this.group.matrixAutoUpdate = false;
     const leafTex: IUniform = { value: leafClusterTexture() };
     this.material = makeVegMaterial(shared, this.fade, leafTex);
-    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND };
+    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND };
     for (let k = 0; k < KINDS.length; k++) {
       for (let v = 0; v < VARIANTS; v++) {
         for (let l = 0; l < LODS; l++) {

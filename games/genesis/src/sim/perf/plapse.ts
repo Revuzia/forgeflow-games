@@ -67,6 +67,7 @@ import { distM, spotInCell, stepFactor, sunElevation, ticksUntilSun, walkSpeed }
 import { FOOD, NEED_N, REST, WATER, lastStress } from '../people/needs.ts';
 import { wearRoad } from '../people/roads.ts';
 import { planetLevel } from './lapse.ts';
+import { foodSessionsLeft } from './pace.ts';
 
 /** most sessions a stretched task stands for, per level (lapse.ts planetLevel: 3 = a world the camera is not on) */
 export const STRETCH: readonly [number, number, number, number] = [1, 2, 4, 4];
@@ -107,7 +108,7 @@ function level(x: PCtx): number {
  * per session for the round trip home), 0 = not stretched (always at level 0). `t` is the TaskSpec (farm: only
  * tending, data2 1, repeats — sowing and harvest are once-only errands).
  */
-export function stretchFor(x: PCtx, s: number, t: { kind: number; data2?: number; goal: number[] | null; work: number }): number {
+export function stretchFor(x: PCtx, s: number, t: { kind: number; data?: number; data2?: number; goal: number[] | null; work: number }): number {
   // (round 2: the decision's rivals — decide.ts noteRivals — are read once, by the task they were noted for)
   const rv = rival.ticks;
   rival.ticks = Infinity;
@@ -142,9 +143,16 @@ export function stretchFor(x: PCtx, s: number, t: { kind: number; data2?: number
   const v = BASE_WALK * sp.def.speed * 0.8;
   const w0 = t.goal ? distM(x.p, _p, t.goal) / v : 0;
   let e = 0;
-  if (CARRY[kind] && t.goal) { storeIn(cx, st, _sp); e = Math.min(4000, Math.round((2 * distM(x.p, t.goal, _sp)) / v) + 10); }
+  // (LIVING PACE: a provisioned worker — out for the day, or on a trip with a camp — works its sessions back to back and
+  // carries the loads home together: no trip home between them — perf/pace.ts)
+  if (CARRY[kind] && t.goal && !(A.trip[s] > x.tick)) { storeIn(cx, st, _sp); e = Math.min(4000, Math.round((2 * distM(x.p, t.goal, _sp)) / v) + 10); }
   let k = Math.floor((budget - w0 + e) / (w + e));
   if (k > STRETCH[lv]) k = STRETCH[lv];
+  // (LIVING PACE: no more sessions of food work than the working day has left — perf/pace.ts FOOD_SESSIONS)
+  if (kind === TASK.fish || (t.data !== undefined && t.data >= 0 && CARRY[kind] && kind !== TASK.hunt && (x.c.items.list[t.data]?.food ?? 0) > 0)) {
+    const left = foodSessionsLeft(x, s, st);
+    if (k > left) k = left;
+  }
   return k > 1 ? k + 16 * e : 0;
 }
 

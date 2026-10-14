@@ -14,7 +14,7 @@ import type { PCtx } from './ctx.ts';
 import type { Mission, Settlement } from './state.ts';
 import { AgentFlag } from '../types.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
-import { DEATH, INV, MEMK, NT, ROLE, TRAIT } from './defs.ts';
+import { BASE_WALK, DEATH, INV, MEMK, NT, ROLE, TRAIT } from './defs.ts';
 import { foodDays, storeAdd, storeHas, storeTake } from './store.ts';
 import { cohortTotal } from './cohorts.ts';
 import { accident, learn, isTaboo, libraryEffect } from './knowledge.ts';
@@ -25,6 +25,12 @@ import { distM } from './world.ts';
 import { die } from './lifecycle.ts';
 import { newMission, routeBetween, volunteers, bestBoat } from './missions.ts';
 import { atWar, grieve, relationOf, polityOf, strategicItem } from './war.ts';
+
+/**
+ * LIVING PACE: a caravan's reach, in game minutes of walking (2 250 min = 37.5 h on the road: about three days of a
+ * caravan's walking; 4 500 m at BASE_WALK 2 m per minute, the reach this code had before the living-world program)
+ */
+const CARAVAN_WALK = 2250;
 
 // ───────────────────────────── prices ─────────────────────────────
 
@@ -98,6 +104,20 @@ export function demandOf(x: PCtx, st: Settlement, out = new Float64Array(x.c.ite
 
 const _dem = new Float64Array(512);
 
+/**
+ * A varied table: people want some of each food they eat, not only enough food. All food used to be one need, so two
+ * neighbours that both lived well off the land had nothing to trade — two iron-age towns 650 m apart, one with 550 rice
+ * and 180 fish, the other with 450 maize and 160 bread but 6 fish, stopped trading altogether (and without the caravans
+ * their opinions of each other sank). Now a food a settlement holds little of is dearer there and wanted up to VARIETY
+ * units a head; one it holds in abundance is cheaper; hunger still comes first (foodScarcity, deficit).
+ */
+const VARIETY = 2;
+function varietyPremium(P: number, have: number): number {
+  const want = P * VARIETY;
+  if (have < want) return 1 + 0.6 * (1 - have / want);
+  return have > want * 4 ? 0.8 : 1;
+}
+
 /** local prices (value units per unit): scarcity against demand; food as one need; what they cannot make costs more */
 export function pricesOf(x: PCtx, st: Settlement, out = new Float64Array(x.c.items.size)): Float64Array {
   const dem = demandOf(x, st, _dem.length >= x.c.items.size ? _dem.subarray(0, x.c.items.size) : new Float64Array(x.c.items.size));
@@ -107,7 +127,7 @@ export function pricesOf(x: PCtx, st: Settlement, out = new Float64Array(x.c.ite
   for (let i = 0; i < out.length; i++) {
     const it = x.c.items.list[i];
     const v = Math.max(0.02, it.value);
-    if (sp.edible[i] > 0) { out[i] = v * foodScarcity; continue; }
+    if (sp.edible[i] > 0) { out[i] = v * foodScarcity * varietyPremium(P, st.store[i] ?? 0); continue; }
     const stock = st.store[i] ?? 0;
     let p = Math.min(5, Math.max(0.25, Math.pow((dem[i] + 1) / (stock + 1), 0.7)));
     if (!canMake(x, st, i)) p *= 1.25;
@@ -127,14 +147,16 @@ export function canMake(x: PCtx, st: Settlement, it: number): boolean {
 function surplus(x: PCtx, st: Settlement, i: number, dem: Float64Array, foodSpare: number): number {
   const have = st.store[i] ?? 0;
   if (have <= 0) return 0;
-  if (x.info[st.species].edible[i] > 0) return Math.max(0, Math.min(have * 0.5, foodSpare / Math.max(0.05, x.info[st.species].edible[i])));
+  // (food: what is spare of the whole table, keeping a varied store of each kind at home)
+  if (x.info[st.species].edible[i] > 0) return Math.max(0, Math.min(have * 0.5, have - Math.max(1, popOf(x, st)) * VARIETY, foodSpare / Math.max(0.05, x.info[st.species].edible[i])));
   if (x.c.items.list[i].tags.includes('vehicle')) return 0;
   return Math.max(0, have - dem[i] * 1.2 - 1);
 }
 
 /** how much a settlement lacks of an item (units below its demand; food by days) */
 function deficit(x: PCtx, st: Settlement, i: number, dem: Float64Array, foodLack: number): number {
-  if (x.info[st.species].edible[i] > 0) return foodLack / Math.max(0.05, x.info[st.species].edible[i]);
+  // (food: the hunger, and a varied store of each kind they eat)
+  if (x.info[st.species].edible[i] > 0) return foodLack / Math.max(0.05, x.info[st.species].edible[i]) + Math.max(0, Math.max(1, popOf(x, st)) * VARIETY - (st.store[i] ?? 0));
   return Math.max(0, dem[i] - (st.store[i] ?? 0));
 }
 
@@ -248,9 +270,9 @@ export function planTrade(x: PCtx, st: Settlement): Mission | null {
     if (atWarWith(x, st, o)) continue;
     const rel = relationOf(x, st.polity, o.polity);
     if (rel && rel.op[rel.a === st.polity ? 0 : 1] < -0.35) continue;
-    // a caravan walks ~15 m an hour: beyond a few days' walk (or sail) it is not worth the road
+    // beyond a few days' walk (or sail) it is not worth the road (LIVING.md §1.3 rule 5: CARAVAN_WALK at BASE_WALK)
     const d = distM(x.p, st.pos, o.pos);
-    if (d > 4500) continue;
+    if (d > CARAVAN_WALK * BASE_WALK) continue;
     if (!own) own = { pa: pricesOf(x, st), da: demandOf(x, st) };
     const plan = tradePlan(x, st, o, cap, own);
     // the way there costs: far trips need more to be worth it; a market at the other end draws trade

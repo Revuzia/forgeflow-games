@@ -1,10 +1,11 @@
-// GENESIS — the hand (CONTRACT.md §11.4): one per god, a sim entity with a position (the client sends the cursor's
-// ground point with hand.move), what it holds and a pose. It grabs ANYTHING: a person, an animal out of a herd, a tree
-// out of a forest, a boulder out of the ground, an item lying about (or one conjured into the palm), a small building
-// off its foundations, the creature (if it lets you). It lets go with a velocity — the thing flies a ballistic arc
-// under the planet's gravity (projectiles.ts) and lands with consequences: hurt, crater, splash, a gift in a store (which
-// may be refused). It sets things down gently (place), drops them, SLAPS (hurts a person, punishes the creature, cracks
-// a wall) and STROKES (comforts and heals a little, rewards the creature). Everything it does is witnessed.
+// GENESIS — the Touch (CONTRACT.md §11.4; LIVING.md §3.6: the god's presence, drawn by the art team as light and
+// weather — internally still `hand.*`): one per god, a sim entity with a position (the client sends the cursor's ground
+// point with hand.move), what it holds and a pose. It LIFTS anything: a person, an animal out of a herd, a tree out of a
+// forest, a boulder out of the ground, an item lying about (or one conjured into it), a small building off its
+// foundations. It lets go with a velocity — HURLS — and the thing flies a ballistic arc under the planet's gravity
+// (projectiles.ts) and lands with consequences: hurt, crater, splash, a gift in a store (which may be refused). It sets
+// things down gently, drops them, REBUKES (hurts a person, cracks a wall) and SOOTHES (comforts and heals a little).
+// Everything it does is witnessed. Its look follows how the people see the god: `HandView.regard` (god/regard.ts).
 
 import type { CommandRegistry, ParamSchema, Args } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
@@ -24,7 +25,7 @@ import { distM } from '../people/world.ts';
 import { herdPos, reindexHerds, animalDef } from '../life/herds.ts';
 import { launch } from './projectiles.ts';
 import { godAct } from './belief.ts';
-import { rewardCreature, punishCreature } from './creature.ts';
+import { regardOf } from './regard.ts';
 import { actor, cellPos3, fail, frame, herePos, norm, ok, r3, tangent } from './util.ts';
 
 /** the hand of a god on a planet (made on first use) */
@@ -50,7 +51,6 @@ export function heldRef(h: HandState): EntityRef | null {
   if (!pl) return null;
   switch (pl.kind) {
     case 'agent': return { kind: 'agent', id: pl.id, planet: h.planet };
-    case 'creature': return { kind: 'creature', id: pl.id, planet: h.planet };
     case 'building': return { kind: 'building', id: pl.b.id, planet: h.planet };
     case 'animal': return { kind: 'animal', id: pl.herd, planet: h.planet };
     case 'tree': return { kind: 'tree', id: pl.species, planet: h.planet };
@@ -63,12 +63,14 @@ export function handView(u: Universe): HandView | null {
   const h = u.god.hand(0);
   const p = h ? u.planet(h.planet) : u.planetFor(undefined);
   if (!p) return null;
-  const g = u.god.god(0);
+  // LIVING §3.6: the Touch looks as the people see the god (−1 feared … +1 trusted); `alignment` carries the same value
+  // until the client reads `regard`
+  const regard = regardOf(u, 0);
   if (!h) {
     const pos = herePos(u, p);
-    return { planet: p.id, pos: [pos[0], pos[1], pos[2]], alt: 8, held: null, pose: 'open', alignment: g?.alignment ?? 0 };
+    return { planet: p.id, pos: [pos[0], pos[1], pos[2]], alt: 8, held: null, pose: 'open', alignment: regard, regard };
   }
-  const v: HandView = { planet: h.planet, pos: [h.pos[0], h.pos[1], h.pos[2]], alt: h.alt, held: heldRef(h), pose: h.poseUntil > u.tick ? h.pose : h.held ? 'grab' : h.pose === 'point' || h.pose === 'cast' ? h.pose : 'open', alignment: g?.alignment ?? 0 };
+  const v: HandView = { planet: h.planet, pos: [h.pos[0], h.pos[1], h.pos[2]], alt: h.alt, held: heldRef(h), pose: h.poseUntil > u.tick ? h.pose : h.held ? 'grab' : h.pose === 'point' || h.pose === 'cast' ? h.pose : 'open', alignment: regard, regard };
   if (h.held) (v as HandView & { heldKind?: string }).heldKind = h.held.kind;
   return v;
 }
@@ -93,7 +95,6 @@ function targetOf(a: Args): { kind: string; id: number } | null {
   if (typeof t === 'string') { const m = t.match(/^(\w+)[:#](\d+)$/); if (m) return { kind: m[1], id: Number(m[2]) }; }
   if (typeof a.kind === 'string' && typeof a.id === 'number') return { kind: a.kind, id: a.id };
   if (typeof a.agent === 'number') return { kind: 'agent', id: a.agent };
-  if (typeof a.creature === 'number') return { kind: 'creature', id: a.creature };
   if (typeof a.building === 'number') return { kind: 'building', id: a.building };
   return null;
 }
@@ -106,7 +107,6 @@ function nearest(u: Universe, p: Planet, pos: ArrayLike<number>, kind: string | 
     const d = distM(p, at, pos);
     if (d <= R && d < bd) { bd = d; best = { kind: k, id }; }
   };
-  if (!kind || kind === 'creature') for (const c of u.god.creatures) if (c.alive && c.planet === p.id && !c.held) consider('creature', c.id, c.pos);
   const ps = p.people;
   if (ps && (!kind || kind === 'agent')) {
     const A = ps.agents;
@@ -120,7 +120,7 @@ function nearest(u: Universe, p: Planet, pos: ArrayLike<number>, kind: string | 
 
 /** take hold of something; returns a message or an error */
 function grab(u: Universe, p: Planet, h: HandState, a: Args): { ok: boolean; msg: string } {
-  if (h.held) return { ok: false, msg: 'The hand is full: release, place or drop what it holds first.' };
+  if (h.held) return { ok: false, msg: 'The Touch already holds something: let go, set it down or drop it first.' };
   const at = (a.pos as V3 | null) ?? h.pos;
   // conjure into the palm: an item (by content id), a boulder, a tree
   if (typeof a.item === 'string') {
@@ -128,7 +128,7 @@ function grab(u: Universe, p: Planet, h: HandState, a: Args): { ok: boolean; msg
     if (it < 0) return { ok: false, msg: `There is no such thing as '${a.item}'.` };
     const qty = Math.max(1, Math.min(1e5, Number(a.qty ?? 10)));
     h.held = { kind: 'item', item: it, qty, artifact: true };
-    return { ok: true, msg: `${qty} ${u.content.items.list[it].name.toLowerCase()} appear in your hand.` };
+    return { ok: true, msg: `${qty} ${u.content.items.list[it].name.toLowerCase()} appear in the Touch.` };
   }
   const kindAsked = typeof a.kind === 'string' ? a.kind : null;
   if (kindAsked === 'rock') {
@@ -152,7 +152,7 @@ function grab(u: Universe, p: Planet, h: HandState, a: Args): { ok: boolean; msg
     return { ok: true, msg: `You pull up a ${u.content.plants.list[sp]?.name.toLowerCase() ?? 'tree'}, roots and all.` };
   }
   const t = targetOf(a) ?? nearest(u, p, at, kindAsked, Number(a.radius ?? 60));
-  if (!t) return { ok: false, msg: `There is nothing ${kindAsked ? `(${kindAsked}) ` : ''}within reach of the hand there.` };
+  if (!t) return { ok: false, msg: `There is nothing ${kindAsked ? `(${kindAsked}) ` : ''}within reach of the Touch there.` };
   const ps = p.people;
   switch (t.kind) {
     case 'agent': {
@@ -209,25 +209,15 @@ function grab(u: Universe, p: Planet, h: HandState, a: Args): { ok: boolean; msg
       godAct(u, p, b.pos, 200, { harm: 0.3, wonder: 0.3 }, h.god);
       return { ok: true, msg: `You lift the ${def?.name.toLowerCase() ?? 'building'} off its foundations.` };
     }
-    case 'creature': {
-      const c = u.god.creature(t.id);
-      if (!c || !c.alive) return { ok: false, msg: 'There is no such creature.' };
-      if (c.god !== h.god && c.trust < 0.5) return { ok: false, msg: `${c.name} is not yours, and will not be lifted.` };
-      if (c.trust < 0.2) return { ok: false, msg: `${c.name} pulls away from your hand: it does not trust you (stroke it more, slap it less).` };
-      h.held = { kind: 'creature', id: c.id };
-      c.held = { kind: 'creature', id: c.id };
-      return { ok: true, msg: `${c.name} lets you lift it.` };
-    }
   }
-  return { ok: false, msg: `The hand cannot hold a ${t.kind}.` };
+  return { ok: false, msg: t.kind === 'creature' ? 'There is no great creature in this world.' : `The Touch cannot hold a ${t.kind}.` };
 }
 
 /** let go with a velocity (m/s, body frame); null = straight down */
 function release(u: Universe, p: Planet, h: HandState, vel: V3): string {
   const pl = h.held;
-  if (!pl) return 'The hand is empty.';
+  if (!pl) return 'The Touch is empty.';
   h.held = null;
-  if (pl.kind === 'creature') { const c = u.god.creature(pl.id); if (c) c.held = null; }
   launch(u, p, pl, [...h.pos] as V3, Math.max(0.5, h.alt), vel, h.god);
   const sp = Math.hypot(vel[0], vel[1], vel[2]);
   const what = pl.kind === 'item' ? u.content.items.list[pl.item]?.name.toLowerCase() ?? 'it' : pl.kind;
@@ -262,13 +252,7 @@ function slapOrStroke(u: Universe, p: Planet, h: HandState, a: Args, slap: boole
   h.pose = slap ? 'slap' : 'stroke';
   h.poseUntil = u.tick + 3;
   const t = targetOf(a) ?? nearest(u, p, at, typeof a.kind === 'string' ? a.kind : null, Number(a.radius ?? 40));
-  if (!t) return { ok: false, msg: `There is nothing there to ${slap ? 'slap' : 'stroke'}.` };
-  if (t.kind === 'creature') {
-    const c = u.god.creature(t.id);
-    if (!c) return { ok: false, msg: 'There is no such creature.' };
-    const r = slap ? punishCreature(u, c, 1) : rewardCreature(u, c, 1);
-    return { ok: true, msg: r };
-  }
+  if (!t) return { ok: false, msg: `There is nothing there to ${slap ? 'rebuke' : 'soothe'}.` };
   if (t.kind === 'agent' && p.people) {
     const x = makeCtx(u, p);
     const s = x.A.slotOf(t.id);
@@ -282,7 +266,7 @@ function slapOrStroke(u: Universe, p: Planet, h: HandState, a: Args, slap: boole
       godAct(u, p, _pt, 120, { harm: 0.35 }, h.god);
       if (x.A.health[s] <= 0) { die(x, s, DEATH.god); return { ok: true, msg: `You strike ${name} down.` }; }
       if (!(x.A.flags[s] & AgentFlag.possessed)) interrupt(x, s);
-      return { ok: true, msg: `You slap ${name}. They will remember it.` };
+      return { ok: true, msg: `You rebuke ${name}. They will remember it.` };
     }
     x.A.health[s] = Math.min(1, x.A.health[s] + 0.15);
     x.A.love[s * 4] = Math.min(1, x.A.love[s * 4] + 0.2);
@@ -290,7 +274,7 @@ function slapOrStroke(u: Universe, p: Planet, h: HandState, a: Args, slap: boole
     x.A.mood[s] = Math.min(1, x.A.mood[s] + 0.3);
     x.A.remember(s, MEMK.miracle, u.tick, 0);
     godAct(u, p, _pt, 120, { help: 0.25 }, h.god);
-    return { ok: true, msg: `You stroke ${name}; their fear eases and their bruises close.` };
+    return { ok: true, msg: `You soothe ${name}; their fear eases and their bruises close.` };
   }
   if (t.kind === 'building' && p.people) {
     const b = p.people.building(t.id);
@@ -312,17 +296,17 @@ function slapOrStroke(u: Universe, p: Planet, h: HandState, a: Args, slap: boole
     hd.hunger = Math.max(0, hd.hunger - 0.2);
     return { ok: true, msg: 'The animals calm under your hand.' };
   }
-  return { ok: false, msg: `You cannot ${slap ? 'slap' : 'stroke'} that.` };
+  return { ok: false, msg: `You cannot ${slap ? 'rebuke' : 'soothe'} that.` };
 }
 
 const pos = (required = false): ParamSchema => ({ type: 'pos', required, desc: 'where (unit vector or lat/lon)' });
 const anyT: ParamSchema = { type: 'any', desc: 'an entity { kind, id } or "kind:id"' };
-const KINDS = ['agent', 'animal', 'tree', 'rock', 'item', 'building', 'creature'];
+const KINDS = ['agent', 'animal', 'tree', 'rock', 'item', 'building'];
 
 export function registerHandCommands(r: CommandRegistry): void {
   r.register('hand.move', ({ u, p, cmd }, a) => {
     const h = handOf(u, actor(cmd), p);
-    if (h.planet !== p.id && h.held) return fail('Put down what the hand holds before reaching to another world.');
+    if (h.planet !== p.id && h.held) return fail('Set down what the Touch holds before reaching to another world.');
     h.prev = [...h.pos] as V3;
     h.prevTick = u.tick;
     h.planet = p.id;
@@ -330,9 +314,8 @@ export function registerHandCommands(r: CommandRegistry): void {
     if (typeof a.alt === 'number') h.alt = a.alt;
     if (typeof a.pose === 'string') { h.pose = a.pose; h.poseUntil = 0; }
     carry(u, p, h);
-    if (h.held?.kind === 'creature') { const c = u.god.creature(h.held.id); if (c) { c.pos = [...h.pos] as V3; c.from = [...c.pos]; c.to = [...c.pos]; } }
     return { ok: true };
-  }, { desc: 'Move the hand', category: 'Hand', params: { pos: pos(), alt: { type: 'number', min: 0, max: 100000, desc: 'metres above the ground' }, pose: { type: 'enum', values: ['open', 'grab', 'point', 'cast', 'slap', 'stroke'] } } });
+  }, { desc: 'Move the Touch', category: 'Hand', params: { pos: pos(), alt: { type: 'number', min: 0, max: 100000, desc: 'metres above the ground' }, pose: { type: 'enum', values: ['open', 'grab', 'point', 'cast', 'slap', 'stroke'] } } });
 
   r.register('hand.grab', ({ u, p, cmd }, a) => {
     const h = handOf(u, actor(cmd), p);
@@ -341,7 +324,7 @@ export function registerHandCommands(r: CommandRegistry): void {
     if (res.ok) { h.pose = 'grab'; h.poseUntil = 0; }
     return res.ok ? ok(res.msg, heldRef(h) ? [heldRef(h)!] : undefined) : fail(res.msg);
   }, {
-    desc: 'Grab anything: a person, an animal, a tree, a rock, an item, a small building, the creature', category: 'Hand',
+    desc: 'Lift anything: a person, an animal, a tree, a rock, an item, a small building', category: 'Hand',
     params: {
       pos: pos(), target: anyT, kind: { type: 'enum', values: KINDS }, id: { type: 'int', min: 0 }, radius: { type: 'number', min: 1, max: 2000, default: 60 },
       item: { type: 'enum', values: (u) => u.content.items.ids(), desc: 'conjure an item into the hand' }, qty: { type: 'number', min: 1, max: 100000 },
@@ -355,26 +338,26 @@ export function registerHandCommands(r: CommandRegistry): void {
   };
   r.register('hand.release', ({ u, p, cmd }, a) => {
     const h = handOf(u, actor(cmd), p);
-    if (!h.held) return fail('The hand holds nothing.');
+    if (!h.held) return fail('The Touch holds nothing.');
     const vel = a.vel || a.toward || a.speed !== undefined ? throwVel(u, p, h, a) : [0, 0, 0] as V3;
     h.pose = 'open'; h.poseUntil = u.tick + 2;
     return ok(release(u, p, h, vel));
   }, { desc: 'Let go (with a velocity: a throw)', category: 'Hand', params: throwSchema });
   r.register('hand.throw', ({ u, p, cmd }, a) => {
     const h = handOf(u, actor(cmd), p);
-    if (!h.held) return fail('The hand holds nothing to throw.');
+    if (!h.held) return fail('The Touch holds nothing to hurl.');
     const vel = throwVel(u, p, h, { ...a, speed: a.speed ?? (a.toward ? undefined : 40) });
     h.pose = 'open'; h.poseUntil = u.tick + 2;
     return ok(release(u, p, h, vel));
-  }, { desc: 'Throw what the hand holds', category: 'Hand', params: throwSchema });
+  }, { desc: 'Hurl what the Touch holds', category: 'Hand', params: throwSchema });
   r.register('hand.drop', ({ u, p, cmd }) => {
     const h = handOf(u, actor(cmd), p);
-    if (!h.held) return fail('The hand holds nothing.');
+    if (!h.held) return fail('The Touch holds nothing.');
     return ok(release(u, p, h, [0, 0, 0]));
-  }, { desc: 'Drop what the hand holds', category: 'Hand', params: {} });
+  }, { desc: 'Drop what the Touch holds', category: 'Hand', params: {} });
   r.register('hand.place', ({ u, p, cmd }, a) => {
     const h = handOf(u, actor(cmd), p);
-    if (!h.held) return fail('The hand holds nothing.');
+    if (!h.held) return fail('The Touch holds nothing.');
     if (a.pos) { h.prev = [...h.pos] as V3; h.pos = norm(a.pos); }
     // set down gently: from just above the ground, barely moving
     h.alt = 0.6;
@@ -385,19 +368,19 @@ export function registerHandCommands(r: CommandRegistry): void {
     if (a.pos) h.pos = norm(a.pos);
     const res = slapOrStroke(u, p, h, a, true);
     return res.ok ? ok(res.msg) : fail(res.msg);
-  }, { desc: 'Slap (punish)', category: 'Hand', params: { pos: pos(), target: anyT, kind: { type: 'enum', values: KINDS }, id: { type: 'int', min: 0 }, radius: { type: 'number', min: 1, max: 1000, default: 40 } } });
+  }, { desc: 'Rebuke (hurts a person, cracks a wall)', category: 'Hand', params: { pos: pos(), target: anyT, kind: { type: 'enum', values: KINDS }, id: { type: 'int', min: 0 }, radius: { type: 'number', min: 1, max: 1000, default: 40 } } });
   r.register('hand.stroke', ({ u, p, cmd }, a) => {
     const h = handOf(u, actor(cmd), p);
     if (a.pos) h.pos = norm(a.pos);
     const res = slapOrStroke(u, p, h, a, false);
     return res.ok ? ok(res.msg) : fail(res.msg);
-  }, { desc: 'Stroke (comfort, reward)', category: 'Hand', params: { pos: pos(), target: anyT, kind: { type: 'enum', values: KINDS }, id: { type: 'int', min: 0 }, radius: { type: 'number', min: 1, max: 1000, default: 40 } } });
+  }, { desc: 'Soothe (comforts, heals a little)', category: 'Hand', params: { pos: pos(), target: anyT, kind: { type: 'enum', values: KINDS }, id: { type: 'int', min: 0 }, radius: { type: 'number', min: 1, max: 1000, default: 40 } } });
   r.register('hand.pose', ({ u, p, cmd }, a) => {
     const h = handOf(u, actor(cmd), p);
     h.pose = String(a.pose);
     h.poseUntil = typeof a.ticks === 'number' ? u.tick + a.ticks : 0;
     return { ok: true };
-  }, { desc: 'Shape the hand (point, cast, open)', category: 'Hand', params: { pose: { type: 'enum', values: ['open', 'grab', 'point', 'cast', 'slap', 'stroke'], required: true }, ticks: { type: 'int', min: 0, max: 1000 } } });
+  }, { desc: 'Shape the Touch (point, cast, open)', category: 'Hand', params: { pose: { type: 'enum', values: ['open', 'grab', 'point', 'cast', 'slap', 'stroke'], required: true }, ticks: { type: 'int', min: 0, max: 1000 } } });
 }
 
 export type { UnitVec, Payload };

@@ -40,6 +40,7 @@ import { contactsDaily, flushReadings } from './culture.ts';
 import { finishTask } from './work.ts';
 import { creditStretched } from '../perf/plapse.ts';
 import { FIRE_BURN, FIRE_HERE, FIRE_HURT, FIRE_NEAR, fleeGoalAlight } from './danger.ts';
+import { godHooks } from './hooks.ts';
 
 export const FIRE_CHECK = 5;
 
@@ -123,9 +124,9 @@ function fireCheck(x: PCtx): void {
   for (let i = 0; i < n; i++) {
     const c = list[i];
     const fi = p.f.fire[c];
-    if (fi <= FIRE_HERE) continue;
-    // in the flames: burned (above FIRE_BURN, growing with the blaze), and turned to flight mid-task at the threshold
-    // decide() flees at
+    // (smoulder — FIRE_HERE .. FIRE_BURN — neither burns nor turns anyone back: people/danger.ts)
+    if (fi <= FIRE_BURN) continue;
+    // in the flames: burned (growing with the blaze), and turned to flight mid-task at the threshold decide() flees at
     if (x.ps.buckets.any(c)) {
       x.ps.agentsIn(c, _cell);
       for (const s of _cell) {
@@ -144,7 +145,7 @@ function fireCheck(x: PCtx): void {
     if (fi <= FIRE_NEAR) continue;
     for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
       const o = g.nbr[e];
-      if (p.f.fire[o] > FIRE_HERE || !x.ps.buckets.any(o)) continue;
+      if (p.f.fire[o] > FIRE_BURN || !x.ps.buckets.any(o)) continue;
       x.ps.agentsIn(o, _cell);
       for (const s of _cell) {
         if (!A.alive[s] || A.flags[s] & AgentFlag.possessed) continue;
@@ -230,6 +231,9 @@ export function harmArea(u: Universe, p: Planet, pos: ArrayLike<number>, radiusM
   const x = makeCtx(u, p);
   const A = x.A;
   let hurt = 0;
+  // (LIVING RELATIONSHIP §3.7: inside a god's act, its wrath scales the blast's lethality; people/hooks.ts)
+  const ws = godHooks.harmScale?.() ?? null;
+  if (ws) severity *= ws.L; // (the radius came scaled: the crater the act made — god/disasters.ts impact)
   const pt = [0, 0, 0];
   for (let s = 0; s < A.hi; s++) {
     if (!A.alive[s]) continue;
@@ -238,9 +242,11 @@ export function harmArea(u: Universe, p: Planet, pos: ArrayLike<number>, radiusM
     if (d > radiusM) continue;
     const k = severity * (1 - d / radiusM) * 1.4;
     A.health[s] -= k;
-    A.fear[s * 4] = Math.min(1, A.fear[s * 4] + 0.2 * severity);
+    // (the god's blast frightens through its witnesses' reading, god/regard.ts — not here, outside the act's budget;
+    // nature's is the god's only to those who believe it acts, faith > 0.3 — LIVING §3.7)
+    if (!ws && A.faith[s * 4] > 0.3) A.fear[s * 4] = Math.min(1, A.fear[s * 4] + 0.2 * severity);
     hurt++;
-    if (A.health[s] <= 0) die(x, s, cause);
+    if (A.health[s] <= 0) { godHooks.noteDeath?.(p.id, A.settlement[s]); die(x, s, cause); }
     else interrupt(x, s);
   }
   return hurt;
@@ -251,6 +257,8 @@ export function damageArea(u: Universe, p: Planet, pos: ArrayLike<number>, radiu
   if (!p.people) return 0;
   const x = makeCtx(u, p);
   let n = 0;
+  const ws = godHooks.harmScale?.() ?? null;
+  if (ws) severity *= ws.B;
   for (const b of x.ps.buildings.slice()) {
     if (b.flags & BuildingFlag.ruined) continue;
     const d = distM(p, b.pos, pos);

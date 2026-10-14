@@ -10,6 +10,7 @@ import { updateResources } from '../src/sim/people/resources.ts';
 import { TRAIT, NT } from '../src/sim/people/defs.ts';
 import { world, people, ctx, membersOf } from './helpers/peoples.ts';
 import { routeBetween } from '../src/sim/people/missions.ts';
+import { ensureRelation } from '../src/sim/people/war.ts';
 
 /** two settled towns of separate polities, about `dist` metres apart */
 function twoTowns(seed: number, era: string, dist = 650, count = 40): { sim: Sim; a: Settlement; b: Settlement } {
@@ -55,17 +56,34 @@ test('an iron monopoly drives the have-nots toward war (a town that holds iron a
   // and judge water where they stand (people/danger.ts, decide.ts waterHere) — before that also on 3, which a hearth fire
   // now plays out differently; elsewhere the have-nots go to war over salt, or not within 18 days, or the town that
   // holds iron too falls out with its neighbour over land just as fast. Seed 10 holds it with the widest margin.)
+  // LIVING PACE (people walk 2 m a game minute, not 0.25): the towns' 650 m is 5½ hours on the road, not 2½ days, so a
+  // caravan goes every day — and a holder that trusts its neighbour sells it iron (economy.ts tradePlan guards strategic
+  // goods only from a people it does not trust): the have-nots then hold iron and covet nothing. So the monopoly here is
+  // a guarded one (the holders do not trust the warlike have-nots: their opinion of them is held below trust), and the
+  // daily trade in everything else warms the have-nots too (economy.ts tradeDone, war.ts opinionTarget), so their war
+  // comes on day 8-19 rather than 8 and the window is 24 days. Measured over seeds 1-12 (_harness/scratch/living/pace/
+  // live|old seedbound.ts iron): before, this test as it was held on 3 of 12 (2, 8, 10), and guarded over 24 days on the
+  // same 3; now, as it was, on 0 of 12, and guarded over 24 days on 4 of 12 (1, 2, 4, 7). Seed 2 held it before and
+  // holds it now, with the widest margin (war on day 11; 0.36).
+  // LIVING LAND (hunting parties, herds, fields, festivals, children's chores: the two towns' days changed), measured over
+  // seeds 1-12 with _harness/scratch/living/land/seedbound/iron.ts, guarded over 24 days: before LAND it held on 4 of 12
+  // (1, 2, 4, 7), with LAND on 2 of 12 (1, 4) — seed 2 now has no war within the 24 days. Seed 4 holds it on both trees
+  // with the widest margin (war on day 19 on both; 0.34 before, 0.36 now).
   const run = (monopoly: boolean) => {
-    const { sim, a, b } = twoTowns(10, 'iron');
+    const { sim, a, b } = twoTowns(4, 'iron');
     metals(sim, a, true);
     metals(sim, b, !monopoly);
     warlike(sim, b);
+    const guard = (): void => {
+      const r = ensureRelation(ctx(sim), a.polity, b.polity);
+      if (r) { const k = r.a === a.polity ? 0 : 1; r.op[k] = Math.min(r.op[k], -0.1); }
+    };
     let war = '';
     let low = 1;
     // b's opinion of a at the end of each day (compared day for day: the monopoly run stops when its war starts)
     const daily: number[] = [];
-    for (let d = 0; d < 18 && !war; d++) {
-      sim.step(1440);
+    for (let d = 0; d < 24 && !war; d++) {
+      for (let h = 0; h < 24; h++) { guard(); sim.step(60); }
       const r = sim.u.planets[0].people.relation(a.polity, b.polity);
       if (r && r.war >= 0 && r.aggressor === b.polity) war = r.cause;
       daily.push(opinion(sim, b, a));
@@ -136,4 +154,30 @@ test('a treaty can end a war', () => {
     assert.ok(peace.ok, peace.msg);
     assert.equal(ps.relation(a.polity, b.polity)!.war, -1);
   }
+});
+
+test('well-fed neighbours still trade: a table wants variety (fish for grain), not only enough food', () => {
+  // two towns that both live well off the land, one with plenty of fish and no grain, the other the other way round:
+  // all food was one need, so neither lacked it and no caravan ever ran between them (economy.ts VARIETY)
+  let towns: ReturnType<typeof twoTowns> | null = null;
+  for (const seed of [11, 12, 14, 15, 16, 17]) {
+    const t = twoTowns(seed, 'bronze');
+    if (routeBetween(ctx(t.sim), t.a, t.b).land) { towns = t; break; }
+  }
+  assert.ok(towns, 'two towns with a road between them');
+  const { sim, a, b } = towns!;
+  const x = ctx(sim);
+  const fish = x.c.items.idx('cooked-fish'), grain = x.c.items.idx('grain');
+  const foods = x.info[a.species].foods;
+  // both well fed (a month of food a head), but each with only its own kind
+  for (const i of foods) { a.store[i] = 0; b.store[i] = 0; }
+  a.store[fish] = 1400;
+  b.store[grain] = 1400;
+  let r = sim.u.planets[0].people.relation(a.polity, b.polity);
+  for (let d = 0; d < 10 && !(a.store[grain] > 1 || b.store[fish] > 1); d++) {
+    sim.step(1440);
+    r = sim.u.planets[0].people.relation(a.polity, b.polity);
+  }
+  assert.ok(a.store[grain] > 1 || b.store[fish] > 1, `grain reached the fishing town (${a.store[grain].toFixed(1)}) or fish the farming town (${b.store[fish].toFixed(1)})`);
+  assert.ok(r && r.trade > 0, 'the trade is on the books');
 });

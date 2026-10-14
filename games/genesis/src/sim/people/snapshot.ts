@@ -18,6 +18,9 @@ import { SettlementFlag } from '../types.ts';
 import { musicOf, styleVariant } from './culture.ts';
 import { atWar, enemiesOf, polityName } from './war.ts';
 import { hasMarket } from './economy.ts';
+import { landFlags2 } from './land.ts';
+import { livelihoodOf } from './ledger.ts';
+import { historyView } from './eras.ts';
 
 function emptyMovers(n: number): MoverBlock {
   return {
@@ -36,6 +39,8 @@ export function agentBlock(u: Universe, p: Planet): MoverBlock {
   if (!A.count) return out;
   const x = makeCtx(u, p);
   const t = u.tick;
+  // (LIVING.md §6.5: more agent flags — AgentFlag2; LAND sets festive, camp, hunter, herder: people/land.ts)
+  const flags2 = (out.flags2 = new Uint8Array(A.count));
   let i = 0;
   for (let s = 0; s < A.hi && i < A.count; s++) {
     if (!A.alive[s]) continue;
@@ -59,6 +64,7 @@ export function agentBlock(u: Universe, p: Planet): MoverBlock {
     out.anim[i] = A.flags[s] & AgentFlag.sleepingIndoors ? AnimState.sleep : A.anim[s];
     out.phase[i] = (hash32(A.id[s], 0xa41) >>> 8) / 16777216;
     out.flags[i] = A.flags[s];
+    flags2[i] = landFlags2(x, s);
     // afloat: `carry` is the boat they ride (types.ts AgentFlag.boat; the client draws raft / boat / sail from it)
     const carried = A.flags[s] & AgentFlag.boat && A.boat[s] >= 0 ? A.boat[s] : A.carryItem(s);
     out.carry[i] = carried >= 0 ? carried : A.tool[s];
@@ -86,6 +92,7 @@ export function agentBlock(u: Universe, p: Planet): MoverBlock {
       const per = k === 'pos' || k === 'vel' ? 3 : 1;
       (r[k] as unknown as { set(a: ArrayLike<number>): void }).set(src.subarray(0, i * per));
     }
+    r.flags2 = flags2.slice(0, i);
     return r;
   }
   return out;
@@ -231,6 +238,10 @@ export function settlementViews(u: Universe, p: Planet): SettlementView[] {
       war: war ? ps.settlements.filter((o) => o.fallen < 0 && !o.band && foes.includes(o.polity)).map((o) => o.id) : [],
       trade, besieged: st.besieged >= 0, age: st.age.kind, disbelief: st.recent.disbelief ?? 0,
       factions: st.factions.map((f) => ({ kind: f.kind, share: f.share })),
+      // (LIVING LAND: this year's food by source, the livestock kept, the share under 15 — people/ledger.ts)
+      livelihood: st.fallen < 0 ? livelihoodOf(x, st) : undefined,
+      // (LIVING HISTORY: the era label of what it can do, and a daughter's grievance against its capital — eras.ts, politics.ts)
+      ...historyView(x, st),
     };
   });
 }

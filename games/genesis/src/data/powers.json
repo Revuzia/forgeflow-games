@@ -1,5 +1,5 @@
 {
- "$comment": "Every user-facing god power (CONTRACT §11.1, §16): category (radial ring group), icon key, radial ring (0 inner .. 2 outer), gesture (unistroke: spiral water, zigzag lightning, double-zigzag storm, circle shield, triangle fire, v heal, wave forest, square food, star meteor, heart fertility, caret teach, line wood, tilde calm, arrow fireball), command + default params, the UI schema of what can be tuned (types, ranges, units, what it targets), synonyms for the freeform parser, restraint cost (worship) and cooldown (ticks), and what witnesses make of it when the handler does not say. Generated palettes, radial menus and the parser read this file; every power must map to a registered command (tests/content.test.ts).",
+ "$comment": "Every user-facing god power (CONTRACT §11.1, §16; LIVING.md §3.6): category (radial ring group), icon key, radial ring (0 inner .. 2 outer), sigil (the one-stroke glyph that draws it: drop rain, anvil storm, fork lightning, ripple stillness, sprout the grove, knot mending, basket plenty, seed increase, log timber, eye insight, flame kindling, trail the falling flame, arch ward, fall meteor — `gesture` keeps the old unistroke name until the UI recogniser switches to sigils), command + default params, the UI schema of what can be tuned (types, ranges, units, what it targets), synonyms for the freeform parser (old names stay as synonyms), restraint cost (worship) and cooldown (ticks), and what witnesses make of it when the handler does not say. Generated palettes, radial menus and the parser read this file; every power must map to a registered command (tests/content.test.ts). The creature is gone (LIVING §3.5): the Signs category holds prophets, omens, sacred places and prayers.",
  "powers": [
   {
    "id": "raise",
@@ -1260,7 +1260,7 @@
   },
   {
    "id": "water-miracle",
-   "name": "Water miracle",
+   "name": "Sigil of Rain",
    "category": "Water",
    "icon": "water-miracle",
    "ring": 0,
@@ -1293,11 +1293,14 @@
    "synonyms": [
     "water miracle",
     "bless with water",
-    "quench"
+    "quench",
+    "sigil of rain",
+    "rain sigil"
    ],
-   "desc": "Water for the thirsty: rain, a pool, damp fields, fires put out.",
+   "desc": "Rain for the thirsty: rain, a pool, damp fields, fires put out.",
    "cost": 10,
-   "cooldown": 60
+   "cooldown": 60,
+   "sigil": "drop"
   },
   {
    "id": "weather-thunderstorm",
@@ -2285,7 +2288,7 @@
   },
   {
    "id": "storm-miracle",
-   "name": "Storm miracle",
+   "name": "Sigil of Storm",
    "category": "Sky",
    "icon": "storm-miracle",
    "ring": 0,
@@ -2319,11 +2322,14 @@
     "storm miracle",
     "call the storm",
     "summon a storm",
-    "tempest"
+    "tempest",
+    "sigil of storm",
+    "storm sigil"
    ],
    "desc": "Call a thunderstorm down.",
    "cost": 15,
-   "cooldown": 90
+   "cooldown": 90,
+   "sigil": "anvil"
   },
   {
    "id": "lightning",
@@ -2361,15 +2367,18 @@
     "lightning",
     "bolt",
     "thunderbolt",
-    "strike"
+    "strike",
+    "sigil of lightning",
+    "fork"
    ],
-   "desc": "Strike with lightning (fire, fear, glass in the dunes).",
+   "desc": "Strike with lightning: one tree, one roof, one person (fire, fear, glass in the dunes).",
    "cost": 10,
-   "cooldown": 60
+   "cooldown": 60,
+   "sigil": "fork"
   },
   {
    "id": "calm",
-   "name": "Calm",
+   "name": "Stillness",
    "category": "Sky",
    "icon": "calm",
    "ring": 1,
@@ -2404,11 +2413,14 @@
     "peace",
     "quiet",
     "soothe",
-    "still the storm"
+    "still the storm",
+    "stillness",
+    "sigil of stillness"
    ],
-   "desc": "Calm: storms disperse, fires die, fear eases, anger cools.",
+   "desc": "Stillness: storms disperse, fires die, fear eases, anger cools.",
    "cost": 15,
-   "cooldown": 90
+   "cooldown": 90,
+   "sigil": "ripple"
   },
   {
    "id": "invent-weather",
@@ -3482,7 +3494,7 @@
   },
   {
    "id": "forest-miracle",
-   "name": "Forest miracle",
+   "name": "The Grove",
    "category": "Life",
    "icon": "forest-miracle",
    "ring": 0,
@@ -3514,11 +3526,15 @@
    "target": "region",
    "synonyms": [
     "forest miracle",
-    "green the land"
+    "green the land",
+    "the grove",
+    "grove",
+    "sigil of the grove"
    ],
-   "desc": "A forest springs up; those who see it may learn forestry.",
+   "desc": "A grove springs up; those who see it may learn forestry.",
    "cost": 15,
-   "cooldown": 90
+   "cooldown": 90,
+   "sigil": "sprout"
   },
   {
    "id": "paint-biome",
@@ -3861,7 +3877,7 @@
   },
   {
    "id": "heal-miracle",
-   "name": "Heal miracle",
+   "name": "Mending",
    "category": "Life",
    "icon": "heal-miracle",
    "ring": 0,
@@ -3895,15 +3911,20 @@
     "heal",
     "healing",
     "miracle of healing",
-    "cure the sick"
+    "cure the sick",
+    "mending",
+    "mend",
+    "sigil of mending",
+    "heal miracle"
    ],
-   "desc": "Heal the sick and hurt; it can start medicine.",
+   "desc": "Mend the sick and hurt; it can start medicine.",
    "cost": 20,
-   "cooldown": 120
+   "cooldown": 120,
+   "sigil": "knot"
   },
   {
    "id": "food-miracle",
-   "name": "Food miracle",
+   "name": "Plenty",
    "category": "Life",
    "icon": "bread",
    "ring": 0,
@@ -3938,15 +3959,19 @@
     "feed",
     "bread",
     "manna",
-    "harvest"
+    "harvest",
+    "plenty",
+    "sigil of plenty",
+    "food miracle"
    ],
    "desc": "Food falls into the store (they may refuse it).",
    "cost": 15,
-   "cooldown": 90
+   "cooldown": 90,
+   "sigil": "basket"
   },
   {
    "id": "fertility",
-   "name": "Fertility",
+   "name": "Increase",
    "category": "Life",
    "icon": "fertility",
    "ring": 1,
@@ -3980,11 +4005,14 @@
     "fertility",
     "fertile",
     "babies",
-    "abundance"
+    "abundance",
+    "increase",
+    "sigil of increase"
    ],
-   "desc": "Fields swell, herds breed, couples have children.",
+   "desc": "Increase: fields swell, herds breed, couples have children.",
    "cost": 25,
-   "cooldown": 150
+   "cooldown": 150,
+   "sigil": "seed"
   },
   {
    "id": "bless",
@@ -4366,7 +4394,7 @@
   },
   {
    "id": "disciple",
-   "name": "Make a disciple",
+   "name": "Call",
    "category": "Peoples",
    "icon": "disciple",
    "ring": 1,
@@ -4405,17 +4433,20 @@
    "target": "agent",
    "synonyms": [
     "disciple",
-    "prophet",
     "apostle",
-    "chosen one",
-    "missionary"
+    "missionary",
+    "call",
+    "the called",
+    "call to the god",
+    "call a follower",
+    "make a disciple"
    ],
-   "desc": "Make a person your disciple with a standing order.",
+   "desc": "Call a person to the god: one of the Called, with a standing order (they follow it as far as they are loyal).",
    "cost": 20
   },
   {
    "id": "disciple-order",
-   "name": "Order disciples",
+   "name": "Charge the Called",
    "category": "Peoples",
    "icon": "orders",
    "ring": 2,
@@ -4453,9 +4484,12 @@
    "synonyms": [
     "order the disciples",
     "disciples preach",
-    "disciples farm"
+    "disciples farm",
+    "charge the called",
+    "order the called",
+    "order disciples"
    ],
-   "desc": "Give disciples a standing order."
+   "desc": "Give the Called a standing order."
   },
   {
    "id": "inspire",
@@ -4654,7 +4688,7 @@
   },
   {
    "id": "wood-miracle",
-   "name": "Wood miracle",
+   "name": "Timber",
    "category": "Peoples",
    "icon": "logs",
    "ring": 1,
@@ -4688,11 +4722,14 @@
     "wood",
     "timber",
     "logs",
-    "lumber"
+    "lumber",
+    "sigil of timber",
+    "wood miracle"
    ],
-   "desc": "Wood piles up in the store.",
+   "desc": "Timber piles up in the store.",
    "cost": 8,
-   "cooldown": 48
+   "cooldown": 48,
+   "sigil": "log"
   },
   {
    "id": "split",
@@ -4911,7 +4948,7 @@
   },
   {
    "id": "teach-miracle",
-   "name": "Teaching miracle",
+   "name": "Insight",
    "category": "Ideas",
    "icon": "scroll",
    "ring": 0,
@@ -4954,11 +4991,15 @@
    "synonyms": [
     "teach them",
     "what comes next",
-    "the next idea"
+    "the next idea",
+    "insight",
+    "sigil of insight",
+    "teaching miracle"
    ],
-   "desc": "Teach a settlement the next thing it could grasp.",
+   "desc": "Insight: a settlement grasps the next thing it could.",
    "cost": 30,
-   "cooldown": 180
+   "cooldown": 180,
+   "sigil": "eye"
   },
   {
    "id": "forget",
@@ -5551,7 +5592,7 @@
   },
   {
    "id": "fire-miracle",
-   "name": "Gift of fire",
+   "name": "Kindling",
    "category": "Fire",
    "icon": "flame",
    "ring": 0,
@@ -5585,15 +5626,18 @@
     "gift of fire",
     "light the hearth",
     "give them fire",
-    "flame"
+    "flame",
+    "kindling",
+    "sigil of kindling"
    ],
-   "desc": "Light their hearths: they may learn to keep fire.",
+   "desc": "Kindling: light their hearths; they may learn to keep fire.",
    "cost": 8,
-   "cooldown": 48
+   "cooldown": 48,
+   "sigil": "flame"
   },
   {
    "id": "fireball",
-   "name": "Fireball",
+   "name": "The Falling Flame",
    "category": "Fire",
    "icon": "fireball",
    "ring": 1,
@@ -5627,11 +5671,15 @@
     "fireball",
     "ball of fire",
     "firebomb",
-    "hellfire"
+    "hellfire",
+    "the falling flame",
+    "falling flame",
+    "sigil of the falling flame"
    ],
-   "desc": "Hurl a ball of fire: it burns, kills — and teaches fire.",
+   "desc": "The falling flame: it burns, it can kill — and it teaches fire.",
    "cost": 20,
-   "cooldown": 120
+   "cooldown": 120,
+   "sigil": "trail"
   },
   {
    "id": "firestorm-call",
@@ -5736,11 +5784,13 @@
     "falling star",
     "bolide",
     "asteroid",
-    "space rock"
+    "space rock",
+    "sigil of the falling star"
    ],
    "desc": "A stone from the sky: a blinding fall, a crater, a ring of fire, iron in the ashes.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "sigil": "fall"
   },
   {
    "id": "disaster-meteor-shower",
@@ -7856,14 +7906,14 @@
   },
   {
    "id": "disaster-leviathan",
-   "name": "Leviathan",
+   "name": "Rogue wave",
    "category": "Disasters",
    "icon": "d-leviathan",
    "ring": 1,
    "gesture": null,
    "command": "disaster.spawn",
    "params": {
-    "kind": "leviathan"
+    "kind": "rogue-wave"
    },
    "schema": {
     "pos": {
@@ -7912,13 +7962,12 @@
    },
    "target": "point",
    "synonyms": [
-    "leviathan",
-    "sea monster",
-    "kraken",
-    "sea serpent",
-    "monster from the deep"
+    "rogue wave",
+    "freak wave",
+    "monster wave",
+    "killer wave"
    ],
-   "desc": "Something vast rises from the deep and walks the shallows, wrecking boats and harbours.",
+   "desc": "A wall of water far taller than the swell around it runs along the coast, smashing boats and harbours and flooding the shore.",
    "cost": 80,
    "cooldown": 120
   },
@@ -8276,7 +8325,7 @@
   },
   {
    "id": "grab",
-   "name": "Grab",
+   "name": "Lift",
    "category": "Hand",
    "icon": "grab",
    "ring": 0,
@@ -8298,8 +8347,7 @@
       "tree",
       "rock",
       "item",
-      "building",
-      "creature"
+      "building"
      ]
     },
     "kind": {
@@ -8310,8 +8358,7 @@
       "tree",
       "rock",
       "item",
-      "building",
-      "creature"
+      "building"
      ]
     },
     "id": {
@@ -8355,13 +8402,14 @@
     "take",
     "lift",
     "seize",
-    "hold"
+    "hold",
+    "take up"
    ],
-   "desc": "Grab anything: a person, an animal, a tree, a rock, an item, a hut, the creature."
+   "desc": "Lift anything: a person, an animal, a tree, a rock, an item, a hut."
   },
   {
    "id": "throw",
-   "name": "Throw",
+   "name": "Hurl",
    "category": "Hand",
    "icon": "throw",
    "ring": 0,
@@ -8399,7 +8447,7 @@
     "chuck",
     "pitch"
    ],
-   "desc": "Throw what the hand holds.",
+   "desc": "Hurl what the Touch holds.",
    "witness": {
     "wonder": 0.2,
     "radius": 300
@@ -8446,7 +8494,7 @@
     "release",
     "drop it"
    ],
-   "desc": "Let go of what the hand holds."
+   "desc": "Let go of what the Touch holds."
   },
   {
    "id": "place",
@@ -8471,7 +8519,7 @@
     "put down",
     "put"
    ],
-   "desc": "Set something down gently."
+   "desc": "Set what the Touch holds down gently."
   },
   {
    "id": "drop",
@@ -8487,11 +8535,11 @@
    "synonyms": [
     "drop"
    ],
-   "desc": "Drop what the hand holds."
+   "desc": "Drop what the Touch holds."
   },
   {
    "id": "slap",
-   "name": "Slap",
+   "name": "Rebuke",
    "category": "Hand",
    "icon": "slap",
    "ring": 0,
@@ -8513,8 +8561,7 @@
       "tree",
       "rock",
       "item",
-      "building",
-      "creature"
+      "building"
      ]
     },
     "kind": {
@@ -8525,8 +8572,7 @@
       "tree",
       "rock",
       "item",
-      "building",
-      "creature"
+      "building"
      ]
     },
     "id": {
@@ -8551,13 +8597,15 @@
     "hit",
     "punish",
     "smack",
-    "spank"
+    "spank",
+    "rebuke",
+    "smite lightly"
    ],
-   "desc": "Slap: hurts a person, punishes the creature."
+   "desc": "Rebuke: hurts a person, cracks a wall."
   },
   {
    "id": "stroke",
-   "name": "Stroke",
+   "name": "Soothe",
    "category": "Hand",
    "icon": "stroke",
    "ring": 0,
@@ -8579,8 +8627,7 @@
       "tree",
       "rock",
       "item",
-      "building",
-      "creature"
+      "building"
      ]
     },
     "kind": {
@@ -8591,8 +8638,7 @@
       "tree",
       "rock",
       "item",
-      "building",
-      "creature"
+      "building"
      ]
     },
     "id": {
@@ -8618,13 +8664,14 @@
     "comfort",
     "reward",
     "caress",
-    "pat"
+    "pat",
+    "soothe"
    ],
-   "desc": "Stroke: comforts and heals a little, rewards the creature."
+   "desc": "Soothe: comforts and heals a little."
   },
   {
    "id": "shield",
-   "name": "Shield",
+   "name": "Ward",
    "category": "Hand",
    "icon": "shield",
    "ring": 1,
@@ -8667,15 +8714,17 @@
     "protect",
     "ward",
     "barrier",
-    "dome"
+    "dome",
+    "sigil of warding"
    ],
-   "desc": "A shield nothing can pass: disasters, fire, thrown things.",
+   "desc": "A ward nothing can pass: disasters, fire, thrown things.",
    "cost": 30,
-   "cooldown": 180
+   "cooldown": 180,
+   "sigil": "arch"
   },
   {
    "id": "cast",
-   "name": "Cast",
+   "name": "Draw a sigil",
    "category": "Hand",
    "icon": "cast",
    "ring": 2,
@@ -8726,409 +8775,13 @@
    "synonyms": [
     "cast",
     "miracle",
-    "work a miracle"
+    "work a miracle",
+    "draw a sigil",
+    "sigil"
    ],
-   "desc": "Cast any miracle by name.",
+   "desc": "Draw any sigil by name (rain, storm, lightning, stillness, the grove, mending, plenty, increase, timber, insight, kindling, the falling flame, ward, meteor).",
    "cost": 10,
    "cooldown": 60
-  },
-  {
-   "id": "adopt",
-   "name": "Adopt a creature",
-   "category": "Creature",
-   "icon": "creature",
-   "ring": 0,
-   "gesture": null,
-   "command": "creature.adopt",
-   "params": {},
-   "schema": {
-    "template": {
-     "type": "enum",
-     "values": "creatures",
-     "default": "ape"
-    },
-    "pos": {
-     "type": "pos",
-     "target": "point",
-     "desc": "where (unit vector or lat/lon)"
-    },
-    "name": {
-     "type": "string"
-    }
-   },
-   "target": "point",
-   "synonyms": [
-    "creature",
-    "adopt",
-    "pet",
-    "titan",
-    "beast of my own"
-   ],
-   "desc": "Adopt a creature: it learns from your hand.",
-   "cost": 100
-  },
-  {
-   "id": "leash",
-   "name": "Leash",
-   "category": "Creature",
-   "icon": "leash",
-   "ring": 0,
-   "gesture": null,
-   "command": "creature.leash",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    },
-    "settlement": {
-     "type": "entity",
-     "entity": [
-      "settlement"
-     ]
-    },
-    "pos": {
-     "type": "pos",
-     "target": "point",
-     "desc": "where (unit vector or lat/lon)"
-    },
-    "mode": {
-     "type": "enum",
-     "values": [
-      "tend",
-      "defend",
-      "impress",
-      "terrify",
-      "explore"
-     ]
-    },
-    "length": {
-     "type": "number",
-     "min": 50,
-     "max": 20000,
-     "default": 900,
-     "unit": "m"
-    }
-   },
-   "target": "settlement",
-   "synonyms": [
-    "leash",
-    "tie",
-    "tether",
-    "guard the village"
-   ],
-   "desc": "Leash the creature to a village or a place, with a mode."
-  },
-  {
-   "id": "unleash",
-   "name": "Unleash",
-   "category": "Creature",
-   "icon": "unleash",
-   "ring": 1,
-   "gesture": null,
-   "command": "creature.unleash",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    }
-   },
-   "target": "entity",
-   "synonyms": [
-    "unleash",
-    "let it roam",
-    "set loose"
-   ],
-   "desc": "Let the creature roam."
-  },
-  {
-   "id": "creature-mode",
-   "name": "Creature mode",
-   "category": "Creature",
-   "icon": "mode",
-   "ring": 1,
-   "gesture": null,
-   "command": "creature.set-mode",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    },
-    "mode": {
-     "type": "enum",
-     "values": [
-      "tend",
-      "defend",
-      "impress",
-      "terrify",
-      "explore"
-     ]
-    }
-   },
-   "target": "entity",
-   "synonyms": [
-    "tend",
-    "defend",
-    "impress",
-    "terrify",
-    "explore"
-   ],
-   "desc": "What the leashed creature should do."
-  },
-  {
-   "id": "reward",
-   "name": "Reward",
-   "category": "Creature",
-   "icon": "treat",
-   "ring": 0,
-   "gesture": null,
-   "command": "creature.reward",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    },
-    "amount": {
-     "type": "number",
-     "min": 0.1,
-     "max": 5,
-     "default": 1,
-     "unit": "atm"
-    }
-   },
-   "target": "entity",
-   "synonyms": [
-    "good boy",
-    "good girl",
-    "well done",
-    "reward it",
-    "praise"
-   ],
-   "desc": "Reward the creature for what it just did."
-  },
-  {
-   "id": "punish",
-   "name": "Punish",
-   "category": "Creature",
-   "icon": "stick",
-   "ring": 0,
-   "gesture": null,
-   "command": "creature.punish",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    },
-    "amount": {
-     "type": "number",
-     "min": 0.1,
-     "max": 5,
-     "default": 1,
-     "unit": "atm"
-    }
-   },
-   "target": "entity",
-   "synonyms": [
-    "bad",
-    "no",
-    "punish it",
-    "scold"
-   ],
-   "desc": "Punish the creature for what it just did."
-  },
-  {
-   "id": "teach-creature",
-   "name": "Teach by example",
-   "category": "Creature",
-   "icon": "show",
-   "ring": 1,
-   "gesture": null,
-   "command": "creature.teach-by-example",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    },
-    "miracle": {
-     "type": "enum",
-     "values": [
-      "water",
-      "food",
-      "heal",
-      "forest",
-      "storm",
-      "fire",
-      "fireball",
-      "shield",
-      "lightning",
-      "wood",
-      "fertility",
-      "calm",
-      "teach",
-      "meteor"
-     ]
-    }
-   },
-   "target": "entity",
-   "synonyms": [
-    "show it",
-    "teach the creature",
-    "watch me"
-   ],
-   "desc": "Cast a miracle for the creature to learn."
-  },
-  {
-   "id": "creature-go",
-   "name": "Send the creature",
-   "category": "Creature",
-   "icon": "go",
-   "ring": 1,
-   "gesture": null,
-   "command": "creature.move",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    },
-    "pos": {
-     "type": "pos",
-     "target": "point",
-     "desc": "where (unit vector or lat/lon)"
-    }
-   },
-   "target": "point",
-   "synonyms": [
-    "go",
-    "come",
-    "fetch",
-    "go there",
-    "call the creature"
-   ],
-   "desc": "Send the creature somewhere."
-  },
-  {
-   "id": "creature-rename",
-   "name": "Name the creature",
-   "category": "Creature",
-   "icon": "name-c",
-   "ring": 2,
-   "gesture": null,
-   "command": "creature.rename",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    },
-    "to": {
-     "type": "string"
-    }
-   },
-   "target": "entity",
-   "synonyms": [
-    "name the creature"
-   ],
-   "desc": "Rename the creature."
-  },
-  {
-   "id": "grow-creature",
-   "name": "Grow the creature",
-   "category": "Creature",
-   "icon": "grow",
-   "ring": 2,
-   "gesture": null,
-   "command": "creature.grow",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    },
-    "amount": {
-     "type": "number",
-     "min": -1,
-     "max": 1,
-     "default": 0.25,
-     "desc": "growth added (its kind spans 0..1)"
-    }
-   },
-   "target": "entity",
-   "synonyms": [
-    "grow the creature",
-    "make the creature bigger",
-    "feed it up",
-    "shrink the creature"
-   ],
-   "desc": "Grow (or shrink) the creature at once: years of feeding in a moment."
-  },
-  {
-   "id": "creature-release",
-   "name": "Set the creature free",
-   "category": "Creature",
-   "icon": "free",
-   "ring": 2,
-   "gesture": null,
-   "command": "creature.release",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "creature id (default: your first)",
-     "entity": [
-      "creature"
-     ]
-    }
-   },
-   "target": "entity",
-   "synonyms": [
-    "set it free",
-    "release the creature",
-    "let it go"
-   ],
-   "desc": "Set the creature free."
   },
   {
    "id": "set-law",
@@ -10392,6 +10045,370 @@
     "harm": 0.2,
     "wonder": 0.8
    }
+  },
+  {
+   "id": "prophet-call",
+   "name": "Make a prophet",
+   "category": "Signs",
+   "icon": "disciple",
+   "ring": 0,
+   "gesture": null,
+   "command": "prophet.call",
+   "params": {},
+   "schema": {
+    "agent": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "agent"
+     ]
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "prophet",
+    "make a prophet",
+    "choose a prophet",
+    "my prophet",
+    "speak through",
+    "seer",
+    "chosen one",
+    "a voice for me"
+   ],
+   "desc": "Mark a grown person as your prophet: they speak for you, read your signs, foretell — and are believed as far as you make their words true.",
+   "cost": 20
+  },
+  {
+   "id": "prophet-foretell",
+   "name": "Foretell",
+   "category": "Signs",
+   "icon": "chronicle",
+   "ring": 0,
+   "gesture": null,
+   "command": "prophet.foretell",
+   "params": {},
+   "schema": {
+    "agent": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "agent"
+     ]
+    },
+    "what": {
+     "type": "enum",
+     "values": [
+      "rain",
+      "food",
+      "healing",
+      "warmth",
+      "protection",
+      "rebuilding",
+      "harm",
+      "sign"
+     ],
+     "default": "rain"
+    },
+    "days": {
+     "type": "number",
+     "min": 1,
+     "max": 5,
+     "default": 2,
+     "unit": "days"
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "foretell",
+    "prophecy",
+    "prophesy",
+    "tell them through",
+    "a prophecy",
+    "promise"
+   ],
+   "desc": "Speak through your prophet: \"rain will come in two days\". Then make it true — or their word, and yours, is worth less.",
+   "cost": 5
+  },
+  {
+   "id": "prophet-abandon",
+   "name": "Abandon a prophet",
+   "category": "Signs",
+   "icon": "forget",
+   "ring": 2,
+   "gesture": null,
+   "command": "prophet.abandon",
+   "params": {},
+   "schema": {
+    "agent": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "agent"
+     ]
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "abandon the prophet",
+    "turn from the prophet",
+    "forsake the prophet",
+    "false prophet"
+   ],
+   "desc": "Turn from a prophet: their credibility falls, and the town hears that the god has left them."
+  },
+  {
+   "id": "omen",
+   "name": "Send a sign",
+   "category": "Signs",
+   "icon": "sign",
+   "ring": 0,
+   "gesture": null,
+   "command": "god.omen",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "kind": {
+     "type": "enum",
+     "values": [
+      "eclipse",
+      "comet",
+      "flood",
+      "rainbow",
+      "lightning",
+      "aurora",
+      "red-rain",
+      "still-sun",
+      "sacred-animal",
+      "spring"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "sign",
+    "send a sign",
+    "an omen",
+    "omen",
+    "a portent",
+    "portent",
+    "show them a sign",
+    "give them a sign"
+   ],
+   "desc": "A sign over a town, made with your own powers — an eclipse, a comet, a rainbow, a lightning strike, a spring rising. Their prophet reads it to them.",
+   "cost": 10,
+   "cooldown": 60
+  },
+  {
+   "id": "omen-rainbow",
+   "name": "Rainbow",
+   "category": "Signs",
+   "icon": "sun-clear",
+   "ring": 1,
+   "gesture": null,
+   "command": "god.omen",
+   "params": {
+    "kind": "rainbow"
+   },
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "rainbow",
+    "a rainbow",
+    "bow in the sky"
+   ],
+   "desc": "A rainbow after rain, the sun low behind them: a promise where they trust you, a reprieve where they fear you.",
+   "cost": 4
+  },
+  {
+   "id": "omen-eclipse",
+   "name": "Eclipse",
+   "category": "Signs",
+   "icon": "d-eclipse",
+   "ring": 1,
+   "gesture": null,
+   "command": "god.omen",
+   "params": {
+    "kind": "eclipse"
+   },
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "eclipse",
+    "darken the sun",
+    "hide the sun",
+    "black sun for a day"
+   ],
+   "desc": "The sun darkens for a while: hardship foretold, or the god's anger.",
+   "cost": 20,
+   "cooldown": 240
+  },
+  {
+   "id": "sacred-place",
+   "name": "Hallow a place",
+   "category": "Signs",
+   "icon": "sprout",
+   "ring": 1,
+   "gesture": null,
+   "command": "place.sacred",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "kind": {
+     "type": "enum",
+     "values": [
+      "spring",
+      "grove",
+      "mountain",
+      "site"
+     ]
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "hallow",
+    "sacred place",
+    "make it sacred",
+    "holy place",
+    "consecrate",
+    "a sacred spring",
+    "a sacred grove",
+    "holy mountain"
+   ],
+   "desc": "Make a spring, a grove, a peak or a site sacred: shrines rise there, pilgrims come.",
+   "cost": 10
+  },
+  {
+   "id": "sacred-animal",
+   "name": "Sacred animal",
+   "category": "Signs",
+   "icon": "paw-new",
+   "ring": 2,
+   "gesture": null,
+   "command": "settlement.sacred",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "animal": {
+     "type": "enum",
+     "values": "animals"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "sacred animal",
+    "holy animal",
+    "revere",
+    "sacred beast",
+    "totem"
+   ],
+   "desc": "A real animal a town reveres: hunting it is taboo there.",
+   "cost": 5
+  },
+  {
+   "id": "answer-prayer",
+   "name": "Answer a prayer",
+   "category": "Signs",
+   "icon": "worship",
+   "ring": 0,
+   "gesture": null,
+   "command": "prayer.answer",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "prayer": {
+     "type": "int",
+     "min": 1
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "answer",
+    "answer the prayers",
+    "answer their prayer",
+    "hear them",
+    "grant their prayer",
+    "grant the prayer"
+   ],
+   "desc": "Do what a town is praying for — rain, food, mending, warmth, protection, rebuilding."
+  },
+  {
+   "id": "wrath",
+   "name": "Wrath",
+   "category": "Laws",
+   "icon": "fear",
+   "ring": 0,
+   "gesture": null,
+   "command": "set",
+   "params": {
+    "path": "god.wrath"
+   },
+   "schema": {
+    "value": {
+     "type": "number",
+     "min": 0,
+     "max": 1,
+     "default": 0.3
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "wrath",
+    "my wrath",
+    "severity",
+    "how hard i strike",
+    "be gentle",
+    "be merciful",
+    "be terrible"
+   ],
+   "desc": "How hard your harm falls: 0 gentle, 0.3 survivable (the default), 1 total destruction allowed."
   }
  ]
 }

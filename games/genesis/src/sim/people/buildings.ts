@@ -12,7 +12,7 @@ import type { Planet } from '../world/planet.ts';
 import { BuildingFlag } from '../types.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
 import { igniteCell } from '../fields/fire.ts';
-import { offsetPoint, distM, isLand } from './world.ts';
+import { offsetPoint, distM, isLand, spotInCell } from './world.ts';
 import { storeAdd, storeHas, storeTake } from './store.ts';
 import { availability } from './resources.ts';
 import { checkLoss, recomputeWritten } from './knowledge.ts';
@@ -260,6 +260,45 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
     }
     if (!clear) continue;
     return { pos: [out[0], out[1], out[2]], cell, rot: facing(out, st.pos) };
+  }
+  // (LIVING LAND §2.5: the spiral's 90 places start at the n-th for a town of n buildings — when the places it skipped
+  // (water, fields) have pushed its buildings out ahead of it, every one of them is taken: a town of 76 buildings found
+  // room for no house in years (_harness/scratch/living/land/live/whynosite.ts). Then the edge of the town: the free dry
+  // cells around it, ring by ring, a few spots in each.)
+  if (wall || outskirts || fn === 'mine' || centre !== st.pos) return null;
+  return edgeSite(x, st, t);
+}
+
+/** a place for building type t at the edge of st: the dry, free, unfarmed cells around its centre, nearest ring first
+ * (cells in index order), six spots in each; null if none within four rings */
+function edgeSite(x: PCtx, st: Settlement, t: number): { pos: [number, number, number]; cell: number; rot: number } | null {
+  const p = x.p, g = p.grid;
+  const def = x.c.buildings.list[t];
+  const seen = new Set<number>([st.cell]);
+  let ring = [st.cell];
+  const out: number[] = [0, 0, 0];
+  for (let d = 0; d <= 4; d++) {
+    for (const cell of ring) {
+      if (!isLand(p, cell) || p.f.water[cell] > 0.15 || p.f.lava[cell] > 0 || p.f.fire[cell] > 0.1) continue;
+      if (p.f.crop[cell] > 0.05 || st.fields.includes(cell)) continue;
+      let steep = 0;
+      for (let e = g.nbrStart[cell]; e < g.nbrStart[cell + 1]; e++) steep = Math.max(steep, Math.abs(p.f.surface[g.nbr[e]] - p.f.surface[cell]));
+      if (steep / p.edgeM > 0.55) continue;
+      for (let k = 0; k < 6; k++) {
+        spotInCell(p, cell, st.id * 64 + t, 0x5e1 + k, out);
+        if (p.cellAt(out) !== cell) continue;
+        let clear = true;
+        for (const b of x.ps.buildings) {
+          if (Math.abs(b.pos[0] - out[0]) + Math.abs(b.pos[1] - out[1]) + Math.abs(b.pos[2] - out[2]) > 0.05) continue;
+          if (distM(p, b.pos, out) < x.c.buildings.list[b.type].footprint + def.footprint + 1.5) { clear = false; break; }
+        }
+        if (clear) return { pos: [out[0], out[1], out[2]], cell, rot: facing(out, st.pos) };
+      }
+    }
+    const next: number[] = [];
+    for (const c of ring) for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) { const o = g.nbr[e]; if (!seen.has(o)) { seen.add(o); next.push(o); } }
+    next.sort((a, b) => a - b);
+    ring = next;
   }
   return null;
 }

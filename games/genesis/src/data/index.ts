@@ -21,7 +21,6 @@ import names from './names.json' with { type: 'json' };
 import events from './events.json' with { type: 'json' };
 import powers from './powers.json' with { type: 'json' };
 import disasters from './disasters.json' with { type: 'json' };
-import creatures from './creatures.json' with { type: 'json' };
 import lexicon from './lexicon.json' with { type: 'json' };
 import ships from './ships.json' with { type: 'json' };
 import plainsFolk from './species/plains-folk.json' with { type: 'json' };
@@ -55,7 +54,7 @@ export const BASE_PACK: ContentPack = {
   // the god layer (phase 3)
   powers: powers.powers as unknown as ContentPack['powers'],
   disasters: disasters.disasters as unknown as ContentPack['disasters'],
-  creatures: creatures.creatures as unknown as ContentPack['creatures'],
+  // (LIVING §3.5: creatures.json is no longer part of the game — the creature is gone; the file stays until DOCS removes it)
   lexicon: lexicon as unknown as ContentPack['lexicon'],
   // worlds and space (phase 4)
   ships: ships.ships as unknown as ContentPack['ships'],

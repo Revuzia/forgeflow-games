@@ -8,8 +8,11 @@
 // overhead at high latitudes, low on the horizon further south) and from orbit (glowing ovals round the poles). Its
 // strength is magnetism × (a quiet glow + the star's activity + storms: GodFx adds solar flares, magnetic storms and
 // aurora-storm weather), and it fades where the sun is up.
+// (additive, world-events lane) Two more lights of the night side: the AIRGLOW — a faint green shell of emission high in
+// the air on the night side, seen edge-on as a thin bright line along the limb from orbit — and the aurora's own light
+// on what lies under its ovals (uAurora: render/planet/terrainmat.ts tints the ground, snow and ice green by it).
 
-import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3, type IUniform } from 'three';
+import { BackSide, BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, SphereGeometry, Vector3, Vector4, type IUniform } from 'three';
 import { ADD_LIGHT, FX_DEPTH_GLSL, FX_LAYER } from '../fx/fxcommon.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 
@@ -81,6 +84,63 @@ void main() {
 }
 `;
 
+/** the airglow shell: emission along the eye's ray through a thin layer high in the air, on the night side only */
+const GLOW_VERT = /* glsl */ `
+varying vec3 vB;
+varying vec3 vCamB;
+void main() {
+  vB = position;
+  // the eye in the body frame (the planet group carries no scale)
+  vCamB = transpose(mat3(modelMatrix)) * (cameraPosition - modelMatrix[3].xyz);
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+}
+`;
+const GLOW_FRAG = /* glsl */ `
+${FX_DEPTH_GLSL}
+uniform float uRg;
+uniform float uRa;
+uniform float uRb;
+uniform vec3 uSunDirBody;
+uniform float uGlowK;
+varying vec3 vB;
+varying vec3 vCamB;
+vec2 hitSphere(vec3 o, vec3 d, float r) {
+  float b = dot(o, d);
+  float c = dot(o, o) - r * r;
+  float h = b * b - c;
+  if (h < 0.0) return vec2(1e9, -1e9);
+  h = sqrt(h);
+  return vec2(-b - h, -b + h);
+}
+void main() {
+  vec3 o = vCamB;
+  vec3 d = normalize(vB - vCamB);
+  vec2 tb = hitSphere(o, d, uRb);
+  if (tb.y <= 0.0) discard;
+  vec2 ta = hitSphere(o, d, uRa);
+  vec2 tg = hitSphere(o, d, uRg);
+  float tEnd = tg.x > 0.0 && tg.y > tg.x ? tg.x : 1e9;
+  // the two pieces of the ray inside the shell (before the inner sphere, after it), cut where the ground stops it
+  float t0 = max(tb.x, 0.0), t1 = min(tb.y, tEnd);
+  float L = 0.0;
+  vec3 mid = o + d * (0.5 * (t0 + t1));
+  if (ta.y > ta.x && ta.x < 1e8) {
+    L += max(0.0, min(ta.x, t1) - t0);
+    L += max(0.0, t1 - max(ta.y, t0));
+    float tm = clamp(ta.x, t0, t1);
+    mid = o + d * tm;
+  } else L = max(0.0, t1 - t0);
+  if (L <= 0.0) discard;
+  float night = smoothstep(0.08, -0.2, dot(normalize(mid), uSunDirBody));
+  float k = L / max(uRb - uRa, 1.0) * night * uGlowK;
+  if (k <= 0.0) discard;
+  // the oxygen green, a little red above it
+  vec3 c = vec3(0.22, 0.95, 0.42) * k + vec3(0.5, 0.12, 0.08) * k * 0.15;
+  gl_FragColor = vec4(c * 0.00045 * fxDisplay(0.35), 0.0);
+}
+`;
+
 export class Aurora {
   readonly group = new Group();
   private meshes: Mesh[] = [];
@@ -88,10 +148,15 @@ export class Aurora {
   /** the poleward oval's (fainter) strength */
   private uK2: IUniform = { value: 0 };
   level = 0;
+  private shared: Record<string, IUniform>;
+  private glow: Mesh;
+  private glowU: Record<string, IUniform>;
+  private curtains: Mesh[] = [];
 
   constructor(fx: Record<string, IUniform>, shared: Record<string, IUniform>) {
     this.group.name = 'aurora';
     this.group.matrixAutoUpdate = false;
+    this.shared = shared;
     this.u = { uR0: { value: 3300 }, uR1: { value: 3800 }, uK: { value: 0 }, uTilt: { value: new Vector3(0.12, 1, 0.05) } };
     const N = 384, M = 6;
     const pos = new Float32Array((N + 1) * (M + 1) * 3);
@@ -114,9 +179,19 @@ export class Aurora {
         m.layers.set(FX_LAYER);
         m.renderOrder = 1;
         this.meshes.push(m);
+        this.curtains.push(m);
         this.group.add(m);
       }
     }
+    // the airglow: a sphere just outside the air (back faces: once over the world's disc from outside, everywhere inside)
+    this.glowU = { uRg: { value: 3000 }, uRa: { value: 3300 }, uRb: { value: 3450 }, uSunDirBody: shared.uSunDirBody, uGlowK: { value: 1 } };
+    for (const k of Object.keys(fx)) this.glowU[k] = fx[k];
+    this.glow = new Mesh(new SphereGeometry(1, 96, 64), new ShaderMaterial({ vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG, uniforms: this.glowU, transparent: true, depthTest: false, depthWrite: false, ...ADD_LIGHT, side: BackSide }));
+    this.glow.frustumCulled = false;
+    this.glow.layers.set(FX_LAYER);
+    this.glow.renderOrder = 0;
+    this.glow.matrixAutoUpdate = true;
+    this.group.add(this.glow);
   }
 
   /** strength from magnetism, star activity and storms (boost); shell radii from the planet and its air */
@@ -128,8 +203,28 @@ export class Aurora {
     this.uK2.value = this.level * 0.55;
     this.u.uR0.value = radius + airTop * 0.55;
     this.u.uR1.value = radius + airTop * 1.35;
-    this.group.visible = this.level > 0.01;
+    for (const m of this.curtains) m.visible = this.level > 0.01;
+    // the airglow shell (any world with air): a thin layer high in it
+    this.glow.visible = hasAir;
+    this.glow.scale.setScalar(radius + airTop * 0.95);
+    this.glow.updateMatrix();
+    this.glowU.uRg.value = radius;
+    this.glowU.uRa.value = radius + airTop * 0.6;
+    this.glowU.uRb.value = radius + airTop * 0.78;
+    this.group.visible = hasAir;
+    // the ovals' light on the ground under them (render/planet/terrainmat.ts uAurora)
+    const ua = this.shared.uAurora?.value as Vector4 | undefined;
+    if (ua && ua.set) {
+      const t = this.u.uTilt.value as Vector3;
+      const l = t.length() || 1;
+      ua.set(t.x / l, t.y / l, t.z / l, this.level > 0.01 ? this.level : 0);
+    }
   }
 
-  dispose(): void { for (const m of this.meshes) (m.material as ShaderMaterial).dispose(); this.meshes[0]?.geometry.dispose(); }
+  dispose(): void {
+    for (const m of this.meshes) (m.material as ShaderMaterial).dispose();
+    this.meshes[0]?.geometry.dispose();
+    this.glow.geometry.dispose();
+    (this.glow.material as ShaderMaterial).dispose();
+  }
 }

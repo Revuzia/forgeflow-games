@@ -101,7 +101,14 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-cal .gn-sep { color: var(--gn-gold); opacity: 0.7; margin: 0 2px; }
 .gn-cal .gn-clock { font-family: var(--gn-mono); font-size: 12.5px; color: var(--gn-gold-hi); margin-left: auto; }
 .gn-sky { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 2px; transform: translateY(1px); box-shadow: 0 0 8px currentColor; }
-.gn-speeds { margin-top: 10px; display: flex; gap: 4px; align-items: center; }
+.gn-speeds { margin-top: 10px; display: flex; align-items: center; }
+/* the speed presets as one segmented row (eleven of them since the living-world pace: pause, 1× … 3000×) */
+.gn-speeds .gn-spd { min-width: 0; padding: 6px 6px; margin-left: -1px; border-radius: 0; font: 600 11px/1 var(--gn-mono); letter-spacing: 0; }
+.gn-speeds .gn-spd:first-child { margin-left: 0; padding: 6px 8px; border-radius: 7px 0 0 7px; }
+.gn-speeds .gn-spd:last-child { border-radius: 0 7px 7px 0; }
+.gn-speeds .gn-spd.gn-on { position: relative; z-index: 1; }
+.gn-timerow { margin-top: 7px; display: flex; gap: 6px; align-items: center; }
+.gn-lapse { font-style: normal; color: var(--gn-gold-hi); letter-spacing: .06em; }
 .gn-stepwrap { position: relative; display: flex; }
 .gn-step { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .gn-step-caret { min-width: 18px; padding: 7px 3px; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
@@ -143,6 +150,8 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-marker .gn-label { font: 500 11px var(--gn-sans); letter-spacing: .26em; text-transform: uppercase; color: var(--gn-ivory); text-shadow: 0 1px 6px #000; white-space: nowrap; }
 .gn-marker .gn-label small { display: block; text-align: center; letter-spacing: .12em; color: var(--gn-ivory-dim); font-size: 11px; margin-top: 2px; }
 .gn-marker.gn-moon .gn-ring { width: 12px; height: 12px; border-color: rgba(156, 196, 255, .4); }
+.gn-marker.gn-near .gn-label { opacity: 0; }
+.gn-marker.gn-near:hover .gn-label { opacity: 1; }
 
 /* ── settlement names over the world ── */
 .gn-labels { pointer-events: none; }
@@ -537,6 +546,7 @@ button.gn-chron-e:hover { background: rgba(255, 255, 255, .04); }
 .gn-save-noimg svg { width: 24px; height: 24px; }
 .gn-save-name { font: 600 16px var(--gn-serif); color: var(--gn-gold-hi); }
 .gn-save-sub { font: 500 13px var(--gn-sans); color: var(--gn-ivory-dim); }
+.gn-save-packs { color: var(--gn-gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46ch; }
 .gn-save-acts { display: flex; gap: 4px; }
 .gn-save-acts .gn-ico { width: 12px; height: 12px; }
 
@@ -584,7 +594,7 @@ body.gn-reduce-motion .gn-toast, body.gn-reduce-motion .gn-insp, body.gn-reduce-
 body.gn-reduce-motion .gn-route, body.gn-reduce-motion .gn-herepin-p, body.gn-reduce-motion .gn-tool, body.gn-reduce-motion .gn-ff, body.gn-reduce-motion .gn-pal { animation: none !important; }
 
 /* clean frames: __GENESIS__.ui(false), H, photo mode — the ForgeFlow portal bar (public/game_controls.js) hides too */
-.genesis-clean #__ff_controls__ { display: none !important; }
+.genesis-clean #__ff_controls__, .genesis-clean #__ffg_touch__ { display: none !important; }
 
 /* ── the hand as the cursor (until the render lane draws it in the world): open over what it can take, closed while
    it carries or presses, a crosshair with a power armed or a throw aimed ── */
@@ -710,7 +720,7 @@ body[data-hand='aim'] #game { cursor: crosshair; }
 .gn-open-veil.gn-lit .gn-open-touch { opacity: 0; animation: none; }
 @keyframes gnOpenIn { from { opacity: 0; filter: blur(6px); transform: translateY(6px); } to { opacity: .92; filter: none; transform: none; } }
 @keyframes gnBreathe { 50% { opacity: .45; } }
-.gn-whisper { position: absolute; left: 50%; top: calc(20px + 60px * var(--gn-ui-scale)); width: min(720px, calc(100vw - 40px)); transform: translateX(-50%) scale(var(--gn-ui-scale)); transform-origin: top center;
+.gn-whisper { position: absolute; left: 50%; top: calc(24px + 158px * var(--gn-ui-scale)); width: min(720px, calc(100vw - 40px)); transform: translateX(-50%) scale(var(--gn-ui-scale)); transform-origin: top center;
   text-align: center; pointer-events: none; opacity: 0; filter: blur(5px); transition: opacity 1.1s ease, filter 1.1s ease; }
 /* a soft dusk behind the words (no box): they stay legible over a bright cloud deck or a sunlit limb */
 .gn-whisper::after { content: ''; position: absolute; inset: -34px -90px -26px; z-index: -1; pointer-events: none;
@@ -863,6 +873,12 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-cam-keys { font: 500 12.5px var(--gn-sans); color: var(--gn-ivory-dim); }
 .gn-cam-chip .gn-btn { padding: 5px 10px; }
 .gn-cam-chip-short .gn-cam-long { display: none; }
+/* a window too narrow for the chip beside the time panel: it sits just under the panel, on the left (clear of the
+   inspector, which opens on the right) */
+.gn-cam-chip.gn-cam-chip-low { left: 18px; top: calc(28px + 146px * var(--gn-ui-scale)); transform: scale(var(--gn-ui-scale)); transform-origin: top left; max-width: calc(100vw - 36px);
+  animation-name: gnRiseLeft; }
+/* (its own rise: the centred chip's keeps a translateX(-50%) that would pull a left-aligned one off the screen) */
+@keyframes gnRiseLeft { from { opacity: 0; transform: translateY(6px) scale(var(--gn-ui-scale)); } to { opacity: 1; transform: scale(var(--gn-ui-scale)); } }
 .gn-cam-cross { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 1.5px solid rgba(243, 223, 174, .75); box-shadow: 0 0 6px rgba(0, 0, 0, .6); pointer-events: none; }
 .gn-cam-cross::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: var(--gn-gold-hi); }
 .gn-cam-menu { position: absolute; left: 50%; bottom: calc(96px * var(--gn-ui-scale)); transform: translateX(-50%) scale(var(--gn-ui-scale)); transform-origin: bottom center; width: 300px; padding: 8px; pointer-events: auto;
@@ -870,7 +886,7 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-cam-menu[hidden] { display: none; }
 .gn-cam-mh { font: 600 10.5px var(--gn-sans); letter-spacing: .26em; text-transform: uppercase; color: var(--gn-gold); padding: 4px 8px 6px; }
 .gn-cam-mi { pointer-events: auto; cursor: pointer; display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 8px 9px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--gn-ivory); text-align: left; }
-.gn-cam-mi.gn-sel, .gn-cam-mi:focus-visible { border-color: var(--gn-line-gold); background: rgba(217, 184, 120, .1); outline: none; }
+.gn-cam-mi.gn-cam-on, .gn-cam-mi:focus-visible { border-color: var(--gn-line-gold); background: rgba(217, 184, 120, .1); outline: none; }
 .gn-cam-mi:disabled { opacity: .38; cursor: default; }
 .gn-cam-ml { font: 600 16px var(--gn-serif); }
 
@@ -922,3 +938,37 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-ph-shot img { display: block; height: 42px; }
 .gn-ph-shot:hover { border-color: var(--gn-line-gold); }
 
+
+/* ── round 3: the speed keys, the quiet opening HUD, the key strip that learns, the hidden-interface note ── */
+.gn-speeds .gn-spd { position: relative; }
+/* a preset's own key in its corner (1 2 3 4 → 1× 10× 100× 1000×) */
+.gn-speeds .gn-spd[data-key]::after { content: attr(data-key); position: absolute; right: 1px; top: 0; font: 600 7.5px/1 var(--gn-mono); color: var(--gn-gold); opacity: .62; pointer-events: none; }
+.gn-speeds .gn-spd.gn-on[data-key]::after { color: #15110a; opacity: .55; }
+.gn-ui.gn-quiet .gn-speeds .gn-spd[data-s="100"] { border-radius: 0 7px 7px 0; }
+.gn-ui.gn-quiet .gn-stepwrap { display: none; }
+.gn-hint-i { display: inline-block; transition: opacity .55s ease, filter .55s ease; }
+.gn-hint-i.gn-gone { opacity: 0; filter: blur(3px); }
+.gn-hidden-note { position: fixed; left: 50%; bottom: 28px; z-index: 30; transform: translateX(-50%); pointer-events: none; font: 600 11px var(--gn-sans); letter-spacing: .22em; text-transform: uppercase;
+  color: var(--gn-ivory); background: rgba(8, 10, 16, .6); border: 1px solid var(--gn-line); border-radius: 999px; padding: 8px 18px; opacity: 0; }
+.gn-hidden-note[hidden] { display: none; }
+.gn-hidden-note.gn-on { animation: gnNote 4.2s ease both; }
+@keyframes gnNote { 0% { opacity: 0; transform: translate(-50%, 6px); } 10%, 72% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+
+/* ── the opening: the spot the people's whisper suggests, ringed on the ground ── */
+.gn-open-ring { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; width: 0; height: 0; will-change: transform; }
+.gn-open-ring[hidden] { display: none; }
+.gn-open-ring-o { position: absolute; left: -34px; top: -34px; width: 68px; height: 68px; border-radius: 50%; border: 1.5px solid rgba(243, 223, 174, .9);
+  box-shadow: 0 0 18px rgba(243, 223, 174, .35), inset 0 0 14px rgba(243, 223, 174, .2); animation: gnRingPulse 2.6s ease-in-out infinite; }
+.gn-open-ring-l { position: absolute; left: 0; top: 44px; transform: translateX(-50%); white-space: nowrap; font: italic 500 16px var(--gn-serif); color: var(--gn-gold-hi);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .95), 0 0 14px rgba(0, 0, 0, .85); animation: gnFade 1.2s ease both; }
+@keyframes gnRingPulse { 0%, 100% { transform: scale(1); opacity: .95; } 50% { transform: scale(1.12); opacity: .6; } }
+body.gn-reduce-motion .gn-open-ring-o { animation: none; }
+
+/* ── a power's warning at the cursor (a people set down where they cannot live) ── */
+.gn-tool-warn { position: fixed; left: 0; top: 0; z-index: 3; pointer-events: none; max-width: 300px; font: 600 12px/1.3 var(--gn-sans); letter-spacing: .02em; color: #ffe2cf;
+  background: rgba(46, 14, 10, .82); border: 1px solid rgba(255, 140, 110, .55); border-radius: 7px; padding: 5px 9px; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); will-change: transform; }
+.gn-tool-warn.gn-mild { color: var(--gn-ivory); background: rgba(14, 18, 30, .82); border-color: var(--gn-line-gold); }
+.gn-tool-warn[hidden] { display: none; }
+
+/* ── photo mode: what is sharp ── */
+.gn-ph-sharp { font: 500 11.5px var(--gn-sans); color: var(--gn-ivory-dim); margin: 2px 0 2px 90px; }

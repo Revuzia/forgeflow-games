@@ -38,6 +38,7 @@ import { interrupt } from './people.ts';
 import { insertSorted } from './lifecycle.ts';
 import { bestBoat, routeBetween } from './missions.ts';
 import { animalDef } from '../life/herds.ts';
+import { witnessAct, relDaily, effectiveKind, meansNow } from '../god/regard.ts';
 
 // ───────────────────────────── tongues ─────────────────────────────
 
@@ -180,35 +181,14 @@ export function witness(p: Planet, pos: ArrayLike<number>, radius: number, kind:
   const ps = p.people;
   const c = ps?.contentRef;
   if (!ps || !c || ps.agents.count === 0 && !ps.settlements.length) return 0;
-  const info = speciesInfo(c);
-  const A = ps.agents;
   const g = Math.max(0, Math.min(GODS - 1, god | 0));
   const tick = ps.now;
   const R = p.st.radius;
-  const pt = [0, 0, 0];
   const mag = Math.max(0, Math.min(2, magnitude));
-  let n = 0;
-  for (let s = 0; s < A.hi; s++) {
-    if (!A.alive[s]) continue;
-    A.posAt(s, tick, pt);
-    const d0 = pt[0] * pos[0] + pt[1] * pos[1] + pt[2] * pos[2];
-    const d = Math.acos(d0 > 1 ? 1 : d0 < -1 ? -1 : d0) * R;
-    if (d > radius) continue;
-    const k = 1 - d / Math.max(1, radius);
-    const sp = info[A.species[s]].def;
-    const piety = A.traits[s * NT + TRAIT.piety];
-    const bold = A.traits[s * NT + TRAIT.boldness];
-    let love = 0, fear = 0;
-    if (kind === 'help') love = mag * k * sp.god.awe * (0.5 + piety);
-    else if (kind === 'harm') fear = mag * k * sp.god.fear * (0.6 + (1 - bold) * 0.5);
-    else { love = 0.45 * mag * k * sp.god.awe * (0.4 + piety); fear = 0.3 * mag * k * sp.god.fear; }
-    const i = s * GODS + g;
-    A.love[i] = Math.min(1, A.love[i] + love);
-    A.fear[i] = Math.min(1, A.fear[i] + fear);
-    A.flags[s] |= AgentFlag.sees_god;
-    if (mag * k >= 0.15) A.remember(s, kind === 'harm' ? MEMK.fear : MEMK.miracle, tick, -1);
-    n++;
-  }
+  // LIVING §3.1: faith, fear, trust and loyalty move by what the act is to each witness, who remember a strong sight
+  // (god/regard.ts); an act that killed someone is read as harm
+  const n = witnessAct(p, pos, radius, kind, mag, g);
+  const read = effectiveKind(kind);
   // the settlements that saw it remember, and will tell what they made of it
   for (const st of ps.settlements) {
     if (st.fallen >= 0) continue;
@@ -216,7 +196,7 @@ export function witness(p: Planet, pos: ArrayLike<number>, radius: number, kind:
     const d = Math.acos(d0 > 1 ? 1 : d0 < -1 ? -1 : d0) * R;
     if (d > radius + st.territory) continue;
     st.recent.godSeen = tick;
-    if (mag >= 0.3 && !ps.pending.some((r) => r.sid === st.id)) ps.pending.push({ sid: st.id, kind, mag, god: g });
+    if (mag >= 0.3 && !ps.pending.some((r) => r.sid === st.id)) ps.pending.push({ sid: st.id, kind: read, mag, god: g });
   }
   return n;
 }
@@ -259,21 +239,15 @@ export function cultureDaily(x: PCtx, st: Settlement): void {
   const A = x.A;
   const members = x.ps.members.get(st.id) ?? [];
   const n = members.length;
-  // faith decays with neglect
+  // faith decays with neglect (LIVING §3.1: the daily drift of faith, fear, trust and loyalty — god/regard.ts)
   const seen = st.recent.godSeen !== undefined && x.tick - st.recent.godSeen < 3 * x.day;
+  relDaily(x, st, seen);
   const love = [0, 0, 0, 0], fear = [0, 0, 0, 0];
   let none = 0;
   for (const s of members) {
-    const piety = A.traits[s * NT + TRAIT.piety];
-    // the god layer's law 'belief.decay' scales how fast neglected faith fades (god/params)
-    const dk = x.u.god.law('belief.decay');
-    const lk = 1 - (seen ? 0.004 : 0.025) * (1.2 - piety) * dk;
-    const fk = 1 - (seen ? 0.01 : 0.045) * dk;
     let any = 0;
     for (let g = 0; g < GODS; g++) {
       const i = s * GODS + g;
-      A.love[i] = Math.round(A.love[i] * lk * 10000) / 10000;
-      A.fear[i] = Math.round(A.fear[i] * fk * 10000) / 10000;
       love[g] += A.love[i];
       fear[g] += A.fear[i];
       any = Math.max(any, A.love[i] + A.fear[i]);
@@ -299,7 +273,9 @@ export function cultureDaily(x: PCtx, st: Settlement): void {
   tabooFromStories(x, st);
   sacredFromStories(x, st);
   fadeTaboos(x, st);
-  if (st.culture.alignment < -0.4) sacrifice(x, st);
+  // (LIVING §3.2: burnt offerings where fear runs past trust by 0.3; a beast from the pens only past fear 0.8; never people)
+  const m = meansNow(x, st);
+  if (m.n > 0 && m.fear > m.trust + 0.3) sacrifice(x, st, m.fear > 0.8);
 }
 
 /** taboos sworn after what happened to them */
@@ -379,10 +355,10 @@ function fadeTaboos(x: PCtx, st: Settlement): void {
 }
 
 /** fearful cultures make offerings: the best of the harvest burned, a beast from the pens */
-function sacrifice(x: PCtx, st: Settlement): void {
+function sacrifice(x: PCtx, st: Settlement, beast: boolean): void {
   const temple = x.ps.of(st.id).some((b) => b.progress >= 1 && !(b.flags & 2) && x.c.buildings.list[b.type].function === 'temple');
   if (!temple || hashFloat(st.id, x.tick, 0x5ac1) > 0.3) return;
-  const herd = x.ps.herds.find((h) => h.owner === st.id && h.count >= 3);
+  const herd = beast ? x.ps.herds.find((h) => h.owner === st.id && h.count >= 3) : undefined;
   let what = '';
   if (herd) { herd.count -= 1; what = animalDef(x, herd.species).name.toLowerCase(); }
   else {

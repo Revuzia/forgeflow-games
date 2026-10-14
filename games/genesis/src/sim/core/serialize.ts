@@ -19,13 +19,16 @@
 // flight with their crews, what each people has seen of the sky, colonies across worlds, debris rings; the list of
 // content packs by name and version); 1.4 phase 4, second pass (each ship's set-aside goods and the progress of its
 // program, the sicknesses its crew carry unseen, the place a ship called down from orbit glides from; the god's
-// inventions frozen in place before a pack that came in after them).
+// inventions frozen in place before a pack that came in after them); 1.5 the living-world program (LIVING.md §6.3: one
+// bump for all its lanes; their steps are core/migrate15.ts LIVING_MIGRATIONS — PACE: the agents' trips and working
+// day).
 
 import type { TypedArray } from './hash.ts';
+import { LIVING_MIGRATIONS } from './migrate15.ts';
 
 export const SAVE_MAGIC = 'GNSS';
 export const SAVE_MAJOR = 1;
-export const SAVE_MINOR = 4;
+export const SAVE_MINOR = 5;
 
 export type BlobType = 'f32' | 'f64' | 'i8' | 'u8' | 'i16' | 'u16' | 'i32' | 'u32';
 
@@ -175,4 +178,6 @@ function migrate(major: number, minor: number, header: Record<string, unknown>):
   // 1.3 -> 1.4: ships without set-aside goods, progress marks, latent sicknesses or a descent start (space/state.ts
   // fills them per ship: nothing set aside, progress counted from the phase's start), and no frozen god-made packs
   if (minor < 4 && header.frozen === undefined) header.frozen = [];
+  // 1.4 -> 1.5: the living-world program (every lane's step, in order: core/migrate15.ts)
+  if (minor < 5) for (const step of LIVING_MIGRATIONS) step(header);
 }

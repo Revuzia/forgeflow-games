@@ -35,7 +35,7 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import type { PlanetView, WorldView } from '../../client/worldview.ts';
-import type { ShipView } from '../../sim/types.ts';
+import type { FieldName, ShipView } from '../../sim/types.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import { orbitOffset, spinAt, type D3 } from '../../client/orbits.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
@@ -50,9 +50,10 @@ import { SPART, SS, eraRank, ERA, shipModel, type ShipModel, type ShipPart } fro
 import { KitBuilder } from '../gen/meshkit.ts';
 import { groundHeight as groundHeightOf } from '../../sim/grid/surface.ts';
 import { buildingAt } from './catalog.ts';
-import { LaunchFx, type LaunchPlanetCtx, type Propellant } from '../fx/launch.ts';
+import { paletteFor } from '../planet/terrainmat.ts';
+import { FX_LAYER, LaunchFx, type LaunchPlanetCtx, type Propellant } from '../fx/launch.ts';
 import type { CameraPose } from '../frame.ts';
-import { Avatar, AVATAR_STATE } from '../camera/avatar.ts';
+import { Avatar, AVATAR_STATE, GOD_WIND, regardColour } from '../camera/avatar.ts';
 import { sunIlluminance } from '../frame.ts';
 import { blackbody } from '../../client/orbits.ts';
 
@@ -259,6 +260,11 @@ const FRAG_SURFACE = /* glsl */ `
     alb = vec3(0.01);
     sEm += c * 6.0 * uShip2.z;
     sRough = 0.1;
+  } else if (code == 59) {
+    // a landing light's lens: a white-hot steady lamp while the ship is crewed (its light on the ground is a deferred
+    // light, render/fx/launch.ts)
+    alb = vec3(0.9, 0.9, 0.88); sRough = 0.08; sMetal = 0.0;
+    sEm += vec3(6.0, 5.7, 5.1) * 4.0 * step(0.5, uShip2.y);
   } else if (code == 5) {
     // planks along the hull: strakes with dark seams (caulking), grain
     float m = seams(vec2(uvv.x * 0.25, uvv.y), vec2(1.4, 0.22), 0.01, fw, cell);
@@ -327,6 +333,14 @@ const FRAG_LIGHT = /* glsl */ `
     sunL.color = sunCol;
     sunL.visible = true;
     RE_Direct(sunL, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+    // painted panels and bright steel carry a clear lacquer: a tight glint of the sun over the broad sheen of the paint
+    if (code == 40 || code == 57 || code == 41) {
+      vec3 hv = normalize(uSunDirView + geometryViewDir);
+      float ndh = max(dot(geometryNormal, hv), 0.0);
+      float ndl = clamp(dot(geometryNormal, uSunDirView), 0.0, 1.0);
+      float fres = 0.04 + 0.96 * pow(1.0 - clamp(dot(geometryViewDir, hv), 0.0, 1.0), 5.0);
+      reflectedLight.directSpecular += sunCol * pow(ndh, code == 40 ? 220.0 : 140.0) * fres * ndl * (code == 40 ? 9.0 : 5.0);
+    }
 #ifdef SHIP_SAIL
     // sunlight through the canvas (seen from the shaded side, a sail glows)
     float back = max(0.0, -dot(geometryNormal, uSunDirView));
@@ -352,11 +366,22 @@ const FRAG_AMBIENT = /* glsl */ `
 #ifdef SHIP_SAIL
     ao = 1.0;
 #endif
-    iblIrradiance += (skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient) * ao;
+    // above the air the sky is black: what lights the shaded side is the world below (earthshine — its lit share of
+    // the face seen, albedo ~0.3, a little blue from the air), from beneath; and what paint and metal mirror is that
+    // bright disc below and the dark above, not a sky dome
+    float rS = length(vBodyPos);
+    float spaceK = smoothstep(uRt, uRt + (uRt - uRg) * 0.8, rS);
+    float litFace = clamp(0.5 + 0.5 * dot(upB, uSunDirBody), 0.0, 1.0);
+    float cover = clamp((uRg * uRg) / (rS * rS), 0.0, 1.0);
+    vec3 earthE = uSunE * 0.3 * litFace * cover * vec3(0.82, 0.92, 1.08);
+    float down = max(0.0, -dot(nB, upB));
+    vec3 earthIrr = earthE * (0.7 * down + 0.3 * (1.0 - abs(dot(nB, upB)))) + uNightAmbient * 0.3;
+    iblIrradiance += mix((skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient) * ao, earthIrr * ao, spaceK);
     vec3 rB = reflect(-vB, nB);
     float horizonK = smoothstep(-0.05, 0.3, dot(rB, upB));
+    float belowK = smoothstep(0.05, -0.45, dot(rB, upB));
     rB = normalize(rB + upB * max(0.0, -dot(rB, upB)) * 1.05);
-    radiance += skyRadiance(upB, rB, uSunDirBody) * horizonK * ao;
+    radiance += mix(skyRadiance(upB, rB, uSunDirBody) * horizonK * ao, earthE * (1.0 / 3.14159) * belowK * ao, spaceK);
 #endif
   }
 `;
@@ -392,7 +417,7 @@ function makeShipMaterial(shared: Record<string, IUniform>, own: Record<string, 
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => `genesis-ship-v1-${variant}-${space ? 's' : 'p'}`;
+  mat.customProgramCacheKey = () => `genesis-ship-v2-${variant}-${space ? 's' : 'p'}`;
   return mat;
 }
 
@@ -469,15 +494,29 @@ function drawLabel(sp: Sprite, text: string, sub: string): void {
   const g = cv.getContext('2d');
   if (!g) return;
   g.clearRect(0, 0, cv.width, cv.height);
+  // a dark glass plate behind the text: an orbit line passing behind never cuts through the letters
+  g.font = '600 26px system-ui, -apple-system, "Segoe UI", sans-serif';
+  const w1 = g.measureText(text).width;
+  g.font = '500 19px system-ui, -apple-system, "Segoe UI", sans-serif';
+  const w2 = g.measureText(sub).width;
+  const pw = Math.min(cv.width - 2, Math.max(w1, w2) + 22);
+  g.fillStyle = 'rgba(6, 8, 14, 0.62)';
+  g.beginPath();
+  if (typeof g.roundRect === 'function') g.roundRect(1, 3, pw, 58, 12); else g.rect(1, 3, pw, 58);
+  g.fill();
+  g.strokeStyle = 'rgba(255, 233, 196, 0.16)';
+  g.lineWidth = 1.5;
+  g.stroke();
   g.font = '600 26px system-ui, -apple-system, "Segoe UI", sans-serif';
   g.textBaseline = 'middle';
   g.shadowColor = 'rgba(0,0,0,0.85)';
   g.shadowBlur = 6;
   g.fillStyle = '#ffe9c4';
-  g.fillText(text, 4, 22);
+  g.fillText(text, 12, 22);
   g.font = '500 19px system-ui, -apple-system, "Segoe UI", sans-serif';
   g.fillStyle = '#c9d3e6';
-  g.fillText(sub, 4, 48);
+  g.fillText(sub, 12, 47);
+  g.shadowBlur = 0;
   tex.needsUpdate = true;
 }
 function kindInfo(kind: string): KindInfo {
@@ -518,6 +557,8 @@ function eraOf(view: WorldView, s: ShipView): string {
 
 function propellant(model: ShipModel, stage: number): Propellant {
   if (model.shape === 'rocket' && eraRank(model.era) < ERA.electric) return 'powder';
+  // a lander's throttled descent engine burns clean: a faint pale-blue flame
+  if (model.shape === 'lander') return 'hydrolox';
   if (model.shape === 'generation-ship' || model.shape === 'ark' || model.shape === 'ark-lander') return 'methalox';
   return stage >= 1 ? 'hydrolox' : 'kerolox';
 }
@@ -569,8 +610,9 @@ interface Track {
   fired: Set<string>;
   lastLost: boolean;
   seenAt: number;
-  /** system-view trail */
+  /** system-view trail: the flown part (a bright core over a soft glow) and the plan ahead (dashed) */
   trail: Line2 | null;
+  trailGlow: Line2 | null;
   trailAhead: Line2 | null;
   trailKey: string;
   /** system-view label */
@@ -615,6 +657,7 @@ const _v3 = new Vector3();
 const _x = new Vector3();
 const _y = new Vector3();
 const _z = new Vector3();
+const _rc: [number, number, number] = [0, 0, 0];
 
 /** quaternion from a basis: +Y = up, +Z = fwd (orthonormalised) */
 function basisQ(up: Vector3, fwd: Vector3, out: Quaternion): Quaternion {
@@ -698,7 +741,7 @@ export class ShipLayer {
     this.resolution.set(w, h);
     this.pixelRatio = pixelRatio;
     this.glintMat.uniforms.uPixelRatio.value = pixelRatio;
-    for (const t of this.tracks.values()) for (const l of [t.trail, t.trailAhead]) if (l) (l.material as LineMaterial).resolution.set(w, h);
+    for (const t of this.tracks.values()) for (const l of [t.trail, t.trailGlow, t.trailAhead]) if (l) (l.material as LineMaterial).resolution.set(w, h);
   }
 
   // ── models and materials ──
@@ -756,7 +799,7 @@ export class ShipLayer {
       id: s.id, view: s, kind: s.kind, info, era, form: 'launch', model: shipModel(s.kind, era, 'launch', s.id), root, nodes: [], own,
       hullMat: null, spentMat: null, spentShip2: new Vector4(0, 0, 0, 0), sailMat: null, hullDepth: makeShipDepth(own, 'hull'), sailDepth: makeShipDepth(own, 'sail'), matPlanet: -99,
       samples: [], phase: s.phase, phaseT0: 0, phaseLen: 1, padDir: null, padYaw: 0, padGround: 0, deck: 0, rig: null, fired: new Set(),
-      lastLost: s.phase === 'lost', seenAt: 0, trail: null, trailAhead: null, trailKey: '', label: null, ignited: s.phase !== 'building' && s.phase !== 'fuelling' && s.phase !== 'boarding' && s.phase !== 'pad',
+      lastLost: s.phase === 'lost', seenAt: 0, trail: null, trailGlow: null, trailAhead: null, trailKey: '', label: null, ignited: s.phase !== 'building' && s.phase !== 'fuelling' && s.phase !== 'boarding' && s.phase !== 'pad',
       phaseSeen: view.renderTick, lostAt: -1e9, padKey: '',
       pose: { id: s.id, kind: s.kind, phase: s.phase, planet: s.planet, body: new Vector3(), sys: [0, 0, 0], up: new Vector3(0, 1, 0), fwd: new Vector3(0, 0, 1), size: 10, visible: false },
     };
@@ -868,24 +911,30 @@ export class ShipLayer {
   private placeAvatar(planets: Map<number, ShipPlanetRef>, time: number): void {
     const s = AVATAR_STATE;
     const ref = s.active ? planets.get(s.planet) : undefined;
-    if (!ref) { if (this.avatar) this.avatar.group.visible = false; return; }
-    if (!this.avatar) this.avatar = new Avatar();
+    if (!ref) { if (this.avatar) this.avatar.group.visible = false; GOD_WIND.value.w = 0; this.fx.extraVisible = false; return; }
+    // (drawn in the launch FX pass, over the composited image, tested against the scene's depth by hand)
+    if (!this.avatar) this.avatar = new Avatar(this.fx.depthU, FX_LAYER);
     const a = this.avatar;
     if (a.group.parent !== ref.group) ref.group.add(a.group);
     a.group.position.copy(s.pos);
     basisQ(s.up, s.fwd, a.group.quaternion);
-    a.pose(time, ref.uniforms.uSunDirView ? (ref.uniforms.uSunDirView.value as Vector3) : null);
-    // its light on the ground and the people (kind: gold; feared: ember red)
-    const good = Math.max(0, Math.min(1, s.alignment * 0.5 + 0.5));
-    // (a lantern among the houses by night; by day only a warm touch on the ground at its feet — sunlight already
-    // floods the street, and a god's glow that out-shines it bleaches the people round it)
     const sunB = ref.uniforms.uSunDirBody?.value as Vector3 | undefined;
     const sinEl = sunB ? s.up.dot(sunB) : -1;
+    const day = Math.max(0, Math.min(1, (sinEl + 0.06) / 0.2));
+    a.pose(time, ref.uniforms.uSunDirView ? (ref.uniforms.uSunDirView.value as Vector3) : null, day, this.resolution.y * 0.9);
+    this.fx.extraVisible = a.group.visible;
+    // the grass round its feet stirs in its wind (strongest when it walks or lifts off)
+    GOD_WIND.value.set(s.pos.x - s.up.x * s.lift, s.pos.y - s.up.y * s.lift, s.pos.z - s.up.z * s.lift, s.visible || s.active ? 0.6 + 0.4 * Math.max(s.moving, s.float) : 0);
+    // its pool of light on the ground and the people: warm when trusted, cold when feared (by day only a touch at its
+    // feet — sunlight already floods the street, and a god's glow that out-shines it bleaches the people round it)
     const dark = Math.max(0, Math.min(1, (0.12 - sinEl) / 0.24));
-    const I = 28 + 190 * dark * dark;
-    const c = good > 0.5 ? [1, 0.82 + 0.1 * (1 - good), 0.55 + 0.25 * (1 - good)] : [1, 0.25 + 0.5 * good, 0.12 + 0.6 * good];
-    _v3.copy(s.up).multiplyScalar(1.4).add(s.pos);
-    this.fx.light(s.planet, this.ctx(ref), _v3.x, _v3.y, _v3.z, 22, c[0] * I, c[1] * I, c[2] * I);
+    const feared = Math.max(0, Math.min(1, -s.alignment / 0.6));
+    // (a pool round the body some ten metres across, not a floodlight on the street: at night it lights the people
+    // beside it and fades out before the houses)
+    const I = (22 + 95 * dark * dark) * (1 - 0.45 * feared);
+    const c = regardColour(s.alignment, _rc);
+    _v3.copy(s.up).multiplyScalar(1.1 - Math.min(1, s.lift) * 0.4).add(s.pos);
+    this.fx.light(s.planet, this.ctx(ref), _v3.x, _v3.y, _v3.z, 13 + 5 * dark, c[0] * I, c[1] * I, c[2] * I);
   }
 
   /** wind for the smoke (the sim's wind field near the pad, or a light easterly) */
@@ -1110,7 +1159,22 @@ export class ShipLayer {
             const ground = _v3.set(dir[0], dir[1], dir[2]).multiplyScalar(g);
             // (the burn began raising dust when the lander came within 60 m: from then on, if this is the first frame seen)
             const fDust = Math.max(0.75, 1 - Math.pow(60 / Math.max(61, A), 1 / 1.3));
-            this.fx.dust(planet, this.ctx(ref), ground, Math.max(0, 1 - alt / 60) * (firing ? firing.thrust : 0), Math.max(0.7, t.model.baseRadius / 3.5), t.phaseT0 + fDust * t.phaseLen);
+            this.fx.dust(planet, this.ctx(ref), ground, Math.max(0, 1 - alt / 60) * (firing ? firing.thrust : 0), Math.max(0.7, t.model.baseRadius / 3.5), t.phaseT0 + fDust * t.phaseLen, groundTint(pv, dir));
+          }
+        }
+        if (ref && cls !== 'air' && (ph === 'landed' || (ph === 'descent' && alt < 80))) {
+          // its contact shadow on the ground (soft, spreading and fading as it rises), and its landing lights' pool
+          const ground = _v3.set(dir[0], dir[1], dir[2]).multiplyScalar(g);
+          const k = 1 - Math.min(1, alt / 80);
+          this.fx.contactShadow(planet, this.ctx(ref), ground, _x.set(dir[0], dir[1], dir[2]), (t.model.baseRadius * 2.2 + alt * 0.35) * (0.6 + 0.4 * k));
+          if (s.crew > 0) {
+            // (a landing light is a pool in the dark; by day it barely shows on the sunlit ground)
+            const sunB = ref.uniforms.uSunDirBody?.value as Vector3 | undefined;
+            const el = sunB ? dir[0] * sunB.x + dir[1] * sunB.y + dir[2] * sunB.z : -1;
+            const dark = Math.max(0, Math.min(1, (0.15 - el) / 0.3));
+            const I = 900 * (ph === 'landed' ? 0.5 : 1) * (0.08 + 0.92 * dark);
+            const lp = _x.set(dir[0], dir[1], dir[2]).multiplyScalar(g + Math.max(1.2, alt * 0.45));
+            this.fx.light(planet, this.ctx(ref), lp.x, lp.y, lp.z, Math.max(18, alt * 1.4), I, I * 0.96, I * 0.9);
           }
         }
         if (ph === 'landed') u1.x = 0.8;
@@ -1329,6 +1393,9 @@ export class ShipLayer {
       const at = world.clone();
       this.fx.engine({
         key: `${t.id}:${key}`, planet: space ? -1 : planet, pos: world.clone(), dir: dir.clone(), radius: g.r, count: g.n, thrust: firing.thrust,
+        haze: phase === 'descent' && !space && t.model.shape === 'lander' ? 1 : 0,
+        // (the launchpad's flame trench runs along its local z, its long open end at −z: buildinggen.ts launchpad)
+        trench: t.padDir && (phase === 'pad' || phase === 'ascent') ? trenchOf(t.padDir, t.padYaw) : undefined,
         vacuum: g.vac, fuel: propellant(t.model, g.st), alt: space ? 1e9 : alt, trail: trail && key !== 'b' ? true : trail,
         path: path ? (tk: number, out: Vector3) => { path(tk, out); return; } : lit !== undefined ? (_tk: number, out: Vector3) => { out.copy(at); } : undefined, since,
         fromPad: phase === 'pad' || (phase === 'ascent' && (g.st === 0 || g.st <= -2)),
@@ -1498,6 +1565,17 @@ export class ShipLayer {
         const hView = 2 * Math.tan((pose.fov * Math.PI) / 360);
         const hK = (34 / Math.max(200, this.resolution.y / Math.max(1, this.pixelRatio))) * hView;
         L.scale.set(hK * 8, hK, 1);
+        // off the line it flies along: the label goes to the side of the glint its path on the screen does not cross
+        // (right of a steep path; above-right of one falling to the right, below-right of one rising to the right)
+        _q.set(pose.quat[0], pose.quat[1], pose.quat[2], pose.quat[3]).invert();
+        const dv = _v3.copy(P.up);
+        if (P.planet >= 0) { const pq = view.planet(P.planet)?.quat; if (pq) dv.applyQuaternion(_q2.set(pq[0], pq[1], pq[2], pq[3])); }
+        dv.applyQuaternion(_q);
+        const sl = Math.hypot(dv.x, dv.y) || 1;
+        const sx = dv.x / sl, sy = dv.y / sl;
+        const steep = Math.abs(sy) > 0.8;
+        const cy = steep ? 0.5 : sx * sy > 0 ? 1.25 : -0.25;
+        L.center.set(-0.035, cy);
         const lm = L.material as SpriteMaterial;
         lm.opacity = vis;
         // (HDR frame: lifted above the exposure like the glints)
@@ -1506,7 +1584,7 @@ export class ShipLayer {
       } else if (t.label) t.label.visible = false;
       // the transfer's path: flown (bright) and ahead (dim)
       const showTrail = vis > 0.01 && s.phase === 'transfer' && !local;
-      if (!showTrail) { if (t.trail) t.trail.visible = false; if (t.trailAhead) t.trailAhead.visible = false; continue; }
+      if (!showTrail) { for (const l of [t.trail, t.trailGlow, t.trailAhead]) if (l) l.visible = false; continue; }
       const bz = this.transferCurve(t, s, view);
       if (!bz) continue;
       const key = `${bz[0][0].toFixed(0)}|${bz[3][0].toFixed(0)}|${Math.round(s.progress * 400)}`;
@@ -1531,34 +1609,61 @@ export class ShipLayer {
           const w = 1 - (g - p) / Math.max(1e-6, 1 - p);
           ahead.push(q[0] + miss[0] * w - anchor[0], q[1] + miss[1] * w - anchor[1], q[2] + miss[2] * w - anchor[2]);
         }
-        for (const [which, pts] of [['trail', done], ['ahead', ahead]] as const) {
-          let line = which === 'trail' ? t.trail : t.trailAhead;
+        // (the plan's dashes scale with the crossing, not a fixed number of metres)
+        let planLen = 0;
+        for (let i = 3; i < ahead.length; i += 3) planLen += Math.hypot(ahead[i] - ahead[i - 3], ahead[i + 1] - ahead[i - 2], ahead[i + 2] - ahead[i - 1]);
+        for (const [which, pts] of [['glow', done], ['trail', done], ['ahead', ahead]] as const) {
+          let line = which === 'trail' ? t.trail : which === 'glow' ? t.trailGlow : t.trailAhead;
           if (!line) {
-            const m = new LineMaterial({ color: 0xffffff, linewidth: which === 'trail' ? 2.2 : 1.2, transparent: true, opacity: 1, depthWrite: false, worldUnits: false, dashed: which === 'ahead', dashSize: 3e4, gapSize: 2.4e4 });
+            const m = new LineMaterial({
+              color: 0xffffff, linewidth: which === 'trail' ? 2.0 : which === 'glow' ? 9 : 1.1, transparent: true, opacity: 1, depthWrite: false, worldUnits: false,
+              dashed: which === 'ahead', dashSize: 3e4, gapSize: 2.4e4, vertexColors: which !== 'ahead',
+            });
+            if (which === 'glow') { m.blending = AdditiveBlending; }
+            // (the vertex colour's red channel is the line's alpha along it: the flown path brightens toward the ship)
+            if (which !== 'ahead') {
+              m.onBeforeCompile = (shader) => { shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#ifdef USE_COLOR\n  alpha *= vColor.r;\n#endif'); };
+              m.customProgramCacheKey = () => 'genesis-shiptrail-fade-v1';
+            }
             m.resolution.copy(this.resolution);
             line = new Line2(new LineGeometry(), m);
             line.frustumCulled = false;
-            line.renderOrder = 6;
+            line.renderOrder = which === 'glow' ? 5.5 : 6;
             this.overlay.add(line);
-            if (which === 'trail') t.trail = line; else t.trailAhead = line;
+            if (which === 'trail') t.trail = line; else if (which === 'glow') t.trailGlow = line; else t.trailAhead = line;
           }
           const geo = new LineGeometry();
           geo.setPositions(pts);
+          if (which !== 'ahead') {
+            const n = pts.length / 3 - 1;
+            const col = new Float32Array(n * 6);
+            for (let i = 0; i < n; i++) {
+              const a0 = i / n, a1 = (i + 1) / n;
+              col[i * 6] = 0.25 + 0.75 * a0 * a0; col[i * 6 + 3] = 0.25 + 0.75 * a1 * a1;
+            }
+            geo.setColors(col);
+          }
           line.geometry.dispose();
           line.geometry = geo;
-          if (which === 'ahead') line.computeLineDistances();
+          if (which === 'ahead') {
+            line.computeLineDistances();
+            const m = line.material as LineMaterial;
+            m.dashSize = Math.max(1000, planLen / 70);
+            m.gapSize = Math.max(800, planLen / 95);
+          }
           line.userData.anchor = anchor;
         }
       }
-      for (const line of [t.trail, t.trailAhead]) {
+      for (const line of [t.trailGlow, t.trail, t.trailAhead]) {
         if (!line) continue;
         const a = line.userData.anchor as D3;
         line.position.set(a[0] - pose.pos[0], a[1] - pose.pos[1], a[2] - pose.pos[2]);
         line.visible = true;
         const m = line.material as LineMaterial;
-        const bright = line === t.trail;
-        m.color.setRGB(bright ? 3.4 : 1.6, bright ? 2.3 : 1.2, bright ? 0.9 : 0.55);
-        m.opacity = vis * (bright ? 0.95 : 0.55);
+        // flown: a hot white-gold core over an amber glow; ahead: a cool, soft dashed plan
+        if (line === t.trail) { m.color.setRGB(3.6, 2.7, 1.3); m.opacity = vis; }
+        else if (line === t.trailGlow) { m.color.setRGB(1.1, 0.62, 0.2); m.opacity = vis * 0.55; }
+        else { m.color.setRGB(0.85, 1.0, 1.35); m.opacity = vis * 0.42; }
       }
     }
     const geo = this.glints.geometry;
@@ -1596,7 +1701,7 @@ export class ShipLayer {
     for (const n of t.nodes) n.pivot.parent?.remove(n.pivot);
     t.hullMat?.dispose(); t.spentMat?.dispose(); t.sailMat?.dispose(); t.hullDepth.dispose(); t.sailDepth.dispose();
     if (t.rig) { t.rig.parent?.remove(t.rig); for (const c of t.rig.children) (c as Mesh).geometry?.dispose(); }
-    for (const l of [t.trail, t.trailAhead]) if (l) { l.parent?.remove(l); l.geometry.dispose(); (l.material as LineMaterial).dispose(); }
+    for (const l of [t.trail, t.trailGlow, t.trailAhead]) if (l) { l.parent?.remove(l); l.geometry.dispose(); (l.material as LineMaterial).dispose(); }
     if (t.label) { t.label.parent?.remove(t.label); const m = t.label.material as SpriteMaterial; m.map?.dispose(); m.dispose(); }
   }
 
@@ -1624,6 +1729,28 @@ function groundR(pv: PlanetView, dir: ArrayLike<number>): number {
     // lazily import-free: WorldView.groundRadius is groundHeight(pv.ground, ...)
     return groundHeightOf(g, x, y, z);
   } catch { return pv.params.radius; }
+}
+
+/** the launchpad's trench axis (body frame) toward its main exit: the pad's local −Z (heading = the pad's yaw) */
+function trenchOf(dir: D3, yaw: number): Vector3 {
+  const e: D3 = [0, 0, 0], n: D3 = [0, 0, 0];
+  tangentBasis(e, n, dir);
+  return new Vector3(-(n[0] * Math.cos(yaw) + e[0] * Math.sin(yaw)), -(n[1] * Math.cos(yaw) + e[1] * Math.sin(yaw)), -(n[2] * Math.cos(yaw) + e[2] * Math.sin(yaw)));
+}
+
+/** the colour of the loose ground at a place (for the dust a landing blows off it): the world's sand, regolith, soil or
+ * snow, weighted by how much of each lies there (the terrain material's own palette) */
+function groundTint(pv: PlanetView, dir: ArrayLike<number>): [number, number, number] {
+  const pal = paletteFor(pv.params.kind);
+  const at = (name: FieldName): number => { const f = pv.fields.get(name); return f ? Math.max(0, pv.grid.sample(f, dir[0], dir[1], dir[2])) : 0; };
+  const sand = Math.min(1, at('sand') / 0.4), snow = Math.min(1, at('snow') / 0.15), soil = Math.min(1, at('soil') / 0.6) * (1 - sand);
+  const c: [number, number, number] = [pal.regolith.r, pal.regolith.g, pal.regolith.b];
+  const mix = (t: number, r: number, g: number, b: number) => { c[0] += (r - c[0]) * t; c[1] += (g - c[1]) * t; c[2] += (b - c[2]) * t; };
+  mix(soil * 0.7, 0.3, 0.22, 0.15);
+  mix(Math.max(sand, pv.params.kind === 'desert' ? 0.6 : 0), pal.sand.r, pal.sand.g, pal.sand.b);
+  mix(snow, 0.85, 0.87, 0.9);
+  // (dust is paler than the ground it lifts off: fine grains, lit through)
+  return [Math.min(1, c[0] * 1.15 + 0.03), Math.min(1, c[1] * 1.15 + 0.03), Math.min(1, c[2] * 1.15 + 0.03)];
 }
 
 function centerAt(view: WorldView, pv: PlanetView, tick: number, out: D3): D3 {

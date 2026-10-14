@@ -1,0 +1,626 @@
+// GENESIS — LIVING LAND (LIVING.md §2): living off the land. Hunting parties that track, camp, stalk and carry the kill
+// home; the first herd (the herder named before there is a herd, young brought home from the hunt) and the herds kept;
+// fishing from real shoals and the waters' own stocks, which can be fished out and grow back; crops on the season's
+// clock; houses that follow the people; wants chained down the recipes; a drought that sends a town to water or kin;
+// births spaced and the hazards of childhood; needs that can be met; children's play and chores; festivals, weddings and
+// funerals; and the ledger that keeps the books of it all (query 'ledger', SettlementView.livelihood, flags2).
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Sim } from '../src/sim/sim.ts';
+import { AgentFlag, AgentFlag2 } from '../src/sim/types.ts';
+import type { Settlement } from '../src/sim/people/state.ts';
+import type { PCtx } from '../src/sim/people/ctx.ts';
+import { makeCtx } from '../src/sim/people/ctx.ts';
+import { DEATH, MEMK, ROLE, TASK, SKILL, NS } from '../src/sim/people/defs.ts';
+import { NEED_N, STATUS, CURIO } from '../src/sim/people/needs.ts';
+import { distM, cellPos, isLand, drinkable, freshWater, sunElevation } from '../src/sim/people/world.ts';
+import { spawnHerd, reindexHerds, animalDef } from '../src/sim/life/herds.ts';
+import { die } from '../src/sim/people/lifecycle.ts';
+import { formCouple } from '../src/sim/people/social.ts';
+import { abandon, assignRoles, oldAge, planConstruction, settlementStep } from '../src/sim/people/settlement.ts';
+import { landOf, ledger, type LedgerYear } from '../src/sim/people/ledger.ts';
+import { HUNT_RANGE_M, carcass, isGame, huntQuota } from '../src/sim/people/hunt.ts';
+import { herderQuota, herdWork, youngFromHunt } from '../src/sim/people/herding.ts';
+import { stockAt, stockFactor, fishWork, THIN } from '../src/sim/people/fishing.ts';
+import { cropsHourly, farmWork, fieldSite, newFieldCell, pruneFields, sowingTime, villageGround, yearPhase } from '../src/sim/people/crops.ts';
+import { ageFertility, birthGap, childhood, mouths, plentyFactor, spaced } from '../src/sim/people/demography.ts';
+import { companyNear, nextGathering, NEAR_M } from '../src/sim/people/gatherings.ts';
+import { statusDaily, talkOutlet } from '../src/sim/people/outlets.ts';
+import { wantChain, wantPick } from '../src/sim/people/wants.ts';
+import { gatherable, itemIdx } from '../src/sim/people/resources.ts';
+import { storeAdd } from '../src/sim/people/store.ts';
+import { planBuilding } from '../src/sim/people/buildings.ts';
+import { world, must, people, membersOf, adultsOf } from './helpers/peoples.ts';
+
+// ───────────────────────────── fixtures ─────────────────────────────
+
+/** a settled village (bronze: hunting, husbandry, farming and fishing known) on the n = 24 sandbox */
+function village(era = 'bronze', seed = 20261008, count = 30): { sim: Sim; st: Settlement } {
+  const sim = world(24, seed);
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const st = people(sim, 'plains-folk', count, { era, settled: true });
+  sim.step(30);
+  return { sim, st };
+}
+
+function cx(sim: Sim): PCtx {
+  return makeCtx(sim.u, sim.u.planets[0]);
+}
+
+/** a land cell between lo and hi metres from the settlement (the driest, greenest first), or -1 */
+function landAt(x: PCtx, st: Settlement, lo: number, hi: number): number {
+  const p = x.p;
+  let best = -1, bv = -1;
+  for (let c = 0; c < p.count; c++) {
+    if (!isLand(p, c) || p.f.water[c] > 0.05) continue;
+    const d = distM(p, cellPos(p, c), st.pos);
+    if (d < lo || d > hi) continue;
+    const v = p.f.grass[c] + p.f.shrub[c] - Math.abs(d - (lo + hi) / 2) / 1000;
+    if (v > bv) { bv = v; best = c; }
+  }
+  return best;
+}
+
+/** no wild beasts on the world (a closed world for the fixture) */
+function clearWild(x: PCtx): void {
+  x.ps.herds = x.ps.herds.filter((h) => h.owner >= 0);
+  x.ps.eco.immigration = false;
+  reindexHerds(x);
+}
+
+function sumRow(st: Settlement, f: (r: LedgerYear) => number): number {
+  return (st.land?.ledger ?? []).reduce((a, r) => a + f(r), 0);
+}
+
+// ───────────────────────────── the ledger ─────────────────────────────
+
+test('land: the ledger keeps the books of a settlement-year and query ledger reads them', () => {
+  const { sim, st } = village('stone');
+  sim.step(1440);
+  const q = sim.query('ledger', { settlement: st.id }) as { year: number; settlements: { settlement: number; years: LedgerYear[] }[] };
+  assert.equal(q.settlements.length, 1);
+  const row = q.settlements[0].years[0];
+  assert.ok(row, 'a row for the year');
+  assert.equal(row.year, 0);
+  assert.ok(Object.keys(row.gathered).length > 0, `gathering is in the books: ${JSON.stringify(row.gathered)}`);
+  assert.ok(row.food.forage > 0, 'the food foraged, in food-days');
+  assert.ok(row.pop > 0 && row.houses >= 0, 'the daily census of people and houses');
+  // a death at home: in the books by cause and age, and a funeral is owed
+  const x = cx(sim);
+  const before = sumRow(st, (r) => r.homeDeaths);
+  const victim = adultsOf(sim, st)[0];
+  die(x, victim, DEATH.injury);
+  assert.equal(sumRow(st, (r) => r.homeDeaths), before + 1);
+  assert.ok((ledger(x, st).deaths.wounds ?? 0) >= 1, 'deaths by cause name');
+  assert.ok(landOf(st).gatherings.some((g) => g.kind === 'funeral'), 'a funeral is planned');
+  const all = sim.query('ledger') as { settlements: unknown[] };
+  assert.ok(all.settlements.length >= 1, 'every settlement without a filter');
+  // a time-lapse window replays agents in the past (perf/plapse.ts moves x.tick back): at a year's end entries for the
+  // old year and the new one alternate, and each finds its own row — one row a year, in order
+  const t0 = x.tick, edge = (Math.floor(t0 / x.year) + 1) * x.year;
+  for (let i = 0; i < 6; i++) {
+    x.tick = i % 2 ? edge + 30 : edge - 30;
+    ledger(x, st).births++;
+  }
+  x.tick = t0;
+  const years = landOf(st).ledger.map((r) => r.year);
+  assert.deepEqual(years, [...new Set(years)].sort((a, b) => a - b), `one row a year, in order: ${years.join(',')}`);
+  assert.equal(landOf(st).ledger.find((r) => r.year === Math.floor(edge / x.year))?.births, 3);
+});
+
+// ───────────────────────────── hunting ─────────────────────────────
+
+test('land: a hunting party tracks game beyond the old reach, camps, stalks it, makes a kill and carries the meat home', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  clearWild(x);
+  for (const it of x.c.itemsByTag.get('meat') ?? []) st.store[it] = 0;
+  // a herd of deer 1.2-1.7 km out: past the 7 cells (~1 050 m at this grid) hunters used to reach, within the 2 km beyond
+  const c = landAt(x, st, 1200, 1700);
+  assert.ok(c >= 0, 'land for the deer');
+  const deer = x.c.animals.idx('deer');
+  const h = spawnHerd(x, deer, c, 10);
+  assert.ok(huntQuota(x, st, 8) >= 2, 'hunters are wanted with game in range');
+  let party = 0, kills = 0;
+  for (let t = 0; t < 4 * 1440 && kills === 0; t += 30) {
+    sim.step(30);
+    const p = st.land?.party;
+    if (p) party = Math.max(party, p.members.length);
+    kills = sumRow(st, (r) => Object.values(r.kills).reduce((a, b) => a + b, 0));
+  }
+  assert.ok(party >= 2 && party <= 6, `a party of 2-6 went out (${party})`);
+  assert.ok(kills >= 1, 'a kill');
+  assert.ok(sumRow(st, (r) => r.huntTrips) >= 1, 'the trip is in the books');
+  assert.ok(h.count >= 10 - 2, `never more than a fifth of the herd at once (${h.count} left of 10)`);
+  assert.ok(sumRow(st, (r) => r.food.hunt) > 5, 'the meat they carried, in food-days');
+  // the hunters carry it home (meat in the store or in their hands)
+  const meat = x.c.items.idx('meat');
+  const carried = membersOf(sim, st).reduce((a, s) => a + x.A.carried(s, meat), 0);
+  sim.step(1440);
+  assert.ok((st.store[meat] ?? 0) + carried > 0 || x.A.count === 0, 'the meat came home');
+  assert.ok(sim.u.chronicle.some((e) => /deer/.test(e.text)), 'the first deer kill is told');
+});
+
+test('land: game — herds under three spared except in famine, dangerous game only for an armed party of four, the sacred animal never', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  clearWild(x);
+  const c = landAt(x, st, 400, 900);
+  const two = spawnHerd(x, x.c.animals.idx('deer'), c, 2);
+  assert.equal(isGame(x, st, two, false, false), false, 'a herd of two is spared');
+  assert.equal(isGame(x, st, two, false, true), true, 'but not by the starving');
+  const auroch = spawnHerd(x, x.c.animals.idx('aurochs'), c, 8);
+  assert.equal(isGame(x, st, auroch, false, false), false, 'aurochs are too dangerous for a small party');
+  assert.equal(isGame(x, st, auroch, true, false), true, 'a party of four with spears takes them');
+  const deer = spawnHerd(x, x.c.animals.idx('deer'), c, 8);
+  assert.equal(isGame(x, st, deer, false, false), true);
+  st.culture.sacred.push('animal:deer');
+  assert.equal(isGame(x, st, deer, false, false), false, 'never the sacred animal');
+  // a carcass: the meat by the beast's weight (a deer of 80 kg gives ~34 kg), hides and bones as animals.json lists
+  const meat = carcass(animalDef(x, x.c.animals.idx('deer'))).find((g) => g.item === 'meat')!;
+  assert.ok(meat.qty >= 30 && meat.qty <= 40, `deer meat ${meat.qty}`);
+  assert.ok(HUNT_RANGE_M === 2000);
+});
+
+// ───────────────────────────── herds ─────────────────────────────
+
+test('land: the first herd — a herder is named once husbandry is known and a beast to tame lives within reach; young from the hunt become a kept herd', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  clearWild(x);
+  assert.equal(herderQuota(x, st), 0, 'nothing to keep, nothing to tame');
+  spawnHerd(x, x.c.animals.idx('wild-goat'), landAt(x, st, 500, 1500), 8);
+  assert.equal(herderQuota(x, st), 1, 'a wild goat herd within hunting range: one herder, before any herd is owned');
+  assignRoles(x, st);
+  assert.equal(membersOf(sim, st).filter((s) => x.A.role[s] === ROLE.herder).length, 1, 'and the role is given');
+  // young brought home from a hunt: a herd of the domestic form, kept by the settlement
+  const from = sim.u.chronicle.length;
+  youngFromHunt(x, st, animalDef(x, x.c.animals.idx('boar')), 2);
+  const pigs = x.ps.herds.find((h) => h.owner === st.id && animalDef(x, h.species).id === 'pig');
+  assert.ok(pigs && pigs.count === 2, 'two young pigs kept');
+  assert.equal(ledger(x, st).tames.pig, 1, 'a tame in the books');
+  assert.ok(sim.u.chronicle.slice(from).some((e) => /first herd/.test(e.text)), 'the first herd is told');
+});
+
+test('land: herding — milk taken by the day from the kept herd; beasts beyond what the pens hold are slaughtered', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  const goats = spawnHerd(x, x.c.animals.idx('goat'), st.cell, 30, st.id);
+  const s = adultsOf(sim, st)[0];
+  const A = x.A;
+  A.task[s] = TASK.herd; A.tTarget[s] = goats.id; A.tData2[s] = 0;
+  landOf(st).milked[String(goats.id)] = x.tick - x.day;
+  const milk = x.c.items.idx('milk');
+  const before = st.store[milk] ?? 0;
+  herdWork(x, s, st);
+  const got = (st.store[milk] ?? 0) - before;
+  // a day of 30 goats' milk (1 a head × 1.5 a day, capped at 40 head, by the herder's hand)
+  assert.ok(got > 20, `a day's milk ${got}`);
+  assert.ok(ledger(x, st).food.herd > 0, 'food from the herd in the books');
+  assert.ok(goats.count < 30, 'beasts beyond the pens (8 without one) are slaughtered, two at a time');
+  assert.ok((ledger(x, st).slaughter.goat ?? 0) >= 1);
+  // pigs give no milk: their increase is eaten — a breeding stock is kept (six head, or 60 % of what the pens hold),
+  // about a head a day beyond it
+  const pens = x.ps.of(st.id).filter((b) => b.progress >= 1 && !(b.flags & 2) && x.c.buildings.list[b.type].function === 'pen').length;
+  const keep = Math.max(6, Math.round((8 + pens * 10) * 0.6));
+  const pigs = spawnHerd(x, x.c.animals.idx('pig'), st.cell, keep + 2, st.id);
+  A.tTarget[s] = pigs.id;
+  const meat = x.c.items.idx('meat');
+  const meat0 = st.store[meat] ?? 0, herd0 = ledger(x, st).food.herd;
+  const t0 = x.tick;
+  for (let d = 1; d <= 8; d++) { x.tick = t0 + d * x.day; landOf(st).milked[String(pigs.id)] = x.tick - x.day; herdWork(x, s, st); }
+  x.tick = t0;
+  assert.equal(pigs.count, keep, `the increase eaten down to the breeding stock: ${pigs.count} (keep ${keep})`);
+  assert.equal(ledger(x, st).slaughter.pig, 2);
+  assert.ok((st.store[meat] ?? 0) > meat0 && ledger(x, st).food.herd > herd0, 'the meat to the store and the books');
+});
+
+// ───────────────────────────── fishing ─────────────────────────────
+
+/** a fresh lake or river cell (not the sea) */
+function freshWaterCell(x: PCtx): number {
+  for (let c = 0; c < x.p.count; c++) if (x.p.f.water[c] > 0.5 && !x.p.s.ocean[c] && x.p.f.salinity[c] < 0.3) return c;
+  return -1;
+}
+
+test('land: a water body holds a finite stock — fished hard it falls below 30 % and gives less to each session, and grows back within a year', () => {
+  const { sim } = village();
+  const x = cx(sim);
+  const c = freshWaterCell(x);
+  assert.ok(c >= 0, 'a lake or river');
+  const s = stockAt(x, c);
+  assert.ok(s.K > 0 && s.S === s.K, 'a stock at its capacity when first fished');
+  assert.equal(stockFactor(s), 1);
+  s.S = s.K * 0.12;
+  assert.ok(stockFactor(s) < 0.5, `below ${THIN} of capacity a session gives less (${stockFactor(s)})`);
+  // a game year later the stock has grown back past 80 %
+  const later = { ...x, tick: x.tick + x.year };
+  const s2 = stockAt(later, c);
+  assert.ok(s2.S >= 0.8 * s2.K, `grown back to ${(s2.S / s2.K).toFixed(2)} of capacity`);
+});
+
+test('land: a fishing session draws on the water\'s stock (or a shoal), takes the fish from it, and is in the books', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  const c = freshWaterCell(x);
+  const s = adultsOf(sim, st)[0];
+  const A = x.A;
+  A.task[s] = TASK.fish; A.tTarget[s] = c;
+  A.cell[s] = c;
+  A.skills[s * NS + SKILL.fish] = 0.5;
+  const stock = stockAt(x, c);
+  const was = stock.S;
+  fishWork(x, s, st, 1, () => true);
+  const row = ledger(x, st);
+  assert.equal(row.fishing.stock + row.fishing.shoal, 1, 'the session drew on a finite stock or a shoal');
+  if (row.fishing.stock) assert.ok(stockAt(x, c).S < was, 'the fish caught are gone from the water');
+  assert.ok(row.food.fish > 0, 'the catch in food-days');
+});
+
+// ───────────────────────────── crops ─────────────────────────────
+
+test('land: crops keep the season\'s clock — sown in the window, ripe after their growing days, harvested as their own crop; no fields on wet or salt ground', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  const wheat = x.c.plants.idx('wheat');
+  // the hemispheres' years are half a year apart
+  const north = (() => { for (let c = 0; c < x.p.count; c++) if (x.p.grid.pos[c * 3 + 1] > 0.6) return c; return -1; })();
+  const south = (() => { for (let c = 0; c < x.p.count; c++) if (x.p.grid.pos[c * 3 + 1] < -0.6) return c; return -1; })();
+  const d = Math.abs(yearPhase(x, north) - yearPhase(x, south));
+  assert.ok(Math.abs(d - 0.5) < 0.02, `north and south half a year apart (${d})`);
+  // the sowing window opens and closes through the year
+  let open = 0, shut = 0;
+  for (let k = 0; k < 24; k++) { const y = { ...x, tick: x.tick + Math.round((k * x.year) / 24) }; if (sowingTime(y, wheat, north)) open++; else shut++; }
+  assert.ok(open >= 3 && shut >= 12, `wheat is sown in a part of the year only (${open} of 24)`);
+  // never on water, salt or saturated ground
+  const water = (() => { for (let c = 0; c < x.p.count; c++) if (x.p.f.water[c] > 0.5) return c; return -1; })();
+  assert.equal(fieldSite(x, wheat, water), 0, 'not under water');
+  const cells = (st.flow?.cells ?? []).filter((c) => fieldSite(x, wheat, c) > 0);
+  assert.ok(cells.length > 0, 'ground fit for wheat in the territory');
+  const good = cells.reduce((b, c) => (fieldSite(x, wheat, c) > fieldSite(x, wheat, b) ? c : b), cells[0]);
+  const m0 = x.p.f.moisture[good], s0 = x.p.f.salinity[good];
+  x.p.f.moisture[good] = 0.95;
+  assert.equal(fieldSite(x, wheat, good), 0, 'not on saturated ground');
+  x.p.f.moisture[good] = m0; x.p.f.salinity[good] = 0.5;
+  assert.equal(fieldSite(x, wheat, good), 0, 'not on salt ground');
+  x.p.f.salinity[good] = s0;
+  // a field sown now grows on its clock: ripe after `grow` days at full suitability, longer where it suits less
+  const L = landOf(st);
+  L.fields = [];
+  st.fields = [good];
+  st.crop = wheat;
+  L.fields.push({ c: good, sp: wheat, sown: x.tick, prog: 0, q: 1, t: x.tick, ripe: -1, shown: 0.06 });
+  x.p.f.cropSpecies[good] = wheat; x.p.f.crop[good] = 0.06;
+  const grow = x.c.plants.list[wheat].season!.grow;
+  let ripeAt = -1;
+  for (let h = 1; h <= 24 * 30 && ripeAt < 0; h++) {
+    const y = { ...x, tick: x.tick + h * 60 };
+    x.p.f.temperature[good] = 15; // (a mild season throughout: frost would hold it)
+    cropsHourly(y, st);
+    if (L.fields[0].ripe >= 0) ripeAt = h;
+  }
+  assert.ok(ripeAt >= grow * 24 - 2, `ripe no sooner than its ${grow} days (${(ripeAt / 24).toFixed(1)})`);
+  assert.ok(x.p.f.crop[good] > 0.5, 'a ripe field shows its crop');
+  // the harvest: wheat comes in as grain, in the books by crop
+  const s = adultsOf(sim, st)[0];
+  x.A.tTarget[s] = good; x.A.tData2[s] = 2; x.A.tData[s] = -1;
+  const y = { ...x, tick: x.tick + ripeAt * 60 };
+  const grain = itemIdx(x, 'grain');
+  const before = (st.store[grain] ?? 0) + x.A.carried(s, grain);
+  farmWork(y, s, st, 1);
+  assert.ok((st.store[grain] ?? 0) + x.A.carried(s, grain) > before + 10, 'the grain of a field');
+  assert.equal(ledger(y, st).harvests.wheat, 1, 'a harvest of wheat in the books');
+  assert.equal(L.fields[0].sp, -1, 'the field lies fallow until the next sowing');
+});
+
+// ───────────────────────────── demography ─────────────────────────────
+
+test('land: births are spaced two to three years a mother; many children mean fewer births; old age takes no child; childhood has its own hazards', () => {
+  const { sim, st } = village('stone', 20261008, 40);
+  const x = cx(sim);
+  const A = x.A;
+  const mother = membersOf(sim, st).find((s) => A.flags[s] & AgentFlag.female && !(A.flags[s] & AgentFlag.child))!;
+  const gap = birthGap(x, mother);
+  assert.ok(gap >= 2 && gap <= 3, `her gap ${gap}`);
+  A.lastBirth[mother] = x.tick;
+  assert.equal(spaced(x, mother), false, 'not again so soon');
+  assert.equal(spaced({ ...x, tick: x.tick + Math.ceil(gap * x.year) }, mother), true, 'after her gap');
+  const f = mouths(x, st);
+  assert.ok(f >= 0.3 && f <= 1, `the mouths factor ${f}`);
+  // hunger lowers fertility; a granary of 50 days a head does not raise it above nature's rate
+  assert.equal(plentyFactor(50, 1), 1);
+  assert.equal(plentyFactor(3, 0.5), 1);
+  assert.ok(Math.abs(plentyFactor(1.5, 0.5) - 0.5) < 1e-9, 'half fed, half the chance');
+  // by age: nothing before maturity, rising over six years (first births come at 18-20), full to 30, none at 45
+  assert.equal(ageFertility(13, 45, 14), 0);
+  assert.ok(Math.abs(ageFertility(17, 45, 14) - 0.5) < 1e-9, 'half at maturity + 3');
+  assert.equal(ageFertility(25, 45, 14), 1);
+  assert.ok(ageFertility(38, 45, 14) < 0.5 && ageFertility(38, 45, 14) > 0, 'waning in the late thirties');
+  assert.equal(ageFertility(45, 45, 14), 0);
+  // old age, rolled for a lifetime at once: every adult may die of it, no child does
+  const kids = membersOf(sim, st).filter((s) => A.flags[s] & AgentFlag.child);
+  assert.ok(kids.length > 0, 'children in the village');
+  oldAge(x, st, 1e6);
+  for (const k of kids) assert.ok(A.alive[k], 'old age takes no child');
+  // the hazards of childhood, over a lifetime at once: the children die of a childhood fever, in the books
+  childhood(x, st, 1e6, die);
+  assert.ok(kids.every((k) => !A.alive[k]), 'childhood is not safe');
+  assert.ok((ledger(x, st).deaths['a childhood fever'] ?? 0) >= kids.length, 'and the books know of what');
+  assert.ok(ledger(x, st).deathsChild >= kids.length);
+});
+
+// ───────────────────────────── children, company, needs ─────────────────────────────
+
+test('land: children play and do chores, and wander little; company is sought within 100 m; status and curiosity are met', () => {
+  const { sim, st } = village('stone', 20261008, 40);
+  const x0 = cx(sim);
+  const A = x0.A;
+  const t: Record<string, number> = { play: 0, chore: 0, wander: 0, all: 0 };
+  for (let k = 0; k < 1440; k += 10) {
+    sim.step(10);
+    for (const s of membersOf(sim, st)) {
+      if (!(A.flags[s] & AgentFlag.child)) continue;
+      const age = (sim.u.tick - A.birth[s]) / cx(sim).year;
+      if (age < 2) continue;
+      t.all++;
+      if (A.task[s] === TASK.play) t.play++;
+      if (A.task[s] === TASK.chore) t.chore++;
+      if (A.task[s] === TASK.wander) t.wander++;
+    }
+  }
+  assert.ok(t.all > 0, 'children sampled');
+  assert.ok(t.play / t.all >= 0.05, `play ${(t.play / t.all).toFixed(3)} of the children's time`);
+  assert.ok(t.chore / t.all >= 0.03, `chores ${(t.chore / t.all).toFixed(3)}`);
+  assert.ok(t.wander / t.all <= 0.1, `wandering ${(t.wander / t.all).toFixed(3)}`);
+  // company within reach only
+  const x = cx(sim);
+  for (const s of adultsOf(sim, st).slice(0, 5)) {
+    const m = companyNear(x, s, st);
+    if (m < 0) continue;
+    const a = [0, 0, 0], b = [0, 0, 0];
+    A.posAt(s, x.tick, a); A.posAt(m, x.tick, b);
+    assert.ok(distM(x.p, a, b) <= NEAR_M, 'within 100 m');
+  }
+  // status from standing: the leader, household heads
+  const lead = A.slotOf(st.leader);
+  A.needs[lead * NEED_N + STATUS] = 0;
+  statusDaily(x, st);
+  assert.ok(A.needs[lead * NEED_N + STATUS] >= 0.4, 'the leader is held high');
+  const low = adultsOf(sim, st).filter((s) => A.needs[s * NEED_N + STATUS] < 0.02).length / adultsOf(sim, st).length;
+  assert.ok(low <= 0.2, `adults with no status after a day: ${low.toFixed(2)}`);
+  // curiosity from talk with someone who knows what they do not
+  const [a1, a2] = adultsOf(sim, st);
+  A.needs[a1 * NEED_N + CURIO] = 0;
+  A.know[a2 * A.kw] |= ~A.know[a1 * A.kw] & 1;
+  A.know[a1 * A.kw] &= ~1;
+  A.know[a2 * A.kw] |= 1;
+  talkOutlet(x, a1, [a1, a2]);
+  assert.ok(A.needs[a1 * NEED_N + CURIO] > 0.1, 'the talk was news');
+});
+
+// ───────────────────────────── gatherings ─────────────────────────────
+
+test('land: a wedding the evening a couple forms, a funeral the evening after a death at home; the books count them', () => {
+  const { sim, st } = village('stone', 20261008, 40);
+  const x = cx(sim);
+  const A = x.A;
+  const single = (female: boolean) => adultsOf(sim, st).find((s) => !A.partner[s] && ((A.flags[s] & AgentFlag.female) !== 0) === female && !(A.flags[s] & AgentFlag.elder));
+  const w = single(true), m = single(false);
+  assert.ok(w !== undefined && m !== undefined, 'two unwed grown-ups');
+  formCouple(x, st, w!, m!);
+  const wed = landOf(st).gatherings.find((g) => g.kind === 'wedding');
+  assert.ok(wed, 'a wedding is planned');
+  assert.ok(wed!.from - x.tick <= x.day, 'that evening');
+  sim.step(1440);
+  assert.ok(sumRow(st, (r) => r.weddings) >= 1, 'the wedding was held');
+  const x2 = cx(sim);
+  const victim = adultsOf(sim, st).find((s) => s !== w && s !== m)!;
+  die(x2, victim, DEATH.injury);
+  const fun = landOf(st).gatherings.find((g) => g.kind === 'funeral');
+  assert.ok(fun && fun.from - x2.tick >= 180, 'a funeral the evening after');
+  sim.step(2 * 1440 + 60);
+  assert.ok(sumRow(st, (r) => r.funerals) >= 1, 'the funeral was held');
+  assert.ok(sumRow(st, (r) => r.couples) >= 1);
+  assert.ok(A.memKind.some((k) => k === MEMK.mourned), 'the mourners remember it');
+  // a couple that forms in the early night is wed the next evening (at once, the town was asleep), and at 100x-1000x
+  // a decision's stretch ends when the evening of a gathering one is called to comes (nextGathering)
+  const x3 = cx(sim);
+  let t = x3.tick;
+  while (sunElevation(sim.u, x3.p, t, st.pos) >= -0.05 || sunElevation(sim.u, x3.p, t - 30, st.pos) < -0.05) t++;
+  const night = { ...x3, tick: t + 30 };
+  // (two grown-ups made single again: by now the village has paired its unwed)
+  const grown = (female: boolean) => adultsOf(sim, st).find((s) => s !== w && s !== m && ((A.flags[s] & AgentFlag.female) !== 0) === female && !(A.flags[s] & AgentFlag.elder));
+  const w2 = grown(true), m2 = grown(false);
+  assert.ok(w2 !== undefined && m2 !== undefined, 'two more grown-ups');
+  for (const s of [w2!, m2!]) { const o = A.slotOf(A.partner[s]); if (o >= 0) A.partner[o] = 0; A.partner[s] = 0; }
+  formCouple(night, st, w2!, m2!);
+  const wed2 = landOf(st).gatherings.find((g) => g.kind === 'wedding' && g.about.includes(A.id[w2!]))!;
+  assert.ok(wed2.from > night.tick + 12 * 60, `the next evening, not in the night (${wed2.from - night.tick} ticks on)`);
+  assert.equal(nextGathering(night, w2!, st), wed2.from - 45 - night.tick, 'the bride decides again when it comes');
+  assert.equal(nextGathering({ ...night, tick: wed2.until }, w2!, st), Infinity, 'nothing after it');
+});
+
+test('land: two festivals a settlement-year, most of the people come, one gathering told in the chronicle', () => {
+  const { sim, st } = village('stone', 20261008, 30);
+  must(sim, { k: 'time.scale', tps: 3000 });
+  const x = cx(sim);
+  sim.step(x.year - sim.u.tick % x.year + 60);
+  const row = (st.land?.ledger ?? []).find((r) => r.year === 0);
+  assert.ok(row, 'the year 0 books');
+  assert.ok(row!.festivals >= 2, `festivals in the year: ${row!.festivals}`);
+  assert.ok(row!.festivalAttend / row!.festivals >= 0.5, `came on average ${(row!.festivalAttend / row!.festivals).toFixed(2)} of the people`);
+  assert.ok(sim.u.chronicle.filter((e) => /danced|feast|midwinter|longest night|rains/.test(e.text)).length >= 1, 'a festival is told');
+});
+
+// ───────────────────────────── houses, wants, drought ─────────────────────────────
+
+test('land: the village keeps its own ground — no field is laid out or sown where its houses spread, and a fallow field there is given up', () => {
+  // (n = 64: cells of 56 m, so the cells around the centre are where the houses go — a town whose houses burned could
+  // not rebuild them for five years while two of those cells were fields)
+  const sim = world(64, 20261008);
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const st = people(sim, 'plains-folk', 30, { era: 'bronze', settled: true });
+  sim.step(30);
+  const x = cx(sim), p = x.p, g = p.grid;
+  const ring: number[] = [];
+  for (let e = g.nbrStart[st.cell]; e < g.nbrStart[st.cell + 1]; e++) ring.push(g.nbr[e]);
+  assert.ok(villageGround(x, st, st.cell) && ring.every((c) => villageGround(x, st, c)), 'the centre and the cells around it');
+  // a new field: never on the village's ground, even where the crop would grow best
+  st.res!.fertile = [...ring, ...(st.flow?.cells ?? []).filter((c) => !ring.includes(c) && c !== st.cell)];
+  const c = newFieldCell(x, st);
+  assert.ok(c < 0 || !villageGround(x, st, c), `a new field off the village ground (${c})`);
+  const ringBest = Math.max(...ring.map((r) => fieldSite(x, st.crop, r)));
+  assert.ok(ringBest > 0.3, `(a ring cell the crop would suit: ${ringBest.toFixed(2)})`);
+  // fallow fields: the one on the village's ground is given up, one beyond it kept
+  const L = landOf(st);
+  const far = (st.flow?.cells ?? []).find((q) => !villageGround(x, st, q) && fieldSite(x, st.crop, q) >= 0.05)!;
+  assert.ok(far !== undefined, 'a field site beyond the village');
+  const fallow = (q: number) => ({ c: q, sp: -1, sown: -1, prog: 0, q: 1, t: x.tick, ripe: -1, shown: 0.02 });
+  L.fields = [fallow(ring[0]), fallow(far)];
+  st.fields = [ring[0], far];
+  pruneFields(x, st);
+  assert.deepEqual(st.fields, [far], 'the village ground is free again');
+});
+
+test('land: a crowded town still finds room for a house — at its edge, when the building spiral has nothing left', () => {
+  // (n = 64: the cells around the centre all fields, the centre cell filled with huts: the spiral's 90 places run out —
+  // a town of 76 buildings found room for no house for years — and the next house goes up at the edge, beyond the fields)
+  const sim = world(64, 20261008);
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const st = people(sim, 'plains-folk', 30, { era: 'bronze', settled: true });
+  sim.step(30);
+  const x = cx(sim), p = x.p, g = p.grid;
+  const ring: number[] = [];
+  for (let e = g.nbrStart[st.cell]; e < g.nbrStart[st.cell + 1]; e++) ring.push(g.nbr[e]);
+  st.fields = [...ring];
+  const hut = x.c.buildings.idx('hut');
+  let placed = 0, outside = 0, inField = 0;
+  for (let i = 0; i < 60; i++) {
+    const b = planBuilding(x, st, hut, true);
+    if (!b) break;
+    placed++;
+    if (b.cell !== st.cell && !ring.includes(b.cell)) outside++;
+    if (st.fields.includes(b.cell)) inField++;
+  }
+  assert.equal(placed, 60, `every hut found a place (${placed})`);
+  assert.ok(outside > 0, `the later ones beyond the fields (${outside})`);
+  assert.equal(inField, 0, 'none in a field');
+});
+
+test('land: houses follow the people — a third site is opened for a dwelling when two other works are open and beds are short', () => {
+  const { sim, st } = village('stone', 20261008, 30);
+  const x = cx(sim);
+  // two non-dwelling sites open
+  st.sites = st.sites.filter((id) => (x.c.buildings.list[x.ps.building(id)!.type].capacity ?? 0) === 0);
+  for (const id of ['store-pit', 'shrine', 'hearth']) {
+    if (st.sites.length >= 2) break;
+    const t = x.c.buildings.idx(id);
+    if (t >= 0) planBuilding(x, st, t);
+  }
+  st.sites = st.sites.filter((id) => (x.c.buildings.list[x.ps.building(id)!.type].capacity ?? 0) === 0).slice(0, 2);
+  assert.equal(st.sites.length, 2, 'two works open');
+  // more people than beds
+  must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 40, settlement: st.id });
+  const x2 = cx(sim);
+  planConstruction(x2, st);
+  const shelters = st.sites.filter((id) => x2.c.buildings.list[x2.ps.building(id)!.type].capacity > 0);
+  assert.equal(shelters.length, 1, 'a dwelling is begun beside them');
+});
+
+test('land: materials drive gathering — ore in store is wanted smelted: its fuel is wanted from the land, the crafts on the way go on the job list', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  const ore = itemIdx(x, 'copper-ore');
+  storeAdd(x, st, ore, 20);
+  for (let i = 0; i < st.store.length; i++) if ((x.c.items.list[i].fuel ?? 0) >= 0.8) st.store[i] = 0;
+  const can = new Set<number>();
+  for (const l of gatherable(x, st).values()) for (const it of l) can.add(it);
+  const d = wantChain(x, st, can);
+  const smelt = [...d.crafts.keys()].find((k) => x.rt.list[k].inputs.some((io) => io.items.includes(ore)));
+  assert.ok(smelt !== undefined, 'the smelting of the ore is wanted');
+  assert.ok((d.crafts.get(smelt!) ?? 0) >= 1.5, 'wanted hard');
+  // its fuel: charcoal from wood, wood from the land
+  const wood = itemIdx(x, 'wood');
+  assert.ok((d.items.get(wood) ?? 0) > 0, 'wood is wanted from the land for the fuel');
+  // a stock of every raw material a known craft takes: none in store, wanted; a store full of it, hardly
+  const raw = [...can].filter((it) => st.library.some((k) => x.rt.list[k].kind === 'craft' && x.rt.list[k].inputs.some((io) => io.items.includes(it))));
+  assert.ok(raw.length >= 3, `raw materials of known crafts: ${raw.length}`);
+  // a dozen of each in store (no recipe is short of it): each is still wanted for the stock, and less the more is kept
+  for (const it of raw) st.store[it] = 12;
+  const some = wantChain(x, st, can).items;
+  const unwanted = raw.filter((it) => (some.get(it) ?? 0) < 0.3).map((it) => x.c.items.list[it].id);
+  assert.deepEqual(unwanted, [], 'every raw material of a known craft is wanted for the stock');
+  const r0 = raw[0];
+  st.store[r0] = 1000;
+  const full = wantChain(x, st, can).items.get(r0) ?? 0;
+  assert.ok(full < 0.05, `hardly wanted with a store full of it (${full})`);
+  // the gatherers share the wants out: the most wanted most often, every one now and then
+  const n = 10, hits = new Array<number>(n).fill(0);
+  for (let i = 0; i < 2000; i++) hits[wantPick((i + 0.5) / 2000, n)]++;
+  assert.ok(hits[0] > hits[1] && hits[1] > hits[4] && hits[9] > 0, `shares ${hits.join(',')}`);
+});
+
+test('land: a drought — a town whose water fails goes to its kin where the water runs, and joins them', () => {
+  const { sim, st } = village('bronze', 20261008, 20);
+  const x = cx(sim);
+  // kin: a daughter town of the same people and polity, by water, 0.6-1.8 km away
+  let c = -1;
+  for (let k = 0; k < x.p.count && c < 0; k++) {
+    const d = distM(x.p, cellPos(x.p, k), st.pos);
+    if (d < 500 || d > 2500 || !isLand(x.p, k) || x.p.f.water[k] > 0.05) continue;
+    if (drinkable(x.p, k)) { c = k; break; }
+    const g = x.p.grid;
+    for (let e = g.nbrStart[k]; e < g.nbrStart[k + 1]; e++) if (freshWater(x.p, g.nbr[e])) { c = k; break; }
+  }
+  assert.ok(c >= 0, 'a place by fresh water for the kin');
+  const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 15, era: 'bronze', settled: true, pos: cellPos(x.p, c) });
+  const kin = x.ps.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
+  kin.polity = st.polity;
+  sim.step(120);
+  const x2 = cx(sim);
+  const before = (x2.ps.members.get(kin.id) ?? []).length;
+  const band = abandon(x2, st, 'drought');
+  assert.equal(band.recent.kin, kin.id, 'they go to their kin');
+  // they arrive
+  const A = x2.A;
+  for (const s of x2.ps.members.get(band.id) ?? []) { A.place(s, kin.pos[0], kin.pos[1], kin.pos[2], x2.tick); A.cell[s] = kin.cell; }
+  settlementStep(x2, band);
+  assert.ok(band.fallen >= 0, 'the band is no more');
+  assert.ok((x2.ps.members.get(kin.id) ?? []).length > before, 'its people live with their kin');
+});
+
+// ───────────────────────────── saves and views ─────────────────────────────
+
+test('land: saves — a world with its fields, parties, gatherings, stocks and books saves and loads to the same hash, and goes on the same', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  stockAt(x, freshWaterCell(x));
+  youngFromHunt(x, st, animalDef(x, x.c.animals.idx('wild-goat')), 2);
+  sim.step(1440);
+  assert.ok(st.land && st.land.ledger.length > 0, 'land state to save');
+  const loaded = Sim.load(sim.save());
+  assert.equal(loaded.hash(), sim.hash());
+  sim.step(300);
+  loaded.step(300);
+  assert.equal(loaded.hash(), sim.hash(), 'and lives on the same');
+});
+
+test('land: views — the settlement card\'s livelihood and the agents\' flags2', () => {
+  const { sim, st } = village();
+  sim.step(1440);
+  const snap = sim.snapshot({ drain: false });
+  const pl = snap.planets.find((p) => p.settlements?.length)!;
+  const view = pl.settlements!.find((v) => v.id === st.id)!;
+  assert.ok(view.livelihood, 'livelihood on the card');
+  const tot = Object.values(view.livelihood!.food).reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(tot - 1) < 0.01, `food shares sum to 1 (${tot})`);
+  assert.ok(view.livelihood!.under15 >= 0 && view.livelihood!.under15 <= 1);
+  const agents = pl.agents!;
+  assert.ok(agents.flags2 && agents.flags2.length === agents.count, 'flags2 for every agent');
+  const x = cx(sim);
+  const herder = membersOf(sim, st).find((s) => x.A.role[s] === ROLE.herder);
+  if (herder !== undefined) {
+    const i = Array.from(agents.id).indexOf(x.A.id[herder]);
+    assert.ok(agents.flags2[i] & AgentFlag2.herder, 'a herder is flagged');
+  }
+});

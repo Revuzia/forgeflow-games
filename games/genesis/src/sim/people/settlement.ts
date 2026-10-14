@@ -32,6 +32,7 @@ import { recipeTable } from '../recipes/recipes.ts';
 import type { Household } from './state.ts';
 import { electLeader, factionsDaily, householdsDaily, schismCandidates } from './social.ts';
 import { cultureDaily } from './culture.ts';
+import { godHooks } from './hooks.ts'; // LIVING RELATIONSHIP: temples where faith holds
 import { economyDaily, popOf } from './economy.ts';
 import { atWar } from './war.ts';
 import { agesDaily, checkWorldEmpty } from '../chronicle.ts';
@@ -43,6 +44,15 @@ import { recountShelters } from './tasks.ts';
 import { planetLevel } from '../perf/lapse.ts';
 // SIM perf push 3 — the coarse settlement step of the peoples' time-lapse (perf/plapse.ts)
 import { chanceIn, dueIn, hourly, settleHours } from '../perf/plapse.ts';
+import { fireSeen } from './firewatch.ts'; // LIVING PACE: a fire seen is a fire learned
+// LIVING LAND (LIVING.md §2): hunting parties and herds in the roles, births spaced, the deaths of childhood, crops,
+// gatherings and the books in the hourly and daily steps (people/land.ts and its modules)
+import { bandHourly, landDaily, landHourly } from './land.ts';
+import { huntQuota, partyOut } from './hunt.ts';
+import { herderQuota, ownHerds } from './herding.ts';
+import { ageFertility, mouths, plentyFactor, spaced } from './demography.ts';
+import { wantChain } from './wants.ts';
+import { materialJobs } from '../god/materials.ts';
 
 /** re-planning interval multiplier per time-lapse level (SIM perf push 2: settlementStep; push 3: per world —
  * perf/lapse.ts planetLevel, 3 = a world the camera is not on) */
@@ -413,14 +423,15 @@ export function settlementStep(x: PCtx, st: Settlement): void {
   const hour = Math.floor(x.tick / 60);
   // a wandering band grows old as it walks (every hour, a settlement or a band, rolls old age once); births and
   // sickness wait for a home (their rules read the settlement's store, beds, hearths and land)
-  if (st.band) { bandStep(x, st, hour); oldAge(x, st, H); return; }
+  if (st.band) { bandStep(x, st, hour); oldAge(x, st, H); bandHourly(x, st, H); return; }
   // SIM perf push 2 — time-lapse (perf/lapse.ts): at 100x / 1000x the re-planning below (caches, roles, work lists) runs
   // 2 / 3 times less often; everything that integrates time (hearths, births, age, sickness, cohorts) covers its hours.
   // (push 3: a periodic task runs when its hour falls inside the H hours this step stands for — dueIn; at H = 1 the
   // plain `(hour + offset) % period === 0`)
   const rp = REPLAN[planetLevel(x.u, x.p)];
-  // refresh caches at fixed hours (saved: decisions read them)
-  if (dueIn(hour + st.id, 8 * rp, H) || !st.res) updateResources(x, st);
+  // refresh caches at fixed hours (saved: decisions read them) — and at once after a drink found a drinking place dry
+  // (LIVING LAND §2.7: a drought killed a town of thirst with water 50-250 m away while its list held a dried cell)
+  if (dueIn(hour + st.id, 8 * rp, H) || !st.res || st.recent.waterStale !== undefined) { updateResources(x, st); delete st.recent.waterStale; }
   if (dueIn(hour + st.id, 24 * rp, H) || !st.flow) updateFlow(x, st);
   burnHearths(x, st, 60 * H);
   refreshLibrary(x, st);
@@ -434,13 +445,16 @@ export function settlementStep(x: PCtx, st: Settlement): void {
   births(x, st, H);
   oldAge(x, st, H);
   sicknessAndAccidents(x, st, H);
+  // (LIVING LAND: crops on the season's clock, the hunting party, gatherings, the deaths of childhood — people/land.ts)
+  landHourly(x, st, H);
   hourly(x, st, H, diseaseStep); // (sickness spreads hour by hour, at each hour's own tick)
   hourly(x, st, H, cohortStep); // (the cohort's statistics, hour by hour: nothing to do for most)
   assignHomes(x, st);
   recountShelters(x, st);
   // daily
   if (dueIn(hour + st.id * 5, 24, H)) daily(x, st);
-  st.nightLight = x.ps.of(st.id).some((b) => b.fuel > 0) ? 1 : 0;
+  // (LIVING CONTENT: a house of a glowing stone the god invented lights the night too — materials.json `light`)
+  st.nightLight = x.ps.of(st.id).some((b) => b.fuel > 0 || (b.progress >= 1 && (x.c.materials.list[b.material]?.light ?? 0) > 0)) ? 1 : 0;
 }
 
 /** a wandering band: the leader picks a site, the band walks there, and settles */
@@ -531,6 +545,9 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   const pt = [0, 0, 0];
   for (const m of members) { A.posAt(m, x.tick, pt); if (distM(x.p, pt, st.target) < 60) near++; }
   if (near >= members.length * 0.5 || (leadD < 60 && near * 3 >= members.length)) {
+    // (LIVING LAND: drought refugees join their kin — abandon)
+    const kin = st.recent.kin !== undefined ? x.ps.settlement(st.recent.kin) : undefined;
+    if (kin && kin.fallen < 0 && !kin.band) { joinKin(x, st, kin); return; }
     const v = siteScore(x, st.species, tc, st.id);
     if (v >= 3.2 || godSite || (v > 1 && x.tick - (st.recent.wander ?? x.tick) > 3 * x.day)) {
       // ruins of a fallen settlement here?
@@ -590,9 +607,14 @@ export function assignRoles(x: PCtx, st: Settlement): void {
   const quota = new Array<number>(17).fill(0);
   let food = Math.max(1, Math.round(n * foodShare));
   const res = st.res;
+  const foodWorkers = food;
   if (lib('agriculture') && st.crop >= 0) { quota[ROLE.farmer] = Math.max(1, Math.round(food * 0.4)); food -= quota[ROLE.farmer]; }
-  if (lib('animal-husbandry') && x.ps.herds.some((h) => h.owner === st.id)) { quota[ROLE.herder] = 1; food -= 1; }
-  if (lib('hunting') && res?.contexts.includes('herds')) { quota[ROLE.hunter] = Math.max(1, Math.round(food * 0.3)); food -= quota[ROLE.hunter]; }
+  // (LIVING LAND: a herder once beasts can be kept and there is a herd to keep or to tame; hunters — 15-30 % of a band's
+  // food workers, 5-15 % of a farming town's — when game is within range: people/herding.ts, hunt.ts)
+  const herders = Math.min(herderQuota(x, st), Math.max(0, food - 1));
+  if (herders > 0) { quota[ROLE.herder] = herders; food -= herders; }
+  const hunters = Math.min(huntQuota(x, st, foodWorkers), Math.max(0, food - 1));
+  if (hunters > 0) { quota[ROLE.hunter] = hunters; food -= hunters; }
   if (lib('fishing') && res && res.fish.length) { quota[ROLE.fisher] = Math.max(1, Math.round(food * 0.35)); food -= quota[ROLE.fisher]; }
   quota[ROLE.gatherer] = Math.max(1, food);
   let rest = n - quota.reduce((a, b) => a + b, 0);
@@ -624,11 +646,14 @@ export function assignRoles(x: PCtx, st: Settlement): void {
   const pending: number[] = [];
   // (the roles the god gave, `r<agent id>` in st.recent, gathered once — SIM perf push 3: a key built per adult per call)
   const givenRoles = godGivenRoles(st);
+  // (LIVING LAND: a hunting party out stays a hunting party until it is home — people/hunt.ts)
+  const party = partyOut(st);
   for (const m of adults) {
     if (A.id[m] === st.leader) { A.role[m] = ROLE.leader; continue; }
     // a role the god gave holds (god/civic.ts agent.role)
     const given = givenRoles ? givenRoles.get(A.id[m]) : undefined;
     if (given !== undefined) { A.role[m] = given; count[given]++; continue; }
+    if (party.length && A.role[m] === ROLE.hunter && party.includes(A.id[m])) { count[ROLE.hunter]++; continue; }
     const r = A.role[m];
     if (r > 0 && r !== ROLE.child && r !== ROLE.leader && count[r] < quota[r]) { count[r]++; continue; }
     pending.push(m);
@@ -654,6 +679,21 @@ export function assignRoles(x: PCtx, st: Settlement): void {
     }
   }
   for (const m of pending) A.role[m] = ROLE.gatherer;
+  // (LIVING LAND: a herder or hunters asked for, and nobody free when the roles were dealt — the leader holds one of the
+  // quota's places — are found among the gatherers, the most skilled at it first)
+  for (const role of [ROLE.herder, ROLE.hunter]) {
+    if (!quota[role]) continue;
+    let have = 0;
+    for (const m of adults) if (A.role[m] === role) have++;
+    const sk = role === ROLE.herder ? SKILL.herd : SKILL.hunt;
+    while (have < quota[role]) {
+      let best = -1, bv = -1;
+      for (const m of adults) if (A.role[m] === ROLE.gatherer && A.skills[m * NS + sk] > bv) { bv = A.skills[m * NS + sk]; best = m; }
+      if (best < 0) break;
+      A.role[best] = role;
+      have++;
+    }
+  }
   // flags for the renderer (mission members keep theirs)
   for (const m of members) {
     if (A.mission[m]) continue;
@@ -706,6 +746,10 @@ function planJobs(x: PCtx, st: Settlement): void {
     jobs.push({ k, n, cell: place.cell, building: place.building });
   };
   const producersOf = (tag: string) => producersByTag(x, tag);
+  // (LIVING CONTENT §4.1: a people that knows a craft of the god's new material works it — the hands that learned it
+  // take it before the everyday crafts that fill the day's twelve jobs (god/materials.ts: at most its few crafts, only
+  // while its stock is short)
+  for (const k of materialJobs(x, st)) add(k, 1);
   // food processing first: cook raw food, bake, grind, smoke surplus
   for (const k of producersOf('cooked')) add(k, 2);
   for (const k of producersOf('flour')) add(k, 2);
@@ -731,6 +775,14 @@ function planJobs(x: PCtx, st: Settlement): void {
   }
   // metals and fuels when their workplaces exist
   for (const tag of ['charcoal', 'metal', 'alloy', 'glass', 'building']) for (const k of producersOf(tag)) add(k, 1);
+  // (LIVING LAND §2.6: the crafts on the way to what they want made — charcoal for the smelter, cordage for the spear —
+  // most wanted first: people/wants.ts)
+  {
+    const can = new Set<number>();
+    for (const l of gatherable(x, st).values()) for (const it of l) can.add(it);
+    const chain = [...wantChain(x, st, can).crafts].filter(([, w]) => w >= 0.5).sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+    for (const [k] of chain) add(k, 2);
+  }
   // writing: keep the library written
   for (const k of st.library) if (x.rt.list[k].writes && st.written.length < st.library.length) add(k, 1);
   // everything else they know, now and then (practice keeps skills alive)
@@ -799,6 +851,8 @@ function planWants(x: PCtx, st: Settlement): void {
   push('stone', storeHas(st, itemIdx(x, 'stone')) < 4 ? 1 : 0.2);
   push('reeds', storeHas(st, itemIdx(x, 'reeds')) < 6 ? 0.8 : 0.1);
   push('fiber', storeHas(st, itemIdx(x, 'fiber')) < 4 ? 0.7 : 0.1);
+  // (LIVING LAND §2.6: the shortfalls of what they want made, followed down its recipes — people/wants.ts)
+  for (const [it, w] of wantChain(x, st, can).items) want(it, w);
   // most wanted first (ties by item index), only what grows or lies within reach
   const out: number[] = [];
   for (const it of L) if (st.res && (st.res.items[String(it)]?.length ?? 0) > 0) out.push(it);
@@ -813,24 +867,34 @@ const SHELTER_PREF = ['house', 'longhouse', 'hive-mound', 'igloo', 'hut', 'lean-
 const ONE_EACH = ['hearth', 'kiln', 'furnace', 'forge', 'oven', 'workshop', 'pen', 'well', 'shrine', 'temple', 'library', 'school', 'market', 'dock',
   'shipyard', 'mill', 'observatory', 'lighthouse', 'mine', 'factory', 'powerplant', 'radio-mast', 'refinery', 'lab', 'launchpad', 'aqueduct', 'tower', 'blast-furnace'];
 
-function planConstruction(x: PCtx, st: Settlement): void {
+export function planConstruction(x: PCtx, st: Settlement): void {
   // sites whose material can no longer be had are begun again in another, or given up (buildings.ts reviseSite): a
   // stalled site used to hold one of the two open slots for ever
   for (const id of st.sites.slice()) { const b = x.ps.building(id); if (b) reviseSite(x, st, b); else st.sites.splice(st.sites.indexOf(id), 1); }
-  if (st.sites.length >= 2) return;
   const members = x.ps.members.get(st.id) ?? [];
   const pop = members.length + cohortTotal(st);
   const mine = x.ps.of(st.id).filter((b) => !(b.flags & BuildingFlag.ruined));
+  // (LIVING LAND §2.5: houses follow the people — beds against people and households without a home are reckoned
+  // before anything else is begun, and a third site may be opened for a dwelling when the two open sites are other
+  // works: a town of 77 slept in 50 beds for years while its sites were a kiln and a wall)
+  let beds = 0, bedsUp = 0, shelterSites = 0;
+  for (const b of mine) {
+    const cap = x.c.buildings.list[b.type].capacity;
+    beds += cap;
+    if (b.progress >= 1) bedsUp += cap;
+    else if (cap > 0) shelterSites++;
+  }
+  const homeless = st.households.some((h) => h.home < 0 && h.members.length > 0);
+  const wantBeds = beds < pop || (homeless && shelterSites === 0 && bedsUp < pop + 6);
+  if (st.sites.length >= (wantBeds && shelterSites === 0 ? 3 : 2)) return;
   const have = (id: string) => mine.some((b) => x.c.buildings.list[b.type].id === id);
   const tIdx = (id: string) => x.c.buildings.idx(id);
   const ok = (id: string) => { const t = tIdx(id); return t >= 0 && canBuild(x, st, t); };
   const plan = (id: string) => { const t = tIdx(id); return t >= 0 ? planBuilding(x, st, t) : null; };
   // fire first
-  if (ok('hearth') && !have('hearth')) { if (plan('hearth')) return; }
+  if (ok('hearth') && !have('hearth') && st.sites.length < 2) { if (plan('hearth')) return; }
   // shelter for everyone
-  let beds = 0;
-  for (const b of mine) beds += x.c.buildings.list[b.type].capacity;
-  if (beds < pop) {
+  if (wantBeds) {
     const sp = x.c.species.list[st.species].id;
     for (const id of SHELTER_PREF) {
       if (!ok(id)) continue;
@@ -840,6 +904,7 @@ function planConstruction(x: PCtx, st: Settlement): void {
       if (plan(id)) return;
     }
   }
+  if (st.sites.length >= 2) return;
   // storage
   const cap = capacity(x, st);
   let stored = 0;
@@ -854,11 +919,14 @@ function planConstruction(x: PCtx, st: Settlement): void {
     const def = x.c.buildings.list[tIdx(id)];
     if (def.cost >= 20 && pop < 25) continue;
     if (id === 'temple' && pop < 30) continue;
+    // (LIVING RELATIONSHIP: a temple where faith > 0.4 and loyalty > 0.3; else the shrine serves — god/relationship.ts)
+    if (id === 'temple' && godHooks.templeWanted && !godHooks.templeWanted(x, st)) continue;
     // ports emerge from boat use: a shore that boats keep leaving from gets its dock (then a shipyard, a light)
     if ((id === 'dock' || id === 'shipyard' || id === 'lighthouse') && (!(st.res && st.res.fish.length) || (st.boatUse ?? 0) < (id === 'dock' ? 2 : 6))) continue;
     if (id === 'market' && (st.traded ?? 0) < 4 && pop < 40) continue;
     if (id === 'mine' && !Object.keys(st.res?.items ?? {}).some((key) => x.c.items.list[Number(key)].tags.includes('ore') && (st.res!.items[key]?.length ?? 0) > 0)) continue;
-    if (id === 'pen' && !st.res?.contexts.includes('herds')) continue;
+    // (LIVING LAND: a pen for a herd kept — the first may come home from a hunt — or one to be tamed nearby)
+    if (id === 'pen' && !st.res?.contexts.includes('herds') && !ownHerds(x, st).length) continue;
     if (id === 'well' && st.res && st.res.water.length && distM(x.p, st.pos, cellPos(x.p, st.res.water[0])) < 60) continue;
     if (id === 'tower' && st.res && st.res.danger < 0) continue;
     if (plan(id)) return;
@@ -942,13 +1010,19 @@ function births(x: PCtx, st: Settlement, hours = 1): void {
     return;
   }
   const dice = worldSalt(x, 0xb1c);
+  // (LIVING LAND §2.8: many children to the adults, fewer births; plenty does not raise a mother's chance above
+  // nature's rate — people/demography.ts)
+  const fewer = mouths(x, st);
+  const fed1 = plentyFactor(fd, fed);
   for (const m of members) {
     if (!(A.flags[m] & AgentFlag.female) || A.flags[m] & (AgentFlag.child | AgentFlag.elder) || !A.partner[m]) continue;
     const f = A.slotOf(A.partner[m]);
     if (f < 0) continue;
     const age = (x.tick - A.birth[m]) / x.year;
     if (age > def.elder - 5) continue;
-    const p = def.fertility * perHour * plenty * crowd * (0.5 + A.mood[m]);
+    // (LIVING LAND: a mother's births 2-3 years apart, her fertility waning after 35 — people/demography.ts)
+    if (!spaced(x, m)) continue;
+    const p = def.fertility * perHour * fed1 * crowd * (0.5 + A.mood[m]) * fewer * ageFertility(age, def.elder - 5, def.maturity);
     if (hashFloat(A.id[m], x.tick, dice) < p) {
       if (atCap) st.cohort.n[0] += 1; else birth(x, st, m, f);
     }
@@ -963,7 +1037,9 @@ export function oldAge(x: PCtx, st: Settlement, hours = 1): void {
   // the world seed's dice (agent ids and ticks repeat from world to world), not the band's age dice
   const dice = worldSalt(x, 0x01da6e);
   for (const m of members) {
-    if (!A.alive[m]) continue;
+    // (LIVING LAND: old age takes no children — childhood has its own hazards, people/demography.ts; three of the
+    // census's child deaths were logged as old age)
+    if (!A.alive[m] || A.flags[m] & AgentFlag.child) continue;
     const h = ageHazard(x, m) * perHour;
     if (hashFloat(A.id[m], x.tick, dice) < h) die(x, m, DEATH.age);
   }
@@ -980,9 +1056,10 @@ function sicknessAndAccidents(x: PCtx, st: Settlement, hours = 1): void {
   const roll = (salt: number, p: number) => hashFloat(st.id, x.tick, salt, dice) < chanceIn(p, hours);
   const lit = x.ps.of(st.id).some((b) => b.fuel > 0);
   const f = x.p.f;
-  // a fire burning in the territory: someone may carry it home (fire-keeping)
-  if (st.flow && (st.recent.wildfire === undefined || x.tick - st.recent.wildfire > x.day)) {
-    for (const c of st.flow.cells) if (f.fire[c] > 0.08) { accident(x, st, 'wildfire', c); break; }
+  // a fire burning within sight (LIVING PACE: within 2 km — people/firewatch.ts): someone may carry it home (fire-keeping)
+  if (st.recent.wildfire === undefined || x.tick - st.recent.wildfire > x.day) {
+    const c = fireSeen(x, st);
+    if (c >= 0) accident(x, st, 'wildfire', c);
   }
   if (lit && (has('clay') || storeHas(st, itemIdx(x, 'clay')) >= 1) && roll(1, 0.12)) accident(x, st, 'fire-on-clay', st.cell);
   if (lit && has('copper') && roll(2, 0.05)) accident(x, st, 'copper-in-fire', st.cell);
@@ -1040,6 +1117,8 @@ function daily(x: PCtx, st: Settlement): void {
   cultureDaily(x, st);
   factionsDaily(x, st);
   householdsDaily(x, st);
+  // (LIVING LAND: the books' daily census, the status of standing — people/land.ts)
+  landDaily(x, st);
   // famine notices
   if (st.stats.starved > 0 && (st.lastFamine < 0 || x.tick - st.lastFamine > 2 * x.day)) {
     const recent = st.stats.starved - (st.recent.starvedSeen ?? 0);
@@ -1076,8 +1155,9 @@ function daily(x: PCtx, st: Settlement): void {
   // trade, gifts, tribute, theft (economy.ts); sickness creeping to the neighbours
   economyDaily(x, st);
   neighbourContagion(x, st);
-  // abandoned fields go wild
-  st.fields = st.fields.filter((c) => x.p.f.cropSpecies[c] === st.crop || x.p.f.crop[c] > 0.02);
+  // abandoned fields go wild (LIVING LAND: a field on the season's clock lies fallow between harvest and sowing, and a
+  // flax field beside the staple is a field too — people/crops.ts)
+  st.fields = st.fields.filter((c) => x.p.f.cropSpecies[c] === st.crop || x.p.f.crop[c] > 0.02 || !!st.land?.fields.some((fs) => fs.c === c));
   updateTerritory(x, st);
   st.era = computeEra(x, st);
   agesDaily(x, st);
@@ -1218,7 +1298,9 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
   const flooded = f.water[st.cell] > 0.6 || (built >= 2 && drowned * 2 > built);
   if (flooded) st.recent.flood = st.recent.flood ?? x.tick; else delete st.recent.flood;
   const well = x.ps.of(st.id).some((b) => b.progress >= 1 && !(b.flags & BuildingFlag.ruined) && x.c.buildings.list[b.type].provides.includes('water') && wellFlows(x.p, b.cell));
-  const dry = !flooded && !well && st.res !== null && st.res.water.length === 0 && x.info[st.species].needW[1] > 0;
+  // (LIVING LAND §2.7: dry means no FRESH water in reach now — the list is hours old, and a drought left it holding
+  // dried cells while the town died of thirst)
+  const dry = !flooded && !well && st.res !== null && !st.res.water.some((c) => freshAt(x, st, c)) && x.info[st.species].needW[1] > 0;
   if (dry) st.recent.dry = st.recent.dry ?? x.tick; else delete st.recent.dry;
   // starving: the store empty and either deaths from hunger or bellies empty all round (waiting for three deaths let a
   // whole town starve on one day: they all reached the end of their strength together)
@@ -1306,9 +1388,60 @@ export function abandon(x: PCtx, st: Settlement, cause: string): Settlement {
   const skip = (c: number) => band.recent[`u${c}`] !== undefined || (cause === 'flood' && x.p.f.water[c] > 0.05);
   const far = searchSite(x, st.species, st.cell, 9, st.id, skip);
   band.target = far.cell >= 0 && far.cell !== st.cell && far.score >= 3.2 ? cellPos(x.p, far.cell) as [number, number, number] : null;
+  // (LIVING LAND §2.7: a town the drought drove out goes to its kin within 3 km where the water still runs — they take
+  // them in: joinKin when it gets there — else toward the best site the band's own search finds, water weighing in it)
+  if (cause === 'drought') {
+    const kin = kinWithWater(x, st);
+    if (kin) {
+      band.target = [kin.pos[0], kin.pos[1], kin.pos[2]];
+      band.recent.kin = kin.id;
+      band.recent.godSite = x.tick; // (a place chosen for them: not given up for its site score)
+    }
+  }
   tell(x.u, x.p, `abandon.${cause}`, vars(x, st, -1, { cause }), st, [settlementRef(x, st)]);
   fall(x, st, cause);
   return band;
+}
+
+/** LIVING LAND: fresh water to drink at cell c for the people of st now (the cell or one beside it; snow for the cold) */
+function freshAt(x: PCtx, st: Settlement, c: number): boolean {
+  const p = x.p;
+  if (p.f.water[c] >= 0.6) return false;
+  if (drinkable(p, c)) return true;
+  if (x.info[st.species].def.habitat.includes('cold') && snowWater(p, c)) return true;
+  const g = p.grid;
+  for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (freshWater(p, g.nbr[e])) return true;
+  return false;
+}
+
+/** LIVING LAND: the nearest kin settlement of st (same people and polity, or parent / daughter) within 3 km whose water
+ * still runs, or null */
+function kinWithWater(x: PCtx, st: Settlement): Settlement | null {
+  let best: Settlement | null = null, bd = 3000;
+  for (const o of x.ps.settlements) {
+    if (o === st || o.fallen >= 0 || o.band || o.species !== st.species) continue;
+    if (o.polity !== st.polity && o.parent !== st.id && st.parent !== o.id) continue;
+    if (!o.res || !o.res.water.some((c) => freshAt(x, o, c))) continue;
+    const d = distM(x.p, st.pos, o.pos);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+
+/** LIVING LAND: a band of drought refugees arrives at its kin: its people, households and what they carry join them */
+function joinKin(x: PCtx, band: Settlement, kin: Settlement): void {
+  const A = x.A;
+  for (const s of (x.ps.members.get(band.id) ?? []).slice()) {
+    x.ps.removeMember(band.id, s);
+    A.settlement[s] = kin.id;
+    A.home[s] = -1;
+    x.ps.addMember(kin.id, s);
+  }
+  for (const h of band.households) kin.households.push({ id: h.id, members: h.members.slice(), home: -1 });
+  band.households = [];
+  for (let i = 0; i < band.store.length; i++) if (band.store[i] > 0) storeAdd(x, kin, i, band.store[i]);
+  tell(x.u, x.p, 'abandon.joined', vars(x, kin, -1, { other: band.name }), kin, [settlementRef(x, kin)], 1);
+  fall(x, band, 'joined');
 }
 
 /** the settlement falls: ruins remain */

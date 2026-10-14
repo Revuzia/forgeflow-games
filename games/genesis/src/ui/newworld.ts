@@ -156,7 +156,7 @@ interface Card { id: string; name: string; desc: string; icon: string }
 const CARDS: Card[] = [
   { id: 'barren', name: 'Barren world', desc: 'One airless rock under a young star, and everything still to do. The opening: breathe, pour, sow — and someone to see it.', icon: 'moon' },
   { id: 'twoworlds', name: 'Two worlds', desc: 'Plains folk in their stone age on a green world, a hive on a warm desert one — and the sky between them.', icon: 'world' },
-  { id: 'twoworlds-late', name: 'Two worlds: the age of rockets', desc: 'Both peoples grown into their electric age. Gaia\'s launchpad stands ready; Rust is a light in its telescopes.', icon: 'w-rocket' },
+  { id: 'twoworlds-late', name: 'Two worlds: the age of rockets', desc: 'Both peoples at the edge of space: Gaia\'s launchpad stands ready; Rust is a light in its telescopes.', icon: 'w-rocket' },
   { id: 'system', name: 'Living system', desc: 'Six worlds and a moon, several peoples at different ages — one at the edge of rockets.', icon: 'orbit' },
   { id: 'sandbox', name: 'Sandbox', desc: 'A temperate world with seas, mountains and rivers, nothing alive yet. Shape it as you like.', icon: 'mountain' },
   { id: 'custom', name: 'Your own system', desc: 'Choose the star, how many worlds and what kind, and who lives where.', icon: 'star' },

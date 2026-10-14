@@ -1,5 +1,5 @@
 {
- "_doc": "More god-layer stills beyond god.json (CONTRACT \u00a715.6\u201315.8): the throw arc while aiming, an uprooted tree in the hand, a firestorm at dusk, a locust swarm, plague over a town, a glowing rift and a sinkhole, a comet over the night side, the sky-paint brush. Lookdev world, staged by script; FX time moved with window.__GENESIS_FX__.advance. Run: node _harness/shots.mjs _harness/specs/god-extra.json",
+ "_doc": "More god-layer stills beyond god.json (CONTRACT §15.6–15.8): the throw arc while aiming, an uprooted tree in the Touch, a boulder hurled mid-flight seen from the god's height (readable: present.ts), a firestorm at dusk, a locust swarm, plague over a town, a glowing rift and a sinkhole, a comet over the night side, the sky-paint brush, and the compositing regressions (alpha-tested foliage in front of a ward and inside fog). Lookdev world, staged by script; FX time moved with window.__GENESIS_FX__.advance. Run: node _harness/shots.mjs _harness/specs/god-extra.json",
  "shots": [
   {
    "name": "godx-throw-arc",
@@ -13,9 +13,9 @@
    "frames": 1,
    "script": [
     "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = true; const p = G.poi('farm');",
-    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 14, alignment: 0.5, pose: 'open' }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'rock', mass: 2600 });",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 14, regard: 0.5, pose: 'open' }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'rock', mass: 2600 });",
     "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 120, tilt: 58, yaw: 0, fov: 55, hour: 15 });",
-    "await G.frames(2); window.__GENESIS_APP__.ui.hand.beginAim(); G.ui_.pointer(640, 120); await G.frames(4);",
+    "await G.frames(2); window.__GENESIS_APP__.ui.hand.beginAim(); G.ui_.pointer(560, 330); await G.frames(4);",
     "return { aiming: window.__GENESIS_APP__.ui.hand.isAiming, held: [F.fx.hand.heldKind, F.fx.hand.heldId], arc: F.fx.hand.u.uArcK.value };"
    ]
   },
@@ -31,9 +31,27 @@
    "frames": 1,
    "script": [
     "const F = window.__GENESIS_FX__; window.__GENESIS_APP__.ui.hand.cancelAim(); window.__GENESIS_APP__.ui.pointerLeave(); G.ui_.closeAll(); F.fx.hand.force = true; const p = G.poi('forest-edge');",
-    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 22, alignment: 0.7, pose: 'open' }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'tree', mass: 1 });",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 22, regard: 0.7, pose: 'open' }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'tree', mass: 1 });",
     "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat - (40 / 3000) * 180 / Math.PI, lon: p.lon, alt: 16, yaw: 0, pitch: 4, fov: 55, hour: 15.5 });",
     "await G.frames(4); return { held: [F.fx.hand.heldKind, F.fx.hand.heldId], scale: F.fx.hand.scale };"
+   ]
+  },
+  {
+   "name": "godx-throw-flight",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; window.__GENESIS_APP__.ui.hand.cancelAim(); window.__GENESIS_APP__.ui.pointerLeave(); G.ui_.closeAll(); F.fx.hand.force = true; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 14, regard: 0.6, pose: 'open' }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'rock', mass: 2600 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 260, tilt: 60, yaw: 0, fov: 55, hour: 15 }); await G.frames(2);",
+    "const up = p.pos, el = Math.hypot(up[2], up[0]) || 1, E = [up[2] / el, 0, -up[0] / el]; const v = [E[0] * 20 + up[0] * 20, E[1] * 20 + up[1] * 20, E[2] * 20 + up[2] * 20]; await G.cmd({ k: 'lookdev.hand.throw', vel: v }); await G.step(1); await G.frames(1); const nf = () => { let n = 0; F.fx.m.flights.forEach(() => n++, F.fx.clock); return n; }; for (let i = 0; i < 8 && !nf(); i++) await G.frames(1); F.advance(1.2); await G.frames(1);",
+    "let fl = []; F.fx.m.flights.forEach((id, kind, q, v, age) => fl.push({ id, kind, age: +age.toFixed(2), d: Math.round(q.distanceTo(F.fx.vis.camBody)) }), F.fx.clock); return fl;"
    ]
   },
   {
@@ -118,8 +136,12 @@
    "script": [
     "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
     "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'comet', pos: p.pos, progress: 0.75, bearing: 120 });",
-    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 7000, tilt: 40, yaw: 300, fov: 60, hour: 21 });",
-    "await G.frames(2); F.advance(4); await G.frames(2);"
+    "// the comet hangs a hundred kilometres up over the farm: seen from the night side 1.5 km off (on a world 3 km round), looking up past the horizon",
+    "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat - (1500 / 3000) * 180 / Math.PI, lon: p.lon, alt: 30, yaw: 0, pitch: 38, fov: 70, hour: 21.5 });",
+    "await G.frames(2); F.advance(4); await G.frames(2);",
+    "const st = [...F.fx.m.disasters.states.values()].find((x) => x.kind === 'comet'); const cm = st && st.extra.comet; const cam = window.__GENESIS_APP__.renderer.camera; const W = F.fx.vis.group.matrixWorld;",
+    "const scr = (v) => { const q = v.clone().applyMatrix4(W).project(cam); return [Math.round((q.x * 0.5 + 0.5) * innerWidth), Math.round((0.5 - q.y * 0.5) * innerHeight), +q.z.toFixed(4)]; };",
+    "return { comet: !!cm, head: cm ? scr(cm.u.uHead.value) : null, alt: cm ? Math.round(cm.u.uHead.value.length() - 3000) : null, len: cm ? Math.round(cm.u.uLen.value) : null, k: cm ? cm.u.uK.value : null };"
    ]
   },
   {
@@ -136,6 +158,53 @@
     "const F = window.__GENESIS_FX__; await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); F.advance(30); await G.frames(1);",
     "await G.camera({ mode: 'orbit', poi: 'farm', dist: 700, tilt: 50, hour: 13 });",
     "const ok = G.ui_.arm('weather-thunderstorm'); G.ui_.pointer(400, 240); await G.frames(3); return { ok, brush: !!F.fx.brush };"
+   ]
+  },
+  {
+   "name": "godx-ward-foliage",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.hand.force = false; const p = G.poi('forest-edge');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.miracle.shield', pos: p.pos, radius: 120 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 260, tilt: 62, yaw: 0, fov: 55, hour: 15.5 }); await G.frames(2); F.advance(2); await G.frames(1);"
+   ]
+  },
+  {
+   "name": "godx-ward-inside",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('forest-edge');",
+    "await G.camera({ mode: 'surface', lat: p.lat, lon: p.lon, alt: 2, yaw: 30, pitch: 14, fov: 60, hour: 15.5 }); await G.frames(2); F.advance(1); await G.frames(1);"
+   ]
+  },
+  {
+   "name": "godx-fog-foliage",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('forest-edge');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.weather', kind: 'fog', pos: p.pos, radius: 1500, intensity: 1 });",
+    "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat, lon: p.lon, alt: 2, yaw: 30, pitch: 14, fov: 60, hour: 9.5 }); await G.frames(2); F.advance(6); await G.frames(1);"
    ]
   }
  ]

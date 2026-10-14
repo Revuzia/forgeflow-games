@@ -22,7 +22,7 @@ import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
 import { makeCtx } from '../people/ctx.ts';
-import { animalBase, animalDef, animalIdx, forage, grazer, habitatFit, herdPos, hunter, reindexHerds, spawnHerd, speciesCount } from './herds.ts';
+import { animalBase, animalDef, animalIdx, forage, gameForNew, grazer, habitatFit, herdPos, hunter, reindexHerds, spawnHerd, speciesCount } from './herds.ts';
 import { offsetPoint, distM, sunElevation, cellPos } from '../people/world.ts';
 import { seasonTemps } from '../people/settlement.ts';
 import { DEATH } from '../people/defs.ts';
@@ -37,7 +37,32 @@ import { packColor } from '../people/ctx.ts';
 export const MAX_HERDS = 220;
 /** isolation that lets a herd become its own species: no herd of its kind within this many metres for ISO_DAYS */
 export const ISO_RANGE_M = 3200;
+/** (the old fixed 36 days: every isolated lineage split at day 35.5 — LIVING CONTENT §4.5 replaced it with isoDaysOf) */
 export const ISO_DAYS = 36;
+/** LIVING CONTENT (§4.5): a lineage becomes its own species after ISO_YEARS[0]..ISO_YEARS[1] game years cut off (per lineage) */
+export const ISO_YEARS: [number, number] = [6, 12];
+
+/**
+ * Days a herd of species sp must stay cut off from its kind before it may become a new species: 6–12 game years, by a
+ * hash of the lineage (the species on this world), so lineages split at their own pace rather than all at once.
+ */
+export function isoDaysOf(x: PCtx, sp: number): number {
+  const yearDays = Math.max(1, x.year / x.day);
+  const yrs = ISO_YEARS[0] + (ISO_YEARS[1] - ISO_YEARS[0]) * hashFloat(sp, x.p.seed, 0x5be1);
+  return Math.max(1, Math.round(yrs * yearDays));
+}
+
+/**
+ * Has herd h's home drifted out of what its kind is made for: a biome the species does not live in, or a climate
+ * outside its comfortable band (the middle of its temperature range)? Only such a herd becomes a new species — a herd
+ * merely cut off in the same country stays what it is.
+ */
+export function newHome(x: PCtx, h: Herd, a: AnimalDef): boolean {
+  const biome = x.c.biomes.list[x.p.f.biome[h.cell]]?.id ?? '';
+  if (biome && !a.biomes.includes(biome) && a.habitat !== 'sea') return true;
+  const t = h.envT ?? x.p.f.temperature[h.cell];
+  return t < a.temp[1] || t > a.temp[2];
+}
 
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
@@ -47,6 +72,20 @@ function massOf(a: AnimalDef): number {
   return a.mass ?? 60 * a.size * a.size * a.size;
 }
 
+/**
+ * Can hunter `a` take prey of kind `b` (a pack's reach: prey up to maxSize)? Walkers take grazers that walk; a raptor of
+ * the air (the golden eagle) stoops on small grazers of the land, up to four times its own weight; a fish-eater of the
+ * water (the seal, the crocodile at the river) takes fish shoals. Insects and fliers are nobody's prey here.
+ * (LIVING CONTENT §4.4: the real predators that keep the hares, the shoals and the desert lizards down.)
+ */
+export function preyOf(a: AnimalDef, b: AnimalDef, maxSize: number): boolean {
+  if (b.habitat === 'air' || b.kind === 'insect') return false;
+  if (b.kind === 'fish') return a.diet.includes('fish') && !b.products.some((io) => io.item === 'shellfish') && b.size <= Math.max(maxSize, a.size);
+  if (!grazer(b) || b.size > maxSize) return false;
+  if (a.habitat === 'air') return b.habitat === 'land' && massOf(b) <= massOf(a) * 4;
+  return a.habitat === 'land' && b.habitat === 'land';
+}
+
 // ───────────────────────────── hourly ─────────────────────────────
 
 /** hourly: every herd eats, breeds or starves, sickens, and moves */
@@ -54,6 +93,7 @@ export function ecoStep(x: PCtx): void {
   const p = x.p;
   const herds = x.ps.herds;
   if (!herds.length) return;
+  if (x.ps.settlements.length) gameForNew(x);
   const yearH = Math.max(24, x.year / 60);
   // where everyone is (local encounters read the cell index)
   _byCell.clear();
@@ -140,8 +180,7 @@ function huntPrey(x: PCtx, h: Herd, a: AnimalDef, c: number): void {
       // the last few of a herd always find cover (prey refuge: no herd is hunted out)
       if (o === h || o.count < 2.5) continue;
       const b = animalDef(x, o.species);
-      if (!(grazer(b) && b.kind !== 'insect') || b.size > maxSize || b.habitat === 'air') continue;
-      if (b.habitat !== a.habitat && !(a.habitat === 'land' && b.habitat === 'land')) continue;
+      if (!preyOf(a, b, maxSize)) continue;
       // the most meat for the chase; penned livestock is guarded
       const v = Math.min(o.count, 6) * massOf(b) * (o.owner >= 0 ? 0.4 : 1);
       if (v > bv) { bv = v; best = o; }
@@ -377,7 +416,7 @@ function hunterNear(x: PCtx, h: Herd, a: AnimalDef): Herd | null {
   for (const o of x.ps.herds) {
     if (o === h || o.count < 1 || o.owner >= 0) continue;
     const b = animalDef(x, o.species);
-    if (!hunter(b) || o.hunger < 0.25 || a.size > b.size * (1 + o.count * 0.5)) continue;
+    if (!hunter(b) || o.hunger < 0.25 || !preyOf(b, a, b.size * (1 + o.count * 0.5))) continue;
     if (P[o.cell * 3] * P[hc * 3] + P[o.cell * 3 + 1] * P[hc * 3 + 1] + P[o.cell * 3 + 2] * P[hc * 3 + 2] >= reach) return o;
   }
   return null;
@@ -394,7 +433,7 @@ function preyNear(x: PCtx, h: Herd, a: AnimalDef): Herd | null {
   for (const o of x.ps.herds) {
     if (o === h || o.count < 1) continue;
     const b = animalDef(x, o.species);
-    if (!grazer(b) || b.kind === 'insect' || b.size > maxSize || b.habitat === 'air' || o.count < 2.5) continue;
+    if (o.count < 2.5 || !preyOf(a, b, maxSize)) continue;
     const d = P[o.cell * 3] * P[hc * 3] + P[o.cell * 3 + 1] * P[hc * 3 + 1] + P[o.cell * 3 + 2] * P[hc * 3 + 2];
     if (d > bd) { bd = d; best = o; }
   }
@@ -618,11 +657,13 @@ function isolationAndSpeciation(x: PCtx): void {
       continue;
     }
     h.iso = (h.iso ?? 0) + 1;
-    // directional selection: the further its home is from what its kind is made for, the faster it changes
+    // directional selection: the further its home is from what its kind is made for, the faster it changes (LIVING
+    // CONTENT §4.5: over 6–12 game years of isolation, and only where its home is not what its kind is made for)
     const mid = (a.temp[1] + a.temp[2]) / 2;
     const env = Math.min(1.5, Math.abs((h.envT ?? mid) - mid) / 12);
-    h.drift = (h.drift ?? 0) + ((1 + env) / ISO_DAYS) * 0.6;
-    if (h.iso >= ISO_DAYS && h.drift >= 1 && hashFloat(h.id, x.tick, 0x5be) < 0.25) speciate(x, h);
+    const need = isoDaysOf(x, h.species);
+    h.drift = Math.round(((h.drift ?? 0) + (0.5 + env) / need) * 1e6) / 1e6;
+    if (h.iso >= need && h.drift >= 1 && newHome(x, h, a) && hashFloat(h.id, x.tick, 0x5be) < 0.25) speciate(x, h);
   }
 }
 
@@ -657,6 +698,7 @@ export function speciate(x: PCtx, h: Herd): number {
   const cold = envT < lo + 3, hot = envT > hi - 3;
   const biome = x.c.biomes.list[f.biome[h.cell]]?.id ?? 'grassland';
   const roll = hashFloat(h.id, x.tick, 0x5bf);
+  const isoDays = h.iso ?? ISO_DAYS;
   // names by habitat: water kinds take water words (never a 'Woolly whale' or a 'Dune fish'), fliers sky words
   const words = parent.habitat === 'sea' ? PREFIX_SEA : parent.habitat === 'water' ? PREFIX_FRESH
     : parent.habitat === 'air' ? (cold ? PREFIX_COLD_AIR : hot ? PREFIX_HOT_AIR : PREFIX_AIR)
@@ -687,15 +729,17 @@ export function speciate(x: PCtx, h: Herd): number {
   const idx = x.c.animals.size + x.ps.species.length;
   x.ps.species.push({ idx, def, base, parent: h.species, born: x.tick });
   const from = h.species;
-  // its kin left on this world, if any, stay what they were
+  // its isolated kin of the same group change with it; its kin left elsewhere on this world, if any, stay what they were
+  for (const o of x.ps.herds) if (o.species === from && o !== h && o.owner < 0 && (o.iso ?? 0) > 0 && sameGroup(x, o, h)) { o.species = idx; o.iso = 0; o.drift = 0; }
+  // (LIVING CONTENT §4.5: asked AFTER the group changed — asked before, the group counted as kin left behind, `became`
+  // was never set and the parent was chronicled extinct: 33 of 44 extinction notices in the census were false)
   const others = x.ps.herds.some((o) => o !== h && o.species === from && o.count >= 0.5);
   if (!others) (x.ps.eco.became ??= {})[String(from)] = idx;
-  for (const o of x.ps.herds) if (o.species === from && o !== h && o.owner < 0 && (o.iso ?? 0) > 0 && sameGroup(x, o, h)) { o.species = idx; o.iso = 0; o.drift = 0; }
   h.species = idx;
   h.iso = 0;
   h.drift = 0;
   x.ps.eco.seen[String(idx)] = x.tick;
-  const years = Math.max(1, Math.round(ISO_DAYS / Math.max(1, x.year / x.day)));
+  const years = Math.max(1, Math.round(isoDays / Math.max(1, x.year / x.day)));
   const place = biome === 'ocean' || biome === 'reef' ? 'waters' : biome;
   tell(x.u, x.p, 'speciation', { parent: plural(parent.name), animal: plural(def.name), place, planet: x.p.name, years }, null, undefined, 2);
   herdPos(h, x.tick, _p);

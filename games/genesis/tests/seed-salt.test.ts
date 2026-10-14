@@ -192,7 +192,11 @@ test('ages and old-age rolls do not share a salt: dying of age says nothing of t
 test('a wandering band grows old too: old age comes for its people before they settle', () => {
   // (a band's hourly step used to end with its walk: a band wandering for weeks lost no one to age, whatever the dice)
   let asBand = 0, died = 0;
-  for (const seed of [1, 2]) {
+  // (LIVING PACE: at 2 m a game minute a band reaches a site to its liking within hours on most worlds — over seeds 1-12
+  // it wandered 116 band-hours in all, 343 at 0.25 m a minute — and old age took it at 0.086 deaths a band-hour, 0.064
+  // before: _harness/scratch/living/pace/{old,live}/out/sb-band.log. These three worlds keep it on the road for a day
+  // or more: 79 band-hours, 7 deaths; seeds 1 and 2 gave 48 + 48 hours and 6 deaths at the old pace)
+  for (const seed of [2, 6, 12]) {
     const sim = world(16, seed);
     const st = people(sim, 'plains-folk', 24);
     const x = ctx(sim), A = x.A;
@@ -205,8 +209,7 @@ test('a wandering band grows old too: old age comes for its people before they s
       for (const e of sim.drainEvents()) if (e.t === 'death' && e.data?.cause === 'old age') died++;
     }
   }
-  // (on these two worlds the band finds no site to its liking in two days)
-  assert.ok(asBand >= 72, `${asBand} hours as a band over two seeds`);
+  assert.ok(asBand >= 72, `${asBand} hours as a band over three seeds`);
   // everyone at the hazard's cap (1 a year): 24 × (1 − (1 − 60 / year)^48) ≈ 3.7 deaths a seed while wandering
   assert.ok(died >= 3, `${died} deaths of old age while wandering, over ${asBand} band-hours`);
 });

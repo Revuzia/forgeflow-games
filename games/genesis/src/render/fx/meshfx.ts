@@ -1,8 +1,10 @@
 // GENESIS — mesh FX of the god layer (CONTRACT.md §15.7): the shapes particles cannot make.
-//   Funnel    a tornado: a roped, twisting condensation funnel from the cloud base to a debris-wrapped foot
-//   Dome      a shield miracle: a hemisphere of light with a hexagonal lattice, a fresnel rim and ripples
-//   Shell     a shockwave's condensation shell, racing out from an impact
-//   Fireball  an expanding ball of fire: turbulent, white-gold at its heart, cooling to red and smoke at its skin
+//   Funnel    a tornado: a roped, twisting condensation funnel from the cloud base to a debris-wrapped foot, under a
+//             rotating wall cloud lowered from the deck
+//   Dome      the ward (a shield miracle): nearly invisible at rest — a thin fresnel rim and a faint shimmer; its
+//             lattice shows only where something strikes it, in rings spreading from the blow; nothing from inside
+//   Shell     a shockwave's condensation shell (no longer used by impacts: their shock is a ring of dust on the ground)
+//   Fireball  an expanding ball of fire (impacts and the fireball miracle now use vfx.ts's fireball puffs)
 //   Bolide    a falling body: an incandescent head in a plasma sheath stretched behind it, and its trail
 //   Comet     a coma and a two-part tail (dust curving, ion straight) pointing away from the star
 //   Debris    instanced rocks thrown on ballistic arcs (or lifted, for a gravity slip), tumbling, lit like the ground
@@ -88,11 +90,12 @@ void main() {
   vec3 q = vec3(cos(vAng - spin) * 2.0, vY * 14.0 - uFxTime * 1.8, sin(vAng - spin) * 2.0 + uSeed);
   float n = fbm3(q) * 0.6 + 0.5 * snoise(q * 2.7 + 3.0) * 0.4;
   float bands = 0.5 + 0.5 * sin(vY * 70.0 + (vAng - spin) * 3.0 + n * 4.0);
-  float dens = smoothstep(-0.2, 0.6, n + 0.25 * bands);
-  // the sheath is thin at the silhouette's edge-on parts, opaque where seen through its depth
+  float dens = smoothstep(-0.35, 0.45, n + 0.25 * bands);
+  // the sheath is densest seen edge-on (through its depth), but a condensation funnel reads as a solid grey cone even
+  // face-on (at 0.35 there the funnel under a real storm was a faint glassy thread behind its own bolt)
   float nv = abs(dot(normalize(vN), normalize(vV)));
-  float edge = mix(1.0, 0.35, pow(nv, 2.0));
-  float a = dens * edge * uK * vis * mix(0.85, 0.45, uLayer);
+  float edge = mix(1.0, 0.72, pow(nv, 2.0));
+  float a = dens * edge * uK * vis * mix(0.95, 0.5, uLayer);
   // fade at the very top into the cloud, and at the foot into the dust skirt
   a *= smoothstep(1.0, 0.86, vY) * mix(0.6, 1.0, smoothstep(0.0, 0.08, vY));
   // colour: dust brown at the foot, grey condensation above, darker in the core
@@ -103,13 +106,56 @@ void main() {
 }
 `;
 
+// the wall cloud: a rotating, lowered disc of dark cloud at the funnel's top (in the funnel's frame: y = 1 at uH)
+const WALL_VERT = /* glsl */ `
+${COMMON_VERT}
+uniform float uH;
+uniform float uRTop;
+uniform float uRWall;
+void main() {
+  vLocal = position;
+  // a shallow bowl: the middle hangs lowest (the lowering under the updraft)
+  float r = length(position.xz);
+  vec3 p = vec3(position.x * uRWall, uH * (0.94 + 0.06 * r * r), position.z * uRWall);
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  vN = normalize(normalMatrix * vec3(0.0, -1.0, 0.0));
+  vWorldN = vec3(0.0, -1.0, 0.0);
+  vV = -mv.xyz;
+  vZ = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}
+`;
+const WALL_FRAG = /* glsl */ `
+${NOISE_GLSL}
+${FX_DEPTH_GLSL}
+${COMMON_VERT}
+uniform float uK;
+uniform float uSeed;
+uniform vec3 uLight;
+void main() {
+  float vis = fxSoft(vZ, 30.0);
+  if (vis <= 0.0) discard;
+  float r = length(vLocal.xz);
+  if (r > 1.0) discard;
+  float th = atan(vLocal.z, vLocal.x);
+  // bands of cloud turning round the core, ragged scud at the rim
+  float sp = th * 3.0 + log(r + 0.06) * 2.5 - uFxTime * 0.45;
+  float n = fbm3(vec3(cos(sp) * 1.4 + r * 3.0, sin(sp) * 1.4, uSeed + uFxTime * 0.03));
+  float dens = smoothstep(-0.25, 0.45, n + 0.35 * (1.0 - r)) * (1.0 - smoothstep(0.55, 1.0, r));
+  float a = dens * uK * vis * 0.92;
+  vec3 c = vec3(0.16, 0.165, 0.18) * uLight * (0.7 + 0.5 * n);
+  gl_FragColor = vec4(c * a, a);
+}
+`;
+
 export class Funnel {
   readonly group = new Group();
   readonly u = {
     uH: { value: 600 }, uRBase: { value: 20 }, uRTop: { value: 120 }, uSeed: { value: 0 }, uK: { value: 0 },
-    uLight: { value: new Vector3(1, 1, 1) }, uDust: { value: new Vector3(0.35, 0.27, 0.19) },
+    uLight: { value: new Vector3(1, 1, 1) }, uDust: { value: new Vector3(0.35, 0.27, 0.19) }, uRWall: { value: 300 },
   };
   private meshes: Mesh[] = [];
+  private wall: Mesh;
   constructor(fx: Record<string, IUniform>) {
     this.group.matrixAutoUpdate = false;
     const geo = tube(28, 64);
@@ -122,10 +168,37 @@ export class Funnel {
       this.meshes.push(m);
       this.group.add(m);
     }
+    this.wall = new Mesh(disc(12, 40), fxMaterial(WALL_VERT, WALL_FRAG, this.u, false, fx));
+    this.wall.frustumCulled = false; this.wall.matrixAutoUpdate = false; this.wall.layers.set(FX_LAYER); this.wall.renderOrder = 3;
+    this.group.add(this.wall);
   }
   /** stand at body-frame point p (m) */
-  place(p: Vector3, matrix: Matrix4): void { for (const m of this.meshes) { m.matrix.copy(matrix); m.matrixWorldNeedsUpdate = true; } void p; }
-  dispose(): void { for (const m of this.meshes) (m.material as ShaderMaterial).dispose(); this.meshes[0]?.geometry.dispose(); }
+  place(p: Vector3, matrix: Matrix4): void {
+    for (const m of this.meshes) { m.matrix.copy(matrix); m.matrixWorldNeedsUpdate = true; }
+    this.wall.matrix.copy(matrix); this.wall.matrixWorldNeedsUpdate = true;
+    this.u.uRWall.value = this.u.uRTop.value * 3.2;
+    void p;
+  }
+  dispose(): void {
+    for (const m of this.meshes) (m.material as ShaderMaterial).dispose();
+    this.meshes[0]?.geometry.dispose();
+    this.wall.geometry.dispose(); (this.wall.material as ShaderMaterial).dispose();
+  }
+}
+
+/** a flat disc of unit radius in x/z */
+function disc(rings: number, segs: number): BufferGeometry {
+  const pos: number[] = [0, 0, 0], idx: number[] = [];
+  for (let r = 1; r <= rings; r++) for (let i = 0; i < segs; i++) { const a = (i / segs) * Math.PI * 2; pos.push(Math.cos(a) * r / rings, 0, Math.sin(a) * r / rings); }
+  for (let i = 0; i < segs; i++) idx.push(0, 1 + ((i + 1) % segs), 1 + i);
+  for (let r = 1; r < rings; r++) for (let i = 0; i < segs; i++) {
+    const a = 1 + (r - 1) * segs + i, b = 1 + (r - 1) * segs + ((i + 1) % segs);
+    idx.push(a, b, a + segs, b, b + segs, a + segs);
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setIndex(idx);
+  return g;
 }
 
 /** an open tube: unit radius at x,z, y from 0 to 1 */
@@ -166,25 +239,33 @@ ${FX_DEPTH_GLSL}
 ${COMMON_VERT}
 uniform float uK;
 uniform vec3 uCol;
-uniform float uHit;
+uniform float uHit;      // a blow's strength now (1 at the strike, decaying)
+uniform vec3 uHitDir;    // where it struck (unit, the dome's own frame)
+uniform float uHitAge;   // seconds since
+uniform float uInside;   // 1 when the camera stands inside the ward
 void main() {
   if (vLocal.y < -0.02) discard;
   float vis = fxSoft(vZ, 3.0);
   float nv = abs(dot(normalize(vN), normalize(vV)));
-  float rim = pow(1.0 - nv, 3.0);
-  // a hexagonal lattice over the dome
+  // at rest nearly invisible: a thin fresnel rim and a faint heat shimmer drifting up it
+  float rim = pow(1.0 - nv, 6.0);
+  float shimmer = 0.5 + 0.5 * snoise(vec3(vLocal.xz * 6.0, vLocal.y * 8.0 - uFxTime * 0.7));
+  // (in the real app at dusk, 0.22 + 0.18 read as a glass bubble over the town rather than a ward felt more than seen)
+  float k = rim * (0.13 + 0.12 * shimmer) * (1.0 - uInside);
+  // a hexagonal lattice that shows only where struck: rings of cells spreading from the blow and fading
   vec2 uv = vec2(atan(vLocal.z, vLocal.x) * 7.0, vLocal.y * 9.0);
-  vec2 r = vec2(1.0, 1.7320508);
-  vec2 h = r * 0.5;
-  vec2 a = mod(uv, r) - h, b = mod(uv - h, r) - h;
+  vec2 rr = vec2(1.0, 1.7320508);
+  vec2 hh = rr * 0.5;
+  vec2 a = mod(uv, rr) - hh, b = mod(uv - hh, rr) - hh;
   vec2 g = dot(a, a) < dot(b, b) ? a : b;
   float hex = smoothstep(0.42, 0.5, max(abs(g.x) * 0.866 + abs(g.y) * 0.5, abs(g.y)));
-  // ripples running up from the ground and from hits
-  float rip = 0.5 + 0.5 * sin(vLocal.y * 30.0 - uFxTime * 3.0);
-  float shimmer = 0.6 + 0.4 * snoise(vec3(uv * 0.5, uFxTime * 0.4));
-  float k = (rim * 0.8 + hex * 0.16 * shimmer + 0.025 + rip * 0.03 + uHit * 0.6 * (1.0 - nv)) * uK * vis;
-  // brighter at the base where it meets the ground
-  k *= 1.0 + 1.5 * smoothstep(0.12, 0.0, vLocal.y);
+  float dh = acos(clamp(dot(normalize(vLocal), uHitDir), -1.0, 1.0));
+  float wave = exp(-pow((dh - uHitAge * 1.1) / 0.12, 2.0)) * exp(-uHitAge * 1.2);
+  float near = exp(-dh * dh * 10.0) * uHit;
+  k += hex * (wave * 1.4 + near * 0.9) + near * 0.25;
+  // where it meets the ground, a faint seam of light (the ring on the ground carries most of it)
+  k += (1.0 - smoothstep(0.0, 0.05, vLocal.y)) * 0.18 * (1.0 - uInside * 0.8);
+  k *= uK * vis;
   gl_FragColor = vec4(uCol * k * fxDisplay(0.7), 0.0);
 }
 `;
@@ -233,7 +314,10 @@ void main() {
 
 export class Dome {
   readonly mesh: Mesh;
-  readonly u = { uK: { value: 0 }, uCol: { value: new Vector3(1.0, 0.8, 0.45) }, uHit: { value: 0 } };
+  readonly u = {
+    uK: { value: 0 }, uCol: { value: new Vector3(1.0, 0.8, 0.45) }, uHit: { value: 0 }, uHitDir: { value: new Vector3(0, 1, 0) },
+    uHitAge: { value: 99 }, uInside: { value: 0 },
+  };
   constructor(fx: Record<string, IUniform>) {
     this.mesh = new Mesh(new SphereGeometry(1, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2 + 0.05), fxMaterial(SPHERE_VERT, DOME_FRAG, this.u, true, fx));
     this.mesh.frustumCulled = false; this.mesh.matrixAutoUpdate = false; this.mesh.layers.set(FX_LAYER); this.mesh.renderOrder = 6;
@@ -434,7 +518,7 @@ void main() {
   vec3 view = normalize(uCamB - uHead);
   vec3 side = normalize(cross(dir, view));
   vec3 p = uHead + dir * uLen * u + side * (uPart > 0.5 ? u * u * uLen * 0.18 : 0.0);
-  p += side * corner.x * uW * (0.2 + u * (uPart > 0.5 ? 2.5 : 0.8));
+  p += side * corner.x * uW * (0.25 + u * (uPart > 0.5 ? 4.0 : 0.9));
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vZ = -mv.z;
   gl_Position = projectionMatrix * mv;
@@ -450,13 +534,14 @@ varying float vZ;
 void main() {
   float vis = fxSoft(vZ, 50.0);
   float u = vC.y * 0.5 + 0.5;
-  float across = 1.0 - abs(vC.x);
+  // soft across the tail (a glow, not a blade), fading along it
+  float across = exp(-vC.x * vC.x * 3.5) * (1.0 - smoothstep(0.8, 1.0, abs(vC.x)));
   float streaks = 0.7 + 0.3 * snoise(vec3(vC.x * 6.0, u * 3.0 - uFxTime * 0.2, uPart * 7.0));
-  float k = pow(across, 1.5) * pow(1.0 - u, 1.6) * streaks;
+  float k = across * pow(1.0 - u, 1.3) * streaks * (uPart > 0.5 ? 1.0 : 0.7);
   vec3 c = uPart > 0.5 ? vec3(1.0, 0.92, 0.75) : vec3(0.45, 0.7, 1.0);
   // the coma: a bright bead at the head
-  k += exp(-u * 30.0) * pow(across, 2.0) * 3.0;
-  gl_FragColor = vec4(c * k * uK * vis * 6.0 * fxDisplay(0.6), 0.0);
+  k += exp(-u * 30.0) * across * across * 3.0;
+  gl_FragColor = vec4(c * k * uK * vis * 3.0 * fxDisplay(0.6), 0.0);
 }
 `;
 
@@ -466,10 +551,14 @@ export class Comet {
   private meshes: Mesh[] = [];
   constructor(fx: Record<string, IUniform>) {
     this.group.matrixAutoUpdate = false;
+    // a strip down the tail (the dust tail curves: two vertices along it would draw it straight)
+    const N = 32, cor: number[] = [], idx: number[] = [];
+    for (let i = 0; i <= N; i++) { const y = -1 + (2 * i) / N; cor.push(-1, y, 1, y); }
+    for (let i = 0; i < N; i++) { const a = i * 2; idx.push(a, a + 1, a + 3, a, a + 3, a + 2); }
     const g = new BufferGeometry();
-    g.setAttribute('corner', new BufferAttribute(new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]), 2));
-    g.setAttribute('position', new BufferAttribute(new Float32Array(12), 3));
-    g.setIndex([0, 1, 2, 0, 2, 3]);
+    g.setAttribute('corner', new BufferAttribute(new Float32Array(cor), 2));
+    g.setAttribute('position', new BufferAttribute(new Float32Array((N + 1) * 6), 3));
+    g.setIndex(idx);
     for (let part = 0; part < 2; part++) {
       const m = new Mesh(g, fxMaterial(COMET_VERT, COMET_FRAG, { ...this.u, uPart: { value: part } }, true, fx));
       m.frustumCulled = false; m.matrixAutoUpdate = false; m.layers.set(FX_LAYER); m.renderOrder = 3;

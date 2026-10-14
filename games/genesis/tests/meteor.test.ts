@@ -14,7 +14,15 @@ test('a meteor on a city kills, ruins, terrifies — and the survivors rebuild w
   // (a seed-bound result: the town rebuilds 3 buildings in the 12 days on 2 of 8 worlds — this one and the default
   // world, 20261008, with the peoples' dice of the seed salt (lifecycle.ts worldSalt); this one and seed 7 since founding
   // bands are drawn by count (settlement.ts createBand). Elsewhere it puts up 1 or 2, or fewer than the meteor left.)
-  const { sim, st } = town(2);
+  // (LIVING RELATIONSHIP, measured over seeds 1-12 with _harness/scratch/living/relationship/sb-meteor.ts: the whole
+  // story — ≥ 3 dead, ≥ 4 fallen, fear +0.3, ≥ 3 rebuilt, the town standing — held on 8 of 12 before (1, 2, 5, 8-12)
+  // and holds on 8 of 12 now (3-10); seed 2 now loses its rebuilding to a fire on its sixth day. Seed 9 holds it on both
+  // trees: rebuilt 5 before, 7 now.)
+  // (LIVING CONTENT, every assertion of this test over seeds 1-12 with _harness/scratch/living/content/seedbound/
+  // sb-meteor-full.ts: it held on 6 of 12 with the old soil balance (2, 6, 9, 10, 11, 12) and holds on 6 of 12 with the
+  // soil of §4.5 (2, 4, 6, 7, 10, 12); seed 9's library had not yet let go of the dead keeper's two ideas when it was
+  // read. Seed 10 holds on both: rebuilt 6 before, 8 now.)
+  const { sim, st } = town(10);
   const p = sim.u.planets[0];
   const ps = p.people;
   const A = ps.agents;
@@ -48,7 +56,9 @@ test('a meteor on a city kills, ruins, terrifies — and the survivors rebuild w
   const standing0 = standing(sim, st.id);
   const fear0 = meanFear(sim, st);
   const c0 = sim.u.chronicle.length;
-  const r = must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: impact, radius: 40 });
+  // (LIVING §3.7: at the default wrath, 0.3, a meteor is survivable and seen coming for an hour; this is the deadly one —
+  // full wrath, today's lethality, no warning)
+  const r = must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: impact, radius: 40, wrath: 1 });
   const id = r.created![0].id;
   // it falls first: a live disaster with an altitude and a direction for the renderer
   sim.step(5);

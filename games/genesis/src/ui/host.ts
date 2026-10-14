@@ -25,7 +25,9 @@ export interface PhotoLens {
   fov: number;
   /** focus distance, metres */
   focus: number;
-  /** depth-of-field strength 0 (all sharp) .. 1 (a wide-open lens) */
+  /** the aperture as an f-number (f/1.4 … f/22), 0 = no depth of field; the blur follows from it (photo.ts blurOf) */
+  aperture: number;
+  /** depth-of-field strength 0 (all sharp) .. 1 (the renderer's widest): from the aperture, focal length and focus */
   blur: number;
   /** colour filter id (photo.ts FILTERS) */
   filter: string;
@@ -41,11 +43,11 @@ export interface PhotoLens {
 }
 
 /**
- * The render lane's camera modes (src/render/camera/follow.ts, dolly.ts, walk.ts, photo.ts), as the UI expects to
- * drive them. Every member is optional: what the renderer does not offer yet, the App does with its fallback
- * (src/ui/camfallback.ts: an orbit that eases after the thing, a dolly that circles the orbit camera, a walking eye on
- * the fly camera's frame, a CSS / 2D-canvas tilt-shift for depth of field). The integration step binds these to the
- * rig; the App prefers them whenever they exist.
+ * The render lane's camera modes (src/render/camera/follow.ts, dolly.ts, walk.ts, photo.ts), as the UI drives them:
+ * render/camera/modes.ts CameraModes implements this, and the App (src/app.ts) runs every camera mode through it.
+ * The members stay optional so a renderer without one still type-checks; the one interface fallback left is photo
+ * mode's tilt-shift band (src/ui/photo.ts), drawn only when `dof` is false (the render lane's photo post draws real
+ * depth of field from the depth buffer, so it is not drawn today).
  */
 export interface RenderCameraModes {
   /** keep the camera on a thing (null: stop) */

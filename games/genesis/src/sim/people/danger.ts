@@ -4,7 +4,11 @@
 // parched body's drink utility reaches ~7.4 — and the fire step hurt and interrupted people from fire 0.1 while flight
 // began at 0.15. So thirsty villagers stood in their burning village drinking, interrupted every few ticks, and people
 // beside the flames did not move until they were in them. Now (decide.ts, people.ts fireCheck):
-//   * standing in fire (> FIRE_HERE) or lava: flight is the ONLY candidate; drinking waits for a safe cell;
+//   * standing in flames (> FIRE_BURN, where they burn) or lava: flight is the ONLY candidate; drinking waits for a
+//     safe cell. Smoulder (FIRE_HERE .. FIRE_BURN: embers and smoke, no burns) is walked through, worked and eaten in —
+//     routes go around it where they can (tasks.ts fireCost): a town whose core smouldered for a week while its
+//     buildings burned down (a store, a well, the houses) turned every walk home into a flight, and 24 of 30 starved
+//     beside 180 units of food;
 //   * beside a cell burning hard (> FIRE_NEAR): flight outranks every need (utility 8+; a drink tops out ~7.4);
 //   * the fire step interrupts people in burning cells and beside hard-burning ones, mid-task, at the same thresholds;
 //   * flight picks a safe cell (not burning, no hard-burning neighbour) AWAY from the local fire, within 6 rings and not
@@ -29,11 +33,12 @@ export const FLEE_SPRINT = 4;
 export const FIRE_BURN = 0.2;
 export const FIRE_HURT = 0.05;
 
-/** 1 + intensity when the cell burns (2 for lava), 0.5 × the hottest neighbour when one burns hard, else 0 */
+/** 1 + intensity when the cell burns hot enough to burn people (2 for lava), 0.5 × the hottest neighbour when one burns
+ * hard, else 0 (smoulder underfoot is no danger: header) */
 export function fireDanger(p: Planet, c: number): number {
   const f = p.f;
   if (f.lava[c] > 0.01) return 2;
-  if (f.fire[c] > FIRE_HERE) return 1 + f.fire[c];
+  if (f.fire[c] > FIRE_BURN) return 1 + f.fire[c];
   const g = p.grid;
   let m = 0;
   for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
@@ -58,7 +63,7 @@ export function heat(p: Planet, c: number): number {
 export function fleeGoalAlight(p: Planet, goal: number, chosen: number): boolean {
   if (goal < 0) return false;
   const h = heat(p, goal);
-  return h > FIRE_HERE && h > chosen / 1000 + 0.1;
+  return h > FIRE_BURN && h > chosen / 1000 + 0.1;
 }
 
 /** the terrain's toll on a step c -> o and back (slope, wading, snow, sand — the flames left out: fleeTarget weighs

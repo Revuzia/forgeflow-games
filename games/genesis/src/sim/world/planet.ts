@@ -173,6 +173,9 @@ export interface PlanetState {
   spinTick0: number;
   /** eclipse / aerosol light multiplier hook (1 = clear) */
   lightScale: number;
+  /** LIVING HISTORY (god/history.ts world.terraform): a barren world being made a living one — the stage (1 air, 2 rain,
+   * 3 the storm lifted, 4 done) and the tick it began (absent: never) */
+  terraform?: { stage: number; t: number };
   /** liquid of the seas */
   liquid: { id: string; freeze: number; boil: number };
   /** how wet the land starts (planet kind moisture; 1 = Earth-like) */

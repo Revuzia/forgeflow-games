@@ -1,20 +1,154 @@
 {
- "$comment": "GENESIS ship kinds and eras (render lane, phase 4b): an airship at its mast, a star gate opening, an electric-age rocket on its pad, a gunpowder rocket climbing, a generation ship in orbit with its ring turning — on the lookdev world's fabricated missions (src/client/lookdevspace.ts). Run: node _harness/shots.mjs _harness/specs/fleet.json --port=5199",
+ "$comment": "GENESIS ship kinds and eras (render lane, phase 4b): an airship at its mast, a star gate opening, an electric-age rocket on its pad, a gunpowder rocket climbing, a generation ship in orbit with its ring turning \u2014 on the lookdev world's fabricated missions (src/client/lookdevspace.ts). Run: node _harness/shots.mjs _harness/specs/fleet.json --port=5199",
  "shots": [
-  {"name": "fleet-airship-mast", "params": "source=lookdev&page=fleet", "size": [960, 540], "canvasOnly": true,
-   "commands": [{"k": "ship.launch", "kind": "airship", "era": "steam", "start": "pad", "progress": 0.5, "id": 2001}],
-   "camera": {"mode": "orbit", "target": {"kind": "ship", "id": 2001}, "dist": 150, "tilt": 74, "hour": 10.5}, "frames": 3},
-  {"name": "fleet-gate-night", "params": "source=lookdev&page=fleet", "size": [960, 540], "canvasOnly": true,
-   "commands": [{"k": "ship.launch", "kind": "gate", "era": "future", "start": "pad", "progress": 0.95, "id": 2002}],
-   "camera": {"mode": "orbit", "target": {"kind": "ship", "id": 2002}, "dist": 70, "tilt": 82, "hour": 21}, "frames": 3},
-  {"name": "fleet-electric-pad", "params": "source=lookdev&page=fleet", "size": [960, 540], "canvasOnly": true,
-   "commands": [{"k": "ship.launch", "kind": "rocket", "era": "electric", "start": "pad", "progress": 0.4, "id": 2003}],
-   "camera": {"mode": "orbit", "target": {"kind": "ship", "id": 2003}, "dist": 75, "tilt": 80, "hour": 9.5}, "frames": 3},
-  {"name": "fleet-gunpowder-climb", "params": "source=lookdev&page=fleet2", "size": [960, 540], "canvasOnly": true,
-   "commands": [{"k": "ship.launch", "kind": "rocket", "era": "gunpowder", "start": "pad", "progress": 0.86, "id": 2004}], "wait": 10,
-   "camera": {"mode": "follow", "target": {"kind": "ship", "id": 2004}, "dist": 60, "pitch": 8, "yaw": 40, "hour": 14}, "frames": 3},
-  {"name": "fleet-ark-orbit", "params": "source=lookdev&page=fleet2", "size": [960, 540], "canvasOnly": true,
-   "commands": [{"k": "ship.launch", "kind": "generation-ship", "start": "orbit", "progress": 0.3, "id": 2005}],
-   "camera": {"mode": "follow", "target": {"kind": "ship", "id": 2005}, "dist": 260, "pitch": 18, "yaw": 120}, "frames": 3}
+  {
+   "name": "fleet-airship-mast",
+   "params": "source=lookdev&page=fleet",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "airship",
+     "era": "steam",
+     "start": "pad",
+     "progress": 0.5,
+     "id": 2001
+    }
+   ],
+   "camera": {
+    "mode": "orbit",
+    "target": {
+     "kind": "ship",
+     "id": 2001
+    },
+    "dist": 150,
+    "tilt": 74,
+    "hour": 10.5
+   },
+   "frames": 3
+  },
+  {
+   "name": "fleet-gate-dusk",
+   "params": "source=lookdev&page=fleetgate&dev=1",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "gate",
+     "era": "future",
+     "start": "pad",
+     "progress": 0.95,
+     "id": 2002
+    }
+   ],
+   "frames": 3,
+   "script": [
+    "const A = window.__GENESIS_APP__; for (let i = 0; i < 30 && !A.renderer.ships.tracks.get(2002); i++) await G.frames(1); const t = A.renderer.ships.tracks.get(2002); const d = t.padDir;",
+    "const lat = Math.asin(d[1]) * 180 / Math.PI, lon = Math.atan2(d[0], d[2]) * 180 / Math.PI;",
+    "await G.camera({ mode: 'orbit', planet: 0, lat, lon, dist: 75, tilt: 80, yaw: t.padYaw * 180 / Math.PI + 18, hour: 19.0 }); await G.frames(1);",
+    "return JSON.stringify({ padYaw: +t.padYaw.toFixed(2), lat: +lat.toFixed(2), lon: +lon.toFixed(2) });"
+   ]
+  },
+  {
+   "name": "fleet-electric-pad",
+   "params": "source=lookdev&page=fleet",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "rocket",
+     "era": "electric",
+     "start": "pad",
+     "progress": 0.4,
+     "id": 2003
+    }
+   ],
+   "camera": {
+    "mode": "orbit",
+    "target": {
+     "kind": "ship",
+     "id": 2003
+    },
+    "dist": 75,
+    "tilt": 80,
+    "hour": 9.5
+   },
+   "frames": 3
+  },
+  {
+   "name": "fleet-gunpowder-climb",
+   "params": "source=lookdev&page=fleet2",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "rocket",
+     "era": "gunpowder",
+     "start": "pad",
+     "progress": 0.86,
+     "id": 2004
+    }
+   ],
+   "wait": 10,
+   "camera": {
+    "mode": "photo",
+    "target": {
+     "kind": "ship",
+     "id": 2004
+    },
+    "dist": 110,
+    "yaw": 60,
+    "alt": 4,
+    "pitch": -16,
+    "fov": 54,
+    "hour": 14
+   },
+   "frames": 3
+  },
+  {
+   "name": "fleet-ark-orbit",
+   "params": "source=lookdev&page=fleet2",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "generation-ship",
+     "start": "orbit",
+     "progress": 0.3,
+     "id": 2005
+    }
+   ],
+   "camera": {
+    "mode": "follow",
+    "target": {
+     "kind": "ship",
+     "id": 2005
+    },
+    "dist": 260,
+    "pitch": 18,
+    "yaw": 120
+   },
+   "frames": 3
+  }
  ]
 }

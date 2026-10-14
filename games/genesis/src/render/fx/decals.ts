@@ -131,6 +131,19 @@ void main() {
   vec3 S = rd * (min(sz, 1e6) / max(-rd.z, 1e-6));
   // screen derivatives before any discard (they are undefined once neighbours have left the quad)
   vec3 dSx = dFdx(S), dSy = dFdy(S);
+  // the pixel's own footprint (m): its depth × the angle a pixel subtends. Derivatives across a silhouette (a leaf
+  // against ground or sky far behind it) are not a footprint: a 2×2 quad straddling the edge saw a "pixel" hundreds of
+  // metres wide, so every ring widened to cover it and every light took a garbage normal there — blocky fringes round
+  // each tree under a ward's ring, a reticle or a light. A silhouette is where the depth's one-sided differences
+  // disagree (a plane, even one seen grazing, changes evenly from pixel to pixel): there the footprint caps them.
+  vec3 rdn = rd / max(length(rd), 1e-6);
+  float foot = length(S) * max(length(dFdx(rdn)), length(dFdy(rdn)));
+  vec2 px1 = 1.0 / uResolution;
+  float zl = texture(tSceneDepth, uv - vec2(px1.x, 0.0)).r, zr = texture(tSceneDepth, uv + vec2(px1.x, 0.0)).r;
+  float zd = texture(tSceneDepth, uv - vec2(0.0, px1.y)).r, zu = texture(tSceneDepth, uv + vec2(0.0, px1.y)).r;
+  float zc = min(sz, 1e6);
+  float bend = max(abs((min(zr, 1e6) - zc) - (zc - min(zl, 1e6))), abs((min(zu, 1e6) - zc) - (zc - min(zd, 1e6))));
+  bool edgeQuad = bend > 0.2 * zc + 0.5;
   vec3 P = uViewToBody * S + uCamBody;
   vec3 up = normalize(vC);
   vec3 d = P - vC;
@@ -141,7 +154,7 @@ void main() {
   vec3 bx = cross(ax, up);
   vec2 q = vec2(dot(lat, bx), dot(lat, ax));
   float r = length(q);
-  float fwR = fwidth(r);
+  float fwR = edgeQuad ? min(fwidth(r), foot * 8.0 + 1e-4) : fwidth(r);
   if (skyPx) discard;
   int t = int(vType + 0.5);
   float slab = vQ.x > 0.0 ? vQ.x : vR * 0.35;
@@ -261,7 +274,7 @@ void main() {
     if (dl > reach) discard;
     vec3 N = cross(dSx, dSy);
     float nl = length(N);
-    N = nl > 1e-12 ? N / nl : -normalize(S);
+    N = nl > 1e-12 && !edgeQuad ? N / nl : -normalize(S);
     if (dot(N, S) > 0.0) N = -N;
     vec3 Lv = mat3(transpose(uViewToBody)) * (L / max(dl, 1e-3));
     float lam = 0.15 + 0.85 * sat(dot(N, Lv));
@@ -291,7 +304,10 @@ void main() {
     float R = vP.x;
     float px = max(fwR, R * 0.003);
     float k = (1.0 - smoothstep(px, px * 4.0, abs(r - R))) + 0.25 * exp(-abs(r - R) / (R * 0.05));
-    float sh = 0.75 + 0.25 * sin(atan(q.x, q.y) * 12.0 - uTime * 2.0);
+    // (p2 > 0: the ward at rest — a dim seam with a slow pulse of light running round it; else the old shimmer)
+    float ang = atan(q.x, q.y);
+    float run = pow(0.5 + 0.5 * cos(ang - uTime * 0.55), 28.0) + 0.6 * pow(0.5 + 0.5 * cos(ang + 3.14159 - uTime * 0.55), 40.0);
+    float sh = vP.z > 0.5 ? 0.22 + 1.6 * run : 0.75 + 0.25 * sin(ang * 12.0 - uTime * 2.0);
     o = vec4(vCol.rgb * vP.y * k * sh * hf * mix(1.0, disp, 0.6), 0.0);
   } else {
     discard;

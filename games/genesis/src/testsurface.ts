@@ -27,7 +27,7 @@
 //                              photo(on) / lens() / setLens(p) / capture() → the picture's { name, w, h, bytes } /
 //                              focusAt(x, y)
 //   worlds_                    opening: state() / touch(); new world: state() / choose(id) / spec(s) / url();
-//                              saves: list() / save(name) / load(id) / importFile(bytes, name) / last();
+//                              saves: list() / save(name) / load(id) / importFile(bytes, name) / last() / bytes();
 //                              mods: take(text, origin) / last() / packs() / library()
 
 import type { App, CameraSpec } from './app.ts';
@@ -70,7 +70,7 @@ export interface CamSurface {
 export interface WorldsSurface {
   opening: { state(): Record<string, unknown>; touch(): void; hold(): { step(ms: number): void }; release(): void };
   newWorld: { state(): Record<string, unknown> | null; choose(id: string): void; spec(s: Partial<CustomSpec>): void; url(): string };
-  saves: { list(): Promise<unknown[]>; save(name: string): Promise<boolean>; load(id: string): Promise<boolean>; importFile(bytes: ArrayBuffer | number[], name: string): Promise<boolean>; last(): unknown };
+  saves: { list(): Promise<unknown[]>; save(name: string): Promise<boolean>; load(id: string): Promise<boolean>; importFile(bytes: ArrayBuffer | number[], name: string): Promise<boolean>; last(): unknown; bytes(): Promise<number[] | null> };
   mods: { take(text: string, origin?: string): Promise<boolean>; last(): unknown; packs(): string[]; library(): Promise<string[]> };
 }
 
@@ -227,7 +227,7 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
       opening: {
         state: () => need().ui.opening.state(), touch: () => need().ui.opening.touchDark(),
         // a held clock the test steps (a software-rendered frame takes seconds: the cinematic would skip its stages)
-        hold: () => { const o = need().ui.opening; let t = performance.now(); o.now = () => t; return { step: (ms: number) => { t += ms; } }; },
+        hold: () => { const o = need().ui.opening; let t = performance.now(); o.now = () => t; o.restartStageClock(); return { step: (ms: number) => { t += ms; } }; },
         release: () => { need().ui.opening.now = () => performance.now(); },
       },
       newWorld: {
@@ -242,6 +242,8 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
         load: (id) => need().ui.saves.loadSlot(id),
         importFile: (bytes, name) => { const b = bytes instanceof ArrayBuffer ? bytes : new Uint8Array(bytes).buffer; return need().ui.saves.importFile(new File([b], name)); },
         last: () => need().ui.saves.last,
+        // the world's own save bytes (a plain .gnss, no packs bundled): what a file from another player may be
+        bytes: async () => { const b = await need().sim.save(); return b ? Array.from(new Uint8Array(b)) : null; },
       },
       mods: {
         take: (text, origin) => need().ui.mods.take(text, origin ?? 'a test', 'file'),

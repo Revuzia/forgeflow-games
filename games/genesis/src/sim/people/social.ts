@@ -24,6 +24,7 @@ import { agentRef, settlementRef, vars } from './util.ts';
 import { cohortTotal } from './cohorts.ts';
 import { insertSorted } from './lifecycle.ts';
 import { apprenticeDaily } from './knowledge.ts';
+import { weddingFor } from './gatherings.ts'; // LIVING LAND: a wedding the evening a couple forms
 
 // ───────────────────────────── leaders ─────────────────────────────
 
@@ -255,6 +256,7 @@ export function formCouple(x: PCtx, st: Settlement, s: number, o: number): void 
   A.home[o] = -1;
   A.needs[s * NN + NEED.belonging] = 1;
   A.needs[o * NN + NEED.belonging] = 1;
+  weddingFor(x, st, s, o); // (LIVING LAND: their wedding that evening — people/gatherings.ts)
 }
 
 export { MEMK };

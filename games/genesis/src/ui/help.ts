@@ -20,10 +20,10 @@ function mouseRows(hint: (id: string) => string, slap: string): [string, string]
     ['Ctrl + wheel', `brush size${size ? ` (keys: ${size})` : ''}`],
     ['Alt + wheel', `brush strength${strength ? ` (keys: ${strength})` : ''}`],
     ['right-drag', 'turn and tilt the view'],
-    ['click', 'inspect a person, a building, a town, a creature…'],
+    ['click', 'inspect a person, a building, a town, a herd, the ground…'],
     ['drag someone', 'pick them up — flick and let go to throw'],
     [hint('hand.throw') || '⇧ E', 'while carrying: hold to aim a throw at the cursor, let go to throw'],
-    ['rub someone', 'stroke: comfort, heal, reward the creature'],
+    ['rub someone', 'stroke: comfort them, heal a little — they feel it'],
     [`${slap} + click`, 'slap: punish (the modifier is rebindable)'],
     ['long press', 'the radial menu at that spot'],
     ['middle-drag', 'draw a gesture'],
@@ -31,22 +31,27 @@ function mouseRows(hint: (id: string) => string, slap: string): [string, string]
   ];
 }
 
+/** the camera actions the "Camera modes" column explains (left out of the Camera keys column) */
+const CAMERA_MODE_IDS = new Set(['cam.menu', 'cam.follow', 'cam.dolly', 'cam.walk', 'cam.photo', 'cam.fly', 'cam.system', 'cam.home']);
+
 /** the sticks and menu navigation (not rebindable); the buttons come from the keybind registry */
 const PAD_FIXED: [string, string][] = [
   ['left stick', 'the cursor (push to the edge to pan) · walking: walk · photo: move'],
-  ['right stick', 'turn and tilt the view · points in the radial · walking and photo: look'],
+  ['right stick', 'turn and tilt the view · points in the radial · following: circle them · walking and photo: look'],
+  ['LB · RB', 'rise · descend · following: farther · nearer · walking: to and from eye level · photo: wider · longer lens'],
   ['D-pad / A / B', 'in a menu or panel: move, press, back'],
 ];
 
 /** the camera's modes: where each comes from, what the mouse does there, how to leave (keys are the bound ones) */
 function cameraRows(hint: (id: string) => string): [string, string][] {
   const k = (id: string, d: string) => hint(id) || d;
+  const move = `${k('cam.forward', 'W')} ${k('cam.left', 'A')} ${k('cam.back', 'S')} ${k('cam.right', 'D')}`;
   return [
-    [k('cam.menu', '`'), 'every camera mode in one list (gamepad: View)'],
-    [k('cam.follow', 'L'), 'follow the selection (the inspector\'s Follow) · Esc stops'],
+    [k('cam.menu', '`'), 'every camera mode in one list (gamepad: Back / View, then the D-pad and A)'],
+    [k('cam.follow', 'L'), 'follow the selection (the inspector\'s Follow) · drag circles them, wheel nearer / farther · Esc stops'],
     [k('cam.dolly', 'J'), 'cinematic: circle the selected settlement (the inspector\'s Cinematic) · drag or Esc ends it'],
-    [k('cam.walk', 'K'), 'walk among them, at the selection or the cursor (the inspector\'s Walk) · drag to look, ⇧ runs · Esc rises'],
-    [k('cam.photo', 'P'), 'photo mode: the interface goes, time stands still · drag looks, wheel zooms, click focuses'],
+    [k('cam.walk', 'K'), `walk among them, at the selection or the cursor (the inspector's Walk) · ${move} walk, ⇧ runs, drag looks, ${k('walk.float', 'R')} jumps and floats, ${k('walk.sink', 'F')} comes down, wheel to eye level · ${k('walk.exit', 'K')} or Esc rises`],
+    [k('cam.photo', 'P'), `photo mode: the interface goes, time stands still · drag looks, ${move} ${k('photo.rise', 'R')} ${k('photo.sink', 'F')} move, wheel zooms, click focuses · ${k('photo.capture', 'Space')} takes the picture`],
     [k('cam.fly', 'V'), 'free flight · ' + k('cam.system', 'M') + ' the whole system · ' + k('cam.home', 'Home') + ' back to orbit'],
   ];
 }
@@ -55,6 +60,7 @@ function cameraRows(hint: (id: string) => string): [string, string][] {
 function worldRows(hint: (id: string) => string): [string, string][] {
   const k = (id: string, d: string) => hint(id) || d;
   return [
+    ['the opening', 'a key or a click lights the star · any key goes straight to the world · Esc: the scenario menu (stay, or another world) · “hush” ends the whispers'],
     [k('ui.newWorld', 'F3'), 'a new world: the barren world, two worlds, a living system, the sandbox, your own system — with a seed'],
     [k('ui.saves', 'F6'), 'saves: slots with a picture and the date, export to a file, import one, autosave'],
     [`${k('ui.quicksave', 'F5')} · ${k('ui.quickload', 'F9')}`, 'quicksave · quickload'],
@@ -89,18 +95,22 @@ export class Help {
     const worlds = col('Worlds, saves, mods', 'save', ...worldRows((id) => kb.hint(id)).map(([k, v]) => row(k, v)));
     const groups = new Map<string, HTMLElement[]>();
     for (const a of ACTIONS) {
+      // (the camera's modes have their own column above, with what each does: their keys are not listed twice)
+      if (CAMERA_MODE_IDS.has(a.id)) continue;
       const keys = kb.keysOf(a.id).map(comboLabel);
       const l = groups.get(a.group) ?? [];
       l.push(row(keys.length ? keys.join(' · ') : a.id === 'hand.primary' ? 'left button' : '—', a.label));
       groups.set(a.group, l);
     }
     const GROUP_ICON: Record<string, string> = { Camera: 'eye', Time: 'hourglass', Powers: 'radial', Hand: 'open-hand', 'Photo mode': 'camera', Walking: 'walk' };
-    const keyCols = [...groups.entries()].map(([g, rows]) => col(g, GROUP_ICON[g] ?? 'menu', ...rows));
+    const keyCols = [...groups.entries()].filter(([, rows]) => rows.length).map(([g, rows]) => col(g, GROUP_ICON[g] ?? 'menu', ...rows));
     const padRows = PAD_FIXED.map(([k, v]) => row(k, v));
     for (const a of ACTIONS) {
       const pads = kb.padOf(a.id);
       const where = a.context === 'photo' ? ' (photo mode)' : a.context === 'walk' ? ' (walking)' : '';
-      if (pads.length) padRows.push(row(pads.map((p) => (a.hold && !/hold/i.test(a.label) ? `${p} (hold)` : p)).join(' · '), `${a.label}${where}`));
+      // (a held button says so once, on the button)
+      const label = a.hold ? a.label.replace(/\s*\(hold\)/i, '') : a.label;
+      if (pads.length) padRows.push(row(pads.map((p) => (a.hold && !/hold/i.test(label) ? `${p} (hold)` : p)).join(' · '), `${label}${where}`));
     }
     const pad = col('Gamepad', 'gamepad', ...padRows);
     const gest = h('div', { class: 'gn-help-col gn-help-gest' }, h('div', { class: 'gn-help-h' }, h('span', { html: icon('gesture') }), `Gestures (hold ${kb.hint('ui.gesture') || 'G'} or the middle button, draw)`));

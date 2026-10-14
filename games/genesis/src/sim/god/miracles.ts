@@ -1,9 +1,11 @@
-// GENESIS — miracles (CONTRACT.md §11.1, §11.2, §16.5): water, food, heal, forest, storm, fire, fireball, shield,
-// lightning, wood, fertility, calm, teach, meteor. A miracle is an act AND an introduction: a heal starts medicine
-// (the herbalism trigger), a forest starts forestry, a fireball or a lit hearth teaches fire, lightning in a dune leaves
-// glass to puzzle over. Miracles spend the god's worship for bonus potency but never fail for want of it (restraint
-// mode charges up front instead: belief.ts). Every miracle is witnessed, and a creature nearby watches and learns it.
-// The hand casts them (gestures map to them in powers.json); creatures cast the ones they learned, at their skill.
+// GENESIS — miracles, drawn as SIGILS (CONTRACT.md §11.1, §11.2, §16.5; LIVING.md §3.6): rain (water), storm,
+// lightning, stillness (calm), the grove (forest), mending (heal), plenty (food), increase (fertility), timber (wood),
+// insight (teach), kindling (fire), the falling flame (fireball), ward (shield), meteor. Internal ids stay; the sigil
+// glyph of each is SIGILS below (powers.json carries it as `sigil`, the UI recogniser draws the templates). A miracle is
+// an act AND an introduction: mending starts medicine (the herbalism trigger), the grove starts forestry, kindling or the
+// falling flame teaches fire, lightning in a dune leaves glass to puzzle over. Miracles spend the god's worship for bonus
+// potency but never fail for want of it (restraint mode charges up front instead: belief.ts). Every miracle is
+// witnessed. The god's harm falls as hard as its wrath allows (god/wrath.ts).
 
 import type { CommandRegistry, ParamSchema } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
@@ -28,21 +30,31 @@ import { relationOf } from '../people/war.ts';
 import { godAct, miraclePotency } from './belief.ts';
 import { giveTo } from './gifts.ts';
 import { hurtPeople } from './harm.ts';
+import { harmScale } from './wrath.ts';
 import { spawnDisaster, effR, scaleDisaster } from './disasters.ts';
 import { actor, cellPos3, clamp, fail, herePos, nearestSettlement, norm, ok, placeName } from './util.ts';
 
 export const MIRACLES = ['water', 'food', 'heal', 'forest', 'storm', 'fire', 'fireball', 'shield', 'lightning', 'wood', 'fertility', 'calm', 'teach', 'meteor'] as const;
 export type MiracleKind = (typeof MIRACLES)[number];
 
+/** LIVING §3.6: each miracle's sigil (an original one-stroke glyph) and the name it goes by */
+export const SIGILS: Record<string, { sigil: string; name: string }> = {
+  water: { sigil: 'drop', name: 'Rain' }, storm: { sigil: 'anvil', name: 'Storm' }, lightning: { sigil: 'fork', name: 'Lightning' },
+  calm: { sigil: 'ripple', name: 'Stillness' }, forest: { sigil: 'sprout', name: 'the Grove' }, heal: { sigil: 'knot', name: 'Mending' },
+  food: { sigil: 'basket', name: 'Plenty' }, fertility: { sigil: 'seed', name: 'Increase' }, wood: { sigil: 'log', name: 'Timber' },
+  teach: { sigil: 'eye', name: 'Insight' }, fire: { sigil: 'flame', name: 'Kindling' }, fireball: { sigil: 'trail', name: 'the Falling Flame' },
+  shield: { sigil: 'arch', name: 'Ward' }, meteor: { sigil: 'fall', name: 'Meteor' },
+};
+
 /** worship a miracle can draw on for bonus potency */
 const COST: Record<string, number> = { water: 10, food: 15, heal: 20, forest: 15, storm: 15, fire: 8, fireball: 20, shield: 30, lightning: 10, wood: 8, fertility: 25, calm: 15, teach: 30, meteor: 40 };
 
 export interface CastOpts {
   radius?: number;
-  /** potency multiplier (worship bonus, a creature's skill) */
+  /** potency multiplier (the worship bonus) */
   power?: number;
   god: number;
-  by: 'god' | 'creature';
+  by: 'god';
   knowledge?: string;
   settlement?: number;
   duration?: number;
@@ -61,8 +73,6 @@ export function castMiracle(u: Universe, p: Planet, kind: string, pos: V3, o: Ca
   const x = p.people ? makeCtx(u, p) : null;
   const st = x ? (o.settlement !== undefined ? x.ps.settlement(o.settlement) ?? null : nearestSettlement(p, pos, R + 600)) : null;
   const near = (rr: number) => (x ? x.ps.settlements.filter((s) => s.fallen < 0 && distM(p, s.pos, pos) <= rr + s.territory) : []);
-  const who = o.by === 'creature' ? 'The creature' : 'The god';
-  void who;
   let msg = '';
   let created: EntityRef[] | undefined;
   switch (k) {
@@ -161,7 +171,10 @@ export function castMiracle(u: Universe, p: Planet, kind: string, pos: V3, o: Ca
     }
     case 'fireball': {
       if (!p.airy) return fail(`Nothing burns without air on ${p.name}.`);
-      const n = igniteArea(u, p, pos, R * Math.sqrt(pw), 0.95);
+      // (LIVING §3.7: the fire it lights reaches R(w) and burns as the buildings do, B(w) — at full strength a falling
+      // flame's fire burned on through a town for days: 24 of 30 dead by the tenth day on one world)
+      const ws = harmScale();
+      const n = igniteArea(u, p, pos, R * Math.sqrt(pw) * ws.R, clamp(0.95 * ws.B, 0.05, 0.95));
       const hurt = hurtPeople(u, p, pos, R * 1.2, 0.8 * pw, DEATH.god, { fear: 0.5 });
       u.emit({ t: 'fireball', planet: p.id, pos: [...pos], a: R, b: pw });
       if (x) for (const s2 of near(R * 4)) { accident(x, s2, 'fireball', s2.cell); accident(x, s2, 'lightning-fire', s2.cell); accident(x, s2, 'fire', s2.cell); }
@@ -176,14 +189,15 @@ export function castMiracle(u: Universe, p: Planet, kind: string, pos: V3, o: Ca
       extinguishArea(u, p, pos, R);
       u.emit({ t: 'shield', planet: p.id, pos: [...pos], a: R, b: until, data: { id } });
       godAct(u, p, pos, R + 300, { help: 0.3 * pw, wonder: 0.4 * pw }, g, 'shield');
-      msg = `A shield of light closes over ${where.replace(/^(on|near|in) /, '')} for ${Math.round((until - u.tick) / 60)} hours.`;
+      msg = `A ward closes over ${where.replace(/^(on|near|in) /, '')} for ${Math.round((until - u.tick) / 60)} hours.`;
       break;
     }
     case 'lightning': {
       const c = p.cellAt(pos);
       u.emit({ t: 'lightning', planet: p.id, pos: [...pos], a: 1.5 * pw, data: { cell: c, god: g } });
       if (p.airy) igniteCell(u, p, c, 0.9, 'lightning');
-      const hurt = hurtPeople(u, p, pos, R, 1.4 * pw, DEATH.god, { fear: 0.6 });
+      // (one to three struck below full wrath, the nearest — LIVING §3.7; everyone within reach at wrath 1)
+      const hurt = hurtPeople(u, p, pos, R, 1.4 * pw, DEATH.god, { fear: 0.6, max: (harmScale().w ?? 1) >= 1 ? undefined : 1 + Math.min(2, Math.floor(2 * pw)) });
       if (x) {
         const dune = p.f.sand[c] > 0.8;
         for (const s2 of near(300)) { accident(x, s2, 'lightning', c); if (dune) accident(x, s2, 'lightning-dune', c); if (p.airy) accident(x, s2, 'lightning-fire', c); }
@@ -277,7 +291,7 @@ export function castMiracle(u: Universe, p: Planet, kind: string, pos: V3, o: Ca
       break;
     }
     case 'meteor': {
-      const d = spawnDisaster(u, p, 'meteor', { pos, radius: R, intensity: pw, god: g, cause: o.by === 'creature' ? 'creature' : 'god' });
+      const d = spawnDisaster(u, p, 'meteor', { pos, radius: R, intensity: pw, god: g, cause: 'god' });
       if (typeof d === 'string') return fail(d);
       created = [{ kind: 'disaster', id: d.id, planet: p.id }];
       msg = `A star falls toward ${where.replace(/^(on|near|in) /, '')}.`;
@@ -321,7 +335,7 @@ export function registerMiracleCommands(r: CommandRegistry): void {
         settlement: typeof a.settlement === 'number' ? a.settlement : undefined, duration: a.duration as number | undefined,
       });
     }, {
-      desc: `Miracle: ${k}`, category: 'Miracles',
+      desc: `Sigil: ${(SIGILS[k]?.name ?? k).replace(/^the /, '').toLowerCase()}`, category: 'Miracles',
       params: {
         pos: mPos, radius: { type: 'number', min: 5, max: 20000, desc: 'metres' }, power: { type: 'number', min: 0.05, max: 5, default: 1 },
         ...(k === 'teach' ? { knowledge: { type: 'enum', values: (u: Universe) => u.content.recipes.ids() } as ParamSchema, settlement: { type: 'any' } as ParamSchema } : {}),
@@ -336,7 +350,7 @@ export function registerMiracleCommands(r: CommandRegistry): void {
     const power = miraclePotency(u, p, g, COST[k] ?? 10) * ((a.power as number | undefined) ?? 1);
     return castMiracle(u, p, k, pos, { radius: a.radius as number | undefined, power, god: g, by: 'god', knowledge: a.knowledge as string | undefined });
   }, {
-    desc: 'Cast any miracle (gestures map here)', category: 'Miracles',
+    desc: 'Draw a sigil: any miracle by name (sigils map here)', category: 'Miracles',
     params: { kind: { type: 'enum', values: [...MIRACLES], required: true }, pos: mPos, radius: { type: 'number', min: 5, max: 20000 }, power: { type: 'number', min: 0.05, max: 5, default: 1 }, knowledge: { type: 'enum', values: (u) => u.content.recipes.ids() } },
   });
 }

@@ -11,7 +11,7 @@
 import type { WorldView } from '../../client/worldview.ts';
 import { qRotateInv, type D3 } from '../../client/orbits.ts';
 import { copyPose, newPose, type CameraPose } from '../frame.ts';
-import { qSlerp, type CameraController, type CameraMode, type InputState } from './common.ts';
+import { CAMERA_NOW, qSlerp, type CameraController, type CameraMode, type InputState } from './common.ts';
 import { OrbitCamera } from './orbit.ts';
 import { FlyCamera } from './fly.ts';
 import { SystemCamera } from './system.ts';
@@ -113,6 +113,7 @@ export class CameraRig {
       this.modes.backToOrbit();
     } else { this.goneFor = 0; this.goneTick = -1; }
     this.active.update(dt, view, input, this.desired);
+    CAMERA_NOW.mode = this.active.mode;
     // a follow that jumped to a newly found subject without a blend is a cut (exposure, clouds, reflections reset)
     if (this.followCam.jumped) { this.followCam.jumped = false; if (this.active === this.followCam && this.blendT >= 1) this.cut = true; }
     if (this.blendT >= 1) {

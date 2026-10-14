@@ -14,7 +14,7 @@ import { Hasher } from '../src/sim/core/hash.ts';
 import type { Universe } from '../src/sim/world/universe.ts';
 import type { Planet } from '../src/sim/world/planet.ts';
 import {
-  dormant, lapseDue, lapseLevel, levelOfScale, setTimeScale, stagger, LAPSE_BIOME, LAPSE_CLIMATE, LAPSE_HYDRO, LAPSE_RAIN, LAPSE_SAND, LAPSE_SHEETS,
+  dormant, lapseDue, lapseLevel, levelOfScale, levelOfTps, setTimeScale, stagger, LAPSE_BIOME, LAPSE_CLIMATE, LAPSE_HYDRO, LAPSE_RAIN, LAPSE_SAND, LAPSE_SHEETS,
   LAPSE_VEG, LAPSE_WEATHER, type LapseSys,
 } from '../src/sim/perf/lapse.ts';
 
@@ -54,6 +54,8 @@ const SCRIPT: [number, Command][] = [
 ];
 
 test('time-lapse: the levels of the speed presets; level 0 is the plain sim and keeps no state for a living world', () => {
+  // (LIVING PACE: the worker's presets are ticks per real second — levelOfTps; the legacy multiplier keeps levelOfScale)
+  for (const [tps, lv] of [[1, 0], [2, 0], [3, 0], [5, 0], [10, 0], [30, 0], [100, 0], [300, 0], [1000, 1], [3000, 2]] as const) assert.equal(levelOfTps(tps), lv, `${tps}x`);
   assert.equal(levelOfScale(1), 0);
   assert.equal(levelOfScale(10), 0);
   assert.equal(levelOfScale(100), 1);
@@ -260,7 +262,7 @@ test('time-lapse: at 1000x rivers still run, a flood spreads and drains, a tsuna
   assert.ok(H(sea) < h0 - 1, `the mound left its centre: ${h0.toFixed(2)} -> ${H(sea).toFixed(2)}`);
 });
 
-test('time-lapse: the worker puts the sim on the level of its speed preset (a logged time.scale)', async () => {
+test('time-lapse: the worker puts the sim on the level of its speed preset (a logged time.scale { tps })', async () => {
   const w = new Worker(new URL('./helpers/workerboot.ts', import.meta.url));
   const waiting: { pred: (m: FromWorker) => boolean; ok: (m: FromWorker) => void }[] = [];
   w.on('message', (m: FromWorker) => {
@@ -281,24 +283,25 @@ test('time-lapse: the worker puts the sim on the level of its speed preset (a lo
       w.postMessage({ type: 'save', id });
       return Sim.load(new Uint8Array((await p).data));
     };
-    w.postMessage({ type: 'speed', speed: 1000 });
+    // (LIVING PACE: presets are ticks per real second — 1x–300x the plain sim, 1000x time-lapse, 3000x deep)
+    w.postMessage({ type: 'speed', speed: 3000 });
     let s = await saved(1);
-    assert.equal(lapseLevel(s.u), 2, '1000x: deep time-lapse');
+    assert.equal(lapseLevel(s.u), 2, '3000x: deep time-lapse');
     w.postMessage({ type: 'speed', speed: 0 });
     s = await saved(2);
     assert.equal(lapseLevel(s.u), 2, 'paused: the level stays');
-    w.postMessage({ type: 'speed', speed: 10 });
+    w.postMessage({ type: 'speed', speed: 300 });
     s = await saved(3);
-    assert.equal(lapseLevel(s.u), 0, '10x: real time');
-    const scales = s.u.log.filter((e) => e.cmd.k === 'time.scale').map((e) => e.cmd.scale);
-    assert.deepEqual(scales, [1000, 10], 'each level change is in the command log');
+    assert.equal(lapseLevel(s.u), 0, '300x: real time');
+    const tps = s.u.log.filter((e) => e.cmd.k === 'time.scale').map((e) => e.cmd.tps);
+    assert.deepEqual(tps, [3000, 300], 'each level change is in the command log');
     // a god-layer time act (`time.speed`, CommandResult.control.speed) paces the worker and sets the level too
     const res = next<{ type: 'result'; id: number; result: { ok: boolean; control?: Record<string, number> } }>((m) => m.type === 'result' && (m as { id: number }).id === 9);
-    w.postMessage({ type: 'cmd', id: 9, cmd: { k: 'time.speed', speed: 100 } });
+    w.postMessage({ type: 'cmd', id: 9, cmd: { k: 'time.speed', speed: 1000 } });
     const r = await res;
-    if (r.result.ok && r.result.control?.speed === 100) {
+    if (r.result.ok && r.result.control?.speed === 1000) {
       s = await saved(4);
-      assert.equal(lapseLevel(s.u), 1, 'time.speed 100: time-lapse level 1');
+      assert.equal(lapseLevel(s.u), 1, 'time.speed 1000: time-lapse level 1');
     }
   } finally {
     await w.terminate();

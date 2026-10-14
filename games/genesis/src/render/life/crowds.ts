@@ -25,6 +25,7 @@ import { BIPED_RIG, HEX_RIG, JELLY_RIG, PLAN, STYLE, bipedMesh, hexMesh, jellyMe
 import { BodyBuckets, bodyMatrix, unpackLinear } from './bodies.ts';
 import type { Buildings } from './buildings.ts';
 import { Boats, vesselOf } from './boats.ts';
+import { AVATAR_STATE } from '../camera/avatar.ts';
 
 // (the far LOD from 60 m, ~22 px tall at 720 p: the mid LOD to 115 m was most of a city view's crowd triangles)
 const LOD_D = [30, 42, 60, 650];
@@ -56,6 +57,8 @@ const BLEND_S = 0.35;
 /** correction decay time constant (s) and the jump beyond which a person is placed, not slid (m) */
 const SMOOTH_S = 0.15;
 const SNAP_M = 12;
+/** (additive, cameras lane) how close the people stand to the walking god's body (m) */
+const AVOID_M = 1.6;
 
 /**
  * Per person: animation blend, the cached ground under them, and the motion smoother. The live sim's snapshots come at
@@ -235,6 +238,10 @@ export class Crowds {
     const cullSq = (LOD_D[LODS - 1] + 260) * (LOD_D[LODS - 1] + 260);
     this.pickN = 0;
     let agents = 0;
+    // the walking god's body on this world (its feet's unit vector), for the people to keep clear of
+    const avoid = AVATAR_STATE.active && AVATAR_STATE.planet === pv.id;
+    const avL = AVATAR_STATE.pos.length() || 1;
+    const avX = AVATAR_STATE.pos.x / avL, avY = AVATAR_STATE.pos.y / avL, avZ = AVATAR_STATE.pos.z / avL;
     if (A && A.count) {
       for (let i = 0; i < A.count; i++) {
         const id = A.id[i];
@@ -282,6 +289,20 @@ export class Crowds {
         // mesh draws (surface + depth interpolated over the sim triangle). Curved ground plus a linear depth stood boats
         // metres above the sea off steep quays and coasts, where the curved ground bulges above the linear one.
         if (afloat) r = water && surfaceF ? pv.params.radius + pv.grid.sample(surfaceF, ux, uy, uz) + Math.max(0, pv.grid.sample(water, ux, uy, uz)) : tr.ground;
+        // (additive, cameras lane) nobody stands inside the walking god's body: people are drawn at least AVOID_M from
+        // its feet, stepped aside along the line from it (the sim's own reaction — kneeling, fleeing — comes by god.seen)
+        if (avoid && !pin && !afloat) {
+          const ex = ux - avX, ey = uy - avY, ez = uz - avZ;
+          const dm = Math.hypot(ex, ey, ez) * R;
+          if (dm < AVOID_M) {
+            let sx = ex, sy = ey, sz = ez;
+            if (dm < 1e-3) { const a = hashFloat(id, 77) * Math.PI * 2; sx = Math.cos(a) * 1e-6; sy = 0; sz = Math.sin(a) * 1e-6; }
+            const k = AVOID_M / Math.max(dm, 1e-3);
+            ux = avX + sx * k; uy = avY + sy * k; uz = avZ + sz * k;
+            const ul2 = Math.hypot(ux, uy, uz) || 1;
+            ux /= ul2; uy /= ul2; uz /= ul2;
+          }
+        }
         const d = Math.hypot(ux * r - cx, uy * r - cy, uz * r - cz);
         const nl = lodFades(d);
         if (!nl) continue;

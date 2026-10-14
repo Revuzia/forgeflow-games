@@ -14,6 +14,7 @@ import { airTemp, sunElevation } from './world.ts';
 import { caseHarm } from '../life/disease.ts';
 // SIM phase 4: a pressure suit or a habitat dome seals a body in its own air and warmth (space/habitat.ts)
 import { sealed } from '../space/habitat.ts';
+import { campFire } from '../perf/pace.ts';
 
 const FOOD = NEED.food, WATER = NEED.water, WARMTH = NEED.warmth, REST = NEED.rest, SAFETY = NEED.safety;
 const BELONG = NEED.belonging, STATUS = NEED.status, CURIO = NEED.curiosity, FAITH = NEED.faith;
@@ -59,7 +60,8 @@ export function thermalStress(x: PCtx, s: number, out?: { teff: number; cold: nu
   let t = Math.min(now, (now + before) * 0.5 + (before < now ? (before - now) * 0.25 : 0));
   if (out) A.tAir[s] = now;
   const ins = shelterAt(x, s);
-  const fire = fireAt(x, cell);
+  // (LIVING PACE: a camper of a people that keeps fire sleeps by a camp fire — perf/pace.ts)
+  const fire = fireAt(x, cell) || campFire(x, s);
   let clothes = 0;
   if (A.gear[s] >= 0) clothes = x.c.items.list[A.gear[s]]?.warmth ?? 0;
   // against cold: shelter evens the temperature toward comfort, a fire warms up to it, clothes help;
@@ -109,7 +111,7 @@ export function updateNeeds(x: PCtx, s: number): number {
   const nb = s * NEED_N;
   const N = A.needs;
   const decay = sp.decay;
-  const asleep = A.task[s] === TASK.sleep && A.phase[s] === 1;
+  const asleep = (A.task[s] === TASK.sleep || A.task[s] === TASK.camp) && A.phase[s] === 1;
   _h.dmg = 0; _h.cause = 0; _h.worst = 0;
   // food and water: linear decay; time spent at zero hurts
   if (sp.needW[FOOD] > 0) hurt(zeroDays(N, nb + FOOD, decay[FOOD] * (asleep ? 0.6 : 1), days) * 0.13, DEATH.starvation);
@@ -146,7 +148,7 @@ export function updateNeeds(x: PCtx, s: number): number {
     const night = sunElevation(x.u, x.p, now, _pos) < -0.03 !== sp.def.nocturnal;
     const st = x.ps.settlement(A.settlement[s]);
     let target = 1;
-    if (night && !fireAt(x, A.cell[s]) && !(A.flags[s] & AgentFlag.sleepingIndoors)) target -= 0.35;
+    if (night && !fireAt(x, A.cell[s]) && !campFire(x, s) && !(A.flags[s] & AgentFlag.sleepingIndoors)) target -= 0.35;
     if (st?.res && st.res.danger >= 0) target -= 0.3;
     target -= Math.min(0.4, A.fear[s * 4] * 0.4);
     if (A.disease[s] >= 0 && now >= A.infectT[s]) target -= 0.15;

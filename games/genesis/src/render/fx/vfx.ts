@@ -25,11 +25,31 @@ import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
 
-/** particle systems (vertex shader branches). < 20: the lit pass; ≥ 20: the emissive pass */
+/** particle systems (vertex shader branches). 0–19 and 40–59: the lit pass; 20–39: the emissive pass */
 export const SYS = {
   dust: 0, plume: 1, ash: 2, pyro: 3, steam: 4, spray: 5, skirt: 6, miasma: 7, smoke: 8, sand: 9, fog: 10, swarm: 11,
   rainCol: 12, cloud: 13, leaves: 14, bounty: 15, precip: 16, splash: 17, trail: 18, snowfall: 19,
   embers: 20, lava: 21, sparks: 22, plasma: 23, motes: 24, shower: 25, flash: 26, sparkle: 27, glints: 28,
+  /** the glowing heads of things thrown on ballistic arcs (impact debris, lava bombs): cooling, short streaks */
+  arcGlow: 29,
+  /** a rain or hail shaft seen from afar: tall soft grey curtains under a storm cell */
+  shaft: 40,
+  /** an impact's fireball: puffs swelling and rising, white-hot cooling through orange to black smoke */
+  fireball: 41,
+  /** an impact's shock ring: an opaque wall of dust rolling outward along the ground, slowing, billowing up */
+  shockRing: 42,
+  /** an impact's ejecta curtain: an inverted cone of rock and dust thrown up and out from the rim */
+  ejecta: 43,
+  /** smoke left along ballistic arcs (the trails of impact debris, of lava bombs) — p2 = the arcs' seed, shared with arcGlow */
+  arcSmoke: 44,
+  /** a low haze hugging the ground (plague miasma in the streets) */
+  groundHaze: 46,
+  /** crows circling over a place of death */
+  crows: 47,
+  /** a swarm's body: dark puffs flowing with internal waves (its specks are `swarm`) */
+  swarmMass: 48,
+  /** blowing snow streaming along the ground round the camera (a blizzard's ground sheet) */
+  drift: 49,
 } as const;
 
 export interface EmitterDef {
@@ -95,6 +115,7 @@ varying vec3 vGlow;
 varying float vSeed;
 varying vec3 vAirT;
 varying vec3 vAirIn;
+varying vec3 vSkyL;
 
 float h1(float a, float b) { return fract(sin(a * 127.1 + b * 311.7) * 43758.5453); }
 vec4 emit(float row, float k) { return texelFetch(tEmit, ivec2(int(k), int(row)), 0); }
@@ -125,7 +146,7 @@ void main() {
   float row = blk.x;
   vec4 E0 = emit(row, 0.0), E1 = emit(row, 1.0), E2 = emit(row, 2.0), E3 = emit(row, 3.0), E4 = emit(row, 4.0);
   float sys = E0.w;
-  bool litSys = sys < 19.5;
+  bool litSys = sys < 19.5 || (sys > 39.5 && sys < 59.5);
   if ((uPass > 0.5) != litSys) { hideMe(); return; }
   float count = blk.z * ${BLOCK}.0;
   float idx = blk.y * ${BLOCK}.0 + iBlock.y;
@@ -139,7 +160,12 @@ void main() {
   float now = uFxTime;
   // ── this particle's age (0..1) and life cycle ──
   float age, cycle, born;
-  if (burst) {
+  bool arcSys = sys > 28.5 && sys < 29.5 || sys > 43.5 && sys < 44.5;
+  if (arcSys) {
+    // (arc systems keep their own clocks along each arc, below)
+    age = clamp((now - t0) / life, 0.0, 1.0); cycle = 0.0; born = t0;
+    if (now < t0 || now - t0 > life * 1.3) { hideMe(); return; }
+  } else if (burst) {
     float stagger = h1(seed + idx * 0.37, 1.7) * min(0.25, life * 0.15) * step(0.5, mod(sys, 2.0) + 0.0);
     float lk = life * (0.7 + 0.6 * h1(seed * 3.1 + idx, 2.3));
     age = (now - t0 - stagger) / lk;
@@ -171,6 +197,9 @@ void main() {
   float soft = 0.5 * size;
   vec3 c = col;
   float lift = 0.0;
+  float selfSh = 0.0;      // a column's own shadow on its far side from the sun (0 none … 1 full)
+  float stretchCap = 11.0; // the longest a streak is smeared along its motion (× its width)
+  float squash = 1.0;      // a puff flattened toward the ground (hazes)
   int S = int(sys + 0.5);
   if (S == 18) {
     // a smoke trail left along a known path (a meteor's): from the head (p0 along the axis from O) back up to where
@@ -204,9 +233,10 @@ void main() {
     // the cap rolls: a toroidal swirl
     p += up * sin(r4 * 6.28 + tS * 0.3) * Rr * 0.1 * capK;
     sz = size * (0.6 + 1.6 * age) * mix(0.8, 1.6, capK);
-    a = smoothstep(0.0, 0.05, age) * (1.0 - smoothstep(0.6, 1.0, age)) * 0.9;
+    a = smoothstep(0.0, 0.05, age) * (1.0 - smoothstep(0.6, 1.0, age)) * 0.92;
     soft = 0.6 * sz;
     glow = vec3(1.0, 0.4, 0.1) * 6.0 * (1.0 - smoothstep(0.0, 0.18, age)) * (1.0 - capK);
+    selfSh = 1.0;
   } else if (S == 2) {
     // a volcano's ash column: it rises to its height, spreads under the sky's lid into an umbrella, leans downwind
     float H = p0, Rr = p1;
@@ -221,8 +251,11 @@ void main() {
     soft = 0.6 * sz;
     // lava glows into the column's foot, and the vent lights the column's underside from below (by day the sun
     // drowns it; at night the ash stands up orange over the crater)
+    // (the vent lights the column's underside all the way up the stem at night: the ash stands up orange over the
+    // crater, darkest and densest in its core; p2 = the vent's glow)
     glow = vec3(1.0, 0.32, 0.06) * 9.0 * (1.0 - smoothstep(0.0, 0.12, age)) * p2
-         + vec3(1.0, 0.36, 0.08) * 1.1 * exp(-hgt / max(H * 0.35, 1.0)) * p2;
+         + vec3(1.0, 0.34, 0.07) * 2.6 * exp(-hgt / max(H * 0.55, 1.0)) * p2;
+    selfSh = 1.0;
   } else if (S == 3) {
     // a pyroclastic flow: billows hugging the ground, racing out from the vent and rolling up behind
     float reach = p0;
@@ -233,6 +266,7 @@ void main() {
     a = smoothstep(0.0, 0.05, age) * (1.0 - smoothstep(0.6, 1.0, age));
     soft = 0.6 * sz;
     glow = vec3(1.0, 0.35, 0.08) * 4.0 * (1.0 - smoothstep(0.0, 0.3, age));
+    selfSh = 0.6;
   } else if (S == 4) {
     // steam: white billows rising and spreading (rifts, lava meeting water), shed along the axis
     p += axis * (r2 - 0.5) * p0 + side * sqrt(r3) * size * 0.5;
@@ -276,6 +310,7 @@ void main() {
     a = smoothstep(0.0, 0.05, age) * (1.0 - smoothstep(0.6, 1.0, age)) * 0.85;
     soft = 0.6 * sz;
     glow = vec3(1.0, 0.36, 0.07) * 5.0 * (1.0 - smoothstep(0.0, 0.2, age)) * p1;
+    selfSh = 1.0;
   } else if (S == 9) {
     // blowing sand and dust: low clouds streaming along the wind over the area (radius p0)
     float R0 = p0;
@@ -294,7 +329,8 @@ void main() {
   } else if (S == 11) {
     // a swarm: dark specks flocking — each orbits a wandering centre on its own noisy path
     float R0 = p0, H = p1;
-    vec3 ctr = O + up * H + (e1 * sin(now * 0.21 + seed) + e2 * cos(now * 0.17 + seed * 2.0)) * R0 * 0.3;
+    // (p2: the CPU moves the emitter — a swarm's wandering mass, whose shadow follows it — so no wander here)
+    vec3 ctr = O + up * H + (p2 > 0.5 ? vec3(0.0) : (e1 * sin(now * 0.21 + seed) + e2 * cos(now * 0.17 + seed * 2.0)) * R0 * 0.3);
     float th = r1 * 6.2831853 + now * (0.6 + r2 * 0.9) * (r3 > 0.5 ? 1.0 : -1.0);
     float rr = R0 * (0.15 + 0.85 * sqrt(r4));
     p = ctr + (e1 * cos(th) + e2 * sin(th)) * rr + up * (sin(now * 1.3 + r2 * 20.0) * H * 0.4 + (r3 - 0.5) * H * 0.8);
@@ -363,6 +399,8 @@ void main() {
     a = edge * power;
     kind = S == 19 ? 7.0 : 5.0;
     if (S == 19) { sz *= 0.6 + 0.8 * r4; }
+    // (S 19 with p2: big flakes right at the lens, out of focus — soft discs)
+    if (S == 19 && p2 > 0.5) { kind = 11.0; a *= 0.55; }
     // (p2: a driven snow — flakes, white and soft, smeared along the gale, not rain's long thin streaks)
     if (S == 16 && p2 > 0.5) { kind = 5.25; sz *= 0.7 + 0.6 * r4; }
   } else if (S == 17) {
@@ -399,17 +437,20 @@ void main() {
     c = mix(vec3(1.0, 0.55, 0.12), vec3(0.8, 0.12, 0.02), cool) * 18.0;
     a = (1.0 - smoothstep(0.6, 1.0, age)) * step(0.1, r1);
     kind = 1.0;
+    stretchCap = 2.5;
   } else if (S == 21) {
     // lava fountains: incandescent blobs in ballistic arcs from the vent, darkening as they fall back
     float s = p1;
     vec3 v0 = up * s * (0.7 + 0.5 * r2) + side * s * 0.35 * sqrt(r3);
     p += side * sqrt(r4) * p0 * 0.3 + v0 * tS - up * 4.9 * tS * tS;
     vel = v0 - up * 9.8 * tS;
-    sz = size * (0.6 + 0.8 * r1);
-    float cool = smoothstep(0.3, 1.0, age);
-    c = mix(vec3(1.0, 0.62, 0.2), vec3(0.6, 0.08, 0.01), cool) * 30.0;
-    a = smoothstep(0.0, 0.03, age) * (1.0 - smoothstep(0.85, 1.0, age));
-    kind = 2.0;
+    sz = size * (0.5 + 0.6 * r1);
+    // lava bombs: short red-orange streaks along their arcs, cooling and darkening as they fly (never sparkler spikes)
+    float cool = smoothstep(0.05, 0.8, age);
+    c = mix(vec3(1.0, 0.5, 0.12), vec3(0.45, 0.05, 0.01), cool) * mix(14.0, 2.5, cool);
+    a = smoothstep(0.0, 0.03, age) * (1.0 - smoothstep(0.8, 1.0, age));
+    kind = 1.0;
+    stretchCap = 2.2;
     lift = 1.0;
   } else if (S == 22) {
     // sparks: fast, falling streaks
@@ -420,6 +461,7 @@ void main() {
     c = col * 20.0;
     a = 1.0 - smoothstep(0.5, 1.0, age);
     kind = 1.0;
+    stretchCap = 3.0;
   } else if (S == 23) {
     // a meteor's plasma: streaks shed behind the glowing head along its path (axis = its flight, p0 = trail length)
     float back = r2 * r2 * p0;
@@ -466,8 +508,153 @@ void main() {
     a = smoothstep(0.0, 0.1, age) * (1.0 - smoothstep(0.7, 1.0, age));
     kind = 2.0;
   }
+  else if (S == 40) {
+    // a rain or hail shaft under a storm cell, seen from afar: tall soft grey curtains (p0 radius, p1 the cloud base
+    // above O) streaming slowly down, leaning with the wind (axis)
+    float R0 = p0, H = p1;
+    float hh = fract(r3 - tS * 0.08);
+    p += side * sqrt(r2) * R0 + up * (H * hh) + axis * (1.0 - hh) * H * 0.15;
+    vel = -up * H + axis * H * 0.15;
+    sz = size * (0.7 + 0.6 * r4);
+    // (feathered: thinning toward the ground and out from the core, some streaks denser than others — a hard-edged
+    // pillar of bright haze read as fog, not rain)
+    a = smoothstep(0.0, 0.5, hh) * (1.0 - smoothstep(0.88, 1.0, hh)) * (1.0 - smoothstep(0.35, 1.0, sqrt(r2))) * (0.45 + 0.9 * r1 * r1) * 0.3;
+    kind = 10.0;
+    stretchCap = 4.5;
+    soft = 2.0 * sz;
+  } else if (S == 41) {
+    // an impact's fireball: puffs filling a swelling hemisphere that rises on its own heat; each white-hot at first,
+    // cooling through orange and red to black smoke (p0 its final radius, p1 its rise speed m/s)
+    float R0 = p0;
+    float z = r3;
+    float rxy = sqrt(max(0.0, 1.0 - z * z));
+    vec3 dirv = (e1 * cos(ang) + e2 * sin(ang)) * rxy + up * z;
+    float rr = R0 * (1.0 - exp(-tS * 2.0)) * pow(r2, 0.33);
+    p += dirv * rr + up * (tS * p1 * (0.6 + 0.4 * r4) + rr * 0.35);
+    p += (e1 * sin(tS * 1.3 + r1 * 20.0) + e2 * cos(tS * 1.1 + r2 * 20.0)) * R0 * 0.08 * age;
+    sz = size * (0.45 + 1.4 * sqrt(age)) * (0.7 + 0.6 * r4);
+    a = smoothstep(0.0, 0.02, age) * (1.0 - smoothstep(0.6, 1.0, age)) * 0.95;
+    soft = 0.6 * sz;
+    // temperature: hottest in the core and early; a blackbody ramp
+    float T = exp(-tS * (0.9 + 0.6 * r2)) * (1.0 - 0.35 * r2);
+    glow = mix(vec3(0.6, 0.06, 0.0), vec3(1.0, 0.42, 0.08), smoothstep(0.1, 0.5, T));
+    glow = mix(glow, vec3(1.0, 0.86, 0.6), smoothstep(0.55, 0.95, T)) * 22.0 * T * T;
+    selfSh = 1.0;
+  } else if (S == 42) {
+    // an impact's shock ring: a wall of dust rolling out along the ground (p0 its farthest reach, p1 its spread rate),
+    // slowing as it goes and billowing up behind its front
+    float Rr = p0 * (1.0 - exp(-tS * p1));
+    float slow = 1.0 - exp(-tS * p1);
+    p += side * (Rr + (r2 - 0.5) * size * 1.6) + up * (size * 0.35 + size * (0.4 + 1.6 * r3) * slow);
+    sz = size * (0.55 + 1.3 * age) * (0.7 + 0.6 * r4);
+    a = smoothstep(0.0, 0.02, age) * (1.0 - smoothstep(0.5, 1.0, age)) * 0.92;
+    soft = 0.5 * sz;
+    selfSh = 0.5;
+  } else if (S == 43) {
+    // the ejecta curtain: rock and dust thrown up and out from the rim (p0 rim radius) at a steep angle — an inverted
+    // cone sheet that falls back outside the crater (p1 launch speed m/s)
+    float el = 0.88 + 0.22 * r3;
+    float sp = p1 * (0.55 + 0.6 * r2);
+    vec3 v0 = side * sp * cos(el) + up * sp * sin(el);
+    float tt = tS;
+    vec3 q = side * p0 * (0.75 + 0.3 * r4) + v0 * tt - up * 4.9 * tt * tt;
+    float hU = dot(q, up);
+    if (hU < 0.0) { q -= up * hU; }
+    p += q;
+    sz = size * (0.5 + 1.2 * age) * (0.7 + 0.6 * r4);
+    a = smoothstep(0.0, 0.03, age) * (1.0 - smoothstep(0.45, 1.0, age)) * 0.85 * (hU < 0.0 ? 0.5 : 1.0);
+    soft = 0.5 * sz;
+    selfSh = 0.5;
+  } else if (S == 44 || S == 29) {
+    // things thrown on ballistic arcs from O: arc j's launch from a hash of the emitters' shared seed (p2); smoke
+    // puffs left along each arc (44, twelve per arc) and the glowing heads (29, one per arc)
+    float j = S == 44 ? floor(idx / 12.0) : idx;
+    float kk = S == 44 ? mod(idx, 12.0) : 0.0;
+    float aj = h1(p2 * 1.7 + j * 0.37, 11.0) * 6.2831853;
+    float el = 0.45 + 0.6 * h1(p2 * 2.3 + j * 0.71, 12.0);
+    float spd = p1 * (0.35 + 0.65 * h1(p2 * 3.1 + j * 0.53, 13.0));
+    vec3 hz = e1 * cos(aj) + e2 * sin(aj);
+    float g = 9.8;
+    float Tj = 2.0 * spd * sin(el) / g + 0.05;
+    float tAll = now - t0;
+    if (S == 44) {
+      float tau = (kk / 12.0) * Tj;
+      float pa = (tAll - tau) / (life * 0.45);
+      if (tAll < tau || pa > 1.0 || tau > tAll) { hideMe(); return; }
+      p += hz * spd * cos(el) * tau + up * (spd * sin(el) * tau - 0.5 * g * tau * tau + pa * size * 2.0);
+      sz = size * (0.35 + 1.6 * sqrt(pa));
+      a = smoothstep(0.0, 0.05, pa) * (1.0 - smoothstep(0.35, 1.0, pa)) * 0.6;
+      soft = 0.6 * sz;
+      age = pa;
+    } else {
+      if (tAll > Tj) { hideMe(); return; }
+      float tt = tAll;
+      vec3 v0 = hz * spd * cos(el) + up * spd * sin(el);
+      p += v0 * tt - up * 0.5 * g * tt * tt;
+      vel = v0 - up * g * tt;
+      float cool = clamp(tt / max(Tj, 0.1), 0.0, 1.0);
+      c = mix(vec3(1.0, 0.65, 0.25), vec3(0.5, 0.07, 0.01), smoothstep(0.0, 0.85, cool)) * mix(16.0, 2.0, cool);
+      sz = size * (0.6 + 0.6 * h1(p2 + j, 14.0));
+      a = 1.0 - smoothstep(0.85, 1.0, cool);
+      kind = 1.0;
+      stretchCap = 2.5;
+      age = cool;
+    }
+  } else if (S == 46) {
+    // a low haze hugging the ground: wide flat puffs drifting slowly (plague miasma in the streets, at dusk)
+    float R0 = p0;
+    p += side * sqrt(r2) * R0 + up * (size * 0.12 + r3 * size * 0.25) + axis * tS * 0.25;
+    p += (e1 * sin(tS * 0.08 + r4 * 6.0) + e2 * cos(tS * 0.07 + r1 * 6.0)) * size * 0.8;
+    sz = size * (0.8 + 0.6 * r4);
+    a = smoothstep(0.0, 0.3, age) * (1.0 - smoothstep(0.65, 1.0, age)) * 0.42;
+    soft = 1.2 * sz;
+    squash = 0.38;
+  } else if (S == 47) {
+    // crows circling over a place of death (p0 the circle's radius, p1 its height)
+    float th = r1 * 6.2831853 + now * (0.22 + 0.12 * r2) * (r3 > 0.5 ? 1.0 : -1.0);
+    float rr = p0 * (0.45 + 0.55 * r4);
+    p += (e1 * cos(th) + e2 * sin(th)) * rr + up * (p1 * (0.75 + 0.5 * r2) + sin(now * 0.6 + r1 * 10.0) * 2.5);
+    vel = (e1 * -sin(th) + e2 * cos(th)) * (r3 > 0.5 ? 1.0 : -1.0);
+    float camD = length(p - uCamBody);
+    sz = max(size, camD * 0.004);
+    a = smoothstep(0.0, 0.1, age) * (1.0 - smoothstep(0.9, 1.0, age));
+    kind = 9.0;
+  } else if (S == 48) {
+    // a swarm's body: a dark mass of puffs flowing round a wandering centre, waves running through it
+    float R0 = p0, H = p1;
+    vec3 ctr = O + up * H;
+    float th = r1 * 6.2831853 + now * (0.35 + 0.25 * r2) * (r3 > 0.5 ? 1.0 : -1.0);
+    float rr = R0 * sqrt(r4) * (0.75 + 0.25 * sin(now * 0.7 + r2 * 8.0));
+    p = ctr + (e1 * cos(th) + e2 * sin(th)) * rr + up * ((r3 - 0.5) * H * 0.7 + sin(th * 3.0 + now * 1.7) * H * 0.18);
+    sz = size * (0.7 + 0.6 * r2);
+    a = smoothstep(0.0, 0.15, age) * (1.0 - smoothstep(0.8, 1.0, age)) * 0.3;
+    soft = 0.8 * sz;
+  } else if (S == 49) {
+    // blowing snow streaming along the ground round the camera: a box (half size p0) wrapped round the eye, within a
+    // metre and a half of the ground (p1: the camera's height over it), smeared along the wind (axis)
+    float B = p0;
+    vec3 base = uCamBody;
+    vec3 upC = normalize(base);
+    vec3 c1 = normalize(cross(upC, abs(upC.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 c2 = cross(upC, c1);
+    vec3 drift = axis * now;
+    vec2 q = vec2(r1, r2) * 2.0 * B + vec2(dot(drift, c1), dot(drift, c2)) - vec2(dot(base, c1), dot(base, c2));
+    q = mod(q, 2.0 * B) - B;
+    float hq = -p1 + 0.05 + r3 * r3 * 1.6 + sin(now * 2.0 + r4 * 20.0) * 0.08;
+    p = base + c1 * q.x + c2 * q.y + upC * hq;
+    vel = axis;
+    sz = size * (0.6 + 0.8 * r4);
+    float edge = 1.0 - smoothstep(0.6, 1.0, length(q) / B);
+    // (wisps, not a blanket: at 0.5 the sheet read as a bank of white fog over the street)
+    // (and near the lens they fade: long smears passing a metre from the eye read as shafts of light, not snow)
+    a = edge * power * (0.12 + 0.3 * r4 * r4) * smoothstep(1.5, 5.0, length(q));
+    kind = 10.0;
+    stretchCap = 4.0;
+    soft = 1.0;
+  }
   // ── shading of lit particles ──
   vLight = vec3(1.0);
+  vSkyL = vec3(0.0);
   vGlow = glow * power;
   if (litSys) {
     float rP = length(p);
@@ -475,7 +662,17 @@ void main() {
     vec2 shade = fxCloudShade(p, rP);
     vec3 sun = uSunE * sunTransmittance(rP, dot(upP, uSunDirBody)) * shade.x;
     vec3 sky = skyIrradiance(upP, upP, uSunDirBody) * shade.y;
-    vLight = sun * 0.24 + sky * 0.3 + vec3(0.002, 0.003, 0.005) + uMoonE * 0.15 * shade.x;
+    // direct light (the sun, the moon) and the sky's apart: a puff's sunlit side warm, its shade blue-grey
+    vLight = sun * 0.24 + uMoonE * 0.15 * shade.x;
+    vSkyL = sky * 0.3 + vec3(0.002, 0.003, 0.005);
+    if (selfSh > 0.0) {
+      // a column's far side from the sun lies in its own shadow
+      vec3 sunH = uSunDirBody - up * dot(uSunDirBody, up);
+      float sl = length(sunH);
+      float lit = sl > 1e-4 ? smoothstep(-0.7, 0.7, dot(side, sunH / sl)) : 1.0;
+      vLight *= mix(1.0, 0.18 + 0.82 * lit, selfSh * min(1.0, sl * 3.0));
+      vSkyL *= mix(1.0, 0.7 + 0.3 * lit, selfSh);
+    }
   }
   // ── aerial perspective: the air between the camera and the particle dims it and veils it in the sky's colour
   // (density averaged along the path between the two heights; the veil is the sky's radiance that way) ──
@@ -493,22 +690,28 @@ void main() {
   }
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDir = vec2(0.0, 1.0);
-  if (kind > 0.5 && kind < 1.5 || kind > 4.5 && kind < 5.5) {
+  if (kind > 0.5 && kind < 1.5 || kind > 4.5 && kind < 5.5 || kind > 9.5 && kind < 10.5) {
     // a streak along its flight on screen
     vec3 vv = (modelViewMatrix * vec4(vel, 0.0)).xyz;
     vec2 d = length(vv.xy) > 1e-5 ? normalize(vv.xy) : vec2(0.0, 1.0);
     vDir = d;
     // (a drop smeared over a 1/60 s exposure: its length is its screen speed × the shutter, many times its width)
-    float stretch = kind > 5.1 ? clamp(length(vv.xy) * 0.04, 1.15, 4.0) : kind > 4.5 ? clamp(length(vv.xy) * 0.0083 / max(sz, 1e-3), 2.0, 14.0) : 1.0 + clamp(length(vv.xy) * 0.08, 0.0, 10.0);
+    float stretch = kind > 9.5 ? stretchCap : kind > 5.1 ? clamp(length(vv.xy) * 0.12, 2.2, 6.0) : kind > 4.5 ? clamp(length(vv.xy) * 0.0083 / max(sz, 1e-3), 2.0, 14.0) : min(stretchCap, 1.0 + clamp(length(vv.xy) * 0.08, 0.0, 10.0));
     vec2 nrm = vec2(d.y, -d.x);
     mv.xy += nrm * corner.x * sz + d * corner.y * sz * stretch;
-  } else if (kind > 7.5) {
+  } else if (kind > 7.5 && kind < 8.5) {
     // a splash: a little crown, wider than tall, standing on the surface
     mv.xy += vec2(corner.x * sz * 1.6, (corner.y * 0.5 + 0.5) * sz * 0.8);
   } else {
-    float rot = r3 * 6.2831853 + (litSys ? age * (r1 - 0.5) * 2.0 : 0.0);
+    float rot = squash < 0.99 || kind > 8.5 ? 0.0 : r3 * 6.2831853 + (litSys ? age * (r1 - 0.5) * 2.0 : 0.0);
     vec2 cc = vec2(cos(rot) * corner.x - sin(rot) * corner.y, sin(rot) * corner.x + cos(rot) * corner.y);
-    mv.xy += cc * sz;
+    if (kind > 8.5 && kind < 9.5) {
+      // a bird: a flat V seen side-on, along its flight on screen
+      vec3 vv = (modelViewMatrix * vec4(vel, 0.0)).xyz;
+      vec2 d = length(vv.xy) > 1e-5 ? normalize(vv.xy) : vec2(1.0, 0.0);
+      vDir = d;
+    }
+    mv.xy += vec2(cc.x, cc.y * squash) * sz;
   }
   gl_Position = projectionMatrix * mv;
   vCorner = corner;
@@ -538,6 +741,7 @@ varying vec3 vGlow;
 varying float vSeed;
 varying vec3 vAirT;
 varying vec3 vAirIn;
+varying vec3 vSkyL;
 void main() {
 #include <logdepthbuf_fragment>
   if (vColor.a <= 0.0) discard;
@@ -553,10 +757,10 @@ void main() {
     float rr = r * (1.0 - 0.22 * n1 - 0.08 * n2);
     float puff = smoothstep(1.0, 0.35, rr) * (0.75 + 0.25 * n2);
     vec3 nrm = normalize(vec3(vCorner * 0.9 + vec2(n1, n2) * 0.25, sqrt(max(0.05, 1.0 - min(r * r, 1.0)))));
-    float lit = clamp(0.55 + 0.55 * dot(nrm.xy, uSunS) + 0.15 * nrm.z, 0.15, 1.2);
+    float lit = clamp(0.42 + 0.78 * dot(nrm.xy, uSunS) + 0.2 * nrm.z, 0.0, 1.3);
     float under = smoothstep(0.4, -0.8, nrm.y);
     float a = vColor.a * puff * fade;
-    vec3 c = vColor.rgb * (vLight * lit + vGlow * (0.35 + 0.65 * under));
+    vec3 c = vColor.rgb * (vLight * lit + vSkyL * (0.7 + 0.3 * nrm.z) + vGlow * (0.35 + 0.65 * under));
     c = c * vAirT + vAirIn;
     gl_FragColor = vec4(c * a, a);
   } else if (vKind > 3.5 && vKind < 4.5) {
@@ -565,7 +769,7 @@ void main() {
     float body = smoothstep(1.0, 0.4, r);
     float wing = 0.5 + 0.5 * sin(uFxTime * 60.0 + vSeed);
     float a = vColor.a * body * fade * (0.7 + 0.3 * wing);
-    gl_FragColor = vec4((vColor.rgb * vLight * 0.6 * vAirT + vAirIn) * a, a);
+    gl_FragColor = vec4((vColor.rgb * (vLight + vSkyL) * 0.6 * vAirT + vAirIn) * a, a);
   } else if (vKind > 4.5 && vKind < 5.5) {
     // a rain streak: thin, brightest in the middle, lit by the sky
     float k = (1.0 - smoothstep(0.0, 1.0, abs(vCorner.x))) * (1.0 - smoothstep(0.6, 1.0, abs(vCorner.y)));
@@ -577,20 +781,20 @@ void main() {
       bright = 1.25;
     }
     float a = vColor.a * k * fade * 0.55;
-    gl_FragColor = vec4((vColor.rgb * (vLight * bright + 0.01) * vAirT + vAirIn) * a, a);
+    gl_FragColor = vec4((vColor.rgb * ((vLight + vSkyL) * bright + 0.01) * vAirT + vAirIn) * a, a);
   } else if (vKind > 5.5 && vKind < 6.5) {
     // a leaf: a little lit ellipse turning in the air
     vec2 q = vCorner * vec2(1.0, 0.55);
     if (length(q) > 0.6) discard;
     float a = vColor.a * fade;
-    gl_FragColor = vec4((vColor.rgb * vLight * 1.4 * vAirT + vAirIn) * a, a);
+    gl_FragColor = vec4((vColor.rgb * (vLight + vSkyL) * 1.4 * vAirT + vAirIn) * a, a);
   } else if (vKind > 6.5 && vKind < 7.5) {
     // a lit blob (fruit, a snowflake, a hailstone)
     if (r > 1.0) discard;
     float sh = 0.6 + 0.4 * (1.0 - r) + 0.25 * max(0.0, -vCorner.y);
     float a = vColor.a * smoothstep(1.0, 0.75, r) * fade;
-    gl_FragColor = vec4((vColor.rgb * vLight * 1.6 * sh * vAirT + vAirIn) * a, a);
-  } else if (vKind > 7.5) {
+    gl_FragColor = vec4((vColor.rgb * (vLight + vSkyL) * 1.6 * sh * vAirT + vAirIn) * a, a);
+  } else if (vKind > 7.5 && vKind < 8.5) {
     // a splash crown: a thin rim of droplets thrown up and out (the arc of a ring seen side-on), open in the middle
     vec2 cq = vec2(vCorner.x, (vCorner.y + 1.0) * 0.9);
     float rim = abs(length(cq) - 0.85);
@@ -598,7 +802,27 @@ void main() {
     // droplets along the rim, not a solid band
     float drops = step(0.35, fract(atan(cq.y, cq.x) * 3.1 + vSeed));
     float a = vColor.a * k * drops * 0.5;
-    gl_FragColor = vec4((vColor.rgb * vLight * 1.8 * vAirT + vAirIn) * a, a);
+    gl_FragColor = vec4((vColor.rgb * (vLight + vSkyL) * 1.8 * vAirT + vAirIn) * a, a);
+  } else if (vKind > 8.5 && vKind < 9.5) {
+    // a bird: two dark wings in a shallow V, beating
+    vec2 q = vec2(dot(vCorner, vDir), dot(vCorner, vec2(-vDir.y, vDir.x)));
+    float flap = sin(uFxTime * 9.0 + vSeed * 3.0);
+    float wing = abs(q.y + abs(q.x) * (0.35 + 0.35 * flap) - 0.1) - (0.14 - 0.1 * abs(q.x));
+    float body = length(q * vec2(0.9, 2.6)) - 0.22;
+    float m = (1.0 - smoothstep(0.0, 0.06, min(wing, body))) * step(abs(q.x), 0.95);
+    float a = vColor.a * m * fade;
+    if (a <= 0.003) discard;
+    gl_FragColor = vec4((vColor.rgb * (vLight + vSkyL) * 0.5 * vAirT + vAirIn) * a, a);
+  } else if (vKind > 9.5 && vKind < 10.5) {
+    // a soft streak (a rain shaft, blowing snow): a long soft ellipse along its motion
+    float k = exp(-vCorner.x * vCorner.x * 3.0) * (1.0 - smoothstep(0.55, 1.0, abs(vCorner.y)));
+    float a = vColor.a * k * fade;
+    gl_FragColor = vec4((vColor.rgb * (vLight + vSkyL) * 1.2 * vAirT + vAirIn) * a, a);
+  } else if (vKind > 10.5) {
+    // a big flake at the lens, out of focus: a soft bright disc
+    if (r > 1.0) discard;
+    float a = vColor.a * exp(-r * r * 2.2) * (1.0 - smoothstep(0.8, 1.0, r)) * fade;
+    gl_FragColor = vec4((vColor.rgb * (vLight + vSkyL) * 1.5 * vAirT + vAirIn) * a, a);
   } else if (vKind > 0.5 && vKind < 1.5) {
     // an emissive streak: hottest at its head
     float core = (1.0 - smoothstep(0.0, 1.0, abs(vCorner.x))) * smoothstep(-1.0, 0.6, vCorner.y) * (1.0 - smoothstep(0.85, 1.0, vCorner.y));

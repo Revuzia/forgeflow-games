@@ -6,18 +6,26 @@
 //   meteor / moon-fall / comet  a bolide (head, sheath, trail), plasma streaks, a smoke trail left along its path, the
 //                     glow it throws on the ground as it comes, a converging reticle where it will land; a comet is a
 //                     coma and a two-part tail high in the sky until it enters
-//   impact (event)    a flash and its light, a condensation shell racing out, a dust ring on the ground, a mushroom
-//                     plume, ejecta sparks and tumbling rocks, a glowing crater and scorched ground
+//   impact (event)    a two-frame white flash lighting the scene, a fireball of puffs cooling from white through orange
+//                     to black smoke, an opaque shock ring of dust rolling out along the ground, the ejecta curtain (an
+//                     inverted cone thrown up from the rim), debris on curved ballistic arcs trailing smoke, tumbling
+//                     rocks, a sun-lit mushroom column, a glowing crater and scorched ground
 //   meteor shower     streaks from one radiant high over the place (its impacts are meteors of their own)
-//   volcano           an ash column spreading into an umbrella downwind, lightning in the plume, lava fountains, embers,
-//                     the vent's glow and light, pyroclastic flows at its height, an ashen sky under the plume
+//   volcano           a dark ash column lit orange from below, spreading into an umbrella downwind, lightning in the
+//                     plume, lava bombs on short arcs cooling and trailing smoke, embers, the vent's glow and light,
+//                     steam where the lava meets snow, pyroclastic flows at its height, an ashen sky under the plume
 //   quake             the shake (events), dust bursting from the ground, fissures at the epicentre, collapses
-//   tornado           a roped funnel, its dust skirt, a ring of debris, chevrons where it is heading, wall-cloud bolts
-//   hurricane         its spiral is the cloud pass's (weather systems); spray over the sea under its eye wall
-//   tsunami / flood   spray thrown along the moving water front (from the water and flow fields)
+//   tornado           a roped funnel under a rotating wall cloud, the storm cell over it (sky/clouds.ts, at once), its
+//                     debris cloud and dust ring, rain and hail shafts round it, chevrons where it is heading, bolts
+//   hurricane         its spiral is the cloud pass's (a storm cell added at once); spray over the sea under its eye wall
+//   tsunami           the wave's front as a breaking wall of water (render/fx/tsunami.ts: crest, curling lip, white
+//                     water, foam behind, the drawdown ahead, a muddy bore on land), spray blown off its crest
+//   flood             spray thrown along the moving water front (from the water and flow fields)
 //   wildfire / storm  smoke columns, embers, heat light and an orange sky near a firestorm (flames: the fire field)
-//   plague / blight   miasma wisps and flies; a sick tint over the land; spores
-//   swarm / infest.   a flock of thousands of specks and its shadow
+//   plague / blight   a low green-grey haze gathered in the streets round the sick (by area, strongest at dusk), flies,
+//                     funeral-pyre smoke, crows circling; spores
+//   swarm / infest.   a dark flowing mass with waves through it, thousands of specks with flickering wings, its shadow
+//                     moving on the ground and the fields stripped yellow where it passed
 //   flare / magnetic  a white wash of the sky, the aurora surging (GodFx feeds sky/aurora.ts)
 //   gravity slip      rocks and dust lifting off the ground
 //   eclipse           the occluder, the corona, the land darkening
@@ -32,11 +40,13 @@ import type { DisasterView, SimEvent } from '../../sim/types.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { DECAL, decal, type Decal, type DecalPass } from './decals.ts';
 import { SYS, type EmitterDef, type Vfx } from './vfx.ts';
-import { Bolide, Comet, Debris, Dome, Fireball, Funnel, Shell } from './meshfx.ts';
+import { Bolide, Comet, Debris, Dome, Funnel } from './meshfx.ts';
 import type { Lightning } from './lightning.ts';
 import type { ScreenState } from './screenfx.ts';
+import type { CloudStorm } from '../sky/clouds.ts';
 import { clamp01, fxHash, smooth } from './fxcommon.ts';
 import { makePropMaterial } from './propmat.ts';
+import { TsunamiCrest } from './tsunami.ts';
 
 export interface FxCtx {
   pv: PlanetView;
@@ -63,6 +73,13 @@ export interface FxCtx {
   camFwd?: Vector3;
   /** the radius (body m, from the planet's centre) of the cloud deck's base — a funnel or a bolt reaches up to it */
   cloudBase?: number;
+  /** the radius of the cloud deck's top (a bolt starts a third of the way up into the deck) */
+  cloudTop?: number;
+  /** a lightning strike over a unit vector, as GodFx draws it: the cloud lit from inside, a bolt when near and not too
+   *  often (real time) — every storm's bolt goes through it */
+  strike?: (u: Vector3, power: number) => void;
+  /** storm cells to add to the cloud deck this frame (a live tornado's thunderstorm, a hurricane's spiral) */
+  storms?: CloudStorm[];
   /**
    * the step for STATE easing (fades in and out, tints, levels): the larger of the FX step and the real frame time, so
    * a disaster spawned on a paused world still fades in (its particles wait for the clock) and nothing pops
@@ -190,7 +207,7 @@ export class DisasterFx {
     const up = _v.copy(p).normalize();
     const pc = p.clone();
     // the flash (and the light it throws)
-    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * (big ? 5 : 7), life: big ? 1.1 : 0.8, count: 1, p0: R * 0.6, p1: big ? 400 : 60, burst: true, r: 1, g: 0.85, b: 0.6 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * (big ? 2.6 : 5), life: big ? 0.45 : 0.6, count: 1, p0: R * 0.5, p1: big ? 300 : 60, burst: true, r: 1, g: 0.9, b: 0.75 }, ctx.now);
     this.transients.push({
       t0: ctx.now, dur: big ? 14 : 3, step: (age, k, c) => {
         const flash = Math.exp(-age * 3.5);
@@ -199,8 +216,8 @@ export class DisasterFx {
         d.cr = 1; d.cg = 0.62 + 0.3 * flash; d.cb = 0.3 + 0.4 * flash;
         d.p0 = R * 30; d.p1 = (flash * 2.5e5 + glow * 2e4) * R * R / 900 * s; d.p2 = R * 0.8; d.p3 = R * 0.8;
         c.decals.add(d);
-        // the view washes white for an instant
-        const f = Math.exp(-age * 9) * (big ? 0.25 : 0.04) * clamp01(1 - pc.distanceTo(c.camBody) / (R * 400));
+        // the view washes white for an instant (two frames), then the light is the fireball's
+        const f = (age < 0.07 ? 1 : Math.exp(-(age - 0.07) * 22)) * (big ? 0.55 : 0.05) * clamp01(1 - pc.distanceTo(c.camBody) / (R * 400));
         c.screen.flash.addScalar(f);
       },
     });
@@ -210,46 +227,26 @@ export class DisasterFx {
       this.transients.push({ t0: ctx.now, dur: 10, step: (age, k, c) => c.decals.add(Object.assign(decal(DECAL.scorch, [pc.x, pc.y, pc.z], R * 1.6), { p0: R * 1.4, p1: 0.6 * (1 - k * k), p2: 3.3 })) });
       return;
     }
-    // the condensation shell racing out, the dust ring on the ground
-    const shell = new Shell(this.fx);
-    this.group.add(shell.mesh);
+    // (no glass shell of condensation: the shock is the dust ring rolling out along the ground)
     const shellUp = up.clone();
-    this.transients.push({
-      t0: ctx.now, dur: 1.3, step: (age) => {
-        const r = R * 2 + age * 340;
-        frameAt(pc, shellUp, r, shell.mesh.matrix);
-        shell.mesh.matrixWorldNeedsUpdate = true;
-        shell.u.uK.value = Math.sin(Math.min(1, age / 1.3) * Math.PI) * Math.exp(-age * 1.2) * 0.9;
-        (shell.u.uLight.value as Vector3).copy(ctx.sunE).multiplyScalar(0.25).addScalar(0.05);
-      }, end: () => { this.group.remove(shell.mesh); shell.dispose(); },
-    });
-    this.transients.push({
-      t0: ctx.now, dur: 9, step: (age, k, c) => {
-        const r = Math.min(R * 16, R * 1.5 + age * 160);
-        c.decals.add(Object.assign(decal(DECAL.ring, [pc.x, pc.y, pc.z], r + R * 2), { cr: 0.45, cg: 0.38, cb: 0.3, ca: (1 - k) * 0.7, p0: r, p1: R * (0.4 + age * 0.15), q0: R * 3 }));
-      },
-    });
-    // the fireball: a ball of incandescent rock vapour swelling and rising off the crater, cooling into the plume's
-    // dark stem (the light it throws is the flash's, above)
-    const fb = new Fireball(this.fx);
-    this.group.add(fb.mesh);
-    this.transients.push({
-      t0: ctx.now, dur: 7, step: (age, k) => {
-        const r = R * (0.45 + 1.15 * (1 - Math.exp(-age * 1.6)));
-        const lift = r * 0.55 + age * R * 0.35;
-        _m.makeScale(r, r, r).setPosition(pc.x + shellUp.x * lift, pc.y + shellUp.y * lift, pc.z + shellUp.z * lift);
-        fb.mesh.matrix.copy(_m); fb.mesh.matrixWorldNeedsUpdate = true;
-        fb.u.uHeat.value = Math.max(0, 1 - age / 5);
-        fb.u.uK.value = Math.min(1, age * 12) * (1 - smooth(0.55, 1, k));
-      }, end: () => { this.group.remove(fb.mesh); fb.dispose(); },
-    });
-    // the mushroom plume, ejecta, rocks
+    const q = ctx.q;
+    // the fireball: puffs swelling and rising off the crater, white-hot cooling through orange to black smoke
+    ctx.vfx.emit({ sys: SYS.fireball, x: p.x, y: p.y, z: p.z, size: R * 0.55, life: 9, count: Math.round(320 * q), p0: R * 1.5, p1: R * 0.14, burst: true, r: 0.11, g: 0.1, b: 0.09 }, ctx.now);
+    // the shock ring: an opaque wall of dust rolling outward along the ground, slowing, billowing up behind its front
+    ctx.vfx.emit({ sys: SYS.shockRing, x: p.x, y: p.y, z: p.z, size: R * 0.55, life: 11, count: Math.round(560 * q), p0: R * 15, p1: 0.45, burst: true, r: 0.44, g: 0.38, b: 0.31 }, ctx.now);
+    // the ejecta curtain: an inverted cone of rock and dust thrown up from the rim, falling back outside it
+    ctx.vfx.emit({ sys: SYS.ejecta, x: p.x, y: p.y, z: p.z, size: R * 0.24, life: 7, count: Math.round(460 * q), p0: R * 0.9, p1: 16 + R * 0.32, burst: true, r: 0.3, g: 0.26, b: 0.22 }, ctx.now);
+    // debris on curved arcs, each glowing as it flies and trailing smoke (the two systems share the arcs' seed)
+    const arcSeed = Math.random() * 97;
+    ctx.vfx.emit({ sys: SYS.arcSmoke, x: p.x, y: p.y, z: p.z, size: Math.max(1, R * 0.1), life: 9, count: 26 * 12, p1: 26 + R * 0.55, p2: arcSeed, burst: true, r: 0.22, g: 0.2, b: 0.18 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.arcGlow, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.035), life: 9, count: 26, p1: 26 + R * 0.55, p2: arcSeed, burst: true }, ctx.now);
+    // the mushroom column (sun-lit: warm on its lit side, blue-grey in its shade), low dust, embers, tumbling rocks
     const H = R * 9 * s;
-    ctx.vfx.emit({ sys: SYS.plume, x: p.x, y: p.y, z: p.z, size: R * 1.1, life: 40, count: Math.round(900 * ctx.q), p0: H, p1: R * 4, duration: 22, r: 0.25, g: 0.21, b: 0.17 }, ctx.now);
-    ctx.vfx.emit({ sys: SYS.dust, x: p.x, y: p.y, z: p.z, size: R * 0.9, life: 14, count: Math.round(400 * ctx.q), p0: R * 1.5, p1: R * 4, burst: true, r: 0.44, g: 0.38, b: 0.3 }, ctx.now);
-    ctx.vfx.emit({ sys: SYS.sparks, x: p.x, y: p.y, z: p.z, size: Math.max(0.8, R * 0.04), life: 4, count: 320, p1: 30 + R * 0.6, burst: true, r: 1, g: 0.6, b: 0.25 }, ctx.now);
-    ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.03), life: 9, count: 256, p0: R, p1: 12 + R * 0.2, burst: true }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.plume, x: p.x, y: p.y, z: p.z, size: R * 1.1, life: 40, count: Math.round(900 * q), p0: H, p1: R * 4, duration: 22, r: 0.25, g: 0.21, b: 0.17 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.dust, x: p.x, y: p.y, z: p.z, size: R * 0.8, life: 12, count: Math.round(240 * q), p0: R * 1.2, p1: R * 2.5, burst: true, r: 0.44, g: 0.38, b: 0.3 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.025), life: 5, count: 110, p0: R, p1: 10 + R * 0.15, burst: true }, ctx.now);
     ctx.debris.burst(p, 70, 18 + R * 0.9, Math.max(1, R * 0.07), ctx.now);
+    void shellUp;
     // the crater glows and the ground around it is scorched
     this.transients.push({
       t0: ctx.now, dur: 60, step: (age, k, c) => {
@@ -270,24 +267,20 @@ export class DisasterFx {
     ctx.vfx.emit({ sys: SYS.dust, x: p.x, y: p.y, z: p.z, size: 25, life: 12, count: 128, p0: 40, p1: 60, burst: true, r: 0.25, g: 0.23, b: 0.22 }, ctx.now);
   }
 
+  /** a ball of fire bursting where it lands (the fireball miracle): puffs cooling to smoke, embers, its light */
   private fireball(p: Vector3, R: number, ctx: FxCtx): void {
-    const fb = new Fireball(this.fx);
-    this.group.add(fb.mesh);
-    const pc = p.clone(), up = p.clone().normalize();
-    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * 4, life: 1.6, count: 1, p0: R * 0.8, p1: 120, burst: true, r: 1, g: 0.7, b: 0.35 }, ctx.now);
-    ctx.vfx.emit({ sys: SYS.smoke, x: p.x, y: p.y, z: p.z, size: R * 0.5, life: 18, count: 300, p0: R * 4, p1: 1, duration: 4, r: 0.12, g: 0.11, b: 0.1 }, ctx.now);
-    ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: 0.8, life: 6, count: 200, p0: R * 0.5, p1: 14, burst: true }, ctx.now);
+    const pc = p.clone();
+    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * 2.4, life: 0.6, count: 1, p0: R * 0.6, p1: 120, burst: true, r: 1, g: 0.75, b: 0.4 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.fireball, x: p.x, y: p.y, z: p.z, size: R * 0.42, life: 6, count: Math.round(200 * ctx.q), p0: R * 0.9, p1: R * 0.12, burst: true, r: 0.1, g: 0.09, b: 0.08 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.smoke, x: p.x, y: p.y, z: p.z, size: R * 0.5, life: 18, count: 260, p0: R * 4, p1: 1, duration: 4, r: 0.12, g: 0.11, b: 0.1 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: 0.8, life: 6, count: 160, p0: R * 0.5, p1: 12, burst: true }, ctx.now);
     this.transients.push({
-      t0: ctx.now, dur: 4, step: (age, k, c) => {
+      t0: ctx.now, dur: 4, step: (age, _k, c) => {
         const r = R * (0.35 + 0.9 * (1 - Math.exp(-age * 2.4)));
-        _m.makeScale(r, r, r).setPosition(pc.x + up.x * r * 0.7, pc.y + up.y * r * 0.7, pc.z + up.z * r * 0.7);
-        fb.mesh.matrix.copy(_m); fb.mesh.matrixWorldNeedsUpdate = true;
-        fb.u.uHeat.value = Math.max(0, 1 - age / 3);
-        fb.u.uK.value = Math.min(1, age * 10) * (1 - smooth(0.6, 1, k));
         const d = decal(DECAL.light, [pc.x, pc.y, pc.z], R * 12);
         d.cr = 1; d.cg = 0.5; d.cb = 0.15; d.p0 = R * 12; d.p1 = 6e4 * Math.max(0, 1 - age / 3) * R * R / 3600; d.p2 = r; d.p3 = r;
         c.decals.add(d);
-      }, end: () => { this.group.remove(fb.mesh); fb.dispose(); },
+      },
     });
   }
 
@@ -300,8 +293,10 @@ export class DisasterFx {
     for (const d of list) {
       let st = this.states.get(d.id);
       if (!st) {
+        // (met already under way — it was there before the camera, or the world is paused: full at once)
+        const under = d.progress < 0 || d.progress > 0.04;
         st = {
-          id: d.id, kind: d.kind, fade: 0, seen: true, gone: false, u: new Vector3(d.pos[0], d.pos[1], d.pos[2]).normalize(), g: new Vector3(),
+          id: d.id, kind: d.kind, fade: under ? 1 : 0, seen: true, gone: false, u: new Vector3(d.pos[0], d.pos[1], d.pos[2]).normalize(), g: new Vector3(),
           emit: new Map(), meshes: [], t0: ctx.now, next: ctx.now, next2: ctx.now, alt: d.params.alt ?? 0, altTick: pv.paramsTick, altRate: 0,
           axis: new Vector3(), view: d, extra: {},
         };
@@ -310,9 +305,10 @@ export class DisasterFx {
       st.seen = true;
       st.gone = false;
       st.view = d;
-      // a moving front glides (snapshots are sparse); a big jump (moved by the god) snaps
+      // a moving front glides (snapshots are sparse) — on real time as well as the FX clock, so a front photographed
+      // just after a step stands where the snapshot says; a jump (moved by the god) snaps
       _v.set(d.pos[0], d.pos[1], d.pos[2]).normalize();
-      if (_v.angleTo(st.u) * R > 400) st.u.copy(_v); else st.u.lerp(_v, 1 - Math.exp(-ctx.dt * 3)).normalize();
+      if (_v.angleTo(st.u) * R > 150) st.u.copy(_v); else st.u.lerp(_v, 1 - Math.exp(-ctx.ease * 4)).normalize();
       groundAt(pv, st.u, st.g, true);
       // altitude of a falling body: extrapolated between snapshots at the rate it falls
       if (d.params.alt !== undefined) {
@@ -326,7 +322,8 @@ export class DisasterFx {
     for (const st of this.states.values()) {
       if (!st.seen) st.gone = true;
       const want = st.gone ? 0 : 1;
-      st.fade += (want - st.fade) * Math.min(1, ctx.ease * (want ? 1.4 : 0.7));
+      // (in within about a second; out more slowly, playing out)
+      st.fade += (want - st.fade) * Math.min(1, ctx.ease * (want ? 3 : 0.7));
       if (st.gone && st.fade < 0.02) { this.retire(st, ctx); this.states.delete(st.id); continue; }
       this.step(st, ctx);
     }
@@ -377,7 +374,20 @@ export class DisasterFx {
     const q = ctx.q;
     const far = camD > Math.max(30000, Rd * 40);
     switch (d.kind) {
-      case 'meteor': case 'moon-fall': case 'comet': {
+      case 'moon-fall': {
+        // (additive, ships/world-events lane) the falling moon is the moon itself — its planet drawn where the sim's
+        // spiral puts it, its tides, its break-up and its fire in render/fx/worlds.ts — not a bolide on a slanting
+        // path. Only in its last hours a faint ring on the ground marks where it will come down
+        const last = clamp01((d.progress - 0.88) / 0.12);
+        if (last > 0.01) {
+          const ret = decal(DECAL.reticle, [g.x, g.y, g.z], Rd * 1.2);
+          ret.cr = 1.2; ret.cg = 0.35; ret.cb = 0.2; ret.ca = 0.22 * last * k; ret.p0 = Rd; ret.p1 = 1 - last; ret.p2 = 1.6; ret.p3 = last;
+          ret.q0 = Rd * 0.6;
+          ctx.decals.add(ret);
+        }
+        break;
+      }
+      case 'meteor': case 'comet': {
         // altitude now (extrapolated), the body's place on its slanting path, its size
         const tickNow = pv.renderTick ?? pv.paramsTick;
         const alt = Math.max(0, st.alt + st.altRate * Math.max(0, tickNow - st.altTick));
@@ -387,7 +397,7 @@ export class DisasterFx {
         const down = Math.max(0.2, -dir.dot(u));
         const sAlong = alt / down;
         const head = _b.copy(g).addScaledVector(dir, -sAlong);
-        const size = P.size ?? (d.kind === 'moon-fall' ? 400 : 12);
+        const size = P.size ?? 12;
         const dist = head.distanceTo(ctx.camBody);
         const comet = d.kind === 'comet' && alt > 25000;
         if (comet) {
@@ -405,15 +415,21 @@ export class DisasterFx {
           const r = Math.max(size * 0.6, dist * 0.003);
           bo.place(head, dir, r, ctx.camBody);
           bo.u.uK.value = k * (alt > 0.5 ? 1 : 0);
-          bo.u.uLen.value = Math.min(sAlong * 0.9 + r * 10, 900 + size * 60);
+          // the glowing trail of ionised air behind it, back up its entry path
+          bo.u.uLen.value = Math.min(Math.max(0, (P.alt0 ?? 24000) / down - sAlong) + r * 10, 4000 + size * 120);
           bo.u.uW.value = r * 0.9;
           const trailLen = Math.min(4000, (P.alt0 ?? 24000) / down) ;
           this.em(st, 'plasma', { sys: SYS.plasma, x: head.x, y: head.y, z: head.z, ax: dir.x, ay: dir.y, az: dir.z, size: r * 0.8, life: 0.6, count: 160, p0: Math.min(sAlong, r * 40), r: 1, g: 0.7, b: 0.35, power: k }, ctx);
           // the smoke trail it leaves, along its path
           this.em(st, 'trail', { sys: SYS.trail, x: g.x, y: g.y, z: g.z, ax: -dir.x, ay: -dir.y, az: -dir.z, size: r * 2.2, life: 25, count: Math.round(420 * q), p0: sAlong, p1: Math.max(sAlong + 1, trailLen), p2: Math.max(50, (st.altRate === 0 ? 1000 : -st.altRate) * 10 / down), r: 0.5, g: 0.47, b: 0.44, power: k }, ctx);
-          // the ground lit from above as it comes; the reticle where it will land
-          const L = decal(DECAL.light, [g.x, g.y, g.z], Math.min(6000, 600 + alt * 0.6));
-          L.cr = 1; L.cg = 0.75; L.cb = 0.5; L.p0 = Math.min(6000, 600 + alt * 0.6); L.p1 = 2e5 * (size / 12) * k; L.p2 = Math.max(50, alt); L.p3 = 50;
+          // the ground lit from above as it comes, the light sweeping along under the head and swelling as it nears
+          const hu = _w.copy(head).normalize();
+          const gh = groundAt(pv, hu, _v, false);
+          const hAlt = Math.max(30, head.length() - gh.length());
+          const reach = Math.min(9000, 900 + hAlt * 1.3);
+          const L = decal(DECAL.light, [gh.x, gh.y, gh.z], reach);
+          L.cr = 1; L.cg = 0.72; L.cb = 0.45; L.p0 = reach; L.p2 = hAlt; L.p3 = Math.max(40, size * 4);
+          L.p1 = 3.2e7 * (size / 12) * k * (0.25 + 0.75 * (1 - smooth(400, 9000, hAlt)));
           ctx.decals.add(L);
           const ret = decal(DECAL.reticle, [g.x, g.y, g.z], Rd * 1.4);
           ret.cr = 1.6; ret.cg = 0.3; ret.cb = 0.15; ret.ca = k; ret.p0 = Rd; ret.p1 = clamp01(alt / Math.max(1, P.alt0 ?? 24000)); ret.p2 = 1.6; ret.p3 = 1 - ret.p1;
@@ -432,14 +448,25 @@ export class DisasterFx {
         const sup = d.kind === 'supervolcano' ? 1 : 0;
         const wind = windAt(pv, u, _w);
         const H = Math.max(200, plume);
-        this.em(st, 'ash', { sys: SYS.ash, x: g.x, y: g.y, z: g.z, ax: wind.x * 0.25, ay: wind.y * 0.25, az: wind.z * 0.25, size: H * 0.045, life: 45, count: Math.round((sup ? 1800 : 1200) * q), p0: H, p1: H * (0.6 + sup * 0.6), p2: 1, r: 0.27, g: 0.25, b: 0.24, power: k * smooth(50, 400, plume) }, ctx);
-        this.em(st, 'lava', { sys: SYS.lava, x: g.x, y: g.y, z: g.z, size: 3.5 * (1 + sup), life: 4.5, count: Math.round(260 * q), p0: Rd * 0.06, p1: 34 * Math.sqrt(I) * (1 + sup * 0.6), power: k }, ctx);
-        this.em(st, 'embers', { sys: SYS.embers, x: g.x, y: g.y, z: g.z, ax: wind.x, ay: wind.y, az: wind.z, size: 1.4, life: 9, count: Math.round(240 * q), p0: 30, p1: 22, power: k }, ctx);
-        // the vent's glow and its light
+        this.em(st, 'ash', { sys: SYS.ash, x: g.x, y: g.y, z: g.z, ax: wind.x * 0.25, ay: wind.y * 0.25, az: wind.z * 0.25, size: H * 0.045, life: 45, count: Math.round((sup ? 1800 : 1200) * q), p0: H, p1: H * (0.6 + sup * 0.6), p2: 1, r: 0.2, g: 0.19, b: 0.18, power: k * smooth(50, 400, plume) }, ctx);
+        // lava bombs: short red-orange streaks on gravity arcs, cooling as they fly; a few embers drifting off
+        this.em(st, 'lava', { sys: SYS.lava, x: g.x, y: g.y, z: g.z, size: 2.6 * (1 + sup), life: 4.5, count: Math.round(140 * q), p0: Rd * 0.06, p1: 30 * Math.sqrt(I) * (1 + sup * 0.6), power: k }, ctx);
+        this.em(st, 'embers', { sys: SYS.embers, x: g.x, y: g.y, z: g.z, ax: wind.x, ay: wind.y, az: wind.z, size: 0.9, life: 9, count: Math.round(110 * q), p0: 30, p1: 14, power: k * 0.8 }, ctx);
+        // now and then a salvo of big bombs, each glowing down its arc and leaving a thin trail of smoke
+        if (ctx.now > ((st.extra.salvo as number | undefined) ?? 0) && !far) {
+          st.extra.salvo = ctx.now + 2 + Math.random() * 2.5;
+          const seed = Math.random() * 97;
+          ctx.vfx.emit({ sys: SYS.arcGlow, x: g.x, y: g.y, z: g.z, size: 2.2 * (1 + sup), life: 7, count: 12, p1: 36 * Math.sqrt(I) * (1 + sup * 0.5), p2: seed, burst: true, power: k }, ctx.now);
+          ctx.vfx.emit({ sys: SYS.arcSmoke, x: g.x, y: g.y, z: g.z, size: 3.5 * (1 + sup), life: 8, count: 12 * 12, p1: 36 * Math.sqrt(I) * (1 + sup * 0.5), p2: seed, burst: true, r: 0.2, g: 0.19, b: 0.18, power: k * 0.8 }, ctx.now);
+        }
+        // the vent's glow, and the fountain's light over the slopes around it
         ctx.decals.add(Object.assign(decal(DECAL.glow, [g.x, g.y, g.z], Rd * 0.35), { cr: 1, cg: 0.32, cb: 0.05, p0: Rd * 0.3, p1: 0.3, p2: 40 * k, p3: d.id, q0: Rd * 0.4 }));
-        const L = decal(DECAL.light, [g.x, g.y, g.z], Rd * 3);
-        L.cr = 1; L.cg = 0.38; L.cb = 0.08; L.p0 = Rd * 3; L.p1 = 3e5 * k * (0.85 + 0.15 * Math.sin(ctx.now * 7)); L.p2 = 60; L.p3 = 60;
+        // (falling off over the upper slopes: at 1.2e6 out to 5 Rd the whole mountain read as sand in daylight at night)
+        const L = decal(DECAL.light, [g.x, g.y, g.z], Rd * 3.5);
+        L.cr = 1; L.cg = 0.34; L.cb = 0.07; L.p0 = Rd * 3.5; L.p1 = 2e5 * k * (0.85 + 0.15 * Math.sin(ctx.now * 7)); L.p2 = 90; L.p3 = 60;
         ctx.decals.add(L);
+        // steam where the lava meets snow (a few points along the front, re-picked now and then)
+        this.lavaSteam(st, ctx, Rd * 2.5);
         // lightning in the plume
         if (ctx.now > st.next && plume > 400 && !far) {
           // (a dirty thunderstorm: the charged ash flickers with bolts every second or two, most inside the column)
@@ -450,7 +477,7 @@ export class DisasterFx {
           const toGround = Math.random() < 0.25;
           const b = toGround ? g.clone().addScaledVector(side, Rd * (0.4 + Math.random())) : g.clone().addScaledVector(up, H * (0.2 + 0.2 * Math.random())).addScaledVector(side, -H * 0.15);
           if (toGround) groundAt(pv, b.clone().normalize(), b);
-          ctx.bolts.strike(a, b, ctx.now, 0.8, toGround ? 5 : 2);
+          ctx.bolts.strike(a, b, ctx.now, 0.8, toGround ? 5 : 2, false);
           ctx.thunder(b, 0.8);
         }
         // pyroclastic flows at the height of the eruption
@@ -493,6 +520,8 @@ export class DisasterFx {
         // a rope, whatever the cloud base allows: thin over most of its height (a few hundredths of it), flaring into
         // the wall cloud at the top
         fn.u.uH.value = h; fn.u.uRBase.value = Math.min(w * 0.32, h * 0.05); fn.u.uRTop.value = Math.min(w * 2.4, h * 0.26); fn.u.uK.value = k;
+        // the storm over it, at once (sky/clouds.ts: a convective cell — the sim's weather and climate catch up later)
+        ctx.storms?.push({ pos: [u.x, u.y, u.z], radius: Math.max(900, w * 16), intensity: 0.95 * k, eye: false, style: 1 });
         // light on the funnel: the storm's dim, diffuse light under the deck (a little of the sun through its edges)
         const el = clamp01(u.dot(ctx.sunDirBody) * 2 + 0.2);
         (fn.u.uLight.value as Vector3).copy(ctx.sunE).multiplyScalar(0.035 * el).addScalar(0.02 + 0.05 * el);
@@ -504,8 +533,23 @@ export class DisasterFx {
         st.extra.prev = g.clone();
         // the dust and debris whirled up round its foot: a skirt a little wider than the rope, not a cloud (its puffs
         // are lit as if in the open; under the deck they get about a fifth of that, as the funnel does)
-        this.em(st, 'skirt', { sys: SYS.skirt, x: g.x, y: g.y, z: g.z, size: Math.min(w * 0.18, h * 0.045), life: 6, count: Math.round(520 * q), p0: Math.min(w * 0.7, h * 0.16), p1: h * 0.14, r: 0.075, g: 0.068, b: 0.062, power: k * 0.7 }, ctx);
-        this.em(st, 'debris', { sys: SYS.swarm, x: g.x, y: g.y, z: g.z, size: Math.max(0.8, camD * 0.002), life: 30, count: Math.round(260 * q), p0: w * 1.4, p1: h * 0.08, r: 0.12, g: 0.09, b: 0.06, power: k }, ctx);
+        this.em(st, 'skirt', { sys: SYS.skirt, x: g.x, y: g.y, z: g.z, size: Math.min(w * 0.22, h * 0.05), life: 6, count: Math.round(760 * q), p0: Math.min(w * 0.9, h * 0.18), p1: h * 0.16, r: 0.085, g: 0.075, b: 0.066, power: k * 0.8 }, ctx);
+        this.em(st, 'debris', { sys: SYS.swarm, x: g.x, y: g.y, z: g.z, size: Math.max(0.8, camD * 0.002), life: 30, count: Math.round(320 * q), p0: w * 1.6, p1: h * 0.1, r: 0.12, g: 0.09, b: 0.06, power: k }, ctx);
+        // the dust it scours off the ground, a ring round its foot
+        ctx.decals.add(Object.assign(decal(DECAL.ring, [g.x, g.y, g.z], w * 3), { cr: 0.3, cg: 0.26, cb: 0.21, ca: 0.45 * k, p0: w * 1.2, p1: w * 0.7, q0: Math.max(6, w) }));
+        // rain and hail shafts round it under the cell (the heavy rain lies on its forward flank)
+        {
+          const base0 = ctx.cloudBase !== undefined ? Math.max(120, ctx.cloudBase - g.length()) : h;
+          for (let i = 0; i < 3; i++) {
+            const b = bearing(u, fxHash(d.id, 20 + i) * 6.283, _a);
+            const off = Math.max(140, w * 4) * (1.2 + 1.3 * fxHash(d.id, 30 + i));
+            const sp = _b.copy(g).addScaledVector(b, off);
+            const su = sp.clone().normalize();
+            groundAt(pv, su, sp, true);
+            const wnd = windAt(pv, su, _w);
+            this.em(st, `shaft${i}`, { sys: SYS.shaft, x: sp.x, y: sp.y, z: sp.z, ax: wnd.x * 0.08, ay: wnd.y * 0.08, az: wnd.z * 0.08, size: Math.max(18, off * 0.12), life: 30, count: Math.round(110 * q), p0: Math.max(50, off * 0.35), p1: base0, r: 0.3, g: 0.32, b: 0.36, power: k * 0.9 }, ctx);
+          }
+        }
         if (st.axis.lengthSq() > 0.5) {
           const pa = decal(DECAL.path, [g.x, g.y, g.z], w * 12);
           // (a map-reading aid: seen from high up; at the ground the funnel itself says where it goes)
@@ -514,14 +558,17 @@ export class DisasterFx {
         }
         if (ctx.now > st.next && !far) {
           st.next = ctx.now + 4 + Math.random() * 6;
-          const top = g.clone().addScaledVector(u, h * 0.98).addScaledVector(bearing(u, Math.random() * 6.28, _w), w * 4);
-          const gp = groundAt(pv, top.clone().normalize(), new Vector3(), false);
-          ctx.bolts.strike(top, gp, ctx.now, 0.9, 5);
+          const top = g.clone().addScaledVector(u, h * 0.98).addScaledVector(bearing(u, Math.random() * 6.28, _w), w * 6);
+          const gu = top.clone().normalize();
+          const gp = groundAt(pv, gu, new Vector3(), false);
+          if (ctx.strike) ctx.strike(gu, 0.9); else ctx.bolts.strike(top, gp, ctx.now, 0.9, 5);
           ctx.thunder(gp, 0.9);
         }
         break;
       }
       case 'hurricane': {
+        // its spiral, at once: a tropical cyclone in the cloud deck (sky/clouds.ts)
+        ctx.storms?.push({ pos: [u.x, u.y, u.z], radius: Math.max(600, Rd), intensity: k, eye: true, style: 2 });
         // spray over the sea under the eye wall when the camera is near it
         const near = camD < Rd * 1.2;
         if (near && this.isWater(pv, _v.copy(ctx.camBody).normalize())) {
@@ -534,8 +581,22 @@ export class DisasterFx {
         ctx.screen.tintSky.multiply(_v.set(1 - 0.3 * inside, 1 - 0.25 * inside, 1 - 0.18 * inside));
         break;
       }
-      case 'tsunami': case 'flood': {
-        this.waterFront(st, ctx, d.kind === 'tsunami' ? 1 : 0.5);
+      case 'tsunami': {
+        let tc = st.extra.crest as TsunamiCrest | undefined;
+        if (!tc) {
+          tc = new TsunamiCrest(this.fx, this.shared);
+          st.extra.crest = tc;
+          this.group.add(tc.mesh);
+          const t2 = tc;
+          st.meshes.push({ obj: t2.mesh, dispose: () => t2.dispose() });
+        }
+        const H = Math.max(6, (P.height ?? 16) * Math.sqrt(Math.max(0.2, I)));
+        tc.update(pv, st.u, H, Math.max(d.radius * 3, 600), k, ctx.now, ctx.ease, ctx.camBody, ctx.sunE);
+        this.crestSpray(st, ctx, tc.crest, H, far);
+        break;
+      }
+      case 'flood': {
+        this.waterFront(st, ctx, 0.5);
         break;
       }
       case 'wildfire': case 'firestorm': {
@@ -555,9 +616,7 @@ export class DisasterFx {
         break;
       }
       case 'plague': {
-        this.em(st, 'miasma', { sys: SYS.miasma, x: g.x, y: g.y, z: g.z, size: Math.max(6, Rd * 0.12), life: 26, count: Math.round(420 * q), p0: Rd, r: 0.42, g: 0.47, b: 0.3, power: k * (P.miasma ?? 1) }, ctx);
-        this.em(st, 'flies', { sys: SYS.swarm, x: g.x, y: g.y, z: g.z, size: 0.25, life: 30, count: Math.round(200 * q), p0: Rd * 0.25, p1: 3, r: 0.05, g: 0.05, b: 0.04, power: k }, ctx);
-        ctx.decals.add(Object.assign(decal(DECAL.tint, [g.x, g.y, g.z], Rd * 1.3), { cr: 0.82, cg: 0.9, cb: 0.68, ca: k, p0: Rd * 1.2, p1: 0.7, p2: 0.4, p3: d.id, q0: Rd * 0.4 }));
+        this.plague(st, ctx, Rd, k * (P.miasma ?? 1), far);
         break;
       }
       case 'blight': {
@@ -566,9 +625,7 @@ export class DisasterFx {
         break;
       }
       case 'swarm': case 'infestation': {
-        const hgt = P.height ?? 20;
-        this.em(st, 'swarm', { sys: SYS.swarm, x: g.x, y: g.y, z: g.z, size: Math.max(0.35, camD * 0.0016), life: 30, count: Math.round((d.kind === 'swarm' ? 3200 : 1600) * q), p0: Rd * 0.55, p1: hgt, r: 0.11, g: 0.09, b: 0.05, power: k * (P.density ?? 1) }, ctx);
-        ctx.decals.add(Object.assign(decal(DECAL.tint, [g.x, g.y, g.z], Rd * 0.8), { cr: 0.7, cg: 0.68, cb: 0.62, ca: k, p0: Rd * 0.7, p1: 0.6, p2: 0.06, p3: ctx.now * 0.3, q0: Rd * 0.3 }));
+        this.swarm(st, ctx, Rd, P.height ?? 20, k * (P.density ?? 1), d.kind === 'swarm', camD);
         break;
       }
       case 'solar-flare': case 'magnetic-storm': {
@@ -694,6 +751,161 @@ export class DisasterFx {
       }
       default: break;
     }
+  }
+
+  /** steam rising where a volcano's lava meets snow (a few points on that front, re-picked every couple of seconds) */
+  private lavaSteam(st: DState, ctx: FxCtx, reach: number): void {
+    const pv = ctx.pv;
+    const lava = pv.fields.get('lava'), snow = pv.fields.get('snow');
+    if (!lava || !snow) return;
+    if (ctx.now > ((st.extra.steamAt as number | undefined) ?? 0)) {
+      st.extra.steamAt = ctx.now + 2;
+      const R = pv.params.radius, P = pv.grid.pos;
+      const pts: number[] = [];
+      const cells = pv.grid.cellsWithin(st.u.x, st.u.y, st.u.z, reach / R);
+      const ns = pv.grid.nbrStart, nb = pv.grid.nbr;
+      for (const c of cells) {
+        if (lava[c] < 0.05) continue;
+        let sn = snow[c];
+        for (let j = ns[c]; j < ns[c + 1]; j++) sn = Math.max(sn, snow[nb[j]]);
+        if (sn > 0.02) pts.push(c);
+        if (pts.length >= 24) break;
+      }
+      // spread the picks out along the front
+      const pick: number[] = [];
+      for (let i = 0; i < pts.length && pick.length < 4; i += Math.max(1, Math.floor(pts.length / 4))) pick.push(pts[i]);
+      st.extra.steamCells = pick;
+      void P;
+    }
+    const pick = (st.extra.steamCells as number[] | undefined) ?? [];
+    let i = 0;
+    for (; i < pick.length; i++) {
+      const c = pick[i];
+      const u = _a.set(pv.grid.pos[c * 3], pv.grid.pos[c * 3 + 1], pv.grid.pos[c * 3 + 2]);
+      const gp = groundAt(pv, u, _b, false);
+      this.em(st, `steam${i}`, { sys: SYS.steam, x: gp.x, y: gp.y, z: gp.z, size: 7, life: 7, count: Math.round(70 * ctx.q), p0: 30, r: 0.86, g: 0.87, b: 0.89, power: st.fade * 0.8 }, ctx);
+    }
+    for (let j = i; j < 4; j++) this.stopEm(st, `steam${j}`, ctx);
+  }
+
+  /**
+   * a plague, seen: a low green-grey haze gathered in the streets round the sick (or the towns in its reach), density
+   * by area (particles per km²), strongest at dusk; flies; funeral-pyre smoke; crows circling
+   */
+  private plague(st: DState, ctx: FxCtx, Rd: number, k: number, far: boolean): void {
+    const pv = ctx.pv;
+    const R = pv.params.radius;
+    // where it gathers: clusters of sick people (re-found every few seconds), else the settlements it reaches
+    if (ctx.now > ((st.extra.findAt as number | undefined) ?? -1)) {
+      st.extra.findAt = ctx.now + 3;
+      const spots: { u: Vector3; n: number }[] = [];
+      const A = pv.agents;
+      if (A) {
+        for (let i = 0; i < A.count && spots.length < 6; i++) {
+          if (!(A.flags[i] & 64 /* AgentFlag.sick */)) continue;
+          const au = _a.set(A.pos[i * 3], A.pos[i * 3 + 1], A.pos[i * 3 + 2]).normalize();
+          if (au.angleTo(st.u) * R > Rd * 1.1) continue;
+          let near: { u: Vector3; n: number } | null = null;
+          for (const sp of spots) if (sp.u.angleTo(au) * R < 70) { near = sp; break; }
+          if (near) near.n++; else spots.push({ u: au.clone(), n: 1 });
+        }
+      }
+      if (!spots.length) {
+        for (const s2 of pv.settlements ?? []) {
+          const su = _a.set(s2.pos[0], s2.pos[1], s2.pos[2]).normalize();
+          if (su.angleTo(st.u) * R < Rd) spots.push({ u: su.clone(), n: 4 });
+          if (spots.length >= 3) break;
+        }
+      }
+      if (!spots.length) spots.push({ u: st.u.clone(), n: 3 });
+      spots.sort((a2, b2) => b2.n - a2.n);
+      st.extra.spots = spots;
+    }
+    const spots = (st.extra.spots as { u: Vector3; n: number }[]) ?? [];
+    // dusk: the haze lies thickest in the evening light
+    const el = st.u.dot(ctx.sunDirBody);
+    const dusk = 0.65 + 0.35 * (1 - smooth(0.05, 0.4, Math.abs(el - 0.03)));
+    const q = ctx.q;
+    let i = 0;
+    for (; i < Math.min(6, spots.length); i++) {
+      const sp = spots[i];
+      const gp = groundAt(pv, sp.u, _b, false);
+      const rr = Math.min(Rd, 45 + 8 * Math.sqrt(sp.n));
+      // ~1 puff per 30 m² at full strength (a street's width of haze, not a uniform disc over the whole region)
+      const count = Math.round(Math.min(700, Math.max(90, (Math.PI * rr * rr) / 30)) * q);
+      this.em(st, `haze${i}`, { sys: SYS.groundHaze, x: gp.x, y: gp.y, z: gp.z, size: Math.max(6, rr * 0.16), life: 30, count, p0: rr, r: 0.36, g: 0.42, b: 0.31, power: k * dusk * 0.9 }, ctx);
+      this.em(st, `wisp${i}`, { sys: SYS.miasma, x: gp.x, y: gp.y, z: gp.z, size: Math.max(3, rr * 0.08), life: 22, count: Math.round(70 * q), p0: rr * 0.8, r: 0.4, g: 0.46, b: 0.33, power: k * 0.8 }, ctx);
+      this.em(st, `flies${i}`, { sys: SYS.swarm, x: gp.x, y: gp.y, z: gp.z, size: 0.18, life: 30, count: Math.round(70 * q), p0: rr * 0.25, p1: 2.5, r: 0.04, g: 0.04, b: 0.035, power: k }, ctx);
+    }
+    for (let j = i; j < 6; j++) { this.stopEm(st, `haze${j}`, ctx); this.stopEm(st, `wisp${j}`, ctx); this.stopEm(st, `flies${j}`, ctx); }
+    if (spots.length && !far) {
+      // the dead are burned at the edge of the worst-hit street; crows wheel over it
+      const sp = spots[0];
+      const off = bearing(sp.u, fxHash(st.id, 41) * 6.283, _w);
+      const pyre = _a.copy(sp.u).multiplyScalar(R).addScaledVector(off, 70).normalize();
+      const pg = groundAt(pv, pyre, new Vector3(), false);
+      this.em(st, 'pyre', { sys: SYS.smoke, x: pg.x, y: pg.y, z: pg.z, size: 2.5, life: 26, count: Math.round(160 * q), p0: 70, p1: 0.6, r: 0.16, g: 0.15, b: 0.14, power: k }, ctx);
+      this.em(st, 'pyreFire', { sys: SYS.embers, x: pg.x, y: pg.y, z: pg.z, size: 0.4, life: 4, count: Math.round(40 * q), p0: 2, p1: 4, power: k }, ctx);
+      const L = decal(DECAL.light, [pg.x, pg.y, pg.z], 60);
+      L.cr = 1; L.cg = 0.45; L.cb = 0.12; L.p0 = 60; L.p1 = 2.5e3 * k; L.p2 = 2; L.p3 = 3;
+      ctx.decals.add(L);
+      const cg = groundAt(pv, sp.u, _b, false);
+      this.em(st, 'crows', { sys: SYS.crows, x: cg.x, y: cg.y, z: cg.z, size: 0.9, life: 60, count: 16, p0: 45, p1: 32, r: 0.03, g: 0.03, b: 0.035, power: k }, ctx);
+    } else { this.stopEm(st, 'pyre', ctx); this.stopEm(st, 'pyreFire', ctx); this.stopEm(st, 'crows', ctx); }
+    // the land looks sick: a faint grey-green pall, not a mustard wash
+    const g = st.g;
+    ctx.decals.add(Object.assign(decal(DECAL.tint, [g.x, g.y, g.z], Rd * 1.3), { cr: 0.9, cg: 0.93, cb: 0.86, ca: k, p0: Rd * 1.2, p1: 0.7, p2: 0.4, p3: st.id, q0: Rd * 0.4 }));
+  }
+
+  /**
+   * a swarm, seen: a dark mass flowing with waves through it (puffs) and thousands of specks with flickering wings,
+   * wandering over the land; its shadow moves under it and the fields it passed lie stripped and yellow
+   */
+  private swarm(st: DState, ctx: FxCtx, Rd: number, hgt: number, k: number, big: boolean, camD: number): void {
+    const pv = ctx.pv;
+    const R = pv.params.radius;
+    const q = ctx.q;
+    // the mass wanders round the disaster's place (the CPU moves it, so its shadow can follow it)
+    const t = ctx.now;
+    const e = bearing(st.u, Math.PI / 2, _w), n = bearing(st.u, 0, _a);
+    const ox = Math.sin(t * 0.07 + st.id) * Rd * 0.35, oy = Math.cos(t * 0.05 + st.id * 2) * Rd * 0.35;
+    const cu = _b.copy(st.u).multiplyScalar(R).addScaledVector(e, ox).addScaledVector(n, oy).normalize();
+    const cg = groundAt(pv, cu, new Vector3(), false);
+    const R0 = Rd * 0.5;
+    this.em(st, 'mass', { sys: SYS.swarmMass, x: cg.x, y: cg.y, z: cg.z, size: Math.max(6, R0 * 0.18), life: 20, count: Math.round((big ? 700 : 400) * q), p0: R0, p1: hgt, r: 0.055, g: 0.045, b: 0.03, power: k }, ctx);
+    this.em(st, 'swarm', { sys: SYS.swarm, x: cg.x, y: cg.y, z: cg.z, size: Math.max(0.35, camD * 0.0018), life: 30, count: Math.round((big ? 3200 : 1600) * q), p0: R0 * 1.05, p1: hgt, p2: 1, r: 0.07, g: 0.055, b: 0.035, power: k }, ctx);
+    // its shadow on the ground (a soft dark blot that moves with it)
+    const sh = decal(DECAL.shadow, [cg.x, cg.y, cg.z], R0 * 1.4);
+    sh.p0 = R0 * 1.05; sh.p1 = R0 * 0.9; sh.p2 = 0.9; sh.ca = 0.45 * k; sh.q0 = Math.max(10, hgt * 2);
+    ctx.decals.add(sh);
+    // the fields it passed: stripped, yellowing (a trail of tints fading over a minute)
+    const trail = (st.extra.stripped as { p: Vector3; t: number }[] | undefined) ?? (st.extra.stripped = []) as { p: Vector3; t: number }[];
+    if (!trail.length || trail[trail.length - 1].p.distanceTo(cg) > R0 * 0.5) trail.push({ p: cg.clone(), t });
+    while (trail.length > 14 || (trail.length && t - trail[0].t > 70)) trail.shift();
+    for (const tr of trail) {
+      const a = (1 - smooth(20, 70, t - tr.t)) * smooth(0, 4, t - tr.t);
+      if (a <= 0.01) continue;
+      ctx.decals.add(Object.assign(decal(DECAL.tint, [tr.p.x, tr.p.y, tr.p.z], R0 * 1.1), { cr: 0.86, cg: 0.76, cb: 0.52, ca: a * st.fade, p0: R0, p1: 0.75, p2: 0.12, p3: st.id + tr.t, q0: R0 * 0.4 }));
+    }
+  }
+
+  /** spray blown off a tsunami's crest along its length (the crest's points, spread out), mist torn off behind it */
+  private crestSpray(st: DState, ctx: FxCtx, crest: { p: Vector3; out: Vector3; land: number }[], H: number, far: boolean): void {
+    const n = far ? 0 : Math.min(16, crest.length);
+    const step = crest.length / Math.max(1, n);
+    const k = st.fade;
+    let i = 0;
+    for (; i < n; i++) {
+      const c = crest[Math.floor(i * step)];
+      const up = _a.copy(c.p).normalize();
+      const fw = _b.copy(c.out).addScaledVector(up, 0.25).normalize();
+      const col = c.land > 0.3 ? [0.62, 0.56, 0.48] : [0.9, 0.93, 0.95];
+      this.em(st, `spray${i}`, { sys: SYS.spray, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.3, life: 3, count: Math.round(220 * ctx.q), p0: H * 2.2, p1: H * 0.9, r: col[0], g: col[1], b: col[2], power: k }, ctx);
+      this.em(st, `mist${i}`, { sys: SYS.steam, x: c.p.x, y: c.p.y, z: c.p.z, ax: fw.x, ay: fw.y, az: fw.z, size: H * 0.6, life: 5, count: Math.round(50 * ctx.q), p0: H * 2.5, r: 0.86, g: 0.89, b: 0.92, power: k * 0.6 }, ctx);
+      // wreckage tumbling in the bore where it runs over the land
+      if (c.land > 0.3 && Math.random() < 0.02) ctx.debris.burst(c.p, 3, H * 0.6, Math.max(0.6, H * 0.06), ctx.now);
+    }
+    for (let j = i; j < 24; j++) { this.stopEm(st, `spray${j}`, ctx); this.stopEm(st, `mist${j}`, ctx); }
   }
 
   /** spray thrown up along the moving water front: the fastest, deepest moving water near the camera */
