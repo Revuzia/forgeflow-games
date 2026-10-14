@@ -1,0 +1,22 @@
+{
+  "title": "VALE",
+  "short_description": "VALE: a 3D lane-brawler on a stopped sundial. Draft a fighter, hold the roads and the Dialwood, and break the enemy Hourbell. Play RIFT 5v5, the one-road BRIDGE, or a ten-player free-for-all, the FRAY.",
+  "description": "The sun stopped over the Vale at the split hour, and the light has been fought over ever since. Aubade keeps the morning side of the dial; Serenade keeps the evening. Between them lie three roads, a jungle of dialwood, and the shadow the broken Needle still casts.\n\nRIFT is the full war: five against five on Hourfall. Draft and ban, take your road, farm the Wicks that walk it, fight over Glasshorn, Resinback, the Sunsplinter and the Longshade, and break the enemy Hourbell. Matches run about 25 minutes.\n\nBRIDGE is one road across a snapped shaft: random fighters, a bench of three, no jungle, and fights from the first minute.\n\nFRAY is ten seats around the Noonplate, every fighter for themselves: four lives each, one shared lampwright's cart, and you start at level 6 with your ultimate ready. First to twelve kills, or the last one standing, takes the hour.\n\nSixteen fighters across six classes, each with a passive, three abilities and an ultimate. Skins change how a fighter looks, never how they play. Bots fill every empty seat, and a practice mode lets you try any fighter alone on the full map.\n\nBuilt from scratch: every fighter, map, effect, track and sound is original.",
+  "genre": "moba",
+  "sub_genre": "lane-brawler",
+  "difficulty": "hard",
+  "controls_keyboard": "Right-click move / attack · Q W E R abilities · D F battle spells · 1-6 items · A attack-move · S stop · B recall · P shop · Tab scoreboard · G ping · Y lock camera · Space centre camera · Alt + ability self-cast · Esc menu",
+  "tags": [
+    "moba",
+    "lane-brawler",
+    "3d",
+    "pvp",
+    "team",
+    "strategy",
+    "free-for-all",
+    "bots",
+    "fantasy",
+    "multiplayer"
+  ],
+  "art_direction": "Painterly key art of a stopped sundial world at the split hour: a vast pale chalk dial plaza seen from a high three-quarter angle, a broken stone needle casting one long violet shadow across it, a lamplit domed town glowing amber on the evening side and glass spires catching cold dawn light on the morning side. Two small masked fighters clash mid-frame on a cobbled road, one lit warm and one cool. Soft volumetric low sun, long shadows, rich but restrained palette of chalk, sandstone, dawnglass blue and lamp-resin amber. Hand-painted stylized illustration, strong silhouettes, no text, no logo, no UI."
+}
