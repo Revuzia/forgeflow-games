@@ -3,6 +3,11 @@
 // will work in the client (CONTRACT §9 characters, §12 rig/clips).
 //
 //   node art/tools/three_load_test.mjs art/out/_proof/_proof_mannequin.glb [--skin-only] [--budget-kb 1172]
+//   node art/tools/three_load_test.mjs art/out/units/glasshorn.glb --unit --clips idle,run,attack1,death
+//        [--feet toe.L,toe.R,hoof.L,hoof.R] [--budget-kb 1024]
+//   --unit: a non-biped unit (monster): its own armature (no VALE_BIPED_1), the clips listed in --clips,
+//   NO `accent` material (neutral), facing from the head bone, and the run's planted feet (the bones in
+//   --feet: the hoof/paw bone whose head is the planted joint) checked against vale_run_ref_speed.
 //
 // Checks: parses; SkinnedMesh(es) bound to one skeleton with every VALE_BIPED_1 bone; inverse
 // bind matrices invertible; skin indices in range and weights normalised; required clips present;
@@ -27,8 +32,13 @@ const REQUIRED = ['idle', 'run', 'attack1', 'attack2', 'cast_a1', 'cast_a2', 'ca
   'idle_lobby', 'victory'];
 
 const args = process.argv.slice(2);
-const file = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--budget-kb');
+const VALUED = ['--budget-kb', '--clips', '--feet'];
+const file = args.find((a, i) => !a.startsWith('--') && !VALUED.includes(args[i - 1]));
 const skinOnly = args.includes('--skin-only');
+const unit = args.includes('--unit');
+const argList = (k) => (args.includes(k) ? args[args.indexOf(k) + 1].split(',').filter(Boolean) : []);
+const unitClips = argList('--clips');
+const unitFeet = argList('--feet');
 if (!file) {
   console.error('usage: node art/tools/three_load_test.mjs file.glb [--skin-only]');
   process.exit(2);
@@ -122,11 +132,17 @@ const wpos = (o) => o.getWorldPosition(new THREE.Vector3());
 const bone = (o, n) => o.getObjectByName(sanN(n));
 const bindBox = new THREE.Box3().setFromObject(root);
 const bindSize = bindBox.getSize(new THREE.Vector3());
-const toeMid = wpos(bone(root, 'toe.L')).add(wpos(bone(root, 'toe.R'))).multiplyScalar(0.5);
-const ankMid = wpos(bone(root, 'foot.L')).add(wpos(bone(root, 'foot.R'))).multiplyScalar(0.5);
-const fwd = toeMid.clone().sub(ankMid).setY(0).normalize();
-const headY = wpos(bone(root, 'head')).y;
-const rootAt = wpos(bone(root, 'root')).length();
+let fwd;
+if (unit) {
+  // units: the head bone stands ahead of the bind-box centre
+  fwd = bone(root, 'head') ? wpos(bone(root, 'head')).sub(bindBox.getCenter(new THREE.Vector3())).setY(0).normalize() : new THREE.Vector3(0, 0, 1);
+} else {
+  const toeMid = wpos(bone(root, 'toe.L')).add(wpos(bone(root, 'toe.R'))).multiplyScalar(0.5);
+  const ankMid = wpos(bone(root, 'foot.L')).add(wpos(bone(root, 'foot.R'))).multiplyScalar(0.5);
+  fwd = toeMid.clone().sub(ankMid).setY(0).normalize();
+}
+const headY = bone(root, 'head') ? wpos(bone(root, 'head')).y : NaN;
+const rootAt = bone(root, 'root') ? wpos(bone(root, 'root')).length() : 0;
 
 // skinned meshes + skeleton
 const skinned = [];
@@ -138,7 +154,7 @@ for (const m of skinned) {
   const sk = m.skeleton;
   if (!sk) { fail(`${m.name}: no skeleton`); continue; }
   boneNames = new Set(sk.bones.map((b) => b.name));
-  for (const b of STANDARD) if (!boneNames.has(san(b))) fail(`${m.name}: skeleton lacks bone ${b} (three name ${san(b)})`);
+  if (!unit) for (const b of STANDARD) if (!boneNames.has(san(b))) fail(`${m.name}: skeleton lacks bone ${b} (three name ${san(b)})`);
   if (sk.boneInverses.length !== sk.bones.length) fail(`${m.name}: ${sk.boneInverses.length} inverses for ${sk.bones.length} bones`);
   for (const inv of sk.boneInverses) if (Math.abs(inv.determinant()) < 1e-8) fail(`${m.name}: singular inverse bind matrix`);
   const si = m.geometry.getAttribute('skinIndex');
@@ -160,8 +176,13 @@ if (skeletons.size > 1) fail(`skinned meshes use ${skeletons.size} different ske
 const mats = new Map();
 root.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) mats.set(m.name, m); });
 const accent = mats.get('accent');
-if (!accent) fail("no 'accent' material");
+if (unit) { if (accent) fail("neutral unit carries an 'accent' material (the renderer would tint it per team)"); }
+else if (!accent) fail("no 'accent' material");
 else if (accent.emissive.r + accent.emissive.g + accent.emissive.b <= 0) fail("'accent' material has no emissive colour");
+if (unit) for (const m of mats.values()) {
+  const e = Math.max(m.emissive.r, m.emissive.g, m.emissive.b) * (m.emissiveIntensity ?? 1);
+  if (e > 0.8 + 1e-3) fail(`${m.name}: emissive ${e.toFixed(2)} > 0.8 at rest (a glow is a warning)`);
+}
 const texInfo = [];
 for (const m of mats.values()) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']) {
   if (m[k]) texInfo.push(`${m.name}.${k}=${m[k].userData.sourceSize?.join('x')}`);
@@ -169,7 +190,7 @@ for (const m of mats.values()) for (const k of ['map', 'normalMap', 'roughnessMa
 
 // clips: every track must resolve to a node and to a skeleton bone
 const clipNames = gltf.animations.map((c) => c.name);
-if (!skinOnly) for (const r of REQUIRED) if (!clipNames.includes(r)) fail(`missing clip ${r}`);
+if (!skinOnly) for (const r of (unit ? unitClips : REQUIRED)) if (!clipNames.includes(r)) fail(`missing clip ${r}`);
 let tracks = 0;
 for (const clip of gltf.animations) {
   for (const t of clip.tracks) {
@@ -243,7 +264,24 @@ if (!skinOnly && gltf.animations.length) {
     if (LOOP.includes(clip.name) && seam > 1e-4) fail(`${clip.name}: loop seam ${seam.toExponential(2)} (first != last pose)`);
     const st = { duration: +clip.duration.toFixed(3), frames: Math.round(clip.duration * 30) };
     if (/^(attack|cast|crit)/.test(clip.name) && st.frames % 5) fail(`${clip.name}: ${st.frames} frames (impact at 40 % needs a multiple of 5)`);
-    if (clip.name === 'run' && runRef) {
+    if (clip.name === 'run' && runRef && unit && unitFeet.length) {
+      // units: each listed foot bone's head is the planted joint (fetlock / ball); while it is down (within
+      // 1.5 cm of its lowest height) it must travel backward (-Z) at runRefSpeed
+      const n = st.frames, dt = clip.duration / n, errs = [];
+      for (const fb of unitFeet) {
+        const b0 = bone(probe, fb);
+        if (!b0) { fail(`run: foot bone ${fb} not found`); continue; }
+        const tr = [];
+        for (let f = 0; f <= n; f++) { act.reset(); act.play(); mx.setTime(f * dt); probe.updateMatrixWorld(true); tr.push(wpos(bone(probe, fb))); }
+        const lo = Math.min(...tr.map((p) => p.y));
+        const down = tr.map((p) => p.y < lo + 0.015);
+        for (let f = 0; f < n; f++) if (down[f] && down[f + 1]) errs.push(Math.abs(-(tr[f + 1].z - tr[f].z) / dt - runRef) / runRef);
+      }
+      st.plantedSamples = errs.length;
+      st.footSlidePct = errs.length ? +(100 * Math.max(...errs)).toFixed(1) : null;
+      if (!errs.length) fail('run: no planted-foot frames found');
+      else if (Math.max(...errs) > 0.08) fail(`run: planted foot speed off runRefSpeed by ${st.footSlidePct}% (foot slide)`);
+    } else if (clip.name === 'run' && runRef) {
       // planted foot: the lowest foot moves backward (-Z) at runRefSpeed while it is down
       const n = st.frames, dt = clip.duration / n, track = { L: [], R: [] }, toes = { L: [], R: [] };
       for (let f = 0; f <= n; f++) {

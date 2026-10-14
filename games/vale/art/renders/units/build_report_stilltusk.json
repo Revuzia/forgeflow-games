@@ -1,0 +1,178 @@
+{
+  "id": "stilltusk",
+  "rest_solve_err": 8.113918951724308e-07,
+  "heat_body": {
+    "heat_ok": true,
+    "unweighted": 0,
+    "fixed_vertices": 0
+  },
+  "tris": 6820,
+  "uv_coverage": 0.694,
+  "bake": {
+    "base": 0.67,
+    "rough_metal": 0.51,
+    "normal": 0.58,
+    "ao": 0.67,
+    "normal_fixed_px": 3222,
+    "pack_save": 0.11,
+    "total": 2.6
+  },
+  "bake_holes_filled": 24,
+  "clips": {
+    "idle": {
+      "frames": 90,
+      "duration_s": 3.0,
+      "loop": true,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "run": {
+      "frames": 24,
+      "duration_s": 0.8,
+      "loop": true,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "attack1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 4,
+      "soft_reach": 0
+    },
+    "cast_a1": {
+      "frames": 35,
+      "duration_s": 1.1667,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "death": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    }
+  },
+  "mesh_top_m": 1.4,
+  "min_z": {
+    "idle": [
+      0.004,
+      [
+        62,
+        [
+          0.17,
+          0.44,
+          0.0
+        ]
+      ]
+    ],
+    "run": [
+      0.004,
+      [
+        4,
+        [
+          0.19,
+          -0.26,
+          0.0
+        ]
+      ]
+    ],
+    "attack1": [
+      0.001,
+      [
+        12,
+        [
+          -0.2,
+          0.47,
+          0.0
+        ]
+      ]
+    ],
+    "cast_a1": [
+      0.004,
+      [
+        14,
+        [
+          0.19,
+          0.49,
+          0.0
+        ]
+      ]
+    ],
+    "death": [
+      -0.028,
+      [
+        16,
+        [
+          -0.06,
+          -0.35,
+          -0.03
+        ]
+      ]
+    ]
+  },
+  "glb_bytes_raw": 2157556,
+  "optimize": {
+    "ok": true,
+    "before": 2157556,
+    "after": 511800
+  },
+  "glb_bytes": 511800,
+  "inspect": [
+    "  skin stilltusk_rig: 29 joints: root hips spine chest neck head ear.L ear.R jaw scapula.L upper_arm.L forearm.L hand.L hoof.L scapula.R upper_arm.R forearm.R hand.R hoof.R tail tail2 thigh.L shin.L foot.L toe.L thigh.R shin.R foot.R toe.R",
+    "  mesh stilltusk: 6820 tris",
+    "    prim material=stilltusk_body tris=6820 verts=5919 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
+    "  material stilltusk_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
+    "  texture stilltusk_normal: image/webp ? 104.4 KiB",
+    "  texture stilltusk_orm: image/webp ? 40.4 KiB",
+    "  texture stilltusk_base: image/webp ? 68.7 KiB",
+    "  clip attack1      0.833 s (25 f) channels=26 bones=25",
+    "  clip cast_a1      1.167 s (35 f) channels=26 bones=25",
+    "  clip death        1.333 s (40 f) channels=26 bones=25",
+    "  clip idle         3.000 s (90 f) channels=29 bones=28",
+    "  clip run          0.800 s (24 f) channels=26 bones=25"
+  ],
+  "load_test": {
+    "ok": true,
+    "log": [
+      "[three] art/out/units/stilltusk.glb (500 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: stilltusk_base 1024x1024 69K, stilltusk_normal 1024x1024 104K, stilltusk_orm 512x512 40K",
+      "  skinned meshes: stilltusk(5919v)",
+      "  bones: 29 (root hips spine chest neck head earL earR jaw scapulaL upper_armL forearmL handL hoofL scapulaR upper_armR forearmR handR hoofR tail tail2 thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:0.833s/26tr, cast_a1:1.167s/26tr, death:1.333s/26tr, idle:3.000s/29tr, run:0.800s/26tr",
+      "  tracks checked: 133; materials: stilltusk_body; textures: stilltusk_body.map=1024x1024, stilltusk_body.normalMap=1024x1024, stilltusk_body.roughnessMap=512x512, stilltusk_body.metalnessMap=512x512, stilltusk_body.aoMap=512x512",
+      "  tris: 6820; bind-pose bounds (three units, Y up): 0.65 x 1.40 x 2.08; facing (0.00, 1.00); head bone y 0.84; runRefSpeed 3.4",
+      "  run: 24 f, planted samples 32, max foot-speed error 1.6%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "sheet": {
+    "ok": true,
+    "out": "art/renders/units/stilltusk.png",
+    "log": [
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.327,0.004,-0.917],[0.326,1.4,1.16]],\"facing\":[0.001,1],\"headY\":0.84,\"heightPx1080\":74,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/stilltusk.png\",\"seconds\":7.3}"
+    ]
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "sculpt": 8.68,
+      "bind": 0.15,
+      "uv": 8.16,
+      "bake": 2.85,
+      "clips": 0.22,
+      "ground_qa": 0.09,
+      "export": 0.38,
+      "optimize": 0.46,
+      "qa": 7.78
+    },
+    "total_s": 28.83
+  }
+}

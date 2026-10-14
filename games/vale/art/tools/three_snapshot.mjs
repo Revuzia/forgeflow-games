@@ -8,6 +8,9 @@
 //        [--sky art/out/_proof/sky.hdr] [--tint #ff5a4f] [--chrome /path/to/chrome] [--cell 300]
 //        [--strip aoMap,normalMap,shadows]   (debug: drop maps to find which one carries an artifact)
 //        [--clips]   clip sheet instead: every clip x 8 frames (impact included) in three
+//        [--unit]    non-biped unit sheet (monsters, structures): row 1 = 8 facings at the gameplay
+//                    camera (1:1 px), then every clip x 8 frames from a high 3/4 camera (55 deg down)
+//                    fitted to the model; facing from the head bone (or skipped when there is none)
 //   Report: facing (bind-pose toe direction, must be +Z), heightPx1080 at default zoom,
 //   accentPct (accent share of the silhouette at the game camera, 8 facings) and accentTopHalfPct.
 //
@@ -29,7 +32,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const GAME = resolve(HERE, '..', '..');
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--') && ['--sky', '--tint', '--chrome', '--cell', '--strip'].includes(args[i - 1])));
+const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--') && ['--sky', '--tint', '--chrome', '--cell', '--strip', '--cam'].includes(args[i - 1])));
 if (!files.length) {
   console.error('usage: node art/tools/three_snapshot.mjs file.glb [out.png] [--sky x.hdr] [--tint #rrggbb] [--chrome exe]');
   process.exit(2);
@@ -40,7 +43,8 @@ const sky = opt('--sky') ? resolve(opt('--sky')) : null;
 const tint = opt('--tint', '#ff5a4f');
 const cell = Number(opt('--cell', 300));
 const strip = opt('--strip', '');   // debug: comma list of material maps to drop (aoMap,normalMap,map,roughnessMap)
-const mode = args.includes('--clips') ? 'clips' : 'sheet';
+const camArg = opt('--cam', '');     // --unit: clip camera "yaw,pitch" in degrees (default 35,55: the high 3/4 view)
+const mode = args.includes('--unit') ? 'unit' : args.includes('--clips') ? 'clips' : 'sheet';
 
 function findChrome() {
   const c = opt('--chrome') || process.env.CHROME;
@@ -58,6 +62,7 @@ function findChrome() {
     }
   }
   for (const p of ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium',
     'C:/Program Files/Google/Chrome/Application/chrome.exe']) if (existsSync(p)) return p;
   return null;
 }
@@ -90,7 +95,7 @@ try {
   const gltf = await new GLTFLoader().loadAsync(Q.get('glb'));
   const clips = Object.fromEntries(gltf.animations.map((c) => [c.name, c]));
   const CLIPS = gltf.animations.map((c) => c.name);
-  const COLS = 8, ROWS = MODE === 'clips' ? CLIPS.length : 3;
+  const COLS = 8, ROWS = MODE === 'clips' ? CLIPS.length : MODE === 'unit' ? 1 + CLIPS.length : 3;
   const W = CELL * COLS, H = CELL * ROWS;
   const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   r.setPixelRatio(1); r.setSize(W, H);
@@ -129,14 +134,21 @@ try {
   proto.updateMatrixWorld(true);
   const bone = (o, n) => o.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(n));
   const wp = (o) => o.getWorldPosition(new THREE.Vector3());
-  const toe = wp(bone(proto, 'toe.L')).add(wp(bone(proto, 'toe.R'))).multiplyScalar(0.5);
-  const ankle = wp(bone(proto, 'foot.L')).add(wp(bone(proto, 'foot.R'))).multiplyScalar(0.5);
-  const fwd = toe.clone().sub(ankle); fwd.y = 0; fwd.normalize();
-  report.facing = [+fwd.x.toFixed(3), +fwd.z.toFixed(3)];
   const box = new THREE.Box3();
-  proto.traverse((o) => { if (o.isSkinnedMesh) { o.skeleton.update(); o.computeBoundingBox(); box.union(o.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
+  proto.traverse((o) => { if (o.isSkinnedMesh) { o.skeleton.update(); o.computeBoundingBox(); box.union(o.boundingBox.clone().applyMatrix4(o.matrixWorld)); }
+    else if (o.isMesh) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
   report.bindBox = [box.min.toArray().map((v) => +v.toFixed(3)), box.max.toArray().map((v) => +v.toFixed(3))];
-  report.headY = +wp(bone(proto, 'head')).y.toFixed(3);
+  if (bone(proto, 'toe.L') && bone(proto, 'foot.L') && MODE !== 'unit') {
+    const toe = wp(bone(proto, 'toe.L')).add(wp(bone(proto, 'toe.R'))).multiplyScalar(0.5);
+    const ankle = wp(bone(proto, 'foot.L')).add(wp(bone(proto, 'foot.R'))).multiplyScalar(0.5);
+    const fwd = toe.clone().sub(ankle); fwd.y = 0; fwd.normalize();
+    report.facing = [+fwd.x.toFixed(3), +fwd.z.toFixed(3)];
+  } else if (bone(proto, 'head')) {
+    // units: the head bone stands ahead of the bind-box centre along +Z
+    const fwd = wp(bone(proto, 'head')).sub(box.getCenter(new THREE.Vector3())); fwd.y = 0; fwd.normalize();
+    report.facing = [+fwd.x.toFixed(3), +fwd.z.toFixed(3)];
+  } else report.facing = null;
+  report.headY = bone(proto, 'head') ? +wp(bone(proto, 'head')).y.toFixed(3) : null;
   const LOOPS = /^(idle|run|recall|idle_lobby|channel|stunned)$/;
   function instance(clip, t, tintHex) {
     const o = SkeletonUtils.clone(proto);
@@ -170,7 +182,7 @@ try {
     scene.remove(obj);
   }
   // accent coverage at the game camera: unlit mask (accent white, rest grey) averaged over 8 facings
-  {
+  if (MODE !== 'unit') {
     const rt = new THREE.WebGLRenderTarget(160, 160);
     const ms = new THREE.Scene();
     const white = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
@@ -205,7 +217,30 @@ try {
     report.heightPx1080 = Math.round((tp.y - bt.y) / 2 * 1080);
   }
   const tgt = new THREE.Vector3(0, 0.95, 0);
-  if (MODE === 'clips') {
+  if (MODE === 'unit') {
+    // row 0: 8 facings at the gameplay camera, 1:1 pixels of the 1080p frame (how big it reads in play)
+    const ut = new THREE.Vector3(0, Math.max(0.3, box.max.y * 0.45), 0);
+    for (let i = 0; i < 8; i++) {
+      const o = instance('idle', 0); o.rotation.y = i * Math.PI / 4; o.updateMatrixWorld(true);
+      draw(o, gameCam(ut), i, 0);
+    }
+    // clip rows: high 3/4 camera (55 deg down, front-left of the unit), fitted to the bind box + a margin
+    // for poses that leave it (lunges, the death roll)
+    const size = box.getSize(new THREE.Vector3());
+    const span = Math.max(size.y, size.z, size.x) * 1.3;
+    const [cy, cp] = (Q.get('cam') || '35,55').split(',').map(Number);
+    const pitch = cp * Math.PI / 180, yaw = cy * Math.PI / 180, fov = 30;
+    const dist = span / 2 / Math.tan(fov * Math.PI / 360);
+    const look = new THREE.Vector3(0, size.y * 0.42, 0);
+    const cam = new THREE.PerspectiveCamera(fov, 1, 0.05, 200);
+    cam.position.set(look.x + Math.sin(yaw) * Math.cos(pitch) * dist, look.y + Math.sin(pitch) * dist, look.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+    cam.lookAt(look); cam.updateMatrixWorld();
+    CLIPS.forEach((name, row) => {
+      const ts = /^(attack|cast|crit)/.test(name) ? [0, 0.12, 0.24, 0.32, 0.4, 0.52, 0.7, 1] : [0, 1/7, 2/7, 3/7, 4/7, 5/7, 6/7, 1];
+      ts.forEach((t, col) => draw(instance(name, t), cam, col, row + 1, 0x39404a));
+    });
+    report.rows = ['facings', ...CLIPS];
+  } else if (MODE === 'clips') {
     // every clip, 8 frames (impact frame included for attack/cast clips), 3/4 eye-level camera
     const cam = new THREE.PerspectiveCamera(28, 1, 0.1, 60);
     cam.position.set(-2.4, 1.55, 3.9); cam.lookAt(0, 0.82, 0);
@@ -256,10 +291,10 @@ await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const port = server.address().port;
 const rel = (p) => '/' + relative(GAME, p).split('\\').join('/');
 const url = `http://127.0.0.1:${port}/__snap.html?glb=${encodeURIComponent(rel(glb))}&cell=${cell}` +
-  `&tint=${encodeURIComponent(tint)}&mode=${mode}` + (sky ? `&sky=${encodeURIComponent(rel(sky))}` : '') + (strip ? `&strip=${encodeURIComponent(strip)}` : '');
+  `&tint=${encodeURIComponent(tint)}&mode=${mode}` + (sky ? `&sky=${encodeURIComponent(rel(sky))}` : '') + (strip ? `&strip=${encodeURIComponent(strip)}` : '') + (camArg ? `&cam=${encodeURIComponent(camArg)}` : '');
 
 const prof = mkdtempSync(join(tmpdir(), 'vale-snap-'));
-const W = cell * 8, H = cell * (mode === 'clips' ? 24 : 3);
+const W = cell * 8, H = cell * (mode === 'clips' || mode === 'unit' ? 24 : 3);
 const proc = spawn(chrome, ['--headless', '--no-sandbox', '--disable-gpu-sandbox', '--use-angle=swiftshader',
   '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', `--window-size=${W},${H}`,
   `--user-data-dir=${prof}`, '--remote-debugging-port=0', '--hide-scrollbars', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -294,5 +329,5 @@ const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyond
 writeFileSync(out, Buffer.from(shot.result.data, 'base64'));
 report.out = relative(GAME, out).split('\\').join('/');
 report.seconds = +((Date.now() - t0) / 1000).toFixed(1);
-const facingOk = report.facing[1] > 0.95;
+const facingOk = report.facing === null || report.facing[1] > 0.95;
 done(facingOk ? 0 : 1, '[three-snap] ' + JSON.stringify(report) + (facingOk ? '' : '\n[three-snap] FAIL: model does not face +Z'));

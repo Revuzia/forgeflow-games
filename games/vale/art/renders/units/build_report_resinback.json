@@ -1,0 +1,178 @@
+{
+  "id": "resinback",
+  "rest_solve_err": 6.177391869245482e-07,
+  "heat_body": {
+    "heat_ok": true,
+    "unweighted": 0,
+    "fixed_vertices": 0
+  },
+  "tris": 10200,
+  "uv_coverage": 0.693,
+  "bake": {
+    "base": 0.95,
+    "rough_metal": 0.68,
+    "normal": 0.7,
+    "ao": 0.78,
+    "normal_fixed_px": 2179,
+    "pack_save": 0.09,
+    "total": 3.29
+  },
+  "bake_holes_filled": 1,
+  "clips": {
+    "idle": {
+      "frames": 90,
+      "duration_s": 3.0,
+      "loop": true,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "run": {
+      "frames": 18,
+      "duration_s": 0.6,
+      "loop": true,
+      "impact": null,
+      "reach_clamps": 2,
+      "soft_reach": 1
+    },
+    "attack1": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "cast_a1": {
+      "frames": 35,
+      "duration_s": 1.1667,
+      "loop": false,
+      "impact": 0.4,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    },
+    "death": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": null,
+      "reach_clamps": 0,
+      "soft_reach": 0
+    }
+  },
+  "mesh_top_m": 1.807,
+  "min_z": {
+    "idle": [
+      0.004,
+      [
+        66,
+        [
+          -0.33,
+          -0.69,
+          0.0
+        ]
+      ]
+    ],
+    "run": [
+      0.002,
+      [
+        10,
+        [
+          0.31,
+          -0.9,
+          0.0
+        ]
+      ]
+    ],
+    "attack1": [
+      -0.0,
+      [
+        18,
+        [
+          -0.3,
+          -0.93,
+          -0.0
+        ]
+      ]
+    ],
+    "cast_a1": [
+      0.004,
+      [
+        30,
+        [
+          -0.3,
+          -0.61,
+          0.0
+        ]
+      ]
+    ],
+    "death": [
+      -0.039,
+      [
+        22,
+        [
+          -0.41,
+          -0.75,
+          -0.04
+        ]
+      ]
+    ]
+  },
+  "glb_bytes_raw": 2201600,
+  "optimize": {
+    "ok": true,
+    "before": 2201600,
+    "after": 568460
+  },
+  "glb_bytes": 568460,
+  "inspect": [
+    "    prim material=resinback_body tris=7000 verts=4983 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
+    "    prim material=resinback_lampresin tris=3200 verts=3039 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
+    "  material resinback_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
+    "  material resinback_lampresin: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.60,0.60,0.60 base=1,1,1,1",
+    "  texture resinback_normal: image/webp ? 81.6 KiB",
+    "  texture resinback_orm: image/webp ? 35.6 KiB",
+    "  texture resinback_base: image/webp ? 67.7 KiB",
+    "  clip attack1      1.000 s (30 f) channels=27 bones=26",
+    "  clip cast_a1      1.167 s (35 f) channels=25 bones=24",
+    "  clip death        1.500 s (45 f) channels=27 bones=26",
+    "  clip idle         3.000 s (90 f) channels=29 bones=28",
+    "  clip run          0.600 s (18 f) channels=29 bones=28"
+  ],
+  "load_test": {
+    "ok": true,
+    "log": [
+      "[three] art/out/units/resinback.glb (555 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: resinback_base 1024x1024 68K, resinback_normal 1024x1024 82K, resinback_orm 512x512 36K",
+      "  skinned meshes: resinback_1(4983v), resinback_2(3039v)",
+      "  bones: 29 (root hips spine chest neck head earL earR jaw scapulaL upper_armL forearmL handL pawL scapulaR upper_armR forearmR handR pawR tail tail2 thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:1.000s/27tr, cast_a1:1.167s/25tr, death:1.500s/27tr, idle:3.000s/29tr, run:0.600s/29tr",
+      "  tracks checked: 137; materials: resinback_body, resinback_lampresin; textures: resinback_body.map=1024x1024, resinback_body.normalMap=1024x1024, resinback_body.roughnessMap=512x512, resinback_body.metalnessMap=512x512, resinback_body.aoMap=512x512, resinback_lampresin.map=1024x1024, resinback_lampresin.normalMap=1024x1024, resinback_lampresin.roughnessMap=512x512, resinback_lampresin.metalnessMap=512x512, resinback_lampresin.aoMap=512x512, resinback_lampresin.emissiveMap=1024x1024",
+      "  tris: 10200; bind-pose bounds (three units, Y up): 1.16 x 1.80 x 2.59; facing (-0.01, 1.00); head bone y 1.00; runRefSpeed 3.3",
+      "  run: 18 f, planted samples 27, max foot-speed error 0.2%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "sheet": {
+    "ok": true,
+    "out": "art/renders/units/resinback.png",
+    "log": [
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.572,0.004,-1.192],[0.586,1.807,1.4]],\"facing\":[-0.009,1],\"headY\":1,\"heightPx1080\":96,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/resinback.png\",\"seconds\":7}"
+    ]
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "sculpt": 10.88,
+      "bind": 0.17,
+      "uv": 11.71,
+      "bake": 3.66,
+      "clips": 0.25,
+      "ground_qa": 0.11,
+      "export": 0.41,
+      "optimize": 0.54,
+      "qa": 7.48
+    },
+    "total_s": 35.28
+  }
+}

@@ -303,7 +303,7 @@ vec3 valeTexGrid( sampler2D t, vec2 p, float scale, vec3 band, float k ) {
   return mix( vec3( 1.0 ), c / m, k ) * band;
 }`;
 
-interface Clearing { x: number; y: number; r: number }
+interface Clearing { x: number; y: number; r: number; camp?: boolean }
 
 export function buildTerrain(map: MapDefT): TerrainBuild {
   const group = new Group();
@@ -336,7 +336,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     cx /= Math.max(1, c.units.length); cy /= Math.max(1, c.units.length);
     let r = 0;
     for (const u of c.units) r = Math.max(r, Math.hypot(u.at[0] - cx, u.at[1] - cy));
-    clearings.push({ x: cx, y: cy, r: r + (c.objective ? 6 : 4.5) });
+    clearings.push({ x: cx, y: cy, r: r + (c.objective ? 6 : 4.5), camp: true });
   }
   for (const p of map.pickups ?? []) clearings.push({ x: p.at[0], y: p.at[1], r: 2.2 });
   for (const s of map.spawns ?? []) clearings.push({ x: s[0], y: s[1], r: 2.6 });
@@ -819,6 +819,8 @@ ${TEX_GLSL}`)
         // thin out deep interiors (they are never seen up close)
         if (e > 9 && rand() < 0.6) continue;
         if (onMark(jx, jy)) continue;
+        // keep camps in view: no canopy on the camera side (+y) of a camp, where a 4-5 m crown on a cliff hides it
+        if (clearings.some((c) => c.camp && Math.abs(jx - c.x) < c.r + 1.5 && jy > c.y && jy < c.y + c.r + 6)) continue;
         treeSpots.push({ x: jx, y: jy, h: wallHeights[i], s: 0.75 + rand() * 0.55, r: rand() * Math.PI * 2, tint: rand() });
       }
     }
