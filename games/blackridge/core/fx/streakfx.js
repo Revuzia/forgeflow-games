@@ -92,6 +92,7 @@ export function createStreakFx(ctx) {
   function onCall(d) {
     const s = ctx.sim && ctx.sim();
     if (!s || !d || !d.plan || !d.plan.length) return;
+    if (d.id === "recon" || !d.target) return;   // the drone lives in grenadefx.js
     const col = COL[d.id] || 0xff4a3a;
     const g = new THREE.Group();
     root.add(g);

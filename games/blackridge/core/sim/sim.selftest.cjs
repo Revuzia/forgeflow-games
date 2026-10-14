@@ -830,6 +830,8 @@ async function main() {
       // additive vocabulary: ground loot + weapon pick-ups (loot.js), kill streaks,
       // medals and score popups (streaks.js)
       "loot", "pickup", "streak", "medal", "score",
+      // 2026-10-14 additive: player take-off (sfx.onJump) — a jump was silent until landing
+      "jump",
     ]);
     const seen = new Set();
     const sim = S.createSim({

@@ -100,7 +100,7 @@ export function createInput(canvas, settings) {
     fire: false, ads: false, reload: false,
     grenade: false,
     switchTo: null, // 'slot1'..'slot5' | 'next' | 'prev' | 'last' | weaponId | null — consumed by buildCmd
-    streak: 0,      // 1..3 = activate that killstreak tier (keys 6/7/8) — one-shot, consumed by buildCmd
+    streak: 0,      // 1..4 = activate that killstreak tier (keys 6/7/8/9) — one-shot, consumed by buildCmd
     interact: false,
     yaw: 0, pitch: 0,
   };
@@ -257,10 +257,11 @@ export function createInput(canvas, settings) {
       case "Digit4": state.switchTo = "slot4"; break;
       case "Digit5": state.switchTo = "slot5"; break;
       case "KeyQ": state.switchTo = "last"; break;
-      // KILLSTREAK specials (core/sim/streaks.js): 6 mortar · 7 airstrike · 8 orbital
+      // KILLSTREAK specials (core/sim/streaks.js): 6 sweep · 7 mortar · 8 airstrike · 9 orbital
       case "Digit6": state.streak = 1; break;
       case "Digit7": state.streak = 2; break;
       case "Digit8": state.streak = 3; break;
+      case "Digit9": state.streak = 4; break;
     }
   });
 

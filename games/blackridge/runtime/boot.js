@@ -277,6 +277,7 @@ try {
   const { createLootFx } = await import(`../core/fx/lootfx.js${V}`);
   const { createStreakFx } = await import(`../core/fx/streakfx.js${V}`);
   const { createStreakAudio } = await import(`../core/audio/streak_audio.js${V}`);
+  const { createGrenadeFx } = await import(`../core/fx/grenadefx.js${V}`);
   // World (third-person) weapon models for ground loot. Imported WITHOUT the ?v=
   // suffix on purpose: soldiers.js imports this module query-less, so this resolves
   // to the SAME instance — one GLB prototype cache for the bots' guns AND the loot.
@@ -314,6 +315,8 @@ try {
   const lootFx = createLootFx(ctx);
   const streakFx = createStreakFx(ctx);
   const streakAudio = createStreakAudio(ctx);
+  const grenadeFx = createGrenadeFx(ctx);
+  ctx.cue = (n) => streakAudio.cue(n);   // match_hud clock warnings
   const post = createPost(ctx);
   ctx.post = post; // v2.2 (A11: capture()/post.resize seam)
   const dynres = createDynres(renderer, perf);
@@ -344,6 +347,7 @@ try {
     hud.attach(bridge);
     ldHud.attach(bridge);
     streakFx.attach(bridge);
+    grenadeFx.attach(bridge);
     streakAudio.attach(bridge);
     // A0 wiring per architecture §3.11: player shots kick recoil + viewmodel.
     // v2.2 swept-projectile convention: impactOnly resolution replays and
@@ -359,6 +363,23 @@ try {
     // trough. The "step" event has always carried the gait data the view layer
     // needs (foot, stride, hz) and nothing consumed it until now.
     bridge.register("step", (d) => { if (vm.onStep) vm.onStep(d); });
+    // CAMERA SHAKE + CA PULSE (2026-10-14 review). Distance-scaled from the eye:
+    // a frag at 4 m kicks hard, a call-in 25 m off still rattles, 60 m is a rumble.
+    bridge.register("explosion", (d) => {
+      if (!d || !d.pos || !vm.shake) return;
+      const cp = camera.position;
+      const dist = Math.hypot(d.pos[0] - cp.x, d.pos[1] - cp.y, d.pos[2] - cp.z);
+      const big = d.source === "streak";
+      const reach = (d.radius || 5) * (big ? 7 : 4.5) + 8;
+      const k = Math.max(0, 1 - dist / reach);
+      if (k <= 0) return;
+      vm.shake((big ? 0.85 : 0.7) * k);
+      if (k > 0.45 && post && post.caKick) post.caKick();
+    });
+    bridge.register("hurt", (d) => {
+      if (!d || d.victim !== "P" || !vm.shake) return;
+      vm.shake(Math.min(0.32, 0.06 + (d.amount || 0) / 160));
+    });
     // bridge.clear() wipes handlers on every match start, so the kill cam
     // re-registers here with everything else rather than once at boot.
     killcam.reset();
@@ -616,6 +637,7 @@ try {
     ldHud.update(dt);
     lootFx.update(dt);
     streakFx.update(dt);
+    grenadeFx.update(dt);
     audio.update(dt);
     sky.update(dt);
     weather.update(dt);

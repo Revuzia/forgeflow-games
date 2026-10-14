@@ -146,31 +146,51 @@ async function main() {
     ok(p.weapon.mag === 6 && p.weapon.state === "idle", "left alone it finishes at a full tube (mag " + p.weapon.mag + ")");
   }
 
-  section("kill streaks 3 / 5 / 10, medals, call-ins");
+  section("kill streaks 3 / 5 / 7 / 10, medals, call-ins, signal sweep");
   {
     const { sim, events } = mk({ colliders: flat() });
     const p = sim.state.player;
     const kill = (n) => { for (let i = 0; i < n; i++) { const id = sim.spawnBot("rifleman", 0, -40, {}); sim.damage(id, 999, "test", "P"); } };
     kill(1); run(sim, 5);
-    ok(sim.state.streak.count === 1 && sim.state.streak.stock.join() === "0,0,0", "1 kill: streak 1, nothing earned");
+    ok(sim.state.streak.count === 1 && sim.state.streak.stock.join() === "0,0,0,0", "1 kill: streak 1, nothing earned");
     kill(1);
     const medals = events.filter((e) => e.type === "medal").map((e) => e.data.text);
     ok(medals.indexOf("DOUBLE KILL") >= 0, "two kills inside 3.5 s -> DOUBLE KILL");
     kill(1);
-    ok(sim.state.streak.stock[0] === 1 && events.some((e) => e.type === "streak" && e.data.phase === "earned" && e.data.id === "mortar"),
-      "3rd kill earns the MORTAR STRIKE");
+    ok(sim.state.streak.stock[0] === 1 && events.some((e) => e.type === "streak" && e.data.phase === "earned" && e.data.id === "recon"),
+      "3rd kill earns the SIGNAL SWEEP");
     ok(medals.concat(events.filter((e) => e.type === "medal").map((e) => e.data.text)).indexOf("3 KILL STREAK") >= 0, "3 KILL STREAK banner");
     kill(2);
-    ok(sim.state.streak.stock[1] === 1, "5th kill earns the AIRSTRIKE");
-    kill(5);
-    ok(sim.state.streak.count === 10 && sim.state.streak.stock[2] === 1, "10th kill earns the ORBITAL BARRAGE (count " + sim.state.streak.count + ")");
+    ok(sim.state.streak.stock[1] === 1, "5th kill earns the MORTAR STRIKE");
+    kill(2);
+    ok(sim.state.streak.stock[2] === 1, "7th kill earns the AIRSTRIKE");
+    kill(3);
+    ok(sim.state.streak.count === 10 && sim.state.streak.stock[3] === 1, "10th kill earns the ORBITAL BARRAGE (count " + sim.state.streak.count + ")");
+
+    // SIGNAL SWEEP: pings every living hostile, repeatedly, then ends
+    const a = sim.spawnBot("rifleman", 12, -25, {}), b2 = sim.spawnBot("rifleman", -18, -35, {});
+    sim.step(cmd({ streak: 1, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
+    ok(sim.state.streak.stock[0] === 0, "using the sweep spends it");
+    run(sim, 60 * 5);
+    const sweeps = events.filter((e) => e.type === "streak" && e.data.phase === "sweep");
+    ok(sweeps.length >= 2, "the drone sweeps repeatedly (" + sweeps.length + " in 5 s)");
+    const ids = new Set((sweeps[sweeps.length - 1].data.contacts || []).map((c) => c.id));
+    ok(ids.has(a) && ids.has(b2), "every living hostile is pinged with a position");
+    sim.damage(a, 999, "test", "P");
+    run(sim, 60 * 3);
+    const last = events.filter((e) => e.type === "streak" && e.data.phase === "sweep").pop();
+    ok(!(last.data.contacts || []).some((c) => c.id === a), "the dead are not pinged");
+    run(sim, 60 * 22);
+    ok(events.some((e) => e.type === "streak" && e.data.phase === "done" && e.data.id === "recon"), "the sweep times out (~24 s)");
+    sim.damage(b2, 999, "test", "P");
+
     // call in the mortar on a bot standing 30 m ahead
     const victim = sim.spawnBot("rifleman", 0, -30, {});
     sim.aimAt(0, 0.0, -30);
     const hp0 = sim.state.bots.find((b) => b.id === victim).hp;
     const killsBefore = sim.state.streak.count;
-    sim.step(cmd({ streak: 1, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
-    ok(sim.state.streak.stock[0] === 0, "using the mortar spends it");
+    sim.step(cmd({ streak: 2, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
+    ok(sim.state.streak.stock[1] === 0, "using the mortar spends it");
     ok(events.some((e) => e.type === "streak" && e.data.phase === "call" && e.data.id === "mortar"), "call event with a target + ETA");
     run(sim, 60 * 6);
     const b = sim.state.bots.find((x) => x.id === victim);
@@ -182,17 +202,17 @@ async function main() {
     // death resets the streak but keeps the earned call-ins
     sim.setGod(false);
     sim.damage("P", 9999, "test", null);
-    ok(sim.state.streak.count === 0 && sim.state.streak.stock[1] === 1 && sim.state.streak.stock[2] === 1,
+    ok(sim.state.streak.count === 0 && sim.state.streak.stock[2] === 1 && sim.state.streak.stock[3] === 1,
       "dying resets the count but keeps earned call-ins");
   }
 
   section("airstrike + orbital geometry");
   {
     const { sim, events } = mk({ colliders: flat() });
-    sim.streaks.give(2, 1); sim.streaks.give(3, 1);
+    sim.streaks.give(3, 1); sim.streaks.give(4, 1);
     sim.aimAt(0, 0, -30);
-    sim.step(cmd({ streak: 2, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
     sim.step(cmd({ streak: 3, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
+    sim.step(cmd({ streak: 4, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
     run(sim, 60 * 10);
     const air = events.filter((e) => e.type === "streak" && e.data.phase === "impact" && e.data.id === "airstrike");
     const orb = events.filter((e) => e.type === "streak" && e.data.phase === "impact" && e.data.id === "orbital");

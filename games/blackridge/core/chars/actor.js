@@ -793,6 +793,15 @@ export function createActor(proto) {
     // and not a decoration. Eased in update() (see life.readyW).
     readyWant: 1,
     groundSpeed: 0,  // soldiers.js drives: m/s, kills foot-slide on loco clips
+    // LEG DIRECTION (2026-10-14, owner: "it seems to slide rather than run"). The clip
+    // set has ONE forward walk and ONE forward run, and a soldier faces where he aims,
+    // so every strafe and back-pedal ran the legs forward while the body glided
+    // sideways — the whole PVP fight was foot-slide. soldiers.js now turns the ROOT
+    // (legs) toward the travel direction by legYaw and plays the cycle backward
+    // (locoDir -1) when he retreats; update() counter-twists the spine by -legYaw so
+    // the chest, arms and rifle stay on the target.
+    legYaw: 0,
+    locoDir: 1,
     _clipRate: 1,    // per-actor playback rate (setLifeSeed)
     lifeGain: 1,     // soldiers.js drives: 1 alive, 0 dead (see update())
     _current: actions[idleName] || null,
@@ -975,7 +984,7 @@ export function createActor(proto) {
       if (actor._current && (cn === "rifle_walk" || cn === "rifle_run")) {
         const nominal = cn === "rifle_run" ? 3.6 : 1.5;
         actor._current.timeScale = Math.min(2.2, Math.max(0.35, actor.groundSpeed / nominal))
-          * (actor._clipRate || 1);
+          * (actor._clipRate || 1) * (actor.locoDir < 0 ? -1 : 1);
       }
       // ---- LIFE LAYER, phase 1: hand the mixer back a CLEAN pose ----------
       // (see the LIFE note at the top of this file — post-mixer bone writes
@@ -1008,7 +1017,18 @@ export function createActor(proto) {
         life.t += dt;
         const ph = life.phase;
         const TAU = Math.PI * 2;
-        const ry = root.rotation.y;
+        // the legs face root.rotation.y; the CHEST faces root - legYaw (see legYaw note).
+        // Every upper-body axis below is built from the chest yaw.
+        const ly = actor.legYaw * actor.lifeGain;
+        if (ly) {
+          _v1.set(0, 1, 0);
+          _q1.setFromAxisAngle(_v1, -ly * 0.40);
+          if (bones.spine) rotateBoneWorld(bones.spine, _q1);
+          _q1.setFromAxisAngle(_v1, -ly * 0.30);
+          if (bones.spine1) rotateBoneWorld(bones.spine1, _q1);
+          if (bones.spine2) rotateBoneWorld(bones.spine2, _q1);
+        }
+        const ry = root.rotation.y - ly;
         // actor-right and actor-up in world (root only ever yaws)
         const rx = Math.cos(ry), rz = -Math.sin(ry);
 

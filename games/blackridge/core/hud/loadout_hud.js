@@ -15,15 +15,17 @@
 // Everything is DOM under the game's #hud root (shown/hidden with it); it reads
 // sim.state each frame and listens to the sim's bridge events. No game logic here.
 
+import { relDegTo } from "./hud.js";
 const STYLE_ID = "ld-style";
 
 const NAMES = { warden: "WARDEN", vesper: "VESPER", breaker: "BREAKER", corvus: "CORVUS", pike: "PIKE" };
 const FULL_NAMES = { warden: "M-72 WARDEN", vesper: "KS-23 VESPER", breaker: "B-12 BREAKER", corvus: "LR-1 CORVUS", pike: "GS-9 PIKE" };
 const SLOT_ORDER = ["warden", "vesper", "breaker", "corvus", "pike"];
 const TIERS = [
-  { tier: 1, id: "mortar", name: "MORTAR", at: 3, key: 6 },
-  { tier: 2, id: "airstrike", name: "AIRSTRIKE", at: 5, key: 7 },
-  { tier: 3, id: "orbital", name: "ORBITAL", at: 10, key: 8 },
+  { tier: 1, id: "recon", name: "SWEEP", at: 3, key: 6 },
+  { tier: 2, id: "mortar", name: "MORTAR", at: 5, key: 7 },
+  { tier: 3, id: "airstrike", name: "AIRSTRIKE", at: 7, key: 8 },
+  { tier: 4, id: "orbital", name: "ORBITAL", at: 10, key: 9 },
 ];
 
 function css() {
@@ -58,6 +60,20 @@ function css() {
   opacity:0;transition:opacity .15s ease;text-shadow:0 1px 3px rgba(0,0,0,.9);padding:2px 7px;background:rgba(8,12,18,.45);border-left:2px solid var(--a10-amber,#d9a441);}
 #ld-loot i{font-style:normal;opacity:.65;margin-left:6px;}
 #ld-loot.on{opacity:1;}
+/* ---- SIGNAL SWEEP: last-known enemy positions ---- */
+#ld-recon{position:absolute;inset:0;pointer-events:none;}
+#ld-recon .rc{position:absolute;transform:translate(-50%,-50%);opacity:0;text-align:center;will-change:transform,opacity;}
+#ld-recon .rc i{display:block;width:11px;height:11px;margin:0 auto;transform:rotate(45deg);border:2px solid #ff3b30;
+  background:rgba(255,59,48,.22);box-shadow:0 0 10px rgba(255,59,48,.55);}
+#ld-recon .rc span{display:block;margin-top:3px;font-size:10px;letter-spacing:.08em;color:#ffd9d4;text-shadow:0 1px 3px #000;}
+#ld-recon .cc{position:absolute;width:8px;height:8px;transform:translate(-50%,0) rotate(45deg);background:#ff3b30;opacity:0;
+  box-shadow:0 0 6px rgba(255,59,48,.7);}
+#ld-recon .bar{position:absolute;left:50%;top:126px;transform:translateX(-50%);font-size:11px;letter-spacing:.16em;color:#ffd9d4;
+  opacity:0;transition:opacity .25s ease;text-shadow:0 1px 4px #000;white-space:nowrap;}
+#ld-recon .bar.on{opacity:.92;}
+#ld-recon .bar b{color:#ff3b30;font-weight:400;margin-left:8px;}
+#ld-recon .bar i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ff3b30;margin-right:7px;vertical-align:1px;
+  animation:ldpulse 1s ease-in-out infinite;}
 /* ---- streak tray ---- */
 #ld-streaks{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;}
 #ld-streaks .ld-st{position:relative;min-width:118px;padding:4px 9px 5px;border:1px solid rgba(232,232,228,.14);background:rgba(8,12,18,.5);
@@ -138,7 +154,21 @@ export function createLoadoutHud(ctx) {
   const mark = el("div", "ld-mark", null, `<svg viewBox="0 0 34 34"><circle cx="17" cy="17" r="12" fill="none" stroke="#ff3b30" stroke-width="2" stroke-dasharray="6 5"/><path d="M17 3v6M17 25v6M3 17h6M25 17h6" stroke="#ffd9d4" stroke-width="2"/></svg><span></span>`);
   const medal = el("div", "ld-medal", null, `<div class="m"></div><div class="s"></div>`);
   const score = el("div", "ld-score");
-  [bar, toast, lootEl, streaks, call, mark, medal, score].forEach((n) => root.appendChild(n));
+  // SIGNAL SWEEP overlay. Markers are SNAPSHOTS (position at the sweep, fading before
+  // the next one) — intel, not a wallhack that tracks a man through a wall.
+  const recon = el("div", "ld-recon");
+  const reconBar = el("div", null, "bar");
+  recon.appendChild(reconBar);
+  const RC_N = 24;
+  const rcEls = [];
+  for (let i = 0; i < RC_N; i++) {
+    const w = el("div", null, "rc", "<i></i><span></span>");
+    const c = el("div", null, "cc");
+    recon.appendChild(w); recon.appendChild(c);
+    rcEls.push({ w, c, span: w.querySelector("span"), txt: "" });
+  }
+  let reconContacts = [], reconT = -99, reconEndT = -1;
+  [recon, bar, toast, lootEl, streaks, call, mark, medal, score].forEach((n) => root.appendChild(n));
 
   let mounted = false;
   function mount() {
@@ -210,15 +240,30 @@ export function createLoadoutHud(ctx) {
   function onStreak(d) {
     if (!d) return;
     const s = sim();
-    if (d.phase === "call" && s) {
+    if (d.phase === "sweep") {
+      reconContacts = (d.contacts || []).slice(0, RC_N);
+      reconT = s ? s.state.time : 0;
+      reconEndT = d.endT || reconEndT;
+      return;
+    }
+    if (d.phase === "call" && s && d.id === "recon") {
+      flyingIds.add(d.id);
+      reconEndT = d.endT || (s.state.time + (d.duration || 24));
+      showToast(`<b>SIGNAL SWEEP</b> ONLINE  <small>hostiles ping on your compass every sweep</small>`);
+    } else if (d.phase === "call" && s) {
       // the first impact's absolute sim time (events can reach us a few ticks late)
       activeCall = { id: d.id, name: d.name, target: d.target, endT: d.plan && d.plan.length ? d.plan[0].t : s.state.time + d.eta };
       flyingIds.add(d.id);
     } else if (d.phase === "done") {
       flyingIds.delete(d.id);
+      if (d.id === "recon") { reconContacts = []; reconEndT = -1; }
       if (activeCall && activeCall.id === d.id) activeCall = null;
     } else if (d.phase === "earned") {
-      showToast(`<b>${d.name}</b> READY  <small>press [${d.key}] — it lands where you are looking</small>`);
+      // the medal banner already reads "<n> KILL STREAK / NAME READY [key]" — the toast
+      // only adds HOW it is used, after the banner has had its moment
+      setTimeout(() => showToast(d.id === "recon"
+        ? `<small>[${d.key}] launches a recon drone — every hostile pings on your compass</small>`
+        : `<small>[${d.key}] calls it on the spot under your crosshair</small>`), 1600);
     } else if (d.phase === "denied" && d.reason === "none") {
       showToast(`<small>NO CALL-IN AVAILABLE</small>`);
     }
@@ -310,6 +355,45 @@ export function createLoadoutHud(ctx) {
       }
     }
 
+    // SIGNAL SWEEP: status line, compass contacts, last-known markers
+    {
+      const now = s.state.time;
+      const on = reconEndT > now && p.alive;
+      reconBar.classList.toggle("on", on);
+      if (on) {
+        const html = `<i></i>SIGNAL SWEEP<b>${Math.ceil(reconEndT - now)}s</b>`;
+        if (reconBar.dataset.h !== html) { reconBar.innerHTML = html; reconBar.dataset.h = html; }
+      }
+      const age = now - reconT;
+      // fade: pop in, hold, gone just before the next sweep (2.4 s period)
+      const a = !on ? 0 : age < 0.12 ? age / 0.12 : age < 1.4 ? 1 : Math.max(0, 1 - (age - 1.4) / 0.9);
+      const cmp = document.getElementById("compass");
+      const cr = cmp ? cmp.getBoundingClientRect() : null;
+      for (let i = 0; i < RC_N; i++) {
+        const r = rcEls[i];
+        const c = reconContacts[i];
+        if (!c || a <= 0.01) {
+          if (r.w.style.opacity !== "0") { r.w.style.opacity = "0"; r.c.style.opacity = "0"; }
+          continue;
+        }
+        const sp = projectToScreen(c.pos[0], c.pos[1] + 2.05, c.pos[2]);
+        if (sp) {
+          r.w.style.left = sp[0].toFixed(1) + "px"; r.w.style.top = sp[1].toFixed(1) + "px";
+          r.w.style.opacity = a.toFixed(2);
+          const txt = Math.round(Math.hypot(c.pos[0] - p.pos[0], c.pos[2] - p.pos[2])) + " m";
+          if (txt !== r.txt) { r.txt = txt; r.span.textContent = txt; }
+        } else r.w.style.opacity = "0";
+        if (cr) {
+          const rel = relDegTo(s, c.pos);
+          const half = cr.width / 2 / 4.4;              // hud.js PX_PER_DEG
+          const cl = Math.max(-half, Math.min(half, rel));
+          r.c.style.left = (cr.left + cr.width / 2 + cl * 4.4).toFixed(1) + "px";
+          r.c.style.top = (cr.bottom + 4).toFixed(1) + "px";
+          r.c.style.opacity = (a * (Math.abs(rel) > half ? 0.45 : 1)).toFixed(2);
+        }
+      }
+    }
+
     // call-in countdown + target marker
     if (activeCall) {
       const left = Math.max(0, activeCall.endT - s.state.time);
@@ -332,6 +416,7 @@ export function createLoadoutHud(ctx) {
 
   function reset() {
     medalQueue = []; medalBusy = 0; activeCall = null; flyingIds = new Set();
+    reconContacts = []; reconT = -99; reconEndT = -1;
     toast.classList.remove("on"); toastT = 0; medal.classList.remove("show");
     mark.classList.remove("on"); call.classList.remove("on"); lootEl.classList.remove("on");
     score.innerHTML = "";

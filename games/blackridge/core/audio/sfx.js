@@ -404,8 +404,10 @@ export function makeSfx(env) {
       if (!Number.isFinite(dist) || dist > 300) return;
     }
     const ring = own || dist < 30 ? 0 : dist < 90 ? 1 : 2;
-    // voice budget: under load distant fire degrades to crack-only, never player
-    if (!own && liveVoices > 40) return;
+    // voice budget: under load distant fire degrades to crack-only, never player —
+    // and never a shooter close enough to matter (2026-10-14: a gun 5 m away was
+    // as droppable as one at 250 m)
+    if (!own && liveVoices > 40 && dist > 35) return;
     const degraded = !own && liveVoices > 24;
 
     const when = own ? 0 : dist / 343;              // audible flight delay (§7.2)
@@ -425,6 +427,15 @@ export function makeSfx(env) {
       f.connect(out); dst = f;
     }
 
+    // SUPPRESSED Vesper (it carries a can on the model and in its data): darker,
+    // quieter report that stops carrying past ~120 m
+    if (d.weaponId === "vesper") {
+      if (!own && dist > 120) return;
+      const lp = ac.createBiquadFilter();
+      lp.type = "lowpass"; lp.frequency.value = 2400; lp.Q.value = 0.5;
+      const sg = ac.createGain(); sg.gain.value = 0.55;
+      lp.connect(sg); sg.connect(dst); dst = lp;
+    }
     const pumpGun = d.weaponId === "breaker";
     // a pump gun's pull interval (0.77 s) exceeds the 0.5 s burst gap, so EVERY
     // pull is flagged firstShot — the §2.8 bump would just be its normal sound
@@ -635,8 +646,16 @@ export function makeSfx(env) {
   //              + a 2.6 kHz ping and a 4 kHz snap).
   // A shotgun volley produces ONE of these per pull (+ one extra low thump if
   // three or more pellets landed): FEEDBACK_WINDOW_S gates the nine pellets.
+  function feedbackOut(gain) {
+    const ac = env.ac;
+    const g = ac.createGain();
+    const vol = fin(env.ctx.settings && env.ctx.settings.sfx, 1);
+    g.gain.value = gclamp(gain * vol);
+    g.connect(env.buses.limiter || env.buses.sfx);
+    return g;
+  }
   function hitTick(head) {
-    const o = uiOut(1);
+    const o = feedbackOut(1);
     stats.hitTicks++;
     if (head) {
       stats.headTicks++;
@@ -651,7 +670,7 @@ export function makeSfx(env) {
     }
   }
   function killThock(head) {
-    const o = uiOut(1);
+    const o = feedbackOut(1);
     stats.killTicks++;
     thump(o, { f0: 190, f1: 105, durMs: 120, gain: 0.26 });
     thump(o, { f0: 700, f1: 600, durMs: 70, gain: 0.22 });
@@ -715,7 +734,11 @@ export function makeSfx(env) {
     if (!d) return;
     const own = d.who === "P";
     // voice budget: under load distant footsteps drop, the player's never do
-    if (!own && liveVoices > 40) return;
+    // (and a step within 12 m is never dropped — it is the enemy at the corner)
+    if (!own && liveVoices > 40) {
+      const bp = env.botPos(d.who), c = camPos();
+      if (!bp || Math.hypot(bp[0] - c[0], bp[2] - c[2]) > 12) return;
+    }
     let out, gain;
     // stance now rides the event (the stance at the FOOT-PLANT, and it works
     // for bots too); fall back to the live sim read for any older emitter.
@@ -734,6 +757,19 @@ export function makeSfx(env) {
       out = env.spatial(p, 30);
       if (!out) return;
       gain = 0.38 * (d.sprint ? 1.41 : 1);
+      // friend or foe: a teammate behind you must not sound like a flanker
+      try {
+        const sm = env.ctx.sim();
+        if (sm && sm.match && sm.match.sameTeam && sm.match.sameTeam("P", d.who)) gain *= 0.5;
+      } catch (e) { /* campaign: everyone is hostile */ }
+      // through a wall or floor: muffled and quieter, still readable
+      if (env.losBlocked && env.losBlocked([p[0], (p[1] || 0) + 0.3, p[2]], camPos())) {
+        const ac = env.ac;
+        const f = ac.createBiquadFilter();
+        f.type = "lowpass"; f.frequency.value = 850;
+        f.connect(out); out = f;
+        gain *= 0.7;
+      }
       // NOTE: bots deliberately keep the FULL level when crouched. §7.4's
       // −8 dB crouch row has only ever applied to the player's own steps, and
       // quietening crouched bots by 8 dB is a stealth-balance change, not a
@@ -920,6 +956,19 @@ export function makeSfx(env) {
     else burst(out, { f: 1400, q: 6, durMs: 12, gain: 0.14, when: 0.05 });
   }
 
+  // take-off: gear shift + cloth + a light push off the boots (2026-10-14 — a jump
+  // used to be silent until the landing)
+  function onJump(d) {
+    if (!d || d.who !== "P") return;
+    const out = env.spatial(null);
+    if (!out) return;
+    const c = buf("cloth");
+    if (c) voice(c, out, { gain: 0.16, rate: 1.08 });
+    else burst(out, { f: 1500, q: 0.8, durMs: 70, gain: 0.08 });
+    thump(out, { f0: 140, f1: 90, durMs: 40, gain: 0.08 });
+    burst(out, { f: 3200, q: 5, durMs: 18, gain: 0.04, when: 0.03 });          // sling / kit jingle
+  }
+
   function onLand(d) {
     if (!d) return;
     const own = d.who === "P";
@@ -1023,7 +1072,7 @@ export function makeSfx(env) {
     const when = dist / 343;
     const out = env.spatial(d.pos, 300);
     if (!out) return;
-    const big = d.source === "drum" || d.source === "transformer";
+    const big = d.source === "drum" || d.source === "transformer" || d.source === "streak";
     const b = buf(big ? "expl_large" : "expl_frag");
     let src = null;
     if (b) src = voice(b, out, { gain: 0.9, rate: 1 + (rng() * 2 - 1) * 0.05, when });
@@ -1086,7 +1135,7 @@ export function makeSfx(env) {
     stats: () => ({ ...stats, shotEvents: volley.n, volleys: volley.volleys,
                     volleyEventsSkipped: volley.skipped }),
     reset, ui, radioSquelch,
-    onShot, onHurt, onDeath, onReload, onSwitch, onAds, onStep, onLand,
+    onShot, onHurt, onDeath, onReload, onSwitch, onAds, onStep, onLand, onJump,
     onEmpty, onBark, onObjective, onWhiz, onExplosion, onGrenade,
   };
 }

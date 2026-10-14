@@ -292,6 +292,7 @@ export function createSoldiers(ctx) {
       lastTick: -1,
       yaw: (d.yaw || 0) + Math.PI,
       yawTarget: (d.yaw || 0) + Math.PI,
+      legYaw: 0, locoDir: 1,
       flashUntil: -1,
       flashOn: false,
       deathPlayed: false,
@@ -522,10 +523,34 @@ export function createSoldiers(ctx) {
         // ---- facing (damped — pivots with weight, never snaps)
         if (bot.alive && !rec.forceAnim) rec.yawTarget = bot.yaw + Math.PI;
         rec.yaw = dampAngle(rec.yaw, rec.yawTarget, rec.deathPlayed ? 18 : 10, dtAnim);
-        actor.root.rotation.y = rec.yaw;
 
         // ---- animation selection (sim's bot.anim is authoritative)
         const hs = bot.vel ? Math.hypot(bot.vel[0], bot.vel[2]) : 0;
+
+        // ---- LEG DIRECTION (see actor.legYaw): legs follow the travel direction,
+        // the chest keeps the aim. Back-pedalling turns the legs to the REVERSE of
+        // travel and runs the cycle backward. Hysteresis on the fwd/back switch so a
+        // pure strafe does not flicker between the two.
+        {
+          let want = 0, dirWant = rec.locoDir || 1;
+          if (bot.alive && !rec.deathPlayed && hs > 0.6) {
+            const moveYaw = Math.atan2(bot.vel[0], bot.vel[2]);
+            let rel = moveYaw - rec.yaw;
+            rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+            const ar = Math.abs(rel);
+            if (dirWant > 0 ? ar > 1.92 : ar < 1.57) dirWant = -dirWant;   // 110 deg out, 90 deg back
+            if (dirWant < 0) { rel = rel - Math.PI; rel = Math.atan2(Math.sin(rel), Math.cos(rel)); }
+            const LIM = 1.22;                                                  // 70 deg of hip turn
+            want = Math.max(-LIM, Math.min(LIM, rel));
+          } else {
+            dirWant = 1;
+          }
+          if (dirWant !== rec.locoDir) { rec.locoDir = dirWant; }
+          rec.legYaw = dampAngle(rec.legYaw || 0, want, 9, dtAnim);
+          actor.legYaw = rec.legYaw;
+          actor.locoDir = rec.locoDir || 1;
+        }
+        actor.root.rotation.y = rec.yaw + (rec.legYaw || 0);
         actor.groundSpeed = hs;
         actor.crouchW = 0;
         // ---- WEAPON READY POSE (iter08) -----------------------------------

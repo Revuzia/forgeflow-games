@@ -95,6 +95,8 @@ async function main() {
     // additive world vocabulary (loot.js / streaks.js): ground weapons + pick-ups,
     // kill-streak call-ins, medals, score popups — emitted by the sim, not the AI
     "loot", "pickup", "streak", "medal", "score",
+    // 2026-10-14 additive: player take-off (sfx.onJump)
+    "jump",
   ]);
 
   // ================================================================ formulas

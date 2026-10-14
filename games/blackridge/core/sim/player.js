@@ -291,6 +291,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
       p.vel[2] = m.slideDir[1] * keep;
       p.vel[1] = MOVE.JUMP_V;
       endSlide(m, t);
+      sim.emit("jump", { who: "P", slide: true });
     } else if ((m.slideV <= MOVE.SLIDE_END_V && m.slideT >= MOVE.SLIDE_MIN_S) ||
                (!cmd.crouch && m.slideT >= MOVE.SLIDE_MIN_S)) {
       endSlide(m, t);
@@ -326,6 +327,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
     p.vel[1] = MOVE.JUMP_V;
     p.grounded = false;
     m.airEntrySpeed = Math.max(hlen(p.vel), MOVE.WALK);
+    sim.emit("jump", { who: "P", slide: false });
   }
 
   // ---- mantle detect (§1.5): buffered/held jump at a wall, or airborne
@@ -816,8 +818,9 @@ export function stepBotLocomotion(sim, bot, dt) {
       bot._stepDist -= stride;
       if (bot._stepDist >= stride) bot._stepDist = 0;
       bot._stepFoot = bot._stepFoot === "L" ? "R" : "L";
+      const gHit = world.raycast([bot.pos[0], bot.pos[1] + 0.3, bot.pos[2]], [0, -1, 0], 1.0);
       sim.emit("step", {
-        who: bot.id, surface: "concrete", sprint: !!cmd.sprint,
+        who: bot.id, surface: gHit ? gHit.surface : "concrete", sprint: !!cmd.sprint,
         foot: bot._stepFoot, stance: bot.stance,
         speed: hspeed, stride, hz: hspeed / stride,
       });

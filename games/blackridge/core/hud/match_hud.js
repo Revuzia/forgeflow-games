@@ -309,12 +309,25 @@ export function createMatchHud(ctx) {
   }
 
   // ------------------------------------------------------------- clock
+  let lastClockCue = null;
   function renderClock() {
     const m = M();
     if (!m) return;
     const ot = m.phase === "overtime";
     clockEl.textContent = (ot ? "OT " : "") + fmtClock(m.timeLeft);
     clockEl.classList.toggle("low", !ot && m.timeLeft <= 60 && m.phase === "live");
+    // clock warnings (audio): 60 s, 30 s, 10 s, then a tick each of the last 5
+    if (m.phase === "live" && ctx.cue) {
+      const tl = m.timeLeft;
+      const prev = lastClockCue;
+      lastClockCue = tl;
+      if (prev != null && tl < prev) {
+        if (prev > 60 && tl <= 60) ctx.cue("clock60");
+        else if (prev > 30 && tl <= 30) ctx.cue("clock30");
+        else if (prev > 10 && tl <= 10) ctx.cue("clock10");
+        else if (tl <= 5 && Math.ceil(tl) !== Math.ceil(prev)) ctx.cue("tick");
+      }
+    } else lastClockCue = null;
   }
 
   // ------------------------------------------------------------- flags (CTF)

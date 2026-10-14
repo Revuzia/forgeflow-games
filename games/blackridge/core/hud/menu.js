@@ -73,7 +73,7 @@ const CONTROLS = [
   ["C / CTRL", "crouch · slide while sprinting"], ["R", "reload"],
   ["G", "frag (hold to cook)"], ["F", "interact"],
   ["1 - 5", "weapons · wheel cycles · Q = last weapon"],
-  ["6 / 7 / 8", "killstreaks: mortar (3) · airstrike (5) · orbital (10)"],
+  ["6 / 7 / 8 / 9", "killstreaks: signal sweep (3) · mortar (5) · airstrike (7) · orbital (10)"],
   ["WALK OVER", "weapons & ammo to loot them — enemies drop their guns"],
   ["TAB", "scoreboard (hold, in match)"], ["ESC", "pause"],
 ];

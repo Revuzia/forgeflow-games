@@ -34,6 +34,17 @@ const VARIANTS = {
     debris: 14, embers: 16, emberC: [2.6, 1.1, 0.3],
     fireballs: 5,
   },
+  // kill-streak call-ins (mortar / airstrike / orbital): bigger, longer, with a
+  // rising smoke column — they used to fall back to the frag-grenade look
+  streak: {
+    flash: [3.4, 2.0, 0.9], flashScaleR: 1.15,
+    light: 0xff9a4a, peak: 95, lightR: 34,
+    ring: [2.8, 1.7, 0.9],
+    smoke: 14, smokeC: [0.11, 0.105, 0.10],
+    debris: 24, embers: 22, emberC: [2.6, 1.2, 0.35],
+    fireballs: 9, fbLife: 0.55, fbSize: 1.9,
+    column: 10,
+  },
   transformer: {
     flash: [2.0, 2.8, 3.2], flashScaleR: 1.1,
     light: 0x7fe8ff, peak: 50, lightR: 18,
@@ -214,6 +225,20 @@ export function makeExplosions(env, pools, decals) {
         }
       })();
 
+      // smoke COLUMN (streak): fast risers that stack into a pillar over the strike
+      if (v.column && pools && pools.dust) {
+        for (let i = 0; i < v.column; i++) {
+          const a = rnd() * Math.PI * 2;
+          const rr = rnd() * radius * 0.18;
+          pools.dust.spawn(
+            x + Math.cos(a) * rr, y + 0.5 + rnd() * 1.2, z + Math.sin(a) * rr,
+            (rnd() - 0.5) * 0.6, 2.6 + rnd() * 2.4, (rnd() - 0.5) * 0.6,
+            3.6 + rnd() * 1.8, 1.2, 4.2,
+            v.smokeC[0] * 0.9, v.smokeC[1] * 0.9, v.smokeC[2] * 0.9,
+            0.5, -0.12, 0, gy, 0.7);
+        }
+      }
+
       // debris: dark chunks, ballistic, bounce
       if (env.impacts) {
         env.impacts.burstAt(pools.dust, pos, _UP, v.debris, 3.5, 8.5, 2.5,
@@ -225,7 +250,7 @@ export function makeExplosions(env, pools, decals) {
         // short-lived fireball cores (grenade/drum only)
         if (v.fireballs > 0) {
           env.impacts.burstAt(pools.spark, pos, _UP, v.fireballs, 0.6, 1.6, 0.6,
-            0.22, 0.08, 0.5, 1.1, 2.4, 1.1, 0.35, 0.2, 0.9, 1.5, 0, 1.0);
+            v.fbLife || 0.22, 0.08, 0.5, v.fbSize || 1.1, 2.4, 1.1, 0.35, 0.2, 0.9, 1.5, 0, 1.0);
         }
       }
 

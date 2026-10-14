@@ -1144,9 +1144,9 @@ export function createHud(ctx) {
     for (const a of arcs) {
       if (!a.live) { if (a.lastOp !== "0") { a.lastOp = "0"; a.el.style.opacity = "0"; } continue; }
       const age = t - a.t;
-      if (age > 0.8 || age < 0) { a.live = false; a.lastOp = "0"; a.el.style.opacity = "0"; continue; }
+      if (age > 2.0 || age < 0) { a.live = false; a.lastOp = "0"; a.el.style.opacity = "0"; continue; }
       if (a.dir) a.deg = relDegDir(sim, a.dir);
-      const alpha = age < 0.25 ? 0.95 : 0.95 * (1 - (age - 0.25) / 0.55);
+      const alpha = age < 0.5 ? 0.95 : 0.95 * (1 - (age - 0.5) / 1.5);
       const pop = 1 + 0.14 * Math.max(0, 1 - age / 0.09);
       const os = alpha.toFixed(2);
       const ts = `rotate(${a.deg.toFixed(1)}deg) scale(${pop.toFixed(3)})`;

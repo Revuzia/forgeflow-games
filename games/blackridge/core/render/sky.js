@@ -328,7 +328,7 @@ export function createSky(ctx) {
     uTime: { value: 0 },
     uCamPos: { value: new THREE.Vector3() },
     uMoonDir: { value: domeUniforms.uMoonDir.value },       // SHARED — one source
-    uLit: { value: new THREE.Color(0x9db2d4) },             // moon-struck cloud face
+    uLit: { value: new THREE.Color(0x6c7a92) },             // moon-struck cloud face (2026-10-14: was 0x9db2d4 — the breaks read as flat white blobs overhead)
     uDark: { value: new THREE.Color(0x0b0d14) },            // self-shadowed body
     uUnder: { value: new THREE.Color(0x241f18) },           // sodium city underlight
     uHorizonCol: { value: domeUniforms.uHorizon.value },    // SHARED — = FOG.color

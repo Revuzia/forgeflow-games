@@ -450,6 +450,7 @@ export function createAudio(ctx) {
       bridge.register("ads", safe("ads", (d) => sfx.onAds(d)));
       bridge.register("step", safe("step", (d) => sfx.onStep(d)));
       bridge.register("land", safe("land", (d) => sfx.onLand(d)));
+      bridge.register("jump", safe("jump", (d) => sfx.onJump && sfx.onJump(d)));
       bridge.register("empty", safe("empty", (d) => sfx.onEmpty(d)));
       bridge.register("bark", safe("bark", (d) => sfx.onBark(d)));
       bridge.register("botstate", safe("botstate", (d) => {
@@ -544,7 +545,11 @@ export function createAudio(ctx) {
 
         // §7.4 slide scrape: crouched at near-sprint speed = sliding (heuristic
         // read of frozen state; there is no slide event in the vocabulary)
-        const sliding = st.player.stance === "crouch" && fin(st.player.speedNorm, 0) > 0.72 && st.player.grounded;
+        // (2026-10-14) the sim's own slide flag first — the speed heuristic cut the
+        // scrape off before the slide ended (it decays below 4.6 m/s mid-slide)
+        const sliding = st.player._m && typeof st.player._m.sliding === "boolean"
+          ? (st.player._m.sliding && st.player.grounded)
+          : (st.player.stance === "crouch" && fin(st.player.speedNorm, 0) > 0.72 && st.player.grounded);
         if (sliding && !slideSrc) {
           try {
             slideSrc = ac.createBufferSource(); slideSrc.buffer = env.noiseBuf(); slideSrc.loop = true;

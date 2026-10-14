@@ -7,11 +7,17 @@
 // streak (an airstrike's bombs) do not feed the streak — the Call of Duty rule —
 // so a lucky strike cannot chain itself to the top.
 //
-//   3 kills  ->  MORTAR STRIKE      key 6   a 4-shell salvo walked onto the
+//   3 kills  ->  SIGNAL SWEEP       key 6   a recon drone loiters overhead for 24 s;
+//                                           every 2.4 s it sweeps the map and pings
+//                                           every living enemy (compass + through-
+//                                           wall markers). Information, not damage:
+//                                           a UAV-class reward that is not a copy of
+//                                           the Call of Duty minimap UAV.
+//   5 kills  ->  MORTAR STRIKE      key 7   a 4-shell salvo walked onto the
 //                                           spot you are looking at (2.4 s ETA)
-//   5 kills  ->  AIRSTRIKE          key 7   a bomb run, 7 bombs in a straight line
+//   7 kills  ->  AIRSTRIKE          key 8   a bomb run, 7 bombs in a straight line
 //                                           away from you through the target
-//   10 kills ->  ORBITAL BARRAGE    key 8   18 heavy rounds saturating a ~20 m
+//   10 kills ->  ORBITAL BARRAGE    key 9   18 heavy rounds saturating a ~20 m
 //                                           circle over 5.5 s — clears a courtyard
 //
 // Earned call-ins sit in a stock (max 2 per type) until used. Using one marks the
@@ -28,6 +34,7 @@
 //   streak {phase:"earned", tier, id, name, count, stock}
 //   streak {phase:"call",   tier, id, name, target:[3], eta, impacts:n, key}
 //   streak {phase:"impact", tier, id, pos:[3], radius, index, of}
+//   streak {phase:"sweep",  tier, id, contacts:[{id,pos:[3]}], index, of, endT}   (recon)
 //   streak {phase:"done",   tier, id}
 //   streak {phase:"denied", tier, reason}              (nothing in stock / dead)
 //   medal  {text, sub, kind}                            (HUD banner)
@@ -39,11 +46,13 @@
 import { detonateAt } from "./grenades.js";
 
 export const STREAK_TIERS = [
-  { id: "mortar", tier: 1, at: 3, key: 6, name: "MORTAR STRIKE",
+  { id: "recon", tier: 1, at: 3, key: 6, name: "SIGNAL SWEEP",
+    delay: 0.9, duration: 24, period: 2.4 },
+  { id: "mortar", tier: 2, at: 5, key: 7, name: "MORTAR STRIKE",
     delay: 2.4, shells: 4, scatter: 4.5, gap: 0.42, radius: 6.0, dmgCenter: 135, dmgEdge: 18 },
-  { id: "airstrike", tier: 2, at: 5, key: 7, name: "AIRSTRIKE",
+  { id: "airstrike", tier: 3, at: 7, key: 8, name: "AIRSTRIKE",
     delay: 3.2, shells: 7, length: 34, gap: 0.22, radius: 6.5, dmgCenter: 150, dmgEdge: 20 },
-  { id: "orbital", tier: 3, at: 10, key: 8, name: "ORBITAL BARRAGE",
+  { id: "orbital", tier: 4, at: 10, key: 9, name: "ORBITAL BARRAGE",
     delay: 3.6, shells: 18, scatter: 10.0, span: 5.5, radius: 7.5, dmgCenter: 175, dmgEdge: 25 },
 ];
 
@@ -66,7 +75,7 @@ export function makeStreaks(sim) {
   const S = sim.state;
   S.streak = {
     count: 0, best: 0,
-    stock: [0, 0, 0],       // per tier (index = tier-1)
+    stock: STREAK_TIERS.map(() => 0),   // per tier (index = tier-1)
     flights: [],            // call-ins in the air: {tier, plan:[{t,pos}], i, endT}
     medalChain: [],         // kill times inside the multi-kill window
     totalScore: 0,
@@ -84,6 +93,20 @@ export function makeStreaks(sim) {
     if (st.stock[tier - 1] >= MAX_STOCK) return;
     st.stock[tier - 1]++;
     sim.emit("streak", { phase: "earned", tier, id: def.id, name: def.name, count, stock: st.stock[tier - 1], key: def.key });
+  }
+
+  // living hostiles, for the recon sweep (match: the roster team rule; campaign:
+  // the mirrored team int — every campaign bot is team 1 against the team-0 player)
+  function hostiles() {
+    const out = [];
+    const pt = S.player.team | 0;
+    for (const b of S.bots) {
+      if (!b || !b.alive) continue;
+      if (sim.match && sim.match.sameTeam) { if (sim.match.sameTeam("P", b.id)) continue; }
+      else if ((b.team | 0) === pt) continue;
+      out.push({ id: b.id, pos: [b.pos[0], b.pos[1], b.pos[2]] });
+    }
+    return out;
   }
 
   function medal(text, sub, kind) {
@@ -116,7 +139,12 @@ export function makeStreaks(sim) {
       st.medalChain = st.medalChain.filter((x) => t - x <= MULTI_WINDOW_S);
       st.medalChain.push(t);
       const n = st.medalChain.length;
-      if (n >= 2) medal(MULTI_NAMES[n] || "MULTI KILL x" + n, "+" + (n * 25) + " bonus", "multi");
+      if (n >= 2) {
+        const bonus = n * 25;
+        st.totalScore += bonus;
+        medal(MULTI_NAMES[n] || "MULTI KILL x" + n, "+" + bonus + " bonus", "multi");
+        sim.emit("score", { points: bonus, why: MULTI_NAMES[n] || "MULTI KILL", headshot: false });
+      }
 
       // ---- the streak itself
       st.count++;
@@ -139,6 +167,21 @@ export function makeStreaks(sim) {
       if (!p.alive) { sim.emit("streak", { phase: "denied", tier, reason: "dead" }); return false; }
       if (st.stock[tier - 1] <= 0) { sim.emit("streak", { phase: "denied", tier, reason: "none" }); return false; }
       if (st.flights.some((f) => f.tier === tier)) { sim.emit("streak", { phase: "denied", tier, reason: "busy" }); return false; }
+
+      if (def.id === "recon") {
+        // no target: the drone takes station over the whole map
+        const plan = [];
+        const t0 = S.time + def.delay;
+        for (let t = 0; t <= def.duration + 1e-6; t += def.period) plan.push({ t: t0 + t });
+        st.stock[tier - 1]--;
+        st.flights.push({ tier, id: def.id, plan, i: 0, endT: t0 + def.duration + 0.4 });
+        sim.emit("streak", {
+          phase: "call", tier, id: def.id, name: def.name, target: null, eta: def.delay,
+          impacts: plan.length, key: def.key, duration: def.duration, endT: t0 + def.duration,
+          plan: plan.map((q) => ({ t: q.t })),
+        });
+        return true;
+      }
 
       // ---- target: first thing under the crosshair, else the ground 45 m out
       const eye = [p.pos[0], p.pos[1] + (p.stance === "crouch" ? 1.10 : 1.62), p.pos[2]];
@@ -214,6 +257,18 @@ export function makeStreaks(sim) {
       for (let k = st.flights.length - 1; k >= 0; k--) {
         const f = st.flights[k];
         const def = STREAK_TIERS[f.tier - 1];
+        if (f.id === "recon") {
+          while (f.i < f.plan.length && f.plan[f.i].t <= t) {
+            f.i++;
+            sim.emit("streak", { phase: "sweep", tier: f.tier, id: f.id, contacts: hostiles(),
+              index: f.i, of: f.plan.length, endT: f.endT - 0.4 });
+          }
+          if (f.i >= f.plan.length && t >= f.endT) {
+            st.flights.splice(k, 1);
+            sim.emit("streak", { phase: "done", tier: f.tier, id: f.id });
+          }
+          continue;
+        }
         while (f.i < f.plan.length && f.plan[f.i].t <= t) {
           const imp = f.plan[f.i++];
           sim.emit("streak", { phase: "impact", tier: f.tier, id: f.id, pos: imp.pos.slice(), radius: def.radius, index: f.i, of: f.plan.length });

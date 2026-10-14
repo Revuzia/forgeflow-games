@@ -75,14 +75,30 @@ const LIVE_PHASES = new Set(["infil", "assault", "exfil"]);
 // §1.6 head-bob table — camera-share amplitudes (m) and vertical freqs (Hz).
 // Viewmodel bob = camera numbers × 2.3. Lateral runs at half the vertical
 // frequency (the table's lateral rows), amplitude column 3.
+// 2026-10-14 (owner: movement "seems to slide rather than run"): the old camera
+// share — 4.8 mm walking, 8.4 mm sprinting — was below what reads as a footfall
+// at 60 fps. Raised to ~9 / 16 / 19 mm with more sprint roll; the bob setting
+// slider still scales the camera share, and ADS still cuts it to 25%.
 const BOB = {
-  walk:   { v: 0.0048, hz: 2.1, l: 0.0027 },
-  sprint: { v: 0.0084, hz: 2.6, l: 0.0042, roll: 0.4 * DEG, rollHz: 1.3 },
-  tac:    { v: 0.0100, hz: 2.9, l: 0.0050, roll: 0.5 * DEG, rollHz: 1.45 },
-  crouch: { v: 0.0030, hz: 1.5, l: 0.0018 },
+  walk:   { v: 0.0090, hz: 2.1, l: 0.0048 },
+  sprint: { v: 0.0160, hz: 2.6, l: 0.0075, roll: 0.75 * DEG, rollHz: 1.3 },
+  tac:    { v: 0.0190, hz: 2.9, l: 0.0088, roll: 0.95 * DEG, rollHz: 1.45 },
+  crouch: { v: 0.0055, hz: 1.5, l: 0.0032 },
 };
 
 const EYE_STAND = 1.62, EYE_CROUCH = 1.10, EYE_SLIDE = 0.90; // §1.3/§1.4
+
+// CAMERA SHAKE (2026-10-14 review: "no camera shake anywhere" — a mortar landing
+// 8 m away did not move the view at all). Trauma model: events ADD trauma (0..1),
+// it bleeds off linearly, and the visible shake is trauma^2 so small hits stay
+// subtle while a call-in on top of you rattles the frame. Render-only, like the
+// fire-response springs: aim (input.state) is never touched.
+const SHAKE = {
+  decay: 1.35,                // trauma per second
+  pitch: 0.030, yaw: 0.026, roll: 0.045,   // rad at trauma 1
+  pos: 0.030,                 // m of eye jitter at trauma 1
+  hz: 23,                     // base noise rate
+};
 
 // ===== FIRE RESPONSE (combat_spec §2.3, VT §5 layer 6, VT §7) ==============
 // Every channel is an under-damped SPRING that a round IMPULSES (adds velocity
@@ -263,6 +279,7 @@ export function createViewmodel(ctx) {
   // camera rig
   let eyeH = EYE_STAND;
   let bobPhase = 0, bobAmpV = 0, bobAmpL = 0, bobRollAmp = 0;
+  let trauma = 0, shakeT = 0;
   let dipY = 0, dipVel = 0, dipTimer = -1, dipDur = 0, dipRec = 0, dipAmp = 0;
   let prevGrounded = true, airVy = 0;
   let fovSprint = 0, fovSlide = 0;
@@ -1029,10 +1046,24 @@ export function createViewmodel(ctx) {
       );
       // VT §7 fire response, camera share: pitch punch + roll + yaw, all
       // RENDER-ONLY.
+      // camera shake (see SHAKE): sum-of-sines noise, three incommensurate rates
+      trauma = Math.max(0, trauma - SHAKE.decay * dt);
+      shakeT += dt;
+      const tt = trauma * trauma;
+      let shP = 0, shY = 0, shR = 0;
+      if (tt > 1e-5) {
+        const w = shakeT * SHAKE.hz;
+        const n1 = Math.sin(w * 1.00) * 0.6 + Math.sin(w * 2.31 + 1.3) * 0.4;
+        const n2 = Math.sin(w * 1.17 + 2.1) * 0.6 + Math.sin(w * 2.73 + 0.4) * 0.4;
+        const n3 = Math.sin(w * 0.83 + 4.2) * 0.6 + Math.sin(w * 1.91 + 2.9) * 0.4;
+        shP = n1 * SHAKE.pitch * tt; shY = n2 * SHAKE.yaw * tt; shR = n3 * SHAKE.roll * tt;
+        camera.position.y += n2 * SHAKE.pos * tt * 0.6;
+        camera.position.x += n3 * SHAKE.pos * tt * 0.4;
+      }
       camera.rotation.set(
-        input.state.pitch + camSwayPitch + K.camP.x,
-        input.state.yaw + camSwayYaw + K.camY.x,
-        rollOut + K.camR.x, "YXZ",
+        input.state.pitch + camSwayPitch + K.camP.x + shP,
+        input.state.yaw + camSwayYaw + K.camY.x + shY,
+        rollOut + K.camR.x + shR, "YXZ",
       );
 
       // FOV kinetics (§1.4, §2.4, VT §7): base → adsFov by eased adsT,
@@ -1292,6 +1323,8 @@ export function createViewmodel(ctx) {
     equip,
     update,
     kick,
+    // add camera-shake trauma (0..1); see SHAKE
+    shake(amount) { trauma = Math.min(1, trauma + Math.max(0, +amount || 0)); },
     muzzleWorld,
     setVisible(on) { visible = !!on; rig.visible = !!on && !!current; },
     setLowered(on) { lowered = !!on; },
