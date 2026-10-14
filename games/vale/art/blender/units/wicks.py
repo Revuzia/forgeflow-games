@@ -85,7 +85,7 @@ class Wick:
         # hood: deep, pointed back, the opening facing -Y; the lamplight inside is accent
         hood = Sculpt("hood")
         hood.add(Ellipsoid((0, 0.02 * k, hz), (0.19 * k, 0.21 * k, 0.2 * k)), k=0.0)
-        hood.add(RoundCone((0, 0.08 * k, hz + 0.08 * k), (0, 0.2 * k, hz + 0.26 * k), 0.12 * k, 0.02 * k), k=0.06 * k)
+        hood.add(RoundCone((0, 0.08 * k, hz + 0.06 * k), (0, 0.27 * k, hz - 0.02 * k), 0.12 * k, 0.03 * k), k=0.06 * k)   # tip droops back (no 'ears' from above)
         hood.add(Torus((0, 0, sh.z + 0.02 * k), 0.15 * k, 0.05 * k), k=0.04 * k)       # collar roll
         hood.sub(Ellipsoid((0, -0.17 * k, hz - 0.02 * k), (0.12 * k, 0.13 * k, 0.13 * k)), k=0.02 * k)
         part("hood", hood, "cloth2", "bone:head", 900)
