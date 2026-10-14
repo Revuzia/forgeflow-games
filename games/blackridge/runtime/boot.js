@@ -287,6 +287,7 @@ try {
   const { createStreakFx } = await import(`../core/fx/streakfx.js${V}`);
   const { createStreakAudio } = await import(`../core/audio/streak_audio.js${V}`);
   const { createGrenadeFx } = await import(`../core/fx/grenadefx.js${V}`);
+  const { createAchievements } = await import(`../core/meta/achievements.js${V}`);
   // World (third-person) weapon models for ground loot. Imported WITHOUT the ?v=
   // suffix on purpose: soldiers.js imports this module query-less, so this resolves
   // to the SAME instance — one GLB prototype cache for the bots' guns AND the loot.
@@ -326,6 +327,7 @@ try {
   const streakAudio = createStreakAudio(ctx);
   const grenadeFx = createGrenadeFx(ctx);
   const touch = isTouch ? touchMod.createTouchControls(ctx) : null;
+  const achievements = createAchievements(ctx);   // ForgeFlow portal unlocks (achievements.json)
   ctx.touch = touch;
   ctx.cue = (n) => streakAudio.cue(n);   // match_hud clock warnings
   // designate mode only opens for a call-in you can actually use
@@ -365,6 +367,7 @@ try {
     ldHud.attach(bridge);
     streakFx.attach(bridge);
     grenadeFx.attach(bridge);
+    achievements.attach(bridge);
     streakAudio.attach(bridge);
     // A0 wiring per architecture §3.11: player shots kick recoil + viewmodel.
     // v2.2 swept-projectile convention: impactOnly resolution replays and
@@ -656,6 +659,7 @@ try {
     streakFx.update(dt);
     grenadeFx.update(dt);
     if (touch) touch.update(dt);
+    achievements.update(dt);
     audio.update(dt);
     sky.update(dt);
     weather.update(dt);

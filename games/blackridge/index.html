@@ -228,6 +228,9 @@
 window.GAME_CONFIG = Object.assign(window.GAME_CONFIG || {}, { touch: false });
 </script>
 <script src="./game_controls.js?v=1789530264"></script>
+<!-- ForgeFlow portal SDK: achievement unlocks (core/meta/achievements.js). Async — the
+     game never waits on it; outside the portal iframe every call is a no-op. -->
+<script async src="https://forgeflowgames.com/forgeflow-sdk.js"></script>
 
 <script>
 /*
@@ -292,7 +295,7 @@ window.GAME_CONFIG = Object.assign(window.GAME_CONFIG || {}, { touch: false });
 
     var s = document.createElement("script");
     s.type = "module";
-    s.src = "./runtime/boot.js?v=139";   /* ?v=N — BUMP EVERY ITERATION */
+    s.src = "./runtime/boot.js?v=141";   /* ?v=N — BUMP EVERY ITERATION */
     document.body.appendChild(s);
 })();
 </script>

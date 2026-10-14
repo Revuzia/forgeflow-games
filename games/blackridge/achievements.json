@@ -1,0 +1,30 @@
+{
+  "_doc": "BLACKRIDGE achievements (2026-10-14): the single source of truth for the game (core/meta/achievements.js attaches a detector to every slug; core/meta/achievements.selftest.cjs fails if the two sets differ) AND the portal seeder (pipeline/seed_achievements_json.py --game blackridge). Fields are exactly the achievements table's (slug, name, description, tier, points, secret). Tier -> points per migration 0003: bronze 5 / silver 15 / gold 30 / diamond 60. Lifetime counts (kills, headshots, weapons, arenas) are kept per device. PVP text never mentions bots, AI or difficulty.",
+  "achievements": [
+    { "slug": "first_kill", "name": "Lights Out", "description": "Get your first kill.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "first_headshot", "name": "Clean Shot", "description": "Get a headshot kill.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "medal_longshot", "name": "Across the Canal", "description": "Earn a LONGSHOT medal: a kill from more than 40 m.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "medal_revenge", "name": "Accounts Settled", "description": "Earn a REVENGE medal: take out the operator who last took you out.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "medal_firstblood", "name": "First Light", "description": "Draw FIRST BLOOD in a match or mission.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "streak_sweep", "name": "Eyes in the Rain", "description": "Earn a Signal Sweep: 3 kills without dying.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "call_in", "name": "Fire for Effect", "description": "Call in a mortar strike, an airstrike or an orbital barrage.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "ctf_capture", "name": "Colors Home", "description": "Capture the enemy flag yourself in Capture the Flag.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "win_skirmish", "name": "Ward Holders", "description": "Win a Skirmish match.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "multi_triple", "name": "Three Down", "description": "Earn a TRIPLE KILL medal.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "streak_mortar", "name": "Shells Inbound", "description": "Earn a Mortar Strike: 5 kills without dying.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "streak_airstrike", "name": "Danger Close", "description": "Earn an Airstrike: 7 kills without dying.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "headshots_25", "name": "Steady Hands", "description": "Get 25 headshot kills.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "kills_100", "name": "Night Shift", "description": "Get 100 kills.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "full_kit", "name": "Full Kit", "description": "Get a kill with each of the five weapons: Warden, Vesper, Breaker, Corvus and Pike.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "win_ctf", "name": "Bring It Home", "description": "Win a Capture the Flag match.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "campaign_clear", "name": "Exfil", "description": "Complete Operation Blackridge.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "multi_quad", "name": "Clean Sweep", "description": "Earn a QUAD KILL medal.", "tier": "gold", "points": 30, "secret": false },
+    { "slug": "streak_orbital", "name": "Tenfold", "description": "Earn an Orbital Barrage: 10 kills without dying.", "tier": "gold", "points": 30, "secret": false },
+    { "slug": "headshots_100", "name": "Dead Center", "description": "Get 100 headshot kills.", "tier": "gold", "points": 30, "secret": false },
+    { "slug": "kills_500", "name": "Harbor Ghost", "description": "Get 500 kills.", "tier": "gold", "points": 30, "secret": false },
+    { "slug": "win_ffa", "name": "Top of the Ward", "description": "Win a Free-for-All match.", "tier": "gold", "points": 30, "secret": false },
+    { "slug": "all_arenas", "name": "Every Street", "description": "Win a match on all three arenas: Lanternwalk, Switchyard and Saltmarket.", "tier": "gold", "points": 30, "secret": false },
+    { "slug": "campaign_hard", "name": "Cinderlock Secured", "description": "Complete Operation Blackridge on HARD.", "tier": "gold", "points": 30, "secret": false },
+    { "slug": "grand_tour", "name": "Legend of the Ward", "description": "Win all three modes on all three arenas: nine different wins.", "tier": "diamond", "points": 60, "secret": false }
+  ]
+}
