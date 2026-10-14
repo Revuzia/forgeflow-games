@@ -18,10 +18,10 @@ Branch: `claude/youthful-ramanujan-gdud5w`. Spine: `_spec/CONTRACT.md`. Look and
 | Renderer (post stack, sky, fog of war, actors, overlay, menu scene) | Core done; typecheck clean at last full run | `_harness/web/render_bench.html` |
 | VFX engine "AAA" upgrade | PAUSED mid-way (7 files in `src/render/vfx/`) | resume: same goal, see below |
 | Client UI (15 screens, components) | Done to first pass | `npm run dev` → http://localhost:5190 |
-| HUD + input + end-to-end flow | PAUSED mid-way (`src/ui/hud/` 9 files, `src/input/` 4) | resume |
+| HUD + input + end-to-end flow | Done: DONE journey passes in real Chrome (RIFT, BRIDGE, FRAY, shop buy + equip) | `node _harness/e2e.mjs all` |
 | Audio (numpy synthesis + WebAudio engine) | Library only; no rendered files, no runtime | resume |
 | Art pipeline v1 (rig, clips, bake, export, parts library, template) | Done, but the owner rejected the mannequin look | `art/README.md` |
-| Art 2.0 hi-fi characters (sculpted volumes → voxel remesh → displacement, cloth draped by simulation, high-to-low bakes, painted albedo, painterly splash) | PAUSED mid-way (`art/blender/common/hifi/` 4 files); proving on Marund | resume |
+| Art 2.0 characters: SDF-sculpted volumes fitted to the concept sheet, base colour = the concept painting projected occlusion-aware onto the game mesh | Marund DONE as a full fighter, AWAITING OWNER SIGN-OFF (`art/renders/_art2/marund_signoff.jpg`); 15 fighters to go | `python3 art/build.py fighter marund --no-skins` |
 | Skies (4) + locked LUT grade | Done | `art/out/maps/*/sky.hdr`, `art/out/grade/` |
 | Painted 2D (icons, key art, mode cards, loading, backdrops, terrain textures, concept sheets) | Pack ready: generate with Grok Imagine in Chrome (`queue.py next/ingest`) | `tools/imagegen/README.md` |
 | Units, structures, monsters, map scenes, menu scene (Blender) | Not started (briefs exist) | `_design/maps/*_landmarks.md` |
@@ -58,6 +58,30 @@ Originality rules still hold: nothing copied from any game.
 7. Copy pass: ability tooltips with keyword and scaling highlighting, lore, home and store copy.
 8. Write the design note, the names-not-used doc, README, game_meta.json and the thumbnail.
    Then run the full end-to-end play-through and review, and push.
+
+## Art 2.0 method (proved on Marund, 2026-10-14)
+1. Concept sheet (front + back, painted) -> projection plates: `python3 art/tools/concept_plates.py <id>
+   --height <m> [--erase-saturated-above <m>]` (repo venv: numpy, Pillow, scipy). Writes
+   `art/.cache/concept/<id>_{front,back}.png` + `_plates.json`. Erase details the model builds as
+   geometry (Marund's painted gem rings -> real windows).
+2. Fit the forms on a 10 cm grid over the concept and write `art/blender/fighters/<id>.py`: numpy SDF
+   parts (`common/hifi/sdf.py`), one Part per binding, a rig fitted to the anatomy, `PROJECTION = {...}`.
+   Check the fit with the silhouette overlay (see `art/blender/proto/marund_v2.py`, the proof script).
+3. Near-flat tops that the game camera sees (a cap crown) get a top plate (`proto/marund_cap_top.py`).
+4. `python3 art/build.py fighter <id> --no-skins --clip-sheet` with PATH incl. /opt/homebrew/bin and
+   CHROME=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome. Gates: three load test OK,
+   <= 1.2 MB, accent 2-6 %, facing +Z. Copy `art/out/fighters/<id>/art.json` into the content `art`.
+5. Skins: palette swaps cannot repaint a painting; each skin needs its own painted concept (Grok/xAI)
+   and the same projection. Splashes: the pipeline's splash works but its backdrop is procedural;
+   composite over the painted backdrops (`art/out/backdrops/`) instead.
+
+## Session log: owner's Mac, 2026-10-14
+- Step 1 DONE: the HUD stylesheet leaked into the menus (`.shop`/`.score`/`.hrow`/`.stile` clashed with
+  the Shop and post-game screens) -> HUD classes renamed; full e2e PASS (rift/bridge/fray/store);
+  menus get an ink scrim over the live scene.
+- Art 2.0 proved on Marund end to end (sculpt, projection paint, rig, 15 clips, GLB 1.16 MB, in game).
+- Next: owner sign-off on Marund -> roll out to the other 15 fighters (+ skin concepts), then VFX
+  (step 4), map scenes + menu scene (step 5: the placeholder low-poly scenery is now the weakest read).
 
 ## Session log: owner's Mac, 2026-10-13 (paused by the owner mid-run)
 Done and pushed:
