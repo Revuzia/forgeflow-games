@@ -24,9 +24,10 @@ interface MusicDefT { file: string; bpm: number; loopStart: number; loopEnd?: nu
 interface CatalogLike {
   audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string> };
   fighters: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } }; kit: Record<string, { id: string; present?: { sfx?: string; hitSfx?: string } } | undefined> }[];
+  units?: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } } }[];
 }
 interface AudioSettings { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean }
-interface EntityLike { id: number; kind: string; team: number; x: number; y: number }
+interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number }
 
 export interface ValeAudioPort extends AudioPort {
   attach(client: MatchClient | null): void;
@@ -81,6 +82,7 @@ class Engine implements ValeAudioPort {
       for (const a of Object.values(f.kit)) if (a?.present) this.abilitySfx.set(a.id, a.present);
       if (f.attack?.present) this.abilitySfx.set(`attack:${f.id}`, f.attack.present);
     }
+    for (const u of cat.units ?? []) if (u.attack?.present) this.abilitySfx.set(`attack:${u.id}`, u.attack.present);   // Needles, Wicks, monsters
     const resume = (): void => { this.ensure(); void this.ctx?.resume(); };
     addEventListener('pointerdown', resume, { capture: true });
     addEventListener('keydown', resume, { capture: true });
@@ -277,9 +279,32 @@ class Engine implements ValeAudioPort {
     return c?.view.players.find((x) => x.player === c.you)?.team ?? -1;
   }
 
+  /** fog: you hear only what your team can see (your own team always), like the renderer draws it */
+  private seen(x: EntityLike | undefined): boolean {
+    const team = this.myTeam();
+    if (!x || team < 0 || x.team === team) return true;
+    return (((x.visibleMask ?? 0) >>> team) & 1) === 1;
+  }
+
+  private seenAt(x: number, y: number): boolean {
+    const team = this.myTeam();
+    const v = this.client?.view as unknown as { visionGrid?: (t: number) => { cell: number; width: number; height: number; data: ArrayLike<number> } } | undefined;
+    if (team < 0 || !v?.visionGrid) return true;
+    try {
+      const g = v.visionGrid(team);
+      const i = Math.floor(x / g.cell), j = Math.floor(y / g.cell);
+      return i >= 0 && j >= 0 && i < g.width && j < g.height && g.data[j * g.width + i] > 0;
+    } catch { return true; }
+  }
+
   private onEvent(e: Record<string, unknown>): void {
     const kind = e.e as string;
     const src = this.ent(e.src), dst = this.ent(e.dst);
+    // events about a unit your team cannot see stay silent (a panned sound would give the unit away)
+    const subject = kind === 'cast' || kind === 'projectile' || kind === 'attack' || kind === 'dash' || kind === 'blink' ? src
+      : kind === 'hit' || kind === 'damage' || kind === 'heal' || kind === 'shield' || kind === 'status' || kind === 'death' ? dst : undefined;
+    if (subject && !this.seen(subject)) return;
+    if (kind === 'area' && !this.seen(src) && !this.seenAt(e.x as number, e.y as number)) return;
     const at = (x: EntityLike | undefined): { x: number; y: number } | null => (x ? { x: x.x, y: x.y } : null);
     const me = this.youPos();
     const near = (p: { x: number; y: number } | null): boolean => !!p && !!me && Math.hypot(p.x - me.x, p.y - me.y) < 14;
@@ -297,13 +322,13 @@ class Engine implements ValeAudioPort {
         break;
       }
       case 'area': if (e.sfx) this.cue(e.sfx as string, { x: e.x as number, y: e.y as number }, 1, ((e.delay as number) || 0) + ((e.life as number) || 0)); break;
-      case 'attack': this.cue(this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : 0.3); break;
+      case 'attack': this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'), at(src), src?.kind === 'fighter' ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3); break;
       case 'damage': {
         const p = at(dst);
         if (near(p)) this.intensity = Math.min(1, this.intensity + (src?.kind === 'fighter' && dst?.kind === 'fighter' ? 0.12 : 0.02));
         if (e.ability) break;                         // ability hits voice through `hit`
         if (e.crit) this.cue(this.ev('crit'), p);
-        else this.cue(this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45);
+        else this.cue(this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, src?.kind === 'fighter' ? 0.8 : 0.45);
         break;
       }
       case 'heal': this.cue(this.ev('heal'), at(dst), 0.7); break;
@@ -341,7 +366,10 @@ class Engine implements ValeAudioPort {
       case 'recall': if (e.player === this.client?.you) this.cue(this.ev(e.state === 'done' ? 'recallDone' : e.state === 'start' ? 'recallStart' : 'recallCancel'), null); break;
       case 'ping': this.cue(this.ev(`ping.${e.kind as string}`), null); break;
       case 'pickup': if (e.player === this.client?.you) this.cue(this.ev('pickup'), null); break;
-      case 'announce': this.cue(this.ev(/first|ace|objective|structure|inhib|core/i.test(e.key as string) ? 'announceMajor' : 'announceMinor'), null); break;
+      case 'announce':
+        // a personal notice (a denied purchase, a practice reset) is only yours to hear
+        if (/^(shop_denied|practice_reset)$/.test(e.key as string) && e.player !== undefined && e.player !== this.client?.you) break;
+        this.cue(this.ev(/first|ace|objective|structure|inhib|core/i.test(e.key as string) ? 'announceMajor' : 'announceMinor'), null); break;
       case 'eliminated': if (e.player === this.client?.you) this.cue(this.ev('eliminated'), null); break;
       case 'suddenDeath': this.cue(this.ev('suddenDeath'), null); break;
       default: break;

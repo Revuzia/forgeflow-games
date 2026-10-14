@@ -66,12 +66,22 @@ export function mount(root: HTMLElement, o: MountOptions): MountedApp {
     effect(() => { a.attach?.(state.match.value ?? null); });
     effect(() => { a.settings?.(state.settings.value.audio); });
   }
+  // a live match is not lost to a stray shortcut: Ctrl+W (level up W) closes a Chrome tab on Windows/Linux, which a
+  // page cannot block, so leaving asks first; in fullscreen the Keyboard Lock API keeps the game's keys entirely
+  const guard = (e: BeforeUnloadEvent): void => { if (state.match.value && !state.ending.value) { e.preventDefault(); e.returnValue = ''; } };
+  addEventListener('beforeunload', guard);
+  const kb = (navigator as Navigator & { keyboard?: { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void } }).keyboard;
+  const onFs = (): void => {
+    if (!kb?.lock) return;
+    if (document.fullscreenElement) void kb.lock(['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyN', 'KeyT', 'Tab', 'Escape']).catch(() => {}); else kb.unlock?.();
+  };
+  document.addEventListener('fullscreenchange', onFs);
   if (o.dev) (window as unknown as { __vale?: unknown }).__vale = { ...ctx, audioLog: (port as { log?: unknown }).log, cueLog: (o.audio as { log?: unknown } | null)?.log, screens: Object.keys(SCREENS) };
   root.textContent = '';
   void loadFonts().then(() => render(<AppContext.Provider value={ctx}><App /></AppContext.Provider>, root));
   return {
     state, router,
-    unmount: () => { stopLoop(); state.dispose(); render(null, root); },
+    unmount: () => { stopLoop(); removeEventListener('beforeunload', guard); document.removeEventListener('fullscreenchange', onFs); state.dispose(); render(null, root); },
   };
 }
 

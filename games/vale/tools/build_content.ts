@@ -381,6 +381,7 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   checkUnique(c.queues, (q) => q.id, ['queues'], 'queue id', dg);
   checkUnique(c.ranks, (r) => r.id, ['ranks'], 'rank id', dg);
   const vfx = checkUnique(c.vfx, (v) => v.id, ['vfx'], 'vfx id', dg);
+  for (const [k, tbl] of [['vfxEvents', c.client.vfxEvents], ['vfxStatus', c.client.vfxStatus]] as const) for (const [role, id] of Object.entries(tbl)) if (!vfx.has(id)) dg.err(['client', k, role], unknownRef('vfx id', id, vfx));
   const currencies = checkUnique(c.store.currencies, (x) => x.id, ['store', 'currencies'], 'currency id', dg);
   const skus = checkUnique(c.store.offers, (o) => o.sku, ['store', 'offers'], 'offer sku', dg);
   checkUnique(c.store.shelves, (s) => s.id, ['store', 'shelves'], 'shelf id', dg);

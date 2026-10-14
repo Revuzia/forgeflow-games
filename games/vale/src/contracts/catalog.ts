@@ -587,6 +587,11 @@ export const ClientDef = z.object({
     tiles: z.array(z.object({ id: Id, title: z.string(), body: z.string(), art: AssetRef, screen: Id,
       params: z.record(z.string(), z.string()).default({}) }).strict()) }).strict(),
   menuScene: z.object({ model: AssetRef.optional(), sky: AssetRef, lut: AssetRef, backdrop: AssetRef.optional() }).strict(),
+  /** VFX for world events and statuses that carry no ability of their own (CONTRACT §9.5): role -> vfx id.
+   *  events: levelUp, respawn, death, unitDeath, structureFall, recall, pickup, objective, blink, crit, heal,
+   *  shield, ultWindup · status: a StatusKind (stun, root, slow, silence, reveal, ...) */
+  vfxEvents: z.record(z.string(), Id).default({}),
+  vfxStatus: z.record(z.string(), Id).default({}),
   tips: z.array(z.string()).default([]),
 }).strict();
 

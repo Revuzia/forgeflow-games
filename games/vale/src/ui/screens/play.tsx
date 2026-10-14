@@ -32,14 +32,17 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
   const locked = (q: QueueDefT): boolean => q.unlockLevel > profile.level;
   // "Play as <fighter>" (collection) prefers a queue that takes a fighter at queue time
   const presetQ = p.params.fighter ? queues.find((q) => cv.pickOf(q) === 'role_preset' && !locked(q))?.id : undefined;
-  const qId = [p.params.queue, presetQ, prefs.lastQueue].find((id) => id && queues.some((q) => q.id === id)) ?? queues.find((q) => !locked(q))?.id ?? queues[0]?.id;
+  // a first visit lands on co-op (bots, no preset to fill in) so FIND MATCH works straight away
+  const qId = [p.params.queue, presetQ, prefs.lastQueue].find((id) => id && queues.some((q) => q.id === id))
+    ?? queues.find((q) => q.kind === 'coop' && !locked(q))?.id ?? queues.find((q) => !locked(q))?.id ?? queues[0]?.id;
   const queue = cv.queue(qId);
   const pick = queue ? cv.pickOf(queue) : null;
   const roles = mode?.roles ? cv.rolesOrdered() : [];
   const [primary, setPrimary] = useState<string>(prefs.roles?.[0] ?? '');
   const [secondary, setSecondary] = useState<string>(prefs.roles?.[1] ?? '');
   const [preset, setPreset] = useState<{ fighter?: string; role?: string }>(() => {
-    const f = cv.fighter(p.params.fighter);
+    // a quick-queue preset starts filled (the fighter asked for, else the first of the roster) and stays changeable
+    const f = cv.fighter(p.params.fighter) ?? cv.c.fighters[0];
     return f ? { fighter: f.id, role: f.role } : {};
   });
   const party = state.party.value;

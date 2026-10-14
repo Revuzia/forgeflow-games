@@ -75,8 +75,10 @@ export function ConfirmBody(p: { body?: ComponentChildren; confirm: string; canc
     <div class="confirm">
       {p.body ? <div class="confirm__body t-body">{p.body}</div> : null}
       <div class="confirm__actions">
-        <Button variant="quiet" cue="back" onPress={p.onCancel}>{p.cancel}</Button>
-        <Button variant="chalk" wedge onPress={p.onConfirm} data-autofocus="">{p.confirm}</Button>
+        {/* a destructive confirm starts on Cancel, so a stray Enter or Space never wipes or forfeits anything */}
+        <Button variant="quiet" cue="back" onPress={p.onCancel} {...(p.tone === 'danger' ? { 'data-autofocus': '' } : {})}>{p.cancel}</Button>
+        <Button variant={p.tone === 'danger' ? 'secondary' : 'chalk'} class={p.tone === 'danger' ? 'btn--danger' : undefined} wedge onPress={p.onConfirm}
+          {...(p.tone === 'danger' ? {} : { 'data-autofocus': '' })}>{p.confirm}</Button>
       </div>
     </div>
   );

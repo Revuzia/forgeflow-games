@@ -27,22 +27,6 @@ const hud = document.getElementById('hud')!;
 if (qs.get('hud') === '0') hud.classList.add('off');
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 
-/** world events that carry no VFX id: the harness may name content ids (CONTRACT §0) */
-function eventVfx(catalog: CatalogT): Record<string, string> {
-  const want: Record<string, string> = {
-    levelUp: 'lib_level_up', respawn: 'lib_respawn', death: 'lib_death_shatter', unitDeath: 'lib_wick_death',
-    structureFall: 'lib_structure_fall', recall: 'lib_recall', pickup: 'lib_sunmote_pickup', objective: 'lib_objective_taken',
-    blink: 'lib_blink', crit: 'lib_crit', heal: 'lib_heal_rise', shield: 'lib_shield_up', ultWindup: 'lib_ult_windup',
-  };
-  const ids = new Set(catalog.vfx.map((v) => v.id));
-  return Object.fromEntries(Object.entries(want).filter(([, id]) => ids.has(id)));
-}
-function statusVfx(catalog: CatalogT): Record<string, string> {
-  const want: Record<string, string> = { stun: 'lib_stun_ring', root: 'lib_root_bind', slow: 'lib_slow_glass', silence: 'lib_silence', reveal: 'lib_reveal_mark' };
-  const ids = new Set(catalog.vfx.map((v) => v.id));
-  return Object.fromEntries(Object.entries(want).filter(([, id]) => ids.has(id)));
-}
-
 function buildSetup(catalog: CatalogT, modeArg: string | null, seed: number): MatchSetup {
   const modes = catalog.modes;
   const mode = (modeArg && (modes.find((m) => m.id === modeArg) ?? modes[Number(modeArg)])) || modes[0];
@@ -79,7 +63,7 @@ async function main(): Promise<void> {
   const renderer: Renderer = createRenderer(canvas, catalog, settings, cat.assetUrl, {
     dev: qs.get('dev') === '1',
     devModelUrl: new URL('/art/out/_proof/_proof_mannequin.glb', location.href).href,
-    eventVfx: eventVfx(catalog), statusVfx: statusVfx(catalog),
+    eventVfx: catalog.client.vfxEvents, statusVfx: catalog.client.vfxStatus,   // the same tables the game boots with
     dynamicResolution: qs.get('dyn') === '1',
     preserveDrawingBuffer: true, quiet: true,
   });

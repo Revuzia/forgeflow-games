@@ -16,7 +16,11 @@ import type { AudioPort } from '../ui/audio_port.ts';
 
 const ui = document.getElementById('ui')!;
 const query = new URLSearchParams(location.search);
-const dev = query.get('dev') === '1';
+// ?dev=1 (the harness handle, autopilot, time scale, autoflow) works in dev builds only: in a shipped build the
+// autopilot would play matches for you at 16x and still earn Candles, XP and rating
+let devBuild = false;
+try { devBuild = !!import.meta.env?.DEV; } catch { devBuild = false; }
+const dev = devBuild && query.get('dev') === '1';
 /** ?render=0: run the client without the 3D renderer (UI review on software GL, low-end fallback checks) */
 const noRender = query.get('render') === '0';
 const ap = query.get('autopilot');
@@ -28,7 +32,7 @@ const autoflow = dev && query.get('autoflow') === '1';
 // RENDER: src/render/index.ts → createRenderer, CONTRACT §9). Missing modules are simply skipped.
 type AudioModule = { createAudioEngine?: (o: { catalog: unknown; assetUrl: (ref: string) => string; settings: unknown }) => AudioPort | Promise<AudioPort> };
 const audioLoaders = import.meta.glob<AudioModule>('../audio/index.ts');
-type RenderModule = { createRenderer?: (canvas: HTMLCanvasElement, catalog: never, settings: never, assetUrl: (ref: string) => string, o?: { dev?: boolean }) => unknown };
+type RenderModule = { createRenderer?: (canvas: HTMLCanvasElement, catalog: never, settings: never, assetUrl: (ref: string) => string, o?: { dev?: boolean; eventVfx?: Record<string, string>; statusVfx?: Record<string, string> }) => unknown };
 const renderLoaders = import.meta.glob<RenderModule>('../render/index.ts');
 
 mountLoading(ui);
@@ -53,7 +57,9 @@ loadCatalog().then(
     const loadRender = Object.values(renderLoaders)[0];
     const canvas = document.getElementById('view') as HTMLCanvasElement | null;
     if (loadRender && canvas && !noRender) {
-      try { renderer = ((await loadRender()).createRenderer?.(canvas, c.catalog as never, session.profile().settings as never, c.assetUrl, { dev }) ?? null) as typeof renderer; }
+      try { renderer = ((await loadRender()).createRenderer?.(canvas, c.catalog as never, session.profile().settings as never, c.assetUrl, {
+        dev, eventVfx: c.catalog.client.vfxEvents, statusVfx: c.catalog.client.vfxStatus,
+      }) ?? null) as typeof renderer; }
       catch (e) { console.warn('[vale] renderer unavailable', e); }
     }
     mount(ui, { catalog: c.catalog, session, audio, renderer, assetUrl: c.assetUrl, dev });

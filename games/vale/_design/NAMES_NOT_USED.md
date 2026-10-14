@@ -120,6 +120,7 @@ The winning proposal named its roles after the primary reference game's classes.
 - Marksman — a reference game's class name; VALE's ranged class is the Slinger
 - Keeper — too close to the reference hero "Keeper of the Light" in a light-themed world
 - Hourglass — as the name of a glyph; it is adjacent to a famous item in the primary reference game, so the glyph is the sandglass
+- First Cut — a boon name too close to a reference game's rune of the same idea (the 2026-10-14 review); the boon is Opening Hour
 
 Vanguard and Warden, the other two replaced role names, are already in the registry (exact-name entries).
 
@@ -155,6 +156,11 @@ Vanguard and Warden, the other two replaced role names, are already in the regis
 | Sanctum | an exact-name registry entry (a reference UI term) |
 | Dart · Drive | each sits inside a longer protected ability or item name |
 | Wayfarer | it sits inside a protected skin-line phrase |
+
+**Battle-spell tuning changed** (the 2026-10-14 adversarial review): the eight battle spells cover the genre's usual
+jobs, but three matched a reference game's numbers exactly, so they were retuned: Hourstrike's charge returns every
+95 s with a 10 s lockout (was 90 s / 15 s), Glass Pane's 90 + 20 per level shield lasts 3 s on 160 s (was 2.5 s on
+180 s), Hairline is 170 s with a 35% healing cut (was 180 s / 40%).
 
 ---
 

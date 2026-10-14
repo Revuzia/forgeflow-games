@@ -29,6 +29,8 @@ export async function open(path = '/?dev=1', o = {}) {
   const logs = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+  // failed requests with their URL (Chrome's console line for a 404 does not name the resource)
+  page.on('response', (r) => { if (r.status() >= 400 && !/favicon/.test(r.url())) logs.push(`[http ${r.status()}] ${r.url()}`); });
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
   if (o.wait !== false) await page.waitForFunction(() => !!window.__vale, null, { timeout: 30000 });
   return { browser, context, page, logs };

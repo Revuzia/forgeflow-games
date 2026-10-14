@@ -63,6 +63,8 @@
     "lut": "assets/grade/vale_grade_01.cube",
     "backdrop": "assets/backdrops/seat_center.webp"
   },
+  "vfxEvents": {"levelUp": "lib_level_up", "respawn": "lib_respawn", "death": "lib_death_shatter", "unitDeath": "lib_wick_death", "structureFall": "lib_structure_fall", "recall": "lib_recall", "pickup": "lib_sunmote_pickup", "objective": "lib_objective_taken", "blink": "lib_blink", "crit": "lib_crit", "heal": "lib_heal_rise", "shield": "lib_shield_up", "ultWindup": "lib_ult_windup"},
+  "vfxStatus": {"stun": "lib_stun_ring", "root": "lib_root_bind", "slow": "lib_slow_glass", "silence": "lib_silence", "reveal": "lib_reveal_mark"},
   "tips": [
     "By default, allies glow azure and enemies glow marigold on every map. Settings let you change both.",
     "A glow on an enemy fighter is a warning. When their light flares, an ability is on its way.",

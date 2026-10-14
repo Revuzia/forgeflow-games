@@ -119,10 +119,10 @@
     {
       "id": "hairline",
       "name": "Hairline",
-      "desc": "Crack an enemy fighter within 6 m: deal 20 + 8 per level damage that ignores armor and resist, and for 4 s its armor and resist are 20% lower and healing on it is 40% weaker.",
+      "desc": "Crack an enemy fighter within 6 m: deal 20 + 8 per level damage that ignores armor and resist, and for 4 s its armor and resist are 20% lower and healing on it is 35% weaker.",
       "icon": "assets/ui/icons/setup/hairline.webp",
       "maxRank": 1,
-      "cooldown": 180,
+      "cooldown": 170,
       "cost": 0,
       "costKind": "none",
       "targeting": {
@@ -165,7 +165,7 @@
           "op": "status",
           "status": "grievous",
           "duration": 4,
-          "power": 0.4,
+          "power": 0.35,
           "to": "target"
         }
       ],
@@ -191,15 +191,15 @@
     {
       "id": "hourstrike",
       "name": "Hourstrike",
-      "desc": "Strike a monster or Wick within 5 m for 450 + 30 per level damage that ignores armor and resist, and heal 60 + 6 per level. Holds 2 charges; one returns every 90 s.",
+      "desc": "Strike a monster or Wick within 5 m for 450 + 30 per level damage that ignores armor and resist, and heal 60 + 6 per level. Holds 2 charges; one returns every 95 s.",
       "icon": "assets/ui/icons/setup/hourstrike.webp",
       "maxRank": 1,
-      "cooldown": 15,
+      "cooldown": 10,
       "cost": 0,
       "costKind": "none",
       "charges": {
         "max": 2,
-        "recharge": 90
+        "recharge": 95
       },
       "targeting": {
         "kind": "unit",
@@ -340,10 +340,10 @@
     {
       "id": "glass_pane",
       "name": "Glass Pane",
-      "desc": "Gain a shield of 90 + 20 per level for 2.5 s.",
+      "desc": "Gain a shield of 90 + 20 per level for 3 s.",
       "icon": "assets/ui/icons/setup/glass_pane.webp",
       "maxRank": 1,
-      "cooldown": 180,
+      "cooldown": 160,
       "cost": 0,
       "costKind": "none",
       "targeting": {
@@ -354,10 +354,9 @@
         {
           "op": "shield",
           "amount": {
-            "base": 90,
-            "level": 20
+            "base": 90, "level": 20
           },
-          "duration": 2.5,
+          "duration": 3,
           "to": "self"
         }
       ],
@@ -469,7 +468,7 @@
   "boons": [
     {
       "id": "first_cut",
-      "name": "First Cut",
+      "name": "Opening Hour",
       "desc": "Your first damage to an enemy fighter deals an extra 12 + 3 per level damage that ignores armor and resist. Once every 10 s per fighter.",
       "icon": "assets/ui/icons/setup/first_cut.webp",
       "triggers": [

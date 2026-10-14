@@ -591,6 +591,10 @@ Mode ids `rift`, `bridge`, `fray` · queue ids `rift_standard`, `rift_quick`, `r
 `map_bridge`, `map_fray` · item/setup pool ids `rift`, `bridge`, `fray`. Player-facing names live in
 the records. Code still never branches on these ids (it branches on `kind`, `pick`, `end.kind`).
 
+- CHANGED(RENDER): world-event and status looks are content: `client.vfxEvents` (levelUp, respawn, death, unitDeath,
+  structureFall, recall, pickup, objective, blink, crit, heal, shield, ultWindup → vfx id) and `client.vfxStatus`
+  (status kind → vfx id); the boot passes them to the renderer, the build checks every id exists.
+
 ## §10 Client UI (`src/ui/`, lane UI)
 - Preact 11 + `@preact/signals`. `ui/app.tsx` mounts over the canvas. Screens are modules in
   `ui/screens/<id>.tsx` registered in `ui/screens/index.ts` by screen id; nav comes from

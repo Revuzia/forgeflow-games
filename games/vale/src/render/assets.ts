@@ -23,6 +23,10 @@ export interface LoadedModel {
   skinned: boolean;
 }
 
+/** a built catalog rewrites every asset it found to `assets/<sha12>-<name>`; an unrewritten ref is known
+ *  missing (--allow-missing-assets) and is never requested (no 404 per menu visit) — CatalogView.isBuilt's rule */
+function built(ref: string): boolean { return /^assets\/[0-9a-f]{12}-/.test(ref) || /^(https?:|data:|blob:|\/)/.test(ref); }
+
 export class Assets {
   private readonly gltfLoader: GLTFLoader;
   private readonly hdrLoader: HDRLoader;
@@ -60,7 +64,7 @@ export class Assets {
   }
 
   model(ref: string | undefined | null): Promise<LoadedModel | null> {
-    if (!ref) return Promise.resolve(null);
+    if (!ref || !built(ref)) return Promise.resolve(null);
     return this.loadModel(ref, this.url(ref));
   }
 
@@ -93,7 +97,7 @@ export class Assets {
   }
 
   hdr(ref: string | undefined | null): Promise<DataTexture | null> {
-    if (!ref) return Promise.resolve(null);
+    if (!ref || !built(ref)) return Promise.resolve(null);
     let p = this.hdrs.get(ref);
     if (!p) {
       p = this.track(this.hdrLoader.loadAsync(this.url(ref)).then((t) => (t.image && (t.image as { width: number }).width > 2 ? t : null))
@@ -109,7 +113,7 @@ export class Assets {
 
   /** a tiling colour texture (sRGB, repeat, trilinear + anisotropic); null when missing */
   texture(ref: string | undefined | null): Promise<Texture | null> {
-    if (!ref) return Promise.resolve(null);
+    if (!ref || !built(ref)) return Promise.resolve(null);
     let p = this.textures.get(ref);
     if (!p) {
       p = this.track(this.texLoader.loadAsync(this.url(ref)).then((t) => {
@@ -126,7 +130,7 @@ export class Assets {
   }
 
   lut(ref: string | undefined | null): Promise<LookupTexture | null> {
-    if (!ref) return Promise.resolve(null);
+    if (!ref || !built(ref)) return Promise.resolve(null);
     let p = this.luts.get(ref);
     if (!p) {
       p = this.track(this.lutLoader.loadAsync(this.url(ref)).then((t) => t as LookupTexture)

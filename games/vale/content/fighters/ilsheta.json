@@ -54,7 +54,7 @@
       "name": "Warm Hands",
       "icon": "assets/ui/icons/abilities/ilsheta_warm_hands.webp",
       "desc": "Ilsheta's heals restore 40% more to allies who are stunned, rooted, slowed, airborne, asleep, feared or taunted, and give them 15% move speed for 1.5 s (once per 4 s per ally).",
-      "triggers": [],
+      "triggers": [{"on": "abilityHit", "filter": {"enemies": false, "allies": true, "self": false, "minions": false, "monsters": false, "summons": false}, "perTargetCooldown": 4, "cond": {"kind": "any", "conds": [{"kind": "targetHasStatus", "status": "stun"}, {"kind": "targetHasStatus", "status": "root"}, {"kind": "targetHasStatus", "status": "slow"}, {"kind": "targetHasStatus", "status": "airborne"}, {"kind": "targetHasStatus", "status": "sleep"}, {"kind": "targetHasStatus", "status": "fear"}, {"kind": "targetHasStatus", "status": "taunt"}]}, "effects": [], "$comment": "presentation only: the bonus heal is inline in her heals; this fires the Warm Hands look on the ally it lands on"}],
       "present": {
         "vfx": "ilsheta_passive_warm"
       }

@@ -146,7 +146,9 @@ async function journey(mode) {
   } catch {
     ok = false;
   }
-  const errors = logs.splice(0).filter((l) => !/404|unavailable|Failed to load resource/.test(l));
+  const errors = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
+  const hard = errors.filter((l) => /^\[(http [45]|pageerror)/.test(l));
+  if (hard.length) { ok = false; console.log(`  ✗ ${hard.length} failed request(s) / page error(s): ${hard.slice(0, 3).join(' · ')}`); }
   report.journeys.push({ mode, ok, steps, consoleErrors: errors.slice(0, 20) });
   return ok;
 }
@@ -211,7 +213,10 @@ async function store() {
   } catch {
     ok = false;
   }
-  report.journeys.push({ mode, ok, steps, consoleErrors: logs.splice(0).filter((l) => !/404|unavailable|Failed to load resource/.test(l)).slice(0, 20) });
+  const errs = logs.splice(0).filter((l) => !/Failed to load resource/.test(l));
+  const hardErrs = errs.filter((l) => /^\[(http [45]|pageerror)/.test(l));
+  if (hardErrs.length) { ok = false; console.log(`  ✗ ${hardErrs.length} failed request(s) / page error(s): ${hardErrs.slice(0, 3).join(' · ')}`); }
+  report.journeys.push({ mode, ok, steps, consoleErrors: errs.slice(0, 20) });
   return ok;
 }
 

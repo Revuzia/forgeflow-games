@@ -574,7 +574,11 @@ export class Actor {
   dispose(): void {
     this.disposed = true;
     this.mixer?.stopAllAction();
+    if (this.mixer && this.model) this.mixer.uncacheRoot(this.model);
     this.mixer = null;
+    // each clone owns its Skeleton, whose bone texture lives on the GPU until disposed (geometry and the
+    // shared materials belong to the cached template and stay)
+    this.model?.traverse((o) => { const sm = o as SkinnedMesh; if (sm.isSkinnedMesh) sm.skeleton.dispose(); });
     for (const m of this.accent) m.dispose();
     if (this.outline) (this.outline.userData.mat as MeshBasicMaterial).dispose();
     this.root.removeFromParent();

@@ -32,6 +32,7 @@
 .btn--secondary.is-selected::before { content: ''; position: absolute; left: calc(1.5 * var(--u)); top: 0; width: 2px; height: var(--u); background: var(--chalk); }
 
 .btn--quiet { color: var(--text-2); padding-left: var(--u); padding-right: var(--u); }
+.btn--danger { color: var(--danger); border-color: var(--danger); }
 .btn--quiet:hover:not([aria-disabled='true']), .btn--quiet:focus-visible { color: var(--text-1); background: rgba(30, 35, 44, 0.7); }
 
 .btn--icon { width: calc(5 * var(--u)); height: calc(5 * var(--u)); padding: 0; color: var(--text-2); }
