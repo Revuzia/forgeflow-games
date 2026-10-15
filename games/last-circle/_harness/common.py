@@ -67,7 +67,7 @@ DEFAULT_BASE = "http://127.0.0.1:8790" + GAME_PATH + "index.html"
 MAPS = ["isla_viva", "ashgrid", "deepwood"]                   # hud.js BATTLE_MAPS
 # The build that is LIVE on the CDN: the default baseline of the perf rows (perf_district) and the frozen "must fail" build of the Wave-7 rows.
 # AFTER A DEPLOY move this ONE constant to the new live build's commit (README "After the Wave-7 deploy"); nothing else holds the sha.
-LIVE_REV = "60b854d0"                                          # Wave 6 release (changelog + cache bump ?v=1791946668)
+LIVE_REV = "dd414cb2"                                          # Wave 7 release (changelog + cache bump ?v=1792031930); Wave 6 was 60b854d0 (gate.py WAVE6_REV)
 
 # Real d3d11 ANGLE, occlusion off, no background throttling (dyefield FLAGS) + precise heap numbers.
 FLAGS = [
