@@ -17,6 +17,11 @@
  * only per-frame CPU cost is three shared uniforms and a sub-range upload on the
  * frames a slot actually changed. Beams are CLAMPED at spawn to the first collider
  * above them (a ray-cast once per item), so none pokes through a roof.
+ *
+ * Wave 7 (lane 7C): an item or chest is SETTLED at spawn - out of any wall it was authored or piled into, off a stairwell hole onto the slab beside it,
+ * down onto a hillside - from the static colliders only (same result on every squad client; see SETTLE below). A pickup (walkover / E / chest) reaches
+ * 2.2 m up or down (REACH_DY), so a player standing on an upper floor or a roof does not take the loot of the room under it. W.nearbyLoot(pos, r, maxDy)
+ * takes the same reach as an optional third argument (the default 4 m is the bots' planning query).
  */
 import * as THREE from "three";
 
@@ -65,7 +70,7 @@ export function init(W) {
     } catch (e) { itemProtoCache[id] = null; }   // not generated yet — fallback shapes
     return itemProtoCache[id];
   };
-  W.nearbyLoot = (pos, r) => nearby(pos, r);
+  W.nearbyLoot = (pos, r, maxDy) => nearby(pos, r, maxDy);   // maxDy: vertical reach (default NEAR_DY); bots' walkover and the player's pickup pass REACH_DY
   W.pickupItem = (a, id) => pickup(W, a, id);
   W.openChest = (a, id) => openChest(W, a, id);
   W.giveItem = (a, data) => give(W, a, data);
@@ -937,13 +942,98 @@ function itemMesh(W, data) {
   return grp;
 }
 
+// ── SETTLE (Wave 7, lane 7C): never leave loot inside a wall or hovering over a hole ─────────────────────────────────────────────────
+// A pile offset or a chest burst lands on a thin wall, a fence post or a container (live 60b854d0: 20 of 1,977 Savanna items inside a box); loot
+// authored at an upper floor can sit over the stairwell hole, 4 m above the slab it should lie on (36 of 1,977: no contact blob, a ring floating
+// in the air, a beam that goes through the roof). Both are pure functions of the STATIC colliders and the ground - no random draw, so every squad
+// client puts the item in the same place - and both are fixed the same way: take the nearest spot (rings of 0.4 m up to 2 m, 16 headings, a fixed
+// order) where the body is clear of every solid box AND there is a floor within 0.9 m under it (a box top, a ramp surface or the ground). Nothing
+// valid within reach (a chest on a hull over the sea, an item still in the air) keeps the authored spot, as before.
+const _stCols = [];
+const SETTLE_RINGS = [0.4, 0.8, 1.2, 1.6, 2.0], SETTLE_STEPS = 16;
+const SETTLE_DIR = [];
+for (let i = 0; i < SETTLE_STEPS; i++) SETTLE_DIR.push([Math.cos(i * Math.PI * 2 / SETTLE_STEPS), Math.sin(i * Math.PI * 2 / SETTLE_STEPS)]);
+/** the sloped slab of a ramp collider at (x, z) (maps.js C-RAMP: dir 0 rises toward +x, 1 toward -x, 2 toward +z, 3 toward -z) */
+function rampTopAt(c, x, z) {
+  const w = Math.max(0.01, c.dir < 2 ? c.maxX - c.minX : c.maxZ - c.minZ);
+  const f = c.dir === 0 ? (x - c.minX) / w : c.dir === 1 ? (c.maxX - x) / w : c.dir === 2 ? (z - c.minZ) / w : (c.maxZ - z) / w;
+  return c.minY + (c.maxY - c.minY) * Math.min(1, Math.max(0, f));
+}
+/** What is within 0.9 m under a body whose base is at y: 2 = a box top or the ground (what surfaceUnder - the contact blob and the floor ring - can
+ *  sit on), 1 = only a ramp surface (an item on a stair: no blob, the ring floats flat at the item), 0 = nothing (over a hole, in the air). */
+function floorUnder(M, x, z, y) {
+  let floor = M.heightAt(x, z), ramp = -Infinity;
+  const cs = M.queryColliders(x, z, 0.05, _stCols);
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
+    if (c.kind === "box") { if (c.maxY <= y + 0.05 && c.maxY > floor) floor = c.maxY; }
+    else if (c.kind === "ramp") { const t = rampTopAt(c, x, z); if (t <= y + 0.05 && t > ramp) ramp = t; }
+  }
+  if (y - floor <= 0.9) return 2;
+  return y - ramp <= 0.9 ? 1 : 0;
+}
+/** does a body (radius rad, from y + 0.05 up to y + hi) overlap the interior of a solid box? A box whose top is at or under the body's base is
+ *  the floor it rests on, not a solid it is inside. */
+function bodyInSolid(M, x, z, y, rad, hi) {
+  const cs = M.queryColliders(x, z, rad + 0.05, _stCols);
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (c.kind !== "box") continue;
+    if (x < c.minX - rad || x > c.maxX + rad || z < c.minZ - rad || z > c.maxZ + rad) continue;
+    if (c.maxY <= y + 0.12) continue;
+    if (y + hi > c.minY + 0.05 && y + 0.05 < c.maxY - 0.05) return true;
+  }
+  return false;
+}
+const _settled = { x: 0, z: 0, moved: false };
+/** Fills and returns `_settled` (shared scratch). The authored spot stays when it is clear of every solid and a box top or the ground is under
+ *  it; else the nearest spot within 2 m that is (a spot only a RAMP supports is a last resort: an item lying on a stair stays on the stair unless a
+ *  slab or the ground is within reach, and so does a death drop); else the authored spot again. */
+function settle(W, x, y, z, rad, hi) {
+  const M = W.map;
+  _settled.x = x; _settled.z = z; _settled.moved = false;
+  if (!M || !M.queryColliders) return _settled;
+  const k0 = bodyInSolid(M, x, z, y, rad, hi) ? 0 : floorUnder(M, x, z, y);
+  if (k0 === 2) return _settled;
+  for (let pass = 2; pass >= 1; pass--) {                    // pass 1 takes a box top / the ground, pass 2 settles for a ramp surface
+    if (pass === 1 && k0 === 1) return _settled;             // already on a stair and nothing better in reach
+    for (let ri = 0; ri < SETTLE_RINGS.length; ri++) {
+      const r = SETTLE_RINGS[ri];
+      for (let k = 0; k < SETTLE_STEPS; k++) {
+        const nx = x + SETTLE_DIR[k][0] * r, nz = z + SETTLE_DIR[k][1] * r;
+        if (bodyInSolid(M, nx, nz, y, rad, hi) || floorUnder(M, nx, nz, y) < pass) continue;
+        _settled.x = nx; _settled.z = nz; _settled.moved = true;
+        return _settled;
+      }
+    }
+  }
+  return _settled;
+}
+
+/** A pile offset on a hillside (or a drop beside a ledge) keeps the AUTHORED height, so on a 45 degree slope an item 1 m uphill of its point hangs
+ *  1-2 m over the ground it lies on (live 60b854d0, Isla Viva's volcano: 23 of 1,804 items; no blob, a ring in the air). With NOTHING under it (no
+ *  box top, no ramp surface) and the ground 0.9-3 m below, it lies on the ground at the usual 0.5 m hover instead - unless that is inside a solid
+ *  or under the waterline (maps.js loot() drops points below waterY + 0.4). Anything within 0.9 m of a box top or a stair is left alone. */
+function lowerOnSlope(W, x, z, gy) {
+  const M = W.map;
+  const ground = M.heightAt(x, z);
+  if (gy - ground <= 0.9 || gy - ground > 3 || floorUnder(M, x, z, gy) !== 0) return gy;
+  const ly = ground + 0.5;
+  if (ly < (M.waterY == null ? -Infinity : M.waterY + 0.4) || bodyInSolid(M, x, z, ly, 0.15, 0.7)) return gy;
+  return ly;
+}
+
 /** id must be DETERMINISTIC across clients (derived from source, not spawn
  * order) so multiplayer "take" mirroring removes the right item everywhere. */
 export function spawnItem(W, data, x, y, z, id) {
   id = id || "i" + (nextId++);
   if (items.has(id)) return id;
   const group = itemMesh(W, data);
-  const gy = Math.max(y, W.map.heightAt(x, z) + 0.15);
+  let gy = Math.max(y, W.map.heightAt(x, z) + 0.15);
+  const st = settle(W, x, gy, z, 0.15, 0.7);          // out of walls, off the stairwell hole (see SETTLE above)
+  if (st.moved) { x = st.x; z = st.z; gy = Math.max(y, W.map.heightAt(x, z) + 0.15); }
+  gy = lowerOnSlope(W, x, z, gy);
   group.position.set(x, gy, z);
   W.group("loot").add(group);
   const it = { id, data, pos: { x, y: gy, z }, group, taken: false, blob: -1, ring: -1, beam: -1, glow: -1, ceil: Infinity };
@@ -987,7 +1077,11 @@ function spawnChest(W, x, y, z) {
   // The chest rests ON the surface under it (the highest floor at or just below its authored height, else the terrain). Every authoring
   // site passes surface + 0.6, so the old `y - 0.4` hung it 0.20 m over the grass (all 193-245 terrain chests per 5 seeds) and sank it
   // 0.10 m into a roof slab. Nothing within 0.9 m under it (a chest on a hull over the sea, a sky island) keeps the old formula.
-  const gy = surfaceUnder(W, x, y, z) ? _surf.floor : Math.max(y - 0.4, W.map.heightAt(x, z));
+  const restY = (px, pz) => (surfaceUnder(W, px, y, pz) ? _surf.floor : Math.max(y - 0.4, W.map.heightAt(px, pz)));
+  // SETTLE (see above): a 1.6 m chest clear of every wall (its body is judged from the floor it rests on) and standing on a floor, not over a hole
+  const st = settle(W, x, restY(x, z), z, 0.55, 0.9);
+  if (st.moved) { x = st.x; z = st.z; }
+  const gy = restY(x, z);
   group.position.set(x, gy, z);
   group.rotation.y = (x * 13.7 + z * 7.3) % (Math.PI * 2); // varied facing
   // gold ring, light beam and glow so chests read from far away: three slots in the
@@ -1078,9 +1172,16 @@ function maybeSupplyDrop(W, dt) {
 }
 
 // ── queries / interaction ────────────────────────────────────────────────────
-function nearby(pos, r) {
+// Vertical reach. nearby() is also the bots' PLANNING query (90 m, |dy| < 4: loot on their own level or a flight of stairs away), so its default
+// stays 4. A pickup is a different question: a 4 m storey puts the floor loot of the room below 3.8 m under a player's feet and the floor above
+// 4.2 m over them, so |dy| < 4 let a player standing on an upper floor (or a roof a ramp reaches) take the ground floor's loot THROUGH the slab -
+// 16-17 % of the items on every seed (probe_loot: items within 1.5 m of a ramp-reached slab 2.2-4 m above them, live 60b854d0 and the Wave-7 tree).
+// The player's walkover / E / chest reach and the bots' walkover (WALK_DY) use this one number.
+const NEAR_DY = 4, REACH_DY = 2.2;
+function nearby(pos, r, maxDy) {
   const out = [];
   const r2 = r * r;
+  const dyMax = maxDy == null ? NEAR_DY : maxDy;
   const x0 = Math.floor((pos.x - r) / LOOT_CELL), x1 = Math.floor((pos.x + r) / LOOT_CELL);
   const z0 = Math.floor((pos.z - r) / LOOT_CELL), z1 = Math.floor((pos.z + r) / LOOT_CELL);
   for (let cx = x0; cx <= x1; cx++) {
@@ -1094,7 +1195,7 @@ function nearby(pos, r) {
           if (!it || it.taken) continue;
           const dx = it.pos.x - pos.x, dz = it.pos.z - pos.z;
           const d2 = dx * dx + dz * dz;                     // squared compare: no sqrt per candidate
-          if (d2 < r2 && Math.abs(it.pos.y - pos.y) < 4) {
+          if (d2 < r2 && Math.abs(it.pos.y - pos.y) < dyMax) {
             out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d: Math.sqrt(d2) });
           }
         } else {
@@ -1102,7 +1203,7 @@ function nearby(pos, r) {
           if (!c || c.opened) continue;
           const dx = c.pos.x - pos.x, dz = c.pos.z - pos.z;
           const d2 = dx * dx + dz * dz;
-          if (d2 < r2 && Math.abs(c.pos.y - pos.y) < 4) {
+          if (d2 < r2 && Math.abs(c.pos.y - pos.y) < dyMax) {
             out.push({ type: "chest", id: c.id, pos: c.pos, d: Math.sqrt(d2) });
           }
         }
@@ -1470,7 +1571,7 @@ export function update(W, dt) {
   //  - HOLD E for 2 s on a chest → open (progress surfaces on the HUD)
   const a = W.player;
   if (a && a.alive) {
-    const near = nearby(a.pos, 2.4);
+    const near = nearby(a.pos, 2.4, REACH_DY);
     // walkover auto-pickup: ammo/heals always (if they fit); weapons only up
     // to 3 carried — hoarding 5 guns left NO room for shield potions, which
     // read as "shields don't work". Tap E to take/swap anything explicitly.

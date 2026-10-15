@@ -27,6 +27,22 @@
  * host = s0); every other slot keeps its bot. A guest joining the lobby simply
  * claims the next slot before match start; when a guest disconnects mid-match
  * the host re-attaches a bot brain to that slot — the actor keeps fighting.
+ *
+ * VERSION GUARD (contract C-VER, Wave 7 lane 7C). The world is rebuilt on every
+ * client from the shared seed, so two clients whose WORLD GENERATORS differ
+ * (maps.js MAP_GEN_VERSION) build different ground, colliders and towns from the
+ * same seed — remote players float, sink or stand in walls. The handshake now
+ * carries that version:
+ *   hello  { name, gv, host }   gv = the sender's MAP_GEN_VERSION, host = 1 for the room's creator
+ *   start  { ..., gv }          the host's version, next to the seed
+ *   refuse { gv, hostGv, name } a guest that would not build the host's world says so
+ * A peer that sends no `gv` (every build before this one) is version 1. Same
+ * version -> everything below is exactly as before. A guest that differs REFUSES
+ * the room (on-screen message, RELOAD button when its own page is the stale one)
+ * and the host is told why; the host also leaves a mismatched peer out of the
+ * roster, so no slot is ever handed to a client that would build another world.
+ * The pure decisions live in SquadHandshake / judgeGv (selftest: net.selftest.cjs);
+ * the DOM and the sends stay in the lobby code below.
  */
 import { NetPlay } from "../../net/ffg_netplay.js";
 import { RTCMesh } from "../../net/ffg_rtc.js";
@@ -37,8 +53,114 @@ const SUPABASE_ANON_KEY =
 
 let S = null; // session
 
+// ── VERSION GUARD: pure part ─────────────────────────────────────────────────
+// IMPORTANT: every royale module is loaded with the SAME ?v= query as the boot module (ffg_royale3d.js `const V = ...`). A bare
+// "./maps.js" from here would be a SECOND instance of maps.js (and a stale one after an in-place edit); with the query it is the
+// instance the boot already loaded - no new fetch. The same query is used for bots.js below.
+const V = new URL(import.meta.url).search;
+
+/** A world-generator version as a positive integer. Anything that is not one (a missing field - every build before the guard -, a
+ *  string, NaN, a negative) is version 1. */
+export function normGv(v) {
+  return typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 9999 ? v : 1;
+}
+
+/** null when the two versions agree, else what the mismatch means for THIS side (`local`). */
+export function judgeGv(local, remote) {
+  const l = normGv(local), r = normGv(remote);
+  if (l === r) return null;
+  const mineOlder = l < r;
+  return {
+    local: l, remote: r, mineOlder,
+    title: mineOlder ? "Your game is out of date" : "The host's game is out of date",
+    detail: mineOlder
+      ? `This room runs game version ${r}; this page is on version ${l}. Reload the page to update, then join again.`
+      : `This room runs game version ${r}; this page is on version ${l}. Ask the host to reload their page, then join again.`,
+    reload: mineOlder,
+  };
+}
+
+/** The line the HOST reads when a guest refused: who, which versions, and who has to reload. */
+export function refusalLine(name, guestGv, hostGv) {
+  const nm = String(name == null || name === "" ? "A player" : name).slice(0, 24);
+  const g = normGv(guestGv), h = normGv(hostGv);
+  return g < h
+    ? `${nm} could not join: their game is out of date (version ${g}, this room runs version ${h}). They need to reload the page.`
+    : `${nm} could not join: your game is out of date (they run version ${g}, this room runs version ${h}). Reload this page, then start a new room.`;
+}
+
+/** The line the HOST reads about a peer it left out of the roster (its hello said another version). */
+export function leftOutLine(name, peerGv, hostGv) {
+  const nm = String(name == null || name === "" ? "A player" : name).slice(0, 24);
+  const g = normGv(peerGv), h = normGv(hostGv);
+  return g < h
+    ? `${nm} is not in this match: their game is out of date (version ${g}, this room runs version ${h}). A bot has their place; they need to reload the page.`
+    : `${nm} is not in this match: this room runs version ${h} and they run version ${g}. A bot has their place; reload this page to match them.`;
+}
+
+/** The pure half of the squad handshake: who is in the room at which world version, who may get a slot, what a guest does with a start
+ *  message. net.js feeds it the messages and does the sending / painting; net.selftest.cjs drives two of these through an in-memory bus. */
+export class SquadHandshake {
+  constructor({ id, name, gv, host }) {
+    this.id = id; this.name = name; this.gv = normGv(gv); this.host = !!host;
+    this.peers = new Map();            // peer id -> { name, gv, host }
+  }
+  /** the body of our "hello" */
+  helloMsg() { return { name: this.name, gv: this.gv, host: this.host ? 1 : 0 }; }
+  /** a "hello" arrived. `first`: we had not seen this peer. `refuseNow`: set when WE are a guest and the peer is the room's host
+   *  (it said so) on another version - leave at once instead of waiting for START. */
+  onHello(from, d) {
+    d = d || {};
+    const first = !this.peers.has(from);
+    const rec = { name: d.name, gv: normGv(d.gv), host: d.host === 1 || d.host === true };
+    this.peers.set(from, rec);
+    const mismatch = judgeGv(this.gv, rec.gv);
+    return { first, rec, mismatch, refuseNow: !this.host && rec.host ? mismatch : null };
+  }
+  /** a peer's version (a peer that never said hello is version 1) */
+  gvOf(id) { const r = this.peers.get(id); return r ? r.gv : 1; }
+  /** HOST: the start roster from `names` (peer id -> name). Peers on another version are LEFT OUT (`left`), the rest are sorted by id and
+   *  cut at `maxGuests` (`over`: stay in the room, told "room is full"). Host = slot 0. */
+  planStart(names, maxGuests) {
+    const roster = [{ peerId: this.id, slot: 0, name: this.name }];
+    const left = [], over = [];
+    for (const pid of Object.keys(names).sort()) {
+      const gv = this.gvOf(pid), nm = names[pid] || "Friend";
+      if (gv !== this.gv) { left.push({ peerId: pid, name: nm, gv }); continue; }
+      if (roster.length - 1 >= maxGuests) { over.push({ peerId: pid, name: nm }); continue; }
+      roster.push({ peerId: pid, slot: roster.length, name: nm });
+    }
+    return { roster, left, over };
+  }
+  /** HOST: the "start" message for `cfg` (seed, map, mode, roster) */
+  startMsg(cfg) { return Object.assign({}, cfg, { gv: this.gv }); }
+  /** GUEST: judge a "start" message. null = same world, go. Else the judgement plus `slot`: the slot an OLD host (no guard) gave us in
+   *  its roster, so the refusal can free it ("bye") instead of leaving a frozen remote body in the host's match. */
+  judgeStart(d) {
+    const j = judgeGv(this.gv, d ? d.gv : undefined);
+    if (!j) return null;
+    const me = d && Array.isArray(d.roster) ? d.roster.find((r) => r && r.peerId === this.id) : null;
+    return Object.assign({ slot: me && me.slot != null ? me.slot : null }, j);
+  }
+}
+
+let _localGv = null, _localGvP = null;
+/** This page's MAP_GEN_VERSION: the export of maps.js, read through the already-loaded module (same ?v= as the boot, so no fetch). A
+ *  maps.js without the export is version 1. A failed import (it cannot be, the boot needed the module) is 1 for this call and is NOT
+ *  cached, so a later lobby retries. */
+function localGenVersion() {
+  if (_localGv != null) return Promise.resolve(_localGv);
+  if (!_localGvP) {
+    _localGvP = import("./maps.js" + V).then(
+      (m) => (_localGv = normGv(m && m.MAP_GEN_VERSION)),
+      (e) => { console.warn("[net] could not read MAP_GEN_VERSION from maps.js:", e); _localGvP = null; return 1; });
+  }
+  return _localGvP;
+}
+
 export function init(W) {
   W.net = null;
+  localGenVersion();   // warm: the lobby needs the number the moment it opens (an already-loaded module, so this is instant)
   W.events.on("openOnline", (sel) => openLobby(W, sel));
   // weapons.js routes hits on netRemote humans here (victim applies to itself).
   // `attackerId` is LAST so the old 4-arg call order still works. It exists
@@ -118,7 +240,7 @@ function isAuthority(W) { return S && S.net.isHost(); }
 // the list because the ENVELOPE is not the right thing to drop — the flush in
 // update() thins its contents first, so shedding never silently strands a
 // pickup or a chest open inside a discarded envelope.
-const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1 };
+const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1, refuse: 1 };
 
 /** OUTBOUND BUDGET, in messages per rolling second. Supabase Realtime does not
  *  throttle a connection that exceeds its rate — it DISCONNECTS it, which
@@ -232,22 +354,69 @@ function openLobby(W, sel) {
   const rosterEl = document.createElement("div");
   Object.assign(rosterEl.style, { fontSize: "13px", lineHeight: "1.6", margin: "2px 0 12px", minHeight: "22px", opacity: ".9" });
   box.appendChild(rosterEl);
+  // Notices (textContent only): why a guest was left out / refused. A separate line, because `status` is rewritten on every peer change.
+  const noteEl = document.createElement("div");
+  Object.assign(noteEl.style, { fontSize: "12.5px", lineHeight: "1.5", margin: "0 0 10px", color: "#ffb060", display: "none" });
+  noteEl.setAttribute("data-net-notice", "");
+  box.appendChild(noteEl);
+  // `key` (a peer id): one line per peer - the guest's own refusal replaces the line the host wrote when its hello arrived
+  function notice(text, key) {
+    let row = key != null ? [...noteEl.children].find((r) => r._key === key) : null;
+    if (!row) { row = document.createElement("div"); row._key = key; noteEl.appendChild(row); }
+    row.textContent = String(text).slice(0, 220);
+    while (noteEl.children.length > 3) noteEl.firstChild.remove();
+    noteEl.style.display = "block";
+  }
   function paintRoster() {
     if (!S || !S.net.room) { rosterEl.innerHTML = ""; return; }
     // ffg_netplay.js:64 makes the LOWEST peer id the host, and startB.onclick
     // hands out slots by sorted peer id — so sorting every id (peers + self) on
     // any client reproduces the exact roster the host will build. No guessing.
+    // A peer on another WORLD VERSION never gets a slot (SquadHandshake.planStart), so it is shown as such and does not count towards the
+    // slot numbers or the room cap.
     const all = Object.keys(S.peers).concat([S.net.id]).sort();
     const badge = (s) => `<span style="font-size:10px;letter-spacing:1px;opacity:.6;margin-left:6px">${s}</span>`;
     let h = "";
-    all.forEach((pid, i) => {
+    let i = -1;                  // index among the peers that can take a slot (self included)
+    all.forEach((pid) => {
       const me = pid === S.net.id;
       // names arrive from other machines — they go through esc() before innerHTML
       const nm = esc(me ? S.myName : (S.peers[pid] || "Friend"));
+      if (!me && S.hs.gvOf(pid) !== S.hs.gv) {
+        h += `<div style="color:#ff9b8a" data-net-peer-gv="${S.hs.gvOf(pid)}">${nm}${badge("VERSION " + S.hs.gvOf(pid) + " — CAN'T JOIN, MUST RELOAD")}</div>`;
+        return;
+      }
+      i++;
       if (i > MAX_GUESTS) { h += `<div style="color:#ffb060">${nm}${badge("SPECTATING — ROOM FULL")}</div>`; return; }
       h += `<div style="${me ? "color:#7fd3ff" : ""}">${me ? "<b>" + nm + "</b>" : nm}${badge(i === 0 ? "HOST" : "SLOT " + i)}</div>`;
     });
     rosterEl.innerHTML = h;
+  }
+  // The guest-side refusal: the plain-language reason in the lobby, the buttons back, and a RELOAD button when THIS page is the stale one.
+  let reloadB = null;
+  function showRefusal(j) {
+    status.textContent = "";
+    const b = document.createElement("b");
+    b.style.color = "#ffb060";
+    b.textContent = j.title;
+    status.appendChild(b);
+    status.appendChild(document.createElement("br"));
+    status.appendChild(document.createTextNode(j.detail));
+    status.setAttribute("data-net-refused", j.mineOlder ? "page-older" : "host-older");
+    status.setAttribute("data-net-versions", j.local + "/" + j.remote);
+    if (reloadB) { reloadB.remove(); reloadB = null; }
+    if (j.reload) {
+      reloadB = document.createElement("button");
+      reloadB.textContent = "RELOAD PAGE";
+      reloadB.setAttribute("data-net-reload", "");
+      Object.assign(reloadB.style, { padding: "10px 22px", borderRadius: "10px", border: "none", cursor: "pointer", fontWeight: "800", fontSize: "14px", background: "#ffb060", color: "#08131f", marginBottom: "12px" });
+      reloadB.onclick = () => { try { location.reload(); } catch (e) {} };
+      status.after(reloadB);
+    }
+    createB.disabled = joinB.disabled = false;
+    startB.style.display = "none";
+    inviteB.style.display = "none";
+    rosterEl.innerHTML = "";
   }
 
   const startB = document.createElement("button");
@@ -283,6 +452,10 @@ function openLobby(W, sel) {
     const my = ++attempt;
     createB.disabled = joinB.disabled = true;
     status.textContent = "Connecting…";
+    // a new attempt starts clean: the last refusal's reason, reload button and notices belong to the last room
+    for (const a of ["data-net-refused", "data-net-versions", "data-net-error"]) status.removeAttribute(a);
+    if (reloadB) { reloadB.remove(); reloadB = null; }
+    noteEl.textContent = ""; noteEl.style.display = "none";
     const net = new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, "last-circle");
     // joinRoom resolves (it does not reject) on CHANNEL_ERROR / TIMED_OUT and reports
     // them through "error" — without this the lobby printed a room code for a room
@@ -300,13 +473,18 @@ function openLobby(W, sel) {
       return;
     }
     if (my !== attempt || !root.isConnected) return;   // cancelled / superseded while loading
+    const gv = await localGenVersion();                // this page's world-generator version (instant: the module is already loaded)
+    if (my !== attempt || !root.isConnected) return;
     // distinct default names online — two "You"s in one lobby is confusing
     const myName = (W.settings.playerName && W.settings.playerName !== "You")
       ? W.settings.playerName
       : "Player-" + net.id.slice(-3).toUpperCase();
-    S = { net, peers: {}, myName, started: false, lastState: 0, lastBots: 0, root };
+    S = { net, peers: {}, myName, started: false, lastState: 0, lastBots: 0, root, gv, refusals: [] };
+    S.hs = new SquadHandshake({ id: net.id, name: myName, gv, host: !!asHost });   // who is at which world version (C-VER)
     S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
     S.status = status;             // beginOnlineMatch reports a full room here
+    S.notice = notice;             // host: why a guest was left out / refused (lobby line; in a match it goes to the chat log)
+    S.showRefusal = showRefusal;   // guest: refuseRoom paints the reason + RELOAD button through this
     // P2P overlay (ffg_rtc.js): the state envelope prefers DataChannels;
     // signaling + everything critical + the full fallback stay on Supabase.
     // ensurePeer is called lazily the first time a peer's state arrives (both
@@ -334,7 +512,7 @@ function openLobby(W, sel) {
       return;
     }
     if (S !== sess || my !== attempt) { try { net.leave(); } catch (x) {} return; }   // cancelled while joining
-    send("hello", { name: S.myName });
+    send("hello", S.hs.helloMsg());
     status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — share this code.` + (asHost ? "" : "<br>Waiting for the host to start…");
     inviteB.style.display = "inline-block";
     paintRoster();
@@ -354,12 +532,19 @@ function openLobby(W, sel) {
     // START is deliberately NOT disabled past the cap: a 5th peer wandering in
     // would otherwise lock the host out of ever starting the match. The extras
     // stay in the room and are rejected by name in beginOnlineMatch.
-    const ids = Object.keys(S.peers).sort().slice(0, MAX_GUESTS);
-    const roster = [{ peerId: S.net.id, slot: 0, name: S.myName }];
-    ids.forEach((pid, i) => roster.push({ peerId: pid, slot: i + 1, name: S.peers[pid] || "Friend" }));
-    const cfg = { seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: sel.mode === "practice" ? "standard" : sel.mode, roster };
+    // VERSION GUARD: a peer on another world version gets no slot (it would build
+    // a different map from this seed) - planStart leaves it out and says so.
+    const plan = S.hs.planStart(S.peers, MAX_GUESTS);
+    const roster = plan.roster;
+    const cfg = S.hs.startMsg({ seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: sel.mode === "practice" ? "standard" : sel.mode, roster });
     send("start", cfg);
-    if (beginOnlineMatch(W, cfg) !== false) root.remove();
+    if (beginOnlineMatch(W, cfg) !== false) {
+      // the host reads WHY someone is not in this match: in the lobby when their hello arrived, and in the chat log once the match is live
+      // (onMatchStart - the lobby is about to go and the HUD chat is not up during the load)
+      S.pendingNotices = plan.left.map((l) => leftOutLine(l.name, l.gv, S.gv));
+      for (const l of plan.left) W.events.emit("squadRefused", { peerId: l.peerId, name: l.name, gv: l.gv, hostGv: S.gv, by: "host" });
+      root.remove();
+    }
   };
 }
 
@@ -379,9 +564,41 @@ function randCode() {
   return s;
 }
 
-window.addEventListener("beforeunload", () => {
+// (guarded so net.selftest.cjs can import this module in Node)
+if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("beforeunload", () => {
   try { if (S && S.started && S.mySlot != null) S.net.send("bye", { slot: "s" + S.mySlot }); } catch (e) {}
 });
+
+/** Tell the player (host side) something about the squad: the lobby line while the lobby is up, else the HUD's chat log
+ *  (W.pushChat, textContent only). Never throws. */
+function notify(W, text, key) {
+  try {
+    if (S && S.notice && S.root && S.root.isConnected) { S.notice(text, key); return; }
+    if (W.pushChat) W.pushChat("SQUAD", String(text).slice(0, 200), false);
+  } catch (e) {}
+}
+
+/** GUEST: this room would build another world than this page. Refuse it: say so on screen, tell the host why, free the slot an old
+ *  (unguarded) host may have given us, and leave the room. `j` = judgeGv / judgeStart result. */
+function refuseRoom(W, j, hostId) {
+  const sess = S;
+  if (!sess || sess.refused) return;
+  sess.refused = j;
+  const net = sess.net, name = sess.myName, gv = sess.gv;
+  console.warn(`[net] refusing the room: this page is world version ${j.local}, the room runs ${j.remote}`);
+  try { if (sess.showRefusal) sess.showRefusal(j); } catch (e) {}
+  const out = (t, d) => { try { net.send(t, d); } catch (e) {} };
+  out("refuse", { gv, hostGv: j.remote, name });                              // the host reads why (CRITICAL: never shed)
+  if (j.slot != null) out("bye", { slot: "s" + j.slot });                     // an old host put us in its roster: it hands the body to a bot
+  W.events.emit("squadRefused", { peerId: net.id, name, gv, hostGv: j.remote, by: "guest", host: hostId || null });
+  try { sess.rtc && sess.rtc.close(); } catch (e) {}
+  net.handlers = {};                       // nothing this channel still delivers may reach a NEW session's onMsg while it winds down
+  if (S === sess) { S = null; W.net = null; }
+  // leave a moment later so the two sends above are on the wire; an old host loads its match for a while before the body exists, so
+  // the "bye" is repeated once, then we are gone
+  setTimeout(() => { if (j.slot != null) out("bye", { slot: "s" + j.slot }); }, 12000);
+  setTimeout(() => { try { net.leave(); } catch (e) {} }, j.slot != null ? 13000 : 500);
+}
 
 function beginOnlineMatch(W, cfg) {
   const me = cfg.roster.find((r) => r.peerId === S.net.id);
@@ -412,16 +629,34 @@ function onMsg(W, { from, t, d }) {
     // never replayed, so the third person to join learned nobody's name and the
     // two already in the room learned only theirs. Bounded — the reply fires
     // only for a first sighting, and everyone already in the room has us.
-    const known = !!S.peers[from];
-    S.peers[from] = d.name;
-    if (!known) send("hello", { name: S.myName });
+    const hr = S.hs.onHello(from, d);
+    S.peers[from] = d && d.name;
+    if (hr.first) send("hello", S.hs.helloMsg());
+    // VERSION GUARD, guest side: the room's host says it builds another world -> refuse now rather than at START
+    if (hr.refuseNow) { refuseRoom(W, hr.refuseNow, from); return; }
+    // VERSION GUARD, host side: say (in the lobby) that this peer will not get a slot
+    if (hr.first && hr.mismatch && S.hs.host && S.notice) S.notice(leftOutLine(d && d.name, hr.rec.gv, S.gv), from);
     if (S.paintRoster) S.paintRoster();
     return;
   }
   if (t === "start" && !S.started) {
+    // VERSION GUARD: the host's start carries its world version next to the seed (none = version 1, every build before the guard).
+    // A different generator would build different ground and colliders from this seed - refuse instead of starting.
+    const j = S.hs.judgeStart(d);
+    if (j) { refuseRoom(W, j, from); return; }
     // remove the lobby only if we actually got a slot — beginOnlineMatch writes
     // the "room is full" message into the lobby that is still on screen
     if (beginOnlineMatch(W, d) !== false && S && S.root) S.root.remove();
+    return;
+  }
+  if (t === "refuse") {
+    // a guest would not build our world (host only reads this; it is also what the guest's own ui already showed it)
+    if (S.net.isHost() && d) {
+      const line = refusalLine(d.name, d.gv, S.gv);
+      S.refusals.push({ from, name: String(d.name == null ? "" : d.name).slice(0, 24), gv: normGv(d.gv), hostGv: S.gv, t: performance.now() });
+      notify(W, line, from);
+      W.events.emit("squadRefused", { peerId: from, name: d.name, gv: normGv(d.gv), hostGv: S.gv, by: "guest" });
+    }
     return;
   }
   if (t === "rtc") {
@@ -448,8 +683,11 @@ function onMsg(W, { from, t, d }) {
     }
     // ENVELOPE MERGE (sender side in update()): bot snapshots and the batched
     // ev list now ride the state packet — one billed message instead of three
-    // streams. The standalone "bots"/"ev" handlers below stay for cross-version
-    // rooms mid-deploy.
+    // streams. The standalone "bots"/"ev" handlers below stay for peers that
+    // still send the pre-merge streams; since the VERSION GUARD (C-VER) such a
+    // peer can no longer be in a match with this build (it has no `gv`, so it is
+    // version 1 and the room refuses it), so they are only reachable by a
+    // same-version peer that chooses to send them. Kept, harmless, byte-identical.
     if (d.bots && !S.net.isHost()) {
       for (const b of d.bots) {
         const ba = W.actorById.get(b.id);
@@ -647,6 +885,9 @@ export function onMatchStart(W) {
   // host sends world sync for any guest that joined at the boundary
   if (S && S.net.isHost()) {
     send("sync", { t: W.t, loot: W.lootSyncState() });
+    // the HUD is up now: tell the host who was left out of this match, and why (lobby time passed while the match loaded)
+    const pend = S.pendingNotices;
+    if (pend && pend.length) { S.pendingNotices = null; for (const t of pend) notify(W, t); }
   }
 }
 
