@@ -28,9 +28,14 @@ shared box), each as its own process with the same --base / --disk / --rev / --h
   2 s; on 7f6a9fb2 it is judged on geometry-only placements: the Wave-4 sim has no ramp-side collision), collisioncheck container-lean + sprints-rocks, worldlive ramps-walk-fine (every ramp of 5 seeds x 3 maps, walk and sprint, every start phase)
   and the Wave-6 city / perf gates (lane 6E, 2026-10-13): placementcheck now also gates the Wave-6 rows (base-edges, doorway-clearance, ramp-start-step, roads-float,
   ground-match at 1e-4 m, pads); citycheck_selftest (the pinned enterable-building detector on a synthetic village, offline); perf_district (calls / triangles at three
-  fixed cameras vs the Wave-5 leftovers release bd523284); citykit_probe (lane 6C's C-KIT browser gate); citycheck (INFORMATION in Wave 6: no town is wired into the live
-  game yet, so its coverage rows are expected to fail; --city-blocking makes it count: the Wave-7 switch)
+  fixed cameras vs a baseline revision - bd523284 in Wave 6, the LIVE build common.LIVE_REV since Wave 7); citykit_probe (lane 6C's C-KIT browser gate); citycheck (INFORMATION in
+  Wave 6 - no town was wired into the live game, so its coverage rows were expected to fail; a COUNTED --blocking gate on Savanna since Wave 7, see below)
   perfcheck, orch_lowpost_ab (INFORMATION ONLY: shown, never counted)
+  and the Wave-7 rows (lane 7D, 2026-10-14; Savanna = ashgrid is the city pilot, Isla Viva / Deepwood follow in Wave 7b):
+    citycheck is now a COUNTED gate (--blocking on ashgrid, 200 seeds; Isla Viva / Deepwood rows stay information); perf_district's default baseline is the LIVE build
+    (common.LIVE_REV) and runs on the two unchanged maps too (perf_district_themed); nancheck (Node: no non-finite ground on 200 seeds x 3 maps), lootcheck (Node: probe_loot --gate),
+    squadguard_live (the squad version guard in a real browser), framecheck_ashgrid / framecheck_deepwood, layoutcheck_ashgrid / _deepwood, mobile_ashgrid, rigcheck_ashgrid / _deepwood,
+    probe_match_ashgrid (replay + census + paths on Savanna), loot_beams_rings_ashgrid, perf_district_phone (INFORMATION: the phone tier), kitcollide / navcheck_towns (when their lanes land)
 
 --negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
 allow-pointer-lock, bootguard j/k --plant no-card and --plant hidden-card, bootcheck --plant lock-drop, feelcheck --plant
@@ -48,6 +53,13 @@ and feelcheck
 the Wave-6 controls (lane 6E): placementcheck --plant no-pads / door-buried / ramp-lip / roads-lifted / ground-shift (the built map mutated in memory; --quick), placementcheck
 --rev bd523284 --rows <the promoted rows> and --rev 7f6a9fb2 --rows ramp-start-step (frozen builds), perf_district --plant extra-calls / extra-tris and --rev bbd6aeae (Isla Viva drop view 525 calls), citycheck --rev bd523284
 --blocking (the Wave-5 release has no towns), citykit_probe --plant <each of lane 6C's six>.
+The Wave-7 controls (lane 7D): citycheck --rev 60b854d0 --blocking --quick (0 pass / 5 fail), nancheck --rev 60b854d0 (the Wave-6 maps.js has the NaN ground), lootcheck --loot-rev 60b854d0
+(the Wave-6 loot.js), squadguard_live --plant no-guard / bare-import, framecheck_ashgrid --plant extra-tris, loot_beams_rings --plant chest-beams-short (both maps), layoutcheck_ashgrid
+--plant no-touch-ui, rigcheck_ashgrid --inject-regression, worldcheck --plant rng-shift (now judged on Isla Viva + Deepwood alone: Savanna's stream is changed on purpose).
+The Wave-7 fix round (lane 7G, 2026-10-14): feelcheck guards its subject from the lobby and protects the whole landing (it lost its subject to a pistol bot on the default
+config, ashgrid seed 4242); hud_cycle compares lobbies on the SAME map (it pins the die roll of the real "Find a new match" click; --plant leak-geometries / leak-textures
+must FAIL); warm_programs (new/warm_programs.py, lane 7F's gate) is registered, with --plant no-arm / no-icons and the live Wave-6 build 60b854d0 (--rev,
+exits 1) as its controls; framecheck's 10-SPACE-toggle row no longer counts the terrain's lazily built near-LOD chunks (--plant chute-leak must still FAIL it, on Deepwood).
 
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
 0 pass / 1 fail / 2 could-not-judge; a timeout or a crash of the gate process is could-not-judge. The overall verdict:
@@ -67,6 +79,10 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
 
+WAVE6_REV = "60b854d0"       # the Wave-6 release (live until the Wave-7 deploy): the frozen "must fail" build of the Wave-7 rows (no towns, NaN ground, the old loot.js). NEVER moves
+LIVE_REV = C.LIVE_REV        # the build LIVE on the CDN (common.py, moved after every deploy): only the perf baselines read it; no control depends on it
+PREL5_REV = "874ab0ca"       # the last-circle build BEFORE lane L5 (3474f1c0, 2026-10-04): every chute deploy allocated geometries (200 -> 212 over the 10 SPACE toggles on isla_viva): the frozen "must fail" build of framecheck's
+                             # 10-SPACE-toggle row (Wave-7 fix round: the row now excludes the terrain's lazily built chunks and must still see this)
 WAVE4_REV = "7f6a9fb2"       # the Wave-4 merge commit: the frozen "must fail" build of the Wave-5 gates
 WAVE5B_REV = "bd523284"      # the Wave-5 leftovers release (live; the build Wave 6 starts from): the frozen "must fail" build of the Wave-6 rows and the perf_district baseline
 WAVE5_REV = "3fce7529"       # the Wave-5 release ("Wave 5", live): the frozen "must fail" build of the 2026-10-13 leftovers-round rows
@@ -79,6 +95,13 @@ GATES = [
     ("placementcheck", "placementcheck.py", [], 1800, False),
     # Wave-5 fix round (lane F1): worldcheck is Node only too (same reason, runs second); worldlive loads one Chrome per map (PRACTICE: ~40 s)
     ("worldcheck", "worldcheck.py", [], 1800, False),
+    # Wave 7 (lane 7D), Node only: no non-finite ground on 200 seeds x 3 maps (~4 min), and lane 7C's loot probe (15 builds, ~15 s)
+    ("nancheck", "nancheck.py", [], 1800, False),
+    ("lootcheck", "lootcheck.py", [], 900, False),
+    # NavGrid.bakeTown over the Savanna towns + compounds: every room street -> room -> street, planned by the grid and walked by the real mover (Node, ~1 min)
+    ("navtown", "navtown.py", [], 1800, False),
+    # lane 7E: the drawn city-kit mesh vs its colliders AT BODY HEIGHT (poke-out <= 0.10 m, phantom <= 0.25 m for EVERY type; collisioncheck measures none of the kit), Node, ~1 min with the census
+    ("kitcollide", "kitcollide.py", ["--census", "7,1234,2026"], 1800, False),
     # Wave 6 (lane 6E): the detector's own selftest (Node only, ~2 s) runs with the other Node gates
     ("citycheck_selftest", "citycheck.py", ["--selftest"], 300, False),
     ("bootcheck", "bootcheck.py", [], 3600, False),
@@ -87,20 +110,43 @@ GATES = [
     ("playtest", "playtest.py", [], 5400, False),
     ("portalcheck", "portalcheck.py", ["--matrix"], 3600, False),
     ("framecheck", "framecheck.py", [], 5400, False),
+    # Wave 7 (lane 7D): the default gate only ever ran Isla Viva. Savanna counts; Deepwood is not touched by Wave 7, so its rows are INFORMATION until Wave 7b
+    # (its one failing row, 10 SPACE toggles: geometries flat, reads 163 -> 164 on the live build too - see README "Wave 7")
+    ("framecheck_ashgrid", "framecheck.py", ["--map", "ashgrid"], 5400, False),
+    ("framecheck_deepwood", "framecheck.py", ["--map", "deepwood"], 5400, True),
     ("lifecycle", "lifecycle.py", [], 3600, False),
     ("feelcheck", "feelcheck.py", [], 3600, False),
     ("layoutcheck", "layoutcheck.py", [], 5400, False),
     ("mobile", "mobile.py", [], 7200, False),
+    # Wave 7 (lane 7D): layoutcheck / mobile / rigcheck / probe_match all started on Isla Viva, the one map Wave 7 did not change. Savanna (and, where cheap, Deepwood) too
+    ("layoutcheck_ashgrid", "layoutcheck.py", ["--map", "ashgrid"], 5400, False),
+    ("layoutcheck_deepwood", "layoutcheck.py", ["--map", "deepwood"], 5400, True),      # information: Deepwood is unchanged in Wave 7; 1 flake in 5 runs (se 667x375: only stick + reload rendered), the other 4 PASS 31 / 31
+    ("mobile_ashgrid", "mobile.py", ["--map", "ashgrid"], 7200, False),
+    ("rigcheck_ashgrid", "rigcheck.py", ["--seeds", "7,11,23", "--map", "ashgrid"], 5400, False),
+    ("rigcheck_deepwood", "rigcheck.py", ["--seeds", "7,11,23", "--map", "deepwood"], 5400, False),
     ("probe_match", "probe_match.py", ["--farwall"], 14400, False),
+    # the same-seed replay, the census (>= 3 guns per player) and the path search on SAVANNA: 3 whole matches (11 twice, 12), ~2 min
+    ("probe_match_ashgrid", "probe_match.py", ["--runs", "11:ashgrid,11:ashgrid,12:ashgrid", "--paths-maps", "ashgrid", "--small-run"], 7200, False),
     ("leaktest", "leaktest.py", [], 7200, False),
     ("collisioncheck", "collisioncheck.py", [], 5400, False),
     ("worldlive", "worldlive.py", [], 5400, False),
     ("navcheck", "navcheck.py", [], 5400, False),
-    # ---- Wave 6 (lane 6E). perf_district: calls + triangles at 3 fixed cameras vs bd523284 (the baseline numbers are cached per commit, so the run loads ONE match);
-    # citykit_probe is lane 6C's C-KIT gate; citycheck is INFORMATION until Wave 7 wires the towns (flip with --city-blocking: see main()).
+    # ---- Wave 6 (lane 6E). perf_district: calls + triangles at 3 fixed cameras vs the baseline revision (Wave 7: common.LIVE_REV; the baseline numbers are cached per commit,
+    # so the run loads ONE match); citykit_probe is lane 6C's C-KIT gate.
     ("perf_district", "perf_district.py", [], 3600, False),
     ("citykit_probe", "citykit_probe.py", [], 3600, False),
-    ("citycheck", "citycheck.py", [], 3600, True),
+    # Wave 7: the kit inside a real Savanna match (inmatch-warm: 0 new programs, inmatch-cost: <= +40 calls / <= 25 % triangles per frame). The collider count is no longer a literal (it moved with every manifest)
+    ("citykit_probe_inmatch", "citykit_probe.py", ["--in-match"], 3600, False),
+    # Wave 7: citycheck is a PERMANENT BLOCKING gate on Savanna (200 seeds; Node ~3.5 min + one Chrome for the detector parity). Isla Viva / Deepwood rows are printed as
+    # "would PASS / would FAIL" information until Wave 7b gives them towns (--block-maps)
+    ("citycheck", "citycheck.py", ["--blocking", "--block-maps", "ashgrid", "--seeds-n", "200"], 3600, False),
+    # the same views vs the LIVE build on the two maps Wave 7 did not change (worlds are byte-identical: a regression guard), and the PHONE tier on Savanna (INFORMATION)
+    ("perf_district_themed", "perf_district.py", ["--maps", "isla_viva,deepwood"], 3600, False),
+    ("perf_district_phone", "perf_district.py", ["--phone"], 3600, True),
+    # lane 7C's squad version guard (MAP_GEN_VERSION in the handshake), two real pages and the real lobby; ~35 s, 61 rows. preguard cases serve the build WITHOUT the guard (60b854d0, fixed)
+    ("squadguard_live", "squadguard_live.py", ["--cases", "same,older,newer,v1,preguard-guest,preguard-host,refuse-live"], 3600, False),
+    # the loot rows on Savanna: every row except `rings` / `glare` (their A/B needs a SAND patch, which Savanna has none of: the Isla Viva run judges them). chestview judges open-sky chests
+    ("loot_beams_rings_ashgrid", "new/loot_beams_rings.py", ["--map", "ashgrid", "--only", "gpusync,pools,clamp,ceilpix,pickup,deaths,chestview,stormfade"], 5400, False),
     # ---- Wave-4 lane gates: _harness/new/<lane>_<name>.py, registered 2026-10-12. Same convention as every gate above (0 pass /
     # 1 fail / 2 could-not-judge, one VERDICT line, JSON in _reports/); all take the common flags, so --disk / --rev / --base /
     # --headed / --gpu pass through. None needs a rAF (they step frames); each lane gate's --isolate / --overlay-root is a
@@ -129,6 +175,9 @@ GATES = [
     ("player_dive", "new/player_dive.py", [], 3600, False),
     ("orch_lowpost", "new/orch_lowpost.py", [], 5400, False),
     ("orch_progkey", "new/orch_progkey.py", [], 3600, False),
+    # Wave-7 fix round (lane 7G, promoted from lane 7F's scratch gate): NOTHING is compiled, created or uploaded by a second renderer or a shadow-pass flip in the
+    # middle of a match - 3 maps x seeds 1, 7, each one whole match to second 306 (about 3 min per map x seed); exact counts, see README "Wave-7 fix round"
+    ("warm_programs", "new/warm_programs.py", [], 5400, False),
     ("sim_pacing", "new/sim_pacing.py", [], 14400, False),
     ("perfcheck", "perfcheck.py", [], 7200, True),
     # information only (never exits 1): LOW tier with vs without the composer, interleaved ABAB. --no-lp drops its lc_liveprobe
@@ -215,6 +264,47 @@ NEGATIVE = [
     ("citykit_probe-plant-q1-sign", "citykit_probe.py", ["--plant", "q1-sign"], 1800),
     ("citykit_probe-plant-mesh-flip", "citykit_probe.py", ["--plant", "mesh-flip"], 1800),
     ("citykit_probe-plant-no-far", "citykit_probe.py", ["--plant", "no-far"], 1800),
+    # ---- Wave 7 (lane 7D). The Wave-6 release (60b854d0, pinned: it stays the "must fail" build after the Wave-7 deploy) wherever the plan says Wave 7 fixes something.
+    # citycheck: the Wave-6 Savanna has no towns (the plan's control; the Wave-5 release one above stays): 0 pass / 5 fail
+    ("citycheck-wave6-release-blocking", "citycheck.py", ["--rev", WAVE6_REV, "--blocking", "--quick"], 1800),
+    # nancheck: the Wave-6 maps.js reads a non-finite ground on Savanna seed 14, Isla Viva 17, Deepwood 12 (quick = seeds 1..40)
+    ("nancheck-wave6-release", "nancheck.py", ["--rev", WAVE6_REV, "--quick"], 1800),
+    # lootcheck: the Wave-6 loot.js on this tree's maps leaves loot inside solids / hovering / through roofs (4 of 8 rows)
+    ("lootcheck-wave6-loot-js", "lootcheck.py", ["--loot-rev", WAVE6_REV], 900),
+    # squadguard_live: a page that sends no version (no-guard) and one whose net.js imports maps.js bare (a second, stale instance: bare-import) must both be caught
+    ("squadguard_live-plant-no-guard", "squadguard_live.py", ["--cases", "older", "--plant", "no-guard"], 1800),
+    ("squadguard_live-plant-bare-import", "squadguard_live.py", ["--cases", "same", "--plant", "bare-import"], 1800),
+    # framecheck_ashgrid: +820k always-drawn triangles must break the relative drop-frame-1 row (x1.51 of the live build)
+    ("framecheck_ashgrid-plant-extra-tris", "framecheck.py", ["--map", "ashgrid", "--plant", "extra-tris"], 1800),
+    # loot_beams_rings chestview (open-sky chests only): every beam capped at a 60 m fade-out must fail it on both maps
+    ("loot_beams_rings-plant-chest-beams-short", "new/loot_beams_rings.py", ["--only", "chestview", "--plant", "chest-beams-short"], 1800),
+    ("loot_beams_rings_ashgrid-plant-chest-beams-short", "new/loot_beams_rings.py", ["--map", "ashgrid", "--only", "chestview", "--plant", "chest-beams-short"], 1800),
+    # the Savanna invocations of the phone / rig gates can still fail
+    ("layoutcheck_ashgrid-plant-no-touch-ui", "layoutcheck.py", ["--map", "ashgrid", "--only", "phones", "--plant", "no-touch-ui"], 3600),
+    ("rigcheck_ashgrid-injected", "rigcheck.py", ["--seeds", "7", "--map", "ashgrid", "--inject-regression"], 3600),
+    # navtown: the town grid baked with 3 m indoor cells (no door fits): the room rows must collapse
+    ("navtown-plant-coarse-indoor", "navtown.py", ["--plant", "coarse-indoor"], 1800),
+    # kitcollide: the colliders that shipped in Wave 6 (27 of 81 kit types poke > 0.10 m out of their collider) and lane 7E's four planted faults
+    ("kitcollide-wave6-release", "kitcollide.py", ["--rev", WAVE6_REV], 1800),
+    ("kitcollide-plant-shrink", "kitcollide.py", ["--plant", "shrink"], 1800),
+    ("kitcollide-plant-grow", "kitcollide.py", ["--plant", "grow"], 1800),
+    ("kitcollide-plant-q1-sign", "kitcollide.py", ["--plant", "q1-sign"], 1800),
+    ("kitcollide-plant-stale-table", "kitcollide.py", ["--plant", "stale-table"], 1800),
+    # ---- Wave-7 fix round (lane 7G). warm_programs: ffg_warmup.js served without armDepthVariants / hud.js served without the lobby icon pre-render (each a patched copy
+    # served by a page route, nothing on disk is edited), and the LIVE Wave-6 build itself (60b854d0, pinned: 3 pass / 4 fail on ashgrid + Deepwood - a late shadow-depth
+    # program, drop-frame-1 icon renderer); one map x seed each is enough for the plants
+    ("warm_programs-plant-no-arm", "new/warm_programs.py", ["--maps", "ashgrid", "--seeds", "1", "--plant", "no-arm"], 1800),
+    ("warm_programs-plant-no-icons", "new/warm_programs.py", ["--maps", "ashgrid", "--seeds", "1", "--plant", "no-icons"], 1800),
+    ("warm_programs-live-60b854d0", "new/warm_programs.py", ["--rev", WAVE6_REV, "--maps", "ashgrid,deepwood"], 1800),
+    # hud_cycle: a resource leaked every round and never disposed must break the same-map comparison (24 geometries / 5 textures per round; the bars are
+    # +-30 / +-5 across the two rounds the rows compare; programs are information: the count moves by several without a leak)
+    ("hud_cycle-plant-leak-geometries", "new/hud_cycle.py", ["--plant", "leak-geometries"], 1800),
+    ("hud_cycle-plant-leak-textures", "new/hud_cycle.py", ["--plant", "leak-textures"], 1800),
+    # framecheck_deepwood: the 10-SPACE-toggle row now excludes the terrain's lazily built near-LOD chunks; a chute deploy that allocates a geometry and never frees it
+    # must still break it (on Deepwood, the map where the terrain share moved the raw count)
+    ("framecheck_deepwood-plant-chute-leak", "framecheck.py", ["--map", "deepwood", "--plant", "chute-leak"], 1800),
+    # ... and a REAL frozen build with the defect: the build before L5 (chutes allocate ~3 geometries per deploy). Only the sections it needs run; its sampled-frames programs row fails too
+    ("framecheck_deepwood-pre-L5-chute-defect", "framecheck.py", ["--rev", PREL5_REV, "--map", "isla_viva", "--skip", "shadow,cluster,alloc,qc,cadence,match,layout"], 1800),
 ]
 
 
@@ -285,7 +375,6 @@ def main():
     ap.add_argument("--skip", default="", help="comma list of gate names to skip")
     ap.add_argument("--no-node", action="store_true", help="skip the Node selftests")
     ap.add_argument("--negative-controls", action="store_true", help="also run the planted-fault runs (each must exit 1)")
-    ap.add_argument("--city-blocking", action="store_true", help="Wave 7: citycheck counts (runs with --blocking on Savanna, ashgrid) instead of being information")
     args = ap.parse_args()
     only = set(x for x in (args.only or "").split(",") if x) or None
     skip = set(x for x in args.skip.split(",") if x)
@@ -302,8 +391,6 @@ def main():
     for name, script, extra, timeout, info in GATES:
         if (only is not None and name not in only) or name in skip:
             continue
-        if name == "citycheck" and args.city_blocking:
-            extra, info = list(extra) + ["--blocking"], False
         r = run_gate(name, script, extra, timeout, args, logdir)
         r["info"] = info
         rows.append(r)

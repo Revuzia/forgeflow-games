@@ -2,10 +2,11 @@
 """perf_district - what does a district COST?  Fixed cameras, exact counts, against a frozen baseline revision.
 (Last Circle world plan, section 4, lane 6E.)
 
-    python _harness/perf_district.py --disk                       # the working copy vs the baseline (default bd523284), ashgrid
+    python _harness/perf_district.py --disk                       # the working copy vs the baseline (default common.LIVE_REV = the live build 60b854d0), ashgrid
     python _harness/perf_district.py --rev <Wave-6 commit> --baseline <older commit> --maps ashgrid,isla_viva,deepwood
     python _harness/perf_district.py --disk --plant extra-calls   # negative control: +60 draw calls planted (must exit 1)
     python _harness/perf_district.py --disk --plant extra-tris    # negative control: +820k triangles planted (must exit 1)
+    python _harness/perf_district.py --disk --phone               # the PHONE tier (Wave 7): a Pixel 7 context (915x412, DPR 2.625, touch, no pointer lock), same views and rows; gate.py runs it as INFORMATION
 
 For every map: ONE Chrome serves the baseline revision (git, through page routing) and ONE the candidate (the working copy, or --rev), each
 loads a standard match at --seed (7), lands, freezes the loop, and renders THREE fixed views through the game's own composer, exactly once,
@@ -39,9 +40,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
+import mobilekit as MK  # noqa: E402
 
 GATE = "perf_district"
-DEFAULT_BASELINE = "bd523284"           # the Wave-5 leftovers release: the build Wave 6 started from
+DEFAULT_BASELINE = C.LIVE_REV            # the LIVE build (common.LIVE_REV: 60b854d0, the Wave-6 release). After a deploy move common.LIVE_REV, nothing else
 CALLS_MAX_DELTA = 40
 TRIS_MAX_RATIO = 1.25
 DROP_CALLS_MAX = 450
@@ -118,7 +120,12 @@ def measure(args, label, map_id, rev, plant, save_png):
     a.rev = rev
     a.disk = True
     res = {"label": label, "map": map_id, "seed": args.seed, "views": {}}
-    with C.Session(a, name="perf_district") as s:
+    sess_kw = {}
+    if args.phone:                      # the phone tier: what a Pixel 7 gets (touch defaults: tier medium, DPR 2.625), mobile.py's context
+        dev = MK.DEVICES["pixel7"]
+        sess_kw = {"viewport": {"width": dev["w"], "height": dev["h"]}, "context_kw": {"device_scale_factor": dev["dpr"], "is_mobile": True, "has_touch": True, "user_agent": dev["ua"]},
+                   "init_scripts": [MK.PHONE_NO_LOCK]}
+    with C.Session(a, name="perf_district", **sess_kw) as s:
         s.boot()
         s.js("() => { try { localStorage.setItem('lc_tutorial_seen', '1'); } catch (e) {} return 1; }")
         t0 = time.time()
@@ -128,7 +135,7 @@ def measure(args, label, map_id, rev, plant, save_png):
         s.freeze_loop()
         res["tier"] = s.safe_js("() => window.__LC__.W.settings && window.__LC__.W.settings.graphics")
         res["dpr"] = s.safe_js("() => window.devicePixelRatio")
-        res["viewport"] = [args.width, args.height]
+        res["viewport"] = [sess_kw["viewport"]["width"], sess_kw["viewport"]["height"]] if args.phone else [args.width, args.height]
         print("  [%s %s] loaded in %.0f s, landed %s, tier %s" % (label, map_id, time.time() - t0, res["land"].get("onGround"), res["tier"]), flush=True)
         if plant:
             res["plant"] = s.js(PLANT_JS, plant)
@@ -155,7 +162,7 @@ def measure(args, label, map_id, rev, plant, save_png):
 
 
 def cache_path(sha, map_id, args):
-    return os.path.join(C.REPORTS, "perf_district_base_%s_%s_s%d_%s_%dx%d_v%d.json" % (sha[:8], map_id, args.seed, args.gpu, args.width, args.height, VIEWSPEC))
+    return os.path.join(C.REPORTS, "perf_district_base_%s_%s_s%d_%s_%dx%d_v%d%s.json" % (sha[:8], map_id, args.seed, args.gpu, args.width, args.height, VIEWSPEC, "_phone" if args.phone else ""))
 
 
 def base_numbers(args, map_id, sha):
@@ -246,7 +253,10 @@ def main():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--no-cache", action="store_true", help="re-measure the baseline instead of reading _reports/perf_district_base_*.json")
+    ap.add_argument("--phone", action="store_true", help="the PHONE tier: a Pixel 7 context (915x412, DPR 2.625, touch, pointer lock refused) for baseline and candidate (gate.py: INFORMATION)")
     args = ap.parse_args()
+    if args.phone and not args.report:
+        args.report = "perf_district_phone"
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)
 
 

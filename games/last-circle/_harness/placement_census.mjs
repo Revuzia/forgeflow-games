@@ -658,7 +658,7 @@ async function censusOne(mapId, seed, lootMod) {
     // slope of every ramp's plank (C-RAMP authoring: <= 45 degrees), water or not
     rec.rampSlopes = M.colliders.filter((c) => c.kind === "ramp").map((c) => r3(Math.atan2(c.maxY - c.minY, c.dir < 2 ? c.maxX - c.minX : c.maxZ - c.minZ) * 180 / Math.PI));
     // doorways: lintel boxes of house / hut / tower / lighthouse / steeple / farmland -> clearance under the lintel
-    const LINTEL = [["house", 1.4, 0.7], ["hut", 1.4, 0.8], ["tower", 1.8, 1], ["lighthouse", 1.5, 0.7], ["steeple", 2, 3.2], ["farmland", 3, 1.2]];
+    const LINTEL = [["house", 1.4, 0.7], ["house", 2.26, 0.7], ["hut", 1.4, 0.8], ["tower", 1.8, 1], ["lighthouse", 1.5, 0.7], ["steeple", 2, 3.2], ["farmland", 3, 1.2]];
     const doors = [];
     for (const b of boxes) {
       const L = LINTEL.find((l) => b.gen === l[0] && Math.abs(b.w - l[1]) < 1e-6 && Math.abs(b.h - l[2]) < 1e-6);

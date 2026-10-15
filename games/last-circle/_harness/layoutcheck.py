@@ -159,7 +159,7 @@ def desktop(v, args):
         else:
             v.cnj("settings: the FOV control reads 57°", "no SETTINGS button on the menu")
         # a standard match: the DEPLOY banner right after the drop starts
-        s.start_match("standard", 7, "isla_viva", enter=True)
+        s.start_match("standard", 7, args.map, enter=True)
         # the DEPLOY announcement is a setTimeout(250) after the drop starts: wait for its title before measuring
         # (21:33 run: the first size was read before it existed). The title text stays after the fade, so later sizes see it.
         got = s.wait_js("() => [...document.querySelectorAll('div')].some((e) => Array.from(e.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() === 'DEPLOY')", 8, 0.1)
@@ -271,7 +271,7 @@ def phones(v, args):
         # in-match HUD. The test subject is protected (setup): the touch layer hides on death / spectate BY DESIGN, so a
         # death during the landing skip must not read as "no touch controls".
         s.page.set_viewport_size({"width": 915, "height": 412})
-        s.start_match("standard", 7, "isla_viva", enter=True)
+        s.start_match("standard", 7, args.map, enter=True)
         s.guard_player(True)
         v.info("landed (setup, player protected)", s.land(120, protect=True))
         s.step_frames(20, 1 / 60, render=False)
@@ -319,11 +319,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
     ap.add_argument("--only", choices=["desktop", "phones"], default=None)
+    ap.add_argument("--map", default="isla_viva", choices=sorted(C.MAPS), help="the map of the matches (default isla_viva; Wave 7 gates ashgrid = Savanna too)")
     ap.add_argument("--plant", default=None, choices=["no-touch-ui"],
                     help="FALSIFIER (phones): hide every data-touch-ui control; the touch-controls row MUST FAIL and the overlap rows be CNJ")
     args = ap.parse_args()
     if args.plant and not args.report:
         args.report = "layoutcheck_plant_" + args.plant.replace("-", "_")
+    elif args.map != "isla_viva" and not args.report:
+        args.report = "layoutcheck_" + args.map
 
     def body(v):
         if args.only in (None, "desktop"):

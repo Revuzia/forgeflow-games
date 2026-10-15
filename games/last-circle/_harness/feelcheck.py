@@ -4,7 +4,9 @@
     python _harness/feelcheck.py
     python _harness/feelcheck.py --disk --burst 3.7
 
-A standard match (ashgrid, seed 4242), the player landed (setup), pointer lock by a REAL click, one bot pinned in front
+A standard match (ashgrid, seed 4242), the player landed (setup: guarded from the lobby on and land(protect=True) through the whole landing, so no
+bot can take the subject away before the rows start - Wave-7 fix round, the default config lost it 4 of 4 runs to a pistol bot touching down 33 m
+away; the landing's absorbed hits are printed), pointer lock by a REAL click, one bot pinned in front
 of the camera (setup: isDummy + netRemote, exactly as the feel-juice audit's shots3.py did), then REAL LMB input.
 The kernel's own loop is stopped and a TIMER-driven frame pump (setInterval 16 ms, dt = real elapsed, max 0.05) runs the
 frames, so the wall-clock parts of the HUD (setTimeout fades today) and the frame-driven parts (L7's dt clocks) both
@@ -140,6 +142,15 @@ TICK_JS = r"""(on) => {
   }, 20);
   return 'on';
 }"""
+
+# counts what the guard absorbed while the subject lands (hits on the local player: who, with what, how much, from how far, in which phase)
+LAND_SPY_JS = r"""() => { const W = window.__LC__.W, p = W.player; if (window.__FC_LAND__) return 'already';
+  const L = window.__FC_LAND__ = { hits: 0, dmg: 0, attackers: {}, maxDmg: 0, nearestM: null, phases: {} };
+  W.events.on('actorHurt', (v, info) => { if (v !== p) return; L.hits++; L.dmg += info.dmg || 0; L.maxDmg = Math.max(L.maxDmg, info.dmg || 0);
+    const a = info.attackerId != null ? W.actorById.get(info.attackerId) : null; const k = (info.attackerId || '?') + ':' + (info.weaponId || '?'); L.attackers[k] = (L.attackers[k] || 0) + 1;
+    L.phases[W.phase] = (L.phases[W.phase] || 0) + 1;
+    if (a) { const d = Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z); L.nearestM = L.nearestM == null ? +d.toFixed(1) : Math.min(L.nearestM, +d.toFixed(1)); } });
+  return 'on'; }"""
 
 PLACE_JS = r"""(args) => { const W = window.__LC__.W, p = W.player, cam = W.camera;
   cam.updateMatrixWorld(true);
@@ -479,17 +490,26 @@ def main():
                 s.page.mouse.click(b[0], b[1])
                 s.sleep(0.4)
             s.page.mouse.click(5, 5)                     # a user gesture: unlock audio so the music graph + duck exist
-            s.start_match("standard", args.seed, args.map, enter=True)
-            s.land(120)
+            # Wave-7 fix round (7G): the test subject is guarded from the LOBBY on and PROTECTED through the whole landing. It used to be guarded only
+            # AFTER an unprotected land(), and that is a death trap on any seed whose drop point has an armed bot touching down near it: ashgrid seed 4242
+            # on the Wave-7 city map puts the player at (-380, -460) with bot s49 landing 33 m away with a pistol; land() keeps running until the DROP phase
+            # ends (about 4 s past touchdown, not until the player stands), the player spawns with 0 shield, 6 pistol hits of 11-30 kill it
+            # (4 of 4 runs: "the player died while landing (setup)"). Every config now takes the same path bootcheck does: guard in the lobby +
+            # land(protect=True) (hp / shield topped up after EVERY sim step), and a LAND_SPY counts the hits the guard absorbed so a run says so.
+            s.start_match("standard", args.seed, args.map, enter=True, guard=True)
+            s.js(LAND_SPY_JS)
+            land = s.land(120, protect=True)
+            land_spy = s.js("() => window.__FC_LAND__")
             s.freeze_loop()
             s.install_pump()
             s.guard_player(True)          # a bot must not kill the test subject mid-burst (it fired 0 shots when it did)
             s.step_frames(30, 1 / 60, render=False)
             rb = s.js(READ_JS)
             v.info("read-back source", rb.get("via"))
+            v.info("landing (guarded from the lobby, protected through every sim step)", {"land": land, "hitsAbsorbed": land_spy})
             p_alive = s.js("() => window.__LC__.W.player.alive")
             if not p_alive:
-                v.cnj("feel checks", "the player died while landing (setup)")
+                v.cnj("feel checks", "the player died while landing despite the guard (a single sim step dealt > 200 damage, or the guard did not install): %s" % land_spy)
                 return
             # pointer lock first (that click may fire a round at nothing)
             cv = s.js("() => { const c = window.__LC__.W.kernel.renderer.domElement; const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }")

@@ -10,10 +10,11 @@ never rasters (program link, uploads, culling, uniforms and every renderer.info 
 whatever the GPU is doing). Milliseconds are printed as INFORMATION only.
 
 Counted (each with the PLAN threshold it gates on; "was" = the audit's measurement on 2026-09-30):
-  drop frame 1        new programs == 0 (was 27, L3/L4/L5/L7 warm-up); total tris < 1.5 M (was 9.91 M);
-                      shadow:actor* tris < 0.5 M (was 8.57 M, L5 a)
+  drop frame 1        new programs == 0 (was 27, L3/L4/L5/L7 warm-up); total tris < 1.5 M on isla_viva (was 9.91 M) and, on ashgrid /
+                      deepwood, <= 1.25 x the LIVE build's drop frame 1 on the same map (Wave 7, see below); shadow:actor* tris < 0.5 M (was 8.57 M, L5 a)
   sampled drop/match  new programs == 0 on every sampled frame after drop frame 1
-  10 SPACE toggles    GPU geometries flat after the first deploy/cut pair (real Space key presses; L5 e)
+  10 SPACE toggles    GPU geometries flat after the first deploy/cut pair (real Space key presses; L5 e). Wave-7 fix round (7G): the count EXCLUDES the terrain's
+                      lazily built near-LOD chunks (see SPACE_GEO_JS); the raw count and the terrain share are printed. Falsifier: --plant chute-leak
   drop cluster        every live actor clustered 22 m ahead of the gliding camera (characters-art method), one
                       rendered frame: calls <= 250 (was 482), actor-chute calls <= 2, actor-nametag calls <= 1 (L5 e/f)
   skinned tris        per visible actor < 30 k (L5 b)
@@ -31,13 +32,20 @@ Attribution keys are pass:group - pass is shadow / main / post; group is actor-b
 actor-nametag / actor-other for objects under an actor (or any object named like chute/canopy/nametag, so lane L5's
 instanced replacements are counted in the same bucket - name them "actor-chute" / "actor-nametag"), else the
 top-level scene group (map, loot, fx, storm ...), plus [skinned] / [inst].
+The 1.5 M bar was calibrated on isla_viva (Wave 4; its drop frame 1 is 1.0 M). Savanna and Deepwood draw 1.9-2.1 M triangles of terrain and
+instanced scenery on the LIVE build already (60b854d0: ashgrid 1.96 M, deepwood 1.92 M), so the absolute bar could never pass there and said nothing
+about a regression. On those two maps the row is therefore RELATIVE, like perf_district's tris-vs-baseline: drop frame 1 <= 1.25 x the same map's
+drop frame 1 on common.LIVE_REV (measured by a second Chrome, cached in _reports/framecheck_base_<sha>_<map>_s<seed>_<gpu>_<w>x<h>_v1.json; a commit
+is frozen so the cache is honest, --no-cache re-measures). isla_viva keeps 1.5 M. --plant extra-tris adds 10 x 82k-triangle spheres and must FAIL it.
 Exit 0 pass / 1 fail / 2 could not judge.
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
+import subprocess
 import sys
 import time
 
@@ -212,6 +220,30 @@ PLANT_FORCED_JS = r"""() => { const k = window.__LC__.W.kernel; if (window.__H_P
   k._updaters.push(window.__H_PLANT_FL__); return 'planted: kernel updater hPlantForcedLayout (style write + offsetWidth read every frame)'; }"""
 
 
+# The 10-SPACE-toggle row counts GPU geometries. maps.js buildTerrain builds the near-LOD terrain chunks LAZILY, one 77 x 77 PlaneGeometry (6,233 vertices) per frame
+# as the focus cell changes under the gliding player, and three registers each with the renderer on its first draw: renderer.info.memory.geometries moves by one
+# when the glider crosses into a cell whose ring was not drawn yet (Deepwood: 164 -> 165 on the Wave-7 tree, 163 -> 164 on the live build 60b854d0 - the SAME count, so no
+# Wave-7 regression, and nothing to do with the chute). That is a bounded cache filling (CHUNKS^2 chunks at most), not a leak: a leak is MONOTONE growth that repeats
+# with every deploy/cut. The row therefore counts every registered geometry that is NOT a terrain chunk's (a registered geometry carries three's dispose listener: the
+# game adds none of its own, `addEventListener("dispose"` over runtime/ finds nothing) and prints the raw count and the terrain share next to it. A geometry a deploy
+# allocates and never frees lives outside W.map.terrain and is counted in full (--plant chute-leak must FAIL the row on every map).
+SPACE_GEO_JS = r"""() => { const W = window.__LC__.W, p = W.player, r = W.kernel.renderer;
+  let terrain = 0; const seen = new Set();
+  if (W.map && W.map.terrain && W.map.terrain.traverse) W.map.terrain.traverse((o) => { const g = o.geometry;
+    if (g && g.isBufferGeometry && !seen.has(g.uuid) && g._listeners && g._listeners.dispose && g._listeners.dispose.length) { seen.add(g.uuid); terrain++; } });
+  const raw = r.info.memory.geometries;
+  return { g: raw - terrain, raw, terrain, chute: !!(p.chute && p.chute.visible !== false && p.chute.deployed !== false && p.chute.active !== false), gliding: p.gliding }; }"""
+
+# --plant chute-leak (falsifier): every chute deploy of the human allocates a fresh canopy geometry, keeps it in the scene and never disposes it (the per-deploy
+# allocation the Wave-4 instanced canopy replaced). It is drawn by the next rendered frame, so three registers it: renderer.info.memory.geometries grows with every deploy.
+PLANT_CHUTE_LEAK_JS = r"""() => { const W = window.__LC__.W, T = W.THREE; if (window.__H_PLANT_CL__) return 'already';
+  window.__H_PLANT_CL__ = { deploys: 0 };
+  W.events.on('chuteDeployed', (a) => { if (a !== W.player) return; window.__H_PLANT_CL__.deploys++;
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, window.__H_PLANT_CL__.deploys * 0.01]), 3));
+    const m = new T.Mesh(g, new T.MeshBasicMaterial({ color: 0xff00ff })); m.frustumCulled = false; m.name = 'planted-chute-leak'; W.scene.add(m); });
+  return 'planted: every chute deploy of the human adds a canopy geometry to the scene that is never disposed'; }"""
+
+
 def _site(fr):
     # the timeline stack's lineNumber/columnNumber are 1-based here (probe: the trace and Error().stack both gave
     # ffg_kernel_3d.js:738:37 for the same frame)
@@ -272,6 +304,46 @@ def mdelta(m0, m1, nf):
             "layoutMsPerFrame": round((m1["LayoutDuration"] - m0["LayoutDuration"]) * 1000 / nf, 3)}
 
 
+TRIS_VS_LIVE = 1.25                       # same factor as perf_district's tris-vs-baseline
+LIVE_RELATIVE_MAPS = ("ashgrid", "deepwood")
+FRAME1_VERSION = 1                       # bump when the drop-frame-1 measurement below changes (it names the cached baseline files)
+
+
+def git_sha(rev):
+    sha = subprocess.run(["git", "-C", C.REPO, "rev-parse", rev], capture_output=True, text=True).stdout.strip()
+    if not sha:
+        raise C.HarnessError("unknown git revision %r" % rev)
+    return sha
+
+
+def live_frame1(args):
+    """Drop frame 1 of the LIVE build (common.LIVE_REV) on args.map / args.seed: {tris, calls, sha, cached}. One extra Chrome, cached per commit."""
+    sha = git_sha(C.LIVE_REV)
+    path = os.path.join(C.REPORTS, "framecheck_base_%s_%s_s%d_%s_%dx%d_v%d.json" % (sha[:8], args.map, args.seed, args.gpu, args.width, args.height, FRAME1_VERSION))
+    if os.path.exists(path) and not args.no_cache:
+        with open(path, encoding="utf-8") as fh:
+            d = json.load(fh)
+        d["cached"] = True
+        return d
+    a = copy.copy(args)
+    a.rev, a.disk, a.plant = C.LIVE_REV, True, None
+    with C.Session(a, "framecheck") as s:
+        s.boot()
+        s.freeze_loop()
+        s.install_pump()
+        s.js(STUB_DRAWS_JS)
+        s.js(ATTR_JS)
+        s.start_match("standard", args.seed, args.map, enter=True)
+        s.js("() => { window.__FC__.want = true; }")
+        s.step_frames(1, 1 / 60, render=True)
+        f1 = s.js("() => window.__FC__.last")
+    d = {"tris": f1["tris"], "calls": f1["calls"], "newPrograms": f1["newPrograms"], "sha": sha, "map": args.map, "seed": args.seed, "cached": False}
+    os.makedirs(C.REPORTS, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(d, fh)
+    return d
+
+
 def attr_sum(attr, pred, idx):
     return sum(v[idx] for k, v in (attr or {}).items() if pred(k))
 
@@ -284,22 +356,35 @@ def main():
     ap.add_argument("--every", type=int, default=30, help="render every Nth pumped frame")
     ap.add_argument("--real-draws", action="store_true")
     ap.add_argument("--skip", default="", help="comma list of sections to skip: shadow,space,cluster,layout,alloc,qc,cadence,match")
-    ap.add_argument("--plant", default=None, choices=["forced-layout"],
-                    help="FALSIFIER: a kernel updater forces a layout every frame; both forced-layout rows MUST fail (the plant run "
-                         "judges only those rows - every other section is skipped or reported as information)")
+    ap.add_argument("--plant", default=None, choices=["forced-layout", "extra-tris", "chute-leak"],
+                    help="FALSIFIER: forced-layout = a kernel updater forces a layout every frame, both forced-layout rows MUST fail; "
+                         "extra-tris = 10 x 82k-triangle spheres drawn from drop frame 1 on, the drop-frame-1 triangle row MUST fail "
+                         "(the plant run judges only those rows - every other section is skipped or reported as information); "
+                         "chute-leak = every chute deploy allocates a canopy geometry and never disposes it, the 10-SPACE-toggle row MUST fail")
+    ap.add_argument("--no-cache", action="store_true", help="re-measure the live build's drop frame 1 instead of reading _reports/framecheck_base_*.json")
     args = ap.parse_args()
     skip = {x.strip() for x in args.skip.split(",") if x.strip()}
     if args.plant:
         skip |= {"shadow", "space", "cluster", "alloc", "qc", "cadence", "match"}
+        if args.plant == "chute-leak":
+            skip -= {"space"}                   # the one section the falsifier is about
+        if args.plant in ("extra-tris", "chute-leak"):
+            skip |= {"layout"}
         if not args.report:
             args.report = "framecheck_plant_" + args.plant.replace("-", "_")
 
     def body(v):
         if args.plant:
             _check = v.check
-            judged = ("forced layouts", "game threw", "harness exception", "environment", "interrupted")
+            judged = (("forced layouts",) if args.plant == "forced-layout" else ("SPACE toggles",) if args.plant == "chute-leak" else ("total tris",)) + ("game threw", "harness exception", "environment", "interrupted")
             v.check = lambda name, ok, detail="", expect=None: (
                 _check(name, ok, detail, expect) if any(j in name for j in judged) else v.info("[plant run, not judged] " + name, detail))
+        lv, lv_err = None, None
+        if args.map in LIVE_RELATIVE_MAPS:
+            try:                            # the live build's drop frame 1 first: one Chrome at a time (the sync Playwright API cannot nest sessions)
+                lv = live_frame1(args)
+            except (C.EnvFailure, C.HarnessError, C.GameError) as e:
+                lv_err = e
         with C.Session(args, "framecheck") as s:
             s.boot()
             s.freeze_loop()
@@ -317,6 +402,9 @@ def main():
             v.info("startMatch", sm)
             p_after = s.js("() => window.__LC__.W.kernel.renderer.info.programs.length")
             v.info("programs before/after startMatch (the warm-up's work)", [p_before, p_after])
+            if args.plant == "extra-tris":
+                import perf_district as PD
+                v.info("plant extra-tris", s.js(PD.PLANT_JS, "extra-tris"))
             # ---- drop frame 1 (the first rendered frame of the drop)
             s.js("() => { window.__FC__.want = true; }")
             s.step_frames(1, 1 / 60, render=True)
@@ -326,11 +414,23 @@ def main():
             sh_act = attr_sum(att, lambda k: k.startswith("shadow:actor"), 1)
             v.check("drop frame 1: new programs == 0", f1["newPrograms"] == 0, {"newPrograms": f1["newPrograms"], "renderMs(info)": f1["renderMs"]},
                     expect="0 (was 27)")
-            v.check("drop frame 1: total tris < 1.5 M", f1["tris"] < 1_500_000, {"tris": f1["tris"], "calls": f1["calls"]}, expect="< 1.5 M (was 9.91 M)")
+            if args.map in LIVE_RELATIVE_MAPS:
+                if lv is None:
+                    v.cnj("drop frame 1: total tris vs the live build", "the live build's drop frame 1 could not be measured: %s" % lv_err)
+                else:
+                    ratio = f1["tris"] / lv["tris"] if lv["tris"] else 0
+                    v.data["liveFrame1"] = lv
+                    v.check("drop frame 1: total tris <= %.2f x the live build" % TRIS_VS_LIVE, bool(lv["tris"]) and ratio <= TRIS_VS_LIVE,
+                            {"tris": f1["tris"], "calls": f1["calls"], "liveTris": lv["tris"], "liveCalls": lv["calls"], "liveSha": lv["sha"][:8], "ratio": round(ratio, 3), "cachedBaseline": lv["cached"]},
+                            expect="<= %.2f x the live build's drop frame 1 on this map (the absolute 1.5 M bar is calibrated on isla_viva, 1.0 M)" % TRIS_VS_LIVE)
+            else:
+                v.check("drop frame 1: total tris < 1.5 M", f1["tris"] < 1_500_000, {"tris": f1["tris"], "calls": f1["calls"]}, expect="< 1.5 M (was 9.91 M)")
             v.check("drop frame 1: shadow:actor* tris < 0.5 M", sh_act < 500_000, {"shadowActorTris": sh_act}, expect="< 0.5 M (was 8.57 M)")
             print("    drop frame 1 attribution: %s" % sorted(att.items(), key=lambda kv: -kv[1][1])[:10], flush=True)
             v.info("weapon view-models at drop frame 1 (information; L4 item 7 preloads them before the lobby)",
                    s.js(WPN_STATE_JS))
+            if args.plant == "extra-tris":
+                return                          # the falsifier judges drop frame 1 only
             # ---- drop window shadow share (PLAN L4 b gate, measured in lc_liveprobe as 60-80 %): 6 CONSECUTIVE rendered
             # drop frames with attribution (a shadow refresh every 3rd frame is covered twice); total tris include the
             # shadow passes (renderer.info is reset once per frame, autoReset off)
@@ -359,18 +459,23 @@ def main():
             # ---- 10 real SPACE toggles while gliding high
             if "space" not in skip:
                 geo = []
+                if args.plant == "chute-leak":
+                    v.note("PLANTED FAULT: " + s.js(PLANT_CHUTE_LEAK_JS) + " - the 10-SPACE-toggle row MUST fail")
                 pl = s.js("() => { const p = window.__LC__.W.player; const a = p; return { gliding: p.gliding, chute: !!(a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false), y: +p.pos.y.toFixed(1) }; }")
                 for i in range(10):
                     s.press("Space", 0.05)
                     s.step_frames(12, 1 / 60, render=12)
-                    geo.append(s.js("() => ({ g: window.__LC__.W.kernel.renderer.info.memory.geometries, chute: ((a) => !!(a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false))(window.__LC__.W.player), gliding: window.__LC__.W.player.gliding })"))
+                    geo.append(s.js(SPACE_GEO_JS))
                 gs = [x["g"] for x in geo]
                 toggled = len({x["chute"] for x in geo}) > 1
                 if not pl.get("gliding") or not toggled:
                     v.cnj("10 SPACE toggles: geometries flat", "the player was not gliding / the chute never toggled (%s, %s)" % (pl, geo[:3]))
                 else:
-                    v.check("10 SPACE toggles: GPU geometries flat after the first pair", max(gs[2:]) - min(gs[2:]) == 0 and gs[-1] <= gs[1],
-                            {"geometriesAfterEachToggle": gs, "chuteStates": [x["chute"] for x in geo], "startState": pl}, expect="flat (L5 e)")
+                    v.check("10 SPACE toggles: GPU geometries (terrain chunks excluded) flat after the first pair", max(gs[2:]) - min(gs[2:]) == 0 and gs[-1] <= gs[1],
+                            {"geometriesAfterEachToggle": gs, "rawAfterEachToggle": [x["raw"] for x in geo], "terrainChunksRegistered": [x["terrain"] for x in geo],
+                             "chuteStates": [x["chute"] for x in geo], "startState": pl}, expect="flat (L5 e)")
+                if args.plant == "chute-leak":
+                    return                      # the falsifier judges the SPACE row only
             # ---- drop cluster
             if "cluster" not in skip:
                 # the characters-art cluster was measured 10 s into the drop, when the bots' canopies are out

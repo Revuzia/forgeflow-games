@@ -4,6 +4,7 @@
     python _harness/probe_match.py                                   # 7 runs (6 seeds, seed 1 twice) + paths/census on 3 maps
     python _harness/probe_match.py --runs 1:isla_viva,1:isla_viva --no-paths --rev 7da063ad
     python _harness/probe_match.py --disk --seconds 600
+    python _harness/probe_match.py --disk --runs 11:ashgrid,11:ashgrid,12:ashgrid --paths-maps ashgrid --small-run     # Wave 7: the Savanna replay + census + paths
 
 Promoted from _spec/improve_2026-09/baseline/probe_match.{py,js}, probe_paths.{py,js} and probe_farwall.{py,js} (the bots
 audit). The in-page probes are READ-ONLY on game state (W.paused aside, which fastForward ignores). What changed vs the
@@ -85,6 +86,8 @@ def main():
     ap.add_argument("--no-paths", action="store_true", help="skip probe_paths (census + path search)")
     ap.add_argument("--paths-maps", default="isla_viva,ashgrid,deepwood")
     ap.add_argument("--paths-live", type=float, default=60.0, help="live path-sampling seconds per map (information)")
+    ap.add_argument("--small-run", action="store_true",
+                    help="the run list is too small for the 'sniper kills in MOST matches' row (a share of matches: Wave 7's Savanna run has 2 distinct matches): that one row is information; every other row is judged as usual")
     ap.add_argument("--farwall", action="store_true", help="also run probe_farwall (far-bot wall clipping; gates farToNearInside == 0, PLAN L5 d)")
     args = ap.parse_args()
     runs = []
@@ -180,8 +183,11 @@ def main():
                     expect="< 5 % ('better' = beats the pistol slot by bots.js's own rule: sim gunValueAt at the live fight's range/EHP "
                            "or the idle mean, own mag + reserve, swap price 0.4 s, margin 1.15; swap-gate/reload/consumable samples skipped)")
         sn = [r for r in distinct if any(k["wid"] == "sniper" for k in r["kills"])]
-        v.check("sniper kills > 0 in most matches", len(sn) * 2 > len(distinct), {"matchesWithSniperKills": len(sn), "matches": len(distinct),
-                                                                                   "sniperKills": wids.get("sniper", 0)}, expect="> half (was 4 sniper kills in 539)")
+        sn_detail = {"matchesWithSniperKills": len(sn), "matches": len(distinct), "sniperKills": wids.get("sniper", 0)}
+        if args.small_run:
+            v.info("sniper kills > 0 in most matches (--small-run: %d distinct matches are too few for a share of matches; information)" % len(distinct), sn_detail)
+        else:
+            v.check("sniper kills > 0 in most matches", len(sn) * 2 > len(distinct), sn_detail, expect="> half (was 4 sniper kills in 539)")
         stuck_rows, ep_rows = [], []
         for r in distinct:
             ag = r["agg"]
@@ -195,7 +201,9 @@ def main():
                 expect="< 2 % (was 12-27 % on isla_viva)")
         v.check("no bot with > 5 stuck episodes in a run", all(x["episodes"] <= 5 for x in ep_rows), ep_rows)
         s1 = [r for r in results if r["seed"] == 1 and r["map"] == "isla_viva" and r.get("track", {}).get("s21")]
-        if not s1:
+        if not any(r["seed"] == 1 and r["map"] == "isla_viva" for r in results):
+            v.info("seed 1 isla_viva: s21 leaves Coco Village", "not part of this --runs list (a Savanna-only run, Wave 7); the default run judges it")
+        elif not s1:
             v.cnj("seed 1 isla_viva: s21 leaves Coco Village", "no seed-1 isla_viva run with a track for s21")
         else:
             rows = []

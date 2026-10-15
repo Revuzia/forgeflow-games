@@ -19,8 +19,9 @@ rotated-wall rows come from the Node census (placement_census.mjs: every box map
   gap            per kind: the widest standoff between collider and drawn mesh in EXCESS of what the tightest axis-aligned box of each drawn
                  body would have, p95 <= 0.15 m (the C-COLL contract keeps boxes; a box cannot hug a round or leaning body)
   sprints        real sprints into props from 8 angles: the body ends > 10 cm inside the drawn mesh in <= 2 % of runs (Wave 4: 52 %); a point
-                 counts only while the feet are below the body's top - 0.10 m (stepping onto a low rock is not walking through it) and not in
-                 a mantle
+                 counts only while the body's top is at least the mover's step height (0.55 m, player.js STEP_UP) above the feet - a body under
+                 that is a step, never an obstacle (stepping onto a low rock is not walking through it; Wave 7 lane 7H: this replaces the
+                 older 'feet below top - 0.10 m', which only covered standing ON a body) - and not in a mantle
   container-lean (L4-gates 2026-10-13) containers, level (< 1.5 deg off vertical) and leaned (>= 1.5 deg: maps.js lays a container on a slope at
                  up to 8 deg while its collider stays level) apart: clip p95 <= 0.10 m and > 25 cm in < 5 % in each group on every map. The all-kind
                  clip row has the same limits; this row names the leaned minority so it cannot hide in an all-instance p95 (Wave 5 release: ashgrid
@@ -30,7 +31,17 @@ rotated-wall rows come from the Node census (placement_census.mjs: every box map
                  not convex: standing on a low shoulder of a cluster, or crossing an open angle of its hull, read 0.4-0.8 m "inside" with no drawn solid under the
                  capsule; see probe_collision.js drawnOverlap): the capsule's centre column under a surface more than 0.10 m above the feet, or a wall higher than
                  the step height inside the capsule's rim. Wave-5 release: 2 of 192 (isla_viva rock 11, 2 angles, 1.19 m deep: a 0.40 m part beside a 1.07 m rock
-                 is a staircase the mover accepts, then the capsule walks off the step box and sinks into the tall box); the hull-only count was 16
+                 is a staircase the mover accepts, then the capsule walks off the step box and sinks into the tall box); the hull-only count was 16.
+                 Wave 7 lane 7H (2026-10-14): the working copy read 2 of 192 (ashgrid rock 193, seed 7) and 5 of 320 over five Savanna seeds (60b854d0: 1 of 320
+                 at seed 31337), every one the SAME false positive and none a rock that was not stopped by its box: an instance whose rock proper reads 0.53-0.55 m
+                 over the mean terrain under its outline (a wall by its box) fell into the pebbleOnly fallback, which kept its 0.11-0.15 m pebbles as "the drawn
+                 body"; the capsule held off the box face stood on a pebble and the centre-column rule (> 0.10 m) read the pebble's 0.102-0.130 m as a solid in the
+                 way. Now a body counts only where its top is >= 0.55 m above the feet (see sprints) and a flagged body is confirmed by its own triangles. The
+                 deepest confirmed overlap on the working copy is 0.02 m (0.51 m before); 3fce7529 still reads 2 of 192 (isla_viva rock 11, 1.19 m deep), 7f6a9fb2
+                 104 of 192, and --plant rocks-small 23 of 64. A run-up whose 4.5 m start stands inside a wall box of the same cluster (a wide cluster: parts 7-8 m
+                 apart; 4 of the 13,432 sprints of an exhaustive sweep, none in the sampled runs) starts further back instead and runs longer: a start in a wall
+                 measures nothing about the fit (walls() and doors() guard their starts the same way). The sample is unchanged: no sampled run-up is backed off
+                 on the working copy
   phantom-rocks  walking at a rock collider on open ground: 0 stops > 0.3 m from a drawn rock (Wave 4: every one)
   bullets        the game's shot test vs the drawn triangles at body height, over the rays that hit either: box kinds (container) agree on
                  >= 85 %; hull kinds on >= what the tightest axis-aligned boxes of the same mesh score on the same rays - 10 points
@@ -295,8 +306,10 @@ def judge(v, per_map, rot, args):
             rock_by.append("%s %d/%d (deepest %s m)" % (m, w["inside10"], w["runs"], f(w.get("deepest"), 2)))
     if rr >= ROCK_SPRINT_MIN_RUNS:
         hull_only = sum((((per_map[m].get("live") or {}).get("walk") or {}).get("rocks") or {}).get("hullOnlyPoints", 0) for m in maps)
-        v.check("sprints-rocks", ri / rr <= ROCK_SPRINT_MAX, "%d of %d rock sprints (%.2f%%) ended > 10 cm inside the drawn rock (limit %d%%): %s; %d hull-flagged trace points were not confirmed by the drawn triangles (standing on a shoulder / over an open angle of the hull)" % (
-            ri, rr, 100.0 * ri / rr, round(100 * ROCK_SPRINT_MAX), ", ".join(rock_by), hull_only), "<= 1 %")
+        backed = sum((((per_map[m].get("live") or {}).get("walk") or {}).get("rocks") or {}).get("startsBackedOff", 0) for m in maps)
+        v.check("sprints-rocks", ri / rr <= ROCK_SPRINT_MAX, "%d of %d rock sprints (%.2f%%) ended > 10 cm inside the drawn rock (limit %d%%): %s; %d hull-flagged trace points were not confirmed by the drawn triangles (standing on a shoulder / over an open angle of the hull)%s" % (
+            ri, rr, 100.0 * ri / rr, round(100 * ROCK_SPRINT_MAX), ", ".join(rock_by), hull_only,
+            ("; %d run-ups started inside a wall box of the same cluster and were started further back" % backed) if backed else ""), "<= 1 %")
     else:
         v.cnj("sprints-rocks", "only %d rock sprints were run (need >= %d)" % (rr, ROCK_SPRINT_MIN_RUNS))
     pr = po = 0

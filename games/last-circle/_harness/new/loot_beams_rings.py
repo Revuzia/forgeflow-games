@@ -21,14 +21,22 @@ One standard match on isla_viva seed 7 (the research's measured seed: 124 weapon
   clamp      EVERY beam's drawn top <= the underside of the first collider above it - 4 cm, checked against an independent brute-force
              pass over ALL map colliders (not the spatial grid the module used); the under-roof census is printed (research: 69 of 346
              floor items and 17 of 51 chests on this seed before bots take any)
-  ceilpix    no beam PIXEL above a ceiling collider: for under-roof beams the scene is rendered (float RT, no bloom) with beams shown
+  ceilpix    no beam PIXEL above a ceiling collider (samples: the most-clamped under-roof beams 30 m apart, up to 12 candidates, until 3 have a framed view whose
+             un-clamped control shows the beam - Wave 7: town buildings hide the first 3 on Savanna): for under-roof beams the scene is rendered (float RT, no bloom) with beams shown
              and hidden from outside the building; the column above the projected ceiling must be identical. CONTROL: the same view
              with the clamp deliberately removed (the beam's drawn height forced to nominal) MUST show beam pixels there - a probe
              that cannot fail is reported as could-not-judge
   pickup     picking an item (E / walkover path), a net take mirror, and opening a chest each park their ring / beam / glow slot (zero
              matrix, free list) and the region renders identically with the markers hidden afterwards (and does NOT before)
   deaths     a killed bot's drops: every dropped item has a ring and a glow, every dropped weapon also a beam (and takes them away on pickup)
-  chestview  from 250 m up (the glider) the chest beams are still drawn: >= 70 % of the chests within 900 m in view show beam pixels
+  chestview  from 250 m up (the glider) the chest beams are still drawn: >= 70 % of the OPEN-SKY chests within 900 m in view, whose beam top is in LINE OF SIGHT,
+             show beam pixels. Open sky = no collider above the beam's footprint (the module's recorded ceiling is null, i.e. the beam is drawn at its nominal
+             height). A chest under a roof has its beam clamped under that roof BY DESIGN (the clamp / ceilpix rows judge those): on Savanna the chests stand
+             inside the town buildings, so the old all-chests count read the roofs, not the beacons. Line of sight: the segment from the camera to the top of the
+             beam (0.2 m below it) crosses no terrain and no collider with a footprint >= 3 x 3 m (a building or a slab; trees, rocks, props and cars do not count):
+             a downtown skyline 40 m high hides what stands behind it from a 250 m glider 600 m away, and a beam that is not drawn because a tower is in front
+             of it is not a missing beam (Wave 7, lane 7D; the roofed and the hidden counts are printed). Falsifier: --plant chest-beams-short serves loot.js with every beam's fade-out
+             distance capped at 60 m and must FAIL this row on any map (no beam pixel is left from 250 m)
   rings      A/B (ring shown / hidden, same frame state, scene + beams + glows otherwise identical): on SAND, GRASS and WOOD (a wooden
              structure top) each rarity ring's band pixels read as the rarity colour (hue error < 15 deg on the displayed pixel) at
              >= 1.4x the floor luminance (scene-linear HDR, pre-bloom, pre-tonemap)
@@ -294,10 +302,10 @@ def main():
     ap.add_argument("--tier", default=None, choices=["low", "medium", "high"], help="boot with this stored graphics tier (default: the game's own)")
     ap.add_argument("--hue-tol", type=float, default=15.0)
     ap.add_argument("--min-lum-ratio", type=float, default=1.4)
-    ap.add_argument("--plant", default=None, choices=["flush-clear", "storm-ignore"],
+    ap.add_argument("--plant", default=None, choices=["flush-clear", "storm-ignore", "chest-beams-short"],
                     help="falsifier (loot.js served through a page.route override, never the working tree): flush-clear = the pre-fix flush "
                          "(clearUpdateRanges before every addUpdateRange), gpusync MUST fail; storm-ignore = every shader's stormK() returns 1 "
-                         "(beams ignore the circle), stormfade MUST fail")
+                         "(beams ignore the circle), stormfade MUST fail; chest-beams-short = every beam fades out by 60 m, chestview MUST fail")
     args = ap.parse_args()
     only = {x.strip() for x in args.only.split(",") if x.strip()}
     want = lambda n: not only or n in only  # noqa: E731
@@ -310,7 +318,7 @@ def main():
         TIER_INIT = ("(() => { try { const m = /[#&]h_tier=(low|medium|high)/.exec(location.hash || ''); "
                      "if (m) localStorage.setItem('lc_settings', JSON.stringify({ graphics: m[1] })); } catch (_) {} })();")
         with C.Session(args, "loot_beams_rings", init_scripts=([TIER_INIT] if args.tier else None)) as s:
-            if args.plant in ("flush-clear", "storm-ignore"):
+            if args.plant in ("flush-clear", "storm-ignore", "chest-beams-short"):
                 if s.disk is None:
                     v.cnj("plant " + args.plant, "needs --disk / --rev (page routing)")
                     return
@@ -320,9 +328,15 @@ def main():
                     return _up.urlparse(url).path.endswith("/runtime/3d/royale/loot.js")
 
                 def _serve(route):
-                    src = open(os.path.join(C.ROOT, "runtime", "3d", "royale", "loot.js"), "rb").read().decode("utf-8")
+                    # the loot.js of the build being served (a --rev run plants into that revision's file, never the working tree's)
+                    if s.disk.git is not None:
+                        src = (s.disk.git.read("runtime/3d/royale/loot.js") or b"").decode("utf-8")
+                    else:
+                        src = open(os.path.join(C.ROOT, "runtime", "3d", "royale", "loot.js"), "rb").read().decode("utf-8")
                     if args.plant == "storm-ignore":
                         key, put = "float stormK(vec3 st, vec2 p) {", " return 1.0;"
+                    elif args.plant == "chest-beams-short":
+                        key, put = "float far = aBeam.w;", " far = min(far, 60.0);"
                     else:
                         key, put = "function queueRange(a, start, count) {", " a.clearUpdateRanges();"
                     if key not in src:
@@ -332,7 +346,8 @@ def main():
                     route.fulfill(status=200, body=src.encode("utf-8"), headers={"Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store"})
                 s.disk.overrides.insert(0, (_pred, _serve))
                 v.info("PLANT", {"flush-clear": "loot.js served with clearUpdateRanges() before every queued range (the pre-fix flush): gpusync must FAIL",
-                                 "storm-ignore": "loot.js served with stormK() returning 1 (beams ignore the storm circle): stormfade must FAIL"}[args.plant])
+                                 "storm-ignore": "loot.js served with stormK() returning 1 (beams ignore the storm circle): stormfade must FAIL",
+                                 "chest-beams-short": "loot.js served with every beam's fade-out distance capped at 60 m (no chest beacon from the glider): chestview must FAIL"}[args.plant])
             if args.tier:
                 s.boot("%s%slc=1#h_tier=%s" % (args.base, "&" if "?" in args.base else "?", args.tier))
                 v.info("tier", args.tier)
@@ -491,7 +506,7 @@ def main():
                 for u in clamped:
                     if all(math.hypot(u["x"] - p["x"], u["z"] - p["z"]) > 30 for p in picks):
                         picks.append(u)
-                    if len(picks) >= 3:
+                    if len(picks) >= 12:                # up to 12 candidates, 30 m apart: the loop below stops at 3 FRAMED samples whose un-clamped control shows the beam
                         break
                 if not picks:
                     v.cnj("ceilpix: no beam pixel above a ceiling collider", "no under-roof beam is clamped by >= 2 m on this seed")
@@ -536,6 +551,10 @@ def main():
                                     "rect": rect, "pc": [round(pc[0]), round(pc[1])], "pt": [round(pt[0]), round(pt[1])]})
                         ctrl.append(cpx)
                         os.makedirs(shots, exist_ok=True)
+                        # Wave 7: in a Savanna town the neighbouring buildings hide a 26 m view of a beam (the control reads 0 px and the probe cannot fail there): keep
+                        # sampling until 3 samples can fail, instead of judging the first 3 candidates whatever they show. The bar is unchanged.
+                        if sum(1 for q in per if q.get("controlPixels", 0) > 20) >= 3:
+                            break
                     judged = [p for p in per if "pixelsAboveCeiling" in p]
                     v.info("ceilpix per sample", per)
                     if not judged:
@@ -663,7 +682,16 @@ def main():
                 rig.settle(6)
                 W_, H_ = rig.size
                 chs = s.js("""() => { const W = window.__LC__.W, c0 = W.camera.position; return W.debugChests().filter((c) => !c.opened && c.beam >= 0).map((c) => { const d = Math.hypot(c.pos.x - c0.x, c.pos.y - c0.y, c.pos.z - c0.z);
-                    const o = W.debugLootFx(c.id).obj; return { id: c.id, x: o.beam.x, y: o.beam.y, z: o.beam.z, top: o.beam.top, d }; }); }""")
+                    const o = W.debugLootFx(c.id).obj; return { id: c.id, x: o.beam.x, y: o.beam.y, z: o.beam.z, top: o.beam.top, d, ceil: c.ceil === Infinity ? null : c.ceil, nominal: o.beam.nominal }; }); }""")
+                # line of sight from the glider's camera to the top of every beam: terrain (every 8 m along the segment) and big boxes (slab test; footprint >= 3 x 3 m)
+                occ = s.js("""(pts) => { const W = window.__LC__.W, c0 = W.camera.position, M = W.map, cols = M.colliders.filter((o) => !o.dead && (o.maxX - o.minX) >= 3 && (o.maxZ - o.minZ) >= 3);
+                    const hit = (tx, ty, tz) => { const d = [tx - c0.x, ty - c0.y, tz - c0.z], L = Math.hypot(d[0], d[1], d[2]), n = Math.ceil(L / 8), o0 = [c0.x, c0.y, c0.z];
+                      for (let i = 1; i < n; i++) { const t = i / n; if (M.heightAt(c0.x + d[0] * t, c0.z + d[2] * t) > c0.y + d[1] * t) return 'terrain'; }
+                      for (const o of cols) { let t0 = 0, t1 = 1; const lo = [o.minX, o.minY, o.minZ], hi = [o.maxX, o.maxY, o.maxZ];
+                        for (let a = 0; a < 3 && t0 <= t1; a++) { if (Math.abs(d[a]) < 1e-9) { if (o0[a] < lo[a] || o0[a] > hi[a]) t0 = 2; } else { let ta = (lo[a] - o0[a]) / d[a], tb = (hi[a] - o0[a]) / d[a]; if (ta > tb) { const q = ta; ta = tb; tb = q; } if (ta > t0) t0 = ta; if (tb < t1) t1 = tb; } }
+                        if (t0 <= t1 && t1 > 0) return 'collider'; }
+                      return null; };
+                    return pts.map((p) => hit(p[0], p[1], p[2])); }""", [[c["x"], c["top"] - 0.2, c["z"]] for c in chs])
                 full = [0, 0, W_, H_]
                 s.js("() => window.__LG__.vis(true, true, true)")
                 on = rig.grab(full, True, False)
@@ -671,25 +699,37 @@ def main():
                 of = rig.grab(full, True, False)
                 s.js("() => window.__LG__.vis(true, true, true)")
                 dif = np.abs(on["hdr"][..., :3] - of["hdr"][..., :3]).max(axis=-1)
-                seen, inview = 0, 0
+                seen, inview, roofed, roofed_seen, hidden, hidden_seen = 0, 0, 0, 0, 0, 0
                 detail = []
-                for c in chs:
+                for ci, c in enumerate(chs):
                     if c["d"] > 900:
                         continue
                     p0 = rig.js("([x, y, z]) => window.__LG__.project(x, y, z)", [c["x"], c["y"] + 0.2, c["z"]])
                     p1 = rig.js("([x, y, z]) => window.__LG__.project(x, y, z)", [c["x"], c["top"] - 0.2, c["z"]])
                     if not (0 < p0[0] < W_ and 0 < p0[1] < H_ and p0[2] < 1):
                         continue
-                    inview += 1
                     x0 = max(0, int(p0[0]) - 6); x1 = min(W_, int(p0[0]) + 7); y0 = max(0, int(min(p0[1], p1[1])) - 6); y1 = min(H_, int(max(p0[1], p1[1])) + 6)
                     n = int((dif[y0:y1, x0:x1] > 0.03).sum())
+                    if c.get("ceil") is not None:
+                        roofed += 1                 # a collider above the beam: its beam is clamped under that roof by design (clamp / ceilpix judge it)
+                        roofed_seen += 1 if n >= 3 else 0
+                        continue
+                    if occ[ci] is not None:
+                        hidden += 1                 # a building / slab / hill stands between the glider and the top of its beam: nothing to draw there
+                        hidden_seen += 1 if n >= 3 else 0
+                        continue
+                    inview += 1
                     seen += 1 if n >= 3 else 0
                     detail.append((c["id"], round(c["d"]), n))
+                v.info("chestview: roofed chests excluded (their beam is clamped under the roof by design)",
+                       "%d of %d chests in view within 900 m are roofed (%d of them show beam pixels); the all-chests figure the row used before Wave 7 would read %d of %d = %.0f %%" % (
+                           roofed, roofed + hidden + inview, roofed_seen, seen + roofed_seen + hidden_seen, roofed + hidden + inview, 100.0 * (seen + roofed_seen + hidden_seen) / max(1, roofed + hidden + inview)))
+                v.info("chestview: open-sky chests with no line of sight to the top of their beam (not judged)", "%d of %d open-sky chests in view are behind a building / slab / hill (%d of them show beam pixels anyway)" % (hidden, hidden + inview, hidden_seen))
                 if inview < 3:
-                    v.cnj("chestview: chest beams are drawn from the glider", "only %d chests within 900 m in view" % inview)
+                    v.cnj("chestview: chest beams are drawn from the glider", "only %d open-sky chests in line of sight within 900 m in view (%d roofed and %d hidden ones excluded)" % (inview, roofed, hidden))
                 else:
-                    v.check("chestview: from 250 m up >= 70 %% of the chests within 900 m in view still show beam pixels (%d of %d)" % (seen, inview), seen >= 0.7 * inview,
-                            {"inView": inview, "seen": seen, "sample": detail[:8]})
+                    v.check("chestview: from 250 m up >= 70 %% of the open-sky chests in line of sight within 900 m still show beam pixels (%d of %d; %d roofed and %d hidden chests not judged)" % (seen, inview, roofed, hidden), seen >= 0.7 * inview,
+                            {"inView": inview, "seen": seen, "roofedExcluded": roofed, "hiddenExcluded": hidden, "sample": detail[:8]})
 
             # ---- rings A/B ---------------------------------------------------------------------------------------------
             spots = {}

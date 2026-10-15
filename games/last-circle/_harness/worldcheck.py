@@ -110,10 +110,19 @@ def mini_root(with_runtime):
     return dst
 
 
-def judge_rng(v, now, base, baseline_label, chk):
+# Wave 7 (lane 7A): Savanna (ashgrid) builds its towns on purpose - the town() draws left the shared RNG, so everything placed after them moves (maps.js
+# MAP_GEN_VERSION 3). Against a baseline OLDER than Wave 7 the stream row therefore judges isla_viva and deepwood, which must stay byte-identical, and prints
+# the Savanna difference as information. `--rng-maps all` restores the old behaviour.
+SAVANNA_BY_DESIGN = ("ashgrid",)
+
+
+def judge_rng(v, now, base, baseline_label, chk, skip_maps=()):
     nb = {(b["map"], b["seed"]): b for b in now["builds"]}
     bb = {(b["map"], b["seed"]): b for b in base["builds"]}
-    keys = sorted(set(nb) & set(bb))
+    for m in skip_maps:
+        diff = sum(1 for k in nb if k[0] == m and k in bb and nb[k]["wild"] != bb[k]["wild"])
+        v.info("rng-stream %s (changed on purpose, Wave 7 towns)" % m, "%d of %d builds differ from %s in wild loot (information, not judged)" % (diff, sum(1 for k in nb if k[0] == m), baseline_label))
+    keys = sorted(k for k in (set(nb) & set(bb)) if k[0] not in skip_maps)
     if not keys:
         return chk("rng-stream", None, "no (map, seed) in common between the two fingerprints")
     poi_bad, wild_bad, prop_bad, rejected, kinds_checked = [], [], [], 0, 0
@@ -227,7 +236,7 @@ def main_fn(v, args):
             base = now
         else:
             base = run_node(["--mode", "fingerprint", "--root", base_root, "--vendor", vendor, "--seeds", seeds])
-        judge_rng(v, now, base, "git " + base_sha, chk)
+        judge_rng(v, now, base, "git " + base_sha, chk, () if args.rng_maps == "all" else SAVANNA_BY_DESIGN)
     finally:
         for d in tmp:
             shutil.rmtree(d, ignore_errors=True)
@@ -239,6 +248,7 @@ def main():
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--baseline-rev", default=None, help="the revision the RNG stream is compared with (default %s, the Wave-4 commit)" % WAVE4_REV)
     ap.add_argument("--quick", action="store_true", help="seed 7 only for the RNG stream")
+    ap.add_argument("--rng-maps", default="held", help="'held' (default): the stream row skips ashgrid (Wave 7 builds Savanna's towns on purpose) and judges isla_viva + deepwood; 'all': every map")
     args = ap.parse_args()
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)
 

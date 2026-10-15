@@ -436,7 +436,7 @@ def main_fn(v, args):
             pl = IM["place"]
             news = [x[2] for x in IM["drop"]["withKit"] + IM["drop"]["without"] + IM["street"]["withKit"] + IM["street"]["without"]]
             probs = C.diag_problems(IM["diag"], rig=False)
-            return (not any(news) and not probs and pl["failed"] == 0 and pl["colliders"] == 640 and pl["programsAfterWarm"] - pl["programsBeforeWarm"] <= 8,
+            return (not any(news) and not probs and pl["failed"] == 0 and pl["colliders"] == M["res"]["colliders"] and pl["programsAfterWarm"] - pl["programsBeforeWarm"] <= 8,
                     "createCityKit({ W }) placed 300 buildings on %s terrain (y %s..%s, %d wet) in %.0f ms; kernel.warmup took programs %s -> %s; new programs over %d drop-camera and %d street frames: %s; %s" % (
                         pl["map"], pl["terrain"]["ymin"], pl["terrain"]["ymax"], pl["terrain"]["wet"], pl["placeMs"], pl["programsBeforeWarm"], pl["programsAfterWarm"], len(IM["drop"]["withKit"]) * 2, len(IM["street"]["withKit"]) * 2, sum(news), ", ".join(probs) or "0 page / console / shader errors"))
         guarded("inmatch-warm", r_im_warm)

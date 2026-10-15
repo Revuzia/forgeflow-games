@@ -319,7 +319,7 @@ def judge(v, doc, args, plant_rows):
     if oth:
         v.info("base-edges, other generators (not judged by the plan row)", " | ".join(oth))
     d = ["%s min %s (%d < 1.85 capsule, %d < 2.0)" % (m, f(S[m]["doors"]["minClear"], 2), S[m]["doors"]["ltCapsule"], S[m]["doors"]["lt20"]) for m in S if S[m]["doors"]["lt20"]]
-    chk("doorway-clearance", not d, "every doorway >= 2.0 m: min " + per_map(lambda s: f(s["doors"]["minClear"], 2)) if not d else " | ".join(d), ">= 2.0 m", wave6_row=True)
+    chk("doorway-clearance", not d, "every doorway >= 2.0 m: min " + per_map(lambda s: "%s over %d doorways" % (f(s["doors"]["minClear"], 2), s["doors"]["n"])) if not d else " | ".join(d), ">= 2.0 m", wave6_row=True)
     d = ["%s %d of %d starts > 0.55 m (max %s)" % (m, S[m]["ramps"]["stepGt055"], S[m]["ramps"]["n"], f(S[m]["ramps"]["stepMax"], 2)) for m in S if S[m]["ramps"]["stepGt055"]]
     chk("ramp-start-step", not d, "every ramp starts within 0.55 m of the floor" if not d else " | ".join(d), "0 over 0.55 m", wave6_row=True)
     d = ["%s %s%%" % (m, f(100 * (S[m]["roads"]["floatShare"] or 0), 1)) for m in S if (S[m]["roads"]["floatShare"] or 0) > 0.01]

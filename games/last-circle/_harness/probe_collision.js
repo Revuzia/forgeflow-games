@@ -90,9 +90,13 @@
   const idealBoxes = (bodies) => bodies.map((Hb) => { let a = 1e9, b = -1e9, c = 1e9, d = -1e9; for (const q of Hb) { if (q[0] < a) a = q[0]; if (q[0] > b) b = q[0]; if (q[1] < c) c = q[1]; if (q[1] > d) d = q[1]; } return { minX: a, maxX: b, minZ: c, maxZ: d }; });
   // signed distance from (px,pz) to the nearest drawn body (negative inside one)
   const sdBodies = (px, pz, bodies) => { let m = 1e9; for (const H of bodies) { const d = sdPoly(px, pz, H); if (d < m) m = d; } return m; };
-  // ... but a capsule whose feet are at or above a body's top is standing ON it (the mover steps onto anything up to 0.55 m and mantles higher
-  // ledges): that is not walking through it. 1e9 when every body is under the feet.
-  const sdBodiesAt = (px, pz, y, hh) => { let m = 1e9; for (let b = 0; b < hh.bodies.length; b++) { if (y >= hh.tops[b] - 0.10) continue; const d = sdPoly(px, pz, hh.bodies[b]); if (d < m) m = d; } return m; };
+  // ... but a body is only an obstacle to a capsule whose feet are more than STEP_UP under its top. This is the mover's own rule (player.js blockedIn:
+  // `c.maxY <= yd + STEP_UP` is ignored, supportIn lifts the feet onto it): a body whose highest vertex is under the step height above the ground the
+  // capsule stands on is a step, never an obstacle, and that covers a capsule standing ON a body (top - feet <= 0.10 m, the old test) and a pebble
+  // beside a rock whose box the capsule is held off (Wave 7, lane 7H: a 0.11 m pebble under the feet of a sprint that the rock's box stopped read
+  // "0.5 m inside the drawn body" when the pebbleOnly fallback below had kept it as the instance's only body). 1e9 when every body is a step.
+  const bodyIsStep = (hh, b, y) => hh.tops[b] - y < STEP_UP;
+  const sdBodiesAt = (px, pz, y, hh) => { let m = 1e9; for (let b = 0; b < hh.bodies.length; b++) { if (bodyIsStep(hh, b, y)) continue; const d = sdPoly(px, pz, hh.bodies[b]); if (d < m) m = d; } return m; };
   const dRect = (c, x, z) => Math.hypot(Math.max(c.minX - x, 0, x - c.maxX), Math.max(c.minZ - z, 0, z - c.maxZ));
   // (sprints, rocks; L4-gates 2026-10-13) The drawn body of a rock is a CONVEX HULL of its vertices in the player's body band, and a rock is not convex: the hull
   // fills the empty angle between the lobes and the flare of its foot. A capsule standing on a low shoulder of a rock, or walking through an open angle of its
@@ -105,25 +109,37 @@
   //   (b) a ring of 12 points at R - 0.10 m: a drawn surface more than STEP_UP (0.55 m) above the feet (a wall the mover will not step onto, overlapped by more
   //       than 10 cm at the disc's edge; a lower surface there is a step the mover climbs, which overlaps the disc edge by up to 0.15 m on the way).
   // In both, solid that starts above the head (bottom hit > feet + body height - 0.05) is not in the way. A build whose triangles cannot be read keeps the hull verdict.
+  // (sprints, rocks; Wave 7 lane 7H, 2026-10-14) Two more rules of the same kind, found by replaying the five stage-B failures (ashgrid seeds 7 (x2), 1, 1234,
+  // 31337 on the working copy, seed 31337 on 60b854d0: every one the same instance type, none a rock that was not stopped by its box):
+  //   (c) a body is judged at a trace point only if its top is at least STEP_UP above the FEET there (bodyIsStep). The pebbleOnly fallback in props() keeps
+  //       every sub-mesh of an instance whose rock proper reads under the step height (0.531-0.547 m over the MEAN terrain under its outline, while the
+  //       box, measured at the terrain under the box centre, is a wall): the 0.11-0.15 m pebble then became "the drawn body", the capsule held off the box
+  //       face stood on the pebble's centre, and rule (a) read the pebble's 0.102-0.130 m rise over the feet as a solid in the way. The mover walks over
+  //       such a pebble (no collider by design: maps.js builds no box under 0.3 m), the old 'feet >= top - 0.10' skip was the special case of (c) that
+  //       only covered standing on it. The rock proper stays judged (it is 0.55-0.72 m over the feet on its low side, the box stops the capsule there).
+  //   (d) the drawn triangles that confirm a flagged body are that body's own (bodySubs), not the union of every kept sub-mesh.
   const CONFIRM_KINDS = new Set(["rocks"]);
   const CONFIRM_RING = Array.from({ length: 12 }, (_, k) => [Math.cos(k * Math.PI / 6), Math.sin(k * Math.PI / 6)]);
   let _confirmRay = null, _confirmTHREE = null;
-  function drawnMeshes(kind, i, hh) {
-    if (hh._drawn) return hh._drawn;
-    hh._drawn = (hh.keepSubs || []).map((si) => (STATE.subsByKind[kind] || [])[si]).filter((o) => o && i < o.count).map((o) => {
+  // The drawn triangles of ONE body (hh.bodySubs[b]: the sub-meshes that make it up). A flagged body is confirmed by its OWN triangles: the triangles of
+  // another body of the instance (a pebble, the low rock beside the proper one) say nothing about whether the capsule is inside THIS one.
+  function drawnMeshes(kind, i, hh, b) {
+    hh._drawn = hh._drawn || {};
+    if (hh._drawn[b]) return hh._drawn[b];
+    hh._drawn[b] = ((hh.bodySubs || [])[b] || []).map((si) => (STATE.subsByKind[kind] || [])[si]).filter((o) => o && i < o.count).map((o) => {
       const m4 = new _confirmTHREE.Matrix4(); o.getMatrixAt(i, m4);
       const mm = new _confirmTHREE.Mesh(o.geometry, new _confirmTHREE.MeshBasicMaterial({ side: _confirmTHREE.DoubleSide }));
       mm.matrixAutoUpdate = false; mm.matrixWorld.multiplyMatrices(o.matrixWorld, m4); mm.matrix.copy(mm.matrixWorld);
       return mm;
     });
-    return hh._drawn;
+    return hh._drawn[b];
   }
   const rayDown = (meshes, px, pz, y) => {
     _confirmRay.set(new _confirmTHREE.Vector3(px, y + CAPH + 4, pz), new _confirmTHREE.Vector3(0, -1, 0)); _confirmRay.near = 0; _confirmRay.far = CAPH + 30;
     return _confirmRay.intersectObjects(meshes, false).map((h) => h.point.y);
   };
-  function drawnOverlap(kind, i, hh, x, y, z) {
-    const meshes = drawnMeshes(kind, i, hh);
+  function drawnOverlap(kind, i, hh, b, x, y, z) {
+    const meshes = drawnMeshes(kind, i, hh, b);
     if (!meshes.length) return true;
     const inTheWay = (hits, rise) => hits.length > 0 && hits[0] > y + rise && (hits.length < 2 || hits[hits.length - 1] < y + CAPH - 0.05);
     if (inTheWay(rayDown(meshes, x, z, y), 0.10)) return true;
@@ -262,7 +278,7 @@
 
         const b = setBox(csUse);
         recs.push({ i, x: r3(b.cx), z: r3(b.cz), base: r3(base), s: r3(sc), tilt: r3(tilt), bodies: bodies.length, pebbles: groups.length - kept.length, stepColliders: cs.length - csUse.length, pebbleOnly, clip: r3(ct.clip), gapMax: r3(ct.gapMax), gapMean: r3(ct.gapMean), gapIdeal: r3(ctI.gapMax), gapExcess: r3(Math.max(0, ct.gapMax - ctI.gapMax)), visTop: r3(top - base), colTop: r3(b.maxY - base), n: cs.length, worst: ct.worst && ct.worst.map(r3), widest: ct.widest && ct.widest.map(r3) });
-        STATE.hulls[kind][i] = { H, bodies, tops: kept.map((gr) => gr.top), base, cs: csUse, csAll: cs, keepSubs };
+        STATE.hulls[kind][i] = { H, bodies, tops: kept.map((gr) => gr.top), base, cs: csUse, csAll: cs, keepSubs, bodySubs: kept.map((gr) => gr.subs) };
       }
       STATE.subsByKind[kind] = subs;
       const ok = recs.filter((r) => !r.noBand && !r.stepOnly);
@@ -308,17 +324,32 @@
       // ---- 1. sprint into the prop from 8 angles at 4.5 m (real stepActor); deepest overlap with the drawn base hull
       const res = [];
       let hullOnly = 0;          // trace points the hull flagged (> 10 cm inside) that the drawn triangles did not confirm (rocks only)
+      let startsBackedOff = 0;   // run-ups whose 4.5 m start stood in a wall box and were started further back (information)
       for (const i of picked[kind]) {
         const hh = STATE.hulls[kind][i]; const [cx, cz] = centroid(hh.H);
         for (let a = 0; a < 8; a++) {
           const ang = a * Math.PI / 4 + 0.13, ux = Math.cos(ang), uz = Math.sin(ang);
-          place(cx - ux * 4.5, cz - uz * 4.5);
-          const tr = walk(ux, uz, 75, true);
+          // The run-up starts 4.5 m before the centroid of the drawn bodies. A wide cluster has parts whose boxes cover that spot (exhaustive sweep, 2026-10-14:
+          // deepwood seeds 1 and 2026, 4 of 8,600+ sprints started INSIDE the wall box of a neighbouring part and read "1 m inside"): a start in a wall says
+          // nothing about the fit, so the start backs off in 0.5 m steps until the capsule stands in the open (walls() and doors() guard their starts with
+          // freeAt the same way) and the sprint is lengthened by the same distance. Runs are never dropped: the count stays 8 per instance.
+          let back = 0;
+          for (; back < 8; back += 0.5) { const sx = cx - ux * (4.5 + back), sz = cz - uz * (4.5 + back); if (freeAt(sx, sz, m.heightAt(sx, sz), R)) break; }
+          if (back > 0) startsBackedOff++;
+          place(cx - ux * (4.5 + back), cz - uz * (4.5 + back));
+          const tr = walk(ux, uz, 75 + Math.ceil(back / 0.12), true);
           let mn = 9, at = null;
           for (const q of tr) {
             if (q[3] || q[1] > hh.base + 1.6 || q[1] + CAPH < hh.base + 0.15) continue;
-            const sd = sdBodiesAt(q[0], q[2], q[1], hh) - R;
-            if (sd < -0.10 && CONFIRM_KINDS.has(kind) && !drawnOverlap(kind, i, hh, q[0], q[1], q[2])) { hullOnly++; continue; }
+            // the deepest body that counts here: not a step (bodyIsStep), and for rocks one whose OWN drawn triangles confirm the hull's verdict
+            let sd = 9, unconfirmed = false;
+            for (let b = 0; b < hh.bodies.length; b++) {
+              if (bodyIsStep(hh, b, q[1])) continue;
+              const d = sdPoly(q[0], q[2], hh.bodies[b]) - R;
+              if (d < -0.10 && CONFIRM_KINDS.has(kind) && !drawnOverlap(kind, i, hh, b, q[0], q[1], q[2])) { unconfirmed = true; continue; }
+              if (d < sd) sd = d;
+            }
+            if (unconfirmed) hullOnly++;
             if (sd < mn) { mn = sd; at = q; }
           }
           const last = tr[tr.length - 1];
@@ -340,7 +371,7 @@
       }
       out.phantom[kind] = { runs: ph.length, over30: ph.filter((q) => q.bodyGapToVisual > 0.3).length, gapP50: pct(ph.map((q) => q.bodyGapToVisual), 0.5), gapMax: pct(ph.map((q) => q.bodyGapToVisual), 1), sample: ph.slice(0, 2) };
       const gaps = res.map((r) => r.minGap);
-      out.walk[kind] = { hullOnlyPoints: hullOnly, instances: picked[kind].length, runs: res.length, inside10: res.filter((r) => r.minGap < -0.10).length, endInside10: res.filter((r) => r.endGap < -0.10).length,
+      out.walk[kind] = { hullOnlyPoints: hullOnly, startsBackedOff, instances: picked[kind].length, runs: res.length, inside10: res.filter((r) => r.minGap < -0.10).length, endInside10: res.filter((r) => r.endGap < -0.10).length,
         deepest: r3(-Math.min(...gaps)), minGapP50: pct(gaps, 0.5), widestStop: r3(Math.max(...gaps)), worst: res.slice().sort((a, b) => a.minGap - b.minGap).slice(0, 2) };
     }
     // ---- 3. bullets: the game's swept shot test (segmentColliders on the prop's own colliders) vs the drawn triangles

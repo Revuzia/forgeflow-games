@@ -139,7 +139,7 @@ def run_device(v, args, dev):
         v.check(P + "menus: no touch control drawn over the menu", not ctl_menu, ctl_menu)
         v.check(P + "menus: every blocking card closes on ONE real tap", all(n == 1 for n in taps.values()), taps or "no cards")
         # a match (setup), landed (setup)
-        s.start_match("standard", 7, "isla_viva", enter=True)
+        s.start_match("standard", 7, args.map, enter=True)
         # W.stats.chests is never incremented in 7da063ad: count the player's own 'chestOpened' events instead
         s.js("() => { const W = window.__LC__.W; if (window.__H_MYCHEST_ON__) return; window.__H_MYCHEST_ON__ = true; window.__H_MYCHEST__ = 0;"
              " W.events.on('chestOpened', (a) => { if (a && a === W.player) window.__H_MYCHEST__++; }); }")
@@ -286,8 +286,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
     ap.add_argument("--devices", default="pixel7,iphone14,se,ipad")
+    ap.add_argument("--map", default="isla_viva", choices=sorted(C.MAPS), help="the map of the match every device plays (default isla_viva; Wave 7 gates ashgrid = Savanna too)")
     ap.set_defaults(gpu="swiftshader")
     args = ap.parse_args()
+    if args.map != "isla_viva" and not args.report:
+        args.report = "mobile_" + args.map
 
     def body(v):
         for dev in [d.strip() for d in args.devices.split(",") if d.strip()]:
