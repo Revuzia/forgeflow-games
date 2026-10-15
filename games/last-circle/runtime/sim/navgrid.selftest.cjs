@@ -737,6 +737,56 @@ const mkc = (k) => ({ kind: k[0] ? "ramp" : "box", minX: k[1], maxX: k[2], minY:
   ok(mine === theirs, "a fresh process gives the identical world hash and routes (" + mine.slice(0, 60) + ")");
 }
 
+// ── 6g. Wave 7, round 2 (lane D4): the one-pass forms of the bake equal the two-call reference; a stair that ends short of its landing still leads to it ──────────
+{
+  // (a) supBlock (support + blocked in one pass), clearTier (the four clearance questions in one pass) and the short list floorFragile asks are the SAME ANSWERS as
+  // supportT + blockedT (and four blockedT): random points, feet heights, radii and ramp-flag states over the house scene's tile, strict ramps on and off.
+  if (typeof NG.supBlock === "function" && typeof NG.clearTier === "function") {
+    const T = NG.bakeTile(scene, flat, { minX: 17.5, minZ: 17.5, maxX: 36.5, maxZ: 32.5 }, 0.75);
+    let sd = 987654321;
+    const rnd = () => { sd = (sd + 0x6D2B79F5) >>> 0; let t = sd; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    let bad = 0, nb = 0, blockedN = 0, rampWon = 0, marginN = 0, tierBad = 0; const tiers = [0, 0, 0, 0, 0];
+    for (let i = 0; i < 60000; i++) {
+      const x = 17.5 + rnd() * 19, z = 17.5 + rnd() * 15, ix = Math.min(T.nx - 1, ((x - T.minX) * T.inv) | 0), iz = Math.min(T.nz - 1, ((z - T.minZ) * T.inv) | 0), ci = iz * T.nx + ix;
+      const a = T.nearStart[ci], b = T.nearStart[ci + 1];
+      if (a === b) continue;
+      const yq = rnd() * 11 - 0.2, rad = NG.RADIUS + (rnd() < 0.5 ? 0.005 : 0.1 * Math.floor(rnd() * 4)), st = rnd() < 0.5 ? 0 : 1, strict = rnd() < 0.3;
+      NG.resetMover(st, 0, strict);
+      const supR = NG.supportT(T, T.nearItems, a, b, x, z, yq, 0), sR = NG.supRampState();
+      const blkR = NG.blockedT(T, T.nearItems, a, b, x, z, supR > yq ? supR : yq, rad);
+      NG.resetMover(st, 0, strict);
+      const o = NG.supBlock(T, T.nearItems, a, b, x, z, yq, 0, rad);
+      nb++; if (blkR) blockedN++; if (sR.ramp === 1) rampWon++; if (sR.margin === 1) marginN++;
+      if (o.sup !== supR || o.blocked !== blkR || o.ramp !== sR.ramp || o.margin !== sR.margin) bad++;
+      NG.resetMover(0, 0, false);
+      const yd = yq, r0 = NG.RADIUS + 0.005;
+      const ref = NG.blockedT(T, T.nearItems, a, b, x, z, yd, r0) ? -1 : NG.blockedT(T, T.nearItems, a, b, x, z, yd, NG.RADIUS + 0.1) ? 0 : NG.blockedT(T, T.nearItems, a, b, x, z, yd, NG.RADIUS + 0.2) ? 1 : NG.blockedT(T, T.nearItems, a, b, x, z, yd, NG.RADIUS + 0.3) ? 2 : 3;
+      const got = NG.clearTier(T, T.nearItems, a, b, x, z, yd, r0);
+      tiers[got + 1]++; if (got !== ref) tierBad++;
+    }
+    NG.resetMover(0, 0, false);
+    ok(bad === 0 && nb > 5000 && blockedN > 500 && blockedN < nb - 500 && rampWon > 100, "supBlock = supportT + blockedT on " + nb + " random cases (" + blockedN + " blocked, " + rampWon + " held up by a ramp, " + marginN + " by a ramp's margin; " + bad + " differ)");
+    ok(tierBad === 0 && tiers.slice(0, 4).every((c) => c > 100), "clearTier = the four blockedT questions on the same cases (tiers -1 / 0 / 1 / 2 / 3: " + tiers.join(" / ") + "; " + tierBad + " differ)");
+  } else info("supBlock / clearTier are not exported by this navgrid.js: equivalence checks skipped");
+
+  // (b) a stair whose top ends 0.61 m before its landing (a tower's stairwell: the landing slab starts past the ramp). The 0.75 m lattice put no node in the gap row (a
+  // node needs a sample inside a footprint), so no edge joined the stair's last row to the landing's first, and the whole storey above the stair was pruned as an island.
+  {
+    const cols = [mk("ramp", 0, 2.2, 0, 3.0, 0, 6.0, 2), mk("box", -0.5, 4.5, 2.7, 3.0, 6.61, 13)];
+    const t = NG.bakeTile(cols, flat, { minX: -3, minZ: -0.07, maxX: 6, maxZ: 14.93 }, 0.75);
+    let slabNodes = 0, rampEnd = 0, bridges = 0;
+    for (let n = 0; n < t.n; n++) {
+      const f = t.flag[n];
+      if (t.y[n] > 2.8 && (f & 4) === 0 && (f & 8) === 0) slabNodes++;
+      if ((f & 4) !== 0 && (f & 64) !== 0 && t.y[n] > 2.3) {
+        rampEnd++;
+        for (let e = t.edgeStart[n]; e < t.edgeStart[n + 1]; e++) { const m = t.edgeTo[e]; if ((t.flag[m] & 4) === 0 && t.y[m] > 2.8 && (t.flag[m] & 8) === 0) bridges++; }
+      }
+    }
+    ok(slabNodes > 20 && bridges >= 2, "a stair that ends 0.61 m short of its landing reaches it: " + slabNodes + " landing nodes survive the island prune, " + bridges + " edges leave the stair's top end onto them (" + rampEnd + " top-end nodes)");
+  }
+}
+
 // ── 7. the real Savanna (needs the harness environment: skipped, not failed, when it is not there) ──────────────────────
 async function realMap() {
   const pathMod = require("path"), urlMod = require("url");

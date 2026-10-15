@@ -229,6 +229,7 @@ export function attachBrain(W, actor, nBots) {
       avoidId: null, avoidUntil: 0, swapT: -99, healBlockedUntil: 0,
       threatFor: undefined, threatT: -99, threatAt: null,
       coverState: undefined, coverPt: null, coverGiveUp: 0, coverUntil: 0, coverFailUntil: 0, coverReflexUntil: 0,
+      noRouteT: -99, deckT: -99, heldN: 0, heldT: -99, heldAcc: 0,        // (Wave 7, round 2) the last "no route" answer of a path request / the next time a roof exit may be looked for
     },
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
@@ -1725,15 +1726,17 @@ let navRampFree = false;
  *  (ramps never block) - see findPath. navRampHits counts the ramp blocks a search ran into, so the retry only happens when it
  *  could change the answer. */
 let navLenient = false, navRampHits = 0;
+const NAV_PULL_PAD = 0.45;
+let navPad = 0.3;                 // the wall margin of navWall: 0.3 m everywhere, the string pull on the Savanna asks for the capsule's 0.45 (see navSearch)
 /** A wall in the walk band (knee to head) at feet height h. A ramp blocks by the C-RAMP contract: where its slab is above
  *  step reach of the floor this point stands on (h), the point is under the slab or beside it. The slab as a FLOOR is
  *  navSupport's job (it already made h the slab top when the slab is reachable, so a bot climbing it is never blocked). */
 function navWall(ci) {
-  const x = NF[4], z = NF[5], h = NF[0];
+  const x = NF[4], z = NF[5], h = NF[0], pad = navPad;
   for (let k = navBStart[ci], e = navBStart[ci + 1]; k < e; k++) {
     const c = navCols[navBItems[k]];
     if (c.dead) continue;
-    if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
+    if (x < c.minX - pad || x > c.maxX + pad || z < c.minZ - pad || z > c.maxZ + pad) continue;
     if (c.kind === "ramp") {
       if (!C_RAMP || navRampFree) continue;
       let f;     // sim rampTopAt, inlined (this runs ~10^5 times per search)
@@ -1903,6 +1906,10 @@ function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
   if (!raw.length) return null;
   const pulled = [];
   let ax = sx, az = sz, ah = sh;
+  // (Wave 7, round 2) On the Savanna a pulled shortcut keeps the capsule's whole radius off a wall corner (0.45 m, not the search's 0.3): the legs this pull produced grazed
+  // wall ends and fence corners at the 0.3 m margin, and 5.4 % of the FRESH old-planner paths started with a leg that crossed a box of the town (probe_paths' first-blocked
+  // test; 0.2 % of the grid's). A shortcut that fails here keeps the raw corner, which the search itself verified at 0.3 m.
+  if (W.map.city) navPad = NAV_PULL_PAD;
   for (let i = 0; i < raw.length; i++) {
     const nxt = raw[i + 1];
     if (!nxt) { pulled.push(raw[i]); break; }
@@ -1911,6 +1918,7 @@ function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
     // keep the corner when the shortcut is blocked, or lands on another floor
     if (!ok || Math.abs(NF[3] - nxt.y) > 0.6) { pulled.push(raw[i]); ax = raw[i].x; az = raw[i].z; ah = raw[i].y; }
   }
+  navPad = 0.3;
   pulled.partial = found < 0;
   return pulled;
 }
@@ -2011,7 +2019,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -2119,7 +2127,7 @@ function navPrefetch() {
  *  is ~20,000 steps (4-5 ticks), so a tick costs about the same whatever the building; with the queue empty it costs nothing. */
 function navTick() {
   const w = nav.world, G = nav.G, st = nav.st, w0 = G.work(), budget = NAV_STEPS_TICK;
-  let guard = 0, spent = 0;
+  let guard = 0;
   while (G.work() - w0 < budget && guard++ < 48) {
     if (!nav.cur) {
       let j = null;
@@ -2128,18 +2136,16 @@ function navTick() {
       if (!j) break;
       try { nav.cur = G.beginJob(w, j); } catch (err) { navFail(err); return; }
     }
-    const t1 = navNow();
     let done = false;
     try { done = G.stepJob(w, nav.cur); } catch (err) { navFail(err); return; }
-    const d = navNow() - t1;
-    spent += d; st.slices++; if (d > st.sliceMaxMs) st.sliceMaxMs = d;
+    st.slices++;                      // (Wave 7, round 2) no wall-clock read per slice any more: the job keeps its own total (nav.cur.ms), and two performance.now() per slice were 2.6 % of the whole bake
     if (done) {
       st.fineJobs++; st.fineMs += nav.cur.ms; if (nav.cur.ms > st.fineMaxMs) st.fineMaxMs = nav.cur.ms; if (nav.cur.slices > st.jobSlicesMax) st.jobSlicesMax = nav.cur.slices;
       st.tiles = w.slots.length;
       nav.cur = null;
     }
   }
-  if (spent > 0) { st.ticksWorked++; st.sliceMs += spent; if (spent > st.tickMaxMs) st.tickMaxMs = spent; }
+  if (G.work() > w0) st.ticksWorked++;
 }
 /** Take what the last query asked for off the world and queue it: a tile new to the queues goes to the back of qNeed, one that was only
  *  queued as a prefetch is promoted to qNeed (a bot is waiting for it). Returns how many unbaked building tiles the query needed. */
@@ -2203,7 +2209,74 @@ function findPath(W, sx, sy, sz, tx, tz, ty) {
     if (p) return p;
     nav.st.fallbacks++;
   }
-  return findPathOld(W, sx, sy, sz, tx, tz, ty);
+  const p = findPathOld(W, sx, sy, sz, tx, tz, ty);
+  // (Wave 7, round 2) a START inside a town / compound and a goal outside it: the grid cannot plan out of its rect and the window planner's first leg out of a town crosses a wall
+  // end or a fence corner at its 0.3 m margin about once in ten (probe_paths' first-blocked test: 58 % of the old planner's blocked first legs started inside a rect). When that first
+  // leg IS blocked (checked on the spot, 0.3 m steps, at the bot's own floor), the grid takes the bot to open ground at the rect's edge toward the goal and the bot walks on from there.
+  if (nav.ready && p && p.length && !p.partial && TOWN_EXIT && firstLegBlocked(W, sx, sy, sz, p[0])) {
+    const q = townExitPath(W, sx, sy, sz, tx, tz);
+    if (q) { nav.st.exits++; return q; }
+  }
+  return p;
+}
+const TOWN_EXIT = true;           // switch: false = the window planner alone, as in the Wave-7 build
+const TOWN_EXIT_MIN_M = 6;        // the rect's edge toward the goal must be at least this far (a bot nearer the edge is out of the town's clutter anyway)
+const _fl = [];
+/** Is the straight walk from (sx,sz) at feet height sy to the waypoint wp blocked by a wall in the knee-to-head band (0.35 m margin) within its first 14 m? */
+function firstLegBlocked(W, sx, sy, sz, wp) {
+  let dx = wp.x - sx, dz = wp.z - sz;
+  const L0 = Math.sqrt(dx * dx + dz * dz);
+  if (L0 < 0.6) return false;
+  const L = L0 > 14 ? 14 : L0;
+  dx = dx / L0 * L; dz = dz / L0 * L;
+  const ex = sx + dx, ez = sz + dz;
+  const got = W.map.queryColliders((sx + ex) * 0.5, (sz + ez) * 0.5, L * 0.5 + 1.0, _fl);
+  const x0 = (sx < ex ? sx : ex) - 0.5, x1 = (sx < ex ? ex : sx) + 0.5, z0 = (sz < ez ? sz : ez) - 0.5, z1 = (sz < ez ? ez : sz) + 0.5;
+  const n = Math.ceil(L / 0.3);
+  for (let k = 0; k < got.length; k++) {
+    const c = got[k];
+    if (c.dead || c.kind === "ramp" || c.maxX < x0 || c.minX > x1 || c.maxZ < z0 || c.minZ > z1) continue;
+    if (!(c.minY < sy + 2.0 && c.maxY > sy + 0.55)) continue;
+    for (let i = 1; i <= n; i++) {
+      const x = sx + dx * i / n, z = sz + dz * i / n;
+      if (x >= c.minX - 0.35 && x <= c.maxX + 0.35 && z >= c.minZ - 0.35 && z <= c.maxZ + 0.35) return true;
+    }
+  }
+  return false;
+}
+/** A grid route from inside a town / compound rect to open ground at the rect's edge toward (tx,tz): the candidates are the exit point pulled 1.5 m inside and the points 3 and 6 m to either
+ *  side along the edge; one is taken only if no collider stands within 1.5 m of it at its own height (a point inside a building would lead the bot into it). null = no such route. */
+function townExitPath(W, sx, sy, sz, tx, tz) {
+  const A = nav.areas;
+  let r = null;
+  for (let i = 0; i < A.length && !r; i++) if (sx >= A[i].minX && sx <= A[i].maxX && sz >= A[i].minZ && sz <= A[i].maxZ) r = A[i];
+  if (!r) return null;
+  const dx = tx - sx, dz = tz - sz, D = Math.sqrt(dx * dx + dz * dz);
+  if (D < 1) return null;
+  const ux = dx / D, uz = dz / D;
+  const tX = ux > 1e-9 ? (r.maxX - sx) / ux : ux < -1e-9 ? (r.minX - sx) / ux : 1e30, tZ = uz > 1e-9 ? (r.maxZ - sz) / uz : uz < -1e-9 ? (r.minZ - sz) / uz : 1e30;
+  const tOut = tX < tZ ? tX : tZ;
+  if (tOut < TOWN_EXIT_MIN_M + 1.5 || tOut >= D) return null;
+  const ex = sx + ux * (tOut - 1.5), ez = sz + uz * (tOut - 1.5);
+  for (let k = 0; k < 5; k++) {
+    const side = k === 0 ? 0 : ((k & 1) ? 1 : -1) * (k > 2 ? 6 : 3);
+    const cx = ex - uz * side, cz = ez + ux * side;
+    if (cx < r.minX || cx > r.maxX || cz < r.minZ || cz > r.maxZ) continue;
+    const g = W.map.heightAt(cx, cz);
+    if (g < W.map.waterY + 0.5) continue;
+    const cols = W.map.queryColliders(cx, cz, 1.6);
+    let free = true;
+    for (let i = 0; i < cols.length && free; i++) {
+      const c = cols[i];
+      if (c.dead || c.kind === "ramp") continue;
+      if (cx < c.minX - 1.5 || cx > c.maxX + 1.5 || cz < c.minZ - 1.5 || cz > c.maxZ + 1.5) continue;
+      if (c.maxY > g - 0.5 && c.minY < g + 4.0) free = false;
+    }
+    if (!free) continue;
+    const q = gridPath(sx, sy, sz, cx, cz, g);
+    if (q && q.length) return q;
+  }
+  return null;
 }
 /** Length of a grid route from the feet: 3D metres along the waypoints. */
 function navLen(a, p) {
@@ -2267,6 +2340,85 @@ function requestPath(W, b, tx, tz, ty, urgent) {
   bb.path = findPath(W, a.pos.x, a.pos.y, a.pos.z, tx, tz, ty);
   bb.nextPathT = W.t + (navMiss ? 1.0 : 2.5);       // (Wave 7) a building tile the route needs is queued: ask again soon
   bb.pathGoal = bb.path ? { x: tx, z: tz } : null;
+  bb.noRouteT = (!bb.path && !navMiss) ? W.t : -99;       // (Wave 7, round 2) a real "no way": a bot on a roof may walk off it (deckExitPath)
+}
+
+// ── ROOF / PERCH EXIT (Wave 7, round 2, lane D4) ─────────────────────────────────────────────────────────────────────────────
+// A glide can end on a roof, on the top of a wall or on a ledge: 31 touchdowns on something over 2.5 m in 6 Savanna matches, 7 of them on real roofs 9-13 m up.
+// Where the grid or the window planner has a way down (a tower's own stairs, a drop of up to 6 m) the bot takes it. Where neither has - the roof is no part of the
+// walkable graph, or the bot stands on the outer face of a wall top with the next storey's wall over its head - it used to STAND: both wall slides were walled, moveToward
+// held still, 3 s later the loot was parked and the next goal tried, until a goal happened to lie the open way (measured: seed 26, bot s25 on a 9.4 m wall top, 7.5 s
+// still, 10.5 s on the roof). This game has no fall damage (hardLand is audio), so the way down is the way a player takes: walk off the nearest open edge. deckExitPoint
+// marches 25 headings, the one toward the goal first, and takes the nearest edge; a wall up to a hop high is hopped (jumpV 7.8: apex 1.38 m), a taller one ends the heading.
+const DECK_AGL = 3.5;             // feet this far over the ground = a roof, a deck, a wall top (a car or a container stack is lower)
+const DECK_LOOK = 20;             // m: how far an exit heading is marched
+const DECK_DROP = 1.4;            // the floor ends where the support under the next step is this much below the floor so far
+const DECK_HOP = 1.25;            // a wall up to this high is hopped; a higher one blocks the heading
+const DECK_NOROUTE_S = 3.0;       // a path request answered "no route" this recently counts (requestPath sets bb.noRouteT)
+const DECK_RETRY_S = 1.0;         // a roof exit is looked for at most this often
+const HELD_STUCK_S = 1.0;         // held this long (the wall guard / hold-still, not counting a bot that is walking) = the hard-stuck branch of moveToward, whatever the goal-distance timer says
+const HELD_TICKS = 15;             // sim ticks (60 Hz) the wall guard must have held a bot before a route (and on a deck a roof exit) is looked for
+const HELD_RETRY_S = 1.0;         // ... and at most this often
+const _dkx = { x: 0, z: 0, d: 0 };
+/** A wall in the walk band at (x,z) for feet at y that is too tall to hop: its box (0.45 m = the capsule) spans from above y + hop to below the head. */
+function tallWallAt(W, x, z, y, hop) {
+  const cols = W.map.queryColliders(x, z, 0.8);
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    if (c.dead || c.kind === "ramp") continue;
+    if (x < c.minX - 0.45 || x > c.maxX + 0.45 || z < c.minZ - 0.45 || z > c.maxZ + 0.45) continue;
+    if (c.minY < y + 2.0 && c.maxY > y + hop) return true;
+  }
+  return false;
+}
+/** Is the bot's own spot under a ceiling: a slab or a wide box whose footprint holds the bot's centre, from 1.8 m (its head) to 6 m over its feet. roofedForJump's test also counts
+ *  a thin wall a storey up that the bot's 0.45 m margin touches - which is what a bot on the outer ledge of a wall top has over its head, and it is NOT under a roof. */
+function underCeiling(W, b) {
+  const a = b.actor, list = wallCols(W, b);
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c.dead || c.kind === "ramp") continue;
+    if (a.pos.x < c.minX || a.pos.x > c.maxX || a.pos.z < c.minZ || a.pos.z > c.maxZ) continue;
+    if (c.maxX - c.minX < 1.0 || c.maxZ - c.minZ < 1.0) continue;
+    if (c.minY >= a.pos.y + 1.8 && c.minY < a.pos.y + 6.0) return true;
+  }
+  return false;
+}
+/** The nearest open edge of the deck the bot stands on, into _dkx ({x, z} = a point 2 m past the edge, d = the distance to the edge), or false. */
+function deckExitPoint(W, a, preferYaw) {
+  const ax = a.pos.x, az = a.pos.z, y0 = a.pos.y, wy = W.map.waterY;
+  let best = 1e9;
+  for (let k = 0; k < 25; k++) {
+    const off = k === 0 ? 0 : ((k & 1) ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 12);
+    const yaw = preferYaw + off, dx = -Math.sin(yaw), dz = -Math.cos(yaw);
+    let h = y0;
+    for (let s = 0.5; s <= DECK_LOOK; s += 0.5) {
+      const x = ax + dx * s, z = az + dz * s;
+      if (tallWallAt(W, x, z, h, DECK_HOP)) break;
+      const sup = supportAt(W, x, z, h);
+      if (sup < h - DECK_DROP) {
+        if (W.map.heightAt(x + dx * 1.5, z + dz * 1.5) < wy + 0.4) break;      // the ground under the edge is water
+        const cost = s + Math.abs(off) * 6;
+        if (cost < best) { best = cost; _dkx.x = x + dx * 2.0; _dkx.z = z + dz * 2.0; _dkx.d = s; }
+        break;
+      }
+      h = sup;
+    }
+  }
+  return best < 1e9;
+}
+/** Give a bot that stands on a roof / wall top / ledge a one-waypoint path 2 m past the nearest open edge. false = it is not on a deck, or no edge is open. The path is
+ *  tagged `exit`: moveToward neither re-plans nor drops it for a wall in its leg (a hop-high parapet is hopped), and it ends itself when the bot falls through the waypoint. */
+function deckExitPath(W, b, tx, tz) {
+  const a = b.actor, bb = b.bb;
+  if (!a.onGround || a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) < DECK_AGL) return false;
+  if (underCeiling(W, b)) return false;                  // a room under a ceiling is no roof
+  if (!deckExitPoint(W, a, Math.atan2(-(tx - a.pos.x), -(tz - a.pos.z)))) return false;
+  const p = [{ x: _dkx.x, y: null, z: _dkx.z, k: 1 }];
+  p.exit = true;
+  bb.path = p; bb.pathGoal = { x: tx, z: tz };
+  bb.nextPathT = W.t + 2.5;
+  return true;
 }
 
 function moveToward(W, b, tx, tz, dt, sprint, ty) {
@@ -2331,6 +2483,11 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // (Wave 5) a goal on another floor needs a ROUTE (the stairs), not a straight walk at it: plan one as soon as it is in
   // reach of the planner's window instead of waiting for a wall to stop the bot (requestPath is rate-limited to 2.5 s)
   if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) { reqWhy = 2; requestPath(W, b, tx, tz, ty); }
+  // (Wave 7, round 2) a bot on a roof / wall top whose path request came back with "no route" and whose goal is well below it walks off the nearest open edge
+  if (!bb.path && a.onGround && bb.noRouteT > W.t - DECK_NOROUTE_S && W.t >= bb.deckT && (ty != null ? ty : W.map.heightAt(tx, tz)) < a.pos.y - 2.5) {
+    bb.deckT = W.t + DECK_RETRY_S;
+    deckExitPath(W, b, tx, tz);
+  }
   // (Wave 7, lane 7B2) a goal inside the town / compound the bot stands in is planned on the grid AT ONCE (doors first, then the rooms
   // and stairs), not after the bot has walked into the wall in front of it - when the straight walk is blocked within the next 14 m. One
   // look per goal per 6 s: a goal the grid cannot reach is not asked again every frame (the straight walk + wall reflexes below take over, as before).
@@ -2361,6 +2518,12 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
     }
   }
   if (bb.path && !bb.path.length) { bb.path = null; bb.pathGoal = null; }
+  // (Wave 7, round 2) A window-planner waypoint a storey and more UNDER the feet and less than a metre away is a drop the planner took at a spot the bot is not at: it stands on the deck
+  // above the lower floor's cell (seed 27, s8: loot on the floor below, the route's one waypoint under the bot's own feet; it paced over it until the 3 s progress test parked the goal,
+  // 8 s on the deck). It is never taken ("on its floor" needs the feet within 1.5 m), so: off the nearest open edge, as for a roof with no way down.
+  if (bb.path && bb.path.length && !bb.path.nav && !bb.path.exit && a.onGround && bb.path[0].y != null && a.pos.y - bb.path[0].y > 2.5 && hyp(bb.path[0].x - a.pos.x, bb.path[0].z - a.pos.z) < 0.8) {
+    if (!deckExitPath(W, b, tx, tz)) { bb.path = null; bb.pathGoal = null; }
+  }
   const gx = bb.path ? bb.path[0].x : tx, gz = bb.path ? bb.path[0].z : tz;
   let want = Math.atan2(-(gx - a.pos.x), -(gz - a.pos.z));
   // PROACTIVE wall steer (owner playtest: bots ground against buildings while
@@ -2385,7 +2548,7 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // than the whole queryColliders budget saved by L6.)
   // (Wave 7) a leg of a grid route was replayed through the mover itself: the 3.2 m probe does not second-guess it (a stair leg or a door
   // jamb read as a wall by this probe was the reason a good plan got dropped); a bot that really is pinned still trips the arm's-length probe
-  if ((!(bb.path && bb.path.nav) && wallAhead(W, a, want, bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2)) ||
+  if ((!(bb.path && (bb.path.nav || bb.path.exit)) && wallAhead(W, a, want, bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2)) ||
       (bb.stuckT > 0.3 && wallAhead(W, a, want, 0.9))) {
     if (bb.path) { bb.path = null; bb.pathGoal = null; }
     reqWhy = 4; requestPath(W, b, tx, tz, ty);
@@ -2402,6 +2565,7 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
         else bb.wallSide = 0;
       }
       if (bb.wallSide) want += bb.wallSide * 1.05;
+      else if (deckExitPath(W, b, tx, tz)) want = Math.atan2(-(bb.path[0].x - a.pos.x), -(bb.path[0].z - a.pos.z));      // (Wave 7, round 2) walled in on a roof / wall top: off the nearest open edge
       else holdStill = true;
     }
   } else bb.wallSide = 0;
@@ -2461,7 +2625,23 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // the indoor loot / rotate / cover-run ticks of the Wave-4 matches were that: pinned for 5-30 ticks, again and again.
   // Same primitive as the fight steering: a heading that meets a wall within 0.9 m slides along it instead. A hop the state
   // asked for (a crate in the way) is its own business.
-  if (!inp.jump) guardMove(W, b, false);
+  if (!inp.jump) {
+    const gm = guardMove(W, b, false);
+    // (Wave 7, round 2) HELD by the wall guard (the heading is walled and so is every slide) is not "stuck" to act()'s detectors - they need a move intent, and the guard
+    // has just cleared it - and the 3.2 m wall probe above cannot see a THIN wall at arm's length (it samples one point, past the wall). Such a bot stood until the 2.5 s
+    // path cool-down ran out (measured: 68 of 11,247 goal-seeking samples with no route stood still, 1-4 s each) or the 3 s progress test parked its loot; one that had landed
+    // on the outer ledge of a wall top stood 9.5 s (Savanna seed 26, s25). After 0.25 s of it: ask for a route NOW (the cool-down is for a bot that keeps walking), and on a
+    // roof / wall top / ledge with still no route, walk off the nearest open edge.
+    if ((gm === 3 || holdStill) && a.onGround) { bb.heldN++; bb.heldAcc += dt; } else { bb.heldN = 0; bb.heldAcc = bb.heldAcc > dt * 2 ? bb.heldAcc - dt * 2 : 0; }
+    // ... and 1 s of it is as stuck as 3 s without the goal getting closer: the goal-distance timer at the top is reset whenever a route appears and is consumed or is asked
+    // for again, so a bot beside an item that lies inside a solid never tripped it (measured: Savanna seed 14, s4, 10 s beside a death drop inside a tower's footprint)
+    if (bb.heldAcc >= HELD_STUCK_S) { bb.heldAcc = 0; if (bb.progT < 3.0) bb.progT = 3.01; }
+    if (bb.heldN >= HELD_TICKS && W.t >= bb.heldT) {
+      bb.heldN = 0; bb.heldT = W.t + HELD_RETRY_S;
+      if (!bb.path) { reqWhy = 4; bb.nextPathT = 0; requestPath(W, b, tx, tz, ty, true); if (bb.path) bb.path.held = true; }      // (.held: only for the probes - which paths came from here)
+      if (!bb.path && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL) deckExitPath(W, b, tx, tz);
+    }
+  }
   return hyp(tx - a.pos.x, tz - a.pos.z);
 }
 

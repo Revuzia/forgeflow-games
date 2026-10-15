@@ -172,6 +172,8 @@
   var OFFS = [-0.375, -0.125, 0.125, 0.375];   // sample offsets (fractions of a cell), Blackridge's pattern
   var LINK_BAND = 3.0;           // nodes this close to a tile edge or hole are border nodes (stitched across tiles)
   var SEAM_BAND = 1.0;           // nodes this close to a side shared with a sibling chunk are kept as reachable seeds (see bakeTile opts.seam)
+  var BRIDGE_DY = 0.9;           // a stair-end bridge (see the floor-edge block of bakeTile) climbs or falls at most this much ...
+  var BRIDGE_D = 1.75;           // ... over at most this horizontal distance (two cells of 0.75 m, a node may sit off its cell centre)
   var FINE_MAX = 16;             // a building tile is at most this many metres a side: a bigger building is baked as several, stitched like any tiles (one bake is atomic, so this bounds the hitch)
   var BUILDING_ROOF_MAX = 14;    // a slab higher than this above the ground is a deck or a bridge, not part of a building
   var MAX_SLOTS = 12000;         // tiles per world: the global node id (slot * STRIDE + local) must stay an int32
@@ -296,6 +298,81 @@
     return false;
   }
 
+  // supportT + blockedT in ONE pass over a cell's colliders (Wave 7 round 2, lane D4): the bake's replay asks for the support under the walker and then whether
+  // the capsule fits, at the same point, twice a step; the two passes read the same rectangles. An item that is farther than the capsule radius from the point
+  // (horizontally) neither holds anybody up (the support margin 0.3 is inside the radius 0.45) nor blocks: it is dropped by one test. The items that survive are
+  // judged by the SAME expressions supportT / blockedT use (so the answer, and the _supRamp / _marginUse side effects, are bit for bit what the two calls gave); the
+  // block test runs after the support is known (it needs the feet height yd = max(yq, support)). Result: the support; _sbBlk = 1 when the capsule is blocked.
+  var _sbBlk = 0;
+  var _sbN = new Int32Array(48);
+  function supBlock(T, items, a, b, x, z, yq, H, rad) {
+    var lx0 = T.lx0, lx1 = T.lx1, lz0 = T.lz0, lz1 = T.lz1, lk = T.lk;
+    var r2 = rad * rad, s = H, nn = 0, over = false, strict = _strictRamp === 1;
+    for (var k = a; k < b; k++) {
+      var i = items[k];
+      var x0 = lx0[i], x1 = lx1[i], z0 = lz0[i], z1 = lz1[i];
+      var ex = x - (x < x0 ? x0 : x > x1 ? x1 : x), ez = z - (z < z0 ? z0 : z > z1 ? z1 : z);
+      if (!(ex * ex + ez * ez < r2)) continue;
+      if (nn < 48) _sbN[nn++] = i; else over = true;
+      var kd = lk[i];
+      if (kd === 2) continue;                           // a blocker is never a floor
+      var m = (kd === 1 && strict) ? 0 : SUP_MARGIN;
+      if (x < x0 - m || x > x1 + m || z < z0 - m || z > z1 + m) continue;
+      var isRamp = kd === 1;
+      var top = isRamp ? rampTopT(T, i, x, z) : T.ly1[i];
+      if (top <= yq + STEP_G && (top > s + 1e-7 || (isRamp && _supRamp === 0 && top > s - 1e-7))) {
+        s = top > s ? top : s; _supRamp = isRamp ? 1 : 0;
+        if (isRamp && (x < x0 || x > x1 || z < z0 || z > z1)) _marginUse = 1;
+      }
+    }
+    var yd = yq > s ? yq : s;
+    if (over) _sbBlk = blockedT(T, items, a, b, x, z, yd, rad) ? 1 : 0;
+    else {
+      var blk = 0;
+      for (var q = 0; q < nn && blk === 0; q++) {
+        var j = _sbN[q];
+        if (lk[j] === 1) { if (rampBlocksT(T, j, x, z, yd, rad)) blk = 1; continue; }
+        if (T.ly1[j] <= yd + STEP_G || T.ly0[j] >= yd + HEIGHT_G) continue;
+        blk = 1;                                         // within the radius horizontally (the test above) and in the vertical band
+      }
+      _sbBlk = blk;
+    }
+    return s;
+  }
+
+  /** The clearance tier of a standing capsule (radius `rad`, feet on yd) at (x, z): -1 = it does not fit; else how many of the fatter capsules (RADIUS + 0.1 / 0.2 / 0.3) fit as well
+   *  (0..3). The bake used to ask blockedT four times in a row, each a full pass over the cell's colliders. blocked(r) only grows with r (a box blocks when its distance is under r; a
+   *  ramp's reach grows with r), so one pass finds the nearest box (squared horizontal distance) and sets the ramps aside, and each radius is then a comparison and, for the ramps, the
+   *  same rampBlocksT call blockedT makes. Same expressions as blockedT: the answers are the same. */
+  var _ctR = new Int32Array(32);
+  function clearTier(T, items, a, b, x, z, yd, rad) {
+    var lx0 = T.lx0, lx1 = T.lx1, lz0 = T.lz0, lz1 = T.lz1, ly0 = T.ly0, ly1 = T.ly1, lk = T.lk;
+    var d2min = 1e30, nr = 0, over = false;
+    for (var k = a; k < b; k++) {
+      var i = items[k];
+      if (lk[i] === 1) { if (nr < 32) _ctR[nr++] = i; else over = true; continue; }
+      if (ly1[i] <= yd + STEP_G || ly0[i] >= yd + HEIGHT_G) continue;
+      var x0 = lx0[i], x1 = lx1[i], z0 = lz0[i], z1 = lz1[i];
+      var ex = x - (x < x0 ? x0 : x > x1 ? x1 : x), ez = z - (z < z0 ? z0 : z > z1 ? z1 : z);
+      var d2 = ex * ex + ez * ez;
+      if (d2 < d2min) d2min = d2;
+    }
+    if (over) {                                                 // more ramps than the scratch holds (never seen): the long way
+      if (blockedT(T, items, a, b, x, z, yd, rad)) return -1;
+      if (blockedT(T, items, a, b, x, z, yd, RADIUS + 0.1)) return 0;
+      if (blockedT(T, items, a, b, x, z, yd, RADIUS + 0.2)) return 1;
+      return blockedT(T, items, a, b, x, z, yd, RADIUS + 0.3) ? 2 : 3;
+    }
+    var r, q, blk;
+    for (var step = 0; step < 4; step++) {
+      r = step === 0 ? rad : RADIUS + 0.1 * step;
+      blk = d2min < r * r;
+      for (q = 0; q < nr && !blk; q++) if (rampBlocksT(T, _ctR[q], x, z, yd, r)) blk = true;
+      if (blk) return step === 0 ? -1 : step - 1;
+    }
+    return 3;
+  }
+
   function cellOf(T, x, z) {
     var ix = ((x - T.minX) * T.inv) | 0, iz = ((z - T.minZ) * T.inv) | 0;
     if (ix >= T.nx) ix = T.nx - 1; if (iz >= T.nz) iz = T.nz - 1;
@@ -337,8 +414,8 @@
       if (b > a) {
         if (gT) { y = T.hf(x, z); gT = false; vy = 0; air = false; }
         yq = air ? y - AIR_PAD : y;
-        sup = supportT(T, items, a, b, px, z, yq, T.hf(px, z)); yd = yq > sup ? yq : sup;
-        if (blockedT(T, items, a, b, px, z, yd, rad)) return false;
+        sup = supBlock(T, items, a, b, px, z, yq, T.hf(px, z), rad);
+        if (_sbBlk === 1) return false;
       }
       x = px;
       // Z move
@@ -389,10 +466,11 @@
       if (gT) { y = T.hf(x, z); gT = false; vy = 0; air = false; }
       Hz = T.hf(x, pz);
       if (water && Hz < T.deepY && (air ? y - AIR_PAD : y) <= T.wetY) return false;          // swimming (player.js: deep terrain under feet at the surface)
+      var sr0 = _supRamp;                  // the ramp flag this support call starts from (see the gravity step below)
       if (b > a) {
         yq = air ? y - AIR_PAD : y;
-        sup = supportT(T, items, a, b, x, pz, yq, Hz); yd = yq > sup ? yq : sup;
-        if (blockedT(T, items, a, b, x, pz, yd, rad)) return false;
+        sup = supBlock(T, items, a, b, x, pz, yq, Hz, rad);
+        if (_sbBlk === 1) return false;
       }
       z = pz;
       // gravity, integrate, land on the support (player.js stepActor)
@@ -402,7 +480,13 @@
       // a lift or a wall (a 0.538 m step between two flush slabs used to be neither, and the mover climbed what the grid walked through).
       var yStood = y;
       vy += GRAVITY * TICK; y += vy * TICK;
-      if (b > a) { _supRamp = 0; sup = supportT(T, items, a, b, x, z, air ? y - AIR_PAD : yStood, Hz); if (_supRamp === 1 && sup >= y - 0.02) usedRamp = 1; }
+      if (b > a) {
+        // the support under the feet after the move: the SAME question the Z-move just asked (same point, same feet height, same ground) when the walker is not in the air
+        // (yStood = the height that call used), and its answer is the same too - when that call started from a clear ramp flag, which is what this one forces: then it
+        // IS this call, side effects included, and is not run twice. (From a set flag the tie rule differs, so the full call runs.)
+        if (!air && sr0 === 0) { if (_supRamp === 1 && sup >= y - 0.02) usedRamp = 1; }
+        else { _supRamp = 0; sup = supportT(T, items, a, b, x, z, air ? y - AIR_PAD : yStood, Hz); if (_supRamp === 1 && sup >= y - 0.02) usedRamp = 1; }
+      }
       else sup = Hz;
       if (y <= sup + 0.02) { y = sup; vy = 0; air = false; } else { air = true; airTicks++; if (y - sup > BIG_GAP) bigTicks++; }
       if (y < yMin) yMin = y;
@@ -692,10 +776,23 @@
    *  the side strip of a ramp, or beside a step that would lift the walker is a place the mover permits only at exact positions; a walker
    *  that is 5 cm off falls, is lifted onto the wrong thing, or is stopped. own = the collider the floor is (-1 terrain). */
   function robOf(tier, fragile) { var r = tier - (fragile ? 2 : 0); return r < 0 ? 0 : r; }
+  var _ff = new Int32Array(256);
   function floorFragile(T, items, a, b, x, z, y, own) {
+    // the eight probes lie within 0.3 m of the node, and a collider holds up (supportT) only within 0.3 m of its footprint: the ones farther than 0.6 m (0.61 for rounding)
+    // from the node hold nobody up at any probe. The probes are asked of this short list, in the same order.
+    var nf = 0, ffl = items, fa = a, fb = b;
+    if (b - a <= 256) {
+      var lx0 = T.lx0, lx1 = T.lx1, lz0 = T.lz0, lz1 = T.lz1;
+      for (var q = a; q < b; q++) {
+        var iq = items[q];
+        if (x < lx0[iq] - 0.61 || x > lx1[iq] + 0.61 || z < lz0[iq] - 0.61 || z > lz1[iq] + 0.61) continue;
+        _ff[nf++] = iq;
+      }
+      ffl = _ff; fa = 0; fb = nf;
+    }
     for (var k = 0; k < 8; k++) {
       var ang = k * 0.7853981633974483, px = x + 0.3 * Math.cos(ang), pz = z + 0.3 * Math.sin(ang);
-      var Hp = T.hf(px, pz), sup = supportT(T, items, a, b, px, pz, y, Hp);
+      var Hp = T.hf(px, pz), sup = supportT(T, ffl, fa, fb, px, pz, y, Hp);
       if (own < 0) { if (sup > Hp + 0.05) return true; }                              // terrain: nothing may lift the walker
       else if (T.lk[own] === 1) {
         // a ramp: the strip within 0.3 m of its sides is held up by the support margin only
@@ -869,14 +966,10 @@
           for (var mi = 0; mi < nM; mi++) if (mT[mi] > cy + 1e-9 && mT[mi] <= cy + STEP_G) { dom = true; break; }
           if (dom) continue;                                                           // the mover would be lifted onto something higher
           if (cO[cj] < 0 && H < waterY - DEEP) continue;                               // swimming, not walking
-          if (blockedT(T, nearItems, a, b, sx, sz, cy, rad)) continue;                 // a standing capsule does not fit
-          // clearance tier 0..3 (a capsule 0.1 / 0.2 / 0.3 m fatter still fits): nodes sit in the middle of a doorway, not on
-          // whichever lattice point happens to be nearest the cell centre
-          var tier = 0;
-          if (!blockedT(T, nearItems, a, b, sx, sz, cy, RADIUS + 0.1)) {
-            tier = 1;
-            if (!blockedT(T, nearItems, a, b, sx, sz, cy, RADIUS + 0.2)) { tier = 2; if (!blockedT(T, nearItems, a, b, sx, sz, cy, RADIUS + 0.3)) tier = 3; }
-          }
+          // a standing capsule must fit; clearance tier 0..3 (a capsule 0.1 / 0.2 / 0.3 m fatter still fits): nodes sit in the middle of a doorway, not on
+          // whichever lattice point happens to be nearest the cell centre (clearTier: one pass for the four questions)
+          var tier = clearTier(T, nearItems, a, b, sx, sz, cy, rad);
+          if (tier < 0) continue;
           if (nE < 2040) { eY[nE] = cy; eX[nE] = sx; eZ[nE] = sz; eD[nE] = dd - 10 * tier; eO[nE] = cO[cj]; eR[nE] = tier; nE++; }
         }
       }
@@ -1002,13 +1095,17 @@
           var cj3 = qz2 * nx + qx2, gb0 = cellFirst[cj3], gb1 = cellFirst[cj3 + 1];
           for (var nbn2 = gb0; nbn2 < gb1; nbn2++) {
             var ddy = nY[nbn2] - nY[na];
-            if (ddy > -STEP_G - 1e-6 || ddy < -DROP_MAX) continue;
-            var ddx = nX[nbn2] - nX[na], ddz = nZ[nbn2] - nZ[na];
-            if (ddx * ddx + ddz * ddz > 1.45 * 1.45) continue;
+            var ddx = nX[nbn2] - nX[na], ddz = nZ[nbn2] - nZ[na], dd2 = ddx * ddx + ddz * ddz;
+            // a DROP: down off a ledge to a floor up to two cells away. A BRIDGE (Wave 7 round 2): a stair's end and the floor it meets two cells away with no node
+            // in the cell between (a stairwell's landing slab starts 0.6 m past the top of its stair: the 0.75 m lattice has no cell centre in the gap, so the
+            // neighbour edges never joined them and the whole storey above a tower's stair was an island); the replay below decides, as for every edge.
+            var isDrop = ddy <= -STEP_G - 1e-6 && ddy >= -DROP_MAX && dd2 <= 1.45 * 1.45;
+            var isBridge = !isDrop && ((nFlag[na] | nFlag[nbn2]) & F_RAMPEND) !== 0 && ((nFlag[na] ^ nFlag[nbn2]) & F_RAMP) !== 0 && ddy <= BRIDGE_DY && ddy >= -BRIDGE_DY && dd2 <= BRIDGE_D * BRIDGE_D;
+            if (!isDrop && !isBridge) continue;
             if (_cnt[1] - yAt >= YIELD_STEPS) { yAt = _cnt[1]; yield 0; }
             var kd2 = evalEdge(null, T, nX[na], nY[na], nZ[na], nFlag[na], nX[nbn2], nY[nbn2], nZ[nbn2], nFlag[nbn2], ci, cj3);
             dropTests++;
-            if (kd2 !== EDGE_DROP) continue;
+            if (isDrop ? kd2 !== EDGE_DROP : kd2 < 0) continue;
             addEdge(na, nbn2, _ec[0], kd2);
             if (!keep[nbn2]) { keep[nbn2] = 1; queue[qt++] = nbn2; if (phase === 1) prov[nbn2] = 1; }
           }
@@ -1423,9 +1520,18 @@
     if (old > 0) for (l = 0; l < T.n; l++) for (e = T.extStart[l]; e < T.extStart[l + 1]; e++) { src[k] = l; to[k] = T.extTo[e]; cost[k] = T.extCost[e]; kind[k] = T.extKind[e]; k++; }
     for (i = 0; i < add; i++) { src[k] = pend[i * 4]; to[k] = pend[i * 4 + 1]; cost[k] = pend[i * 4 + 2]; kind[k] = pend[i * 4 + 3]; k++; }
     for (i = 0; i < tot; i++) key[i] = W.slots[to[i] >> SHIFT].key * STRIDE + (to[i] & (STRIDE - 1));
-    var order = new Array(tot);
-    for (i = 0; i < tot; i++) order[i] = i;
-    order.sort(function (p, q) { return (src[p] - src[q]) || (key[p] - key[q]); });
+    // order by (source, destination key); equal pairs keep their insertion order (old links first). The old links are ALREADY in that order (this function wrote them),
+    // so only the new ones are sorted and the two runs are merged - the same permutation the full stable sort gave, without sorting the whole list every stitch.
+    var order = new Array(tot), pn = tot - old, pidx = new Array(pn);
+    for (i = 0; i < pn; i++) pidx[i] = old + i;
+    pidx.sort(function (p, q) { return (src[p] - src[q]) || (key[p] - key[q]); });
+    var ia = 0, ib = 0, io = 0;
+    while (ia < old && ib < pn) {
+      var pb = pidx[ib], cmp = (src[ia] - src[pb]) || (key[ia] - key[pb]);
+      if (cmp <= 0) order[io++] = ia++; else order[io++] = pb, ib++;
+    }
+    while (ia < old) order[io++] = ia++;
+    while (ib < pn) order[io++] = pidx[ib++];
     var EI = tot < 65535 ? Uint16Array : Int32Array;
     var xs = new EI(T.n + 1), xt = new Int32Array(tot), xc = new Float32Array(tot), xk = new Uint8Array(tot);
     for (i = 0; i < tot; i++) xs[src[i] + 1]++;
@@ -2158,6 +2264,9 @@
     collectJobs: collectJobs, runJob: runJob, takeWanted: takeWanted, beginJob: beginJob, stepJob: stepJob, work: function () { return _cnt[1]; },
     tilesAround: tilesAround, snapNodes: function (W, x, y, z, maxDy, R) { var n = snapNodes(W, x, y, z, maxDy, R), o = []; for (var i = 0; i < n; i++) o.push(snapGid[i]); return o; },
     // the mover model, exposed for the selftest and the harness (pure given a tile)
+    // (Wave 7 round 2) the one-pass forms the bake uses, exposed so the selftest can hold them to the two-call reference (supportT + blockedT, four blockedT)
+    supBlock: function (T, items, a, b, x, z, yq, H, rad) { var sup = supBlock(T, items, a, b, x, z, yq, H, rad); return { sup: sup, blocked: _sbBlk === 1, ramp: _supRamp, margin: _marginUse }; },
+    clearTier: clearTier, supRampState: function () { return { ramp: _supRamp, margin: _marginUse }; }, resetMover: function (ramp, margin, strict) { _supRamp = ramp; _marginUse = margin; _strictRamp = strict ? 1 : 0; },
     rampBlocksT: rampBlocksT, supportT: supportT, blockedT: blockedT, hop: function (W, T0, ax, ay, az, bx, bz, rad, strict) {
       _strictRamp = strict ? 1 : 0;
       var ok = hop(W, T0, ax, ay, az, bx, bz, rad, null, -1);
