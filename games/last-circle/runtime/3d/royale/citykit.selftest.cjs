@@ -269,6 +269,33 @@ function refBox(b, q, k, x, y, z) {
     ok(/if \(T\.kind === "car"\) \{ _carCol\.setHex\(it\.tint == null \? 0xffffff : it\.tint\)/.test(src3), "every car instance carries an instance colour (white = untouched), so all cars of a kit share one program variant");
   }
 
+  // the vertical stretch `sy` (Wave 7 completion): a skyline tower drawn taller than it was modelled - Y extents scale, X / Z stay exact, the default is the unstretched table
+  {
+    let bad = [], n = 0;
+    for (const id of K.typeIds()) {
+      for (const [q, sy] of [[0, 1.5], [1, 1.25], [3, 1.8]]) {
+        const a = K.colliderFor(id, 3, 7, -2, q, 1), b = K.colliderFor(id, 3, 7, -2, q, 1, sy);
+        n++;
+        if (a.length !== b.length) { bad.push(id + " box count"); continue; }
+        for (let i = 0; i < a.length; i++) {
+          const A = a[i], B = b[i];
+          if (A.minX !== B.minX || A.maxX !== B.maxX || A.minZ !== B.minZ || A.maxZ !== B.maxZ) { bad.push(id + " q" + q + " x/z moved"); break; }
+          if (Math.abs((B.minY - 7) - (A.minY - 7) * sy) > 1e-9 || Math.abs((B.maxY - 7) - (A.maxY - 7) * sy) > 1e-9) { bad.push(id + " q" + q + " y not scaled"); break; }
+        }
+      }
+    }
+    ok(bad.length === 0, "colliderFor(..., sy) scales every box's Y extent about the ground and leaves X and Z exact (" + n + " type x turn x stretch combinations)", bad.slice(0, 3));
+    const same = K.typeIds().every((id) => JSON.stringify(K.colliderFor(id, 1, 2, 3, 1, 1)) === JSON.stringify(K.colliderFor(id, 1, 2, 3, 1, 1, 1)) && JSON.stringify(K.colliderFor(id, 1, 2, 3, 1, 1)) === JSON.stringify(K.colliderFor(id, 1, 2, 3, 1, 1, null)));
+    ok(same, "sy omitted, null and 1 give the very same colliders (every existing caller is unchanged)");
+    const fp = K.footprintFor("skyscraper/building-skyscraper-b", 0, 0, 0, 1, 1.5), fp1 = K.footprintFor("skyscraper/building-skyscraper-b", 0, 0, 0, 1);
+    ok(Math.abs(fp.height - fp1.height * 1.5) < 1e-9 && fp.w === fp1.w && fp.d === fp1.d, "footprintFor carries sy: 53.76 m x 1.5 = " + fp.height.toFixed(2) + " m tall, the same footprint", [fp, fp1]);
+    ok(K.normaliseEntry({ type: "skyscraper/building-skyscraper-a", x: 0, y: 0, z: 0, sy: 1.4 }, 0).sy === 1.4 && K.normaliseEntry({ type: "skyscraper/building-skyscraper-a", x: 0, y: 0, z: 0 }, 0).sy === 1 && K.normaliseEntry({ type: "skyscraper/building-skyscraper-a", x: 0, y: 0, z: 0, sy: -2 }, 0).bad, "normaliseEntry: sy defaults to 1, a positive one is kept, a non-positive one is refused");
+    let thrown = false; try { K.colliderFor("props/hydrant", 0, 0, 0, 0, 1, 0); } catch (e) { thrown = true; }
+    ok(thrown, "colliderFor refuses a zero vertical stretch");
+    const src4 = fs.readFileSync(path.join(__dirname, "citykit.js"), "utf8");
+    ok(/scy = sc \* it\.sy/.test(src4) && /0, scy, 0, it\.y - c0\[1\]/.test(src4) && /T\[o \+ 1\] \* it\.k \* it\.sy/.test(src4), "the drawn instance matrix and the far proxy boxes stretch by sy exactly as the colliders do (one vertical scale in three places)");
+  }
+
   // ---------------------------------------------------------------- budget
   const dt = (Date.now() - T0) / 1000;
   ok(dt < 20, "the selftest runs in under 20 s (gate.py's budget)", dt);

@@ -666,7 +666,8 @@ async function main() {
   {
     const PS = Math.min(SEEDS, 60);
     const share = (L) => { const per = new Map(); for (const p of L.parcels) if (p.building) { const a = p.building.aabb; per.set(p.block, (per.get(p.block) || 0) + (a[2] - a[0]) * (a[3] - a[1])); } return L.blocks.map((b) => (per.get(b.id) || 0) / ((b.x1 - b.x0) * (b.z1 - b.z0))); };
-    const coreShare = [], townShare = [], coreBlocks = [], skyN = [], skyMax = [], variantsPerTown = [], cmpKinds = {}, cmpProps = {};
+    const lmBad = [], lmCore = [], lmTown = [], sky60 = [], syBad = [], lmKinds = {};
+    const townWho = [], coreShare = [], townShare = [], coreBlocks = [], skyN = [], skyMax = [], variantsPerTown = [], cmpKinds = {}, cmpProps = {};
     const badCmp = [], tintBad = [], tintSeen = new Set(), nonCity = { tint: 0, towns: 0 };
     let nTint = 0, nCars = 0, nonTintable = 0;
     for (let seed = 1; seed <= PS; seed++) {
@@ -674,8 +675,16 @@ async function main() {
       for (const L of M.towns) {
         if (!L.blocks.length) continue;
         const s = share(L);
+        { // Wave 7 completion: landmark lots (gas / market / plaza / court) and the stretched skyline
+          const lm = L.parcels.filter((p) => p.use === "lot" && TG.LANDMARK_LOTS.indexOf(p.lot) >= 0);
+          for (const p of lm) { lmKinds[p.lot] = (lmKinds[p.lot] || 0) + 1; }
+          for (const p of L.parcels) if (p.use === "lot" && TG.LANDMARK_LOTS.indexOf(p.lot) < 0 && ["parking", "park", "yard"].indexOf(p.lot) < 0) lmBad.push("ashgrid#" + seed + " " + L.id + " lot kind " + p.lot);
+          for (const p of L.parcels) if (p.building && p.building.sy !== undefined) { const kit = p.building.kit, R = (TG.STRETCH_RANGES || {})[kit]; if (!R || p.building.sy < R[0] - 1e-9 || p.building.sy > R[1] + 1e-9 || Math.abs(p.building.height - Math.round(TG.SHELL_KITS.skyline.concat(TG.SHELL_KITS.mid).find((k) => k[0] === kit)[3] * p.building.sy * 100) / 100) > 0.011) syBad.push("ashgrid#" + seed + " " + L.id + " " + kit + " sy " + p.building.sy + " height " + p.building.height); }
+          if (L.kind === "core") { lmCore.push(lm.length); sky60.push(L.parcels.filter((p) => p.building && p.building.gen === "shell" && p.building.height >= 60).length); }
+          else if (L.kind === "town") lmTown.push(lm.length);
+        }
         if (L.kind === "core") { coreShare.push(pct(s, 0.5)); coreBlocks.push(L.blocks.length); skyN.push(L.parcels.filter((p) => p.building && p.building.gen === "shell" && p.building.height >= 30).length); skyMax.push(Math.max(...L.parcels.filter((p) => p.building).map((p) => p.building.height))); }
-        else if (L.kind === "town") townShare.push(pct(s, 0.5));
+        else if (L.kind === "town") { townShare.push(pct(s, 0.5)); townWho.push(L.id + "#" + seed); if (process.env.TG_DEBUG && pct(s, 0.5) < 0.34) info("low-density town " + L.id + "#" + seed + ": block shares " + s.map((v) => v.toFixed(2)).join(" ") + " | parcels " + L.blocks.map((b) => L.parcels.filter((p) => p.block === b.id).map((p) => (p.building ? p.arch || p.use : "LOT:" + p.lot) + ":" + Math.round((p.rect[2] - p.rect[0]) * (p.rect[3] - p.rect[1]))).join(",")).join(" / ")); }
         const vs = new Set(L.parcels.filter((p) => p.building && p.building.gen === "shell").map((p) => p.building.palette.variant || "base"));
         variantsPerTown.push(vs.size);
         for (const e of TG.streetProps(L, seed)) {
@@ -713,7 +722,11 @@ async function main() {
     polish.coreShare = pct(coreShare, 0.5); polish.townShare = pct(townShare, 0.5);
     ok(coreBlocks.every((n) => n === 16), "Downtown Core is a 4 x 4 block grid on every one of " + PS + " seeds", "block counts " + [...new Set(coreBlocks)].join("/"));
     ok(Math.min(...coreShare) >= 0.40, "the core's built footprint covers >= 40 % of a block (median block, every seed; stage A: 0.25-0.30)", "worst seed " + fix(Math.min(...coreShare), 3) + ", median " + fix(polish.coreShare, 3));
-    ok(Math.min(...townShare) >= 0.33, "a town's built footprint covers >= 33 % of a block (median block of every town of every seed; stage A: 0.20-0.28)", "worst " + fix(Math.min(...townShare), 3) + ", median " + fix(polish.townShare, 3));
+    ok(Math.min(...townShare) >= 0.33, "a town's built footprint covers >= 33 % of a block (median block of every town of every seed; stage A: 0.20-0.28)", "worst " + fix(Math.min(...townShare), 3) + " (" + townWho[townShare.indexOf(Math.min(...townShare))] + "), median " + fix(polish.townShare, 3));
+    ok(Math.min(...lmCore) >= 2 && pct(lmCore, 0.5) >= 3, "Downtown holds >= 2 landmark lots (gas / market / plaza / court) on every one of " + PS + " seeds and >= 3 at the median (a lot too small for its landmark is a yard in maps.js)", "worst " + Math.min(...lmCore) + ", median " + pct(lmCore, 0.5) + ", kinds " + Object.keys(lmKinds).sort().map((k) => k + " " + lmKinds[k]).join(", "));
+    ok(lmBad.length === 0, "every lot of a city town is a parking lot, a pocket park, a yard or a landmark lot (no unknown kind)", lmBad.slice(0, 3).join(" | "));
+    ok(sky60.filter((n) => n >= 3).length >= Math.floor(PS * 0.9) && Math.max(...skyMax) >= 80, "the skyline is stretched: >= 3 kit towers of 60 m or more on 90 % of seeds, the tallest >= 80 m (the kit was modelled to 54 m)", "seeds with >= 3: " + sky60.filter((n) => n >= 3).length + " of " + PS + ", median count " + pct(sky60, 0.5) + ", tallest " + fix(Math.max(...skyMax), 1) + " m");
+    ok(syBad.length === 0, "every stretched shell carries a factor inside its type's STRETCH range and a height of kit height x factor", syBad.length + ", first: " + syBad.slice(0, 2).join(" | "));
     ok(Math.min(...skyN) >= 6, "the downtown skyline holds >= 6 kit towers of 30 m or more on every seed (stage A: 4-5, in a 3 x 3 core)", "worst " + Math.min(...skyN) + ", median " + pct(skyN, 0.5) + ", tallest " + fix(Math.max(...skyMax), 1) + " m");
     ok(Math.max(...variantsPerTown) <= 2, "a town's kit shells wear at most two colormaps (every (type, colormap) pair is a draw call per district)", "worst " + Math.max(...variantsPerTown));
     ok(["homestead", "farmstead", "depot", "hamlet", "tower"].every((k) => (cmpKinds[k] || 0) >= 20), "all five compound kinds occur (" + Object.keys(cmpKinds).sort().map((k) => k + " " + cmpKinds[k]).join(", ") + " over " + PS + " seeds)");

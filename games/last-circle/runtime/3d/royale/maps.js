@@ -490,7 +490,8 @@ function mkHeightFn(mapId, seed) {
 //   bake()            freeze into the Float32 lattice; from then on at(x, z) is the ground
 // Everything is deterministic: pads come from the seeded layout only and the bake is plain IEEE arithmetic (+, -, *, /, sqrt), the same on
 // every client.
-export const MAP_GEN_VERSION = 3;                   // see map.genVersion (3 = Wave 7: Savanna's towns; an old client has no export and counts as 1)
+export const MAP_GEN_VERSION = 4;                   // see map.genVersion (4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
+const WAVE6_GEN_VERSION = 2;                        // the layout a Savanna page plays when towngen.js / citykit.js do not load (see prepareCity)
 export const LAT_CELLS = 608;                       // 8 chunks x 76 near-LOD cells (see CHUNKS / NEAR_SEG in buildMap)
 export const LAT_N = LAT_CELLS + 1;                 // 609 nodes per side
 export const LAT_PITCH = SIZE / LAT_CELLS;          // 2.6316 m
@@ -1301,6 +1302,7 @@ export async function buildMap(W, mapId) {
     uv.needsUpdate = true;
   }
   const STRUCT_TILE = 2.6;    // metres of wall per brick/panel tile
+  let structTile = STRUCT_TILE;   // D2: the Savanna city sets this per building (1.9 / 2.6 / 3.6 / 5.0 m: small brick, the default, big panels, render) - one texture, four looks, no extra draw call
   const ROAD_TILE = 6.0;      // asphalt tiles slower — it is a broad flat surface
 
   // ── structures: batched boxes + colliders ─────────────────────────────────
@@ -1382,7 +1384,7 @@ export async function buildMap(W, mapId) {
   function addBox(cx, cy, cz, w, h, d, color, opts) {
     opts = opts || {};
     const geo = new THREE.BoxGeometry(w, h, d);
-    scaleBoxUV(geo, w, h, d, STRUCT_TILE);
+    scaleBoxUV(geo, w, h, d, structTile);
     if (opts.rotY) geo.rotateY(opts.rotY);
     geo.translate(cx, cy, cz);
     // batch key carries the texture KIND (opts.tex: shingle/plank/metal/block;
@@ -1876,7 +1878,7 @@ export async function buildMap(W, mapId) {
       // (one base of 41 sank 1.19 m on a slope: placementcheck props-sunk 2.4 % > 2 %). It now rides up to 0.3 m higher, so the uphill end sinks <= ~0.9 m and the low end floats <= 0.2 m.
       let hi = -Infinity;
       for (let i = 0; i < n; i++) { const t = g[i] - (gx * vx[i] + gz * vz[i]); if (t > hi) hi = t; }
-      it.y += Math.min(0.3, Math.max(0, hi - y0 + (PROP_EMBED[kind] || 0.1) - 0.85));
+      it.y += Math.min(0.2, Math.max(0, hi - y0 + (PROP_EMBED[kind] || 0.1) - 0.85));       // (D2: 0.2, was 0.3: the low end of one base floated 0.254 m on a seed of the Wave-7 completion round, over the 0.25 m bar; the uphill end now sinks up to ~1.0 m on the steepest base)
     }
     it.tx = gx; it.tz = gz;                                                    // the ground plane's slope (0 = untilted); the instance matrix and the collider boxes both read it
   }
@@ -2219,6 +2221,11 @@ export async function buildMap(W, mapId) {
       addBoxR(x, z, 0, pz, ry + 0.28, w + 0.7, 0.56, 0.22, pc, rot, NC); addBoxR(x, z, 0, -pz, ry + 0.28, w + 0.7, 0.56, 0.22, pc, rot, NC);
       addBoxR(x, z, px, 0, ry + 0.28, 0.22, 0.56, d + 0.7 - 0.44, pc, rot, NC); addBoxR(x, z, -px, 0, ry + 0.28, 0.22, 0.56, d + 0.7 - 0.44, pc, rot, NC);
     }
+    if (st.trim) {                                                                        // a cornice band round the wall tops (cream or dark), proud of the walls by 5 cm
+      const tc = st.trim === 1 ? shade(wallC, 1.22) : shade(wallC, 0.6), tz = d / 2 + T / 2 + 0.06, tx = w / 2 + T / 2 + 0.06, ty = y + H - 0.22;
+      addBoxR(x, z, 0, tz, ty, w + 0.4, 0.4, 0.14, tc, rot, NC); addBoxR(x, z, 0, -tz, ty, w + 0.4, 0.4, 0.14, tc, rot, NC);
+      addBoxR(x, z, tx, 0, ty, 0.14, 0.4, d + 0.4, tc, rot, NC); addBoxR(x, z, -tx, 0, ty, 0.14, 0.4, d + 0.4, tc, rot, NC);
+    }
     if (st.chimney) addBoxR(x, z, st.chimney * w * 0.3, -d * 0.2, ry + (st.roof === 2 ? 0.9 : 1.2), 0.9, st.roof === 2 ? 1.8 : 2.4, 0.9, shade(wallC, 0.72), rot, NC);
     if (st.unit) addBoxR(x, z, -st.unit * w * 0.26, d * 0.2, ry + 0.55, 1.5, 1.1, 1.1, "#8f969c", rot, NC);                 // (a unit stands ON the deck: 1.1 m tall, centre ry + 0.55)
     const glass = st.glass || "#34495e", sill = shade(wallC, 0.7);
@@ -2386,11 +2393,15 @@ export async function buildMap(W, mapId) {
   const inRects = (list, x, z, pad) => { for (let i = 0; i < list.length; i++) { const r = list[i]; if (x > r[0] - pad && x < r[2] + pad && z > r[1] - pad && z < r[3] + pad) return true; } return false; };
   const inCity = (x, z, pad) => cityFoot.length > 0 && inRects(cityFoot, x, z, pad || 0);
   const SAV = {
-    walls: { house: ["#d9c7a5", "#cfae86", "#c4966f", "#e2d8c3", "#b3ad94", "#cba08f", "#bfa27a"], shop: ["#d8a766", "#86a9b9", "#c4b88d", "#cf8068", "#a9b7a0", "#d6c08a"],
+    // (D2: the house and shop lists were all tans: a block of them was one colour from the plane. Sage, sky blue, terracotta, white, mustard, teal, rose and brick red join them; a block still takes
+    //  only TWO of its list, so a street stays one family and the next street is another)
+    walls: { house: ["#d9c7a5", "#cfae86", "#c4966f", "#e2d8c3", "#b3ad94", "#cba08f", "#bfa27a", "#9fb394", "#a9c0cf", "#c4725a", "#ebe6d6", "#d6b55a", "#7fa7a3", "#d9a7a0", "#a85a45"],
+      shop: ["#d8a766", "#86a9b9", "#c4b88d", "#cf8068", "#a9b7a0", "#d6c08a", "#e0d6b8", "#7fa7a3", "#c4725a", "#d6b55a", "#8c9fb8"],
       big: ["#8fa4b8", "#a7b3bd", "#c6b79c", "#9fae9d", "#b69883", "#8197ad", "#b9b5aa", "#7b8fa3", "#a89684"], hall: ["#b8ad94", "#a5a79b", "#c3b49a", "#9b9a8c"], shed: ["#a68f62", "#b08968", "#93805e"],
       barn: ["#a8553c", "#8f4a38", "#b9a27a", "#7e6a58"],
       core: ["#6d8aa5", "#5f7a93", "#7d93a8", "#8a7a6c", "#9aa8b4", "#6e7c8a", "#b09a84", "#74897b"] },     // (downtown towers: deeper, glassier tones than the town walls so the skyline reads from the plane, none so dark it goes black in shade)
-    roofs: ["#b5643c", "#9a4a36", "#7b5a48", "#8a6a50", "#a8523a", "#6c5a52", "#c07a48", "#5e6b73", "#8b5a3c", "#a3452f"],
+    roofs: ["#b5643c", "#9a4a36", "#7b5a48", "#8a6a50", "#a8523a", "#6c5a52", "#c07a48", "#5e6b73", "#8b5a3c", "#a3452f",
+      "#4c5865", "#3e4a58", "#6e8796", "#d8d3c4", "#587a5c", "#8e3b38", "#2f3d4c", "#b9553a"],     // (D2: slate, blue-grey, white flat deck, patina green, oxblood: roofs are what a 330 m drop view sees of a house)
     awnings: ["#c0563a", "#3a7a9a", "#d6a23a", "#5a8a5a", "#9a3a4a", "#d8d2c0"],
     glass: ["#34495e", "#2f4256", "#3d5266", "#2b3b4a"],
     mullions: ["#323c48", "#3a4a5a", "#2c3a30", "#4a3a34", "#2f3a52"],
@@ -2419,7 +2430,7 @@ export async function buildMap(W, mapId) {
       } catch (e) { err = e; TG = CK = undefined; console.warn("[maps] the town generator did not load (try " + (attempt + 1) + " of 2):", e && e.message || e); }
     }
     if (!TG) {
-      cityFallback = { reason: String(err && err.message || err || "import failed").slice(0, 200), genVersion: MAP_GEN_VERSION - 1, wanted: MAP_GEN_VERSION };
+      cityFallback = { reason: String(err && err.message || err || "import failed").slice(0, 200), genVersion: WAVE6_GEN_VERSION, wanted: MAP_GEN_VERSION };
       console.error("[maps] towngen.js / citykit.js failed to load twice: Savanna is built on its Wave-6 layout (genVersion " + cityFallback.genVersion + ", not " + MAP_GEN_VERSION + "); a squad host with the towns builds a different map.");
       return null;
     }
@@ -2432,7 +2443,7 @@ export async function buildMap(W, mapId) {
     for (const T of lay.compounds.concat(lay.towns.filter((q) => !q.blocks.length && q.compound && q.parcels.length))) { const q = T.compound.bounds; cityFoot.push([q[0] - 6, q[1] - 6, q[2] + 6, q[3] + 6]); }   // (a POI whose grid did not fit falls back to a lane cluster)
     for (const T of lay.towns.concat(lay.compounds)) for (const p of T.parcels) if (p.building) { const a = p.building.aabb; cityBld.push([a[0], a[1], a[2], a[3]]); }
     for (const T of lay.compounds) for (const q of T.compound.props) cityBld.push(q.kind === "container" ? [q.x - 3.4, q.z - 3.4, q.x + 3.4, q.z + 3.4] : [q.x - 5, q.z - 5, q.x + 5, q.z + 5]);   // (silo / water tower / containers: wild loot keeps out)
-    return { TG, CK, lay, kit: [], stats: lay.stats, lights: 0, kitStats: null };
+    return { TG, CK, lay, kit: [], stats: lay.stats, lights: 0, kitStats: null, skyline: [], landmarks: [] };
   }
   // the streets and the links between towns go into the ground field NOW (before any pad), as ROAD_W-wide corridors
   function registerCityRoads() {
@@ -2485,6 +2496,94 @@ export async function buildMap(W, mapId) {
     cityPalCache.set(key, P);
     return P;
   }
+  // â”€â”€ D2 (Wave 7 completion): landmark lots and compound dressing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Everything here is addBox into the town's (or compound cell's) own structure sink: the same mesh, the same texture, ZERO extra draw calls; only what a player can walk into
+  // or shelter behind collides (pillars, pumps, a kiosk, a clock tower's shaft, the court's stands). towngen decides WHICH lot is a gas station / market / plaza / court (a
+  // pure function of the seed); the shapes are drawn from the lot's own sub-stream ("lm<parcel>"). A lot too small for its landmark stays an (empty) yard.
+  const LM_MIN = { gas: [18, 14], market: [17, 13], plaza: [14, 14], court: [24, 15] };
+  function buildLandmark(T, p) {
+    const m = LM_MIN[p.lot], r = p.rect, w = r[2] - r[0], d = r[3] - r[1], cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2;
+    const alongX = w >= d, L = alongX ? w : d, Wd = alongX ? d : w;
+    if (!m || L < m[0] || Wd < m[1]) return false;
+    const rr = city.TG.subRng(seed, T.id, "lm" + p.id), NC = { collide: false };
+    const fv = alongX ? p.facing[1] : p.facing[0], sv = fv < 0 ? -1 : 1;                   // which way (along the lot's short axis) the street is
+    const y0 = heightAt0(cx, cz) + CITY_SW_LIFT;
+    // u runs along the lot's long side, v across it toward the street (sv); B places a box by (u, v, height of its centre, size u, size y, size v)
+    // (a box that stands on the paving reaches down through the 10 cm slab to the ground: a piece hovering 10 cm over the terrain is a floating piece to the placement gates)
+    const B = (u, v, yc, bu, bh, bv, col, o) => { let c = yc, h = bh; if (yc - bh / 2 < 0.06) { const top = yc + bh / 2; c = (top - CITY_SW_LIFT) / 2; h = top + CITY_SW_LIFT; } return addBox(alongX ? cx + u : cx + v, y0 + c, alongX ? cz + v : cz + u, alongX ? bu : bv, h, alongX ? bv : bu, col, o); };
+    if (p.lot === "gas") {
+      const cv = sv * (Wd / 2 - 4.9), kv = -sv * (Wd / 2 - 3.6), uu = Math.min(L / 2 - 1.5, 5.4), accent = rr() < 0.5 ? "#c8382e" : "#2f6fb0", cw = Math.min(11, 2 * uu);
+      B(0, cv, 4.85, cw, 0.5, 6.4, "#dcdad0", NC); B(0, cv, 4.5, cw + 0.1, 0.34, 6.5, accent, NC);
+      for (const su of [-1, 1]) for (const sw of [-1, 1]) B(su * (cw / 2 - 0.8), cv + sw * 2.3, 2.3, 0.5, 4.6, 0.5, "#b9b9b4");
+      for (const su of [-1, 1]) { B(su * 1.9, cv, 0.8, 0.8, 1.6, 0.55, "#e3e0d6"); B(su * 1.9, cv, 1.68, 0.84, 0.16, 0.59, accent, NC); }
+      B(0, kv, 1.6, 5.6, 3.2, 3.6, "#e8e2cf"); B(0, kv, 3.35, 6.0, 0.4, 4.0, "#3e4a58", NC); B(0, kv + sv * 1.84, 1.7, 4.4, 1.5, 0.06, "#27384a", NC);
+      const su = (rr() < 0.5 ? -1 : 1) * (L / 2 - 1.6);
+      B(su, sv * (Wd / 2 - 1.1), 3.5, 0.3, 7, 0.3, "#4a4d52", NC); B(su, sv * (Wd / 2 - 1.1), 7.5, 2.2, 1.7, 0.3, "#f1c232", NC); B(su, sv * (Wd / 2 - 1.1), 8.2, 2.3, 0.4, 0.34, accent, NC);
+    } else if (p.lot === "market") {
+      const n = Math.max(2, Math.min(4, Math.floor((L - 3) / 5.4))), pitch = 5.4, v0 = -sv * Math.min(2.2, Wd / 2 - 4.5), AW = SAV.awnings, off = Math.floor(rr() * AW.length);
+      for (let k = 0; k < n; k++) {
+        const u = (k - (n - 1) / 2) * pitch, col = AW[(k + off) % AW.length];
+        for (const su of [-1, 1]) for (const sw of [-1, 1]) B(u + su * 1.7, v0 + sw * 1.15, 1.2, 0.14, 2.4, 0.14, "#8a6a3a", NC);
+        B(u, v0, 2.45, 3.9, 0.18, 2.8, col, NC); B(u, v0 + sv * 1.4, 2.3, 3.9, 0.34, 0.08, shade(col, 0.8), NC);
+        B(u, v0 - sv * 0.5, 0.55, 3.3, 1.1, 0.7, "#a8794f", NC); B(u - 1.0, v0 - sv * 0.5, 1.3, 0.8, 0.5, 0.6, "#c8a45a", NC); B(u + 0.9, v0 - sv * 0.5, 1.25, 0.9, 0.4, 0.6, "#b4553c", NC);
+      }
+      for (let k = 0; k < 3; k++) B((rr() - 0.5) * (L - 6), sv * (Wd / 2 - 2.2), 0.3, 0.8, 0.6, 0.8, "#b58a4a", NC);
+    } else if (p.lot === "plaza") {
+      const h = 15 + rr() * 5, cap = rr() < 0.5 ? "#6a3b30" : "#3e5a52";
+      B(0, 0, 0.3, 6.4, 0.6, 6.4, "#b7b3a4", NC);
+      B(0, 0, h / 2, 3.4, h, 3.4, "#cdbb9c"); B(0, 0, 1.0, 4.0, 2.0, 4.0, "#a99e85", NC);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const fy = y0 + h - 3.4;
+        addBox(cx + dx * 1.78, fy, cz + dz * 1.78, dx ? 0.22 : 2.7, 2.7, dz ? 0.22 : 2.7, "#efe6cf", NC);                                   // the clock plate
+        addBox(cx + dx * 1.92, fy + 0.4, cz + dz * 1.92, dx ? 0.1 : 0.14, 1.05, dz ? 0.1 : 0.14, "#2a2a2a", NC);                         // minute hand
+        addBox(cx + dx * 1.92 + (dz ? 0.35 : 0), fy, cz + dz * 1.92 + (dx ? 0.35 : 0), dx ? 0.1 : 0.8, 0.14, dz ? 0.1 : 0.8, "#2a2a2a", NC); // hour hand
+      }
+      B(0, 0, h + 0.4, 4.4, 0.8, 4.4, cap, NC); B(0, 0, h + 1.3, 3.0, 1.0, 3.0, shade(cap, 1.1), NC); B(0, 0, h + 2.3, 1.7, 1.0, 1.7, cap, NC); B(0, 0, h + 4.0, 0.22, 2.4, 0.22, "#3a3a3a", NC);
+      for (const [bu, bv, ro] of [[-4.6, 0, 1], [4.6, 0, 1], [0, -4.6, 0], [0, 4.6, 0]]) B(bu, bv, 0.25, ro ? 0.6 : 2.0, 0.5, ro ? 2.0 : 0.6, "#8a6a3a", NC);
+    } else if (p.lot === "court") {
+      const bl = Math.min(L - 8, 20);
+      for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) B(0, sd * (Wd / 2 - 1.0 - k * 0.8), 0.28 * (3 - k), bl, 0.56 * (3 - k), 0.8, "#aeb0b4");       // (three steps, the highest on the outside)
+      for (const su of [-1, 1]) {
+        const u = su * (Math.min(L - 8, 28) / 2 - 0.6);
+        B(u, 0, 2.1, 0.2, 4.2, 0.2, "#55585d", NC); B(u - su * 0.15, 0, 3.7, 0.1, 1.0, 1.7, "#ececec", NC);
+        for (const sd of [-1, 1]) { B(su * (L / 2 - 1.2), sd * (Wd / 2 - 1.2), 4.5, 0.25, 9, 0.25, "#4a4d52", NC); B(su * (L / 2 - 1.2), sd * (Wd / 2 - 1.2), 9.2, 1.4, 0.5, 0.9, "#f3efd0", NC); }
+      }
+    }
+    city.landmarks.push({ kind: p.lot, town: T.id, x: cx, z: cz });
+    return true;
+  }
+  // a compound's loose dressing (hay, a wood pile, a trough, rubble, crates) in its yard, and a windbreak of acacias round it: collide:false boxes on free spots (clear of cars, props
+  // and buildings), so it never snags a player and never hides behind a wall. The dice are the compound's own sub-stream ("dec").
+  function buildCompoundDecor(T) {
+    const C = T.compound, y = C.yard, rr = city.TG.subRng(seed, T.id, "dec"), NC = { collide: false }, ruin = T.theme === "ruin", V = C.variant || "homestead";
+    const free = (x, z, rad) => {
+      for (const c of C.cars) if ((c.x - x) * (c.x - x) + (c.z - z) * (c.z - z) < (rad + 2.8) * (rad + 2.8)) return false;
+      for (const q of C.props) { const pr = q.kind === "container" ? 4.4 : q.kind === "watertower" ? 5.2 : 3.6; if ((q.x - x) * (q.x - x) + (q.z - z) * (q.z - z) < (rad + pr) * (rad + pr)) return false; }
+      for (const p of T.parcels) { const a = p.building.aabb; if (x > a[0] - rad && x < a[2] + rad && z > a[1] - rad && z < a[3] + rad) return false; }
+      return x > y[0] + rad && x < y[2] - rad && z > y[1] + rad && z < y[3] - rad;
+    };
+    const spot = (rad) => { for (let k = 0; k < 12; k++) { const x = y[0] + rad + rr() * (y[2] - y[0] - 2 * rad), z = y[1] + rad + rr() * (y[3] - y[1] - 2 * rad); if (free(x, z, rad)) return [x, z]; } return null; };
+    const at = (x, z, dy, w, h, d, col) => { let c = dy, hh = h; if (dy - h / 2 < 0.06) { const top = dy + h / 2; c = (top - CITY_SW_LIFT) / 2; hh = top + CITY_SW_LIFT; } return addBox(x, heightAt0(x, z) + CITY_SW_LIFT + c, z, w, hh, d, col, NC); };
+    const hay = ["#d6b052", "#c9a24a", "#dcbb62"];
+    if (!ruin && V !== "depot") for (let k = 0, n = V === "farmstead" ? 2 : 1; k < n; k++) {
+      const s = spot(2.4); if (!s) continue;
+      at(s[0] - 0.9, s[1], 0.6, 1.6, 1.2, 1.2, hay[k % 3]); at(s[0] + 0.9, s[1], 0.6, 1.6, 1.2, 1.2, hay[(k + 1) % 3]); at(s[0], s[1] + 0.1, 1.8, 1.6, 1.2, 1.2, hay[(k + 2) % 3]);
+    }
+    const wp = spot(1.6);
+    if (wp) { at(wp[0], wp[1], 0.35, 2.2, 0.7, 0.9, "#7a5a3a"); at(wp[0], wp[1] + 0.95, 0.35, 2.2, 0.7, 0.9, "#6c4f33"); at(wp[0] + 0.1, wp[1] + 0.45, 1.0, 2.0, 0.6, 0.9, "#84633f"); }
+    if (V === "farmstead") { const s = spot(1.6); if (s) { at(s[0], s[1], 0.35, 2.4, 0.7, 0.9, "#6b7f8c"); at(s[0], s[1], 0.68, 2.2, 0.08, 0.7, "#4f7da0"); } }
+    if (ruin) for (let k = 0; k < 4; k++) { const s = spot(1.4); if (!s) continue; const q = 0.9 + rr() * 1.0; at(s[0], s[1], q / 2, q * 1.4, q, q * 1.1, k % 2 ? "#8d877a" : "#77726a"); if (k === 0) at(s[0] + 1.6, s[1], 0.7, 3.2, 1.4, 0.4, "#9a9487"); }
+    if (V === "depot") for (let k = 0; k < 3; k++) { const s = spot(1.2); if (!s) continue; at(s[0], s[1], 0.5, 1.0, 1.0, 1.0, "#b58a4a"); at(s[0] + 1.05, s[1], 0.5, 1.0, 1.0, 1.0, "#a37a3f"); at(s[0] + 0.5, s[1], 1.5, 1.0, 1.0, 1.0, "#c29a56"); }
+    // a windbreak of three to five acacias round the fence (the map's own instanced tree, with its trunk collider): a green clump a pilot can see from the plane
+    const b = C.bounds, nT = ruin ? 2 : 3 + Math.floor(rr() * 3);
+    for (let k = 0; k < nT; k++) {
+      const side = Math.floor(rr() * 4), t = rr(), off = 4.5 + rr() * 3;
+      const tx = side < 2 ? b[0] + (b[2] - b[0]) * t : (side === 2 ? b[0] - off : b[2] + off), tz = side < 2 ? (side === 0 ? b[1] - off : b[3] + off) : b[1] + (b[3] - b[1]) * t;
+      if (C.gate && (tx - C.gate[0]) * (tx - C.gate[0]) + (tz - C.gate[1]) * (tz - C.gate[1]) < 100) continue;
+      props.tree.push({ x: tx, y: heightAt0(tx, tz), z: tz, s: 0.8 + rr() * 0.45, ry: rr() * Math.PI * 2 });
+    }
+    city.landmarks.push({ kind: "compound:" + V, town: T.id, x: (y[0] + y[2]) / 2, z: (y[1] + y[3]) / 2 });
+  }
   function buildCityBuildings() {
     const { TG, lay } = city;
     const cell = 600;                     // (7A2: compounds share a district per 600 m cell, was 300 m: a compound is 3-5 small buildings, and every district costs 2-3 structure draw calls (twice with the shadow pass) in every view that sees it - 9 compound districts were 36 calls of a seed-1 drop view)
@@ -2504,41 +2603,46 @@ export async function buildMap(W, mapId) {
         const nLoot0 = lootPoints.length + chestPoints.length;
         const wallKey = b.arch === "shop" ? "shop" : (b.gen === "tower" ? "big" : b.use === "barn" ? "barn" : b.use === "hall" ? "hall" : b.use === "shed" ? "shed" : "house");
         const PAL = cityPalette(T, isCmp ? -1 : p.block, core), cr = TG.subRng(seed, T.id, "col" + p.id), sr = TG.subRng(seed, T.id, "sty" + p.id);
-        const q1 = cr(), q2 = cr(), q3 = cr();
+        const q1 = cr(), q2 = cr(), q3 = cr(), q4 = cr(), vr = TG.subRng(seed, T.id, "var" + p.id), v1 = vr(), v2 = vr();
+        structTile = q4 < 0.2 ? 1.9 : q4 < 0.6 ? 2.6 : q4 < 0.85 ? 3.6 : 5.0;                  // (D2: brick size varies per building: the one texture reads as four wall finishes)
         const wallC = shade(q1 < 0.55 ? PAL[wallKey][0] : q1 < 0.84 ? PAL[wallKey][1] : SAV.walls[wallKey][Math.floor(q3 * SAV.walls[wallKey].length)], dim);
         const roofC = shade(q2 < 0.5 ? PAL.roof[0] : q2 < 0.84 ? PAL.roof[1] : SAV.roofs[Math.floor(q3 * SAV.roofs.length)], dim);
         let look = wallC + roofC;
         if (b.gen === "shell") {
           const ctr = SHELL_CENTRE[b.kit] || [0, 0], q = b.turn, cs = [1, 0, -1, 0][q], sn = [0, 1, 0, -1][q];
           const hx = (b.aabb[2] - b.aabb[0]) / 2, hz = (b.aabb[3] - b.aabb[1]) / 2, y = groundPad(b.cx, b.cz, hx, hz, { gen: "shell" });
-          city.kit.push({ type: b.kit, x: b.cx - (ctr[0] * cs + ctr[1] * sn), y, z: b.cz - (-ctr[0] * sn + ctr[1] * cs), rot: q, district: did, palette: b.palette && b.palette.variant ? b.palette.variant : undefined });
-          look = b.kit + "|" + (b.palette && b.palette.variant || "");
+          city.kit.push({ type: b.kit, x: b.cx - (ctr[0] * cs + ctr[1] * sn), y, z: b.cz - (-ctr[0] * sn + ctr[1] * cs), rot: q, district: did, palette: b.palette && b.palette.variant ? b.palette.variant : undefined, sy: b.sy });
+          look = b.kit + "|" + (b.palette && b.palette.variant || "") + "|" + (b.sy || 1);
+          if (b.height > 30) city.skyline.push({ x: b.cx, z: b.cz, h: b.height, kind: "shell", town: T.id });
         } else if (b.gen === "tower") {
           const base = core ? SAV.tower.core : SAV.tower.town, mull = SAV.mullions[Math.floor(sr() * SAV.mullions.length)];
           const y = towerTurn(b.cx, b.cz, b.floors, b.w, wallC, T.id, b.turn, { loot: base.loot, chest: base.chest, mullion: mull });
-          towerCrown(b, y, sr, core);
-          look += mull + b.floors + "x" + b.w;
+          const shaftH = towerCrown(b, y, sr, core, wallC, T.id);
+          look += mull + b.floors + "x" + b.w + (shaftH ? "s" + Math.round(shaftH / 6) : "");
         } else {
           const lt = isCmp ? (b.use === "shed" ? SAV.loot.cmpShed : SAV.loot.cmpHouse) : (SAV.loot[b.use] || SAV.loot.house);
           const o = { loot: lt[0], chest: lt[1], doorW: 2.26 };       // the 2.26 m door of the layout (wallDoorwayWide): a 1.4 m door leaves a capsule 0.5 m a side
           const fh = b.floorH || 3.4;
-          const storeys = (b.use === "house" || b.use === "shop") && b.floors >= 2 && sr() < 0.75 ? 2 : 1;      // a two-storey front on the big houses and shops (one real floor inside until Wave 8)
+          let storeys = (b.use === "house" || b.use === "shop") && b.floors >= 2 && sr() < 0.75 ? 2 : 1;      // a two-storey front on the big houses and shops (one real floor inside until Wave 8)
+          if (storeys === 2 && b.w >= 12.5 && v1 < 0.3) storeys = 3;                                          // D2: a few three-storey fronts (a 10 m façade: height variety in a street)
           const st = { storeys, floorH: fh, glass: SAV.glass[Math.floor(sr() * SAV.glass.length)] };
           if (b.use === "shop") { st.shopfront = true; st.roof = 2; st.awning = sr() < 0.75 ? (sr() < 0.6 ? PAL.awning[0] : PAL.awning[1]) : null; st.sign = shade(roofC, 0.9); st.unit = sr() < 0.4 ? (sr() < 0.5 ? -1 : 1) : 0; }
           else if (b.use === "hall") { st.roof = 2; st.blindBack = true; st.unit = sr() < 0.6 ? 1 : 0; }
           else if (b.use === "barn") { st.roof = 0; st.blindBack = true; }
           else if (b.use === "shed") { st.roof = sr() < 0.5 ? 0 : 1; st.blindBack = true; }
           else { const rr = sr(); st.roof = rr < 0.42 ? 0 : rr < 0.64 ? 1 : rr < 0.8 ? 3 : 2; st.chimney = sr() < 0.4 ? (sr() < 0.5 ? -1 : 1) : 0; st.porch = sr() < 0.55; st.unit = st.roof === 2 && sr() < 0.5 ? 1 : 0; }
+          st.trim = (b.use === "house" || b.use === "shop") ? (v2 < 0.3 ? 1 : v2 < 0.5 ? 2 : 0) : 0;         // D2: a cornice band (cream / dark) under the roof edge
           o.style = st;
           o.H = fh * storeys;
           o.flat = st.roof === 2;
           house(b.cx, b.cz, b.w, b.d, b.rot, wallC, roofC, T.id, o);
-          look += st.roof + "" + storeys + (st.chimney ? "c" : "") + (st.porch ? "p" : "") + (st.awning || "") + b.w + "x" + b.d + st.glass;
+          look += st.roof + "" + storeys + (st.chimney ? "c" : "") + (st.porch ? "p" : "") + (st.awning || "") + b.w + "x" + b.d + st.glass + structTile + st.trim;
         }
         city.looks.set(T.id + ":" + p.id, look);
         blockLoot.set(p.block, (blockLoot.get(p.block) || 0) + (lootPoints.length + chestPoints.length - nLoot0));
         if (b.enterable && b.gen !== "shell" && !blockHome.has(p.block)) blockHome.set(p.block, b);
       }
+      structTile = STRUCT_TILE;
       for (const [bid, home] of blockHome) if (!blockLoot.get(bid)) loot(home.cx, heightAt0(home.cx, home.cz) + 0.5, home.cz, T.id);   // a block the dice left empty gets one floor item
       if (clus) {
         const fr = TG.subRng(seed, T.id, "fence"), fs = SAV.fences[Math.floor(fr() * SAV.fences.length)];
@@ -2552,6 +2656,7 @@ export async function buildMap(W, mapId) {
           } else if (q.kind === "watertower") waterTower(q.x, q.z, T.id);
           else if (q.kind === "container") city.kit.push({ type: "props/shipping-container", x: q.x, y: cityKitY("props/shipping-container", q.x, q.z, q.rot, CITY_SW_LIFT - 0.01), z: q.z, rot: q.rot, district: did });
         }
+        buildCompoundDecor(T);
       }
       if (grid) {
         // pocket parks get two acacias (the map's own instanced tree, with its baked trunk collider), at two of the lot's four corners
@@ -2563,6 +2668,7 @@ export async function buildMap(W, mapId) {
             props.tree.push({ x: c[0], y: heightAt0(c[0], c[1]), z: c[1], s: sc, ry });
           }
         }
+        for (const p of T.parcels) if (p.use === "lot" && LM_MIN[p.lot]) buildLandmark(T, p);          // D2: gas stations, markets, clock-tower plazas, courts
         // back-yard acacias (7A2): a house, and a shop with room behind it, in a town or village block gets one at a back corner of its lot, 45 % of the time
         if (!core) for (const p of T.parcels) {
           const b = p.building;
@@ -2584,13 +2690,15 @@ export async function buildMap(W, mapId) {
     }
     sink = batches;
     padReuse = false;
-    for (const it of city.kit) for (const c of city.CK.colliderFor(it.type, it.x, it.y, it.z, it.rot)) cityKitBoxes.push(c);
+    for (const it of city.kit) for (const c of city.CK.colliderFor(it.type, it.x, it.y, it.z, it.rot, undefined, it.sy)) cityKitBoxes.push(c);
   }
   // rooftop dressing of an enterable tower: a pair of units on the roof's -X side (away from the chest in the middle and the access ramp along +X) and, on a core
   // tower, an antenna mast. Cosmetic, no collider; the dice are the parcel's own style stream.
-  function towerCrown(b, y, sr, core) {
+  function towerCrown(b, y, sr, core, wallC, townId) {
     const ry = y + b.floors * 4 + 0.3, rot = b.rot, fw = b.w, NC = { collide: false };
     const u1 = sr(), u2 = sr(), u3 = sr(), mast = sr();
+    const shaft = towerShaft(b, ry, sr, core, wallC, townId);
+    if (shaft) return shaft;                                  // (the slab stands where the crown's units would: it is the crown)
     addBoxR(b.cx, b.cz, -fw * 0.3, -fw * 0.28, ry + 0.55, 1.9, 1.1, 1.4, "#8f969c", rot, NC);
     if (u1 < 0.7) addBoxR(b.cx, b.cz, -fw * 0.3, fw * 0.08 + u2 * fw * 0.1, ry + 0.45, 1.3, 0.9, 1.3, "#a6acb1", rot, NC);
     if (u3 < 0.35) addBoxR(b.cx, b.cz, -fw * 0.12, -fw * 0.3, ry + 1.1, 2.2, 2.2, 2.2, shade("#8d949a", 0.9), rot, NC);      // a stair / lift head
@@ -2599,6 +2707,26 @@ export async function buildMap(W, mapId) {
       addBoxR(b.cx, b.cz, -fw * 0.34, fw * 0.3, ry + mh / 2, 0.28, mh, 0.28, "#5d6268", rot, NC);
       addBoxR(b.cx, b.cz, -fw * 0.34, fw * 0.3, ry + mh * 0.8, 1.6, 0.16, 0.16, "#5d6268", rot, NC);
     }
+    return 0;
+  }
+  // D2 (Wave 7 completion) the tall shaft of an enterable tower: the roof is a walkable deck (a chest in the middle, the access ramp on the +X flank), so a skyscraper cannot
+  // simply stand on it - but a SLAB can stand on its -X strip (the crown's units already live there), leaving two thirds of the deck for the chest, the ramp and a fight. The shaft is
+  // solid (one exact box collider, a wall to the roof's players), drawn with dark glass ribbons every 3.6 m so it reads as a curtain-wall tower from the plane, a cap and a mast. Core
+  // towers 70 % of the time (18-72 m of shaft over the 12 m roof: 30-84 m in all), town mid-rises 30 % (8-24 m). The dice come after the crown's own, on the parcel's style stream.
+  function towerShaft(b, ry, sr, core, wallC, townId) {
+    const d1 = sr(), d2 = sr(), d3 = sr(), d4 = sr();
+    if (d1 > (core ? 0.7 : 0.3)) return 0;
+    const fw = b.w, rot = b.rot, NC = { collide: false };
+    const sw = Math.min(fw * 0.42, Math.round((5 + d2 * 3) * 2) / 2), dep = fw - 1.4, H = core ? 18 + d3 * 54 : 8 + d3 * 16, lx = -fw / 2 + 0.55 + sw / 2;
+    // four curtain-wall schemes [body, ribbon]: blue glass between pale floor bands, a pale tower with blue glass ribbons, brick red with cream bands, slate with steel bands - every one a
+    // value contrast the 330 m haze does not erase (a tan tower on tan haze was the Wave-7 skyline)
+    const sch = [["#3f5f7e", "#a9b8c6"], ["#d2cfc4", "#4d6a84"], ["#8a4a39", "#c8aa90"], ["#55606b", "#8fa0b0"]][Math.floor(d4 * 4) % 4], body = sch[0], glass = sch[1];
+    addBoxR(b.cx, b.cz, lx, 0, ry + H / 2, sw, H, dep, body, b.rot, { tex: "block" });
+    for (let t = 2.2; t + 0.9 <= H - 0.8; t += 3.6) addBoxR(b.cx, b.cz, lx, 0, ry + t + 0.45, sw + 0.12, 0.9, dep + 0.12, glass, rot, NC);
+    addBoxR(b.cx, b.cz, lx, 0, ry + H + 0.25, sw + 0.5, 0.5, dep + 0.5, shade(body, 0.62), rot, NC);
+    if (core && d2 > 0.3) addBoxR(b.cx, b.cz, lx, 0, ry + H + 0.5 + 2 + d3 * 3, 0.3, 4 + d3 * 6, 0.3, "#5d6268", rot, NC);
+    city.skyline.push({ x: b.cx, z: b.cz, h: Math.round((b.floors * 4 + 0.3 + H + 0.5) * 10) / 10, kind: "shaft", town: townId });
+    return H;
   }
   // ── the paint: sidewalks, plazas, lots, lane lines, crosswalks (after the bake: every vertex on the ground the player stands on) ──────────────────────
   // Two merged meshes, vertex-coloured, wearing the same grain texture as the roads so they share ONE program with the structures: "city:ground" (the 3 m
@@ -2652,11 +2780,13 @@ export async function buildMap(W, mapId) {
         else quad(T, x0, z0 + lz * k / n, x1, z0 + lz * (k + 1) / n, lift, hex);
       }
     };
-    const LOTC = { parking: "#55585d", park: "#7f9a58", yard: "#a9a18c" };
+    const LOTC = { parking: "#4a4e54", park: "#5d8b44", yard: "#a9a18c", plaza: "#c9c5b6", market: "#b08a5c", gas: "#5b5f64", court: "#9e4a38" };
     // 7A2: the sidewalk ring is the lightest thing in a town (it frames every block against the dark asphalt from the plane); the ground inside a block is not one
     // plaza any more: each BUILT parcel has its own paving / packed earth / dry-lawn tone (a hash of its id), the industrial yards a darker concrete.
-    const RING = "#cdc7b6", PLAZA = "#a39d8d", WHITE = "#efece0";
-    const PARCEL_TONES = { core: ["#a39d8d", "#9a968a", "#aaa596", "#9fa095"], town: ["#aaa58f", "#a39f86", "#b2a98e", "#9c9d86", "#a7a490", "#b5ae98"], yard: ["#8e8c84", "#999690", "#85857f"] };
+    // D2: the town ground reads against the tan haze of the drop view as COOL concrete (a bluish-grey plaza inside a pale kerb ring) instead of one more tan: the parcels' tones
+    // are greys with a hue drift (blue-grey, warm grey, green-grey), the downtown the coolest
+    const RING = "#d9dad4", PLAZA = "#8d9197", WHITE = "#f2f0e6";
+    const PARCEL_TONES = { core: ["#868c94", "#7d848d", "#92979c", "#838a8f", "#8f8f90"], town: ["#999a92", "#8f9189", "#a2a095", "#8a9189", "#9a9890", "#a6a498"], yard: ["#767672", "#82827e", "#6f716f"] };
     const cols = [], c0 = -BH;
     { let u = c0; cols.push([u, u + SWW]); u += SWW; for (let k = 0; k < 16; k++) { cols.push([u, u + 2.5]); u += 2.5; } cols.push([u, u + SWW]); }
     for (const T of lay.towns) {
@@ -2696,12 +2826,52 @@ export async function buildMap(W, mapId) {
           quad(paint, cx - hl, cz - hw, cx + hl, cz + hw, CITY_MK_LIFT, WHITE);
         }
       }
+      // the white lines of a sports court (a landmark lot, see buildLandmark): the outline of the playing area between the two stands, the half-way line and the two keys
+      for (const p of T.parcels) {
+        if (p.lot !== "court") continue;
+        const r = p.rect, w = r[2] - r[0], d = r[3] - r[1], alongX = w >= d, L = alongX ? w : d, Wd = alongX ? d : w;
+        if (L < LM_MIN.court[0] || Wd < LM_MIN.court[1]) continue;
+        const cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2, hu = Math.min(L - 8, 28) / 2, hv = Math.max(2.5, Wd / 2 - 4.0), ln = 0.14;
+        const seg = (u0, v0, u1, v1) => { const x0 = alongX ? cx + u0 : cx + v0, x1 = alongX ? cx + u1 : cx + v1, z0 = alongX ? cz + v0 : cz + u0, z1 = alongX ? cz + v1 : cz + u1; strip(paint, Math.min(x0, x1) - ln, Math.min(z0, z1) - ln, Math.max(x0, x1) + ln, Math.max(z0, z1) + ln, CITY_MK_LIFT, WHITE); };
+        seg(-hu, -hv, hu, -hv); seg(-hu, hv, hu, hv); seg(-hu, -hv, -hu, hv); seg(hu, -hv, hu, hv); seg(0, -hv, 0, hv);
+        for (const s of [-1, 1]) { seg(s * hu, -hv * 0.45, s * (hu - 5.8), -hv * 0.45); seg(s * hu, hv * 0.45, s * (hu - 5.8), hv * 0.45); seg(s * (hu - 5.8), -hv * 0.45, s * (hu - 5.8), hv * 0.45); }
+      }
     }
     // a compound's yard is packed earth: a decal over its rectangle (the fence and the houses stand around it)
     for (const T of lay.compounds.concat(lay.towns.filter((q) => !q.blocks.length && q.compound))) {
-      const y = T.compound.yard;
+      const y = T.compound.yard, yc = T.theme === "ruin" ? "#8d8777" : T.compound.variant === "depot" ? "#6d6c68" : "#a98f62";      // (D2: dark packed earth / rubble / a depot's tarmac: the pale "#d9c18f" vanished into the haze)
       const nx = Math.max(1, Math.round((y[2] - y[0]) / 2.5)), nz = Math.max(1, Math.round((y[3] - y[1]) / 2.5));
-      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) quad(slab, y[0] + (y[2] - y[0]) * i / nx, y[1] + (y[3] - y[1]) * j / nz, y[0] + (y[2] - y[0]) * (i + 1) / nx, y[1] + (y[3] - y[1]) * (j + 1) / nz, CITY_SW_LIFT, "#d9c18f");
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) quad(slab, y[0] + (y[2] - y[0]) * i / nx, y[1] + (y[3] - y[1]) * j / nz, y[0] + (y[2] - y[0]) * (i + 1) / nx, y[1] + (y[3] - y[1]) * (j + 1) / nz, CITY_SW_LIFT, yc);
+    }
+    // D2: crop fields beside the farmsteads and some homesteads - 24-32 x 14-20 m of alternating green and gold rows lying on the ground (decals: no draw call, no collider), on the side of
+    // the fence where the ground is level and dry and no street, link or other compound is in the way; they are what turns a compound from "two houses on open grass" into a farm
+    for (const T of lay.compounds) {
+      const C = T.compound, V = C.variant || "homestead", fr = city.TG.subRng(seed, T.id, "fld"), nF = T.theme === "ruin" || V === "depot" || V === "hamlet" ? 0 : V === "farmstead" ? 2 : (fr() < 0.5 ? 1 : 0);
+      const b = C.bounds, mid = [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2], order = [0, 1, 2, 3].sort(() => 0), pals = [["#86a34a", "#a9a041"], ["#b3a23d", "#8a9a45"], ["#6f9a47", "#b6a845"], ["#9db04e", "#c1ac45"]];
+      for (let k = 3; k > 0; k--) { const j = Math.floor(fr() * (k + 1)); const t = order[k]; order[k] = order[j]; order[j] = t; }
+      let made = 0;
+      for (const side of order) {
+        if (made >= nF) break;
+        const long = 24 + fr() * 8, short = 14 + fr() * 6, horiz = side < 2, ww = horiz ? long : short, dd = horiz ? short : long, gap = 3.5;
+        const x0 = horiz ? mid[0] - ww / 2 : (side === 2 ? b[0] - gap - ww : b[2] + gap), z0 = horiz ? (side === 0 ? b[1] - gap - dd : b[3] + gap) : mid[1] - dd / 2, x1 = x0 + ww, z1 = z0 + dd;
+        let lo = 1e9, hi = -1e9, bad = false;
+        for (let i = 0; i <= 4 && !bad; i++) for (let j = 0; j <= 4; j++) { const h = heightAt0(x0 + ww * i / 4, z0 + dd * j / 4); if (!(h - h === 0)) { bad = true; break; } if (h < lo) lo = h; if (h > hi) hi = h; }
+        if (bad || lo < waterY + 1.2 || hi - lo > 2.4) continue;
+        for (const q of cityRoadLog) { if (x1 > Math.min(q[0], q[2]) - q[4] / 2 - 4 && x0 < Math.max(q[0], q[2]) + q[4] / 2 + 4 && z1 > Math.min(q[1], q[3]) - q[4] / 2 - 4 && z0 < Math.max(q[1], q[3]) + q[4] / 2 + 4) { bad = true; break; } }
+        if (bad) continue;
+        for (const T2 of lay.compounds) { if (T2 === T) continue; const q = T2.compound.bounds; if (x1 > q[0] - 3 && x0 < q[2] + 3 && z1 > q[1] - 3 && z0 < q[3] + 3) { bad = true; break; } }
+        if (bad) continue;
+        for (const T2 of lay.towns) for (const bk of T2.blocks) if (x1 > bk.cx - 38 && x0 < bk.cx + 38 && z1 > bk.cz - 38 && z0 < bk.cz + 38) { bad = true; }
+        if (bad) continue;
+        const pal = pals[Math.floor(fr() * pals.length)], pitch = 2.4, n = Math.max(2, Math.floor((horiz ? dd : ww) / pitch));
+        quad(slab, x0, z0, x1, z1, CITY_SW_LIFT - 0.025, "#9b8660");                                                            // (the headland: a rim of bare earth round the rows)
+        for (let r = 0; r < n; r++) {
+          const a = (horiz ? dd : ww) * r / n, a2 = (horiz ? dd : ww) * (r + 1) / n - 0.35;
+          if (horiz) strip(slab, x0 + 0.8, z0 + a + 0.2, x1 - 0.8, z0 + a2, CITY_SW_LIFT, pal[r % 2]); else strip(slab, x0 + a + 0.2, z0 + 0.8, x0 + a2, z1 - 0.8, CITY_SW_LIFT, pal[r % 2]);
+        }
+        city.landmarks.push({ kind: "field", town: T.id, x: (x0 + x1) / 2, z: (z0 + z1) / 2 });
+        made++;
+      }
     }
     // the links between towns: centre dashes too
     for (const l of lay.links) {
@@ -2726,9 +2896,13 @@ export async function buildMap(W, mapId) {
       mesh.receiveShadow = true; mesh.castShadow = false; mesh.name = name;
       g.add(mesh);
     };
-    emit(slab, "city:ground", -1);
-    emit(paint, "city:paint", -3);
+    // D2: ONE mesh, not two: the paint (dashes, zebra stripes) lies on the road ribbon (lift 0.115 over a ribbon at 0.06), the slab on the sidewalks and lots (0.10); the
+    // widest stripe reaches 4.03 m from a street's axis and the sidewalk starts at 5.0, so the two never overlap and one polygon offset (the paint's, -3) serves both
     city.paintStats = { slabQuads: slab.idx.length / 6, paintQuads: paint.idx.length / 6 };
+    for (const k of ["pos", "nor", "col", "uv"]) for (const v of paint[k]) slab[k].push(v);
+    const pb = slab.pos.length / 3 - paint.pos.length / 3;
+    for (const i of paint.idx) slab.idx.push(i + pb);
+    emit(slab, "city:ground", -3);
   }
   // roads, blocks and buildings on the minimap canvas (the HUD draws the town names from map.pois)
   function drawCityOnMinimap(ctx) {
@@ -3217,6 +3391,18 @@ export async function buildMap(W, mapId) {
       for (let i = 0; i < base.length; i += 3) {
         const b = base[i];
         b.flat = true;                                                   // a stack base stays level
+        // D2: a base on ground that rises more than 0.8 m under its footprint slides (in 1.5 m steps, up to 6 m, to the flattest spot of eight directions) before it is settled: a level
+        // 6 m container on such a slope either floats at its low end or sinks at its high one, and a single base of 45 did both within a hair of the placement gates' bars
+        if (groundRelief("container", b) > 0.8) {
+          const ox = b.x, oz = b.z;
+          let best = groundRelief("container", b), bx = ox, bz = oz;
+          for (let rr2 = 1.5; rr2 <= 6 && best > 0.8; rr2 += 1.5) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+            b.x = ox + dx * rr2; b.z = oz + dz * rr2;
+            const q = groundRelief("container", b);
+            if (q < best - 0.02) { best = q; bx = b.x; bz = b.z; }
+          }
+          b.x = bx; b.z = bz;
+        }
         settleProp("container", b);
         const topY = b.y + cH * b.s;                                     // the real top of the lower container
         const alongZ = Math.abs(Math.sin(b.ry)) > 0.5, hl = cL * b.s;    // long axis along z when yawed a quarter turn; half length
@@ -3502,6 +3688,8 @@ export async function buildMap(W, mapId) {
       }
       return m;
     };
+    const isl = mapId === "ashgrid" ? { tops: [], rocks: [] } : null;
+    const islScaleUV = (geo, span) => { if (!_islTex) return; const uv = geo.attributes.uv; if (uv) { for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * span, uv.getY(i) * span); uv.needsUpdate = true; } };
     for (let i = 0; i < nIsl; i++) {
       const ang = rng() * Math.PI * 2;
       const rr = 180 + rng() * (HALF - 320);
@@ -3512,12 +3700,19 @@ export async function buildMap(W, mapId) {
       const rad = 9 + rng() * 8;
       // grassy top disc — TILE = 8 m per texture tile, same density as the terrain
       const topGeo = new THREE.CylinderGeometry(rad, rad * 0.92, 1.6, 9);
-      const top = new THREE.Mesh(topGeo, islMat(grassC, 0.95, topGeo, (rad * 2) / TILE));
-      top.position.set(ix, topY - 0.8, iz);
-      top.castShadow = true; top.receiveShadow = true;
-      g.add(top);
+      // D2 (Savanna only): the islands' discs and rocks are baked into ONE mesh each after the loop (a drop view over the whole map saw five islands = ten draw calls); they cast no
+      // shadow there (a floating island 26-52 m up never shadows anything a player can see: the shadow box is +-55 m around the player and the merged mesh would sit in it for ever)
+      const top = isl ? null : new THREE.Mesh(topGeo, islMat(grassC, 0.95, topGeo, (rad * 2) / TILE));
+      if (isl) { islScaleUV(topGeo, (rad * 2) / TILE); topGeo.translate(ix, topY - 0.8, iz); isl.tops.push(topGeo); }
+      else {
+        top.position.set(ix, topY - 0.8, iz);
+        top.castShadow = true; top.receiveShadow = true;
+        g.add(top);
+      }
       // hanging rock cone underneath
       const rockGeo = new THREE.ConeGeometry(rad * 0.9, rad * 1.5, 14);   // 8 radial segments read as a paper dart from below; +12 tris each
+      if (isl) { islScaleUV(rockGeo, (rad * 2) / TILE); rockGeo.rotateX(Math.PI); rockGeo.translate(ix, topY - 1.4 - rad * 0.75, iz); isl.rocks.push(rockGeo); }
+      else {
       const rock = new THREE.Mesh(rockGeo, islMat(rockC, 1, rockGeo, (rad * 2) / TILE));
       // A fixed skylight term at ~6% of the map's horizon colour lifts the fully
       // downward-facing underside without touching the rest of the scene's lighting,
@@ -3530,6 +3725,7 @@ export async function buildMap(W, mapId) {
       // physically overhangs it — the island read as two unrelated lit objects.
       rock.castShadow = true; rock.receiveShadow = true;
       g.add(rock);
+      }
       // walkable top collider — 0.92·rad matches the visible disc's octagon flat-to-flat
       // (was 0.86·rad, leaving the outer ~14% of grass unsupported → rim fall-through on
       // a hero feature that carries premium loot).
@@ -3561,6 +3757,15 @@ export async function buildMap(W, mapId) {
       const py = heightAt0(px, pz);
       if (baseH(px, pz) < waterY + 0.5 || inRects(cityBld, px, pz, 3.5)) continue;
       addPortal(px, py, pz, rng() * Math.PI * 2);
+    }
+    if (isl && isl.tops.length) {
+      const nullGeo = { attributes: {} };                                           // (islMat only scales a UV it finds: the baked geometries carry their own)
+      const topM = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(isl.tops, false), islMat(grassC, 0.95, nullGeo, 1));
+      topM.name = "island:tops"; topM.castShadow = false; topM.receiveShadow = true; g.add(topM);
+      const rockMat = islMat(rockC, 1, nullGeo, 1);
+      rockMat.emissive.set(K.sky); rockMat.emissiveIntensity = 0.12;
+      const rockM = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(isl.rocks, false), rockMat);
+      rockM.name = "island:rocks"; rockM.castShadow = false; rockM.receiveShadow = true; g.add(rockM);
     }
   }
 
@@ -3619,7 +3824,11 @@ export async function buildMap(W, mapId) {
     for (const bkey in bset) {
       const bar = bkey.lastIndexOf("|");
       const color = bkey.slice(0, bar);
-      const tkind = tag && bkey.slice(bar + 1) === "block" ? "s" : bkey.slice(bar + 1);       // (7A2: a Savanna district draws its tower walls with the brick struct texture too: one structure draw call fewer per town, two with the shadow pass)
+      // (7A2: a Savanna district draws its tower walls with the brick struct texture too: one structure draw call fewer per town, two with the shadow pass.
+      //  D2: and its roofs: a roof is a tinted terracotta / slate / tin slab seen from 30 m or more, and the "shingle" texture was a whole extra mesh per district -
+      //  12 draw calls of a drop view over six towns and compound cells. The same goes for the Savanna landmarks' batch; the other maps keep every kind)
+      const bk = bkey.slice(bar + 1);
+      const tkind = (tag || city) && (bk === "block" || bk === "shingle") ? "s" : bk;
       if (EMIT[color]) continue;                    // built below, one mesh per colour
       _vc.set(color);
       const list = kindGroups[tkind] || (kindGroups[tkind] = []);
@@ -3800,6 +4009,20 @@ export async function buildMap(W, mapId) {
       }
     }
   }
+  function mergePartsByMaterial(meshes) {
+    const byMat = new Map(), out = [];
+    for (const m of meshes) { const k = m.material; if (!byMat.has(k)) byMat.set(k, []); byMat.get(k).push(m); }
+    for (const [mat, list] of byMat) {
+      if (list.length === 1 || Array.isArray(mat)) { for (const m of list) out.push(m); continue; }
+      const geos = list.map((m) => m.geometry.clone().applyMatrix4(m.matrixWorld));
+      let merged = null;
+      try { merged = BufferGeometryUtils.mergeGeometries(geos, false); } catch (e) { merged = null; }
+      for (const q of geos) q.dispose();
+      if (!merged) { for (const m of list) out.push(m); continue; }
+      out.push({ geometry: merged, material: mat, matrixWorld: new THREE.Matrix4(), isMesh: true, merged: true });
+    }
+    return out;
+  }
   const _upV = new THREE.Vector3(0, 1, 0), _qTilt = new THREE.Quaternion(), _vTilt = new THREE.Vector3(), _tAnch = new THREE.Matrix4();
   for (const kind in props) {
     const list = props[kind];
@@ -3832,11 +4055,23 @@ export async function buildMap(W, mapId) {
       // from its collider; the trunk collider moves to the trunk instead (table part `c`).
       const recentre = tk ? !!tk.recentre : kind === "rocks";
       const anchor = !recentre ? [0, 0] : tk ? tk.anchor : [((bbox.min.x + bbox.max.x) / 2) * norm, ((bbox.min.z + bbox.max.z) / 2) * norm];
-      const meshes = [];
+      let meshes = [];
       root.traverse((o) => { if (o.isMesh) meshes.push(o); });
+      // D2 (Savanna only): a prop GLB made of several meshes that share ONE material (the car is 13 meshes of 7 materials, the rock cluster 4 of 1) is one InstancedMesh per
+      // MESH - 13 draw calls for the cars alone in every view that sees the map-wide mesh. Meshes of one material are baked into one geometry (their GLB-local matrices
+      // folded into the vertices), so a kind costs one call per material. Same triangles, same instance matrices, same colliders (those come from the baked table).
+      if (mapId === "ashgrid") meshes = mergePartsByMaterial(meshes);
+      // (the coarse trunk is added AFTER the canopy: the first InstancedMesh of a kind carries the GLB's own geometry, which the placement census reads the kind's local frame from)
+      const isLod = (q) => mapId === "ashgrid" && kind === "tree" && q.geometry.index && q.geometry.index.count / 3 > 1200;
+      if (mapId === "ashgrid" && kind === "tree") meshes.sort((a, b) => (isLod(a) ? 1 : 0) - (isLod(b) ? 1 : 0));
       instRefs[kind] = [];
       for (const m of meshes) {
-        const inst = new THREE.InstancedMesh(m.geometry, m.material, list.length);
+        // D2 (Savanna): the acacia's trunk is 2,360 triangles x ~456 trees, all drawn in every view (1.07 M of a 2.2 M triangle frame). The map-wide mesh draws a COARSE copy
+        // (~560 triangles); the trees within 110 m of the camera focus are drawn from the full geometry by the near-caster proxies below, and are hidden here while they are
+        const lodPart = isLod(m);
+        const lodGeo = lodPart ? clusterSimplify(m.geometry, 24) : null;
+        if (lodGeo && m.geometry.userData) lodGeo.userData.kind = m.geometry.userData.kind;                   // (the same kind tag as the geometry it stands in for)
+        const inst = new THREE.InstancedMesh(lodGeo || m.geometry, m.material, list.length);
         // NOTHING map-wide casts any more. Each of these InstancedMeshes is sized to
         // the whole 1600 m map (measured bounding radii 850-1,011 m), so three derives
         // one bounding sphere spanning the map and the shadow camera's ±55 m frustum
@@ -3868,7 +4103,7 @@ export async function buildMap(W, mapId) {
         inst.instanceMatrix.needsUpdate = true;
         g.add(inst);
         instRefs[kind].push(inst);
-        if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: m.material, mats });
+        if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: m.material, mats, lo: lodPart ? inst : null, hid: new Set() });
       }
     }
     // colliders for solid props
@@ -3895,12 +4130,13 @@ export async function buildMap(W, mapId) {
     const NEAR_N = 64, NEAR_R2 = 110 * 110;
     const nearCasters = shadowSrc.map((ref) => {
       const im = new THREE.InstancedMesh(ref.geo, ref.mat, NEAR_N);
-      im.castShadow = true; im.receiveShadow = false; im.count = 0;
+      im.castShadow = true; im.receiveShadow = !!ref.lo; im.count = 0;       // (a near tree that replaces its coarse twin keeps receiving shadow, as that twin did)
       im.frustumCulled = false;   // rebuilt around the focus; its own bounding sphere is stale by design
       g.add(im);
       return { im, ref };
     });
     let _fx = 1e9, _fz = 1e9;
+    const _tinyM = new THREE.Matrix4();
     W._foliageDirty = true;
     if (nearCasters.length) trackUpdater(() => {
       const f = W._camFocus || W.player; if (!f) return;
@@ -3908,17 +4144,26 @@ export async function buildMap(W, mapId) {
       if (!W._foliageDirty && dx * dx + dz * dz < 400) return;    // 20 m threshold
       _fx = f.pos.x; _fz = f.pos.z; W._foliageDirty = false;
       for (const nc of nearCasters) {
-        const { list, mats } = nc.ref;
+        const { list, mats, lo } = nc.ref;
         let n = 0;
+        const cur = lo ? new Set() : null;
         for (let i = 0; i < list.length && n < NEAR_N; i++) {
           const it = list[i];
           if (it.dead) continue;
           const ax = it.x - _fx, az = it.z - _fz;
           if (ax * ax + az * az > NEAR_R2) continue;
           nc.im.setMatrixAt(n++, mats[i]);
+          if (cur) cur.add(i);
         }
         nc.im.count = n;
         nc.im.instanceMatrix.needsUpdate = true;
+        if (lo) {                                  // the coarse map-wide twin hides exactly the trees the near proxy draws in full
+          const prev = nc.ref.hid;
+          for (const i of prev) if (!cur.has(i) && !list[i].dead) lo.setMatrixAt(i, mats[i]);
+          for (const i of cur) if (!prev.has(i)) { _tinyM.copy(mats[i]); const e = _tinyM.elements; for (let k = 0; k < 11; k++) if (k !== 3 && k !== 7) e[k] *= 1e-4; lo.setMatrixAt(i, _tinyM); }       // (hidden IN PLACE: the same position, a ten-thousandth of the size - never at the origin)
+          nc.ref.hid = cur;
+          lo.instanceMatrix.needsUpdate = true;
+        }
       }
     });
   }
@@ -4018,6 +4263,37 @@ export async function buildMap(W, mapId) {
   }
 
   // ── sky-island decor: few enough to clone directly ───────────────────────
+  // D2 (Savanna only): ONE InstancedMesh per material of each decor kind (the acacia is a trunk and a canopy, the crystal two parts) instead of a clone per tree - eight island trees
+  // were sixteen draw calls (and sixteen shadow-pass calls) of a drop view. They cast no shadow (a floating island 26-52 m up shadows nothing a player sees).
+  if (mapId === "ashgrid" && islandTrees.length) {
+    const byKind = new Map();
+    for (const t of islandTrees) { if (!byKind.has(t.kind)) byKind.set(t.kind, []); byKind.get(t.kind).push(t); }
+    const IM = new THREE.Matrix4(), IP = new THREE.Vector3(), IQ = new THREE.Quaternion(), IS = new THREE.Vector3();
+    for (const [kind, list] of byKind) {
+      try {
+        const m = await W.kernel.loadGLTF(kind === "crystal" ? W.assetBase + "assets/props/meshy/deco_crystal.glb" : W.assetBase + "assets/props/" + kind + ".glb");
+        m.updateMatrixWorld(true);
+        const bb2 = new THREE.Box3().setFromObject(m), sz2 = bb2.getSize(new THREE.Vector3());
+        const baseH2 = kind === "crystal" ? 3.2 : kind === "palm" ? 7 : kind === "pine" ? 8 : 6.5;
+        const meshes = [];
+        m.traverse((o) => { if (o.isMesh) meshes.push(o); });
+        for (const part of mergePartsByMaterial(meshes)) {
+          const ig = part.geometry.clone();                                              // (a copy of its own, tagged as nothing: a sky-island tree is not a GROUND prop to the placement gates)
+          ig.userData = {};
+          const inst = new THREE.InstancedMesh(ig, part.material, list.length);
+          inst.name = "island:" + kind;
+          for (let i = 0; i < list.length; i++) {
+            const t = list[i], s2 = (baseH2 / Math.max(0.001, sz2.y)) * t.s;
+            IM.compose(IP.set(t.x, t.y - bb2.min.y * s2, t.z), IQ.setFromAxisAngle(_upV, t.ry), IS.set(s2, s2, s2)).multiply(part.matrixWorld);
+            inst.setMatrixAt(i, IM);
+          }
+          inst.instanceMatrix.needsUpdate = true;
+          inst.castShadow = false; inst.receiveShadow = true;
+          g.add(inst);
+        }
+      } catch (e) { /* crystal GLB may not exist yet — islands still work */ }
+    }
+  } else
   for (const t of islandTrees) {
     try {
       const url = t.kind === "crystal"
@@ -4209,7 +4485,12 @@ export async function buildMap(W, mapId) {
     return BASE_SURF[mapId] || "grass";
   }
 
-  if (cityFallback) { try { W.events && W.events.emit && W.events.emit("mapFallback", { map: mapId, genVersion: cityFallback.genVersion, wanted: cityFallback.wanted, reason: cityFallback.reason }); } catch (e) { /* a listener's problem */ } }
+  // D2 (squad fallback, with lane D1's net.js): after the map is built, a page that fell back says so on W.mapFallback { from, to, reason } (from = the version it advertised,
+  // to = the version it really built: the Wave-6 layout is generator version 2) and on the "mapFallback" event; net.js leaves the squad room for such a client
+  if (cityFallback) {
+    W.mapFallback = { from: cityFallback.wanted, to: cityFallback.genVersion, reason: cityFallback.reason };
+    try { W.events && W.events.emit && W.events.emit("mapFallback", { map: mapId, from: cityFallback.wanted, to: cityFallback.genVersion, genVersion: cityFallback.genVersion, wanted: cityFallback.wanted, reason: cityFallback.reason }); } catch (e) { /* a listener's problem */ }
+  }
   return {
     id: mapId, K, half: HALF * 0.98, size: SIZE, waterY,
     heightAt: heightAt0, groundAt: heightAt0, surfaceAt,
@@ -4228,11 +4509,84 @@ export async function buildMap(W, mapId) {
     fallback: cityFallback,                                                     // null, or { reason, genVersion, wanted }: the towns did not load, this is the Wave-6 Savanna
     // WAVE 7: the Savanna city as built (null on the other maps): towngen's layout (towns, compounds, links, stats), the citykit list and what it placed, the
     // decals - read-only, for the gates (citycheck, placementcheck, perf_district) and for debugging
-    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog } : null,
+    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog } : null,
     ground: { lattice: field.lat, latN: LAT_N, pitch: LAT_PITCH, pads: field.pads.length, corridors: field.corridors, corridorSegments: field.segs.length, bakeMs, roads: roadStats, roadSections: roadLog, padLog },
     // the look to restore to when the camera surfaces (underwater overrides it)
     fogSurface: { color: K.sky, density: K.fog },
   };
+}
+
+/** D2 (Savanna trees): a coarse copy of an indexed position + normal geometry by VERTEX CLUSTERING with quadric placement (Lindstrom / Garland-Heckbert): every vertex falls in a cell
+ *  of (largest bbox extent / div); each cell keeps ONE vertex, put where the planes of the faces around it meet (the quadric minimum, pulled toward the cell's centroid by a small
+ *  regulariser and clamped to the cell grown by half a cell) so a round trunk keeps its girth instead of shrinking to the centroid polygon; triangles that collapse are dropped,
+ *  normals are re-derived from the surviving faces. Pure function of the input (Map insertion order = vertex order). The acacia's trunk (2,360 triangles) becomes ~560 at div 24. */
+function clusterSimplify(geo, div) {
+  const P = geo.attributes.position, I = geo.index;
+  if (!I || !P || P.itemSize !== 3) return geo;
+  const n = P.count;
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (let i = 0; i < n; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+  const cell = Math.max(x1 - x0, y1 - y0, z1 - z0) / div;
+  if (!(cell > 0)) return geo;
+  const key = new Map(), cid = new Int32Array(n), cx = [], cy = [], cz = [], cn = [];
+  for (let i = 0; i < n; i++) {
+    const ix = Math.floor((P.getX(i) - x0) / cell), iy = Math.floor((P.getY(i) - y0) / cell), iz = Math.floor((P.getZ(i) - z0) / cell), k = (ix * 512 + iy) * 512 + iz;
+    let c = key.get(k);
+    if (c === undefined) { c = cn.length; key.set(k, c); cx.push(0); cy.push(0); cz.push(0); cn.push(0); }
+    cid[i] = c; cx[c] += P.getX(i); cy[c] += P.getY(i); cz[c] += P.getZ(i); cn[c]++;
+  }
+  const m = cn.length, Q = new Float64Array(m * 10);              // the 10 unique terms of a symmetric 4x4 plane quadric: aa ab ac ad bb bc bd cc cd dd
+  const idx = I.array, nt = I.count / 3;
+  for (let t = 0; t < nt; t++) {
+    const a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2];
+    const ax = P.getX(a), ay = P.getY(a), az = P.getZ(a);
+    const ux = P.getX(b) - ax, uy = P.getY(b) - ay, uz = P.getZ(b) - az, vx = P.getX(c) - ax, vy = P.getY(c) - ay, vz = P.getZ(c) - az;
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (!(l > 1e-18)) continue;
+    const w = l / 2; nx /= l; ny /= l; nz /= l;
+    const d = -(nx * ax + ny * ay + nz * az), terms = [nx * nx, nx * ny, nx * nz, nx * d, ny * ny, ny * nz, ny * d, nz * nz, nz * d, d * d];
+    for (const v of [a, b, c]) { const o = cid[v] * 10; for (let j = 0; j < 10; j++) Q[o + j] += w * terms[j]; }
+  }
+  const rx = new Float32Array(m), ry = new Float32Array(m), rz = new Float32Array(m), reg = 1e-3;
+  for (let c = 0; c < m; c++) {
+    const o = c * 10, mx = cx[c] / cn[c], my = cy[c] / cn[c], mz = cz[c] / cn[c], tr = Q[o] + Q[o + 4] + Q[o + 7], lam = Math.max(tr, 1e-12) * reg;
+    // (A + lam I) x = -b + lam * centroid     A = [[aa ab ac] [ab bb bc] [ac bc cc]]   b = [ad bd cd]
+    const A00 = Q[o] + lam, A01 = Q[o + 1], A02 = Q[o + 2], A11 = Q[o + 4] + lam, A12 = Q[o + 5], A22 = Q[o + 7] + lam;
+    const r0 = -Q[o + 3] + lam * mx, r1 = -Q[o + 6] + lam * my, r2 = -Q[o + 8] + lam * mz;
+    const det = A00 * (A11 * A22 - A12 * A12) - A01 * (A01 * A22 - A12 * A02) + A02 * (A01 * A12 - A11 * A02);
+    let sx = mx, sy = my, sz = mz;
+    if (Math.abs(det) > 1e-30) {
+      sx = (r0 * (A11 * A22 - A12 * A12) - A01 * (r1 * A22 - A12 * r2) + A02 * (r1 * A12 - A11 * r2)) / det;
+      sy = (A00 * (r1 * A22 - A12 * r2) - r0 * (A01 * A22 - A12 * A02) + A02 * (A01 * r2 - r1 * A02)) / det;
+      sz = (A00 * (A11 * r2 - r1 * A12) - A01 * (A01 * r2 - r1 * A02) + r0 * (A01 * A12 - A11 * A02)) / det;
+    }
+    const lim = cell * 0.75;
+    rx[c] = Math.min(mx + lim, Math.max(mx - lim, sx)); ry[c] = Math.min(my + lim, Math.max(my - lim, sy)); rz[c] = Math.min(mz + lim, Math.max(mz - lim, sz));
+  }
+  const tri = [], seen = new Set();
+  for (let t = 0; t < nt; t++) {
+    const a = cid[idx[t * 3]], b = cid[idx[t * 3 + 1]], c = cid[idx[t * 3 + 2]];
+    if (a === b || b === c || a === c) continue;
+    const so = [a, b, c].sort((p, q) => p - q), sk = (so[0] * m + so[1]) * m + so[2];          // (the same triangle twice is kept once)
+    if (seen.has(sk)) continue;
+    seen.add(sk); tri.push(a, b, c);
+  }
+  const pos = new Float32Array(m * 3), nor = new Float32Array(m * 3);
+  for (let c = 0; c < m; c++) { pos[c * 3] = rx[c]; pos[c * 3 + 1] = ry[c]; pos[c * 3 + 2] = rz[c]; }
+  for (let t = 0; t < tri.length; t += 3) {
+    const a = tri[t], b = tri[t + 1], c = tri[t + 2];
+    const ux = pos[b * 3] - pos[a * 3], uy = pos[b * 3 + 1] - pos[a * 3 + 1], uz = pos[b * 3 + 2] - pos[a * 3 + 2], vx = pos[c * 3] - pos[a * 3], vy = pos[c * 3 + 1] - pos[a * 3 + 1], vz = pos[c * 3 + 2] - pos[a * 3 + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    for (const v of [a, b, c]) { nor[v * 3] += nx; nor[v * 3 + 1] += ny; nor[v * 3 + 2] += nz; }
+  }
+  for (let c = 0; c < m; c++) { const l = Math.hypot(nor[c * 3], nor[c * 3 + 1], nor[c * 3 + 2]) || 1; nor[c * 3] /= l; nor[c * 3 + 1] /= l; nor[c * 3 + 2] /= l; }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  out.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+  out.setIndex(new THREE.BufferAttribute(new Uint16Array(tri), 1));
+  out.computeBoundingSphere(); out.computeBoundingBox();
+  return out;
 }
 
 function shade(hex, k) {

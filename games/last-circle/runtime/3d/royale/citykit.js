@@ -21,6 +21,8 @@
  *            Only quarter turns give exact collider boxes. Any other angle still draws at that angle and its colliders become a staircase of <= 1 m
  *            strips (every point of the true box covered, nothing more than ~1 m outside it; counted in `stats().inexactEntries`).
  *   scale    uniform multiplier on the type's suggested_scale (default 1); colliders scale with it.
+ *   sy       (Wave 7 completion) a VERTICAL-only stretch on top of scale (default 1): a skyline tower drawn 1.3-1.8x taller than it was modelled, same footprint; the
+ *            colliders' y extents scale with it, x and z stay exact. A pure function of the entry like everything else.
  *   district a string id of ONE chunk (a town, a compound, a yard) - the unit of frustum culling, so keep it POI-sized (radius <= ~150 m): a camera inside a
  *            district draws every type of it even when looking away. One InstancedMesh per (type, palette) per district, each with its own COMPUTED
  *            bounding sphere (a map-wide instance never culls, maps.js:2003-2014). A missing id is chunked on a 96 m grid.
@@ -296,9 +298,9 @@ export function quarterFacing(dx, dz) {
 }
 const _SIN = [0, 1, 0, -1], _COS = [1, 0, -1, 0];       // exact quarter-turn tables (never Math.sin(PI/2))
 
-/** One manifest box -> a world box at an exact quarter turn q about +Y (x' = x cos + z sin, z' = -x sin + z cos), scaled by k, at (x, y, z). */
-function pushQuarter(out, T, o, x, y, z, k, q) {
-  const x0 = T[o] * k, y0 = T[o + 1] * k, z0 = T[o + 2] * k, x1 = T[o + 3] * k, y1 = T[o + 4] * k, z1 = T[o + 5] * k;
+/** One manifest box -> a world box at an exact quarter turn q about +Y (x' = x cos + z sin, z' = -x sin + z cos), scaled by k (and by sy, the vertical stretch, on Y only), at (x, y, z). */
+function pushQuarter(out, T, o, x, y, z, k, q, sy) {
+  const x0 = T[o] * k, y0 = T[o + 1] * k * sy, z0 = T[o + 2] * k, x1 = T[o + 3] * k, y1 = T[o + 4] * k * sy, z1 = T[o + 5] * k;
   let a, b, c, d;                                       // X range [a, b], Z range [c, d]
   if (q === 0) { a = x0; b = x1; c = z0; d = z1; }
   else if (q === 1) { a = z0; b = z1; c = -x1; d = -x0; }
@@ -310,8 +312,8 @@ function pushQuarter(out, T, o, x, y, z, k, q) {
  *  (the strip axis is the one the rectangle's edges are shallow to, so no edge climbs more than 1 m per metre; millimetre rounding is outward, never inward).
  *  Every point of the true rotated box lies inside some strip; no strip reaches more than ~seg beyond it. A fallback for a one-off prop at a slant:
  *  Wave 7 lots are quarter-turned, which is exact. */
-function pushStrips(out, T, o, x, y, z, k, ry, seg) {
-  const x0 = T[o] * k, y0 = T[o + 1] * k, z0 = T[o + 2] * k, x1 = T[o + 3] * k, y1 = T[o + 4] * k, z1 = T[o + 5] * k;
+function pushStrips(out, T, o, x, y, z, k, ry, seg, sy) {
+  const x0 = T[o] * k, y0 = T[o + 1] * k * sy, z0 = T[o + 2] * k, x1 = T[o + 3] * k, y1 = T[o + 4] * k * sy, z1 = T[o + 5] * k;
   const c = Math.cos(ry), s = Math.sin(ry), lx = [x0, x1, x1, x0], lz = [z0, z0, z1, z1], px = [0, 0, 0, 0], pz = [0, 0, 0, 0];
   for (let i = 0; i < 4; i++) { px[i] = lx[i] * c + lz[i] * s; pz[i] = -lx[i] * s + lz[i] * c; }
   const alongX = Math.abs(s) <= Math.abs(c), a = alongX ? px : pz, b = alongX ? pz : px;
@@ -331,24 +333,27 @@ function pushStrips(out, T, o, x, y, z, k, ry, seg) {
     else out.push(mkCollider("box", x + B0, x + B1, y + y0, y + y1, z + A0, z + A1, -1, null, -1, 0));
   }
 }
-function pushColliders(out, type, x, y, z, k, R, seg) {
+function pushColliders(out, type, x, y, z, k, R, seg, sy) {
   const T = COLLIDER_BOXES[type];
-  if (R.exact) for (let o = 0; o < T.length; o += 6) pushQuarter(out, T, o, x, y, z, k, R.q);
-  else for (let o = 0; o < T.length; o += 6) pushStrips(out, T, o, x, y, z, k, R.ry, seg);
+  sy = sy === undefined ? 1 : sy;
+  if (R.exact) for (let o = 0; o < T.length; o += 6) pushQuarter(out, T, o, x, y, z, k, R.q, sy);
+  else for (let o = 0; o < T.length; o += 6) pushStrips(out, T, o, x, y, z, k, R.ry, seg, sy);
 }
 /** The colliders of one placed instance (pure; usable in Node without THREE). rot: quarter-turn index or radians (see resolveRotation). */
-export function colliderFor(type, x, y, z, rot, scale) {
+export function colliderFor(type, x, y, z, rot, scale, sy) {
   if (!hasType(type)) throw new Error("citykit.colliderFor: unknown type " + JSON.stringify(type));
   const k = scale === undefined || scale === null ? 1 : +scale;
   if (!(k > 0) || !isFinite(k)) throw new Error("citykit.colliderFor: bad scale " + scale);
+  const ky = sy === undefined || sy === null ? 1 : +sy;                  // (Wave 7 completion: `sy` = a vertical-only stretch, a skyline tower taller than it was modelled; x and z stay exact)
+  if (!(ky > 0) || !isFinite(ky)) throw new Error("citykit.colliderFor: bad vertical stretch " + sy);
   if (!isFinite(x) || !isFinite(y) || !isFinite(z)) throw new Error("citykit.colliderFor: non-finite position");
   const out = [];
-  pushColliders(out, type, +x, +y, +z, k, resolveRotation(rot), DEFAULTS.chainSegment);
+  pushColliders(out, type, +x, +y, +z, k, resolveRotation(rot), DEFAULTS.chainSegment, ky);
   return out;
 }
 /** The XZ footprint (and height) the colliders of one instance cover: the union AABB. Lets a town generator fit a lot before placing. */
-export function footprintFor(type, x, z, rot, scale) {
-  const cs = colliderFor(type, x, 0, z, rot, scale);
+export function footprintFor(type, x, z, rot, scale, sy) {
+  const cs = colliderFor(type, x, 0, z, rot, scale, sy);
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, maxY = -Infinity;
   for (const c of cs) { if (c.minX < minX) minX = c.minX; if (c.maxX > maxX) maxX = c.maxX; if (c.minZ < minZ) minZ = c.minZ; if (c.maxZ > maxZ) maxZ = c.maxZ; if (c.maxY > maxY) maxY = c.maxY; }
   return { minX, maxX, minZ, maxZ, height: maxY, w: maxX - minX, d: maxZ - minZ };
@@ -362,11 +367,13 @@ export function normaliseEntry(e, i) {
   if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return { i, type: e.type, bad: "non-finite position" };
   const k = e.scale === undefined || e.scale === null ? 1 : +e.scale;
   if (!(k > 0) || !isFinite(k)) return { i, type: e.type, bad: "bad scale" };
+  const sy = e.sy === undefined || e.sy === null ? 1 : +e.sy;
+  if (!(sy > 0) || !isFinite(sy)) return { i, type: e.type, bad: "bad vertical stretch" };
   const R = resolveRotation(e.rot, e.ry);
   if (!isFinite(R.ry)) return { i, type: e.type, bad: "bad rotation" };
   let tint = null;                                     // Wave 7 polish: a car's paint (sRGB 0xrrggbb, or "#rrggbb"); read by the drawing only, never by a collider
   if (e.tint !== undefined && e.tint !== null) { const v = typeof e.tint === "string" ? parseInt(e.tint.replace("#", ""), 16) : +e.tint; if (Number.isFinite(v)) tint = (v >>> 0) & 0xffffff; }
-  return { i, type: e.type, x, y, z, k, q: R.q, ry: R.ry, exact: R.exact, district: e.district == null ? null : String(e.district), palette: e.palette == null ? null : String(e.palette), tint };
+  return { i, type: e.type, x, y, z, k, sy, q: R.q, ry: R.ry, exact: R.exact, district: e.district == null ? null : String(e.district), palette: e.palette == null ? null : String(e.palette), tint };
 }
 
 /** Palette choice of one instance: spec = a theme name, a variant name, or nothing (-> the district's theme). Returns { key, variant, tint, id }.
@@ -629,7 +636,7 @@ export function createCityKit(env) {
     for (const it of items) {
       const T = COLLIDER_BOXES[it.type], cs = colorsFor(it.type, it.pal.variant, it.pal.tint), cr = it.exact ? _COS[it.q] : Math.cos(it.ry), sr = it.exact ? _SIN[it.q] : Math.sin(it.ry);
       for (let o = 0; o < T.length; o += 6) {
-        const b = [T[o] * it.k, T[o + 1] * it.k, T[o + 2] * it.k, T[o + 3] * it.k, T[o + 4] * it.k, T[o + 5] * it.k];
+        const b = [T[o] * it.k, T[o + 1] * it.k * it.sy, T[o + 2] * it.k, T[o + 3] * it.k, T[o + 4] * it.k * it.sy, T[o + 5] * it.k];
         const P = (lx, ly, lz) => [it.x - c0[0] + lx * cr + lz * sr, it.y - c0[1] + ly, it.z - c0[2] - lx * sr + lz * cr];
         const N = (nx, nz) => [nx * cr + nz * sr, -nx * sr + nz * cr];
         const face = (corners, n, color) => {
@@ -676,7 +683,7 @@ export function createCityKit(env) {
       if (n.bad) { skipped.push({ i, type: n.type, reason: n.bad }); continue; }
       if (!hasType(n.type)) { skipped.push({ i, type: n.type, reason: "unknown type" }); continue; }
       ranges[i * 2] = colliders.length;
-      pushColliders(colliders, n.type, n.x, n.y, n.z, n.k, { q: n.q, ry: n.ry, exact: n.exact }, opt.chainSegment);
+      pushColliders(colliders, n.type, n.x, n.y, n.z, n.k, { q: n.q, ry: n.ry, exact: n.exact }, opt.chainSegment, n.sy);
       ranges[i * 2 + 1] = colliders.length - ranges[i * 2];
       if (!n.exact) inexact++;
       entries.push(n);
@@ -724,7 +731,7 @@ export function createCityKit(env) {
     const tmp = [];
     for (const it of items) {
       tmp.length = 0;
-      pushColliders(tmp, it.type, it.x, it.y, it.z, it.k, { q: it.q, ry: it.ry, exact: it.exact }, opt.chainSegment);
+      pushColliders(tmp, it.type, it.x, it.y, it.z, it.k, { q: it.q, ry: it.ry, exact: it.exact }, opt.chainSegment, it.sy);
       for (const c of tmp) {
         if (c.minX < nx) nx = c.minX; if (c.maxX > xx) xx = c.maxX; if (c.minY < ny) ny = c.minY; if (c.maxY > xy) xy = c.maxY; if (c.minZ < nz) nz = c.minZ; if (c.maxZ > xz) xz = c.maxZ;
       }
@@ -763,9 +770,9 @@ export function createCityKit(env) {
         let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
         const cen = [];                                                        // each instance's own sphere: [x, y, z, r], local to the district
         for (let j = 0; j < list.length; j++) {
-          const it = list[j], sc = T.scale * it.k;
+          const it = list[j], sc = T.scale * it.k, scy = sc * it.sy;
           const c = it.exact ? _COS[it.q] : Math.cos(it.ry), s = it.exact ? _SIN[it.q] : Math.sin(it.ry);
-          M.set(c * sc, 0, s * sc, it.x - c0[0],  0, sc, 0, it.y - c0[1],  -s * sc, 0, c * sc, it.z - c0[2],  0, 0, 0, 1);
+          M.set(c * sc, 0, s * sc, it.x - c0[0],  0, scy, 0, it.y - c0[1],  -s * sc, 0, c * sc, it.z - c0[2],  0, 0, 0, 1);
           if (!part.identity) M.multiply(part.local);
           im.setMatrixAt(j, M);
           if (T.kind === "car") { _carCol.setHex(it.tint == null ? 0xffffff : it.tint); im.setColorAt(j, _carCol); }
