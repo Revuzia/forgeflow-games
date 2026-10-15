@@ -68,6 +68,9 @@ MAPS = ["isla_viva", "ashgrid", "deepwood"]                   # hud.js BATTLE_MA
 # The build that is LIVE on the CDN: the default baseline of the perf rows (perf_district) and the frozen "must fail" build of the Wave-7 rows.
 # AFTER A DEPLOY move this ONE constant to the new live build's commit (README "After the Wave-7 deploy"); nothing else holds the sha.
 LIVE_REV = "dd414cb2"                                          # Wave 7 release (changelog + cache bump ?v=1792031930); Wave 6 was 60b854d0 (gate.py WAVE6_REV)
+# The DEPLOYED game (Cloudflare Workers CDN, served under /last-circle/ - the repo's scoped server uses /games/last-circle/). The one place that holds the live URL:
+# squadguard_live --live and the README's post-deploy checklist read it. Read-only use only (a page load; the squad relay is a stand-in, no production data is touched).
+LIVE_BASE = "https://forgeflow-games-cdn.isimcha85.workers.dev/last-circle/index.html"
 
 # Real d3d11 ANGLE, occlusion off, no background throttling (dyefield FLAGS) + precise heap numbers.
 FLAGS = [
@@ -478,11 +481,12 @@ CTYPES = {".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; cha
           ".txt": "text/plain", ".bin": "application/octet-stream", ".ico": "image/x-icon", ".woff2": "font/woff2"}
 
 
-def disk_file_for(url_path):
-    """Map /games/last-circle/<rel> to a file under ROOT, or None (outside the game dir / missing)."""
-    if not url_path.startswith(GAME_PATH):
+def disk_file_for(url_path, game_path=None):
+    """Map /games/last-circle/<rel> (or `game_path`: the CDN serves the same files under /last-circle/) to a file under ROOT, or None (outside the game dir / missing)."""
+    gp = game_path or GAME_PATH
+    if not url_path.startswith(gp):
         return None
-    rel = urllib.parse.unquote(url_path[len(GAME_PATH):]) or "index.html"
+    rel = urllib.parse.unquote(url_path[len(gp):]) or "index.html"
     full = os.path.realpath(os.path.join(ROOT, rel.replace("/", os.sep)))
     root = os.path.realpath(ROOT)
     if full != root and not full.startswith(root + os.sep):
@@ -541,8 +545,9 @@ def git_blobs(rev):
 class DiskServer:
     """context.route handler serving the game dir for a set of origins (read-only; working copy or a git revision)."""
 
-    def __init__(self, origins, rev=None):
+    def __init__(self, origins, rev=None, game_path=None):
         self.origins = [o.rstrip("/") for o in origins]
+        self.game_path = game_path or GAME_PATH       # the URL path the game dir is served under (the live CDN: /last-circle/)
         self.served = 0
         self.missing = []
         self.overrides = []          # (predicate(url) -> bool, handler(route) -> None) checked first
@@ -561,7 +566,7 @@ class DiskServer:
                 pass
         u = urllib.parse.urlparse(url)
         if self.git is not None:
-            rel = urllib.parse.unquote(u.path[len(GAME_PATH):]) if u.path.startswith(GAME_PATH) else None
+            rel = urllib.parse.unquote(u.path[len(self.game_path):]) if u.path.startswith(self.game_path) else None
             if rel is not None and (rel == "" or rel.endswith("/")):
                 rel += "index.html"
             body = self.git.read(rel) if rel and ".." not in rel.split("/") else None
@@ -570,7 +575,7 @@ class DiskServer:
                 return route.fulfill(status=404, body="Not found", headers={"Cache-Control": "no-store"})
             path = rel
         else:
-            path = disk_file_for(u.path)
+            path = disk_file_for(u.path, self.game_path)
             if path is None:
                 self.missing.append(u.path)
                 return route.fulfill(status=404, body="Not found", headers={"Cache-Control": "no-store"})

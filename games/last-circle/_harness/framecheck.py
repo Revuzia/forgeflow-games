@@ -404,7 +404,7 @@ def main():
             v.info("programs before/after startMatch (the warm-up's work)", [p_before, p_after])
             if args.plant == "extra-tris":
                 import perf_district as PD
-                v.info("plant extra-tris", s.js(PD.PLANT_JS, "extra-tris"))
+                v.info("plant extra-tris", s.js(PD.PLANT_JS, ["extra-tris", 24]))   # 24 x 81,920 tris = +1.97 M: the Wave-7 completion city draws ~1.3 M on its drop frame (the live build 2.08 M), so +1.97 M reads ~x1.6 of live; the bar is x1.25
             # ---- drop frame 1 (the first rendered frame of the drop)
             s.js("() => { window.__FC__.want = true; }")
             s.step_frames(1, 1 / 60, render=True)

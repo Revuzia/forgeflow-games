@@ -4,6 +4,7 @@
 
     python _harness/navtown.py --disk                          # the working copy: Savanna seeds 7, 1234, 2026 (~1.5 min)
     python _harness/navtown.py --disk --plant coarse-indoor    # negative control (must exit 1): the grid is baked with 3 m indoor cells, no door fits
+    python _harness/navtown.py --rev dd414cb2                  # a frozen commit (the Wave-7 live build): town-top-rooms MUST fail there (2-3 downtown top-storey rooms per seed have no route)
 
 navcheck's door-reachability rows drive the REAL BOT CONTROLLER (bots.js); they cover the town tiles once lane 7B2's wiring lands, but only for the bots' planner. These rows
 judge the GRID itself, independent of bots.js: `probe_navtown.mjs` builds Savanna with the UNMODIFIED maps.js, bakes every town and compound of its towngen layout with
@@ -15,6 +16,12 @@ point (in) and back (out) and WALKS it with player.js's tick() (the real mover; 
   town-ground-rooms     ground-floor rooms (<= 1.5 m over the terrain) reached in AND out >= 98 %          (plan: door-reachability, ground floors >= 98 %)
   town-upper-rooms      rooms above the ground floor (upper + top) reached in AND out >= 85 %             (plan: upper floors >= 85 % after Wave 5; 98 % after Wave 8)
   town-walks-agree      the real mover arrives on >= 99.5 % of the walks the grid planned                  (the grid errs toward blocked: it must not plan what the mover cannot walk)
+  town-top-rooms        (Wave-7 completion round, D5) the TOP storey - rooms more than 7.5 m over the terrain, the third storey and up of a downtown tower - reached in AND out >= 98 % on every seed
+                        (the plan's Wave-8 number for upper floors, asked here of the highest rooms only; >= 15 top rooms per seed or the row is could-not-judge). Wave-7 live build dd414cb2:
+                        22 of 24 / 18 of 21 / 23 of 26 (seeds 7, 1234, 2026): the stair's landing slab starts 0.61 m past the ramp end, no lattice node bridges the gap, the whole storey above the stair
+                        is an island for the planner ("no-goal" / "partial path"). The upper-rooms row (all rooms above the ground floor, 85 %) hid this: 95.7-97.7 %
+  town-top-walks-agree  (Wave-7 completion round, D5) the real mover arrives on >= 99.5 % of the walks the grid planned to a TOP-storey room: the island was joined by bridge edges, and a planner that
+                        joins what the mover cannot cross would send bots into the same wall for the rest of the match
   information           per level and per town: rooms, planned, walked, the unreached rooms with where and why; bake ms; MB per town (plan estimate 1-2 MB)
 
 The control `--plant coarse-indoor` bakes with cellIndoor 3 m: a 1 m door cannot be crossed, so the rooms behind doors are not reached and town-ground-rooms / town-upper-rooms FAIL.
@@ -32,6 +39,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
+import placementcheck as PC  # noqa: E402
 
 GATE = "navtown"
 PROBE = os.path.join(C.HERE, "probe_navtown.mjs")
@@ -40,6 +48,8 @@ GROUND_MIN = 0.98
 UPPER_MIN = 0.85
 AGREE_MIN = 0.995
 ROOMS_MIN = 300
+TOP_MIN = 0.98
+TOP_ROOMS_MIN = 15           # the top storey of the Savanna downtown has 21-26 rooms per seed (Wave-7 live build); fewer than this = the survey measured too little
 
 
 def pc(a, b):
@@ -61,11 +71,15 @@ def main_fn(v0, args):
     vendor = os.path.join(C.ROOT, "assets", "vendor", "three")
     if not os.path.isdir(vendor):
         raise C.EnvFailure("vendored three not found at %s" % vendor)
+    root, served = C.ROOT, "working copy"
+    if args.rev:
+        root, sha = PC.rev_root(args.rev)
+        served = "git " + sha
     out = os.path.join(tempfile.gettempdir(), "lc_navtown_%d.json" % os.getpid())
-    cmd = ["node", PROBE, "--root", C.ROOT, "--vendor", vendor, "--map", "ashgrid", "--seeds", args.seeds, "--out", out]
+    cmd = ["node", PROBE, "--root", root, "--vendor", vendor, "--map", "ashgrid", "--seeds", args.seeds, "--out", out]
     if plant:
         cmd += ["--plant", plant]
-    print("%s: working copy | Savanna seeds %s | plant %s" % (GATE, args.seeds, plant or "none"), flush=True)
+    print("%s: %s | Savanna seeds %s | plant %s" % (GATE, served, args.seeds, plant or "none"), flush=True)
     t0 = time.time()
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=args.timeout, cwd=C.ROOT)
@@ -113,6 +127,19 @@ def main_fn(v0, args):
     check("town-upper-rooms", not bad_u, "rooms above the ground floor reached in AND out: " + "; ".join(show_u), ">= %d %% on every seed" % round(100 * UPPER_MIN))
     plan = sum(s["tab"][l]["plan"] for s in seeds for l in s["tab"])
     walk = sum(s["tab"][l]["walk"] for s in seeds for l in s["tab"])
+    tops = [(s["seed"], s["tab"]["top"]["rooms"], s["tab"]["top"]["both"]) for s in seeds]
+    few = [t for t in tops if t[1] < TOP_ROOMS_MIN]
+    if few:
+        v0.cnj("town-top-rooms", "only %s top-storey rooms on seeds %s (need >= %d): the survey measured too little" % ([t[1] for t in few], [t[0] for t in few], TOP_ROOMS_MIN))
+    else:
+        bad_t = [t[0] for t in tops if t[2] < TOP_MIN * t[1]]
+        check("town-top-rooms", not bad_t, "top-storey rooms (> 7.5 m over the terrain) reached in AND out: " + "; ".join("seed %d %d of %d (%s)" % (t[0], t[2], t[1], pc(t[2], t[1])) for t in tops), ">= %d %% on every seed" % round(100 * TOP_MIN))
+    tplan = [(s["seed"], s["tab"]["top"]["plan"], s["tab"]["top"]["walk"]) for s in seeds]
+    if sum(t[1] for t in tplan) == 0:
+        v0.cnj("town-top-walks-agree", "the grid planned no walk to a top-storey room: nothing for the real mover to walk")
+    else:
+        bad_w = [t[0] for t in tplan if t[1] and t[2] < AGREE_MIN * t[1]]
+        check("town-top-walks-agree", not bad_w, "the real mover arrived on " + "; ".join("seed %d %d of %d (%s)" % (t[0], t[2], t[1], pc(t[2], t[1])) for t in tplan) + " of the walks planned to a top-storey room", ">= %.1f %% on every seed" % (100 * AGREE_MIN))
     check("town-walks-agree", plan > 0 and walk >= AGREE_MIN * plan, "the real mover arrived on %d of %d planned walks (%s); failed walks: %s" % (
         walk, plan, pc(walk, plan), [f for s in seeds for f in s["fails"]][:3] or "none"), ">= %.1f %%" % (100 * AGREE_MIN))
     for s in seeds:

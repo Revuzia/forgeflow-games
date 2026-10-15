@@ -221,7 +221,9 @@
     const THREE = await import("three");
     const m = M();
     const g = W.group("map");
-    const insts = []; g.traverse((o) => { if (o.isInstancedMesh && !(o.castShadow && !o.receiveShadow)) insts.push(o); });
+    // The map-wide prop meshes never cast (maps.js: "NOTHING map-wide casts any more"); the small near-caster proxies rebuilt around the camera focus do. The old filter dropped a
+    // proxy only when it did not also receive shadow; the Savanna tree proxies (Wave-7 completion round, D2) receive too, so a plain castShadow test is the one that keeps them out.
+    const insts = []; g.traverse((o) => { if (o.isInstancedMesh && !o.castShadow) insts.push(o); });
     const byKind = {};
     for (const c of m.colliders) if (c.prop && !c.dead) ((byKind[c.prop] = byKind[c.prop] || {})[c.idx] = byKind[c.prop][c.idx] || []).push(c);
     const m4 = new THREE.Matrix4(), mw = new THREE.Matrix4(), v = new THREE.Vector3();
@@ -229,8 +231,42 @@
     STATE.hulls = {}; STATE.samples = {}; STATE.groups = byKind; STATE.insts = insts; STATE.subsByKind = {};
     for (const kind of Object.keys(byKind)) {
       let root; try { root = await W.kernel.loadGLTF(W.assetBase + "assets/props/" + kind + ".glb"); } catch (e) { out.notes.push("no GLB for collider prop kind " + kind); continue; }
-      const geos = new Set(); root.traverse((o) => { if (o.isMesh) geos.add(o.geometry); });
-      const allSubs = insts.filter((o) => geos.has(o.geometry));
+      root.updateMatrixWorld(true);
+      const glbMeshes = []; root.traverse((o) => { if (o.isMesh) glbMeshes.push(o); });
+      const geos = new Set(glbMeshes.map((o) => o.geometry));
+      let allSubs = insts.filter((o) => geos.has(o.geometry));
+      // maps.js may draw a kind from geometry that is not the GLB's own (Wave-7 completion round, Savanna only: meshes of ONE material baked into one geometry to save draw calls, the
+      // acacia's trunk replaced by a coarse copy on the map-wide mesh). The harness judges the colliders against the DRAWN parts of the GLB, not against the draw calls: when some GLB
+      // mesh has no instanced mesh of its own, every GLB mesh becomes a virtual sub-mesh - its own full-detail geometry under the kind's instance transform. The transform comes from
+      // the first map-wide instanced mesh of the kind's materials (maps.js bakes a GLB mesh's local matrix into the instance matrix when it draws the mesh alone, and into the
+      // vertices when it merges, so that mesh's own local matrix is divided out first).
+      if (!allSubs.length || !glbMeshes.every((o) => allSubs.some((q) => q.geometry === o.geometry))) {
+        const mats = new Set(glbMeshes.map((o) => o.material));
+        // the map-wide mesh that carries THIS kind's instance matrices: one of the kind's materials AND as many instances as the kind has (a material can be shared with another kind: the
+        // Savanna trees, birches and pines all use "Green"); among those, the first drawn
+        const nInst = Math.max(...Object.keys(byKind[kind]).map(Number)) + 1;
+        const cands = insts.filter((o) => mats.has(o.material) && o.count >= nInst);
+        cands.sort((a, b) => (a.count - nInst) - (b.count - nInst));
+        const t = cands[0];
+        if (t) {
+          // the GLB mesh whose local matrix maps.js folded into the instance matrix: the one whose geometry the mesh draws, or (a coarse LOD copy of it) the only GLB mesh of that material
+          const sameMat = glbMeshes.filter((o) => o.material === t.material);
+          const own = glbMeshes.find((o) => o.geometry === t.geometry) || (sameMat.length === 1 ? sameMat[0] : null);
+          const l0inv = own ? own.matrixWorld.clone().invert() : new THREE.Matrix4();
+          // D2's tree LOD (Savanna): the trees within 110 m of the camera focus are hidden on the coarse map-wide twin (a 1e-4 scale matrix) while a small near-caster proxy draws them in
+          // full. Their TRUE matrices are the proxy's, in ascending instance order; reading the hidden ones as they are would put the drawn body at the origin (gap 200 m, clip 0).
+          const hidden = []; { const e = new THREE.Matrix4(); for (let q = 0; q < t.count; q++) { t.getMatrixAt(q, e); if (Math.abs(e.elements[0]) < 1e-3 && Math.abs(e.elements[5]) < 1e-3) hidden.push(q); } }
+          let rank = null, proxy = null;
+          if (hidden.length) {
+            const proxies = []; g.traverse((o) => { if (o.isInstancedMesh && o.castShadow && o.material === t.material && o.count === hidden.length) proxies.push(o); });
+            if (proxies.length === 1) { proxy = proxies[0]; rank = new Map(hidden.map((q, k) => [q, k])); }
+            out.notes.push(kind + ": " + hidden.length + " instances are hidden on the map-wide mesh by the near-field LOD swap; " + (proxy ? "their true matrices are read from the near-caster proxy" : "NO unique near-caster proxy found (" + proxies.length + "): they are judged at the hidden (collapsed) matrix"));
+          }
+          const trueAt = (i, outM) => { t.getMatrixAt(i, outM); if (rank && rank.has(i)) proxy.getMatrixAt(rank.get(i), outM); return outM; };
+          allSubs = glbMeshes.map((o) => ({ virtual: true, geometry: o.geometry, material: o.material, count: t.count, matrixWorld: t.matrixWorld, getMatrixAt: (i, out) => { trueAt(i, out); out.multiply(l0inv); out.multiply(o.matrixWorld); return out; } }));
+          out.notes.push(kind + ": drawn from a merged / simplified map-wide mesh: judged against the GLB's own " + allSubs.length + " parts under the instance transform");
+        }
+      }
       if (!allSubs.length) { out.notes.push("no instanced mesh for prop kind " + kind); continue; }
       const subs = solidSubs(allSubs);
       if (subs.length !== allSubs.length) out.notes.push(kind + ": soft foliage sub-meshes left out of the drawn body: " + allSubs.filter((o) => !subs.includes(o)).map((o) => o.material.name).join(","));
@@ -672,5 +708,47 @@
     return { slabs: slabs.length, tested: new Set(res.map((r) => r.x + "," + r.z)).size, runs: res.length, passed: res.filter((r) => r.passed).length, byDrop: drops.map((d) => ({ drop: d, runs: res.filter((r) => r.drop === d).length, passed: res.filter((r) => r.drop === d && r.passed).length })), failed: res.filter((r) => r.passed).slice(0, 8) };
   }
 
-  return { props, live, doors, walls, ramps, falls, _state: STATE };
+  // ---------------------------------------------------------------- the exhaustive sprint sweep (Wave-7 completion round, lane D5: rocksweep.py)
+  // live() samples 8 instances per kind. This visits EVERY isolated instance of `kind` (default rocks) from 8 angles with the real mover (stepActor through
+  // C.fastForward), judged exactly like live()'s sprint (the same bodyIsStep rule, the same own-triangle confirmation, the same backed-off start). A real
+  // mover defect that bites 1 sprint in 3,000 (the 6 mm support window of player.js: blockedIn probes the destination floor from the feet BEFORE gravity,
+  // the post-move support test from the feet AFTER it) is invisible in a sample of 64 and shows here as a count.
+  async function sprintsAll(opt) {
+    const THREE = await import("three");
+    _confirmTHREE = THREE; _confirmRay = new THREE.Raycaster();
+    const m = M();
+    const kind = (opt && opt.kind) || "rocks";
+    const ids = Object.keys(STATE.hulls[kind] || {}).map(Number).filter((i) => isolatedSet(STATE.hulls[kind][i].csAll, 5));
+    const out = { kind, instances: ids.length, runs: 0, inside10: 0, hullOnly: 0, deepest: 0, fail: [], backed: 0 };
+    for (const i of ids) {
+      const hh = STATE.hulls[kind][i]; const [cx, cz] = centroid(hh.H);
+      for (let a = 0; a < 8; a++) {
+        const ang = a * Math.PI / 4 + 0.13, ux = Math.cos(ang), uz = Math.sin(ang);
+        let back = 0;
+        for (; back < 8; back += 0.5) { const sx = cx - ux * (4.5 + back), sz = cz - uz * (4.5 + back); if (freeAt(sx, sz, m.heightAt(sx, sz), R)) break; }
+        if (back > 0) out.backed++;
+        place(cx - ux * (4.5 + back), cz - uz * (4.5 + back));
+        const tr = walk(ux, uz, 75 + Math.ceil(back / 0.12), true);
+        let mn = 9, at = null;
+        for (const q of tr) {
+          if (q[3] || q[1] > hh.base + 1.6 || q[1] + CAPH < hh.base + 0.15) continue;
+          let sd = 9, unconfirmed = false;
+          for (let b = 0; b < hh.bodies.length; b++) {
+            if (bodyIsStep(hh, b, q[1])) continue;
+            const d = sdPoly(q[0], q[2], hh.bodies[b]) - R;
+            if (d < -0.10 && CONFIRM_KINDS.has(kind) && !drawnOverlap(kind, i, hh, b, q[0], q[1], q[2])) { unconfirmed = true; continue; }
+            if (d < sd) sd = d;
+          }
+          if (unconfirmed) out.hullOnly++;
+          if (sd < mn) { mn = sd; at = q; }
+        }
+        out.runs++;
+        if (mn < -0.10) { out.inside10++; out.fail.push({ i, ang: r3(ang), minGap: r3(mn), at: at && at.map(r3), back }); }
+        if (-mn > out.deepest) out.deepest = r3(-mn);
+      }
+    }
+    return out;
+  }
+
+  return { props, live, doors, walls, ramps, falls, sprintsAll, _state: STATE };
 }

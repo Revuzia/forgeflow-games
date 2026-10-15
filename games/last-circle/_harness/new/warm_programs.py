@@ -22,7 +22,7 @@ Rows per map x seed (exact counts; milliseconds are information):
   forced checkpoints a forced all-visible render (the warm-up's own force()) after the window (238 / 246 / 248 s) compiles 0 programs (objects that exist now and would link on first draw)
   shuffle            24 shadow passes with every group's children shuffled and every shadow participant a caster, at match second 240 and 252: programs compiled == 0
   icon renderer      after the real Enter press (the lobby stayed up LOBBY_WAIT s): WebGL contexts created == 0 and toDataURL readbacks == 0
-  supply crate       programs compiled between match second 262 and 300 (the storm-phase-2 supply drop falls from second 269) == 0   [the balloon's transparent lit material is linked by fx.js lateLitProxy]
+  supply crate       programs compiled between match second 262 and 300 (the storm-phase-2 supply drop falls from second 269) == 0   [the balloon's transparent lit material is linked by loot.js makeSupplyCrate() through warmObjects: the ONE builder of the crate, used by the live drop and by the warm-up (Wave-7 completion round, lane D1)]
 Exit 0 pass / 1 fail / 2 could-not-judge.
 """
 from __future__ import annotations
@@ -289,7 +289,7 @@ def one_run(args, v, mp, seed):
             v.check(icon_name, n_ctx == 0 and n_tdu == 0 and lob["ctx"] >= 11,
                     {"contextsAfterEnter": n_ctx, "toDataURLAfterEnter": n_tdu, "inLobby": lob["ctx"], "lobbySeconds": waited}, expect="0 / 0 (the 1 context + 10 icons are built in the lobby)")
         v.check("%s: the supply-crate drop (forced renders every 3 s, match second %d-%d) compiles 0 programs" % (tag, CRATE_FROM, CRATE_TO + 3), t_end >= CRATE_TO and not crate and len(crate_cps) >= 10,
-                {"programs": len(crate), "first": brief(crate), "reached_t": round(t_end, 1), "renders": len(crate_cps)}, expect="0 (fx.js lateLitProxy gives the warm frame the balloon's transparent lit program; the single-source fix would be loot.js's own makeSupplyCrate)")
+                {"programs": len(crate), "first": brief(crate), "reached_t": round(t_end, 1), "renders": len(crate_cps)}, expect="0 (loot.js makeSupplyCrate() is the one crate builder; warmObjects hands its page-lifetime proxy to the warm frame, so the balloon's transparent lit program is linked before the drop)")
         v.check("%s: no page / window errors" % tag, not (d["pageErrors"] or d["windowErrors"]), {"pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3]})
 
 

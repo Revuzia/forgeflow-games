@@ -214,7 +214,7 @@ def measure_map(v, args, map_id, lib, rooms_body, ticks_src):
     if args.walk_seeds:
         walk_seeds = [int(x) for x in args.walk_seeds.split(",")]
     walk_seeds = walk_seeds[:args.walk_matches]
-    only = args.only
+    only = set(args.only.split(",")) if args.only else None        # --only ticks,rooms runs two halves (Wave-7 completion round: the extra-seed invocations skip the fixed-seed pocket half)
     with C.Session(args, "nav_" + map_id, viewport={"width": 960, "height": 600}) as s:
         if args.plant:
             if not (args.disk or args.rev):
@@ -223,7 +223,7 @@ def measure_map(v, args, map_id, lib, rooms_body, ticks_src):
             print("  [%s] plant %s: %s" % (map_id, args.plant, res["plant"]), flush=True)
         s.boot()
         s.freeze_loop()
-        if only in (None, "ticks"):
+        if only is None or "ticks" in only:
             res["ticks"] = []
             for k in range(args.tick_matches):
                 seed = tick_seed + k
@@ -236,7 +236,7 @@ def measure_map(v, args, map_id, lib, rooms_body, ticks_src):
                     map_id, seed, round(time.time() - t1), r["summary"]["simT"], sum(r["intent"].get(k2, 0) for k2 in ("in_ground", "in_upper")),
                     sum(r["blocked"].get(k2, 0) for k2 in ("in_ground", "in_upper"))), flush=True)
                 res["ticks"].append(r)
-        if only in (None, "rooms"):
+        if only is None or "rooms" in only:
             res["rooms"] = []
             for seed in walk_seeds:
                 st = s.start_match("quick", seed, map_id, enter=True)
@@ -251,7 +251,7 @@ def measure_map(v, args, map_id, lib, rooms_body, ticks_src):
                     json.dumps(w.get("upperIn")), json.dumps(w.get("upperOut")), json.dumps(w.get("topIn")), json.dumps(w.get("topOut")),
                     (w.get("long") or {}).get("ok"), (w.get("long") or {}).get("n")), flush=True)
                 res["rooms"].append(r)
-        if only in (None, "pockets"):
+        if only is None or "pockets" in only:
             res["pockets"] = []
             psrc = wrap_pockets()
             for seed in POCKET_SEEDS:
@@ -485,7 +485,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
     ap.add_argument("--maps", default=None, help="comma list (default: all three)")
-    ap.add_argument("--only", choices=["ticks", "rooms", "pockets"], default=None, help="run one half only")
+    ap.add_argument("--only", default=None, help="run some halves only: ticks, rooms, pockets (comma list, e.g. ticks,rooms)")
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--tick-seed", type=int, default=None, help="override the standard-match seed of the tick metric (all maps)")
     ap.add_argument("--tick-matches", type=int, default=3, help="standard matches per map for the tick metric (seed, seed+1, seed+2); 3 since 2026-10-13 (2 before): "

@@ -608,7 +608,12 @@ def main():
                     post = s.js("""([sp, sn]) => { const W = window.__LC__.W, D = W.debugLootFx(), m = D.meshes;
                         const zero = (mesh, slot) => { const a = mesh.instanceMatrix.array; let t = 0; for (let i = 0; i < 16; i++) t += Math.abs(a[slot * 16 + i]); return t === 0; };
                         const free = (k, slot) => D.free ? D.free[k].indexOf(slot) >= 0 : null;
-                        return { ringZero: zero(m[0], sp[0]), beamZero: zero(m[1], sp[1]), netRingZero: sn ? zero(m[0], sn[0]) : null, netBeamZero: sn ? zero(m[1], sn[1]) : null,
+                        // a freed slot may be taken again at once by loot a BOT spawns during the 3 stepped frames (a bot opening a chest bursts items that reuse it): then it is
+                        // neither zero nor free, but it is owned by someone else - the item that was picked no longer owns it. That is reuse, not a leak (the accounting row below
+                        // proves every live slot has exactly one live owner).
+                        const ownerOf = (k, slot) => { for (const o of W.debugItems().concat(W.debugChests())) { if (o[k] === slot) return o.id; } return null; };
+                        return { ringOwner: ownerOf('ring', sp[0]), beamOwner: ownerOf('beam', sp[1]), netRingOwner: sn ? ownerOf('ring', sn[0]) : null, netBeamOwner: sn ? ownerOf('beam', sn[1]) : null,
+                                 ringZero: zero(m[0], sp[0]), beamZero: zero(m[1], sp[1]), netRingZero: sn ? zero(m[0], sn[0]) : null, netBeamZero: sn ? zero(m[1], sn[1]) : null,
                                  ringFree: free('rings', sp[0]), beamFree: free('beams', sp[1]), netRingFree: sn ? free('rings', sn[0]) : null, netBeamFree: sn ? free('beams', sn[1]) : null,
                                  itemGone: !W.debugItems().some((q) => q.id === 't_pick' || q.id === 't_net'),
                                  nearby: W.nearbyLoot(W.player.pos, 12).filter((q) => q.id === 't_pick' || q.id === 't_net').length }; }""", [slots_p, slots_n]) if slots_p else None
@@ -626,10 +631,21 @@ def main():
                           out[k] = { owned: own[k].length, distinct: set.size, live: d[k].live, ownedButFree: own[k].filter((x) => fr.has(x)).length }; }
                         return out; }""")
                     acct_ok = all(a["owned"] == a["live"] == a["distinct"] and a["ownedButFree"] == 0 for a in acct.values())
+                    # a picked item's slot is PARKED when it is zero and on the free list, or - reused at once by loot a bot spawned in the stepped frames - owned by anything but the
+                    # picked item itself (with the accounting row, every live slot has exactly one live owner: a leaked slot has none)
+                    def parked(zero_k, free_k, owner_k):
+                        if post is None:
+                            return False
+                        own = post.get(owner_k)
+                        if own in ("t_pick", "t_net"):
+                            return False
+                        if own is not None:
+                            return True
+                        return bool(post.get(zero_k)) and post.get(free_k) is not False
                     v.check("pickup: picking an item and a net-take mirror each park their ring + beam (zero matrix, back on the free list) and the pools stay "
                             "consistent (every live slot owned by exactly one live item / chest)",
-                            bool(ok_pick) and alive_pre and post is not None and post["ringZero"] and post["beamZero"] and post["netRingZero"] and post["netBeamZero"]
-                            and post["ringFree"] is not False and post["beamFree"] is not False and post["netRingFree"] is not False and post["netBeamFree"] is not False
+                            bool(ok_pick) and alive_pre and post is not None and parked("ringZero", "ringFree", "ringOwner") and parked("beamZero", "beamFree", "beamOwner")
+                            and parked("netRingZero", "netRingFree", "netRingOwner") and parked("netBeamZero", "netBeamFree", "netBeamOwner")
                             and post["itemGone"] and post["nearby"] == 0 and acct_ok,
                             {"pickupReturned": ok_pick, "aliveBefore": alive_pre, "liveBefore": pre["fx"], "post": post, "accounting": acct})
                     if before_px < 30:
@@ -649,11 +665,12 @@ def main():
                         s.js("(id) => window.__LC__.W.openChest(window.__LC__.W.player, id)", ch["id"])
                         s.step_frames(2, 1 / 60, True)
                         after = s.js("""(id) => { const W = window.__LC__.W, d = W.debugLootFx(), c = W.debugChests().find((q) => q.id === id);
-                            return { live: [d.beams.live, d.rings.live, d.glows.live], rec: { opened: c.opened, ring: c.ring, beam: c.beam, glow: c.glow },
+                            const own = []; for (const o of W.debugItems().concat(W.debugChests())) { if (o.glow >= 0) own.push(o.glow); }
+                            return { live: [d.beams.live, d.rings.live, d.glows.live], glowOwned: own.length, glowDistinct: new Set(own).size, rec: { opened: c.opened, ring: c.ring, beam: c.beam, glow: c.glow },
                                      targetable: W.nearbyLoot({ x: c.pos.x, y: c.pos.y, z: c.pos.z }, 3).some((q) => q.type === 'chest' && q.id === id) }; }""", ch["id"])
-                        v.check("pickup: opening a chest parks its ring + beam + glow slots (the record lets go of all three, the glow count drops by 1)",
+                        v.check("pickup: opening a chest parks its ring + beam + glow slots (the record lets go of all three, the glow count drops by at least 1 - a bot may open another chest in the same frames - and every live glow has exactly one owner)",
                                 after["rec"]["opened"] and after["rec"]["ring"] == -1 and after["rec"]["beam"] == -1 and after["rec"]["glow"] == -1
-                                and after["live"][2] == before[2] - 1 and not after["targetable"],
+                                and after["live"][2] <= before[2] - 1 and after["glowOwned"] == after["live"][2] == after["glowDistinct"] and not after["targetable"],
                                 {"before": before, "after": after, "note": "rings / beams live may rise: the loot the chest drops takes slots of its own"})
 
             # ---- deaths ------------------------------------------------------------------------------------------------
