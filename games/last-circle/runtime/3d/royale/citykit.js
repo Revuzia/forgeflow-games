@@ -2,8 +2,9 @@
  * citykit.js - the Last Circle city kit (world plan 2026-10, Wave 6, lane 6C; contract C-KIT).
  *
  * Places the CC0 town kit (assets/props/city/**, assets/props/cars/**: Kenney City Kit Suburban / Commercial / Roads, Car Kit, Furniture Kit, Graveyard Kit,
- * Quaternius props) as INSTANCED DISTRICTS with colliders that are exact axis-aligned boxes. NOT wired into the live game in Wave 6: Wave 7 (maps.js)
- * is the first importer.
+ * Quaternius props) as INSTANCED DISTRICTS with colliders that are exact axis-aligned boxes. Wired in Wave 7 (lane 7A): maps.js imports it DYNAMICALLY on
+ * Savanna only, with the boot module's own ?v= query (`import("./citykit.js" + new URL(import.meta.url).search)`: a static relative import would drop the
+ * query and serve stale JS after an edit), builds one kit per match (`W._cityKit`, disposed by disposeMapResources) and appends `place().colliders` to the map's.
  *
  *   import { createCityKit } from "./citykit.js";
  *   const kit = createCityKit({ THREE, kernel: W.kernel, assetBase: W.assetBase });          // or { W }; one kit per match
@@ -78,87 +79,87 @@ const HALF_PI = Math.PI / 2;
 // re-run, `node citykit.selftest.cjs --emit-table` prints the new literal.
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 const COLLIDER_BOXES = Object.freeze({
-  "suburban/building-type-a":[-4.53,0,-2.502,-1.83,4.562,3.498,-1.83,0,-2.502,1.92,6.002,3.498,1.92,0,-2.502,4.62,4.562,3.498,-4.08,0,-3.702,-1.53,4.562,-2.502,1.77,0,-3.702,4.32,4.562,-2.502],
-  "suburban/building-type-c":[-4.481,0,-2.502,-1.781,3.823,3.498,-1.781,0,-2.502,1.969,7.442,3.498,1.969,0,-2.502,4.519,6.002,3.498,1.669,0,-3.702,4.219,6.002,-2.502],
-  "suburban/building-type-e":[-4.53,0,-2.501,4.62,8.19,3.499,-4.08,0,-3.701,-1.53,8.19,-2.501,1.77,0,-3.701,4.32,8.19,-2.501],
-  "suburban/building-type-g":[-5.07,0,-1.991,4.08,5.31,4.009,1.53,0,-3.641,4.68,1.7,-1.991,-4.62,0,-3.191,-2.07,2.284,-1.991],
-  "suburban/building-type-h":[-4.53,0,-2.848,4.62,5.31,3.002],
-  "suburban/building-type-i":[-4.481,0,-2.501,-1.781,3.823,3.499,-1.781,0,-2.501,4.519,5.31,3.499,-1.181,0,-3.701,1.369,5.31,-2.501],
-  "suburban/building-type-m":[-1.241,0,-3.941,5.059,5.31,4.909,-4.091,0,-1.091,-1.241,5.31,4.909,2.059,0,-5.141,4.609,2.284,-3.941,-5.141,0,-0.791,-4.091,1.7,1.759],
-  "suburban/building-type-o":[-4.572,0,-2.501,-1.872,3.24,3.499,-1.872,0,-2.501,4.578,8.19,3.499,-1.272,0,-3.701,1.278,6.365,-2.501],
-  "suburban/building-type-p":[-1.614,0,-2.364,4.686,5.76,3.636,-1.164,0,-3.564,1.386,1.7,-2.364],
-  "suburban/building-type-q":[-1.314,0,-2.738,4.686,5.76,2.962,-2.664,0,-2.588,-1.314,3.24,-0.038],
-  "commercial/building-a":[-4.702,0,-3.99,5.348,15.36,5.76],
-  "commercial/building-c":[-4.702,0,-3.24,5.348,10.56,6.66,-0.652,0,-6.39,3.998,2.125,-4.74,-0.652,0,-4.74,3.998,10.56,-3.24],
-  "commercial/building-e":[-9.84,0,-4.247,-0.24,5.76,5.503,-0.24,0,-4.247,9.96,10.56,5.503],
-  "commercial/building-f":[-5.04,0,-3.93,5.16,20.16,5.67,0.21,0,-6.03,4.71,15.96,-3.93],
-  "commercial/building-h":[-4.702,0,-4.097,5.348,15.36,5.653],
-  "commercial/building-i":[-7.44,0,-6.762,7.56,19.68,7.488],
-  "commercial/building-m":[-7.44,0,-7.002,7.56,34.2,7.398],
-  "skyscraper/building-skyscraper-a":[-7.41,0,-6.06,7.59,33.6,7.29,-7.26,0,-7.41,-2.16,34.56,-6.06,2.34,0,-7.41,7.44,34.56,-6.06],
-  "skyscraper/building-skyscraper-b":[-7.41,0,-6.06,7.59,53.28,7.29,-7.26,0,-7.41,-2.16,53.76,-6.06,2.34,0,-7.41,7.44,53.76,-6.06],
-  "skyscraper/building-skyscraper-c":[-7.38,0,-5.177,7.62,44.16,8.023],
-  "skyscraper/building-skyscraper-d":[-7.38,0,-5.177,7.62,62.88,8.023],
-  "skyscraper/building-skyscraper-e":[-7.17,0,-7.002,7.98,48.48,7.398],
-  "lowdetail/low-detail-building-a":[-2.85,0,-2.85,3,24,3],
-  "lowdetail/low-detail-building-b":[-2.4,0,-2.4,2.55,23.4,2.55],
-  "lowdetail/low-detail-building-g":[-2.4,0,-2.4,2.55,24,2.55,-2.85,0,-3,-0.45,24,-2.4,0.6,0,-3,3,24,-2.4,-3,0,0.6,-2.4,24,3],
-  "lowdetail/low-detail-building-h":[-3,0,-2.85,3.15,25.2,3],
-  "lowdetail/low-detail-building-wide-a":[-5.7,0,-3,5.85,13.2,3.15],
-  "props/barrier-traffic":[-0.778,0.003,-0.39,0.778,0.805,0.39],
-  "props/box-crate":[-0.465,0,-0.465,0.465,0.93,0.465],
-  "props/cone-traffic":[-0.286,0,-0.286,0.286,0.714,0.286],
-  "props/construction-barrier":[-0.472,0,-1.012,0.472,1.069,1.012],
-  "props/crate-yard":[-0.481,0,-0.481,0.481,0.95,0.481],
-  "props/dumpster":[-0.977,0,-0.518,0.977,1.592,0.518],
-  "props/fence-suburban":[-1.187,0,-0.187,1.187,1.35,0.187],
-  "props/grave-bench":[-0.726,0,-0.41,0.726,0.947,0.41],
-  "props/hydrant":[-0.257,0.001,-0.183,0.257,0.773,0.217],
-  "props/light-curved":[-0.225,0,-0.225,0.225,6.075,0.225],
-  "props/light-curved-double":[-0.225,0,-0.225,0.225,6.075,0.225],
-  "props/light-square":[-0.225,0,-0.225,0.225,5.4,0.225],
-  "props/planter":[-0.8,0,-0.602,0.8,0.708,0.598],
-  "props/shipping-container":[-3.008,0.042,-1.442,3.008,2.983,1.442],
-  "cars/delivery":[-1.2,0,-2.64,1.2,1.689,2.56,-1.04,1.689,-2.56,1.04,2.64,1.589],
-  "cars/hatchback-sports":[-1.105,0,-2.465,1.105,1.197,2.38,-1.105,1.197,-2.21,1.105,1.87,1.494],
-  "cars/police":[-1.262,0,-2.635,1.262,1.282,2.635,-1.275,1.282,-2.523,1.275,2.21,1.538],
-  "cars/sedan":[-1.275,0,-2.21,1.275,1.282,2.125,-1.275,1.282,-1.565,1.275,2.21,1.283],
-  "cars/suv":[-1.275,0,-2.295,1.275,1.37,2.295,-1.275,1.37,-2.295,1.275,2.21,1.081],
-  "cars/taxi":[-1.275,0,-2.38,1.275,1.377,2.295,-0.928,1.377,-1.43,0.928,2.55,1.075],
-  "cars/truck":[-1.275,0,-2.55,1.275,1.326,2.465,-1.275,1.326,-2.465,1.275,2.21,1.359],
-  "cars/van":[-1.275,0,-2.38,1.275,1.377,2.295,-1.275,1.377,-2.28,1.275,2.295,1.43],
-  "furniture/bookcaseClosed":[0,0,-0.55,0.88,1.87,0],
-  "furniture/cabinetTelevision":[0,0,-0.55,1.76,0.682,0],
-  "furniture/cardboardBoxClosed":[0,0,-0.468,0.468,0.618,0],
-  "furniture/chair":[0,0,-0.44,0.44,1.034,0],
-  "furniture/chairDesk":[0,0,-0.692,0.737,1.337,0],
-  "furniture/desk":[-0.022,0,-0.836,1.594,0.846,0.027],
-  "furniture/kitchenFridge":[0,0,-0.62,0.946,2.024,0.022],
-  "furniture/kitchenSink":[0,0,-0.99,0.946,1.078,0],
-  "furniture/kitchenStove":[0,0,-0.99,0.946,0.99,0],
-  "furniture/loungeSofa":[0,0,-0.902,2.156,1.012,0],
-  "furniture/pottedPlant":[-0.233,0,-0.266,0.233,1.439,0.266],
-  "furniture/sideTable":[-0.022,0,-0.462,1.154,0.846,0.022],
-  "furniture/stoolBar":[0,0,-0.506,0.584,0.957,0],
-  "furniture/table":[0,0,-0.984,1.851,0.719,0],
-  "furniture/tableCoffee":[-1.014,0,-0.66,0.44,0.506,0.22],
-  "furniture/trashcan":[-0.229,0,-0.246,0.229,0.941,0.269],
-  "walls/doorway":[0,0,-0.223,1.1,2.25,0.027],
-  "walls/doorwayFront":[0,0,-0.223,1.1,2.25,0.027],
-  "walls/doorwayOpen":[0,0,-0.196,0.1,2.25,0,1,0,-0.196,1.1,2.25,0,0.1,2.15,-0.196,1,2.25,0],
-  "walls/floorCorner":[0,0,-1.21,1.21,0.11,0],
-  "walls/floorCornerRound":[0,0,-1.21,1.21,0.11,0],
-  "walls/floorFull":[0,0,-2.2,2.2,0.11,0],
-  "walls/floorHalf":[0,0,-2.2,1.1,0.11,0],
-  "walls/paneling":[0,0,0,1.1,1.308,0.066],
-  "walls/wall":[0,0,-0.11,2.2,2.837,0],
-  "walls/wallCorner":[1.05,0,-1.21,1.35,2.837,-0.01,0,0,-0.16,1.05,2.837,0.14],
-  "walls/wallCornerRond":[1.05,0,-1.21,1.35,2.837,0.14,0,0,-0.16,1.05,2.837,0.14],
-  "walls/wallDoorway":[0,0,-0.153,0.7,2.9,0.043,1.55,0,-0.153,2.25,2.9,0.043,0.7,2.15,-0.153,1.55,2.9,0.043],
-  "walls/wallDoorwayWide":[0,2.15,-0.153,2.25,2.9,0.043,0,0,-0.153,0.2,2.15,0.043,2.05,0,-0.153,2.25,2.15,0.043],
-  "walls/wallHalf":[0,0,-0.11,1.1,2.837,0],
-  "walls/wallWindow":[0,0,-0.153,2.2,2.837,0.043],
-  "walls/wallWindowSlide":[0,0,-0.153,2.2,2.837,0.043]
+  "suburban/building-type-a": [-4.48,0,-2.552,-1.78,4.562,3.448,-1.78,0,-2.552,1.87,6.002,3.448,1.87,0,-2.552,4.52,4.562,3.448,-4.28,0,-3.702,-1.43,4.562,-2.602,1.52,0,-3.702,4.32,4.562,-2.602,1.42,0,-3.402,1.47,6.002,-2.602,-0.33,0,-2.652,-0.08,6.002,-2.602],
+  "suburban/building-type-c": [-4.531,0,-2.552,-1.831,3.823,3.448,-1.831,0,-2.552,1.819,7.442,3.448,1.819,0,-2.552,4.469,6.002,3.448,1.469,0,-3.702,4.269,6.002,-2.602,1.369,0,-3.402,1.419,7.442,-2.602,-0.381,0,-2.652,-0.081,7.442,-2.602],
+  "suburban/building-type-e": [-4.53,0,-2.551,4.52,8.19,3.449,-4.28,0,-3.701,-1.43,8.19,-2.601,1.52,0,-3.701,4.32,8.19,-2.601,1.42,0,-3.401,1.47,8.19,-2.601,-0.33,0,-2.651,-0.08,8.19,-2.601,-4.63,0,2.849,-4.58,8.19,2.999],
+  "suburban/building-type-g": [-5.02,0,-2.041,4.03,5.31,3.959,1.48,0,-3.691,4.73,5.31,-0.441,-4.82,0,-3.141,-1.97,1.8,-2.091,1.08,0,-2.891,5.08,5.31,-1.241,2.23,0,-4.041,3.93,1.8,-3.741,0.88,0,-2.391,5.28,5.31,-1.791,1.28,0,-3.241,4.93,5.31,-0.941,2.78,0,-4.241,3.43,1.8,-4.091,1.93,0,-3.891,4.28,5.31,-0.291],
+  "suburban/building-type-h": [-4.48,0,-2.998,4.52,5.31,3.052],
+  "suburban/building-type-i": [-4.531,0,-2.551,-1.831,3.823,3.449,-1.831,0,-2.551,4.469,5.31,3.449,-1.431,0,-3.701,1.369,5.31,-2.601,2.519,0,-2.651,2.769,5.31,-2.601],
+  "suburban/building-type-m": [-1.291,0,-3.941,4.909,5.31,4.859,-4.141,0,-1.141,-1.341,5.31,4.859,1.909,0,-5.141,4.709,5.31,-3.991,-5.141,0,-0.991,-4.191,1.8,1.859,-1.041,0,-4.091,0.359,5.31,-3.991,0.909,0,-4.041,4.809,5.31,-3.991,-1.341,0,4.859,-1.291,5.31,4.909],
+  "suburban/building-type-o": [-4.572,0,-2.551,-1.922,3.096,3.449,-1.922,0,-2.551,4.428,8.19,3.449,-1.472,0,-3.701,1.328,6.365,-2.601,2.878,0,-2.651,3.178,6.365,-2.601],
+  "suburban/building-type-p": [-1.564,0,-2.414,4.536,5.76,3.636,-1.364,0,-3.564,1.436,1.8,-2.464,-4.464,0,2.536,-3.414,6.12,3.636,-4.464,0,-2.464,-3.414,6.12,-1.414,2.986,0,-2.514,3.286,1.8,-2.464],
+  "suburban/building-type-q": [-1.514,0,-2.988,4.536,5.76,3.012,-2.664,0,-2.838,-1.564,3.24,0.012,-1.214,0,3.062,-0.814,6.019,3.412,-4.314,0,2.512,-4.064,3.24,2.812,-4.314,0,-2.738,-4.064,3.24,-2.488,2.536,0,3.062,2.836,1.8,3.112],
+  "commercial/building-a": [-4.802,0,-4.04,5.348,15.36,5.61,-0.802,0,-4.44,1.348,14.4,5.71,3.998,0,-4.44,5.248,15.36,5.71,-4.702,0,-4.44,-3.452,15.36,5.71,-3.402,0,5.66,3.948,15.36,5.71,-5.202,0,-3.79,-4.852,14.4,-3.29,2.298,0,-4.19,3.048,14.4,-4.09,-0.952,0,-4.19,1.498,15.36,-4.09,3.848,0,-4.24,5.348,15.36,-4.09,-4.802,0,-4.19,-3.302,15.36,-4.09],
+  "commercial/building-c": [-4.802,0,-3.39,5.348,10.56,6.51,-0.702,0,-6.44,3.948,1.8,-4.74,-0.702,0,-4.74,3.948,9.6,6.61,-0.952,0,-4.24,4.698,10.08,6.61,-4.602,0,-3.54,-2.252,10.56,6.61,-5.302,0,-2.94,-4.852,9.6,-2.34,-0.852,0,-6.04,4.098,2.125,-4.29,-0.252,0,-6.54,3.448,1.8,-6.49,-1.352,0,-3.64,5.248,10.56,6.61,4.748,0,-3.94,4.998,10.56,-3.69,4.148,0,-4.49,4.448,10.56,-4.29,-2.202,0,6.56,-1.402,10.56,6.61],
+  "commercial/building-e": [-9.84,0,-4.347,-0.24,5.76,5.503,-0.24,0,-4.347,9.91,10.56,5.503,5.76,0,-5.697,8.71,9.6,5.603,-8.89,0,-4.997,-5.44,5.28,6.103,-4.09,0,-4.997,-0.64,4.8,6.103,5.01,0,-4.997,9.41,9.6,5.603,-9.69,0,-4.597,-0.24,5.76,5.703,-0.24,0,-4.597,1.66,10.56,5.703,3.26,0,-4.597,9.81,10.56,5.603,4.06,0,-5.447,4.51,4.8,-5.047,5.36,0,-5.347,9.06,10.56,-5.047,0.36,0,-5.447,0.76,4.8,-5.047,1.71,0,-4.547,2.21,10.56,-4.397,2.56,0,5.553,3.01,10.56,5.653,-8.99,0,-4.747,-5.34,5.28,5.853,-4.19,0,-4.747,-0.54,4.8,5.853,4.86,0,-4.747,9.56,10.56,-4.647,5.66,0,-5.447,8.81,10.56,-5.397,5.26,0,-5.097,9.16,10.56,-5.047],
+  "commercial/building-f": [-5.04,0,-3.98,5.11,20.16,5.67,0.16,0,-6.13,4.71,1.8,-4.88,0.16,0,-4.88,4.71,20.16,5.77,-0.99,0,-4.48,4.96,20.16,5.77,-4.94,0,-4.38,-3.69,20.16,5.77,0.01,0,-5.78,4.86,4.8,-4.53,-3.64,0,5.72,-1.04,20.16,5.77,-2.74,0,-4.13,-1.99,20.16,-4.03,-1.19,0,-4.18,5.11,20.16,-4.03,-5.04,0,-4.18,-3.54,20.16,-4.03],
+  "commercial/building-h": [-4.802,0,-4.147,5.348,15.36,5.553,-1.402,0,-4.497,1.948,15.36,-4.197,-4.652,0,-4.547,-2.252,15.36,-4.197,3.398,0,-4.497,5.298,15.36,-4.197,-4.202,0,-5.447,-3.752,4.8,-5.047,4.348,0,-5.447,4.748,4.8,-5.047,-5.202,0,-3.847,-4.852,14.4,-3.347,-4.802,0,-4.297,2.098,15.36,-4.197,3.248,0,-4.247,3.348,15.36,-4.197],
+  "commercial/building-i": [-7.44,0,-6.912,7.51,19.68,7.488,-3.44,0,-7.312,-1.29,19.68,7.638,1.36,0,-7.312,3.51,19.68,7.638,-7.34,0,-7.312,-6.09,20.16,7.638,6.16,0,-7.312,7.41,20.16,7.638,0.16,0,7.538,6.11,20.16,7.638,-6.04,0,7.538,-0.79,20.16,7.638,-0.34,0,-7.062,0.41,20.16,-6.962,-3.59,0,-7.062,-1.14,20.16,-6.962,1.21,0,-7.062,3.66,20.16,-6.962,-7.44,0,-7.062,-5.94,20.16,-6.962,6.01,0,-7.062,7.51,20.16,-6.962],
+  "commercial/building-m": [-7.44,0,-7.052,7.51,34.2,7.348,-3.44,0,-7.452,-1.29,34.2,7.498,1.36,0,-7.452,3.51,34.2,7.498,-7.34,0,-7.452,-6.09,29.76,7.498,6.16,0,-7.452,7.41,29.76,7.498,-6.04,0,7.398,-0.79,29.76,7.498,0.86,0,7.398,6.11,29.76,7.498,-0.34,0,-7.202,0.41,29.76,-7.102,0.16,0,7.398,0.61,29.76,7.498,-3.59,0,-7.202,-1.14,29.76,-7.102,1.21,0,-7.202,3.66,29.76,-7.102,-7.44,0,-7.252,-5.94,29.76,-7.102,6.01,0,-7.202,7.51,29.76,-7.102],
+  "skyscraper/building-skyscraper-a": [-7.46,0,-6.11,7.49,33.6,7.34,2.24,0,-7.46,7.39,34.56,7.49,-7.36,0,-7.46,-2.21,34.56,7.49,-2.16,0,-6.36,-0.71,33.6,7.49,0.84,0,-6.36,2.19,33.6,7.49,-7.46,0,-7.21,-2.11,34.56,-6.16,2.14,0,-7.21,7.49,34.56,-6.16,0.19,0,7.39,0.59,34.56,7.54,-0.66,0,-6.26,-0.21,33.6,-6.16],
+  "skyscraper/building-skyscraper-b": [-7.46,0,-6.11,7.49,53.28,7.34,2.24,0,-7.46,7.39,53.76,7.49,-7.36,0,-7.46,-2.21,53.76,7.49,-2.16,0,-6.36,-0.71,52.8,7.49,0.84,0,-6.36,2.19,52.8,7.49,-7.46,0,-7.21,-2.11,53.76,-6.16,2.14,0,-7.21,7.49,53.76,-6.16,0.19,0,7.39,0.59,53.76,7.54,-0.66,0,-6.26,-0.21,52.8,-6.16],
+  "skyscraper/building-skyscraper-c": [-7.43,0,-5.227,7.47,44.16,8.023,-7.38,0,-6.427,-2.03,44.16,8.123,2.07,0,-6.427,7.42,44.16,8.123,-3.48,0,-6.777,-2.18,44.16,-6.477,6.12,0,-6.777,7.42,44.16,-6.477,-7.38,0,-6.777,-6.08,44.16,-6.477,2.22,0,-6.777,3.52,44.16,-6.477,-1.98,0,-5.577,-1.28,48,8.123,1.32,0,-5.577,2.02,43.2,8.123,-2.03,0,-7.727,-1.63,4.8,-7.327,1.67,0,-7.727,2.07,4.8,-7.327,0.17,0,8.073,1.27,44.16,8.173,-0.33,0,-5.327,0.42,43.2,-5.277,-1.23,0,8.073,-0.78,44.16,8.123,-7.43,0,-6.527,-5.93,44.16,-6.427,3.57,0,-6.527,3.67,44.16,-6.477,6.02,0,-6.527,7.47,44.16,-6.427,-1.23,0,-5.327,-1.13,43.2,-5.277,-3.58,0,-6.527,-3.53,44.16,-6.477,1.22,0,-5.327,1.27,43.2,-5.277],
+  "skyscraper/building-skyscraper-d": [-7.43,0,-5.227,7.47,62.4,8.023,-7.38,0,-6.427,-2.03,62.88,8.123,2.07,0,-6.427,7.42,63.36,8.123,-3.48,0,-6.777,-2.18,63.36,-6.477,6.12,0,-6.777,7.42,63.36,-6.477,-7.38,0,-6.777,-6.08,63.36,-6.477,2.22,0,-6.777,3.52,63.36,-6.477,-1.98,0,-5.577,-1.28,62.4,8.123,1.32,0,-5.577,2.02,62.4,8.123,-2.03,0,-7.727,-1.63,4.8,-7.327,1.67,0,-7.727,2.07,4.8,-7.327,0.17,0,8.073,1.27,63.36,8.173,-0.33,0,-5.327,0.42,62.4,-5.277,-1.23,0,8.073,-0.78,63.36,8.123,-7.43,0,-6.527,-5.93,63.36,-6.427,3.57,0,-6.527,3.67,63.36,-6.477,6.02,0,-6.527,7.47,63.36,-6.427,-1.23,0,-5.327,-1.13,62.4,-5.277,-3.58,0,-6.527,-3.53,63.36,-6.477,1.22,0,-5.327,1.27,62.4,-5.277],
+  "skyscraper/building-skyscraper-e": [-7.12,0,-7.052,7.83,48.48,7.348,-3.12,0,-7.452,-0.97,48,7.498,1.68,0,-7.452,3.83,48.48,7.498,-7.02,0,-7.452,-5.77,48.96,7.498,6.48,0,-7.452,7.73,48.96,7.498,-5.72,0,7.398,-0.47,48.96,7.498,1.18,0,7.398,6.43,48.96,7.498,-0.02,0,-7.202,0.73,48.96,-7.102,0.53,0,7.398,0.93,48.96,7.498,-3.27,0,-7.202,-0.82,48.96,-7.102,1.53,0,-7.202,3.98,48.96,-7.102,-7.12,0,-7.202,-5.62,48.96,-7.102,6.33,0,-7.202,7.83,48.96,-7.102],
+  "lowdetail/low-detail-building-a": [-3,0,-2.85,3.05,24,2.9,-2.85,0,-3,2.9,24,3.05],
+  "lowdetail/low-detail-building-b": [-3,0,-2.9,-1.8,12,2.95,-1.8,0,-2.9,1.85,23.4,2.95,1.85,0,-2.9,3.05,12,2.95,-2.9,0,-3,2.95,12,-1.8,-2.9,0,-1.8,2.95,23.4,1.85,-2.9,0,1.85,2.95,12,3.05],
+  "lowdetail/low-detail-building-g": [-2.5,0,-2.5,2.55,24,2.55,0.6,0,-2.95,3.05,24,-0.55,-2.95,0,0.6,-0.55,24,3.05,0.6,0,0.6,3,24,3.05,-2.95,0,-2.95,-0.55,24,-0.55],
+  "lowdetail/low-detail-building-h": [-3,0,-2.85,3.05,25.2,2.9,-2.85,0,-3,2.9,25.2,3.05],
+  "lowdetail/low-detail-building-wide-a": [-6,0,-2.85,6.05,13.2,2.9,-5.85,0,-3,5.9,13.2,3.05],
+  "props/barrier-traffic": [-0.778,0,-0.14,0.822,0.805,0.16,-0.728,0,-0.24,-0.578,0.805,0.26,0.622,0,-0.24,0.772,0.805,0.26],
+  "props/box-crate": [-0.465,0,-0.465,0.465,0.93,0.465],
+  "props/cone-traffic": [-0.286,0,-0.286,0.286,0.714,0.286],
+  "props/construction-barrier": [-0.472,0,-1.012,0.472,1.069,1.012],
+  "props/crate-yard": [-0.481,0,-0.481,0.481,0.95,0.481],
+  "props/dumpster": [-0.977,0,-0.518,0.977,1.592,0.518],
+  "props/fence-suburban": [-1.187,0,-0.187,1.187,1.35,0.187],
+  "props/grave-bench": [-0.726,0,-0.41,0.726,0.947,0.41],
+  "props/hydrant": [-0.257,0.001,-0.183,0.257,0.773,0.217],
+  "props/light-curved": [-0.225,0,-0.225,0.225,6.075,0.225],
+  "props/light-curved-double": [-0.225,0,-0.225,0.225,6.075,0.225],
+  "props/light-square": [-0.225,0,-0.225,0.225,5.4,0.225],
+  "props/planter": [-0.6,0,-0.402,0.65,0.708,0.448,-0.5,0,-0.502,0.55,0.708,0.548],
+  "props/shipping-container": [-3.008,0.042,-1.442,3.008,2.983,1.442],
+  "cars/delivery": [-1.05,0,-2.64,1.15,1.689,2.56,-1.2,0,1.26,1.25,1.689,1.46],
+  "cars/hatchback-sports": [-1.105,0,-2.365,1.145,1.197,2.335,-1.005,0,-2.465,1.045,1.197,2.435],
+  "cars/police": [-1.125,0,-2.585,1.175,1.282,2.415,-0.825,0,2.465,0.875,1.282,2.665,-1.275,0,0.965,1.325,1.282,1.265],
+  "cars/sedan": [-1.125,0,-2.16,1.175,1.282,2.14,-1.275,0,0.54,1.325,1.282,0.79],
+  "cars/suv": [-1.125,0,-1.995,1.175,1.37,2.305,-0.525,0,-2.295,0.575,1.37,-2.045,-1.275,0,0.705,1.325,1.37,0.955],
+  "cars/taxi": [-1.125,0,-2.33,1.175,1.377,2.32,-1.275,0,0.72,1.325,1.377,0.92],
+  "cars/truck": [-1.125,0,-2.5,1.175,1.326,2.5,-1.275,0,0.9,1.325,1.326,1.1],
+  "cars/van": [-1.125,0,-2.33,1.175,1.377,2.32,-1.275,0,0.87,1.325,1.377,1.12],
+  "furniture/bookcaseClosed": [0,0,-0.55,0.88,1.87,0],
+  "furniture/cabinetTelevision": [0,0,-0.55,1.76,0.682,0],
+  "furniture/cardboardBoxClosed": [0,0,-0.468,0.468,0.618,0],
+  "furniture/chair": [0,0,-0.44,0.44,1.034,0],
+  "furniture/chairDesk": [0,0,-0.692,0.737,1.337,0],
+  "furniture/desk": [-0.022,0,-0.836,1.594,0.846,0.027],
+  "furniture/kitchenFridge": [0,0,-0.62,0.946,2.024,0.022],
+  "furniture/kitchenSink": [0,0,-0.99,0.946,1.078,0],
+  "furniture/kitchenStove": [0,0,-0.99,0.946,0.99,0],
+  "furniture/loungeSofa": [0,0,-0.902,2.156,1.012,0],
+  "furniture/pottedPlant": [-0.233,0,-0.266,0.233,1.439,0.266],
+  "furniture/sideTable": [-0.022,0,-0.462,1.154,0.846,0.022],
+  "furniture/stoolBar": [0,0,-0.506,0.584,0.957,0],
+  "furniture/table": [0,0,-0.984,1.851,0.719,0],
+  "furniture/tableCoffee": [-1.014,0,-0.66,0.44,0.506,0.22],
+  "furniture/trashcan": [-0.229,0,-0.246,0.229,0.941,0.269],
+  "walls/doorway": [0,0,-0.223,1.1,2.25,0.027],
+  "walls/doorwayFront": [0,0,-0.223,1.1,2.25,0.027],
+  "walls/doorwayOpen": [0,0,-0.196,0.1,2.25,0,1,0,-0.196,1.1,2.25,0,0.1,2.15,-0.196,1,2.25,0],
+  "walls/floorCorner": [0,0,-1.21,1.21,0.11,0],
+  "walls/floorCornerRound": [0,0,-1.21,1.21,0.11,0],
+  "walls/floorFull": [0,0,-2.2,2.2,0.11,0],
+  "walls/floorHalf": [0,0,-2.2,1.1,0.11,0],
+  "walls/paneling": [0,0,0,1.1,1.308,0.066],
+  "walls/wall": [0,0,-0.11,2.2,2.837,0],
+  "walls/wallCorner": [1,0,-1.21,1.25,2.837,-0.01,0,0,-0.11,1,2.837,0.04],
+  "walls/wallCornerRond": [0,0,-0.21,1.25,2.837,0.04,1.1,0,-1.21,1.25,2.837,-0.26],
+  "walls/wallDoorway": [0,0,-0.153,0.7,2.9,0.043,1.55,0,-0.153,2.25,2.9,0.043,0.7,2.15,-0.153,1.55,2.9,0.043],
+  "walls/wallDoorwayWide": [0,2.15,-0.153,2.25,2.9,0.043,0,0,-0.153,0.2,2.15,0.043,2.05,0,-0.153,2.25,2.15,0.043],
+  "walls/wallHalf": [0,0,-0.11,1.1,2.837,0],
+  "walls/wallWindow": [0,0,-0.153,2.2,2.837,0.043],
+  "walls/wallWindowSlide": [0,0,-0.153,2.2,2.837,0.043]
 });
 
 /** Average colours of each building type's walls and roofs per palette variant, sampled offline from the GLB UVs in the shipped colormaps:
@@ -363,7 +364,9 @@ export function normaliseEntry(e, i) {
   if (!(k > 0) || !isFinite(k)) return { i, type: e.type, bad: "bad scale" };
   const R = resolveRotation(e.rot, e.ry);
   if (!isFinite(R.ry)) return { i, type: e.type, bad: "bad rotation" };
-  return { i, type: e.type, x, y, z, k, q: R.q, ry: R.ry, exact: R.exact, district: e.district == null ? null : String(e.district), palette: e.palette == null ? null : String(e.palette) };
+  let tint = null;                                     // Wave 7 polish: a car's paint (sRGB 0xrrggbb, or "#rrggbb"); read by the drawing only, never by a collider
+  if (e.tint !== undefined && e.tint !== null) { const v = typeof e.tint === "string" ? parseInt(e.tint.replace("#", ""), 16) : +e.tint; if (Number.isFinite(v)) tint = (v >>> 0) & 0xffffff; }
+  return { i, type: e.type, x, y, z, k, q: R.q, ry: R.ry, exact: R.exact, district: e.district == null ? null : String(e.district), palette: e.palette == null ? null : String(e.palette), tint };
 }
 
 /** Palette choice of one instance: spec = a theme name, a variant name, or nothing (-> the district's theme). Returns { key, variant, tint, id }.
@@ -532,8 +535,29 @@ export function createCityKit(env) {
     const m = new THREE.MeshStandardMaterial({ map: tex || null, roughness: 1, metalness: 0, side: double ? THREE.DoubleSide : THREE.FrontSide });
     m.color.setHex(tex ? pal.tint : 0xb4b8c4);
     m.name = "citykit:" + id;
+    if (pal.key === "car") installCarPaint(m);
     palMats.set(id, m);
     return m;
+  }
+  // Car paint (Wave 7 polish). The Kenney car palette paints every model in ONE saturated swatch (green sedans, red hatchbacks, ...), which in a street of 20 parked cars
+  // is a toy shop. Every car InstancedMesh carries an instance colour (white = untouched): where the texel is a saturated body swatch (HSV saturation > ~0.65) it is replaced
+  // by that colour scaled by the texel's own luminance (the swatch's light-to-dark gradient survives), while glass, tyres, greys, whites and the lamps' pale tones keep the
+  // texture. Same material, same program for every car in the kit: no extra draw call, one extra program variant (instancing colour) compiled in the warm frame.
+  function installCarPaint(m) {
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace("#include <color_fragment>", `
+#if defined( USE_COLOR ) && !defined( USE_COLOR_ALPHA )
+  if (vColor.r + vColor.g + vColor.b < 2.999) {
+    float cmx = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b)), cmn = min(diffuseColor.r, min(diffuseColor.g, diffuseColor.b));
+    float ksat = smoothstep(0.55, 0.75, (cmx - cmn) / max(cmx, 1e-4));
+    float klum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vColor * (0.45 + 1.3 * klum), ksat);
+  }
+#else
+  #include <color_fragment>
+#endif`);
+    };
+    m.customProgramCacheKey = () => "citykit-car-paint";
   }
   function boxMaterial() {
     if (!proxyMat) { proxyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }); proxyMat.name = "citykit:boxes"; }
@@ -725,7 +749,7 @@ export function createCityKit(env) {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(it);
     }
-    const M = new THREE.Matrix4(), _sc3 = new THREE.Vector3();
+    const M = new THREE.Matrix4(), _sc3 = new THREE.Vector3(), _carCol = new THREE.Color();
     for (const [key, list] of groups) {
       const type = list[0].type, r = glb.get(type), T = man.types[type], pal = list[0].pal;
       for (let pi = 0; pi < r.parts.length; pi++) {
@@ -744,6 +768,7 @@ export function createCityKit(env) {
           M.set(c * sc, 0, s * sc, it.x - c0[0],  0, sc, 0, it.y - c0[1],  -s * sc, 0, c * sc, it.z - c0[2],  0, 0, 0, 1);
           if (!part.identity) M.multiply(part.local);
           im.setMatrixAt(j, M);
+          if (T.kind === "car") { _carCol.setHex(it.tint == null ? 0xffffff : it.tint); im.setColorAt(j, _carCol); }
           sc3.copy(gs.center).applyMatrix4(M);
           const rr = gs.radius * M.getMaxScaleOnAxis();
           cen.push(sc3.x, sc3.y, sc3.z, rr);
@@ -757,6 +782,7 @@ export function createCityKit(env) {
         for (let j = 0; j < cen.length; j += 4) br = Math.max(br, Math.hypot(cen[j] - bcx, cen[j + 1] - bcy, cen[j + 2] - bcz) + cen[j + 3]);
         im.instanceMatrix.needsUpdate = true;
         if (im.instanceMatrix.setUsage) im.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+        if (im.instanceColor) { im.instanceColor.needsUpdate = true; if (im.instanceColor.setUsage) im.instanceColor.setUsage(THREE.StaticDrawUsage); }
         im.castShadow = casts(type);
         im.receiveShadow = true;
         im.userData.kitDistrict = id; im.userData.kitType = type;

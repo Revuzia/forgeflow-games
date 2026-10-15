@@ -27,13 +27,26 @@ WHAT A GLB IS (the contract the next wave codes against)
     that scale; for another scale multiply them by newScale / suggested_scale).
   * doubleSided stays as authored (Kenney = true, Quaternius / furniture = false); the shells are not watertight.
 
-COLLIDERS  baked from the geometry (see footprint_colliders): triangles are clipped to a body band (0.3-1.7 m), projected
-           to the ground plane, the enclosed area is filled (so a hollow shell is solid and a porch/awning above the
-           band is NOT), and the mask is cut into a few maximal axis-aligned rectangles. Height of each box = the 75th
-           percentile of the roof height under it. They are built from the manifest, not from the GLB, so they exist
-           whether or not the GLB loads (the maps.js pattern that drops colliders on a failed load is the thing to avoid).
+COLLIDERS  baked from the geometry, as exact axis-aligned boxes, and judged against the DRAWN mesh by _harness/probe_kitcollide.js (Wave 7, lane 7E):
+             poke-out  (the drawn solid reaching outside the boxes at body height)  <= 0.10 m for EVERY type,
+             phantom   (the boxes reaching outside the drawn solid)                 <= 0.25 m for EVERY type.
+           Body band = feet+0.3 .. feet+1.8 m (below: a step, the mover climbs 0.55 m; above: clears the 1.8 m capsule). Mode "footprint" (buildings) and "bands"
+           (cars): the triangles clipped to the band are projected to the ground (0.05 m cells), the enclosed area is filled (a hollow shell is solid, a porch roof
+           or awning inside the band is solid, one above 1.8 m is NOT), and the mask is covered by a few maximal axis-aligned rectangles: each rectangle lies
+           inside the solid grown by 0.15 m (so a box never stands more than 0.15 m off the drawn mesh), together they cover every part of the solid that is
+           thicker than 0.10 m (so nothing visible is more than 0.10 m outside them), and each is cut back to the cells it is needed for. A column or a
+           porch post three metres from the wall gets its own small box; a chamfered corner gets a plus-shaped pair instead of one box with a 0.28 m phantom
+           corner. Height of each box = the 75th percentile of the roof height under it (>= 1.8 m), split at a real roof-height step. Modes "bbox", "pole" and
+           "elevation" are unchanged. They are built from the manifest, not from the GLB, so they exist whether or not the GLB loads (the maps.js pattern
+           that drops colliders on a failed load is the thing to avoid).
 
-USAGE   python games/last-circle/_tools/art_b_city.py [--only SUBSTR] [--scratch DIR] [--no-plots]
+USAGE   python games/last-circle/_tools/art_b_city.py [--only SUBSTR] [--scratch DIR] [--no-plots] [--skip-pack] [--out-root DIR] [--colliders-only]
+          --colliders-only   recompute only the colliders / collider_mode / collider_info (+ the manifest readme) into the existing manifest: ~1 min, no GLB, palette or
+                             plot is written, every other byte of the manifest is kept. The full run and this one write the SAME manifest bytes (checked 2026-10-14).
+          --out-root DIR     write assets/props/{city,cars} under DIR instead of the game directory (reproducibility checks: the full run into an empty DIR reproduces the
+                             manifest and every GLB / PNG of the game directory byte for byte).
+        After a run: node runtime/3d/royale/citykit.selftest.cjs --emit-table (the embedded COLLIDER_BOXES of citykit.js), then
+        python _harness/kitcollide.py (poke-out / phantom of all 81 types against the drawn mesh) and node runtime/3d/royale/citykit.selftest.cjs.
 Exit codes: 0 ok, 1 an assertion failed, 2 environment problem (source / gltf-transform / node missing).
 """
 from __future__ import annotations
@@ -114,11 +127,11 @@ P = [   # street / yard props
     ("props", "props/cone-traffic.glb", "cone-traffic", "car", 1.2, "cone", "bbox"),
     ("props", "props/box-crate.glb", "box-crate", "car", 1.3, "crate", "bbox"),
     ("props", "props/fence-suburban.glb", "fence-suburban", "suburban", 5.0, "fence", "bbox"),
-    ("props", "props/planter.glb", "planter", "suburban", 4.0, "planter", "bbox"),
+    ("props", "props/planter.glb", "planter", "suburban", 4.0, "planter", "footprint"),
     ("props", "props/grave-bench.glb", "grave-bench", "graveyard", 1.8, "bench", "bbox"),
     ("props", "props/hydrant-quaternius.glb", "hydrant", "quaternius_atlas", 1.0, "hydrant", "bbox"),
     ("props", "props/dumpster-quaternius.glb", "dumpster", None, 0.8, "dumpster", "bbox"),
-    ("props", "props/barrier-traffic-quaternius.glb", "barrier-traffic", "quaternius_atlas", 1.0, "barrier", "bbox"),
+    ("props", "props/barrier-traffic-quaternius.glb", "barrier-traffic", "quaternius_atlas", 1.0, "barrier", "footprint"),
     ("props", "props/crate-quaternius.glb", "crate-yard", None, 6.0, "crate", "bbox"),
     ("props", "props/shipping-container-quaternius.glb", "shipping-container", None, 1.38, "container", "bbox"),
 ]
@@ -128,6 +141,18 @@ FURN = ["bookcaseClosed", "cabinetTelevision", "chair", "chairDesk", "desk", "ki
         "loungeSofa", "tableCoffee", "table", "sideTable", "pottedPlant", "trashcan", "cardboardBoxClosed", "stoolBar"]
 WALLS = ["doorway", "doorwayFront", "doorwayOpen", "floorCorner", "floorCornerRound", "floorFull", "floorHalf", "paneling",
          "wall", "wallCorner", "wallCornerRond", "wallDoorway", "wallDoorwayWide", "wallHalf", "wallWindow", "wallWindowSlide"]
+README = [
+        "Geometry-only GLBs. Palette-textured types: assign ONE shared THREE.Texture per palette (palettes[<key>].file, relative to this manifest): tex.flipY=false, tex.colorSpace=SRGBColorSpace, magFilter=NearestFilter, minFilter=NearestMipmapNearestFilter for the Kenney city palettes.",
+        "Needs GLTFLoader.setMeshoptDecoder(MeshoptDecoder) (assets/vendor/three/examples/jsm/libs/meshopt_decoder.module.js).",
+        "POSITION is float32 (no KHR_mesh_quantization transform on the node): geometry can be instanced or baked directly. NORMAL decodes to int8 normalised, TEXCOORD_0 to uint16 normalised.",
+        "Origin = footprint centre at ground, authored front = +Z. Multiply native units by suggested_scale for metres. bbox_m / colliders are in metres at suggested_scale (for another scale multiply by newScale/suggested_scale).",
+        "colliders: axis-aligned boxes {min,max}, local metres, fitted to the geometry that is DRAWN between feet+0.3 m and feet+1.8 m (art_b_city.py; judged by _harness/probe_kitcollide.js: nothing drawn at body height more than 0.10 m outside the boxes, no box edge more than 0.25 m off the drawn mesh). A porch roof or awning above 1.8 m is not a collider, a column or pilaster is. Build them from this manifest whether or not the GLB loads.",
+        "Palette variants (palettes[key].variants): recoloured copies of the colormap (suburban: roof slate/brick/sand; commercial: roof + facade slate/brick/sand). Swap the shared texture, not the GLB.",
+        "Cars have no roof palette variants (no roofs); front = +Z; collider boxes in two layers (body up to the beltline, cabin above it).",
+        "The suburban and commercial kits both name their texture Textures/colormap.png but the two colormaps DIFFER: never share one THREE.Texture between them (one shared Texture per palette key).",
+        "districts: suggested type lists for the Savanna pilot (downtown, suburb, warehouse_yard, far_skyline, street, parking, interior_kit).",
+]
+
 KIT_SCALE = 2.2   # furniture + walls share one grid: a 1.0 wall module = 2.2 m
 
 
@@ -210,8 +235,14 @@ def clean_prims(g, c) -> list[Prim]:
 
 
 # ───────────────────────────── colliders ─────────────────────────────
-CELL = 0.15          # metres per grid cell
-BAND = (0.30, 1.70)  # body band, metres at suggested scale
+BAND = (0.30, 1.80)  # body band, metres at suggested scale: lower = a step (the mover climbs 0.55 m), higher = clears a 1.8 m capsule
+CELL = 0.05          # metres per grid cell of the fit
+CLOSE_CELLS = 2      # a gap in the wall outline narrower than 2 x 2 cells (0.2 m) does not open a hollow shell to the outside
+OPEN_CELLS = 0       # 0: every cell of the drawn solid must be covered; n > 0: a feature thinner than 2n cells (0.10 m for 1) may stay uncovered
+ALLOW = 0.12         # a box may stand this far (m, plus a cell) off the drawn solid (the phantom bar is 0.25 m)
+POKE_OK = 0.05       # raster estimate (m) a 1- or 2-box cover must stay under (the probe's bar is 0.10 m; the estimate is good to half a cell)
+PHANTOM_OK = 0.16    # raster estimate (m) of the farthest exposed box edge from the mesh, corner slack included (the probe's bar is 0.25 m)
+MAX_BOXES = 24       # per layer
 
 
 def tri_world(prims, scale):
@@ -271,14 +302,14 @@ def band_mask(tris, grid, lo, hi):
     return m
 
 
-def fill_enclosed(wall: np.ndarray) -> np.ndarray:
-    d = cv2.dilate(wall, np.ones((3, 3), np.uint8), iterations=1)
+def fill_enclosed(wall: np.ndarray, k: int = 1) -> np.ndarray:
+    d = cv2.dilate(wall, np.ones((3, 3), np.uint8), iterations=k)
     free = d == 0
     lab, n = ndimage.label(free)
     border = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
     outside = np.isin(lab, border[border > 0])
     solid = (~outside).astype(np.uint8)
-    return cv2.erode(solid, np.ones((3, 3), np.uint8), iterations=1).astype(bool)
+    return cv2.erode(solid, np.ones((3, 3), np.uint8), iterations=k).astype(bool)
 
 
 def heightfield(tris, grid):
@@ -327,9 +358,10 @@ def decompose(solid: np.ndarray, max_boxes: int, min_frac: float):
 
 def split_by_height(rect, top, solid, depth=0, max_depth=2):
     """Split a footprint rectangle at a real roof-height STEP (a lower wing next to a tall block). A gabled roof changes
-    height gradually (tiny jump per 15 cm cell) and is never split; a step is a single-cell jump >= max(1.2 m, 18 %)."""
+    height gradually (a few cm per cell) and is never split; a step is a single-cell jump >= max(1.2 m, 18 %)."""
+    cell = CELL
     r0, c0, r1, c1 = rect
-    if (r1 - r0) * (c1 - c0) * CELL * CELL < 12.0:     # a small bump is not worth two boxes
+    if (r1 - r0) * (c1 - c0) * cell * cell < 12.0:     # a small bump is not worth two boxes
         return [rect]
     sub = np.where(solid[r0:r1, c0:c1] & (top[r0:r1, c0:c1] > 0), top[r0:r1, c0:c1], np.nan)
     best = None
@@ -340,7 +372,7 @@ def split_by_height(rect, top, solid, depth=0, max_depth=2):
                 warnings.simplefilter("ignore")
                 prof = np.nanmedian(sub, axis=0 if axis == 0 else 1)
         ok = ~np.isnan(prof)
-        if ok.sum() < 6:
+        if ok.sum() < round(0.9 / cell):
             continue
         pf = np.where(ok, prof, np.nan)
         jumps = np.abs(np.diff(pf))
@@ -348,7 +380,7 @@ def split_by_height(rect, top, solid, depth=0, max_depth=2):
             continue
         i = int(np.nanargmax(jumps))
         n = len(prof)
-        if i + 1 < 8 or n - (i + 1) < 8:           # each part at least 1.2 m wide
+        if i + 1 < round(1.2 / cell) or n - (i + 1) < round(1.2 / cell):           # each part at least 1.2 m wide
             continue
         if jumps[i] >= max(1.2, 0.18 * float(np.nanmax(pf))) and (best is None or jumps[i] > best[0]):
             best = (float(jumps[i]), axis, i + 1)
@@ -365,24 +397,136 @@ def split_by_height(rect, top, solid, depth=0, max_depth=2):
     return out
 
 
-def footprint_colliders(prims, scale, max_boxes=4):
-    tris = tri_world(prims, scale)
-    grid = Grid(tris, CELL)
-    wall = band_mask(tris, grid, *BAND)
-    solid = fill_enclosed(wall)
-    top = heightfield(tris, grid)
-    rects, cov = decompose(solid, max_boxes, 0.03)
-    split = []
-    for r in rects:
-        split += split_by_height(r, top, solid)
+def best_rect(allowed: np.ndarray, uncovered: np.ndarray):
+    """The rectangle inside `allowed` (every cell True) that covers the most `uncovered` cells; ties -> the smaller one.
+    Enumerates the maximal rectangles of the histogram stack (as max_rect does) and scores each from an integral image.
+    -> (score, area, r0, c0, r1, c1) with exclusive r1 / c1; score 0 when nothing is left to cover."""
+    H, W = allowed.shape
+    ii = np.zeros((H + 1, W + 1), np.int32)
+    ii[1:, 1:] = uncovered.astype(np.int32).cumsum(0).cumsum(1)
+    heights = np.zeros(W, np.int32)
+    best = (0, 1 << 60, 0, 0, 0, 0)
+    for r in range(H):
+        heights = np.where(allowed[r], heights + 1, 0)
+        hl = heights.tolist()
+        stack: list = []
+        for c in range(W + 1):
+            cur = hl[c] if c < W else 0
+            start = c
+            while stack and stack[-1][1] >= cur:
+                s, hh = stack.pop()
+                if hh:
+                    r0 = r - hh + 1
+                    sc = int(ii[r + 1, c] - ii[r0, c] - ii[r + 1, s] + ii[r0, s])
+                    area = hh * (c - s)
+                    if sc > best[0] or (sc == best[0] and sc > 0 and area < best[1]):
+                        best = (sc, area, r0, s, r + 1, c)
+                start = s
+            stack.append((start, cur))
+    return best
+
+
+def cover_mask(rects, shape) -> np.ndarray:
+    m = np.zeros(shape, bool)
+    for r0, c0, r1, c1 in rects:
+        m[r0:r1, c0:c1] = True
+    return m
+
+
+def cover_error(cov: np.ndarray, need: np.ndarray, dS: np.ndarray):
+    """Raster estimate of how a cover stands to the drawn solid, in metres: (poke, phantom). poke = the farthest cell of `need` from the cover; phantom = the
+    farthest cell on the exposed boundary of the cover from the solid (dS = distance of every cell to it) plus the 0.06 m a box CORNER stands past a cell centre
+    and the raster is conservative (measured against the probe: the probe reads about this estimate, never more than 0.01 m above it)."""
+    poke = float(ndimage.distance_transform_edt(~cov)[need].max()) * CELL if need.any() else 0.0
+    edge = cov & ~ndimage.binary_erosion(cov, structure=ndimage.generate_binary_structure(2, 1), border_value=0)
+    phantom = float(dS[edge].max()) + 0.06 if edge.any() else 0.0
+    return poke, phantom
+
+
+def fit_rects(solid: np.ndarray, max_boxes: int = MAX_BOXES, pre=None):
+    """Cover the drawn solid (the filled band projection) with few axis-aligned rectangles so that nothing drawn is more than POKE_OK outside them and no box edge
+    stands more than ALLOW (+ a cell) off the mesh. `pre` = rectangles of lower layers that already stand (a cell within POKE_OK of them needs no box: the mirrors
+    of a car are within a hand of its door line). Fewest boxes first:
+      1 box   the bounding box of what is left (a post, a plain block);
+      2 boxes a plus: the bounding box with a notch cut out of each of its four corners (a chamfered or rounded building / car corner), the notch searched on a
+              5 cm grid, smallest first;
+      n boxes the greedy exact cover: the rectangle inside `allowed` (= the solid grown by ALLOW) that covers the most cells that are still more than POKE_OK from
+              every box, cut back to the bounding box of those cells (tight against the mesh, never reaching into the slack), until nothing is left. A facade with
+              0.5 m pilasters needs a box per pilaster: no single face is within 0.10 m of both the pilaster tip and the recess behind it.
+    Boxes wholly inside the union of the others are dropped. -> (rects [(r0, c0, r1, c1)], uncovered cells, cells that needed covering)"""
+    dS = ndimage.distance_transform_edt(~solid) * CELL
+    allowed = dS <= ALLOW
+    cov0 = cover_mask(pre or [], solid.shape)
+    need = solid & ((ndimage.distance_transform_edt(~cov0) * CELL > POKE_OK) if cov0.any() else True)
+    total = int(need.sum())
+    if total == 0:
+        return [], 0, 0
+    rr, cc = np.nonzero(need)
+    r0, r1, c0, c1 = int(rr.min()), int(rr.max()) + 1, int(cc.min()), int(cc.max()) + 1
+    one = [(r0, c0, r1, c1)]
+    p1, f1 = cover_error(cov0 | cover_mask(one, solid.shape), need, dS)
+    if p1 <= POKE_OK and f1 <= PHANTOM_OK:
+        return one, 0, total
+    if max_boxes >= 2:
+        best = None
+        for ix in range(1, 11):
+            for iz in range(1, 11):
+                if 2 * ix >= c1 - c0 or 2 * iz >= r1 - r0:
+                    continue
+                cross = [(r0 + iz, c0, r1 - iz, c1), (r0, c0 + ix, r1, c1 - ix)]
+                p2, f2 = cover_error(cov0 | cover_mask(cross, solid.shape), need, dS)
+                if p2 <= POKE_OK and f2 <= PHANTOM_OK and (best is None or (ix + iz) < best[0]):
+                    best = (ix + iz, cross)
+        if best:
+            return best[1], 0, total
+    rects: list = []
+    unc = need.copy()
+    while len(rects) < max_boxes and unc.any():
+        sc, _, a0, b0, a1, b1 = best_rect(allowed, unc)
+        if sc == 0:
+            break
+        rr2, cc2 = np.nonzero(unc[a0:a1, b0:b1])
+        rects.append((a0 + int(rr2.min()), b0 + int(cc2.min()), a0 + int(rr2.max()) + 1, b0 + int(cc2.max()) + 1))
+        cov = cov0 | cover_mask(rects, solid.shape)
+        unc = need & (ndimage.distance_transform_edt(~cov) * CELL > POKE_OK)
+    # drop a rectangle wholly covered by the others (smallest first)
+    cover = np.zeros(solid.shape, np.int16)
+    for q in rects:
+        cover[q[0]:q[2], q[1]:q[3]] += 1
+    for q in sorted(rects, key=lambda q: (q[2] - q[0]) * (q[3] - q[1])):
+        if (cover[q[0]:q[2], q[1]:q[3]] >= 2).all():
+            rects.remove(q)
+            cover[q[0]:q[2], q[1]:q[3]] -= 1
+    return rects, int(unc.sum()), total
+
+
+def rect_boxes(rects, grid, top, solid, y0=None, y1=None, floor=None):
+    """grid rectangles -> boxes [x0, y0, z0, x1, y1, z1] in metres. y0 / y1 None: ground to the 75th percentile of the roof height under the
+    rectangle (at least the top of the body band), split at a real roof-height step; given: that layer (cars)."""
     boxes = []
-    for r0, c0, r1, c1 in split:
-        x0, z0, x1, z1 = grid.to_world(c0, r0, c1, r1)
-        hv = top[r0:r1, c0:c1]
-        hv = hv[hv > 0]
-        h = float(np.percentile(hv, 75)) if len(hv) else BAND[1]
-        boxes.append([round(x0, 3), 0.0, round(z0, 3), round(x1, 3), round(max(h, BAND[1]), 3), round(z1, 3)])
-    return boxes, dict(coverage=round(cov, 3), height_splits=len(split) - len(rects)), (grid, wall, solid, top)
+    for rect in rects:
+        parts = split_by_height(rect, top, solid) if y1 is None else [rect]
+        for r0, c0, r1, c1 in parts:
+            x0, z0, x1, z1 = grid.to_world(c0, r0, c1, r1)
+            if y1 is None:
+                hv = top[r0:r1, c0:c1]
+                hv = hv[hv > 0]
+                h = max(float(np.percentile(hv, 75)) if len(hv) else BAND[1], BAND[1] if floor is None else floor)
+                boxes.append([round(x0, 3), 0.0, round(z0, 3), round(x1, 3), round(h, 3), round(z1, 3)])
+            else:
+                boxes.append([round(x0, 3), round(y0, 3), round(z0, 3), round(x1, 3), round(y1, 3), round(z1, 3)])
+    return boxes
+
+
+def footprint_colliders(prims, scale, max_boxes=MAX_BOXES):
+    tris = tri_world(prims, scale)
+    grid = Grid(tris, CELL, margin=8)
+    wall = band_mask(tris, grid, *BAND)
+    solid = fill_enclosed(wall, CLOSE_CELLS)
+    top = heightfield(tris, grid)
+    rects, left, total = fit_rects(solid, max_boxes)
+    boxes = rect_boxes(rects, grid, top, solid, floor=min(BAND[1], float(tris[..., 1].max())))      # a 0.7 m planter gets a 0.7 m box, not a 1.8 m one
+    return boxes, dict(coverage=round(1 - left / max(total, 1), 3), height_splits=len(boxes) - len(rects)), (grid, wall, solid, top)
 
 
 def bbox_collider(prims, scale, min_dim=0.0):
@@ -413,8 +557,9 @@ def pole_colliders(prims, scale):
 
 
 def band_colliders(prims, scale):
-    """Cars: a low body box and a narrower cabin box. The split is the lowest height at which the geometry above it is
-    <= 80 % of the full length (the cabin without the hood / trunk); a van or box truck never gets there and keeps one tall box."""
+    """Cars: a low body layer and a narrower cabin layer, each fitted like a building footprint (the body box has round-cornered phantom corners cut away
+    by the plus-shaped cover). The split is the lowest height at which the geometry above it is <= 80 % of the full length (the cabin without the hood /
+    trunk); a van or box truck never gets there and splits at half height. Body boxes stand on the ground up to the split, cabin boxes from the split to the roof."""
     tris = tri_world(prims, scale)
     ymax = float(tris[..., 1].max())
 
@@ -422,8 +567,7 @@ def band_colliders(prims, scale):
         pts = [q for q in (clip_y(t, lo, hi) for t in tris if t[:, 1].max() >= lo and t[:, 1].min() <= hi) if len(q)]
         if not pts:
             return None
-        P = np.concatenate(pts)
-        return P
+        return np.concatenate(pts)
 
     full = extent(0.25, ymax)
     full_len = float(full[:, 2].max() - full[:, 2].min())
@@ -436,13 +580,17 @@ def band_colliders(prims, scale):
             break
     if split is None:
         split = round(0.5 * ymax, 3)
-    boxes = []
-    for lo, hi, y0, y1 in ((0.25, split - 0.02, 0.0, split), (split + 0.02, ymax, split, ymax)):
-        P = extent(lo, hi)
-        if P is None:
-            continue
-        boxes.append([round(float(P[:, 0].min()), 3), y0, round(float(P[:, 2].min()), 3), round(float(P[:, 0].max()), 3), round(y1, 3), round(float(P[:, 2].max()), 3)])
-    return boxes
+    grid = Grid(tris, CELL, margin=8)
+    boxes, left, total, below = [], 0, 0, []
+    for lo, hi, y0, y1 in ((BAND[0], split, 0.0, split), (split, ymax, split, ymax)):
+        wall = band_mask(tris, grid, lo, hi)
+        solid = fill_enclosed(wall, CLOSE_CELLS)
+        rects, l, tot = fit_rects(solid, MAX_BOXES, pre=below)
+        below = below + rects
+        boxes += rect_boxes(rects, grid, None, solid, y0, y1)
+        left += l
+        total += tot
+    return boxes, dict(coverage=round(1 - left / max(total, 1), 3), split=split)
 
 
 def elevation_colliders(prims, scale, cell=0.05, max_boxes=4):
@@ -479,7 +627,7 @@ def make_colliders(c, prims):
     elif c["mode"] == "pole":
         boxes = pole_colliders(prims, sc)
     elif c["mode"] == "bands":
-        boxes = band_colliders(prims, sc)
+        boxes, info = band_colliders(prims, sc)
     elif c["mode"] == "elevation":
         boxes, info = elevation_colliders(prims, sc)
     else:
@@ -574,6 +722,28 @@ def plot_group(group: str, items: list, path: Path) -> None:
     plt.close(fig)
 
 
+def colliders_only(cat) -> int:
+    """Recompute ONLY the colliders (boxes, mode, info) from the source models and rewrite them into the existing manifest. Nothing else is written
+    (no GLB, palette or plot) and every other byte of the manifest is kept, so the output is a pure function of (source models, this file, the manifest)."""
+    mpath = OUT / "manifest.json"
+    manifest = json.loads(mpath.read_text(encoding="utf-8"))
+    types = manifest["types"]
+    for c in cat:
+        if c["id"] not in types:
+            print("FAIL", c["id"], "is not in the existing manifest (run the full intake first)")
+            return 1
+        boxes, info, _ = make_colliders(c, clean_prims(read_glb(c["src"]), c))
+        t = types[c["id"]]
+        t["colliders"] = [{"min": b[:3], "max": b[3:]} for b in boxes]
+        t["collider_mode"] = c["mode"]
+        t["collider_info"] = info
+        print("%-34s %-9s %d box%s %s" % (c["id"], c["mode"], len(boxes), "" if len(boxes) == 1 else "es", info))
+    manifest["readme"] = README
+    mpath.write_text(json.dumps(manifest, separators=(",", ":")), encoding="utf-8")
+    print("\ncolliders ->", mpath, "(%d types, %d boxes)" % (len(types), sum(len(v["colliders"]) for v in types.values())))
+    return 0
+
+
 # ───────────────────────────── main ─────────────────────────────
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -581,7 +751,15 @@ def main() -> int:
     ap.add_argument("--scratch", default=str(DEFAULT_SCRATCH))
     ap.add_argument("--no-plots", action="store_true")
     ap.add_argument("--skip-pack", action="store_true", help="reuse the GLBs already on disk (collider / manifest iteration)")
+    ap.add_argument("--out-root", default=None, help="write assets/props/{city,cars} under this directory instead of the game directory (reproducibility checks)")
+    ap.add_argument("--colliders-only", action="store_true",
+                    help="recompute ONLY colliders / collider_mode / collider_info from the source models and rewrite them into the existing manifest "
+                         "(no GLB, palette or plot is written; every other byte of the manifest is kept)")
     args = ap.parse_args()
+    global OUT, OUT_CARS
+    if args.out_root:
+        OUT = Path(args.out_root) / "assets" / "props" / "city"
+        OUT_CARS = Path(args.out_root) / "assets" / "props" / "cars"
     scratch = Path(args.scratch)
     try:
         cli = cli_dir()
@@ -594,6 +772,8 @@ def main() -> int:
     cat = catalogue()
     if args.only:
         cat = [c for c in cat if args.only in c["id"]]
+    if args.colliders_only:
+        return colliders_only(cat)
     t0 = time.time()
     palettes = build_palettes(catalogue())
     types = {}
@@ -666,17 +846,7 @@ def main() -> int:
         "version": 1,
         "generated_by": "games/last-circle/_tools/art_b_city.py",
         "licence": "CC0 throughout: Kenney City Kit Suburban / Commercial / Roads, Car Kit, Furniture Kit, Graveyard Kit; Quaternius props (Poly Pizza). See CREDITS.md.",
-        "readme": [
-            "Geometry-only GLBs. Palette-textured types: assign ONE shared THREE.Texture per palette (palettes[<key>].file, relative to this manifest): tex.flipY=false, tex.colorSpace=SRGBColorSpace, magFilter=NearestFilter, minFilter=NearestMipmapNearestFilter for the Kenney city palettes.",
-            "Needs GLTFLoader.setMeshoptDecoder(MeshoptDecoder) (assets/vendor/three/examples/jsm/libs/meshopt_decoder.module.js).",
-            "POSITION is float32 (no KHR_mesh_quantization transform on the node): geometry can be instanced or baked directly. NORMAL decodes to int8 normalised, TEXCOORD_0 to uint16 normalised.",
-            "Origin = footprint centre at ground, authored front = +Z. Multiply native units by suggested_scale for metres. bbox_m / colliders are in metres at suggested_scale (for another scale multiply by newScale/suggested_scale).",
-            "colliders: axis-aligned boxes {min,max}, local metres, body footprint (porches/awnings above 1.7 m excluded), baked from the geometry (art_b_city.py). Build them from this manifest whether or not the GLB loads.",
-            "Palette variants (palettes[key].variants): recoloured copies of the colormap (suburban: roof slate/brick/sand; commercial: roof + facade slate/brick/sand). Swap the shared texture, not the GLB.",
-            "Cars have no roof palette variants (no roofs); front = +Z; two collider boxes (body + cabin).",
-            "The suburban and commercial kits both name their texture Textures/colormap.png but the two colormaps DIFFER: never share one THREE.Texture between them (one shared Texture per palette key).",
-            "districts: suggested type lists for the Savanna pilot (downtown, suburb, warehouse_yard, far_skyline, street, parking, interior_kit).",
-        ],
+        "readme": README,
         "districts": {
             "downtown": [k for k in sorted_types if k.startswith("skyscraper/")] + ["commercial/building-i", "commercial/building-m", "commercial/building-f", "commercial/building-a", "commercial/building-h"],
             "suburb": [k for k in sorted_types if k.startswith("suburban/")],

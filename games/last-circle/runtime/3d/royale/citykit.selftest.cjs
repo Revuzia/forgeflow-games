@@ -56,7 +56,7 @@ function refBox(b, q, k, x, y, z) {
   ok(drift.length === 0, "the embedded collider table equals manifest.json EXACTLY (every box, every number)" + (drift.length ? " - run: node citykit.selftest.cjs --emit-table" : ""), drift.slice(0, 5));
   const modes = {};
   for (const id of mIds) modes[manifest.types[id].collider_mode] = (modes[manifest.types[id].collider_mode] || 0) + 1;
-  ok(modes.footprint === 29 && modes.bbox === 36 && modes.bands === 8 && modes.elevation === 5 && modes.pole === 3, "collider modes: footprint 29, bbox 36, bands 8, elevation 5, pole 3", modes);
+  ok(modes.footprint === 31 && modes.bbox === 34 && modes.bands === 8 && modes.elevation === 5 && modes.pole === 3, "collider modes (the intake re-run of Wave 7, art_b_city.py: two more footprint-baked types): footprint 31, bbox 34, bands 8, elevation 5, pole 3", modes);
 
   // ---------------------------------------------------------------- mkCollider contract (maps.js:228)
   const mk = K.mkCollider("box", 1, 2, 3, 4, 5, 6, -1, null, -1, 0);
@@ -207,6 +207,7 @@ function refBox(b, q, k, x, y, z) {
   ok(throws(() => K.colliderFor("nope/none", 0, 0, 0, 0)) && throws(() => K.colliderFor("cars/sedan", NaN, 0, 0, 0)) && throws(() => K.colliderFor("cars/sedan", 0, 0, 0, 0, -1)) && throws(() => K.localBoxes("x")), "colliderFor / localBoxes throw on an unknown type, a non-finite position or a bad scale");
   const NE = K.normaliseEntry;
   ok(NE({ type: "cars/sedan", x: 1, y: 2, z: 3, rot: 2, district: "d" }, 5).q === 2 && NE({ type: "cars/sedan", x: 1, y: 2, z: 3 }, 0).k === 1 && NE({ type: "cars/sedan", x: 1, y: 2, z: 3, scale: 1.2 }, 0).k === 1.2, "normaliseEntry: rot, scale default, district");
+  ok(NE({ type: "cars/sedan", x: 0, y: 0, z: 0, tint: 0x336699 }, 0).tint === 0x336699 && NE({ type: "cars/sedan", x: 0, y: 0, z: 0, tint: "#ff8800" }, 0).tint === 0xff8800 && NE({ type: "cars/sedan", x: 0, y: 0, z: 0 }, 0).tint === null && NE({ type: "cars/sedan", x: 0, y: 0, z: 0, tint: "zz" }, 0).tint === null && NE({ type: "cars/sedan", x: 0, y: 0, z: 0, tint: -5 }, 0).tint === (-5 >>> 0 & 0xffffff), "normaliseEntry (Wave 7 polish): a car's tint (a number or #rrggbb) is kept, a missing or unparsable one is null");
   ok(NE(null, 0).bad && NE({ x: 1, y: 2, z: 3 }, 0).bad && NE({ type: "a", x: NaN, y: 0, z: 0 }, 0).bad && NE({ type: "a", x: 0, y: 0, z: 0, scale: 0 }, 0).bad, "normaliseEntry reports a missing type, a non-finite position and a zero scale");
 
   // ---------------------------------------------------------------- the colliders-only place() path (no THREE: this is a squad client with nothing but the table)
@@ -220,6 +221,8 @@ function refBox(b, q, k, x, y, z) {
   ok(dump(res.colliders) === dump(want), "place({draw:false}) returns the colliders of every valid entry, in list order, with no THREE", res.colliders.length);
   ok(res.meshes.length === 0 && res.skipped.length === 1 && res.skipped[0].i === 2 && res.skipped[0].reason === "unknown type", "an unknown type is skipped and reported, not thrown", res.skipped);
   ok(res.ranges.length === list.length * 2 && res.ranges[0] === 0 && res.ranges[1] === K.colliderFor(list[0].type, 0, 0, 0, 0).length && res.ranges[4] === 0 && res.ranges[5] === 0 && res.ranges[6] === res.ranges[2] + res.ranges[3], "ranges[] gives [start, count] per list index (count 0 for the skipped one)", Array.from(res.ranges));
+  const tinted = await K.createCityKit({}).place(list.map((e) => Object.assign({}, e, { tint: 0x336699 })), { draw: false });
+  ok(dump(tinted.colliders) === dump(res.colliders), "a paint (tint) never changes a collider: the same list with every entry tinted gives the identical colliders");
   const res2 = await K.createCityKit({}).place(list.slice().reverse().reverse(), { draw: false });
   ok(dump(res2.colliders) === dump(res.colliders), "a second kit instance gives the identical list (no module state)");
   const noThree = await K.createCityKit({}).place(list, {});
@@ -257,6 +260,14 @@ function refBox(b, q, k, x, y, z) {
   const pcRows = {};
   if (pcBlock) for (const m of pcBlock[1].matchAll(/"([^"]+)":\s*\[([^\]]+)\]/g)) pcRows[m[1]] = m[2].split(",").map((s) => parseInt(s.trim(), 16));
   ok(bld.length === 27 && bld.every((id) => pcRows[id] && pcRows[id].length === 8 && pcRows[id].every((v) => v >= 0 && v <= 0xffffff)), "PROXY_COLORS holds wall + roof for all 27 palette-textured buildings in all 4 variants", { buildings: bld.length, rows: Object.keys(pcRows).length });
+
+  // the car-paint shader (Wave 7 polish): only the saturated body swatch is recoloured, one program for every car, installed on the "car" palette's material only
+  {
+    const src3 = fs.readFileSync(path.join(__dirname, "citykit.js"), "utf8");
+    ok(/function installCarPaint\(m\)/.test(src3) && /if \(pal\.key === "car"\) installCarPaint\(m\)/.test(src3), "the car-paint shader is installed on the car palette's material and on no other");
+    ok(/smoothstep\(0\.55, 0\.75,/.test(src3) && /vColor\.r \+ vColor\.g \+ vColor\.b < 2\.999/.test(src3) && /customProgramCacheKey/.test(src3), "the car paint recolours only saturated texels (glass, tyres, greys keep the texture), leaves an untinted (white) car untouched, and has a fixed program key");
+    ok(/if \(T\.kind === "car"\) \{ _carCol\.setHex\(it\.tint == null \? 0xffffff : it\.tint\)/.test(src3), "every car instance carries an instance colour (white = untouched), so all cars of a kit share one program variant");
+  }
 
   // ---------------------------------------------------------------- budget
   const dt = (Date.now() - T0) / 1000;

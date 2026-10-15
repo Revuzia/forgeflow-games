@@ -400,6 +400,35 @@ function checkCompounds(TG, M) {
   return out;
 }
 
+// street props (Wave 7): each entry is a known manifest type, a quarter turn, clear of every building, off the road (cars: inside the curb lane and clear of every
+// junction), not on top of another prop; and the whole list is a pure function of (seed, layout)
+function checkStreetProps(TG, CK, man, L, props) {
+  const out = [], ROAD_HALF = TG.ROAD_W / 2;
+  const roadRects = [], nodeSq = [];
+  for (const e of L.roads.edges) {
+    const A = L.roads.nodes[e.a], B = L.roads.nodes[e.b];
+    roadRects.push([Math.min(A.x, B.x) - (e.axis === "x" ? 0 : ROAD_HALF), Math.min(A.z, B.z) - (e.axis === "z" ? 0 : ROAD_HALF), Math.max(A.x, B.x) + (e.axis === "x" ? 0 : ROAD_HALF), Math.max(A.z, B.z) + (e.axis === "z" ? 0 : ROAD_HALF)]);
+  }
+  for (const n of L.roads.nodes) nodeSq.push([n.x - ROAD_HALF, n.z - ROAD_HALF, n.x + ROAD_HALF, n.z + ROAD_HALF]);
+  const blds = L.parcels.filter((p) => p.building).map((p) => p.building.aabb);
+  const fps = [];
+  for (const q of props) {
+    if (!man.types[q.type] || !CK.hasType(q.type)) { out.push(L.id + " unknown kit type " + q.type); continue; }
+    if (![0, 1, 2, 3].includes(q.rot)) { out.push(L.id + " " + q.type + " rot " + q.rot + " is not a quarter turn"); continue; }
+    const fp = CK.footprintFor(q.type, q.x, q.z, q.rot), box = [fp.minX, fp.minZ, fp.maxX, fp.maxZ];
+    fps.push([box, q]);
+    for (const b of blds) if (overlapArea(box, b) > 0) { out.push(L.id + " " + q.type + " at " + q.x + "," + q.z + " stands inside a building"); break; }
+    if (q.kind === "car") {
+      for (const n of nodeSq) if (overlapArea(box, n) > 0) { out.push(L.id + " car at " + q.x + "," + q.z + " is in a junction"); break; }
+      if (!roadRects.some((r) => box[0] >= r[0] - 1e-3 && box[2] <= r[2] + 1e-3 && box[1] >= r[1] - 1e-3 && box[3] <= r[3] + 1e-3) && !L.parcels.some((p) => p.use === "lot" && box[0] >= p.rect[0] && box[2] <= p.rect[2] && box[1] >= p.rect[1] && box[3] <= p.rect[3])) out.push(L.id + " car at " + q.x + "," + q.z + " is neither in a street nor in a lot");
+    } else if (q.kind === "light" || q.kind === "hydrant" || q.kind === "bench") {
+      for (const r of roadRects) if (overlapArea(box, r) > 0.02) { out.push(L.id + " " + q.kind + " at " + q.x + "," + q.z + " stands on the road"); break; }
+    }
+  }
+  for (let i = 0; i < fps.length; i++) for (let j = i + 1; j < fps.length; j++) if (overlapArea(fps[i][0], fps[j][0]) > 0.0004) { out.push(L.id + " " + fps[i][1].type + " overlaps " + fps[j][1].type + " at " + fps[i][1].x + "," + fps[i][1].z); break; }
+  return out;
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function realChild() {
   return new Promise((resolve) => {
@@ -422,7 +451,10 @@ async function realMode() {
     globalThis.__LC_BOXES = null;
     const M = await buildMap(E.makeW(7), map);
     const pts = [];
-    for (let i = 0; i < 400; i++) { const x = (rnd() * 2 - 1) * 780, z = (rnd() * 2 - 1) * 780; pts.push([x, z, M.heightAt(x, z), M.groundAt(x, z)]); }
+    // Savanna (Wave 7) builds its towns as plateaus (every block one pad, a compound's yard one pad, the falloff up to 12 m beyond): the ground there is the
+    // plateau's, on purpose, not the analytic function the selftest slices. Points inside a town / compound footprint (+ 18 m) are left out of the sample.
+    const foot = M.city ? M.city.layout.towns.flatMap((T) => T.blocks.map((b) => [b.cx - 51, b.cz - 51, b.cx + 51, b.cz + 51])).concat(M.city.layout.compounds.concat(M.city.layout.towns.filter((T) => !T.blocks.length && T.compound)).map((T) => [T.compound.bounds[0] - 18, T.compound.bounds[1] - 18, T.compound.bounds[2] + 18, T.compound.bounds[3] + 18])) : [];
+    while (pts.length < 400) { const x = (rnd() * 2 - 1) * 780, z = (rnd() * 2 - 1) * 780; if (foot.some((r) => x > r[0] && x < r[2] && z > r[1] && z < r[3])) continue; pts.push([x, z, M.heightAt(x, z), M.groundAt(x, z)]); }
     res[map] = { waterY: M.waterY, pois: M.pois.map((p) => [p.id, p.x, p.z, p.r]), pts };
   }
   process.stdout.write("REAL_JSON " + JSON.stringify(res) + "\n");
@@ -579,6 +611,151 @@ async function main() {
   }
   ok(poiFail.length === 0, "every named town has >= 6 enterable buildings on all " + SEEDS + " seeds", poiFail.join("; "));
 
+  // ── 3b. street props + the reserve option (Wave 7, lane 7A) ───────────────────────────────────────────────────────────────────────────
+  console.log("\n[3b] street props (streetProps) and layoutMap's reserve rectangles");
+  const CKmod = await import(pathToFileURL(path.join(__dirname, "citykit.js")).href);
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "assets", "props", "city", "manifest.json"), "utf8"));
+  {
+    const PS = Math.min(SEEDS, 80), bad = [];
+    let nProps = 0, nTowns = 0, nondet = 0;
+    const kinds = {};
+    for (let seed = 1; seed <= PS; seed++) {
+      const h = mk("ashgrid", seed), M = TG.layoutMap(seed, "ashgrid", TG.defaultPois("ashgrid"), h, -999);
+      for (const L of M.towns) {
+        if (!L.blocks.length) continue;
+        const a = TG.streetProps(L, seed);
+        if (JSON.stringify(a) !== JSON.stringify(TG.streetProps(L, seed))) nondet++;
+        bad.push(...checkStreetProps(TG, CKmod, manifest, L, a).map((e) => "ashgrid#" + seed + " " + e));
+        nProps += a.length; nTowns++;
+        for (const q of a) kinds[q.kind] = (kinds[q.kind] || 0) + 1;
+      }
+    }
+    ok(bad.length === 0, "every street prop is a manifest type, a quarter turn, clear of buildings and junctions, off the road (cars in the lane), clear of its neighbours (" + PS + " seeds, " + nTowns + " grid towns, " + nProps + " props)", bad.length + " failures, first: " + bad.slice(0, 3).join(" | "));
+    ok(nondet === 0, "streetProps is a pure function of (seed, layout): two calls give the same list");
+    info("props by kind over " + PS + " seeds: " + Object.keys(kinds).sort().map((k) => k + " " + kinds[k]).join(", ") + "; per town " + fix(nProps / Math.max(1, nTowns), 0));
+    const usedTypes = new Set(TG.STREET_TYPES.concat(TG.KIT_CARS.map((c) => c[0])));
+    for (const grp of Object.values(TG.SHELL_KITS)) for (const k of grp) usedTypes.add(k[0]);
+    const missing = [...usedTypes].filter((t) => !manifest.types[t] || !CKmod.hasType(t));
+    ok(missing.length === 0, "every type towngen can ask citykit for (" + usedTypes.size + ") is in the manifest and in citykit's collider table", missing.join(","));
+    // downtown in the core density bar: at least 24 lights and 12 cars on every seed (a core with no dressing reads as a plan, not a place)
+    let thin = 0;
+    for (let seed = 1; seed <= PS; seed++) { const M = TG.layoutMap(seed, "ashgrid", TG.defaultPois("ashgrid"), mk("ashgrid", seed), -999), d = M.towns.find((t) => t.id === "downtown"), a = TG.streetProps(d, seed); if (a.filter((q) => q.kind === "light").length < 24 || a.filter((q) => q.kind === "car").length < 8) thin++; }
+    ok(thin === 0, "Downtown Core carries >= 24 street lights and >= 8 parked cars on every one of " + PS + " seeds", thin + " thin seeds");
+  }
+  {
+    // layoutMap({ reserve }): the landmark rectangles the caller keeps (Savanna's overpass strip and crane) are never built over
+    const R = [[324, 72, 538, 88], [-386, -450, -370, -406]], bad = [];
+    for (let seed = 1; seed <= 40; seed++) {
+      const M = TG.layoutMap(seed, "ashgrid", TG.defaultPois("ashgrid"), mk("ashgrid", seed), -999, { reserve: R });
+      for (const L of M.towns.concat(M.compounds)) {
+        for (const b of L.blocks) for (const r of R) if (overlapArea([b.cx - 28, b.cz - 28, b.cx + 28, b.cz + 28], r) > 0) bad.push("ashgrid#" + seed + " " + L.id + " block ring on a reserved rectangle");
+        for (const p of L.parcels) if (p.building) for (const r of R) if (overlapArea(p.building.aabb, r) > 0) bad.push("ashgrid#" + seed + " " + L.id + "/" + p.id + " building on a reserved rectangle");
+        if (L.kind === "compound") for (const r of R) if (rectDist(L.compound.entry.x, L.compound.entry.z, r) < 59.9) bad.push("ashgrid#" + seed + " " + L.id + " compound within 60 m of a reserved rectangle");
+      }
+    }
+    ok(bad.length === 0, "layoutMap({ reserve }) never builds a block, a building or a compound on / within 60 m of a reserved rectangle (40 seeds, 2 rectangles)", bad.length + " failures, first: " + bad.slice(0, 3).join(" | "));
+    const free = TG.layoutMap(7, "ashgrid", TG.defaultPois("ashgrid"), mk("ashgrid", 7), -999), held = TG.layoutMap(7, "ashgrid", TG.defaultPois("ashgrid"), mk("ashgrid", 7), -999, { reserve: R });
+    const same = TG.layoutMap(7, "ashgrid", TG.defaultPois("ashgrid"), mk("ashgrid", 7), -999, { reserve: [] });
+    ok(JSON.stringify(free) === JSON.stringify(same), "an empty reserve changes nothing (the Wave-6 layout is byte-identical without one)");
+    info("seed 7: " + free.stats.enterable + " enterable buildings free, " + held.stats.enterable + " with the two reserved rectangles");
+  }
+
+  // ── 3c. the city polish (Wave 7, lane 7A2): density, skyline, compounds, car paints, kit colormaps, a NaN ground ────────────────────────────
+  console.log("\n[3c] Savanna city polish: block density, skyline, compound kinds, car paints, shell colormaps, a non-finite ground");
+  const polish = {};
+  {
+    const PS = Math.min(SEEDS, 60);
+    const share = (L) => { const per = new Map(); for (const p of L.parcels) if (p.building) { const a = p.building.aabb; per.set(p.block, (per.get(p.block) || 0) + (a[2] - a[0]) * (a[3] - a[1])); } return L.blocks.map((b) => (per.get(b.id) || 0) / ((b.x1 - b.x0) * (b.z1 - b.z0))); };
+    const coreShare = [], townShare = [], coreBlocks = [], skyN = [], skyMax = [], variantsPerTown = [], cmpKinds = {}, cmpProps = {};
+    const badCmp = [], tintBad = [], tintSeen = new Set(), nonCity = { tint: 0, towns: 0 };
+    let nTint = 0, nCars = 0, nonTintable = 0;
+    for (let seed = 1; seed <= PS; seed++) {
+      const h = mk("ashgrid", seed), M = TG.layoutMap(seed, "ashgrid", TG.defaultPois("ashgrid"), h, -999);
+      for (const L of M.towns) {
+        if (!L.blocks.length) continue;
+        const s = share(L);
+        if (L.kind === "core") { coreShare.push(pct(s, 0.5)); coreBlocks.push(L.blocks.length); skyN.push(L.parcels.filter((p) => p.building && p.building.gen === "shell" && p.building.height >= 30).length); skyMax.push(Math.max(...L.parcels.filter((p) => p.building).map((p) => p.building.height))); }
+        else if (L.kind === "town") townShare.push(pct(s, 0.5));
+        const vs = new Set(L.parcels.filter((p) => p.building && p.building.gen === "shell").map((p) => p.building.palette.variant || "base"));
+        variantsPerTown.push(vs.size);
+        for (const e of TG.streetProps(L, seed)) {
+          if (e.kind !== "car") { if (e.tint !== undefined) tintBad.push("ashgrid#" + seed + " " + L.id + " a " + e.kind + " carries a tint"); continue; }
+          nCars++;
+          if ((TG.TINTABLE_CARS || []).indexOf(e.type) < 0) { nonTintable++; if (e.tint !== undefined) tintBad.push("ashgrid#" + seed + " " + L.id + " " + e.type + " carries a tint"); }
+          else if (e.tint === undefined || !(TG.CAR_TINTS || []).some((q) => q[0] === e.tint)) tintBad.push("ashgrid#" + seed + " " + L.id + " " + e.type + " tint " + e.tint + " is not a CAR_TINTS colour");
+          else { nTint++; tintSeen.add(e.tint); }
+        }
+      }
+      for (const C of M.compounds) {
+        const v = C.compound.variant;
+        cmpKinds[v] = (cmpKinds[v] || 0) + 1;
+        for (const q of C.compound.props) cmpProps[q.kind] = (cmpProps[q.kind] || 0) + 1;
+        const nb = C.parcels.length;
+        if (v === "farmstead" && nb >= 3 && !C.parcels.some((p) => p.building.arch === "barn")) badCmp.push("ashgrid#" + seed + " " + C.id + " farmstead without a barn");
+        if (v === "farmstead" && C.parcels.some((p) => p.building.arch === "barn") && !C.compound.props.some((q) => q.kind === "silo")) badCmp.push("ashgrid#" + seed + " " + C.id + " farmstead with a barn but no silo");
+        if (v === "depot" && C.compound.props.filter((q) => q.kind === "container").length !== 3) badCmp.push("ashgrid#" + seed + " " + C.id + " depot without its 3 containers");
+        if (v === "tower") {
+          const t = C.compound.props.find((q) => q.kind === "watertower"), bd = C.compound.bounds;
+          if (!t) badCmp.push("ashgrid#" + seed + " " + C.id + " 'tower' compound without a water tower");
+          else {
+            if (!(t.x > bd[0] && t.x < bd[2] && t.z > bd[1] && t.z < bd[3])) badCmp.push("ashgrid#" + seed + " " + C.id + " water tower outside the compound bounds");
+            for (const p of C.parcels) if (overlapArea([t.x - 4.6, t.z - 4.6, t.x + 4.6, t.z + 4.6], p.building.aabb) > 0) badCmp.push("ashgrid#" + seed + " " + C.id + " water tower on a building");
+            for (const car of C.compound.cars) if (Math.hypot(car.x - t.x, car.z - t.z) < 5) badCmp.push("ashgrid#" + seed + " " + C.id + " a car under the water tower");
+          }
+        }
+      }
+    }
+    // another theme gets no paints and no polish dressing (its street props are the stage-A output)
+    for (let seed = 1; seed <= 10; seed++) {
+      const h = mk("deepwood", seed), M = TG.layoutMap(seed, "deepwood", TG.defaultPois("deepwood"), h, waterOf("deepwood"));
+      for (const L of M.towns) if (L.blocks.length) { nonCity.towns++; for (const e of TG.streetProps(L, seed)) { if (e.tint !== undefined || /light-square|trashcan|construction-barrier|shipping-container/.test(e.type)) nonCity.tint++; } }
+    }
+    polish.coreShare = pct(coreShare, 0.5); polish.townShare = pct(townShare, 0.5);
+    ok(coreBlocks.every((n) => n === 16), "Downtown Core is a 4 x 4 block grid on every one of " + PS + " seeds", "block counts " + [...new Set(coreBlocks)].join("/"));
+    ok(Math.min(...coreShare) >= 0.40, "the core's built footprint covers >= 40 % of a block (median block, every seed; stage A: 0.25-0.30)", "worst seed " + fix(Math.min(...coreShare), 3) + ", median " + fix(polish.coreShare, 3));
+    ok(Math.min(...townShare) >= 0.33, "a town's built footprint covers >= 33 % of a block (median block of every town of every seed; stage A: 0.20-0.28)", "worst " + fix(Math.min(...townShare), 3) + ", median " + fix(polish.townShare, 3));
+    ok(Math.min(...skyN) >= 6, "the downtown skyline holds >= 6 kit towers of 30 m or more on every seed (stage A: 4-5, in a 3 x 3 core)", "worst " + Math.min(...skyN) + ", median " + pct(skyN, 0.5) + ", tallest " + fix(Math.max(...skyMax), 1) + " m");
+    ok(Math.max(...variantsPerTown) <= 2, "a town's kit shells wear at most two colormaps (every (type, colormap) pair is a draw call per district)", "worst " + Math.max(...variantsPerTown));
+    ok(["homestead", "farmstead", "depot", "hamlet", "tower"].every((k) => (cmpKinds[k] || 0) >= 20), "all five compound kinds occur (" + Object.keys(cmpKinds).sort().map((k) => k + " " + cmpKinds[k]).join(", ") + " over " + PS + " seeds)");
+    ok(badCmp.length === 0, "compound props are where they belong: a farmstead's silo, a depot's three containers, a water tower inside its yard and clear of cars and walls", badCmp.length + " failures, first: " + badCmp.slice(0, 3).join(" | "));
+    ok(tintBad.length === 0 && nTint > 0 && nonTintable > 0, "car paints: every tintable car carries one CAR_TINTS colour, taxis and police cars none (" + nTint + " tinted, " + nonTintable + " liveried, " + tintSeen.size + " distinct paints)", tintBad.slice(0, 3).join(" | "));
+    ok(tintSeen.size >= 10, "at least 10 of the " + (TG.CAR_TINTS || []).length + " car paints are used (no one-colour street)", tintSeen.size + " used");
+    ok(nonCity.tint === 0 && nonCity.towns > 0, "a non-city theme (Deepwood, " + nonCity.towns + " towns) gets no car paint and none of the polish props", nonCity.tint + " found");
+    // the number of kinds in the paint table and the deterministic order: two calls, the same tints
+    { const L = TG.layoutMap(7, "ashgrid", TG.defaultPois("ashgrid"), mk("ashgrid", 7), -999).towns[0]; ok(JSON.stringify(TG.streetProps(L, 7)) === JSON.stringify(TG.streetProps(L, 7)), "the paints are part of the pure street-prop list (two calls, identical)"); }
+    // tower() climbs to its roof chest by a 2.2 m ramp along its local +X wall (up to 2.3 m out): that flank must be free of every other building, and a three-storey tower must be
+    // >= 15 m wide (a 12.5 m one climbs at 44.4 degrees and a sprint down it mantles: worldlive ramps-walk-fine, 7A2)
+    {
+      const CS = [1, 0, -1, 0], SN = [0, 1, 0, -1], blockedList = [], steepList = [];
+      let towers = 0;
+      for (let seed = 1; seed <= PS; seed++) {
+        const M = TG.layoutMap(seed, "ashgrid", TG.defaultPois("ashgrid"), mk("ashgrid", seed), -999);
+        for (const L of M.towns) {
+          const bs = L.parcels.filter((p) => p.building).map((p) => p.building);
+          for (const b of bs) {
+            if (b.gen !== "tower") continue;
+            towers++;
+            if (b.floors >= 3 && b.w < 15) steepList.push("ashgrid#" + seed + " " + L.id + " a " + b.w + " m tower of " + b.floors + " storeys");
+            const c = CS[b.turn], s = SN[b.turn], W2 = b.w / 2, P = [[W2, -b.w / 2], [W2 + 2.3, b.w / 2]].map(([u, v]) => [b.cx + u * c + v * s, b.cz - u * s + v * c]);
+            const r = [Math.min(P[0][0], P[1][0]), Math.min(P[0][1], P[1][1]), Math.max(P[0][0], P[1][0]), Math.max(P[0][1], P[1][1])];
+            for (const o of bs) if (o !== b && overlapArea(r, o.aabb) > 0) { blockedList.push("ashgrid#" + seed + " " + L.id + " tower at " + b.cx + "," + b.cz + " has a building on its ramp flank"); break; }
+          }
+        }
+      }
+      ok(blockedList.length === 0 && towers > 100, "every tower() building (" + towers + " over " + PS + " seeds) has its +X roof-ramp flank free of other buildings", blockedList.length + " blocked, first: " + blockedList.slice(0, 2).join(" | "));
+      ok(steepList.length === 0, "no three-storey tower() building is narrower than 15 m (its roof ramp would climb at more than 43 degrees)", steepList.length + ", first: " + steepList.slice(0, 2).join(" | "));
+    }
+    // a NaN ground: the sampler reads a non-finite node as deep water, so the layout is finite and keeps off the patch
+    {
+      const h = mk("ashgrid", 7), nan = (x, z) => (x > 56 && x < 120 && z > -10 && z < 50 ? NaN : h(x, z));
+      const M = TG.layoutMap(7, "ashgrid", TG.defaultPois("ashgrid"), nan, -999);
+      const nums = [];
+      const scan = (o) => { if (typeof o === "number") nums.push(o); else if (o && typeof o === "object") for (const k in o) scan(o[k]); };
+      scan(M.towns.map((t) => ({ b: t.blocks, p: t.parcels.map((q) => q.building && q.building.aabb), n: t.roads.nodes })));
+      ok(nums.every(Number.isFinite), "a height function that returns NaN on a patch still gives a finite layout (" + nums.length + " numbers scanned)", nums.filter((v) => !Number.isFinite(v)).length + " non-finite");
+    }
+  }
+
   // ── 4. determinism ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   console.log("\n[4] determinism");
   {
@@ -676,6 +853,28 @@ async function main() {
     { const t = clone(town); const s = t.stairs[0]; s.rise = 6; s.slopeDeg = 50; ok(checkInterior(TG, t).length > 0, "planted: a 50 degree stair is caught"); }
     // 9. a compound inside a town
     { const mm = clone(M); mm.compounds[0].poi.x = mm.towns[0].blocks[0].cx; mm.compounds[0].poi.z = mm.towns[0].blocks[0].cz; ok(checkCompounds(TG, mm).length > 0, "planted: a compound on top of a town is caught"); }
+    // 11. street props (Wave 7)
+    {
+      const tp = TG.streetProps(town, 7), manC = JSON.parse(fs.readFileSync(path.join(ROOT, "assets", "props", "city", "manifest.json"), "utf8"));
+      ok(checkStreetProps(TG, await import(pathToFileURL(path.join(__dirname, "citykit.js")).href), manC, town, tp).length === 0, "control: the unplanted downtown's street props pass the prop checker");
+      const CK = await import(pathToFileURL(path.join(__dirname, "citykit.js")).href);
+      { const b = town.parcels.find((q) => q.building && q.building.enterable).building; const q = tp.slice(); q.push({ type: "props/hydrant", x: b.cx, z: b.cz, rot: 0, kind: "hydrant" }); ok(checkStreetProps(TG, CK, manC, town, q).length > 0, "planted: a hydrant inside a building is caught"); }
+      { const n = town.roads.nodes.find((q) => q.deg >= 4); const q = tp.slice(); q.push({ type: "cars/sedan", x: n.x, z: n.z, rot: 1, kind: "car" }); ok(checkStreetProps(TG, CK, manC, town, q).length > 0, "planted: a car in a junction is caught"); }
+      { const q = tp.slice(); q.push({ type: "cars/spaceship", x: 0, z: 0, rot: 0, kind: "car" }); ok(checkStreetProps(TG, CK, manC, town, q).length > 0, "planted: an unknown kit type is caught"); }
+      { const q = tp.slice(); const c = q.find((e) => e.kind === "car"); q.push(Object.assign({}, c)); ok(checkStreetProps(TG, CK, manC, town, q).length > 0, "planted: two cars on the same spot are caught"); }
+      { const q = tp.map((e) => Object.assign({}, e)); const c = q.find((e) => e.kind === "car"); c.rot = 0.5; ok(checkStreetProps(TG, CK, manC, town, q).length > 0, "planted: a car off the quarter turns is caught"); }
+    }
+    // 12. the city polish checkers (Wave 7, 7A2): each must bite on a planted fault
+    {
+      const cars = TG.streetProps(town, 7).filter((e) => e.kind === "car" && (TG.TINTABLE_CARS || []).indexOf(e.type) >= 0);
+      const offPalette = (list) => list.filter((e) => e.kind === "car" && (TG.TINTABLE_CARS || []).indexOf(e.type) >= 0 && !(TG.CAR_TINTS || []).some((q) => q[0] === e.tint)).length;
+      ok(cars.length > 0 && offPalette(cars) === 0, "control: every tintable car of the unplanted downtown wears a CAR_TINTS paint (" + cars.length + " cars)");
+      { const q = cars.map((e) => Object.assign({}, e)); q[0].tint = 0x00ff00; ok(offPalette(q) > 0, "planted: a toy-green car off the paint table is caught"); }
+      { const q = cars.map((e) => Object.assign({}, e)); delete q[0].tint; ok(offPalette(q) > 0, "planted: a tintable car with no paint is caught"); }
+      const small = clone(town); for (const p of small.parcels) if (p.building && p.building.enterable) { p.building.w = 5; p.building.d = 5; p.building.aabb = [p.building.cx - 2.5, p.building.cz - 2.5, p.building.cx + 2.5, p.building.cz + 2.5]; }
+      const per = (L) => { const m2 = new Map(); for (const p of L.parcels) if (p.building) { const a = p.building.aabb; m2.set(p.block, (m2.get(p.block) || 0) + (a[2] - a[0]) * (a[3] - a[1])); } return L.blocks.map((b) => (m2.get(b.id) || 0) / ((b.x1 - b.x0) * (b.z1 - b.z0))); };
+      ok(pct(per(town), 0.5) >= 0.40 && pct(per(small), 0.5) < 0.40, "planted: a core of 5 x 5 m boxes fails the footprint-share bar (the unplanted one passes: " + fix(pct(per(town), 0.5), 3) + " vs " + fix(pct(per(small), 0.5), 3) + ")");
+    }
     // 10. nondeterminism: a layout built from a perturbed height function differs
     const hp = (x, z) => h(x, z) + (Math.abs(x) < 400 ? 1.7 * Math.sin(x * 0.05 + z * 0.03) : 0);
     ok(JSON.stringify(TG.layoutMap(7, "ashgrid", TG.defaultPois("ashgrid"), hp, -999)) !== JSON.stringify(M), "planted: a different ground changes the layout (the generator reads the height function)");

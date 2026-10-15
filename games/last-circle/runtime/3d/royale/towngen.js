@@ -10,6 +10,12 @@
  *   placeCompounds(seed, mapId, towns, heightFn, waterY)    the SEPARATE compound list (farthest-point fill; layoutMap calls it)
  *   PLANS[mapId] / planFor(mapId, poi) / defaultPois(mapId) the per-POI plan (kind, block grid, theme, reach) of the three maps
  *   enterableBoxes(layouts), summarize(layout), makeSampler(fn), mulberry32, hash32, subRng, VERSION and the constants
+ *   streetProps(layout, seed)                              (Wave 7) the static street dressing of one grid layout as citykit list entries minus the height:
+ *                                                          lights, hydrants, benches, planters, parked cars, parking-lot / park / yard dressing
+ *   layoutMap(..., { reserve: [[x0, z0, x1, z1], ...] })   (Wave 7) rectangles of landmarks the caller keeps (Savanna's overpass and crane): no block, building or
+ *                                                          compound is placed on them, and compounds keep 60 m from them like from a town
+ *   PLANS[map].compounds.inner / .jitter                   (Wave 7, Savanna only) favour the interior / pick among near-best candidates at random, so the compound
+ *                                                          fill is scattered instead of a lattice on the map border (0 / 0 = the Wave-6 farthest-point fill)
  *   heightFn = the BASE ground (maps.js heightAt0, before any pad / corridor is registered); pois = the map's land-snapped POI list.
  *
  * theme: 'city' (Savanna) | 'resort' (Isla Viva) | 'lodge' (Deepwood) select palette keys (manifest palettes + variants) and the parcel mix;
@@ -51,7 +57,7 @@
  * VERSION is the generator version: any change that moves output bumps it (lane 7C's squad version guard reads it).
  */
 
-export const VERSION = 1;
+export const VERSION = 2;                          // 2 = Wave 7: layoutMap({ reserve }), streetProps, Savanna compounds scattered (PLANS.ashgrid.compounds.inner / jitter); isla_viva and deepwood layouts are byte-identical to 1
 
 // ── constants ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const PITCH = 56;                          // road centreline spacing: blocks stay inside the bot planner's 64 m window
@@ -68,7 +74,9 @@ export const MAX_FLOORS = 3;                              // O3: <= 3 walkable f
 const GEN_WET = 1.5;                                      // the generator keeps 0.7 m more than the plan's 0.8 (8 m node spacing: aliasing slack)
 const HP = PITCH / 2;                                     // 28: block centre -> street centreline
 const LAT = 2;                                            // terrain lattice pitch for structural decisions (m)
-const FRONT_SETBACK = 1.5, SIDE_MARGIN = 1.0, BACK_MARGIN = 1.0;
+// the lot margins: a city grid (Wave 7 polish) builds closer to the lot lines - a 1.5 m gap between neighbours (was 2.0) and 1.2 m of front yard - so a block
+// holds more building; every other theme keeps the Wave-6 numbers. gridAttempt sets them for its own duration (see below).
+let FRONT_SETBACK = 1.5, SIDE_MARGIN = 1.0, BACK_MARGIN = 1.0;
 const RELIEF_LEVELS = [6.5, 9, 12];                   // block relief ladder (m over the 56 m cell); pads (C-PAD) flatten what is left
 const COMPOUND_MIN_TOWN = 60;                             // m, compound centre to the nearest town footprint
 const COMPOUND_REACH = 720;                               // m, +- from the map centre
@@ -134,6 +142,7 @@ const worldDir = (turn, a, b) => [a * COS[turn] + b * SIN[turn], -a * SIN[turn] 
 // The lattice lives in one pooled pair of typed arrays (allocating 8 MB per sampler made GC the biggest cost): the most recently made sampler owns
 // them (entries are stamped with its id); an older sampler that lost ownership falls back to its own Map, so results never mix.
 const POOL = { vals: null, stamp: null, owner: 0, nextId: 1 };
+const NON_FINITE = -50;                                  // what a non-finite height node counts as (Wave 7: maps.js's TerrainField could return NaN on a few seeds; fixed there, guarded here)
 const WIN = 480, SPAN = 2 * WIN + 1;                    // +-960 m of lattice nodes in typed arrays, a Map beyond
 export function makeSampler(fn) {
   if (!POOL.vals) { POOL.vals = new Float64Array(SPAN * SPAN); POOL.stamp = new Int32Array(SPAN * SPAN); }
@@ -148,13 +157,14 @@ export function makeSampler(fn) {
       if (POOL.owner === id && i >= -WIN && i <= WIN && j >= -WIN && j <= WIN) {
         const k = (j + WIN) * SPAN + (i + WIN);
         if (POOL.stamp[k] === id) return POOL.vals[k];
-        const v = fn(i * LAT, j * LAT);
+        let v = fn(i * LAT, j * LAT);
+        if (!(v - v === 0)) v = NON_FINITE;                 // (a NaN / infinite ground node reads as deep water: the block is dropped, nothing downstream sees a NaN)
         POOL.vals[k] = v; POOL.stamp[k] = id;
         return v;
       }
       const k = (i + 65536) * 131072 + (j + 65536);
       let v = own.get(k);
-      if (v === undefined) { v = fn(i * LAT, j * LAT); own.set(k, v); }
+      if (v === undefined) { v = fn(i * LAT, j * LAT); if (!(v - v === 0)) v = NON_FINITE; own.set(k, v); }
       return v;
     },
   };
@@ -223,10 +233,12 @@ const ARCH = {
 // (assets/props/city/manifest.json; the selftest re-reads the manifest and fails if these drift). Front is +Z.
 const SHELLS = {
   skyline: [["skyscraper/building-skyscraper-a", 16.32, 16.32, 34.56], ["skyscraper/building-skyscraper-b", 16.32, 16.32, 53.76],
-    ["skyscraper/building-skyscraper-c", 15.36, 16.655, 48.96], ["skyscraper/building-skyscraper-e", 15.54, 14.904, 48.96],
-    ["commercial/building-m", 14.88, 14.904, 37.8], ["commercial/building-i", 14.88, 15.624, 20.16]],
+    ["skyscraper/building-skyscraper-e", 15.54, 14.904, 48.96],
+    ["commercial/building-m", 14.88, 14.904, 37.8]],     // (Wave 7 polish: skyscraper-c and -d are left out: their manifest collider ends 3 m short of the drawn rear, a 1.6 m clip at body height)
   mid: [["commercial/building-a", 10.603, 11.28, 15.516], ["commercial/building-f", 10.08, 12.36, 20.316],
     ["commercial/building-h", 10.603, 12.094, 15.516], ["commercial/building-c", 10.603, 13.08, 10.716]],
+  // city towns' kit houses (Wave 7 polish): the stage-A list minus type-h and type-q, whose manifest colliders leave the drawn mesh 0.19 / 0.38 m outside them at body height, plus type-c / -e / -o
+  house_city: [["suburban/building-type-a", 9.36, 7.403, 6.002], ["suburban/building-type-i", 9.262, 7.401, 5.31], ["suburban/building-type-c", 9.262, 7.403, 7.442], ["suburban/building-type-e", 9.36, 7.401, 8.19], ["suburban/building-type-o", 9.144, 7.401, 8.19]],
   house: [["suburban/building-type-a", 9.36, 7.403, 6.002], ["suburban/building-type-h", 9.36, 6.595, 5.31],
     ["suburban/building-type-i", 9.262, 7.401, 5.31], ["suburban/building-type-q", 8.928, 6.376, 6.61]],
 };
@@ -241,10 +253,10 @@ const THEMES = {
 };
 // archetype weights per theme / kind ("lot" = a parcel with no building: parking, pocket park, yard; "shell" = closed kit building)
 const MIX = {
-  "city/core": { tower: 34, midrise: 34, shop: 18, lot: 0, shell: 14 },
-  "city/town": { house_s: 20, house_m: 22, shop: 26, midrise: 12, shed: 4, lot: 6, shell: 10 },
-  "city/village": { house_s: 28, house_m: 22, shop: 24, midrise: 4, shed: 8, lot: 6, shell: 8 },
-  "city/yard": { hall: 34, shed: 24, shop: 12, lot: 14, shell: 0 },
+  "city/core": { tower: 30, midrise: 36, shop: 16, lot: 3, shell: 24 },
+  "city/town": { house_s: 18, house_m: 24, shop: 24, midrise: 12, shed: 2, lot: 3, shell: 22 },
+  "city/village": { house_s: 26, house_m: 24, shop: 22, midrise: 4, shed: 6, lot: 3, shell: 20 },
+  "city/yard": { hall: 36, shed: 22, shop: 12, lot: 8, shell: 10 },
   "resort/core": { midrise: 30, shop: 30, house_m: 20, lot: 4, shell: 10 },
   "resort/town": { house_s: 20, house_m: 30, shop: 24, midrise: 12, lot: 6, shell: 8 },
   "resort/village": { house_s: 30, house_m: 30, shop: 22, shed: 8, lot: 6, shell: 4 },
@@ -262,17 +274,17 @@ export const PLANS = {
   ashgrid: {
     theme: "city",
     pois: {
-      downtown: { kind: "core", cols: 3, rows: 3, minBlocks: 7, maxShift: 16 },
-      metro: { kind: "town", cols: 2, rows: 2, minBlocks: 3, maxShift: 60 },
+      downtown: { kind: "core", cols: 4, rows: 4, minBlocks: 12, maxShift: 16 },
+      metro: { kind: "town", cols: 3, rows: 2, minBlocks: 4, maxShift: 60 },
       overpass: { kind: "town", cols: 2, rows: 2, minBlocks: 3, maxShift: 60 },
-      yard: { kind: "yard", cols: 2, rows: 2, minBlocks: 2, maxShift: 60 },
-      mall: { kind: "town", cols: 2, rows: 2, minBlocks: 3, maxShift: 60 },
-      crane: { kind: "village", cols: 2, rows: 1, minBlocks: 2, maxShift: 50 },
+      yard: { kind: "yard", cols: 3, rows: 2, minBlocks: 3, maxShift: 60 },
+      mall: { kind: "town", cols: 3, rows: 2, minBlocks: 4, maxShift: 60 },
+      crane: { kind: "village", cols: 3, rows: 1, minBlocks: 2, maxShift: 50 },
       rubble: { kind: "village", cols: 2, rows: 1, minBlocks: 2, maxShift: 60 },
-      motorpool: { kind: "yard", cols: 2, rows: 1, minBlocks: 2, maxShift: 50 },
-      outpost: { kind: "town", cols: 3, rows: 2, minBlocks: 4, maxShift: 50 },
+      motorpool: { kind: "yard", cols: 3, rows: 1, minBlocks: 2, maxShift: 50 },
+      outpost: { kind: "town", cols: 3, rows: 3, minBlocks: 6, maxShift: 50 },
     },
-    compounds: { count: 30, themes: ["farm", "ruin"], weights: [3, 2] },
+    compounds: { count: 30, themes: ["farm", "ruin"], weights: [3, 2], inner: 0.8, jitter: 0.2, variety: true },     // inner / jitter: see placeCompounds (Wave 7 spreads Savanna's compounds over the map instead of a ring on its border)
   },
   isla_viva: {
     theme: "resort",
@@ -535,13 +547,51 @@ function room(rect, fx, fz) {
 }
 function maxFloorsFor(w, d) { return d >= 10 ? (w >= 12.5 ? 3 : 2) : 1; }
 /** choose dims + floors of archetype `key` that fit a frontage x depth; null if none */
-function fitArch(rng, key, fw, fd, minFloors) {
+// City theme only (Wave 7 polish): a building GROWS toward the room its parcel gives it, on the 2.5 m module, so a block reads as built and not as a few boxes on
+// a plaza (the stage-A towns covered 20-30 % of a block). [max frontage, max depth]; the tower() generator is square, so towers and mid-rises grow square.
+const GROW = { house_s: [12.5, 12.5], house_m: [15, 15], shop: [22.5, 17.5], hall: [27.5, 17.5], shed: [7.5, 7.5], midrise: [20, 20], tower: [20, 20], barn: [20, 12.5] };
+const floor25 = (v) => Math.floor(v / CELL + 1e-6) * CELL;
+function growDims(rng, key, A, dm, fw, fd) {
+  const G = GROW[key];
+  if (!G) return dm;
+  if (A.gen === "tower") {                                             // square: s0 .. sMax in 2.5 steps
+    const s0 = Math.max(dm[0], dm[1]), sMax = Math.min(G[0], G[1], floor25(fw), floor25(fd));
+    if (sMax <= s0) return dm;
+    const steps = Math.round((sMax - s0) / CELL), s = rng() < 0.8 ? sMax : s0 + CELL * Math.floor(rng() * (steps + 1));
+    return [s, s];
+  }
+  const wMax = Math.max(dm[0], Math.min(G[0], floor25(fw))), dMax = Math.max(dm[1], Math.min(G[1], floor25(fd)));
+  const pickIn = (lo, hi) => (hi <= lo ? lo : rng() < 0.8 ? hi : lo + CELL * Math.floor(rng() * (Math.round((hi - lo) / CELL) + 1)));
+  return [pickIn(dm[0], wMax), pickIn(dm[1], dMax)];
+}
+// city theme: Downtown's kit shells wear TWO of the four colormaps (chosen by the town's id), every other town's ONE - every (type, colormap) pair is one draw call per district (two
+// with its shadow pass), and a street view of the 9-block Outpost drew 10 of them
+const SHELL_VARIANTS = [[null, "slate"], [null, "brick"], ["sand", "slate"], ["brick", "sand"], [null, "sand"], ["slate", "brick"]];
+// city theme: the tower() generator climbs to its roof chest by an exterior ramp 2.2 m wide along its local +X wall (up to 2.3 m out). In the dense city that ramp ran into the
+// next building or into the next tower's ramp (worldlive ramps-walk-fine: a descent mantled onto the neighbour's ramp, 7 ramps of 5 seeds). A tower / mid-rise therefore keeps a
+// RAMP_LANE strip free on its +X flank (inside its own parcel, so a neighbour's wall and ramp stay out of it) and gives up that much frontage.
+const RAMP_LANE = 2.6;
+const SHELL_HOUSE_COVER = 0.33;                             // a kit house (9 x 7 m, two storeys, a real roof) may sit in a bigger yard than a box building may
+const MIN_COVER = 0.5;                                     // city theme: a building should fill at least this share of its parcel
+/** the largest share of its parcel (area `pa`) archetype `key` can reach in room fw x fd after growth (0 = it does not fit) */
+function archCover(key, fw, fd, pa) {
+  const A = ARCH[key], G = GROW[key];
+  if (A.gen === "tower") fw -= RAMP_LANE;
+  if (!A.dims.some((dm) => dm[0] <= fw + 1e-6 && dm[1] <= fd + 1e-6)) return 0;
+  let w = Math.min(G[0], floor25(fw)), d = Math.min(G[1], floor25(fd));
+  if (A.gen === "tower") w = d = Math.min(w, d);
+  return w * d / pa;
+}
+function fitArch(rng, key, fw, fd, minFloors, grow) {
   const A = ARCH[key];
+  if (grow && A.gen === "tower") fw -= RAMP_LANE;
   const fit = A.dims.filter((dm) => dm[0] <= fw + 1e-6 && dm[1] <= fd + 1e-6);
   if (!fit.length) return null;
   fit.sort((p, q) => q[0] * q[1] - p[0] * p[1]);
-  const dm = fit[Math.min(fit.length - 1, rng() < 0.6 ? 0 : 1)];
-  const cap = Math.min(MAX_FLOORS, maxFloorsFor(dm[0], dm[1]));
+  let dm = fit[Math.min(fit.length - 1, rng() < 0.6 ? 0 : 1)];
+  if (grow) dm = growDims(rng, key, A, dm, fw, fd);
+  let cap = Math.min(MAX_FLOORS, maxFloorsFor(dm[0], dm[1]));
+  if (grow && A.gen === "tower" && dm[0] < 15) cap = Math.min(cap, 2);                  // (city: a 12.5 m tower() of three storeys climbs its roof ramp at 44.4 degrees and a sprint down it mantles: two storeys there)
   let fl = A.floors.filter((f) => f <= cap);
   if (!fl.length) fl = [1];
   if (minFloors && Math.max(...fl) < minFloors) return null;
@@ -549,13 +599,17 @@ function fitArch(rng, key, fw, fd, minFloors) {
   return { key, w: dm[0], d: dm[1], floors, fh: A.fh, use: A.use, gen: A.gen };
 }
 /** place a building of dims (w, d) in a parcel rect facing (fx, fz), pushed to the street side; returns the building frame */
-function placeBuilding(rect, fx, fz, w, d) {
+function placeBuilding(rect, fx, fz, w, d, lane) {
   const turn = turnOf(fx, fz);
   let cx, cz;
   if (fz > 0) { cz = rect[3] - FRONT_SETBACK - d / 2; cx = (rect[0] + rect[2]) / 2; }
   else if (fz < 0) { cz = rect[1] + FRONT_SETBACK + d / 2; cx = (rect[0] + rect[2]) / 2; }
   else if (fx > 0) { cx = rect[2] - FRONT_SETBACK - d / 2; cz = (rect[1] + rect[3]) / 2; }
   else { cx = rect[0] + FRONT_SETBACK + d / 2; cz = (rect[1] + rect[3]) / 2; }
+  if (lane) {                                          // a tower() building keeps its exterior roof ramp on its local +X flank: push the building to the -X margin so the strip beside it is free
+    const fwE = (fz !== 0 ? rect[2] - rect[0] : rect[3] - rect[1]) - 2 * SIDE_MARGIN, u = -(fwE - w) / 2;
+    cx += u * COS[turn]; cz -= u * SIN[turn];
+  }
   return { cx, cz, turn };
 }
 function aabbOf(b, w, d) {
@@ -568,7 +622,7 @@ function paletteFor(rng, theme, big) {
 }
 /** build the parcel record (and its interior) for an archetype placed in `rect` */
 function makeBuildingParcel(S, rng, pid, blockId, rect, fx, fz, fit, theme, extra) {
-  const frame = placeBuilding(rect, fx, fz, fit.w, fit.d);
+  const frame = placeBuilding(rect, fx, fz, fit.w, fit.d, theme === "city" && fit.gen === "tower" ? RAMP_LANE : 0);
   const bd = { cx: r3(frame.cx), cz: r3(frame.cz), turn: frame.turn, w: fit.w, d: fit.d, floors: fit.floors, floorH: fit.fh, use: fit.use };
   const bb = aabbOf(bd, fit.w, fit.d);
   const big = fit.use === "midrise" || fit.use === "tower" || fit.use === "hall" || fit.use === "barn" || fit.use === "shop";
@@ -585,7 +639,7 @@ function makeBuildingParcel(S, rng, pid, blockId, rect, fx, fz, fit, theme, extr
   const inter = genInterior(rng, bd, pid);
   return { parcel, inter };
 }
-function makeShellParcel(S, rng, pid, blockId, rect, fx, fz, kit, theme) {
+function makeShellParcel(S, rng, pid, blockId, rect, fx, fz, kit, theme, variants) {
   const frame = placeBuilding(rect, fx, fz, kit[1], kit[2]);
   const bb = aabbOf(frame, kit[1], kit[2]);
   return {
@@ -593,20 +647,22 @@ function makeShellParcel(S, rng, pid, blockId, rect, fx, fz, kit, theme) {
     building: {
       cx: r3(frame.cx), cz: r3(frame.cz), w: kit[1], d: kit[2], turn: frame.turn, rot: ROT[frame.turn], facing: FACE[frame.turn].slice(),
       aabb: [r3(bb[0]), r3(bb[1]), r3(bb[2]), r3(bb[3])], gen: "shell", arch: "shell", kit: kit[0], floors: 0, visualHeight: kit[3], height: kit[3],
-      enterable: false, palette: paletteFor(rng, theme, kit[0].indexOf("suburban") < 0), ground: groundOf(S, bb[0], bb[1], bb[2], bb[3]),
+      enterable: false, palette: variants ? { key: kit[0].indexOf("suburban") < 0 ? "commercial" : "suburban", variant: variants[Math.floor(rng() * variants.length)] } : paletteFor(rng, theme, kit[0].indexOf("suburban") < 0), ground: groundOf(S, bb[0], bb[1], bb[2], bb[3]),
     },
   };
 }
-function makeLotParcel(pid, blockId, rect, fx, fz, rng) {
-  return { id: pid, block: blockId, use: "lot", lot: pick(rng, ["parking", "park", "yard"]), rect: [r3(rect[0]), r3(rect[1]), r3(rect[2]), r3(rect[3])], facing: [fx, fz], building: null };
+function makeLotParcel(pid, blockId, rect, fx, fz, rng, kinds) {
+  return { id: pid, block: blockId, use: "lot", lot: pick(rng, kinds || ["parking", "park", "yard"]), rect: [r3(rect[0]), r3(rect[1]), r3(rect[2]), r3(rect[3])], facing: [fx, fz], building: null };
 }
 /** assign every parcel of one block */
 function fillBlock(S, rng, blk, theme, kind, shellBudgetLeft, idBase, out) {
   const mix = mixFor(theme, kind);
   const bx0 = blk.cx - PARCEL_HALF, bz0 = blk.cz - PARCEL_HALF, bx1 = blk.cx + PARCEL_HALF, bz1 = blk.cz + PARCEL_HALF;
-  const nTarget = kind === "core" ? rint(rng, 3, 4) : kind === "yard" ? rint(rng, 4, 6) : kind === "village" ? rint(rng, 6, 8) : rint(rng, 5, 8);
-  const minSide = kind === "core" ? 14 : kind === "yard" ? 13 : 12;
-  const rects = splitBlock(rng, bx0, bz0, bx1, bz1, nTarget, minSide, kind === "core");
+  const grow = theme === "city";                                  // Wave 7 polish: the city theme builds dense, the other themes are the Wave-6 plan
+  const nTarget = grow ? (kind === "core" ? 4 : kind === "yard" ? rint(rng, 5, 6) : kind === "village" ? rint(rng, 6, 8) : rint(rng, 6, 8))
+    : kind === "core" ? rint(rng, 3, 4) : kind === "yard" ? rint(rng, 4, 6) : kind === "village" ? rint(rng, 6, 8) : rint(rng, 5, 8);
+  const minSide = grow ? (kind === "core" ? 18 : kind === "yard" ? 13 : 10) : kind === "core" ? 14 : kind === "yard" ? 13 : 12;
+  const rects = splitBlock(rng, bx0, bz0, bx1, bz1, nTarget, minSide, kind === "core" && !grow);
   const items = rects.map((r) => {
     const f = parcelFacing(rng, r, bx0, bz0, bx1, bz1);
     return { rect: r, fx: f[0], fz: f[1], area: (r[2] - r[0]) * (r[3] - r[1]) };
@@ -615,13 +671,22 @@ function fillBlock(S, rng, blk, theme, kind, shellBudgetLeft, idBase, out) {
   const shellW = mix.shell || 0, totW = Object.values(mix).reduce((a, b) => a + b, 0) || 1;
   const wantShell = Math.min(shellBudgetLeft.n, Math.round(items.length * shellW / totW + (rng() < (items.length * shellW / totW) % 1 ? 0.5 : 0)));
   const bySize = items.map((it, i) => i).sort((a, b) => items[b].area - items[a].area || a - b);
-  const shellKits = SHELLS[(kind === "core" ? "skyline" : (THEMES[theme] || THEMES.city).shell === "skyline" ? "mid" : (THEMES[theme] || THEMES.city).shell)];
+  // city towns mix kit houses in with the mid-rises - but each town uses HALF of each list (every other type, from an id-hash parity): a kit type is a draw call per district, two with its shadow
+  const half = (list) => (grow && kind !== "core" ? list.filter((k, i) => (i + hash32(out.id)) % 2 === 0) : list);
+  const shellKits = half(SHELLS[(kind === "core" ? "skyline" : (THEMES[theme] || THEMES.city).shell === "skyline" ? "mid" : (THEMES[theme] || THEMES.city).shell)]);
+  const houseKits = grow && kind !== "core" ? half(SHELLS.house_city) : null;
   const taken = new Set();
   let nShell = 0;
-  for (const i of bySize) {
+  // city theme: a shell goes where its fixed footprint FILLS the parcel (the biggest parcel is not the best one for a 10 m kit house), never under MIN_COVER
+  const kitFits = (kits, fw, fd) => kits.filter((k) => k[1] <= fw + 1e-6 && k[2] <= fd + 1e-6);
+  const bestCover = (it) => { const [fw, fd] = room(it.rect, it.fx, it.fz), pa = it.area; let b = 0; for (const k of kitFits(shellKits.concat(houseKits || []), fw, fd)) b = Math.max(b, k[1] * k[2] / pa); return b; };
+  const shellOrder = grow ? bySize.slice().sort((a, b) => bestCover(items[b]) - bestCover(items[a]) || a - b) : bySize;
+  for (const i of shellOrder) {
     if (nShell >= wantShell) break;
     const it = items[i], [fw, fd] = room(it.rect, it.fx, it.fz);
-    const kits = shellKits.filter((k) => k[1] <= fw + 1e-6 && k[2] <= fd + 1e-6);
+    let kits = kitFits(shellKits, fw, fd);
+    if (houseKits && (!kits.length || rng() < 0.45)) { const hk = kitFits(houseKits, fw, fd); if (hk.length) kits = hk; }
+    if (grow) kits = kits.filter((k) => k[1] * k[2] / it.area >= (k[0].indexOf("suburban") === 0 ? SHELL_HOUSE_COVER : MIN_COVER));
     if (!kits.length) continue;
     const kit = kits[Math.floor(rng() * kits.length)];
     it.shell = kit; taken.add(i); nShell++;
@@ -632,20 +697,26 @@ function fillBlock(S, rng, blk, theme, kind, shellBudgetLeft, idBase, out) {
   for (const it of items) {
     const pid = idBase + order++;
     const id = "p" + pid;
-    if (it.shell) { out.parcels.push(makeShellParcel(S, rng, id, blk.id, it.rect, it.fx, it.fz, it.shell, theme)); continue; }
+    if (it.shell) { out.parcels.push(makeShellParcel(S, rng, id, blk.id, it.rect, it.fx, it.fz, it.shell, theme, grow ? (kind === "core" ? SHELL_VARIANTS[hash32(out.id) % SHELL_VARIANTS.length] : [SHELL_VARIANTS[hash32(out.id) % SHELL_VARIANTS.length][0]]) : null)); continue; }
     const [fw, fd] = room(it.rect, it.fx, it.fz);
     let fit = null;
     if (mix.lot && rng() * (totW - (mix.shell || 0)) < mix.lot) fit = null;
     else {
-      const pool = keys.slice();
+      let pool = keys.slice();
+      if (grow) {                                                  // keep the archetypes that can fill >= MIN_COVER of this parcel (else the best-filling ones)
+        const cov = pool.map((k) => archCover(k, fw, fd, it.area));
+        const good = pool.filter((k, j) => cov[j] >= MIN_COVER);
+        if (good.length) pool = good;
+        else { const mx = Math.max(...cov); pool = pool.filter((k, j) => cov[j] >= mx - 1e-9 && mx > 0); }
+      }
       while (pool.length && !fit) {
         const k = wpick(rng, pool, (q) => mix[q]);
         pool.splice(pool.indexOf(k), 1);
-        fit = fitArch(rng, k, fw, fd);
+        fit = fitArch(rng, k, fw, fd, 0, grow);
       }
-      if (!fit) fit = fitArch(rng, "shed", fw, fd);
+      if (!fit) fit = fitArch(rng, "shed", fw, fd, 0, grow);
     }
-    if (!fit) { out.parcels.push(makeLotParcel(id, blk.id, it.rect, it.fx, it.fz, rng)); continue; }
+    if (!fit) { out.parcels.push(makeLotParcel(id, blk.id, it.rect, it.fx, it.fz, rng, grow && kind === "core" ? ["parking", "park"] : null)); continue; }       // (a downtown lot is a car park or a pocket park, never a bare yard)
     const sub = subRng(out.seed, out.id, id);
     const made = makeBuildingParcel(S, sub, id, blk.id, it.rect, it.fx, it.fz, fit, theme);
     out.parcels.push(made.parcel);
@@ -729,6 +800,11 @@ function anchorCandidates(maxShift, step) {
 }
 
 function gridAttempt(seed, poi, S, waterY, theme, kind, opts) {
+  const m0 = [FRONT_SETBACK, SIDE_MARGIN, BACK_MARGIN];
+  if (theme === "city") { FRONT_SETBACK = 1.2; SIDE_MARGIN = 0.75; BACK_MARGIN = 0.75; }
+  try { return gridAttemptIn(seed, poi, S, waterY, theme, kind, opts); } finally { FRONT_SETBACK = m0[0]; SIDE_MARGIN = m0[1]; BACK_MARGIN = m0[2]; }
+}
+function gridAttemptIn(seed, poi, S, waterY, theme, kind, opts) {
   const rng = subRng(seed, poi.id);
   const cols = opts.cols || 2, rows = opts.rows || 2;
   const total = cols * rows, minBlocks = clamp(opts.minBlocks != null ? opts.minBlocks : Math.min(total, 2), 1, total);
@@ -787,8 +863,8 @@ function gridAttempt(seed, poi, S, waterY, theme, kind, opts) {
   let pcount = 0;
   const holder = { seed, id: poi.id, parcels: L.parcels, rooms: L.rooms, doors: L.doors, stairs: L.stairs };
   // shell budget over the whole layout is settled after the block fills: allow up to 20 % of an estimated building count
-  const estimate = L.blocks.length * (kind === "core" ? 3.5 : kind === "yard" ? 4 : 6);
-  budget.n = Math.floor(estimate * MAX_SHELL_SHARE * 0.8);
+  const estimate = L.blocks.length * (theme === "city" ? (kind === "core" ? 4 : kind === "yard" ? 5.5 : 8) : kind === "core" ? 3.5 : kind === "yard" ? 4 : 6);
+  budget.n = Math.floor(estimate * MAX_SHELL_SHARE * (theme === "city" ? 1 : 0.8));
   for (const b of L.blocks) {
     const brng = subRng(seed, poi.id, "blk" + b.i + "," + b.j);
     pcount += fillBlock(S, brng, b, theme, kind, budget, pcount, holder);
@@ -866,7 +942,7 @@ function convertToEnterable(S, L, p, theme) {
   const rng = subRng(L.seed, L.id, p.id + "x");
   const [fx, fz] = p.facing, [fw, fd] = room(p.rect, fx, fz);
   let fit = null;
-  for (const k of ["house_m", "shop", "house_s", "cabin", "shed"]) { fit = fitArch(rng, k, fw, fd); if (fit) break; }
+  for (const k of ["house_m", "shop", "house_s", "cabin", "shed"]) { fit = fitArch(rng, k, fw, fd, 0, theme === "city"); if (fit) break; }
   if (!fit) return false;
   // remove an old shell's (nonexistent) interior; rebuild as an enterable building in the same parcel
   const made = makeBuildingParcel(S, rng, p.id, p.block, p.rect, fx, fz, fit, theme);
@@ -979,12 +1055,33 @@ function yardItems(rng, kind, theme, opts) {
     const dm = fit.length ? fit[Math.floor(rng() * fit.length)] : A.dims[0];
     return { key, w: dm[0], d: dm[1], floors: 1, fh: A.fh, use: A.use, gen: A.gen };
   };
-  const spec = { yw: 24, yd: 14, rows: { N: [], S: [], E: [], W: [] }, fields: 0, fence: true, silo: false, cars: 2 };
+  const spec = { yw: 24, yd: 14, rows: { N: [], S: [], E: [], W: [] }, fields: 0, fence: true, silo: false, cars: 2, variant: "homestead", containers: 0, tower: false };
   if (kind === "compound") {
-    const nH = rint(rng, 2, 4);
-    const order = ["N", "S", "N", "S"];
-    for (let k = 0; k < nH; k++) spec.rows[order[k]].push(dimsOf(house(), 10));
-    spec.rows[rng() < 0.5 ? "W" : "E"].push(dimsOf("shed", 12));
+    // Wave 7 polish (opts.variety, Savanna only): five kinds of compound instead of one - a homestead, a farmstead (barn + silo), a depot (a hall, sheds, a parking
+    // yard and containers), an open hamlet, a homestead with a water tower. Without opts.variety this is the Wave-6 homestead, draw for draw.
+    const V = opts.variety ? wpick(rng, [["homestead", 34], ["farmstead", 22], ["depot", 14], ["hamlet", 18], ["tower", 12]], (q) => q[1])[0] : "homestead";
+    spec.variant = V;
+    if (V === "farmstead") {
+      spec.yw = 34; spec.yd = 16; spec.silo = true; spec.cars = 1;
+      spec.rows.N.push(dimsOf("barn", 22)); spec.rows.N.push(dimsOf("shed", 8));
+      spec.rows.S.push(dimsOf("house_m", 12.5)); spec.rows.S.push(dimsOf("house_s", 10));
+      if (rng() < 0.5) spec.rows.E.push(dimsOf("shed", 10));
+    } else if (V === "depot") {
+      spec.yw = 34; spec.yd = 18; spec.cars = 6; spec.containers = 3;
+      spec.rows.N.push(dimsOf("hall", 20)); spec.rows.N.push(dimsOf("shed", 8));
+      spec.rows.S.push(dimsOf("shed", 10)); spec.rows.S.push(dimsOf("shed", 10));
+      if (rng() < 0.5) spec.rows.E.push(dimsOf("shed", 10));
+    } else if (V === "hamlet") {
+      spec.yw = 26; spec.yd = 12; spec.fence = false; spec.cars = 3;
+      const nH = rint(rng, 3, 4), order = ["N", "S", "N", "S"];
+      for (let k = 0; k < nH; k++) spec.rows[order[k]].push(dimsOf(house(), 10));
+    } else {
+      const nH = rint(rng, 2, 4);
+      const order = ["N", "S", "N", "S"];
+      for (let k = 0; k < nH; k++) spec.rows[order[k]].push(dimsOf(house(), 10));
+      spec.rows[rng() < 0.5 ? "W" : "E"].push(dimsOf("shed", 12));
+      if (V === "tower") { spec.tower = true; spec.yw = 28; spec.yd = 16; spec.cars = 2; }
+    }
   } else if (kind === "farm") {
     spec.yw = 36; spec.yd = 18; spec.fields = 3; spec.silo = true; spec.cars = 2;
     spec.rows.N.push(dimsOf("barn", 22)); spec.rows.N.push(dimsOf("shed", 8));
@@ -1068,7 +1165,7 @@ function clusterAttempt(seed, poi, S, waterY, theme, kind, opts) {
   const rng = subRng(seed, poi.id);
   const fixed = !!opts.fixed;
   const lane = kind === "lane" ? (theme === "mill" ? 190 : clamp(Math.round(poi.r * 1.0 / 5) * 5, 60, 120)) : 0;      // (a "green" is a fixed 40 x 26 m common)
-  const spec = yardItems(subRng(seed, poi.id, "items"), kind, theme, { lane });
+  const spec = yardItems(subRng(seed, poi.id, "items"), kind, theme, { lane, variety: !!opts.variety });
   const frame = yardFrame(spec);
   const reliefMax = kind === "compound" ? 3.2 : theme === "ruin" ? 5.5 : 3.6;
   const minB = kind === "compound" ? 2 : 6;
@@ -1151,9 +1248,23 @@ function clusterAttempt(seed, poi, S, waterY, theme, kind, opts) {
     });
     L.compound.bounds = f;
   }
+  L.compound.variant = spec.variant;
+  const keepOut = [];                                  // [x, z, r]: what a car keeps clear of (Wave 7 polish: containers, the water tower)
+  if (spec.containers) {
+    const cs = [[-spec.yw / 2 + 4, -spec.yd / 2 + 2.6], [spec.yw / 2 - 4, spec.yd / 2 - 2.6], [-spec.yw / 2 + 4, spec.yd / 2 - 2.6]];
+    for (let k = 0; k < spec.containers; k++) {
+      const q = t(cs[k][0], cs[k][1]);
+      L.compound.props.push({ kind: "container", x: r3(q[0]), z: r3(q[1]), rot: best.axis === 1 ? 1 : 0 });
+      keepOut.push([q[0], q[1], 4.2]);
+    }
+  }
+  if (spec.tower && L.parcels.length) { const q = t(0, 0); L.compound.props.push({ kind: "watertower", x: r3(q[0]), z: r3(q[1]) }); keepOut.push([q[0], q[1], 7]); }
   const crng = subRng(seed, poi.id, "cars");
   for (let k = 0; k < spec.cars; k++) {
-    const cx = rrange(crng, yard[0] + 3, yard[2] - 3), cz = rrange(crng, yard[1] + 2, yard[3] - 2);
+    let cx = rrange(crng, yard[0] + 3, yard[2] - 3), cz = rrange(crng, yard[1] + 2, yard[3] - 2);
+    const hits = () => keepOut.some((o) => (o[0] - cx) * (o[0] - cx) + (o[1] - cz) * (o[1] - cz) < o[2] * o[2]);
+    for (let tries = 0; tries < 8 && hits(); tries++) { cx = rrange(crng, yard[0] + 3, yard[2] - 3); cz = rrange(crng, yard[1] + 2, yard[3] - 2); }
+    if (hits()) continue;                              // (no free spot in 8 draws: this car is not parked)
     L.compound.cars.push({ x: r3(cx), z: r3(cz), turn: (yard[2] - yard[0] >= yard[3] - yard[1] ? 1 : 0) + 2 * rint(crng, 0, 1) });
   }
   if (spec.silo && L.parcels.length) {
@@ -1232,7 +1343,7 @@ export function placeCompounds(seed, mapId, towns, heightFn, waterY, opts) {
   const minGap = opts.minGap != null ? opts.minGap : 70;
   const REACH = opts.reach != null ? opts.reach : COMPOUND_REACH;
   const G = COMPOUND_GRID, n = Math.floor(2 * REACH / G) + 1, N = n * n;
-  const foot = townFootprints(towns), boxes = enterableBoxes(towns);
+  const foot = townFootprints(towns).concat(opts.reserve || []), boxes = enterableBoxes(towns);
   const gx = new Float64Array(N), gz = new Float64Array(N), dbox = new Float64Array(N).fill(1e9), dtown = new Float64Array(N).fill(1e9), ok = new Uint8Array(N);
   const wetMin = waterY + GEN_WET + 0.4;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i; gx[k] = -REACH + i * G; gz[k] = -REACH + j * G; }
@@ -1267,9 +1378,19 @@ export function placeCompounds(seed, mapId, towns, heightFn, waterY, opts) {
   const sites = [];
   let examined = 0, rejected = 0;
   const bad = new Uint8Array(N);
+  // `inner` (default 0) favours the interior: a candidate's score is its distance x (1 + inner x (1 - how far out it is, 0 at the centre .. 1 at +-REACH)); `jitter`
+  // (default 0) picks the site at random (own stream) among the candidates scoring within that share of the best, so the fill is not a lattice. With both 0 this is
+  // the Wave-6 farthest-point fill, byte for byte (isla_viva and deepwood keep it: their coverage rows were tuned on it).
+  const inner = plan.inner || 0, jitter = plan.jitter || 0, jrng = jitter ? subRng(seed, mapId + ":compounds", "pick") : null;
+  const score = inner ? (k) => dbox[k] * (1 + inner * (1 - Math.max(Math.abs(gx[k]), Math.abs(gz[k])) / REACH)) : (k) => dbox[k];
   while (sites.length < count && examined < count * 6 + 60) {
-    let bk = -1, bd = 0;
-    for (let k = 0; k < N; k++) if (ok[k] && !bad[k] && dbox[k] > bd) { bd = dbox[k]; bk = k; }
+    let bk = -1, bd = 0, bs = 0;
+    for (let k = 0; k < N; k++) if (ok[k] && !bad[k]) { const sc = score(k); if (sc > bs) { bs = sc; bd = dbox[k]; bk = k; } }
+    if (bk >= 0 && jitter) {
+      const pool = [];
+      for (let k = 0; k < N; k++) if (ok[k] && !bad[k] && dbox[k] >= minGap && score(k) >= bs * (1 - jitter)) pool.push(k);
+      if (pool.length) { bk = pool[Math.floor(jrng() * pool.length)]; bd = dbox[bk]; }
+    }
     if (bk < 0 || bd < minGap) break;
     examined++;
     const x = gx[bk], z = gz[bk];
@@ -1277,7 +1398,7 @@ export function placeCompounds(seed, mapId, towns, heightFn, waterY, opts) {
     if (reg.lo < wetMin || reg.hi - reg.lo > 6.5) { bad[bk] = 1; rejected++; continue; }
     const idx = sites.length;
     const theme = themes[(() => { const t = wpick(trng, themes.map((q, i) => i), (i) => weights[i] != null ? weights[i] : 1); return t; })()];
-    const L = layout(seed, { id: "cmp" + (idx < 10 ? "0" : "") + idx, x, z, r: 30 }, S, waterY, theme, { kind: "compound", fixed: true });
+    const L = layout(seed, { id: "cmp" + (idx < 10 ? "0" : "") + idx, x, z, r: 30 }, S, waterY, theme, { kind: "compound", fixed: true, variety: !!plan.variety });
     if (L.stats.enterable < 3) { bad[bk] = 1; rejected++; continue; }
     sites.push(L);
     const nb = enterableBoxes([L]);
@@ -1344,7 +1465,7 @@ export function layoutMap(seed, mapId, pois, heightFn, waterY, opts) {
   opts = opts || {};
   const S = asSampler(heightFn);
   pois = pois || defaultPois(mapId);
-  const avoid = [];                                       // footprints of the towns laid out so far: a later town that has to move (a POI on water) never lands on them
+  const avoid = (opts.reserve || []).map((r) => r.slice());   // footprints of the towns laid out so far (and the caller's `reserve` rectangles [x0, z0, x1, z1]: landmarks that stay): a later town that has to move never lands on them
   const towns = pois.map((p) => {
     const plan = planFor(mapId, p);
     const L = layout(seed, p, S, waterY, plan.theme, Object.assign({}, plan, { avoid: avoid.slice() }));
@@ -1352,7 +1473,7 @@ export function layoutMap(seed, mapId, pois, heightFn, waterY, opts) {
     if (L.compound && L.parcels.length) avoid.push(L.compound.bounds);
     return L;
   });
-  const comp = opts.compounds === false ? { sites: [], stats: { examined: 0, rejected: 0, placed: 0 } } : placeCompounds(seed, mapId, towns, S, waterY, opts.compound || {});
+  const comp = opts.compounds === false ? { sites: [], stats: { examined: 0, rejected: 0, placed: 0 } } : placeCompounds(seed, mapId, towns, S, waterY, Object.assign({}, opts.compound || {}, { reserve: opts.reserve || [] }));
   const links = opts.links === false ? [] : buildLinks(towns, S, waterY);
   const all = towns.concat(comp.sites);
   const ent = all.reduce((a, T) => a + T.stats.enterable, 0), bld = all.reduce((a, T) => a + T.stats.buildings, 0);
@@ -1368,6 +1489,135 @@ export function summarize(L) {
   for (const b of L.blocks) rel = Math.max(rel, b.ground.relief);
   return { blocks: L.blocks.length, parcels: L.parcels.length, buildings: bl.length, enterable: ent.length, shells: bl.length - ent.length, lots: L.parcels.length - bl.length,
     storeys: floors, doors: L.doors.length, rooms: L.rooms.length, stairs: L.stairs.length, maxBlockRelief: rel, roadEdges: L.roads ? L.roads.edges.length : 0 };
+}
+
+// ── street props (Wave 7, lane 7A): lights, hydrants, benches, planters, parked cars, lot dressing - as DATA, in the layout's own sub-RNG ──────────────────────────
+// Every entry is a citykit list item minus its height: { type, x, z, rot, kind }. x, z are the footprint ORIGIN of the manifest type (all these types are modelled
+// about their origin), rot is the quarter-turn index citykit takes (front +Z faces +Z, +X, -Z, -X for 0..3). maps.js puts each at the ground it stands on.
+// Nothing is placed on a parcel rectangle (buildings and lots are inside the parcel squares), inside a street junction, or within 1.5 m of another prop of its kind.
+export const KIT_CARS = [["cars/sedan", 3], ["cars/suv", 2], ["cars/hatchback-sports", 1.2], ["cars/taxi", 1], ["cars/van", 1.2], ["cars/police", 0.5], ["cars/truck", 0.7], ["cars/delivery", 0.6]];
+export const STREET_TYPES = ["props/light-curved", "props/hydrant", "props/grave-bench", "props/planter", "props/dumpster", "props/box-crate", "props/crate-yard", "props/cone-traffic",
+  "props/light-square", "props/light-curved-double", "props/construction-barrier", "props/shipping-container", "furniture/trashcan"];     // (the last five: the Wave 7 polish dressing, city theme only)
+/** Parked-car paints (city theme): muted, mostly neutral - white, silver, greys, black, dark blue / red / green, sand - as [sRGB hex, weight]. A car entry carries one as `tint`
+ *  (citykit recolours the saturated body texels of the car palette to it; the glass, tyres and lamps keep their own colours). Taxis and police cars keep their liveries. */
+export const CAR_TINTS = [[0xf0f0ee, 3], [0xc7cbd0, 4], [0x8c929a, 3], [0x3a3e44, 4], [0x1e2227, 3], [0x1f3553, 2], [0x5a2029, 2], [0x4b583b, 2], [0xb7a27b, 2], [0x68808f, 2], [0x7c2f26, 1.2], [0x9a6a3c, 1]];
+export const TINTABLE_CARS = ["cars/sedan", "cars/suv", "cars/hatchback-sports", "cars/van", "cars/truck", "cars/delivery"];
+const LIGHT_OFFSET = 6.4;       // m from a street centreline: the middle of the 3 m sidewalk (5 .. 8)
+const CAR_OFFSET = 3.55;        // m from a street centreline: the middle of the curb lane (a 2.55 m car spans 2.3 .. 4.8)
+const JUNCTION = 9.5;           // m from a node a street prop keeps clear (half the road + the curb radius + a car length of approach)
+/** quarter-turn index whose front (+Z) faces (dx, dz) */
+const faceIdx = (dx, dz) => (Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? 1 : 3) : (dz > 0 ? 0 : 2));
+function pickCars(rng, n) {
+  const pool = KIT_CARS.map((c) => c.slice()), out = [];
+  while (out.length < n && pool.length) { const c = wpick(rng, pool, (q) => q[1]); pool.splice(pool.indexOf(c), 1); out.push(c[0]); }
+  return out;
+}
+/** The static street dressing of one grid layout (a town): see the block comment above. Pure and deterministic: a function of (seed, layout). */
+export function streetProps(L, seed) {
+  const out = [];
+  if (!L.blocks || !L.blocks.length) return out;
+  const rng = subRng(seed === undefined ? L.seed : seed, L.id, "street");
+  const nodes = L.roads.nodes;
+  const heavy = L.kind === "core";
+  const city = L.theme === "city";                                      // Wave 7 polish: the extra dressing and the car paints are the city theme's; the others are the stage-A output
+  const vrng = city ? subRng(seed === undefined ? L.seed : seed, L.id, "street2") : null, trng = city ? subRng(seed === undefined ? L.seed : seed, L.id, "tint") : null;
+  const cars = pickCars(rng, city ? (heavy ? 4 : 3) : heavy ? 5 : 4);     // (city: a car type is a draw call, two with its shadow: paints give the variety instead)
+  const inBlock = (x, z, m) => { for (const b of L.blocks) if (Math.abs(x - b.cx) <= BLOCK_HALF - m && Math.abs(z - b.cz) <= BLOCK_HALF - m) return true; return false; };
+  const taken = [];                                                    // [x, z, kind, r] placed so far: 1.5 m clear of a prop of the same kind, 2.5 m of a light
+  const clear = (x, z, kind, r) => { for (const q of taken) { const dx = q[0] - x, dz = q[1] - z, rr = q[3] + r + 0.6; if (dx * dx + dz * dz < rr * rr) return false; } return true; };
+  const add = (type, x, z, rot, kind, r) => {
+    if (!clear(x, z, kind, r)) return false;
+    taken.push([x, z, kind, r]);
+    const e = { type, x: r3(x), z: r3(z), rot, kind };
+    if (trng && kind === "car" && TINTABLE_CARS.indexOf(type) >= 0) e.tint = wpick(trng, CAR_TINTS, (q) => q[1])[0];
+    out.push(e); return true;
+  };
+  // street lights: both sidewalks of every street edge that has a block beside it, staggered so a light faces a gap
+  for (const e of L.roads.edges) {
+    const A = nodes[e.a], B = nodes[e.b], len = e.len;
+    if (len < 2 * JUNCTION + 6) continue;
+    const ux = e.axis === "x" ? Math.sign(B.x - A.x) : 0, uz = e.axis === "z" ? Math.sign(B.z - A.z) : 0, nx = -uz, nz = ux;
+    for (const side of [-1, 1]) {
+      const n = Math.max(1, Math.round((len - 2 * JUNCTION) / 26));
+      for (let k = 0; k < n; k++) {
+        const t = JUNCTION + (len - 2 * JUNCTION) * ((k + (side > 0 ? 0.3 : 0.7)) / n);
+        const px = A.x + ux * t + nx * side * LIGHT_OFFSET, pz = A.z + uz * t + nz * side * LIGHT_OFFSET;
+        if (!inBlock(px, pz, 0.3)) continue;
+        let lt = "props/light-curved";
+        if (vrng) vrng();                                              // (one stream draw per light kept: the other dressing below does not shift)
+        add(lt, px, pz, faceIdx(nx * side, nz * side), "light", 0.3);
+      }
+    }
+  }
+  // each block: corner hydrants, a bench or two mid-side, planters at the corners of the core
+  for (const b of L.blocks) {
+    const bx = [b.cx - BLOCK_HALF + 1.5, b.cx + BLOCK_HALF - 1.5], bz = [b.cz - BLOCK_HALF + 1.5, b.cz + BLOCK_HALF - 1.5];
+    for (const x of bx) for (const z of bz) {
+      if (rng() < (city ? 0.17 : 0.45)) add("props/hydrant", x, z, Math.floor(rng() * 4), "hydrant", 0.4);     // (a hydrant is 976 triangles: 83 of them were 81k, a tenth of the city's kit)
+      else if (heavy && rng() < 0.5) add("props/planter", x + (x > b.cx ? -0.9 : 0.9), z + (z > b.cz ? -0.7 : 0.7), Math.floor(rng() * 2) * 2, "planter", 0.9);
+    }
+    for (const side of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {            // the four sidewalks (side = the direction of the street from the block centre)
+      if (rng() < 0.45) continue;
+      const along = (rng() - 0.5) * 18, px = b.cx + side[0] * (BLOCK_HALF - 1.5) + (side[0] ? 0 : along), pz = b.cz + side[1] * (BLOCK_HALF - 1.5) + (side[1] ? 0 : along);
+      add("props/grave-bench", px, pz, faceIdx(side[0], side[1]), "bench", 0.8);
+    }
+  }
+  // parked cars in the curb lanes (never in a junction), more of them downtown
+  const occ = city ? (heavy ? 0.16 : 0.12) : heavy ? 0.24 : 0.15;     // (a parked car is 2,000-2,500 triangles: the city has four times the street length of stage A, not four times the cars)
+  for (const e of L.roads.edges) {
+    const A = nodes[e.a], B = nodes[e.b], len = e.len;
+    const ux = e.axis === "x" ? Math.sign(B.x - A.x) : 0, uz = e.axis === "z" ? Math.sign(B.z - A.z) : 0, nx = -uz, nz = ux;
+    for (const side of [-1, 1]) {
+      for (let t = JUNCTION + 2.4; t <= len - JUNCTION - 2.4; t += 6.4) {
+        const draw = rng(), pickT = rng(), flip = rng() < 0.5, jit = (rng() - 0.5) * 1.6;
+        if (draw >= occ) continue;
+        const px = A.x + ux * (t + jit) + nx * side * CAR_OFFSET, pz = A.z + uz * (t + jit) + nz * side * CAR_OFFSET;
+        const rot = e.axis === "x" ? (flip ? 1 : 3) : (flip ? 0 : 2);
+        add(cars[Math.min(cars.length - 1, Math.floor(pickT * cars.length))], px, pz, rot, "car", 2.4);
+      }
+    }
+  }
+  // the empty lots: a parking lot (two rows of stalls, half full), a pocket park (benches, planters), a yard (a dumpster and crates)
+  for (const p of L.parcels) {
+    if (p.use !== "lot") continue;
+    const [x0, z0, x1, z1] = p.rect, w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    if (p.lot === "parking") {
+      const alongX = w >= d, L1 = alongX ? w : d, Wd = alongX ? d : w;
+      const rows = Wd >= 20 ? [-(Wd / 2 - 4.6), Wd / 2 - 4.6] : [0];
+      for (const off of rows) for (let u = -L1 / 2 + 3.4; u <= L1 / 2 - 3.4; u += 3.2) {
+        if (rng() > 0.5) continue;
+        const px = alongX ? cx + u : cx + off, pz = alongX ? cz + off : cz + u;
+        add(cars[Math.floor(rng() * cars.length)], px, pz, alongX ? (off < 0 ? 0 : 2) : (off < 0 ? 1 : 3), "car", 2.4);
+      }
+    } else if (p.lot === "park") {
+      add("props/grave-bench", cx - 3, cz, 1, "bench", 0.8); add("props/grave-bench", cx + 3, cz, 3, "bench", 0.8);
+      add("props/planter", cx, cz - 4, 0, "planter", 0.9); add("props/planter", cx, cz + 4, 2, "planter", 0.9);
+    } else if (city && L.kind === "yard" && w >= 14 && d >= 12) {
+      const alongX = w >= d, rot = alongX ? 0 : 1;                       // a container yard: two containers (6 x 2.9 m) end to end along the lot's long side
+      for (const off of [-3.4, 3.4]) add("props/shipping-container", alongX ? cx + off : cx, alongX ? cz : cz + off, rot, "container", 3.2);
+    } else {
+      add("props/dumpster", x0 + 3, z0 + 2.5, 0, "dumpster", 1.1);
+      add(rng() < 0.5 ? "props/box-crate" : "props/crate-yard", x1 - 3, z1 - 3, Math.floor(rng() * 4), "crate", 0.7);
+      add("props/crate-yard", x1 - 5, z1 - 3.2, Math.floor(rng() * 4), "crate", 0.7);
+    }
+  }
+  if (city) {
+    // a parked car is 2,000-2,500 triangles: a core of 86 of them (seed 1) cost the endgame view 340k. The cars a town ends up with are thinned to an even spread of at most
+    // CAR_CAP (38 in a core, 20 elsewhere) AFTER every draw above was made, so nothing else in the layout moves
+    const capN = heavy ? 38 : 20, idxs = [];
+    for (let i = 0; i < out.length; i++) if (out[i].kind === "car") idxs.push(i);
+    if (idxs.length > capN) {
+      const drop = new Set(), n = idxs.length;
+      for (let k = 0; k < n; k++) if (!(Math.floor((k + 1) * capN / n) > Math.floor(k * capN / n))) drop.add(idxs[k]);
+      for (let i = out.length - 1; i >= 0; i--) if (drop.has(i)) out.splice(i, 1);
+    }
+    // litter bins at the block corners (the sidewalk's outer corners, beside the hydrants and benches)
+    for (const b of L.blocks) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      if (vrng() > (heavy ? 0.5 : 0.3)) continue;
+      add("furniture/trashcan", b.cx + sx * (BLOCK_HALF - 2.3), b.cz + sz * (BLOCK_HALF - 1.4), Math.floor(vrng() * 4), "bin", 0.35);
+    }
+  }
+  return out;
 }
 
 // tables the selftest (and Wave 7 / lane 6C) read: the shell kit sizes (checked against the manifest), archetypes, themes, mixes
