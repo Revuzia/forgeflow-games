@@ -184,7 +184,7 @@ GATES = [
     ("squadguard_live_fallback_full", "squadguard_live.py", ["--full", "--cases", "fallback-full"], 3600, False),
     # Wave-7 completion round (D5): the SAME cases against the DEPLOYED build (common.LIVE_BASE over the network; read-only, the relay is a stand-in, nothing of production is touched; 63 rows, ~2 min).
     # INFORMATION here: it judges the build that is live, not the candidate in the working copy. It is a COUNTED part of every post-deploy check (README): `python _harness/squadguard_live.py --live`
-    ("squadguard_live_cdn", "squadguard_live.py", ["--live", "--cases", SQ_CASES], 1800, True),
+    ("squadguard_live_cdn", "squadguard_live.py", ["--live", "--cases", SQ_CASES + "," + SQ_CASES_FALLBACK], 1800, True),
     # the loot rows on Savanna: every row except `rings` / `glare` (their A/B needs a SAND patch, which Savanna has none of: the Isla Viva run judges them). chestview judges open-sky chests
     ("loot_beams_rings_ashgrid", "new/loot_beams_rings.py", ["--map", "ashgrid", "--only", "gpusync,pools,clamp,ceilpix,pickup,deaths,chestview,stormfade"], 5400, False),
     # ---- Wave-4 lane gates: _harness/new/<lane>_<name>.py, registered 2026-10-12. Same convention as every gate above (0 pass /
