@@ -39,6 +39,16 @@ const [mapsMod, playerMod, weaponsMod, lootMod, stormMod, botsMod, hudMod, audio
     import("./royale/net.js" + V),
   ]);
 const { MAPS, buildMap, disposeMapResources } = mapsMod;
+// sim/navgrid.js (Wave 7, lane 7B2): the baked town navigation grid, a second universal script on window.FFG.sim.NavGrid, fetched in parallel with
+// sim/royale.js below. OPTIONAL: if it fails to load the bots keep the 64 m window planner everywhere (bots.js feature-detects it), so a missing
+// file is a console note, not a failure.
+const navLoad = new Promise((res) => {
+  if (window.FFG && window.FFG.sim && window.FFG.sim.NavGrid) return res();
+  const s = document.createElement("script");
+  s.src = new URL("../sim/navgrid.js" + V, import.meta.url).href;
+  s.onload = res; s.onerror = () => { console.warn("[royale] navgrid.js not loaded - the bots keep the window planner:", s.src); res(); };
+  document.head.appendChild(s);
+});
 // sim/royale.js is a universal script (not an ES module) — load it once via
 // a classic <script> tag so it lands on window.FFG.sim.Royale.
 await new Promise((res, rej) => {
@@ -52,6 +62,7 @@ await new Promise((res, rej) => {
   document.head.appendChild(s);
 });
 const SIM = window.FFG.sim.Royale;
+await navLoad;
 
 // Match teardown order (contract C8). Every module that owns per-match state
 // exports disposeMatch(W); each is FEATURE-DETECTED so lanes can land in any

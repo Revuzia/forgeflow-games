@@ -114,6 +114,7 @@ export function disposeMatch(W) {
   brains.length = 0;
   navCols.length = 0;
   _wq.length = 0; _mq.length = 0;     // (Wave 5) the wall probes' collider scratch: references to the old map's colliders
+  navReset();                         // (Wave 7) the town grid: typed arrays + the old map's colliders
   return { brains: n };
 }
 
@@ -215,7 +216,7 @@ export function attachBrain(W, actor, nBots) {
       // numbers only meet `|| 0` / `|| -99` defaults or `>` tests against W.t >= 0;
       // the rest only meet truthiness or `== null`. fightTarget, threatFor and
       // coverState keep `undefined` itself (compared with !== / ===).
-      lootType: null, supply: null, path: null, pathGoal: null, nextPathT: 0, badLoot: null,
+      lootType: null, supply: null, path: null, pathGoal: null, nextPathT: 0, badLoot: null, navGX: 0, navGZ: 0, navT: -99,
       progGoal: null, progBest: null, progT: 0, wallSide: 0, detourDir: 0, nextJumpT: 0,
       anchor: null, anchorT: 0, breaks: 0,
       // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
@@ -238,6 +239,8 @@ export function attachBrain(W, actor, nBots) {
   };
   actor.brain = brain;
   brains.push(brain);
+  // (Wave 7) the town grid's outdoor tiles bake in the idle time of startMatch's awaits and of the lobby; update() is the barrier (navArm). Lobby phase only.
+  if (nav.map !== W.map && W.phase === "lobby") startNav(W);
   return brain;
 }
 
@@ -322,7 +325,10 @@ export function assignDrops(W) {
       const at = landingFor(lp);
       if (!at) continue;
       const s = { x: at.x, z: at.z, taken: false };
-      if (lp.poi == null) spots.wild.push(s);
+      // (Wave 7) a Savanna compound's loot points are tagged cmpNN, which names no POI: they used to be filed under a list nothing ever
+      // claimed from, so ~30 compounds with their guns and chests were never a landing zone. They land with the wild spots (one bot per
+      // gun / chest spot, so the number of bots a compound takes scales with its loot points, as a POI's cap does).
+      if (lp.poi == null || (typeof lp.poi === "string" && lp.poi.startsWith("cmp"))) spots.wild.push(s);
       else (byPoi[lp.poi] || (byPoi[lp.poi] = [])).push(s);
     }
   }
@@ -424,11 +430,14 @@ export function assignDrops(W) {
 // ═════════════════════════════════════════════════════════════════════════════
 export function update(W, dt) {
   if (!brains.length) return;
+  if (nav.job && !nav.ready) navArm(W);      // (Wave 7) the barrier: the first tick of a match never runs on a half-baked grid
+  if (nav.ready) navTick();                  // (Wave 7) the bake schedule: a slice of the building tile in progress
   // Cover scans are the one genuinely expensive thing a brain can do, so they are
   // rationed GLOBALLY rather than per-bot: 2 full scans per frame across all 49
   // brains. With ~24 bots fighting at once every fighter still gets a slot about
   // every 12 frames (~0.2s), far more often than the re-plan interval needs.
   _coverBudget = 2;
+  nav.q = NAV_Q_PER_FRAME;
   const now = W.t;
   const pp = W.player ? W.player.pos : null;
   for (const b of brains) {
@@ -716,8 +725,9 @@ function onEnter(W, b, state) {
     const pick = pickLoot(W, a, near);
     bb.lootId = pick ? pick.id : null;
     bb.lootType = pick ? pick.type : null;
-    if (pick) bb.moveTo = { x: pick.pos.x, z: pick.pos.z, y: pick.pos.y };   // y: loot on an upper floor
-    else {
+    if (pick) {
+      bb.moveTo = { x: pick.pos.x, z: pick.pos.z, y: pick.pos.y };   // y: loot on an upper floor
+    } else {
       // no loot in reach — head to one of the 3 nearest POIs (random pick, so
       // a bot on a barren POI doesn't orbit it forever)
       const ranked = W.map.pois
@@ -839,11 +849,17 @@ function feedsStarvingPrimary(a, ammoId) {
   return false;
 }
 
+const NAV_UNREACHABLE = 25;       // pickLoot: a candidate the town grid cannot route to loses this many points
+const _pkS = [], _pkN = [];       // pickLoot's best-K scratch (score, loot), best first
 function pickLoot(W, a, near) {
   const upgraded = isUpgraded(a);
   // out of ammo everywhere → ammo boxes and chests ARE the priority
   const dry = !a.inventory.slots.some((s) => s && s.kind === "weapon" && slotAmmo(a, s) > 0);
-  let best = null, bs = -1;
+  // (Wave 7, lane 7B2) K = 1 is the old scan (the strict > keeps the first of equal scores). With the town grid armed the best K are kept
+  // and re-priced by their route: score - 0.4 x metres of PATH instead of 0.4 x metres of straight line, so the gun behind a wall
+  // is not "8 m away" and the one across a street is not "nearer" than the one on the way; a candidate with no route loses 25 points.
+  const K = nav.ready ? NAV_PICK_K : 1;
+  _pkS.length = 0; _pkN.length = 0;
   for (const n of near) {
     let score = 0;
     // Skip anything give() would refuse. Without this a bot at the gun cap kept
@@ -860,9 +876,33 @@ function pickLoot(W, a, near) {
     else if (n.data.kind === "consumable") score = n.data.id.includes("shield") ? 45 : 34;
     else if (n.data.kind === "ammo") score = dry ? 80 : (feedsStarvingPrimary(a, n.data.id) ? 70 : 38);
     score -= n.d * 0.4;
-    if (score > bs && !lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) && !offShore(W, a, n.pos)) { bs = score; best = n; }   // (only a would-be winner pays for the probes)
+    if (score > (_pkN.length < K ? -1 : _pkS[K - 1]) && !lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) && !offShore(W, a, n.pos)) {   // (only a would-be winner pays for the probes)
+      let i = _pkN.length;
+      while (i > 0 && _pkS[i - 1] < score) i--;          // after the equal scores: the first of equals wins
+      _pkS.splice(i, 0, score); _pkN.splice(i, 0, n);
+      if (_pkN.length > K) { _pkS.length = K; _pkN.length = K; }
+    }
   }
-  return best;
+  if (!_pkN.length) return null;
+  if (K === 1) return _pkN[0];
+  nav.st.picks++;
+  let bi = 0, bv = -1e9;
+  for (let i = 0; i < _pkN.length; i++) {
+    const n = _pkN[i];
+    let v = _pkS[i], p = null;
+    // the favourite is always priced (its route becomes the bot's); a runner-up only when a longer route could still flip the order: a route is
+    // 0.4 points a metre, the walks of a town are rarely more than 30 m longer than the line (a query is 0.1-0.7 MB of garbage: 87 % of all of them
+    // were these candidates before this margin)
+    if (nav.q > 0 && (i === 0 || _pkS[0] - _pkS[i] <= NAV_PICK_MARGIN) && navBoth(a.pos.x, a.pos.z, n.pos.x, n.pos.z)) {
+      nav.q--;
+      p = gridPath(a.pos.x, a.pos.y, a.pos.z, n.pos.x, n.pos.z, n.pos.y, i > 0, true);     // only the straight-line favourite queues its building when it is not baked yet
+      if (p) { v += n.d * 0.4 - Math.max(n.d, navLen(a, p)) * 0.4; nav.st.pickPaths++; }
+      else if (navMiss) nav.st.pickMiss++;                // the tiles are queued, not baked yet: no verdict
+      else { v -= NAV_UNREACHABLE; nav.st.pickNulls++; }
+    }
+    if (v > bv) { bv = v; bi = i; }
+  }
+  return _pkN[bi];
 }
 
 /** Loot under a ceiling lower than a standing actor is a TRAP, not a target: the
@@ -1887,7 +1927,7 @@ function navRoofed(x, z, h, ci) {
  *  on a grid shifted by half a cell (doorways: see navSearch). Measured 2026-09-30:
  *  a bot inside a palm_bay hut with two 1.4 m doors got null from BOTH findPath
  *  and findExit and stayed inside for a minute. */
-function findPath(W, sx, sy, sz, tx, tz, ty) {
+function findPathOld(W, sx, sy, sz, tx, tz, ty) {
   navRampHits = 0;
   const p = findPathPass(W, sx, sy, sz, tx, tz, ty);
   if (p && !p.partial) return p;
@@ -1934,8 +1974,272 @@ function findExitPass(W, sx, sy, sz, minDist) {
   return e;
 }
 const NAV_HALF = CELL * 0.5 - 0.01;
-/** Test hook for the lane probes: the live pathfinder, read-only. */
-export function debugNav() { return { findPath, findExit, CELL, GRID_R, wallAhead }; }
+// ═════════════════════════════════════════════════════════════════════════════
+// THE TOWN NAVIGATION GRID (Wave 7, lane 7B2).
+// sim/navgrid.js bakes the Savanna's towns and compounds (towngen's layout, map.city.layout) into a layered grid whose every edge was
+// replayed through the REAL mover (doors, rooms, stairs, ramps, drops). Inside those rects findPath asks it (door waypoints first, floors
+// and stairs through the grid, a certified straight walk between waypoints) and pickLoot prices candidates by their PATH. Everywhere else
+// - open ground between the towns, the other two maps, a match where the module did not load - the 64 m window planner above is in
+// charge, unchanged.
+// DETERMINISM, AND WHY THE GRID IS LAZY. A building's tile costs 10-190 ms to bake and the whole city has ~620 of them (13 million replayed steps,
+// 6-15 s, 5 GB of short-lived garbage): too much for a loading screen and far too much for one frame. The grid is therefore a LAZY world (navgrid
+// createWorld({ lazy })): a query never bakes anything - a tile that is not in reads as missing and is only listed (takeWanted) - and the bake
+// runs on a fixed SIM-TICK schedule:
+//   barrier (before the first tick of a match)  every outdoor tile (463 of them, ~1 ms each; started in attachBrain, run in 12 ms slices in
+//                                               the idle time of startMatch's awaits and of the lobby; update() finishes what is left)
+//   every tick                                  NAV_STEPS_TICK steps of replay work (~6 ms, counted by navgrid's replay counter, never timed) on the
+//                                               building tile in progress; when it is done the next one starts: first the ones a query asked for
+//                                               (qNeed, oldest first), then every other building of the towns, nearest to a bot's landing spot first
+//                                               (qPre, from assignDrops). A tile is baked and stitched a few hundred steps at a time (navgrid
+//                                               beginJob / stepJob), so a 190 ms tile is never one frame; the city is in by ~40 s of match time, during the
+//                                               glide and the landing, and after that the schedule costs nothing.
+// A bot whose route needs a tile that is not in yet gets null from the grid, falls back to the window planner for that request, and asks
+// again; readiness is a function of the tick count and of the queries (all sim state), never of the wall clock. The final graph is the
+// same whatever order the tiles come in (equal world hash), and every edge that exists is certified; the wall clock below paces only the
+// background slices before the first tick and feeds the stats. `nav.ready` is set by the barrier alone, so a brain attached any other way
+// (host hand-over mid-match) keeps the window planner. Grid queries are rationed per frame by COUNT (nav.q, reset in update()).
+const nav = { map: null, G: null, world: null, areas: null, ready: false, job: null, cur: null, q: 0, tick: 0, qNeed: [], qPre: [], qKeys: null, st: null };
+const NAV_Q_PER_FRAME = 4;        // grid queries per frame over all brains (a query is 1.4-3 ms median; a stuck bot's request is exempt)
+const NAV_PICK_K = 3;             // pickLoot keeps the best this-many candidates for pricing by path
+const NAV_PICK_MARGIN = 12;       // ... and prices a runner-up only when it is within this many points of the favourite
+const NAV_PLAN_MIN_M = 8;         // moveToward plans a route at once for a goal at least this far away inside a town (a nearer one is walked at, and the wall reflexes ask when a wall is in the way)
+const NAV_STEPS_TICK = 6000;      // replayed 10 cm steps of tile-bake work per sim tick (~6 ms; a building tile is ~20,000 of them, the whole city ~13 million: in by ~40 s)
+// A* weight 1.6 and the search table's whole 22,000 nodes: on 150 loot-to-loot routes of 10-110 m in the downtown 129 of 150 were found at
+// (1.3, 9000) - 15 hit the limit; 144 at (1.3, 22000) and (1.6, 22000) [the other 6 start inside furniture] - at a median 5-7 ms (max 53 ms)
+// and routes 1-3 % longer than the optimal ones (7B1 measured hw 1.3; routes of more than ~100 m between upper floors need the larger table)
+const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
+const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
+const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
+  coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, error: null });
+nav.st = navStats0();
+
+function navReset() {
+  if (nav.job && nav.job.timer) clearTimeout(nav.job.timer);
+  nav.map = null; nav.G = null; nav.world = null; nav.areas = null; nav.ready = false; nav.job = null; nav.cur = null; nav.q = 0; nav.tick = 0;
+  nav.qNeed.length = 0; nav.qPre.length = 0; nav.qKeys = null;
+}
+function navFail(err) {
+  if (!nav.st.error) console.warn("[royale] town nav grid failed (the bots keep the window planner):", err);
+  nav.st.error = String(err && err.message || err);
+  nav.ready = false; nav.world = null; nav.job = null; nav.cur = null;
+}
+/** Create the (lazy) grid for this match's map and start baking its outdoor tiles in the background. Savanna only (map.city); a missing
+ *  module, a map without a city, or a throw leaves nav.world null and the window planner in charge. */
+function startNav(W) {
+  if (nav.map === W.map) return;
+  navReset();
+  nav.map = W.map;
+  nav.st = navStats0();
+  const G = typeof globalThis !== "undefined" && globalThis.FFG && globalThis.FFG.sim && globalThis.FFG.sim.NavGrid;
+  const city = W.map && W.map.city;
+  if (!G || typeof G.bakeTown !== "function" || typeof G.runJob !== "function" || typeof G.beginJob !== "function" || typeof G.stepJob !== "function" || typeof G.takeWanted !== "function" || !(G.VERSION >= 2) || !city || !city.layout) return;
+  try {
+    const t0 = navNow(), lay = city.layout;
+    // maxMs 0: this call creates the world and bakes ONE tile; the barrier job bakes the rest of the outdoor tiles
+    const town = G.bakeTown(W.map.colliders, W.map.heightAt, lay.towns.concat(lay.compounds), { waterY: W.map.waterY, portals: W.map.portals, maxMs: 0, lazy: true });
+    nav.G = G; nav.world = town.world; nav.areas = town.rects; nav.qKeys = new Set();
+    nav.st.areas = town.rects.length;
+    const jobs = [], seen = new Set();
+    for (let i = 0; i < town.rects.length; i++) {
+      const js = G.collectJobs(town.world, town.rects[i]);
+      for (let k = 0; k < js.length; k++) if (js[k].kind === 0 && !seen.has(js[k].key)) { seen.add(js[k].key); jobs.push(js[k]); }
+    }
+    nav.job = { jobs, i: 0, done: false, timer: 0, ms: navNow() - t0 };
+    navSchedule(nav.job);
+  } catch (err) { navFail(err); }
+}
+/** Bake outdoor tiles until the job is done or `budgetMs` of wall time is spent (< 0: no limit). */
+function navPump(job, budgetMs) {
+  const G = nav.G, w = nav.world, t0 = navNow();
+  while (job.i < job.jobs.length) {
+    G.runJob(w, job.jobs[job.i++]);
+    if (budgetMs >= 0 && navNow() - t0 >= budgetMs) break;
+  }
+  if (job.i >= job.jobs.length) job.done = true;
+  job.ms += navNow() - t0;
+  return job.done;
+}
+function navSchedule(job) {
+  if (job.timer || job.done || typeof setTimeout !== "function") return;
+  job.timer = setTimeout(() => {
+    job.timer = 0;
+    if (nav.job !== job || job.done) return;
+    try { navPump(job, 12); } catch (err) { navFail(err); return; }
+    if (!job.done) navSchedule(job);
+  }, 0);
+}
+/** THE BARRIER: finish the outdoor bake (synchronously, whatever the background got done), queue the buildings around the landing spots
+ *  and arm the grid. update() calls it before the first brain tick of a match; it is exported for a caller that wants the grid armed
+ *  earlier (it costs the same wherever it runs). The bots keep the window planner when anything is missing or throws. */
+function navArm(W) {
+  const job = nav.job;
+  if (!job || nav.ready || nav.map !== W.map) return;
+  if (job.timer) { clearTimeout(job.timer); job.timer = 0; }
+  const tb = navNow(), ms0 = job.ms;
+  try {
+    if (!job.done) navPump(job, -1);
+    navPrefetch();
+  } catch (err) { navFail(err); return; }
+  if (nav.job === job && job.done) { nav.st.barrierMs = navNow() - tb; nav.st.bgMs = ms0; nav.st.coarseMs = job.ms; nav.st.coarseJobs = job.jobs.length; nav.ready = true; nav.st.tiles = nav.world.slots.length; }
+}
+/** Every building tile of the towns, in the order the glide needs them (assignDrops has run): nearest to ANY bot's landing spot first. A building cut into
+ *  chunks is queued whole (its chunks settle together) at the distance of its nearest chunk; ties break by tile key. The queue is the whole city -
+ *  update() works through it at NAV_STEPS_TICK steps a tick, so it is baked by about the end of the glide and the grid never misses after that. */
+function navPrefetch() {
+  const w = nav.world, A = nav.areas, T = [];
+  for (let i = 0; i < brains.length; i++) { const t = brains[i].bb.dropTarget; if (t) T.push(t); }
+  const bl = [], seen = new Set();
+  for (let i = 0; i < w.fine.length; i++) {
+    const r = w.fine[i];
+    if (r.tile !== null || seen.has(r.idx)) continue;
+    let inTown = false;
+    for (let k = 0; k < A.length && !inTown; k++) inTown = r.maxX > A[k].minX && r.minX < A[k].maxX && r.maxZ > A[k].minZ && r.minZ < A[k].maxZ;
+    if (!inTown) continue;
+    const rs = r.grp !== null ? r.grp.rects : [r];
+    let d = 1e18;
+    for (let m = 0; m < rs.length; m++) {
+      seen.add(rs[m].idx);
+      const cx = (rs[m].minX + rs[m].maxX) * 0.5, cz = (rs[m].minZ + rs[m].maxZ) * 0.5;
+      for (let k = 0; k < T.length; k++) { const dx = cx - T[k].x, dz = cz - T[k].z, dd = dx * dx + dz * dz; if (dd < d) d = dd; }
+    }
+    bl.push({ rs, d, key: 100000000 + r.idx });
+  }
+  bl.sort((p, q) => (p.d - q.d) || (p.key - q.key));
+  for (let m = 0; m < bl.length; m++) {
+    const rs = bl[m].rs;
+    for (let n = 0; n < rs.length; n++) {
+      const key = 100000000 + rs[n].idx;
+      if (rs[n].tile === null && !nav.qKeys.has(key)) { nav.qKeys.add(key); nav.qPre.push({ kind: 1, key, tx: 0, tz: 0, rect: rs[n] }); nav.st.prefetch++; }
+    }
+  }
+}
+/** One tick of the bake schedule (update(), before the brains): slices of the building tile in progress, until NAV_STEPS_TICK replayed steps of work
+ *  have been done - the clock is the replay counter navgrid keeps, never the wall clock - then the next tile starts, a requested one first. A tile
+ *  is ~20,000 steps (4-5 ticks), so a tick costs about the same whatever the building; with the queue empty it costs nothing. */
+function navTick() {
+  const w = nav.world, G = nav.G, st = nav.st, w0 = G.work(), budget = NAV_STEPS_TICK;
+  let guard = 0, spent = 0;
+  while (G.work() - w0 < budget && guard++ < 48) {
+    if (!nav.cur) {
+      let j = null;
+      while (!j && nav.qNeed.length) { const c = nav.qNeed.shift(); if (c.rect.tile === null) j = c; }
+      while (!j && nav.qPre.length) { const c = nav.qPre.shift(); if (c.rect.tile === null) j = c; }
+      if (!j) break;
+      try { nav.cur = G.beginJob(w, j); } catch (err) { navFail(err); return; }
+    }
+    const t1 = navNow();
+    let done = false;
+    try { done = G.stepJob(w, nav.cur); } catch (err) { navFail(err); return; }
+    const d = navNow() - t1;
+    spent += d; st.slices++; if (d > st.sliceMaxMs) st.sliceMaxMs = d;
+    if (done) {
+      st.fineJobs++; st.fineMs += nav.cur.ms; if (nav.cur.ms > st.fineMaxMs) st.fineMaxMs = nav.cur.ms; if (nav.cur.slices > st.jobSlicesMax) st.jobSlicesMax = nav.cur.slices;
+      st.tiles = w.slots.length;
+      nav.cur = null;
+    }
+  }
+  if (spent > 0) { st.ticksWorked++; st.sliceMs += spent; if (spent > st.tickMaxMs) st.tickMaxMs = spent; }
+}
+/** Take what the last query asked for off the world and queue it: a tile new to the queues goes to the back of qNeed, one that was only
+ *  queued as a prefetch is promoted to qNeed (a bot is waiting for it). Returns how many unbaked building tiles the query needed. */
+function navDrainWanted() {
+  const w = nav.world;
+  if (!w.wanted.length) return 0;
+  const js = nav.G.takeWanted(w);
+  let n = 0;
+  for (let k = 0; k < js.length; k++) {
+    const j = js[k];
+    if (j.kind !== 1 || j.rect.tile !== null) continue;       // the outdoor tiles are all in after the barrier
+    n++;
+    if (nav.cur && nav.cur.j.key === j.key) continue;         // being baked right now
+    if (!nav.qKeys.has(j.key)) { nav.qKeys.add(j.key); nav.qNeed.push(j); nav.st.needJobs++; continue; }
+    const pi = nav.qPre.findIndex((c) => c.key === j.key);
+    if (pi >= 0) nav.qNeed.push(nav.qPre.splice(pi, 1)[0]);
+  }
+  return n;
+}
+export async function prepareNav(W) {
+  if (brains.length && W.map) { if (nav.map !== W.map) startNav(W); navArm(W); }
+  return navInfo();
+}
+function navInfo() {
+  return { ready: nav.ready, areas: nav.st.areas, tiles: nav.world ? nav.world.slots.length : 0, queued: nav.qNeed.length + nav.qPre.length, stats: nav.st, world: nav.world };
+}
+/** Is (sx,sz) AND (tx,tz) inside one town / compound rect? The grid knows only the tiles of those rects (a hop outside is blocked). */
+function navBoth(sx, sz, tx, tz) {
+  const A = nav.areas;
+  for (let i = 0; i < A.length; i++) {
+    const r = A[i];
+    if (sx >= r.minX && sx <= r.maxX && sz >= r.minZ && sz <= r.maxZ && tx >= r.minX && tx <= r.maxX && tz >= r.minZ && tz <= r.maxZ) return true;
+  }
+  return false;
+}
+let navMiss = false;               // the last findPath() asked the grid and it came back empty because tiles it needs are not baked yet (not because there is no route)
+/** One grid query: waypoints {x, y, z, k} (k = the kind of the leg that arrives there: 0 walk, 1 drop, 2 ramp) or null. NOT rationed here. A null
+ *  answer that needed building tiles sets navMiss (and queues them); a route found keeps its asks to itself (a tile beside a street is not needed). */
+function gridPath(ax, ay, az, tx, tz, ty, noQueue, price) {
+  const t0 = navNow();
+  let p = null;
+  navMiss = false;
+  try { p = nav.G.findPath(nav.world, ax, ay, az, tx, ty == null ? undefined : ty, tz, price ? NAV_OPTS_PRICE : NAV_OPTS); } catch (err) { navFail(err); return null; }
+  const d = navNow() - t0, st = nav.st;
+  st.queries++; st.ms += d; if (d > st.maxMs) st.maxMs = d;
+  if (!p || !p.length) {
+    st.nulls++;
+    if (noQueue) { if (nav.world.wanted.length > 0) { navMiss = true; st.misses++; nav.world.wanted.length = 0; } }      // a candidate that is not (yet) the bot's choice does not queue its building
+    else if (navDrainWanted() > 0) { navMiss = true; st.misses++; }
+    return null;
+  }
+  nav.world.wanted.length = 0;
+  p.nav = !price;                   // a priced route is a length, not a route to follow
+  return p;
+}
+/** The planner every caller uses: the grid inside a town / compound, else (or when the grid finds nothing) the window planner. */
+function findPath(W, sx, sy, sz, tx, tz, ty) {
+  navMiss = false;
+  if (nav.ready && navBoth(sx, sz, tx, tz)) {
+    const p = gridPath(sx, sy, sz, tx, tz, ty);
+    if (p) return p;
+    nav.st.fallbacks++;
+  }
+  return findPathOld(W, sx, sy, sz, tx, tz, ty);
+}
+/** Length of a grid route from the feet: 3D metres along the waypoints. */
+function navLen(a, p) {
+  let d = 0, x = a.pos.x, y = a.pos.y, z = a.pos.z;
+  for (let i = 0; i < p.length; i++) { const dx = p[i].x - x, dy = p[i].y - y, dz = p[i].z - z; d += Math.sqrt(dx * dx + dy * dy + dz * dz); x = p[i].x; y = p[i].y; z = p[i].z; }
+  return d;
+}
+/** May the follower take waypoint 0 of a grid route now? A waypoint is taken within 0.55 m and on its own floor (the last one within 0.6 m): the legs were
+ *  certified for a walker that heads straight at the next waypoint, and moveToward walks exactly that line (see the reprojection there), so the bot passes
+ *  through every waypoint it was given. (7B1 measured a looser rule - up to 1.5 m early, but only while navgrid.walkSegment certifies the walk on to
+ *  the next waypoint - which saves a few centimetres at a corner and costs four mover replays per frame per bot: 8 MB of garbage in ten seconds.) */
+function navConsume(a, path, dwp) {
+  const wp = path[0];
+  if (wp.y != null && Math.abs(a.pos.y - wp.y) > ARRIVE_DY) return false;
+  return dwp < (path.length === 1 ? 0.6 : 0.55);
+}
+
+/** The probes' planner: findPath, but a grid miss is settled on the spot - the building tiles the route needs are baked NOW (a probe plans on a
+ *  paused world that never ticks, so the tick schedule would never run) and the question is asked again. It answers what the game answers
+ *  once its tiles are in; the game itself never does this. */
+function findPathSettled(W, sx, sy, sz, tx, tz, ty) {
+  if (nav.job && !nav.ready) navArm(W);       // a probe plans before the first tick: arm the grid (the barrier) now
+  for (let round = 0; round < 8; round++) {
+    const p = findPath(W, sx, sy, sz, tx, tz, ty);
+    if (!navMiss || !nav.ready) return p;
+    let ran = 0;
+    try {
+      if (nav.cur) { while (!nav.G.stepJob(nav.world, nav.cur)); nav.cur = null; ran++; }
+      while (nav.qNeed.length) { const j = nav.qNeed.shift(); if (j.rect.tile === null) { nav.G.runJob(nav.world, j); ran++; } }
+    } catch (err) { navFail(err); return p; }
+    if (!ran) return p;
+  }
+  return findPath(W, sx, sy, sz, tx, tz, ty);
+}
+/** Test hook for the lane probes: the live pathfinder (findPath settles grid misses at once, see findPathSettled; findPathGame is the game's). */
+export function debugNav() { return { findPath: findPathSettled, findPathGame: findPath, findExit, findPathOld, CELL, GRID_R, wallAhead, navInfo, navBoth }; }
 
 /** Floor-aware "can I stand here" for local probes (cover candidates): the
  *  support a bot at feet height y would have at (x,z), or NaN when that spot is
@@ -1948,12 +2252,20 @@ function standAt(W, x, z, y) {
   if (obstacleAt(W, x, z, s)) return NaN;
   return s;
 }
-function requestPath(W, b, tx, tz, ty) {
+let reqWhy = 0;                   // stats only: who asked (1 progress-stuck, 2 wrong floor, 3 proactive, 4 wall reflex, 5 hard-stuck)
+function requestPath(W, b, tx, tz, ty, urgent) {
   const bb = b.bb;
   if ((bb.nextPathT || 0) > W.t) return;
-  bb.nextPathT = W.t + 2.5;
   const a = b.actor;
+  if (nav.ready && navBoth(a.pos.x, a.pos.z, tx, tz)) {
+    // (Wave 7) a town query is rationed per frame (by count); the request the ration refuses is asked again next frame. A bot that is
+    // stuck is never refused.
+    if (nav.q <= 0 && !urgent) { nav.st.skipped++; return; }
+    nav.q--;
+    nav.st.req[reqWhy]++;
+  }
   bb.path = findPath(W, a.pos.x, a.pos.y, a.pos.z, tx, tz, ty);
+  bb.nextPathT = W.t + (navMiss ? 1.0 : 2.5);       // (Wave 7) a building tile the route needs is queued: ask again soon
   bb.pathGoal = bb.path ? { x: tx, z: tz } : null;
 }
 
@@ -1979,7 +2291,9 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
      walks ended within 0.1 m horizontally of the goal - the bot stood under it. So on the wrong floor the progress is the
      length of the ROUTE left (when there is one), and the test applies however near the goal is. */
   const wrongFloor = ty != null && (ty - a.pos.y >= ARRIVE_DY || a.pos.y - ty >= ARRIVE_DY);
-  const onRoute = wrongFloor && bb.path && bb.path.length > 0;
+  // (Wave 7) and the same for ANY goal inside a town that has a grid route: the way to a door on the far side of a building leads AWAY from
+  // the goal for a while, and "the horizontal distance did not fall for 3 s" read that as stuck and parked a good loot item
+  const onRoute = (wrongFloor || (bb.path && bb.path.nav)) && bb.path && bb.path.length > 0;
   const prog = onRoute ? routeLeft(a, bb.path) : goalD;
   const progKind = onRoute ? 1 : 0;
   if (bb.progKind !== progKind) { bb.progKind = progKind; bb.progBest = null; bb.progT = 0; }
@@ -1996,7 +2310,7 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
        away on the next frame; 36 s indoors). A bot that HAD a route and still made no progress is parked as before. */
     const hadRoute = !!(bb.path && bb.path.length);
     bb.nextPathT = 0;
-    requestPath(W, b, tx, tz, ty);
+    reqWhy = 1; requestPath(W, b, tx, tz, ty, true);
     // ... ONCE per item: the same item tripping again is parked, whatever the planner says (a route a bot cannot follow must
     // not keep it on the item for the rest of the match: measured, one bot looped 80 s on one item with a "good" route)
     const routed = !hadRoute && bb.path && !bb.path.partial && !(bb.lootId && bb.lootId === bb.routeId);
@@ -2016,13 +2330,28 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   if (bb.path && bb.pathGoal && hyp(tx - bb.pathGoal.x, tz - bb.pathGoal.z) > 8) { bb.path = null; bb.pathGoal = null; }
   // (Wave 5) a goal on another floor needs a ROUTE (the stairs), not a straight walk at it: plan one as soon as it is in
   // reach of the planner's window instead of waiting for a wall to stop the bot (requestPath is rate-limited to 2.5 s)
-  if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) requestPath(W, b, tx, tz, ty);
+  if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) { reqWhy = 2; requestPath(W, b, tx, tz, ty); }
+  // (Wave 7, lane 7B2) a goal inside the town / compound the bot stands in is planned on the grid AT ONCE (doors first, then the rooms
+  // and stairs), not after the bot has walked into the wall in front of it - when the straight walk is blocked within the next 14 m. One
+  // look per goal per 6 s: a goal the grid cannot reach is not asked again every frame (the straight walk + wall reflexes below take over, as before).
+  if (nav.ready && !bb.path && goalD > NAV_PLAN_MIN_M && (W.t >= bb.navT || hyp(tx - bb.navGX, tz - bb.navGZ) > 4) && W.t >= bb.nextPathT &&
+      navBoth(a.pos.x, a.pos.z, tx, tz)) {
+    bb.navGX = tx; bb.navGZ = tz; bb.navT = W.t + 6;
+    // ... when a wall is in the way of the straight walk (the next 14 m of it): a clear line needs no plan until the wall reflexes below find a wall
+    if (wallAhead(W, a, Math.atan2(-(tx - a.pos.x), -(tz - a.pos.z)), Math.min(goalD, 14))) {
+      reqWhy = 3; requestPath(W, b, tx, tz, ty);
+      if (navMiss) bb.navT = W.t + 1.0;
+    }
+  }
   // (T-tick-actors B2) a waypoint is reached on ITS floor: horizontal distance alone
   // consumed the ground-floor waypoint of a stair descent while the bot was upstairs.
   // (Wave 5) and the same on the way UP: the first-floor waypoint of a stair climb is not reached from the room below it.
   if (bb.path && bb.path.length) {
     const wp0 = bb.path[0], dwp = hyp(wp0.x - a.pos.x, wp0.z - a.pos.z);
-    if (dwp < 1.6 && !(wp0.y != null && Math.abs(a.pos.y - wp0.y) > ARRIVE_DY)) {
+    if (bb.path.nav) {
+      // (Wave 7) a GRID route: 7B1's follower rule (see navConsume), not the window planner's 1.6 m + wall-probe rule
+      if (navConsume(a, bb.path, dwp)) bb.path.shift();
+    } else if (dwp < 1.6 && !(wp0.y != null && Math.abs(a.pos.y - wp0.y) > ARRIVE_DY)) {
       // (Wave 5) CORNER-CUT PROTECTION. A waypoint is a corner the planner hugged (0.3 m off the wall), and 1.6 m is a long
       // way from one: shifting it at 1.6 m turned the bot onto the straight line to the NEXT waypoint through the building
       // it was rounding (measured: a bot looting through a hut window threw away a good route at the hut's corner, every
@@ -2054,10 +2383,12 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // bot is visibly not moving (stuckT, frozen legs), probe at arm's length too.
   // (Only then: an extra collider query per moving bot per frame would cost more
   // than the whole queryColliders budget saved by L6.)
-  if (wallAhead(W, a, want, bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2) ||
+  // (Wave 7) a leg of a grid route was replayed through the mover itself: the 3.2 m probe does not second-guess it (a stair leg or a door
+  // jamb read as a wall by this probe was the reason a good plan got dropped); a bot that really is pinned still trips the arm's-length probe
+  if ((!(bb.path && bb.path.nav) && wallAhead(W, a, want, bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2)) ||
       (bb.stuckT > 0.3 && wallAhead(W, a, want, 0.9))) {
     if (bb.path) { bb.path = null; bb.pathGoal = null; }
-    requestPath(W, b, tx, tz, ty);
+    reqWhy = 4; requestPath(W, b, tx, tz, ty);
     if (!bb.wallSide) bb.wallSide = !wallAhead(W, a, want + 0.9, 3.2) ? 1 : (!wallAhead(W, a, want - 0.9, 3.2) ? -1 : 1);
     if (!bb.path) {
       // The slide itself must not walk the bot somewhere it cannot leave. Sliding
@@ -2074,9 +2405,20 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
       else holdStill = true;
     }
   } else bb.wallSide = 0;
-  steerYaw(a, want, dt, 7);
+  steerYaw(a, want, dt, bb.path && bb.path.nav ? 12 : 7);      // (Wave 7) on a grid route the legs already go where the route goes (see below): the body follows quickly
   inp.mz = holdStill ? 0 : 1;
   inp.sprint = !!sprint && !holdStill;
+  // (Wave 7) the grid replayed a stair, a ramp and a drop at WALK speed (6 m/s); sprinting (8) over one carries the feet further in the air
+  if (inp.sprint && bb.path && bb.path.nav && (bb.path[0].k > 0 || (bb.path.length > 1 && bb.path[1].k > 0))) inp.sprint = false;
+  /* (Wave 7) FOLLOWING A GRID ROUTE. The yaw above is smoothed (a 7 /s lag), so a bot that turns a corner at 6 m/s walks ~1.2 m along its OLD
+     heading before the legs follow the new one: it overshot the foot of a stair by a metre and bounced along its side (measured on the
+     Savanna: 8 of 80 upper-floor walks failed). The grid certified each leg for a walker that heads straight at the next waypoint, so the
+     move direction is that line NOW, expressed in the current yaw's frame (fireOnTheMove's reprojection); the yaw still turns smoothly. */
+  if (bb.path && bb.path.nav && !holdStill) {
+    const bq = K.moveBasis(inp.yaw, _mb0), wdx = -Math.sin(want), wdz = -Math.cos(want);
+    inp.mz = wdx * bq.fx + wdz * bq.fz;
+    inp.mx = wdx * bq.rx + wdz * bq.rz;
+  }
   // hop obstacles: support ahead higher than feet → jump
   const aheadX = a.pos.x - Math.sin(a.input.yaw) * 1.4;
   const aheadZ = a.pos.z - Math.cos(a.input.yaw) * 1.4;
@@ -2095,7 +2437,7 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
       // hard-stuck: ask A* for a real route around the blocker. If no path
       // exists (trapped in a blocked pocket — indoors against a wall), walk to
       // the NEAREST OPEN CELL first; the blind detour is the last resort.
-      requestPath(W, b, tx, tz, ty);
+      reqWhy = 5; requestPath(W, b, tx, tz, ty, true);
       if (!bb.path) {
         // Escape search at the bot's OWN floor height (the old ring probed cells
         // at terrain height, so on an upper floor it picked a spot 1.5 m away on
@@ -2195,7 +2537,8 @@ function actLoot(W, b, dt) {
   // and this allocated a sorted result list every frame for every looting bot.
   const mt = bb.moveTo;
   const nearGoal = !mt || bb.chestId || hyp(mt.x - a.pos.x, mt.z - a.pos.z) < 3.5;
-  const near = nearGoal ? W.nearbyLoot(a.pos, 2.4) : _noLoot;
+  // 2.2 = loot.js REACH_DY (lane 7C): a bot, like the player, does not take the loot of the floor below / above through a slab
+  const near = nearGoal ? W.nearbyLoot(a.pos, 2.4, 2.2) : _noLoot;
   for (const n of near) {
     if (n.type === "chest") {
       // chests take a 2s channel — bots obey the same rule as the player
