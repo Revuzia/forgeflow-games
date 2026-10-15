@@ -3,6 +3,44 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-10-15 — Wave 7 completion: a taller, more varied Savanna, safer squads, bots off the roofs (?v=1792092800)
+
+Closes the gaps the Wave-7 verifiers named, before Wave 7b (themed towns on Isla Viva and Deepwood) and Wave 8 (furnished interiors). Independently
+verified; the full `gate.py --disk --negative-controls` found only four harness defects (two stale plant controls, a roof-exit row that counted a roof
+firefight as a stall, a loot-pool row that read a bot's legitimate slot reuse as a leak), all fixed with their controls re-proven.
+
+**Savanna**
+- Skyline: buildings over 30 m go from 12 to 35-40, over 60 m from 0 to 14-20, over 80 m from 0 to 1-3; the tallest from about 50 m to 81-87 m.
+  More variety (52-57 distinct looks of ~60 downtown buildings, was 37-42; 18 roof colours, cornices, three-storey fronts), 5-9 landmark lots per
+  seed (gas station, market, clock-tower plaza, sports court with stands and floodlights), richer compounds (4.4-4.7 buildings each; hay, troughs,
+  windbreaks, crop fields), and a cooler town ground with a pale kerb ring so towns read from the plane (edge density in the 330 m drop view +41-72 %).
+  The drop view is still hazy: the global fog is signed off and untouched.
+- Cost: draw calls at the three fixed cameras are within the plan's bars on all five test seeds against BOTH the old build and Wave 7 (worst +3 vs
+  Wave 7, +22 vs Wave 6; bar +40), triangles at most x0.69 / x0.82 of them, phone tier 25/25; queryColliders 121 per frame.
+- `MAP_GEN_VERSION` is 4 (3 was Wave 7): Savanna's world changed; Isla Viva and Deepwood hash identically.
+
+**Squads**: a client whose `towngen.js` / `citykit.js` import fails (retried once) now sets `W.mapFallback`, and `net.js` takes it out of the squad room with
+an on-screen message instead of advertising a version it does not hold; solo play is unaffected. The squad-guard test now also runs against the live CDN
+(63 of 63 on the seven guard cases). The supply-crate shader program is linked where it is created (loot.js) instead of by a duplicate in fx.js.
+
+**Movement**: the 6 mm window in the mover (the wall test and the support test disagreed about the feet) is closed: the exhaustive sweep of every isolated
+rock on three maps reads 0 of 13,808 sprints inside a rock (live: 5 of 12,464). Doors, stairs, ramps, mantles and feel are unchanged (collisioncheck 17/17,
+worldlive 8/8, navcheck 10/10, feelcheck 7/7 x3, 21 matches: circle 5 or later in 21 of 21).
+
+**Bots in towns**: top-storey rooms reached 70 of 70 (was 63 of 71): a tower's landing slab starts 0.61 m past its stair, so the grid pruned the storey above as
+an island; stair-end bridge edges fix it. Bots that landed on a roof no longer stand there (natural landings, 72 touchdowns: longest stand 9.0 s -> 2.4 s,
+landings standing 3 s or more 6 -> 0). Real stalls (wanting to move with zero input) 0.50 % -> 0.24 % of moving ticks. Sim cost per tick is unchanged
+(0.553 ms; the nav bake is still most of Savanna's excess).
+
+**Gates**: roofland (roof landings), rocksweep, simcost, genversion, coldcache, the squad fallback cases and the live squad test are registered; perf_district
+runs on five seeds; framecheck for Deepwood is blocking; roof-exit and the loot pickup rows judge what they should (time outside a firefight; slot
+ownership), and every changed row still fails the planted fault or the frozen build (the live Wave-7 build still fails roof-exit, 3 of 40).
+
+**Known and NOT fixed**
+- Bot paths whose first leg is blocked did not improve (about 3-4 % of sampled paths; 96 % are the outdoor planner rounding wall corners).
+- KB allocated per Savanna frame is 97.6-98.4 against the 100 bar (87 at Wave 7): thin, watch it. The rock sweep's deepest overlap reads 0.100 m on Ashgrid
+  against a bar of more than 0.10 m. Outpost streets still use a crude, oversized brick texture.
+
 ## 2026-10-14 — Wave 7: the Savanna city (?v=1792031930)
 
 Plan `_spec/world_2026-10/PLAN.md`, Wave 7 of 8, Savanna only (Isla Viva and Deepwood towns are Wave 7b). Owner ask: "real city rather than so much
