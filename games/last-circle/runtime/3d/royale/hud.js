@@ -1811,6 +1811,7 @@ export function showLobby(W, onDone) {
   if (R.menu) { R.menu.remove(); R.menu = null; }
   teardownMenuWorld(W);
   ensureAAAStyles();
+  warmIcons(W);                 // the slot thumbnails, one per tick, while the countdown runs (see warmIcons)
   const L = layer("lobby", {
     pointerEvents: "auto",
     background: "radial-gradient(ellipse at 50% 30%, rgba(10,24,48,0.55) 0%, rgba(4,10,20,0.88) 100%)",
@@ -3586,6 +3587,26 @@ function itemIcon(W, id) {
   if (iconCache[key]) return Promise.resolve(iconCache[key]);
   if (!W.itemProto) return Promise.resolve(null);
   return W.itemProto(id).then((proto) => renderThumb(proto, key, 0.35)).catch(() => null);
+}
+/** Wave 7 (lane 7F): build every slot thumbnail while the LOBBY is up. The icon renderer is a second WebGL context: creating it, linking its
+ *  program and uploading a gun's mesh plus its textures into it all ran on the first frames of the DROP (the starting pistol: getContext 5-7 ms and a
+ *  24-62 ms render + readback on drop frame 1) and again on the first pickup of each weapon / item kind (measured: the AR at 66 s, a bandage and a
+ *  shield at 85 s) - the same mid-match stall as a late shader program, in a context the main renderer's program census cannot see. iconCache outlives
+ *  the match, so this runs once per page; one icon per timer tick (no task longer than one icon); and only while the lobby is still showing - once the
+ *  drop starts the lazy path above takes over exactly as before. Cosmetic: any failure leaves the lazy path. */
+let _iconWarmRun = 0;
+function warmIcons(W) {
+  const run = ++_iconWarmRun;
+  const jobs = [];
+  for (const id of Object.keys(K.WEAPONS || {})) if (!iconCache[id]) jobs.push(() => weaponIcon(W, id));
+  for (const id of Object.keys(K.CONSUMABLES || {})) if (!iconCache["item:" + id]) jobs.push(() => itemIcon(W, id));
+  let i = 0;
+  const step = () => {
+    if (run !== _iconWarmRun || W.phase !== "lobby" || i >= jobs.length) return;
+    try { jobs[i++](); } catch (e) { /* cosmetic only */ }
+    setTimeout(step, 50);
+  };
+  setTimeout(step, 100);
 }
 
 // ── per-weapon crosshairs ────────────────────────────────────────────────────

@@ -24,9 +24,14 @@
  *   2. compileAsync with the composer's readBuffer bound (the exact RT variant);
  *   3. ONE real composer.render(): shadow-depth programs, bloom + output
  *      programs, the deferred ANGLE link on first draw, and every texture /
- *      geometry / instance-buffer upload;
+ *      geometry / instance-buffer upload. The shadow pass gets one
+ *      representative caster per depth signature wearing its own depth
+ *      material (armDepthVariants below), so EVERY depth program the shared
+ *      depth material can derive later is already linked, not just the ones
+ *      this frame's draw order happened to derive (Wave 7, lane 7F);
  *   4. restore visibility / counts / culling / LOD / render target / autoClear
- *      exactly, and schedule a clean shadow refresh.
+ *      exactly (and the representatives' cast flag + depth material), and
+ *      schedule a clean shadow refresh.
  *
  * The forced state is only ever held inside SYNCHRONOUS blocks: the program
  * link wait in step 2 runs with the scene restored, so the kernel's live rAF
@@ -80,10 +85,91 @@ function restore(state) {
   for (const o of state.added) if (o.parent) o.parent.remove(o);
 }
 
+// ── shadow-depth programs: every key, not every draw ────────────────────────────────────────────────
+// WHY (Wave 7, lane 7F; measured with _harness: framecheck "sampled frames new programs == 0" failed on Savanna AND on the live
+// build 60b854d0, and deepwood failed on drop frame 6): three draws EVERY shadow caster with ONE shared MeshDepthMaterial
+// (WebGLShadowMap._depthMaterial) and, before each draw, copies the caster's map / side onto it. A material's program is only
+// re-derived from that state when setProgram() sees a flip - instancing or skinning changing between two consecutive draws,
+// or a new version - so the depth program a draw gets is decided by the ORDER of the shadow pass: the warm frame (everything
+// forced visible, casters in one order) compiled the keys {plain, skinned+map, double-sided+map, ...} its own flips happened
+// to derive, and the live pass - a different caster set (cast toggles on districts, loot and bodies, the shadow frustum
+// culling, instanced pools that were empty at warm) - flipped at another object and derived (map, front-side, plain), a key
+// nothing had compiled: a synchronous link on a drop frame (7 to 25 ms of stall, once per map, at an arbitrary second).
+// Every key the shared material can ever derive is a pure function of the CASTER'S OWN signature (instancing, instance colour,
+// skinning, morph targets, map / alpha-map uv channel, alpha test, depth side), because getDepthMaterial() writes that
+// caster's map / side onto the material right before the draw. So the warm frame gives ONE representative per signature its
+// own customDepthMaterial (a session-lived MeshDepthMaterial built exactly like three's: RGBA packing) and draws it in the
+// shadow pass: the program for that signature is derived on the first draw of that material, whatever the order, and every
+// later flip of the shared material is a program-cache hit. No object keeps the material, no texture stays referenced.
+const SHADOW_SIDE = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
+const _depthPool = new Map();     // signature -> MeshDepthMaterial. Session-lived and NEVER disposed: it holds the program reference.
+
+function depthSignature(o, m, vsm) {
+  const g = o.geometry;
+  if (!g) return null;
+  const mo = g.morphAttributes || {};
+  const morphAttr = mo.position || mo.normal || mo.color;
+  const side = (m.shadowSide !== null && m.shadowSide !== undefined) ? m.shadowSide : (vsm ? m.side : SHADOW_SIDE[m.side]);
+  return [
+    o.isInstancedMesh === true ? (o.instanceColor ? "Ic" : "I") + (o.morphTexture ? "m" : "") : "-",
+    o.isBatchedMesh === true ? "B" + (o._colorsTexture ? "c" : "") : "-",
+    o.isSkinnedMesh === true ? "S" : "-",
+    (mo.position ? "p" : "") + (mo.normal ? "n" : "") + (mo.color ? "k" : "") + (morphAttr ? morphAttr.length : 0),
+    m.map ? m.map.channel : -1,
+    m.alphaMap ? m.alphaMap.channel : -1,
+    m.alphaTest > 0 ? 1 : 0,
+    m.displacementMap && m.displacementScale !== 0 ? m.displacementMap.channel : -1,
+    side,
+  ].join(",");
+}
+
+/** Pick one representative caster per depth signature and give it its own depth material for the warm frame.
+ *  Call AFTER force() (everything visible, un-culled) and before the one real composer frame. Returns { reps, undo }. */
+function armDepthVariants(renderer, scene) {
+  const sm = renderer.shadowMap;
+  const out = { reps: 0, skipped: 0, undo() {} };
+  if (!sm || !sm.enabled) return out;                 // low tier: no shadow pass, no depth programs
+  const vsm = sm.type === THREE.VSMShadowMap;
+  const reps = new Map();                             // signature -> object (a current caster wins over a toggled-off one)
+  scene.traverse((o) => {
+    if (o.isMesh !== true || (o.userData && o.userData.isOutline === true)) return;
+    if (o.customDepthMaterial !== undefined) return;  // already owns its depth material: nothing is shared
+    const m = o.material;
+    // a shadow participant: casts now, or is a mesh whose creator toggles it (districts, loot, bodies keep receiveShadow on)
+    if (!m || !m.isMaterial || !(o.castShadow === true || o.receiveShadow === true)) return;
+    if (Array.isArray(m)) { out.skipped++; return; }  // groups share one customDepthMaterial: left to the live path
+    if (m.visible === false) return;
+    const sig = depthSignature(o, m, vsm);
+    if (sig === null) return;
+    const have = reps.get(sig);
+    if (!have || (o.castShadow === true && have.castShadow !== true)) reps.set(sig, o);
+  });
+  const armed = [];
+  for (const [sig, o] of reps) {
+    let d = _depthPool.get(sig);
+    if (!d) { d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); _depthPool.set(sig, d); }   // (no name: it would become the program's SHADER_NAME)
+    armed.push({ o, d, cast: o.castShadow });
+    o.castShadow = true;
+    o.customDepthMaterial = d;
+  }
+  out.reps = armed.length;
+  out.list = armed.map((a) => (a.o.name || a.o.type) + (a.cast === true ? "*" : ""));     // diagnostics: the representative of each signature (* = a current caster)
+  out.undo = () => {
+    for (const a of armed) {
+      a.o.castShadow = a.cast;
+      delete a.o.customDepthMaterial;
+      // getDepthMaterial() copied the caster's textures onto the pooled material: drop them so a finished match is never held alive
+      a.d.map = null; a.d.alphaMap = null; a.d.displacementMap = null;
+    }
+  };
+  return out;
+}
+
 /**
  * @param kernel   Kernel3D (renderer, scene, camera, optional composer)
  * @param opts     { extras?: Object3D[] }
- * @returns stats  { ms, target, forced, extras, skinBounds, programs: {before, afterCompile, afterRender} }
+ * @returns stats  { ms, target, forced, extras, skinBounds, depthVariants, programs: {before, afterCompile, afterRender} }
+ *                 (depthVariants = depth signatures given their own depth material for the warm frame; absent without a shadow pass)
  */
 export async function warmup(kernel, opts) {
   opts = opts || {};
@@ -125,12 +211,15 @@ export async function warmup(kernel, opts) {
 
   // 3: one real frame (synchronous), 4: exact restore.
   st = force(scene, extras);
+  let dv = null;
   try {
     renderer.autoClear = true;
     if (sm && sm.enabled) sm.needsUpdate = true;    // a real shadow pass even when autoUpdate is off (glide cadence)
+    try { dv = armDepthVariants(renderer, scene); stats.depthVariants = dv.reps; stats.depthVariantList = dv.list; } catch (e) { dv = null; /* an optimisation only */ }
     if (composer) composer.render(0);
     else { renderer.setRenderTarget(null); renderer.render(scene, camera); }
   } finally {
+    if (dv) dv.undo();
     renderer.setRenderTarget(prevTarget);
     renderer.autoClear = prevAutoClear;
     restore(st);

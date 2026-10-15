@@ -871,7 +871,24 @@ export function warmObjects(W) {
   if (inst) out.push(inst);
   if (decalMesh) out.push(decalMesh);
   for (const b of blasts) out.push(b.sp, b.ring);
+  out.push(lateLitProxy());
   return out;
+}
+
+/** A lit, TRANSPARENT MeshStandardMaterial that no scene object wears at warm time. loot.js builds the supply-drop balloon from exactly this
+ *  material when the storm reaches phase 2 (about 4.5 minutes in), and three keys `opaque`, so it is a program of its own: it linked, synchronously,
+ *  on the first frame the balloon was in view - measured 280-570 ms for that one link on the dev box (Intel UHD, ANGLE D3D11), on all three maps.
+ *  This proxy gives the warm frame that program (Wave 7, lane 7F). It MIRRORS loot.js maybeSupplyDrop's balloon parameters; the preferred home is
+ *  loot.js's own makeSupplyCrate() (lane 7F's loot_supplycrate_warm.diff), after which this is a harmless duplicate: both resolve to ONE program and
+ *  the proxy can simply be deleted. A page-lifetime singleton - it holds the program for the session and is never disposed. */
+let _litProxy = null;
+function lateLitProxy() {
+  if (!_litProxy) {
+    _litProxy = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 4), new THREE.MeshStandardMaterial({ color: 0xf2a33c, transparent: true, opacity: 0.85 }));
+    _litProxy.name = "fx-late-lit-proxy";
+    _litProxy.castShadow = false; _litProxy.receiveShadow = false;
+  }
+  return _litProxy;
 }
 
 /** Contract C9 read-back (merged into __LC__.feel() by L4). Cheap: no DOM reads. */
