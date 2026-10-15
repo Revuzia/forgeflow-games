@@ -1891,7 +1891,12 @@ function stepActor(W, a, dt) {
     // `cols` is still this frame's list: the mantle probes above use their own
     // queries (and only on the rare frame a human pushes into a ledge), which
     // never touch this module-owned array
-    let sup = supportIn(W, cols, a.pos.x, a.pos.z, a.pos.y);
+    // WAVE-7 completion (lane D3): the floor is probed from the HIGHER of the feet before and after
+    // gravity (K.supportProbeY), the height blockedIn already used to decide a box was a step, not a wall.
+    // Probing from the lowered feet left a window (gravity * dt^2 = 5.5 mm on the ground, more in a fall)
+    // where a box 0.544-0.550 m over the feet was neither a wall nor liftable: the capsule walked 0.6-1.3 m
+    // into the rock and sank (5 of 13,432 swept rock sprints). A tick that does not fall is untouched.
+    let sup = supportIn(W, cols, a.pos.x, a.pos.z, K.supportProbeY(feetY0, a.pos.y));
     // LANDING SWEEP (Wave 5, 5C). supportIn is a POINT test (tops <= feet + STEP_UP), and
     // a faller covers more than STEP_UP per tick past ~33 m/s (a drop of ~27 m: a sky
     // island, the crane), so a 0.3 m roof slab fell between two ticks and the actor

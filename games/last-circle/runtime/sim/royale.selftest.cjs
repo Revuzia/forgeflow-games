@@ -906,5 +906,51 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(b1 !== a1 && a1.radius === raw.radius, "storm: a new t builds a new object and never changes one handed out before");
 }
 
+// ── MOVER FLOOR PROBE (Wave 7 completion, lane D3): blockedIn and the support test agree ─────────────────
+// player.js decided "this box is a step, not a wall" in TWO places: blockedIn with the feet BEFORE the tick (y0), the support test that lifts
+// the capsule onto it with the feet AFTER gravity (y1 = y0 + (v + g*dt)*dt, 5.5 mm lower standing, more in a fall). A box whose rise over y0 was
+// in (STEP_UP - (y0 - y1), STEP_UP] was neither a wall nor liftable: the capsule walked in and sank (5 of 13,432 swept rock sprints, 0.037 %).
+// The mirror below is the two decisions for ONE box, line for line; the live mover is proven in a real browser (collisioncheck, the rock sweep).
+{
+  const g = R.MOVE.gravity, dt = 1 / 60, SU = 0.55;
+  const y0 = 13.417;                                                    // the measured case (ashgrid seed 31337 rock 40): feet on a step box
+  const verdict = (rise, v, probe) => {
+    const top = y0 + rise;
+    const y1 = y0 + (v + g * dt) * dt;                                  // player.js: vel.y += g*dt, then pos.y += vel.y*dt
+    const wall = !(top <= y0 + SU);                                     // blockedIn: a lone box is a wall iff its top is over feet + STEP_UP (the floor it adds is itself)
+    const lift = top <= probe(y0, y1) + SU;                             // supportIn at the probe height
+    return { wall, lift, y1 };
+  };
+  const oldProbe = (a, b) => b, newProbe = R.supportProbeY;
+  ok(typeof newProbe === "function" && newProbe(5, 4) === 5 && newProbe(4, 5) === 5 && newProbe(5, 5) === 5, "floor probe: the higher of the feet before and after gravity");
+  ok(newProbe(NaN, 3) === 3 && Number.isNaN(newProbe(3, NaN)), "floor probe: a NaN start falls back to the end feet (same as the old test); a NaN end stays NaN");
+  let oldBad = 0, newBad = 0, n = 0, oldFirst = null, oldLast = null, liftedMore = 0, wallBad = 0;
+  for (let ri = 400; ri <= 700; ri++) {                                 // rises 0.400 .. 0.700 m in 1 mm steps
+    const rise = ri / 1000;
+    for (const v of [0, -2, -8, -16, -25, -40]) {                       // standing (vy 0 after the landing), a jump's descent, a fall
+      n++;
+      const o = verdict(rise, v, oldProbe), w = verdict(rise, v, newProbe);
+      if (!o.wall && !o.lift) { oldBad++; if (v === 0) { if (oldFirst === null) oldFirst = rise; oldLast = rise; } }
+      if (!w.wall && !w.lift) newBad++;                                 // neither a wall nor liftable: the defect
+      if (w.lift && !o.lift && w.wall) liftedMore++;                    // a wall the new probe would lift onto (must never happen)
+      if (w.wall !== o.wall) wallBad++;                                 // the wall rule itself must not move
+    }
+  }
+  ok(oldBad > 0 && oldFirst !== null && oldFirst > 0.543 && oldLast <= 0.55, "floor probe: CONTROL: the old probe leaves " + oldBad + " of " + n + " (rise x fall speed) cases neither a wall nor liftable, standing: rise " + oldFirst + " .. " + oldLast + " m");
+  ok(newBad === 0, "floor probe: the new probe leaves 0 of " + n + " cases neither a wall nor liftable (rises 0.400-0.700 m, fall speeds 0-40 m/s)");
+  ok(liftedMore === 0 && wallBad === 0, "floor probe: a box over STEP_UP is still a wall and is never lifted onto; the wall rule is untouched");
+  // a tick that does not fall is the old test exactly (jump up, the apex, a flat tick)
+  let same = true;
+  for (let v = 0; v <= 8; v += 0.5) { const y1 = y0 + (v + g * dt) * dt; if (y1 >= y0 && newProbe(y0, y1) !== y1) same = false; }
+  ok(same && newProbe(y0, y0) === y0, "floor probe: a rising or flat tick probes from the end feet exactly as before (jumping and flat ground are byte-identical)");
+  // the mover reads it where the support test runs, and blockedIn still uses the feet before the tick
+  let pj = null;
+  try { pj = require("fs").readFileSync(require("path").join(__dirname, "..", "3d", "royale", "player.js"), "utf8"); } catch (e) { /* outside the repo: skip the source pin */ }
+  if (pj) {
+    ok(/supportIn\(W, cols, a\.pos\.x, a\.pos\.z, K\.supportProbeY\(feetY0, a\.pos\.y\)\)/.test(pj), "floor probe: player.js stepActor's support test probes from K.supportProbeY(feet before, feet after)");
+    ok(/const yd = isMove \? Math\.max\(y, supportIn\(W, cols, x, z, y\)\) : y;/.test(pj), "floor probe: player.js blockedIn still reads its floor from the feet before the tick");
+  } else console.log("  INFO  player.js not found next to this file: source pins skipped");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -358,6 +358,17 @@
     return best;
   }
 
+  /** THE FLOOR PROBE HEIGHT OF ONE MOVER TICK (Wave 7 completion, lane D3). player.js decides "this box is a step, not a wall"
+   *  in TWO places: blockedIn lets the capsule into a box whose top is <= feet + STEP_UP with the feet as they were BEFORE the tick
+   *  (y0), and the support test that raises the capsule onto it ran AFTER gravity at the lower feet (y1). A box whose rise over y0
+   *  is in (STEP_UP - (y0 - y1), STEP_UP] - 5.5 mm on the ground (gravity * dt^2), more in a fall - was neither a wall nor
+   *  liftable: the capsule walked into it and sank. Both tests now read the floor from the same height: the support test probes from
+   *  the HIGHER of the two feet (a rising tick already did: y1 > y0). Pure; on a tick that does not fall it returns y1 untouched, so
+   *  jumping, walking up and every flat tick are byte-identical. Used by player.js stepActor's landing/support test. */
+  function supportProbeY(y0, y1) {
+    return y0 > y1 ? y0 : y1;
+  }
+
   /** First blocking collider along a segment. `cols` is any iterable of
    *  colliders (boxes and ramps). Returns the nearest {t, n*, c} or null. */
   function segmentColliders(ax, ay, az, bx, by, bz, cols) {
@@ -1031,7 +1042,7 @@
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
     segmentColliders: segmentColliders,
-    RAMP_THICK: RAMP_THICK, rampHalfV: rampHalfV, rampBlocks: rampBlocks, sweepSupport: sweepSupport, aimRayDist: aimRayDist,
+    RAMP_THICK: RAMP_THICK, rampHalfV: rampHalfV, rampBlocks: rampBlocks, sweepSupport: sweepSupport, supportProbeY: supportProbeY, aimRayDist: aimRayDist,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
     BOT_TIER_BANDS: BOT_TIER_BANDS, skillMix: skillMix, mixRating: mixRating, interpTierK: interpTierK, BOT_PACE: BOT_PACE,
