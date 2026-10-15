@@ -15,6 +15,17 @@
  *     survives the JSON round trip the relay applies | the version query rides every import edge of net.js (static, on the source).
  * Planted faults (negative controls): a roster that ignores the version, a guest that treats a missing gv as "same", a normGv that maps a
  * missing gv to the local version - each must make at least one row fail.
+ *
+ * Wave 7 completion round (lane D1, contract C-FALLBACK): a page whose towngen.js / citykit.js failed to import builds the Wave-6 Savanna layout
+ * while it advertises MAP_GEN_VERSION, so it must leave the squad. Rows: normFallback reads both shapes maps.js uses ({ from, to, reason } and
+ * { genVersion, wanted, reason }) | judgeFallback is the plain-language card text (names the map failure, says reload) | fallbackLine is what the
+ * room reads | detectMapFallback finds the fallback from the event, map.fallback, a built genVersion that differs from the advertised one, or
+ * W.mapFallback - and ignores a STALE W.mapFallback when the built map is healthy | SquadHandshake.onMapFail takes slot / name / host from the
+ * roster, never from the message body (a peer cannot kick another peer's slot), and ignores a sender that is not in the match | the "mapfail"
+ * message is in the CRITICAL list, the event is wired, onMatchStart and update act on it (static, on the source). Planted faults: a spoofable
+ * onMapFail, a detector that ignores a differing genVersion, a detector that trusts a stale W.mapFallback, a normFallback that only reads one
+ * shape, a source without the CRITICAL entry - each must fail at least one row. The leave itself (messages, bots, the card) needs the DOM and a
+ * match: _harness/squadguard_live.py case "fallback".
  */
 "use strict";
 const fs = require("fs");
@@ -125,6 +136,63 @@ function suite(M, label, count) {
     row(threw === null, "malformed hello / start bodies do not throw", threw);
     row(host.gvOf("z") === 1 && host.gvOf("w") === 1 && host.gvOf("v") === 1, "a string / fractional / negative gv is version 1");
   }
+  // ── C-FALLBACK: the pure parts ──────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const { normFallback, judgeFallback, fallbackLine, detectMapFallback } = M;
+    const nf1 = normFallback(rt({ from: 3, to: 2, reason: "import failed" })), nf2 = normFallback(rt({ map: "ashgrid", genVersion: 2, wanted: 3, reason: "x" }));
+    row(nf1 && nf1.wanted === 3 && nf1.built === 2 && nf1.reason === "import failed", "normFallback reads the contract shape { from, to, reason }", nf1);
+    row(nf2 && nf2.wanted === 3 && nf2.built === 2 && nf2.reason === "x", "normFallback reads the maps.js event / map.fallback shape { genVersion, wanted, reason }", nf2);
+    const nf3 = normFallback(rt({ from: "3", to: NaN, reason: { a: 1 } }));
+    row(nf3 && nf3.wanted === null && nf3.built === null && typeof nf3.reason === "string", "normFallback: a non-number version is null, a reason is always a string", nf3);
+    row(normFallback(null) === null && normFallback(undefined) === null && normFallback("x") === null && normFallback(7) === null, "normFallback: not an object -> null");
+    row(normFallback({ reason: "r".repeat(900) }).reason.length === 200, "normFallback: the reason is cut at 200 characters");
+
+    const jf = judgeFallback(3, normFallback({ from: 3, to: 2, reason: "boom" }));
+    row(/part of the map failed to load/i.test(jf.title) && /reload the page/i.test(jf.detail) && /different world/i.test(jf.detail) && /left the room/i.test(jf.detail) &&
+        jf.reload === true && jf.wanted === 3 && jf.built === 2, "judgeFallback: the card says part of the map failed to load, that the player left the room, and to reload the page", jf);
+    const jf0 = judgeFallback(undefined, null);
+    row(jf0.wanted === 1 && jf0.built === null && jf0.reload === true, "judgeFallback: a missing record still gives a card (version 1, built unknown)", jf0);
+
+    const fl = fallbackLine("Ann", false), flh = fallbackLine("Bob", true);
+    row(/Ann/.test(fl) && /map failed to load/i.test(fl) && /reload the page/i.test(fl) && /bot has their place/i.test(fl), "fallbackLine: a guest line names the player, the map failure, the bot and the reload", fl);
+    row(/Bob/.test(flh) && /the host/i.test(flh) && /map failed to load/i.test(flh) && /offline/i.test(flh), "fallbackLine: a host line says the host left and the match carries on offline", flh);
+    row(fallbackLine("", false).startsWith("A player") && fallbackLine("x".repeat(80), false).indexOf("x".repeat(25)) === -1, "fallbackLine: a missing name is 'A player', a long one is cut at 24");
+
+    const healthy = { map: { genVersion: 3 } };
+    row(detectMapFallback(healthy, 3, null) === null, "detect: a healthy map (built = advertised, no fallback record) -> null");
+    row(detectMapFallback({}, 3, null) === null && detectMapFallback(undefined, 3, null) === null && detectMapFallback(null, 3, null) === null, "detect: no W / no map -> null, never throws");
+    const ev = detectMapFallback(healthy, 3, normFallback({ from: 3, to: 2, reason: "e" }));
+    row(ev && ev.via === "event" && ev.wanted === 3 && ev.built === 2, "detect: the mapFallback event of this session's load wins", ev);
+    const byMap = detectMapFallback({ map: { genVersion: 2, fallback: { reason: "r", genVersion: 2, wanted: 3 } } }, 3, null);
+    row(byMap && byMap.via === "map.fallback" && byMap.built === 2 && byMap.wanted === 3, "detect: map.fallback is found", byMap);
+    const byGv = detectMapFallback({ map: { genVersion: 2 } }, 3, null);
+    row(byGv && byGv.via === "genVersion" && byGv.wanted === 3 && byGv.built === 2, "detect: a built genVersion that differs from the advertised one is a fallback even with no record", byGv);
+    const noGv = detectMapFallback({ map: {} }, 3, null);
+    row(noGv === null, "detect: a map with no genVersion field (an old maps.js) is not a fallback", noGv);
+    const stale = detectMapFallback({ map: { genVersion: 3 }, mapFallback: { from: 3, to: 2, reason: "an EARLIER match" } }, 3, null);
+    row(stale === null, "detect: a STALE W.mapFallback left by an earlier match is ignored when the built map is healthy", stale);
+    const stub = detectMapFallback({ mapFallback: { from: 3, to: 2, reason: "stub" } }, 3, null);
+    row(stub && stub.via === "W.mapFallback" && stub.built === 2, "detect: W.mapFallback is used when there is no built map to contradict it", stub);
+    const contra = detectMapFallback({ map: { genVersion: 2 }, mapFallback: { from: 3, to: 2, reason: "c" } }, 3, null);
+    row(contra && contra.built === 2 && contra.wanted === 3, "detect: W.mapFallback and a differing built genVersion agree", contra);
+
+    // onMapFail: the roster decides, not the message
+    const host = mk("a_h", 3, true, "Host");
+    const roster = [{ peerId: "a_h", slot: 0, name: "Host" }, { peerId: "b_1", slot: 1, name: "G1" }, { peerId: "c_2", slot: 2, name: "G2" }];
+    const body = rt({ name: "G1", gv: 3, wanted: 3, built: 2, reason: "import failed", host: 0, slot: 1 });
+    const mf = host.onMapFail("b_1", body, roster);
+    row(mf && mf.slot === 1 && mf.id === "s1" && mf.host === false && mf.name === "G1" && mf.wanted === 3 && mf.built === 2 && /G1/.test(mf.line) && /map failed to load/i.test(mf.line),
+      "onMapFail: a guest's mapfail gives its slot (s1), its roster name, the versions and the line the room reads", mf);
+    const mfh = host.onMapFail("a_h", rt({ name: "Host", wanted: 3, built: 2, host: 1, slot: 0 }), roster);
+    row(mfh && mfh.slot === 0 && mfh.id === "s0" && mfh.host === true && /the host/i.test(mfh.line), "onMapFail: slot 0 is the host (guests treat it like a lost host)", mfh);
+    const spoof = host.onMapFail("b_1", rt({ name: "Evil", wanted: 3, built: 2, host: 1, slot: 2 }), roster);
+    row(spoof && spoof.slot === 1 && spoof.id === "s1" && spoof.host === false && spoof.name === "G1", "onMapFail: a body that claims slot 2 / host / another name cannot kick somebody else's slot (the roster wins)", spoof);
+    row(host.onMapFail("z_9", body, roster) === null, "onMapFail: a sender that is not in the match's roster -> null (nothing to free)");
+    row(host.onMapFail("b_1", body, undefined) === null && host.onMapFail("b_1", body, "nope") === null && host.onMapFail("b_1", body, []) === null, "onMapFail: no roster -> null");
+    let threw = null;
+    try { host.onMapFail("b_1", undefined, roster); host.onMapFail("b_1", null, roster); host.onMapFail("b_1", { wanted: "x", built: {}, reason: 5 }, roster); host.onMapFail("b_1", "s", roster); } catch (e) { threw = String(e); }
+    row(threw === null, "onMapFail: a malformed body does not throw", threw);
+  }
   return bad;
 }
 
@@ -150,6 +218,20 @@ function suite(M, label, count) {
   ok(imports.some((i) => i.spec === "./maps.js"), "the local MAP_GEN_VERSION is read by a dynamic import of maps.js (the already-loaded instance, no new file)");
   ok(!/from\s+"\.\/maps\.js/.test(src) && !/import\s+"\.\/maps\.js/.test(src), "no static import of maps.js (a bare edge would be a second, stale module instance)");
   ok(/refuse: 1/.test(src), "the refuse message is in the CRITICAL list (the outbound budget never sheds it)");
+  // C-FALLBACK, static: the wiring that only a browser can run is at least present, and removing a piece of it is caught
+  ok(/mapfail: 1/.test(src), "the mapfail message is in the CRITICAL list (the outbound budget never sheds it)");
+  ok(!/mapfail: 1/.test(src.replace(", mapfail: 1", "")), "planted fault caught: a source without the mapfail CRITICAL entry fails that row");
+  ok(/W\.events\.on\("mapFallback"/.test(src), "init listens for the mapFallback event (maps.js emits it while the map is built)");
+  const sliceOf = (from, to) => { const a = src.indexOf(from), b = src.indexOf(to, a + 1); return a >= 0 && b > a ? src.slice(a, b) : ""; };
+  const onStartSrc = sliceOf("export function onMatchStart(W)", "export function update(W, dt)");
+  ok(/detectMapFallback\(W, S\.gv, S\.mapFallback\)[\s\S]*leaveForFallback\(W, fb\)/.test(onStartSrc), "onMatchStart judges the built map and leaves the squad on a fallback (before it sends any sync)");
+  ok(onStartSrc.indexOf("leaveForFallback") > 0 && onStartSrc.indexOf("leaveForFallback") < onStartSrc.indexOf('send("sync"'), "...and does so BEFORE the host's sync goes out");
+  ok(/S\.mapFallback && !S\.fallbackDone\) \{ leaveForFallback\(/.test(sliceOf("export function update(W, dt)", "function pack(a)")), "update acts on a fallback noted by the event too (onMatchStart normally gets there first)");
+  const leaveSrc = sliceOf("function leaveForFallback(W, fb)", "function beginOnlineMatch(W, cfg)");
+  const leaveOk = (t) => /out\("mapfail"/.test(t) && /out\("bye"/.test(t) && /convertRemotesToBots\(W\)/.test(t) && /W\.net = null/.test(t) && /showFallbackCard\(W, j\)/.test(t) && /squadMapFallback/.test(t);
+  ok(leaveOk(leaveSrc), "the leaving client sends mapfail + the old-style bye, converts its remote bodies to bots, clears W.net and shows the card");
+  ok(!leaveOk(leaveSrc.replace("W.net = null", "")), "planted fault caught: a leave that keeps W.net fails that row");
+  ok(!leaveOk(leaveSrc.replace("showFallbackCard(W, j);", "")), "planted fault caught: a leave with no card on screen fails that row");
 
   const M = await import(pathToFileURL(NET_JS).href);
   for (const k of ["normGv", "judgeGv", "SquadHandshake", "refusalLine", "leftOutLine"]) ok(typeof M[k] === "function", "net.js exports " + k);
@@ -182,8 +264,27 @@ function suite(M, label, count) {
   class MissingIsLocal extends M.SquadHandshake {      // a hello without gv is taken for the local version
     onHello(from, d) { return super.onHello(from, Object.assign({}, d, d && d.gv === undefined ? { gv: this.gv } : {})); }
   }
-  for (const [name, Cls] of [["a roster that ignores the version", IgnoresVersion], ["a guest that trusts a start with no gv", MissingIsSame], ["a hello without gv taken for the local version", MissingIsLocal]]) {
-    const bad = suite(Object.assign({}, M, { SquadHandshake: Cls }), name, false);
+  class SpoofableMapFail extends M.SquadHandshake {    // C-FALLBACK: slot / host / name taken from the message body, not the roster
+    onMapFail(from, d, roster) {
+      const r = super.onMapFail(from, d, roster);
+      if (!r || !d) return r;
+      const slot = Number.isInteger(d.slot) ? d.slot : r.slot;
+      return Object.assign({}, r, { slot, id: "s" + slot, host: d.host === 1 || r.host, name: d.name || r.name });
+    }
+  }
+  const real = M.detectMapFallback, realNorm = M.normFallback;
+  const withGv = (W, gv) => (W && W.map ? Object.assign({}, W, { map: Object.assign({}, W.map, { genVersion: gv }) }) : W);
+  const mutants = [
+    ["a roster that ignores the version", { SquadHandshake: IgnoresVersion }],
+    ["a guest that trusts a start with no gv", { SquadHandshake: MissingIsSame }],
+    ["a hello without gv taken for the local version", { SquadHandshake: MissingIsLocal }],
+    ["an onMapFail that trusts the message body (a peer can kick another slot)", { SquadHandshake: SpoofableMapFail }],
+    ["a detector that ignores a built genVersion that differs from the advertised one", { detectMapFallback: (W, adv, seen) => real(withGv(W, normGv(adv)), adv, seen) }],
+    ["a detector that trusts a stale W.mapFallback over a healthy map", { detectMapFallback: (W, adv, seen) => real(W, adv, seen) || (W && W.mapFallback ? Object.assign({ via: "W.mapFallback" }, realNorm(W.mapFallback)) : null) }],
+    ["a normFallback that only reads the event shape", { normFallback: (x) => (x && typeof x === "object" ? realNorm({ genVersion: x.genVersion, wanted: x.wanted, reason: x.reason }) : null) }],
+  ];
+  for (const [name, over] of mutants) {
+    const bad = suite(Object.assign({}, M, over), name, false);
     ok(bad >= 1, "planted fault caught: " + name + " fails " + bad + " row(s)", bad);
   }
 

@@ -43,6 +43,21 @@
  * roster, so no slot is ever handed to a client that would build another world.
  * The pure decisions live in SquadHandshake / judgeGv (selftest: net.selftest.cjs);
  * the DOM and the sends stay in the lobby code below.
+ *
+ * MAP FALLBACK (contract C-FALLBACK, Wave 7 completion round, lane D1). The handshake above compares the version a page ADVERTISES (the
+ * MAP_GEN_VERSION export, read in the lobby before any map exists). A page whose towngen.js / citykit.js failed to import twice builds the
+ * Wave-6 Savanna layout instead (maps.js says so: W.mapFallback = { from, to, reason }, map.genVersion = the version it really built, and a
+ * "mapFallback" event on W.events), so it holds a different world than the one it advertised. Such a client must not take part in a squad:
+ *   - when its match goes live (onMatchStart: the first moment actors and the HUD exist) it LEAVES the room - a "mapfail" message (name, the two
+ *     versions, the reason) and the old-style "bye" for its slot go out, its remote actors become bots (the hostLost conversion) and W.net is
+ *     cleared, so the match carries on as a SOLO match on the layout it really has - and shows a card on screen: "Part of the map failed to
+ *     load ... reload the page" (RELOAD PAGE / KEEP PLAYING);
+ *   - the rest of the room reads why (a lobby line / the HUD chat log); the host turns the leaver's body into a bot; if the leaver was the HOST
+ *     the guests continue offline exactly as when a host disconnects (hostLost) and are told why;
+ *   - a solo match (no squad session) is untouched; a squad whose members all built the same world is untouched.
+ * The fallback is found three ways, whichever maps.js provides: the "mapFallback" event (while this session's match loads), W.mapFallback /
+ * map.fallback, and the built map's genVersion differing from the advertised one. Pure parts: normFallback / judgeFallback / fallbackLine /
+ * detectMapFallback / SquadHandshake.onMapFail (selftest); the browser proof is _harness/squadguard_live.py case "fallback".
  */
 import { NetPlay } from "../../net/ffg_netplay.js";
 import { RTCMesh } from "../../net/ffg_rtc.js";
@@ -98,6 +113,54 @@ export function leftOutLine(name, peerGv, hostGv) {
     : `${nm} is not in this match: this room runs version ${h} and they run version ${g}. A bot has their place; reload this page to match them.`;
 }
 
+// ── MAP FALLBACK: pure part (contract C-FALLBACK) ─────────────────────────────────────────────────────────────────────────────────────────
+/** The fallback record from either shape maps.js uses - the contract's W.mapFallback { from, to, reason } or the event / map.fallback
+ *  { genVersion, wanted, reason } - as { wanted, built, reason } (a version is null when the record has none). null when `x` is not an object. */
+export function normFallback(x) {
+  if (!x || typeof x !== "object") return null;
+  const ver = (v) => (typeof v === "number" && Number.isFinite(v) ? normGv(v) : null);
+  const wanted = ver(x.from) != null ? ver(x.from) : ver(x.wanted);
+  const built = ver(x.to) != null ? ver(x.to) : ver(x.genVersion);
+  return { wanted, built, reason: String(x.reason == null ? "" : x.reason).slice(0, 200) };
+}
+
+/** What a page tells ITS OWN player when it holds another world than the one it advertised (`fb` = a normFallback result). */
+export function judgeFallback(localGv, fb) {
+  const l = normGv(localGv);
+  return {
+    local: l, wanted: fb && fb.wanted != null ? fb.wanted : l, built: fb && fb.built != null ? fb.built : null, reason: fb && fb.reason ? fb.reason : "",
+    title: "Part of the map failed to load",
+    detail: "This page could not load the whole map, so it would play a different world from the rest of the squad. You have left the room and this match carries on solo. Reload the page to fix it, then join again.",
+    reload: true,
+  };
+}
+
+/** The line the ROOM reads when a squad-mate left because its map fell back. `host`: the leaver was the room's host. */
+export function fallbackLine(name, host) {
+  const nm = String(name == null || name === "" ? "A player" : name).slice(0, 24);
+  return host
+    ? `${nm} (the host) had to leave: part of their map failed to load, so they would have played a different world. The match carries on offline.`
+    : `${nm} left the squad: part of their map failed to load, so they would have played a different world. A bot has their place; they need to reload the page.`;
+}
+
+/** Does the world this page BUILT differ from the one it advertised? `advertised` = the MAP_GEN_VERSION it sent in its hello, `seen` = what the
+ *  "mapFallback" event delivered while THIS session's match was loading (fresh by construction). Returns { wanted, built, reason, via } or null.
+ *  Found by (in this order) the event, map.fallback, the built map's genVersion differing from the advertised one, and W.mapFallback - which is
+ *  trusted only when the built map does not contradict it (a record left by an EARLIER match on this page must not make a healthy map look like
+ *  a fallback: a map that says it is the advertised version and carries no .fallback is healthy). */
+export function detectMapFallback(W, advertised, seen) {
+  const adv = normGv(advertised);
+  const map = W && W.map ? W.map : null;
+  const mapGv = map && map.genVersion != null ? normGv(map.genVersion) : null;
+  if (seen) return Object.assign({ via: "event" }, seen);
+  const mf = map && map.fallback ? normFallback(map.fallback) : null;
+  if (mf) return Object.assign({ via: "map.fallback" }, mf);
+  if (mapGv != null && mapGv !== adv) return { wanted: adv, built: mapGv, reason: "the built map is version " + mapGv + ", this page advertised " + adv, via: "genVersion" };
+  const wf = W ? normFallback(W.mapFallback) : null;
+  if (wf && mapGv == null) return Object.assign({ via: "W.mapFallback" }, wf);
+  return null;
+}
+
 /** The pure half of the squad handshake: who is in the room at which world version, who may get a slot, what a guest does with a start
  *  message. net.js feeds it the messages and does the sending / painting; net.selftest.cjs drives two of these through an in-memory bus. */
 export class SquadHandshake {
@@ -142,6 +205,16 @@ export class SquadHandshake {
     const me = d && Array.isArray(d.roster) ? d.roster.find((r) => r && r.peerId === this.id) : null;
     return Object.assign({ slot: me && me.slot != null ? me.slot : null }, j);
   }
+  /** A "mapfail" arrived: a peer left because its map fell back (C-FALLBACK). `roster` = the match's roster ([{ peerId, slot, name }]). null when
+   *  the sender is not in this match (nothing to free, nothing to tell). The slot, the name and "is it the host" (slot 0) come from the ROSTER,
+   *  never from the message body: any peer can send anything, and a body must not be able to kick somebody else's slot. */
+  onMapFail(from, d, roster) {
+    const me = Array.isArray(roster) ? roster.find((r) => r && r.peerId === from) : null;
+    if (!me || typeof me.slot !== "number") return null;
+    const host = me.slot === 0;
+    const fb = normFallback({ from: d && d.wanted, to: d && d.built, reason: d && d.reason });
+    return { from, slot: me.slot, id: "s" + me.slot, name: me.name, host, wanted: fb.wanted, built: fb.built, reason: fb.reason, line: fallbackLine(me.name, host) };
+  }
 }
 
 let _localGv = null, _localGvP = null;
@@ -162,6 +235,9 @@ export function init(W) {
   W.net = null;
   localGenVersion();   // warm: the lobby needs the number the moment it opens (an already-loaded module, so this is instant)
   W.events.on("openOnline", (sel) => openLobby(W, sel));
+  // C-FALLBACK: maps.js says, while this match's map is being built, that part of it failed to load (towngen.js / citykit.js). A squad session notes it
+  // and acts when the match goes live (onMatchStart / update); with no squad session (a solo match) there is nothing to do and nothing changes.
+  W.events.on("mapFallback", (info) => { if (S && S.started && !S.mapFallback) S.mapFallback = normFallback(info) || { wanted: null, built: null, reason: "" }; });
   // weapons.js routes hits on netRemote humans here (victim applies to itself).
   // `attackerId` is LAST so the old 4-arg call order still works. It exists
   // because this fires for everything simulated locally — on the host that is
@@ -240,7 +316,7 @@ function isAuthority(W) { return S && S.net.isHost(); }
 // the list because the ENVELOPE is not the right thing to drop — the flush in
 // update() thins its contents first, so shedding never silently strands a
 // pickup or a chest open inside a discarded envelope.
-const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1, refuse: 1 };
+const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1, refuse: 1, mapfail: 1 };
 
 /** OUTBOUND BUDGET, in messages per rolling second. Supabase Realtime does not
  *  throttle a connection that exceeds its rate — it DISCONNECTS it, which
@@ -600,6 +676,125 @@ function refuseRoom(W, j, hostId) {
   setTimeout(() => { try { net.leave(); } catch (e) {} }, j.slot != null ? 13000 : 500);
 }
 
+// ── MAP FALLBACK: the leaving side and the room's side (contract C-FALLBACK, see the header) ───────────────────────────────────────────────
+let _fbCard = null;
+/** The on-screen message of a client that left the squad because its map fell back. Not a modal - the match carries on under it - but a card at the
+ *  top with RELOAD PAGE and KEEP PLAYING (textContent only). It gives the mouse back like every clickable overlay (hud.js releaseCursor). */
+function showFallbackCard(W, j) {
+  try {
+    if (_fbCard) { _fbCard.remove(); _fbCard = null; }
+    try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
+    try { W.kernel.renderer.domElement.style.cursor = ""; } catch (e) {}
+    W._suppressNextShot = true;           // the click that re-grabs the pointer must not also fire the weapon
+    const card = document.createElement("div");
+    card.setAttribute("data-net-fallback", j.wanted + "/" + (j.built == null ? "?" : j.built));
+    Object.assign(card.style, {
+      // below the HUD's top rows (storm timer, level bar, mission card end near 170 px) so the circle timer stays readable under it
+      position: "absolute", left: "50%", top: "178px", transform: "translateX(-50%)", zIndex: 80, width: "min(94vw, 620px)", boxSizing: "border-box",
+      background: "rgba(10,19,31,0.96)", border: "1px solid rgba(255,176,96,0.65)", borderRadius: "12px", padding: "12px 16px", textAlign: "center",
+      color: "#eaf2ff", fontFamily: "system-ui, sans-serif", fontSize: "13px", lineHeight: "1.4", pointerEvents: "auto", boxShadow: "0 8px 30px rgba(0,0,0,0.45)",
+    });
+    const t = document.createElement("div");
+    t.textContent = j.title;
+    Object.assign(t.style, { fontWeight: "900", fontSize: "16px", letterSpacing: "1px", color: "#ffb060", marginBottom: "6px" });
+    const d = document.createElement("div");
+    d.textContent = j.detail;
+    d.style.marginBottom = "10px";
+    const row = document.createElement("div");
+    Object.assign(row.style, { display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" });
+    const mkb = (label, primary, fn, attr) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.setAttribute(attr, "");
+      Object.assign(b.style, { padding: "9px 20px", borderRadius: "10px", border: "none", cursor: "pointer", fontWeight: "800", fontSize: "13px", background: primary ? "#ffb060" : "rgba(255,255,255,0.14)", color: primary ? "#08131f" : "#cfe4ff" });
+      b.onclick = fn;
+      row.appendChild(b);
+    };
+    mkb("RELOAD PAGE", true, () => { try { location.reload(); } catch (e) {} }, "data-net-reload");
+    mkb("KEEP PLAYING", false, () => { card.remove(); if (_fbCard === card) _fbCard = null; }, "data-net-dismiss");
+    card.append(t, d, row);
+    (W.kernel.parent || document.body).appendChild(card);
+    _fbCard = card;
+    // the card belongs to the match it was raised in: it goes when the player is back at the menu, and after 40 s (a player with the mouse locked
+    // cannot click KEEP PLAYING without pressing ESC first, and the card must not cover the HUD for the rest of the match)
+    const ph0 = W.phase, born = performance.now();
+    const iv = setInterval(() => {
+      if (!card.isConnected) { clearInterval(iv); return; }
+      if ((ph0 !== "menu" && W.phase === "menu") || performance.now() - born > 40000) { card.remove(); clearInterval(iv); if (_fbCard === card) _fbCard = null; }
+    }, 500);
+    return card;
+  } catch (e) { console.warn("[net] could not show the map-fallback card:", e); return null; }
+}
+
+/** Every actor this client was only following (remote humans, the host's bots) fights on under a local bot brain - the hostLost conversion. */
+function convertRemotesToBots(W) {
+  let converted = 0;
+  for (const a of W.actors || []) {
+    if (a.netRemote && a !== W.player) {
+      a.netRemote = false; a.isBot = true;
+      import("./bots.js" + V).then((m) => m.attachBrain(W, a));
+      converted++;
+    }
+  }
+  return converted;
+}
+
+/** HOST: the human in `a`'s slot is gone for good -> its body fights on under a bot brain, and the guests are told. */
+function takeOverBody(W, a) {
+  a.netRemote = false; a.isBot = true;
+  import("./bots.js" + V).then((m) => m.attachBrain(W, a));
+  send("takeover", { slot: a.id });
+}
+
+/** HOST: free slot `id` (a "mapfail" / "bye" for it arrived). false = the body does not exist yet (this host is still loading its match when the
+ *  guest's message arrives): the caller remembers the slot and drainPending does it once the actors exist. */
+function hostTakeOver(W, id) {
+  const a = W.actorById && W.actorById.get(id);
+  if (!a) return false;
+  if (a.alive && S.net.isHost() && a.netRemote) takeOverBody(W, a);
+  return true;
+}
+
+/** Work a "mapfail" asked for before this client's actors existed: the host's slot take-overs, a guest's "the host left". Called when the match goes
+ *  live and from update() while something is pending. */
+function drainPending(W) {
+  if (!S) return;
+  if (S.pendingTakeovers && S.pendingTakeovers.size && W.actorById && W.actorById.size) {
+    for (const id of [...S.pendingTakeovers]) if (hostTakeOver(W, id)) S.pendingTakeovers.delete(id);
+  }
+  if (S.hostGone && W.player) { S.hostGone = false; hostLost(W); }
+}
+
+/** Tell the player (a squad-mate left because its map fell back): the HUD chat log once the HUD is up, else remembered for onMatchStart. */
+function tellRoom(W, text, key) {
+  if (W.phase === "match" || W.phase === "drop") { notify(W, text, key); return; }
+  (S.pendingNotices = S.pendingNotices || []).push(text);
+}
+
+/** THE LEAVING SIDE of C-FALLBACK: this page holds another world than the one it advertised, so it must not play in the squad. Tells the room (a
+ *  "mapfail" with both versions, and the old-style "bye" for the slot, which builds from before this contract understand), turns every remote body
+ *  into a bot, drops the session (W.net = null: a solo match from here) and puts the reason on screen. `fb` = a detectMapFallback result. */
+function leaveForFallback(W, fb) {
+  const sess = S;
+  if (!sess || sess.fallbackDone) return;
+  sess.fallbackDone = true;
+  const net = sess.net, isHost = net.isHost();
+  const j = judgeFallback(sess.gv, fb);
+  const me = sess.cfg && Array.isArray(sess.cfg.roster) ? sess.cfg.roster.find((r) => r && r.peerId === net.id) : null;
+  console.warn(`[net] leaving the squad: this page built map version ${j.built == null ? "?" : j.built} but advertised ${j.wanted} (${fb.via || "fallback"}${fb.reason ? ": " + fb.reason : ""})`);
+  const out = (t, d) => { try { net.send(t, d); } catch (e) {} };
+  out("mapfail", { name: sess.myName, gv: sess.gv, wanted: j.wanted, built: j.built, reason: String(fb.reason || "").slice(0, 120), host: isHost ? 1 : 0, slot: me ? me.slot : null });
+  if (me) out("bye", { slot: "s" + me.slot });
+  const converted = convertRemotesToBots(W);
+  W.squadLeft = { reason: "map-fallback", wanted: j.wanted, built: j.built, via: fb.via || null, host: isHost, converted };
+  W.events.emit("squadMapFallback", { peerId: net.id, name: sess.myName, wanted: j.wanted, built: j.built, via: fb.via || null, host: isHost, by: "self" });
+  try { sess.rtc && sess.rtc.close(); } catch (e) {}
+  net.handlers = {};                       // nothing this channel still delivers may reach a NEW session's onMsg while it winds down
+  if (S === sess) { S = null; W.net = null; }
+  setTimeout(() => { try { net.leave(); } catch (e) {} }, 500);   // a moment later, so the two sends above are on the wire
+  showFallbackCard(W, j);
+}
+
 function beginOnlineMatch(W, cfg) {
   const me = cfg.roster.find((r) => r.peerId === S.net.id);
   if (!me) {
@@ -657,6 +852,18 @@ function onMsg(W, { from, t, d }) {
       notify(W, line, from);
       W.events.emit("squadRefused", { peerId: from, name: d.name, gv: normGv(d.gv), hostGv: S.gv, by: "guest" });
     }
+    return;
+  }
+  if (t === "mapfail") {
+    // C-FALLBACK, the room's side: a squad-mate's map fell back (it would play another world) and it has left. Its slot, name and "was it the host"
+    // come from OUR roster, not from the message body. Say why; the host turns its body into a bot, the guests treat a leaving host like a lost one.
+    const r = S.hs.onMapFail(from, d, S.cfg && S.cfg.roster);
+    if (!r) return;
+    (S.mapFails = S.mapFails || []).push({ from, id: r.id, name: r.name, host: r.host, wanted: r.wanted, built: r.built });
+    tellRoom(W, r.line, from);
+    if (S.net.isHost()) { if (!hostTakeOver(W, r.id)) (S.pendingTakeovers = S.pendingTakeovers || new Set()).add(r.id); }
+    else if (r.host) { if (W.player) hostLost(W); else S.hostGone = true; }
+    W.events.emit("squadMapFallback", { peerId: from, name: r.name, wanted: r.wanted, built: r.built, host: r.host, by: "peer" });
     return;
   }
   if (t === "rtc") {
@@ -752,11 +959,7 @@ function onMsg(W, { from, t, d }) {
   if (t === "bye") {
     // a guest left mid-match: host re-attaches a bot brain so the slot fights on
     const a = W.actorById.get(d.slot);
-    if (a && a.alive && S.net.isHost() && a.netRemote) {
-      a.netRemote = false; a.isBot = true;
-      import("./bots.js" + (new URL(import.meta.url).search || "")).then((m) => m.attachBrain(W, a));
-      send("takeover", { slot: a.id });
-    }
+    if (a && a.alive && S.net.isHost() && a.netRemote) takeOverBody(W, a);
     // the HOST left mid-match: this bye used to be silently ignored by guests
     // (the branch above is host-only), stranding them in a frozen world — all
     // ~46 host-simulated bots stop at their last lerp target, the clock stops,
@@ -857,14 +1060,7 @@ function slewClock(W, hostT) {
 export function hostLost(W) {
   if (!S || S._hostLostRan) return;
   S._hostLostRan = true;
-  let converted = 0;
-  for (const a of W.actors) {
-    if (a.netRemote && a !== W.player) {
-      a.netRemote = false; a.isBot = true;
-      import("./bots.js" + (new URL(import.meta.url).search || "")).then((m) => m.attachBrain(W, a));
-      converted++;
-    }
-  }
+  const converted = convertRemotesToBots(W);
   try { S.rtc && S.rtc.close(); } catch (e) {}
   try { S.net && S.net.leave && S.net.leave(); } catch (e) {}
   W.net = null;                                 // frame gates (hitstop etc.) read this
@@ -882,17 +1078,25 @@ export function leave(W) {
 }
 
 export function onMatchStart(W) {
-  // host sends world sync for any guest that joined at the boundary
-  if (S && S.net.isHost()) {
-    send("sync", { t: W.t, loot: W.lootSyncState() });
-    // the HUD is up now: tell the host who was left out of this match, and why (lobby time passed while the match loaded)
-    const pend = S.pendingNotices;
-    if (pend && pend.length) { S.pendingNotices = null; for (const t of pend) notify(W, t); }
+  if (!S) return;
+  // C-FALLBACK: the first moment actors and the HUD exist. A client that holds another world than the one it advertised leaves the squad here
+  // (nothing below - no sync, no state - is sent for it).
+  if (S.started) {
+    const fb = detectMapFallback(W, S.gv, S.mapFallback);
+    if (fb) { leaveForFallback(W, fb); return; }
   }
+  drainPending(W);        // take-overs / "the host left" that arrived while this client was still loading
+  // host sends world sync for any guest that joined at the boundary
+  if (S.net.isHost()) send("sync", { t: W.t, loot: W.lootSyncState() });
+  // the HUD is up now: say who was left out of this match, and why (lobby time passed while the match loaded), or who left while it loaded
+  const pend = S.pendingNotices;
+  if (pend && pend.length) { S.pendingNotices = null; for (const t of pend) notify(W, t); }
 }
 
 export function update(W, dt) {
   if (!S || !S.started || !W.player) return;
+  if (S.mapFallback && !S.fallbackDone) { leaveForFallback(W, detectMapFallback(W, S.gv, S.mapFallback)); return; }   // (onMatchStart normally got there first)
+  if (S.pendingTakeovers || S.hostGone) drainPending(W);
   const now = performance.now();
   // OWN STATE, rate scaled by room size. Every send is billed once per receiving
   // subscriber, so H humans at 12 Hz cost 12·H·H messages/s: 48 for a pair but

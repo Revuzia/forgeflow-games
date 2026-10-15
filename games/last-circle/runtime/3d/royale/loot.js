@@ -258,12 +258,30 @@ export function debugItems() { return [...items.values()].filter((it) => !it.tak
  *  and to sit in the loot group, so the kernel warm-up compiles their three programs under
  *  the loading screen. The warm-up forces each empty pool to count >= 1 for its one real
  *  frame; every vertex shader discards a slot that holds a zero matrix, so that frame
- *  draws nothing it should not. */
+ *  draws nothing it should not. The fourth object is the supply-crate proxy (see below). */
 export function warmObjects(W) {
   const P = fxInit();
   const g = W.group("loot");
   for (const k of ["rings", "beams", "glows"]) if (!P[k].mesh.parent) g.add(P[k].mesh);
-  return [P.rings.mesh, P.beams.mesh, P.glows.mesh];
+  // The supply crate is born at storm phase 2 (about 4.5 minutes in), so its two programs used to link on the frame it first came into view: the
+  // opaque box shares the plain standard program, but the BALLOON is a transparent MeshStandardMaterial and three keys `opaque`, so it is a
+  // program of its own (measured on all three maps, 270-290 s into the match). A page-lifetime proxy built by the SAME factory the live drop uses
+  // gives the warm frame both materials; it holds the programs for the session, and no live crate shares an instance with it.
+  if (!_warmCrate) _warmCrate = makeSupplyCrate().crate;
+  return [P.rings.mesh, P.beams.mesh, P.glows.mesh, _warmCrate];
+}
+let _warmCrate = null;
+
+/** ONE builder for the supply crate (box + balloon), used by the live drop and by warmObjects, so the materials the warm-up links can never drift
+ *  from the ones the drop draws. */
+function makeSupplyCrate() {
+  const crate = new THREE.Group();
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), new THREE.MeshStandardMaterial({ color: 0x4aa8ff, metalness: 0.3, roughness: 0.5 }));
+  box.position.y = 0.8;
+  const balloon = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf2a33c, transparent: true, opacity: 0.85 }));
+  balloon.position.y = 5;
+  crate.add(box, balloon);
+  return { crate, box, balloon };
 }
 
 function slotInfo(P, slot) {
@@ -1135,12 +1153,7 @@ function maybeSupplyDrop(W, dt) {
     const ang = rng() * Math.PI * 2, rr = (st.nextRadius || st.radius) * 0.6 * rng();
     const cx = (st.nextCenter ? st.nextCenter.x : st.center.x) + Math.cos(ang) * rr;
     const cz = (st.nextCenter ? st.nextCenter.z : st.center.z) + Math.sin(ang) * rr;
-    const crate = new THREE.Group();
-    const box = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), new THREE.MeshStandardMaterial({ color: 0x4aa8ff, metalness: 0.3, roughness: 0.5 }));
-    box.position.y = 0.8;
-    const balloon = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf2a33c, transparent: true, opacity: 0.85 }));
-    balloon.position.y = 5;
-    crate.add(box, balloon);
+    const { crate, balloon } = makeSupplyCrate();
     crate.position.set(cx, 200, cz);
     W.group("loot").add(crate);
     supplyState.falling = { crate, x: cx, z: cz, balloon };
