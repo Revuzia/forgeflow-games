@@ -18,7 +18,7 @@
 //   24 u16 yaw (×65536/2π) | 26 u16 aimYaw | 28 i16 aimPitch (×32767/π)
 //   30 u16 flags: b0–2 MoveState (walk slog slick wallslick air), b3 alive, b4 slickForm, b5 firing, b6 hidden, b7 grounded,
 //      b8 rolling, b9 flicking, b10 leaping, b11 charging, b12 specialReady, b13 courtFrozen, b14 tall, b15 ballistic
-//   32 u8 hp (×255/WEAPONS.hp) | 33 f32 tank (exact enough for the dry-click rule the client predicts)
+//   32 u8 hp (×255/HP_CAP, the largest kit max hp) | 33 f32 tank (exact enough for the dry-click rule the client predicts)
 //   37 u8 special (floor ×255) | 38 u8 charge (×255) | 39 u8 respawnT (1/20 s) | 40 u8 protectedT (1/20 s)
 //   41 u8 surfacing (whole ticks) | 42 u8 specialActive (0 none, else WEAPONS.specials index + 1) | 43 u8 specialT (1/20 s)
 //   44 i8 spawnSite | 45 u8 subCooldown (1/20 s) | 46 u16 ackSeq (last consumed intent seq of a human runner, 0 a bot)
@@ -45,7 +45,7 @@ import { CREW_SLOTS } from '../core/types.ts';
 import type { SimEvent } from '../core/match/events.ts';
 import { RUNNER_NET_BOOL, RUNNER_NET_NUM, type RunnerNetState } from '../core/runner.ts';
 import { CAMERA, MOVE, TANK, TICK } from '../core/config.ts';
-import { WEAPONS } from '../core/data.ts';
+import { WEAPONS, HP_CAP } from '../core/data.ts';
 
 // ───────────────────────────── constants (CONTRACT_ONLINE §O16) ─────────────────────────────
 export const PROTO = 1;
@@ -291,7 +291,7 @@ export interface RunnerLike {
   lastSpring: number; jumps: number; landings: number;
 }
 
-const HP_MAX = WEAPONS.hp;
+const HP_MAX = HP_CAP;
 const clampU8 = (v: number): number => Math.max(0, Math.min(255, Math.round(v)));
 const angU16 = (a: number): number => { let y = finite(a) % (Math.PI * 2); if (y < 0) y += Math.PI * 2; return Math.round(y * YAW_Q) & 0xffff; };
 const u16Ang = (v: number): number => { let y = v / YAW_Q; if (y > Math.PI) y -= Math.PI * 2; return y; };

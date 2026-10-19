@@ -198,7 +198,7 @@ async function fetchMapBytes(def: MapDef, onProgress: (f: number) => void): Prom
   return out.buffer;
 }
 
-export const VERSION = 'dyefield-1.5.2';
+export const VERSION = 'dyefield-1.5.3';
 
 declare global {
   interface Window {

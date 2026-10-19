@@ -53,7 +53,7 @@ import { conveyorAt, oobAt, springAt } from './mapgeo.ts';
 import type { Painter } from './paint/painter.ts';
 import type { SimEvent } from './match/events.ts';
 import { COMBAT, DEV_BRUSH, HITBOX, MATCH, MOVE, SLICK, TANK, TICK } from './config.ts';
-import { WEAPONS } from './data.ts';
+import { WEAPONS, kitMaxHp } from './data.ts';
 
 export interface SpawnPoint { x: number; y: number; z: number; yaw: number }
 /** A team spawn pad: top-centre + radius. */
@@ -156,6 +156,8 @@ export class Runner {
   grounded = false;
   tank: number = TANK.max;
   hp: number = WEAPONS.hp;
+  /** this runner's kit max HP (kitMaxHp) */
+  readonly maxHp: number;
   alive = true;
   respawnT = 0;
   hidden = false;
@@ -311,6 +313,8 @@ export class Runner {
     this.side = who.team === 2 ? 'B' : 'A';
     this.enemy = opts.mode === 'ffa' ? 0 : who.team === 1 ? 2 : who.team === 2 ? 1 : 0;
     this.kit = who.kit;
+    this.maxHp = kitMaxHp(who.kit);
+    this.hp = this.maxHp;
     this.bot = who.bot;
     this.body = body;
     this.physics = opts.physics ?? null;
@@ -355,7 +359,7 @@ export class Runner {
     this.offDyeT = 0;
     this.wallCd = 0;
     this.refilling = false;
-    this.hp = WEAPONS.hp;
+    this.hp = this.maxHp;
     this.tank = TANK.max;
     this.alive = true;
     this.respawnT = 0;

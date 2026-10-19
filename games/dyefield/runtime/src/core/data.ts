@@ -72,6 +72,14 @@ export const WEAPONS = weaponsJson as unknown as {
   specialCharge: Record<string, number>;
 };
 
+/** Max HP of a kit: the kit's own 'hp' (weapons.json, e.g. SHEET-DRUM 150) or the global WEAPONS.hp. */
+export function kitMaxHp(kitId: string): number {
+  const k = WEAPONS.kits.find((x) => x.id === kitId) as { hp?: unknown } | undefined;
+  return typeof k?.hp === 'number' && k.hp > 0 ? k.hp : WEAPONS.hp;
+}
+/** The largest max HP of any kit (the net snapshot scales hp by this). */
+export const HP_CAP: number = Math.max(WEAPONS.hp, ...WEAPONS.kits.map((k) => kitMaxHp(k.id)));
+
 export function mapById(id: string): MapDef {
   const m = MAPS.find((x) => x.id === id);
   if (!m) throw new Error(`unknown map id '${id}' (data/maps.json has: ${MAPS.map((x) => x.id).join(', ')})`);

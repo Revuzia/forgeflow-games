@@ -762,6 +762,7 @@ async function main(): Promise<number> {
     it.special = false;
     const startTick = world.tick;
     let maxY = y0, drift = 0, hp = me.hp, ringTick = -1, leapSeen = false;
+    const hpStart = me.hp;   // the roller (SHEET-DRUM, max 150) may still be regenerating here: judge 'no damage', not 'hp == 100'
     let nv = NaN, nvx = 0, nvz = 0;
     for (let k = 0; k < S(3) && ringTick < 0; k++) {
       const probeInput = k < 20;
@@ -782,7 +783,7 @@ async function main(): Promise<number> {
         && take('special', ev0).some((e) => e.pid === 0 && e.phase === 'start') && take('special', ev0).some((e) => e.pid === 0 && e.phase === 'end'),
       `apex +${f3(maxY - y0)} m (leapHeight ${WELL.leapHeight}), slam after ${f3(air)} s (${KITS.leapSeconds} s)`);
     check('WELLSPRING: the leap can\'t be interrupted (damage ignored; move / fire intents ignored)',
-      hp === WEAPONS.hp && drift < 0.02 && shotsDuring === 0,
+      hp >= hpStart && drift < 0.02 && shotsDuring === 0,
       `hp stayed ${f2(hp)} after a 50-damage hit mid-leap; drift ${f3(drift)} m with the stick held; ${shotsDuring} shots/rolls`);
     const ring = take('ring', ev0)[0];
     const hn = take('hit', ev0).filter((h) => h.victim === near.id && h.by === 0), hf = take('hit', ev0).filter((h) => h.victim === far.id);

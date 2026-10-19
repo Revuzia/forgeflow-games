@@ -615,7 +615,7 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
       if (!r.alive) continue;
       if (this.protectTicks[i] > 0) r.protectedT = --this.protectTicks[i] * TICK;   // CHANGED(WASHOUT)
       r.lastHitT += dt;
-      if (r.lastHitT >= HEALTH.regenDelay && r.hp < WEAPONS.hp) r.hp = Math.min(WEAPONS.hp, r.hp + HEALTH.regenPerSecond * dt);
+      if (r.lastHitT >= HEALTH.regenDelay && r.hp < r.maxHp) r.hp = Math.min(r.maxHp, r.hp + HEALTH.regenPerSecond * dt);
     }
     // CHANGED(WASHOUT): a crew reached the score limit this tick → the match ends now, through the horn path
     if (this.limitHit) { this.end('limit'); this.capEvents(); return; }
