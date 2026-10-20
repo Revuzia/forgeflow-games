@@ -103,7 +103,8 @@ async function journey(mode) {
         await waitFor(page, (v) => { const s = v.state.draft.value; const m = s?.seats.find((x) => x.isYou); return !s || (s.phase !== 'pick' && s.phase !== 'ban') || !!m?.locked || (s.turn?.action !== 'ban' && !!s.turn?.players.includes(m?.player)); }, 90000);
         const now = await mine();
         if (!now || now.phase !== 'pick' || now.locked) { await waitFor(page, (v) => !!v.state.loading.value || !!v.state.match.value, 120000); return { before, after: now, assigned: true }; }
-        const card = page.locator('.scr--draft .fcard:not(.is-taken):not(.is-locked):not(.is-banned):not([aria-disabled="true"])').first();
+        const card = page.locator('.scr--draft:not(.is-leaving) .fcard:not(.is-taken):not(.is-locked):not(.is-banned):not([aria-disabled="true"])').first();
+        await card.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});   // the board lands under the screen wipe
         if (await card.count()) { await card.click(); await page.waitForTimeout(250); }
         const lock = page.locator('.scr--draft').getByRole('button', { name: /Lock in/i }).first();
         if (await lock.count()) { await lock.click(); await page.waitForTimeout(400); }

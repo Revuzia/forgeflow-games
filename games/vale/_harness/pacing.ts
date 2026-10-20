@@ -1,6 +1,6 @@
 // VALE harness — match pacing: all-bot matches on the REAL built catalog (dist-catalog), several seeds per
 // mode, headless at full sim speed. Prints each match's end reason and length, and the mean per mode.
-//   node tools/build_content.ts --allow-missing-assets && node _harness/pacing.ts [--seeds 6] [--modes rift,bridge,fray]
+//   node tools/build_content.ts --allow-missing-assets && node _harness/pacing.ts [--seeds 6] [--modes rift,bridge,fray] [--rules '<json>']
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,18 @@ const MODES = opt('modes', 'rift,bridge,fray').split(',');
 const root = join(HERE, '..', 'dist-catalog', 'schema-1');
 const ver = readdirSync(root).sort().pop()!;
 const catalog: CatalogT = Catalog.parse(JSON.parse(readFileSync(join(root, ver, 'catalog.json'), 'utf8')));
+// balance experiments without touching content: --rules '<json>' deep-merges into every probed mode's rules
+const deepMerge = (a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = { ...a };
+  for (const [k, v] of Object.entries(b)) {
+    const cur = out[k];
+    out[k] = v && typeof v === 'object' && !Array.isArray(v) && cur && typeof cur === 'object' && !Array.isArray(cur)
+      ? deepMerge(cur as Record<string, unknown>, v as Record<string, unknown>) : v;
+  }
+  return out;
+};
+const RULES = opt('rules', '');
+if (RULES) for (const m of catalog.modes) if (MODES.includes(m.id)) m.rules = deepMerge(m.rules as unknown as Record<string, unknown>, JSON.parse(RULES)) as unknown as typeof m.rules;
 
 function setupFor(modeId: string, seed: number): MatchSetup {
   const mode = catalog.modes.find((m) => m.id === modeId)!;

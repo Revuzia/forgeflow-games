@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE audio vocabulary (content/audio.json). priority: higher wins a voice slot; 10 critical alerts, 9 announcer, 8 enemy threat, 7 own actions, 6 ally/shared combat, 3-5 world. Combat cue priorities assume the local player's own action; the engine may lift an enemy source aimed at you by +1 and drop an ally source by -1. pitchVar is a +/- playback-rate fraction (0.05 ~ +/-0.85 semitone); in-key cues use 0. cooldown is the minimum seconds between two starts of the same cue. Music: one loop per file, length a whole number of 8 s phrases; match beds add the 'intense' layer (same length, bar-aligned), crossfaded by the engine on combat intensity.",
+  "$comment": "VALE audio vocabulary (content/audio.json). priority: higher wins a voice slot; 10 critical alerts, 9 announcer, 8 enemy threat, 7 own actions, 6 ally/shared combat, 3-5 world. Combat cue priorities assume the local player's own action; the engine may lift an enemy source aimed at you by +1 and drop an ally source by -1. pitchVar is a +/- playback-rate fraction (0.05 ~ +/-0.85 semitone); in-key cues use 0. cooldown is the minimum seconds between two starts of the same cue. Music: one loop per file, length a whole number of 8 s phrases; match beds add the 'intense' layer (same length, bar-aligned), crossfaded by the engine on combat intensity. ui/screens/stings bind the client's own roles (src/ui/audio_kinds.ts) to cues and beds; the build requires every role bound.",
   "cues": {
     "ui_hover": {"files": ["assets/audio/ui_hover.ogg"], "bus": "ui", "gain": 0.45, "pitchVar": 0, "maxVoices": 2, "priority": 2, "spatial": false, "loop": false, "cooldown": 0.07},
     "ui_click": {"files": ["assets/audio/ui_click.ogg"], "bus": "ui", "gain": 0.6, "pitchVar": 0.02, "maxVoices": 2, "priority": 4, "spatial": false, "loop": false, "cooldown": 0.03},
@@ -111,6 +111,15 @@
     "ping.missing": "m_ping_missing", "ping.assist": "m_ping_assist", "ping.push": "m_ping_push", "ping.vision": "m_ping_vision",
     "ping.objective": "m_ping_objective", "ping.retreat": "m_ping_retreat"
   },
+  "ui": {
+    "hover": "ui_hover", "click": "ui_click", "confirm": "ui_confirm", "back": "ui_back", "error": "ui_error",
+    "tab": "ui_tab", "toggle": "ui_toggle", "slider": "ui_slider", "queue_search": "ui_queue_search", "queue_pop": "ui_queue_pop",
+    "accept": "ui_accept", "lockin": "ui_lockin", "ban": "ui_ban", "hover_fighter": "ui_hover_fighter", "currency_tick": "ui_currency_tick",
+    "equip": "ui_equip", "purchase": "ui_purchase", "reward_reveal": "ui_reward_reveal", "level_account": "ui_level_account", "notify": "ui_notify",
+    "shop_buy": "ui_shop_buy", "shop_sell": "ui_shop_sell", "shop_undo": "ui_shop_undo"
+  },
+  "screens": { "menu": "mus_menu", "draft": "mus_draft", "postgame": "mus_postgame" },
+  "stings": { "victory": "m_victory_sting", "defeat": "m_defeat_sting", "placement": "m_placement_sting" },
   "music": {
     "mus_menu": {"file": "assets/audio/music/mus_menu.ogg", "bpm": 60, "loopStart": 0, "gain": 0.8, "layers": []},
     "mus_draft": {"file": "assets/audio/music/mus_draft.ogg", "bpm": 90, "loopStart": 0, "gain": 0.8, "layers": []},

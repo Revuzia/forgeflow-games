@@ -639,6 +639,9 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   stingers (tonal, no voice in this slice; subtitles carry the text).
 - `src/audio/engine.ts`: buses music/sfx/ui/voice/ambience → master, ducking (voice > sfx > music),
   voice limits per cue, listener at the camera target, muting via settings.
+- CHANGED(UI): `audio.ui` (UI cue kind → cue id), `audio.screens` (client screen `menu|draft|postgame` →
+  music id) and `audio.stings` (`victory|defeat|placement` → cue id) bind the client's own sound roles,
+  listed in `src/ui/audio_kinds.ts`; the content build fails when a role is unbound or names a missing cue.
 - CHANGED(AUDIO): `audio.events` (content/audio.json) binds the engine's event roles to cue ids so
   no cue id lives in `src/` (an unbound role is silent; the build checks every bound cue exists).
   Roles: `cast, castUlt, enemyUltWindup, projectile, hitAbility, attack, crit, hitPhysical, hitMagic,

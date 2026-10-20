@@ -343,7 +343,9 @@ export class LocalSession implements Session {
     const { req, queue } = pd;
     const seats = this.draftSeats(pd);
     const draft = queue.draft;
-    const finalize = pd.protocol === 'role_preset' ? draft?.finalizeSeconds ?? DRAFT_DEFAULTS.presetFinalize : draft?.finalizeSeconds ?? DRAFT_DEFAULTS.finalize;
+    // practice with a preset fighter has nothing to decide (its skin comes with the preset): no finalize window
+    const finalize = pd.protocol === 'role_preset' && queue.kind === 'practice' ? 0
+      : pd.protocol === 'role_preset' ? draft?.finalizeSeconds ?? DRAFT_DEFAULTS.presetFinalize : draft?.finalizeSeconds ?? DRAFT_DEFAULTS.finalize;
     const skinCache = new Map<string, string[]>();
     const loadCache = new Map<string, LoadoutChoice>();
     const host = new DraftHost({

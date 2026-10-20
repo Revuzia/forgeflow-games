@@ -12,7 +12,7 @@ import { effect, signal } from '@preact/signals';
 import type { CatalogT } from '../contracts/catalog.ts';
 import type { MatchClient, OnlineInfo, Session } from '../contracts/session.ts';
 import { AppContext, handleEsc, Overlay, useApp, type AppCtx } from './app_ctx.ts';
-import { musicId, recordingPort, UiSound, type AudioPort } from './audio_port.ts';
+import { recordingPort, UiSound, type AudioPort } from './audio_port.ts';
 import { CatalogView } from './catalog_view.ts';
 import { loadFonts } from './fonts.ts';
 import { animateIn, animateOut, reducedMotion } from './motion.ts';
@@ -54,7 +54,7 @@ export function mount(root: HTMLElement, o: MountOptions): MountedApp {
   const cv = new CatalogView(o.catalog, o.assetUrl);
   const router = new Router('home');
   const port = o.dev ? recordingPort(o.audio ?? null) : o.audio ?? null;
-  const sound = new UiSound(port);
+  const sound = new UiSound(port, o.catalog.audio);
   const overlay = new Overlay();
   const state = new AppState({ session: o.session, cv, router, sound, renderer: o.renderer ?? null });
   const ctx: AppCtx = { cv, session: o.session, state, router, sound, overlay, hasScene: !!o.renderer };
@@ -192,7 +192,7 @@ function App(): JSX.Element {
     if (kind === 'match') {
       const map = state.cv.map(state.match.value?.setup.map ?? state.lastSetup.value?.map);
       sound.music(map?.art.music ?? null);
-    } else sound.music(kind === 'none' ? null : musicId(kind ?? 'menu'));
+    } else sound.music(kind === 'none' ? null : sound.musicFor(kind ?? 'menu'));
   }, [def.music, route.key]);
 
   // Esc: tooltip → top modal (unless it is not dismissable) → the screen's claim → Back

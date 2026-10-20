@@ -92,9 +92,11 @@ for (const [f, fam] of [['roles.json', 'roles'], ['classes.json', 'classes'], ['
   put(f, [...fx.filter((r) => !ids.has(r.id)), ...mine]);
 }
 if (existsSync(real('audio.json'))) {
-  const a = readJson(join(tree, 'audio.json')) as { cues: object; music: object };
-  const b = readJson(real('audio.json')) as { cues: object; music: object };
-  put('audio.json', { cues: { ...a.cues, ...b.cues }, music: { ...a.music, ...b.music } });
+  type Audio = { cues: object; music: object; events?: object; ui?: object; screens?: object; stings?: object };
+  const a = readJson(join(tree, 'audio.json')) as Audio;
+  const b = readJson(real('audio.json')) as Audio;
+  put('audio.json', { cues: { ...a.cues, ...b.cues }, music: { ...a.music, ...b.music },
+    ui: { ...a.ui, ...b.ui }, screens: { ...a.screens, ...b.screens }, stings: { ...a.stings, ...b.stings } });
 }
 // whole-file families: the real file when it exists
 for (const f of ['items.json', 'setup.json', 'store.json', 'client.json', 'strings.en.json', 'bot_names.json', 'version.json']) {

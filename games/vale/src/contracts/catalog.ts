@@ -609,7 +609,12 @@ export const MusicDef = z.object({
 /** `events` binds the audio engine's event roles (CONTRACT §11: cast, castUlt, hitPhysical, takedown,
  *  ping.<kind>, …) to cue ids, so no cue id lives in code; an unbound role is silent */
 export const AudioDef = z.object({ cues: z.record(Id, AudioCue), music: z.record(Id, MusicDef),
-  events: z.record(z.string(), Id).default({}) }).strict();
+  events: z.record(z.string(), Id).default({}),
+  /** the client's own roles (src/ui/audio_kinds.ts): UI cue kind → cue id, client screen → music id,
+   *  post-game sting → cue id; the content build requires every role in code to be bound */
+  ui: z.record(z.string(), Id).default({}),
+  screens: z.record(z.string(), Id).default({}),
+  stings: z.record(z.string(), Id).default({}) }).strict();
 
 export const VfxDef = z.object({
   id: Id,

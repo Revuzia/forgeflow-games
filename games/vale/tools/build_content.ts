@@ -64,6 +64,7 @@ import { Catalog, ClipRole, Effect, SCHEMA_VERSION, type CatalogT } from '../src
 import { BEHAVIOR_KEYS, DAMAGE_MULT_KINDS, PRIORITY_TOKENS } from '../src/sim/units/behavior_keys.ts';
 import { VFX_TEXTURE_NAMES } from '../src/render/vfx/atlas.ts';
 import { VFX_SHAPES } from '../src/render/vfx/shapes.ts';
+import { SCREEN_MUSIC_KINDS, STING_KINDS, UI_CUE_KINDS } from '../src/ui/audio_kinds.ts';
 import { MANIFEST_FORMAT, MANIFEST_PRODUCT, type CatalogManifest, type ManifestHistoryEntry } from '../src/contracts/manifest.ts';
 import { checkNames, DEFAULT_DESIGN_DIR, formatHit, loadDenyList, type NameInput, type TextKind } from './names_check.ts';
 import { MIGRATIONS, type CatalogData, type MigrationRegistry } from './schema_migrations.ts';
@@ -392,6 +393,17 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   const cues = new Set(Object.keys(c.audio.cues));
   const music = new Set(Object.keys(c.audio.music));
   for (const [role, cue] of Object.entries(c.audio.events)) if (!cues.has(cue)) dg.err(['audio', 'events', role], unknownRef('audio cue', cue, cues));
+  // the client's own sound roles (src/ui/audio_kinds.ts) must all be bound, to cues / beds that exist
+  const roleSets: [ 'ui' | 'screens' | 'stings', readonly string[], Set<string>, string][] = [
+    ['ui', UI_CUE_KINDS, cues, 'audio cue'], ['screens', SCREEN_MUSIC_KINDS, music, 'music bed'], ['stings', STING_KINDS, cues, 'audio cue']];
+  for (const [key, kinds, known, what] of roleSets) {
+    const bound = c.audio[key];
+    for (const k of kinds) if (!(k in bound)) dg.err(['audio', key], `the client plays "${k}" but audio.${key} does not bind it (src/ui/audio_kinds.ts)`);
+    for (const [role, id] of Object.entries(bound)) {
+      if (!kinds.includes(role)) dg.warn(['audio', key, role], `audio.${key}.${role} is not a role the client plays (src/ui/audio_kinds.ts)`);
+      if (!known.has(id)) dg.err(['audio', key, role], unknownRef(what, id, known));
+    }
+  }
   const unitKind = new Map(c.units.map((u) => [u.id, u.kind] as const));
   const clipRoles = new Set<string>(ClipRole.options);
 

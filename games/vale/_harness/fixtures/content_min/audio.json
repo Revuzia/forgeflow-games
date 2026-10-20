@@ -15,5 +15,40 @@
       "bpm": 96,
       "loopStart": 0
     }
+  },
+  "ui": {
+    "hover": "fx_cue_hit",
+    "click": "fx_cue_hit",
+    "confirm": "fx_cue_hit",
+    "back": "fx_cue_hit",
+    "error": "fx_cue_hit",
+    "tab": "fx_cue_hit",
+    "toggle": "fx_cue_hit",
+    "slider": "fx_cue_hit",
+    "queue_search": "fx_cue_hit",
+    "queue_pop": "fx_cue_hit",
+    "accept": "fx_cue_hit",
+    "lockin": "fx_cue_hit",
+    "ban": "fx_cue_hit",
+    "hover_fighter": "fx_cue_hit",
+    "currency_tick": "fx_cue_hit",
+    "equip": "fx_cue_hit",
+    "purchase": "fx_cue_hit",
+    "reward_reveal": "fx_cue_hit",
+    "level_account": "fx_cue_hit",
+    "notify": "fx_cue_hit",
+    "shop_buy": "fx_cue_hit",
+    "shop_sell": "fx_cue_hit",
+    "shop_undo": "fx_cue_hit"
+  },
+  "screens": {
+    "menu": "fx_music_a",
+    "draft": "fx_music_a",
+    "postgame": "fx_music_a"
+  },
+  "stings": {
+    "victory": "fx_cue_hit",
+    "defeat": "fx_cue_hit",
+    "placement": "fx_cue_hit"
   }
 }

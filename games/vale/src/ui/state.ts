@@ -180,8 +180,11 @@ export class AppState {
         const first = !this.draft.value;
         this.draft.value = e.state;
         this.accepted.value = false;
-        if (first || r.route.value.screen !== 'draft') {
-          if (r.route.value.screen !== 'draft') { this.sound.play('confirm'); r.reset('draft', {}, 'forward'); }
+        // practice with a preset fighter goes straight to loading (its draft is already decided); otherwise
+        // the queue screen (and its ready check) leaves under the wipe, never sliding over the draft board
+        const decided = cv.queue(e.state.queue)?.kind === 'practice' && e.state.phase !== 'pick' && e.state.phase !== 'ban';
+        if ((first || r.route.value.screen !== 'draft') && !decided) {
+          if (r.route.value.screen !== 'draft') { this.sound.play('confirm'); r.reset('draft', {}, 'wipe'); }
         }
         if (e.state.phase === 'done') { /* loading follows */ }
         break;
