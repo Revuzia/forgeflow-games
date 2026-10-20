@@ -1,6 +1,6 @@
 // VALE — the DONE journey end to end in real Chrome with real input (CONTRACT §13 "e2e").
 //
-//   node _harness/e2e.mjs [rift|bridge|fray|all] [--speed 16] [--headed]
+//   node _harness/e2e.mjs [rift|bridge|fray|all] [--speed 16] [--headed] [--audio m4a]
 //
 // Per mode: Home → Play → pick the mode on the Mode Dial → a queue → Find match → Ready → draft /
 // assignment / pick (real clicks) → loading → the match (your seat on the dev autopilot at time scale
@@ -8,7 +8,9 @@
 // banner → post-game with grants → Home. All modes share one profile, so after the last one the
 // Candles earned buy a skin in the Shop and it is equipped (one STORE journey at the end). Screenshots per step go to
 // _harness/_shots/e2e_<mode>_<nn>_<step>.png; a JSON report to _harness/_reports/e2e.json.
-// Needs the dev server (npm run dev) and a content build. Exit 0 = every journey passed.
+// --audio m4a opens the game with ?audio=m4a (the CONTRACT §11 format fallback forced); match_live reports the
+// audio files fetched per format either way. Needs the dev server (npm run dev) and a content build. Exit 0 =
+// every journey passed.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -19,6 +21,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const which = args.find((a) => !a.startsWith('--')) ?? 'all';
 const speed = Number(args[args.indexOf('--speed') + 1]) || 16;
+const audioFmt = args.includes('--audio') ? args[args.indexOf('--audio') + 1] : null;
 if (args.includes('--headed')) process.env.VALE_HEADED = '1';
 const MODES = which === 'all' ? ['rift', 'bridge', 'fray'] : [which];
 const QUEUE_CARD = { rift: 'Co-op vs bots', bridge: null, fray: null };
@@ -34,7 +37,11 @@ let session = null;
 async function journey(mode) {
   const steps = [];
   let n = 0;
-  session ??= await open(`/?dev=1&autopilot=match&speed=${speed}`);
+  if (!session) {
+    session = await open(`/?dev=1&autopilot=match&speed=${speed}${audioFmt ? `&audio=${audioFmt}` : ''}`);
+    session.audioFetches = { ogg: 0, m4a: 0 };
+    session.page.on('request', (q) => { const m = /\.(ogg|m4a)$/.exec(new URL(q.url()).pathname); if (m) session.audioFetches[m[1]]++; });
+  }
   const { page, logs } = session;
   const step = async (name, fn) => {
     const t0 = Date.now();
@@ -127,7 +134,7 @@ async function journey(mode) {
     });
     await step('match_live', async () => {
       await waitFor(page, (v) => (v.state.match.value?.view.time ?? 0) > 60, 180000);
-      return await vale(page, (v) => { const c = v.state.match.value; const p = c.view.players[c.you]; return { t: Math.round(c.view.time), scale: c.timeScale, kda: `${p.kills}/${p.deaths}/${p.assists}`, gold: p.gold, level: c.view.entity(p.entity)?.level, cues: [...new Set(v.cueLog ?? [])].length }; });
+      return await vale(page, (v) => { const c = v.state.match.value; const p = c.view.players[c.you]; return { t: Math.round(c.view.time), scale: c.timeScale, kda: `${p.kills}/${p.deaths}/${p.assists}`, gold: p.gold, level: c.view.entity(p.entity)?.level, cues: [...new Set(v.cueLog ?? [])].length }; }).then((x) => ({ ...x, audioFetches: { ...session.audioFetches } }));
     });
     await step('match_end', async () => {
       await waitFor(page, (v) => v.state.ending.value || v.router.route.value.screen === 'postgame', 1500000);

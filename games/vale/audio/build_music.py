@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """VALE music build (lane AUDIO, music only): renders every bed in content/audio.json `music` (main stem +
 layers) and every cue on the `music` bus (the stings), masters them, encodes Ogg Opus (tokens.audio.format.primary;
-the same codec as the SFX build) at the exact audio.json paths (assets/audio/<x> → audio/out/<x>) and
-prints QA from the DECODED files.
+the same codec as the SFX build) at the exact audio.json paths (assets/audio/<x> → audio/out/<x>) plus the
+AAC-LC .m4a sibling of each (audio/out/<x>.m4a, aac.py: the CONTRACT §11 fallback for browsers that cannot
+decode Ogg Opus; a bed is encoded with wrap-around context the MP4 edit list trims, so it decodes to the
+.ogg's exact length and alignment and loops gaplessly) and prints QA from the DECODED files.
 
     cd games/vale/audio && ../../../.venv/bin/python3 build_music.py [--only mus_match_rift,m_victory_sting] [--kbps 128]
 
@@ -21,7 +23,8 @@ QA per bed stem (decoded OGG)
   layer    the lift main+layer over main per band (dB): the combat layer should lift sub/low/lowmid and
            leave pres (the UI / ability band) nearly alone
   mode     share of pitch-class energy inside D Dorian + G# (+ F# for the bright beds)
-Stings: length, max short-term LUFS (target −16), true peak (≤ −1.0 dBTP decoded), mode share.
+  m4a      the .m4a decode: sample count equal to the .ogg's, LUFS / true peak, and the same seam test
+Stings: length, max short-term LUFS (target −16), true peak (≤ −1.0 dBTP decoded), mode share (+ the .m4a's).
 """
 from __future__ import annotations
 
@@ -41,6 +44,7 @@ sys.path.insert(0, HERE)
 if shutil.which('ffmpeg') is None and os.path.exists('/opt/homebrew/bin/ffmpeg'):
     os.environ['PATH'] = '/opt/homebrew/bin:' + os.environ.get('PATH', '')
 
+import aac  # noqa: E402
 import bedlib  # noqa: E402
 import cuelib  # noqa: E402
 import music  # noqa: E402  (registers the beds)
@@ -54,6 +58,7 @@ CONTENT = os.path.join(GAME, 'content', 'audio.json')
 BANDS = [('sub', 20, 80), ('low', 80, 250), ('lowmid', 250, 1000), ('pres', 1000, 4000), ('air', 4000, 16000)]
 DORIAN_G = (0, 2, 4, 5, 7, 9, 11, 8)
 LAYER_KBPS = 96              # the combat layers are mostly drums and bass: Opus is transparent there at 96k
+AAC_KBPS = {'main': 160, 'layer': 128, 'sting': 160}     # the .m4a siblings (AAC-LC ABR)
 BRIGHT = DORIAN_G + (6,)
 
 
@@ -188,14 +193,19 @@ def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool) -> dict
         wav = os.path.join(tmp, f'{bid}_{k}.wav')
         io.write_wav(wav, x)
         encode(wav, paths[k], kbps if k == 'main' else LAYER_KBPS)
+        m4a = aac.m4a_path(paths[k])
+        aac.encode_m4a(x, m4a, AAC_KBPS['main' if k == 'main' else 'layer'], loop=True)
         if keep_wav:
             shutil.copy(wav, paths[k][:-4] + '.wav')
         y = io.decode(paths[k])
         decoded[k] = y
         bar_s = 240.0 / float(meta['bpm'])
         r = stem_qa(y, allowed, bar_s)
+        ym = io.decode(m4a)
         r.update(path=os.path.relpath(paths[k], GAME), samples=y.shape[1], render_samples=x.shape[1],
-                 kb=os.path.getsize(paths[k]) / 1024, master=minfo[k], pre_seam=seam_qa(x, bar_s))
+                 kb=os.path.getsize(paths[k]) / 1024, master=minfo[k], pre_seam=seam_qa(x, bar_s),
+                 m4a=dict(kb=os.path.getsize(m4a) / 1024, samples=ym.shape[1], lufs=L.integrated(ym, circular=True),
+                          tp=L.true_peak(ym, circular=True), seam=seam_qa(ym, bar_s)))
         rep['stems'][k] = r
     if len(decoded) > 1:
         main = decoded['main']
@@ -230,6 +240,10 @@ def print_bed(rep: dict) -> None:
               f">7k peak {s['hf']:.1f}x vs downbeat median {s['hf_med']:.1f}x (pct {s['hf_pct']:.0f})  "
               f"flux {s['flux']:.1f} dB vs median {s['flux_med']:.1f} (pct {s['flux_pct']:.0f})")
         print(f"           bands {fmt_bands(r['bands'])}")
+        a, sa = r['m4a'], r['m4a']['seam']
+        print(f"           m4a {a['kb']:.0f} kB  len {a['samples']} {'=' if a['samples'] == r['samples'] else '≠'} ogg  "
+              f"LUFS {a['lufs']:6.2f}  TP {a['tp']:5.2f} dBTP  seam {'PASS' if sa['ok'] else 'CHECK'}: step {sa['jump']:.2f}x  "
+              f">7k peak {sa['hf']:.1f}x (pct {sa['hf_pct']:.0f})  flux {sa['flux']:.1f} dB (pct {sa['flux_pct']:.0f})")
         if 'lift_db' in r:
             print(f"           layer lift (dB) " + ' '.join(f'{b} +{v:.1f}' for b, v in r['lift_db'].items())
                   + f"   main+layer {r['sum_lufs']:.2f} LUFS, TP {r['sum_tp']:.2f}")
@@ -246,13 +260,18 @@ def build_sting(sid: str, spec: 'music.StingSpec', ref: str, kbps: int, tmp: str
     wav = os.path.join(tmp, f'{sid}.wav')
     io.write_wav(wav, y)
     encode(wav, path, kbps)
+    m4a = aac.m4a_path(path)
+    aac.encode_m4a(y, m4a, AAC_KBPS['sting'])
     d = io.decode(path)
+    dm = io.decode(m4a)
     from synth.viz import mode_energy_ratio
     allowed = BRIGHT if ('victory' in sid or 'first' in sid) else DORIAN_G
     return dict(id=sid, path=os.path.relpath(path, GAME), seconds=d.shape[1] / SR, dur=spec.dur,
                 st=L.max_short_term(d), mom=L.max_momentary(d), tp=L.true_peak(d), target=spec.target_st,
                 kb=os.path.getsize(path) / 1024, mode=mode_energy_ratio(d, allowed), render_s=time.time() - t0,
-                gain_db=info.get('gain_db'), gr_db=info.get('limiter_gr_db'), notes=spec.notes)
+                gain_db=info.get('gain_db'), gr_db=info.get('limiter_gr_db'), notes=spec.notes,
+                m4a=dict(kb=os.path.getsize(m4a) / 1024, samples=dm.shape[1], samples_ogg=d.shape[1],
+                         st=L.max_short_term(dm), tp=L.true_peak(dm)))
 
 
 def print_sting(r: dict) -> None:
@@ -260,6 +279,9 @@ def print_sting(r: dict) -> None:
     print(f"\n■ {r['id']}  {r['path']}  {r['seconds']:.2f} s {'ok' if ok else 'OUT OF WINDOW'} {r['dur']}  {r['kb']:.0f} kB")
     print(f"           short-term max {r['st']:.2f} LUFS (target {r['target']})  momentary max {r['mom']:.2f}  "
           f"TP {r['tp']:.2f} dBTP  limiter GR {r['gr_db']:.1f} dB  mode {100 * r['mode']:.1f}%")
+    a = r['m4a']
+    print(f"           m4a {a['kb']:.0f} kB  len {a['samples']} {'=' if a['samples'] == a['samples_ogg'] else '≠'} ogg  "
+          f"short-term max {a['st']:.2f} LUFS  TP {a['tp']:.2f} dBTP")
     print(f"           {r['notes']}")
 
 

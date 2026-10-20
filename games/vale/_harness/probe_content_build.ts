@@ -4,13 +4,15 @@
 // _harness/fixtures/{content_min, art/out, audio/out, design_min} and checks:
 //   * a valid build: manifest shape (§3.2), catalog sha256, zod-parseable output with defaults
 //     applied, every asset ref rewritten to assets/<sha256-12>-<basename> and present with that hash;
+//     audio.m4a maps each .ogg ref to its .m4a sibling (CONTRACT §11 format fallback);
 //   * reproducibility: an unchanged rebuild keeps the catalog bytes and adds no history entry;
 //     a version bump appends history and keeps the old catalog file;
 //   * --check writes nothing; --allow-missing-assets downgrades a missing asset to a warning and
 //     leaves the ref untouched;
 //   * negative cases fail with file + JSON path in the message: unknown key, broken cross-refs,
-//     missing asset, Git LFS pointer, recipe sum, UnitDef.behavior vocabulary, pickup grant effects
-//     (and their defaults in the output), nav grid size, blank kit text, base-skin ownership,
+//     missing asset, an .ogg without its .m4a sibling, Git LFS pointer, recipe sum, UnitDef.behavior
+//     vocabulary, pickup grant effects (and their defaults in the output), nav grid size, blank kit
+//     text, base-skin ownership,
 //     deny-listed names;
 //   * names_check rules (multi-word, non-dictionary, strict, allowlist, prose vs name, normalization).
 // Fixture ids are placeholders (fx_*). Pass --keep to leave the temp dirs for inspection.
@@ -103,6 +105,11 @@ try {
   }
   check(cat.fighters[0].art.model.endsWith('-fx_fighter_a.glb') && cat.audio.cues.fx_cue_hit.files[0].endsWith('-fx_hit.ogg') && cat.roles[0].icon.endsWith('-fx_icon.png'),
     'refs from all three roots (art/out, audio/out, content/) resolve and keep their basename');
+  // CONTRACT §11 format fallback: every shipped .ogg ref maps to its content-addressed .m4a sibling
+  const oggs = [...new Set(refs.filter((r) => r.endsWith('.ogg')))];
+  const m4a: Record<string, string> = cat.audio.m4a ?? {};
+  check(oggs.length >= 2 && oggs.every((r) => m4a[r]?.endsWith(r.slice(r.indexOf('-')).replace(/\.ogg$/, '.m4a'))) && Object.keys(m4a).length === oggs.length,
+    `audio.m4a maps each of the ${oggs.length} .ogg refs to its .m4a sibling (and nothing else)`, JSON.stringify(m4a));
 
   // ── 2. unchanged rebuild is byte-stable ─────────────────────────────────────────────────────────
   const b2 = run(['--content', join(FIX, 'content_min'), '--out', out, '--design', DESIGN]);
@@ -157,6 +164,8 @@ try {
   }), ['vfx.json $[0].layers[0].lifetime: unknown key "lifetime" for a burst layer', 'vfx.json $[0].layers[0].texture: expected one of', 'vfx.json $[0].layers[1].color', 'vfx.json $[0].layers[2].type: unknown layer type "tornado"']);
   neg('missing asset', (c) => editJson(join(c, 'roles.json'), (j) => { j[0].icon = 'assets/ui/fx_missing.png'; }),
     ['roles.json $[0].icon', 'asset not found: "assets/ui/fx_missing.png"']);
+  neg('an .ogg without its .m4a sibling (CONTRACT §11)', (_c, root) => rmSync(join(root, 'audio/out/fx_hit.m4a')),
+    ['has no usable .m4a sibling', 'fx_hit.m4a is missing']);
   neg('Git LFS pointer instead of a GLB', (_c, root) => writeFileSync(join(root, 'art/out/units/fx_unit.glb'), 'version https://git-lfs.github.com/spec/v1\noid sha256:00\nsize 1\n'),
     ['units.json $[0].art.model', 'Git LFS pointer']);
   neg('recipe does not sum', (c) => editJson(join(c, 'items.json'), (j) => { j[1].cost = 500; }),

@@ -44,6 +44,7 @@ const MIME: Record<string, string> = {
   '.hdr': 'image/vnd.radiance',
   '.exr': 'image/x-exr',
   '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
   '.opus': 'audio/ogg',
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',

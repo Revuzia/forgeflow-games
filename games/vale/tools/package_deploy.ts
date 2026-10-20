@@ -10,9 +10,11 @@
 // The folder is rebuilt from scratch each run (a stale catalog version or asset left behind would be
 // uploaded and served). Before copying it verifies what a broken deploy would only show in a
 // player's browser: index.html exists, the client build carries no content and no source maps, the
-// manifest parses, every catalog it lists exists with the sha256 it claims, and every asset ref in
-// those catalogs exists in catalog/assets/. It refuses an --out it would be dangerous to delete
-// (see unsafeOut). Exit 0 ok · 1 verification failed · 2 usage or unsafe --out.
+// manifest parses, every catalog it lists exists with the sha256 it claims, every asset ref in
+// those catalogs exists in catalog/assets/, and the Ogg Opus fallback map (audio.m4a, CONTRACT §11)
+// covers every .ogg the current (highest) schema ships — an older frozen schema is checked only when
+// it carries the map. It refuses an --out it would be dangerous to delete (see unsafeOut).
+// Exit 0 ok · 1 verification failed · 2 usage or unsafe --out.
 
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
@@ -64,6 +66,7 @@ function verify(o: Opts): string[] {
   let m: CatalogManifest;
   try { m = JSON.parse(readFileSync(manifestFile, 'utf8')) as CatalogManifest; } catch (e) { errs.push(`${show(manifestFile)}: ${(e as Error).message}`); return errs; }
   if (m.format !== 1 || !m.schemas || Object.keys(m.schemas).length === 0) { errs.push(`${show(manifestFile)}: no schemas listed`); return errs; }
+  const current = String(Math.max(...Object.keys(m.schemas).map(Number)));
   for (const [schema, entry] of Object.entries(m.schemas)) {
     const file = join(o.catalog, entry.catalog);
     if (!existsSync(file)) { errs.push(`schema ${schema}: ${entry.catalog} missing`); continue; }
@@ -74,6 +77,15 @@ function verify(o: Opts): string[] {
     const text = bytes.toString('utf8');
     for (const match of text.matchAll(/"(assets\/[A-Za-z0-9_./-]+)"/g)) if (!existsSync(join(o.catalog, match[1]))) missing.add(match[1]);
     if (missing.size) errs.push(`schema ${schema}: ${missing.size} asset ref(s) not in ${show(o.catalog)}/assets (e.g. ${[...missing][0]}) — was it built with --allow-missing-assets?`);
+    // the .m4a siblings (browsers without Ogg Opus): the current schema must carry the map (a build with
+    // --allow-missing-assets from a tree without .m4a files omits it); an older frozen schema serves clients
+    // that may predate it, so it is checked only when present
+    let alt: Record<string, string> | undefined;
+    try { alt = (JSON.parse(text) as { audio?: { m4a?: Record<string, string> } }).audio?.m4a; } catch { errs.push(`schema ${schema}: ${entry.catalog} is not JSON`); }
+    if (alt || schema === current) {
+      const bare = new Set([...text.matchAll(/"(assets\/[A-Za-z0-9_./-]+\.ogg)"/g)].map((x) => x[1]).filter((r) => !alt?.[r]));
+      if (bare.size) errs.push(`schema ${schema}: ${bare.size} .ogg ref(s) without an .m4a sibling in audio.m4a${alt ? '' : ' (the catalog has no audio.m4a)'} (e.g. ${[...bare][0]}) — Safari before 18.4 would play nothing; rebuild audio/ and the content`);
+    }
   }
   return errs;
 }
@@ -127,6 +139,8 @@ function main(argv: string[]): number {
   console.log(`\nVALE deploy → ${show(o.out)}`);
   for (const [k, g] of [...groups].sort(([a], [b]) => a.localeCompare(b))) console.log(`  ${k.padEnd(w)}  ${String(g.n).padStart(5)} files  ${fmt(g.bytes).padStart(10)}`);
   console.log(`  ${'total'.padEnd(w)}  ${String(files.length).padStart(5)} files  ${fmt(total).padStart(10)}`);
+  const m4a = files.filter((f) => f.rel.endsWith('.m4a'));
+  if (m4a.length) console.log(`  of which .m4a (Ogg Opus fallback, CONTRACT §11): ${m4a.length} files, ${fmt(m4a.reduce((s, f) => s + f.bytes, 0))}`);
   console.log('  largest:');
   for (const f of [...files].sort((a, b) => b.bytes - a.bytes).slice(0, 5)) console.log(`    ${fmt(f.bytes).padStart(10)}  ${f.rel}`);
   return 0;

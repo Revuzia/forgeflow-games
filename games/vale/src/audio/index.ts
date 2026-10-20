@@ -5,6 +5,14 @@
 //   cues        AudioCue: random variant file, ±pitchVar semitones, gain, maxVoices (the quietest-
 //               priority oldest voice is stolen), cooldown (s), loop; files decode lazily on first use,
 //               UI cues preload; an unknown or missing cue is silently ignored (art may still be rendering)
+//   format      every cue / bed ships as Ogg Opus with an AAC .m4a sibling (catalog audio.m4a). The session
+//               decodes .ogg; the first .ogg that fails to decode (or canPlayType saying no Ogg Opus, or the
+//               dev-build switch ?audio=m4a) switches the whole session to .m4a and that file is retried. While
+//               the format is undecided only one .ogg is in flight (others wait for it, at most PROBE_MS), so a
+//               browser never fetches both formats of a cue unless its .ogg failed. MP4 edit lists trim the AAC
+//               priming, so a .m4a starts sample-aligned with its .ogg and loops / beds decode to its exact
+//               length: loop points are format-independent (audio/aac.py; Safari pads a one-shot's end to a
+//               whole 1024-sample frame of silence, inaudible)
 //   music       MusicDef beds crossfade (1.2 s); `layers` start sample-aligned with the main stem and
 //               fade by the match's combat intensity (enter above 0.6, leave below 0.35 after 8 s,
 //               quantised to the bar); duck() pulls the bed −8 dB under a moment (the ready check)
@@ -22,7 +30,7 @@ type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
 interface CueDef { files: string[]; bus: Bus; gain: number; pitchVar: number; maxVoices: number; priority: number; spatial: boolean; loop: boolean; cooldown: number }
 interface MusicDefT { file: string; bpm: number; loopStart: number; loopEnd?: number; gain: number; layers: { id: string; file: string }[] }
 interface CatalogLike {
-  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string> };
+  audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string>; m4a?: Record<string, string> };
   fighters: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } }; kit: Record<string, { id: string; present?: { sfx?: string; hitSfx?: string } } | undefined> }[];
   units?: { id: string; attack?: { present?: { sfx?: string; hitSfx?: string } } }[];
 }
@@ -33,6 +41,8 @@ export interface ValeAudioPort extends AudioPort {
   attach(client: MatchClient | null): void;
   settings(s: AudioSettings): void;
   readonly log: string[];
+  /** the session's file format: null until the first .ogg decodes (or fails) */
+  readonly format: 'ogg' | 'm4a' | null;
 }
 
 const BUSES: Bus[] = ['music', 'sfx', 'ui', 'voice', 'ambience'];
@@ -40,6 +50,10 @@ const XFADE_S = 1.2;
 const HEAR_M = 26;           // beyond this a spatial cue is silent
 const NEAR_M = 6;            // inside this it is full volume
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
+const PROBE_MS = 10000;      // the format-deciding .ogg: other loads wait this long for its request (then the
+                             // next one probes: a stalled request), and its decode counts as failed if unsettled
+                             // this long after the bytes arrived (a hung decoder); neither may mute the game.
+                             // Generous: boot can stall the main thread for seconds
 
 interface Voice { src: AudioBufferSourceNode; gain: GainNode; cue: string; priority: number; started: number }
 
@@ -57,6 +71,11 @@ class Engine implements ValeAudioPort {
   private readonly events: Record<string, string>;
   private readonly beds: Record<string, MusicDefT>;
   private readonly url: (ref: string) => string;
+  /** .ogg ref → its .m4a sibling (catalog audio.m4a, written by the content build) */
+  private readonly alt: Record<string, string>;
+  private fmt: 'ogg' | 'm4a' | null;
+  /** the first .ogg decode while the format is undecided; other loads wait for it */
+  private probe: Promise<void> | null = null;
   private bed: { id: string; main: AudioBufferSourceNode | null; layer: AudioBufferSourceNode | null; gain: GainNode; layerGain: GainNode } | null = null;
   private wantBed: string | null = null;
   private duckGain!: GainNode;
@@ -77,6 +96,8 @@ class Engine implements ValeAudioPort {
     this.events = cat.audio.events ?? {};
     this.beds = cat.audio.music;
     this.url = url;
+    this.alt = cat.audio.m4a ?? {};
+    this.fmt = initialFormat();
     this.vol = { ...settings };
     for (const f of cat.fighters) {
       for (const a of Object.values(f.kit)) if (a?.present) this.abilitySfx.set(a.id, a.present);
@@ -123,17 +144,68 @@ class Engine implements ValeAudioPort {
     for (const b of BUSES) this.bus.get(b)!.gain.setTargetAtTime(this.vol[b], t, 0.05);
   }
 
+  get format(): 'ogg' | 'm4a' | null { return this.fmt; }
+
   private buffer(ref: string): Promise<AudioBuffer | null> {
     let p = this.buffers.get(ref);
     if (!p) {
       const ctx = this.ctx;
-      p = !ctx ? Promise.resolve(null) : fetch(this.url(ref))
-        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
-        .then((b) => ctx.decodeAudioData(b))
-        .catch(() => null);
+      p = ctx ? this.load(ctx, ref).catch(() => null) : Promise.resolve(null);   // never a rejected promise
       if (ctx) this.buffers.set(ref, p);
     }
     return p;
+  }
+
+  /** one file's bytes; null when it could not be fetched (HTTP error, or the network failing before or during
+   *  the body). Never rejects */
+  private async bytes(ref: string): Promise<ArrayBuffer | null> {
+    try {
+      const r = await fetch(this.url(ref));
+      return r.ok ? await r.arrayBuffer() : null;
+    } catch { return null; }
+  }
+
+  /** decodeAudioData; undefined when it fails (or is still unsettled after `limitMs`, when given). Never rejects */
+  private async decodeBytes(ctx: AudioContext, bytes: ArrayBuffer, limitMs = 0): Promise<AudioBuffer | undefined> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const buf = ctx.decodeAudioData(bytes);
+      return await (limitMs ? Promise.race([buf, new Promise<undefined>((r) => { timer = setTimeout(r, limitMs, undefined); })]) : buf);
+    } catch { return undefined; } finally { clearTimeout(timer); }
+  }
+
+  private async decode(ctx: AudioContext, ref: string): Promise<AudioBuffer | null> {
+    const b = await this.bytes(ref);
+    return b ? (await this.decodeBytes(ctx, b)) ?? null : null;
+  }
+
+  /** a cue / bed file in the session's format (see `format` in the header) */
+  private async load(ctx: AudioContext, ref: string): Promise<AudioBuffer | null> {
+    const alt = this.alt[ref];
+    if (!alt) return this.decode(ctx, ref);
+    while (this.fmt === null && this.probe) await this.probe;       // undecided: one .ogg at a time decides
+    if (this.fmt === 'm4a') return this.decode(ctx, alt);
+    const probing = this.fmt === null;
+    let free = (): void => {};
+    let stalled: ReturnType<typeof setTimeout> | undefined;
+    if (probing) {
+      // this load decides and the others wait for it; a request that stalls without erroring stops holding
+      // them after PROBE_MS (the next waiter probes) and keeps loading for its own cue
+      let release = (): void => {};
+      const mine = new Promise<void>((r) => { release = r; });
+      free = () => { clearTimeout(stalled); if (this.probe === mine) this.probe = null; release(); };
+      stalled = setTimeout(free, PROBE_MS);
+      this.probe = mine;
+    }
+    try {
+      const bytes = await this.bytes(ref);
+      if (!bytes) return null;                       // not fetched (404, offline): the format stays open
+      clearTimeout(stalled);                         // the bytes are here: hold the others for the decode
+      const buf = await this.decodeBytes(ctx, bytes, probing ? PROBE_MS : 0);
+      if (buf) { this.fmt ??= 'ogg'; return buf; }
+      this.fmt = 'm4a';                              // this browser cannot decode the .ogg: switch the session
+    } finally { free(); }
+    return this.decode(ctx, alt);
   }
 
   // ── AudioPort ─────────────────────────────────────────────────────────────────────────────────
@@ -400,6 +472,18 @@ class Engine implements ValeAudioPort {
     b.layerGain.gain.cancelScheduledValues(t);
     b.layerGain.gain.setTargetAtTime(this.combat ? 1 : 0, at, 0.6);
   }
+}
+
+/** the dev switch ?audio=m4a forces the fallback (to test it in any browser; dev builds only, like ?dev=1); a
+ *  browser whose media stack says it cannot play Ogg Opus starts on .m4a; otherwise the first .ogg decode decides */
+function initialFormat(): 'ogg' | 'm4a' | null {
+  let devBuild = false;
+  try { devBuild = !!import.meta.env?.DEV; } catch { devBuild = false; }
+  try {
+    if (devBuild && new URLSearchParams(location.search).get('audio') === 'm4a') return 'm4a';
+    if (document.createElement('audio').canPlayType('audio/ogg; codecs=opus') === '') return 'm4a';
+  } catch { /* no DOM: decide on the first decode */ }
+  return null;
 }
 
 export function createAudioEngine(o: { catalog: unknown; assetUrl: (ref: string) => string; settings: unknown }): ValeAudioPort {

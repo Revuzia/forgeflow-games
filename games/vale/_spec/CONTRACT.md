@@ -652,6 +652,19 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   the pre-game countdown), matchStart, castMonster, ping.<ping kind>`. `pitchVar` is a playback-rate fraction;
   a looping cue stops after its zone's `delay + life` (the `area` event carries `life` for zones), else 2.5 s. An ability's own
   `present.sfx` / `hitSfx` wins over `cast` / `hitAbility`.
+- CHANGED(AUDIO): **format fallback.** Every `.ogg` (Ogg Opus) also ships as an AAC-LC `.m4a` sibling for
+  browsers that cannot decode Ogg Opus (Safari before 18.4): `audio/build.py` and `audio/build_music.py` write
+  `audio/out/<x>.m4a` from the same master (`audio/aac.py`; cues 96 / 128 kb/s mono / stereo, beds and stings
+  160, layers 128), the content build requires and ships it content-addressed and writes `audio.m4a`
+  (`.ogg` ref → `.m4a` ref; content never lists it; the deploy refuses a current catalog it does not cover),
+  and the engine decodes `.ogg` until one fails to decode (or `canPlayType` has no Ogg Opus, or `?audio=m4a`
+  in a dev build), then switches the session to `.m4a` and retries that file; while undecided one `.ogg`
+  decides and the others wait for it, so a working browser never fetches both formats. The MP4 edit list
+  trims the AAC priming, a loop's wrap-around context and the end padding: in Chrome 155 (and ffmpeg) a
+  `.m4a` decodes to its `.ogg`'s exact length and alignment; Safari 27 applies the start trim but not a
+  one-shot's end trim, so a one-shot's length comes out rounded up to whole 1024-sample AAC frames (the extra
+  samples are the encoder's silent padding, below −90 dBFS). Loops and beds decode exact in both
+  (`_harness/audio_probe.mjs`), so `loopStart` / `loopEnd` hold for both formats.
 
 ## §12 Art pipeline (`art/`, lane ART)
 - Blender 5.2, `--background --factory-startup`, deterministic (fixed seeds). `art/build.py`

@@ -1,0 +1,164 @@
+<!doctype html>
+<!-- VALE harness — audio format probe (CONTRACT §11 format fallback). Driven by _harness/audio_probe.mjs.
+     Through the dev server: reads ./catalog/manifest.json → catalog, takes a music bed's .ogg (or ?ref=) and its
+     .m4a sibling (catalog audio.m4a), decodes each with decodeAudioData at 48 kHz and POSTs to ?report=<url>:
+     canPlayType, per file ok / error / length / rate / channels / decode ms / head + tail samples (base64 f32,
+     for an offline cross-check), and the two decodes against each other (cross-correlation lag within ±2400
+     samples, rms difference, and the peak of any samples the .m4a has past the .ogg's length). For a loop (a
+     bed, a layer or a looping cue) also the loop-seam step (the wrap's sample step over the 99.9th-percentile
+     step around it; ≤ 1.5 = seamless) and the browser's own loop at the wrap (an OfflineAudioContext renders a
+     looping source from up to 0.5 s before the end: the step there over the 99.9th-percentile step, and the
+     deepest 5 ms rms dip within ±20 ms against the median — a gap shows as a dip). A decode error and a
+     playback-test error are reported apart (file.err / file.loop.err).
+     Then it closes its own tab (?close=0 keeps it). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VALE audio probe</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f4ef; --fg: #1d1b18; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #16150f; --fg: #e9e5da; } }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 13px/1.45 ui-monospace, Menlo, monospace; }
+  pre { white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body>
+<pre id="out">decoding…</pre>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const report = q.get('report');
+const SR = 48000;
+const $out = document.getElementById('out');
+
+const b64 = (f32) => {
+  const u = new Uint8Array(f32.buffer, f32.byteOffset, f32.byteLength);
+  let s = '';
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+
+/** the wrap step (last sample → first) over the 99.9th-percentile step within ±0.5 s of it */
+function seam(buf) {
+  const n = buf.length, w = Math.min(SR / 2, Math.floor(n / 2) - 1);
+  let step = 0;
+  const steps = [];
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const x = buf.getChannelData(c);
+    step = Math.max(step, Math.abs(x[0] - x[n - 1]));
+    for (let i = n - w; i < n - 1; i++) steps.push(Math.abs(x[i + 1] - x[i]));
+    for (let i = 0; i < w; i++) steps.push(Math.abs(x[i + 1] - x[i]));
+  }
+  steps.sort((a, b) => a - b);
+  const p999 = steps[Math.floor(steps.length * 0.999)] || 1e-12;
+  return { step, p999, ratio: step / p999 };
+}
+
+/** the lag of b against a (channel 0: the cross-correlation peak over ±2400 samples on a 1.4 s window from
+ *  0.25 s in — the whole file when it is shorter — so an untrimmed AAC priming of 1024 / 2112 samples would
+ *  show), the rms difference there, and b's samples past a's length (count, peak over all channels) */
+function compare(a, b) {
+  const x = a.getChannelData(0), y = b.getChannelData(0), R = 2400;
+  const at = x.length > 65536 + 2 * R ? Math.max(R, Math.min(12000, x.length - 65536 - R)) : 0;
+  const m = Math.min(65536, x.length - at);
+  let best = { lag: 0, c: -Infinity };
+  for (let lag = -R; lag <= R; lag++) {
+    let c = 0;
+    for (let i = 0; i < m; i++) c += x[at + i] * (y[at + i + lag] ?? 0);
+    if (c > best.c) best = { lag, c };
+  }
+  let e = 0, p = 0;
+  for (let i = 0; i < m; i++) { const d = x[at + i] - (y[at + i + best.lag] ?? 0); e += d * d; p += x[at + i] * x[at + i]; }
+  let extraPeak = 0;
+  for (let c = 0; c < b.numberOfChannels; c++) { const z = b.getChannelData(c); for (let i = a.length; i < z.length; i++) extraPeak = Math.max(extraPeak, Math.abs(z[i])); }
+  return { lag: best.lag, diffDb: 10 * Math.log10(e / (p + 1e-30) + 1e-30), extra: b.length - a.length, extraPeak };
+}
+
+/** play the buffer looping (loopStart 0, loopEnd = its duration) from 0.5 s (at most half the file) before the
+ *  end, 1 s rendered */
+async function loopRender(buf) {
+  const ctx = new OfflineAudioContext(buf.numberOfChannels, SR, SR);
+  const src = ctx.createBufferSource();
+  src.buffer = buf; src.loop = true; src.loopStart = 0; src.loopEnd = buf.duration;
+  src.connect(ctx.destination);
+  const at = Math.min(SR / 2, Math.floor(buf.length / 2)), win = SR / 200;   // the wrap lands on rendered sample `at`
+  src.start(0, (buf.length - at) / buf.sampleRate);
+  const y = await ctx.startRendering();
+  let step = 0;
+  const steps = [];
+  const rms = [];
+  for (let c = 0; c < y.numberOfChannels; c++) {
+    const x = y.getChannelData(c);
+    step = Math.max(step, Math.abs(x[at] - x[at - 1]));
+    for (let i = 1; i < x.length; i++) if (i !== at) steps.push(Math.abs(x[i] - x[i - 1]));
+    for (let k = 0; k * win < x.length; k++) {
+      let e = 0;
+      for (let i = k * win; i < (k + 1) * win; i++) e += x[i] * x[i];
+      rms[k] = (rms[k] ?? 0) + e;
+    }
+  }
+  steps.sort((a, b) => a - b);
+  const sorted = [...rms].sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)] || 1e-30;
+  let dip = Infinity;
+  for (let k = Math.max(0, Math.floor((at - SR / 50) / win)); k < Math.min(rms.length, Math.ceil((at + SR / 50) / win)); k++) dip = Math.min(dip, rms[k]);
+  return { stepRatio: step / (steps[Math.floor(steps.length * 0.999)] || 1e-12), rmsDipDb: 10 * Math.log10(dip / med + 1e-30) };
+}
+
+const errText = (e) => `${e?.name ?? 'Error'}: ${e?.message ?? e}`;
+
+/** fetch + decodeAudioData (ok / err are about that alone); for a loop also the seam and the looped playback
+ *  (an error there is file.loop.err, never a decode failure) */
+async function decode(url, loop) {
+  const t0 = performance.now();
+  let buf, size;
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) return { ok: false, url, err: `http ${r.status}` };
+    const bytes = await r.arrayBuffer();
+    size = bytes.byteLength;                        // decodeAudioData detaches the buffer
+    buf = await new OfflineAudioContext(2, 1, SR).decodeAudioData(bytes);
+  } catch (e) {
+    return { ok: false, url, err: errText(e), ms: Math.round(performance.now() - t0) };
+  }
+  const ms = Math.round(performance.now() - t0);
+  const c0 = buf.getChannelData(0);
+  const f = { ok: true, url, bytes: size, ms, length: buf.length, rate: buf.sampleRate, channels: buf.numberOfChannels,
+    duration: buf.duration, head: b64(c0.slice(0, 4096)), tail: b64(c0.slice(Math.max(0, c0.length - 4096))), buf };
+  if (loop) {
+    f.seam = seam(buf);
+    try { f.loop = await loopRender(buf); } catch (e) { f.loop = { err: errText(e) }; }
+  }
+  return f;
+}
+
+(async () => {
+  const el = document.createElement('audio');
+  const res = { ua: navigator.userAgent, at: new Date().toISOString(),
+    canPlayType: { oggOpus: el.canPlayType('audio/ogg; codecs=opus'), aac: el.canPlayType('audio/mp4; codecs="mp4a.40.2"') }, contextRate: null };
+  try { const c = new AudioContext(); res.contextRate = c.sampleRate; void c.close(); } catch (e) { res.contextRate = String(e); }
+  try {
+    const man = await (await fetch('../../catalog/manifest.json', { cache: 'no-store' })).json();
+    const schema = Object.keys(man.schemas).sort((a, b) => Number(b) - Number(a))[0];
+    const cat = await (await fetch(`../../catalog/${man.schemas[schema].catalog}`, { cache: 'no-store' })).json();
+    const bed = Object.keys(cat.audio.music)[0];
+    res.ogg = q.get('ref') ?? cat.audio.music[bed].file;
+    res.m4a = cat.audio.m4a?.[res.ogg] ?? null;
+    res.bed = q.get('ref') ? null : bed;
+    // a loop: a bed / layer file or a looping cue's variant (a one-shot gets no seam or looped-playback test)
+    res.loop = Object.values(cat.audio.music).some((d) => d.file === res.ogg || d.layers?.some((l) => l.file === res.ogg))
+      || Object.values(cat.audio.cues).some((c) => c.loop && c.files.includes(res.ogg));
+    const files = { ogg: await decode(`../../catalog/${res.ogg}`, res.loop), m4a: res.m4a ? await decode(`../../catalog/${res.m4a}`, res.loop) : { ok: false, err: 'no audio.m4a entry' } };
+    if (files.ogg.ok && files.m4a.ok) res.compare = { sameLength: files.ogg.length === files.m4a.length, ...compare(files.ogg.buf, files.m4a.buf) };
+    for (const f of Object.values(files)) delete f.buf;
+    res.files = files;
+  } catch (e) { res.error = String(e?.stack ?? e); }
+  $out.textContent = JSON.stringify(res, (k, v) => (k === 'head' || k === 'tail' ? `${v.length} b64 chars` : v), 1);
+  if (report) {
+    try { await fetch(report, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(res) }); } catch (e) { $out.textContent += `\nreport failed: ${e}`; }
+    addEventListener('pagehide', () => navigator.sendBeacon(report.replace(/\/report\b.*$/, '/closed'), 'closed'));
+    if (q.get('close') !== '0') setTimeout(() => window.close(), 400);
+  }
+})();
+</script>
+</body>
+</html>

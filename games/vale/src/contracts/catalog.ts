@@ -618,7 +618,10 @@ export const AudioDef = z.object({ cues: z.record(Id, AudioCue), music: z.record
    *  post-game sting → cue id; the content build requires every role in code to be bound */
   ui: z.record(z.string(), Id).default({}),
   screens: z.record(z.string(), Id).default({}),
-  stings: z.record(z.string(), Id).default({}) }).strict();
+  stings: z.record(z.string(), Id).default({}),
+  /** WRITTEN BY THE CONTENT BUILD, never by content (CONTRACT §11 format fallback): each shipped .ogg ref → the
+   *  ref of its AAC .m4a sibling (audio/out/<x>.m4a), for browsers that cannot decode Ogg Opus */
+  m4a: z.record(AssetRef, AssetRef).optional() }).strict();
 
 export const VfxDef = z.object({
   id: Id,

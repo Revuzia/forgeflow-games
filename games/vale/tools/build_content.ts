@@ -29,6 +29,10 @@
 // to that path, which is relative to the manifest directory (§3.2). Refs must be exact-case and
 // self-contained (GLB, not .gltf + .bin). Known binary formats are sniffed (a Git LFS pointer or a
 // failed export fails the build here, not in a player's browser).
+// FORMAT FALLBACK (CONTRACT §11): every resolved .ogg must have an AAC .m4a sibling next to it (the audio
+// builds write audio/out/<x>.m4a); it ships content-addressed like any asset and the build writes
+// audio.m4a = { <.ogg ref>: <.m4a ref> } into the catalog (content never lists it). A missing sibling is
+// an error (a warning under --allow-missing-assets).
 //
 // OUTPUT (§3.1, §3.2):
 //   <out>/schema-<n>/<version>/catalog.json   minified; one per schema in MIGRATIONS.reachable()
@@ -88,7 +92,9 @@ export interface BuildOptions {
   builtAt?: string;
   quiet?: boolean;
 }
-export interface AssetInfo { ref: string; abs: string; root: string; bytes: number; out?: string; sha256?: string }
+export interface AssetInfo { ref: string; abs: string; root: string; bytes: number; out?: string; sha256?: string;
+  /** set on an .m4a format-fallback sibling: the .ogg ref it stands in for (CONTRACT §11) */
+  altOf?: string }
 export interface EmittedSchema { schema: number; version: string; catalog: string; sha256: string; unchanged: boolean; bytes: number }
 export interface BuildResult {
   ok: boolean;
@@ -392,6 +398,7 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   checkUnique(c.client.home.tiles, (t) => t.id, ['client', 'home', 'tiles'], 'home tile id', dg);
   const cues = new Set(Object.keys(c.audio.cues));
   const music = new Set(Object.keys(c.audio.music));
+  if (c.audio.m4a !== undefined) dg.err(['audio', 'm4a'], 'audio.m4a is written by the content build (each .ogg\'s .m4a sibling, CONTRACT §11); remove it from content');
   for (const [role, cue] of Object.entries(c.audio.events)) if (!cues.has(cue)) dg.err(['audio', 'events', role], unknownRef('audio cue', cue, cues));
   // the client's own sound roles (src/ui/audio_kinds.ts) must all be bound, to cues / beds that exist
   const roleSets: [ 'ui' | 'screens' | 'stings', readonly string[], Set<string>, string][] = [
@@ -829,6 +836,7 @@ function sniff(abs: string, ref: string): string | null {
     case 'jpg': case 'jpeg': return h[0] === 0xff && h[1] === 0xd8 ? null : 'is not a JPEG';
     case 'webp': return magic('RIFF') && magic('WEBP', 8) ? null : 'is not a WebP';
     case 'ogg': case 'opus': return magic('OggS') ? null : 'is not an Ogg file';
+    case 'm4a': return magic('ftyp', 4) ? null : 'is not an MP4 / M4A file (no "ftyp" box)';
     case 'hdr': return magic('#?') ? null : 'is not a Radiance HDR (missing "#?" header)';
     case 'cube': return /LUT_3D_SIZE/.test(readFileSync(abs, 'latin1')) ? null : 'is not a .cube LUT (no LUT_3D_SIZE)';
     case 'json': try { JSON.parse(readFileSync(abs, 'utf8').replace(/^﻿/, '')); return null; } catch { return 'is not valid JSON'; }
@@ -876,6 +884,19 @@ function resolveAssets(refs: Map<string, Seg[][]>, opts: BuildOptions, dg: Diagn
     const bad = sniff(hit.abs, ref);
     if (bad) { dg.err(where, `asset "${ref}" → ${displayPath(hit.abs)} ${bad}`); continue; }
     found.set(ref, { ref, abs: hit.abs, root: hit.root, bytes: statSync(hit.abs).size });
+    if (/\.ogg$/.test(ref)) {
+      // the AAC sibling for browsers that cannot decode Ogg Opus (CONTRACT §11), next to the resolved .ogg
+      const altRef = ref.replace(/\.ogg$/, '.m4a');
+      const altAbs = hit.abs.replace(/\.ogg$/, '.m4a');
+      const e = exactCaseExists(altAbs);
+      const altBad = e === 'yes' ? sniff(altAbs, altRef) : null;
+      if (e === 'yes' && !altBad) found.set(altRef, { ref: altRef, abs: altAbs, root: hit.root, bytes: statSync(altAbs).size, altOf: ref });
+      else {
+        const msg = `asset "${ref}" has no usable .m4a sibling (${displayPath(altAbs)} ${altBad ?? (e === 'case' ? 'differs in letter case' : 'is missing')}): browsers without Ogg Opus would play nothing (CONTRACT §11; run audio/build.py / build_music.py)${more}`;
+        if (opts.allowMissingAssets && e === 'no') dg.warn(where, msg + ' (--allow-missing-assets)');
+        else dg.err(where, msg);
+      }
+    }
   }
   return found;
 }
@@ -1078,6 +1099,10 @@ export function buildContent(opts: BuildOptions): BuildResult {
   for (const [k, v] of Object.entries(parsed.data)) {
     rewritten[k] = k === 'strings' || k === 'botNames' ? v : mapStrings(v, (s) => rewrite.get(s) ?? s);
   }
+  // .ogg → .m4a format-fallback refs (CONTRACT §11), sorted for a stable catalog
+  const alts = [...assets.values()].filter((a) => a.altOf && a.out && rewrite.has(a.altOf))
+    .map((a) => [rewrite.get(a.altOf!)!, a.out!] as const).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0));
+  if (alts.length) rewritten.audio = { ...(rewritten.audio as Record<string, unknown>), m4a: Object.fromEntries(alts) };
   const recheck = Catalog.safeParse(rewritten);
   if (!recheck.success) { reportIssues(recheck.error.issues as unknown as IssueLike[], [], dg); return result; }
 
@@ -1120,6 +1145,8 @@ function printSummary(r: BuildResult, opts: BuildOptions): void {
   const rows: [string, string][] = r.counts.map(([k, n]) => [k, String(n)]);
   const total = r.assets.reduce((s, a) => s + a.bytes, 0);
   rows.push(['assets', `${r.assets.length} files, ${fmtBytes(total)}`]);
+  const alts = r.assets.filter((a) => a.altOf);
+  if (alts.length) rows.push(['  of which .m4a', `${alts.length} files, ${fmtBytes(alts.reduce((s, a) => s + a.bytes, 0))} (Ogg Opus fallback, CONTRACT §11)`]);
   rows.push(['names check', r.namesChecked ? 'ran' : 'SKIPPED (no deny-list)']);
   for (const e of r.emitted) rows.push([`schema ${e.schema}`, `${e.catalog} (${fmtBytes(e.bytes)}, sha256 ${e.sha256.slice(0, 12)}…${e.unchanged ? ', unchanged' : ''})`]);
   const w = Math.max(...rows.map(([k]) => k.length));

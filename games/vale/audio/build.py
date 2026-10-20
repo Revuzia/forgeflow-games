@@ -2,7 +2,9 @@
 """VALE cue build (lane AUDIO): render every non-music cue in content/audio.json from its recipe
 (audio/cues/*.py) → master (cuelib.master: DC block, tail trim, loudness match, soft clip, true-peak
 limit) → Ogg Opus 48 kHz (tokens.audio.format.primary: opus) at the exact path the contract names
-(assets/audio/<x> → audio/out/<x>), then decode that file and QA what the game will actually play.
+(assets/audio/<x> → audio/out/<x>), then decode that file and QA what the game will actually play. Every
+.ogg also gets its AAC-LC .m4a sibling (audio/out/<x>.m4a, aac.py: the CONTRACT §11 fallback for browsers
+that cannot decode Ogg Opus), encoded from the same master and QA'd from its own decode.
 
     python3 build.py                     # every non-music cue
     python3 build.py --only ui_click,c_crit
@@ -22,6 +24,8 @@ Exit 1 if any non-music cue in audio.json has no recipe, or a rendered cue fails
   limiter    gain reduction above the recipe's budget (a sound pushed so far it loses its transient)
   edges      a click at the start or end (first sample / last 2 ms above -50 dBFS), DC above -54 dBFS
   loop seam  (loops) a burst of >6 kHz energy across the wrap (codec splatter or a step)
+  m4a        the .m4a decode: M4A-LEN not sample-exact to the .ogg's, M4A-LOUD more than 1 LU (dB) from the .ogg's
+             measurement, M4A-TP above -1.0 dBTP, M4A-SEAM a loop seam burst as above
 Deterministic: every random choice is seeded from the cue id (synth.core.rng) and ffmpeg runs
 bitexact, so a rebuild reproduces the same files.
 """
@@ -49,6 +53,7 @@ import numpy as np  # noqa: E402
 
 import cues  # noqa: E402,F401  (side effect: registers every recipe in cuelib.REGISTRY)
 from cuelib import CEILING_DBTP, REGISTRY, measure, master  # noqa: E402
+import aac  # noqa: E402
 from synth import loudness as L  # noqa: E402
 from synth.core import SR, stereo  # noqa: E402
 
@@ -56,6 +61,7 @@ CONTRACT = os.path.normpath(os.path.join(HERE, '..', 'content', 'audio.json'))
 OUT = os.path.join(HERE, 'out')
 WORK = os.path.join(HERE, '_work', 'cues')
 BITRATE = {1: '96k', 2: '128k'}    # libopus VBR targets per channel count: transparent for SFX
+AAC_KBPS = {1: 96, 2: 128}         # AAC-LC ABR targets for the .m4a siblings, per channel count
 LEAD_S = 0.005                     # one-shots start with 5 ms of digital silence: the codec's pre-echo
                                    # then ramps in instead of stepping at sample 0 (5 ms < a 60 fps frame)
 TP_MAX = -1.0
@@ -151,6 +157,11 @@ def render(cid: str, files: list[str]) -> list[dict]:
             ceiling -= (tp - TP_MAX) + 0.3        # codec overshoot: master again under a lower ceiling
         if 'error' in info:
             continue
+        # the .m4a sibling, from the same final master
+        ch = 1 if is_mono else 2
+        m4a = aac.m4a_path(ogg)
+        aac.encode_m4a(data, m4a, AAC_KBPS[ch], loop=spec.loop)
+        dm = decode(m4a)
         kind, tgt = spec.target
         got = measure(dec, kind, spec.loop)
         dur = dec.shape[1] / SR
@@ -178,6 +189,18 @@ def render(cid: str, files: list[str]) -> list[dict]:
             row['seam'] = seam_ratio(dec)
             if row['seam'] > 6.0:
                 flags.append('SEAM')
+        row.update(m4a_kb=os.path.getsize(m4a) / 1024, m4a_got=float(measure(dm, kind, spec.loop)),
+                   m4a_tp=float(L.true_peak(dm, circular=spec.loop)), m4a_len=int(dm.shape[1]))
+        if row['m4a_len'] != dec.shape[1]:
+            flags.append(f"M4A-LEN{row['m4a_len'] - dec.shape[1]:+d}")
+        if not abs(row['m4a_got'] - got) <= tol:          # parity with the .ogg (which answers to the target)
+            flags.append(f"M4A-LOUD{row['m4a_got'] - got:+.1f}")
+        if row['m4a_tp'] > TP_MAX:
+            flags.append('M4A-TP')
+        if spec.loop:
+            row['m4a_seam'] = seam_ratio(dm)
+            if row['m4a_seam'] > 6.0:
+                flags.append('M4A-SEAM')
         row['flags'] = flags
         rows.append(row)
     return rows
@@ -359,7 +382,7 @@ def main(argv: list[str] | None = None) -> int:
                 rows += res
     rows.sort(key=lambda r: ({'ui': 0, 'ping': 1, 'match': 2, 'voice': 3, 'combat': 4}.get(r.get('cat', ''), 5), r['id']))
 
-    print(f"{'cue':24s} {'ms':>6s} {'tgt':>9s} {'got':>6s} {'dTP':>6s} {'GR':>5s} ch {'2-5k':>5s} {'kB':>5s}  flags")
+    print(f"{'cue':24s} {'ms':>6s} {'tgt':>9s} {'got':>6s} {'dTP':>6s} {'GR':>5s} ch {'2-5k':>5s} {'kB':>5s} | m4a {'got':>6s} {'dTP':>6s} {'kB':>5s}  flags")
     fails = 0
     for r in rows:
         if 'error' in r:
@@ -371,10 +394,12 @@ def main(argv: list[str] | None = None) -> int:
         if r['flags']:
             fails += 1
         tgt = f"{r['kind']}{r['target']:+g}"
-        print(f"{r['id']:24s} {r['dur'] * 1000:6.0f} {tgt:>9s} {r['got']:6.1f} {r['tp']:6.1f} {r['gr']:5.1f} {r['ch']:2d} {r['harsh'] * 100:4.0f}% {r['kb']:5.1f}  {' '.join(r['flags'])}")
+        print(f"{r['id']:24s} {r['dur'] * 1000:6.0f} {tgt:>9s} {r['got']:6.1f} {r['tp']:6.1f} {r['gr']:5.1f} {r['ch']:2d} {r['harsh'] * 100:4.0f}% {r['kb']:5.1f} |     {r['m4a_got']:6.1f} {r['m4a_tp']:6.1f} {r['m4a_kb']:5.1f}  {' '.join(r['flags'])}")
     ok = len(rows) - fails
     print(f'\n{len(rows)} files, {ok} pass QA, {fails} flagged — {time.time() - t0:.1f} s'
-          f' (loudness tol ±{TOL_LU} LU, true peak ≤ {TP_MAX} dBTP decoded, Ogg Opus 48 kHz)')
+          f' (loudness tol ±{TOL_LU} LU, true peak ≤ {TP_MAX} dBTP decoded, Ogg Opus 48 kHz;'
+          f' .m4a siblings AAC-LC, same checks)'
+          f'\n.ogg {sum(r["kb"] for r in rows if "kb" in r) / 1024:.2f} MB, .m4a {sum(r["m4a_kb"] for r in rows if "m4a_kb" in r) / 1024:.2f} MB')
     if a.json:
         with open(a.json, 'w', encoding='utf8') as f:
             json.dump([{k: v for k, v in r.items() if k != 'tb'} for r in rows], f, indent=1)
