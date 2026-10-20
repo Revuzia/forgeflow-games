@@ -181,12 +181,16 @@ const IC = {
   medkit: SVG("0 0 24 24", '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M9 7V5.6c0-.9.7-1.6 1.6-1.6h2.8c.9 0 1.6.7 1.6 1.6V7"/><path fill="currentColor" fill-rule="evenodd" d="M5.4 7h13.2A2.4 2.4 0 0 1 21 9.4v8.2a2.4 2.4 0 0 1-2.4 2.4H5.4A2.4 2.4 0 0 1 3 17.6V9.4A2.4 2.4 0 0 1 5.4 7zM11 10.2v2.3H8.7v1.9H11v2.3h2v-2.3h2.3v-1.9H13v-2.3z"/>'),
   rerun: SVG("0 0 24 24", '<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.6h-4.6"/>'),
   next: SVG("0 0 24 24", '<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h14M13 6.5l5.5 5.5-5.5 5.5"/>'),
+  // LC-14: the frag - a round body, a lever and a pin ring (the item is built dark in P1; these are its HUD entries)
+  frag: SVG("0 0 24 24", '<path fill="currentColor" d="M12 7.6c3.7 0 6.4 2.9 6.4 6.6S15.7 21 12 21s-6.4-3.1-6.4-6.8 2.7-6.6 6.4-6.6z"/><rect x="9.6" y="4.6" width="4.8" height="3.4" rx="1" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M14.4 5.6c2.4-.3 4.1.6 4.6 2.6"/><circle cx="7.6" cy="5.4" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path fill="none" stroke="#0b1424" stroke-width="1.1" opacity=".55" d="M7.4 13h9.2M12 9v11"/>'),
 };
 /** The four consumables, in the order the vitals row shows them. */
 const CON_ORDER = ["bandage", "medkit", "mini_shield", "big_shield"];
-const CON_ICON = { bandage: IC.bandage, medkit: IC.medkit, mini_shield: IC.shieldO, big_shield: IC.shield };
-const CON_COLOR = { bandage: "#e8dcc2", medkit: "#ff7b6b", mini_shield: "#7cc4ff", big_shield: "#4aa8ff" };
-const CON_NAME = { bandage: "BANDAGE", medkit: "MEDKIT", mini_shield: "MINI SHIELD", big_shield: "BIG SHIELD" };
+// The vitals row shows the four heals (CON_ORDER); the frag (LC-14, P1-A's consumable with `throws`) has its icon, colour and name here so the
+// slot row, the pickup line and the interact prompt name it properly the day its loot weight goes above 0 (P2-D) - it never joins the heal row.
+const CON_ICON = { bandage: IC.bandage, medkit: IC.medkit, mini_shield: IC.shieldO, big_shield: IC.shield, frag: IC.frag };
+const CON_COLOR = { bandage: "#e8dcc2", medkit: "#ff7b6b", mini_shield: "#7cc4ff", big_shield: "#4aa8ff", frag: "#a9c26a" };
+const CON_NAME = { bandage: "BANDAGE", medkit: "MEDKIT", mini_shield: "MINI SHIELD", big_shield: "BIG SHIELD", frag: "FRAG GRENADE" };
 const AMMO_NAME = { light: "LIGHT AMMO", medium: "MEDIUM AMMO", shells: "SHELLS", heavy: "HEAVY AMMO", grenades: "GRENADES" };
 const MAG_SEGS = 10;         // pooled mag-bar segments (a 30-round mag is 10 x 3 rounds)
 
@@ -308,6 +312,17 @@ html.lc-touch .lc-circ-l { display: none; } html.lc-touch .lc-circ-s { display: 
 .lc-tbl tr.me td.r { color: #ffd54a; }
 .lc-tbl .you { font-size: ${MINFS(11)}; font-weight: 700; opacity: .6; margin-left: 6px; line-height: 1; vertical-align: middle; }
 .lc-tbl .live { font-size: ${MINFS(10)}; font-weight: 800; letter-spacing: 1px; color: #7be0a3; margin-left: 8px; line-height: 1; vertical-align: middle; }
+/* ---- pings (LC-07): a world pip with its distance, an edge arrow when it is off screen, a compass tick ---- */
+.lc-ping { position: absolute; left: 0; top: 0; display: none; pointer-events: none; text-align: center; will-change: transform; --pc: #ffd254; }
+.lc-ping .dia { width: 15px; height: 15px; margin: 0 auto; transform: rotate(45deg); background: var(--pc); border: 2px solid rgba(6,10,18,.85); box-shadow: 0 0 10px var(--pc), 0 1px 3px rgba(0,0,0,.8); }
+.lc-ping.enemy .dia { border-radius: 2px 50% 2px 50%; }
+.lc-ping.pin .dia { width: 17px; height: 17px; box-shadow: 0 0 0 3px rgba(6,10,18,.55), 0 0 14px var(--pc); }
+.lc-ping .lbl { margin-top: 6px; font-family: ${FONT}; font-weight: 800; font-size: 13px; line-height: 14px; letter-spacing: .6px; color: var(--pc); white-space: nowrap; text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,.8); font-variant-numeric: tabular-nums; }
+.lc-ping .arr { display: none; width: 0; height: 0; margin: 4px auto 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 11px solid var(--pc); filter: drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
+.lc-ping.edge .arr { display: block; }
+.lc-ping.edge .dia { width: 10px; height: 10px; }
+.lc-cping { position: absolute; top: 3px; width: 9px; height: 9px; margin-left: -6px; transform: rotate(45deg); background: var(--pc, #ffd254); border: 1.5px solid rgba(6,10,18,.9); box-shadow: 0 0 6px var(--pc, #ffd254); display: none; pointer-events: none; }
+.lc-cping.edge { opacity: .55; }
 `;
   document.head.appendChild(st);
 }
@@ -321,6 +336,8 @@ export function init(W) {
   R = { root };
   wireEvents(W);
   initTouch(W);
+  initPingInput(W);          // LC-07: Ping key + middle mouse (window listeners, once)
+  W._hudPings = PINGS;       // test surface (read-only by probes): the live pings + counters
 }
 
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
@@ -748,7 +765,8 @@ export function randomMap() {
 }
 const MODE_CARDS = [
   { id: "standard", name: "BATTLE ROYALE", sub: "50 players · random map · last one standing" },
-  { id: "quick", name: "QUICK MATCH", sub: "5-minute storm · double loot · hot start" },
+  // LC-82: the quick storm runs 239 s (sim STORM_PHASES.quick) with 1.8x loot and a ground start - the old line promised five minutes and double loot
+  { id: "quick", name: "QUICK MATCH", sub: "4-minute storm · extra loot · ground start" },
   { id: "practice", name: "PRACTICE", sub: "No storm · random map · full loadout" },
 ];
 
@@ -1251,7 +1269,8 @@ export function showMenu(W, startMatch) {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "13px", fontWeight: "800",
     letterSpacing: "4px", color: "#8ec8ff", textShadow: "0 0 18px rgba(80,160,255,0.5)",
   }, "LAST CIRCLE", topBar);   // no studio/site branding inside the game itself
-  h("div", { fontSize: "12px", opacity: "0.55", letterSpacing: "2px", fontWeight: "600" }, "SEASON 1  ·  FREE TO PLAY", topBar);
+  // LC-82: the top bar named a season (number one) the game does not have (no season object, no pass, no reset)
+  h("div", { fontSize: "12px", opacity: "0.55", letterSpacing: "2px", fontWeight: "600" }, "FREE TO PLAY", topBar);
 
   // center stack. A centred column TALLER than the viewport overflows at BOTH
   // ends, and the top end cannot be scrolled to: at 1280x720 the wordmark's top
@@ -1260,11 +1279,17 @@ export function showMenu(W, startMatch) {
   // its first and last children still centre it whenever it fits. Short
   // viewports also get a compact layout (tighter gaps, smaller preview stage,
   // no tagline) so the common laptop sizes need little or no scroll.
-  const compact = (window.innerHeight || 900) < 860;
+  // LC-83 MENU FIT. At 1280x720 the reticle swatches were clipped 9 px and the key-hint line sat 36-80 px below the fold; at 1366x768 and
+  // 1536x864 the hint was under the fold too (parity audit + p1d_menu probe). On a MOUSE desktop the compact layout now starts below 920 px,
+  // and below 800 px a SHORT layout tightens the stack further (smaller wordmark and preview stage, tighter cards and gaps). A touch device
+  // keeps exactly the old rule and sizes (its TOUCH_CSS owns the phone layout; phone support is unchanged).
+  const IH = window.innerHeight || 900;
+  const compact = IH < (touchOn ? 860 : 920);
+  const short = !touchOn && IH < 800;
   const wrap = h("div", {
     position: "absolute", inset: "0", display: "flex", flexDirection: "column",
-    alignItems: "center", justifyContent: "flex-start", gap: compact ? "12px" : "20px",
-    padding: compact ? "58px 24px 16px" : "64px 24px 40px", boxSizing: "border-box",
+    alignItems: "center", justifyContent: "flex-start", gap: short ? "8px" : compact ? "12px" : "20px",
+    padding: short ? "56px 24px 8px" : compact ? "58px 24px 16px" : "64px 24px 40px", boxSizing: "border-box",
     overflowY: "auto", overflowX: "hidden",
   }, null, L);
   wrap.dataset.lc = "menuwrap";
@@ -1273,7 +1298,7 @@ export function showMenu(W, startMatch) {
   const titleBlock = h("div", { textAlign: "center", marginTop: "auto", animation: "lcTitleIn .9s cubic-bezier(.2,.8,.2,1) both" }, null, wrap);
   titleBlock.dataset.lc = "titleblock";
   const wordmark = h("div", {
-    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "min(72px, 7vw, 9vh)", fontWeight: "900", lineHeight: "1.15",
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: short ? "min(72px, 7vw, 7vh)" : "min(72px, 7vw, 9vh)", fontWeight: "900", lineHeight: "1.15",
     letterSpacing: "10px",
     background: "linear-gradient(180deg, #ffffff 10%, #a8d4ff 55%, #4a9fff 100%)",
     WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
@@ -1288,7 +1313,7 @@ export function showMenu(W, startMatch) {
     const pr = W.progress, c = pr.career || {};
     const need = xpForLevel(pr.level);
     const strip = h("div", {
-      display: "flex", alignItems: "center", gap: "10px", marginTop: "10px",
+      display: "flex", alignItems: "center", gap: "10px", marginTop: short ? "6px" : "10px",
       padding: "6px 14px", borderRadius: "10px", background: "rgba(4,12,24,0.5)",
       border: "1px solid rgba(120,180,255,0.18)", fontFamily: "Rajdhani, " + FONT,
     }, null, titleBlock);
@@ -1306,7 +1331,7 @@ export function showMenu(W, startMatch) {
       // two of the seven career fields were write-only. Show them.
       h("div", {
         fontSize: FS(11.5), opacity: "0.8", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px",
-      }, c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills" + (c.bestPlacement ? " · best #" + c.bestPlacement : "")
+      }, c.matches + (c.matches === 1 ? " match · " : " matches · ") + c.wins + (c.wins === 1 ? " win · " : " wins · ") + c.kills + (c.kills === 1 ? " kill" : " kills") + (c.bestPlacement ? " · best #" + c.bestPlacement : "")
          + (c.damage ? " · " + Math.round(c.damage / 1000) + "k dmg" : "") + (c.timeAliveS ? " · " + (c.timeAliveS / 3600).toFixed(1) + "h" : ""), strip);
     }
     // Coming back tomorrow rather than in a month is worth naming.
@@ -1325,8 +1350,8 @@ export function showMenu(W, startMatch) {
   // is no interval here to leak.
   if (W.daily) {
     const dp = h("div", {
-      display: "flex", flexDirection: "column", gap: "3px", marginTop: "8px",
-      padding: "8px 14px", borderRadius: "10px", background: "rgba(4,12,24,0.5)",
+      display: "flex", flexDirection: "column", gap: short ? "1px" : "3px", marginTop: short ? "6px" : "8px",
+      padding: short ? "6px 14px" : "8px 14px", borderRadius: "10px", background: "rgba(4,12,24,0.5)",
       border: "1px solid rgba(255,190,110,0.22)", fontFamily: "Rajdhani, " + FONT,
       // titleBlock runs lcTitleIn, which ENDS on letter-spacing:10px with
       // fill-mode both — so every descendant inherited 10px tracking and the
@@ -1372,7 +1397,7 @@ export function showMenu(W, startMatch) {
   const modeIcons = { standard: "⚔", quick: "⚡", practice: "◎" };
   const modeEls = cards.map((m, i) => {
     const c = h("div", Object.assign({
-      padding: "14px 20px 14px 16px", cursor: "pointer", minWidth: "300px",
+      padding: short ? "10px 20px 10px 16px" : "14px 20px 14px 16px", cursor: "pointer", minWidth: "300px",
       position: "relative", overflow: "hidden", animation: `lcPanelIn .55s ${0.2 + i * 0.06}s both`,
     }, PANEL), null, leftCol);
     c.className = "lc-mode-card lc-glass-scan";
@@ -1397,7 +1422,8 @@ export function showMenu(W, startMatch) {
       }, "START HERE", txt).dataset.lc = "rookiechip";
       // the tail drops on a phone on its side, where the full line wrapped to
       // three lines inside the card
-      h("span", null, " · FIGHTING IN 10 SECONDS", txt.lastChild).dataset.lc = "chiptail";
+      // LC-82: the chip promised a fight ten seconds after the click, against a measured 26-30 s cold; what IS true is the point of the mode
+      h("span", null, " · NO PARACHUTE, STRAIGHT TO THE FIGHT", txt.lastChild).dataset.lc = "chiptail";
     }
     // the card IS the play button — one click launches this mode (no separate DROP IN)
     h("div", {
@@ -1433,12 +1459,12 @@ export function showMenu(W, startMatch) {
   h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "700",
     letterSpacing: "2.5px", color: "#9fd0ff", opacity: "0.7", textAlign: "center",
-    marginTop: "6px", marginBottom: "2px", animation: "lcGlow 3.2s ease-in-out infinite",
+    marginTop: short ? "2px" : "6px", marginBottom: "2px", animation: "lcGlow 3.2s ease-in-out infinite",
   }, "◂  CHOOSE A MODE TO DEPLOY  ▸", leftCol);
 
   const subRow = h("div", { display: "flex", gap: "10px" }, null, leftCol);
   const mkGhost = (label, parent) => h("button", Object.assign({}, BTN, {
-    flex: "1", fontSize: "12px", padding: "12px 8px",
+    flex: "1", fontSize: "12px", padding: short ? "10px 8px" : "12px 8px",
     background: "rgba(255,255,255,0.06)", color: "#cfe4ff",
     border: "1px solid rgba(140,200,255,0.2)",
     fontFamily: "Rajdhani, " + FONT, fontWeight: "700", letterSpacing: "1.5px",
@@ -1470,7 +1496,7 @@ export function showMenu(W, startMatch) {
 
   // — SKIN BAY: premium 3D turntable —
   const bay = h("div", Object.assign({
-    width: "320px", padding: "16px 18px 14px", display: "flex", flexDirection: "column",
+    width: "320px", padding: short ? "10px 18px 10px" : "16px 18px 14px", display: "flex", flexDirection: "column",
     alignItems: "center", gap: "8px", position: "relative", overflow: "hidden",
   }, PANEL), null, cols);
   bay.className = "lc-glass-scan";
@@ -1479,7 +1505,7 @@ export function showMenu(W, startMatch) {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: FS(11), letterSpacing: "3px",
     opacity: "0.7", fontWeight: "800", color: "#9fd0ff",
   }, "OPERATIVE", bay);
-  const STG = compact ? 220 : 280;
+  const STG = short ? 168 : compact ? 220 : 280;
   const stage = h("div", {
     position: "relative", width: STG + "px", height: STG + "px", borderRadius: "14px",
     overflow: "hidden",
@@ -1708,8 +1734,8 @@ export function showMenu(W, startMatch) {
   // "WASD MOVE · MOUSE AIM" and a desktop never reads "LEFT THUMB".
   const hintStyle = {
     fontFamily: "Rajdhani, " + FONT, fontSize: "13px", fontWeight: "600",
-    opacity: "0.6", maxWidth: "820px", textAlign: "center", lineHeight: "1.7",
-    letterSpacing: "0.5px", color: "#c0d4ec",
+    opacity: "0.6", maxWidth: "820px", textAlign: "center",
+    letterSpacing: "0.5px", color: "#c0d4ec", lineHeight: short ? "1.45" : "1.7",
     textShadow: "0 2px 8px rgba(0,0,0,0.9)",
     animation: "lcPanelIn .6s .4s both",
     marginBottom: "auto",       // pairs with the title block's marginTop: auto
@@ -1722,6 +1748,7 @@ export function showMenu(W, startMatch) {
   mk("KeyW") + mk("KeyA") + mk("KeyS") + mk("KeyD") + " MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  " +
   mk("Space") + " JUMP / CHUTE  ·  " + mk("ShiftLeft") + " SPRINT (" + (W.settings && W.settings.sprintToggle ? "TOGGLE" : "HOLD") + ")  ·  " +
   mk("KeyR") + " RELOAD  ·  " + mk("KeyE") + " LOOT  ·  " + mk("Digit1") + "–" + mk("Digit5") + " WEAPONS  ·  " + mk("KeyM") + " MAP" +
+  "  ·  MMB / " + mk(PING_KEY) + " PING" +          // LC-07: the new verb, named where the others are (kept on one line)
   // the two new verbs are invisible without this line — a feature nobody can
   // discover is a feature that doesn't exist
   "  ·  JUMP AT A LEDGE = CLIMB  ·  " + mk("ShiftLeft") + " WHILE SCOPED = HOLD BREATH",
@@ -1747,14 +1774,25 @@ export function showLoading(W, text) {
     pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "center",
     background: "radial-gradient(ellipse at 50% 40%, rgba(20,40,70,0.55) 0%, rgba(4,10,20,0.92) 70%, rgba(2,6,12,0.97) 100%)",
   });
-  const box = h("div", Object.assign({ textAlign: "center", padding: "36px 48px", minWidth: "360px" }, PANEL), null, L);
+  const box = h("div", Object.assign({ textAlign: "center", padding: "36px 48px", minWidth: "360px", maxWidth: "min(520px, calc(100vw - 32px))", boxSizing: "border-box" }, PANEL), null, L);
+  box.dataset.lc = "loadbox";
   h("div", {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "28px", fontWeight: "900", letterSpacing: "6px",
     background: "linear-gradient(180deg,#fff,#7eb8ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
   }, "LAST CIRCLE", box);
+  // LC-23: WHERE you are going and HOW, on the screen you stare at for 10-25 s. The orchestrator's text is "Building <map>…"; the map id and
+  // mode are on W already (set before showLoading), so the card can name both even when the text is empty (recoverToMenu's blank call).
+  const mapLbl = mapLabel(W.mapId);
+  if (text && mapLbl) {
+    const modeLbl = W.mode === "quick" ? "QUICK MATCH" : W.mode === "practice" ? "PRACTICE" : "BATTLE ROYALE";
+    const ml = h("div", {
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "13px", fontWeight: "800", letterSpacing: "3px", color: "#8ec8ff", marginTop: "12px",
+    }, mapLbl.toUpperCase() + "  ·  " + modeLbl, box);
+    ml.dataset.lc = "loadmap";
+  }
   h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "16px", fontWeight: "600", opacity: "0.85",
-    marginTop: "14px", letterSpacing: "2px", color: "#b8d4f0",
+    marginTop: "10px", letterSpacing: "2px", color: "#b8d4f0",
   }, text || "DEPLOYING…", box);
   const bar = h("div", {
     width: "300px", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px",
@@ -1782,16 +1820,71 @@ export function showLoading(W, text) {
     fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "600", opacity: "0.6",
     letterSpacing: "1.5px", marginTop: "10px", color: "#9fd0ff",
   }, "BUILDING TERRAIN…", box);
-  let p = 12;
-  setFill(12);
+  // LC-23 MONOTONIC. The creep ran to 92 % while the map built, then the first real report reset the fill to 12 + 86 x (1/32) = 15 % - the
+  // bar went BACKWARDS (measured: 92 % -> 15 % at 12 s, cold Quick). Now the fill only ever grows: the creep (map build, which reports
+  // nothing) eases toward a 55 % ceiling instead of racing to 92, and the real report (operatives loaded / total) fills the rest of the bar
+  // FROM wherever the creep had got to. R._loadMax is the high-water mark every write goes through, and a probe reads it.
+  R._loadMax = 0;
+  const grow = (pct) => { if (pct > R._loadMax) { R._loadMax = pct; setFill(pct); } };
+  setFill(0); grow(8);
+  let base = null;
   if (R._loadIv) clearInterval(R._loadIv);      // a second showLoading must not orphan the first creep
-  R._loadIv = setInterval(() => { p = Math.min(92, p + 8); setFill(p); }, 300);
+  R._loadIv = setInterval(() => { grow(R._loadMax + (55 - R._loadMax) * 0.12); }, 300);
   W.loadProgress = (loaded, total) => {
     if (!total) return;
     if (R._loadIv) { clearInterval(R._loadIv); R._loadIv = null; }
-    setFill(12 + Math.round(86 * Math.min(1, loaded / total)));
-    sub.textContent = "LOADING OPERATIVES  " + Math.min(loaded, total) + "/" + total;
+    if (base === null) base = R._loadMax;
+    const f = Math.min(1, Math.max(0, loaded / total));
+    grow(base + (98 - base) * f);
+    sub.textContent = f >= 1 ? "GETTING READY TO DROP…" : "LOADING OPERATIVES  " + Math.min(loaded, total) + "/" + total;
   };
+  // TIPS: one true line at a time, rotated every 4.5 s while the card is up (the interval dies with the layer)
+  const tipEl = h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "14px", fontWeight: "600", lineHeight: "1.45", color: "#cfe2f7", opacity: "0.9",
+    marginTop: "18px", paddingTop: "12px", borderTop: "1px solid rgba(140,200,255,0.16)", minHeight: "40px", transition: "opacity .25s",
+  }, "", box);
+  tipEl.dataset.lc = "loadtip";
+  const tips = loadingTips(W);
+  let ti = Math.floor(Math.random() * tips.length);
+  const showTip = () => { tipEl.textContent = "TIP  ·  " + tips[ti % tips.length]; ti++; };
+  showTip();
+  if (R._tipIv) clearInterval(R._tipIv);
+  R._tipIv = setInterval(() => {
+    if (!tipEl.isConnected) { clearInterval(R._tipIv); R._tipIv = null; return; }
+    tipEl.style.opacity = "0";
+    setTimeout(() => { if (tipEl.isConnected) { showTip(); tipEl.style.opacity = "0.9"; } }, 250);
+  }, 4500);
+}
+/** "isla_viva" -> "Isla Viva" (the three battle maps by name; anything else title-cased from its id). */
+function mapLabel(id) {
+  if (!id) return "";
+  const N = { isla_viva: "Isla Viva", ashgrid: "Ashgrid", deepwood: "Deepwood" };
+  return N[id] || String(id).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+/** Loading-screen tips. Every one is true of this build (the keys are the LIVE bindings); a touch player gets the touch wording. */
+function loadingTips(W) {
+  const k = (c) => { const ph = physFor(W, c); return ph ? keyLabel(ph).toUpperCase() : null; };
+  const t = [
+    "Shields soak damage before health does. Top them up before you push.",
+    "Crouching and standing still both tighten your spread.",
+    "Headshots hit harder with every gun but the launcher - the sniper most of all.",
+    "Supply drops carry legendary loot, and the map marks where they land.",
+    "The storm hurts more as the circles close. The timer at the top says when it moves.",
+    "Jump at a low wall or a rooftop edge to climb over it.",
+  ];
+  if (touchOn) {
+    t.push("Push the move stick all the way forward to sprint.");
+    t.push("Hold USE at a chest to open it.");
+    t.push("Tap the minimap to see the whole map.");
+  } else {
+    const sh = k("ShiftLeft"), sp = k("Space"), e = k("KeyE"), m = k("KeyM"), z = k(PING_KEY);
+    if (sh) t.push(sh + ((W.settings && W.settings.sprintToggle) ? " toggles sprint on and off." : " is sprint - hold it to run."));
+    if (sp) t.push("In the air, " + sp + " cuts your chute so you dive faster. " + sp + " again opens it.");
+    if (e) t.push("Hold " + e + " at a chest to open it.");
+    if (m) t.push(m + " opens the big map. Click it to drop a pin your squad can see.");
+    t.push("Middle mouse" + (z ? " or " + z : "") + " pings what you are looking at - a spot, or an enemy.");
+  }
+  return t;
 }
 
 /** Take the loading screen down without showing anything else (lane L4's
@@ -1799,6 +1892,7 @@ export function showLoading(W, text) {
  *  and the W.loadProgress hook that writes into it. Idempotent. */
 export function hideLoading(W) {
   if (R._loadIv) { clearInterval(R._loadIv); R._loadIv = null; }
+  if (R._tipIv) { clearInterval(R._tipIv); R._tipIv = null; }
   if (W) W.loadProgress = null;
   if (R.loading) { R.loading.remove(); R.loading = null; }
 }
@@ -2384,11 +2478,24 @@ function msToMidnight() {
   const n = new Date();
   return new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1).getTime() - n.getTime();
 }
+/** Seconds from the first wait to the last shrink of this mode's storm (sim STORM_PHASES; standard 920, quick 239). Infinity with no storm. */
+function stormTotalS(W) {
+  const ph = (K && K.STORM_PHASES && K.STORM_PHASES[W.mode]) || (W.stormCtl && W.stormCtl.storm && W.stormCtl.storm.phases) || [];
+  let t = 0;
+  for (const x of ph) t += (+x.wait || 0) + (+x.shrink || 0);
+  return t > 0 ? t : Infinity;
+}
+/** LC-19: can this challenge be done in THIS mode? A survive-N-seconds card longer than the storm is impossible to finish where it is offered
+ *  (Quick Match offered "Survive 8 minutes" against a 239 s storm). Every other card fits every mode. */
+function chalFits(W, c) {
+  if (!c || !/^survive/.test(c.id)) return true;
+  return c.goal <= stormTotalS(W);
+}
 function pickChallenges(W) {
   // Three at random per match, EXCLUDING today's dailies so no single action can
   // pay twice and so the `ch.id + ":" + cur` card signature stays unique.
   const skip = (W.daily && W.daily.ids) || [];
-  const pool = CHAL_POOL.filter((c) => skip.indexOf(c.id) < 0);
+  const pool = CHAL_POOL.filter((c) => skip.indexOf(c.id) < 0 && chalFits(W, c));
   const pick = [];
   const bag = pool.slice();
   for (let i = 0; i < 3 && bag.length; i++) pick.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
@@ -2588,7 +2695,7 @@ function updateWeaponCard(W, p, C) {
       const cid = wid.slice(11);
       R.wName.textContent = CON_NAME[cid] || cid.toUpperCase(); R.wName.style.color = CON_COLOR[cid] || "#dfe7f2";
       R.wTag.style.display = "none"; R.wMode.style.display = "none";
-      R.wAType.textContent = "FIRE TO USE";
+      R.wAType.textContent = cid === "frag" ? "FIRE TO THROW" : "FIRE TO USE";
       R.magTracks[0].parentNode.style.display = "none";
       R._wSilFor = null; R.wSil.style.visibility = "hidden";
     } else {
@@ -2699,7 +2806,8 @@ export function showHUD(W) {
   // Re-read every match, not once per session: loadDaily re-validates against
   // today, so a tab left open across midnight rolls onto the new set.
   W.daily = loadDaily();
-  W._challenges = pickChallenges(W).concat(dailyChallenges(W));
+  // LC-19: a daily that cannot be finished in this mode stays on the menu (it can be done in another mode today) but is not shown in this match
+  W._challenges = pickChallenges(W).concat(dailyChallenges(W).filter((c) => chalFits(W, c)));
   W._chalIdx = 0; W._xpDirty = true; W._chalXp = 0; W._elimXp = 0;
   const meta = h("div", { position: "absolute", top: META_TOP + "px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
   const xpRow = h("div", { display: "flex", alignItems: "center", gap: "8px", width: "100%", background: "rgba(0,0,0,0.42)", padding: "4px 10px", borderRadius: "8px" }, null, meta);
@@ -2788,6 +2896,8 @@ export function showHUD(W) {
   h("div", { position: "absolute", left: "50%", top: "12px", transform: "translateX(-50%)", width: "2px", height: "12px", background: "#ffd254", boxShadow: "0 0 4px rgba(0,0,0,0.9)" }, null, compBand);
   R.compassWrap = compWrap;
   compWrap.dataset.lc = "compass";
+  // LC-07 pings: the world pips (own layer, under the menus) and the compass ticks (a box over the ruler, outside its fade mask)
+  buildPings(L, compWrap);
 
   // weapon-switch popup: rarity-coloured name above the hotbar for a beat
   // (Final Drop parity — their hotbar select shows rarity/name)
@@ -2919,6 +3029,7 @@ export function showHUD(W) {
   R.lowHpTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(180,20,20,0) 45%, rgba(180,20,20,0.5) 100%)", opacity: "0", transition: "opacity .45s", pointerEvents: "none" }, null, L);
 
   R._hudCache = {};
+  R.dmgLog = [];            // LC-81: the damage-taken log belongs to this match
   _slotC.who = null;        // new roster / new HUD: repaint the slot row once
   // perf readout (opt-in): FPS always, plus link freshness when online. This is
   // deliberately NOT labelled "ping" — net.js records lastSeen timestamps, not
@@ -2957,6 +3068,8 @@ export function showHUD(W) {
   // deployment beat — the match used to just… start, with no moment marking it
   const tot = W.match ? W.match.totalPlayers : 50;
   if (W.mode === "practice") setTimeout(() => announce("PRACTICE", "FIVE DUMMIES DUE SOUTH · 12–80M", "#9fd7ff", 2600, ANN_PRIO.deploy), 250);
+  // LC-82: Quick Match starts ON THE GROUND (SIM.MODE.quick drop "ground"), so "DEPLOY" announced a drop that never happens
+  else if (W.mode === "quick") setTimeout(() => announce("FIGHT", tot + " PLAYERS · GROUND START · LAST ONE STANDING WINS", "#9fd7ff", 2600, ANN_PRIO.deploy), 250);
   else setTimeout(() => announce("DEPLOY", tot + " PLAYERS · LAST ONE STANDING WINS", "#9fd7ff", 2600, ANN_PRIO.deploy), 250);
   syncTouchPrefs(W);
 }
@@ -3134,6 +3247,9 @@ export function update(W, dt) {
     const n = Math.round(hdg) % 360;
     if (R._compN !== n) { R._compN = n; R.compassNum.textContent = String(n); }
   }
+
+  // LC-07: pings (expiry, world pip / edge arrow, compass tick) - every frame, like the compass
+  if (p && R.pingEls) stepPings(W, p, ((-p.yaw * 180 / Math.PI) % 360 + 360) % 360);
 
   // vitals: the number + 4 + 4 segments, written only when a value changed (updateVitals)
   updateVitals(p, C);
@@ -3523,6 +3639,8 @@ function slotsDirty(p) {
 // later, so a firefight churned DOM nodes in exactly the frames that matter.
 // The pool size is the old live cap (14); when all are live the oldest is reused.
 const IND_POOL = 14;
+// LC-70: how far a footstep carries, by stance - the same ranges audio.js gives its STEP rows (d: crouch 11, walk 22, sprint 34)
+const STEP_HEAR_M = { crouch: 11, walk: 22, sprint: 34 };
 const inds = [];      // live cues: {el, ang, t, life, kind}
 const indFree = [];   // parked pool entries of the CURRENT HUD
 const stepMarks = new Map(); // actorId -> last footstep indicator time
@@ -3566,14 +3684,19 @@ function stepIndicators(W, dt) {
   }
   const p = W.player;
   if (!p) return;
-  // footstep scan at 3Hz: moving actors within 30m (visualized sound)
+  // footstep scan at 3Hz: moving actors you could HEAR (visualized sound). LC-70: it used to be anyone moving within 30 m - a crouched
+  // enemy at 25 m showed a footprint audio.js would never play (crouch steps carry 11 m), and every squad-mate walking beside you filled
+  // the ring. The radius is now the footstep's own audible range by stance (audio.js STEP: crouch 11 m, walk 22 m, sprint 34 m; a remote
+  // actor's sprint arrives with the LC-09 sprint bit), and team-mates are never shown.
   stepIndicators._acc = (stepIndicators._acc || 0) + dt;
   if (stepIndicators._acc > 0.33) {
     stepIndicators._acc = 0;
+    const myTeam = p.teamId;
     for (const a of W.actors) {
       if (a === p || !a.alive) continue;
+      if (myTeam && a.teamId === myTeam) continue;
       const d = Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z);
-      if (d > 30) continue;
+      if (d > (a.crouching ? STEP_HEAR_M.crouch : a.sprinting ? STEP_HEAR_M.sprint : STEP_HEAR_M.walk)) continue;
       if (Math.hypot(a.vel.x, a.vel.z) < 2) continue;
       const last = stepMarks.get(a.id) || -9;
       if (W.t - last < 1.4) continue;
@@ -3726,7 +3849,7 @@ function paintCrosshair(W, weaponId) {
     dot(1.5);
   }
   else if (cls === "sniper") { dot(2); line(-1, 10, 2, 8); }  // fine dot + drop hint (scope overlay on ADS)
-  else if (cls === "launcher") {
+  else if (cls === "launcher" || weaponId === "consumable:frag") {      // LC-14: a held frag is lobbed too
     dot(2);
     // arc chevron hinting the lobbed trajectory
     const ch = h("div", { position: "absolute", left: (CENTER - 7) + "px", top: (CENTER + 8) + "px", width: "14px", height: "14px", border: "2px solid rgba(255,200,120,0.95)", borderTop: "none", borderLeft: "none", transform: "rotate(45deg)", boxShadow: "0 0 2px rgba(0,0,0,0.8)" }, null, R.cross);
@@ -3782,12 +3905,15 @@ function paintSlots(W, p) {
   paintCons(W, p);       // the vitals row's consumable counts change exactly when the slots do
 }
 function shortName(s) {
-  const M = { pistol: "PSTL", smg: "SMG", ar: "AR", shotgun: "SHTG", sniper: "SNPR", glauncher: "GL", bandage: "BAND", medkit: "MED", mini_shield: "MINI", big_shield: "SHLD" };
+  const M = { pistol: "PSTL", smg: "SMG", ar: "AR", shotgun: "SHTG", sniper: "SNPR", glauncher: "GL", bandage: "BAND", medkit: "MED", mini_shield: "MINI", big_shield: "SHLD", frag: "FRAG" };
   return M[s.id] || s.id.slice(0, 4).toUpperCase();
 }
 function labelFor(d) {
   if (!d) return "Pick up";
-  if (d.kind === "weapon") return "Pick up " + shortName(d) + (d.id !== "grenade" ? " (" + K.RARITY[d.rarity || 0] + ")" : "");
+  // (a `d.id !== "grenade"` test lived here: no weapon was ever called "grenade", and the frag is a consumable - LC-14 - so it never
+  //  reaches this branch. Every weapon names its rarity.)
+  if (d.kind === "weapon") return "Pick up " + shortName(d) + " (" + K.RARITY[d.rarity || 0] + ")";
+  if (d.kind === "consumable" && d.id === "frag") return "Pick up FRAG GRENADE" + (d.count > 1 ? " x" + d.count : "");
   return "Pick up " + shortName(d);
 }
 /** Guns any actor may CARRY — mirrors GUN_CAP in loot.js, which is module-private
@@ -3819,6 +3945,254 @@ function interactLabel(W, data) {
 function fmtT(s) {
   s = Math.max(0, Math.ceil(s));
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+
+// ═══ PINGS (parity LC-07) ══════════════════════════════════════════════════════
+// The game had no way to point at anything: middle mouse, Z and G added 0 DOM nodes (verify/lc07), so a squad with no voice could not say
+// "there" - Apex's ping was designed and play-tested with voice BANNED for exactly this (pcgamer.com, Apex ping system). Now:
+//   * MIDDLE MOUSE or the rebindable PING key (canonical "KeyZ", default Z - Settings > Keybinds) marks what the reticle is on: the world point
+//     of K.aimRayDist (the same march the bullets use, read-only), or an ENEMY when an enemy body is under the reticle nearer than the world;
+//   * the BIG MAP (M): a click drops a map PIN (a waypoint) and the map stays open; right-click clears it;
+//   * each ping shows as a pip in the world with its distance (an arrow on the screen edge when it is off screen), a tick on the compass and
+//     a diamond on the minimap and the big map;
+//   * lifetime 30 s; a location ping and a map pin also end when their owner walks up to them; one world ping and one pin per player, a new
+//     one replaces the old;
+//   * online, net.js sends it to the squad (W.sendPing: 1 per second, team-filtered on receipt) and squad pings arrive as "netPing";
+//   * every placed ping (own and received) emits "pingPlaced" for audio.js to voice (lane P1-B);
+//   * touch has no binding (the touch layer and its paths are unchanged).
+const PING_LIFE_S = 30;            // a ping's lifetime
+const PING_ARRIVE_M = 5;           // a location ping / map pin ends when its owner is this close (horizontal)
+const PING_FAR = 600;              // how far the ping ray reaches
+const PING_POOL = 10;              // world pips (4 humans x world ping + map pin, with room to spare)
+const PING_KEY = "KeyZ";           // the canonical code of the Ping action (ACTIONS); the physical key is whatever Settings bound to it
+const PING_COL_ME = "#ffd254", PING_COL_ENEMY = "#ff5a4a";
+const PING_COL_MATE = ["#6ec4ff", "#7cf0a8", "#ff9df0", "#c9a6ff"];
+const PINGS = { list: [], lastLocal: -1e9, placed: 0, sent: 0, recv: 0, mmDrawn: 0 };
+const _pv = new THREE.Vector3(), _pdir = new THREE.Vector3(), _pcols = [];
+
+function pingColor(W, pg) {
+  if (pg.kind === "enemy") return PING_COL_ENEMY;
+  if (W.player && pg.owner === W.player.id) return PING_COL_ME;
+  const n = parseInt(String(pg.owner).slice(1), 10);
+  return PING_COL_MATE[(Number.isFinite(n) ? n : 0) % PING_COL_MATE.length];
+}
+/** Add (or replace) a ping. `pg` = { owner, kind: "go" | "enemy" | "pin", src: "w" | "m", x, y, z }. Local pings go to the squad too. */
+function addPing(W, pg, local) {
+  if (!pg || !Number.isFinite(pg.x) || !Number.isFinite(pg.z)) return null;
+  const y = Number.isFinite(pg.y) ? pg.y : (W.map && W.map.heightAt ? W.map.heightAt(pg.x, pg.z) : 0);
+  const key = pg.owner + ":" + (pg.src === "m" ? "m" : "w");
+  const p = { key, owner: pg.owner, kind: pg.kind, src: pg.src === "m" ? "m" : "w", x: pg.x, y, z: pg.z, born: W.t, local: !!local,
+              dist: null, scr: null, cmp: null };
+  PINGS.list = PINGS.list.filter((q) => q.key !== key);
+  PINGS.list.push(p);
+  PINGS.placed++;
+  if (local && W.net && W.sendPing && W.sendPing({ k: p.kind, src: p.src, x: p.x, y: p.y, z: p.z })) PINGS.sent++;
+  mmT = 1;                                       // the minimap repaints on this frame's HUD tick, not up to 100 ms later
+  if (W.events) W.events.emit("pingPlaced", { owner: p.owner, kind: p.kind, src: p.src, x: p.x, y: p.y, z: p.z, own: !!local });
+  return p;
+}
+function clearPing(W, owner, src, local) {
+  const key = owner + ":" + (src === "m" ? "m" : "w");
+  const had = PINGS.list.length;
+  PINGS.list = PINGS.list.filter((q) => q.key !== key);
+  if (PINGS.list.length !== had) mmT = 1;
+  if (local && W.net && W.sendPing) W.sendPing({ k: "clr", src });
+}
+/** Can the local player ping right now? Alive, in a live match, on a mouse (touch has no binding), with no menu over the match. */
+function pingReady(W) {
+  if (touchOn || !R.hud || !W.player || !W.player.alive) return false;
+  if (W.phase !== "match" && W.phase !== "drop") return false;
+  if (W.paused || R.pause || R.settings || R.howto || R.post || R.career) return false;
+  return true;
+}
+/** What is the reticle on? An enemy body (kind "enemy", at the body), else the first solid point of the camera ray (kind "go"), else
+ *  nothing (sky past PING_FAR). Same geometry as weapons.js crosshairPoint: the ray through screen centre, actor capsules, then
+ *  K.aimRayDist against the terrain and the colliders from the ray's closest approach to the player's eye. */
+function pingTarget(W) {
+  const cam = W.camera || (W.kernel && W.kernel.camera);
+  const me = W.player;
+  if (!cam || !me || !W.map || !K || !K.aimRayDist) return null;
+  cam.getWorldDirection(_pdir);
+  const o = cam.position;
+  let best = PING_FAR, hitA = null;
+  const r = ((K.PLAYERK && K.PLAYERK.radius) || 0.45) + 0.5;     // a ping is more forgiving than a bullet
+  const denom = _pdir.x * _pdir.x + _pdir.z * _pdir.z;
+  const myTeam = me.teamId;
+  if (denom > 1e-6) for (const t of W.actors) {
+    if (!t.alive || t === me || (myTeam && t.teamId === myTeam)) continue;
+    const dx = t.pos.x - o.x, dz = t.pos.z - o.z;
+    const u = (dx * _pdir.x + dz * _pdir.z) / denom;
+    if (u < 1 || u > best) continue;
+    const px = o.x + _pdir.x * u, pz = o.z + _pdir.z * u, py = o.y + _pdir.y * u;
+    if ((px - t.pos.x) ** 2 + (pz - t.pos.z) ** 2 > r * r) continue;
+    const top = t.pos.y + (K.actorHeight ? K.actorHeight(t) : 1.8) + 0.3;
+    if (py < t.pos.y - 0.3 || py > top) continue;
+    best = u; hitA = t;
+  }
+  const ex = me.pos.x, ey = me.pos.y + 1.6, ez = me.pos.z;
+  const dEye = (ex - o.x) * _pdir.x + (ey - o.y) * _pdir.y + (ez - o.z) * _pdir.z;
+  const d0 = dEye < 0.05 ? 0.05 : dEye > 8 ? 8 : dEye;
+  const map = W.map;
+  const dist = K.aimRayDist(o.x, o.y, o.z, _pdir.x, _pdir.y, _pdir.z, d0, best,
+    (x, z) => map.heightAt(x, z), (x, z, rr, buf) => map.queryColliders(x, z, rr, buf), _pcols);
+  if (hitA && dist >= best - 1e-6) return { kind: "enemy", x: hitA.pos.x, y: hitA.pos.y + 1.0, z: hitA.pos.z, actor: hitA.id };
+  if (dist >= PING_FAR - 1e-3) return null;     // the sky: nothing to mark
+  return { kind: "go", x: o.x + _pdir.x * dist, y: o.y + _pdir.y * dist, z: o.z + _pdir.z * dist };
+}
+/** The ping key / middle mouse. One ping per second (the same rate the squad receives). */
+function placeWorldPing(W) {
+  if (!pingReady(W)) return false;
+  const nowMs = performance.now();
+  if (nowMs - PINGS.lastLocal < 1000) return false;
+  const tg = pingTarget(W);
+  if (!tg) { flashMsg("NOTHING TO PING"); return false; }
+  PINGS.lastLocal = nowMs;
+  return !!addPing(W, { owner: W.player.id, kind: tg.kind, src: "w", x: tg.x, y: tg.y, z: tg.z }, true);
+}
+/** Big map: a click at canvas-relative (u, v) in 0..1 drops this player's map pin there. */
+function placeMapPin(W, u, v) {
+  if (!W.map || !W.player) return false;
+  const S = W.map.size;
+  const x = (u - 0.5) * S, z = (v - 0.5) * S;
+  return !!addPing(W, { owner: W.player.id, kind: "pin", src: "m", x, y: W.map.heightAt ? W.map.heightAt(x, z) : 0, z }, true);
+}
+/** The input listeners (once per page): the Ping key through the same remap canon() player.js applies, and middle mouse. */
+let _pingInit = false;
+function initPingInput(W) {
+  if (_pingInit) return;
+  _pingInit = true;
+  const canon = (c) => {
+    const rm = (W.settings && W.settings.remap) || {};
+    if (rm[c]) return rm[c];
+    return c;
+  };
+  window.addEventListener("keydown", (ev) => {
+    if (ev.repeat || W.captureKey) return;
+    if (ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA")) return;
+    if (canon(ev.code) !== PING_KEY) return;
+    if (placeWorldPing(W)) ev.preventDefault();
+  });
+  window.addEventListener("mousedown", (ev) => {
+    if (ev.button !== 1) return;
+    if (!pingReady(W) || R.bigmap) return;
+    ev.preventDefault();                          // no autoscroll cursor
+    placeWorldPing(W);
+  }, true);
+  // a received squad ping (net.js, team-filtered + rate-limited there)
+  W.events.on("netPing", (d) => {
+    if (!d || !R.hud) return;
+    PINGS.recv++;
+    if (d.k === "clr") { clearPing(W, d.owner, d.src, false); return; }
+    addPing(W, { owner: d.owner, kind: d.k, src: d.src, x: d.x, y: d.y, z: d.z }, false);
+  });
+}
+/** Build the pip pool + the compass tick pool for a new HUD (showHUD). */
+function buildPings(L, compWrap) {
+  PINGS.list = [];
+  PINGS.lastLocal = -1e9;
+  R.pingEls = [];
+  R.pingLayer = h("div", { position: "absolute", inset: "0", pointerEvents: "none" }, null, L);
+  R.pingLayer.dataset.lc = "pings";
+  for (let i = 0; i < PING_POOL; i++) {
+    const el = h("div", null, null, R.pingLayer); el.className = "lc-ping";
+    const arr = h("div", null, null, el); arr.className = "arr";
+    const dia = h("div", null, null, el); dia.className = "dia";
+    const lbl = h("div", null, "", el); lbl.className = "lbl";
+    R.pingEls.push({ el, arr, dia, lbl, k: "", t: "", c: "", on: false, edge: null });
+  }
+  R.cmpPingEls = [];
+  const box = h("div", { position: "absolute", left: "0", top: "22px", width: "300px", height: "26px", pointerEvents: "none" }, null, compWrap);
+  box.dataset.lc = "compasspings";
+  for (let i = 0; i < PING_POOL; i++) {
+    const el = h("div", null, null, box); el.className = "lc-cping";
+    R.cmpPingEls.push({ el, c: "", on: false, edge: null, x: null });
+  }
+}
+/** Expire, project and paint every ping (update(), every frame; at most PING_POOL projections). `p` = the focus actor. */
+function stepPings(W, p, hdg) {
+  if (!R.pingEls) return;
+  // expiry: lifetime, and arrival for location pings / map pins
+  if (PINGS.list.length) {
+    const keep = [];
+    for (const q of PINGS.list) {
+      if (q.kind !== "pin" && W.t - q.born > PING_LIFE_S) continue;
+      if (q.kind !== "enemy" && W.t - q.born > 1) {
+        const ow = W.actorById && W.actorById.get(q.owner);
+        if (ow && ow.alive && Math.hypot(ow.pos.x - q.x, ow.pos.z - q.z) <= PING_ARRIVE_M) continue;
+      }
+      keep.push(q);
+    }
+    if (keep.length !== PINGS.list.length) { PINGS.list = keep; mmT = 1; }
+  }
+  const cam = W.camera || (W.kernel && W.kernel.camera);
+  viewSize(W);
+  const sw = _vw, sh = _vh;
+  let i = 0;
+  for (const q of PINGS.list) {
+    if (i >= R.pingEls.length) break;
+    const E = R.pingEls[i], C2 = R.cmpPingEls[i];
+    i++;
+    const col = pingColor(W, q);
+    const d = Math.round(Math.hypot(q.x - p.pos.x, q.y - p.pos.y, q.z - p.pos.z));
+    q.dist = d;
+    // world pip / edge arrow
+    let sx = sw / 2, sy = sh / 2, edge = false, ang = 0;
+    if (cam) {
+      _pv.set(q.x, q.y + (q.kind === "enemy" ? 1.1 : 0.4), q.z).project(cam);
+      const behind = _pv.z > 1;
+      let nx = _pv.x, ny = _pv.y;
+      if (behind) { nx = -nx; ny = -ny; }
+      const M = 0.86;                              // on screen = inside this NDC box
+      if (behind || nx < -M || nx > M || ny < -M || ny > M) {
+        // OFF SCREEN: an arrow on an ellipse round the reticle (like the sound ring), pointing the way to turn. The screen's own edge was the
+        // first try: in the corners that put the arrow on the minimap and the kill feed. rx/ry keep it inside the HUD's free middle band
+        // (under the quest card, over the vitals / weapon card) at 720p-1080p.
+        edge = true;
+        if (behind && Math.abs(nx) < 1e-3 && Math.abs(ny) < 1e-3) ny = -1;
+        ang = Math.atan2(nx * sw, ny * sh);         // screen-space direction, 0 = up
+        const rx = Math.min(sw * 0.36, sh * 0.62), ry = sh * 0.25;
+        sx = sw / 2 + Math.sin(ang) * rx; sy = sh / 2 - Math.cos(ang) * ry;
+      } else { sx = (nx * 0.5 + 0.5) * sw; sy = (-ny * 0.5 + 0.5) * sh; }
+    }
+    q.scr = { x: Math.round(sx), y: Math.round(sy), edge };
+    if (!E.on) { E.el.style.display = "block"; E.on = true; }
+    if (E.c !== col) { E.el.style.setProperty("--pc", col); E.c = col; }
+    const kc = q.kind;
+    if (E.k !== kc) { E.el.classList.toggle("enemy", kc === "enemy"); E.el.classList.toggle("pin", kc === "pin"); E.k = kc; }
+    const txt = (kc === "enemy" ? "ENEMY  " : "") + d + " m";
+    if (E.t !== txt) { E.lbl.textContent = txt; E.t = txt; }
+    if (E.edge !== edge) { E.el.classList.toggle("edge", edge); E.edge = edge; }
+    E.el.style.transform = "translate(-50%," + (edge ? "-50%" : "-10px") + ") translate(" + sx.toFixed(0) + "px," + sy.toFixed(0) + "px)";
+    if (edge) E.arr.style.transform = "rotate(" + (ang * 180 / Math.PI).toFixed(0) + "deg)";
+    // compass tick: the bearing in the compass's own convention (north = -Z, heading = -yaw), +-66 deg on the strip, clamped at its ends
+    const brg = (Math.atan2(q.x - p.pos.x, -(q.z - p.pos.z)) * 180 / Math.PI + 360) % 360;
+    let dl = brg - hdg; dl = ((dl + 540) % 360) - 180;
+    const cEdge = Math.abs(dl) > 66;
+    const cx = 150 + Math.max(-66, Math.min(66, dl)) * 2.2;
+    q.cmp = { x: Math.round(cx), deg: Math.round(brg), edge: cEdge };
+    if (!C2.on) { C2.el.style.display = "block"; C2.on = true; }
+    if (C2.c !== col) { C2.el.style.setProperty("--pc", col); C2.c = col; }
+    if (C2.edge !== cEdge) { C2.el.classList.toggle("edge", cEdge); C2.edge = cEdge; }
+    if (C2.x !== q.cmp.x) { C2.el.style.left = q.cmp.x + "px"; C2.x = q.cmp.x; }
+  }
+  for (; i < R.pingEls.length; i++) {
+    const E = R.pingEls[i], C2 = R.cmpPingEls[i];
+    if (E.on) { E.el.style.display = "none"; E.on = false; }
+    if (C2.on) { C2.el.style.display = "none"; C2.on = false; }
+  }
+}
+/** Minimap / big map diamonds (drawMinimap). */
+function drawPings(W, ctx, size, big, toPx) {
+  let n = 0;
+  for (const q of PINGS.list) {
+    const x = toPx(q.x), z = toPx(q.z), r = big ? (q.kind === "pin" ? 9 : 7) : (q.kind === "pin" ? 5.5 : 4.5);
+    ctx.fillStyle = pingColor(W, q);
+    ctx.beginPath(); ctx.moveTo(x, z - r); ctx.lineTo(x + r, z); ctx.lineTo(x, z + r); ctx.lineTo(x - r, z); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(6,10,18,0.9)"; ctx.lineWidth = big ? 2 : 1.3; ctx.stroke();
+    if (q.kind === "pin") { ctx.beginPath(); ctx.arc(x, z, r + (big ? 4 : 2.5), 0, Math.PI * 2); ctx.strokeStyle = pingColor(W, q); ctx.lineWidth = big ? 1.6 : 1; ctx.stroke(); }
+    n++;
+  }
+  if (!big) PINGS.mmDrawn = n;
 }
 
 // ═══ minimap ═════════════════════════════════════════════════════════════════
@@ -3907,6 +4281,8 @@ function drawMinimap(W, ctx, size, big) {
       if (big) { ctx.fillStyle = "#dfeaff"; ctx.fillText(a.name, ax, az - br2 - 2); }
     }
   }
+  // LC-07 pings (own, squad's, map pins), under the player arrow
+  if (PINGS.list.length || !big) drawPings(W, ctx, size, big, toPx);
   // player arrow
   const p = W.player;
   if (p) {
@@ -3923,6 +4299,19 @@ function drawMinimap(W, ctx, size, big) {
 
 // ═══ events, pause, death, stats, settings ══════════════════════════════════
 function wireEvents(W) {
+  // LC-19: W.stats (ffg_royale3d.js) declared heads / chests / heals / stormDmg / legendaries / longestKillM for objectives and read-outs, and
+  // nothing ever incremented them. Each is one line on an event that already fires for the local player.
+  const st = () => W.stats;
+  W.events.on("hitMarker", (owner, target, dmg, isHead) => { if (isHead && owner && owner === W.player && st()) st().heads = (st().heads || 0) + 1; });
+  W.events.on("chestOpened", (a) => { if (a && a === W.player && st()) st().chests = (st().chests || 0) + 1; });
+  W.events.on("healed", (a) => { if (a && a === W.player && st()) st().heals = (st().heals || 0) + 1; });
+  W.events.on("stormTick", (dmg) => { if (st() && +dmg > 0) st().stormDmg = Math.round(((st().stormDmg || 0) + +dmg) * 10) / 10; });
+  W.events.on("pickedUp", (a, data) => { if (a && a === W.player && data && data.kind === "weapon" && (data.rarity | 0) >= 4 && st()) st().legendaries = (st().legendaries || 0) + 1; });
+  W.events.on("actorDied", (victim, killerId) => {
+    if (!st() || !W.player || !victim || victim === W.player || killerId !== W.player.id) return;
+    const d = Math.round(Math.hypot(victim.pos.x - W.player.pos.x, victim.pos.y - W.player.pos.y, victim.pos.z - W.player.pos.z));
+    if (d > (st().longestKillM || 0)) st().longestKillM = d;
+  });
   W.events.on("hitMarker", (owner, target, dmg, isHead) => {
     if (owner !== W.player || !R.hitmark || !R.hitTicks) return;
     // KILL LATCH: weapons.js emits actorDied for the killing round BEFORE this
@@ -3975,6 +4364,20 @@ function wireEvents(W) {
     const att = W.actorById.get(info.attackerId);
     if (att) addIndicator(W, att.pos.x, att.pos.z, "damage");
   });
+  // LC-81 DAMAGE LOG: every hit the local player takes (attacker, weapon, amount, headshot) and every storm tick, on the match clock, so the
+  // death banner can say who did what in the last 10 s - it only ever named the killer.
+  W.events.on("actorHurt", (victim, info) => {
+    if (!W.player || victim !== W.player || !info || !(info.dmg > 0)) return;
+    const L2 = R.dmgLog || (R.dmgLog = []);
+    L2.push({ t: W.t, src: info.attackerId || "world", w: info.weaponId || null, dmg: info.dmg, head: !!info.isHead });
+    if (L2.length > 96) L2.splice(0, L2.length - 96);
+  });
+  W.events.on("stormTick", (dmg) => {
+    if (!W.player || !(+dmg > 0)) return;
+    const L2 = R.dmgLog || (R.dmgLog = []);
+    L2.push({ t: W.t, src: "storm", w: "storm", dmg: +dmg, head: false });
+    if (L2.length > 96) L2.splice(0, L2.length - 96);
+  });
   W.events.on("actorDied", (victim, killerId, weaponId) => {
     // The killing blow looked identical to chipping someone for 13 — the same
     // white marker. Kill style = red ticks + ring, held, and LATCHED so the
@@ -4022,7 +4425,7 @@ function wireEvents(W) {
       const rar = RAR[data.rarity || 0] || "";
       pickupMsg("PICKED UP  " + rar.toUpperCase() + " " + String(data.id).toUpperCase());
     } else if (data.kind === "consumable") {
-      pickupMsg("PICKED UP  " + String(data.id).replace(/_/g, " ").toUpperCase() + (data.count > 1 ? " x" + data.count : ""));
+      pickupMsg("PICKED UP  " + (CON_NAME[data.id] || String(data.id).replace(/_/g, " ").toUpperCase()) + (data.count > 1 ? " x" + data.count : ""));
     } else if (data.kind === "ammo") {
       pickupMsg("PICKED UP  " + String(data.id).toUpperCase() + " AMMO");
     }
@@ -4031,7 +4434,18 @@ function wireEvents(W) {
   // local continuation — the announcement is the difference between "the game
   // broke" and "the host left, keep playing"
   W.events.on("hostLost", (converted) => {
-    announce("HOST LEFT", "MATCH CONTINUES OFFLINE — " + converted + " PLAYERS NOW BOT-CONTROLLED", "#ffb36a", 4200, ANN_PRIO.deploy);
+    const sub = "MATCH CONTINUES OFFLINE — " + converted + " PLAYERS NOW BOT-CONTROLLED";
+    // A DEAD player (spectating) never saw this: announce() drops everything below victory priority while the death banner owns the band
+    // (parity audit: guest spectating, host left, no banner). The news still matters to them - the match they watch just changed hands - so it
+    // goes on the line under the death banner (flashMsg, held longer) and into the chat log, where it stays readable.
+    if (R.deathBox) {
+      flashMsg("HOST LEFT — MATCH CONTINUES OFFLINE", 6000);
+      if (W.pushChat) W.pushChat("SQUAD", "The host left. " + sub.charAt(0) + sub.slice(1).toLowerCase() + ".", false);
+      R._hostLeftShown = "death";
+    } else {
+      announce("HOST LEFT", sub, "#ffb36a", 4200, ANN_PRIO.elim);
+      R._hostLeftShown = "band";
+    }
   });
   W.events.on("stormWarning", () => flashMsg("STORM SHRINKS IN 10 SECONDS"));
   W.events.on("stormClosing", () => flashMsg("THE STORM IS CLOSING"));
@@ -4120,12 +4534,12 @@ function expireFeed(now) {
   }
 }
 
-function flashMsg(text) {
+function flashMsg(text, ms) {
   if (!R.stormMsg) return;
   R.stormMsg.textContent = text;
   R.stormMsg.style.opacity = "1";
   clearTimeout(R._stormMsgT);
-  R._stormMsgT = setTimeout(() => { if (R.stormMsg) R.stormMsg.style.opacity = "0"; }, 2600);
+  R._stormMsgT = setTimeout(() => { if (R.stormMsg) R.stormMsg.style.opacity = "0"; }, ms || 2600);
 }
 function pickupMsg(text) {
   if (!R.pickupMsg) return;
@@ -4214,13 +4628,34 @@ function toggleBigMap(W) {
     head.textContent = bits.join("   ·   ");
   };
   paintHead();
-  h("div", { position: "absolute", bottom: "26px", fontSize: "13px", opacity: "0.7" }, "M / ESC to close", L).className = "kbd-hint";
+  h("div", { position: "absolute", bottom: "26px", fontSize: "13px", opacity: "0.7" }, "CLICK THE MAP TO DROP A PIN  ·  RIGHT-CLICK TO CLEAR IT  ·  M / ESC TO CLOSE", L).className = "kbd-hint";
   h("div", { position: "absolute", bottom: "26px", fontSize: "13px", opacity: "0.8" }, "TAP ANYWHERE TO CLOSE", L).className = "lc-touch-only";
   // A touch tap that opened the map is followed by the browser's synthesized
   // click on whatever is under the finger — now this layer. hudTapUp cancels
   // that click at its touchend; this guard is the backstop.
   const openedAt = performance.now();
-  L.onclick = () => { if (performance.now() - openedAt > 250) toggleBigMap(W); };
+  // LC-07 MAP PIN (mouse only; touch keeps "tap anywhere to close"). With the pointer locked every click went to the game canvas behind the
+  // map, so the mouse is released while the map is up (releaseCursor also stops the click that re-grabs it from firing a shot). A click ON
+  // the map drops this player's pin there and the map stays open; a right-click on it clears the pin; a click beside the map closes it.
+  if (!touchOn) {
+    releaseCursor(W);
+    cv.style.cursor = "crosshair";
+    cv.dataset.lc = "bigmapcanvas";
+    cv.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 && e.button !== 2) return;
+      e.stopPropagation(); e.preventDefault();
+      if (!W.player || !W.player.alive || (W.phase !== "match" && W.phase !== "drop")) return;
+      const rc = cv.getBoundingClientRect();
+      if (e.button === 0) placeMapPin(W, (e.clientX - rc.left) / rc.width, (e.clientY - rc.top) / rc.height);
+      else clearPing(W, W.player.id, "m", true);
+      drawMinimap(W, cv.getContext("2d"), size, true);
+    });
+    cv.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  L.onclick = (e) => {
+    if (!touchOn && e && e.target === cv) return;              // a pin click, handled on mousedown above
+    if (performance.now() - openedAt > 250) toggleBigMap(W);
+  };
   R._bigIv = setInterval(() => {
     if (R.bigmap) { drawMinimap(W, cv.getContext("2d"), size, true); paintHead(); }
     else clearInterval(R._bigIv);
@@ -4260,10 +4695,26 @@ function togglePause(W) {
   const st = h("button", Object.assign({}, BTN, { background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "SETTINGS", box);
   st.onclick = () => showSettings(W);
   const quit = h("button", Object.assign({}, BTN, { background: "rgba(255,80,80,0.2)", color: "#ff9f9f" }), "QUIT TO MENU", box);
-  quit.onclick = () => { R.pause.remove(); R.pause = null; if (!online) W.paused = false; W.endMatch(false); };
+  quit.dataset.lc = "quit";
+  // LC-44: QUIT TO MENU ended the match on ONE click (no confirmation) - one stray click mid-fight and the match was gone. It now asks first,
+  // in the same card: LEAVE MATCH ends it exactly as before, STAY goes back to the pause card. (Leaving while alive counts as an elimination:
+  // the placement is recorded by the orchestrator's endMatch.)
+  quit.onclick = () => {
+    clear(box);
+    h("div", { fontSize: "22px", fontWeight: "900", letterSpacing: "2px" }, "LEAVE THE MATCH?", box);
+    const alive = !!(W.player && W.player.alive) && W.phase !== "over";
+    h("div", { fontSize: "13px", opacity: "0.8", lineHeight: "1.5", maxWidth: "300px", alignSelf: "center", fontFamily: "Rajdhani, " + FONT },
+      alive ? "You are still in it. Leaving now counts as being eliminated." : "You will go back to the main menu.", box);
+    const yes = h("button", Object.assign({}, BTN, { background: "rgba(255,80,80,0.32)", color: "#ffd0d0", border: "1px solid rgba(255,120,120,0.5)" }), "LEAVE MATCH", box);
+    yes.dataset.lc = "quityes";
+    yes.onclick = () => { if (R.pause) { R.pause.remove(); R.pause = null; } if (!online) W.paused = false; W.endMatch(false); };
+    const no = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "STAY", box);
+    no.dataset.lc = "quitno";
+    no.onclick = () => { togglePause(W); togglePause(W); };     // close and reopen: the pause card as it was
+  };
   h("div", { fontSize: FS(11), opacity: "0.6" },
     online ? "ONLINE — the match keeps running while this is open. Stay sharp."
-           : "Note: the match keeps running in a real BR — here it pauses (single-player).", box);
+           : "Single-player: the match is paused while this is open.", box);
 }
 
 /** P4.3: the death card is a banner over the LIVE view now. It takes the announcement
@@ -4345,6 +4796,49 @@ function showDeath(W, killerId, weaponId) {
       if (killer.hp <= 25 && dealt > 0) { lv.style.color = "#ffd166"; h("span", null, "SO CLOSE", p2).style.color = "#ffd166"; }
     }
   }
+  // LC-81: row 3 - EVERY damage source of the last 10 s with its total (Apex's death recap; ours named the killer only). Sorted by damage;
+  // at most three pills, the rest folded into "+N more".
+  const rec = deathRecap(W, 10);
+  if (rec.length) {
+    const d3 = h("div", null, null, box); d3.className = "lc-d2"; d3.dataset.lc = "deathrecap";
+    const p3 = h("div", null, null, d3); p3.className = "lc-dp rc";
+    h("span", null, "LAST 10 S", p3).className = "lab";
+    rec.slice(0, 3).forEach((r, i) => {
+      if (i) h("span", null, "·", p3).className = "lab";
+      const nm = h("b", null, r.name, p3);
+      if (r.src === W.player.id) nm.style.color = "#ffb36a";
+      h("span", null, r.dmg + (r.what ? " " + r.what : ""), p3);
+      if (r.heads) h("span", null, r.heads + " HS", p3).className = "hs";
+    });
+    if (rec.length > 3) h("span", null, "+" + (rec.length - 3) + " more", p3).className = "lab";
+    R._deathRecap = rec;
+  } else R._deathRecap = [];
+}
+/** LC-81: the damage the local player took in the last `win` seconds of the match clock, per source: [{ src, name, dmg, hits, heads, what }],
+ *  biggest first. Sources: an attacker id (its name, its weapon if it used one), "storm", or "world" (a fall or a blast with no owner). */
+function deathRecap(W, win) {
+  const L2 = R.dmgLog || [], t1 = W.t, by = new Map();
+  for (const e of L2) {
+    if (t1 - e.t > win) continue;
+    let r = by.get(e.src);
+    if (!r) {
+      const a = e.src !== "storm" && e.src !== "world" && W.actorById ? W.actorById.get(e.src) : null;
+      r = { src: e.src, name: e.src === "storm" ? "STORM" : a ? a.name : e.src === "world" ? "FALL / BLAST" : "UNKNOWN", dmg: 0, hits: 0, heads: 0, weps: new Map() };
+      by.set(e.src, r);
+    }
+    r.dmg += e.dmg; r.hits++; if (e.head) r.heads++;
+    if (e.w && e.w !== "storm") r.weps.set(e.w, (r.weps.get(e.w) || 0) + 1);
+  }
+  const out = [];
+  for (const r of by.values()) {
+    let what = "";
+    if (r.weps.size) {
+      const [w, n] = [...r.weps.entries()].sort((a, b) => b[1] - a[1])[0];
+      what = "(" + (K && K.weaponName && K.WEAPONS[w] ? K.weaponName(w) : String(w).toUpperCase()) + (r.hits > 1 ? " ×" + r.hits : "") + ")";
+    } else if (r.hits > 1 && r.src !== "storm") what = "(×" + r.hits + ")";
+    out.push({ src: r.src, name: r.name, dmg: Math.round(r.dmg), hits: r.hits, heads: r.heads, what });
+  }
+  return out.sort((a, b) => b.dmg - a.dmg);
 }
 
 /** The winning kill's banner + feed used to be destroyed in the frame they were
@@ -4607,7 +5101,7 @@ export function showPostMatch(W, res) {
     }
     if (c) {
       const careerEl = h("div", { fontSize: "12.5px", opacity: "0.8", marginTop: "14px", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT },
-        "CAREER · " + c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills · top-10s " + c.top10s + " · best #" + (c.bestPlacement || "—")
+        "CAREER · " + c.matches + (c.matches === 1 ? " match · " : " matches · ") + c.wins + (c.wins === 1 ? " win · " : " wins · ") + c.kills + (c.kills === 1 ? " kill" : " kills") + " · top-10s " + c.top10s + " · best #" + (c.bestPlacement || "—")
         + " · " + Math.round(c.damage / 1000) + "k dmg · " + (c.timeAliveS / 3600).toFixed(1) + "h", box);
       careerEl.dataset.lc = "postcareer";
     }
@@ -4663,6 +5157,11 @@ const ACTIONS = [
   ["Jump", "Space"], ["Sprint", "ShiftLeft"], ["Crouch", "KeyC"], ["Loot / Interact", "KeyE"],
   ["Emote — Dance", "KeyB"], ["Emote — Cheer", "KeyN"],
   ["Reload", "KeyR"], ["Map", "KeyM"],
+  // LC-07: "KeyZ" is the Ping action's canonical code (hud.js PING_KEY); middle mouse always pings as well
+  ["Ping", "KeyZ"],
+  // LC-82: Q was hardcoded (player.js reads the canonical KeyQ) and missing here, so "every key can be rebound" was false; remap is applied
+  // before player.js sees a key, so listing it makes it rebindable with no player.js change
+  ["Drop weapon", "KeyQ"],
   ["Weapon 1", "Digit1"], ["Weapon 2", "Digit2"], ["Weapon 3", "Digit3"],
   ["Weapon 4", "Digit4"], ["Weapon 5", "Digit5"],
 ];   // fire/ADS are mouse buttons — not keyboard-rebindable here
@@ -4701,7 +5200,8 @@ export function showHowToPlay(W) {
   }, null, box);
   body.dataset.lc = "howtobody";
   h("div", { fontSize: "13px", opacity: "0.8", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
-    "50 drop in, one walks out. Pick a landing zone, loot a weapon, stay inside the circle.", body);
+    // LC-82: there is no landing-zone picker (owner 2026-09-15: drop straight in); you steer the glide instead
+    "50 drop in, one walks out. Steer your drop, loot a weapon, stay inside the circle.", body);
   const mkGrid = (cls) => {
     const g = h("div", { display: "grid", gridTemplateColumns: "auto 1fr", gap: "5px 16px", marginTop: "6px", fontFamily: "Rajdhani, " + FONT, fontSize: "13px" }, null, body);
     g.className = cls;
@@ -4729,7 +5229,7 @@ export function showHowToPlay(W) {
     "Play with the phone on its side. Aim assist steadies your aim while you fire (Settings turns it off). The reticle grows when your shots will scatter and tightens when they will not — standing still helps.", body);
   tn.className = "lc-touch-only";
   // KEYBOARD section. Read the LIVE bindings. This card closes with "Every key
-  // here can be rebound in Settings" while printing hardcoded defaults, so the
+  // here can be rebound" (Settings) while printing hardcoded defaults, so the
   // moment anyone took it up on that, the only onboarding screen in the game
   // taught the wrong keys.
   const kb = mkGrid("kbd-hint");
@@ -4745,14 +5245,16 @@ export function showHowToPlay(W) {
   kb(kx("KeyE"), "Loot — hold on a chest to open it");
   kb(kx("KeyR"), "Reload");
   kb(kx("Digit1") + " – " + kx("Digit5"), "Weapon and item slots");
-  kb("Q", "Drop your weapon — hand a gun to a squadmate (keeps its magazine)");
+  kb(kx("KeyQ"), "Drop your weapon — hand a gun to a squadmate (keeps its magazine)");
+  kb("MMB / " + kx(PING_KEY), "Ping — mark a spot, or an enemy, for your squad · on the map (" + kx("KeyM") + ") click to drop a pin");
   kb(kx("KeyM"), "Map");
   kb(kx("KeyB") + " / " + kx("KeyN"), "Emote — dance · cheer");
   kb(kx("Space") + " at a ledge", "Climb — jump toward a low wall or rooftop edge and you'll pull up over it");
   kb(kx("ShiftLeft") + " scoped", "Hold breath — steadies the sniper sway; watch your lungs, running dry leaves you shaky");
   kb("ESC", "Pause and settings");
   h("div", { fontSize: "12px", opacity: "0.7", marginTop: "6px", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
-    "The reticle grows when your shots will scatter and tightens when they will not — standing still and crouching both help. Every key here can be rebound in Settings.", body).className = "kbd-hint";
+    // LC-82: ESC and the mouse buttons are fixed, so "every key here" was not true; Q (drop) is in the keybind table now
+    "The reticle grows when your shots will scatter and tightens when they will not — standing still and crouching both help. Every key above except ESC and the mouse buttons can be rebound in Settings.", body).className = "kbd-hint";
   const go = h("button", Object.assign({}, BTN, {
     fontFamily: "Orbitron, " + FONT_DISPLAY, background: "linear-gradient(180deg,#6ec4ff,#2f7fd6)",
     color: "#fff", fontSize: "15px", padding: "12px 34px", letterSpacing: "2px", marginTop: "2px", alignSelf: "center",
@@ -4796,7 +5298,8 @@ export function showCareer(W) {
   };
   const m = c.matches || 0;
   if (!m) {
-    h("div", { fontSize: "13px", opacity: "0.75", fontFamily: "Rajdhani, " + FONT }, "No ranked matches yet — practice does not count toward the career record.", box);
+    // LC-82: there is no ranked mode - this said "ranked"
+    h("div", { fontSize: "13px", opacity: "0.75", fontFamily: "Rajdhani, " + FONT }, "No matches yet — practice does not count toward the career record.", box);
   } else {
     row("Matches", m);
     row("Wins", c.wins + "  (" + (100 * c.wins / m).toFixed(1) + "%)");
