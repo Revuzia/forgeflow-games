@@ -1372,5 +1372,12 @@
   "settings.unit.percent": "{n}%",
   "settings.unit.x": "×{n}",
   "settings.unit.fps": "{n} fps",
-  "settings.unit.px": "{n} px"
+  "settings.unit.px": "{n} px",
+  "net.online": "Online · {n}",
+  "net.connecting": "Connecting…",
+  "net.refused": "Update needed",
+  "net.offline": "Offline · vs bots",
+  "net.online_tip": "Matchmade queues play online with other players; bots fill the empty seats.",
+  "net.offline_tip": "The game server is not reachable: queues play against bots. It reconnects on its own.",
+  "queue.online": "Online · {n} searching this queue · bots fill the empty seats"
 }

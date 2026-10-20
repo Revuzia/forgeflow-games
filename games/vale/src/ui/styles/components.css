@@ -283,3 +283,12 @@
 .sicon--ability { background: linear-gradient(150deg, color-mix(in srgb, var(--pal-a, #2C333F) 30%, var(--ink-1)), var(--ink-1)); }
 .sicon__key { position: absolute; right: 2px; bottom: 2px; font-family: var(--font-numeric); font-weight: 700; font-size: max(12px, calc(11px * var(--k))); line-height: 1; color: var(--text-1);
   background: rgba(11, 13, 17, 0.85); padding: 2px 3px; border-radius: 2px; }
+
+/* game-server link pill (top bar) */
+.netpill { display: inline-flex; align-items: center; gap: var(--u); padding: calc(0.5 * var(--u)) calc(1.25 * var(--u)); border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-2); margin-right: calc(2 * var(--u)); white-space: nowrap; }
+.netpill__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+.netpill--online { color: var(--text-1); }
+.netpill--online .netpill__dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.netpill--connecting .netpill__dot { background: var(--warn); }
+.netpill--refused .netpill__dot { background: var(--danger); }
+.queue__net { color: var(--ok); }

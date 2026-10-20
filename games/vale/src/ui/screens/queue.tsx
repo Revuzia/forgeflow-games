@@ -61,6 +61,9 @@ export function QueueScreen(): JSX.Element {
             : q?.estimate !== undefined ? cv.t('queue.searching', 'Searching · {elapsed} · usually under {estimate}', { elapsed: fmtWait(elapsed), estimate: fmtWait(q.estimate) })
               : cv.t('queue.searching_short', 'Searching · {elapsed}', { elapsed: fmtWait(elapsed) })}
         </p>
+        {state.online.value?.status === 'online' && !idle ? (
+          <p class="t-body-s queue__net stg">{cv.t('queue.online', 'Online · {n} searching this queue · bots fill the empty seats', { n: state.online.value.searching[q?.queue ?? ''] ?? 1 })}</p>
+        ) : null}
         {queue ? <p class="t-body-s muted queue__desc stg">{queue.desc}</p> : null}
       </div>
       {found && q ? <ReadyCheck /> : null}

@@ -10,7 +10,7 @@ import { render, type ComponentType, type JSX } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { effect, signal } from '@preact/signals';
 import type { CatalogT } from '../contracts/catalog.ts';
-import type { MatchClient, Session } from '../contracts/session.ts';
+import type { MatchClient, OnlineInfo, Session } from '../contracts/session.ts';
 import { AppContext, handleEsc, Overlay, useApp, type AppCtx } from './app_ctx.ts';
 import { musicId, recordingPort, UiSound, type AudioPort } from './audio_port.ts';
 import { CatalogView } from './catalog_view.ts';
@@ -297,6 +297,7 @@ function TopBar(p: { def: ScreenDef; route: Route }): JSX.Element {
         </nav>
       )}
       <span class="bar__spacer" />
+      {state.online.value ? <OnlinePill info={state.online.value} /> : null}
       {!flow && cur ? (
         <div class="bar__wallet" title={cur.desc}>
           <Currency id={cur.id} amount={profile.wallet[cur.id] ?? 0} size="m" />
@@ -341,6 +342,18 @@ function ScreenHost(): JSX.Element {
       ))}
     </>
   );
+}
+
+/** the game-server link: online (players on now), connecting, or offline (queues play against bots) */
+function OnlinePill(p: { info: OnlineInfo }): JSX.Element {
+  const { cv } = useApp();
+  const i = p.info;
+  const label = i.status === 'online' ? cv.t('net.online', 'Online · {n}', { n: i.players })
+    : i.status === 'connecting' ? cv.t('net.connecting', 'Connecting…')
+      : i.status === 'refused' ? cv.t('net.refused', 'Update needed') : cv.t('net.offline', 'Offline · vs bots');
+  const tip = i.status === 'online' ? cv.t('net.online_tip', 'Matchmade queues play online with other players; bots fill the empty seats.')
+    : i.status === 'refused' ? (i.reason ?? '') : cv.t('net.offline_tip', 'The game server is not reachable: queues play against bots. It reconnects on its own.');
+  return <span class={`netpill netpill--${i.status} t-label`} title={tip} role="status"><span class="netpill__dot" aria-hidden="true" />{label}</span>;
 }
 
 const WIPE_SWAP_MS = Math.round(TOKENS.motion.signature.ms / 2);

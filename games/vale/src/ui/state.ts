@@ -4,7 +4,7 @@
 
 import { batch, computed, signal } from '@preact/signals';
 import type {
-  DraftState, GrantSummary, MatchClient, PartyMember, Profile, QueueRequest, Session, SessionEvent, Settings,
+  DraftState, GrantSummary, MatchClient, OnlineInfo, PartyMember, Profile, QueueRequest, Session, SessionEvent, Settings,
 } from '../contracts/session.ts';
 import type { MatchResult, MatchSetup, PlayerId } from '../contracts/sim.ts';
 import type { CatalogView } from './catalog_view.ts';
@@ -63,6 +63,8 @@ export class AppState {
   readonly toasts = signal<Toast[]>([]);
   readonly prefs = signal<UiPrefs>(loadPrefs());
   readonly lastError = signal<string | null>(null);
+  /** the game-server link (null: this build plays offline) */
+  readonly online = signal<OnlineInfo | null>(null);
   /** true from accept until the draft opens */
   readonly accepted = signal(false);
   /** the last re-queue lockout the session gave (seconds): the next is double, capped at 60 (CONTRACT §7) */
@@ -84,7 +86,12 @@ export class AppState {
     this.profile.value = o.session.profile();
     this.party.value = o.session.party();
     this.off = o.session.on((e) => this.onEvent(e));
-    setInterval(() => { this.now.value = performance.now(); }, 500);
+    setInterval(() => {
+      this.now.value = performance.now();
+      const o = this.session.online?.() ?? null;
+      const cur = this.online.peek();
+      if (JSON.stringify(o) !== JSON.stringify(cur)) this.online.value = o;
+    }, 500);
   }
 
   /** seconds left on the re-queue lockout */
