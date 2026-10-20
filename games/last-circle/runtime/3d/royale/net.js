@@ -219,9 +219,11 @@ export class SquadHandshake {
     const left = [], over = [], gone = [];
     for (const pid of Object.keys(names).sort()) {
       const gv = this.gvOf(pid), nm = names[pid] || "Friend";
-      // LC-11: a peer that left the room before START gets NO slot (it is not "left out" - nobody is there to tell)
-      if (!this.isPresent(pid, nowMs)) { gone.push({ peerId: pid, name: nm }); continue; }
+      // a peer on another world version is LEFT OUT and named (the host is told why), whether or not it is still in the room - a refusing
+      // guest leaves the room by itself a moment after it refuses
       if (gv !== this.gv) { left.push({ peerId: pid, name: nm, gv }); continue; }
+      // LC-11: a same-version peer that left the room before START gets NO slot (it is "gone", not left out: nobody is there to tell)
+      if (!this.isPresent(pid, nowMs)) { gone.push({ peerId: pid, name: nm }); continue; }
       if (roster.length - 1 >= maxGuests) { over.push({ peerId: pid, name: nm }); continue; }
       roster.push({ peerId: pid, slot: roster.length, name: nm });
     }
@@ -669,9 +671,10 @@ function openLobby(W, sel) {
     // any client reproduces the exact roster the host will build. No guessing.
     // A peer on another WORLD VERSION never gets a slot (SquadHandshake.planStart), so it is shown as such and does not count towards the
     // slot numbers or the room cap.
-    // LC-11: only peers still in the room (a friend who closed the tab is no longer listed, and gets no slot at START)
+    // LC-11: only peers still in the room (a friend who closed the tab is no longer listed, and gets no slot at START); a peer on another
+    // world version stays listed with its badge after it leaves, so the host can still read why it is not in the match
     const nowP = performance.now();
-    const all = Object.keys(S.peers).filter((pid) => S.hs.isPresent(pid, nowP)).concat([S.net.id]).sort();
+    const all = Object.keys(S.peers).filter((pid) => S.hs.isPresent(pid, nowP) || S.hs.gvOf(pid) !== S.hs.gv).concat([S.net.id]).sort();
     const badge = (s) => `<span class="lcn-badge">${s}</span>`;
     let h = "";
     let i = -1;                  // index among the peers that can take a slot (self included)

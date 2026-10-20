@@ -231,6 +231,13 @@ function suiteP1D(M, SIM, count) {
     h2.onPresence(["a_host", "b_f"]); h2.onPresence(["a_host"]); h2.onPresence(["a_host", "b_f"]);
     row(h2.isPresent("b_f", 99999) === true, "presence: a peer that drops out and comes back is present again");
     row(h2.isPresent("a_host", 0) === true, "presence: this page is always present to itself");
+    // a guest on ANOTHER version that refused and left before START is still named as left out (the host reads why), never rostered
+    const h3 = mk("a_host", 3, true);
+    h3.onHello("b_old", { name: "Old", gv: 2 }, 0);
+    h3.onPresence(["a_host", "b_old"]); h3.onPresence(["a_host"]);
+    const p3 = h3.planStart({ b_old: "Old" }, 3, 99999);
+    row(p3.roster.length === 1 && p3.left.length === 1 && p3.left[0].peerId === "b_old" && p3.gone.length === 0,
+      "presence: a version-mismatched guest that already left is still LEFT OUT by name (squadguard's notice), not silently gone", p3);
   }
   // ── LC-11 sender binding (verify/lc11 forgeries) ────────────────────────────────────────────────────────────────────────────────────────
   {
