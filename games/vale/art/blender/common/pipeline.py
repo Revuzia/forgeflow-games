@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 
 import bmesh
+import numpy as np
 import bpy
 
 from . import anim, bake, export, materials, mesh, rig, scene
@@ -153,6 +154,43 @@ def prepare_lows(ctx: Context, parts: list[Part]) -> tuple:
             stats[f"validate_{o.name}"] = f"{f0}->{len(o.data.polygons)}"
     src.hide_render = False
     return body, accent, highs, src, stats
+
+
+def split_forms(body, parts, col) -> list:
+    """Faces of form-tagged parts (Part.form) move into their own objects named `form_<form>`, after the
+    bake: same UV atlas, materials, skin weights and armature, so the renderer can toggle them by the
+    fighter's form (EntityView.form, src/render/actors.ts)."""
+    groups = {}
+    for i, p in enumerate(parts):
+        f = getattr(p, "form", None)
+        if f:
+            groups.setdefault(f, set()).add(i)
+    if not groups:
+        return []
+    me = body.data
+    attr = me.attributes.get("vale_part")
+    if attr is None:
+        return []
+    pv = np.empty(len(me.vertices), dtype=np.int64)
+    attr.data.foreach_get("value", pv)
+    out = []
+    for f, idx in groups.items():
+        new = mesh.duplicate(body, f"form_{f}", col)
+        bm = mesh.obj_bm(new)
+        dead = [face for face in bm.faces if int(pv[face.verts[0].index]) not in idx]
+        bmesh.ops.delete(bm, geom=dead, context="FACES")
+        bm.to_mesh(new.data)
+        bm.free()
+        new.data.update()
+        out.append(new)
+    every = set().union(*groups.values())
+    bm = mesh.obj_bm(body)
+    dead = [face for face in bm.faces if int(pv[face.verts[0].index]) in every]
+    bmesh.ops.delete(bm, geom=dead, context="FACES")
+    bm.to_mesh(body.data)
+    bm.free()
+    body.data.update()
+    return out
 
 
 def split_kept(obj, name: str, col):
@@ -295,7 +333,10 @@ def build(spec, args, skin=None) -> dict:
     arm["vale_fighter"] = spec.ID
     arm["vale_height"] = float(spec.PROPORTIONS["height"])
     arm["vale_run_ref_speed"] = float(spec.MOTION["run_ref_speed"])
-    objs = [arm, body] + ([accent] if accent else [])
+    forms = split_forms(body, parts, ctx.col)
+    if forms:
+        report["forms"] = [o.name for o in forms]
+    objs = [arm, body] + ([accent] if accent else []) + forms
     report["tris"] = sum(mesh.tri_count(o, evaluated=False) for o in objs if o.type == "MESH")
     # FighterArt.height places the health bar: the measured top of the rest-pose mesh (crests,
     # horns and hats included), not the rig's crown height

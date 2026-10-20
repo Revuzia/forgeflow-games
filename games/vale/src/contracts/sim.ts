@@ -100,6 +100,9 @@ export interface EntityView {
   readonly vx: number; readonly vy: number;
   readonly vfx?: string;
   readonly skin?: string;             // fighters only (echo of SeatSetup.skin)
+  /** CHANGED(SIM), additive: the fighter's current form (passive.forms id) or null; the renderer shows the
+   *  model's `form_<id>` nodes in that form and its `form_base` nodes otherwise */
+  readonly form?: string | null;
   readonly height: number;            // airborne / dash arc height in metres (0 on ground)
 }
 

@@ -311,6 +311,15 @@ export class Actor {
       });
       m.material = Array.isArray(m.material) ? next : next[0];
     });
+    // form-swapped parts (CONTRACT §12): nodes named form_<id> show in that form, form_base when in none
+    this.formNodes = new Map();
+    model.traverse((o) => {
+      const m = /^form_([a-z0-9]+(?:_[a-z0-9]+)*?)(?:[._]\d+)?$/i.exec(o.name);
+      if (!m) return;
+      const k = m[1].toLowerCase();
+      (this.formNodes.get(k) ?? this.formNodes.set(k, []).get(k)!).push(o);
+    });
+    this.shownForm = undefined;
     this.model = model;
     this.root.add(model);
     if (t.clips.size > 0) this.mixer = new AnimationMixer(model);
@@ -319,6 +328,18 @@ export class Actor {
       if (o) this.sockets.set(k, o);
     }
     this.accentHex = '';
+  }
+
+  /** form id → model nodes shown only in that form ('base' = no form) */
+  private formNodes = new Map<string, Object3D[]>();
+  private shownForm: string | null | undefined = undefined;
+
+  /** show the nodes of the current form (a form without its own nodes keeps the base ones) */
+  private applyForm(form: string | null): void {
+    if (form === this.shownForm || this.formNodes.size === 0) return;
+    this.shownForm = form;
+    const want = form && this.formNodes.has(form) ? form : 'base';
+    for (const [k, nodes] of this.formNodes) for (const n of nodes) n.visible = k === want;
   }
 
   /** world position of a socket (falls back to the body centre) */
@@ -331,6 +352,7 @@ export class Actor {
   /** a new sim tick arrived */
   pushTick(v: EntityView, tick: number): void {
     this.view = v;
+    this.applyForm(v.form ?? null);
     this.team = v.team;
     this.owner = v.owner;
     this.radius = v.radius;

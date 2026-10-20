@@ -650,6 +650,10 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   cast_a2, cast_a3, cast_ult, death, recall, idle_lobby, victory`; optional `crit, channel, dash,
   stunned, spawn, taunt`. Impact frame at 40 % of attack/cast clips. `run` authored for a stated
   reference speed in m/s (written to the fighter JSON).
+- CHANGED(ART): **form-swapped parts.** A fighter with passive forms (Ervet's hilt/great blade) carries every
+  variant in one GLB as nodes named `form_<form id>` and `form_base`; the renderer shows a form's nodes while
+  `EntityView.form` is that form (else `form_base`); a form without nodes keeps the base ones. Authoring:
+  `Part(form=...)` in the fighter spec (split after the bake, `pipeline.split_forms`).
 - **Materials:** PBR (base color / ORM / normal baked from Blender materials at 1024², 2048² for
   landmarks; ART 2.0 fighters carry a 2048² hand-painted base colour (concept projection) with ORM and
   normal at 1024², inside the same 1.2 MB GLB budget); an emissive material named `accent` on every

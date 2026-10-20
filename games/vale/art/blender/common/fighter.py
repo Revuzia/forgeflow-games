@@ -36,6 +36,8 @@ class Part:
           ('chain', chain_name, root_bone) (x_ chain cloth/tail) | 'transfer' (copy body weights)
     Materials named `accent` (or gem_*/glow_*) stay emissive/unbaked; parts made only of such
     materials are exported as a separate mesh with the material untouched.
+    form: a form-swapped part (Ervet's three blades): baked with the rest, then split into a node named
+    `form_<form>` the renderer shows only in that form (`form_base` = no form; CONTRACT §12).
     """
     name: str
     high: bpy.types.Object | None = None
@@ -43,6 +45,7 @@ class Part:
     tris: int | None = None
     bind: object = "auto"
     uv_weight: float = 1.0
+    form: str | None = None                    # 'base' or a passive.forms id: exported as its own node form_<form>
 
 
 @dataclass
