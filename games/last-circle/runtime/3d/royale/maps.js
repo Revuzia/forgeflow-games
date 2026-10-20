@@ -190,7 +190,13 @@ function blockTex(aniso) {
     },
     (h) => 0.87 + h * 0.13, aniso, 4.4);
 }
-const KIND_TEX = { shingle: shingleTex, plank: plankTex, metal: metalTex, block: blockTex };
+function stuccoTex(aniso) {
+  // Wave 7b (Isla Viva's resort walls): smooth trowelled plaster - a fine grain and soft trowel swirls, no joints (the brick relief read as a council estate under pastel paint)
+  return _fieldTex("stucco", 256,
+    (u, v) => _tfbm(u * 30, v * 30, 71, 3) * 0.55 + _tfbm(u * 7, v * 7, 73, 2) * 0.45,
+    (h) => 0.93 + h * 0.07, aniso, 1.4);
+}
+const KIND_TEX = { shingle: shingleTex, plank: plankTex, metal: metalTex, block: blockTex, stucco: stuccoTex };
 
 function waterNormalTex(aniso) {
   if (_texCache.waterN) return _texCache.waterN;
@@ -490,8 +496,8 @@ function mkHeightFn(mapId, seed) {
 //   bake()            freeze into the Float32 lattice; from then on at(x, z) is the ground
 // Everything is deterministic: pads come from the seeded layout only and the bake is plain IEEE arithmetic (+, -, *, /, sqrt), the same on
 // every client.
-export const MAP_GEN_VERSION = 4;                   // see map.genVersion (4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
-const WAVE6_GEN_VERSION = 2;                        // the layout a Savanna page plays when towngen.js / citykit.js do not load (see prepareCity)
+export const MAP_GEN_VERSION = 5;                   // see map.genVersion (5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
+const FALLBACK_GEN_VERSION = { ashgrid: 2, isla_viva: 4, deepwood: 4 };   // the generator version of the layout a page plays when towngen.js / citykit.js do not load (see prepareCity): Savanna's Wave-6 layout is 2; Isla Viva's and Deepwood's pre-7b worlds are 4 (their maps were identical in 2, 3 and 4, only the loot settled differently from 3)
 export const LAT_CELLS = 608;                       // 8 chunks x 76 near-LOD cells (see CHUNKS / NEAR_SEG in buildMap)
 export const LAT_N = LAT_CELLS + 1;                 // 609 nodes per side
 export const LAT_PITCH = SIZE / LAT_CELLS;          // 2.6316 m
@@ -740,8 +746,10 @@ function colorAt(mapId, h, x, z, seed, out) {
   if (mapId === "isla_viva") {
     if (h < 0.4) return rgb(o, 0.93, 0.87, 0.64);                 // sand
     if (h < 2.2) return rgb(o, 0.90 - n * 0.1, 0.84, 0.58);
-    if (h > 58) return rgb(o, 0.42, 0.38, 0.36);                  // volcano rock
-    if (h > 34) return rgb(o, 0.48 + n * 0.1, 0.44, 0.38);
+    if (h > 34) {                                                  // volcano rock (Wave 7b stage B: dark basalt with rust strata, darker toward the rim - was a pale grey that read as dust, not rock)
+      const t = Math.min(1, (h - 34) / 30), band = 0.5 + 0.5 * Math.sin(h * 0.45 + n * 4.0);
+      return rgb(o, 0.19 - 0.04 * t + band * 0.12 + n * 0.05, 0.16 - 0.035 * t + band * 0.05 + n * 0.04, 0.145 - 0.03 * t + band * 0.02 + n * 0.035);   // (linear: ~#776e6a basalt, rust bands to ~#9a7c6a)
+    }
     return rgb(o, 0.18 + n * 0.15, 0.62 + n * 0.18, 0.28);        // lush grass
   }
   if (mapId === "ashgrid") {
@@ -832,6 +840,72 @@ export function disposeMapResources(W) {
   });
   return { geometries, materials, textures };
 }
+
+// ── city themes (Wave 7b): the colour / loot tables of the town builder, one per map ───────────────────────────────────────────────────────────
+// ashgrid is the Wave-7 Savanna table VERBATIM (its world must hash identically); isla_viva and deepwood are the O2 themes: a pastel resort and a timber lodge village.
+const CITY_THEME_TABLES = {
+  ashgrid: {
+    // (D2: the house and shop lists were all tans: a block of them was one colour from the plane. Sage, sky blue, terracotta, white, mustard, teal, rose and brick red join them; a block still takes
+    //  only TWO of its list, so a street stays one family and the next street is another)
+    walls: { house: ["#d9c7a5", "#cfae86", "#c4966f", "#e2d8c3", "#b3ad94", "#cba08f", "#bfa27a", "#9fb394", "#a9c0cf", "#c4725a", "#ebe6d6", "#d6b55a", "#7fa7a3", "#d9a7a0", "#a85a45"],
+      shop: ["#d8a766", "#86a9b9", "#c4b88d", "#cf8068", "#a9b7a0", "#d6c08a", "#e0d6b8", "#7fa7a3", "#c4725a", "#d6b55a", "#8c9fb8"],
+      big: ["#8fa4b8", "#a7b3bd", "#c6b79c", "#9fae9d", "#b69883", "#8197ad", "#b9b5aa", "#7b8fa3", "#a89684"], hall: ["#b8ad94", "#a5a79b", "#c3b49a", "#9b9a8c"], shed: ["#a68f62", "#b08968", "#93805e"],
+      barn: ["#a8553c", "#8f4a38", "#b9a27a", "#7e6a58"],
+      core: ["#6d8aa5", "#5f7a93", "#7d93a8", "#8a7a6c", "#9aa8b4", "#6e7c8a", "#b09a84", "#74897b"] },     // (downtown towers: deeper, glassier tones than the town walls so the skyline reads from the plane, none so dark it goes black in shade)
+    roofs: ["#b5643c", "#9a4a36", "#7b5a48", "#8a6a50", "#a8523a", "#6c5a52", "#c07a48", "#5e6b73", "#8b5a3c", "#a3452f",
+      "#4c5865", "#3e4a58", "#6e8796", "#d8d3c4", "#587a5c", "#8e3b38", "#2f3d4c", "#b9553a"],     // (D2: slate, blue-grey, white flat deck, patina green, oxblood: roofs are what a 330 m drop view sees of a house)
+    awnings: ["#c0563a", "#3a7a9a", "#d6a23a", "#5a8a5a", "#9a3a4a", "#d8d2c0"],
+    glass: ["#34495e", "#2f4256", "#3d5266", "#2b3b4a"],
+    mullions: ["#323c48", "#3a4a5a", "#2c3a30", "#4a3a34", "#2f3a52"],
+    fences: [["#9a7a4a", 1.0], ["#d9d2c0", 1.1], ["#7d8288", 1.3], ["#6b4f33", 0.9]],
+    // [floor-item chance, chest chance] per building. 7A2: the city has 40 % more buildings than stage A and a chest is TWO draw calls (base + lid, no instancing): the chest chances are
+    // about 60 % of stage A's so a downtown view does not pay 30 calls for chests (seed 1: 18 chests in the drop view); floor items keep their stage-A odds
+    loot: { house: [0.5, 0.12], shop: [0.8, 0.2], hall: [0.9, 0.3], shed: [0.35, 0.05], cmpHouse: [0.40, 0.12], cmpShed: [0.30, 0.05] },   // (the ~60 wild spots that moved: 30 compounds x ~2 points)
+    tower: { core: { loot: 0.75, chest: 0.33, mullion: "#323c48" }, town: { loot: 0.6, chest: 0.25, mullion: "#3a3f46" } },
+  },
+  // Isla Viva: a coastal RESORT. Whitewash, cream, peach and seafoam walls under coral, teal and aqua roofs; striped awnings; white picket and driftwood fences.
+  isla_viva: {
+    walls: { house: ["#f7aa94", "#aae2cc", "#90d4e4", "#fce498", "#faf4e8", "#f0aaba", "#f2cdb2", "#bfe3dc", "#f6f1e6", "#f3bba6"],     // (the first six are the kit palettes' colourways: coral, mint, lagoon, sun, shell, rose - lane B3's theme_colours.js)
+      shop: ["#faf4e8", "#fce498", "#aae2cc", "#f7aa94", "#90d4e4", "#f0aaba", "#f2c9a0", "#cfe6e0"],
+      big: ["#f4efe4", "#efe3cd", "#dff0ee", "#f2d8c4", "#e8d9c2", "#d9ebe8"], hall: ["#efe5d0", "#d9e8e4", "#f1ddb8", "#e6d3bd"], shed: ["#c9a97a", "#b89a6e", "#d6b88a", "#ae8f63"],
+      barn: ["#b9553d", "#a2503c", "#c9a27a", "#8f6a48"],
+      core: ["#f4efe4", "#efe3cd", "#dff0ee", "#f2d8c4"] },
+    roofs: ["#c0583e", "#22808c", "#2e60a8", "#dc6e3c", "#c8ced4", "#b44a3a", "#e2674a", "#2f9aa0", "#3aa6a4", "#d98a3c", "#e58a6a", "#2c8f95", "#f0efe6", "#c85c46"],
+    awnings: ["#e2574c", "#1f9aa6", "#f2b53c", "#f4f1e8", "#e87fa0", "#3ea06a"],
+    glass: ["#4a7f93", "#3f7389", "#5a93a3", "#34687c"],
+    mullions: ["#e8e2d2", "#d9d2c0", "#f3efe4", "#cfc8b4"],
+    fences: [["#f4efe4", 1.0], ["#d9b98a", 1.0], ["#c9a97a", 0.9], ["#e3d6bd", 1.1]],
+    // (stage A cut the chest rolls to ~1/3 of Savanna's because a chest was FIVE draw calls; since loot.js draws every chest as an instance of one pool (Wave 7b stage B: 3 calls for all
+    //  of them) the rolls are Savanna's or a little more: Isla Viva's chests were 31-44 per match against 51-69 at the live build. Floor items and wild spots as before.)
+    loot: { house: [0.58, 0.24], shop: [0.88, 0.34], hall: [0.92, 0.44], shed: [0.42, 0.1], cmpHouse: [0.48, 0.24], cmpShed: [0.36, 0.1] },     // (a little above Savanna's: the resort has ~230 buildings a match, Savanna ~410)
+    tower: { core: { loot: 0.78, chest: 0.45, mullion: "#e8e2d2" }, town: { loot: 0.68, chest: 0.35, mullion: "#f3efe4" } },
+    // the ground of a resort town: a plank boardwalk for the sidewalk ring, sun-bleached paving inside the blocks, beach-white lane lines
+    ground: { ring: "#c19a6a", plaza: "#d9ccae", white: "#fbf6e8", road: "#5b5a58",          // (stage B: dark asphalt, was a pale "#8a8070" - the street grid vanished into the drop view's sea haze)
+      lot: { parking: "#a39d8e", park: "#56a05a", yard: "#dccfa9", plaza: "#efe6d0", market: "#cfa56e", gas: "#9a9484", court: "#c26a50", beach: "#eadcae", pool: "#5fb6c4", garden: "#62a85c" },
+      tones: { core: ["#e0d4b8", "#d9ccae", "#e6dac0"], town: ["#e3d7bb", "#dccfae", "#e8dcc2", "#d6c9a8", "#e0d2b2", "#eadfc6"], yard: ["#b9ae96", "#c4b99f", "#aea38c"] },
+      minimap: { block: "#efe2c0" } },
+  },
+  // Deepwood: a timber LODGE village. Log and plank walls in browns under dark green, oxblood and bark roofs; a red barn; split-rail and plank fences.
+  deepwood: {
+    walls: { house: ["#bc8c56", "#96543a", "#624430", "#8a5a33", "#9c9280", "#7a4e2d", "#4a6c54", "#9a6a3f", "#9c3a2e", "#a07445", "#6f4a2e", "#85583a"],     // (pine, cedar, walnut, driftwood, forest, barn: lane B3's lodge colourways)
+      shop: ["#bc8c56", "#9a6a3f", "#96543a", "#a8794f", "#9c9280", "#b08a5e"],
+      big: ["#7a5a3a", "#6a4c34", "#8a6a48", "#7d6446"], hall: ["#6f4a2e", "#7d5a3a", "#5e4630", "#8a6a48"], shed: ["#6b4f33", "#5c4430", "#7a5c3c", "#85673f"],
+      barn: ["#8c3b2e", "#7a3328", "#9a4636", "#6e4a38"],
+      core: ["#7a5a3a", "#6a4c34", "#8a6a48"] },
+    roofs: ["#2f5a3c", "#3a6a44", "#27503a", "#35604a", "#8e3b2e", "#a3452f", "#7a3326", "#4a3a2c", "#5a4636", "#3c4650", "#2e4f45", "#6e2f26"],
+    awnings: ["#8e3b2e", "#2f5a3c", "#c9a24a", "#6a4a32"],
+    glass: ["#3b4a52", "#2f3d44", "#42535b"],
+    mullions: ["#3a2a1e", "#2e2118", "#4a3626"],
+    fences: [["#6b4f33", 1.0], ["#5c4430", 1.1], ["#7a5c3c", 0.9], ["#85673f", 1.0]],
+    loot: { house: [0.58, 0.12], shop: [0.88, 0.2], hall: [0.92, 0.3], shed: [0.42, 0.05], cmpHouse: [0.48, 0.12], cmpShed: [0.36, 0.05] },     // (Savanna's chest rolls: see the resort table)
+    tower: { core: { loot: 0.78, chest: 0.33, mullion: "#3a2a1e" }, town: { loot: 0.68, chest: 0.25, mullion: "#4a3626" } },
+    // the ground of a lodge village: gravel kerbs, trodden earth inside the blocks, pine-needle brown lanes (no lane paint, no zebra crossings: noMarkings)
+    ground: { noMarkings: true, ring: "#9a8f7a", plaza: "#6f6850", white: "#d8cfba", road: "#5f4f3c",
+      lot: { parking: "#6d6a5c", park: "#4a7a45", yard: "#7d7157", plaza: "#a89d84", market: "#8d7556", gas: "#6d6a5c", court: "#7a4a38", woodyard: "#6b5a40", campfire: "#4f4636", garden: "#4f8048" },
+      tones: { core: ["#6f6850", "#7a735a", "#665f4a"], town: ["#6e6a52", "#77705a", "#645f4a", "#7a7560", "#6a654e", "#736d56"], yard: ["#5f5944", "#6a634c", "#58523f"] },
+      minimap: { block: "#c9bd9c" } },
+  },
+};
 
 export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
@@ -1315,6 +1389,7 @@ export async function buildMap(W, mapId) {
   // draws only the districts it can see instead of every building of the map. `cap` (set by towerTurn) also collects what a generator just emitted.
   let sink = batches, cap = null;
   const districtSinks = new Map();  // district id -> batch set (insertion order = build order)
+  const distParts = new Map();      // Wave 7b (themed maps): compound-cell district id -> [[x, z, r], ...] of its compounds (the shadow test reads them, not the 600 m cell's sphere)
   function useDistrict(id) {
     let sk = districtSinks.get(id);
     if (!sk) districtSinks.set(id, sk = {});
@@ -1657,19 +1732,26 @@ export async function buildMap(W, mapId) {
       // so blockedHoriz still stops you.
       const SILL_H = 1.40, SILL_Y = fy + 0.70;      // spans fy+0.00..fy+1.40
       const HEAD_H = 1.50, HEAD_Y = fy + 3.25;      // spans fy+2.50..fy+4.00
+      const WT = { tex: (o && o.wallTex) || "block" };                 // (Wave 7b stage B: a themed tower wears its theme's walls - stucco on the resort, planks in the lodge village - not the brick "block")
       if (f === 0) {
         const dw = 1.8;
-        addBox(x - W2 / 2 - dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color, { tex: "block" });
-        addBox(x + W2 / 2 + dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color, { tex: "block" });
-        addBox(x, fy + FH - 0.5, z + W2, dw, 1, T, color, { tex: "block" });
-        addBox(x, fy + FH / 2, z - W2, fw, FH, T, color, { tex: "block" });
-        addBox(x - W2, fy + FH / 2, z, T, FH, fw, color, { tex: "block" });
-        addBox(x + W2, fy + FH / 2, z, T, FH, fw, color, { tex: "block" });
+        addBox(x - W2 / 2 - dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color, WT);
+        addBox(x + W2 / 2 + dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color, WT);
+        addBox(x, fy + FH - 0.5, z + W2, dw, 1, T, color, WT);
+        addBox(x, fy + FH / 2, z - W2, fw, FH, T, color, WT);
+        addBox(x - W2, fy + FH / 2, z, T, FH, fw, color, WT);
+        addBox(x + W2, fy + FH / 2, z, T, FH, fw, color, WT);
       } else {
-        addBox(x, SILL_Y, z + W2, fw, SILL_H, T, color, { tex: "block" }); addBox(x, HEAD_Y, z + W2, fw, HEAD_H, T, color, { tex: "block" });
-        addBox(x, SILL_Y, z - W2, fw, SILL_H, T, color, { tex: "block" }); addBox(x, HEAD_Y, z - W2, fw, HEAD_H, T, color, { tex: "block" });
-        addBox(x - W2, SILL_Y, z, T, SILL_H, fw, color, { tex: "block" }); addBox(x - W2, HEAD_Y, z, T, HEAD_H, fw, color, { tex: "block" });
-        addBox(x + W2, SILL_Y, z, T, SILL_H, fw, color, { tex: "block" }); addBox(x + W2, HEAD_Y, z, T, HEAD_H, fw, color, { tex: "block" });
+        addBox(x, SILL_Y, z + W2, fw, SILL_H, T, color, WT); addBox(x, HEAD_Y, z + W2, fw, HEAD_H, T, color, WT);
+        addBox(x, SILL_Y, z - W2, fw, SILL_H, T, color, WT); addBox(x, HEAD_Y, z - W2, fw, HEAD_H, T, color, WT);
+        addBox(x - W2, SILL_Y, z, T, SILL_H, fw, color, WT); addBox(x - W2, HEAD_Y, z, T, HEAD_H, fw, color, WT);
+        addBox(x + W2, SILL_Y, z, T, SILL_H, fw, color, WT); addBox(x + W2, HEAD_Y, z, T, HEAD_H, fw, color, WT);
+        if (o && o.balcony) {                                            // (stage B) a balcony along the front of every upper floor: a 0.2 m slab 1.3 m deep, a 1.0 m rail; exact colliders
+          const bw = fw * 0.7, bz = z + W2 + T / 2, rc = o.balcony;
+          addBox(x, fy + 0.1, bz + 0.65, bw, 0.2, 1.3, shade(color, 0.85), WT);
+          addBox(x, fy + 0.7, bz + 1.25, bw, 1.0, 0.1, rc);
+          addBox(x - bw / 2 + 0.05, fy + 0.7, bz + 0.65, 0.1, 1.0, 1.2, rc); addBox(x + bw / 2 - 0.05, fy + 0.7, bz + 0.65, 0.1, 1.0, 1.2, rc);
+        }
         // Wave 7 (`o.mullion` = a colour): thin window posts between sill and header, so the open band reads as a row of windows from the street. Cosmetic: no collider
         // (the band stays the firing port it always was), and each post touches the sill below and the header above.
         if (o && o.mullion) {
@@ -1691,8 +1773,9 @@ export async function buildMap(W, mapId) {
       if (!(o && o.loot != null) || rng() < o.loot) loot(x + (rng() - 0.5) * fw * 0.5, fy + 0.5, z + (rng() - 0.5) * fw * 0.5, poi);
     }
     addBox(x, y + floors * FH + 0.15, z, fw, 0.3, fw, shade(color, 0.65)); // roof slab
-    addBox(x, y + floors * FH + 0.7, z + fw / 2 - 0.2, fw, 1.1, 0.35, shade(color, 0.6)); // parapet
-    addBox(x, y + floors * FH + 0.7, z - fw / 2 + 0.2, fw, 1.1, 0.35, shade(color, 0.6));
+    const PC = (o && o.parapetC) || shade(color, 0.6);
+    addBox(x, y + floors * FH + 0.7, z + fw / 2 - 0.2, fw, 1.1, 0.35, PC); // parapet
+    addBox(x, y + floors * FH + 0.7, z - fw / 2 + 0.2, fw, 1.1, 0.35, PC);
     if (!(o && o.chest != null) || rng() < o.chest) chest(x, y + floors * FH + 0.6, z, poi);   // roof chest
     if (!(o && o.loot != null) || rng() < o.loot) loot(x, y + 0.5, z, poi);
     // exterior ramp along the +X wall up to the roof — rooftop chests must be
@@ -1803,7 +1886,8 @@ export async function buildMap(W, mapId) {
       }
     }
     loot(x, y + 0.6, z, poi);
-    if (rng() < 0.6) chest(x, y + 0.6, z + len * 0.35, poi);
+    // (Wave 7b, a map with a city layout: the deck may be turned, and the chest goes on its centreline - at z + 0.35 len it fell off the edge of a deck turned 0.3 rad)
+    if (rng() < 0.6) { if (city && rot) chest(x + len * 0.35 * Math.sin(rot), y + 0.6, z + len * 0.35 * Math.cos(rot), poi); else chest(x, y + 0.6, z + len * 0.35, poi); }
   }
 
   // ── per-map POIs + props plan (props = pure scenery + cover collision) ────
@@ -1986,6 +2070,8 @@ export async function buildMap(W, mapId) {
   const ROAD_LIFT = 0.06;   // above the mesh; well under STEP_UP (0.55) either way
   const ROAD_XS = [-1, -0.5, 0, 0.5, 1];   // cross-section offsets, x half-width
   const ROAD_DRY = 0.35;    // a road section needs its centreline this far above the waterline
+  const themedRoads = mapId !== "ashgrid";   // Wave 7b: see roadRibbon
+  const ROAD_XS_T = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1];   // (the themed maps: nine cross-section vertices, so a triangle is 1.2 m across the ground's shoulder instead of 2.5 m)
   const roadStats = { registered: 0, sections: 0, droppedWet: 0, metres: 0, metresDropped: 0 };
   const roadLog = [];       // the dry sections as built, kept for the gates and the screenshot tools
   function road(x0, z0, x1, z1, width) {
@@ -2010,10 +2096,10 @@ export async function buildMap(W, mapId) {
   function roadRibbon(x0, z0, x1, z1, width) {
     const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
     if (len < 1) return;
-    const n = Math.max(1, Math.ceil(len / ROAD_STEP));
+    const n = Math.max(1, Math.ceil(len / (themedRoads ? 1.6 : ROAD_STEP)));
     const ux = dx / len, uz = dz / len;      // along
     const px = -uz, pz = ux;                 // perpendicular
-    const hw = width / 2, W2 = ROAD_XS.length;
+    const XS = themedRoads ? ROAD_XS_T : ROAD_XS, hw = width / 2, W2 = XS.length;
     const posA = new Float32Array((n + 1) * W2 * 3);
     const uvA = new Float32Array((n + 1) * W2 * 2);
     const idx = [];
@@ -2021,16 +2107,18 @@ export async function buildMap(W, mapId) {
     for (let i = 0; i <= n; i++) {
       const t = i / n, cx = x0 + dx * t, cz = z0 + dz * t;
       for (let j = 0; j < W2; j++) {
-        const vx = cx + px * ROAD_XS[j] * hw, vz = cz + pz * ROAD_XS[j] * hw;
+        const vx = cx + px * XS[j] * hw, vz = cz + pz * XS[j] * hw;
         // The ribbon's triangles span 2 m x 1.75 m, the lattice cells 2.63 m: on a CURVED stretch (a pad's falloff, a road cut into a slope) the
         // ground half-way between two vertices bulges above the straight chord and pokes through. A vertex is lifted by the largest bulge of
         // the chords that end at it (the ground at their midpoint minus the mean of their ends): 0 on a plane, so a slope costs nothing.
-        const sa = len / n, sc = hw * 0.5, g0 = heightAt0(vx, vz);
+        const sa = len / n, sc = hw * (themedRoads ? 0.25 : 0.5), g0 = heightAt0(vx, vz);
         let lift = 0, b;
         b = heightAt0(vx + ux * sa * 0.5, vz + uz * sa * 0.5) - 0.5 * (g0 + heightAt0(vx + ux * sa, vz + uz * sa)); if (b > lift) lift = b;
         b = heightAt0(vx - ux * sa * 0.5, vz - uz * sa * 0.5) - 0.5 * (g0 + heightAt0(vx - ux * sa, vz - uz * sa)); if (b > lift) lift = b;
-        b = heightAt0(vx + px * sc * 0.5, vz + pz * sc * 0.5) - 0.5 * (g0 + heightAt0(vx + px * sc, vz + pz * sc)); if (b > lift) lift = b;
-        b = heightAt0(vx - px * sc * 0.5, vz - pz * sc * 0.5) - 0.5 * (g0 + heightAt0(vx - px * sc, vz - pz * sc)); if (b > lift) lift = b;
+        // (Wave 7b, the themed maps: an EDGE vertex does not look outward across the kerb - the ground falls away there on a fill side, and that outward chord alone lifted the whole
+        //  edge 0.06 m: roads-float 1.5 % on Isla Viva's hills. Savanna keeps the rule it was built with: its world must hash identically)
+        if (!(themedRoads && j === W2 - 1)) { b = heightAt0(vx + px * sc * 0.5, vz + pz * sc * 0.5) - 0.5 * (g0 + heightAt0(vx + px * sc, vz + pz * sc)); if (b > lift) lift = b; }
+        if (!(themedRoads && j === 0)) { b = heightAt0(vx - px * sc * 0.5, vz - pz * sc * 0.5) - 0.5 * (g0 + heightAt0(vx - px * sc, vz - pz * sc)); if (b > lift) lift = b; }
         posA[k * 3] = vx; posA[k * 3 + 1] = g0 + Math.min(0.15, lift * 0.4) + ROAD_LIFT; posA[k * 3 + 2] = vz;
         uvA[k * 2] = vx / ROAD_TILE; uvA[k * 2 + 1] = vz / ROAD_TILE;   // world-planar, same texel density as before
         k++;
@@ -2171,27 +2259,36 @@ export async function buildMap(W, mapId) {
     const H = (o && o.H) || 3.4, T = 0.32, doorW = (o && o.doorW) || 1.4, winW = 1.2;
     // C-PAD: the roof deck (w + 0.7 by d + 0.7, turned by the quarter turn `rot`) is the widest thing in the footprint
     const rc = Math.abs(Math.cos(rot)), rs = Math.abs(Math.sin(rot));
-    const y = groundPad(x, z, (rc * (w + 0.7) + rs * (d + 0.7)) / 2 + 0.05, (rs * (w + 0.7) + rc * (d + 0.7)) / 2 + 0.05, { gen: "house" });
+    // Wave 7b: o.y0 = the floor stands on a DECK (the docks village): no pad, the walls start at y0; o.wallTex = the texture kind of the walls (a lodge: "plank")
+    const y = o && o.y0 != null ? o.y0 : groundPad(x, z, (rc * (w + 0.7) + rs * (d + 0.7)) / 2 + 0.05, (rs * (w + 0.7) + rc * (d + 0.7)) / 2 + 0.05, { gen: "house" });
+    const WO = o && o.wallTex ? { tex: o.wallTex } : undefined;
     const segW = w / 2 - doorW / 2, segD = d / 2 - winW / 2;
     const jamb = d / 4 + winW / 4, pier = w / 4 + doorW / 4;
     // WAVE 7 (7A2) `o.style`: a styled building (the Savanna city's) gets facade windows, a roof shape, a canopy / awning and a chimney, all cosmetic (no collider),
     // and its door is 2.7 m under the lintel whatever its height (a two-storey house or a shop would otherwise have a 6 m door; the wall above is filled in).
     const st = (o && o.style) || null;
-    addBoxR(x, z, -pier, -d / 2, y + H / 2, segW, H, T, wallC, rot);                // back, L of back door
-    addBoxR(x, z, pier, -d / 2, y + H / 2, segW, H, T, wallC, rot);                 // back, R of back door
-    addBoxR(x, z, 0, -d / 2, st ? y + 3.05 : y + H - 0.35, doorW, 0.7, T, wallC, rot);              // back door lintel
-    if (st && H > 3.4 + 1e-6) addBoxR(x, z, 0, -d / 2, y + (3.4 + H) / 2, doorW, H - 3.4, T, wallC, rot);
+    // Wave 7b stage B `o.upper` (themed two-storey houses / shops): a REAL upper floor at y + UP (UP = the storey height): a slab with a stairwell, an interior ramp along one side wall,
+    // a second window opening in each side wall and a floor item upstairs - the two-storey front stops being a fake. Savanna never passes it.
+    const UP = o && o.upper && st && st.storeys === 2 ? (st.floorH || 3.4) : 0;
+    addBoxR(x, z, -pier, -d / 2, y + H / 2, segW, H, T, wallC, rot, WO);                // back, L of back door
+    addBoxR(x, z, pier, -d / 2, y + H / 2, segW, H, T, wallC, rot, WO);                 // back, R of back door
+    addBoxR(x, z, 0, -d / 2, st ? y + 3.05 : y + H - 0.35, doorW, 0.7, T, wallC, rot, WO);              // back door lintel
+    if (st && H > 3.4 + 1e-6) addBoxR(x, z, 0, -d / 2, y + (3.4 + H) / 2, doorW, H - 3.4, T, wallC, rot, WO);
     for (const sx of [-1, 1]) {                                                     // side walls with a window band
-      addBoxR(x, z, sx * w / 2, -jamb, y + H / 2, T, H, segD, wallC, rot);
-      addBoxR(x, z, sx * w / 2, jamb, y + H / 2, T, H, segD, wallC, rot);
-      addBoxR(x, z, sx * w / 2, 0, y + 0.60, T, 1.20, winW, wallC, rot);            // sill  (y+0.00..y+1.20)
-      if (o && o.H) addBoxR(x, z, sx * w / 2, 0, y + 2.30 + (H - 2.30) / 2, T, H - 2.30, winW, wallC, rot);   // header (y+2.30..y+H)
-      else addBoxR(x, z, sx * w / 2, 0, y + 2.85, T, 1.10, winW, wallC, rot);       // header (y+2.30..y+3.40)
+      addBoxR(x, z, sx * w / 2, -jamb, y + H / 2, T, H, segD, wallC, rot, WO);
+      addBoxR(x, z, sx * w / 2, jamb, y + H / 2, T, H, segD, wallC, rot, WO);
+      addBoxR(x, z, sx * w / 2, 0, y + 0.60, T, 1.20, winW, wallC, rot, WO);            // sill  (y+0.00..y+1.20)
+      if (UP) {                                                                       // two openings: the lintel + upper sill (y+2.30..y+UP+1.20), the upper header (y+UP+2.30..y+H)
+        addBoxR(x, z, sx * w / 2, 0, y + (2.30 + UP + 1.20) / 2, T, UP + 1.20 - 2.30, winW, wallC, rot, WO);
+        addBoxR(x, z, sx * w / 2, 0, y + UP + 2.30 + (H - UP - 2.30) / 2, T, H - UP - 2.30, winW, wallC, rot, WO);
+      } else if (o && o.H) addBoxR(x, z, sx * w / 2, 0, y + 2.30 + (H - 2.30) / 2, T, H - 2.30, winW, wallC, rot, WO);   // header (y+2.30..y+H)
+      else addBoxR(x, z, sx * w / 2, 0, y + 2.85, T, 1.10, winW, wallC, rot, WO);       // header (y+2.30..y+3.40)
     }
-    addBoxR(x, z, -pier, d / 2, y + H / 2, segW, H, T, wallC, rot);                 // front L of door
-    addBoxR(x, z, pier, d / 2, y + H / 2, segW, H, T, wallC, rot);                  // front R of door
-    addBoxR(x, z, 0, d / 2, st ? y + 3.05 : y + H - 0.35, doorW, 0.7, T, wallC, rot);               // door lintel
-    if (st && H > 3.4 + 1e-6) addBoxR(x, z, 0, d / 2, y + (3.4 + H) / 2, doorW, H - 3.4, T, wallC, rot);
+    if (UP) houseUpper(x, z, w, d, rot, y, UP, T, wallC, poiId, o);
+    addBoxR(x, z, -pier, d / 2, y + H / 2, segW, H, T, wallC, rot, WO);                 // front L of door
+    addBoxR(x, z, pier, d / 2, y + H / 2, segW, H, T, wallC, rot, WO);                  // front R of door
+    addBoxR(x, z, 0, d / 2, st ? y + 3.05 : y + H - 0.35, doorW, 0.7, T, wallC, rot, WO);               // door lintel
+    if (st && H > 3.4 + 1e-6) addBoxR(x, z, 0, d / 2, y + (3.4 + H) / 2, doorW, H - 3.4, T, wallC, rot, WO);
     // The deck used to sit at y+H+0.35 (spanning H+0.20..H+0.50): a 20 cm slit of daylight between the walls' top (y+H) and the roof, on every
     // house in every match. Resting it ON the walls (H+0.00..H+0.30) puts the roof surface 0.20 m lower, the ridge cap with it.
     addBoxR(x, z, 0, 0, y + H + 0.15, w + 0.7, 0.3, d + 0.7, roofC, rot, { tex: "shingle" });   // roof deck (overhangs)
@@ -2226,7 +2323,7 @@ export async function buildMap(W, mapId) {
       addBoxR(x, z, 0, tz, ty, w + 0.4, 0.4, 0.14, tc, rot, NC); addBoxR(x, z, 0, -tz, ty, w + 0.4, 0.4, 0.14, tc, rot, NC);
       addBoxR(x, z, tx, 0, ty, 0.14, 0.4, d + 0.4, tc, rot, NC); addBoxR(x, z, -tx, 0, ty, 0.14, 0.4, d + 0.4, tc, rot, NC);
     }
-    if (st.chimney) addBoxR(x, z, st.chimney * w * 0.3, -d * 0.2, ry + (st.roof === 2 ? 0.9 : 1.2), 0.9, st.roof === 2 ? 1.8 : 2.4, 0.9, shade(wallC, 0.72), rot, NC);
+    if (st.chimney) addBoxR(x, z, st.chimney * w * 0.3, -d * 0.2, ry + (st.roof === 2 ? 0.9 : 1.2), 0.9, st.roof === 2 ? 1.8 : 2.4, 0.9, st.chimneyC || shade(wallC, 0.72), rot, NC);
     if (st.unit) addBoxR(x, z, -st.unit * w * 0.26, d * 0.2, ry + 0.55, 1.5, 1.1, 1.1, "#8f969c", rot, NC);                 // (a unit stands ON the deck: 1.1 m tall, centre ry + 0.55)
     const glass = st.glass || "#34495e", sill = shade(wallC, 0.7);
     const z1 = d / 2 + T / 2 + 0.025, z0 = -d / 2 - T / 2 - 0.025, x1 = w / 2 + T / 2 + 0.025;
@@ -2240,12 +2337,21 @@ export async function buildMap(W, mapId) {
         }
         if (!st.blindBack) addBoxR(x, z, sx * pier, z0, wy, wd, 1.15, 0.05, glass, rot, NC);  // back panes
       }
-      if (f > 0) for (const sx of [-1, 1]) addBoxR(x, z, sx * x1, 0, wy, 0.05, 1.15, 1.2, glass, rot, NC);   // an upper storey's side windows (the ground floor's are the apertures)
+      if (f > 0 && !(o && o.upper)) for (const sx of [-1, 1]) addBoxR(x, z, sx * x1, 0, wy, 0.05, 1.15, 1.2, glass, rot, NC);   // an upper storey's side windows (the ground floor's are the apertures; a real upper floor has apertures too)
     }
     if (st.shopfront) {                                                                   // glass front: one tall pane in each pier, a sign band over the door
       const gw = Math.max(0.8, segW - 0.5);
       for (const sx of [-1, 1]) addBoxR(x, z, sx * pier, z1, y + 1.55, gw, 2.0, 0.05, glass, rot, NC);
       addBoxR(x, z, 0, z1 + 0.04, y + 3.78, Math.min(w - 0.6, doorW + 2.4), 0.5, 0.08, st.sign || shade(roofC, 0.9), rot, NC);
+    }
+    if (st.balcony && storeys >= 2) {
+      // (stage B) a balcony across the upper floor's front: a 0.2 m slab 1.3 m deep at the floor level, a 1.0 m rail on its three open sides; exact colliders (a glider can land on it).
+      // Its floor meets the front wall; there is no door onto it (the upper floor's windows are in the side walls): a balcony to look at, cover for whoever lands there.
+      const bw = Math.min(w - 1.2, 7.0), bd = 1.3, by = y + fh, zf = d / 2 + T / 2, rc = st.railC || "#f4f1e8";
+      addBoxR(x, z, 0, zf + bd / 2, by + 0.1, bw, 0.2, bd, shade(wallC, 0.85), rot);
+      addBoxR(x, z, 0, zf + bd - 0.05, by + 0.7, bw, 1.0, 0.1, rc, rot);
+      for (const sx of [-1, 1]) addBoxR(x, z, sx * (bw / 2 - 0.05), zf + bd / 2, by + 0.7, 0.1, 1.0, bd - 0.1, rc, rot);
+      addBoxR(x, z, 0, zf + 0.2, by - 0.15, bw, 0.3, 0.4, shade(wallC, 0.75), rot, NC);                            // the beam it is cantilevered from (a band under its root)
     }
     if (st.awning) {
       const aw = Math.min(w - 0.8, w * 0.82);
@@ -2254,6 +2360,31 @@ export async function buildMap(W, mapId) {
     } else if (st.porch) {
       addBoxR(x, z, 0, d / 2 + 0.8, y + 2.85, doorW + 1.0, 0.14, 1.6, shade(roofC, 0.92), rot, NC);
     }
+  }
+  /** the real upper floor of a two-storey house (see house() `o.upper`): local frame of house() (door at +z, quarter turn `rot`). A 0.3 m slab over the whole inside at y + UP .. y + UP + 0.3
+   *  minus a stairwell; a 2.0 m ramp along the -x or +x side wall (the parcel's own style stream does not decide it: the side is the one away from the house's x, so neighbours alternate)
+   *  rising from the front (+z, by the door) toward the back onto the slab (a 0.3 m step at its top, under STEP_UP); the stairwell hole starts where a climber's head is still under the slab
+   *  (stairHeadroomRun, as tower()). Every piece is an exact box (a quarter turn); the ramp's direction is turned with the house. Loot upstairs: one floor item with the house's floor odds. */
+  function houseUpper(x, z, w, d, rot, y, UP, T, wallC, poiId, o) {
+    const turn = ((Math.round(rot / (Math.PI / 2)) % 4) + 4) % 4, c = [1, 0, -1, 0][turn], s = [0, 1, 0, -1][turn];
+    const ix = w / 2 - T / 2, iz = d / 2 - T / 2;                                       // the inside faces of the walls
+    const side = ((Math.round(x * 2) + Math.round(z * 2)) & 1) ? 1 : -1, rw = 2.0, rx = side * (ix - 0.15 - rw / 2);
+    // the ramp: foot at zf (front), top at zt (back), rising toward -z. Its foot stands 1.75 m inside the front wall: the run-up along its axis is inside the room (a capsule 1.2 m before the foot
+    // clears the wall; with 0.6 m the straight approach started behind the wall - collisioncheck ramps-climb, 16 of 42)
+    // (Wave 7b stage C) a LANDING at the foot: 2.6 m of floor between the foot and the front wall wherever the room is deep enough to keep the full run (1.35 x UP, 36.5 degrees), never less
+    // than stage B's 1.75. With 1.75 m a body beside the stair near its foot stood 2.8 m from the front wall: a healer backing off along the stair met that wall after ~1.8 m and curled round the foot
+    // (navcheck heal-pockets: 200 side:0.8 placements on Isla Viva / Deepwood moved 1.91-1.94 m in 2 s); the 10 m-deep houses keep their run and a 1.4-2.6 m strip behind the stair's top.
+    const foot = Math.min(2.6, Math.max(1.75, 2 * iz - 0.3 - 1.35 * UP));
+    const zf = iz - foot, run = Math.min(zf + iz - 0.3, 1.35 * UP), zt = zf - run;
+    const nearD = stairHeadroomRun(UP, run);
+    const hz0 = Math.max(-iz, zt - 0.05 * run), hz1 = Math.min(iz, Math.max(zt + 0.6 * run, zt + nearD)), hx0 = rx - rw / 2 - 0.15, hx1 = rx + rw / 2 + 0.15;
+    const sc = mapId === "deepwood" ? "#8a6a48" : "#b08a5e", yc = y + UP + 0.15;               // (a boarded floor: the plank texture, a warm wood)
+    const slab = (x0, x1, z0, z1) => { if (x1 - x0 > 0.05 && z1 - z0 > 0.05) addBoxR(x, z, (x0 + x1) / 2, (z0 + z1) / 2, yc, x1 - x0, 0.3, z1 - z0, sc, rot, { tex: "plank" }); };
+    slab(-ix, Math.max(-ix, hx0), -iz, iz); slab(Math.min(ix, hx1), ix, -iz, iz);       // the strips left and right of the hole (full depth)
+    slab(Math.max(-ix, hx0), Math.min(ix, hx1), -iz, hz0); slab(Math.max(-ix, hx0), Math.min(ix, hx1), hz1, iz);      // behind and in front of it
+    const mz = (zf + zt) / 2, wx = x + rx * c + mz * s, wz = z - rx * s + mz * c;
+    addRamp(wx, y, wz, rw, UP, run, _RAMP_TURN[turn][3], shade(wallC, 0.7));
+    if (o && o.loot != null) { if (rng() < o.loot) { const lx = -rx * 0.5, lz = -iz * 0.35; loot(x + lx * c + lz * s, y + UP + 0.8, z - lx * s + lz * c, poiId); } }
   }
   // street dressing along a town's main street: lamp posts, market stalls, benches,
   // hydrants (all cosmetic — collide:false — so they add life without snagging players).
@@ -2387,30 +2518,30 @@ export async function buildMap(W, mapId) {
     return true;
   };
   const cityFoot = [];              // [x0, z0, x1, z1]: where the wilderness must not put anything (a town's blocks + roads, a compound's fence)
+  const cityDecks = [];             // [x0, z0, x1, z1]: the docks village's deck slabs (a floor item beside one would sit half under its edge): wild loot keeps out like it does of a building
   const cityBld = [];               // [x0, z0, x1, z1]: every town / compound building footprint (and kit shells): wild loot and portals keep out
   const cityRoadLog = [];           // [x0, z0, x1, z1, width]: every street and link, for the grass mask and the minimap
+  const cityKeepClear = [];         // (stage B) [x0, z0, x1, z1]: where no launch ring may stand (the mill bridge's deck and 14 m approaches); empty on Savanna
   let city = null;                  // { TG, CK, lay, kit: [citykit list], stats } - set in the ashgrid branch
   const inRects = (list, x, z, pad) => { for (let i = 0; i < list.length; i++) { const r = list[i]; if (x > r[0] - pad && x < r[2] + pad && z > r[1] - pad && z < r[3] + pad) return true; } return false; };
   const inCity = (x, z, pad) => cityFoot.length > 0 && inRects(cityFoot, x, z, pad || 0);
-  const SAV = {
-    // (D2: the house and shop lists were all tans: a block of them was one colour from the plane. Sage, sky blue, terracotta, white, mustard, teal, rose and brick red join them; a block still takes
-    //  only TWO of its list, so a street stays one family and the next street is another)
-    walls: { house: ["#d9c7a5", "#cfae86", "#c4966f", "#e2d8c3", "#b3ad94", "#cba08f", "#bfa27a", "#9fb394", "#a9c0cf", "#c4725a", "#ebe6d6", "#d6b55a", "#7fa7a3", "#d9a7a0", "#a85a45"],
-      shop: ["#d8a766", "#86a9b9", "#c4b88d", "#cf8068", "#a9b7a0", "#d6c08a", "#e0d6b8", "#7fa7a3", "#c4725a", "#d6b55a", "#8c9fb8"],
-      big: ["#8fa4b8", "#a7b3bd", "#c6b79c", "#9fae9d", "#b69883", "#8197ad", "#b9b5aa", "#7b8fa3", "#a89684"], hall: ["#b8ad94", "#a5a79b", "#c3b49a", "#9b9a8c"], shed: ["#a68f62", "#b08968", "#93805e"],
-      barn: ["#a8553c", "#8f4a38", "#b9a27a", "#7e6a58"],
-      core: ["#6d8aa5", "#5f7a93", "#7d93a8", "#8a7a6c", "#9aa8b4", "#6e7c8a", "#b09a84", "#74897b"] },     // (downtown towers: deeper, glassier tones than the town walls so the skyline reads from the plane, none so dark it goes black in shade)
-    roofs: ["#b5643c", "#9a4a36", "#7b5a48", "#8a6a50", "#a8523a", "#6c5a52", "#c07a48", "#5e6b73", "#8b5a3c", "#a3452f",
-      "#4c5865", "#3e4a58", "#6e8796", "#d8d3c4", "#587a5c", "#8e3b38", "#2f3d4c", "#b9553a"],     // (D2: slate, blue-grey, white flat deck, patina green, oxblood: roofs are what a 330 m drop view sees of a house)
-    awnings: ["#c0563a", "#3a7a9a", "#d6a23a", "#5a8a5a", "#9a3a4a", "#d8d2c0"],
-    glass: ["#34495e", "#2f4256", "#3d5266", "#2b3b4a"],
-    mullions: ["#323c48", "#3a4a5a", "#2c3a30", "#4a3a34", "#2f3a52"],
-    fences: [["#9a7a4a", 1.0], ["#d9d2c0", 1.1], ["#7d8288", 1.3], ["#6b4f33", 0.9]],
-    // [floor-item chance, chest chance] per building. 7A2: the city has 40 % more buildings than stage A and a chest is TWO draw calls (base + lid, no instancing): the chest chances are
-    // about 60 % of stage A's so a downtown view does not pay 30 calls for chests (seed 1: 18 chests in the drop view); floor items keep their stage-A odds
-    loot: { house: [0.5, 0.12], shop: [0.8, 0.2], hall: [0.9, 0.3], shed: [0.35, 0.05], cmpHouse: [0.40, 0.12], cmpShed: [0.30, 0.05] },   // (the ~60 wild spots that moved: 30 compounds x ~2 points)
-    tower: { core: { loot: 0.75, chest: 0.33, mullion: "#323c48" }, town: { loot: 0.6, chest: 0.25, mullion: "#3a3f46" } },
-  };
+  const cityReserveExtra = [];      // [x0, z0, x1, z1] rectangles a map keeps clear of the layout for its own landmarks (Isla Viva's Cliff Temples keep); filled before prepareCity()
+  /** Wave 7b: is this spot (grown by pad) in a block, yard or village footprint of the layout, or on a building? The draw-then-reject test of a map's own landmarks. */
+  const cityBlocks = (x, z, pad) => inCity(x, z, pad) || (cityBld.length > 0 && inRects(cityBld, x, z, pad)) || (cityDecks.length > 0 && inRects(cityDecks, x, z, pad));
+  /** Wave 7b: the first shoreline spot (ground within [lo, hi] of the sea level, water within 22 m on one side and dry land on another, nothing of the layout within `clear`) on rings round (cx, cz); null when there is none. Pure function of the ground. */
+  function shoreSpot(cx, cz, maxR, lo, hi, clear, avoid) {
+    lo = lo == null ? waterY + 0.6 : lo; hi = hi == null ? waterY + 2.2 : hi; clear = clear || 12;
+    for (let ring = 0; ring <= maxR; ring += 10) for (let i = 0; i < (ring ? 16 : 1); i++) {
+      const a = i / 16 * Math.PI * 2 + ring * 0.13, x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring, h = baseH(x, z);
+      if (!(h >= lo && h <= hi) || cityBlocks(x, z, clear)) continue;
+      if (avoid && Math.hypot(x - avoid[0], z - avoid[1]) < avoid[2]) continue;
+      let wet = 0, dry = 0;
+      for (let k = 0; k < 8; k++) { const q = baseH(x + Math.cos(k * Math.PI / 4) * 22, z + Math.sin(k * Math.PI / 4) * 22); if (q < waterY - 0.1) wet++; else if (q > waterY + 0.8) dry++; }
+      if (wet > 0 && dry > 0) return [x, z];
+    }
+    return null;
+  }
+  const SAV = CITY_THEME_TABLES[mapId] || CITY_THEME_TABLES.ashgrid;   // the active theme's tables (Savanna / resort / lodge): see CITY_THEME_TABLES above buildMap
   const SHELL_CENTRE = { "suburban/building-type-q": [0, 0.15] };   // the only kit building whose visual box is not centred on its origin (manifest bbox_min_m / bbox_max_m)
   const CITY_SW_LIFT = 0.10, CITY_MK_LIFT = 0.115;   // sidewalk and paint heights over the ground (the road ribbon is ROAD_LIFT = 0.06 over it)
 
@@ -2430,18 +2561,29 @@ export async function buildMap(W, mapId) {
       } catch (e) { err = e; TG = CK = undefined; console.warn("[maps] the town generator did not load (try " + (attempt + 1) + " of 2):", e && e.message || e); }
     }
     if (!TG) {
-      cityFallback = { reason: String(err && err.message || err || "import failed").slice(0, 200), genVersion: WAVE6_GEN_VERSION, wanted: MAP_GEN_VERSION };
-      console.error("[maps] towngen.js / citykit.js failed to load twice: Savanna is built on its Wave-6 layout (genVersion " + cityFallback.genVersion + ", not " + MAP_GEN_VERSION + "); a squad host with the towns builds a different map.");
+      cityFallback = { reason: String(err && err.message || err || "import failed").slice(0, 200), genVersion: FALLBACK_GEN_VERSION[mapId] || 2, wanted: MAP_GEN_VERSION };
+      console.error("[maps] towngen.js / citykit.js failed to load twice: " + K.name + " is built on its pre-city layout (genVersion " + cityFallback.genVersion + ", not " + MAP_GEN_VERSION + "); a squad host with the towns builds a different map.");
       return null;
     }
-    // landmarks that stay: the overpass (pillars, decks, the access ramp, the station) and the crane with its jib ramp
-    const op = pois.find((q) => q.id === "overpass"), cr = pois.find((q) => q.id === "crane");
-    const reserve = [[op.x - 106, op.z - 8, op.x + 108, op.z + 8], [cr.x - 6, cr.z - 20, cr.x + 10, cr.z + 24]];
-    const lay = TG.layoutMap(seed, "ashgrid", pois.map((q) => ({ id: q.id, x: q.x, z: q.z, r: q.r })), baseH, waterY, { reserve });
+    // landmarks that stay: Savanna's overpass (pillars, decks, the access ramp, the station) and the crane with its jib ramp. The other maps keep their landmarks by drawing
+    // them first and dropping what overlaps the city (the draw-then-reject rule), or by placing them after the layout on a free spot.
+    let reserve = cityReserveExtra.slice();
+    if (mapId === "ashgrid") {
+      const op = pois.find((q) => q.id === "overpass"), cr = pois.find((q) => q.id === "crane");
+      reserve = [[op.x - 106, op.z - 8, op.x + 108, op.z + 8], [cr.x - 6, cr.z - 20, cr.x + 10, cr.z + 24]];
+    }
+    const lay = TG.layoutMap(seed, mapId, pois.map((q) => ({ id: q.id, x: q.x, z: q.z, r: q.r })), baseH, waterY, { reserve });
+    // Isla Viva and Deepwood (Wave 7b): a town the generator had to move (a coastal POI on open water, a river bank, a steep slope) takes its POI with it, so the named place,
+    // the drop-screen label, the bots' targets and the citycheck attribution all sit where the buildings are. Savanna's POIs never move.
+    if (mapId !== "ashgrid") for (const T of lay.towns) {
+      const p = pois.find((q) => q.id === T.id), c = T.centre;
+      if (p && c && (T.blocks.length || T.parcels.length) && Math.hypot(c[0] - p.x, c[1] - p.z) > 8) { p.x = Math.round(c[0] * 10) / 10; p.z = Math.round(c[1] * 10) / 10; }
+    }
     const HP = TG.PITCH / 2;
     for (const T of lay.towns) for (const b of T.blocks) cityFoot.push([b.cx - HP - 5, b.cz - HP - 5, b.cx + HP + 5, b.cz + HP + 5]);
-    for (const T of lay.compounds.concat(lay.towns.filter((q) => !q.blocks.length && q.compound && q.parcels.length))) { const q = T.compound.bounds; cityFoot.push([q[0] - 6, q[1] - 6, q[2] + 6, q[3] + 6]); }   // (a POI whose grid did not fit falls back to a lane cluster)
+    for (const T of lay.compounds.concat(lay.towns.filter((q) => !q.blocks.length && q.compound && q.parcels.length && q.kind !== "crater"))) { const q = T.compound.bounds; cityFoot.push([q[0] - 6, q[1] - 6, q[2] + 6, q[3] + 6]); }   // (a POI whose grid did not fit falls back to a lane cluster)
     for (const T of lay.towns.concat(lay.compounds)) for (const p of T.parcels) if (p.building) { const a = p.building.aabb; cityBld.push([a[0], a[1], a[2], a[3]]); }
+    for (const T of lay.towns) if (T.kind === "docks" && T.docks) for (const dk of T.docks.decks) cityDecks.push([dk.rect[0], dk.rect[1], dk.rect[2], dk.rect[3]]);
     for (const T of lay.compounds) for (const q of T.compound.props) cityBld.push(q.kind === "container" ? [q.x - 3.4, q.z - 3.4, q.x + 3.4, q.z + 3.4] : [q.x - 5, q.z - 5, q.x + 5, q.z + 5]);   // (silo / water tower / containers: wild loot keeps out)
     return { TG, CK, lay, kit: [], stats: lay.stats, lights: 0, kitStats: null, skyline: [], landmarks: [] };
   }
@@ -2449,8 +2591,15 @@ export async function buildMap(W, mapId) {
   function registerCityRoads() {
     const { TG, lay } = city;
     for (const T of lay.towns) for (const s of T.roads.streets) { road(s.x0, s.z0, s.x1, s.z1, TG.ROAD_W); cityRoadLog.push([s.x0, s.z0, s.x1, s.z1, TG.ROAD_W]); }
-    for (const l of lay.links) { road(l.ax, l.az, l.bx, l.bz, TG.ROAD_W); cityRoadLog.push([l.ax, l.az, l.bx, l.bz, TG.ROAD_W]); }
+    for (const l of lay.links) {
+      // Wave 7b: a link on a map with water carries `path`, a polyline round the water (towngen routeLink); Savanna's links are the straight segments they were
+      const pts = l.path && l.path.length > 1 ? l.path : [[l.ax, l.az], [l.bx, l.bz]];
+      for (let k = 0; k + 1 < pts.length; k++) { road(pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], TG.ROAD_W); cityRoadLog.push([pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], TG.ROAD_W]); }
+    }
   }
+  // Wave 7b: the special layouts - the docks village (a boardwalk on stilts), the crater-rim village and the mill-and-bridge compound - register their pads and footprints here, right
+  // after the plateaus and before any building, like everything that shapes the ground (the C-PAD order rule)
+
   // every town is ONE plateau: each block's square (grown to the road's outer edge) is a pad at the town's level - the median of the live ground under all its blocks
   // - so streets, sidewalks and every building are exactly level and the town's whole edge is one falloff; a compound's yard (its fence rectangle) is one pad too.
   // Registered right after the roads and BEFORE any landmark, so everything built later reads the shaped ground (the C-PAD order rule).
@@ -2464,7 +2613,7 @@ export async function buildMap(W, mapId) {
     };
     for (const T of lay.towns) {
       if (!T.blocks.length) {                       // (a POI with no grid fits falls back to a lane / yard cluster: its bounds are one plateau too)
-        if (T.compound && T.parcels.length) { const q = T.compound.bounds, r = [q[0], q[1], q[2], q[3]]; groundPad((r[0] + r[2]) / 2, (r[1] + r[3]) / 2, (r[2] - r[0]) / 2, (r[3] - r[1]) / 2, { gen: "yard", level: medianOf([r]) }); }
+        if (T.compound && T.parcels.length && !SPECIAL_KINDS[T.kind]) { const q = T.compound.bounds, r = [q[0], q[1], q[2], q[3]]; groundPad((r[0] + r[2]) / 2, (r[1] + r[3]) / 2, (r[2] - r[0]) / 2, (r[3] - r[1]) / 2, { gen: "yard", level: medianOf([r]) }); }
         continue;
       }
       const rects = T.blocks.map((b) => [b.cx - HPm, b.cz - HPm, b.cx + HPm, b.cz + HPm]), H = medianOf(rects);
@@ -2565,7 +2714,19 @@ export async function buildMap(W, mapId) {
     const spot = (rad) => { for (let k = 0; k < 12; k++) { const x = y[0] + rad + rr() * (y[2] - y[0] - 2 * rad), z = y[1] + rad + rr() * (y[3] - y[1] - 2 * rad); if (free(x, z, rad)) return [x, z]; } return null; };
     const at = (x, z, dy, w, h, d, col) => { let c = dy, hh = h; if (dy - h / 2 < 0.06) { const top = dy + h / 2; c = (top - CITY_SW_LIFT) / 2; hh = top + CITY_SW_LIFT; } return addBox(x, heightAt0(x, z) + CITY_SW_LIFT + c, z, w, hh, d, col, NC); };
     const hay = ["#d6b052", "#c9a24a", "#dcbb62"];
-    if (!ruin && V !== "depot") for (let k = 0, n = V === "farmstead" ? 2 : 1; k < n; k++) {
+    const themedYard = mapId !== "ashgrid" && (T.theme === "resort" || T.theme === "lodge");
+    if (themedYard && !ruin) {
+      const s = spot(2.6);
+      if (s && T.theme === "resort") {
+        const cc = ["#e8705a", "#2aa6a8", "#f3c34a", "#e892a6"][Math.floor(rr() * 4)];
+        at(s[0], s[1], 1.1, 0.1, 2.2, 0.1, "#d9d4c8"); at(s[0], s[1], 2.25, 2.6, 0.12, 2.6, cc);
+        at(s[0] - 1.4, s[1] + 1.5, 0.2, 0.7, 0.3, 1.9, "#f2f0ea"); at(s[0] + 1.4, s[1] + 1.5, 0.2, 0.7, 0.3, 1.9, "#8fd0d8");
+      } else if (s) {
+        at(s[0], s[1], 0.1, 1.1, 0.2, 1.1, "#3d3a34");
+        for (const [ox, oz, ww, dd] of [[-1.5, 0, 0.45, 1.5], [1.5, 0, 0.45, 1.5], [0, -1.5, 1.5, 0.45], [0, 1.5, 1.5, 0.45]]) at(s[0] + ox, s[1] + oz, 0.22, ww, 0.44, dd, "#6b4a2e");
+      }
+    }
+    if (!ruin && V !== "depot" && !themedYard) for (let k = 0, n = V === "farmstead" ? 2 : 1; k < n; k++) {
       const s = spot(2.4); if (!s) continue;
       at(s[0] - 0.9, s[1], 0.6, 1.6, 1.2, 1.2, hay[k % 3]); at(s[0] + 0.9, s[1], 0.6, 1.6, 1.2, 1.2, hay[(k + 1) % 3]); at(s[0], s[1] + 0.1, 1.8, 1.6, 1.2, 1.2, hay[(k + 2) % 3]);
     }
@@ -2575,38 +2736,777 @@ export async function buildMap(W, mapId) {
     if (ruin) for (let k = 0; k < 4; k++) { const s = spot(1.4); if (!s) continue; const q = 0.9 + rr() * 1.0; at(s[0], s[1], q / 2, q * 1.4, q, q * 1.1, k % 2 ? "#8d877a" : "#77726a"); if (k === 0) at(s[0] + 1.6, s[1], 0.7, 3.2, 1.4, 0.4, "#9a9487"); }
     if (V === "depot") for (let k = 0; k < 3; k++) { const s = spot(1.2); if (!s) continue; at(s[0], s[1], 0.5, 1.0, 1.0, 1.0, "#b58a4a"); at(s[0] + 1.05, s[1], 0.5, 1.0, 1.0, 1.0, "#a37a3f"); at(s[0] + 0.5, s[1], 1.5, 1.0, 1.0, 1.0, "#c29a56"); }
     // a windbreak of three to five acacias round the fence (the map's own instanced tree, with its trunk collider): a green clump a pilot can see from the plane
-    const b = C.bounds, nT = ruin ? 2 : 3 + Math.floor(rr() * 3);
+    const b = C.bounds, nT = ruin ? 2 : mapId === "ashgrid" ? 3 + Math.floor(rr() * 3) : 2 + Math.floor(rr() * 2);
     for (let k = 0; k < nT; k++) {
       const side = Math.floor(rr() * 4), t = rr(), off = 4.5 + rr() * 3;
       const tx = side < 2 ? b[0] + (b[2] - b[0]) * t : (side === 2 ? b[0] - off : b[2] + off), tz = side < 2 ? (side === 0 ? b[1] - off : b[3] + off) : b[1] + (b[3] - b[1]) * t;
       if (C.gate && (tx - C.gate[0]) * (tx - C.gate[0]) + (tz - C.gate[1]) * (tz - C.gate[1]) < 100) continue;
-      props.tree.push({ x: tx, y: heightAt0(tx, tz), z: tz, s: 0.8 + rr() * 0.45, ry: rr() * Math.PI * 2 });
+      props[cityTree].push({ x: tx, y: heightAt0(tx, tz), z: tz, s: 0.8 + rr() * 0.45, ry: rr() * Math.PI * 2 });
     }
     city.landmarks.push({ kind: "compound:" + V, town: T.id, x: (y[0] + y[2]) / 2, z: (y[1] + y[3]) / 2 });
   }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WAVE 7b: THE THEMED CITIES - what Isla Viva (a resort) and Deepwood (a timber lodge) add to the Savanna section above
+  // ═══════════════════════════════════════════════════════════════════════════
+  // The same towngen layouts, the same pads, the same house() / tower() generators on parcels, the same kit and decals: only the tables (CITY_THEME_TABLES), the style dice
+  // (themedStyle), the street dressing and the special layouts differ. Three layouts have shapes of their own and are built here from their data: the docks village (decks and
+  // posts over the shallows, houses ON the decks), the crater-rim village (levelled terrace plots, ruined stone houses, retaining walls, a plaza, broken arches, columns and rubble)
+  // and the mill-and-bridge compound. Savanna never enters any of this: every call is guarded by the layout's `kind` (core / town / village / yard / compound only exist there).
+  const SPECIAL_KINDS = { docks: 1, crater: 1, mill: 1 };
+  const RUIN_STONE = ["#8f8a80", "#9a9488", "#847e72", "#a49d8f", "#7d786d", "#968f82"];
+  const TG_subRng = (id, salt) => city.TG.subRng(seed, id, salt);
+  const cityTree = mapId === "isla_viva" ? "palm" : mapId === "deepwood" ? "pine" : "tree";    // the instanced tree of a windbreak, a pocket park, a back yard (Savanna: the acacia, as before)
+  /** [lowest, highest] ground under a turned w x d box (5 x 3 samples over its outline) */
+  function groundRange(cx, cz, w, d, rot) {
+    const c = Math.cos(rot || 0), s = Math.sin(rot || 0);
+    let lo = Infinity, hi = -Infinity;
+    const ni = Math.min(41, Math.max(5, Math.ceil(w / 1.2) + 1)), nj = Math.min(11, Math.max(3, Math.ceil(d / 1.2) + 1));      // (a sample every ~1.2 m: a long wall on a 30 degree slope has no low corner between the old five)
+    for (let i = 0; i < ni; i++) for (let j = 0; j < nj; j++) {
+      const u = (i / (ni - 1) - 0.5) * w, v = (j / (nj - 1) - 0.5) * d, g = heightAt0(cx + u * c + v * s, cz - u * s + v * c);
+      if (g < lo) lo = g; if (g > hi) hi = g;
+    }
+    return [lo, hi];
+  }
+  /** a stone box `h` tall over the HIGHEST ground under it, standing 0.35 m into the LOWEST: cover that is at least h tall wherever you meet it (a turned box is cut into <= 1 m colliders by addBox) */
+  function stoneBox(cx, cz, w, d, rot, h, color, opts) {
+    const [lo, hi] = groundRange(cx, cz, w, d, rot), y0 = lo - 0.35, y1 = hi + h;
+    addBox(cx, (y0 + y1) / 2, cz, w, y1 - y0, d, color, Object.assign({ rotY: rot || 0, tex: "block" }, opts || {}));
+    return y1;
+  }
+  // The cosmetic style of a resort / lodge house (see houseStyle for the shapes): roof, porch / awning, chimney, trim. `sr` = the parcel's own style stream.
+  function themedStyle(b, sr, PAL, roofC, fh) {
+    const lodge = mapId === "deepwood", st = { storeys: 1, floorH: fh, glass: SAV.glass[Math.floor(sr() * SAV.glass.length)] };
+    const two = (b.use === "house" || b.use === "shop") && b.floors >= 2 && (sr() < (lodge ? 0.6 : 0.65) || b.arch === "villa" || b.arch === "lodge2");      // (Wave 7b stage B: 0.4 / 0.5 -> 0.6 / 0.65 - a real upper floor now, see house() o.upper; villas and lodges always)
+    if (two) st.storeys = 2;
+    const villa = b.arch === "villa" || b.arch === "lodge2";
+    const r1 = sr(), r2 = sr(), r3 = sr();
+    if (lodge) {
+      st.roof = b.use === "hall" || b.use === "barn" ? 0 : r1 < 0.46 ? 0 : r1 < 0.88 ? 1 : 3;
+      st.chimney = b.use === "shed" ? 0 : r2 < 0.78 ? (r3 < 0.5 ? -1 : 1) : 0;
+      st.chimneyC = "#6f6a62";
+      st.porch = b.use !== "shed" && r3 < 0.82;
+      if (b.use === "shop") { st.porch = true; st.sign = "#c9a24a"; }
+      if (b.use === "hall" || b.use === "barn") st.blindBack = true;
+      st.trim = 0;
+    } else {
+      if (b.use === "shop") { st.shopfront = true; st.roof = 2; st.awning = r1 < 0.9 ? (r2 < 0.5 ? PAL.awning[0] : PAL.awning[1]) : null; st.sign = shade(roofC, 0.9); st.unit = 0; }
+      else if (b.use === "hall") { st.roof = r1 < 0.6 ? 3 : 2; st.awning = r2 < 0.5 ? PAL.awning[0] : null; }
+      else if (b.use === "shed") { st.roof = r1 < 0.5 ? 0 : 1; st.porch = true; st.blindBack = true; }
+      else { st.roof = r1 < 0.34 ? 3 : r1 < 0.58 ? 2 : r1 < 0.8 ? 1 : 0; st.chimney = 0; st.porch = r2 < 0.65; st.awning = r3 < 0.28 ? PAL.awning[1] : null; st.unit = 0; }
+      st.trim = (b.use === "house" || b.use === "shop") ? (r3 < 0.35 ? 1 : 0) : 0;
+    }
+    if (villa) {                                                                       // (stage B) the villa / the two-storey lodge: a balcony across the upper floor's front, no awning or porch roof under it
+      st.balcony = true; st.awning = null; st.porch = false;
+      if (!lodge) { st.roof = r1 < 0.55 ? 2 : 3; st.trim = 1; st.railC = "#f4f1e8"; }        // a flat roof with a parapet or a low hip roof, a cream cornice, a white rail
+      else { st.roof = r1 < 0.6 ? 0 : 1; st.railC = "#5a4430"; st.chimney = st.chimney || 1; }
+    }
+    return st;
+  }
+  // wall texture of a resort / lodge building: a lodge is all timber (plank); a resort cottage / beach hut is clapboard half the time, the shops and halls plaster ("s" at the block's tile)
+  const themedWallTex = (b, v) => (mapId === "deepwood" ? "plank" : b.arch === "villa" ? "stucco" : (b.use === "shed" || (b.use === "house" && v < 0.5)) ? "plank" : "stucco");     // (resort: clapboard or smooth stucco, never brick; a villa is whitewashed stucco)
+
+  // ── the docks village: decks over the shallows, posts down to the seabed (cosmetic), houses ON the decks (house() takes y0) ────────────────────────────────────────────
+  function buildDockDecks(T) {
+    const D = T.docks, top = D.top, pc = "#a8794f", dark = shade("#a8794f", 0.62);
+    const decks = D.decks.map((dk) => dk.rect);
+    // every deck: a 0.3 m slab (top = the deck level), exact box, plank texture
+    for (const r of decks) addBox((r[0] + r[2]) / 2, top - 0.15, (r[1] + r[3]) / 2, r[2] - r[0], 0.3, r[3] - r[1], pc, { tex: "plank" });
+    // the gangway: the beach at the landing may stand more than a step (0.55 m) under the deck (a low beach after the link road's corridor has been cut beside it): a 3.2 m plank ramp from the
+    // lowest sand under it up to the boardwalk's first edge, so the village is never an island for a walker or a bot
+    {
+      const sp0 = decks[0], alongX = sp0[2] - sp0[0] > sp0[3] - sp0[1], sg = alongX ? Math.sign(D.dir[0]) : Math.sign(D.dir[1]), RL = 3.2;
+      const fx = alongX ? (sg > 0 ? sp0[0] : sp0[2]) : (sp0[0] + sp0[2]) / 2, fz = alongX ? (sp0[1] + sp0[3]) / 2 : (sg > 0 ? sp0[1] : sp0[3]);
+      const gx = fx - (alongX ? sg * RL / 2 : 0), gz = fz - (alongX ? 0 : sg * RL / 2);
+      const lo = groundRange(gx - (alongX ? sg * 0.4 : 0), gz - (alongX ? 0 : sg * 0.4), alongX ? RL + 0.8 : 2.4, alongX ? 2.4 : RL + 0.8, 0)[0], rise = top - lo;     // (the ground 0.4 m before the foot too: the lip gate)
+      if (rise > 0.12 && rise < RL) addRamp(gx, lo, gz, 2.4, rise, RL, alongX ? (sg > 0 ? 0 : 1) : (sg > 0 ? 2 : 3), "#a8794f");
+    }
+    // posts: down to the seabed (0.3 m into it) at the corners and every 4 m round every deck, each reaching the ground under ITSELF; cosmetic (a swimmer is not worth a collider)
+    const seen = new Set();
+    const post = (x, z) => {
+      const k = Math.round(x * 2) + "," + Math.round(z * 2);
+      if (seen.has(k)) return;
+      seen.add(k);
+      const g = heightAt0(x, z) - 0.3;
+      if (top - 0.3 - g > 0.25) addBox(x, (g + top - 0.3) / 2, z, 0.32, top - 0.3 - g, 0.32, dark, { collide: false });
+    };
+    for (const r of decks) {
+      const nx = Math.max(1, Math.round((r[2] - r[0]) / 4)), nz = Math.max(1, Math.round((r[3] - r[1]) / 4));
+      for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) { if (i && j && i < nx && j < nz) continue; post(r[0] + 0.3 + (r[2] - r[0] - 0.6) * i / nx, r[1] + 0.3 + (r[3] - r[1] - 0.6) * j / nz); }
+    }
+    // a low kerb board along the two long sides of the spine so the boardwalk reads as one (cosmetic)
+    const sp = decks[0], alongX = sp[2] - sp[0] > sp[3] - sp[1];
+    for (const side of [0, 1]) {
+      if (alongX) addBox((sp[0] + sp[2]) / 2, top + 0.25, side ? sp[3] - 0.1 : sp[1] + 0.1, sp[2] - sp[0], 0.5, 0.15, shade(pc, 0.8), { collide: false });
+      else addBox(side ? sp[2] - 0.1 : sp[0] + 0.1, top + 0.25, (sp[1] + sp[3]) / 2, 0.15, 0.5, sp[3] - sp[1], shade(pc, 0.8), { collide: false });
+    }
+    // the head of the boardwalk: a chest and a floor item (what pier() always gave a dock)
+    const head = D.decks.find((dk) => dk.role === "head");
+    if (head) { const r = head.rect, mx = (r[0] + r[2]) / 2, mz = (r[1] + r[3]) / 2; loot(mx, top + 0.5, mz, T.id); chest(mx + (alongX ? 0 : 3), top + 0.6, mz + (alongX ? 3 : 0), T.id); }
+  }
+
+  // ── the crater-rim village ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  /** A ruined stone house: the walls of house() (door 2.26 m, a window opening in each side wall, a back breach half the time) built in segments, the roofed half whole and the other half
+   *  broken down to 1.3-3.0 m, a roof deck over the whole half only (so nothing floats and the room stays a room), rubble beside the breaches, the loot of any house. `rr` = the
+   *  building's own sub-RNG (nothing here touches the shared stream except the loot rolls, made last in a fixed order). */
+  function ruinHouse(x, z, w, d, rot, wallC, roofC, poiId, rr, o) {
+    const H = 3.4, T = 0.34, doorW = 2.26, winW = 1.2, WT = { tex: "block" };
+    const rc = Math.abs(Math.cos(rot)), rs = Math.abs(Math.sin(rot));
+    const y = groundPad(x, z, (rc * (w + 0.7) + rs * (d + 0.7)) / 2 + 0.05, (rs * (w + 0.7) + rc * (d + 0.7)) / 2 + 0.05, { gen: "house" });
+    const roofSide = rr() < 0.5 ? -1 : 1;                       // the half that keeps its roof: local x > -0.12 w (right) or x < 0.12 w (left)
+    const under = (u0, u1) => (roofSide > 0 ? u1 > -0.12 * w : u0 < 0.12 * w);          // does a front / back wall segment [u0, u1] stand under the roof deck?
+    // one front / back wall segment on the wall at local z = v: whole under the roof, otherwise whole 40 % of the time and else broken down to 1.3 - 3.0 m
+    const seg = (u0, u1, v) => {
+      if (u1 - u0 < 0.15) return H;
+      const full = under(u0, u1) || rr() < 0.4, hb = full ? H : 1.3 + rr() * 1.7;
+      addBoxR(x, z, (u0 + u1) / 2, v, y + hb / 2, u1 - u0, hb, T, wallC, rot, WT);
+      return hb;
+    };
+    const fL = seg(-w / 2, -doorW / 2, d / 2), fR = seg(doorW / 2, w / 2, d / 2);
+    if (fL === H && fR === H) addBoxR(x, z, 0, d / 2, y + 3.05, doorW, 0.7, T, wallC, rot, WT);
+    if (rr() < 0.5) { const bu = (rr() - 0.5) * (w - 4.6); seg(-w / 2, bu - 1.3, -d / 2); seg(bu + 1.3, w / 2, -d / 2); }          // a 2.6 m breach in the back wall
+    else { seg(-w / 2, 0, -d / 2); seg(0, w / 2, -d / 2); }
+    for (const sx of [-1, 1]) {                                                                              // side walls: a window opening in the middle; the one under the roof is whole
+      const side = (u0, u1) => {
+        const full = sx === roofSide || rr() < 0.3, hb = full ? H : 1.3 + rr() * 1.7;
+        addBoxR(x, z, sx * w / 2, (u0 + u1) / 2, y + hb / 2, T, hb, u1 - u0, wallC, rot, WT);
+        return hb;
+      };
+      const a = side(-d / 2, -winW / 2), b2 = side(winW / 2, d / 2);
+      addBoxR(x, z, sx * w / 2, 0, y + 0.6, T, 1.2, winW, wallC, rot, WT);
+      if (a === H && b2 === H) addBoxR(x, z, sx * w / 2, 0, y + 2.3 + (H - 2.3) / 2, T, H - 2.3, winW, wallC, rot, WT);
+    }
+    // the roof deck over the roofed 62 % (w * 0.62 + 0.35 wide, the full depth + 0.7, resting on the whole walls)
+    const rw = w * 0.62 + 0.35, ru = roofSide * (w / 2 - rw / 2 + 0.35);
+    addBoxR(x, z, ru, 0, y + H + 0.15, rw, 0.3, d + 0.7, roofC, rot, { tex: "shingle" });
+    // rubble just outside: three blocks 1.2 - 1.7 m tall on the broken side (cover; clear of the walls)
+    const cr = Math.cos(rot), sr2 = Math.sin(rot);
+    for (let k = 0; k < 3; k++) {
+      const su = -roofSide * (0.2 + rr() * 0.3) * w, sv = (rr() < 0.5 ? -1 : 1) * (d / 2 + 1.7 + rr() * 1.4), bw = 1.4 + rr() * 1.0, bh = 1.2 + rr() * 0.5, tn = 0.86 + rr() * 0.14;
+      stoneBox(x + su * cr + sv * sr2, z - su * sr2 + sv * cr, bw, bw * 0.8, rot, bh, shade(wallC, tn));
+    }
+    if (o && o.loot != null) {
+      if (rng() < o.loot) loot(x, y + 0.5, z, poiId);
+      if (rng() < o.chest) chest(x + (rng() - 0.5) * w * 0.4, y + 0.6, z + (rng() - 0.5) * d * 0.4, poiId);
+    } else { loot(x, y + 0.5, z, poiId); if (rng() < 0.5) chest(x + (rng() - 0.5) * w * 0.4, y + 0.6, z + (rng() - 0.5) * d * 0.4, poiId); }
+    return y;
+  }
+  // the terrace plots' pads, the plaza's, and the village's footprints (the wilderness keeps out of them); runs from registerCityExtras, before any building
+  function registerCrater(T) {
+    const C = T.crater;
+    for (const p of C.plots) { const r = p.rect; groundPad((r[0] + r[2]) / 2, (r[1] + r[3]) / 2, (r[2] - r[0]) / 2, (r[3] - r[1]) / 2, { gen: "terrace", level: p.level }); cityFoot.push([r[0] - 5, r[1] - 5, r[2] + 5, r[3] + 5]); }
+    groundPad(C.plaza.x, C.plaza.z, C.plaza.r, C.plaza.r, { gen: "plaza", level: C.plaza.level });
+    // the four stair lines are graded like roads (a 3.6 m bed, the profile smoothed along the line, level across it): the 8 m ramps laid on them then meet the ground at both ends and have no
+    // cross-slope to be half buried in on the cone's lumps and the terraces' cut banks
+    for (const st of C.stairs) registerCorridor([[st.cx + st.dx * st.r0, st.cz + st.dz * st.r0], [st.cx + st.dx * st.r1, st.cz + st.dz * st.r1]], 3.6, { falloff: 3 });
+    cityFoot.push([C.plaza.x - 22, C.plaza.z - 22, C.plaza.x + 22, C.plaza.z + 22]);
+    for (const q of C.pieces) cityFoot.push([q.x - 3, q.z - 3, q.x + 3, q.z + 3]);
+    for (const q of C.arches) cityFoot.push([q.x - 5, q.z - 5, q.x + 5, q.z + 5]);
+    for (const q of C.towers || []) cityFoot.push([q.x - 5, q.z - 5, q.x + 5, q.z + 5]);
+  }
+  /** the walls, arches, plaza and free pieces of the crater village (after its houses): all exact stone boxes (the free fragments turned), cover wherever you meet them */
+  function buildCrater(T) {
+    const C = T.crater, col = RUIN_STONE, pr = TG_subRng(T.id, "pieces");
+    useDistrict("town:" + T.id);
+    for (const w of C.walls) {
+      const c = col[Math.floor(pr() * col.length)];
+      if (w.axis === 0) stoneBox(w.x, w.z, w.len, w.th, 0, w.h, c); else stoneBox(w.x, w.z, w.th, w.len, 0, w.h, c);
+    }
+    // broken arches: two pillars and a lintel over the 3.4 m gap, the lintel's underside >= 2.6 m over the highest ground under the gateway; a broken one has a short pillar and half a lintel
+    for (const a of C.arches) {
+      const c = col[Math.floor(pr() * col.length)], sepX = a.axis === 0, off = a.gap / 2 + 0.6;
+      const p0 = sepX ? [a.x - off, a.z] : [a.x, a.z - off], p1 = sepX ? [a.x + off, a.z] : [a.x, a.z + off];
+      const [g0, h0] = groundRange(p0[0], p0[1], 1.2, 1.2, 0), [g1, h1] = groundRange(p1[0], p1[1], 1.2, 1.2, 0), hi = Math.max(h0, h1, heightAt0(a.x, a.z));       // (a pillar stands 0.35 m into the LOWEST ground under its 1.2 m foot)
+      const lintelBottom = hi + 2.6, lintelTop = lintelBottom + 0.9;
+      addBox(p0[0], (g0 - 0.35 + lintelTop) / 2, p0[1], 1.2, lintelTop - g0 + 0.35, 1.2, c, { tex: "block" });
+      const top1 = a.broken ? h1 + 2.1 : lintelTop;
+      addBox(p1[0], (g1 - 0.35 + top1) / 2, p1[1], 1.2, top1 - g1 + 0.35, 1.2, c, { tex: "block" });
+      const s0 = (sepX ? p0[0] : p0[1]) - 0.6, s1 = a.broken ? (sepX ? a.x : a.z) + 0.4 : (sepX ? p1[0] : p1[1]) + 0.6, len = s1 - s0, mid = (s0 + s1) / 2;
+      addBox(sepX ? mid : a.x, lintelBottom + 0.45, sepX ? a.z : mid, sepX ? len : 1.2, 0.9, sepX ? 1.2 : len, shade(c, 0.92), { tex: "block" });
+    }
+    // the plaza: eight broken columns round an altar of three steps with two chests
+    const P = C.plaza;
+    for (const q of P.columns) stoneBox(q[0], q[1], 0.9, 0.9, 0, q[2], col[Math.floor(pr() * col.length)]);
+    const ax = P.altar.x, az = P.altar.z, y0 = heightAt0(ax, az);
+    addBox(ax, y0 + 0.2, az, 5.0, 0.4, 4.0, "#a49d8f", { tex: "block" }); addBox(ax, y0 + 0.65, az, 3.6, 0.5, 2.8, "#9a9488", { tex: "block" }); addBox(ax, y0 + 1.15, az, 2.2, 0.5, 1.6, "#8f8a80", { tex: "block" });
+    chest(ax - 0.5, y0 + 1.4, az, T.id); chest(ax + 0.5, y0 + 1.4, az, T.id); loot(ax, y0 + 0.5, az + 3.2, T.id); loot(ax, y0 + 0.5, az - 3.2, T.id);
+    // the free pieces
+    useDistrict("town:" + T.id);
+    for (const q of C.pieces) {
+      const c = col[Math.floor(pr() * col.length)], tint = shade(c, 0.82 + Math.floor(pr() * 4) * 0.06);
+      stoneBox(q.x, q.z, q.w, q.d, q.rot, q.h, q.kind === "column" ? c : tint);
+    }
+    // (stage B) the ruined watchtowers: a hollow 4.6 m stone shaft, 0.5 m walls from 0.35 m into the lowest ground to `h` over the highest, a 2.3 m doorway toward the axis (a lintel over it), a
+    // slit window on each other side; a broken one has lost a corner of its top; merlons on the rest of the rim (cosmetic); a floor item inside. Exact boxes.
+    for (const tw of C.towers || []) {
+      const [lo, hi] = groundRange(tw.x, tw.z, tw.w, tw.w, 0), y0 = lo - 0.35, top = hi + tw.h, Wt = tw.w, t = 0.5, c = RUIN_STONE[Math.floor(pr() * RUIN_STONE.length)], sh = shade(c, 0.9);
+      const face = tw.face;                                            // 0 +z, 1 +x, 2 -z, 3 -x: the wall with the door
+      for (let k = 0; k < 4; k++) {
+        const nx = [0, 1, 0, -1][k], nz = [1, 0, -1, 0][k], cx = tw.x + nx * (Wt / 2 - t / 2), cz = tw.z + nz * (Wt / 2 - t / 2), along = nx ? Wt : Wt;      // the wall facing (nx, nz)
+        const wx = nx ? t : along, wz = nx ? along : t, wallTop = tw.broken && k === (face + 2) % 4 ? hi + tw.h * 0.6 : top;
+        if (k === face) {                                              // the doorway: two jambs and a lintel
+          const jl = (Wt - 2.3) / 2;
+          for (const sd of [-1, 1]) { const ox = nx ? 0 : sd * (2.3 / 2 + jl / 2), oz = nx ? sd * (2.3 / 2 + jl / 2) : 0; addBox(cx + ox, (y0 + wallTop) / 2, cz + oz, nx ? t : jl, wallTop - y0, nx ? jl : t, c, { tex: "block" }); }
+          addBox(cx, (hi + 2.6 + wallTop) / 2, cz, nx ? t : 2.3, wallTop - hi - 2.6, nx ? 2.3 : t, sh, { tex: "block" });
+        } else addBox(cx, (y0 + wallTop) / 2, cz, wx, wallTop - y0, wz, c, { tex: "block" });
+        if (k !== face) addBox(cx + nx * 0.03, hi + tw.h * 0.55, cz + nz * 0.03, nx ? t + 0.04 : 0.35, 1.2, nx ? 0.35 : t + 0.04, "#2a2622", { collide: false });   // a dark slit window
+      }
+      for (const [mx, mz] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) {   // merlons round the rim (not on the broken side)
+        const bx = tw.x + mx * (Wt / 2 - 0.35), bz = tw.z + mz * (Wt / 2 - 0.35);
+        const bk = (face + 2) % 4;                                     // the broken wall: 0 +z, 1 +x, 2 -z, 3 -x
+        if (tw.broken && (bk === 0 ? mz > 0 : bk === 2 ? mz < 0 : bk === 1 ? mx > 0 : mx < 0)) continue;
+        addBox(bx, top + 0.45, bz, 0.7, 0.9, 0.7, sh, { collide: false, tex: "block" });
+      }
+      loot(tw.x, heightAt0(tw.x, tw.z) + 0.5, tw.z, T.id);
+    }
+    // (stage B) the braziers along the stair lines: a 1.0 m stone pedestal (an exact collider), an iron bowl, a fire (emissive: the near-lamp pool lights it at dusk)
+    for (const bz of C.braziers || []) {
+      const top = stoneBox(bz[0], bz[1], 0.7, 0.7, 0, 1.0, "#7d786d");
+      addBox(bz[0], top + 0.12, bz[1], 0.95, 0.24, 0.95, "#3a3430", { collide: false });
+      coneAt(bz[0], top + 0.2, bz[1], 0.34, 0.62, 6, "#ffb050", pr() * Math.PI);
+      lampPts.push({ x: bz[0], y: top + 0.6, z: bz[1] });
+    }
+    // the stair flights: the four axis lines through the volcano's axis, from the outer ring to the plaza, in 8 m ramps that follow the ground (the foot of each on the lowest ground
+    // under its width, its top on the ground at the next station: so the flight is one continuous staircase hugging the slope, never a viaduct, and no piece climbs more than its run)
+    useDistrict("town:" + T.id);
+    for (const st of C.stairs) {
+      const ux = st.dx, uz = st.dz, px = -uz, pz = ux, RUN = 4, n = Math.floor((st.r1 - st.r0) / RUN);
+      const gAt = (r) => { let lo = Infinity; for (let k = -2; k <= 2; k++) { const g = heightAt0(st.cx + ux * r + px * k * 0.55, st.cz + uz * r + pz * k * 0.55); if (g < lo) lo = g; } return lo; };
+      for (let k = 0; k < n; k++) {
+        const ra = st.r0 + k * RUN, rb = ra + RUN, ga = gAt(ra), gb = gAt(rb), up = gb > ga;                // the ramp rises toward the far end (rb) when that is the higher
+        // the foot stands 9 cm over the lowest ground under its width 0.3 m BEFORE its edge (the collision gate reads the ground there: a foot at the edge's own level hangs slope x 0.3 m over it
+        // on a 30 degree slope; 9 cm is under its 10 cm lip bar, and the walker descending still reaches the foot within the worldlive tolerance); the top meets the ground at the other station
+        const foot = (up ? gAt(ra - 0.3) : gAt(rb + 0.3)) + 0.0, topG = up ? gb : ga, rise = topG - foot;
+        if (rise < 0.3 || rise > RUN * 0.92) continue;                                                // (flat; or steeper than the run's 43 degrees: the bare slope is the way there)
+        const mx = st.cx + ux * (ra + rb) / 2, mz = st.cz + uz * (ra + rb) / 2;
+        const dirV = up ? [ux, uz] : [-ux, -uz], dir = dirV[0] > 0 ? 0 : dirV[0] < 0 ? 1 : dirV[1] > 0 ? 2 : 3;
+        addRamp(mx, foot, mz, 2.4, rise, RUN, dir, "#8f8a80");
+      }
+    }
+  }
+  // ── Wave 7b stage B: cosmetic geometry at any pose (no collider: the colliders go in beside them as exact boxes) ──────────────────────────────────────────────────────────
+  // A box, a cylinder (a log: its cut ends a lighter colour) or a gable prism under a world matrix, into the current sink with the same batch keys as addBox (so a district stays one
+  // mesh per texture kind). Used where a box on the axes cannot draw the shape: a water wheel, round logs, a pitched roof, a boulder.
+  const _gM = new THREE.Matrix4(), _gR = new THREE.Matrix4(), _gT = new THREE.Matrix4(), _vA = new THREE.Vector3();
+  function boxAt(m, w, h, d, color, tex, out) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    scaleBoxUV(geo, w, h, d, structTile);
+    geo.applyMatrix4(m);
+    if (out) out.push([geo, color]); else pushGeo(color + "|" + (tex || "s"), geo);
+    return geo;
+  }
+  function cylAt(m, r, len, seg, color, tex, capColor) {
+    const geo = new THREE.CylinderGeometry(r, r, len, seg, 1, true), uv = geo.attributes.uv, su = 2 * Math.PI * r / structTile, sv = len / structTile;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+    geo.applyMatrix4(m);
+    pushGeo(color + "|" + (tex || "s"), geo);
+    if (capColor) for (const sg of [1, -1]) {
+      const cap = new THREE.CircleGeometry(r, seg), cu = cap.attributes.uv;
+      cap.rotateX(sg > 0 ? -Math.PI / 2 : Math.PI / 2); cap.translate(0, sg * len / 2, 0);
+      for (let i = 0; i < cu.count; i++) cu.setXY(i, cu.getX(i) * 2 * r / structTile, cu.getY(i) * 2 * r / structTile);
+      cap.applyMatrix4(m);
+      pushGeo(capColor + "|" + (tex || "s"), cap);
+    }
+  }
+  /** a gable roof: a prism w wide (x), h high (apex at y = h, base at y = 0), d long (z, the ridge), flat-shaded, indexed (it merges with the boxes) */
+  function prismGeo(w, h, d) {
+    const hw = w / 2, hd = d / 2, sl = Math.hypot(hw, h), nx = h / sl, ny = hw / sl;
+    const pos = [], nor = [], uv = [], idx = [];
+    const quad = (a, b, c, e, n, uw, uh) => { const k = pos.length / 3; pos.push(...a, ...b, ...c, ...e); for (let i = 0; i < 4; i++) nor.push(...n); uv.push(0, 0, uw, 0, uw, uh, 0, uh); idx.push(k, k + 1, k + 2, k, k + 2, k + 3); };
+    const tri = (a, b, c, n) => { const k = pos.length / 3; pos.push(...a, ...b, ...c); for (let i = 0; i < 3; i++) nor.push(...n); uv.push(0, 0, w / structTile, 0, w / 2 / structTile, h / structTile); idx.push(k, k + 1, k + 2); };
+    quad([-hw, 0, hd], [-hw, 0, -hd], [0, h, -hd], [0, h, hd], [-nx, ny, 0], d / structTile, sl / structTile);      // the -x slope (outward normal up and to -x)
+    quad([hw, 0, -hd], [hw, 0, hd], [0, h, hd], [0, h, -hd], [nx, ny, 0], d / structTile, sl / structTile);        // the +x slope
+    tri([-hw, 0, hd], [0, h, hd], [hw, 0, hd], [0, 0, 1]);                                                           // the gable ends
+    tri([hw, 0, -hd], [0, h, -hd], [-hw, 0, -hd], [0, 0, -1]);
+    quad([-hw, 0, -hd], [-hw, 0, hd], [hw, 0, hd], [hw, 0, -hd], [0, -1, 0], w / structTile, d / structTile);       // the soffit
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    return geo;
+  }
+  /** the colliders under a gable roof (base y0, ridge along the z of a quarter-turned frame): `n` stacked boxes, each as wide as the roof is at its middle height (the drawn slope is within h / 2n of them) */
+  function gableColliders(cx, cz, w, d, alongX, y0, h, n) {
+    for (let k = 0; k < n; k++) {
+      const yb = y0 + h * k / n, ym = h * (k + 0.5) / n, ww = w * (1 - ym / h);
+      if (ww < 0.4) continue;
+      boxColliders(cx, yb + h / n / 2, cz, alongX ? d : ww, h / n, alongX ? ww : d, 0);
+    }
+  }
+  // ── Wave 7b stage B: the themed towns' street life (Isla Viva: a beach bar, a pool deck, café umbrellas at the shops; Deepwood: a campfire circle, a woodyard) ──────────────────────
+  // The layout's lots are parking / park / yard on every themed map (towngen); here a resort town's park becomes a beach bar and its yard a pool deck (the pool is a decal of buildCityGround),
+  // a lodge town's park a campfire circle and its yard a woodyard. Everything is boxes, cones and cylinders in the town's district (no draw call of its own); what a player can walk into or
+  // land on collides (a counter, a back bar, the thatch over a kiosk as stacked boxes, the log piles, the stools are too small to matter). The dice are each lot's own sub-stream.
+  /** a cone (apex up) or a 4-sided pyramid (seg 4), base at y, cosmetic */
+  function coneAt(x, y, z, r, h, seg, color, rotY, tex) {
+    const geo = new THREE.ConeGeometry(r, h, seg, 1, false), uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 2 * Math.PI * r / structTile, uv.getY(i) * h / structTile);
+    if (rotY) geo.rotateY(rotY);
+    geo.translate(x, y + h / 2, z);
+    pushGeo(color + "|" + (tex || "s"), geo);
+  }
+  /** a café / beach umbrella over a little table with two chairs, standing on the ground at (x, z) (cosmetic: a pole you walk round, like the street furniture) */
+  function umbrella(x, z, color, rr, table) {
+    const gr = heightAt0(x, z), g0 = gr + CITY_SW_LIFT - 0.02, NC = { collide: false };
+    addBox(x, (gr - 0.05 + g0 + 2.4) / 2, z, 0.09, g0 + 2.4 - gr + 0.05, 0.09, "#e8e4da", NC);                 // (the pole reaches through the paving into the ground)
+    coneAt(x, g0 + 2.0, z, 1.3, 0.55, 8, color, rr() * Math.PI);
+    coneAt(x, g0 + 2.55, z, 0.12, 0.18, 6, shade(color, 0.8));
+    if (!table) return;
+    addBox(x, g0 + 0.74, z, 0.8, 0.06, 0.8, "#f2efe6", NC);
+    for (const [cx, cz] of [[0.75, 0], [-0.75, 0]]) { const a = rr() * 0.6 - 0.3, px = x + cx * Math.cos(a), pz = z + cx * Math.sin(a) + cz, pg = heightAt0(px, pz) - 0.04; addBox(px, (pg + g0 + 0.46) / 2, pz, 0.42, g0 + 0.46 - pg, 0.42, "#d9d2c0", NC); }
+  }
+  function lounger(x, z, rot, color) {
+    const gr = heightAt0(x, z) - 0.04, g0 = gr + 0.04 + CITY_SW_LIFT - 0.02;
+    addBox(x, (gr + g0 + 0.36) / 2, z, 0.7, g0 + 0.36 - gr, 1.9, color, { collide: false, rotY: rot });
+    const c = Math.cos(rot), s = Math.sin(rot);
+    addBox(x + 0.75 * s, g0 + 0.45, z + 0.75 * c, 0.7, 0.5, 0.4, color, { collide: false, rotY: rot });
+  }
+  function themedLots(T, did) {
+    const resort = mapId === "isla_viva", NC = { collide: false };
+    const kitPts = city.kit.filter((e) => e.district === did).map((e) => [e.x, e.z]);
+    const clearOfKit = (x, z, r) => { for (const q of kitPts) if ((q[0] - x) * (q[0] - x) + (q[1] - z) * (q[1] - z) < r * r) return false; return true; };
+    for (const p of T.parcels) {
+      const rr = TG_subRng(T.id, "tl" + p.id), r = p.rect, cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2, w = r[2] - r[0], d = r[3] - r[1];
+      const [fx, fz] = p.facing, y0 = heightAt0(cx, cz) + CITY_SW_LIFT;
+      if (p.use === "lot" && w >= 12 && d >= 12) {
+        if (resort && (p.lot === "park" || (p.lot === "parking" && (city.TG.hash32(T.id + ":" + p.id) & 1)))) {          // (half the car parks too: a resort has few lots)
+          // the beach bar: a kiosk (counter to the street, a back bar, four posts, a thatched pyramid roof), four stools, two umbrellas with tables, two loungers
+          const ux = fz ? 1 : 0, uz = fz ? 0 : 1, vx = fx, vz = fz;                        // u along the frontage, v toward the street
+          const P = (u, v) => [cx + ux * u + vx * v, cz + uz * u + vz * v];
+          const box = (u, v, yc, bu, h, bv, col, o) => {                                      // (a box standing on the paving reaches through it to the ground under it)
+            const q = P(u, v);
+            let c = y0 + yc, hh = h;
+            if (yc - h / 2 < 0.06) { const g = Math.min(heightAt0(q[0], q[1]), heightAt0(q[0] + (ux ? bu : bv) / 2, q[1] + (ux ? bv : bu) / 2), heightAt0(q[0] - (ux ? bu : bv) / 2, q[1] - (ux ? bv : bu) / 2)) - 0.05, top = y0 + yc + h / 2; c = (g + top) / 2; hh = top - g; }
+            addBox(q[0], c, q[1], ux ? bu : bv, hh, ux ? bv : bu, col, o);
+          };
+          box(0, 1.2, 0.55, 3.6, 1.1, 0.6, "#a8794f", { tex: "plank" });
+          box(0, -1.1, 0.9, 3.6, 1.8, 0.45, "#8a6a48", { tex: "plank" });
+          box(0, 1.2, 1.13, 3.8, 0.06, 0.75, "#f2efe6", NC);
+          for (const [u, v] of [[-1.9, 1.5], [1.9, 1.5], [-1.9, -1.4], [1.9, -1.4]]) box(u, v, 1.3, 0.16, 2.6, 0.16, "#7a5a3a", NC);
+          coneAt(cx, y0 + 2.6, cz, 3.25, 1.5, 4, "#d6b36a", Math.PI / 4);
+          for (let k = 0; k < 3; k++) { const ym = (k + 0.5) / 3, sz = 4.4 * (1 - ym); boxColliders(cx, y0 + 2.6 + 0.5 * k + 0.25, cz, sz, 0.5, sz, 0); }   // (the pyramid: three square tiers under it)
+          for (const u of [-1.2, -0.4, 0.4, 1.2]) { const q = P(u, 2.1), g = heightAt0(q[0], q[1]) + CITY_SW_LIFT; _gT.makeTranslation(q[0], g + 0.36, q[1]); cylAt(_gT, 0.2, 0.72, 8, "#c9a46a", "plank"); }
+          const AW = SAV.awnings;
+          for (const [u, v] of [[-4.4, 4.2], [4.4, 4.0]]) { const q = P(u, v); if (Math.abs(u) < w / 2 - 1.5) umbrella(q[0], q[1], AW[Math.floor(rr() * AW.length)], rr, true); }
+          for (const u of [-3.2, 3.2]) { const q = P(u, -4.6); lounger(q[0], q[1], Math.atan2(vx, vz) + Math.PI, "#f4f1e8"); }
+          city.landmarks.push({ kind: "beachbar", town: T.id, x: cx, z: cz });
+        } else if (resort && p.lot === "yard") {
+          // the pool deck (the pool and its rim are drawn by buildCityGround): loungers and umbrellas along its two long sides
+          const px0 = r[0] + 3.5, px1 = r[2] - 3.5, pz0 = r[1] + 3.5, pz1 = r[3] - 3.5, alongX = px1 - px0 >= pz1 - pz0;
+          const n = Math.max(2, Math.min(4, Math.floor((alongX ? px1 - px0 : pz1 - pz0) / 4)));
+          for (const sd of [-1, 1]) for (let k = 0; k < n; k++) {
+            const t = (k + 0.5) / n;
+            const x = alongX ? px0 + (px1 - px0) * t : (sd < 0 ? px0 - 1.7 : px1 + 1.7), z = alongX ? (sd < 0 ? pz0 - 1.7 : pz1 + 1.7) : pz0 + (pz1 - pz0) * t;
+            if (k % 2) lounger(x, z, alongX ? 0 : Math.PI / 2, "#f4f1e8"); else umbrella(x, z, SAV.awnings[Math.floor(rr() * SAV.awnings.length)], rr, false);
+          }
+          city.landmarks.push({ kind: "pool", town: T.id, x: cx, z: cz });
+        } else if (!resort && p.lot === "park") {
+          // the campfire circle: a ring of stones round a fire of three logs over embers, four log benches round it
+          for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, x = cx + Math.cos(a) * 1.0, z = cz + Math.sin(a) * 1.0; addBox(x, y0 + 0.08, z, 0.4, 0.3, 0.32, RUIN_STONE[k % RUIN_STONE.length], { collide: false, rotY: a, tex: "block" }); }
+          { const gl = Math.min(heightAt0(cx - 0.7, cz - 0.7), heightAt0(cx + 0.7, cz + 0.7), heightAt0(cx - 0.7, cz + 0.7), heightAt0(cx + 0.7, cz - 0.7)) - 0.04; addBox(cx, (gl + y0 + 0.05) / 2, cz, 1.4, y0 + 0.05 - gl, 1.4, "#3a3530", NC); }
+          addBox(cx, y0 + 0.1, cz, 0.7, 0.12, 0.7, "#e8742c", NC);
+          for (let k = 0; k < 3; k++) { const a = k * Math.PI * 2 / 3 + rr(); _gT.makeTranslation(cx + Math.cos(a) * 0.28, y0 + 0.45, cz + Math.sin(a) * 0.28); _gR.makeRotationAxis(_vA.set(-Math.sin(a), 0, Math.cos(a)), 0.55); cylAt(_gT.multiply(_gR), 0.09, 1.1, 6, "#5e4128", "plank", "#c49c62"); }
+          for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; fallenLog({ x: cx + Math.cos(a) * 3.4, z: cz + Math.sin(a) * 3.4, w: 2.6, d: 0.62, rot: a + Math.PI / 2 }, "#6b4a2e"); }
+          city.landmarks.push({ kind: "campfire", town: T.id, x: cx, z: cz });
+        } else if (!resort && p.lot === "yard") {
+          // the woodyard: two round log piles, a chopping stump with an axe in it, a sawhorse
+          const alongX = w >= d;
+          logPile({ x: cx + (alongX ? -3.2 : 0), z: cz + (alongX ? 0 : -3.2), w: 3.6, d: 1.7, rot: alongX ? 0 : Math.PI / 2 }, "#6b4a2e", rr);
+          logPile({ x: cx + (alongX ? 2.2 : 2.6), z: cz + (alongX ? 2.6 : 2.2), w: 3.2, d: 1.6, rot: alongX ? Math.PI / 2 : 0 }, "#5e4128", rr);
+          const sx = cx + (alongX ? 2.6 : -2.6), sz = cz + (alongX ? -2.4 : 2.6), sg = heightAt0(sx, sz) + CITY_SW_LIFT - 0.05;
+          _gT.makeTranslation(sx, sg + 0.32, sz); cylAt(_gT, 0.38, 0.64, 10, "#6b4a2e", "plank", "#c9a46a");
+          boxColliders(sx, sg + 0.32, sz, 0.6, 0.64, 0.6, 0);
+          city.landmarks.push({ kind: "woodyard", town: T.id, x: cx, z: cz });
+        }
+        continue;
+      }
+      // café umbrellas: a resort shop puts two on the sidewalk in front of it, either side of its door (clear of the kit's lights, benches and hydrants)
+      const b = p.building;
+      if (!resort || !b || p.use !== "shop" || b.gen === "shell") continue;
+      const fxw = b.facing[0], fzw = b.facing[1], ux = fzw ? 1 : 0, uz = fzw ? 0 : 1;
+      const edge = fzw ? (fzw > 0 ? r[3] : r[1]) : (fxw > 0 ? r[2] : r[0]);
+      for (const sgn of [-1, 1]) {
+        const u = sgn * Math.min(3.0, b.w / 2 - 0.6), x = (fzw ? b.cx + ux * u : edge + fxw * 1.5), z = (fzw ? edge + fzw * 1.5 : b.cz + uz * u);
+        if (!clearOfKit(x, z, 2.2)) continue;
+        umbrella(x, z, SAV.awnings[Math.floor(rr() * SAV.awnings.length)], rr, true);
+      }
+    }
+  }
+  const millWheels = [];          // the turning wheels: [{ geos: [[geo, colour]], pivot, axis }] - meshes made after the merge (their material is the plank structure material)
+  // ── the mill-and-bridge village (Deepwood): terrace plots on both banks like the crater's, a road bridge, the water mill, a mill hall, round log piles and boulders ────────────
+  function registerMill(T) {
+    const M = T.mill;
+    for (const p of M.plots) { const r = p.rect; groundPad((r[0] + r[2]) / 2, (r[1] + r[3]) / 2, (r[2] - r[0]) / 2, (r[3] - r[1]) / 2, { gen: "terrace", level: p.level }); cityFoot.push([r[0] - 5, r[1] - 5, r[2] + 5, r[3] + 5]); }
+    cityFoot.push(M.axis === 0 ? [M.deck[0] - 10, M.deck[1] - 4, M.deck[2] + 10, M.deck[3] + 4] : [M.deck[0] - 4, M.deck[1] - 10, M.deck[2] + 4, M.deck[3] + 10]);
+    cityKeepClear.push(M.axis === 0 ? [M.deck[0] - 4, M.deck[1] - 24, M.deck[2] + 4, M.deck[3] + 24] : [M.deck[0] - 24, M.deck[1] - 4, M.deck[2] + 24, M.deck[3] + 4]);   // (a launch ring stood 7 m off the s1 deck end: it flings whoever walks off the bridge)
+    for (const q of M.pieces) cityFoot.push([q.x - 3, q.z - 3, q.x + 3, q.z + 3]);
+    if (M.wheel) { const r = M.wheel.rect; cityFoot.push([r[0] - 3, r[1] - 3, r[2] + 3, r[3] + 3]); }     // (the water mill: the wilderness keeps out)
+    planBridge(M);
+  }
+  /** (Wave 7b stage C) The bridge is fitted to its banks HERE, at registration (before anything round it is built): the wet interval [a, b] round the layout's middle on the ground as it is
+   *  now (base + road corridors + the plots' terrace pads), the deck level `top`, and a STAGGERED end on each bank. Stage B ran the whole 8.5 m deck out to where its CENTRELINE met the
+   *  bank; the river runs ~30 degrees off any quarter turn, so the bank's contour crosses the deck's width diagonally (5 m along the deck over its 8.5 m), and one outer lane ended 0.6-1.8 m
+   *  over the ground (a walker stood under the deck's end face, in the water) while the other ran 1-3 m into the bank. Now the deck is cut into NSTRIP strips across its width and each strip
+   *  runs out from the river's middle until ITS OWN lanes meet the bank (the highest of three sub-lanes within 0.05 m of the deck top), then 0.1 m on: every lane of the full width leaves
+   *  the deck onto its own bank within a step (the deck end follows the bank like planks cut to fit), and the banks are not touched (only the channel bed under the deck, below) - a levelled landing was tried first and its falloff
+   *  (3-7 m cuts on these steep valley sides) filled the channel and dammed the river beside the bridge. (t = along the deck: z for a N-S bridge (M.axis 0), x for an E-W one.) */
+  const NSTRIP = 12;                                        // (0.71 m strips: the bank rises <= 0.2 m across one)
+  function planBridge(M) {
+    const ax = M.a, NS = M.axis === 0, BH = (M.width || 4.5) / 2, mid = (M.water[0] + M.water[1]) / 2;
+    const G = (u, t) => (NS ? heightAt0(ax + u, t) : heightAt0(t, ax + u));         // u: across the deck from its axis, t: along it
+    const Gb = (u, t) => (NS ? baseH(ax + u, t) : baseH(t, ax + u));                  // the analytic ground: the river as the map carves it
+    // THE CHANNEL under the deck: what makes this a bridge is the river a swimmer must swim (the endgame gate reads a bridge as >= 8 m of swim-deep water along it). Square to the river the
+    // deep part of the channel is 7.5-9 m along the deck on some seeds (seed 15: 7.5 m on the lattice), so the bed under the deck is dredged: four flat pads, one per quarter of the deck's
+    // width, at waterY - 2.4, each core laid on the lattice nodes INSIDE that quarter's own deep run (a rectangle is snapped OUT to the nodes: asked for as the deep run itself, plus a 1 m margin,
+    // the cores reached the banks and their falloff cut them back - the deck grew to 28 m and lanes ended in the cut), a 4 m falloff that widens the deep water by a metre or two into the
+    // shallows, never into a bank. They follow the river's skew quarter by quarter; one level, so their shared nodes agree. The deep run is read on the ANALYTIC ground (baseH): a link road's
+    // corridor ending near a bridge head spills its falloff into the river (seed 86: the south half of the channel filled 3-4 m, 4 m of deep water left under the outer lanes), and the
+    // channel under the deck is the river's, so the bed goes back to it there.
+    const KL = LAT_CELLS / SIZE, nodeGE = (v) => TerrainField.node(Math.ceil((v + HALF) * KL - 1e-9)), nodeLE = (v) => TerrainField.node(Math.floor((v + HALF) * KL + 1e-9));
+    const chan = [];
+    for (let q = 0; q < 4; q++) {
+      const u0 = -BH + (q * BH) / 2, u1 = u0 + BH / 2, um = (u0 + u1) / 2;
+      let dA = null, dB = null;
+      for (let t = mid - 30; t <= mid + 30 + 1e-9; t += 0.5) if (Gb(um, t) < waterY - 1.15) { if (dA === null) dA = t; dB = t; }
+      if (dA === null) continue;
+      const n0 = nodeGE(dA), n1 = nodeLE(dB);
+      if (n1 - n0 < LAT_PITCH - 1e-6) continue;                                                       // (less than one cell of deep water in this quarter: nothing to lay on)
+      const r = NS ? { x0: ax + u0, x1: ax + u1, z0: n0 + 0.01, z1: n1 - 0.01 } : { x0: n0 + 0.01, x1: n1 - 0.01, z0: ax + u0, z1: ax + u1 };
+      const op = field.overlapPad(r.x0, r.x1, r.z0, r.z1);
+      const h = field.registerPad(r, waterY - 2.4, 4);
+      padLog.push({ gen: "bridgechannel", x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1) / 2, hx: (r.x1 - r.x0) / 2, hz: (r.z1 - r.z0) / 2, h, relief: 0, fo: 4, merged: !!(op && op.pad.h !== h), cut: 0 });
+      chan.push([+n0.toFixed(2), +n1.toFixed(2), op && op.pad.h !== h ? "CLASH" : ""]);
+    }
+    // the wet interval round the layout's middle and the deck level, on the ground as it is now (after the channel)
+    const hh = (t) => G(0, t);
+    let a = mid, b = mid;
+    while (hh(a - 1) < waterY && mid - a < 60) a -= 1;
+    while (hh(b + 1) < waterY && b - mid < 60) b += 1;
+    const top = Math.min(4.5, Math.max(M.top, Math.min(hh(a - 1.5), hh(b + 1.5)) + 0.1));
+    const SW = (2 * BH) / NSTRIP, strips = [];
+    for (let k = 0; k < NSTRIP; k++) {
+      const u0 = -BH + k * SW, u1 = u0 + SW, us = [u0 + 0.05, (u0 + u1) / 2, u1 - 0.05];
+      // out until its highest sub-lane meets the deck top AND its lowest is within a step under it: a gap under a strip's end face is a wall to a walker coming off the bank (a terrain
+      // cliff across one strip - the edge of a road corridor's or the channel's falloff - left one sub-lane 1.2 m under the end on 4 of 200 seeds); a corner of the run-out under the bank's
+      // grass is not (the walker rises with the ground)
+      const open = (t) => { const g0 = G(us[0], t), g1 = G(us[1], t), g2 = G(us[2], t); return Math.max(g0, g1, g2) < top - 0.05 || Math.min(g0, g1, g2) < top - 0.45; };
+      let tA = mid, tB = mid;
+      while (open(tA) && mid - tA < 60) tA -= 0.1;
+      while (open(tB) && tB - mid < 60) tB += 0.1;
+      strips.push({ u0, u1, tA: tA - 0.1, tB: tB + 0.1 });
+    }
+    let t0 = Infinity, t1 = -Infinity, cA = -Infinity, cB = Infinity;
+    for (const s of strips) { if (s.tA < t0) t0 = s.tA; if (s.tB > t1) t1 = s.tB; if (s.tA > cA) cA = s.tA; if (s.tB < cB) cB = s.tB; }
+    M.plan = { a, b, top, t0, t1, cA, cB, strips, chan };                 // (cA..cB: the span every strip covers - the deck's main slab)
+  }
+  /** the bridge (an 8.5 m timber road deck at M.top over the sea level, stone piers from the river bed, stone abutments, heavy rails, lanterns at its four corners), the water mill, the plots'
+   *  retaining walls and the free pieces - round log piles, fallen logs, boulders (after the houses) */
+  function buildMill(T) {
+    const M = T.mill, col = RUIN_STONE, pr = TG_subRng(T.id, "pieces");
+    useDistrict("town:" + T.id);                                    // (one district per endgame village: the bridge, walls, pieces and houses were four - 6-8 draw calls more in every endgame view)
+    // the deck is fitted to the ground AS IT IS NOW (the base ground plus every pad and road corridor registered so far - the plots' pads and the link road to the bridge head move the
+    // banks by a metre or three): the wet interval round the layout's middle, the level over it (1.8 m, higher when the banks at the water's edge stand higher), the ends where the ground meets it
+    // (t = the coordinate along the deck: z for a N-S bridge (M.axis 0), x for an E-W one; `ax` = the fixed one)
+    // (stage C: the wet interval, the level and the staggered ends are planned at registration - planBridge)
+    const ax = M.a, NS = M.axis === 0;
+    const BW = M.width || 4.5, BH = BW / 2;                        // (Wave 7b stage B: an 8.5 m road bridge, was a 4.5 m footbridge)
+    const { a, b, top, t0, t1, cA, cB, strips } = M.plan, len = t1 - t0, tc = (t0 + t1) / 2;
+    const G = (u, t) => (NS ? heightAt0(ax + u, t) : heightAt0(t, ax + u));
+    const dk = NS ? [ax - BH, t0, ax + BH, t1] : [t0, ax - BH, t1, ax + BH];
+    M.deckBuilt = { rect: dk, top, water: [a, b], axis: M.axis, width: BW, strips: strips.map((s) => [s.u0, s.u1, s.tA, s.tB]) };
+    const AT = (u, t) => (NS ? [u, t] : [t, u]);                     // (across, along) -> world x, z
+    const boxUT = (u, y, t, wu, h, wt, color, o) => { const p = AT(u, t); addBox(p[0], y, p[1], NS ? wu : wt, h, NS ? wt : wu, color, o); };
+    // the deck: the main slab over the span every strip covers, and each strip's own run-out to its bank at both ends (exact boxes, one top)
+    boxUT(ax, top - 0.15, (cA + cB) / 2, BW, 0.3, cB - cA, "#9a6c43", { tex: "plank" });
+    for (const s of strips) {
+      if (cA - s.tA > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (s.tA + cA) / 2, s.u1 - s.u0, 0.3, cA - s.tA, "#9a6c43", { tex: "plank" });
+      if (s.tB - cB > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (cB + s.tB) / 2, s.u1 - s.u0, 0.3, s.tB - cB, "#9a6c43", { tex: "plank" });
+    }
+    // three stringer beams under the deck over the water (cosmetic: they read as a timber bridge from the banks), and a darker kerb plank along both edges (each over its own edge strip)
+    for (const su of [-1, 0, 1]) boxUT(ax + su * (BH - 0.9), top - 0.55, (a + b) / 2, 0.4, 0.5, b - a + 2, "#5e4430", { tex: "plank", collide: false });
+    const edgeS = [strips[0], strips[strips.length - 1]];
+    for (const [su, s] of [[-1, edgeS[0]], [1, edgeS[1]]]) boxUT(ax + su * (BH - 0.2), top + 0.06, (s.tA + s.tB) / 2, 0.4, 0.12, s.tB - s.tA, "#6b4a2e", { tex: "plank", collide: false });
+    // the abutments: where a strip runs out over a bank that falls away under it, solid stone causeway blocks (<= 2.5 m long) carry it from the ground to its underside - nothing hangs in the air over a
+    // bank, and the block faces read as a stone abutment. Per PAIR of strips (2.1 m wide), from the lowest ground under the pair (stage B: under the centreline only - a bank that falls away across
+    // the deck left a block's low corner in the air).
+    for (let k = 0; k + 1 < strips.length; k += 2) {
+      const sa = strips[k], sb = strips[k + 1], u0 = sa.u0, u1 = sb.u1, um = (u0 + u1) / 2;
+      const low = (t) => Math.min(G(u0 + 0.05, t), G(um, t), G(u1 - 0.05, t));
+      // from the pair's longer run-out (under its shorter strip that stretch is bank above the block's top) to where the ground under the pair goes into the water (its own water's edge: on the
+      // bank's high side that is well inside the centreline's wet interval)
+      const mA = Math.min(sa.tA, sb.tA), mB = Math.max(sa.tB, sb.tB);
+      let wA = mA, wB = mB;
+      while (low(wA) >= waterY + 0.25 && wA < (a + b) / 2) wA += 0.25;
+      while (low(wB) >= waterY + 0.25 && wB > (a + b) / 2) wB -= 0.25;
+      for (const [s0, s1] of [[mA, wA], [wB, mB]]) {
+        if (s1 - s0 < 0.2) continue;
+        const nB = Math.max(1, Math.ceil((s1 - s0) / 2.5));
+        for (let j = 0; j < nB; j++) {
+          const v0 = s0 + (s1 - s0) * j / nB, v1 = s0 + (s1 - s0) * (j + 1) / nB, g = Math.min(low(v0), low(v1), low((v0 + v1) / 2)) - 0.3, y1 = top - 0.3;
+          if (y1 - g < 0.25) continue;
+          boxUT(ax + um, (g + y1) / 2, (v0 + v1) / 2, u1 - u0 - 0.05, y1 - g, Math.abs(v1 - v0) + 0.1, "#8f8a80", { tex: "block" });
+        }
+      }
+    }
+    {                                                                                                    // piers: the river bed to the deck's underside, exact boxes (cover in the river), one every ~8 m of water
+      const nP = Math.max(1, Math.round((b - a) / 8)), pu = BW - 1.1, pt2 = 2.8;
+      for (let i = 1; i <= nP; i++) {
+        const pt = a + (b - a) * i / (nP + 1), p = AT(ax, pt), g = groundRange(p[0], p[1], NS ? pu : pt2, NS ? pt2 : pu, 0)[0] - 0.5, y1 = top - 0.3;
+        boxUT(ax, (g + y1) / 2, pt, pu, y1 - g, pt2, "#8f8a80", { tex: "block" });
+        boxUT(ax, y1 - 0.25, pt, pu + 0.5, 0.5, pt2 + 0.5, "#7d786d", { tex: "block", collide: false });       // (a cap stone a little wider than the pier)
+      }
+    }
+    // rails over the water and 3 m onto each bank, on both sides of the deck: a 1.25 m panel (0.2 thick, a collider: cover) between every two posts (a post every 3 m, cosmetic), a top rail over them;
+    // the panels are 2.6 m long, so none is a "slab" of its own (the deck is the only walkable slab of the bridge)
+    for (const sx of [-1, 1]) {
+      const side = ax + sx * (BH - 0.12);                                                                // the rail's fixed coordinate (x for a N-S deck, z for an E-W one)
+      const es = sx < 0 ? edgeS[0] : edgeS[1], r0 = Math.max(a - 3, es.tA + 0.3), r1 = Math.min(b + 3, es.tB - 0.3);     // (stage C: never past its own edge strip's run-out - on the bank's high side the strip meets the bank sooner)
+      for (let t = r0; t < r1 - 0.2; t += 3) {
+        const l = Math.min(2.6, r1 - t - 0.4);
+        boxUT(side, top + 0.75, t, 0.32, 1.5, 0.32, "#4e3a28", { collide: false });
+        if (l > 0.6) boxUT(side, top + 0.625, t + 0.35 + l / 2, 0.2, 1.25, l, "#7a5a3a", { tex: "plank" });
+      }
+      boxUT(side, top + 1.42, (r0 + r1) / 2 - 0.1, 0.36, 0.16, r1 - r0 - 0.2, "#5a4430", { tex: "plank", collide: false });
+      // lanterns at both ends of the rails: a post down to the ground (or the deck) and a lamp head (the near-lamp light pool lights the crossing)
+      for (const te of [r0 - 0.6, r1 + 0.6]) {
+        const p = AT(side, te), g = heightAt0(p[0], p[1]);
+        if (g < waterY + 0.3 || g > top + 0.6) continue;
+        const y0 = Math.min(g, top) - 0.06;
+        boxUT(side, (y0 + top + 2.9) / 2, te, 0.26, top + 2.9 - y0, 0.26, "#3a2c20", { collide: false });
+        boxUT(side, top + 3.05, te, 0.5, 0.36, 0.5, "#ffe9a8", { collide: false });
+        lampPts.push({ x: p[0], y: top + 3.05, z: p[1] });
+      }
+    }
+    buildWaterMill(T, M);
+    // the plots' retaining walls (dry stone) and the free pieces
+    useDistrict("town:" + T.id);
+    for (const w of M.walls) { const c = col[Math.floor(pr() * col.length)]; if (w.axis === 0) stoneBox(w.x, w.z, w.len, w.th, 0, w.h, c); else stoneBox(w.x, w.z, w.th, w.len, 0, w.h, c); }
+    useDistrict("town:" + T.id);
+    for (const q of M.pieces) {
+      const c = q.kind === "boulder" ? col[Math.floor(pr() * col.length)] : shade(["#6b4a2e", "#7a5636", "#5e4128"][Math.floor(pr() * 3)], 1);
+      if (q.kind === "woodpile") logPile(q, c, pr);
+      else if (q.kind === "log") fallenLog(q, c);
+      else boulder(q, c);
+    }
+    // the mill's own loot: a chest at the bridge's middle (the crossing is what the village is for)
+    chest(NS ? ax + 1.0 : (a + b) / 2, top + 0.6, NS ? (a + b) / 2 : ax + 1.0, T.id);
+  }
+  /** a stacked pile of round logs (4 + 3 + 2 + 1, its long side along the piece's quarter turn), each bottom log on the ground under its own line, each upper one on the two logs under it; the cut
+   *  ends pale. Colliders: two exact boxes (the lower two rows full depth, the upper two half depth), from 0.3 m into the lowest ground under the pile. */
+  function logPile(q, c, pr) {
+    const alongX = Math.abs(Math.cos(q.rot)) > 0.5, L = q.w, D = q.d, r = D / 8, ux = alongX ? 1 : 0, uz = alongX ? 0 : 1, vx = uz, vz = ux;
+    const lineG = (o) => { let sum = 0; for (let k = 0; k <= 4; k++) { const t = (k / 4 - 0.5) * L * 0.9; sum += heightAt0(q.x + ux * t + vx * o, q.z + uz * t + vz * o); } return sum / 5; };
+    let lo = Infinity;
+    for (let k = 0; k <= 4; k++) for (let j = 0; j <= 2; j++) { const t = (k / 4 - 0.5) * L, o = (j / 2 - 0.5) * D, g = heightAt0(q.x + ux * t + vx * o, q.z + uz * t + vz * o); if (g < lo) lo = g; }
+    const ys = [];
+    let top = lo;
+    for (let row = 0; row < 4; row++) {
+      const n = 4 - row, cur = [];
+      for (let i = 0; i < n; i++) {
+        const o = (i - (n - 1) / 2) * 2 * r;
+        const y = row === 0 ? lineG(o) + r - 0.07 : Math.max(ys[row - 1][i], ys[row - 1][i + 1]) + 2 * r * 0.866;
+        cur.push(y);
+        const ll = L * (0.9 + pr() * 0.1), sh = (pr() - 0.5) * 0.3;
+        _gT.makeTranslation(q.x + ux * sh + vx * o, y, q.z + uz * sh + vz * o);
+        _gR.makeRotationZ(Math.PI / 2);
+        if (!alongX) _gR.premultiply(_gM.makeRotationY(Math.PI / 2));
+        cylAt(_gT.multiply(_gR), r * 0.97, ll, 9, shade(c, 0.9 + pr() * 0.2), "plank", "#c9a46a");
+        top = Math.max(top, y + r);
+      }
+      ys.push(cur);
+    }
+    const y2 = Math.max(...ys[1]) + r;                                         // the top of the second row
+    boxColliders(q.x, (lo - 0.3 + y2) / 2, q.z, alongX ? L * 0.95 : D, y2 - lo + 0.3, alongX ? D : L * 0.95, 0);      // the two lower rows, the pile's full depth
+    boxColliders(q.x, (lo - 0.3 + top) / 2, q.z, alongX ? L * 0.9 : 4 * r, top - lo + 0.3, alongX ? 4 * r : L * 0.9, 0);   // its core, as deep as the third row, from the ground to the top log (one box: cover as tall as the pile)
+  }
+  /** a fallen trunk: one round log lying on the ground along its yaw, pitched to the ground at its two ends; colliders = <= 1 m pieces along it, each at its own height */
+  function fallenLog(q, c) {
+    const L = q.w, r = Math.min(0.45, q.d / 2), ux = Math.cos(q.rot), uz = -Math.sin(q.rot);                     // (the yaw turns +x like rotateY: x' = x c, z' = -x s)
+    const gA = heightAt0(q.x - ux * L * 0.45, q.z - uz * L * 0.45), gB = heightAt0(q.x + ux * L * 0.45, q.z + uz * L * 0.45), gM = heightAt0(q.x, q.z);
+    const yA = gA + r - 0.12, yB = gB + r - 0.12, yM = Math.min((yA + yB) / 2, gM + r - 0.05);
+    const pitch = Math.atan2(yB - yA, L * 0.9);
+    _gT.makeTranslation(q.x, yM, q.z);
+    _gR.makeRotationZ(-Math.PI / 2 + pitch).premultiply(_gM.makeRotationY(q.rot));
+    cylAt(_gT.multiply(_gR), r, L, 10, c, "plank", "#c49c62");
+    const n = Math.max(1, Math.ceil(L));
+    for (let k = 0; k < n; k++) {
+      const t = -L / 2 + (k + 0.5) * L / n, y = yM + Math.tan(pitch) * t;
+      boxColliders(q.x + ux * t, y, q.z + uz * t, L / n, 2 * r * 0.92, 2 * r * 0.92, q.rot);
+    }
+  }
+  /** a boulder: a faceted, flattened icosahedron the piece's size, sunk into the ground; the collider is the box inside its waist (0.8 of the footprint) */
+  function boulder(q, c) {
+    const [lo] = groundRange(q.x, q.z, q.w, q.d, q.rot), gc = heightAt0(q.x, q.z), base = Math.max(lo, gc - 0.4);
+    const geo = new THREE.IcosahedronGeometry(1, 1), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) { const k = 0.9 + 0.2 * (((Math.round(p.getX(i) * 31) * 7 + Math.round(p.getY(i) * 37) * 13 + Math.round(p.getZ(i) * 29) * 5) & 15) / 15); p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k); }   // (keyed by the vertex position: shared corners move together, the facets stay closed)
+    geo.computeVertexNormals();
+    const idx = []; for (let i = 0; i < p.count; i++) idx.push(i);
+    geo.setIndex(idx);
+    const ry = Math.max(q.h * 0.62, 0.6);
+    geo.scale(q.w / 2 * 1.04, ry, q.d / 2 * 1.04); geo.rotateY(q.rot || 0); geo.translate(q.x, base + q.h - ry, q.z);
+    const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * q.w / structTile * 2, uv.getY(i) * q.h / structTile * 2);
+    pushGeo(c + "|block", geo);
+    const yt = base + q.h * 0.92;
+    boxColliders(q.x, (lo - 0.35 + yt) / 2, q.z, q.w * 0.8, yt - lo + 0.35, q.d * 0.8, q.rot || 0);
+  }
+  /** The water mill beside the bridge (towngen's L.mill.wheel): a two-storey timber millhouse on a stone base that stands in the river's edge, a gable roof, an overshot wheel on its side wall
+   *  (it TURNS: one mesh of its own, turned about its axle every frame within 320 m of the camera), the axle into the base, a flume on trestles from a stone sluice up the bank to the wheel's top.
+   *  Frame: X = from the wheel to the house (the across-the-deck axis, away from the bridge), Z = X x up, `q` = metres inland from the water's edge (local z = zs q). Every part of the house and
+   *  the flume that collides is an exact box (the frame is a quarter turn); the wheel collides as three stacked boxes round its disc. */
+  function buildWaterMill(T, M) {
+    const W0 = M.wheel;
+    if (!W0) return;
+    const NS = M.axis === 0, R = W0.r || 3.6, land = W0.land, sd = W0.side, u = W0.u;
+    const hu = (t) => (NS ? heightAt0(u, t) : heightAt0(t, u));
+    let te = W0.te;                                                                                     // the water's edge on the ground as built (the pads and the link road moved the banks a little)
+    for (let k = 0; k < 8 && hu(te) < waterY + 0.2; k++) te += land;
+    for (let k = 0; k < 8 && hu(te - land) >= waterY + 0.2; k++) te -= land;
+    const o = NS ? [u, te] : [te, u];
+    const Xw = new THREE.Vector3(NS ? sd : 0, 0, NS ? 0 : sd), Yw = new THREE.Vector3(0, 1, 0), Zw = new THREE.Vector3().crossVectors(Xw, Yw);
+    const inl = NS ? [0, land] : [land, 0], zs = (Zw.x * inl[0] + Zw.z * inl[1]) >= 0 ? 1 : -1;
+    const F = new THREE.Matrix4().makeBasis(Xw, Yw, Zw).setPosition(o[0], 0, o[1]);
+    const WP = (lx, q) => [o[0] + Xw.x * lx + Zw.x * zs * q, o[1] + Xw.z * lx + Zw.z * zs * q];
+    const G = (lx, q) => { const p = WP(lx, q); return heightAt0(p[0], p[1]); };
+    const ext = (wx, dq) => [Math.abs(Xw.x) * wx + Math.abs(Zw.x) * dq, Math.abs(Xw.z) * wx + Math.abs(Zw.z) * dq];
+    // an axis-aligned part in the frame: (lx, q) centre, wx along X, dq along q (exact in the world: the frame is a quarter turn); colOnly = the collider without a drawn box
+    const part = (lx, y, q, wx, h, dq, color, opts) => { const p = WP(lx, q), e = ext(wx, dq); addBox(p[0], y, p[1], e[0], h, e[1], color, opts); };
+    const colOnly = (lx, y, q, wx, h, dq) => { const p = WP(lx, q), e = ext(wx, dq); boxColliders(p[0], y, p[1], e[0], h, e[1], 0); };
+    const at = (lx, y, q, rx) => { _gT.makeTranslation(lx, y, zs * q); if (rx) _gT.multiply(_gR.makeRotationX(rx)); return _gM.multiplyMatrices(F, _gT); };
+    const NC = { collide: false };
+    // the millhouse: X 1.2 .. 9.6, q -3 .. 7 (its river end on the stone base in the water)
+    const HX = 5.4, HW = 8.4, HQ = 2, HD = 10;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i <= 6; i++) for (let j = 0; j <= 8; j++) { const g = G(HX - HW / 2 + HW * i / 6, HQ - HD / 2 + HD * j / 8); if (g < lo) lo = g; if (g > hi) hi = g; }
+    const fy = Math.max(hi + 0.25, waterY + 2.4), BH2 = 5.6, roofH = 3.1;
+    part(HX, (lo - 0.35 + fy) / 2, HQ, HW + 0.4, fy - lo + 0.35, HD + 0.4, "#8a857a", { tex: "block" });                       // the stone base
+    part(HX, fy + BH2 / 2, HQ, HW, BH2, HD, "#7a5636", { tex: "plank" });                                                     // the timber body (closed: the mill's machinery)
+    for (const [px, pq] of [[HX - HW / 2, HQ - HD / 2], [HX + HW / 2, HQ - HD / 2], [HX - HW / 2, HQ + HD / 2], [HX + HW / 2, HQ + HD / 2]]) part(px, fy + BH2 / 2, pq, 0.4, BH2, 0.4, "#4a3626", NC);   // corner posts
+    part(HX, fy + 2.85, HQ, HW + 0.12, 0.25, HD + 0.12, "#4a3626", NC);                                                        // the floor beam between the storeys
+    for (const fl of [0, 1]) {
+      const wy = fy + 1.6 + fl * 2.85;
+      for (const qq of [-2.2, 1, 4.2]) part(HX + HW / 2 + 0.03, wy, HQ + qq - 1, 0.06, 1.2, 1.1, "#2f3d44", NC);              // the long side's windows (away from the wheel)
+      for (const xx of [-2.4, 2.4]) { part(HX + xx, wy, HQ - HD / 2 - 0.03, 1.1, 1.2, 0.06, "#2f3d44", NC); if (fl) part(HX + xx, wy, HQ + HD / 2 + 0.03, 1.1, 1.2, 0.06, "#2f3d44", NC); }
+    }
+    part(HX, fy + 1.15, HQ + HD / 2 + 0.04, 1.6, 2.3, 0.08, "#3a2a1e", NC);                                                    // the door on the uphill end (painted: the mill is shut)
+    part(HX, fy + 2.5, HQ + HD / 2 + 0.3, 2.4, 0.12, 0.6, "#6e2f26", NC);                                                      // its little canopy
+    // the gable roof: ridge along q, 0.5 m eaves; colliders: 5 stacked boxes under the slopes
+    pushGeo("#6e2f26|shingle", prismGeo(HW + 1.0, roofH, HD + 1.0).applyMatrix4(at(HX, fy + BH2, HQ)));
+    { const c = WP(HX, HQ), ridgeX = Math.abs(Zw.x) > 0.5; gableColliders(c[0], c[1], HW + 1.0, HD + 1.0, ridgeX, fy + BH2, roofH, 5); }
+    { const cy0 = fy + BH2 - 0.05, cy1 = fy + BH2 + roofH * 0.48 + 1.4; part(HX + 2.2, (cy0 + cy1) / 2, HQ + 2.6, 0.8, cy1 - cy0, 0.8, "#6f6a62", NC); }   // a chimney (from the top of the walls up through the roof)
+    { const a2 = WP(HX - HW / 2, HQ - HD / 2), b2 = WP(HX + HW / 2, HQ + HD / 2); cityBld.push([Math.min(a2[0], b2[0]), Math.min(a2[1], b2[1]), Math.max(a2[0], b2[0]), Math.max(a2[1], b2[1])]); }
+    // the wheel: centre over the water 2.2 m out from the edge, its bottom 0.9 m under the surface, 1.5 m wide; rims of 20 segments, 20 paddles, 8 spokes a rim, a hub (its own mesh: it turns)
+    const qW = -2.2, hubY = waterY + R - 0.9, WG = [];
+    for (const rx of [-0.75, 0.75]) {
+      for (let i = 0; i < 20; i++) { const th = i * Math.PI * 2 / 20; _gT.makeTranslation(rx, hubY, zs * qW).multiply(_gR.makeRotationX(th)).multiply(_gM.makeTranslation(0, R, 0)); boxAt(new THREE.Matrix4().multiplyMatrices(F, _gT), 0.22, 0.34, 2 * Math.PI * R / 20 * 1.08, "#4f3b29", "plank", WG); }
+      for (let k = 0; k < 4; k++) boxAt(at(rx, hubY, qW, k * Math.PI / 4), 0.18, 2 * R - 0.25, 0.18, "#6b5038", "plank", WG);
+    }
+    for (let i = 0; i < 20; i++) { const th = (i + 0.5) * Math.PI * 2 / 20; _gT.makeTranslation(0, hubY, zs * qW).multiply(_gR.makeRotationX(th)).multiply(_gM.makeTranslation(0, R - 0.42, 0)); boxAt(new THREE.Matrix4().multiplyMatrices(F, _gT), 1.56, 0.78, 0.1, "#5e4630", "plank", WG); }
+    boxAt(at(0, hubY, qW), 1.9, 0.8, 0.8, "#3a2c20", "plank", WG);
+    const piv = WP(0, qW);
+    millWheels.push({ geos: WG, pivot: [piv[0], hubY, piv[1]], axis: [Xw.x, 0, Xw.z] });
+    part(0.25, hubY, qW, 2.3, 0.36, 0.36, "#2e2620", NC);                                                                       // the axle (it does not turn: a round shaft reads the same)
+    for (const [y0, y1, hw] of [[-0.92, -0.38, 0.62], [-0.38, 0.38, 0.95], [0.38, 0.92, 0.62]]) colOnly(0, hubY + R * (y0 + y1) / 2, qW, 1.6, R * (y1 - y0), 2 * R * hw);   // the disc
+    { // the wheel pit: a masonry sill on the river bed under the wheel (0.15 m under its paddles) and a low wall on its open side, so the wheel turns in a stone race, not over bare mud
+      let bed = Infinity; for (let i = 0; i <= 4; i++) for (const lx of [-1, 0, 1]) bed = Math.min(bed, G(lx, qW - R + i * R / 2));
+      const sTop = hubY - R - 0.15;                                                                // (2 cm into the rim's lowest segment: the wheel rests in its race)
+      if (sTop - bed > -0.2) part(0, (bed - 0.35 + sTop) / 2, qW, 2.2, sTop - bed + 0.35, 2 * R * 0.9, "#7d786d", { tex: "block", collide: false });
+      const wTop = Math.max(waterY + 0.25, hubY - R + 1.2);
+      let wbed = Infinity; for (let i = 0; i <= 4; i++) wbed = Math.min(wbed, G(-1.25, qW - R + i * R / 2));
+      part(-1.25, (wbed - 0.35 + wTop) / 2, qW, 0.5, wTop - wbed + 0.35, 2 * R * 0.95, "#8a857a", { tex: "block" });
+    }
+    // the flume: a trough on trestles from q 15 (a stone sluice head up the bank) down to the wheel's top, falling 0.8 m, water in it; posts every 3 m from the bank (exact colliders)
+    const fTop0 = hubY + R + 0.35, q0f = qW + 0.7, q1f = 15, nSeg = 7;
+    for (let k = 0; k < nSeg; k++) {
+      const qa = q0f + (q1f - q0f) * k / nSeg, qb = q0f + (q1f - q0f) * (k + 1) / nSeg, qm = (qa + qb) / 2, yb = fTop0 + 0.8 * (qm - q0f) / (q1f - q0f), L = qb - qa + 0.04;
+      part(0, yb, qm, 1.1, 0.14, L, "#6b4a2e", { tex: "plank" });
+      for (const sx of [-0.5, 0.5]) part(sx, yb + 0.33, qm, 0.1, 0.52, L, "#5e4128", { tex: "plank" });
+      part(0, yb + 0.2, qm, 0.88, 0.06, L, "#5f97b3", NC);
+    }
+    for (let q = 1; q <= 14.01; q += 3) {
+      const yb = fTop0 + 0.8 * (q - q0f) / (q1f - q0f) - 0.07;
+      for (const sx of [-0.5, 0.5]) { const g = G(sx, q) - 0.06; if (yb - g > 0.3) part(sx, (g + yb) / 2, q, 0.24, yb - g, 0.24, "#4e3a28"); }
+      part(0, yb - 0.08, q, 1.3, 0.16, 0.2, "#4e3a28", NC);
+    }
+    part(0.86, fTop0 - 0.07, 0, 0.8, 0.16, 0.3, "#4e3a28", NC);                                                                  // a bracket from the trough to the house wall
+    { const g = Math.min(G(0, 15.8), G(0.9, 15.8), G(-0.9, 15.8)) - 0.35, yt = fTop0 + 0.8 + 0.6; part(0, (g + yt) / 2, 15.9, 2.0, yt - g, 1.8, "#8a857a", { tex: "block" }); }
+  }
+  // the docks: a stilt house on a deck stands over ground the navigation grid reads as terrain only where a walker could stand (shallower than 1.08 m) and not under a deck (a floor 0.9 m over
+  // the sand leaves no head room). A building tile (the roof + 2 m) is baked on its own and its flood fill starts from the terrain nodes IN it: a tile with none keeps its floors; a tile with
+  // some seeds from them - and if the deck stands more than a step (0.55 m) over every one of them (a sand flat at 0.1 - 0.3 m under a deck at 0.9, or only wading nodes round it) the deck
+  // is pruned as an island and the rooms on it are unreachable for a bot. So under each platform house: a seabed that is mostly wading (no dry ground outside the decks) is dug to 2.6 m under
+  // the surface (the tile then holds no terrain at all), and ground that is dry is levelled at waterY + 0.5 (a 0.4 m step up to the deck: the sand seeds the flood and the deck is reached).
+  // The flat 5 m round the house is a pad; its edge slopes away.
+  function registerDocks(T) {
+    const decks = T.docks.decks.map((dk) => dk.rect);
+    const onDeck = (x, z) => { for (const r of decks) if (x > r[0] - 0.6 && x < r[2] + 0.6 && z > r[1] - 0.6 && z < r[3] + 0.6) return true; return false; };
+    for (const p of T.parcels) {
+      const b = p.building;
+      if (!b.deck) continue;
+      const a = b.aabb;
+      let dry = 0, shallow = 0;
+      for (let x = a[0] - 3.0; x <= a[2] + 3.0; x += 0.75) for (let z = a[1] - 3.0; z <= a[3] + 3.0; z += 0.75) {
+        if (onDeck(x, z)) continue;
+        const h = heightAt0(x, z);
+        if (h >= waterY) dry++; else if (h >= waterY - 1.5) shallow++;
+      }
+      if (dry + shallow === 0) continue;
+      const lvlWant = dry > 0 ? waterY + 0.5 : waterY - 2.6, op = field.overlapPad(a[0] - 5, a[2] + 5, a[1] - 5, a[3] + 5);
+      if (op !== null && Math.abs(op.pad.h - lvlWant) > 0.3) continue;                          // (a pad of another level is already there - a town's plateau beside the landing: joining it would bury the deck)
+      groundPad((a[0] + a[2]) / 2, (a[1] + a[3]) / 2, (a[2] - a[0]) / 2 + 5, (a[3] - a[1]) / 2 + 5, { gen: "dockbed", level: dry > 0 ? waterY + 0.5 : waterY - 2.6 });
+    }
+  }
+  /** a row of palms (resort) / pines (lodge) along the streets of a grid town: every 64 m, alternating sides, 7.4 m from the centreline (on the sidewalk's outer edge), never within 16 m of a
+   *  junction or on a building / lot rectangle; the instanced tree with its trunk collider, like the pocket parks'. Savanna keeps its bare streets (its world is untouched). */
+  function streetTrees(T) {
+    const N = T.roads.nodes, tr = TG_subRng(T.id, "streettrees");
+    let k = 0;
+    for (const e of T.roads.edges) {
+      const A = N[e.a], B = N[e.b], ux = e.axis === "x" ? Math.sign(B.x - A.x) : 0, uz = e.axis === "z" ? Math.sign(B.z - A.z) : 0;
+      for (let t = 20 + tr() * 10; t <= e.len - 20; t += (mapId === "isla_viva" ? 42 : 52)) {          // (stage B: every 42 m on the resort - a palm-lined promenade - and 52 m in the lodge village: the far palms / pines are the coarse LOD copy now, was 76 / 64 m)
+        const side = (k++ % 2) ? 1 : -1, off = 7.4 + (tr() - 0.5) * 0.8, sc = 0.8 + tr() * 0.35, ry = tr() * Math.PI * 2;
+        const x = A.x + ux * t + (-uz) * side * off, z = A.z + uz * t + ux * side * off;
+        if (inRects(cityBld, x, z, 3.0) || inRects(cityDecks, x, z, 2.0) || heightAt0(x, z) < waterY + 0.6) continue;
+        props[cityTree].push({ x, y: heightAt0(x, z), z, s: sc, ry, street: true });      // (street: drawn by the map-wide mesh, never a near-field shadow caster - see the casters below)
+      }
+    }
+  }
+  function registerCityExtras() {
+    for (const T of city.lay.towns) {
+      if (T.kind === "docks" && T.docks) registerDocks(T);
+      if (T.kind === "crater" && T.crater) registerCrater(T);
+      else if (T.kind === "mill" && T.mill) registerMill(T);
+    }
+  }
+
   function buildCityBuildings() {
     const { TG, lay } = city;
-    const cell = 600;                     // (7A2: compounds share a district per 600 m cell, was 300 m: a compound is 3-5 small buildings, and every district costs 2-3 structure draw calls (twice with the shadow pass) in every view that sees it - 9 compound districts were 36 calls of a seed-1 drop view)
+    const cell = mapId === "ashgrid" ? 600 : 300;   // (Wave 7b: a themed map's compounds share a district per 300 m cell - fewer compounds per mesh: the frustum drops the ones behind a street camera and the shadow pass the far ones) (7A2: compounds share a district per 600 m cell, was 300 m: a compound is 3-5 small buildings, and every district costs 2-3 structure draw calls (twice with the shadow pass) in every view that sees it - 9 compound districts were 36 calls of a seed-1 drop view)
     city.looks = new Map();               // "<town>:<parcel>" -> one string naming everything that distinguishes the building's look (the gates count distinct looks per town)
     padReuse = true;
     for (const T of lay.towns.concat(lay.compounds)) {
       const isCmp = T.id.startsWith("cmp"), grid = T.blocks.length > 0, clus = !!T.compound && !grid;     // clus: a compound, or a POI whose grid did not fit (a lane)
       const c0 = isCmp ? [T.compound.entry.x, T.compound.entry.z] : T.centre;
       const did = isCmp ? "cmp:" + Math.floor((c0[0] + HALF) / cell) + "," + Math.floor((c0[1] + HALF) / cell) : "town:" + T.id;
+      if (isCmp && mapId !== "ashgrid") { const q = T.compound.bounds; if (!distParts.has(did)) distParts.set(did, []); distParts.get(did).push([(q[0] + q[2]) / 2, (q[1] + q[3]) / 2, Math.hypot(q[2] - q[0], q[3] - q[1]) / 2 + 6]); }
       useDistrict(did);
+      if (T.kind === "docks" && T.docks) buildDockDecks(T);                  // (Wave 7b: the decks and posts exist before the houses that stand on them: one connected structure to the seabed)
       const dim = T.theme === "ruin" ? 0.8 : 1;
       const core = T.kind === "core";
       const blockLoot = new Map(), blockHome = new Map();       // block id -> loot points it holds / its first enterable building (every block ends up holding loot)
       for (const p of T.parcels) {
-        const b = p.building;
+        // (Wave 7b stage B: a layout's building record carries no `use` - the parcel does - so every `b.use` test below read undefined: on the themed maps every shop, hall, shed and barn
+        //  was styled, textured and looted as a house (no shop fronts, no awnings). The themed maps read the parcel's use; Savanna keeps what it built (its world must hash as the live one).)
+        const b = mapId !== "ashgrid" && p.building && p.building.use == null ? Object.assign({}, p.building, { use: p.use }) : p.building;
         if (!b) continue;
         const nLoot0 = lootPoints.length + chestPoints.length;
         const wallKey = b.arch === "shop" ? "shop" : (b.gen === "tower" ? "big" : b.use === "barn" ? "barn" : b.use === "hall" ? "hall" : b.use === "shed" ? "shed" : "house");
         const PAL = cityPalette(T, isCmp ? -1 : p.block, core), cr = TG.subRng(seed, T.id, "col" + p.id), sr = TG.subRng(seed, T.id, "sty" + p.id);
         const q1 = cr(), q2 = cr(), q3 = cr(), q4 = cr(), vr = TG.subRng(seed, T.id, "var" + p.id), v1 = vr(), v2 = vr();
         structTile = q4 < 0.2 ? 1.9 : q4 < 0.6 ? 2.6 : q4 < 0.85 ? 3.6 : 5.0;                  // (D2: brick size varies per building: the one texture reads as four wall finishes)
-        const wallC = shade(q1 < 0.55 ? PAL[wallKey][0] : q1 < 0.84 ? PAL[wallKey][1] : SAV.walls[wallKey][Math.floor(q3 * SAV.walls[wallKey].length)], dim);
-        const roofC = shade(q2 < 0.5 ? PAL.roof[0] : q2 < 0.84 ? PAL.roof[1] : SAV.roofs[Math.floor(q3 * SAV.roofs.length)], dim);
+        let wallC = shade(q1 < 0.55 ? PAL[wallKey][0] : q1 < 0.84 ? PAL[wallKey][1] : SAV.walls[wallKey][Math.floor(q3 * SAV.walls[wallKey].length)], dim);
+        let roofC = shade(q2 < 0.5 ? PAL.roof[0] : q2 < 0.84 ? PAL.roof[1] : SAV.roofs[Math.floor(q3 * SAV.roofs.length)], dim);
+        if (T.kind === "crater") {                                                                          // Wave 7b: the crater-rim village is dry-stone, its roofs dark old timber, each house in its own district quarter
+          wallC = RUIN_STONE[Math.floor(q1 * RUIN_STONE.length) % RUIN_STONE.length]; roofC = q2 < 0.5 ? "#5b4a3d" : "#6c6256";
+          // (one district for the whole village: four quarter districts were 4-8 draw calls of every endgame view for ~2 k triangles each)
+        }
         let look = wallC + roofC;
         if (b.gen === "shell") {
           const ctr = SHELL_CENTRE[b.kit] || [0, 0], q = b.turn, cs = [1, 0, -1, 0][q], sn = [0, 1, 0, -1][q];
@@ -2616,26 +3516,39 @@ export async function buildMap(W, mapId) {
           if (b.height > 30) city.skyline.push({ x: b.cx, z: b.cz, h: b.height, kind: "shell", town: T.id });
         } else if (b.gen === "tower") {
           const base = core ? SAV.tower.core : SAV.tower.town, mull = SAV.mullions[Math.floor(sr() * SAV.mullions.length)];
-          const y = towerTurn(b.cx, b.cz, b.floors, b.w, wallC, T.id, b.turn, { loot: base.loot, chest: base.chest, mullion: mull });
-          const shaftH = towerCrown(b, y, sr, core, wallC, T.id);
+          const tO = { loot: base.loot, chest: base.chest, mullion: mull };
+          if (mapId !== "ashgrid") {                                                                         // (stage B: a resort apartment block / a timber lodge, not a brick car park)
+            if (mapId === "isla_viva") { tO.wallTex = "stucco"; tO.balcony = "#f4f1e8"; tO.parapetC = "#f2efe6"; }
+            else { tO.wallTex = "plank"; tO.balcony = "#5a4430"; tO.parapetC = "#4a3626"; }
+          }
+          const y = towerTurn(b.cx, b.cz, b.floors, b.w, wallC, T.id, b.turn, tO);
+          const shaftH = mapId === "ashgrid" ? towerCrown(b, y, sr, core, wallC, T.id) : themedCrown(b, y, sr);
           look += mull + b.floors + "x" + b.w + (shaftH ? "s" + Math.round(shaftH / 6) : "");
         } else {
           const lt = isCmp ? (b.use === "shed" ? SAV.loot.cmpShed : SAV.loot.cmpHouse) : (SAV.loot[b.use] || SAV.loot.house);
           const o = { loot: lt[0], chest: lt[1], doorW: 2.26 };       // the 2.26 m door of the layout (wallDoorwayWide): a 1.4 m door leaves a capsule 0.5 m a side
           const fh = b.floorH || 3.4;
-          let storeys = (b.use === "house" || b.use === "shop") && b.floors >= 2 && sr() < 0.75 ? 2 : 1;      // a two-storey front on the big houses and shops (one real floor inside until Wave 8)
+          let storeys, st;
+          if (mapId !== "ashgrid") {                                                                          // Wave 7b: a resort / a lodge: its own style dice (themedStyle), its wall texture
+            st = themedStyle(b, sr, PAL, roofC, fh); storeys = st.storeys;
+            const wt = themedWallTex(b, v2); if (wt) o.wallTex = wt;
+            if (storeys === 2 && T.kind !== "crater" && !b.deck) o.upper = true;                          // (Wave 7b stage B: the two-storey houses and shops get their real upper floor; not the ruins, not a stilt house on the docks)
+          } else {
+          storeys = (b.use === "house" || b.use === "shop") && b.floors >= 2 && sr() < 0.75 ? 2 : 1;      // a two-storey front on the big houses and shops (one real floor inside until Wave 8)
           if (storeys === 2 && b.w >= 12.5 && v1 < 0.3) storeys = 3;                                          // D2: a few three-storey fronts (a 10 m façade: height variety in a street)
-          const st = { storeys, floorH: fh, glass: SAV.glass[Math.floor(sr() * SAV.glass.length)] };
+          st = { storeys, floorH: fh, glass: SAV.glass[Math.floor(sr() * SAV.glass.length)] };
           if (b.use === "shop") { st.shopfront = true; st.roof = 2; st.awning = sr() < 0.75 ? (sr() < 0.6 ? PAL.awning[0] : PAL.awning[1]) : null; st.sign = shade(roofC, 0.9); st.unit = sr() < 0.4 ? (sr() < 0.5 ? -1 : 1) : 0; }
           else if (b.use === "hall") { st.roof = 2; st.blindBack = true; st.unit = sr() < 0.6 ? 1 : 0; }
           else if (b.use === "barn") { st.roof = 0; st.blindBack = true; }
           else if (b.use === "shed") { st.roof = sr() < 0.5 ? 0 : 1; st.blindBack = true; }
           else { const rr = sr(); st.roof = rr < 0.42 ? 0 : rr < 0.64 ? 1 : rr < 0.8 ? 3 : 2; st.chimney = sr() < 0.4 ? (sr() < 0.5 ? -1 : 1) : 0; st.porch = sr() < 0.55; st.unit = st.roof === 2 && sr() < 0.5 ? 1 : 0; }
           st.trim = (b.use === "house" || b.use === "shop") ? (v2 < 0.3 ? 1 : v2 < 0.5 ? 2 : 0) : 0;         // D2: a cornice band (cream / dark) under the roof edge
+          }
           o.style = st;
           o.H = fh * storeys;
           o.flat = st.roof === 2;
-          house(b.cx, b.cz, b.w, b.d, b.rot, wallC, roofC, T.id, o);
+          if (T.kind === "crater") ruinHouse(b.cx, b.cz, b.w, b.d, b.rot, wallC, roofC, T.id, TG_subRng(T.id, "ruin" + p.id), o);
+          else { if (b.deck) o.y0 = b.y0; house(b.cx, b.cz, b.w, b.d, b.rot, wallC, roofC, T.id, o); }
           look += st.roof + "" + storeys + (st.chimney ? "c" : "") + (st.porch ? "p" : "") + (st.awning || "") + b.w + "x" + b.d + st.glass + structTile + st.trim;
         }
         city.looks.set(T.id + ":" + p.id, look);
@@ -2643,8 +3556,10 @@ export async function buildMap(W, mapId) {
         if (b.enterable && b.gen !== "shell" && !blockHome.has(p.block)) blockHome.set(p.block, b);
       }
       structTile = STRUCT_TILE;
+      if (T.kind === "crater") buildCrater(T);
+      else if (T.kind === "mill" && T.mill) buildMill(T);
       for (const [bid, home] of blockHome) if (!blockLoot.get(bid)) loot(home.cx, heightAt0(home.cx, home.cz) + 0.5, home.cz, T.id);   // a block the dice left empty gets one floor item
-      if (clus) {
+      if (clus && !SPECIAL_KINDS[T.kind]) {
         const fr = TG.subRng(seed, T.id, "fence"), fs = SAV.fences[Math.floor(fr() * SAV.fences.length)];
         for (const f of T.compound.fence) addFence(f[0], f[1], f[2], f[3], fs[1], 0.2, fs[0]);
         for (const cr2 of T.compound.cars) props.car.push({ x: cr2.x, y: heightAt0(cr2.x, cr2.z), z: cr2.z, s: 2.2, ry: cr2.turn * Math.PI / 2 });
@@ -2665,20 +3580,21 @@ export async function buildMap(W, mapId) {
           const tr = TG.subRng(seed, T.id, "tree" + p.id), r = p.rect, cx4 = [[r[0] + 5, r[1] + 5], [r[2] - 5, r[1] + 5], [r[0] + 5, r[3] - 5], [r[2] - 5, r[3] - 5]];
           for (let k = 0; k < 2; k++) {
             const c = cx4.splice(Math.floor(tr() * cx4.length), 1)[0], sc = 0.85 + tr() * 0.4, ry = tr() * Math.PI * 2;
-            props.tree.push({ x: c[0], y: heightAt0(c[0], c[1]), z: c[1], s: sc, ry });
+            props[cityTree].push({ x: c[0], y: heightAt0(c[0], c[1]), z: c[1], s: sc, ry });
           }
         }
+        if (mapId !== "ashgrid") streetTrees(T);
         for (const p of T.parcels) if (p.use === "lot" && LM_MIN[p.lot]) buildLandmark(T, p);          // D2: gas stations, markets, clock-tower plazas, courts
         // back-yard acacias (7A2): a house, and a shop with room behind it, in a town or village block gets one at a back corner of its lot, 45 % of the time
         if (!core) for (const p of T.parcels) {
           const b = p.building;
           if (!b || b.gen === "shell" || b.gen === "tower" || (b.use !== "house" && b.use !== "shop")) continue;
           const tr = TG.subRng(seed, T.id, "yard" + p.id);
-          if (tr() > 0.45) continue;
+          if (tr() > (mapId === "ashgrid" ? 0.45 : 0.22)) continue;                 // (Wave 7b: a palm / pine is dearer in triangles than the acacia: the themed back yards keep half as many)
           const r = p.rect, [fx, fz] = p.facing, a = b.aabb, ux = tr() < 0.5 ? 1 : -1;
           const tx = fz ? (ux > 0 ? r[2] - 2.6 : r[0] + 2.6) : (fx > 0 ? r[0] + 2.6 : r[2] - 2.6), tz = fz ? (fz > 0 ? r[1] + 2.6 : r[3] - 2.6) : (ux > 0 ? r[3] - 2.6 : r[1] + 2.6);
           if (tx > a[0] - 2.4 && tx < a[2] + 2.4 && tz > a[1] - 2.4 && tz < a[3] + 2.4) continue;          // (the building's own footprint, with a crown's room)
-          props.tree.push({ x: tx, y: heightAt0(tx, tz), z: tz, s: 0.8 + tr() * 0.35, ry: tr() * Math.PI * 2 });
+          props[cityTree].push({ x: tx, y: heightAt0(tx, tz), z: tz, s: 0.8 + tr() * 0.35, ry: tr() * Math.PI * 2 });
         }
         // street dressing: kit lights, hydrants, benches, planters, parked cars, lot dressing (towngen's data; y = the ground each one stands on)
         for (const e of TG.streetProps(T, seed)) {
@@ -2686,11 +3602,29 @@ export async function buildMap(W, mapId) {
           city.kit.push({ type: e.type, x: e.x, y, z: e.z, rot: e.rot, district: did, tint: e.tint });
           if (e.kind === "light") { const fa = [[0, 1], [1, 0], [0, -1], [-1, 0]][e.rot]; lampPts.push({ x: e.x - fa[0] * 1.6, y: y + (e.type === "props/light-square" ? 5.2 : 5.9), z: e.z - fa[1] * 1.6 }); city.lights++; }
         }
+        if (mapId !== "ashgrid") themedLots(T, did);                                                       // (stage B: beach bars, pool decks, café umbrellas / campfires, woodyards)
       }
     }
     sink = batches;
     padReuse = false;
     for (const it of city.kit) for (const c of city.CK.colliderFor(it.type, it.x, it.y, it.z, it.rot, undefined, it.sy)) cityKitBoxes.push(c);
+  }
+  /** (stage B) the roof of a themed tower: a resort's roof terrace (a parasol, two loungers, a white stair head on the -X side, away from the chest in the middle and the ramp on +X); a lodge's
+   *  timber water tank on four legs and a stone chimney. Cosmetic; the parcel's style stream. No curtain-wall shaft: that is Savanna's skyline. */
+  function themedCrown(b, y, sr) {
+    const ry = y + b.floors * 4 + 0.3, rot = b.rot, fw = b.w, NC = { collide: false }, d1 = sr(), d2 = sr();
+    if (mapId === "isla_viva") {
+      addBoxR(b.cx, b.cz, -fw * 0.3, -fw * 0.3, ry + 1.1, 2.0, 2.2, 2.2, "#f2efe6", rot, NC);
+      const px = -fw * 0.28, pz = fw * 0.24, c = Math.cos(rot), s = Math.sin(rot), wx = b.cx + px * c + pz * s, wz = b.cz - px * s + pz * c;
+      addBox(wx, ry + 1.1, wz, 0.09, 2.2, 0.09, "#e8e4da", NC); coneAt(wx, ry + 1.95, wz, 1.4, 0.55, 8, SAV.awnings[Math.floor(d1 * SAV.awnings.length)], d2 * Math.PI);
+      for (const k of [-1, 1]) addBoxR(b.cx, b.cz, -fw * 0.28 + k * 1.0, fw * 0.24 - 1.9, ry + 0.18, 0.7, 0.36, 1.9, "#f4f1e8", rot, NC);
+    } else {
+      for (const [lx, lz] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) addBoxR(b.cx, b.cz, -fw * 0.3 + lx, -fw * 0.28 + lz, ry + 0.9, 0.2, 1.8, 0.2, "#4a3626", rot, NC);
+      addBoxR(b.cx, b.cz, -fw * 0.3, -fw * 0.28, ry + 2.6, 2.4, 1.8, 2.4, "#6b4a2e", rot, { collide: false, tex: "plank" });
+      addBoxR(b.cx, b.cz, -fw * 0.3, -fw * 0.28, ry + 3.6, 2.7, 0.2, 2.7, "#3a2c20", rot, NC);
+      addBoxR(b.cx, b.cz, -fw * 0.32, fw * 0.3, ry + 1.0, 1.0, 2.0, 1.0, "#6f6a62", rot, { collide: false, tex: "block" });
+    }
+    return 0;
   }
   // rooftop dressing of an enterable tower: a pair of units on the roof's -X side (away from the chest in the middle and the access ramp along +X) and, on a core
   // tower, an antenna mast. Cosmetic, no collider; the dice are the parcel's own style stream.
@@ -2780,13 +3714,14 @@ export async function buildMap(W, mapId) {
         else quad(T, x0, z0 + lz * k / n, x1, z0 + lz * (k + 1) / n, lift, hex);
       }
     };
-    const LOTC = { parking: "#4a4e54", park: "#5d8b44", yard: "#a9a18c", plaza: "#c9c5b6", market: "#b08a5c", gas: "#5b5f64", court: "#9e4a38" };
+    const GR = SAV.ground || null;                                                          // Wave 7b: the resort / lodge ground tones (Savanna: none, the literals below)
+    const LOTC = GR ? GR.lot : { parking: "#4a4e54", park: "#5d8b44", yard: "#a9a18c", plaza: "#c9c5b6", market: "#b08a5c", gas: "#5b5f64", court: "#9e4a38" };
     // 7A2: the sidewalk ring is the lightest thing in a town (it frames every block against the dark asphalt from the plane); the ground inside a block is not one
     // plaza any more: each BUILT parcel has its own paving / packed earth / dry-lawn tone (a hash of its id), the industrial yards a darker concrete.
     // D2: the town ground reads against the tan haze of the drop view as COOL concrete (a bluish-grey plaza inside a pale kerb ring) instead of one more tan: the parcels' tones
     // are greys with a hue drift (blue-grey, warm grey, green-grey), the downtown the coolest
-    const RING = "#d9dad4", PLAZA = "#8d9197", WHITE = "#f2f0e6";
-    const PARCEL_TONES = { core: ["#868c94", "#7d848d", "#92979c", "#838a8f", "#8f8f90"], town: ["#999a92", "#8f9189", "#a2a095", "#8a9189", "#9a9890", "#a6a498"], yard: ["#767672", "#82827e", "#6f716f"] };
+    const RING = GR ? GR.ring : "#d9dad4", PLAZA = GR ? GR.plaza : "#8d9197", WHITE = GR ? GR.white : "#f2f0e6";
+    const PARCEL_TONES = GR ? GR.tones : { core: ["#868c94", "#7d848d", "#92979c", "#838a8f", "#8f8f90"], town: ["#999a92", "#8f9189", "#a2a095", "#8a9189", "#9a9890", "#a6a498"], yard: ["#767672", "#82827e", "#6f716f"] };
     const cols = [], c0 = -BH;
     { let u = c0; cols.push([u, u + SWW]); u += SWW; for (let k = 0; k < 16; k++) { cols.push([u, u + 2.5]); u += 2.5; } cols.push([u, u + SWW]); }
     for (const T of lay.towns) {
@@ -2812,7 +3747,7 @@ export async function buildMap(W, mapId) {
       }
       // centre dashes of every street edge, a zebra crossing on every leg of every junction
       const N = T.roads.nodes, legs = new Map();
-      for (const e of T.roads.edges) {
+      if (!(GR && GR.noMarkings)) for (const e of T.roads.edges) {
         const A = N[e.a], B = N[e.b], len = e.len, ux = e.axis === "x" ? Math.sign(B.x - A.x) : 0, uz = e.axis === "z" ? Math.sign(B.z - A.z) : 0;
         for (let t = 11.5; t + 3 <= len - 11.5 + 1e-6; t += 6) {
           const ax = A.x + ux * t, az = A.z + uz * t, bx = A.x + ux * (t + 3), bz = A.z + uz * (t + 3);
@@ -2820,7 +3755,7 @@ export async function buildMap(W, mapId) {
         }
         if (len >= 24) { legs.set(e.a + ":" + ux + ":" + uz, [A, ux, uz]); legs.set(e.b + ":" + -ux + ":" + -uz, [B, -ux, -uz]); }
       }
-      for (const [, [n, dx, dz]] of legs) {
+      if (!(GR && GR.noMarkings)) for (const [, [n, dx, dz]] of legs) {
         for (let k = -3; k <= 3; k++) {
           const cx = n.x + dx * 7.7 + (-dz) * k * 1.25, cz = n.z + dz * 7.7 + dx * k * 1.25, hl = dx ? 1.5 : 0.28, hw = dx ? 0.28 : 1.5;
           quad(paint, cx - hl, cz - hw, cx + hl, cz + hw, CITY_MK_LIFT, WHITE);
@@ -2837,8 +3772,17 @@ export async function buildMap(W, mapId) {
         for (const s of [-1, 1]) { seg(s * hu, -hv * 0.45, s * (hu - 5.8), -hv * 0.45); seg(s * hu, hv * 0.45, s * (hu - 5.8), hv * 0.45); seg(s * (hu - 5.8), -hv * 0.45, s * (hu - 5.8), hv * 0.45); }
       }
     }
+    // (stage B) a resort town's yard lot is a pool deck: a white rim and the pool, 3.5 m in from the lot's edges (decals; the loungers and umbrellas round it are themedLots')
+    if (mapId === "isla_viva") for (const T of lay.towns) for (const p of T.parcels) {
+      if (p.use !== "lot" || p.lot !== "yard") continue;
+      const r = p.rect; if (r[2] - r[0] < 12 || r[3] - r[1] < 12) continue;
+      const x0 = r[0] + 3.5, x1 = r[2] - 3.5, z0 = r[1] + 3.5, z1 = r[3] - 3.5;
+      strip(slab, x0 - 0.6, z0 - 0.6, x1 + 0.6, z1 + 0.6, CITY_SW_LIFT + 0.004, "#f2efe6");
+      strip(slab, x0, z0, x1, z1, CITY_SW_LIFT + 0.008, "#3fa6c4");
+      strip(slab, x0 + 0.5, z0 + 0.5, x1 - 0.5, z1 - 0.5, CITY_SW_LIFT + 0.012, "#58bcd4");
+    }
     // a compound's yard is packed earth: a decal over its rectangle (the fence and the houses stand around it)
-    for (const T of lay.compounds.concat(lay.towns.filter((q) => !q.blocks.length && q.compound))) {
+    for (const T of lay.compounds.concat(lay.towns.filter((q) => !q.blocks.length && q.compound && q.kind !== "mill"))) {     // (Wave 7b stage B: not the mill - its "yard" is the bridge deck: the decal lay on the banks under both deck ends as two tan wedges)
       const y = T.compound.yard, yc = T.theme === "ruin" ? "#8d8777" : T.compound.variant === "depot" ? "#6d6c68" : "#a98f62";      // (D2: dark packed earth / rubble / a depot's tarmac: the pale "#d9c18f" vanished into the haze)
       const nx = Math.max(1, Math.round((y[2] - y[0]) / 2.5)), nz = Math.max(1, Math.round((y[3] - y[1]) / 2.5));
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) quad(slab, y[0] + (y[2] - y[0]) * i / nx, y[1] + (y[3] - y[1]) * j / nz, y[0] + (y[2] - y[0]) * (i + 1) / nx, y[1] + (y[3] - y[1]) * (j + 1) / nz, CITY_SW_LIFT, yc);
@@ -2909,7 +3853,8 @@ export async function buildMap(W, mapId) {
     const S = 512 / SIZE, X = (x) => (x + HALF) * S;
     ctx.save && ctx.save();
     ctx.globalAlpha = 1;
-    for (const T of city.lay.towns) for (const b of T.blocks) { ctx.fillStyle = T.kind === "core" ? "#e0d8bf" : "#cfc8b4"; ctx.fillRect(X(b.x0), X(b.z0), (b.x1 - b.x0) * S, (b.z1 - b.z0) * S); }
+    const MM = SAV.ground && SAV.ground.minimap ? SAV.ground.minimap : null;                  // Wave 7b: the resort / lodge minimap colours (Savanna: the literals below)
+    for (const T of city.lay.towns) for (const b of T.blocks) { ctx.fillStyle = MM ? MM.block : T.kind === "core" ? "#e0d8bf" : "#cfc8b4"; ctx.fillRect(X(b.x0), X(b.z0), (b.x1 - b.x0) * S, (b.z1 - b.z0) * S); }
     ctx.fillStyle = "#34373c";
     for (const r of cityRoadLog) {
       const w = Math.max(2, r[4] * S * 0.75);
@@ -2948,16 +3893,35 @@ export async function buildMap(W, mapId) {
   function installCityCull() {
     const meshes = [];
     g.traverse((o) => { if (o.isMesh && o.userData.district) { if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); meshes.push(o); } });
-    if (!meshes.length) return;
+    // Wave 7b stage B: the kit's instanced meshes get the same 170 m shadow test (a kit district far from the camera cast into the shadow pass whenever its sphere touched the
+    // sun's shadow box: Savanna s31337's endgame view drew the Mall's kit 5 times in the shadow pass). [world x, y, z, r] of each mesh's own instance sphere (citykit computes it
+    // tight: the box of its instance centres + the farthest instance), and the cast flag citykit gave it (buildings and cars cast, small props never do).
+    const kitM = [];
+    g.traverse((o) => {
+      if (!o.isInstancedMesh || !o.userData.kitDistrict || !o.boundingSphere || !o.castShadow) return;
+      o.updateWorldMatrix(true, false);
+      const c = o.boundingSphere.center.clone().applyMatrix4(o.matrixWorld);
+      kitM.push([o, c.x, c.y, c.z, o.boundingSphere.radius]);
+    });
+    if (!meshes.length && !kitM.length) return;
     let t = 9;
     trackUpdater((dt) => {
       t += dt; if (t < 0.5) return; t = 0;
       const cam = W.camera; if (!cam) return;
+      for (let i = 0; i < kitM.length; i++) {
+        const k = kitM[i], dx = k[1] - cam.position.x, dy = k[2] - cam.position.y, dz = k[3] - cam.position.z;
+        k[0].castShadow = Math.sqrt(dx * dx + dy * dy + dz * dz) - k[4] < 170;
+      }
       for (const m of meshes) {
         const bs = m.geometry.boundingSphere, dx = bs.center.x - cam.position.x, dy = bs.center.y - cam.position.y, dz = bs.center.z - cam.position.z;
         const d = Math.sqrt(dx * dx + dy * dy + dz * dz) - bs.radius;
         m.visible = d < 1100;
-        m.castShadow = d < 170;
+        // (Wave 7b: a compound cell's sphere spans its 600 m cell, so the 170 m test passed from anywhere near it and the shadow pass drew every compound of the cell (15 k
+        //  triangles of a Coco Village street view's shadow map for compounds 300 m away): a themed cell casts when one of ITS compounds is within 170 m)
+        const P = m.userData.parts;
+        let ds = d;
+        if (P) { ds = Infinity; for (const p of P) { const e = Math.hypot(p[0] - cam.position.x, p[1] - cam.position.z) - p[2]; if (e < ds) ds = e; } }
+        m.castShadow = ds < 170;
       }
     });
   }
@@ -3041,7 +4005,9 @@ export async function buildMap(W, mapId) {
     const H = 22, seg = 6, sh = H / seg, T = 0.4;
     const y = groundPad(x, z, 3.5, 3.5, { gen: "lighthouse" });          // C-PAD: the 6.2 m base band on one level
     for (let i = 0; i < seg; i++) {
-      const w = 6.2 - i * 0.7, hw = w / 2, c = i % 2 ? "#dcdcdc" : "#c23b3b", cy = y + i * sh + sh / 2;
+      // (Wave 7b, S1 request, applied in stage C) the TOP band keeps the width of the band under it: tapered, it left a 0.35 m ledge on band 4's wall tops (19.4 m up) roofed by the
+      // 4 m light room 3.6 m above - navcheck's room survey reads that unreachable ledge as a 4th-storey ROOM the planner can never reach (isla_viva seed 21: top-floor-paths 0/4 there)
+      const w = 6.2 - Math.min(i, seg - 2) * 0.7, hw = w / 2, c = i % 2 ? "#dcdcdc" : "#c23b3b", cy = y + i * sh + sh / 2;
       if (i === 0) {                                    // door gap on the -Z face of the bottom band
         const dw = 1.5, sw = (w - dw) / 2;
         addBox(x - (dw + sw) / 2, cy, z - hw, sw, sh + 0.12, T, c);
@@ -3173,23 +4139,32 @@ export async function buildMap(W, mapId) {
       const p = pois.find((q) => q.id === id);
       if (p) snapPoiToLand(p, waterY + 0.8);
     }
-    buildRoads(7);                                // connect every POI into a road network (cosmetic ribbons; the corridors go into the ground NOW, before anything is built on them)
+    // WAVE 7b: the resort towns, the docks village and the crater-rim village come from towngen like Savanna's city (see the city section above). The Cliff Temples keep and its
+    // five cubes stay where the table put them (`keepAt`, the POI's spot before the layout moves it): the layout keeps its 36 x 28 m clear and the cubes are drawn first and
+    // dropped where they would stand in a street or a yard (the draw-then-reject rule). A page whose towngen.js did not load plays the pre-7b layout below.
+    const keepAt = { x: pois[4].x, z: pois[4].z, r: pois[4].r, id: pois[4].id, on: baseH(pois[4].x, pois[4].z) > waterY + 0.8 };
+    if (keepAt.on) cityReserveExtra.push([keepAt.x - 17, keepAt.z - 14, keepAt.x + 19, keepAt.z + 14]);
+    city = await prepareCity();
+    if (city) { registerCityRoads(); registerCityPlateaus(); registerCityExtras(); buildCityBuildings(); } else buildRoads(7);   // (connect every POI into a road network (cosmetic ribbons; the corridors go into the ground NOW, before anything is built on them))
     // C-PAD ORDER: three towers below (the Cliff Temples keep, the Coco Village market hall, the volcano-rim observatory) are built AFTER things that
     // stand where their pads reshape the ground (the five temple cubes and their ramps, the rim slabs). Their pads - the very rectangles tower()
     // asks for, so tower() finds them and builds on the same level - are laid first, under the same dry-land conditions.
-    if (baseH(pois[4].x, pois[4].z) > waterY + 0.8) groundPad(pois[4].x, pois[4].z, 12 / 2 + 0.4, 12 / 2 + 0.4, { gen: "tower" });
-    if (baseH(pois[1].x, pois[1].z - 40) > waterY + 0.8) groundPad(pois[1].x, pois[1].z - 40, 14 / 2 + 0.4, 14 / 2 + 0.4, { gen: "tower" });
-    if (baseH(pois[2].x - 88, pois[2].z + 30) > waterY + 0.8) groundPad(pois[2].x - 88, pois[2].z + 30, 11 / 2 + 0.4, 11 / 2 + 0.4, { gen: "tower" });
+    if (keepAt.on) groundPad(keepAt.x, keepAt.z, 12 / 2 + 0.4, 12 / 2 + 0.4, { gen: "tower" });
+    if (!city && baseH(pois[1].x, pois[1].z - 40) > waterY + 0.8) groundPad(pois[1].x, pois[1].z - 40, 14 / 2 + 0.4, 14 / 2 + 0.4, { gen: "tower" });
+    if (!city && baseH(pois[2].x - 88, pois[2].z + 30) > waterY + 0.8) groundPad(pois[2].x - 88, pois[2].z + 30, 11 / 2 + 0.4, 11 / 2 + 0.4, { gen: "tower" });
     // villages → real towns (houses on a street with front doors to the road)
-    town(pois[0], [C_WOODP, C_BAMBOO], "#c0563a", { along: "z", nPer: 4, signature: "depot" });        // Palm Bay
-    town(pois[1], [C_BAMBOO, C_WOODP], "#cf6b3a", { along: "x", nPer: 5 });                            // Coco Village (its market hall is the tower below)
-    town(pois[6], [C_WOODP, C_BAMBOO], "#b5503a", { along: "x", nPer: 4, layout: "crossroads" });       // Jungle Market
-    farmland(pois[7], { minH: 0.6 });                                          // Banana Farm → actual farmland
-    lighthouse(pois[3].x - 55, pois[3].z + 55, pois[3].id);                     // Shipwreck Cove lighthouse (coastal landmark)
+    if (!city) {
+      town(pois[0], [C_WOODP, C_BAMBOO], "#c0563a", { along: "z", nPer: 4, signature: "depot" });        // Palm Bay
+      town(pois[1], [C_BAMBOO, C_WOODP], "#cf6b3a", { along: "x", nPer: 5 });                            // Coco Village (its market hall is the tower below)
+      town(pois[6], [C_WOODP, C_BAMBOO], "#b5503a", { along: "x", nPer: 4, layout: "crossroads" });       // Jungle Market
+      farmland(pois[7], { minH: 0.6 });                                          // Banana Farm → actual farmland
+    }
+    let lhSpot = null;
+    { const ls = city ? shoreSpot(pois[3].x, pois[3].z, 160) : null; lhSpot = ls; if (ls) lighthouse(ls[0], ls[1], pois[3].id); else lighthouse(pois[3].x - 55, pois[3].z + 55, pois[3].id); }   // Shipwreck Cove lighthouse (coastal landmark)
     // cliff temples: stone block structures
     const templeBlockers = [];       // the cubes' caps and their ramp planks, [x0, x1, z0, z1]: the keep's roof ramp keeps clear of them
     {
-      const p = pois[4];
+      const p = keepAt;
       // All five cubes are drawn first (the same draws in the same order: nothing between them consumes the stream), then built: a cube's ramp
       // must know where the keep (below) and the other cubes stand. Its ramp (up to 10 m long since the <= 45 degree rule) used to be fixed on the
       // +Z face and ran through the keep's wall or under its first-floor slab on 2 seeds of 5 (isla_viva 1234, 31337: the ramp could not be
@@ -3202,10 +4177,11 @@ export async function buildMap(W, mapId) {
         temples.push({ x, z, s });
         templeBlockers.push([x - s * 0.65, x + s * 0.65, z - s * 0.65, z + s * 0.65]);
       }
-      const keepOn = baseH(p.x, p.z) > waterY + 0.8;                         // the keep below is only built on dry ground
+      const keepOn = keepAt.on;                                              // the keep below is only built on dry ground
       const keep = keepOn ? [p.x - 6.8, p.x + 8.9, p.z - 6.8, p.z + 6.8] : null;   // its walls (+- 6.2), plus its exterior roof ramp along the +X wall, plus a capsule
       for (let i = 0; i < 5; i++) {
         const { x, z, s } = temples[i];
+        if (city && cityBlocks(x, z, s * 0.65 + 5)) continue;                  // (Wave 7b: a cube that would stand in a street, a yard or a building of the layout is not built; its draws were made)
         const y = groundPad(x, z, s * 0.65 + 0.2, s * 0.65 + 0.2, { gen: "temple" });   // C-PAD: the cube and its 1.3 x cap on one level
         addBox(x, y + s / 2, z, s, s, s, C_STONE, { tex: "block" });
         addBox(x, y + s + 0.8, z, s * 1.3, 1.6, s * 1.3, shade(C_STONE, 0.85), { tex: "block" });
@@ -3243,8 +4219,8 @@ export async function buildMap(W, mapId) {
     // both do. tower() already emits per-floor slabs, a stairwell hole over each
     // interior ramp and a roof chest. Guarded on dry ground so these do not
     // repeat the Lagoon Docks waterline bug — the coast is close at both spots.
-    if (baseH(pois[4].x, pois[4].z) > waterY + 0.8) tower(pois[4].x, pois[4].z, 3, 12, C_STONE, pois[4].id, templeBlockers);          // Cliff Temples keep
-    if (baseH(pois[1].x, pois[1].z - 40) > waterY + 0.8) tower(pois[1].x, pois[1].z - 40, 2, 14, C_BAMBOO, pois[1].id); // Coco Village market hall
+    if (keepAt.on) tower(keepAt.x, keepAt.z, 3, 12, C_STONE, keepAt.id, templeBlockers);          // Cliff Temples keep
+    if (!city && baseH(pois[1].x, pois[1].z - 40) > waterY + 0.8) tower(pois[1].x, pois[1].z - 40, 2, 14, C_BAMBOO, pois[1].id); // Coco Village market hall
     // Volcano Rim: an r=130 named landing zone that emitted FOUR CHESTS and no
     // geometry at all — and because scatterTrees rejects nearPoi(x, z, 26) it also
     // cleared every tree out to 156 m, so the drop screen advertised a place that
@@ -3252,7 +4228,8 @@ export async function buildMap(W, mapId) {
     // circle they belong to. Obsidian slabs on the rim for cover (Rubble Row's
     // fragment pattern retinted, same quantised shade so the batch key stays
     // stable), an observatory to hold, and the chests pulled inside the POI.
-    {
+    // (Wave 7b: the crater-rim village of the layout is that place now; this block is the pre-7b fallback)
+    if (!city) {
       const p = pois[2], C_OBS = "#5a5048";
       for (let i = 0; i < 10; i++) {
         const a = (i / 10) * Math.PI * 2 + rng() * 0.5, rr = 60 + rng() * 50;
@@ -3270,27 +4247,31 @@ export async function buildMap(W, mapId) {
         chest(cx, heightAt0(cx, cz) + 0.6, cz, p.id);
       }
     }
-    // shipwreck: hull from planks
+    // shipwreck: hull from planks (Wave 7b: on the layout's shore, beside the ruined hamlet: the POI moved there with it)
     {
-      const p = pois[3]; const y = waterY + 0.2;
-      addBox(p.x, y + 1.6, p.z, 6, 3.2, 18, "#7a5233", { rotY: 0.6 });
-      addBox(p.x + 3, y + 4.2, p.z + 2, 0.5, 6, 0.5, "#6b4326", { rotY: 0.6 });
+      let p = pois[3]; const y = waterY + 0.2;
+      if (city) { const hs = shoreSpot(p.x, p.z, 120, waterY - 0.3, waterY + 0.9, 14, lhSpot ? [lhSpot[0], lhSpot[1], 34] : null); if (hs) p = { x: hs[0], z: hs[1], id: p.id }; }
+      const hr = city ? 0 : 0.6;                                    // (Wave 7b: with a city layout the hull stands square to the axes, so the axis-aligned boarding plank runs alongside it and meets its deck; the fallback keeps 0.6)
+      addBox(p.x, y + 1.6, p.z, 6, 3.2, 18, "#7a5233", { rotY: hr });
+      addBox(p.x + 3, y + 4.2, p.z + 2, 0.5, 6, 0.5, "#6b4326", { rotY: hr });
       addRamp(p.x - 4.2, y, p.z - 8.6, 2.4, 3.5, 7.5, 2, "#6b4326"); // boarding plank to the deck chest
       // the two loose points used to sit 6.7 m off the hull centreline, inside the old rotated-AABB phantom
       // wall; the hull collider is its true outline now, so they would hover over open water. Hull-local
       // (+1.4, -4.5) / (-1.4, +4.5) puts them on the deck (rotY 0.6: x' = lx c + lz s, z' = -lx s + lz c).
-      const wc = Math.cos(0.6), ws = Math.sin(0.6);
+      const wc = Math.cos(hr), ws = Math.sin(hr);
       chest(p.x, y + 3.4, p.z, p.id);
       chest(p.x + 1.4 * wc - 4.5 * ws, y + 3.4, p.z - 1.4 * ws - 4.5 * wc, p.id);
       loot(p.x - 1.4 * wc + 4.5 * ws, y + 4.0, p.z + 1.4 * ws + 4.5 * wc, p.id);
     }
-    // docks
-    pier(120, 640, 22, 0.2, C_WOODP, "lagoon_docks");
-    pier(160, 610, 16, -0.3, C_WOODP, "lagoon_docks");
-    // (90,590) is below sea level on every seed sampled; hut() now stilts itself
-    // over water, so the shack stays ON the dock instead of being ring-searched
-    // up to 56 m inland (which still landed in water on 89.2% of seeds anyway).
-    hut(90, 590, 5, 4.4, 0, C_WOODP, "lagoon_docks");
+    // docks (Wave 7b: the docks village of the layout replaces them)
+    if (!city) {
+      pier(120, 640, 22, 0.2, C_WOODP, "lagoon_docks");
+      pier(160, 610, 16, -0.3, C_WOODP, "lagoon_docks");
+      // (90,590) is below sea level on every seed sampled; hut() now stilts itself
+      // over water, so the shack stays ON the dock instead of being ring-searched
+      // up to 56 m inland (which still landed in water on 89.2% of seeds anyway).
+      hut(90, 590, 5, 4.4, 0, C_WOODP, "lagoon_docks");
+    }
     minorLandmarks(14, [C_WOODP, C_BAMBOO], "#b5503a", { minH: waterY + 1.2 });
     // grid dims, not attempt counts (see scatterTrees). Measured on 2 seeds:
     // 134 -> 263 props, mean distance to nearest cover 36 m -> 22 m, open ground
@@ -3479,11 +4460,11 @@ export async function buildMap(W, mapId) {
           if (inCity(x, z, 3)) continue;                    // (Wave 7: no rubble inside the village's blocks)
           addBox(x, Math.min(y + 0.9, lowGround(x, z, fw, 0.5, fr) + fh / 2), z, fw, fh, 0.5, fc, { rotY: fr });
         }
-        if (k % 2 === 0 && !inRects(cityBld, kx, kz, 2) && (!city || openSpot(kx, heightAt0(kx, kz) + 0.5, kz))) loot(kx, heightAt0(kx, kz) + 0.5, kz, p.id);
+        if (k % 2 === 0 && !inRects(cityBld, kx, kz, 2) && !inRects(cityDecks, kx, kz, 2) && (!city || openSpot(kx, heightAt0(kx, kz) + 0.5, kz))) loot(kx, heightAt0(kx, kz) + 0.5, kz, p.id);
       }
       for (let i = 0; i < 2; i++) {
         const cx = p.x + (rng() - 0.5) * p.r, cz = p.z + (rng() - 0.5) * p.r;
-        if (!inRects(cityBld, cx, cz, 2) && (!city || openSpot(cx, heightAt0(cx, cz) + 0.6, cz))) chest(cx, heightAt0(cx, cz) + 0.6, cz, p.id);       // was sampled at the POI centre — floated on the slope
+        if (!inRects(cityBld, cx, cz, 2) && !inRects(cityDecks, cx, cz, 2) && (!city || openSpot(cx, heightAt0(cx, cz) + 0.6, cz))) chest(cx, heightAt0(cx, cz) + 0.6, cz, p.id);       // was sampled at the POI centre — floated on the slope
       }
     }
     // motor pool (cars = metal)
@@ -3542,10 +4523,14 @@ export async function buildMap(W, mapId) {
     poi("mill", "Riverside Mill", 40, 40, 90);
     poi("firewatch", "Fire Watch", 60, -520, 80);
     poi("meadow", "Meadow Farm", 430, 430, 100);
-    buildRoads(7);
+    // WAVE 7b: the lodge villages and the mill-and-bridge compound come from towngen like Savanna's city (see the city section above); a page whose towngen.js did not load plays the
+    // pre-7b layout below. The hamlets' landmarks (ranger towers, the lake pier, the hunters' blinds, the quarry rocks, the chapel) are drawn first / placed after the layout and
+    // dropped or moved where they would stand in a street or a yard.
+    city = await prepareCity();
+    if (city) { registerCityRoads(); registerCityPlateaus(); registerCityExtras(); buildCityBuildings(); } else buildRoads(7);
     // logging camp → a small mill town (+ its signature log piles)
-    town(pois[0], [C_LOG, C_PLANK], "#7a4a2a", { along: "x", nPer: 4 });
-    {
+    if (!city) town(pois[0], [C_LOG, C_PLANK], "#7a4a2a", { along: "x", nPer: 4 });
+    if (!city) {
       const p = pois[0];
       for (let i = 0; i < 8; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.5, z = p.z + (rng() - 0.5) * p.r * 1.5;
@@ -3555,17 +4540,28 @@ export async function buildMap(W, mapId) {
       }
     }
     // ranger ridge + fire watch towers
+    if (city) {
+      // (Wave 7b: a ranger tower needs a 6 x 14 m clearing for its switchback: the first free spot of a ring round the POI, 20-90 m out; the Fire Watch tower stands on the Fire Watch green)
+      const free = (cx, cz, rmin, rmax) => { for (let r = rmin; r <= rmax; r += 10) for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6 + r * 0.37, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; if (baseH(x, z) > waterY + 1.5 && !cityBlocks(x, z, 14)) return [x, z]; } return null; };
+      const a1 = free(pois[1].x, pois[1].z, 30, 110), a2 = free(pois[1].x + 20, pois[1].z + 30, 40, 120), a3 = free(pois[6].x, pois[6].z, 24, 90);
+      if (a1) rangerTower(a1[0], a1[1], C_PLANK, "ranger");
+      if (a2) rangerTower(a2[0], a2[1], C_PLANK, "ranger");
+      if (a3) rangerTower(a3[0], a3[1], C_PLANK, "firewatch");
+    } else {
     rangerTower(pois[1].x - 20, pois[1].z, C_PLANK, "ranger");
     rangerTower(pois[1].x + 45, pois[1].z + 35, C_PLANK, "ranger");
     rangerTower(pois[6].x, pois[6].z, C_PLANK, "firewatch");
+    }
     // lakeside cabins → a lakeside town (+ its pier)
-    town(pois[2], [C_PLANK, C_LOG], "#6a4028", { along: "x", nPer: 4, minH: waterY + 0.6, layout: "crossroads" });
-    pier(pois[2].x + 40, pois[2].z + 60, 18, 0.3, C_PLANK, pois[2].id);
+    if (!city) town(pois[2], [C_PLANK, C_LOG], "#6a4028", { along: "x", nPer: 4, minH: waterY + 0.6, layout: "crossroads" });
+    if (city) { const ps = shoreSpot(pois[2].x, pois[2].z, 150, waterY + 0.3, waterY + 1.6, 12); if (ps) pier(ps[0], ps[1], 18, 0.3, C_PLANK, pois[2].id); }   // (Wave 7b: the pier starts on the shore beside the lodge town)
+    else pier(pois[2].x + 40, pois[2].z + 60, 18, 0.3, C_PLANK, pois[2].id);
     // hunter's hollow: blinds (elevated boxes)
     {
       const p = pois[3];
       for (let i = 0; i < 4; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.4, z = p.z + (rng() - 0.5) * p.r * 1.4;
+        if (city && cityBlocks(x, z, 7)) continue;                              // (Wave 7b: a blind in a yard or on a street is not built; its draws were made)
         const y = heightAt0(x, z);
         addBox(x, y + 2.6, z, 2.6, 2.4, 2.6, C_PLANK);
         addStilt(x - 1, z, 0.4, y + 2.8, shade(C_PLANK, 0.8), true);      // legs reach the ground under each one
@@ -3580,20 +4576,25 @@ export async function buildMap(W, mapId) {
       for (let i = 0; i < 12; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.5, z = p.z + (rng() - 0.5) * p.r * 1.5;
         const y = heightAt0(x, z);
-        props.rocks.push({ x, y, z, s: 1.6 + rng() * 1.8, ry: rng() * Math.PI * 2 });
+        const s = 1.6 + rng() * 1.8, ry = rng() * Math.PI * 2;                                       // (the same draws in the same order as before)
+        // Wave 7b (a map with a city layout): a quarry rock is dropped where the ground under its base rises more than 1.2 m (finalizeProps' reliefMax) - the quarry lane's pads cut
+        // 2.7 - 3.3 m banks, and a 3 m rock on one stood with its drawn hull 1.5 m over its own low collider box (rocksweep, Deepwood s1); plus the scattered rocks' slope rule (`rej`)
+        props.rocks.push(city ? { x, y, z, s, ry, rej: 1, reliefMax: 1.2 } : { x, y, z, s, ry });
       }
-      chest(p.x, heightAt0(p.x, p.z) + 0.6, p.z, p.id);
-      hut(p.x + 40, p.z - 30, 6, 5, 0, C_STONE, p.id);
+      if (!city) { chest(p.x, heightAt0(p.x, p.z) + 0.6, p.z, p.id); hut(p.x + 40, p.z - 30, 6, 5, 0, C_STONE, p.id); }
     }
-    // riverside mill
-    {
+    // riverside mill (Wave 7b: the mill-and-bridge compound of the layout replaces the tower and the hut)
+    if (!city) {
       const p = pois[5];
       tower(p.x, p.z, 2, 10, C_PLANK, p.id);
       hut(p.x - 24, p.z + 14, 6, 5, 0, C_LOG, p.id);
     }
     // meadow farm → actual farmland (crop rows + barn + silo + fence)
-    farmland(pois[7], { minH: 0.6 });
-    steeple(pois[5].x + 48, pois[5].z + 42, pois[5].id);                        // Riverside Mill chapel steeple (landmark)
+    if (!city) farmland(pois[7], { minH: 0.6 });
+    if (city) {                                                                  // the Riverside Mill chapel steeple (landmark): the first free dry spot of a ring round the compound
+      const p = pois[5];
+      for (let r = 100; r <= 190; r += 10) { let done = false; for (let k = 0; k < 12 && !done; k++) { const a = k * Math.PI / 6 + 0.9, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r; if (baseH(x, z) > waterY + 2.5 && !cityBlocks(x, z, 14) && baseH(x + 8, z) > waterY + 2.5 && baseH(x - 8, z) > waterY + 2.5 && baseH(x, z + 10) > waterY + 2.5 && baseH(x, z - 10) > waterY + 2.5) { steeple(x, z, p.id); done = true; } } if (done) break; }
+    } else steeple(pois[5].x + 48, pois[5].z + 42, pois[5].id);                 // Riverside Mill chapel steeple (landmark)
     minorLandmarks(14, [C_LOG, C_PLANK], "#6a4028", { minH: waterY + 1.2 });
     // grid dims, not attempt counts. Deepwood was already the densest map (845
     // props, mean distance to cover 26 m), so it is the one map where stratifying
@@ -3688,7 +4689,7 @@ export async function buildMap(W, mapId) {
       }
       return m;
     };
-    const isl = mapId === "ashgrid" ? { tops: [], rocks: [] } : null;
+    const isl = (mapId === "ashgrid" || city) ? { tops: [], rocks: [] } : null;     // (Wave 7b: the themed maps bake their islands too - a drop view over Deepwood saw 4-6 islands = 8-12 draw calls)
     const islScaleUV = (geo, span) => { if (!_islTex) return; const uv = geo.attributes.uv; if (uv) { for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * span, uv.getY(i) * span); uv.needsUpdate = true; } };
     for (let i = 0; i < nIsl; i++) {
       const ang = rng() * Math.PI * 2;
@@ -3696,6 +4697,7 @@ export async function buildMap(W, mapId) {
       const ix = Math.cos(ang) * rr, iz = Math.sin(ang) * rr;
       const groundH = baseH(ix, iz);
       if (groundH < waterY - 2) continue;                      // not over deep ocean
+      if (mapId !== "ashgrid" && city && cityBlocks(ix, iz, 30)) continue;     // (Wave 7b: an island never floats over a town - a mid-rise's shaft reaches 34 m and the island's loot ended up inside it)
       const topY = Math.max(groundH, waterY) + 26 + rng() * 26; // 26-52m up
       const rad = 9 + rng() * 8;
       // grassy top disc — TILE = 8 m per texture tile, same density as the terrain
@@ -3755,7 +4757,7 @@ export async function buildMap(W, mapId) {
       const p = pois[Math.floor(rng() * pois.length)];
       const px = p.x + 14 + (rng() - 0.5) * 24, pz = p.z + 14 + (rng() - 0.5) * 24;
       const py = heightAt0(px, pz);
-      if (baseH(px, pz) < waterY + 0.5 || inRects(cityBld, px, pz, 3.5)) continue;
+      if (baseH(px, pz) < waterY + 0.5 || inRects(cityBld, px, pz, 3.5) || (cityKeepClear.length && inRects(cityKeepClear, px, pz, 3))) continue;
       addPortal(px, py, pz, rng() * Math.PI * 2);
     }
     if (isl && isl.tops.length) {
@@ -3775,11 +4777,11 @@ export async function buildMap(W, mapId) {
   // per player (audit M2). This is the LAST rng consumer in buildMap (nothing after
   // it draws), so taking more draws here moves no building, prop or portal.
   // WAVE 7 (Savanna): 70 wild spots, not 130 - the other ~60 live in the compounds' buildings now (house() rolls their loot); a wild spot never lands inside a building.
-  const wildN = city ? 70 : 130;
+  const wildN = city ? (mapId === "ashgrid" ? 70 : 100) : 130;               // (Wave 7b: the themed maps keep 100 wild spots: floor items out on the map are one draw each, a chest in a town street five)
   for (let i = 0, tries = 0; i < wildN && tries < wildN * 6; tries++) {
     const x = (rng() * 2 - 1) * (HALF - 60), z = (rng() * 2 - 1) * (HALF - 60);
     const y = heightAt0(x, z);
-    if (baseH(x, z) < waterY + 0.5 || (cityBld.length && (inRects(cityBld, x, z, 1.2) || !openSpot(x, y + 0.5, z) || onProp(x, z)))) continue;
+    if (baseH(x, z) < waterY + 0.5 || (cityBld.length && (inRects(cityBld, x, z, 1.2) || inRects(cityDecks, x, z, 1.2) || !openSpot(x, y + 0.5, z) || onProp(x, z)))) continue;
     i++;
     loot(x, y + 0.5, z, null);
     if (rng() < 0.12) chest(x, y + 0.6, z, null);
@@ -3795,7 +4797,7 @@ export async function buildMap(W, mapId) {
   // Deliberately NOT doing the metal half of this (crane/water-tower steel at
   // roughness 0.42 / metalness 0.6): scene.environment is still null everywhere in
   // this game, so a metal lobe would reflect pure black and look worse, not better.
-  const EMIT = { "#ffe9a8": 0xffe9a8, "#fff2b0": 0xfff2b0 };
+  const EMIT = { "#ffe9a8": 0xffe9a8, "#fff2b0": 0xfff2b0, "#ffb050": 0xff9a3c };      // (stage B: the crater village's brazier fires)
   // ONE MESH PER TEXTURE KIND, colour per VERTEX (lane S, 2026-10). The batches
   // were one merged mesh per colour x kind — ~30 meshes, each spanning the whole
   // map, so neither the camera nor the shadow camera could ever reject one: ~30
@@ -3818,6 +4820,29 @@ export async function buildMap(W, mapId) {
     if (tx) { mat.map = tx.map; mat.normalMap = tx.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
     return (structMats[tkind] = mat);
   }
+  /** Wave 7b: the brick/stone ("s") and plank textures in one material - vertex attribute `tki` 0 = s, 1 = plank (both 256 px tiling canvases, identity transforms, the same UVs) */
+  let dualMat = null;
+  function dualStructMaterial() {
+    if (dualMat) return dualMat;
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.88, metalness: 0.04 });
+    let pk = null, sc = null;
+    try { pk = plankTex(aniso); sc = stuccoTex(aniso); } catch (e) { pk = sc = null; }
+    if (_st && pk && sc) {
+      mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5);
+      const SC = THREE.ShaderChunk;
+      // tki 0 = s (brick / stone), 1 = plank, 2 = stucco: weights from the flat per-vertex index (no interpolation across a box: every vertex of a box has the same index)
+      const pick3 = (a, b, c, uv) => "( texture2D( " + a + ", " + uv + " ) * ( 1.0 - step( 0.5, vTki ) ) + texture2D( " + b + ", " + uv + " ) * ( step( 0.5, vTki ) - step( 1.5, vTki ) ) + texture2D( " + c + ", " + uv + " ) * step( 1.5, vTki ) )";
+      mat.customProgramCacheKey = () => "lc-struct-mix-v2";
+      mat.onBeforeCompile = (sh) => {
+        sh.uniforms.map2 = { value: pk.map }; sh.uniforms.normalMap2 = { value: pk.normal }; sh.uniforms.map3 = { value: sc.map }; sh.uniforms.normalMap3 = { value: sc.normal };
+        sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute float tki;\nvarying float vTki;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvTki = tki;");
+        sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform sampler2D map2;\nuniform sampler2D normalMap2;\nuniform sampler2D map3;\nuniform sampler2D normalMap3;\nvarying float vTki;")
+          .replace("#include <map_fragment>", SC.map_fragment.split("texture2D( map, vMapUv )").join(pick3("map", "map2", "map3", "vMapUv")))
+          .replace("#include <normal_fragment_maps>", SC.normal_fragment_maps.split("texture2D( normalMap, vNormalMapUv )").join(pick3("normalMap", "normalMap2", "normalMap3", "vNormalMapUv")));     // (every occurrence: the chunk samples the normal map in its object-space AND its tangent-space branch)
+      };
+    }
+    return (dualMat = mat);
+  }
   /** Merge one batch set (colour|kind -> geometries) into one mesh per texture kind plus one per emissive colour. `tag` = "" for the map-wide set, else the district id. */
   function mergeBatchSet(bset, tag) {
     const kindGroups = {};                        // tkind -> [geometry with a color attribute]
@@ -3839,12 +4864,28 @@ export async function buildMap(W, mapId) {
         list.push(geo);
       }
     }
+    // Wave 7b (a themed map's district): the brick/stone kind and the plank kind share ONE mesh - a lodge district is half plank walls, half stone and shingle, and the two
+    // were two draw calls (four with the shadow pass) in every view that saw it: 10-13 districts in a Deepwood street view. A per-vertex texture index picks the texture
+    // (dualStructMaterial: the same lighting, the same UVs and texture transforms, two samplers); Savanna keeps its kinds (its frames are untouched).
+    const DUAL = [["s", 0], ["plank", 1], ["stucco", 2]];
+    if (tag && city && mapId !== "ashgrid" && DUAL.filter(([k]) => kindGroups[k]).length >= 2) {
+      const both = [];
+      for (const [k, v] of DUAL) for (const geo of (kindGroups[k] || [])) { geo.setAttribute("tki", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(v), 1)); both.push(geo); }
+      const mergedB = BufferGeometryUtils.mergeGeometries(both, false);
+      if (mergedB) {
+        for (const [k] of DUAL) delete kindGroups[k];
+        const mesh = new THREE.Mesh(mergedB, dualStructMaterial());
+        mesh.castShadow = true; mesh.receiveShadow = true;
+        mesh.name = "structures:mix@" + tag; mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag);
+        g.add(mesh);
+      }
+    }
     for (const tkind in kindGroups) {
       const merged = BufferGeometryUtils.mergeGeometries(kindGroups[tkind], false);
       const mesh = new THREE.Mesh(merged, structMaterial(tkind));
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.name = "structures:" + tkind + (tag ? "@" + tag : "");
-      if (tag) mesh.userData.district = tag;
+      if (tag) { mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag); }
       g.add(mesh);
     }
     for (const bkey in bset) {
@@ -3863,12 +4904,37 @@ export async function buildMap(W, mapId) {
       mat.emissive = new THREE.Color(emit); mat.emissiveIntensity = 2.8; mat.toneMapped = false;
       const mesh = new THREE.Mesh(merged, mat);
       mesh.castShadow = true; mesh.receiveShadow = true;
-      if (tag) { mesh.name = "structures:emit@" + tag; mesh.userData.district = tag; }
+      if (tag) { mesh.name = "structures:emit@" + tag; mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag); }
       g.add(mesh);
     }
   }
   mergeBatchSet(batches, "");
   for (const [did, sk] of districtSinks) mergeBatchSet(sk, did);
+  // Wave 7b stage B: the turning mill wheels (buildWaterMill): one plank-material mesh each, turned about the axle (world pivot + axis) at 0.55 rad/s while the camera is within 320 m
+  for (const wh of millWheels) {
+    const list = [];
+    for (const [geo, color] of wh.geos) {
+      _vc.set(color);
+      const n = geo.attributes.position.count, ca = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { ca[i * 3] = _vc.r; ca[i * 3 + 1] = _vc.g; ca[i * 3 + 2] = _vc.b; }
+      geo.setAttribute("color", new THREE.BufferAttribute(ca, 3));
+      list.push(geo);
+    }
+    const merged = BufferGeometryUtils.mergeGeometries(list, false);
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, structMaterial("plank"));
+    mesh.name = "mill:wheel"; mesh.castShadow = true; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
+    g.add(mesh);
+    const P = new THREE.Vector3(wh.pivot[0], wh.pivot[1], wh.pivot[2]), A = new THREE.Vector3(wh.axis[0], wh.axis[1], wh.axis[2]).normalize(), mR = new THREE.Matrix4(), mT = new THREE.Matrix4();
+    let ang = 0;
+    trackUpdater((dt) => {
+      const cam = W.camera;
+      if (cam && (cam.position.x - P.x) * (cam.position.x - P.x) + (cam.position.z - P.z) * (cam.position.z - P.z) > 320 * 320) return;
+      ang = (ang + dt * 0.55) % (Math.PI * 2);
+      mesh.matrix.makeTranslation(P.x, P.y, P.z).multiply(mR.makeRotationAxis(A, ang)).multiply(mT.makeTranslation(-P.x, -P.y, -P.z));
+      mesh.matrixWorldNeedsUpdate = true;
+    });
+  }
   await yieldPhase();                                // phase 2/3 done
 
   // ── near-lamp point-light pool ────────────────────────────────────────────
@@ -3910,9 +4976,11 @@ export async function buildMap(W, mapId) {
 
   // ── merge roads + parking lots into one flat asphalt ribbon mesh ──────────
   if (roadGeos.length) {
-    const roadCol = mapId === "ashgrid" ? "#3d4045" : mapId === "deepwood" ? "#5f4f3c" : "#7c6a4e";
+    const roadCol = mapId === "ashgrid" ? "#3d4045" : city && SAV.ground ? SAV.ground.road : mapId === "deepwood" ? "#5f4f3c" : "#7c6a4e";
     const rmerged = BufferGeometryUtils.mergeGeometries(roadGeos, false);
-    const rmat = new THREE.MeshStandardMaterial({ color: roadCol, roughness: 0.98, metalness: 0 });
+    // (Wave 7b stage B: a depth bias, the decals' rule: where a ribbon chord dips a few cm under a terrain triangle - a diagonal link across a valley side - the road wins the depth test instead
+    //  of showing grass slivers through it; a state, not a program variant)
+    const rmat = new THREE.MeshStandardMaterial({ color: roadCol, roughness: 0.98, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     try { const gt = groundTex(aniso); rmat.map = gt.map; rmat.normalMap = gt.normal; rmat.normalScale = new THREE.Vector2(0.3, 0.3); } catch (e) {}
     if (photo && photo.asphalt && rmat.map) {
       // P2.5: the road_asphalt photograph as DETAIL over the road colour (the same divide-by-its-own-average rule as the terrain): grit and
@@ -4062,14 +5130,33 @@ export async function buildMap(W, mapId) {
       // folded into the vertices), so a kind costs one call per material. Same triangles, same instance matrices, same colliders (those come from the baked table).
       if (mapId === "ashgrid") meshes = mergePartsByMaterial(meshes);
       // (the coarse trunk is added AFTER the canopy: the first InstancedMesh of a kind carries the GLB's own geometry, which the placement census reads the kind's local frame from)
-      const isLod = (q) => mapId === "ashgrid" && kind === "tree" && q.geometry.index && q.geometry.index.count / 3 > 1200;
-      if (mapId === "ashgrid" && kind === "tree") meshes.sort((a, b) => (isLod(a) ? 1 : 0) - (isLod(b) ? 1 : 0));
+      // Wave 7b stage B: the same far LOD for the themed maps' heavy tree - Isla Viva's palm (one 3,134-triangle mesh: 551 k triangles of an Isla Viva s31337 street view, 47 % of the frame)
+      // and Deepwood's pine canopy (1,613). Savanna's acacia is unchanged.
+      const LOD_KIND = mapId === "ashgrid" ? "tree" : mapId === "isla_viva" ? "palm" : mapId === "deepwood" ? "pine" : null;
+      const isLod = (q) => kind === LOD_KIND && q.geometry.index && q.geometry.index.count / 3 > 1200;
+      if (kind === LOD_KIND) meshes.sort((a, b) => (isLod(a) ? 1 : 0) - (isLod(b) ? 1 : 0));
       instRefs[kind] = [];
+      // a kind whose ONLY mesh is the LOD part (the palm): a full-geometry twin with every instance goes first and is never drawn (visible = false) - it is the kind's instance list at the
+      // GLB's own geometry (what the probes read a kind's frame and positions from, as the acacia's canopy is on Savanna); the coarse copy draws, the near proxies draw the near ones in full
+      if (kind === LOD_KIND && mapId !== "ashgrid" && meshes.length && meshes.every(isLod)) {
+        const m = meshes[0], full = new THREE.InstancedMesh(m.geometry, m.material, list.length), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3();
+        for (let i = 0; i < list.length; i++) {
+          const it = list[i], s = norm * it.s;
+          Q.setFromAxisAngle(_upV, it.ry || 0);
+          M.compose(P.set(it.x, it.y - bbox.min.y * s, it.z), Q, S.set(s, s, s));
+          if (anchor[0] || anchor[1]) M.multiply(_tAnch.makeTranslation(-anchor[0] / norm, 0, -anchor[1] / norm));
+          M.multiply(m.matrixWorld);
+          full.setMatrixAt(i, M);
+        }
+        full.castShadow = false; full.receiveShadow = true; full.visible = false; full.name = "lod-full:" + kind;
+        g.add(full);
+        instRefs[kind].push(full);
+      }
       for (const m of meshes) {
         // D2 (Savanna): the acacia's trunk is 2,360 triangles x ~456 trees, all drawn in every view (1.07 M of a 2.2 M triangle frame). The map-wide mesh draws a COARSE copy
         // (~560 triangles); the trees within 110 m of the camera focus are drawn from the full geometry by the near-caster proxies below, and are hidden here while they are
         const lodPart = isLod(m);
-        const lodGeo = lodPart ? clusterSimplify(m.geometry, 24) : null;
+        const lodGeo = lodPart ? (mapId === "ashgrid" ? clusterSimplify(m.geometry, 24) : clusterSimplifyUV(m.geometry, 24)) : null;
         if (lodGeo && m.geometry.userData) lodGeo.userData.kind = m.geometry.userData.kind;                   // (the same kind tag as the geometry it stands in for)
         const inst = new THREE.InstancedMesh(lodGeo || m.geometry, m.material, list.length);
         // NOTHING map-wide casts any more. Each of these InstancedMeshes is sized to
@@ -4133,7 +5220,16 @@ export async function buildMap(W, mapId) {
       im.castShadow = true; im.receiveShadow = !!ref.lo; im.count = 0;       // (a near tree that replaces its coarse twin keeps receiving shadow, as that twin did)
       im.frustumCulled = false;   // rebuilt around the focus; its own bounding sphere is stale by design
       g.add(im);
-      return { im, ref };
+      // Wave 7b stage B: a LOD kind on a themed map also draws its STREET trees near the focus in full (the street palms / pines cast no near-field shadow, so the casters skip them;
+      // without this they would stay coarse up close). Its own InstancedMesh, never a caster; a clone of the geometry without the kind tag (the probes read only the map-wide meshes).
+      let street = null;
+      if (ref.lo && mapId !== "ashgrid") {
+        const sg = ref.geo.clone(); sg.userData = {};
+        street = new THREE.InstancedMesh(sg, ref.mat, NEAR_N);
+        street.castShadow = false; street.receiveShadow = true; street.count = 0; street.frustumCulled = false; street.name = "near-street:" + ref.kind;
+        g.add(street);
+      }
+      return { im, ref, street };
     });
     let _fx = 1e9, _fz = 1e9;
     const _tinyM = new THREE.Matrix4();
@@ -4145,18 +5241,24 @@ export async function buildMap(W, mapId) {
       _fx = f.pos.x; _fz = f.pos.z; W._foliageDirty = false;
       for (const nc of nearCasters) {
         const { list, mats, lo } = nc.ref;
-        let n = 0;
+        let n = 0, ns = 0;
         const cur = lo ? new Set() : null;
-        for (let i = 0; i < list.length && n < NEAR_N; i++) {
+        for (let i = 0; i < list.length; i++) {
           const it = list[i];
           if (it.dead) continue;
           const ax = it.x - _fx, az = it.z - _fz;
           if (ax * ax + az * az > NEAR_R2) continue;
+          if (it.street) {                             // (Wave 7b: a street palm / pine casts no near-field shadow: ~10 of them within 110 m of a Coco Village street were 50 k triangles of proxies, shadow pass + their depth-equal colour draw)
+            if (nc.street && ns < NEAR_N) { nc.street.setMatrixAt(ns++, mats[i]); cur.add(i); }
+            continue;
+          }
+          if (n >= NEAR_N) continue;
           nc.im.setMatrixAt(n++, mats[i]);
           if (cur) cur.add(i);
         }
         nc.im.count = n;
         nc.im.instanceMatrix.needsUpdate = true;
+        if (nc.street) { nc.street.count = ns; nc.street.instanceMatrix.needsUpdate = true; }
         if (lo) {                                  // the coarse map-wide twin hides exactly the trees the near proxy draws in full
           const prev = nc.ref.hid;
           for (const i of prev) if (!cur.has(i) && !list[i].dead) lo.setMatrixAt(i, mats[i]);
@@ -4265,7 +5367,7 @@ export async function buildMap(W, mapId) {
   // ── sky-island decor: few enough to clone directly ───────────────────────
   // D2 (Savanna only): ONE InstancedMesh per material of each decor kind (the acacia is a trunk and a canopy, the crystal two parts) instead of a clone per tree - eight island trees
   // were sixteen draw calls (and sixteen shadow-pass calls) of a drop view. They cast no shadow (a floating island 26-52 m up shadows nothing a player sees).
-  if (mapId === "ashgrid" && islandTrees.length) {
+  if ((mapId === "ashgrid" || city) && islandTrees.length) {          // (Wave 7b: the themed maps too - 6 island palms were 6 draw calls + 6 shadow calls of an Isla Viva drop view)
     const byKind = new Map();
     for (const t of islandTrees) { if (!byKind.has(t.kind)) byKind.set(t.kind, []); byKind.get(t.kind).push(t); }
     const IM = new THREE.Matrix4(), IP = new THREE.Vector3(), IQ = new THREE.Quaternion(), IS = new THREE.Vector3();
@@ -4585,6 +5687,44 @@ function clusterSimplify(geo, div) {
   out.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   out.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
   out.setIndex(new THREE.BufferAttribute(new Uint16Array(tri), 1));
+  out.computeBoundingSphere(); out.computeBoundingBox();
+  return out;
+}
+
+/** Wave 7b stage B: clusterSimplify for a TEXTURED mesh (the palm samples a colour atlas): the same clusters and quadric positions, but a cluster is split by the atlas swatch its vertices
+ *  sample (uv quantised to 1/64), each output vertex keeping a uv of its own swatch - clusterSimplify drops the uv, and the coarse palms sampled the atlas at (0, 0): pale grey trees. */
+function clusterSimplifyUV(geo, div) {
+  const UV = geo.attributes.uv, base = clusterSimplify(geo, div);
+  if (!UV || base === geo) return base;
+  // re-derive the cluster of every source vertex exactly as clusterSimplify did (same cell, same keys, same order), then split by uv swatch
+  const P = geo.attributes.position, I = geo.index.array, n = P.count;
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (let i = 0; i < n; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+  const cell = Math.max(x1 - x0, y1 - y0, z1 - z0) / div, key = new Map(), cid = new Int32Array(n);
+  for (let i = 0; i < n; i++) { const k = (Math.floor((P.getX(i) - x0) / cell) * 512 + Math.floor((P.getY(i) - y0) / cell)) * 512 + Math.floor((P.getZ(i) - z0) / cell); let c = key.get(k); if (c === undefined) { c = key.size; key.set(k, c); } cid[i] = c; }
+  const BP = base.attributes.position.array, outV = new Map(), pos = [], uv = [], tri = [], seen = new Set();
+  const vOf = (i) => { const k = cid[i] * 4194304 + Math.round(UV.getX(i) * 64) * 2048 + Math.round(UV.getY(i) * 64); let o = outV.get(k); if (o === undefined) { o = pos.length / 3; outV.set(k, o); const c = cid[i]; pos.push(BP[c * 3], BP[c * 3 + 1], BP[c * 3 + 2]); uv.push(UV.getX(i), UV.getY(i)); } return o; };
+  for (let t = 0; t < I.length; t += 3) {
+    const a = I[t], b = I[t + 1], c = I[t + 2];
+    if (cid[a] === cid[b] || cid[b] === cid[c] || cid[a] === cid[c]) continue;
+    const va = vOf(a), vb = vOf(b), vc = vOf(c), so = [va, vb, vc].sort((p, q) => p - q), sk = so.join(",");
+    if (seen.has(sk)) continue;
+    seen.add(sk); tri.push(va, vb, vc);
+  }
+  const nor = new Float32Array(pos.length);
+  for (let t = 0; t < tri.length; t += 3) {
+    const a = tri[t] * 3, b = tri[t + 1] * 3, c = tri[t + 2] * 3;
+    const ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1], uz = pos[b + 2] - pos[a + 2], vx = pos[c] - pos[a], vy = pos[c + 1] - pos[a + 1], vz = pos[c + 2] - pos[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    for (const v of [a, b, c]) { nor[v] += nx; nor[v + 1] += ny; nor[v + 2] += nz; }
+  }
+  for (let v = 0; v < nor.length; v += 3) { const l = Math.hypot(nor[v], nor[v + 1], nor[v + 2]) || 1; nor[v] /= l; nor[v + 1] /= l; nor[v + 2] /= l; }
+  base.dispose();
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+  out.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  out.setIndex(pos.length / 3 > 65535 ? new THREE.BufferAttribute(new Uint32Array(tri), 1) : new THREE.BufferAttribute(new Uint16Array(tri), 1));
   out.computeBoundingSphere(); out.computeBoundingBox();
   return out;
 }

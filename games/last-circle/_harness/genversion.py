@@ -4,6 +4,8 @@
     python _harness/genversion.py --disk                                   # the working copy against the build LIVE on the CDN (common.LIVE_REV): 3 maps x seeds 1, 7, 1234 (~1 min)
     python _harness/genversion.py --rev dd414cb2 --live-rev 60b854d0       # any two commits: the Wave-7 release against the Wave-6 one (the worlds differ, the version moved 2 -> 3: PASS)
     python _harness/genversion.py --rev dd414cb2 --live-rev 60b854d0 --plant no-bump   # negative control: the same candidate with its MAP_GEN_VERSION set back to 2: MUST FAIL
+    python _harness/genversion.py --disk --expect-version 5 --identical-maps ashgrid   # Wave 7b (gate.py): the version is 5 on all three maps, and Savanna's world hashes IDENTICALLY to the live build's
+    python _harness/genversion.py --disk --expect-version 5 --identical-maps ashgrid --plant savanna-shift   # negative control: Savanna gets one compound fewer (a scratch towngen.js): MUST FAIL
 
 A squad room is "every client rebuilds the same world from W.seed" (net.js hands MAP_GEN_VERSION over in the handshake and refuses a peer whose version differs). The guard sees the VERSION,
 never the world: a change to a world builder, the collider table, a prop anchor or loot placement that leaves MAP_GEN_VERSION where it was puts two clients on one version and two
@@ -16,6 +18,10 @@ height on a 7.3 m grid, the POIs, the prop anchors, the map's loot points and th
   gv-export-built   the version each built map reports (map.genVersion) equals the file's export (a fallback build reports less on purpose and would show here)
   population        at least 9 (map, seed) builds compared on each side (a probe that built nothing is could-not-judge, never a pass)
   INFO              the number of builds whose world changed, per field; the live and candidate versions; whether the bump was single (live + 1; D2 bumps ONCE per round)
+
+Wave 7b (lane B2) adds two rows: gv-target (`--expect-version N`: the export IS N and every built map reports N - "the three maps' versions are consistent") and gv-identical (`--identical-maps
+ashgrid`: the maps named there must hash IDENTICALLY to the live build's on every field and seed - Wave 7b changes Isla Viva and Deepwood on purpose and promises Savanna's world stays byte for byte;
+a squad peer on the live build and one on this build would otherwise share a version on Savanna and play different cities).
 
 --plant no-bump copies the candidate's runtime tree to a scratch directory and sets its `MAP_GEN_VERSION` back to the live build's value (the candidate's world is untouched): on a candidate
 whose world differs from the live build's, gv-bumped must FAIL. With --disk the plant works on whatever the tree holds; if the tree's world is still identical to live's the plant changes
@@ -85,12 +91,28 @@ def plant_no_bump(root, live_version):
     return dst, "MAP_GEN_VERSION %s -> %s in a scratch copy of maps.js" % (m.group(2), live_version)
 
 
+def plant_savanna_shift(root):
+    """a scratch copy of root's runtime/ + assets/props whose towngen.js lays out ONE Savanna compound fewer (PLANS.ashgrid.compounds.count 30 -> 29); the version is untouched"""
+    dst = tempfile.mkdtemp(prefix="lc_genversion_plant_")
+    for sub in ("runtime", os.path.join("assets", "props")):
+        shutil.copytree(os.path.join(root, sub), os.path.join(dst, sub))
+    p = os.path.join(dst, "runtime", "3d", "royale", "towngen.js")
+    with open(p, encoding="utf-8", newline="") as fh:
+        src = fh.read()
+    m = re.search(r"(compounds: \{ count: )30(, themes)", src)
+    if not m:
+        raise C.EnvFailure("plant savanna-shift: towngen.js has no 'compounds: { count: 30, themes' (the Savanna plan)")
+    with open(p, "w", encoding="utf-8", newline="") as fh:
+        fh.write(re.sub(r"(compounds: \{ count: )30(, themes)", lambda mm: mm.group(1) + "29" + mm.group(2), src, count=1))
+    return dst, "Savanna compounds 30 -> 29 in a scratch copy of towngen.js"
+
+
 def main_fn(v, args):
     vendor = os.path.join(C.ROOT, "assets", "vendor", "three")
     if not os.path.isdir(vendor):
         raise C.EnvFailure("vendored three not found at %s" % vendor)
-    if args.plant and args.plant != "no-bump":
-        raise C.HarnessError("unknown --plant %r (known: no-bump)" % args.plant)
+    if args.plant and args.plant not in ("no-bump", "savanna-shift"):
+        raise C.HarnessError("unknown --plant %r (known: no-bump, savanna-shift)" % args.plant)
     live_root, live_sha = PC.rev_root(args.live_rev)
     if args.rev:
         cand_root, cand_sha = PC.rev_root(args.rev)
@@ -102,9 +124,9 @@ def main_fn(v, args):
     plant_note = None
     scratch = None
     try:
-        if args.plant == "no-bump":
-            scratch, plant_note = plant_no_bump(cand_root, live["exportVersion"])
-            print("  plant no-bump: %s" % plant_note, flush=True)
+        if args.plant in ("no-bump", "savanna-shift"):
+            scratch, plant_note = plant_no_bump(cand_root, live["exportVersion"]) if args.plant == "no-bump" else plant_savanna_shift(cand_root)
+            print("  plant %s: %s" % (args.plant, plant_note), flush=True)
             cand = run_probe(scratch, vendor, args.maps, args.seeds, args.timeout, "candidate (planted)")
         else:
             cand = run_probe(cand_root, vendor, args.maps, args.seeds, args.timeout, "candidate")
@@ -145,6 +167,31 @@ def main_fn(v, args):
             v.info("plant has no effect here", "the candidate's world equals the live build's, so there is nothing to forget to bump: pin --rev against an older --live-rev (the registered control)")
     bad = [(b["map"], b["seed"], b["genVersion"]) for b in cand["builds"] if b["genVersion"] != cv]
     v.check("gv-export-built", not bad, "every built map reports genVersion %d = the export%s" % (cv, ("; differing: %s" % bad[:4]) if bad else ""), "map.genVersion == MAP_GEN_VERSION")
+    # ---- Wave 7b: the three maps agree on the target version; the held maps are byte for byte the live build's ----
+    if args.expect_version is not None:
+        by_map = {}
+        for b in cand["builds"]:
+            by_map.setdefault(b["map"], set()).add(b["genVersion"])
+        off = {m: sorted(x) for m, x in by_map.items() if x != {args.expect_version}}
+        v.check("gv-target", cv == args.expect_version and not off, "MAP_GEN_VERSION export %d, built maps report %s (target %d)%s" % (cv, "; ".join("%s %s" % (m, sorted(x)) for m, x in sorted(by_map.items())), args.expect_version,
+                ("; OFF TARGET: %s" % off) if off or cv != args.expect_version else ""), "export == every built map's genVersion == %d" % args.expect_version)
+    ident = [m for m in (args.identical_maps or "").split(",") if m]
+    if ident:
+        movedm = {}
+        for b in cand["builds"]:
+            if b["map"] not in ident:
+                continue
+            o = lk.get((b["map"], b["seed"]))
+            if o is None:
+                continue
+            d = [f for f in FIELDS if b[f] != o[f]]
+            if d:
+                movedm.setdefault(b["map"], []).append("s%d: %s%s" % (b["seed"], ",".join(d), (" (colliders %d -> %d)" % (o["n"], b["n"])) if o["n"] != b["n"] else ""))
+        n_ident = sum(1 for b in cand["builds"] if b["map"] in ident)
+        v.check("gv-identical", n_ident > 0 and not movedm, ("%d builds of %s hash IDENTICALLY to the live build's (col / heights / pois / props / points / items)" % (n_ident, ",".join(ident))) if n_ident and not movedm else
+                ("no build of %s was compared" % ",".join(ident)) if not n_ident else "; ".join("%s changed on %d of %d seeds: %s" % (m, len(x), len(args.seeds.split(",")), "; ".join(x[:4])) for m, x in movedm.items()),
+                "the held maps (%s) hash identically to the live build's on every seed" % ",".join(ident))
+        v.info("changed on purpose", "maps whose world differs from the live build's: %s" % (", ".join(sorted({m.split(" ")[0] for m in moved})) or "none"))
     v.info("version step", "candidate %d, live %d: %s" % (cv, lv, "a single bump (live + 1)" if cv == lv + 1 else ("unchanged" if cv == lv else ("bumped %d times in one round" % (cv - lv) if cv > lv else "LOWER"))))
 
 
@@ -154,7 +201,9 @@ def main():
     ap.add_argument("--live-rev", default=C.LIVE_REV, help="the build the candidate is compared with (default common.LIVE_REV)")
     ap.add_argument("--maps", default="isla_viva,ashgrid,deepwood")
     ap.add_argument("--seeds", default="1,7,1234")
-    ap.add_argument("--plant", default=None, help="negative control: no-bump")
+    ap.add_argument("--plant", default=None, help="negative control: no-bump, savanna-shift")
+    ap.add_argument("--expect-version", type=int, default=None, help="Wave 7b: the MAP_GEN_VERSION every map must report (gate.py passes 5)")
+    ap.add_argument("--identical-maps", default="", help="Wave 7b: maps whose world must hash IDENTICALLY to the live build's (gate.py: ashgrid)")
     ap.add_argument("--timeout", type=int, default=900)
     args = ap.parse_args()
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)

@@ -114,7 +114,7 @@ export function createActor(W, opts) {
     chute: null, _chuteH: null, chuteToggled: false,
     skin: null, clips: null, hasCrouchClip: false, armBones: null, torsoFix: false, hand: null, handBone: null,
     _bodies: null, _lod0Geo: null, _lod1Geo: null, _lod: 0, _bodyShadow: true, _wpnRef: null, _wpnMeshes: null, _wpnShadow: null,
-    _evalNow: false, _mixT: 0, _skipUsed: false, _onScreen: false, _dEff: 0, _agl: 0, _synced: false,
+    _evalNow: false, _mixT: 0, _skipUsed: false, _mixRate: 1, _onScreen: false, _dEff: 0, _agl: 0, _synced: false,
     _bodyYaw: 0, _hasBodyYaw: false, _tiltX: 0, _tiltZ: 0, _eyeY: 0, _hasEyeY: false,
     _armW: 0, _hasArmW: false, _armMode: null, _animTS: 1, _adsT: 0, _stepAcc: 0,
     hitReactT: 0, _hitReactAt: -9, _portalT: 0, _portalBoost: false, _ovReload: false,
@@ -1400,6 +1400,89 @@ function aimAssistStep(W, inp, firing, moving, dt) {
 const STEP_UP = 0.55;
 const tmpV = new THREE.Vector3();
 
+// ── ZERO-GARBAGE MOVER CALLS (Wave 7b, lane S1) ─────────────────────────────
+// V8 BOXES every double that crosses a call it did not inline - each argument
+// at the caller and the return value in the callee are fresh heap numbers - and
+// stepActor is far too big to inline its helpers. Called as blockedIn(W, cols,
+// a.pos.x, a.pos.z, nx, a.pos.z, a.pos.y, h, true) / supportIn(..) / heightAt(..)
+// the mover made ~20 heap numbers per actor per tick: framecheck's heap sampling
+// on Isla Viva read stepActor 10.9 + blockedIn 7.4 + supportIn 2.2 + maps.js
+// heightAt 3.5 KB a frame (all 16-byte samples = heap numbers). The hot mover
+// calls now pass their numbers through MV (a Float64Array: stores into it never
+// allocate) and get the support back in it - the SAME arithmetic in the same
+// order, so every result is bit for bit what the argument form gave.
+//   MV[0] x0  MV[1] z0   the capsule centre before the move (blockedF)
+//   MV[2] x   MV[3] z    the point tested (blockedF / supportF / groundF)
+//   MV[4] y              feet height (blockedF: before the move; supportF: probe height)
+//   MV[5] h              capsule height (blockedF)
+//   MV[6]                OUT supportF: the support;  MV[7] OUT groundF: the ground
+const MV = new Float64Array(8);
+// THE GROUND, read in place. maps.js heightAt is `(x, z) => field.at(x, z)` over the baked Float32 lattice (M.ground.lattice); a call
+// to it boxes x, z and its result (maps.js `at` was 3.5 KB a frame of the mover's garbage). groundF evaluates the SAME expression on
+// the same lattice - term for term maps.js TerrainField.at - and is only used after latBind has proved it equal (===) to M.heightAt on
+// 600 points of this map (edges, outside, every lattice row); a map without a lattice, or one that disagrees anywhere, keeps
+// calling M.heightAt (never a different ground).
+let _latMap = null, _lat = null, _latN = 0, _latC = 0, _latK = 0, _latH = 0;
+function latBind(M) {
+  _latMap = M; _lat = null;
+  const g = M && M.ground;
+  if (!g || !g.lattice || !(g.latN > 1) || !(M.size > 0) || typeof M.heightAt !== "function") return;
+  _lat = g.lattice; _latN = g.latN; _latC = g.latN - 1; _latK = (g.latN - 1) / M.size; _latH = M.size / 2;
+  // the self-check: a fixed spread of points (seeded LCG: no Math.random, no state) incl. exact lattice nodes, cell diagonals and
+  // positions beyond the edge, where at() clamps. It runs inside a caller's MV call (supportF binds on its first call): the caller's
+  // point is kept and put back.
+  const keepX = MV[2], keepZ = MV[3];
+  latCheck(M);
+  MV[2] = keepX; MV[3] = keepZ;
+}
+function latCheck(M) {
+  let s = 12345;
+  for (let i = 0; i < 600; i++) {
+    s = (Math.imul(s, 1103515245) + 12345) >>> 0;
+    const u = s / 4294967296;
+    s = (Math.imul(s, 1103515245) + 12345) >>> 0;
+    const v = s / 4294967296;
+    let x = (u - 0.5) * M.size * 1.1, z = (v - 0.5) * M.size * 1.1;
+    if (i % 3 === 0) { x = Math.round(x / (M.size / _latC)) * (M.size / _latC); }
+    if (i % 5 === 0) { z = Math.round(z / (M.size / _latC)) * (M.size / _latC); }
+    MV[2] = x; MV[3] = z; groundF(W0);
+    if (MV[7] !== M.heightAt(x, z)) { _lat = null; return; }
+  }
+}
+const W0 = { map: null };                // groundF's W while binding (it only reads W.map in the fallback branch)
+/** MV[7] = the ground at (MV[2], MV[3]): maps.js TerrainField.at, inlined. */
+function groundF(W) {
+  const L = _lat;
+  if (L === null) { MV[7] = W.map.heightAt(MV[2], MV[3]); return; }
+  const C = _latC;
+  let fx = (MV[2] + _latH) * _latK, fz = (MV[3] + _latH) * _latK;
+  fx = fx < 0 ? 0 : fx > C ? C : fx; fz = fz < 0 ? 0 : fz > C ? C : fz;
+  let ix = fx | 0, iz = fz | 0;
+  if (ix >= C) ix = C - 1;
+  if (iz >= C) iz = C - 1;
+  const u = fx - ix, v = fz - iz, i = iz * _latN + ix;
+  if (u + v <= 1) { MV[7] = L[i] + u * (L[i + 1] - L[i]) + v * (L[i + _latN] - L[i]); return; }
+  const h11 = L[i + _latN + 1];
+  MV[7] = h11 + (1 - u) * (L[i + _latN] - h11) + (1 - v) * (L[i + 1] - h11);
+}
+
+/** W.map.heightAt(A[o], A[o + 1]) -> A[o + 2], unboxed (groundF): for the bots' per-frame wall / floor probes (bots.js). */
+export function groundA(W, A, o) {
+  if (W.map !== _latMap) latBind(W.map);
+  MV[2] = A[o]; MV[3] = A[o + 1];
+  groundF(W);
+  A[o + 2] = MV[7];
+}
+
+/** supportAt(W, A[o], A[o + 1], A[o + 2]) -> A[o + 3]: the same query and support test, numbers in an array (bots.js per-frame hop probe). */
+export function supportA(W, A, o) {
+  const x = A[o], z = A[o + 1], y = A[o + 2];
+  const cols = W.map.queryColliders(x, z, 0.6);
+  MV[2] = x; MV[3] = z; MV[4] = y;
+  supportF(W, cols);
+  A[o + 3] = MV[6];
+}
+
 /** highest walkable support under (x,z) at or below y+STEP_UP */
 export function supportAt(W, x, z, y) {
   return supportIn(W, W.map.queryColliders(x, z, 0.6), x, z, y);
@@ -1409,9 +1492,19 @@ export function supportAt(W, x, z, y) {
  *  returns every collider in the 16 m grid cells its box touches, so a list
  *  queried around the actor with a radius that covers this frame's move is a
  *  SUPERSET of what a per-point query returns — and the exact footprint tests
- *  below make the answer identical. */
+ *  below make the answer identical. (The argument form, for the rare callers;
+ *  the mover's per-tick path is supportF.) */
 function supportIn(W, cols, x, z, y) {
-  let s = W.map.heightAt(x, z);
+  MV[2] = x; MV[3] = z; MV[4] = y;
+  supportF(W, cols);
+  return MV[6];
+}
+/** supportIn over MV: x = MV[2], z = MV[3], probe height y = MV[4] -> MV[6]. */
+function supportF(W, cols) {
+  if (W.map !== _latMap) latBind(W.map);
+  groundF(W);
+  const x = MV[2], z = MV[3], y = MV[4];
+  let s = MV[7];
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
@@ -1422,14 +1515,16 @@ function supportIn(W, cols, x, z, y) {
       else if (c.dir === 1) f = (c.maxX - x) / Math.max(0.01, c.maxX - c.minX);
       else if (c.dir === 2) f = (z - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
       else f = (c.maxZ - z) / Math.max(0.01, c.maxZ - c.minZ);
-      top = c.minY + (c.maxY - c.minY) * K.clamp(f, 0, 1);
+      top = c.minY + (c.maxY - c.minY) * (f < 0 ? 0 : f > 1 ? 1 : f);       // K.clamp(f, 0, 1), inlined
     } else {
       top = c.maxY;
     }
     if (top <= y + STEP_UP && top > s) s = top;
   }
-  return s;
+  MV[6] = s;
 }
+// sim rampBlocks' numbers (K.rampBlocksA reads [x, z, yd, h, r, stepUp] from this array: no boxed arguments)
+const RBA = new Float64Array(6);
 
 /** Capsule side blocking for a move (x0,z0) -> (x,z) by an actor whose feet are
  *  at y. Two rules on top of the plain overlap test (bots S6 / VERIFY #12):
@@ -1444,8 +1539,16 @@ function supportIn(W, cols, x, z, y) {
  *     200+ s at isla_viva (-46, 38.6, -34.8) and deepwood (490.5, 25.6, -366.3).
  *  Walls the capsule is not inside block exactly as before. */
 function blockedIn(W, cols, x0, z0, x, z, y, h, isMove) {
+  MV[0] = x0; MV[1] = z0; MV[2] = x; MV[3] = z; MV[4] = y; MV[5] = h;
+  return blockedF(W, cols, isMove);
+}
+/** blockedIn over MV: (x0, z0) = MV[0..1], (x, z) = MV[2..3], feet y = MV[4], height h = MV[5]. The clamps are K.clamp inlined
+ *  (v < lo ? lo : v > hi ? hi : v), the ramp test is K.rampBlocksA (the same function K.rampBlocks runs). */
+function blockedF(W, cols, isMove) {
+  const x0 = MV[0], z0 = MV[1], x = MV[2], z = MV[3], y = MV[4], h = MV[5];
   const r = K.PLAYERK.radius, r2 = r * r;
-  const yd = isMove ? Math.max(y, supportIn(W, cols, x, z, y)) : y;
+  let yd = y;
+  if (isMove) { supportF(W, cols); yd = Math.max(y, MV[6]); }        // supportF reads MV[2..4] = (x, z, y) and leaves them as they are
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.kind === "ramp") {
@@ -1455,20 +1558,24 @@ function blockedIn(W, cols, x0, z0, x, z, y, h, isMove) {
       // onto it, so rampBlocks reads false there), its sides and underside block.
       // Same "already held" rule as a box: a capsule that is already inside the
       // slab's zone may leave, or slide, but not go deeper.
-      if (!K.rampBlocks(c, x, z, yd, h, r, STEP_UP)) continue;
-      if (isMove && K.rampBlocks(c, x0, z0, y, h, r, STEP_UP)) {
-        const ex0 = x - K.clamp(x, c.minX, c.maxX), ez0 = z - K.clamp(z, c.minZ, c.maxZ);
-        const ex1 = x0 - K.clamp(x0, c.minX, c.maxX), ez1 = z0 - K.clamp(z0, c.minZ, c.maxZ);
-        if (ex0 * ex0 + ez0 * ez0 >= ex1 * ex1 + ez1 * ez1) continue;
+      RBA[0] = x; RBA[1] = z; RBA[2] = yd; RBA[3] = h; RBA[4] = r; RBA[5] = STEP_UP;
+      if (!K.rampBlocksA(c, RBA)) continue;
+      if (isMove) {
+        RBA[0] = x0; RBA[1] = z0; RBA[2] = y;
+        if (K.rampBlocksA(c, RBA)) {
+          const ex0 = x - (x < c.minX ? c.minX : x > c.maxX ? c.maxX : x), ez0 = z - (z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z);
+          const ex1 = x0 - (x0 < c.minX ? c.minX : x0 > c.maxX ? c.maxX : x0), ez1 = z0 - (z0 < c.minZ ? c.minZ : z0 > c.maxZ ? c.maxZ : z0);
+          if (ex0 * ex0 + ez0 * ez0 >= ex1 * ex1 + ez1 * ez1) continue;
+        }
       }
       return c;
     }
     if (c.maxY <= yd + STEP_UP || c.minY >= yd + h) continue;
-    let ex = x - K.clamp(x, c.minX, c.maxX), ez = z - K.clamp(z, c.minZ, c.maxZ);
+    let ex = x - (x < c.minX ? c.minX : x > c.maxX ? c.maxX : x), ez = z - (z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z);
     const d2 = ex * ex + ez * ez;
     if (d2 >= r2) continue;
     if (isMove && c.maxY > y + STEP_UP && c.minY < y + h) {
-      ex = x0 - K.clamp(x0, c.minX, c.maxX); ez = z0 - K.clamp(z0, c.minZ, c.maxZ);
+      ex = x0 - (x0 < c.minX ? c.minX : x0 > c.maxX ? c.maxX : x0); ez = z0 - (z0 < c.minZ ? c.minZ : z0 > c.maxZ ? c.maxZ : z0);
       const d20 = ex * ex + ez * ez;
       if (d20 < r2 && d2 >= d20) continue;     // already inside it: leaving / sliding is fine
     }
@@ -1489,7 +1596,9 @@ function blockedIn(W, cols, x0, z0, x, z, y, h, isMove) {
  *  0.45 m - and stuck rose to 2.0-4.7 % of moving samples (16 episodes for one
  *  bot); with the slide 0.5-1.1 %. The push is at most the radius minus the
  *  distance already reached, i.e. never more than this frame's own move. */
-function cornerSlide(W, cols, a, c, x, z, h) {
+//  (x, z, h) are the refused move's own MV[2], MV[3], MV[5] (stepActor calls this right after the blockedF that refused it).
+function cornerSlide(W, cols, a, c) {
+  const x = MV[2], z = MV[3], h = MV[5];
   if ((x >= c.minX && x <= c.maxX) || (z >= c.minZ && z <= c.maxZ)) return false;   // a face
   const cx = x < c.minX ? c.minX : c.maxX, cz = z < c.minZ ? c.minZ : c.maxZ;
   const ex = x - cx, ez = z - cz;
@@ -1497,7 +1606,8 @@ function cornerSlide(W, cols, a, c, x, z, h) {
   if (len < 1e-4) return false;
   const k = (K.PLAYERK.radius + 1e-3) / len;
   const px = cx + ex * k, pz = cz + ez * k;
-  if (blockedIn(W, cols, a.pos.x, a.pos.z, px, pz, a.pos.y, h, true)) return false;
+  MV[0] = a.pos.x; MV[1] = a.pos.z; MV[2] = px; MV[3] = pz; MV[4] = a.pos.y; MV[5] = h;
+  if (blockedF(W, cols, true)) return false;
   a.pos.x = px; a.pos.z = pz;
   return true;
 }
@@ -1532,6 +1642,7 @@ const _mb = { fx: 0, fz: 0, rx: 0, rz: 0 };   // K.moveBasis out-param (no per-f
 // the last tick), then the view pass. update(W, dt) = tick + frame(alpha = 1):
 // exactly the old one-call behaviour, for any caller that does not split.
 let _tickN = 0;
+let _viewN = 0;                 // view passes run (the mixer stagger's clock: actorView)
 const TELEPORT2 = 6 * 6;   // a > 6 m jump inside one tick (spawn, portal, net snap) is drawn, not interpolated
 
 export function tick(W, dt) {
@@ -1599,6 +1710,7 @@ const _frustum = new THREE.Frustum(), _pm = new THREE.Matrix4(), _vSph = new THR
 function viewPass(W, dt) {
   const cam = W.camera;
   if (!cam) return;
+  _viewN++;
   cam.updateMatrixWorld();
   _pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
   _frustum.setFromProjectionMatrix(_pm);
@@ -1608,7 +1720,7 @@ function viewPass(W, dt) {
   const actors = W.actors;
   for (let i = 0; i < actors.length; i++) {
     const a = actors[i];
-    if (a.alive && a.rig) actorView(W, a, focus, fovK);
+    if (a.alive && a.rig) actorView(W, a, focus, fovK, i, dt);
   }
   // clip selection + the pose layers, for every actor whose transform was
   // synced this frame (emotes and mantles own their pose, as before)
@@ -1671,7 +1783,7 @@ function applyRim(a, mode) {
 }
 
 /** One live actor's view state for this frame. */
-function actorView(W, a, focus, fovK) {
+function actorView(W, a, focus, fovK, slot, dt) {
   const p = a.obj.position;
   const dx = p.x - _camW.x, dy = p.y - _camW.y, dz = p.z - _camW.z;
   const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -1731,15 +1843,35 @@ function actorView(W, a, focus, fovK) {
   const m = a.rig.mixer;
   a._evalNow = m.time !== a._mixT;
   a._mixT = m.time;
-  a._skipUsed = m._ffgSkip === true;
+  // a mixer the STAGGER below held back this frame is not "skipped" in animate()'s sense (it must not be stepped there: that
+  // would undo the reduced rate); only the policy skip (far / off screen without a shadow) is
+  a._skipUsed = m._ffgSkip === true && m._lcStag !== true;
   let skip = false, rate = 1;
   if (!isFocus) {
     if (dEff > MIX_SKIP_M) skip = true;
     else if (!onScreen) { if (bodyShadow) rate = 2; else skip = true; }     // its shadow may still be in view
     else rate = dEff <= MIX_FULL_M ? 1 : dEff <= MIX_HALF_M ? 2 : 4;
   }
-  m._ffgSkip = skip;
-  m._ffgRate = rate;
+  // THE REDUCED RATE, STAGGERED HERE (Wave 7b, lane S1). It used to be the kernel's C4 _ffgRate 2 | 4, which only the kernel's own
+  // loop honoured: __LC__.stepFrames' fallback and the harness frame pump stepped every mixer that was not skipped, every frame, so
+  // framecheck's allocation window paid each rate-2 / rate-4 bot's whole clip evaluation 2-4x (three's Interpolant.evaluate was the
+  // biggest single garbage site, 12-15 KB a frame on Isla Viva). The stagger now lives in the flags themselves: on the frames a
+  // rate-limited mixer sits out it is SKIPPED (_ffgSkip, which every frame driver honours) and the frame it runs it is stepped once
+  // with the time it sat out (mixer.timeScale = (held + dt) / dt, the time held back measured in the real frame dt) - the kernel's
+  // accumulate-and-catch-up, done where every driver sees it. The kernel always gets _ffgRate 1. A POLICY skip (far / off screen
+  // without a shadow) drops the held time exactly as the kernel's skip did (the clip resumes from its own clock). Slot = the actor's
+  // index, so the rate-limited crowd spreads over the frames. Flags set here drive NEXT frame's mixer step.
+  if (m._lcHeld === undefined) { m._lcStag = false; m._lcHeld = 0; }      // first view of this rig: the fields in one order
+  if (m._lcStag === true) m._lcHeld += dt;                // this frame's step was held back: owe it
+  else m._lcHeld = 0;
+  if (skip) { m._ffgSkip = true; m._lcStag = false; m._lcHeld = 0; m.timeScale = 1; }
+  else if (rate > 1 && (_viewN + 1 + slot) % rate !== 0) { m._ffgSkip = true; m._lcStag = true; }
+  else {
+    m._ffgSkip = false; m._lcStag = false;
+    m.timeScale = m._lcHeld > 0 && dt > 0 ? (m._lcHeld + dt) / dt : 1;
+  }
+  m._ffgRate = 1;
+  a._mixRate = skip ? 0 : rate;
   a._onScreen = onScreen;
 }
 
@@ -1801,7 +1933,9 @@ function stepActor(W, a, dt) {
 
   // water/swim state: deep water = terrain far enough below the surface
   const wy = W.map.waterY;
-  const terrH = W.map.heightAt(a.pos.x, a.pos.z);
+  if (W.map !== _latMap) latBind(W.map);
+  MV[2] = a.pos.x; MV[3] = a.pos.z; groundF(W);
+  const terrH = MV[7];                                   // W.map.heightAt(a.pos.x, a.pos.z), unboxed (see groundF)
   const deepWater = terrH < wy - K.PLAYERK.swimDepth;
   const wasSwimming = a.swimming;
   a.swimming = deepWater && a.pos.y <= wy + 0.3;
@@ -1867,13 +2001,15 @@ function stepActor(W, a, dt) {
     {
       let hitWall = false;
       const nx = a.pos.x + mvx;
-      let bc = blockedIn(W, cols, a.pos.x, a.pos.z, nx, a.pos.z, a.pos.y, h, true);
+      MV[0] = a.pos.x; MV[1] = a.pos.z; MV[2] = nx; MV[3] = a.pos.z; MV[4] = a.pos.y; MV[5] = h;
+      let bc = blockedF(W, cols, true);
       if (!bc) a.pos.x = nx;
-      else if (!cornerSlide(W, cols, a, bc, nx, a.pos.z, h)) { a.vel.x = 0; hitWall = true; }
+      else if (!cornerSlide(W, cols, a, bc)) { a.vel.x = 0; hitWall = true; }
       const nz = a.pos.z + mvz;
-      bc = blockedIn(W, cols, a.pos.x, a.pos.z, a.pos.x, nz, a.pos.y, h, true);
+      MV[0] = a.pos.x; MV[1] = a.pos.z; MV[2] = a.pos.x; MV[3] = nz; MV[4] = a.pos.y; MV[5] = h;
+      bc = blockedF(W, cols, true);
       if (!bc) a.pos.z = nz;
-      else if (!cornerSlide(W, cols, a, bc, a.pos.x, nz, h)) { a.vel.z = 0; hitWall = true; }
+      else if (!cornerSlide(W, cols, a, bc)) { a.vel.z = 0; hitWall = true; }
       // MANTLE trigger (research: ironhold ships it; the movement scorecard
       // rated it the missing S-effort verb): airborne, pushing forward INTO a
       // wall, and a ledge top within hand reach — above the 0.55 auto-step,
@@ -1896,7 +2032,9 @@ function stepActor(W, a, dt) {
     // Probing from the lowered feet left a window (gravity * dt^2 = 5.5 mm on the ground, more in a fall)
     // where a box 0.544-0.550 m over the feet was neither a wall nor liftable: the capsule walked 0.6-1.3 m
     // into the rock and sank (5 of 13,432 swept rock sprints). A tick that does not fall is untouched.
-    let sup = supportIn(W, cols, a.pos.x, a.pos.z, K.supportProbeY(feetY0, a.pos.y));
+    MV[2] = a.pos.x; MV[3] = a.pos.z; MV[4] = feetY0 > a.pos.y ? feetY0 : a.pos.y;     // K.supportProbeY(feetY0, a.pos.y), inlined
+    supportF(W, cols);
+    let sup = MV[6];
     // LANDING SWEEP (Wave 5, 5C). supportIn is a POINT test (tops <= feet + STEP_UP), and
     // a faller covers more than STEP_UP per tick past ~33 m/s (a drop of ~27 m: a sky
     // island, the crane), so a 0.3 m roof slab fell between two ticks and the actor
@@ -2124,9 +2262,10 @@ function mantleTrigger(W, a, h) {
 
 
 function clampToMap(W, a) {
-  const H = W.map.half;
-  a.pos.x = K.clamp(a.pos.x, -H, H);
-  a.pos.z = K.clamp(a.pos.z, -H, H);
+  // K.clamp(a.pos.x, -H, H), inlined (a call boxed a.pos.x and -H every tick); a position inside is left untouched
+  const H = W.map.half, x = a.pos.x, z = a.pos.z;
+  if (x < -H) a.pos.x = -H; else if (x > H) a.pos.x = H;
+  if (z < -H) a.pos.z = -H; else if (z > H) a.pos.z = H;
 }
 
 // ── parachute (canopy dome + 2 white gores + suspension lines) ──────────────
@@ -3356,7 +3495,7 @@ export function killActor(W, victim, killerId, weaponId) {
   // pass never revisits it — and a long-range kill left a mid-stride statue
   // instead of a death animation. Full rate for the corpse's short life; the
   // mixer is disposed when the corpse sinks out (below).
-  if (victim.rig && victim.rig.mixer) { victim.rig.mixer._ffgSkip = false; victim.rig.mixer._ffgRate = 1; }
+  if (victim.rig && victim.rig.mixer) { const vm = victim.rig.mixer; vm._ffgSkip = false; vm._ffgRate = 1; vm._lcStag = false; vm._lcHeld = 0; vm.timeScale = 1; }
   // an actor killed mid-mantle must not freeze mid-air in the scripted arc —
   // update() skips dead actors, so nothing else would ever clear the state
   victim.mantleT = null;
@@ -3532,7 +3671,7 @@ export function readback(W) {
     if (a._wpnShadow) r.shadowWeapons++;
     if (a._onScreen) r.onScreen++;
     const m = a.rig.mixer;
-    if (m._ffgSkip) r.mixSkip++; else r.mixRate[m._ffgRate || 1]++;
+    if (!a._mixRate) r.mixSkip++; else r.mixRate[a._mixRate]++;
   }
   return r;
 }

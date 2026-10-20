@@ -69,6 +69,26 @@ cold cache); lane D1's squad fallback cases in squadguard_live (+ squadguard_liv
 integration run: it judges the DEPLOYED build, read-only, not the candidate); simcost (INFORMATION); and the Savanna and Deepwood coverage invocations probe_match_deepwood, sim_pacing_ashgrid / sim_pacing_deepwood,
 navcheck_seeds and collisioncheck_seeds. `gate.py --disk --post-deploy` runs the post-deploy check (POST_DEPLOY: coldcache --live, squadguard_live --live, the new perf baseline). See README "Wave-7 completion round".
 
+The Wave-7b rows (lane B2, 2026-10-15; Isla Viva and Deepwood get themed towns and the O4 endgame areas - a ruined crater-rim village, a mill-and-bridge compound): citycheck gates ALL THREE maps
+(CITY_BLOCK; named-town tables, compounds, streets of the layout, c7 gated and strict c8 information, live parity per map); endgamecheck (NEW, Node: the crater-rim village and the mill bridge, the bridge
+walked by the REAL mover 30 of 30); navtown takes every map's towns + compounds + the bridge (NAVTOWN_BLOCK, NAVTOWN_BRIDGE); kitcollide weighs the kit on all three maps; genversion adds gv-target
+(MAP_GEN_TARGET on all three maps) and gv-identical (Savanna hashes IDENTICALLY to the live build); worldcheck judges Savanna's RNG stream against the live build (the themed maps change on purpose);
+perf_district_themed (the themed maps, three seeds, vs the live build) and perf_district_phone (three maps, triangles <= x1.20); leaktest_maps (six matches cycling the three maps); mobile_deepwood,
+sim_pacing_isla_viva, coldcache_isla_viva / _deepwood, squadguard_live_fallback_full_isla_viva / _deepwood. Every control is pinned to WAVE7C_REV (the Wave-7 completion release 6191b380, frozen) or is a
+planted fault; see README "Wave-7b gates". perf_district VIEWSPEC 3 (2026-10-18): the camera and W._camFocus are pinned to each view while the frames are stepped (until v2 the
+near ring and loot cull followed the PLAYER's landing spot); every perf control still fails under v3. citycheck's detector-parity is could-not-judge when the served tree changes between its Node and Chrome halves.
+
+Wave 7b stage B (lane S3, 2026-10-19): mobile guards its subject after landing (a bot killed the unguarded player on Isla Viva seed 7 -> 35/48; control mobile-plant-no-touch-ui, Isla Viva);
+collisioncheck's container-lean row is PER MAP (LEAN_OPTIONAL: Isla Viva / Deepwood place no prop containers), so Isla Viva joins collisioncheck_seeds (COLSEEDS_MAPS = ALL_MAPS; control
+collisioncheck-lean-required-isla-viva, exit 2 expected); shotsheet (NEW, INFORMATION: the camera-pinned screenshot sheet per map; control shotsheet-plant-far-player). The Savanna perf bar vs
+the Wave-6 release stays +40 calls (perf_district, unchanged). See README "Wave-7b stage B".
+
+Wave 7b stage C (lane C3, 2026-10-19): worldlive's two ramp plants re-anchored on the stage-B mover (`K.rampBlocksA(c, RBA)`; both exited 2 = could-not-judge, now exit 1 again);
+endgamecheck walks the bridge on FIVE lanes over the full deck width, walking AND sprinting, both ways (20 per seed) on seeds 1-60 + 1234, 2026, 31337 (was 3 lanes within +-0.9 m,
+walk only, 5 seeds: 30/30 on the stage-B tree, whose E-W decks fail 6-8 of 20 at the outer lanes; new control endgamecheck-plant-deck-edge + its fixture twin); player_dive row (3)
+'settled' = canopy open >= 1 s (was |tiltX| <= 0.3; new control player_dive-plant-canopy-dive-pose); squadguard_live_cdn_fallback_full_isla_viva / _deepwood (INFORMATION until the
+deploy, COUNTED in POST_DEPLOY). See README "Wave-7b stage C".
+
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
 0 pass / 1 fail / 2 could-not-judge; a timeout or a crash of the gate process is could-not-judge. The overall verdict:
 any fail -> FAIL (exit 1); else any could-not-judge -> COULD-NOT-JUDGE (exit 2, re-run those gates; never counted as a
@@ -95,6 +115,21 @@ PERF_SEEDS = "1,7,1234,2026,31337"   # perf_district: the five Savanna seeds (th
 SQ_CASES = "same,older,newer,v1,preguard-guest,preguard-host,refuse-live"      # squadguard_live: the version-guard cases (Wave 7 lane 7C)
 SQ_CASES_FALLBACK = "fallback,fallback-host,fallback-solo"                      # + lane D1's C-FALLBACK cases (a client whose towngen.js/citykit.js failed leaves the squad). The DEPLOYED build (Wave 7) has none of
                                                                                 # this: squadguard_live_cdn stays on SQ_CASES until the deploy that carries the fallback, then adds SQ_CASES_FALLBACK (README post-deploy checklist)
+WAVE7C_REV = "6191b380"      # the Wave-7 COMPLETION release (live until the Wave-7b deploy): the frozen "must fail" build of the Wave-7b rows (no towns on Isla Viva / Deepwood, no crater-rim village, no bridge,
+                             # MAP_GEN_VERSION 4). NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
+# ---- Wave 7b (lane B2). Which maps' rows COUNT. Isla Viva and Deepwood get their towns and endgame areas from lane B1 in the same stage; each constant was set at the END of the stage to what B1
+# reported landed (README "Wave-7b gates"). A map left out of a list runs as INFORMATION ("would PASS / would FAIL"), never silently skipped.
+MAP_GEN_TARGET = 5                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps
+ALL_MAPS = "isla_viva,ashgrid,deepwood"
+CITY_BLOCK = ALL_MAPS                                  # citycheck --block-maps (all three maps: lane B1 landed the themed towns, compounds and both endgame areas)
+NAVTOWN_BLOCK = ALL_MAPS                               # navtown --block-maps
+NAVTOWN_BRIDGE = "deepwood"                            # navtown --require-bridge (the Riverside Mill bridge landed)
+KIT_REQUIRE = ALL_MAPS                                 # kitcollide --census-require: the maps that must place the city kit
+NAVSEEDS_MAPS = "ashgrid,deepwood"                     # navcheck_seeds --maps. Isla Viva NOT added (2026-10-19, Wave-7b tree): upper-rooms could-not-judge (21 < 40) and top-floor-paths FAILS 23/28 = 82.1 % (bar 95 %; the live build had < 10 queries) - a lane finding, see README "Wave-7b gates"
+COLSEEDS_MAPS = ALL_MAPS                               # collisioncheck_seeds --maps. Isla Viva ADDED in stage B (lane S3, 2026-10-19): container-lean is per map now (collisioncheck LEAN_OPTIONAL: Isla Viva / Deepwood place no
+                                                       # prop containers), so it is no longer could-not-judge there; phantom-rocks passes on the 7b tree (the live build: 1 of 12)
+ENDGAME_BLOCK = "isla_viva,deepwood"                   # endgamecheck --block-maps (both endgame areas landed)
+THEMES_INFO = False                                    # themeshots (lane B3's gate: the resort / lodge colourways + looks): information until lane B1 applies B3's palette patch to the tree; counted afterwards
 PREL5_REV = "874ab0ca"       # the last-circle build BEFORE lane L5 (3474f1c0, 2026-10-04): every chute deploy allocated geometries (200 -> 212 over the 10 SPACE toggles on isla_viva): the frozen "must fail" build of framecheck's
                              # 10-SPACE-toggle row (Wave-7 fix round: the row now excludes the terrain's lazily built chunks and must still see this)
 WAVE4_REV = "7f6a9fb2"       # the Wave-4 merge commit: the frozen "must fail" build of the Wave-5 gates
@@ -108,23 +143,36 @@ GATES = [
     # it runs first; collisioncheck / navcheck load one Chrome per map and run after leaktest.
     ("placementcheck", "placementcheck.py", [], 1800, False),
     # Wave-5 fix round (lane F1): worldcheck is Node only too (same reason, runs second); worldlive loads one Chrome per map (PRACTICE: ~40 s)
-    ("worldcheck", "worldcheck.py", [], 1800, False),
+    # Wave 7b: Savanna's RNG stream must equal the LIVE build's (genversion's gv-identical is the whole-world twin); Isla Viva / Deepwood change on purpose (printed as information)
+    ("worldcheck", "worldcheck.py", ["--baseline-rev", LIVE_REV, "--rng-maps", "ashgrid"], 1800, False),
     # Wave 7 (lane 7D), Node only: no non-finite ground on 200 seeds x 3 maps (~4 min), and lane 7C's loot probe (15 builds, ~15 s)
     ("nancheck", "nancheck.py", [], 1800, False),
     # Wave-7 completion round (D5), Node only (~25 s): the squad world contract - if anything a peer must agree on (colliders, ground, POIs, prop anchors, loot points, the settled loot items) differs from
     # the LIVE build's on 3 maps x seeds 1, 7, 1234, MAP_GEN_VERSION must be higher than the live build's. Lane D2 owns the constant and bumps it ONCE; every other lane that changes the world tells D2
-    ("genversion", "genversion.py", [], 1800, False),
+    # Wave 7b: + gv-target (MAP_GEN_VERSION == MAP_GEN_TARGET on all three maps) and gv-identical (Savanna hashes IDENTICALLY to the live build: col / heights / pois / props / points / items)
+    ("genversion", "genversion.py", ["--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid"], 1800, False),
     ("lootcheck", "lootcheck.py", [], 900, False),
     # NavGrid.bakeTown over the Savanna towns + compounds: every room street -> room -> street, planned by the grid and walked by the real mover (Node, ~1 min)
-    ("navtown", "navtown.py", [], 1800, False),
+    # Wave 7b: every map's towns + compounds (+ the Deepwood bridge). Rows of the maps in NAVTOWN_BLOCK count; the others print would PASS / would FAIL
+    ("navtown", "navtown.py", ["--block-maps", NAVTOWN_BLOCK] + (["--require-bridge", NAVTOWN_BRIDGE] if NAVTOWN_BRIDGE else []), 3600, False),
     # Wave-7 completion round (D5, lane D4's roof exit): the match's own 49 bots, 8 Savanna seeds x 120 s, every bot tracked from a NATURAL glide ending on a roof / wall top (feet >= 3.5 m over the terrain):
     # each leaves it within 8 s and none stands still more than 4 s in total (not counting ENGAGE / HEAL). The Wave-7 live build stands 7.5-9 s in total on a roof and needs up to 13 s to leave. Browser, ~2 min
     ("roofland", "roofland.py", [], 3600, False),
     # Wave-7 completion round (D5; promoted from the Wave-7 verify): one consistent build for a player with a cold / stale browser cache - every runtime script requested with the boot's ?v=, none requested twice,
     # the exempt shared files byte-identical to the live build's, the match builds with no fallback. Browser, ~1 min. `coldcache.py --disk --release` (cache bump counted) is run on the release candidate; `--live` after the deploy
     ("coldcache", "coldcache.py", [], 1800, False),
+    # Wave 7b: the themed maps import towngen.js / citykit.js now (new edges: each must carry the boot's ?v=). Browser, ~30 s each
+    ("coldcache_isla_viva", "coldcache.py", ["--map", "isla_viva"], 1800, False),
+    ("coldcache_deepwood", "coldcache.py", ["--map", "deepwood"], 1800, False),
     # lane 7E: the drawn city-kit mesh vs its colliders AT BODY HEIGHT (poke-out <= 0.10 m, phantom <= 0.25 m for EVERY type; collisioncheck measures none of the kit), Node, ~1 min with the census
-    ("kitcollide", "kitcollide.py", ["--census", "7,1234,2026"], 1800, False),
+    # Wave 7b: the census weighs the types by what ALL THREE maps place; kit-placed [map] FAILS a map in KIT_REQUIRE that places no kit
+    ("kitcollide", "kitcollide.py", ["--census", "7,1234,2026", "--census-maps", ALL_MAPS] + (["--census-require", KIT_REQUIRE] if KIT_REQUIRE else []), 3600, False),
+    # Wave 7b (NEW, Node, ~2 min): the O4 endgame areas - the crater-rim village on Isla Viva (ring of buildings and pads, stairs <= 45 degrees, no grid on a slope > 25 degrees) and the mill-and-bridge compound
+    # on Deepwood (a bridge, walked by the REAL mover 30 of 30 on 5 seeds, grounded). Rows of the maps in ENDGAME_BLOCK count
+    ("endgamecheck", "endgamecheck.py", ["--block-maps", ENDGAME_BLOCK], 3600, False),
+    # ... and its SELF-TEST, independent of the working copy: a scratch fixture (the Wave-7 completion release + 8 hand-made rim houses + a plank bridge on piers) on which every row must PASS
+    # (the bridge walked 30 of 30 by the real mover); each planted fault on the fixture must fail its row (NEGATIVE below). Node only, ~10 s
+    ("endgamecheck_fixture", "endgamecheck.py", ["--fixture", "good", "--quick"], 900, False),
     # Wave 6 (lane 6E): the detector's own selftest (Node only, ~2 s) runs with the other Node gates
     ("citycheck_selftest", "citycheck.py", ["--selftest"], 300, False),
     ("bootcheck", "bootcheck.py", [], 3600, False),
@@ -147,12 +195,16 @@ GATES = [
     ("layoutcheck_ashgrid", "layoutcheck.py", ["--map", "ashgrid"], 5400, False),
     ("layoutcheck_deepwood", "layoutcheck.py", ["--map", "deepwood"], 5400, True),      # information: Deepwood is unchanged in Wave 7; 1 flake in 5 runs (se 667x375: only stick + reload rendered), the other 4 PASS 31 / 31
     ("mobile_ashgrid", "mobile.py", ["--map", "ashgrid"], 7200, False),
+    ("mobile_deepwood", "mobile.py", ["--map", "deepwood"], 7200, False),                 # Wave 7b: the default `mobile` is Isla Viva; Deepwood gets its towns too (48 rows, 4 devices)
     ("rigcheck_ashgrid", "rigcheck.py", ["--seeds", "7,11,23", "--map", "ashgrid"], 5400, False),
     ("rigcheck_deepwood", "rigcheck.py", ["--seeds", "7,11,23", "--map", "deepwood"], 5400, False),
     ("probe_match", "probe_match.py", ["--farwall"], 14400, False),
     # the same-seed replay, the census (>= 3 guns per player) and the path search on SAVANNA: 3 whole matches (11 twice, 12), ~2 min
     ("probe_match_ashgrid", "probe_match.py", ["--runs", "11:ashgrid,11:ashgrid,12:ashgrid", "--paths-maps", "ashgrid", "--small-run"], 7200, False),
     ("leaktest", "leaktest.py", [], 7200, False),
+    # Wave 7b: ACROSS MAP CHANGES - six matches cycling Isla Viva, Deepwood, Savanna: each map's second lobby within +-5 textures / +-30 geometries of its first (a rematch picks a random map; the
+    # towns are instanced districts that disposeMapResources must free). Browser, ~10 min
+    ("leaktest_maps", "leaktest.py", ["--maps", "isla_viva,deepwood,ashgrid", "--matches", "6"], 7200, False),
     ("collisioncheck", "collisioncheck.py", [], 5400, False),
     ("worldlive", "worldlive.py", [], 5400, False),
     # Wave-7 completion round (D5): the REAL-MOVER SWEEP - every isolated rock of 3 maps x 5 seeds x 8 angles with the game's own mover (13,432 sprints, ~4 min): exactly 0 end inside a rock. The sampled
@@ -161,6 +213,13 @@ GATES = [
     ("rocksweep", "rocksweep.py", [], 3600, False),
     ("rocksweep_nolip", "rocksweep.py", ["--strip-lip"], 3600, True),       # INFORMATION: a QUESTION about the bake config (is the lip redundant?), not a bar on the game - the lip ships either way
     ("navcheck", "navcheck.py", [], 5400, False),
+    # Wave 7b (lane B3's gate, registered here by lane B2): what the kit's town THEMES look like (resort / lodge colourways, palette looks, tables in sync with towngen / citykit, 0 new programs); one
+    # Chrome at the menu, ~1 min. THEMES_INFO until the palette patch is on the tree
+    ("themeshots", "themeshots.py", ["--themes", "resort,lodge,city", "--label", "gate"], 1800, THEMES_INFO),
+    # Wave 7b stage B (lane S3, promoted from the stage-A lanes' scratch shots): the CAMERA-PINNED screenshot sheet per map (drop 330 m, street, town centre, compound, endgame, the map's
+    # extras, minimap; camera + focus pinned while stepping, the player teleported under the camera). INFORMATION: the sheet is for LOOKING; its rows (views-rendered, district-visible:
+    # 0 town districts within 1100 m of the draw camera hidden, errors) prove the pictures show what the game would show there. One Chrome per map, ~1-2 min each
+    ("shotsheet", "shotsheet.py", ["--label", "gate"], 3600, True),
     # ---- Wave 6 (lane 6E). perf_district: calls + triangles at 3 fixed cameras vs the baseline revision (Wave 7: common.LIVE_REV; the baseline numbers are cached per commit,
     # so the run loads ONE match); citykit_probe is lane 6C's C-KIT gate.
     # Wave-7 completion round (D5): the five Savanna seeds (PERF_SEEDS) vs the LIVE build (no regression since the last deploy) AND vs the Wave-6 release (the plan's original +40 calls / x1.25 triangles bar:
@@ -172,19 +231,28 @@ GATES = [
     ("citykit_probe_inmatch", "citykit_probe.py", ["--in-match"], 3600, False),
     # Wave 7: citycheck is a PERMANENT BLOCKING gate on Savanna (200 seeds; Node ~3.5 min + one Chrome for the detector parity). Isla Viva / Deepwood rows are printed as
     # "would PASS / would FAIL" information until Wave 7b gives them towns (--block-maps)
-    ("citycheck", "citycheck.py", ["--blocking", "--block-maps", "ashgrid", "--seeds-n", "200"], 3600, False),
+    # Wave 7b: gates the maps in CITY_BLOCK (all three once lane B1 landed both); the live half (detector parity, Chrome == Node) runs on every map. ~13 min on a busy box
+    ("citycheck", "citycheck.py", ["--blocking", "--block-maps", CITY_BLOCK, "--seeds-n", "200", "--live-maps", ALL_MAPS], 5400, False),
     # the same views vs the LIVE build on the two maps Wave 7 did not change (worlds are byte-identical: a regression guard), and the PHONE tier on Savanna (INFORMATION)
-    ("perf_district_themed", "perf_district.py", ["--maps", "isla_viva,deepwood"], 3600, False),
+    # Wave 7b: the themed maps now carry towns - three seeds against the LIVE build (<= +40 calls, <= x1.25 triangles per view, drop view <= 450 calls: Isla Viva was 515 at an earlier HEAD)
+    ("perf_district_themed", "perf_district.py", ["--maps", "isla_viva,deepwood", "--seeds", "1,7,31337", "--baseline", LIVE_REV], 5400, False),
     # Wave-7 completion round: COUNTED (was INFORMATION: the Wave-7 build read x1.247 of the x1.25 triangle bar at the phone endgame). After lane D2's tree LOD / draw-call merge the phone tier reads triangles
     # x0.60-0.70 and world calls -1 .. -67 against the live build on seeds 1, 7, 31337 (the real margin); seeds 1 and 31337 are the heavy cities. The same three views, a Pixel 7 context
-    ("perf_district_phone", "perf_district.py", ["--phone", "--seeds", "1,7,31337"], 3600, False),
+    ("perf_district_phone", "perf_district.py", ["--phone", "--seeds", "1,7,31337", "--maps", ALL_MAPS], 7200, False),       # Wave 7b: all three maps, phone triangles <= x1.20
     # lane 7C's squad version guard (MAP_GEN_VERSION in the handshake), two real pages and the real lobby; ~35 s, 61 rows. preguard cases serve the build WITHOUT the guard (60b854d0, fixed)
     ("squadguard_live", "squadguard_live.py", ["--cases", SQ_CASES + "," + SQ_CASES_FALLBACK], 3600, False),
     # lane D1's REAL fallback path (--full): towngen.js / citykit.js requests aborted on the guest, a whole Savanna match on each page (~1 min): the guest really falls back, leaves, plays on solo; the host's copy of it becomes a bot
     ("squadguard_live_fallback_full", "squadguard_live.py", ["--full", "--cases", "fallback-full"], 3600, False),
+    # Wave 7b: the themed maps load towngen.js / citykit.js now - a guest whose imports fail must fall back (genVersion - 1), leave the squad and play on solo there too
+    ("squadguard_live_fallback_full_isla_viva", "squadguard_live.py", ["--full", "--cases", "fallback-full", "--fallback-map", "isla_viva"], 3600, False),
+    ("squadguard_live_fallback_full_deepwood", "squadguard_live.py", ["--full", "--cases", "fallback-full", "--fallback-map", "deepwood"], 3600, False),
     # Wave-7 completion round (D5): the SAME cases against the DEPLOYED build (common.LIVE_BASE over the network; read-only, the relay is a stand-in, nothing of production is touched; 63 rows, ~2 min).
     # INFORMATION here: it judges the build that is live, not the candidate in the working copy. It is a COUNTED part of every post-deploy check (README): `python _harness/squadguard_live.py --live`
     ("squadguard_live_cdn", "squadguard_live.py", ["--live", "--cases", SQ_CASES + "," + SQ_CASES_FALLBACK], 1800, True),
+    # stage C (lane C3): the REAL fallback (--full) on the two themed maps, against the DEPLOYED build. INFORMATION until the Wave-7b deploy: the live 6191b380 builds Isla Viva / Deepwood without
+    # towngen.js / citykit.js, so a guest whose imports fail does not fall back there (the pinned controls squadguard_live_fallback_full_*-wave7c-live FAIL on it); COUNTED in the post-deploy check (POST_DEPLOY)
+    ("squadguard_live_cdn_fallback_full_isla_viva", "squadguard_live.py", ["--live", "--full", "--cases", "fallback-full", "--fallback-map", "isla_viva"], 1800, True),
+    ("squadguard_live_cdn_fallback_full_deepwood", "squadguard_live.py", ["--live", "--full", "--cases", "fallback-full", "--fallback-map", "deepwood"], 1800, True),
     # the loot rows on Savanna: every row except `rings` / `glare` (their A/B needs a SAND patch, which Savanna has none of: the Isla Viva run judges them). chestview judges open-sky chests
     ("loot_beams_rings_ashgrid", "new/loot_beams_rings.py", ["--map", "ashgrid", "--only", "gpusync,pools,clamp,ceilpix,pickup,deaths,chestview,stormfade"], 5400, False),
     # ---- Wave-4 lane gates: _harness/new/<lane>_<name>.py, registered 2026-10-12. Same convention as every gate above (0 pass /
@@ -223,12 +291,13 @@ GATES = [
     # (probe_match_ashgrid, since Wave 7, replays Savanna). Each entry below is one Chrome, time-boxed; the wall time of every one is in README "Wave-7 completion round". sim_pacing needs SIX distinct
     # (seed, map) runs (its median / circle rows are over them: fewer = could-not-judge), so each map gets six seeds plus the first one repeated as the replay pair
     ("sim_pacing_ashgrid", "new/sim_pacing.py", ["--runs", "51001:ashgrid,51001:ashgrid,51002:ashgrid,51003:ashgrid,51004:ashgrid,51005:ashgrid,51006:ashgrid"], 7200, False),
+    ("sim_pacing_isla_viva", "new/sim_pacing.py", ["--runs", "51201:isla_viva,51201:isla_viva,51202:isla_viva,51203:isla_viva,51204:isla_viva,51205:isla_viva,51206:isla_viva"], 7200, False),
     ("sim_pacing_deepwood", "new/sim_pacing.py", ["--runs", "51101:deepwood,51101:deepwood,51102:deepwood,51103:deepwood,51104:deepwood,51105:deepwood,51106:deepwood"], 7200, False),
     ("probe_match_deepwood", "probe_match.py", ["--runs", "13:deepwood,13:deepwood,23:deepwood", "--paths-maps", "deepwood", "--small-run"], 7200, False),
     # other seeds than the default run's (tick seed 5 / 13, walk seeds 11, 5 / 13, 23) on the two maps whose rooms and bots Wave 7 changed or could have changed; the pocket half (fixed seeds 1, 7, 1234) is not repeated
-    ("navcheck_seeds", "navcheck.py", ["--maps", "ashgrid,deepwood", "--only", "ticks,rooms", "--tick-seed", "21", "--walk-seeds", "21,22"], 7200, False),
+    ("navcheck_seeds", "navcheck.py", ["--maps", NAVSEEDS_MAPS, "--only", "ticks,rooms", "--tick-seed", "21", "--walk-seeds", "21,22"], 7200, False),
     # the default run is seed 7; seed 31337 is where the rock residuals of Wave 7 sat. Savanna and Deepwood only (Isla Viva has 20-28 rocks per seed and passes at every seed)
-    ("collisioncheck_seeds", "collisioncheck.py", ["--maps", "ashgrid,deepwood", "--seed", "31337"], 5400, False),
+    ("collisioncheck_seeds", "collisioncheck.py", ["--maps", COLSEEDS_MAPS, "--seed", "31337"], 5400, False),               # Wave 7b: Isla Viva joins when it passes (COLSEEDS_MAPS)
     # INFORMATION: what the sim costs per tick and how many frames hitch, this tree against the live build (A B A B). Never fails on a ratio; exit 2 only when nothing could be measured
     ("simcost", "simcost.py", [], 5400, True),
     ("perfcheck", "perfcheck.py", [], 7200, True),
@@ -243,6 +312,8 @@ GATES = [
 POST_DEPLOY = [
     ("postdeploy_coldcache", "coldcache.py", ["--live"], 1800),                                       # one consistent build for a cold cache AND live-rev: common.LIVE_REV is the deployed commit
     ("postdeploy_squadguard_live", "squadguard_live.py", ["--live", "--cases", SQ_CASES + "," + SQ_CASES_FALLBACK], 1800),   # the version guard + the fallback, against the deployed build
+    ("postdeploy_squadguard_fallback_full_isla_viva", "squadguard_live.py", ["--live", "--full", "--cases", "fallback-full", "--fallback-map", "isla_viva"], 1800),   # Wave 7b: the real fallback on the themed maps
+    ("postdeploy_squadguard_fallback_full_deepwood", "squadguard_live.py", ["--live", "--full", "--cases", "fallback-full", "--fallback-map", "deepwood"], 1800),
     ("postdeploy_perf_baseline", "perf_district.py", ["--identical"], 3600),                                         # the new baseline: --disk working copy vs LIVE_REV, row identical-to-baseline (x1.000: run with the deployed tree checked out)
 ]
 
@@ -393,10 +464,70 @@ NEGATIVE = [
     # collisioncheck_seeds can still fail: rocks 16 cm too small on seed 31337 (49 % of the Savanna + Deepwood rock sprints end inside a rock). navcheck_seeds has NO plant of its own: navcheck's plants degrade the
     # window planner (nav-l3 etc.), which Savanna's towns do not use (the nav grid plans there) and Deepwood has too few upper rooms to judge (CNJ, tried 2026-10-15); its controls are navcheck's own plants on Isla Viva (default invocation)
     ("collisioncheck_seeds-plant-rocks-small", "collisioncheck.py", ["--maps", "ashgrid,deepwood", "--seed", "31337", "--plant", "rocks-small"], 3600),
+    # Wave 7b stage B (lane S3): container-lean is per map. Savanna is REQUIRED (it has the yard): Savanna with containers it cannot fit (container-narrow, above) must fail, and a run that
+    # declares NO map optional must be could-not-judge on Isla Viva (no container there): the per-map requirement is still enforced (expected exit 2). NOT --quick: a quick run has 32 rock sprints,
+    # and sprints-rocks (>= 60 needed) would be could-not-judge for a reason that has nothing to do with containers
+    ("collisioncheck-lean-required-isla-viva", "collisioncheck.py", ["--maps", "isla_viva", "--lean-optional-maps", "none"], 1800, 2),     # (the same run with the default optional list passes: README "Wave-7b stage B")
     ("squadguard_live_cdn-plant-no-guard", "squadguard_live.py", ["--live", "--cases", "older", "--plant", "no-guard"], 1800),
     ("squadguard_live_cdn-plant-bare-import", "squadguard_live.py", ["--live", "--cases", "same", "--plant", "bare-import"], 1800),
     # coldcache --live with --expect-rev pointing at a build that is NOT live (the Wave-6 release): the live-rev row (common.LIVE_REV is the deployed commit) must FAIL
     ("coldcache-live-wrong-live-rev", "coldcache.py", ["--live", "--expect-rev", WAVE6_REV], 1800),
+    # ---- Wave 7b (lane B2). Every control is the frozen Wave-7 completion release (WAVE7C_REV: no themed towns, no rim village, no bridge, version 4) or a planted fault; the Wave-6 release where the plan says so.
+    # citycheck: the live themed maps have no towngen layout - every coverage / town / compound / endgame row of Isla Viva and Deepwood FAILS (Node only, 30 seeds); the Wave-6 release fails them too
+    ("citycheck-wave7c-themed-blocking", "citycheck.py", ["--rev", WAVE7C_REV, "--blocking", "--block-maps", "isla_viva,deepwood", "--maps", "isla_viva,deepwood", "--quick"], 1800),
+    ("citycheck-wave6-themed-blocking", "citycheck.py", ["--rev", WAVE6_REV, "--blocking", "--block-maps", "isla_viva,deepwood", "--maps", "isla_viva,deepwood", "--quick"], 1800),
+    # ... and the layout half of town-roads-dry can fail (a wet street planted on Savanna, which has water nowhere)
+    ("citycheck-plant-wet-street", "citycheck.py", ["--disk", "--city-plant", "wet-street", "--blocking", "--block-maps", "ashgrid", "--maps", "ashgrid", "--quick", "--no-live"], 1800),
+    # endgamecheck: the live build has neither a crater-rim village nor a bridge; five planted faults (the built map mutated in memory) for the rows that pass vacuously on the live build
+    ("themeshots-wave7c-frozen", "themeshots.py", ["--rev", WAVE7C_REV, "--themes", "resort,lodge,city", "--label", "frozen"], 1800),
+    ("endgamecheck-wave7c-live", "endgamecheck.py", ["--rev", WAVE7C_REV, "--block-maps", "all", "--quick"], 1800),
+    ("endgamecheck-wave6-release", "endgamecheck.py", ["--rev", WAVE6_REV, "--block-maps", "all", "--quick"], 1800),
+    ("endgamecheck-plant-steep-stair", "endgamecheck.py", ["--plant", "steep-stair", "--quick"], 1800),
+    ("endgamecheck-plant-ring-collapse", "endgamecheck.py", ["--plant", "ring-collapse", "--quick"], 1800),
+    ("endgamecheck-plant-grid-on-slope", "endgamecheck.py", ["--plant", "grid-on-slope", "--quick"], 1800),
+    ("endgamecheck-plant-bridge-gap", "endgamecheck.py", ["--plant", "bridge-gap", "--quick"], 1800),
+    ("endgamecheck-plant-float-pier", "endgamecheck.py", ["--plant", "float-pier", "--quick"], 1800),
+    # stage C (lane C3): the deck cut back on one side between the old centre lanes and the outer lane - the 3-lane walk (+-0.9 m) crossed it 30/30, the full-width walk must FAIL
+    ("endgamecheck-plant-deck-edge", "endgamecheck.py", ["--plant", "deck-edge", "--quick", "--walk-seeds", "1,7,9,1234,2026"], 1800),
+    # ... the same five plants on the FIXTURE, where every row passes first (right-reason controls, independent of lane B1's tree)
+    ("endgamecheck_fixture-plant-steep-stair", "endgamecheck.py", ["--fixture", "good", "--quick", "--plant", "steep-stair"], 900),
+    ("endgamecheck_fixture-plant-ring-collapse", "endgamecheck.py", ["--fixture", "good", "--quick", "--plant", "ring-collapse"], 900),
+    ("endgamecheck_fixture-plant-grid-on-slope", "endgamecheck.py", ["--fixture", "good", "--quick", "--plant", "grid-on-slope"], 900),
+    ("endgamecheck_fixture-plant-bridge-gap", "endgamecheck.py", ["--fixture", "good", "--quick", "--plant", "bridge-gap"], 900),
+    ("endgamecheck_fixture-plant-float-pier", "endgamecheck.py", ["--fixture", "good", "--quick", "--plant", "float-pier"], 900),
+    ("endgamecheck_fixture-plant-deck-edge", "endgamecheck.py", ["--fixture", "good", "--quick", "--plant", "deck-edge"], 900),
+    # player_dive (3): settled = canopy open >= 1 s (stage C, lane C3). A player.js whose canopy keeps the dive tilt must FAIL row (3) (the old |tiltX| <= 0.3 filter admitted 0 pilots there: could-not-judge)
+    ("player_dive-plant-canopy-dive-pose", "new/player_dive.py", ["--plant", "canopy-dive-pose"], 3600),
+    # navtown: the live build has no M.city on the themed maps (town-rooms-found FAILS); the coarse-indoor plant stays Savanna's. (The Wave-6 release's navgrid.js has no bakeTown: could-not-judge, so no Wave-6 pin here)
+    ("navtown-wave7c-themed", "navtown.py", ["--rev", WAVE7C_REV, "--maps", "isla_viva,deepwood", "--block-maps", "isla_viva,deepwood", "--require-bridge", "deepwood", "--seeds", "7"], 1800),
+    # kitcollide: the live themed maps place NO kit (kit-placed FAILS)
+    ("kitcollide-wave7c-themed", "kitcollide.py", ["--rev", WAVE7C_REV, "--census", "7", "--census-maps", "isla_viva,deepwood", "--census-require", "isla_viva,deepwood"], 1800),
+    # genversion: the live build is version 4, not the target (gv-target FAILS); Savanna one compound short (a scratch towngen.js) breaks gv-identical
+    ("genversion-wave7c-target", "genversion.py", ["--rev", WAVE7C_REV, "--live-rev", WAVE7C_REV, "--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid"], 900),
+    ("genversion-plant-savanna-shift", "genversion.py", ["--disk", "--live-rev", WAVE7C_REV, "--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid", "--plant", "savanna-shift"], 900),
+    # worldcheck: the extra rng() draw (existing) judged the new way - Savanna against the live build
+    ("worldcheck-plant-rng-shift-wave7c", "worldcheck.py", ["--plant", "rng-shift", "--baseline-rev", WAVE7C_REV, "--rng-maps", "ashgrid"], 900),
+    # perf_district: the same sized plants on the themed maps (Isla Viva is the tight one), and the phone tier's x1.20
+    ("perf_district_themed-plant-extra-calls", "perf_district.py", ["--maps", "isla_viva", "--seeds", "7", "--plant", "extra-calls"], 1800),
+    ("perf_district_themed-plant-extra-tris", "perf_district.py", ["--maps", "deepwood", "--seeds", "7", "--plant", "extra-tris"], 1800),
+    ("perf_district_phone-plant-extra-tris-themed", "perf_district.py", ["--phone", "--maps", "isla_viva", "--seeds", "7", "--plant", "extra-tris"], 1800),
+    # leaktest across map changes: a resource rendered and never disposed in every lobby (24 geometries + 5 textures) breaks the cycle rows
+    ("leaktest_maps-plant-leak", "leaktest.py", ["--maps", "isla_viva,deepwood,ashgrid", "--matches", "6", "--plant", "leak"], 7200),
+    # coldcache on a themed map: net.js importing maps.js bare (a second, stale instance) must fail there too
+    ("coldcache_deepwood-plant-bare-import", "coldcache.py", ["--map", "deepwood", "--plant", "bare-import"], 1800),
+    ("coldcache_isla_viva-plant-bare-import", "coldcache.py", ["--map", "isla_viva", "--plant", "bare-import"], 1800),
+    # the guest fallback on a themed map: the live build has no towns to lose, so the guest never falls back (the row FAILS) - and the planted no-fallback client
+    # framecheck on Isla Viva is relative to the live build too now (+1.97 M planted triangles read ~x2 of its 1.0 M drop frame)
+    ("mobile_deepwood-plant-no-touch-ui", "mobile.py", ["--map", "deepwood", "--devices", "pixel7", "--plant", "no-touch-ui"], 3600),
+    # Wave 7b stage B (lane S3): mobile now guards its subject after landing (a bot killed the unguarded player on Isla Viva seed 7: 35/48). The guard must not
+    # make a control-less phone pass: the default (Isla Viva) invocation with every touch control hidden must still FAIL
+    ("mobile-plant-no-touch-ui", "mobile.py", ["--devices", "pixel7", "--plant", "no-touch-ui"], 3600),
+    # shotsheet: the stage-A screenshot defect made certain (nothing pinned, the player parked in the far map corner: the city cull hides the towns of the view) must FAIL district-visible
+    # (Deepwood seed 4242 Lakeside is where the stage-A check saw empty lots)
+    ("shotsheet-plant-far-player", "shotsheet.py", ["--maps", "deepwood", "--seeds", "4242", "--plant", "far-player", "--label", "plant"], 1800),
+    ("framecheck-plant-extra-tris-isla-viva", "framecheck.py", ["--plant", "extra-tris"], 1800),
+    ("squadguard_live_fallback_full_deepwood-wave7c-live", "squadguard_live.py", ["--rev", WAVE7C_REV, "--full", "--cases", "fallback-full", "--fallback-map", "deepwood"], 1800),
+    ("squadguard_live_fallback_full_isla_viva-wave7c-live", "squadguard_live.py", ["--rev", WAVE7C_REV, "--full", "--cases", "fallback-full", "--fallback-map", "isla_viva"], 1800),
 ]
 
 

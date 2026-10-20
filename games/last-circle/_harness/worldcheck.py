@@ -8,6 +8,7 @@
     python _harness/worldcheck.py --disk --plant stale-table   # negative controls (each must exit 1)
     python _harness/worldcheck.py --disk --plant rng-shift
     python _harness/worldcheck.py --disk --baseline-rev <rev>  # compare the RNG stream with another revision (Wave 6 re-baselines on purpose)
+    python _harness/worldcheck.py --disk --baseline-rev 6191b380 --rng-maps ashgrid   # Wave 7b: Savanna's stream must equal the live build's; Isla Viva / Deepwood change on purpose (information)
 
 It imports the UNMODIFIED runtime/3d/royale/maps.js in Node (world_env.mjs, the same environment as placement_census.mjs) and asserts:
 
@@ -121,7 +122,7 @@ def judge_rng(v, now, base, baseline_label, chk, skip_maps=()):
     bb = {(b["map"], b["seed"]): b for b in base["builds"]}
     for m in skip_maps:
         diff = sum(1 for k in nb if k[0] == m and k in bb and nb[k]["wild"] != bb[k]["wild"])
-        v.info("rng-stream %s (changed on purpose, Wave 7 towns)" % m, "%d of %d builds differ from %s in wild loot (information, not judged)" % (diff, sum(1 for k in nb if k[0] == m), baseline_label))
+        v.info("rng-stream %s (changed on purpose: a town-wiring wave; information, not judged)" % m, "%d of %d builds differ from %s in wild loot (information, not judged)" % (diff, sum(1 for k in nb if k[0] == m), baseline_label))
     keys = sorted(k for k in (set(nb) & set(bb)) if k[0] not in skip_maps)
     if not keys:
         return chk("rng-stream", None, "no (map, seed) in common between the two fingerprints")
@@ -236,7 +237,14 @@ def main_fn(v, args):
             base = now
         else:
             base = run_node(["--mode", "fingerprint", "--root", base_root, "--vendor", vendor, "--seeds", seeds])
-        judge_rng(v, now, base, "git " + base_sha, chk, () if args.rng_maps == "all" else SAVANNA_BY_DESIGN)
+        if args.rng_maps == "all":
+            skip_maps = ()
+        elif args.rng_maps == "held":
+            skip_maps = SAVANNA_BY_DESIGN
+        else:                       # Wave 7b: a comma list of the maps whose stream is JUDGED (`ashgrid`: Savanna must be identical to the live build, Isla Viva and Deepwood get towns on purpose)
+            judged = set(x for x in args.rng_maps.split(",") if x)
+            skip_maps = tuple(m for m in C.MAPS if m not in judged)
+        judge_rng(v, now, base, "git " + base_sha, chk, skip_maps)
     finally:
         for d in tmp:
             shutil.rmtree(d, ignore_errors=True)
@@ -248,7 +256,7 @@ def main():
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--baseline-rev", default=None, help="the revision the RNG stream is compared with (default %s, the Wave-4 commit)" % WAVE4_REV)
     ap.add_argument("--quick", action="store_true", help="seed 7 only for the RNG stream")
-    ap.add_argument("--rng-maps", default="held", help="'held' (default): the stream row skips ashgrid (Wave 7 builds Savanna's towns on purpose) and judges isla_viva + deepwood; 'all': every map")
+    ap.add_argument("--rng-maps", default="held", help="'held' (default): the stream row skips ashgrid (Wave 7 builds Savanna's towns on purpose) and judges isla_viva + deepwood; 'all': every map; or a comma list of the maps JUDGED (Wave 7b: 'ashgrid' - Savanna must read the live build's stream, the themed maps get their towns on purpose)")
     args = ap.parse_args()
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)
 

@@ -3362,20 +3362,24 @@ export function update(W, dt) {
       const cam = W.kernel.camera;
       viewSize(W);
       const sw = _vw, sh = _vh;
+      // touch: keep the pills off the on-screen controls and the reticle
+      const koOn = touchOn && koRefresh(W, sw, sh);
       for (const n of near) {
         if (li >= R.lootLbls.length) break;
         R._lv.set(n.pos.x, n.pos.y + (n.type === "chest" ? 1.0 : 0.55), n.pos.z).project(cam);
         if (R._lv.z > 1 || R._lv.x < -1 || R._lv.x > 1 || R._lv.y < -1 || R._lv.y > 1) continue;
-        const el = R.lootLbls[li++];
         const isW = n.type === "item" && n.data.kind === "weapon";
         const txt = n.type === "chest" ? "CHEST"
                   : shortName(n.data) + (isW ? " · " + (K.RARITY[n.data.rarity || 0] || "").toUpperCase() : "");
+        let lx = (R._lv.x * 0.5 + 0.5) * sw, ly = (-R._lv.y * 0.5 + 0.5) * sh;   // the pill's bottom-centre
+        if (koOn) { ly = koPlace(txt, lx, ly); if (ly === null) continue; }    // under a control: not drawn, slot kept
+        const el = R.lootLbls[li++];
         if (el._t !== txt) {
           el._t = txt; el.textContent = txt;
           el.style.color = n.type === "chest" ? "#ffd254"
                         : isW ? (K.RARITY_COLOR[K.RARITY[n.data.rarity || 0]] || "#dfe7f2") : "#8fd3a0";
         }
-        el.style.transform = "translate(-50%,-100%) translate(" + ((R._lv.x * 0.5 + 0.5) * sw).toFixed(0) + "px," + ((-R._lv.y * 0.5 + 0.5) * sh).toFixed(0) + "px)";
+        el.style.transform = "translate(-50%,-100%) translate(" + lx.toFixed(0) + "px," + ly.toFixed(0) + "px)";
         el.style.opacity = (n.d < 3 ? 1 : Math.max(0.3, 1 - (n.d - 3) / 7)).toFixed(2);
         if (el.style.display !== "block") el.style.display = "block";
       }
@@ -3430,6 +3434,68 @@ export function update(W, dt) {
   mkUpdate(dt);
 }
 const _sq = { ads: false, speed: 0, airborne: false, crouching: false, sinceLastShotS: 0 };
+
+// ── touch keep-out for world-anchored labels (Wave 7b C2) ────────────────────
+// The loot pills are projected anywhere on screen, so on a phone a chest near
+// the landing spot drew "CHEST" under the FIRE button (layoutcheck / hud_checks
+// iphone14 + pixel7, Isla Viva at 69 chests). In touch mode every pill is
+// tested against the rects of the on-screen controls (data-touch-ui, + the
+// portal control bar) and the reticle: over the reticle it is lifted above it,
+// over a control it is not drawn (its pool slot goes to the next item). The
+// rects are re-read only when the view size or the touch layer's visibility
+// changes, and every 10 HUD frames otherwise (the stick floats under the
+// thumb): one getBoundingClientRect batch, then plain numbers - nothing is
+// allocated per frame. Desktop never enters this path.
+const KO_PAD = 3;                        // px of air between a pill and a control
+const _ko = { f: 99, vis: null, vw: -1, vh: -1, n: 0, box: new Float64Array(4 * 16), els: null, wid: new Map(), h: 0, rr: 31 };
+function koRefresh(W, sw, sh) {
+  const k = _ko;
+  const vis = !!(W.touch && W.touch.visible);
+  const r = R._ret;
+  k.rr = Math.max(28, ((r && r.gapPx) || 0) + ((r && r.len) || 0)) + KO_PAD;
+  if (++k.f < 10 && vis === k.vis && sw === k.vw && sh === k.vh) return true;
+  k.f = 0; k.vis = vis; k.vw = sw; k.vh = sh; k.n = 0;
+  const lbls = R.lootLbls;
+  // measured pill sizes (by text), from the pills on screen now
+  for (let i = 0; i < lbls.length; i++) {
+    const el = lbls[i];
+    if (el.style.display !== "block" || !el._t) continue;
+    const w = el.offsetWidth;
+    if (w > 0) { if (k.wid.size > 256) k.wid.clear(); k.wid.set(el._t, w); k.h = el.offsetHeight; }
+  }
+  if (!vis) return true;
+  const host = lbls[0] && lbls[0].parentElement;
+  if (!host) return true;
+  if (!k.els || !k.els.length || !k.els[0].isConnected) k.els = document.querySelectorAll("[data-touch-ui]");
+  const hr = host.getBoundingClientRect();
+  const ox = hr.left, oy = hr.top;
+  for (let i = 0; i < k.els.length; i++) koPush(k.els[i], ox, oy);
+  koPush(document.getElementById("__ff_controls__"), ox, oy);
+  return true;
+}
+function koPush(e, ox, oy) {
+  const k = _ko;
+  if (!e || k.n >= 16) return;
+  const b = e.getBoundingClientRect();
+  if (b.width < 1 || b.height < 1) return;            // display:none / hidden layer
+  const o = 4 * k.n++;
+  k.box[o] = b.left - ox - KO_PAD; k.box[o + 1] = b.top - oy - KO_PAD;
+  k.box[o + 2] = b.right - ox + KO_PAD; k.box[o + 3] = b.bottom - oy + KO_PAD;
+}
+/** the pill's bottom-centre y after the keep-out (lifted over the reticle), or null = not drawn */
+function koPlace(txt, x, y) {
+  const k = _ko;
+  const w = k.wid.get(txt) || (txt.length * 8.6 + 20);
+  const h = k.h || 21;
+  const x0 = x - w / 2, x1 = x + w / 2;
+  const cx = k.vw / 2, cy = k.vh / 2, rr = k.rr;
+  if (x1 > cx - rr && x0 < cx + rr && y > cy - rr && y - h < cy + rr) y = cy - rr;
+  for (let i = 0, o = 0; i < k.n; i++, o += 4) {
+    const b = k.box;
+    if (x1 > b[o] && x0 < b[o + 2] && y > b[o + 1] && y - h < b[o + 3]) return null;
+  }
+  return y;
+}
 // Dirty check for the slot row, allocation-free: the last painted id / count /
 // rarity per slot, the active index, and every ammo pool, compared in place.
 const _slotC = { who: null, active: -2, n: -1, ids: [], counts: [], rars: [], ammo: {}, ammoN: -1 };

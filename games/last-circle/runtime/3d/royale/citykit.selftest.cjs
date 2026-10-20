@@ -232,7 +232,7 @@ function refBox(b, q, k, x, y, z) {
   // ---------------------------------------------------------------- palettes and themes
   const RP = K.resolvePalette;
   ok(RP("suburban", "slate", "city").variant === "slate" && RP("suburban", "slate", "city").tint === 0xffffff, "an explicit variant is taken literally (no tint)");
-  ok(RP("suburban", "resort", "city").variant === "sand" && RP("commercial", undefined, "ruin").variant === K.THEMES.ruin.variant.commercial && RP("commercial", undefined, "ruin").tint === K.THEMES.ruin.tint && RP("suburban", undefined, undefined).variant === K.THEMES.city.variant.suburban, "a theme name (per entry) or the district theme (default city) picks the recoloured colormap");
+  ok(RP("suburban", "resort", "city").variant === K.THEMES.resort.variant.suburban && RP("commercial", undefined, "ruin").variant === K.THEMES.ruin.variant.commercial && RP("commercial", undefined, "ruin").tint === K.THEMES.ruin.tint && RP("suburban", undefined, undefined).variant === K.THEMES.city.variant.suburban, "a theme name (per entry) or the district theme (default city) picks the recoloured colormap");
   ok(RP("car", "ruin", "ruin").variant === "base" && RP("car", "ruin", "ruin").tint === 0xffffff && RP("roads", undefined, "lodge").id === "roads:base:ffffff" && RP(null, "ruin").key === null, "cars, roads, graveyard and quaternius props keep their authored colours in every theme");
   ok(RP("suburban", undefined, "ruin").id !== RP("suburban", undefined, "city").id && RP("suburban", "base", "x").id === "suburban:base:ffffff", "different themes give different shared-texture ids; one id per (palette, variant, tint)");
   const themes = Object.keys(K.THEMES);
@@ -260,6 +260,28 @@ function refBox(b, q, k, x, y, z) {
   const pcRows = {};
   if (pcBlock) for (const m of pcBlock[1].matchAll(/"([^"]+)":\s*\[([^\]]+)\]/g)) pcRows[m[1]] = m[2].split(",").map((s) => parseInt(s.trim(), 16));
   ok(bld.length === 27 && bld.every((id) => pcRows[id] && pcRows[id].length === 8 && pcRows[id].every((v) => v >= 0 && v <= 0xffffff)), "PROXY_COLORS holds wall + roof for all 27 palette-textured buildings in all 4 variants", { buildings: bld.length, rows: Object.keys(pcRows).length });
+
+  // Wave 7b: the theme colourways (manifest.themes, written by art_b_city.py) are in VARIANT_ORDER, have far-proxy colours, and THEMES / THEME_TYPES agree with the manifest's record
+  {
+    const vo = /const VARIANT_ORDER = \[([^\]]*)\]/.exec(src2), order = vo ? vo[1].split(",").map((s) => s.trim().replace(/"/g, "")) : [];
+    const pxBlock = /const PROXY_COLORS_X = Object\.freeze\(\{([\s\S]*?)\n\}\);/.exec(src2), pxRows = {};
+    if (pxBlock) for (const m of pxBlock[1].matchAll(/"([^"]+)":\s*\[([^\]]+)\]/g)) pxRows[m[1]] = m[2].split(",").map((s) => parseInt(s.trim(), 16));
+    const mt = manifest.themes || {}, tv = [];
+    for (const t of Object.keys(mt)) for (const key of Object.keys(mt[t].variants)) for (const v of mt[t].variants[key]) if (!tv.includes(v)) tv.push(v);
+    const missing = [];
+    for (const v of tv) { if (!order.includes(v)) missing.push("VARIANT_ORDER:" + v); for (const key of ["suburban", "commercial"]) if (!(manifest.palettes[key].variants || {})[v]) missing.push(key + ":" + v + " (no palette file)"); }
+    ok(tv.length >= 12 && missing.length === 0 && order.slice(0, 4).join() === "base,slate,brick,sand" && order.slice(4).join() === tv.join(), "VARIANT_ORDER = the four shipped colormaps + every manifest theme colourway in manifest order, each with a palette file", missing.concat(order.slice(4).join() === tv.join() ? [] : ["order differs"]));
+    ok(bld.every((id) => pxRows[id] && pxRows[id].length === 2 * tv.length && pxRows[id].every((v) => v >= 0 && v <= 0xffffff)), "PROXY_COLORS_X holds wall + roof for all 27 palette-textured buildings in every theme colourway", { rows: Object.keys(pxRows).length });
+    const drift = [];
+    for (const t of Object.keys(mt)) {
+      const th = K.THEMES[t], types = K.THEME_TYPES[t];
+      if (!th) { drift.push(t + ": no THEMES entry"); continue; }
+      for (const key of ["suburban", "commercial"]) if (th.variant[key] !== mt[t].variants[key][0]) drift.push(t + ":" + key + " default is " + th.variant[key] + ", manifest says " + mt[t].variants[key][0]);
+      if (JSON.stringify(types) !== JSON.stringify(mt[t].types)) drift.push(t + ": THEME_TYPES differs from manifest.themes." + t + ".types");
+      if (th.tint !== parseInt(mt[t].tint, 16)) drift.push(t + ": tint");
+    }
+    ok(drift.length === 0, "THEMES / THEME_TYPES of every manifest theme equal manifest.json's themes block (the generator's record)", drift);
+  }
 
   // the car-paint shader (Wave 7 polish): only the saturated body swatch is recoloured, one program for every car, installed on the "car" palette's material only
   {

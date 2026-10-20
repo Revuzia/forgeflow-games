@@ -34,6 +34,9 @@
   //
   // measure(M, ctx) returns one record per (map, seed): enterable buildings, land distance statistics, town-road wetness,
   // per-town enterable counts and the endgame cover counts. citycheck.py applies the thresholds.
+  // Wave 7b (lane B2): `rec.city` (null, or the towngen layout of the built map as numbers: per town kind / theme / grid / blocks / the steepest block / enterable / ruins /
+  // bridges / stairs, per compound the enterable buildings the detector finds inside its bounds, the link roads) and `rec.roads.layout` (towngen's own streets sampled every 4 m
+  // across their width on the FINAL ground: the town-roads-dry row now judges the layout's streets as well as the road mesh). The detector itself is untouched (PIN.version 1).
   const r1 = (v) => Math.round(v * 10) / 10;
   const r3 = (v) => Math.round(v * 1000) / 1000;
   // cell key: a cell centre is c.minX + 0.25 + k * 0.5, i.e. x * 2 sits on a half-integer; round HALF UP with a tiny bias so two cells 0.5 m apart
@@ -293,6 +296,54 @@
     return res;
   }
 
+  /** Wave 7b: the layout half of the town-road row. towngen's streets (roads.edges between roads.nodes), sampled every 4 m at 3 offsets across their width, on the final ground. `plant` 'wet-street' forces the first 10 samples wet (the control). */
+  function layoutRoadWetness(M, plant) {
+    const L = M.city && M.city.layout;
+    const wy = M.waterY, dry = wy < -100;
+    const res = { layout: !!L, towns: 0, verts: 0, wet: 0, wetByTown: {}, vertsByTown: {} };
+    if (!L) return res;
+    let forced = plant === "wet-street" ? 10 : 0;
+    for (const T of L.towns) {
+      res.towns++;
+      const nodes = new Map(((T.roads && T.roads.nodes) || []).map((n) => [n.id, n]));
+      for (const e of (T.roads && T.roads.edges) || []) {
+        const a = nodes.get(e.a), b = nodes.get(e.b);
+        if (!a || !b) continue;
+        const hw = (e.width || 10) / 2, len = Math.hypot(b.x - a.x, b.z - a.z) || 1, n = Math.max(1, Math.ceil(len / 4)), ux = (b.x - a.x) / len, uz = (b.z - a.z) / len;
+        for (let k = 0; k <= n; k++) for (const off of [-1, 0, 1]) {
+          const x = a.x + (b.x - a.x) * k / n + (-uz) * off * hw, z = a.z + (b.z - a.z) * k / n + ux * off * hw;
+          res.verts++; res.vertsByTown[T.id] = (res.vertsByTown[T.id] || 0) + 1;
+          if (forced > 0 || (!dry && M.heightAt(x, z) < wy)) { forced--; res.wet++; res.wetByTown[T.id] = (res.wetByTown[T.id] || 0) + 1; }
+        }
+      }
+    }
+    return res;
+  }
+
+  /** Wave 7b: the towngen layout of the BUILT map as numbers (null when the map has no M.city). `ent` = the detector's enterable buildings. */
+  function cityInfo(M, ent) {
+    const C = M.city;
+    if (!C || !C.layout) return null;
+    const L = C.layout, deg = 180 / Math.PI;
+    const towns = (L.towns || []).map((T) => {
+      let relief = 0;
+      for (const b of T.blocks || []) if (b.ground && b.ground.relief > relief) relief = b.ground.relief;
+      const par = T.parcels || [];
+      let stairsMax = 0; for (const st of T.stairs || []) if (st.slopeDeg > stairsMax) stairsMax = st.slopeDeg;
+      return { id: T.id, kind: T.kind, theme: T.theme, grid: !!T.grid, blocks: (T.blocks || []).length, maxBlockReliefM: r1(relief), maxBlockSlopeDeg: r1(Math.atan(relief / 46) * deg),
+        parcels: par.length, enterable: par.filter((p) => p.building && p.building.enterable).length, ruin: par.filter((p) => p.building && p.building.ruin).length,
+        bridges: (T.bridges || []).length, stairs: (T.stairs || []).length, stairsMaxDeg: r1(stairsMax), centre: T.centre || null, pads: (T.pads || []).length };
+    });
+    const compounds = (L.compounds || []).map((T) => {
+      const bd = T.compound && T.compound.bounds;
+      const found = bd ? ent.filter((b) => b.x >= bd[0] - 4 && b.x <= bd[2] + 4 && b.z >= bd[1] - 4 && b.z <= bd[3] + 4).length : null;
+      const par = T.parcels || [];
+      return { id: T.id, theme: T.theme, kind: T.kind, claimed: par.filter((p) => p.building && p.building.enterable).length, found, buildings: par.filter((p) => p.building).length, bridges: (T.bridges || []).length };
+    });
+    const links = L.links || [];
+    return { version: C.version, towns, compounds, links: { n: links.length, wet: links.filter((l) => l.wetVerts > 0).length, wetVerts: links.reduce((a, l) => a + (l.wetVerts || 0), 0) } };
+  }
+
   /** static cover pieces (>= 1.2 m tall, no prop, no ramp) whose middle lies inside a storm circle; thin 0.3 m roof decks apart */
   function endgame(M, SIM, seed, mode) {
     if (!SIM || typeof SIM.Storm !== "function") return null;
@@ -340,6 +391,8 @@
       roads: roadWetness(M, ctx.roadMesh),
       endgame: endgame(M, ctx.SIM, ctx.seed, ctx.mode),
     };
+    rec.roads.layout = layoutRoadWetness(M, ctx.plant);                 // Wave 7b
+    rec.city = cityInfo(M, ent);                                      // Wave 7b: null on a build whose map has no towngen layout
     if (ctx.legacy !== false) rec.legacyCluster = legacyCluster(M.colliders, gnd, wy);
     if (ctx.withBuildings) rec.buildings = ent.map((b) => [b.x, b.z, b.x0, b.x1, b.z0, b.z1, b.floors]);
     rec.ms = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
@@ -354,5 +407,5 @@
     return measure(M, Object.assign({ SIM: W.SIM || (window.FFG && window.FFG.sim && window.FFG.sim.Royale), seed: W.seed, mapId: W.mapId, roadMesh, withBuildings: true }, opt || {}));
   }
 
-  return { PIN, detect, legacyCluster, landDistance, roadWetness, endgame, measure, measureLive };
+  return { PIN, detect, legacyCluster, landDistance, roadWetness, layoutRoadWetness, cityInfo, endgame, measure, measureLive };
 }

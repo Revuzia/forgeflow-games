@@ -10,8 +10,8 @@ never rasters (program link, uploads, culling, uniforms and every renderer.info 
 whatever the GPU is doing). Milliseconds are printed as INFORMATION only.
 
 Counted (each with the PLAN threshold it gates on; "was" = the audit's measurement on 2026-09-30):
-  drop frame 1        new programs == 0 (was 27, L3/L4/L5/L7 warm-up); total tris < 1.5 M on isla_viva (was 9.91 M) and, on ashgrid /
-                      deepwood, <= 1.25 x the LIVE build's drop frame 1 on the same map (Wave 7, see below); shadow:actor* tris < 0.5 M (was 8.57 M, L5 a)
+  drop frame 1        new programs == 0 (was 27, L3/L4/L5/L7 warm-up); total tris < 1.5 M on isla_viva (was 9.91 M) and, on every map (Wave 7b: isla_viva
+                      too), <= 1.25 x the LIVE build's drop frame 1 on the same map (Wave 7, see below); shadow:actor* tris < 0.5 M (was 8.57 M, L5 a)
   sampled drop/match  new programs == 0 on every sampled frame after drop frame 1
   10 SPACE toggles    GPU geometries flat after the first deploy/cut pair (real Space key presses; L5 e). Wave-7 fix round (7G): the count EXCLUDES the terrain's
                       lazily built near-LOD chunks (see SPACE_GEO_JS); the raw count and the terrain share are printed. Falsifier: --plant chute-leak
@@ -305,7 +305,7 @@ def mdelta(m0, m1, nf):
 
 
 TRIS_VS_LIVE = 1.25                       # same factor as perf_district's tris-vs-baseline
-LIVE_RELATIVE_MAPS = ("ashgrid", "deepwood")
+LIVE_RELATIVE_MAPS = ("isla_viva", "ashgrid", "deepwood")       # Wave 7b: Isla Viva too (its towns are new); it ALSO keeps the absolute 1.5 M bar below
 FRAME1_VERSION = 1                       # bump when the drop-frame-1 measurement below changes (it names the cached baseline files)
 
 
@@ -423,7 +423,7 @@ def main():
                     v.check("drop frame 1: total tris <= %.2f x the live build" % TRIS_VS_LIVE, bool(lv["tris"]) and ratio <= TRIS_VS_LIVE,
                             {"tris": f1["tris"], "calls": f1["calls"], "liveTris": lv["tris"], "liveCalls": lv["calls"], "liveSha": lv["sha"][:8], "ratio": round(ratio, 3), "cachedBaseline": lv["cached"]},
                             expect="<= %.2f x the live build's drop frame 1 on this map (the absolute 1.5 M bar is calibrated on isla_viva, 1.0 M)" % TRIS_VS_LIVE)
-            else:
+            if args.map == "isla_viva":
                 v.check("drop frame 1: total tris < 1.5 M", f1["tris"] < 1_500_000, {"tris": f1["tris"], "calls": f1["calls"]}, expect="< 1.5 M (was 9.91 M)")
             v.check("drop frame 1: shadow:actor* tris < 0.5 M", sh_act < 500_000, {"shadowActorTris": sh_act}, expect="< 0.5 M (was 8.57 M)")
             print("    drop frame 1 attribution: %s" % sorted(att.items(), key=lambda kv: -kv[1][1])[:10], flush=True)

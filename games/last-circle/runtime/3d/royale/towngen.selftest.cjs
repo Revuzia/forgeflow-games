@@ -375,26 +375,108 @@ function checkPads(TG, L) {
   }
   return out;
 }
-function checkLinks(TG, M) {
+// Wave 7b: the special layouts (a docks village, a crater-rim village, a mill-and-bridge compound) have no blocks / streets / yard: their link ends are "ends", their ground is shaped by
+// maps.js (decks, terraces, a bridge), and they get their own checks
+const isSpecial = (L) => L.kind === "docks" || L.kind === "crater" || L.kind === "mill";
+function checkSpecial(TG, L, S, wy) {
+  const out = [], id = L.id;
+  const bad = (m) => out.push(id + " " + m);
+  if (L.blocks.length || L.roads.edges.length || L.pads.length) bad("a special layout has blocks / streets / pads (never a grid)");
+  if (!L.ends || !L.ends.length || !L.compound || !L.compound.bounds) bad("has no link ends / bounds");
+  const fin = (v) => Number.isFinite(v);
+  const rectOk = (r) => r && r.length === 4 && r.every(fin) && r[0] < r[2] && r[1] < r[3];
+  const ov = (a, b, m) => a[0] < b[2] + m && b[0] < a[2] + m && a[1] < b[3] + m && b[1] < a[3] + m;
+  const inside = (r, b) => r[0] >= b[0] - 1e-3 && r[2] <= b[2] + 1e-3 && r[1] >= b[1] - 1e-3 && r[3] <= b[3] + 1e-3;
+  if (L.kind === "docks") {
+    const D = L.docks;
+    if (!D) return [id + " docks record missing"];
+    if (!D.decks.every((d) => rectOk(d.rect))) bad("a deck is not a finite rectangle");
+    const spine = D.decks[0], plat = D.decks.filter((d) => d.role === "platform");
+    if (!spine || spine.role !== "spine" || Math.max(spine.rect[2] - spine.rect[0], spine.rect[3] - spine.rect[1]) < 36) bad("boardwalk shorter than 36 m");
+    if (plat.length < 4) bad("only " + plat.length + " platforms");
+    if (Math.abs(D.top - (wy + TG.DOCK_TOP)) > 0.011) bad("deck top " + D.top + " is not waterY + DOCK_TOP");
+    const land = S.h(D.landing[0], D.landing[1]);
+    if (land > wy + 0.6) bad("the landing stands " + (land - wy).toFixed(2) + " m over the water (the boardwalk starts where the ground drops under waterY + 0.5)");
+    const wet = (r) => { let k = 0; for (let a = 0; a < 3; a++) for (let c = 0; c < 3; c++) if (S.h(r[0] + (r[2] - r[0]) * (a + 0.5) / 3, r[1] + (r[3] - r[1]) * (c + 0.5) / 3) <= wy + 0.75) k++; return k; };
+    for (const p of plat) if (wet(p.rect) < 5) bad("a platform stands on dry ground (" + wet(p.rect) + "/9 wet points)");
+    const decked = L.parcels.filter((p) => p.building && p.building.deck);
+    for (const p of decked) {
+      const b = p.building;
+      if (Math.abs(b.y0 - D.top) > 1e-6) bad(p.id + " floor y0 " + b.y0 + " is not the deck top");
+      if (!plat.some((d) => inside(b.aabb, d.rect))) bad(p.id + " is not inside a platform deck");
+    }
+    for (let i = 0; i < L.parcels.length; i++) for (let j = i + 1; j < L.parcels.length; j++) { const a = L.parcels[i].building, b = L.parcels[j].building; if (a && b && ov(a.aabb, b.aabb, 0.5)) bad(L.parcels[i].id + " and " + L.parcels[j].id + " overlap"); }
+    if (L.stats.enterable < 9) bad("only " + L.stats.enterable + " enterable buildings");
+  } else if (L.kind === "crater") {
+    const C = L.crater;
+    if (!C) return [id + " crater record missing"];
+    if (C.plots.length < 30) bad("only " + C.plots.length + " terrace plots");
+    if (C.stairs.length !== 4) bad(C.stairs.length + " stair lines (4 expected)");
+    if (C.pieces.length < 60) bad("only " + C.pieces.length + " cover pieces");
+    if (!(C.plaza && C.plaza.r >= 14 && fin(C.plaza.x) && fin(C.plaza.z) && fin(C.plaza.level))) bad("the plaza is malformed");
+    for (const p of C.plots) {
+      if (!rectOk(p.rect) || !fin(p.level)) bad("plot " + p.id + " is malformed");
+      if (Math.hypot((p.rect[0] + p.rect[2]) / 2 - C.centre[0], (p.rect[1] + p.rect[3]) / 2 - C.centre[1]) > 150) bad("plot " + p.id + " is more than 150 m from the axis");
+    }
+    for (let i = 0; i < C.plots.length; i++) for (let j = i + 1; j < C.plots.length; j++) if (ov(C.plots[i].rect, C.plots[j].rect, 0)) bad("plots " + C.plots[i].id + " and " + C.plots[j].id + " overlap");
+    // never a grid: the plot centres sit on rings, not on a lattice - fewer than half of them share an x or a z (to 1 m) with another
+    let shared = 0;
+    for (const p of C.plots) { const cx = (p.rect[0] + p.rect[2]) / 2, cz = (p.rect[1] + p.rect[3]) / 2; if (C.plots.some((q) => q !== p && (Math.abs((q.rect[0] + q.rect[2]) / 2 - cx) < 1 || Math.abs((q.rect[1] + q.rect[3]) / 2 - cz) < 1))) shared++; }
+    if (shared > C.plots.length * 0.5) bad(shared + " of " + C.plots.length + " plots share a row / column (a grid)");
+    for (const s of C.stairs) if (!(fin(s.cx) && fin(s.cz) && s.r1 - s.r0 >= 80)) bad("a stair line is malformed");
+  } else if (L.kind === "mill") {
+    const M = L.mill;
+    if (!M) return [id + " mill record missing"];
+    if (!L.bridges.length) bad("no bridge");
+    if (!rectOk(M.deck) || !(M.deepWidth >= 8)) bad("the bridge deck is malformed / spans only " + M.deepWidth + " m of deep water");
+    // (Wave 7b stage C) the deck is laid on the quarter turn closest to SQUARE across the river's local direction (stage B laid E-W decks 60 degrees off square across this ~30-degree river
+    // on 15 of 200 seeds: one half of each end in the water, the other buried in the bank): the least-squares slope dz/dx of the layout's centreline within 40 m of the crossing
+    {
+      const xc = (M.deck[0] + M.deck[2]) / 2, pts = (M.centreline || []).filter((p) => Math.abs(p[0] - xc) <= 40);
+      if (pts.length >= 2) {
+        let n = 0, sx = 0, sz = 0, sxx = 0, sxz = 0;
+        for (const p of pts) { n++; sx += p[0]; sz += p[1]; sxx += p[0] * p[0]; sxz += p[0] * p[1]; }
+        const d = n * sxx - sx * sx, m = d > 1e-9 ? (n * sxz - sx * sz) / d : 0;
+        if (M.axis === 0 ? Math.abs(m) > 1.05 : Math.abs(m) < 0.95) bad("the bridge deck (axis " + M.axis + ") is not the quarter turn closest to square across the river (local slope dz/dx " + m.toFixed(2) + ")");
+      }
+    }
+    if (M.plots.length < 6) bad("only " + M.plots.length + " plots");
+    if (L.ends.length !== 2) bad(L.ends.length + " link ends (the two bridge heads)");
+    const side = (p) => { const x = (p.rect[0] + p.rect[2]) / 2, z = (p.rect[1] + p.rect[3]) / 2; return M.axis === 0 ? Math.sign(z - (M.deck[1] + M.deck[3]) / 2) : Math.sign(x - (M.deck[0] + M.deck[2]) / 2); };
+    const banks = new Set(M.plots.map(side));
+    if (!banks.has(-1) || !banks.has(1)) bad("plots on one bank only");
+    if (M.pieces.length < 60) bad("only " + M.pieces.length + " cover pieces");
+  }
+  return out;
+}
+const linkLow = { n: 0 };
+function checkLinks(TG, M, h, wy) {
   const out = [];
   const ids = new Set(M.towns.map((t) => t.id));
   for (const k of M.links) {
     if (k.blocked !== 0) out.push("link " + k.a + "->" + k.b + " crosses " + k.blocked + " block(s)");
     if (!ids.has(k.a) || !ids.has(k.b) || !(k.len > 0)) out.push("link " + k.a + "->" + k.b + " malformed");
     const A = M.towns.find((t) => t.id === k.a), B = M.towns.find((t) => t.id === k.b);
-    const onEnd = (T, x, z) => (T.blocks.length ? T.roads.portals.some((p) => Math.abs(T.roads.nodes[p.node].x - x) < 1e-3 && Math.abs(T.roads.nodes[p.node].z - z) < 1e-3) : T.compound && Math.abs(T.compound.entry.x - x) < 1e-3 && Math.abs(T.compound.entry.z - z) < 1e-3);
+    const onEnd = (T, x, z) => (isSpecial(T) ? (T.ends || []).some((e) => Math.abs(e.x - x) < 1e-3 && Math.abs(e.z - z) < 1e-3) : T.blocks.length ? T.roads.portals.some((p) => Math.abs(T.roads.nodes[p.node].x - x) < 1e-3 && Math.abs(T.roads.nodes[p.node].z - z) < 1e-3) : T.compound && Math.abs(T.compound.entry.x - x) < 1e-3 && Math.abs(T.compound.entry.z - z) < 1e-3);
+    if (wy > -100 && k.path) {                                  // Wave 7b: a link on a map with water goes round it - every 6 m of its polyline is above the water (a sample under waterY + 0.35 is counted as information: the road builder drops that stretch - a spit by a dock)
+      let wetN = 0;
+      for (let i = 0; i + 1 < k.path.length; i++) { const a = k.path[i], b = k.path[i + 1], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 6)); for (let j = 0; j <= n; j++) { const g = h(a[0] + (b[0] - a[0]) * j / n, a[1] + (b[1] - a[1]) * j / n); if (g < wy) wetN++; else if (g < wy + 0.35) linkLow.n++; } }
+      if (wetN) out.push("link " + k.a + "->" + k.b + " has " + wetN + " wet samples on its route");
+    }
     if (!onEnd(A, k.ax, k.az) || !onEnd(B, k.bx, k.bz)) out.push("link " + k.a + "->" + k.b + " does not leave by an edge node / the yard entry");
   }
   return out;
 }
 function checkCompounds(TG, M) {
   const out = [];
+  // (Wave 7b: a map with water whose first pass left under 6 homesteads gets a floor pass that may stand 40 m, not 60, from a town; Savanna never does)
+  const lim = M.mapId !== "ashgrid" && M.compounds.length <= 6 ? 40 : 60;
   const townRects = [];
   for (const T of M.towns) { for (const b of T.blocks) { townRects.push([b.cx - 28, b.cz - 28, b.cx + 28, b.cz + 28]); for (const p of []) void p; } for (const p of T.parcels) townRects.push(p.rect); }
   for (const C of M.compounds) {
     let min = Infinity;
     for (const r of townRects) min = Math.min(min, rectDist(C.poi.x, C.poi.z, r));
-    if (min < 60 - 1e-6) out.push(C.id + " compound centre " + min.toFixed(1) + " m from a town (< 60)");
+    if (min < lim - 1e-6) out.push(C.id + " compound centre " + min.toFixed(1) + " m from a town (< " + lim + ")");
     if (Math.max(Math.abs(C.poi.x), Math.abs(C.poi.z)) > 720 + 1e-6) out.push(C.id + " compound outside +-720 m");
   }
   return out;
@@ -455,7 +537,7 @@ async function realMode() {
     // plateau's, on purpose, not the analytic function the selftest slices. Points inside a town / compound footprint (+ 18 m) are left out of the sample.
     const foot = M.city ? M.city.layout.towns.flatMap((T) => T.blocks.map((b) => [b.cx - 51, b.cz - 51, b.cx + 51, b.cz + 51])).concat(M.city.layout.compounds.concat(M.city.layout.towns.filter((T) => !T.blocks.length && T.compound)).map((T) => [T.compound.bounds[0] - 18, T.compound.bounds[1] - 18, T.compound.bounds[2] + 18, T.compound.bounds[3] + 18])) : [];
     while (pts.length < 400) { const x = (rnd() * 2 - 1) * 780, z = (rnd() * 2 - 1) * 780; if (foot.some((r) => x > r[0] && x < r[2] && z > r[1] && z < r[3])) continue; pts.push([x, z, M.heightAt(x, z), M.groundAt(x, z)]); }
-    res[map] = { waterY: M.waterY, pois: M.pois.map((p) => [p.id, p.x, p.z, p.r]), pts };
+    res[map] = { waterY: M.waterY, pois: M.pois.map((p) => [p.id, p.x, p.z, p.r]), pts, centres: M.city ? M.city.layout.towns.map((T) => [T.id, T.centre, T.blocks.length || T.parcels.length]) : [] };
   }
   process.stdout.write("REAL_JSON " + JSON.stringify(res) + "\n");
   process.exit(0);
@@ -524,7 +606,7 @@ async function main() {
   const addFail = (key, list) => { if (list.length) { (fails[key] = fails[key] || []).push(...list); } };
   const poiStats = {}, shifts = {}, msTown = [], msCompound = [], msMap = {};
   const roadAgg = { n: 0, low0: 0, low8: 0, min: Infinity, edges: 0 };
-  const agg = { towns: 0, compounds: 0, buildings: 0, enterable: 0, shells: 0, rooms: 0, doors: 0, stairs: 0, blocks: 0, parcels: 0, quarterTurned: 0, doorsReach: 0, enterableTown: 0, lanes: 0, bridges: 0, hardStage: 0, fallbackLane: 0, jogged: 0, millBridges: 0, relief: [], reliefLevel: [0, 0, 0] };
+  const agg = { special: {}, towns: 0, compounds: 0, buildings: 0, enterable: 0, shells: 0, rooms: 0, doors: 0, stairs: 0, blocks: 0, parcels: 0, quarterTurned: 0, doorsReach: 0, enterableTown: 0, lanes: 0, bridges: 0, hardStage: 0, fallbackLane: 0, jogged: 0, millBridges: 0, relief: [], reliefLevel: [0, 0, 0] };
   const keep = {};                                                     // one layoutMap per map kept for the coverage / plots
   const denseEvery = 4;
   for (const map of MAPS) {
@@ -550,9 +632,12 @@ async function main() {
         addFail("every parcel touches a street", f(checkStreets(TG, L)));
         addFail("road graph connected / clear of blocks / no street > 150 m", f(checkRoads(TG, L, blocks, h, wy)));
         addFail("enterable share / shells / floors", f(checkShares(TG, L)));
-        addFail("front door reachable from a street node", f(checkDoors(TG, L, index, h)));
+        if (isSpecial(L)) { agg.special[L.kind] = (agg.special[L.kind] || 0) + 1; addFail("special layouts (docks / crater / mill) are well formed", f(checkSpecial(TG, L, { h }, wy))); }
+        else {
+          addFail("front door reachable from a street node", f(checkDoors(TG, L, index, h)));
+          addFail("pads and corridors are valid C-PAD arguments", f(checkPads(TG, L)));
+        }
         addFail("rooms / doors / stairs consistent", f(checkInterior(TG, L)));
-        addFail("pads and corridors are valid C-PAD arguments", f(checkPads(TG, L)));
         if (wy > -100 && L.roads && L.roads.edges.length) {
           const rv = roadVertices(L, h, wy, 0);
           const rv8 = roadVertices(L, h, wy, TG.WET_MARGIN);
@@ -578,7 +663,7 @@ async function main() {
       }
       addFail("no overlapping parcels / buildings", checkOverlap(all).map((s) => map + "#" + seed + " " + s));
       addFail("compounds >= 60 m from every town", checkCompounds(TG, M).map((s) => map + "#" + seed + " " + s));
-      addFail("links leave by an edge node and never cross a block", checkLinks(TG, M).map((s) => map + "#" + seed + " " + s));
+      addFail("links leave by an edge node and never cross a block", checkLinks(TG, M, h, wy).map((s) => map + "#" + seed + " " + s));
       if (map === "deepwood") { const mill = M.towns.find((t) => t.id === "mill"); if (mill.bridges.length) agg.millBridges++; }
       // town parcels enterable counts for the share row
       for (const L of M.towns) agg.enterableTown += L.stats.enterable;
@@ -595,6 +680,7 @@ async function main() {
     ok(f.length === 0, r + " (" + SEEDS + " seeds x " + ((r === "blocks dry" || r === "0 road vertices below waterY") ? "the 2 water maps" : "3 maps") + ")", f.length ? f.length + " failures, first: " + f.slice(0, 3).join(" | ") : "");
   }
   info("road vertices checked " + roadAgg.n + " over " + roadAgg.edges + " edges; below waterY: " + roadAgg.low0 + "; below waterY+0.8: " + roadAgg.low8 + "; lowest margin " + fix(roadAgg.min, 2) + " m");
+  info("special layouts: " + JSON.stringify(agg.special) + "; link samples between waterY and waterY + 0.35 (the road builder drops them): " + linkLow.n);
   info("totals: " + agg.towns + " town layouts + " + agg.compounds + " compounds, " + agg.blocks + " blocks, " + agg.parcels + " parcels, " + agg.buildings + " buildings (" + agg.enterable + " enterable, " + agg.shells + " shells = " + fix(100 * agg.shells / Math.max(1, agg.buildings), 1) + "%), " + agg.rooms + " rooms, " + agg.doors + " doors, " + agg.stairs + " stairs, " + agg.bridges + " bridges");
   ok(agg.millBridges >= Math.floor(SEEDS * 0.95), "Riverside Mill straddles its river with a bridge on " + agg.millBridges + " of " + SEEDS + " seeds (O4: a mill-and-bridge compound across the Deepwood river)");
   ok(agg.quarterTurned === agg.buildings && agg.buildings > 0, "every building (" + agg.buildings + ") is quarter-turned");
@@ -909,6 +995,8 @@ async function main() {
         ok(R.waterY === waterOf(map), map + ": real waterY " + R.waterY + " = the selftest's");
         const pois = TG.defaultPois(map);
         if (map === "isla_viva") snapIsla(pois, h, waterOf(map));
+        // Wave 7b: on the water maps a town the generator moved takes its POI with it (maps.js prepareCity; the layout's centre is read from the real map, the rule is replayed here)
+        if (map !== "ashgrid") for (const [tid, c, n] of R.centres) { const p = pois.find((q) => q.id === tid); if (p && c && n && Math.hypot(c[0] - p.x, c[1] - p.z) > 8) { p.x = Math.round(c[0] * 10) / 10; p.z = Math.round(c[1] * 10) / 10; } }
         const worst = Math.max(...R.pois.map((rp) => { const p = pois.find((q) => q.id === rp[0]); return p ? Math.hypot(p.x - rp[1], p.z - rp[2]) + Math.abs(p.r - rp[3]) : 1e9; }));
         ok(worst < 1e-6 && R.pois.length === pois.length, map + ": the POI table (after the land snap) equals the real map's pois (" + R.pois.length + " POIs, worst difference " + (worst < 1e9 ? worst.toExponential(1) : "missing") + ")");
       }

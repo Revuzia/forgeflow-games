@@ -78,9 +78,14 @@ def install_plant(s, args, plant):
     if b is None:
         raise C.EnvFailure("plant: %s is not in the served tree" % rel)
     src = b.decode("utf-8")
-    anchor = "if (!K.rampBlocks(c, x, z, yd, h, r, STEP_UP)) continue;"
-    if src.count(anchor) != 1:
-        raise C.EnvFailure("plant %s: anchor %r found %d times in %s (the plant needs the Wave-5 mover)" % (plant, anchor, src.count(anchor), rel))
+    # blockedIn's C-RAMP test, in each spelling the mover has had: Wave 5 (boxed arguments) and Wave 7b S1 (blockedF hands the
+    # same numbers to K.rampBlocksA in the RBA array; player.js ~1562). Exactly ONE of them must be present exactly once.
+    anchors = ["if (!K.rampBlocks(c, x, z, yd, h, r, STEP_UP)) continue;", "if (!K.rampBlocksA(c, RBA)) continue;"]
+    hits = [(a, src.count(a)) for a in anchors if src.count(a)]
+    if len(hits) != 1 or hits[0][1] != 1:
+        raise C.EnvFailure("plant %s: blockedIn ramp anchor not found exactly once in %s (%s; the plant needs the Wave-5+ mover)"
+                           % (plant, rel, ", ".join("%r x%d" % (a, src.count(a)) for a in anchors)))
+    anchor = hits[0][0]
     body = src.replace(anchor, PLANT_REPLACE[plant]).encode("utf-8")
     s.disk.overrides.append((lambda url: urllib.parse.urlparse(url).path.endswith("/" + rel),
                              lambda route: route.fulfill(status=200, body=body, headers={"Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})))

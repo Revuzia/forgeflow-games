@@ -4,6 +4,7 @@ no server, no file edited.
 
     python _harness/kitcollide.py                         # the working copy: manifest.json + the colliders citykit.js really uses (~15 s)
     python _harness/kitcollide.py --census 7,1234,2026    # + weigh every type by how often the Savanna builder places it (~25 s a seed)
+    python _harness/kitcollide.py --census 7,1234,2026 --census-maps ashgrid,isla_viva,deepwood --census-require ashgrid,isla_viva,deepwood   # Wave 7b: the kit on all three maps
     python _harness/kitcollide.py --rev 60b854d0          # a frozen commit (the must-fail proof: the colliders that shipped in Wave 6)
     python _harness/kitcollide.py --plant shrink          # negative controls (each must exit 1, see PLANTS)
 
@@ -89,7 +90,7 @@ def run_probe(root, manifest, citykit, args, out):
     if args.only:
         cmd += ["--only", args.only]
     if args.census:
-        cmd += ["--census", args.census]
+        cmd += ["--census", args.census, "--census-maps", args.census_maps]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=args.timeout, cwd=C.ROOT)
     except FileNotFoundError:
@@ -187,7 +188,14 @@ def main_fn(v, args):
                                    "total shipped": sum(r["shipBoxes"] or 0 for r in T.values()) if shipped else None}, expect="<= 24 per type")
     cen = doc.get("census")
     if args.census:
-        if not cen or cen.get("error") or not cen.get("counts"):
+        if cen and not cen.get("error") and not cen.get("counts") and cen.get("byMap") and args.census_require:
+            # Wave 7b: no kit at all on the maps that were asked to place one is a verdict, not a could-not-judge: each required map FAILS kit-placed
+            v.info("entries", "the census built %s and found no kit entry on any of them" % ",".join(cen.get("maps") or []))
+            for mid, bm in cen["byMap"].items():
+                if mid in args.census_require.split(","):
+                    row("kit-placed [%s]" % mid, False, "this build's %s places NO city kit (M.city is null on %d of %d seeds)" % (mid, len(bm["seeds"]) - bm["hasCity"], len(bm["seeds"])),
+                        "kit entries on every seed, none on a type over either bar")
+        elif not cen or cen.get("error") or not cen.get("counts"):
             v.cnj("entries", "census failed: %s" % ((cen or {}).get("error") or "no counts"))
         else:
             tot = cen["entries"]
@@ -198,6 +206,17 @@ def main_fn(v, args):
                 sh["shipped poke > 0.10 m %"] = round(100 * share("shipWorstPoke", POKE_BAR), 2)
                 sh["shipped phantom > 0.25 m %"] = round(100 * share("shipWorstPhantom", PHANTOM_BAR), 2)
             row("entries", all(x == 0 for x in sh.values()), dict(sh, entries=tot, seeds=per_seed), expect="0 % of the placed entries over either bar")
+            # Wave 7b: the kit is placed on all three maps. Per map: how many entries, and (maps named in --census-require) a map with NO kit at all FAILS - it has no city to judge
+            for mid, bm in (cen.get("byMap") or {}).items():
+                n = bm["entries"]
+                badn = sum(c for i, c in bm["counts"].items() if i in T and (T[i]["worstPoke"] > POKE_BAR or T[i]["worstPhantom"] > PHANTOM_BAR))
+                if shipped:
+                    badn += sum(c for i, c in bm["counts"].items() if i in T and (T[i]["shipWorstPoke"] > POKE_BAR or T[i]["shipWorstPhantom"] > PHANTOM_BAR) and not (T[i]["worstPoke"] > POKE_BAR or T[i]["worstPhantom"] > PHANTOM_BAR))
+                v.info("entries [%s]" % mid, "%d kit entries on %d seeds (%d with a city layout), %d on a type over either bar (%s %%), manifest boxes %d, shipped boxes %d" % (
+                    n, len(bm["seeds"]), bm["hasCity"], badn, round(100 * badn / max(1, n), 2), bm["boxesMan"], bm["boxesShip"]))
+                if mid in (args.census_require or "").split(","):
+                    row("kit-placed [%s]" % mid, n > 0 and bm["hasCity"] == len(bm["seeds"]) and badn == 0, "%d kit entries on %d seeds, %d on a type over a bar" % (n, len(bm["seeds"]), badn) if n else "this build's %s places NO city kit (M.city is null on %d of %d seeds)" % (mid, len(bm["seeds"]) - bm["hasCity"], len(bm["seeds"])),
+                        "kit entries on every seed, none on a type over either bar")
     v.info("worst by poke", worst("worstPoke", 8))
     v.info("worst by phantom", worst("worstPhantom", 8))
     v.info("wall", "%.0f s (Node, no browser)" % (time.time() - t0))
@@ -209,7 +228,9 @@ def main():
     ap.add_argument("--rev", default=None, metavar="GITREV", help="judge the colliders as committed at GITREV (runtime/ + assets/props extracted to a temp dir)")
     ap.add_argument("--disk", action="store_true", help="accepted for gate.py symmetry: this gate always reads the working copy unless --rev")
     ap.add_argument("--only", default=None, help="comma list of id substrings")
-    ap.add_argument("--census", default=None, help="comma list of Savanna seeds to weigh the types by (builds the real map in Node, ~25 s a seed)")
+    ap.add_argument("--census", default=None, help="comma list of seeds to weigh the types by (builds the real map in Node, ~25 s a seed on Savanna)")
+    ap.add_argument("--census-maps", default="ashgrid", help="maps the census builds (Wave 7b: ashgrid,isla_viva,deepwood)")
+    ap.add_argument("--census-require", default="", help="maps that MUST place a kit (a build without one FAILS kit-placed [map])")
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANTS)))
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--report", default=None)

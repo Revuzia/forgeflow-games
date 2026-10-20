@@ -16,7 +16,11 @@ import * as THREE from "three";
 // instances (a bare "./weapons.js" would be a second, uninitialized copy).
 const V = new URL(import.meta.url).search;
 const { aimDir, eyePos } = await import("./weapons.js" + V);
-const { supportAt } = await import("./player.js" + V);
+const { supportAt, supportA, groundA } = await import("./player.js" + V);
+const SPQ = new Float64Array(4);          // supportA scratch: x, z, y -> [3] the support (Wave 7b, S1)
+// (Wave 7b, S1) the ground under a probe point, read unboxed: GA[0] = x, GA[1] = z -> groundA -> GA[2] = W.map.heightAt(x, z) (a call with
+// double arguments boxes them and its result: the bots' per-frame wall probes read the terrain at every step)
+const GA = new Float64Array(3);
 
 let K = null;
 const brains = [];
@@ -223,7 +227,7 @@ export function attachBrain(W, actor, nBots) {
       // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
       // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
       progKind: 0, wallCols: [], wallT: -99, wallX: 0, wallZ: 0,
-      hdX: 0, hdZ: 0, hdT: -99, healSide: 1, hdBadX: 0, hdBadZ: 0, hdBadUntil: 0, unstickT: -99,
+      hdX: 0, hdZ: 0, hdT: -99, healSide: 1, hdBadX: 0, hdBadZ: 0, hdBadUntil: 0, unstickT: -99, hdHold: -1,
       slideX: 0, slideZ: 0, slideUntil: -99, slideFlips: 0, routeId: null, pinX: 0, pinZ: 0, pinT: 0, pinIntent: 0, pinN: 0,
       fightTarget: undefined, fightT: 0, aimHigh: false, errPhase: 0, closeInUntil: 0,
       avoidId: null, avoidUntil: 0, swapT: -99, healBlockedUntil: 0,
@@ -683,7 +687,6 @@ function perceive(W, b) {
     let dd = Math.abs(((angTo - Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw))) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
     const heardHim = bb.heard && bb.heard.shooterId === t.id && W.t - bb.heard.t < 4;
     if (dd > 1.4 && d > 15 && !heardHim && bb.target !== t.id) continue;
-    if (W.map.losBlocked(eye.x, eye.y, eye.z, t.pos.x, t.pos.y + 1.2, t.pos.z)) continue;
     // TARGET VALUE, not just distance (audit S1: bots never read hp/shield). A
     // player judges an enemy by the shield bar and by who is shooting at them:
     //  - a cracked target (low shield+hp) is worth walking a little further for;
@@ -694,7 +697,13 @@ function perceive(W, b) {
     const weak = ehp < 50 ? 0.6 : ehp < 100 ? 0.85 : 1;
     const attacker = a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 3 ? 0.6 : 1;
     const sd = d * bias * weak * attacker;
-    if (sd < bestD) { bestD = sd; best = t; }
+    // (Wave 7b, S1) the sight line LAST, and only for a candidate that would win: a seen candidate replaces the best only when
+    // sd < bestD, so one that cannot win needs no march (the same choice as before; losBlocked has no lasting side effect - its
+    // collider queries only stamp their own results). It was the costliest call of the think tick (maps.js losBlocked 3.7 KB
+    // of garbage a frame on Isla Viva, every candidate in reach every think).
+    if (!(sd < bestD)) continue;
+    if (W.map.losBlocked(eye.x, eye.y, eye.z, t.pos.x, t.pos.y + 1.2, t.pos.z)) continue;
+    bestD = sd; best = t;
   }
   if (best) {
     if (bb.target !== best.id) { bb.target = best.id; bb.acquireT = W.t; }
@@ -1216,7 +1225,14 @@ function underFire(W, b, dt) {
   return true;
 }
 
+// (Wave 7b, S1) steerYawQ: the same turn with the wanted yaw in SYQ[0] (a call boxes a double argument)
+const SYQ = new Float64Array(1);
 function steerYaw(a, want, dt, speed) {
+  SYQ[0] = want;
+  steerYawQ(a, dt, speed);
+}
+function steerYawQ(a, dt, speed) {
+  const want = SYQ[0];
   let d = want - a.input.yaw;
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
@@ -1276,6 +1292,13 @@ function rampBlocks(c, x, z, y) {
  *  bots walked uphill inside an isla_viva house until the 2nd-floor slab pinned
  *  them (blockedHoriz then refuses every direction) for 200+ s. */
 function wallAhead(W, a, yaw, look) {
+  WAQ[0] = yaw; WAQ[1] = look;
+  return wallAheadQ(W, a);
+}
+// (Wave 7b, S1) wallAhead with yaw = WAQ[0], look = WAQ[1] (the per-frame callers fill the array: a call boxes double arguments)
+const WAQ = new Float64Array(2);
+function wallAheadQ(W, a) {
+  const yaw = WAQ[0], look = WAQ[1];
   /* (Wave 5) The FLOOR is marched, the wall is tested where it always was. This used to test ONE point `look` m out, at
      max(feet, support there): on a stair that point is far above step reach of the feet, so the band was tested at the wrong
      floor (a false wall on the way UP), and on a descent that passes under the slab it came from the feet-height band caught
@@ -1318,10 +1341,12 @@ function wallAhead(W, a, yaw, look) {
       const ramp = c.kind === "ramp", top = ramp ? rampTopAt(c, px, pz) : c.maxY;
       if (top > s && top <= h + NAV_STEP_UP + (ramp ? NAV_RAMP_EXTRA : 0)) s = top;
     }
-    const tg = W.map.heightAt(px, pz);
+    GA[0] = px; GA[1] = pz; groundA(W, GA, 0);
+    const tg = GA[2];
     h = s > tg ? s : tg;
   }
-  let s = W.map.heightAt(ex, ez);
+  GA[0] = ex; GA[1] = ez; groundA(W, GA, 0);
+  let s = GA[2];
   for (let i = 0; i < _mq.length; i++) {
     const c = _mq[i];
     if (c.dead || ex < c.minX - 0.3 || ex > c.maxX + 0.3 || ez < c.minZ - 0.3 || ez > c.maxZ + 0.3) continue;
@@ -1386,7 +1411,8 @@ const _hd = { x: 0, z: 0 };       // headingBlocked's heading (a call with doubl
  *  this runs for every fighting bot every frame. */
 function headingBlocked(W, list, a) {
   const px = a.pos.x + _hd.x * WALL_LOOK, pz = a.pos.z + _hd.z * WALL_LOOK, y0 = a.pos.y;
-  let s = W.map.heightAt(px, pz);
+  GA[0] = px; GA[1] = pz; groundA(W, GA, 0);
+  let s = GA[2];
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
@@ -1412,6 +1438,7 @@ function headingBlocked(W, list, a) {
  *  sim's own rampBlocks at that floor, with blockedIn's "already held" rule: a step that does not go deeper into a zone the
  *  body is ALREADY in is allowed (a bot beside a stair may walk along it, or away). The same rule the standing-point probes
  *  use, applied along the heading. Returns the blocking ramp or null. Cheap exit when no ramp is near the leg. */
+const RBQ = new Float64Array(6);          // K.rampBlocksA's numbers [x, z, yd, h, r, stepUp] (unboxed: Wave 7b, S1)
 const RAMP_STEP = 0.15;                  // march step (the mover moves < 0.1 m a tick; 0.15 m reads a stair's side the same)
 function rampLegBlocked(W, list, a) {
   const ax = a.pos.x, az = a.pos.z, ex = ax + _hd.x * WALL_LOOK, ez = az + _hd.z * WALL_LOOK;
@@ -1428,7 +1455,8 @@ function rampLegBlocked(W, list, a) {
   for (let k = 1; k <= n; k++) {
     const x = ax + (ex - ax) * k / n, z = az + (ez - az) * k / n;
     // the floor under this step: player.js supportIn over the held list
-    let s = W.map.heightAt(x, z);
+    GA[0] = x; GA[1] = z; groundA(W, GA, 0);
+    let s = GA[2];
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
       if (c.dead || x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
@@ -1439,8 +1467,10 @@ function rampLegBlocked(W, list, a) {
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
       if (c.kind !== "ramp" || c.dead) continue;
-      if (!K.rampBlocks(c, x, z, yd, hh, rr, NAV_STEP_UP)) continue;
-      if (K.rampBlocks(c, ox, oz, y, hh, rr, NAV_STEP_UP)) {
+      RBQ[0] = x; RBQ[1] = z; RBQ[2] = yd; RBQ[3] = hh; RBQ[4] = rr; RBQ[5] = NAV_STEP_UP;
+      if (!K.rampBlocksA(c, RBQ)) continue;
+      RBQ[0] = ox; RBQ[1] = oz; RBQ[2] = y;
+      if (K.rampBlocksA(c, RBQ)) {
         // already inside the zone: a step that does not go closer to the footprint is allowed (player.js blockedIn)
         const dx1 = x - (x < c.minX ? c.minX : x > c.maxX ? c.maxX : x), dz1 = z - (z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z);
         const dx0 = ox - (ox < c.minX ? c.minX : ox > c.maxX ? c.maxX : ox), dz0 = oz - (oz < c.minZ ? c.minZ : oz > c.maxZ ? c.maxZ : oz);
@@ -1634,7 +1664,8 @@ function navTerrEnsure(W, ci) {
   if (navTerrSeen[ci] !== navStamp) {
     navTerrSeen[ci] = navStamp;
     const ix = ci % NAV_N, iz = (ci - ix) / NAV_N;
-    navTerr[ci] = W.map.heightAt(navOX + (ix - GRID_R) * CELL, navOZ + (iz - GRID_R) * CELL);
+    GA[0] = navOX + (ix - GRID_R) * CELL; GA[1] = navOZ + (iz - GRID_R) * CELL; groundA(W, GA, 0);      // W.map.heightAt, unboxed (Wave 7b, S1)
+    navTerr[ci] = GA[2];
   }
 }
 function navCellOf(x, z) {
@@ -1815,7 +1846,9 @@ function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
   // 1.4 m doorway an 0.8 m free band, which a grid row hits only about half the
   // time; the half-cell-shifted retry always has a row inside it.
   const o = off || 0, oz = offZ === undefined ? o : offZ;
-  navPrepare(W, sx + o, sz + oz);
+  // (Wave 7b, S1) navShiftX/Z: the WINDOW centred off the bot (findPathPass's last retry, see there): the search starts in the bot's own cell
+  const shX = navShiftX, shZ = navShiftZ, shifted = shX !== 0 || shZ !== 0;
+  navPrepare(W, sx + o + shX, sz + oz + shZ);
   navRampFree = navLenient;
   for (let k = 0; k < navCols.length && !navRampFree; k++) {
     const c = navCols[k];
@@ -1827,7 +1860,15 @@ function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
   NF[4] = sx; NF[5] = sz; NF[6] = sy + NAV_STEP_UP;
   navSupport(W, sc < 0 ? S : sc);
   let sh = NF[0];
-  if (o || oz) {
+  let S0 = S;                       // the start cell (the window's centre, unless shifted)
+  if (shifted) {
+    // the start is the bot's own cell: walk from the feet to its centre first (the offset rule below); the goal must lie inside the window
+    if (sc < 0 || mode !== 0 || navCellOf(tx, tz) < 0) return null;
+    S0 = sc;
+    NF[8] = sx; NF[9] = sz; NF[10] = sh; NF[11] = navCellX(S0); NF[12] = navCellZ(S0);
+    if (!navWalk(W)) return null;
+    sh = NF[3];
+  } else if (o || oz) {
     // walk from the feet to the centre cell first; if that is walled, no search
     NF[8] = sx; NF[9] = sz; NF[10] = sh; NF[11] = navCellX(S); NF[12] = navCellZ(S);
     if (!navWalk(W)) return null;
@@ -1835,7 +1876,8 @@ function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
   }
   // goal cell: clamp a far goal onto the window edge along the line to it
   let T = -1, clamped = false;
-  if (mode === 0) {
+  if (mode === 0 && shifted) T = navCellOf(tx, tz);
+  else if (mode === 0) {
     let gx = tx - sx, gz = tz - sz;
     const m = Math.max(Math.abs(gx), Math.abs(gz)) / CELL;
     if (m > GRID_R - 1) { const k = (GRID_R - 1) / m; gx *= k; gz *= k; clamped = true; }
@@ -1844,10 +1886,10 @@ function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
   }
   const useTy = mode === 0 && !clamped && ty != null;
   heapN = 0;
-  const s = navNodeAt(S, sh);
+  const s = navNodeAt(S0, sh);
   navG[s] = 0;
-  heapPush(s, mode === 0 ? navOct(S, T) : 0);
-  let found = -1, bestId = s, bestH = mode === 0 ? navOct(S, T) : 0, expanded = 0;
+  heapPush(s, mode === 0 ? navOct(S0, T) : 0);
+  let found = -1, bestId = s, bestH = mode === 0 ? navOct(S0, T) : 0, expanded = 0;
   const minD2 = (minDist || 0) * (minDist || 0);
   while (heapN > 0 && expanded < NAV_MAX_EXPAND) {
     const id = heapPop();
@@ -1893,7 +1935,7 @@ function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
   if (end < 0) {
     if (mode !== 0) return null;
     // partial: only if it is real progress toward the goal
-    if (bestId === s || navOct(S, T) - bestH < 3) return null;
+    if (bestId === s || navOct(S0, T) - bestH < 3) return null;
     end = bestId;
   }
   // reconstruct (end -> start), then string-pull from the bot's feet
@@ -1964,8 +2006,24 @@ function findPathPass(W, sx, sy, sz, tx, tz, ty) {
     if (q && !q.partial) return q;
     if (q && !best) best = q;
   }
+  // (Wave 7b, S1) A GOAL ON ANOTHER FLOOR whose way up starts on its FAR side. The window is centred on the bot (+-31.5 m), so a door or stair
+  // just past the edge of it (the cliff temples' top floor from the south: the stair foot lies 32.5 m from a bot 25 m away) is invisible, and the
+  // search ends on the nearest wrong floor (navcheck top-floor-paths: one of the four starts, on the live build as well). Once more with the
+  // window centred between the bot and the goal: both are then 12-16 m from its centre and the detour around the goal fits. Only when
+  // everything above found no complete route, the goal is a floor away (a stair is what is missing) and it lies within reach of the window;
+  // the route found is the same kind (a search in one window), so nothing else changes.
+  if (ty != null && (ty - sy >= ARRIVE_DY || sy - ty >= ARRIVE_DY)) {
+    const dx = tx - sx, dz = tz - sz, m = Math.max(Math.abs(dx), Math.abs(dz)) / CELL;
+    if (m >= 8 && m <= GRID_R * 1.5) {
+      navShiftX = Math.round(dx * 0.5 / CELL) * CELL; navShiftZ = Math.round(dz * 0.5 / CELL) * CELL;
+      let q = null;
+      try { q = navSearch(W, sx, sy, sz, tx, tz, ty, 0, 0, 0); } finally { navShiftX = 0; navShiftZ = 0; }
+      if (q && !q.partial) return q;
+    }
+  }
   return best;
 }
+let navShiftX = 0, navShiftZ = 0;         // the window's centre relative to the bot (0 = on the bot): findPathPass's far-side retry only
 /** Nearest reachable spot OUTSIDE (on open ground, no roof) at least minDist away. */
 function findExit(W, sx, sy, sz, minDist) {
   navRampHits = 0;
@@ -2045,7 +2103,11 @@ function startNav(W) {
   try {
     const t0 = navNow(), lay = city.layout;
     // maxMs 0: this call creates the world and bakes ONE tile; the barrier job bakes the rest of the outdoor tiles
-    const town = G.bakeTown(W.map.colliders, W.map.heightAt, lay.towns.concat(lay.compounds), { waterY: W.map.waterY, portals: W.map.portals, maxMs: 0, lazy: true });
+    // (Wave 7b, S1) the terrain function the world replays the mover on: the map's own heightAt, carrying the baked lattice it reads, so navgrid's hop
+    // reads the ground in place (latFor checks the two agree on 600 points first) instead of a boxed call per 10 cm step
+    const M0 = W.map, hfn = (x, z) => M0.heightAt(x, z);
+    hfn.ground = M0.ground; hfn.size = M0.size;
+    const town = G.bakeTown(W.map.colliders, hfn, lay.towns.concat(lay.compounds), { waterY: W.map.waterY, portals: W.map.portals, maxMs: 0, lazy: true });
     nav.G = G; nav.world = town.world; nav.areas = town.rects; nav.qKeys = new Set();
     nav.st.areas = town.rects.length;
     const jobs = [], seen = new Set();
@@ -2312,7 +2374,12 @@ function findPathSettled(W, sx, sy, sz, tx, tz, ty) {
   return findPath(W, sx, sy, sz, tx, tz, ty);
 }
 /** Test hook for the lane probes: the live pathfinder (findPath settles grid misses at once, see findPathSettled; findPathGame is the game's). */
-export function debugNav() { return { findPath: findPathSettled, findPathGame: findPath, findExit, findPathOld, CELL, GRID_R, wallAhead, navInfo, navBoth }; }
+export function debugNav() {
+  return { findPath: findPathSettled, findPathGame: findPath, findExit, findPathOld, CELL, GRID_R, wallAhead, navInfo, navBoth,
+    // (Wave 7b, S1) the heal / fight steering probes, for the probes only: headingBlocked's two halves along a world heading (hx, hz)
+    headingBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return headingBlocked(W, wallCols(W, b), b.actor); },
+    rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b.actor); } };
+}
 
 /** Floor-aware "can I stand here" for local probes (cover candidates): the
  *  support a bot at feet height y would have at (x,z), or NaN when that spot is
@@ -2422,6 +2489,15 @@ function deckExitPath(W, b, tx, tz) {
 }
 
 function moveToward(W, b, tx, tz, dt, sprint, ty) {
+  MTQ[0] = tx; MTQ[1] = tz;
+  moveTowardQ(W, b, dt, sprint, ty);
+  return MTQ[2];
+}
+/** (Wave 7b, S1) moveToward with the goal in MTQ[0] (x), MTQ[1] (z); the distance left comes back in MTQ[2]. The per-frame callers
+ *  (actLoot, actMove, actEngage, coverStep) use this form: a call boxes every double argument and the returned double. */
+const MTQ = new Float64Array(3);
+function moveTowardQ(W, b, dt, sprint, ty) {
+  const tx = MTQ[0], tz = MTQ[1];
   const a = b.actor, inp = a.input, bb = b.bb;
   /* PROGRESS stuck, as opposed to FROZEN stuck.
      The speed test at the top of act() only accumulates bb.stuckT when the bot
@@ -2432,11 +2508,16 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
      distance refuse to fall for 4 s, one bot parked 3.0 m from a loot pickup.
      So watch the GOAL, not the legs: if the distance has not improved by half a
      metre in 3 s, declare hard-stuck and let the pathfinder take over. */
-  if (!bb.progGoal || hyp(tx - bb.progGoal.x, tz - bb.progGoal.z) > 4) {
+  // (Wave 7b, S1) hyp() and the probes are written so no double crosses a call here: moveToward is past the inliner's budget, and a call boxes
+  // every number argument and its result (it was the biggest bots.js garbage site: 3-8 KB a frame). Same arithmetic, term for term.
+  let qx = 0, qz = 0;
+  if (bb.progGoal) { qx = tx - bb.progGoal.x; qz = tz - bb.progGoal.z; }
+  if (!bb.progGoal || Math.sqrt(qx * qx + qz * qz) > 4) {
     if (!bb.progGoal) bb.progGoal = { x: 0, z: 0 };
     bb.progGoal.x = tx; bb.progGoal.z = tz; bb.progBest = null; bb.progT = 0;
   }
-  const goalD = hyp(tx - a.pos.x, tz - a.pos.z);
+  qx = tx - a.pos.x; qz = tz - a.pos.z;
+  const goalD = Math.sqrt(qx * qx + qz * qz);
   /* (Wave 5) FLOOR-AWARE. A goal on another floor (ty given, a metre and a half or more above or below the feet) is not
      "near" however close it is on the map, and getting there means walking AWAY from it to the stairs: horizontal
      distance rises on the way. Measured (Wave-4, 3 maps): 3 in 4 upstairs rooms were never reached, and 10 of 13 failed
@@ -2479,7 +2560,7 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // PATH FOLLOW: an active A* waypoint chain overrides the direct line.
   // Drop the plan when the caller's goal has moved well away from the one the
   // path was computed for (a re-planned rotation, a moving target).
-  if (bb.path && bb.pathGoal && hyp(tx - bb.pathGoal.x, tz - bb.pathGoal.z) > 8) { bb.path = null; bb.pathGoal = null; }
+  if (bb.path && bb.pathGoal) { qx = tx - bb.pathGoal.x; qz = tz - bb.pathGoal.z; if (Math.sqrt(qx * qx + qz * qz) > 8) { bb.path = null; bb.pathGoal = null; } }
   // (Wave 5) a goal on another floor needs a ROUTE (the stairs), not a straight walk at it: plan one as soon as it is in
   // reach of the planner's window instead of waiting for a wall to stop the bot (requestPath is rate-limited to 2.5 s)
   if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) { reqWhy = 2; requestPath(W, b, tx, tz, ty); }
@@ -2491,11 +2572,12 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // (Wave 7, lane 7B2) a goal inside the town / compound the bot stands in is planned on the grid AT ONCE (doors first, then the rooms
   // and stairs), not after the bot has walked into the wall in front of it - when the straight walk is blocked within the next 14 m. One
   // look per goal per 6 s: a goal the grid cannot reach is not asked again every frame (the straight walk + wall reflexes below take over, as before).
-  if (nav.ready && !bb.path && goalD > NAV_PLAN_MIN_M && (W.t >= bb.navT || hyp(tx - bb.navGX, tz - bb.navGZ) > 4) && W.t >= bb.nextPathT &&
+  if (nav.ready && !bb.path && goalD > NAV_PLAN_MIN_M && (W.t >= bb.navT || ((qx = tx - bb.navGX), (qz = tz - bb.navGZ), Math.sqrt(qx * qx + qz * qz) > 4)) && W.t >= bb.nextPathT &&
       navBoth(a.pos.x, a.pos.z, tx, tz)) {
     bb.navGX = tx; bb.navGZ = tz; bb.navT = W.t + 6;
     // ... when a wall is in the way of the straight walk (the next 14 m of it): a clear line needs no plan until the wall reflexes below find a wall
-    if (wallAhead(W, a, Math.atan2(-(tx - a.pos.x), -(tz - a.pos.z)), Math.min(goalD, 14))) {
+    WAQ[0] = Math.atan2(-(tx - a.pos.x), -(tz - a.pos.z)); WAQ[1] = Math.min(goalD, 14);
+    if (wallAheadQ(W, a)) {
       reqWhy = 3; requestPath(W, b, tx, tz, ty);
       if (navMiss) bb.navT = W.t + 1.0;
     }
@@ -2504,7 +2586,7 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // consumed the ground-floor waypoint of a stair descent while the bot was upstairs.
   // (Wave 5) and the same on the way UP: the first-floor waypoint of a stair climb is not reached from the room below it.
   if (bb.path && bb.path.length) {
-    const wp0 = bb.path[0], dwp = hyp(wp0.x - a.pos.x, wp0.z - a.pos.z);
+    const wp0 = bb.path[0], wq0x = wp0.x - a.pos.x, wq0z = wp0.z - a.pos.z, dwp = Math.sqrt(wq0x * wq0x + wq0z * wq0z);
     if (bb.path.nav) {
       // (Wave 7) a GRID route: 7B1's follower rule (see navConsume), not the window planner's 1.6 m + wall-probe rule
       if (navConsume(a, bb.path, dwp)) bb.path.shift();
@@ -2514,14 +2596,20 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
       // it was rounding (measured: a bot looting through a hut window threw away a good route at the hut's corner, every
       // time, for 16 s). Keep the corner until the walk to the next waypoint is clear, or the bot is on top of it.
       const nx = bb.path[1];
-      if (!nx || dwp < 0.6 || !wallAhead(W, a, Math.atan2(-(nx.x - a.pos.x), -(nx.z - a.pos.z)), Math.min(3.2, Math.max(0.8, hyp(nx.x - a.pos.x, nx.z - a.pos.z))))) bb.path.shift();
+      let shiftIt = !nx || dwp < 0.6;
+      if (!shiftIt) {
+        const nqx = nx.x - a.pos.x, nqz = nx.z - a.pos.z;
+        WAQ[0] = Math.atan2(-(nx.x - a.pos.x), -(nx.z - a.pos.z)); WAQ[1] = Math.min(3.2, Math.max(0.8, Math.sqrt(nqx * nqx + nqz * nqz)));
+        shiftIt = !wallAheadQ(W, a);
+      }
+      if (shiftIt) bb.path.shift();
     }
   }
   if (bb.path && !bb.path.length) { bb.path = null; bb.pathGoal = null; }
   // (Wave 7, round 2) A window-planner waypoint a storey and more UNDER the feet and less than a metre away is a drop the planner took at a spot the bot is not at: it stands on the deck
   // above the lower floor's cell (seed 27, s8: loot on the floor below, the route's one waypoint under the bot's own feet; it paced over it until the 3 s progress test parked the goal,
   // 8 s on the deck). It is never taken ("on its floor" needs the feet within 1.5 m), so: off the nearest open edge, as for a roof with no way down.
-  if (bb.path && bb.path.length && !bb.path.nav && !bb.path.exit && a.onGround && bb.path[0].y != null && a.pos.y - bb.path[0].y > 2.5 && hyp(bb.path[0].x - a.pos.x, bb.path[0].z - a.pos.z) < 0.8) {
+  if (bb.path && bb.path.length && !bb.path.nav && !bb.path.exit && a.onGround && bb.path[0].y != null && a.pos.y - bb.path[0].y > 2.5 && ((qx = bb.path[0].x - a.pos.x), (qz = bb.path[0].z - a.pos.z), Math.sqrt(qx * qx + qz * qz) < 0.8)) {
     if (!deckExitPath(W, b, tx, tz)) { bb.path = null; bb.pathGoal = null; }
   }
   const gx = bb.path ? bb.path[0].x : tx, gz = bb.path ? bb.path[0].z : tz;
@@ -2537,7 +2625,8 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // keep the wall-slide (the old code switched the slide off whenever any path
   // existed, so a bad long-range path also disabled the one thing that would
   // have got the bot round the wall — audit S4).
-  const legD = hyp(gx - a.pos.x, gz - a.pos.z);
+  qx = gx - a.pos.x; qz = gz - a.pos.z;
+  const legD = Math.sqrt(qx * qx + qz * qz);
   let holdStill = false;
   // The probe sits 3.2 m out, so a THIN wall right in front (a 0.35 m hut wall)
   // falls between the bot and the probe point and is never seen: measured
@@ -2548,11 +2637,11 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // than the whole queryColliders budget saved by L6.)
   // (Wave 7) a leg of a grid route was replayed through the mover itself: the 3.2 m probe does not second-guess it (a stair leg or a door
   // jamb read as a wall by this probe was the reason a good plan got dropped); a bot that really is pinned still trips the arm's-length probe
-  if ((!(bb.path && (bb.path.nav || bb.path.exit)) && wallAhead(W, a, want, bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2)) ||
-      (bb.stuckT > 0.3 && wallAhead(W, a, want, 0.9))) {
+  if ((!(bb.path && (bb.path.nav || bb.path.exit)) && ((WAQ[0] = want), (WAQ[1] = bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2), wallAheadQ(W, a))) ||
+      (bb.stuckT > 0.3 && ((WAQ[0] = want), (WAQ[1] = 0.9), wallAheadQ(W, a)))) {
     if (bb.path) { bb.path = null; bb.pathGoal = null; }
     reqWhy = 4; requestPath(W, b, tx, tz, ty);
-    if (!bb.wallSide) bb.wallSide = !wallAhead(W, a, want + 0.9, 3.2) ? 1 : (!wallAhead(W, a, want - 0.9, 3.2) ? -1 : 1);
+    if (!bb.wallSide) bb.wallSide = !((WAQ[0] = want + 0.9), (WAQ[1] = 3.2), wallAheadQ(W, a)) ? 1 : (!((WAQ[0] = want - 0.9), (WAQ[1] = 3.2), wallAheadQ(W, a)) ? -1 : 1);
     if (!bb.path) {
       // The slide itself must not walk the bot somewhere it cannot leave. Sliding
       // uphill along an isla_viva house wall walked bots into the low-ceiling
@@ -2560,8 +2649,10 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
       // refuses every direction (measured 2026-09-30: 200+ s pinned). Probe the
       // slide heading at floor height; if that is walled too, slide the other way;
       // if both are, hold still and let the path request (every 2.5 s) find a way.
-      if (wallAhead(W, a, want + bb.wallSide * 1.05, 1.6)) {
-        if (!wallAhead(W, a, want - bb.wallSide * 1.05, 1.6)) bb.wallSide = -bb.wallSide;
+      WAQ[0] = want + bb.wallSide * 1.05; WAQ[1] = 1.6;
+      if (wallAheadQ(W, a)) {
+        WAQ[0] = want - bb.wallSide * 1.05; WAQ[1] = 1.6;
+        if (!wallAheadQ(W, a)) bb.wallSide = -bb.wallSide;
         else bb.wallSide = 0;
       }
       if (bb.wallSide) want += bb.wallSide * 1.05;
@@ -2569,7 +2660,7 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
       else holdStill = true;
     }
   } else bb.wallSide = 0;
-  steerYaw(a, want, dt, bb.path && bb.path.nav ? 12 : 7);      // (Wave 7) on a grid route the legs already go where the route goes (see below): the body follows quickly
+  SYQ[0] = want; steerYawQ(a, dt, bb.path && bb.path.nav ? 12 : 7);      // (Wave 7) on a grid route the legs already go where the route goes (see below): the body follows quickly
   inp.mz = holdStill ? 0 : 1;
   inp.sprint = !!sprint && !holdStill;
   // (Wave 7) the grid replayed a stair, a ramp and a drop at WALK speed (6 m/s); sprinting (8) over one carries the feet further in the air
@@ -2586,7 +2677,8 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // hop obstacles: support ahead higher than feet → jump
   const aheadX = a.pos.x - Math.sin(a.input.yaw) * 1.4;
   const aheadZ = a.pos.z - Math.cos(a.input.yaw) * 1.4;
-  const sup = supportAt(W, aheadX, aheadZ, a.pos.y + 0.6);
+  SPQ[0] = aheadX; SPQ[1] = aheadZ; SPQ[2] = a.pos.y + 0.6; supportA(W, SPQ, 0);
+  const sup = SPQ[3];
   if (sup > a.pos.y + 0.55 && sup < a.pos.y + 2.2 && a.onGround) inp.jump = true;
   if (bb.stuckT > 0.7) {
     // jump at most once every 0.9s — the old EVERY-FRAME jump while stuck
@@ -2642,7 +2734,8 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
       if (!bb.path && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL) deckExitPath(W, b, tx, tz);
     }
   }
-  return hyp(tx - a.pos.x, tz - a.pos.z);
+  qx = tx - a.pos.x; qz = tz - a.pos.z;
+  MTQ[2] = Math.sqrt(qx * qx + qz * qz);
 }
 
 /** Fight WHILE running (owner playtest: bots "all just run instead of always
@@ -2695,7 +2788,8 @@ function actMove(W, b, dt, sprint) {
   if (!bb.moveTo) { onEnter(W, b, b.state); return; }
   // (Wave 5) the goal's floor rides along (CLOSEIN / HUNT carry the enemy's), and "arrived" means on that floor too
   const ty = bb.moveTo.y;
-  const d = moveToward(W, b, bb.moveTo.x, bb.moveTo.z, dt, sprint, ty);
+  MTQ[0] = bb.moveTo.x; MTQ[1] = bb.moveTo.z; moveTowardQ(W, b, dt, sprint, ty);
+  const d = MTQ[2];
   if (d < 3 && onFloorOf(b.actor, ty)) { bb.moveTo = null; b.nextThink = 0; }
 }
 
@@ -2734,7 +2828,8 @@ function actLoot(W, b, dt) {
   if (bb.moveTo) {
     const far = hyp(bb.moveTo.x - a.pos.x, bb.moveTo.z - a.pos.z) > 12;
     const gy = bb.moveTo.y;     // (moveToward can clear moveTo itself: a parked loot id)
-    const d = moveToward(W, b, bb.moveTo.x, bb.moveTo.z, dt, far, gy); // sprint the long hauls
+    MTQ[0] = bb.moveTo.x; MTQ[1] = bb.moveTo.z; moveTowardQ(W, b, dt, far, gy); // sprint the long hauls
+    const d = MTQ[2];
     if (d < 1.8 && onFloorOf(a, gy)) bb.moveTo = null;   // (Wave 5) arrived = on the item's floor too
   } else {
     // plan exhausted → re-plan NOW (state may stay LOOT, so onEnter must be
@@ -3036,6 +3131,7 @@ function actHeal(W, b, dt) {
 }
 
 const RETREAT_FAN = [0, 0.61, -0.61, 1.22, -1.22, 1.75, -1.75];   // radians off straight-away: 0, 35, 70, 100 degrees, both sides
+const HEAL_HOLD_S = 0.45;         // (Wave 7b, S1) the longest a healer holds a corner before it takes the way back out (pickRetreat)
 /** The heal retreat heading: the first FREE heading in a fan of +-100 degrees around straight-away-from-the-threat (never a
  *  heading with a component toward it). The fan opens on the side last used first, so the choice does not dither. Writes the
  *  unit heading to _gh (and bb.hdX/hdZ, for the pin recovery); false = every heading in the fan is walled. */
@@ -3057,9 +3153,15 @@ function pickRetreat(W, b, list, ux, uz) {
     if (W.t < bb.hdBadUntil && hx * bb.hdBadX + hz * bb.hdBadZ > 0.9) continue;    // the heading a pin just proved wrong
     _hd.x = hx; _hd.z = hz;
     if (headingBlocked(W, list, a)) continue;
-    // a REVERSAL of the retreat inside a second (the way it was going just closed): the room has no way back, so hold the
-    // corner instead of pacing - the heal finishes either way, and a bot that stands still does not look stuck
-    if (W.t - bb.hdT < 1.0 && bb.hdX * hx + bb.hdZ * hz < -0.3) { bb.hdT = W.t; return false; }
+    // a REVERSAL of the retreat inside a second (the way it was going just closed): hold the corner instead of pacing - for at most
+    // HEAL_HOLD_S. (Wave 7b, S1) The hold renewed itself (it set hdT, which re-armed the 1 s window on every frame of the hold), so a healer
+    // whose only way out lay behind its last heading - under a stair against a wall, the new house stairs of Isla Viva / Deepwood - stood
+    // under the slab for the whole heal (navcheck heal-pockets under:2.4: 199 of 298 escaped on Isla Viva); past the hold it takes the way out.
+    if (W.t - bb.hdT < 1.0 && bb.hdX * hx + bb.hdZ * hz < -0.3) {
+      if (bb.hdHold < 0 || bb.hdHold > W.t) bb.hdHold = W.t;
+      if (W.t - bb.hdHold < HEAL_HOLD_S) { bb.hdT = W.t; return false; }
+    }
+    bb.hdHold = -1;
     _gh.x = hx; _gh.z = hz;
     bb.hdX = hx; bb.hdZ = hz; bb.hdT = W.t;
     if (k > 0) bb.healSide = off < 0 ? -1 : 1;
@@ -3112,6 +3214,12 @@ const COVER_ARRIVE = 1.8;      // metres: close enough to count as "in cover"
  * target position: a bot must not get unperceivable knowledge out of this.
  */
 function coverStep(W, b, dt, tp, seen, dist) {
+  CSQ[0] = dist;
+  return coverStepQ(W, b, dt, tp, seen);
+}
+const CSQ = new Float64Array(1);          // coverStepQ's dist (Wave 7b, S1: no boxed argument)
+function coverStepQ(W, b, dt, tp, seen) {
+  const dist = CSQ[0];
   const a = b.actor, bb = b.bb, inp = a.input;
 
   // ── already committed: run the state machine, no search ──
@@ -3125,7 +3233,7 @@ function coverStep(W, b, dt, tp, seen, dist) {
       bb.coverUntil = W.t + COVER_HOLD * (1.35 - (b.tierNow || a.tier || 3) * 0.09);
       return true;
     }
-    moveToward(W, b, cp.x, cp.z, dt, d > 6);
+    MTQ[0] = cp.x; MTQ[1] = cp.z; moveTowardQ(W, b, dt, d > 6);
     return true;
   }
   if (bb.coverState === "IN") {
@@ -3255,14 +3363,15 @@ function actEngage(W, b, dt) {
   // reloading branch below: that branch ends in a bare `return`, so anything
   // placed after it can never run while reloading — which is one of the exact
   // moments a bot most needs to break line of sight.
-  if (coverStep(W, b, dt, tp, seen, dist)) return;
+  CSQ[0] = dist;
+  if (coverStepQ(W, b, dt, tp, seen)) return;
 
   // RELOADING = break for lateral cover, don't stand in the open trading nothing
   if (a.weapon && a.weapon.state === "reloading") {
     inp.mx = bb.strafeDir;
     inp.mz = -0.5;
     inp.sprint = true;
-    steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 10);
+    SYQ[0] = Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)); steerYawQ(a, dt, 10);
     guardMove(W, b, true);        // (Wave 5) the strafe / back-off must not go into a wall
     return;
   }
@@ -3290,7 +3399,8 @@ function actEngage(W, b, dt) {
   // 0.05m under a crouched capsule's 1.668m ceiling and a full 0.6m OVER a
   // swimmer's 1.02m one, so scale it: 0.94 stays inside the head band at every
   // stance, 0.64 reproduces the old ~1.15m chest point when standing.
-  const th = t.swimming ? 0.9 : K.actorHeight(t);
+  // K.actorHeight(t), inlined (a call returns a boxed double)
+  const th = t.swimming ? 0.9 : K.PLAYERK.height * (t && t.crouching && t.hasCrouchClip ? K.CROUCH.heightMult : 1);
   const aimY = tp.y + th * (bb.aimHigh ? 0.94 : 0.64);
   // lead for projectile weapons
   let lead = 0;
@@ -3324,12 +3434,12 @@ function actEngage(W, b, dt) {
   wantYaw += Math.sin(bb.errPhase) * err;
   wantPitch += Math.cos(bb.errPhase * 0.83) * err * 0.6;
 
-  steerYaw(a, wantYaw, dt, 10);
+  SYQ[0] = wantYaw; steerYawQ(a, dt, 10);
   inp.pitch = Math.max(-1.3, Math.min(1.3, inp.pitch + (wantPitch - inp.pitch) * Math.min(1, dt * 9)));
 
   // fire discipline: reaction delay, LOS, range, bursts
   const reacted = sinceAcq > b.tierK.reactionMs / 1000;
-  const inRange = dist < fireRangeM(def);          // the same reach ensureGunOut values a gun at
+  const inRange = dist < (def.falloff ? def.falloff[1] * 1.3 : 30);      // fireRangeM(def), inlined          // the same reach ensureGunOut values a gun at
   const canSee = seen;
   inp.ads = dist > 25;
   // Take the crouched stance only when already holding a range position, not
@@ -3374,7 +3484,7 @@ function actEngage(W, b, dt) {
   // instant LOS breaks, which is exactly what coverStep just achieved — ungated,
   // this walks the bot straight back out of the cover it reached.
   if (!seen && bb.targetPos && (bb.coverState === "NONE" || !bb.coverState)) {
-    moveToward(W, b, bb.targetPos.x, bb.targetPos.z, dt, false);
+    MTQ[0] = bb.targetPos.x; MTQ[1] = bb.targetPos.z; moveTowardQ(W, b, dt, false);
   }
   // (Wave 5) wall-aware fight steering: the strafe / approach / back-off above are raw input; this is the one place they
   // meet the walls. After the yaw has been steered, so the heading it judges is the one the mover will use this tick.

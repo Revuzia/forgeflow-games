@@ -1,8 +1,11 @@
 // probe_navtown.mjs - can a walker get street -> room -> street in EVERY room of the Savanna towns and compounds, planned by NavGrid.bakeTown and walked by the REAL mover?
 // (Wave 7, lane 7D; the closed loop of lane 7B1's phase3.mjs promoted over bakeTown rects.)  NO browser, NO server, NO file edited.
 //
-//   node _harness/probe_navtown.mjs [--root <game dir>] [--vendor <three dir>] [--navgrid <navgrid.js>] [--map ashgrid] [--seeds 7,1234,2026] [--dists 25,16,34]
+//   node _harness/probe_navtown.mjs [--root <game dir>] [--vendor <three dir>] [--navgrid <navgrid.js>] [--maps ashgrid,isla_viva,deepwood] [--seeds 7,1234,2026] [--dists 25,16,34]
 //                                   [--plant coarse-indoor] [--maxrooms N] [--out result.json]
+// (Wave 7b, lane B2: every map's towns, compounds and bridge. `--map X` is still accepted for one map. A seed record carries its `map`; a map whose build has no M.city layout is
+//  recorded with noCity, and navtown.py judges that as a FAIL on a blocking map. A layout with `bridges[]` (Riverside Mill) gets a BRIDGE half: the grid plans bank -> bank both
+//  ways and the real mover walks the plan, see `bridgeWalk` below.)
 //
 // Per (map, seed): the UNMODIFIED maps.js builds the map (world gates' Node environment); its towngen layout (M.city.layout: towns + compounds) is baked with
 // NavGrid.bakeTown(M.colliders, M.heightAt, rects, { waterY, portals }) - the way stage B composes the grid (only the coarse tiles that touch a town / compound rect +
@@ -22,6 +25,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeEnv } from "./world_env.mjs";
+import { loadPlayer, makeGameW as makeGameW0, makeMover as makeMover0, follow as follow0 } from "./mover_env.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = {};
@@ -30,7 +34,7 @@ for (let i = 2; i < process.argv.length; i++) {
   if (a.startsWith("--")) { const k = a.slice(2); const n = process.argv[i + 1]; if (n === undefined || n.startsWith("--")) args[k] = true; else { args[k] = n; i++; } }
 }
 const ROOT = path.resolve(args.root || path.join(HERE, ".."));
-const MAP = args.map || "ashgrid";
+const MAPS = String(args.maps || args.map || "ashgrid").split(",").filter(Boolean);
 const SEEDS = String(args.seeds || "7,1234,2026").split(",").filter(Boolean).map(Number);
 const DISTS = String(args.dists || "25,16,34").split(",").filter(Boolean).map(Number);
 const MAXROOMS = Number(args.maxrooms || 1e9);
@@ -46,67 +50,12 @@ const NGmod = req(NAVGRID);
 const NG = NGmod && NGmod.bakeTile ? NGmod : globalThis.FFG.sim.NavGrid;
 if (!NG || !NG.bakeTown) { process.stderr.write("navgrid.js has no bakeTown (a Wave-6 module): nothing to measure\n"); process.exit(3); }
 const THREE = E.THREE;
-const Pmod = await import(pathToFileURL(path.join(ROOT, "runtime", "3d", "royale", "player.js")).href);
+const Pmod = await loadPlayer(ROOT);
 const warn = console.warn, log = console.log;
 console.warn = () => {}; console.log = () => {};
-
-// ───────────── a W the real player.js can run on (no renderer, no input) ─────────────
-async function makeGameW(M, seed) {
-  const noop = () => {};
-  const dom = new Proxy({ style: {}, addEventListener: noop, removeEventListener: noop, requestPointerLock: noop, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1, height: 1 }), clientWidth: 1, clientHeight: 1 },
-    { get: (t, k) => (k in t ? t[k] : noop), set: (t, k, v) => { t[k] = v; return true; } });
-  globalThis.addEventListener = noop; globalThis.removeEventListener = noop;
-  if (!globalThis.document.addEventListener) { globalThis.document.addEventListener = noop; globalThis.document.removeEventListener = noop; globalThis.document.body = dom; globalThis.document.documentElement = dom; globalThis.document.getElementById = () => dom; globalThis.document.querySelector = () => dom; }
-  if (!globalThis.navigator) try { globalThis.navigator = { userAgent: "node", maxTouchPoints: 0 }; } catch (e) { /* node 22 has navigator */ }
-  const W = E.makeW(seed);
-  W.map = M; W.actors = []; W.kernel.renderer = { domElement: dom }; W.mapId = M.id;
-  W.settings = W.settings || {}; W.settings.keys = {}; W.settings.remap = {};
-  Pmod.init(W);
-  return W;
-}
-
-function makeMover(W) {
-  const a = {
-    alive: true, isBot: true, netRemote: false, isDummy: false, id: 1,
-    pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: 0,
-    input: { yaw: 0, pitch: 0, mx: 0, mz: 0, sprint: false, ads: false, crouch: false, jump: false, emote: null, fire: false },
-    onGround: true, gliding: false, swimming: false, inWater: false, crouching: false, healing: null, emoting: null, mantleT: null,
-    _pp: new THREE.Vector3(), _pyaw: 0, _ppT: 0, _vmode: 0, _stepAcc: 0, hasCrouchClip: false, chute: null, _portalBoost: false,
-    _portalT: 0, _adsT: 0, _agl: 0, sprinting: false, lastDamageT: -999,
-  };
-  W.actors = [a]; W.t = 0; W.phase = "match";
-  const place = (x, y, z) => {
-    a.pos.set(x, y, z); a.vel.set(0, 0, 0); a.onGround = true; a.swimming = false; a.inWater = false; a.gliding = false; a.mantleT = null; a.alive = true;
-    a.input.mx = 0; a.input.mz = 0; a.input.jump = false; a.input.sprint = false;
-  };
-  return { a, place };
-}
-
-/** follow `path` with the real mover: steer at the next waypoint, advance on arrival, give up on a stall (2.5 s without progress) or the time budget */
-function follow(mover, GW, start, wp) {
-  const a = mover.a;
-  mover.place(start.x, start.y, start.z);
-  const DT = 1 / 60;
-  let wi = 0, ticks = 0, total = 0, px = start.x, pz = start.z;
-  for (const w of wp) { total += Math.hypot(w.x - px, w.z - pz); px = w.x; pz = w.z; }
-  const cap = Math.ceil((total / 4.5 + 12) * 60);
-  let lastProg = 0, bestD = Infinity;
-  while (ticks < cap) {
-    const w = wp[wi];
-    const dx = w.x - a.pos.x, dz = w.z - a.pos.z, d = Math.hypot(dx, dz);
-    const last = wi === wp.length - 1;
-    if (d <= (last ? 0.45 : 0.55) && Math.abs(a.pos.y - w.y) < 1.4) {
-      if (last) return { ok: true, ticks, total };
-      wi++; bestD = Infinity; lastProg = ticks; continue;
-    }
-    a.input.yaw = Math.atan2(-dx, -dz); a.input.mz = 1; a.input.mx = 0;
-    Pmod.tick(GW, DT); GW.t += DT; ticks++;
-    if (d < bestD - 0.05) { bestD = d; lastProg = ticks; }
-    if (ticks - lastProg > 150) return { ok: false, why: "stuck", wi, of: wp.length, at: [a.pos.x, a.pos.y, a.pos.z], toward: [w.x, w.y, w.z], total };
-    if (a.swimming) return { ok: false, why: "swim", wi, of: wp.length, at: [a.pos.x, a.pos.y, a.pos.z], toward: [w.x, w.y, w.z], total };
-  }
-  return { ok: false, why: "time", wi, of: wp.length, at: [a.pos.x, a.pos.y, a.pos.z], toward: [wp[wi].x, wp[wi].y, wp[wi].z], total };
-}
+const makeGameW = (M, seed) => makeGameW0(E, Pmod, M, seed);
+const makeMover = (GW) => makeMover0(GW, THREE);
+const follow = (mover, GW, start, wp) => follow0(Pmod, mover, GW, start, wp);
 
 // ───────────── navcheck's room survey (probe_rooms.js section B) over the built map M ─────────────
 function surveyRooms(M) {
@@ -225,13 +174,25 @@ function surveyRooms(M) {
     if (g.length < 3) continue;
     let cx = 0, cz = 0; for (const p of g) { cx += p.x; cz += p.z; } cx /= g.length; cz /= g.length;
     let rep = g[0], bd = 1e9; for (const p of g) { const d = Math.hypot(p.x - cx, p.z - cz); if (d < bd) { bd = d; rep = p; } }
-    rooms.push({ x: rep.x, z: rep.z, s: rep.s, agl: +(rep.s - rep.terr).toFixed(2), n: g.length, bld: rep.bld });
+    // height over the ground a walker stands on: a room on a dock over open water stands on the SURFACE (+0.9 m), not 3-5 m over the seabed (Wave 7b: Lagoon Docks was classed 'upper'); a dry map has waterY -999
+    rooms.push({ x: rep.x, z: rep.z, s: rep.s, agl: +(rep.s - Math.max(rep.terr, M.waterY)).toFixed(2), n: g.length, bld: rep.bld });
   }
   rooms.sort((a, b) => a.x - b.x || a.z - b.z);
   const openPt = (x, z) => {
     if (Math.abs(x) > M.half - 15 || Math.abs(z) > M.half - 15) return null;
     const terr = M.heightAt(x, z);
-    if (terr < M.waterY + 0.4) return null;
+    if (terr < M.waterY + 0.4) {
+      // Wave 7b: over open water the street IS the deck: a thin slab 0.3-1.6 m over the surface (the Lagoon Docks boardwalk, a pier), roofless and clear of walls. A dock room 40-60 m out on a boardwalk has
+      // no dry point within the 34 m reach; the planner and the real mover walk the deck like any street
+      const L = qc(x, z, 0.6);
+      let top = null;
+      for (const c of L) {
+        if (c.dead || c.kind === "ramp" || x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ || c.maxY - c.minY > 1.2) continue;
+        if (c.maxY >= M.waterY + 0.3 && c.maxY <= M.waterY + 1.6 && (top === null || c.maxY > top)) top = c.maxY;
+      }
+      if (top === null || roofAt(x, z, top) || wallDist(x, z, top) < 0.8) return null;
+      return { x, z, y: top };
+    }
     const sp = supportAt(x, z, terr + 0.2);
     if (sp.s > terr + 0.05) return null;
     if (roofAt(x, z, terr)) return null;
@@ -251,11 +212,11 @@ function surveyRooms(M) {
 }
 
 const pct = (a, b) => (b ? Math.round(1000 * a / b) / 10 : null);
-const res = { root: ROOT, navgrid: NAVGRID, map: MAP, plant: PLANT, dists: DISTS, seeds: [] };
-for (const seed of SEEDS) {
+const res = { root: ROOT, navgrid: NAVGRID, maps: MAPS, plant: PLANT, dists: DISTS, seeds: [] };
+for (const MAP of MAPS) for (const seed of SEEDS) {
   const M = await buildMap(E.makeW(seed), MAP);
-  const rec = { seed, genVersion: M.genVersion, noCity: !M.city };
-  if (!M.city) { res.seeds.push(rec); continue; }
+  const rec = { map: MAP, seed, genVersion: M.genVersion, noCity: !M.city };
+  if (!M.city) { res.seeds.push(rec); try { M.dispose && M.dispose(); } catch (e) { /* stub */ } continue; }
   const L = M.city.layout;
   const rects = [...L.towns, ...L.compounds];
   const ids = [...L.towns.map((t) => t.id), ...L.compounds.map((c) => c.id)];
@@ -318,6 +279,28 @@ for (const seed of SEEDS) {
     else if (unreached.length < 16) unreached.push({ place: ids[ti], lvl: lv, room: [r.x, r.s, r.z].map((v) => +v.toFixed(1)), in: anyIn, out: anyOut, why: whyNot });
   }
   Object.assign(rec, { roomsFound: sv.rooms.length, roomsInTowns: nTown, queryWalkMs: Date.now() - q0, tab, walkedByDir: roomsIn, perPlace, noplan, fails, noStart, unreached, townMB });
+  // ---- the BRIDGE half (Wave 7b): every layout bridge {x0, z0, x1, z1, len, width, deck} (Riverside Mill): the grid plans bank -> bank both ways, the real mover walks the plan ----
+  {
+    const bw = { bridges: 0, walks: 0, planned: 0, walked: 0, fails: [] };
+    const dry = (x, z) => M.heightAt(x, z) > M.waterY + 0.4 && !(M.queryColliders ? (() => { const o = []; M.queryColliders(x, z, 0.6, o); return o.some((c) => !c.dead && c.kind !== "ramp" && x > c.minX - 0.5 && x < c.maxX + 0.5 && z > c.minZ - 0.5 && z < c.maxZ + 0.5 && c.maxY - c.minY > 0.6 && c.minY < M.heightAt(x, z) + 1.5); })() : false);
+    for (const T of L.towns.concat(L.compounds)) for (const br of (T.bridges || [])) {
+      bw.bridges++;
+      const dx = br.x1 - br.x0, dz = br.z1 - br.z0, len = Math.hypot(dx, dz) || 1, ux = dx / len, uz = dz / len;
+      const bank = (sx, sz, sgn) => { for (const d of [8, 11, 14, 18]) { const x = sx + sgn * ux * d, z = sz + sgn * uz * d; if (dry(x, z)) return { x, y: M.heightAt(x, z), z }; } return null; };
+      const A = bank(br.x0, br.z0, -1), B = bank(br.x1, br.z1, 1);
+      if (!A || !B) { bw.fails.push({ town: T.id, why: "no dry bank point 8-18 m past the bridge ends", len: +len.toFixed(1) }); continue; }
+      for (const [from, to, dir] of [[A, B, "ab"], [B, A, "ba"]]) {
+        bw.walks++;
+        const p = NG.findPath(town.world, from.x, from.y, from.z, to.x, to.y, to.z);
+        const okPlan = p && p.length && Math.hypot(p[p.length - 1].x - to.x, p[p.length - 1].z - to.z) < 1.6 && Math.abs(p[p.length - 1].y - to.y) < 1.8;
+        if (!okPlan) { bw.fails.push({ town: T.id, dir, why: "no plan: " + (town.world.lastFail || "partial path"), len: +len.toFixed(1) }); continue; }
+        bw.planned++;
+        const f = follow(mover, GW, from, p);
+        if (f.ok) bw.walked++; else bw.fails.push({ town: T.id, dir, why: "mover " + f.why, at: f.at && f.at.map((v) => +v.toFixed(1)), len: +len.toFixed(1) });
+      }
+    }
+    rec.bridgeWalk = bw;
+  }
   res.seeds.push(rec);
   try { M.dispose && M.dispose(); } catch (e) { /* the Node stub has nothing to free */ }
 }

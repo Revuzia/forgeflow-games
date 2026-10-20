@@ -305,7 +305,62 @@
   // block test runs after the support is known (it needs the feet height yd = max(yq, support)). Result: the support; _sbBlk = 1 when the capsule is blocked.
   var _sbBlk = 0;
   var _sbN = new Int32Array(48);
+  // ── ZERO-GARBAGE CALLS (Wave 7b, lane S1) ──────────────────────────────────────────────────────────────────────────
+  // A call V8 did not inline boxes every double argument and the returned double; hop() replays the mover in 10 cm steps and asked the map's
+  // heightAt and supBlock with numbers at every step (framecheck: hop + supBlock + maps.js heightAt 6-10 KB of garbage a frame while bots
+  // plan through towns). hop passes them through these Float64Arrays instead: the SAME expressions on the same numbers, bit for bit.
+  //   _hq: [0] x, [1] z -> hfQ -> [2] the terrain height (T.hf(x, z))
+  //   _sq: [0] x, [1] z, [2] yq, [3] H, [4] rad -> supBlockQ -> [5] the support (supBlock's result; _sbBlk as before)
+  var _hq = new Float64Array(3), _sq = new Float64Array(6);
+  /** The terrain read of a tile's height function without a call: when the function carries the map's baked lattice (fn.ground =
+   *  { lattice, latN } and fn.size, set by bots.js on the function it hands the world) the read is maps.js TerrainField.at itself, term for
+   *  term; it is used only after 600 points of the function agreed with it exactly (===), else hfQ calls the function as before. */
+  function latFor(fn) {
+    if (typeof fn !== "function") return null;
+    if (fn._ngLat !== undefined) return fn._ngLat;
+    var g = fn.ground, size = fn.size, out = null;
+    if (g && g.lattice && g.latN > 1 && size > 0) {
+      out = { L: g.lattice, n: g.latN, c: g.latN - 1, k: (g.latN - 1) / size, h: size / 2 };
+      var sd = 12345;
+      for (var i = 0; i < 600 && out; i++) {
+        sd = (Math.imul(sd, 1103515245) + 12345) >>> 0; var u = sd / 4294967296;
+        sd = (Math.imul(sd, 1103515245) + 12345) >>> 0; var v = sd / 4294967296;
+        var x = (u - 0.5) * size * 1.1, z = (v - 0.5) * size * 1.1;
+        if (i % 3 === 0) x = Math.round(x / (size / out.c)) * (size / out.c);
+        if (i % 5 === 0) z = Math.round(z / (size / out.c)) * (size / out.c);
+        _hq[0] = x; _hq[1] = z; latRead(out);
+        if (_hq[2] !== fn(x, z)) out = null;
+      }
+    }
+    try { fn._ngLat = out; } catch (e) { /* a frozen function: no cache */ }
+    return out;
+  }
+  /** maps.js TerrainField.at over a bound lattice: _hq[0], _hq[1] -> _hq[2] */
+  function latRead(G) {
+    var L = G.L, C = G.c, N = G.n;
+    var fx = (_hq[0] + G.h) * G.k, fz = (_hq[1] + G.h) * G.k;
+    fx = fx < 0 ? 0 : fx > C ? C : fx; fz = fz < 0 ? 0 : fz > C ? C : fz;
+    var ix = fx | 0, iz = fz | 0;
+    if (ix >= C) ix = C - 1;
+    if (iz >= C) iz = C - 1;
+    var u = fx - ix, v = fz - iz, i = iz * N + ix;
+    if (u + v <= 1) { _hq[2] = L[i] + u * (L[i + 1] - L[i]) + v * (L[i + N] - L[i]); return; }
+    var h11 = L[i + N + 1];
+    _hq[2] = h11 + (1 - u) * (L[i + N] - h11) + (1 - v) * (L[i + 1] - h11);
+  }
+  /** T.hf(_hq[0], _hq[1]) -> _hq[2] */
+  function hfQ(T) {
+    var G = T.hl;
+    if (G) latRead(G);
+    else _hq[2] = T.hf(_hq[0], _hq[1]);
+  }
   function supBlock(T, items, a, b, x, z, yq, H, rad) {
+    _sq[0] = x; _sq[1] = z; _sq[2] = yq; _sq[3] = H; _sq[4] = rad;
+    supBlockQ(T, items, a, b);
+    return _sq[5];
+  }
+  function supBlockQ(T, items, a, b) {
+    var x = _sq[0], z = _sq[1], yq = _sq[2], H = _sq[3], rad = _sq[4];
     var lx0 = T.lx0, lx1 = T.lx1, lz0 = T.lz0, lz1 = T.lz1, lk = T.lk;
     var r2 = rad * rad, s = H, nn = 0, over = false, strict = _strictRamp === 1;
     for (var k = a; k < b; k++) {
@@ -337,7 +392,7 @@
       }
       _sbBlk = blk;
     }
-    return s;
+    _sq[5] = s;
   }
 
   /** The clearance tier of a standing capsule (radius `rad`, feet on yd) at (x, z): -1 = it does not fit; else how many of the fatter capsules (RADIUS + 0.1 / 0.2 / 0.3) fit as well
@@ -412,9 +467,11 @@
         ci = cellOf(T, px, z); a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
       }
       if (b > a) {
-        if (gT) { y = T.hf(x, z); gT = false; vy = 0; air = false; }
+        if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; gT = false; vy = 0; air = false; }
         yq = air ? y - AIR_PAD : y;
-        sup = supBlock(T, items, a, b, px, z, yq, T.hf(px, z), rad);
+        _hq[0] = px; _hq[1] = z; hfQ(T);
+        _sq[0] = px; _sq[1] = z; _sq[2] = yq; _sq[3] = _hq[2]; _sq[4] = rad; supBlockQ(T, items, a, b);
+        sup = _sq[5];
         if (_sbBlk === 1) return false;
       }
       x = px;
@@ -428,7 +485,8 @@
         // (glued: the mover lands every tick), and then the replay jumps to the last step inside this cell (the terrain is read again where the line leaves
         // open ground). Over ground that drops faster than the mover can follow (more than GLUE_DROP a tick: a 0.26 slope at full speed, any slope once the
         // mover has speed) the feet LEAVE it and fall, and arrive at the next feature higher than the terrain and with a downward speed: simulated tick by tick.
-        var hS = T.hf(x, z);
+        _hq[0] = x; _hq[1] = z; hfQ(T);
+        var hS = _hq[2];
         if (gT) {
           var cix = ci % T.nx, ciz = (ci - cix) / T.nx;
           var tx1 = dx > 1e-12 ? (T.minX + (cix + 1) * T.cell - ax) / dx : dx < -1e-12 ? (T.minX + cix * T.cell - ax) / dx : 1e30;
@@ -440,12 +498,14 @@
             var jf = rest ? restDist(sLast) / L : sLast / n, jx = ax + dx * jf, jz = az + dz * jf;
             // the terrain can dip under the swim line between two checked points: jump only where it is clear of the line at both ends,
             // else walk the steps one by one with the swim test (the mover swims the moment the ground under it is DEEP)
-            var hJ = T.hf(jx, jz);
+            _hq[0] = jx; _hq[1] = jz; hfQ(T);
+            var hJ = _hq[2];
             if (!(hS - hS === 0) || !(hJ - hJ === 0)) return false;                      // no ground height at either end of the jump (NaN, infinite): nobody walks there
             var jl = Math.sqrt((jx - x) * (jx - x) + (jz - z) * (jz - z));
             if ((hS - hJ) <= JUMP_SLOPE * jl && (!water || (hS >= T.deepY + WATER_GUARD && hJ >= T.deepY + WATER_GUARD))) { s = sLast; x = jx; z = jz; continue; }
           }
-          var hN = T.hf(x, pz);
+          _hq[0] = x; _hq[1] = pz; hfQ(T);
+          var hN = _hq[2];
           if (!(hN - hN === 0)) return false;
           if (hS - hN <= GLUE_DROP) {                       // still glued to the ground: one more step on it
             if (water && hN < T.deepY) return false;
@@ -454,7 +514,8 @@
           }
           y = hS; vy = 0; gT = false; air = false;          // the ground falls away faster than the feet can follow
         }
-        Hz = T.hf(x, pz);
+        _hq[0] = x; _hq[1] = pz; hfQ(T);
+        Hz = _hq[2];
         if (!(Hz - Hz === 0)) return false;
         vy += GRAVITY * TICK; y += vy * TICK;
         if (water && Hz < T.deepY && (air ? y - AIR_PAD : y) <= T.wetY) return false;
@@ -463,13 +524,15 @@
         z = pz;
         continue;
       }
-      if (gT) { y = T.hf(x, z); gT = false; vy = 0; air = false; }
-      Hz = T.hf(x, pz);
+      if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; gT = false; vy = 0; air = false; }
+      _hq[0] = x; _hq[1] = pz; hfQ(T);
+      Hz = _hq[2];
       if (water && Hz < T.deepY && (air ? y - AIR_PAD : y) <= T.wetY) return false;          // swimming (player.js: deep terrain under feet at the surface)
       var sr0 = _supRamp;                  // the ramp flag this support call starts from (see the gravity step below)
       if (b > a) {
         yq = air ? y - AIR_PAD : y;
-        sup = supBlock(T, items, a, b, x, pz, yq, Hz, rad);
+        _sq[0] = x; _sq[1] = pz; _sq[2] = yq; _sq[3] = Hz; _sq[4] = rad; supBlockQ(T, items, a, b);
+        sup = _sq[5];
         if (_sbBlk === 1) return false;
       }
       z = pz;
@@ -491,7 +554,7 @@
       if (y <= sup + 0.02) { y = sup; vy = 0; air = false; } else { air = true; airTicks++; if (y - sup > BIG_GAP) bigTicks++; }
       if (y < yMin) yMin = y;
     }
-    if (gT) { y = T.hf(x, z); }
+    if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; }
     else if (y > sup + 0.02) {      // the horizontal run is over and the feet are in the air (a drop): they fall straight down onto the highest top under them
       var land = b > a ? supportT(T, items, a, b, x, z, y, Hz) : Hz;
       if (y - land > BIG_GAP) bigTicks += 30;                  // it left the walk and fell to something far below
@@ -857,7 +920,7 @@
     }
     var m = sel.length;
     var T = {
-      isTile: true, grp: null, island: null, key: opts.key != null ? opts.key : 0, minX: minX, minZ: minZ, maxX: maxX, maxZ: maxZ, cell: cell, nx: nx, nz: nz, inv: inv, hf: hf,
+      isTile: true, grp: null, island: null, key: opts.key != null ? opts.key : 0, minX: minX, minZ: minZ, maxX: maxX, maxZ: maxZ, cell: cell, nx: nx, nz: nz, inv: inv, hf: hf, hl: latFor(hf),
       deepY: waterY - DEEP, wetY: waterY + 0.3,
       m: m, lx0: new Float64Array(m), lx1: new Float64Array(m), ly0: new Float64Array(m), ly1: new Float64Array(m),
       lz0: new Float64Array(m), lz1: new Float64Array(m), lk: new Uint8Array(m), ld: new Int8Array(m),

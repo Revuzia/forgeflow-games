@@ -160,6 +160,7 @@ export function disposeLootResources(W) {
   // material and instance buffers are shared by every match, so teardown leaves them alone
   if (FX.pools) for (const k in FX.pools) { keep(FX.pools[k].mesh.geometry); keep(FX.pools[k].mesh.material); }
   for (const d of chestDepthMats.values()) keep(d);
+  for (const P of VIS.values()) if (P.parts) for (const m of P.parts) { keep(m.geometry); keep(m.material); }   // the model pools (page-lifetime)
   for (const k in kindGeos) keep(kindGeos[k]);
   for (const k in kindMats) keep(kindMats[k]);
   for (const k in itemProtoCache) keep(itemProtoCache[k]);
@@ -216,6 +217,7 @@ export function populate(W) {
   g.add(blobInit());
   fxResetPools();
   fxAttach(g);                     // the three marker pools (rings, beams, glows) ride in the loot group
+  visAttach(W, g);                 // ...and the instanced models (every pool built so far; empty lists)
 
   let fi = 0;
   const floorPts = [];
@@ -268,7 +270,16 @@ export function warmObjects(W) {
   // program of its own (measured on all three maps, 270-290 s into the match). A page-lifetime proxy built by the SAME factory the live drop uses
   // gives the warm frame both materials; it holds the programs for the session, and no live crate shares an instance with it.
   if (!_warmCrate) _warmCrate = makeSupplyCrate().crate;
-  return [P.rings.mesh, P.beams.mesh, P.glows.mesh, _warmCrate];
+  const out = [P.rings.mesh, P.beams.mesh, P.glows.mesh, _warmCrate];
+  // The model pools (INSTANCED LOOT MODELS): every kind a match can show is built here when its model is loaded - every weapon proto, the
+  // pickups, ammo and the chest pools - so the warm frame links each instanced program (and the near chests' instanced depth variant);
+  // a kind that first appears mid-match would otherwise link its program on the frame it comes into view.
+  if (W._weaponProtos) for (const id in W._weaponProtos) itemPool(W, { kind: "weapon", id });
+  itemPool(W, { kind: "ammo", id: "light" });
+  for (const id in ITEM_FILES) if (itemProtoCache[id] !== undefined) itemPool(W, { kind: "consumable", id });
+  if (chestProto) chestPools(W);
+  for (const Q of VIS.values()) if (Q.parts) for (const m of Q.parts) { if (!m.parent) g.add(m); out.push(m); }
+  return out;
 }
 let _warmCrate = null;
 
@@ -327,6 +338,7 @@ export function disposeMatch(W) {
   items.clear(); chests.clear(); lootGrid.clear();
   blobReset();
   fxResetPools();                  // every marker slot back to the free list; the pools themselves are page-lifetime
+  visReset();                      // the model pools' lists (the pools, their geometry and buffers are page-lifetime)
   takenIds.length = 0;
   supplyState = null;
   chestChannel.id = null; chestChannel.t = 0;
@@ -933,31 +945,195 @@ function fxFrame(W, dt, cull) {
   if (st && st.center && st.radius > 0.5) s.set(st.center.x, st.center.z, st.radius); else s.set(0, 0, 1e9);
 }
 
-function itemMesh(W, data) {
-  const grp = new THREE.Group();            // the floor ring + beam live in the instanced pools, not here
-  if (data.kind === "weapon") {
-    // weapon proto (async — attach when protos ready)
-    if (W.weaponProto) {
-      W.weaponProto(data.id).then((proto) => {
-        if (proto && grp.parent) { const m = noShadow(proto.clone()); m.position.y = 0.45; m.rotation.z = 0.5; grp.add(m); }
-      });
-    }
-  } else if (data.kind === "ammo") {
-    const m = new THREE.Mesh(kindGeos.ammo, kindMats.ammo); m.position.y = 0.35; grp.add(m);
-  } else if (data.kind === "consumable") {
-    // Meshy 3D model when available; glowing capsule fallback until then
-    const fallback = () => {
-      const isShield = data.id.includes("shield");
-      const m = new THREE.Mesh(kindGeos.consumable, isShield ? kindMats.shieldC : kindMats.heal); m.position.y = 0.4; grp.add(m);
-    };
-    if (W.itemProto) {
-      W.itemProto(data.id).then((proto) => {
-        if (proto && grp.parent) { const m = noShadow(proto.clone()); m.position.y = 0.42; grp.add(m); }
-        else if (grp.parent) fallback();
-      });
-    } else fallback();
+// ── INSTANCED LOOT MODELS (Wave 7b, lane S2) ─────────────────────────────────────────────────────────────────────────────────────────
+// Every floor item and every chest used to be a CLONE of its model: a gun = 1-3 draw calls, an ammo box 1, a chest FIVE (two meshes of
+// lid and three of base), each per item in the 150 m model cull. Measured (perfbreak, Savanna s31337 endgame view, 2026-10-19): chests
+// 39 + 10 shadow calls and floor items 59 calls of the view's 238, against 9 + 5 at the Wave-6 build - the whole of the +119 the
+// cumulative perf bar sees. Now every model is ONE InstancedMesh per (kind, material): the parts of a model are baked into one geometry
+// per material at its pose inside the old item group (a gun 0.45 m up, tilted 0.5 rad; an ammo box 0.35 m; a pickup 0.42 m), and the
+// instance matrix is the old group's transform (the item's spot + the shared bob, the shared spin; a chest's fixed heading). A kind's parts
+// share ONE matrix attribute (one upload). Only the items inside the cull are written, compacted to the front, so a hidden item costs no
+// vertex work and the triangle count is exactly the drawn models'; the bounding sphere is refitted to what is drawn, so three's frustum
+// test still drops a kind behind the camera. Chests: an opened chest is dimmed through the instance colour (it used to clone its
+// materials), and the chests within the shadow radius are drawn by a second "near" pool that casts (with the per-material depth
+// materials below) while the rest do not - the old per-chest shadow hand-back, two pools instead of one flag per clone.
+// Render-only: no random draw, no position, no id changes (replay and the squad worlds are untouched).
+const VIS_MAX = 512;                                   // models of ONE kind drawn at once (the 150 m cull holds far fewer)
+const VIS = new Map();                                 // key -> pool (page-lifetime, like the marker pools; re-parented each match)
+const VIS_ARR = [];                                    // the same pools as an array: the per-render loop walks it by index (no iterator per frame)
+const _vS = new THREE.Sphere(), _vM = new THREE.Matrix4(), _vM2 = new THREE.Matrix4(), _vQ = new THREE.Quaternion(), _vE = new THREE.Euler(), _vP = new THREE.Vector3(), _vSc = new THREE.Vector3();
+/** Merge same-layout geometries (one material's parts) into one indexed geometry; null when the attribute layouts differ. */
+function mergeParts(geos) {
+  if (geos.length === 1) return geos[0];
+  const names = Object.keys(geos[0].attributes).sort();
+  for (const g of geos) { const n = Object.keys(g.attributes).sort(); if (n.join() !== names.join()) return null; for (const k of names) if (g.attributes[k].itemSize !== geos[0].attributes[k].itemSize) return null; }
+  let nv = 0, ni = 0;
+  for (const g of geos) { nv += g.attributes.position.count; ni += g.index ? g.index.count : g.attributes.position.count; }
+  const out = new THREE.BufferGeometry(), idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+  for (const k of names) {
+    const sz = geos[0].attributes[k].itemSize, arr = new Float32Array(nv * sz);
+    let o = 0;
+    for (const g of geos) { const a = g.attributes[k]; for (let i = 0; i < a.count; i++) for (let c = 0; c < sz; c++) arr[o++] = a.getComponent(i, c); }
+    out.setAttribute(k, new THREE.BufferAttribute(arr, sz));
   }
-  return grp;
+  let vo = 0, io = 0;
+  for (const g of geos) {
+    if (g.index) for (let i = 0; i < g.index.count; i++) idx[io++] = g.index.getX(i) + vo;
+    else for (let i = 0; i < g.attributes.position.count; i++) idx[io++] = i + vo;
+    vo += g.attributes.position.count;
+  }
+  out.setIndex(new THREE.BufferAttribute(idx, 1));
+  return out;
+}
+/** The parts of a model: its meshes baked at `rootXf` (the old clone's root transform, replacing the proto root's own), grouped and merged per material. */
+function bakeModel(proto, rootXf) {
+  proto.updateMatrixWorld(true);
+  const inv = _vM2.copy(proto.matrixWorld).invert();
+  const byMat = new Map();
+  proto.traverse((n) => {
+    if (!n.isMesh || !n.geometry || n.isSkinnedMesh) return;
+    const geo = n.geometry.clone();
+    geo.applyMatrix4(_vM.multiplyMatrices(rootXf, _vM.multiplyMatrices(inv, n.matrixWorld)));
+    for (const k of Object.keys(geo.attributes)) if (k !== "position" && k !== "normal" && k !== "uv" && k !== "color" && k !== "uv1") geo.deleteAttribute(k);   // (tangents etc.: not used by these materials, and they block a merge)
+    const key = n.material;
+    if (!byMat.has(key)) byMat.set(key, []);
+    byMat.get(key).push(geo);
+  });
+  const parts = [];
+  for (const [mat, geos] of byMat) {
+    const multi = Array.isArray(mat) || geos.some((g) => g.groups && g.groups.length);
+    const merged = multi ? null : mergeParts(geos);
+    if (merged) { if (merged !== geos[0]) for (const g of geos) g.dispose(); parts.push([merged, mat]); }
+    else for (const g of geos) parts.push([g, mat]);
+  }
+  return parts;
+}
+/** A pool for one model kind. `src` resolves to [proto, rootXf] (or null = nothing to draw). opts: { color: per-instance colour (chests), cast, depthFor } */
+function visPool(key, src, opts) {
+  let P = VIS.get(key);
+  if (P) return P;
+  P = { key, items: [], parts: null, mat: new THREE.InstancedBufferAttribute(new Float32Array(VIS_MAX * 16), 16), col: null, n: 0, dirty: true, cast: !!(opts && opts.cast), opts: opts || {}, pending: null };
+  P.mat.setUsage(THREE.DynamicDrawUsage);
+  if (P.opts.color) { P.col = new THREE.InstancedBufferAttribute(new Float32Array(VIS_MAX * 3).fill(1), 3); P.col.setUsage(THREE.DynamicDrawUsage); }
+  VIS.set(key, P); VIS_ARR.push(P);
+  const build = (r) => {
+    if (!r || !r[0]) { P.parts = []; return; }
+    const parts = bakeModel(r[0], r[1]);
+    P.parts = parts.map(([geo, mat]) => {
+      const m = new THREE.InstancedMesh(geo, mat, VIS_MAX);
+      m.instanceMatrix = P.mat;                        // one matrix buffer for every part of the kind
+      if (P.col) m.instanceColor = P.col;
+      m.name = "loot-model:" + key;
+      m.count = 0; m.visible = false;
+      m.castShadow = P.cast; m.receiveShadow = false;
+      if (P.cast && P.opts.depthFor && !Array.isArray(mat)) m.customDepthMaterial = P.opts.depthFor(mat);
+      if (!geo.boundingSphere) geo.computeBoundingSphere();
+      m.boundingSphere = new THREE.Sphere();
+      m.userData.geoR = geo.boundingSphere.radius + geo.boundingSphere.center.length();
+      return m;
+    });
+    if (visGroup) for (const m of P.parts) visGroup.add(m);
+    P.dirty = true;
+  };
+  try {
+    const r = src();
+    if (r && typeof r.then === "function") P.pending = r.then(build, () => build(null));
+    else build(r);
+  } catch (e) { build(null); }
+  return P;
+}
+let visGroup = null;
+/** the loot group of the match: every built pool's meshes ride in it (re-parented by populate, like the marker pools) */
+function visAttach(W, g) {
+  visGroup = g;
+  // the per-render hook (see visFrame): chained in front of whatever the scene already runs; installed once per scene
+  const sc = W.scene || (W.kernel && W.kernel.scene);
+  if (sc && sc.isScene && !sc.__lootVisHook) {                     // (a Node probe's stand-in W has no scene: nothing renders there)
+    const prev = typeof sc.onBeforeRender === "function" ? sc.onBeforeRender : function () {};
+    sc.onBeforeRender = function (renderer, scene, camera, rt) { visFrame(camera); return prev.call(this, renderer, scene, camera, rt); };
+    sc.__lootVisHook = true;
+  }
+  for (const P of VIS.values()) { P.items.length = 0; P.n = 0; P.dirty = true; if (P.parts) for (const m of P.parts) { m.count = 0; m.visible = false; g.add(m); } }
+}
+function visReset() { for (const P of VIS.values()) { P.items.length = 0; P.n = 0; P.dirty = true; if (P.parts) for (const m of P.parts) { m.count = 0; m.visible = false; } } }
+function visAdd(P, o) { o.vp = P; o.vi = P.items.length; P.items.push(o); P.dirty = true; }
+function visRemove(o) {
+  const P = o.vp;
+  if (!P) return;
+  const last = P.items.pop();
+  if (last !== o) { P.items[o.vi] = last; last.vi = o.vi; }
+  o.vp = null; o.vi = -1; P.dirty = true;
+}
+const _rootXf = (y, rz, root) => {
+  const m = new THREE.Matrix4();
+  _vE.set(root ? root.rotation.x : 0, root ? root.rotation.y : 0, rz);
+  return m.compose(_vP.set(root ? root.position.x : 0, y, root ? root.position.z : 0), _vQ.setFromEuler(_vE), root ? _vSc.copy(root.scale) : _vSc.set(1, 1, 1));
+};
+const ITEM_POOL_KEY = (d) => (d.kind === "weapon" ? "w:" + d.id : d.kind === "ammo" ? "ammo" : d.kind === "consumable" ? "c:" + d.id : null);
+/** The pool an item's model is drawn by (created on first use; null = the item has no model, e.g. a gun before weapons.js exists). */
+function itemPool(W, data) {
+  const key = ITEM_POOL_KEY(data);
+  if (!key) return null;
+  if (VIS.has(key)) return VIS.get(key);
+  if (data.kind === "weapon") {
+    if (!W.weaponProto) return null;
+    return visPool(key, () => W.weaponProto(data.id).then((proto) => (proto ? [proto, _rootXf(0.45, 0.5, proto)] : null)));
+  }
+  if (data.kind === "ammo") return visPool(key, () => { const g = new THREE.Group(); g.add(new THREE.Mesh(kindGeos.ammo, kindMats.ammo)); return [g, _rootXf(0.35, 0, null)]; });
+  // consumable: the Meshy model when there is one, the glowing capsule when not
+  const fallback = () => { const g = new THREE.Group(); g.add(new THREE.Mesh(kindGeos.consumable, data.id.includes("shield") ? kindMats.shieldC : kindMats.heal)); return [g, _rootXf(0.4, 0, null)]; };
+  if (!W.itemProto) return visPool(key, fallback);
+  return visPool(key, () => W.itemProto(data.id).then((proto) => (proto ? [proto, _rootXf(0.42, 0, proto)] : fallback()), fallback));
+}
+/** The chest pools: "far" (no shadow) and "near" (casts, inside CHEST_SHADOW_R). */
+function chestPools(W) {
+  if (CHEST_P) return CHEST_P;
+  const src = () => ensureChestProto(W).then((proto) => { proto.updateMatrix(); return [proto, proto.matrix.clone()]; });   // (the clone kept the proto root's own scale + lift)
+  return (CHEST_P = [visPool("chest:far", src, { color: true }), visPool("chest:near", src, { color: true, cast: true, depthFor: chestDepthFor })]);
+}
+let CHEST_P = null;
+/** Write the drawn instances of every pool: the items / chests whose `vis` is set (update(): inside the 150 m model cull) and whose model is
+ *  in THIS render's view, compacted; the kind's bounding sphere refitted. Runs from the scene's onBeforeRender (installed by populate), i.e.
+ *  with the camera of the very render that draws them, before three uploads the instance buffers: one kind's sphere spans every model of it
+ *  within the cull, so without the per-model view test a pool would draw the models behind the camera too (the clones were frustum-tested one
+ *  by one). The casting "near" chests are not view-tested: a chest behind you still throws its shadow into the view. */
+const _vF = new THREE.Frustum(), _vPM = new THREE.Matrix4(), _vT = new THREE.Sphere();
+function visFrame(cam) {
+  const ang = bobT * 1.4, cs = Math.cos(ang), sn = Math.sin(ang);
+  const useF = !!(cam && cam.isCamera && cam.projectionMatrix && cam.matrixWorldInverse);
+  if (useF) _vF.setFromProjectionMatrix(_vPM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+  for (let pi = 0; pi < VIS_ARR.length; pi++) {
+    const P = VIS_ARR[pi];
+    if (!P.parts || !P.parts.length) continue;
+    const chest = !!P.col, viewTest = useF && !P.cast;
+    if (chest && !P.dirty && !viewTest) continue;      // the near chests never move: rewritten only when their set changes
+    const a = P.mat.array, ca = chest ? P.col.array : null, rr = P.parts[0].userData.geoR + 0.5;
+    let n = 0, x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (let i = 0; i < P.items.length && n < VIS_MAX; i++) {
+      const o = P.items[i];
+      if (!o.vis) continue;
+      if (viewTest) { _vT.center.set(o.pos.x, o.pos.y, o.pos.z); _vT.radius = rr; if (!_vF.intersectsSphere(_vT)) continue; }
+      const x = o.pos.x, z = o.pos.z, y = chest ? o.pos.y : o.pos.y + Math.sin(bobT * 2 + x) * 0.08 + 0.08;
+      const c = chest ? o.rc : cs, s = chest ? o.rs : sn, k = n * 16;
+      a[k] = c; a[k + 1] = 0; a[k + 2] = -s; a[k + 3] = 0; a[k + 4] = 0; a[k + 5] = 1; a[k + 6] = 0; a[k + 7] = 0;
+      a[k + 8] = s; a[k + 9] = 0; a[k + 10] = c; a[k + 11] = 0; a[k + 12] = x; a[k + 13] = y; a[k + 14] = z; a[k + 15] = 1;
+      if (ca) { const v = o.opened ? 0.45 : 1; ca[n * 3] = v; ca[n * 3 + 1] = v; ca[n * 3 + 2] = v; }
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
+      n++;
+    }
+    P.n = n; P.dirty = false;
+    if (n) {
+      queueRange(P.mat, 0, n * 16);
+      if (ca) queueRange(P.col, 0, n * 3);
+      _vS.center.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+      _vS.radius = Math.sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0)) / 2;
+    }
+    for (let i = 0; i < P.parts.length; i++) {
+      const m = P.parts[i];
+      m.count = n; m.visible = n > 0;
+      if (n) { m.boundingSphere.center.copy(_vS.center); m.boundingSphere.radius = _vS.radius + m.userData.geoR; }
+    }
+  }
 }
 
 // ── SETTLE (Wave 7, lane 7C): never leave loot inside a wall or hovering over a hole ─────────────────────────────────────────────────
@@ -1047,14 +1223,14 @@ function lowerOnSlope(W, x, z, gy) {
 export function spawnItem(W, data, x, y, z, id) {
   id = id || "i" + (nextId++);
   if (items.has(id)) return id;
-  const group = itemMesh(W, data);
   let gy = Math.max(y, W.map.heightAt(x, z) + 0.15);
   const st = settle(W, x, gy, z, 0.15, 0.7);          // out of walls, off the stairwell hole (see SETTLE above)
   if (st.moved) { x = st.x; z = st.z; gy = Math.max(y, W.map.heightAt(x, z) + 0.15); }
   gy = lowerOnSlope(W, x, z, gy);
-  group.position.set(x, gy, z);
-  W.group("loot").add(group);
-  const it = { id, data, pos: { x, y: gy, z }, group, taken: false, blob: -1, ring: -1, beam: -1, glow: -1, ceil: Infinity };
+  // the model is an instance of its kind's pool (see INSTANCED LOOT MODELS); vis = inside the model cull (set by update)
+  const it = { id, data, pos: { x, y: gy, z }, taken: false, vis: true, vp: null, vi: -1, blob: -1, ring: -1, beam: -1, glow: -1, ceil: Infinity };
+  const P = itemPool(W, data);
+  if (P) visAdd(P, it);
   items.set(id, it);
   gridAdd("item", id, { x, z });
   it.blob = blobAlloc(W, it);
@@ -1091,7 +1267,6 @@ async function ensureChestProto(W) {
 
 function spawnChest(W, x, y, z) {
   const id = "c" + (nextId++);
-  const group = new THREE.Group();
   // The chest rests ON the surface under it (the highest floor at or just below its authored height, else the terrain). Every authoring
   // site passes surface + 0.6, so the old `y - 0.4` hung it 0.20 m over the grass (all 193-245 terrain chests per 5 seeds) and sank it
   // 0.10 m into a roof slab. Nothing within 0.9 m under it (a chest on a hull over the sea, a sky island) keeps the old formula.
@@ -1100,8 +1275,7 @@ function spawnChest(W, x, y, z) {
   const st = settle(W, x, restY(x, z), z, 0.55, 0.9);
   if (st.moved) { x = st.x; z = st.z; }
   const gy = restY(x, z);
-  group.position.set(x, gy, z);
-  group.rotation.y = (x * 13.7 + z * 7.3) % (Math.PI * 2); // varied facing
+  const ry = (x * 13.7 + z * 7.3) % (Math.PI * 2);          // varied facing (the census probes re-derive it from the position)
   // gold ring, light beam and glow so chests read from far away: three slots in the
   // shared instanced pools (no per-chest meshes, sprites or materials)
   fxInit();
@@ -1112,29 +1286,11 @@ function spawnChest(W, x, y, z) {
     beam = beamAlloc(x, _surf.floor, z, GOLD_HEX, CHEST_BEAM.h, CHEST_BEAM.r, CHEST_BEAM.gain, CHEST_BEAM.far, ceil);
     glow = glowAlloc(x, _surf.floor + 0.9, z, 3.2, GOLD_HEX, GLOW_GAIN);
   }
-  // keep a handle on the loaded model so update() can cull it by distance —
-  // chests.set below runs synchronously, long before this promise resolves.
-  ensureChestProto(W).then((proto) => {
-    if (!group.parent) return;
-    const m = proto.clone();
-    group.add(m);
-    const rec = chests.get(id);
-    if (rec) {
-      rec.model = m;
-      // the model's casters, toggled by distance in update(). They stay ON until
-      // the first update so the match warm-up frame links their depth variant.
-      const casters = [];
-      m.traverse((n) => {
-        if (!n.isMesh || !n.castShadow) return;
-        if (Array.isArray(n.material)) { n.castShadow = false; return; }   // (none in chest.glb; never via the shared material)
-        n.customDepthMaterial = chestDepthFor(n.material);
-        casters.push(n);
-      });
-      rec.casters = casters; rec.cast = true;
-    }
-  });
-  W.group("loot").add(group);
-  chests.set(id, { id, pos: { x, y: gy, z }, group, opened: false, glow, beam, ring, ringOn: true, ceil });
+  // the model: an instance of the chest pools (see INSTANCED LOOT MODELS). It starts in the casting "near" pool, so the match warm-up
+  // frame links the instanced depth variant; update() moves it by distance (on inside 45 m, off past 50 m) and culls it past the model cull.
+  const rec = { id, pos: { x, y: gy, z }, opened: false, glow, beam, ring, ringOn: true, ceil, rc: Math.cos(ry), rs: Math.sin(ry), vis: true, cast: true, vp: null, vi: -1 };
+  visAdd(chestPools(W)[1], rec);
+  chests.set(id, rec);
   gridAdd("chest", id, { x, z });
   return id;
 }
@@ -1233,7 +1389,7 @@ function openChest(W, a, id) {
   c.opened = true;
   if (FX.pools) { poolRelease(FX.pools.glows, c.glow); poolRelease(FX.pools.beams, c.beam); poolRelease(FX.pools.rings, c.ring); }
   c.glow = c.beam = c.ring = -1;
-  c.group.traverse((o) => { if (o.isMesh && o.material && o.material.color) { o.material = o.material.clone(); o.material.color.multiplyScalar(0.45); } });
+  if (c.vp) c.vp.dirty = true;                       // the opened chest is drawn dimmed (instance colour 0.45: what the cloned material's colour x 0.45 was)
   const rng = K.mulberry32((W.seed ^ 0xc4e57) + parseInt(id.slice(1), 10));
   const drops = K.rollChest(rng);
   let i = 0;
@@ -1250,7 +1406,7 @@ function openChest(W, a, id) {
  *  death-drop glow). It owns no GPU object of its own any more - everything per-item
  *  is a slot in a shared instanced pool - so nothing here needs disposing. */
 function releaseItem(it) {
-  if (it.group.parent) it.group.parent.remove(it.group);
+  visRemove(it);
   blobRelease(it);
   itemFxRelease(it);
 }
@@ -1551,14 +1707,12 @@ export function update(W, dt) {
     const dx = it.pos.x - cp.x, dy = it.pos.y - cp.y, dz = it.pos.z - cp.z;
     const d2 = dx * dx + dy * dy + dz * dz;
     const vis = d2 < cull2;
-    if (it.group.visible !== vis) { it.group.visible = vis; blobShow(it, vis); itemFxShow(it, vis); }
-    if (!vis || d2 > 90 * 90) continue;
-    it.group.rotation.y = bobT * 1.4;
-    it.group.position.y = it.pos.y + Math.sin(bobT * 2 + it.pos.x) * 0.08 + 0.08;
+    if (it.vis !== vis) { it.vis = vis; blobShow(it, vis); itemFxShow(it, vis); }   // (the model, bob and spin: visFrame below)
   }
   maybeSupplyDrop(W, dt);
 
   // chests: cull the model + ring by distance and hand the shadow back up close
+  const CP = CHEST_P;
   for (const c of chests.values()) {
     const cdx = c.pos.x - cp.x, cdy = c.pos.y - cp.y, cdz = c.pos.z - cp.z;
     const d2 = cdx * cdx + cdy * cdy + cdz * cdz;
@@ -1566,15 +1720,14 @@ export function update(W, dt) {
     // beam stay lit at any range (the shader fades them) — they are the beacon you
     // steer the glider toward, and hiding them would make chests unfindable on
     // descent. Their pulse is in the shader: nothing to animate here any more.
-    if (c.model) c.model.visible = d2 < cull2;
+    const vis = d2 < cull2;
+    if (c.vis !== vis) { c.vis = vis; if (c.vp) c.vp.dirty = true; }
     if (c.ring >= 0) {
       const ringOn = d2 < cull2;
       if (c.ringOn !== ringOn) { c.ringOn = ringOn; if (FX.pools) poolShow(FX.pools.rings, c.ring, ringOn); }
     }
-    if (c.casters) {
-      const cast = d2 < (c.cast ? CHEST_SHADOW_OFF2 : CHEST_SHADOW_R2);
-      if (c.cast !== cast) { c.cast = cast; for (let i = 0; i < c.casters.length; i++) c.casters[i].castShadow = cast; }
-    }
+    const cast = d2 < (c.cast ? CHEST_SHADOW_OFF2 : CHEST_SHADOW_R2);
+    if (c.cast !== cast && CP) { c.cast = cast; visRemove(c); visAdd(CP[cast ? 1 : 0], c); }
   }
   fxFrame(W, dt, cull);
 

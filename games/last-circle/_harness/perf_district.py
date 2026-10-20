@@ -10,7 +10,8 @@
     python _harness/perf_district.py --disk --plant extra-calls   # negative control: +60 draw calls planted (must exit 1)
     python _harness/perf_district.py --disk --plant extra-tris    # negative control: +820k triangles planted (must exit 1)
     python _harness/perf_district.py --disk --identical           # post-deploy (after moving common.LIVE_REV): the working copy must read the baseline's numbers (x1.000)
-    python _harness/perf_district.py --disk --phone               # the PHONE tier (Wave 7): a Pixel 7 context (915x412, DPR 2.625, touch, no pointer lock), same views and rows; gate.py runs it as INFORMATION
+    python _harness/perf_district.py --disk --phone               # the PHONE tier (Wave 7): a Pixel 7 context (915x412, DPR 2.625, touch, no pointer lock), same views and rows; Wave 7b: triangles <= x1.20 (not x1.25) on every map
+    python _harness/perf_district.py --disk --maps isla_viva,deepwood --seeds 1,7,31337   # Wave 7b: the themed maps' new towns against the live build: <= +40 calls, <= x1.25 triangles, drop view <= 450 calls
 
 For every map: ONE Chrome serves the baseline revision (git, through page routing) and ONE the candidate (the working copy, or --rev), each
 loads a standard match at --seed (7), lands, freezes the loop, and renders THREE fixed views through the game's own composer, exactly once,
@@ -51,13 +52,14 @@ GATE = "perf_district"
 DEFAULT_BASELINE = C.LIVE_REV            # the LIVE build (common.LIVE_REV, dd414cb2 = the Wave-7 release). After a deploy move common.LIVE_REV, nothing else
 CALLS_MAX_DELTA = 40
 TRIS_MAX_RATIO = 1.25
+TRIS_MAX_RATIO_PHONE = 1.20             # Wave 7b: the PHONE tier's triangle bar is x1.20 on EVERY map (tightened from x1.25: the Wave-7 completion build reads <= x0.874 on Savanna, the themed maps' new towns must stay inside x1.20)
 DROP_CALLS_MAX = 450
 IDENTICAL_CALLS = 10                    # --identical: the same build measured twice differs by up to 8 world calls (the drop / endgame views carry 0-8 random sprite draws; measured: dd414cb2 seed 1 twice, 227 vs 219) ...
 IDENTICAL_TRIS = 0.002                  # ... and by at most this share of triangles (18 of 2.2 M in the worst view seen)
 DROP_AT = {"ashgrid": "downtown", "isla_viva": "coco_village", "deepwood": "logging"}
 STREET = {"ashgrid": "outpost", "isla_viva": "coco_village", "deepwood": "lakeside"}
 VIEWS = ["drop", "street", "endgame"]
-VIEWSPEC = 2                            # bump when SPEC_JS changes (it names the cached baseline files)
+VIEWSPEC = 3                            # bump when SPEC_JS changes (it names the cached baseline files); 3 = Wave 7b: camera + focus pinned to the view while stepping
 PLANT_ROWS = {"extra-calls": {"calls-vs-baseline"}, "extra-tris": {"tris-vs-baseline"}}
 
 # Everything below runs in the page. One call = one view.
@@ -86,9 +88,26 @@ SPEC_JS = r"""([kind, opt]) => { const W = window.__LC__.W, M = W.map;
       for (const q of M.queryColliders(px, pz, 0.5, [])) if (px > q.minX && px < q.maxX && pz > q.minZ && pz < q.maxZ && py > q.minY && py < q.maxY) { inside = true; break; }
       if (!inside) break; py += 4; }
     spec = [px, py, pz, c.x, H(c.x, c.z) + 1.5, c.z, 70]; }
-  // the terrain's near ring follows W._camFocus (what city_probe.py did): put it under the camera
-  W._camFocus = { pos: { x: spec[0], y: 0, z: spec[2] } }; if (W.camera) W.camera.position.set(spec[0], 50, spec[2]);
+  // VIEWSPEC 3 (Wave 7b, lane B2): the per-frame updaters that follow the camera must see THIS view while the harness steps the frames before the draw:
+  // the terrain's near ring / foliage casters / shadow volume follow W._camFocus, loot.js's 150 m model cull follows W.camera.position. Until v2 this
+  // set W._camFocus once, and player.js updateCamera() rewrote it (W._camFocus = W.player) and moved the camera back behind the player on the first
+  // stepped frame, so every view was measured with the near ring and the loot cull of the PLAYER's landing spot (lane B1, 2026-10-18: Deepwood s1
+  // focus = Fire Watch for all three views; Isla Viva s31337 endgame +101 k triangles of floor-gun models 640 m from the view). Both are pinned for
+  // the stepped frames and released by VIEW_JS. The pinned focus inherits the player's fields (the HUD reads yaw / hp from it).
+  const cam = W.camera;
+  if (cam) { cam.position.set(spec[0], spec[1], spec[2]); for (const m of ['set', 'copy', 'lerp', 'add', 'sub']) cam.position[m] = function () { return this; }; }
+  const pin = Object.create(W.player || {}); pin.pos = { x: spec[0], y: spec[1], z: spec[2] };
+  Object.defineProperty(W, '_camFocus', { configurable: true, get: () => pin, set: () => {} });
+  window.__PD_PIN__ = true;
   return spec; }"""
+
+UNPIN_JS = r"""() => { const W = window.__LC__.W, cam = W.camera; if (!window.__PD_PIN__) return 0;
+  if (cam) for (const m of ['set', 'copy', 'lerp', 'add', 'sub']) delete cam.position[m];
+  delete W._camFocus; W._camFocus = W.player; window.__PD_PIN__ = false; return 1; }"""
+
+FOCUS_JS = r"""() => { const W = window.__LC__.W, f = W._camFocus, c = W.camera && W.camera.position;
+  return { focus: f && f.pos ? [Math.round(f.pos.x), Math.round(f.pos.z)] : null, cam: c ? [Math.round(c.x), Math.round(c.y), Math.round(c.z)] : null,
+           player: W.player && W.player.pos ? [Math.round(W.player.pos.x), Math.round(W.player.pos.z)] : null }; }"""
 
 VIEW_JS = r"""([kind, spec, opt]) => { const W = window.__LC__.W, k = W.kernel, cam = k.camera, r = k.renderer, sc = k.scene;
   const [px, py, pz, tx, ty, tz, fov] = spec;
@@ -153,7 +172,10 @@ def measure(args, label, map_id, rev, plant, save_png, seed=None, plant_n=None):
             spec = s.js(SPEC_JS, [kind, opt])
             s.step_frames(14, dt=1.0 / 20, render=False)
             s.step_frames(12, dt=1.0 / 20, render=False)
+            foc = s.js(FOCUS_JS)
+            s.js(UNPIN_JS)
             r = s.js(VIEW_JS, [kind, spec, opt])
+            r["focusAtDraw"] = foc
             png = r.pop("png", None)
             if png and save_png:
                 os.makedirs(C.SHOTS, exist_ok=True)
@@ -162,8 +184,8 @@ def measure(args, label, map_id, rev, plant, save_png, seed=None, plant_n=None):
                     fh.write(base64.b64decode(png.split(",", 1)[1]))
                 r["png"] = path
             res["views"][kind] = r
-            print("  [%s %s] %-7s world %4d calls %9d tris | with actors %4d calls %9d tris | programs %s geometries %s textures %s" % (
-                label, map_id, kind, r["calls"], r["tris"], r["callsAll"], r["trisAll"], r["programs"], r["geometries"], r["textures"]), flush=True)
+            print("  [%s %s] %-7s world %4d calls %9d tris | with actors %4d calls %9d tris | programs %s geometries %s textures %s | focus %s cam %s player %s" % (
+                label, map_id, kind, r["calls"], r["tris"], r["callsAll"], r["trisAll"], r["programs"], r["geometries"], r["textures"], foc.get("focus"), foc.get("cam"), foc.get("player")), flush=True)
         res["pageErrors"] = [e[1][:200] for e in s.page_errors][:3]
         res["failedRequests"] = len(s.failed)
         res["failedList"] = [str(x)[:220] for x in s.failed[:4]]
@@ -215,6 +237,7 @@ def main_fn(v0, args):
     if plant and not (args.disk or args.rev):
         raise C.EnvFailure("--plant needs --disk or --rev (the candidate is served through page routing)")
     maps = [m for m in args.maps.split(",") if m]
+    tris_max = TRIS_MAX_RATIO_PHONE if args.phone else TRIS_MAX_RATIO
     seeds = [int(x) for x in args.seeds.split(",") if x.strip()] if args.seeds else [args.seed]
     multi = len(seeds) > 1
     bases = [x.strip() for x in args.baseline.split(",") if x.strip()]         # one or more baseline revisions; the candidate is loaded ONCE per (map, seed) and judged against each
@@ -261,7 +284,7 @@ def main_fn(v0, args):
                 rows_t.append("%s %s -> %s (x%.3f)" % (kind, f(b["tris"]), f(c["tris"]), ratio))
                 if dc > CALLS_MAX_DELTA:
                     bad_c.append(kind)
-                if ratio > TRIS_MAX_RATIO:
+                if ratio > tris_max:
                     bad_t.append(kind)
                 if dc > w.get("calls", (-10 ** 9,))[0]:
                     w["calls"] = (dc, "%s %s" % (tag0, kind))
@@ -271,7 +294,7 @@ def main_fn(v0, args):
                     b["calls"], f(b["tris"]), b["callsAll"], c["calls"], f(c["tris"]), c["callsAll"], b["programs"], c["programs"], b["geometries"], c["geometries"], b["textures"], c["textures"], c.get("png", "")))
             if rows_c:
                 v.check("calls-vs-baseline [%s]" % tag, not bad_c, ("every view within +%d calls of the baseline: " % CALLS_MAX_DELTA if not bad_c else "over +%d calls in %s: " % (CALLS_MAX_DELTA, ", ".join(bad_c))) + "; ".join(rows_c), "<= +%d calls per view" % CALLS_MAX_DELTA)
-                v.check("tris-vs-baseline [%s]" % tag, not bad_t, ("every view within x%.2f triangles of the baseline: " % TRIS_MAX_RATIO if not bad_t else "over x%.2f triangles in %s: " % (TRIS_MAX_RATIO, ", ".join(bad_t))) + "; ".join(rows_t), "<= x%.2f triangles per view" % TRIS_MAX_RATIO)
+                v.check("tris-vs-baseline [%s]" % tag, not bad_t, ("every view within x%.2f triangles of the baseline: " % tris_max if not bad_t else "over x%.2f triangles in %s: " % (tris_max, ", ".join(bad_t))) + "; ".join(rows_t), "<= x%.2f triangles per view" % tris_max)
             if args.identical:
                 # the post-deploy baseline check: the working copy IS the baseline build (gate.py --post-deploy, after common.LIVE_REV moved to the deployed commit)
                 diffs = []
@@ -294,7 +317,7 @@ def main_fn(v0, args):
         if w:
             # the margin the bars leave over every map x seed of the run (information: the rows above are the verdict)
             v0.info("worst margins over %d map x seed runs vs %s" % (len(maps) * len(seeds), bsha[:8]), "most calls over the baseline: %+d (%s; bar +%d) | highest triangle ratio: x%.3f (%s; bar x%.2f) | highest drop view with actors: %d calls (%s; bar %d)" % (
-                w.get("calls", (0, "-"))[0], w.get("calls", (0, "-"))[1], CALLS_MAX_DELTA, w.get("tris", (0, "-"))[0], w.get("tris", (0, "-"))[1], TRIS_MAX_RATIO,
+                w.get("calls", (0, "-"))[0], w.get("calls", (0, "-"))[1], CALLS_MAX_DELTA, w.get("tris", (0, "-"))[0], w.get("tris", (0, "-"))[1], tris_max,
                 w.get("drop", (0, "-"))[0], w.get("drop", (0, "-"))[1], DROP_CALLS_MAX))
 
 

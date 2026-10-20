@@ -70,6 +70,9 @@ SEEDS = "1,7,1234,31337,2026"
 EXPECTED_KINDS = {"isla_viva": ["palm", "tree", "bush", "rocks", "car", "barrel"],
                   "ashgrid": ["tree", "bush", "rocks", "car", "container", "barrel"],
                   "deepwood": ["birch", "pine", "bush", "rocks", "car"]}
+# Wave 7b (lane B2): a kind the world may legitimately NOT place. Isla Viva's old barrels came from Palm Bay's "depot" town() signature; the resort towns of Wave 7b are towngen layouts and carry none.
+# A kind listed here is still judged by every row when >= 5 are present; only its absence is not a could-not-judge (printed as information).
+OPTIONAL_KINDS = {"isla_viva": ("barrel",)}
 # thresholds: plan section 4, re-measured on 7f6a9fb2 (see REPORT.md of lane 5D and the README rows)
 OFFSET_MAX = 0.5
 ROCK_HOVER_MAX = 0.05
@@ -83,6 +86,14 @@ EDGE_SHARE_MAX = 0.01       # base-edges: share of a plan generator's grounded s
 PAD_FLAT = 0.02             # a pad is flat when the ground under it varies by <= 0.02 m
 PADS_GATING = True          # lane 6E decision on 6A's final numbers (see REPORT / README): False leaves the pads row information
 EDGE_GENS = ("house", "hut", "tower", "rangerTower", "waterTower", "steeple", "lighthouse", "farmland")
+# Wave 7b (lane B2): base-edges judges EVERY generator with >= 5 grounded structures (the Wave-6 plan list above plus the ones the themed towns add: buildCrater, ruinHouse, dock and bridge builders ...),
+# except the cosmetic ones named here (a fence board follows the ground at its two ends and floats up to 0.99 m in between by design). A list of names would have let lane B1's crater village (33 % of 60
+# structures up to 1.29 m over the ground) pass unjudged: it was an INFORMATION line.
+EDGE_EXEMPT = ("addFenceBoard", "?")
+
+
+def edge_judged(gen):
+    return gen in EDGE_GENS or gen not in EDGE_EXEMPT
 COLTOP_MISS_MAX = 0.05
 CHEST_GAP_P50 = 0.05
 CHEST_GAP_MAX = 0.10
@@ -168,13 +179,15 @@ def judge(v, doc, args, plant_rows):
         return v.check(name, ok, detail, expect)
 
     # 0. the census itself
-    missing = []
+    missing, optional_absent = [], []
     for m, kinds in EXPECTED_KINDS.items():
         if m not in S:
             continue
         for k in kinds:
             if k not in S[m]["props"] or S[m]["props"][k]["n"] < 5:
-                missing.append("%s:%s" % (m, k))
+                (optional_absent if k in OPTIONAL_KINDS.get(m, ()) else missing).append("%s:%s" % (m, k))
+    if optional_absent:
+        v.info("census: optional prop kinds not placed in this world (Wave 7b)", ", ".join(optional_absent) + " (fewer than 5 instances: no row can judge them; judged when present)")
     if doc.get("lootNote"):
         v.cnj("census: loot.js", doc["lootNote"])
     for m in S:
@@ -307,17 +320,18 @@ def judge(v, doc, args, plant_rows):
     bad = []
     for m in S:
         for e in S[m]["grounded"]:
-            if e["gen"] in EDGE_GENS and e["n"] >= 5 and (e["edgeGt10Share"] or 0) > EDGE_SHARE_MAX:
+            if edge_judged(e["gen"]) and e["n"] >= 5 and (e["edgeGt10Share"] or 0) > EDGE_SHARE_MAX:
                 bad.append("%s %s %s%% of %d (p50 %s, max %s)" % (m, e["gen"], f(100 * e["edgeGt10Share"], 0), e["n"], f(e["edgeP50"], 2), f(e["edgeMax"], 2)))
-    judged = sum(e["n"] for m in S for e in S[m]["grounded"] if e["gen"] in EDGE_GENS and e["n"] >= 5)
-    chk("base-edges", not bad and judged > 0, ("grounded structure base edges <= 0.10 m over the ground (%d structures of %s)" % (judged, "/".join(EDGE_GENS[:3]) + "...")) if not bad else " | ".join(bad), "<= %d %% per generator" % (100 * EDGE_SHARE_MAX), wave6_row=True)
+    judged = sum(e["n"] for m in S for e in S[m]["grounded"] if edge_judged(e["gen"]) and e["n"] >= 5)
+    judged_gens = sorted({e["gen"] for m in S for e in S[m]["grounded"] if edge_judged(e["gen"]) and e["n"] >= 5})
+    chk("base-edges", not bad and judged > 0, ("grounded structure base edges <= 0.10 m over the ground (%d structures of %d generators: %s)" % (judged, len(judged_gens), "/".join(judged_gens[:10]) + ("..." if len(judged_gens) > 10 else ""))) if not bad else " | ".join(bad), "<= %d %% per generator" % (100 * EDGE_SHARE_MAX), wave6_row=True)
     oth = []
     for m in S:
         for e in S[m]["grounded"]:
-            if e["gen"] not in EDGE_GENS and e["n"] >= 1 and (e["edgeGt10Share"] or 0) > 0:
+            if not (edge_judged(e["gen"]) and e["n"] >= 5) and e["n"] >= 1 and (e["edgeGt10Share"] or 0) > 0:
                 oth.append("%s %s %s%% of %d (max %s%s)" % (m, e["gen"], f(100 * e["edgeGt10Share"], 1), e["n"], f(e["edgeMax"], 2), (" e.g. seed %s at %s,%s" % (e["worst"][0]["seed"], f(e["worst"][0]["x"], 0), f(e["worst"][0]["z"], 0))) if e.get("worst") else ""))
     if oth:
-        v.info("base-edges, other generators (not judged by the plan row)", " | ".join(oth))
+        v.info("base-edges, other generators (not judged: exempt, or fewer than 5)", " | ".join(oth))
     d = ["%s min %s (%d < 1.85 capsule, %d < 2.0)" % (m, f(S[m]["doors"]["minClear"], 2), S[m]["doors"]["ltCapsule"], S[m]["doors"]["lt20"]) for m in S if S[m]["doors"]["lt20"]]
     chk("doorway-clearance", not d, "every doorway >= 2.0 m: min " + per_map(lambda s: "%s over %d doorways" % (f(s["doors"]["minClear"], 2), s["doors"]["n"])) if not d else " | ".join(d), ">= 2.0 m", wave6_row=True)
     d = ["%s %d of %d starts > 0.55 m (max %s)" % (m, S[m]["ramps"]["stepGt055"], S[m]["ramps"]["n"], f(S[m]["ramps"]["stepMax"], 2)) for m in S if S[m]["ramps"]["stepGt055"]]

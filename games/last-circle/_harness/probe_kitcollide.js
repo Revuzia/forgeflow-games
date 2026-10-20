@@ -393,26 +393,36 @@ for (const id of ids) {
 // ----------------------------------------- census (how often the map places each type) -----------------------------------------
 let census = null;
 if (args.census) {
-  const seeds = String(args.census).split(",").filter(Boolean).map(Number), mapId = String(args["census-map"] || "ashgrid");
+  // Wave 7b (lane B2): --census-maps ashgrid,isla_viva,deepwood weighs the types by what EVERY listed map places (the kit is placed on all three maps in Wave 7b); --census-map X is the old single-map form.
+  const seeds = String(args.census).split(",").filter(Boolean).map(Number), mapIds = String(args["census-maps"] || args["census-map"] || "ashgrid").split(",").filter(Boolean);
   try {
     const { makeEnv } = await import(pathToFileURL(path.join(HERE, "world_env.mjs")).href);
     const E = await makeEnv({ root: ROOT, vendor: args.vendor });
     const { buildMap } = await E.importMaps();
-    census = { map: mapId, seeds: {}, counts: {}, entries: 0, boxesMan: 0, boxesShip: 0 };
-    for (const seed of seeds) {
-      const M = await buildMap(E.makeW(seed), mapId);
-      const kit = (M.city && M.city.kit) || [];
-      const c = { entries: kit.length, byType: {}, boxesMan: 0, boxesShip: 0, builtColliders: M.colliders ? M.colliders.length : null };
-      for (const it of kit) {
-        c.byType[it.type] = (c.byType[it.type] || 0) + 1;
-        const t = manifest.types[it.type];
-        if (t) c.boxesMan += t.colliders.length;
-        if (CK && CK.hasType(it.type)) c.boxesShip += CK.localBoxes(it.type).length;
-        census.counts[it.type] = (census.counts[it.type] || 0) + 1;
+    census = { map: mapIds.join(","), maps: mapIds, seeds: {}, counts: {}, entries: 0, boxesMan: 0, boxesShip: 0, byMap: {} };
+    for (const mapId of mapIds) {
+      const bm = census.byMap[mapId] = { seeds: {}, counts: {}, entries: 0, boxesMan: 0, boxesShip: 0, hasCity: 0 };
+      for (const seed of seeds) {
+        const M = await buildMap(E.makeW(seed), mapId);
+        const kit = (M.city && M.city.kit) || [];
+        const c = { entries: kit.length, byType: {}, boxesMan: 0, boxesShip: 0, builtColliders: M.colliders ? M.colliders.length : null, hasCity: !!M.city };
+        if (M.city) bm.hasCity++;
+        for (const it of kit) {
+          c.byType[it.type] = (c.byType[it.type] || 0) + 1;
+          const t = manifest.types[it.type];
+          if (t) c.boxesMan += t.colliders.length;
+          if (CK && CK.hasType(it.type)) c.boxesShip += CK.localBoxes(it.type).length;
+          census.counts[it.type] = (census.counts[it.type] || 0) + 1;
+          bm.counts[it.type] = (bm.counts[it.type] || 0) + 1;
+        }
+        census.entries += c.entries; census.boxesMan += c.boxesMan; census.boxesShip += c.boxesShip;
+        bm.entries += c.entries; bm.boxesMan += c.boxesMan; bm.boxesShip += c.boxesShip;
+        census.seeds[mapIds.length > 1 ? mapId + ":" + seed : seed] = c;
+        bm.seeds[seed] = c;
+        process.stderr.write(`census ${mapId} seed ${seed}: ${c.entries} kit entries, ${c.boxesMan} manifest boxes, ${c.boxesShip} shipped boxes
+`);
+        try { if (typeof M.dispose === "function") M.dispose(); } catch (e) { /* the Node stub has nothing to free */ }
       }
-      census.entries += c.entries; census.boxesMan += c.boxesMan; census.boxesShip += c.boxesShip;
-      census.seeds[seed] = c;
-      process.stderr.write(`census ${mapId} seed ${seed}: ${c.entries} kit entries, ${c.boxesMan} manifest boxes, ${c.boxesShip} shipped boxes\n`);
     }
   } catch (e) { census = { error: String(e && e.stack || e).slice(0, 600) }; }
 }

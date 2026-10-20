@@ -947,8 +947,14 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   let pj = null;
   try { pj = require("fs").readFileSync(require("path").join(__dirname, "..", "3d", "royale", "player.js"), "utf8"); } catch (e) { /* outside the repo: skip the source pin */ }
   if (pj) {
-    ok(/supportIn\(W, cols, a\.pos\.x, a\.pos\.z, K\.supportProbeY\(feetY0, a\.pos\.y\)\)/.test(pj), "floor probe: player.js stepActor's support test probes from K.supportProbeY(feet before, feet after)");
-    ok(/const yd = isMove \? Math\.max\(y, supportIn\(W, cols, x, z, y\)\) : y;/.test(pj), "floor probe: player.js blockedIn still reads its floor from the feet before the tick");
+    // Wave 7b (lane S1, the allocation round): the mover passes its numbers through the MV Float64Array (a call V8 does not inline boxes
+    // every double argument), so the pins read the MV form: the support probe height is supportProbeY's own expression (y0 > y1 ? y0 : y1,
+    // checked equal to K.supportProbeY above) written into MV[4] right before supportF, and blockedF's floor is max(feet before, support).
+    ok(/MV\[2\] = a\.pos\.x; MV\[3\] = a\.pos\.z; MV\[4\] = feetY0 > a\.pos\.y \? feetY0 : a\.pos\.y;[^\n]*\n\s*supportF\(W, cols\);/.test(pj) &&
+       [[5, 4], [4, 5], [5, 5], [NaN, 3], [3, NaN]].every(([p, q]) => Object.is(p > q ? p : q, newProbe(p, q))),
+       "floor probe: player.js stepActor's support test probes from K.supportProbeY(feet before, feet after) (inlined into MV[4])");
+    ok(/let yd = y;\s*if \(isMove\) \{ supportF\(W, cols\); yd = Math\.max\(y, MV\[6\]\); \}/.test(pj) && /const x0 = MV\[0\], z0 = MV\[1\], x = MV\[2\], z = MV\[3\], y = MV\[4\], h = MV\[5\];/.test(pj),
+       "floor probe: player.js blockedIn (blockedF) still reads its floor from the feet before the tick");
   } else console.log("  INFO  player.js not found next to this file: source pins skipped");
 }
 

@@ -25,7 +25,10 @@ rotated-wall rows come from the Node census (placement_census.mjs: every box map
   container-lean (L4-gates 2026-10-13) containers, level (< 1.5 deg off vertical) and leaned (>= 1.5 deg: maps.js lays a container on a slope at
                  up to 8 deg while its collider stays level) apart: clip p95 <= 0.10 m and > 25 cm in < 5 % in each group on every map. The all-kind
                  clip row has the same limits; this row names the leaned minority so it cannot hide in an all-instance p95 (Wave 5 release: ashgrid
-                 containers p95 0.15 m, 6 of 64 container sprints end inside)
+                 containers p95 0.15 m, 6 of 64 container sprints end inside). PER MAP since Wave 7b stage B (lane S3): a map in --lean-optional-maps
+                 (default isla_viva,deepwood: no prop containers there, the yard is Savanna's) may measure none (information); any other map of the run
+                 measuring < 5 containers makes the row could-not-judge ("container-lean required maps"). An all-optional run (Isla Viva alone) prints
+                 the row as not applicable instead of could-not-judge, so Isla Viva can join collisioncheck_seeds
   sprints-rocks  (L4-gates 2026-10-13) real sprints into ROCKS end > 10 cm inside the drawn mesh in <= 1 % of runs (192 runs: at most 1). The 2 % bar of
                  the sprints row is over all kinds, so it hid the rocks. A point the convex hull flags counts only when the DRAWN triangles confirm it (a rock is
                  not convex: standing on a low shoulder of a cluster, or crossing an open angle of its hull, read 0.4-0.8 m "inside" with no drawn solid under the
@@ -106,6 +109,14 @@ PLANTS = {"container-narrow": {"container-lean"}, "rocks-small": {"sprints-rocks
 PLANT_KIND = {"container-narrow": "container", "rocks-small": "rocks"}
 PLANT_SKIP = "doors,walls,ramps,falls"       # a plant run needs props + live only
 PLANT_MAPS = "ashgrid"                       # containers and rocks are both plentiful there
+LEAN_OPTIONAL = "isla_viva,deepwood"         # container-lean: maps that place NO prop containers (the container yard is Savanna's; Wave 7b stage B, lane S3). A map listed here with no container is
+                                             # information; any other map of the run must measure >= MIN_KIND_N containers or the row is could-not-judge. "none" = every map required
+
+
+def lean_optional(args):
+    raw = getattr(args, "lean_optional_maps", None)
+    raw = LEAN_OPTIONAL if raw is None else raw
+    return set() if raw.strip().lower() in ("", "none") else set(x for x in raw.split(",") if x)
 
 
 def f(v, nd=3):
@@ -262,10 +273,17 @@ def judge(v, per_map, rot, args):
         v.info("per kind clip / gap", " ;; ".join(rows))
 
     # ---- container-lean: the container clip, level and leaned instances apart (the all-kind clip row has the same limits)
-    lean_rows, lean_bad, lean_seen, lean_n = [], [], 0, 0
+    # Wave 7b stage B (lane S3): the requirement is PER MAP. A map in --lean-optional-maps (default LEAN_OPTIONAL: Isla Viva and Deepwood, which place no prop
+    # containers - the container yard is Savanna's) may have none: it is printed as information. Every other map in the run MUST measure >= MIN_KIND_N
+    # containers with a lean split, or the row is could-not-judge naming it (until 2026-10-19 the row passed when ANY map of the run had containers, and a
+    # run of Isla Viva alone was could-not-judge on every seed, which kept Isla Viva out of collisioncheck_seeds)
+    optional = lean_optional(args)
+    lean_rows, lean_bad, lean_seen, lean_n, lean_missing, lean_absent_ok = [], [], 0, 0, [], []
     for m in maps:
         k = ((per_map[m].get("props") or {}).get("kinds") or {}).get("container")
         if not k or k["measured"] < MIN_KIND_N or not k.get("lean"):
+            got = 0 if not k else k["measured"]
+            (lean_absent_ok if m in optional else lean_missing).append("%s (%d containers measured)" % (m, got))
             continue
         lean_seen += 1
         for tag in ("level", "leaned"):
@@ -278,12 +296,19 @@ def judge(v, per_map, rot, args):
             if (g["p95"] or 0) > CLIP_P95 or (g["over25"] or 0) >= CLIP25_MAX:
                 lean_bad.append("%s %s containers (n %d%s): clip p95 %s m, max %s m, %s%% > 25 cm; worst %s" % (m, tag, g["n"], (", up to %s deg off vertical" % f(g["maxTilt"], 1)) if tag == "leaned" else "",
                                  f(g["p95"], 2), f(g["max"], 2), f(100 * (g["over25"] or 0), 0), json.dumps(g.get("worst"))[:160]))
+    if lean_absent_ok:
+        v.info("container-lean optional maps", "no container measured, allowed on %s (--lean-optional-maps %s)" % (", ".join(lean_absent_ok), ",".join(sorted(optional)) or "none"))
     if lean_seen:
         v.check("container-lean", not lean_bad, ("container clip into the drawn body <= %.2f m at p95, < 5%% over 25 cm, level and leaned apart, %d maps; %d containers lean >= %.1f deg" % (CLIP_P95, lean_seen, lean_n, LEAN_MIN_DEG)) if not lean_bad else " | ".join(lean_bad),
                 "p95 <= 0.10 m, > 25 cm in < 5 %, level and leaned")
         v.info("container clip by lean", " ;; ".join(lean_rows))
-    else:
-        v.cnj("container-lean", "no container with a lean split was measured (>= %d containers on a map needed)" % MIN_KIND_N)
+    if lean_missing:
+        v.cnj("container-lean required maps", "a map that must place containers measured fewer than %d: %s (optional maps: %s)" % (MIN_KIND_N, ", ".join(lean_missing), ",".join(sorted(optional)) or "none"))
+    elif not lean_seen:
+        if lean_absent_ok:
+            v.info("container-lean", "not applicable: every map of this run is optional and places no container (%s)" % ", ".join(lean_absent_ok))
+        else:
+            v.cnj("container-lean", "no container with a lean split was measured (>= %d containers on a map needed)" % MIN_KIND_N)
 
     # ---- sprints / phantom / bullets
     runs = inside = 0
@@ -472,6 +497,7 @@ def main():
     ap.add_argument("--quick", action="store_true", help="fewer instances / runs per section (development)")
     ap.add_argument("--skip", default="", help="comma list of sections to skip: props,live,doors,walls,ramps,falls")
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANTS)))
+    ap.add_argument("--lean-optional-maps", default=None, help="container-lean: maps allowed to place no container (default %s; 'none' = every map of the run must measure containers)" % LEAN_OPTIONAL)
     args = ap.parse_args()
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)
 

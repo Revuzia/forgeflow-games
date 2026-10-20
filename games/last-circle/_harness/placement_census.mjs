@@ -856,7 +856,7 @@ function summarise(results) {
 
 // ── --mode city (lane 6E, Wave 6): the Node half of citycheck.py ───────────────────────────────────────────────────
 //   node placement_census.mjs --mode city --root <game dir> --vendor <three vendor dir> --maps ashgrid --seeds 7,1,2 --out city.json
-//        [--legacy-seeds 7,1234] [--grid 4] [--buildings] [--towngen]
+//        [--legacy-seeds 7,1234] [--grid 4] [--buildings] [--towngen] [--city-plant wet-street]   (Wave 7b: --city-plant forces 10 layout street samples wet, the town-roads-dry control)
 // Builds each (map, seed) with the UNMODIFIED maps.js and runs probe_city.js's measure() on the BUILT map: enterable buildings (the pinned
 // door-checked detector), land distance to them, town-road wetness, per-town enterable counts, the endgame cover counts. The same function
 // runs in the page (citycheck.py's live half), so a mismatch between the two is a harness defect, not a game one. Nothing is written but --out.
@@ -875,7 +875,7 @@ async function cityMode() {
     try { M = await buildMap(W, mapId); } finally { console.warn = warn; }
     let roadMesh = null;
     W.group("map").traverse((o) => { if (o.name === "roads") roadMesh = o; });
-    const rec = API.measure(M, { SIM, seed, mapId, roadMesh, grid, legacy: legacySeeds.has(seed), withBuildings: !!args.buildings });
+    const rec = API.measure(M, { SIM, seed, mapId, roadMesh, grid, legacy: legacySeeds.has(seed), withBuildings: !!args.buildings, plant: args["city-plant"] || null });
     rec.buildMs = Date.now() - t1 - rec.ms;
     rows.push(rec);
     try { if (typeof M.dispose === "function") M.dispose(); } catch (e) { /* ignore */ }

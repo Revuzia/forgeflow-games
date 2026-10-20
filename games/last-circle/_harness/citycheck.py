@@ -3,6 +3,7 @@
 
     python _harness/citycheck.py --disk                       # Wave 6: INFORMATION - prints the table, exit 0 when measured, 2 when not
     python _harness/citycheck.py --disk --blocking            # Wave 7: the rows gate (exit 1 on a failed row)
+    python _harness/citycheck.py --disk --blocking --block-maps all   # Wave 7b: all three maps gate (also: a comma list; the default is ashgrid)
     python _harness/citycheck.py --rev bd523284 --blocking    # the must-fail proof: the Wave-5 release has no towns (exit 1)
     python _harness/citycheck.py --disk --quick               # 30 seeds instead of 200, no Chrome
     python _harness/citycheck.py --disk --towngen             # forecast: lane 6B's towngen.js scored against the same targets (Node)
@@ -27,8 +28,13 @@ Rows (plan section 4, per map; coverage rows judged on the COVER seeds, the rest
   town-enterables      every named town >= 6 enterable buildings on every seed                    (HEAD Container Yard, Rubble Row, Banana Farm, Ranger Ridge, Hunter's Hollow, Fire Watch: 0)
   endgame-cover        the area of the last two circles (r 31.4 m) holds >= 10 static cover pieces on >= 90 % of seeds   (HEAD median 0 / 5 / 0 = ashgrid / isla_viva / deepwood; the 9.4 m final circle alone: median 0)
   detector-parity      the live game's probe equals the Node replay for the same (map, seed)       (a harness-integrity row)
+  compounds-placed     (Wave 7b) every seed lays out >= COMPOUND_MIN[map] compounds (75 % of towngen PLANS: 24 / 6 / 27)      (live Isla Viva / Deepwood: no layout at all = 0)
+  compounds-enterable  (Wave 7b) >= 95 % of all compounds hold >= 2 enterable buildings by the pinned detector (PUBG: compounds of 2-6 buildings)
+  endgame-final-c8     (Wave 7b, INFORMATION) the strict 9.4 m final circle (c8): median cover pieces and the share of seeds with >= 10
 INFORMATION mode (the Wave-6 default) prints every row as "would PASS / would FAIL" and never exits 1: in Wave 6 no town exists in the live
-game, so the coverage rows are EXPECTED to fail on the working copy. --blocking (Wave 7) makes them gate on --block-maps (default ashgrid).
+game, so the coverage rows are EXPECTED to fail on the working copy. --blocking (Wave 7) makes them gate on --block-maps (default ashgrid; Wave 7b: `all` or a list).
+Wave 7b changes of definition (README "Wave-7b gates"): town-enterables judges the NAMED TOWNS of TOWN_TABLE on the themed maps (the other POIs - a wreck, temples, a farm,
+a watchtower - print as information); town-roads-dry also judges towngen's own streets (rec.roads.layout, sampled on the final ground); --city-plant wet-street is its control.
 
 --towngen scores lane 6B's runtime/3d/royale/towngen.js (Node, the real heightAt of each built map) as a pre-wiring forecast: the same rows
 on (enterable buildings of the current map outside the replaced towns) + (enterable parcels the generator emits).
@@ -63,6 +69,18 @@ TOWN_MIN = 6
 ENDGAME_MIN = 10
 ENDGAME_SEED_SHARE = 0.90
 PARITY_TOL = 0.02
+# Wave 7b (lane B2): the named towns whose enterable count gates `town-enterables` (plan section 4: "every named town >= 6 enterable buildings"). Savanna: every POI (the Wave-7 rule,
+# unchanged). The themed maps: the TOWNS and the endgame village (Isla Viva: Palm Bay, Coco Village, Jungle Market, Lagoon Docks + Volcano Rim = the crater-rim village; Deepwood: Logging
+# Camp, Ranger Ridge, Lakeside Cabins, Hunter's Hollow, Old Quarry, Riverside Mill = the mill compound). The rest of each map's POIs (Shipwreck Cove, Cliff Temples, Banana Farm; Fire Watch,
+# Meadow Farm: a wreck, ruins, farmland, a watchtower, farmland) stay on an INFORMATION line with their counts.
+TOWN_TABLE = {
+    "isla_viva": ("palm_bay", "coco_village", "jungle_market", "lagoon_docks", "volcano_rim"),
+    "deepwood": ("logging", "ranger", "lakeside", "hollow", "quarry", "mill"),
+}
+COMPOUND_MIN = {"ashgrid": 24, "isla_viva": 6, "deepwood": 27}      # 75 % of towngen PLANS[map].compounds.count (30 / 8 / 36): a seed whose dry land cannot hold them all is allowed to lose a quarter
+COMPOUND_BUILDINGS = 2                                              # a compound holds >= 2 enterable buildings (PUBG: compounds "with 2 to 6 buildings")
+COMPOUND_SHARE = 0.95                                               # ... for >= 95 % of all compounds over all seeds
+PLANT_ROWS = {"wet-street": {"town-roads-dry"}}
 ENDGAME_NOTE = ("the plan's HEAD figure (final circle median 0) measured the 9.4 m final circle itself; 10 pieces inside a 277 m2 disc is out of reach of any layout "
                 "with 56 m blocks, so the row measures the area the last two circles span (circle -2, r 31.4 m) with the plan's bar unchanged; the strict figure stays an INFO line")
 
@@ -137,6 +155,28 @@ def node_tasks(root, vendor, maps, seeds_by_map, legacy_seeds, jobs, timeout, ch
 
 
 # ───────────────────────────── the Chrome half ─────────────────────────────
+def tree_state(root):
+    """(path, size, mtime) of every runtime / asset-table file the worlds are built from: the Node half and the Chrome half must measure the SAME tree
+    (Wave 7b: another lane editing maps.js between the two halves read as a detector-parity FAIL; it is an environment condition, could-not-judge)."""
+    out = {}
+    for sub in ("runtime", os.path.join("assets", "props")):
+        base = os.path.join(root, sub)
+        for dp, _dn, fns in os.walk(base):
+            for fn in fns:
+                if fn.endswith((".js", ".mjs", ".json")):
+                    fp = os.path.join(dp, fn)
+                    try:
+                        st = os.stat(fp)
+                    except OSError:
+                        continue
+                    out[os.path.relpath(fp, root)] = (st.st_size, int(st.st_mtime))
+    return out
+
+
+def tree_changed(before, after):
+    return sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
+
+
 def live_record(args, map_id, seed, src):
     a = copy.copy(args)
     a.disk = bool(args.disk or args.rev)
@@ -172,13 +212,17 @@ def same_buildings(a, b):
 class Rows:
     """INFORMATION mode (Wave 6): every row is printed "would PASS / would FAIL" and never gates. --blocking: the rows gate (on --block-maps)."""
 
-    def __init__(self, v, blocking, block_maps):
+    def __init__(self, v, blocking, block_maps, only=None):
         self.v, self.blocking, self.block_maps = v, blocking, set(block_maps)
+        self.only = only                      # a --city-plant run: only the named rows count (the others print as information)
         self.state = {}
 
     def row(self, name, ok, detail, expect=None, map_id=None):
         key = name if map_id is None else "%s [%s]" % (name, map_id)
         self.state[key] = ok
+        if self.only is not None and name not in self.only:
+            self.v.info("%s (not counted in plant mode)" % key, detail)
+            return ok
         gating = self.blocking and (map_id is None or map_id in self.block_maps)
         if gating:
             return self.v.check(key, ok, detail, expect)
@@ -218,12 +262,22 @@ def judge(v, R, rows, maps, cover_seeds, args):
                   "median <= %d m and p90 <= %d m" % (MEDIAN_MAX, P90_MAX), m)
             bad = [r for r in cov if (r["cover"]["gt150"] or 0) > FAR150_MAX]
             R.row("land-far150", not bad, "land more than 150 m away: " + "; ".join("s%d %s%%" % (r["seed"], f(100 * (r["cover"]["gt150"] or 0))) for r in cov), "<= %d %%" % (100 * FAR150_MAX), m)
-        # ---- town roads ----
+        # ---- town roads: the road mesh (the legacy rule) AND towngen's own streets (Wave 7b: rec.roads.layout) ----
         wet_map = any(r["waterY"] > -100 for r in seeds.values())
-        if not wet_map:
-            v.info("town-roads-dry [%s]" % m, "no water on this map")
+        lay = {s: r["roads"].get("layout") or {} for s, r in seeds.items()}
+        lay_wet = sorted(s for s, l in lay.items() if l.get("wet", 0) > 0)
+        lay_tot = sum(l.get("wet", 0) for l in lay.values())
+        lay_by = {}
+        for l in lay.values():
+            for pid, n in (l.get("wetByTown") or {}).items():
+                lay_by[pid] = lay_by.get(pid, 0) + 1
+        lay_seeds = sum(1 for l in lay.values() if l.get("layout"))
+        if lay_seeds:
+            S[m]["roadsWetLayout"] = {"seedsWet": len(lay_wet), "vertsWet": lay_tot, "bySeedsPerTown": lay_by, "seedsWithLayout": lay_seeds}
+        if not wet_map and not lay_wet:
+            v.info("town-roads-dry [%s]" % m, "no water on this map%s" % ((" (towngen's streets: %d samples on %d seeds, 0 wet)" % (sum(l.get("verts", 0) for l in lay.values()), lay_seeds)) if lay_seeds else ""))
         else:
-            nomesh = [s for s, r in seeds.items() if not r["roads"]["meshFound"]]
+            nomesh = [s for s, r in seeds.items() if not r["roads"]["meshFound"]] if wet_map else []
             if nomesh:
                 R.row("town-roads-dry", None, "no road mesh found on %d of %d seeds (the 'roads' mesh is where the ribbon lives)" % (len(nomesh), len(seeds)), None, m)
             else:
@@ -234,9 +288,15 @@ def judge(v, R, rows, maps, cover_seeds, args):
                     for pid, n in r["roads"]["wetByPoi"].items():
                         bypoi[pid] = bypoi.get(pid, 0) + 1
                 S[m]["roadsWet"] = {"seedsWet": len(wetseeds), "vertsWet": tot, "bySeedsPerPoi": bypoi}
-                R.row("town-roads-dry", not wetseeds, ("0 town road vertices below waterY on %d seeds (%d town vertices on seed %s)" % (len(seeds), next(iter(seeds.values()))["roads"]["townVerts"], min(seeds))) if not wetseeds else
-                      "%d wet town road vertices on %d of %d seeds (%s%%); seeds with a wet street per town: %s" % (tot, len(wetseeds), len(seeds), f(100 * len(wetseeds) / len(seeds)), ", ".join("%s %d" % (k, n) for k, n in sorted(bypoi.items(), key=lambda kv: -kv[1]))),
+                ok = not wetseeds and not lay_wet
+                lay_txt = (" | towngen's streets: %d samples on %d seeds with a layout, %s" % (sum(l.get("verts", 0) for l in lay.values()), lay_seeds, "0 wet" if not lay_wet else
+                           "%d wet on %d seeds (%s)" % (lay_tot, len(lay_wet), ", ".join("%s %d" % (k, n) for k, n in sorted(lay_by.items(), key=lambda kv: -kv[1]))))) if lay_seeds else " | no towngen layout on this build (the road mesh is all there is)"
+                R.row("town-roads-dry", ok, (("road mesh: 0 town road vertices below waterY on %d seeds (%d town vertices on seed %s)" % (len(seeds), next(iter(seeds.values()))["roads"]["townVerts"], min(seeds))) if not wetseeds else
+                      "road mesh: %d wet town road vertices on %d of %d seeds (%s%%); seeds with a wet street per town: %s" % (tot, len(wetseeds), len(seeds), f(100 * len(wetseeds) / len(seeds)), ", ".join("%s %d" % (k, n) for k, n in sorted(bypoi.items(), key=lambda kv: -kv[1])))) + lay_txt,
                       "0 vertices on every seed", m)
+        links = [r["city"]["links"] for r in seeds.values() if r.get("city")]
+        if links and any(l["wet"] for l in links):
+            v.info("%s inter-town link roads under water (information, not a town road)" % m, "%d of %d seeds have a wet link road (max %d wet vertices): a link may cross water on a bridge or a ford" % (sum(1 for l in links if l["wet"]), len(links), max(l["wetVerts"] for l in links)))
         # ---- every named town ----
         pois = {}
         for r in seeds.values():
@@ -247,11 +307,38 @@ def judge(v, R, rows, maps, cover_seeds, args):
             vals = [r["perPoi"].get(pid, 0) for r in seeds.values()]
             tstat[pid] = {"name": pois[pid], "min": min(vals), "p50": pctl(vals, 0.5), "max": max(vals), "below": sum(1 for x in vals if x < TOWN_MIN), "n": len(vals)}
         S[m]["towns"] = tstat
-        low = sorted((k for k, t in tstat.items() if t["min"] < TOWN_MIN), key=lambda k: tstat[k]["p50"])
-        v.info("%s enterable per named town (min / median / max over %d seeds)" % (m, len(seeds)), "; ".join("%s %d/%s/%d" % (t["name"], t["min"], f(t["p50"], 0), t["max"]) for t in tstat.values()))
-        R.row("town-enterables", not low, ("every named town has >= %d enterable buildings on every one of %d seeds" % (TOWN_MIN, len(seeds))) if not low else
-              "%d of %d named towns dip under %d on some seed: %s" % (len(low), len(tstat), TOWN_MIN, "; ".join("%s min %d median %s (under %d on %d of %d seeds)" % (tstat[k]["name"], tstat[k]["min"], f(tstat[k]["p50"], 0), TOWN_MIN, tstat[k]["below"], tstat[k]["n"]) for k in low)),
-              "every town >= %d on every seed" % TOWN_MIN, m)
+        named = [k for k in tstat if m not in TOWN_TABLE or k in TOWN_TABLE[m]]          # Wave 7b: the themed maps gate their NAMED TOWNS (TOWN_TABLE); Savanna every POI
+        rest = [k for k in tstat if k not in named]
+        gone = [k for k in (TOWN_TABLE.get(m) or ()) if k not in tstat]
+        low = sorted((k for k in named if tstat[k]["min"] < TOWN_MIN), key=lambda k: tstat[k]["p50"])
+        v.info("%s enterable per named town (min / median / max over %d seeds)" % (m, len(seeds)), "; ".join("%s %d/%s/%d" % (t["name"], t["min"], f(t["p50"], 0), t["max"]) for k, t in tstat.items() if k in named))
+        if rest:
+            v.info("%s other POIs (information: not a town)" % m, "; ".join("%s %d/%s/%d (under %d on %d of %d seeds)" % (tstat[k]["name"], tstat[k]["min"], f(tstat[k]["p50"], 0), tstat[k]["max"], TOWN_MIN, tstat[k]["below"], tstat[k]["n"]) for k in rest))
+        if gone:
+            R.row("town-enterables", False, "TOWN_TABLE names POIs this build's %s does not have: %s" % (m, ", ".join(gone)), None, m)
+        else:
+            R.row("town-enterables", not low, ("every named town has >= %d enterable buildings on every one of %d seeds (%s)" % (TOWN_MIN, len(seeds), ", ".join(tstat[k]["name"] for k in named))) if not low else
+                  "%d of %d named towns dip under %d on some seed: %s" % (len(low), len(named), TOWN_MIN, "; ".join("%s min %d median %s (under %d on %d of %d seeds)" % (tstat[k]["name"], tstat[k]["min"], f(tstat[k]["p50"], 0), TOWN_MIN, tstat[k]["below"], tstat[k]["n"]) for k in low)),
+                  "every town >= %d on every seed" % TOWN_MIN, m)
+        # ---- compounds (Wave 7b): the 2-6 building farm / ruin clusters between the towns ----
+        cities = [r["city"] for r in seeds.values() if r.get("city")]
+        cmin = COMPOUND_MIN.get(m, 0)
+        if not cities:
+            R.row("compounds-placed", False, "this build's %s has no towngen layout (M.city is null): 0 compounds on every one of %d seeds" % (m, len(seeds)), ">= %d compounds on every seed" % cmin, m)
+            R.row("compounds-enterable", False, "no compound to judge: this build's %s has no towngen layout" % m, ">= %d %% of compounds hold >= %d enterable buildings" % (100 * COMPOUND_SHARE, COMPOUND_BUILDINGS), m)
+        else:
+            counts = [len(c["compounds"]) for c in cities]
+            few = [s for s, r in seeds.items() if len((r.get("city") or {"compounds": []})["compounds"]) < cmin]
+            S[m]["compounds"] = {"min": min(counts), "p50": pctl(counts, 0.5), "max": max(counts), "seedsUnder": len(few), "layoutSeeds": len(cities)}
+            R.row("compounds-placed", not few and len(cities) == len(seeds), "compounds per seed: min %d, median %s, max %d over %d seeds%s" % (min(counts), f(pctl(counts, 0.5), 0), max(counts), len(cities), ("; %d seeds under %d" % (len(few), cmin)) if few else ""), ">= %d compounds on every seed" % cmin, m)
+            allc = [c for ci in cities for c in ci["compounds"]]
+            good = sum(1 for c in allc if (c["found"] or 0) >= COMPOUND_BUILDINGS)
+            fcount = {}
+            for c in allc:
+                fcount[c["found"]] = fcount.get(c["found"], 0) + 1
+            S[m]["compoundsEnterable"] = {"compounds": len(allc), "good": good, "byFound": fcount}
+            R.row("compounds-enterable", bool(allc) and good >= COMPOUND_SHARE * len(allc) and len(cities) == len(seeds), ("%d seeds have no towngen layout; " % (len(seeds) - len(cities)) if len(cities) != len(seeds) else "") + "%d of %d compounds (%s %%) hold >= %d enterable buildings by the pinned detector; enterable buildings per compound: %s" % (
+                good, len(allc), f(100 * good / max(1, len(allc))), COMPOUND_BUILDINGS, ", ".join("%s: %d" % (k, fcount[k]) for k in sorted(fcount, key=lambda x: (x is None, x)))), ">= %d %% of compounds" % (100 * COMPOUND_SHARE), m)
         # ---- endgame ----
         eg = [r["endgame"] for r in seeds.values() if r.get("endgame")]
         if not eg:
@@ -268,6 +355,9 @@ def judge(v, R, rows, maps, cover_seeds, args):
                 ks[-1], f(eg[0][ks[-1]]["r"]), f(med(ks[-1]), 0), ENDGAME_MIN, f(100 * sh(ks[-1])), S[m]["endgame"]["finalNoRoof"]))
             R.row("endgame-cover", sh(area) >= ENDGAME_SEED_SHARE, "the area of the last two circles (circle %s, r %s m) holds >= %d static cover pieces on %s%% of %d seeds (median %s pieces; the 9.4 m final circle alone: %s%%)" % (
                 area, f(eg[0][area]["r"]), ENDGAME_MIN, f(100 * sh(area)), len(eg), f(med(area), 0), f(100 * sh(ks[-1]))), ">= %d %% of seeds" % (100 * ENDGAME_SEED_SHARE), m)
+            fin = ks[-1]
+            v.info("endgame-final-%s [%s] (INFORMATION: the strict final circle, r %s m)" % (fin, m, f(eg[0][fin]["r"])), "median %s cover pieces, p10 %s, >= %d pieces on %s%% of %d seeds; no roof slab on %d seeds (Wave 7b target: reported, not gated: 10 pieces inside a 277 m2 disc is out of reach of any 56 m block layout)" % (
+                f(med(fin), 0), f(pctl([e[fin]["pieces"] for e in eg], 0.1), 0), ENDGAME_MIN, f(100 * sh(fin)), len(eg), S[m]["endgame"]["finalNoRoof"]))
     return S
 
 
@@ -332,6 +422,79 @@ def selftest(v):
         raise C.EnvFailure("selftest: node produced no result: %s" % ((p.stderr or p.stdout or "")[-300:]))
     for name, r in res.items():
         v.check("selftest: " + name, r["ok"], "got %s, want %s" % (r["got"], r["want"]))
+    selftest_judge(v)
+
+
+class _Quiet:
+    """a Verdict stand-in for the judge selftest: records (name, ok) and prints nothing"""
+
+    def __init__(self):
+        self.rows, self.data = [], {}
+
+    def check(self, name, ok, detail="", expect=None):
+        self.rows.append((name, ok))
+        return ok
+
+    def cnj(self, name, why):
+        self.rows.append((name, None))
+
+    def info(self, name, detail=""):
+        pass
+
+
+def _fake_row(seed=1, map_id="isla_viva"):
+    """one (map, seed) record shaped like probe_city.measure()'s, on a themed map whose every row passes"""
+    pois = [{"id": i, "name": i.replace("_", " ").title()} for i in ("palm_bay", "coco_village", "volcano_rim", "shipwreck", "lagoon_docks", "jungle_market")]
+    cc = {"r": 31.4, "pieces": 40, "roofs": 3}
+    return {"map": map_id, "seed": seed, "waterY": 0, "enterable": 100, "sealed": 0, "pois": pois, "perPoi": {p["id"]: 12 for p in pois},
+            "cover": {"within25": 0.25, "median": 40.0, "p90": 80.0, "gt150": 0.01, "landKm2": 0.5},
+            "roads": {"meshFound": True, "wetTown": 0, "townVerts": 100, "wetByPoi": {}, "townByPoi": {},
+                      "layout": {"layout": True, "towns": 6, "verts": 900, "wet": 0, "wetByTown": {}, "vertsByTown": {}}},
+            "endgame": {"c6": dict(cc, r=70.6), "c7": dict(cc), "c8": dict(cc, r=9.4, pieces=4), "final": "c8", "finalPieces": 4, "finalRoofs": 1},
+            "city": {"version": 4, "towns": [], "compounds": [{"id": "cmp%02d" % i, "found": 4, "claimed": 4, "buildings": 4} for i in range(8)], "links": {"n": 3, "wet": 0, "wetVerts": 0}}}
+
+
+def selftest_judge(v):
+    """the Wave-7b JUDGE logic on synthetic records (offline, no Node): a good themed map passes every row, and each defect breaks exactly its own row"""
+    class A:
+        quick, seeds_n = True, 30
+
+    def run(mutate=None, map_id="isla_viva"):
+        rows = []
+        for sd in (1, 2, 7, 1234, 2026):
+            r = _fake_row(sd, map_id)
+            if mutate and sd in (7, 2026):
+                mutate(r)
+            rows.append(r)
+        q = _Quiet()
+        R = Rows(q, True, [map_id])
+        judge(q, R, rows, [map_id], [7, 1234, 2026], A)
+        return {n.split(" [")[0]: ok for n, ok in q.rows}
+
+    def lowtown(r): r["perPoi"]["lagoon_docks"] = 3
+    def lowrest(r): r["perPoi"]["shipwreck"] = 0                    # a POI outside the named table: information only
+    def fewcmp(r): r["city"]["compounds"] = r["city"]["compounds"][:3]
+    def thincmp(r):
+        for c in r["city"]["compounds"][:6]: c["found"] = 1
+    def wetlayout(r): r["roads"]["layout"].update(wet=4, wetByTown={"palm_bay": 4})
+    def wetmesh(r): r["roads"].update(wetTown=2, wetByPoi={"coco_village": 2})
+    def nocity(r): r["city"] = None
+    def lowc7(r): r["endgame"]["c7"]["pieces"] = 2
+    cases = [("a good themed map passes every row", None, lambda o: all(x is True for x in o.values()) and {"town-enterables", "compounds-placed", "compounds-enterable", "town-roads-dry", "endgame-cover"} <= set(o)),
+             ("a named town under 6 breaks town-enterables", lowtown, lambda o: o["town-enterables"] is False and o["compounds-placed"] is True),
+             ("a POI outside the named table does not", lowrest, lambda o: o["town-enterables"] is True),
+             ("3 compounds break compounds-placed", fewcmp, lambda o: o["compounds-placed"] is False),
+             ("compounds with one enterable building break compounds-enterable", thincmp, lambda o: o["compounds-enterable"] is False and o["compounds-placed"] is True),
+             ("a wet towngen street breaks town-roads-dry", wetlayout, lambda o: o["town-roads-dry"] is False),
+             ("a wet road-mesh vertex breaks town-roads-dry", wetmesh, lambda o: o["town-roads-dry"] is False),
+             ("no towngen layout breaks both compound rows", nocity, lambda o: o["compounds-placed"] is False and o["compounds-enterable"] is False),
+             ("2 cover pieces in c7 break endgame-cover", lowc7, lambda o: o["endgame-cover"] is False)]
+    for name, mut, want in cases:
+        o = run(mut)
+        v.check("selftest judge: " + name, bool(want(o)), {k: o[k] for k in sorted(o)})
+    # Savanna (every POI counts) keeps the Wave-7 rule: the same low POI that the themed table ignores breaks it
+    q = run(lowrest, "ashgrid")
+    v.check("selftest judge: ashgrid judges EVERY POI (no named table)", q["town-enterables"] is False, q)
 
 
 # ───────────────────────────── towngen forecast ─────────────────────────────
@@ -380,8 +543,10 @@ def main_fn(v, args):
     live_maps = [m for m in args.live_maps.split(",") if m and m in maps]
     seeds_all = sorted(set(wide) | set(cover) | (set(live_seeds) if live_maps else set()))
     blocking = bool(args.blocking)
-    block_maps = [m for m in args.block_maps.split(",") if m]
-    R = Rows(v, blocking, block_maps)
+    block_maps = [m for m in (",".join(C.MAPS) if args.block_maps == "all" else args.block_maps).split(",") if m]
+    if args.city_plant and args.city_plant not in PLANT_ROWS:
+        raise C.HarnessError("unknown --city-plant %r (known: %s)" % (args.city_plant, ", ".join(sorted(PLANT_ROWS))))
+    R = Rows(v, blocking, block_maps, PLANT_ROWS.get(args.city_plant))
     v.data.update({"root": label, "mode": "BLOCKING" if blocking else "INFORMATION", "blockMaps": block_maps, "coverSeeds": cover, "wideSeeds": n_wide, "pin": "probe_city.js v1"})
     print("%s: %s | maps %s | cover seeds %s | %d seeds for the many-seed rows | %s" % (GATE, label, ",".join(maps), cover, n_wide, "BLOCKING" if blocking else "INFORMATION (Wave 6: no towns in the live game yet, the coverage rows are expected to fail)"), flush=True)
     if args.towngen:
@@ -392,7 +557,8 @@ def main_fn(v, args):
             v.check("forecast scored (INFORMATION: %d rows would FAIL%s; --blocking makes them gate)" % (len(failing), (": " + ", ".join(failing[:6]) + ("..." if len(failing) > 6 else "")) if failing else ""), True, {"wouldFail": failing})
         v.data["rows"] = {k: ok for k, ok in R.state.items()}
         return
-    rows = node_tasks(root, vendor, maps, {m: seeds_all for m in maps}, set(cover), args.jobs, args.census_timeout)
+    tree0 = tree_state(root)
+    rows = node_tasks(root, vendor, maps, {m: seeds_all for m in maps}, set(cover), args.jobs, args.census_timeout, extra=(["--city-plant", args.city_plant] if args.city_plant else None))
     v.info("Node replay", "%d (map, seed) builds measured in %.0f s (%d jobs)" % (len(rows), time.time() - t0, args.jobs))
     S = judge(v, R, rows, maps, cover, args)
     v.data["summary"] = S
@@ -404,10 +570,18 @@ def main_fn(v, args):
         byk = {(r["map"], r["seed"]): r for r in rows}
         for m in live_maps:
             for sd in live_seeds:
+                moved = tree_changed(tree0, tree_state(root))
+                if moved:
+                    R.row("detector-parity", None, "the served tree changed after the Node half started (%s): Chrome and Node would build different worlds - re-run on a stable tree" % ", ".join(moved[:4]), None, m)
+                    continue
                 try:
                     lr = live_record(args, m, sd, src)
                 except C.EnvFailure as e:
                     R.row("detector-parity", None, "live half: %s" % e, None, m)
+                    continue
+                moved = tree_changed(tree0, tree_state(root))
+                if moved:
+                    R.row("detector-parity", None, "the served tree changed while the page was measured (%s) - re-run on a stable tree" % ", ".join(moved[:4]), None, m)
                     continue
                 nr = byk.get((m, sd))
                 ok, why = same_buildings(lr.get("buildings", []), nr.get("buildings", [])) if nr else (False, "the Node replay has no (%s, %d)" % (m, sd))
@@ -437,7 +611,8 @@ def main():
     C.add_common_args(ap)
     ap.add_argument("--maps", default=None, help="comma list (default: all three)")
     ap.add_argument("--blocking", action="store_true", help="Wave 7: the rows gate (default: information)")
-    ap.add_argument("--block-maps", default="ashgrid", help="maps whose rows gate under --blocking (default ashgrid = Savanna; the themed maps follow in Wave 7b)")
+    ap.add_argument("--block-maps", default="ashgrid", help="maps whose rows gate under --blocking: a comma list or `all` (default ashgrid = Savanna; Wave 7b: all three)")
+    ap.add_argument("--city-plant", default=None, help="negative control (Wave 7b): %s - only the named rows count" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--cover-seeds", default=None, help="coverage-row seeds (default %s)" % ",".join(str(s) for s in COVER_SEEDS))
     ap.add_argument("--seeds-n", type=int, default=WIDE_N, help="seeds 1..N for the many-seed rows (default %d)" % WIDE_N)
     ap.add_argument("--quick", action="store_true", help="30 seeds, no Chrome")

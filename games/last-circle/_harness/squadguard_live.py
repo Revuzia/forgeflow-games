@@ -849,7 +849,7 @@ def case_fallback_full(rig, v, args, N):
         if not pg.evaluate(NETMOD_JS):
             raise C.EnvFailure("%s: could not load the page's net.js module" % name)
     gname = gpg.evaluate("() => window.__LC__.W.net.myName")
-    hpg.evaluate("() => { window.__LC__.W.randomMap = () => 'ashgrid'; return true; }")       # Savanna: the only map with towns to lose
+    hpg.evaluate("(m) => { window.__LC__.W.randomMap = () => m; return true; }", args.fallback_map)       # the map whose towns the guest loses (Savanna by default; Wave 7b: isla_viva / deepwood too)
     press_start(hpg)
     t0 = time.time()
     card, chat, live_since = None, None, None
@@ -887,8 +887,8 @@ def case_fallback_full(rig, v, args, N):
     # what is judged is that it is OLDER than N, that map.fallback and W.mapFallback { from N, to <that> } agree with it, and that everything net.js says matches it
     B = gw.get("genVersion")
     mf0 = gw.get("mapFallback") or {}
-    v.check("%s: the guest REALLY fell back (its Savanna was built as version %s < %d, map.fallback set, W.mapFallback = { from %d, to %s }) while it advertised %d" % (name, B, N, N, B, N),
-            gw["mapId"] == "ashgrid" and isinstance(B, int) and B < N and gw["fallback"] and mf0.get("from") == N and mf0.get("to") == B, gw)
+    v.check("%s: the guest REALLY fell back (its %s was built as version %s < %d, map.fallback set, W.mapFallback = { from %d, to %s }) while it advertised %d" % (name, args.fallback_map, B, N, N, B, N),
+            gw["mapId"] == args.fallback_map and isinstance(B, int) and B < N and gw["fallback"] and mf0.get("from") == N and mf0.get("to") == B, gw)
     _card_rows(v, name, card, "the guest", N, B)
     st = gpg.evaluate(LEFT_JS)
     left = st.get("left") or {}
@@ -997,6 +997,7 @@ def main():
     ap.add_argument("--plant", default=None, choices=["no-guard", "bare-import", "no-fallback"],
                     help="planted fault in the served net.js (negative controls, each MUST FAIL): no-guard (judgeGv never reports a mismatch), bare-import (net.js's maps.js import loses the ?v=), no-fallback (a client that notices its map fell back stays in the squad: use with --cases fallback / fallback-host / fallback-solo)")
     ap.add_argument("--shots", action="store_true", help="save a screenshot of each refusal / host lobby into _harness/_shots/squadguard/")
+    ap.add_argument("--fallback-map", default="ashgrid", choices=sorted(C.MAPS), help="case fallback-full: the map the host starts (default ashgrid = Savanna; Wave 7b: isla_viva, deepwood - the guest must fall back on their towns too)")
     ap.add_argument("--full", action="store_true", help="in case `same`: no startMatch stub - both pages load the real match (minutes)")
     args = ap.parse_args()
     if args.live:

@@ -3,6 +3,7 @@
 
     python _harness/leaktest.py                       # 3 matches on ashgrid, seed 4242 (the PLAN's `3 ashgrid`)
     python _harness/leaktest.py --matches 3 --map ashgrid --disk
+    python _harness/leaktest.py --maps isla_viva,deepwood,ashgrid --matches 6 --disk   # Wave 7b: ACROSS MAP CHANGES - six matches cycling the three maps; each map's second lobby is judged against its first
 
 Promoted from _spec/improve_2026-09/baseline/leaktest.py. One page, K back-to-back matches on the SAME map and seed,
 started through __LC__.startMatch (what PLAY AGAIN calls; the real button picks a random map, which would hide a leak
@@ -28,6 +29,11 @@ Output: owner file per texture group with its unique-source count at every lobby
 that owns the file (PLAN section 3), so each lane knows which textures its disposeMatch(W) must free.
 
 GATE (PLAN L4): textures at the m2 and m3 lobby within +-5 of m1. Exit 0 / 1 / 2 (could not judge).
+
+Wave 7b (lane B2): `--maps a,b,c` cycles the maps (match k plays map k mod N): a rematch picks a RANDOM map, so what must not leak is a map change - the towns of Isla Viva and Deepwood are instanced
+districts, their meshes / textures / geometries must be freed in disposeMapResources. Rows (one per match that revisits a map): the lobby's textures within +-5 AND its geometries within +-30 of
+the FIRST lobby on that map (the hud_cycle bars; the maps themselves differ by tens of textures, so lobbies are only ever compared on the same map). The texture census growth table is a
+single-map reading and is skipped in cycle mode.
 """
 from __future__ import annotations
 
@@ -154,6 +160,18 @@ CENSUS_JS = r"""(tag) => {
            sceneObjects: (() => { let n = 0; W.scene.traverse(() => n++); return n; })(), t: +(W.t || 0).toFixed(1) };
 }"""
 
+# --plant leak (Wave 7b): what a forgotten dispose leaves behind, added in every lobby - a scratch scene of 24 geometries and 5 textures is rendered once (the renderer registers them in
+# renderer.info.memory) and dropped WITHOUT dispose(). Three matches later the same map's lobby carries +72 geometries / +15 textures: the cycle rows MUST fail (exit 1).
+LEAK_JS = r"""() => { const W = window.__LC__.W, T = W.THREE, r = W.kernel.renderer;
+  const sc = new T.Scene(), cam = new T.PerspectiveCamera(60, 1, 0.1, 100); cam.position.set(0, 0, 5);
+  const m0 = new T.MeshBasicMaterial({ color: 0xff00ff });
+  for (let i = 0; i < 24; i++) { const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, i * 0.001]), 3)); const m = new T.Mesh(g, m0); m.frustumCulled = false; sc.add(m); }
+  const shared = new T.BufferGeometry(); shared.setAttribute('position', new T.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3)); shared.setAttribute('uv', new T.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1]), 2));
+  for (let i = 0; i < 5; i++) { const t = new T.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1); t.needsUpdate = true; const m = new T.Mesh(shared, new T.MeshBasicMaterial({ map: t })); m.frustumCulled = false; sc.add(m); }
+  const prevT = r.getRenderTarget(), prevAuto = r.autoClear; r.setRenderTarget(null); r.autoClear = false;
+  try { r.render(sc, cam); } finally { r.autoClear = prevAuto; r.setRenderTarget(prevT); }
+  return { geometries: r.info.memory.geometries, textures: r.info.memory.textures }; }"""
+
 STUB_DRAWS_JS = r"""() => { const gl = window.__LC__.W.kernel.renderer.getContext(); if (gl.__hStub) return 'already';
   for (const fn of ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced', 'drawRangeElements']) if (gl[fn]) gl[fn] = function () {};
   gl.__hStub = true; return 'stubbed'; }"""
@@ -189,6 +207,9 @@ def main():
     C.add_common_args(ap)
     ap.add_argument("--matches", type=int, default=3)
     ap.add_argument("--map", default="ashgrid")
+    ap.add_argument("--maps", default=None, help="Wave 7b: a comma list cycled across the matches (match k plays maps[(k-1) % N]); each map's later lobbies are judged against its first lobby")
+    ap.add_argument("--plant", default=None, choices=["leak"], help="negative control (Wave 7b): 24 geometries + 5 textures are rendered and never disposed in every lobby; the rows MUST fail")
+    ap.add_argument("--geo-tolerance", type=int, default=30, help="cycle mode: lobby geometries within +-N of the same map's first lobby (the hud_cycle bar)")
     ap.add_argument("--seed", type=int, default=4242)
     ap.add_argument("--mode", default="standard")
     ap.add_argument("--slice", type=float, default=10.0, help="fastForward seconds per slice")
@@ -197,6 +218,9 @@ def main():
     ap.add_argument("--real-draws", action="store_true", help="do not stub gl.draw* (the GPU rasters every stepped frame)")
     args = ap.parse_args()
     args.width, args.height = (1600, 900) if (args.width, args.height) == (1280, 720) else (args.width, args.height)
+
+    cycle = [x for x in (args.maps or "").split(",") if x] or [args.map]
+    rotating = len(cycle) > 1
 
     def body(v):
         with C.Session(args, "leaktest") as s:
@@ -215,9 +239,13 @@ def main():
             for m in range(1, args.matches + 1):
                 s.js("(m) => { window.__H_EPOCH__ = m; }", m)
                 t0 = time.time()
-                r = s.start_match(args.mode, args.seed, args.map, enter=False)
+                r = s.start_match(args.mode, args.seed, cycle[(m - 1) % len(cycle)], enter=False)
                 s.step_frames(2, 1 / 60, render=True)
+                if args.plant == "leak":
+                    print("  plant leak: %s" % s.js(LEAK_JS), flush=True)
+                    s.step_frames(1, 1 / 60, render=True)
                 snap = s.js(CENSUS_JS, "m%d_lobby" % m)
+                snap["map"] = cycle[(m - 1) % len(cycle)]
                 snap["load_s"] = round(time.time() - t0, 1)
                 snaps.append(snap)
                 print("  snapshot m%d_lobby: textures %s geometries %s programs %s (load %.0f s)" % (
@@ -262,13 +290,36 @@ def main():
         for x in snaps:
             print("  %-13s  %8s  %10s  %8s  %6s  %6s  %12s" % (x["tag"], x["infoTextures"], x["geometries"], x["programs"],
                                                                 x.get("heapMB"), x.get("mixers"), x.get("sceneObjects")))
-        if len(tex) >= 2:
+        if rotating:
+            first = {}
+            compared = 0
+            for i, x in enumerate(lob, start=1):
+                mp = x.get("map")
+                if mp not in first:
+                    first[mp] = (i, x)
+                    continue
+                j, b = first[mp]
+                compared += 1
+                dt, dg = x["infoTextures"] - b["infoTextures"], x["geometries"] - b["geometries"]
+                v.check("lobby m%d (%s) textures within +-%d, geometries within +-%d of m%d" % (i, mp, args.tolerance, args.geo_tolerance, j), abs(dt) <= args.tolerance and abs(dg) <= args.geo_tolerance,
+                        {"map": mp, "textures": [b["infoTextures"], x["infoTextures"]], "geometries": [b["geometries"], x["geometries"]], "dTextures": dt, "dGeometries": dg},
+                        expect="|dTextures| <= %d and |dGeometries| <= %d (the same map's first lobby; programs are information)" % (args.tolerance, args.geo_tolerance))
+            if not compared:
+                v.cnj("lobby resources", "no map was visited twice: %d matches over %d maps" % (len(lob), len(cycle)))
+            v.info("lobbies by map", {mp: [(x["tag"], x["infoTextures"], x["geometries"], x["programs"]) for x in lob if x.get("map") == mp] for mp in cycle})
+        elif len(tex) >= 2:
             base = tex[0]
             for i, t in enumerate(tex[1:], start=2):
                 v.check("lobby textures m%d within +-%d of m1" % (i, args.tolerance), abs(t - base) <= args.tolerance,
                         {"m1": base, "m%d" % i: t, "delta": t - base}, expect="|delta| <= %d (PLAN L4)" % args.tolerance)
         else:
             v.cnj("lobby textures", "fewer than 2 lobbies reached")
+        if rotating:
+            fferr = v.data.get("fastForwardErrors") or []
+            v.check("the game did not throw inside fastForward", not fferr, {"n": len(fferr), "first": fferr[:2]})
+            errs = C.diag_problems(d, rig=False)
+            v.check("no page errors / window errors during the loop", not (d["pageErrors"] or d["windowErrors"]), {"pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3], "all": errs})
+            return
         # ---------- census ----------
         tags, groups = summarize_census(snaps)
         ltags = [t for t in tags if t.endswith("_lobby")]

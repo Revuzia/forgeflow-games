@@ -212,27 +212,30 @@
   // (o, d, lo, hi, n) — and bullets, bot sight lines and cover scans call it for
   // every collider they touch, a measured 14 KB of garbage per frame on its own.
   // Scalars in module scope instead; the result object is only built on a HIT.
-  var _sbMin = 0, _sbMax = 1, _sbAxis = -1;
+  // (Wave 7b, lane S1) ... and in a Float64Array, not three closure variables: a double stored into a closure slot is a fresh heap
+  // number every time (two per slab test). SB[0] = entry t, SB[1] = exit t, SB[2] = the entry axis (-1 none).
+  var SB = new Float64Array(3);
   function _slab(o, d, lo, hi, axis) {
     if (d > -1e-9 && d < 1e-9) return !(o < lo || o > hi);   // parallel: inside the slab or a miss
     var inv = 1 / d;
     var t1 = (lo - o) * inv, t2 = (hi - o) * inv;
     if (t1 > t2) { var sw = t1; t1 = t2; t2 = sw; }
-    if (t1 > _sbMin) { _sbMin = t1; _sbAxis = axis; }
-    if (t2 < _sbMax) _sbMax = t2;
-    return _sbMin <= _sbMax;
+    if (t1 > SB[0]) { SB[0] = t1; SB[2] = axis; }
+    if (t2 < SB[1]) SB[1] = t2;
+    return SB[0] <= SB[1];
   }
   function segmentBox(ax, ay, az, bx, by, bz, box) {
     var dx = bx - ax, dy = by - ay, dz = bz - az;
-    _sbMin = 0; _sbMax = 1; _sbAxis = -1;
+    SB[0] = 0; SB[1] = 1; SB[2] = -1;
     if (!_slab(ax, dx, box.minX, box.maxX, 0)) return null;
     if (!_slab(ay, dy, box.minY, box.maxY, 1)) return null;
     if (!_slab(az, dz, box.minZ, box.maxZ, 2)) return null;
     var nx = 0, ny = 0, nz = 0;
-    if (_sbAxis === 0) nx = dx > 0 ? -1 : 1;
-    else if (_sbAxis === 1) ny = dy > 0 ? -1 : 1;
-    else if (_sbAxis === 2) nz = dz > 0 ? -1 : 1;
-    return { t: _sbMin, tExit: _sbMax, nx: nx, ny: ny, nz: nz };
+    var axis = SB[2];
+    if (axis === 0) nx = dx > 0 ? -1 : 1;
+    else if (axis === 1) ny = dy > 0 ? -1 : 1;
+    else if (axis === 2) nz = dz > 0 ? -1 : 1;
+    return { t: SB[0], tExit: SB[1], nx: nx, ny: ny, nz: nz };
   }
 
   /** Top surface of a ramp collider at (x,z) — same formula the movement
@@ -277,11 +280,11 @@
     var s = Math.sqrt(1 + k * k);
     var hv = RAMP_THICK * 0.5 * s;
     // clip to the footprint prism; the plank never leaves minY - hv .. maxY + hv
-    _sbMin = 0; _sbMax = 1; _sbAxis = -1;
+    SB[0] = 0; SB[1] = 1; SB[2] = -1;
     if (!_slab(ax, dx, c.minX, c.maxX, 0)) return null;
     if (!_slab(az, dz, c.minZ, c.maxZ, 2)) return null;
     if (!_slab(ay, dy, c.minY - hv, c.maxY + hv, 1)) return null;
-    var lo = _sbMin, hi = _sbMax;
+    var lo = SB[0], hi = SB[1];
     var u0, du;                                   // run coordinate from the low edge, and its rate along the segment
     if (c.dir === 0) { u0 = ax - c.minX; du = dx; }
     else if (c.dir === 1) { u0 = c.maxX - ax; du = -dx; }
@@ -314,6 +317,15 @@
    *  high ramp is walkable exactly where a standing capsule fits under the plank.
    *  Pure; player.js blockedIn calls it with its own STEP_UP. */
   function rampBlocks(c, x, z, yd, h, r, stepUp) {
+    _rbA[0] = x; _rbA[1] = z; _rbA[2] = yd; _rbA[3] = h; _rbA[4] = r; _rbA[5] = stepUp;
+    return rampBlocksA(c, _rbA);
+  }
+  /** rampBlocks with its numbers in an array A = [x, z, yd, h, r, stepUp] (any Float64Array or array): the per-tick callers
+   *  (player.js blockedF) pass them this way, because a call that is not inlined boxes every double argument (Wave 7b, lane S1:
+   *  the allocation round). ONE body: rampBlocks is this function. */
+  var _rbA = new Float64Array(6);
+  function rampBlocksA(c, A) {
+    var x = A[0], z = A[1], yd = A[2], h = A[3], r = A[4], stepUp = A[5];
     var nx = x < c.minX ? c.minX : x > c.maxX ? c.maxX : x;
     var nz = z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z;
     var ex = x - nx, ez = z - nz;
@@ -331,7 +343,10 @@
     reach = reach > 0 ? Math.sqrt(reach) : 0;
     var uLow = uc - reach;
     if (uLow < 0) uLow = 0; else if (uLow > al) uLow = al;
-    return c.minY + k * uLow - rampHalfV(c) < yd + h;
+    // rampHalfV(c), inlined (term for term: a call here returned a boxed double)
+    var alongV = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
+    var kV = (c.maxY - c.minY) / Math.max(0.01, alongV);
+    return c.minY + k * uLow - RAMP_THICK * 0.5 * Math.sqrt(1 + kV * kV) < yd + h;
   }
 
   /** LANDING SWEEP. The support test is a POINT test: the highest top <= feet + stepUp.
@@ -1042,7 +1057,7 @@
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
     segmentColliders: segmentColliders,
-    RAMP_THICK: RAMP_THICK, rampHalfV: rampHalfV, rampBlocks: rampBlocks, sweepSupport: sweepSupport, supportProbeY: supportProbeY, aimRayDist: aimRayDist,
+    RAMP_THICK: RAMP_THICK, rampHalfV: rampHalfV, rampBlocks: rampBlocks, rampBlocksA: rampBlocksA, sweepSupport: sweepSupport, supportProbeY: supportProbeY, aimRayDist: aimRayDist,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
     BOT_TIER_BANDS: BOT_TIER_BANDS, skillMix: skillMix, mixRating: mixRating, interpTierK: interpTierK, BOT_PACE: BOT_PACE,

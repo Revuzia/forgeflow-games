@@ -37,6 +37,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
 import mobilekit as MK  # noqa: E402
 
+# --plant no-touch-ui (Wave 7b falsifier, the same stylesheet as layoutcheck's): every data-touch-ui control and the game_controls.js overlay display:none - nothing to touch, so the FIRE / together / look rows MUST FAIL
+PLANT_NO_TOUCH = r"""(() => { const add = () => { const st = document.createElement('style'); st.id = '__h_plant_notouch';
+  st.textContent = '[data-touch-ui],#__ffg_touch__{display:none !important}'; (document.head || document.documentElement).appendChild(st); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add(); })();"""
+
 CTL_JS = r"""() => {
   const vis = (e) => { for (let n = e; n && n.nodeType === 1; n = n.parentElement) { const s = getComputedStyle(n); if (s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0) return false; } return true; };
   const R = (e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
@@ -78,14 +83,30 @@ SLOTS_JS = r"""() => {
 }"""
 
 CHEST_JS = r"""() => { const W = window.__LC__.W, p = W.player;
-  const near = W.nearbyLoot ? W.nearbyLoot(p.pos, 400) : [];
-  const c = near.filter((n) => n.type === 'chest').sort((a, b) => a.d - b.d)[0];
+  // Wave 7b: the nearest UNOPENED chest a walker reaches on the ground (base <= 1 m over the terrain): a Deepwood seed-7 chest sits on top of an 11 m ranger tower, which a player teleported to the
+  // foot of the tower cannot open (the row measures the USE control, not the climb); nearbyLoot (within a few metres of the player's height) is the fallback for a build with no debugChests
+  let c = null;
+  if (W.debugChests) {
+    const pool = W.debugChests().filter((h) => !h.opened && h.pos && h.pos.y - W.map.heightAt(h.pos.x, h.pos.z) <= 1.0);
+    pool.sort((a, b) => Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z) - Math.hypot(b.pos.x - p.pos.x, b.pos.z - p.pos.z));
+    if (pool.length) { const h = pool[0]; c = { type: 'chest', id: h.id, x: h.pos.x, y: h.pos.y, z: h.pos.z, d: Math.hypot(h.pos.x - p.pos.x, h.pos.z - p.pos.z) }; }
+  }
+  if (!c) { const near = W.nearbyLoot ? W.nearbyLoot(p.pos, 400) : []; c = near.filter((n) => n.type === 'chest').sort((a, b) => a.d - b.d)[0]; }
   if (!c) return null;
   const cx = c.x != null ? c.x : (c.pos ? c.pos.x : null), cz = c.z != null ? c.z : (c.pos ? c.pos.z : null);
   if (cx == null) return { keys: Object.keys(c) };
-  const y = W.map.heightAt(cx + 1.2, cz);
-  p.pos.set(cx + 1.2, Math.max(y, c.y != null ? c.y : y), cz); p.vel && p.vel.set(0, 0, 0);
-  p.input.yaw = Math.atan2(1.2, 0); return { d: c.d, id: c.id, x: cx, z: cz }; }"""
+  // Wave 7b: stand 1.0-1.5 m from the chest at the first of 24 spots that is NOT inside a wall / prop / container (a chest in a town building has a wall on one side; the old fixed +1.2 m east
+  // spot put the player in it on a themed map's chest), at the chest's own floor height
+  const cy = c.y != null ? c.y : W.map.heightAt(cx, cz);
+  const blocked = (x, z, y) => { const o = []; try { W.map.queryColliders(x, z, 1.0, o); } catch (e) { return false; }
+    for (const q of o) { if (q.dead || q.kind === 'ramp') continue; if (q.maxY <= y + 0.55 || q.minY >= y + 1.8) continue;
+      const ex = x - Math.min(Math.max(x, q.minX), q.maxX), ez = z - Math.min(Math.max(z, q.minZ), q.maxZ); if (ex * ex + ez * ez < 0.45 * 0.45) return true; } return false; };
+  let sx = cx + 1.2, sz = cz, found = false;
+  for (const rr of [1.2, 1.0, 1.5]) for (let k = 0; k < 8 && !found; k++) { const a = k * Math.PI / 4, x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+    if (!blocked(x, z, Math.max(W.map.heightAt(x, z), cy - 0.6))) { sx = x; sz = z; found = true; } }
+  const y = W.map.heightAt(sx, sz);
+  p.pos.set(sx, Math.max(y, cy), sz); p.vel && p.vel.set(0, 0, 0);
+  p.input.yaw = Math.atan2(cx - sx, cz - sz) + Math.PI; return { d: c.d, id: c.id, x: cx, z: cz, freeSpot: found, at: [Math.round(sx * 10) / 10, Math.round(sz * 10) / 10] }; }"""
 
 ROTATE_JS = r"""() => { const t = (document.body.innerText || ''); return { rotate: /rotate|turn your (phone|device)|landscape/i.test(t), sample: (t.match(/[^\n]*(rotate|landscape)[^\n]*/i) || [null])[0] }; }"""
 
@@ -93,7 +114,7 @@ ROTATE_JS = r"""() => { const t = (document.body.innerText || ''); return { rota
 def run_device(v, args, dev):
     spec = MK.DEVICES[dev]
     ctx_kw = {"device_scale_factor": spec["dpr"], "is_mobile": True, "has_touch": True, "user_agent": spec["ua"]}
-    inits = ([MK.IOS_INIT] if spec.get("ios") else []) + [MK.PHONE_NO_LOCK]
+    inits = ([MK.IOS_INIT] if spec.get("ios") else []) + [MK.PHONE_NO_LOCK] + ([PLANT_NO_TOUCH] if getattr(args, "plant", None) == "no-touch-ui" else [])
     P = dev + ": "
     with C.Session(args, "mobile-" + dev, viewport={"width": spec["w"], "height": spec["h"]}, context_kw=ctx_kw, init_scripts=inits) as s:
         T = MK.Touch(s.cdp(), s.sleep)
@@ -144,6 +165,10 @@ def run_device(v, args, dev):
         s.js("() => { const W = window.__LC__.W; if (window.__H_MYCHEST_ON__) return; window.__H_MYCHEST_ON__ = true; window.__H_MYCHEST__ = 0;"
              " W.events.on('chestOpened', (a) => { if (a && a === W.player) window.__H_MYCHEST__++; }); }")
         s.land(120, protect=True)
+        # SETUP (Wave 7b stage B, lane S3; found by lane B1): the touch rows judge the CONTROLS, not survival. On the Wave-7b Isla Viva a bot in the landing town
+        # (seed 7: s2, SMG) killed the unguarded player during the 2 s pistol hold, and every later row then measured a dead player (moved 0 / turned 0 / shots 0:
+        # 35/48). The guard tops hp/shield up each frame; it does not move, aim or fire for the player. --plant no-touch-ui must still FAIL with it on.
+        s.guard_player(True)
         s.freeze_loop()
         s.install_pump()
         s.step_frames(30, 1 / 60, render=False)
@@ -287,10 +312,13 @@ def main():
     C.add_common_args(ap)
     ap.add_argument("--devices", default="pixel7,iphone14,se,ipad")
     ap.add_argument("--map", default="isla_viva", choices=sorted(C.MAPS), help="the map of the match every device plays (default isla_viva; Wave 7 gates ashgrid = Savanna too)")
+    ap.add_argument("--plant", default=None, choices=["no-touch-ui"], help="negative control (Wave 7b): every touch control display:none; the touch rows MUST fail")
     ap.set_defaults(gpu="swiftshader")
     args = ap.parse_args()
     if args.map != "isla_viva" and not args.report:
         args.report = "mobile_" + args.map
+    if args.plant and not args.report:
+        args.report = "mobile_plant_" + args.plant.replace("-", "_")
 
     def body(v):
         for dev in [d.strip() for d in args.devices.split(",") if d.strip()]:

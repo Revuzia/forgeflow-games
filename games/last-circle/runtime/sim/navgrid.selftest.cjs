@@ -51,10 +51,12 @@ function minOf(n, fn) { let best = Infinity; for (let i = 0; i < n; i++) { const
   if (pj) {
     const m1 = /const STEP_UP = ([0-9.]+);/.exec(pj);
     ok(m1 && +m1[1] === NG.STEP_UP, "STEP_UP = player.js literal (" + (m1 && m1[1]) + ")");
-    const sup = /function supportIn\([^)]*\) \{[\s\S]*?\n\}/.exec(pj);
+    const sup = /function supportF\([^)]*\) \{[\s\S]*?\n\}/.exec(pj);            // Wave 7b S1: supportIn's body lives in supportF (MV calling convention)
     const m2 = sup && /c\.minX - ([0-9.]+)/.exec(sup[0]);
     ok(m2 && +m2[1] === NG.SUP_MARGIN, "supportIn footprint margin = player.js literal (" + (m2 && m2[1]) + ")");
-    ok(/K\.PLAYERK\.radius/.test(pj) && /function blockedIn\(/.test(pj) && /K\.rampBlocks\(c, x, z, yd, h, r, STEP_UP\)/.test(pj), "player.js blockedIn still calls the sim rampBlocks the way navgrid copies it");
+    // Wave 7b S1: blockedIn's body is blockedF, which hands the SAME numbers to the sim's rampBlocksA (rampBlocks' one body) in an array
+    ok(/K\.PLAYERK\.radius/.test(pj) && /function blockedF\(/.test(pj) && /RBA\[0\] = x; RBA\[1\] = z; RBA\[2\] = yd; RBA\[3\] = h; RBA\[4\] = r; RBA\[5\] = STEP_UP;\s*\n\s*if \(!K\.rampBlocksA\(c, RBA\)\) continue;/.test(pj),
+       "player.js blockedIn still calls the sim rampBlocks the way navgrid copies it");
   } else info("player.js not found next to this file: source pins skipped");
   if (bj) { const m3 = /const NAV_DROP_MAX = ([0-9.]+);/.exec(bj); ok(m3 && +m3[1] === NG.DROP_MAX, "DROP_MAX = bots.js NAV_DROP_MAX (" + (m3 && m3[1]) + ")"); }
 

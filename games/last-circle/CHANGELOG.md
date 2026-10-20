@@ -3,6 +3,27 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-10-19 — Wave 7b: themed towns on Isla Viva and Deepwood, and the endgame areas (?v=1792458191)
+
+Plan `_spec/world_2026-10/PLAN.md`, Wave 7b. Three stages, each independently verified; the final run of `gate.py --disk --negative-controls` on
+the frozen release tree: 85 of 85 counted gates and 7 of 7 selftests pass, 131 of 131 planted-fault controls caught. `MAP_GEN_VERSION` is 5
+(Savanna's world is byte-identical to the last build; Isla Viva and Deepwood changed).
+
+- **Isla Viva** reads as a pastel resort island: red-tile and coral roofs, palms, promenades, walled compounds and a docks village; the volcano rim
+  holds a ruined crater village of stone huts on a basalt cone, with stairs the real mover climbs 120 of 120 times. Land within 25 m of a building you
+  can enter: 37-42 % (was 9-10 %). Chests 69 (was 53), 4.84 guns + chests per player.
+- **Deepwood** reads as timber lodge towns; Riverside Mill has a mill wheel and a timber bridge with rails, lamps and stone piers across the river
+  (walked across the full 8.5 m width on 200 seeds: 2,000 of 2,000 walking and sprinting). Final-circle cover on 96 % of seeds (bar 90 %).
+- Enterable buildings: Isla Viva 97.5 %, Deepwood 99.6 %. Town roads under water: 0 of 200 seeds on every map (was 200 of 200).
+- Performance: per-frame memory Isla Viva 58.8 KB (was ~60 live; peaked at 118 during the build and was fixed), Savanna 74.2; worst themed
+  view +19 draw calls over the old build, drop views 140-223 calls (limit 450), phone tier within its bar. Savanna's endgame view is now within
+  the +40 bar against the pre-town build on all five test seeds.
+- Bots: heal-pockets 99.87 %, top-floor paths 186 of 186, the same seed replays identically under heavy CPU load.
+- Phones: an in-world loot label can no longer draw under a touch control.
+
+**Known and NOT fixed**: Deepwood allocates ~94 KB per frame (bar 100; the live build reads 54 there) - watch it. The crater village is sparse at eye
+height, Deepwood's drop view is washed out by snow and rain, and buildings are still boxes with bare interiors (furnished interiors are Wave 8).
+
 ## 2026-10-15 — Wave 7 completion: a taller, more varied Savanna, safer squads, bots off the roofs (?v=1792092800)
 
 Closes the gaps the Wave-7 verifiers named, before Wave 7b (themed towns on Isla Viva and Deepwood) and Wave 8 (furnished interiors). Independently
