@@ -1,0 +1,213 @@
+{
+  "id": "shieldwick_aubade",
+  "fighter": "shieldwick_aubade",
+  "skin": false,
+  "parts": {
+    "tris_cloak": 500,
+    "tris_hem_band": 110,
+    "tris_stole": 90,
+    "tris_scarf": 130,
+    "tris_hood": 430,
+    "tris_hood_lining": 380,
+    "tris_hood_rim": 130,
+    "tris_hood_seam": 70,
+    "tris_knob": 110,
+    "tris_hood_light": 130,
+    "tris_sleeve_R": 90,
+    "tris_wraps_R": 58,
+    "tris_mitt_R": 64,
+    "tris_sleeve_L": 90,
+    "tris_wraps_L": 60,
+    "tris_mitt_L": 64,
+    "tris_leg_R": 16,
+    "tris_boot_R": 70,
+    "tris_leg_L": 16,
+    "tris_boot_L": 70,
+    "tris_shield": 210,
+    "tris_shield_ring": 40,
+    "tris_shield_boss": 100,
+    "tris_haft": 50,
+    "tris_lantern": 150,
+    "tris_lantern_core": 40
+  },
+  "uv_coverage": 0.675,
+  "bake": {
+    "base": 3.44,
+    "rough_metal": 3.32,
+    "normal": 1.27,
+    "ao": 1.06,
+    "normal_fixed_px": 20428,
+    "projection": 47.02,
+    "pack_save": 47.12,
+    "total": 57.24
+  },
+  "tris": 3268,
+  "mesh_top_m": 1.089,
+  "clips": {
+    "idle": {
+      "frames": 72,
+      "duration_s": 2.4,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 12,
+      "duration_s": 0.4,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.25,
+      "stride_m": 0.65,
+      "cycle_s": 0.4
+    },
+    "attack1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 96,
+      "duration_s": 3.2,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 1058484,
+  "optimize": {
+    "ok": true,
+    "before": 1058484,
+    "after": 438344
+  },
+  "glb_bytes": 438344,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/shieldwick_aubade.glb (428 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: shieldwick_aubade_base 1024x1024 119K, shieldwick_aubade_normal 256x256 18K, shieldwick_aubade_orm 256x256 19K",
+      "  skinned meshes: shieldwick_aubade(3536v), shieldwick_aubade_accent(175v)",
+      "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:0.833s/18tr, attack2:0.667s/20tr, cast_a1:0.833s/20tr, cast_a2:0.833s/20tr, cast_a3:1.000s/20tr, cast_ult:1.333s/20tr, channel:1.333s/20tr, dash:0.500s/21tr, death:1.333s/20tr, idle:2.400s/20tr, idle_lobby:3.200s/20tr, recall:2.000s/21tr, run:0.400s/20tr, stunned:1.333s/20tr, victory:2.000s/20tr",
+      "  tracks checked: 300; materials: body, accent; textures: body.map=1024x1024, body.normalMap=256x256, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 3268; bind-pose bounds (three units, Y up): 0.84 x 1.09 x 0.59; facing (0.00, 1.00); head bone y 0.72; runRefSpeed 3.25",
+      "  run: 12 f, planted samples 2, max foot-speed error 4.3%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.447,
+        0,
+        -0.292
+      ],
+      [
+        0.398,
+        1.089,
+        0.296
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 0.716,
+    "accentPct": 6.21,
+    "accentTopHalfPct": 63.2,
+    "heightPx1080": 57,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 15,
+    "out": "art/renders/units/three_shieldwick_aubade.png",
+    "seconds": 13.9,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.18,
+      "model": 21.18,
+      "lows_bind": 0.04,
+      "uv": 8.43,
+      "bake": 57.25,
+      "clips": 0.2,
+      "export": 1.52,
+      "optimize": 0.68,
+      "load_test": 0.26,
+      "three_qa": 14.25,
+      "cache": 0.08
+    },
+    "total_s": 104.12
+  },
+  "run_ref_speed": 3.25,
+  "height_m": 1.0
+}

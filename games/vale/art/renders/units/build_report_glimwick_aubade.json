@@ -1,0 +1,253 @@
+{
+  "id": "glimwick_aubade",
+  "fighter": "glimwick_aubade",
+  "skin": false,
+  "parts": {
+    "bind_sleeves": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_sleeves": 210,
+    "bind_trousers": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "toe.L",
+        "toe.R"
+      ]
+    },
+    "tris_trousers": 80,
+    "tris_hood": 496,
+    "tris_hood_rim": 148,
+    "tris_rim_line": 80,
+    "tris_knob": 48,
+    "tris_seam": 78,
+    "tris_hollow": 60,
+    "tris_hoodlight": 66,
+    "tris_cloak": 622,
+    "tris_stole": 138,
+    "tris_sash": 118,
+    "tris_mitt_R": 110,
+    "tris_mitt_L": 110,
+    "tris_boot_L": 80,
+    "tris_boot_R": 80,
+    "tris_pole": 108,
+    "tris_finial": 70,
+    "tris_crook": 80,
+    "tris_lamp_panes": 60,
+    "tris_lamp_frame": 150,
+    "tris_cord": 24,
+    "validate_glimwick_aubade": "2614->2606",
+    "validate_glimwick_aubade_accent": "402->380"
+  },
+  "uv_coverage": 0.74,
+  "bake": {
+    "base": 2.2,
+    "rough_metal": 1.5,
+    "normal": 0.77,
+    "ao": 0.65,
+    "normal_fixed_px": 19327,
+    "projection": 29.11,
+    "pack_save": 29.19,
+    "total": 34.49
+  },
+  "tris": 2986,
+  "mesh_top_m": 1.32,
+  "clips": {
+    "idle": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 10,
+      "duration_s": 0.3333,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.25,
+      "stride_m": 0.542,
+      "cycle_s": 0.333
+    },
+    "attack1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "channel": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 10,
+      "duration_s": 0.3333,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 957928,
+  "optimize": {
+    "ok": true,
+    "before": 957928,
+    "after": 384152
+  },
+  "glb_bytes": 384152,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_aubade.glb (375 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: glimwick_aubade_base 1024x1024 139K, glimwick_aubade_normal 256x256 17K, glimwick_aubade_orm 256x256 20K",
+      "  skinned meshes: glimwick_aubade(3521v), glimwick_aubade_accent(215v)",
+      "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b x_skirt_f x_skirt_l x_skirt_r)",
+      "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.833s/23tr, cast_a2:0.833s/23tr, cast_a3:0.833s/23tr, cast_ult:0.833s/23tr, channel:2.000s/19tr, dash:0.333s/25tr, death:1.500s/21tr, idle:2.000s/19tr, idle_lobby:2.000s/19tr, recall:2.000s/19tr, run:0.333s/25tr, stunned:2.000s/19tr, victory:2.000s/19tr",
+      "  tracks checked: 323; materials: body, accent; textures: body.map=1024x1024, body.normalMap=256x256, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 2986; bind-pose bounds (three units, Y up): 0.73 x 1.32 x 0.53; facing (0.00, 1.00); head bone y 0.66; runRefSpeed 3.25",
+      "  run: 10 f, planted samples 2, max foot-speed error 1.2%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.421,
+        -0.001,
+        -0.242
+      ],
+      [
+        0.313,
+        1.32,
+        0.286
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 0.66,
+    "accentPct": 7.05,
+    "accentTopHalfPct": 52.9,
+    "heightPx1080": 69,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 15,
+    "out": "art/renders/units/three_glimwick_aubade.png",
+    "seconds": 9,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.25,
+      "model": 11.11,
+      "lows_bind": 3.58,
+      "uv": 23.52,
+      "bake": 34.49,
+      "clips": 0.38,
+      "export": 1.02,
+      "optimize": 0.57,
+      "load_test": 0.18,
+      "three_qa": 9.38,
+      "cache": 0.03
+    },
+    "total_s": 84.59
+  },
+  "run_ref_speed": 3.25,
+  "height_m": 0.93
+}

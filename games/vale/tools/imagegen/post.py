@@ -4,6 +4,7 @@
     python tools/imagegen/post.py                 # process every raw image that has a manifest record
     python tools/imagegen/post.py --apply-refs    # …and point content refs at the new files
     python tools/imagegen/post.py --pick ability_x=2   # use raw/ability_x__2.png instead of the first variant
+    python tools/imagegen/post.py --only concept_wick_   # only ids starting with this prefix (leave other outputs alone)
 
 Per kind:  icon → 256² WebP (centre crop) · keyart/backdrop → cover-crop to the record's size class
 (wide 1920×1080, landscape 1280×960, portrait 768×1152) WebP · texture → square, made SEAMLESS by
@@ -51,6 +52,7 @@ def main() -> None:
     ap.add_argument("--apply-refs", action="store_true")
     ap.add_argument("--pick", action="append", default=[], help="id=variant")
     ap.add_argument("--kind", help="only this kind (icon | concept | keyart | backdrop | texture)")
+    ap.add_argument("--only", help="only ids starting with this prefix (comma list allowed)")
     a = ap.parse_args()
     pf = HERE / "picks.json"
     picks = {k: str(v) for k, v in json.loads(pf.read_text(encoding="utf-8")).items() if not k.startswith("$")} if pf.exists() else {}
@@ -60,6 +62,8 @@ def main() -> None:
     done, swaps = 0, {}
     for it in man["items"]:
         if a.kind and it["kind"] != a.kind:
+            continue
+        if a.only and not any(it["id"].startswith(p) for p in a.only.split(",") if p):
             continue
         v = picks.get(it["id"])
         src = RAW / (f"{it['id']}__{v}.png" if v and v != "1" else f"{it['id']}.png")
