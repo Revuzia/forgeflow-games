@@ -35,7 +35,7 @@ import { ThrowFx } from '../src/render/fx/throwfx.ts';
 import { Debris } from '../src/render/fx/meshfx.ts';
 import { swapPropDepth } from '../src/render/fx/propmat.ts';
 import type { FxCtx } from '../src/render/fx/disasters.ts';
-import { FALLBACK_SIGIL, SIGIL_IDS, sigilOfMiracle, sigilStroke } from '../src/render/fx/sigils.ts';
+import { FALLBACK_SIGIL, SIGIL_IDS, sigilOfDisaster, sigilOfMiracle, sigilStroke } from '../src/render/fx/sigils.ts';
 import { SHAPES, Unistroke, type Pt } from '../src/ui/unistroke.ts';
 import { BASE_PACK } from '../src/data/index.ts';
 import { AgentFlag2, type EntityRef, type HandView, type ProjectileView } from '../src/sim/types.ts';
@@ -287,6 +287,33 @@ test('feared, the Touch is storm-dark and crackles; trusted, it is warm light an
   assert.ok(inner(g).u.uDark.value === 0 && g.light.r > g.light.b + 0.3, 'warm light, no storm');
 });
 
+test('trusted, the Touch is warm light more than weather; holding, its cradle still shows what it holds', () => {
+  const S = touchStage();
+  const look = (regard: number, held: EntityRef | null) => {
+    const h = new HandVisual();
+    h.force = true;
+    S.run(h, 80, () => ({ hand: S.hand({ regard, held, pose: held ? 'grab' : 'open' }) }));
+    const u = inner(h).u;
+    return { tuft: u.uTuftK.value, heart: u.uHeartK.value, dust: u.uDustK.value, motes: u.uMoteK.value, moteS: u.uMoteS.value, beam: u.uBeamK.value, grasp: h.grasp };
+  };
+  const awed = look(0, null), trusted = look(1, null), feared = look(-1, null);
+  // open: a trusted god's cloud thins, the light at its heart swells, its motes of light thicken and grow, its shaft
+  // brightens, and it raises almost no dust (a sunlit whirl of cloud and dust read as a white dust devil)
+  assert.ok(trusted.tuft < awed.tuft * 0.5, `less cloud (${trusted.tuft.toFixed(2)} vs ${awed.tuft.toFixed(2)})`);
+  assert.ok(trusted.heart > awed.heart * 2.5, `more light at its heart (${trusted.heart.toFixed(2)} vs ${awed.heart.toFixed(2)})`);
+  assert.ok(trusted.motes > awed.motes * 2 && trusted.moteS > awed.moteS * 1.5, 'more and larger motes of light');
+  assert.ok(trusted.beam > awed.beam * 2, `a brighter shaft (${trusted.beam.toFixed(2)} vs ${awed.beam.toFixed(2)})`);
+  assert.ok(trusted.dust < awed.dust * 0.25, `almost no dust (${trusted.dust.toFixed(3)} vs ${awed.dust.toFixed(3)})`);
+  // a feared god is the storm: its cloud is thickest
+  assert.ok(feared.tuft > awed.tuft && feared.heart < trusted.heart, 'feared: thick dark cloud, little light');
+  // holding, the trusted god keeps more of its cradle and less glow than open (the weave must show; what it holds
+  // stands dark against the light instead of drowning in it)
+  const holding = look(1, { kind: 'rock', id: 2600 });
+  assert.ok(holding.grasp > 0.95, 'it gathered');
+  assert.ok(holding.tuft > trusted.tuft, `the cradle is woven of cloud (${holding.tuft.toFixed(2)} vs open ${trusted.tuft.toFixed(2)})`);
+  assert.ok(holding.heart / trusted.heart < 1.2, 'its heart no brighter than open (what it holds is not drowned)');
+});
+
 test('the Touch at work: a throw leaves a trail, a rebuke is a downdraft and a flash, a cast traces its sigil', () => {
   const S = touchStage();
   const h = new HandVisual();
@@ -519,6 +546,11 @@ test('one glyph per sigil: what the Touch traces and the land shows is the strok
   assert.ok(drop[1] > drop[31 * 2 + 1], 'the drop starts high');
   assert.ok(fall[0] < fall[31 * 2] && fall[1] > fall[31 * 2 + 1], 'the fall runs down-right');
   assert.ok(sprout[1] < -0.9, 'the sprout starts at the foot of its stem');
+  // a disaster sent with a sigil (the meteor's power) writes it; one no sigil sends (a volcano, a comet) writes none
+  for (const p of used) if (p.command === 'disaster.spawn' && p.params?.kind) assert.equal(sigilOfDisaster(p.params.kind), p.sigil, `${p.params.kind} is sent with ${p.sigil}`);
+  assert.equal(sigilOfDisaster('meteor'), 'fall');
+  assert.equal(sigilOfDisaster('volcano'), null);
+  assert.equal(sigilOfDisaster('comet'), null);
   // an invented miracle draws the original fallback, which has a stroke of its own
   assert.equal(sigilOfMiracle('no-such-miracle'), FALLBACK_SIGIL);
   assert.deepEqual(sigilStroke('no-such-sigil', 32), sigilStroke(FALLBACK_SIGIL, 32));

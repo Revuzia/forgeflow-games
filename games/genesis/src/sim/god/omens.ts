@@ -44,6 +44,7 @@ import { spawnDisaster } from './disasters.ts';
 import { foretell, heard, makeProphet, prophetOfSettlement } from './prophets.ts';
 import { addSacredPlace, revere, sacredAnimalOf } from './sacred.ts';
 import { godAct } from './belief.ts';
+import { curiosityGain } from '../people/outlets.ts';
 
 export const OMEN_KINDS = ['eclipse', 'comet', 'flood', 'rainbow', 'lightning', 'aurora', 'red-rain', 'still-sun', 'sacred-animal', 'spring'] as const;
 export type OmenKind = (typeof OMEN_KINDS)[number];
@@ -101,7 +102,8 @@ export function readOmen(u: Universe, p: Planet, kind: OmenKind, pos: ArrayLike<
     moveSettlement(x, st, { faith: def.faith, fear: def.fear, trust: def.trust * (trusted ? 1 : 0.5) });
     const members = x.ps.members.get(st.id) ?? [];
     seen += members.length;
-    for (const s of members) { x.A.remember(s, MEMK.omen, u.tick, OMEN_KINDS.indexOf(kind)); x.A.flags[s] |= AgentFlag.sees_god; }
+    // (LIVING §2.9: an omen is a new thing to wonder at — LAND's curiosity outlet, wired at integration 2026-10-20)
+    for (const s of members) { x.A.remember(s, MEMK.omen, u.tick, OMEN_KINDS.indexOf(kind)); x.A.flags[s] |= AgentFlag.sees_god; curiosityGain(x, s, 0.15); }
     st.recent.godSeen = u.tick;
     r.acts.push({ kind: `omen:${kind}`, tick: u.tick, god, dead: 0, foretold: false, provoked: false, key: `omen:${kind}:${u.tick}` });
     if (r.acts.length > 12) r.acts.splice(0, r.acts.length - 12);

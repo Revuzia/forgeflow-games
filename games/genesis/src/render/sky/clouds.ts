@@ -295,7 +295,15 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
   // cover: round clusters of round heaps read as popcorn from orbit)
   float lobes = textureLod(uCloudDetail, pb * (1.0 / 2600.0) + warp * 0.2 + vec3(0.21, 0.63, 0.47), 0.0).r * 0.65
               + textureLod(uCloudDetail, pb * (1.0 / 1050.0) + vec3(0.83, 0.37, 0.11), 0.0).g * 0.35;
-  float mask = clamp(0.62 * big + 0.62 * cluster - 0.14 + 0.55 * (lobes - 0.62) * (1.0 - abs(big - 0.5) * 1.2), 0.0, 1.0);
+  // ... and most of the mask is a FRACTAL field: a Perlin fBm over two tiles (5.2 and 1.7 km: masses from ~1.3 km
+  // down to ~50 m, the detail texture's A, σ ≈ 0.045 for the 0.6 / 0.4 sum, stretched to a uniform 0..1), so cloud
+  // masses come in every size, with ragged margins, holes and outliers — the look of a real cloud field from orbit. (A
+  // Worley cluster noise carrying the mask made every mass an oval of one size, evenly spread: cotton wool, whatever
+  // the heaps inside it did.)
+  float fA = textureLod(uCloudDetail, pb * (1.0 / 5200.0) + warp * 0.25 + vec3(0.37, 0.11, 0.83), 0.0).a;
+  float fB = textureLod(uCloudDetail, pb * (1.0 / 1700.0) + warp * 0.1 + vec3(0.59, 0.77, 0.21), 0.0).a;
+  float fractM = smoothstep(0.41, 0.59, 0.6 * fA + 0.4 * fB);
+  float mask = clamp(0.4 * big + 0.25 * cluster + 0.7 * fractM - 0.17 + 0.3 * (lobes - 0.62) * (1.0 - abs(big - 0.5) * 1.2), 0.0, 1.0);
   mask = mix(mask, mask * (0.25 + 1.0 * streets), streetsW * 0.6);
   // broken cover only: an overcast stays overcast
   float brk = 1.0 - smoothstep(0.75, 0.97, cov);
@@ -352,47 +360,50 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
       float cellsW = textureLod(uCloudDetail, pb * (1.0 / 2100.0) + vec3(0.41, 0.13, 0.77), 0.0).r;
       anvil = max(anvil, K.x * (1.0 - smoothstep(0.35, 0.85, ang)) * smoothstep(0.62, 0.82, cellsW + 0.3 * core));
     } else {
-      // tropical cyclone: a bright central dense overcast with an eye, spiral rain bands outside it, narrowing and
-      // breaking into cells outward, and the outflow's cirrus shield over the inner bands
-      // (the phase wobble is a fifth of the bands' spacing at most: more and the spiral itself dissolved into blotches)
-      float wob = 1.0 * warp.x + 0.8 * (lobes - 0.6);
-      // Bands on a logarithmic spiral (constant phase: θ = −k·ln r / m), wound at a hurricane's pitch: four narrow
-      // SECONDARY bands at ψ ≈ 16° (m = 4, k = 14; each about a quarter of the spacing between them) and one PRINCIPAL
-      // band at ψ ≈ 11° (m = 1, k = 5.2) that sweeps out of the overcast, broad beside it and narrowing outward. (Three
-      // equal arms at ~29° and one at 14°, all as wide as the overcast near it, merged into one fat arm round a white
-      // disc: a painted '6', a weather-map icon.) The phases wander with the synoptic warp and the cluster lobes, so a
-      // band swells, pinches and frays instead of running as a clean ribbon.
-      float lr = log(ang + 0.05) * K.y;
-      float sec = 0.5 + 0.5 * sin(14.0 * lr + 4.0 * th + 1.3 * wob);
-      float pri = 0.5 + 0.5 * sin(5.2 * lr + th + 1.1 + wob);
-      float reach = 1.0 - smoothstep(0.85, 1.35, ang + 0.15 * (lobes - 0.6));
-      // the central dense overcast: round, ~0.4 of the system, its edge ragged where the bands leave it
-      float cdo = 1.0 - smoothstep(0.28, 0.46, ang + 0.1 * (lobes - 0.6) + 0.06 * warp.y);
-      float outer = smoothstep(0.45, 1.15, ang);
-      float secK = smoothstep(0.62, 0.9, sec) * (1.0 - smoothstep(0.7, 1.2, ang)) * 0.85;
-      float priK = smoothstep(mix(0.4, 0.74, outer), mix(0.82, 0.96, outer), pri);
-      // outward the bands are lines of convective cells with clear air between them (the cluster mask and a finer
-      // cell pattern)
-      float cellsB = textureLod(uCloudDetail, pb * (1.0 / 1500.0) + vec3(0.29, 0.61, 0.83), 0.0).r;
-      float bandK = max(priK, secK) * mix(1.0, smoothstep(0.35, 0.72, 0.55 * mask + 0.45 * cellsB + 0.12), outer);
+      // tropical cyclone: a broad bright central dense overcast (CDO) round a small clear eye; one PRINCIPAL rain band
+      // peeling off the CDO and sweeping out round about half the storm, narrowing as it goes; a few shorter SECONDARY
+      // bands further out; every band a line of convective cells broken by clear lanes, more so outward; and over the
+      // inner storm the cirrus OUTFLOW, a translucent shield combed into streaks that curl the other way (the outflow
+      // turns anticyclonically aloft) — the storm's edge a haze, not a cut-out.
+      // Bands on logarithmic spirals, constant phase θ + s·b·ln r (s: the spin sense; outward a band turns against the
+      // spin: the inflow spirals in cyclonically) at a rain band's pitch, ψ ≈ 20° (b = cot ψ ≈ 2.6): the principal band
+      // turns ~190° from the CDO (r ≈ 0.35) to the rim. (At ψ ≈ 11–16°, four secondary arms and a principal band wound
+      // more than a full turn: concentric rings round a white disc, a target.) The phases wander with the synoptic warp
+      // and the cluster lobes, so a band swells, pinches and frays instead of running as a clean ribbon.
+      float wob = 0.7 * warp.x + 0.6 * (lobes - 0.6);
+      float lr = log(ang + 0.03);
+      float pri = 0.5 + 0.5 * cos(th + K.y * 2.6 * lr + 0.4 + wob);
+      float sec = 0.5 + 0.5 * cos(3.0 * (th + K.y * 3.0 * lr) + 1.9 + 1.4 * wob);
+      float reach = 1.0 - smoothstep(0.95, 1.4, ang + 0.15 * (lobes - 0.6));
+      float outer = smoothstep(0.45, 1.2, ang);
+      // the principal band, broad where it leaves the overcast, narrower outward; the secondary bands between ~0.5 and
+      // 1.0 of the radius, narrow
+      float priK = smoothstep(mix(0.8, 0.88, outer), mix(0.94, 0.98, outer), pri) * smoothstep(0.22, 0.34, ang);
+      float secK = smoothstep(0.82, 0.95, sec) * smoothstep(0.42, 0.56, ang) * (1.0 - smoothstep(0.85, 1.15, ang)) * 0.9;
+      // the CDO: about a third of the system, its ragged edge drawn out along the principal band where it peels off
+      float cdo = 1.0 - smoothstep(0.25, 0.39, ang + 0.08 * (lobes - 0.6) + 0.04 * warp.y - 0.1 * priK * (1.0 - outer));
+      // the bands are lines of convective cells with clear air between them (the cluster mask and a finer cell pattern)
+      float cellsB = textureLod(uCloudDetail, pb * (1.0 / 1300.0) + vec3(0.29, 0.61, 0.83), 0.0).r;
+      float bandK = max(priK, secK) * mix(1.0, smoothstep(0.32, 0.68, 0.45 * mask + 0.55 * cellsB + 0.08), 0.35 + 0.65 * outer)
+        * (1.0 - smoothstep(0.85, 1.25, ang));
       float arms = max(pri, sec * 0.9);
-      float m = mix(0.04 + 1.25 * bandK, 1.0, cdo);
+      float m = mix(0.02 + 1.25 * bandK, 1.0, cdo);
       float cb = mix(cov, cov0, K.x * reach);
       cov = mix(cov, clamp(max(cb, 0.35) * m * 1.25, 0.0, 1.0), reach * K.x);
       sysW = max(sysW, K.x * reach);
-      float eye = smoothstep(0.08, 0.14, ang);
-      float wall = eye * (1.0 - smoothstep(0.13, 0.26, ang));
-      storm = mix(storm, mix((0.35 + 0.6 * arms), 0.8, cdo) + 0.2 * wall, reach * K.x);
+      float eye = smoothstep(0.06, 0.11, ang);
+      float wall = eye * (1.0 - smoothstep(0.11, 0.22, ang));
+      storm = mix(storm, mix((0.35 + 0.6 * arms * max(priK, secK)), 0.8, cdo) + 0.2 * wall, reach * K.x);
       // the overcast's top is smooth (stratiform), the eyewall and the bands tower
       ctype = mix(ctype, mix(0.85, 0.12, cdo * (1.0 - wall)), reach * K.x);
-      // the outflow at the top: spiral striations over the overcast (its top rises and falls along them, so a low sun
-      // draws its texture from orbit)
-      float striae = 0.5 + 0.5 * sin((th + K.y * 3.2 * log(ang + 0.04)) * 7.0 + 3.0 * warp.y);
+      // the outflow aloft: striations over the overcast curling ANTI-cyclonically (its top rises and falls along them,
+      // so a low sun draws its texture from orbit)
+      float striae = 0.5 + 0.5 * sin(8.0 * (th - K.y * 1.6 * log(ang + 0.04)) + 3.0 * warp.y + 2.0 * (lobes - 0.6));
       anvil = max(anvil, K.x * reach * cdo * eye * (0.62 + 0.38 * striae));
-      // ... and its cirrus outflow spreads past the overcast as a thin veil, combed into the same spiral streaks
-      // (translucent over the bands and the sea between them: the storm's outer edge is a haze, not a cut-out)
-      float veil = (1.0 - smoothstep(0.45, 1.05, ang + 0.1 * (lobes - 0.6))) * (1.0 - cdo) * smoothstep(0.35, 0.8, striae);
-      anvil = max(anvil, K.x * reach * eye * 0.3 * veil);
+      // ... and its cirrus spreads past the overcast as a thin veil combed into the same streaks, over the inner bands
+      // and the sea between them
+      float veil = (1.0 - smoothstep(0.5, 0.95, ang + 0.12 * (lobes - 0.6))) * (1.0 - cdo) * smoothstep(0.3, 0.8, striae);
+      anvil = max(anvil, K.x * reach * eye * 0.34 * veil);
       cov *= mix(1.0, eye, reach * K.x);
     }
   }
@@ -439,12 +450,20 @@ float cloudField(vec3 pb, float hf, float cov, float storm, float ctype, float a
   // A third, finer octave (~520 m tile: heaps of 35–130 m) rides on both, so a far field has the spread of sizes of a
   // real one — merged masses with knobbly lumps, smaller clumps beside them, lone small puffs at their margins (one
   // octave read as popcorn, two as cotton wool). (Weights 0.5 / 0.32 / 0.18: the sum's spread is 1/1.6 of one octave's.)
+  // The far field's outline is FRACTAL: a Perlin fBm over two tiles (1.6 and 4.6 km: features from ~1 km down to
+  // ~50 m, the detail texture's A) carries most of it, so the masses have the ragged, self-similar margins, holes and
+  // satellite clumps of a real cloud field seen from orbit; the merged heaps (nb) and the heap itself add the lumps.
+  // (Worley heaps alone, merged or not, gave rounded blobs of one size scattered evenly: cotton wool.) The fBm's spread
+  // (σ ≈ 0.045 for the 0.62 / 0.38 sum; 8-bit texels are fine at that) is stretched to a uniform 0..1 first.
   if (cl_far > 0.0) {
     float nb = cl_tex(uCloudBase, q * 0.43 + vec3(0.19, 0.53, 0.71), 128.0 * 0.43 * uCloudScale.x).r;
-    float nf = cl_tex(uCloudBase, q * 2.3 + vec3(0.67, 0.29, 0.13), 128.0 * 2.3 * uCloudScale.x).r;
-    float sf = 0.5 * nb + 0.32 * shape + 0.18 * nf;
-    sf = clamp(0.5 + (sf - 0.5) * 1.6, 0.0, 1.0);
-    shape = mix(shape, sf, cl_far * 0.85);
+    float fa = cl_tex(uCloudDetail, q * 0.75 + vec3(0.13, 0.57, 0.91), 64.0 * 0.75 * uCloudScale.x).a;
+    float fb = cl_tex(uCloudDetail, q * 0.26 + vec3(0.71, 0.23, 0.37), 64.0 * 0.26 * uCloudScale.x).a;
+    float fr = smoothstep(0.41, 0.59, 0.62 * fa + 0.38 * fb);
+    float sf = 0.55 * fr + 0.25 * nb + 0.2 * shape;
+    sf = clamp(0.5 + (sf - 0.5) * 1.55, 0.0, 1.0);
+    // (not inside a storm system's towers and bands: its organised shapes stay clean-edged)
+    shape = mix(shape, sf, cl_far * 0.9 * (1.0 - 0.75 * smoothstep(0.3, 0.7, storm)));
   }
   // cauliflower: billows of ~75 / 150 m (the base texture's Worley octaves) push a heap's surface in and out, a little
   // stronger toward the top (one that only started above the base left a wider skirt under a narrower waist:
@@ -500,10 +519,16 @@ float cloudDetailed(vec3 pb, float hf, float cov, float storm, float ctype, floa
     float d4 = cl_tex(uCloudDetail, dq * 0.42 + vec3(0.21, 0.83, 0.57), 64.0 * 0.42 * uCloudScale.y).g;
     vv -= (mix(d3, 1.0 - d3, bill) * 0.15 + mix(d4, 1.0 - d4, bill) * 0.07) * cl_far;
   }
-  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.1, cl_far)) : 0.0;
+  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.07, cl_far)) : 0.0;
   // ... and its thin parts are thin: density grows with the square of the cover toward the margins, so a far cloud's
   // fringe is translucent veil over the ground (τ ≈ 1 a few pixels in) and only its core is opaque white
   c *= mix(1.0, c, cl_far * 0.6);
+  // ... and a mass is not of one thickness: thinner streaks and pockets (~30–250 m, the fBm again) let the sea and
+  // the land show through as grey, so from orbit a mass has an inner texture instead of one flat white
+  if (cl_far > 0.0 && c > 0.0) {
+    float th = cl_tex(uCloudDetail, dq * 0.05 + vec3(0.47, 0.19, 0.83), 64.0 * 0.05 * uCloudScale.y).a;
+    c *= mix(1.0, 0.3 + 0.7 * smoothstep(0.42, 0.56, th), cl_far * 0.55 * (1.0 - smoothstep(0.6, 1.0, storm)));
+  }
   if (an > 0.0) {
     // the anvil: smooth, fibrous, lightly eroded
     float ca = clamp(an - (1.0 - df) * 0.3, 0.0, 1.0) * 0.5;
@@ -543,12 +568,24 @@ void main() {
   vec2 st = gl_FragCoord.xy / uSize * 2.0 - 1.0;
   vec3 dir = normalize(cl_faceDir(st, uFace));
   vec2 cs = textureLod(uCoverage, dir, 0.0).rg;
-  float cov = clamp(cs.x + uCloudScale.w, 0.0, 1.0);
   float storm = cs.y;
-  // the sim's own storms (rain heavier than ~5 mm/h) spread an anvil downwind of their towers: the strongest
-  // precipitation within ~300 m
   vec3 t1 = normalize(cross(dir, abs(dir.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
   vec3 t2 = cross(dir, t1);
+  // The sim's cover is a field of saturated cells a few hundred metres across (its humidity crosses the condensation
+  // threshold steeply): taken as is, every cell was a solid oval of overcast — its outline the field's own, the
+  // weather mask switched off inside it ('an overcast stays overcast') — and from orbit the world wore evenly spread
+  // ovals of cotton wool. The cover the clouds are organised from is the REGIONAL one: the cell's own value with the
+  // mean of two rings round it (~350 and ~800 m), so an isolated saturated cell is a cloudy region whose masses the
+  // fractal weather mask shapes, while a broad overcast (a front, a painted storm) stays solid.
+  float ringA = 0.0, ringB = 0.0;
+  for (int k = 0; k < 6; k++) {
+    float a = float(k) * 1.0472;
+    ringA += textureLod(uCoverage, normalize(dir * uMidR + (t1 * cos(a) + t2 * sin(a)) * 350.0), 0.0).r;
+    ringB += textureLod(uCoverage, normalize(dir * uMidR + (t1 * cos(a + 0.5236) + t2 * sin(a + 0.5236)) * 800.0), 0.0).r;
+  }
+  float cov = clamp(0.4 * cs.x + 0.35 * ringA / 6.0 + 0.25 * ringB / 6.0 + uCloudScale.w, 0.0, 1.0);
+  // the sim's own storms (rain heavier than ~5 mm/h) spread an anvil downwind of their towers: the strongest
+  // precipitation within ~300 m
   float pw = cs.y;
   for (int k = 0; k < 6; k++) {
     float a = float(k) * 1.0472;
@@ -794,7 +831,10 @@ void main() {
   float limbK = (1.0 - uInsideAir) * smoothstep(uRg - 0.1 * thickS, uRg + 0.6 * thickS, rMin);
   float farIn = 1.0 - 0.6 * uInsideAir;
   cl_far = limbK;
-  float limbDim = mix(1.0, 0.18, limbK);
+  // heaps standing out past the ground's silhouette fade with how high above it the ray passes: the deck's lower part
+  // still rims the limb, the tops a tenth of a radius up do not stand out as a ring of lumps — nor, dimmed rather than
+  // gone, as a grey fringe of translucent smudges round the disc
+  float limbDim = 1.0 - (1.0 - uInsideAir) * smoothstep(uRg + 0.15 * (uShell.y - uRg), uRg + 0.75 * (uShell.y - uRg), rMin);
   float nu = dot(d, sun);
   vec4 phS = msPhases(nu);
   vec4 phM = moonOn ? msPhases(dot(d, moon)) : vec4(0.0);

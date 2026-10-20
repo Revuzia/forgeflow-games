@@ -466,6 +466,8 @@ export const DRY_EDGE = 30;
 /** (LIVING PACE) fire seasons: dry strikes drawn per game hour over a world (stateless draws; only the cells of grass and
  * scrub country in their dry season take them) — calibrated with _harness/scratch/living/pace (pace.ts fire) */
 export const HEAT_STRIKES_PER_HOUR = 60;
+/** (LIVING integration) the cells of the world HEAT_STRIKES_PER_HOUR was set on (n = 64: 10 n² + 2) */
+export const HEAT_CELLS = 40962;
 /** (LIVING PACE) a dry strike lights cured fuel only below this soil moisture */
 export const CURED_MOISTURE = 0.3;
 
@@ -519,7 +521,10 @@ function heatLightning(u: Universe, p: Planet, dt: number): void {
     content.biomes.list.forEach((b, i) => { if (FIRE_SEASON_BIOMES.includes(b.id)) set![i] = 1; else if (b.id === 'forest' || b.id === 'taiga') set![i] = 2; });
     seasonBiomes.set(content, set);
   }
-  const expected = (HEAT_STRIKES_PER_HOUR * dt) / 60;
+  // (per cell, the same on every grid: HEAT_STRIKES_PER_HOUR is the rate of the n = 64 world's 40 962 cells — LIVING
+  // integration, 2026-10-20: drawn per world, a cell of an n = 12 world was struck 28 times as often; it showed when a
+  // wetter cure let the strikes through (LIVING §10.5) and a living start's people learned fire within its first hours)
+  const expected = (HEAT_STRIKES_PER_HOUR * (p.count / HEAT_CELLS) * dt) / 60;
   let n = Math.floor(expected);
   if (hashFloat(u.tick, p.id, 0xd1e5) < expected - n) n++;
   const f = p.f, N = p.count;

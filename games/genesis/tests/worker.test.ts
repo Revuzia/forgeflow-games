@@ -47,6 +47,7 @@ test('worker protocol round trip', async () => {
   try {
     // a full snapshot carries every published field as a Float32Array of the grid's size
     const full = await c.snapshot(true);
+    const tFull = performance.now();
     assert.equal(full.planets.length, 2);
     const home = full.planets[0];
     assert.equal(home.gridN, 16);
@@ -57,12 +58,24 @@ test('worker protocol round trip', async () => {
     // nothing changed since: the next snapshot ships no field arrays
     const quiet = await c.snapshot(false);
     assert.equal(quiet.planets[0].fields, undefined);
-    // step 120 ticks (paused world), then fields that changed come again
-    const st = await c.call<{ type: 'stepped'; id: number; tick: number }>({ type: 'step', id: 1, ticks: 120 });
-    assert.equal(st.tick, 120);
-    const soon = await c.snapshot(false);
-    assert.equal(soon.tick, 120);
-    assert.equal(soon.planets[0].fields?.temperature, undefined, 'slow fields are throttled (~500 ms)');
+    // step 120 ticks (paused world), then fields that changed come again — but the slow fields not within ~500 ms of the
+    // last time they were sent. (LIVING integration, 2026-10-20: the check is made on a round that stays inside the
+    // window — a full snapshot sends the fields, the step and the next snapshot follow at once; on a machine so loaded
+    // that the round itself outlasts the window it is tried again, up to eight times: the assertion is the same)
+    let tick = 0, measured = false;
+    for (let attempt = 0; attempt < 8 && !measured; attempt++) {
+      // (the window opens when the fields were last sent: the full snapshot above, or a fresh one on a retry)
+      const t0 = attempt ? (await c.snapshot(true), performance.now()) : tFull;
+      const st = await c.call<{ type: 'stepped'; id: number; tick: number }>({ type: 'step', id: 100 + attempt, ticks: 120 });
+      tick += 120;
+      assert.equal(st.tick, tick);
+      const soon = await c.snapshot(false);
+      assert.equal(soon.tick, tick);
+      if (performance.now() - t0 > 350) continue;
+      measured = true;
+      assert.equal(soon.planets[0].fields?.temperature, undefined, 'slow fields are throttled (~500 ms)');
+    }
+    assert.ok(measured, 'a step and a snapshot within the throttle window (eight tries)');
     await new Promise((ok) => setTimeout(ok, 550));
     const after = await c.snapshot(false);
     assert.ok(after.planets[0].fields?.temperature, 'temperature changed and was sent once the throttle allowed');

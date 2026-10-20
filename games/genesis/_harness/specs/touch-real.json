@@ -1,0 +1,43 @@
+{
+ "_doc": "The Touch against the REAL sim in its worker (scenario=lookdev, the sim's own town world; LIVING \u00a73.6, hooks H2/H7): the sim's hand lifts a real villager of the biggest town (hand.grab target agent: HandView.held, the crowds draw them where the Touch's pinch is), seen close, with the look the sim's own regard gives it (HandView.regard); then it hurls them (hand.throw toward a point 70 m off: a projectile carrying the agent, streaked in the Touch's light). Run: node _harness/shots.mjs _harness/specs/touch-real.json --port=5195",
+ "shots": [
+  {
+   "name": "real-touch-hold",
+   "params": "scenario=lookdev&page=signs&dev=1",
+   "size": [
+    960,
+    540
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const D = 180 / Math.PI;",
+    "await G.step(1440); const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0];",
+    "const list = (await G.query('agents', { settlement: s.id })) || []; const T = pv().fields.get('tree'); const blk = pv().agents; const posOf = (id) => { for (let k = 0; k < blk.count; k++) if (blk.id[k] === id) return [blk.pos[k * 3], blk.pos[k * 3 + 1], blk.pos[k * 3 + 2]]; return null; }; let a = null, best = 9; for (const x of list) { if ((x.age ?? 30) < 16) continue; const q = posOf(x.id); if (!q) continue; const l = Math.hypot(...q); const v = T ? pv().grid.sample(T, q[0] / l, q[1] / l, q[2] / l) : 0; if (v < best) { best = v; a = x; } } a = a || list[0];",
+    "const q = posOf(a.id) || s.pos; const l = Math.hypot(...q); const u = q.map((x) => x / l);",
+    "await G.cmd({ k: 'hand.move', pos: u }); const r = await G.cmd({ k: 'hand.grab', pos: u, target: { kind: 'agent', id: a.id } }); await G.step(1);",
+    "F.fx.hand.force = true; await G.camera({ mode: 'orbit', lat: Math.asin(u[1]) * D, lon: Math.atan2(u[0], u[2]) * D, dist: 40, tilt: 48, yaw: 30, fov: 55, hour: 15.5 }); await G.frames(1); F.fx.hand.hold = 600; await G.frames(2); F.fx.hand.hold = null; await G.frames(1);",
+    "const h = A.sim.view.hand; return { tree: +best.toFixed(2), grab: r.msg, held: h && h.held, regard: h && h.regard, b: F.fx.hand.behaviour, grasp: +F.fx.hand.grasp.toFixed(2), L: +F.fx.hand.scale.toFixed(1) };"
+   ]
+  },
+  {
+   "name": "real-touch-throw",
+   "params": "scenario=lookdev&page=signs&dev=1",
+   "size": [
+    960,
+    540
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const h0 = A.sim.view.hand; const c = h0.pos; const ex = [c[2], 0, -c[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el; const to = [c[0] + ex[0] * 70 / R, c[1], c[2] + ex[2] * 70 / R]; const tl = Math.hypot(...to); const tu = to.map((x) => x / tl);",
+    "await G.camera({ mode: 'orbit', lat: Math.asin(c[1]) * D, lon: Math.atan2(c[0], c[2]) * D, dist: 110, tilt: 55, yaw: 120, fov: 55, hour: 15.5 }); await G.frames(1);",
+    "const r = await G.cmd({ k: 'hand.throw', toward: tu }); await G.frames(1); F.advance(0.9); await G.frames(2);",
+    "return { thrown: r.msg, flying: (pv().projectiles || []).map((p) => [p.kind, p.what, +p.alt.toFixed(1)]), pins: F.fx.m.flights.agentPins.size };"
+   ]
+  }
+ ]
+}

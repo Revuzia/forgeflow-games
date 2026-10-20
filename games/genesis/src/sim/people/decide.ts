@@ -742,7 +742,7 @@ export function planGather(x: PCtx, s: number, st: Settlement | undefined, food:
     if (sp.sea && settled && !atCamp && st!.res!.fish.length && st!.library.includes(x.rt.byId.get('fishing') ?? -1)) {
       const fc = st!.res!.fish[0];
       const v = (availability(x, itemIdx(x, 'fish'), fc) * FOOD_SESSION.fish) / (SESSION.fish + 2 * travel(fc));
-      if (v > bv) return planFish(x, s, st);
+      if (v > bv) { const t = planFish(x, s, st); if (t) return t; }
     }
     if (bit >= 0 && bv * 600 > 0.15) return { kind: gatherTaskOf(x, bit), goal: spot(x, s, best, bit + 19), goalCell: best, work: W, data: bit };
     if (sp.sea && food && !atCamp) { const t = planFish(x, s, st); if (t) return t; }

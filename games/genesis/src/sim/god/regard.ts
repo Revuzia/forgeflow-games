@@ -86,6 +86,20 @@ export function relStat(u: Universe, k: string, add = 1): void {
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+/** over this last share of the way to 1, faith and trust grow ever more slowly (0.5: from the middle up; 0.3 still let
+ * the prophet's town reach trust 0.913, 0.4 faith 0.976 — tests/living-integration.test.ts) */
+export const RISE_TAPER = 0.5;
+/**
+ * LIVING integration (2026-10-20, §3.8 "no pinned meter"): faith or trust v raised by d — in full below 1 − RISE_TAPER,
+ * tapering to nothing at 1 (a fall is taken in full). Each act stayed inside its budget, but a few good acts in a row
+ * still pinned the meters: on the acceptance worlds a prophet whose three prophecies the god made true left trust at
+ * 0.91–0.97 in half the towns (the lane's own fixture 0.88), and faith at 0.95–1.0 in every one.
+ */
+export function rise(v: number, d: number): number {
+  if (d <= 0) return clamp01(v + d);
+  return clamp01(v + d * Math.min(1, (1 - v) / RISE_TAPER));
+}
+
 /**
  * A person the relationship has not touched yet (born, spawned, come back from a cohort, a crew member landed): their
  * faith and loyalty are set from what they hold — faith = min(1, trust + fear), loyalty = 0.5 × trust (the 1.4 save
@@ -346,9 +360,9 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
     const i = s * GODS + g;
     const rf = sid >= 0 ? kF.get(sid) ?? 1 : Math.min(1, 0.35 / Math.max(0.35, Math.abs(_d[j * 5 + 1])));
     const rt = sid >= 0 ? kT.get(sid) ?? 1 : Math.min(1, 0.35 / Math.max(0.35, Math.abs(_d[j * 5 + 2])));
-    A.faith[i] = clamp01(A.faith[i] + _d[j * 5]);
+    A.faith[i] = rise(A.faith[i], _d[j * 5]);
     A.fear[i] = clamp01(A.fear[i] + _d[j * 5 + 1] * rf);
-    A.love[i] = clamp01(A.love[i] + _d[j * 5 + 2] * rt);
+    A.love[i] = rise(A.love[i], _d[j * 5 + 2] * rt);
     A.loyalty[i] = clamp01(A.loyalty[i] + _d[j * 5 + 3]);
     A.flags[s] |= AgentFlag.sees_god;
     // a strong sight is remembered: a miracle, or a fright
@@ -376,9 +390,9 @@ export function moveSettlement(x: PCtx, st: Settlement, d: { faith?: number; fea
   for (const s of x.ps.members.get(st.id) ?? []) {
     freshen(A, s, means);
     const i = s * GODS + g;
-    if (d.faith) A.faith[i] = clamp01(A.faith[i] + d.faith);
+    if (d.faith) A.faith[i] = rise(A.faith[i], d.faith);
     if (d.fear) A.fear[i] = clamp01(A.fear[i] + d.fear);
-    if (d.trust) A.love[i] = clamp01(A.love[i] + d.trust);
+    if (d.trust) A.love[i] = rise(A.love[i], d.trust);
     if (d.loyalty) A.loyalty[i] = clamp01(A.loyalty[i] + d.loyalty);
   }
 }

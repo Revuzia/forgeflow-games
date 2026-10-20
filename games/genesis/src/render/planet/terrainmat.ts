@@ -86,6 +86,7 @@ uniform vec3 uSandCol;
 uniform vec3 uRegolith;
 uniform vec3 uNightAmbient;
 uniform float uNightRim;       // 0 near the ground .. 1 from orbit: the night floor's rim on the limb (renderer.ts)
+uniform float uNightEdge;      // irradiance of the thin starlit edge on the night limb seen from orbit (renderer.ts)
 uniform vec4 uAurora;          // (additive, world-events lane) the auroral ovals' light: magnetic axis (xyz), strength (w)
 uniform float uCityLights;
 uniform samplerCube uCityTex;  // night lights from afar (citylights.ts), bound by the renderer
@@ -284,7 +285,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // blocks alone, which fade out past ~150 m, a bald peak from 130 m was a smooth grey dome: clay, not stone.)
     if (rockLikely > 0.01 && fw < 4.0) {
       vec3 g0;
-      vec3 B0 = rk_joints(P + vec3(41.7, 13.1, 27.9), up, Nb, 17.0, fw, mix(0.32, 0.6, steep), g0);
+      vec3 B0 = rk_joints(P + vec3(41.7, 13.1, 27.9), up, Nb, 17.0, fw, mix(0.2, 0.4, steep), g0);
       rock *= mix(1.0, B0.x, 0.85);
       rock *= mix(1.0, mix(0.8, 1.16, fract(B0.z * 9.13)), 0.75 * aaF(fw, 5.0));
       rockG += g0 * 0.8;
@@ -292,7 +293,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     }
     if (rockLikely > 0.01 && fw < 1.2) {
       vec3 g1;
-      vec3 B1 = rk_joints(P, up, Nb, 5.2, fw, mix(0.3, 0.55, steep), g1);
+      vec3 B1 = rk_joints(P, up, Nb, 5.2, fw, mix(0.16, 0.34, steep), g1);
       rock *= B1.x;
       rockG += g1;
       rockJoint = max(rockJoint, B1.y);
@@ -301,7 +302,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       rock *= mix(1.0, mix(0.82, 1.12, bt), 0.6 * aaF(fw, 1.5));
       if (fw < 0.3) {
         vec3 g2;
-        vec3 B2 = rk_joints(P * 1.0 + 17.3, up, Nb, 1.35, fw, 0.25, g2);
+        vec3 B2 = rk_joints(P * 1.0 + 17.3, up, Nb, 1.35, fw, 0.16, g2);
         rock *= mix(1.0, B2.x, 0.6);
         rockG += g2 * 0.6;
         rockJoint = max(rockJoint, B2.y * 0.5);
@@ -337,10 +338,27 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
         rockG += dgq * (2.4 * 6.0 * tq * (1.0 - tq) / 0.4 * sign(gq)) * gullyK * 0.35;
       }
     }
-    // lichen / moss on damp, gentler rock (terran only)
+    // weathering in the albedo at 4–30 m, what bare rock reads by from 50 m to a kilometre besides its joints: rust
+    // stains bleeding from iron in the stone (warm ochre-brown, in runs down steep faces), dark wet / organic streaks
+    // and patches, paler freshly broken faces (where blocks fell: on the steepest ground) — value and a little hue, so
+    // a mountainside is mottled stone, not one even grey. (Soft grey alone read as fur, then as crumpled paper.)
+    {
+      float stN = snoise(P * vec3(0.07, 0.07, 0.07) + warpV * 1.5 + 23.0) * 0.6 + snoise(P * 0.19 + 41.0) * 0.4 * aaF(fw, 5.0);
+      float rust = smoothstep(0.15, 0.75, stN) * (0.6 + 0.4 * steep);
+      rock = mix(rock, rock * vec3(1.32, 1.0, 0.72) + vec3(0.025, 0.008, 0.0), rust * 0.55 * (uKind < 0.5 ? 1.0 : uKind < 2.5 ? 0.12 : 0.5));
+      float darkS = smoothstep(0.2, 0.7, -stN + 0.3 * snoise(P * 0.5 + 9.0) * aaF(fw, 2.0));
+      rock *= 1.0 - 0.32 * darkS;
+      float fresh = smoothstep(0.4, 0.75, snoise(P * 0.11 + 77.0)) * smoothstep(0.25, 0.5, slope);
+      rock = mix(rock, rock * 1.25 + 0.015, fresh * 0.6);
+    }
+    // lichen on damp, gentler rock (terran only): grey-green crusts and, on the drier sunny faces, orange ones, in
+    // patches of a metre or two
     if (!airless) {
-      float lich = smoothstep(0.35, 0.8, moist) * smoothstep(0.2, 0.7, snoise(P * 0.33) * 0.5 + 0.5) * (1.0 - steep * 0.6);
+      float lichN = snoise(P * 0.33) * 0.5 + 0.5;
+      float lich = smoothstep(0.35, 0.8, moist) * smoothstep(0.2, 0.7, lichN) * (1.0 - steep * 0.6);
       rock = mix(rock, vec3(0.08, 0.095, 0.05), lich * 0.4);
+      float lichO = smoothstep(0.62, 0.85, snoise(P * 0.71 + 13.0) * 0.5 + 0.5) * (1.0 - smoothstep(0.5, 0.9, moist)) * aaF(fw, 1.5);
+      rock = mix(rock, vec3(0.3, 0.16, 0.05), lichO * 0.45);
     }
   }
   vec3 col = rock;
@@ -405,6 +423,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // the far canopy's weight and crown shape here (snow lies in the gaps and on the crowns' tops, the crowns' flanks
   // stay dark)
   float canopyW = 0.0, canopyCrown = 0.0;
+  // how tall the sward stands here (0 the gaps between the tufts .. 1 the tips of the tussocks; its mean where the
+  // tufts are finer than a pixel): a thin snow fills the gaps first and the tips show through it
+  float swardTop = 0.5;
   // farmland's own weight: a sown field shows as tilled rows even where little else grows (and covers the sand)
   float fieldW = 0.0;
   if (vegTotal > 0.01) {
@@ -430,6 +451,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // tufts, tips and gaps (groundfloor.ts swardDetail): the sward's own texture at 3–60 m
     vec3 vEye = normalize(transpose(uBodyToView) * normalize(vViewPosition));
     vec4 swd = swardDetail(P, fw, dot(up, vEye));
+    swardTop = clamp(0.45 + 0.75 * swd.y - 0.6 * swd.w, 0.0, 1.0);
     gcol *= swd.x;
     gcol = mix(gcol, gcol * vec3(1.24, 1.13, 0.7), swd.y * 0.32 * (1.0 - cold * 0.5));
     // (the ~4 m clumps only faintly in the relief: at ±5 cm their slopes, raked by a low sun, printed an even field of
@@ -639,17 +661,18 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float pq = pn * 0.95 + 0.5;
     // (a crisp, ragged rim: rock breaks through the turf along a line, it does not fade into it — at a ramp of 0.08 the
     // outcrops were soft blue-grey blotches, puddles rather than stone)
-    float outW = smoothstep(1.0 - 0.5 * oreA, 1.025 - 0.5 * oreA, pq) * (1.0 - smoothstep(0.0, 0.4, uw));
+    // (the ramp keeps at least ~a pixel's worth of the noise's change: a step under a pixel drew the rim in jaggies)
+    float outW = smoothstep(1.0 - 0.5 * oreA, 1.025 + fw * 0.12 - 0.5 * oreA, pq) * (1.0 - smoothstep(0.0, 0.4, uw));
     // the turf round an outcrop is thin: browner, with loose stones weathered off the rock scattered in it (a uniformly
     // darker band round every patch read as an outline drawn on the map)
     float rim = smoothstep(0.93 - 0.5 * oreA, 1.0 - 0.5 * oreA, pq) * (1.0 - outW) * (1.0 - smoothstep(0.0, 0.4, uw)) * (1.0 - softO);
     if (rim > 0.001) {
       col = mix(col, col * vec3(1.08, 0.97, 0.82), rim * 0.5);
-      float sAA = aaF(fw, 0.9);
+      float sAA = aaF(fw, 1.8);
       if (sAA > 0.0) {
         vec3 sv = voronoi3(P * 1.1 + 5.3);
-        float stone = (1.0 - smoothstep(0.18, 0.3, sv.x)) * step(0.55, sv.z) * rim * sAA;
-        col = mix(col, rock * (0.7 + 0.5 * fract(sv.z * 13.1)), stone);
+        float stone = (1.0 - smoothstep(0.18, 0.3 + fw * 0.3, sv.x)) * step(0.55, sv.z) * rim * sAA;
+        col = mix(col, rock * (0.85 + 0.35 * fract(sv.z * 13.1)), stone);
         bump += stone * 0.12 * (1.0 - smoothstep(0.0, 0.3, sv.x));
       }
     }
@@ -662,13 +685,15 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // earth for a soft deposit. (A flat patch of rock colour, however stained, read as a puddle in the grass.)
       vec3 oc = rock * vec3(0.9, 0.85, 0.8);
       float ob = rockBump;
-      float bAA = aaF(fw, 2.5) * (1.0 - softO);
+      // (the boulders break up the outcrop's MARGIN — its heart is the jointed bedrock the rock layer already draws: a
+      // jumble of equal boulders over the whole patch read as a tiled mosaic)
+      float bAA = aaF(fw, 2.5) * (1.0 - softO) * (1.0 - smoothstep(0.25, 0.75, outW) * 0.7);
       if (bAA > 0.0) {
         vec3 bv = voronoi3(P * 0.4 + warpV * 0.6);
         float be = bv.y - bv.x;
         float dome = smoothstep(0.0, 0.45, be);
         float gap = (1.0 - smoothstep(0.015, 0.07 + fw * 0.25, be)) * bAA;
-        oc *= mix(1.0, (0.72 + 0.5 * bv.z) * (1.0 - 0.75 * gap), bAA);
+        oc *= mix(1.0, (0.82 + 0.32 * bv.z) * (1.0 - 0.6 * gap), bAA);
         ob = mix(ob, dome * 0.9 + bv.z * 0.4, bAA);
       }
       oc = mix(oc, mix(uRegolith, oreC, 0.55) * (0.85 + 0.3 * m1), softO);
@@ -678,7 +703,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // the rock showing between (a wash of the ore's colour over the whole outcrop read as a pale puddle)
       float stainN = snoise(P * 0.33 + warpV * 2.0 + 17.0) * 0.6 + snoise(P * 1.3 + 5.0) * 0.4 * aaF(fw, 0.8);
       float gossan = smoothstep(-0.35, 0.25, snoise(P * 0.21 + warpV + 3.3)) * (1.0 - softO) * (1.0 - darkO) * (1.0 - paleO);
-      oc = mix(oc, oc * vec3(1.25, 0.82, 0.55) + vec3(0.03, 0.008, 0.0), gossan * 0.6);
+      oc = mix(oc, oc * vec3(1.2, 0.86, 0.62) + vec3(0.022, 0.006, 0.0), gossan * 0.55);
       float stain = smoothstep(0.2, 0.6, stainN) * (0.45 + 0.55 * oSat);
       oc = mix(oc, oc * 0.3 + oreC * 0.8, stain * 0.7 * (1.0 - darkO * 0.5));
       // veins along the fractures (thin ridged noise), faded to their share where a pixel cannot hold them
@@ -746,18 +771,27 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float aspectSun = dot(tanN, normalize(sunT + 1e-5)) * 2.5;
     float hollow = clamp(concave * 2.5, -1.0, 1.0);
     float thin = 1.0 - smoothstep(0.08, 0.4, snow);
-    float sd = snow * (1.0 + 0.35 * hollow * thin - 0.25 * clamp(aspectSun, -1.0, 1.0) * thin) + (m2 * 0.012 + m1 * 0.01) * thin;
-    float need = 0.055 + 0.3 * smoothstep(0.05, 0.6, shrub) + 0.03 * smoothstep(0.2, 0.8, grass);
-    float full = smoothstep(0.012, need, sd);
-    // a dusting: the snow lies between the tufts and the tips show through it — a fine speckle up close that averages
-    // to grey-white from afar — and it melts out first in broad, irregular patches (~15–30 m) where it is thinnest
-    // (a 1–3 m blotch noise read as camouflage)
+    float sd = snow * (1.0 + 0.35 * hollow * thin - 0.25 * clamp(aspectSun, -1.0, 1.0) * thin) + (m2 * 0.007 + m1 * 0.006) * thin * smoothstep(0.0, 0.03, snow);
+    // a thin cover melts out first in broad, irregular patches (~15–30 m) where it is thinnest
     float meltN = snoise(P * 0.045 + warpV * 0.6) * 0.7 + snoise(P * 0.13 + 3.0) * 0.3 * aaF(fw, 4.0);
     float keep = smoothstep(-0.45, 0.25, meltN + (sd - 0.02) * 25.0);
-    float tipsN = snoise(P * 3.7 + 7.0) * 0.65 + snoise(P * 9.5 + 2.0) * 0.35 * aaF(fw, 0.1);
-    float tipsCov = mix(0.72, smoothstep(-0.2, 0.3, tipsN + (sd - 0.02) * 15.0), aaF(fw, 0.27));
-    float dust = smoothstep(0.002, 0.018, sd) * keep * tipsCov;
-    float sw = max(full, dust * 0.85) * (1.0 - smoothstep(0.3, 0.55, slope));
+    sd *= mix(mix(0.55, 1.0, keep), 1.0, 1.0 - thin);
+    // The snow lies AMONG the plants: on bare ground a centimetre whitens it; in a meadow it fills the gaps between the
+    // tufts first and the tips of the tussocks show through it (swardTop: the sward's own tufts, tips and gaps — so a
+    // dusting is white ground stippled by the grass that stands out of it, not a camouflage of blotches), and the
+    // meadow is white once the snow is deeper than the sward (~8 cm). Where the tufts are finer than a pixel the
+    // threshold's spread stands for them (the same mean coverage, no speckle); shrubs need ~0.4 m to be buried.
+    float grassK = smoothstep(0.05, 0.6, grass + crop * 0.5) * (1.0 - fieldW * 0.5);
+    float swA = 0.07 * grassK;
+    float swRes = aaF(fw, 0.45);
+    float sOff = (0.5 - swardTop) * swA * swRes;
+    float sWid = 0.5 * swA * (1.0 - swRes);
+    // (half the sward is buried at ~2.8 cm, over a narrow ramp: where the tufts are drawn their tips and gaps make a
+    // crisp stipple, not a grey veil)
+    float sC = 0.006 + 0.022 * grassK, sW = 0.004 + 0.005 * grassK + sWid;
+    float full = smoothstep(sC - sW, sC + sW, sd + sOff);
+    full *= mix(1.0, 0.3 + 0.7 * smoothstep(0.12, 0.42, sd), smoothstep(0.05, 0.6, shrub));
+    float sw = full * (1.0 - smoothstep(0.3, 0.55, slope));
     // under a canopy (the forest floor's weight) the crowns catch part of the snow, and litter, twigs and stones poke
     // through a thin cover; the floor keeps its canopy occlusion (ao below)
     // (a wide ramp: the litter's leaf-scale height on a narrow one made a dithered snow edge up close)
@@ -903,7 +937,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // through, the rest has crusted over (its tears dark seams); the fine shrinkage cracks glow only on the very hottest
     // ground. (Every tear and crack of the whole flow alight read as red crushed gravel.)
     float lavaAct = smoothstep(-0.1, 0.45, snoise(P * 0.035 + vec3(3.7, 1.1, 8.3)) * 0.75 + snoise(P * 0.11 + 2.0) * 0.25 + (heat - 0.5) * 0.6);
-    float glowT = clamp((crack1 + crackMean) * smoothstep(0.12, 0.55, heat) * lavaAct + crack2 * 0.2 * smoothstep(0.92, 1.0, heat) * lavaAct + chan + toe * 0.7, 0.0, 1.0);
+    // (and tear by tear the melt shows more or less: some tears gape bright, most are a dull red line, many have
+    // crusted shut — an even net of equally bright cracks read as a mosaic, a 'floor is lava' tile)
+    float tearV = 0.25 + 0.75 * smoothstep(-0.35, 0.55, snoise(lp * 0.19 + 31.0) * 0.7 + snoise(lp * 0.6 + 7.0) * 0.3 * k1);
+    float glowT = clamp((crack1 * tearV + crackMean) * smoothstep(0.12, 0.55, heat) * lavaAct + crack2 * 0.2 * smoothstep(0.92, 1.0, heat) * lavaAct + chan + toe * 0.7, 0.0, 1.0);
     // incandescence: deep red at a tear's cooling lips → orange → yellow-white in the open channels
     vec3 hotC = mix(vec3(0.9, 0.07, 0.006), vec3(1.0, 0.32, 0.035), smoothstep(0.2, 0.7, glowT) * (0.4 + 0.6 * heat));
     hotC = mix(hotC, vec3(1.0, 0.62, 0.22), chan * heat);
@@ -926,12 +963,13 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       if (wr.z > 0.05) rope += snoise(lp * vec3(0.45, 0.45, 2.2) + 9.2) * wr.z;
       rope *= aR;
     }
-    vec3 crustC = vec3(0.032, 0.03, 0.03) * (0.7 + 0.6 * plate) * (0.92 + 0.12 * rope);
+    // (fresh basalt is near black: at a 0.6 specular and roughness 0.38 the plates mirrored the bright sky as grey paving)
+    vec3 crustC = vec3(0.022, 0.02, 0.02) * (0.7 + 0.6 * plate) * (0.92 + 0.12 * rope);
     crustC += vec3(0.05, 0.008, 0.0) * (1.0 - smoothstep(0.0, 0.25, edge1)) * heat * k1 * lavaAct;
     crustC *= 1.0 - 0.5 * crack2 * (1.0 - heat);
     col = mix(col, crustC, lw);
-    rough = mix(rough, mix(0.72, 0.38, heat), lw);
-    spec = mix(spec, 0.6, lw);
+    rough = mix(rough, mix(0.82, 0.55, heat), lw);
+    spec = mix(spec, 0.35, lw);
     bump = mix(bump, plate * 0.12 + rope * 0.05 - crack1 * 0.15 - chan * 0.25, lw);
     mk = mix(mk, 0.1, lw);
     rockW *= 1.0 - lw;
@@ -1242,6 +1280,11 @@ const FRAG_AMBIENT = /* glsl */ `
     // ground and air): the silhouette reads against space on every world, with or without air
     float rimV = 1.0 - clamp(dot(upB, vB), 0.0, 1.0);
     skyE += uNightAmbient * (uNightRim * 2.5 * rimV * rimV * rimV * nightSide);
+    // ... and a thin edge of starlight right on the silhouette (renderer.ts uNightEdge, from orbit): the night half of a
+    // half-lit world — seen under the day side's exposure, where any physical starlight is black — still shows its
+    // outline against space, a faint grey rim, instead of ending at the terminator
+    float rim4 = rimV * rimV * rimV * rimV;
+    skyE += vec3(0.85, 0.9, 1.0) * (uNightEdge * rim4 * rim4 * nightSide);
     // the aurora overhead lights the ground under its ovals green (snow and ice show it most) where the sun is down
     if (uAurora.w > 0.0) {
       float ca = abs(dot(upB, uAurora.xyz));
@@ -1303,7 +1346,16 @@ const FRAG_EMISSIVE = /* glsl */ `
       // (and compressed once more, ^0.6: a hamlet's few hearths and its aura still read from orbit while a city core
       // stays orange instead of bleaching to cream)
       vec4 csc = pow(cs, vec4(0.6));
-      vec3 lights = (warmC * csc.x + coolC * csc.y + streetC * csc.z * 1.25 + warmC * csc.w * 1.2) * 1.3;
+      // From orbit (a pixel ~10 m and more) a town is many small lights, not one lamp: its aura is weighted down and
+      // broken into districts (a smooth ~30 m noise, stable as the world turns), and the whole is dimmer, so a city
+      // core reads as warm sodium yellow over orange streets instead of clipping to one cream blob with contour rings
+      // under the night exposure (which is set by the starlit ground, two hundred times darker)
+      float farC = smoothstep(2500.0, 8000.0, cd);
+      float districts = 0.3 + 1.2 * smoothstep(-0.45, 0.6, snoise(vBodyPos * 0.035 + 17.0) * 0.7 + snoise(vBodyPos * 0.11 + 5.0) * 0.3);
+      // (and a deeper sodium orange from afar: AgX pales a bright orange toward cream)
+      vec3 farW = vec3(1.0, 0.36, 0.08);
+      vec3 lights = (mix(warmC, farW, farC) * csc.x + coolC * csc.y + streetC * csc.z * 1.25 + mix(warmC, farW, farC) * csc.w * mix(1.2, 0.35, farC)) * districts * 1.3;
+      lights *= mix(1.0, 0.26, farC);
       totalEmissiveRadiance += lights * night * uCityLights * nearK;
     }
     if (cityL > 0.002 && night > 0.0) {
@@ -1351,7 +1403,7 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
     uBodyToView: { value: new Matrix3() }, uSunDirBody: { value: new Vector3(1, 0, 0) }, uSunDirView: { value: new Vector3(1, 0, 0) },
     uKind: { value: 0 }, uSeaLevel: { value: 0 }, uYearFrac: { value: 0 }, uSeasonAmp: { value: 1 }, uTime: { value: 0 },
     uRockA: { value: new Color() }, uRockB: { value: new Color() }, uSandCol: { value: new Color() }, uRegolith: { value: new Color() },
-    uNightAmbient: { value: new Vector3(0.004, 0.006, 0.012) }, uNightRim: { value: 1 }, uCityLights: { value: 1 }, uCityTex: { value: null },
+    uNightAmbient: { value: new Vector3(0.004, 0.006, 0.012) }, uNightRim: { value: 1 }, uNightEdge: { value: 0 }, uCityLights: { value: 1 }, uCityTex: { value: null },
     // moonlight (set per frame by the renderer for the primary planet; zero elsewhere)
     uMoonE: { value: new Vector3() }, uMoonDirBody: { value: new Vector3(0, 1, 0) }, uMoonDirView: { value: new Vector3(0, 1, 0) },
     uCloudCov: { value: null }, uCloudShell: { value: new Vector2(3180, 3420) }, uCloudOn: { value: 0 },

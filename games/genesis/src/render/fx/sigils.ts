@@ -46,24 +46,34 @@ export const SIGIL_IDS: readonly string[] = [...Object.keys(SHAPES), FALLBACK_SI
 
 interface PowerLike { command?: string; params?: Record<string, unknown>; sigil?: string | null }
 
-/** miracle kind → the `sigil` of the power that casts it, from the content (built once) */
-let fromPowers: Map<string, string> | null = null;
-function powerSigils(): Map<string, string> {
+/** miracle kind / disaster kind → the `sigil` of the power that casts it, from the content (built once) */
+let fromPowers: { miracle: Map<string, string>; disaster: Map<string, string> } | null = null;
+function powerSigils(): { miracle: Map<string, string>; disaster: Map<string, string> } {
   if (fromPowers) return fromPowers;
-  fromPowers = new Map();
+  fromPowers = { miracle: new Map(), disaster: new Map() };
   const list = ((BASE_PACK as unknown as { powers?: PowerLike[] }).powers ?? []);
   for (const pw of list) {
     if (!pw.sigil || typeof pw.command !== 'string') continue;
-    if (pw.command.startsWith('miracle.') && pw.command !== 'miracle.cast') fromPowers.set(pw.command.slice(8), pw.sigil);
-    else if (pw.command === 'disaster.spawn' && typeof pw.params?.kind === 'string') fromPowers.set(pw.params.kind, pw.sigil);
+    if (pw.command.startsWith('miracle.') && pw.command !== 'miracle.cast') fromPowers.miracle.set(pw.command.slice(8), pw.sigil);
+    else if (pw.command === 'disaster.spawn' && typeof pw.params?.kind === 'string') fromPowers.disaster.set(pw.params.kind, pw.sigil);
   }
   return fromPowers;
 }
 
 /** the sigil a miracle of `kind` draws: the casting power's `sigil` field, else the sim's table, else the fallback */
 export function sigilOfMiracle(kind: string): string {
-  const s = powerSigils().get(kind) ?? SIGIL_OF_MIRACLE[kind];
+  const P = powerSigils();
+  const s = P.miracle.get(kind) ?? P.disaster.get(kind) ?? SIGIL_OF_MIRACLE[kind];
   return s && SHAPES[s] ? s : FALLBACK_SIGIL;
+}
+
+/**
+ * The sigil of a disaster the god sends with one (a power whose command is `disaster.spawn` of that kind carries a
+ * `sigil`: the meteor's `fall`) — null for a disaster no sigil sends (a volcano picked from the radial, nature's own)
+ */
+export function sigilOfDisaster(kind: string): string | null {
+  const s = powerSigils().disaster.get(kind);
+  return s && SHAPES[s] ? s : null;
 }
 
 /** a smooth curve through a few control points (Catmull–Rom), dense enough to resample */

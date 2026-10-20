@@ -136,7 +136,25 @@ export function siteObtainable(x: PCtx, st: Settlement, b: Building): boolean {
  * Returns true if the site still stands (revised or not).
  */
 export function reviseSite(x: PCtx, st: Settlement, b: Building): boolean {
-  if (b.progress >= 1 || siteObtainable(x, st, b)) return true;
+  if (b.progress >= 1) return true;
+  // (LIVING integration, 2026-10-20 — the default meteor on seed 1's town: its crater filled, the town's heart moved to
+  // dry ground, and for a week nothing rose. One site stood 7 m under the new lake; the other, a house begun in mudbrick
+  // that no one was making, waited with 30 bricks, 20 stone blocks and 27 timber in the store — 'obtainable' because
+  // the recipe was known. A site under water is given up; a site nothing has reached yet takes a material the store can
+  // pay for now)
+  if (x.p.f.water[b.cell] > 0.6) {
+    for (const [it, q] of materialItems(x, b.material)) storeAdd(x, st, it, q * b.delivered);
+    removeBuilding(x, b);
+    return false;
+  }
+  if (b.delivered === 0 && b.progress === 0) {
+    const def = x.c.buildings.list[b.type];
+    if (affordable(x, st, b.material) < def.cost) {
+      const m = chooseMaterial(x, st, b.type);
+      if (m >= 0 && m !== b.material && affordable(x, st, m) >= def.cost) { b.material = m; x.ps.version++; return true; }
+    }
+  }
+  if (siteObtainable(x, st, b)) return true;
   const prev = b.material, delivered = b.delivered;
   const m = chooseMaterial(x, st, b.type);
   if (m >= 0 && m !== prev) {

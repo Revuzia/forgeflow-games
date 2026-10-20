@@ -40,11 +40,12 @@ import { makeCtx } from '../people/ctx.ts';
 import { DEATH, GODS, MEMK, NT, TASK, TRAIT } from '../people/defs.ts';
 import { interrupt } from '../people/people.ts';
 import { die } from '../people/lifecycle.ts';
+import { statusGain } from '../people/outlets.ts';
 import { tell } from '../people/story.ts';
 import { agentName, agentRef, settlementRef, vars } from '../people/util.ts';
 import { distM, spotInCell } from '../people/world.ts';
 import { fail, ok } from './util.ts';
-import { meansNow, moveSettlement, relOf, relStat, srel } from './regard.ts';
+import { meansNow, moveSettlement, relOf, relStat, rise, srel } from './regard.ts';
 import { actReaches, PRAYER_WORDS } from './prayers.ts';
 import { addSacredPlace, foundShrine, sacredNear } from './sacred.ts';
 
@@ -201,6 +202,8 @@ function fulfilled(x: PCtx, pr: Prophecy, st: Settlement): void {
     ph.credibility = r3(ph.credibility + 0.25 * (1 - ph.credibility));
     ph.fulfilled++;
     if (pr.kind === 'harm') ph.harmCame = x.tick;
+    // (LIVING §2.9: a fulfilled prophecy is the prophet's standing — LAND's outlet, wired at integration 2026-10-20)
+    if (s >= 0) statusGain(x, s, 0.3);
   }
   relStat(u, 'prophecies.fulfilled');
   moveSettlement(x, st, { faith: 0.15, trust: 0.1, loyalty: 0.1 });
@@ -285,8 +288,9 @@ function preachHour(x: PCtx, ph: ProphetState, s: number): void {
     let other = 0;
     for (let g = 1; g < GODS; g++) other = Math.max(other, A.loyalty[i + g]);
     const k = c * (1 - 0.7 * other);
-    A.faith[i] = Math.min(1, A.faith[i] + 0.04 * k);
-    A.love[i] = Math.min(1, A.love[i] + 0.008 * k);
+    // (faith and trust taper near the top: god/regard.ts rise — no pinned meter, LIVING §3.8)
+    A.faith[i] = rise(A.faith[i], 0.04 * k);
+    A.love[i] = rise(A.love[i], 0.008 * k);
     A.loyalty[i] = Math.min(1, A.loyalty[i] + 0.012 * k);
     for (let g = 1; g < GODS; g++) { A.loyalty[i + g] *= 1 - 0.02 * c; A.faith[i + g] *= 1 - 0.01 * c; }
     A.flags[o] |= AgentFlag.sees_god;

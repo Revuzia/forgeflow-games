@@ -288,3 +288,214 @@ test('integration: a default meteor whose crater fills with water over a town mo
   assert.ok((p.people.members.get(st.id)?.length ?? 0) >= n0 - 3, `its people live in it (${p.people.members.get(st.id)?.length} of ${n0})`);
   assert.ok(told.some((t) => /heart|dry ground/.test(t)), `the chronicle tells it: ${told.slice(-6).join(' | ')}`);
 });
+
+test('integration: a fished-out water is passed over — by a town\'s fishers and by a hungry band — and nobody fishes an empty pond', async () => {
+  // (2026-10-20, the acceptance run, seed 1234 year 21: the town fished its pond to nothing and kept at it; when it fell
+  // its band of 25, foraging the sea's way with nothing at hand, went to the nearest water — the same empty pond — and 20
+  // of them fished it for four days while 19 starved, with a full lake and land food beyond)
+  const { planFish } = await import('../src/sim/people/decide.ts');
+  const { stockAt } = await import('../src/sim/people/fishing.ts');
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const x = makeCtx(sim.u, p);
+  const A = p.people.agents;
+  // a band of the same folk, set down beside the town (unsettled: it fishes the nearest water)
+  const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 12, era: 'stone', settled: false, pos: st.pos });
+  const band = p.people.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
+  assert.ok(band.band, 'a band');
+  const x2 = makeCtx(sim.u, p);
+  x2.rt.byId.get('fishing');
+  // every water within 4 rings of anyone, and every water of the town, fished out
+  const thinned = new Set<number>();
+  const empty = (c: number) => { const s = stockAt(x2, c); s.S = 0; thinned.add(c); };
+  for (const c of st.res?.fish ?? []) empty(c);
+  for (const q of [...(p.people.members.get(band.id) ?? []), ...(p.people.members.get(st.id) ?? [])]) {
+    for (const c of p.cellsNear([p.grid.pos[A.cell[q] * 3], p.grid.pos[A.cell[q] * 3 + 1], p.grid.pos[A.cell[q] * 3 + 2]], p.edgeM * 4.5)) if (p.f.water[c] > 0.3) empty(c);
+  }
+  assert.ok(thinned.size > 0, 'waters to fish out');
+  // the band and the town may know fishing: let them all
+  const k = x2.rt.byId.get('fishing')!;
+  if (!band.library.includes(k)) band.library.push(k);
+  if (!st.library.includes(k)) st.library.push(k);
+  let asked = 0;
+  for (const q of [...(p.people.members.get(band.id) ?? []), ...(p.people.members.get(st.id) ?? [])]) {
+    if (A.flags[q] & 1) continue;
+    const owner = p.people.settlement(A.settlement[q]) ?? undefined;
+    const t = planFish(x2, q, owner);
+    asked++;
+    if (t) assert.ok(!thinned.has(t.target ?? -1), `agent ${A.id[q]} of ${owner?.band ? 'the band' : 'the town'} sent to fish a water fished out (cell ${t.target})`);
+  }
+  assert.ok(asked > 10);
+  void x;
+});
+
+test('integration: a pond first fished when it was a puddle has the fish of the lake it became', async () => {
+  // (the seed-1234 pond: its water body was taken once, at its first session — 1.1 m deep, capacity 13 fish — and kept;
+  // a year later it stood 14 m deep and still held 13 at most)
+  const { stockInfo } = await import('../src/sim/people/fishing.ts');
+  const { landWorld } = await import('../src/sim/people/ledger.ts');
+  const { sim } = town();
+  const p = sim.u.planets[0];
+  const x = makeCtx(sim.u, p);
+  // a cell of a water of some size (a lake, a river, the sea: one whose fish are more than a puddle's 13)
+  const W = landWorld(p.people);
+  let c = -1;
+  let real = { K: 0, S: 0, share: 0 };
+  for (let o = 0; o < p.grid.count && c < 0; o++) {
+    if (p.f.water[o] < 0.5) continue;
+    const r = stockInfo(x, o);
+    if (r.K > 60) { c = o; real = r; }
+  }
+  assert.ok(c >= 0, 'a water of some size');
+  // what the first session saw: a puddle of one cell, fished to nothing
+  for (const k of Object.keys(W.body)) delete W.body[k];
+  for (const k of Object.keys(W.stocks)) delete W.stocks[k];
+  W.body[String(c)] = c;
+  W.stocks[String(c)] = { K: 13.3, S: 0.1, t: sim.u.tick, n: 1, gone: -1 };
+  const now = stockInfo(x, c);
+  assert.ok(now.K >= Math.min(real.K, 40), `capacity ${now.K} (the water holds ${real.K})`);
+  assert.ok(now.share >= 0.5, `the lake's fish are there: share ${now.share}`);
+});
+
+test('integration: an omen feeds the curiosity of those who read it; a fulfilled prophecy raises the prophet\'s standing (LIVING §2.9 outlets, LAND × RELATIONSHIP)', async () => {
+  // (LAND exported curiosityGain / statusGain for the omens and prophets of RELATIONSHIP, and neither lane called them:
+  // in the 50-year acceptance worlds a fifth to a third of the grown sat at no curiosity at some year ends)
+  const { NEED, NN } = await import('../src/sim/people/defs.ts');
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const A = p.people.agents;
+  const ms = p.people.members.get(st.id) ?? [];
+  // a prophet whose word the god keeps
+  const who = commoner(sim, st);
+  must(sim, { k: 'prophet.call', agent: who });
+  const ps = A.slotOf(who);
+  A.needs[ps * NN + NEED.status] = 0;
+  must(sim, { k: 'prophet.foretell', agent: who, what: 'rain', days: 2 });
+  sim.step(60);
+  must(sim, { k: 'miracle.water', pos: st.pos });
+  assert.equal(sim.u.god.rel!.prophets.find((q) => q.agent === who)!.fulfilled, 1, 'fulfilled');
+  assert.ok(A.needs[ps * NN + NEED.status] >= 0.25, `the prophet's status ${A.needs[ps * NN + NEED.status]}`);
+  // an omen read by the town
+  for (const s of ms) A.needs[s * NN + NEED.curiosity] = 0;
+  must(sim, { k: 'god.omen', settlement: st.id, kind: 'comet' });
+  const curious = ms.filter((s) => A.needs[s * NN + NEED.curiosity] >= 0.1).length;
+  assert.ok(curious >= ms.length * 0.9, `curiosity fed in ${curious} of ${ms.length}`);
+});
+
+test('integration: a prophet whose three prophecies the god makes true wins the town without pinning its trust (LIVING §3.8 "no pinned meter")', () => {
+  // (the acceptance sessions, the n = 64 bronze town of seed 2: three prophecies foretold through a called prophet and
+  // made true by rain, plenty and mending — trust ended at 0.97 and faith at 1.0; each act kept inside its budget, the
+  // run of them pinned the meters. Faith and trust now rise ever more slowly over their upper half (god/regard.ts rise,
+  // RISE_TAPER 0.5; with 0.3 trust ended at 0.913, with 0.4 faith at 0.976)
+  const sim = new Sim({ seed: 2, scenario: 'sandbox', overrides: { n: 64, vegetation: 1 } });
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 30, era: 'bronze', settled: true });
+  const p = sim.u.planets[0];
+  const st = p.people.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
+  sim.step(1440);
+  const A = p.people.agents;
+  const mean = (arr: Float32Array) => { const ms = p.people.members.get(st.id) ?? []; return ms.reduce((a, s) => a + arr[s * GODS], 0) / Math.max(1, ms.length); };
+  const loy0 = mean(A.loyalty);
+  const who = commoner(sim, st);
+  must(sim, { k: 'prophet.call', agent: who });
+  const acts: [string, Record<string, unknown>][] = [['rain', { k: 'miracle.water', pos: st.pos }], ['food', { k: 'miracle.food', pos: st.pos }], ['healing', { k: 'miracle.heal', pos: st.pos }]];
+  for (let day = 0; day < 6; day++) {
+    const ph = sim.u.god.rel!.prophets.find((q) => q.agent === who);
+    if (day % 2 === 0 && ph) {
+      // a silenced prophet is warded first (the god defends its prophet), then speaks
+      if (ph.silenced > sim.u.tick) { const pt = [0, 0, 0]; A.posAt(A.slotOf(who), sim.u.tick, pt); sim.applyNow({ k: 'miracle.shield', pos: pt, radius: 60 }); }
+      sim.applyNow({ k: 'prophet.foretell', agent: who, what: acts[day / 2][0] as 'rain', days: 2 });
+    }
+    if (day % 2 === 1) must(sim, acts[(day - 1) / 2][1] as never);
+    sim.step(1440);
+  }
+  const ph = sim.u.god.rel!.prophets.find((q) => q.agent === who)!;
+  assert.ok(ph.fulfilled >= 3 && ph.credibility >= 0.7, `credibility ${ph.credibility} after ${ph.fulfilled} fulfilled`);
+  const trust = mean(A.love), faith = mean(A.faith), loy = mean(A.loyalty);
+  assert.ok(loy >= loy0 + 0.2, `loyalty ${loy0.toFixed(3)} → ${loy.toFixed(3)}`);
+  assert.ok(trust <= 0.9, `mean trust ${trust.toFixed(3)}: pinned`);
+  assert.ok(faith <= 0.97, `mean faith ${faith.toFixed(3)}: pinned`);
+});
+
+test('integration: a town with a temple still builds houses when its people outgrow its beds (only homes have beds)', async () => {
+  // (the acceptance run, seed 2 years 25–34: 9 dwellings, 45 beds for 51–61 people, and no house begun in ten years — the
+  // planner counted the temple's 20 places, the school's and the mill's as beds; homes are only buildings that shelter)
+  const { planConstruction } = await import('../src/sim/people/settlement.ts');
+  const { ruin } = await import('../src/sim/people/buildings.ts');
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const x = makeCtx(sim.u, p);
+  must(sim, { k: 'settlement.build', settlement: st.id, type: 'temple' });
+  const pop = p.people.members.get(st.id)?.length ?? 0;
+  const C = sim.u.content.buildings.list;
+  // the town's sites given up, and its homes down to fewer beds than people (but with the temple's places, more)
+  for (const id of st.sites.slice()) { const b = p.people.building(id); if (b) ruin(x, st, b, 'test'); }
+  st.sites.length = 0;
+  let kept = 0;
+  for (const b of p.people.of(st.id).filter((q) => q.progress >= 1 && !(q.flags & 2)).sort((a, b2) => a.id - b2.id)) {
+    const def = C[b.type];
+    if (!def.provides.includes('shelter') || def.capacity <= 0) continue;
+    if (kept < Math.max(10, pop - 20) && kept + def.capacity < pop) kept += def.capacity; else ruin(x, st, b, 'test');
+  }
+  assert.ok(kept < pop && kept + 20 >= pop, `beds ${kept} for ${pop} people (with the temple's 20: ${kept + 20})`);
+  planConstruction(x, st);
+  const homes = st.sites.map((id) => p.people.building(id)!).filter((b) => C[b.type].provides.includes('shelter') && C[b.type].capacity > 0);
+  assert.ok(homes.length >= 1, `a house begun: sites ${st.sites.map((id) => C[p.people.building(id)!.type].id).join(', ') || 'none'}`);
+});
+
+test('integration: a site under water is given up; a site nothing has reached yet takes a material the store can pay for now', async () => {
+  // (the default meteor on seed 1's town, the god sessions: its crater filled, the heart of the town moved, and for a week
+  // nothing rose — one site stood 7 m under the new lake, the other was a house begun in mudbrick that no one was making
+  // while the store held 30 bricks, 20 stone blocks and 27 timber: 'obtainable', the recipe being known)
+  const { planBuilding, reviseSite } = await import('../src/sim/people/buildings.ts');
+  const { storeAdd } = await import('../src/sim/people/store.ts');
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const x = makeCtx(sim.u, p);
+  const C = sim.u.content;
+  const house = C.buildings.idx('house');
+  const mud = C.materials.idx('mudbrick'), timber = C.materials.idx('timber');
+  assert.ok(house >= 0 && mud >= 0 && timber >= 0);
+  // the store: no mudbrick, timber enough for a house; and they know how to make mudbrick (so it stays 'obtainable')
+  st.store[C.items.idx('mudbrick')] = 0;
+  storeAdd(x, st, C.items.idx('timber'), 40);
+  for (const id of ['clay-digging', 'mudbrick', 'carpentry']) { const k = x.rt.byId.get(id)!; if (!st.library.includes(k)) st.library.push(k); }
+  const b = planBuilding(x, st, house, false, mud)!;
+  assert.ok(b && C.materials.list[b.material].id === 'mudbrick');
+  assert.ok(reviseSite(x, st, b), 'the site stands');
+  assert.notEqual(C.materials.list[b.material].id, 'mudbrick', 'begun again in what the store holds');
+  assert.ok(st.sites.includes(b.id));
+  // a site under water
+  const w = planBuilding(x, st, house, false, mud)!;
+  p.f.water[w.cell] = 3;
+  assert.equal(reviseSite(x, st, w), false, 'given up');
+  assert.ok(!st.sites.includes(w.id) && !p.people.building(w.id), 'gone from the sites');
+});
+
+test('integration: a fire season strikes a cell as often on a small world as on a large one (the rate is per cell, not per world)', async () => {
+  // (HEAT_STRIKES_PER_HOUR was drawn per world: a cell of an n = 12 world was struck 28 times as often as one of the
+  // n = 64 world it was set on — found when a wetter cure let the strikes through and a living start's people learned
+  // fire within its first hours, tests/scenarios.test.ts 'barren: the milestones ...')
+  const { HEAT_CELLS } = await import('../src/sim/fields/weather.ts');
+  const perCellHour = (n: number): { rate: number; strikes: number } => {
+    const sim = new Sim({ seed: 11, scenario: 'sandbox', overrides: { n, vegetation: 1 } });
+    must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+    const p = sim.u.planets[0], f = p.f;
+    const savanna = sim.u.content.biomes.idx('savanna');
+    const land: number[] = [];
+    for (let c = 0; c < p.count; c++) if (!p.s.ocean[c]) land.push(c);
+    let strikes = 0;
+    const hours = 48;
+    for (let k = 0; k < hours * 6; k++) {
+      // every land cell cured savanna in its dry season (the hourly climate pass would move them)
+      for (const c of land) { f.water[c] = 0; f.snow[c] = 0; f.precip[c] = 0; f.moisture[c] = 0.08; f.wetness[c] = 0; f.temperature[c] = 28; f.grass[c] = 0.9; f.shrub[c] = 0.3; f.tree[c] = 0.1; f.biome[c] = savanna; f.fire[c] = 0; }
+      sim.step(10);
+      for (const e of sim.drainEvents()) if (e.t === 'lightning' && (e.data as { dry?: number } | undefined)?.dry === 2) strikes++;
+    }
+    return { rate: strikes / land.length / hours, strikes };
+  };
+  const small = perCellHour(16), large = perCellHour(32);
+  assert.ok(HEAT_CELLS > 0 && small.strikes > 20 && large.strikes > 20, `strikes ${small.strikes} / ${large.strikes}`);
+  const ratio = small.rate / large.rate;
+  assert.ok(ratio > 0.6 && ratio < 1.6, `a cell of the n = 16 world is struck ${ratio.toFixed(2)} times as often as one of the n = 32 world`);
+});

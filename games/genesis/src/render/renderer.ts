@@ -742,6 +742,11 @@ export class Renderer {
     else nf.set(0.0045, 0.005, 0.0064).multiplyScalar(1 + 7 * lift * farK);
     (u.uNightAmbient.value as Vector3).add(nf);
     if (u.uNightRim) u.uNightRim.value = farK;
+    // the thin starlit edge on the night limb (terrainmat FRAG_AMBIENT): while the view is mostly day (the exposure set
+    // by the sunlit side, under which real starlight is black) the night half's silhouette keeps a faint grey outline
+    // against space, ~3 % of the sun right at the edge on an airless world (with air the airglow band draws it too);
+    // it gives way as the night side fills the view and the night floor itself is lifted
+    if (u.uNightEdge) u.uNightEdge.value = farK * E * (vis.atmo.has ? 0.006 : 0.03) * (1 - lift);
     return on;
   }
   /** this frame's night floor on the primary planet (starlight / airglow irradiance), shared with its clouds */

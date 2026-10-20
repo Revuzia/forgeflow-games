@@ -472,6 +472,26 @@ void main() {
     vec3 inscat = (Ein * 0.11 * vec3(0.78, 1.0, 0.72) + Esun * 0.012 * (1.0 + 2.0 * phaseMie(dot(d, uSunDir), 0.6))) / ATMO_PI;
     col = mix(col, inscat, haze);
   }
+  // AIRGLOW: on the night side the upper air glows faintly (the green line of atomic oxygen, the redder OH and sodium
+  // below it) in a thin layer above the cloud deck. Straight down it is far below the starlit ground; edge-on, from
+  // orbit, the path through the layer is ~15× longer and it draws the thin green band that outlines a night world
+  // against space (as from the ISS). Occluded by the ground and by anything drawn in front of the layer.
+  {
+    float thickA = uRt - uRg;
+    float rA = uRg + 0.74 * thickA, rB = uRg + 0.9 * thickA;
+    vec2 sB = raySphere(o, d, rB);
+    float a = max(sB.x, t0), b = min(sB.y, t1);
+    if (b > a) {
+      vec2 sA = raySphere(o, d, rA);
+      float inner = sA.x <= sA.y ? max(0.0, min(sA.y, b) - max(sA.x, a)) : 0.0;
+      float path = (b - a) - inner;
+      vec3 pm = o + d * (0.5 * (a + b));
+      float nightG = smoothstep(0.1, -0.14, dot(normalize(pm), uSunDir));
+      // (tied to the star's light at the world, so the band keeps its place against the night exposure everywhere)
+      float sunL = dot(uSunE, vec3(0.2126, 0.7152, 0.0722));
+      col += vec3(0.32, 1.0, 0.5) * (2.2e-6 * path * nightG * sunL);
+    }
+  }
   gl_FragColor = vec4(col, 1.0);
 }
 `;

@@ -37,6 +37,7 @@ import { fishWork } from './fishing.ts';
 import { choreDone, gatherDone, playDone, raiseDone } from './gatherings.ts';
 import { noteCraft, noteGathered } from './ledger.ts';
 import { craftOutlet, curiosityGain, statusGain, talkOutlet } from './outlets.ts';
+import { rise } from '../god/regard.ts';
 
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
@@ -483,7 +484,7 @@ function worship(x: PCtx, s: number, st: Settlement | undefined, kind: number): 
   const piety = A.traits[s * NT + TRAIT.piety];
   A.needs[nb + FAITH] = Math.min(1, A.needs[nb + FAITH] + (kind === TASK.worship ? 0.7 : 0.45));
   // devotion turns toward the god they know
-  if (A.love[s * 4] > 0.02) A.love[s * 4] = Math.min(1, A.love[s * 4] + 0.003 * piety);
+  if (A.love[s * 4] > 0.02) A.love[s * 4] = rise(A.love[s * 4], 0.003 * piety); // (tapering near the top: god/regard.ts)
   // worship flows to the god they believe in (none: to no one)
   // (LIVING RELATIONSHIP: worship by faith and fear and the place; a prophet's sermon by credibility — god/relationship.ts)
   if (st) addWorship(x, st, s, godHooks.worship ? godHooks.worship(x, s, st, kind) : (kind === TASK.worship ? 2 : 1) * (0.5 + piety));

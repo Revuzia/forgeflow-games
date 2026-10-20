@@ -942,17 +942,20 @@ export class DisasterFx {
           const p = groundAt(pv, pu, new Vector3(), false);
           this.em(st, `w-vent${i}`, { sys: SYS.steam, x: p.x, y: p.y, z: p.z, ax: wind.x * 0.3, ay: wind.y * 0.3, az: wind.z * 0.3, size: 2.2 + sup * 1.5, life: 7, count: Math.round(56 * q), p0: 14 + 10 * fxHash(d.id, 80 + i), r: 0.84, g: 0.85, b: 0.86, power: k * 0.42 }, ctx);
         }
-        // the summit's cracks, a dull glow deep in the vent (it shows at night)
+        // the summit's cracks, a dull glow deep in the vent (it shows at night) — both growing as the magma rises: the
+        // sim grows the plume over the warning to 15 % of the eruption's, so its share says how near the eruption is
+        // (at full strength from the first hour, a warned volcano's vent on the open ground read as a fire by day)
+        const near = clamp01((P.plume ?? 0) / ((sup ? 6000 : 1800) * 0.15));
         for (let i = 0; i < 2; i++) {
           const ax = bearing(u, fxHash(d.id, 90 + i) * 6.283, _a);
           for (const type of [DECAL.cracks, DECAL.crackGlow]) {
             const c = decal(type, [g.x, g.y, g.z], Rd * 0.3);
             c.ax = ax.x; c.ay = ax.y; c.az = ax.z; c.cr = 1; c.cg = 0.3; c.cb = 0.06; c.ca = k * 0.7;
-            c.p0 = Rd * (0.14 + 0.1 * fxHash(d.id, 95 + i)); c.p1 = 4; c.p2 = 1.6 * k; c.p3 = d.id + 40 + i; c.q0 = 10;
+            c.p0 = Rd * (0.14 + 0.1 * fxHash(d.id, 95 + i)); c.p1 = 4; c.p2 = (0.5 + 1.1 * near) * k; c.p3 = d.id + 40 + i; c.q0 = 10;
             ctx.decals.add(c);
           }
         }
-        ctx.decals.add(Object.assign(decal(DECAL.glow, [g.x, g.y, g.z], Rd * 0.14), { cr: 1, cg: 0.28, cb: 0.05, p0: Rd * 0.11, p1: 0.4, p2: 4 * k * (0.65 + 0.35 * Math.sin(ctx.now * 1.7)), p3: d.id, q0: Rd * 0.2 }));
+        ctx.decals.add(Object.assign(decal(DECAL.glow, [g.x, g.y, g.z], Rd * 0.12), { cr: 1, cg: 0.28, cb: 0.05, p0: Rd * (0.06 + 0.04 * near), p1: 0.4, p2: (0.4 + 2.2 * near * near) * k * (0.65 + 0.35 * Math.sin(ctx.now * 1.7)), p3: d.id, q0: Rd * 0.2 }));
         break;
       }
       case 'meteor': {

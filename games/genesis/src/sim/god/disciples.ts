@@ -31,6 +31,7 @@ import { agentName, agentRef, settlementRef, vars } from '../people/util.ts';
 import { distM, spotInCell } from '../people/world.ts';
 import { actor, fail, ok } from './util.ts';
 import { godAct } from './belief.ts';
+import { rise } from './regard.ts';
 import { hashFloat } from '../core/rng.ts';
 
 export const DISCIPLE_MODES = ['worship', 'farm', 'build', 'teach', 'preach', 'missionary'] as const;
@@ -103,8 +104,9 @@ export function disciplesHourly(u: Universe, p: Planet): void {
       if (distM(p, pt, q) > 70) continue;
       const i = o * GODS;
       const k0 = A.task[s] === TASK.preach ? 1 : 0.35;
-      A.faith[i + g] = Math.min(1, Math.round((A.faith[i + g] + 0.02 * k0) * 1e4) / 1e4);
-      A.love[i + g] = Math.min(1, Math.round((A.love[i + g] + 0.006 * k0) * 1e4) / 1e4);
+      // (faith and trust taper near the top: god/regard.ts rise — no pinned meter, LIVING §3.8)
+      A.faith[i + g] = Math.min(1, Math.round(rise(A.faith[i + g], 0.02 * k0) * 1e4) / 1e4);
+      A.love[i + g] = Math.min(1, Math.round(rise(A.love[i + g], 0.006 * k0) * 1e4) / 1e4);
       A.loyalty[i + g] = Math.min(1, Math.round((A.loyalty[i + g] + 0.006 * k0) * 1e4) / 1e4);
       for (let k = 0; k < GODS; k++) if (k !== g) { A.love[i + k] = Math.round(A.love[i + k] * 0.99 * 1e4) / 1e4; A.loyalty[i + k] = Math.round(A.loyalty[i + k] * 0.99 * 1e4) / 1e4; }
       if (A.faith[i + g] > 0.5 && hashed(A.id[o], u.tick) < 0.02) A.remember(o, MEMK.converted, u.tick, g);

@@ -85,8 +85,35 @@ export function stockAt(x: PCtx, c: number): FishStock {
   }
   const st = W.stocks[String(id)];
   grow(x, st);
-  return st;
+  return st.S < st.K * THIN_FISHER ? rebody(x, c, id, st) : st;
 }
+
+/**
+ * LIVING integration (2026-10-20): a water fished out is looked at again — it may have grown since it was first fished
+ * (a crater pond filled to a lake, a puddle joined to the river). The body is kept per cell from its first session, and
+ * on seed 1234 of the acceptance run a pond met at 1.1 m deep (capacity 13 fish) stood 14 m deep a year later with its
+ * capacity still 13: the town fished it to nothing and its band of 25 kept at it until 19 starved. Grown in place, the
+ * new water brings its fish (the deficit fished out is kept); joined to a larger water, the cell is that water's (a
+ * known stock, or a new one short by what was fished here). A water that only shrank keeps its stock, as before.
+ */
+function rebody(x: PCtx, c: number, id: number, s: FishStock): FishStock {
+  const b = findBody(x, c);
+  if (b.id === id) {
+    if (b.K > s.K) { s.S = Math.round((s.S + b.K - s.K) * 1000) / 1000; s.K = b.K; s.n = Math.max(s.n, b.n); }
+    return s;
+  }
+  if (b.n <= s.n) return s;
+  const W = landWorld(x.ps);
+  W.body[String(c)] = b.id;
+  let ns = W.stocks[String(b.id)];
+  if (!ns) {
+    ns = { K: b.K, S: Math.round(Math.max(b.K * 0.005, b.K - (s.K - s.S)) * 1000) / 1000, t: x.tick, n: b.n, gone: -1 };
+    W.stocks[String(b.id)] = ns;
+  } else grow(x, ns);
+  return ns;
+}
+/** the share of its capacity under which a fisher passes a water over (and its body is looked at again) */
+const THIN_FISHER = 0.15;
 
 /** bring a stock's numbers up to now (exact logistic solution over the elapsed time) */
 function grow(x: PCtx, s: FishStock): void {
@@ -140,11 +167,15 @@ export function fishTask(x: PCtx, s: number, st: Settlement | undefined, nearest
     const n = Math.min(3, st.res.fish.length);
     const pick = Math.floor(hashFloat(A.id[s], x.tick, 0xf15) * n);
     c = st.res.fish[pick];
-    // fished out here: the next of the settlement's waters that is not (stocks it has met before)
+    // fished out here: the next of the settlement's waters that is not (stocks it has met before) — and when every one
+    // is, no fishing: the fisher gathers instead (LIVING integration, 2026-10-20: the nets went on into a water fished to
+    // nothing, a town's fishers and then its whole hungry band, while food grew on land)
     if (thin(x, c)) {
-      for (const o of st.res.fish) if (o !== c && !thin(x, o)) { c = o; break; }
+      let o2 = -1;
+      for (const o of st.res.fish) if (o !== c && !thin(x, o)) { o2 = o; break; }
+      c = o2;
     }
-  } else c = nearest(4, (o) => p.f.water[o] > 0.3);
+  } else c = nearest(4, (o) => p.f.water[o] > 0.3 && !thin(x, o));
   if (c < 0) return null;
   // stand on the bank unless a swimmer
   const sp = x.info[A.species[s]].def;
@@ -165,7 +196,10 @@ function thin(x: PCtx, c: number): boolean {
   const s = W.stocks[String(id)];
   if (!s) return false;
   grow(x, s);
-  return s.S < s.K * 0.15;
+  if (s.S >= s.K * THIN_FISHER) return false;
+  // (fished out as first found: the water may have grown since — stockAt looks again)
+  const now = stockAt(x, c);
+  return now.S < now.K * THIN_FISHER;
 }
 
 /**

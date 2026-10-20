@@ -1,5 +1,6 @@
 // GENESIS — the god layer's visuals, orchestrated (CONTRACT.md §15.6–15.8): the Touch (render/hand.ts), disasters and
-// their warnings, weather and the rainbow, lightning, miracles and the sigils they write on the land, auroras,
+// their warnings, weather and the rainbow, lightning, miracles and the sigils they write on the land (a sigil-sent
+// disaster's too: the meteor's `fall`, where it will strike; a rival god's in its own cold silver), auroras,
 // projectiles in flight, brush and targeting previews, and the signs — prophets, sacred places, sacred animals, omens
 // read (render/signs/signs.ts, LIVING §3.4, hook H4). (The giant creature left the game — LIVING §0.1.6, hook H6: there
 // is no creature layer.)
@@ -29,7 +30,7 @@ import type { FullscreenQuad } from '../post/fsquad.ts';
 import type { Quality } from '../quality.ts';
 import type { SimEvent } from '../../sim/types.ts';
 import type { CloudStorm } from '../sky/clouds.ts';
-import { AnimState } from '../../sim/types.ts';
+import { AnimState, TICKS_PER_SECOND_1X } from '../../sim/types.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import { HandVisual, type HandCursor, type UiHandPose } from '../hand.ts';
 import { Aurora } from '../sky/aurora.ts';
@@ -47,6 +48,7 @@ import { ScreenFx, newScreenState } from './screenfx.ts';
 import { swapPropDepth } from './propmat.ts';
 import { Rainbow } from './rainbow.ts';
 import { SigilMarks } from './sigilfx.ts';
+import { sigilOfDisaster } from './sigils.ts';
 import { SignsLayer } from '../signs/signs.ts';
 
 export interface BrushIn {
@@ -65,6 +67,8 @@ export interface BrushIn {
 /** the categories' brush colours (src/ui/tools.ts CAT_COLOR) — a reticle for the destructive ones, a painted region for the sky */
 const DISASTER_TINT: [number, number, number] = [1.5, 0.35, 0.25];
 const SKY_TINT: [number, number, number] = [0.75, 0.9, 1.3];
+/** the light a rival god's sigils are written in: a cold silver, never the player's Touch */
+const RIVAL_LIGHT = { r: 0.66, g: 0.72, b: 0.95 };
 
 /** weather kinds that light up the aurora (weather.json render.aurora) */
 const AURORA_WEATHER = new Map<string, number>(
@@ -240,7 +244,9 @@ export class GodFx {
     if (this.lastReal >= 0) {
       const realDt = Math.max(0, Math.min(0.1, time - this.lastReal));
       const dTick = tick - this.lastTick;
-      if (dTick > 1e-6) fxDt = Math.min(realDt, dTick / 10 + 1e-3);
+      // (1x is TICKS_PER_SECOND_1X ticks per real second — LIVING §1.1: one since the living-world pace, ten before:
+      // divided by the old ten, every explosion, bolt and flight played at a sixth of its speed at 1x)
+      if (dTick > 1e-6) fxDt = Math.min(realDt, dTick / TICKS_PER_SECOND_1X + 1e-3);
     }
     this.lastReal = time;
     this.lastTick = tick;
@@ -481,18 +487,37 @@ export class GodFx {
         break;
       case 'miracle': {
         M.miracles.onEvent(e, ctx);
-        // its sigil written on the land where it lands (the power's glyph)
-        if (p) {
-          const u = _w.copy(p).normalize();
-          const gp = u.multiplyScalar(groundHeight(pv.ground, u.x, u.y, u.z));
-          M.sigils.land(pv, String((e.data as { kind?: string } | undefined)?.kind ?? e.text ?? ''), gp, e.a ?? 100, this.hand.light, vis.camBody, this.camFwd, this.lastReal);
-        }
-        // the Touch casts it when it is near: it traces the miracle's sigil in light
-        if (p && this.hand.visible && this.hand.pos.distanceTo(p) < Math.max(250, (e.a ?? 100) * 2.5)) this.hand.pulse('cast', this.hand.hold ?? this.lastReal, String((e.data as { kind?: string } | undefined)?.kind ?? e.text ?? ''));
+        const md = e.data as { kind?: string; god?: number } | undefined;
+        // (a rival god's miracle is written in a cold silver of its own, and the player's Touch does not cast it)
+        const rival = typeof md?.god === 'number' && md.god !== 0;
+        this.writeSigil(p, String(md?.kind ?? e.text ?? ''), e.a ?? 100, rival);
+        break;
+      }
+      case 'disaster': {
+        // a disaster the god sends with a sigil (the meteor's `fall`): its glyph is written where it will strike — the
+        // god's mark on the place, before the warning's first light — and the Touch traces it when near
+        const dd = e.data as { kind?: string; god?: number; cause?: string } | undefined;
+        if (!dd?.kind || dd.cause === 'nature' || typeof dd.god !== 'number' || !sigilOfDisaster(dd.kind)) break;
+        this.writeSigil(p, dd.kind, e.a ?? 100, dd.god !== 0);
         break;
       }
       case 'shield': M.miracles.onEvent(e, ctx); break;
     }
+  }
+
+  /**
+   * a sigil written on the land where a miracle (or a sigil-sent disaster) of `kind` lands at body point `p` (the
+   * power's glyph, at the act's radius), in the Touch's light — and, when the Touch is near, traced by it in the air as
+   * it casts. A rival god's is written in its own cold silver, and the player's Touch never casts it.
+   */
+  private writeSigil(p: Vector3 | null, kind: string, radius: number, rival: boolean): void {
+    const vis = this.vis, M = this.m;
+    if (!p || !vis || !M) return;
+    const pv = vis.pv;
+    const u = _w.copy(p).normalize();
+    const gp = u.multiplyScalar(groundHeight(pv.ground, u.x, u.y, u.z));
+    M.sigils.land(pv, kind, gp, radius, rival ? RIVAL_LIGHT : this.hand.light, vis.camBody, this.camFwd, this.lastReal);
+    if (!rival && this.hand.visible && this.hand.pos.distanceTo(p) < Math.max(250, radius * 2.5)) this.hand.pulse('cast', this.hand.hold ?? this.lastReal, kind);
   }
 
   private brushDecal(pv: PlanetView): void {

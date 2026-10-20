@@ -879,7 +879,10 @@ export function planConstruction(x: PCtx, st: Settlement): void {
   // works: a town of 77 slept in 50 beds for years while its sites were a kiln and a wall)
   let beds = 0, bedsUp = 0, shelterSites = 0;
   for (const b of mine) {
-    const cap = x.c.buildings.list[b.type].capacity;
+    // (only a place people can live in has beds — the homes of formHouseholds below; LIVING integration 2026-10-20: a
+    // temple's 20 and a school's 10 counted as beds, and a town of 61 with a temple slept in 45 beds for ten years)
+    const def = x.c.buildings.list[b.type];
+    const cap = def.provides.includes('shelter') ? def.capacity : 0;
     beds += cap;
     if (b.progress >= 1) bedsUp += cap;
     else if (cap > 0) shelterSites++;
@@ -1366,8 +1369,11 @@ export function moveHeart(x: PCtx, st: Settlement): boolean {
   for (const b of x.ps.of(st.id)) if (b.progress >= 1 && !(b.flags & BuildingFlag.ruined) && f.water[b.cell] > 1.5) ruin(x, st, b, 'flood');
   st.cell = best;
   st.pos = cellPos(p, best) as [number, number, number];
+  // (the territory is reckoned from the centre, as when the god moves a town: god/civic.ts; and the views see the move)
+  updateTerritory(x, st);
   updateFlow(x, st);
   updateResources(x, st);
+  x.ps.version++;
   tell(x.u, x.p, 'heart.flood', vars(x, st, -1, {}), st, [settlementRef(x, st)]);
   return true;
 }

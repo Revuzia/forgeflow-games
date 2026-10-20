@@ -345,8 +345,9 @@ void main() {
     vec3 D = normalize(GW_D[i].xyz);
     vec3 d = waveTan(D, up);
     float feed = windFeed(d, gWindT, i < 2 ? 1.0 : 0.5) * smoothstep(0.15, 0.45, length(d));
-    // (kept while at least ~6 pixels hold a wavelength: at 3 the long waves drew bands across a whole ocean from orbit)
-    float fade = 1.0 - smoothstep(0.06, 0.2, fwWave(D, up) / L);
+    // (kept while at least ~8 pixels hold a wavelength: at 3 the long waves drew bands across a whole ocean from orbit,
+    // at 5 stripes over the lakes from a few kilometres up)
+    float fade = 1.0 - smoothstep(0.04, 0.13, fwWave(D, up) / L);
     float grpW = gwGroup(gwG, i);
     float amp = GW_A[i] * sea * calm * fade * feed * grpW;
     gUnresolved += pow(GW_A[i] * sea * calm * feed * 6.2831853 / L, 2.0) * 0.5 * (1.0 - fade);
@@ -363,8 +364,13 @@ void main() {
     vec3 d = waveTan(D, up);
     float k = 6.2831853 / L;
     // (a shelf a few metres deep still carries the swell: only the shallows calm it)
-    float amp = L * 0.011 * sea * calm * (1.0 - smoothstep(0.06, 0.2, fwWave(D, up) / L)) * smoothstep(1.5, 8.0, vDepth)
-      * windFeed(d, gWindT, 1.0) * smoothstep(0.15, 0.45, length(d));
+    // (drawn while ~14 pixels or more hold a wavelength, its slopes folded into the glint's roughness below that: kept
+    // down to 5 px, three pure swells mirrored the sky's horizon gradient as parallel stripes — corrugated tin over
+    // every lake and sea from a few kilometres up)
+    float fadeS = 1.0 - smoothstep(0.025, 0.07, fwWave(D, up) / L);
+    float ampS = L * 0.011 * sea * calm * smoothstep(1.5, 8.0, vDepth) * windFeed(d, gWindT, 1.0) * smoothstep(0.15, 0.45, length(d));
+    gUnresolved += pow(ampS * k, 2.0) * 0.5 * (1.0 - fadeS);
+    float amp = ampS * fadeS;
     grad += d * (amp * k * cos(k * dot(P, D) - sqrt(9.8 * k) * uTime + fi * 2.1));
   }
   // the long waves only: the mirrored cloud deck is looked up along this (a ripple's tilt, carried out kilometres to the

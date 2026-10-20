@@ -539,6 +539,7 @@ attribute vec2 corner;
 attribute vec4 iSeed;    // a, b, c, kind (0 a mote of light, 1 dust, 2 a leaf)
 uniform float uFlowPh;
 uniform float uMoteK;
+uniform float uMoteS;    // the motes of light's size (a trusted god's larger)
 uniform float uDustK;
 uniform float uLeafK;
 varying vec2 vC;
@@ -562,8 +563,9 @@ void main() {
   // gathered, the motes of light swarm round the cradle
   if (kind < 0.5) p = mix(p, cradleAt(mix(-0.8, 0.85, ph), th * 1.3, 0.9 + 0.35 * c), uGrasp * step(0.35, b));
   float dist = length(p - uCamB);
-  float sz = kind < 0.5 ? uL * 0.016 * (0.6 + 0.8 * c) : kind < 1.5 ? uL * 0.11 * (0.6 + 0.8 * c) : uL * 0.03 * (0.7 + 0.6 * c);
-  if (kind < 0.5) sz = max(sz, dist * 0.0018);
+  float sz = kind < 0.5 ? uL * 0.016 * (0.6 + 0.8 * c) * uMoteS : kind < 1.5 ? uL * 0.11 * (0.6 + 0.8 * c) : uL * 0.03 * (0.7 + 0.6 * c);
+  // (a mote of light never under a couple of pixels: a trusted god's are larger, the warm light it is made of)
+  if (kind < 0.5) sz = max(sz, dist * 0.0018 * uMoteS);
   float on = kind < 0.5 ? uMoteK : kind < 1.5 ? uDustK : uLeafK;
   // (a camera inside the vortex: what passes within a metre or two of the lens fades, or it fills the frame with
   // great blurred discs of dust and light)
@@ -855,7 +857,7 @@ export class HandVisual {
     // vortex and cradle
     uBase: { value: new Vector3() }, uAx: { value: new Vector3(0, 1, 0) }, uHg: { value: 4 }, uRG: { value: 6 }, uRK: { value: 2 }, uSpin: { value: 0 },
     uGrasp: { value: 0 }, uCC: { value: new Vector3() }, uCR: { value: 1 }, uCH: { value: 1 },
-    uStreakK: { value: 0.5 }, uDustK: { value: 0.4 }, uFlowPh: { value: 0 }, uMoteK: { value: 0.7 }, uLeafK: { value: 0.3 },
+    uStreakK: { value: 0.5 }, uDustK: { value: 0.4 }, uFlowPh: { value: 0 }, uMoteK: { value: 0.7 }, uMoteS: { value: 1 }, uLeafK: { value: 0.3 },
     // mantle
     uTuftK: { value: 0.8 }, uCloudA: { value: 0.8 }, uGlowK: { value: 0.5 }, uWarm: { value: 0 }, uCamR: { value: new Vector3(1, 0, 0) }, uCamU: { value: new Vector3(0, 1, 0) },
     // glyph, trail, arc, crackles, heart
@@ -1043,6 +1045,7 @@ export class HandVisual {
     // (a trusted god's air is still: little dust raised — a cloud of beige dust round it read as a dust devil, not light)
     this.u.uDustK.value = air ? (0.35 + 0.05 * grasp + 0.3 * W.reach + 1.2 * rk) * nearG * (1 - 0.55 * trusted) : 0;
     this.u.uMoteK.value = 0.6 + 0.6 * W.soothe + 0.8 * ck + 0.3 * grasp + 0.4 * trusted;
+    this.u.uMoteS.value = 1 + 0.9 * trusted + 0.4 * ck + 0.3 * W.soothe;
     this.u.uLeafK.value = air ? (0.25 + 0.3 * grasp + 0.4 * W.reach) * nearG * (1 - 0.6 * feared) : 0;
     this.u.uWhorlK.value = air ? 0.75 + 0.2 * feared : 0;
     // the mantle: a light whirl of cloud open, a dense cradle holding; a feared god's storm is thick and dark; on an
@@ -1100,6 +1103,20 @@ export class HandVisual {
     this.u.uHeartR.value = L * (0.55 + 0.3 * ck + 0.3 * W.soothe) * (1 - 0.5 * grasp) + grasp * Math.max(this.cradleR, this.cradleH) * 0.4;
     this.u.uHeartK.value = (0.22 + 0.2 * W.reach + 0.6 * ck + 0.25 * W.soothe + 0.8 * rk) * (1 - 0.3 * grasp) + 0.3 * grasp + 0.2 * trusted;
     this.u.uHeartBack.value = grasp;
+    // ── a trusted god is warm light more than weather: its cloud thins, the light at its heart swells and its shaft
+    //    brightens, motes of light thicken in the air and almost no dust is raised (open, as fully as it can: a sunlit
+    //    whirl of cloud read as a white dust devil; holding, half as far: the cradle's weave must still show, and what
+    //    it holds must stand dark against the light, not drown in it) ──
+    if (trusted > 0) {
+      const tw = trusted * (1 - 0.5 * grasp);
+      this.u.uTuftK.value *= 1 - trusted * (0.65 - 0.2 * grasp);
+      this.u.uHeartK.value *= 1 + 2.5 * tw;
+      this.u.uHeartR.value *= 1 + tw;
+      this.u.uMoteK.value *= 1 + 1.5 * tw;
+      this.u.uBeamK.value *= 1 + 0.7 * tw;
+      this.u.uDustK.value *= 1 - trusted * (0.8 - 0.15 * grasp);
+      this.u.uGlowK.value *= 1 + 0.8 * tw;
+    }
     // ── far away (from the god's height and beyond) the Touch condenses to a point of light under its whorl: its cloud,
     //    its wind and its dust fade, its heart glows (at ~140 m it would read as a weather system from orbit) ──
     const camD = this.pos.distanceTo(f.camBody);
@@ -1127,7 +1144,7 @@ export class HandVisual {
     this.u.uGripT.value = lenTop / Math.max(1e-3, lenTop + lenBot);
     // (the strip is wider than the light in it: the beam's soft falloff needs the room; a feared god's downdraft is
     // a broad column of dark cloud)
-    const wk = 1.6 * (1 + 0.45 * feared) * (1 - 0.55 * farK);
+    const wk = 1.6 * (1 + 0.45 * feared) * (1 + 0.4 * trusted * (1 - grasp)) * (1 - 0.55 * farK);
     this.u.uWTop.value = Math.max(L * 1.1, topH * 0.06) * (1 + 0.4 * W.soothe - 0.35 * W.point) * wk;
     this.u.uWGrip.value = L * (0.3 - 0.1 * grasp - 0.17 * W.point + 0.2 * W.soothe + 0.25 * rk) * wk;
     this.u.uWGround.value = L * (0.42 + 0.55 * W.soothe - 0.3 * W.point) * wk;
