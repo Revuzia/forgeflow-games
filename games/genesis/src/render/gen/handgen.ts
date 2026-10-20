@@ -44,8 +44,9 @@ function smooth(a: number, b: number, x: number): number {
 export function touchLook(regard: number): TouchLook {
   const r = Math.max(-1, Math.min(1, Number.isFinite(regard) ? regard : 0));
   const trusted = smooth(0.08, 0.75, r), feared = smooth(0.08, 0.75, -r);
-  // pale silver-gold (awed) → warm daylight gold (trusted); feared keeps a cold light in its core
-  let lr = 1.0, lg = 0.93 - 0.25 * trusted, lb = 0.82 - 0.52 * trusted;
+  // pale silver-gold (awed) → warm daylight gold (trusted); feared keeps a cold light in its core. (Saturated: the tone
+  // curve and the sunlit sky round it pale the gold, and a paler one read on screen as a white dust devil.)
+  let lr = 1.0, lg = 0.93 - 0.3 * trusted, lb = 0.82 - 0.6 * trusted;
   lr += (0.62 - lr) * feared; lg += (0.74 - lg) * feared; lb += (1.0 - lb) * feared;
   return {
     light: [lr, lg, lb], rim: [0.5, 0.68, 1.0], dark: 0.92 * feared, trusted, feared,

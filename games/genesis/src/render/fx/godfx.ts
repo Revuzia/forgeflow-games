@@ -470,8 +470,10 @@ export class GodFx {
       case 'lightning': {
         if ((e.data as { ambient?: boolean } | undefined)?.ambient || !e.pos) break;
         this.lightningAt(_v.set(e.pos[0], e.pos[1], e.pos[2]).normalize(), Math.min(1.5, Math.max(0.6, e.a ?? 1)), ctx, true);
-        // a strike made a sign (god/omens.ts: data.omen): the struck place is left glowing
-        if ((e.data as { omen?: number } | undefined)?.omen) M.signs.onEvent(e, R, this.lastReal);
+        // a strike made a sign (god/omens.ts: data.omen) leaves the struck place glowing; a god's lightning sigil does when
+        // a town reads it as one (the `omen` event after it) — the signs layer remembers it until then
+        const ld = e.data as { omen?: number; god?: number } | undefined;
+        if (ld?.omen || typeof ld?.god === 'number') M.signs.onEvent(e, R, this.lastReal);
         break;
       }
       case 'sacred.place': case 'sacred.animal': case 'omen': case 'prophet.called': case 'prophet.fulfilled': case 'prophet.died':

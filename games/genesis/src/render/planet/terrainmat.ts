@@ -279,12 +279,23 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // faces, ridges, the heights, thin cover, ore outcrops: a closed meadow or wood pays nothing for it
     float rockLikely = max(max(steep, smoothstep(0.5, 0.9, -concave)), max(1.0 - smoothstep(0.25, 0.6, soil + vF2.x + vF2.y + vF2.z + vF2.w), smoothstep(0.25, 0.4, vOre.a)));
     rockLikely = max(rockLikely, smoothstep(180.0, 220.0, hG - uSeaLevel));
+    // the same three joint sets at the scale of SLABS and ledges (~17 m, beds ~8 m): what bare rock reads by from
+    // 100 m to a kilometre — blocky masses, each its own tilt and tone, split by dark open fissures. (With the 5 m
+    // blocks alone, which fade out past ~150 m, a bald peak from 130 m was a smooth grey dome: clay, not stone.)
+    if (rockLikely > 0.01 && fw < 4.0) {
+      vec3 g0;
+      vec3 B0 = rk_joints(P + vec3(41.7, 13.1, 27.9), up, Nb, 17.0, fw, mix(0.32, 0.6, steep), g0);
+      rock *= mix(1.0, B0.x, 0.85);
+      rock *= mix(1.0, mix(0.8, 1.16, fract(B0.z * 9.13)), 0.75 * aaF(fw, 5.0));
+      rockG += g0 * 0.8;
+      rockJoint = max(rockJoint, B0.y * 0.8);
+    }
     if (rockLikely > 0.01 && fw < 1.2) {
       vec3 g1;
       vec3 B1 = rk_joints(P, up, Nb, 5.2, fw, mix(0.3, 0.55, steep), g1);
       rock *= B1.x;
-      rockG = g1;
-      rockJoint = B1.y;
+      rockG += g1;
+      rockJoint = max(rockJoint, B1.y);
       // per-block weathering: some blocks fresher (paler), some stained darker, a few with a lichen bloom
       float bt = fract(B1.z * 13.7);
       rock *= mix(1.0, mix(0.82, 1.12, bt), 0.6 * aaF(fw, 1.5));
@@ -629,22 +640,47 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // (a crisp, ragged rim: rock breaks through the turf along a line, it does not fade into it — at a ramp of 0.08 the
     // outcrops were soft blue-grey blotches, puddles rather than stone)
     float outW = smoothstep(1.0 - 0.5 * oreA, 1.025 - 0.5 * oreA, pq) * (1.0 - smoothstep(0.0, 0.4, uw));
-    // the turf round an outcrop is thin and worn: a darker band a metre or two wide where the soil gives out
-    col *= 1.0 - 0.2 * smoothstep(0.94 - 0.5 * oreA, 1.0 - 0.5 * oreA, pq) * (1.0 - outW) * aaF(fw, 1.5) * (1.0 - smoothstep(0.0, 0.4, uw));
+    // the turf round an outcrop is thin: browner, with loose stones weathered off the rock scattered in it (a uniformly
+    // darker band round every patch read as an outline drawn on the map)
+    float rim = smoothstep(0.93 - 0.5 * oreA, 1.0 - 0.5 * oreA, pq) * (1.0 - outW) * (1.0 - smoothstep(0.0, 0.4, uw)) * (1.0 - softO);
+    if (rim > 0.001) {
+      col = mix(col, col * vec3(1.08, 0.97, 0.82), rim * 0.5);
+      float sAA = aaF(fw, 0.9);
+      if (sAA > 0.0) {
+        vec3 sv = voronoi3(P * 1.1 + 5.3);
+        float stone = (1.0 - smoothstep(0.18, 0.3, sv.x)) * step(0.55, sv.z) * rim * sAA;
+        col = mix(col, rock * (0.7 + 0.5 * fract(sv.z * 13.1)), stone);
+        bump += stone * 0.12 * (1.0 - smoothstep(0.0, 0.3, sv.x));
+      }
+    }
     // (from afar: the deposit's colour faintly in the ground, where single outcrops are too small to draw)
     float farK = 1.0 - aaF(fw, 8.0);
     col = mix(col, col * mix(vec3(1.0), oreC / max(oLum, 0.02) * 0.5 + 0.5, 0.25), smoothstep(0.25, 0.7, oreA) * farK * 0.6);
     if (outW > 0.001) {
-      // the outcrop: the planet's rock in its jointed blocks (rock already carries them), weathered darker and browner
-      // than the fresh rock of a cliff, or bare earth for a soft deposit; it stands a little proud of the turf
-      vec3 oc = mix(rock * vec3(0.86, 0.8, 0.74), mix(uRegolith, oreC, 0.55) * (0.85 + 0.3 * m1), softO);
-      float ob = mix(rockBump, m2 * 0.2, softO) + 0.25 * (1.0 - softO);
-      // weathered stain of the ore's colour — malachite and azurite blooms over copper, rust runs over iron — in
-      // blotches (~3 m) broken into specks up close, and runs down the joints: the rock shows through it (a wash of
-      // the ore's colour over the whole outcrop read as a pale puddle)
+      // the outcrop: a jumble of weathered blocks and boulders (~2.5 m) breaking through — each a rounded mass of its own
+      // tone with shadowed gaps between them, on the planet's jointed rock (rock already carries the joints) — or bare
+      // earth for a soft deposit. (A flat patch of rock colour, however stained, read as a puddle in the grass.)
+      vec3 oc = rock * vec3(0.9, 0.85, 0.8);
+      float ob = rockBump;
+      float bAA = aaF(fw, 2.5) * (1.0 - softO);
+      if (bAA > 0.0) {
+        vec3 bv = voronoi3(P * 0.4 + warpV * 0.6);
+        float be = bv.y - bv.x;
+        float dome = smoothstep(0.0, 0.45, be);
+        float gap = (1.0 - smoothstep(0.015, 0.07 + fw * 0.25, be)) * bAA;
+        oc *= mix(1.0, (0.72 + 0.5 * bv.z) * (1.0 - 0.75 * gap), bAA);
+        ob = mix(ob, dome * 0.9 + bv.z * 0.4, bAA);
+      }
+      oc = mix(oc, mix(uRegolith, oreC, 0.55) * (0.85 + 0.3 * m1), softO);
+      ob = mix(ob, m2 * 0.2, softO);
+      // metal ores weather to GOSSAN: rust-brown iron oxides over most of the surface, in runs and blotches (~3 m); the
+      // ore's own colour — malachite and azurite over copper, sulfur yellow, gold's quartz — blooms in patches through it,
+      // the rock showing between (a wash of the ore's colour over the whole outcrop read as a pale puddle)
       float stainN = snoise(P * 0.33 + warpV * 2.0 + 17.0) * 0.6 + snoise(P * 1.3 + 5.0) * 0.4 * aaF(fw, 0.8);
-      float stain = smoothstep(0.05, 0.55, stainN) * (0.55 + 0.45 * oSat);
-      oc = mix(oc, oc * 0.35 + oreC * 0.85, stain * 0.75 * (1.0 - darkO * 0.5));
+      float gossan = smoothstep(-0.35, 0.25, snoise(P * 0.21 + warpV + 3.3)) * (1.0 - softO) * (1.0 - darkO) * (1.0 - paleO);
+      oc = mix(oc, oc * vec3(1.25, 0.82, 0.55) + vec3(0.03, 0.008, 0.0), gossan * 0.6);
+      float stain = smoothstep(0.2, 0.6, stainN) * (0.45 + 0.55 * oSat);
+      oc = mix(oc, oc * 0.3 + oreC * 0.8, stain * 0.7 * (1.0 - darkO * 0.5));
       // veins along the fractures (thin ridged noise), faded to their share where a pixel cannot hold them
       float vr = 1.0 - abs(snoise((P + warpV * 3.0) * 0.32 + 5.0));
       float vein = smoothstep(0.88, 0.97, vr) * aaF(fw, 0.5);

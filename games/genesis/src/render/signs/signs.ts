@@ -74,6 +74,7 @@ const PROPHET_COL: [number, number, number] = [1.0, 0.8, 0.46];
 const FAVOUR_COL: [number, number, number] = [1.0, 0.82, 0.48];
 const ANGER_COL: [number, number, number] = [0.62, 0.52, 1.0];
 const ANIMAL_COL: [number, number, number] = [1.0, 0.9, 0.62];
+const STRIKE_COL: [number, number, number] = [1.0, 0.92, 0.78];
 
 /** the animal content index of a sacred animal's id (its own id, or an old id it replaced: `aliases`) — -1 none */
 export function animalIndex(id: string | undefined): number {
@@ -116,6 +117,8 @@ export class SignsLayer {
   /** captures: hold every moment (an omen read, a strike, a call) at this age (s) instead of real time; null runs */
   hold: number | null = null;
   private moments: Moment[] = [];
+  /** the god's last strike (a lightning sigil), until a town reads it as a sign */
+  private lastStrike: { p: Vector3; real: number; marked: boolean } | null = null;
   private motes = new Map<number, number>();
   private polledAt = -1e9;
   private polling = false;
@@ -142,10 +145,20 @@ export class SignsLayer {
       }
       case 'omen': {
         if (p) this.moments.push({ kind: 'omen', p, t0: real, dur: 6.5, col: d.reading === 'feared' ? ANGER_COL : FAVOUR_COL, agent: -1, size: 220 });
+        // the lightning sigil on one thing, read as a sign (god/omens.ts omensOfCommand: the town's `omen` event follows
+        // the strike's own `lightning` in the same batch) — the struck place is left glowing, as a Signs-power strike is
+        const ls = this.lastStrike;
+        if (d.kind === 'lightning' && ls && !ls.marked && p && real - ls.real < 3 && ls.p.distanceTo(p) < 4000) {
+          ls.marked = true;
+          this.moments.push({ kind: 'strike', p: ls.p.clone(), t0: real, dur: 9, col: STRIKE_COL, agent: -1, size: 7 });
+        }
         break;
       }
       case 'lightning': {
-        if (p && d.omen) this.moments.push({ kind: 'strike', p, t0: real, dur: 9, col: [1.0, 0.92, 0.78], agent: -1, size: 7 });
+        if (!p) break;
+        // a strike the Signs power made a sign (data.omen); a god's other strikes are remembered for the town's reading
+        if (d.omen) this.moments.push({ kind: 'strike', p, t0: real, dur: 9, col: STRIKE_COL, agent: -1, size: 7 });
+        this.lastStrike = { p, real, marked: !!d.omen };
         break;
       }
       case 'prophet.called': {

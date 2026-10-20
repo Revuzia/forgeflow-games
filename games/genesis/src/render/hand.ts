@@ -516,7 +516,7 @@ void main() {
   vec3 sd = normalize(vSunS + vec3(0.0, 0.0, 1e-3));
   float lam = clamp(dot(nrm, sd) * 0.55 + 0.45, 0.0, 1.0);
   float powder = 1.0 - exp(-dens * 3.0);
-  vec3 alb = uCloudA * mix(vec3(1.0), vec3(1.0, 0.75, 0.42), uWarm);
+  vec3 alb = uCloudA * mix(vec3(1.0), vec3(1.0, 0.7, 0.36), uWarm);
   // (a trusted god's cloud is lit more by its own light than by the sun: sunlit white swamped the gold)
   // (and kept below the tone curve's shoulder, where white swallows colour: its gold must survive to the screen)
   vec3 lit = vLight * alb * (0.25 + 0.75 * lam) * mix(0.75, 1.05, powder) * (1.0 - 0.6 * uWarm);
@@ -642,12 +642,15 @@ void main() {
   float vis = fxSoft(vZ, 0.5);
   if (vis <= 0.0) discard;
   float x = abs(vSide);
-  float core = exp(-x * x * 9.0), halo = exp(-x * x * 2.0) * (1.0 - smoothstep(0.8, 1.0, x));
+  float core = exp(-x * x * 6.0), halo = exp(-x * x * 1.8) * (1.0 - smoothstep(0.8, 1.0, x));
   float drawn = 1.0 - smoothstep(uTrace - 0.004, uTrace + 0.004, vT);
   float head = exp(-pow((vT - uTrace) / 0.025, 2.0)) * (1.0 - step(0.999, uTrace));
   float k = (core * 1.1 + halo * 0.3) * drawn + head * (core * 3.0 + halo * 0.8);
   vec3 col = mix(uCol, uRim, uDark * 0.75);
-  gl_FragColor = vec4(col * k * uGlyphK * uPres * vis * fxDisplay(0.7), 0.0);
+  // (the air behind the line a little veiled: against a bright sky light added alone summed to a white thread and the
+  // glyph's shape and colour were lost; over the night it changes nothing)
+  float veil = clamp(halo * 0.28 + core * 0.18, 0.0, 0.4) * max(drawn, head) * uGlyphK * uPres * vis;
+  gl_FragColor = vec4(col * k * uGlyphK * uPres * vis * fxDisplay(0.7), veil);
 }
 `;
 const CRACKLE_FRAG = /* glsl */ `
@@ -927,7 +930,7 @@ export class HandVisual {
     this.motes = fxMesh(new Mesh(moteGeometry(), mk(MOTE_VERT, MOTE_FRAG, false)), 16);
     this.heart = fxMesh(new Mesh(quadGeometry(), mk(HEART_VERT, HEART_FRAG, true)), 16);
     this.streaks = fxMesh(new Mesh(bandGeometry(), mk(STREAK_VERT, STREAK_FRAG, false)), 17);
-    this.glyph = fxMesh(new Mesh(this.glyphGeo, mk(STRIP_VERT, GLYPH_FRAG, true)), 18);
+    this.glyph = fxMesh(new Mesh(this.glyphGeo, mk(STRIP_VERT, GLYPH_FRAG, false)), 18);
     this.trailMesh = fxMesh(new Mesh(this.trailGeo, mk(STRIP_VERT, TRAIL_FRAG, true)), 18);
     this.crackMesh = fxMesh(new Mesh(this.crackGeo, mk(STRIP_VERT, CRACKLE_FRAG, true)), 19);
     this.arcMesh = fxMesh(new Points(this.arcGeo, mk(ARC_VERT, ARC_FRAG, true)), 19);
@@ -1033,11 +1036,12 @@ export class HandVisual {
     this.grasp = grasp;
     this.u.uGrasp.value = grasp;
     // (a trusted god's shaft is warm daylight let down to them: stronger than an awed god's pale one)
-    this.u.uBeamK.value = (0.5 + 0.2 * grasp + 0.55 * W.point + 0.35 * W.soothe + 0.6 * ck) * (1 - 0.3 * feared) * (1 + 0.45 * trusted);
+    this.u.uBeamK.value = (0.5 + 0.2 * grasp + 0.55 * W.point + 0.35 * W.soothe + 0.6 * ck) * (1 - 0.3 * feared) * (1 + 0.7 * trusted);
     this.u.uGroundK.value = Math.min(1, 0.16 + 0.75 * W.point + 0.45 * W.soothe + 0.3 * ck);
     this.u.uFlashK.value = rk * 1.2;
     this.u.uStreakK.value = Math.max(0.08, 0.32 + 0.4 * grasp + 0.35 * W.reach - 0.2 * W.soothe - 0.25 * W.point + 1.1 * rk + 0.3 * ck);
-    this.u.uDustK.value = air ? (0.35 + 0.05 * grasp + 0.3 * W.reach + 1.2 * rk) * nearG : 0;
+    // (a trusted god's air is still: little dust raised — a cloud of beige dust round it read as a dust devil, not light)
+    this.u.uDustK.value = air ? (0.35 + 0.05 * grasp + 0.3 * W.reach + 1.2 * rk) * nearG * (1 - 0.55 * trusted) : 0;
     this.u.uMoteK.value = 0.6 + 0.6 * W.soothe + 0.8 * ck + 0.3 * grasp + 0.4 * trusted;
     this.u.uLeafK.value = air ? (0.25 + 0.3 * grasp + 0.4 * W.reach) * nearG * (1 - 0.6 * feared) : 0;
     this.u.uWhorlK.value = air ? 0.75 + 0.2 * feared : 0;
@@ -1045,7 +1049,7 @@ export class HandVisual {
     // airless world there is no cloud to gather (the light and the motes alone)
     this.u.uTuftK.value = air ? (0.42 + 0.06 * grasp + 0.25 * W.reach - 0.25 * W.point + 0.3 * feared + 0.2 * rk) * (1 - 0.35 * W.soothe) : 0;
     this.u.uCloudA.value = look.cloud;
-    this.u.uWarm.value = 0.85 * trusted;
+    this.u.uWarm.value = 0.95 * trusted;
     // (its own light inside its cloud: warm gold through a trusted god's whirl — the cloud reads as lit by the god, not
     // only by the sun)
     this.u.uGlowK.value = (0.6 + 0.7 * grasp + 0.6 * W.soothe + 0.8 * ck) * (0.7 + 2.2 * trusted);
@@ -1466,7 +1470,8 @@ export class HandVisual {
       const tl = Math.hypot(tx, ty) || 1;
       const sx = -ty / tl, sy = tx / tl;
       const d = Math.hypot(cam.x - px, cam.y - py, cam.z - pz);
-      const w = Math.max(L * 0.035, d * wpx * 2.5);
+      // (the line itself three or four pixels wide at any distance: at 2.5 px of strip it was a one-pixel thread)
+      const w = Math.max(L * 0.05, d * wpx * 4.5);
       const ox = (right.x * sx + up.x * sy) * w, oy = (right.y * sx + up.y * sy) * w, oz = (right.z * sx + up.z * sy) * w;
       pos.setXYZ(i * 2, px + ox, py + oy, pz + oz);
       pos.setXYZ(i * 2 + 1, px - ox, py - oy, pz - oz);

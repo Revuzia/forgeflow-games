@@ -14,7 +14,7 @@ import { ERAS } from '../content.ts';
 import { DEATH, NS, NT, ROLE, SKILL, TRAIT } from './defs.ts';
 import { birth, die, ageHazard, spawnAgent, insertSorted, worldSalt } from './lifecycle.ts';
 import { accident, computeEra, hiveShare, learn, libHas, refreshLibrary } from './knowledge.ts';
-import { planBuilding, canBuild, decayBuildings, hearthAccidents, reviseSite, styleOf } from './buildings.ts';
+import { planBuilding, canBuild, decayBuildings, hearthAccidents, reviseSite, ruin, styleOf } from './buildings.ts';
 import { updateFlow, updateResources, availability, itemIdx, gatherable, territoryRings } from './resources.ts';
 import { capacity, foodDays, spoil, storeAdd, storeHas, storeAny } from './store.ts';
 import { cellPos, distM, drinkable, freshWater, hollowDepth, isLand, offsetPoint, snowWater, sunAt, wellFlows } from './world.ts';
@@ -1296,7 +1296,10 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
     if (f.water[b.cell] > 0.5) drowned++;
   }
   const flooded = f.water[st.cell] > 0.6 || (built >= 2 && drowned * 2 > built);
-  if (flooded) st.recent.flood = st.recent.flood ?? x.tick; else delete st.recent.flood;
+  // (its own key, LIVING integration 2026-10-20: `recent.flood` is also the cooldown stamp of the 'flood' discovery
+  // accident (knowledge.ts accident), which fires every few hours while water stands at the centre and kept restarting
+  // this timer — a town lived 4.6 days in a 5 m crater lake before it was let go)
+  if (flooded) st.recent.floodSince = st.recent.floodSince ?? x.tick; else delete st.recent.floodSince;
   const well = x.ps.of(st.id).some((b) => b.progress >= 1 && !(b.flags & BuildingFlag.ruined) && x.c.buildings.list[b.type].provides.includes('water') && wellFlows(x.p, b.cell));
   // (LIVING LAND §2.7: dry means no FRESH water in reach now — the list is hours old, and a drought left it holding
   // dried cells while the town died of thirst)
@@ -1322,13 +1325,50 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
   const harsh = (suffering > members.length * 0.4 || dead) && !kinder && !enduresSeason(x, st);
   if (harsh) st.recent.harsh = st.recent.harsh ?? x.tick; else delete st.recent.harsh;
   if (!dead && st.recent.thermalAt !== undefined && x.tick - st.recent.thermalAt >= 3 * x.day) { delete st.recent.thermalDead; delete st.recent.thermalAt; }
-  const cause = st.recent.flood !== undefined && x.tick - st.recent.flood > 0.5 * x.day ? 'flood'
+  const cause = st.recent.floodSince !== undefined && x.tick - st.recent.floodSince > 0.5 * x.day ? 'flood'
     // (a dry town leaves within the day: thirst kills in two or three, and a people waiting longer died where it stood)
     : st.recent.dry !== undefined && x.tick - st.recent.dry > 0.75 * x.day ? 'drought'
     : st.recent.harsh !== undefined && (x.tick - st.recent.harsh > 2 * x.day || dead) ? (tooCold ? 'cold' : 'heat')
     : st.recent.hungry !== undefined && x.tick - st.recent.hungry > 2 * x.day ? 'famine' : null;
   if (!cause) return false;
+  // (LIVING integration, 2026-10-20: water over the heart of a town with dry ground beside it — the pond a default
+  // meteor's crater became, a swollen stream — moves the town there, its deep-drowned houses lost, instead of ending it:
+  // the seed-4 town of the acceptance sessions walked away from a crater lake and was founded anew 400 m off under a new
+  // name, its record with its god left behind. A flood with no dry ground in the town's reach still drives them out)
+  if (cause === 'flood' && moveHeart(x, st)) { delete st.recent.floodSince; return false; }
   abandon(x, st, cause);
+  return true;
+}
+
+/**
+ * LIVING integration: the heart of a flooded town moves to dry ground in its own reach — the cell of one of its standing
+ * buildings nearest the old centre, else the nearest dry land within its territory — and the houses under deep water
+ * (> 1.5 m) are lost (its builders raise new ones about the new heart). The caches that start from the centre (the flow
+ * field, the resource lists) are rebuilt; the chronicle tells it. False when there is no dry ground in reach.
+ */
+export function moveHeart(x: PCtx, st: Settlement): boolean {
+  const p = x.p, f = p.f;
+  const dry = (c: number) => isLand(p, c) && f.water[c] < 0.05 && f.lava[c] <= 0 && !p.s.ocean[c];
+  let best = -1, bd = Infinity;
+  for (const b of x.ps.of(st.id)) {
+    if (b.progress < 1 || b.flags & BuildingFlag.ruined || b.cell === st.cell || !dry(b.cell)) continue;
+    const d = distM(p, b.pos, st.pos);
+    if (d < bd || (d === bd && b.cell < best)) { bd = d; best = b.cell; }
+  }
+  if (best < 0) {
+    for (const c of p.cellsNear(st.pos, st.territory)) {
+      if (c === st.cell || !dry(c)) continue;
+      const d = distM(p, cellPos(p, c), st.pos);
+      if (d < bd || (d === bd && c < best)) { bd = d; best = c; }
+    }
+  }
+  if (best < 0) return false;
+  for (const b of x.ps.of(st.id)) if (b.progress >= 1 && !(b.flags & BuildingFlag.ruined) && f.water[b.cell] > 1.5) ruin(x, st, b, 'flood');
+  st.cell = best;
+  st.pos = cellPos(p, best) as [number, number, number];
+  updateFlow(x, st);
+  updateResources(x, st);
+  tell(x.u, x.p, 'heart.flood', vars(x, st, -1, {}), st, [settlementRef(x, st)]);
   return true;
 }
 

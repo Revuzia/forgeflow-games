@@ -262,3 +262,29 @@ test('integration: in a heatwave an infant cools off at home, not on a swim of i
   assert.ok(maxD <= st.territory + 30, `an infant went ${Math.round(maxD)} m from the centre (the village is ${Math.round(st.territory)} m): ${JSON.stringify(tasks)}`);
   assert.equal(tasks.camp ?? 0, 0, `infants camping out: ${JSON.stringify(tasks)}`);
 });
+
+test('integration: a default meteor whose crater fills with water over a town moves the town\'s heart to dry ground; the town stays', () => {
+  // (2026-10-20, the acceptance sessions, seed 4: the crater of a default-wrath meteor on Aru filled to a 5 m lake over
+  // the cell that held 13 of its 15 buildings. The 'flood' discovery accident stamps `recent.flood`, the same key as the
+  // abandonment timer, so the town lived 4.6 days in the lake; then it walked away — "Aru fell" — and its 31 people were
+  // founded anew 400 m off as Taam in the Hills, their record with their god left behind)
+  const sim = new Sim({ seed: 4, scenario: 'sandbox', overrides: { n: 64, vegetation: 1 } });
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 30, era: 'bronze', settled: true });
+  const p = sim.u.planets[0];
+  const st = p.people.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
+  sim.step(1440);
+  const c0 = st.cell, name = st.name, n0 = p.people.members.get(st.id)?.length ?? 0;
+  must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: st.pos });
+  const told: string[] = [];
+  for (let d = 0; d < 4; d++) {
+    sim.step(1440);
+    for (const e of sim.drainEvents()) if (e.t === 'chronicle' && typeof e.text === 'string') told.push(e.text);
+  }
+  assert.ok(p.f.water[c0] > 2, `the crater over the old heart holds water (${p.f.water[c0].toFixed(2)} m)`);
+  assert.equal(st.fallen, -1, `the town fell: ${told.filter((t) => /fell|water/.test(t)).join(' | ')}`);
+  assert.equal(st.name, name, 'the same town, by its name');
+  assert.ok(st.cell !== c0 && p.f.water[st.cell] < 0.05, `its heart moved to dry ground (water ${p.f.water[st.cell].toFixed(2)} m)`);
+  assert.ok((p.people.members.get(st.id)?.length ?? 0) >= n0 - 3, `its people live in it (${p.people.members.get(st.id)?.length} of ${n0})`);
+  assert.ok(told.some((t) => /heart|dry ground/.test(t)), `the chronicle tells it: ${told.slice(-6).join(' | ')}`);
+});

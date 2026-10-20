@@ -547,7 +547,7 @@ export class LookdevBackend implements SimBackend {
   private sink: SnapshotSink | null = null;
   private scenario = 'lookdev';
   private seed = 1;
-  /** the fabricated god layer: hand, creatures, disasters, weather, projectiles, events (client/lookdevgod.ts) */
+  /** the fabricated god layer: the Touch, disasters, weather, projectiles, signs, events (client/lookdevgod.ts) */
   private god = new LookdevGod();
   private godPlanet(lp: LookPlanet): GodPlanet { return { snap: lp.snap, fields: lp.fields, dirty: lp.dirty, grid: getGrid(lp.snap.gridN) }; }
   /** fabricated ships on their missions and world events: crack, erase, moon-fall, birth (client/lookdevspace.ts) */
@@ -772,7 +772,7 @@ export class LookdevBackend implements SimBackend {
         // ships and world events (ship.launch, lookdev.ship, world.crack / erase / moon-fall / birth)
         const sr = this.space.cmd(c, this.tick);
         if (sr) return sr;
-        // the god layer's commands (hand, creatures, disasters, weather, miracles, lookdev.*)
+        // the god layer's commands (the Touch, disasters, weather, miracles, signs, lookdev.*)
         const gr = this.god.cmd(c, this.godPlanet(lp), this.tick);
         if (gr) return gr;
         return { ok: false, msg: `lookdev has no sim: '${c.k}' is not simulated here (run without ?source=lookdev).` };

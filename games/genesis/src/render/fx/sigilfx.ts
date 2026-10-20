@@ -47,17 +47,18 @@ void main() {
   float vis = fxSoft(vZ, uSoft);
   if (vis <= 0.0) discard;
   float x = abs(vSide);
-  // a bright line of light in a soft glow (the stroke is drawn a third of the strip wide: the rest is its glow and the
-  // shadow pressed round it)
-  float core = exp(-x * x * 22.0), halo = exp(-x * x * 4.5) * (1.0 - smoothstep(0.8, 1.0, x));
+  // a bright line of light in a soft glow (the line is drawn some two fifths of the strip wide: the rest is its glow
+  // and the shadow pressed round it)
+  float core = exp(-x * x * 11.0), halo = exp(-x * x * 3.2) * (1.0 - smoothstep(0.8, 1.0, x));
   float drawn = 1.0 - smoothstep(uTrace - 0.003, uTrace + 0.003, vT);
   float head = exp(-pow((vT - uTrace) / 0.02, 2.0)) * (1.0 - step(0.999, uTrace));
-  float k = (core * 1.5 + halo * 0.4) * drawn + head * (core * 4.0 + halo);
-  // (the land round the stroke shadowed, as if the glyph were pressed into it: on snow, sand, a ripe field or a
-  // lightning-lit hillside the glyph keeps its edge where light alone would vanish into the bright ground)
-  float press = exp(-x * x * 2.2) * (1.0 - smoothstep(0.85, 1.0, x)) * drawn * 0.5;
+  float k = (core * 1.25 + halo * 0.45) * drawn + head * (core * 3.5 + halo);
+  // (the land under the stroke shadowed, as if the glyph were pressed into it, most under the line itself: on snow,
+  // sand, a ripe field or a lightning-lit hillside the glyph keeps its edge and its colour where light added to bright
+  // ground alone summed to a faint white thread)
+  float press = clamp(core * 0.5 + halo * 0.3, 0.0, 0.66) * (1.0 - smoothstep(0.85, 1.0, x)) * max(drawn, head);
   // (a white-hot heart along the line, the colour in its glow)
-  vec3 col = mix(uCol, vec3(1.0), 0.35 * core);
+  vec3 col = mix(uCol, vec3(1.0), 0.25 * core * core);
   gl_FragColor = vec4(col * k * uK * vis * fxDisplay(0.75), press * uK * vis);
 }
 `;
@@ -120,8 +121,9 @@ export class SigilMarks {
     const st = sigilStroke(sigilOfMiracle(kind), N);
     const pos = slot.mesh.geometry.getAttribute('position') as BufferAttribute;
     const R = slot.R;
-    // (half the strip's width: the line, its glow and its pressed shadow — a few pixels at any distance)
-    const w = Math.max(R * 0.045, dist * 0.0045);
+    // (half the strip's width: the line, its glow and its pressed shadow — the line some four or five pixels wide at any
+    // distance; thinner, it read as a faint white thread on sunlit ground from the god's height)
+    const w = Math.max(R * 0.06, dist * 0.0085);
     const lift = Math.max(0.6, R * 0.015);
     for (let i = 0; i < N; i++) {
       const j0 = Math.max(0, i - 1), j1 = Math.min(N - 1, i + 1);

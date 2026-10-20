@@ -562,6 +562,32 @@ test('signs: the sim\'s events become places and moments', () => {
   s.dispose();
 });
 
+test('signs: the lightning sigil read as a sign leaves its struck place glowing; unread, or read as another sign, nothing', () => {
+  const R = 3000;
+  const kinds = (s: SignsLayer) => (s as unknown as { moments: { kind: string; p: Vector3 }[] }).moments;
+  // the strike (miracle.lightning: data.god) a little way from the town, then the town reads it (omensOfCommand)
+  const strike: [number, number, number] = [Math.sin(0.1), Math.cos(0.1), 0];
+  const s = new SignsLayer({});
+  s.onEvent({ t: 'lightning', tick: 6, planet: 0, pos: strike, a: 1.5, data: { cell: 4, god: 0 } }, R, 10);
+  assert.equal(kinds(s).length, 0, 'a strike alone is no sign');
+  s.onEvent({ t: 'omen', tick: 6, planet: 0, pos: [0, 1, 0], text: 'lightning', data: { kind: 'lightning', settlement: 1, reading: 'trusted' } }, R, 10.1);
+  const m = kinds(s);
+  assert.deepEqual(m.map((x) => x.kind), ['omen', 'strike'], 'the town reads it, and the struck place glows');
+  assert.ok(m[1].p.distanceTo(new Vector3(...strike).multiplyScalar(R)) < 1e-6, 'at the strike, not at the town');
+  // read once: a second reading of the same strike marks nothing more
+  s.onEvent({ t: 'omen', tick: 7, planet: 0, pos: [0, 1, 0], data: { kind: 'lightning', reading: 'feared' } }, R, 10.2);
+  assert.equal(kinds(s).filter((x) => x.kind === 'strike').length, 1);
+  // a strike followed by another omen's reading, or read long after, or by a town far away: no glowing place
+  for (const [kind, dt, pos] of [['rainbow', 0.1, [0, 1, 0]], ['lightning', 9, [0, 1, 0]], ['lightning', 0.1, [0, -1, 0]]] as [string, number, [number, number, number]][]) {
+    const q = new SignsLayer({});
+    q.onEvent({ t: 'lightning', tick: 6, planet: 0, pos: strike, data: { god: 0 } }, R, 20);
+    q.onEvent({ t: 'omen', tick: 6, planet: 0, pos, data: { kind, reading: 'trusted' } }, R, 20 + dt);
+    assert.equal(kinds(q).filter((x) => x.kind === 'strike').length, 0, `${kind} after ${dt} s at ${pos}`);
+    q.dispose();
+  }
+  s.dispose();
+});
+
 /** a small world whose ground slopes from sea up to land along x: the coast runs north–south through x = 0 */
 function slopeWorld(): PlanetView {
   const grid = getGrid(24), R = 3000;

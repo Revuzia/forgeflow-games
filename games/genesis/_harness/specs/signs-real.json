@@ -1,5 +1,5 @@
 {
- "_doc": "Signs against the REAL sim in its worker (scenario=lookdev, the sim's own town world): a prophet called in the biggest town (prophet.call \u2192 AgentFlag2.prophet in the snapshot), a spring hallowed beside it (place.sacred \u2192 the sacred.place event and the `sacred` query), a sign sent to the town (god.omen), a volcano sent near it in its warning phase (DisasterView.params.warning), and a meteor's first light over it (the ring where it will fall, a new star high above). Run: node _harness/shots.mjs _harness/specs/signs-real.json --port=5195",
+ "_doc": "Signs against the REAL sim in its worker (scenario=lookdev, the sim's own town world): a prophet called in the biggest town (prophet.call \u2192 AgentFlag2.prophet in the snapshot), a spring hallowed beside it (place.sacred \u2192 the sacred.place event and the `sacred` query), a sign sent to the town (god.omen), the lightning sigil cast on a tree by the town (read as a sign: the struck place glows), a volcano sent near it in its warning phase (DisasterView.params.warning), and a meteor's first light over it (the ring where it will fall, a new star high above). Run: node _harness/shots.mjs _harness/specs/signs-real.json --port=5195",
  "shots": [
   {
    "name": "real-prophet",
@@ -39,6 +39,26 @@
     "await G.camera({ mode: 'surface', lat: Math.asin(c[1]) * D, lon: Math.atan2(c[0], c[2]) * D, alt: 24, pitch: 12, fov: 72, sunElevation: 9, faceSun: true, turn: 180 }); await G.frames(1);",
     "F.fx.m.signs.hold = 2.0; const om = await G.cmd({ k: 'god.omen', settlement: s.id, kind: 'rainbow' }); await G.step(2); await G.frames(3);",
     "const sq = await G.query('sacred', {}); return { spring: sp.msg, omen: om.msg, places: sq && sq.places && sq.places.length, bows: F.fx.m.rainbow.live, st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "real-lightning-sign",
+   "params": "scenario=lookdev&page=signs&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI; const W = pv().fields.get('water'); const T = pv().fields.get('tree');",
+    "const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; const c = s.pos; const ex = [c[2], 0, -c[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el; const nx = [c[1] * ex[2], c[2] * ex[0] - c[0] * ex[2], -c[1] * ex[0]];",
+    "const at = (e, n) => { const q = [c[0] + (ex[0] * e + nx[0] * n) / R, c[1] + (nx[1] * n) / R, c[2] + (ex[2] * e + nx[2] * n) / R]; const l = Math.hypot(q[0], q[1], q[2]); return [q[0] / l, q[1] / l, q[2] / l]; };",
+    "let best = null, bv = -1; for (let rr = 220; rr <= 420; rr += 40) for (let a = 0; a < 32; a++) { const th = (a / 32) * Math.PI * 2; const q = at(Math.sin(th) * rr, Math.cos(th) * rr); if (W && pv().grid.sample(W, q[0], q[1], q[2]) > 0.05) continue; const v = T ? pv().grid.sample(T, q[0], q[1], q[2]) : 0; if (v > bv) { bv = v; best = q; } }",
+    "const q = best || at(300, 0); await G.camera({ mode: 'orbit', lat: Math.asin(q[1]) * D, lon: Math.atan2(q[0], q[2]) * D, dist: 230, tilt: 62, yaw: 35, fov: 55, hour: 19 }); await G.frames(1);",
+    "const r = await G.cmd({ k: 'miracle.lightning', pos: q }); await G.step(1); await G.frames(2); F.fx.m.signs.hold = 2.2; await G.frames(3);",
+    "return { r: r.msg, tree: +bv.toFixed(2), st: F.fx.m.signs.stats };"
    ]
   },
   {

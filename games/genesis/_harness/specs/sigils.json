@@ -14,11 +14,11 @@
    "script": [
     "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
     "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); const p = G.poi('farm');",
-    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 470, tilt: 6, yaw: 0, fov: 55, hour: 13 }); await G.frames(2);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 640, tilt: 22, yaw: 0, fov: 55, hour: 14 }); await G.frames(2);",
     "const pv = F.fx.vis.pv, R = pv.params.radius, S = pv.fields.get('surface'); const u = p.pos; const ex = [u[2], 0, -u[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el; const nx = [u[1] * ex[2], u[2] * ex[0] - u[0] * ex[2], -u[1] * ex[0]];",
     "const kinds = ['water', 'storm', 'lightning', 'calm', 'forest', 'heal', 'food', 'fertility', 'wood', 'teach', 'fire', 'fireball', 'shield', 'meteor'];",
     "const light = { r: 1.0, g: 0.78, b: 0.42 }; const fwd = F.fx.camFwd.clone();",
-    "kinds.forEach((k, i) => { const col = i % 4, row = Math.floor(i / 4); const e = (col - 1.5) * 105, n = (1.5 - row) * 92; const q = [u[0] + (ex[0] * e + nx[0] * n) / R, u[1] + (nx[1] * n) / R, u[2] + (ex[2] * e + nx[2] * n) / R]; const l = Math.hypot(...q); const v = F.fx.hand.pos.clone().set(q[0] / l, q[1] / l, q[2] / l); v.multiplyScalar(R + pv.grid.sample(S, v.x, v.y, v.z)); F.fx.m.sigils.land(pv, k, v, 64, light, F.fx.vis.camBody, fwd, performance.now() / 1000); });",
+    "kinds.forEach((k, i) => { const col = i % 4, row = Math.floor(i / 4); const e = (col - 1.5) * 150, n = (1.5 - row) * 125; const q = [u[0] + (ex[0] * e + nx[0] * n) / R, u[1] + (nx[1] * n) / R, u[2] + (ex[2] * e + nx[2] * n) / R]; const l = Math.hypot(...q); const v = F.fx.hand.pos.clone().set(q[0] / l, q[1] / l, q[2] / l); v.multiplyScalar(R + pv.grid.sample(S, v.x, v.y, v.z)); F.fx.m.sigils.land(pv, k, v, 64, light, F.fx.vis.camBody, fwd, performance.now() / 1000); });",
     "F.fx.m.sigils.hold = 2.0; await G.frames(3); return { live: F.fx.m.sigils.live };"
    ]
   },
