@@ -73,14 +73,22 @@
     // The 0.5x ADS spread bonus, the scope camera and the overlay all gate on it.
     sniper:   { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 700, falloff: [200, 400], spreadDeg: 0.15, scope: true, adsFov: 20, adsTimeS: 0.5 },
     glauncher:{ cls: "launcher", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45 },
+    // FRAG GRENADE (parity P1-A, LC-14; BUILT DARK). The blast definition explode() and hitDamage() read by
+    // id - it is NOT a gun: it is deliberately absent from WEAPON_IDS (loot, bot weapon choice and every
+    // per-gun selftest loop iterate that list), it has no magazine or ammo, and nothing ever equips "frag"
+    // as a.weapon.id. The carried item is CONSUMABLES.frag (kind "consumable", thrown by its own branch in
+    // weapons.js stepWeapon, never through useConsumable / applyHeal). Apex's frag deals 100 with falloff;
+    // splashScale here runs linearly to 25 % at splashR + 0.8 (the launcher's convention), fuse from the throw.
+    frag:     { cls: "throwable", damage: 100, headMult: 1.0, rpm: 60, speed: 20, arc: true, fuseS: 3.0, splashR: 4.5, spreadDeg: 0 },
   };
-  var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"]; // lootable guns
+  var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"]; // lootable guns (never the frag: see WEAPONS.frag)
   // Display names. The kill feed threw away the weaponId it was handed and the
   // death screen printed the raw internal id ("glauncher"), so the one place a
   // player learns what killed them showed them a variable name.
   var WEAPON_NAMES = {
     pistol: "Pistol", smg: "SMG", ar: "Assault Rifle",
     shotgun: "Shotgun", sniper: "Sniper", glauncher: "Grenade Launcher",
+    frag: "Frag Grenade",
     storm: "the Storm",
   };
   function weaponName(id) { return WEAPON_NAMES[id] || String(id || "?"); }
@@ -107,7 +115,65 @@
     medkit:      { heals: "hp", amount: 100, cap: 100, useS: 8, stack: 3 },
     mini_shield: { heals: "shield", amount: 25, cap: 50, useS: 2, stack: 6 },
     big_shield:  { heals: "shield", amount: 50, cap: 100, useS: 5, stack: 3 },
+    // LC-14 frag, BUILT DARK: no `heals` key, so every heal path refuses it (player.js useConsumable/applyHeal,
+    // bots.js usable(): `c.heals === "hp" ? ... : a.shield < c.cap` reads cap undefined -> false). `throws`
+    // names the WEAPONS entry the blast uses. Loot weight 0 until P2-D turns it on with bot throws (P2-B).
+    frag:        { throws: "frag", useS: 0, stack: 3 },
   };
+
+  /** Throw tunables for CONSUMABLES with `throws` (weapons.js throwRound). The launch is the aim direction
+   *  raised by `loft` (a natural over-arm release, so a level aim still carries ~25 m), at `speed` m/s, under
+   *  `gravity`. `cycleS` = time between throws. Pure data: fragLaunch / predictArc below are the shared math,
+   *  so an arc preview (P2-A HUD) and the live round can never disagree. */
+  var FRAG = { speed: 20, loft: 0.17, gravity: -15, cycleS: 0.9, minElev: -0.7, maxElev: 1.25 };
+
+  /** Launch velocity of a throw along the unit aim (dx,dy,dz). Writes {vx,vy,vz} into `out` (optional). */
+  function fragLaunch(dx, dy, dz, out) {
+    out = out || {};
+    var hl = Math.sqrt(dx * dx + dz * dz);
+    var hx = hl > 1e-6 ? dx / hl : 0, hz = hl > 1e-6 ? dz / hl : -1;
+    var el = clamp(Math.atan2(dy, hl > 1e-6 ? hl : 1e-6) + FRAG.loft, FRAG.minElev, FRAG.maxElev);
+    var c = Math.cos(el) * FRAG.speed;
+    out.vx = hx * c; out.vy = Math.sin(el) * FRAG.speed; out.vz = hz * c;
+    return out;
+  }
+
+  /** First contact of a ballistic round launched from (x,y,z) at (vx,vy,vz) under gravity g (m/s^2, negative),
+   *  sampled every 1/120 s of flight on the EXACT parabola (weapons.js integrates arcing rounds exactly, so this
+   *  is the same curve), tested against the terrain (heightAt(x,z)) and, when `query` is given, against static
+   *  colliders swept per sample segment (query(x, z, r, buf) = maps.queryColliders). Returns
+   *  {x, y, z, t, kind: "terrain"|"collider"|null, nx, ny, nz} written into `out` (optional); kind null = no contact
+   *  within maxT (x/y/z then the position at maxT). Terrain contact is interpolated inside the sample segment. */
+  function predictArc(x, y, z, vx, vy, vz, g, maxT, heightAt, query, buf, out) {
+    out = out || {};
+    var h = 1 / 120, px = x, py = y, pz = z, t = 0, n = Math.ceil((maxT || 4) / h);
+    var hPrev = heightAt(px, pz);
+    for (var i = 1; i <= n; i++) {
+      t = i * h;
+      var cx = x + vx * t, cy = y + vy * t + 0.5 * g * t * t, cz = z + vz * t;
+      if (query) {
+        var mx = (px + cx) * 0.5, mz = (pz + cz) * 0.5, ex = (cx - px) * 0.5, ez = (cz - pz) * 0.5;
+        var cols = query(mx, mz, Math.sqrt(ex * ex + ez * ez) + 0.6, buf);
+        var sh = cols && cols.length ? segmentColliders(px, py, pz, cx, cy, cz, cols) : null;
+        if (sh && sh.t > 0) {
+          out.x = px + (cx - px) * sh.t; out.y = py + (cy - py) * sh.t; out.z = pz + (cz - pz) * sh.t;
+          out.t = t - h + h * sh.t; out.kind = "collider"; out.nx = sh.nx; out.ny = sh.ny; out.nz = sh.nz;
+          return out;
+        }
+      }
+      var hc = heightAt(cx, cz);
+      if (cy <= hc) {
+        var da = py - hPrev, db = cy - hc;
+        var f = da > 0 && da - db > 1e-9 ? da / (da - db) : 1;
+        out.x = px + (cx - px) * f; out.z = pz + (cz - pz) * f; out.y = heightAt(out.x, out.z);
+        out.t = t - h + h * f; out.kind = "terrain"; out.nx = 0; out.ny = 1; out.nz = 0;
+        return out;
+      }
+      px = cx; py = cy; pz = cz; hPrev = hc;
+    }
+    out.x = px; out.y = py; out.z = pz; out.t = t; out.kind = null; out.nx = 0; out.ny = 0; out.nz = 0;
+    return out;
+  }
 
   // arcade-BR speeds (owner: "not industry standard" at 8.4 — browser BRs
   // like Final Drop run ~9-10 sprint with a strong FOV kick)
@@ -185,8 +251,86 @@
     // FIRST-SHOT ACCURACY: a deliberate single shot while standing still goes
     // exactly where the reticle points — no bloom lottery. Tolerance rather than
     // an exact compare now that movePen is continuous.
-    if (def.cls !== "shotgun" && !st.airborne && sp < 0.6 && (st.sinceLastShotS || 0) > 0.5) spread *= 0.15;
+    if (def.cls !== "shotgun" && !st.airborne && sp < 0.6) {
+      // PER-SHOT BLOOM (parity P1-A, LC-33). The rule below the `if` was binary: 0.15x after 0.5 s idle,
+      // else the full cone from shot 2 on, so a held AR's 2nd round was as wild as its 30th and there was
+      // nothing to learn about tapping vs spraying. With a heat value the cone now opens shot by shot
+      // (0.15x -> 1.0x) and closes again after you stop. `st.heat` = the heat right AFTER the last shot,
+      // decayed here by st.sinceLastShotS, so a caller that only knows the time since the last shot (the
+      // reticle) reads the same cone the next shot will use.
+      //   st.heat === null       -> the legacy binary rule (bots: their aim error is their own model and
+      //                             D8 pacing is tuned on it; gunValueAt's estimates)
+      //   st.heat a number       -> the bloom model (weapons.js fire(), the local non-touch human)
+      //   st.heat undefined      -> the live-heat registry below if it holds this weapon, else legacy:
+      //                             hud.js reads the reticle without knowing about heat
+      var heat = st.heat;
+      if (heat === undefined) heat = LIVE_HEAT.id === weaponId ? LIVE_HEAT.heat : null;
+      if (heat === null) {
+        if ((st.sinceLastShotS || 0) > 0.5) spread *= FIRST_SHOT_MULT;
+      } else {
+        spread *= FIRST_SHOT_MULT + (1 - FIRST_SHOT_MULT) * heatNow(heat, st.sinceLastShotS || 0);
+      }
+    }
     return spread;
+  }
+  var FIRST_SHOT_MULT = 0.15;
+  /** Heat per shot (0..1 scale: 1 = the full cone). After shot 1 the cone is 0.15 + 0.85 x perShot of the
+   *  maximum (<= 0.35x for every gun here), and it is fully open by shot ceil(1 / perShot) + 1. The heat is
+   *  HELD for holdS after each shot (any automatic's interval is shorter, so a held trigger accumulates)
+   *  and then cools at coolPerS: a full spray is back to first-shot accuracy 0.30 + 1/3 = 0.63 s after the
+   *  last round (the legacy rule: 0.5 s), a single tap after 0.37 s. The shotgun has no first-shot regime. */
+  var BLOOM = {
+    pistol:    { perShot: 0.20 },
+    smg:       { perShot: 0.14 },
+    ar:        { perShot: 0.20 },
+    sniper:    { perShot: 0.50 },
+    glauncher: { perShot: 0.50 },
+    holdS: 0.30, coolPerS: 3.0,
+  };
+  function heatNow(heatAfterShot, sinceS) {
+    var h = heatAfterShot - Math.max(0, sinceS - BLOOM.holdS) * BLOOM.coolPerS;
+    return h < 0 ? 0 : h > 1 ? 1 : h;
+  }
+  /** Heat right after a shot fired at `heatBefore` (already decayed). */
+  function heatAfterShot(weaponId, heatBefore) {
+    var b = BLOOM[weaponId];
+    return b ? Math.min(1, heatBefore + b.perShot) : 1;
+  }
+  // The ONE mutable thing in this module: the local human's heat, registered by weapons.js on every shot
+  // (and cleared on swap / death / match reset / touch), so the reticle (hud.js -> effectiveSpread with no
+  // `heat` field) draws the bloom. It never feeds the sim's outcome: fire() always passes heat explicitly.
+  var LIVE_HEAT = { id: null, heat: 0 };
+  function setLiveHeat(weaponId, heat) { LIVE_HEAT.id = weaponId || null; LIVE_HEAT.heat = heat || 0; }
+
+  // ── RECOIL PATTERNS (parity P1-A, LC-01) ──────────────────────────────────
+  // The human's kick re-centred at 0.12 rad/s, faster than an AR could add it (5.5 shots/s x 0.011 rad =
+  // 0.06 rad/s), so a 30-round spray never climbed past ONE kick (0.52 deg, measured) and there was no
+  // recoil to control. Automatics now follow a fixed per-gun pattern, shot index by shot index: the pitch
+  // kick decays from a strong opening (pitch[i] = A e^(-i/tau) + B) so an uncompensated AR spray climbs
+  // ~3.6 deg and plateaus, and a deterministic yaw wobble (plus the seeded jitter the old kick had)
+  // makes the drift learnable. Recovery is HELD while the trigger is held and firing, then re-centres at
+  // recoverPerS, never below the pitch the burst started from (a player who pulled down keeps their aim).
+  // Human only (bots model error themselves), automatics only, never on touch (the touch path keeps the
+  // legacy kick byte for byte). `cap` bounds the total climb whatever the stance multiplier.
+  function recoilTable(n, A, tau, B, Y, w, ph) {
+    var p = [], y = [];
+    for (var i = 0; i < n; i++) { p.push(A * Math.exp(-i / tau) + B); y.push(Y * Math.sin(w * i + ph)); }
+    return { pitch: p, yaw: y };
+  }
+  var RECOIL = {
+    ar:  (function () { var t = recoilTable(30, 0.0078, 6, 0.0004, 0.0012, 0.45, 0.6);
+      return { pitch: t.pitch, yaw: t.yaw, jitter: 0.0008, cap: 0.07, hipMult: 1.15, crouchMult: 0.85, recoverPerS: 0.26, recoverYawPerS: 0.15 }; })(),
+    smg: (function () { var t = recoilTable(30, 0.0047, 8, 0.0002, 0.0010, 0.6, 2.0);
+      return { pitch: t.pitch, yaw: t.yaw, jitter: 0.0007, cap: 0.05, hipMult: 1.15, crouchMult: 0.85, recoverPerS: 0.22, recoverYawPerS: 0.15 }; })(),
+  };
+  /** Pitch kick (rad) of shot `idx` (0-based) of a burst, before the cap. stance: {ads, crouching}. */
+  function recoilPitchKick(weaponId, idx, stance) {
+    var r = RECOIL[weaponId];
+    if (!r) return 0;
+    var k = r.pitch[idx < r.pitch.length ? idx : r.pitch.length - 1];
+    if (!(stance && stance.ads)) k *= r.hipMult;
+    if (stance && stance.crouching) k *= r.crouchMult;
+    return k;
   }
 
   /** `out` is optional: pass a reusable {fx,fz,rx,rz} object on per-frame paths
@@ -772,6 +916,7 @@
     glauncher: 0.10,   // variable explosive yield
     smg:    0.12,      // 15-19 at base 17
     shotgun: 0.15,     // per PELLET, on top of how many pellets land
+    frag: 0.10,        // same explosive yield swing as the launcher
   };
 
   /** `roll` is an optional [0,1) sample. Omit it for the NOMINAL value — every
@@ -834,6 +979,11 @@
   var FLOOR_GUN_SHARE = 0.55;
   var FLOOR_AMMO_SHARE = 0.20;           // standalone ammo; guns bring their own
   var FLOOR_GUN_WEIGHTS = [8, 24, 26, 20, 12, 10];   // pistol smg ar shotgun sniper glauncher
+  // consumable rolls; the trailing "frag" entry is weight 0 until P2-D (LC-14 built dark)
+  var FLOOR_CON_IDS = ["bandage", "mini_shield", "medkit", "big_shield", "frag"];
+  var FLOOR_CON_WEIGHTS = [32, 34, 18, 16, 0];
+  var CHEST_CON_IDS = ["mini_shield", "big_shield", "medkit", "bandage", "frag"];
+  var CHEST_CON_WEIGHTS = [34, 26, 20, 20, 0];
 
   /** One floor-spawn item. kind: weapon|ammo|consumable.
    *  A weapon carries `companions`: its own ammo, 1-2 boxes' worth, as ONE item
@@ -854,8 +1004,11 @@
       var aid = ["light", "medium", "shells", "heavy", "grenades"][weightedIndex(rng, [30, 28, 22, 12, 8])];
       return { kind: "ammo", id: aid, count: AMMO[aid].box };
     }
-    var cid = ["bandage", "mini_shield", "medkit", "big_shield"][weightedIndex(rng, [32, 34, 18, 16])];
-    return { kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : 1 };
+    // "frag" rides LAST at weight 0 (LC-14, built dark): weightedIndex never lands on a trailing zero-weight
+    // entry (the running roll is already <= 0 at the last positive weight) and the total is unchanged, so
+    // every seed rolls exactly what it rolled before. P2-D raises the weight with MAP_GEN_VERSION.
+    var cid = FLOOR_CON_IDS[weightedIndex(rng, FLOOR_CON_WEIGHTS)];
+    return { kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : cid === "frag" ? 2 : 1 };
   }
 
   /** Flat list for one floor roll: [item, ...its companions], companions stripped
@@ -918,7 +1071,7 @@
     var reserve = opts.reserve != null ? opts.reserve : Infinity;
     if (loaded + reserve <= 0) return 0;                        // dry: worth nothing
     var spread = effectiveSpread(id, rarity || 0, {
-      ads: dist > 25, speed: opts.speed || 0, airborne: false, crouching: false, sinceLastShotS: interval,
+      ads: dist > 25, speed: opts.speed || 0, airborne: false, crouching: false, sinceLastShotS: interval, heat: null,
     });
     var aim = opts.aimDeg != null ? opts.aimDeg : VALUE_AIM_DEG;   // the shooter's own aim error, when known
     var ang = Math.sqrt(spread * spread + aim * aim) * Math.PI / 180;
@@ -966,8 +1119,8 @@
     if (w.ammo) items.push({ kind: "ammo", id: w.ammo, count: AMMO[w.ammo].box * 2 });
     var r = rng();
     if (r < 0.55) {
-      var cid = ["mini_shield", "big_shield", "medkit", "bandage"][weightedIndex(rng, [34, 26, 20, 20])];
-      items.push({ kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : 1 });
+      var cid = CHEST_CON_IDS[weightedIndex(rng, CHEST_CON_WEIGHTS)];   // frag last at weight 0 (see rollFloorItem)
+      items.push({ kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : cid === "frag" ? 2 : 1 });
     } else {
       items.push({ kind: "ammo", id: ["light", "medium", "shells"][weightedIndex(rng, [34, 34, 32])], count: 20 });
     }
@@ -1067,6 +1220,11 @@
     weightedIndex: weightedIndex, rollRarity: rollRarity, rollFloorItem: rollFloorItem, rollChest: rollChest, rollSupplyDrop: rollSupplyDrop,
     rollFloorSpawn: rollFloorSpawn, floorRollCount: floorRollCount, FLOOR_GUN_WEIGHTS: FLOOR_GUN_WEIGHTS,
     gunValueAt: gunValueAt,
+    // parity P1-A
+    FRAG: FRAG, fragLaunch: fragLaunch, predictArc: predictArc,
+    BLOOM: BLOOM, FIRST_SHOT_MULT: FIRST_SHOT_MULT, heatNow: heatNow, heatAfterShot: heatAfterShot, setLiveHeat: setLiveHeat,
+    RECOIL: RECOIL, recoilPitchKick: recoilPitchKick,
+    FLOOR_CON_IDS: FLOOR_CON_IDS, FLOOR_CON_WEIGHTS: FLOOR_CON_WEIGHTS, CHEST_CON_IDS: CHEST_CON_IDS, CHEST_CON_WEIGHTS: CHEST_CON_WEIGHTS,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FFG = root.FFG || {};
