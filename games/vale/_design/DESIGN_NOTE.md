@@ -23,7 +23,7 @@ VALE is an original 3D lane-brawler that runs in the browser. Its world is one g
 | Seats | 2 teams × 5, five positions | 2 × 5 | 10 × 1, every seat its own colour |
 | Pick | draft; the four RIFT queues layer on top | the Lot: one random fighter each, a team bench of 2, one redraw | free pick, no duplicates |
 | Start | level 1, 480 Gleam | level 3, 1,300 Gleam, no recall | level 6 (ultimate ready), 1,400 Gleam |
-| Win | silence the Hourbell (sudden death at 40:00) | silence the Hourbell (sudden death at 20:00) | first to 12 kills, last one standing, or best placed at 11:00 |
+| Win | silence the Hourbell (sudden death at 40:00) | silence the Hourbell (sudden death at 16:00) | first to 12 kills, last one standing, or best placed at 11:00 |
 | Target length | 22–28 min | 14–20 min | 8–11 min |
 
 Source: `content/modes.json`, `content/queues.json`, `content/maps/*.json`. RIFT's queues are Quick (role and fighter chosen before queueing), Draft (1 ban a team), Ranked (2 bans a team, Glicko-2) and Co-op vs bots; Custom and Practice complete the eight queues.
@@ -282,7 +282,7 @@ The full record is [`_design/NAMES_NOT_USED.md`](NAMES_NOT_USED.md). `tools/name
 | FRAY | pick → match → **4th of 10** at the 11:00 limit → 94 Candles |
 | Store | Shop → buy the Chalkline Pavise skin for Ardit → equip it |
 
-Both team matches ran past their target lengths (RIFT 22–28 min, BRIDGE 14–20 min). One bot-filled run does not measure pacing, but it is worth watching in playtests. Screenshots land in `_harness/_shots/`.
+Both team matches in this run went long (RIFT 22–28 min, BRIDGE 14–20 min targets); one bot-filled run does not measure pacing. `_harness/pacing.ts` does (all-bot matches, many seeds): RIFT mean 24.8 min over 10 seeds, FRAY 9.3. BRIDGE ran 25.2 (17.7–53.2 over 20 seeds) until 2026-10-20, when its respawns were lengthened (8 s + 2 s a level, ×1.45 from 9:00) and sudden death moved to 16:00 with respawns ×3: now 19.0 (14.1–22.9). Short respawns let a losing team stall the one road forever; longer ones turn a won fight into a push. Screenshots land in `_harness/_shots/`.
 
 **1080p60** (`_harness/perf_1080.mjs`, report `_harness/_reports/perf_1080.json`): the real renderer in Chrome on the GPU at 1920 × 1080, DPR 1, with the HUD on, ten minutes into a live RIFT match, camera on the densest fight, 8 s per preset. GPU: Apple M5 (ANGLE Metal).
 

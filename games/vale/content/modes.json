@@ -68,7 +68,7 @@
       "roles": false,
       "card": { "art": "assets/ui/modes/bridge_card.webp", "accent": "#EDE6D6", "glyph": "assets/ui/modes/bridge_glyph.svg" },
       "rules": {
-        "$comment": "Target 14-20 min. Level 3 and 1,300 Gleam at the start; waves every 25 s from 0:20; XP doubled on a cheaper table because five share one road; no recall, the base fountain heals slowly and only inside the base circle, Mending Sunmotes on the span are the real sustain. Sudden death at 20:00.",
+        "$comment": "Target 14-20 min. Level 3 and 1,300 Gleam at the start; waves every 25 s from 0:20; XP doubled on a cheaper table because five share one road; no recall, the base fountain heals slowly and only inside the base circle, Mending Sunmotes on the span are the real sustain. Respawns run long (8 s + 2 s a level, ×1.45 from 9:00) so a won fight turns into a push; sudden death at 16:00 (respawns ×3). Pacing (all-bot, 20 seeds): mean 19.0 min, 14.1-22.9.",
         "startLevel": 3,
         "maxLevel": 18,
         "startGold": 1300,
@@ -77,7 +77,7 @@
         "goldMult": 1,
         "xpMult": 2,
         "xpTable": [200, 260, 320, 380, 440, 500, 560, 620, 680, 740, 800, 860, 920, 980, 1040, 1100, 1160],
-        "respawn": { "base": 6, "perLevel": 1.5, "max": 32, "lateGameRampAt": 840, "lateGameMult": 1.2 },
+        "respawn": { "base": 8, "perLevel": 2, "max": 40, "lateGameRampAt": 540, "lateGameMult": 1.45 },
         "shopAccess": "base_or_dead",
         "recall": false,
         "fountainHeals": true,
@@ -96,7 +96,7 @@
         "structures": true,
         "jungle": false,
         "surrender": { "earliest": 480, "votesNeeded": 0.8 },
-        "suddenDeathAt": 1200,
+        "suddenDeathAt": 960,
         "end": { "kind": "core", "coreStructure": "hourbell" },
         "bounty": { "kill": 250, "assistShare": 0.6, "streakStep": 50, "streakMax": 350, "shutdownMax": 350 },
         "abilityRanks": { "basicMax": 5, "ultLevels": [6, 11, 16] },
@@ -106,7 +106,7 @@
           "killXpFraction": 0.5,
           "multiKillWindow": 10,
           "fountainHealPerSec": 0.08,
-          "suddenDeathRespawnMult": 1.5
+          "suddenDeathRespawnMult": 3
         }
       }
     },

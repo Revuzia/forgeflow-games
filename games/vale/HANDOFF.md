@@ -113,8 +113,10 @@ vocabulary in code (all exist; a build check tying UiCueKind to audio.cues would
 
 ### Pacing (10-14, `node _harness/pacing.ts --seeds 10`: all-bot matches on the real catalog, ~2 s each)
 RIFT mean 24.8 min (19-31; target about 25) · FRAY 9.3 (6-11; target 8-11) · BRIDGE 21.3 (16-28; target 14-20,
-card says about 17). Moving BRIDGE's sudden death 20:00 -> 16:00 changed nothing (21.7), so the lever is
-elsewhere (Needle/Hourbell health on the Span, wave strength, respawn ramp). A balance follow-up.
+card said about 17). 10-20: fixed with the respawn ramp (the lever: short respawns let the losing team
+stall the one road). BRIDGE respawn 8 s + 2 s/level (max 40), ×1.45 from 9:00, sudden death 16:00 with
+respawns ×3 -> mean 19.0 (14.1-22.9, 20 seeds; was 25.2, 17.7-53.2). Card now "about 19 min".
+`pacing.ts --rules '<json>'` tries rule changes without editing content.
 
 ### Art 2.0 rollout prep (10-14, waiting on the owner's sign-off)
 - Skins: `pipeline.build` re-colours the projected painting per part (skin role / base role per channel,

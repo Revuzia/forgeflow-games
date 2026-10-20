@@ -10,7 +10,7 @@
   ],
   "modeSlots": [
     { "mode": "rift", "status": "live", "note": "Hourfall · 5v5 · about 25 min" },
-    { "mode": "bridge", "status": "live", "note": "Needlespan · 5v5 · about 17 min" },
+    { "mode": "bridge", "status": "live", "note": "Needlespan · 5v5 · about 19 min" },
     { "mode": "fray", "status": "live", "note": "Noonplate · 10 fighters · about 10 min" },
     { "mode": null, "status": "reserved", "label": "The uncarved hour", "note": "A new mode will be cut here." }
   ],
