@@ -1,0 +1,146 @@
+{
+ "boulder_block": {
+  "budget": 600,
+  "kb": 12.1,
+  "role": "rock",
+  "size_m": [
+   0.87,
+   0.63,
+   0.35
+  ],
+  "tris": 214,
+  "verts": 309
+ },
+ "boulder_pair": {
+  "budget": 600,
+  "kb": 16.9,
+  "role": "rock",
+  "size_m": [
+   1.11,
+   0.9,
+   0.32
+  ],
+  "tris": 284,
+  "verts": 451
+ },
+ "boulder_tick": {
+  "budget": 600,
+  "kb": 13.1,
+  "role": "rock",
+  "size_m": [
+   1.02,
+   0.56,
+   0.31
+  ],
+  "tris": 174,
+  "verts": 348
+ },
+ "dialwood_broad": {
+  "budget": 750,
+  "kb": 25.2,
+  "role": "tree",
+  "size_m": [
+   3.18,
+   3.07,
+   2.95
+  ],
+  "tris": 584,
+  "verts": 659
+ },
+ "dialwood_lean": {
+  "budget": 750,
+  "kb": 25.6,
+  "role": "tree",
+  "size_m": [
+   2.63,
+   2.03,
+   3.11
+  ],
+  "tris": 616,
+  "verts": 668
+ },
+ "dialwood_squat": {
+  "budget": 750,
+  "kb": 22.4,
+  "role": "tree",
+  "size_m": [
+   3.14,
+   2.59,
+   2.51
+  ],
+  "tris": 522,
+  "verts": 581
+ },
+ "dialwood_tall": {
+  "budget": 750,
+  "kb": 24.9,
+  "role": "tree",
+  "size_m": [
+   2.1,
+   2.48,
+   3.27
+  ],
+  "tris": 572,
+  "verts": 651
+ },
+ "dialwood_young": {
+  "budget": 750,
+  "kb": 16.3,
+  "role": "tree",
+  "size_m": [
+   2.01,
+   1.58,
+   2.89
+  ],
+  "tris": 388,
+  "verts": 411
+ },
+ "needle_drum": {
+  "budget": 600,
+  "kb": 13.9,
+  "role": "rock",
+  "size_m": [
+   0.46,
+   0.42,
+   0.35
+  ],
+  "tris": 188,
+  "verts": 372
+ },
+ "needle_slab": {
+  "budget": 600,
+  "kb": 14.7,
+  "role": "rock",
+  "size_m": [
+   0.54,
+   0.31,
+   0.29
+  ],
+  "tris": 196,
+  "verts": 396
+ },
+ "stone_chip": {
+  "budget": 300,
+  "kb": 10.4,
+  "role": "stone",
+  "size_m": [
+   0.6,
+   0.5,
+   0.42
+  ],
+  "tris": 134,
+  "verts": 272
+ },
+ "stone_tick": {
+  "budget": 300,
+  "kb": 14.5,
+  "role": "stone",
+  "size_m": [
+   0.74,
+   0.3,
+   0.25
+  ],
+  "tris": 192,
+  "verts": 392
+ }
+}

@@ -77,7 +77,9 @@
       "bounty": { "gold": 120, "goldGlobal": 80, "xp": 100 },
       "behavior": { "targetRules": "tower", "callForHelpRange": 9.5, "rampPerHit": 0.35, "rampMax": 1.05, "rampReset": 3, "damageMult": { "minion": 1.4, "summon": 1.4 } },
       "sightRange": 12,
-      "art": { "model": "assets/units/needle_outer.glb", "height": 7, "icon": "assets/units/needle_outer_icon.png",
+      "art": { "model": "assets/units/needle_outer_aubade.glb",
+        "teamModels": ["assets/units/needle_outer_aubade.glb", "assets/units/needle_outer_serenade.glb"],
+        "height": 7, "icon": "assets/units/needle_outer_icon.png",
         "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
     },
     {
@@ -91,7 +93,9 @@
       "bounty": { "gold": 140, "goldGlobal": 100, "xp": 140 },
       "behavior": { "targetRules": "tower", "callForHelpRange": 9.5, "rampPerHit": 0.35, "rampMax": 1.05, "rampReset": 3, "damageMult": { "minion": 1.4, "summon": 1.4 } },
       "sightRange": 12,
-      "art": { "model": "assets/units/needle_inner.glb", "height": 7.5, "icon": "assets/units/needle_inner_icon.png",
+      "art": { "model": "assets/units/needle_inner_aubade.glb",
+        "teamModels": ["assets/units/needle_inner_aubade.glb", "assets/units/needle_inner_serenade.glb"],
+        "height": 7.5, "icon": "assets/units/needle_inner_icon.png",
         "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
     },
     {
@@ -105,7 +109,9 @@
       "bounty": { "gold": 50, "goldGlobal": 50, "xp": 100 },
       "behavior": { "targetRules": "tower", "callForHelpRange": 9.5, "rampPerHit": 0.4, "rampMax": 1.2, "rampReset": 3, "damageMult": { "minion": 1.4, "summon": 1.4 } },
       "sightRange": 12,
-      "art": { "model": "assets/units/needle_bell.glb", "height": 6.5, "icon": "assets/units/needle_bell_icon.png",
+      "art": { "model": "assets/units/needle_bell_aubade.glb",
+        "teamModels": ["assets/units/needle_bell_aubade.glb", "assets/units/needle_bell_serenade.glb"],
+        "height": 6.5, "icon": "assets/units/needle_bell_icon.png",
         "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
     },
     {
@@ -118,7 +124,9 @@
       "behavior": { "targetRules": "none" },
       "sightRange": 10,
       "onTakedownTeamBuff": "lanternwake",
-      "art": { "model": "assets/units/lantern.glb", "height": 4.5, "icon": "assets/units/lantern_icon.png",
+      "art": { "model": "assets/units/lantern_aubade.glb",
+        "teamModels": ["assets/units/lantern_aubade.glb", "assets/units/lantern_serenade.glb"],
+        "height": 4.5, "icon": "assets/units/lantern_icon.png",
         "clips": { "idle": "idle", "death": "death" } }
     },
     {
@@ -130,7 +138,9 @@
       "bounty": { "gold": 0, "xp": 0 },
       "behavior": { "targetRules": "none" },
       "sightRange": 14,
-      "art": { "model": "assets/units/hourbell.glb", "height": 9, "icon": "assets/units/hourbell_icon.png",
+      "art": { "model": "assets/units/hourbell_aubade.glb",
+        "teamModels": ["assets/units/hourbell_aubade.glb", "assets/units/hourbell_serenade.glb"],
+        "height": 9, "icon": "assets/units/hourbell_icon.png",
         "clips": { "idle": "idle", "death": "death" } }
     },
 

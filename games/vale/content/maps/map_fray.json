@@ -342,15 +342,12 @@
   "lut": "assets/grade/vale_grade_01.cube",
   "minimap": "assets/maps/map_fray/minimap.png",
   "terrain": {
-   "textures": { "$comment": "painted tiling textures by role (render/terrain.ts maps each texture's mean onto the band colour)", "road": "assets/textures/stone_road.webp", "floor": "assets/textures/grass_dark.webp", "clearing": "assets/textures/dirt_path.webp", "dust": "assets/textures/gravel_light.webp", "cliff": "assets/textures/chalk_cliff.webp", "cliffTop": "assets/textures/moss_stone.webp" },
-   "props": { "$comment": "scatter props (art/blender/props/scatter.py): vertex-coloured, real size; render/terrain.ts instances them on its procedural spots", "tree": ["assets/props/dialwood_a.glb", "assets/props/dialwood_b.glb", "assets/props/dialwood_c.glb"], "rock": ["assets/props/boulder_a.glb", "assets/props/boulder_b.glb"], "stone": ["assets/props/stone_a.glb"] },
+   "plate": {"at": [32, 32], "radius": 30},
+   "surface": "plate",
+   "textures": {"$comment": "painted tiling textures by role (tools/terrain_textures.py; render/terrain.ts maps each painting's mean onto the band colour, alpha = height)", "litter": "assets/textures/terrain_litter.webp", "grain": "assets/textures/terrain_grain.webp", "moss": "assets/textures/terrain_moss.webp"},
+   "props": { "$comment": "none (brief \u00a74: the Noonplate is a clean stone stage; no foliage beyond the rim, where the fair's stands are landmarks)", "tree": [], "rock": [], "stone": [] },
    "$comment": "honed basalt plate; hour-lines from the centre to each hour-mark; the cart ring at the centre",
-   "colors": {
-    "lane": "#8E887C",
-    "jungle": "#4A4744",
-    "clearing": "#6E6A62",
-    "inscription": "#B7B0A0"
-   },
+   "colors": {"lane": "#4A4A4E", "jungle": "#4A4744", "clearing": "#6E6A62", "inscription": "#9C978C", "midInlay": "#615E58", "cliffFace": "#3E3D40", "cliffLip": "#8E8A80", "edgeLight": "#D8D2C2", "cliffTop": "#CFCAC0", "moss": "#4A5A42", "grassRoot": "#2F3B30", "grassTip": "#9AA478"},
    "hourMarks": "spawns[] in seat order I-X, clockwise from 12",
    "wallHeights": {
     "hourStones": 1.2,

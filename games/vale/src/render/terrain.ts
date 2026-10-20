@@ -1,35 +1,62 @@
 // VALE render — procedural terrain from the map JSON (CONTRACT §0: terrain, scatter and trim are
 // procedural-allowed). Used while `map.art.scene` is missing or empty (the art lane's Blender scene
-// replaces it as soon as it loads). Everything is derived from MapDef, deterministically:
+// replaces it as soon as it loads). Everything is derived from MapDef, deterministically.
 //
-//   ground    one plane; a CPU-baked splat of DISTANCES (lane centre, clearing edge, wall edge, thicket
-//             edge) shaded in the fragment shader: honed irregular pavers on the roads (lighter, quieter:
-//             L* 62–68), a dark mossy Dialwood floor with leaf litter (L* 30–40), packed-dust clearings
-//             around camps / bases / structures (L* 45–50), wall-foot occlusion and quiet carved hour-lines.
-//             Roughness ≥ 0.5 everywhere walkable.
-//   cliffs    every wall polygon, outline resampled at ~0.9 m with a deterministic wobble, extruded
-//             1.6–3.4 m and chiselled (position-based displacement, flat facets): lit tops with moss
-//             (L* 55–62) and a bright worn rim, dark stratified faces (L* 18–25). An outer rim closes the
-//             world. `terrain.wallStyle: "gorge"` (Needlespan) turns large walls into a chasm instead:
-//             the ground opens, sheer walls drop into the gorge mist.
+//   ground    one plane shaded per pixel from baked DISTANCE FIELDS (splat: lane, camp room, wall, brush;
+//             splat2: Standing Shadow, Fallen Shaft, chasm; inlay: engraved / inlaid strokes) and three
+//             painted tiling textures with height in alpha (terrain_litter / grain / moss, each
+//             mapped so its MEAN lands on the designed band colour: the bible's value law holds).
+//             `art.terrain.surface` picks the floor:
+//               dial   RIFT: honed irregular dial-stone flags on the roads (L* 62–68) with a carved
+//                      inscription band and hour-ticks, broken mossy verges (50–56) whose flags are lost
+//                      to the wood flag by flag, a Dialwood floor of moss and fan-leaf litter with broad
+//                      hue/value drifts (30–40) and the hour-line groove along every path, dusty pale
+//                      camp rooms (45–50), moss banks and occlusion at every wall foot, the Seat, the
+//                      Fallen Shaft's pale floor under its water.
+//               span   BRIDGE: the fallen shaft's deck in long courses (60–66), a chalk band of carved
+//                      hour-script on every edge of the drop (70), the Snap's crazing and lit fracture.
+//               plate  FRAY: polished basalt slabs in rings (28–36), chalk hour-lines and numerals, the
+//                      shop ring.
+//             Base plazas (art.terrain.plazas): Aubade chalk flags with dawnglass rings round the
+//             fountain, Serenade ochre sandstone with lampresin. Roughness ≥ 0.5 everywhere walkable.
+//   walls     every wall polygon swept course by course (terrain_walls.ts): dark cut stone in battered
+//             horizontal courses with chunky chiselled blocks (18–25), a protruding cap course whose
+//             chamfer carries the painted edge light, a carved lip, then moss and canopy on top (55–62).
+//             Heights from art.terrain.wallHeights (small / hourStones, large / rim, frame).
+//             `wallStyle: "gorge"` (Needlespan): large walls are the gorge. The ground opens; the deck's
+//             edges roll over into the shaft's curved needle-stone flank, then raw rock in strata falls
+//             into the depth mist (height-based, darkening toward the abyss); the far walls fall in columnar
+//             rock; rock spires stand in the gorge (parallax); the hour-band notches stand proud as carved rings.
 //   brush     Needlegrass: instanced clumps of SOLID tapered blades (no alpha cards) on a carved curb.
-//   scatter   (quality 0 sparse · 1 half · 2 full) rounded Dialwood canopies on the cliff tops, boulders at
-//             the cliff feet and stones on the jungle floor; never in lanes, clearings or brush.
-//   marks     the Standing Shadow floor (keeps its colour under fog, hard engraved edge) and the
-//             Fallen Shaft's shallow water, when the map's terrain block describes them.
+//   clutter   (quality 0 none · 1 half · 2 full) moss cushions, fallen fan leaves, pebbles, wall-foot
+//             tufts: solid, instanced, chunked, no shadows; Dialwood floor only (never on roads, rooms,
+//             plazas, the Seat or the Noonline; the deck and the Noonplate stay clean stages).
+//   scatter   (quality 0 sparse · 1 half · 2 full) Dialwood canopies on the cliff tops, boulders at the
+//             cliff feet and stones on the jungle floor; never in lanes, clearings or brush (none on the
+//             Noonplate: its corners are the noon glare).
+//   marks     the Standing Shadow floor (violet-cool stone, hard engraved edge, keeps its colour under
+//             fog) and the Fallen Shaft's shallow water.
 // Instanced scatter is chunked (24 m cells) so off-screen chunks are culled from the main and shadow
 // passes. Every material is patched with the world chunk (fog of war + edge haze).
 
 import {
-  BackSide, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide,
-  ExtrudeGeometry, Group, IcosahedronGeometry, InstancedMesh, LinearFilter, type Material, Matrix4, Mesh,
-  MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion, RedFormat, RGBAFormat, Shape, ShapeGeometry, ShapeUtils, UnsignedByteType,
-  type Texture, Vector2, Vector3, Vector4, type WebGLProgramParametersWithUniforms,
+  BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, IcosahedronGeometry,
+  InstancedMesh, LinearFilter, type Material, Matrix4, Mesh, MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion,
+  RGBAFormat, Shape, ShapeGeometry, ShapeUtils, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
+  type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { MapDefT } from '../contracts/catalog.ts';
 import { NOISE_GLSL } from './glsl.ts';
+import { FRAY_SEATS } from './palette.ts';
 import { patchWorldMaterial, worldUniforms } from './world_material.ts';
+import {
+  GROUND_MAIN_GLSL, GROUND_PARS_GLSL, SHADOW_MAIN_GLSL, SHADOW_PARS_GLSL, TERRAIN_HELPERS_GLSL, WALL_MAIN_GLSL, WALL_MIST_GLSL,
+  WALL_PARS_GLSL, WALL_VERT_MAIN, WALL_VERT_PARS,
+} from './terrain_glsl.ts';
+import { cliffProfile, flankProfile, rockFaceProfile, type Strip, sweep, WallMesh, WK } from './terrain_walls.ts';
+import { bakeInlay, fracture, hourScript, INLAY, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
+import { bladeTuft, fanLeaf, mossTuft, pebble, spire } from './terrain_clutter.ts';
 
 type V2 = readonly [number, number];
 type Poly = readonly V2[];
@@ -97,6 +124,17 @@ function signedArea(poly: Poly): number {
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) a += (poly[j][0] * poly[i][1] - poly[i][0] * poly[j][1]);
   return a / 2;
 }
+/** signed distance to a set of polygons (negative inside), capped at ±cap */
+function polysSD(x: number, y: number, polys: Poly[], boxes: Box[], cap: number): number {
+  let d = cap;
+  let inside = false;
+  for (let k = 0; k < polys.length; k++) {
+    if (boxDist(x, y, boxes[k]) >= d && !inside) continue;
+    if (pointInPolygon(x, y, polys[k])) inside = true;
+    d = Math.min(d, polyEdgeDist(x, y, polys[k]));
+  }
+  return inside ? -Math.min(d, cap) : Math.min(d, cap);
+}
 
 /** resample the outline at ~step m with a deterministic outward/inward wobble (map-border edges stay straight) */
 function organicOutline(poly: Poly, step: number, amp: number, size: V2, seed: number): V2[] {
@@ -121,26 +159,21 @@ function organicOutline(poly: Poly, step: number, amp: number, size: V2, seed: n
   }
   return out;
 }
-
-/** naive polygon inset (for convex-ish shapes) */
-function insetPolygon(pts: Vector2[], d: number): Vector2[] {
-  const n = pts.length;
-  const out: Vector2[] = [];
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
-    const e0 = p1.clone().sub(p0).normalize(), e1 = p2.clone().sub(p1).normalize();
-    const n0 = new Vector2(-e0.y, e0.x), n1 = new Vector2(-e1.y, e1.x);
-    const bis = n0.add(n1).normalize();
-    out.push(p1.clone().addScaledVector(bis, d));
+/** resample a polyline at ~step m (no wobble) */
+function resample(path: readonly V2[], step: number): V2[] {
+  const out: V2[] = [path[0]];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    for (let k = 1; k <= n; k++) out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
   }
   return out;
 }
 
 /** shape in the extrusion plane: sim (x, y) → shape (x, −y) so rotateX(−π/2) lands it on (x, ·, y) */
-function shapeOf(poly: Poly, inset = 0): Shape {
+function shapeOf(poly: Poly): Shape {
   let pts = poly.map(([x, y]) => new Vector2(x, -y));
   if (ShapeUtils.isClockWise(pts)) pts = pts.reverse();
-  if (inset !== 0) pts = insetPolygon(pts, inset);
   return new Shape(pts);
 }
 
@@ -166,12 +199,20 @@ function chunked(geo: BufferGeometry, mat: Material, items: { m: Matrix4; c?: Co
 }
 
 // ── palette (tokens.json colors.terrain-ref + bible valueLstar), overridable by map.art.terrain.colors ─
-interface TerrainColors { lane: string; laneGrout: string; jungle: string; moss: string; earth: string; clearing: string; inscription: string;
-  cliffTop: string; cliffFace: string; curb: string; grassRoot: string; grassTip: string; leaf: string; trunk: string; stone: string; chasm: string; mist: string }
+interface TerrainColors {
+  lane: string; laneGrout: string; verge: string; jungle: string; moss: string; earth: string; clearing: string; inscription: string;
+  cliffTop: string; cliffFace: string; cliffLip: string; edgeLight: string; curb: string; grassRoot: string; grassTip: string; leaf: string;
+  trunk: string; stone: string; chasm: string; mist: string; flank: string; rock: string; shaftFloor: string; seat: string;
+  plazaAubade: string; plazaSerenade: string; inlayAubade: string; inlaySerenade: string; midInlay: string; lit: string;
+  shadowLine: string; water: string; litter: string; pebble: string;
+}
 const DEFAULT_COLORS: TerrainColors = {
-  lane: '#9A927F', laneGrout: '#6F685A', jungle: '#4E5547', moss: '#475A43', earth: '#5C5446', clearing: '#7A766A', inscription: '#B7B0A0',
-  cliffTop: '#8E8979', cliffFace: '#45423C', curb: '#8A8476', grassRoot: '#2F3B30', grassTip: '#8A9A7C', leaf: '#3F5A45',
-  trunk: '#4A3F36', stone: '#77726A', chasm: '#2A2D33', mist: '#5E6C93',
+  lane: '#9A927F', laneGrout: '#6F685A', verge: '#7C7666', jungle: '#4E5547', moss: '#475A43', earth: '#5C5446', clearing: '#8A8576',
+  inscription: '#B7B0A0', cliffTop: '#5E6450', cliffFace: '#45423C', cliffLip: '#8E8979', edgeLight: '#D8D0BC', curb: '#8A8476',
+  grassRoot: '#2F3B30', grassTip: '#9AA478', leaf: '#3F5A45', trunk: '#4A3F36', stone: '#77726A', chasm: '#2A2D33', mist: '#5E6C93',
+  flank: '#5D5A55', rock: '#4A4C52', shaftFloor: '#A4A69E', seat: '#B4AE9E', plazaAubade: '#B3B1A8', plazaSerenade: '#AF9A78',
+  inlayAubade: '#BFD3E6', inlaySerenade: '#C99A5E', midInlay: '#5F5D58', lit: '#FFE2B8', shadowLine: '#7A7396', water: '#4F6B70',
+  litter: '#6A5434', pebble: '#7A766D',
 };
 function colorsFrom(terrain: Record<string, unknown> | undefined): TerrainColors {
   const c: TerrainColors = { ...DEFAULT_COLORS };
@@ -195,13 +236,26 @@ function polysOf(v: unknown): Poly[] {
   walk(v);
   return out;
 }
+/** polylines (≥ 2 points) from a list (defensive) */
+function linesOf(v: unknown): V2[][] {
+  if (!Array.isArray(v)) return [];
+  const out: V2[][] = [];
+  for (const l of v) {
+    if (!Array.isArray(l)) continue;
+    const pts = l.filter((p): p is [number, number] => Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number').map((p) => [p[0], p[1]] as V2);
+    if (pts.length >= 2) out.push(pts);
+  }
+  return out;
+}
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
+const pt = (v: unknown): V2 | undefined => (Array.isArray(v) && typeof v[0] === 'number' && typeof v[1] === 'number' ? [v[0], v[1]] : undefined);
 
 export interface TerrainBuild {
   group: Group;
   /** heights of every wall polygon (0 for chasm walls) */
   wallHeights: number[];
   setScatter(level: 0 | 1 | 2): void;
-  /** painted tiling textures by role (map.art.terrain.textures): road, floor, clearing, dust, cliff, cliffTop */
+  /** painted tiling textures by role (map.art.terrain.textures): litter, grain, moss */
   setTextures(t: Partial<Record<TerrainTexRole, Texture>>): void;
   /** authored scatter props (map.art.terrain.props: tree / rock / stone → GLB variants), vertex-coloured,
    *  real size, origin at the ground contact; they replace the procedural shapes and re-scatter */
@@ -212,12 +266,10 @@ export interface TerrainBuild {
   dispose(): void;
 }
 
-export type TerrainTexRole = 'road' | 'floor' | 'clearing' | 'dust' | 'cliff' | 'cliffTop';
+export type TerrainTexRole = 'litter' | 'grain' | 'moss';
 export type TerrainPropRole = 'tree' | 'rock' | 'stone';
 export const TERRAIN_PROP_ROLES: readonly TerrainPropRole[] = ['tree', 'rock', 'stone'];
-export const TERRAIN_TEX_ROLES: readonly TerrainTexRole[] = ['road', 'floor', 'clearing', 'dust', 'cliff', 'cliffTop'];
-/** world metres per texture repeat, by role */
-const TEX_SCALE: Record<TerrainTexRole, number> = { road: 3.6, floor: 5.0, clearing: 4.5, dust: 4.0, cliff: 3.4, cliffTop: 6.5 };
+export const TERRAIN_TEX_ROLES: readonly TerrainTexRole[] = ['litter', 'grain', 'moss'];
 
 /** load map.art.terrain.props (role → GLB refs) into vertex-coloured geometries (each GLB merged, its
  *  node transforms applied); null when the map names none */
@@ -276,34 +328,14 @@ export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => 
 }
 
 /** a 1×1 stand-in so the samplers exist from the first compile (textures swap in without a recompile) */
-function whiteTex(): DataTexture {
-  const t = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat, UnsignedByteType);
+function greyTex(): DataTexture {
+  const t = new DataTexture(new Uint8Array([160, 160, 160, 153]), 1, 1, RGBAFormat, UnsignedByteType);
   t.needsUpdate = true;
   return t;
 }
 
-/** GLSL: anti-tiled painted sample calibrated so its MEAN colour lands on the designed band colour (the
- *  bible's value law holds; the painting supplies the detail). The mean is the texture's smallest mip. */
-const TEX_GLSL = /* glsl */`
-// organic surfaces (grass, moss, dirt): two rotated samples blended by noise hide the repeat
-vec3 valeTexBand( sampler2D t, vec2 p, float scale, vec3 band, float n ) {
-  vec2 uv = p / scale;
-  vec3 a = texture( t, uv ).rgb;
-  vec2 r = vec2( 0.8 * uv.x - 0.6 * uv.y, 0.6 * uv.x + 0.8 * uv.y ) * 0.61 + vec2( 0.37, 0.71 );
-  vec3 b = texture( t, r ).rgb;
-  vec3 c = mix( a, b, smoothstep( 0.35, 0.65, n ) );
-  vec3 m = max( textureLod( t, vec2( 0.5 ), 16.0 ).rgb, vec3( 0.02 ) );
-  return c / m * band;
-}
-// structured surfaces (cobbles, strata): one aligned sample (a rotated copy would cross the grid);
-// macro tone variation from the caller hides the repeat; contrast eased by k
-vec3 valeTexGrid( sampler2D t, vec2 p, float scale, vec3 band, float k ) {
-  vec3 c = texture( t, p / scale ).rgb;
-  vec3 m = max( textureLod( t, vec2( 0.5 ), 16.0 ).rgb, vec3( 0.02 ) );
-  return mix( vec3( 1.0 ), c / m, k ) * band;
-}`;
-
-interface Clearing { x: number; y: number; r: number; camp?: boolean }
+interface Clearing { x: number; y: number; r: number; camp?: boolean; room?: boolean }
+type Surface = 'dial' | 'span' | 'plate';
 
 export function buildTerrain(map: MapDefT): TerrainBuild {
   const group = new Group();
@@ -312,6 +344,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const tr = (map.art.terrain ?? {}) as Record<string, unknown>;
   const colors = colorsFrom(tr);
   const gorge = tr.wallStyle === 'gorge';
+  const surface: Surface = tr.surface === 'span' || tr.surface === 'plate' || tr.surface === 'dial' ? tr.surface
+    : gorge ? 'span' : map.lanes.length === 0 ? 'plate' : 'dial';
   const rand = mulberry(0x5eed ^ Math.round(SX * 131 + SY * 17));
   const walls: Poly[] = map.walls.map((w) => w.map((p) => [p[0], p[1]] as V2));
   const thickets: Poly[] = (map.thickets ?? []).map((w) => w.map((p) => [p[0], p[1]] as V2));
@@ -321,8 +355,9 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const lanes = map.lanes.map((l) => l.path.map((p) => [p[0], p[1]] as V2));
   const disposables: { dispose(): void }[] = [];
   const lin = (hex: string): Color => new Color().setStyle(hex);
+  const onBorder = (x: number, y: number): boolean => Math.abs(x) < 0.01 || Math.abs(y) < 0.01 || Math.abs(x - SX) < 0.01 || Math.abs(y - SY) < 0.01;
 
-  // clearings: bases, shops, structures, camps, pickups, spawns
+  // clearings: bases, shops, structures, camps, pickups, spawns (scatter keeps out); rooms = camp floors
   const clearings: Clearing[] = [];
   for (const b of map.bases) {
     clearings.push({ x: b.fountain.at[0], y: b.fountain.at[1], r: b.fountain.radius + 3.5 });
@@ -336,17 +371,60 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     cx /= Math.max(1, c.units.length); cy /= Math.max(1, c.units.length);
     let r = 0;
     for (const u of c.units) r = Math.max(r, Math.hypot(u.at[0] - cx, u.at[1] - cy));
-    clearings.push({ x: cx, y: cy, r: r + (c.objective ? 6 : 4.5), camp: true });
+    clearings.push({ x: cx, y: cy, r: r + (c.objective ? 6 : 4.5), camp: true, room: !c.objective });
   }
   for (const p of map.pickups ?? []) clearings.push({ x: p.at[0], y: p.at[1], r: 2.2 });
   for (const s of map.spawns ?? []) clearings.push({ x: s[0], y: s[1], r: 2.6 });
   for (const s of map.shops ?? []) clearings.push({ x: s.at[0], y: s.at[1], r: s.radius + 1.5 });
+  const rooms = clearings.filter((c) => c.room);
 
-  // ── splat (distance fields) ──────────────────────────────────────────────────────────────────
+  // ── map marks from art.terrain ─────────────────────────────────────────────────────────────────
+  const noon = tr.noonline as Record<string, unknown> | undefined;
+  const shadowDef = noon?.standingShadow as { floor?: unknown; tint?: unknown; tip?: unknown } | undefined;
+  const shaftDef = noon?.fallenShaft as { floor?: unknown } | undefined;
+  const shadowPolys = polysOf(shadowDef?.floor), shaftPolys = polysOf(shaftDef?.floor);
+  const shadowBoxes = shadowPolys.map(bbox), shaftBoxes = shaftPolys.map(bbox);
+  const chasmPolys = walls.filter((_, i) => chasm[i]);
+  const chasmBoxes = chasmPolys.map(bbox);
+  const solidWalls = walls.map((w, i) => ({ w, b: wallBoxes[i] })).filter((_, i) => !chasm[i]);
+  // plazas: art.terrain.plazas [{ at, radius, side }], else one per base round its fountain
+  const plazas: { x: number; y: number; r: number; side: number; fx: number; fy: number; fr: number }[] = [];
+  {
+    const raw = Array.isArray(tr.plazas) ? (tr.plazas as { at?: unknown; radius?: unknown; side?: unknown }[]) : [];
+    const list = raw.length ? raw.map((p) => ({ at: pt(p.at), r: num(p.radius), side: typeof p.side === 'number' ? p.side : 0 }))
+      : map.bases.map((b) => ({ at: [(b.fountain.at[0] + b.spawn[0]) / 2 + (b.team === 0 ? 3 : -3), b.fountain.at[1]] as V2, r: 13, side: b.team }));
+    for (const p of list) {
+      if (!p.at || !p.r) continue;
+      let best = map.bases[0];
+      for (const b of map.bases) if (Math.hypot(b.fountain.at[0] - p.at[0], b.fountain.at[1] - p.at[1]) < Math.hypot(best.fountain.at[0] - p.at[0], best.fountain.at[1] - p.at[1])) best = b;
+      const f = best ? best.fountain : { at: p.at, radius: 4 };
+      plazas.push({ x: p.at[0], y: p.at[1], r: p.r, side: p.side, fx: f.at[0], fy: f.at[1], fr: f.radius });
+    }
+  }
+  const inPlaza = (x: number, y: number, pad: number): boolean => plazas.some((p) => Math.hypot(x - p.x, y - p.y) < p.r + pad);
+  const seat = tr.seat as { at?: unknown; radius?: unknown } | undefined;
+  const seatAt = pt(seat?.at);
+  const seatV = seatAt ? new Vector3(seatAt[0], seatAt[1], num(seat?.radius) ?? 0) : new Vector3(0, 0, 0);
+  const plateDef = tr.plate as { at?: unknown; radius?: unknown } | undefined;
+  const plateAt = pt(plateDef?.at) ?? (map.shops[0] ? (map.shops[0].at as unknown as V2) : [SX / 2, SY / 2] as V2);
+  const plateR = num(plateDef?.radius) ?? Math.min(SX, SY) / 2 - 2;
+  const gdef = (tr.gorge ?? {}) as Record<string, unknown>;
+  const axisY = typeof gdef.axisY === 'number' ? gdef.axisY : lanes[0] ? lanes[0].reduce((s, p) => s + p[1], 0) / lanes[0].length : SY / 2;
+  const deckHalf = num(gdef.deckHalf) ?? 7;
+  const gorgeDepth = num(gdef.depth) ?? 36;
+  const bandH = num(gdef.bandHeight) ?? 1.0;
+  const snapDef = tr.snap as { at?: unknown; radius?: unknown } | undefined;
+  const snapAt = pt(snapDef?.at);
+  const snapR = num(snapDef?.radius) ?? 0;
+
+  // ── splats (distance fields) ────────────────────────────────────────────────────────────────────
   const texel = Math.max(0.5, Math.max(SX, SY) / 384);
   const W = Math.ceil(SX / texel) + 1, H = Math.ceil(SY / texel) + 1;
   const splat = new Uint8Array(W * H * 4);
-  const chasmMask = gorge ? new Uint8Array(W * H) : null;
+  const splat2 = new Uint8Array(W * H * 4);
+  /** CPU copies for placement: lane, room, wall, thicket, shadow, shaft, chasm */
+  const F = { ld: new Float32Array(W * H), cd: new Float32Array(W * H), wd: new Float32Array(W * H), td: new Float32Array(W * H),
+    sh: new Float32Array(W * H), sf: new Float32Array(W * H), ch: new Float32Array(W * H) };
   for (let j = 0; j < H; j++) {
     const y = j * texel;
     for (let i = 0; i < W; i++) {
@@ -354,141 +432,161 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       let ld = 16;
       for (const l of lanes) for (let k = 1; k < l.length; k++) ld = Math.min(ld, segDist(x, y, l[k - 1][0], l[k - 1][1], l[k][0], l[k][1]));
       let cd = 16;
-      for (const c of clearings) cd = Math.min(cd, Math.hypot(x - c.x, y - c.y) - c.r);
+      for (const c of rooms) cd = Math.min(cd, Math.hypot(x - c.x, y - c.y) - c.r);
       let wd = 8;
-      for (let k = 0; k < walls.length; k++) {
-        if (boxDist(x, y, wallBoxes[k]) >= wd) continue;
-        const inside = pointInPolygon(x, y, walls[k]);
-        if (inside && chasmMask && chasm[k]) chasmMask[j * W + i] = 255;
-        if (inside) { wd = 0; break; }
-        wd = Math.min(wd, polyEdgeDist(x, y, walls[k]));
+      for (const { w, b } of solidWalls) {
+        if (boxDist(x, y, b) >= wd) continue;
+        if (pointInPolygon(x, y, w)) { wd = 0; break; }
+        wd = Math.min(wd, polyEdgeDist(x, y, w));
       }
       let td = 4;
       for (let k = 0; k < thickets.length; k++) {
-        if (boxDist(x, y, thicketBoxes[k]) >= td) continue;
+        if (boxDist(x, y, thicketBoxes[k]) >= Math.abs(td)) continue;
         const e = polyEdgeDist(x, y, thickets[k]);
         td = Math.min(td, pointInPolygon(x, y, thickets[k]) ? -e : e);
       }
-      const o = (j * W + i) * 4;
+      const sh = shadowPolys.length ? polysSD(x, y, shadowPolys, shadowBoxes, 4) : 4;
+      const sf = shaftPolys.length ? polysSD(x, y, shaftPolys, shaftBoxes, 4) : 4;
+      const ch = chasmPolys.length ? -polysSD(x, y, chasmPolys, chasmBoxes, 4) : -4;
+      const k = j * W + i, o = k * 4;
+      F.ld[k] = ld; F.cd[k] = cd; F.wd[k] = wd; F.td[k] = td; F.sh[k] = sh; F.sf[k] = sf; F.ch[k] = ch;
       splat[o] = Math.round(Math.min(1, ld / 16) * 255);
       splat[o + 1] = Math.round(Math.min(1, Math.max(0, (cd + 8) / 24)) * 255);
       splat[o + 2] = Math.round(Math.min(1, wd / 8) * 255);
       splat[o + 3] = Math.round(Math.min(1, Math.max(0, (td + 4) / 8)) * 255);
+      splat2[o] = Math.round(((sh + 4) / 8) * 255);
+      splat2[o + 1] = Math.round(((sf + 4) / 8) * 255);
+      splat2[o + 2] = 0;
+      splat2[o + 3] = Math.round(((ch + 4) / 8) * 255);
     }
   }
-  const splatTex = new DataTexture(splat, W, H, RGBAFormat, UnsignedByteType);
-  splatTex.magFilter = LinearFilter; splatTex.minFilter = LinearFilter; splatTex.generateMipmaps = false;
-  splatTex.needsUpdate = true;
-  disposables.push(splatTex);
-  const maskTex = new DataTexture(chasmMask ?? new Uint8Array(4), chasmMask ? W : 2, chasmMask ? H : 2, RedFormat, UnsignedByteType);
-  maskTex.magFilter = LinearFilter; maskTex.minFilter = LinearFilter; maskTex.generateMipmaps = false; maskTex.unpackAlignment = 1;
-  maskTex.needsUpdate = true;
-  disposables.push(maskTex);
+  const field = (f: Float32Array, x: number, y: number): number => {
+    const i = Math.min(W - 1, Math.max(0, Math.round(x / texel))), j = Math.min(H - 1, Math.max(0, Math.round(y / texel)));
+    return f[j * W + i];
+  };
+  const mkTex = (data: Uint8Array): DataTexture => {
+    const t = new DataTexture(data, W, H, RGBAFormat, UnsignedByteType);
+    t.magFilter = LinearFilter; t.minFilter = LinearFilter; t.generateMipmaps = false;
+    t.needsUpdate = true;
+    disposables.push(t);
+    return t;
+  };
+  const splatTex = mkTex(splat), splat2Tex = mkTex(splat2);
 
-  // hour-line centre (the dial): terrain.hourLines.centre, else the map centre
-  const hl = tr.hourLines as { centre?: unknown; ring?: unknown } | undefined;
-  const centre = Array.isArray(hl?.centre) && typeof hl!.centre[0] === 'number' ? new Vector2(hl!.centre[0] as number, hl!.centre[1] as number) : new Vector2(SX / 2, SY / 2);
-  const ring = typeof hl?.ring === 'number' ? hl.ring : 0;
-  const seat = tr.seat as { at?: unknown; radius?: unknown } | undefined;
-  const seatV = Array.isArray(seat?.at) ? new Vector3(seat!.at[0] as number, seat!.at[1] as number, typeof seat?.radius === 'number' ? seat.radius : 0) : new Vector3(0, 0, 0);
+  // ── inlay strokes (engraved and inlaid marks) ──────────────────────────────────────────────────
+  const strokes = new StrokeSet();
+  const inWall = (x: number, y: number): boolean => field(F.wd, x, y) <= 0.01;
+  if (surface === 'dial') {
+    // hour-ticks across the roads' inscription bands, every 9 m
+    for (const l of lanes) roadTicks(strokes, l, LANE_HALF, 0.3, 9, (x, y) => !inWall(x, y) && !inPlaza(x, y, 0.5) && !(seatV.z > 0 && Math.hypot(x - seatV.x, y - seatV.y) < seatV.z + 1));
+    // the hour-line groove along every Dialwood path: the hour-ring and the hour-lines (art.terrain.hourLines)
+    const hl = (tr.hourLines ?? {}) as { centre?: unknown; ring?: unknown; paths?: unknown };
+    const hc = pt(hl.centre) ?? [SX / 2, SY / 2] as V2;
+    const ring = num(hl.ring);
+    if (ring) strokes.circle(hc, ring, 0.3, INLAY.groove, 0.5);
+    for (const p of linesOf(hl.paths)) strokes.poly(p, 0.3, INLAY.groove);
+    // the Standing Shadow's tip, engraved on the pit floor
+    const tip = pt(shadowDef?.tip);
+    if (tip) { strokes.seg([tip[0] - 0.8, tip[1] + 1.2], tip, 0.16, INLAY.lit); strokes.seg([tip[0] + 0.8, tip[1] + 1.2], tip, 0.16, INLAY.lit); strokes.seg(tip, [tip[0], tip[1] + 2.6], 0.13, INLAY.lit); }
+  } else if (surface === 'span') {
+    // carved hour-script along every edge of the drop, inside the 0.4 m chalk band
+    chasmPolys.forEach((poly, k) => {
+      const ccw = signedArea(poly) > 0;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        if (onBorder(a[0], a[1]) && onBorder(b[0], b[1])) continue;
+        hourScript(strokes, [a, b], (_p, t) => (ccw ? [t[1], -t[0]] : [-t[1], t[0]]), 0.4, 300 + k * 31 + i, (x, y) => x > 0.3 && x < SX - 0.3 && field(F.ch, x, y) < 0.05);
+      }
+    });
+    // the Snap: the lit fracture across the plaza and fine crazing radiating from it
+    if (snapAt && snapR > 0) {
+      const rnd = mulberryI(4242);
+      const main = fracture([snapAt[0], snapAt[1] - snapR - 2], [snapAt[0], snapAt[1] + snapR + 2], 0.9, 6, rnd);
+      strokes.poly(main, 0.09, INLAY.lit);
+      for (let k = 0; k < 26; k++) {
+        const s = main[Math.floor(rnd() * main.length)];
+        const ang = (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * 1.6;
+        const len = 1.4 + rnd() * 4.5;
+        const end: V2 = [s[0] + Math.cos(ang) * len, s[1] + Math.sin(ang) * len];
+        const br = fracture(s, end, len * 0.18, 4, rnd);
+        strokes.poly(br.filter((p) => Math.hypot(p[0] - snapAt[0], p[1] - snapAt[1]) < snapR - 0.3), 0.035, INLAY.groove);
+        if (rnd() < 0.5) {
+          const m = br[Math.floor(br.length / 2)];
+          const a2 = ang + (rnd() - 0.5) * 1.8, l2 = len * 0.4;
+          strokes.poly(fracture(m, [m[0] + Math.cos(a2) * l2, m[1] + Math.sin(a2) * l2], l2 * 0.2, 3, rnd).filter((p) => Math.hypot(p[0] - snapAt[0], p[1] - snapAt[1]) < snapR - 0.3), 0.03, INLAY.groove);
+        }
+      }
+    }
+    for (const p of map.pickups ?? []) { strokes.circle(p.at as unknown as V2, 0.85, 0.06, INLAY.groove, 0.2); strokes.circle(p.at as unknown as V2, 0.55, 0.04, INLAY.groove, 0.2); }
+  } else {
+    // the Noonplate: chalk hour-lines from the cart ring to every hour-mark, the marks' numerals
+    (map.spawns ?? []).forEach((s, k) => {
+      const dx = s[0] - plateAt[0], dy = s[1] - plateAt[1], l = Math.hypot(dx, dy) || 1;
+      const ux = dx / l, uy = dy / l;
+      strokes.seg([plateAt[0] + ux * 4.35, plateAt[1] + uy * 4.35], [plateAt[0] + ux * (l - 1.9), plateAt[1] + uy * (l - 1.9)], 0.15, INLAY.chalk);
+      numeral(strokes, [s[0] + ux * 0.6, s[1] + uy * 0.6], k + 1, 1.9, 0.16, INLAY.chalk);
+      strokes.circle([s[0] + ux * 0.6, s[1] + uy * 0.6], 1.75, 0.14, INLAY.lit, 0.3);
+    });
+    strokes.circle(plateAt, 4.0, 0.22, INLAY.mid, 0.3);
+    strokes.circle(plateAt, plateR - 0.45, 0.18, INLAY.chalk, 0.4);
+    for (const p of map.pickups ?? []) { strokes.circle(p.at as unknown as V2, 0.85, 0.2, INLAY.mid, 0.15); strokes.circle(p.at as unknown as V2, 0.45, 0.14, INLAY.chalk, 0.12); }
+  }
+  const inlay = bakeInlay(strokes, [SX, SY], 0.125);
+  disposables.push(inlay.tex);
 
-  const white: Texture = whiteTex();
-  disposables.push(white);
+  const grey: Texture = greyTex();
+  disposables.push(grey);
+  const tempField = (tr.temperatureField ?? {}) as { west?: unknown; east?: unknown; strength?: unknown };
+  const tempOf = (hex: unknown, d: string): Color => {
+    const c = lin(typeof hex === 'string' ? hex : d);
+    const l = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+    return c.multiplyScalar(1 / Math.max(1e-3, l));
+  };
+  const tempK = typeof tempField.strength === 'number' ? Math.min(1, tempField.strength * 3) : 0;
+  const tex = { litter: { value: grey as Texture }, grain: { value: grey as Texture }, moss: { value: grey as Texture } };
+  const shared = {
+    uTempW: { value: tempOf(tempField.west, '#B8C6D9') }, uTempE: { value: tempOf(tempField.east, '#D9C2A0') }, uTempK: { value: tempK },
+    uMapSize: { value: new Vector2(SX, SY) },
+  };
+
   // ── ground ───────────────────────────────────────────────────────────────────────────────────
-  const gz0 = gorge ? 0 : -MARGIN, gz1 = gorge ? SY : SY + MARGIN;
+  const gz0 = -MARGIN, gz1 = SY + MARGIN;
   const groundGeo = new PlaneGeometry(SX + MARGIN * 2, gz1 - gz0, 1, 1);
   groundGeo.rotateX(-Math.PI / 2);
   groundGeo.translate(SX / 2, 0, (gz0 + gz1) / 2);
   const groundMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
+  const p0 = plazas[0], p1 = plazas[1];
   const gu = {
-    uSplat: { value: splatTex }, uChasm: { value: maskTex }, uGorge: { value: gorge ? 1 : 0 },
-    uSplatScale: { value: new Vector2(1 / (W * texel), 1 / (H * texel)) },
+    ...shared,
+    uSplat: { value: splatTex }, uSplat2: { value: splat2Tex }, uInlay: { value: inlay.tex },
+    uSplatScale: { value: new Vector2(1 / (W * texel), 1 / (H * texel)) }, uInlayScale: { value: new Vector2(inlay.scale[0], inlay.scale[1]) },
     uLaneHalf: { value: LANE_HALF },
-    uLane: { value: lin(colors.lane) }, uGrout: { value: lin(colors.laneGrout) }, uJungle: { value: lin(colors.jungle) },
+    uTexLitter: tex.litter, uTexGrain: tex.grain, uTexMoss: tex.moss,
+    uLane: { value: lin(colors.lane) }, uGrout: { value: lin(colors.laneGrout) }, uVerge: { value: lin(colors.verge) }, uJungle: { value: lin(colors.jungle) },
     uMoss: { value: lin(colors.moss) }, uEarth: { value: lin(colors.earth) }, uClearing: { value: lin(colors.clearing) },
-    uInscription: { value: lin(colors.inscription) }, uThicketFloor: { value: lin(colors.grassRoot) },
-    uCenter: { value: centre }, uRing: { value: ring }, uSeat: { value: seatV },
-    uUseTex: { value: 0 }, uTexRoad: { value: white }, uTexFloor: { value: white }, uTexClear: { value: white }, uTexDust: { value: white },
-    uTexScale: { value: new Vector4(TEX_SCALE.road, TEX_SCALE.floor, TEX_SCALE.clearing, TEX_SCALE.dust) },
+    uInscription: { value: lin(colors.inscription) }, uThicketFloor: { value: lin(colors.grassRoot) }, uShaftFloor: { value: lin(colors.shaftFloor) },
+    uSeatC: { value: lin(colors.seat) }, uMidInlay: { value: lin(colors.midInlay) }, uLitC: { value: lin(colors.lit) },
+    uPlazaA: { value: lin(colors.plazaAubade) }, uPlazaS: { value: lin(colors.plazaSerenade) }, uInlayA: { value: lin(colors.inlayAubade) }, uInlayS: { value: lin(colors.inlaySerenade) },
+    uPlaza0: { value: p0 ? new Vector4(p0.x, p0.y, p0.r, p0.side) : new Vector4() }, uPlaza1: { value: p1 ? new Vector4(p1.x, p1.y, p1.r, p1.side) : new Vector4() },
+    uFount0: { value: p0 ? new Vector4(p0.fx, p0.fy, p0.fr, 0) : new Vector4() }, uFount1: { value: p1 ? new Vector4(p1.fx, p1.fy, p1.fr, 0) : new Vector4() },
+    uSeat: { value: seatV }, uPlate: { value: new Vector3(plateAt[0], plateAt[1], plateR) },
+    uWaterT: worldUniforms.valeTime,
+    uSeatCol: { value: Array.from({ length: 10 }, (_, k) => lin(FRAY_SEATS[k % FRAY_SEATS.length].color)) },
   };
+  const styleDef = surface === 'span' ? 'VALE_STYLE_SPAN' : surface === 'plate' ? 'VALE_STYLE_PLATE' : 'VALE_STYLE_DIAL';
   groundMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     Object.assign(shader.uniforms, gu);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGroundW;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvGroundW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
-varying vec3 vGroundW;
-uniform sampler2D uSplat; uniform sampler2D uChasm; uniform float uGorge; uniform vec2 uSplatScale; uniform float uLaneHalf;
-uniform vec3 uLane, uGrout, uJungle, uMoss, uEarth, uClearing, uInscription, uThicketFloor; uniform vec2 uCenter; uniform float uRing; uniform vec3 uSeat;
-uniform float uUseTex; uniform sampler2D uTexRoad, uTexFloor, uTexClear, uTexDust; uniform vec4 uTexScale;
-float gHeight; float gRough;
-${NOISE_GLSL}
-${TEX_GLSL}`)
-      .replace('#include <map_fragment>', `
-{
-  vec2 p = vGroundW.xz;
-  if ( uGorge > 0.5 && texture( uChasm, p * uSplatScale ).r > 0.5 ) discard;
-  vec4 s = texture( uSplat, p * uSplatScale );
-  float laneD = s.r * 16.0, clearD = s.g * 24.0 - 8.0, wallD = s.b * 8.0, thickD = s.a * 8.0 - 4.0;
-  float nBig = valeFbm( p * 0.07 + 3.7 ), nMid = valeFbm( p * 0.29 ), n2 = valeNoise( p * 1.9 ), n3 = valeNoise( p * 7.3 );
-  float wob = ( nMid - 0.5 ) * 1.2 + ( n2 - 0.5 ) * 0.35;
-  float lane = 1.0 - smoothstep( uLaneHalf - 0.12, uLaneHalf + 0.12, laneD + wob * 0.6 );
-  float laneDust = 1.0 - smoothstep( uLaneHalf, uLaneHalf + 1.3, laneD + wob * 0.9 );
-  float clearing = 1.0 - smoothstep( -0.8, 1.0, clearD + wob * 1.6 );
-  // Dialwood floor: dark, mossy, quiet, with leaf litter
-  vec3 jungle = uJungle * ( 0.8 + 0.3 * nMid + 0.08 * ( n3 - 0.5 ) );
-  jungle = mix( jungle, uMoss * ( 0.9 + 0.25 * n2 ), smoothstep( 0.5, 0.68, nBig ) * 0.75 );
-  jungle = mix( jungle, uEarth * ( 0.85 + 0.2 * n2 ), smoothstep( 0.55, 0.72, valeFbm( p * 0.18 + 11.0 ) ) * 0.5 );
-  float litter = step( 0.9, valeHash12( floor( p * 5.0 ) ) ) * smoothstep( 0.3, 0.7, valeNoise( p * 5.0 + 2.0 ) );
-  jungle *= 1.0 - litter * 0.22;
-  // clearings: packed dust with grit
-  vec3 clearC = uClearing * ( 0.9 + 0.14 * ( nMid - 0.5 ) + 0.1 * ( n3 - 0.5 ) );
-  // roads: honed irregular pavers, joints quiet, worn toward the centre line
-  vec4 pv = valePavers( p, 1.15 );
-  float joint = 1.0 - smoothstep( 0.02, 0.06, pv.y );
-  float wear = 1.0 - smoothstep( 0.0, uLaneHalf, laneD );
-  vec3 laneC = uLane * ( 0.9 + 0.12 * ( pv.x - 0.5 ) + 0.05 * ( n3 - 0.5 ) + 0.06 * wear + 0.06 * ( nMid - 0.5 ) );
-  laneC = mix( laneC, uGrout, joint * 0.65 );
-  // dusty margin between road and floor
-  vec3 dust = mix( uClearing, uEarth, 0.35 ) * ( 0.88 + 0.16 * n2 );
-  float texH = 0.0;
-  if ( uUseTex > 0.5 ) {
-    // painted surfaces: the procedural colour stays the band (value law), the painting adds the detail
-    vec3 laneBand = uLane * ( 0.92 + 0.06 * wear + 0.08 * ( nMid - 0.5 ) + 0.05 * ( nBig - 0.5 ) );
-    vec3 tRoad = valeTexGrid( uTexRoad, p, uTexScale.x, laneBand, 1.0 );
-    vec3 tFloor = valeTexBand( uTexFloor, p, uTexScale.y, jungle, nBig );
-    vec3 tClear = valeTexBand( uTexClear, p, uTexScale.z, clearC, nMid );
-    vec3 tDust = valeTexBand( uTexDust, p, uTexScale.w, dust, n2 );
-    laneC = mix( laneC, tRoad, 0.9 ); jungle = mix( jungle, tFloor, 0.85 ); clearC = mix( clearC, tClear, 0.85 ); dust = mix( dust, tDust, 0.8 );
-    texH = ( dot( tRoad / max( laneC, vec3( 0.02 ) ), vec3( 0.333 ) ) - 1.0 ) * 0.025 * lane;
-  }
-  vec3 col = mix( jungle, clearC, clearing );
-  col = mix( col, dust, laneDust * ( 1.0 - lane ) * 0.85 );
-  col = mix( col, laneC, lane );
-  // carved hour-lines radiating from the dial's centre, and the hour-ring (quiet inscription)
-  vec2 rc = p - uCenter; float rr = length( rc );
-  float ang = atan( rc.x, -rc.y );
-  float seg = 6.2831853 / 12.0;
-  float al = abs( mod( ang + seg * 0.5, seg ) - seg * 0.5 ) * rr;
-  float hour = ( 1.0 - smoothstep( 0.05, 0.09, al ) ) * smoothstep( 8.0, 14.0, rr );
-  if ( uRing > 0.0 ) hour = max( hour, 1.0 - smoothstep( 0.06, 0.1, abs( rr - uRing ) ) );
-  if ( uSeat.z > 0.0 ) { float sr = length( p - uSeat.xy ); hour = max( hour, ( 1.0 - smoothstep( 0.08, 0.13, abs( sr - uSeat.z ) ) ) * 1.3 ); }
-  col = mix( col, col * 0.78, hour * mix( 0.5, 0.8, lane ) );
-  col = mix( col, uInscription * ( 0.9 + 0.1 * n2 ), hour * 0.12 * lane );
-  // wall-foot occlusion and the brush floor
-  col *= mix( 0.55, 1.0, smoothstep( 0.0, 2.2, wallD + ( n2 - 0.5 ) * 0.6 ) );
-  float brush = 1.0 - smoothstep( -0.3, 0.25, thickD );
-  col = mix( col, uThicketFloor * ( 0.85 + 0.3 * n2 ), brush * 0.85 );
-  diffuseColor.rgb *= col;
-  float paverH = smoothstep( 0.0, 0.07, pv.y ) * 0.03 + ( pv.x - 0.5 ) * 0.006;
-  gHeight = mix( ( nMid - 0.5 ) * 0.05 + ( n3 - 0.5 ) * 0.02 - litter * 0.01, mix( paverH, texH, uUseTex ) + ( n3 - 0.5 ) * 0.004, lane ) - hour * 0.015;
-  gRough = mix( mix( 0.95, 0.9, clearing ), 0.7 + 0.1 * pv.x, lane );
-}`)
+      .replace('#include <common>', `#include <common>\n#define ${styleDef}\n${gorge ? '#define VALE_GORGE\n' : ''}${GROUND_PARS_GLSL}\n${NOISE_GLSL}\n${TERRAIN_HELPERS_GLSL}`)
+      .replace('#include <map_fragment>', GROUND_MAIN_GLSL)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRough;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gEmit;')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, gHeight, 1.0 );');
   };
-  groundMat.customProgramCacheKey = () => 'vale_ground_v5';
+  groundMat.customProgramCacheKey = () => `vale_ground_v6_${surface}${gorge ? '_g' : ''}`;
   patchWorldMaterial(groundMat);
   const ground = new Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
@@ -496,7 +594,7 @@ ${TEX_GLSL}`)
   group.add(ground);
   disposables.push(groundGeo, groundMat);
 
-  // ── cliffs (raised walls) ──────────────────────────────────────────────────────────────────────
+  // ── walls ───────────────────────────────────────────────────────────────────────────────────────
   // authored landmarks (map.art.terrain.landmarks with a model): scatter keeps out of their footprint (and
   // well clear on the camera side, +y, so canopies never hide them); a landmark that covers a whole wall
   // polygon IS that wall (a fallen drum, a slab), so the polygon gets no cliff block of its own
@@ -508,43 +606,27 @@ ${TEX_GLSL}`)
     const b = wallBoxes[i];
     return b.minX >= m.x - m.sx - 0.3 && b.maxX <= m.x + m.sx + 0.3 && b.minY >= m.y - m.sy - 0.3 && b.maxY <= m.y + m.sy + 0.3;
   }));
+  const wh = (tr.wallHeights ?? {}) as Record<string, unknown>;
+  const smallH = num(wh.small) ?? num(wh.hourStones);
+  const largeH = num(wh.large) ?? num(wh.rim);
+  const RH = num(wh.frame) ?? num(wh.rim) ?? 3.4;
   const wallHeights: number[] = [];
-  const cliffGeos: BufferGeometry[] = [];
-  const addCliff = (poly: Poly, h: number, seed: number, amp: number): void => {
-    const outline = organicOutline(poly, 0.9, amp, [SX, SY], seed);
-    if (outline.length < 3) return;
-    const geo = new ExtrudeGeometry(shapeOf(outline), { depth: h, steps: 3, bevelEnabled: false, curveSegments: 1 });
-    geo.rotateX(-Math.PI / 2);
-    geo.deleteAttribute('uv');
-    const g = geo.index ? geo.toNonIndexed() : geo;
-    // chisel: position-based displacement (identical for coincident vertices → no cracks), flat facets
-    const pos = g.getAttribute('position') as BufferAttribute;
-    const hs = new Float32Array(pos.count);
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-      const onB = Math.abs(x) < 0.02 || Math.abs(z) < 0.02 || Math.abs(x - SX) < 0.02 || Math.abs(z - SY) < 0.02;
-      const k = onB ? 0 : amp * 0.9;
-      const dx = (vnoise(x * 0.9 + y * 1.3, z * 0.9) - 0.5) * k + (vnoise(x * 2.3, z * 2.3 + y * 2.0) - 0.5) * k * 0.4;
-      const dz = (vnoise(z * 0.9 - y * 1.1 + 17.0, x * 0.9) - 0.5) * k + (vnoise(z * 2.3 + 5.0, x * 2.3 - y * 1.7) - 0.5) * k * 0.4;
-      const dy = y > h - 0.01 ? (vnoise(x * 0.7, z * 0.7) - 0.5) * 0.18 : 0;
-      pos.setXYZ(i, x + dx, y + dy, z + dz);
-      hs[i] = h;
-    }
-    g.setAttribute('aH', new BufferAttribute(hs, 1));
-    g.computeVertexNormals();
-    cliffGeos.push(g);
-    if (g !== geo) geo.dispose();
-  };
+  const wm = new WallMesh();
   walls.forEach((poly, i) => {
     if (chasm[i] || replaced[i]) { wallHeights.push(0); return; }
     const area = Math.abs(signedArea(poly));
     const small = area < 25;
-    const h = small ? 1.6 + 0.6 * hash2(i, area) : 2.6 + 0.8 * hash2(i * 3.1, area);
+    const h = small ? (smallH ?? 1.6 + 0.6 * hash2(i, area)) : (largeH ?? 2.6 + 0.8 * hash2(i * 3.1, area));
     wallHeights.push(h);
-    addCliff(poly, h, i * 7.3, small ? 0.12 : 0.32);
+    const seed = 1 + ((i * 0.618034) % 1) * 9;
+    const outline = organicOutline(poly, 0.9, small ? 0.06 : 0.28, [SX, SY], i * 7.3);
+    if (outline.length < 3) return;
+    const prof = cliffProfile(h, i * 7.3 + 1, small);
+    sweep(wm, outline, prof.strips, { closed: true, ccw: signedArea(outline) > 0, seed, chisel: small ? 0.05 : 0.16, pinned: onBorder }, h);
+    wm.cap(outline, prof.topY, [0, 0, 0, WK.top], [1, seed, prof.topY, h]);
   });
   // outer rim: a carved wall all around the playable plate (gorge maps: only the terrace ends)
-  const RIM = 14, RH = 3.4;
+  const RIM = 14;
   const rimPolys: Poly[] = gorge ? [
     [[-RIM, 0], [0, 0], [0, SY], [-RIM, SY]],
     [[SX, 0], [SX + RIM, 0], [SX + RIM, SY], [SX, SY]],
@@ -554,122 +636,142 @@ ${TEX_GLSL}`)
     [[-RIM, 0], [0, 0], [0, SY], [-RIM, SY]],
     [[SX, 0], [SX + RIM, 0], [SX + RIM, SY], [SX, SY]],
   ];
-  rimPolys.forEach((poly, i) => addCliff(poly, RH, 100 + i, 0));
-  const cliffGeo = cliffGeos.length ? mergeGeometries(cliffGeos, false) : new BufferGeometry();
-  for (const g of cliffGeos) g.dispose();
-  const cliffMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.84, metalness: 0 });
-  const cu = {
-    uTop: { value: lin(colors.cliffTop) }, uFace: { value: lin(colors.cliffFace) }, uMossC: { value: lin(colors.moss) },
-    uUseTex: { value: 0 }, uTexCliff: { value: white }, uTexTop: { value: white }, uTexScale2: { value: new Vector2(TEX_SCALE.cliff, TEX_SCALE.cliffTop) },
-  };
-  cliffMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-    Object.assign(shader.uniforms, cu);
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aH; varying vec3 vCliffW; varying vec3 vCliffN; varying float vH;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvCliffW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz; vCliffN = normalize( mat3( modelMatrix ) * objectNormal ); vH = aH;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
-varying vec3 vCliffW; varying vec3 vCliffN; varying float vH; uniform vec3 uTop, uFace, uMossC; float cH;
-uniform float uUseTex; uniform sampler2D uTexCliff, uTexTop; uniform vec2 uTexScale2;
-${NOISE_GLSL}
-${TEX_GLSL}`)
-      .replace('#include <map_fragment>', `
-{
-  vec3 n = normalize( vCliffN );
-  float top = smoothstep( 0.6, 0.9, n.y );
-  vec2 hp = vCliffW.xz;
-  float along = dot( vCliffW.xz, normalize( vec2( n.z, -n.x ) + 1e-4 ) );
-  float n1 = valeFbm( hp * 0.35 ), n3 = valeNoise( hp * 6.0 + vCliffW.y );
-  // strata: wavy horizontal beds, darker seams, a few vertical fractures
-  float bed = vCliffW.y * 2.4 + ( valeNoise( vec2( along * 0.25, 1.7 ) ) - 0.5 ) * 1.6;
-  float seam = 1.0 - smoothstep( 0.0, 0.12, abs( fract( bed ) - 0.5 ) - 0.38 );
-  float frac = 1.0 - smoothstep( 0.0, 0.05, abs( valeNoise( vec2( along * 0.8, vCliffW.y * 0.3 ) ) - 0.5 ) );
-  vec3 face = uFace * ( 0.82 + 0.3 * valeNoise( vec2( along * 0.6, vCliffW.y * 1.5 ) ) + 0.08 * ( n3 - 0.5 ) );
-  face *= mix( 0.55, 1.0, smoothstep( 0.0, 1.8, vCliffW.y ) );
-  face = mix( face, face * 0.6, max( seam * 0.7, frac * 0.5 ) );
-  // lit, worn rim just under the top edge
-  float rim = smoothstep( vH - 0.45, vH - 0.05, vCliffW.y ) * ( 1.0 - top );
-  face = mix( face, uTop * 0.82, rim * 0.6 );
-  vec3 topC = uTop * ( 0.84 + 0.22 * n1 + 0.08 * ( n3 - 0.5 ) );
-  topC = mix( topC, uMossC * 1.1, smoothstep( 0.52, 0.7, valeFbm( vCliffW.xz * 0.16 + 9.0 ) ) * 0.6 );
-  if ( uUseTex > 0.5 ) {
-    // faces: the strata painting runs along the wall (u = along the face, v = height); tops: planar
-    vec3 tFace = valeTexGrid( uTexCliff, vec2( along, vCliffW.y * 1.4 ), uTexScale2.x, face, 0.9 );
-    vec3 tTop = valeTexBand( uTexTop, vCliffW.xz, uTexScale2.y, topC, n1 );
-    face = mix( face, tFace, 0.85 ); topC = mix( topC, mix( topC, tTop, 0.55 ), 0.9 );
-  }
-  diffuseColor.rgb *= mix( face, topC, top );
-  cH = ( 1.0 - top ) * ( -seam * 0.03 - frac * 0.02 + ( n3 - 0.5 ) * 0.02 ) + top * ( n3 - 0.5 ) * 0.012;
-}`)
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, cH, 1.0 );');
-  };
-  cliffMat.customProgramCacheKey = () => 'vale_cliff_v5';
-  patchWorldMaterial(cliffMat);
-  const cliffs = new Mesh(cliffGeo, cliffMat);
-  cliffs.castShadow = true; cliffs.receiveShadow = true; cliffs.name = 'vale_cliffs';
-  group.add(cliffs);
-  disposables.push(cliffGeo, cliffMat);
+  rimPolys.forEach((poly, i) => {
+    const seed = 3 + i;
+    const prof = cliffProfile(RH, 100 + i, false);
+    sweep(wm, poly, prof.strips, { closed: true, ccw: signedArea(poly) > 0, seed, chisel: 0, pinned: onBorder }, RH);
+    wm.cap(poly, prof.topY, [0, 0, 0, WK.top], [1, seed, prof.topY, RH]);
+  });
+  // Needlegrass curbs: a small carved kerb (the lip strips: cap stones, chamfered edge light)
+  thickets.forEach((poly, k) => {
+    const ccw = signedArea(poly) > 0;
+    const strips: Strip[] = [
+      { from: { off: 0.1, y: -0.03 }, to: { off: 0.1, y: 0.1 }, kind: WK.lipFace, course: 0 },
+      { from: { off: 0.1, y: 0.1 }, to: { off: 0.05, y: 0.15 }, kind: WK.chamfer, course: 0 },
+      { from: { off: 0.05, y: 0.15 }, to: { off: -0.1, y: 0.15 }, kind: WK.lipTop, course: 0 },
+      { from: { off: -0.1, y: 0.15 }, to: { off: -0.14, y: 0.03 }, kind: WK.lipIn, course: 0 },
+    ];
+    sweep(wm, resample([...poly, poly[0]], 0.6).slice(0, -1), strips, { closed: true, ccw, seed: 50 + k, chisel: 0.012 }, 0.15);
+  });
 
-  // ── chasms (gorge style): the ground opens; sheer walls drop into the mist ─────────────────────
+  // ── the gorge (wallStyle "gorge"): the deck's flank, raw rock, far walls, carved bands, spires ──────
+  const spireItems: { m: Matrix4; c?: Color }[] = [];
   if (gorge) {
-    const DEPTH = 22;
-    const chasmPolys: Poly[] = walls.filter((_, i) => chasm[i]);
-    const nWalls = chasmPolys.length;
-    chasmPolys.push([[-MARGIN, -MARGIN], [SX + MARGIN, -MARGIN], [SX + MARGIN, 0], [-MARGIN, 0]]);
-    chasmPolys.push([[-MARGIN, SY], [SX + MARGIN, SY], [SX + MARGIN, SY + MARGIN], [-MARGIN, SY + MARGIN]]);
-    const geos: BufferGeometry[] = [];
-    chasmPolys.forEach((poly, i) => {
-      const outline = i < nWalls ? organicOutline(poly, 1.0, 0.25, [SX, SY], 40 + i) : poly.slice();
-      const geo = new ExtrudeGeometry(shapeOf(outline), { depth: DEPTH, steps: 4, bevelEnabled: false, curveSegments: 1 });
-      geo.rotateX(-Math.PI / 2);
-      geo.translate(0, -DEPTH, 0);
-      geo.deleteAttribute('uv');
-      const g = geo.index ? geo.toNonIndexed() : geo;
-      const pos = g.getAttribute('position') as BufferAttribute;
-      for (let k = 0; k < pos.count; k++) {
-        const x = pos.getX(k), y = pos.getY(k), z = pos.getZ(k);
-        if (y > -0.05) continue;
-        const a = Math.min(1, -y / 3) * 0.6;
-        pos.setXYZ(k, x + (vnoise(x * 0.6 + y, z * 0.6) - 0.5) * a, y, z + (vnoise(z * 0.6 - y, x * 0.6 + 3.0) - 0.5) * a);
+    const flankStrips = flankProfile(gorgeDepth, 7);
+    const bandStrips = flankProfile(gorgeDepth, 9, 1.18).map((s) => ({ ...s, kind: s.kind === WK.flank ? WK.band : s.kind }));
+    const rockExtra = (x: number, y: number, h: number): number => (h < -5.5 ? ((vnoise(x * 0.16, h * 0.09 + y * 0.1) - 0.5) * 3.2 + (vnoise(x * 0.5 + 3, h * 0.3) - 0.5) * 1.0) * Math.min(1, (-h - 5.5) / 6) : 0);
+    chasmPolys.forEach((poly, k) => {
+      const ccw = signedArea(poly) > 0;
+      const n = poly.length;
+      // classify edges: map-border edges are far walls (rock falls from the rim), the rest are deck edges
+      const isBorderEdge = (i: number): boolean => {
+        const a = poly[i], b = poly[(i + 1) % n];
+        return onBorder(a[0], a[1]) && onBorder(b[0], b[1]) && (Math.abs(a[0] - b[0]) < 0.01 || Math.abs(a[1] - b[1]) < 0.01);
+      };
+      // hour-band notches: vertex runs strictly inside the deck strip
+      const inStrip = (p: V2): boolean => Math.abs(p[1] - axisY) < deckHalf - 0.05;
+      // start the walk at a border edge so runs never wrap
+      let s0 = 0;
+      for (let i = 0; i < n; i++) if (isBorderEdge(i)) { s0 = (i + 1) % n; break; }
+      let run: V2[] = [];
+      let runBorder: boolean | null = null;
+      const flush = (): void => {
+        if (run.length >= 2) {
+          if (runBorder) {
+            const line = resample(run, 2.0);
+            sweep(wm, line, rockFaceProfile(0, gorgeDepth, 11 + k, false), { closed: false, ccw, seed: 20 + k, chisel: 0.5, extra: rockExtra, taper: 1.5 }, 0);
+          } else {
+            const line = resample(run, 0.9);
+            sweep(wm, line, flankStrips, { closed: false, ccw, seed: 30 + k, chisel: 0.05, extra: rockExtra }, 0);
+          }
+        }
+        run = [];
+      };
+      for (let t = 0; t < n; t++) {
+        const i = (s0 + t) % n;
+        const b = isBorderEdge(i);
+        if (runBorder !== b) { flush(); runBorder = b; run = [poly[i]]; }
+        run.push(poly[(i + 1) % n]);
       }
-      g.computeVertexNormals();
-      geos.push(g);
-      if (g !== geo) geo.dispose();
+      flush();
+      // carved hour-bands: the notch block stands proud of the deck, its ring rolls on down the flank
+      for (let i = 0; i < n; i++) {
+        if (inStrip(poly[i]) || !inStrip(poly[(i + 1) % n])) continue;
+        const notch: V2[] = [poly[i]];
+        let j = (i + 1) % n;
+        while (inStrip(poly[j]) && notch.length < n) { notch.push(poly[j]); j = (j + 1) % n; }
+        notch.push(poly[j]);
+        if (notch.length < 4) continue;
+        const nccw = signedArea(notch) > 0;
+        const bandProfile: Strip[] = [
+          { from: { off: 0, y: -0.3 }, to: { off: 0, y: bandH - 0.08 }, kind: WK.band, course: 0 },
+          { from: { off: 0, y: bandH - 0.08 }, to: { off: -0.08, y: bandH }, kind: WK.chamfer, course: 0 },
+        ];
+        sweep(wm, notch, bandProfile, { closed: true, ccw: nccw, seed: 60 + i, chisel: 0 }, bandH);
+        wm.cap(notch.map((p) => p), bandH, [0, 0, 0, WK.band], [1, 60 + i, bandH, bandH]);
+        sweep(wm, resample([notch[notch.length - 1], notch[0]], 0.6).reverse(), bandStrips, { closed: false, ccw, seed: 70 + i, chisel: 0.03, extra: rockExtra }, 0);
+      }
     });
-    const chasmGeo = mergeGeometries(geos, false);
-    for (const g of geos) g.dispose();
-    const chasmMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: BackSide });
-    const ch = { uFaceC: { value: lin(colors.cliffFace) }, uMist: { value: lin(colors.mist) } };
-    chasmMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-      Object.assign(shader.uniforms, ch);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vChW;')
-        .replace('#include <project_vertex>', '#include <project_vertex>\nvChW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+    // far walls' rims: the plateau's lip (a low carved kerb on the far side of the drop)
+    // rock spires standing in the gorge (parallax: the drop reads deep as the camera moves)
+    const sp = mulberry(777);
+    for (let k = 0; k < Math.round(SX * SY * 0.012); k++) {
+      const x = sp() * SX, y = sp() * SY;
+      if (field(F.ch, x, y) < 2.6) continue;
+      if (y < 2 || y > SY - 2) continue;
+      const top = -3 - sp() * sp() * 12;
+      const w = 1.2 + sp() * 2.4;
+      const hgt = top + gorgeDepth + 6;
+      spireItems.push({ m: new Matrix4().compose(new Vector3(x, -gorgeDepth - 6, y), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), sp() * 6.28), new Vector3(w, hgt, w * (0.8 + sp() * 0.4))) });
+    }
+  }
+  const wallGeo = wm.geometry();
+  const wallMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.86, metalness: 0 });
+  const wu = {
+    ...shared,
+    uFace: { value: lin(colors.cliffFace) }, uLip: { value: lin(colors.cliffLip) }, uEdgeLight: { value: lin(colors.edgeLight) },
+    uTop: { value: lin(colors.cliffTop) }, uMossC: { value: lin(colors.moss) }, uFlank: { value: lin(colors.flank) }, uRock: { value: lin(colors.rock) },
+    uMist: { value: lin(colors.mist).multiplyScalar(0.5) }, uEarthC: { value: lin(colors.earth) }, uMistK: { value: gorge ? 0.065 : 0 },
+    uStoneTop: { value: surface === 'plate' ? 1 : 0 },
+    uTexGrain: tex.grain, uTexMoss: tex.moss, uTexLitter: tex.litter,
+  };
+  wallMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+    Object.assign(shader.uniforms, wu);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${WALL_VERT_PARS}`)
+      .replace('#include <project_vertex>', `#include <project_vertex>\n${WALL_VERT_MAIN}`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${WALL_PARS_GLSL}\n${NOISE_GLSL}\n${TERRAIN_HELPERS_GLSL}`)
+      .replace('#include <map_fragment>', WALL_MAIN_GLSL)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = cRough;')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, cH, 1.0 );')
+      .replace('#include <opaque_fragment>', `${WALL_MIST_GLSL}\n#include <opaque_fragment>`);
+  };
+  wallMat.customProgramCacheKey = () => 'vale_walls_v6';
+  patchWorldMaterial(wallMat);
+  const wallMesh = new Mesh(wallGeo, wallMat);
+  wallMesh.castShadow = true; wallMesh.receiveShadow = true; wallMesh.name = 'vale_cliffs';
+  group.add(wallMesh);
+  disposables.push(wallGeo, wallMat);
+
+  // gorge extras: spires and drifting mist banks
+  if (gorge) {
+    const spGeo = spire(5);
+    const spMat = new MeshStandardMaterial({ color: lin(colors.rock), roughness: 0.92, flatShading: true });
+    const mistU = { uMist: wu.uMist, uMistK: wu.uMistK };
+    spMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+      Object.assign(shader.uniforms, mistU);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\nvarying vec3 vChW; uniform vec3 uFaceC, uMist;\n${NOISE_GLSL}`)
-        .replace('#include <map_fragment>', `
-{
-  float bed = 1.0 - smoothstep( 0.0, 0.1, abs( fract( vChW.y * 1.6 + valeNoise( vChW.xz * 0.3 ) ) - 0.5 ) - 0.4 );
-  vec3 c = uFaceC * ( 0.75 + 0.3 * valeNoise( vChW.xz * 0.8 + vChW.y ) ) * ( 1.0 - bed * 0.35 );
-  diffuseColor.rgb *= c;
-}`)
-        .replace('#include <opaque_fragment>', `
-{
-  // gorge mist: the deeper, the more the stone dissolves into the gorge colour (height fog, never camera distance)
-  float m = 1.0 - exp( -max( 0.0, -vChW.y - 1.5 ) * 0.16 );
-  outgoingLight = mix( outgoingLight, uMist * 0.55, m );
-}
-#include <opaque_fragment>`);
+        .replace('#include <common>', '#include <common>\nuniform vec3 uMist; uniform float uMistK;')
+        .replace('#include <opaque_fragment>', `{ float dm = max( 0.0, -vValeWorld.y - 2.0 ); float m = 1.0 - exp( -uMistK * dm * ( 1.0 + dm * 0.045 ) ); outgoingLight = mix( outgoingLight, uMist * mix( 1.0, 0.45, smoothstep( 8.0, 30.0, dm ) ), m ); }\n#include <opaque_fragment>`);
     };
-    chasmMat.customProgramCacheKey = () => 'vale_chasm_v1';
-    patchWorldMaterial(chasmMat);
-    const chasmMesh = new Mesh(chasmGeo, chasmMat);
-    chasmMesh.receiveShadow = true; chasmMesh.name = 'vale_chasm';
-    group.add(chasmMesh);
-    disposables.push(chasmGeo, chasmMat);
+    spMat.customProgramCacheKey = () => 'vale_spire_v1';
+    patchWorldMaterial(spMat);
+    if (spireItems.length) group.add(chunked(spGeo, spMat, spireItems, 'vale_spires', false));
+    disposables.push(spGeo, spMat);
   }
 
-  // ── Needlegrass (brush) + curb ───────────────────────────────────────────────────────────────
+  // ── Needlegrass (brush) ────────────────────────────────────────────────────────────────────────
   const clump = needlegrassClump(lin(colors.grassRoot), lin(colors.grassTip));
   const grassMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0, side: DoubleSide });
   const grassU = { uWindT: worldUniforms.valeTime };
@@ -694,7 +796,7 @@ ${TEX_GLSL}`)
   };
   grassMat.customProgramCacheKey = () => 'vale_grass_v2';
   patchWorldMaterial(grassMat);
-  const grassItems: { m: Matrix4 }[] = [];
+  const grassItems: { m: Matrix4; c: Color }[] = [];
   {
     const q = new Quaternion(), s = new Vector3(), pos = new Vector3(), up = new Vector3(0, 1, 0);
     thickets.forEach((poly, k) => {
@@ -705,94 +807,78 @@ ${TEX_GLSL}`)
           const jx = x + (rand() - 0.5) * step * 0.9, jy = y + (rand() - 0.5) * step * 0.9;
           if (!pointInPolygon(jx, jy, poly)) continue;
           const e = polyEdgeDist(jx, jy, poly);
-          if (e < 0.15) continue;
+          if (e < 0.22) continue;
           q.setFromAxisAngle(up, rand() * Math.PI * 2);
           const kk = 0.8 + rand() * 0.45;
           const hh = (0.85 + rand() * 0.35) * (e < 0.6 ? 0.8 : 1);
           s.set(kk, hh, kk);
           pos.set(jx, 0, jy);
-          grassItems.push({ m: new Matrix4().compose(pos, q, s) });
+          const t = 0.88 + 0.24 * vnoise(jx * 0.7, jy * 0.7) + (rand() - 0.5) * 0.08;
+          grassItems.push({ m: new Matrix4().compose(pos, q, s), c: new Color(t * (1.0 + (rand() - 0.5) * 0.06), t, t * (0.96 + (rand() - 0.5) * 0.06)) });
         }
       }
     });
   }
   if (grassItems.length) group.add(chunked(clump, grassMat, grassItems, 'vale_needlegrass'));
   disposables.push(clump, grassMat);
-  // curb: thin carved stone band along every brush outline
-  const curbGeos: BufferGeometry[] = [];
-  for (const poly of thickets) {
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const ax = poly[j][0], ay = poly[j][1], bx = poly[i][0], by = poly[i][1];
-      const len = Math.hypot(bx - ax, by - ay);
-      if (len < 0.05) continue;
-      const g = new BoxGeometry(len + 0.2, 0.12, 0.2);
-      g.rotateY(-Math.atan2(by - ay, bx - ax));
-      g.translate((ax + bx) / 2, 0.05, (ay + by) / 2);
-      g.deleteAttribute('uv');
-      curbGeos.push(g);
-    }
-  }
-  if (curbGeos.length) {
-    const curbGeo = mergeGeometries(curbGeos, false);
-    for (const g of curbGeos) g.dispose();
-    const curbMat = new MeshStandardMaterial({ color: lin(colors.curb), roughness: 0.8 });
-    patchWorldMaterial(curbMat);
-    const curb = new Mesh(curbGeo, curbMat);
-    curb.receiveShadow = true; curb.castShadow = false; curb.name = 'vale_curb';
-    group.add(curb);
-    disposables.push(curbGeo, curbMat);
-  }
 
   // ── Standing Shadow + Fallen Shaft (terrain marks from the map's terrain block) ────────────────
-  const noon = tr.noonline as Record<string, unknown> | undefined;
-  const shadowDef = noon?.standingShadow as { floor?: unknown; tint?: unknown } | undefined;
-  /** the shadow floor takes the painted road stone under its tint once textures land (ShapeGeometry UVs are metres) */
-  const shadowFills: { mat: MeshStandardMaterial; tint: Color }[] = [];
-  for (const poly of polysOf(shadowDef?.floor)) {
-    const tint = typeof shadowDef?.tint === 'string' ? shadowDef.tint : '#4A4560';
+  const shU = {
+    uSplat: { value: splatTex }, uSplat2: { value: splat2Tex }, uInlay: { value: inlay.tex },
+    uSplatScale: gu.uSplatScale, uInlayScale: gu.uInlayScale, uTexGrain: tex.grain,
+    // ×1.5: lands the lit, graded floor on the designed L* 30–36 (the tint is the designed screen colour)
+    uShadowC: { value: lin(typeof shadowDef?.tint === 'string' ? shadowDef.tint : '#4A4560').multiplyScalar(1.5) }, uShadowLine: { value: lin(colors.shadowLine) },
+  };
+  for (const poly of shadowPolys) {
     const fill = new ShapeGeometry(shapeOf(poly), 1);
     fill.rotateX(-Math.PI / 2);
     fill.translate(0, 0.012, 0);
-    const mat = new MeshStandardMaterial({ color: lin(tint), roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const mat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+      Object.assign(shader.uniforms, shU);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vShW;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvShW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\n${SHADOW_PARS_GLSL}\n${NOISE_GLSL}\n${TERRAIN_HELPERS_GLSL}`)
+        .replace('#include <map_fragment>', SHADOW_MAIN_GLSL)
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, sHeight, 1.0 );');
+    };
+    mat.customProgramCacheKey = () => 'vale_shadow_v2';
     patchWorldMaterial(mat, { keepColor: true });
-    shadowFills.push({ mat, tint: lin(tint) });
     const mesh = new Mesh(fill, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_standing_shadow';
     group.add(mesh);
-    // engraved edge: a darker band just inside the outline (hard edge)
-    const outer = shapeOf(poly);
-    const inner = insetPolygon(outer.getPoints(), 0.16);
-    outer.holes.push(new Shape(inner.slice().reverse()));
-    const band = new ShapeGeometry(outer, 1);
-    band.rotateX(-Math.PI / 2);
-    band.translate(0, 0.016, 0);
-    const bmat = new MeshStandardMaterial({ color: lin(tint).multiplyScalar(0.45), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-    patchWorldMaterial(bmat, { keepColor: true });
-    const bm = new Mesh(band, bmat);
-    bm.receiveShadow = true;
-    group.add(bm);
-    disposables.push(fill, mat, band, bmat);
+    disposables.push(fill, mat);
   }
-  const shaftDef = noon?.fallenShaft as { floor?: unknown } | undefined;
-  for (const poly of polysOf(shaftDef?.floor)) {
+  for (const poly of shaftPolys) {
     const geo = new ShapeGeometry(shapeOf(poly), 1);
     geo.rotateX(-Math.PI / 2);
-    geo.translate(0, 0.014, 0);
-    // shallow water over pale stone: a thin tinted film the floor shows through, slow crossing ripples
-    // catching the sky (an opaque gloss only mirrored the flat sky as a grey sheet)
-    const mat = new MeshStandardMaterial({ color: lin('#4F6B70'), roughness: 0.16, metalness: 0, transparent: true, opacity: 0.5, depthWrite: false,
-      envMapIntensity: 0.45, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    geo.translate(0, 0.03, 0);
+    // shallow water over pale stone: a thin cool film the floor shows through, slow crossing ripples
+    // catching the sky, a brighter wet rim where it laps the stone
+    const mat = new MeshStandardMaterial({ color: lin(colors.water), roughness: 0.1, metalness: 0, transparent: true, opacity: 0.5, depthWrite: false,
+      envMapIntensity: 0.9, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const wU = { uWaterT: worldUniforms.valeTime, uSplat2: { value: splat2Tex }, uSplatScale: gu.uSplatScale };
     mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-      shader.uniforms.uWaterT = worldUniforms.valeTime;
+      Object.assign(shader.uniforms, wU);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\nuniform float uWaterT;\n${NOISE_GLSL}`)
+        .replace('#include <common>', `#include <common>\nuniform float uWaterT; uniform sampler2D uSplat2; uniform vec2 uSplatScale;\n${NOISE_GLSL}`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   {
     vec2 wp = vValeWorld.xz;
     float h = valeNoise( wp * 1.7 + vec2( uWaterT * 0.35, uWaterT * 0.21 ) ) + 0.55 * valeNoise( wp * 3.9 - vec2( uWaterT * 0.47, -uWaterT * 0.29 ) );
-    normal = valeBump( -vViewPosition, normal, h, 0.06 );
-  }`);
+    normal = valeBump( -vViewPosition, normal, h, 0.05 );
+  }`)
+        .replace('#include <opaque_fragment>', `{
+  float sd = texture( uSplat2, vValeWorld.xz * uSplatScale ).g * 8.0 - 4.0;
+  float lap = 1.0 - smoothstep( 0.0, 0.35, -sd );
+  diffuseColor.a = mix( diffuseColor.a, 0.75, lap );
+  outgoingLight = mix( outgoingLight, outgoingLight * 1.25 + vec3( 0.02 ), lap * ( 0.6 + 0.4 * sin( uWaterT * 0.9 + vValeWorld.x * 2.0 + vValeWorld.z ) ) );
+}
+#include <opaque_fragment>`);
     };
+    mat.customProgramCacheKey = () => 'vale_water_v2';
     patchWorldMaterial(mat);
     const mesh = new Mesh(geo, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';
@@ -806,7 +892,7 @@ ${TEX_GLSL}`)
   group.add(scatterGroup);
   const treeSpots: { x: number; y: number; h: number; s: number; r: number; tint: number }[] = [];
   walls.forEach((poly, i) => {
-    if (chasm[i] || wallHeights[i] < 2.2) return;
+    if (chasm[i] || wallHeights[i] < 2.2 || surface === 'plate') return;          // the Noonplate is a clean stage
     const b = wallBoxes[i];
     const step = 2.7;
     for (let y = b.minY + step / 2; y < b.maxY; y += step) {
@@ -835,28 +921,57 @@ ${TEX_GLSL}`)
       const a = out[k], b = out[(k + 1) % out.length];
       const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
       const nx = (ccw ? dy : -dy) / l, ny = (ccw ? -dx : dx) / l;
-      const off = 0.25 + rand() * 0.6;
+      const off = 0.35 + rand() * 0.6;
       const t = rand();
       const x = a[0] + nx * off + dx * t, y = a[1] + ny * off + dy * t;
       if (x < 0.5 || y < 0.5 || x > SX - 0.5 || y > SY - 0.5) continue;
-      let ok = true;
-      for (const ln of lanes) for (let j = 1; j < ln.length && ok; j++) if (segDist(x, y, ln[j - 1][0], ln[j - 1][1], ln[j][0], ln[j][1]) < LANE_HALF + 0.6) ok = false;
+      if (surface !== 'dial') continue;
+      let ok = field(F.ld, x, y) > LANE_HALF + 0.6;
       for (const c of clearings) if (ok && Math.hypot(x - c.x, y - c.y) < c.r) ok = false;
-      if (ok && onMark(x, y)) ok = false;
+      if (ok && (onMark(x, y) || inPlaza(x, y, 1) || field(F.sh, x, y) < 0.5 || field(F.sf, x, y) < 0.5)) ok = false;
       if (ok) boulderSpots.push({ x, y, s: 0.35 + Math.pow(rand(), 1.6) * 0.75, r: rand() * Math.PI * 2 });
     }
   });
   const stoneSpots: { x: number; y: number; s: number; r: number }[] = [];
-  const nStones = Math.round(SX * SY * 0.02);
+  const nStones = surface === 'dial' ? Math.round(SX * SY * 0.02) : 0;
   for (let k = 0; k < nStones; k++) {
     const x = rand() * SX, y = rand() * SY;
-    let ok = true;
-    for (const l of lanes) for (let i = 1; i < l.length && ok; i++) if (segDist(x, y, l[i - 1][0], l[i - 1][1], l[i][0], l[i][1]) < LANE_HALF + 1.2) ok = false;
+    let ok = field(F.ld, x, y) > LANE_HALF + 1.2 && field(F.wd, x, y) > 0.6 && field(F.td, x, y) > 0.2;
     for (const c of clearings) if (ok && Math.hypot(x - c.x, y - c.y) < c.r + 0.8) ok = false;
-    for (let w = 0; w < walls.length && ok; w++) if (boxDist(x, y, wallBoxes[w]) < 0.6 && (pointInPolygon(x, y, walls[w]) || polyEdgeDist(x, y, walls[w]) < 0.6)) ok = false;
-    for (let t = 0; t < thickets.length && ok; t++) if (boxDist(x, y, thicketBoxes[t]) < 0.5 && pointInPolygon(x, y, thickets[t])) ok = false;
-    if (ok && onMark(x, y)) ok = false;
+    if (ok && (onMark(x, y) || inPlaza(x, y, 1) || field(F.sh, x, y) < 0.5 || field(F.sf, x, y) < 0.5)) ok = false;
     if (ok) stoneSpots.push({ x, y, s: 0.1 + Math.pow(rand(), 2.2) * 0.32, r: rand() * Math.PI * 2 });
+  }
+  // ground clutter (Dialwood only: the deck and the plate stay clean stages)
+  type CSpot = { x: number; y: number; s: number; r: number; c: Color };
+  const clutter: { moss: CSpot[]; leaf: CSpot[]; pebble: CSpot[]; tuft: CSpot[] } = { moss: [], leaf: [], pebble: [], tuft: [] };
+  if (surface === 'dial') {
+    const cr = mulberry(9001);
+    const leafCols = [colors.litter, '#7A5A2E', '#6E4A2A', '#5E5530', '#4E5A2E', '#806538', '#62402A'].map(lin);
+    const step = 0.55;
+    for (let y = step / 2; y < SY; y += step) {
+      for (let x = step / 2; x < SX; x += step) {
+        const jx = x + (cr() - 0.5) * step, jy = y + (cr() - 0.5) * step;
+        const ld = field(F.ld, jx, jy), wd = field(F.wd, jx, jy), td = field(F.td, jx, jy), cd = field(F.cd, jx, jy);
+        if (wd <= 0.05 || td < 0.35 || ld < LANE_HALF + 0.7 || cd < 0.3) { cr(); cr(); cr(); continue; }
+        if (field(F.sh, jx, jy) < 0.5 || field(F.sf, jx, jy) < 0.7 || inPlaza(jx, jy, 0.5) || (seatV.z > 0 && Math.hypot(jx - seatV.x, jy - seatV.y) < seatV.z + 0.8)) { cr(); cr(); cr(); continue; }
+        if (clearings.some((c) => !c.camp && Math.hypot(jx - c.x, jy - c.y) < c.r - 1)) { cr(); cr(); cr(); continue; }
+        const mossy = vnoise(jx * 0.05 + 3.7, jy * 0.05) ;
+        const foot = Math.max(0, 1 - wd / 1.3);
+        const verge = ld < LANE_HALF + 2.2 ? 1 : 0;
+        const a = cr(), b = cr(), c = cr();
+        const v = 0.85 + 0.3 * vnoise(jx * 0.4, jy * 0.4);
+        if (a < 0.45 * foot + 0.08 * verge) {
+          clutter.tuft.push({ x: jx, y: jy, s: 0.22 + b * 0.2, r: c * 6.283, c: new Color(v, v * (0.98 + b * 0.06), v * 0.92) });
+        } else if (a < 0.45 * foot + 0.08 * verge + 0.07 + 0.12 * mossy) {
+          clutter.moss.push({ x: jx, y: jy, s: 0.16 + b * 0.24, r: c * 6.283, c: new Color(v * (0.95 + c * 0.12), v, v * (0.85 + b * 0.1)) });
+        } else if (a < 0.45 * foot + 0.08 * verge + 0.07 + 0.12 * mossy + 0.36) {
+          const lc = leafCols[Math.floor(b * leafCols.length) % leafCols.length].clone().multiplyScalar(0.8 + c * 0.35);
+          clutter.leaf.push({ x: jx, y: jy, s: 0.09 + c * 0.07, r: b * 6.283 + a * 40, c: lc });
+        } else if (a > 0.985 - 0.08 * foot) {
+          clutter.pebble.push({ x: jx, y: jy, s: 0.07 + b * b * 0.16, r: c * 6.283, c: new Color(v * 0.95, v * 0.95, v * 0.92) });
+        }
+      }
+    }
   }
   const trunkGeo = new CylinderGeometry(0.1, 0.2, 1, 5, 1);
   trunkGeo.translate(0, 0.5, 0);
@@ -867,6 +982,15 @@ ${TEX_GLSL}`)
   const stoneMat = new MeshStandardMaterial({ color: lin(colors.stone), roughness: 0.88, flatShading: true });
   for (const mt of [leafMat, trunkMat, stoneMat]) patchWorldMaterial(mt);
   disposables.push(trunkGeo, canopyGeo, rockGeo, leafMat, trunkMat, stoneMat);
+  const clutterGeo = {
+    moss: mossTuft(new Color(0.05, 0.065, 0.028), new Color(0.15, 0.18, 0.065)),
+    leaf: fanLeaf(new Color(1, 1, 1)),
+    pebble: pebble(lin(colors.pebble)),
+    tuft: bladeTuft(lin(colors.grassRoot), lin(colors.grassTip).multiplyScalar(0.92)),
+  };
+  const clutterMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, side: DoubleSide });
+  patchWorldMaterial(clutterMat);
+  disposables.push(clutterGeo.moss, clutterGeo.leaf, clutterGeo.pebble, clutterGeo.tuft, clutterMat);
   let scatterParts: Group[] = [];
   let props: Partial<Record<TerrainPropRole, BufferGeometry[]>> = {};
   let scatterLevel: 0 | 1 | 2 = 2;
@@ -928,6 +1052,19 @@ ${TEX_GLSL}`)
         return { m: new Matrix4().compose(pos, q, s) };
       }), 'vale_stones', false));
     }
+    // ground clutter: none on Low, half on Medium, all on High/Ultra; never casts shadows
+    const keepC = level === 0 ? 0 : level === 1 ? 0.5 : 1;
+    const place = (list: CSpot[], geo: BufferGeometry, name: string, yS: number, y0: number): void => {
+      const items = pick(list, keepC).map((p) => {
+        q.setFromAxisAngle(up, p.r); s.set(p.s, p.s * yS, p.s); pos.set(p.x, y0, p.y);
+        return { m: new Matrix4().compose(pos, q, s), c: p.c };
+      });
+      if (items.length) scatterParts.push(chunked(geo, clutterMat, items, name, false));
+    };
+    place(clutter.moss, clutterGeo.moss, 'vale_clutter_moss', 1, -0.01);
+    place(clutter.leaf, clutterGeo.leaf, 'vale_clutter_leaf', 1, 0.004);
+    place(clutter.pebble, clutterGeo.pebble, 'vale_clutter_pebble', 1, 0);
+    place(clutter.tuft, clutterGeo.tuft, 'vale_clutter_tuft', 1.1, 0);
     for (const g of scatterParts) scatterGroup.add(g);
   };
   setScatter(2);
@@ -937,22 +1074,7 @@ ${TEX_GLSL}`)
     wallHeights,
     setScatter,
     setTextures(t: Partial<Record<TerrainTexRole, Texture>>): void {
-      if (t.road) gu.uTexRoad.value = t.road;
-      if (t.floor) gu.uTexFloor.value = t.floor;
-      if (t.clearing) gu.uTexClear.value = t.clearing;
-      if (t.dust) gu.uTexDust.value = t.dust;
-      gu.uUseTex.value = t.road && t.floor && t.clearing && t.dust ? 1 : 0;
-      if (t.cliff) cu.uTexCliff.value = t.cliff;
-      if (t.cliffTop) cu.uTexTop.value = t.cliffTop;
-      cu.uUseTex.value = t.cliff && t.cliffTop ? 1 : 0;
-      if (t.road && shadowFills.length) {
-        const tx = t.road.clone();                                       // the pit is paved: the dial's own stone
-        tx.repeat.set(1 / TEX_SCALE.road, 1 / TEX_SCALE.road);
-        tx.needsUpdate = true;
-        disposables.push(tx);
-        // lift the tint a little so the textured mean keeps the designed value (L* 30-36)
-        for (const f of shadowFills) { f.mat.map = tx; f.mat.color.copy(f.tint).multiplyScalar(1.3); f.mat.needsUpdate = true; }
-      }
+      for (const r of TERRAIN_TEX_ROLES) { const x = t[r]; if (x) tex[r].value = x; }
     },
     setProps(p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void {
       props = p;

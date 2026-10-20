@@ -1,19 +1,40 @@
-"""VALE scatter props (ART 2.0 methods): Dialwood trees, boulders and stones for the map scatter.
+"""VALE scatter props: Dialwood trees, fallen hour-tick stones and needle fragments for the map scatter
+(src/render/terrain.ts instances them from each map's `art.terrain.props`: tree / rock / stone).
 
-    Blender -b --factory-startup --python art/blender/props/scatter.py -- [--only dialwood_a,...] [--preview]
+    Blender -b --factory-startup --python-exit-code 1 --python art/blender/props/scatter.py -- [--only a,b]
+        [--preview [--res 1920] [--samples 48]]          (VALE_CYCLES_DEVICE=CPU when the GPU is busy)
 
-Sculpted as numpy SDF volumes (common/hifi/sdf.py), decimated to instancing budgets, and PAINTED INTO
-VERTEX COLOURS (no textures: a tree costs a few KB): a warm sunlit crown and cool dark underside, a
-posterised painterly ramp, crevice occlusion from the surface's own concavity, light leaf dabs, bark
-streaks, moss on stone tops and chalk-lit stone edges. Forms are chunky and readable from the 52-degree
-camera; nothing glows. Colours are the terrain palette (src/render/terrain.ts DEFAULT_COLORS): leaf
-#3F5A45, trunk #4A3F36, stone #77726A, moss #475A43, and the terrain multiplies a per-instance tint.
+Modules (this folder): kit.py (numpy mesh parts, fan leaves, tubes, GLB writer), paint.py (ray-cast
+occlusion and painterly ramps), dialwood.py (the trees), stones.py (chiselled stone pieces).
 
-Output: art/out/props/<name>.glb (authored at real size, origin at the ground contact) and a preview
-sheet art/renders/props/scatter.png.
+Budgets are per INSTANCE COUNT, not per model: RIFT instances ~920 trees (each drawn again in the shadow
+pass) against a ≤ 700k-triangle scene (CONTRACT §12, RIFT brief §6), so a tree is ≤ 750 triangles.
+
+  Dialwood   (RIFT §6, WORLD §maps "lacquered fan-leaved plates, bevelled, instanced") — five variants
+             (tall, broad, squat, young, leaning): crowns of clumps shingled with single-sided fan leaves over
+             closed cores, shaded by clump normals; a faceted trunk with a root flare and limbs. ≤ 750
+             triangles; ≤ 3.4 m tall in game (the brief's cap south of play), crowns ≤ 1.6 m from the trunk,
+             so a crown on a block edge keeps the units on the road beside it in view.
+  boulders   RIFT rock role: fallen hour-tick stones at the cliff feet — they stand on walkable floor, so
+             ≤ 0.4 m in game (brief §6, checklist §8): authored ≤ ROCK_MAX_H. Low broken slabs, a tick bar
+             with its engraved groove, a broken pair; worn lit chamfers, moss feathered into the stone.
+  stones     fallen hour-tick fragments. ≤ 300 triangles; authored ≤ 0.85 m because the terrain scales a
+             stone by 0.10–0.42 (it lands ≤ 0.4 m).
+  needle_*   BRIDGE §5: pale needle-stone fragments (a drum sector with its recessed hour-band, a broken
+             slab), ≤ 0.58 m so the terrain's ≤ 1.38× boulder scale keeps them ≤ 0.8 m. Built for the stubs,
+             broken edges and gorge lip; they render once the terrain (or the map's landmarks) places them.
+
+Everything is vertex-coloured (no textures, no material maps — the terrain draws all props with one
+vertex-colour material, roughness 0.86), real size in metres, origin at the ground contact. Terrain spins
+each instance about the vertical, so the paint carries only rotation-invariant light (sky visibility,
+up-facing, occlusion, rims); the renderer's sun supplies direction.
+
+Output: art/out/props/<name>.glb, art/renders/props/scatter.png (--preview) and a build report
+art/renders/props/build_report.json (triangles, vertices, KB, size per prop).
 """
 from __future__ import annotations
 
+import json
 import math
 import os
 import sys
@@ -22,290 +43,135 @@ import bpy
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 from common import scene  # noqa: E402
-from common.hifi import sdf  # noqa: E402
-from common.hifi.sdf import Capsule, Ellipsoid, RoundCone, Sculpt, Sphere  # noqa: E402
+
+import dialwood  # noqa: E402
+import kit  # noqa: E402
+import stones  # noqa: E402
+from paint import srgb2lin  # noqa: E402
+from stones import StoneSpec  # noqa: E402
 
 OUT = os.path.join(scene.OUT_DIR, "props")
 RENDERS = os.path.join(scene.RENDERS_DIR, "props")
-N = sdf.Noise(23)
 
+BUDGET = {"tree": 750, "rock": 600, "stone": 300}
+ROCK_MAX_H = 0.33                 # RIFT rock role, authored: ×1.1·s (s ≤ 1.1) − 4 cm sunk → ≤ 0.36 m in game
 
-def srgb2lin(c):
-    c = np.asarray(c, dtype=np.float64)
-    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
-
-
-def hexc(h: str) -> np.ndarray:
-    h = h.lstrip("#")
-    return np.array([int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)])
-
-
-def smooth(a, b, x):
-    t = np.clip((x - a) / (b - a), 0, 1)
-    return t * t * (3 - 2 * t)
-
-
-# ── shapes ───────────────────────────────────────────────────────────────────────────────────────
-def dialwood(seed: int, height: float, crown: float, lobes: int, lean: float) -> tuple[Sculpt, Sculpt]:
-    rng = np.random.default_rng(seed)
-    trunk = Sculpt("trunk")
-    top = np.array([lean * 0.4, 0.0, height * 0.55])
-    trunk.add(RoundCone((0, 0, 0.0), top, 0.26, 0.15), k=0.0)
-    for a in range(4):                                     # root flare
-        ang = a * math.pi / 2 + rng.uniform(-0.3, 0.3)
-        trunk.add(RoundCone((0, 0, 0.35), (math.cos(ang) * 0.42, math.sin(ang) * 0.42, 0.0), 0.12, 0.06), k=0.12)
-    for b in range(2):                                     # two limbs into the crown
-        ang = rng.uniform(0, 2 * math.pi)
-        trunk.add(RoundCone(top * 0.85, top + np.array([math.cos(ang) * crown * 0.45, math.sin(ang) * crown * 0.45, height * 0.18]), 0.1, 0.05), k=0.08)
-    bark = lambda P: 0.012 * np.sin(np.arctan2(P[:, 1], P[:, 0]) * 9 + P[:, 2] * 2.0) + 0.01 * N(P, 6.0)
-    trunk_d = Sculpt("trunk_d")
-    for op in trunk.ops:
-        trunk_d.ops.append(op)
-    canopy = Sculpt("canopy")
-    cz = height * 0.55 + crown * 0.55
-    c0 = np.array([lean * 0.6, 0.0, cz])
-    canopy.add(Ellipsoid(c0, (crown, crown * 0.95, crown * 0.78)), k=0.0)
-    for i in range(lobes):                                 # leaf masses around and above the core
-        ang = 2 * math.pi * i / lobes + rng.uniform(-0.4, 0.4)
-        rr = crown * rng.uniform(0.62, 0.85)
-        zz = cz + crown * rng.uniform(-0.25, 0.45)
-        r = crown * rng.uniform(0.5, 0.68)
-        canopy.add(Ellipsoid(c0 + (math.cos(ang) * rr, math.sin(ang) * rr, zz - cz), (r, r * 0.95, r * 0.82)), k=crown * 0.25)
-    canopy.add(Ellipsoid(c0 + (0, 0, crown * 0.55), (crown * 0.6, crown * 0.6, crown * 0.5)), k=crown * 0.3)
-    # leaf clumps: rounded masses packed over the upper surface (the read that survives the camera and
-    # the decimation: a cauliflower of clumps, each with its own light and shadow)
-    for i in range(int(16 + crown * 10)):
-        u = rng.uniform(-0.35, 1.0)
-        ph = rng.uniform(0, 2 * math.pi)
-        rr = math.sqrt(max(0.0, 1 - u * u))
-        d = np.array([rr * math.cos(ph) * crown * 1.02, rr * math.sin(ph) * crown * 0.98, u * crown * 0.84])
-        r = crown * rng.uniform(0.24, 0.34)
-        canopy.add(Sphere(c0 + d * 0.92, r), k=crown * 0.06)
-    leafy = lambda P: -0.05 * np.clip(N.ridged(P, 3.2, 2), 0, 1) - 0.02 * N(P, 8.0)    # fine leaf grain
-    canopy_d = Sculpt("canopy_d")
-    canopy_d.add(sdf.Blend([(op, prim, k) for op, prim, k, _ in canopy.ops]).displaced(leafy, 0.12), k=0.0)
-    trunk_dd = Sculpt("trunk_dd")
-    trunk_dd.add(sdf.Blend([(op, prim, k) for op, prim, k, _ in trunk.ops]).displaced(bark, 0.025), k=0.0)
-    return trunk_dd, canopy_d
-
-
-def boulder(seed: int, size: float, flat: float) -> Sculpt:
-    rng = np.random.default_rng(seed)
-    S = Sculpt("boulder")
-    S.add(Ellipsoid((0, 0, size * 0.32), (size * 0.62, size * 0.5, size * 0.42 * flat)), k=0.0)
-    for i in range(3):
-        ang = rng.uniform(0, 2 * math.pi)
-        S.add(Ellipsoid((math.cos(ang) * size * 0.3, math.sin(ang) * size * 0.25, size * rng.uniform(0.15, 0.4)),
-                        (size * rng.uniform(0.3, 0.45),) * 2 + (size * 0.3 * flat,)), k=size * 0.12)
-    # chisel: planar cuts (facets) + a few cracks, the stylised "carved" read
-    for i in range(6):
-        n = rng.normal(size=3)
-        n[2] = abs(n[2]) * 0.6 + 0.2
-        n /= np.linalg.norm(n)
-        S.inter(sdf.HalfSpace(n * size * rng.uniform(0.42, 0.55) + np.array([0, 0, size * 0.3]), n, size * 2), k=size * 0.04)
-    S.inter(sdf.HalfSpace((0, 0, -0.02), (0, 0, -1), size * 2), k=0.0)
-    out = Sculpt("boulder_d")
-    out.add(sdf.Blend([(op, prim, k) for op, prim, k, _ in S.ops]).displaced(lambda P: 0.02 * size * N(P, 3.0 / size), 0.03 * size), k=0.0)
-    return out
-
-
-# ── vertex paint ─────────────────────────────────────────────────────────────────────────────────
-def mesh_arrays(ob):
-    me = ob.data
-    v = np.empty(len(me.vertices) * 3)
-    me.vertices.foreach_get("co", v)
-    v = v.reshape(-1, 3)
-    me.calc_loop_triangles() if hasattr(me, "calc_loop_triangles") else None
-    n = np.empty(len(me.vertices) * 3)
-    me.vertices.foreach_get("normal", n)
-    n = n.reshape(-1, 3)
-    e = np.empty(len(me.edges) * 2, dtype=np.int64)
-    me.edges.foreach_get("vertices", e)
-    return v, n, e.reshape(-1, 2)
-
-
-def cavity(v, n, e, iters: int = 3):
-    """+ convex (edges, crowns), - concave (crevices): the vertex against its neighbours' mean, along n."""
-    nv = len(v)
-    cnt = np.bincount(e.ravel(), minlength=nv).astype(np.float64)
-    avg = v.copy()
-    for _ in range(iters):
-        acc = np.zeros_like(v)
-        np.add.at(acc, e[:, 0], avg[e[:, 1]])
-        np.add.at(acc, e[:, 1], avg[e[:, 0]])
-        avg = acc / np.maximum(cnt, 1)[:, None]
-    return np.einsum("ij,ij->i", v - avg, n)
-
-
-def paint(ob, colors: np.ndarray):
-    me = ob.data
-    if "Col" in me.color_attributes:
-        me.color_attributes.remove(me.color_attributes["Col"])
-    attr = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
-    rgba = np.ones((len(colors), 4))
-    rgba[:, :3] = srgb2lin(np.clip(colors, 0, 1))
-    attr.data.foreach_set("color", rgba.astype(np.float32).ravel())
-    me.color_attributes.active_color = attr
-
-
-SUN = np.array([-0.45, -0.35, 0.82])
-SUN /= np.linalg.norm(SUN)
-
-
-def paint_canopy(ob, crown_z: float, crown: float, seed: int):
-    v, n, e = mesh_arrays(ob)
-    leaf = hexc("#3F5A45")
-    hi = hexc("#86A04E")         # sunlit leaf (warm, yellow-green)
-    mid = hexc("#3F5A3C")
-    lo = hexc("#121C1A")         # underside (cool, deep)
-    h = (v[:, 2] - (crown_z - crown)) / (2 * crown)
-    lit = np.clip(np.einsum("ij,j->i", n, SUN), 0, 1)
-    t = np.clip(0.5 * smooth(0.1, 0.95, h) + 0.75 * lit - 0.25, 0, 1)
-    t = np.round(t * 4) / 4 * 0.7 + t * 0.3                 # posterised painterly bands, softened
-    col = np.where(t[:, None] < 0.5, lo + (mid - lo) * (t[:, None] / 0.5), mid + (hi - mid) * ((t[:, None] - 0.5) / 0.5))
-    cav = cavity(v, n, e)
-    occ = np.clip(-cav / 0.035, 0, 1)
-    col *= (1 - 0.6 * occ)[:, None]
-    rng = np.random.default_rng(seed)
-    dab = (N(v * np.array([1, 1, 1.3]), 4.1) > 0.6) & (lit > 0.45)
-    col = np.where(dab[:, None], col * 0.5 + hexc("#B4C46A") * 0.5, col)
-    col = col * 0.9 + leaf * 0.1
-    paint(ob, col)
-
-
-def paint_trunk(ob):
-    v, n, e = mesh_arrays(ob)
-    base = hexc("#4A3F36")
-    streak = 0.85 + 0.25 * np.sin(np.arctan2(v[:, 1], v[:, 0]) * 9 + v[:, 2] * 2.0)
-    lit = np.clip(np.einsum("ij,j->i", n, SUN), 0, 1)
-    col = base[None, :] * (streak * (0.7 + 0.55 * lit))[:, None]
-    col *= (0.6 + 0.4 * smooth(0, 0.6, v[:, 2]))[:, None]        # dark at the roots
-    paint(ob, col)
-
-
-def paint_stone(ob, size: float, moss: bool = True):
-    v, n, e = mesh_arrays(ob)
-    stone = hexc("#68635B")
-    light = hexc("#A49C8B")
-    dark = hexc("#2A2826")
-    mossc = hexc("#5B7046")
-    lit = np.clip(np.einsum("ij,j->i", n, SUN), 0, 1)
-    t = np.clip(0.25 + 0.75 * lit, 0, 1)
-    t = np.round(t * 3) / 3 * 0.6 + t * 0.4
-    col = np.where(t[:, None] < 0.5, dark + (stone - dark) * (t[:, None] / 0.5), stone + (light - stone) * ((t[:, None] - 0.5) / 0.5))
-    cav = cavity(v, n, e)
-    col *= (1 - 0.5 * np.clip(-cav / (0.03 * size), 0, 1))[:, None]
-    col = col + (light - col) * (0.35 * np.clip(cav / (0.025 * size), 0, 1))[:, None]          # chalk-lit edges
-    if moss:
-        m = smooth(0.55, 0.85, n[:, 2]) * (N(v, 1.6 / size) > 0.45)
-        col = col * (1 - m[:, None] * 0.8) + mossc * (m[:, None] * 0.8)
-    col *= (0.55 + 0.45 * smooth(0, size * 0.25, v[:, 2]))[:, None]   # contact shadow at the foot
-    paint(ob, col)
-
-
-# ── build ────────────────────────────────────────────────────────────────────────────────────────
-def low(ob, tris: int):
-    t = sum(len(p.vertices) - 2 for p in ob.data.polygons)
-    if t > tris:
-        m = ob.modifiers.new("dec", "DECIMATE")
-        m.ratio = tris / t
-        with bpy.context.temp_override(object=ob, active_object=ob, selected_objects=[ob]):
-            bpy.ops.object.modifier_apply(modifier=m.name)
-    ob.data.polygons.foreach_set("use_smooth", np.ones(len(ob.data.polygons), dtype=bool))
-    return ob
-
-
-def material():
-    m = bpy.data.materials.get("vale_prop_vcol") or bpy.data.materials.new("vale_prop_vcol")
-    m.use_nodes = True
-    nt = m.node_tree
-    b = nt.nodes.get("Principled BSDF")
-    vc = nt.nodes.new("ShaderNodeVertexColor")
-    vc.layer_name = "Col"
-    nt.links.new(vc.outputs["Color"], b.inputs["Base Color"])
-    b.inputs["Roughness"].default_value = 0.85
-    return m
-
-
-SPECS = {
-    "dialwood_a": dict(kind="tree", seed=3, height=4.4, crown=1.55, lobes=6, lean=0.15),
-    "dialwood_b": dict(kind="tree", seed=11, height=5.2, crown=1.35, lobes=5, lean=-0.2),
-    "dialwood_c": dict(kind="tree", seed=29, height=3.8, crown=1.8, lobes=7, lean=0.05),
-    "boulder_a": dict(kind="rock", seed=5, size=1.0, flat=0.85),
-    "boulder_b": dict(kind="rock", seed=17, size=1.0, flat=0.65),
-    "stone_a": dict(kind="rock", seed=41, size=1.0, flat=0.5, moss=False),
+STONES: dict[str, tuple[str, StoneSpec]] = {
+    # RIFT rock role: fallen hour-tick stones at the cliff feet, on walkable floor, so ≤ 0.4 m in game (brief
+    # §6, checklist §8): authored ≤ 0.33 m tall (terrain ×1.1·s vertically, s ≤ 1.1, sunk 4 cm). Low, broken,
+    # half-sunk carved pieces that read as floor dressing, never as walls.
+    "boulder_block": ("rock", StoneSpec(seed=5, size=(0.92, 0.64, 0.30), chips=7, broken=True, bevel=0.05, taper=0.16,
+                                        moss=[(-0.16, 0.06, 0.22)], tilt=(0.04, -0.03), sink=0.05, palette="dial")),
+    "boulder_tick": ("rock", StoneSpec(seed=17, size=(1.18, 0.38, 0.27), chips=7, broken=True, bevel=0.045, groove=0.08, taper=0.2,
+                                       tilt=(0.0, 0.05), yaw=0.25, sink=0.06, palette="dial")),
+    "boulder_pair": ("rock", StoneSpec(seed=29, size=(0.70, 0.54, 0.27), chips=6, broken=True, bevel=0.045, taper=0.15,
+                                       moss=[(-0.04, 0.04, 0.13)], tilt=(-0.04, 0.05), offset=(-0.16, 0.10, 0.0), sink=0.05, palette="dial",
+                                       extra=[StoneSpec(seed=31, size=(0.38, 0.30, 0.20), chips=4, broken=True, bevel=0.035, taper=0.1,
+                                                        tilt=(0.18, 0.2), offset=(0.36, -0.30, 0.0), yaw=0.7, palette="dial")])),
+    # RIFT stones (terrain scale 0.10–0.46): fallen hour-tick fragments
+    "stone_tick": ("stone", StoneSpec(seed=41, size=(0.84, 0.30, 0.24), chips=3, broken=True, bevel=0.03, groove=0.07, taper=0.1,
+                                      tilt=(0.06, 0.0), palette="dial")),
+    "stone_chip": ("stone", StoneSpec(seed=47, size=(0.62, 0.50, 0.34), chips=5, broken=True, bevel=0.035, taper=0.15,
+                                      tilt=(0.12, -0.08), palette="dial")),
+    # BRIDGE (brief §5: needle fragments ≤ 0.8 m on the stubs, broken edges and gorge lip, never on the deck):
+    # built for that placement; the terrain places no rock on the span today, so the map does not list them
+    "needle_drum": ("rock", StoneSpec(seed=53, size=(0.70, 0.42, 0.0), shape="drum", chips=3, broken=False, bevel=0.03,
+                                      band=True, palette="needle")),
+    "needle_slab": ("rock", StoneSpec(seed=59, size=(0.52, 0.30, 0.23), chips=4, broken=True, bevel=0.03, groove=0.05,
+                                      tilt=(0.05, 0.10), palette="needle")),
 }
 
 
-def build(name: str, spec: dict, col):
-    mat = material()
-    objs = []
-    if spec["kind"] == "tree":
-        trunk, canopy = dialwood(spec["seed"], spec["height"], spec["crown"], spec["lobes"], spec["lean"])
-        tv, tq = trunk.mesh(0.045)
-        cv, cq = canopy.mesh(0.06)
-        t = low(sdf.to_object(f"{name}_trunk", tv, tq, col), 260)
-        c = low(sdf.to_object(f"{name}_canopy", cv, cq, col), 1800)
-        paint_trunk(t)
-        cz = spec["height"] * 0.55 + spec["crown"] * 0.55
-        paint_canopy(c, cz, spec["crown"], spec["seed"])
-        objs = [t, c]
-    else:
-        S = boulder(spec["seed"], spec["size"], spec["flat"])
-        v, q = S.mesh(0.03)
-        r = low(sdf.to_object(name, v, q, col), 420)
-        paint_stone(r, spec["size"], spec.get("moss", True))
-        objs = [r]
-    for o in objs:
-        o.data.materials.append(mat)
-    scene.select_only(objs, active=objs[0])
-    if len(objs) > 1:
-        bpy.ops.object.join()
-    ob = bpy.context.view_layer.objects.active
-    ob.name = name
-    return ob
+def build(name: str) -> tuple[str, kit.Part, np.ndarray]:
+    if name in dialwood.TREES:
+        sp = dialwood.TREES[name]
+        part = dialwood.build_tree(sp)
+        col = dialwood.paint_tree(part, sp.seed, sp.tint)
+        return "tree", part, col
+    role, sp = STONES[name]
+    part = stones.build_stone(sp)
+    col = stones.paint_stone(part, sp.palette, sp.seed)
+    return role, part, col
 
 
-def export(ob, path):
-    scene.select_only([ob], active=ob)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    bpy.ops.export_scene.gltf(**scene.op_kwargs(bpy.ops.export_scene.gltf, filepath=path, export_format="GLB", use_selection=True,
-                                                export_apply=True, export_yup=True, export_normals=True, export_texcoords=False,
-                                                export_vertex_color="ACTIVE", export_all_vertex_colors=False, export_materials="EXPORT",
-                                                export_animations=False, export_skins=False, export_morph=False, export_lights=False,
-                                                export_cameras=False))
+def export(name: str, part: kit.Part, col: np.ndarray) -> int:
+    os.makedirs(OUT, exist_ok=True)
+    return kit.write_glb(os.path.join(OUT, f"{name}.glb"), part.P, part.N, srgb2lin(col), part.F, name)
 
 
-def preview(objs):
+# ── preview sheet: the game's camera pitch, RIFT's sun, a cliff-top floor ──────────────────────────
+def preview(names: list[str], res: int = 1920, samples: int = 48):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     scene.cycles_device(sc)
-    sc.cycles.samples = 64
-    sc.render.resolution_x, sc.render.resolution_y = 1600, 600
-    sc.render.film_transparent = False
-    sc.view_settings.view_transform = "Standard"
+    sc.cycles.samples = samples
+    sc.cycles.use_denoising = True
+    sc.render.resolution_x, sc.render.resolution_y = res, res * 9 // 16
+    try:
+        sc.view_settings.view_transform = "Khronos PBR Neutral"
+    except TypeError:
+        sc.view_settings.view_transform = "Standard"
     w = sc.world or bpy.data.worlds.new("w")
     sc.world = w
     w.use_nodes = True
-    w.node_tree.nodes["Background"].inputs["Color"].default_value = (0.42, 0.44, 0.47, 1)
-    w.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.8
+    bg = w.node_tree.nodes["Background"]
+    bg.inputs["Color"].default_value = (0.55, 0.62, 0.74, 1)
+    bg.inputs["Strength"].default_value = 0.75
     sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
-    sun.data.energy = 2.2
+    sun.data.energy = 3.0
+    sun.data.color = (1.0, 0.92, 0.85)
+    sun.data.angle = math.radians(2.0)
     sc.collection.objects.link(sun)
-    sun.rotation_euler = (math.radians(38), 0, math.radians(-40))
-    x = 0.0
-    for o in objs:
-        o.location.x = x
-        x += 4.2 if "dialwood" in o.name else 2.4
+    from mathutils import Vector
+    sun_dir = Vector((-0.3531, -0.5043, 0.788))          # RIFT sunDir (three) → Blender (x, -z, y)
+    sun.rotation_euler = (-sun_dir).to_track_quat("-Z", "Y").to_euler()
+    mat = bpy.data.materials.new("prev_vcol")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    attr = nt.nodes.new("ShaderNodeVertexColor")
+    nt.links.new(attr.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.86
+    floor_m = bpy.data.materials.new("floor")
+    floor_m.use_nodes = True
+    floor_m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*srgb2lin([0.50, 0.48, 0.43]), 1)
+    floor_m.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.9
+    bpy.ops.mesh.primitive_plane_add(size=80, location=(10, 4, 0))
+    bpy.context.active_object.data.materials.append(floor_m)
+    trees = [n for n in names if n in dialwood.TREES]
+    rocks = [n for n in names if n not in dialwood.TREES]
+    placed = []
+    for i, n in enumerate(trees):
+        placed.append((n, (i * 4.4, 4.0, 0.0), 0.82))
+    for i, n in enumerate(rocks):
+        role = STONES[n][0]
+        s = 1.0 if role == "rock" else 0.46                       # stones at their largest in-game size
+        placed.append((n, (-1.2 + i * 1.95, -0.6, 0.0), s))
+    for n, loc, s in placed:
+        bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, f"{n}.glb"))
+        for ob in bpy.context.selected_objects:
+            if ob.type != "MESH":
+                continue
+            ca = ob.data.color_attributes
+            if len(ca):
+                attr.layer_name = ca[0].name
+            ob.data.materials.clear()
+            ob.data.materials.append(mat)
+            ob.location = loc
+            ob.scale = (s, s, s)
+            ob.rotation_euler[2] = 0.6
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
     sc.collection.objects.link(cam)
-    cam.data.lens = 28
-    cx = x / 2 - 2
-    cam.location = (cx, -15.0, 13.0)
-    from mathutils import Vector
-    cam.rotation_euler = (Vector((cx, 0, 1.6)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+    cam.data.type = "ORTHO"
+    cam.data.ortho_scale = 22.0
+    pitch = math.radians(52)
+    tgt = Vector((8.8, 2.2, 1.0))
+    d = 40.0
+    cam.location = tgt + Vector((0, -math.cos(pitch) * d, math.sin(pitch) * d))
+    cam.rotation_euler = (tgt - cam.location).to_track_quat("-Z", "Y").to_euler()
     sc.camera = cam
     os.makedirs(RENDERS, exist_ok=True)
     sc.render.filepath = os.path.join(RENDERS, "scatter.png")
@@ -317,18 +183,31 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--only", default="")
     p.add_argument("--preview", action="store_true")
+    p.add_argument("--res", type=int, default=1920)
+    p.add_argument("--samples", type=int, default=48)
     a = p.parse_args(scene.script_args())
     scene.reset()
-    col = scene.collection("props")
-    names = [n for n in SPECS if not a.only or n in a.only.split(",")]
-    objs = []
-    for nme in names:
-        ob = build(nme, SPECS[nme], col)
-        export(ob, os.path.join(OUT, f"{nme}.glb"))
-        scene.log(f"{nme}: {sum(len(p.vertices) - 2 for p in ob.data.polygons)} tris, {os.path.getsize(os.path.join(OUT, nme + '.glb')) // 1024} KB")
-        objs.append(ob)
+    names = [n for n in list(dialwood.TREES) + list(STONES) if not a.only or n in a.only.split(",")]
+    report = {}
+    rp = os.path.join(RENDERS, "build_report.json")
+    if os.path.exists(rp):
+        report = {k: v for k, v in json.load(open(rp)).items() if k in dialwood.TREES or k in STONES}
+    for n in names:
+        role, part, col = build(n)
+        size = export(n, part, col)
+        ext = np.ptp(part.P, axis=0)
+        report[n] = dict(role=role, tris=int(part.tris), verts=int(len(part.P)), kb=round(size / 1024, 1),
+                         size_m=[round(float(x), 2) for x in ext], budget=BUDGET[role])
+        flag = "" if part.tris <= BUDGET[role] else "  OVER BUDGET"
+        if role == "rock" and STONES[n][1].palette == "dial" and part.P[:, 2].max() > ROCK_MAX_H:
+            flag += f"  TOO TALL (> {ROCK_MAX_H} m authored)"
+        scene.log(f"{n:16s} {role:5s} {part.tris:5d} tris {len(part.P):5d} verts {size / 1024:6.1f} KB  "
+                  f"{ext[0]:.2f}×{ext[1]:.2f}×{ext[2]:.2f} m{flag}")
+    os.makedirs(RENDERS, exist_ok=True)
+    with open(rp, "w") as fh:
+        json.dump(report, fh, indent=1, sort_keys=True)
     if a.preview:
-        preview(objs)
+        preview(list(report) if not a.only else names, a.res, a.samples)
 
 
 if __name__ == "__main__":

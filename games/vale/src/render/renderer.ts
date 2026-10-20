@@ -41,7 +41,7 @@ import { BAR_KIND, BarLayer, GLYPH, SHAPE } from './overlay/bars.ts';
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
 import { TELE_SHAPE, TelegraphLayer, type TeleSpec } from './overlay/telegraphs.ts';
-import { FRAY_SEATS, Palette, type ColorblindMode } from './palette.ts';
+import { FRAY_SEATS, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
 import { PostChain } from './post.ts';
 import { DynamicResolution, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
@@ -512,7 +512,7 @@ class ValeRenderer implements Renderer {
           const def = this.lib.unit(e.def);
           if (def) {
             a.configureUnit(def);
-            this.lib.unitTemplate(e.def).then((t) => actor.attach(t, def.art.scale, 'accent'));
+            this.lib.unitTemplate(e.def, this.palette.ffa ? null : e.team).then((t) => actor.attach(t, def.art.scale, 'accent'));
           }
         }
         a.pushTick(e, tick);
@@ -808,7 +808,9 @@ class ValeRenderer implements Renderer {
     if (map) { for (const s of map.structures) units.add(s.unit); for (const c of map.camps) for (const u of c.units) units.add(u.unit); for (const pk of map.pickups) units.add(pk.unit); }
     const mode = this.catalog.modes.find((m) => m.id === setup.mode);
     for (const w of mode?.rules.minionWaves?.composition ?? []) units.add(w.unit);
-    const refs = this.lib.refsFor(setup.seats.map((s) => ({ fighter: s.fighter, skin: s.skin })), units);
+    // per-team unit models (art.teamModels): every side on the field, none in FFA modes
+    const teams = isFfaMode(mode) ? null : [...setup.seats.map((s) => s.team), ...(map?.structures.map((s) => s.team) ?? [])];
+    const refs = this.lib.refsFor(setup.seats.map((s) => ({ fighter: s.fighter, skin: s.skin })), units, teams);
     const jobs: Promise<unknown>[] = refs.map((r) => this.assets.model(r));
     if (map) { jobs.push(this.assets.hdr(map.art.sky), this.assets.lut(map.art.lut), this.assets.model(map.art.scene)); }
     for (const s of setup.seats) jobs.push(this.lib.fighterTemplate(s.fighter, s.skin));

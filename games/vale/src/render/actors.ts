@@ -1,6 +1,8 @@
 // VALE render — characters and units (CONTRACT §9 "Characters"; STYLE_BIBLE "Fighters").
 //
 //   * One template per GLB (assets.ts caches the load); every entity gets SkeletonUtils.clone of it.
+//     Units pick their GLB by team (UnitDef.art.teamModels[team], else art.model; FFA → art.model),
+//     so a structure is an Aubade spire on team 0 and a Serenade dome on team 1 (CONTRACT §12).
 //     Skins carry mesh + skeleton only: their clips come from the fighter's BASE model and bind by
 //     bone name (the rig standard VALE_BIPED_1 is shared), so a skin never needs its own clips.
 //   * AnimationMixer per actor, driven by EntityView.state / anim / stateTime:
@@ -80,8 +82,11 @@ export class ModelLibrary {
   fighter(id: string): FighterDefT | undefined { return this.fighters.get(id); }
   unit(id: string): UnitDefT | undefined { return this.units.get(id); }
 
-  /** every model ref a match needs (loading screen preload) */
-  refsFor(fighters: { fighter: string; skin: string }[], unitIds: Iterable<string>): string[] {
+  /**
+   * Every model ref a match needs (loading screen preload). `teams`: the sides on the field (seats and
+   * structure placements); null in FFA modes, where every unit shows `art.model` (CONTRACT §12 teamModels).
+   */
+  refsFor(fighters: { fighter: string; skin: string }[], unitIds: Iterable<string>, teams: Iterable<TeamId> | null = null): string[] {
     const out = new Set<string>();
     for (const s of fighters) {
       const f = this.fighters.get(s.fighter);
@@ -89,8 +94,20 @@ export class ModelLibrary {
       const sk = this.skins.get(s.skin);
       if (sk) out.add(sk);
     }
-    for (const u of unitIds) { const d = this.units.get(u); if (d) out.add(d.art.model); }
+    const ts = teams ? [...new Set(teams)] : [];
+    for (const u of unitIds) {
+      const d = this.units.get(u);
+      if (!d) continue;
+      if (!d.art.teamModels?.length || ts.length === 0) out.add(d.art.model);
+      else for (const t of ts) out.add(this.unitModelRef(d, t));
+    }
     return [...out];
+  }
+
+  /** the model a unit of `team` shows: art.teamModels[team], else art.model (null team = FFA / no fixed sides) */
+  unitModelRef(def: UnitDefT, team: TeamId | null): string {
+    const tm = def.art.teamModels;
+    return team !== null && team >= 0 && tm && team < tm.length ? tm[team] : def.art.model;
   }
 
   private patchMaterials(root: Object3D, fighter: boolean, accentName: string): void {
@@ -144,14 +161,18 @@ export class ModelLibrary {
     return p;
   }
 
-  unitTemplate(unitId: string): Promise<Template | null> {
-    const key = `u:${unitId}`;
-    let p = this.templates.get(key);
-    if (p) return p;
+  /** one template per (unit, model): `team` picks art.teamModels[team] (null = FFA → art.model); a team model
+   *  that fails to load falls back to art.model */
+  unitTemplate(unitId: string, team: TeamId | null = null): Promise<Template | null> {
     const def = this.units.get(unitId);
     if (!def) return Promise.resolve(null);
+    const ref = this.unitModelRef(def, team);
+    const key = `u:${unitId}:${ref}`;
+    let p = this.templates.get(key);
+    if (p) return p;
     p = (async (): Promise<Template | null> => {
-      const m = await this.assets.model(def.art.model);
+      const m = await this.assets.model(ref);
+      if (!m?.renderable && ref !== def.art.model) return this.unitTemplate(unitId, null);
       if (m?.renderable) {
         const clips = new Map<string, AnimationClip>();
         for (const c of m.gltf.animations) clips.set(c.name, c);

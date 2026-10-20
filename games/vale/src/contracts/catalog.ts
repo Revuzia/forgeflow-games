@@ -444,7 +444,11 @@ export const UnitDef = z.object({
   sightRange: z.number().positive().default(10),
   /** structures/objectives: buff granted to the killer's team (TeamBuff id) */
   onTakedownTeamBuff: Id.optional(),
-  art: z.object({ model: AssetRef, scale: z.number().positive().default(1), height: z.number().positive(),
+  art: z.object({ model: AssetRef,
+    /** CHANGED(ART): per-team models, index = TeamId (RIFT/BRIDGE: 0 Aubade, 1 Serenade). A team past the end,
+     *  a neutral unit (team < 0) and FFA modes use `model`; every entry shares `height`, `clips` and `scale`. */
+    teamModels: z.array(AssetRef).optional(),
+    scale: z.number().positive().default(1), height: z.number().positive(),
     clips: z.record(z.string(), z.string()).default({}), icon: AssetRef.optional(), instanced: z.boolean().default(false) }).strict(),
 }).strict();
 

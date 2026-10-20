@@ -488,8 +488,13 @@
   "lut": "assets/grade/vale_grade_01.cube",
   "minimap": "assets/maps/map_bridge/minimap.png",
   "terrain": {
-   "textures": { "$comment": "painted tiling textures by role (render/terrain.ts maps each texture's mean onto the band colour)", "road": "assets/textures/stone_road.webp", "floor": "assets/textures/grass_dark.webp", "clearing": "assets/textures/dirt_path.webp", "dust": "assets/textures/gravel_light.webp", "cliff": "assets/textures/chalk_cliff.webp", "cliffTop": "assets/textures/moss_stone.webp" },
-   "props": { "$comment": "scatter props (art/blender/props/scatter.py): vertex-coloured, real size; render/terrain.ts instances them on its procedural spots", "tree": ["assets/props/dialwood_a.glb", "assets/props/dialwood_b.glb", "assets/props/dialwood_c.glb"], "rock": ["assets/props/boulder_a.glb", "assets/props/boulder_b.glb"], "stone": ["assets/props/stone_a.glb"] },
+   "temperatureField": {"axis": "west-east", "west": "#B8C6D9", "east": "#D9C2A0", "strength": 0.06, "appliesTo": "terrain albedo (render/terrain.ts): the Dawn Arch end leans cool, the Lamp Gate end warm; never a team hue"},
+   "snap": {"at": [78, 22], "radius": 12},
+   "gorge": {"axisY": 22, "deckHalf": 7, "depth": 36, "bandHeight": 1.0, "note": "the deck strip is axisY ± deckHalf; chasm-wall vertices strictly inside it are the carved hour-band notches"},
+   "plazas": [{"at": [10, 22], "radius": 13, "side": 0}, {"at": [146, 22], "radius": 13, "side": 1}],
+   "surface": "span",
+   "textures": {"$comment": "painted tiling textures by role (tools/terrain_textures.py; render/terrain.ts maps each painting's mean onto the band colour, alpha = height)", "litter": "assets/textures/terrain_litter.webp", "grain": "assets/textures/terrain_grain.webp", "moss": "assets/textures/terrain_moss.webp"},
+   "props": { "$comment": "scatter props (art/blender/props/scatter.py). No trees on the span. Rock: needle-stone fragments (brief \u00a75: \u2264 0.8 m, on the stubs, the deck's broken edges and the gorge lip, never on the deck); they render once render/terrain.ts places rock spots there (today it places none off the Dialwood floor). No loose stones: the deck is a clean stage", "rock": ["assets/props/needle_drum.glb", "assets/props/needle_slab.glb"] },
    "$comment": "the walls of Needlespan are the gorge: render them as a drop, never as cliffs rising from the span",
    "wallStyle": "gorge",
    "landmarks": [
@@ -551,11 +556,7 @@
      "note": "Serenade shop kiosk"
     }
    ],
-   "colors": {
-    "lane": "#988F7C",
-    "clearing": "#7E786B",
-    "inscription": "#B7B0A0"
-   }
+   "colors": {"lane": "#A59B86", "clearing": "#7E786B", "inscription": "#D8D1BE", "laneGrout": "#746C5C", "moss": "#4A5A42", "cliffFace": "#4C4842", "cliffLip": "#8E8979", "edgeLight": "#D8D0BC", "flank": "#3D3A37", "rock": "#3A3E47", "mist": "#5E6C93", "grassRoot": "#2F3B30", "grassTip": "#9AA478", "lit": "#FFE2B8", "plazaAubade": "#A3A7A8", "plazaSerenade": "#A8916E", "inlayAubade": "#C6CFD6", "inlaySerenade": "#C7924E"}
   },
   "lighting": {
    "sunDir": [

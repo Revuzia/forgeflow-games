@@ -2,7 +2,7 @@
 
     Blender -b --factory-startup --python art/blender/units/unit_icons.py -- [--only needle_outer,...] [--fast]
 
-Each GLB in art/out/units is imported as built, framed whole from a three-quarter view, lit with the map's
+Each GLB in art/out/units is imported as built (structures: <id>_aubade.glb, the canonical culture), framed whole from a three-quarter view, lit with the map's
 sun and the bible's rim pair (the same setup as the fighter and monster icons), rendered transparent and
 laid over a painted ink backdrop with a soft glow in the unit's own colour. Output: art/out/units/<id>_icon.png
 (128x128, the size CONTRACT §12 gives icons).
@@ -28,8 +28,8 @@ ICONS = {
     "needle_outer": {"yaw": 30.0, "pitch": 10.0, "fill": 0.9, "ink": "#1D1F25", "glow": "#5F7488"},
     "needle_inner": {"yaw": 30.0, "pitch": 10.0, "fill": 0.9, "ink": "#1D1F25", "glow": "#5F7488"},
     "needle_bell": {"yaw": 30.0, "pitch": 10.0, "fill": 0.9, "ink": "#1D1F25", "glow": "#6A6F86"},
-    "hourbell": {"yaw": 30.0, "pitch": 14.0, "fill": 0.86, "ink": "#1D1F25", "glow": "#7A6A4A"},
-    "lantern": {"yaw": 30.0, "pitch": 12.0, "fill": 0.88, "ink": "#1D1F25", "glow": "#7A5A30"},
+    "hourbell": {"yaw": 30.0, "pitch": 14.0, "fill": 0.86, "ink": "#1D1F25", "glow": "#5F7488"},
+    "lantern": {"yaw": 30.0, "pitch": 12.0, "fill": 0.88, "ink": "#1D1F25", "glow": "#5F7488"},
     "hooded_lamp": {"yaw": 30.0, "pitch": 12.0, "fill": 0.86, "ink": "#1D1F25", "glow": "#4A6A8A"},
     "sunmote_mend": {"yaw": 20.0, "pitch": 16.0, "fill": 0.8, "ink": "#1B1F1D", "glow": "#3F7A55"},
     "sunmote_quick": {"yaw": 20.0, "pitch": 16.0, "fill": 0.8, "ink": "#1F1D18", "glow": "#7A6A35"},
@@ -41,7 +41,24 @@ def render_icon(uid: str, fast: bool = False) -> str:
     from common import imageops, render
     cfg = ICONS[uid]
     scene.reset()
-    bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, f"{uid}.glb"))
+    # structures ship one model per culture (art.teamModels); the icon shows the canonical Aubade one
+    # (the unquantized export structures.py keeps for its contact sheet imports cleanly into Blender)
+    src = os.path.join(OUT, f"{uid}_aubade.glb")
+    raw = os.path.join(scene.CACHE_DIR, "structures", "raw", f"{uid}_aubade.glb")
+    structure = os.path.isfile(src)
+    bpy.ops.import_scene.gltf(filepath=(raw if os.path.isfile(raw) else src) if structure else os.path.join(OUT, f"{uid}.glb"))
+    if structure:
+        bpy.context.scene.frame_set(0)
+        for o in bpy.context.scene.objects:      # rest pose (the importer leaves a clip applied)
+            if o.animation_data:
+                o.animation_data.action = None
+            o.animation_data_clear()
+        for o in bpy.context.scene.objects:
+            if o.name.endswith("_core"):
+                o.scale = (1.0, 1.0, 1.0)
+            if o.parent is None and o.type == "EMPTY":
+                o.rotation_mode = "XYZ"
+                o.rotation_euler = (0.0, 0.0, 1.5707963)     # the side the game camera sees (facing 0)
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     bpy.context.view_layer.update()
     pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]

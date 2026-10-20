@@ -669,6 +669,14 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   variant in one GLB as nodes named `form_<form id>` and `form_base`; the renderer shows a form's nodes while
   `EntityView.form` is that form (else `form_base`); a form without nodes keeps the base ones. Authoring:
   `Part(form=...)` in the fighter spec (split after the bake, `pipeline.split_forms`).
+- CHANGED(ART): **per-team unit models.** `UnitDef.art.teamModels: AssetRef[]` (optional, additive) lists one
+  GLB per `TeamId` (RIFT/BRIDGE: `[aubade, serenade]`); a unit picks `teamModels[team]`, and a team past the
+  end, a neutral unit (team < 0), an FFA mode (FRAY: no fixed sides) or a team model that fails to load use
+  `art.model`. Every entry shares the unit's `height`, `scale`, `clips` and collision radius, keeps the
+  `accent` material, and sits in the same budget. The renderer caches one template per (unit, model) and the
+  loading screen preloads the model of every side on the field (seats + structure placements). The content
+  build checks each ref like `art.model` (resolves, GLB magic, `.glb`). Structures use it: Aubade = tall chalk
+  spires with dawnglass, Serenade = low ironstone domes with lampresin (`art/blender/units/structures.py`).
 - **Materials:** PBR (base color / ORM / normal baked from Blender materials at 1024², 2048² for
   landmarks; ART 2.0 fighters carry a 2048² hand-painted base colour (concept projection) with ORM and
   normal at 1024², inside the same 1.2 MB GLB budget); an emissive material named `accent` on every

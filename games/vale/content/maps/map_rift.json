@@ -1416,17 +1416,15 @@
   "lut": "assets/grade/vale_grade_01.cube",
   "minimap": "assets/maps/map_rift/minimap.png",
   "terrain": {
-   "textures": { "$comment": "painted tiling textures by role (render/terrain.ts maps each texture's mean onto the band colour)", "road": "assets/textures/stone_road.webp", "floor": "assets/textures/grass_dark.webp", "clearing": "assets/textures/dirt_path.webp", "dust": "assets/textures/gravel_light.webp", "cliff": "assets/textures/chalk_cliff.webp", "cliffTop": "assets/textures/moss_stone.webp" },
-   "props": { "$comment": "scatter props (art/blender/props/scatter.py): vertex-coloured, real size; render/terrain.ts instances them on its procedural spots", "tree": ["assets/props/dialwood_a.glb", "assets/props/dialwood_b.glb", "assets/props/dialwood_c.glb"], "rock": ["assets/props/boulder_a.glb", "assets/props/boulder_b.glb"], "stone": ["assets/props/stone_a.glb"] },
+   "plazas": [{"at": [12, 55], "radius": 13, "side": 0}, {"at": [158, 55], "radius": 13, "side": 1}],
+   "surface": "dial",
+   "textures": {"$comment": "painted tiling textures by role (tools/terrain_textures.py; render/terrain.ts maps each painting's mean onto the band colour, alpha = height)", "litter": "assets/textures/terrain_litter.webp", "grain": "assets/textures/terrain_grain.webp", "moss": "assets/textures/terrain_moss.webp"},
+   "props": { "$comment": "scatter props (art/blender/props/scatter.py): vertex-coloured, real size, origin at the ground contact; render/terrain.ts instances them on its procedural spots. Dialwood trees (clumps of lacquered fan leaves, \u2264 750 tris, \u2264 3.4 m in game), fallen hour-tick stones at the cliff feet (rock: \u2264 0.4 m in game, they stand on walkable floor) and small tick fragments", "tree": ["assets/props/dialwood_tall.glb", "assets/props/dialwood_broad.glb", "assets/props/dialwood_squat.glb", "assets/props/dialwood_young.glb", "assets/props/dialwood_lean.glb"], "rock": ["assets/props/boulder_block.glb", "assets/props/boulder_tick.glb", "assets/props/boulder_pair.glb"], "stone": ["assets/props/stone_tick.glb", "assets/props/stone_chip.glb"] },
    "$comment": "Art hints (free-form; the sim reads none of it). colors: refs for render/terrain.ts's procedural fallback. noonline: floor polygons of the two Noonline halves. tokens.json grade.maps.rift.valueLstar is the value law; _design/maps/map_rift_landmarks.md is the brief.",
-   "colors": {
-    "lane": "#9A927F",
-    "jungle": "#4E5547",
-    "clearing": "#7A766A",
-    "inscription": "#B7B0A0"
-   },
+   "colors": {"lane": "#A29A86", "jungle": "#5C6454", "clearing": "#837E70", "inscription": "#B7B0A0", "laneGrout": "#6F685A", "verge": "#7C7666", "moss": "#4F644B", "earth": "#685F50", "cliffTop": "#8E8A7C", "cliffFace": "#4C4842", "cliffLip": "#8E8979", "edgeLight": "#D8D0BC", "grassRoot": "#2F3B30", "grassTip": "#9AA478", "shaftFloor": "#8E9692", "seat": "#A8A394", "plazaAubade": "#9A9991", "plazaSerenade": "#A59171", "inlayAubade": "#C6CFD6", "inlaySerenade": "#C7924E", "shadowLine": "#7A7396", "water": "#2F4E58", "litter": "#6A5434", "pebble": "#7A766D"},
    "noonline": {
     "standingShadow": {
+       "tip": [85, 24],
      "floor": [
       [
        [80.9, 23.0],
@@ -1531,11 +1529,7 @@
     "radius": 8.0,
     "relief": "flush; carved rim <= 0.15 m"
    },
-   "hourLines": {
-    "centre": [85.0, 55.0],
-    "ring": 27.0,
-    "note": "Dialwood paths follow the hour-ring and two hour-lines per quadrant (Baseward, Rimward)"
-   },
+   "hourLines": {"centre": [85.0, 55.0], "ring": 27.0, "note": "Dialwood paths follow the hour-ring and two hour-lines per quadrant (Baseward, Rimward)", "paths": [[[61.6, 41.5], [44.3, 31.5], [36.4, 23.4]], [[108.4, 41.5], [125.7, 31.5], [133.6, 23.4]], [[61.6, 68.5], [44.3, 78.5], [36.4, 86.6]], [[108.4, 68.5], [125.7, 78.5], [133.6, 86.6]], [[69.1, 33.2], [63.8, 23.5], [61.2, 13.9]], [[100.9, 33.2], [106.2, 23.5], [108.8, 13.9]], [[69.1, 76.8], [63.8, 86.5], [61.2, 96.1]], [[100.9, 76.8], [106.2, 86.5], [108.8, 96.1]]]},
    "landmarks": [
     {
      "id": "glass_belfry", "model": "assets/maps/landmarks/glass_belfry.glb",

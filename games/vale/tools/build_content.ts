@@ -529,6 +529,10 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   c.units.forEach((u, i) => {
     if (u.onTakedownTeamBuff !== undefined && !teamBuffs.has(u.onTakedownTeamBuff)) dg.err(['units', i, 'onTakedownTeamBuff'], unknownRef('team buff', u.onTakedownTeamBuff, teamBuffs));
     walkRecord(u, ['units', i], { clips: new Set(Object.keys(u.art.clips)), clipOwner: `unit ${u.id} art.clips`, forms: null });
+    // per-team models (CONTRACT §12): GLBs like art.model (existence + magic are checked with every asset ref, §3.6)
+    u.art.teamModels?.forEach((ref, k) => {
+      if (!/\.glb$/i.test(ref)) dg.err(['units', i, 'art', 'teamModels', k], `team model "${ref}" must be a .glb (like art.model)`);
+    });
     checkBehavior(u, ['units', i, 'behavior'], dg);
     // effect lists inside behavior (pickup grants) get the same reference checks as any other
     for (const [k, v] of Object.entries(u.behavior)) {
