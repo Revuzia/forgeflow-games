@@ -215,7 +215,7 @@ export function createCareerPanel(src: CareerSource): CareerPanel {
       im.alt = '';
       const what = r.rule === 'turf' ? `${(Number(r.turfPct) || 0).toFixed(1)} %` : `${n(Number(r.washes) || 0)} washes`;
       li.append(
-        el('span', 'md', `${r.mode === 'ffa' ? 'FFA' : 'TEAMS'} · ${r.rule === 'turf' ? 'TURF' : 'WASHOUT'}${r.online ? ' · ONLINE' : ''}`),
+        el('span', 'md', `${r.mode === 'ffa' ? 'FFA' : r.duel ? 'DUEL' : 'TEAMS'} · ${r.rule === 'turf' ? 'TURF' : 'WASHOUT'}${r.online ? ' · ONLINE' : ''}`),
         el('span', 'ar', mapName(r.map)), im,
         el('b', 'res', r.result === 'win' ? 'WIN' : r.result === 'loss' ? 'LOSS' : 'DRAW'),
         el('span', 'st', what), el('span', 'sc', n(Number(r.score) || 0)),

@@ -35,8 +35,10 @@ function botNames(humans: readonly string[], seed: number): string[] {
 }
 
 /** the roster + seats for `members` (connected humans, any order) */
-export function buildOnlineRoster(members: readonly WireMember[], mode: 'teams' | 'ffa', seed: number, skill: BotSkill): OnlineRoster {
-  const hs = [...members].sort((a, b) => a.slot - b.slot).slice(0, 8);
+export function buildOnlineRoster(members: readonly WireMember[], mode: 'teams' | 'ffa' | 'duel', seed: number, skill: BotSkill): OnlineRoster {
+  // DUEL: one runner a side (two humans, or a human and one bot); the sim plays it as TEAMS
+  const perSide = mode === 'duel' ? 1 : TEAM_SIZE;
+  const hs = [...members].sort((a, b) => a.slot - b.slot).slice(0, perSide * 2);
   const names = hs.map((m) => sanitizeName(m.name, hash32(seed, m.slot)));
   const pool = botNames(names, seed);
   const kits = mixedKits(validKit(hs[0]?.kit ?? 'mist-rasp'));
@@ -84,7 +86,7 @@ export function buildOnlineRoster(members: readonly WireMember[], mode: 'teams' 
       seats.push({ slot: m.slot, runner: roster.length });
       roster.push({ id: roster.length, name: names[i], team, kit: validKit(m.kit), bot: true, skill });
     }
-    while (roster.length < (team === TEAM_SUN ? TEAM_SIZE : TEAM_SIZE * 2)) {
+    while (roster.length < (team === TEAM_SUN ? perSide : perSide * 2)) {
       const b = nextBot();
       roster.push({ id: roster.length, name: b.name, team, kit: b.kit, bot: true, skill });
     }
@@ -94,7 +96,7 @@ export function buildOnlineRoster(members: readonly WireMember[], mode: 'teams' 
 
 /** CONTRACT_ONLINE §O7.1: the bot runner a late joiner takes — TEAMS on the side with fewer humans (tie → SUNCREW), FFA
  *  the first bot; −1 when every runner is human-held */
-export function lateJoinRunner(roster: readonly RosterEntry[], humanRunners: ReadonlySet<number>, mode: 'teams' | 'ffa'): number {
+export function lateJoinRunner(roster: readonly RosterEntry[], humanRunners: ReadonlySet<number>, mode: 'teams' | 'ffa' | 'duel'): number {
   if (mode === 'ffa') { for (const e of roster) if (!humanRunners.has(e.id)) return e.id; return -1; }
   const cnt = [0, 0, 0];
   for (const id of humanRunners) { const t = roster[id]?.team; if (t === 1 || t === 2) cnt[t]++; }

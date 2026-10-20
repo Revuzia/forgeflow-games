@@ -45,7 +45,7 @@ FREE-FOR-ALL (CONTRACT_FFA F3, lane UI), all by real clicks / keys:
 WASHOUT + CONTROLS (CONTRACT_WASHOUT W4 / W8, CONTRACT_CONTROLS C1 / C4), all by real clicks / keys:
  15. PLAY → RULE      — TURF (the default, "Cover the most floor") / WASHOUT ("Most washes wins"): aria-checked, the
                       profile + localStorage, the line under the pair; the title mode line names every option
-                      ('Harbor Cup • 4 v 4 · Free-for-all · Washout', also the page title); the profile card reads
+                      ('Harbor Cup • 4 v 4 · Free-for-all · Duel · Washout', also the page title); the profile card reads
                       'TEAMS · WASHOUT' / 'FREE-FOR-ALL · WASHOUT' (TURF: the crew name / FREE-FOR-ALL as before); HOW TO
                       PLAY panel 1 carries the WASHOUT rule text; back to TURF restores every TURF line.
  16. a WASHOUT START  — PLAY → WASHOUT → START on LOCKWELL: the loading card reads 'Harbor Cup • Washout · 4 v 4', the HUD
@@ -80,12 +80,12 @@ SCREENS = [("loadout", "#dfm-loadout"), ("play", "#dfm-play"), ("settings", "#df
            ("howto", "#dfm-how-to-play"), ("credits", "#dfm-credits")]
 STRINGS = {
     "wordmark": "DYEFIELD", "mode": "Harbor Cup • 4 v 4", "hint": "Pick your kit — crest sits on the right",
-    "credits": "An original 4 v 4 and free-for-all turf-paint shooter.", "victory": "THE HARBOR CHOSE A COLOR.",
-    "modeFfa": "Harbor Cup • Free-for-all", "teams": "TEAMS · 4 v 4", "ffa": "FREE-FOR-ALL",
+    "credits": "An original 4 v 4, free-for-all and 1 v 1 duel turf-paint shooter.", "victory": "THE HARBOR CHOSE A COLOR.",
+    "modeFfa": "Harbor Cup • Free-for-all", "teams": "TEAMS · 4 v 4", "ffa": "FREE-FOR-ALL", "duel": "DUEL · 1 v 1",
     # owner 2026-09-28: where no mode is committed (title, lobby card, bare-URL static card) the line names BOTH modes;
     # a match's loading card names that match's mode ("mode" / "modeFfa" exactly). CHANGED(WASHOUT) W4: it names the
     # WASHOUT rule too
-    "modeAll": "Harbor Cup • 4 v 4 · Free-for-all · Washout",
+    "modeAll": "Harbor Cup • 4 v 4 · Free-for-all · Duel · Washout",
     # CONTRACT_WASHOUT W4: the WASHOUT match lines, the RULE selector, the profile card, HOW TO PLAY
     "modeWashout": "Harbor Cup • Washout · 4 v 4", "modeFfaWashout": "Harbor Cup • Washout · Free-for-all",
     "turf": "TURF", "washout": "WASHOUT", "turfLine": "Cover the most floor", "washoutLine": "Most washes wins",
@@ -620,7 +620,7 @@ def ffa_menus(run):
     if run.menu().get("screen") != "play":
         run.click("#dfm-play", 0.7)
     labels = s.safe_js("() => [...document.querySelectorAll('.dfm-modebtn')].map((b) => b.textContent)", default=[])
-    run.ok(labels == [STRINGS["teams"], STRINGS["ffa"]], "mode selector labels %s" % labels)
+    run.ok(labels == [STRINGS["teams"], STRINGS["ffa"], STRINGS["duel"]], "mode selector labels %s" % labels)
     run.ok((run.menu().get("profile") or {}).get("mode") == "teams", "the default mode is not TEAMS (%s)" % run.menu().get("profile"))
     run.click("#dfm-mode-ffa", 0.4)
     prof = run.menu().get("profile") or {}

@@ -31,7 +31,7 @@
 //
 // CONTRACT_WASHOUT W4: PLAY carries a RULE selector beside MODE — TURF (the default, "Cover the most floor") / WASHOUT
 // ("Most washes wins"), the picked rule's line under the pair — persisted in the profile as `rule` (START's selection
-// carries it). The title's brand line names every option ('Harbor Cup • 4 v 4 · Free-for-all · Washout'); the profile
+// carries it). The title's brand line names every option ('Harbor Cup • 4 v 4 · Free-for-all · Duel · Washout'); the profile
 // card shows the picked mode and rule in WASHOUT ('TEAMS · WASHOUT' / 'FREE-FOR-ALL · WASHOUT'; TURF keeps the crew name
 // / FREE-FOR-ALL); HOW TO PLAY's first panel explains WASHOUT when it is picked.
 // CONTRACT_CONTROLS C1: AIM (RMB by default) is a remappable action (SETTINGS lists it after FIRE); the MOUSE card adds AIM
@@ -68,11 +68,11 @@ export const LOADOUT_HINT = 'Pick your kit — crest sits on the right';
 /** the title's brand line (every option) and the match lines; defined in boot.ts so the loading card shares them */
 export { MODE_LINE_ALL, MODE_LINE_FFA, MODE_LINE_WASHOUT, MODE_LINE_FFA_WASHOUT };
 /** CONTRACT_FFA F3: the PLAY mode selector labels */
-export const MODE_LABELS: ReadonlyArray<readonly [ProfileMode, string]> = [['teams', 'TEAMS · 4 v 4'], ['ffa', 'FREE-FOR-ALL']];
+export const MODE_LABELS: ReadonlyArray<readonly [ProfileMode, string]> = [['teams', 'TEAMS · 4 v 4'], ['ffa', 'FREE-FOR-ALL'], ['duel', 'DUEL · 1 v 1']];
 /** CONTRACT_WASHOUT W4: the PLAY rule selector — label + its one-line description */
 export const RULE_LABELS: ReadonlyArray<readonly [ProfileRule, string, string]> = [['turf', 'TURF', 'Cover the most floor'], ['washout', 'WASHOUT', 'Most washes wins']];
 /** the brief's credits line, widened for the FREE-FOR-ALL mode (owner 2026-09-28: 4 v 4-only copy was misleading) */
-export const CREDITS_LINE = 'An original 4 v 4 and free-for-all turf-paint shooter.';
+export const CREDITS_LINE = 'An original 4 v 4, free-for-all and 1 v 1 duel turf-paint shooter.';
 /** HOW TO PLAY panel 1's rule: teams (unchanged copy) / FREE-FOR-ALL (new copy, CONTRACT_FFA F3) */
 export const HOW_RULE = 'Dye the court in your crew’s color. When the final horn sounds, the crew with more turf wins.';
 export const HOW_RULE_FFA = 'Free-for-all: every runner is a crew of one. When the final horn sounds, the most turf wins.';
@@ -198,6 +198,8 @@ export interface StartSelection {
   ffaColor: number;
   /** CONTRACT_WASHOUT W4: the match rule picked on PLAY */
   rule: ProfileRule;
+  /** DUEL practice: the opponent's kit id or 'random' */
+  opponentKit?: string;
   /** a fixed match seed (Quick Match's filled court: the runners' names were shown before the start); absent = random */
   seed?: number;
 }
@@ -350,6 +352,10 @@ export class Menus {
   private readonly lightNote: HTMLElement;
   private readonly skillBtns = new Map<BotSkill, HTMLButtonElement>();
   private readonly skillNote: HTMLElement;
+  /** DUEL practice: the OPPONENT picker (a kit or RANDOM; shown only in DUEL) + the BOTS caption it renames */
+  private readonly oppBox: HTMLElement;
+  private readonly oppBtns = new Map<string, HTMLButtonElement>();
+  private readonly botsCap: HTMLElement;
   private readonly playKit: HTMLElement;
   private readonly startBtn: HTMLButtonElement;
   // settings parts
@@ -426,22 +432,27 @@ export class Menus {
       this.sound('click');
       this.hooks.online?.();
     });
-    // the wrapper only anchors the why-not note beside the button
+    // owner 2026-10-19: PLAY and PLAY ONLINE share one row, side by side, each half of the old PLAY width and the same
+    // height (PLAY ONLINE was a thinner bar above PLAY). The row also anchors the why-not note.
     const onlineRow = el('div', 'dfm-playrow');
-    onlineRow.append(this.onlineTile, this.onlineWhy);
+    const playBtn = btn('dfm-item dfm-item-play', '');
+    playBtn.id = 'dfm-play';
+    playBtn.dataset.group = 'stack';
+    playBtn.dataset.default = '';
+    playBtn.append(el('span', 'chev', '▶'), el('span', 'lbl', 'PLAY'));
+    playBtn.addEventListener('click', () => { this.sound('click'); this.open('play'); });
+    onlineRow.append(playBtn, this.onlineTile, this.onlineWhy);
     stack.append(onlineRow);
     const items: Array<[string, () => void]> = [
-      ['PLAY', () => this.open('play')],
       ['LOADOUT', () => this.open('loadout')],
       ['SETTINGS', () => this.open('settings')],
       ['HOW TO PLAY', () => this.open('howto')],
       ['CREDITS', () => this.open('credits')],
     ];
-    items.forEach(([label, fn], i) => {
-      const b = btn(`dfm-item${i === 0 ? ' dfm-item-play' : ''}`, '');
+    items.forEach(([label, fn]) => {
+      const b = btn('dfm-item', '');
       b.id = `dfm-${label.toLowerCase().replace(/ /g, '-')}`;
       b.dataset.group = 'stack';
-      if (i === 0) b.dataset.default = '';
       b.append(el('span', 'chev', '▶'), el('span', 'lbl', label));
       b.addEventListener('click', () => { this.sound('click'); fn(); });
       stack.append(b);
@@ -660,7 +671,8 @@ export class Menus {
     this.lightNote = el('div', 'dfm-light', '');
     tod.append(this.presetRow, this.lightNote);
     const bots = el('div', 'dfm-opt');
-    bots.append(el('h3', 'dfm-cap', 'BOTS'));
+    this.botsCap = el('h3', 'dfm-cap', 'BOTS');
+    bots.append(this.botsCap);
     const skillRow = el('div', 'dfm-seg');
     for (const s of BOT_SKILL_IDS) {
       const b = btn('dfm-segbtn', SKILL_TEXT[s][0]);
@@ -672,6 +684,34 @@ export class Menus {
     }
     this.skillNote = el('p', 'dfm-note', '');
     bots.append(skillRow, this.skillNote);
+    // DUEL practice (owner 2026-10-19): choose who to duel — the opponent's kit, or RANDOM; BOTS above is its level
+    // it lives INSIDE the BOTS box: the options row is a position-keyed grid (tod / bots / kit / start)
+    this.oppBox = el('div', 'dfm-opp');
+    this.oppBox.id = 'dfm-opp';
+    this.oppBox.append(el('h3', 'dfm-cap', 'OPPONENT'));
+    const oppRow = el('div', 'dfm-oppseg');
+    oppRow.setAttribute('role', 'radiogroup');
+    oppRow.setAttribute('aria-label', 'Opponent');
+    for (const id of [...WEAPONS.kits.map((k) => k.id), 'random']) {
+      const kr = id === 'random' ? null : WEAPONS.kits.find((k) => k.id === id) ?? null;
+      const b = btn('dfm-oppbtn', '');
+      b.id = `dfm-opp-${id}`;
+      b.dataset.kit = id;
+      b.setAttribute('role', 'radio');
+      b.title = kr ? `${kr.name} · ${roleLabel(kr.role)}` : 'A random kit every duel';
+      if (kr) {
+        const img = el('img', 'kiticon');
+        img.src = KIT_ICONS[id] ?? '';
+        img.alt = '';
+        img.draggable = false;
+        b.append(img, el('span', 'nm', kr.name));
+      } else b.append(svgEl(SVG.dice, 'dice'), el('span', 'nm', 'RANDOM'));
+      b.addEventListener('click', () => { this.sound('click'); this.profile.set({ duelKit: id }); });
+      this.oppBtns.set(id, b);
+      oppRow.append(b);
+    }
+    this.oppBox.append(oppRow);
+    bots.append(this.oppBox);
     const you = el('div', 'dfm-opt');
     you.append(el('h3', 'dfm-cap', 'YOUR KIT'));
     this.playKit = btn('dfm-playkit', '');
@@ -1279,7 +1319,7 @@ export class Menus {
     this.sound('start');
     this.hooks.start({
       map, random, preset: map === 'pier18' ? p.preset : '', skill: p.skill, kit: p.kit, crew: p.crew, name: cleanName(this.profile.get().name),
-      mode: p.mode, ffaColor: p.ffaColor, rule: p.rule === 'washout' ? 'washout' : 'turf',
+      mode: p.mode, ffaColor: p.ffaColor, rule: p.rule === 'washout' ? 'washout' : 'turf', ...(p.mode === 'duel' ? { opponentKit: p.duelKit } : {}),
     });
   }
 
@@ -1361,7 +1401,8 @@ export class Menus {
     this.profMark.textContent = mark;
     this.profName.textContent = p.name || 'YOU';
     // the profile card: TURF keeps the crew name (teams) / FREE-FOR-ALL; WASHOUT names the mode and the rule
-    this.profCrew.textContent = wash ? `${ffa ? MODE_LABELS[1][1] : 'TEAMS'} · WASHOUT` : ffa ? MODE_LABELS[1][1] : team.name;
+    this.profCrew.textContent = p.mode === 'duel' ? (wash ? 'DUEL · WASHOUT' : 'DUEL · TURF')
+      : wash ? `${ffa ? MODE_LABELS[1][1] : 'TEAMS'} · WASHOUT` : ffa ? MODE_LABELS[1][1] : team.name;
     const k = kitRow(p.kit);
     const sub = subRow(k.sub), sp = specialRow(k.special);
     this.kitCard.replaceChildren();
@@ -1385,6 +1426,12 @@ export class Menus {
     this.crewCap.textContent = ffa ? `COLOR · ${fc.label}` : 'CREW';
     for (const [id, b] of this.colorBtns) { const on = id === p.ffaColor; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     for (const [m, b] of this.modeBtns) { const on = m === p.mode; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
+    // DUEL practice: the OPPONENT picker shows; BOTS reads as the opponent's level
+    const duel = p.mode === 'duel';
+    this.oppBox.hidden = !duel;
+    this.skillNote.hidden = duel;          // room for the OPPONENT row
+    this.botsCap.textContent = duel ? 'OPPONENT LEVEL' : 'BOTS';
+    for (const [id, b] of this.oppBtns) { const on = id === p.duelKit; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     if (document.activeElement !== this.nameInput) this.nameInput.value = p.name;
     this.renderStats(k);
     this.subBox.replaceChildren(...this.miniCard('SUB', sub?.name ?? '—', str(sub?.blurb), SVG['jelly-charge']));
@@ -1714,7 +1761,8 @@ export class Menus {
         overlap = r.top < r0.bottom && r.bottom > r0.top;
       }
       if (along <= 2) continue;
-      const s = along + across * (overlap ? 0.5 : 2.5);
+      // a near tie goes to the screen's default (↑ from LOADOUT lands on PLAY, not PLAY ONLINE beside it: 2026-10-19 row)
+      const s = along + across * (overlap ? 0.5 : 2.5) - (it.hasAttribute('data-default') ? 12 : 0);
       if (s < bestS) { bestS = s; best = it; }
     }
     if (!best && (dir === 'up' || dir === 'down') && cur.dataset.group) {

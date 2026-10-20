@@ -715,7 +715,7 @@ export function hashU32(hex: string): number { return parseInt(hex, 16) >>> 0; }
 export type Device = 'kbm' | 'touch';
 export interface HelloFields { proto: number; build: string; name: string; kit: string; crew: number; color: number; device: Device; simMs: number; rttMs: number }
 export interface WireMember { slot: number; name: string; kit: string; crew: number; color: number; device: Device; conn: boolean; owner: boolean; host: boolean; rttMs: number | null }
-export interface WireRoom { code: string; quick: boolean; mode: 'teams' | 'ffa'; rule: 'turf' | 'washout'; map: string; preset: string; skill: 'breeze' | 'swell' | 'storm'; phase: 'room' | 'loading' | 'live' | 'post' | 'closed'; ownerSlot: number; hostSlot: number; matchNo: number }
+export interface WireRoom { code: string; quick: boolean; mode: 'teams' | 'ffa' | 'duel'; rule: 'turf' | 'washout'; map: string; preset: string; skill: 'breeze' | 'swell' | 'storm'; phase: 'room' | 'loading' | 'live' | 'post' | 'closed'; ownerSlot: number; hostSlot: number; matchNo: number }
 export interface WireSeat { slot: number; runner: number }
 export interface WireRosterEntry { id: number; name: string; team: number; kit: string; bot: boolean; skill: 'breeze' | 'swell' | 'storm' }
 export interface WireEndRunner { id: number; name: string; team: number; slot: number | null; washes: number; washedCount: number; painted: number; shots: number; seat: SeatTotals | null }
@@ -731,7 +731,7 @@ export type TextMsg =
   | { t: 'set'; kit?: string; crew?: number; color?: number; rttMs?: number; simMs?: number }
   | { t: 'cfg'; mode?: string; rule?: string; map?: string; preset?: string; skill?: string; durationS?: number }
   | { t: 'start' }
-  | { t: 'assign'; matchNo: number; hostSlot: number; seed: number; map: string; preset: string; mode: 'teams' | 'ffa'; rule: 'turf' | 'washout'; skill: 'breeze' | 'swell' | 'storm'; durationS?: number }
+  | { t: 'assign'; matchNo: number; hostSlot: number; seed: number; map: string; preset: string; mode: 'teams' | 'ffa' | 'duel'; rule: 'turf' | 'washout'; skill: 'breeze' | 'swell' | 'storm'; durationS?: number }
   | { t: 'roster'; matchNo: number; seats: WireSeat[]; roster: WireRosterEntry[]; durationS: number; countdownS: number; from?: number }
   | { t: 'loaded'; matchNo: number; atlasSig: number; from?: number }
   | { t: 'seat'; runner: number; slot: number | null; name: string; human: boolean; from?: number }

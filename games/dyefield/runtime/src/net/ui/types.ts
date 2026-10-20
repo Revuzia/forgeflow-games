@@ -5,7 +5,7 @@
 // integration this file can become `export type * from '../api.ts'` (or stay as is) without touching the screens.
 // Nothing here is a runtime value: importing it costs no bytes.
 
-export type OnlineMode = 'teams' | 'ffa';
+export type OnlineMode = 'teams' | 'ffa' | 'duel';
 export type OnlineRule = 'turf' | 'washout';
 export type OnlineSkill = 'breeze' | 'swell' | 'storm';
 export interface OnlineProfile { name: string; kit: string; crew: 0 | 1 | 2; ffaColor: number }

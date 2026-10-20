@@ -1,5 +1,5 @@
 {
-  "_doc": "DYEFIELD achievements (_spec/CONTRACT_STATS.md §S6.1): the single source of truth for the game (stats/achievements.ts attaches the detectors by slug) AND the portal seeder (forgeflow-games/pipeline/seed_dyefield_achievements.py). 29 rows, 340 XP: bronze 5 / silver 15 / gold 30. Fields are exactly the achievements table's (slug, name, description, tier, points, secret).",
+  "_doc": "DYEFIELD achievements (_spec/CONTRACT_STATS.md §S6.1): the single source of truth for the game (stats/achievements.ts attaches the detectors by slug) AND the portal seeder (forgeflow-games/pipeline/seed_dyefield_achievements.py). 36 rows, 430 XP (29 + the 7 DUEL rows of 2026-10-19): bronze 5 / silver 15 / gold 30. Fields are exactly the achievements table's (slug, name, description, tier, points, secret).",
   "achievements": [
     { "slug": "first_match", "name": "Wet Paint", "description": "Finish your first match.", "tier": "bronze", "points": 5, "secret": false },
     { "slug": "first_win", "name": "First Splash", "description": "Win your first match.", "tier": "bronze", "points": 5, "secret": false },
@@ -29,6 +29,13 @@
     { "slug": "matches_100", "name": "Dockside Legend", "description": "Finish 100 matches.", "tier": "gold", "points": 30, "secret": false },
     { "slug": "online_first", "name": "Open Water", "description": "Finish an online match.", "tier": "bronze", "points": 5, "secret": false },
     { "slug": "online_win", "name": "Crowd Pleaser", "description": "Win an online match.", "tier": "silver", "points": 15, "secret": false },
-    { "slug": "online_wins_10", "name": "Harbor Champion", "description": "Win 10 online matches.", "tier": "gold", "points": 30, "secret": false }
+    { "slug": "online_wins_10", "name": "Harbor Champion", "description": "Win 10 online matches.", "tier": "gold", "points": 30, "secret": false },
+    { "slug": "duel_first", "name": "Pistols at Dawn", "description": "Finish your first DUEL.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "duel_turf_win", "name": "Your Half, My Half", "description": "Win a DUEL · TURF match.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "duel_washout_win", "name": "Last One Standing", "description": "Win a DUEL · WASHOUT match.", "tier": "bronze", "points": 5, "secret": false },
+    { "slug": "duel_turf_60", "name": "Lion's Share", "description": "Win a DUEL · TURF match with 60 % or more of the dyed court.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "duel_storm_win", "name": "Eye of the Storm", "description": "Win a DUEL against a STORM opponent.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "duel_online_win", "name": "Called Out", "description": "Win an online DUEL.", "tier": "silver", "points": 15, "secret": false },
+    { "slug": "duel_flawless", "name": "Not a Drop", "description": "Win a DUEL · WASHOUT without being washed once.", "tier": "gold", "points": 30, "secret": false }
   ]
 }

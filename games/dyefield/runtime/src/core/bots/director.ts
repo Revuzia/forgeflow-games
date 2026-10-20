@@ -275,6 +275,8 @@ class Brain {
 
   mode: Mode = 'wait';
   holding = false;
+  /** refill: the heading (rad) the bot swims through its own dye while it drinks (NaN = pick one) */
+  swimYaw = NaN;
   // perception
   target = -1;
   reactAt = 0;                     // tick when the current stimulus has been reacted to
@@ -1936,7 +1938,21 @@ export class BotDirector {
         }
       }
     } else if (b.mode === 'refill' && b.holding) {
+      // owner 2026-10-19 ("shouldn't they be in constant motion?"): a player refills by SWIMMING through own dye, not by
+      // sitting in it. While slicked, keep a heading whose next 1.2 m stays own dye; turn in 45° steps (the strafe side
+      // first) only when it would leave the dye or hit a wall, so the heading is steady (no shake). No own dye ahead in any
+      // of the 8 headings → stay put and drink (the old behaviour).
       speed = 0;
+      if (r.slickForm && r.state === 'slick') {
+        if (!Number.isFinite(b.swimYaw)) b.swimYaw = r.yaw;
+        for (let k = 0; k < 8; k++) {
+          const step = (k === 0 ? 0 : Math.ceil(k / 2) * (k % 2 ? 1 : -1)) * b.strafeSign * (Math.PI / 4);
+          const a = b.swimYaw + step, dx = Math.sin(a), dz = Math.cos(a);
+          if (this.teamUnder(r.x + dx * 1.2, r.y, r.z + dz * 1.2) !== b.own || !this.safeStep(r, dx, dz) || this.wallAhead(r, dx, dz)) continue;
+          b.swimYaw = a; wx = dx; wz = dz; speed = 0.75;
+          break;
+        }
+      } else b.swimYaw = NaN;
     } else if (b.mode === 'cover' && b.holding) {
       speed = 0;
     } else {

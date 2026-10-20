@@ -39,6 +39,7 @@ import {
   KIT_RE,
   MAPS,
   MAX_HUMANS,
+  capFor,
   PRESET_RE,
   PROTO,
   RATE_CLIENT,
@@ -357,7 +358,7 @@ export class Room extends DurableObject<Env> {
     const now = Date.now();
     if (!st || !st.quick || st.phase !== 'live' || !TOKEN_RE.test(ticket)) return { ok: false, why: 'phase' };
     const occupied = st.members.length + st.tickets.filter((t) => !st.members.some((m) => m.ticket === t)).length;
-    if (occupied >= MAX_HUMANS) return { ok: false, why: 'full' };
+    if (occupied >= capFor(st.mode)) return { ok: false, why: 'full' };
     if (this.endsAt() - now < timing(this.env, 'LATE_JOIN_MIN_LEFT_S') * 1000) return { ok: false, why: 'late' };
     const n = Math.max(1, st.humansAtStart);
     const a = estimateMatch(n + 1, st.durationS ?? undefined);
@@ -441,13 +442,13 @@ export class Room extends DurableObject<Env> {
       const perIp = num(this.env, 'PER_IP_ROOM', 8);
       if (perIp > 0 && ip && st.members.filter((x) => x.conn && x.ip === ip).length >= perIp)
         return refuseSocket(CLOSE_RATE, 'rate', 'Too many connections from your network');
-      if (st.members.length >= MAX_HUMANS) {
+      if (st.members.length >= capFor(st.mode)) {
         // outside a match, the oldest disconnected member gives up its seat
         const evictable =
           st.phase === 'room' || st.phase === 'post'
             ? st.members.filter((x) => !x.conn).sort((a, b) => a.leftAt - b.leftAt)[0]
             : undefined;
-        if (!evictable) return refuseSocket(CLOSE_FULL, 'room_full', 'This room is full (8 players)');
+        if (!evictable) return refuseSocket(CLOSE_FULL, 'room_full', `This room is full (${capFor(st.mode)} players)`);
         this.removeMember(evictable);
       }
       let slot = 0;
@@ -787,7 +788,8 @@ export class Room extends DurableObject<Env> {
     const st = this.st!;
     if (st.quick || m.slot !== st.ownerSlot || st.phase !== 'room') return this.quietDrop();
     let changed = false;
-    if (isMode(o.mode) && o.mode !== st.mode) ((st.mode = o.mode), (changed = true));
+    // DUEL holds 2: a room with more members cannot switch to it (the owner sees the setting not take)
+    if (isMode(o.mode) && o.mode !== st.mode && st.members.length <= capFor(o.mode)) ((st.mode = o.mode), (changed = true));
     if (isRule(o.rule) && o.rule !== st.rule) ((st.rule = o.rule), (changed = true));
     if (typeof o.map === 'string' && (o.map === 'random' || (MAPS as readonly string[]).includes(o.map)) && o.map !== st.map)
       ((st.map = o.map), (changed = true));
@@ -1316,7 +1318,7 @@ export class Room extends DurableObject<Env> {
     if (!st || !st.quick || !st.lobby) return;
     const live = st.phase === 'live';
     const pendingTickets = st.tickets.filter((t) => !st.members.some((m) => m.ticket === t)).length;
-    const open = live ? Math.max(0, MAX_HUMANS - st.members.length - pendingTickets) : 0;
+    const open = live ? Math.max(0, capFor(st.mode) - st.members.length - pendingTickets) : 0;
     const endsAt = live ? this.endsAt() : 0;
     const stub = this.env.LOBBY.get(this.env.LOBBY.idFromName(st.lobby));
     void stub.roomOpen(st.code, open, endsAt).catch(() => {});

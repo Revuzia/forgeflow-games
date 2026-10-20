@@ -77,7 +77,7 @@ import { buildAtlas, type PaintAtlas } from './core/paint/atlas.ts';
 import { Painter } from './core/paint/painter.ts';
 import { MinimapRaster } from './core/paint/minimap.ts';
 import { loadRapier, PhysicsWorld, type Rapier } from './core/physics.ts';
-import { defaultRoster, ffaCrew, parseBotSkill, type BotSkill, type RosterEntry } from './core/match/roster.ts';
+import { defaultRoster, duelRoster, ffaCrew, parseBotSkill, type BotSkill, type RosterEntry } from './core/match/roster.ts';
 import { buildNav, type NavGraph } from './core/bots/nav.ts';
 import { createRenderer, hasWebGL2, isRenderQuality, type RenderQuality, type RendererRig } from './view/renderer.ts';
 import { FollowCamera } from './view/camera.ts';
@@ -94,7 +94,7 @@ import { createJuice, type Juice } from './ui/juice.ts';
 import { createAudio, type GameAudio } from './audio/index.ts';
 import { BootUI, RotateOverlay } from './ui/boot.ts';
 import { Menus, crewColors, type StartSelection } from './ui/menus.ts';
-import { SettingsStore, ProfileStore, type Settings } from './ui/settings.ts';
+import { SettingsStore, ProfileStore, type Settings, type ProfileMode } from './ui/settings.ts';
 import { Mannequin } from './ui/mannequin.ts';
 import { MAP_THUMBS } from './ui/icons.ts';
 import { Input, type InputMode } from './input.ts';
@@ -198,7 +198,7 @@ async function fetchMapBytes(def: MapDef, onProgress: (f: number) => void): Prom
   return out.buffer;
 }
 
-export const VERSION = 'dyefield-1.5.3';
+export const VERSION = 'dyefield-1.6.0';
 
 declare global {
   interface Window {
@@ -262,7 +262,11 @@ function paramConfig(): MatchConfig {
     return { kit, skill, seed, durationS: devSeconds(), crew, mode, devBrush: app.dev && params.get('brush') === '1', ...ruleOpt };
   }
   const crew: TeamId = cq === '2' || cq === 'gulf' ? 2 : 1;
-  return { kit, skill, seed, durationS: devSeconds(), crew, devBrush: app.dev && params.get('brush') === '1', ...ruleOpt };
+  // DUEL: ?mode=duel (&opp=<kit id>) — you vs one opponent
+  const duelQ = (params.get('mode') || '').trim().toLowerCase() === 'duel';
+  const opp = params.get('opp') || '';
+  const duelOpt = duelQ ? { duel: true, ...(WEAPONS.kits.some((k) => k.id === opp) ? { opponentKit: opp } : {}) } : {};
+  return { kit, skill, seed, durationS: devSeconds(), crew, devBrush: app.dev && params.get('brush') === '1', ...ruleOpt, ...duelOpt };
 }
 /** CONTRACT_WASHOUT W4: the deep link's rule (?rule=washout; anything else → turf) */
 function paramRule(): MatchRule {
@@ -469,6 +473,13 @@ function lobbyRoster(seed: number): RosterEntry[] {
 }
 
 function matchRoster(cfg: MatchConfig): RosterEntry[] {
+  if (cfg.duel) {
+    // DUEL: you vs one opponent (the picked kit, else random), the BOTS tier as its skill
+    const r = duelRoster({ humanKit: cfg.kit, humanName: cfg.humanName, seed: cfg.seed, skill: cfg.skill, opponentKit: cfg.opponentKit,
+      kitIds: WEAPONS.kits.map((k) => k.id) });
+    if (cfg.crew === 2) for (const e of r) e.team = (e.team === 1 ? 2 : 1) as TeamId;
+    return r;
+  }
   if (cfg.mode === 'ffa') {
     // CONTRACT_FFA F1: 8 runners, each its own crew — the human on its colour, bots on the other seven
     return defaultRoster({ humanKit: cfg.kit, humanName: cfg.humanName, seed: cfg.seed, skill: cfg.skill, botKits: mixedBotKits(cfg.kit),
@@ -627,7 +638,7 @@ async function boot(): Promise<void> {
   const bootUi = new BootUI();
   // CONTRACT_FFA F3: a deep link loads a match of one mode — the loading card names it; a bare URL opens the lobby,
   // where the card keeps the both-modes line (boot.ts MODE_LINE_ALL)
-  bootUi.setMode(DEEP_LINK ? (parseMatchMode(params.get('mode')) === 'ffa' ? 'ffa' : 'teams') : 'all', DEEP_LINK ? paramRule() : 'turf');
+  bootUi.setMode(DEEP_LINK ? ((params.get('mode') || '').toLowerCase() === 'duel' ? 'duel' : parseMatchMode(params.get('mode')) === 'ffa' ? 'ffa' : 'teams') : 'all', DEEP_LINK ? paramRule() : 'turf');
   window.__DF_BOOT__?.handoff();
   let arena: Arena | null = null;
   let session: Session | null = null;
@@ -859,7 +870,7 @@ async function boot(): Promise<void> {
       try {
         const def = mapById(sel.map);
         S.menus.hideAll();
-        bootUi.setMode(sel.mode === 'ffa' ? 'ffa' : 'teams', sel.rule === 'washout' ? 'washout' : 'turf');   // FFA F3 / WASHOUT W4: the card names the match being loaded
+        bootUi.setMode(sel.mode === 'ffa' ? 'ffa' : sel.mode === 'duel' ? 'duel' : 'teams', sel.rule === 'washout' ? 'washout' : 'turf');   // FFA F3 / WASHOUT W4: the card names the match being loaded
         bootUi.showLoading(sel.random ? `Random arena: ${def.name}` : `Loading ${def.name}…`, { name: def.name, thumb: MAP_THUMBS[def.id] ?? null });
         app.phase = 'loading';
         arenaF = 0;
@@ -878,6 +889,7 @@ async function boot(): Promise<void> {
         const cfg: MatchConfig = {
           kit: sel.kit, skill: sel.skill, seed: sel.seed ?? randomSeed(), durationS: devSeconds(), humanName: sel.name || undefined,
           crew: ffa ? ffaCrew(sel.ffaColor) : sel.crew, devBrush: false, ...(ffa ? { mode: 'ffa' as const } : {}),
+          ...(sel.mode === 'duel' ? { duel: true, ...(sel.opponentKit && sel.opponentKit !== 'random' ? { opponentKit: sel.opponentKit } : {}) } : {}),
           ...(sel.rule === 'washout' ? { rule: 'washout' as const } : {}),   // CONTRACT_WASHOUT W4: the RULE pick
         };
         session = await startSession(S, arena, 'match', cfg, hooks, report);
@@ -959,7 +971,7 @@ async function boot(): Promise<void> {
         if (input.mode === 'touch') keepAwake(true);
         const def = mapById(mapId);
         shared.menus.hideAll();
-        bootUi.setMode(cfg.mode === 'ffa' ? 'ffa' : 'teams', cfg.rule === 'washout' ? 'washout' : 'turf');
+        bootUi.setMode(cfg.mode === 'ffa' ? 'ffa' : cfg.duel ? 'duel' : 'teams', cfg.rule === 'washout' ? 'washout' : 'turf');
         bootUi.showLoading(`Loading ${def.name}…`, { name: def.name, thumb: MAP_THUMBS[def.id] ?? null });
         app.phase = 'loading';
         arenaF = 0;
@@ -985,7 +997,7 @@ async function boot(): Promise<void> {
       }
     };
     /** PLAY VS BOTS from the online screens: the normal offline match with that mode / rule */
-    const playOffline = (mode: MatchMode, rule: MatchRule, seed?: number): void => {
+    const playOffline = (mode: ProfileMode, rule: MatchRule, seed?: number): void => {
       const pr = profile.get();
       const maps = playableMaps();
       const pick = maps[Math.floor(Math.random() * maps.length)] ?? mapById(LOBBY_MAP);

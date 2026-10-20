@@ -34,6 +34,10 @@ import {
 } from './types.ts';
 
 // ───────────────────────────── copy (the harness asserts these) ─────────────────────────────
+/** DUEL (owner 2026-10-19): a room / quick match of 2; TEAMS and FFA keep 8 */
+export const seatsFor = (mode: string): number => (mode === 'duel' ? 2 : MAX_HUMANS);
+/** the chip / value text of a mode */
+export const modeName = (mode: string): string => (mode === 'ffa' ? 'FREE-FOR-ALL' : mode === 'duel' ? 'DUEL · 1 v 1' : 'TEAMS · 4 v 4');
 export const ONLINE_TEXT = {
   title: 'PLAY ONLINE',
   hint: 'Jump into a match, or play with friends',
@@ -54,7 +58,7 @@ export const ONLINE_TEXT = {
   players: 'PLAYERS', bot: 'BOT', you: 'YOU', owner: 'OWNER', kick: 'KICK', sure: 'SURE?',
   start: 'START', leave: 'LEAVE', needTwo: 'Waiting for one more player — share the code.',
   waitOwner: (n: string): string => `Waiting for ${n} to start the match.`,
-  ready: (n: number): string => (n >= MAX_HUMANS ? `${n} players — a full room, no bots.` : `${n} players ready · bots fill ${MAX_HUMANS - n} seat${MAX_HUMANS - n === 1 ? '' : 's'}.`),
+  ready: (n: number, cap: number = MAX_HUMANS): string => (n >= cap ? (cap === 2 ? 'Both duelists are here.' : `${n} players — a full room, no bots.`) : `${n} players ready · bots fill ${cap - n} seat${cap - n === 1 ? '' : 's'}.`),
   unsupported: 'Your browser can’t play online',
 } as const;
 
@@ -588,7 +592,7 @@ export class OnlineScreens {
   }
   private pickNow(): { mode: OnlineMode; rule: OnlineRule } {
     const p = this.profile.get();
-    return { mode: p.mode === 'ffa' ? 'ffa' : 'teams', rule: p.rule === 'washout' ? 'washout' : 'turf' };
+    return { mode: p.mode === 'ffa' ? 'ffa' : p.mode === 'duel' ? 'duel' : 'teams', rule: p.rule === 'washout' ? 'washout' : 'turf' };
   }
 
   // ───────────────────────────── open / close / show ─────────────────────────────
@@ -673,7 +677,7 @@ export class OnlineScreens {
     for (const [r, b] of this.ruleBtns) { const on = r === rule; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     this.ruleNote.textContent = RULE_LABELS.find(([r]) => r === rule)?.[2] ?? '';
     this.root.dataset.rule = rule;
-    const modeChip = mode === 'ffa' ? 'FREE-FOR-ALL' : 'TEAMS · 4 v 4';
+    const modeChip = modeName(mode);
     const qmChips = this.doorChips[0];
     if (qmChips) {
       qmChips.replaceChildren(el('span', 'chip', modeChip), el('span', 'chip', rule === 'washout' ? 'WASHOUT' : 'TURF'));
@@ -714,7 +718,9 @@ export class OnlineScreens {
     this.stopFill();
     // window.__DF_QM_FILL_S (harness only) pins the fill time so a gate does not wait 20-60 s
     const forced = Number((window as { __DF_QM_FILL_S?: number }).__DF_QM_FILL_S) || 0;
-    const total = forced > 0 ? forced * 1000 : 20000 + Math.random() * 40000, n = MAX_HUMANS - 1, first = Math.min(2500, total * 0.1);
+    // DUEL: one opponent joins at a random 30-60 s (the 2-player rule); TEAMS / FFA: seven, one by one over 20-60 s
+    const duel = this.lastDoor.mode === 'duel';
+    const total = forced > 0 ? forced * 1000 : duel ? 30000 + Math.random() * 30000 : 20000 + Math.random() * 40000, n = seatsFor(this.lastDoor.mode) - 1, first = Math.min(2500, total * 0.1);
     const joins = Array.from({ length: n - 1 }, () => first + Math.random() * (total - first)).sort((a, b) => a - b);
     joins.push(total);
     const devices = joins.map((): 'kbm' | 'touch' => (Math.random() < 0.3 ? 'touch' : 'kbm'));
@@ -745,7 +751,7 @@ export class OnlineScreens {
       slot, name, kit: '', crew, color, device, conn: true, owner: slot === 0, host: slot === 0, rttMs: null });
     const members = [member(0, me.name, mode === 'ffa' ? 1 : mine, mode === 'ffa' ? mine : 1, this.touch ? 'touch' : 'kbm')];
     for (let i = 0; i < this.fill.joins.length; i++) {
-      const crew = mode === 'ffa' ? 1 : (i < 3 ? mine : 3 - mine);
+      const crew = mode === 'ffa' ? 1 : mode === 'duel' ? 3 - mine : (i < 3 ? mine : 3 - mine);
       members.push(member(i + 1, names[i % names.length], crew, mode === 'ffa' ? others[i] : 1, this.fill.devices[i]));
     }
     return { code: '', quick: true, mode, rule, map: 'random', preset: 'noon', skill: 'swell', phase: 'room', matchNo: 0, members, mySlot: 0, ownerSlot: 0, hostSlot: 0 };
@@ -827,7 +833,7 @@ export class OnlineScreens {
     this.searchState = state;
     this.searchCard.dataset.state = state;
     const { mode, rule } = room ? { mode: room.mode, rule: room.rule } : { mode: this.lastDoor.mode, rule: this.lastDoor.rule };
-    this.searchChips.replaceChildren(el('span', 'chip', mode === 'ffa' ? 'FREE-FOR-ALL' : 'TEAMS · 4 v 4'), el('span', 'chip', rule === 'washout' ? 'WASHOUT' : 'TURF'));
+    this.searchChips.replaceChildren(el('span', 'chip', modeName(mode)), el('span', 'chip', rule === 'washout' ? 'WASHOUT' : 'TURF'));
     const title = state === 'connecting' ? ONLINE_TEXT.connecting : state === 'queue' ? ONLINE_TEXT.finding : state === 'solo' ? ONLINE_TEXT.solo
       : state === 'found' ? ONLINE_TEXT.found : state === 'hostleft' ? ONLINE_TEXT.hostLeft : ONLINE_TEXT.joiningMatch;
     this.searchTitle.textContent = title;
@@ -835,7 +841,7 @@ export class OnlineScreens {
     this.searchPeople.hidden = state !== 'found';
     let line = '';
     if (state === 'queue') line = ONLINE_TEXT.queueLine;
-    else if (state === 'solo') line = `Nobody else is queued for ${mode === 'ffa' ? 'FREE-FOR-ALL' : 'TEAMS'} · ${rule === 'washout' ? 'WASHOUT' : 'TURF'} right now. Playing with a friend? Make sure you both picked the same mode and rule, or use CREATE ROOM and share the code. Otherwise keep waiting, or play against bots.`;
+    else if (state === 'solo') line = `Nobody else is queued for ${mode === 'ffa' ? 'FREE-FOR-ALL' : mode === 'duel' ? 'DUEL' : 'TEAMS'} · ${rule === 'washout' ? 'WASHOUT' : 'TURF'} right now. Playing with a friend? Make sure you both picked the same mode and rule, or use CREATE ROOM and share the code. Otherwise keep waiting, or play against bots.`;
     else if (state === 'connecting') line = this.lastDoor.door === 'join' ? `Joining room ${this.lastDoor.code}…` : this.lastDoor.door === 'create' ? 'Opening a room…' : 'Reaching the matchmaker…';
     else if (state === 'hostleft') line = ONLINE_TEXT.hostLeftLine;
     else if (state === 'loading') line = 'Loading the arena…';
@@ -885,7 +891,7 @@ export class OnlineScreens {
       const el1 = fill ? (performance.now() - this.fill.t0) / 1000 : Math.max(0, this.queue.waitedS + (performance.now() - this.queue.at) / 1000);
       const waiting = Math.max(1, this.queue.waiting, fill ? 1 + this.fillJoined() : 0);
       const w = el('span', 'stat');
-      w.append(el('b', '', fill ? `${waiting} / ${MAX_HUMANS}` : String(waiting)), el('span', '', waiting === 1 ? 'waiting (you)' : 'waiting'));
+      w.append(el('b', '', fill ? `${waiting} / ${seatsFor(this.lastDoor.mode)}` : String(waiting)), el('span', '', waiting === 1 ? 'waiting (you)' : 'waiting'));
       const t = el('span', 'stat');
       t.append(el('b', 'clock', fmtClock(el1)), el('span', '', 'searching'));
       this.searchStats.append(w, t);
@@ -947,9 +953,11 @@ export class OnlineScreens {
     // seats: humans by slot, the empty seats BOT
     const bySlot = new Map(r.members.map((m) => [m.slot, m]));
     const humans = r.members.filter((m) => m.conn).length;
-    this.roomCount.textContent = `${r.members.length} / ${MAX_HUMANS}`;
+    const cap = seatsFor(r.mode);
+    this.roomCount.textContent = `${r.members.length} / ${cap}`;
     for (let i = 0; i < MAX_HUMANS; i++) {
       const row = this.seats[i];
+      row.li.hidden = i >= cap;          // DUEL: two seats
       const m = bySlot.get(i) ?? null;
       row.slot = m ? m.slot : null;
       row.li.dataset.slot = String(i);
@@ -1002,7 +1010,7 @@ export class OnlineScreens {
     };
     pick('mode', r.mode); pick('rule', r.rule); pick('map', r.map); pick('preset', r.preset); pick('skill', r.skill);
     const mapName = r.map === 'random' ? 'RANDOM' : (playableMaps().find((m) => m.id === r.map)?.name ?? r.map).toUpperCase();
-    this.roomVals.get('mode')!.textContent = r.mode === 'ffa' ? 'FREE-FOR-ALL' : 'TEAMS · 4 v 4';
+    this.roomVals.get('mode')!.textContent = modeName(r.mode);
     this.roomVals.get('rule')!.textContent = `${r.rule === 'washout' ? 'WASHOUT' : 'TURF'} — ${RULE_LABELS.find(([x]) => x === r.rule)?.[2] ?? ''}`;
     this.roomVals.get('map')!.textContent = mapName;
     this.roomVals.get('preset')!.textContent = PRESET_TEXT[r.preset] ?? r.preset.toUpperCase();
@@ -1018,7 +1026,7 @@ export class OnlineScreens {
     this.startBtn.hidden = !mine;
     this.startBtn.disabled = humans < 2;
     const owner = r.members.find((m) => m.slot === r.ownerSlot);
-    this.startNote.textContent = mine ? (humans < 2 ? ONLINE_TEXT.needTwo : ONLINE_TEXT.ready(humans)) : ONLINE_TEXT.waitOwner(owner?.name ?? 'the owner');
+    this.startNote.textContent = mine ? (humans < 2 ? ONLINE_TEXT.needTwo : ONLINE_TEXT.ready(humans, seatsFor(r.mode))) : ONLINE_TEXT.waitOwner(owner?.name ?? 'the owner');
     // ownership moved (the owner left, §O4.3)
     if (prev && prev.code === r.code && prev.ownerSlot !== r.ownerSlot) {
       this.toast(mine ? 'You own the room now' : `${owner?.name ?? 'Someone'} owns the room now`);

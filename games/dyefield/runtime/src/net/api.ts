@@ -20,7 +20,7 @@ import {
 } from './proto.ts';
 
 // ───────────────────────────── the contract's API types (§O11.1) ─────────────────────────────
-export type OnlineMode = 'teams' | 'ffa';
+export type OnlineMode = 'teams' | 'ffa' | 'duel';
 export type OnlineRule = 'turf' | 'washout';
 export interface OnlineProfile { name: string; kit: string; crew: 0 | 1 | 2; ffaColor: number }
 export interface RoomMember { slot: number; name: string; kit: string; crew: number; color: number;

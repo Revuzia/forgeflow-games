@@ -70,8 +70,8 @@ export const TOUCH_OPACITY_MIN = 0.35;
 export const TOUCH_OPACITY_MAX = 1;
 
 /** CONTRACT_FFA F1: the match mode (mirrors core/types.ts `MatchMode`) */
-export type ProfileMode = 'teams' | 'ffa';
-export const PROFILE_MODES: readonly ProfileMode[] = ['teams', 'ffa'];
+export type ProfileMode = 'teams' | 'ffa' | 'duel';
+export const PROFILE_MODES: readonly ProfileMode[] = ['teams', 'ffa', 'duel'];
 /** CONTRACT_WASHOUT W4: the match rule (mirrors core/types.ts `MatchRule`) — TURF (paint, the default) or WASHOUT */
 export type ProfileRule = 'turf' | 'washout';
 export const PROFILE_RULES: readonly ProfileRule[] = ['turf', 'washout'];
@@ -93,6 +93,8 @@ export interface Profile {
   /** Pier 18 time of day (a lighting preset id): 'noon' | 'golden' */
   preset: string;
   skill: BotSkill;
+  /** DUEL practice: the opponent's kit (a kit id) or 'random' */
+  duelKit: string;
 }
 
 /** audio README defaults (master 0.8, music 0.45, sfx 0.9) */
@@ -125,7 +127,7 @@ export function defaultSettings(): Settings {
 }
 
 export function defaultProfile(): Profile {
-  return { name: '', crew: 1, mode: 'teams', rule: 'turf', ffaColor: 1, kit: 'mist-rasp', map: 'pier18', preset: 'noon', skill: DEFAULT_BOT_SKILL };
+  return { name: '', crew: 1, mode: 'teams', rule: 'turf', ffaColor: 1, kit: 'mist-rasp', map: 'pier18', preset: 'noon', skill: DEFAULT_BOT_SKILL, duelKit: 'random' };
 }
 
 /** a display name: letters, digits, space, - _ . ' ; trimmed; ≤ NAME_MAX */
@@ -215,12 +217,13 @@ export function sanitizeProfile(raw: unknown, kits: readonly string[], maps: rea
   return {
     name: cleanName(r.name),
     crew: r.crew === 2 ? 2 : 1,
-    mode: r.mode === 'ffa' ? 'ffa' : 'teams',
+    mode: r.mode === 'ffa' ? 'ffa' : r.mode === 'duel' ? 'duel' : 'teams',
     rule: r.rule === 'washout' ? 'washout' : 'turf',      // CONTRACT_WASHOUT W4: anything else (an old save) → turf
     ffaColor: typeof r.ffaColor === 'number' && Number.isInteger(r.ffaColor) && r.ffaColor >= 1 && r.ffaColor <= FFA_COLORS ? r.ffaColor : d.ffaColor,
     kit, map,
     preset: r.preset === 'golden' ? 'golden' : 'noon',
     skill: typeof r.skill === 'string' && (BOT_SKILL_IDS as readonly string[]).includes(r.skill) ? parseBotSkill(r.skill) : d.skill,
+    duelKit: typeof r.duelKit === 'string' && kits.includes(r.duelKit) ? r.duelKit : 'random',
   };
 }
 

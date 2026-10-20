@@ -547,10 +547,10 @@ function sectionFixtures(): void {
   const xp = ACHIEVEMENTS.reduce((s, a) => s + a.points, 0);
   const tiers = ACHIEVEMENTS.reduce<Record<string, number>>((m, a) => { m[a.tier] = (m[a.tier] ?? 0) + 1; return m; }, {});
   const pts: Record<string, number> = { bronze: 5, silver: 15, gold: 30 };
-  check('the set: 29 rows, 340 XP, 14 bronze / 12 silver / 3 gold, points by tier, unique slugs, limits',
-    ACHIEVEMENTS.length === 29 && xp === 340 && tiers.bronze === 14 && tiers.silver === 12 && tiers.gold === 3
+  check('the set: 36 rows, 430 XP, 17 bronze / 15 silver / 4 gold, points by tier, unique slugs, limits',
+    ACHIEVEMENTS.length === 36 && xp === 430 && tiers.bronze === 17 && tiers.silver === 15 && tiers.gold === 4
       && ACHIEVEMENTS.every((a) => a.points === pts[a.tier] && a.secret === false && a.slug.length <= 64 && a.name.length <= 80 && a.description.length <= 240)
-      && new Set(ACHIEVEMENTS.map((a) => a.slug)).size === 29,
+      && new Set(ACHIEVEMENTS.map((a) => a.slug)).size === 36,
     `${ACHIEVEMENTS.length} rows · ${xp} XP · ${JSON.stringify(tiers)}`);
   const ffaWin = { mode: 'ffa' as const, crews: 8, ...WIN };
   const ffaDraw = { mode: 'ffa' as const, crews: 8, ...DRAW };
@@ -596,6 +596,14 @@ function sectionFixtures(): void {
       fire: one({ online: true, humans: 2, ...WIN }, (c) => { c.online.w = 9; c.online.m = 9; }),
       miss: one({ online: true, humans: 2, ...DRAW }, (c) => { c.online.w = 9; c.online.m = 9; }),
     },
+    // DUEL (2026-10-19): the near miss is the same record outside a duel (or one notch short)
+    duel_first: { fire: one({ duel: true }), miss: one({}) },
+    duel_turf_win: { fire: one({ duel: true, ...WIN }), miss: one({ duel: true, ...DRAW }) },
+    duel_washout_win: { fire: one({ duel: true, rule: 'washout', ...WIN }), miss: one({ rule: 'washout', ...WIN }) },
+    duel_turf_60: { fire: one({ duel: true, ...WIN, turfPct: 60 }), miss: one({ duel: true, ...WIN, turfPct: 59.9 }) },
+    duel_storm_win: { fire: one({ duel: true, skill: 'storm', ...WIN }), miss: one({ duel: true, skill: 'swell', ...WIN }) },
+    duel_online_win: { fire: one({ duel: true, online: true, humans: 2, ...WIN }), miss: one({ duel: true, online: false, humans: 1, ...WIN }) },
+    duel_flawless: { fire: one({ duel: true, rule: 'washout', ...WIN, washed: 0 }), miss: one({ duel: true, rule: 'washout', ...WIN, washed: 1 }) },
   };
   const bad: string[] = [];
   for (const a of ACHIEVEMENTS) {

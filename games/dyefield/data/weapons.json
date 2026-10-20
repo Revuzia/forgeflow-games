@@ -163,6 +163,6 @@
     "teamLimit": 51,
     "ffaLimit": 20,
     "seaCreditSeconds": 5,
-    "spawnProtectSeconds": 2.0
+    "spawnProtectSeconds": 2.0, "duelLimit": 10
   }
 }

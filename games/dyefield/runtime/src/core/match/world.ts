@@ -156,11 +156,14 @@ export interface WashoutConfig {
   seaCreditS: number;
   /** s of spawn protection after a respawn (ends early when the runner fires, subs or uses a special) */
   protectS: number;
+  /** DUEL (a TEAMS match of one runner a side): the WASHOUT score limit (weapons.json washout.duelLimit) */
+  duelLimit: number;
 }
 export const WASHOUT: WashoutConfig = ((): WashoutConfig => {
   const w = ((WEAPONS as unknown as { washout?: Record<string, unknown> }).washout ?? {}) as Record<string, unknown>;
   const num = (k: string, d: number): number => { const v = w[k]; return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : d; };
-  return { teamLimit: num('teamLimit', 51), ffaLimit: num('ffaLimit', 20), seaCreditS: num('seaCreditSeconds', 5), protectS: num('spawnProtectSeconds', 2) };
+  return { teamLimit: num('teamLimit', 51), ffaLimit: num('ffaLimit', 20), seaCreditS: num('seaCreditSeconds', 5), protectS: num('spawnProtectSeconds', 2),
+    duelLimit: num('duelLimit', 10) };
 })();
 
 /** CHANGED(WASHOUT) (CONTRACT_WASHOUT §W1): the WASHOUT score limit of `mode` on map `def` — data/maps.json →
@@ -414,7 +417,9 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     this.rule = o.rule === 'washout' ? 'washout' : 'turf';
     this.washout = this.rule === 'washout';
     {
-      const lim = o.scoreLimit ?? washoutLimitFor(o.def, this.mode);   // per map (maps.json), else weapons.json
+      // DUEL: a TEAMS match of at most 2 runners plays to washout.duelLimit (a 4 v 4 map limit would never be reached 1 v 1)
+      const duel = this.mode === 'teams' && o.roster.length <= 2;
+      const lim = o.scoreLimit ?? (duel ? WASHOUT.duelLimit : washoutLimitFor(o.def, this.mode));   // per map (maps.json), else weapons.json
       this.limit = this.washout && Number.isFinite(lim) && lim > 0 ? Math.round(lim) : 0;
     }
     this.protectTicks = new Int32Array(o.roster.length);

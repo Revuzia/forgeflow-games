@@ -10,7 +10,7 @@ import * as L from './lib.mjs';
 const QM_FAST = { QM_FILL_WAIT_S: 2, QM_MAX_WAIT_S: 4, QM_SOLO_WAIT_S: 5, QM_AUTOSTART_S: 2, REMATCH_WINDOW_S: 3 };
 
 const SUITES = [
-  { name: 'A-base', vars: { ...QM_FAST }, tests: ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't10'] },
+  { name: 'A-base', vars: { ...QM_FAST }, tests: ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't10', 't11'] },
   { name: 'B-idle', vars: { PREMATCH_PING_IDLE_S: 3, ROOM_IDLE_CLOSE_MIN: 0.15, PER_IP_ROOM: 2, PER_IP_LOBBY: 1 }, tests: ['t7idle', 't4ip'] },
   { name: 'C-strict', vars: { COUNT_MODE: 'strict', RAW_CAP: 3000, DAILY_UNIT_CAP: 1000000, QM_FILL_WAIT_S: 1 }, tests: ['t8'] },
   { name: 'D-billing20', vars: { COUNT_MODE: 'billing20', RAW_CAP: 1, DAILY_UNIT_CAP: 120 }, tests: ['t8b'] },
@@ -62,6 +62,7 @@ function fileFor(t) {
       t8b: 't8_meter.mjs',
       t9: 't9_load.mjs',
       t10: 't10_hibernate.mjs',
+      t11: 't11_duel.mjs',
     }[t] ?? t + '.mjs'
   );
 }

@@ -41,7 +41,7 @@ import { buildAtlas, type PaintAtlas } from '../runtime/src/core/paint/atlas.ts'
 import { Painter } from '../runtime/src/core/paint/painter.ts';
 import { mapById, type MapDef } from '../runtime/src/core/data.ts';
 import { TICK } from '../runtime/src/core/config.ts';
-import { emptyIntent, type PlayerIntent } from '../runtime/src/core/types.ts';
+import { emptyIntent, simMode, type PlayerIntent } from '../runtime/src/core/types.ts';
 import { MatchWorld, type MatchResult } from '../runtime/src/core/match/world.ts';
 import type { RosterEntry } from '../runtime/src/core/match/roster.ts';
 import { BotDirector } from '../runtime/src/core/bots/director.ts';
@@ -62,7 +62,7 @@ const QUICK = argv.includes('--quick');
 const VERBOSE = argv.includes('--verbose');
 const SECONDS = Number(arg('--seconds', QUICK ? '60' : '180'));
 const SUITE = QUICK ? ['A0', 'R'] : ['A0', 'A80', 'A80:sheet-drum', 'R', 'Mteams:turf', 'Mteams:washout', 'Mffa:turf', 'Mffa:washout',
-  'Mteams:turf:lockwell', 'Mteams:turf:cinder', 'Pdrum', 'Pslick', 'Ptoggle', 'J40', 'J60:80', 'G', 'H', 'G:ffa:washout', 'H:ffa:turf', 'L', 'T', 'U'];
+  'Mteams:turf:lockwell', 'Mteams:turf:cinder', 'Dturf', 'Dwashout', 'Pdrum', 'Pslick', 'Ptoggle', 'J40', 'J60:80', 'G', 'H', 'G:ffa:washout', 'H:ffa:turf', 'L', 'T', 'U'];
 const ONLY = arg('--only', '').split(',').map((s) => s.trim()).filter(Boolean);
 const RUN = ONLY.length ? ONLY : SUITE;
 const TICK_MS = TICK * 1000;
@@ -102,7 +102,7 @@ function arenaOf(md: MapData): SessionArena {
 function worldOf(a: SessionArena, spec: SessionSpec): MatchWorld {
   return new MatchWorld({
     def: a.def, geo: a.geo, physics: a.physics, painter: a.painter, roster: spec.roster, seed: spec.seed,
-    durationS: spec.durationS, countdownS: spec.countdownS, mode: spec.mode, ...(spec.rule === 'washout' ? { rule: 'washout' as const } : {}),
+    durationS: spec.durationS, countdownS: spec.countdownS, mode: simMode(spec.mode), ...(spec.rule === 'washout' ? { rule: 'washout' as const } : {}),
   });
 }
 
@@ -151,7 +151,7 @@ interface Match {
 }
 
 interface MatchOpts {
-  map: string; mode: 'teams' | 'ffa'; rule: 'turf' | 'washout'; humans: number; lag: number; seconds: number; seed: number;
+  map: string; mode: 'teams' | 'ffa' | 'duel'; rule: 'turf' | 'washout'; humans: number; lag: number; seconds: number; seed: number;
   kits?: string[]; replay?: boolean; drivers?: Array<Driver | null>; lateJoin?: number[];
 }
 
@@ -378,6 +378,20 @@ async function scenarioM(mode: 'teams' | 'ffa', rule: 'turf' | 'washout', map: s
   const rates = h.session.host?.intentRates() ?? [];
   console.log(`   ${tag}: ${((performance.now() - t0) / 1000).toFixed(1)} s wall · intent Hz ${rates.map((r) => r.hz.toFixed(1)).join(' ')}`);
   check(`${tag}: every remote human's INTENTS ≥ 15 Hz (median)`, rates.length === 7 && rates.every((r) => r.hz >= 15), rates.map((r) => `${r.runner}:${r.hz.toFixed(1)}`).join(' '));
+  agreement(tag, m, { p95: 0.35, lag: 40, replay: true });
+}
+
+/** DUEL (owner 2026-10-19): 2 humans, one runner a side — exactly 2 runners, opposite crews, no bots; the washout limit is
+ *  washout.duelLimit; then the same agreement checks as the 8-human matches */
+async function scenarioD(rule: 'turf' | 'washout', seconds: number): Promise<void> {
+  const tag = `D duel 2 humans ${rule}`;
+  const m = await makeMatch({ map: 'pier18', mode: 'duel', rule, humans: 2, lag: 40, seconds, seed: 9002, kits: ['needle-glint', 'sheet-drum'], replay: true });
+  const w = hostDev(m).session.world;
+  const rs = w.runners;
+  check(`${tag}: the roster is 2 runners on opposite crews`, rs.length === 2 && rs[0].team !== rs[1].team, rs.map((r) => `${r.id}:${r.team}:${r.kit}`).join(' '));
+  if (rule === 'washout') check(`${tag}: the washout limit is the duel limit (10)`, (w as unknown as { limit: number }).limit === 10, String((w as unknown as { limit: number }).limit));
+  check(`${tag}: the roller (SHEET-DRUM) spawns with its 150 hp`, rs.some((r) => r.kit === 'sheet-drum' && r.hp === 150), rs.map((r) => `${r.kit}:${r.hp}`).join(' '));
+  await runToEnd(m, seconds + 12);
   agreement(tag, m, { p95: 0.35, lag: 40, replay: true });
 }
 
@@ -620,7 +634,7 @@ function e2eDevice(i: number, url: string, netdur: number): E2EDev {
       const md = await mapData(spec.map);
       const arena = arenaOf(md);
       const world = new MatchWorld({ def: arena.def, geo: arena.geo, physics: arena.physics, painter: arena.painter, roster: spec.roster, seed: spec.seed,
-        durationS: spec.durationS, countdownS: spec.countdownS, mode: spec.mode, ...(spec.rule === 'washout' ? { rule: 'washout' as const } : {}) });
+        durationS: spec.durationS, countdownS: spec.countdownS, mode: simMode(spec.mode), ...(spec.rule === 'washout' ? { rule: 'washout' as const } : {}) });
       dev.arena = arena; dev.world = world; dev.localPid = spec.localPid;
       dev.intents = spec.roster.map(() => emptyIntent());
       const h: OnlineGameHandle = {
@@ -817,6 +831,7 @@ async function main(): Promise<number> {
     try {
       if (sc.startsWith('A')) { const [lag, kit] = sc.slice(1).split(':'); await scenarioA(Number(lag) || 0, kit || 'mist-rasp', SECONDS); }
       else if (sc.startsWith('M')) { const [mode, rule, map] = sc.slice(1).split(':'); await scenarioM(mode === 'ffa' ? 'ffa' : 'teams', rule === 'washout' ? 'washout' : 'turf', map || 'pier18', Math.min(SECONDS, 90)); }
+      else if (sc.startsWith('D')) await scenarioD(sc.slice(1) === 'washout' ? 'washout' : 'turf', Math.min(SECONDS, 90));
       else if (sc.startsWith('J')) { const [jt, lg] = sc.slice(1).split(':'); await scenarioJ(Number(jt) || 40, Number(lg) || 0, Math.min(SECONDS, 90)); }
       else if (sc.startsWith('P')) await scenarioP(sc.slice(1) as 'drum' | 'slick' | 'toggle', SECONDS);
       else if (sc.startsWith('G') || sc.startsWith('H')) {

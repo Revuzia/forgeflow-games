@@ -19,7 +19,7 @@ import {
   CLOSE_RATE,
   CLOSE_TRY_LATER,
   KIT_RE,
-  MAX_HUMANS,
+  capFor,
   PROTO,
   RATE_LOBBY,
   clampNum,
@@ -352,9 +352,10 @@ export class Lobby extends DurableObject<Env> {
       const anchor = W[0];
       const widened = now - anchor.a.joinedAt >= fill;
       const pool = W.filter((x) => x === anchor || (widened ? true : x.a.cont === anchor.a.cont));
-      const group = pool.slice(0, MAX_HUMANS);
+      const cap = capFor(anchor.a.mode);
+      const group = pool.slice(0, cap);
       let launch = false;
-      if (group.length >= MAX_HUMANS) launch = true;
+      if (group.length >= cap) launch = true;
       else if (group.length >= 2) {
         const second = group[1];
         launch = now - second.a.joinedAt >= fill || now - anchor.a.joinedAt >= max;

@@ -21,6 +21,8 @@ export type Side = 'A' | 'B';
 /** CHANGED(CORE): TEAMS · 4 v 4 (the default, the shipped game) or FREE-FOR-ALL (8 runners, each its own crew). */
 export type MatchMode = 'teams' | 'ffa';
 export const MATCH_MODES: readonly MatchMode[] = ['teams', 'ffa'];
+/** the sim mode of a menu / online mode: DUEL (one runner a side) plays as TEAMS */
+export function simMode(m: string | null | undefined): MatchMode { return m === 'ffa' ? 'ffa' : 'teams'; }
 
 /** A mode from a query param / CLI flag / saved setting (case-insensitive; 'free-for-all' / 'freeforall' → 'ffa');
  *  anything else → `fallback`. */

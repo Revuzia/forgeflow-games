@@ -7,7 +7,7 @@
 // Game drives it through the GameNet methods (tick / drain / frame / shift) and adopts a swapped world through the hook.
 
 import type { PlayerIntent } from '../core/types.ts';
-import { emptyIntent } from '../core/types.ts';
+import { emptyIntent, simMode } from '../core/types.ts';
 import { TICK } from '../core/config.ts';
 import type { MapDef } from '../core/data.ts';
 import type { MapGeometry } from '../core/mapgeo.ts';
@@ -31,7 +31,7 @@ import { lateJoinRunner } from './roster.ts';
 export interface SessionArena { def: MapDef; geo: MapGeometry; physics: PhysicsWorld; painter: Painter; nav: NavGraph }
 
 export interface SessionSpec {
-  matchNo: number; seed: number; mode: 'teams' | 'ffa'; rule: 'turf' | 'washout'; skill: BotSkill; map: string; preset: string;
+  matchNo: number; seed: number; mode: 'teams' | 'ffa' | 'duel'; rule: 'turf' | 'washout'; skill: BotSkill; map: string; preset: string;
   durationS: number; countdownS: number; roster: RosterEntry[]; seats: WireSeat[];
   mySlot: number; hostSlot: number; members: WireMember[];
   /** host changes so far this match (0 at the start) */
@@ -331,7 +331,7 @@ export class OnlineSession implements GameNet {
     }
     const w = new MatchWorld({
       def: A.def, geo: A.geo, physics: A.physics, painter: A.painter, roster: s.roster, seed: restoreSeed(s.seed, this.migrations),
-      durationS: s.durationS, countdownS: 0, mode: s.mode, ...(s.rule === 'washout' ? { rule: 'washout' as const } : {}),
+      durationS: s.durationS, countdownS: 0, mode: simMode(s.mode), ...(s.rule === 'washout' ? { rule: 'washout' as const } : {}),
     });
     const scratch: SimEvent[] = [];
     this.stats.discardedCtorEvents += w.drainEvents(scratch);

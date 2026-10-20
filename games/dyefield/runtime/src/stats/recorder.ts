@@ -232,6 +232,7 @@ export class MatchRecorder {
     const rec: MatchRecord = {
       id: c.id, at: this.now(), v: 1, mode: v.mode, rule: v.rule, map: v.def.id, kit: c.info.kit, skill: c.info.skill,
       online: false, humans: v.runners.filter((r) => !r.bot).length,
+      ...(v.mode === 'teams' && v.runners.length <= 2 ? { duel: true as const } : {}),
       ...rr,
       washes: me.washes, washed: me.washedCount, paintedM2: Math.round(me.painted),
       specials: c.specials, subs: c.subs, splashdowns: c.splashdowns, bestStreak: c.bestStreak,

@@ -62,6 +62,8 @@ export interface MatchRecord {
   at: number;
   v: 1;
   mode: 'teams' | 'ffa';
+  /** DUEL (2026-10-19): a TEAMS match of one runner a side (stored under mode 'teams'; absent = not a duel) */
+  duel?: true;
   rule: 'turf' | 'washout';
   map: string;
   kit: string;

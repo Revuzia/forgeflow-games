@@ -60,8 +60,13 @@
 /* PLAY ONLINE is the first main-menu button, the same size as PLAY (owner, 2026-10-12). The button carries
    .dfm-item-play (size, type, spacing) and .dfm-item-online (the sea-blue colour); the wrapper only anchors the
    why-not note. (It used to be a small tile beside PLAY.) */
-.dfm-playrow { position: relative; display: block; margin-bottom: 4px; }
-.dfm-playrow > .dfm-item-online { width: 100%; margin-bottom: 0; white-space: nowrap; }
+/* owner 2026-10-19: PLAY + PLAY ONLINE side by side, each half the row, both PLAY's height */
+.dfm-playrow { position: relative; display: flex; gap: clamp(8px, .8vw, 12px); margin-bottom: 4px; }
+.dfm-playrow > .dfm-item-play { flex: 1 1 0; min-width: 0; width: auto; margin-bottom: 0; padding: 0 10px; justify-content: center;
+  font-size: clamp(22px, 2vw, 30px); white-space: nowrap; }
+.dfm-playrow > .dfm-item-online .lbl { font-size: .8em; }
+:where(html:not(.df-touch)) .dfm-playrow > .dfm-item:focus { transform: translateY(-3px) rotate(-1deg); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-playrow > .dfm-item:hover { transform: translateY(-3px) rotate(-1deg); } }
 .dfm-item-online, .dfm[data-crew="gulf"] .dfm-item-online { background: linear-gradient(180deg, #a6eef6, var(--sea)); color: #04313f; }
 .dfm-item-online .lbl { display: inline-flex; align-items: center; gap: .3em; font-size: .86em; letter-spacing: 0; }
 .dfm-item-online .oico { flex: none; width: .85em; height: .85em; }
@@ -700,8 +705,8 @@ html.df-touch .df-fps { left: 50%; top: auto; bottom: calc(env(safe-area-inset-b
   .dfm-item-play { height: 52px; font-size: 28px; margin-bottom: 0; }
   :where(html:not(.df-touch)) .dfm-item:focus { transform: translateX(8px) rotate(-1deg); box-shadow: 0 5px 0 var(--ink); }
   /* CONTRACT_ONLINE §O4.1 on a phone: the row stays one PLAY-high line (the stack keeps its five-row height) */
-  .dfm-playrow { gap: 14px; margin-bottom: 0; }
-  .dfm-item-online { height: auto; flex-basis: clamp(92px, 34%, 124px); padding: 0 6px; font-size: 21px; }
+  .dfm-playrow { gap: 8px; margin-bottom: 0; }
+  .dfm-playrow > .dfm-item-play { height: 52px; padding: 0 6px; font-size: 19px; }
   :where(html:not(.df-touch)) .dfm-item-online:focus { transform: translateY(-3px) rotate(1deg); box-shadow: 0 6px 0 var(--ink), 0 0 0 3px var(--cream); }
   .dfm-online-why { font-size: 13px; padding: 6px 12px; max-width: min(260px, 40vw); }
   .dfm-item.small { height: 44px; font-size: 19px; box-shadow: 0 4px 0 var(--ink); }
@@ -939,4 +944,27 @@ html.df-touch .df-fps { left: 50%; top: auto; bottom: calc(env(safe-area-inset-b
   .dfm-segbtn { padding: 0 10px; font-size: 14px !important; }
   .dfm-kitcard .chips { display: none; }
   .dfm-plate span { display: none; }
+}
+
+/* DUEL practice (owner 2026-10-19): the OPPONENT picker on PLAY — four kit chips + RANDOM, shown only in DUEL */
+.dfm-opp { margin-top: 8px; }
+.dfm-opp .dfm-cap { margin-bottom: 4px; }
+.dfm-oppseg { display: flex; flex-wrap: wrap; gap: 6px; }
+.dfm-oppbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 3px 9px 3px 3px; border: 3px solid var(--ink); border-radius: 12px;
+  background: var(--cream); color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; letter-spacing: .02em; cursor: pointer; box-shadow: 0 3px 0 var(--ink); }
+.dfm-oppbtn .kiticon { width: 30px; height: 30px; object-fit: contain; border-radius: 8px; background: var(--ink2); }
+.dfm-oppbtn .dice { width: 26px; height: 26px; margin-left: 4px; }
+.dfm-oppbtn .dice svg { display: block; width: 100%; height: 100%; }
+.dfm-oppbtn.on { background: var(--crew); }
+:where(html:not(.df-touch)) .dfm-oppbtn:focus { outline: 3px solid var(--cream); outline-offset: 2px; }
+@media (max-height: 500px) {
+  /* phone landscape: the opponent row stays one line — icons only, the name as the tooltip / label */
+  .dfm-opp { margin-top: 0; }
+  /* the BOTS box lays its level row and the opponent icons side by side (one line: START stays on screen) */
+  .dfm-opt:has(> .dfm-opp:not([hidden])) { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; }
+  .dfm-opt:has(> .dfm-opp:not([hidden])) > .dfm-cap { flex: 1 0 100%; }
+  .dfm-opp .dfm-cap { display: none; }
+  .dfm-oppseg { flex-wrap: nowrap; gap: 4px; }
+  .dfm-oppbtn { min-height: 44px; padding: 3px; }
+  .dfm-oppbtn .nm { display: none; }
 }

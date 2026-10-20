@@ -152,6 +152,10 @@ export interface MatchConfig {
   mode?: MatchMode;
   /** CONTRACT_WASHOUT W4: 'turf' (default: the most floor wins) or 'washout' (the most credited washes wins) */
   rule?: MatchRule;
+  /** DUEL: one runner a side (the sim plays it as TEAMS; labels, stats and the roster read this) */
+  duel?: boolean;
+  /** DUEL practice: the opponent's kit id (else a random kit) */
+  opponentKit?: string;
   /** CHANGED(ONLINE): the online roster (every member's MatchWorld is built from the same one); offline: unset */
   roster?: RosterEntry[];
   /** CHANGED(ONLINE): the local runner's id (0 offline) */

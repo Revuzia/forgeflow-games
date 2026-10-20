@@ -113,7 +113,7 @@ export function createOnline(env: OnlineEnv): OnlineController {
       const prof = env.profile.get();
       const cfg: OnlineMatchConfig = {
         kit: spec.kit, skill: spec.skill, seed: spec.seed >>> 0, durationS: spec.durationS, humanName: prof.name || undefined,
-        crew: spec.roster[spec.localPid]?.team as TeamId, devBrush: false, ...(spec.mode === 'ffa' ? { mode: 'ffa' as const } : {}),
+        crew: spec.roster[spec.localPid]?.team as TeamId, devBrush: false, ...(spec.mode === 'ffa' ? { mode: 'ffa' as const } : {}), ...(spec.mode === 'duel' ? { duel: true } : {}),
         ...(spec.rule === 'washout' ? { rule: 'washout' as const } : {}), roster: spec.roster, localPid: spec.localPid, online: true,
       };
       // the stats seam: every online match start (CONTRACT_STATS §S9.1); a migration repeats it with the same matchId

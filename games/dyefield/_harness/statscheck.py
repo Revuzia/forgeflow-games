@@ -929,9 +929,9 @@ def s_ui(run):
                    and (hr is None or pr.get("t", 0) >= hr.get("b", 0) - 1),
                    "panel layout at %s: inside the window, under the header, no overlap, no clipped numbers, no sideways scroll" % tag,
                    {"bad": lay.get("bad"), "clipped": lay.get("clipped"), "hscroll": lay.get("hscroll"), "panel": pr, "head": hr})
-            run.ok(lay.get("tiles") == ["31", "12", "39 %", "2,214"] and lay.get("achItems") == 29 and lay.get("secs", 0) == 8
-                   and (lay.get("achSum") or "").startswith("9 / 29"),
-                   "panel content (%s): tiles, 29 achievements, focusable section heads" % tag, {"tiles": lay.get("tiles"), "achSum": lay.get("achSum"), "secs": lay.get("secs")})
+            run.ok(lay.get("tiles") == ["31", "12", "39 %", "2,214"] and lay.get("achItems") == 36 and lay.get("secs", 0) == 8
+                   and (lay.get("achSum") or "").startswith("9 / 36"),
+                   "panel content (%s): tiles, 36 achievements, focusable section heads" % tag, {"tiles": lay.get("tiles"), "achSum": lay.get("achSum"), "secs": lay.get("secs")})
             # arrows scroll the panel: focus a late section head
             sc0 = fjs(f, "() => document.querySelector('#dfc-career').scrollTop") or 0
             fjs(f, "() => { const h = [...document.querySelectorAll('#dfc-career .dfc-sec[data-nav]')]; h[h.length - 1].focus(); }")

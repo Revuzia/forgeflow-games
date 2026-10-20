@@ -1,4 +1,4 @@
-// DYEFIELD — the 29 achievements (_spec/CONTRACT_STATS.md §S6). Pure: THREE-free, DOM-free.
+// DYEFIELD — the 36 achievements (29 + 7 DUEL) (_spec/CONTRACT_STATS.md §S6). Pure: THREE-free, DOM-free.
 // achievements.json is the single source of truth (the seeder reads the same file); this module attaches one detector per
 // slug. Detectors run at finalize on ELIGIBLE records only: `r` = the record, `C` = the display career AFTER applying r.
 
@@ -19,8 +19,8 @@ const winsOn = (rec: Record<string, { w: number }> | undefined, k: string): bool
 export const DETECTORS: Readonly<Record<string, Detector>> = {
   first_match: (_r, C) => C.matches >= 1,
   first_win: (r) => win(r),
-  teams_turf_win: (r) => r.mode === 'teams' && r.rule === 'turf' && win(r),
-  teams_washout_win: (r) => r.mode === 'teams' && r.rule === 'washout' && win(r),
+  teams_turf_win: (r) => r.mode === 'teams' && !r.duel && r.rule === 'turf' && win(r),
+  teams_washout_win: (r) => r.mode === 'teams' && !r.duel && r.rule === 'washout' && win(r),
   ffa_turf_win: (r) => r.mode === 'ffa' && r.rule === 'turf' && win(r),
   ffa_washout_win: (r) => r.mode === 'ffa' && r.rule === 'washout' && win(r),
   ffa_podium: (r) => r.mode === 'ffa' && r.place <= 3,
@@ -34,7 +34,7 @@ export const DETECTORS: Readonly<Record<string, Detector>> = {
   map_lockwell: (r) => win(r) && r.map === 'lockwell',
   map_cinder: (r) => win(r) && r.map === 'cinder',
   all_maps: (_r, C) => MAPS3.every((m) => winsOn(C.byMap, m)),
-  turf_50: (r) => r.mode === 'teams' && r.rule === 'turf' && r.turfPct >= 50,
+  turf_50: (r) => r.mode === 'teams' && !r.duel && r.rule === 'turf' && r.turfPct >= 50,
   paint_1500: (r) => r.paintedM2 >= 1500,
   washes_10: (r) => r.washes >= 10,
   streak_5: (r) => r.bestStreak >= 5,
@@ -46,6 +46,14 @@ export const DETECTORS: Readonly<Record<string, Detector>> = {
   online_first: (r) => r.online,
   online_win: (r) => r.online && win(r),
   online_wins_10: (_r, C) => C.online.w >= 10,
+  // DUEL (owner 2026-10-19): one runner a side (record.duel)
+  duel_first: (r) => !!r.duel,
+  duel_turf_win: (r) => !!r.duel && r.rule === 'turf' && win(r),
+  duel_washout_win: (r) => !!r.duel && r.rule === 'washout' && win(r),
+  duel_turf_60: (r) => !!r.duel && r.rule === 'turf' && win(r) && r.turfPct >= 60,
+  duel_storm_win: (r) => !!r.duel && !r.online && r.skill === 'storm' && win(r),
+  duel_online_win: (r) => !!r.duel && r.online && win(r),
+  duel_flawless: (r) => !!r.duel && r.rule === 'washout' && win(r) && r.washed === 0,
 };
 
 /** every slug whose detector fires for (r, C), in table order; [] for an ineligible record */

@@ -9,7 +9,7 @@ Input: games/dyefield/runtime/src/stats/achievements.json - the SAME file the ga
 Steps
   1. resolve the game: GET /rest/v1/games?slug=eq.dyefield&select=id,slug,status -> exactly one row (expect id 53;
      refuses on 0 or > 1)
-  2. validate the JSON: 29 rows, unique slugs, tier in {bronze, silver, gold}, points 5 / 15 / 30 by tier, slug <= 64,
+  2. validate the JSON: 36 rows (29 + 7 DUEL, 2026-10-19), unique slugs, tier in {bronze, silver, gold}, points 5 / 15 / 30 by tier, slug <= 64,
      name <= 80, description <= 240 chars, secret false
   3. read the existing rows for that game (select=*) and ALWAYS write a backup first:
      forgeflow-games/state/backups/dyefield_achievements_<UTC yyyymmddThhmmss>.json (all existing dyefield rows, even [])
@@ -59,7 +59,7 @@ ACH_JSON = ROOT / "games" / "dyefield" / "runtime" / "src" / "stats" / "achievem
 BACKUP_DIR = ROOT / "state" / "backups"
 GAME_SLUG = "dyefield"
 EXPECT_GAME_ID = 53
-EXPECT_ROWS = 29
+EXPECT_ROWS = 36
 TIER_POINTS = {"bronze": 5, "silver": 15, "gold": 30}
 FIELDS = ("slug", "name", "description", "tier", "points", "secret")
 COMPARE = ("name", "description", "tier", "points", "secret")

@@ -53,11 +53,15 @@ export const DEFAULTS = {
 export type TimingKey = keyof typeof DEFAULTS;
 
 export const MAX_HUMANS = 8;
+/** DUEL (one runner a side): rooms and quick-match groups of 2; TEAMS / FFA keep MAX_HUMANS */
+export function capFor(mode: string): number {
+  return mode === 'duel' ? 2 : MAX_HUMANS;
+}
 export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const CODE_LEN = 4;
 export const MAPS = ['pier18', 'lockwell', 'cinder'] as const;
 export const SKILLS = ['breeze', 'swell', 'storm'] as const;
-export const MODES = ['teams', 'ffa'] as const;
+export const MODES = ['teams', 'ffa', 'duel'] as const;
 export const RULES = ['turf', 'washout'] as const;
 export type Mode = (typeof MODES)[number];
 export type Rule = (typeof RULES)[number];
@@ -86,7 +90,7 @@ export const KIT_RE = /^[a-z0-9-]{1,24}$/;
 export const PRESET_RE = /^[a-z0-9_-]{1,16}$/;
 
 export function isMode(v: unknown): v is Mode {
-  return v === 'teams' || v === 'ffa';
+  return v === 'teams' || v === 'ffa' || v === 'duel';
 }
 export function isRule(v: unknown): v is Rule {
   return v === 'turf' || v === 'washout';

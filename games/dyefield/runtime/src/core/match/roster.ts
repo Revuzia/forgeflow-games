@@ -48,6 +48,18 @@ export interface RosterOptions {
   humanCrew?: TeamId;
 }
 
+/** DUEL: one runner a side — id 0 = the human on SUNCREW, id 1 = the opponent bot on GULF CREW with `opponentKit` (a kit id;
+ *  anything else → a random kit from the seed). The sim plays it as a TEAMS match (MatchWorld then uses washout.duelLimit). */
+export function duelRoster(o: RosterOptions & { opponentKit?: string; kitIds: readonly string[] }): RosterEntry[] {
+  const human = (o.humanName ?? '').trim() || 'YOU';
+  const pool = namePool(human, o.seed);
+  const kit = o.opponentKit && o.kitIds.includes(o.opponentKit) ? o.opponentKit : o.kitIds[o.seed % Math.max(1, o.kitIds.length)] ?? DEFAULT_KIT;
+  return [
+    { id: 0, name: human, team: TEAM_SUN, kit: o.humanKit || DEFAULT_KIT, bot: false, skill: o.skill },
+    { id: 1, name: pool[0], team: TEAM_GULF, kit, bot: true, skill: o.skill },
+  ];
+}
+
 export function defaultRoster(o: RosterOptions): RosterEntry[] {
   if (o.mode === 'ffa') return ffaRoster(o);
   const human = (o.humanName ?? '').trim() || 'YOU';
