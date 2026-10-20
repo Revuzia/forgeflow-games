@@ -1,0 +1,99 @@
+{
+ "written": "1.4",
+ "by": "_harness/scratch/living/pace/base (the tree of 2026-10-13)",
+ "tick": 300,
+ "hash14": "7c8842e9eb5d9f10",
+ "bytes": 1620304,
+ "settlement": {
+  "id": 1,
+  "name": "Aru",
+  "era": 3,
+  "library": 89,
+  "members": 30,
+  "leader": 4
+ },
+ "agentsAlive": 30,
+ "agentIds": [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30
+ ],
+ "disciple": 3,
+ "creatures": [
+  {
+   "id": 1,
+   "name": "Omo",
+   "template": "ape"
+  }
+ ],
+ "herds": {
+  "boar": 6.05,
+  "bear": 1,
+  "whale": 1,
+  "ice-beast": 12,
+  "sand-crawler": 12
+ },
+ "placed": {
+  "ice-beast": 944,
+  "sand-crawler": 1184
+ },
+ "store": {
+  "stone": 12,
+  "wood": 50,
+  "fiber": 8,
+  "reeds": 12,
+  "hide": 4,
+  "wild-grain": 124.03,
+  "clay": 8,
+  "dried-meat": 176.983,
+  "grain": 60,
+  "cloth": 6,
+  "pot": 6,
+  "mudbrick": 30,
+  "brick": 30,
+  "stone-block": 20,
+  "timber": 30,
+  "charcoal": 10,
+  "copper": 4,
+  "tin": 2,
+  "bronze": 4,
+  "hide-clothes": 5,
+  "chocolate": 10
+ },
+ "disasters": [
+  "leviathan"
+ ],
+ "weather": [
+  15
+ ],
+ "itemsN": 130,
+ "chocolateIdx": 129,
+ "buildings": 21
+}

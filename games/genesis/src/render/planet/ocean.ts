@@ -85,6 +85,8 @@ varying float vTemp;
 varying float vCrest;
 varying float vSalt;
 varying vec3 vWind;
+varying vec3 vSheet;
+varying float vBedCos;
 #include <logdepthbuf_pars_vertex>
 void main() {
 ${TERRAIN_VERT_CORE}
@@ -126,6 +128,10 @@ ${TERRAIN_VERT_CORE}
     crest += amp * max(sin(ph), 0.0);
   }
   vCrest = crest / max(sea * 0.7, 0.05);
+  // the water level itself, before the waves ride on it: its slope is the sim's moving volume (a surge, a tsunami)
+  vSheet = tPos;
+  // the bed's own slope (cos to the vertical): a sheet leaning with its bed is a cascade, not a surge
+  vBedCos = dot(normalize(tN), up);
   tPos += disp;
   // the tidal bulge under (and opposite) a near moon: the equilibrium tide's shape (3cos²θ − 1) / 2, held off the
   // shores so the water's edge stays on the ground (render/fx/worlds.ts sets uTide while a moon falls)
@@ -171,6 +177,7 @@ uniform float uFrame;
 uniform mat4 uViewToPrevClip;
 uniform vec3 uMoonE;
 uniform vec3 uMoonDirBody;
+uniform vec3 uNightAmbient;  // the night floor (starlight, airglow; renderer.ts), the terrain's own
 uniform sampler2D uOverlay;  // (UI lane, additive) the map overlay, shared with the terrain (planet uniforms)
 uniform vec3 uOverlayK;
 varying vec3 vBodyPos;
@@ -182,6 +189,8 @@ varying float vTemp;
 varying float vCrest;
 varying float vSalt;
 varying vec3 vWind;
+varying vec3 vSheet;
+varying float vBedCos;
 float gSea = 1.0;
 vec3 gWindT = vec3(0.0);
 // the pixel's footprint ALONG a wave's direction d: at a grazing view the footprint is metres long toward the horizon
@@ -336,7 +345,8 @@ void main() {
     vec3 D = normalize(GW_D[i].xyz);
     vec3 d = waveTan(D, up);
     float feed = windFeed(d, gWindT, i < 2 ? 1.0 : 0.5) * smoothstep(0.15, 0.45, length(d));
-    float fade = 1.0 - smoothstep(0.1, 0.33, fwWave(D, up) / L);
+    // (kept while at least ~6 pixels hold a wavelength: at 3 the long waves drew bands across a whole ocean from orbit)
+    float fade = 1.0 - smoothstep(0.06, 0.2, fwWave(D, up) / L);
     float grpW = gwGroup(gwG, i);
     float amp = GW_A[i] * sea * calm * fade * feed * grpW;
     gUnresolved += pow(GW_A[i] * sea * calm * feed * 6.2831853 / L, 2.0) * 0.5 * (1.0 - fade);
@@ -353,7 +363,7 @@ void main() {
     vec3 d = waveTan(D, up);
     float k = 6.2831853 / L;
     // (a shelf a few metres deep still carries the swell: only the shallows calm it)
-    float amp = L * 0.011 * sea * calm * (1.0 - smoothstep(0.1, 0.33, fwWave(D, up) / L)) * smoothstep(1.5, 8.0, vDepth)
+    float amp = L * 0.011 * sea * calm * (1.0 - smoothstep(0.06, 0.2, fwWave(D, up) / L)) * smoothstep(1.5, 8.0, vDepth)
       * windFeed(d, gWindT, 1.0) * smoothstep(0.15, 0.45, length(d));
     grad += d * (amp * k * cos(k * dot(P, D) - sqrt(9.8 * k) * uTime + fi * 2.1));
   }
@@ -392,7 +402,7 @@ void main() {
   float sh = sunShadow(vViewPos, nV);
   float csh = cloudShadowW(P, uSunDirBody);
   vec3 sunCol = uSunE * sunTransmittance(rP, muS) * sh * csh;
-  vec3 skyE = skyIrradiance(up, up, uSunDirBody) + vec3(0.004, 0.006, 0.012);
+  vec3 skyE = skyIrradiance(up, up, uSunDirBody) + uNightAmbient;
 
   // ── refraction + absorption ──
   vec2 suv = gl_FragCoord.xy / uResolution;
@@ -428,7 +438,9 @@ void main() {
   vec3 inscat = sigmaS / (sigmaA + sigmaS) * (1.0 - Tw) * (sunCol * max(muS, 0.0) * 0.09 + skyE * 0.1) / 3.14159;
   // (still fresh water is dark and clear, not milky — at the sea's back-scatter ponds read as turquoise milk; rivers
   // keep their silt)
-  inscat *= mix(0.5, 1.0, max(smoothstep(0.3, 0.8, vSalt), riverK));
+  // (… but a DEEP lake is a body of water like the sea: halved, its in-scatter left an inland lake seen from a few
+  // hundred metres up a black disc, a hole in the land beside a blue sea)
+  inscat *= mix(0.5, 1.0, max(max(smoothstep(0.3, 0.8, vSalt), riverK), smoothstep(2.0, 8.0, vDepth)));
   vec3 under = refr * Tw + inscat;
 
   // ── reflection ──
@@ -447,7 +459,8 @@ void main() {
   float sig2 = gUnresolved + meanK * gResolved + nVar * 0.5;
   vec3 rB = reflect(-vB, nR);
   rB = normalize(rB + up * (max(0.0, -dot(rB, up)) * 1.02 + sqrt(sig2) * 0.8));
-  vec3 skyR = skyRadiance(up, rB, uSunDirBody);
+  // (+ the starlit night sky's own radiance, E/π: a moonless sea mirrors it, dark from above, brighter toward its limb)
+  vec3 skyR = skyRadiance(up, rB, uSunDirBody) + uNightAmbient * 0.3;
   // the clouds overhead, mirrored: the deck's density where the reflected ray crosses the mid-shell (the same density
   // the cloud shadows use), lit by the sun through the air at the cloud and by the sky; thin far out (it is the
   // reflected sky the SSR cannot see: off-screen above the frame)
@@ -573,6 +586,23 @@ void main() {
   // is interpolated right up to its banks). (From 1.3 m/s a broad river 3 m deep — smooth and boiling, not white — was
   // one sheet of foam lace: from 100 m, TV static where the town's lake should be)
   float rapids = max(smoothstep(3.5, 5.0, flowSpd) * smoothstep(0.4, 1.2, vDepth), smoothstep(0.06, 0.25, lean) * smoothstep(0.5, 2.0, vDepth) * smoothstep(0.3, 1.0, flowSpd));
+  // a SURGE: the sim moves a tsunami's (or a flood's) volume as a steep bulge of the water level over deep water — the
+  // level's own slope (vSheet, before the wind waves ride on it), not the waves'. Its face is a wall of turbulent white
+  // water streaked down the slope, foam boiling at its foot; a calm sea's level is flat, a river's barely tilts (the
+  // tsunami's flow field stays at rest in the sim, so this cannot wait for a speed)
+  vec3 sgN = cross(dFdx(vSheet), dFdy(vSheet));
+  float sgL = length(sgN);
+  float sgCos = sgL > 1e-20 ? abs(dot(sgN / sgL, up)) : 1.0;
+  float sheetSlope = sqrt(max(1.0 - sgCos * sgCos, 0.0)) / max(sgCos, 1e-3);
+  // (only where the level is steeper than its bed — a cascade down a slope leans with the ground under it — and over
+  // a bed no steeper than a shelf)
+  float bedC = clamp(vBedCos, 1e-3, 1.0);
+  float bedSlope = sqrt(max(1.0 - bedC * bedC, 0.0)) / bedC;
+  float surge = smoothstep(0.045, 0.16, sheetSlope - bedSlope) * (1.0 - smoothstep(0.12, 0.3, bedSlope)) * smoothstep(1.0, 3.0, vDepth)
+    * (1.0 - smoothstep(0.5, 1.5, riverK + max(flowSpd - 2.0, 0.0)));
+  vec3 surgeDown = sgL > 1e-20 ? (sgN / sgL) * sign(dot(sgN, up)) : up;
+  surgeDown -= up * dot(surgeDown, up);
+  surgeDown = length(surgeDown) > 1e-5 ? normalize(surgeDown) : vec3(0.0);
   // rivers are shallow everywhere: their banks get a thin lip of foam, not a foamy bed
   shore *= mix(1.0, 0.25, riverK);
   // whitecaps: the open sea breaks into scattered white patches that drift and die away — a few, not a speckle
@@ -589,7 +619,7 @@ void main() {
   float whitecap = smoothstep(1.0 - cover * 4.0, 1.0 - cover * 2.0 + 0.02, wcN * 0.5 + 0.5) * step(0.001, cover) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
   // the streaks of foam a gale leaves behind (thin, long, along the wind)
   whitecap = max(whitecap, smoothstep(0.75, 0.95, snoise(vec3(P.x * 0.03, P.y * 1.4, P.z * 0.03) + 3.1) * 0.5 + 0.5) * smoothstep(9.0, 16.0, windSpd * uWind) * 0.5 * calm * smoothstep(0.3, 0.8, vSalt));
-  float foamAmt = clamp(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), 0.0, 1.0);
+  float foamAmt = clamp(max(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), surge * 0.95), 0.0, 1.0);
   if (foamAmt > 0.01) {
     // foam is LACE: a web of bright bubble filaments round dark holes (ridged noise at two scales, drifting with the
     // flow and slowly re-forming), thinning out in larger patches — the cells of a Voronoi read as white fish scales
@@ -611,6 +641,11 @@ void main() {
       vec3 side = normalize(cross(fd, up) + 1e-5);
       float streak = smoothstep(0.1, 0.7, snoise(P * 1.2 - vFlow * uTime * 0.9) * 0.5 + 0.5);
       pat = mix(pat, 0.75 + 0.25 * streak, smoothstep(0.06, 0.2, lean));
+    }
+    // a surge's face: streaks of white water running down it, churning
+    if (surge > 0.02) {
+      float sk = (snoise(P * 0.9 + surgeDown * uTime * 1.6) * 0.6 + snoise(P * 2.3 - surgeDown * uTime * 2.2) * 0.4 * (1.0 - smoothstep(0.1, 0.5, fw))) * 0.5 + 0.5;
+      pat = mix(pat, 0.7 + 0.3 * smoothstep(0.15, 0.75, sk), surge * 0.8);
     }
     // soft coverage, never saturated white
     float foam = smoothstep(0.05, 0.9, foamAmt * (0.55 + 0.75 * pat)) * 0.8;

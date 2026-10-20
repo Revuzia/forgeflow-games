@@ -18,6 +18,7 @@ import type { ModLibrary } from './mods.ts';
 import { ver } from './mods.ts';
 import { Panel } from './panel.ts';
 import { h, clear, download } from './dom.ts';
+import { savedWorldFromText } from './embed.ts';
 import { icon } from './icons.ts';
 
 export interface PackRef { id: string; name: string; version: string }
@@ -234,6 +235,8 @@ export interface SavesDeps {
   openNewWorld(): void;
   /** a save was opened (the opening ends, panels close) */
   loaded?(): void;
+  /** may the world now be kept (false behind the title: it is scenery, and the panel only loads) */
+  keepable?(): boolean;
 }
 
 export class Saves {
@@ -260,7 +263,7 @@ export class Saves {
     this.nameIn = h('input', { class: 'gn-text', type: 'text', placeholder: 'Name this moment…', spellcheck: 'false', maxlength: '80', aria: { label: 'Name of the save' } }) as HTMLInputElement;
     this.nameIn.addEventListener('keydown', (e) => { if (e.key !== 'Escape') e.stopPropagation(); if (e.key === 'Enter') void this.saveNew(); });
     const saveBtn = h('button', { class: 'gn-btn gn-btn-gold', on: { click: () => void this.saveNew() } }, h('span', { html: icon('save') }), 'Save');
-    const file = h('input', { type: 'file', accept: '.gnss,.genesis,application/octet-stream', style: 'display:none', aria: { label: 'Import a saved world' } }) as HTMLInputElement;
+    const file = h('input', { type: 'file', accept: '.gnss,.genesis,.txt,.html,application/octet-stream', style: 'display:none', aria: { label: 'Import a saved world' } }) as HTMLInputElement;
     file.addEventListener('change', () => { const f = file.files?.[0]; if (f) void this.importFile(f); file.value = ''; });
     const importBtn = h('button', { class: 'gn-btn', on: { click: () => file.click() } }, h('span', { html: icon('upload') }), 'Import a file');
     this.alertEl = h('div', { class: 'gn-saves-alert', role: 'alert' });
@@ -278,12 +281,22 @@ export class Saves {
       h('div', { class: 'gn-set-h gn-saves-h' }, h('span', { text: 'Kept moments' }), h('span', { class: 'gn-saves-auto' }, h('span', { text: 'Autosave' }), this.autoSel)),
       h('div', { class: 'gn-saves-autonote' }, this.autoNote),
       this.listEl, this.worldEl);
-    this.panel.onOpen = () => { this.alertEl.hidden = true; void this.refresh(); };
+    this.newRow = this.panel.body.querySelector('.gn-saves-new') as HTMLDivElement;
+    this.panel.onOpen = () => { this.alertEl.hidden = true; this.syncMode(); void this.refresh(); };
   }
 
   get isOpen(): boolean { return this.panel.isOpen; }
   open(): void { this.panel.open(); }
   close(): void { this.panel.close(); }
+
+  private newRow: HTMLDivElement;
+  /** behind the title the panel only loads: keeping the scenery world would overwrite a real one */
+  private syncMode(): void {
+    const keep = this.deps.keepable?.() ?? true;
+    const save = this.newRow.querySelectorAll<HTMLElement>('input, .gn-btn-gold');
+    for (const el of Array.from(save)) el.hidden = !keep;
+    this.panel.setTitle(keep ? 'Saves' : 'Load a world', keep ? 'keep this moment, or return to one' : 'return to a kept moment, or import a file');
+  }
 
   /** a problem (or an outcome) shown at the top of the panel, with a way forward when there is one */
   private alert(kind: 'bad' | 'ok', msg: string, act?: { label: string; run(): void }): void {
@@ -307,12 +320,17 @@ export class Saves {
     const w = this.deps.world();
     const pv = this.host.view.planet(this.host.primary());
     clear(this.worldEl);
+    this.worldEl.hidden = !(this.deps.keepable?.() ?? true);
     this.worldEl.append(h('span', { class: 'gn-set-note', text: `This world: ${pv?.name ?? '—'} · ${scenarioName(w.scenario)} · seed ${w.seed}${this.deps.packs().length ? ` · ${this.deps.packs().length} pack${this.deps.packs().length > 1 ? 's' : ''}` : ''}` }),
       h('button', { class: 'gn-btn', on: { click: () => { this.close(); this.deps.openNewWorld(); } } }, h('span', { html: icon('new-world') }), 'A new world…'));
     clear(this.listEl);
     let list: SaveMeta[] = [];
     try { list = await this.store.list(); } catch (e) { this.listEl.append(h('div', { class: 'gn-set-warn', text: `Saves cannot be listed: ${storageWords(e)}` })); return; }
-    if (!list.length) { this.listEl.append(h('div', { class: 'gn-set-note gn-saves-empty', text: `Nothing kept yet. Name this moment and save it — or press ${this.host.keybinds.hint('ui.quicksave') || 'F5'} for a quicksave.` })); return; }
+    if (!list.length) {
+      const keep = this.deps.keepable?.() ?? true;
+      this.listEl.append(h('div', { class: 'gn-set-note gn-saves-empty', text: keep ? `Nothing kept yet. Name this moment and save it — or press ${this.host.keybinds.hint('ui.quicksave') || 'F5'} for a quicksave.` : 'Nothing kept yet. Begin a new world: it is kept as you play, and you can save it whenever you like — or import a file.' }));
+      return;
+    }
     for (const m of list) this.listEl.append(this.row(m));
   }
 
@@ -323,7 +341,7 @@ export class Saves {
     const del = h('button', { class: 'gn-btn', title: 'Delete', aria: { label: `Delete ${m.name}` }, html: icon('close') });
     const acts = h('div', { class: 'gn-save-acts' },
       h('button', { class: 'gn-btn gn-btn-gold', text: 'Load', on: { click: () => void this.loadSlot(m.id) } }),
-      h('button', { class: 'gn-btn', title: 'Keep the world as it is now in this slot', text: 'Overwrite', on: { click: () => void this.saveSlot(m.id, m.name) } }),
+      (this.deps.keepable?.() ?? true) ? h('button', { class: 'gn-btn', title: 'Keep the world as it is now in this slot', text: 'Overwrite', on: { click: () => void this.saveSlot(m.id, m.name) } }) : null,
       h('button', { class: 'gn-btn', title: 'Export to a file', aria: { label: `Export ${m.name}` }, html: icon('download'), on: { click: () => void this.exportSlot(m.id) } }),
       del);
     del.addEventListener('click', () => {
@@ -477,6 +495,11 @@ export class Saves {
   async importFile(f: File): Promise<boolean> {
     let buf: ArrayBuffer;
     try { buf = await f.arrayBuffer(); } catch (e) { this.fail(`The file could not be read: ${e instanceof Error ? e.message : String(e)}`); return false; }
+    // a saved world kept as a page of text (the site's frame cannot download: src/ui/embed.ts) is read back to its bytes
+    const head = String.fromCharCode(...new Uint8Array(buf.slice(0, 4)));
+    if (head !== 'GNSS' && head !== 'GNPK') {
+      try { const back = await savedWorldFromText(new TextDecoder().decode(buf)); if (back) buf = back; } catch (e) { this.fail(`${f.name}: ${e instanceof Error ? e.message : String(e)}`); return false; }
+    }
     let parts: { save: ArrayBuffer; packs: ContentPack[]; meta: BundleMeta };
     let hdr: SaveHeader;
     try { parts = unbundle(buf); hdr = readSaveHeader(parts.save); } catch (e) { this.fail(`${f.name}: ${e instanceof Error ? e.message : String(e)}`); return false; }
@@ -484,7 +507,7 @@ export class Saves {
     for (const p of parts.packs) await this.deps.library.keep(p, 'save').catch(() => null);
     const need = new Set(neededPacks(hdr));
     const m = parts.meta;
-    const name = m.name || f.name.replace(/\.(gnss|genesis)$/i, '');
+    const name = m.name || f.name.replace(/\.(gnss|genesis|txt|html?)$/i, '');
     const rec: SaveRecord = {
       id: `s${Date.now().toString(36)}`, name, scenario: hdr.scenario, seed: hdr.seed, tick: hdr.tick, date: Date.now(),
       world: m.world ?? hdr.worlds[0] ?? '', worlds: hdr.worlds, calendar: m.calendar ?? hdr.calendar, summary: [m.summary ?? headerSummary(hdr), 'imported'].filter(Boolean).join(' · '), thumb: m.thumb ?? null, size: parts.save.byteLength,
@@ -502,6 +525,8 @@ export class Saves {
   frame(): void {
     const min = this.host.prefs.value.game.autosaveMinutes;
     if (!min || this.host.source !== 'worker') return;
+    // the title's scenery is never kept (its timer waits for a real world)
+    if (!(this.deps.keepable?.() ?? true)) { this.lastAuto = performance.now(); return; }
     const now = performance.now();
     if (now - this.lastAuto < min * 60000) return;
     this.lastAuto = now;

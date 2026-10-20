@@ -8280,7 +8280,7 @@
     "falling star",
     "call a star down"
    ],
-   "desc": "Call a star down (gesture: a star).",
+   "desc": "Call a star down on a place.",
    "cost": 40,
    "cooldown": 240
   },
@@ -8340,7 +8340,7 @@
     "item": {
      "type": "enum",
      "values": "items",
-     "desc": "conjure an item into the hand"
+     "desc": "conjure an item into the Touch"
     },
     "qty": {
      "type": "number",

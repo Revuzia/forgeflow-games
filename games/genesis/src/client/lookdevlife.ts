@@ -129,6 +129,10 @@ export class LookdevLife {
   private w: LifeWorld;
   private rng: Rng;
   private lastBuildTick = -1e9;
+  /** (signs, LIVING §6.5) per-agent AgentFlag2 bits by agent id: a prophet, the Called */
+  private flags2 = new Map<number, number>();
+  /** the building block changed outside construction (a shrine raised): send it with the next snapshot */
+  private blockDirty = false;
 
   constructor(w: LifeWorld) {
     this.w = w;
@@ -157,6 +161,48 @@ export class LookdevLife {
         nightLight: Math.min(1, 0.25 + lightK * 0.18), knowledgeCount: 5 + eraIdx(s.era) * 9, flags: 0,
       });
     }
+  }
+
+  // ───────────────────────────── signs (fixtures for render/signs) ─────────────────────────────
+
+  /** set or clear AgentFlag2 bits on an agent (a prophet, one of the Called) */
+  setFlags2(id: number, bits: number, on: boolean): void {
+    const v = this.flags2.get(id) ?? 0;
+    this.flags2.set(id, on ? v | bits : v & ~bits);
+  }
+
+  /** the ids of the `n` people nearest unit vector u (grown-ups first; from their last snapshot place) */
+  agentsNear(u: ArrayLike<number>, n: number, adults = true): number[] {
+    const A = this.agents;
+    const out: { id: number; d: number }[] = [];
+    for (let i = 0; i < this.agentList.length; i++) {
+      const a = this.agentList[i];
+      if (adults && a.flags & AgentFlag.child) continue;
+      const d = 1 - (A.pos[i * 3] * u[0] + A.pos[i * 3 + 1] * u[1] + A.pos[i * 3 + 2] * u[2]);
+      out.push({ id: a.id, d });
+    }
+    return out.sort((a, b) => a.d - b.d).slice(0, n).map((q) => q.id);
+  }
+
+  /** a shrine raised at unit vector u (beside a sacred place), in the nearest settlement's stone */
+  addShrine(u: ArrayLike<number>, mat = 'stone'): number {
+    let best: Site | null = null, bd = -2;
+    for (const s of this.sites) { const d = s.frame.c[0] * u[0] + s.frame.c[1] * u[1] + s.frame.c[2] * u[2]; if (d > bd) { bd = d; best = s; } }
+    if (!best) return -1;
+    const [x, z] = this.toLocal(best.frame, u);
+    let i = this.placeNear(best, 'shrine', 'shrine', mat, x, z, null, 0.9, { flags: BuildingFlag.sacred | BuildingFlag.lit }, 40);
+    if (i < 0) i = this.add(best, 'shrine', 'shrine', mat, x, z, 0, 0.9, { flags: BuildingFlag.sacred | BuildingFlag.lit });
+    this.buildings = this.makeBuildingBlock();
+    this.blockDirty = true;
+    return 1000 + i;
+  }
+
+  /** change a settlement's view (its prophet, its sacred places and animal) */
+  setSettlement(id: number, patch: Partial<SettlementView>): boolean {
+    const s = this.settlements.find((q) => q.id === id);
+    if (!s) return false;
+    Object.assign(s, patch);
+    return true;
   }
 
   // ───────────────────────────── geometry helpers ─────────────────────────────
@@ -1112,7 +1158,7 @@ export class LookdevLife {
     return {
       count: n, id: new Uint32Array(n), species: new Uint16Array(n), pos: new Float32Array(n * 3), vel: new Float32Array(n * 3),
       alt: new Float32Array(n), heading: new Float32Array(n), anim: new Uint8Array(n), phase: new Float32Array(n), flags: new Uint16Array(n),
-      carry: new Int16Array(n), group: new Int32Array(n), scale: new Float32Array(n), tint: new Uint32Array(n),
+      carry: new Int16Array(n), group: new Int32Array(n), scale: new Float32Array(n), tint: new Uint32Array(n), flags2: new Uint8Array(n),
     };
   }
 
@@ -1132,6 +1178,7 @@ export class LookdevLife {
       const a = this.agentList[i];
       const f = a.site.frame;
       A.id[i] = a.id; A.species[i] = a.species; A.flags[i] = a.flags; A.carry[i] = a.carry; A.group[i] = a.group;
+      A.flags2![i] = this.flags2.get(a.id) ?? 0;
       A.scale[i] = a.scale; A.tint[i] = a.tint; A.alt[i] = a.alt; A.phase[i] = a.phase;
       if (a.mode === 0) {
         if (!a.cached) { this.put(A, i, f, a.x, a.z, 0, 0, a.heading); a.cached = [A.pos[i * 3], A.pos[i * 3 + 1], A.pos[i * 3 + 2]]; }
@@ -1201,6 +1248,7 @@ export class LookdevLife {
     }
     // construction creeps on (re-sent only when it does)
     let blk: BuildingBlock | null = null;
+    if (this.blockDirty) { this.blockDirty = false; blk = this.buildings; }
     if (Math.abs(tick - this.lastBuildTick) > 240) {
       this.lastBuildTick = tick;
       let changed = false;

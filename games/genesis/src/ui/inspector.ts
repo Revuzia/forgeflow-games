@@ -1,20 +1,22 @@
 // GENESIS — the inspector (CONTRACT.md §16.6, §1.6 "inspector biographies"): click anything and read it, and act on it.
 // A dark glass card on the right that exists only while something is selected:
 //   person     biography: name, people, age, role, what they are doing, family, health, mood, needs, skills, traits,
-//              knowledge, memories, faith
-//   settlement population, era, rule, neighbours, people, belief, library, stores, buildings, stories, language
+//              knowledge, memories, trust and fear of the god; a prophet's card (how far they are believed, what they
+//              foretold and when it falls due, persecution) with Foretell and Abandon; Make a prophet for a grown person
+//   settlement population, its age (eraLabel), rule, neighbours, how it lives off the land, how it holds the god (faith,
+//              fear, trust, loyalty), its open prayers with Answer, its prophet, what it keeps holy (its sacred animal
+//              can be chosen), a daughter town's grievance, library, stores, buildings, stories, language — and Send a sign
 //   building · herd · cell (fields, biome, plants, ore) · species (a people: body, needs, lands)
 //   disaster   kind, strength, reach, life — with Cancel, Scale, Move, Freeze
 //   weather    kind, strength, reach, drift — Clear, paint more
-//   creature   body, alignment, hunger, energy, desires, miracles learned, leash — Reward, Punish, Leash, Mode, Teach,
-//              Grow, Rename, Release
 //   ship       kind, phase, crew, route, log — Recall, Destroy
 //   world      the laws of the world: every registered parameter, editable live (set <path> <value>)
 // Every card ends with the powers that act on that kind of thing (generated from powers.json): a click arms the power
 // with the selection (the tool card then offers "Cast on …").
 //
-// Data comes from sim.query ('agent', 'settlement', 'building', 'herds', 'cell', 'species', 'disaster', 'creature',
-// 'ship', 'params', 'planet'); the card re-asks every ~1.2 s while open. A person who dies while selected keeps their
+// Data comes from sim.query ('agent' with 'prophets', 'settlement', 'building', 'herds', 'cell', 'species', 'disaster',
+// 'ship', 'params', 'planet') and the mirror's live views (a settlement's regard, prayers, prophet and sacred things;
+// a person's flags2); the card re-asks every ~1.2 s while open. A person who dies while selected keeps their
 // card, marked as such.
 
 import type { EntityRef, CommandResult, Command } from '../sim/types.ts';
@@ -23,6 +25,8 @@ import type { Power, PowerBook } from './powers.ts';
 import { h, cap, clear, fmtNum, fmtDist, fmtTicks, fmtLatLon } from './dom.ts';
 import { icon } from './icons.ts';
 import { slider, toggle } from './panel.ts';
+import { METERS, meterRow, PRAYER_WORDS, PRAYER_ANSWERS, PLACE_WORDS, answerCommand, foretellForm, foretellSays, prophetState, type ProphetRow } from './living.ts';
+import { AgentFlag, AgentFlag2 } from '../sim/types.ts';
 
 export interface InspectorDeps {
   query(q: string, args: Record<string, unknown>): Promise<unknown>;
@@ -41,8 +45,14 @@ export interface InspectorDeps {
   powers: PowerBook;
   /** arm a power with the selection (and preset values) */
   arm(p: Power, preset?: Record<string, unknown>): void;
-  /** live views of disasters / weather / ships / creatures (the mirror) */
+  /** live views from the mirror: a disaster, weather, ship; a settlement's view; a person's flags */
   live(ref: InspectRef): Record<string, unknown> | null;
+  /** the sign picker over a settlement */
+  openSigns?(target: { planet: number; id: number }): void;
+  /** a sacred place at a cell (the god's window keeps the list), or null */
+  sacredAt?(planet: number, cell: number): { kind: string; settlement: number } | null;
+  /** the render clock now (prophecies and prayers say how long they have) */
+  tick?(): number;
   planetName(id: number): string;
   dayHours(planet: number): number;
   /** an action's key as people read it (titles follow rebinding) */
@@ -72,16 +82,16 @@ const TRAIT_WORDS: Record<string, [string, string]> = {
 };
 const KIND_LABEL: Record<string, string> = {
   agent: 'Person', animal: 'Herd', building: 'Building', settlement: 'Settlement', cell: 'Place', species: 'A people', disaster: 'Disaster',
-  weather: 'Weather', creature: 'Creature', ship: 'Ship', planet: 'World',
+  weather: 'Weather', ship: 'Ship', planet: 'World',
 };
 /** which power-entity kinds a selection kind answers to (a herd is picked as an animal) */
-const POWER_KIND: Record<string, string> = { agent: 'agent', settlement: 'settlement', disaster: 'disaster', creature: 'creature', ship: 'ship', planet: 'planet', animal: 'animal', building: 'building' };
+const POWER_KIND: Record<string, string> = { agent: 'agent', settlement: 'settlement', disaster: 'disaster', ship: 'ship', planet: 'planet', animal: 'animal', building: 'building' };
 
 /** groups of the laws of the world, by path prefix */
 const LAW_GROUPS: [RegExp, string][] = [
   [/^planet\.atmosphere\./, 'The air'], [/^(planet|orbit)\./, 'The world'], [/^star\./, 'The star'], [/^(climate|weather)\./, 'Climate and weather'],
   [/^(hydro|fire|vegetation|terrain)\./, 'Nature\'s pace'], [/^species\./, 'The peoples'], [/^(disasters|world)\./, 'Disasters'],
-  [/^(belief|creature|hand|rivals|restraint|miracles)\./, 'The god'], [/^space\./, 'Ships and space'], [/^sim\./, 'The simulation'],
+  [/^(belief|god|hand|rivals|restraint|miracles|prayers|prophets)\./, 'The god'], [/^space\./, 'Ships and space'], [/^sim\./, 'The simulation'],
 ];
 
 export class Inspector {
@@ -179,11 +189,11 @@ export class Inspector {
     this.head.append(el('div', 'gn-insp-kind', KIND_LABEL[ref.kind] ?? cap(ref.kind)), el('div', 'gn-insp-name', '…'));
     clear(this.body);
     this.body.append(el('div', 'gn-insp-wait', 'Asking the world…'));
-    const followable = ref.kind === 'agent' || ref.kind === 'animal' || ref.kind === 'creature' || ref.kind === 'disaster' || ref.kind === 'ship' || ref.kind === 'weather';
+    const followable = ref.kind === 'agent' || ref.kind === 'animal' || ref.kind === 'disaster' || ref.kind === 'ship' || ref.kind === 'weather';
     this.followBtn.hidden = !followable;
     this.lookBtn.hidden = ref.kind === 'species';
     this.cineBtn.hidden = !this.deps.dolly || ref.kind !== 'settlement';
-    this.walkBtn.hidden = !this.deps.walk || !['settlement', 'agent', 'building', 'cell', 'animal', 'creature'].includes(ref.kind);
+    this.walkBtn.hidden = !this.deps.walk || !['settlement', 'agent', 'building', 'cell', 'animal'].includes(ref.kind);
     this.syncFollow();
     this.lastAsk = -1e9;
     this.tick(performance.now());
@@ -251,9 +261,16 @@ export class Inspector {
         return d ? { ...d, live } : live;
       }
       case 'weather': return this.deps.live(ref);
-      case 'creature': {
-        const d = obj(await q('creature', { id: ref.id }));
-        return d ? { ...d, live: this.deps.live(ref) } : null;
+      case 'settlement': {
+        const d = obj(await q('settlement', { id: ref.id, planet }));
+        return d ? { ...d, view: this.deps.live(ref) } : null;
+      }
+      case 'agent': {
+        const [d, pr] = await Promise.all([q('agent', { id: ref.id, planet }), q('prophets', { planet }).catch(() => null)]);
+        const a = obj(d);
+        if (!a || a.lookdev) return a;
+        const prophet = Array.isArray(pr) ? (pr as ProphetRow[]).find((p) => p.agent === ref.id) ?? null : null;
+        return { ...a, prophet, live: this.deps.live(ref) };
       }
       case 'ship': return obj(await q('ship', { id: ref.id }));
       case 'planet': {
@@ -286,7 +303,6 @@ export class Inspector {
       case 'species': this.species(d); break;
       case 'disaster': this.disaster(ref as EntityRef, d); break;
       case 'weather': this.weather(ref as EntityRef, d); break;
-      case 'creature': this.creature(ref as EntityRef, d); break;
       case 'ship': this.ship(ref as EntityRef, d); break;
       case 'planet': this.planet(ref as EntityRef, d); break;
       default: this.head.append(el('div', 'gn-insp-name', cap(ref.kind)));
@@ -409,9 +425,15 @@ export class Inspector {
     if (d.sick && !this.gone) flags.push(`sick: ${str(d.sick)}`);
     const master = Array.isArray(d.master) ? (d.master as string[]) : [];
     if (master.length) flags.push(`master of ${master.join(', ')}`);
-    if (num(d.flags) & 16) flags.push('disciple of the god');
-    if (num(d.flags) & 32) flags.push('possessed by the god');
-    if (num(d.flags) & 8) flags.push('leader');
+    const f2 = num((d.live as Rec | null)?.flags2);
+    const prophet = d.prophet as ProphetRow | null;
+    if (prophet && !prophet.abandoned) flags.push('your prophet');
+    else if (f2 & AgentFlag2.prophet) flags.push('a prophet');
+    if (num(d.flags) & AgentFlag.disciple || f2 & AgentFlag2.called) flags.push('one of the Called');
+    if (num(d.flags) & AgentFlag.possessed) flags.push('possessed by the god');
+    if (num(d.flags) & AgentFlag.leader) flags.push('leader');
+    if (f2 & AgentFlag2.sheltering) flags.push('sheltering');
+    if (f2 & AgentFlag2.pilgrim) flags.push('on pilgrimage');
     if (flags.length) this.chips(this.body, flags, 6, 'gn-chip-flag');
     if (typeof d.species === 'string') {
       const spl = el('div', 'gn-insp-line');
@@ -432,11 +454,18 @@ export class Inspector {
       for (const k of nk) this.bar(grid, NEED_LABEL[k] ?? cap(k), num(needs[k]));
       sec.append(grid);
     }
+    if (prophet && !this.gone) this.prophetCard(ref, prophet);
     const faith = (d.faith ?? null) as Rec | null;
     if (faith) {
       const sec = this.section('Toward the god');
-      this.bar(sec, 'Love', num(faith.love), 'gn-love');
+      if (typeof faith.faith === 'number') this.bar(sec, 'Faith', num(faith.faith), 'gn-faithb');
+      this.bar(sec, 'Trust', num(faith.trust, num(faith.love)), 'gn-love');
       this.bar(sec, 'Fear', num(faith.fear), 'gn-fear');
+      if (typeof faith.loyalty === 'number') this.bar(sec, 'Loyalty', num(faith.loyalty), 'gn-loyal');
+    }
+    // a grown person who is not a prophet may be called as one (one to a town)
+    if (!this.gone && !prophet && age >= 16) {
+      this.acts(this.body, [{ label: 'Make them your prophet', icon: 'prophet', title: 'They will preach, read your signs to their town and foretell what you will do', run: () => void this.act({ k: 'prophet.call', agent: ref.id, planet }) }]);
     }
     const skills = Object.entries((d.skills ?? {}) as Record<string, number>).sort((a, b) => b[1] - a[1]).slice(0, 6);
     if (skills.length) {
@@ -488,6 +517,34 @@ export class Inspector {
     }
   }
 
+  /** a prophet: how far they are believed, what they foretold and when it falls due, their standing; Foretell, Abandon */
+  private prophetCard(ref: EntityRef, p: ProphetRow): void {
+    const planet = ref.planet ?? 0;
+    const tick = this.deps.tick?.() ?? 0;
+    const sec = this.section('Prophet', p.how === 'rose' ? (p.confirmed ? 'rose on their own · confirmed' : 'rose on their own') : 'called by you');
+    sec.classList.add('gn-insp-prophet');
+    this.bar(sec, 'Believed', p.credibility, 'gn-cred', `${Math.round(p.credibility * 100)}%`);
+    const st = prophetState(p, tick);
+    if (st.length) this.chips(sec, st, 6, 'gn-chip-flag');
+    const open = (p.prophecies ?? []).filter((q) => q.until > tick);
+    if (open.length) {
+      const list = el('ul', 'gn-insp-stories');
+      for (const q of open) list.append(el('li', '', `“${cap(foretellSays(q.kind))}” — ${q.by === 'prophet' ? 'their own word' : 'your word'}, ${this.leftText(planet, q.until, tick)}`));
+      sec.append(list);
+    } else sec.append(el('div', 'gn-insp-none', 'Nothing foretold now. Say what you will do through them — then make it true.'));
+    if ((p.fulfilled ?? 0) + (p.failed ?? 0) > 0) this.kv(sec, 'Proved', `${p.fulfilled ?? 0} right · ${p.failed ?? 0} wrong`);
+    if (!p.abandoned) {
+      sec.append(foretellForm({ agent: ref.id, planet, name: str(this.data?.name, 'They'), cmd: (c) => this.deps.cmd(c), done: () => { this.lastAsk = -1e9; } }));
+      this.acts(sec, [{ label: 'Abandon', icon: 'withdraw', title: 'Turn from them: their word loses its weight', run: () => void this.act({ k: 'prophet.abandon', agent: ref.id, planet }) }]);
+    }
+  }
+
+  /** "1 day 4 h left" from the render clock */
+  private leftText(planet: number, until: number, tick: number): string {
+    const left = until - tick;
+    return left <= 0 ? 'ending' : `${fmtTicks(left, this.deps.dayHours(planet))} left`;
+  }
+
   private building(ref: EntityRef, d: Rec): void {
     const planet = ref.planet ?? 0;
     const name = str(d.name, 'A building');
@@ -515,9 +572,9 @@ export class Inspector {
     const books = Array.isArray(d.books) ? (d.books as string[]).filter(Boolean) : [];
     if (books.length) { const b = this.section('Written here', `${books.length}`); this.chips(b, books, 16, 'gn-chip-book'); }
     this.acts(this.body, [
-      { label: 'Lift it', icon: 'grab', title: 'Take it in the hand (small buildings)', run: () => void this.act({ k: 'hand.grab', planet, target: { kind: 'building', id: ref.id } }) },
-      { label: 'Mend', icon: 'stroke', title: 'Smooth its cracks (stroke)', run: () => void this.act({ k: 'hand.stroke', planet, target: { kind: 'building', id: ref.id } }) },
-      { label: 'Crack', icon: 'slap', title: 'Strike its walls (slap)', run: () => void this.act({ k: 'hand.slap', planet, target: { kind: 'building', id: ref.id } }) },
+      { label: 'Lift it', icon: 'grab', title: 'Lift it with the Touch (small buildings)', run: () => void this.act({ k: 'hand.grab', planet, target: { kind: 'building', id: ref.id } }) },
+      { label: 'Mend', icon: 'stroke', title: 'Soothe it: its cracks close a little', run: () => void this.act({ k: 'hand.stroke', planet, target: { kind: 'building', id: ref.id } }) },
+      { label: 'Crack', icon: 'slap', title: 'Rebuke it: its walls crack', run: () => void this.act({ k: 'hand.slap', planet, target: { kind: 'building', id: ref.id } }) },
     ]);
   }
 
@@ -528,8 +585,11 @@ export class Inspector {
     const cohort = num(coh.children) + num(coh.adults) + num(coh.elders);
     const sp = str(d.speciesName, str(d.species));
     const era = str(d.era);
+    const view = (d.view ?? null) as Rec | null;
+    const hist = (d.history ?? null) as Rec | null;
+    const age = str(view?.eraLabel, str(hist?.label, era ? `${era} age` : ''));
     this.header(d.fallen ? 'Settlement · fallen' : d.band ? 'Band' : 'Settlement', str(d.name, 'A settlement'),
-      [cap(sp), era ? `${era} age` : '', `${pop} ${pop === 1 ? 'soul' : 'souls'}`].filter(Boolean).join(' · '));
+      [cap(sp), age, `${pop} ${pop === 1 ? 'soul' : 'souls'}`].filter(Boolean).join(' · '));
     const line = el('div', 'gn-insp-doing');
     const f = d.founded as Rec | null;
     const feature = str(d.feature);
@@ -580,11 +640,13 @@ export class Inspector {
     if (d.crop) this.kv(sec, 'Fields of', `${str(d.crop).toLowerCase()}${num(d.fields) ? ` (${num(d.fields)})` : ''}`);
     const roles = Object.entries((d.roles ?? {}) as Record<string, number>).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`);
     if (roles.length) this.chips(sec, roles, 10, 'gn-chip-role');
-    if (typeof d.belief === 'number') {
+    if (!d.fallen) this.settlementGod(ref, d, view);
+    else if (typeof d.belief === 'number') {
       const g = this.section('Toward the god');
       this.bar(g, 'Belief', num(d.belief), 'gn-love');
       this.bar(g, 'Fear', num(d.fear), 'gn-fear');
     }
+    this.livelihood(view);
     const lib = Array.isArray(d.library) ? (d.library as string[]) : [];
     const written = new Set(Array.isArray(d.written) ? (d.written as string[]) : []);
     const secrets = new Set(Array.isArray(d.secrets) ? (d.secrets as string[]) : []);
@@ -631,6 +693,73 @@ export class Inspector {
     }
   }
 
+  /** how a settlement holds the god, what it prays for, its prophet, what it keeps holy — and a sign to send it */
+  private settlementGod(ref: EntityRef, d: Rec, view: Rec | null): void {
+    const planet = ref.planet ?? 0;
+    const tick = this.deps.tick?.() ?? 0;
+    const reg = (view?.regard ?? null) as Record<string, number> | null;
+    const g = this.section('How they hold you');
+    if (reg) {
+      const wrap = el('div', 'gn-meters');
+      for (const m of METERS) wrap.append(meterRow(m, num(reg[m])));
+      g.append(wrap);
+    } else if (typeof d.belief === 'number') {
+      this.bar(g, 'Belief', num(d.belief), 'gn-love');
+      this.bar(g, 'Fear', num(d.fear), 'gn-fear');
+    }
+    // the open prayers, each with its answer
+    const prayers = Array.isArray(view?.prayers) ? (view!.prayers as { id: number; kind: string; until: number; urgency: number }[]) : [];
+    for (const p of prayers) {
+      const row = el('div', 'gn-insp-prayer');
+      row.dataset.prayer = String(p.id);
+      const t = el('span', 'gn-insp-prayer-t');
+      t.append(h('span', { class: 'gn-insp-prayer-i', html: icon('prayer') }), el('b', '', `They pray for ${PRAYER_WORDS[p.kind] ?? p.kind}`), el('small', '', ` · ${this.leftText(planet, p.until, tick)}`));
+      const b = h('button', { class: 'gn-btn gn-primary gn-insp-act', title: `Answer it: ${PRAYER_ANSWERS[p.kind] ?? 'the fitting act'}`, text: 'Answer' });
+      b.addEventListener('click', () => { b.disabled = true; void this.act(answerCommand({ planet, settlement: ref.id, id: p.id })); });
+      row.append(t, b);
+      g.append(row);
+    }
+    const pr = (view?.prophet ?? null) as Rec | null;
+    if (pr) {
+      const who = el('span');
+      who.append(this.link(str(pr.name), { kind: 'agent', id: num(pr.agent), planet }), document.createTextNode(` · believed ${Math.round(num(pr.credibility) * 100)}%`));
+      this.kv(g, 'Prophet', who);
+    }
+    const sacred = (view?.sacred ?? null) as Rec | null;
+    if (sacred && num(sacred.places) > 0) this.kv(g, 'Holy places', `${num(sacred.places)}`);
+    // the animal they revere: shown, and chosen here (settlement.sacred)
+    const animals = this.deps.powers.enumOf('settlement.sacred', 'animal');
+    const cur = str(sacred?.animal);
+    if (animals?.length) {
+      const sel = h('select', { class: 'gn-select', aria: { label: 'Their sacred animal' } }) as HTMLSelectElement;
+      if (!cur) sel.append(h('option', { value: '', text: 'none — choose one…' }));
+      for (const a of animals) sel.append(h('option', { value: a, text: a.replace(/-/g, ' ') }));
+      sel.value = cur;
+      sel.addEventListener('keydown', (e) => e.stopPropagation());
+      sel.addEventListener('change', () => { if (sel.value) void this.act({ k: 'settlement.sacred', settlement: ref.id, animal: sel.value, planet }); });
+      this.kv(g, 'They revere', sel);
+    } else if (cur) this.kv(g, 'They revere', `the ${cur.replace(/-/g, ' ')}`);
+    const grievance = typeof view?.grievance === 'number' ? num(view.grievance) : -1;
+    if (grievance >= 0) this.bar(g, 'Grievance', grievance, 'gn-fear', grievance >= 0.6 ? 'breaking away' : grievance >= 0.35 ? 'bitter' : 'content');
+    this.acts(g, [
+      { label: 'Send a sign', icon: 'sign', title: 'A wonder over them: they read it by how they hold you', run: () => this.deps.openSigns?.({ planet, id: ref.id }) },
+      { label: 'Hallow a place', icon: 'sacred', title: 'Then click a spring, a grove or a peak near them', run: () => { const p = this.deps.powers.get('sacred-place'); if (p) this.deps.arm(p); } },
+    ]);
+  }
+
+  /** how it lives off the land this year (SettlementView.livelihood): food by source, herds, children */
+  private livelihood(view: Rec | null): void {
+    const lv = (view?.livelihood ?? null) as { food?: Record<string, number>; herds?: number; under15?: number } | null;
+    if (!lv?.food) return;
+    const src = Object.entries(lv.food).filter(([, v]) => v > 0.005).sort((a, b) => b[1] - a[1]);
+    if (!src.length && !lv.herds) return;
+    const words: Record<string, string> = { forage: 'Gathering', hunt: 'Hunting', fish: 'Fishing', farm: 'Farming', herd: 'Herding' };
+    const g = this.section('Living off the land', 'this year');
+    for (const [k, v] of src) this.bar(g, words[k] ?? cap(k), v, 'gn-skill', `${Math.round(v * 100)}%`);
+    if (num(lv.herds) > 0) this.kv(g, 'Livestock', `${Math.round(num(lv.herds))} head`);
+    if (typeof lv.under15 === 'number' && lv.under15 > 0) this.kv(g, 'Children', `${Math.round(lv.under15 * 100)}% under fifteen`);
+  }
+
   private herd(d: Rec): void {
     const n = num(d.count);
     this.header('Herd', str(d.name, 'Animals'), `${Math.max(1, Math.round(n))} ${n >= 1.5 ? 'animals' : 'animal'} · ${str(d.state, 'grazing')}`);
@@ -651,6 +780,14 @@ export class Inspector {
     const temp = num(f.temperature);
     now.textContent = `${temp.toFixed(1)} °C now, ${num(d.tempMean).toFixed(1)} °C through the year${num(f.water) > 0.05 ? `, under ${fmtDist(num(f.water))} of water` : ''}${d.precipKind && d.precipKind !== 'none' ? `, ${str(d.precipKind)} falling` : ''}.`;
     this.body.append(now);
+    const holy = this.deps.sacredAt?.(planet, ref.id);
+    if (holy) {
+      const kp = this.ref ? this.deps.live({ kind: 'settlement', id: holy.settlement, planet })?.name : null;
+      const line = el('div', 'gn-insp-line gn-insp-holy');
+      line.append(h('span', { html: icon('sacred') }), document.createTextNode(` ${cap(PLACE_WORDS[holy.kind] ?? 'a holy place')}, sacred${kp ? ' to ' : ''}`));
+      if (kp) line.append(this.link(str(kp), { kind: 'settlement', id: holy.settlement, planet }));
+      this.body.append(line);
+    }
     const g = this.section('Ground');
     this.bar(g, 'Moisture', num(f.moisture), 'gn-mood');
     this.bar(g, 'Fertility', num(f.fertility), 'gn-health');
@@ -758,59 +895,6 @@ export class Inspector {
     this.acts(this.body, [
       { label: 'Clear it', icon: 'sun-clear', title: 'Clear the weather here', run: () => void this.act({ k: 'weather.clear', planet, ...(pos ? { pos } : {}), radius: Math.max(50, num(d.radius)) }) },
       { label: 'More of it', icon: 'new-weather', title: 'Paint more of this weather', run: () => { const p = this.deps.powers.list.find((x) => x.command === 'weather.paint' && x.params.kind === kind); if (p) this.deps.arm(p); } },
-    ]);
-  }
-
-  private creature(ref: EntityRef, d: Rec): void {
-    const planet = num(d.planet, ref.planet ?? 0);
-    const al = num(d.alignment);
-    const leash = d.leash as Rec | null;
-    this.header('Creature', str(d.name, 'Creature'), [cap(str(d.template)), al > 0.35 ? 'kind' : al < -0.35 ? 'cruel' : 'unsure', `${num(d.height, 0) ? fmtDist(num(d.height)) : ''}`].filter(Boolean).join(' · '));
-    this.body.append(el('div', 'gn-insp-doing', cap(str(d.activity, 'idle'))));
-    const s = this.section('Body and mind');
-    this.bar(s, 'Kindness', (al + 1) / 2, al >= 0 ? 'gn-love' : 'gn-fear', al.toFixed(2));
-    this.bar(s, 'Fed', 1 - num(d.hunger), 'gn-health');
-    this.bar(s, 'Energy', num(d.energy), 'gn-mood');
-    this.bar(s, 'Grown', num(d.growth), 'gn-skill');
-    this.bar(s, 'Trust', num(d.trust), 'gn-love');
-    const desires = Object.entries((d.desires ?? {}) as Record<string, number>).sort((a, b) => b[1] - a[1]);
-    if (desires.length) {
-      const g = this.section('What it wants', 'learned by reward and punishment');
-      for (const [k, v] of desires.slice(0, 9)) this.bar(g, cap(k.replace(/-/g, ' ')), v, 'gn-skill');
-    }
-    const mir = Object.entries((d.miracles ?? {}) as Record<string, number>).filter(([, v]) => v > 0.01).sort((a, b) => b[1] - a[1]);
-    const m = this.section('Miracles it knows', mir.length ? `${mir.length}` : 'none yet');
-    for (const [k, v] of mir) this.bar(m, cap(k), v, 'gn-love');
-    const lk = this.section('Leash');
-    this.kv(lk, 'Held', leash ? `${str(leash.mode)} · ${num(leash.settlement, -1) >= 0 ? 'to a town' : 'to a place'}` : 'free');
-    // controls
-    const id = ref.id;
-    const ctl = this.section('Teach it');
-    this.acts(ctl, [
-      { label: 'Reward', icon: 'treat', title: 'What it just did, it will do more (stroke)', run: () => void this.act({ k: 'creature.reward', planet, id }) },
-      { label: 'Punish', icon: 'stick', title: 'What it just did, it will do less (slap)', run: () => void this.act({ k: 'creature.punish', planet, id }) },
-      { label: 'Leash', icon: 'leash', title: 'Click a town or a place to leash it to', run: () => { const p = this.deps.powers.get('leash'); if (p) this.deps.arm(p, { mode: str(leash?.mode, 'tend'), ...(p.schema.id?.type === 'entity' ? { id } : {}) }); } },
-      { label: 'Unleash', icon: 'unleash', run: () => void this.act({ k: 'creature.unleash', planet, id }) },
-      { label: 'Go there', icon: 'go', title: 'Then click where it should go', run: () => { const p = this.deps.powers.get('creature-go'); if (p) this.deps.arm(p, p.schema.id?.type === 'entity' ? { id } : {}); } },
-    ]);
-    const modes = this.deps.powers.enumOf('creature.set-mode', 'mode') ?? ['tend', 'defend', 'impress', 'terrify', 'explore'];
-    const modeSel = h('select', { class: 'gn-select' }) as HTMLSelectElement;
-    for (const x of modes) modeSel.append(h('option', { value: x, text: x }));
-    modeSel.value = str(leash?.mode, 'tend');
-    modeSel.addEventListener('change', () => void this.act({ k: 'creature.set-mode', planet, id, mode: modeSel.value }));
-    const teachSel = h('select', { class: 'gn-select' }) as HTMLSelectElement;
-    for (const x of this.deps.powers.enumOf('creature.teach-by-example', 'miracle') ?? ['water', 'food', 'heal', 'forest', 'storm', 'fire', 'fireball', 'shield', 'lightning', 'wood', 'fertility', 'calm', 'teach', 'meteor']) teachSel.append(h('option', { value: x, text: x }));
-    const teachBtn = h('button', { class: 'gn-btn gn-insp-act', text: 'Show it' });
-    teachBtn.addEventListener('click', () => void this.act({ k: 'creature.teach-by-example', planet, id, miracle: teachSel.value }));
-    ctl.append(h('div', { class: 'gn-insp-form' }, h('span', { class: 'gn-insp-k', text: 'Mode' }), modeSel), h('div', { class: 'gn-insp-form' }, h('span', { class: 'gn-insp-k', text: 'Miracle' }), teachSel, teachBtn));
-    const nameIn = h('input', { class: 'gn-text', type: 'text', placeholder: 'a new name', spellcheck: 'false' }) as HTMLInputElement;
-    nameIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && nameIn.value.trim()) void this.act({ k: 'creature.rename', planet, id, to: nameIn.value.trim() }); });
-    ctl.append(h('div', { class: 'gn-insp-form' }, h('span', { class: 'gn-insp-k', text: 'Name' }), nameIn));
-    this.acts(ctl, [
-      { label: 'Grow', icon: 'grow', run: () => void this.act({ k: 'creature.grow', planet, id, amount: 0.25 }) },
-      { label: 'Shrink', icon: 'minus', run: () => void this.act({ k: 'creature.grow', planet, id, amount: -0.25 }) },
-      { label: 'Lift', icon: 'grab', title: 'Take it in the hand (if it trusts you)', run: () => void this.act({ k: 'hand.grab', planet, target: { kind: 'creature', id } }) },
-      { label: 'Release', icon: 'free', title: 'Let it go free for ever', run: () => void this.act({ k: 'creature.release', planet, id }) },
     ]);
   }
 

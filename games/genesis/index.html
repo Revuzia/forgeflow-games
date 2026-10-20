@@ -48,6 +48,16 @@
     box-shadow: 0 0 10px rgba(243, 223, 174, .7); }
   .gn-status { font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: clamp(10px, .8vw, 13px); letter-spacing: .32em; text-transform: uppercase;
     color: var(--dim); min-height: 1.3em; }
+  .gn-note { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; font-size: clamp(11px, .85vw, 14px); color: #d9d2c4; max-width: min(560px, 86vw); text-align: center;
+    line-height: 1.5; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .gn-note[hidden] { display: none; }
+  .gn-note .gn-note-acts { display: flex; gap: 10px; }
+  .gn-note button, .gn-card-shell .gn-ghost { font: 600 11px 'Inter', system-ui, sans-serif; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; color: var(--ivory);
+    background: rgba(255, 255, 255, .05); border: 1px solid rgba(217, 184, 120, .45); border-radius: 999px; padding: .7em 1.4em; box-shadow: none; }
+  .gn-note button:hover, .gn-note button:focus-visible, .gn-card-shell .gn-ghost:hover, .gn-card-shell .gn-ghost:focus-visible { background: rgba(217, 184, 120, .14); outline: none; filter: none; }
+  .gn-card-shell .gn-acts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .gn-card-shell details { margin: 0 0 1.1em; }
+  .gn-card-shell summary { cursor: pointer; color: var(--dim); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; margin-bottom: .6em; }
   @keyframes gnTurn { to { background-position: 0 0; filter: hue-rotate(0deg); } }
   @media (prefers-reduced-motion: reduce) { .gn-orb { animation: none; } }
 
@@ -79,6 +89,35 @@
   <div class="gn-sub">You poured water on a dead rock. Now they have a word for you.</div>
   <div class="gn-bar"><b id="boot-fill"></b></div>
   <div class="gn-status" id="boot-status">Lighting the star…</div>
+  <div class="gn-note" id="boot-note" hidden>
+    <span id="boot-note-text"></span>
+    <span class="gn-note-acts"><button type="button" id="boot-wait">Keep waiting</button><button type="button" onclick="location.reload()">Begin again</button></span>
+  </div>
+</div>
+
+<div id="retry" class="gn-card-shell" hidden role="alertdialog" aria-labelledby="retry-title">
+  <div class="gn-card">
+    <h1 id="retry-title">The world would not begin</h1>
+    <h2 id="retry-sub">something stopped it while it was being made</h2>
+    <p id="retry-words">This happens now and then on a busy machine or a slow connection. Trying again usually works.</p>
+    <details><summary>What happened</summary><pre id="retry-msg"></pre></details>
+    <div class="gn-acts">
+      <button type="button" onclick="location.reload()">Try again</button>
+      <button type="button" class="gn-ghost" id="retry-light">Begin on the barren world</button>
+    </div>
+  </div>
+</div>
+
+<div id="touchcard" class="gn-card-shell" hidden role="dialog" aria-labelledby="touch-title">
+  <div class="gn-card">
+    <h1 id="touch-title">Best on a desktop</h1>
+    <h2>GENESIS is made for a mouse and a keyboard</h2>
+    <p>You shape whole worlds here with a mouse, a keyboard (or a gamepad) and a computer's graphics card. On a phone or a tablet it will run slowly, and the touch screen cannot reach every power.</p>
+    <p>Open this page on a desktop or laptop for the full game — or look around anyway.</p>
+    <div class="gn-acts">
+      <button type="button" id="touch-go">Play anyway</button>
+    </div>
+  </div>
 </div>
 
 <div id="nogpu" class="gn-card-shell" hidden role="alertdialog" aria-labelledby="nogpu-title">

@@ -6,6 +6,10 @@
 //     plague. Births and deaths come in BURSTS (a winter, a plague, a baby boom), so they are gathered per settlement
 //     over a short window into one line ("3 children born in Aru", "4 died in Aru — cold, hunger"). Discoveries that
 //     arrive together are gathered the same way.
+//   * the people and their god (LIVING §3): a prayer raised (with "Answer" on it), answered or lapsed; a prophet called,
+//     foretelling, proved right or wrong, persecuted, dead; an omen and how the town read it; a disaster's warning and
+//     an evacuation; a place hallowed, an animal revered; a vein laid, a material first worked, a plant invented; a
+//     town breaking from its capital. Each takes its chronicle line's words when one was written with it.
 //   * Chronicle entries (view.chronicle): the readable story of an event ("Grain spilled around the camp at Aru grew
 //     again the next season…"). An event takes the text of the chronicle entry written at the same tick about the
 //     same thing; chronicle entries that no event claimed are shown when they matter (weight ≥ 2, or a first
@@ -16,7 +20,7 @@
 // hours, and a line that starts "Year 4." loses it when the header already dates it — and the header's date is the
 // chronicle entry's own. Plain DOM; styles in styles.css (.gn-toast*).
 
-import type { ChronicleEntry, EntityRef, SimEvent, UnitVec } from '../sim/types.ts';
+import type { ChronicleEntry, Command, EntityRef, SimEvent, UnitVec } from '../sim/types.ts';
 import type { WorldView } from '../client/worldview.ts';
 import { stripYear } from './words.ts';
 
@@ -29,7 +33,7 @@ export interface ToastSpec {
   text: string;
   /** a place to fly to when the toast is clicked */
   at?: { planet: number; pos: UnitVec } | null;
-  /** a thing to select (inspect) when the toast is clicked: a disaster, a creature, a ship */
+  /** a thing to select (inspect) when the toast is clicked: a disaster, a prophet, a ship */
   select?: EntityRef | null;
   /** date line ("Year 2 · day 7") */
   date?: string;
@@ -48,6 +52,8 @@ export interface ToastActions {
   lookAt(planet: number, pos: UnitVec): void;
   /** select (inspect) a thing a toast names */
   select?(ref: EntityRef): void;
+  /** send a command (a prayer's "Answer" on its toast) */
+  cmd?(c: Command): void;
 }
 
 const ICONS: Record<ToastKind, string> = {
@@ -73,6 +79,7 @@ const PRIORITY: Partial<Record<ToastKind, number>> = {
   // the answer to what the player just did (god, warn) outranks any news
   god: 4, warn: 4, loss: 3, fall: 3, war: 3, refusal: 3, plague: 3, discovery: 2, founding: 2, peace: 2, birth: 1, death: 1, info: 1, nature: 0,
 };
+/** at most this many toasts at once (the shell lowers it in a short window: the site's 888 × 500 frame holds two) */
 const MAX_SHOWN = 4;
 
 interface Burst {
@@ -129,6 +136,10 @@ export class Toasts {
   enabled = true;
   /** the opening is on: the worlds' firsts are its whispers, not toasts */
   muteMilestones = false;
+  /** the world's news is not shown (the title's world is scenery); the player's own answers still are */
+  muteNews = false;
+  /** how many toasts stand at once */
+  maxShown = MAX_SHOWN;
   /** lifetime of news toasts (ms); screenshots of a software-rendered page raise it (__GENESIS__.toastLife) */
   life = 7800;
   /** words for people (the shell's: coordinates → places, minutes → hours) */
@@ -242,7 +253,7 @@ export class Toasts {
 
   /** keep the column short: when it overflows, the least important (then the oldest) news goes first */
   private trim(): void {
-    while (this.root.children.length > MAX_SHOWN) {
+    while (this.root.children.length > this.maxShown) {
       let worst: Element | null = null, wp = Infinity;
       for (const c of Array.from(this.root.children)) {
         const p = Number((c as HTMLElement).dataset.pri ?? 1);
@@ -263,7 +274,7 @@ export class Toasts {
     if (this.chronicleSeen > view.chronicle.length) this.chronicleSeen = view.chronicle.length;
     for (let i = this.chronicleSeen; i < view.chronicle.length; i++) this.pendingChron.push({ e: view.chronicle[i], at: now });
     this.chronicleSeen = view.chronicle.length;
-    if (!this.enabled) { this.pendingChron.length = 0; this.bursts.clear(); return; }
+    if (!this.enabled || this.muteNews) { this.pendingChron.length = 0; this.bursts.clear(); return; }
     if (this.forgetTick >= 0 && now > this.forgetUntil) this.forgetTick = -1;
     for (const e of evs) {
       // the world ran back: what was told of the undone time is taken back (its toasts, its news still waiting)
@@ -438,9 +449,95 @@ export class Toasts {
         this.show({ kind: 'warn', title: `${god > 0 ? 'A rival\'s wrath' : 'Nature'} · ${view.planet(planet)?.name ?? ''}`, text: c ? c.text : `${e.text ?? 'A disaster'} has begun${god > 0 ? ', sent by a rival god' : ''}. Click to see it.`, date: dateFrom(c, date), at, select: ref, planet });
         return;
       }
-      case 'creature.learned': {
+      // ── the people and their god (LIVING §3) ──
+      case 'prayer.raised': {
+        // every prayer is told once, with its answer on it (a settlement prays at most twice at a time: never a flood)
+        const kind = String(data.kind ?? '');
+        const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        const pid = typeof data.prayer === 'number' ? data.prayer : undefined;
+        this.show({
+          kind: 'god', title: `Prayer · ${place}`, text: c ? c.text : `${where} prays for ${PRAYER_TEXT[kind] ?? kind}${Number(data.urgency ?? 0) >= 0.75 ? ', desperately' : ''}.`, date: dateFrom(c, date), at, planet,
+          action: this.actions.cmd && sid >= 0 ? { label: 'Answer', title: `Answer it: ${ANSWERED_BY[kind] ?? 'the fitting act'}`, run: () => this.actions.cmd!({ k: 'prayer.answer', settlement: sid, ...(pid !== undefined ? { prayer: pid } : {}), planet }) } : null,
+        });
+        return;
+      }
+      case 'prayer.answered': {
+        const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        this.show({ kind: 'god', title: `Heard · ${place}`, text: c ? c.text : `The god heard ${where}: their prayer for ${PRAYER_TEXT[String(data.kind)] ?? 'help'} was answered.`, date: dateFrom(c, date), at, planet });
+        return;
+      }
+      case 'prayer.lapsed': {
+        const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        // ("they say the god is deaf": three lapses in a row is the chronicle's own heavier line, shown with it)
+        this.claim(e.tick, (q) => q.weight >= 2 && mentions(q.text, where));
+        this.show({ kind: 'loss', title: `Unanswered · ${place}`, text: c ? c.text : `${where} prayed for ${PRAYER_TEXT[String(data.kind)] ?? 'help'} and no answer came.`, date: dateFrom(c, date), at, planet });
+        return;
+      }
+      case 'prophet.called': case 'prophet.foretold': case 'prophet.fulfilled': case 'prophet.failed':
+      case 'prophet.persecuted': case 'prophet.died': case 'prophet.abandoned': {
+        const agent = typeof data.agent === 'number' ? data.agent : e.ref?.kind === 'agent' ? e.ref.id : -1;
+        const c = this.claim(e.tick, (q) => (agent >= 0 && q.refs?.some((r) => r.kind === 'agent' && r.id === agent) === true) || mentions(q.text, where));
+        const what = String(data.kind ?? '');
+        const fallback: Record<string, string> = {
+          'prophet.called': `A prophet speaks for the god in ${where}.`,
+          'prophet.foretold': `${where} is told: ${FORETOLD[what] ?? 'the god will act'}.`,
+          'prophet.fulfilled': `What the prophet foretold came true in ${where}.`,
+          'prophet.failed': `What the prophet foretold did not come to ${where}.`,
+          'prophet.persecuted': `The rulers of ${where} turn on the prophet.`,
+          'prophet.died': `The prophet of ${where} is dead.`,
+          'prophet.abandoned': `The god turned from the prophet of ${where}.`,
+        };
+        const tone: ToastKind = e.t === 'prophet.failed' || e.t === 'prophet.died' ? 'loss' : e.t === 'prophet.persecuted' ? 'warn' : 'god';
+        const title = { 'prophet.called': 'Prophet', 'prophet.foretold': 'Prophecy', 'prophet.fulfilled': 'Fulfilled', 'prophet.failed': 'Failed', 'prophet.persecuted': 'Persecution', 'prophet.died': 'Prophet dead', 'prophet.abandoned': 'Abandoned' }[e.t] ?? 'Prophet';
+        const sel = agent >= 0 && e.t !== 'prophet.died' ? { kind: 'agent' as const, id: agent, planet } : null;
+        this.show({ kind: tone, title: `${title} · ${place}`, text: c ? c.text : fallback[e.t], date: dateFrom(c, date), at: sel ? null : at, select: sel, planet });
+        return;
+      }
+      case 'omen': {
+        const kind = String(data.kind ?? e.text ?? '');
+        const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        // one sign over several towns: one toast
+        const ok = `omen:${planet}:${kind}`;
+        if (now - (this.lastRefusal.get(ok) ?? -1e9) < BURST_MS) return;
+        this.lastRefusal.set(ok, now);
+        this.show({ kind: 'god', title: `A sign · ${place}`, text: c ? c.text : `${where} saw ${OMEN_TEXT[kind] ?? 'a sign'} and read it as ${data.reading === 'feared' ? 'anger' : 'favour'}.`, date: dateFrom(c, date), at, planet });
+        return;
+      }
+      case 'warning': {
         const ref = e.ref ? { ...e.ref, planet } : null;
-        this.show({ kind: 'god', title: 'The creature learns', text: `It watched your hand and learned the ${String(data.miracle ?? e.text ?? 'miracle')} miracle.`, date, at, select: ref });
+        const kind = String(data.kind ?? 'disaster').replace(/-/g, ' ');
+        const c = this.claim(e.tick, (q) => q.kind === 'disaster' || mentions(q.text, kind));
+        this.show({ kind: 'warn', title: `Warning · ${view.planet(planet)?.name ?? ''}`, text: c ? c.text : `The ground warns of a ${kind}: the people nearby can see it coming.`, date: dateFrom(c, date), at, select: ref, planet });
+        return;
+      }
+      case 'evacuate': {
+        const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        this.show({ kind: 'warn', title: `Leaving · ${place}`, text: c ? c.text : `${where} leaves its homes for safer ground until the danger passes.`, date: dateFrom(c, date), at, planet });
+        return;
+      }
+      case 'sacred.place': case 'sacred.animal': {
+        const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        const text = e.t === 'sacred.animal'
+          ? `The ${String(data.animal ?? 'animal').replace(/-/g, ' ')} is sacred to ${where}: none there will hunt it.`
+          : `${cap(PLACE_TEXT[String(data.kind)] ?? 'A place')} near ${where} is holy now.`;
+        this.show({ kind: 'god', title: `Sacred · ${place}`, text: c ? c.text : text, date: dateFrom(c, date), at, planet });
+        return;
+      }
+      case 'ore.seeded': {
+        // the god's own vein: the command's answer says it; a vein laid with an invented material is news
+        if (!data.invented) return;
+        this.show({ kind: 'discovery', title: `A new vein · ${view.planet(planet)?.name ?? ''}`, text: `A vein of ${String(data.ore ?? e.text ?? 'ore').replace(/-/g, ' ')} lies in the ground now.`, date, at, planet });
+        return;
+      }
+      case 'material.first': {
+        const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        const what = String(data.what ?? 'first');
+        this.show({ kind: 'discovery', title: `A first · ${place}`, text: c ? c.text : `${where}: the first ${what.replace(/-/g, ' ')} of ${String(data.material ?? 'the new material').replace(/-/g, ' ')}.`, date: dateFrom(c, date), at, planet });
+        return;
+      }
+      case 'secession': {
+        const c = this.claim(e.tick, (q) => q.kind === 'polity' || q.kind === 'war' || mentions(q.text, where));
+        this.show({ kind: 'war', title: `Breaking away · ${place}`, text: c ? c.text : `${where} breaks from its capital${data.revolt ? ' in revolt' : ''}.`, date: dateFrom(c, date), at, planet });
         return;
       }
       case 'rival.act': {
@@ -494,6 +591,24 @@ export class Toasts {
     }
   }
 }
+
+/** what a prayer asks for, what answers it, what a prophet foretells, what an omen is (LIVING §3.3, §3.4) */
+const PRAYER_TEXT: Record<string, string> = { food: 'food', rain: 'rain', healing: 'healing', warmth: 'warmth', protection: 'protection', rebuilding: 'help to rebuild' };
+const ANSWERED_BY: Record<string, string> = {
+  food: 'plenty or a gift of food', rain: 'rain over their land', healing: 'mending for the sick', warmth: 'kindling and warmth',
+  protection: 'a ward over them', rebuilding: 'timber to rebuild',
+};
+const FORETOLD: Record<string, string> = {
+  rain: 'rain will come', food: 'plenty will come', healing: 'the sick will mend', warmth: 'warmth will come', protection: 'they will be kept safe',
+  rebuilding: 'their homes will rise again', harm: 'harm will come', sign: 'a sign will be seen',
+};
+const OMEN_TEXT: Record<string, string> = {
+  eclipse: 'the sun go dark', comet: 'a comet cross the sky', flood: 'the waters rise and spare them', rainbow: 'a rainbow over them',
+  lightning: 'lightning choose one thing', aurora: 'curtains of light in the sky', 'red-rain': 'red rain fall', 'still-sun': 'the sun stand still',
+  'sacred-animal': 'their sacred animal come near', spring: 'a spring rise',
+};
+const PLACE_TEXT: Record<string, string> = { spring: 'a spring', grove: 'a grove', mountain: 'a peak', site: 'a place' };
+const cap = (t: string): string => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 
 /** a chronicle line is about this thing (several stories can be told in one tick: a god act and its refusal) */
 function mentions(text: string, what: string): boolean {

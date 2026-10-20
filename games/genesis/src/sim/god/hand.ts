@@ -283,7 +283,7 @@ function slapOrStroke(u: Universe, p: Planet, h: HandState, a: Args, slap: boole
       b.damage = Math.min(1, b.damage + 0.35);
       p.people.version++;
       godAct(u, p, b.pos, 150, { harm: 0.3 }, h.god);
-      return { ok: true, msg: `The walls crack under your hand.` };
+      return { ok: true, msg: `The walls crack under your Touch.` };
     }
     b.damage = Math.max(0, b.damage - 0.2);
     p.people.version++;
@@ -294,7 +294,7 @@ function slapOrStroke(u: Universe, p: Planet, h: HandState, a: Args, slap: boole
     if (!hd) return { ok: false, msg: 'There is no such herd.' };
     if (slap) { hd.state = 2; hd.scared = u.tick; return { ok: true, msg: 'The herd scatters in panic.' }; }
     hd.hunger = Math.max(0, hd.hunger - 0.2);
-    return { ok: true, msg: 'The animals calm under your hand.' };
+    return { ok: true, msg: 'The animals calm under your Touch.' };
   }
   return { ok: false, msg: `You cannot ${slap ? 'rebuke' : 'soothe'} that.` };
 }
@@ -327,7 +327,7 @@ export function registerHandCommands(r: CommandRegistry): void {
     desc: 'Lift anything: a person, an animal, a tree, a rock, an item, a small building', category: 'Hand',
     params: {
       pos: pos(), target: anyT, kind: { type: 'enum', values: KINDS }, id: { type: 'int', min: 0 }, radius: { type: 'number', min: 1, max: 2000, default: 60 },
-      item: { type: 'enum', values: (u) => u.content.items.ids(), desc: 'conjure an item into the hand' }, qty: { type: 'number', min: 1, max: 100000 },
+      item: { type: 'enum', values: (u) => u.content.items.ids(), desc: 'conjure an item into the Touch' }, qty: { type: 'number', min: 1, max: 100000 },
       mass: { type: 'number', min: 10, max: 2e6, desc: 'kg (a boulder)' },
     },
   });

@@ -149,6 +149,8 @@ export interface NewWorldDeps {
   /** the world now ('barren', seed): the opening's Esc offers to stay */
   world(): { scenario: string; seed: number };
   dev: boolean;
+  /** is the world here the player's (false behind the title: scenery, never kept) */
+  keepable?(): boolean;
 }
 
 interface Card { id: string; name: string; desc: string; icon: string }
@@ -256,7 +258,7 @@ export class NewWorld {
     const stay = this.fromOpening && this.choice === here;
     this.beginBtn.textContent = this.leaving ? 'Keeping this world…' : stay ? 'Stay' : 'Begin';
     this.beginBtn.disabled = this.leaving;
-    this.noteEl.textContent = stay ? '' : here && host.source === 'worker' && host.prefs.value.game.autosaveMinutes > 0 ? 'This world is kept as the autosave before you leave it.' : '';
+    this.noteEl.textContent = stay || !(this.deps.keepable?.() ?? true) ? '' : here && host.source === 'worker' && host.prefs.value.game.autosaveMinutes > 0 ? 'This world is kept as the autosave before you leave it.' : '';
   }
 
   private renderCustom(): void {

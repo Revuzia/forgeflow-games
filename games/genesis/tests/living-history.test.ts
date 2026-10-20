@@ -16,7 +16,9 @@ import { pathOptsFor } from '../src/sim/people/resources.ts';
 import { findPath } from '../src/sim/grid/pathfind.ts';
 import { accident, computeEra, refreshLibrary } from '../src/sim/people/knowledge.ts';
 import { histOf, kinOpinion, POLITICS, sendAid, popOf, walkDays } from '../src/sim/people/politics.ts';
-import { politicsDaily, polityOf } from '../src/sim/people/war.ts';
+import { politicsDaily, polityOf, plunder } from '../src/sim/people/war.ts';
+import { spawnHerd } from '../src/sim/life/herds.ts';
+import { newMission, volunteers } from '../src/sim/people/missions.ts';
 import { DWELL, PRACTICE, PRACTICE_USES, eraLabel, inventable, practised } from '../src/sim/people/eras.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
 import { ERAS } from '../src/sim/content.ts';
@@ -289,13 +291,31 @@ test('a daughter whose grievance runs high breaks away: a new polity, a secessio
   assert.equal(d.polity, d.id);
   assert.notEqual(cap.polity, d.polity);
   assert.ok(n < 300, `within ${n} days at grievance 0.9 (p up to ${POLITICS.maxP} a day)`);
-  const ev = sim.drainEvents().find((e) => e.t === 'secession');
+  const evs = sim.drainEvents();
+  const ev = evs.find((e) => e.t === 'secession');
   assert.ok(ev, 'a secession event');
   assert.equal((ev!.data as { cause: string }).cause, 'famine');
   assert.ok(sim.u.chronicle.some((e) => e.text.includes(d.name) && /hungry years|starve/i.test(e.text)), 'the chronicle says why');
+  // every part a grievance can be made of has its telling
+  for (const why of ['tribute', 'famine', 'feud', 'distance', 'tongue', 'raids', 'friction', 'outgrown']) assert.ok(sim.content.events.find(`secession.${why}`), `secession.${why}`);
   // free, it holds no grievance against its old capital: the quarrel is between peoples now
   assert.equal(histOf(x, d).grievance, 0);
-  assert.ok(x.ps.relation(cap.polity, d.polity), 'the two peoples have a relation');
+  const rel = x.ps.relation(cap.polity, d.polity);
+  assert.ok(rel, 'the two peoples have a relation');
+  // a famine at the root: a revolt, and war
+  assert.ok((ev!.data as { revolt: boolean }).revolt, 'a revolt');
+  assert.ok(evs.some((e) => e.t === 'war' && (e.data as { cause: string }).cause === 'revolt'), 'the hungry years end in war');
+  // a parting over tribute, in peace: a pact of open roads (a treaty)
+  const { sim: s3, cap: c3, d: d3 } = kinTowns();
+  const x3 = ctx(s3);
+  const h3 = histOf(x3, d3);
+  const p3 = d3.polity;
+  days(x3, 400, () => { if (d3.polity === p3) { h3.grievance = 0.8; h3.why = { tribute: 0.5, distance: 0.3 }; } });
+  assert.notEqual(d3.polity, p3, 'it left');
+  const r3 = x3.ps.relation(c3.polity, d3.polity)!;
+  assert.equal(r3.war, -1, 'in peace');
+  assert.ok(r3.treaties.includes('trade-pact'), JSON.stringify(r3.treaties));
+  assert.ok(s3.u.chronicle.some((e) => /parted in peace|pact of open roads/.test(e.text)), 'the parting is told');
   // a contented daughter (grievance under 0.6) never goes
   const { sim: s2, d: d2 } = kinTowns();
   const x2 = ctx(s2);
@@ -322,6 +342,21 @@ test('kin raids: a starving town raids a fat kin town within two days\' walk tha
   let r2 = false;
   days(x2, 60, () => { starve(x2, d2); histOf(x2, d2).kin[String(c2.id)] = 0.9; histOf(x2, d2).grievance = 0; r2 ||= x2.ps.missions.some((m) => m.kind === 'raid' && m.from === d2.id); });
   assert.equal(r2, false, 'no raid on a town they love');
+});
+
+test('raiders drive off livestock: a share of the raided town\'s largest herd goes home with them', () => {
+  const { sim, cap, d } = kinTowns();
+  const x = ctx(sim);
+  const sheep = x.c.animals.idx('sheep');
+  const herd = spawnHerd(x, sheep, cap.cell, 12, cap.id);
+  const who = volunteers(x, d, 4, true);
+  const m = newMission(x, 'raid', d, cap, who)!;
+  assert.ok(m, 'a raiding party');
+  const note = plunder(x, m, d, cap);
+  assert.ok(herd.count < 12, `the herd shrank (${herd.count})`);
+  const taken = x.ps.herds.find((h) => h.owner === d.id && h.species === sheep);
+  assert.ok(taken && taken.count >= 1, 'the raiders own some of it now');
+  assert.match(note, /head of sheep/);
 });
 
 test('a polity\'s capital is the town that founded it, whichever of its towns is asked about first', () => {

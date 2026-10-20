@@ -293,6 +293,10 @@ export function paceSleep(x: PCtx, s: number, st: Settlement, night: boolean, du
     if (bed) { _h[0] = bed.pos[0]; _h[1] = bed.pos[1]; _h[2] = bed.pos[2]; } else storePoint(x, st, _h);
     A.posAt(s, x.tick, _a);
     if (walkTicks(x, s, _a, _h) <= roadCampTicks(x)) return null;
+    // inside their own village they walk home to bed however long the way (a town of a hundred spans more than the 45
+    // minutes of ROAD_CAMP_TICKS: in the integrated acceptance run, year 50, 36 of 49 adults of one town slept out in its
+    // square after the evening worship and the festival instead of going home — integration, 2026-10-15)
+    if (distM(x.p, _a, st.pos) <= st.territory) return null;
   }
   return { kind: TASK.camp, goal: null, goalCell: A.cell[s], work: dur, target: -1 };
 }

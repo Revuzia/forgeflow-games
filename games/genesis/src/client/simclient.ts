@@ -3,8 +3,13 @@
 // Two interchangeable backends behind one interface:
 //   * WorkerBackend — the real sim in a module Web Worker (src/sim/worker.ts), ToWorker / FromWorker messages.
 //   * LookdevBackend — a local generator of plausible planet data (src/client/lookdev.ts) for render development.
-// `?source=lookdev` forces lookdev; otherwise the worker is tried first and, if it is missing, throws, or does not say
-// 'ready' in time, the client warns and falls back to lookdev so the app always runs.
+// `?source=lookdev` forces lookdev; `?source=auto` tries the worker and, if it is missing, throws, or does not say
+// 'ready' in time, falls back to lookdev so the app always runs. The living sim itself (`source=worker`, the game) has
+// NO fixed deadline (the parity audit: 'Two worlds' took 24 s to build on a loaded machine and the old 20 s timer
+// failed it): the boot reports stages — waking the simulation (the worker's module answers a first message once it has
+// loaded), building the world (its scenario's own steps, paced by how long this machine took last time, or by the
+// worker's own `progress` messages where it sends them) — and says when a build runs long without ever giving up on it;
+// only a worker that fails (an error, a crash) ends the boot, with the reason.
 //
 // The client asks for a snapshot after each rendered frame (at most 30 Hz, one request in flight), mirrors it into a
 // WorldView and lets the WorldView interpolate between snapshots.
@@ -38,6 +43,8 @@ class WorkerBackend implements SimBackend {
   private readyResolve: ((c: string[]) => void) | null = null;
   private readyReject: ((e: unknown) => void) | null = null;
   onFatal: ((msg: string) => void) | null = null;
+  /** the world being built says how far it is (a worker that sends `{ type: 'progress', stage, frac }`) */
+  onProgress: ((stage: string, frac: number) => void) | null = null;
 
   constructor(worker: Worker) {
     this.worker = worker;
@@ -45,10 +52,21 @@ class WorkerBackend implements SimBackend {
     worker.onerror = (ev: ErrorEvent) => {
       ev.preventDefault();
       const msg = ev.message || 'the sim worker failed to load';
+      // (a worker that fails before it is ready — its module did not load, its world could not be built — ends the
+      // boot with the reason: every call waiting on it fails too, so nothing waits forever)
+      const failed = this.failPending(msg);
       if (this.readyReject) { this.readyReject(new Error(msg)); this.readyReject = null; this.readyResolve = null; }
-      else this.onFatal?.(msg);
+      else if (!failed) this.onFatal?.(msg);
     };
     worker.onmessageerror = () => this.onFatal?.('a sim message could not be decoded');
+  }
+
+  /** every call still waiting fails with the reason; true when there was one (the boot's first message) */
+  private failPending(msg: string): boolean {
+    if (!this.pending.size || this.onFatal) return false;
+    for (const p of this.pending.values()) p.fail(new Error(msg));
+    this.pending.clear();
+    return true;
   }
 
   private post(m: ToWorker, transfer: Transferable[] = []): void {
@@ -64,6 +82,9 @@ class WorkerBackend implements SimBackend {
   }
 
   private onMessage(m: FromWorker): void {
+    // (additive, forward compatible: a worker that reports the stages of building its world)
+    const pm = m as unknown as { type: string; stage?: unknown; frac?: unknown };
+    if (pm.type === 'progress') { this.onProgress?.(String(pm.stage ?? ''), Number(pm.frac ?? 0)); return; }
     switch (m.type) {
       case 'ready':
         this.readyResolve?.(m.content);
@@ -74,6 +95,7 @@ class WorkerBackend implements SimBackend {
         return;
       case 'error':
         if (this.readyReject) { this.readyReject(new Error(m.msg)); this.readyReject = null; this.readyResolve = null; return; }
+        if (this.failPending(m.msg)) return;
         console.error('[genesis] sim error:', m.msg, m.stack ?? '');
         this.onFatal?.(m.stack || m.msg);
         return;
@@ -98,6 +120,9 @@ class WorkerBackend implements SimBackend {
       this.post({ type: 'init', scenario, seed, options });
     });
   }
+
+  /** resolves once the worker's module has loaded and answers (a query before 'init' is answered at once) */
+  wake(): Promise<unknown> { return this.call<unknown>((id) => ({ type: 'query', id, q: 'ping' })); }
 
   requestSnapshot(full = false): void { this.post({ type: 'snapshot', full }); }
   setSpeed(x: number): void { this.post({ type: 'speed', speed: x }); }
@@ -124,8 +149,32 @@ export interface SimClientOptions {
   scenario: string;
   seed: number;
   options?: Record<string, unknown>;
-  /** ms to wait for the worker's 'ready' before falling back (auto mode) */
+  /** ms to wait for the worker's 'ready' before falling back to lookdev (`auto` only: the living sim has no deadline) */
   readyTimeoutMs?: number;
+  /** the boot's stages as they pass: what is happening (words) and how far the boot is (0..1) */
+  onStage?(label: string, frac: number): void;
+  /** the world is taking long to build (called once, then every ~30 s while it still builds): elapsed ms */
+  onSlow?(elapsedMs: number): void;
+}
+
+/** how long building each scenario took on this machine last time (ms): the build's progress is paced by it */
+const BUILD_KEY = 'genesis.buildms.v1';
+const BUILD_GUESS: Record<string, number> = { barren: 7000, sandbox: 9000, lookdev: 9000, twoworlds: 24000, 'twoworlds-late': 26000, system: 32000 };
+function buildTimes(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(BUILD_KEY) ?? '{}') as Record<string, number>; } catch { return {}; }
+}
+function rememberBuild(scenario: string, ms: number): void {
+  try { const t = buildTimes(); t[scenario] = Math.round(ms); localStorage.setItem(BUILD_KEY, JSON.stringify(t)); } catch { /* next time guesses again */ }
+}
+
+/** what building a world goes through, in order (the sim's own steps: world/scenarios.ts, its climate and life) */
+export const BUILD_STAGES = ['Shaping the rock', 'Gathering the seas', 'Warming the air', 'Sowing the land', 'Setting down the peoples', 'Turning the world'];
+
+/** the stage and the bar for a build `t` ms in when it took `expect` ms last time (never quite full before 'ready') */
+export function buildProgress(t: number, expect: number): { label: string; frac: number } {
+  const k = 1 - Math.exp(-t / Math.max(1500, expect) * 1.25);
+  const i = Math.min(BUILD_STAGES.length - 1, Math.floor(k * BUILD_STAGES.length));
+  return { label: `${BUILD_STAGES[i]}…`, frac: Math.min(0.97, k) };
 }
 
 export class SimClient {
@@ -144,15 +193,35 @@ export class SimClient {
 
   async start(o: SimClientOptions): Promise<void> {
     const sink: SnapshotSink = (s) => this.receive(s);
+    const stage = (label: string, frac: number) => o.onStage?.(label, Math.max(0, Math.min(1, frac)));
     if (o.source !== 'lookdev') {
       try {
+        stage('Waking the simulation…', 0.04);
         const { spawnSimWorker } = await import('./workerspawn.ts');
         const wb = new WorkerBackend(spawnSimWorker());
-        const timeout = o.readyTimeoutMs ?? 20000;
-        await Promise.race([
-          wb.init(o.scenario, o.seed, o.options ?? {}, sink),
-          new Promise<never>((_, fail) => setTimeout(() => fail(new Error(`no 'ready' from the sim worker in ${timeout} ms`)), timeout)),
-        ]);
+        // the living sim waits as long as the world takes to build; only `auto` gives up and falls back to lookdev
+        const deadline = o.source === 'auto' ? (o.readyTimeoutMs ?? 20000) : 0;
+        const run = async (): Promise<void> => {
+          // the worker's module is loaded (and parsed) once it answers
+          await wb.wake();
+          stage('Building the world…', 0.0);
+          const expect = buildTimes()[o.scenario] ?? BUILD_GUESS[o.scenario] ?? 20000;
+          const t0 = performance.now();
+          let real = false;
+          wb.onProgress = (st, f) => { real = true; stage(st ? `${st}…` : 'Building the world…', f); };
+          let slowAt = Math.max(45000, expect * 3);
+          const timer = setInterval(() => {
+            const t = performance.now() - t0;
+            if (!real) { const p = buildProgress(t, expect); stage(p.label, p.frac); }
+            if (t > slowAt) { o.onSlow?.(t); slowAt = t + 30000; }
+          }, 250);
+          try { await wb.init(o.scenario, o.seed, o.options ?? {}, sink); } finally { clearInterval(timer); wb.onProgress = null; }
+          rememberBuild(o.scenario, performance.now() - t0);
+          stage('The world is made.', 1);
+        };
+        await (deadline > 0
+          ? Promise.race([run(), new Promise<never>((_, fail) => setTimeout(() => fail(new Error(`no 'ready' from the sim worker in ${deadline} ms`)), deadline))])
+          : run());
         wb.onFatal = (msg) => this.onFatal?.(msg);
         this.backend = wb;
         this.source = 'worker';

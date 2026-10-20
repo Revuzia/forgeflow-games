@@ -450,6 +450,58 @@ vec3 sandDetail(vec3 P, vec3 up, float fw) {
   return vec3(alb, bump, glint);
 }
 
+// the sward at 3–60 m (what makes a meadow read as GRASS from a god's 30–60 m, not a felt or a velvet): irregular
+// tussocks (~0.5–1 m), the sward combed into streaks along a wandering lean, tufts (~14 cm) with lit, paler tips and
+// shaded gaps between them, blade streaks (~5 cm) up close, and a view-dependent
+// density — looking along the ground the eye sees a mat of tips (fuller, lighter, yellower), looking straight down it
+// sees into the gaps. Every term fades to its mean by the footprint. x = value factor, y = tip yellowing 0..1,
+// z = bump (m), w = gap occlusion 0..1. NdV: the ground's up · the direction to the eye.
+vec4 swardDetail(vec3 P, float fw, float NdV) {
+  float val = 1.0, tip = 0.0, bump = 0.0, gap = 0.0;
+  // tussocks (~0.5–1 m): irregular mounds of sward (warped noise, not a lattice of cells — cells read as scales) with
+  // a lit crown and a shaded hollow round each: the mottle that still reads from a god's 30–60 m
+  float a2 = ff_aa(fw, 0.6);
+  if (a2 > 0.0) {
+    vec3 q = P * 1.7 + vec3(snoise(P * 0.5 + 2.0), snoise(P * 0.5 + 6.0), snoise(P * 0.5 + 9.0)) * 0.9;
+    float tus = smoothstep(-0.45, 0.65, snoise(q) * 0.75 + snoise(q * 2.3 + 4.0) * 0.25);
+    val *= 1.0 + 0.2 * (tus - 0.5) * a2;
+    bump += (tus - 0.5) * 0.04 * a2;
+    gap += (1.0 - tus) * 0.5 * a2;
+    tip += tus * 0.2 * a2;
+  }
+  // the sward is COMBED: blades lean together in drifts, streaks of lighter and darker along a lean that wanders in
+  // ~10 m patches (a 3D noise stretched along fixed directions, so it needs no tangent frame)
+  float a3 = ff_aa(fw, 0.2);
+  if (a3 > 0.0) {
+    float lean = snoise(P * 0.06 + 31.0);
+    vec3 D1 = normalize(vec3(0.71, 0.25, 0.66)), D2 = normalize(vec3(-0.42, 0.88, 0.22));
+    vec3 Dl = normalize(mix(D1, D2, 0.5 + 0.5 * lean));
+    vec3 Ds = normalize(cross(Dl, vec3(0.31, -0.52, 0.79)));
+    vec3 Dt = cross(Dl, Ds);
+    float comb = snoise(vec3(dot(P, Ds) * 7.0, dot(P, Dl) * 1.3, dot(P, Dt) * 7.0) + 13.0);
+    val *= 1.0 + 0.1 * comb * a3;
+    tip += max(comb, 0.0) * 0.25 * a3;
+  }
+  float a1 = ff_aa(fw, 0.14);
+  if (a1 > 0.0) {
+    vec3 fp; float f1, id;
+    ff_cells(P * 7.0 + vec3(snoise(P * 1.3 + 4.0), snoise(P * 1.3 + 8.0), snoise(P * 1.3 + 12.0)) * 0.45, fp, f1, id);
+    float tuft = smoothstep(0.62, 0.12, f1);
+    val *= 1.0 + (0.3 * (tuft - 0.4) + 0.12 * (id - 0.5)) * a1;
+    tip += tuft * (0.3 + 0.4 * step(0.6, id)) * a1;
+    bump += (tuft - 0.4) * 0.03 * a1;
+    gap = max(gap, (1.0 - tuft) * a1);
+  }
+  float a0 = ff_aa(fw, 0.05);
+  if (a0 > 0.0) val *= 1.0 + 0.16 * snoise(P * vec3(22.0, 9.0, 22.0)) * a0;
+  float graze = 1.0 - clamp(NdV, 0.0, 1.0);
+  graze *= graze;
+  val *= mix(0.94, 1.07, graze);
+  tip = clamp(tip * (1.0 - 0.3 * graze) + 0.35 * graze, 0.0, 1.0);
+  gap *= 1.0 - 0.7 * graze;
+  return vec4(val, tip, bump, gap);
+}
+
 // open grassland variation: dry / lush sward at 10–50 m, wildflowers in spring and summer
 vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winter, float cold, vec3 warpV) {
   float pA = fbm3(P * 0.045 + warpV * 0.6 + 3.1);
@@ -466,9 +518,11 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
   g = mix(g, mix(lushC, dryC, smoothstep(0.32, 0.82, dryness)), 0.45);
   // what gives the sward its focus at 3–100 m: tussocks and their shaded gaps (~0.7 m and ~2.2 m), trampled and
   // thin patches (~6 m) — value, not hue, so it never turns into camouflage; each fades to its mean by footprint
-  float tus = snoise(P * 1.45 + warpV * 0.6 + 33.0) * ff_aa(fw, 0.7) * 0.6 + snoise(P * 0.45 + 51.0) * ff_aa(fw, 2.2) * 0.4;
+  // (the ~2.2 m octave only faintly: at 0.4 of ±16 % it printed dark round dimples every couple of metres — a hammered,
+  // quilted felt from 30–60 m)
+  float tus = snoise(P * 1.45 + warpV * 0.6 + 33.0) * ff_aa(fw, 0.7) * 0.75 + snoise(P * 0.45 + 51.0) * ff_aa(fw, 2.2) * 0.15;
   float thin = smoothstep(0.35, 0.85, snoise(P * 0.16 + warpV * 0.5 + 71.0) * 0.5 + 0.5) * ff_aa(fw, 6.0);
-  g *= 0.84 + 0.32 * smoothstep(-0.8, 0.8, tus);
+  g *= 0.89 + 0.22 * smoothstep(-0.8, 0.8, tus);
   g = mix(g, g * vec3(1.2, 1.12, 0.86) + vec3(0.012, 0.008, 0.002), thin * 0.45);
   // the sward's own grain: clumps (~0.35 m) and tussocks (~1.1 m), each a lit crown with a shaded gap round it —
   // rounded and anti-aliased by the footprint, mean-preserving. Soft noise alone left the turf out of focus at 10–80 m
@@ -477,10 +531,12 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
     vec3 fp; float f1, id;
     ff_cells(P * 2.8 + warpV * 0.3 + 5.0, fp, f1, id);
     float c1 = smoothstep(0.62, 0.18, f1) - 0.42;
-    g *= 1.0 + (0.34 * c1 + 0.08 * (id - 0.5)) * ff_aa(fw, 0.36);
+    // (gentle: at ±34 % / ±22 % these two lattices of lit cells with dark rims read from 30–60 m as hammered metal,
+    // the scales of a lizard — not a sward, whose texture is fibrous and irregular: swardDetail)
+    g *= 1.0 + (0.14 * c1 + 0.06 * (id - 0.5)) * ff_aa(fw, 0.36);
     ff_cells(P * 0.9 + warpV * 0.2 + 17.0, fp, f1, id);
     float c2 = smoothstep(0.66, 0.2, f1) - 0.42;
-    g *= 1.0 + (0.22 * c2 + 0.1 * (id - 0.5)) * ff_aa(fw, 1.1);
+    g *= 1.0 + (0.08 * c2 + 0.06 * (id - 0.5)) * ff_aa(fw, 1.1);
   }
   float season = (1.0 - autumn) * (1.0 - winter) * (1.0 - cold);
   float patchF = smoothstep(0.55, 0.8, snoise(P * 0.19 + warpV + 21.0) * 0.5 + 0.5) * season * smoothstep(0.3, 0.55, moist) * (1.0 - dryness * 0.5);

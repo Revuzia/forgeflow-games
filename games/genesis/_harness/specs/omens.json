@@ -1,0 +1,59 @@
+{
+ "_doc": "The omen catalogue's phenomena (LIVING \u00a73.4.4) as a town sees them, each with the town's reading (the `omen` event: a ring of light through it \u2014 warm for favour, cold violet for anger; render/signs/signs.ts): an eclipse, a comet, a flood without deaths. The rainbow, red rain and the lightning sign are in signs.json. Lookdev world. Run: node _harness/shots.mjs _harness/specs/omens.json --port=5195",
+ "shots": [
+  {
+   "name": "om-eclipse",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false; const p = G.poi('valley');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); F.fx.m.weather.lens = 0;",
+    "await G.cmd({ k: 'lookdev.disaster', kind: 'eclipse', pos: p.pos, progress: 0.5, params: { coverage: 0.97 } });",
+    "await G.step(1); await G.camera({ mode: 'surface', poi: 'valley', alt: 40, pitch: 8, fov: 40, sunElevation: 10, faceSun: true });",
+    "await G.frames(2); F.advance(4); await G.frames(2); return { ecl: F.fx.screenState.eclipse, ev: F.fx.exposureEV };"
+   ]
+  },
+  {
+   "name": "om-comet",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('town');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'comet', pos: p.pos, progress: 0.75, bearing: 120 });",
+    "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat - (1500 / 3000) * 180 / Math.PI, lon: p.lon, alt: 30, yaw: 0, pitch: 38, fov: 70, hour: 21.5 }); await G.frames(1);",
+    "F.fx.m.signs.hold = 2.0; await G.cmd({ k: 'lookdev.omen', pos: p.pos, kind: 'comet', reading: 'trusted' }); await G.step(1); F.advance(4); await G.frames(2);",
+    "return { st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "om-flood",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; const p = G.poi('river');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'flood', pos: p.pos, progress: 0.3 });",
+    "await G.step(3); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 48, yaw: p.heading, fov: 55, hour: 15.5 }); await G.frames(1);",
+    "F.fx.m.signs.hold = 2.4; await G.cmd({ k: 'lookdev.omen', pos: p.pos, kind: 'flood', reading: 'trusted' }); await G.step(1); F.advance(3); await G.frames(2);",
+    "return { st: F.fx.m.signs.stats };"
+   ]
+  }
+ ]
+}

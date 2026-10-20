@@ -220,13 +220,17 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
   // (the pull of hardship is sated by praying — a person who has just prayed has their faith need met — and never
   // outweighs a meal: at full strength the whole town prayed 34–48 % of the days after a meteor and did not rebuild)
   U[C.pray] = Math.min(PRAY_CAP, need * 0.3 * piety * (0.3 + faith) * day + PRAY_K * (faith * (0.15 + 0.6 * h) + fear * 0.3 * h) * (0.5 + 0.5 * need));
+  // (infants and toddlers do not pray: in the integrated acceptance run the under-twos of a town in hardship, who have no
+  // play or chores yet, spent 17 % of their day at prayer — integration, 2026-10-14)
+  const babe = (x.tick - A.birth[s]) / x.year < PRAY_AGE;
+  if (babe) U[C.pray] = 0;
   // a prophet's own work: preaching by day, at home or in the town they carry the faith to
   if (u.god.rel?.prophets.length) {
     const t = prophetTask(x, s, st, night, pressing);
     if (t) return t;
   }
   // evening worship at dusk: attendance ≈ 0.5 faith + 0.3 loyalty
-  if (pressing < 1 && A.task[s] !== TASK.worship && !(A.flags[s] & AgentFlag.child && hashFloat(A.id[s], 0xc1d) < 0.5)) {
+  if (pressing < 1 && A.task[s] !== TASK.worship && !(A.flags[s] & AgentFlag.child && hashFloat(A.id[s], 0xc1d) < 0.5) && !babe) {
     const el = sunElevation(u, x.p, x.tick, st.pos);
     if (el > -0.07 && el < 0.03 && sunElevation(u, x.p, x.tick - 20, st.pos) > el) {
       const attend = Math.min(1, 0.5 * faith + 0.3 * A.loyalty[i] + 0.15 * piety * faith);
@@ -271,6 +275,8 @@ function godsFeast(x: PCtx, st: Settlement): void {
 export const PRAY_K = 3;
 /** the most prayer can weigh (work is 0.55–0.9, a hungry body's meal more) */
 export const PRAY_CAP = 0.65;
+/** the age (years) from which a child prays */
+export const PRAY_AGE = 4;
 
 /** where evening worship is held: the temple, else the shrine, else a lit hearth, else the centre */
 function worshipPlace(x: PCtx, st: Settlement): { id: number; cell: number } {

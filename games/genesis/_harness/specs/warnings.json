@@ -1,0 +1,33 @@
+{
+ "_doc": "Warning phases of the god's disasters (LIVING §3.7, hook H5: DisasterView.params.warning; render/fx/disasters.ts warning(), render/fx/drawback.ts): a volcano rumbling (smoke and steam, fumaroles, rockfalls at a warning tremor, a dull glow in the vent), the sea drawing back off the coast before a tsunami, a meteor's first light high over a town. Lookdev world; `warning: -1` holds each in its warning phase. Run: node _harness/shots.mjs _harness/specs/warnings.json --port=5195",
+ "shots": [
+  { "name": "wr-volcano-rumbling", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
+      "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); const p = G.poi('peak');",
+      "await G.cmd({ k: 'lookdev.disaster', kind: 'volcano', pos: p.pos, warning: -1 }); await G.step(1);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 600, tilt: 72, yaw: 160, fov: 50, hour: 17.6 }); await G.frames(3);",
+      "F.advance(14); await G.step(61); await G.frames(1); F.advance(1.2); await G.frames(2);",
+      "const d = F.fx.vis.pv.disasters[0]; return { kind: d && d.kind, warning: d && d.params.warning, plume: d && d.params.plume };"
+    ] },
+  { "name": "wr-tsunami-drawback", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; await G.cmd({ k: 'lookdev.clear' }); const p = G.poi('coast'); const h = p.heading * Math.PI / 180;",
+      "await G.cmd({ k: 'lookdev.disaster', kind: 'tsunami', pos: p.pos, offset: [Math.sin(h) * 700, Math.cos(h) * 700], warning: -1 }); await G.step(1);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 240, tilt: 62, yaw: p.heading + 90, fov: 58, hour: 15.5 }); await G.frames(3);",
+      "F.advance(30); await G.frames(2);",
+      "const st = [...F.fx.m.disasters.states.values()].find((x) => x.kind === 'tsunami'); const db = st && st.extra.drawback; return { warned: st && st.extra.warned, dw: st && st.extra.dw, tris: db && db.tris };"
+    ] },
+  { "name": "wr-meteor-first-light", "params": "source=lookdev", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; await G.cmd({ k: 'lookdev.clear' }); const p = G.poi('town');",
+      "await G.cmd({ k: 'lookdev.disaster', kind: 'meteor', pos: p.pos, warning: -1, bearing: 250 }); await G.step(1); await G.frames(3);",
+      "const d = F.fx.vis.pv.disasters.find((x) => x.kind === 'meteor'); const u = p.pos, P = d.params; const down = Math.max(0.2, -(P.dirX * u[0] + P.dirY * u[1] + P.dirZ * u[2])); const s = P.alt / down;",
+      "const R = 3000; const hx = u[0] * R - P.dirX * s, hy = u[1] * R - P.dirY * s, hz = u[2] * R - P.dirZ * s; const ex = [u[2], 0, -u[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el; const nx = [u[1] * ex[2], u[2] * ex[0] - u[0] * ex[2], -u[1] * ex[0]];",
+      "const vx = hx - u[0] * R, vy = hy - u[1] * R, vz = hz - u[2] * R; const ve = vx * ex[0] + vz * ex[2], vn = vx * nx[0] + vy * nx[1] + vz * nx[2], vu = vx * u[0] + vy * u[1] + vz * u[2];",
+      "const yaw = Math.atan2(ve, vn) * 180 / Math.PI, pitch = Math.atan2(vu, Math.hypot(ve, vn)) * 180 / Math.PI;",
+      "await G.cmd({ k: 'planet.cloudiness', value: 0.05 }); await G.cmd({ k: 'lookdev.field', field: 'cloud', pos: p.pos, radius: 2600, value: 0 }); await G.camera({ mode: 'surface', lat: p.lat, lon: p.lon, alt: 60, yaw, pitch: Math.min(70, pitch - 10), fov: 62, hour: 19.1 }); await G.frames(2); F.advance(2); await G.frames(2);",
+      "return { alt: P.alt, yaw: Math.round(yaw), pitch: Math.round(pitch), warning: P.warning };"
+    ] }
+ ]
+}

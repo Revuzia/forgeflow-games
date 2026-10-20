@@ -189,9 +189,10 @@ function intentWetland(c: HistoryClause): boolean {
 /** "create a new kingdom", "found a nation", "a new realm": a people of its own, set down beside the others */
 function intentKingdom(c: HistoryClause): boolean {
   const { s, mods } = c;
-  if (!/\b(kingdoms?|realms?|nations?|chiefdoms?|countr(?:y|ies)|empires?|states?|tribes?|princedoms?)\b/.test(s)) return false;
-  if (!/\b(new|another|create|found|make|start|establish|raise|begin|set up|build)\b/.test(s)) return false;
-  if (/\b(of|state of)\b.*\b(war|peace|mind|grace)\b/.test(s)) return false;
+  // ("a new kingdom", "another realm" — not "make the tribes go to war")
+  if (!/\b(?:new|another|a|an|one more)\s+(?:[a-z'-]+\s+)?(kingdom|realm|nation|chiefdom|country|empire|state|tribe|princedom)\b/.test(s)) return false;
+  if (!/\b(create|found|make|start|establish|raise|begin|set up|build|give me|i want|let there be|conjure)\b/.test(s)) return false;
+  if (/\b(war|peace|mind|grace|emergency|alert)\b/.test(s)) return false;
   const p = c.cx.p;
   const st = mods.place?.settlement !== undefined && p ? p.people?.settlement(mods.place.settlement) : null;
   // beside a named town, or the largest one, a good way off (a kingdom of its own, not a quarter of theirs)

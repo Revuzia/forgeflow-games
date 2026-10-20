@@ -1259,6 +1259,125 @@ swarm of X); after spawn / summon / unleash an unknown noun is a real animal or 
 → `world.birth`; a destructive act on a settlement the sentence did not name asks for confirmation in the preview; the
 duplicate Firestorm power (`firestorm-call`, `disaster-firestorm`) merges into one. Target 62 / 62.
 
+### 5.4 As built (HISTORY lane, 2026-10-14; probes and logs in `_harness/scratch/living/history/`)
+Modules: `people/politics.ts` (grievances, secession, kin raids, border friction, aid; `historyDaily`, called by
+`war.ts politicsDaily`), `people/eras.ts` (the era clock, practice, the age's institutions, wonders, era labels),
+`god/history.ts` (`settlement.advance`, `settlement.teach { era }`, `world.terraform`), `god/freeform-history.ts` (the
+HISTORY phrases). HISTORY's hunks in shared files: `people/state.ts` (`Settlement.hist?`), `people/knowledge.ts` (learn →
+noteLearned / syncEra, the era told by its label; planExperiment and accident → inventable), `people/war.ts` (polityOf:
+a polity's capital is its founding town; independence keeps schism and the unreconciled conquered, salted with the
+world; politicsDaily → historyDaily; battle → kinRaided; plunder drives off livestock), `people/missions.ts` (an arrival → missionArrived),
+`people/snapshot.ts` (historyView), `people/query.ts` (`settlement.history`; `polities[].settlements[]` with
+`eraLabel`, `grievance`, `why`), `types.ts` (`SettlementView.eraLabel?`, `grievance?`), `world/planet.ts`
+(`PlanetState.terraform?`), `sim.ts` (terraformStep hourly while a world is being made), `god/index.ts`
+(registerHistoryCommands), `content.ts` (template variable `label`), `data/events.json` (14 templates), `data/lexicon.json`
+(`biomeWords`), `data/powers.json` (one Firestorm), `core/migrate15.ts` (HISTORY's step: a no-op — `Settlement.hist` is made
+on first use, a 1.4 town's era clock starts at the load with what it knew counted as long practised).
+
+- **Grievance** (`politics.ts`, weights in `POLITICS`): per daughter town against its capital, 0..1, with its parts
+  (`hist.why`, the inspector's "why"). + a tithe each season of 3 days (a tenth of its food above two days a head and of
+  its metal and finery, carried by bearers or taken: +0.004); + a famine — under a day of food a head, or a death of
+  hunger — that the capital, with food to spare (4 days a head of its own and 2 days a head of the daughter's beyond),
+  did not relieve within 2 days: +0.45, told in the chronicle ("No bread came from Aru when Lune starved"); the capital
+  sends food on its own with a daily chance 0.2 × its leader's generosity (`sendAid`, a gift mission of up to three days
+  a head); + a feud, weighed once for each pair of leaders (certain when the daughter's leading party is the rival of the
+  capital's, else by the hotter leader's aggression): +0.12; + distance beyond a day's walk (600 game minutes ×
+  BASE_WALK, paths × 1.3): +0.002 a day for each day of walking beyond half a day, up to 0.004 (the spec's +0.002 a day);
+  + a daughter grown to 0.9 of its capital: +0.0015 a day at 1.2 times its size, up to 0.0045 at twice it; + a
+  generation (20 game years) with fewer than 4 visits drifts its tongue (a new seed on its `langLine`, +0.05, then
+  +0.0015 a day for each 0.18 of language distance beyond 0.3); + raided by kin +0.3 (the raider +0.15); + fields and
+  hunting grounds in each other's land (+0.001 a day, kin opinion −0.01 a day); − a trade caravan or gift arriving
+  (−0.0005), food sent in a famine (−0.15), time (−0.2 % a day: a grievance outlives a generation, half-life ~29 years).
+- **Secession** above 0.6: daily p = 0.02 × min(1, (g − 0.6) / 0.15 + 0.2) × the independence party's strength
+  (0.5 + hawks + ½ seekers + (g − 0.6), 0.5..1); a famine or raids at the root, or g > 0.85 with a war party, make it a
+  revolt (war.ts declares war, cause 'revolt'); a peaceful parting not over a feud is sealed by a pact of open roads
+  (`trade-pact`, event `treaty { kind: 'parting' }`, chronicle `treaty.parting`). Event `secession { settlement, from,
+  capital, cause, grievance, revolt }`, chronicle `secession.<cause>`. The old flat chances for distance > 1 400 m and
+  tongue > 0.45 are gone (they now weigh in the grievance); a schism and an unreconciled conquest keep theirs, salted with
+  the world (every world's daughters used to leave on the same days: the base kin fixture's five secessions all fell on
+  day 56). A polity's capital is its founding town when its record is made (a daughter stepped before its mother used to
+  become the capital of a polity it had not founded — in the base fixture runs too).
+- **Kin raids**: a town under a day of food a head raids a town within two days' walk with 5 days a head that it holds
+  below 0.3 (kin: 0.5 − its grievance × 0.8, less raids and friction between them; other peoples: the relation) —
+  inside one polity too, one party at a time; raiders who win drive off livestock as well as stores (up to 0.3 of the
+  largest herd, two head a raider: `war.ts plunder`).
+- **Eras** (`eras.ts`): the era index is unchanged; `eraLabel` reads capabilities (stone age, fire-keepers, first
+  farmers, potters, copper age, bronze age, iron age; classical age … space age by index only with metal known). Pace:
+  the next era's ideas open after `DWELL` years in the present era (stone 0, fire 4, clay 16, bronze 26, iron 10,
+  classical 18, medieval 14, gunpowder 24, steam 12, electric 12; a people stuck in an era moves on after the sum of the
+  dwells between); an idea is built on only once practised (`PRACTICE` years of its era: 0, 0.5, 1, 3, 3, 3, 3, 2, 2, 1.5,
+  1.5, or 24 crafts of it in the LAND ledger); an age's institutions (writing, law, money, calendar, diplomacy,
+  mathematics, astronomy, schooling, medicine, quarantine) only once the people has reached their era and lived half
+  its dwell. Gated: experiments and everyday accidents. Not gated: wonders (star iron, miracles, comets, eclipses,
+  lightning in the dunes — the next era at once, never beyond), and everything learned from others or the god.
+- **The god's acts** (`god/history.ts`): `settlement.advance { settlement, era? }` and `settlement.teach { settlement,
+  era: 'next' | <era> }` (knowledge now optional; `anyOf: knowledge, era`): everything up to and including the era
+  taught, groundwork first (the first idea by `forceTeach`, the unwilling compelled and afraid; the rest as lessons), the
+  new era's clock starting now, one chronicle line (`era.god`). `world.terraform { planet? }`: air at once
+  (`planet.add-air` 1); when the air has warmed the rock above 12 °C (or after 14 days) a world-wide storm and the seas
+  raised into the lowest quarter of the land; a day later the storm lifts; two days after, grass over the land and berry
+  scrub and two forests on the warmest wet land (`PlanetState.terraform { stage, t }`, stepped hourly by sim.ts). A
+  world already habitable for plains folk (score > 0.3, breathable) is refused: "Gaia is alive already".
+- **Free text** (`god/freeform.ts`, `god/freeform-history.ts`, lexicon `biomeWords`): "on the sea near X" — the nearest
+  water to X (the open sea within 5 km when asked for); "near X but not on it" / "clear of it" — dry land beyond X's
+  edge; "between X and Y" — the middle of the two, a town's radius clear of both (`Mods.mid`; a mountain between them is a
+  ridge ACROSS the way from one to the other); "make the river / lake flood" — a flood where it runs (no river: the
+  nearest water); "turn A into B" — B painted over the nearest A (a world without deserts: its driest land); jungle →
+  rainforest, swamp / marsh / bog / fen → wetland (with shallow water, beside a named town, not on it); "new X world" →
+  `world.birth { kind }`; "advance X to the next era"; "terraform this world"; knights, heroes (soldier + inspired),
+  champions; "create a new kingdom" (a people of its own, set down beside the largest town); "armageddon" (every people
+  at war with its nearest neighbour, a volley of disasters at full wrath) and "send every disaster at once" (six). A
+  destructive act landing on a standing town the words never named sets `ParseOut.confirm` ("This would strike Aru (31
+  people), which you did not name. Go ahead?"); an end of days and every disaster at once always do. The duplicate
+  Firestorm power `firestorm-call` is gone (`disaster-firestorm` keeps every synonym; `fire.firestorm` still runs).
+
+### 5.5 Measured (HISTORY; before = the tree HISTORY started from, `base/` and LAND's census; after = this tree; 3000x)
+| measure | before | after | target |
+|---|---|---|---|
+| free-text phrases resolved as meant (`freeform.ts`, `tests/omnipotence.test.ts`) | 9 / 62 at the spec; 47 / 62 with the other lanes in (HISTORY's own 1 / 16) | **62 / 62** (HISTORY 16 / 16) | 62 / 62 |
+| kin fixture, ≥ 1 secession (`kin.ts`, 8 seeds × 20 years) | 5 / 8 — every one on day 56 (year 4.67), always the daughter beyond 1 400 m: an unsalted flat chance, not a grievance | **4 / 8** (seeds 2, 3, 6, 8; years 11.9–17.3; 6 secessions) | ≥ 5 / 8 |
+| ≥ 1 raid or war | 0 / 8 | **1 / 8** (seed 2: a revolt, 1 war, 3 battles, 2 conquests) | ≥ 3 / 8 |
+| ≥ 1 treaty | 1 / 8 (seed 2, a trade pact) | **3 / 8** (seeds 3, 6, 8: five peaceful partings sealed by a pact of open roads) | ≥ 2 / 8 |
+| control (the capital feeds every famine): no secession | no secession in 3 / 8 (base secession had no food term: the control is the same world) | **4 / 8** (seeds 1, 4, 5, 7; in seed 1 — the one famine — the starving daughter is fed ten times, lives (59 people at year 20, not starved out by year 7) and ends at grievance 0.12, not 0.62; the 7 others are the normal run's world) | ≥ 6 / 8 |
+| era labels against capabilities (census, settlement-years) | no label: the era index read "bronze" from the first copper smelting — 58 of the 910 settlement-years below were a "bronze" era without bronze (seed 20261008: years 26.1 → 52.6; its bronze came at 127.1, tin found late) | **0 of 910** inconsistent (all 58 read "copper age") | 0 |
+| polities / wars / raids, census 8 seeds × 8 years (§0.4) | 1 / 0 / 0 | 1 / 0 / 0 — still one town per world at year 8 (25–41 people) and at year 30 (16–70); seed 20261008 over 230 years: first daughter at year 125, then 13 secessions, 11 wars, 42 raids, 1 treaty, up to 4 polities | §5.1 fixture |
+
+Era timeline (§1.5; a 30-person band, the n = 64 sandbox, no god; game years of the first recipe):
+
+| milestone | target | before (LAND's census: 8 seeds × 8 y; 4 × 30 y) | after (7 census seeds: 1234 1 2 3 4 5 × 30 y, 20261008 × 230 y) |
+|---|---|---|---|
+| fire-keeping | 1–6 | 4.0 (0.17–5), 8 / 8 | 4.0 (0.17–5), 6 / 7 in band (seed 3 at 0.17: PACE's lightning) |
+| agriculture | 3–12 | **0.08** (0.08–0.42), 0 / 8 in band | **6.3** (4.1–8.1), 7 / 7 |
+| pottery | 6–18 | **4.4** (2.5–5.9), 0 / 7 | **8.1** (4.5–9.3), 6 / 7 |
+| copper smelting | 20–40 | **5.2** (3.9–6.2 in 6 of 8 by year 8; 3.9–15.3 in the 30-year runs), none in band | **24.1** (22.0–24.5), 7 / 7 |
+| bronze | 30–55 | 0 / 4 by year 30 | 127.1 (1 / 1; no tin until late; 0 / 6 by year 30) |
+| writing | 35–65 | 28.4 (1 / 4 by year 30) | 39.3 (1 / 1; 0 / 6 by year 30, as it should) |
+| iron smelting | 50–85 | — | 52.6 (1 / 1) |
+| classical era | 65–100 | — | 65.5 (1 / 1) |
+| medieval era | 90–130 | — | **177.1** (0 / 1) |
+| gunpowder … first orbit | 110–230 | — | not by year 230 |
+
+The early ages now keep the timeline (copper had come 14–16 years before its band in every seed; now 7 of 7 in band). From the
+classical age on, the one long run is slow: a single town of 86–157 people from year 60 to 120 (its first daughter at
+year 125) added 10 ideas from year 70 to 130; the dwell opened the medieval ideas at year 83.5, and the first came at 177 —
+the pace is the number of minds (LAND's demography) and the late recipes' own discovery rates (steel needs a forge and
+practised iron tools), not the era clock. The second 230-year seed (7) was not run in this session (the machine was
+shared: one 230-year run took 7 164 CPU s, 2 h of wall time).
+
+Why the fixture falls short, from the runs (`out/kin-v7-<seed>.json`, `dbgsec.ts`): (1) **chance under the spec's cap.**
+At p ≤ 0.02 a day and 12 days a game year, a daughter needs ~100 days above 0.6 to part with ~85 % odds; seeds 5 and 7
+each held a daughter above 0.6 for 100–140 days (above 0.9 for the last 48–60, ending at 1.0) and drew no roll
+under 0.02 in them (the roll itself is flat: 0.0190–0.0206 below 0.02 over 100 000 days, ids 1–4, seeds 1, 2, 3, 7). (2) **Famine is rare in this fixture**: only
+seed 1 saw a daughter under a day's food while its capital stood (`famineSeen`) — there the capital's own aid came
+8 days before the famine (year 5.3) and none in it: +0.45 at year 6.1 (grievance 0.62), and the town starved out by
+year 7 before a roll fell; seed 4's three towns all died (the base run lost two of them too). So raids among kin (which the spec ties to hunger) did not happen, and the control —
+which only acts in a famine — is the same world as the normal run in 7 of 8 seeds: the two targets (≥ 5 / 8 seceding;
+the control ≥ 6 / 8 not) cannot both hold while 1 of 8 seeds has a famine. What the control changes is shown where it
+can be: the unit tests (aid in the famine −0.15 and no famine grievance; unrelieved +0.45) and seed 1 above.
+Reproduce (in `_harness/scratch/living/history/`, two at a time): `node kin.ts <seed> 20 v7` and `env CONTROL=1 node
+kin.ts <seed> 20 v7c` (`HROOT=base` for the old tree), `node census.ts <seed> <years> live 3000`, `node summarize.ts kin
+base v7 v7c`, `node summarize.ts census live l230`, `node freeform.ts`; the logs and JSON are in `out/`.
+
 ---
 
 ## 6. LANE PLAN

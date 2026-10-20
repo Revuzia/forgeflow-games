@@ -72,7 +72,8 @@ export function normalize3(v: V3): V3 {
 export function fxHash(a: number, b = 0, c = 0): number {
   let h = Math.imul((a * 73856093) ^ (b * 19349663) ^ (c * 83492791), 0x9e3779b1) >>> 0;
   h ^= h >>> 15; h = Math.imul(h, 0x85ebca6b) >>> 0; h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35) >>> 0; h ^= h >>> 16;
-  return h / 4294967296;
+  // (`^` yields a signed int: unsigned again, or the result spans −0.5 … 0.5)
+  return (h >>> 0) / 4294967296;
 }
 
 export const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);

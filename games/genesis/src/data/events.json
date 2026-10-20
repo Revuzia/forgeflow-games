@@ -226,6 +226,8 @@
     {"id": "secession.distance", "kind": "polity", "weight": 2, "text": ["{other} was too far away to rule {settlement}: it is {polity} now.", "Days of walking from {other}, {settlement} went its own way: {polity}."]},
     {"id": "secession.tongue", "kind": "polity", "weight": 2, "text": ["Speaking a tongue of its own, {settlement} no longer counted itself one people with {other}: {polity}.", "{settlement} and {other} no longer understood each other; {settlement} is {polity} now."]},
     {"id": "secession.raids", "kind": "polity", "weight": 2, "text": ["Raided by its own kin, {settlement} broke with {other}: {polity}.", "After the raids, {settlement} would not be ruled from {other}: {polity}."]},
-    {"id": "secession.friction", "kind": "polity", "weight": 2, "text": ["Quarrels over fields and hunting grounds drove {settlement} from {other}: {polity}."]}
+    {"id": "secession.friction", "kind": "polity", "weight": 2, "text": ["Quarrels over fields and hunting grounds drove {settlement} from {other}: {polity}."]},
+    {"id": "secession.outgrown", "kind": "polity", "weight": 2, "text": ["Grown larger than {other}, {settlement} would no longer bow to it: {polity}.", "The daughter outgrew the mother: {settlement} broke from {other} and is {polity} now."]},
+    {"id": "treaty.parting", "kind": "treaty", "weight": 1, "text": ["{settlement} and {other} parted in peace, and swore to keep the roads open between them.", "Kin still: {settlement} and {other} went their own ways with a pact of open roads."]}
   ]
 }

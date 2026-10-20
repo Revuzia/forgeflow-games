@@ -1,16 +1,49 @@
 // GENESIS — the sigils' strokes (LIVING §3.6 "Sigils": original one-stroke glyphs, none of them Black & White's nor a
-// bare primitive). The Touch traces the sigil of the miracle it casts in light (render/hand.ts); the UI's recogniser
-// templates are the UI team's (hook H8) — these are the drawn shapes only.
+// bare primitive). The Touch traces the sigil of the miracle it casts in light (render/hand.ts) and the miracle burns
+// it into the ground where it lands (render/fx/sigilfx.ts); the UI's recogniser templates are the UI team's (hook H8)
+// — these are the drawn shapes only.
+//
+// Which glyph a miracle draws comes from the content: the `sigil` field of the power whose command casts it
+// (powers.json, `miracle.<kind>`, or a `disaster.spawn` of that kind — the meteor), so a mod's power with its own sigil
+// draws its own. SIGIL_OF_MIRACLE (the sim's god/miracles.ts SIGILS) is the fallback, and a sigil nobody authored
+// draws 'wisp' — an original stroke, never a bare spiral or circle.
 //
 // Each glyph is authored as a few control points in a unit box (x right, y up, both −1..1) along the one stroke, then
 // resampled into an even polyline (Catmull–Rom through the points, equal arc length per sample), so a trace at a
 // constant rate draws the whole stroke at a constant speed. Pure data and arithmetic: no three.js, testable in Node.
 
-/** the sigil of each miracle kind the sim sends (sim/god/miracles.ts `data.kind`) */
+import { BASE_PACK } from '../../data/index.ts';
+
+/** the sigil of each miracle kind the sim sends (sim/god/miracles.ts `data.kind`, its SIGILS table) */
 export const SIGIL_OF_MIRACLE: Readonly<Record<string, string>> = {
   water: 'drop', storm: 'anvil', lightning: 'fork', calm: 'ripple', forest: 'sprout', heal: 'knot', food: 'basket',
   fertility: 'seed', wood: 'log', teach: 'eye', fire: 'flame', fireball: 'trail', shield: 'arch', meteor: 'fall',
 };
+
+/** the glyph drawn for a sigil nobody authored (an invented miracle's) */
+export const FALLBACK_SIGIL = 'wisp';
+
+interface PowerLike { command?: string; params?: Record<string, unknown>; sigil?: string | null }
+
+/** miracle kind → the `sigil` of the power that casts it, from the content (built once) */
+let fromPowers: Map<string, string> | null = null;
+function powerSigils(): Map<string, string> {
+  if (fromPowers) return fromPowers;
+  fromPowers = new Map();
+  const list = ((BASE_PACK as unknown as { powers?: PowerLike[] }).powers ?? []);
+  for (const pw of list) {
+    if (!pw.sigil || typeof pw.command !== 'string') continue;
+    if (pw.command.startsWith('miracle.') && pw.command !== 'miracle.cast') fromPowers.set(pw.command.slice(8), pw.sigil);
+    else if (pw.command === 'disaster.spawn' && typeof pw.params?.kind === 'string') fromPowers.set(pw.params.kind, pw.sigil);
+  }
+  return fromPowers;
+}
+
+/** the sigil a miracle of `kind` draws: the casting power's `sigil` field, else the sim's table, else the fallback */
+export function sigilOfMiracle(kind: string): string {
+  const s = powerSigils().get(kind) ?? SIGIL_OF_MIRACLE[kind];
+  return s && s in AUTHORED ? s : FALLBACK_SIGIL;
+}
 
 type P = [number, number];
 
@@ -79,12 +112,9 @@ const AUTHORED: Record<string, () => P[]> = {
   arch: () => [[-0.95, -0.82], [-0.62, -0.82], [-0.62, -0.2], [-0.6, 0.25], [-0.32, 0.65], [0.0, 0.78], [0.32, 0.65], [0.6, 0.25], [0.62, -0.2], [0.62, -0.82], [0.95, -0.82]],
   // a long diagonal down-right ending in a small burst loop
   fall: () => [[-0.92, 0.92], [-0.4, 0.4], [0.2, -0.2], [0.5, -0.5], ...loop(0.64, -0.64, 0.2, Math.PI * 0.75, 10)],
-  // (a sigil the table does not name — an invented miracle: an inward spiral)
-  spiral: () => {
-    const out: P[] = [];
-    for (let i = 0; i <= 30; i++) { const t = i / 30; const a = t * Math.PI * 4.5; const r = 0.9 * (1 - t * 0.85); out.push([Math.cos(a) * r, Math.sin(a) * r]); }
-    return out;
-  },
+  // (a sigil the table does not name — an invented miracle's: a wisp rising in a long S and curling back on itself
+  // into a small hooked tip — one stroke, no closed primitive)
+  wisp: () => [[-0.82, -0.88], [-0.32, -0.74], [0.02, -0.38], [-0.12, 0.02], [-0.02, 0.42], [0.36, 0.78], [0.74, 0.62], [0.58, 0.32], [0.34, 0.42]],
 };
 
 export const SIGIL_IDS: readonly string[] = Object.keys(AUTHORED);
@@ -92,13 +122,13 @@ export const SIGIL_IDS: readonly string[] = Object.keys(AUTHORED);
 const cache = new Map<string, Float32Array>();
 
 /**
- * The stroke of a sigil as `n` evenly spaced points (x, y pairs in −1..1), drawn in order. Unknown ids get the spiral.
+ * The stroke of a sigil as `n` evenly spaced points (x, y pairs in −1..1), drawn in order. Unknown ids get the wisp.
  */
 export function sigilStroke(id: string, n = 96): Float32Array {
   const key = `${id}|${n}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const ctrl = (AUTHORED[id] ?? AUTHORED.spiral)();
+  const ctrl = (AUTHORED[id] ?? AUTHORED[FALLBACK_SIGIL])();
   // a dense Catmull–Rom curve through the control points
   const dense: P[] = [];
   for (let i = 0; i < ctrl.length - 1; i++) {

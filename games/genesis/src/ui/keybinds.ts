@@ -11,13 +11,15 @@
 // its key shadows whatever the world layer binds to the same key (in photo mode Space takes the picture instead of
 // pausing, P leaves instead of entering). Conflicts are checked within a layer, never across layers.
 
+import { SPEED_PRESETS } from '../sim/types.ts';
+
 /** a modal key layer (a camera mode); actions without one are the world's */
 export type Context = 'photo' | 'walk';
 
 export interface ActionDef {
   id: string;
   label: string;
-  group: 'Camera' | 'Time' | 'Powers' | 'Hand' | 'Windows' | 'Photo mode' | 'Walking';
+  group: 'Camera' | 'Time' | 'Powers' | 'Touch' | 'The god' | 'Windows' | 'Photo mode' | 'Walking';
   keys: string[];
   pad?: string[];
   /** held (true while down) rather than a single press */
@@ -28,6 +30,9 @@ export interface ActionDef {
   /** live only in this camera mode, where it shadows the world's binding of the same key */
   context?: Context;
 }
+
+/** the speed presets (sim/types.ts SPEED_PRESETS without the pause) and their keys on the number row */
+export const SPEED_KEYS: [number, string][] = SPEED_PRESETS.filter((x) => x > 0).map((x, i) => [x, `Digit${(i + 1) % 10}`]);
 
 /** gamepad buttons of the standard mapping, by index */
 export const PAD_BUTTONS = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Back', 'Start', 'LS', 'RS', 'Up', 'Down', 'Left', 'Right', 'Home'] as const;
@@ -55,12 +60,10 @@ export const ACTIONS: ActionDef[] = [
   { id: 'cam.menu', label: 'Camera modes', group: 'Camera', keys: ['Backquote'], pad: ['Back'] },
   // time
   { id: 'time.pause', label: 'Pause / resume', group: 'Time', keys: ['Space'] },
-  { id: 'time.speed1', label: 'Speed 1×', group: 'Time', keys: ['Digit1'] },
-  { id: 'time.speed10', label: 'Speed 10×', group: 'Time', keys: ['Digit2'] },
-  { id: 'time.speed100', label: 'Speed 100×', group: 'Time', keys: ['Digit3'] },
-  { id: 'time.speed1000', label: 'Speed 1000×', group: 'Time', keys: ['Digit4'] },
-  { id: 'time.faster', label: 'Faster', group: 'Time', keys: ['Digit5'], pad: ['Up'] },
-  { id: 'time.slower', label: 'Slower', group: 'Time', keys: ['Digit0'], pad: ['Down'] },
+  // (LIVING PACE, hook H1: every preset of SPEED_PRESETS on the number row — 1 is the slow, real 1×, 0 the deep time-lapse)
+  ...SPEED_KEYS.map(([x, code]) => ({ id: `time.speed${x}`, label: `Speed ${x}×${x >= 3000 ? ' (deep time-lapse)' : x >= 1000 ? ' (time-lapse)' : ''}`, group: 'Time' as const, keys: [code] })),
+  { id: 'time.faster', label: 'Faster (the next speed)', group: 'Time', keys: ['PageUp'], pad: ['Up'] },
+  { id: 'time.slower', label: 'Slower (the speed before)', group: 'Time', keys: ['PageDown'], pad: ['Down'] },
   { id: 'time.stepTick', label: 'Step one minute', group: 'Time', keys: ['Comma'] },
   { id: 'time.stepHour', label: 'Step one hour', group: 'Time', keys: ['Period'] },
   { id: 'time.stepDay', label: 'Step one day', group: 'Time', keys: ['Shift+Period'] },
@@ -69,7 +72,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'ui.palette', label: 'Command palette', group: 'Powers', keys: ['Slash', 'Ctrl+KeyK'], pad: ['Y'] },
   { id: 'ui.freeform', label: 'Do this… (words)', group: 'Powers', keys: ['Enter', 'Semicolon'], pad: ['X'] },
   { id: 'ui.radial', label: 'Radial menu (hold)', group: 'Powers', keys: ['KeyQ'], pad: ['RS'], hold: true },
-  { id: 'ui.gesture', label: 'Draw a gesture (hold)', group: 'Powers', keys: ['KeyG'], pad: ['LT'], hold: true },
+  { id: 'ui.gesture', label: 'Draw a sigil (hold)', group: 'Powers', keys: ['KeyG'], pad: ['LT'], hold: true },
   { id: 'tool.apply', label: 'Use the power at the cursor', group: 'Powers', keys: ['KeyY'], pad: ['A'] },
   { id: 'tool.repeat', label: 'Cast the last power again at the cursor', group: 'Powers', keys: ['KeyT'] },
   { id: 'tool.cancel', label: 'Cancel / back', group: 'Powers', keys: ['Escape'], pad: ['B'] },
@@ -77,14 +80,18 @@ export const ACTIONS: ActionDef[] = [
   { id: 'tool.smaller', label: 'Brush smaller', group: 'Powers', keys: ['BracketLeft'] },
   { id: 'tool.stronger', label: 'Brush stronger', group: 'Powers', keys: ['Shift+BracketRight'] },
   { id: 'tool.weaker', label: 'Brush weaker', group: 'Powers', keys: ['Shift+BracketLeft'] },
-  // hand
-  { id: 'hand.primary', label: 'Hand / use (hold: grab, paint)', group: 'Hand', keys: [], pad: ['RT'], hold: true },
-  { id: 'hand.take', label: 'Take what is under the hand / set it down', group: 'Hand', keys: ['KeyE'], pad: ['LS'] },
-  { id: 'hand.throw', label: 'Throw what the hand holds toward the cursor', group: 'Hand', keys: ['Shift+KeyE'] },
-  { id: 'hand.slap', label: 'Slap what is under the hand', group: 'Hand', keys: ['KeyB'] },
-  { id: 'hand.stroke', label: 'Stroke what is under the hand', group: 'Hand', keys: ['KeyN'] },
-  { id: 'hand.slapMod', label: 'Slap modifier (+ click)', group: 'Hand', keys: ['Alt'], modifier: true },
+  // the Touch (LIVING §3.6: the god's presence as light — it lifts, sets down and hurls; rebukes and soothes)
+  { id: 'hand.primary', label: 'Touch / use (hold: lift, paint)', group: 'Touch', keys: [], pad: ['RT'], hold: true },
+  { id: 'hand.take', label: 'Lift what is under the Touch / set it down', group: 'Touch', keys: ['KeyE'], pad: ['LS'] },
+  { id: 'hand.throw', label: 'Hurl what the Touch holds toward the cursor', group: 'Touch', keys: ['Shift+KeyE'] },
+  { id: 'hand.slap', label: 'Rebuke what is under the Touch', group: 'Touch', keys: ['KeyB'] },
+  { id: 'hand.stroke', label: 'Soothe what is under the Touch', group: 'Touch', keys: ['KeyN'] },
+  { id: 'hand.slapMod', label: 'Rebuke modifier (+ click)', group: 'Touch', keys: ['Alt'], modifier: true },
   // windows
+  // the people and their god (LIVING §3): the god's window, the omens, the most pressing prayer
+  { id: 'ui.god', label: 'The god: how the people hold you, prayers, prophets, wrath', group: 'The god', keys: ['F4'] },
+  { id: 'ui.signs', label: 'Send a sign', group: 'The god', keys: ['F7'] },
+  { id: 'god.answer', label: 'Answer the most pressing prayer', group: 'The god', keys: ['Shift+F4'] },
   { id: 'ui.chronicle', label: 'Chronicle', group: 'Windows', keys: ['KeyC'] },
   { id: 'ui.overlayNext', label: 'Next map overlay', group: 'Windows', keys: ['KeyO'], pad: ['Right'] },
   { id: 'ui.overlayPrev', label: 'Previous map overlay', group: 'Windows', keys: ['Shift+KeyO'], pad: ['Left'] },
@@ -196,7 +203,14 @@ export class Keybinds {
     this.storage = storage;
     this.resetAll(false);
     const saved = storage?.get<Partial<BindingState> | null>(STORE_KEY, null);
-    if (saved?.keys) for (const [id, v] of Object.entries(saved.keys)) if (ACTION_BY_ID.has(id) && Array.isArray(v)) this.keys.set(id, v.filter((x) => typeof x === 'string'));
+    // (bindings kept before the speed steps changed: an old default of a speed key is dropped — the new defaults stand —
+    // and a key the player chose stays theirs)
+    const moved: Record<string, string[]> = { 'time.speed10': ['Digit2'], 'time.speed100': ['Digit3'], 'time.speed1000': ['Digit4'], 'time.faster': ['Digit5'], 'time.slower': ['Digit0'] };
+    if (saved?.keys) for (const [id, v] of Object.entries(saved.keys)) {
+      if (!ACTION_BY_ID.has(id) || !Array.isArray(v)) continue;
+      if (moved[id] && v.length === moved[id].length && v.every((x, i) => x === moved[id][i])) continue;
+      this.keys.set(id, v.filter((x) => typeof x === 'string'));
+    }
     if (saved?.pad) for (const [id, v] of Object.entries(saved.pad)) if (ACTION_BY_ID.has(id) && Array.isArray(v)) this.pad.set(id, v.filter((x) => typeof x === 'string'));
   }
 

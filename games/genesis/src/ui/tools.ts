@@ -9,7 +9,7 @@
 //   line        press at one end, release at the other (a mountain range, a river, a road)
 //   settlement  click a settlement (twice for pairs: war, peace, merge, treaties)
 //   agent       click a person
-//   entity      click a disaster / creature / ship / anything for the hand (or use the selection)
+//   entity      click a disaster / a ship / a person / anything for the Touch (or use the selection)
 //   move        a thing (the selection, the inspector's own thing, or a first click) and where it goes
 //   world       acts on the world: click it, or Cast
 //   instant     no place: Cast
@@ -24,7 +24,7 @@
 import type { Command, CommandResult, EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { ParamSpec, Power, ToolMode } from './powers.ts';
-import { toolMode, radiusParam, strengthParam, cardParams, defaultValue, missingRequired, paramLabel, fmtParam, buildCommand, entityKey, isSelector, type Place } from './powers.ts';
+import { toolMode, radiusParam, strengthParam, cardParams, missingRequired, paramLabel, fmtParam, buildCommand, entityKey, castValues, sliderStart, autoWords, categoryLabel, worldPrefill, type Place } from './powers.ts';
 import { h, clear, fmtDist, clamp, store } from './dom.ts';
 import { icon } from './icons.ts';
 import { slider, toggle } from './panel.ts';
@@ -78,7 +78,7 @@ export class Tools {
   /** two-step tools: the first pick (a settlement, a thing, a line's start) */
   private first: { ref?: EntityRef; hit?: GroundHit; label: string } | null = null;
   private last: { power: Power; values: Record<string, unknown> } | null = null;
-  /** things given with the arming (the inspector's own creature for "Leash"): sent with every cast of the armed power */
+  /** things given with the arming (the inspector's own prophet for "Foretell"): sent with every cast of the armed power */
   private presetRefs: Record<string, number> = {};
   private cardBody: HTMLDivElement;
   private cardHead: HTMLDivElement;
@@ -142,8 +142,11 @@ export class Tools {
     this.mode = toolMode(p);
     this.values = values;
     const r = p.schema.radius;
+    // the brush is the power's own size until the player sets it: its data default (a tornado's 60 m, a meteor's
+    // 120 m), never the size the last power's brush was left at
+    const known = this.host.powers.defaultOf(p, 'radius');
     if (r && typeof remembered.__radius === 'number') this.brushRadius = remembered.__radius;
-    else if (r) this.brushRadius = clamp(Number(r.default ?? this.brushRadius), r.min ?? R_MIN, r.max ?? R_MAX);
+    else if (r) this.brushRadius = clamp(Number(known ?? this.brushRadius), Math.max(R_MIN, r.min ?? R_MIN), Math.min(R_MAX, r.max ?? R_MAX));
     this.first = null;
     this.press = null;
     this.presetRefs = {};
@@ -165,13 +168,18 @@ export class Tools {
   /** the values a power would be cast with: what was used last, its own fixed params, what the world suggests, defaults */
   valuesFor(p: Power, preset: Record<string, unknown> = {}): Record<string, unknown> {
     const remembered = this.armed?.id === p.id ? this.values : this.memory.get(p.id) ?? {};
-    const v: Record<string, unknown> = {};
-    for (const [k, s] of Object.entries(p.schema)) {
-      if (s.type === 'pos' || s.type === 'entity' || s.type === 'vec3') continue;
-      const d = remembered[k] ?? (p.params[k] !== undefined ? p.params[k] : this.prefill(p, k, s) ?? (isSelector(p, k) ? undefined : defaultValue(k, s)));
-      if (d !== undefined) v[k] = d;
-    }
-    return { ...v, ...preset };
+    const { __radius, ...set } = remembered;
+    void __radius;
+    // only what the player set, the power's own params, what the world suggests and the data's defaults: a value the data
+    // leaves open stays unset, and the sim takes its own (castValues)
+    return { ...castValues(p, set, (k, s) => this.prefill(p, k, s)), ...preset };
+  }
+
+  /** the radius a power's brush starts at when the player has not set it (its data default), clamped to the brush */
+  private brushDefault(p: Power): number {
+    const r = p.schema.radius;
+    const known = this.host.powers.defaultOf(p, 'radius');
+    return r ? clamp(Number(known ?? 250), Math.max(R_MIN, r.min ?? R_MIN), Math.min(R_MAX, r.max ?? R_MAX)) : this.brushRadius;
   }
 
   /** the brush radius a power would use now (its remembered one, the armed one, or its default) */
@@ -180,7 +188,7 @@ export class Tools {
     const m = this.memory.get(p.id)?.__radius;
     const r = p.schema.radius;
     if (typeof m === 'number') return m;
-    return r ? clamp(Number(r.default ?? 250), r.min ?? R_MIN, r.max ?? R_MAX) : this.brushRadius;
+    return r ? this.brushDefault(p) : this.brushRadius;
   }
 
   /** cast a power once without arming it (a gesture): at a point, with a radius in metres (null: its default) */
@@ -212,25 +220,15 @@ export class Tools {
     return false;
   }
 
-  /** values the world itself suggests: the day's length for "length of the day", the world for world verbs */
+  /** values the world itself suggests: what a setter power changes, as it is now (powers.ts worldPrefill) */
   private prefill(p: Power, k: string, s: ParamSpec): unknown {
     const pv = this.host.view.planet(this.host.primary());
     if (!pv) return undefined;
     const pp = pv.params;
-    if (p.command === 'time.day-length' && k === 'hours') return Math.round(pp.dayHours * 10) / 10;
-    if (p.command === 'time.year-length' && k === 'days') return Math.round(pp.yearDays * 10) / 10;
-    if (p.command === 'time.axial-tilt' && k === 'degrees') return Math.round((pp.axialTilt * 180) / Math.PI);
-    if (p.command === 'time.set-hour' && k === 'hour') return Math.round(pp.dayHours / 2);
-    if (p.command === 'planet.set' && k === 'gravity') return Math.round(pp.gravity * 10) / 10;
-    if (p.command === 'planet.set' && k === 'magnetism') return Math.round(pp.magnetism * 100) / 100;
-    if (p.command === 'planet.set' && k === 'temperatureOffset') return 5;
-    if (p.command === 'time.speed' && k === 'speed') return 10;
-    if (p.command === 'time.step' && k === 'hours') return 1;
-    if (p.command === 'time.rewind' && k === 'hoursAgo') return 1;
-    if (p.command === 'star.set' && k === 'luminosity') return Math.round(this.host.view.star.luminosity * 100) / 100;
     if (p.command === 'set' && k === 'value' && typeof p.params.path === 'string') return undefined;
-    if (s.type === 'string' && (k === 'name' || k === 'to')) return '';
-    return undefined;
+    if (s.type === 'string' && (k === 'name' || k === 'to')) return undefined;
+    const star = this.host.view.star;
+    return worldPrefill(p, k, { dayHours: pp.dayHours, yearDays: pp.yearDays, axialTilt: pp.axialTilt, gravity: pp.gravity, magnetism: pp.magnetism, luminosity: star.luminosity, starKind: star.kind });
   }
 
   // ───────────────────────────── the card ─────────────────────────────
@@ -252,7 +250,7 @@ export class Tools {
     fold.addEventListener('click', () => { this.view.min = !this.view.min; store.set(CARD_KEY, this.view); this.renderCard(); });
     this.cardHead.append(
       h('span', { class: 'gn-tool-ico', html: icon(p.icon, p.category) }),
-      h('div', { class: 'gn-tool-titles' }, h('div', { class: 'gn-tool-name', text: p.name }), h('div', { class: 'gn-tool-cat', text: `${p.category}${p.gesture ? ` · gesture: ${p.gesture}` : ''}` })),
+      h('div', { class: 'gn-tool-titles' }, h('div', { class: 'gn-tool-name', text: p.name }), h('div', { class: 'gn-tool-cat', text: `${categoryLabel(p.category)}${p.sigil ? ` · sigil: ${p.sigil}` : ''}` })),
       fold, close);
     this.card.classList.toggle('gn-tool-min', this.view.min);
     clear(this.cardBody);
@@ -268,8 +266,9 @@ export class Tools {
     const miss = new Set(missingRequired(p, this.values));
     for (const [k, s] of cardParams(p)) {
       if (p.params[k] !== undefined && (k === 'kind' || k === 'material' || k === 'path')) continue; // fixed by the power itself
-      // the brush and its strength are always on the card; the rest behind "More", unless it must be given
-      const main = k === sk || miss.has(k);
+      // the brush, its strength and a harmful power's wrath (how hard it falls: survivable unless raised) are always on
+      // the card; the rest behind "More", unless it must be given
+      const main = k === sk || k === 'wrath' || miss.has(k);
       if (!main) { extra++; if (!this.view.more) continue; }
       const ctl = this.control(k, s);
       if (!ctl) continue;
@@ -292,17 +291,34 @@ export class Tools {
 
   private control(k: string, s: ParamSpec): HTMLElement | null {
     const v = this.values[k];
-    const set = (x: unknown) => { this.values[k] = x; };
+    const set = (x: unknown) => { if (x === undefined) delete this.values[k]; else this.values[k] = x; };
     if (s.type === 'number' || s.type === 'int') {
+      const p = this.armed!;
+      const known = this.host.powers.defaultOf(p, k);
       if (s.min !== undefined && s.max !== undefined) {
         const wide = s.min >= 0 && s.max / Math.max(s.min, 1e-3) > 200 && s.min > 0;
         const step = s.type === 'int' ? 1 : (s.max - s.min) / 400;
-        const sl = slider({ min: s.min, max: s.max, step, value: Number(v ?? s.min), log: wide, fmt: (x) => fmtParam(k, x, s, this.dayHours()), on: (x) => set(s.type === 'int' ? Math.round(x) : x) });
+        // a value the player has not set is the power's own (the sim's default): the slider stands there and says so,
+        // and nothing is sent until it is moved; ↺ gives it back
+        const start = clamp(Number(v ?? sliderStart(s, known)), s.min, s.max);
+        const sl = slider({ min: s.min, max: s.max, step, value: start, log: wide, fmt: (x) => fmtParam(k, x, s, this.dayHours()), on: (x) => { set(s.type === 'int' ? Math.round(x) : x); reset.hidden = false; sl.classList.remove('gn-auto'); } });
         sl.dataset.key = k;
+        const out = sl.querySelector<HTMLElement>('.gn-range-v');
+        const reset = h('button', { class: 'gn-btn gn-tool-auto', title: 'Back to its own value', aria: { label: `Reset ${paramLabel(k)}` }, text: '↺' });
+        reset.addEventListener('click', () => {
+          delete this.values[k];
+          (sl as HTMLDivElement & { setValue?: (x: number) => void }).setValue?.(clamp(sliderStart(s, known), s.min!, s.max!));
+          if (out) out.textContent = autoWords(this.host.powers, p, k, this.dayHours());
+          sl.classList.add('gn-auto');
+          reset.hidden = true;
+        });
+        if (v === undefined) { if (out) out.textContent = autoWords(this.host.powers, p, k, this.dayHours()); sl.classList.add('gn-auto'); reset.hidden = true; }
+        sl.append(reset);
         return sl;
       }
-      const inp = h('input', { class: 'gn-num', type: 'number', value: String(v ?? 0) }) as HTMLInputElement;
-      inp.addEventListener('input', () => set(Number(inp.value)));
+      const inp = h('input', { class: 'gn-num', type: 'number', value: v === undefined ? '' : String(v), placeholder: autoWords(this.host.powers, p, k, this.dayHours()) }) as HTMLInputElement;
+      inp.addEventListener('input', () => set(inp.value.trim() === '' ? undefined : Number(inp.value)));
+      inp.addEventListener('keydown', (e) => e.stopPropagation());
       return inp;
     }
     if (s.type === 'boolean') return toggle(!!v, (x) => set(x), k);
@@ -320,6 +336,8 @@ export class Tools {
       }
       const sel = h('select', { class: 'gn-select' }) as HTMLSelectElement;
       if (!s.required && s.default === undefined) sel.append(h('option', { value: '', text: 'any' }));
+      // a choice the player must make shows as one still to make (never a first entry that looks chosen)
+      else if (s.required && v === undefined) sel.append(h('option', { value: '', text: 'choose…', disabled: true }));
       for (const x of vals) sel.append(h('option', { value: x, text: x.replace(/-/g, ' ') }));
       sel.value = String(v ?? '');
       sel.addEventListener('change', () => set(sel.value || undefined));
@@ -361,7 +379,6 @@ export class Tools {
         const kinds = this.entityKinds(p);
         t = `Click ${kinds.length ? kinds.map((k) => (k === 'agent' ? 'a person' : `a ${k}`)).join(' or ') : 'something'}.`;
         if (sel) cast = `Cast on ${this.refName(sel)}`;
-        else if (kinds.includes('creature') && this.host.view.creatures.length) cast = `Cast on ${this.host.view.creatures[0].name}`;
         else if (kinds.includes('planet')) cast = `Cast on ${this.host.view.planet(this.host.primary())?.name ?? 'this world'}`;
         break;
       }
@@ -381,7 +398,6 @@ export class Tools {
   private refName(r: EntityRef): string {
     const v = this.host.view;
     if (r.kind === 'settlement') for (const pv of v.planets) { const s = pv.settlements.find((q) => q.id === r.id); if (s) return s.name; }
-    if (r.kind === 'creature') { const c = v.creatures.find((q) => q.id === r.id); if (c) return c.name; }
     if (r.kind === 'disaster') for (const pv of v.planets) { const d = pv.disasters.find((q) => q.id === r.id); if (d) return `the ${d.kind.replace(/-/g, ' ')}`; }
     if (r.kind === 'planet') return v.planet(r.id)?.name ?? 'the world';
     if (r.kind === 'ship') { const s = v.ships.find((q) => q.id === r.id); if (s) return `the ${s.kind}`; }
@@ -435,9 +451,9 @@ export class Tools {
     }
     this.last = { power: p, values: { ...values, __radius: typeof c.radius === 'number' ? c.radius : this.brushRadius } };
     const r = await this.host.cmd(c, { quiet });
-    // a disaster / creature / ship it made can be inspected at once
+    // a disaster or a ship it made can be inspected at once
     const m = toolMode(p);
-    const made = r.ok ? r.created?.find((e) => e.kind === 'disaster' || e.kind === 'creature' || e.kind === 'ship') : undefined;
+    const made = r.ok ? r.created?.find((e) => e.kind === 'disaster' || e.kind === 'ship') : undefined;
     if (made && (m === 'once' || m === 'aim' || m === 'instant')) this.host.select({ ...made, planet: made.planet ?? c.planet as number });
     return r;
   }
@@ -478,6 +494,13 @@ export class Tools {
     if ((m === 'settlement' && this.pairKey(p)) || (m === 'move' && !this.selectionFor(p)) || m === 'line') {
       this.arm(p, values ?? {});
       this.host.toast({ text: `${p.name} needs ${m === 'line' ? 'two ends' : 'two picks'}: it is ready on the card.`, kind: 'info', ms: 3200 });
+      return null;
+    }
+    // a choice only the player can make (which biome, which idea, which ore): the card asks for it
+    const miss = missingRequired(p, vals);
+    if (miss.length) {
+      this.arm(p, values ?? {});
+      this.host.toast({ text: `${p.name}: choose the ${miss.map(paramLabel).join(' and the ')} on the card.`, kind: 'info', ms: 3600 });
       return null;
     }
     if (m !== 'instant' && m !== 'world' && !at) { this.host.toast({ text: 'Point at the ground first: there is no place to cast it.', kind: 'warn' }); return null; }
@@ -555,7 +578,7 @@ export class Tools {
     }
     if (mode === 'move') {
       const kinds = this.entityKinds(p);
-      const who = (armedHere ? this.first?.ref : null) ?? this.selectionFor(p) ?? (kinds.includes('creature') && this.host.view.creatures[0] ? { kind: 'creature' as const, id: this.host.view.creatures[0].id, planet: this.host.view.creatures[0].planet } : null);
+      const who = (armedHere ? this.first?.ref : null) ?? this.selectionFor(p);
       if (!who) {
         if (ent && kinds.includes(ent.kind)) { this.first = { ref: ent, label: this.refName(ent) }; this.renderInstr(); return null; }
         if (hit && kinds.includes('settlement')) { const sid = this.host.settlementAt(hit.planet, hit.dir); if (sid !== null) { const r: EntityRef = { kind: 'settlement', id: sid, planet: hit.planet }; this.first = { ref: r, label: this.refName(r) }; this.renderInstr(); return null; } }
@@ -784,7 +807,6 @@ export class Tools {
       if (r.kind === 'settlement') { const s = pv.settlements.find((q) => q.id === r.id); if (s) return { planet: pv.id, dir: s.pos }; }
       if (r.kind === 'weather') { const w = pv.weather.find((q) => q.id === r.id); if (w) return { planet: pv.id, dir: w.pos }; }
     }
-    if (r.kind === 'creature') { const c = v.creatures.find((q) => q.id === r.id); if (c) return { planet: c.planet, dir: c.pos }; }
     return null;
   }
 
@@ -808,7 +830,7 @@ export class Tools {
     if (!k) return;
     const s = p.schema[k];
     const lo = s.min ?? 0, hi = s.max ?? 1;
-    const cur = Number(this.values[k] ?? defaultValue(k, s) ?? lo);
+    const cur = Number(this.values[k] ?? sliderStart(s, this.host.powers.defaultOf(p, k)));
     const floor = (hi - lo) * 0.01;
     let next = dir > 0 ? Math.max(cur * 1.25, cur + floor) : Math.min(cur / 1.25, cur - floor);
     if (s.type === 'int') next = Math.round(next) + (Math.round(next) === cur ? dir : 0);

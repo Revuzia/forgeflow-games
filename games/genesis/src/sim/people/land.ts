@@ -52,8 +52,9 @@ export function landUtilities(x: PCtx, s: number, st: Settlement, U: Float64Arra
   }
   if (child) {
     const age = (x.tick - A.birth[s]) / x.year;
-    // a child wanders only when nothing else calls
-    U[C.wander] = Math.min(U[C.wander], 0.05);
+    // a child wanders only when nothing else calls — and an infant not at all: it stays by home and its people (in the
+    // integrated acceptance run the under-twos, kept from prayer, wandered 13 % of the child time; integration 2026-10-14)
+    U[C.wander] = age < 2 ? 0 : Math.min(U[C.wander], 0.05);
     if (night) return;
     const play = canPlay(age), chore = canChore(age, x.info[A.species[s]].def.maturity);
     if (!play && !chore) return;

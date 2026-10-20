@@ -467,6 +467,7 @@ export class Renderer {
           // of bright grey cloud blocks around the cities, which should be what the night shows)
           bodyToClip: _bodyToClip, planetId: pv.id, moonDir: moonOn ? _moonDir : undefined, moonE: moonOn ? _moonEc.copy(_moonE).multiplyScalar(MOON_CLOUD_SHARE) : undefined,
           aurora: (vis.uniforms.uAurora?.value as Vector4 | undefined),
+          nightAmb: vis === primaryVis ? this.nightFloor : undefined,
           // (additive, the god layer) lightning lighting the deck from inside
           flashes: vis === primaryVis ? this.godfx.cloudFlashes : undefined,
         }, q.cloudSteps, q.cloudLightSteps);
@@ -562,7 +563,10 @@ export class Renderer {
       post.setKey(key);
       // (additive, world-events lane) over the night side from orbit the exposure may open further: the starlit,
       // moonlit ground, the airglow on the limb and the aurora's light under its ovals read as a dim world, not a hole
-      const ceil = Math.exp(Math.log(6) + (Math.log(5) - Math.log(6)) * night);
+      // (the night ceiling, 8.5: at 5 a fireless village under the starlit floor sank to pure black at 1x — half of
+      // every game day unreadable; now its huts and the land read as silhouettes in a deep blue while hearths, windows
+      // and lamps still lead)
+      const ceil = Math.exp(Math.log(6) + (Math.log(8.5) - Math.log(6)) * night);
       post.setMetering(0.02, ceil + (10 - ceil) * orbitNight, Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * night));
     }
     // bloom: half by day (a veil), full at dusk and night where lamps, windows and fire should glow
@@ -582,7 +586,9 @@ export class Renderer {
     // history are still converging on the first frame: one snap left the view wrongly exposed for a second)
     if (this.cutFrames > 0) post.cutExposure();
     // photo mode: the lens's depth of field on the composited image, its exposure / bloom / vignette / grain
-    const finishIn = this.photoPost.apply(r, this.fsq, input, post.linDepth.texture, post.w, post.h);
+    // (the lens's temporal resolve accumulates only while the view holds still: a moved camera or a cut starts over)
+    const still = this.cutFrames === 0 && this.poseStill(pose);
+    const finishIn = this.photoPost.apply(r, this.fsq, input, post.linDepth.texture, post.w, post.h, still);
     // (additive, god layer: an eclipse darkens the land — the auto-exposure must not simply lift it back to day)
     const evGod = this.godfx.exposureEV;
     this.settings.exposureBias += evGod;
@@ -591,6 +597,18 @@ export class Renderer {
     if (this.cutFrames > 0) this.cutFrames--;
     this.updateStats();
     this.stats.frameMs = performance.now() - t0;
+  }
+
+  /** the view did not move since the last frame (within a millimetre and a few micro-radians) */
+  private readonly lastPose = new Float64Array(8).fill(NaN);
+  private poseStill(pose: CameraPose): boolean {
+    const L = this.lastPose;
+    const still = Math.abs(pose.pos[0] - L[0]) < 1e-3 && Math.abs(pose.pos[1] - L[1]) < 1e-3 && Math.abs(pose.pos[2] - L[2]) < 1e-3
+      && Math.abs(pose.quat[0] - L[3]) < 2e-6 && Math.abs(pose.quat[1] - L[4]) < 2e-6 && Math.abs(pose.quat[2] - L[5]) < 2e-6
+      && Math.abs(pose.quat[3] - L[6]) < 2e-6 && Math.abs(pose.fov - L[7]) < 1e-6;
+    L[0] = pose.pos[0]; L[1] = pose.pos[1]; L[2] = pose.pos[2];
+    L[3] = pose.quat[0]; L[4] = pose.quat[1]; L[5] = pose.quat[2]; L[6] = pose.quat[3]; L[7] = pose.fov;
+    return still;
   }
 
   /** sine of the sun's elevation at the camera (1 when not near a planet with air) */
@@ -705,12 +723,29 @@ export class Renderer {
     // every material also gets a moonlit sky's share of its night ambient while the moon is up at the camera (the
     // direct moonlight itself is the uMoonE term in terrain, buildings, roads, trees, bodies — shaders/moon.glsl.ts)
     if (on) (u.uNightAmbient.value as Vector3).addScaledVector(_moonE, 0.22 * smoothstepN(-0.05, 0.25, elev));
-    // starlight and airglow (with air): a moonless night keeps buildings, trees, people and roads faintly readable in a
-    // cool grey-blue instead of black against the lit windows (planetview's base airglow is ~5× weaker)
-    // (at 0.014 / 0.019 / 0.04 a moonless street at eye height was black past the reach of the lamps)
-    if (vis.atmo.has) (u.uNightAmbient.value as Vector3).add(_v3.set(0.021, 0.028, 0.058).multiplyScalar(orbitDim));
+    // the night floor: starlight and airglow (with air) — a moonless night keeps buildings, trees, people and roads faintly
+    // readable in a cool grey-blue instead of black against the lit windows (planetview's base airglow is ~5× weaker);
+    // (at 0.014 / 0.019 / 0.04 a moonless street at eye height was black past the reach of the lamps) — or starlight
+    // alone on an airless world. Seen from orbit the floor is lifted and a rim of it lights the limb (terrainmat
+    // uNightRim): the night side reads as a dim world with its coasts and weather — never a black hole in the
+    // starfield. An airless world is metered on its sunlit crescent (no night key: there are no city lights to save):
+    // a floor ~1/200 of the sun from orbit is a charcoal silhouette under the day exposure's ceiling; the
+    // terrain applies the floor on the NIGHT side only (terrainmat), so its day shadows stay black (CONTRACT §16.1).
+    // (the lift follows how much of the view is night: over the night side all of it — ×5 with air, where at ×1.6 the
+    // starlit land metered against the lit limb and the cities stayed black — but a half-lit world keeps its night half
+    // dark beside the day exposure: lifted there, night clouds and snow glowed like a second day side)
+    const farK = smoothstepN(Math.max(vis.atmo.thickness, 200) * 2, Math.max(vis.atmo.thickness, 200) * 6, vis.altitude);
+    const subSolar = _v3.copy(vis.camBody).normalize().dot(u.uSunDirBody.value as Vector3);
+    const lift = farK * (1 - smoothstepN(-0.35, 0.05, subSolar));
+    const nf = this.nightFloor;
+    if (vis.atmo.has) nf.set(0.021, 0.028, 0.058).multiplyScalar(1 + 4 * lift);
+    else nf.set(0.0045, 0.005, 0.0064).multiplyScalar(1 + 7 * lift * farK);
+    (u.uNightAmbient.value as Vector3).add(nf);
+    if (u.uNightRim) u.uNightRim.value = farK;
     return on;
   }
+  /** this frame's night floor on the primary planet (starlight / airglow irradiance), shared with its clouds */
+  readonly nightFloor = new Vector3();
   private wb = new Vector3(1, 1, 1);
   private sun: SunScreen = { uv: new Vector2(-10, -10), onScreen: false, color: new Vector3(1, 1, 1), strength: 0 };
   private wbSnap = true;

@@ -28,6 +28,7 @@ import { SPEED_PRESETS } from '../sim/types.ts';
 import type { ContentPack } from '../sim/content.ts';
 import type { UiHost, InspectRef, GroundHit } from './host.ts';
 import type { Power } from './powers.ts';
+import { categoryLabel } from './powers.ts';
 import { Hud } from './hud.ts';
 import { Inspector } from './inspector.ts';
 import { Palette } from './palette.ts';
@@ -44,15 +45,19 @@ import { Help } from './help.ts';
 import { Menu } from './menu.ts';
 import { Gamepad } from './gamepad.ts';
 import { Catalog } from './catalog.ts';
-import { CreatureMarks } from './creatures.ts';
 import { Opening } from './opening.ts';
 import { NewWorld } from './newworld.ts';
 import { Mods, type ModLibrary, type BootProblem } from './mods.ts';
 import { Photo } from './photo.ts';
 import { CameraUi } from './cammodes.ts';
 import type { LoadOutcome } from './saves.ts';
-import { ACTION_BY_ID, LAYER_HOLD_CODES, comboLabel, splitCombo, type Context } from './keybinds.ts';
+import { ACTION_BY_ID, LAYER_HOLD_CODES, SPEED_KEYS, comboLabel, splitCombo, type Context } from './keybinds.ts';
 import { isTyping } from './dom.ts';
+import { TimeGuard, installDownloadFallback } from './embed.ts';
+import { Title } from './title.ts';
+import { Credits } from './credits.ts';
+import { GodPanel, SignPicker, type GodRow, type SacredPlaceRow } from './living.ts';
+import { Invent } from './invent.ts';
 import { humanize } from './words.ts';
 
 export interface ShellDeps {
@@ -63,7 +68,8 @@ export interface ShellDeps {
   camera: { system(): void; fly(): void; home(): void; follow(): void; look(): void };
   /** a plain left click on the world (select / inspect / recentre / fly to a world) */
   click(x: number, y: number): void;
-  setUi(v: boolean): void;
+  /** the interface shown or hidden; `clean` (default: when hidden) also hides the site's bar — a clean frame */
+  setUi(v: boolean, clean?: boolean): void;
   uiVisible(): boolean;
   setBrush(b: BrushPreview | null): void;
   uniformsOf(planet: number): Record<string, IUniform> | null;
@@ -102,6 +108,8 @@ export interface ShellDeps {
   dev: boolean;
   /** HUD per-frame inputs the shell cannot know (render stats, projections) */
   hudFrame(): Omit<import('./hud.ts').HudFrame, 'open' | 'labels' | 'ticker'>;
+  /** the title's camera: a slow turn round the world behind it (on), or the player's camera again (off) */
+  titleCamera?(on: boolean): void;
 }
 
 /** camera action → the key code the camera controllers read (orbit / fly) */
@@ -111,13 +119,19 @@ const CAM_KEYS: Record<string, [string, string]> = {
 };
 
 /** what still works while a veiled window (settings, saves, the controls card, the menu) is open */
-const MODAL_OK = new Set(['ui.settings', 'ui.saves', 'ui.help', 'ui.menu', 'ui.newWorld', 'ui.mods', 'ui.quicksave', 'ui.quickload', 'ui.chronicle', 'tool.cancel',
-  'time.pause', 'time.speed1', 'time.speed10', 'time.speed100', 'time.speed1000', 'time.faster', 'time.slower', 'time.stepTick', 'time.stepHour', 'time.stepDay']);
+const MODAL_OK = new Set(['ui.settings', 'ui.saves', 'ui.help', 'ui.menu', 'ui.newWorld', 'ui.mods', 'ui.credits', 'ui.quicksave', 'ui.quickload', 'ui.chronicle', 'tool.cancel',
+  'time.pause', ...SPEED_KEYS.map(([x]) => `time.speed${x}`), 'time.faster', 'time.slower', 'time.stepTick', 'time.stepHour', 'time.stepDay']);
+
+/** the scenery world behind a cold load's title turns at this speed (its day passes in a few minutes) */
+const TITLE_SPEED = 10;
+
+/** what does nothing on the title (its world is only scenery: keeping it would overwrite the player's own) */
+const TITLE_NO = new Set(['ui.menu', 'ui.chronicle', 'ui.mods', 'ui.quicksave', 'ui.title', 'ui.god', 'ui.signs', 'god.answer']);
 
 type PressKind = 'none' | 'tool' | 'hand' | 'camera' | 'gesture' | 'right' | 'photo';
 
 /** what still works in photo mode besides its own layer: time, the windows that explain it, cancel */
-const PHOTO_OK = new Set(['tool.cancel', 'ui.help', 'cam.photo', 'time.pause', 'time.speed1', 'time.speed10', 'time.speed100', 'time.speed1000', 'time.faster', 'time.slower', 'time.stepTick', 'time.stepHour', 'time.stepDay']);
+const PHOTO_OK = new Set(['tool.cancel', 'ui.help', 'cam.photo', 'time.pause', ...SPEED_KEYS.map(([x]) => `time.speed${x}`), 'time.faster', 'time.slower', 'time.stepTick', 'time.stepHour', 'time.stepDay']);
 
 export class Shell {
   readonly hud: Hud;
@@ -136,12 +150,25 @@ export class Shell {
   readonly menu: Menu;
   readonly pad: Gamepad;
   readonly catalog: Catalog;
-  readonly creatures: CreatureMarks;
   readonly opening: Opening;
   readonly newWorld: NewWorld;
   readonly mods: Mods;
   readonly photo: Photo;
   readonly cam: CameraUi;
+  /** the site's pause and the hidden page's (src/ui/embed.ts) */
+  readonly time: TimeGuard;
+  /** the front door (src/ui/title.ts) and the credits */
+  readonly title: Title;
+  readonly credits: Credits;
+  /** the people and their god (src/ui/living.ts): the god's window, the sign picker; the invent forms */
+  readonly god: GodPanel;
+  readonly signs: SignPicker;
+  readonly invent: Invent;
+  /** the gods of the worlds (query 'gods': the rivals' epithets), asked now and then */
+  private gods: GodRow[] = [];
+  private godsAt = -1e9;
+  /** the sacred places (query 'sacred'), for the place card */
+  private sacred: SacredPlaceRow[] = [];
   private deps: ShellDeps;
   private host: UiHost;
   /** the mouse's last position (CSS px), null when it left the canvas */
@@ -188,6 +215,7 @@ export class Shell {
     }, deps.dev);
     const root = this.hud.root, world = this.hud.world;
     this.hud.toasts.actions.select = (ref: EntityRef) => host.select(ref);
+    this.hud.toasts.actions.cmd = (c) => { void host.cmd(c); };
     this.hud.toasts.words = (text, planet) => {
       const p = planet ?? host.primary();
       return humanize(host.view, p, text, { dayHours: host.view.planet(p)?.params.dayHours });
@@ -206,6 +234,9 @@ export class Shell {
       powers: host.powers,
       arm: (p, preset) => this.arm(p, preset),
       live: (ref) => this.live(ref),
+      openSigns: (t) => this.signs.open(t),
+      sacredAt: (planet, cell) => this.sacred.find((p) => p.planet === planet && p.cell === cell) ?? null,
+      tick: () => host.view.renderTick,
       planetName: (id) => host.view.planet(id)?.name ?? 'the world',
       dayHours: (id) => host.view.planet(id)?.params.dayHours ?? 24,
       hint: (id) => host.keybinds.hint(id),
@@ -220,7 +251,7 @@ export class Shell {
     });
     this.palette.onClose = () => this.noteDismiss();
     // the radial is drawn over the panels (a card or the inspector never hides its slots); it is not scaled
-    this.radial = new Radial(root, host, (p) => this.arm(p), (cat) => this.openPalette(`!${cat.toLowerCase()} `));
+    this.radial = new Radial(root, host, (p) => this.arm(p), (cat) => this.openPalette(`!${categoryLabel(cat).toLowerCase()} `));
     this.freeform = new Freeform(root, world, host, { arm: (p) => this.arm(p), openLaw: (path) => this.openLaws(path), catalog: this.catalog });
     this.freeform.onClose = () => this.noteDismiss();
     this.catalog.onLaws = () => { if (this.palette.isOpen) this.palette.refresh(); };
@@ -240,14 +271,16 @@ export class Shell {
     this.saves = new Saves(root, {
       host, library: deps.library, save: () => deps.save(), load: (b, packs) => deps.load(b, packs), thumb: () => deps.thumb(), world: () => deps.world(),
       packs: () => deps.packs(), reloadInto: (id) => deps.reloadInto(id), openMods: () => this.openWindow('mods'), openNewWorld: () => this.openWindow('newWorld'),
-      loaded: () => { this.opening.end(); this.newWorld.close(); },
+      loaded: () => { this.opening.end(); this.newWorld.close(); this.title.close('load'); },
+      // (the title's world is scenery: never kept as the autosave, nor saved from the title)
+      keepable: () => !this.title.isOpen,
     });
     this.newWorld = new NewWorld(root, {
-      host, library: deps.library, dev: deps.dev, world: () => deps.world(),
+      host, library: deps.library, dev: deps.dev, world: () => deps.world(), keepable: () => !this.title.isOpen,
       openSaves: () => this.openWindow('saves'),
       begin: async (url) => {
         // the world being left is kept as the autosave first (when autosave is on and there is a living world)
-        if (host.source === 'worker' && host.prefs.value.game.autosaveMinutes > 0 && !this.opening.isActive) await this.saves.autosave().catch(() => false);
+        if (host.source === 'worker' && host.prefs.value.game.autosaveMinutes > 0 && !this.opening.isActive && !this.title.isOpen) await this.saves.autosave().catch(() => false);
         await deps.leaveFor(url);
       },
     });
@@ -256,8 +289,32 @@ export class Shell {
       openNewWorld: () => this.openWindow('newWorld'),
     });
     this.help = new Help(root, host);
-    this.menu = new Menu(root, host);
-    this.creatures = new CreatureMarks(world, host);
+    this.menu = new Menu(root, host, { quitToTitle: () => void this.quitToTitle() });
+    this.credits = new Credits(root);
+    this.signs = new SignPicker(root, {
+      view: () => host.view, primary: () => host.primary(), query: (q, a) => host.query(q, a), cmd: (c) => host.cmd(c),
+      arm: (id, preset) => this.armId(id, preset), target: () => this.townMeant(),
+    });
+    this.god = new GodPanel(root, {
+      view: () => host.view, primary: () => host.primary(), query: (q, a) => host.query(q, a), cmd: (c) => host.cmd(c),
+      select: (ref) => host.select(ref), lookAt: (planet, pos) => host.lookAt(planet, pos), arm: (id, preset) => this.armId(id, preset),
+      openSigns: (t) => this.signs.open(t), gods: () => this.gods, hint: (id) => host.keybinds.hint(id),
+    });
+    this.invent = new Invent(root, {
+      view: () => host.view, primary: () => host.primary(), cmd: (c) => host.cmd(c),
+      here: () => { const g = host.focusGround(); return g ? { planet: g.planet, dir: [g.dir[0], g.dir[1], g.dir[2]] } : null; },
+      town: () => this.townMeant(),
+      plants: () => host.powers.enumOf('content.plant', 'like') ?? [],
+    });
+    this.title = new Title(root, {
+      host,
+      list: () => this.saves.list(),
+      load: (id) => this.saves.loadSlot(id),
+      openWindow: (w) => this.openWindow(w),
+      camera: (on) => deps.titleCamera?.(on),
+      setHud: (titled) => this.titled(titled),
+    });
+    this.title.onClose = (how) => this.titleClosed(how);
     // photo mode and the camera's chip live beside the panels, not in them: they stay while the interface is hidden
     this.photo = new Photo(parent, { host, canvas: deps.canvas, hour: () => deps.localHour(), dayHours: () => host.view.planet(host.primary())?.params.dayHours ?? 24, setHour: (hh) => deps.setLocalHour(hh) });
     this.cam = new CameraUi(parent, { host, nameOf: (ref) => this.catalog.nameOf(ref as EntityRef), uiVisible: () => deps.uiVisible(), action: (id) => this.action(id) });
@@ -272,7 +329,8 @@ export class Shell {
       light: (ev, bloom) => deps.openingLight?.(ev, bloom),
       cameraBusy: () => deps.cameraBusy?.() ?? false,
       audioRunning: () => deps.audioRunning?.() ?? false,
-      setUi: (v) => deps.setUi(v),
+      // (the opening's dark is not a clean frame: the site's bar stays over it)
+      setUi: (v) => deps.setUi(v, false),
       arm: (p, preset) => this.arm(p, preset),
       disarm: () => { if (this.tools.state().armed === 'people') this.tools.disarm(); },
       hudQuiet: (q) => this.hud.setQuiet(q),
@@ -290,8 +348,19 @@ export class Shell {
     window.addEventListener('resize', () => this.applyUiPrefs());
     // labels built from bindings follow a rebinding
     host.keybinds.listen(() => { this.hud.setHint(host.prefs.value.ui.hints); this.hud.refreshKeys(); this.tools.refreshKeys(); });
-    // the portal's pause button opens the game menu
-    (window as unknown as { __PAUSE__?: { toggle(): void; pause(): void } }).__PAUSE__ = { toggle: () => this.action('ui.menu'), pause: () => { if (!this.menu.isOpen) this.openWindow('menu'); } };
+    // the site bar's Pause really pauses (and a hidden page stops time where the setting says so): src/ui/embed.ts
+    this.time = new TimeGuard({
+      speed: () => host.view.speed,
+      setSpeed: (x) => host.setSpeed(x),
+      openMenu: () => this.openWindow('menu'),
+      closeWindows: () => { for (const w of [this.settings, this.saves, this.help, this.menu, this.newWorld, this.mods, this.credits]) if (w.isOpen) w.close(); },
+      windowOpen: () => this.windowUp(),
+      titleOpen: () => this.titleOpen(),
+      hiddenPref: () => host.prefs.value.game.pauseHidden,
+      toast: (t) => host.toast(t),
+    });
+    // a file the site's frame will not download is offered in a new tab instead
+    installDownloadFallback((t) => host.toast(t));
   }
 
   /**
@@ -323,8 +392,42 @@ export class Shell {
     if (this.modal()) return;
     this.palette.close();
     this.radial.close();
+    // inventing a material or a plant is a few choices that read together: its form, not a bare tool card
+    if (p.command === 'content.material' || p.command === 'content.plant') {
+      this.invent.open(p.command === 'content.material' ? 'material' : 'plant', typeof preset.name === 'string' ? preset.name : '');
+      this.host.sound('ui.open');
+      return;
+    }
     this.tools.arm(p, preset);
     this.host.sound('ui.arm');
+  }
+
+  /** arm a power by its id (the god's window, the sign picker); false when no such power is known */
+  armId(id: string, preset: Record<string, unknown> = {}): boolean {
+    const p = this.host.powers.get(id);
+    if (!p) return false;
+    this.arm(p, preset);
+    return true;
+  }
+
+  /** the settlement the player means now: the selected one (or the one of a selected person), else the nearest to where the camera looks */
+  townMeant(): { planet: number; id: number } | null {
+    const host = this.host;
+    const sel = host.selected();
+    if (sel?.kind === 'settlement') return { planet: sel.planet ?? host.primary(), id: sel.id };
+    const pv = host.view.planet(host.primary());
+    if (sel?.kind === 'agent' && pv?.agents) {
+      const A = pv.agents;
+      for (let i = 0; i < A.count; i++) if (A.id[i] === sel.id && A.group[i] >= 0) return { planet: pv.id, id: A.group[i] };
+    }
+    const f = host.focusGround();
+    let best: number | null = null, bd = Infinity;
+    if (pv && f) for (const st of pv.settlements) {
+      if (st.flags & 2) continue;
+      const d = 1 - (st.pos[0] * f.dir[0] + st.pos[1] * f.dir[1] + st.pos[2] * f.dir[2]);
+      if (d < bd) { bd = d; best = st.id; }
+    }
+    return best !== null && pv ? { planet: pv.id, id: best } : null;
   }
 
   openFreeform(text = ''): void {
@@ -356,8 +459,8 @@ export class Shell {
   }
 
   /** open a veiled window: the game menu gives way to it, the transient pickers close, it draws on top */
-  openWindow(which: 'settings' | 'saves' | 'help' | 'menu' | 'newWorld' | 'mods'): void {
-    const p = which === 'settings' ? this.settings : which === 'saves' ? this.saves : which === 'help' ? this.help : which === 'newWorld' ? this.newWorld : which === 'mods' ? this.mods : this.menu;
+  openWindow(which: 'settings' | 'saves' | 'help' | 'menu' | 'newWorld' | 'mods' | 'credits'): void {
+    const p = which === 'settings' ? this.settings : which === 'saves' ? this.saves : which === 'help' ? this.help : which === 'newWorld' ? this.newWorld : which === 'mods' ? this.mods : which === 'credits' ? this.credits : this.menu;
     // (photo mode is left first: the interface it hides is where windows live)
     if (this.photo.isActive) this.host.cam?.photo(false);
     this.cam.closeMenu();
@@ -369,7 +472,7 @@ export class Shell {
     if (p.isOpen) p.panel.raise(); else p.open();
   }
 
-  /** the mirror's live view of a disaster / weather / creature / ship (the inspector's "now") */
+  /** the mirror's live view of a disaster / weather / ship (the inspector's "now") */
   private live(ref: InspectRef): Record<string, unknown> | null {
     const v = this.host.view;
     if (ref.kind === 'disaster' || ref.kind === 'weather') {
@@ -380,8 +483,18 @@ export class Shell {
       }
       return null;
     }
-    if (ref.kind === 'creature') return (v.creatures.find((c) => c.id === ref.id) as unknown as Record<string, unknown>) ?? null;
     if (ref.kind === 'ship') return (v.ships.find((s) => s.id === ref.id) as unknown as Record<string, unknown>) ?? null;
+    // a settlement's view (its regard, prayers, prophet, what it keeps holy, its age, its livelihood)
+    if (ref.kind === 'settlement') {
+      const s = v.planet(ref.planet ?? this.host.primary())?.settlements.find((q) => q.id === ref.id);
+      return s ? (s as unknown as Record<string, unknown>) : null;
+    }
+    // a person's flags as the movers carry them (prophet, the Called, sheltering, on pilgrimage)
+    if (ref.kind === 'agent') {
+      const A = v.planet(ref.planet ?? this.host.primary())?.agents;
+      if (A) for (let i = 0; i < A.count; i++) if (A.id[i] === ref.id) return { flags: A.flags[i], flags2: A.flags2?.[i] ?? 0, group: A.group[i] };
+      return null;
+    }
     return null;
   }
 
@@ -393,11 +506,21 @@ export class Shell {
     if (this.opening.cinematic && id !== 'tool.cancel' && !id.startsWith('time.')) this.opening.skip();
     // a veiled window is up: the world waits (time and the window keys still work)
     if (this.modal() && !MODAL_OK.has(id)) { host.sound('ui.error'); return; }
+    // the title's world is scenery: no game menu, chronicle, mods or quicksave of it from there
+    if (this.title.isOpen && TITLE_NO.has(id)) { host.sound('ui.error'); return; }
     // photo mode: its own keys, time, and the way out
     if (id.startsWith('photo.')) { this.photo.action(id); return; }
     if (this.photo.isActive && !PHOTO_OK.has(id)) return;
+    if (id.startsWith('ui.god@')) { this.god.open(id.slice(7) as never); return; }
     if (id.startsWith('ui.radial@')) { const [x, y] = id.slice(10).split(',').map(Number); this.radial.open(x, Math.max(300, y), 'click'); this.hud.used('ui.radial'); return; }
     this.hud.used(id);
+    // the speed presets (every one of SPEED_PRESETS has its action: time.speed1 … time.speed3000)
+    if (/^time\.speed\d+$/.test(id)) {
+      const x = Number(id.slice(10));
+      if (this.time.sitePaused) this.time.sitePaused = false;
+      host.setSpeed(x);
+      return;
+    }
     switch (id) {
       case 'cam.system': this.deps.camera.system(); return;
       case 'cam.fly': this.deps.camera.fly(); return;
@@ -418,11 +541,11 @@ export class Shell {
       case 'cam.menu': this.cam.toggleMenu(); return;
       case 'ui.newWorld': if (this.newWorld.isOpen) this.newWorld.close(); else { this.openWindow('newWorld'); } return;
       case 'ui.mods': if (this.mods.isOpen) this.mods.close(); else this.openWindow('mods'); return;
-      case 'time.pause': host.setSpeed(host.view.speed === 0 ? (this.lastSpeed || 1) : (this.lastSpeed = host.view.speed, 0)); return;
-      case 'time.speed1': host.setSpeed(1); return;
-      case 'time.speed10': host.setSpeed(10); return;
-      case 'time.speed100': host.setSpeed(100); return;
-      case 'time.speed1000': host.setSpeed(1000); return;
+      case 'time.pause':
+        // time stopped by the site's Pause comes back at its own speed
+        if (this.time.sitePaused && host.view.speed === 0) { this.time.resume(); return; }
+        host.setSpeed(host.view.speed === 0 ? (this.lastSpeed || 1) : (this.lastSpeed = host.view.speed, 0));
+        return;
       case 'time.faster': case 'time.slower': {
         const presets: readonly number[] = SPEED_PRESETS;
         const i = presets.indexOf(host.view.speed);
@@ -479,9 +602,24 @@ export class Shell {
       case 'ui.quicksave': void this.saves.quicksave(); return;
       case 'ui.quickload': void this.saves.quickload(); return;
       case 'ui.help': if (this.help.isOpen) this.help.close(); else this.openWindow('help'); return;
+      case 'ui.credits': if (this.credits.isOpen) this.credits.close(); else this.openWindow('credits'); return;
+      case 'ui.god': this.god.toggle(); return;
+      case 'ui.signs': if (this.signs.isOpen) this.signs.close(); else this.signs.open(); return;
+      case 'god.answer': this.answerMostPressing(); return;
+      case 'ui.title': if (!this.title.isOpen) void this.quitToTitle(); return;
       case 'ui.menu': if (this.menu.isOpen) this.menu.close(); else this.openWindow('menu'); return;
       case 'ui.hide': this.hideUi(this.deps.uiVisible()); return;
     }
+  }
+
+  /** the most pressing open prayer of this world, answered (the key; the god's card names it) */
+  private answerMostPressing(): void {
+    const host = this.host;
+    const pv = host.view.planet(host.primary());
+    let best: { s: number; id: number; u: number } | null = null;
+    for (const s of pv?.settlements ?? []) for (const p of s.prayers ?? []) if (!(s.flags & 2) && (!best || p.urgency > best.u)) best = { s: s.id, id: p.id, u: p.urgency };
+    if (!best || !pv) { host.toast({ text: 'No one is praying to you now.', kind: 'info', ms: 2600 }); return; }
+    void host.cmd({ k: 'prayer.answer', settlement: best.s, prayer: best.id, planet: pv.id });
   }
 
   /** H: the interface away (with a note saying how it comes back) or back */
@@ -518,7 +656,7 @@ export class Shell {
     if (this.palette.isOpen) { this.palette.close(); return done(); }
     if (this.freeform.isOpen) { this.freeform.close(); return done(); }
     // the newest open window first
-    const wins = [this.settings, this.saves, this.help, this.menu, this.chronicle, this.newWorld, this.mods].filter((p) => p.isOpen)
+    const wins = [this.settings, this.saves, this.help, this.menu, this.chronicle, this.newWorld, this.mods, this.credits, this.god, this.signs, this.invent].filter((p) => p.isOpen)
       .sort((a, b) => Number(b.panel.root.style.zIndex || 0) - Number(a.panel.root.style.zIndex || 0));
     if (wins.length) { wins[0].close(); return done(); }
     if (this.tools.cancelStep()) return done();
@@ -531,6 +669,8 @@ export class Shell {
     if (cm === 'follow') { this.host.follow(null); return done(); }
     if (!this.deps.uiVisible()) { this.hideUi(false); return done(); }
     if (performance.now() - this.dismissedAt < 400) return;
+    // the title has nothing behind it to go back to: Esc stays on it
+    if (this.title.isOpen) return;
     // nothing left to close: while the opening's whispers speak, its scenario menu ("Another world?"); else the game menu
     if (this.opening.isActive && this.opening.cancel()) return done();
     this.openWindow('menu');
@@ -542,7 +682,50 @@ export class Shell {
 
   /** a modal window (veiled) is open: world input pauses */
   modal(): boolean {
-    return this.settings.isOpen || this.saves.isOpen || this.help.isOpen || this.menu.isOpen || this.newWorld.isOpen || this.mods.isOpen || this.opening.modal;
+    return this.settings.isOpen || this.saves.isOpen || this.help.isOpen || this.menu.isOpen || this.newWorld.isOpen || this.mods.isOpen || this.credits.isOpen || this.invent.isOpen || this.opening.modal || this.title.isOpen;
+  }
+
+  /** a window (not the title itself) is up */
+  windowUp(): boolean {
+    return this.settings.isOpen || this.saves.isOpen || this.help.isOpen || this.menu.isOpen || this.newWorld.isOpen || this.mods.isOpen || this.credits.isOpen || this.invent.isOpen;
+  }
+
+  titleOpen(): boolean { return this.title.isOpen; }
+
+  /** the interface behind the title steps aside (the site's bar stays: it is not a clean frame) */
+  private titled(on: boolean): void {
+    this.hud.root.classList.toggle('gn-titled', on);
+    this.hud.world.classList.toggle('gn-titled', on);
+    // the cold load's world is scenery: it turns a little faster behind the title (a world quit to stands still)
+    if (on && this.titleSpeed < 0 && this.host.source === 'worker') this.host.setSpeed(TITLE_SPEED);
+    if (on) {
+      this.palette.close(); this.radial.close(); this.freeform.close();
+      this.god.close(); this.signs.close(); this.invent.close();
+      if (this.gestures.active || this.gestures.armed) this.gestures.cancel();
+      if (this.tools.isArmed) this.tools.disarm();
+      if (this.host.selected()) this.host.select(null);
+      if (this.photo.isActive) this.host.cam?.photo(false);
+      this.opening.end();
+    }
+  }
+
+  /** the speed the world had when the player quit to the title (Continue gives it back) */
+  private titleSpeed = -1;
+
+  /** the game menu's "Quit to title": the world is kept as the autosave, time stops, the title comes up over it */
+  async quitToTitle(): Promise<void> {
+    const host = this.host;
+    if (host.source === 'worker') await this.saves.autosave().catch(() => false);
+    this.titleSpeed = host.view.speed;
+    if (host.view.speed > 0) host.setSpeed(0);
+    this.title.open({ fromGame: true });
+  }
+
+  /** the title went away: after "Quit to title" and Continue, the world's own speed again; else the plain 1× */
+  private titleClosed(how: string): void {
+    if (this.titleSpeed >= 0 && how === 'continue') { if (this.host.view.speed === 0) this.host.setSpeed(this.titleSpeed); }
+    else if (this.host.source === 'worker') this.host.setSpeed(1);
+    this.titleSpeed = -1;
   }
 
   /** the camera mode's key layer, if one is live */
@@ -558,7 +741,7 @@ export class Shell {
     if (!cam) return;
     if (cam.mode() === 'dolly') { cam.dolly(null); return; }
     const sel = host.selected();
-    if (sel && (sel.kind === 'settlement' || sel.kind === 'building' || sel.kind === 'agent' || sel.kind === 'creature')) { cam.dolly(sel as EntityRef); return; }
+    if (sel && (sel.kind === 'settlement' || sel.kind === 'building' || sel.kind === 'agent')) { cam.dolly(sel as EntityRef); return; }
     const pv = host.view.planet(host.primary());
     const f = host.focusGround();
     let best: number | null = null, bd = Infinity;
@@ -582,6 +765,14 @@ export class Shell {
       if (e.code === 'Escape' && (e.target as HTMLElement).closest('.gn-win')) { e.preventDefault(); (e.target as HTMLElement).blur(); this.cancel(); }
       return;
     }
+    // Enter on a control reached by the keyboard (the title's doors, a window's buttons, the inspector's) presses it, as
+    // anywhere on the web; a control merely clicked with the mouse keeps Enter for "do this"
+    const fe = document.activeElement as HTMLElement | null;
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && fe && fe !== document.body && fe.matches(':focus-visible')
+      && fe.matches('button, summary, a[href], [role="button"], [role="menuitem"]')) return;
+    // the arrows on a slider reached by the keyboard move it (the wrath, a setting, a brush); after a drag with the mouse
+    // they are the camera's again
+    if (/^(Arrow(Left|Right|Up|Down)|Home|End|PageUp|PageDown)$/.test(e.code) && fe instanceof HTMLInputElement && fe.type === 'range' && fe.matches(':focus-visible')) return;
     const kb = this.host.keybinds;
     // the opening's star and fall (the interface still hidden): a key gives way to the world at once — a power or a
     // window key then acts; a time key (Space among them) only skips: it meant "go on", not "pause" (Esc: the menu)
@@ -805,7 +996,7 @@ export class Shell {
       if (!down && this.padUiHeld === name) { this.padUiHeld = null; return; }
     }
     const focus = this.focusedPanel();
-    if (down && (this.modal() || this.chronicle.isOpen || this.freeform.isOpen || focus) && this.panelNav(name, focus)) return;
+    if (down && (this.modal() || this.chronicle.isOpen || this.god.isOpen || this.signs.isOpen || this.freeform.isOpen || focus) && this.panelNav(name, focus)) return;
     // pressing on the world takes the focus away from a panel
     if (down && focus && (name === 'A' || name === 'RT')) (document.activeElement as HTMLElement | null)?.blur();
     for (const id of ids) {
@@ -857,9 +1048,9 @@ export class Shell {
 
   /** D-pad / A / B inside panels: move focus between controls, press the focused one, set a focused slider or list */
   private panelNav(name: string, focused: HTMLElement | null = null): boolean {
-    const open = [this.settings, this.saves, this.help, this.menu, this.chronicle, this.newWorld, this.mods].filter((x) => x.isOpen)
+    const open = [this.settings, this.saves, this.help, this.menu, this.chronicle, this.newWorld, this.mods, this.credits, this.god, this.signs, this.invent].filter((x) => x.isOpen)
       .sort((a, b) => Number(b.panel.root.style.zIndex || 0) - Number(a.panel.root.style.zIndex || 0));
-    const panel = (this.opening.modal ? this.opening.root : null) ?? open[0]?.panel.root ?? (this.freeform.isOpen ? this.freeform.root : null) ?? focused;
+    const panel = (this.opening.modal ? this.opening.root : null) ?? open[0]?.panel.root ?? (this.title.isOpen ? this.title.root : null) ?? (this.freeform.isOpen ? this.freeform.root : null) ?? focused;
     if (!panel) return false;
     const items = Array.from(panel.querySelectorAll<HTMLElement>('button, select, input, [tabindex]')).filter((x) => x.offsetParent !== null && !(x as HTMLButtonElement).disabled);
     if (!items.length) return false;
@@ -971,17 +1162,23 @@ export class Shell {
     this.palette.frame();
     this.saves.frame();
     this.inspector.tick(performance.now());
+    // the people and their god: the wrath a harmful cast falls with, the god's window, the rivals' names now and then
+    host.powers.wrathLaw = host.view.wrath ?? host.powers.wrathLaw;
+    this.god.frame();
+    this.pollGods();
     // the world layer: busy (names and markers let presses through), hushed (names and markers hidden)
     const busy = pointerOwned || this.hand.busy || this.press !== 'none';
     const hush = this.radial.isOpen || this.palette.isOpen || this.gestures.active || this.gestures.armed || this.opening.hush;
     this.hud.setWorldMode(busy, hush);
-    this.creatures.frame(hush);
     // (before the toasts drain the events: the opening reads the sim's milestones)
     this.opening.frame();
     this.hud.keepOut = this.opening.speaking();
     this.hud.toasts.muteMilestones = this.opening.isActive;
+    // (the title's world is scenery: its news is not the player's)
+    this.hud.toasts.muteNews = this.title.isOpen;
     this.cam.frame(this.pad.active);
     this.photo.frame();
+    this.time.frame();
     // (the note says it for six seconds, then fades; it goes at once when the interface comes back)
     if (!this.hiddenNote.hidden) {
       const age = performance.now() - this.hiddenNoteAt;
@@ -1002,6 +1199,23 @@ export class Shell {
     });
     this.hud.toasts.pump(host.view, performance.now(), host.primary());
     this.layout();
+  }
+
+  /** the gods (their epithets for the HUD and the god's window) and the sacred places (the place card), every ~6 s */
+  private pollGods(): void {
+    const now = performance.now();
+    if (now - this.godsAt < 6000 || this.host.source !== 'worker' || this.title.isOpen) return;
+    this.godsAt = now;
+    const planet = this.host.primary();
+    void this.host.query('gods', {}).then((g) => {
+      if (!Array.isArray(g)) return;
+      this.gods = g as GodRow[];
+      this.hud.setGods(this.gods);
+    }).catch(() => { /* the names wait */ });
+    void this.host.query('sacred', { planet }).then((r) => {
+      const places = (r as { places?: unknown } | null)?.places;
+      if (Array.isArray(places)) this.sacred = places as SacredPlaceRow[];
+    }).catch(() => { /* the list waits */ });
   }
 
   /**
@@ -1028,11 +1242,23 @@ export class Shell {
       // too little room above the card for the column: the toasts go to the top centre
       if (card.top < H * 0.42) top = true;
     }
+    // (a short window — the site's 888 × 500 frame — holds two toasts between the time panel and the dock)
+    this.hud.toasts.maxShown = H < 600 ? 2 : H < 760 ? 3 : 4;
     const tickerMax = Math.max(160, (dock.left - 36 - 18) / s);
-    const key = `${Math.round(bottom)}|${top}|${Math.round(tickerMax)}`;
+    // a window open on the left (the chronicle, The god) would cover the toasts: they stand beside it (to the right of
+    // it, short of the inspector when that is open)
+    let toastLeft: number | undefined, toastMaxW: number | undefined;
+    let leftEdge = 0;
+    for (const w of [this.chronicle, this.god]) if (w.isOpen) leftEdge = Math.max(leftEdge, w.panel.root.getBoundingClientRect().right);
+    if (leftEdge > 0) {
+      const insp = this.inspector.isOpen ? this.inspector.root.getBoundingClientRect().left : window.innerWidth;
+      toastLeft = leftEdge + 12;
+      toastMaxW = Math.max(200, (insp - 14 - toastLeft) / s);
+    }
+    const key = `${Math.round(bottom)}|${top}|${Math.round(tickerMax)}|${Math.round(toastLeft ?? -1)}|${Math.round(toastMaxW ?? -1)}`;
     if (key === this.layoutKey) return;
     this.layoutKey = key;
-    this.hud.layout({ toastBottom: bottom, toastTop: top, tickerMax });
+    this.hud.layout({ toastBottom: bottom, toastTop: top, tickerMax, toastLeft, toastMaxW });
   }
 
   /** the selection changed (App.select): the inspector follows */
@@ -1051,6 +1277,8 @@ export class Shell {
       opening: this.opening.state(), uiScale: this.uiScale(),
       newWorld: this.newWorld.isOpen ? this.newWorld.state() : null, mods: this.mods.isOpen, modsLast: this.mods.last,
       photo: this.photo.state(), cam: this.cam.state(), saveLast: this.saves.last,
+      title: this.title.state(), credits: this.credits.isOpen, sitePaused: this.time.sitePaused, hiddenPaused: this.time.hiddenPaused,
+      god: this.god.state(), signs: this.signs.state(), invent: this.invent.state(), prayerMarks: this.hud.prayerMarks.marked(),
     };
   }
 }

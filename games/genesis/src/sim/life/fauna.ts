@@ -219,6 +219,9 @@ export function contentAfterLoad(u: Universe, h: Record<string, unknown>): { rem
       return k !== id ? `animal:${k}` : t;
     });
   }
+  // disasters under way are kept by kind id: an old id becomes the kind that replaced it (a 1.4 leviathan at sea goes on
+  // as the rogue wave — its view, chronicle and events name the real kind; integration, 2026-10-14)
+  for (const d of u.god.disasters) if (c.disasters.has(d.kind)) d.kind = c.disasters.canonical(d.kind);
   // herds of a kind replaced in place by a real one, where the real one cannot live (a methane sky's 'haze rays')
   let dropped = 0;
   if (Array.isArray(old.animals)) {

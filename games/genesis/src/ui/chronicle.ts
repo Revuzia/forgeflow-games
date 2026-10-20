@@ -163,7 +163,7 @@ export class Chronicle {
 
   private placeOf(e: ChronicleEntry): EntityRef | null {
     for (const r of e.refs ?? []) {
-      if (r.kind === 'settlement' || r.kind === 'agent' || r.kind === 'disaster' || r.kind === 'creature' || r.kind === 'ship') return { ...r, planet: r.planet ?? e.planet };
+      if (r.kind === 'settlement' || r.kind === 'agent' || r.kind === 'disaster' || r.kind === 'ship') return { ...r, planet: r.planet ?? e.planet };
     }
     return null;
   }

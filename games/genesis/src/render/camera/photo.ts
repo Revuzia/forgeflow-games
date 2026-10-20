@@ -6,10 +6,11 @@
 //   PHOTO        the lens the interface edits (src/ui/photo.ts through RenderCameraModes.lens): exposure, focal length,
 //                focus distance, blur, roll, bloom, vignette, grain (the colour filters and the frame are the panel's).
 //   PhotoPost    real depth of field from the depth buffer: a thin-lens circle of confusion (∝ |z − focus| / z, up to a
-//                blur-scaled share of the frame), gathered over a 48-tap golden-angle disc on the composited HDR image
-//                before bloom (so blurred highlights bloom into soft bokeh); the far field does not bleed over a sharp
-//                subject, the near field does bleed over the background (as a lens does); brighter samples weigh more (the
-//                bokeh discs read).
+//                blur-scaled share of the frame), gathered over a Vogel disc (48 taps, 128 at Cinematic) rotated per pixel
+//                by blue noise and per frame by the golden ratio, on the composited HDR image before bloom (so blurred
+//                highlights bloom into soft bokeh), then resolved over still frames (history clamped to the current 3×3
+//                neighbourhood: nothing ghosts); the far field does not bleed over a sharp subject, the near field does
+//                bleed over the background (as a lens does); brighter samples weigh more (the bokeh discs read).
 //   capturePhoto the picture at up to 4K (3840 × 2160) by render-target supersampling: the canvas is resized to the
 //                picture, the internal resolution scaled by the supersample factor, a few frames rendered (the clouds'
 //                and reflections' history refill), the canvas read, everything put back.
@@ -23,6 +24,7 @@ import { nearestPlanet } from '../frame.ts';
 import { FullscreenQuad, passMaterial } from '../post/fsquad.ts';
 import type { PostSettings } from '../post/pipeline.ts';
 import { basisQuat, norm3, surfaceRadius, type CameraController, type InputState } from './common.ts';
+import { blueNoiseTexture } from '../sky/bluenoise.ts';
 
 /** the lens (degrees, metres, stops, 0..1); mirrors src/ui/host.ts PhotoLens */
 export interface Lens {
@@ -146,14 +148,20 @@ export class PhotoCamera implements CameraController {
 
 // ───────────────────────────── depth of field ─────────────────────────────
 
+// The gather: a Vogel disc (taps at r = √((i + ½) / N)·R, θ = i·golden angle) ROTATED PER PIXEL by a 64² blue-noise
+// rank and per frame by the golden ratio. A fixed pattern shared by every pixel (the previous golden-angle disc) drew
+// the taps' own lattice into every out-of-focus edge — a square grid over flat walls and the sky's bokeh; rotated, the
+// residual is fine blue-noise grain that the temporal resolve below averages away over a few still frames.
 const dofFrag = (taps: number): string => /* glsl */ `
 varying vec2 vUv;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
+uniform sampler2D tBlue;
 uniform vec2 uRes;
 uniform float uFocus;
 uniform float uMaxPx;
 uniform float uNearK;
+uniform float uFrame;
 const int TAPS = ${taps};
 float cocPx(float z) {
   z = min(z, 1e7);
@@ -168,12 +176,17 @@ void main() {
   // search as far as the largest circle could reach here
   float radius = max(coc0, uMaxPx * 0.75);
   if (radius < 0.6) { gl_FragColor = vec4(c0, 1.0); return; }
-  vec3 acc = c0 * 1.0;
-  float wsum = 1.0;
+  // per-pixel rotation (blue noise) and per-frame rotation (golden ratio): no shared lattice anywhere
+  float bn = texelFetch(tBlue, ivec2(gl_FragCoord.xy) & 63, 0).r;
+  float rot = fract(bn + uFrame * 0.618034) * 6.2831853;
+  // (the centre's own share: a sharp pixel stays itself, a blurred one is one tap among many)
+  float w0 = 1.0 / max(1.0, coc0 * coc0 * 0.08);
+  vec3 acc = c0 * w0;
+  float wsum = w0;
   for (int i = 0; i < TAPS; i++) {
     float fi = float(i) + 0.5;
     float r = sqrt(fi / float(TAPS)) * radius;
-    float a = fi * 2.39996323;
+    float a = fi * 2.39996323 + rot;
     vec2 off = vec2(cos(a), sin(a)) * r;
     vec2 uv = vUv + off / uRes;
     vec3 c = texture(tColor, uv).rgb;
@@ -183,34 +196,80 @@ void main() {
     // sharper centre (no background halo round a sharp subject), one in front can (the near field bleeds)
     float reach = z > z0 ? min(coc, coc0) : coc;
     float w = smoothstep(r - 1.0, r + 0.5, reach);
-    // bokeh: bright points carry more weight (their discs read)
+    // bokeh: bright points carry more weight (their discs read), clamped so one hot pixel never paints a solid disc
     w *= 1.0 + 0.6 * smoothstep(1.0, 6.0, luma(c));
-    acc += c * w;
+    acc += min(c, vec3(64.0)) * w;
     wsum += w;
   }
   gl_FragColor = vec4(acc / wsum, 1.0);
 }
 `;
 
+// The resolve: last frame's gathered image, clamped to this frame's 3×3 neighbourhood (so a moving subject never
+// ghosts), blended at 1/n while the view and the lens hold still (n ≤ 8): the per-frame rotations average into smooth
+// discs over a few frames, and the picture (capturePhoto renders several frames) is clean.
+const RESOLVE_FRAG = /* glsl */ `
+varying vec2 vUv;
+uniform sampler2D tCur;
+uniform sampler2D tHist;
+uniform vec2 uRes;
+uniform float uN;
+void main() {
+  vec3 c = texture(tCur, vUv).rgb;
+  if (uN <= 1.0) { gl_FragColor = vec4(c, 1.0); return; }
+  vec3 mn = c, mx = c;
+  vec2 px = 1.0 / uRes;
+  for (int j = -1; j <= 1; j++)
+  for (int i = -1; i <= 1; i++) {
+    if (i == 0 && j == 0) continue;
+    vec3 s = texture(tCur, vUv + vec2(float(i), float(j)) * px).rgb;
+    mn = min(mn, s); mx = max(mx, s);
+  }
+  vec3 h = clamp(texture(tHist, vUv).rgb, mn, mx);
+  gl_FragColor = vec4(mix(h, c, 1.0 / uN), 1.0);
+}
+`;
+
 const dofMaterial = (taps: number): ShaderMaterial => passMaterial(dofFrag(taps), {
-  tColor: { value: null }, tDepth: { value: null }, uRes: { value: new Vector2(1, 1) }, uFocus: { value: 200 }, uMaxPx: { value: 8 }, uNearK: { value: 1.2 },
+  tColor: { value: null }, tDepth: { value: null }, tBlue: { value: blueNoiseTexture() }, uRes: { value: new Vector2(1, 1) },
+  uFocus: { value: 200 }, uMaxPx: { value: 8 }, uNearK: { value: 1.2 }, uFrame: { value: 0 },
 });
+
+const rt = (w: number, h: number): WebGLRenderTarget =>
+  new WebGLRenderTarget(w, h, { type: HalfFloatType, format: RGBAFormat, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false });
 
 export class PhotoPost {
   private target: WebGLRenderTarget | null = null;
+  private hist: [WebGLRenderTarget, WebGLRenderTarget] | null = null;
+  private histIdx = 0;
+  private histN = 0;
+  private frame = 0;
+  private lensKey = '';
   private mat48 = dofMaterial(48);
   private mat128: ShaderMaterial | null = null;
+  private readonly resolveMat = passMaterial(RESOLVE_FRAG, { tCur: { value: null }, tHist: { value: null }, uRes: { value: new Vector2(1, 1) }, uN: { value: 1 } });
   /** the Cinematic preset's lens (Quality.dof): 128 taps for smooth discs instead of 48 */
   hq = false;
 
-  /** depth of field on the composited HDR image when photo mode wants it; returns the texture to tone map */
-  apply(r: WebGLRenderer, fsq: FullscreenQuad, input: Texture, linDepth: Texture, w: number, h: number): Texture {
-    const L = PHOTO.lens;
-    if (!PHOTO.on || L.blur <= 0.001) return input;
+  /** forget the accumulated frames (a camera cut, a moved camera) */
+  reset(): void { this.histN = 0; }
+
+  /**
+   * depth of field on the composited HDR image when photo mode wants it; returns the texture to tone map. `still`: the
+   * view has not moved since the last frame (the temporal resolve may keep accumulating).
+   */
+  apply(r: WebGLRenderer, fsq: FullscreenQuad, input: Texture, linDepth: Texture, w: number, h: number, still = false): Texture {
+    const L = PHOTO.on ? PHOTO.lens : null;
+    if (!L || L.blur <= 0.001) { this.histN = 0; return input; }
     if (!this.target || this.target.width !== w || this.target.height !== h) {
       this.target?.dispose();
-      this.target = new WebGLRenderTarget(w, h, { type: HalfFloatType, format: RGBAFormat, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false });
+      this.hist?.[0].dispose(); this.hist?.[1].dispose();
+      this.target = rt(w, h);
+      this.hist = [rt(w, h), rt(w, h)];
+      this.histN = 0;
     }
+    const key = `${L.focus.toFixed(3)}|${L.blur.toFixed(4)}|${L.fov.toFixed(3)}|${this.hq ? 1 : 0}`;
+    if (key !== this.lensKey || !still) { this.lensKey = key; this.histN = 0; }
     const mat = this.hq ? (this.mat128 ??= dofMaterial(128)) : this.mat48;
     const u = mat.uniforms;
     u.tColor.value = input;
@@ -219,8 +278,21 @@ export class PhotoPost {
     u.uFocus.value = Math.max(0.3, L.focus);
     // a wide-open lens blurs up to ~2.2 % of the frame's height
     u.uMaxPx.value = L.blur * 0.022 * h;
+    this.frame = (this.frame + 1) % 4096;
+    u.uFrame.value = this.frame;
     fsq.render(r, mat, this.target);
-    return this.target.texture;
+    // temporal resolve into the other history buffer
+    const hist = this.hist!;
+    const prev = hist[this.histIdx], next = hist[this.histIdx ^ 1];
+    this.histN = Math.min(8, this.histN + 1);
+    const ru = this.resolveMat.uniforms;
+    ru.tCur.value = this.target.texture;
+    ru.tHist.value = prev.texture;
+    (ru.uRes.value as Vector2).set(w, h);
+    ru.uN.value = this.histN;
+    fsq.render(r, this.resolveMat, next);
+    this.histIdx ^= 1;
+    return next.texture;
   }
 
   /** the post settings with the lens on top (exposure added, bloom / vignette / grain from the lens) */
@@ -235,7 +307,10 @@ export class PhotoPost {
     return scratch;
   }
 
-  dispose(): void { this.target?.dispose(); this.mat48.dispose(); this.mat128?.dispose(); }
+  dispose(): void {
+    this.target?.dispose(); this.hist?.[0].dispose(); this.hist?.[1].dispose();
+    this.mat48.dispose(); this.mat128?.dispose(); this.resolveMat.dispose();
+  }
 }
 
 // ───────────────────────────── the picture ─────────────────────────────
@@ -272,7 +347,8 @@ export function capturePhoto(R: PhotoRenderer, view: WorldView, pose: CameraPose
     q.maxDpr = Math.max(1, q.maxDpr);
     R.resize(W, H, 1);
     R.cut();
-    const n = Math.max(1, Math.min(8, o.frames ?? 3));
+    // (with depth of field on, at least 6: the lens's temporal resolve averages its per-frame rotations into smooth discs)
+    const n = Math.max(PHOTO.on && PHOTO.lens.blur > 0.001 ? 6 : 1, Math.min(8, o.frames ?? 3));
     for (let i = 0; i < n; i++) R.render(view, pose, 1 / 60, time + i / 60);
     url = R.canvas.toDataURL('image/png');
   } finally {

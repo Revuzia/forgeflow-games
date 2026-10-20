@@ -729,6 +729,7 @@ function describe(cx: PCtx2, c: Command, label?: string): string {
 }
 
 function placeLabel(m: Mods): string {
+  if (m.mid && m.place && m.other && !/^between /.test(m.place.label)) return ` · between ${m.place.label} and ${m.other.label}`;
   return m.place ? ` · ${m.place.label}` : '';
 }
 
@@ -2605,7 +2606,7 @@ function intentHand(c: Clause): boolean {
   if (verb(cx, s, 'grab') && !/\b(land|ground|earth|terrain|season|sun)\b/.test(s)) {
     const item = findNoun(u.content, p, s, ['item']);
     const k = kinds.find(([re]) => re.test(s));
-    if (item && !k) c.add({ k: 'hand.grab', item: item.id, ...(mods.qty ? { qty: mods.qty } : {}) }, 'conjure into the hand');
+    if (item && !k) c.add({ k: 'hand.grab', item: item.id, ...(mods.qty ? { qty: mods.qty } : {}) }, 'conjure into the Touch');
     else c.add({ k: 'hand.grab', ...(k ? { kind: k[1] } : {}) }, 'grab');
     return true;
   }

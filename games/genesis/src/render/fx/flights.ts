@@ -5,8 +5,8 @@
 // renderer therefore flies each throw itself, in FX time, along the same ballistic arc under the planet's gravity
 // (a few real seconds), and plays the landing when ITS flight comes down (the sim's landing event is held until then).
 // What flies is drawn: a boulder, an uprooted tree, a bundle, a hut torn off its foundations (lit props, tumbling), a
-// person (the crowds draw them where the flight says, tumbling, in the thrown pose) or the creature (its visual
-// follows the flight); a pale streak of displaced air trails anything fast. Projectiles the snapshot still carries
+// person (the crowds draw them where the flight says, tumbling, in the thrown pose); a pale streak of displaced air
+// trails anything fast. (There is no creature to fly: LIVING §3.5 — the sim never sends one.) Projectiles the snapshot still carries
 // that no event announced (a long flight, a gravity slip, a reload) are flown from their snapshot state.
 
 import { BufferGeometry, Group, Matrix4, Mesh, Vector3, type IUniform, type MeshStandardMaterial } from 'three';
@@ -45,9 +45,8 @@ export class Flights {
   private geos = new Map<string, BufferGeometry>();
   private shared: Record<string, IUniform>;
   private seenProj = new Set<number>();
-  /** agents and creatures flying now: id → body-frame point and tumble (crowds / creature layers draw them) */
+  /** people flying now: id → body-frame point and tumble (the crowds draw them) */
   readonly agentPins = new Map<number, { x: number; y: number; z: number; tumble: number; anim: number }>();
-  readonly creaturePins = new Map<number, Vector3>();
   /**
    * (additive, the god layer: render/fx/throwfx.ts) the drawn scale of a flying prop — present.ts raises it so a hurled
    * boulder reads from the god's height and eases it back to its true size before it lands; null draws its true size
@@ -113,7 +112,6 @@ export class Flights {
   update(ctx: FxCtx, projectiles: ProjectileView[]): void {
     const pv = ctx.pv;
     this.agentPins.clear();
-    this.creaturePins.clear();
     // projectiles in the snapshot nobody announced: fly them from where they are
     for (const pr of projectiles) {
       if (this.flights.has(pr.id) || this.seenProj.has(pr.id)) continue;
@@ -157,8 +155,6 @@ export class Flights {
         // (set down gently: upright, feet first, standing — not the flailing tumble of a throw)
         if (f.gentle) this.agentPins.set(id, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: 0, anim: AnimState.idle });
         else this.agentPins.set(id, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: age * 5.5, anim: AnimState.thrown });
-      } else if (f.kind === 'creature') {
-        this.creaturePins.set(id, f.p.clone());
       } else if (f.mesh) {
         const s = this.sizeOf ? this.sizeOf(f.kind, f.size, age, f.p, f.v, id) : f.size;
         _m.makeRotationAxis(f.spin, age * 6).scale(_q.set(s, s, s)).setPosition(f.p);

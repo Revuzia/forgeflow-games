@@ -33,6 +33,14 @@
 //   acid rain, ice age, heat wave, drought, dust bowl, impact winter, glass storm, overgrowth, leviathan, forgetting
 //   fog, stampede, rogue flyby — tints, frost, cracks, blowing dust, bolts on the dunes, pollen, a serpent's back,
 //   a fog bank, a dust cloud, a dark world sliding past
+//   WARNINGS (LIVING §3.7, hook H5: DisasterView.params.warning — the god's disasters give the people a chance):
+//   volcano           rumbling: smoke and steam standing from the summit and thickening as the eruption nears,
+//                     fumaroles on the upper flanks, cracks and a dull glow deep in the vent, rockfalls and dust on
+//                     its slopes at each small quake (the sim's warning quakes) — no ash, no lava, no bolts yet
+//   meteor            its first light: a new bright star high over the place with a faint streak behind it, growing,
+//                     and a faint ring where it will fall — no fire, no trail of smoke until it truly comes down
+//   tsunami           the sea drawing back off the coasts in its reach: bare wet seabed, puddles, a line of foam far
+//                     out (render/fx/drawback.ts); the bare ground is swallowed again as the wave comes
 
 import { BufferAttribute, BufferGeometry, Group, Matrix4, Mesh, SphereGeometry, Vector3, type IUniform, type MeshStandardMaterial } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
@@ -47,6 +55,7 @@ import type { CloudStorm } from '../sky/clouds.ts';
 import { clamp01, fxHash, smooth } from './fxcommon.ts';
 import { makePropMaterial } from './propmat.ts';
 import { TsunamiCrest } from './tsunami.ts';
+import { DRAWBACK_MAX, Drawback } from './drawback.ts';
 
 export interface FxCtx {
   pv: PlanetView;
@@ -112,6 +121,9 @@ interface DState {
 interface Transient { t0: number; dur: number; step(age: number, k: number, ctx: FxCtx): void; end?(ctx: FxCtx): void }
 
 const _v = new Vector3(), _w = new Vector3(), _a = new Vector3(), _b = new Vector3();
+
+/** the kinds whose warning phase is drawn (the sim warns of these: god/precursors.ts) */
+const WARNED_FX = new Set(['volcano', 'supervolcano', 'meteor', 'tsunami']);
 const _m = new Matrix4();
 
 /** the ground point (body m) under a unit vector, and the water surface if higher */
@@ -192,6 +204,19 @@ export class DisasterFx {
         break;
       }
       case 'fireball': this.fireball(p, Math.max(10, e.a ?? 60), ctx); break;
+      case 'quake': {
+        // a volcano's warning tremor (the sim's small quakes, data.warning): rockfalls and dust on its slopes
+        if (!(e.data as { warning?: number } | undefined)?.warning) break;
+        const n = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < n; i++) {
+          const b = bearing(u, Math.random() * 6.283, new Vector3());
+          const pu = u.clone().multiplyScalar(pv.params.radius).addScaledVector(b, 40 + Math.random() * 160).normalize();
+          const q = groundAt(pv, pu, new Vector3(), false);
+          ctx.vfx.emit({ sys: SYS.dust, x: q.x, y: q.y, z: q.z, size: 5, life: 6, count: 40, p0: 10, p1: 7, burst: true, r: 0.42, g: 0.38, b: 0.33 }, ctx.now);
+          ctx.debris.burst(q, 4, 5, 0.7, ctx.now);
+        }
+        break;
+      }
     }
   }
 
@@ -373,6 +398,10 @@ export class DisasterFx {
     const I = Math.max(0.1, P.intensity ?? d.intensity);
     const q = ctx.q;
     const far = camD > Math.max(30000, Rd * 40);
+    // LIVING §3.7: a warned disaster's warning phase (the rumbling, the first light, the sea drawn back) — the blow is
+    // not drawn until the sim lets it fall
+    if (P.warning && WARNED_FX.has(d.kind)) { this.warning(st, ctx, Rd, k, far); return; }
+    if (st.extra.warned) this.afterWarning(st, ctx);
     switch (d.kind) {
       case 'moon-fall': {
         // (additive, ships/world-events lane) the falling moon is the moon itself — its planet drawn where the sim's
@@ -890,6 +919,105 @@ export class DisasterFx {
   }
 
   /** spray blown off a tsunami's crest along its length (the crest's points, spread out), mist torn off behind it */
+  // ───────────────────────────── warnings (LIVING §3.7, hook H5) ─────────────────────────────
+
+  private warning(st: DState, ctx: FxCtx, Rd: number, k: number, far: boolean): void {
+    const d = st.view, P = d.params, g = st.g, u = st.u, pv = ctx.pv;
+    st.extra.warned = true;
+    const age = Math.max(0, ctx.now - st.t0);
+    const q = ctx.q;
+    switch (d.kind) {
+      case 'volcano': case 'supervolcano': {
+        const sup = d.kind === 'supervolcano' ? 1 : 0;
+        // smoke and steam standing from the summit, thickening as the eruption nears (the sim grows its plume)
+        const H = Math.max(140, Math.min(1000, (P.plume ?? 0) > 0 ? P.plume * 2.5 : 280)) * (1 + sup * 0.5);
+        const wind = windAt(pv, u, _w);
+        this.em(st, 'w-smoke', { sys: SYS.smoke, x: g.x, y: g.y, z: g.z, ax: wind.x * 0.4, ay: wind.y * 0.4, az: wind.z * 0.4, size: 9 + H * 0.045, life: 26, count: Math.round(320 * q), p0: H, p1: 1, r: 0.52, g: 0.51, b: 0.49, power: k * 0.75 }, ctx);
+        if (far) break;
+        // fumaroles: steam from vents on the upper flanks
+        for (let i = 0; i < 4; i++) {
+          const b = bearing(u, fxHash(d.id, 60 + i) * 6.283, _a);
+          const pu = _b.copy(u).multiplyScalar(pv.params.radius).addScaledVector(b, Rd * (0.12 + 0.22 * fxHash(d.id, 70 + i))).normalize();
+          const p = groundAt(pv, pu, new Vector3(), false);
+          this.em(st, `w-vent${i}`, { sys: SYS.steam, x: p.x, y: p.y, z: p.z, ax: wind.x * 0.3, ay: wind.y * 0.3, az: wind.z * 0.3, size: 3 + sup * 2, life: 7, count: Math.round(40 * q), p0: 14 + 10 * fxHash(d.id, 80 + i), r: 0.84, g: 0.85, b: 0.86, power: k * 0.6 }, ctx);
+        }
+        // the summit's cracks, a dull glow deep in the vent (it shows at night)
+        for (let i = 0; i < 2; i++) {
+          const ax = bearing(u, fxHash(d.id, 90 + i) * 6.283, _a);
+          for (const type of [DECAL.cracks, DECAL.crackGlow]) {
+            const c = decal(type, [g.x, g.y, g.z], Rd * 0.3);
+            c.ax = ax.x; c.ay = ax.y; c.az = ax.z; c.cr = 1; c.cg = 0.3; c.cb = 0.06; c.ca = k * 0.7;
+            c.p0 = Rd * (0.14 + 0.1 * fxHash(d.id, 95 + i)); c.p1 = 4; c.p2 = 1.6 * k; c.p3 = d.id + 40 + i; c.q0 = 10;
+            ctx.decals.add(c);
+          }
+        }
+        ctx.decals.add(Object.assign(decal(DECAL.glow, [g.x, g.y, g.z], Rd * 0.14), { cr: 1, cg: 0.28, cb: 0.05, p0: Rd * 0.11, p1: 0.4, p2: 4 * k * (0.65 + 0.35 * Math.sin(ctx.now * 1.7)), p3: d.id, q0: Rd * 0.2 }));
+        break;
+      }
+      case 'meteor': {
+        // its first light: a new star high over the place with a faint streak behind it, growing as it comes
+        const tickNow = pv.renderTick ?? pv.paramsTick;
+        const alt0 = P.alt0 ?? 24000;
+        const alt = Math.max(0, st.alt + st.altRate * Math.max(0, tickNow - st.altTick)) || alt0;
+        const dir = _a.set(P.dirX ?? -u.x, P.dirY ?? -u.y, P.dirZ ?? -u.z);
+        if (dir.lengthSq() < 1e-6) dir.copy(u).negate();
+        dir.normalize();
+        const down = Math.max(0.2, -dir.dot(u));
+        // (high: held at least at the height it will enter from — it is still out beyond the air)
+        const hAlt = Math.max(alt, alt0 * 0.85);
+        const head = _b.copy(g).addScaledVector(dir, -hAlt / down);
+        const dist = head.distanceTo(ctx.camBody);
+        // (a Bolide's head and halo: seen from the place it will strike the streak is end-on, and only the halo shows —
+        // a new star growing — while from aside its faint trail runs back up its path)
+        let bo = st.extra.firstLight as Bolide | undefined;
+        if (!bo) {
+          bo = new Bolide(this.fx);
+          const b2 = bo;
+          st.extra.firstLight = bo; this.group.add(bo.group); st.meshes.push({ obj: bo.group, dispose: () => b2.dispose() });
+          (bo.u.uCol.value as Vector3).set(0.72, 0.82, 1.0);
+        }
+        const near = 1 - clamp01((hAlt - alt0 * 0.85) / Math.max(1, alt0));
+        bo.place(head, dir, Math.max((P.size ?? 12) * 0.5, dist * 0.0012), ctx.camBody);
+        bo.u.uLen.value = Math.min(6000, Math.max(600, dist * 0.12));
+        bo.u.uW.value = Math.max(2, dist * 0.0008);
+        bo.u.uK.value = k * (0.3 + 0.25 * near) * (0.85 + 0.15 * Math.sin(ctx.now * 2.3) * Math.sin(ctx.now * 0.9));
+        // a faint ring where it will fall
+        const ret = decal(DECAL.reticle, [g.x, g.y, g.z], Rd * 1.4);
+        ret.cr = 1.6; ret.cg = 0.3; ret.cb = 0.15; ret.ca = 0.4 * k; ret.p0 = Rd; ret.p1 = 1; ret.p2 = 0.8; ret.p3 = 0.1; ret.q0 = Rd * 0.6;
+        ctx.decals.add(ret);
+        break;
+      }
+      case 'tsunami': {
+        let db = st.extra.drawback as Drawback | undefined;
+        if (!db) {
+          db = new Drawback(this.fx, this.shared, pv, g, Math.max(1200, Rd * 3));
+          const d2 = db;
+          st.extra.drawback = db; this.group.add(db.mesh); st.meshes.push({ obj: db.mesh, dispose: () => d2.dispose() });
+        }
+        // the sea goes out over the warning's first minutes of FX time, then stands far out
+        const dw = DRAWBACK_MAX * (1 - Math.exp(-age / 7));
+        st.extra.dw = dw;
+        db.update(dw, k, ctx.camBody);
+        break;
+      }
+    }
+  }
+
+  /** the warning is over: its smoke stops, the first light gives way to the falling body, the sea comes back in */
+  private afterWarning(st: DState, ctx: FxCtx): void {
+    for (const key of [...st.emit.keys()]) if (key.startsWith('w-')) this.stopEm(st, key, ctx);
+    const fl = st.extra.firstLight as Bolide | undefined;
+    if (fl) fl.u.uK.value = 0;
+    const db = st.extra.drawback as Drawback | undefined;
+    if (db) {
+      const f = Math.max(0, ((st.extra.dbFade as number | undefined) ?? 1) - ctx.ease * 0.35);
+      st.extra.dbFade = f;
+      db.update((st.extra.dw as number | undefined) ?? 0, f * st.fade, ctx.camBody);
+      if (f > 0) return;
+    }
+    st.extra.warned = false;
+  }
+
   private crestSpray(st: DState, ctx: FxCtx, crest: { p: Vector3; out: Vector3; land: number }[], H: number, far: boolean): void {
     const n = far ? 0 : Math.min(16, crest.length);
     const step = crest.length / Math.max(1, n);

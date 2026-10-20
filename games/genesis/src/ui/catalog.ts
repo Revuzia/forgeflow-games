@@ -1,6 +1,6 @@
 // GENESIS — what the interface knows by name (CONTRACT.md §16): the laws of each world (the parameter registry, query
 // 'params': path, label, unit, range, value) and the names of the things the player touches (people, herds, buildings,
-// creatures, disasters, ships, settlements). Panels ask synchronously and get what is known now (or null); a miss asks
+// disasters, ships, settlements). Panels ask synchronously and get what is known now (or null); a miss asks
 // the sim in the background, so the next frame's hint, badge or toast has the name. Shared by the palette, the "do
 // this" field, the hand and the toasts so each name is asked for once.
 
@@ -58,8 +58,7 @@ export class Catalog {
     const planet = ref.planet ?? this.host.primary();
     // what the mirror already has
     switch (ref.kind) {
-      case 'settlement': for (const pv of v.planets) { const s = pv.settlements.find((q) => q.id === ref.id); if (s) return { name: s.name, role: s.flags & 1 ? 'a band' : `${s.era} age` }; } return null;
-      case 'creature': { const c = v.creatures.find((q) => q.id === ref.id); return c ? { name: c.name, role: `${c.body}` } : null; }
+      case 'settlement': for (const pv of v.planets) { const s = pv.settlements.find((q) => q.id === ref.id); if (s) return { name: s.name, role: s.flags & 1 ? 'a band' : s.eraLabel ?? `${s.era} age` }; } return null;
       case 'disaster': for (const pv of v.planets) { const d = pv.disasters.find((q) => q.id === ref.id); if (d) return { name: `the ${d.kind.replace(/-/g, ' ')}`, role: 'disaster' }; } return null;
       case 'weather': for (const pv of v.planets) { const w = pv.weather.find((q) => q.id === ref.id); if (w) return { name: `the ${w.kind.replace(/-/g, ' ')}`, role: 'weather' }; } return null;
       case 'ship': { const s = v.ships.find((q) => q.id === ref.id); return s ? { name: `the ${s.kind.replace(/-/g, ' ')}`, role: 'ship' } : null; }

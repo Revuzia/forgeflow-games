@@ -37,7 +37,8 @@ export interface Prefs {
     /** the frame rate beside the achieved speed (always with ?dev=1) */
     showFps: boolean;
   };
-  game: { autosaveMinutes: number; edgePan: boolean };
+  /** pauseHidden: stop time while the page is hidden — 'auto' (on inside the site's frame), 'on', 'off' */
+  game: { autosaveMinutes: number; edgePan: boolean; pauseHidden: 'auto' | 'on' | 'off' };
   pad: { enabled: boolean; deadzone: number; cursorSpeed: number; invertY: boolean; lookSpeed: number };
 }
 
@@ -46,7 +47,7 @@ export const DEFAULT_PREFS: Prefs = {
   gfx: { renderScale: 1, shadows: true, ssao: true, godRays: true, bloom: 1, flare: true, fxaa: true, grain: true, vignette: true, vegetation: 1, grass: true, orbits: true, exposure: 0 },
   audio: { master: 0.8, music: 0.6, sfx: 0.8, ambience: 0.7, muted: false },
   ui: { autoScale: true, scale: 1, palette: 'standard', reduceMotion: false, hints: true, toastSeconds: 8, ticker: true, labels: true, showFps: false },
-  game: { autosaveMinutes: 10, edgePan: true },
+  game: { autosaveMinutes: 10, edgePan: true, pauseHidden: 'auto' },
   pad: { enabled: true, deadzone: 0.18, cursorSpeed: 900, invertY: false, lookSpeed: 1 },
 };
 

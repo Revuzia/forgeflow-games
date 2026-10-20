@@ -1,6 +1,8 @@
-// GENESIS — the god layer's visuals, orchestrated (CONTRACT.md §15.6–15.8): the Touch (render/hand.ts), disasters,
-// weather, lightning, miracles, auroras, projectiles in flight, brush and targeting previews. (The giant creature left
-// the game — LIVING §0.1.6, hook H6: its layer is no longer built here.)
+// GENESIS — the god layer's visuals, orchestrated (CONTRACT.md §15.6–15.8): the Touch (render/hand.ts), disasters and
+// their warnings, weather and the rainbow, lightning, miracles and the sigils they write on the land, auroras,
+// projectiles in flight, brush and targeting previews, and the signs — prophets, sacred places, sacred animals, omens
+// read (render/signs/signs.ts, LIVING §3.4, hook H4). (The giant creature left the game — LIVING §0.1.6, hook H6: there
+// is no creature layer.)
 //
 // The Renderer owns one GodFx and calls it at four points of its frame (renderer.ts):
 //   shakeCamera  — right after the camera pose is set (quakes, impacts shake the view)
@@ -43,6 +45,9 @@ import { Flights } from './flights.ts';
 import { ThrowFx } from './throwfx.ts';
 import { ScreenFx, newScreenState } from './screenfx.ts';
 import { swapPropDepth } from './propmat.ts';
+import { Rainbow } from './rainbow.ts';
+import { SigilMarks } from './sigilfx.ts';
+import { SignsLayer } from '../signs/signs.ts';
 
 export interface BrushIn {
   planet: number;
@@ -83,6 +88,9 @@ interface Modules {
   flights: Flights;
   throws: ThrowFx;
   aurora: Aurora;
+  rainbow: Rainbow;
+  sigils: SigilMarks;
+  signs: SignsLayer;
 }
 
 export class GodFx {
@@ -186,8 +194,11 @@ export class GodFx {
       const flights = new Flights(this.shared);
       const throws = new ThrowFx(this.fx);
       const aurora = new Aurora(this.fx, this.shared);
-      this.m = { vfx, debris, bolts, disasters, weather: new WeatherFx(), miracles, flights, throws, aurora };
-      this.group.add(vfx.group, debris.mesh, bolts.mesh, disasters.group, miracles.group, flights.group, throws.group, aurora.group);
+      const rainbow = new Rainbow(this.fx, this.shared);
+      const sigils = new SigilMarks(this.fx);
+      const signs = new SignsLayer(this.fx);
+      this.m = { vfx, debris, bolts, disasters, weather: new WeatherFx(), miracles, flights, throws, aurora, rainbow, sigils, signs };
+      this.group.add(vfx.group, debris.mesh, bolts.mesh, disasters.group, miracles.group, flights.group, throws.group, aurora.group, rainbow.mesh, sigils.group, signs.group);
     }
   }
 
@@ -286,6 +297,8 @@ export class GodFx {
     M.disasters.update(pv.disasters, ctx);
     M.weather.update(ctx);
     M.miracles.update(ctx);
+    M.sigils.update(this.lastReal, this.decals);
+    M.rainbow.update(pv, vis.camBody, cam.projectionMatrixInverse, viewToBody(vis), ctx.cloudBase ?? pv.params.radius + 260, ctx.ease);
     // people in the hand and in the air are drawn where the god layer says
     const crowds = vis.life.crowds;
     crowds.pinned.clear();
@@ -293,12 +306,19 @@ export class GodFx {
       crowds.pinned.set(this.hand.heldId, { x: this.hand.pinch.x, y: this.hand.pinch.y, z: this.hand.pinch.z, tumble: this.hand.swing, anim: AnimState.held });
     }
     for (const [id, p] of M.flights.agentPins) crowds.pinned.set(id, p);
+    // ── the signs: prophets, the Called, sacred places and animals, omens read (after the crowds placed the people) ──
+    M.signs.update({
+      pv, camBody: vis.camBody, now: this.clock, real: time, decals: this.decals, vfx: M.vfx,
+      ticksSinceSnap: Math.max(0, (pv.renderTick ?? pv.paramsTick) - pv.paramsTick),
+      personAt: (id) => crowds.positionOf(id), query: simQuery(),
+    });
     // ── lightning: ribbons, the light they throw on the ground ──
     M.bolts.update(this.clock, vis.camBody, ctx.ease);
     M.bolts.forEachLive(this.clock, (gp, top, k, power) => {
       // the strike lights the ground and everything standing there for an instant (a ground flash), the view a little
       const d = decal(DECAL.light, [gp.x, gp.y, gp.z], 600);
-      d.cr = 0.75; d.cg = 0.8; d.cb = 1; d.p0 = 600; d.p1 = 1.4e5 * k * power; d.p2 = Math.min(120, top.distanceTo(gp) * 0.25); d.p3 = 30;
+      // (a near strike lit the whole hillside white at its stroke: bright, but the land keeps its shape)
+      d.cr = 0.75; d.cg = 0.8; d.cb = 1; d.p0 = 600; d.p1 = 6e4 * k * power; d.p2 = Math.min(120, top.distanceTo(gp) * 0.25); d.p3 = 40;
       this.decals.add(d);
       const near = 1 - smooth(200, 2500, gp.distanceTo(vis.camBody));
       this.flashDecay.addScalar(0.0015 * k * near);
@@ -411,7 +431,11 @@ export class GodFx {
     const R = pv.params.radius;
     const p = e.pos ? new Vector3(e.pos[0], e.pos[1], e.pos[2]).normalize().multiplyScalar(R) : null;
     switch (e.t) {
-      case 'quake': this.addShake(p, Math.min(1.4, 0.15 * Math.max(0, (e.a ?? 5) - 3)), (e.b ?? 400) * 6 + 1500); break;
+      case 'quake':
+        this.addShake(p, Math.min(1.4, 0.15 * Math.max(0, (e.a ?? 5) - 3)), (e.b ?? 400) * 6 + 1500);
+        // (a volcano's warning tremors bring rocks down its slopes)
+        M.disasters.onEvent(e, ctx);
+        break;
       case 'impact': {
         const sh = p && (e.data as { shielded?: boolean } | undefined)?.shielded ? M.miracles.shieldOver(p) : null;
         if (sh && p) {
@@ -440,12 +464,23 @@ export class GodFx {
       case 'lightning': {
         if ((e.data as { ambient?: boolean } | undefined)?.ambient || !e.pos) break;
         this.lightningAt(_v.set(e.pos[0], e.pos[1], e.pos[2]).normalize(), Math.min(1.5, Math.max(0.6, e.a ?? 1)), ctx, true);
+        // a strike made a sign (god/omens.ts: data.omen): the struck place is left glowing
+        if ((e.data as { omen?: number } | undefined)?.omen) M.signs.onEvent(e, R, this.lastReal);
         break;
       }
+      case 'sacred.place': case 'omen': case 'prophet.called': case 'prophet.fulfilled':
+        M.signs.onEvent(e, R, this.lastReal);
+        break;
       case 'miracle': {
         M.miracles.onEvent(e, ctx);
+        // its sigil written on the land where it lands (the power's glyph)
+        if (p) {
+          const u = _w.copy(p).normalize();
+          const gp = u.multiplyScalar(groundHeight(pv.ground, u.x, u.y, u.z));
+          M.sigils.land(pv, String((e.data as { kind?: string } | undefined)?.kind ?? e.text ?? ''), gp, e.a ?? 100, this.hand.light, vis.camBody, this.camFwd, this.lastReal);
+        }
         // the Touch casts it when it is near: it traces the miracle's sigil in light
-        if (p && this.hand.visible && this.hand.pos.distanceTo(p) < Math.max(250, (e.a ?? 100) * 2.5)) this.hand.pulse('cast', this.lastReal, String((e.data as { kind?: string } | undefined)?.kind ?? e.text ?? ''));
+        if (p && this.hand.visible && this.hand.pos.distanceTo(p) < Math.max(250, (e.a ?? 100) * 2.5)) this.hand.pulse('cast', this.hand.hold ?? this.lastReal, String((e.data as { kind?: string } | undefined)?.kind ?? e.text ?? ''));
         break;
       }
       case 'shield': M.miracles.onEvent(e, ctx); break;
@@ -530,9 +565,19 @@ export class GodFx {
     this.screen.dispose();
     if (this.m) {
       this.m.vfx.dispose(); this.m.debris.dispose(); this.m.bolts.dispose(); this.m.disasters.dispose(); this.m.miracles.dispose();
-      this.m.flights.dispose(); this.m.throws.dispose(); this.m.aurora.dispose();
+      this.m.flights.dispose(); this.m.throws.dispose(); this.m.aurora.dispose(); this.m.rainbow.dispose(); this.m.sigils.dispose(); this.m.signs.dispose();
     }
   }
+}
+
+/**
+ * the sim's queries for the signs (the sacred places the snapshot does not carry): through the app's automation
+ * surface (window.__GENESIS__, installed on every page by main.ts) — absent on a bare renderer, where the events alone
+ * feed them
+ */
+function simQuery(): ((q: string) => Promise<unknown>) | undefined {
+  const g = (globalThis as unknown as { __GENESIS__?: { query?: (q: string, a?: Record<string, unknown>) => Promise<unknown> } }).__GENESIS__;
+  return g?.query ? (q: string) => g.query!(q, {}) : undefined;
 }
 
 /** the view → body rotation of the primary planet (one shared matrix, recomputed when asked) */

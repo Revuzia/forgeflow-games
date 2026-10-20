@@ -33,7 +33,10 @@ export interface Power {
   category: string;
   icon: string;
   ring: number;
+  /** @deprecated LIVING §3.6: the old drawn shapes; the recogniser reads `sigil` (kept only so old mods load) */
   gesture: string | null;
+  /** the sigil that casts it (LIVING §3.6: an original one-stroke glyph id — drop, anvil, fork …), or null */
+  sigil: string | null;
   command: string;
   params: Record<string, unknown>;
   schema: Record<string, ParamSpec>;
@@ -48,10 +51,23 @@ export interface Power {
 // (LIVING.md §3.5 / §7 H4: the creature is gone; its place on the radial is the Signs — prophets, omens, sacred places, answered prayers)
 export const CATEGORIES = ['Shape', 'Water', 'Sky', 'Life', 'Peoples', 'Ideas', 'Fire', 'Disasters', 'Hand', 'Signs', 'Worlds', 'Time', 'Laws'];
 
+/**
+ * the names the interface shows for a category (LIVING §3.6, hook H7): the data keeps its ids ('Hand'), the player reads
+ * "Touch" — the god's presence as light and weather, never a hand
+ */
+const CATEGORY_LABEL: Record<string, string> = { Hand: 'Touch' };
+export function categoryLabel(c: string): string { return CATEGORY_LABEL[c] ?? c; }
+/** a category id from what the player typed or read ("touch" → 'Hand'), or null */
+export function categoryFromLabel(word: string): string | null {
+  const w = word.trim().toLowerCase();
+  for (const c of CATEGORIES) if (c.toLowerCase() === w || categoryLabel(c).toLowerCase() === w) return c;
+  return null;
+}
+
 /** registries by name for enum values when the sim cannot be asked (the lookdev world) */
 function baseRegistry(name: string): string[] {
   const pack = BASE_PACK as unknown as Record<string, { id: string }[] | undefined>;
-  const alias: Record<string, string> = { recipes: 'recipes', planetkinds: 'planetkinds', species: 'species', weather: 'weather', plants: 'plants', biomes: 'biomes', animals: 'animals', diseases: 'diseases', items: 'items', disasters: 'disasters', creatures: 'creatures', stars: 'stars', ships: 'ships', buildings: 'buildings' };
+  const alias: Record<string, string> = { recipes: 'recipes', planetkinds: 'planetkinds', species: 'species', weather: 'weather', plants: 'plants', biomes: 'biomes', animals: 'animals', diseases: 'diseases', items: 'items', disasters: 'disasters', stars: 'stars', ships: 'ships', buildings: 'buildings', ores: 'ores', materials: 'materials' };
   const list = pack[alias[name] ?? name];
   return Array.isArray(list) ? list.map((x) => x.id) : [];
 }
@@ -65,11 +81,104 @@ function normalizePower(raw: Record<string, unknown>): Power {
   }
   return {
     id: String(raw.id), name: String(raw.name ?? raw.id), category: String(raw.category ?? 'Laws'), icon: String(raw.icon ?? ''),
-    ring: Number(raw.ring ?? 1), gesture: (raw.gesture as string | null) ?? null, command: String(raw.command),
+    ring: Number(raw.ring ?? 1), gesture: (raw.gesture as string | null) ?? null, sigil: typeof raw.sigil === 'string' && raw.sigil ? raw.sigil : null,
+    command: String(raw.command),
     params: (raw.params ?? {}) as Record<string, unknown>, schema, target: (raw.target ?? 'none') as PowerTarget,
     synonyms: Array.isArray(raw.synonyms) ? (raw.synonyms as string[]) : [], desc: String(raw.desc ?? ''),
     cost: typeof raw.cost === 'number' ? raw.cost : undefined, cooldown: typeof raw.cooldown === 'number' ? raw.cooldown : undefined,
   };
+}
+
+/**
+ * Powers the interface offers for commands the sim registers but powers.json does not list yet (LIVING §4.1–4.2, hook
+ * H12): seeding a vein of ore with a brush, and inventing a material or a plant (their dialogs: src/ui/invent.ts).
+ * Added only when no power of the data already casts the command.
+ */
+export const CLIENT_POWERS: Record<string, unknown>[] = [
+  {
+    id: 'seed-vein', name: 'Seed a vein', category: 'Shape', icon: 'ore', ring: 1, command: 'terrain.seed-ore', target: 'region',
+    params: {},
+    schema: {
+      ore: { type: 'enum', values: 'ores', required: true, desc: 'what lies in the vein' },
+      pos: { type: 'pos', target: 'point', desc: 'where' },
+      radius: { type: 'number', min: 20, max: 5000, default: 120, unit: 'm', target: 'region' },
+      richness: { type: 'number', min: 0.05, max: 1, default: 0.7, desc: 'how rich the vein is' },
+    },
+    synonyms: ['seed a vein', 'ore vein', 'put ore in the ground', 'deposit', 'lode', 'mine'],
+    desc: 'Lay a vein of ore in the ground where you click: miners find it, smiths want it.',
+  },
+  {
+    id: 'invent-material', name: 'Invent a material', category: 'Ideas', icon: 'artifact', ring: 1, command: 'content.material', target: 'none',
+    params: {},
+    schema: {
+      name: { type: 'string', required: true },
+      kind: { type: 'enum', values: ['metal', 'stone', 'mineral', 'gem', 'wood', 'fibre'] },
+      traits: { type: 'any', desc: 'light, hard, warm, glowing, flexible, beautiful …' },
+      uses: { type: 'any', desc: 'building, tools, weapons, luxury' },
+      settlement: { type: 'entity', entity: ['settlement'] },
+    },
+    synonyms: ['new material', 'invent a metal', 'create a metal', 'a new stone', 'mithril'],
+    desc: 'A new metal, stone, gem, mineral, wood or fibre — with veins or groves to find, crafts that use it and people who want it.',
+  },
+  {
+    id: 'invent-plant', name: 'Invent a plant', category: 'Life', icon: 'sprout', ring: 1, command: 'content.plant', target: 'none',
+    params: {},
+    schema: {
+      name: { type: 'string', required: true },
+      type: { type: 'enum', values: ['tree', 'shrub', 'grass', 'crop'], default: 'shrub' },
+      like: { type: 'enum', values: 'plants', desc: 'the plant it is like (its climate)' },
+      pos: { type: 'pos', target: 'point', desc: 'where it grows' },
+    },
+    synonyms: ['new plant', 'new crop', 'invent a crop', 'grow a new plant'],
+    desc: 'A new plant or crop with what it gives: it grows where you point (a crop waits to be sown).',
+  },
+];
+
+/** disasters.json's own reach, strength and life per kind: what the sim uses for a value the card leaves unset */
+interface DisasterDefaults { id: string; radius?: number; intensity?: number; life?: [number, number] }
+const BASE_DISASTERS = new Map(((BASE_PACK.disasters ?? []) as unknown as DisasterDefaults[]).map((d) => [d.id, d]));
+
+/** the list with the client powers whose command no power of the data casts (their registries: live ids when known) */
+function withClientPowers(list: Power[], live: Map<string, string[]> = new Map()): Power[] {
+  const have = new Set(list.map((p) => p.command));
+  const ids = new Set(list.map((p) => p.id));
+  const out = [...list];
+  for (const raw of CLIENT_POWERS) {
+    if (have.has(String(raw.command)) || ids.has(String(raw.id))) continue;
+    const p = normalizePower(raw);
+    for (const [k, s] of Object.entries(raw.schema as Record<string, ParamSpec>)) if (typeof s.values === 'string' && live.get(s.values)?.length) p.schema[k].values = live.get(s.values)!.slice();
+    out.push(p);
+  }
+  return out;
+}
+
+// ───────────────────────────── wrath (LIVING §3.7) ─────────────────────────────
+
+/** the wrath law's default (god/wrath.ts WRATH_DEFAULT): survivable */
+export const WRATH_DEFAULT = 0.3;
+
+/** a harmful cast's own wrath on the tool card (the sim's disaster.spawn / miracle schemas carry it) */
+const WRATH_SPEC: ParamSpec = { type: 'number', min: 0, max: 1, desc: 'how hard it falls: gentle … survivable (the law) … apocalyptic' };
+
+/**
+ * A wrath in the words the free text uses for it (gentle / small 0.1, the law 0.3, great 0.6, huge 0.85, apocalyptic 1):
+ * the tool card, the "do this" preview and the god's window all say it this way.
+ */
+export function wrathWord(w: number): string {
+  if (w >= 0.93) return 'apocalyptic';
+  if (w >= 0.73) return 'huge';
+  if (w >= 0.45) return 'great';
+  if (w >= 0.2) return 'survivable';
+  return 'gentle';
+}
+
+/** what a wrath does to the people under it, in a line (the slider's caption) */
+export function wrathMeans(w: number): string {
+  if (w >= 0.93) return 'nothing is spared: a town can fall to one blow';
+  if (w >= 0.73) return 'few escape what it strikes';
+  if (w >= 0.45) return 'many die where it strikes; the rest remember';
+  if (w >= 0.2) return 'they scare and kill, but most live: warnings come first';
+  return 'it frightens more than it kills';
 }
 
 export class PowerBook {
@@ -80,20 +189,73 @@ export class PowerBook {
   version = 0;
 
   constructor() {
-    this.set(((BASE_PACK.powers ?? []) as unknown as Record<string, unknown>[]).map(normalizePower));
+    this.set(withClientPowers(((BASE_PACK.powers ?? []) as unknown as Record<string, unknown>[]).map(normalizePower)));
   }
 
   /** take the sim's catalogue (query 'powers': base + mods + inventions, enum values resolved) */
   setFromSim(raw: unknown): boolean {
     if (!Array.isArray(raw) || !raw.length) return false;
-    this.set((raw as Record<string, unknown>[]).filter((p) => p && typeof p.id === 'string' && typeof p.command === 'string').map((p) => {
+    this.set(withClientPowers((raw as Record<string, unknown>[]).filter((p) => p && typeof p.id === 'string' && typeof p.command === 'string').map((p) => {
       const pw = normalizePower(p);
       // the sim resolved registry names to live ids already; keep them
       for (const [k, s] of Object.entries((p.schema ?? {}) as Record<string, ParamSpec>)) if (Array.isArray(s.values)) pw.schema[k].values = s.values;
       return pw;
-    }));
+    }), this.liveValues));
     return true;
   }
+
+  /** live enum values the sim reported for the client powers' registries (ores, plants: the god's inventions included) */
+  private liveValues = new Map<string, string[]>();
+  /** the disaster kinds' own defaults (query 'disaster-kinds': base + mods) */
+  private disasters = new Map<string, DisasterDefaults>(BASE_DISASTERS);
+
+  /** the sim's disaster kinds (their reach, strength and life: what a value left unset becomes) */
+  setDisasterKinds(raw: unknown): void {
+    if (!Array.isArray(raw)) return;
+    for (const d of raw as DisasterDefaults[]) if (d && typeof d.id === 'string') this.disasters.set(d.id, d);
+  }
+
+  /** a registry's live ids (query 'ores', 'plants' …): the client powers' pickers list them */
+  setRegistry(name: string, ids: string[]): void {
+    if (!ids.length) return;
+    this.liveValues.set(name, ids);
+    let changed = false;
+    for (const p of this.list) {
+      const def = CLIENT_POWERS.find((c) => c.id === p.id);
+      if (!def) continue;
+      for (const [k, s] of Object.entries(def.schema as Record<string, ParamSpec>)) if (s.values === name) { p.schema[k].values = ids.slice(); changed = true; }
+    }
+    if (changed) this.version++;
+  }
+
+  /**
+   * The value the sim will use for a parameter the card leaves unset, when it is known here: the data's own default,
+   * or — for a disaster — its kind's reach and strength (disasters.json). Undefined: the sim decides (a disaster's life
+   * from its range, a count from the place), and the card says "its own".
+   */
+  defaultOf(p: Power, k: string): unknown {
+    const s = p.schema[k];
+    if (!s) return undefined;
+    if (s.default !== undefined) return s.default;
+    // a harmful cast left without its own wrath falls with the world's (the law god.wrath, LIVING §3.7)
+    if (k === 'wrath') return this.wrathLaw;
+    const d = p.command === 'disaster.spawn' && typeof p.params.kind === 'string' ? this.disasters.get(p.params.kind) : undefined;
+    if (d) {
+      if (k === 'radius' && typeof d.radius === 'number') return d.radius;
+      if (k === 'intensity') return typeof d.intensity === 'number' ? d.intensity : 1;
+      if (k === 'scale') return 1;
+    }
+    return undefined;
+  }
+
+  /** a disaster kind's life range (ticks), for the card's words ("its own: 3–6 h"), or null */
+  lifeOf(p: Power): [number, number] | null {
+    const d = p.command === 'disaster.spawn' && typeof p.params.kind === 'string' ? this.disasters.get(p.params.kind) : undefined;
+    return d && Array.isArray(d.life) && d.life.length === 2 ? [Number(d.life[0]), Number(d.life[1])] : null;
+  }
+
+  /** the wrath law now (Snapshot.wrath; 0.3 until the world says): what a harmful cast left alone falls with */
+  wrathLaw = WRATH_DEFAULT;
 
   /** the commands' own schemas (query 'commands'): which parameters each power's command REQUIRES, and their types */
   private commands = new Map<string, Record<string, { type?: string; required?: boolean; values?: string[]; unit?: string }>>();
@@ -137,6 +299,9 @@ export class PowerBook {
     for (const p of this.list) {
       const cs = this.commands.get(p.command);
       if (!cs) continue;
+      // a harmful command takes its own wrath (LIVING §3.7): the card offers it on every power that casts one, left at
+      // the world's law until the player moves it
+      if (cs.wrath && !p.schema.wrath && p.params.wrath === undefined) p.schema.wrath = { ...WRATH_SPEC };
       for (const [k, s] of Object.entries(p.schema)) {
         const c = cs[k];
         if (!c) continue;
@@ -170,10 +335,10 @@ export class PowerBook {
     return out;
   }
 
-  /** powers cast by a gesture shape */
-  gestures(): Map<string, Power> {
+  /** powers cast by a sigil (LIVING §3.6: the `sigil` field; the old drawn shapes are gone) */
+  sigils(): Map<string, Power> {
     const m = new Map<string, Power>();
-    for (const p of this.list) if (p.gesture && !m.has(p.gesture)) m.set(p.gesture, p);
+    for (const p of this.list) if (p.sigil && !m.has(p.sigil)) m.set(p.sigil, p);
     return m;
   }
 
@@ -204,7 +369,7 @@ export type ToolMode =
   | 'line'      // press at A, release at B (`to`)
   | 'settlement' // click a settlement (and, for pairs, a second one)
   | 'agent'     // click a person
-  | 'entity'    // click a thing of the kinds it takes (disaster, creature, ship, a held thing)
+  | 'entity'    // click a thing of the kinds it takes (disaster, ship, a person, a held thing)
   | 'move'      // an entity (from the selection) and a destination click (`to` / `pos`)
   | 'world'     // acts on the world under the camera: click anywhere on it or press Cast
   | 'instant';  // no place at all: Cast
@@ -217,7 +382,7 @@ export function toolMode(p: Power): ToolMode {
   if (p.command === 'weather.paint' || p.command === 'content.weather') return 'front';
   // moving a thing is a thing and a destination (its `to` is a place, not the far end of a line): with the thing
   // chosen — the selection, the inspector's own — one click says where
-  if ((p.command === 'disaster.move' || p.command === 'settlement.move' || p.command === 'creature.move' || p.command === 'possess.move' || p.command === 'agent.move' || p.command === 'possess.act')) return 'move';
+  if ((p.command === 'disaster.move' || p.command === 'settlement.move' || p.command === 'possess.move' || p.command === 'agent.move' || p.command === 'possess.act')) return 'move';
   if (toSpec && toSpec.target === 'line') return 'line';
   if (p.target === 'line') return 'line';
   switch (p.target) {
@@ -265,30 +430,92 @@ export function cardParams(p: Power): [string, ParamSpec][] {
   });
 }
 
-/** a sensible starting value for a parameter the data leaves open */
+/**
+ * The value a parameter starts at: the data's own default, or nothing. A value the data leaves open is NOT made up
+ * here: it stays unset, so the sim takes its own (a tornado lives its kind's 3–6 hours, an introduction brings what the
+ * command brings) — the old guess of "2 % up a wide range" sent tornadoes of 139 days and 20 001 strangers (audit).
+ */
 export function defaultValue(k: string, s: ParamSpec): unknown {
-  if (s.default !== undefined) return s.default;
-  switch (s.type) {
-    case 'number': case 'int': {
-      if (s.min !== undefined && s.max !== undefined) {
-        // a quarter of the way up a log range for wide ranges, else the middle
-        const lo = s.min, hi = s.max;
-        if (lo >= 0 && hi / Math.max(lo, 1e-3) > 50) return roundNice(lo + (hi - lo) * 0.02 + (lo === 0 ? Math.min(hi, 10) * 0.5 : 0));
-        return roundNice((lo + hi) / 2);
-      }
-      return s.min ?? 0;
-    }
-    case 'boolean': return false;
-    case 'enum': return Array.isArray(s.values) && s.values.length ? s.values[0] : '';
-    case 'string': return '';
+  void k;
+  return s.default;
+}
+
+/**
+ * Where a slider stands for a value left unset (the card shows "its own" there; nothing is sent until it is moved):
+ * the known default, else 1 in a range that holds it (a factor), else the low end of a wide range, else the middle.
+ */
+export function sliderStart(s: ParamSpec, known: unknown): number {
+  if (typeof known === 'number' && Number.isFinite(known)) return known;
+  const lo = s.min ?? 0, hi = s.max ?? 1;
+  if (lo <= 1 && hi >= 1 && (s.unit === '×' || hi / Math.max(lo, 1e-3) > 50)) return 1;
+  if (lo >= 0 && hi / Math.max(lo, 1e-3) > 50) return lo;
+  return (lo + hi) / 2;
+}
+
+/**
+ * The values a cast of a power sends, before the place and the things picked: what the player set (remembered), the
+ * power's own fixed params, what the world suggests (`prefill`), the data's defaults — and nothing else. Pure (tests).
+ */
+export function castValues(p: Power, remembered: Record<string, unknown>, prefill: (k: string, s: ParamSpec) => unknown = () => undefined): Record<string, unknown> {
+  const v: Record<string, unknown> = {};
+  for (const [k, s] of Object.entries(p.schema)) {
+    if (s.type === 'pos' || s.type === 'entity' || s.type === 'vec3') continue;
+    // (the brush radius is the brush's: buildCommand sends it)
+    if (k === 'radius' && (s.type === 'number' || s.type === 'int')) continue;
+    const d = remembered[k] ?? (p.params[k] !== undefined ? p.params[k] : prefill(k, s) ?? (isSelector(p, k) ? undefined : defaultValue(k, s)));
+    if (d !== undefined && d !== '') v[k] = d;
+  }
+  return v;
+}
+
+/** the world as a setter power starts from (the current day, gravity, star …) */
+export interface WorldNow { dayHours: number; yearDays: number; axialTilt: number; gravity: number; magnetism: number; luminosity: number; starKind?: string }
+
+const r1 = (x: number): number => Math.round(x * 10) / 10;
+const r2 = (x: number): number => Math.round(x * 100) / 100;
+
+/**
+ * What the world itself suggests for a value: a power that SETS something of the world starts from what it is now (the
+ * length of the day, gravity, the star's brightness and kind), so a cast left untouched changes nothing by surprise.
+ */
+export function worldPrefill(p: Power, k: string, w: WorldNow | null): unknown {
+  if (!w) return undefined;
+  switch (p.command) {
+    case 'time.day-length': return k === 'hours' ? r1(w.dayHours) : undefined;
+    case 'time.year-length': return k === 'days' ? r1(w.yearDays) : undefined;
+    case 'time.axial-tilt': return k === 'degrees' ? Math.round((w.axialTilt * 180) / Math.PI) : undefined;
+    case 'time.set-hour': return k === 'hour' ? Math.round(w.dayHours / 2) : undefined;
+    case 'time.step': return k === 'hours' ? 1 : undefined;
+    case 'time.rewind': return k === 'hoursAgo' ? 1 : undefined;
+    case 'planet.set':
+      if (k === 'gravity') return r1(w.gravity);
+      if (k === 'magnetism') return r2(w.magnetism);
+      if (k === 'spin') return r1(w.dayHours);
+      // (a step warmer: the offset is added to the climate)
+      if (k === 'temperatureOffset') return 5;
+      return undefined;
+    case 'star.set':
+      if (k === 'luminosity') return r2(w.luminosity);
+      if (k === 'kind') return w.starKind;
+      return undefined;
     default: return undefined;
   }
 }
 
-function roundNice(v: number): number {
-  if (Math.abs(v) >= 100) return Math.round(v);
-  if (Math.abs(v) >= 10) return Math.round(v * 10) / 10;
-  return Math.round(v * 100) / 100;
+/** "its own: 3–6 h" — what an unset parameter will be, in words (the card's value line) */
+export function autoWords(book: PowerBook, p: Power, k: string, dayHours = 24): string {
+  const known = book.defaultOf(p, k);
+  if (k === 'wrath') return `the world's: ${wrathWord(book.wrathLaw)} · ${book.wrathLaw.toFixed(2)}`;
+  if (k === 'duration') {
+    const life = book.lifeOf(p);
+    if (life) {
+      const a = fmtTicks(life[0], dayHours), b = fmtTicks(life[1], dayHours);
+      const ua = a.replace(/^[\d.]+ /, ''), ub = b.replace(/^[\d.]+ /, '');
+      return `its own: ${life[0] === life[1] ? a : ua === ub || `${ua}s` === ub ? `${a.split(' ')[0]}–${b}` : `${a}–${b}`}`;
+    }
+  }
+  if (known !== undefined) return `its own: ${fmtParam(k, known, p.schema[k], dayHours)}`;
+  return 'its own';
 }
 
 /**
@@ -323,6 +550,7 @@ export function fmtParam(k: string, v: unknown, s?: ParamSpec, dayHours = 24): s
   if (v === undefined || v === null) return '';
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   if (typeof v === 'number') {
+    if (k === 'wrath') return `${wrathWord(v)} · ${v.toFixed(2)}`;
     const unit = s?.unit ?? '';
     if (k === 'radius' || unit === 'm') return fmtDist(v);
     if (k === 'duration' || unit === 'ticks') return fmtTicks(v, dayHours);

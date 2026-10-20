@@ -11,7 +11,7 @@ import type { Command, CommandResult } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { Power } from './powers.ts';
 import type { Catalog, LawRow } from './catalog.ts';
-import { fmtParam, paramLabel } from './powers.ts';
+import { fmtParam, paramLabel, wrathWord, categoryLabel } from './powers.ts';
 import { h, clear, fmtNum, store } from './dom.ts';
 import { icon } from './icons.ts';
 import { placeWords, fmtDuration } from './words.ts';
@@ -246,8 +246,8 @@ export class Freeform {
       return total;
     };
     for (const p of this.host.powers.list) {
-      const s = score([p.name, ...p.synonyms, p.category]) + score([p.desc]) * 0.4;
-      if (s >= 18) out.push({ label: p.name, sub: p.category, icon: p.icon || 'cast', score: s, run: () => { this.close(); this.deps.arm(p); } });
+      const s = score([p.name, ...p.synonyms, categoryLabel(p.category)]) + score([p.desc]) * 0.4;
+      if (s >= 18) out.push({ label: p.name, sub: categoryLabel(p.category), icon: p.icon || 'cast', score: s, run: () => { this.close(); this.deps.arm(p); } });
     }
     const planet = this.here?.planet ?? this.host.primary();
     const seen = new Set<string>();
@@ -288,7 +288,7 @@ export class Freeform {
       const law = this.deps.catalog.law(planet, c.path);
       name = law ? lawName(law) : cap(paramLabel(c.path.split('.').pop() ?? c.path));
       const unit = law?.unit && law.unit !== '0..1' && law.unit !== 'fraction' ? ` ${law.unit}` : '';
-      chips.push(`to ${typeof c.value === 'number' ? fmtNum(c.value) : String(c.value)}${typeof c.value === 'number' ? unit : ''}`);
+      chips.push(`to ${typeof c.value === 'number' ? fmtNum(c.value) : String(c.value)}${typeof c.value === 'number' ? unit : ''}${c.path === 'god.wrath' && typeof c.value === 'number' ? ` · ${wrathWord(c.value)}` : ''}`);
       if (law && typeof law.value === 'number') chips.push(`now ${fmtNum(law.value)}${unit}`);
     }
     for (const k of ['pos', 'to', 'toward'] as const) { const t = where(k, c[k]); if (t) chips.push(t); }
@@ -306,6 +306,8 @@ export class Freeform {
       }
       if (k === 'cmd' && v && typeof v === 'object') { chips.push(`→ ${book.commandName((v as Command).k)}`); continue; }
       if (k === 'items') { const t = itemsText(v); if (t) chips.push(t); continue; }
+      // the size words of the sentence ("a huge meteor") as the wrath it falls with (LIVING §3.7)
+      if (k === 'wrath' && typeof v === 'number') { chips.push(`${wrathWord(v)} · wrath ${v.toFixed(2)}`); continue; }
       if (/Ago$/.test(k) && typeof v === 'number') {
         const min = k === 'ticksAgo' ? v : k === 'hoursAgo' ? v * 60 : v * dayH * 60;
         chips.push(`${fmtDuration(min, dayH)} ago`);
@@ -326,6 +328,8 @@ export class Freeform {
       if (typeof v === 'object' && v !== null && !Array.isArray(v)) continue; // never raw JSON
       chips.push(`${paramLabel(k)} ${val}`);
     }
+    // a harmful act with no size word falls with the world's wrath: say so (survivable, unless the law was raised)
+    if (c.wrath === undefined && book.commandParam(c.k, 'wrath')) chips.push(`${wrathWord(book.wrathLaw)} · the world's wrath`);
     return h('div', { class: 'gn-ff-line', title: book.commandDescription(c.k) },
       h('span', { class: 'gn-ff-arrow', text: '→' }),
       h('span', { class: 'gn-ff-ico', html: icon(pw?.icon ?? (c.k === 'set' ? 'law' : 'words'), pw?.category) }),
@@ -340,10 +344,10 @@ export class Freeform {
     if (id === undefined) return undefined;
     const s = pw?.schema[k];
     let ek = ref?.kind ?? (s?.type === 'entity' ? s.entity?.[0] : undefined);
-    if (!ek && (k === 'id' || k === 'target' || k === 'ship' || k === 'creature' || k === 'agent')) {
+    if (!ek && (k === 'id' || k === 'target' || k === 'ship' || k === 'agent')) {
       const pre = kind.split('.')[0];
-      ek = k === 'ship' ? 'ship' : k === 'creature' ? 'creature' : k === 'agent' ? 'agent'
-        : pre === 'disaster' ? 'disaster' : pre === 'creature' ? 'creature' : pre === 'agent' || pre === 'possess' || pre === 'disciple' ? 'agent' : pre === 'ship' ? 'ship' : pre === 'world' ? 'planet' : undefined;
+      ek = k === 'ship' ? 'ship' : k === 'agent' ? 'agent'
+        : pre === 'disaster' ? 'disaster' : pre === 'agent' || pre === 'possess' || pre === 'disciple' || pre === 'prophet' ? 'agent' : pre === 'ship' ? 'ship' : pre === 'world' ? 'planet' : undefined;
     }
     if (!ek) return undefined;
     const n = this.deps.catalog.nameOf({ kind: ek, id, planet });
@@ -397,8 +401,8 @@ export class Freeform {
       if (this.here) await this.host.cmd({ k: 'focus', planet: this.here.planet, pos: this.here.dir }, { quiet: true });
       const r = await this.host.cmd({ k: 'freeform', text });
       if (r.ok) {
-        // what it made can be looked at: the first creature / disaster / settlement it created
-        const made = r.created?.find((e) => e.kind === 'disaster' || e.kind === 'creature' || e.kind === 'settlement' || e.kind === 'ship');
+        // what it made can be looked at: the first disaster, settlement or ship it created
+        const made = r.created?.find((e) => e.kind === 'disaster' || e.kind === 'settlement' || e.kind === 'ship');
         if (made) this.host.select({ ...made, planet: made.planet ?? this.host.primary() });
         this.close();
       } else {

@@ -97,6 +97,12 @@ export class WorldView {
   msPerTick = 0;
   restraint = false;
   worship: number[] = [];
+  /** the time-lapse level the sim runs at (Snapshot.lapseLevel: 0 plain, 1 time-lapse, 2 deep), null from older sims */
+  lapseLevel: number | null = null;
+  /** how the people of every world see the player god, −1 feared … +1 trusted (Snapshot.regard), null while unknown */
+  regard: number | null = null;
+  /** the wrath law, 0 gentle … 0.3 survivable … 1 total (Snapshot.wrath), null while unknown */
+  wrath: number | null = null;
   content: string[] = [];
   star: StarView = {
     name: 'Sun', kind: 'G', luminosity: 1, temperature: 5800, radius: 10000, color: [1, 0.95, 0.88], activity: 0,
@@ -116,10 +122,16 @@ export class WorldView {
    * (capped at the requested speed), so a sim that cannot hold 1000x still moves the planet smoothly instead of the
    * clock racing ahead at the nominal rate and stalling at every snapshot
    */
-  tickRate = 10;
+  tickRate = TICKS_PER_SECOND_1X;
   private lastFrameAt = -1;
   private rateT: number[] = [];
   private rateTick: number[] = [];
+  /**
+   * real time (ms) the current snapshot tick first arrived: the render clock extrapolates from the moment the sim's
+   * integer tick last CHANGED, not from the latest snapshot — at 1x (one tick a second, LIVING PACE) thirty snapshots a
+   * second carry the same tick, and extrapolating from each of them held the clock back into a sawtooth (hook H1)
+   */
+  private tickAt = 0;
 
   planet(id: number): PlanetView | undefined {
     for (const p of this.planets) if (p.id === id) return p;
@@ -129,6 +141,7 @@ export class WorldView {
   /** Merge a snapshot into the mirror. Field arrays are adopted (they were transferred to us), not copied. */
   apply(snap: Snapshot, now: number): void {
     this.measureRate(snap, now);
+    if (this.snapshots === 0 || snap.tick !== this.snapTick) this.tickAt = now;
     this.snapTick = snap.tick;
     this.snapAt = now;
     this.speed = snap.speed;
@@ -136,6 +149,9 @@ export class WorldView {
     this.msPerTick = snap.msPerTick;
     this.restraint = snap.restraint;
     this.worship = snap.worship;
+    this.lapseLevel = typeof snap.lapseLevel === 'number' ? snap.lapseLevel : null;
+    if (typeof snap.regard === 'number') this.regard = snap.regard;
+    if (typeof snap.wrath === 'number') this.wrath = snap.wrath;
     if (snap.content?.length) this.content = snap.content;
     if (snap.star) this.star = snap.star;
     this.ships = snap.ships ?? [];
@@ -245,8 +261,9 @@ export class WorldView {
   }
 
   /**
-   * Measured ticks per real second over a sliding ~1.2 s window of snapshot arrivals. Snapshot ticks are integers and
-   * arrive at ~30 Hz, so a per-snapshot rate would be noise (0 or 30 ticks/s at 1x); a window of a second is smooth.
+   * Measured ticks per real second over a sliding window of the moments the snapshot tick CHANGED (snapshot ticks are
+   * integers: at 100x every snapshot brings a new one, at 1x one in thirty does). The window holds ~1.2 s, and at least
+   * three and a half ticks' worth at slow speeds, so the rate is smooth at one tick a second too.
    */
   private measureRate(snap: Snapshot, now: number): void {
     const nominal = snap.speed * TICKS_PER_SECOND_1X;
@@ -255,12 +272,14 @@ export class WorldView {
       this.rateTick.length = 0;
       this.tickRate = nominal;
     }
-    this.rateT.push(now);
-    this.rateTick.push(snap.tick);
-    while (this.rateT.length > 2 && now - this.rateT[0] > 1200) { this.rateT.shift(); this.rateTick.shift(); }
-    const span = (now - this.rateT[0]) / 1000;
-    if (span >= 0.4) {
-      const est = (snap.tick - this.rateTick[0]) / span;
+    const n = this.rateTick.length;
+    if (!n || snap.tick !== this.rateTick[n - 1]) { this.rateT.push(now); this.rateTick.push(snap.tick); }
+    const win = Math.max(1200, nominal > 0 ? 3500 / nominal : 1200);
+    while (this.rateT.length > 2 && now - this.rateT[0] > win) { this.rateT.shift(); this.rateTick.shift(); }
+    const last = this.rateT.length - 1;
+    const span = (this.rateT[last] - this.rateT[0]) / 1000;
+    if (last >= 1 && span >= 0.4) {
+      const est = (this.rateTick[last] - this.rateTick[0]) / span;
       // a stepped jump inside the window would inflate the estimate: never exceed the requested speed
       this.tickRate = Math.max(0, Math.min(nominal, est * 1.01));
     }
@@ -276,9 +295,11 @@ export class WorldView {
     if (this.lastFrameAt < 0) this.lastFrameAt = now;
     const dt = Math.min(0.25, Math.max(0, (now - this.lastFrameAt) / 1000));
     this.lastFrameAt = now;
-    const elapsed = Math.max(0, (now - this.snapAt) / 1000);
-    // never extrapolate more than ~0.6 s of sim time past the last snapshot (a stalled worker freezes the world)
-    const target = this.snapTick + Math.min(elapsed, 0.6) * tps;
+    // from the moment the sim's tick last changed (see tickAt), never more than ~0.6 s — or a tick and a half at slow
+    // speeds — past it: a stalled worker freezes the world
+    const elapsed = Math.max(0, (now - this.tickAt) / 1000);
+    const cap = Math.max(0.6, tps > 0 ? 1.5 / tps : 0.6);
+    const target = this.snapTick + Math.min(elapsed, cap) * tps;
     let t = this.renderTick + dt * tps;
     const err = target - t;
     const jump = Math.max(30, tps * 1.5);

@@ -360,8 +360,8 @@ export function registerPeopleCommands(r: CommandRegistry): void {
     A.remember(s, MEMK.disciple, u.tick, 0);
     const st = x.ps.settlement(A.settlement[s]);
     if (st) tell(u, p, 'disciple', vars(x, st, s), st, [agentRef(x, s)]);
-    return ok(`${agentName(x, s)} becomes your disciple.`);
-  }, { desc: 'Make a disciple', category: 'Peoples', params: { id: agentId } });
+    return ok(`${agentName(x, s)} is one of the Called now.`);
+  }, { desc: 'Call one of them to your service (one of the Called)', category: 'Peoples', params: { id: agentId } });
 
   r.register('agent.rename', ({ u, p }, a) => {
     const x = makeCtx(u, p);

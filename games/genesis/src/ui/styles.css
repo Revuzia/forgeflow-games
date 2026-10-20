@@ -130,17 +130,53 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-worldbtn.gn-here { border-color: var(--gn-line-gold); color: var(--gn-gold-hi); }
 .gn-worldbtn .gn-pop { font: 500 11.5px var(--gn-mono); color: var(--gn-ivory-dim); letter-spacing: 0; }
 .gn-worldbtn .gn-pop:empty { display: none; }
-.gn-faith { display: flex; align-items: center; gap: 11px; padding: 8px 12px 8px 10px; }
-.gn-faith-i { width: 18px; height: 18px; color: var(--gn-gold); }
-.gn-faith-w { display: flex; flex-direction: column; line-height: 1.1; }
+.gn-faith { display: flex; flex-direction: column; gap: 6px; padding: 8px 11px 8px 10px; width: 300px; cursor: pointer; transition: border-color .15s; }
+.gn-faith:hover { border-color: var(--gn-line-gold); }
+.gn-faith-top { display: flex; align-items: center; gap: 10px; }
+.gn-faith-i { width: 18px; height: 18px; color: var(--gn-gold); flex: none; }
+.gn-faith-w { display: flex; flex-direction: column; line-height: 1.1; min-width: 54px; }
 .gn-faith-w b { font: 600 14px var(--gn-sans); font-variant-numeric: tabular-nums; color: var(--gn-gold-hi); letter-spacing: .02em; }
-.gn-faith-w small, .gn-faith-b small { font: 600 11px var(--gn-sans); letter-spacing: .18em; text-transform: uppercase; color: var(--gn-ivory-dim); }
-.gn-faith-b { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
-.gn-faith-track { height: 4px; border-radius: 2px; background: rgba(239, 231, 214, .1); overflow: hidden; display: block; }
-.gn-faith-fill { display: block; height: 100%; border-radius: 2px; }
-.gn-faith-fill.gn-love { background: linear-gradient(90deg, #8d74c9, var(--gn-gold-hi)); }
-.gn-faith-fill.gn-fear { background: linear-gradient(90deg, #7a3a36, var(--gn-bad)); }
-.gn-faith-r { font: 500 11.5px var(--gn-mono); color: var(--gn-warn); border-left: 1px solid var(--gn-line); padding-left: 10px; }
+.gn-faith-w small { font: 600 10.5px var(--gn-sans); letter-spacing: .16em; text-transform: uppercase; color: var(--gn-ivory-dim); }
+.gn-faith-band { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gn-faith-band b { font: 600 15px/1 var(--gn-serif); letter-spacing: .08em; text-transform: uppercase; }
+.gn-faith-gauge { position: relative; height: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--gn-feared), rgba(239, 231, 214, .45) 50%, var(--gn-trusted)); opacity: .85; }
+.gn-faith-gauge i { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); background: #fff8e6; box-shadow: 0 0 0 2px rgba(9, 11, 17, .8), 0 0 8px rgba(255, 240, 200, .8); }
+.gn-faith-m { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; }
+.gn-faith-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.gn-faith-chip { display: inline-flex; align-items: center; gap: 5px; font: 500 11.5px/1 var(--gn-sans); color: var(--gn-ivory-dim); padding: 4px 7px; border-radius: 9px; border: 1px solid var(--gn-line); background: rgba(255, 255, 255, .03); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gn-faith-chip > span { width: 12px; height: 12px; flex: none; display: inline-block; }
+.gn-faith-chip:hover { color: var(--gn-ivory); border-color: var(--gn-line-gold); }
+.gn-faith-pray { color: var(--gn-gold-hi); border-color: rgba(217, 184, 120, .4); background: rgba(217, 184, 120, .1); animation: gnPrayPulse 2.6s ease-in-out infinite; }
+.gn-faith-wrath.gn-hot { color: var(--gn-warn); border-color: rgba(240, 164, 107, .4); }
+.gn-faith-r { color: var(--gn-warn); }
+/* (a window on the left leaves the inspector its column on the right when both are open) */
+.gn-ui:has(> .gn-insp:not([hidden])) .gn-win-left { width: max(340px, min(520px, calc(100vw - 54px - 384px * var(--gn-ui-scale)) / var(--gn-ui-scale))); }
+/* (with the inspector open under it, the card keeps only its first line: worship and the band) */
+.gn-ui:has(> .gn-insp:not([hidden])) .gn-faith-m, .gn-ui:has(> .gn-insp:not([hidden])) .gn-faith-chips { display: none; }
+@keyframes gnPrayPulse { 50% { box-shadow: 0 0 10px rgba(243, 223, 174, .28); } }
+
+/* the regard bands and the four values (the card, The god, the inspector) */
+:root { --gn-feared: #9b7ae0; --gn-trusted: #f3c978; }
+.gn-band-feared { color: #c4b0ff; }
+.gn-band-awed { color: var(--gn-ivory); }
+.gn-band-unseen { color: var(--gn-ivory-dim); }
+.gn-band-trusted { color: var(--gn-gold-hi); }
+.gn-meter { display: grid; grid-template-columns: 62px 1fr auto; align-items: center; gap: 8px; font: 500 12.5px var(--gn-sans); }
+.gn-meter-c { grid-template-columns: 50px 1fr 22px; gap: 6px; font-size: 11px; }
+.gn-meter-l { color: var(--gn-ivory-dim); letter-spacing: .04em; }
+.gn-meter-track { height: 4px; border-radius: 2px; background: rgba(239, 231, 214, .1); overflow: hidden; display: block; }
+.gn-meter-track i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #8a7448, var(--gn-gold-hi)); }
+.gn-meter-w { color: var(--gn-ivory); white-space: nowrap; font-size: 12px; }
+.gn-meter-c .gn-meter-w { font: 500 11px var(--gn-mono); color: var(--gn-ivory-dim); text-align: right; }
+.gn-meter-faith .gn-meter-track i, .gn-god-cell.gn-meter-faith i { background: linear-gradient(90deg, #8a7448, var(--gn-gold-hi)); }
+.gn-meter-fear .gn-meter-track i, .gn-god-cell.gn-meter-fear i { background: linear-gradient(90deg, #7a3a36, var(--gn-bad)); }
+.gn-meter-trust .gn-meter-track i, .gn-god-cell.gn-meter-trust i { background: linear-gradient(90deg, #4f6fa5, var(--gn-blue)); }
+.gn-meter-loyalty .gn-meter-track i, .gn-god-cell.gn-meter-loyalty i { background: linear-gradient(90deg, #6b5aa8, #d6c6ff); }
+.gn-meter-cred .gn-meter-track i { background: linear-gradient(90deg, #a07a3a, #ffe2a0); }
+.gn-meters { display: flex; flex-direction: column; gap: 5px; margin: 4px 0; }
+.gn-regard { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font: 600 10.5px var(--gn-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--gn-ivory-faint); }
+.gn-regard-track { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--gn-feared), rgba(239, 231, 214, .45) 50%, var(--gn-trusted)); }
+.gn-regard-mark { position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%; transform: translate(-50%, -50%); background: #fff8e6; box-shadow: 0 0 0 2px rgba(9, 11, 17, .85), 0 0 10px rgba(255, 240, 200, .8); }
 
 /* ── system view markers ── */
 .gn-markers { position: absolute; inset: 0; pointer-events: none; }
@@ -160,11 +196,24 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-slabel-name { pointer-events: auto; cursor: pointer; display: inline-block; padding: 1px 6px; border-radius: 6px; font-family: var(--gn-serif); font-size: 16px; font-weight: 600; letter-spacing: .06em; color: var(--gn-gold-hi); text-shadow: 0 1px 3px #000, 0 0 12px rgba(0, 0, 0, .75); }
 .gn-slabel-sub { font: 500 11px var(--gn-sans); letter-spacing: .18em; text-transform: uppercase; color: var(--gn-ivory); opacity: .78; text-shadow: 0 1px 3px #000; }
 .gn-slabel-name:hover { color: #fff6dc; background: rgba(9, 11, 17, .32); }
+/* a settlement's small signs: a lamp while it prays, a star where its prophet lives, a leaf where it keeps something holy */
+.gn-slabel-sign { display: inline-block; width: 13px; height: 13px; vertical-align: -1px; margin: 0 2px; color: var(--gn-gold-hi); filter: drop-shadow(0 1px 2px #000); }
+.gn-slabel-pray { color: #ffe3a0; animation: gnLamp 2.4s ease-in-out infinite; margin-right: 5px; }
+.gn-slabel-prophet { color: #ffd98a; }
+.gn-slabel-sacred { color: #cfe7a0; }
+@keyframes gnLamp { 50% { filter: drop-shadow(0 0 5px rgba(255, 220, 150, .9)) drop-shadow(0 1px 2px #000); } }
+/* a praying town seen from high up: a small lamp (a click selects it) */
+.gn-lmarks { pointer-events: none; }
+.gn-lmark { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform; }
+.gn-lmark-prayer { --u: .5; width: calc(15px + 7px * var(--u)); height: calc(15px + 7px * var(--u)); padding: 3px; border-radius: 50%; color: #ffe7b0; background: radial-gradient(circle, rgba(255, 214, 140, calc(.18 + .25 * var(--u))), rgba(255, 214, 140, 0) 70%); filter: drop-shadow(0 0 4px rgba(255, 210, 140, .8)) drop-shadow(0 1px 2px #000); animation: gnLamp 2.4s ease-in-out infinite; }
+.gn-lmark-prayer:hover { color: #fff; }
+.gn-world-layer.gn-busy .gn-lmark { pointer-events: none; }
+.gn-world-layer.gn-hush .gn-lmarks, .gn-world-layer.gn-titled .gn-lmarks { opacity: 0; }
 
 /* ── bottom-left: toasts + chronicle ticker ── */
-.gn-toasts { position: absolute; left: 18px; bottom: var(--gn-toast-bottom, calc(54px + 46px * var(--gn-ui-scale))); display: flex; flex-direction: column; gap: 6px; max-width: min(440px, 40vw); align-items: flex-start; transform: scale(var(--gn-ui-scale)); transform-origin: bottom left; }
+.gn-toasts { position: absolute; left: var(--gn-toast-left, 18px); bottom: var(--gn-toast-bottom, calc(54px + 46px * var(--gn-ui-scale))); display: flex; flex-direction: column; gap: 6px; max-width: min(440px, 40vw, var(--gn-toast-maxw, 440px)); align-items: flex-start; transform: scale(var(--gn-ui-scale)); transform-origin: bottom left; }
 .gn-toast {
-  --gn-tc: var(--gn-gold); display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%;
+  --gn-tc: var(--gn-gold); display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%; box-sizing: border-box;
   padding: 9px 13px 10px 10px; font: 13px/1.38 var(--gn-sans); color: var(--gn-ivory); animation: gnToastIn .35s ease both;
   border-left: 2px solid color-mix(in srgb, var(--gn-tc) 70%, transparent);
 }
@@ -462,7 +511,7 @@ button.gn-chip:hover { border-color: var(--gn-line-gold); color: var(--gn-gold-h
 .gn-win { position: absolute; display: flex; flex-direction: column; overflow: hidden; z-index: 10; background: linear-gradient(180deg, rgba(16, 20, 33, 0.9), rgba(9, 12, 20, 0.88)); border-color: var(--gn-line-2); }
 .gn-win-center { left: 50%; top: 50%; width: min(760px, calc(100vw - 32px)); max-height: min(820px, calc(100vh - 64px)); transform: translate(-50%, -50%) scale(var(--gn-ui-scale)); transform-origin: center; }
 .gn-win-wide { left: 50%; top: 50%; width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 56px); transform: translate(-50%, -50%) scale(var(--gn-ui-scale)); transform-origin: center; }
-.gn-win-left { left: 18px; top: calc(18px + 110px * var(--gn-ui-scale)); bottom: auto; height: calc((100vh - 78px - 110px * var(--gn-ui-scale)) / var(--gn-ui-scale)); width: min(520px, calc(100vw - 36px)); transform: scale(var(--gn-ui-scale)); transform-origin: top left; }
+.gn-win-left { left: 18px; top: calc(16px + 158px * var(--gn-ui-scale)); bottom: auto; height: calc((100vh - 34px - 220px * var(--gn-ui-scale)) / var(--gn-ui-scale)); width: min(520px, calc(100vw - 36px)); transform: scale(var(--gn-ui-scale)); transform-origin: top left; }
 .gn-win-menu { width: min(460px, calc(100vw - 32px)); }
 .gn-win-head { display: flex; align-items: center; gap: 12px; padding: 14px 14px 12px 18px; border-bottom: 1px solid var(--gn-line); }
 .gn-win-icon { width: 26px; height: 26px; color: var(--gn-gold); flex: none; }
@@ -596,22 +645,24 @@ body.gn-reduce-motion .gn-route, body.gn-reduce-motion .gn-herepin-p, body.gn-re
 /* clean frames: __GENESIS__.ui(false), H, photo mode — the ForgeFlow portal bar (public/game_controls.js) hides too */
 .genesis-clean #__ff_controls__, .genesis-clean #__ffg_touch__ { display: none !important; }
 
-/* ── the hand as the cursor (until the render lane draws it in the world): open over what it can take, closed while
-   it carries or presses, a crosshair with a power armed or a throw aimed ── */
-body[data-hand='open'] #game, body[data-hand='slap'] #game { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M8.2 12.5V5.6a1.4 1.4 0 0 1 2.8 0v5.6M11 11V4.2a1.4 1.4 0 0 1 2.8 0V11M13.8 11.2V5.4a1.4 1.4 0 0 1 2.8 0v7.1M8.2 12.4l-1.6-2.1a1.5 1.5 0 0 0-2.4 1.7l3.1 5.2a7 7 0 0 0 6 3.4h.6a5 5 0 0 0 5-5V8.1a1.4 1.4 0 0 0-2.8 0' fill='rgba%28243%2C223%2C174%2C0.18%29' stroke='%230b0e16' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M8.2 12.5V5.6a1.4 1.4 0 0 1 2.8 0v5.6M11 11V4.2a1.4 1.4 0 0 1 2.8 0V11M13.8 11.2V5.4a1.4 1.4 0 0 1 2.8 0v7.1M8.2 12.4l-1.6-2.1a1.5 1.5 0 0 0-2.4 1.7l3.1 5.2a7 7 0 0 0 6 3.4h.6a5 5 0 0 0 5-5V8.1a1.4 1.4 0 0 0-2.8 0' fill='none' stroke='%23f3dfae' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 15 13, grab; }
-body[data-hand='carry'] #game, body[data-hand='press'] #game { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M7.2 9.6a1.6 1.6 0 0 1 3.2 0M10.4 9.2a1.6 1.6 0 0 1 3.2 0M13.6 9.4a1.6 1.6 0 0 1 3.2 0v4.8a6 6 0 0 1-6 6h-.4a5 5 0 0 1-4.7-3.3l-1.1-3.1a1.6 1.6 0 0 1 2.9-1.3l.9 1.6V9.6M10.4 9.2v3.2M13.6 9.4v3' fill='rgba%28243%2C223%2C174%2C0.3%29' stroke='%230b0e16' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M7.2 9.6a1.6 1.6 0 0 1 3.2 0M10.4 9.2a1.6 1.6 0 0 1 3.2 0M13.6 9.4a1.6 1.6 0 0 1 3.2 0v4.8a6 6 0 0 1-6 6h-.4a5 5 0 0 1-4.7-3.3l-1.1-3.1a1.6 1.6 0 0 1 2.9-1.3l.9 1.6V9.6M10.4 9.2v3.2M13.6 9.4v3' fill='none' stroke='%23f3dfae' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 15 15, grabbing; }
+/* ── the Touch as the cursor (LIVING §3.6: the god's presence is light, never a hand): a ring of light over what it can
+   lift, a bright held orb while it carries or presses, a red-gold strike while it rebukes, a crosshair with a power armed
+   or a hurl aimed ── */
+body[data-hand='open'] #game { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='8.6' fill='rgba%28243%2C223%2C174%2C0.14%29' stroke='%230b0e16' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='8.6' fill='none' stroke='%23f3dfae' stroke-width='1.4'/%3E%3Cpath d='M16 2.6v4.2M16 25.2v4.2M2.6 16h4.2M25.2 16h4.2' stroke='%230b0e16' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M16 2.6v4.2M16 25.2v4.2M2.6 16h4.2M25.2 16h4.2' stroke='%23f3dfae' stroke-width='1.4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='2.3' fill='%23fff3d6' stroke='%230b0e16' stroke-width='1'/%3E%3C/svg%3E") 16 16, pointer; }
+body[data-hand='slap'] #game { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='8.6' fill='rgba%28239%2C123%2C107%2C0.16%29' stroke='%230b0e16' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='8.6' fill='none' stroke='%23f4a08e' stroke-width='1.4'/%3E%3Cpath d='M17.6 9.4l-4.2 6.4h3.4l-2 6.8' fill='none' stroke='%230b0e16' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M17.6 9.4l-4.2 6.4h3.4l-2 6.8' fill='none' stroke='%23ffd9cf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 16, pointer; }
+body[data-hand='carry'] #game, body[data-hand='press'] #game { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23f3dfae' stroke-opacity='.6' stroke-width='1.2' stroke-dasharray='2.4 3'/%3E%3Ccircle cx='16' cy='16' r='6.4' fill='rgba%28255%2C243%2C214%2C0.5%29' stroke='%230b0e16' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='6.4' fill='none' stroke='%23fff3d6' stroke-width='1.6'/%3E%3C/svg%3E") 16 16, grabbing; }
 body[data-hand='tool'] #game { cursor: crosshair; }
 body[data-hand='aim'] #game { cursor: crosshair; }
 
 /* ── the world layer's modes: busy (the pointer belongs to a tool, a gesture or the hand: names and markers let presses
    through to the world) and hushed (the radial, the palette or a gesture card is up: names and markers step aside) ── */
-.gn-world-layer.gn-busy .gn-slabel-name, .gn-world-layer.gn-busy .gn-marker, .gn-world-layer.gn-busy .gn-crea { pointer-events: none !important; }
-.gn-world-layer.gn-hush .gn-labels, .gn-world-layer.gn-hush .gn-markers, .gn-world-layer.gn-hush .gn-creas, .gn-world-layer.gn-hush .gn-sel,
+.gn-world-layer.gn-busy .gn-slabel-name, .gn-world-layer.gn-busy .gn-marker, .gn-world-layer.gn-busy .gn-lmark { pointer-events: none !important; }
+.gn-world-layer.gn-hush .gn-labels, .gn-world-layer.gn-hush .gn-markers, .gn-world-layer.gn-hush .gn-lmarks, .gn-world-layer.gn-hush .gn-sel,
 .gn-world-layer.gn-hush .gn-hoverring, .gn-world-layer.gn-hush .gn-ovchip { opacity: 0 !important; pointer-events: none !important; transition: opacity .15s; }
 .gn-slabel-name, .gn-slabel-sub { font-size: calc(16px * min(1.35, max(1, var(--gn-ui-scale) * .85))); }
 .gn-slabel-sub { font-size: calc(11px * min(1.3, max(1, var(--gn-ui-scale) * .85))); }
 
-/* ── the hand: its hover ring, what it carries, the arc of an aimed throw ── */
+/* ── the Touch: its hover ring, what it carries, the arc of an aimed hurl ── */
 .gn-hoverring { position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%; pointer-events: none; border: 1.5px solid rgba(243, 223, 174, .85);
   box-shadow: 0 0 12px rgba(243, 223, 174, .55), inset 0 0 8px rgba(243, 223, 174, .3); animation: gnRing 1.2s ease-in-out infinite; will-change: transform; }
 @keyframes gnRing { 50% { box-shadow: 0 0 18px rgba(243, 223, 174, .8), inset 0 0 10px rgba(243, 223, 174, .45); } }
@@ -621,24 +672,6 @@ body[data-hand='aim'] #game { cursor: crosshair; }
 .gn-aim-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .gn-aim-svg path { fill: none; stroke: var(--gn-gold-hi); stroke-width: 2.2; stroke-dasharray: 8 6; filter: drop-shadow(0 0 4px rgba(243, 223, 174, .7)); animation: gnDash 1s linear infinite; }
 .gn-aim-svg circle { fill: none; stroke: var(--gn-gold-hi); stroke-width: 2; filter: drop-shadow(0 0 6px rgba(243, 223, 174, .9)); }
-
-/* ── creatures (a silhouette at the creature's place and height, its name card over it) ── */
-.gn-creas { position: absolute; inset: 0; pointer-events: none; }
-.gn-crea { position: absolute; left: 0; top: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; will-change: transform; }
-.gn-crea > * { transform-origin: 50% 100%; }
-.gn-crea { translate: -50% -100%; }
-.gn-crea-fig { pointer-events: auto; cursor: grab; transition: filter .2s; }
-.gn-crea-fig svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.gn-crea-body { fill: #4a4136; stroke: rgba(10, 10, 12, .55); stroke-width: 1.2; }
-.gn-crea-shadow { fill: rgba(0, 0, 0, .35); }
-.gn-crea.gn-crea-good .gn-crea-body { fill: #d8c79c; stroke: rgba(70, 52, 20, .6); }
-.gn-crea.gn-crea-evil .gn-crea-body { fill: #2a1513; stroke: rgba(180, 40, 30, .55); }
-.gn-crea-fig:hover { filter: drop-shadow(0 0 6px rgba(243, 223, 174, .8)); }
-.gn-crea.gn-crea-held .gn-crea-fig { filter: drop-shadow(0 0 10px rgba(243, 223, 174, .95)); }
-.gn-crea-card { pointer-events: auto; cursor: pointer; text-align: center; margin-bottom: 4px; padding: 3px 10px 4px; border-radius: 10px; background: rgba(9, 11, 17, .62);
-  border: 1px solid var(--gn-line); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); max-width: 280px; }
-.gn-crea-name { font: 600 16px var(--gn-serif); color: var(--gn-gold-hi); letter-spacing: .06em; white-space: nowrap; }
-.gn-crea-sub { font: 500 11px var(--gn-sans); letter-spacing: .06em; color: var(--gn-ivory); opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── the tool card: compact by default, foldable to its title, values flash when keys change them ── */
 .gn-tool-fold { padding: 5px 6px; min-width: 0; }
@@ -663,7 +696,7 @@ body[data-hand='aim'] #game { cursor: crosshair; }
 /* ── worship spent on a miracle ── */
 .gn-faith.gn-spent { animation: gnSpent 1.4s ease; }
 @keyframes gnSpent { 0% { box-shadow: 0 0 0 1px var(--gn-gold-hi), 0 0 24px rgba(243, 223, 174, .6); } 100% { box-shadow: var(--gn-shadow); } }
-.gn-faith-spent { font: 600 12px var(--gn-sans); color: var(--gn-gold-hi); white-space: nowrap; border-left: 1px solid var(--gn-line); padding-left: 10px; animation: gnFade .3s ease both; }
+.gn-faith-spent { font: 600 12px var(--gn-sans); color: var(--gn-gold-hi); white-space: nowrap; animation: gnFade .3s ease both; }
 
 /* ── the radial: names near the pointer, groups, "More…", what the hot slot does ── */
 .gn-rad-pl { position: absolute; pointer-events: none; font: 600 11px var(--gn-sans); letter-spacing: .08em; color: var(--gn-ivory); white-space: nowrap;
@@ -773,7 +806,7 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-nw-warn { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; font: italic 500 14px var(--gn-serif); color: var(--gn-warn); }
 .gn-nw-warn span:first-child { width: 14px; height: 14px; flex: none; }
 .gn-linkbtn { pointer-events: auto; cursor: pointer; background: none; border: 0; padding: 0 2px; font: inherit; color: var(--gn-gold-hi); text-decoration: underline; text-underline-offset: 3px; }
-.gn-nw-foot { position: sticky; bottom: 0; margin: 14px -18px 0; padding: 12px 18px 14px; background: linear-gradient(180deg, rgba(9, 12, 20, 0), rgba(9, 12, 20, .96) 18%); display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--gn-line); }
+.gn-nw-foot { position: sticky; bottom: 0; margin: 14px -18px 0; padding: 12px 18px 14px; background: linear-gradient(180deg, rgba(9, 12, 20, .9), rgba(9, 12, 20, .98) 14px); display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--gn-line); }
 .gn-nw-seed { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .gn-nw-seed .gn-field-l { font: 600 11px var(--gn-sans); letter-spacing: .24em; text-transform: uppercase; color: var(--gn-gold); }
 .gn-nw-seed .gn-seed { width: 140px; font-family: var(--gn-mono); letter-spacing: .06em; }
@@ -973,3 +1006,206 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
 
 /* ── photo mode: what is sharp ── */
 .gn-ph-sharp { font: 500 11.5px var(--gn-sans); color: var(--gn-ivory-dim); margin: 2px 0 2px 90px; }
+
+/* ═══════════════ the front door, the site's frame, the living world (UI lane, LIVING.md §7) ═══════════════ */
+
+/* ── the title (src/ui/title.ts): over the turning world, its column on the left, the world to the right ── */
+.gn-title { position: absolute; inset: 0; z-index: 3; pointer-events: auto; display: flex; flex-direction: column; justify-content: center;
+  padding: 0 0 0 clamp(24px, 6.5vw, 120px); animation: gnFade .8s ease both; }
+.gn-title-shade { position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, rgba(4, 6, 11, .9) 0%, rgba(4, 6, 11, .72) 26%, rgba(4, 6, 11, .28) 50%, rgba(4, 6, 11, 0) 66%),
+    radial-gradient(120% 80% at 0% 100%, rgba(4, 6, 11, .6), rgba(4, 6, 11, 0) 60%); }
+.gn-title-col { position: relative; width: min(460px, 46vw); transform: scale(var(--gn-ui-scale)); transform-origin: left center; }
+/* (the column is scaled with the interface: sizes inside it are the column's own, and the mark is as wide as its letters,
+   so the gold that fills them reaches the last one) */
+.gn-title-mark { display: inline-block; font: 500 62px/1 var(--gn-serif); letter-spacing: .34em; margin-left: -.04em; white-space: nowrap;
+  background: linear-gradient(180deg, var(--gn-gold-hi) 0%, var(--gn-gold) 58%, #9b7b45 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, .55)); }
+.gn-title-sub { font: italic 500 17px/1.35 var(--gn-serif); color: var(--gn-ivory-dim); margin: 12px 0 clamp(18px, 4.2vh, 44px); max-width: 30em; }
+.gn-title-menu { display: flex; flex-direction: column; gap: 2px; }
+.gn-title-b { pointer-events: auto; cursor: pointer; display: grid; grid-template-columns: 26px 1fr; gap: 14px; align-items: center; padding: 9px 14px 9px 10px;
+  border: 1px solid transparent; border-radius: 11px; background: none; color: var(--gn-ivory); text-align: left; transition: background .15s, border-color .15s; }
+.gn-title-b:hover:not([disabled]), .gn-title-b:focus-visible { border-color: var(--gn-line-gold); background: linear-gradient(90deg, rgba(217, 184, 120, .13), rgba(217, 184, 120, .03)); outline: none; }
+.gn-title-b[disabled] { cursor: default; opacity: .42; }
+.gn-title-i { width: 22px; height: 22px; color: var(--gn-gold); }
+.gn-title-t { min-width: 0; }
+.gn-title-l { display: block; font: 600 23px/1.1 var(--gn-serif); letter-spacing: .05em; }
+.gn-title-t small { display: block; font: 500 12px/1.35 var(--gn-sans); color: var(--gn-ivory-faint); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gn-title-main .gn-title-l { color: var(--gn-gold-hi); font-size: 27px; }
+.gn-title-main:not([disabled]) .gn-title-t small { color: var(--gn-ivory-dim); }
+.gn-title-foot { position: absolute; left: clamp(24px, 6.5vw, 120px); bottom: 16px; display: flex; gap: 8px; font: 600 10px var(--gn-sans); letter-spacing: .26em;
+  text-transform: uppercase; color: var(--gn-ivory-faint); pointer-events: none; }
+/* the interface behind the title steps aside (windows, their veils and the toasts stay) */
+.gn-ui.gn-titled > :not(.gn-title):not(.gn-win):not(.gn-veil):not(.gn-toasts) { opacity: 0 !important; pointer-events: none !important; transition: opacity .35s ease; }
+.gn-world-layer.gn-titled > * { opacity: 0 !important; pointer-events: none !important; }
+
+/* ── credits and licences ── */
+.gn-credits { display: flex; flex-direction: column; gap: 8px; }
+.gn-cr-game { margin-bottom: 6px; }
+.gn-cr-mark { font: 500 34px/1 var(--gn-serif); letter-spacing: .32em; color: var(--gn-gold-hi); margin-bottom: 10px; }
+.gn-credits p { margin: 0 0 8px; line-height: 1.5; color: var(--gn-ivory); }
+.gn-credits .gn-cr-dim { color: var(--gn-ivory-dim); font-size: 12.5px; }
+.gn-cr-work { border: 1px solid var(--gn-line); border-radius: 10px; padding: 8px 12px; background: rgba(255, 255, 255, .02); }
+.gn-cr-work[open] { border-color: var(--gn-line-gold); }
+.gn-cr-work summary { cursor: pointer; list-style: none; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: baseline; }
+.gn-cr-work summary::-webkit-details-marker { display: none; }
+.gn-cr-name { font: 600 17px var(--gn-serif); color: var(--gn-ivory); }
+.gn-cr-lic { font: 600 10px var(--gn-sans); letter-spacing: .18em; text-transform: uppercase; color: var(--gn-gold); justify-self: end; }
+.gn-cr-work summary small { grid-column: 1 / -1; color: var(--gn-ivory-faint); font-size: 12px; }
+.gn-cr-text { white-space: pre-wrap; font: 11.5px/1.45 var(--gn-mono); color: var(--gn-ivory-dim); max-height: 260px; overflow: auto; margin: 10px 0 2px; padding: 10px; background: rgba(0, 0, 0, .3); border-radius: 8px; user-select: text; }
+
+/* ── the tool card: a value the player has not set is the power's own ── */
+.gn-slider.gn-auto .gn-range-v { color: var(--gn-ivory-faint); font-style: italic; }
+.gn-slider.gn-auto .gn-range { opacity: .55; }
+.gn-tool-auto { padding: 3px 6px; min-width: 0; margin-left: 4px; font: 600 12px/1 var(--gn-sans); }
+
+/* ── the site's frame (888 × 500) and other short windows: everything fits without scrolling to find it ── */
+@media (max-height: 600px) {
+  .gn-win-menu { width: min(620px, calc(100vw - 24px)); }
+  .gn-win-menu .gn-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; }
+  .gn-menu-b { padding: 6px 10px; gap: 10px; grid-template-columns: 22px 1fr auto; }
+  .gn-menu-i { width: 18px; height: 18px; }
+  .gn-menu-l { font-size: 15.5px; }
+  /* (the site's bar sits in the frame's bottom-right corner: windows end above it) */
+  .gn-win-center, .gn-win-wide { max-height: calc(100vh - 58px); top: calc(50% - 21px); }
+  /* (a window on the left — the chronicle, The god — takes the height over the time panel, ending above the dock) */
+  .gn-win-left { top: 8px; height: calc((100vh - 72px) / var(--gn-ui-scale)); }
+  .gn-nw-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+  .gn-nw-card { padding: 8px 10px; grid-template-columns: 24px 1fr; gap: 9px; }
+  .gn-nw-ic { width: 22px; height: 22px; }
+  .gn-nw-name { font-size: 17px; }
+  .gn-nw-ct small { font-size: 11.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .gn-nw-foot { margin-top: 8px; padding: 8px 18px 10px; gap: 6px; }
+  .gn-win-head { padding: 7px 10px 6px 14px; gap: 9px; }
+  .gn-win-icon { width: 20px; height: 20px; }
+  .gn-win-title { font-size: 19px; }
+  .gn-win-sub { font-size: 12px; margin-top: 1px; }
+  .gn-win-body { padding: 9px 14px 11px; }
+  .gn-help-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 16px; }
+  .gn-help-r { font-size: 12px; }
+  .gn-title { padding-left: clamp(18px, 5vw, 60px); }
+  .gn-title-mark { font-size: clamp(34px, 9vh, 46px); }
+  .gn-title-sub { font-size: 13px; margin: 6px 0 12px; }
+  .gn-title-b { padding: 4px 12px 4px 8px; gap: 10px; }
+  .gn-title-i { width: 18px; height: 18px; }
+  .gn-title-l { font-size: 17px; }
+  .gn-title-main .gn-title-l { font-size: 19px; }
+  .gn-title-t small { font-size: 11px; margin-top: 1px; }
+  .gn-title-foot { bottom: 10px; }
+  .gn-tabs { margin-bottom: 8px; padding-bottom: 6px; }
+  .gn-tabs.gn-tabs-sticky { margin: -9px -14px 8px; padding: 8px 14px 6px; }
+}
+@media (max-height: 420px) {
+  .gn-title-sub, .gn-title-t small { display: none; }
+}
+
+
+/* ── The god (src/ui/living.ts): how the people hold you, wrath, prayers, prophets, signs, holy things, towns, rivals ── */
+.gn-win-god .gn-win-body { display: flex; flex-direction: column; gap: 14px; }
+.gn-god-sec { flex: none; }
+.gn-god-sec:empty { display: none; }
+.gn-god-sec.gn-flash { animation: gnFlashSec 1.2s ease; border-radius: 8px; }
+@keyframes gnFlashSec { 0% { box-shadow: 0 0 0 1px var(--gn-line-gold), 0 0 18px rgba(217, 184, 120, .3); } 100% { box-shadow: none; } }
+.gn-god-h { display: flex; align-items: baseline; gap: 8px; font: 600 12px var(--gn-sans); letter-spacing: .18em; text-transform: uppercase; color: var(--gn-gold); margin-bottom: 7px; border-bottom: 1px solid var(--gn-line); padding-bottom: 5px; }
+.gn-god-h small { font: 500 11.5px var(--gn-sans); letter-spacing: .04em; text-transform: none; color: var(--gn-ivory-faint); }
+.gn-god-hi { width: 15px; height: 15px; align-self: center; flex: none; }
+.gn-god-band { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.gn-god-band b { font: 600 26px/1 var(--gn-serif); letter-spacing: .06em; }
+.gn-god-wor { display: inline-flex; align-items: center; gap: 6px; font: 500 12.5px var(--gn-sans); color: var(--gn-gold-hi); }
+.gn-god-wor > span { width: 15px; height: 15px; }
+.gn-god-say { margin: 8px 0 6px; font: italic 500 15px/1.35 var(--gn-serif); color: var(--gn-ivory); }
+.gn-god-dim { color: var(--gn-ivory-faint); font-size: 12.5px; line-height: 1.45; margin: 4px 0; }
+.gn-god-list { display: flex; flex-direction: column; gap: 4px; }
+.gn-god-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; background: rgba(255, 255, 255, .025); border: 1px solid transparent; }
+.gn-god-row:hover { border-color: var(--gn-line); }
+.gn-god-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gn-god-t b { font: 500 13.5px var(--gn-sans); color: var(--gn-ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gn-god-t small { font-size: 12px; color: var(--gn-ivory-dim); }
+.gn-prayer-i { width: 18px; height: 18px; color: #ffe3a0; flex: none; filter: drop-shadow(0 0 4px rgba(255, 210, 140, .5)); }
+.gn-god-look { padding: 5px 6px; }
+.gn-god-look .gn-ico { width: 14px; height: 14px; }
+.gn-btn.gn-primary, .gn-primary { color: #15110a; background: linear-gradient(180deg, var(--gn-gold-hi), var(--gn-gold)); border-color: transparent; }
+.gn-btn.gn-primary:hover { filter: brightness(1.06); color: #15110a; }
+.gn-btn.gn-primary:disabled { filter: grayscale(.6) brightness(.7); cursor: default; }
+.gn-god-acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.gn-god-prophet { padding: 8px 10px; border-radius: 9px; background: rgba(255, 220, 150, .04); border: 1px solid rgba(217, 184, 120, .2); display: flex; flex-direction: column; gap: 5px; margin-bottom: 6px; }
+.gn-god-pl { font: 600 17px var(--gn-serif); color: var(--gn-gold-hi); }
+.gn-god-pl small { font: 500 12px var(--gn-sans); color: var(--gn-ivory-dim); }
+.gn-god-pl .gn-insp-link { font: inherit; }
+.gn-god-proph { font: italic 500 14px var(--gn-serif); color: var(--gn-ivory); }
+.gn-god-proph small { font: 500 11.5px var(--gn-sans); font-style: normal; color: var(--gn-ivory-dim); }
+.gn-wrath-row { display: grid; grid-template-columns: 112px 1fr; align-items: center; gap: 10px; }
+.gn-wrath-word { font: 600 19px var(--gn-serif); color: var(--gn-warn); letter-spacing: .04em; }
+.gn-wrath-means { font-size: 12.5px; color: var(--gn-ivory); margin: 3px 0 2px; }
+.gn-wrath-slider .gn-range { accent-color: var(--gn-warn); }
+.gn-god-towns { display: flex; flex-direction: column; gap: 3px; }
+.gn-god-trow { display: grid; grid-template-columns: minmax(80px, 1.3fr) repeat(4, 1fr); align-items: center; gap: 8px; }
+.gn-god-thead { font: 600 10.5px var(--gn-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--gn-ivory-faint); }
+.gn-god-trow .gn-insp-link { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gn-god-cell { height: 5px; border-radius: 3px; background: rgba(239, 231, 214, .1); overflow: hidden; display: block; }
+.gn-god-cell i { display: block; height: 100%; border-radius: 3px; }
+
+/* the foretell form */
+.gn-fore { display: flex; flex-direction: column; gap: 5px; padding: 7px 8px; border-radius: 8px; background: rgba(0, 0, 0, .18); border: 1px solid var(--gn-line); margin-top: 4px; }
+.gn-fore-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gn-fore-row .gn-select { flex: 1 1 110px; min-width: 0; }
+.gn-fore-says { font: italic 500 13.5px/1.35 var(--gn-serif); color: var(--gn-ivory-dim); }
+
+/* Send a sign */
+.gn-win-signs { width: min(700px, calc(100vw - 32px)); }
+.gn-sign-over { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font: 600 12px var(--gn-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--gn-gold); }
+.gn-sign-over .gn-select { flex: 1; max-width: 320px; text-transform: none; letter-spacing: 0; }
+.gn-sign-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.gn-sign { pointer-events: auto; cursor: pointer; display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 8px 10px; border-radius: 9px; color: var(--gn-ivory); background: rgba(255, 255, 255, .03); border: 1px solid var(--gn-line); font: 13px var(--gn-sans); }
+.gn-sign:hover, .gn-sign:focus-visible { border-color: var(--gn-line-gold); background: rgba(217, 184, 120, .08); }
+.gn-sign-any { border-style: dashed; }
+.gn-sign-i { width: 22px; height: 22px; color: var(--gn-gold-hi); flex: none; margin-top: 1px; }
+.gn-sign-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gn-sign-t b { font: 600 15px var(--gn-serif); color: var(--gn-gold-hi); letter-spacing: .02em; }
+.gn-sign-t small { font-size: 11.5px; line-height: 1.35; color: var(--gn-ivory-dim); }
+.gn-sign-t .gn-sign-read { color: var(--gn-ivory); font-style: italic; }
+.gn-sign-note { margin-top: 10px; font-size: 12.5px; color: var(--gn-ivory-faint); }
+
+/* the inspector: a settlement's prayers, a prophet's card, a holy place, more value tones */
+.gn-insp-prayer { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 220, 150, .06); border: 1px solid rgba(217, 184, 120, .25); }
+.gn-insp-prayer-t { flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.gn-insp-prayer-t small { color: var(--gn-ivory-dim); }
+.gn-insp-prayer-i { width: 16px; height: 16px; color: #ffe3a0; display: inline-block; }
+.gn-insp-prophet { background: rgba(255, 220, 150, .035); border-radius: 9px; padding: 6px 8px 8px; border: 1px solid rgba(217, 184, 120, .18); }
+.gn-insp-holy { display: flex; align-items: center; gap: 5px; color: #cfe7a0; }
+.gn-insp-holy > span { width: 15px; height: 15px; display: inline-block; }
+.gn-insp-fill.gn-cred { background: linear-gradient(90deg, #a07a3a, #ffe2a0); }
+.gn-insp-fill.gn-faithb { background: linear-gradient(90deg, #8a7448, var(--gn-gold-hi)); }
+.gn-insp-fill.gn-loyal { background: linear-gradient(90deg, #6b5aa8, #d6c6ff); }
+.gn-insp .gn-meters { margin: 2px 0 4px; }
+
+/* Invent a material / a plant */
+.gn-win-invent { width: min(600px, calc(100vw - 32px)); }
+.gn-inv-form { display: flex; flex-direction: column; gap: 9px; }
+.gn-inv-row { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 10px; }
+.gn-inv-row[hidden] { display: none; }
+.gn-inv-l { font: 600 11.5px var(--gn-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--gn-gold); }
+.gn-inv-c { min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.gn-inv-c .gn-seg { flex-wrap: wrap; }
+.gn-inv-name { width: 100%; font-size: 15px; }
+.gn-inv-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.gn-inv-chip.gn-on, .gn-inv-chip.gn-on:hover { color: #15110a; background: linear-gradient(180deg, var(--gn-gold-hi), var(--gn-gold)); border-color: transparent; }
+.gn-inv-foot { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--gn-line); }
+.gn-inv-says { flex: 1; font: italic 500 14.5px/1.35 var(--gn-serif); color: var(--gn-ivory); }
+.gn-inv-go { padding: 9px 16px; font-size: 13px; }
+
+/* the site's 888 × 500 frame: The god and the forms tighten */
+@media (max-height: 600px) {
+  .gn-toast { padding: 6px 10px 7px 8px; font-size: 12.5px; line-height: 1.32; }
+  .gn-t-title > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .gn-faith { width: 260px; padding: 6px 9px; gap: 4px; }
+  .gn-faith-m { gap: 1px 10px; }
+  .gn-win-god .gn-win-body { gap: 10px; }
+  .gn-god-band b { font-size: 21px; }
+  .gn-god-say { font-size: 14px; margin: 5px 0 4px; }
+  .gn-sign-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .gn-sign { padding: 5px 8px; }
+  .gn-sign-t small:not(.gn-sign-read) { display: none; }
+  .gn-inv-form { gap: 6px; }
+  .gn-inv-foot { margin-top: 8px; padding-top: 7px; }
+}

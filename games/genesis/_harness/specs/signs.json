@@ -1,0 +1,185 @@
+{
+ "_doc": "Prophets and signs (LIVING \u00a73.4, hook H4; render/signs/signs.ts, render/fx/rainbow.ts): a prophet in a crowd and from the god's height, a shrine at a spring, a sacred grove, a holy mountain, the sacred animal's mark, omens (a rainbow read as favour, red rain read as anger, a lightning strike made a sign, an eclipse, a comet). Lookdev world; F.fx.m.signs.hold pins the moments' age (a frame takes seconds here). Run: node _harness/shots.mjs _harness/specs/signs.json --port=5195",
+ "shots": [
+  {
+   "name": "sg-prophet-crowd",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false; F.fx.hand.hold = null;",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); const p = G.poi('town'); await G.step(1);",
+    "const r = await G.cmd({ k: 'lookdev.prophet', pos: p.pos, name: 'Hesh', credibility: 0.75, called: 4 }); await G.step(1);",
+    "await G.camera({ mode: 'surface', lat: p.lat - (24 / 3000) * 180 / Math.PI, lon: p.lon, alt: 4, yaw: 0, pitch: 9, fov: 60, hour: 16.5 }); await G.frames(3);",
+    "return { r: r.msg, id: r.created && r.created[0].id, st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "sg-prophet-god",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('town');",
+    "await G.cmd({ k: 'planet.cloudiness', value: 0.1 }); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 230, tilt: 58, yaw: 30, fov: 50, hour: 16.5 }); await G.frames(3);",
+    "return { st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "sg-spring-shrine",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = F.fx.vis.pv; const W = pv.fields.get('water'); const R = pv.params.radius;",
+    "const v = G.poi('village') || G.poi('town'); const c = v.pos; const ex = [c[2], 0, -c[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el; const nx = [c[1] * ex[2], c[2] * ex[0] - c[0] * ex[2], -c[1] * ex[0]];",
+    "const at = (e, n) => { const q = [c[0] + (ex[0] * e + nx[0] * n) / R, c[1] + (nx[1] * n) / R, c[2] + (ex[2] * e + nx[2] * n) / R]; const l = Math.hypot(q[0], q[1], q[2]); return [q[0] / l, q[1] / l, q[2] / l]; };",
+    "let best = null, bk = 1e9, ue = 0, un = 0; for (let a = 0; a < 72; a++) { const th = (a / 72) * Math.PI * 2, se = Math.sin(th), sn = Math.cos(th); let prev = 1; for (let r = 24; r < Math.min(bk, 900); r += 3) { const q = at(se * r, sn * r); const w = pv.grid.sample(W, q[0], q[1], q[2]); if (w > 0.6 && prev < 0.05) { bk = r; ue = se; un = sn; best = q; break; } if (w > 0.6) break; prev = w; } }",
+    "if (!best) return 'no shore near the village'; const k = bk; const be = ue * k, bn = un * k;",
+    "const spring = at(ue * (k + 3), un * (k + 3)), shrine = at(ue * (k - 16), un * (k - 16));",
+    "F.fx.m.signs.hold = 99; await G.cmd({ k: 'lookdev.sacred', pos: spring, kind: 'spring' }); await G.cmd({ k: 'lookdev.shrine', pos: shrine }); await G.step(2);",
+    "const cam = at(be * (k - 70) / k + bn / k * 20, bn * (k - 70) / k - be / k * 20); const la = Math.asin(cam[1]) * 180 / Math.PI, lo = Math.atan2(cam[0], cam[2]) * 180 / Math.PI;",
+    "const sa = Math.asin(spring[1]) * 180 / Math.PI, so = Math.atan2(spring[0], spring[2]) * 180 / Math.PI;",
+    "await G.camera({ mode: 'orbit', lat: sa, lon: so, dist: 42, tilt: 66, yaw: Math.atan2(-be, -bn) * 180 / Math.PI, fov: 55, hour: 17.2 }); await G.frames(3);",
+    "return { spring, k: Math.round(k), st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "sg-grove",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; const p = G.poi('forest'); await G.cmd({ k: 'lookdev.sacred', pos: p.pos, kind: 'grove' }); await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 210, tilt: 48, yaw: 0, fov: 55, hour: 17.4 }); await G.frames(3);",
+    "return { st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "sg-mountain",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('peak'); await G.cmd({ k: 'lookdev.sacred', pos: p.pos, kind: 'mountain' }); await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 950, tilt: 74, yaw: 200, fov: 50, hour: 18.2 }); await G.frames(3);",
+    "return { st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "sg-sacred-animal",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = F.fx.vis.pv; const h = G.poi('herd'); const M = pv.animals; let sp = -1, bd = 9;",
+    "for (let i = 0; i < M.count; i++) { const d = 1 - (M.pos[i * 3] * h.pos[0] + M.pos[i * 3 + 1] * h.pos[1] + M.pos[i * 3 + 2] * h.pos[2]); if (d < bd) { bd = d; sp = M.species[i]; } }",
+    "let sid = -1, sd = 9; for (const s of pv.settlements) { const d = 1 - (s.pos[0] * h.pos[0] + s.pos[1] * h.pos[1] + s.pos[2] * h.pos[2]); if (d < sd) { sd = d; sid = s.id; } }",
+    "const r = await G.cmd({ k: 'lookdev.sacred-animal', settlement: sid, species: sp, places: 1 }); await G.step(1);",
+    "let bi = -1, bb = 9; for (let i = 0; i < M.count; i++) { if (M.species[i] !== sp) continue; const d = 1 - (M.pos[i * 3] * h.pos[0] + M.pos[i * 3 + 1] * h.pos[1] + M.pos[i * 3 + 2] * h.pos[2]); if (d < bb) { bb = d; bi = i; } } const q = [M.pos[bi * 3], M.pos[bi * 3 + 1], M.pos[bi * 3 + 2]];",
+    "await G.camera({ mode: 'orbit', lat: Math.asin(q[1]) * 180 / Math.PI, lon: Math.atan2(q[0], q[2]) * 180 / Math.PI, dist: 18, tilt: 70, yaw: 30, fov: 55, hour: 17.0 }); await G.frames(3);",
+    "return { r: r.msg, sp, sid, km: Math.round(Math.acos(1 - sd) * 3000), st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "sg-rainbow-favour",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; const p = G.poi('town'); await G.cmd({ k: 'lookdev.weather.clear' }); await G.cmd({ k: 'planet.cloudiness', value: 0.05 });",
+    "await G.cmd({ k: 'lookdev.weather', kind: 'rainbow', pos: p.pos, radius: 1100, intensity: 1 }); await G.step(1);",
+    "await G.camera({ mode: 'surface', poi: 'town', alt: 24, pitch: 12, fov: 72, sunElevation: 9, faceSun: true, turn: 180 }); await G.frames(2);",
+    "F.fx.m.signs.hold = 2.2; await G.cmd({ k: 'lookdev.omen', pos: p.pos, kind: 'rainbow', reading: 'trusted' }); await G.step(1); F.advance(3); await G.frames(3);",
+    "return { bows: F.fx.m.rainbow.live, st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "sg-redrain-anger",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; const p = G.poi('town'); await G.cmd({ k: 'lookdev.weather.clear' });",
+    "await G.cmd({ k: 'lookdev.weather', kind: 'blood-rain', pos: p.pos, radius: 900, intensity: 1 }); await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 260, tilt: 62, yaw: 0, fov: 55, hour: 15 }); await G.frames(1);",
+    "F.fx.m.signs.hold = 2.6; await G.cmd({ k: 'lookdev.omen', pos: p.pos, kind: 'red-rain', reading: 'feared' }); await G.step(1); F.advance(2); await G.frames(3);",
+    "return { st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "sg-strike-sign",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; await G.cmd({ k: 'lookdev.weather.clear' }); const p = G.poi('forest-edge');",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 150, tilt: 72, yaw: p.heading, fov: 55, hour: 18.6 }); await G.frames(1);",
+    "F.fx.m.signs.hold = 1.4; await G.cmd({ k: 'lookdev.event', t: 'lightning', pos: p.pos, a: 1.2, data: { omen: 1 } }); await G.step(1); await G.frames(1); await G.frames(2);",
+    "return { st: F.fx.m.signs.stats, bolts: F.fx.m.bolts.live };"
+   ]
+  },
+  {
+   "name": "sg-called",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; await G.cmd({ k: 'lookdev.weather.clear' }); const p = G.poi('town');",
+    "await G.camera({ mode: 'surface', lat: p.lat - (40 / 3000) * 180 / Math.PI, lon: p.lon, alt: 6, yaw: 0, pitch: 14, fov: 60, hour: 15.5 }); await G.frames(1);",
+    "F.fx.m.signs.hold = 2.0; const r = await G.cmd({ k: 'lookdev.prophet', pos: p.pos, name: 'Ama', credibility: 0.45, event: true }); await G.step(1); await G.frames(1); await G.frames(2);",
+    "return { r: r.msg, st: F.fx.m.signs.stats };"
+   ]
+  }
+ ]
+}

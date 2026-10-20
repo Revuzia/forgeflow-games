@@ -3,19 +3,22 @@
 // high; hungry towns raid even their kin; neighbours whose fields and hunting grounds touch grow cold. war.ts calls
 // `historyDaily` once a day per planet (before the relations between polities are weighed).
 //
-//   grievance + tribute paid (a tithe of food and goods to the capital each season of 3 days: +0.0012)
+//   grievance + tribute paid (a tithe of food and goods to the capital each season of 3 days: +0.004)
 //             + a famine (under a day of food a head, or a death of hunger) the capital did not relieve while it had food to
 //               spare (judged after 2 days: +0.45 — the strongest of them)
 //             + a leaders' feud, or a rival faction leading the daughter against the capital's (+0.12, once a leader)
-//             + distance: more than a day's walk from the capital (+0.0002 a day for each day of walking beyond half a day)
+//             + distance: more than a day's walk from the capital (+0.002 a day for each day of walking beyond half a day,
+//               up to 0.004 at two and a half days)
 //             + a tongue drifting apart: a generation (20 game years) with little contact adds a drift to the daughter's
 //               speech (people/culture.ts langDistance), and every 0.18 of distance weighs a little each day
 //             + raided by kin (+0.3), border friction over touching fields and hunting grounds (+0.001 a day)
-//             + a daughter grown as large as its capital (0.9 of it and more: +0.0006 a day at 1.2 times its size, up to 0.0015)
-//             − kin visits (trade caravans and gifts: −0.0005 each), aid in hard times (−0.15), time (−0.3 % a day)
-//   secession grievance > 0.6: a daily chance rising to 0.02 at 0.9, carried by the independence party's strength
-//             (the hawks and the seekers of the new) — a bitter one (most of it raids or unrelieved famine, or grievance
-//             > 0.85 with a strong war party) is a revolt and war (war.ts secede / declareWar); otherwise a peaceful parting
+//             + a daughter grown as large as its capital (0.9 of it and more: +0.0015 a day at 1.2 times its size, up to
+//               0.0045 at twice it: the people of the larger town no longer bow to the smaller)
+//             − kin visits (trade caravans and gifts: −0.0005 each), aid in hard times (−0.15), time (−0.2 % a day)
+//   secession grievance > 0.6: a daily chance rising to 0.02 by 0.72, carried by the independence party's strength
+//             (0.5 .. 1: the hawks and the seekers of the new) — a bitter one (most of it raids or unrelieved famine, or grievance
+//             > 0.85 with a strong war party) is a revolt and war (war.ts secede / declareWar); otherwise a peaceful parting,
+//             sealed by a pact to keep the roads open between them unless a feud was at its root
 //   kin raids a town with less than a day of food raids a neighbour within two days' walk (a raid is a march of a day or
 //             two) that has 5 days a head and whom it holds below 0.3 — inside one polity too (missions.ts raid; war.ts)
 //   aid       the capital relieves a hungry daughter when it has food to spare, more readily under a generous leader
@@ -74,16 +77,16 @@ export interface HistState {
 
 /** the tunable weights (a probe may change them in its own process; the game never does) */
 export const POLITICS = {
-  /** daily fade of a grievance (a famine left unrelieved is remembered for a generation: half-life ~19 game years) */
-  decay: 0.003,
-  tributeDays: 3, tributeShare: 0.1, tribute: 0.0012,
+  /** daily fade of a grievance (a grievance is remembered for a generation and more: half-life ~29 game years) */
+  decay: 0.002,
+  tributeDays: 3, tributeShare: 0.1, tribute: 0.004,
   /** a hard time: under this many days of food a head; the capital has food to spare above this */
   leanDays: 1, spareDays: 4, judgeDays: 2, famine: 0.45, aid: 0.15, aidP: 0.2,
   feud: 0.12,
   /** a day's walk (game minutes of walking × BASE_WALK) and the grievance a day for each day beyond it */
-  dayWalkMin: 600, distance: 0.0002,
+  dayWalkMin: 600, distance: 0.002,
   /** a daughter grown as large as its capital (from 0.9 of it) no longer bows to it: a day, at 1.2 times its size */
-  outgrown: 0.0006,
+  outgrown: 0.0015,
   generationYears: 20, rareVisits: 4, drift: 0.05, tongue: 0.0015,
   kinRaid: 0.3, raider: 0.15, friction: 0.001, frictionOp: 0.01,
   /** how far a hungry town's raiders go (days of walking: a raid is a march of a day or two) */
@@ -216,7 +219,7 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
     }
   } else if (h.famine >= 0 && foodDays(x, d) >= P * G.leanDays * 1.5 && x.tick - h.famine >= G.judgeDays * x.day) h.famine = -1;
   // a daughter grown as large as its mother
-  if (P >= Pc * 0.9) addG(h, 'outgrown', G.outgrown * Math.min(2.5, (P / Pc - 0.8) / 0.4));
+  if (P >= Pc * 0.9) addG(h, 'outgrown', G.outgrown * Math.min(3, (P / Pc - 0.8) / 0.4));
   // the leaders: a feud between them, or a rival party leading the daughter (weighed once for each pair of leaders)
   const pair = `${d.leader}:${cap.leader}`;
   if (d.leader && cap.leader && pair !== h.feud) {
@@ -231,7 +234,7 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   }
   // distance: the farther the capital, the less it is their own
   const days = walkDays(x, d, cap);
-  if (days > 1) addG(h, 'distance', G.distance * Math.min(3, days - 1 + 0.5));
+  if (days > 1) addG(h, 'distance', G.distance * Math.min(2, days - 0.5));
   // a tongue drifting apart: a generation with little contact
   if (x.tick - h.genAt >= G.generationYears * x.year) {
     if (h.visits < G.rareVisits) {
@@ -336,8 +339,8 @@ export function missionArrived(x: PCtx, m: Mission, from: Settlement, to: Settle
 function secessionCheck(x: PCtx, d: Settlement, cap: Settlement, h: HistState): void {
   const G = POLITICS;
   if (h.grievance <= G.threshold) return;
-  const strength = Math.max(0.2, Math.min(1, 0.45 + factionShare(d, 'hawks') + 0.5 * factionShare(d, 'seekers') + (h.grievance - G.threshold)));
-  const p = G.maxP * Math.min(1, (h.grievance - G.threshold) / 0.3 + 0.1) * strength;
+  const strength = Math.max(0.5, Math.min(1, 0.5 + factionShare(d, 'hawks') + 0.5 * factionShare(d, 'seekers') + (h.grievance - G.threshold)));
+  const p = G.maxP * Math.min(1, (h.grievance - G.threshold) / 0.15 + 0.2) * strength;
   if (hashFloat(d.id, x.tick, worldSalt(x, 0x5ece)) >= p) return;
   const pl = x.ps.polity(d.polity);
   if (!pl) return;
@@ -354,6 +357,12 @@ function secessionCheck(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   if (r) {
     const k = r.a === d.polity ? 0 : 1;
     r.grievance[k] = Math.min(3, r.grievance[k] + h.grievance * 0.5);
+    // kin who part in peace (not over a feud) seal it: the roads stay open between them (a pact, war.ts treaties)
+    if (!bitter && top !== 'feud' && !r.treaties.includes('trade-pact')) {
+      r.treaties.push('trade-pact');
+      tell(x.u, x.p, 'treaty.parting', vars(x, d, -1, { other: cap.name }), d, [settlementRef(x, d), settlementRef(x, cap)], 1);
+      x.u.emit({ t: 'treaty', planet: x.p.id, pos: [d.pos[0], d.pos[1], d.pos[2]], ref: settlementRef(x, d), data: { a: r.a, b: r.b, kind: 'parting' } });
+    }
   }
   h.grievance = 0;
   h.why = {};

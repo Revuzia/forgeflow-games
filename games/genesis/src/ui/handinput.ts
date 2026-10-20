@@ -1,26 +1,26 @@
-// GENESIS — the god hand under the mouse (CONTRACT.md §11.4, §1.4 "a visible hand that grabs, throws, slaps,
-// strokes"). No tool armed, the left button IS the hand:
-//   press on someone and drag (or hold still ~0.4 s)     → grab: they come with the hand; let go with a flick to
-//                                                          THROW (velocity from the mouse's motion over the ground),
+// GENESIS — the Touch under the mouse (LIVING.md §3.6: the god's presence, drawn by the render lane as light and
+// weather; was CONTRACT.md §11.4's hand). No tool armed, the left button IS the Touch:
+//   press on someone and drag (or hold still ~0.4 s)     → LIFT: they rise with the Touch; let go with a flick to
+//                                                          HURL them (velocity from the mouse's motion over the ground),
 //                                                          or slowly to set them down there
-//   press on someone and rub back and forth             → STROKE (comfort, heal, reward the creature)
-//   slap modifier (Alt, rebindable) + click on someone  → SLAP (punish); on the held thing while it is held
+//   press on someone and rub back and forth             → SOOTHE (comfort them, heal a little)
+//   rebuke modifier (Alt, rebindable) + click on someone → REBUKE (a sharp blow: hurts a person, cracks a wall)
 //   press on bare ground and drag                        → the camera (grab the land and turn it)
 //   long press on bare ground                            → the radial menu
 //   quick click                                          → select / inspect (the App)
-// Keys: E takes what is under the cursor / sets the held thing down; ⇧E AIMS: the hand stops where it is, an arc runs
-// from it to the cursor, and letting go of E throws along it (a click throws at the click, Esc puts the aim away);
-// B slaps, N strokes.
+// Keys: E lifts what is under the cursor / sets the held thing down; ⇧E AIMS: the Touch stops where it is, an arc runs
+// from it to the cursor, and letting go of E hurls along it (a click hurls at the click, Esc puts the aim away);
+// B rebukes, N soothes.
 //
 // Timing is read from the events themselves (PointerEvent.timeStamp, and the coalesced samples between frames), never
-// from when a handler happened to run: on a machine that hitches, a flick still throws, a rub still strokes, and a
+// from when a handler happened to run: on a machine that hitches, a flick still hurls, a rub still soothes, and a
 // slow click on a person still opens the inspector.
 //
-// Until the hand has a body in the world (the render lane's hand.ts), the interface shows it: the cursor takes the
-// hand's pose (open over someone it can take, closed while carrying, a pointing hand with a power armed, a crosshair
-// while aiming), a badge at the pointer names what it carries and how high ("Kek ↑ 9 m"), and the hint over someone
-// names them ("Kek, child — drag: grab …"). The hand's place in the world follows the cursor (hand.move: often while
-// carrying, sparingly otherwise — every hand move is a logged command).
+// The interface shows the Touch at the pointer: the cursor is light (a ring over someone it can lift, a held orb while
+// carrying, a red-gold strike while rebuking, a crosshair with a power armed or a hurl aimed), a badge at the pointer
+// names what it carries and how high ("Kek ↑ 9 m"), and the hint over someone names them ("Kek, child — drag: lift …").
+// Its place in the world follows the cursor (hand.move: often while carrying, sparingly otherwise — every move is a
+// logged command). The command kinds keep their ids (hand.*): only what the player reads changed.
 
 import type { EntityRef, UnitVec } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
@@ -34,7 +34,7 @@ interface Sample { t: number; dir: UnitVec; planet: number }
 /** one pointer sample: position and its event time */
 export interface PtrSample { x: number; y: number; t: number }
 
-const GRAB_KINDS = new Set(['agent', 'animal', 'building', 'creature', 'item']);
+const GRAB_KINDS = new Set(['agent', 'animal', 'building', 'item']);
 /** hold still this long on someone to pick them up (a slower click than this is a click) */
 const HOLD_MS = 400;
 /** a release this soon after the last motion is a flick */
@@ -296,7 +296,7 @@ export class HandInput {
 
   /** ⇧E pressed: hold the hand where it is and aim (the throw happens when E is let go, or at a click) */
   beginAim(): boolean {
-    if (!this.held()) { this.host.toast({ text: 'The hand holds nothing to throw (E takes what is under it).', kind: 'info' }); return false; }
+    if (!this.held()) { this.host.toast({ text: `The Touch holds nothing to hurl (${this.host.keybinds.hint('hand.take') || 'E'} lifts what is under it).`, kind: 'info' }); return false; }
     this.aiming = true;
     return true;
   }
@@ -388,10 +388,10 @@ export class HandInput {
     this.hoverRef = ent && GRAB_KINDS.has(ent.kind) ? ent : null;
     if (!this.host.prefs.value.ui.hints) { this.hint.hidden = true; return; }
     let text = '';
-    if (held) text = `click: set down · flick: throw · ${this.throwKey()}: aim a throw · ${this.modName()}+click: slap`;
+    if (held) text = `click: set down · flick: hurl · ${this.throwKey()}: aim a hurl · ${this.modName()}+click: rebuke`;
     else if (this.hoverRef) {
       const who = this.catalog.label(this.hoverRef);
-      text = `${who ? `${who} — ` : ''}drag: grab · rub: stroke · ${this.modName()}+click: slap · click: inspect`;
+      text = `${who ? `${who} — ` : ''}drag: lift · rub: soothe · ${this.modName()}+click: rebuke · click: inspect`;
     }
     if (!text) { this.hint.hidden = true; return; }
     this.hint.hidden = false;

@@ -1,7 +1,8 @@
 // GENESIS — tiny DOM helpers shared by the UI panels (CONTRACT.md §16: plain DOM + CSS, no framework).
 //
 // `h()` builds an element with classes, attributes, text and children in one call; `fmt*` turn sim numbers into the
-// short readable strings the panels show; `download()` hands the player a file (chronicle exports, saves).
+// short readable strings the panels show; `download()` hands the player a file (chronicle exports, saves, pictures),
+// with a way round the portal frame's blocked downloads.
 
 export type Child = Node | string | number | null | undefined | false;
 
@@ -90,9 +91,23 @@ export function fmtLatLon(u: ArrayLike<number>): string {
   return `${Math.abs(lat).toFixed(0)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(0)}°${lon >= 0 ? 'E' : 'W'}`;
 }
 
-/** hand the player a file */
+/** is the page inside another site's frame (the ForgeFlow portal): downloads may be blocked there (its sandbox) */
+export function isEmbedded(): boolean {
+  try { return window.self !== window.top; } catch { return true; }
+}
+
+/** what to do when a file may not have reached the player (the site's frame blocks downloads): set by the shell */
+export type DownloadFallback = (f: { name: string; blob: Blob; type: string }) => void;
+let fallback: DownloadFallback | null = null;
+export function setDownloadFallback(fn: DownloadFallback | null): void { fallback = fn; }
+
+/**
+ * hand the player a file. Inside the site's frame (sandboxed without downloads) the browser drops it silently, so the
+ * download is still tried — it works where the frame allows it — and the fallback offers the file in a new tab
+ * (src/ui/embed.ts)
+ */
 export function download(name: string, data: BlobPart, type = 'text/plain'): void {
-  const blob = new Blob([data], { type });
+  const blob = data instanceof Blob ? data : new Blob([data], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -101,6 +116,7 @@ export function download(name: string, data: BlobPart, type = 'text/plain'): voi
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+  if (fallback && isEmbedded()) fallback({ name, blob, type: blob.type || type });
 }
 
 export function escapeHtml(s: string): string {

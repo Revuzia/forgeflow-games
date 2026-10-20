@@ -196,9 +196,24 @@ export function omensOfCommand(u: Universe, p: Planet, cmd: Command, res: Comman
       if (st && sacredAnimalOf(st) && sacredAnimalOf(st) === String(a.species)) sign('sacred-animal', pos, 600);
       break;
     }
+    case 'god.omen': {
+      // the Signs power reads its omen itself (makeOmen → readOmen): here it becomes the god's act of a sign, so a
+      // prophecy of a sign is fulfilled by it and a risen prophet near it is confirmed (integration, 2026-10-14: before,
+      // only omens made through other powers counted)
+      const R = u.god.rel;
+      const o = R?.omens[R.omens.length - 1];
+      if (o && o.tick === u.tick && o.planet === p.id && o.god === g) {
+        const k = o.kind as OmenKind;
+        out.push({ kind: 'sign', planet: p.id, pos: [o.pos[0], o.pos[1], o.pos[2]], radius: OMENS[k]?.sky ? Infinity : OMEN_REACH[k] ?? 600, god: g, settlement: -1 });
+      }
+      break;
+    }
   }
   return out;
 }
+
+/** how far the people see an omen the Signs power makes on the ground (makeOmen's reading radius), in m */
+const OMEN_REACH: Partial<Record<OmenKind, number>> = { flood: 300, rainbow: 900, 'red-rain': 700, lightning: 200, 'sacred-animal': 600, spring: 400 };
 
 /** hourly: omens nature makes — an eclipse or a comet nature sent, a rainbow after the rain with the sun low */
 export function naturalOmens(u: Universe, p: Planet): void {

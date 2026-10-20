@@ -5,9 +5,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fuzzy, fuzzyAny, highlight } from '../src/ui/fuzzy.ts';
-import { Unistroke, SHAPES, type Pt } from '../src/ui/unistroke.ts';
+import { Unistroke, SIGILS, SIGIL_WORDS, type Pt } from '../src/ui/unistroke.ts';
 import { Keybinds, ACTIONS, comboOf, comboLabel } from '../src/ui/keybinds.ts';
-import { PowerBook, toolMode, buildCommand, defaultValue, missingRequired, entityKey, isSelector, CATEGORIES, type Power } from '../src/ui/powers.ts';
+import { PowerBook, toolMode, buildCommand, castValues, missingRequired, entityKey, isSelector, CATEGORIES, categoryLabel, worldPrefill, type Power, type ParamSpec } from '../src/ui/powers.ts';
 import { placeWords, humanize, tollOf, stripYear, fmtDuration, unitOf, latLonText, areaText } from '../src/ui/words.ts';
 import { hasIcon, categoryIcon } from '../src/ui/icons.ts';
 import { town } from './helpers/god.ts';
@@ -27,13 +27,13 @@ test('fuzzy: exact names first, words in any order, synonyms count, misses are n
   assert.equal(highlight('Rain', [0, 1]), '<mark>Ra</mark>in');
 });
 
-test('gestures: every shape is recognised drawn larger, smaller, tilted, backwards and unevenly', () => {
+test('sigils: every sigil is recognised drawn larger, smaller, tilted, backwards and unevenly', () => {
   const u = new Unistroke();
   let seed = 11;
   const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   let ok = 0, n = 0;
   const misses: string[] = [];
-  for (const [name, pts] of Object.entries(SHAPES)) {
+  for (const [name, pts] of Object.entries(SIGILS)) {
     for (let t = 0; t < 12; t++) {
       const s = 0.4 + rnd() * 1.8, a = (rnd() - 0.5) * 0.3, sy = s * (0.8 + rnd() * 0.4);
       let p: Pt[] = pts.map(([x, y]) => [x * s * Math.cos(a) - y * sy * Math.sin(a) + 500 + (rnd() - 0.5) * 6, x * s * Math.sin(a) + y * sy * Math.cos(a) + 400 + (rnd() - 0.5) * 6] as Pt);
@@ -45,17 +45,20 @@ test('gestures: every shape is recognised drawn larger, smaller, tilted, backwar
     }
   }
   assert.ok(ok / n >= 0.95, `recognised ${ok}/${n}: ${misses.join(', ')}`);
-  // a V and a caret are the same stroke turned over: orientation matters
-  assert.equal(u.recognize(SHAPES.v)?.name, 'v');
-  assert.equal(u.recognize(SHAPES.caret)?.name, 'caret');
+  // a loop at either end of a level line, the two diagonals: orientation matters
+  assert.equal(u.recognize(SIGILS.ripple)?.name, 'ripple');
+  assert.equal(u.recognize(SIGILS.log)?.name, 'log');
+  assert.equal(u.recognize(SIGILS.trail)?.name, 'trail');
+  assert.equal(u.recognize(SIGILS.fall)?.name, 'fall');
   // a scribble too short to mean anything
   assert.equal(u.recognize([[0, 0], [1, 1], [2, 2]]), null);
 });
 
-test('gestures: every gesture a power uses has a shape', () => {
+test('sigils: every sigil a power uses has a template and words; none of the old drawn shapes is left', () => {
   const book = new PowerBook();
-  for (const g of book.gestures().keys()) assert.ok(SHAPES[g], `no template for gesture '${g}'`);
-  assert.ok(book.gestures().size >= 14);
+  for (const g of book.sigils().keys()) { assert.ok(SIGILS[g], `no template for sigil '${g}'`); assert.ok(SIGIL_WORDS[g], `no words for sigil '${g}'`); }
+  assert.ok(book.sigils().size >= 14, `${book.sigils().size} sigils`);
+  for (const old of ['circle', 'spiral', 'zigzag', 'double-zigzag', 'triangle', 'v', 'caret', 'square', 'star', 'heart', 'wave', 'tilde', 'line', 'arrow']) assert.ok(!SIGILS[old], `the old shape '${old}' is still a template`);
 });
 
 test('keybinds: the defaults have no conflicts; a rebinding that collides is found; bindings persist', () => {
@@ -92,26 +95,28 @@ test('powers: every power has a tool mode, an icon and a category the radial sho
   for (const p of book.list) {
     assert.ok(toolMode(p), p.id);
     assert.ok(hasIcon(p.icon), `power '${p.id}' has no icon '${p.icon}'`);
-    // (LIVING §3.5: 'Signs' replaces the creature's category — on the radial once the UI team adds it: hook H4, the
-    // todo test below)
-    if (p.category === 'Signs') continue;
     assert.ok(CATEGORIES.includes(p.category), `power '${p.id}': category '${p.category}' is not on the radial`);
   }
   for (const c of CATEGORIES) assert.ok(categoryIcon(c).includes('<path') || categoryIcon(c).includes('<circle'), c);
 });
 
-test('powers: the Signs category (prophets, omens, sacred places, prayers) is on the radial in place of Creature', { todo: 'hook H4 (LIVING.md §7): src/ui/powers.ts CATEGORIES — the UI team' }, () => {
+test('powers: the Signs category (prophets, omens, sacred places, prayers) is on the radial in place of Creature; the Hand reads "Touch"', () => {
   const book = new PowerBook();
   assert.ok(book.list.some((p) => p.category === 'Signs'), 'the sim sends Signs powers');
   assert.ok(CATEGORIES.includes('Signs'), "the radial shows 'Signs'");
   assert.ok(!CATEGORIES.includes('Creature'), "and no 'Creature'");
+  assert.ok(!book.list.some((p) => /^creature\./.test(p.command)), 'no creature power');
+  assert.equal(categoryLabel('Hand'), 'Touch');
+  // the seed-a-vein brush and the invent dialogs are offered (hook H12)
+  for (const k of ['terrain.seed-ore', 'content.material', 'content.plant']) assert.ok(book.list.some((p) => p.command === k), k);
 });
 
-/** a value for a required parameter the card would ask the player to type */
-function fillRequired(k: string, type: string, pos: number[]): unknown {
+/** a value for a required parameter the card would ask the player to give (a list: the player picks one of it) */
+function fillRequired(k: string, spec: ParamSpec, pos: number[]): unknown {
   const words: Record<string, unknown> = { name: 'Test', path: 'planet.gravity', to: 'Bo', text: 'rain', substance: 'chocolate', from: 'east', species: 'wolf', value: 3, cmd: { k: 'water.rain', pos }, items: [{ item: 'bread', qty: 5 }], tags: ['food'] };
   if (k in words) return words[k];
-  return type === 'number' || type === 'int' ? 1 : type === 'boolean' ? true : 'x';
+  if (spec.type === 'enum' && Array.isArray(spec.values) && spec.values.length) return spec.values[0];
+  return spec.type === 'number' || spec.type === 'int' ? 1 : spec.type === 'boolean' ? true : 'x';
 }
 
 test('powers: the command the tool card sends for every power is accepted by the sim', () => {
@@ -132,13 +137,10 @@ test('powers: the command the tool card sends for every power is accepted by the
   book.setCommands(sim.query('commands'));
   const failures: string[] = [];
   for (const p of book.list) {
-    const values: Record<string, unknown> = {};
-    for (const [k, s] of Object.entries(p.schema)) {
-      if (s.type === 'pos' || s.type === 'entity' || s.type === 'vec3') continue;
-      const v = p.params[k] !== undefined ? p.params[k] : defaultValue(k, s);
-      if (v !== undefined) values[k] = v;
-    }
-    for (const k of missingRequired(p, values)) values[k] = fillRequired(k, p.schema[k].type, pos);
+    // what the card sends for a power nobody has touched: its own params and the data's defaults, nothing made up
+    const world = { dayHours: 24, yearDays: 12, axialTilt: 0.4, gravity: 9.8, magnetism: 1, luminosity: 1, starKind: 'G' };
+    const values: Record<string, unknown> = castValues(p as Power, {}, (k) => worldPrefill(p as Power, k, world));
+    for (const k of missingRequired(p, values)) values[k] = fillRequired(k, p.schema[k], pos);
     // what the pointer would pick: a place, a second place, and the things the power takes
     const refs: Record<string, unknown> = {};
     for (const [k, s] of Object.entries(p.schema)) {

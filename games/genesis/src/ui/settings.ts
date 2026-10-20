@@ -9,7 +9,7 @@ import type { UiHost } from './host.ts';
 import type { Prefs } from './prefs.ts';
 import { ACTIONS, comboLabel, comboOf, splitCombo, type ActionDef } from './keybinds.ts';
 import { Panel, field, slider, toggle, select, segmented } from './panel.ts';
-import { h, clear, fmtNum } from './dom.ts';
+import { h, clear, fmtNum, isEmbedded } from './dom.ts';
 import { icon } from './icons.ts';
 
 type Tab = 'graphics' | 'audio' | 'interface' | 'controls' | 'game';
@@ -91,7 +91,7 @@ export class Settings {
         this.content.append(
           field('Master', slider({ min: 0, max: 1, step: 0.01, value: a.master, fmt: pctF, on: set('audio.master') })),
           field('Music', slider({ min: 0, max: 1, step: 0.01, value: a.music, fmt: pctF, on: set('audio.music') }), 'the peoples\' songs, the score of orbit'),
-          field('Effects', slider({ min: 0, max: 1, step: 0.01, value: a.sfx, fmt: pctF, on: set('audio.sfx') }), 'the hand, miracles, disasters'),
+          field('Effects', slider({ min: 0, max: 1, step: 0.01, value: a.sfx, fmt: pctF, on: set('audio.sfx') }), 'the Touch, miracles, disasters'),
           field('Ambience', slider({ min: 0, max: 1, step: 0.01, value: a.ambience, fmt: pctF, on: set('audio.ambience') }), 'wind, surf, birds, rain, crowds'),
           field('Mute', toggle(a.muted, set('audio.muted'), 'Mute')));
         break;
@@ -108,7 +108,7 @@ export class Settings {
             { value: 'tritanopia', label: 'Tritanopia (blue–yellow)' }, { value: 'monochrome', label: 'Monochrome' },
           ], u.palette, set('ui.palette')), 'map overlays, toasts, inspector bars'),
           field('Reduce motion', toggle(u.reduceMotion, set('ui.reduceMotion'), 'Reduce motion')),
-          field('Hints', toggle(u.hints, set('ui.hints'), 'Hints'), 'the hand\'s hints and the controls line'),
+          field('Hints', toggle(u.hints, set('ui.hints'), 'Hints'), 'the Touch\'s hints and the controls line'),
           field('Toasts stay', slider({ min: 3, max: 30, step: 1, value: u.toastSeconds, fmt: (x) => `${x} s`, on: set('ui.toastSeconds') })),
           field('Chronicle ticker', toggle(u.ticker, set('ui.ticker'), 'Chronicle ticker')),
           field('Settlement names', toggle(u.labels, set('ui.labels'), 'Settlement names')),
@@ -123,6 +123,8 @@ export class Settings {
           field('Natural disasters', toggle(true, (on) => void this.host.cmd({ k: 'set', path: 'disasters.natural', value: on ? 1 : 0 }), 'Natural disasters'), 'the world sends its own (a law: see the laws of the world)'),
           field('Autosave', select([{ value: '0', label: 'Off' }, { value: '5', label: 'Every 5 minutes' }, { value: '10', label: 'Every 10 minutes' }, { value: '20', label: 'Every 20 minutes' }, { value: '30', label: 'Every 30 minutes' }],
             String(v.game.autosaveMinutes), (x) => P.set('game.autosaveMinutes', Number(x)))),
+          field('Pause when hidden', select([{ value: 'auto', label: isEmbedded() ? 'Auto (on: playing inside the site)' : 'Auto (off: on its own page)' }, { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }],
+            v.game.pauseHidden, (x) => P.set('game.pauseHidden', x)), 'time stands still while you look at another tab, and runs again when you come back'),
           h('div', { class: 'gn-set-note', text: 'Every other law of the world — gravity, the length of the day, the air, the star, how fast fire spreads — is in the laws of the world (U, or the inspector on a world).' }),
           h('button', { class: 'gn-btn gn-set-reset', text: 'Open the laws of this world', on: { click: () => { this.close(); this.host.action('ui.laws'); } } }));
         void this.host.query('laws').then((d) => {

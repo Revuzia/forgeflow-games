@@ -13,7 +13,7 @@
 //   query(q, args)             sim.query (inspector data: 'agent', 'settlement', 'building', 'herds', 'cell', ...)
 //   poi(name)                  a point of interest on the primary world: { lat, lon, heading, cell, pos, planet }
 //                              ('homestead' = a good place to set a people down; 'newest'; 'settlement:<id>'; ...)
-//   select(ref | null)         select a thing ({ kind: 'agent'|'building'|'settlement'|'animal'|'creature'|'disaster'|
+//   select(ref | null)         select a thing ({ kind: 'agent'|'building'|'settlement'|'animal'|'disaster'|
 //                              'weather'|'ship'|'cell'|'planet'|'species', id }) → inspector
 //   follow(ref | null)         keep the camera on a thing
 //   pickAt(x, y)               what is drawn under a screen point (CSS px): { kind, id, planet, dist } or null
@@ -22,7 +22,10 @@
 //   toastLife(ms)              how long toasts stay (a software-rendered capture takes seconds per frame)
 //   ui_                        the interface (src/ui/shell.ts): open(panel, arg) / closeAll() / action(id) / arm(power,
 //                              values) / cast(power, values, [x, y]) / pointer(x, y) / key(code, mods) / gesture(name |
-//                              points, [x, y], size) / overlay(mode) / state() / pref(path, value)
+//                              points, [x, y], size) / overlay(mode) / state() / pref(path, value) — panels include
+//                              'title', 'credits', 'god' (arg: a section), 'signs' (arg: settlement id), 'invent' (arg:
+//                              'material' | 'plant'); title(id) presses a door of the title; invent(fields) fills the
+//                              open invent form as a player would
 //   cam_                       the camera's modes: mode() / follow(ref) / dolly(ref) / walk(ref | null, leave) /
 //                              photo(on) / lens() / setLens(p) / capture() → the picture's { name, w, h, bytes } /
 //                              focusAt(x, y)
@@ -51,6 +54,10 @@ export interface UiSurface {
   overlay(mode: string | null): void;
   state(): Record<string, unknown>;
   palette(): { kind: string; title: string; sub: string }[];
+  /** press a door of the title ('continue', 'new', 'load', 'settings', 'controls', 'credits') */
+  title(id: string): boolean;
+  /** fill the open invent form as a player would */
+  invent(o: { name?: string; kind?: string; traits?: string[]; uses?: string[]; type?: string; like?: string; gives?: 'food' | 'fibre' }): void;
   /** set a preference ('ui.scale', 'ui.palette', 'audio.master', 'gfx.bloom' …) as the settings panel does */
   pref(path: string, value: unknown): void;
 }
@@ -130,6 +137,11 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
         case 'cammenu': s.cam.openMenu(); break;
         case 'overlay': s.overlays.set(typeof arg === 'string' ? arg : 'temperature'); break;
         case 'gesture': s.gestures.begin(window.innerWidth / 2, window.innerHeight / 2); break;
+        case 'title': s.title.open({ fromGame: arg === 'game' }); break;
+        case 'credits': s.openWindow('credits'); break;
+        case 'god': s.god.open(typeof arg === 'string' ? arg as never : undefined); break;
+        case 'signs': s.signs.open(typeof arg === 'number' ? { planet: need().primary(), id: arg } : null); break;
+        case 'invent': s.invent.open(arg === 'plant' ? 'plant' : 'material'); break;
         default: throw new Error(`unknown panel '${panel}'`);
       }
       await need().waitFrames(1);
@@ -137,7 +149,7 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
     closeAll() {
       const s = need().ui;
       s.palette.close(); s.radial.close(); s.freeform.close(); s.gestures.cancel();
-      for (const p of [s.chronicle, s.settings, s.saves, s.help, s.menu, s.newWorld, s.mods]) p.close();
+      for (const p of [s.chronicle, s.settings, s.saves, s.help, s.menu, s.newWorld, s.mods, s.credits, s.god, s.signs, s.invent]) p.close();
       s.cam.closeMenu();
       s.tools.disarm();
     },
@@ -179,6 +191,8 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
     overlay: (mode) => need().ui.overlays.set(mode),
     state: () => need().ui.state(),
     palette: () => need().ui.palette.rowsText(),
+    title: (id) => need().ui.title.press(id),
+    invent: (o) => need().ui.invent.fill(o),
     pref: (path, value) => need().prefs.set(path, value),
   };
   const surface: GenesisTestSurface = {

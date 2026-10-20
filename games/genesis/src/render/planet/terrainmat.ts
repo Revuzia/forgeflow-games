@@ -69,6 +69,7 @@ varying vec4 vF2;  // grass shrub tree crop
 varying vec4 vF3;  // temperature moisture road fire
 varying vec4 vF4;  // surface (curved) waterLevel waterDepth groundHeight
 varying vec4 vF5;  // treeSpecies cropSpecies light biome
+varying vec4 vOre; // ore outcrops: the ore's colour × richness (rgb), richness (a) — fieldtex.ts O
 varying float vCurv; // concavity (m), field N.w
 varying vec3 vFireWind; // the surface wind (m/s, body frame) where the fire field is non-zero (fire fronts run downwind)
 uniform mat3 uBodyToView;
@@ -84,6 +85,7 @@ uniform vec3 uRockB;
 uniform vec3 uSandCol;
 uniform vec3 uRegolith;
 uniform vec3 uNightAmbient;
+uniform float uNightRim;       // 0 near the ground .. 1 from orbit: the night floor's rim on the limb (renderer.ts)
 uniform vec4 uAurora;          // (additive, world-events lane) the auroral ovals' light: magnetic axis (xyz), strength (w)
 uniform float uCityLights;
 uniform samplerCube uCityTex;  // night lights from afar (citylights.ts), bound by the renderer
@@ -133,6 +135,53 @@ vec3 bumpNormal(vec3 surfPos, vec3 n, float h) {
   vec3 b = abs(det) * n - g;
   float bl = length(b);
   return (bl > 1e-20 && !isnan(bl)) ? b / bl : n;
+}
+
+
+// jointed rock (0.6–8 m): blocks split along joints. Each cell of a jittered lattice is one FLAT face with its own
+// tilt and level, and the faces meet in an open joint — at the joint every face drops to the same depth, so the
+// height is continuous and the screen-derivative normal shows planar facets with crisp, dark seams between them (the
+// earlier soft noise relief read as grey fur, not stone). x = albedo factor (per-block tone, dark joints), y = height
+// (m), z = joint openness 0..1 (for AO). scale: blocks per metre.
+vec3 rk_blocks(vec3 P, vec3 up, float scale, float fw, float relief) {
+  // (the lattice is domain-warped: irregular, non-convex blocks of varied size, not a crazy paving of even cells)
+  vec3 p = P * scale;
+  p += vec3(snoise(p * 0.45 + 3.1), snoise(p * 0.45 + 7.7), snoise(p * 0.45 + 12.9)) * 0.42;
+  vec3 b = floor(p - 0.5);
+  float f1 = 9.0, f2 = 9.0;
+  vec3 fp = b, fp2 = b; float id = 0.0;
+  for (int k = 0; k < 8; k++) {
+    vec3 c = b + vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
+    vec3 q = c + 0.15 + 0.7 * gn_hash33(c + 0.71);
+    vec3 r = q - p;
+    float d = dot(r, r);
+    if (d < f1) { f2 = f1; fp2 = fp; f1 = d; fp = q; id = gn_hash13(c + 0.29); }
+    else if (d < f2) { f2 = d; fp2 = q; }
+  }
+  f1 = sqrt(f1); f2 = sqrt(f2);
+  float gap = f2 - f1;
+  // each joint has its own openness: many are tight hairlines, some gape (a seam drawn round every block read as
+  // grout); the width is at least ~1.5 pixels so a seam never breaks into dashes, and it fades out as it would thin
+  float jh = gn_hash13(floor((fp + fp2) * 3.7));
+  float jOpen = smoothstep(0.25, 0.85, jh);
+  float jw = (0.025 + 0.06 * jOpen) + fw * scale * 1.5;
+  float open = (1.0 - smoothstep(0.0, jw, gap)) * mix(0.25, 1.0, jOpen) * (1.0 - smoothstep(0.08, 0.3, fw * scale * 1.5));
+  // the face: a plane through the feature point with a random tilt (tangent), plus a per-block level; at an open
+  // joint every face drops to the same depth, so the height stays continuous
+  vec3 tilt = gn_hash33(fp * 1.37 + 3.1) - 0.5;
+  tilt -= up * dot(tilt, up);
+  vec3 r = p - fp;
+  float face = (dot(r, tilt) * 0.6 + (id - 0.5) * 0.22) / scale;
+  // the joint is a shallow groove (a deep one turned every seam into a black, stair-stepped line through the screen-
+  // derivative normal), shallower still while it is only a few pixels wide; the faces meet it at the same depth
+  // (and the faces bevel down to it over a wider band, ~a sixth of a block: a block standing proud of its neighbour
+  // shows a lit or shaded ledge, not a one-pixel cliff)
+  float jPx = jw / max(fw * scale, 1e-4);
+  float grooveD = mix(0.04, 0.12, smoothstep(2.0, 6.0, jPx)) * relief / scale * 0.17;
+  float bevel = 1.0 - smoothstep(0.0, 0.16 + fw * scale * 2.0, gap);
+  float h = mix(face * relief, -grooveD, max(bevel, open));
+  float tone = 0.9 + 0.2 * fract(id * 7.31);
+  return vec3(mix(tone, 0.8, open), h, open);
 }
 
 TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
@@ -185,6 +234,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   float band = 0.5 + 0.5 * sin(strata * 6.2831853);
   vec3 rock = mix(uRockA, uRockB, clamp(0.5 + 0.6 * big + 0.2 * (band - 0.5) + 0.12 * m1, 0.0, 1.0));
   float rockBump = big * 0.9 + m2 * 0.35;
+  float rockJoint = 0.0;
   if (fine) {
     // triplanar (body axes) vertical streaks: water and lichen run down steep faces
     vec3 tpw = pow(abs(up), vec3(8.0));
@@ -206,6 +256,25 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float grain = snoise(P * 3.1) * aaF(fw, 0.32);
     rock *= (1.0 - 0.12 * seam * steep) * (0.94 + 0.08 * mid + 0.05 * grain) * (1.0 + 0.08 * ledgeB);
     rockBump += ledgeB * 0.45 + mid * 0.22 + grain * 0.02;
+    // jointed blocks (~6 m) split into fragments (~1.4 m): planar faces and dark open joints — stone, not fur. The
+    // larger set tilts more on steep faces (blocky cliffs), the smaller is a gentle facet grain on every outcrop
+    // (only where rock can show — steep faces, ridges, the heights, thin cover, ore outcrops: a closed meadow or wood
+    // pays nothing for it)
+    float rockLikely = max(max(steep, smoothstep(0.5, 0.9, -concave)), max(1.0 - smoothstep(0.25, 0.6, soil + vF2.x + vF2.y + vF2.z + vF2.w), smoothstep(0.25, 0.4, vOre.a)));
+    rockLikely = max(rockLikely, smoothstep(180.0, 220.0, hG - uSeaLevel));
+    float bk1 = aaF(fw, 2.5) * step(0.01, rockLikely), bk2 = aaF(fw, 0.7);
+    if (bk1 > 0.0) {
+      vec3 B1 = rk_blocks(P + warpV * 1.5, up, 0.17, fw, mix(0.5, 1.1, steep));
+      rock *= mix(1.0, B1.x, bk1);
+      rockBump += B1.y * bk1;
+      rockJoint = B1.z * bk1;
+      if (bk2 > 0.0) {
+        vec3 B2 = rk_blocks(P + warpV * 0.6 + 11.3, up, 0.72, fw, 0.6);
+        rock *= mix(1.0, B2.x, bk2 * 0.5);
+        rockBump += B2.y * bk2;
+        rockJoint = max(rockJoint, B2.z * bk2 * 0.5);
+      }
+    }
     // lichen / moss on damp, gentler rock (terran only)
     if (!airless) {
       float lich = smoothstep(0.35, 0.8, moist) * smoothstep(0.2, 0.7, snoise(P * 0.33) * 0.5 + 0.5) * (1.0 - steep * 0.6);
@@ -215,8 +284,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   vec3 col = rock;
   float rough = 0.84;
   float bump = rockBump;
+  // how much of what shows is still the bare rock (its joints darken the ambient at the end)
+  float rockW = 1.0;
   // strength of the close-up micro relief (0.2–2 m: grain, clods, tufts), blended through the layers like the bump
-  float mk = 0.22;
+  // (on bare rock only a little: the blocks' facets carry its form, and a strong soft micro noise read as fur)
+  float mk = 0.1;
   float ao = 1.0;
   float spec = 0.5;
   vec3 emis = vec3(0.0);
@@ -252,6 +324,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     }
     col = mix(col, sc, soilW);
     bump = mix(bump, sb, soilW);
+    rockW *= 1.0 - soilW;
     rough = mix(rough, 0.92, soilW);
     mk = mix(mk, 0.3, soilW);
   }
@@ -261,11 +334,15 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float aw = smoothstep(0.02, 0.3, ash + m2 * 0.05);
     vec3 ac = airless ? uRegolith * 0.42 : vec3(0.075, 0.072, 0.07);
     col = mix(col, ac * (0.9 + 0.2 * m1), aw);
+    rockW *= 1.0 - aw;
     rough = mix(rough, 0.95, aw);
   }
 
   // ── vegetation: grass / dry grass, shrubs, forest canopy, farm fields ──
   float vegTotal = grass + shrub + tree + crop;
+  // the far canopy's weight and crown shape here (snow lies in the gaps and on the crowns' tops, the crowns' flanks
+  // stay dark)
+  float canopyW = 0.0, canopyCrown = 0.0;
   // farmland's own weight: a sown field shows as tilled rows even where little else grows (and covers the sand)
   float fieldW = 0.0;
   if (vegTotal > 0.01) {
@@ -288,11 +365,16 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     gcol = mix(gcol, gcol * vec3(0.86, 0.96, 0.9), smoothstep(0.6, -0.8, patchy) * 0.10);
     gcol *= 0.88 + 0.16 * clump + 0.12 * blades + 0.1 * m2;
     gcol = meadowTint(gcol, P, fw, moist, autumn, winter, cold, warpV);
-    float gBump = clump * 0.05 + blades * 0.02;
+    // tufts, tips and gaps (groundfloor.ts swardDetail): the sward's own texture at 3–60 m
+    vec3 vEye = normalize(transpose(uBodyToView) * normalize(vViewPosition));
+    vec4 swd = swardDetail(P, fw, dot(up, vEye));
+    gcol *= swd.x;
+    gcol = mix(gcol, gcol * vec3(1.24, 1.13, 0.7), swd.y * 0.32 * (1.0 - cold * 0.5));
+    float gBump = clump * 0.05 + blades * 0.02 + swd.z;
 
     vec3 vcol = gcol;
     float vb = gBump;
-    float vao = 1.0;
+    float vao = 1.0 - 0.32 * swd.w;
     // shrubs: clumpy blobs over grass
     if (shrub > 0.01) {
       float sw = smoothstep(0.15, 0.7, shrub + m2 * 0.3);
@@ -335,6 +417,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float inst = uVegFade.x > 1e8 ? 0.0 : 1.0 - smoothstep(uVegFade.x, uVegFade.y, camDist);
       float cover = tw * mix(0.8, 1.0, crown) * (1.0 - inst);
       vcol = mix(vcol, tc, cover);
+      canopyW = cover; canopyCrown = crown;
       // (additive, quality pass) the crowns' relief rounds off into the gaps between them (the border distance's
       // smoothstep has no slope at the border: no crease for the screen-derivative normals to turn into dotted black
       // seams), and both the relief and the gaps' shade fade out while a crown is still several pixels across — at
@@ -410,8 +493,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float vegW = max(smoothstep(0.1, 0.42, vegTotal + vegN) * (1.0 - steep * 0.8), fieldW);
     col = mix(col, vcol, vegW);
     bump = mix(bump, vb, vegW);
-    // (turf is a mat of blades, not a dimpled skin: at 0.45 a low sun drew a hammered-metal egg-crate over every meadow)
-    mk = mix(mk, 0.16, vegW);
+    rockW *= 1.0 - vegW;
+    // (turf is a mat of blades, not a dimpled skin: at 0.45 a low sun drew a hammered-metal egg-crate over every meadow;
+    // the tufts' own relief, swardDetail, carries the close-up grain now)
+    mk = mix(mk, 0.08, vegW);
     rough = mix(rough, 0.88, vegW);
     ao = mix(ao, vao, vegW);
     spec = mix(spec, 0.35, vegW);
@@ -435,6 +520,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     if (veryFine && sw > 0.5) s.glint = max(s.glint, sdt.z);
     col = mix(col, scl, sw);
     bump = mix(bump, sdt.y + m2 * 0.25, sw);
+    rockW *= 1.0 - sw;
     rough = mix(rough, 0.9, sw);
     mk = mix(mk, 0.07, sw);
   }
@@ -449,6 +535,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       vec3 bs = mix(uSandCol, uSandCol * vec3(0.92, 0.9, 0.86), smoothstep(-0.3, 0.6, m1)) * (0.94 + 0.06 * m2);
       col = mix(col, bs, beach);
       bump = mix(bump, m2 * 0.15, beach);
+      rockW *= 1.0 - beach;
       rough = mix(rough, 0.9, beach);
       mk = mix(mk, 0.07, beach);
     }
@@ -459,8 +546,62 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       col = mix(col, rock, bare);
       bump = mix(bump, rockBump, bare);
       rough = mix(rough, 0.84, bare);
-      mk = mix(mk, 0.22, bare);
+      mk = mix(mk, 0.1, bare);
+      rockW = mix(rockW, 1.0, bare);
       ao = mix(ao, 1.0, bare);
+    }
+  }
+
+  // ── ore outcrops (LIVING H12): where the sim's ore field is rich the bedrock breaks through its cover in ledges and
+  // boulder fields stained by what it carries — malachite green over copper, rust-red gossan over iron, black seams of
+  // coal and obsidian, white and yellow crusts of salt, saltpetre and sulfur, quartz veins with metal glints over gold
+  // and silver — while soft deposits (clay banks, glass sand) show as bare coloured earth. Patches of 5–30 m, broken by
+  // noise, so a prospector and the god can read the hills; from afar they average into a faint tint of the deposit.
+  float oreA = vOre.a;
+  if (oreA > 0.04 && uw < 0.4) {
+    vec3 oreC = vOre.rgb / max(oreA, 1e-4);
+    float oLum = dot(oreC, vec3(0.2126, 0.7152, 0.0722));
+    float oMax = max(oreC.r, max(oreC.g, oreC.b));
+    float oSat = (oMax - min(oreC.r, min(oreC.g, oreC.b))) / max(oMax, 1e-3);
+    // the deposit's character from its colour: dark (coal, obsidian, oil), pale (salt, saltpetre, glass sand), earthy
+    // orange (clay) — the soft ones are not bedrock
+    float darkO = 1.0 - smoothstep(0.015, 0.05, oLum);
+    float paleO = smoothstep(0.4, 0.7, oLum) * (1.0 - smoothstep(0.35, 0.6, oSat));
+    float clayO = smoothstep(0.12, 0.2, oLum) * smoothstep(0.55, 0.75, oSat) * step(oreC.b * 1.8, oreC.g) * (1.0 - paleO);
+    float softO = max(paleO, clayO);
+    float pn = snoise(P * 0.045 + 31.0) * 0.32 + snoise(P * 0.17 + 7.0) * 0.16 * aaF(fw, 6.0) + snoise(P * 0.6 + 3.0) * 0.06 * aaF(fw, 1.6);
+    // (outcrops in patches even over the richest deposit — about half the ground there, a fifth at middling richness,
+    // a few boulders over a poor one — with the land's own cover between them)
+    float pq = pn * 0.95 + 0.5;
+    float outW = smoothstep(1.0 - 0.5 * oreA, 1.08 - 0.5 * oreA, pq) * (1.0 - smoothstep(0.0, 0.4, uw));
+    // (from afar: the deposit's colour faintly in the ground, where single outcrops are too small to draw)
+    float farK = 1.0 - aaF(fw, 8.0);
+    col = mix(col, col * mix(vec3(1.0), oreC / max(oLum, 0.02) * 0.5 + 0.5, 0.25), smoothstep(0.25, 0.7, oreA) * farK * 0.6);
+    if (outW > 0.001) {
+      // the outcrop: the planet's rock in blocks (rock already carries them), or bare earth for a soft deposit
+      vec3 oc = mix(rock, mix(uRegolith, oreC, 0.55) * (0.85 + 0.3 * m1), softO);
+      float ob = mix(rockBump, m2 * 0.2, softO);
+      // weathered stain: a halo of the ore's colour washed over the rock in blotches (gossan, malachite bloom)
+      float stain = smoothstep(-0.3, 0.7, snoise(P * 0.13 + warpV + 17.0)) * (0.55 + 0.45 * oSat);
+      oc = mix(oc, oc * 0.45 + oreC * 0.75, stain * 0.55 * (1.0 - darkO * 0.5));
+      // veins along the fractures (thin ridged noise), faded to their share where a pixel cannot hold them
+      float vr = 1.0 - abs(snoise((P + warpV * 3.0) * 0.32 + 5.0));
+      float vein = smoothstep(0.88, 0.97, vr) * aaF(fw, 0.5);
+      float veinMean = 0.06 * (1.0 - aaF(fw, 0.5));
+      oc = mix(oc, oreC * 1.1, (vein + veinMean) * (1.0 - softO) * 0.9);
+      // dark seams in bands along the strata (coal, obsidian)
+      float seamB = smoothstep(0.35, 0.65, sin((hG + warpV.x * 3.0 + m1 * 2.0) * 1.9) * 0.5 + 0.5);
+      oc = mix(oc, oreC * 0.9 + 0.01, darkO * mix(0.5, seamB, aaF(fw, 1.5)) * 0.9);
+      // crusts of efflorescence on pale deposits, patchy
+      float crustP = smoothstep(0.35, 0.7, snoise(P * 0.42 + 3.0) * 0.5 + 0.5 + 0.2 * snoise(P * 1.7) * aaF(fw, 0.6));
+      oc = mix(oc, oreC * 0.95, paleO * crustP * 0.85);
+      col = mix(col, oc, outW);
+      bump = mix(bump, ob + vein * 0.03, outW);
+      rough = mix(rough, mix(0.8, 0.55, vein), outW);
+      mk = mix(mk, 0.1, outW);
+      rockW = mix(rockW, 1.0 - softO, outW);
+      // metal glints in the veins (bright, saturated ores: gold, copper, silver)
+      if (veryFine && vein > 0.4 && oLum > 0.1) s.glint = max(s.glint, gn_hash13(floor(P * 30.0)));
     }
   }
 
@@ -497,29 +638,43 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   }
 
   // ── snow ──
-  if (snow > 0.005) {
-    // snow does not hold on cliffs: faces past ~45° show their rock (white walls read as spikes on the limb). Partial
-    // cover follows the land, not noise: shaded (pole-facing / away from the sun) slopes and hollows keep it, sunny
-    // convex ground melts out first — a gentle, wide transition with little noise (no dalmatian spots)
+  if (snow > 0.002) {
+    // the sim's snow is a depth (m: 1 mm of water ≈ 1 cm). A dusting of 1–2 cm already whitens the bare ground and the
+    // gaps of the sward in patches; ~6 cm is a white field through which only tussocks show; deep snow buries the
+    // shrubs (it needs ~0.3 m more where they stand). Snow does not hold on cliffs: faces past ~45° show their rock.
+    // Partial cover follows the land, not noise: shaded (pole-facing / away from the sun) slopes and hollows keep it,
+    // sunny convex ground melts out first; drifts pile in the lee of the wind.
     vec3 tanN = Nb - up * dot(Nb, up);
     vec3 sunT = uSunDirBody - up * dot(uSunDirBody, up);
     float aspectSun = dot(tanN, normalize(sunT + 1e-5)) * 2.5;
-    float hollow = clamp(concave * 2.5, -1.0, 1.0) * 0.3;
-    float sw = smoothstep(0.0, 0.4, snow * 1.6 - 0.04 + m2 * 0.04 + m1 * 0.04 - aspectSun * 0.12 + hollow * 0.2) * (1.0 - smoothstep(0.3, 0.55, slope));
+    float hollow = clamp(concave * 2.5, -1.0, 1.0);
+    float thin = 1.0 - smoothstep(0.08, 0.4, snow);
+    float sd = snow * (1.0 + 0.35 * hollow * thin - 0.25 * clamp(aspectSun, -1.0, 1.0) * thin) + (m2 * 0.012 + m1 * 0.01) * thin;
+    float need = 0.055 + 0.3 * smoothstep(0.05, 0.6, shrub) + 0.03 * smoothstep(0.2, 0.8, grass);
+    float full = smoothstep(0.012, need, sd);
+    // a dusting: patchy white over the ground's own colour (drifts at ~1–5 m), averaging to grey-white from afar
+    float patchN = snoise(P * 0.37 + warpV) * 0.6 + snoise(P * 1.3 + 3.0) * 0.4 * aaF(fw, 0.8);
+    float dust = smoothstep(0.002, 0.02, sd) * mix(0.55, smoothstep(-0.15, 0.35, patchN + (sd - 0.02) * 12.0), aaF(fw, 3.0));
+    float sw = max(full, dust * 0.85) * (1.0 - smoothstep(0.3, 0.55, slope));
     // under a canopy (the forest floor's weight) the crowns catch part of the snow, and litter, twigs and stones poke
     // through a thin cover; the floor keeps its canopy occlusion (ao below)
     // (a wide ramp: the litter's leaf-scale height on a narrow one made a dithered snow edge up close)
     if (ffW > 0.0) sw *= (1.0 - 0.5 * ffW) * (1.0 - ffW * smoothstep(0.005, 0.085, ffl.bump) * (1.0 - smoothstep(0.4, 0.9, snow)));
+    // the far canopy: snow on the crowns' tops and in the clearings, dark flanks between (a snowy forest from afar is
+    // grey-white and speckled, not a white sheet)
+    sw *= 1.0 - canopyW * mix(0.7, 0.35, canopyCrown) * (1.0 - 0.4 * smoothstep(0.3, 1.0, snow));
     vec3 sc = vec3(0.78, 0.81, 0.86) * (0.93 + 0.08 * m1);
     // wind-packed crust is greyer, fresh drifts whiter; sastrugi and drifts give the shading its grain
     sc *= mix(0.9, 1.04, smoothstep(-0.4, 0.5, m2));
     float drift = fine ? snoise(P * 0.17) * 0.5 + snoise(P * 0.9) * 0.08 * aaF(fw, 1.0) + m2 * 0.6 : m2 * 0.6;
+    // (a thin cover keeps the ground's relief under it)
     col = mix(col, sc, sw);
-    bump = mix(bump, drift, sw);
+    bump = mix(bump, mix(bump * 0.6 + drift * 0.3, drift, 1.0 - thin), sw);
     rough = mix(rough, 0.55, sw);
     mk = mix(mk, 0.05, sw);
     ao = mix(ao, 1.0, sw * (1.0 - ffW));
     spec = mix(spec, 0.6, sw);
+    rockW *= 1.0 - sw;
     // sparkle: rare facets that mirror the sun (lit in the sun term)
     if (veryFine && sw > 0.5) s.glint = gn_hash13(floor(P * 22.0));
   }
@@ -580,17 +735,54 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     mk = mix(mk, 0.05, max(d, 0.6) * inW);
   }
 
-  // ── lava: dark crust, glowing cracks (emissive, animated) ──
+  // ── lava (the mesh stands on its depth: VERT_MAIN) ──
+  // A flow is mostly CRUST: dark plates of fresh basalt riding on the melt, incandescent only where the crust tears —
+  // cracks between plates (~5 m, finer ~1.4 m ones fainter), wider and hotter where the flow is deep and young — a few
+  // winding molten channels on its deepest parts, the crust creeping downhill, and the flow's front (the toe, where it
+  // breaks open as it advances) glowing in a lobed line; the thin cooled margins are near black. Cracks fade to their
+  // share of glow by the pixel footprint (from afar a flow is a dark body veined with red, never a glitter), and the
+  // glow is a little dimmer by day (the eye reads the sunlit ground first).
   if (lava > 0.01) {
-    float lw = smoothstep(0.02, 0.4, lava);
-    vec3 lv = voronoi3(P * 0.25 + vec3(0.0, uTime * 0.01, 0.0));
-    float glow = 1.0 - smoothstep(0.0, 0.18, lv.y - lv.x);
-    float hot = clamp(lava * 0.6, 0.0, 1.0);
-    col = mix(col, vec3(0.03, 0.025, 0.022), lw);
-    rough = mix(rough, 0.7, lw);
-    float pulse = 0.75 + 0.25 * sin(uTime * 1.3 + lv.z * 20.0);
-    emis += vec3(4.0, 1.1, 0.18) * glow * lw * (0.25 + hot) * pulse * 6.0;
-    bump = mix(bump, (1.0 - glow) * 0.4, lw);
+    vec3 tanD = Nb - up * dot(Nb, up);
+    float tl = length(tanD);
+    vec3 downD = tl > 1e-4 ? tanD / tl : vec3(0.0);
+    float lobe = snoise(P * 0.08 + 3.0) * 0.6 + snoise(P * 0.27 + 9.0) * 0.3 * aaF(fw, 3.0);
+    float lw = smoothstep(0.03, 0.12, lava + lobe * 0.05);
+    float heat = smoothstep(0.2, 3.0, lava + lobe * 0.4) * 0.85;
+    vec3 drift = downD * uTime * mix(0.02, 0.12, heat) * min(tl * 5.0, 1.0);
+    vec3 lp = P - drift;
+    float k1 = aaF(fw, 2.5), k2 = aaF(fw, 0.7);
+    float w1 = mix(0.018, 0.075, heat), w2 = mix(0.01, 0.035, heat);
+    float c1 = w1 * 2.2, c2 = w2 * 2.0, plate = 0.5;
+    if (k1 > 0.0) {
+      vec3 v1 = voronoi3(lp * 0.2);
+      c1 = mix(c1, 1.0 - smoothstep(w1, w1 + max(fw * 0.2 * 1.5, 0.012), v1.y - v1.x), k1);
+      plate = mix(plate, v1.z, k1);
+    }
+    if (k2 > 0.0) {
+      vec3 v2 = voronoi3(lp * 0.7 + 7.3);
+      c2 = mix(c2, 1.0 - smoothstep(w2, w2 + max(fw * 0.7 * 1.5, 0.012), v2.y - v2.x), k2);
+    }
+    float crack = max(c1, c2 * 0.45 * (0.3 + 0.7 * heat));
+    // molten channels: winding lines (ridged noise, ~2–4 m wide) on the deep parts only
+    float chR = 1.0 - abs(snoise(lp * 0.028 + vec3(5.0, 1.0, 3.0)) + 0.25 * snoise(lp * 0.09 + 2.0));
+    float chan = smoothstep(0.9, 0.97, chR) * smoothstep(1.2, 2.6, lava + lobe * 0.3) * aaF(fw * 0.5, 3.0);
+    // the toe of the flow breaks open where it advances
+    float toe = lw * (1.0 - smoothstep(0.12, 0.45, lava + lobe * 0.06)) * smoothstep(0.15, 0.6, snoise(P * 0.21 + vec3(0.0, uTime * 0.05, 0.0)) * 0.5 + 0.5);
+    float glowT = clamp(crack * (0.35 + 0.65 * heat) + chan + toe * 0.6, 0.0, 1.0);
+    // incandescence: deep red → orange → yellow with temperature
+    vec3 hotC = mix(vec3(0.85, 0.06, 0.006), vec3(1.0, 0.3, 0.03), smoothstep(0.15, 0.6, glowT));
+    hotC = mix(hotC, vec3(1.0, 0.6, 0.2), smoothstep(0.75, 1.0, glowT) * heat);
+    float flick = 0.88 + 0.12 * snoise(lp * 0.6 + vec3(0.0, uTime * 0.7, 0.0));
+    float dayL = mix(1.0, 0.6, smoothstep(-0.05, 0.25, dot(up, uSunDirBody)));
+    emis += hotC * glowT * mix(0.5, 4.5, max(heat, chan)) * flick * dayL * lw;
+    // the crust: fresh glassy basalt, a little lighter on old plates, the plates' rims warmed by the glow beneath
+    vec3 crustC = vec3(0.03, 0.028, 0.027) * (0.75 + 0.5 * plate) + vec3(0.035, 0.007, 0.0) * crack * heat;
+    col = mix(col, crustC, lw);
+    rough = mix(rough, mix(0.8, 0.5, heat), lw);
+    bump = mix(bump, (1.0 - crack) * mix(0.25, 0.45, 1.0 - heat) + plate * 0.1 - chan * 0.2, lw);
+    mk = mix(mk, 0.12, lw);
+    rockW *= 1.0 - lw;
   }
   // fire: a FRONT — a ragged band of burning litter where the fire field crosses the edge of the burning ground (its
   // level warped by noise, so the band wanders instead of following the 50 m sim triangles), ash and a sparse scatter
@@ -699,7 +891,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // height — the contract's groundHeight — untouched
   float macro = (fbm3(P * 0.017) * 1.4 + fbm3(P * 0.047 + 5.0) * 0.45) * (1.0 - smoothstep(0.5, 6.0, ash + snow * 4.0));
   // (halved under turf on gentle ground: with the mesh's own 12 m relief, a low sun raked meadows into hummocks)
-  macro *= 1.0 - 0.5 * smoothstep(0.2, 0.6, vegTotal) * (1.0 - steep);
+  // (… and down to a quarter under a closed sward: its tussocks carry the ground's texture, and the broad swells
+  // raked by a low sun read as a hammered felt from 30–60 m)
+  macro *= 1.0 - 0.75 * smoothstep(0.2, 0.6, vegTotal) * (1.0 - steep);
   // close-up micro relief (0.3 m and 1.1 m octaves) from ANALYTIC noise gradients: smooth per pixel at any mesh
   // density (screen-space derivatives of the bump facet per triangle), with a matching albedo grain
   s.microG = vec3(0.0);
@@ -712,6 +906,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     s.microG = (g - up * dot(g, up)) * mk;
     col *= 1.0 + (0.12 * n1 * aa1 + 0.08 * n2 * aa2) * mk * 2.0;
   }
+  // the rock's open joints shade the ambient (and a little of the sun) where the rock shows
+  ao *= 1.0 - 0.35 * rockJoint * rockW;
   s.albedo = col;
   s.rough = clamp(rough, 0.04, 1.0);
   s.bump = bump + macro * mix(1.0, 0.3, smoothstep(0.0, 0.25, uw));
@@ -728,10 +924,12 @@ uniform highp sampler2D uFieldM1;
 uniform highp sampler2D uFieldV;
 uniform highp sampler2D uFieldC;
 uniform highp sampler2D uFieldS;
+uniform highp sampler2D uFieldO;
 varying vec3 vBodyPos;
 varying vec3 vBodyN;
 varying vec4 vF0;
 varying vec4 vF1;
+varying vec4 vOre;
 varying vec4 vF2;
 varying vec4 vF3;
 varying vec4 vF4;
@@ -745,6 +943,17 @@ const VERT_MAIN = /* glsl */ `
 ${TERRAIN_VERT_CORE}
   vF0 = tfInterp(uFieldM0, aCells, aMisc.x);
   vF1 = tfInterp(uFieldM1, aCells, aMisc.x);
+  // lava lies ON the ground (types.ts: lava top = surface + lava), as water does: the mesh stands on its depth, so a
+  // flow is a body with a front that fills hollows and buries what it overran; a molten surface is smoother than the
+  // ground it flows over (the shading normal leans toward the vertical as it deepens)
+  {
+    float lavaH = max(vF1.x, 0.0);
+    if (lavaH > 0.0) {
+      vec3 upV = normalize(position);
+      tPos += upV * lavaH;
+      tNrm = normalize(mix(tNrm, upV, smoothstep(0.15, 1.5, lavaH) * 0.65));
+    }
+  }
   vF2 = tfInterp(uFieldV, aCells, aMisc.x);
   vF3 = tfInterp(uFieldC, aCells, aMisc.x);
   // material-aware relief in the SHADING (the heights are the contract's ground and stay as they are): the 12 m and
@@ -765,6 +974,7 @@ ${TERRAIN_VERT_CORE}
   vBodyN = tNrm;
   vF4 = vec4(tS, tA.z, tA.w, tH);
   vF5 = tfInterp(uFieldS, aCells, aMisc.x);
+  vOre = tfInterp(uFieldO, aCells, aMisc.x);
   vCurv = tfInterp(uFieldN, aCells, aMisc.x).w;
   // (fetched only near fire: the rest of the planet pays nothing for it)
   vFireWind = abs(vF3.w) > 0.001 ? tfInterp(uFieldD, aCells, aMisc.x).yzw : vec3(0.0);
@@ -863,7 +1073,14 @@ const FRAG_AMBIENT = /* glsl */ `
     mat3 viewToBody = transpose(uBodyToView);
     vec3 nB = normalize(viewToBody * normal);
     vec3 vB = normalize(viewToBody * geometryViewDir);
-    vec3 skyE = skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient * (0.6 + 0.4 * max(dot(nB, upB), 0.0));
+    // (the night floor where the sun is down: in daylight it would only grey the shadows — an airless world's must stay
+    // black, CONTRACT §16.1)
+    float nightSide = mix(0.15, 1.0, smoothstep(0.08, -0.12, dot(upB, uSunDirBody)));
+    vec3 skyE = skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient * ((0.6 + 0.4 * max(dot(nB, upB), 0.0)) * nightSide);
+    // seen from orbit, the limb of the night side catches more of the starlit floor (a long grazing path of faintly lit
+    // ground and air): the silhouette reads against space on every world, with or without air
+    float rimV = 1.0 - clamp(dot(upB, vB), 0.0, 1.0);
+    skyE += uNightAmbient * (uNightRim * 2.5 * rimV * rimV * rimV * nightSide);
     // the aurora overhead lights the ground under its ovals green (snow and ice show it most) where the sun is down
     if (uAurora.w > 0.0) {
       float ca = abs(dot(upB, uAurora.xyz));
@@ -966,12 +1183,12 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
   return {
     uFieldA: { value: null }, uFieldN: { value: null }, uFieldM0: { value: null }, uFieldM1: { value: null },
     uFieldV: { value: null }, uFieldC: { value: null }, uFieldS: { value: null }, uFieldF: { value: null }, uFieldG: { value: null },
-    uFieldD: { value: null },
+    uFieldD: { value: null }, uFieldO: { value: null },
     uRadius: { value: 3000 }, uCamBody: { value: new Vector3() },
     uBodyToView: { value: new Matrix3() }, uSunDirBody: { value: new Vector3(1, 0, 0) }, uSunDirView: { value: new Vector3(1, 0, 0) },
     uKind: { value: 0 }, uSeaLevel: { value: 0 }, uYearFrac: { value: 0 }, uSeasonAmp: { value: 1 }, uTime: { value: 0 },
     uRockA: { value: new Color() }, uRockB: { value: new Color() }, uSandCol: { value: new Color() }, uRegolith: { value: new Color() },
-    uNightAmbient: { value: new Vector3(0.004, 0.006, 0.012) }, uCityLights: { value: 1 }, uCityTex: { value: null },
+    uNightAmbient: { value: new Vector3(0.004, 0.006, 0.012) }, uNightRim: { value: 1 }, uCityLights: { value: 1 }, uCityTex: { value: null },
     // moonlight (set per frame by the renderer for the primary planet; zero elsewhere)
     uMoonE: { value: new Vector3() }, uMoonDirBody: { value: new Vector3(0, 1, 0) }, uMoonDirView: { value: new Vector3(0, 1, 0) },
     uCloudCov: { value: null }, uCloudShell: { value: new Vector2(3180, 3420) }, uCloudOn: { value: 0 },
@@ -1020,6 +1237,7 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
 const DEPTH_VERT = /* glsl */ `
 #include <common>
 ${TERRAIN_VERT_PARS}
+uniform highp sampler2D uFieldM1;
 #include <logdepthbuf_pars_vertex>
 void main() {
 ${TERRAIN_VERT_CORE}
@@ -1027,6 +1245,8 @@ ${TERRAIN_VERT_CORE}
   // every hump shadowing the next at a low sun drew an egg-crate of light and shade over every meadow and street.
   // Hills and valleys (the cell surface) still cast theirs, ~1.5 m shorter; bare rock keeps its own relief's shadows
   tPos -= normalize(tPos) * (3.0 * tA.y * (1.0 - smoothstep(0.55, 0.9, tA.y)));
+  // (lava stands on the ground: terrainmat VERT_MAIN)
+  tPos += normalize(position) * max(tfInterp(uFieldM1, aCells, aMisc.x).x, 0.0);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(tPos, 1.0);
 #include <logdepthbuf_vertex>
 }
@@ -1045,7 +1265,7 @@ export function makeTerrainDepthMaterial(shared: Record<string, IUniform>, terra
     vertexShader: DEPTH_VERT,
     fragmentShader: DEPTH_FRAG,
     uniforms: {
-      uFieldA: shared.uFieldA, uFieldN: shared.uFieldN, uFieldG: shared.uFieldG, uFieldD: shared.uFieldD, uRadius: shared.uRadius, uCamBody: shared.uCamBody,
+      uFieldA: shared.uFieldA, uFieldN: shared.uFieldN, uFieldG: shared.uFieldG, uFieldD: shared.uFieldD, uFieldM1: shared.uFieldM1, uRadius: shared.uRadius, uCamBody: shared.uCamBody,
       uMorph: terrain.userData.uMorph as IUniform<Vector4>,
     },
     colorWrite: false,

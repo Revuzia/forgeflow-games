@@ -10,9 +10,13 @@
 // and lights its rim when it lands, a volcano pours lava, a tsunami's wall of water runs at the coast, a wildfire
 // burns, a weather system paints cloud and precipitation. It is not the sim: nothing here is deterministic
 // or conserved — it only has to look like the god at work.
+// Signs (LIVING §3.4, hooks H4/H5): `lookdev.disaster { …, warning: ticks | -1 }` holds a volcano, a meteor or a tsunami
+// in its warning phase (params.warning = 1, a tsunami's drawback; -1 holds it there for a picture; the volcano's small
+// warning quakes come hourly), `lookdev.sacred { pos, kind, settlement? }` hallows a place (the `sacred.place` event;
+// the `sacred` query lists them), `lookdev.omen { pos, kind, reading? }` has a town read an omen (the `omen` event).
 
 import type {
-  Command, CommandResult, CreatureView, DisasterView, EntityRef, FieldName, HandView, MoverBlock, PlanetSnap, ProjectileView, SimEvent, UnitVec, WeatherView,
+  Command, CommandResult, DisasterView, EntityRef, FieldName, HandView, MoverBlock, PlanetSnap, ProjectileView, SimEvent, UnitVec, WeatherView,
 } from '../sim/types.ts';
 import { AnimState } from '../sim/types.ts';
 import type { IcoGrid } from '../sim/grid/icogrid.ts';
@@ -41,6 +45,8 @@ interface LookDisaster {
   ended: boolean;
   lastFx: number;
   base?: { cells: number[]; water: Float32Array; surface: Float32Array };
+  /** LIVING §3.7: the warning phase lasts until this tick (Infinity: held there); its blow starts after */
+  warnUntil?: number;
 }
 
 interface LookProjectile { view: ProjectileView; t0: number; pos0: UnitVec; alt0: number; vel0: [number, number, number] }
@@ -63,7 +69,7 @@ function posOf(c: Command, key = 'pos', R = 0): UnitVec | null {
   let u: UnitVec | null = null;
   if (Array.isArray(p) && p.length >= 3) u = unit(p as number[]);
   else if (typeof c.lat === 'number' && typeof c.lon === 'number' && key === 'pos') u = latlon(c.lat, c.lon);
-  // "offset": [east m, north m] from that point (lookdev framing: two creatures side by side, a storm off the coast)
+  // "offset": [east m, north m] from that point (lookdev framing: a storm off the coast, a wave out at sea)
   const o = c.offset;
   if (u && key === 'pos' && R > 0 && Array.isArray(o) && o.length >= 2) {
     const e = bearingDir(u, Math.PI / 2), n = bearingDir(u, 0);
@@ -95,6 +101,16 @@ export class LookdevGod {
   private nextId = 1;
   private weatherBase = new Map<string, Float32Array>();
   activity: number | null = null;
+  /** sacred places hallowed here (the sim's god/sacred.ts places, as its `sacred` query lists them) */
+  private places: { id: number; planet: number; cell: number; pos: UnitVec; kind: string; settlement: number; since: number; by: string; was: number }[] = [];
+
+  /** an event for the next snapshot (lookdev.ts: prophets called, shrines raised) */
+  emit(e: SimEvent): void { this.events.push(e); }
+
+  /** the sim's `sacred` query, for what lookdev hallowed */
+  sacredQuery(): { places: unknown[]; animals: unknown[] } {
+    return { places: this.places.map((q) => ({ ...q, pos: [...q.pos] })), animals: [] };
+  }
 
   /** handle a command; null when it is not one of the god layer's */
   cmd(c: Command, lp: GodPlanet, tick: number): CommandResult | null {
@@ -164,6 +180,13 @@ export class LookdevGod {
         const render: Record<string, number> = { ...def.render, ...(c.params && typeof c.params === 'object' ? c.params as Record<string, number> : {}) };
         const view: DisasterView = { id, kind, planet: lp.snap.id, pos: p, radius, intensity, progress: 0, frozen: false, params: { ...render } };
         const d: LookDisaster = { view, t0: tick, life, pin: typeof c.progress === 'number' ? c.progress : null, alt0: render.alt ?? 0, vel: [0, 0, 0], render, ended: false, lastFx: -1e9 };
+        // a warning phase first (the sim's god/precursors.ts): -1 holds it there
+        if (typeof c.warning === 'number' && c.warning !== 0) {
+          d.warnUntil = c.warning < 0 ? Infinity : tick + c.warning;
+          view.params.warning = 1;
+          if (kind === 'tsunami') view.params.drawback = 1;
+          if (kind === 'volcano' || kind === 'supervolcano') view.params.plume = Math.round((render.plume ?? 1000) * 0.1);
+        }
         // a falling body comes in at a slant from a hashed bearing
         if (render.alt !== undefined) {
           const b = bearingDir(p, (typeof c.bearing === 'number' ? c.bearing : hashFloat(id, 3) * 360) * Math.PI / 180);
@@ -182,7 +205,8 @@ export class LookdevGod {
         list.push(d);
         this.disasters.set(lp.snap.id, list);
         this.events.push({ t: 'disaster', tick, planet: lp.snap.id, pos: [...p], a: radius, b: intensity, text: def.name, ref: { kind: 'disaster', id, planet: lp.snap.id }, data: { kind, id } });
-        this.onStart(d, lp, tick);
+        if (d.warnUntil !== undefined) this.events.push({ t: 'warning', tick, planet: lp.snap.id, pos: [...p], ref: { kind: 'disaster', id, planet: lp.snap.id }, data: { kind, id } });
+        else this.onStart(d, lp, tick);
         this.age(d, lp, tick);
         return { ok: true, msg: `${def.name}.`, created: [{ kind: 'disaster', id, planet: lp.snap.id }] };
       }
@@ -210,6 +234,23 @@ export class LookdevGod {
       case 'weather.global': {
         lp.snap.params.globalWeather = typeof c.kind === 'string' && c.kind ? c.kind : null;
         return { ok: true };
+      }
+      case 'lookdev.sacred': case 'place.sacred': {
+        const p = posOf(c, 'pos', R);
+        if (!p) return { ok: false, msg: 'lookdev.sacred needs a pos' };
+        const kind = typeof c.kind === 'string' ? c.kind : 'site';
+        const id = 9000 + this.places.length;
+        const settlement = typeof c.settlement === 'number' ? c.settlement : -1;
+        this.places.push({ id, planet: lp.snap.id, cell: lp.grid.nearestCell(p[0], p[1], p[2]), pos: p, kind, settlement, since: tick, by: 'god', was: 0 });
+        this.events.push({ t: 'sacred.place', tick, planet: lp.snap.id, pos: [...p], data: { id, kind, settlement, by: 'god' } });
+        return { ok: true, msg: `A ${kind} is holy now.` };
+      }
+      case 'lookdev.omen': {
+        const p = posOf(c, 'pos', R);
+        if (!p) return { ok: false, msg: 'lookdev.omen needs a pos (the town that reads it)' };
+        const kind = typeof c.kind === 'string' ? c.kind : 'rainbow';
+        this.events.push({ t: 'omen', tick, planet: lp.snap.id, pos: [...p], text: kind, data: { kind, settlement: Number(c.settlement ?? -1), reading: c.reading === 'feared' ? 'feared' : 'trusted', god: 0 } });
+        return { ok: true, msg: `They read the ${kind}.` };
       }
       case 'lookdev.event': {
         const p = posOf(c, 'pos', R);
@@ -249,6 +290,8 @@ export class LookdevGod {
       }
       case 'lookdev.clear': {
         this.disasters.clear(); this.weather.clear(); this.projectiles = []; this.hand = null;
+        // (signs: true also forgets the places hallowed here — the `sacred` query stops listing them)
+        if (c.signs) this.places = [];
         return { ok: true };
       }
     }
@@ -294,6 +337,22 @@ export class LookdevGod {
   private age(d: LookDisaster, lp: GodPlanet, tick: number): void {
     const v = d.view;
     const R = lp.snap.params.radius;
+    // the warning phase: nothing strikes yet — a volcano rumbles (a small quake an hour), its smoke grows
+    if (d.warnUntil !== undefined) {
+      if (tick < d.warnUntil) {
+        v.progress = 0;
+        if ((v.kind === 'volcano' || v.kind === 'supervolcano') && tick - d.lastFx >= 60) {
+          d.lastFx = tick;
+          this.events.push({ t: 'quake', tick, planet: lp.snap.id, pos: [...v.pos], a: 3, data: { warning: 1, id: v.id } });
+        }
+        return;
+      }
+      // over: the blow falls, its life counted from now
+      delete v.params.warning; delete v.params.drawback;
+      d.t0 = tick; d.warnUntil = undefined; d.lastFx = -1e9;
+      this.events.push({ t: 'warning.end', tick, planet: lp.snap.id, pos: [...v.pos], ref: { kind: 'disaster', id: v.id, planet: lp.snap.id }, data: { kind: v.kind, id: v.id } });
+      this.onStart(d, lp, tick);
+    }
     const prog = d.pin ?? Math.max(0, Math.min(1, (tick - d.t0) / Math.max(1, d.life)));
     v.progress = Math.round(prog * 1000) / 1000;
     const P = v.params;
@@ -480,10 +539,10 @@ export class LookdevGod {
   }
 
   /** the global part: the hand (the Touch's entity) and the events since the last snapshot (no creatures: H6) */
-  global(tick: number, _R: number): { creatures: CreatureView[]; hand: HandView | null; events: SimEvent[] } {
+  global(tick: number, _R: number): { hand: HandView | null; events: SimEvent[] } {
     if (this.hand && this.handPoseUntil && tick > this.handPoseUntil) { this.hand.pose = this.hand.held ? 'grab' : 'open'; this.handPoseUntil = 0; }
     const ev = this.events;
     this.events = [];
-    return { creatures: [], hand: this.hand ? { ...this.hand, pos: [...this.hand.pos] as UnitVec } : null, events: ev };
+    return { hand: this.hand ? { ...this.hand, pos: [...this.hand.pos] as UnitVec } : null, events: ev };
   }
 }

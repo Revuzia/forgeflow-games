@@ -15,6 +15,7 @@
 
 import type { UiHost } from './host.ts';
 import type { Power } from './powers.ts';
+import { categoryLabel } from './powers.ts';
 import { BASE_PACK } from '../data/index.ts';
 import { h, clear } from './dom.ts';
 import { icon, categoryIcon } from './icons.ts';
@@ -167,8 +168,8 @@ export class Radial {
     cats.forEach((c, i) => {
       const a = -Math.PI / 2 + (i / cats.length) * Math.PI * 2;
       const x = this.cx + Math.cos(a) * R_CAT, y = this.cy + Math.sin(a) * R_CAT;
-      const el = h('button', { class: 'gn-rad-cat', title: c, aria: { label: c }, html: categoryIcon(c) });
-      el.append(h('span', { class: 'gn-rad-cl', text: c }));
+      const el = h('button', { class: 'gn-rad-cat', title: categoryLabel(c), aria: { label: categoryLabel(c) }, html: categoryIcon(c) });
+      el.append(h('span', { class: 'gn-rad-cl', text: categoryLabel(c) }));
       el.style.left = `${x}px`; el.style.top = `${y}px`;
       this.root.append(el);
       this.cats.push({ el, label: null, x, y, cat: c, angle: a });
@@ -247,7 +248,7 @@ export class Radial {
         const it = items[i];
         const more = it === 'more';
         const name = more ? 'More…' : it.name;
-        const el = h('button', { class: `gn-rad-pow${more ? ' gn-rad-more' : ''}`, title: more ? `Every ${cat.toLowerCase()} power, in the palette` : it.name, aria: { label: name }, html: more ? icon('search') : icon(it.icon, it.category) });
+        const el = h('button', { class: `gn-rad-pow${more ? ' gn-rad-more' : ''}`, title: more ? `Every ${categoryLabel(cat).toLowerCase()} power, in the palette` : it.name, aria: { label: name }, html: more ? icon('search') : icon(it.icon, it.category) });
         el.style.left = `${x}px`; el.style.top = `${y}px`;
         el.style.animationDelay = `${Math.min(k, 14) * 12}ms`;
         // its name, outward from the ring (shown on the slots nearest the pointer)
@@ -307,9 +308,9 @@ export class Radial {
     if (s?.power || s?.more) {
       const name = s.power ? s.power.name : 'More…';
       this.cName.textContent = name;
-      this.cSub.textContent = s.power ? s.power.category : `every ${s.more!.toLowerCase()} power`;
+      this.cSub.textContent = s.power ? categoryLabel(s.power.category) : `every ${categoryLabel(s.more!).toLowerCase()} power`;
       // what it does, beside the slot (outward), never cut off
-      const desc = s.power ? `${s.power.desc}${s.power.gesture ? ` · gesture: ${s.power.gesture}` : ''}` : 'Open the palette on this category: search, arm, cast.';
+      const desc = s.power ? `${s.power.desc}${s.power.sigil ? ` · sigil: ${s.power.sigil}` : ''}` : 'Open the palette on this category: search, arm, cast.';
       clear(this.tip);
       this.tip.append(h('b', { text: name }), h('span', { text: desc }));
       const right = s.x >= this.cx;
@@ -319,12 +320,12 @@ export class Radial {
       this.tip.hidden = false;
     } else if (s?.group) {
       this.cName.textContent = s.group;
-      this.cSub.textContent = `${this.groupsOf(s.cat!)?.get(s.group)?.length ?? 0} ${s.cat!.toLowerCase()}`;
+      this.cSub.textContent = `${this.groupsOf(s.cat!)?.get(s.group)?.length ?? 0} ${categoryLabel(s.cat!).toLowerCase()}`;
     } else if (s?.cat) {
-      this.cName.textContent = s.cat;
+      this.cName.textContent = categoryLabel(s.cat);
       this.cSub.textContent = `${this.host.powers.byCategory.get(s.cat)?.length ?? 0} powers`;
     } else if (this.active) {
-      this.cName.textContent = this.activeGroup ?? this.active;
+      this.cName.textContent = this.activeGroup ?? categoryLabel(this.active);
       this.cSub.textContent = this.groups.length && !this.activeGroup ? 'point at a group' : 'point at a power';
     } else {
       this.cName.textContent = 'Powers';

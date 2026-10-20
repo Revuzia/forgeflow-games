@@ -16,7 +16,7 @@ import type { EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { Catalog, LawRow } from './catalog.ts';
 import type { Power } from './powers.ts';
-import { toolMode, missingRequired } from './powers.ts';
+import { toolMode, missingRequired, categoryLabel } from './powers.ts';
 import { ACTIONS } from './keybinds.ts';
 import { fuzzyAny, highlight } from './fuzzy.ts';
 import { h, clear, fmtNum } from './dom.ts';
@@ -195,8 +195,8 @@ export class Palette {
       // the D-pad and A work here as on any row)
       for (const c of this.host.powers.categories()) {
         out.push({
-          kind: 'cat', title: c, sub: `${this.host.powers.byCategory.get(c)?.length ?? 0} powers`, iconHtml: categoryIcon(c), score: -1e8,
-          run: () => { this.input.value = `!${c.toLowerCase()} `; this.sel = 0; this.refresh(); this.input.focus(); },
+          kind: 'cat', title: categoryLabel(c), sub: `${this.host.powers.byCategory.get(c)?.length ?? 0} powers`, iconHtml: categoryIcon(c), score: -1e8,
+          run: () => { this.input.value = `!${categoryLabel(c).toLowerCase()} `; this.sel = 0; this.refresh(); this.input.focus(); },
         });
       }
       // …and every action a key can do (the camera, time, the windows), for a gamepad or a mouse that has no keys
@@ -220,7 +220,7 @@ export class Palette {
     for (const p of this.host.powers.list) {
       let score = 0, titleHtml: string | undefined, via: string | null = null;
       if (q) {
-        const m = fuzzyAny(q, p.name, [...p.synonyms, `${p.category} ${p.name}`, p.desc], 0.78);
+        const m = fuzzyAny(q, p.name, [...p.synonyms, `${categoryLabel(p.category)} ${p.name}`, p.desc], 0.78);
         if (!m) continue;
         score = m.score + 6;
         via = m.via;
@@ -232,11 +232,11 @@ export class Palette {
       }
       const mode = toolMode(p);
       const cost = restraint && p.cost ? ` · ${p.cost} worship` : '';
-      const subVia = via && via !== p.desc && !via.startsWith(p.category) ? `“${via}” · ` : '';
+      const subVia = via && via !== p.desc && !via.startsWith(categoryLabel(p.category)) ? `“${via}” · ` : '';
       const placed = mode !== 'instant' && mode !== 'world';
       const world = this.host.view.planet(this.here?.planet ?? this.host.primary())?.name ?? 'this world';
       rows.push({
-        kind: 'power', title: p.name, titleHtml, sub: `${subVia}${p.desc || p.category}${cost}`, iconHtml: icon(p.icon, p.category), badge: p.category,
+        kind: 'power', title: p.name, titleHtml, sub: `${subVia}${p.desc || categoryLabel(p.category)}${cost}`, iconHtml: icon(p.icon, p.category), badge: categoryLabel(p.category),
         hint: mode === 'instant' ? 'cast' : 'arm',
         shiftHint: placed ? (this.hereText ? `⇧↵ ${this.hereText}` : '⇧↵ no place') : mode === 'world' ? `⇧↵ on ${world}` : '',
         score,
@@ -301,7 +301,6 @@ export class Palette {
       for (const d of pv.disasters) add(d.kind.replace(/-/g, ' '), `a live disaster on ${pv.name}${d.frozen ? ' · frozen' : ''}`, `d-${d.kind}`, { kind: 'disaster', id: d.id, planet: pv.id }, 2);
       for (const w of pv.weather) add(w.kind.replace(/-/g, ' '), `weather on ${pv.name}${w.pinned ? ' · held' : ''}`, 'cloud', { kind: 'weather', id: w.id, planet: pv.id }, -2);
     }
-    for (const c of v.creatures) add(c.name, `creature · ${c.body} · ${c.activity}`, 'creature', { kind: 'creature', id: c.id, planet: c.planet }, 3);
     for (const s of v.ships) add(`${s.kind.replace(/-/g, ' ')} #${s.id}`, `ship · ${s.phase}${s.crew ? ` · ${s.crew} aboard` : ''}`, 'w-rocket', { kind: 'ship', id: s.id, planet: s.planet }, 1);
     if (q.length >= 2) for (const a of this.people) {
       const pv = v.planet(a.planet);
@@ -410,7 +409,7 @@ export class Palette {
   setQuery(q: string): void { this.input.value = q; this.sel = 0; this.refresh(); }
 }
 
-const ACTION_ICON: Record<string, string> = { Camera: 'eye', Time: 'hourglass', Powers: 'radial', Hand: 'open-hand', Windows: 'menu' };
+const ACTION_ICON: Record<string, string> = { Camera: 'eye', Time: 'hourglass', Powers: 'radial', Touch: 'touch', Windows: 'menu' };
 
 function escapeText(s: string): string {
   return s.replace(/[&<>"]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;'));

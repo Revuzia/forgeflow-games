@@ -12,13 +12,14 @@
 import type {
   AtmosphereParams, Command, CommandResult, FieldName, OrbitParams, PlanetParams, PlanetSnap, Snapshot, StarView,
 } from '../sim/types.ts';
-import { TICKS_PER_SECOND_1X } from '../sim/types.ts';
+import { AgentFlag2, TICKS_PER_SECOND_1X } from '../sim/types.ts';
 import { getGrid, type IcoGrid } from '../sim/grid/icogrid.ts';
 import { Noise3 } from '../sim/grid/noise.ts';
 import { Rng, hashFloat } from '../sim/core/rng.ts';
 import { blackbody, orbitOffset, orbitPlaneQuat, qAxis, qMul, qRotateInv, type D3, type DQ } from './orbits.ts';
 import type { SimBackend, SnapshotSink } from './simclient.ts';
 import { LookdevLife } from './lookdevlife.ts';
+import { BASE_PACK } from '../data/index.ts';
 import { LookdevGod, type GodPlanet } from './lookdevgod.ts';
 import { LookdevSpace } from './lookdevspace.ts';
 
@@ -685,7 +686,7 @@ export class LookdevBackend implements SimBackend {
     const space = this.space.snapshot(tick, planets);
     const star = this.god.activity != null ? { ...this.star, activity: this.god.activity } : this.star;
     return {
-      tick, speed: this.speed, achievedSpeed: this.speed, star, planets, ships: space.ships, creatures: god.creatures, hand: god.hand,
+      tick, speed: this.speed, achievedSpeed: this.speed, star, planets, ships: space.ships, hand: god.hand,
       events: [...god.events, ...space.events], chronicle: [], content: ['lookdev'], msPerTick: 0, restraint: false, worship: [0],
     };
   }
@@ -736,6 +737,37 @@ export class LookdevBackend implements SimBackend {
       }
       case 'focus':
         return { ok: true };
+      // ── signs (LIVING §3.4; fixtures for render/signs): a prophet in a crowd, the Called, a shrine, a sacred animal ──
+      case 'lookdev.prophet': {
+        const life = lp.life;
+        if (!life) return { ok: false, msg: 'no people on this world' };
+        const u = Array.isArray(c.pos) ? (c.pos as number[]) : null;
+        const id = typeof c.agent === 'number' ? c.agent : u ? life.agentsNear(u, 1)[0] : undefined;
+        if (id === undefined) return { ok: false, msg: 'lookdev.prophet needs an agent or a pos' };
+        life.setFlags2(id, AgentFlag2.prophet, c.on !== false);
+        const sid = typeof c.settlement === 'number' ? c.settlement : lp.life?.settlements[0]?.id ?? 0;
+        life.setSettlement(sid, { prophet: c.on === false ? undefined : { agent: id, name: String(c.name ?? 'Hesh'), credibility: typeof c.credibility === 'number' ? c.credibility : 0.6 } });
+        // the Called round them
+        const called = typeof c.called === 'number' && u ? life.agentsNear(u, c.called + 1).filter((q) => q !== id) : [];
+        for (const q of called) life.setFlags2(q, AgentFlag2.called, true);
+        if (c.event) this.god.emit({ t: 'prophet.called', tick: Math.floor(this.tick), planet: lp.snap.id, pos: u ? [u[0], u[1], u[2]] : undefined, data: { agent: id, settlement: sid, credibility: 0.45, how: 'god' } });
+        return { ok: true, msg: `The god called ${String(c.name ?? 'Hesh')}.`, created: [{ kind: 'agent', id, planet: lp.snap.id }] };
+      }
+      case 'lookdev.shrine': {
+        const u = Array.isArray(c.pos) ? (c.pos as number[]) : null;
+        if (!lp.life || !u) return { ok: false, msg: 'lookdev.shrine needs a pos on the home world' };
+        const id = lp.life.addShrine(u, typeof c.material === 'string' ? c.material : 'stone');
+        return id >= 0 ? { ok: true, msg: 'A shrine rises.', created: [{ kind: 'building', id, planet: lp.snap.id }] } : { ok: false, msg: 'nowhere to raise it' };
+      }
+      case 'lookdev.sacred-animal': {
+        if (!lp.life) return { ok: false, msg: 'no people on this world' };
+        const sid = Number(c.settlement ?? lp.life.settlements[0]?.id ?? 0);
+        // (the animal by its id, or by its content index: the species of a herd in view)
+        const animals = (BASE_PACK as unknown as { animals?: { id: string }[] }).animals ?? [];
+        const animal = typeof c.animal === 'string' ? c.animal : typeof c.species === 'number' ? animals[c.species]?.id : undefined;
+        const ok = lp.life.setSettlement(sid, { sacred: { places: Number(c.places ?? 0), animal } });
+        return ok ? { ok: true, msg: `They revere the ${String(animal)}.` } : { ok: false, msg: `no settlement ${sid}` };
+      }
       default: {
         // ships and world events (ship.launch, lookdev.ship, world.crack / erase / moon-fall / birth)
         const sr = this.space.cmd(c, this.tick);
@@ -754,6 +786,7 @@ export class LookdevBackend implements SimBackend {
 
   async query(q: string): Promise<unknown> {
     if (q === 'scenario') return { scenario: this.scenario, seed: this.seed };
+    if (q === 'sacred') return this.god.sacredQuery();
     return null;
   }
 

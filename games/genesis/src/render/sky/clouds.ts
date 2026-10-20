@@ -261,6 +261,9 @@ float cl_remap(float v, float a, float b, float c, float d) { return c + (v - a)
 // pixel footprint (m) of the current sample; < 0: implicit derivatives
 float cl_fp = -1.0;
 #endif
+// 0..1: how far away (orbit, the limb seen from space) the current ray's clouds are seen — their margins soften into
+// translucent, fractal edges instead of hard-edged heaps (set per ray by the march; 0 in the bakes)
+float cl_far = 0.0;
 vec4 cl_tex(highp sampler3D s, vec3 q, float texPerM) {
   if (cl_fp < 0.0) return texture(s, q);
   return textureLod(s, q, log2(max(cl_fp * texPerM, 1.0)));
@@ -288,7 +291,11 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
   // cloud streets: rows of heaps along the (east–west) flow, ~250 m apart, in some regions
   float streetsW = smoothstep(0.55, 0.8, textureLod(uCloudBase, wq * 0.7 + vec3(0.13, 0.81, 0.27), 0.0).r);
   float streets = smoothstep(0.25, 0.75, textureLod(uCloudBase, vec3(pb.x * (1.0 / 4200.0), pb.y * (1.0 / 1000.0), pb.z * (1.0 / 4200.0)) + warp * 0.15, 0.0).r);
-  float mask = clamp(0.62 * big + 0.62 * cluster - 0.14, 0.0, 1.0);
+  // (the clusters' margins break up fractally — finer lobes and holes at ~650 m and ~260 m — instead of round blobs of
+  // cover: round clusters of round heaps read as popcorn from orbit)
+  float lobes = textureLod(uCloudDetail, pb * (1.0 / 2600.0) + warp * 0.2 + vec3(0.21, 0.63, 0.47), 0.0).r * 0.65
+              + textureLod(uCloudDetail, pb * (1.0 / 1050.0) + vec3(0.83, 0.37, 0.11), 0.0).g * 0.35;
+  float mask = clamp(0.62 * big + 0.62 * cluster - 0.14 + 0.55 * (lobes - 0.62) * (1.0 - abs(big - 0.5) * 1.2), 0.0, 1.0);
   mask = mix(mask, mask * (0.25 + 1.0 * streets), streetsW * 0.6);
   // broken cover only: an overcast stays overcast
   float brk = 1.0 - smoothstep(0.75, 0.97, cov);
@@ -345,11 +352,17 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
       float cellsW = textureLod(uCloudDetail, pb * (1.0 / 2100.0) + vec3(0.41, 0.13, 0.77), 0.0).r;
       anvil = max(anvil, K.x * (1.0 - smoothstep(0.35, 0.85, ang)) * smoothstep(0.62, 0.82, cellsW + 0.3 * core));
     } else {
-      // tropical cyclone: a smooth bright central dense overcast with an eye, spiral rain bands outside it
+      // tropical cyclone: a smooth bright central dense overcast with an eye, spiral rain bands outside it — a
+      // principal band and two secondary ones, wide near the overcast, narrowing and breaking into cells outward
       float arms = 0.5 + 0.5 * sin(4.0 * log(ang + 0.06) * K.y + 2.0 * th);
+      float arms1 = 0.5 + 0.5 * sin(3.0 * log(ang + 0.06) * K.y + th + 1.1);
+      // (the principal band a little stronger than the secondary pair; clear lanes between them)
+      float armsA = max(arms, arms1 * 0.8);
       float reach = 1.0 - smoothstep(0.85, 1.35, ang);
       float cdo = 1.0 - smoothstep(0.3, 0.52, ang);
-      float m = mix(0.08 + 1.25 * arms, 1.0, cdo);
+      float outer = smoothstep(0.55, 1.2, ang);
+      float bandK = smoothstep(mix(0.3, 0.55, outer), mix(0.85, 0.95, outer), armsA) * mix(1.0, 0.5 + 0.7 * mask, outer);
+      float m = mix(0.06 + 1.25 * bandK, 1.0, cdo);
       float cb = mix(cov, cov0, K.x * reach);
       cov = mix(cov, clamp(max(cb, 0.35) * m * 1.25, 0.0, 1.0), reach * K.x);
       sysW = max(sysW, K.x * reach);
@@ -358,7 +371,10 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
       storm = mix(storm, mix((0.35 + 0.6 * arms), 0.8, cdo) + 0.2 * wall, reach * K.x);
       // the overcast's top is smooth (stratiform), the eyewall and the bands tower
       ctype = mix(ctype, mix(0.85, 0.12, cdo * (1.0 - wall)), reach * K.x);
-      anvil = max(anvil, K.x * reach * cdo * eye);
+      // the outflow at the top: spiral striations over the overcast (its top rises and falls along them, so a low sun
+      // draws its texture from orbit)
+      float striae = 0.5 + 0.5 * sin((th + K.y * 3.2 * log(ang + 0.04)) * 7.0 + 3.0 * warp.y);
+      anvil = max(anvil, K.x * reach * cdo * eye * (0.62 + 0.38 * striae));
       cov *= mix(1.0, eye, reach * K.x);
     }
   }
@@ -382,7 +398,8 @@ float cloudField(vec3 pb, float hf, float cov, float storm, float ctype, float a
   // anvil: a flat-bottomed shelf under the top of the shell, spreading far wider than the towers
   if (anvil > 0.0) {
     float aBot = 0.74 + 0.04 * (n.b - 0.6);
-    float aTop = 0.95 + 0.05 * (n.g - 0.6);
+    // (a stronger anvil stands taller: the striations of a cyclone's outflow carry relief)
+    float aTop = 0.86 + 0.11 * anvil + 0.05 * (n.g - 0.6);
     an = anvil * smoothstep(aBot - 0.01, aBot + 0.015, hf) * (1.0 - smoothstep(aTop - 0.07, aTop, hf)) * smoothstep(0.35, 0.65, 0.6 * n.g + 0.4 * n.r + 0.15 * anvil);
   }
   if (hf < base || hf > top) return 0.0;
@@ -395,6 +412,10 @@ float cloudField(vec3 pb, float hf, float cov, float storm, float ctype, float a
   shape = mix(0.45 + 0.55 * shape, shape, smoothstep(0.1, 0.55, ctype));
   // a cumulonimbus is a filled column (lumpy only at its edges)
   shape = mix(shape, 0.5 + 0.5 * shape, colm);
+  // seen from far away (orbit) the single heaps merge into the weather's own shapes — clusters, streets, bands and
+  // their fractal lobes — as soft decks: on a world this small one heap is a twentieth of the disc, and a field of
+  // separate round heaps read as popcorn (the threshold's ramp widens with cl_far too: soft, translucent margins)
+  shape = mix(shape, 0.45 + 0.3 * shape, cl_far * 0.7);
   // cauliflower: billows of ~75 / 150 m (the base texture's Worley octaves) push a heap's surface in and out, a little
   // stronger toward the top (one that only started above the base left a wider skirt under a narrower waist:
   // mushroom-shaped heaps); decks stay smooth
@@ -439,7 +460,7 @@ float cloudDetailed(vec3 pb, float hf, float cov, float storm, float ctype, floa
     float d2 = cl_tex(uCloudDetail, dq * 3.31 + vec3(0.37, 0.71, 0.13), 64.0 * 3.31 * uCloudScale.y).g;
     vv -= mix(d2, 1.0 - d2, bill) * 0.07 * nearK;
   }
-  float c = v > 0.0 ? cl_cover(vv, lo, 0.03) : 0.0;
+  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.3, cl_far)) : 0.0;
   if (an > 0.0) {
     // the anvil: smooth, fibrous, lightly eroded
     float ca = clamp(an - (1.0 - df) * 0.3, 0.0, 1.0) * 0.5;
@@ -571,6 +592,8 @@ uniform vec3 uMoonDir;    // world frame
 uniform vec3 uMoonE;      // moon illuminance (0 when no moon is up)
 uniform vec4 uAurora;     // (additive, world-events lane) the auroral ovals: magnetic axis (body frame, xyz), strength (w)
 uniform float uDebugView; // 1 first-hit distance, 2 transmittance, 3 samples taken
+uniform vec3 uNightAmb;   // starlight and airglow on the cloud tops (the renderer's night floor): a moonless night side
+                          // seen from orbit shows its weather as faint grey decks, not a black disc
 // (additive, the god layer — render/fx/godfx.ts) lightning inside the deck lights the cloud from within, in the cloud's
 // own shape: up to four flashes, body-frame point (xyz) and radiance (w), reach (m)
 uniform vec4 uFlash[4];
@@ -719,6 +742,16 @@ void main() {
   vec2 sg = raySphere(o, d, uRg - 2.0);
   bool hitsGround = sg.x <= sg.y && sg.x > 0.0;
   float tEnd = min(tScene, hitsGround ? sg.x : 1e30);
+  // seen from space, clouds standing out past the planet's limb (this world's deck stands ~a tenth of a radius high, so
+  // single heaps stick out of the silhouette) and clouds far away soften into a translucent haze ring with soft margins:
+  // no lit specks along the limb, no popcorn of hard heaps from orbit
+  float tca = -dot(o, d);
+  float rMin = tca > 0.0 ? sqrt(max(r0 * r0 - tca * tca, 0.0)) : r0;
+  float thickS = uShell.y - uShell.x;
+  float limbK = (1.0 - uInsideAir) * smoothstep(uRg - 0.1 * thickS, uRg + 0.6 * thickS, rMin);
+  float farIn = 1.0 - 0.6 * uInsideAir;
+  cl_far = limbK;
+  float limbDim = mix(1.0, 0.18, limbK);
   float nu = dot(d, sun);
   vec4 phS = msPhases(nu);
   vec4 phM = moonOn ? msPhases(dot(d, moon)) : vec4(0.0);
@@ -822,6 +855,7 @@ void main() {
         float r = length(p);
         float hf = (r - uShell.x) / thick;
         cl_fp = t * uPixelAngle * 1.5;
+        cl_far = max(limbK, farIn * smoothstep(2200.0, 6000.0, t));
         vec4 wx = textureLod(uCloudWx, p, 0.0);
         if (wx.x < 0.02 && wx.w < 0.02) { s += dtC * 2.0; lastStep = dtC * 2.0; continue; }
         if (cloudMaybe(p, hf, wx.x, wx.y, wx.z, wx.w) <= 0.0) { s += dtC; lastStep = dtC; continue; }
@@ -846,12 +880,13 @@ void main() {
       float r = length(p);
       float hf = (r - uShell.x) / thick;
       cl_fp = tm * uPixelAngle * 1.5;
+      cl_far = max(limbK, farIn * smoothstep(2200.0, 6000.0, tm));
       vec4 wx = textureLod(uCloudWx, p, 0.0);
       float hn = 0.0;
       float nearK = uNearDetail * (1.0 - smoothstep(300.0, 1400.0, tm));
       float c = cloudDetailed(p, hf, wx.x, wx.y, wx.z, wx.w, nearK, hn);
       // the near zone dissolves (the in-cloud fog above stands in for it)
-      float dens = densityOf(c, wx.y) * (uCamFog > 0.0 ? smoothstep(uNearR * 0.25, uNearR, tm) : smoothstep(2.0, 12.0, tm));
+      float dens = densityOf(c, wx.y) * (uCamFog > 0.0 ? smoothstep(uNearR * 0.25, uNearR, tm) : smoothstep(2.0, 12.0, tm)) * limbDim;
       nSamp += 1.0;
       if (dens <= 1e-5) {
         empty++;
@@ -887,6 +922,9 @@ void main() {
       // ambient: the cloud hides half of the sky from its own surface and more toward the base; storm cores darker still
       float ambOcc = mix(0.25, 0.75, smoothstep(0.0, 0.9, hn)) * (1.0 - 0.45 * smoothstep(0.3, 1.0, wx.y));
       S += mix(ambBot, ambTop, smoothstep(0.0, 1.0, hn)) * ambOcc;
+      // the night floor (starlight, airglow) on the deck, where the sun is down for the cloud
+      // (an irradiance: a white cloud returns ~E/π of it, its base less)
+      S += uNightAmb * ((0.45 + 0.55 * hn) / PI) * smoothstep(0.1, -0.15, dot(up, sun)) * (1.0 - 0.4 * smoothstep(0.3, 1.0, wx.y));
       // (additive) the aurora overhead lights the cloud tops under its ovals green on the night side
       if (uAurora.w > 0.0) {
         vec3 upB = normalize(uWorldToBody * up);
@@ -964,7 +1002,7 @@ uniform vec2 uShell;
 uniform float uCirrusR;
 uniform float uFar;
 uniform mat4 uPrevBodyToClip;
-// (additive, quality pass) the coarsest interleave (k = 4, 'low'): the spatial reconstruction is a depth-aware
+// (additive, quality pass) the coarse interleaves (k = 3 'medium', k = 4 'low'): the spatial reconstruction is a depth-aware
 // bilinear at a blue-noise jittered position (a new rank each frame) instead of a Catmull-Rom of the sparse samples —
 // a sharp cubic of a near-binary 1/16 grid draws every sample as a rounded square, and on a slow machine whose camera
 // keeps moving the history never gets the frames to hide them. Grain that averages out, not a mosaic.
@@ -1181,6 +1219,8 @@ export interface CloudInputs {
   moonE?: Vector3;
   /** (additive, world-events lane) the aurora's ovals: body-frame magnetic axis and strength (render/sky/aurora.ts) */
   aurora?: Vector4;
+  /** the night floor (starlight and airglow irradiance) the cloud tops take where the sun is down for them */
+  nightAmb?: Vector3;
   /**
    * (additive, the god layer: render/fx/godfx.ts `cloudFlashes`) lightning inside the deck: body-frame point, radiance w
    * and reach r (m) of up to four flashes lighting the cloud from within
@@ -1302,6 +1342,7 @@ export class CloudPass {
       uInsideAir: { value: 1 }, uCamMuS: { value: 1 }, uFullRes: { value: new Vector2(4, 4) }, uOffset: { value: new Vector2() }, uK: { value: 2 },
       uPixelAngle: { value: 0.001 }, uNearDetail: { value: 1 }, uCirrus: { value: 0.4 }, uCirrusR: { value: 3528 },
       uMoonDir: { value: new Vector3(0, 1, 0) }, uMoonE: { value: new Vector3() }, uDebugView: { value: 0 }, uAurora: { value: new Vector4() },
+      uNightAmb: { value: new Vector3() },
       // (additive, the god layer) lightning flashes inside the deck
       uFlash: { value: Array.from({ length: 4 }, () => new Vector4()) }, uFlashR: { value: [1, 1, 1, 1] }, uFlashN: { value: 0 },
       uRg: { value: 0 }, uRt: { value: 0 }, uBetaR: { value: new Vector3() }, uHR: { value: 1 }, uBetaMs: { value: new Vector3() },
@@ -1479,6 +1520,7 @@ export class CloudPass {
     (u.uMoonDir.value as Vector3).copy(i.moonDir ?? _zero);
     (u.uMoonE.value as Vector3).copy(i.moonE ?? _zero);
     if (i.aurora) (u.uAurora.value as Vector4).copy(i.aurora); else (u.uAurora.value as Vector4).set(0, 1, 0, 0);
+    (u.uNightAmb.value as Vector3).copy(i.nightAmb ?? _zero);
     {
       // (additive) lightning flashes inside the deck
       const fl = i.flashes ?? [];
@@ -1502,7 +1544,8 @@ export class CloudPass {
     r.uRawRes.value.set(this.raw.width, this.raw.height);
     r.uOffset.value.set(off[0], off[1]);
     r.uK.value = k;
-    r.uSoftUp.value = k >= 4 ? 1 : 0;
+    // (soft upsample at k = 3 too, Medium: its Catmull-Rom of a 1/9 grid stair-stepped cloud margins by 2–4 px)
+    r.uSoftUp.value = k >= 3 ? 1 : 0;
     r.uFrameR.value = i.frame % 1024;
     r.uHistValid.value = this.histValid ? 1 : 0;
     // samples per pixel the history may hold while reprojection holds (k = 1 marches every pixel every frame)

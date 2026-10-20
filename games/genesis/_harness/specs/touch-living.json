@@ -1,0 +1,158 @@
+{
+ "_doc": "The Touch as light and weather (LIVING \u00a70.1.7, \u00a73.6, hooks H2/H7; render/hand.ts, gen/handgen.ts): idle (a whirl of wind, light and cloud), holding (the mantle gathered into a cradle round what it holds, wind bound round it), throwing (the cradle opening, the hurled thing streaked in its light), each trusted (warm daylight) and feared (storm-dark, crackling). Lookdev world; F.fx.hand.hold pins the Touch's clock (nextCrackle finds a moment an arc has just struck). Run: node _harness/shots.mjs _harness/specs/touch-living.json --port=5195",
+ "shots": [
+  {
+   "name": "tl-idle-trusted",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = true; F.fx.hand.hold = null; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' });",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.85, pose: 'open', held: null }); await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 95, tilt: 74, yaw: 20, fov: 55, hour: 15.5 }); F.fx.hand.regard = 0.85; await G.frames(3);",
+    "return { b: F.fx.hand.behaviour, L: +F.fx.hand.scale.toFixed(1), regard: +F.fx.hand.regard.toFixed(2), grasp: +F.fx.hand.grasp.toFixed(2) };"
+   ]
+  },
+  {
+   "name": "tl-lift-trusted",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 8, regard: 0.85, pose: 'open', held: null }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'rock', mass: 2600 }); await G.step(1);",
+    "F.fx.hand.hold = 500; await G.frames(2); F.fx.hand.hold = null; await G.frames(2);",
+    "return { b: F.fx.hand.behaviour, grasp: +F.fx.hand.grasp.toFixed(2), held: [F.fx.hand.heldKind, F.fx.hand.heldId] };"
+   ]
+  },
+  {
+   "name": "tl-close-hold",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('farm'); F.fx.hand.hold = null;",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 8, regard: 0.85, pose: 'open', held: null }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'rock', mass: 2600 }); F.fx.hand.regard = 0.85; await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 40, tilt: 80, yaw: 20, fov: 55, hour: 15.5 }); F.fx.hand.hold = 520; await G.frames(2); F.fx.hand.hold = null; await G.frames(2);",
+    "return { b: F.fx.hand.behaviour, L: +F.fx.hand.scale.toFixed(1), grasp: +F.fx.hand.grasp.toFixed(2) };"
+   ]
+  },
+  {
+   "name": "tl-lift-feared",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 8, regard: -0.9, pose: 'grab' }); F.fx.hand.regard = -0.9; await G.step(1);",
+    "const t = F.fx.hand.nextCrackle(600, -0.9); F.fx.hand.hold = t; await G.frames(3);",
+    "return { b: F.fx.hand.behaviour, t, crackling: F.fx.hand.crackling, grasp: +F.fx.hand.grasp.toFixed(2) };"
+   ]
+  },
+  {
+   "name": "tl-idle-feared",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: -0.9, pose: 'open', held: null }); F.fx.hand.regard = -0.9; await G.step(1);",
+    "const t = F.fx.hand.nextCrackle(700, -0.9); F.fx.hand.hold = t; await G.frames(3);",
+    "return { b: F.fx.hand.behaviour, t, crackling: F.fx.hand.crackling, grasp: +F.fx.hand.grasp.toFixed(2) };"
+   ]
+  },
+  {
+   "name": "tl-villager-trusted",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.hand.hold = null; const p = G.poi('town'); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.7, pose: 'open', held: null }); F.fx.hand.regard = 0.7;",
+    "await G.camera({ mode: 'surface', lat: p.lat - (16 / 3000) * 180 / Math.PI, lon: p.lon, alt: 3, yaw: 0, pitch: 8, fov: 60, hour: 16 }); await G.frames(1);",
+    "const a = G.agents(40).filter((x) => x.dist < 70).map((x) => x.id); await G.cmd({ k: 'lookdev.hand.grab', target: { kind: 'agent', id: a[0] } }); await G.step(1); F.fx.hand.hold = 800; await G.frames(2); F.fx.hand.hold = null; await G.frames(2);",
+    "return { b: F.fx.hand.behaviour, held: [F.fx.hand.heldKind, F.fx.hand.heldId], L: +F.fx.hand.scale.toFixed(1), grasp: +F.fx.hand.grasp.toFixed(2), d: Math.round(F.fx.hand.grip.distanceTo(F.fx.vis.camBody)) };"
+   ]
+  },
+  {
+   "name": "tl-villager-feared",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; await G.cmd({ k: 'lookdev.hand', regard: -0.85 }); F.fx.hand.regard = -0.85; await G.step(1);",
+    "const t = F.fx.hand.nextCrackle(900, -0.85); F.fx.hand.hold = t; await G.frames(3);",
+    "return { b: F.fx.hand.behaviour, held: [F.fx.hand.heldKind, F.fx.hand.heldId], crackling: F.fx.hand.crackling };"
+   ]
+  },
+  {
+   "name": "tl-throw",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.hand.hold = null; const p = G.poi('farm');",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 14, regard: 0.6, pose: 'open', held: null }); await G.cmd({ k: 'lookdev.hand.grab', kind: 'rock', mass: 2600 });",
+    "await G.step(1); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 150, tilt: 64, yaw: 0, fov: 55, hour: 15 }); await G.frames(2);",
+    "const up = p.pos, el = Math.hypot(up[2], up[0]) || 1, E = [up[2] / el, 0, -up[0] / el]; const v = [E[0] * 20 + up[0] * 20, E[1] * 20 + up[1] * 20, E[2] * 20 + up[2] * 20]; await G.cmd({ k: 'lookdev.hand.throw', vel: v }); await G.step(1); await G.frames(1); const nf = () => { let n = 0; F.fx.m.flights.forEach(() => n++, F.fx.clock); return n; }; for (let i = 0; i < 8 && !nf(); i++) await G.frames(1); F.advance(0.5); await G.frames(1);",
+    "let fl = []; F.fx.m.flights.forEach((id, kind, q, v, age) => fl.push({ id, kind, age: +age.toFixed(2), d: Math.round(q.distanceTo(F.fx.vis.camBody)) }), F.fx.clock); return { fl, grasp: +F.fx.hand.grasp.toFixed(2) };"
+   ]
+  },
+  {
+   "name": "tl-orbit",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.hand.hold = null; const p = G.poi('farm'); await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.7, pose: 'open', held: null });",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 2600, tilt: 30, yaw: 0, fov: 50, hour: 14 }); await G.frames(3);",
+    "return { L: +F.fx.hand.scale.toFixed(1), vis: F.fx.hand.visible };"
+   ]
+  }
+ ]
+}

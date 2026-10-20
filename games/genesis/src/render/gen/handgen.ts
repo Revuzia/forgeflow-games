@@ -1,317 +1,293 @@
-// GENESIS — the god hand's body (CONTRACT.md §15.6: "the hand has articulated fingers ... and a skin shader with SSS").
+// GENESIS — the Touch's form (LIVING §0.1.7, §3.6, hook H7; CONTRACT §11.4, §15.6). The god's hand of the old design
+// is gone: its presence in the world is light and weather, drawn by render/hand.ts. This module is the Touch's
+// generator — everything about its SHAPE that is not a shader: the geometry its parts are drawn with, its palette by
+// regard, the cradle it gathers round what it holds, the CPU twin of the vortex the vertex shaders place, and the
+// jagged arcs of a feared god's crackling. Pure data and arithmetic (three.js geometry objects only): testable in Node.
 //
-// A right hand modelled as one implicit surface (gen/sdfmesh.ts) and polygonised once: a palm with its transverse arch,
-// thenar and hypothenar pads and the pads under the knuckles; four fingers of three phalanges each, tapering, wider at
-// the joints, with fingertip pads and NAILS (a raised plate on each distal phalanx); a thumb that swings out of the
-// thenar mass; knuckle bumps over the metacarpal heads; webbing between the fingers (each finger blends into the palm,
-// never into its neighbour); a wrist with its ulnar bump; and a short forearm that the material dissolves into light.
-//
-// Units: hand length 1 (wrist crease → middle fingertip). Hand space: +z toward the fingers, +y the back of the hand,
-// +x the thumb side (a right hand, palm down). The rig (gen/rig.ts) has 21 bones: forearm, hand, five metacarpals,
-// three phalanges per finger and two for the thumb. Per-vertex data for the shader:
-//   aRest  — the bind position (procedural detail stays on the skin as it bends)
-//   aMark  — x nail (0..1), y dorsal (−1 palm .. +1 back), z signed distance to the nearest flexion joint along its
-//            bone (creases, knuckle wrinkles), w thinness (light through the fingers)
-//   aPart  — x finger (0 thumb, 1 index … 4 little, 5 palm, 6 wrist / forearm), y 0..1 along the finger (0 at its root)
+//   the vortex     a whirl of wind round a vertical axis from the ground up past the grip: wide at the ground (the dust
+//                  it draws up), narrow at the grip, flaring out above it into the light coming down
+//   the mantle     tufts of cloud riding the vortex up (open), or GATHERED into a closed, turning cradle round whatever
+//                  the Touch holds (grasp): three bands of cloud circling it — under it, round its middle, over it —
+//                  with gaps between, so what it holds shows; the low tufts come in last, so it visibly gathers; the
+//                  crown is left open where the light comes in. Nothing of it is a hand: no palm, no fingers, no limb.
+//   the bands      ribbons of wind spiralling up the vortex; while it holds, six of them wrap round the cradle (wind
+//                  bound round the held thing) and three stay below as the column's tether to the ground
+//   regard         −1 feared … +1 trusted (HandView.regard): warm daylight and still air when trusted, a pale silver-
+//                  gold when awed, storm-dark cloud with a cold light and crackling arcs when feared
 
-import { BufferAttribute, BufferGeometry } from 'three';
-import { Rig, bone, type RigBone, type V3 } from './rig.ts';
-import { frame, meshSdf, sdCapsule, sdEllipsoid, sdRoundCone, segDist, skinWeights, smin, smoothAttribute, type Frame } from './sdfmesh.ts';
+import { BufferAttribute, BufferGeometry, Float32BufferAttribute, InstancedBufferAttribute, InstancedBufferGeometry } from 'three';
 
-export const HAND_FINGERS = ['thumb', 'index', 'middle', 'ring', 'little'] as const;
+// ───────────────────────────── palette by regard ─────────────────────────────
 
-interface FingerDef {
-  /** metacarpal base and head (MCP joint) */
-  base: V3;
-  mcp: V3;
-  /** phalanx lengths, joint radii (proximal end of each phalanx, then the tip), spread angle (rad, + toward the thumb) */
-  len: [number, number, number];
-  rad: [number, number, number, number];
-  spread: number;
-  /** initial droop per joint (rad): the relaxed arc the hand is bound in */
-  droop: number;
+export interface TouchLook {
+  /** the Touch's own light (linear RGB): warm gold trusted … pale silver-gold awed … a cold blue-white when feared */
+  light: [number, number, number];
+  /** a feared god's cold light: the flicker inside its storm, the arcs */
+  rim: [number, number, number];
+  /** 0 light … 1 storm-dark */
+  dark: number;
+  /** 0..1 how trusted / how feared (smooth bands round regard ±0.08 … ±0.75) */
+  trusted: number;
+  feared: number;
+  /** the albedo of its cloud: sunlit white when trusted, slate when feared */
+  cloud: number;
+  /** how often its storm crackles (arcs per second) */
+  crackle: number;
 }
 
-const FINGERS: FingerDef[] = [
-  // index, middle, ring, little (the thumb is built apart)
-  { base: [0.064, 0.0, 0.1], mcp: [0.136, 0.0, 0.548], len: [0.205, 0.124, 0.096], rad: [0.0485, 0.0435, 0.039, 0.0325], spread: 0.07, droop: 0.06 },
-  { base: [0.018, 0.0, 0.1], mcp: [0.041, 0.006, 0.565], len: [0.226, 0.14, 0.101], rad: [0.0505, 0.0455, 0.0405, 0.0335], spread: 0.0, droop: 0.06 },
-  { base: [-0.03, 0.0, 0.1], mcp: [-0.052, 0.0, 0.546], len: [0.21, 0.134, 0.097], rad: [0.0475, 0.0425, 0.038, 0.0315], spread: -0.075, droop: 0.065 },
-  { base: [-0.072, -0.004, 0.11], mcp: [-0.134, -0.012, 0.495], len: [0.165, 0.1, 0.086], rad: [0.0415, 0.037, 0.0335, 0.028], spread: -0.18, droop: 0.075 },
-];
+function smooth(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
 
-/** cross-section flattening of fingers (y over x) */
-const FLAT = 0.86;
-
-export interface HandMesh {
-  geo: BufferGeometry;
-  bones: RigBone[];
-  /** bone indices */
-  idx: {
-    forearm: number; hand: number;
-    meta: number[];            // [thumb, index, middle, ring, little]
-    /** phalanges per finger: thumb has 2 (proximal, distal), the others 3 */
-    phal: number[][];
+/** the Touch's look for a regard in −1 (feared) … +1 (trusted) */
+export function touchLook(regard: number): TouchLook {
+  const r = Math.max(-1, Math.min(1, Number.isFinite(regard) ? regard : 0));
+  const trusted = smooth(0.08, 0.75, r), feared = smooth(0.08, 0.75, -r);
+  // pale silver-gold (awed) → warm daylight gold (trusted); feared keeps a cold light in its core
+  let lr = 1.0, lg = 0.93 - 0.25 * trusted, lb = 0.82 - 0.52 * trusted;
+  lr += (0.62 - lr) * feared; lg += (0.74 - lg) * feared; lb += (1.0 - lb) * feared;
+  return {
+    light: [lr, lg, lb], rim: [0.5, 0.68, 1.0], dark: 0.92 * feared, trusted, feared,
+    cloud: 0.86 - 0.74 * feared + 0.06 * trusted,
+    // (arcs a second or so apart: a storm that crackles now and then, dark between — lit half the time it read pale)
+    crackle: feared > 0.3 ? 0.4 + 1.2 * (feared - 0.3) / 0.7 : 0,
   };
-  /** bind-pose fingertip points (pad side), per finger, and the palm centre (palmar surface) */
-  tips: V3[];
-  palm: V3;
 }
 
-let cached: HandMesh | null = null;
+// ───────────────────────────── the vortex and the cradle (CPU twin of the shaders) ─────────────────────────────
 
-/** the hand mesh (built once; ~15–20 k vertices) */
-export function handMesh(): HandMesh {
-  if (cached) return cached;
-  cached = buildHand();
-  return cached;
+/** the frame the vortex is placed in (body frame, metres) */
+export interface VortexFrame {
+  /** the vortex's foot on the ground, its axis (unit) and a tangent pair */
+  base: [number, number, number];
+  ax: [number, number, number];
+  e1: [number, number, number];
+  e2: [number, number, number];
+  /** the grip's height over the foot; the Touch's size; radius at the ground and at the grip */
+  hg: number;
+  L: number;
+  rg: number;
+  rk: number;
+  /** spin phase (rad) and the flow's phase (rising) */
+  spin: number;
+  flow: number;
+  /** 0 open … 1 holding: how far the mantle has gathered into the cradle */
+  grasp: number;
+  /** the cradle: its centre (body m), horizontal and vertical radii */
+  c: [number, number, number];
+  cr: number;
+  ch: number;
 }
 
-function add(a: V3, b: V3): V3 { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
-function scl(a: V3, k: number): V3 { return [a[0] * k, a[1] * k, a[2] * k]; }
-function norm(a: V3): V3 { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
-function rotY(v: V3, a: number): V3 { const c = Math.cos(a), s = Math.sin(a); return [c * v[0] + s * v[2], v[1], -s * v[0] + c * v[2]]; }
-function rotX(v: V3, a: number): V3 { const c = Math.cos(a), s = Math.sin(a); return [v[0], c * v[1] - s * v[2], s * v[1] + c * v[2]]; }
+/** the vortex's radius at height h over its foot (j: a per-strand jitter 0..1) — VORTEX_GLSL vortexR */
+export function vortexR(f: VortexFrame, h: number, j: number): number {
+  const h0 = f.hg + f.L * 0.75;
+  const tg = Math.min(1, Math.max(0, h / Math.max(f.hg, 1e-3)));
+  const s = smooth(0, 1, Math.pow(tg, 0.7));
+  const r = (f.rg + (f.rk - f.rg) * s) * (0.8 + 0.4 * j);
+  return r * (1 + 0.55 * smooth(f.hg, h0, h));
+}
 
-interface Segment { a: V3; b: V3; ra: number; rb: number; f: Frame }
+function at(f: VortexFrame, h: number, r: number, th: number, out: number[]): void {
+  const c = Math.cos(th), s = Math.sin(th);
+  for (let i = 0; i < 3; i++) out[i] = f.base[i] + f.ax[i] * h + (f.e1[i] * c + f.e2[i] * s) * r;
+}
 
-function buildHand(): HandMesh {
-  const bones: RigBone[] = [];
-  const up: V3 = [0, 1, 0];
-  // 0 forearm, 1 hand
-  bones.push(bone('forearm', -1, [0, 0.012, -0.62], [0, 0.004, -0.02], up, 0.13));
-  bones.push(bone('hand', 0, [0, 0.004, -0.02], [0, 0.0, 0.24], up, 0.11));
-  // thumb geometry: CMC → MCP → IP → tip; it swings out and turns its pad toward the fingers
-  const tCmc: V3 = [0.078, -0.03, 0.075];
-  const tMcp: V3 = [0.212, -0.058, 0.262];
-  const tDir1 = norm([0.42, -0.2, 0.885]);
-  const tIp = add(tMcp, scl(tDir1, 0.152));
-  const tDir2 = norm([0.3, -0.24, 0.92]);
-  const tTip = add(tIp, scl(tDir2, 0.118));
-  // the thumb's dorsal (nail) direction: rolled outward ~70° from the back of the hand
-  const tUp = norm([0.86, 0.5, -0.12]);
-  const meta: number[] = [];
-  const phal: number[][] = [];
-  meta.push(bones.length); bones.push(bone('thumb.meta', 1, tCmc, tMcp, tUp, 0.058));
-  const thumbP = bones.length; bones.push(bone('thumb.p', meta[0], tMcp, tIp, tUp, 0.048));
-  const thumbD = bones.length; bones.push(bone('thumb.d', thumbP, tIp, tTip, tUp, 0.042));
-  phal.push([thumbP, thumbD]);
-  // fingers
-  const fingerSegs: Segment[][] = [];
-  const tips: V3[] = [];
-  for (let fi = 0; fi < 4; fi++) {
-    const F = FINGERS[fi];
-    const m = bones.length;
-    meta.push(m);
-    bones.push(bone(`${HAND_FINGERS[fi + 1]}.meta`, 1, F.base, F.mcp, up, 0.05));
-    let dir: V3 = rotY([0, 0, 1], F.spread);
-    let p = F.mcp;
-    const segs: Segment[] = [];
-    const ph: number[] = [];
-    let parent = m;
-    for (let k = 0; k < 3; k++) {
-      dir = norm(rotX(dir, F.droop * (k === 0 ? 0.6 : 1)));
-      const q = add(p, scl(dir, F.len[k]));
-      const bi = bones.length;
-      bones.push(bone(`${HAND_FINGERS[fi + 1]}.${'pmd'[k]}`, parent, p, q, up, F.rad[k] * 0.95));
-      ph.push(bi);
-      segs.push({ a: p, b: q, ra: F.rad[k], rb: F.rad[k + 1] * (k < 2 ? 0.97 : 1), f: frame(p, [q[0] - p[0], q[1] - p[1], q[2] - p[2]], up) });
-      parent = bi;
-      p = q;
-    }
-    phal.push(ph);
-    fingerSegs.push(segs);
-    // the tip pad: just short of the end, on the palm side
-    const last = segs[2];
-    tips.push(add(last.b, add(scl(last.f.w, -last.rb * 0.6), scl(last.f.v, -last.rb * 0.7))));
+/** how far a tuft (seed b: low 0 … high 1) has gathered into the cradle at grasp g — the low ones come in last */
+export function gathered(g: number, b: number): number {
+  return smooth(0.42 * (1 - b), 0.42 * (1 - b) + 0.58, g);
+}
+
+/**
+ * One cloud tuft of the mantle (seeds a, b, c, d in 0..1): its body-frame position into `out` and its opacity
+ * envelope (0..1). Open, it rides the vortex up and fades at both ends of its climb; gathered, it turns on the cradle's
+ * shell, leaving the crown open. The vertex shader TUFT_VERT places the same point.
+ */
+export function mantlePoint(f: VortexFrame, a: number, b: number, c: number, d: number, out: number[]): number {
+  // open: up the vortex
+  const life = 5 + 4 * d;
+  const ph = ((f.flow * 0.3) / life + a) % 1;
+  const phase = ph < 0 ? ph + 1 : ph;
+  const h = phase * (f.hg + 0.9 * f.L);
+  const r = vortexR(f, h, c) * (0.75 + 0.5 * c);
+  const th = a * Math.PI * 2 + f.spin * (0.55 + 0.3 * b) + phase * 2.4;
+  const po = [0, 0, 0];
+  at(f, h, r, th, po);
+  const fadeOpen = Math.sin(Math.PI * phase);
+  // gathered: on the cradle's shell, in three tilted bands of wind circling what it holds (below it, round its middle,
+  // over it — gaps between them, so what it holds shows through; the crown left open)
+  const th2 = a * Math.PI * 2 + f.spin * (1.1 + 0.5 * c);
+  const sl = cradleLat(b, th2, f.spin);
+  const cl = Math.sqrt(Math.max(0, 1 - sl * sl));
+  const rr = 0.82 + 0.36 * c;
+  const pg = [0, 0, 0];
+  const cs = Math.cos(th2), sn = Math.sin(th2);
+  for (let i = 0; i < 3; i++) pg[i] = f.c[i] + f.ax[i] * sl * f.ch * rr + (f.e1[i] * cs + f.e2[i] * sn) * cl * f.cr * rr;
+  const g = gathered(f.grasp, b);
+  for (let i = 0; i < 3; i++) out[i] = po[i] + (pg[i] - po[i]) * g;
+  return fadeOpen + (CRADLE_ALPHA - fadeOpen) * g;
+}
+
+/** how dense a gathered tuft is drawn (the cradle is lighter than the whirl's billows: what it holds shows through) */
+export const CRADLE_ALPHA = 0.62;
+
+/**
+ * The sine of latitude on the cradle of a gathered tuft with seed b at azimuth th: one of three bands of wind (below
+ * what it holds, round its middle, over it), each a ring tilted its own way and slowly precessing with the spin, so
+ * the bands cross and weave a loose basket of wind rather than stacking as plates; a little spread within each.
+ */
+export function cradleLat(b: number, th: number, spin: number): number {
+  const band = Math.min(2, Math.floor(b * 3));
+  const tilt = band === 1 ? 0.3 : 0.18;
+  return [-0.6, 0.0, 0.45][band] + tilt * Math.sin(th + band * 2.094 - spin * 0.21) + ((b * 3 - band) - 0.5) * 0.16;
+}
+
+/**
+ * The cradle the mantle gathers into round what the Touch holds: its horizontal and vertical radii (m) and how far
+ * its centre hangs below the grip (m). `drawn` is the held thing's drawn size (m: a person's height, a boulder's
+ * width, a tree's height, a hut's width); L the Touch's size.
+ */
+export function cradleOf(kind: string, drawn: number, L: number): { r: number; h: number; drop: number } {
+  switch (kind) {
+    // a person hangs from the grip (their body below it): the cradle round their middle
+    case 'agent': return { r: 0.9 + 0.12 * L, h: 1.25 + 0.08 * L, drop: 0.85 };
+    case 'tree': return { r: 0.42 * drawn + 0.1 * L, h: 0.62 * drawn, drop: 0 };
+    case 'building': return { r: 0.78 * drawn, h: 0.62 * drawn + 0.1 * L, drop: 0 };
+    case 'animal': return { r: 0.7 * drawn + 0.1 * L, h: 0.6 * drawn + 0.08 * L, drop: 0.3 * drawn };
+    default: return { r: 0.72 * drawn + 0.1 * L, h: 0.72 * drawn + 0.1 * L, drop: 0 };
   }
-  // thumb tip pad (its palm side faces −tUp-ish toward the index)
-  const tF = frame(tIp, [tTip[0] - tIp[0], tTip[1] - tIp[1], tTip[2] - tIp[2]], tUp);
-  tips.unshift(add(tTip, add(scl(tF.w, -0.02), scl(tF.v, -0.03))));
-  const thumbSegs: Segment[] = [
-    { a: tCmc, b: tMcp, ra: 0.062, rb: 0.05, f: frame(tCmc, [tMcp[0] - tCmc[0], tMcp[1] - tCmc[1], tMcp[2] - tCmc[2]], tUp) },
-    { a: tMcp, b: tIp, ra: 0.05, rb: 0.0445, f: frame(tMcp, [tIp[0] - tMcp[0], tIp[1] - tMcp[1], tIp[2] - tMcp[2]], tUp) },
-    { a: tIp, b: tTip, ra: 0.0445, rb: 0.036, f: tF },
-  ];
-
-  // ── the field (every part precomputed: it is evaluated a few hundred thousand times) ──
-  const palmBox = frame([0.0, -0.006, 0.31], [0, 0, 1], up);
-  const thenar = frame([0.108, -0.05, 0.2], [0.55, -0.1, 0.83], up);
-  const hypothenar = frame([-0.105, -0.038, 0.28], [-0.1, 0, 1], up);
-  const fingerAll = [thumbSegs, ...fingerSegs];
-  const knuckles: V3[] = FINGERS.map((F) => add(F.mcp, [0, 0.03, -0.006]));
-  const padsUnder: V3[] = FINGERS.map((F) => add(F.mcp, [0, -0.045, -0.035]));
-  const metaSegs: Segment[] = FINGERS.map((F) => ({ a: F.base, b: F.mcp, ra: 0.052, rb: 0.049, f: frame(F.base, [F.mcp[0] - F.base[0], F.mcp[1] - F.base[1], F.mcp[2] - F.base[2]], up) }));
-  const wrist: Segment = { a: [0, 0.004, -0.09], b: [0, -0.002, 0.07], ra: 0.106, rb: 0.112, f: frame([0, 0, -0.09], [0, 0, 1], up) };
-  const fore: Segment = { a: [0, 0.012, -0.66], b: [0, 0.004, -0.08], ra: 0.138, rb: 0.104, f: frame([0, 0, -0.66], [0, 0, 1], up) };
-  // per finger: its tip pad and nail plate, and a bounding capsule (root → tip) for culling
-  interface FingerParts { segs: Segment[]; flat: number[]; pad: V3; padR: V3; nail: V3; nailR: V3; f: Frame; ca: V3; cb: V3; cr: number; web: number }
-  const parts: FingerParts[] = fingerAll.map((segs, fi) => {
-    const s = segs[segs.length - 1];
-    const L = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1], s.b[2] - s.a[2]);
-    const mid = add(s.a, scl(s.f.w, L * 0.55));
-    return {
-      segs, flat: segs.map((_, k) => (fi === 0 && k === 0 ? 0.92 : FLAT)),
-      pad: add(mid, scl(s.f.v, -s.rb * 0.42)), padR: [s.rb * 0.92, s.rb * 0.62, L * 0.42],
-      nail: add(add(s.a, scl(s.f.w, L * 0.62)), scl(s.f.v, s.rb * 0.6)), nailR: [s.rb * 0.74, s.rb * 0.3, L * 0.42], f: s.f,
-      ca: segs[0].a, cb: s.b, cr: Math.max(...segs.map((q) => q.ra)) + 0.02, web: fi === 0 ? 0.06 : 0.034,
-    };
-  });
-
-  // a flattened round cone: squash the segment's local v (dorsal) axis
-  const flatCone = (x: number, y: number, z: number, s: Segment, flat: number): number => {
-    const cx = x - s.a[0], cy = y - s.a[1], cz = z - s.a[2];
-    const lv = cx * s.f.v[0] + cy * s.f.v[1] + cz * s.f.v[2];
-    const k = (1 / flat - 1) * lv;
-    return sdRoundCone(x + s.f.v[0] * k, y + s.f.v[1] * k, z + s.f.v[2] * k, s.a, s.b, s.ra, s.rb) * flat;
-  };
-
-  const palmField = (x: number, y: number, z: number): number => {
-    // (parts are skipped where they are certainly farther than their blend radius from the running value: smin of a
-    // farther primitive leaves it unchanged, so the field is exact where it matters)
-    let d = 1e9;
-    if (z > -0.16) {
-      // the metacarpal body: four flattened cones fused, with the transverse arch (higher in the middle)
-      for (let fi = 0; fi < 4; fi++) d = smin(d, flatCone(x, y, z, metaSegs[fi], 0.74), 0.065);
-      // the palm's mass (a flattened ellipsoid), its pads
-      if (z > -0.02 && z < 0.66) {
-        d = smin(d, sdEllipsoid(x, y, z, palmBox.c, [0.16, 0.062, 0.25], palmBox), 0.05);
-        d = smin(d, sdEllipsoid(x, y, z, thenar.c, [0.068, 0.056, 0.13], thenar), 0.05);
-        d = smin(d, sdEllipsoid(x, y, z, hypothenar.c, [0.05, 0.045, 0.165], hypothenar), 0.04);
-      }
-      if (z > 0.36 && z < 0.7) for (let i = 0; i < 4; i++) {
-        d = smin(d, sdEllipsoid(x, y, z, padsUnder[i], [0.044, 0.026, 0.05]), 0.03);
-        d = smin(d, sdEllipsoid(x, y, z, knuckles[i], [0.032, 0.026, 0.034]), 0.03);
-      }
-    }
-    // the wrist: a flattened round cone, its ulnar bump, then the forearm with its muscle bellies
-    if (z < 0.3) {
-      d = smin(d, flatCone(x, y, z, wrist, 0.68), 0.07);
-      if (z < 0.08) d = smin(d, sdEllipsoid(x, y, z, [-0.098, 0.03, -0.035], [0.026, 0.024, 0.03]), 0.03);
-    }
-    if (z < 0.12) {
-      d = smin(d, flatCone(x, y, z, fore, 0.76), 0.08);
-      d = smin(d, sdEllipsoid(x, y, z, [0.01, -0.02, -0.5], [0.14, 0.1, 0.2]), 0.08);
-    }
-    return d;
-  };
-
-  const fingerField = (x: number, y: number, z: number, F: FingerParts): number => {
-    let d = 1e9;
-    for (let k = 0; k < F.segs.length; k++) d = smin(d, flatCone(x, y, z, F.segs[k], F.flat[k]), 0.012);
-    d = smin(d, sdEllipsoid(x, y, z, F.pad, F.padR, F.f), 0.016);
-    d = smin(d, sdEllipsoid(x, y, z, F.nail, F.nailR, F.f), 0.008);
-    return d;
-  };
-
-  const field = (x: number, y: number, z: number): number => {
-    const pd = palmField(x, y, z);
-    let d = pd;
-    for (let fi = 0; fi < 5; fi++) {
-      const F = parts[fi];
-      // a finger farther than its web from the palm's surface cannot change the result
-      if (sdCapsule(x, y, z, F.ca, F.cb, F.cr) > pd + F.web) continue;
-      // each finger webs into the palm (the thumb's web is broad), never into its neighbour
-      d = Math.min(d, smin(pd, fingerField(x, y, z, F), F.web));
-    }
-    return d;
-  };
-
-  const h = 0.0085;
-  const m = meshSdf(field, [-0.26, -0.2, -0.72], [0.46, 0.17, 1.08], h, 1);
-  const n = m.vertexCount;
-  // ── skinning ──
-  const segs = bones.map((b) => ({ a: b.head, b: b.tail, r: b.r }));
-  const fingerOf = (bi: number): number => {
-    if (bi === meta[0] || phal[0].includes(bi)) return 0;
-    for (let f = 1; f < 5; f++) if (bi === meta[f] || phal[f].includes(bi)) return f;
-    return bi === 0 ? 6 : 5;
-  };
-  const isPhal = (bi: number): boolean => phal.some((p) => p.includes(bi));
-  const sk = skinWeights(m.pos, segs, 8, (best, other) => {
-    // a finger's flesh follows its own chain (and its metacarpal); the palm blends across metacarpals; the wrist
-    // between hand and forearm
-    if (isPhal(best)) {
-      const f = fingerOf(best);
-      return fingerOf(other) === f || (f === 0 && (other === meta[1] || other === 1)) || (other === meta[f]);
-    }
-    if (best === 0) return other === 1 || meta.includes(other);
-    return !isPhal(other) || phal.some((p) => p[0] === other);
-  });
-  // soften the weight seams a little (two passes; renormalised after)
-  const wt = sk.weight;
-  const full = new Float32Array(n * bones.length);
-  for (let v = 0; v < n; v++) for (let s = 0; s < 4; s++) full[v * bones.length + sk.index[v * 4 + s]] += wt[v * 4 + s];
-  smoothAttribute(m.index, n, full, bones.length, 2, 0.5);
-  const bIdx = new Float32Array(n * 4), bW = new Float32Array(n * 4);
-  for (let v = 0; v < n; v++) {
-    const row = full.subarray(v * bones.length, (v + 1) * bones.length);
-    const top = [-1, -1, -1, -1];
-    for (let b = 0; b < bones.length; b++) {
-      if (row[b] < 1e-3) continue;
-      for (let s = 0; s < 4; s++) if (top[s] < 0 || row[b] > row[top[s]]) { for (let q = 3; q > s; q--) top[q] = top[q - 1]; top[s] = b; break; }
-    }
-    let sum = 0;
-    for (let s = 0; s < 4; s++) if (top[s] >= 0) sum += row[top[s]];
-    for (let s = 0; s < 4; s++) { bIdx[v * 4 + s] = top[s] >= 0 ? top[s] : 0; bW[v * 4 + s] = top[s] >= 0 ? row[top[s]] / sum : 0; }
-  }
-
-  // ── surface marks ──
-  const mark = new Float32Array(n * 4), part = new Float32Array(n * 2);
-  const tmp = { t: 0 };
-  for (let v = 0; v < n; v++) {
-    const x = m.pos[v * 3], y = m.pos[v * 3 + 1], z = m.pos[v * 3 + 2];
-    const nx = m.nrm[v * 3], ny = m.nrm[v * 3 + 1], nz = m.nrm[v * 3 + 2];
-    // nearest bone (by radius-normalised distance)
-    let best = 0, bd = Infinity;
-    for (let b = 0; b < bones.length; b++) { const d = segDist(x, y, z, bones[b].head, bones[b].tail) / bones[b].r; if (d < bd) { bd = d; best = b; } }
-    const B = bones[best];
-    const f = fingerOf(best);
-    // dorsal: the normal against the bone's dorsal axis
-    const dors = nx * B.y[0] + ny * B.y[1] + nz * B.y[2];
-    // nail: on the last phalanx, dorsal, in the plate's footprint
-    let nail = 0;
-    const last = f === 0 ? phal[0][1] : f >= 1 && f <= 4 ? phal[f][2] : -1;
-    if (best === last) {
-      segDist(x, y, z, B.head, B.tail, tmp);
-      const L = Math.hypot(B.tail[0] - B.head[0], B.tail[1] - B.head[1], B.tail[2] - B.head[2]);
-      const lx = (x - B.head[0]) * B.x[0] + (y - B.head[1]) * B.x[1] + (z - B.head[2]) * B.x[2];
-      const along = tmp.t * L;
-      const r = B.r;
-      const u = lx / (r * 0.72), w = (along - L * 0.64) / (L * 0.44);
-      nail = Math.max(0, Math.min(1, (1 - Math.hypot(u, w)) * 6)) * Math.max(0, Math.min(1, (dors - 0.3) * 4));
-    }
-    // crease coordinate: signed distance (along the bone) to the nearest flexion joint (this bone's head or tail)
-    segDist(x, y, z, B.head, B.tail, tmp);
-    const L = Math.hypot(B.tail[0] - B.head[0], B.tail[1] - B.head[1], B.tail[2] - B.head[2]);
-    const s0 = tmp.t * L, s1 = (tmp.t - 1) * L;
-    const crease = Math.abs(s0) < Math.abs(s1) ? s0 : s1;
-    const thin = f <= 4 && isPhal(best) ? 1 : f <= 4 ? 0.55 : best === 1 ? 0.35 : 0.15;
-    mark[v * 4] = nail; mark[v * 4 + 1] = dors; mark[v * 4 + 2] = crease; mark[v * 4 + 3] = thin;
-    part[v * 2] = f;
-    // along the finger: 0 at the knuckle, 1 at the tip
-    if (f <= 4 && isPhal(best)) {
-      const chain = phal[f];
-      const k = chain.indexOf(best);
-      part[v * 2 + 1] = (k + Math.max(0, Math.min(1, tmp.t))) / chain.length;
-    } else part[v * 2 + 1] = 0;
-  }
-  smoothAttribute(m.index, n, mark, 4, 1, 0.5);
-
-  const geo = new BufferGeometry();
-  geo.setAttribute('position', new BufferAttribute(m.pos, 3));
-  geo.setAttribute('normal', new BufferAttribute(m.nrm, 3));
-  geo.setAttribute('aRest', new BufferAttribute(m.pos.slice(), 3));
-  geo.setAttribute('aBoneIdx', new BufferAttribute(bIdx, 4));
-  geo.setAttribute('aBoneW', new BufferAttribute(bW, 4));
-  geo.setAttribute('aMark', new BufferAttribute(mark, 4));
-  geo.setAttribute('aPart', new BufferAttribute(part, 2));
-  geo.setIndex(new BufferAttribute(m.index, 1));
-  geo.computeBoundingSphere();
-  // the palm centre on the palmar surface
-  const palm: V3 = [0.02, -0.075, 0.34];
-  return { geo, bones, idx: { forearm: 0, hand: 1, meta, phal }, tips, palm };
 }
 
-/** a rig for the hand mesh (one per hand visual) */
-export function handRig(h: HandMesh): Rig { return new Rig(h.bones); }
+// ───────────────────────────── crackling (feared) ─────────────────────────────
+
+/**
+ * A jagged arc from p to q (body m) by midpoint displacement: 2^depth + 1 points, displacement `amp` (m) halving with
+ * each level, with `rnd` a source of uniform numbers in 0..1. Returned as a flat xyz array.
+ */
+export function crackleArc(p: ArrayLike<number>, q: ArrayLike<number>, amp: number, depth: number, rnd: () => number): Float32Array {
+  let pts: number[][] = [[p[0], p[1], p[2]], [q[0], q[1], q[2]]];
+  let s = amp;
+  for (let k = 0; k < depth; k++) {
+    const next: number[][] = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const dl2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2] || 1;
+      const r = [rnd() - 0.5, rnd() - 0.5, rnd() - 0.5];
+      const rd = (r[0] * d[0] + r[1] * d[1] + r[2] * d[2]) / dl2;
+      for (let j = 0; j < 3; j++) r[j] -= d[j] * rd;
+      const rl = Math.hypot(r[0], r[1], r[2]) || 1;
+      const m = (rnd() * 2 - 1) * s;
+      next.push([(a[0] + b[0]) / 2 + (r[0] / rl) * m, (a[1] + b[1]) / 2 + (r[1] / rl) * m, (a[2] + b[2]) / 2 + (r[2] / rl) * m], b);
+    }
+    pts = next;
+    s *= 0.55;
+  }
+  return new Float32Array(pts.flat());
+}
+
+// ───────────────────────────── geometry ─────────────────────────────
+
+/** samples down the shaft, wind bands and samples along each, motes, cloud tufts, glyph / trail samples, arc samples */
+export const TOUCH_N = { column: 72, ribs: 9, rib: 44, motes: 420, tufts: 84, glyph: 96, trail: 64, arcs: 3, arc: 33 } as const;
+
+/**
+ * `strips` camera-facing strips of `n` samples each: attributes aT (0..1 along), aSide (±1 across) and a placeholder
+ * position (the vertex shader or the CPU places them).
+ */
+export function stripGeometry(n: number, strips = 1): BufferGeometry {
+  const g = new BufferGeometry();
+  const t = new Float32Array(n * 2 * strips), side = new Float32Array(n * 2 * strips), strip = new Float32Array(n * 2 * strips);
+  const idx: number[] = [];
+  for (let s = 0; s < strips; s++) for (let i = 0; i < n; i++) {
+    const k = (s * n + i) * 2;
+    t[k] = t[k + 1] = i / (n - 1); side[k] = 1; side[k + 1] = -1; strip[k] = strip[k + 1] = s;
+    if (i < n - 1) idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+  }
+  g.setAttribute('position', new BufferAttribute(new Float32Array(n * 2 * strips * 3), 3));
+  g.setAttribute('aT', new BufferAttribute(t, 1));
+  g.setAttribute('aSide', new BufferAttribute(side, 1));
+  g.setAttribute('aStrip', new BufferAttribute(strip, 1));
+  g.setIndex(idx);
+  return g;
+}
+
+/** the wind bands: `ribs` ribbons of `n` samples (aRib, aS along 0..1, aSide ±1); positions from the frame uniforms */
+export function bandGeometry(ribs: number = TOUCH_N.ribs, n: number = TOUCH_N.rib): BufferGeometry {
+  const g = new BufferGeometry();
+  const m = ribs * n * 2;
+  const rib = new Float32Array(m), s = new Float32Array(m), side = new Float32Array(m);
+  const idx: number[] = [];
+  for (let r = 0; r < ribs; r++) for (let i = 0; i < n; i++) {
+    const k = (r * n + i) * 2;
+    rib[k] = rib[k + 1] = r; s[k] = s[k + 1] = i / (n - 1); side[k] = 1; side[k + 1] = -1;
+    if (i < n - 1) idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+  }
+  // (positions come from the frame uniforms: the attribute is a placeholder three needs for the draw count)
+  g.setAttribute('position', new BufferAttribute(new Float32Array(m * 3), 3));
+  g.setAttribute('aRib', new BufferAttribute(rib, 1));
+  g.setAttribute('aS', new BufferAttribute(s, 1));
+  g.setAttribute('aSide', new BufferAttribute(side, 1));
+  g.setIndex(idx);
+  return g;
+}
+
+/** a unit disc in the xz plane (rings × segments), for the whorl in the cloud deck */
+export function discGeometry(rings: number, segs: number): BufferGeometry {
+  const pos: number[] = [0, 0, 0], idx: number[] = [];
+  for (let r = 1; r <= rings; r++) for (let s = 0; s < segs; s++) {
+    const a = (s / segs) * Math.PI * 2, rr = r / rings;
+    pos.push(Math.cos(a) * rr, 0, Math.sin(a) * rr);
+  }
+  for (let s = 0; s < segs; s++) idx.push(0, 1 + s, 1 + ((s + 1) % segs));
+  for (let r = 1; r < rings; r++) for (let s = 0; s < segs; s++) {
+    const a = 1 + (r - 1) * segs + s, b = 1 + (r - 1) * segs + ((s + 1) % segs);
+    idx.push(a, a + segs, b, b, a + segs, b + segs);
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setIndex(idx);
+  return g;
+}
+
+/** one camera-facing quad (attribute corner ±1) */
+export function quadGeometry(): BufferGeometry {
+  const g = new BufferGeometry();
+  g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1, -1, 1], 2));
+  g.setAttribute('position', new Float32BufferAttribute(new Float32Array(12), 3));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  return g;
+}
+
+/** a small deterministic generator (render-side variation only) */
+export function touchRng(seed: number): () => number {
+  let h = seed >>> 0 || 0x2545f491;
+  return () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
+}
+
+/**
+ * Instanced quads with a seed per instance (iSeed: a, b, c, kind/size). `kinds(i)` gives the 4th seed component; the
+ * others are uniform in 0..1 from a fixed generator, so the Touch looks the same every time it appears.
+ */
+export function seededQuads(n: number, seed: number, kinds: (i: number, rnd: () => number) => number): InstancedBufferGeometry {
+  const g = new InstancedBufferGeometry();
+  g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1, -1, 1], 2));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  const rnd = touchRng(seed);
+  const s = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) { s[i * 4] = rnd(); s[i * 4 + 1] = rnd(); s[i * 4 + 2] = rnd(); s[i * 4 + 3] = kinds(i, rnd); }
+  g.setAttribute('iSeed', new InstancedBufferAttribute(s, 4));
+  g.instanceCount = n;
+  return g;
+}
+
+/** the motes drawn up into the vortex: a third points of light (kind 0), half dust (1), the rest leaves (2) */
+export function moteGeometry(n: number = TOUCH_N.motes): InstancedBufferGeometry {
+  return seededQuads(n, 0x2545f491, (i) => (i % 6 < 2 ? 0 : i % 6 < 5 ? 1 : 2));
+}
+
+/** the mantle's cloud tufts (4th seed: d, a size / life variation) */
+export function tuftGeometry(n: number = TOUCH_N.tufts): InstancedBufferGeometry {
+  return seededQuads(n, 0x51ed270b, (_i, rnd) => rnd());
+}

@@ -1,0 +1,83 @@
+{
+ "_doc": "Sigils (LIVING \u00a73.6, hook H8; render/fx/sigils.ts, sigilfx.ts, hand.ts): every glyph of the content written on the land in light (a board of all 14, row by row: drop anvil fork ripple / sprout knot basket seed / log eye flame trail / arch fall), then a few cast by the Touch in context \u2014 traced in the air over it and landing on the ground with the miracle. F.fx.m.sigils.hold / F.fx.hand.hold pin the moment. Run: node _harness/shots.mjs _harness/specs/sigils.json --port=5195",
+ "shots": [
+  {
+   "name": "sigil-board",
+   "params": "source=lookdev",
+   "size": [
+    960,
+    540
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); const p = G.poi('farm');",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 470, tilt: 6, yaw: 0, fov: 55, hour: 13 }); await G.frames(2);",
+    "const pv = F.fx.vis.pv, R = pv.params.radius, S = pv.fields.get('surface'); const u = p.pos; const ex = [u[2], 0, -u[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el; const nx = [u[1] * ex[2], u[2] * ex[0] - u[0] * ex[2], -u[1] * ex[0]];",
+    "const kinds = ['water', 'storm', 'lightning', 'calm', 'forest', 'heal', 'food', 'fertility', 'wood', 'teach', 'fire', 'fireball', 'shield', 'meteor'];",
+    "const light = { r: 1.0, g: 0.78, b: 0.42 }; const fwd = F.fx.camFwd.clone();",
+    "kinds.forEach((k, i) => { const col = i % 4, row = Math.floor(i / 4); const e = (col - 1.5) * 105, n = (1.5 - row) * 92; const q = [u[0] + (ex[0] * e + nx[0] * n) / R, u[1] + (nx[1] * n) / R, u[2] + (ex[2] * e + nx[2] * n) / R]; const l = Math.hypot(...q); const v = F.fx.hand.pos.clone().set(q[0] / l, q[1] / l, q[2] / l); v.multiplyScalar(R + pv.grid.sample(S, v.x, v.y, v.z)); F.fx.m.sigils.land(pv, k, v, 64, light, F.fx.vis.camBody, fwd, performance.now() / 1000); });",
+    "F.fx.m.sigils.hold = 2.0; await G.frames(3); return { live: F.fx.m.sigils.live };"
+   ]
+  },
+  {
+   "name": "sigil-cast-heal",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.sigils.hold = null; const p = G.poi('town'); F.fx.hand.force = true;",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.8, pose: 'open', held: null }); F.fx.hand.regard = 0.8; await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 150, tilt: 62, yaw: 15, fov: 55, hour: 16.5 }); await G.frames(1);",
+    "F.fx.m.sigils.hold = 1.6; await G.cmd({ k: 'lookdev.miracle.heal', pos: p.pos }); await G.step(1); await G.frames(3);",
+    "F.fx.hand.hold = 3000; F.fx.hand.pulse('cast', 3000 - 1.15, 'heal'); F.advance(1.5); await G.frames(2);",
+    "return { b: F.fx.hand.behaviour, live: F.fx.m.sigils.live };"
+   ]
+  },
+  {
+   "name": "sigil-cast-lightning-feared",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.sigils.hold = null; F.fx.hand.hold = null; const p = G.poi('forest-edge');",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: -0.8, pose: 'open', held: null }); F.fx.hand.regard = -0.8; await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 120, tilt: 66, yaw: p.heading, fov: 55, hour: 17.5 }); await G.frames(1);",
+    "F.fx.m.sigils.hold = 1.6; await G.cmd({ k: 'lookdev.miracle.lightning', pos: p.pos }); await G.step(1); await G.frames(3);",
+    "F.fx.hand.hold = 3100; F.fx.hand.pulse('cast', 3100 - 1.15, 'lightning'); F.advance(1.4); await G.frames(2);",
+    "return { b: F.fx.hand.behaviour, live: F.fx.m.sigils.live, bolts: F.fx.m.bolts.live };"
+   ]
+  },
+  {
+   "name": "sigil-cast-plenty",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; F.fx.m.sigils.hold = null; F.fx.hand.hold = null; const p = G.poi('village') || G.poi('town');",
+    "await G.cmd({ k: 'lookdev.hand', pos: p.pos, alt: 0, regard: 0.3, pose: 'open', held: null }); F.fx.hand.regard = 0.3; await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 170, tilt: 58, yaw: 40, fov: 55, hour: 15 }); await G.frames(1);",
+    "F.fx.m.sigils.hold = 0.8; await G.cmd({ k: 'lookdev.miracle.food', pos: p.pos }); await G.step(1); await G.frames(3);",
+    "F.fx.hand.hold = 3200; F.fx.hand.pulse('cast', 3200 - 0.7, 'food'); await G.frames(2);",
+    "return { b: F.fx.hand.behaviour, live: F.fx.m.sigils.live };"
+   ]
+  }
+ ]
+}

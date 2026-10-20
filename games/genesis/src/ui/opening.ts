@@ -7,7 +7,7 @@
 //   2. The airless world turns into view: the camera falls from the star to the grey rock and the world keeps turning
 //      under it for a few breaths. The interface fades in.
 //   3. Whispers that suggest the next act — breathe (air), water, soil and a seed, someone to see it — each with one
-//      quiet way to do it in place and, only after a while with nothing done, another way (a gesture, words, a key).
+//      quiet way to do it in place and, only after a while with nothing done, another way (a sigil, words, a key).
 //      They follow the sim's 'milestone' events (air, first-rain, first-sea, first-green, first-people, first-fire,
 //      first-night, first-settlement, first-discovery) and adapt to what the player did first: water poured on a rock
 //      with no air, a people set down before anything grows, green before rain — each is answered before the next
@@ -342,7 +342,7 @@ export class Opening {
         if (now - this.lastCheck > 600) { this.lastCheck = now; this.check(false); }
         if (this.cur && !this.laterShown && this.cur.later && now - this.curAt > IDLE_LATER) { this.laterShown = true; this.render(); }
         // the whispers step back while a window, a list or a menu is up (the camera modes, the step menu too)
-        // — and while the band it put in the hand waits to be set down: the ring and the tool's card say what to do, the
+        // — and while the band it put in the Touch waits to be set down: the ring and the tool's card say what to do, the
         // words would only cover the ground being chosen
         this.card.classList.toggle('gn-away', this.armedPeople || this.deps.menuOpen() || document.querySelector('.gn-pal:not([hidden]), .gn-rad:not([hidden]), .gn-win:not([hidden]), .gn-cam-menu:not([hidden]), .gn-stepmenu:not([hidden])') !== null);
         this.placeRing();
@@ -370,7 +370,7 @@ export class Opening {
 
   private note(kind: string): void {
     if (this.met.has(kind)) return;
-    // the band the whisper put in the hand is down: the hand is empty again
+    // the band the whisper put in the Touch is down: the Touch is empty again
     if (kind === 'first-people' && this.armedPeople) { this.armedPeople = false; this.deps.disarm?.(); }
     this.met.add(kind);
     this.order.push(kind);
@@ -560,7 +560,7 @@ export class Opening {
         beat, line: this.met.has('air') ? 'Water?' : 'Water — though it will not stay without air.',
         // (the opening's storm passes by itself once a sea has gathered — stormCheck — so it never snows the world under)
         act: { label: 'let it rain', run: () => { this.stormAt = this.host.view.renderTick; this.cmd({ k: 'weather.global', planet, kind: 'storm' }, { k: 'water.sea-level', planet, value: -40 }); } },
-        later: `The air warms the rock slowly; rain on frozen ground lies as snow. Let time run (${k('time.speed100', '3')}), or hold ${k('ui.gesture', 'G')} and draw a spiral for water where you point.`,
+        later: `The air warms the rock slowly; rain on frozen ground lies as snow. Let time run (${k('time.speed100', '7')}), or hold ${k('ui.gesture', 'G')} and draw the drop — a hook falling into a small loop — for rain where you point.`,
       };
       case 'green': return {
         beat, line: 'Soil, and a seed.',
@@ -571,7 +571,7 @@ export class Opening {
             { k: 'life.plant', planet, species: 'berry-bush', pos: here(), radius: 1800, density: 0.5 },
             { k: 'life.forest', planet, pos: here(), radius: 1400 }),
         },
-        later: `Green spreads only where water and warmth allow. Hold ${k('ui.gesture', 'G')} and draw a wave for a forest.`,
+        later: `Green spreads only where water and warmth allow. Hold ${k('ui.gesture', 'G')} and draw the sprout — a stem with a leaf to each side — for a grove.`,
       };
       case 'people': return {
         beat, line: 'Someone to see it?',
@@ -581,7 +581,7 @@ export class Opening {
       case 'night': return {
         beat, line: night ? 'Night. They have no fire. They huddle in the dark, cold.' : this.coldNight ? 'Their night was cold. They still have no fire.' : 'Night is coming, and they have no fire.',
         act: sid >= 0 ? { label: 'give them fire', run: () => { this.fireGivenAt = this.host.view.renderTick; this.lastCheck = 0; this.cmd({ k: 'idea.teach', planet, knowledge: 'fire-keeping', settlement: sid }, { k: 'idea.teach', planet, knowledge: 'fire-making', settlement: sid }); } } : undefined,
-        later: `A lightning strike might teach them. Hold ${k('ui.gesture', 'G')} and draw a triangle: fire from the sky.`,
+        later: `A lightning strike might teach them. Hold ${k('ui.gesture', 'G')} and draw the fork — down, back up, down again — for fire from the sky.`,
       };
       case 'kindle': {
         // (fire is in their heads; a hearth has to be built and fed before it glows — the whisper waits with them as
@@ -592,8 +592,8 @@ export class Opening {
           line: late ? 'Still no hearth. They know of fire, but none burns yet.' : night ? 'Night. Their first hearth is not lit yet.' : 'Watch for their first hearth.',
           act: this.host.view.speed < 10 ? { label: 'let the day pass', run: () => this.host.setSpeed(10) } : undefined,
           later: late
-            ? `Hold ${k('ui.gesture', 'G')} over them and draw a triangle: Kindling lights their hearths — or press ${k('ui.palette', '/')} and search “kindling”.`
-            : `Time runs faster with ${k('time.speed10', '2')} and ${k('time.speed100', '3')}.`,
+            ? `Hold ${k('ui.gesture', 'G')} over them and draw the flame sigil: Kindling lights their hearths — or press ${k('ui.palette', '/')} and search “kindling”.`
+            : `Time runs faster with ${k('time.speed10', '5')} and ${k('time.speed100', '7')}.`,
         };
       }
       case 'fire': return {
@@ -607,8 +607,8 @@ export class Opening {
       case 'wait': return {
         beat, line: 'Watch them. Their first night is coming.',
         act: { label: 'let the day pass', run: () => this.host.setSpeed(10) },
-        // (the hand, suggested once there is someone to hold)
-        later: `Time runs faster with ${k('time.speed10', '2')} and ${k('time.speed100', '3')}; ${k('time.pause', 'Space')} stops it. Or come close and pick one up — drag them, and set them down gently.`,
+        // (the Touch, suggested once there is someone to lift)
+        later: `Time runs faster with ${k('time.speed10', '5')} and ${k('time.speed100', '7')}; ${k('time.pause', 'Space')} stops it. Or come close and lift one with the Touch — drag them, and set them down gently.`,
       };
       case 'rest': return {
         beat, line: 'Leave them. Come back in a hundred years.',
@@ -618,7 +618,7 @@ export class Opening {
   }
 
   /**
-   * the people's whisper: the hand holds a band of plains folk — the next click on the ground sets them down. The camera
+   * the people's whisper: the Touch holds a band of plains folk — the next click on the ground sets them down. The camera
    * goes down to the ringed spot (green, near water, warm enough, the morning side), and time that was racing slows to
    * 10× so their first day can be watched.
    */

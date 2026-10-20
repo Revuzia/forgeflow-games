@@ -36,6 +36,7 @@ import { factionShare } from './social.ts';
 import { ERAS } from '../content.ts';
 import { NEED_N } from './needs.ts';
 import { historyDaily, kinRaided } from './politics.ts';
+import { animalDef, spawnHerd } from '../life/herds.ts';
 
 // ───────────────────────────── polities ─────────────────────────────
 
@@ -700,7 +701,7 @@ function casualties(x: PCtx, slots: number[], share: number, salt: number, salt2
 }
 
 /** raiders take what they can carry: food first, then metal and finery */
-function plunder(x: PCtx, m: Mission, from: Settlement, to: Settlement): string {
+export function plunder(x: PCtx, m: Mission, from: Settlement, to: Settlement): string {
   const A = x.A;
   const slots = slotsOf(x, m);
   const order = [...x.info[from.species].foods, ...(x.c.itemsByTag.get('metal') ?? []), ...(x.c.itemsByTag.get('luxury') ?? []), ...(x.c.itemsByTag.get('weapon') ?? [])];
@@ -719,6 +720,17 @@ function plunder(x: PCtx, m: Mission, from: Settlement, to: Settlement): string 
       room -= q * w;
       const name = x.c.items.list[it].name.toLowerCase();
       if (!took.includes(name)) took.push(name);
+    }
+  }
+  // (LIVING HISTORY §5.1: raiders drive off livestock too — a share of the town's largest herd, driven home)
+  if (m.kind === 'raid' && slots.length) {
+    let herd: (typeof x.ps.herds)[number] | null = null;
+    for (const h of x.ps.herds) if (h.owner === to.id && h.count >= 2 && (!herd || h.count > herd.count)) herd = h;
+    if (herd) {
+      const k = Math.max(1, Math.min(Math.floor(herd.count * 0.3), 2 * slots.length));
+      herd.count = Math.round((herd.count - k) * 1000) / 1000;
+      spawnHerd(x, herd.species, from.cell, k, from.id);
+      took.push(`${k} head of ${animalDef(x, herd.species).name.toLowerCase()}`);
     }
   }
   m.back = [];

@@ -20,6 +20,7 @@ import type { PlanetView } from './client/worldview.ts';
 import { qRotate, qRotateInv } from './client/orbits.ts';
 import { tangentBasis } from './sim/core/vec3.ts';
 import { Renderer } from './render/renderer.ts';
+import { newPose, copyPose, type CameraPose } from './render/frame.ts';
 import { capturePhoto } from './render/camera/photo.ts';
 import { CameraRig } from './render/camera/rig.ts';
 import { newInput, type InputState } from './render/camera/common.ts';
@@ -39,6 +40,7 @@ import { Keybinds } from './ui/keybinds.ts';
 import { PrefsStore } from './ui/prefs.ts';
 import type { ToastSpec, ToastAction } from './ui/toasts.ts';
 import { store } from './ui/dom.ts';
+import { wantTitle, hasPlayed, markPlayed } from './ui/title.ts';
 import { humanize, tollOf } from './ui/words.ts';
 
 export interface AppOptions {
@@ -118,7 +120,7 @@ export interface CameraSpec {
 }
 
 /** a thing in the world the camera can frame / follow and the inspector can show (`target` of a CameraSpec) */
-export interface TargetRef { kind: 'agent' | 'building' | 'settlement' | 'animal' | 'creature' | 'disaster' | 'ship' | 'weather'; id: number; planet?: number }
+export interface TargetRef { kind: 'agent' | 'building' | 'settlement' | 'animal' | 'disaster' | 'ship' | 'weather'; id: number; planet?: number }
 
 function hasBuildings(pv: PlanetView, settlement: number): boolean {
   const B = pv.buildings;
@@ -128,7 +130,7 @@ function hasBuildings(pv: PlanetView, settlement: number): boolean {
 
 function isTargetRef(v: unknown): v is TargetRef {
   const o = v as TargetRef | null;
-  return !!o && typeof o === 'object' && typeof o.id === 'number' && ['agent', 'building', 'settlement', 'animal', 'creature', 'disaster', 'ship', 'weather'].includes(o.kind);
+  return !!o && typeof o === 'object' && typeof o.id === 'number' && ['agent', 'building', 'settlement', 'animal', 'disaster', 'ship', 'weather'].includes(o.kind);
 }
 
 /** acts whose harm comes after the cast (an Undo is offered on their toast whatever the first toll) */
@@ -252,8 +254,8 @@ export class App implements UiHost {
   get source(): string { return this.sim.source; }
   get selected_(): InspectRef | null { return this.sel; }
 
-  async start(progress: (msg: string, frac: number) => void): Promise<void> {
-    progress('Lighting the star…', 0.08);
+  async start(progress: (msg: string, frac: number, note?: string) => void): Promise<void> {
+    progress('Lighting the star…', 0.06);
     this.renderer = new Renderer(this.canvas);
     const gl = this.renderer.three.getContext() as WebGL2RenderingContext;
     this.autoQuality = detectQuality(gl);
@@ -263,11 +265,11 @@ export class App implements UiHost {
     this.applyGraphics();
     this.resize();
     window.addEventListener('resize', () => this.resize());
-    progress('Forming the worlds…', 0.22);
+    progress('Waking the simulation…', 0.1);
     this.sim.onFatal = (msg) => this.onFatal?.('the simulation stopped', msg);
     const boot = await this.bootWorld();
-    await this.startSim(boot);
-    progress('Gathering the air…', 0.62);
+    await this.startSim(boot, progress);
+    progress('Gathering the air…', 0.8);
     this.sim.setSpeed(this.opts.speed);
     void this.loadPowers();
     const uiRoot = document.getElementById('ui') ?? document.body;
@@ -283,8 +285,9 @@ export class App implements UiHost {
         look: () => { const s = this.sel; if (s && s.kind !== 'species') this.lookAtEntity(s as EntityRef); },
       },
       click: (x, y) => this.onClick(x, y),
-      setUi: (v) => this.setUi(v),
+      setUi: (v, clean) => this.setUi(v, clean),
       uiVisible: () => this.uiVisible,
+      titleCamera: (on) => this.titleCamera(on),
       setBrush: (b) => this.renderer.setBrush(b),
       uniformsOf: (id) => (this.renderer.planets.get(id)?.uniforms as unknown as Record<string, IUniform>) ?? null,
       save: () => this.saveBytes(),
@@ -370,8 +373,14 @@ export class App implements UiHost {
     this.sim.view.pendingEvents.length = 0;
     this.ui.hud.toasts.pump(this.sim.view, performance.now());
     this.ui.hud.toasts.enabled = true;
+    // the front door: a returning player's cold load shows the title over the turning world (src/ui/title.ts); a first
+    // visit goes straight into the opening, a page opened into a world straight into it
+    const returning = hasPlayed() || (this.sim.source === 'worker' && (await this.ui.saves.list().catch(() => [])).length > 0);
+    const title = this.sim.source === 'worker' && !boot.slot && wantTitle(location.search, returning);
+    markPlayed();
+    if (title) this.ui.title.open();
     // a new game on the barren world begins with the opening (§16.1); ?intro=0 skips it
-    if (this.opts.intro && boot.scenario === 'barren' && !boot.slot && this.sim.source === 'worker' && !this.opts.cam) this.ui.opening.start();
+    else if (this.opts.intro && boot.scenario === 'barren' && !boot.slot && this.sim.source === 'worker' && !this.opts.cam) this.ui.opening.start();
     // what the packs asked for at boot did, in words (a pack left out says why; Mods lists it too)
     for (const n of this.bootNotes) this.toast({ text: n, kind: 'info' });
     for (const p of this.bootProblems) this.toast({ text: `Left out: ${p.what}. ${p.msg}${p.problems.length ? ` (${p.problems.slice(0, 2).join('; ')}${p.problems.length > 2 ? ' …' : ''})` : ''}`, kind: 'warn', ms: 12000 });
@@ -411,10 +420,14 @@ export class App implements UiHost {
     return { scenario, packs, slot: null };
   }
 
-  private async startSim(boot: { scenario: string; packs: ContentPack[]; slot: SaveRecord | null }): Promise<void> {
-    // (the living sim is the game: a slow machine building a big system waits for it rather than failing at 20 s; the
-    // 'auto' source keeps the short wait before it falls back to the lookdev world)
-    const base = { source: this.opts.source, seed: this.opts.seed, readyTimeoutMs: this.opts.source === 'worker' ? 120000 : 20000 };
+  private async startSim(boot: { scenario: string; packs: ContentPack[]; slot: SaveRecord | null }, progress: (msg: string, frac: number, note?: string) => void = () => {}): Promise<void> {
+    // (the living sim is the game: it has no deadline — the boot card follows its stages, and a build that runs long says
+    // so without giving up; only the 'auto' source keeps a short wait before it falls back to the lookdev world)
+    const base = {
+      source: this.opts.source, seed: this.opts.seed, readyTimeoutMs: 20000,
+      onStage: (label: string, f: number) => progress(label, 0.12 + 0.6 * f),
+      onSlow: (ms: number) => progress('', -1, `This world is taking longer than usual to build (${Math.round(ms / 1000)} s) — it is still being made.`),
+    };
     try {
       await this.sim.start({ ...base, scenario: boot.scenario, options: boot.packs.length ? { mods: boot.packs } : {} });
     } catch (e) {
@@ -429,6 +442,7 @@ export class App implements UiHost {
     }
     this.packs = [...boot.packs];
     if (boot.slot) {
+      progress(`Returning to ${boot.slot.name}…`, 0.76);
       const r = await this.sim.load(boot.slot.bytes.slice(0));
       if (r.ok) {
         const hdr = readSaveHeader(boot.slot.bytes);
@@ -528,6 +542,52 @@ export class App implements UiHost {
     }
   }
 
+  // ── the title's camera (src/ui/title.ts): the world turning slowly behind the title, off to the right of its column ──
+
+  /** the title is up: its camera holds the lit face of the world and sways across it */
+  private titleOn = false;
+  private titleT = 0;
+  /** the look turned left of the world (rad): the world sits right of the title's column; eased in and out */
+  private titleYaw = 0;
+  private titleRender: CameraPose = newPose();
+
+  /** the title's camera: on — the home world from orbit in the afternoon light, the orbit lines away; off — the player's */
+  titleCamera(on: boolean): void {
+    this.titleOn = on;
+    if (!on) {
+      if (this.orbitsShown !== null) { this.renderer.showOrbits = this.orbitsShown; this.orbitsShown = null; }
+      return;
+    }
+    this.titleT = 0;
+    this.leaveModes(null);
+    const view = this.sim.view;
+    const home = view.planet(this.primary()) ?? view.planets.find((p) => p.params.orbit.parent < 0) ?? view.planets[0];
+    if (!home) return;
+    view.update(performance.now());
+    // (the bodies where they are now: a cold load's first frame may not have placed them, and the light must be known)
+    view.updateBodies(view.renderTick);
+    this.rig.orbit.setFromLatLon(home.id, 12, this.afternoonLon(home, 38), home.params.radius * 3.2, 0, null);
+    this.rig.use(this.rig.orbit, 0);
+    this.renderer.cut();
+    if (this.orbitsShown === null) { this.orbitsShown = this.renderer.showOrbits; this.renderer.showOrbits = false; }
+  }
+
+  /** the pose drawn: the rig's, its look turned left while the title is up (the rig's own pose is untouched) */
+  private titlePose(pose: CameraPose, dt: number): CameraPose {
+    const want = this.titleOn ? Math.min(0.24, 0.13 * (window.innerWidth / Math.max(1, window.innerHeight))) : 0;
+    this.titleYaw += (want - this.titleYaw) * (1 - Math.exp(-dt * 2.4));
+    if (Math.abs(this.titleYaw) < 1e-4) { this.titleYaw = 0; return pose; }
+    const out = copyPose(this.titleRender, pose);
+    // q · (a turn about the camera's own up): the view looks left, the world moves right on the screen
+    const h = this.titleYaw / 2, sy = Math.sin(h), cy = Math.cos(h);
+    const [x, y, z, w] = pose.quat;
+    out.quat[0] = x * cy - z * sy;
+    out.quat[1] = y * cy + w * sy;
+    out.quat[2] = z * cy + x * sy;
+    out.quat[3] = w * cy - y * sy;
+    return out;
+  }
+
   /** the opening holds its view of the home world in the afternoon light while it falls (-1: no) */
   private sunLock = -1;
 
@@ -541,9 +601,16 @@ export class App implements UiHost {
   private async loadPowers(): Promise<void> {
     this.powersAt = performance.now();
     if (this.sim.source !== 'worker') return;
-    const [d, cmds] = await Promise.all([this.sim.query('powers').catch(() => null), this.sim.query('commands').catch(() => null)]);
+    const [d, cmds, kinds, ores, plants] = await Promise.all([
+      this.sim.query('powers').catch(() => null), this.sim.query('commands').catch(() => null), this.sim.query('disaster-kinds').catch(() => null),
+      this.sim.query('ores', {}).catch(() => null), this.sim.query('content').catch(() => null),
+    ]);
     this.powers.setFromSim(d);
     this.powers.setCommands(cmds);
+    // (what a disaster left unset becomes; the ores and plants a vein or an invented plant can be: the god's own too)
+    this.powers.setDisasterKinds(kinds);
+    if (Array.isArray(ores)) this.powers.setRegistry('ores', (ores as { id?: unknown }[]).map((o) => String(o.id ?? '')).filter(Boolean));
+    void plants;
   }
 
   private resize(): void {
@@ -638,7 +705,7 @@ export class App implements UiHost {
       view.update(now);
       this.ui.preFrame(dt);
       this.cameraModesFrame(dt);
-      const pose = this.rig.update(dt, view, this.input);
+      const pose = this.titlePose(this.rig.update(dt, view, this.input), dt);
       this.syncModes();
       this.applyLook();
       if (this.rig.cut) { this.renderer.cut(); this.rig.cut = false; }
@@ -711,21 +778,20 @@ export class App implements UiHost {
       this.ui.pointerDown(e.clientX, e.clientY, e.button, e, e.timeStamp, label);
     };
     c.addEventListener('pointerdown', (e) => down(e, null));
-    // a settlement's name or a creature over the world does not swallow a press: it goes to the world's own pointer
-    // handling (a drag still turns the world, a tool still works, the hand still grabs), and a plain click on a name
-    // selects that settlement
+    // a settlement's name over the world does not swallow a press: it goes to the world's own pointer handling (a drag
+    // still turns the world, a tool still works, the Touch still lifts), and a plain click on a name selects that
+    // settlement; a prophet's or a holy place's mark is the same (a click selects what it marks)
     this.ui.hud.world.addEventListener('pointerdown', (e) => {
       const t = e.target as HTMLElement | null;
       const nm = t?.closest<HTMLElement>('.gn-slabel-name');
-      const cr = t?.closest<HTMLElement>('.gn-crea');
-      if (!nm && !cr) return;
+      const mk = t?.closest<HTMLElement>('.gn-lmark');
+      if (!nm && !mk) return;
       e.preventDefault();
       e.stopPropagation();
       if (nm) down(e, { planet: Number(nm.dataset.planet), id: Number(nm.dataset.sid) });
-      else if (cr) {
-        // the creature under the hand: a click selects it, a drag or a hold takes it
-        const id = Number(cr.dataset.cid), planet = Number(cr.dataset.planet);
-        this.forcedEntity = { kind: 'creature', id, planet };
+      else if (mk) {
+        const kind = mk.dataset.kind as EntityRef['kind'] | undefined;
+        if (kind) this.forcedEntity = { kind, id: Number(mk.dataset.id), planet: Number(mk.dataset.planet) };
         down(e, null);
       }
     });
@@ -790,7 +856,7 @@ export class App implements UiHost {
     return hit ? { kind: hit.kind, id: hit.id, planet: pv.id, dist: hit.t } : null;
   }
 
-  /** a creature, disaster or ship drawn near a screen point (by its projected position, within ~30 px) */
+  /** a disaster or ship drawn near a screen point (by its projected position, within ~30 px) */
   private pickNear(x: number, y: number): EntityRef | null {
     const v = this.sim.view;
     let best: EntityRef | null = null, bd = 30;
@@ -800,7 +866,6 @@ export class App implements UiHost {
       const d = Math.hypot(s[0] - x, s[1] - y) - grace;
       if (d < bd) { bd = d; best = ref; }
     };
-    for (const c of v.creatures) consider(c.planet, c.pos, c.height * 0.6, { kind: 'creature', id: c.id, planet: c.planet }, 6);
     for (const pv of v.planets) {
       if (pv.id !== this.renderer.primaryId) continue;
       for (const d of pv.disasters) consider(pv.id, d.pos, Math.max(4, d.params.alt ?? 0), { kind: 'disaster', id: d.id, planet: pv.id });
@@ -853,7 +918,7 @@ export class App implements UiHost {
     }
     const near = this.pickNear(x, y);
     const ent = this.pickEntity(x, y);
-    if (near && (!ent || near.kind === 'creature')) { this.select(near); return; }
+    if (near && !ent) { this.select(near); return; }
     if (ent) { this.select({ kind: ent.kind, id: ent.id, planet: ent.planet }); return; }
     const hit = this.pickGround(x, y);
     if (!hit) {
@@ -904,7 +969,7 @@ export class App implements UiHost {
 
   async cmd(c: Command, opts: { quiet?: boolean } = {}): Promise<CommandResult> {
     // (the lookdev world fabricates what the render lane develops against — ships and world events, the god layer's
-    // hand, creatures, disasters and weather: those reach its backend, which answers the rest in words)
+    // Touch, disasters and weather: those reach its backend, which answers the rest in words)
     if (this.sim.source !== 'worker' && c.k !== 'focus' && !c.k.startsWith('hand.move') && !/^(lookdev\.|ship\.|world\.(crack|erase|moon-fall|birth))/.test(c.k)) {
       const r = { ok: false, msg: 'This is the lookdev world: nothing here listens. Run the living simulation (source=worker) to be obeyed.' };
       if (!opts.quiet) this.toast({ text: r.msg, kind: 'warn' });
@@ -1027,14 +1092,13 @@ export class App implements UiHost {
     return h ? { planet: h.planet, dir: [h.dir[0], h.dir[1], h.dir[2]] as UnitVec, cell: h.cell } : null;
   }
 
-  /** a press that began on a creature's silhouette: the hand takes that creature */
+  /** a press that began on a mark over the world (a prophet's): it is about that one */
   private forcedEntity: EntityRef | null = null;
 
   entityAt(x: number, y: number): EntityRef | null {
     if (this.forcedEntity) return this.forcedEntity;
     const near = this.pickNear(x, y);
     const e = this.pickEntity(x, y);
-    if (near && (!e || near.kind === 'creature')) return near;
     return e ? { kind: e.kind, id: e.id, planet: e.planet } : near;
   }
 
@@ -1134,6 +1198,18 @@ export class App implements UiHost {
         o.focus = [x / l, y / l, z / l];
       }
     }
+    if (this.titleOn) {
+      // the title's world: the lit face held toward the eye, the camera swaying slowly across it (the world itself
+      // turns under it while time runs)
+      this.titleT += dt;
+      const pv = this.sim.view.planet(this.rig.orbit.planet);
+      if (pv && this.rig.mode === 'orbit') {
+        const lon = (this.afternoonLon(pv, 38 + 20 * Math.sin((this.titleT * 2 * Math.PI) / 150)) * Math.PI) / 180, lat = (12 * Math.PI) / 180;
+        // (held exactly, not eased toward: the target already moves smoothly, and a slow machine's few frames would
+        // otherwise leave the camera behind the turning world, on its night side)
+        this.rig.orbit.focus = [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)];
+      }
+    }
     if (this.sunLock >= 0) {
       const pv = this.sim.view.planet(this.sunLock);
       if (pv && this.rig.mode === 'orbit' && this.rig.orbit.planet === pv.id) {
@@ -1168,7 +1244,7 @@ export class App implements UiHost {
     if (!pv || !b) return null;
     const l = Math.hypot(b[0], b[1], b[2]) || 1;
     const dir: [number, number, number] = [b[0] / l, b[1] / l, b[2] / l];
-    let reach = ref.kind === 'building' ? 30 : ref.kind === 'creature' ? 25 : 18;
+    let reach = ref.kind === 'building' ? 30 : 18;
     if (ref.kind === 'settlement') {
       const B = pv.buildings;
       let r = 0;
@@ -1422,7 +1498,7 @@ export class App implements UiHost {
 
   /**
    * Body-frame position (m) of a thing on a planet: where the life layer drew it this frame when it did, else from
-   * the snapshot (people, herds, buildings, settlements, creatures, disasters, weather, ships, a cell).
+   * the snapshot (people, herds, buildings, settlements, disasters, weather, ships, a cell).
    */
   entityBodyPos(pv: PlanetView, ref: { kind: string; id: number }): [number, number, number] | null {
     const life = this.renderer.planets.get(pv.id)?.life;
@@ -1457,9 +1533,6 @@ export class App implements UiHost {
     } else if (ref.kind === 'building') {
       const B = pv.buildings;
       if (B) for (let i = 0; i < B.count; i++) if (B.id[i] === ref.id) { u = [B.pos[i * 3], B.pos[i * 3 + 1], B.pos[i * 3 + 2]]; lift = 5; break; }
-    } else if (ref.kind === 'creature') {
-      const c = v.creatures.find((q) => q.id === ref.id && q.planet === pv.id);
-      if (c) { u = c.pos; lift = c.height * 0.6; }
     } else if (ref.kind === 'disaster') {
       const d = pv.disasters.find((q) => q.id === ref.id);
       if (d) { u = d.pos; lift = 8 + Math.min(400, d.params.alt ?? 0); }
@@ -1499,7 +1572,7 @@ export class App implements UiHost {
     const pv = this.sim.view.planet(ref.planet ?? this.renderer.primaryId);
     const b = pv ? this.entityBodyPos(pv, ref) : null;
     if (!pv || !b) return;
-    const d = ref.kind === 'settlement' ? 240 : ref.kind === 'building' ? 70 : ref.kind === 'disaster' || ref.kind === 'weather' ? 900 : ref.kind === 'creature' ? 60 : 28;
+    const d = ref.kind === 'settlement' ? 240 : ref.kind === 'building' ? 70 : ref.kind === 'disaster' || ref.kind === 'weather' ? 900 : 28;
     this.lookAt(pv.id, b, d);
     this.frameBesideInspector(pv, d);
   }
@@ -1533,7 +1606,7 @@ export class App implements UiHost {
     o.focus = [nf[0] / nl, nf[1] / nl, nf[2] / nl];
   }
 
-  /** the hand's hover: a ring over the person (or herd, building, creature) it would take */
+  /** the Touch's hover: a ring over the person (or herd, building) it would lift */
   private updateHoverRing(): void {
     const el = this.hoverEl;
     if (!el) return;
@@ -1624,11 +1697,12 @@ export class App implements UiHost {
     if (this.flyFromPose()) this.rig.use(this.rig.fly, 0.4);
   }
 
-  setUi(v: boolean): void {
+  setUi(v: boolean, clean = !v): void {
     this.uiVisible = v;
     this.ui?.hud.setVisible(v);
-    // clean frames (trailer stills, photo mode, __GENESIS__.ui(false)) hide the ForgeFlow portal bar too (styles.css)
-    document.body.classList.toggle('genesis-clean', !v);
+    // clean frames (trailer stills, photo mode, __GENESIS__.ui(false)) hide the ForgeFlow portal bar too (styles.css);
+    // the opening's dark and the title are not clean frames: the site's bar stays over them
+    document.body.classList.toggle('genesis-clean', clean);
   }
 
   setQuality(name: QualityName): void {
@@ -1999,7 +2073,7 @@ export class App implements UiHost {
     const v = this.sim.view;
     const pose = this.rig.pose;
     return {
-      tick: v.renderTick, snapTick: v.snapTick, speed: v.speed, achievedSpeed: v.achievedSpeed, fps: this.fps,
+      tick: Math.max(v.renderTick, v.snapTick), renderTick: v.renderTick, snapTick: v.snapTick, speed: v.speed, achievedSpeed: v.achievedSpeed, fps: this.fps,
       scenario: this.world.scenario, seed: this.world.seed, source: this.sim.source, quality: this.quality, frames: this.frames,
       camera: { mode: this.camModeName(), rig: this.rig.mode, planet: pose.planet, pos: [...pose.pos], quat: [...pose.quat], fov: pose.fov, altitude: this.renderer.stats.altitude, walked: this.walkedMetres() },
       packs: this.packs.map((p) => p.id), content: [...this.sim.view.content],

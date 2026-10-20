@@ -1,13 +1,14 @@
-// GENESIS — miracle gestures (CONTRACT.md §16.5; hold G or the middle mouse button, or the gamepad's LT): draw a shape
-// with the hand and the miracle it names is cast where it was drawn, as large as it was drawn. A glowing trail follows
-// the stroke; while drawing, a card shows the shapes the powers know (powers.json `gesture`: spiral = water, zigzag =
-// lightning, double zigzag = storm, circle = shield, triangle = fire, V = heal, wave = forest, square = food, star =
-// meteor, heart = fertility, caret = teach, line = wood, tilde = calm, arrow = fireball). Recognition is the
-// $1-style recogniser in unistroke.ts, limited to the shapes some power uses.
+// GENESIS — sigils (LIVING.md §3.6, hook H8; was CONTRACT.md §16.5's gestures): hold G or the middle mouse button, or
+// the gamepad's LT, and draw a sigil — an original one-stroke glyph — and the miracle it names is cast where it was
+// drawn, as large as it was drawn. A trail of light follows the stroke; while drawing, a card shows the sigils the powers
+// know (powers.json `sigil`: drop = rain, anvil = storm, fork = lightning, ripple = stillness, sprout = the grove,
+// knot = mending, basket = plenty, seed = increase, log = timber, eye = insight, flame = kindling, trail = the falling
+// flame, arch = ward, fall = meteor). Recognition is the $1-style recogniser in unistroke.ts, limited to the sigils
+// some power uses.
 
 import type { GroundHit, UiHost } from './host.ts';
 import type { Power } from './powers.ts';
-import { Unistroke, shapePolyline, type Pt } from './unistroke.ts';
+import { Unistroke, shapePolyline, SIGIL_WORDS, type Pt } from './unistroke.ts';
 import { h, clear } from './dom.ts';
 import { icon } from './icons.ts';
 
@@ -84,13 +85,13 @@ export class Gestures {
     const pts = this.pts;
     this.pts = [];
     if (pts.length < 6) return;
-    const powers = this.deps.host.powers.gestures();
+    const powers = this.deps.host.powers.sigils();
     const allowed = new Set([...powers.keys()].filter((g) => this.rec.names().includes(g)));
     const r = this.rec.recognize(pts.map((p) => [p.x, p.y] as Pt), allowed);
     const trail = pts.map((p) => ({ x: p.x, y: p.y }));
     if (!r || r.score < MIN_SCORE) {
-      const near = r ? `${r.name}${powers.get(r.name) ? ` (${powers.get(r.name)!.name})` : ''}` : '';
-      this.fading = { pts: trail, until: performance.now() + 1400, label: near ? `Not quite — nearest: ${near}` : 'Not a shape I know', ok: false };
+      const near = r ? `${r.name}${powers.get(r.name) ? ` sigil (${powers.get(r.name)!.name})` : ' sigil'}` : '';
+      this.fading = { pts: trail, until: performance.now() + 1400, label: near ? `Not quite — nearest: the ${near}` : 'Not a sigil the world knows', ok: false };
       this.last = r ? { name: r.name, score: r.score, power: null } : null;
       this.deps.host.sound('gesture.fail');
       return;
@@ -116,7 +117,7 @@ export class Gestures {
 
   /** recognise points without drawing (test surface): the shape and the power it casts */
   recognize(points: Pt[]): { name: string; score: number; power: string | null } | null {
-    const powers = this.deps.host.powers.gestures();
+    const powers = this.deps.host.powers.sigils();
     const r = this.rec.recognize(points, new Set(powers.keys()));
     return r ? { name: r.name, score: r.score, power: r.score >= MIN_SCORE ? powers.get(r.name)?.id ?? null : null } : null;
   }
@@ -178,21 +179,26 @@ export class Gestures {
     }
   }
 
-  /** the card of shapes and the miracles they cast */
+  /** the card of sigils and the miracles they cast */
   private renderCard(): void {
     const book = this.deps.host.powers;
     if (this.cardVersion === book.version && this.card.childElementCount) return;
     this.cardVersion = book.version;
     clear(this.card);
-    this.card.append(h('div', { class: 'gn-gest-h' }, h('span', { html: icon('gesture') }), h('span', { text: 'Draw a shape' })));
-    const grid = h('div', { class: 'gn-gest-grid' });
-    for (const [shape, p] of book.gestures()) {
-      const poly = shapePolyline(shape, 30, 3);
-      grid.append(h('div', { class: 'gn-gest-item', title: p.desc },
-        h('span', { class: 'gn-gest-shape', html: poly ? `<svg viewBox="0 0 30 30"><polyline points="${poly}"/></svg>` : '' }),
-        h('span', { class: 'gn-gest-name', text: p.name }),
-        h('span', { class: 'gn-gest-sh', text: shape.replace('-', ' ') })));
-    }
-    this.card.append(grid);
+    this.card.append(h('div', { class: 'gn-gest-h' }, h('span', { html: icon('gesture') }), h('span', { text: 'Draw a sigil' })));
+    this.card.append(sigilGrid(book.sigils()));
   }
+}
+
+/** the sigils as a grid of glyphs with the miracles they cast (the sigil card, the controls card) */
+export function sigilGrid(sigils: Map<string, Power>): HTMLDivElement {
+  const grid = h('div', { class: 'gn-gest-grid' });
+  for (const [sigil, p] of sigils) {
+    const poly = shapePolyline(sigil, 30, 3);
+    grid.append(h('div', { class: 'gn-gest-item', title: `${p.name}: ${SIGIL_WORDS[sigil] ?? sigil}. ${p.desc}` },
+      h('span', { class: 'gn-gest-shape', html: poly ? `<svg viewBox="0 0 30 30"><polyline points="${poly}"/></svg>` : '' }),
+      h('span', { class: 'gn-gest-name', text: p.name }),
+      h('span', { class: 'gn-gest-sh', text: sigil })));
+  }
+  return grid;
 }

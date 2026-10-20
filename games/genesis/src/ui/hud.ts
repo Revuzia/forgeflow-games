@@ -1,20 +1,23 @@
 // GENESIS — the HUD (CONTRACT.md §16.1): top left the world's name, its calendar (year, season, day, the local hour
-// where the camera looks) and the time controls (pause, 1×, 10×, 100×, 1000×, step a minute / an hour / a day) with the
-// achieved multiplier; top right the worlds strip (click to fly; the living on each) and, under it, worship and belief;
-// bottom centre the dock (the current tool's card sits above it: src/ui/tools.ts) with the doors to the palette, the
-// radial, the "do this" field, gestures, overlays, the chronicle, settings and the controls card; bottom left the toasts
-// and a one-line chronicle ticker. Settlement names float over the world, planet markers over the system view, and
-// the dev overlay (?dev=1) lists draw calls, triangles, patches and the life layer's counts.
+// where the camera looks) and the time controls (pause and every speed step, 1× to 3000×, the step a minute / an hour /
+// a day) with the achieved multiplier and the time-lapse badge; top right the worlds strip (click to fly; the living on
+// each) and, under it, the god's card: worship, how the people hold you (feared · awed · trusted, and their faith,
+// fear, trust and loyalty), the open prayers, the wrath law and the rival gods by name — a click opens The god
+// (src/ui/living.ts). Bottom centre the dock (the current tool's card sits above it: src/ui/tools.ts) with the doors to
+// the palette, the radial, the "do this" field, sigils, overlays, the chronicle, settings and the controls card; bottom
+// left the toasts and a one-line chronicle ticker. Settlement names float over the world (with their age, and a lamp
+// while they pray), planet markers over the system view, prayer lamps over praying towns from orbit, and the dev
+// overlay (?dev=1) lists draw calls, triangles, patches and the life layer's counts.
 // Two layers: `world` (things pinned to places on screen: labels, markers, the selection, "here") is never scaled;
 // `root` (the panels) takes the interface scale from the settings. Only a settlement's NAME takes a click (the label
-// box does not), and while the pointer belongs to a tool, a gesture or the hand the names let presses through to the
-// world (the world layer's `gn-busy`); while the radial, the palette or a gesture card is up they hide (`gn-hush`).
+// box does not), and while the pointer belongs to a tool, a sigil or the Touch the names let presses through to the
+// world (the world layer's `gn-busy`); while the radial, the palette or a sigil card is up they hide (`gn-hush`).
 // The frame rate shows only on request (?dev=1 or the setting): it is the developer's number, not the player's. Worship
-// spent on a miracle pulses the worship card with what was spent.
+// spent on a miracle pulses the god's card with what was spent.
 // The calendar is the local one where the camera looks: the hour, the day, the season and the year roll over together
-// (a day begins at local midnight). The speed presets carry their keys (1 2 3 4 for 1× 10× 100× 1000×). While the
-// opening speaks the HUD is quiet (`setQuiet`: pause, 1×, 10×, 100× only, no key strip); the key strip under it forgets
-// each control once it has been used (`used`), and goes when all are learnt.
+// (a day begins at local midnight). Each speed step carries its key in its corner (1–0 for 1× … 3000×). While the
+// opening speaks the HUD is quiet (`setQuiet`: pause, 1×, 10×, 100×, 1000× only, no key strip); the key strip under it
+// forgets each control once it has been used (`used`), and goes when all are learnt.
 
 /// <reference types="vite/client" />
 import '@fontsource/cormorant-garamond/latin-500.css';
@@ -35,8 +38,10 @@ import { SPEED_PRESETS } from '../sim/types.ts';
 import { qRotate, qRotateInv } from '../client/orbits.ts';
 import { Toasts, type ToastSpec } from './toasts.ts';
 import { stripYear } from './words.ts';
-import { h, fmtNum } from './dom.ts';
+import { h, fmtNum, cap } from './dom.ts';
 import { icon } from './icons.ts';
+import { wrathWord, WRATH_DEFAULT } from './powers.ts';
+import { PrayerMarks, labelSigns, regardOf, regardValue, bandOf, meterRow, openPrayers, godTitle, METERS, PRAYER_WORDS, type GodRow } from './living.ts';
 
 export interface HudActions {
   setSpeed(x: number): void;
@@ -104,11 +109,11 @@ installDigits();
 /** the key strip's controls, in order: the id `used` takes, the key (or its action), what it does */
 const HINTS: [string, string, string][] = [
   ['drag', 'drag', 'turn'], ['wheel', 'wheel', 'descend'], ['click', 'click', 'inspect'], ['ui.palette', '/', 'powers'], ['ui.freeform', 'Enter', 'do this'],
-  ['ui.radial', 'Q', 'radial'], ['ui.gesture', 'G', 'gesture'], ['ui.help', 'F1', 'controls'],
+  ['ui.radial', 'Q', 'radial'], ['ui.gesture', 'G', 'sigil'], ['ui.help', 'F1', 'controls'],
 ];
 const HINTS_KEY = 'genesis.hints.learnt.v1';
-/** the presets the quiet HUD keeps (the opening) */
-const QUIET_SPEEDS = new Set<number>([0, 1, 10, 100]);
+/** the presets the quiet HUD keeps (the opening): pause, the slow real 1×, and a few steps toward the time-lapse */
+const QUIET_SPEEDS = new Set<number>([0, 1, 10, 100, 1000]);
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -148,6 +153,10 @@ export class Hud {
   private worldBtns = new Map<number, HTMLButtonElement>();
   private faith: HTMLDivElement;
   private faithKey = '';
+  /** the rival gods by name and epithet (the shell asks the sim now and then: query 'gods') */
+  private gods: GodRow[] = [];
+  /** prayer lamps over praying towns, from orbit */
+  readonly prayerMarks: PrayerMarks;
   /** worship as last shown, and the "−15" that floats when some is spent */
   private lastWorship = -1;
   private spentEl: HTMLSpanElement | null = null;
@@ -168,7 +177,7 @@ export class Hud {
   private lastText = '';
   private v2 = new Vector2();
   private actions: HudActions;
-  private speedIds: Record<number, string> = { 0: 'time.pause', 1: 'time.speed1', 10: 'time.speed10', 100: 'time.speed100', 1000: 'time.speed1000' };
+  private speedIds: Record<number, string> = Object.fromEntries(SPEED_PRESETS.map((x) => [x, x === 0 ? 'time.pause' : `time.speed${x}`]));
   /** the key strip's controls already used (kept in this browser) */
   private learnt = new Set<string>();
   private hintOn = true;
@@ -242,7 +251,14 @@ export class Hud {
     const right = el('div', 'gn-topright');
     this.worlds = el('div', 'gn-panel gn-worlds');
     this.faith = el('div', 'gn-panel gn-faith');
-    this.faith.title = 'Worship gathered and how the living feel about you';
+    this.faith.setAttribute('role', 'button');
+    this.faith.tabIndex = 0;
+    this.faith.addEventListener('mouseenter', () => { const k = actions.hint('ui.god'); this.faith.title = `How the people hold you — open The god${k ? ` (${k})` : ''}`; });
+    this.faith.addEventListener('click', (e) => {
+      const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-god]');
+      actions.action(chip ? `ui.god@${chip.dataset.god}` : 'ui.god');
+    });
+    this.faith.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); actions.action('ui.god'); } });
     right.append(this.worlds, this.faith);
     this.root.appendChild(right);
     // ── world-pinned layers ──
@@ -250,6 +266,7 @@ export class Hud {
     this.world.appendChild(this.markers);
     this.labels = el('div', 'gn-markers gn-labels');
     this.world.appendChild(this.labels);
+    this.prayerMarks = new PrayerMarks(this.world);
     // ── toasts + ticker ──
     this.toasts = new Toasts(this.root, { lookAt: (planet, pos) => actions.lookAt(planet, pos) });
     this.ticker = el('button', 'gn-ticker') as HTMLButtonElement;
@@ -277,7 +294,7 @@ export class Hud {
     door('palette', 'palette', 'Powers', 'ui.palette');
     door('radial', 'radial', 'Radial', 'ui.radial');
     door('freeform', 'words', 'Do this', 'ui.freeform');
-    door('gesture', 'gesture', 'Gesture', 'ui.gesture');
+    door('gesture', 'gesture', 'Sigil', 'ui.gesture');
     this.dock.append(el('span', 'gn-dock-sep'));
     door('overlay', 'overlay', 'Overlay', 'ui.overlayNext');
     door('chronicle', 'chronicle', 'Chronicle', 'ui.chronicle');
@@ -361,8 +378,11 @@ export class Hud {
   }
 
   /** the shell's layout pass: where the toasts sit, how far the ticker may run */
-  layout(o: { toastBottom: number; toastTop: boolean; tickerMax: number }): void {
+  layout(o: { toastBottom: number; toastTop: boolean; tickerMax: number; toastLeft?: number; toastMaxW?: number }): void {
     this.root.style.setProperty('--gn-toast-bottom', `${Math.round(o.toastBottom)}px`);
+    // (a window open on the left — the chronicle, The god — would cover the column: it stands beside the window instead)
+    if (o.toastLeft !== undefined) this.root.style.setProperty('--gn-toast-left', `${Math.round(o.toastLeft)}px`); else this.root.style.removeProperty('--gn-toast-left');
+    if (o.toastMaxW !== undefined) this.root.style.setProperty('--gn-toast-maxw', `${Math.round(o.toastMaxW)}px`); else this.root.style.removeProperty('--gn-toast-maxw');
     this.root.style.setProperty('--gn-ticker-max', `${Math.round(o.tickerMax)}px`);
     this.toasts.root.classList.toggle('gn-toasts-top', o.toastTop);
   }
@@ -419,18 +439,20 @@ export class Hud {
     for (const [id, b] of this.worldBtns) if (!view.planet(id)) { b.remove(); this.worldBtns.delete(id); }
   }
 
-  /** worship (the pool of the player god) and belief: the living's love and fear, weighted by how many they are */
-  private syncFaith(view: WorldView): void {
-    let pop = 0, belief = 0, love = 0, fear = 0, towns = 0;
-    for (const pv of view.planets) for (const s of pv.settlements) {
-      if (s.flags & 2) continue;
-      const n = Math.max(1, s.population);
-      pop += n;
-      belief += s.belief * n;
-      if (s.alignment >= 0) love += s.belief * n * s.alignment; else fear += s.belief * n * -s.alignment;
-      towns++;
-    }
+  /** the rival gods by name and epithet (query 'gods') */
+  setGods(list: GodRow[]): void { this.gods = list; }
+
+  /**
+   * The god's card: worship (the pool miracles draw on), how the people of this world hold you — the band (feared ·
+   * awed · trusted) on its gauge and their faith, fear, trust and loyalty — the open prayers, the wrath law and the
+   * rival gods by name. A click opens The god; its chips open it at their section.
+   */
+  private syncFaith(view: WorldView, primary: number): void {
+    const m = regardOf(view, primary);
+    const r = regardValue(view, m);
+    const prayers = openPrayers(view, primary);
     const w = view.worship[0] ?? 0;
+    const wrath = view.wrath ?? WRATH_DEFAULT;
     // worship spent (a miracle drew on it for strength): pulse the card and say how much
     const now = performance.now();
     if (this.lastWorship >= 0 && w < this.lastWorship - 0.5) {
@@ -439,26 +461,38 @@ export class Hud {
       this.faith.classList.remove('gn-spent');
       void this.faith.offsetWidth;
       this.faith.classList.add('gn-spent');
-      this.faith.title = `Worship spent: ${Math.round(this.spent)} — miracles draw on worship for strength (up to ×1.5)`;
     }
     this.lastWorship = w;
     if (this.spentEl && now - this.spentAt > 2600) { this.spentEl.remove(); this.spentEl = null; }
-    const rivals = view.worship.slice(1).map((x, i) => ({ god: i + 1, w: x })).filter((r) => r.w > 0.5);
-    const b = pop ? belief / pop : 0;
-    const tone = love + fear > 0.0001 ? (love - fear) / (love + fear) : 0;
-    const key = `${Math.round(w)}|${Math.round(b * 100)}|${Math.round(tone * 20)}|${rivals.map((r) => Math.round(r.w)).join(',')}|${view.restraint}|${towns}|${now - this.spentAt < 2500 ? Math.round(this.spent) : 0}`;
+    const rivals = this.gods.filter((g) => g.id !== 0 && g.alive !== false && (view.worship[g.id] ?? g.worship ?? 0) > 0.5);
+    const key = `${Math.round(w)}|${r.toFixed(2)}|${m ? METERS.map((k) => Math.round(m[k] * 100)).join(',') : '-'}|${prayers.length}:${prayers[0]?.settlement ?? ''}|${wrath.toFixed(2)}|${rivals.map((g) => `${g.id}:${Math.round(view.worship[g.id] ?? 0)}`).join(',')}|${view.restraint}|${now - this.spentAt < 2500 ? Math.round(this.spent) : 0}`;
     if (key === this.faithKey) return;
     this.faithKey = key;
-    this.faith.hidden = !towns && w < 0.5;
-    const pct = Math.round(b * 100);
+    this.faith.hidden = !m && w < 0.5;
     this.faith.innerHTML = '';
+    const band = bandOf(r, m);
     this.faith.append(
-      h('span', { class: 'gn-faith-i', html: icon('worship') }),
-      h('span', { class: 'gn-faith-w' }, h('b', { text: fmtNum(Math.round(w)) }), h('small', { text: view.restraint ? 'worship · restraint' : 'worship' })),
-      h('span', { class: 'gn-faith-b' },
-        h('span', { class: 'gn-faith-track' }, h('i', { class: `gn-faith-fill ${tone >= 0 ? 'gn-love' : 'gn-fear'}`, style: `width:${pct}%` })),
-        h('small', { text: !towns ? 'no one yet' : pct === 0 ? 'no one believes yet' : `${pct}% believe · ${tone > 0.25 ? 'loved' : tone < -0.25 ? 'feared' : 'loved and feared'}` })),
-      ...(rivals.length ? [h('span', { class: 'gn-faith-r', title: 'worship of rival gods', text: `rivals ${rivals.map((r) => fmtNum(Math.round(r.w))).join(' · ')}` })] : []));
+      h('div', { class: 'gn-faith-top' },
+        h('span', { class: 'gn-faith-i', html: icon('worship') }),
+        h('span', { class: 'gn-faith-w' }, h('b', { text: fmtNum(Math.round(w)) }), h('small', { text: view.restraint ? 'worship · restraint' : 'worship' })),
+        h('span', { class: `gn-faith-band gn-band-${band}` },
+          h('b', { text: cap(band) }),
+          h('span', { class: 'gn-faith-gauge' }, h('i', { style: `left:${Math.round((Math.max(-1, Math.min(1, r)) + 1) * 50)}%` })))),
+    );
+    if (m) {
+      const g = h('div', { class: 'gn-faith-m' });
+      for (const k of METERS) g.append(meterRow(k, m[k], true));
+      this.faith.append(g);
+    }
+    const chips = h('div', { class: 'gn-faith-chips' });
+    if (prayers.length) {
+      const p = prayers[0];
+      chips.append(h('span', { class: 'gn-faith-chip gn-faith-pray', data: { god: 'prayers' }, title: `${prayers.length === 1 ? 'A prayer is' : `${prayers.length} prayers are`} open: ${prayers.slice(0, 3).map((q) => `${q.name} — ${PRAYER_WORDS[q.kind] ?? q.kind}`).join('; ')}` },
+        h('span', { html: icon('prayer') }), prayers.length === 1 ? `${p.name} prays for ${PRAYER_WORDS[p.kind] ?? p.kind}` : `${prayers.length} prayers`));
+    }
+    chips.append(h('span', { class: `gn-faith-chip gn-faith-wrath${wrath >= 0.45 ? ' gn-hot' : ''}`, data: { god: 'wrath' }, title: `Wrath ${wrath.toFixed(2)}: how hard your harm falls` }, h('span', { html: icon('wrath') }), `wrath: ${wrathWord(wrath)}`));
+    if (rivals.length) chips.append(h('span', { class: 'gn-faith-chip gn-faith-r', data: { god: 'rivals' }, title: 'Rival gods and the worship they hold' }, rivals.slice(0, 2).map((g) => `${godTitle(g)} ${fmtNum(Math.round(view.worship[g.id] ?? g.worship ?? 0))}`).join(' · ') + (rivals.length > 2 ? ` +${rivals.length - 2}` : '')));
+    this.faith.append(chips);
     if (now - this.spentAt < 2500 && this.spent >= 1) {
       this.spentEl = h('span', { class: 'gn-faith-spent', text: `−${Math.round(this.spent)} worship · a stronger miracle` });
       this.faith.append(this.spentEl);
@@ -549,11 +583,18 @@ export class Hud {
           rec = { el: e, text: '' };
           this.labelEls.set(key, rec);
         }
-        const sub = `${s.population} · ${s.flags & 1 ? 'wandering' : `${s.era} age`}${s.besieged ? ' · besieged' : s.war?.length ? ' · at war' : ''}`;
-        const text = `${s.name}|${sub}`;
+        const sub = `${s.population} · ${s.flags & 1 ? 'wandering' : s.eraLabel ?? `${s.era} age`}${s.besieged ? ' · besieged' : s.war?.length ? ' · at war' : ''}`;
+        const sg = labelSigns(s);
+        const text = `${s.name}|${sub}|${sg.prayer.toFixed(1)}|${sg.prophet}|${sg.sacred}`;
         if (rec.text !== text) {
           rec.text = text;
-          (rec.el.firstElementChild as HTMLElement).textContent = s.name;
+          const nm = rec.el.firstElementChild as HTMLElement;
+          nm.textContent = s.name;
+          // its small signs: a lamp while it prays (brighter the more pressing), a star where its prophet lives, a leaf
+          // where it keeps something holy
+          if (sg.prayer >= 0) nm.prepend(h('span', { class: 'gn-slabel-sign gn-slabel-pray', html: icon('prayer'), style: `opacity:${(0.6 + 0.4 * sg.prayer).toFixed(2)}`, title: `${s.name} prays for ${(s.prayers ?? []).map((q) => PRAYER_WORDS[q.kind] ?? q.kind).join(' and ')}` }));
+          if (sg.prophet) nm.append(h('span', { class: 'gn-slabel-sign gn-slabel-prophet', html: icon('prophet'), title: `${s.prophet!.name}, your prophet, lives here` }));
+          if (sg.sacred) nm.append(h('span', { class: 'gn-slabel-sign gn-slabel-sacred', html: icon('sacred'), title: s.sacred?.animal ? `They revere the ${s.sacred.animal.replace(/-/g, ' ')}` : 'They keep a holy place' }));
           (rec.el.lastElementChild as HTMLElement).textContent = sub;
         }
         // (under the whisper's words a name steps back: the two would read as one)
@@ -589,9 +630,14 @@ export class Hud {
     const pv: PlanetView | undefined = view.planet(f.primary) ?? view.planets[0];
     const now = performance.now();
     this.syncWorlds(view, f.primary);
-    this.syncFaith(view);
+    this.syncFaith(view, f.primary);
     this.syncMarkers(f);
     this.syncLabels(f, view.planet(f.primary));
+    // prayer lamps from high up, where the names do not show (the names carry their own lamp closer in)
+    this.prayerMarks.update({
+      view, pv: view.planet(f.primary), cam: f.pose.pos, altitude: f.altitude, systemView: f.systemView, project: f.project, v2: this.v2,
+      groundRadius: f.groundRadius, labelsShown: f.labels !== false && f.altitude > 70 && f.altitude < 9000,
+    });
     this.syncTicker(view, f.ticker !== false, now);
     if (pv) {
       this.dayH = pv.params.dayHours;
@@ -622,7 +668,7 @@ export class Hud {
     this.achieved.classList.toggle('gn-behind', behind);
     // the time-lapse the sim runs at (the snapshot's lapseLevel when the mirror carries it, else from the preset:
     // 1x–300x the plain sim, 1000x time-lapse, 3000x deep time-lapse — sim/perf/lapse.ts)
-    const lv = (view as unknown as { lapseLevel?: number }).lapseLevel ?? (view.speed >= 3000 ? 2 : view.speed >= 1000 ? 1 : 0);
+    const lv = view.lapseLevel ?? (view.speed >= 3000 ? 2 : view.speed >= 1000 ? 1 : 0);
     const lapse = view.speed > 0 && lv > 0 ? ` <i class="gn-lapse">${lv > 1 ? 'deep time-lapse' : 'time-lapse'}</i>` : '';
     this.achieved.innerHTML = `<b>${view.speed === 0 ? 'paused' : '×' + fmtSpeed(view.achievedSpeed)}</b>${lapse}${f.showFps ? ` · ${f.fps < 10 ? f.fps.toFixed(1) : f.fps.toFixed(0)} fps` : ''}`;
     this.achieved.title = view.speed > 0 ? `Asked for ×${view.speed}; the worlds are keeping ×${fmtSpeed(view.achievedSpeed)}${lv > 0 ? ' — in time-lapse: the slow systems take longer steps, the same world' : ''}` : 'Time stands still';

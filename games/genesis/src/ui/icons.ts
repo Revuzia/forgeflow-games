@@ -33,6 +33,9 @@ const person = CI(12, 5.4, 2.4) + P('M12 8.3v6.6M7.6 11.2l4.4-1.4 4.4 1.4M12 14.
 const personAt = (x: number, y: number, s = 0.62): string => at(x, y, s, person);
 const openHand = P('M8.2 12.5V5.6a1.4 1.4 0 0 1 2.8 0v5.6M11 11V4.2a1.4 1.4 0 0 1 2.8 0V11M13.8 11.2V5.4a1.4 1.4 0 0 1 2.8 0v7.1M8.2 12.4l-1.6-2.1a1.5 1.5 0 0 0-2.4 1.7l3.1 5.2a7 7 0 0 0 6 3.4h.6a5 5 0 0 0 5-5V8.1a1.4 1.4 0 0 0-2.8 0');
 const fist = P('M7.2 9.6a1.6 1.6 0 0 1 3.2 0M10.4 9.2a1.6 1.6 0 0 1 3.2 0M13.6 9.4a1.6 1.6 0 0 1 3.2 0v4.8a6 6 0 0 1-6 6h-.4a5 5 0 0 1-4.7-3.3l-1.1-3.1a1.6 1.6 0 0 1 2.9-1.3l.9 1.6V9.6M10.4 9.2v3.2M13.6 9.4v3');
+/** the Touch (LIVING §3.6): the god's presence as a fall of light onto a point — never a hand */
+const touchLight = P('M12 2.4v6.2M8.6 3.6l1.6 5.2M15.4 3.6l-1.6 5.2') + CI(12, 12.6, 3) + P('M5 19.6c2-1.3 4.4-2 7-2s5 .7 7 2');
+const touchSmall = (x: number, y: number, s = 0.62): string => at(x, y, s, touchLight);
 const globe = CI(12, 12, 8.6) + P('M3.4 12h17.2M12 3.4c2.6 2.4 3.9 5.3 3.9 8.6s-1.3 6.2-3.9 8.6c-2.6-2.4-3.9-5.3-3.9-8.6S9.4 5.8 12 3.4z');
 const ringWorld = CI(12, 12, 5.6) + P('M3.2 15.4c-1.4 1.7 .4 2.9 4.2 2.4 4.4-.6 10.6-3.4 12.6-6.1 1.2-1.7-.2-2.7-3.2-2.5');
 const house = P('M4 11.2L12 5l8 6.2M6.2 9.6V19h11.6V9.6M10.2 19v-4.6h3.6V19');
@@ -269,23 +272,18 @@ const ICONS: Record<string, string> = {
   freeze: snowflake,
   'star-fall': at(5, -0.5, 0.6, star5) + P('M10.4 11.4L4 17.8M13.4 13.2L8.2 18.4M8.4 9.8l-4.6 4.6') + ground.replace('M3 20.5h18', 'M3 21h11'),
   // ── Hand ──
-  grab: fist,
-  throw: at(-3, 3, 0.78, openHand) + P('M15.6 6.4c2-1.6 3.8-1.8 5.6-1.2M17 9.6c1.6-.4 3-.2 4.2.6') + CI(18, 3.2, 1.4),
-  'open-hand': openHand,
-  place: at(0, -2.6, 0.82, openHand) + P('M5 21.5h14'),
-  drop: at(0, -3.4, 0.78, openHand) + arrowDown(19.4, 13, 21),
-  slap: openHand + P('M2.4 6.4l2.2 1.6M2 10.6h2.6M3 14.4l2.2-1'),
-  stroke: openHand + P('M3 21.5c2.8-1.6 5.6-1.6 8.4 0s5.6 1.6 8.4 0'),
+  grab: P('M12 20.5v-9M8.2 15l3.8-3.8 3.8 3.8') + P('M12 2.6v3.6M8.6 3.6l1.2 2.8M15.4 3.6l-1.2 2.8') + CI(12, 8.8, 1.6) + P('M5.5 21.2h13'),
+  throw: P('M3.2 19.5c2.6-8.6 8.8-12.4 16.4-10.8') + P('M15.6 5.6l4.4 3-3.2 4.2') + CI(5.6, 15.2, 1.8) + P('M2.6 21.2h6'),
+  'open-hand': touchLight,
+  place: P('M12 3v12M8.2 11.2L12 15l3.8-3.8') + CI(12, 17.6, 1.2) + P('M4.5 21h15'),
+  drop: CI(12, 6.6, 3) + P('M12 10.8v9.6M8.4 16.8l3.6 3.6 3.6-3.6') + P('M8.8 3.6l-1.2-1.2M15.2 3.6l1.2-1.2'),
+  slap: P('M14.2 2.4L8.4 11h4.4l-2.6 7.2 7-9.6h-4.4l2.6-6.2z') + P('M3.5 21.2h17M7 21.2l-1.6-2M17 21.2l1.6-2'),
+  stroke: CI(12, 6.4, 2.6) + P('M12 1.8v1.4M7.4 3.4l.9 1M16.6 3.4l-.9 1') + P('M3.5 14c2.8-2 5.7-2 8.5 0s5.7 2 8.5 0M5.5 18.6c2.2-1.5 4.4-1.5 6.5 0s4.4 1.5 6.5 0'),
   shield: shieldP,
-  cast: openHand + at(13.6, -0.6, 0.42, star5),
-  // ── Creature ──
-  creature: P('M6.6 8.6c-1.6-1.4-1.8-3.6-.6-5 1.4.4 2.4 1.4 2.8 2.8M17.4 8.6c1.6-1.4 1.8-3.6.6-5-1.4.4-2.4 1.4-2.8 2.8M12 6c-4 0-7 3-7 7 0 4.4 3.2 7.6 7 7.6s7-3.2 7-7.6c0-4-3-7-7-7zM9.6 16.6c1.4 1 3.4 1 4.8 0') + DOT(9.4, 12, 1.2) + DOT(14.6, 12, 1.2),
-  leash: chain + P('M3.5 20.5l3-3M20.5 3.5l-3 3'),
-  unleash: P('M9.6 14.4l1.4-1.4M13 11l1.4-1.4M10.4 7.6l1.4-1.4a3.4 3.4 0 0 1 4.8 4.8l-1.4 1.4M13.6 16.4l-1.4 1.4a3.4 3.4 0 0 1-4.8-4.8l1.4-1.4') + P('M4 4l2.4 2.4M20 20l-2.4-2.4'),
+  cast: P('M4 17.6c1.4-6.4 4.6-10.4 8.6-10.4 3.2 0 4 3.6 1.4 5-2.4 1.3-4.2-1-2.6-3.4 2.4-3.4 6.8-4.6 9.6-3.4') + DOT(4, 17.6, 1.2) + P('M2.8 21h18.4'),
+  // (the creature's glyphs went with it: LIVING §3.5; these few stay for mods)
   mode: sliders,
-  treat: P('M9.8 6.6a2.4 2.4 0 1 0-3.2 3.2l7.6 7.6a2.4 2.4 0 1 0 3.2-3.2zM14.2 17.4a2.4 2.4 0 1 0 3.2-3.2M9.8 6.6a2.4 2.4 0 1 0-3.2 3.2'),
-  stick: P('M5 20L18.5 5.5M16.2 5.4l2.6-2.6M14.8 9.4l2.2-.2M9.4 14.2l-.6 2.2'),
-  show: eyeP + at(13.8, 12.6, 0.42, openHand),
+  show: eyeP + touchSmall(12.6, 11.6, 0.46),
   go: P('M4 19.5l4.5-9.2 4.6 5.4L20 4.5M14.6 4.5H20V10'),
   'name-c': tagP,
   grow: P('M4 20h16M7 20v-4.6M12 20V10.6M17 20V5') + P('M14.6 7.4L17 5l2.4 2.4'),
@@ -312,8 +310,7 @@ const ICONS: Record<string, string> = {
   'cat-ideas': bulb,
   'cat-fire': flame,
   'cat-disasters': meteor + ground.replace('M3 20.5h18', 'M14 20.5h7'),
-  'cat-hand': openHand,
-  'cat-creature': '',
+  'cat-hand': touchLight,
   'cat-worlds': ringWorld,
   'cat-time': hourglassP,
   'cat-laws': tabletP,
@@ -354,15 +351,28 @@ const ICONS: Record<string, string> = {
   camera: P('M3.5 8.2h3.6l1.6-2.4h6.6l1.6 2.4h3.6v10.6h-17z') + CI(12, 13.2, 3.6) + DOT(17.8, 10.6, 0.8),
   film: P('M3.5 5.5h17v13h-17zM7 5.5v13M17 5.5v13M3.5 9h3.5M3.5 12h3.5M3.5 15h3.5M17 9h3.5M17 12h3.5M17 15h3.5') + P('M10.4 9.8l3.6 2.2-3.6 2.2z'),
   mods: P('M12 2.8l8 4.4v9.6l-8 4.4-8-4.4V7.2zM12 2.8v4.6M4 7.2l8 4.4 8-4.4M12 11.6v9.6') + P('M8 9.4l-4-2.2'),
+  // the living world (UI lane, LIVING.md §7): ore veins, prayers, prophets, holy places, wrath, the Touch, regard
+  ore: P('M3.5 19.5l2.2-7.2 4.4-4.6 6.2 1.6 3.2 5.4.9 4.8z') + P('M6.4 16.4l3.4-2.6 2.6.9 3.8-3.4') + DOT(9.8, 13.8, 1.1) + DOT(16.2, 11.3, 1.1),
+  rainbow: P('M3 18.5a9 9 0 0 1 18 0M6.2 18.5a5.8 5.8 0 0 1 11.6 0M9.4 18.5a2.6 2.6 0 0 1 5.2 0'),
+  prayer: P('M6.8 18.8h10.4l-1.2 2.4H8z') + P('M9.4 16.2c-1.4-1.8.9-3-.2-5.2M12 16.2c-1.4-2.1 1-3.5-.1-6.4M14.6 16.2c-1.4-1.8.9-3-.2-5.2') + P('M12 2.6v2.2M8.8 3.6l.8 1.6M15.2 3.6l-.8 1.6'),
+  prophet: CI(12, 7.4, 2.4) + P('M12 10.3v5.9M8.4 13l3.6-1.4 3.6 1.4M12 16.2l-2.8 5.2M12 16.2l2.8 5.2') + P('M12 1.6v1.6M7.4 3.4l1 1.2M16.6 3.4l-1 1.2M5.6 7.4h1.6M16.8 7.4h1.6'),
+  sacred: P('M12 21.2V13.6M12 13.6c-3.2 0-5.4-2.2-5.4-5.2 0-2.6 2.4-4.8 5.4-6.4 3 1.6 5.4 3.8 5.4 6.4 0 3-2.2 5.2-5.4 5.2z') + P('M6.4 21.2h11.2') + DOT(12, 8.4, 1.2),
+  wrath: cloud + P('M12.4 13.2l-2.2 4h2.6l-1.6 4.2'),
+  touch: touchLight,
+  regard: P('M3 15a9 9 0 0 1 18 0') + P('M12 15l4.6-5.2') + DOT(12, 15, 1.4) + P('M4.6 18.6h3M16.4 18.6h3'),
+  called: person + P('M5.4 6.4l2 .8M18.6 6.4l-2 .8M12 1.2v1.2'),
+  credits: P('M5.5 3.5h10l3 3v14h-13z') + P('M15.5 3.5v3h3') + P('M8.2 10h7.6M8.2 13h7.6M8.2 16h4.6'),
+  title: globe,
+  touchscreen: P('M7.4 2.8h9.2a1.4 1.4 0 0 1 1.4 1.4v15.6a1.4 1.4 0 0 1-1.4 1.4H7.4A1.4 1.4 0 0 1 6 19.8V4.2a1.4 1.4 0 0 1 1.4-1.4zM10.6 18.4h2.8'),
+  desktop: P('M3.4 4.5h17.2v11H3.4zM9 20.5h6M12 15.5v5'),
   dice: P('M5 4.5h14a.5.5 0 0 1 .5.5v14a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5z') + DOT(8.4, 8.4, 1.2) + DOT(15.6, 8.4, 1.2) + DOT(12, 12, 1.2) + DOT(8.4, 15.6, 1.2) + DOT(15.6, 15.6, 1.2),
 };
-ICONS['cat-creature'] = ICONS.creature;
 // the Signs: an omen in the sky (prophets, omens, sacred places, prayers answered)
 ICONS['cat-signs'] = ICONS.sign;
 
 const CATEGORY_ICON: Record<string, string> = {
   Shape: 'cat-shape', Water: 'cat-water', Sky: 'cat-sky', Life: 'cat-life', Peoples: 'cat-peoples', Ideas: 'cat-ideas', Fire: 'cat-fire',
-  Disasters: 'cat-disasters', Hand: 'cat-hand', Creature: 'cat-creature', Signs: 'cat-signs', Worlds: 'cat-worlds', Time: 'cat-time', Laws: 'cat-laws',
+  Disasters: 'cat-disasters', Hand: 'cat-hand', Signs: 'cat-signs', Worlds: 'cat-worlds', Time: 'cat-time', Laws: 'cat-laws',
 };
 
 /** an icon's SVG markup; an unknown key falls back to its category's glyph, else a star */

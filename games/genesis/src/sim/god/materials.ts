@@ -34,6 +34,7 @@ import { storeHas } from '../people/store.ts';
 import { tell } from '../people/story.ts';
 import { witness } from '../people/culture.ts';
 import { distM } from '../people/world.ts';
+import { MAX_WORK_COST, flowCost } from '../people/resources.ts';
 import { rebuildContent, slug, titleCase } from './runtime.ts';
 import { fail, herePos, nearestSettlement, norm, ok, placeName } from './util.ts';
 import { makePlant } from './plantsrt.ts';
@@ -328,17 +329,26 @@ export function naturalVeins(p: Planet, oi: number, geology: Record<string, numb
 /** a dry land spot near a settlement for a vein: 200-350 m out, on high ground if there is any (or -1) */
 function veinSpotNear(p: Planet, st: Settlement, salt: number): V3 | null {
   const P = p.grid.pos;
-  let best = -1, bv = -1;
-  for (const c of p.cellsNear(st.pos, Math.max(400, p.edgeM * 2.5))) {
-    if (p.s.ocean[c] || p.f.water[c] > 0.2) continue;
-    const d = distM(p, [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]], st.pos);
-    if (d < Math.min(150, p.edgeM * 0.6) || d > Math.max(380, p.edgeM * 2.2)) continue;
-    if (p.people.bByCell.get(c).length || st.fields.includes(c)) continue;
-    const v = p.f.surface[c] - p.st.seaLevel + 40 * hashFloat(c, salt, 0x0e3);
-    if (v > bv) { bv = v; best = c; }
+  // within the town's work reach (people/resources.ts: the walking cost from home, not the straight line) when any such
+  // ground will do — the high ground 150–380 m out it took before lay beyond that reach on 3 of 4 worlds of the
+  // integrated acceptance run, and nobody ever mined it (integration, 2026-10-14)
+  for (const reachable of [true, false]) {
+    let best = -1, bv = -1;
+    for (const c of p.cellsNear(st.pos, Math.max(400, p.edgeM * 2.5))) {
+      if (p.s.ocean[c] || p.f.water[c] > 0.2) continue;
+      const d = distM(p, [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]], st.pos);
+      if (d < Math.min(150, p.edgeM * 0.6) || d > Math.max(380, p.edgeM * 2.2)) continue;
+      if (p.people.bByCell.get(c).length || st.fields.includes(c)) continue;
+      if (reachable && flowCost(st, c) > VEIN_REACH * MAX_WORK_COST) continue;
+      const v = p.f.surface[c] - p.st.seaLevel + 40 * hashFloat(c, salt, 0x0e3);
+      if (v > bv) { bv = v; best = c; }
+    }
+    if (best >= 0) return [P[best * 3], P[best * 3 + 1], P[best * 3 + 2]];
   }
-  return best < 0 ? null : [P[best * 3], P[best * 3 + 1], P[best * 3 + 2]];
+  return null;
 }
+/** the share of the work reach a vein laid for a town lies within (its centre: the vein spreads 120 m around it) */
+const VEIN_REACH = 0.8;
 
 // ───────────────────────────── demand and firsts ─────────────────────────────
 

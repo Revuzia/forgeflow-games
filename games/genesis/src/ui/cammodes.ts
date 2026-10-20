@@ -162,13 +162,13 @@ export class CameraUi {
   private menuItems(): MenuItem[] {
     const host = this.host;
     const sel = host.selected();
-    const followable = !!sel && ['agent', 'animal', 'creature', 'disaster', 'ship', 'weather'].includes(sel.kind);
+    const followable = !!sel && ['agent', 'animal', 'disaster', 'ship', 'weather'].includes(sel.kind);
     const pv = host.view.planet(host.primary());
     const towns = pv ? pv.settlements.some((s) => !(s.flags & 2)) : false;
     const mode = host.cam?.mode() ?? 'orbit';
     return [
       { id: 'orbit', label: 'Orbit this world', icon: 'world', action: 'cam.home', ok: true },
-      { id: 'follow', label: mode === 'follow' ? 'Stop following' : 'Follow the selection', icon: 'follow', action: 'cam.follow', ok: followable || mode === 'follow', why: 'select a person, a herd, a creature or a ship first' },
+      { id: 'follow', label: mode === 'follow' ? 'Stop following' : 'Follow the selection', icon: 'follow', action: 'cam.follow', ok: followable || mode === 'follow', why: 'select a person, a herd, a disaster or a ship first' },
       { id: 'dolly', label: mode === 'dolly' ? 'End the cinematic' : 'Cinematic', icon: 'film', action: 'cam.dolly', ok: towns || mode === 'dolly', why: 'there is no settlement on this world yet' },
       { id: 'walk', label: mode === 'walk' ? 'Rise from the ground' : 'Walk among them', icon: 'walk', action: 'cam.walk', ok: !!pv },
       { id: 'photo', label: 'Photo mode', icon: 'camera', action: 'cam.photo', ok: true },

@@ -12,6 +12,9 @@
 //   S  treeSpecies, cropSpecies, light (night lights, reserved), biome
 //   G  curvature gradient of `surface` (gx, gy, gz, gw) from surface.ts surfaceGradients — computed once per surface
 //      change by the WorldView (pv.ground.grad, the array the CPU ground function reads) and uploaded as is
+//   O  ore outcrops (LIVING H12): the cell's ore colour (ores.json `color` of its oreType) premultiplied by its ore
+//      richness in rgb, the richness in a — interpolated linearly, so neighbouring deposits of different ores blend
+//      their stains instead of switching type along a sim-triangle edge
 //   D  dune amplitude (surface.ts duneAmpOf of the raw sand depth), the ground function's dune term; surface wind
 //      (m/s, body-frame tangent vector: the sea state of the water, ocean.ts) in yzw — a synthetic trade-wind / westerly
 //      pattern with gusty variation where the source has no wind field (lookdev)
@@ -26,11 +29,39 @@ import type { FieldName } from '../../sim/types.ts';
 import type { PlanetView } from '../../client/worldview.ts';
 import { duneAmpOf, roughOf, surfaceGradients } from '../../sim/grid/surface.ts';
 import { CityLights } from './citylights.ts';
+import { BASE_PACK } from '../../data/index.ts';
+
+/** linear-light colour of each ore (oreType − 1 indexes the content's ore list; the base pack's come first, invented
+ * ores past it take a neutral mineral grey-green from their index) */
+function hexRgb(hex: string | undefined): [number, number, number] {
+  const h = String(hex ?? '#808080').replace('#', '');
+  const v = (i: number) => { const c = (parseInt(h.slice(i, i + 2), 16) || 128) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  return [v(0), v(2), v(4)];
+}
+let ORE_RGB: [number, number, number][] = (BASE_PACK.ores ?? []).map((o) => hexRgb((o as { color?: string }).color));
+let orePaletteVersion = 0;
+/**
+ * The live ore list (the sim's `ores` query: base pack, mods and the god's inventions, in content order) — so an
+ * invented ore's outcrops take its own colour. Until it is called the base pack's colours stand (hook H12, for the
+ * app: pass the query's rows as they come).
+ */
+export function setOrePalette(list: readonly { color?: string }[]): void {
+  const next = list.map((o) => hexRgb(o.color));
+  if (next.length === ORE_RGB.length && next.every((c, i) => c[0] === ORE_RGB[i][0] && c[1] === ORE_RGB[i][1] && c[2] === ORE_RGB[i][2])) return;
+  ORE_RGB = next;
+  orePaletteVersion++;
+}
+function oreRgb(type: number): [number, number, number] {
+  const i = Math.round(type) - 1;
+  if (i >= 0 && i < ORE_RGB.length) return ORE_RGB[i];
+  const k = ((i * 0.618034) % 1 + 1) % 1;
+  return [0.18 + 0.12 * k, 0.2 + 0.06 * (1 - k), 0.16 + 0.1 * k];
+}
 
 export const FIELD_ROW = 256;
 const WET = 0.02;
 
-type TexName = 'A' | 'N' | 'M0' | 'M1' | 'V' | 'C' | 'F' | 'S' | 'G' | 'D';
+type TexName = 'A' | 'N' | 'M0' | 'M1' | 'V' | 'C' | 'F' | 'S' | 'G' | 'D' | 'O';
 const SOURCES: Record<TexName, FieldName[]> = {
   A: ['surface', 'soil', 'sand', 'snow', 'water'],
   N: ['surface'],
@@ -42,6 +73,7 @@ const SOURCES: Record<TexName, FieldName[]> = {
   S: ['treeSpecies', 'cropSpecies', 'biome'],
   G: ['surface'],
   D: ['sand', 'windX', 'windY', 'windZ'],
+  O: ['ore', 'oreType'],
 };
 
 export class FieldTextures {
@@ -50,7 +82,7 @@ export class FieldTextures {
   /** CPU copies used by the chunk system for bounds / water presence (same arrays as the textures) */
   readonly waterLevel: Float32Array;
   readonly waterDepth: Float32Array;
-  private stamps: Record<TexName, string> = { A: '', N: '', M0: '', M1: '', V: '', C: '', F: '', S: '', G: '', D: '' };
+  private stamps: Record<TexName, string> = { A: '', N: '', M0: '', M1: '', V: '', C: '', F: '', S: '', G: '', D: '', O: '' };
   /** night light per cell, supplied by the life layer (lit buildings), packed into S.z; and its version */
   private light: Float32Array | null = null;
   private lightVersion = 0;
@@ -78,7 +110,7 @@ export class FieldTextures {
       t.needsUpdate = true;
       return t;
     };
-    this.tex = { A: mk(), N: mk(), M0: mk(), M1: mk(), V: mk(), C: mk(), F: mk(), S: mk(), G: mk(), D: mk() };
+    this.tex = { A: mk(), N: mk(), M0: mk(), M1: mk(), V: mk(), C: mk(), F: mk(), S: mk(), G: mk(), D: mk(), O: mk() };
     this.waterLevel = new Float32Array(count);
     this.waterDepth = new Float32Array(count);
   }
@@ -87,6 +119,7 @@ export class FieldTextures {
     let s = '';
     for (const f of SOURCES[name]) s += (this.pv.fieldVersion.get(f) ?? 0) + ',';
     if (name === 'S') s += `L${this.lightVersion}`;
+    if (name === 'O') s += `P${orePaletteVersion}`;
     return s;
   }
 
@@ -290,16 +323,28 @@ export class FieldTextures {
             const lat = Math.asin(Math.max(-1, Math.min(1, y)));
             const band = Math.cos(lat * 3);   // +1 trades (equator), −1 westerlies (~60°), +1 polar easterlies
             const gust = 0.5 + 0.5 * Math.sin(x * 9.1 + Math.sin(z * 7.3) * 2) * Math.sin(z * 8.3 + Math.sin(y * 6.1) * 2);
-            const speed = 3 + 8 * gust * (0.6 + 0.4 * Math.abs(band));
+            // (the belts turn through calm — the horse latitudes — instead of flipping: a sign switch at the belts' edge
+            // reversed the sea state's direction along a line, drawn across every ocean as a wavy seam in the glint)
+            const speed = (1 + 10 * gust) * Math.min(1, Math.abs(band) * 2.5);
             // east unit vector (−z, 0, x)/|..| in this frame's longitude convention (lon = atan2(x, z))
             let ex = z, ez = -x;
             const el = Math.hypot(ex, ez) || 1;
             ex /= el; ez /= el;
-            const k = band >= 0 ? -1 : 1; // trades blow toward the west
+            const k = -Math.sign(band); // trades blow toward the west
             d[c * 4 + 1] = ex * speed * k;
             d[c * 4 + 2] = 0;
             d[c * 4 + 3] = ez * speed * k;
           }
+        }
+        break;
+      }
+      case 'O': {
+        const d = this.tex.O.image.data as Float32Array;
+        const ore = this.field('ore'), ty = this.field('oreType');
+        for (let c = 0; c < n; c++) {
+          const a = ore && ty && ty[c] > 0 ? Math.max(0, Math.min(1, ore[c])) : 0;
+          const rgb = a > 0 ? oreRgb(ty![c]) : ORE_RGB[0] ?? [0, 0, 0];
+          d[c * 4] = rgb[0] * a; d[c * 4 + 1] = rgb[1] * a; d[c * 4 + 2] = rgb[2] * a; d[c * 4 + 3] = a;
         }
         break;
       }
