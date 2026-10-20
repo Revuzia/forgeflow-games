@@ -1,14 +1,21 @@
-// GENESIS — the god's presence, generated (render lane; LIVING §0.1.6–7, §3.6, hooks H6–H8), without a GPU:
-//   * the Touch (gen/handgen.ts): its look follows regard — warm daylight trusted, storm-dark and crackling feared —
-//     monotonically; open, its mantle rides the whirl up from a wide foot on the ground; holding, it gathers into a
-//     closed cradle round what it holds (every tuft near the cradle, on all sides of it, the crown left open), the
-//     low tufts last; the cradle fits a person, a boulder, a tree; its geometry is well formed; a crackle's arc is a
-//     connected jagged channel from one end to the other; nothing of it is a hand (no fingers, no palm)
+// GENESIS — the god's presence, generated and drawn (render lane; LIVING §0.1.6–7, §3.4, §3.6, hooks H4–H8), without a
+// GPU:
+//   * the Touch's form (gen/handgen.ts): its look follows regard — warm daylight trusted, storm-dark and crackling
+//     feared — monotonically; open, its mantle rides the whirl up from a wide foot on the ground; holding, it gathers
+//     into a closed cradle round what it holds (every tuft near the cradle, on all sides of it, the crown left open),
+//     the low tufts last; the cradle fits a person, a boulder, a tree; its geometry is well formed; a crackle's arc is a
+//     connected jagged channel from one end to the other; nothing of it is a hand (no fingers, no palm, no rig)
+//   * the Touch at work (render/hand.ts HandVisual, driven frame by frame as the renderer drives it): it appears where
+//     the cursor is and goes when nothing calls it; it lifts a person (the cradle gathers round them, below the grip)
+//     and lets go; hurled fast it leaves a trail; a rebuke is a downdraft that throws dust and a cold flash; casting, it
+//     traces the miracle's sigil; feared it crackles (an arc struck at the moment nextCrackle names), trusted never;
+//     its shadow and its pool of light lie on the ground; a person it hurls is drawn flying by their own id (the
+//     sim's 'thrown' event names the projectile, a different id sequence), never a stranger
 //   * the creature is gone from the renderer: no creature layer or generator module ships
-//   * the sigils (fx/sigils.ts): every power's `sigil` in powers.json has an authored, evenly sampled stroke inside
-//     the unit box; each miracle draws its power's sigil; none of them reads as one of the old gesture shapes (circle,
-//     spiral, zigzag, triangle, V, square, star — a $1-style shape distance); an invented miracle draws the original
-//     fallback glyph
+//   * the sigils (fx/sigils.ts): ONE glyph per sigil — the stroke the Touch traces and the miracle writes on the land
+//     is the UI recogniser's own template, so the recogniser reads each drawn glyph back as its sigil; every power's
+//     `sigil` has one; evenly sampled inside the unit box; none reads as one of the old gesture shapes (circle,
+//     spiral, zigzag, triangle, V, square, star — a $1-style shape distance); an invented miracle draws the fallback
 //   * the signs (render/signs): prophets and the Called are found by AgentFlag2, a sacred animal by its id or the old
 //     id it replaced, the sim's events become sacred places and moments (an ordinary strike is no sign); the sea's
 //     drawback before a tsunami (fx/drawback.ts) lies on the coast's shallows, on the ground, never inland
@@ -16,14 +23,28 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { BufferGeometry } from 'three';
+import { Color, Group, Vector3, type BufferGeometry, type IUniform, type Mesh, type Object3D, type ShaderMaterial } from 'three';
 import {
   CRADLE_ALPHA, TOUCH_N, bandGeometry, crackleArc, cradleOf, discGeometry, gathered, mantlePoint, moteGeometry, stripGeometry, touchLook,
   touchRng, tuftGeometry, vortexR, type VortexFrame,
 } from '../src/render/gen/handgen.ts';
 import * as handgen from '../src/render/gen/handgen.ts';
+import { HandVisual, type HandFrame } from '../src/render/hand.ts';
+import { Flights } from '../src/render/fx/flights.ts';
+import { ThrowFx } from '../src/render/fx/throwfx.ts';
+import { Debris } from '../src/render/fx/meshfx.ts';
+import { swapPropDepth } from '../src/render/fx/propmat.ts';
+import type { FxCtx } from '../src/render/fx/disasters.ts';
 import { FALLBACK_SIGIL, SIGIL_IDS, sigilOfMiracle, sigilStroke } from '../src/render/fx/sigils.ts';
+import { SHAPES, Unistroke, type Pt } from '../src/ui/unistroke.ts';
 import { BASE_PACK } from '../src/data/index.ts';
+import { AgentFlag2, type EntityRef, type HandView, type ProjectileView } from '../src/sim/types.ts';
+import { PLACE_LOOK, SignsLayer, animalIndex, markedPeople } from '../src/render/signs/signs.ts';
+import { DRAWBACK_MAX, Drawback } from '../src/render/fx/drawback.ts';
+import type { Decal, DecalPass } from '../src/render/fx/decals.ts';
+import { getGrid } from '../src/sim/grid/icogrid.ts';
+import { Noise3 } from '../src/sim/grid/noise.ts';
+import type { PlanetView } from '../src/client/worldview.ts';
 
 const lum = (c: [number, number, number]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 
@@ -154,6 +175,242 @@ test('a feared god crackles: each arc is one jagged channel from its start to it
   assert.ok(maxStep < direct * 0.4, 'connected: no long jumps');
 });
 
+// ───────────────────────────── the Touch at work (render/hand.ts) ─────────────────────────────
+
+/** the Touch's stage: the slope world, a point on its land, a camera 80 m off to the side looking at it */
+function touchStage(sunUp = true) {
+  const pv = { ...slopeWorld(), id: 0 } as PlanetView;
+  const R = pv.params.radius;
+  const u = new Vector3(0.15, 0.05, 1).normalize();
+  const e = new Vector3(0, 1, 0).cross(u).normalize();
+  const cam = u.clone().multiplyScalar(R + 70).addScaledVector(e, 80);
+  const fwd = u.clone().multiplyScalar(R).sub(cam).normalize();
+  const decals: Decal[] = [];
+  const pass = { add: (d: Decal) => { decals.push(d); } } as unknown as DecalPass;
+  const shared: Record<string, IUniform> = {
+    uSunDirBody: { value: (sunUp ? u.clone().addScaledVector(e, 0.8) : u.clone().negate()).normalize() },
+    uSunE: { value: new Vector3(8, 8, 8) },
+  };
+  const bursts: string[] = [];
+  let t = 0;
+  /** run n frames of dt seconds; `over` changes the frame (the sim's hand, the cursor, the pose) */
+  const run = (h: HandVisual, n: number, over: (i: number) => Partial<HandFrame> = () => ({}), dt = 0.05): Decal[] => {
+    for (let i = 0; i < n; i++) {
+      t += dt;
+      decals.length = 0;
+      h.update({
+        pv, hand: null, camBody: cam, camFwd: fwd, camUp: u, dt, fxTime: t, fxDt: dt, cursor: null, uiPose: 'none', aiming: false,
+        decals: pass, shared, cloudBase: R + 900, air: true, fov: 55, viewH: 720, burst: (k) => { bursts.push(k); }, ...over(i),
+      });
+    }
+    return decals;
+  };
+  const hand = (o: Partial<HandView> = {}): HandView => ({ planet: 0, pos: [u.x, u.y, u.z], alt: 0, held: null, pose: 'open', alignment: 0, regard: 0, ...o });
+  return { pv, R, u, e, cam, run, hand, bursts, now: () => t };
+}
+
+/** a private part of the Touch (its uniforms, its meshes) */
+const inner = (h: HandVisual) => h as unknown as { u: Record<string, { value: number }>; glyph: Object3D; trailMesh: Object3D; sigil: { stroke: Float32Array } | null };
+
+test('the Touch appears where it is called and goes when nothing calls it', () => {
+  const S = touchStage();
+  const h = new HandVisual();
+  S.run(h, 20);
+  assert.ok(!h.visible && h.presence === 0, 'nobody calls it: it is not there');
+  const cursor = { planet: 0, dir: [S.u.x, S.u.y, S.u.z] };
+  S.run(h, 30, () => ({ cursor }));
+  assert.ok(h.visible && h.presence > 0.9, `under the cursor it gathers (${h.presence.toFixed(2)})`);
+  const up = h.pos.clone().normalize();
+  assert.ok(up.angleTo(S.u) < 1e-3, 'over the ground the cursor points at');
+  const above = h.pos.length() - (S.R + S.pv.grid.sample(S.pv.fields.get('surface')!, up.x, up.y, up.z));
+  assert.ok(above > 0.3 * h.scale && above < 0.7 * h.scale, `hovering low over it (${above.toFixed(1)} m, size ${h.scale.toFixed(1)})`);
+  assert.equal(h.behaviour, 'open');
+  // it follows the cursor on a spring that holds at any frame rate (8 fps here, and a 2-s stall): no overshoot past
+  // where it goes, no flying apart
+  for (const dt of [0.1, 2]) {
+    const q = S.u.clone().addScaledVector(S.e, (dt < 1 ? 9 : -9) / S.R).normalize();
+    const to = { planet: 0, dir: [q.x, q.y, q.z] };
+    const target = () => h.pos.clone().normalize().angleTo(q) * S.R;
+    const start = target();
+    let worst = 0;
+    for (let i = 0; i < 30; i++) { S.run(h, 1, () => ({ cursor: to }), dt); worst = Math.max(worst, target()); }
+    assert.ok(start > 5 && worst <= start + 1e-6 && target() < 0.05, `dt ${dt}: it closes on the cursor steadily (${start.toFixed(2)} → worst ${worst.toFixed(2)} → ${target().toFixed(3)} m)`);
+  }
+  S.run(h, 20, () => ({ cursor, uiPose: 'open' }));
+  assert.equal(h.behaviour, 'reach', 'reaching for something, the whirl quickens and lowers');
+  // the cursor leaves: it lingers a moment, then goes
+  S.run(h, 100);
+  assert.ok(!h.visible, 'gone when the cursor left');
+  // from four radii out it is never drawn (from the system view it would be a weather system)
+  const far = { camBody: S.u.clone().multiplyScalar(S.R * 6) };
+  S.run(h, 40, () => ({ cursor, ...far }));
+  assert.ok(!h.visible, 'not from space');
+});
+
+test('the Touch lifts a person into its cradle and lets them go', () => {
+  const S = touchStage();
+  const h = new HandVisual();
+  const held: EntityRef = { kind: 'agent', id: 7, planet: 0 };
+  S.run(h, 60, () => ({ hand: S.hand({ held, pose: 'grab', alt: 6, regard: 0.8 }) }));
+  assert.equal(h.behaviour, 'lift');
+  assert.ok(h.grasp > 0.95, `gathered round them (${h.grasp.toFixed(2)})`);
+  assert.deepEqual([h.heldKind, h.heldId], ['agent', 7]);
+  const up = h.grip.clone().normalize();
+  // the person hangs through the grip: the people layer draws them at the pinch, the cradle round their middle
+  assert.ok(Math.abs(h.pinch.clone().sub(h.grip).dot(up) - 0.95) < 1e-6, 'held by the top of them, at the grip');
+  assert.ok(h.cradle.clone().sub(h.pinch).dot(up) < -0.5, 'the cradle round their body, below the grip');
+  assert.ok(h.pos.length() - S.R > 2, 'lifted clear of the ground');
+  // set down: the cradle opens back into the whirl
+  S.run(h, 80, () => ({ hand: S.hand({ pose: 'open', regard: 0.8 }) }));
+  assert.ok(h.grasp < 0.05 && h.heldKind === '' && (h.behaviour as string) === 'open', `released (${h.grasp.toFixed(2)}, ${h.behaviour})`);
+});
+
+test('feared, the Touch is storm-dark and crackles; trusted, it is warm light and never does', () => {
+  const S = touchStage();
+  const h = new HandVisual();
+  S.run(h, 80, () => ({ hand: S.hand({ pose: 'point', regard: -1 }) }));
+  assert.ok(h.regard < -0.9, `its look eases to the people's regard (${h.regard.toFixed(2)})`);
+  assert.ok(inner(h).u.uDark.value > 0.85, 'storm-dark');
+  const at = h.nextCrackle(100, -1);
+  assert.ok(at !== null && at >= 100, 'a feared god crackles now and then');
+  h.hold = at;
+  const d = S.run(h, 1, () => ({ hand: S.hand({ pose: 'point', regard: -1 }) }));
+  assert.ok(h.crackling >= 1, 'an arc struck at the moment nextCrackle named');
+  assert.ok(d.some((x) => x.type === 10 && x.cb > x.cr && x.p1 > 0), 'its cold light on the ground under the arc');
+  h.hold = null;
+  const g = new HandVisual();
+  assert.equal(g.nextCrackle(100, 1), null);
+  let arcs = 0;
+  S.run(g, 200, () => ({ hand: S.hand({ pose: 'point', regard: 1 }) }));
+  for (let i = 0; i < 40; i++) { S.run(g, 1, () => ({ hand: S.hand({ pose: 'point', regard: 1 }) })); arcs += g.crackling; }
+  assert.equal(arcs, 0, 'a trusted god never crackles');
+  assert.ok(inner(g).u.uDark.value === 0 && g.light.r > g.light.b + 0.3, 'warm light, no storm');
+});
+
+test('the Touch at work: a throw leaves a trail, a rebuke is a downdraft and a flash, a cast traces its sigil', () => {
+  const S = touchStage();
+  const h = new HandVisual();
+  const cursor = { planet: 0, dir: [S.u.x, S.u.y, S.u.z] };
+  S.run(h, 30, () => ({ cursor }));
+  // swept fast across the land (a throw): a ribbon of its light behind it
+  const sweep = (i: number) => { const q = S.u.clone().addScaledVector(S.e, 0.004 * Math.sin(i * 0.5)).normalize(); return { cursor: { planet: 0, dir: [q.x, q.y, q.z] } }; };
+  S.run(h, 12, sweep);
+  assert.ok(inner(h).u.uTrailK.value > 0.2 && inner(h).trailMesh.visible, `a trail (${inner(h).u.uTrailK.value.toFixed(2)})`);
+  // a rebuke: the sim's hand slaps — a downdraft gust thrown out along the ground, a cold flash
+  S.run(h, 40, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
+  S.bursts.length = 0;
+  let d: Decal[] = [];
+  for (let i = 0; i < 4; i++) d = S.run(h, 1, () => ({ cursor, hand: S.hand({ pose: 'slap' }) }));
+  assert.equal(h.behaviour, 'rebuke');
+  assert.ok(S.bursts.includes('gust') && S.bursts.includes('flash'), `dust and a flash (${S.bursts})`);
+  assert.ok(d.some((x) => x.type === 8 && x.ca > 0.1), 'the gust rolls out along the ground');
+  // a cast: the miracle's sigil traced in light over it — the glyph the player draws for the mending
+  S.run(h, 60, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
+  h.pulse('cast', S.now(), 'heal');
+  S.run(h, 12, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
+  assert.equal(h.behaviour, 'sigil');
+  assert.ok(inner(h).glyph.visible, 'the glyph is being traced');
+  assert.deepEqual(inner(h).sigil?.stroke, sigilStroke('knot', TOUCH_N.glyph));
+  S.run(h, 80, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
+  assert.ok(!inner(h).glyph.visible, 'and fades');
+});
+
+test('a person the Touch hurls is drawn flying by their own id, never the projectile\'s', () => {
+  const pv = { ...slopeWorld(), id: 0 } as PlanetView;
+  const u = new Vector3(0.15, 0.05, 1).normalize();
+  const vfx = { emit: () => 1, set: () => { /* */ }, stop: () => { /* */ }, alive: () => true };
+  const ctx = { pv, now: 0, dt: 0.05, vfx } as unknown as FxCtx;
+  const thrown = (id: number, data: Record<string, unknown> = {}) => ({ t: 'thrown', tick: 1, planet: 0, pos: [u.x, u.y, u.z] as [number, number, number], a: 14, b: 4, data: { id, payload: 'agent', vel: [8 * u.x + 3, 8 * u.y, 8 * u.z], ...data } });
+  const fly = (setup: (f: Flights) => void, projectiles: ProjectileView[] = []) => {
+    const f = new Flights({});
+    ctx.now = 0;
+    setup(f);
+    ctx.now = 0.3;
+    f.update(ctx, projectiles);
+    return [...f.agentPins.keys()];
+  };
+  // projectile 3 carried agent 42, whom the Touch held: agent 42 flies (agent 3 — a stranger — stays where they are)
+  assert.deepEqual(fly((f) => f.onEvent(thrown(3), ctx, 42)), [42]);
+  // the event names them itself
+  assert.deepEqual(fly((f) => f.onEvent(thrown(4, { agent: 9 }), ctx)), [9]);
+  // nobody says who: the snapshot's projectile does (what = the agent's id)
+  const pr: ProjectileView = { id: 5, planet: 0, kind: 'agent', what: 77, content: '', pos: [u.x, u.y, u.z], alt: 4, vel: [0, 0, 0] };
+  assert.deepEqual(fly((f) => f.onEvent(thrown(5), ctx), [pr]), [77]);
+  // and nobody at all: nobody is drawn flying (a wrong person in the air is worse than none)
+  assert.deepEqual(fly((f) => f.onEvent(thrown(6), ctx)), []);
+  // the streak of the god's light behind a hurled thing is its own path traced back — the same at any frame rate: one
+  // frame 0.3 s into the flight draws the whole 0.3 s of it, head where it is, tail where it was
+  const R = pv.params.radius;
+  const v0 = new Vector3(0, 0, 0).crossVectors(u, new Vector3(0, 1, 0)).normalize().multiplyScalar(14);
+  const t = 0.3, p1 = u.clone().multiplyScalar(R + 20);
+  const fx = new ThrowFx({});
+  const src = { sizeOf: null, forEach: (f: (id: number, kind: string, p: Vector3, v: Vector3, age: number) => void) => f(1, 'agent', p1, v0, t) };
+  const cam = u.clone().multiplyScalar(R + 30).addScaledVector(new Vector3(0, 1, 0), 40);
+  fx.update(src, pv, 5, cam, 55, 720, { add: () => { /* */ } } as unknown as DecalPass, new Color(1, 0.8, 0.5));
+  const at = fx.group.geometry.getAttribute('position');
+  const mid = (i: number) => new Vector3((at.getX(i * 2) + at.getX(i * 2 + 1)) / 2, (at.getY(i * 2) + at.getY(i * 2 + 1)) / 2, (at.getZ(i * 2) + at.getZ(i * 2 + 1)) / 2);
+  const n = at.count / 2 / 8; // samples per flight slot (8 slots)
+  let head = -1;
+  for (let k = 0; k < 8; k++) if (mid(k * n).distanceTo(p1) < 1e-3) head = k * n;
+  assert.ok(head >= 0 && fx.group.visible, 'the streak starts where it is');
+  // (under gravity: moving level now, 0.3 s ago it was ½ g t² lower than a straight line back — it was still rising)
+  const g = pv.params.gravity || 9.8, was = p1.clone().addScaledVector(v0, -t).addScaledVector(u, -0.5 * g * t * t);
+  assert.ok(mid(head + n - 1).distanceTo(was) < 0.05, `and reaches back to where it was 0.3 s ago (${mid(head + n - 1).distanceTo(was).toFixed(3)} m)`);
+  fx.dispose();
+});
+
+test('the Touch\'s weather lies on the ground: a pool of its light, its cloud\'s shadow in the sun', () => {
+  for (const sunUp of [true, false]) {
+    const S = touchStage(sunUp);
+    const h = new HandVisual();
+    const cursor = { planet: 0, dir: [S.u.x, S.u.y, S.u.z] };
+    const d = S.run(h, 30, () => ({ cursor }));
+    const ground = (x: Decal) => new Vector3(x.x, x.y, x.z).normalize().angleTo(S.u) * S.R;
+    const pool = d.find((x) => x.type === 10);
+    assert.ok(pool && pool.p1 > 0 && ground(pool) < 1, 'a pool of its light under it');
+    const shadow = d.find((x) => x.type === 0);
+    if (sunUp) assert.ok(shadow && shadow.ca > 0 && ground(shadow) < h.scale * 6, 'its shadow near it in the sun');
+    else assert.ok(!shadow, 'no shadow at night');
+  }
+  // nothing of the Touch is a hand: no skinned body, no bones, no fingers
+  const S = touchStage();
+  const h = new HandVisual();
+  S.run(h, 10, () => ({ cursor: { planet: 0, dir: [S.u.x, S.u.y, S.u.z] }, hand: S.hand({ held: { kind: 'rock', id: 900, planet: 0 }, pose: 'grab' }) }));
+  h.group.traverse((o) => {
+    assert.ok(!(o as { isSkinnedMesh?: boolean }).isSkinnedMesh && !(o as { isBone?: boolean }).isBone, `${o.name || o.type}: no skinned body`);
+    assert.ok(!/hand|finger|palm|thumb/i.test(o.name) || o.name === 'touch', `${o.name}: nothing named for a hand`);
+  });
+  h.dispose();
+});
+
+test('the god layer\'s shadow casters draw the atlas with depth twins that sample no texture (no GL feedback loop)', () => {
+  // debris (InstancedMesh), a boulder the Touch holds, a thing in flight: every mesh on the shadow layer (1) has a
+  // depth twin, swapPropDepth puts it on for the shadow pass and takes it off after, and the twin reads no texture —
+  // drawing into the shadow atlas with the lit material (which samples that atlas) is the feedback loop
+  const root = new Group();
+  const debris = new Debris({}, { uFxTime: { value: 0 } }, 8);
+  debris.burst(new Vector3(0, 3000, 0), 4, 5, 1, 0);
+  root.add(debris.mesh);
+  const S = touchStage();
+  const h = new HandVisual();
+  S.run(h, 10, () => ({ cursor: { planet: 0, dir: [S.u.x, S.u.y, S.u.z] }, hand: S.hand({ held: { kind: 'rock', id: 900, planet: 0 }, pose: 'grab' }) }));
+  root.add(h.group);
+  const casters: Mesh[] = [];
+  root.traverse((o) => { const m = o as Mesh; if (m.isMesh && m.layers.isEnabled(1)) casters.push(m); });
+  assert.ok(casters.length >= 2, `casters found (${casters.length})`);
+  const lit = casters.map((m) => m.material);
+  swapPropDepth(root, true);
+  casters.forEach((m, i) => {
+    const twin = m.material as ShaderMaterial;
+    assert.notEqual(twin, lit[i], `${m.name || m.type}: swapped for the shadow pass`);
+    assert.ok(twin.isShaderMaterial && twin.colorWrite === false, 'a depth-only twin');
+    for (const [k, u] of Object.entries(twin.uniforms)) assert.ok(!(u.value && (u.value as { isTexture?: boolean }).isTexture), `${k}: the twin samples no texture`);
+  });
+  swapPropDepth(root, false);
+  casters.forEach((m, i) => assert.equal(m.material, lit[i], 'the lit material is back after the shadow pass'));
+  debris.dispose(); h.dispose();
+});
+
 test('the creature is gone from the renderer', () => {
   for (const f of ['src/render/life/creature.ts', 'src/render/gen/creaturegen.ts']) {
     assert.ok(!existsSync(fileURLToPath(new URL(`../${f}`, import.meta.url))), `${f} does not ship`);
@@ -210,15 +467,24 @@ function primitives(): Record<string, P2[]> {
   };
 }
 
-test('every sigil of the content is an original authored stroke, and each miracle draws its power\'s sigil', () => {
+test('one glyph per sigil: what the Touch traces and the land shows is the stroke the player draws', () => {
   const powers = ((BASE_PACK as unknown as { powers: { id: string; command: string; params?: { kind?: string }; sigil?: string | null }[] }).powers);
   const used = powers.filter((p) => p.sigil);
   assert.ok(used.length >= 14, `the powers carry sigils (${used.length})`);
   for (const p of used) {
-    assert.ok(SIGIL_IDS.includes(p.sigil!), `${p.id}: sigil '${p.sigil}' is authored`);
+    assert.ok(SHAPES[p.sigil!] && SIGIL_IDS.includes(p.sigil!), `${p.id}: sigil '${p.sigil}' has the recogniser's template`);
     // the miracle the power casts draws that sigil
     const kind = p.command.startsWith('miracle.') ? p.command.slice(8) : p.params?.kind;
     if (kind && p.command !== 'miracle.cast') assert.equal(sigilOfMiracle(kind), p.sigil, `${kind} draws ${p.sigil}`);
+  }
+  // the recogniser reads every drawn glyph back as its own sigil, confidently (screen y runs down: flip the glyph's up)
+  const rec = new Unistroke();
+  for (const id of Object.keys(SHAPES)) {
+    const s = sigilStroke(id, 96);
+    const pts: Pt[] = [];
+    for (let i = 0; i < 96; i++) pts.push([s[i * 2] * 100, -s[i * 2 + 1] * 100]);
+    const r = rec.recognize(pts);
+    assert.ok(r && r.name === id && r.score > 0.85, `${id}: the drawn glyph reads as ${id} (${r?.name} ${r?.score.toFixed(3)})`);
   }
   const prims = primitives();
   // (the measure itself: a wobbly circle is a circle)
@@ -227,13 +493,17 @@ test('every sigil of the content is an original authored stroke, and each miracl
   for (const id of SIGIL_IDS) {
     const s = sigilStroke(id, 64);
     assert.equal(s.length, 128);
-    let total = 0, hi = 0;
+    let total = 0, hi = 0, x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (let i = 0; i < 64; i++) {
-      assert.ok(Math.abs(s[i * 2]) <= 1.05 && Math.abs(s[i * 2 + 1]) <= 1.05, `${id}: inside the unit box`);
-      if (i) { const d = Math.hypot(s[i * 2] - s[i * 2 - 2], s[i * 2 + 1] - s[i * 2 - 1]); total += d; hi = Math.max(hi, d); }
+      const x = s[i * 2], y = s[i * 2 + 1];
+      assert.ok(Math.abs(x) <= 1.0001 && Math.abs(y) <= 1.0001, `${id}: inside the unit box`);
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      if (i) { const d = Math.hypot(x - s[i * 2 - 2], y - s[i * 2 - 1]); total += d; hi = Math.max(hi, d); }
     }
+    // fitted: its longer side spans the box
+    assert.ok(Math.max(x1 - x0, y1 - y0) > 1.9, `${id}: fills the box`);
     // equal arc length per sample (a chord across a sharp turn is shorter than the arc: the bound is on the longest)
-    assert.ok(hi < (total / 63) * 1.6, `${id}: evenly sampled (longest ${hi.toFixed(4)}, mean ${(total / 63).toFixed(4)})`);
+    assert.ok(hi < (total / 63) * 1.05, `${id}: evenly sampled (longest ${hi.toFixed(4)}, mean ${(total / 63).toFixed(4)})`);
     // never a bare primitive: far from every old gesture shape (a wobbly copy of one of them scores ~0.04-0.05)
     const pts: P2[] = [];
     for (let i = 0; i < 64; i++) pts.push([s[i * 2], s[i * 2 + 1]]);
@@ -244,20 +514,18 @@ test('every sigil of the content is an original authored stroke, and each miracl
     }
   }
   assert.ok(!SIGIL_IDS.includes('spiral'), 'no spiral glyph');
-  // an invented miracle draws the original fallback, which is authored
+  // the glyph's up is up: the drop falls from its top, the fall runs down to the right, the sprout grows up its stem
+  const drop = sigilStroke('drop', 32), fall = sigilStroke('fall', 32), sprout = sigilStroke('sprout', 32);
+  assert.ok(drop[1] > drop[31 * 2 + 1], 'the drop starts high');
+  assert.ok(fall[0] < fall[31 * 2] && fall[1] > fall[31 * 2 + 1], 'the fall runs down-right');
+  assert.ok(sprout[1] < -0.9, 'the sprout starts at the foot of its stem');
+  // an invented miracle draws the original fallback, which has a stroke of its own
   assert.equal(sigilOfMiracle('no-such-miracle'), FALLBACK_SIGIL);
   assert.deepEqual(sigilStroke('no-such-sigil', 32), sigilStroke(FALLBACK_SIGIL, 32));
+  assert.ok(!(FALLBACK_SIGIL in SHAPES), 'the fallback is not a castable sigil');
 });
 
 // ───────────────────────────── signs (render/signs, render/fx/drawback) ─────────────────────────────
-
-import { AgentFlag2 } from '../src/sim/types.ts';
-import { PLACE_LOOK, SignsLayer, animalIndex, markedPeople } from '../src/render/signs/signs.ts';
-import { DRAWBACK_MAX, Drawback } from '../src/render/fx/drawback.ts';
-import { getGrid } from '../src/sim/grid/icogrid.ts';
-import { Noise3 } from '../src/sim/grid/noise.ts';
-import { Vector3 } from 'three';
-import type { PlanetView } from '../src/client/worldview.ts';
 
 test('signs: prophets and the Called are found by their flags, sacred animals by id or old id, every place kind has a look', () => {
   const f2 = new Uint8Array([0, AgentFlag2.prophet, AgentFlag2.called, AgentFlag2.hunter, AgentFlag2.prophet | AgentFlag2.festive, AgentFlag2.called | AgentFlag2.camp]);
@@ -285,8 +553,11 @@ test('signs: the sim\'s events become places and moments', () => {
   s.onEvent({ t: 'lightning', tick: 6, planet: 0, pos: [1, 0, 0], data: {} }, 3000, 2);
   s.onEvent({ t: 'lightning', tick: 6, planet: 0, pos: [1, 0, 0], data: { omen: 1 } }, 3000, 2);
   s.onEvent({ t: 'prophet.called', tick: 7, planet: 0, pos: [0, 0, 1], data: { agent: 3 } }, 3000, 3);
+  s.onEvent({ t: 'sacred.animal', tick: 8, planet: 0, pos: [0, 0, 1], data: { settlement: 2, animal: 'cattle' } }, 3000, 3);
+  s.onEvent({ t: 'prophet.died', tick: 9, planet: 0, pos: [0, 0, 1], data: { agent: 3, settlement: 2 } }, 3000, 3);
+  s.onEvent({ t: 'prophet.foretold', tick: 9, planet: 0, pos: [0, 0, 1], data: { agent: 3 } }, 3000, 3);
   const m = (s as unknown as { moments: { kind: string; col: number[] }[] }).moments;
-  assert.deepEqual(m.slice(before).map((x) => x.kind), ['omen', 'strike', 'called'], 'an ordinary strike is no sign');
+  assert.deepEqual(m.slice(before).map((x) => x.kind), ['omen', 'strike', 'called', 'fulfilled', 'passing'], 'an ordinary strike is no sign; a prophecy spoken shows nothing yet');
   assert.ok(m[before].col[2] > m[before].col[0], 'anger reads cold');
   s.dispose();
 });

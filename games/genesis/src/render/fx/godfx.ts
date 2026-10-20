@@ -458,9 +458,15 @@ export class GodFx {
       }
       case 'eruption': this.addShake(p, 0.5, 4000); M.disasters.onEvent(e, ctx); break;
       case 'collapsed': case 'landslide': case 'steam': case 'fireball': M.disasters.onEvent(e, ctx); break;
-      case 'thrown': case 'landed': case 'splash':
-        if (!M.flights.onEvent(e, ctx)) M.disasters.onEvent(e, ctx);
+      case 'thrown': case 'landed': case 'splash': {
+        // (a person hurled from the Touch: it held them until this frame — events run before the Touch updates)
+        // (measured over the ground, not through it: the event's point is on the datum sphere, the grip over the land)
+        const g = this.hand.grip, gl = g.length() || 1;
+        const along = p ? Math.acos(Math.max(-1, Math.min(1, g.dot(p) / (gl * R)))) * R : Infinity;
+        const fromTouch = e.t === 'thrown' && this.hand.heldKind === 'agent' && along < Math.max(60, this.hand.scale * 4);
+        if (!M.flights.onEvent(e, ctx, fromTouch ? this.hand.heldId : -1)) M.disasters.onEvent(e, ctx);
         break;
+      }
       case 'lightning': {
         if ((e.data as { ambient?: boolean } | undefined)?.ambient || !e.pos) break;
         this.lightningAt(_v.set(e.pos[0], e.pos[1], e.pos[2]).normalize(), Math.min(1.5, Math.max(0.6, e.a ?? 1)), ctx, true);
@@ -468,7 +474,7 @@ export class GodFx {
         if ((e.data as { omen?: number } | undefined)?.omen) M.signs.onEvent(e, R, this.lastReal);
         break;
       }
-      case 'sacred.place': case 'omen': case 'prophet.called': case 'prophet.fulfilled':
+      case 'sacred.place': case 'sacred.animal': case 'omen': case 'prophet.called': case 'prophet.fulfilled': case 'prophet.died':
         M.signs.onEvent(e, R, this.lastReal);
         break;
       case 'miracle': {

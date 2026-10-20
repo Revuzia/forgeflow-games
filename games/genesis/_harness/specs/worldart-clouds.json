@@ -1,0 +1,105 @@
+{
+ "shots": [
+  {
+   "name": "wc2-orbit-low",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "low",
+   "canvasOnly": true,
+   "frames": 10,
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -30,
+    "dist": 7600,
+    "hour": 13
+   }
+  },
+  {
+   "name": "wc2-orbit-med",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 10,
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -30,
+    "dist": 7600,
+    "hour": 13
+   }
+  },
+  {
+   "name": "wc2-limb-dusk",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 10,
+   "camera": {
+    "mode": "orbit",
+    "lat": 8,
+    "lon": 20,
+    "dist": 7400,
+    "hour": 18.6
+   }
+  },
+  {
+   "name": "wc2-hurricane",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 10,
+   "commands": [
+    {
+     "k": "lookdev.weather",
+     "kind": "hurricane",
+     "lat": 14,
+     "lon": -40,
+     "radius": 1000,
+     "intensity": 1
+    }
+   ],
+   "wait": 1,
+   "camera": {
+    "mode": "orbit",
+    "lat": 14,
+    "lon": -40,
+    "dist": 7000,
+    "hour": 13
+   }
+  },
+  {
+   "name": "wc2-orbit-high",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 8,
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -30,
+    "dist": 7600,
+    "hour": 13
+   }
+  }
+ ]
+}

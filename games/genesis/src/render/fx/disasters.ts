@@ -929,17 +929,18 @@ export class DisasterFx {
     switch (d.kind) {
       case 'volcano': case 'supervolcano': {
         const sup = d.kind === 'supervolcano' ? 1 : 0;
-        // smoke and steam standing from the summit, thickening as the eruption nears (the sim grows its plume)
+        // smoke and steam standing from the summit, thickening as the eruption nears (the sim grows its plume) — only a
+        // faint glow from below at its root (p1): a fire-lit column would read as the eruption itself
         const H = Math.max(140, Math.min(1000, (P.plume ?? 0) > 0 ? P.plume * 2.5 : 280)) * (1 + sup * 0.5);
         const wind = windAt(pv, u, _w);
-        this.em(st, 'w-smoke', { sys: SYS.smoke, x: g.x, y: g.y, z: g.z, ax: wind.x * 0.4, ay: wind.y * 0.4, az: wind.z * 0.4, size: 9 + H * 0.045, life: 26, count: Math.round(320 * q), p0: H, p1: 1, r: 0.52, g: 0.51, b: 0.49, power: k * 0.75 }, ctx);
+        this.em(st, 'w-smoke', { sys: SYS.smoke, x: g.x, y: g.y, z: g.z, ax: wind.x * 0.4, ay: wind.y * 0.4, az: wind.z * 0.4, size: 9 + H * 0.045, life: 26, count: Math.round(320 * q), p0: H, p1: 0.12, r: 0.52, g: 0.51, b: 0.49, power: k * 0.75 }, ctx);
         if (far) break;
         // fumaroles: steam from vents on the upper flanks
         for (let i = 0; i < 4; i++) {
           const b = bearing(u, fxHash(d.id, 60 + i) * 6.283, _a);
           const pu = _b.copy(u).multiplyScalar(pv.params.radius).addScaledVector(b, Rd * (0.12 + 0.22 * fxHash(d.id, 70 + i))).normalize();
           const p = groundAt(pv, pu, new Vector3(), false);
-          this.em(st, `w-vent${i}`, { sys: SYS.steam, x: p.x, y: p.y, z: p.z, ax: wind.x * 0.3, ay: wind.y * 0.3, az: wind.z * 0.3, size: 3 + sup * 2, life: 7, count: Math.round(40 * q), p0: 14 + 10 * fxHash(d.id, 80 + i), r: 0.84, g: 0.85, b: 0.86, power: k * 0.6 }, ctx);
+          this.em(st, `w-vent${i}`, { sys: SYS.steam, x: p.x, y: p.y, z: p.z, ax: wind.x * 0.3, ay: wind.y * 0.3, az: wind.z * 0.3, size: 2.2 + sup * 1.5, life: 7, count: Math.round(56 * q), p0: 14 + 10 * fxHash(d.id, 80 + i), r: 0.84, g: 0.85, b: 0.86, power: k * 0.42 }, ctx);
         }
         // the summit's cracks, a dull glow deep in the vent (it shows at night)
         for (let i = 0; i < 2; i++) {

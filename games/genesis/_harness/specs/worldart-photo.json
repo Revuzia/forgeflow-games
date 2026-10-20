@@ -1,0 +1,34 @@
+{
+ "shots": [
+  {
+   "name": "wp-dof-high",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 6,
+   "script": [
+    "await G.camera({ mode: 'surface', poi: 'town', alt: 2.5, pitch: 3, hour: 19.9 }); await G.frames(2);",
+    "G.cam_.photo(true); G.cam_.setLens({ aperture: 1.4, blur: 1, focus: 5, guides: 'none', frame: 'free' }); await G.frames(2); return G.cam_.lens();"
+   ]
+  },
+  {
+   "name": "wp-dof-cine",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "cinematic",
+   "canvasOnly": true,
+   "frames": 6,
+   "script": [
+    "await G.camera({ mode: 'surface', poi: 'town', alt: 2.5, pitch: 3, hour: 19.9 }); await G.frames(2);",
+    "G.cam_.photo(true); G.cam_.setLens({ aperture: 1.4, blur: 1, focus: 5, guides: 'none', frame: 'free' }); await G.frames(2); return G.cam_.lens();"
+   ]
+  }
+ ]
+}

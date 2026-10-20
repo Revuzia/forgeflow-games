@@ -219,7 +219,10 @@ void main() {
   float fseed = floor(uTouchT * 9.0);
   float burst = pow(max(0.0, snoise(vec3(fseed * 0.37, 0.5, 2.0))), 6.0) * 1.4;
   float stretch = smoothstep(0.35, 0.85, 0.5 + 0.5 * snoise(vec3(s * 0.45, fseed * 1.7, 5.0)));
-  float fl = uDark * burst * stretch + uCrackK * 0.35 * smoothstep(0.3, 0.9, vT);
+  // (an arc's own light: the stretch of the storm round the grip it struck from glows, falling off up and down the
+  // column — the whole column lit at once read as a bar of white light, not a storm)
+  float nearGrip = exp(-pow((vT - uGripT) / 0.09, 2.0));
+  float fl = uDark * burst * stretch + uCrackK * 0.22 * nearGrip * (0.5 + 0.5 * stretch);
   vec3 flick = uRim * fl * dbody * exp(-x * x * 4.0) * (0.4 + 0.6 * dn) * env;
   vec3 c = (light + flick) * fxDisplay(0.6);
   // a dense shaft of lit air veils what is behind it a little (premultiplied over): over a blue sky a purely added
@@ -446,6 +449,10 @@ void main() {
   vec3 p = mix(po, pg, g);
   vec3 tang = normalize(mix(to, tg, g) + 1e-4);
   float env = mix(fo, ${CRADLE_ALPHA.toFixed(3)}, g);
+  // (gathered, the side of the cradle toward the eye thins to a window: what it holds is seen held in its weather, not
+  // hidden in a ball of cloud)
+  float facing = dot(normalize(pg - uCC + 1e-5), normalize(uCamB - uCC + 1e-5));
+  env *= 1.0 - 0.8 * g * smoothstep(0.15, 0.8, facing);
   // a wisp: long along its way round, thin across; the open ones grow as they rise, the gathered ones a tight weave
   float szO = uL * (0.13 + 0.12 * d) * (0.55 + 0.75 * smoothstep(0.0, uHg + uL, h));
   float szG = max(uCR, uCH) * (0.2 + 0.12 * d);
@@ -509,9 +516,10 @@ void main() {
   vec3 sd = normalize(vSunS + vec3(0.0, 0.0, 1e-3));
   float lam = clamp(dot(nrm, sd) * 0.55 + 0.45, 0.0, 1.0);
   float powder = 1.0 - exp(-dens * 3.0);
-  vec3 alb = uCloudA * mix(vec3(1.0), vec3(1.0, 0.86, 0.62), uWarm);
+  vec3 alb = uCloudA * mix(vec3(1.0), vec3(1.0, 0.75, 0.42), uWarm);
   // (a trusted god's cloud is lit more by its own light than by the sun: sunlit white swamped the gold)
-  vec3 lit = vLight * alb * (0.25 + 0.75 * lam) * mix(0.75, 1.05, powder) * (1.0 - 0.45 * uWarm);
+  // (and kept below the tone curve's shoulder, where white swallows colour: its gold must survive to the screen)
+  vec3 lit = vLight * alb * (0.25 + 0.75 * lam) * mix(0.75, 1.05, powder) * (1.0 - 0.6 * uWarm);
   // its own light inside the cloud: strongest at its heart and through the thin parts (warm gold; a cold glimmer when
   // feared, flaring with each arc)
   float thin = 1.0 - dens;
@@ -669,6 +677,7 @@ ${COMMON}
 attribute vec2 corner;
 uniform vec3 uHeartC;
 uniform float uHeartR;
+uniform float uHeartBack; // holding: the glow hangs BEHIND what it holds, which stands dark against it
 varying vec2 vC;
 varying float vZ;
 void main() {
@@ -678,7 +687,7 @@ void main() {
   vec3 sx = cross(view, up0);
   sx = dot(sx, sx) > 1e-8 ? normalize(sx) : vec3(1.0, 0.0, 0.0);
   vec3 sy = cross(sx, view);
-  vec3 p = uHeartC + (sx * corner.x + sy * corner.y) * uHeartR + view * uHeartR * 0.3;
+  vec3 p = uHeartC + (sx * corner.x + sy * corner.y) * uHeartR + view * uHeartR * mix(0.3, -0.7, uHeartBack);
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vZ = -mv.z;
   gl_Position = projectionMatrix * mv;
@@ -689,14 +698,17 @@ ${FX_DEPTH_GLSL}
 ${COMMON}
 uniform float uHeartK;
 uniform float uHeartR;
+uniform float uHeartBack;
 varying vec2 vC;
 varying float vZ;
 void main() {
-  float vis = fxSoft(vZ, uHeartR * 0.8);
+  // (behind what it holds the depth test is sharp: their silhouette cuts the glow)
+  float vis = fxSoft(vZ, uHeartR * mix(0.8, 0.12, uHeartBack));
   float r = length(vC);
   if (r > 1.0 || vis <= 0.0) discard;
   float win = (1.0 - r * r) * (1.0 - r * r);
-  float k = (exp(-r * r * 3.5) * 0.65 + exp(-r * r * 18.0) * 0.5) * win;
+  // (a broad soft glow and a bright heart: by day only the heart reads, at dusk the whole glow)
+  float k = (exp(-r * r * 3.5) * 0.65 + exp(-r * r * 18.0) * 0.9) * win;
   vec3 col = mix(uCol, uRim, uDark * 0.5) * (1.0 - 0.85 * uDark) + uRim * uCrackK * 0.25;
   gl_FragColor = vec4(col * k * uHeartK * uPres * vis * fxDisplay(0.6), 0.0);
 }
@@ -844,7 +856,7 @@ export class HandVisual {
     // mantle
     uTuftK: { value: 0.8 }, uCloudA: { value: 0.8 }, uGlowK: { value: 0.5 }, uWarm: { value: 0 }, uCamR: { value: new Vector3(1, 0, 0) }, uCamU: { value: new Vector3(0, 1, 0) },
     // glyph, trail, arc, crackles, heart
-    uTrace: { value: 0 }, uGlyphK: { value: 0 }, uTrailK: { value: 0 }, uHeartC: { value: new Vector3() }, uHeartR: { value: 4 }, uHeartK: { value: 0.3 },
+    uTrace: { value: 0 }, uGlyphK: { value: 0 }, uTrailK: { value: 0 }, uHeartC: { value: new Vector3() }, uHeartR: { value: 4 }, uHeartK: { value: 0.3 }, uHeartBack: { value: 0 },
     uArcCol: { value: new Color(1, 0.85, 0.5) }, uArcAimK: { value: 0 }, uSize: { value: 6 }, uArcK: { value: new Vector3() },
     // the whorl's frame at the top (its own pair: the vortex frame leans)
     uTE1: { value: new Vector3(1, 0, 0) }, uTE2: { value: new Vector3(0, 0, 1) },
@@ -1020,12 +1032,13 @@ export class HandVisual {
     const grasp = W.lift;
     this.grasp = grasp;
     this.u.uGrasp.value = grasp;
-    this.u.uBeamK.value = (0.5 + 0.2 * grasp + 0.55 * W.point + 0.35 * W.soothe + 0.6 * ck) * (1 - 0.3 * feared);
+    // (a trusted god's shaft is warm daylight let down to them: stronger than an awed god's pale one)
+    this.u.uBeamK.value = (0.5 + 0.2 * grasp + 0.55 * W.point + 0.35 * W.soothe + 0.6 * ck) * (1 - 0.3 * feared) * (1 + 0.45 * trusted);
     this.u.uGroundK.value = Math.min(1, 0.16 + 0.75 * W.point + 0.45 * W.soothe + 0.3 * ck);
     this.u.uFlashK.value = rk * 1.2;
     this.u.uStreakK.value = Math.max(0.08, 0.32 + 0.4 * grasp + 0.35 * W.reach - 0.2 * W.soothe - 0.25 * W.point + 1.1 * rk + 0.3 * ck);
     this.u.uDustK.value = air ? (0.35 + 0.05 * grasp + 0.3 * W.reach + 1.2 * rk) * nearG : 0;
-    this.u.uMoteK.value = 0.6 + 0.6 * W.soothe + 0.8 * ck + 0.3 * grasp;
+    this.u.uMoteK.value = 0.6 + 0.6 * W.soothe + 0.8 * ck + 0.3 * grasp + 0.4 * trusted;
     this.u.uLeafK.value = air ? (0.25 + 0.3 * grasp + 0.4 * W.reach) * nearG * (1 - 0.6 * feared) : 0;
     this.u.uWhorlK.value = air ? 0.75 + 0.2 * feared : 0;
     // the mantle: a light whirl of cloud open, a dense cradle holding; a feared god's storm is thick and dark; on an
@@ -1033,7 +1046,9 @@ export class HandVisual {
     this.u.uTuftK.value = air ? (0.42 + 0.06 * grasp + 0.25 * W.reach - 0.25 * W.point + 0.3 * feared + 0.2 * rk) * (1 - 0.35 * W.soothe) : 0;
     this.u.uCloudA.value = look.cloud;
     this.u.uWarm.value = 0.85 * trusted;
-    this.u.uGlowK.value = (0.6 + 0.7 * grasp + 0.6 * W.soothe + 0.8 * ck) * (0.7 + 0.9 * trusted);
+    // (its own light inside its cloud: warm gold through a trusted god's whirl — the cloud reads as lit by the god, not
+    // only by the sun)
+    this.u.uGlowK.value = (0.6 + 0.7 * grasp + 0.6 * W.soothe + 0.8 * ck) * (0.7 + 2.2 * trusted);
     // spin: still air when trusted, a storm when feared; fast while it lifts; a rebuke reverses the flow (downdraft)
     const omega = (0.7 + 0.5 * (1 - trusted) + 1.8 * feared) * (1 + 1.3 * grasp + 0.7 * W.reach - 0.55 * W.soothe) + 7 * rk;
     this.spin += omega * dt;
@@ -1079,7 +1094,8 @@ export class HandVisual {
     // the heart: what it holds hangs in its light
     this.u.uHeartC.value.copy(this.cradle);
     this.u.uHeartR.value = L * (0.55 + 0.3 * ck + 0.3 * W.soothe) * (1 - 0.5 * grasp) + grasp * Math.max(this.cradleR, this.cradleH) * 0.4;
-    this.u.uHeartK.value = (0.22 + 0.2 * W.reach + 0.6 * ck + 0.25 * W.soothe + 0.8 * rk) * (1 - 0.3 * grasp);
+    this.u.uHeartK.value = (0.22 + 0.2 * W.reach + 0.6 * ck + 0.25 * W.soothe + 0.8 * rk) * (1 - 0.3 * grasp) + 0.3 * grasp + 0.2 * trusted;
+    this.u.uHeartBack.value = grasp;
     // ── far away (from the god's height and beyond) the Touch condenses to a point of light under its whorl: its cloud,
     //    its wind and its dust fade, its heart glows (at ~140 m it would read as a weather system from orbit) ──
     const camD = this.pos.distanceTo(f.camBody);
@@ -1349,10 +1365,13 @@ export class HandVisual {
     if (!this.placed || Math.hypot(tx - this.pos.x, ty - this.pos.y, tz - this.pos.z) > L * 25) {
       this.pos.set(tx, ty, tz); this.vel.set(0, 0, 0); this.placed = true; this.placedTop = false;
     } else if (dt > 0) {
+      // (critically damped, solved exactly over the step: stable at any frame rate — stepped forward naively the
+      // spring diverged below ~15 fps, and the Touch flew apart on a slow machine)
       const w = this.heldKind ? 8 : 11;
-      const ax = w * w * (tx - this.pos.x) - 2 * w * this.vel.x, ay = w * w * (ty - this.pos.y) - 2 * w * this.vel.y, az = w * w * (tz - this.pos.z) - 2 * w * this.vel.z;
-      this.vel.x += ax * dt; this.vel.y += ay * dt; this.vel.z += az * dt;
-      this.pos.x += this.vel.x * dt; this.pos.y += this.vel.y * dt; this.pos.z += this.vel.z * dt;
+      const e = Math.exp(-w * dt);
+      const sx = springStep(this.pos.x - tx, this.vel.x, w, dt, e), sy = springStep(this.pos.y - ty, this.vel.y, w, dt, e), sz = springStep(this.pos.z - tz, this.vel.z, w, dt, e);
+      this.pos.set(tx + sx[0], ty + sy[0], tz + sz[0]);
+      this.vel.set(sx[1], sy[1], sz[1]);
     }
     // the facing (for what it holds): away from the camera, level; aiming, toward the target
     const up = _y.copy(this.pos).normalize();
@@ -1553,6 +1572,16 @@ export class HandVisual {
     this.heldMat?.dispose();
     this.heldLeafMat?.dispose();
   }
+}
+
+/**
+ * One step of a critically damped spring (angular frequency w) toward 0: offset x0 and velocity v0 after dt, exactly
+ * (`e` = exp(−w·dt)): x = (x0 + (v0 + w·x0)·dt)·e, v = (v0 − w·(v0 + w·x0)·dt)·e. It never rings and never diverges,
+ * whatever the step (from rest it closes without passing its target).
+ */
+export function springStep(x0: number, v0: number, w: number, dt: number, e = Math.exp(-w * dt)): [number, number] {
+  const c = v0 + w * x0;
+  return [(x0 + c * dt) * e, (v0 - w * c * dt) * e];
 }
 
 /** an orthonormal pair (e1, e2) round unit axis a */

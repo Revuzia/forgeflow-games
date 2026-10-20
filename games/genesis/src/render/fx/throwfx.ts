@@ -51,7 +51,10 @@ const MAX_FLIGHTS = 8;
 
 interface Track {
   id: number;
-  hist: { p: Vector3; t: number }[];
+  /** where it is now, how fast, how long it has flown (FX s): the streak is its own path traced back from here */
+  p: Vector3;
+  v: Vector3;
+  age: number;
   /** the predicted landing point (body m), the predicted flight time (s), the Touch's size at release (m) */
   land: Vector3;
   T: number;
@@ -81,6 +84,7 @@ export class ThrowFx {
   private viewH = 720;
   private pv: PlanetView | null = null;
   private now = 0;
+  private readonly path: Vector3[] = Array.from({ length: SAMPLES }, () => new Vector3());
 
   constructor(fx: Record<string, IUniform>) {
     const n = MAX_FLIGHTS * SAMPLES * 2;
@@ -121,15 +125,13 @@ export class ThrowFx {
       if (!tr) {
         const slot = this.freeSlots.pop();
         if (slot === undefined) return;
-        tr = { id, hist: [], land: new Vector3(), T: 1, touch: touchSize(p.distanceTo(camB)), predAt: -1e9, seen: true, slot };
+        tr = { id, p: new Vector3(), v: new Vector3(), age: 0, land: new Vector3(), T: 1, touch: touchSize(p.distanceTo(camB)), predAt: -1e9, seen: true, slot };
         this.tracks.set(id, tr);
       }
       tr.seen = true;
       // the arc ahead, refined a few times a second (the ground under a small world curves away)
       if (now - tr.predAt > 0.25) { tr.predAt = now; tr.T = age + this.predict(p, v, tr.land); }
-      tr.hist.push({ p: p.clone(), t: now });
-      while (tr.hist.length > 2 && now - tr.hist[0].t > 0.5) tr.hist.shift();
-      if (tr.hist.length > SAMPLES) tr.hist.splice(0, tr.hist.length - SAMPLES);
+      tr.p.copy(p); tr.v.copy(v); tr.age = age;
       // where it comes down: a ring converging as it falls (bright enough to find from the god's height)
       const prog = clamp01(age / Math.max(0.2, tr.T));
       const dLand = tr.land.distanceTo(camB);
@@ -178,24 +180,39 @@ export class ThrowFx {
     return t;
   }
 
-  /** the streak ribbons of every tracked flight */
+  /**
+   * the streak ribbons of every tracked flight: its own ballistic path traced BACK from where it is now over the last
+   * half second (or its whole flight, if shorter) — the same streak at 60 fps and at 5, and in a held capture
+   */
   private build(): void {
     const pos = this.geo.getAttribute('position') as BufferAttribute;
     const arr = pos.array as Float32Array;
     arr.fill(0);
     const cam = this.camB;
     const pxk = (2 * Math.tan((this.fov * Math.PI) / 360)) / Math.max(1, this.viewH);
+    const pv = this.pv;
+    const R = pv?.params.radius ?? 1, gr = pv?.params.gravity || 9.8;
     let any = false;
     for (const tr of this.tracks.values()) {
-      const n = tr.hist.length;
-      if (n < 2) continue;
+      const span = Math.min(0.5, tr.age);
+      if (span < 0.02) continue;
       any = true;
+      // the path back: sample 0 the head (now), the last the tail (span seconds ago)
+      const h = span / (SAMPLES - 1);
+      const path = this.path;
+      path[0].copy(tr.p);
+      const q = _a.copy(tr.p), w = _b.copy(tr.v);
+      for (let i = 1; i < SAMPLES; i++) {
+        // (gravity reversed: a step back undoes the step forward flights.ts took)
+        q.addScaledVector(w, -h);
+        const r = q.length();
+        w.addScaledVector(q, (gr * (R / r) * (R / r) * h) / r);
+        path[i].copy(q);
+      }
       for (let i = 0; i < SAMPLES; i++) {
-        // sample 0 is the head (newest), the last the tail
-        const j = Math.max(0, n - 1 - Math.round((i / (SAMPLES - 1)) * (n - 1)));
-        const p = tr.hist[j].p;
-        const q = tr.hist[Math.min(n - 1, j + 1)].p, o = tr.hist[Math.max(0, j - 1)].p;
-        const tx = q.x - o.x, ty = q.y - o.y, tz = q.z - o.z;
+        const p = path[i];
+        const o = path[Math.max(0, i - 1)], qn = path[Math.min(SAMPLES - 1, i + 1)];
+        const tx = qn.x - o.x, ty = qn.y - o.y, tz = qn.z - o.z;
         const vx = cam.x - p.x, vy = cam.y - p.y, vz = cam.z - p.z;
         let sx = ty * vz - tz * vy, sy = tz * vx - tx * vz, sz = tx * vy - ty * vx;
         const sl = Math.hypot(sx, sy, sz) || 1;

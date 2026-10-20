@@ -22,6 +22,8 @@ import type { FxCtx } from './disasters.ts';
 interface Flight {
   id: number;
   kind: string;
+  /** what flies (ProjectileView.what): for a person, their AGENT id — the id the people layer draws them by (the
+   *  flight's own id is the projectile's, a different sequence: pinning by it would fly a stranger); -1 unknown */
   what: number;
   p: Vector3;
   v: Vector3;
@@ -45,7 +47,7 @@ export class Flights {
   private geos = new Map<string, BufferGeometry>();
   private shared: Record<string, IUniform>;
   private seenProj = new Set<number>();
-  /** people flying now: id → body-frame point and tumble (the crowds draw them) */
+  /** people flying now: AGENT id → body-frame point and tumble (the crowds draw them) */
   readonly agentPins = new Map<number, { x: number; y: number; z: number; tumble: number; anim: number }>();
   /**
    * (additive, the god layer: render/fx/throwfx.ts) the drawn scale of a flying prop — present.ts raises it so a hurled
@@ -66,9 +68,12 @@ export class Flights {
     for (const [id, fl] of this.flights) f(id, fl.kind, fl.p, fl.v, now - fl.t0);
   }
 
-  /** a 'thrown' event: fly it; a 'landed' / 'splash' for a flight in the air: hold it until the flight lands */
-  onEvent(e: SimEvent, ctx: FxCtx): boolean {
-    const data = (e.data ?? {}) as { id?: number; payload?: string; vel?: number[] };
+  /**
+   * a 'thrown' event: fly it; a 'landed' / 'splash' for a flight in the air: hold it until the flight lands.
+   * `heldAgent`: the person the Touch held until this frame, if any (who a thrown 'agent' is when the event does not say)
+   */
+  onEvent(e: SimEvent, ctx: FxCtx, heldAgent = -1): boolean {
+    const data = (e.data ?? {}) as { id?: number; payload?: string; vel?: number[]; agent?: number; what?: number };
     if (e.t === 'thrown' && e.pos) {
       const id = typeof data.id === 'number' ? data.id : this.nextLocal++;
       const u = new Vector3(e.pos[0], e.pos[1], e.pos[2]).normalize();
@@ -76,7 +81,10 @@ export class Flights {
       const p = u.clone().multiplyScalar(g + Math.max(0.5, e.b ?? 2));
       const v = data.vel ? new Vector3(data.vel[0], data.vel[1], data.vel[2]) : u.clone().multiplyScalar(12);
       const kind = data.payload ?? 'rock';
-      this.start(id, kind, -1, p, v, ctx);
+      // who flies, for a person: the event's word (data.agent / data.what) else the one the Touch just let go of; the
+      // snapshot's projectile fills it in otherwise (update)
+      const what = kind === 'agent' ? (typeof data.agent === 'number' ? data.agent : typeof data.what === 'number' ? data.what : heldAgent) : -1;
+      this.start(id, kind, what, p, v, ctx);
       // the sim's landing may already be queued behind it
       const held = this.holdLanding.get(id);
       if (held) { this.flights.get(id)!.landing = held; this.holdLanding.delete(id); }
@@ -105,7 +113,9 @@ export class Flights {
       this.group.add(f.mesh);
       f.size = kind === 'rock' ? 0.8 : kind === 'tree' ? 2.5 : kind === 'building' ? 3 : 0.6;
     }
-    f.trail = ctx.vfx.emit({ sys: SYS.steam, x: p.x, y: p.y, z: p.z, size: 0.7, life: 1.2, count: 64, p0: 0.5, r: 0.85, g: 0.85, b: 0.87, power: 0.35 }, ctx.now);
+    // (a puff of displaced air behind a hurled boulder, tree or hut; a person or a beast in the air is left clear to see —
+    // the streak of the god's light behind them is throwfx's — a white puff round a flying villager hid them)
+    if (kind !== 'agent' && kind !== 'animal') f.trail = ctx.vfx.emit({ sys: SYS.steam, x: p.x, y: p.y, z: p.z, size: 0.7, life: 1.2, count: 64, p0: 0.5, r: 0.85, g: 0.85, b: 0.87, power: 0.35 }, ctx.now);
     this.flights.set(id, f);
   }
 
@@ -114,7 +124,9 @@ export class Flights {
     this.agentPins.clear();
     // projectiles in the snapshot nobody announced: fly them from where they are
     for (const pr of projectiles) {
-      if (this.flights.has(pr.id) || this.seenProj.has(pr.id)) continue;
+      const known = this.flights.get(pr.id);
+      if (known && known.what < 0) known.what = pr.what;
+      if (known || this.seenProj.has(pr.id)) continue;
       this.seenProj.add(pr.id);
       const u = new Vector3(pr.pos[0], pr.pos[1], pr.pos[2]).normalize();
       const g = groundHeight(pv.ground, u.x, u.y, u.z);
@@ -152,9 +164,12 @@ export class Flights {
       }
       const age = ctx.now - f.t0;
       if (f.kind === 'agent') {
+        // (pinned by the person's own id, never the projectile's; a person nobody named is left where the sim has them)
+        const who = f.what;
         // (set down gently: upright, feet first, standing — not the flailing tumble of a throw)
-        if (f.gentle) this.agentPins.set(id, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: 0, anim: AnimState.idle });
-        else this.agentPins.set(id, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: age * 5.5, anim: AnimState.thrown });
+        if (who < 0) { /* unknown: not drawn in flight */ }
+        else if (f.gentle) this.agentPins.set(who, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: 0, anim: AnimState.idle });
+        else this.agentPins.set(who, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: age * 5.5, anim: AnimState.thrown });
       } else if (f.mesh) {
         const s = this.sizeOf ? this.sizeOf(f.kind, f.size, age, f.p, f.v, id) : f.size;
         _m.makeRotationAxis(f.spin, age * 6).scale(_q.set(s, s, s)).setPosition(f.p);

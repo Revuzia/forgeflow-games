@@ -1,0 +1,12 @@
+{
+  "shots": [
+    { "name": "wperf-orbit-low", "params": "source=lookdev", "size": [640, 360], "quality": "low", "canvasOnly": true, "frames": 6, "camera": { "mode": "orbit", "lat": 12, "lon": -30, "dist": 7600, "hour": 13 } },
+    { "name": "wperf-ground-low", "params": "source=lookdev", "size": [640, 360], "quality": "low", "canvasOnly": true, "frames": 6, "camera": { "mode": "orbit", "poi": "peak", "dist": 140, "tilt": 60, "hour": 10 } },
+    { "name": "wperf-orbit-medium", "params": "source=lookdev", "size": [640, 360], "quality": "medium", "canvasOnly": true, "frames": 6, "camera": { "mode": "orbit", "lat": 12, "lon": -30, "dist": 7600, "hour": 13 } },
+    { "name": "wperf-ground-medium", "params": "source=lookdev", "size": [640, 360], "quality": "medium", "canvasOnly": true, "frames": 6, "camera": { "mode": "orbit", "poi": "peak", "dist": 140, "tilt": 60, "hour": 10 } },
+    { "name": "wperf-orbit-high", "params": "source=lookdev", "size": [640, 360], "quality": "high", "canvasOnly": true, "frames": 6, "camera": { "mode": "orbit", "lat": 12, "lon": -30, "dist": 7600, "hour": 13 } },
+    { "name": "wperf-ground-high", "params": "source=lookdev", "size": [640, 360], "quality": "high", "canvasOnly": true, "frames": 6, "camera": { "mode": "orbit", "poi": "peak", "dist": 140, "tilt": 60, "hour": 10 } },
+    { "name": "wperf-orbit-ultra", "params": "source=lookdev", "size": [640, 360], "quality": "ultra", "canvasOnly": true, "frames": 6, "camera": { "mode": "orbit", "lat": 12, "lon": -30, "dist": 7600, "hour": 13 } },
+    { "name": "wperf-ground-ultra", "params": "source=lookdev", "size": [640, 360], "quality": "ultra", "canvasOnly": true, "frames": 6, "camera": { "mode": "orbit", "poi": "peak", "dist": 140, "tilt": 60, "hour": 10 } }
+  ]
+}

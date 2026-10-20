@@ -678,12 +678,16 @@ void main() {
     float edgeN = snoise(P * 0.07) * 0.3 + snoise(P * 0.45) * 0.08 + snoise(P * 1.9) * 0.03;
     // (over the first ~0.18 m of depth: fading out over 0.4 m spread every gently shelving lake into a 10–20 m halo of
     // milky haze from 60 m up, a fog patch rather than water)
-    float edge = smoothstep(0.012, 0.18, vertThick + min(edgeN, 0.12) * smoothstep(1.6, 0.2, vertThick));
+    // (from afar the depth buffer cannot tell a coarse patch's sheet from the coarse bed under it — the two meshes
+    // nearly meet, and the whole lake read as its own shore film: its dark wet bed, a black disc in the land from a few
+    // kilometres up while the sea beside it mirrored the sky. Out there the field's own depth stands in)
+    float thickE = mix(vertThick, max(vertThick, vDepth), smoothstep(0.25, 1.5, fw));
+    float edge = smoothstep(0.012, 0.18, thickE + min(edgeN, 0.12) * smoothstep(1.6, 0.2, thickE));
     // at zero thickness exactly the ground behind: a sheet within depth precision of the ground (dry shore cells hold
     // their level a few cm under it) can never z-fight into speckles
     // (a film a few centimetres thick is the wet ground the terrain already darkens along its waterline band: darkened
     // again here it drew a dotted line of tiny pools wherever the 3 m detail relief dips under the level)
-    float film = smoothstep(0.03, 0.3, vertThick);
+    float film = smoothstep(0.03, 0.3, thickE);
     vec3 wetGround = mix(refr, refr * 0.8 + skyR * F * 0.3, film);
     col = mix(wetGround, col, edge * (1.0 - paper));
   }

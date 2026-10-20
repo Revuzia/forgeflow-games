@@ -1,0 +1,38 @@
+{
+ "shots": [
+  {
+   "name": "wt-tsunami",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "window.__GENESIS_FX__.fx.hand.force = false; const F = window.__GENESIS_FX__; const p = G.poi('coast');",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'weather.clear' });",
+    "await G.camera({ mode: 'surface', poi: 'coast', alt: 14, yaw: p.heading, pitch: 0, fov: 65, hour: 10.5 }); await G.frames(2);",
+    "const R = F.fx.ctx.pv.params.radius; const c = F.fx.vis.camBody.clone().normalize(); const f = F.fx.camFwd.clone(); f.addScaledVector(c, -f.dot(c)).normalize(); const o = c.clone().addScaledVector(f, 950 / R).normalize();",
+    "await G.cmd({ k: 'lookdev.disaster', kind: 'tsunami', pos: [o.x, o.y, o.z], progress: 0.62, radius: 420, intensity: 1.5 });",
+    "await G.step(1); await G.frames(2); F.advance(6); await G.frames(4);"
+   ]
+  },
+  {
+   "name": "wt-tsunami-top",
+   "params": "source=lookdev",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const st = [...F.fx.m.disasters.states.values()].find((x) => x.kind === 'tsunami');",
+    "const p = G.poi('coast'); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 700, tilt: 45, yaw: p.heading, hour: 10.5 }); await G.frames(6);"
+   ]
+  }
+ ]
+}

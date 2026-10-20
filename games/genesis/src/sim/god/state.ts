@@ -271,6 +271,8 @@ export interface SettlementRel {
   animal: string;
   /** daily memory of the conditions: tick a condition first held (drought, cold, ...), prayers raised throttle */
   since: Record<string, number>;
+  /** this evening's worship: the tick its window opened and who has gone (agent ids) — once an evening each */
+  vespers?: { t: number; went: number[] };
 }
 
 export interface RelState {

@@ -113,6 +113,7 @@ export class PlanetVisual {
       get grad() { return self.pv.ground.grad ?? null; },
       waterLevel: this.fields.waterLevel,
       waterDepth: this.fields.waterDepth,
+      get lava() { return self.pv.fields.get('lava') ?? null; },
       get geomVersion() { return self.fields.geomVersion; },
     });
     this.vegetation = new Vegetation(sharedRec);

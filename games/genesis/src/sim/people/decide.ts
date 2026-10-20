@@ -567,23 +567,39 @@ function findShelter(x: PCtx, s: number, st: Settlement): Building | null {
   return best;
 }
 
+/**
+ * An infant (under 2) keeps by home and its people: no trips of its own to water or the trees (integration, 2026-10-20:
+ * under a heatwave the tests' town's infants walked 400–590 m alone to swim — ten hours each way at an infant's pace — and
+ * slept out there; their parents spent a fifth of their day walking after them)
+ */
+function infantOf(x: PCtx, s: number): boolean {
+  return (x.A.flags[s] & AgentFlag.child) !== 0 && (x.tick - x.A.birth[s]) / x.year < 2;
+}
+
+/** within the village (the territory of st): where an infant may go for water */
+function inVillage(x: PCtx, st: Settlement | undefined, c: number): boolean {
+  return !!st && !st.band && distM(x.p, cellPos(x.p, c), st.pos) <= st.territory;
+}
+
 /** relief from the heat: a dip in water near at hand, else the shade of home, else the shade of trees */
 function planCool(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | null {
   const p = x.p, A = x.A;
-  const w = nearestCell(x, A.cell[s], 3, (o) => p.f.water[o] > 0.1 && p.f.water[o] < 2.5 && p.f.lava[o] <= 0);
+  const infant = infantOf(x, s);
+  const w = nearestCell(x, A.cell[s], 3, (o) => p.f.water[o] > 0.1 && p.f.water[o] < 2.5 && p.f.lava[o] <= 0 && (!infant || inVillage(x, st, o)));
   if (w >= 0) return { kind: TASK.bathe, goal: spot(x, s, w, 13), goalCell: w, work: 60 };
   if (st && !st.band) {
     const home = x.ps.building(A.home[s]);
     if (home && home.progress >= 1 && !(home.flags & 2)) return { kind: TASK.warm, goal: [home.pos[0], home.pos[1], home.pos[2]], goalCell: home.cell, work: 120, target: home.id, data2: 1 };
   }
-  const t = nearestCell(x, A.cell[s], 3, (o) => p.f.tree[o] > 0.4 && isLand(p, o));
+  const t = nearestCell(x, A.cell[s], 3, (o) => p.f.tree[o] > 0.4 && isLand(p, o) && (!infant || inVillage(x, st, o)));
   if (t >= 0) return { kind: TASK.warm, goal: spot(x, s, t, 19), goalCell: t, work: 90 };
   return null;
 }
 
 function planBathe(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | null {
   const p = x.p;
-  const c = nearestCell(x, x.A.cell[s], 5, (o) => p.f.water[o] > 0.1);
+  const infant = infantOf(x, s);
+  const c = nearestCell(x, x.A.cell[s], 5, (o) => p.f.water[o] > 0.1 && (!infant || inVillage(x, st, o)));
   if (c < 0) return null;
   return { kind: TASK.bathe, goal: spot(x, s, c, 13), goalCell: c, work: 40 };
 }

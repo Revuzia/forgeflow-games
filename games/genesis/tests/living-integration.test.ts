@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 import { town, must } from './helpers/god.ts';
 import { Sim } from '../src/sim/sim.ts';
 import { MAX_WORK_COST, flowCost } from '../src/sim/people/resources.ts';
-import { TASK, TASK_NAMES } from '../src/sim/people/defs.ts';
+import { GODS, NT, TASK, TASK_NAMES, TRAIT } from '../src/sim/people/defs.ts';
+import { sunElevation } from '../src/sim/people/world.ts';
+import { VESPERS_HIGH, VESPERS_LOW } from '../src/sim/god/relationship.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
 import { distM } from '../src/sim/people/world.ts';
 import { ROAD_CAMP_TICKS, paceSleep, walkTicks } from '../src/sim/perf/pace.ts';
@@ -191,4 +193,72 @@ test('integration: at night a villager inside their own village walks home to be
   assert.equal(paceSleep(x, s, st, true, 480), null, 'inside the village: home to bed');
   put(far);
   assert.equal(paceSleep(x, s, st, true, 480)?.kind, TASK.camp, 'far beyond it: a camp where night fell');
+});
+
+test('integration: evening worship draws the grown at the rate faith and loyalty ask, once an evening each, not only those who happen to decide at dusk', () => {
+  // (2026-10-20: the acceptance sessions' quiet towns: once infants no longer prayed, the town's evening worship nearly
+  // stopped — only the 4–6 of 23 adults who made a decision inside the 25 minutes of dusk could go, so a faithful town
+  // (formula 0.56) sent 9–22 % of its grown to worship. The window is now the evening, and each goes once.)
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const A = p.people.agents;
+  for (const s of p.people.members.get(st.id) ?? []) { A.faith[s * GODS] = 0.8; A.loyalty[s * GODS] = 0.4; }
+  sim.step(1440);
+  const evenings = new Map<number, { adults: Set<number>; went: Map<number, number> }>();
+  const prev = new Map<number, number>();
+  let formula = 0, fn = 0;
+  for (let k = 0; k < 4 * 1440; k += 5) {
+    sim.step(5);
+    const el = sunElevation(sim.u, p, sim.u.tick, st.pos);
+    const inWindow = el > VESPERS_LOW && el < VESPERS_HIGH && sunElevation(sim.u, p, sim.u.tick - 20, st.pos) > el;
+    const day = Math.floor((sim.u.tick + 360) / 1440);
+    for (const s of p.people.members.get(st.id) ?? []) {
+      if (A.flags[s] & 1) continue;
+      const id = A.id[s];
+      if (inWindow) {
+        let e = evenings.get(day);
+        if (!e) { e = { adults: new Set(), went: new Map() }; evenings.set(day, e); }
+        if (!e.adults.has(id)) {
+          e.adults.add(id);
+          const i = s * GODS;
+          formula += Math.min(1, 0.5 * A.faith[i] + 0.3 * A.loyalty[i] + 0.15 * A.traits[s * NT + TRAIT.piety] * A.faith[i]);
+          fn++;
+        }
+        if (A.task[s] === TASK.worship && prev.get(id) !== TASK.worship) e.went.set(id, (e.went.get(id) ?? 0) + 1);
+      }
+      prev.set(id, A.task[s]);
+    }
+  }
+  const rates = [...evenings.values()].map((e) => e.went.size / Math.max(1, e.adults.size));
+  const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
+  const asked = formula / fn;
+  assert.ok(evenings.size >= 4, `${evenings.size} evenings`);
+  assert.ok(mean >= 0.5 * asked, `the grown at evening worship: ${rates.map((r) => r.toFixed(2)).join(', ')} (mean ${mean.toFixed(2)}) where the formula asks ${asked.toFixed(2)}`);
+  for (const e of evenings.values()) for (const [id, n] of e.went) assert.equal(n, 1, `agent ${id} went to the evening worship ${n} times in one evening`);
+});
+
+test('integration: in a heatwave an infant cools off at home, not on a swim of its own beyond the village', () => {
+  // (2026-10-20: the tests' town, day 19 of a quiet run and under a painted heatwave: its infants walked alone to water
+  // 400–590 m out — ten hours each way at an infant's pace — slept out there and walked back to eat; their parents spent a
+  // fifth of the day going after them)
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const A = p.people.agents;
+  must(sim, { k: 'weather.paint', kind: 'heatwave', pos: st.pos, radius: 3000, duration: 2880, intensity: 2 });
+  const pt = [0, 0, 0];
+  let n = 0, maxD = 0;
+  const tasks: Record<string, number> = {};
+  for (let t = 0; t < 2880; t += 10) {
+    sim.step(10);
+    for (const s of p.people.members.get(st.id) ?? []) {
+      if ((sim.u.tick - A.birth[s]) / p.st.orbit.period >= 2) continue;
+      n++;
+      A.posAt(s, sim.u.tick, pt);
+      maxD = Math.max(maxD, distM(p, pt, st.pos));
+      tasks[TASK_NAMES[A.task[s]]] = (tasks[TASK_NAMES[A.task[s]]] ?? 0) + 1;
+    }
+  }
+  assert.ok(n > 100, `infant samples ${n}`);
+  assert.ok(maxD <= st.territory + 30, `an infant went ${Math.round(maxD)} m from the centre (the village is ${Math.round(st.territory)} m): ${JSON.stringify(tasks)}`);
+  assert.equal(tasks.camp ?? 0, 0, `infants camping out: ${JSON.stringify(tasks)}`);
 });

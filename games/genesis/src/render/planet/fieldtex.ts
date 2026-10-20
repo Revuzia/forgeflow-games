@@ -12,9 +12,10 @@
 //   S  treeSpecies, cropSpecies, light (night lights, reserved), biome
 //   G  curvature gradient of `surface` (gx, gy, gz, gw) from surface.ts surfaceGradients — computed once per surface
 //      change by the WorldView (pv.ground.grad, the array the CPU ground function reads) and uploaded as is
-//   O  ore outcrops (LIVING H12): the cell's ore colour (ores.json `color` of its oreType) premultiplied by its ore
-//      richness in rgb, the richness in a — interpolated linearly, so neighbouring deposits of different ores blend
-//      their stains instead of switching type along a sim-triangle edge
+//   O  ore outcrops (LIVING H12): the cell's ore colour (ores.json `color` of its oreType) premultiplied by its showing
+//      richness (ore × how plainly that deposit breaks the surface, ORE_SHOW) in rgb, that showing richness in a —
+//      interpolated linearly, so neighbouring deposits of different ores blend their stains instead of switching type
+//      along a sim-triangle edge
 //   D  dune amplitude (surface.ts duneAmpOf of the raw sand depth), the ground function's dune term; surface wind
 //      (m/s, body-frame tangent vector: the sea state of the water, ocean.ts) in yzw — a synthetic trade-wind / westerly
 //      pattern with gusty variation where the source has no wind field (lookdev)
@@ -38,17 +39,32 @@ function hexRgb(hex: string | undefined): [number, number, number] {
   const v = (i: number) => { const c = (parseInt(h.slice(i, i + 2), 16) || 128) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
   return [v(0), v(2), v(4)];
 }
+/**
+ * How plainly a deposit breaks the surface (0..1, × its richness in O.a): the sim's `ore` field is the cell's RICHEST
+ * deposit and lies over a third of the land above 0.3 (flint and glass sand under most plains), so outcrops by
+ * richness alone would stain half the world. Metal ores, coal, sulfur, obsidian and salt crop out as stained rock and
+ * crusts; clay as banks only where rich; flint nodules and glass sand do not show (they ARE the soil and the beach);
+ * a deposit the god made (or a mod's) shows plainly — it is news.
+ */
+const ORE_SHOW: Record<string, number> = {
+  flint: 0, clay: 0.4, copper: 1, tin: 0.85, iron: 1, coal: 0.85, gold: 0.8, silver: 0.8, sulfur: 1, obsidian: 1,
+  saltpeter: 0.6, salt: 0.8, 'glass-sand': 0, oil: 0.45, uranium: 0.8, gems: 0.7,
+};
+const showOf = (id: string | undefined): number => (id && id in ORE_SHOW ? ORE_SHOW[id] : 0.9);
 let ORE_RGB: [number, number, number][] = (BASE_PACK.ores ?? []).map((o) => hexRgb((o as { color?: string }).color));
+let ORE_VIS: number[] = (BASE_PACK.ores ?? []).map((o) => showOf((o as { id?: string }).id));
 let orePaletteVersion = 0;
 /**
  * The live ore list (the sim's `ores` query: base pack, mods and the god's inventions, in content order) — so an
  * invented ore's outcrops take its own colour. Until it is called the base pack's colours stand (hook H12, for the
  * app: pass the query's rows as they come).
  */
-export function setOrePalette(list: readonly { color?: string }[]): void {
+export function setOrePalette(list: readonly { id?: string; color?: string }[]): void {
   const next = list.map((o) => hexRgb(o.color));
-  if (next.length === ORE_RGB.length && next.every((c, i) => c[0] === ORE_RGB[i][0] && c[1] === ORE_RGB[i][1] && c[2] === ORE_RGB[i][2])) return;
+  const vis = list.map((o) => showOf(o.id));
+  if (next.length === ORE_RGB.length && next.every((c, i) => c[0] === ORE_RGB[i][0] && c[1] === ORE_RGB[i][1] && c[2] === ORE_RGB[i][2] && vis[i] === ORE_VIS[i])) return;
   ORE_RGB = next;
+  ORE_VIS = vis;
   orePaletteVersion++;
 }
 function oreRgb(type: number): [number, number, number] {
@@ -56,6 +72,10 @@ function oreRgb(type: number): [number, number, number] {
   if (i >= 0 && i < ORE_RGB.length) return ORE_RGB[i];
   const k = ((i * 0.618034) % 1 + 1) % 1;
   return [0.18 + 0.12 * k, 0.2 + 0.06 * (1 - k), 0.16 + 0.1 * k];
+}
+function oreVis(type: number): number {
+  const i = Math.round(type) - 1;
+  return i >= 0 && i < ORE_VIS.length ? ORE_VIS[i] : 0.9;
 }
 
 export const FIELD_ROW = 256;
@@ -88,6 +108,7 @@ export class FieldTextures {
   private lightVersion = 0;
   /** bumped whenever A (heights / water) changes: the chunk system re-derives bounds */
   geomVersion = 0;
+  private lavaVersion = 0;
   /**
    * night lights seen from afar, splatted from the lit buildings and the roads (citylights.ts); built once the life
    * layer supplies a light field, bound to the terrain's uCityTex by the renderer
@@ -144,6 +165,8 @@ export class FieldTextures {
       this.fill(name);
       this.tex[name].needsUpdate = true;
       if (name === 'A') { geom = true; this.geomVersion++; }
+      // (lava raises the terrain mesh by its depth: the chunk bounds follow a flow as they follow the ground)
+      else if (name === 'M1' && (this.pv.fieldVersion.get('lava') ?? 0) !== this.lavaVersion) { this.lavaVersion = this.pv.fieldVersion.get('lava') ?? 0; this.geomVersion++; }
     }
     if (this.light) {
       this.cityLights ??= new CityLights(this.pv.params.radius);
@@ -342,7 +365,7 @@ export class FieldTextures {
         const d = this.tex.O.image.data as Float32Array;
         const ore = this.field('ore'), ty = this.field('oreType');
         for (let c = 0; c < n; c++) {
-          const a = ore && ty && ty[c] > 0 ? Math.max(0, Math.min(1, ore[c])) : 0;
+          const a = ore && ty && ty[c] > 0 ? Math.max(0, Math.min(1, ore[c])) * oreVis(ty[c]) : 0;
           const rgb = a > 0 ? oreRgb(ty![c]) : ORE_RGB[0] ?? [0, 0, 0];
           d[c * 4] = rgb[0] * a; d[c * 4 + 1] = rgb[1] * a; d[c * 4 + 2] = rgb[2] * a; d[c * 4 + 3] = a;
         }

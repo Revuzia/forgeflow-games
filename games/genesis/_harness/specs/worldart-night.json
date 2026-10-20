@@ -1,0 +1,70 @@
+{
+ "shots": [
+  {
+   "name": "wn-orbit-night",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 6,
+   "camera": {
+    "mode": "orbit",
+    "lat": 8,
+    "lon": 20,
+    "dist": 7400,
+    "hour": 0.5
+   }
+  },
+  {
+   "name": "wn-town-night",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 6,
+   "camera": {
+    "mode": "orbit",
+    "poi": "town",
+    "dist": 140,
+    "tilt": 62,
+    "hour": 1.5
+   }
+  },
+  {
+   "name": "wn-airless-night",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 6,
+   "script": [
+    "const ps = G.state().planets; const P = ps.find((p) => p.kind === 'moon') ?? ps.find((p) => p.kind === 'barren');",
+    "await G.camera({ mode: 'orbit', planet: P.id, lat: 5, lon: 40, dist: P.radius * 2.8, hour: 22 }); return { id: P.id, name: P.name, kind: P.kind, r: P.radius };"
+   ]
+  },
+  {
+   "name": "wn-airless-ground-night",
+   "params": "source=lookdev",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 6,
+   "script": [
+    "const ps = G.state().planets; const P = ps.find((p) => p.kind === 'barren') ?? ps.find((p) => p.kind === 'moon');",
+    "await G.camera({ mode: 'surface', planet: P.id, lat: 10, lon: 30, alt: 25, pitch: 4, hour: 23 }); return { id: P.id, name: P.name, kind: P.kind };"
+   ]
+  }
+ ]
+}

@@ -470,17 +470,29 @@ vec4 swardDetail(vec3 P, float fw, float NdV) {
     tip += tus * 0.2 * a2;
   }
   // the sward is COMBED: blades lean together in drifts, streaks of lighter and darker along a lean that wanders in
-  // ~10 m patches (a 3D noise stretched along fixed directions, so it needs no tangent frame)
-  float a3 = ff_aa(fw, 0.2);
-  if (a3 > 0.0) {
-    float lean = snoise(P * 0.06 + 31.0);
-    vec3 D1 = normalize(vec3(0.71, 0.25, 0.66)), D2 = normalize(vec3(-0.42, 0.88, 0.22));
-    vec3 Dl = normalize(mix(D1, D2, 0.5 + 0.5 * lean));
-    vec3 Ds = normalize(cross(Dl, vec3(0.31, -0.52, 0.79)));
-    vec3 Dt = cross(Dl, Ds);
-    float comb = snoise(vec3(dot(P, Ds) * 7.0, dot(P, Dl) * 1.3, dot(P, Dt) * 7.0) + 13.0);
-    val *= 1.0 + 0.1 * comb * a3;
-    tip += max(comb, 0.0) * 0.25 * a3;
+  // ~10 m patches — two combings along FIXED directions, cross-faded by the lean (each a 3D noise stretched along its
+  // own frame, so it needs no tangent frame). (One frame turned by the lean itself made its coordinate P·D(P) race by
+  // hundreds of cycles per metre on a 3 km world: no streaks at all, a shimmering pixel noise over every meadow.)
+  // The streaks come in two sizes: fine (~0.15 × 0.8 m) up close, and drifts (~0.6 × 3 m) that still read from a
+  // god's 30–60 m — lighter where the tips catch the light, darker where the sward lies open
+  float a3 = ff_aa(fw, 0.2), a3b = ff_aa(fw, 0.9);
+  if (a3b > 0.0) {
+    float lean = 0.5 + 0.5 * snoise(P * 0.06 + 31.0);
+    const vec3 L1 = vec3(0.71, 0.25, 0.66), S1 = vec3(0.4, -0.91, 0.08), T1 = vec3(-0.58, -0.33, 0.74);
+    const vec3 L2 = vec3(-0.42, 0.88, 0.22), S2 = vec3(0.73, 0.45, -0.52), T2 = vec3(0.54, 0.16, 0.83);
+    float cA = snoise(vec3(dot(P, S1) * 1.6, dot(P, L1) * 0.33, dot(P, T1) * 1.6) + 41.0);
+    float cB = snoise(vec3(dot(P, S2) * 1.6, dot(P, L2) * 0.33, dot(P, T2) * 1.6) + 57.0);
+    float drift = mix(cA, cB, smoothstep(0.3, 0.7, lean));
+    val *= 1.0 + 0.09 * drift * a3b;
+    tip += max(drift, 0.0) * 0.22 * a3b;
+    gap += max(-drift, 0.0) * 0.25 * a3b;
+    if (a3 > 0.0) {
+      float fA = snoise(vec3(dot(P, S1) * 7.0, dot(P, L1) * 1.3, dot(P, T1) * 7.0) + 13.0);
+      float fB = snoise(vec3(dot(P, S2) * 7.0, dot(P, L2) * 1.3, dot(P, T2) * 7.0) + 23.0);
+      float comb = mix(fA, fB, smoothstep(0.3, 0.7, lean));
+      val *= 1.0 + 0.1 * comb * a3;
+      tip += max(comb, 0.0) * 0.25 * a3;
+    }
   }
   float a1 = ff_aa(fw, 0.14);
   if (a1 > 0.0) {

@@ -1,34 +1,83 @@
 {
- "_doc": "Signs against the REAL sim in its worker (scenario=lookdev, the sim's own town world): a prophet called in the biggest town (prophet.call → AgentFlag2.prophet in the snapshot), a spring hallowed beside it (place.sacred → the sacred.place event and the `sacred` query), a sign sent to the town (god.omen), and a volcano sent near it in its warning phase (DisasterView.params.warning). Run: node _harness/shots.mjs _harness/specs/signs-real.json --port=5195",
+ "_doc": "Signs against the REAL sim in its worker (scenario=lookdev, the sim's own town world): a prophet called in the biggest town (prophet.call \u2192 AgentFlag2.prophet in the snapshot), a spring hallowed beside it (place.sacred \u2192 the sacred.place event and the `sacred` query), a sign sent to the town (god.omen), a volcano sent near it in its warning phase (DisasterView.params.warning), and a meteor's first light over it (the ring where it will fall, a new star high above). Run: node _harness/shots.mjs _harness/specs/signs-real.json --port=5195",
  "shots": [
-  { "name": "real-prophet", "params": "scenario=lookdev&page=signs&dev=1", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
-    "script": [
-      "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
-      "await G.step(1440); const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; const p = G.poi('settlement:' + s.id);",
-      "const list = (await G.query('agents', { settlement: s.id })) || []; let r = null; for (const a of list) { r = await G.cmd({ k: 'prophet.call', agent: a.id }); if (r.ok) break; } await G.step(2);",
-      "await G.frames(2); const blk = pv().agents; const pa = (pv().settlements.find((x) => x.prophet) || {}).prophet; let pi = -1; for (let i = 0; i < blk.count; i++) if ((blk.flags2 && (blk.flags2[i] & 1)) || (pa && blk.id[i] === pa.agent)) { pi = i; break; } const q = pi >= 0 ? [blk.pos[pi * 3], blk.pos[pi * 3 + 1], blk.pos[pi * 3 + 2]] : p.pos;",
-      "const la = Math.asin(q[1]) * D, lo = Math.atan2(q[0], q[2]) * D; await G.camera({ mode: 'orbit', lat: la, lon: lo, dist: 40, tilt: 64, yaw: 130, fov: 55, hour: 16 }); await G.frames(3);",
-      "const bm = F.fx.m.signs.marks.beams; const foot = [bm.pos[0], bm.pos[1], bm.pos[2]]; return { call: r && r.msg, prophet: pi, footFromCam: Math.round(Math.hypot(foot[0] - F.fx.vis.camBody.x, foot[1] - F.fx.vis.camBody.y, foot[2] - F.fx.vis.camBody.z)), st: F.fx.m.signs.stats, view: pv().settlements.find((x) => x.prophet) && pv().settlements.find((x) => x.prophet).prophet };"
-    ] },
-  { "name": "real-spring-omen", "params": "scenario=lookdev&page=signs&dev=1", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
-    "script": [
-      "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI; const W = pv().fields.get('water');",
-      "const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; const c = s.pos; const ex = [c[2], 0, -c[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el; const nx = [c[1] * ex[2], c[2] * ex[0] - c[0] * ex[2], -c[1] * ex[0]];",
-      "const at = (e, n) => { const q = [c[0] + (ex[0] * e + nx[0] * n) / R, c[1] + (nx[1] * n) / R, c[2] + (ex[2] * e + nx[2] * n) / R]; const l = Math.hypot(q[0], q[1], q[2]); return [q[0] / l, q[1] / l, q[2] / l]; };",
-      "let best = null; for (let rr = 40; rr < 1400 && !best; rr += 12) for (let a = 0; a < 64 && !best; a++) { const th = (a / 64) * Math.PI * 2; const q = at(Math.sin(th) * rr, Math.cos(th) * rr); if (W && pv().grid.sample(W, q[0], q[1], q[2]) > 0.3) best = q; }",
-      "const sp = await G.cmd({ k: 'place.sacred', pos: best || at(60, 0), kind: 'spring' }); await G.step(1);",
-      "await G.camera({ mode: 'surface', lat: Math.asin(c[1]) * D, lon: Math.atan2(c[0], c[2]) * D, alt: 24, pitch: 12, fov: 72, sunElevation: 9, faceSun: true, turn: 180 }); await G.frames(1);",
-      "F.fx.m.signs.hold = 2.0; const om = await G.cmd({ k: 'god.omen', settlement: s.id, kind: 'rainbow' }); await G.step(2); await G.frames(3);",
-      "const sq = await G.query('sacred', {}); return { spring: sp.msg, omen: om.msg, places: sq && sq.places && sq.places.length, bows: F.fx.m.rainbow.live, st: F.fx.m.signs.stats };"
-    ] },
-  { "name": "real-volcano-warning", "params": "scenario=lookdev&page=signs&dev=1", "size": [800, 450], "quality": "medium", "canvasOnly": true, "frames": 1,
-    "script": [
-      "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
-      "const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; const c = s.pos; const ex = [c[2], 0, -c[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el;",
-      "const v = [c[0] + ex[0] * 450 / R, c[1], c[2] + ex[2] * 450 / R]; const l = Math.hypot(...v); const vp = v.map((x) => x / l);",
-      "const r = await G.cmd({ k: 'disaster.spawn', kind: 'volcano', pos: vp }); await G.step(70); await G.frames(2);",
-      "await G.camera({ mode: 'orbit', lat: Math.asin(vp[1]) * D, lon: Math.atan2(vp[0], vp[2]) * D, dist: 520, tilt: 72, yaw: 250, fov: 55, hour: 17.5 }); await G.frames(2); F.advance(12); await G.frames(2);",
-      "const d = pv().disasters.find((x) => x.kind === 'volcano'); return { spawn: r.msg, warning: d && d.params.warning, plume: d && d.params.plume, progress: d && d.progress };"
-    ] }
+  {
+   "name": "real-prophet",
+   "params": "scenario=lookdev&page=signs&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "await G.step(1440); const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; const p = G.poi('settlement:' + s.id);",
+    "const list = (await G.query('agents', { settlement: s.id })) || []; let r = null; for (const a of list) { r = await G.cmd({ k: 'prophet.call', agent: a.id }); if (r.ok) break; } await G.step(2);",
+    "await G.frames(2); const blk = pv().agents; const pa = (pv().settlements.find((x) => x.prophet) || {}).prophet; let pi = -1; for (let i = 0; i < blk.count; i++) if ((blk.flags2 && (blk.flags2[i] & 1)) || (pa && blk.id[i] === pa.agent)) { pi = i; break; } const q = pi >= 0 ? [blk.pos[pi * 3], blk.pos[pi * 3 + 1], blk.pos[pi * 3 + 2]] : p.pos;",
+    "const la = Math.asin(q[1]) * D, lo = Math.atan2(q[0], q[2]) * D; await G.camera({ mode: 'orbit', lat: la, lon: lo, dist: 85, tilt: 52, yaw: 130, fov: 55, hour: 16 }); await G.frames(3);",
+    "const bm = F.fx.m.signs.marks.beams; const foot = [bm.pos[0], bm.pos[1], bm.pos[2]]; return { call: r && r.msg, prophet: pi, footFromCam: Math.round(Math.hypot(foot[0] - F.fx.vis.camBody.x, foot[1] - F.fx.vis.camBody.y, foot[2] - F.fx.vis.camBody.z)), st: F.fx.m.signs.stats, view: pv().settlements.find((x) => x.prophet) && pv().settlements.find((x) => x.prophet).prophet };"
+   ]
+  },
+  {
+   "name": "real-spring-omen",
+   "params": "scenario=lookdev&page=signs&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI; const W = pv().fields.get('water');",
+    "const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; const c = s.pos; const ex = [c[2], 0, -c[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el; const nx = [c[1] * ex[2], c[2] * ex[0] - c[0] * ex[2], -c[1] * ex[0]];",
+    "const at = (e, n) => { const q = [c[0] + (ex[0] * e + nx[0] * n) / R, c[1] + (nx[1] * n) / R, c[2] + (ex[2] * e + nx[2] * n) / R]; const l = Math.hypot(q[0], q[1], q[2]); return [q[0] / l, q[1] / l, q[2] / l]; };",
+    "let best = null; for (let rr = 40; rr < 1400 && !best; rr += 12) for (let a = 0; a < 64 && !best; a++) { const th = (a / 64) * Math.PI * 2; const q = at(Math.sin(th) * rr, Math.cos(th) * rr); if (W && pv().grid.sample(W, q[0], q[1], q[2]) > 0.3) best = q; }",
+    "const sp = await G.cmd({ k: 'place.sacred', pos: best || at(60, 0), kind: 'spring' }); await G.step(1);",
+    "await G.camera({ mode: 'surface', lat: Math.asin(c[1]) * D, lon: Math.atan2(c[0], c[2]) * D, alt: 24, pitch: 12, fov: 72, sunElevation: 9, faceSun: true, turn: 180 }); await G.frames(1);",
+    "F.fx.m.signs.hold = 2.0; const om = await G.cmd({ k: 'god.omen', settlement: s.id, kind: 'rainbow' }); await G.step(2); await G.frames(3);",
+    "const sq = await G.query('sacred', {}); return { spring: sp.msg, omen: om.msg, places: sq && sq.places && sq.places.length, bows: F.fx.m.rainbow.live, st: F.fx.m.signs.stats };"
+   ]
+  },
+  {
+   "name": "real-volcano-warning",
+   "params": "scenario=lookdev&page=signs&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; const pv = () => A.sim.view.planets[0]; const R = pv().params.radius; const D = 180 / Math.PI;",
+    "const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; const c = s.pos; const ex = [c[2], 0, -c[0]]; const el = Math.hypot(ex[0], ex[2]); ex[0] /= el; ex[2] /= el;",
+    "const v = [c[0] + ex[0] * 450 / R, c[1], c[2] + ex[2] * 450 / R]; const l = Math.hypot(...v); const vp = v.map((x) => x / l);",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'volcano', pos: vp }); await G.step(70); await G.frames(2);",
+    "await G.camera({ mode: 'orbit', lat: Math.asin(vp[1]) * D, lon: Math.atan2(vp[0], vp[2]) * D, dist: 520, tilt: 72, yaw: 250, fov: 55, hour: 17.5 }); await G.frames(2); F.advance(12); await G.frames(2);",
+    "const d = pv().disasters.find((x) => x.kind === 'volcano'); return { spawn: r.msg, warning: d && d.params.warning, plume: d && d.params.plume, progress: d && d.progress };"
+   ]
+  },
+  {
+   "name": "real-meteor-warning",
+   "params": "scenario=lookdev&page=signs&dev=1",
+   "size": [
+    800,
+    450
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "const A = window.__GENESIS_APP__, F = window.__GENESIS_FX__; F.fx.m.signs.hold = null; const pv = () => A.sim.view.planets[0]; const D = 180 / Math.PI;",
+    "for (const x of pv().disasters) await G.cmd({ k: 'disaster.cancel', id: x.id });",
+    "const s = pv().settlements.slice().sort((a, b) => b.population - a.population)[0]; const c = s.pos;",
+    "await G.camera({ mode: 'orbit', lat: Math.asin(c[1]) * D, lon: Math.atan2(c[0], c[2]) * D, dist: 900, tilt: 66, yaw: 70, fov: 62, hour: 19.2 }); await G.frames(1);",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'meteor', pos: c }); await G.step(4); await G.frames(2); F.advance(2); await G.frames(2);",
+    "const d = pv().disasters.find((x) => x.kind === 'meteor'); return { spawn: r.msg, warning: d && d.params.warning, alt: d && d.params.alt, R: pv().params.radius };"
+   ]
+  }
  ]
 }

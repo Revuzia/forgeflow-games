@@ -78,9 +78,9 @@ for (const [label, speed, simRate] of [['10x', 10, 10 * TICKS_PER_SECOND_1X], ['
 
 // LIVING PACE hook H1 (the client team's): at the new 1x — ONE tick per real second — the render clock's 0.6 s cap on
 // extrapolation past the last snapshot (src/client/worldview.ts update) is 0.6 of a tick, so the integer snapshot ticks
-// show as a sawtooth: measured 32.8 % per-frame rate jitter (target < 20 %). Kept as a todo here so it shows in every
-// run until src/client/worldview.ts paces its extrapolation by time, not ticks; then drop the todo.
-test('render clock at 1x (1 tick per real second): smooth, monotonic, close behind the sim', { todo: 'hook H1: src/client/worldview.ts at 1 tick per second' }, () => {
+// show as a sawtooth: measured 32.8 % per-frame rate jitter (target < 20 %). It was a todo until the client team's
+// worldview.ts paced its extrapolation by time (it passes since; the integrator dropped the todo, 2026-10-20).
+test('render clock at 1x (1 tick per real second): smooth, monotonic, close behind the sim', () => {
   const r = run(1, 1 * TICKS_PER_SECOND_1X, 8);
   assert.equal(r.backward, 0, 'the clock ran backwards');
   assert.ok(Math.abs(r.meanRate - TICKS_PER_SECOND_1X) / TICKS_PER_SECOND_1X < 0.03, `mean rate ${r.meanRate.toFixed(2)} vs sim ${TICKS_PER_SECOND_1X}`);

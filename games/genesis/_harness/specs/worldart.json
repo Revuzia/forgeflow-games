@@ -1,0 +1,21 @@
+{
+  "shots": [
+    { "name": "wb-orbit-low", "params": "source=lookdev", "size": [960, 540], "quality": "low", "canvasOnly": true, "frames": 10,
+      "camera": { "mode": "orbit", "lat": 12, "lon": -30, "dist": 7600, "hour": 13 } },
+    { "name": "wb-orbit-med", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true, "frames": 10,
+      "camera": { "mode": "orbit", "lat": 12, "lon": -30, "dist": 7600, "hour": 13 } },
+    { "name": "wb-orbit-high", "params": "source=lookdev", "size": [960, 540], "quality": "high", "canvasOnly": true, "frames": 8,
+      "camera": { "mode": "orbit", "lat": 12, "lon": -30, "dist": 7600, "hour": 13 } },
+    { "name": "wb-limb-dusk", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true, "frames": 10,
+      "camera": { "mode": "orbit", "lat": 8, "lon": 20, "dist": 7400, "hour": 18.6 } },
+    { "name": "wb-hurricane", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true, "frames": 10,
+      "commands": [ { "k": "lookdev.weather", "kind": "hurricane", "lat": 14, "lon": -40, "radius": 1000, "intensity": 1 } ],
+      "wait": 1,
+      "camera": { "mode": "orbit", "lat": 14, "lon": -40, "dist": 7000, "hour": 13 } },
+    { "name": "wb-coast-2km", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true, "frames": 10,
+      "commands": [ { "k": "lookdev.clear" }, { "k": "weather.clear" } ],
+      "camera": { "mode": "orbit", "poi": "coast", "dist": 2000, "tilt": 45, "hour": 11 } },
+    { "name": "wb-lakes-4km", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true, "frames": 10,
+      "camera": { "mode": "orbit", "poi": "valley", "dist": 4200, "tilt": 55, "hour": 10 } }
+  ]
+}

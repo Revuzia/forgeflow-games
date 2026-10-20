@@ -1,0 +1,8 @@
+{
+  "shots": [
+    { "name": "wl-lakes-4km", "params": "source=lookdev", "size": [640, 360], "quality": "medium", "canvasOnly": true, "frames": 6,
+      "camera": { "mode": "orbit", "poi": "valley", "dist": 4200, "tilt": 55, "hour": 10 } },
+    { "name": "wl-lakes-grazing", "params": "source=lookdev", "size": [640, 360], "quality": "medium", "canvasOnly": true, "frames": 6,
+      "camera": { "mode": "orbit", "poi": "valley", "dist": 2600, "tilt": 78, "hour": 10 } }
+  ]
+}

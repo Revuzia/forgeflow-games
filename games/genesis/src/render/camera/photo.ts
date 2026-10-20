@@ -347,8 +347,10 @@ export function capturePhoto(R: PhotoRenderer, view: WorldView, pose: CameraPose
     q.maxDpr = Math.max(1, q.maxDpr);
     R.resize(W, H, 1);
     R.cut();
-    // (with depth of field on, at least 6: the lens's temporal resolve averages its per-frame rotations into smooth discs)
-    const n = Math.max(PHOTO.on && PHOTO.lens.blur > 0.001 ? 6 : 1, Math.min(8, o.frames ?? 3));
+    // (with depth of field on, at least 12: the cut above holds the lens's temporal resolve off for its first 4 frames —
+    // the exposure, the clouds and the terrain are still converging there — and the resolve then averages 8 frames of
+    // per-frame disc rotations into smooth bokeh; at 6 it averaged only 2 and the picture kept the gather's grain)
+    const n = Math.max(PHOTO.on && PHOTO.lens.blur > 0.001 ? 12 : 1, Math.min(8, o.frames ?? 3));
     for (let i = 0; i < n; i++) R.render(view, pose, 1 / 60, time + i / 60);
     url = R.canvas.toDataURL('image/png');
   } finally {

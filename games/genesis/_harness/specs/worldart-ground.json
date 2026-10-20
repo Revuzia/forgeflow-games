@@ -1,0 +1,211 @@
+{
+ "shots": [
+  {
+   "name": "wg-meadow-50-low",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 4,
+   "camera": {
+    "mode": "orbit",
+    "poi": "homestead",
+    "dist": 50,
+    "tilt": 66,
+    "hour": 17.3
+   }
+  },
+  {
+   "name": "wg-meadow-160-low",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 4,
+   "camera": {
+    "mode": "orbit",
+    "poi": "homestead",
+    "dist": 160,
+    "tilt": 76,
+    "hour": 17.3
+   }
+  },
+  {
+   "name": "wg-cliff",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 4,
+   "camera": {
+    "mode": "orbit",
+    "poi": "valley",
+    "dist": 110,
+    "tilt": 62,
+    "turn": 60,
+    "hour": 15
+   }
+  },
+  {
+   "name": "wg-ore-copper",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 4,
+   "commands": [
+    {
+     "k": "lookdev.field",
+     "field": "oreType",
+     "pos": "$poi:peak",
+     "offset": [
+      0,
+      -260
+     ],
+     "radius": 2500,
+     "value": 3
+    },
+    {
+     "k": "lookdev.field",
+     "field": "ore",
+     "pos": "$poi:peak",
+     "offset": [
+      0,
+      -260
+     ],
+     "radius": 170,
+     "value": 1.0
+    }
+   ],
+   "wait": 1,
+   "script": [
+    "const p = G.poi('peak'); const D = 180 / Math.PI; await G.camera({ mode: 'orbit', lat: p.lat - (260 / 3000) * D, lon: p.lon, dist: 150, tilt: 50, hour: 10 });"
+   ]
+  },
+  {
+   "name": "wg-snow-dust",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 4,
+   "commands": [
+    {
+     "k": "lookdev.field",
+     "field": "ore",
+     "pos": "$poi:homestead",
+     "radius": 400,
+     "value": 0
+    },
+    {
+     "k": "lookdev.field",
+     "field": "snow",
+     "pos": "$poi:homestead",
+     "radius": 400,
+     "value": 0.035
+    }
+   ],
+   "wait": 1,
+   "camera": {
+    "mode": "orbit",
+    "poi": "homestead",
+    "dist": 45,
+    "tilt": 55,
+    "hour": 10
+   }
+  },
+  {
+   "name": "wg-lava-day",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 4,
+   "commands": [
+    {
+     "k": "lookdev.field",
+     "field": "snow",
+     "pos": "$poi:homestead",
+     "radius": 600,
+     "value": 0
+    },
+    {
+     "k": "lookdev.field",
+     "field": "lava",
+     "pos": "$poi:homestead",
+     "radius": 130,
+     "value": 1.6
+    },
+    {
+     "k": "lookdev.field",
+     "field": "lava",
+     "pos": "$poi:homestead",
+     "radius": 60,
+     "value": 3.0
+    }
+   ],
+   "wait": 1,
+   "camera": {
+    "mode": "orbit",
+    "poi": "homestead",
+    "dist": 85,
+    "tilt": 58,
+    "hour": 11
+   }
+  },
+  {
+   "name": "wg-lava-night",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 4,
+   "camera": {
+    "mode": "orbit",
+    "poi": "homestead",
+    "dist": 120,
+    "tilt": 55,
+    "hour": 23
+   }
+  },
+  {
+   "name": "wg-lakes-4km",
+   "params": "source=lookdev&dev=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 6,
+   "camera": {
+    "mode": "orbit",
+    "poi": "valley",
+    "dist": 4200,
+    "tilt": 55,
+    "hour": 10
+   }
+  }
+ ]
+}

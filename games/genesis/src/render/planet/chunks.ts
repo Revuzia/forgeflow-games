@@ -287,6 +287,8 @@ export interface ChunkFieldSource {
   grad: ArrayLike<number> | null;
   waterLevel: Float32Array;
   waterDepth: Float32Array;
+  /** molten lava depth per cell (m): the terrain mesh stands on it (terrainmat VERT_MAIN), so the bounds do too */
+  lava?: ArrayLike<number> | null;
   geomVersion: number;
 }
 
@@ -393,6 +395,7 @@ export class ChunkLOD {
     const s = this.fields.surface;
     const wl = this.fields.waterLevel, wd = this.fields.waterDepth;
     const G = this.fields.grad;
+    const lv = this.fields.lava ?? null;
     let lo = Infinity, hi = -Infinity, water = false, g2 = 0;
     for (let k = 0; k < cells.length; k++) {
       const c = cells[k];
@@ -400,6 +403,8 @@ export class ChunkLOD {
       if (G) { const m = G[c * 4] * G[c * 4] + G[c * 4 + 1] * G[c * 4 + 1] + G[c * 4 + 2] * G[c * 4 + 2]; if (m > g2) g2 = m; }
       if (h < lo) lo = h;
       if (h > hi) hi = h;
+      // (a flow stands on the ground: its top bounds the patch too)
+      if (lv && lv[c] > 0 && h + lv[c] > hi) hi = h + lv[c];
       if (wd[c] > 0.02 || wl[c] > h - 0.5) {
         water = true;
         if (wl[c] > hi) hi = wl[c];

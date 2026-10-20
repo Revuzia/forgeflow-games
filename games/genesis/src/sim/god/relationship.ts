@@ -229,15 +229,21 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
     const t = prophetTask(x, s, st, night, pressing);
     if (t) return t;
   }
-  // evening worship at dusk: attendance ≈ 0.5 faith + 0.3 loyalty
+  // evening worship at dusk: attendance ≈ 0.5 faith + 0.3 loyalty — once an evening each, at their first decision from
+  // just before sunset to the end of dusk (integration, 2026-10-20: the old window was the 25 minutes of dusk itself, and
+  // only 4–6 of a town's 23 adults decided in it — the rest were at work or on the way home — so 4 % of adults came
+  // where the formula asks 18 %; the infants, idle and deciding every few minutes, had made up the town's worship)
   if (pressing < 1 && A.task[s] !== TASK.worship && !(A.flags[s] & AgentFlag.child && hashFloat(A.id[s], 0xc1d) < 0.5) && !babe) {
     const el = sunElevation(u, x.p, x.tick, st.pos);
-    if (el > -0.07 && el < 0.03 && sunElevation(u, x.p, x.tick - 20, st.pos) > el) {
+    if (el > VESPERS_LOW && el < VESPERS_HIGH && sunElevation(u, x.p, x.tick - 20, st.pos) > el) {
+      const r = srel(u, x.p.id, st.id);
+      if (!r.vespers || x.tick - r.vespers.t > x.day / 2) r.vespers = { t: x.tick, went: [] };
+      const ev = r.vespers;
       const attend = Math.min(1, 0.5 * faith + 0.3 * A.loyalty[i] + 0.15 * piety * faith);
-      const dayIdx = Math.floor(x.tick / x.day);
-      if (hashFloat(A.id[s], dayIdx, 0xe7e5) < attend) {
+      if (!ev.went.includes(A.id[s]) && hashFloat(A.id[s], ev.t, 0xe7e5) < attend) {
+        ev.went.push(A.id[s]);
         const place = worshipPlace(x, st);
-        return { kind: TASK.worship, goal: spotInCell(x.p, place.cell, A.id[s], 0xe7e6, [0, 0, 0]), goalCell: place.cell, work: 30 + Math.round(30 * hashFloat(A.id[s], dayIdx, 0xe7e7)), target: place.id };
+        return { kind: TASK.worship, goal: spotInCell(x.p, place.cell, A.id[s], 0xe7e6, [0, 0, 0]), goalCell: place.cell, work: 30 + Math.round(30 * hashFloat(A.id[s], ev.t, 0xe7e7)), target: place.id };
       }
     }
   }
@@ -275,6 +281,8 @@ function godsFeast(x: PCtx, st: Settlement): void {
 export const PRAY_K = 3;
 /** the most prayer can weigh (work is 0.55–0.9, a hungry body's meal more) */
 export const PRAY_CAP = 0.65;
+/** the evening worship window: the sun's elevation (rad), sinking, from just before sunset to the end of dusk */
+export const VESPERS_HIGH = 0.06, VESPERS_LOW = -0.25;
 /** the age (years) from which a child prays */
 export const PRAY_AGE = 4;
 

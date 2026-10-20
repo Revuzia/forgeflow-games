@@ -1,0 +1,16 @@
+{
+  "shots": [
+    { "name": "wr2-rock-peak-bare", "params": "source=lookdev&dev=1", "size": [640, 360], "quality": "high", "canvasOnly": true, "frames": 4,
+      "commands": [
+        { "k": "lookdev.field", "field": "snow", "pos": "$poi:peak", "radius": 420, "value": 0 },
+        { "k": "lookdev.field", "field": "soil", "pos": "$poi:peak", "radius": 420, "value": 0 },
+        { "k": "lookdev.field", "field": "grass", "pos": "$poi:peak", "radius": 420, "value": 0 },
+        { "k": "lookdev.field", "field": "shrub", "pos": "$poi:peak", "radius": 420, "value": 0 },
+        { "k": "lookdev.field", "field": "tree", "pos": "$poi:peak", "radius": 420, "value": 0 },
+        { "k": "lookdev.field", "field": "ice", "pos": "$poi:peak", "radius": 420, "value": 0 } ],
+      "wait": 1,
+      "camera": { "mode": "orbit", "poi": "peak", "dist": 130, "tilt": 50, "hour": 15 } },
+    { "name": "wr2-rock-peak-far", "params": "source=lookdev&dev=1", "size": [640, 360], "quality": "high", "canvasOnly": true, "frames": 4,
+      "camera": { "mode": "orbit", "poi": "peak", "dist": 700, "tilt": 45, "hour": 15 } }
+  ]
+}

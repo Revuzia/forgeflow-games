@@ -18,9 +18,10 @@
 //   moments          an omen read in a town (a ring of light spreading through it — warm where they read favour, a
 //                    cold violet where they read anger), a lightning strike made a sign (the struck place left glowing,
 //                    light lingering over it), a prophet called (a column of light coming down onto them), a prophecy
-//                    fulfilled, a place hallowed
+//                    fulfilled, a place hallowed, a beast taken for holy, a prophet's death (their thread lifting away)
 // Data: the agents' `flags2` (AgentFlag2.prophet / called), SettlementView.prophet / .sacred, the sim's events
-// (sacred.place, omen, lightning with data.omen, prophet.called / .fulfilled) and the `sacred` query for the places
+// (sacred.place, sacred.animal, omen, lightning with data.omen, prophet.called / .fulfilled / .died) and the `sacred`
+// query for the places
 // that were holy before this view was made (polled now and then: the snapshot does not carry them).
 
 import { Group, Vector3, type IUniform } from 'three';
@@ -72,6 +73,7 @@ export const PLACE_LOOK: Record<string, { col: [number, number, number]; ring: n
 const PROPHET_COL: [number, number, number] = [1.0, 0.8, 0.46];
 const FAVOUR_COL: [number, number, number] = [1.0, 0.82, 0.48];
 const ANGER_COL: [number, number, number] = [0.62, 0.52, 1.0];
+const ANIMAL_COL: [number, number, number] = [1.0, 0.9, 0.62];
 
 /** the animal content index of a sacred animal's id (its own id, or an old id it replaced: `aliases`) — -1 none */
 export function animalIndex(id: string | undefined): number {
@@ -91,7 +93,7 @@ export function markedPeople(flags2: ArrayLike<number> | undefined, count: numbe
 }
 
 interface Moment {
-  kind: 'hallowed' | 'omen' | 'strike' | 'called' | 'fulfilled';
+  kind: 'hallowed' | 'omen' | 'strike' | 'called' | 'fulfilled' | 'passing';
   p: Vector3;
   t0: number;
   dur: number;
@@ -152,6 +154,16 @@ export class SignsLayer {
       }
       case 'prophet.fulfilled': {
         if (p) this.moments.push({ kind: 'fulfilled', p, t0: real, dur: 5, col: FAVOUR_COL, agent: -1, size: 160 });
+        break;
+      }
+      case 'sacred.animal': {
+        // a town takes a beast for holy: a soft ring through it, in the sacred animal's own light
+        if (p) this.moments.push({ kind: 'fulfilled', p, t0: real, dur: 4.5, col: ANIMAL_COL, agent: -1, size: 120 });
+        break;
+      }
+      case 'prophet.died': {
+        // a prophet dies: their thread of light lifts away from the ground and fades into the sky
+        if (p) this.moments.push({ kind: 'passing', p, t0: real, dur: 6, col: PROPHET_COL, agent: typeof d.agent === 'number' ? d.agent : -1, size: 3 });
         break;
       }
     }
@@ -245,7 +257,7 @@ export class SignsLayer {
         f.decals.add(ring);
       }
       // its beacon: faint up close, a thread to find it by from afar
-      const kb = 0.1 + 0.8 * smooth(150, 700, dist);
+      const kb = 0.12 + 0.78 * smooth(90, 520, dist);
       M.beams.add(_c.copy(g).addScaledVector(up, look.lift * 0.3), up, Math.max(30, Math.min(900, dist * 0.32)), 0.18, cr, cg, cb, kb, cam, pl.id * 1.31);
       if (pl.kind === 'spring') {
         // rings of light spreading on the water, one after another (drawn after the water: a ground decal is under it)
@@ -262,12 +274,14 @@ export class SignsLayer {
         // soft lights drifting among the trees, high in the crowns (not a light on the floor: seen through the leaves
         // a lit floor is only a scatter of bright holes)
         const e = tangent(up, _e), n = _n.crossVectors(up, e);
-        for (let j = 0; j < 7; j++) {
+        // (a dozen, each a few pixels at any distance: from the god's height the grove reads as a scatter of lights
+        // in one wood, not single lit pixels)
+        for (let j = 0; j < 12; j++) {
           const a = fxHash(pl.id, j) * Math.PI * 2 + f.real * 0.05 * (j % 2 ? 1 : -1);
-          const rr = look.ring * (0.15 + 0.55 * fxHash(pl.id, j, 1));
-          const hh = look.lift * (0.45 + 0.5 * fxHash(pl.id, j, 2)) + Math.sin(f.real * 0.4 + j * 1.9) * 0.8;
+          const rr = look.ring * (0.12 + 0.6 * fxHash(pl.id, j, 1));
+          const hh = look.lift * (0.5 + 0.55 * fxHash(pl.id, j, 2)) + Math.sin(f.real * 0.4 + j * 1.9) * 0.8;
           const q = _h.copy(g).addScaledVector(e, Math.cos(a) * rr).addScaledVector(n, Math.sin(a) * rr).addScaledVector(up, hh);
-          M.glints.add(q.x, q.y, q.z, Math.max(0.7, dist * 0.004), cr, cg, cb, 0.5 + 0.2 * Math.sin(f.real * 0.8 + j * 2.3));
+          M.glints.add(q.x, q.y, q.z, Math.max(0.8, dist * 0.0075), cr, cg, cb, 0.55 + 0.2 * Math.sin(f.real * 0.8 + j * 2.3));
         }
       }
       // motes rising there while the camera is near enough to see them
@@ -334,9 +348,9 @@ export class SignsLayer {
       const back = _c.copy(u).multiplyScalar(g + size * 1.05 + 0.25);
       const tw = 0.5 + 0.5 * Math.sin(f.real * 1.1 + fxHash(M.id[i], 3) * 6.28);
       const k = (0.3 + 0.25 * tw) * (1 - smooth(300, 600, d));
-      this.marks.glints.add(back.x, back.y, back.z, Math.max(0.3, d * 0.0045), 1.0, 0.9, 0.62, k);
+      this.marks.glints.add(back.x, back.y, back.z, Math.max(0.3, d * 0.0045), ANIMAL_COL[0], ANIMAL_COL[1], ANIMAL_COL[2], k);
       const L = decal(DECAL.light, [u.x * g, u.y * g, u.z * g], size * 4 + 2);
-      L.cr = 1; L.cg = 0.9; L.cb = 0.62; L.p0 = size * 4 + 2; L.p1 = 36 * k * (size + 0.5); L.p2 = size + 1.8; L.p3 = 1;
+      L.cr = ANIMAL_COL[0]; L.cg = ANIMAL_COL[1]; L.cb = ANIMAL_COL[2]; L.p0 = size * 4 + 2; L.p1 = 36 * k * (size + 0.5); L.p2 = size + 1.8; L.p3 = 1;
       f.decals.add(L);
       this.stats.animals++;
     }
@@ -390,6 +404,13 @@ export class SignsLayer {
         const L = decal(DECAL.light, [_g.x, _g.y, _g.z], 14);
         L.cr = cr; L.cg = cg; L.cb = cb; L.p0 = 14; L.p1 = 260 * fade * down; L.p2 = 6; L.p3 = 2;
         f.decals.add(L);
+      } else if (m.kind === 'passing') {
+        // the thread lifts off the ground where they fell and rises away, thinning
+        const top = Math.max(80, Math.min(700, dist * 0.5));
+        const rise = smooth(0.1, 1, k);
+        const foot = _c.copy(_g).addScaledVector(up, top * rise * 0.8 + 1.5);
+        this.marks.beams.add(foot, up, top * (1 - 0.6 * rise), 0.25, cr, cg, cb, 1.1 * fade, cam, m.t0);
+        this.marks.glints.add(foot.x, foot.y, foot.z, Math.max(0.6, dist * 0.006), cr, cg, cb, 0.8 * fade);
       }
     }
   }

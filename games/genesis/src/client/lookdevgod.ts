@@ -148,11 +148,15 @@ export class LookdevGod {
         if (!this.hand?.held) return { ok: false, msg: 'The hand holds nothing.' };
         const held = this.hand.held;
         const v = Array.isArray(c.vel) ? (c.vel as number[]) : null;
-        if (c.k !== 'hand.place' && held.kind !== 'agent') {
+        // (a person is hurled too — the sim flies them as a projectile whose `what` is their agent id; let go or set down,
+        // they are only put back on their feet)
+        if (c.k !== 'hand.place' && (held.kind !== 'agent' || c.k === 'hand.throw')) {
           const vel: [number, number, number] = v ? [v[0], v[1], v[2]] : [0, 0, 0];
           if (!v && c.k === 'hand.throw') { const d = bearingDir(this.hand.pos, 0); const up = this.hand.pos; for (let i = 0; i < 3; i++) vel[i] = d[i] * 25 + up[i] * 18; }
-          this.projectiles.push({ view: { id: this.nextId++, planet: lp.snap.id, kind: held.kind, what: held.id, content: '', pos: [...this.hand.pos], alt: this.hand.alt, vel }, t0: tick, pos0: [...this.hand.pos], alt0: this.hand.alt, vel0: vel });
-          this.events.push({ t: 'thrown', tick, planet: lp.snap.id, pos: [...this.hand.pos], a: Math.hypot(vel[0], vel[1], vel[2]), b: this.hand.alt, data: { payload: held.kind, vel } });
+          const pid = this.nextId++;
+          this.projectiles.push({ view: { id: pid, planet: lp.snap.id, kind: held.kind, what: held.id, content: '', pos: [...this.hand.pos], alt: this.hand.alt, vel }, t0: tick, pos0: [...this.hand.pos], alt0: this.hand.alt, vel0: vel });
+          // (as the sim's god/projectiles.ts launch: the event names the projectile, whose snapshot view says what flies)
+          this.events.push({ t: 'thrown', tick, planet: lp.snap.id, pos: [...this.hand.pos], a: Math.hypot(vel[0], vel[1], vel[2]), b: this.hand.alt, data: { id: pid, payload: held.kind, vel } });
         }
         this.hand.held = null;
         this.hand.pose = 'open';

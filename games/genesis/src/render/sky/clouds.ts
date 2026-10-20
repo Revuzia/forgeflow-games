@@ -352,16 +352,25 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
       float cellsW = textureLod(uCloudDetail, pb * (1.0 / 2100.0) + vec3(0.41, 0.13, 0.77), 0.0).r;
       anvil = max(anvil, K.x * (1.0 - smoothstep(0.35, 0.85, ang)) * smoothstep(0.62, 0.82, cellsW + 0.3 * core));
     } else {
-      // tropical cyclone: a smooth bright central dense overcast with an eye, spiral rain bands outside it — a
-      // principal band and two secondary ones, wide near the overcast, narrowing and breaking into cells outward
-      float arms = 0.5 + 0.5 * sin(4.0 * log(ang + 0.06) * K.y + 2.0 * th);
-      float arms1 = 0.5 + 0.5 * sin(3.0 * log(ang + 0.06) * K.y + th + 1.1);
-      // (the principal band a little stronger than the secondary pair; clear lanes between them)
-      float armsA = max(arms, arms1 * 0.8);
-      float reach = 1.0 - smoothstep(0.85, 1.35, ang);
-      float cdo = 1.0 - smoothstep(0.3, 0.52, ang);
-      float outer = smoothstep(0.55, 1.2, ang);
-      float bandK = smoothstep(mix(0.3, 0.55, outer), mix(0.85, 0.95, outer), armsA) * mix(1.0, 0.5 + 0.7 * mask, outer);
+      // tropical cyclone: a bright central dense overcast with an eye, spiral rain bands outside it — a principal band
+      // and two secondary ones, wide near the overcast, narrowing and breaking into cells outward. The spirals' phase
+      // wanders with the synoptic warp and the cluster lobes, so a band swells, pinches and frays instead of running
+      // as a clean ribbon (a perfect logarithmic spiral of uniform width read as a painted '6', a weather-map icon),
+      // and the overcast's edge is ragged where the bands leave it
+      // (a fifth of the bands' spacing at most: more and the spiral itself dissolved into blotches)
+      float wob = 1.0 * warp.x + 0.8 * (lobes - 0.6);
+      // three bands wound ~1.5 turns (a two-armed spiral and a single one at a different pitch read as one fat arm
+      // round the overcast: a '6')
+      float arms = 0.5 + 0.5 * sin(5.5 * log(ang + 0.06) * K.y + 3.0 * th + wob);
+      float arms1 = 0.5 + 0.5 * sin(4.0 * log(ang + 0.06) * K.y + th + 1.1 + wob * 0.8);
+      // (the principal band a little stronger than the secondary ones; clear lanes between them)
+      float armsA = max(arms, arms1 * 0.85);
+      float reach = 1.0 - smoothstep(0.85, 1.35, ang + 0.15 * (lobes - 0.6));
+      float cdo = 1.0 - smoothstep(0.26, 0.44, ang + 0.12 * (lobes - 0.6) + 0.08 * warp.y);
+      float outer = smoothstep(0.5, 1.2, ang);
+      // outward the bands break into convective cells (the cluster mask and a finer cell pattern)
+      float cellsB = textureLod(uCloudDetail, pb * (1.0 / 1500.0) + vec3(0.29, 0.61, 0.83), 0.0).r;
+      float bandK = smoothstep(mix(0.48, 0.66, outer), mix(0.88, 0.97, outer), armsA) * mix(1.0, smoothstep(0.35, 0.75, 0.55 * mask + 0.45 * cellsB + 0.15), outer);
       float m = mix(0.06 + 1.25 * bandK, 1.0, cdo);
       float cb = mix(cov, cov0, K.x * reach);
       cov = mix(cov, clamp(max(cb, 0.35) * m * 1.25, 0.0, 1.0), reach * K.x);
@@ -375,6 +384,10 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
       // draws its texture from orbit)
       float striae = 0.5 + 0.5 * sin((th + K.y * 3.2 * log(ang + 0.04)) * 7.0 + 3.0 * warp.y);
       anvil = max(anvil, K.x * reach * cdo * eye * (0.62 + 0.38 * striae));
+      // ... and its cirrus outflow spreads past the overcast as a thin veil, combed into the same spiral streaks
+      // (translucent over the bands and the sea between them: the storm's outer edge is a haze, not a cut-out)
+      float veil = (1.0 - smoothstep(0.45, 1.05, ang + 0.1 * (lobes - 0.6))) * (1.0 - cdo) * smoothstep(0.35, 0.8, striae);
+      anvil = max(anvil, K.x * reach * eye * 0.3 * veil);
       cov *= mix(1.0, eye, reach * K.x);
     }
   }
@@ -412,10 +425,18 @@ float cloudField(vec3 pb, float hf, float cov, float storm, float ctype, float a
   shape = mix(0.45 + 0.55 * shape, shape, smoothstep(0.1, 0.55, ctype));
   // a cumulonimbus is a filled column (lumpy only at its edges)
   shape = mix(shape, 0.5 + 0.5 * shape, colm);
-  // seen from far away (orbit) the single heaps merge into the weather's own shapes — clusters, streets, bands and
-  // their fractal lobes — as soft decks: on a world this small one heap is a twentieth of the disc, and a field of
-  // separate round heaps read as popcorn (the threshold's ramp widens with cl_far too: soft, translucent margins)
-  shape = mix(shape, 0.45 + 0.3 * shape, cl_far * 0.7);
+  // Seen from far away (orbit) one heap is a twentieth of this small world's disc, and a field of separate round heaps
+  // read as popcorn. Out there the heaps merge into larger masses — a lower octave of the same noise (~2.8 km tile:
+  // cells of 200–700 m) carries the shape and the heaps ride on it as lumps — so the weather's own shapes (clusters,
+  // streets, bands and their lobes) read as soft volumes with knobbly tops, not as scattered cotton balls. The two
+  // octaves are re-spread to a uniform 0..1 (their weighted sum is triangular), so the coverage still means the share
+  // of the sky. (The threshold's ramp widens with cl_far too, and the far erosion in cloudDetailed frays the margins.)
+  if (cl_far > 0.0) {
+    float nb = cl_tex(uCloudBase, q * 0.43 + vec3(0.19, 0.53, 0.71), 128.0 * 0.43 * uCloudScale.x).r;
+    float sf = 0.6 * nb + 0.4 * shape;
+    sf = clamp(0.5 + (sf - 0.5) * 1.4, 0.0, 1.0);
+    shape = mix(shape, sf, cl_far * 0.85);
+  }
   // cauliflower: billows of ~75 / 150 m (the base texture's Worley octaves) push a heap's surface in and out, a little
   // stronger toward the top (one that only started above the base left a wider skirt under a narrower waist:
   // mushroom-shaped heaps); decks stay smooth
@@ -460,7 +481,17 @@ float cloudDetailed(vec3 pb, float hf, float cov, float storm, float ctype, floa
     float d2 = cl_tex(uCloudDetail, dq * 3.31 + vec3(0.37, 0.71, 0.13), 64.0 * 3.31 * uCloudScale.y).g;
     vv -= mix(d2, 1.0 - d2, bill) * 0.07 * nearK;
   }
-  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.3, cl_far)) : 0.0;
+  // far away the detail above is finer than a pixel (it averages to its mean): a coarse octave of it (~390 m tile, 6 m
+  // texels) frays the margins into lobes and wisps a few pixels across and dents the tops — the cauliflower of a
+  // whole cloud mass seen from orbit, instead of a smooth blob with a blurred outline
+  if (cl_far > 0.0) {
+    float d3 = cl_tex(uCloudDetail, dq * 0.14 + vec3(0.63, 0.17, 0.41), 64.0 * 0.14 * uCloudScale.y).r;
+    vv -= mix(d3, 1.0 - d3, bill) * 0.17 * cl_far;
+  }
+  float c = v > 0.0 ? cl_cover(vv, lo, mix(0.03, 0.16, cl_far)) : 0.0;
+  // ... and its thin parts are thin: density grows with the square of the cover toward the margins, so a far cloud's
+  // fringe is translucent veil over the ground (τ ≈ 1 a few pixels in) and only its core is opaque white
+  c *= mix(1.0, c, cl_far * 0.6);
   if (an > 0.0) {
     // the anvil: smooth, fibrous, lightly eroded
     float ca = clamp(an - (1.0 - df) * 0.3, 0.0, 1.0) * 0.5;
@@ -1003,12 +1034,12 @@ uniform float uCirrusR;
 uniform float uFar;
 uniform mat4 uPrevBodyToClip;
 // (additive, quality pass) the coarse interleaves (k = 3 'medium', k = 4 'low'): the spatial reconstruction is a depth-aware
-// bilinear at a blue-noise jittered position (a new rank each frame) instead of a Catmull-Rom of the sparse samples —
-// a sharp cubic of a near-binary 1/16 grid draws every sample as a rounded square, and on a slow machine whose camera
-// keeps moving the history never gets the frames to hide them. Grain that averages out, not a mosaic.
+// Gaussian of the 4×4 nearest samples (σ ≈ 0.6 sample spacing) instead of a Catmull-Rom — a sharp cubic of a
+// near-binary 1/16 grid draws every sample as a rounded square, and on a slow machine whose camera keeps moving the
+// history never gets the frames to hide them. (A bilinear at a blue-noise jittered position replaced the squares with
+// a coarse grain that a moving camera never averaged out: dithered, mottled clouds at Low.) Soft margins, no mosaic,
+// no grain; the history sharpens a still view.
 uniform float uSoftUp;
-uniform sampler2D tBlue;
-uniform float uFrameR;
 
 float zAt(ivec2 p) {
   float dz = texelFetch(tDepth, p, 0).r;
@@ -1090,12 +1121,6 @@ void main() {
   vec2 cw3 = f * f * (-0.5 + 0.5 * f);
   float wxs[4] = float[4](cw0.x, cw1.x, cw2.x, cw3.x);
   float wys[4] = float[4](cw0.y, cw1.y, cw2.y, cw3.y);
-  // (soft upsample) the jittered sampling position, in raw texels relative to qb: within ±0.5 of this pixel's own
-  vec2 qj = f;
-  if (uSoftUp > 0.5) {
-    float b1 = texelFetch(tBlue, P & 63, 0).r, b2 = texelFetch(tBlue, (P + ivec2(37, 23)) & 63, 0).r;
-    qj += vec2(fract(b1 + uFrameR * 0.618034), fract(b2 + uFrameR * 0.754878)) - 0.5;
-  }
   vec4 acc = vec4(0.0);
   float wsum = 0.0;
   vec4 m1 = vec4(0.0), m2 = vec4(0.0);
@@ -1112,15 +1137,13 @@ void main() {
     vec4 c = texelFetch(tCur, Rj, 0);
     vec4 a = texelFetch(tCurAux, Rj, 0);
     float wz = exp(-abs(a.w - z0) * 3.0);
-    // depth-aware Catmull-Rom reconstruction (soft upsample: depth-aware bilinear at the jittered position)
-    float w = uSoftUp > 0.5
-      ? max(0.0, 1.0 - abs(float(i - 1) - qj.x)) * max(0.0, 1.0 - abs(float(j - 1) - qj.y)) * (wz + 1e-4)
-      : wxs[i] * wys[j] * (wz + 1e-4);
-    acc += c * w;
-    wsum += w;
     // statistics for the clip box and the sample's cross-bilateral filter: a Gaussian over the nearest samples
     vec2 dd = vec2(float(i - 1), float(j - 1)) - f;
-    float wg = exp(-dot(dd, dd) * 0.9) * wz;
+    float wg = exp(-dot(dd, dd) * (uSoftUp > 0.5 ? 1.5 : 0.9)) * wz;
+    // depth-aware Catmull-Rom reconstruction (soft upsample: the depth-aware Gaussian itself)
+    float w = uSoftUp > 0.5 ? wg + 1e-6 : wxs[i] * wys[j] * (wz + 1e-4);
+    acc += c * w;
+    wsum += w;
     vec3 y = toYCoCg(c.rgb);
     m1 += vec4(y, c.a) * wg;
     m2 += vec4(y * y, c.a * c.a) * wg;
@@ -1358,8 +1381,8 @@ export class CloudPass {
       uWorldToBody: { value: new Matrix3() }, uPlanetPos: { value: new Vector3() }, uPrevCamBody: { value: new Vector3() },
       uShell: { value: new Vector2(3180, 3420) }, uCirrusR: { value: 3528 }, uFar: { value: 2e7 },
       uPrevBodyToClip: { value: new Matrix4() }, uRg: { value: 0 }, uRt: { value: 0 },
-      // (additive, quality pass) soft upsample at the coarsest interleave
-      uSoftUp: { value: 0 }, tBlue: { value: blueNoiseTexture() }, uFrameR: { value: 0 },
+      // (additive, quality pass) the soft (Gaussian) upsample at the coarse interleaves
+      uSoftUp: { value: 0 },
     });
     this.resolveMat.glslVersion = GLSL3;
   }
@@ -1546,7 +1569,6 @@ export class CloudPass {
     r.uK.value = k;
     // (soft upsample at k = 3 too, Medium: its Catmull-Rom of a 1/9 grid stair-stepped cloud margins by 2–4 px)
     r.uSoftUp.value = k >= 3 ? 1 : 0;
-    r.uFrameR.value = i.frame % 1024;
     r.uHistValid.value = this.histValid ? 1 : 0;
     // samples per pixel the history may hold while reprojection holds (k = 1 marches every pixel every frame)
     r.uMaxN.value = k === 1 ? 8 : 12;
