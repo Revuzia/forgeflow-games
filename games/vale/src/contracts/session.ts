@@ -199,4 +199,9 @@ export interface Session {
   declineMatch?(): void;
   setPartyBots?(count: number): PartyMember[];
   playAgain?(): void;
+  /** CHANGED(SESSION), additive: the game-server link (CONTRACT §7.2); null/absent = offline build */
+  online?(): OnlineInfo | null;
 }
+
+/** the online link as the UI shows it */
+export interface OnlineInfo { status: 'connecting' | 'online' | 'offline' | 'refused'; players: number; searching: Record<string, number>; reason?: string }

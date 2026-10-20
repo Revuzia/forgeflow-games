@@ -6,6 +6,10 @@
 // Custom lobbies and practice skip search and ready check (straight to their draft). Every step
 // emits a SessionEvent ('queue' 'draft' 'loading' 'match' 'postgame' 'profile' 'error').
 //
+// ONLINE (CONTRACT §7.2): with an OnlineLink that is connected, matchmade queues go to the game server
+// (search, ready check and draft run there; the match is a LockstepMatchHost); practice and custom stay
+// local, and so does everything when the link is offline. The postgame (grants, rating, history) is booked
+// here from the match result either way.
 // Matchmaking is simulated (matchmaker.ts), every open seat is a bot, the draft runs locally
 // (draft.ts), the match runs on a LocalMatchHost (match_host.ts) the presentation pumps each frame.
 // Grants (grants.ts), ratings (ratings.ts) and purchases (economy.ts) write the profile, which is
@@ -24,7 +28,7 @@
 
 import type { CatalogT, ModeDefT, QueueDefT, RulesParamsT } from '../contracts/catalog.ts';
 import type {
-  DraftAction, DraftState, GrantSummary, Identity, MatchClient, MatchHistoryEntry, PartyMember,
+  DraftAction, DraftState, GrantSummary, Identity, MatchClient, OnlineInfo, MatchHistoryEntry, PartyMember,
   Profile, ProfileStore, QueueRequest, Session, SessionEvent, Settings,
 } from '../contracts/session.ts';
 import type { LoadoutChoice, MatchResult, MatchSetup, PlayerId } from '../contracts/sim.ts';
@@ -38,6 +42,9 @@ import { applyGrants, grantsDisabled } from './grants.ts';
 import { IdSource, randomSeed, randomToken } from './ids.ts';
 import { LocalIdentityProvider } from './identity.ts';
 import { LocalMatchHost, forfeitResult, MAX_TIME_SCALE, type BotFactory } from './match_host.ts';
+import { LockstepMatchHost } from './lockstep_host.ts';
+import type { OnlineLink } from './online_link.ts';
+import type { NetProfile, ServerMsg } from '../contracts/net.ts';
 import { Matchmaker, type QueueEvent } from './matchmaker.ts';
 import {
   HISTORY_CAP, LocalProfileStore, MemoryProfileStore, isRawStore, migrateProfile, newProfile, reconcileProfile, type ProfileContext,
@@ -79,7 +86,12 @@ export interface LocalSessionOptions {
   pregameSeconds?: number;
   /** simulated search time range in seconds (default 2–6) */
   searchSeconds?: [number, number];
+  /** the game server link: matchmade queues play online while it is connected */
+  online?: OnlineLink | null;
 }
+
+/** what the session needs from either match host */
+type HostLike = MatchClient & { start(): void; dispose(): void };
 
 /** everything about the match being assembled, from queue pop to post-game */
 interface Pending {
@@ -118,7 +130,11 @@ export class LocalSession implements Session {
   private pending: Pending | null = null;
   private draftHost: DraftHost | null = null;
   private draftTimer: (() => void) | null = null;
-  private host: LocalMatchHost | null = null;
+  private host: HostLike | null = null;
+  /** the current queue → draft → match runs on the server */
+  private onlineFlow = false;
+  /** the server's draft as you see it */
+  private netDraft: DraftState | null = null;
   private persistOk = true;
   /** matchReady() arrived before the sim was built (a listener on the first 'loading' event) */
   private readyEarly = false;
@@ -140,7 +156,11 @@ export class LocalSession implements Session {
       emit: (e) => this.onQueueEvent(e),
       matched: () => this.onMatched(),
     }, o.searchSeconds);
+    o.online?.on((m) => this.onNet(m));
   }
+
+  /** the online link's state (UI: online/offline, players, tickets per queue); null without a link */
+  online(): OnlineInfo | null { return this.opts.online ? this.opts.online.info() : null; }
 
   // ── profile plumbing ─────────────────────────────────────────────────────────────────────────
   private ctx(): ProfileContext {
@@ -250,6 +270,7 @@ export class LocalSession implements Session {
       this.beginDraft(req, queue);
       return;
     }
+    if (this.opts.online?.connected && this.partyBots.length === 0) { this.netQueue(req, queue); return; }
     const seats = queue.bots.fill === 'none' ? 1 + this.partyBots.length : modeLayout(mode).length;
     if (this.mm.start(queue.id, seats)) this._phase = 'searching';
     else this.error('queue: the matchmaker is busy');
@@ -260,10 +281,11 @@ export class LocalSession implements Session {
     this.queue(structuredClone(this.lastReq));
   }
 
-  acceptMatch(): void { if (!this.mm.accept()) this.error('accept: no ready check'); }
-  declineMatch(): void { if (!this.mm.decline()) this.error('decline: no ready check'); }
+  acceptMatch(): void { if (this.onlineFlow) { this.opts.online?.send({ t: 'accept' }); return; } if (!this.mm.accept()) this.error('accept: no ready check'); }
+  declineMatch(): void { if (this.onlineFlow) { this.opts.online?.send({ t: 'decline' }); return; } if (!this.mm.decline()) this.error('decline: no ready check'); }
 
   cancelQueue(): void {
+    if (this.onlineFlow) { this.netCancel(); return; }
     if (this._phase === 'searching' || this._phase === 'found' || (this._phase === 'accepted' && !this.draftHost)) { this.mm.cancel(); return; }
     if (this._phase === 'draft' && this.pending) {
       const free = this.pending.queue.kind === 'custom' || this.pending.queue.kind === 'practice';
@@ -433,6 +455,7 @@ export class LocalSession implements Session {
   }
 
   draft(action: DraftAction): void {
+    if (this.onlineFlow) { this.netDraftAction(action); return; }
     const host = this.draftHost, pd = this.pending;
     if (this._phase !== 'draft' || !host || !pd) { this.error('draft: no draft running'); return; }
     const r = host.act(pd.you, action);
@@ -444,7 +467,10 @@ export class LocalSession implements Session {
   }
 
   /** the current draft as you see it (null outside a draft) */
-  draftView(): DraftState | null { return this.draftHost && this.pending ? this.draftHost.view(this.pending.you) : null; }
+  draftView(): DraftState | null {
+    if (this.onlineFlow) return this.netDraft;
+    return this.draftHost && this.pending ? this.draftHost.view(this.pending.you) : null;
+  }
 
   private stopDraft(): void {
     this.draftTimer?.();
@@ -527,6 +553,8 @@ export class LocalSession implements Session {
     this.persist();
     this.host?.dispose();
     this.host = null;
+    this.onlineFlow = false;
+    this.netDraft = null;
     this._phase = 'postgame';
     this.emit({ type: 'postgame', result: structuredClone(result), grants: structuredClone(grants), you: pd.you });
   }
@@ -556,9 +584,109 @@ export class LocalSession implements Session {
   }
 
   private teardownMatch(): void {
+    if (this.host instanceof LockstepMatchHost && !this.host.ended) this.opts.online?.send({ t: 'leave' });
     this.host?.dispose();
     this.host = null;
     this.pending = null;
+  }
+
+  // ── online (CONTRACT §7.2) ──────────────────────────────────────────────────────────────────
+  /** queue on the server: it searches, runs the ready check and the draft, then streams the match */
+  private netQueue(req: QueueRequest, queue: QueueDefT): void {
+    const skins: Record<string, string[]> = {};
+    const loadouts: NetProfile['loadouts'] = {};
+    const rules = effectiveRules(findMode(this.catalog, queue.mode)!, queue);
+    for (const f of this.catalog.fighters) {
+      skins[f.id] = yourSkins(this.catalog, this.p, f.id);
+      loadouts[f.id] = sanitizeLoadout(this.catalog, rules, this.p.loadouts[f.id]);
+    }
+    const profile: NetProfile = { name: this.identity.displayName, skins, loadouts, rating: this.yourRating(queue) };
+    if (!this.opts.online?.send({ t: 'queue', req, profile })) { this.error('online: the server is not reachable'); return; }
+    this.onlineFlow = true;
+    this.netDraft = null;
+    this.pending = null;
+    this._phase = 'searching';
+    this.emit({ type: 'queue', state: 'searching', queue: queue.id, elapsed: 0 });
+  }
+
+  private netCancel(): void {
+    const link = this.opts.online;
+    if (this._phase === 'draft') {
+      // dodging an online draft: your seat is left to its timers, you take the usual lockout
+      link?.send({ t: 'leave' });
+      const queue = this.pending?.queue.id ?? this.lastReq?.queue;
+      this.onlineFlow = false; this.netDraft = null; this.pending = null; this._phase = 'idle';
+      this.emit({ type: 'queue', state: 'idle', ...(queue ? { queue } : {}), reason: 'dodged', lockout: this.mm.penalize() });
+      return;
+    }
+    if (this._phase === 'found') { link?.send({ t: 'decline' }); return; }
+    link?.send({ t: 'cancel' });
+    this.onlineFlow = false;
+    this._phase = 'idle';
+    this.emit({ type: 'queue', state: 'idle', ...(this.lastReq ? { queue: this.lastReq.queue } : {}), reason: 'cancelled' });
+  }
+
+  private netDraftAction(action: DraftAction): void {
+    if (this._phase !== 'draft' || !this.netDraft) { this.error('draft: no draft running'); return; }
+    this.opts.online?.send({ t: 'draft', a: action });
+    // your cosmetic + loadout choices stick to the profile, as offline
+    const me = this.netDraft.seats.find((s) => s.isYou);
+    if (action.a === 'skin' && me?.locked && ownsSkin(this.p, action.skin)) { equip(this.p, this.catalog, me.locked, action.skin); this.persist(); }
+    if (action.a === 'loadout' && me?.locked) { this.p.loadouts[me.locked] = { spells: [...action.loadout.spells], boons: [...action.loadout.boons] }; this.persist(); }
+  }
+
+  private onNet(m: ServerMsg): void {
+    if (!this.onlineFlow) return;
+    switch (m.t) {
+      case 'queue': {
+        const e = m.e;
+        if (e.state === 'declined' || e.state === 'idle') { this.onlineFlow = false; this.netDraft = null; }
+        this.onQueueEvent(e as QueueEvent);
+        break;
+      }
+      case 'draft': {
+        const req = this.lastReq;
+        const queue = req ? findQueue(this.catalog, req.queue) : undefined;
+        if (!req || !queue) return;
+        if (!this.pending) {
+          try { this.pending = this.planMatch(req, queue); } catch (err) { this.error(`draft: ${err instanceof Error ? err.message : String(err)}`); return; }
+        }
+        const me = m.s.seats.find((s) => s.isYou);
+        if (me) this.pending.you = me.player;
+        this.netDraft = m.s;
+        this._phase = 'draft';
+        this.emit({ type: 'draft', state: m.s });
+        break;
+      }
+      case 'loading': {
+        const pd = this.pending;
+        if (!pd) return;
+        pd.setup = m.setup;
+        pd.you = m.you;
+        this._phase = 'loading';
+        this.readyEarly = false;
+        this.emit({ type: 'loading', setup: m.setup, progress: 0 });
+        const bots = this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, m.setup) ?? null;
+        const link = this.opts.online!;
+        const host = new LockstepMatchHost(pd.simCatalog, m.setup, m.you, link, {
+          bots, autopilot: this.autopilot('match'),
+          pilot: this.autopilot('match') ? (this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, m.setup) ?? null) : null,
+          onEnd: (r) => { if (this.host === host) this.finishMatch(r, false); },
+          onForfeit: () => { if (this.host === host) this.finishMatch(forfeitResult(m.setup, host.view, m.you), true); },
+          onStall: () => { if (this.host === host) { this.error('online: the connection to the match was lost'); this.finishMatch(forfeitResult(m.setup, host.view, m.you), true); } },
+        });
+        this.host = host;
+        this.emit({ type: 'loading', setup: m.setup, progress: 1 });
+        if (this.readyEarly && this.host === host) { this.readyEarly = false; this.matchReady(); }
+        break;
+      }
+      case 'start': case 'tick': case 'end':
+        if (this.host instanceof LockstepMatchHost) this.host.receive(m);
+        break;
+      case 'error': this.error(`online: ${m.m}`); break;
+      case 'desync': this.error(`online: your game drifted from the server at tick ${m.n}`); break;
+      default: break;
+    }
   }
 
   // ── economy + profile ────────────────────────────────────────────────────────────────────────

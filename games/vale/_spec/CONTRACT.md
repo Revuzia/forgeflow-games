@@ -504,6 +504,18 @@ Semantics of `LocalSession` (`src/session/`, details in each file header):
   `_harness/fixtures/session_fixture.ts` (roles with `assign`, ranks, store, a queue per kind), driven
   by `ManualClock` + `MemoryProfileStore`. The BOTS lane is linked only in `src/session/bots_link.ts`.
 
+### §7.2 Online play (CHANGED(SESSION))
+`server/` (`npm run server`, Node 22 + `ws`) is the game server: WebSocket protocol in `src/contracts/net.ts`.
+Matchmade queues (quick, standard, ranked, co-op) go online when the client has a connected link
+(`?server=ws://…` or `VALE_CONFIG.server`); practice and custom stay local. The server runs the ready check,
+the DraftHost (each human sees their own seat's view) and the authoritative sim; matches are LOCKSTEP: every
+30 Hz tick the server broadcasts the human commands it applied, and each client steps its own copy of the
+deterministic sim (bots included) with them (`LockstepMatchHost`). Digests every 60 ticks flag drift. A
+player who leaves or drops is driven by a server-side bot. An autopilot (dev) uses its own bot factory
+instance (a factory's controllers share a team plan). Grants, rating and history are booked by the client
+from the result, as for a local match. Proof: `_harness/probe_online.ts` (BRIDGE, FRAY, RIFT co-op with 2–3
+humans; zero drift; clients and server agree on every stat).
+
 ## §8 Economy, ownership, rating (lane SESSION)
 - Currency is earned by play only (`CurrencyDef.earnedOnly`). Grants come from
   `QueueDef.grants` (win/loss base + per-minute, capped; Fray adds `grants.placement[placement-1]`)

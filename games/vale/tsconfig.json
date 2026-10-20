@@ -20,5 +20,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "tools/**/*.ts", "_harness/**/*.ts", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tools/**/*.ts", "_harness/**/*.ts", "server/**/*.ts", "vite.config.ts"]
 }

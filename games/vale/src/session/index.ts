@@ -8,6 +8,8 @@ export { LocalIdentityProvider, sanitizeName } from './identity.ts';
 export { LocalProfileStore, MemoryProfileStore, PROFILE_KEY, migrateProfile, newProfile } from './profile_store.ts';
 export { defaultSettings, applyPreset, patchSettings, VIDEO_LADDER, DEFAULT_BINDS } from './settings.ts';
 export { LocalMatchHost, forfeitResult } from './match_host.ts';
+export { LockstepMatchHost } from './lockstep_host.ts';
+export { OnlineLink, type LinkInfo, type LinkStatus } from './online_link.ts';
 export { checkInvariants } from './economy.ts';
 export { tierFor, glicko2 } from './ratings.ts';
 export { xpToNext } from './grants.ts';

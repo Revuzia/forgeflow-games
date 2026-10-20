@@ -11,6 +11,7 @@
 
 import { loadCatalog } from './catalog.ts';
 import { LocalSession } from '../session/index.ts';
+import { OnlineLink } from '../session/online_link.ts';
 import { mount, mountBootError, mountLoading } from '../ui/app.tsx';
 import type { AudioPort } from '../ui/audio_port.ts';
 
@@ -39,7 +40,12 @@ mountLoading(ui);
 loadCatalog().then(
   async (c) => {
     console.info(`[vale] catalog ${c.version} (schema ${c.schema}) from ${c.manifestUrl}`);
-    const session = new LocalSession({ catalog: c.catalog, dev, ...(autopilot !== undefined ? { autopilot } : {}) });
+    // online play: ?server=wss://… or VALE_CONFIG.server (public/config.js); without one, every queue is local
+    const serverUrl = query.get('server') ?? (window as unknown as { VALE_CONFIG?: { server?: string | null } }).VALE_CONFIG?.server ?? null;
+    let named: LocalSession | null = null;
+    const online = serverUrl ? new OnlineLink(serverUrl, c.catalog.version, () => named?.identity.displayName ?? 'Player') : null;
+    const session = new LocalSession({ catalog: c.catalog, dev, online, ...(autopilot !== undefined ? { autopilot } : {}) });
+    named = session;
     if (speed > 1 || autoflow) {
       session.on((e) => {
         if (e.type === 'match' && speed > 1) e.client.setTimeScale(speed);
