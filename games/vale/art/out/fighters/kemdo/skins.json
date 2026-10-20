@@ -1,0 +1,16 @@
+[
+  {
+    "id": "kemdo_highrim",
+    "fighter": "kemdo",
+    "model": "assets/fighters/kemdo/kemdo_highrim.glb",
+    "portrait": "assets/fighters/kemdo/kemdo_highrim_portrait.png",
+    "splash": "assets/fighters/kemdo/kemdo_highrim_splash.png"
+  },
+  {
+    "id": "kemdo_long_evening",
+    "fighter": "kemdo",
+    "model": "assets/fighters/kemdo/kemdo_long_evening.glb",
+    "portrait": "assets/fighters/kemdo/kemdo_long_evening_portrait.png",
+    "splash": "assets/fighters/kemdo/kemdo_long_evening_splash.png"
+  }
+]

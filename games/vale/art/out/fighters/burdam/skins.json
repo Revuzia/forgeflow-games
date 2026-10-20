@@ -1,0 +1,16 @@
+[
+  {
+    "id": "burdam_stillwater",
+    "fighter": "burdam",
+    "model": "assets/fighters/burdam/burdam_stillwater.glb",
+    "portrait": "assets/fighters/burdam/burdam_stillwater_portrait.png",
+    "splash": "assets/fighters/burdam/burdam_stillwater_splash.png"
+  },
+  {
+    "id": "burdam_almanac",
+    "fighter": "burdam",
+    "model": "assets/fighters/burdam/burdam_almanac.glb",
+    "portrait": "assets/fighters/burdam/burdam_almanac_portrait.png",
+    "splash": "assets/fighters/burdam/burdam_almanac_splash.png"
+  }
+]

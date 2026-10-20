@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ervet_stillwater",
+    "fighter": "ervet",
+    "model": "assets/fighters/ervet/ervet_stillwater.glb",
+    "portrait": "assets/fighters/ervet/ervet_stillwater_portrait.png",
+    "splash": "assets/fighters/ervet/ervet_stillwater_splash.png"
+  },
+  {
+    "id": "ervet_lamplit",
+    "fighter": "ervet",
+    "model": "assets/fighters/ervet/ervet_lamplit.glb",
+    "portrait": "assets/fighters/ervet/ervet_lamplit_portrait.png",
+    "splash": "assets/fighters/ervet/ervet_lamplit_splash.png"
+  }
+]

@@ -1,0 +1,241 @@
+{
+  "id": "ervet_lamplit",
+  "fighter": "ervet",
+  "skin": true,
+  "parts": {
+    "bind_torso": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "forearm.L",
+        "hand.L",
+        "forearm.R",
+        "hand.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_torso": 418,
+    "bind_arms": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_arms": 748,
+    "bind_belt": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "head",
+        "hand.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_belt": 700,
+    "bind_legs": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "toe.L",
+        "toe.R"
+      ]
+    },
+    "tris_legs": 560,
+    "bind_boots": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "thigh.R"
+      ]
+    },
+    "tris_boots": 758,
+    "tris_helm": 1200,
+    "tris_visor": 520,
+    "tris_crest": 700,
+    "tris_scarf": 1100,
+    "tris_breastplate": 800,
+    "tris_pauldron_R": 560,
+    "tris_clasp_R": 80,
+    "tris_lames_R": 900,
+    "tris_pauldron_L": 560,
+    "tris_clasp_L": 80,
+    "tris_lames_L": 900,
+    "tris_backplate": 450,
+    "tris_inlay_back": 120,
+    "tris_vambrace_R": 360,
+    "tris_hand_R": 380,
+    "tris_vambrace_L": 360,
+    "tris_hand_L": 380,
+    "tris_inlay_buckle": 78,
+    "tris_tabard": 348,
+    "tris_skirt_R": 300,
+    "tris_skirt_L": 300,
+    "tris_coat": 1900,
+    "tris_greave_R": 420,
+    "tris_greave_L": 420,
+    "tris_grip": 220,
+    "tris_guard": 430,
+    "tris_pommel": 200,
+    "tris_inlays": 160,
+    "tris_blade": 260,
+    "tris_blade_hilt": 240,
+    "tris_blade_great": 280,
+    "tris_lamp_cage": 220,
+    "tris_lamp_bead": 80,
+    "validate_ervet": "17452->17445"
+  },
+  "uv_coverage": 0.622,
+  "bake": {
+    "base": 17.7,
+    "rough_metal": 14.5,
+    "normal": 9.18,
+    "ao": 13.53,
+    "normal_fixed_px": 6894,
+    "projection": 193.31,
+    "pack_save": 193.83,
+    "total": 250.66
+  },
+  "forms": [
+    "form_base",
+    "form_hilt",
+    "form_great"
+  ],
+  "tris": 18483,
+  "mesh_top_m": 2.148,
+  "glb_bytes_raw": 2490912,
+  "optimize": {
+    "ok": true,
+    "before": 2490912,
+    "after": 1052528
+  },
+  "glb_bytes": 1052528,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ervet/ervet_lamplit.glb (1028 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ervet_lamplit_base 2048x2048 325K, ervet_lamplit_normal 512x512 45K, ervet_lamplit_orm 512x512 70K",
+      "  skinned meshes: ervet_accent(575v), ervet_lamplit(15404v), form_base(243v), form_great(280v), form_hilt(330v)",
+      "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_crossguard x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_f_1)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 18483; bind-pose bounds (three units, Y up): 1.63 x 2.15 x 0.84; facing (-0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ervet/ervet_lamplit_splash.png",
+      "portrait": "art/out/fighters/ervet/ervet_lamplit_portrait.png"
+    },
+    "seconds": {
+      "splash": 26.05,
+      "portrait": 11.44
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.636,
+        0,
+        -0.354
+      ],
+      [
+        0.752,
+        2.148,
+        0.411
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.854,
+    "accentPct": 2.45,
+    "accentTopHalfPct": 96.1,
+    "heightPx1080": 115,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/ervet/three_ervet_lamplit.png",
+    "seconds": 22.2,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.58,
+      "model": 68.57,
+      "lows_bind": 48.84,
+      "uv": 37.47,
+      "bake": 250.66,
+      "export": 0.31,
+      "optimize": 1.11,
+      "load_test": 0.27,
+      "render": 37.58,
+      "three_qa": 22.74
+    },
+    "total_s": 468.39
+  },
+  "run_ref_speed": 3.45,
+  "height_m": 2.06
+}

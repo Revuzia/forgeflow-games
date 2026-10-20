@@ -1,0 +1,270 @@
+{
+  "id": "burdam",
+  "fighter": "burdam",
+  "skin": false,
+  "parts": {
+    "bind_coat": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "neck",
+        "head",
+        "hand.L",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_coat": 2400,
+    "bind_forearms": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "shoulder.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_forearms": 898,
+    "tris_mask": 1500,
+    "tris_cowl": 1600,
+    "tris_skirt": 1450,
+    "tris_belt": 950,
+    "tris_tally": 784,
+    "tris_fist_R": 650,
+    "tris_fist_L": 650,
+    "tris_vambrace": 572,
+    "tris_strap_plate": 474,
+    "tris_shoulder_plate": 500,
+    "tris_fringe": 300,
+    "tris_tier1": 700,
+    "tris_tier2": 600,
+    "tris_tier3": 450,
+    "tris_tier4": 350,
+    "tris_trousers": 1050,
+    "tris_boots": 1150,
+    "tris_blade": 1000,
+    "tris_heel": 720,
+    "tris_gems": 240,
+    "tris_haft": 400,
+    "tris_pommel": 300,
+    "validate_burdam": "19448->19438"
+  },
+  "uv_coverage": 0.613,
+  "bake": {
+    "base": 6.76,
+    "rough_metal": 3.23,
+    "normal": 3.1,
+    "ao": 4.64,
+    "normal_fixed_px": 74534,
+    "projection": 128.76,
+    "pack_save": 130.07,
+    "total": 148.41
+  },
+  "tris": 19678,
+  "mesh_top_m": 2.157,
+  "clips": {
+    "idle": {
+      "frames": 72,
+      "duration_s": 2.4,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 24,
+      "duration_s": 0.8,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.45,
+      "stride_m": 1.38,
+      "cycle_s": 0.8
+    },
+    "attack1": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 120,
+      "duration_s": 4.0,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 2787308,
+  "optimize": {
+    "ok": true,
+    "before": 2787308,
+    "after": 1161480
+  },
+  "glb_bytes": 1161480,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam.glb (1134 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_base 2048x2048 278K, burdam_normal 512x512 43K, burdam_orm 512x512 65K",
+      "  skinned meshes: burdam(17314v), burdam_accent(134v)",
+      "  bones: 26 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:1.000s/20tr, attack2:1.333s/20tr, cast_a1:0.833s/22tr, cast_a2:1.000s/20tr, cast_a3:1.000s/20tr, cast_ult:1.500s/20tr, channel:1.333s/20tr, dash:0.667s/21tr, death:2.000s/21tr, idle:2.400s/20tr, idle_lobby:4.000s/20tr, recall:2.000s/20tr, run:0.800s/22tr, stunned:1.333s/20tr, victory:2.000s/20tr",
+      "  tracks checked: 306; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 19678; bind-pose bounds (three units, Y up): 1.41 x 2.16 x 2.00; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
+      "  run: 24 f, planted samples 6, max foot-speed error 1.6%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/burdam/splash.png",
+      "portrait": "art/out/fighters/burdam/portrait.png",
+      "icon": "art/out/fighters/burdam/icon.png",
+      "turntable": "art/renders/fighters/burdam/turntable.png"
+    },
+    "seconds": {
+      "splash": 49.43,
+      "portrait": 19.07,
+      "icon": 3.25,
+      "turntable": 14.03
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.632,
+        0,
+        -0.368
+      ],
+      [
+        0.783,
+        2.157,
+        1.629
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.849,
+    "accentPct": 1.94,
+    "accentTopHalfPct": 95.1,
+    "heightPx1080": 116,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 15,
+    "out": "art/renders/fighters/burdam/three_burdam.png",
+    "seconds": 85.1,
+    "exit": 0,
+    "clip_sheet": "art/renders/fighters/burdam/three_clips_burdam.png"
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.43,
+      "model": 13.43,
+      "lows_bind": 10.57,
+      "uv": 12.43,
+      "bake": 148.42,
+      "clips": 0.9,
+      "export": 5.99,
+      "optimize": 2.63,
+      "load_test": 0.66,
+      "render": 86.03,
+      "three_qa": 227.31,
+      "cache": 0.32
+    },
+    "total_s": 509.28
+  },
+  "run_ref_speed": 3.45,
+  "height_m": 2.15
+}

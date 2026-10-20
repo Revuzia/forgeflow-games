@@ -1,0 +1,132 @@
+{
+  "id": "hesmi_shadeprint",
+  "fighter": "hesmi",
+  "skin": true,
+  "parts": {
+    "tris_hood": 1800,
+    "tris_eyeband": 448,
+    "tris_facewrap": 648,
+    "tris_mantle": 2200,
+    "tris_pauldron_R": 500,
+    "tris_pauldron_L": 500,
+    "tris_torso": 2098,
+    "tris_belt": 650,
+    "tris_sash": 1150,
+    "tris_tunic": 1350,
+    "tris_legs": 1250,
+    "tris_shinguard_R": 320,
+    "tris_shinguard_L": 320,
+    "tris_boots": 1050,
+    "tris_forearms": 648,
+    "tris_gauntlet_R": 560,
+    "tris_gauntlet_L": 560,
+    "tris_fist_R": 430,
+    "tris_knuckle_R": 230,
+    "tris_fist_L": 430,
+    "tris_knuckle_L": 230,
+    "tris_shard_up_L": 520,
+    "tris_shard_up_R": 520,
+    "tris_shard_mid": 760,
+    "tris_shard_lo_L": 520,
+    "tris_shard_lo_R": 520,
+    "tris_brace": 420,
+    "tris_eyes": 418,
+    "tris_tips": 300,
+    "tris_eye_rings": 360,
+    "tris_shard_rims": 900,
+    "validate_hesmi": "21892->21886"
+  },
+  "uv_coverage": 0.634,
+  "bake": {
+    "base": 9.02,
+    "rough_metal": 7.19,
+    "normal": 8.4,
+    "ao": 8.73,
+    "normal_fixed_px": 19683,
+    "projection": 174.1,
+    "pack_save": 174.59,
+    "total": 209.03
+  },
+  "tris": 22604,
+  "mesh_top_m": 2.305,
+  "glb_bytes_raw": 2474272,
+  "optimize": {
+    "ok": true,
+    "before": 2474272,
+    "after": 1051436
+  },
+  "glb_bytes": 1051436,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_shadeprint.glb (1027 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_shadeprint_base 2048x2048 283K, hesmi_shadeprint_normal 512x512 38K, hesmi_shadeprint_orm 512x512 67K",
+      "  skinned meshes: hesmi_accent(370v), hesmi_shadeprint(17748v)",
+      "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 22604; bind-pose bounds (three units, Y up): 1.40 x 2.31 x 0.92; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/hesmi/hesmi_shadeprint_splash.png",
+      "portrait": "art/out/fighters/hesmi/hesmi_shadeprint_portrait.png"
+    },
+    "seconds": {
+      "splash": 24.95,
+      "portrait": 11.92
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.701,
+        0,
+        -0.524
+      ],
+      [
+        0.701,
+        2.305,
+        0.399
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.962,
+    "accentPct": 2.16,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 124,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/hesmi/three_hesmi_shadeprint.png",
+    "seconds": 28,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.38,
+      "model": 54.63,
+      "lows_bind": 22.08,
+      "uv": 6.77,
+      "bake": 209.04,
+      "export": 0.35,
+      "optimize": 1.73,
+      "load_test": 0.28,
+      "render": 36.93,
+      "three_qa": 28.58
+    },
+    "total_s": 361.33
+  },
+  "run_ref_speed": 3.35,
+  "height_m": 2.22
+}

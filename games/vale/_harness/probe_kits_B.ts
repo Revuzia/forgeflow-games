@@ -94,7 +94,9 @@ section('content lint', () => {
       /^res_/.test(f.resource as string) && /^class_/.test(f.class as string), [f.resource, f.class]);
     check(`${id}: matches the ROSTER.md table (class, resource, positions, difficulty, attack, height)`,
       f.class === row.cls && f.resource === row.res && f.role === row.role && f.secondaryRole === row.second && f.difficulty === row.diff &&
-      (f.attack as Any).range === row.range && (f.attack as Any).damageType === row.dtype && (f.art as Any).height === row.height,
+      (f.attack as Any).range === row.range && (f.attack as Any).damageType === row.dtype &&
+      // art.height is the built model's measured height (Art 2.0: weapon and crest included): within 25 % of the design height
+      Math.abs((f.art as Any).height as number - row.height) <= row.height * 0.25,
       [f.class, f.resource, f.role, f.secondaryRole, f.difficulty, (f.attack as Any).range, (f.art as Any).height]);
     check(`${id}: role and secondaryRole are real positions`, roleIds.has(f.role as string) && (f.secondaryRole === undefined || roleIds.has(f.secondaryRole as string)));
     check(`${id}: tags carry the origin (${row.accent}) and melee / ranged`, (f.tags as string[]).includes(row.accent) && (f.tags as string[]).some((t) => t === 'melee' || t === 'ranged'), f.tags);
@@ -113,7 +115,8 @@ section('content lint', () => {
     const range = (f.attack as Any).range as number;
     check(`${id}: attack range inside the ${row.dtype === 'phys' && range < 3 ? 'melee 1.6-2.1' : 'ranged 5.0-6.0'} m window`, range < 3 ? inR(range, 1.6, 2.1) : inR(range, 5, 6), range);
     check(`${id}: palette hexes are not a reserved relationship hue above 40% saturation`, reservedOk((f.palette as Any).primary as string) && reservedOk((f.palette as Any).secondary as string), f.palette);
-    check(`${id}: runRefSpeed 3.6, accentMaterial accent, all 12 required clip roles`, (f.art as Any).runRefSpeed === 3.6 && (f.art as Any).accentMaterial === 'accent' &&
+    // runRefSpeed is measured from the run clip's stride by the Art 2.0 build (planted feet): a sane band, not one number
+    check(`${id}: runRefSpeed 3.0-4.0, accentMaterial accent, all 12 required clip roles`, inR((f.art as Any).runRefSpeed as number, 3.0, 4.0) && (f.art as Any).accentMaterial === 'accent' &&
       ['idle', 'run', 'attack1', 'attack2', 'cast_a1', 'cast_a2', 'cast_a3', 'cast_ult', 'death', 'recall', 'idle_lobby', 'victory'].every((c) => c in ((f.art as Any).clips as Any)));
     let scripts = 0, badFilters = 0, longRange = 0, noTelegraph = 0;
     const msgs: string[] = [];

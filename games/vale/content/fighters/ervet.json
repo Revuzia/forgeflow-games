@@ -723,9 +723,9 @@
     "portrait": "assets/fighters/ervet/portrait.png",
     "splash": "assets/fighters/ervet/splash.png",
     "icon": "assets/fighters/ervet/icon.png",
-    "height": 2.1,
+    "height": 2.15,
     "scale": 1,
-    "runRefSpeed": 3.6,
+    "runRefSpeed": 3.45,
     "clips": {
       "idle": "idle",
       "run": "run",
@@ -739,11 +739,8 @@
       "recall": "recall",
       "idle_lobby": "idle_lobby",
       "victory": "victory",
-      "crit": "crit",
-      "spawn": "spawn",
-      "stunned": "stunned",
       "dash": "dash",
-      "taunt": "taunt"
+      "stunned": "stunned"
     },
     "sockets": {
       "origin": "root",
@@ -751,11 +748,13 @@
       "head": "head",
       "hand_r": "hand.R",
       "hand_l": "hand.L",
-      "weapon": "prop.R",
       "weapon_r": "prop.R",
       "weapon_l": "prop.L",
       "foot_r": "foot.R",
-      "foot_l": "foot.L"
+      "foot_l": "foot.L",
+      "weapon": "prop.R",
+      "blade_tip": "x_blade_tip",
+      "crossguard": "x_crossguard"
     },
     "accentMaterial": "accent"
   },

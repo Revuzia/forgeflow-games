@@ -1,0 +1,251 @@
+{
+  "id": "odrum_shadeprint",
+  "fighter": "odrum",
+  "skin": true,
+  "parts": {
+    "bind_coat": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hand.L",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_coat": 3000,
+    "bind_straps": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "head",
+        "forearm.L",
+        "hand.L",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_straps": 698,
+    "bind_belt": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "neck",
+        "head",
+        "shoulder.L",
+        "hand.L",
+        "shoulder.R",
+        "hand.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_belt": 600,
+    "bind_skirt": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_skirt": 2000,
+    "bind_trousers": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "foot.L",
+        "toe.L",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_trousers": 900,
+    "bind_boots": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "thigh.R"
+      ]
+    },
+    "tris_boots": 1400,
+    "tris_cap": 1300,
+    "tris_head": 700,
+    "tris_mask": 1800,
+    "tris_wrap_L": 300,
+    "tris_wrap_R": 300,
+    "tris_hand_L": 600,
+    "tris_hand_R": 700,
+    "tris_staff": 900,
+    "tris_staff_wraps": 600,
+    "tris_staff_caps": 300,
+    "tris_cords_R": 110,
+    "tris_pot_R": 900,
+    "tris_pot_rim_R": 260,
+    "tris_resin_R": 80,
+    "tris_window_R": 160,
+    "tris_cords_L": 110,
+    "tris_pot_L": 900,
+    "tris_pot_rim_L": 260,
+    "tris_resin_L": 80,
+    "tris_window_L": 160,
+    "validate_odrum": "18638->18633"
+  },
+  "uv_coverage": 0.591,
+  "bake": {
+    "base": 16.49,
+    "rough_metal": 13.79,
+    "normal": 10.43,
+    "ao": 20.61,
+    "normal_fixed_px": 19647,
+    "projection": 198.72,
+    "pack_save": 199.12,
+    "total": 261.41
+  },
+  "tris": 19113,
+  "mesh_top_m": 1.912,
+  "glb_bytes_raw": 2410652,
+  "optimize": {
+    "ok": true,
+    "before": 2410652,
+    "after": 1015280
+  },
+  "glb_bytes": 1015280,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_shadeprint.glb (991 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: odrum_shadeprint_base 2048x2048 313K, odrum_shadeprint_normal 512x512 38K, odrum_shadeprint_orm 512x512 65K",
+      "  skinned meshes: odrum_accent(252v), odrum_shadeprint(16244v)",
+      "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_hang_l x_pot_l x_hang_r x_pot_r x_pellet x_sling_pouch thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 19113; bind-pose bounds (three units, Y up): 1.41 x 1.91 x 0.50; facing (0.00, 1.00); head bone y 1.54; runRefSpeed 3.35",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/odrum/odrum_shadeprint_splash.png",
+      "portrait": "art/out/fighters/odrum/odrum_shadeprint_portrait.png"
+    },
+    "seconds": {
+      "splash": 15.26,
+      "portrait": 7.92
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.765,
+        0,
+        -0.265
+      ],
+      [
+        0.645,
+        1.912,
+        0.232
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.536,
+    "accentPct": 3.56,
+    "accentTopHalfPct": 41.9,
+    "heightPx1080": 102,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/odrum/three_odrum_shadeprint.png",
+    "seconds": 67.9,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 4.41,
+      "model": 20.85,
+      "lows_bind": 15.27,
+      "uv": 14.83,
+      "bake": 261.41,
+      "export": 0.4,
+      "optimize": 1.69,
+      "load_test": 0.33,
+      "render": 23.36,
+      "three_qa": 70.91
+    },
+    "total_s": 414.11
+  },
+  "run_ref_speed": 3.35,
+  "height_m": 1.82
+}

@@ -502,9 +502,9 @@
     "portrait": "assets/fighters/burdam/portrait.png",
     "splash": "assets/fighters/burdam/splash.png",
     "icon": "assets/fighters/burdam/icon.png",
-    "height": 2.15,
+    "height": 2.16,
     "scale": 1,
-    "runRefSpeed": 3.6,
+    "runRefSpeed": 3.45,
     "clips": {
       "idle": "idle",
       "run": "run",
@@ -518,11 +518,9 @@
       "recall": "recall",
       "idle_lobby": "idle_lobby",
       "victory": "victory",
-      "crit": "crit",
-      "spawn": "spawn",
-      "stunned": "stunned",
+      "channel": "channel",
       "dash": "dash",
-      "taunt": "taunt"
+      "stunned": "stunned"
     },
     "sockets": {
       "origin": "root",
@@ -530,11 +528,13 @@
       "head": "head",
       "hand_r": "hand.R",
       "hand_l": "hand.L",
-      "weapon": "prop.R",
       "weapon_r": "prop.R",
       "weapon_l": "prop.L",
       "foot_r": "foot.R",
-      "foot_l": "foot.L"
+      "foot_l": "foot.L",
+      "weapon": "prop.R",
+      "weapon_tip": "x_blade_tip",
+      "notch": "x_notch_mid"
     },
     "accentMaterial": "accent"
   },

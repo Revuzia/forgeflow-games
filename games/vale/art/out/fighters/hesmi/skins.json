@@ -1,0 +1,16 @@
+[
+  {
+    "id": "hesmi_gorgewalk",
+    "fighter": "hesmi",
+    "model": "assets/fighters/hesmi/hesmi_gorgewalk.glb",
+    "portrait": "assets/fighters/hesmi/hesmi_gorgewalk_portrait.png",
+    "splash": "assets/fighters/hesmi/hesmi_gorgewalk_splash.png"
+  },
+  {
+    "id": "hesmi_shadeprint",
+    "fighter": "hesmi",
+    "model": "assets/fighters/hesmi/hesmi_shadeprint.glb",
+    "portrait": "assets/fighters/hesmi/hesmi_shadeprint_portrait.png",
+    "splash": "assets/fighters/hesmi/hesmi_shadeprint_splash.png"
+  }
+]

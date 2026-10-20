@@ -1,0 +1,153 @@
+{
+  "id": "kemdo_long_evening",
+  "fighter": "kemdo",
+  "skin": true,
+  "parts": {
+    "bind_forearms": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "shoulder.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_forearms": 700,
+    "tris_hood": 1598,
+    "tris_face": 780,
+    "tris_brow": 498,
+    "tris_head_core": 118,
+    "tris_shirt": 1150,
+    "tris_sleeves": 600,
+    "tris_cowl": 1650,
+    "tris_wrap": 900,
+    "tris_pauldron_1": 380,
+    "tris_pauldron_2": 300,
+    "tris_pauldron_3": 300,
+    "tris_medallion": 100,
+    "tris_belt": 750,
+    "tris_robe": 1800,
+    "tris_panel": 650,
+    "tris_trousers": 698,
+    "tris_boots": 1098,
+    "tris_vambrace": 592,
+    "tris_hand_R": 450,
+    "tris_hand_L": 450,
+    "tris_glaive_blade": 260,
+    "tris_glaive_collar": 110,
+    "tris_glaive_frame": 1100,
+    "tris_glaive_lens": 420,
+    "tris_glaive_ring": 300,
+    "tris_glaive_wrap": 380,
+    "tris_glaive_haft": 200,
+    "tris_glaive_butt": 260,
+    "tris_tassel_plates": 360,
+    "validate_kemdo": "18652->18636"
+  },
+  "uv_coverage": 0.59,
+  "bake": {
+    "base": 3.92,
+    "rough_metal": 3.58,
+    "normal": 3.01,
+    "ao": 3.39,
+    "normal_fixed_px": 29794,
+    "projection": 50.85,
+    "pack_save": 51.13,
+    "total": 65.39
+  },
+  "tris": 18936,
+  "mesh_top_m": 2.44,
+  "glb_bytes_raw": 2648460,
+  "optimize": {
+    "ok": true,
+    "before": 2648460,
+    "after": 1143368
+  },
+  "glb_bytes": 1143368,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_long_evening.glb (1117 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: kemdo_long_evening_base 2048x2048 387K, kemdo_long_evening_normal 512x512 47K, kemdo_long_evening_orm 512x512 74K",
+      "  skinned meshes: kemdo_accent(150v), kemdo_long_evening(17617v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 18936; bind-pose bounds (three units, Y up): 1.18 x 2.44 x 0.58; facing (0.00, 1.00); head bone y 1.81; runRefSpeed 3.45",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/kemdo/kemdo_long_evening_splash.png",
+      "portrait": "art/out/fighters/kemdo/kemdo_long_evening_portrait.png"
+    },
+    "seconds": {
+      "splash": 6.54,
+      "portrait": 5.61
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.728,
+        0.001,
+        -0.238
+      ],
+      [
+        0.451,
+        2.44,
+        0.341
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.808,
+    "accentPct": 1.97,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 132,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/kemdo/three_kemdo_long_evening.png",
+    "seconds": 8.8,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.34,
+      "model": 15.08,
+      "lows_bind": 6.41,
+      "uv": 6.12,
+      "bake": 65.39,
+      "export": 0.1,
+      "optimize": 0.91,
+      "load_test": 0.21,
+      "render": 12.19,
+      "three_qa": 9.13
+    },
+    "total_s": 116.23
+  },
+  "run_ref_speed": 3.45,
+  "height_m": 2.1
+}

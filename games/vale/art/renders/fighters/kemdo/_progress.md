@@ -1,0 +1,13 @@
+# Kemdo Art 2.0 progress
+
+- 2026-10-20 09:06 CDT: plates. `art/blender/proto/kemdo_plates.py --height 2.38` (glaive tip; hood crown 2.10 m at
+  eroded row 232, sole 1455, tip 70). Fixes over the shared script: big backdrop-grey islands inside the cut
+  (glaive/robe, arm/robe, knee gaps) removed; floor-shadow trim narrowed to 75 rows and neutral-only (no cut
+  through the boot-top strap, the pale lower blade kept). Mask checked clean.
+- 2026-10-20 09:24 CDT: kemdo.py v1 (SDF parts, rig with the concept's right arm, prop.R up the haft, sockets) + proto/kemdo_fit.py; fit overlay (fit_front_back.png) matches the concept outline within ~2 cm. First build next.
+- 2026-10-20 09:46 CDT: build 3 (base): 18212 tris, 1151 KiB, accent 2.73 %, facing +Z, three load test OK (after art.json refresh). Bespoke clips for all 15 (clip_overrides) + proto/kemdo_poses.py (workbench pose sheets from the cached .blend). art.json height = 2.43 (bind-pose top incl. glaive: the shared load test demands it; the brief wanted 2.10) - flag for the lead.
+- 2026-10-20 10:03 CDT: build 5 (base): 18212 tris, 1132 KiB, accent 2.3 %, load test OK; slimmer accent ring, portrait/icon from idle (face clear), victory reworked, Vent flare 8 deg. content art block copied (height 2.43, runRefSpeed 3.45, clips, sockets). In-game shots art2_kemdo_*: reads. SKINS added; skins build next.
+- 2026-10-20 10:13 CDT: skins built: kemdo_highrim 18212 tris 993 KiB accent 2.26 % load OK; kemdo_long_evening 18572 tris 1001 KiB accent 2.24 % load OK (tassel plates flat lampresin).
+- 2026-10-20 10:19 CDT: Long Evening rebuilt (tassel fan narrowed, hangs under the frame): 18572 tris, 1029 KiB, accent 2.25 %, load OK. content checks OK (--check --allow-missing-assets OK; strict --check lists nothing for kemdo). Final base rebuild (writes skins.json) next.
+- 2026-10-20 10:25 CDT: DONE. Final base build: 18212 tris, 1132 KiB, accent 2.3 %, facing +Z, load test OK, 15 clips, skins.json written; art block == art.json; content checks OK. Open: art.json height 2.43 (glaive tip) vs the brief's 2.10 (shared load-test gate wins); Highrim is subtle by its brief palette.
+- 2026-10-20 11:39 CDT: FIX PASS build A (base): glaive head 1.42x (43 cm oval frame, thin 3.3 cm accent band, domed lens painted bright warm glass), studs inpainted + frame re-projected (paint wrapper), matte stone pauldron/vambrace/blade, 54 cm hooked butt blade, cowl shoulder from the front plate; torso/sleeves/belt custom weights (bind wrapper), pauldron 3 rigid lames; motion rewrite (auto two-hand grips, glaive + body floor clamps, lens roll, upright recoveries, new Vent/Heat Shimmer/dash/victory/lobby adjust); splash = cast_ult hold. 18576 tris, 1149 KiB, accent 1.9 %, load test OK. QA tool: proto/kemdo_qa.py.

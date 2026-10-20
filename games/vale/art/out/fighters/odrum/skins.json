@@ -1,0 +1,16 @@
+[
+  {
+    "id": "odrum_noon_fair",
+    "fighter": "odrum",
+    "model": "assets/fighters/odrum/odrum_noon_fair.glb",
+    "portrait": "assets/fighters/odrum/odrum_noon_fair_portrait.png",
+    "splash": "assets/fighters/odrum/odrum_noon_fair_splash.png"
+  },
+  {
+    "id": "odrum_shadeprint",
+    "fighter": "odrum",
+    "model": "assets/fighters/odrum/odrum_shadeprint.glb",
+    "portrait": "assets/fighters/odrum/odrum_shadeprint_portrait.png",
+    "splash": "assets/fighters/odrum/odrum_shadeprint_splash.png"
+  }
+]

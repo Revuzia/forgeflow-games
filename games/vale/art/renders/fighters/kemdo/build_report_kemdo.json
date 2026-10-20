@@ -1,0 +1,255 @@
+{
+  "id": "kemdo",
+  "fighter": "kemdo",
+  "skin": false,
+  "parts": {
+    "bind_forearms": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "shoulder.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R"
+      ]
+    },
+    "tris_forearms": 700,
+    "tris_hood": 1598,
+    "tris_face": 780,
+    "tris_brow": 498,
+    "tris_head_core": 118,
+    "tris_shirt": 1150,
+    "tris_sleeves": 600,
+    "tris_cowl": 1650,
+    "tris_wrap": 900,
+    "tris_pauldron_1": 380,
+    "tris_pauldron_2": 300,
+    "tris_pauldron_3": 300,
+    "tris_medallion": 100,
+    "tris_belt": 750,
+    "tris_robe": 1800,
+    "tris_panel": 650,
+    "tris_trousers": 698,
+    "tris_boots": 1098,
+    "tris_vambrace": 592,
+    "tris_hand_R": 450,
+    "tris_hand_L": 450,
+    "tris_glaive_blade": 260,
+    "tris_glaive_collar": 110,
+    "tris_glaive_frame": 1100,
+    "tris_glaive_lens": 420,
+    "tris_glaive_ring": 300,
+    "tris_glaive_wrap": 380,
+    "tris_glaive_haft": 200,
+    "tris_glaive_butt": 260,
+    "validate_kemdo": "18292->18276"
+  },
+  "uv_coverage": 0.605,
+  "bake": {
+    "base": 11.37,
+    "rough_metal": 14.38,
+    "normal": 7.91,
+    "ao": 8.71,
+    "normal_fixed_px": 27794,
+    "projection": 98.7,
+    "pack_save": 99.18,
+    "total": 142.17
+  },
+  "tris": 18576,
+  "mesh_top_m": 2.44,
+  "clips": {
+    "idle": {
+      "frames": 72,
+      "duration_s": 2.4,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.45,
+      "stride_m": 1.15,
+      "cycle_s": 0.667
+    },
+    "attack1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 50,
+      "duration_s": 1.6667,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 120,
+      "duration_s": 4.0,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 90,
+      "duration_s": 3.0,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 2875316,
+  "optimize": {
+    "ok": true,
+    "before": 2875316,
+    "after": 1176368
+  },
+  "glb_bytes": 1176368,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo.glb (1149 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: kemdo_base 2048x2048 282K, kemdo_normal 512x512 47K, kemdo_orm 512x512 76K",
+      "  skinned meshes: kemdo(17199v), kemdo_accent(150v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:0.833s/18tr, attack2:1.000s/18tr, cast_a1:0.833s/19tr, cast_a2:0.667s/20tr, cast_a3:0.833s/20tr, cast_ult:1.333s/18tr, channel:3.000s/20tr, dash:0.500s/20tr, death:1.667s/20tr, idle:2.400s/20tr, idle_lobby:4.000s/20tr, recall:2.000s/19tr, run:0.667s/22tr, stunned:1.333s/18tr, victory:2.000s/18tr",
+      "  tracks checked: 290; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 18576; bind-pose bounds (three units, Y up): 1.18 x 2.44 x 0.57; facing (0.00, 1.00); head bone y 1.81; runRefSpeed 3.45",
+      "  run: 20 f, planted samples 2, max foot-speed error 0%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/kemdo/splash.png",
+      "portrait": "art/out/fighters/kemdo/portrait.png",
+      "icon": "art/out/fighters/kemdo/icon.png",
+      "turntable": "art/renders/fighters/kemdo/turntable.png"
+    },
+    "seconds": {
+      "splash": 18.04,
+      "portrait": 10.05,
+      "icon": 2.11,
+      "turntable": 8.86
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.728,
+        0.001,
+        -0.238
+      ],
+      [
+        0.451,
+        2.44,
+        0.335
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.808,
+    "accentPct": 1.9,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 132,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 15,
+    "out": "art/renders/fighters/kemdo/three_kemdo.png",
+    "seconds": 28.5,
+    "exit": 0,
+    "clip_sheet": "art/renders/fighters/kemdo/three_clips_kemdo.png"
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 4.09,
+      "model": 102.0,
+      "lows_bind": 49.09,
+      "uv": 10.59,
+      "bake": 142.17,
+      "clips": 0.96,
+      "export": 3.16,
+      "optimize": 1.2,
+      "load_test": 0.23,
+      "render": 39.34,
+      "three_qa": 72.6,
+      "cache": 0.19
+    },
+    "total_s": 425.73
+  },
+  "run_ref_speed": 3.45,
+  "height_m": 2.1
+}
