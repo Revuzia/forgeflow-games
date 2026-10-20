@@ -60,6 +60,18 @@ To rebuild art, run `python3 art/build.py <target>`: it uses `$BLENDER` when set
 install (`/Applications/Blender.app`, the Windows default, or `blender` on `PATH`), else the `bpy`
 module (CONTRACT §12, `art/README.md`).
 
+## Online play
+
+`npm run server` starts the game server (Node 22, WebSocket, port 8787; `--port`, `--host`, `--wait <s>` for
+how long a search waits before bots fill, `--catalog <catalog.json>`). It must serve the same catalog
+version as the clients. Point clients at it with `server` in `public/config.js` (or `?server=ws://host:8787`
+for a one-off). Matchmade queues then play online: the server matchmakes, runs the ready check and the draft,
+and runs each match as deterministic lockstep (every client steps the same sim on the server's ticks; bots
+fill empty seats; a dropped player reconnects into their seat). Practice and custom games stay local, and
+without a reachable server every queue plays against bots. Hosting the server is a separate deploy (any Node
+22 host with WebSockets behind TLS: `wss://`). Proof: `node _harness/probe_online.ts`,
+`node _harness/e2e_online.mjs`.
+
 ## Two builds that ship separately (CONTRACT §3.1)
 
 | build | command | output | contains |
