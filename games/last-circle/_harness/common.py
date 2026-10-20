@@ -67,7 +67,7 @@ DEFAULT_BASE = "http://127.0.0.1:8790" + GAME_PATH + "index.html"
 MAPS = ["isla_viva", "ashgrid", "deepwood"]                   # hud.js BATTLE_MAPS
 # The build that is LIVE on the CDN: the default baseline of the perf rows (perf_district) and the frozen "must fail" build of the Wave-7 rows.
 # AFTER A DEPLOY move this ONE constant to the new live build's commit (README "After the Wave-7 deploy"); nothing else holds the sha.
-LIVE_REV = "6191b380"                                          # Wave 7 completion release (changelog + cache bump ?v=1792092800); Wave 7 was dd414cb2 (gate.py WAVE7_REV), Wave 6 60b854d0 (WAVE6_REV)
+LIVE_REV = "9115494d"                                          # Wave 7 completion release (changelog + cache bump ?v=1792092800); Wave 7 was dd414cb2 (gate.py WAVE7_REV), Wave 6 60b854d0 (WAVE6_REV)
 # The DEPLOYED game (Cloudflare Workers CDN, served under /last-circle/ - the repo's scoped server uses /games/last-circle/). The one place that holds the live URL:
 # squadguard_live --live and the README's post-deploy checklist read it. Read-only use only (a page load; the squad relay is a stand-in, no production data is touched).
 LIVE_BASE = "https://forgeflow-games-cdn.isimcha85.workers.dev/last-circle/index.html"
