@@ -81,7 +81,7 @@ export class Hub {
     if (!this.conns.has(c.id)) return;
     this.conns.delete(c.id);
     this.unqueue(c);
-    c.room?.leave(c);
+    c.room?.leave(c, true);
   }
 
   private onMessage(c: Conn, m: ClientMsg): void {
@@ -104,6 +104,11 @@ export class Hub {
       case 'cmd': c.room?.command(c, m.c); break;
       case 'digest': c.room?.digest(c, m.n, m.h); break;
       case 'leave': c.room?.leave(c); break;
+      case 'resume': {
+        const room = [...this.rooms].find((r) => r.id === m.room);
+        if (!room || !room.resume(c, m.token, m.from)) c.send({ t: 'error', m: 'resume: that match is over' });
+        break;
+      }
       default: c.send({ t: 'error', m: 'unknown message' });
     }
   }

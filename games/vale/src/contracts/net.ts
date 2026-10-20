@@ -11,7 +11,9 @@
 // runs the DraftHost; each seat gets its own view) → loading (the MatchSetup + your seat) → ready (assets
 // loaded) → start → tick … → end (the server's result). The client books grants and history from the
 // result exactly as a local match (LocalSession.finishMatch). Practice and custom lobbies stay local.
-// A player who drops is driven by a bot on the server (its commands broadcast like a human's).
+// A player who drops is driven by a bot on the server (its commands broadcast like a human's) until they
+// reconnect and send 'resume' (room + token from 'loading'): the server replays the ticks they missed and
+// hands the seat back.
 
 import type { DraftAction, DraftState, QueueRequest, SessionEvent } from './session.ts';
 import type { Command, LoadoutChoice, MatchResult, MatchSetup, PlayerId } from './sim.ts';
@@ -41,6 +43,8 @@ export type ClientMsg =
   | { t: 'ready' }
   | { t: 'cmd'; c: Command }
   | { t: 'digest'; n: number; h: string }
+  /** back after a dropped connection: resume your seat; the server replays ticks n >= from */
+  | { t: 'resume'; room: string; token: string; from: number }
   | { t: 'leave' };
 
 export type QueueSessionEvent = Extract<SessionEvent, { type: 'queue' }>;
@@ -50,10 +54,13 @@ export type ServerMsg =
   | { t: 'stats'; online: number; searching: Record<string, number> }
   | { t: 'queue'; e: QueueSessionEvent }
   | { t: 'draft'; s: DraftState }
-  | { t: 'loading'; setup: MatchSetup; you: PlayerId }
+  /** room + token let you resume your seat after a dropped connection */
+  | { t: 'loading'; setup: MatchSetup; you: PlayerId; room: string; token: string }
   | { t: 'start'; tick: number }
   /** tick n: apply these human commands, then step */
   | { t: 'tick'; n: number; c?: [PlayerId, Command][] }
+  /** after a resume: the ticks you missed, in order */
+  | { t: 'replay'; ticks: { n: number; c?: [PlayerId, Command][] }[] }
   | { t: 'end'; result: MatchResult }
   | { t: 'desync'; n: number }
   | { t: 'error'; m: string };

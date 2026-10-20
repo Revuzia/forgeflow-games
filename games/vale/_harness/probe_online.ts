@@ -31,7 +31,7 @@ const hub = new Hub({ catalog, port: 0, host: '127.0.0.1', waitSeconds: 0.5, spe
 await new Promise((r) => setTimeout(r, 100));
 const url = `ws://127.0.0.1:${hub.port}`;
 
-async function scenario(queue: string, humans: number, pilot: boolean): Promise<void> {
+async function scenario(queue: string, humans: number, pilot: boolean, dropAt = 0): Promise<void> {
   console.log(`— ${queue}: ${humans} humans${pilot ? ' on autopilot (their commands cross the wire)' : ' standing still'}`);
   const clients = Array.from({ length: humans }, (_, i) => {
     const link = new OnlineLink(url, catalog.version, () => `Tester ${i + 1}`);
@@ -52,7 +52,11 @@ async function scenario(queue: string, humans: number, pilot: boolean): Promise<
   for (const c of clients) c.s.queue({ queue });
   // pump every live match like the frame loop does, until every client has its postgame
   const deadline = Date.now() + 240000;
+  let dropped = false, resumed = false;
+  if (dropAt) clients[0].link.on((m) => { if (m.t === 'replay') resumed = true; });
   while (!clients.every((c) => c.result) && Date.now() < deadline) {
+    const m0 = clients[0].s.currentMatch();
+    if (dropAt && !dropped && m0 && m0.view.tick >= dropAt) { dropped = true; clients[0].link.dropForTest(); }
     for (const c of clients) c.s.currentMatch()?.pump(0.05);
     await new Promise((r) => setImmediate(r));
   }
@@ -68,6 +72,7 @@ async function scenario(queue: string, humans: number, pilot: boolean): Promise<
   check(clients.every((c) => !c.errors.some((e) => /drifted|lost/.test(e))), 'no digest drift and no lost connection', clients.map((c) => c.errors));
   check(mism.every((m) => m === 0), 'every server tick lined up with the client sim', mism);
   check(clients.every((c) => c.s.profile().history[0]?.matchId === results[0]?.matchId), 'each profile booked the online match');
+  if (dropAt) check(dropped && resumed, 'a client whose connection dropped mid-match resumed its seat (replayed the missed ticks)', { dropped, resumed });
   if (pilot) {
     const acted = results[0]?.players.filter((p) => p.controller === 'human').map((p) => p.cs + p.kills + p.deaths + p.assists) ?? [];
     check(acted.length === humans && acted.every((n) => n > 0), 'the humans played: their commands reached every sim', acted);
@@ -79,7 +84,8 @@ async function scenario(queue: string, humans: number, pilot: boolean): Promise<
 await scenario('bridge_standard', 2, true);
 await scenario('fray_standard', 3, true);
 await scenario('rift_coop', 2, false);
-check(serverResults.length >= 3, 'the server ran every match to an end', serverResults);
+await scenario('bridge_standard', 2, true, 6000);
+check(serverResults.length >= 4, 'the server ran every match to an end', serverResults);
 await hub.close();
 console.log(`${fails ? 'FAIL' : 'PASS'} probe_online`);
 process.exit(fails ? 1 : 0);

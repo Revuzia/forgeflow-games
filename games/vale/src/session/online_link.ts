@@ -52,6 +52,9 @@ export class OnlineLink {
     try { ws.send(JSON.stringify(m)); return true; } catch { return false; }
   }
 
+  /** tests: drop the socket as a network failure would (the link reconnects on its own) */
+  dropForTest(): void { try { this.ws?.close(); } catch { /* closed */ } }
+
   dispose(): void {
     this.disposed = true;
     if (this.retry) clearTimeout(this.retry);

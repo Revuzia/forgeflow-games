@@ -58,6 +58,8 @@ export class LockstepMatchHost implements MatchClient {
   private serverResult: MatchResult | null = null;
   /** ticks whose number did not match the local sim (should stay 0) */
   mismatches = 0;
+  /** the newest server tick received (resume asks for the ones after it) */
+  lastTick = -1;
 
   constructor(catalog: CatalogT, setup: MatchSetup, you: PlayerId, link: OnlineLink, opts: LockstepOptions = {}) {
     this.catalog = catalog;
@@ -95,12 +97,20 @@ export class LockstepMatchHost implements MatchClient {
     if (this._ended) return;
     this.lastHeard = Date.now();
     if (m.t === 'start') this._live = true;
-    else if (m.t === 'tick') { this._live = true; this.ticks.push({ n: m.n, ...(m.c ? { c: m.c } : {}) }); }
+    else if (m.t === 'tick') { this._live = true; this.push({ n: m.n, ...(m.c ? { c: m.c } : {}) }); }
+    else if (m.t === 'replay') { this._live = true; for (const t of m.ticks) this.push(t); }
     else if (m.t === 'end') {
       this.serverResult = m.result;
       // the local sim reaches the same end within its backlog; if it has nothing left to step, finish now
       if (!this.ticks.length) this.finish(m.result);
     }
+  }
+
+  /** queue a server tick once (a replay can overlap what already arrived) */
+  private push(t: { n: number; c?: [PlayerId, Command][] }): void {
+    if (t.n <= this.lastTick) return;
+    this.lastTick = t.n;
+    this.ticks.push(t);
   }
 
   send(cmd: Command): void {

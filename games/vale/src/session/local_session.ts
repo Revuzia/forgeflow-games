@@ -135,6 +135,8 @@ export class LocalSession implements Session {
   private onlineFlow = false;
   /** the server's draft as you see it */
   private netDraft: DraftState | null = null;
+  /** your seat in the online match (resume after a dropped connection) */
+  private netSeat: { room: string; token: string } | null = null;
   private persistOk = true;
   /** matchReady() arrived before the sim was built (a listener on the first 'loading' event) */
   private readyEarly = false;
@@ -157,6 +159,7 @@ export class LocalSession implements Session {
       matched: () => this.onMatched(),
     }, o.searchSeconds);
     o.online?.on((m) => this.onNet(m));
+    o.online?.onStatus((i) => this.onNetStatus(i.status));
   }
 
   /** the online link's state (UI: online/offline, players, tickets per queue); null without a link */
@@ -555,6 +558,7 @@ export class LocalSession implements Session {
     this.host = null;
     this.onlineFlow = false;
     this.netDraft = null;
+    this.netSeat = null;
     this._phase = 'postgame';
     this.emit({ type: 'postgame', result: structuredClone(result), grants: structuredClone(grants), you: pd.you });
   }
@@ -635,6 +639,21 @@ export class LocalSession implements Session {
     if (action.a === 'loadout' && me?.locked) { this.p.loadouts[me.locked] = { spells: [...action.loadout.spells], boons: [...action.loadout.boons] }; this.persist(); }
   }
 
+  /** the link dropped or came back: a live match resumes its seat; a search or draft is lost */
+  private onNetStatus(status: string): void {
+    if (!this.onlineFlow) return;
+    if (status === 'online' && this.host instanceof LockstepMatchHost && !this.host.ended && this.netSeat) {
+      this.opts.online?.send({ t: 'resume', room: this.netSeat.room, token: this.netSeat.token, from: this.host.lastTick + 1 });
+      return;
+    }
+    if (status === 'offline' && (this._phase === 'searching' || this._phase === 'found' || this._phase === 'accepted' || this._phase === 'draft')) {
+      const queue = this.pending?.queue.id ?? this.lastReq?.queue;
+      this.onlineFlow = false; this.netDraft = null; this.pending = null; this._phase = 'idle';
+      this.error('online: the connection to the server was lost');
+      this.emit({ type: 'queue', state: 'idle', ...(queue ? { queue } : {}), reason: 'cancelled' });
+    }
+  }
+
   private onNet(m: ServerMsg): void {
     if (!this.onlineFlow) return;
     switch (m.t) {
@@ -663,6 +682,7 @@ export class LocalSession implements Session {
         if (!pd) return;
         pd.setup = m.setup;
         pd.you = m.you;
+        this.netSeat = { room: m.room, token: m.token };
         this._phase = 'loading';
         this.readyEarly = false;
         this.emit({ type: 'loading', setup: m.setup, progress: 0 });
@@ -680,7 +700,7 @@ export class LocalSession implements Session {
         if (this.readyEarly && this.host === host) { this.readyEarly = false; this.matchReady(); }
         break;
       }
-      case 'start': case 'tick': case 'end':
+      case 'start': case 'tick': case 'end': case 'replay':
         if (this.host instanceof LockstepMatchHost) this.host.receive(m);
         break;
       case 'error': this.error(`online: ${m.m}`); break;

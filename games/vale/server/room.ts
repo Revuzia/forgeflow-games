@@ -57,7 +57,9 @@ export class Room {
   private readonly mode: ModeDefT;
   private readonly rng: Rng;
   /** humans, by seat once seated */
-  private readonly humans: { t: Ticket; player: PlayerId; accepted: boolean; ready: boolean; left: boolean }[];
+  private readonly humans: { t: Ticket; player: PlayerId; accepted: boolean; ready: boolean; left: boolean; token: string; dropped: boolean }[];
+  /** every tick of the match (resume replays from here) */
+  private readonly history: { n: number; c?: [PlayerId, Command][] }[] = [];
   private timers: ReturnType<typeof setInterval>[] = [];
   private readyLeft: number;
   private draft: DraftHost | null = null;
@@ -77,7 +79,7 @@ export class Room {
     this.mode = mode;
     this.rng = stream(o.seed, `room:${id}`);
     this.readyLeft = o.readySeconds ?? READY_SECONDS;
-    this.humans = o.tickets.map((t) => ({ t, player: -1, accepted: false, ready: false, left: false }));
+    this.humans = o.tickets.map((t) => ({ t, player: -1, accepted: false, ready: false, left: false, token: this.rng.nextU32().toString(36) + this.rng.nextU32().toString(36), dropped: false }));
     for (const h of this.humans) h.t.peer.room = this;
     this.broadcastReady();
     this.every(250, () => this.tickReady(0.25 * Math.max(1, o.speed ?? 1)));
@@ -274,7 +276,7 @@ export class Room {
     }
     this.setup = setup;
     this.phase = 'loading';
-    for (const h of this.humans) if (!h.left) h.t.peer.send({ t: 'loading', setup, you: h.player });
+    for (const h of this.humans) if (!h.left) h.t.peer.send({ t: 'loading', setup, you: h.player, room: this.id, token: h.token });
     this.loadTimer = 0;
     this.every(500, () => { this.loadTimer += 0.5; if (this.phase === 'loading' && this.loadTimer >= LOAD_TIMEOUT_S) this.startLive(); });
   }
@@ -340,7 +342,9 @@ export class Room {
     for (const [p, c] of cmds) sim.command(p, c);
     const n = sim.view.tick;
     const events: SimEvent[] = sim.step();
-    this.sendAll(cmds.length ? { t: 'tick', n, c: cmds } : { t: 'tick', n });
+    const tick = cmds.length ? { n, c: cmds } : { n };
+    this.history.push(tick);
+    this.sendAll({ t: 'tick', ...tick });
     const after = sim.view.tick;
     if (after % DIGEST_EVERY === 0) {
       this.digests.set(after, stateDigest(worldOf(sim)));
@@ -363,16 +367,34 @@ export class Room {
     }
   }
 
-  /** a player left the match (or dropped): their seat plays on under a bot */
-  leave(peer: Peer): void {
+  /** a player left the match (or dropped): their seat plays on under a bot; a drop may resume */
+  leave(peer: Peer, dropped = false): void {
     const h = this.human(peer);
     if (!h) return;
+    h.dropped = dropped && this.phase === 'live';
     if (this.phase === 'ready') { this.failReady([peer]); return; }
     h.left = true;
     if (peer.room === this) peer.room = null;
     if (this.phase === 'live') this.drive(h.player);
     if (this.phase === 'loading' && this.humans.every((x) => x.ready || x.left)) this.startLive();
-    if (this.humans.every((x) => x.left)) this.close();
+    if (this.humans.every((x) => x.left && !x.dropped)) this.close();
+  }
+
+  /** a dropped player is back: hand the seat back and replay the ticks they missed */
+  resume(peer: Peer, token: string, from: number): boolean {
+    const h = this.humans.find((x) => x.token === token);
+    if (!h || this.phase !== 'live' || !this.setup || !h.dropped) return false;
+    h.t = { ...h.t, peer };
+    h.left = false;
+    h.dropped = false;
+    peer.room = this;
+    peer.name = h.t.profile.name;
+    this.drivers.delete(h.player);
+    const first = this.history.length ? this.history[0].n : 0;
+    const ticks = this.history.slice(Math.max(0, from - first));
+    peer.send({ t: 'replay', ticks });
+    this.log(`resume · ${h.t.profile.name} from tick ${from} (${ticks.length} replayed)`);
+    return true;
   }
 }
 
