@@ -14,9 +14,16 @@ const S = { fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7, 'stroke-l
 
 type Family = 'bolt' | 'volley' | 'dash' | 'blink' | 'burst' | 'cone' | 'line' | 'zone' | 'shield' | 'heal' | 'buff' | 'stun' | 'slow' | 'summon' | 'mark' | 'self' | 'wedge';
 
-/** the glyph family of an ability, from its effects (the delivery first, then what it does) */
+const FAMILY_CACHE = new WeakMap<AbilityCore, Family>();
+/** the glyph family of an ability, from its effects (the delivery first, then what it does); cached per
+ *  record (it serialises the effect tree, and the Dial Bar asks on every render) */
 export function abilityFamily(a: AbilityCore | undefined): Family {
   if (!a) return 'wedge';
+  let f = FAMILY_CACHE.get(a);
+  if (!f) { f = familyOf(a); FAMILY_CACHE.set(a, f); }
+  return f;
+}
+function familyOf(a: AbilityCore): Family {
   const top = a.effects;
   const ops = new Set(top.map((e) => e.op));
   const all = JSON.stringify(a.effects);
@@ -128,6 +135,35 @@ export function GleamGlyph(p: { size?: number }): JSX.Element {
       <path d="M8 1.5l1.6 4.9L14.5 8l-4.9 1.6L8 14.5l-1.6-4.9L1.5 8l4.9-1.6z" fill="currentColor" />
     </svg>
   );
+}
+
+// ── statuses (r12 M4) ────────────────────────────────────────────────────────────────────────────
+// One drawn mark per status kind, distinct by silhouette (never by colour): plate = structure, ring =
+// time and state, wedge = act. Loss of control converges or pins; help points up or forward.
+const STATUS_PATHS: Record<string, JSX.Element> = {
+  stun: <g {...S}><path d="M12 3.5v4.5M12 16v4.5M3.5 12H8M16 12h4.5" /><path d="M9.5 6.5L12 9l2.5-2.5M9.5 17.5L12 15l2.5 2.5M6.5 9.5L9 12l-2.5 2.5M17.5 9.5L15 12l2.5 2.5" /><circle cx="12" cy="12" r="1.3" fill="currentColor" /></g>,
+  airborne: <g {...S}><path d="M6 13l6-6 6 6" /><path d="M6 19l6-6 6 6" opacity="0.6" /><path d="M8 4h8" /></g>,
+  sleep: <g {...S}><path d="M15.5 4.5a7.5 7.5 0 1 0 4 12.5 6 6 0 0 1-4-12.5z" /><path d="M5 5h3l-3 3h3" opacity="0.7" /></g>,
+  fear: <g {...S}><circle cx="12" cy="12" r="2.2" /><path d="M12 6.5V3M12 17.5V21M6.5 12H3M17.5 12H21" /><path d="M7.5 7.5L5.5 5.5M16.5 16.5l2 2M16.5 7.5l2-2M7.5 16.5l-2 2" opacity="0.6" /></g>,
+  taunt: <g {...S}><circle cx="18" cy="12" r="2.6" /><path d="M3.5 12h10" /><path d="M10 7.5l4.5 4.5-4.5 4.5" /></g>,
+  silence: <g {...S}><path d="M3.5 12c1.6-3 3.4-3 5 0s3.4 3 5 0 3.4-3 5 0" opacity="0.75" /><path d="M5 19.5L19 4.5" stroke-width="2.2" /></g>,
+  // root: the unit (a ring) held by three roots that fork down and out — no arrow and no ground line, so it never
+  // reads as the Dial Bar's recall mark (an arrow onto the ground)
+  root: <g {...S}><circle cx="12" cy="6.5" r="3" /><path d="M12 9.5v11" /><path d="M11.2 11.5C9 13.5 7 15 4.5 19.5" /><path d="M12.8 11.5c2.2 2 4.2 3.5 6.7 8" /><path d="M6.6 16.6L4 15.5M17.4 16.6l2.6-1.1M12 16l-2 2.2" opacity="0.6" /></g>,
+  disarm: <g {...S}><path d="M4.5 19.5l5-5" stroke-width="2.2" /><path d="M13 11l6.5-6.5" stroke-width="2.2" /><path d="M10.5 10.5l3 3" opacity="0.6" /><path d="M16 4.5h3.5V8" /></g>,
+  slow: <g {...S}><path d="M4 6.5h5v5h5v5h6" /><path d="M17 19.5l3-3" opacity="0.6" /></g>,
+  haste: <g {...S}><path d="M4 7l5 5-5 5" /><path d="M11 7l5 5-5 5" /><path d="M18 9.5l2.5 2.5-2.5 2.5" opacity="0.6" /></g>,
+  invisible: <g {...S}><path d="M12 3.5l7 8.5-7 8.5-7-8.5z" stroke-dasharray="2.2 2.2" /></g>,
+  untargetable: <g {...S}><path d="M18.4 8.2A7.5 7.5 0 1 0 19.5 12" /><path d="M16.5 4.5l2 3.7-3.9 1" opacity="0.7" /></g>,
+  unstoppable: <g {...S}><path d="M4 12h12" stroke-width="2.4" /><path d="M13 6l7 6-7 6z" fill="currentColor" /></g>,
+  reveal: <g {...S}><circle cx="12" cy="12" r="6.5" /><circle cx="12" cy="12" r="1.6" fill="currentColor" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" /></g>,
+  grievous: <g {...S}><path d="M12 5v14M5 12h14" stroke-width="2.4" opacity="0.7" /><path d="M5.5 18.5l13-13" stroke-width="2" /></g>,
+  armor_shred: <g {...S}><rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M12 5l-2 4.5 3 2.5-2 3 1 4" /></g>,
+  resist_shred: <g {...S}><path d="M10.5 4.6A7.5 7.5 0 1 0 15 4.9" /><path d="M10.5 4.6l2 3-1 2.5 2.5-1 1-4.2" /></g>,
+};
+/** a status's mark (unknown kinds fall back to the plain wedge) */
+export function StatusGlyph(p: { kind: string; class?: string }): JSX.Element {
+  return <svg viewBox="0 0 24 24" class={p.class ?? 'sglyph'} aria-hidden="true">{STATUS_PATHS[p.kind] ?? FAMILY_PATHS.wedge}</svg>;
 }
 
 // ── pings ────────────────────────────────────────────────────────────────────────────────────────

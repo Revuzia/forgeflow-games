@@ -63,7 +63,11 @@ export type PingKind = 'alert' | 'danger' | 'onMyWay' | 'missing' | 'assist' | '
 export type EntityKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon' | 'ward' | 'pickup' | 'projectile' | 'zone';
 export type ActionState = 'idle' | 'move' | 'attack' | 'cast' | 'channel' | 'dash' | 'stunned' | 'dead' | 'recall';
 
-export interface StatusView { kind: StatusKindT; remaining: number; duration: number; power: number }
+export interface StatusView { kind: StatusKindT; remaining: number; duration: number; power: number;
+  /** CHANGED(UI), additive: the entity that applied it (the sim's Status already carries it) and the record
+   *  (ability / item / spell id) whose effect applied it, '' when none. The HUD lights an ability's
+   *  "effect running" border from a status your own ability put on you (r12 m1). */
+  readonly src?: EntityId; readonly source?: string }
 export interface BuffView { id: string; source: string; remaining: number; duration: number; stacks: number; icon?: string;
   /** CHANGED(UI), additive: the entity that applied it (the sim's Buff already carries it). The HUD tells a buff
    *  (applied by your side) from a debuff (by the other side) with it (r12 M4). */

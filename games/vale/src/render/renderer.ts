@@ -629,7 +629,8 @@ class ValeRenderer implements Renderer {
       if (!alive) continue;
       let kind: number = BAR_KIND.fighter;
       let show = true;
-      if (v.kind === 'minion' || v.kind === 'summon') { kind = BAR_KIND.minion; show = v.hp < v.maxHp - 1e-3 || a.id === this.hover || a.id === this.target; }
+      // r12 M7: enemy Wicks always carry their bar (last-hitting reads at a glance); allies when hurt or targeted
+      if (v.kind === 'minion' || v.kind === 'summon') { kind = BAR_KIND.minion; show = rel === 'enemy' || v.hp < v.maxHp - 1e-3 || a.id === this.hover || a.id === this.target; }
       else if (v.kind === 'structure') { kind = BAR_KIND.structure; }
       else if (v.kind === 'monster') { kind = BAR_KIND.monster; show = v.hp < v.maxHp - 1e-3 || v.state !== 'idle' || a.id === this.hover; }
       else if (v.kind === 'ward' || v.kind === 'pickup') show = false;
@@ -660,6 +661,8 @@ class ValeRenderer implements Renderer {
         res: v.maxRes > 0 ? v.res / v.maxRes : 0, showRes, resHatch: hatch, cc,
         color: col, resColor, glyph: kind === BAR_KIND.structure ? (v.team === 0 ? GLYPH.spire : GLYPH.dome) : isF ? GLYPH.chip : GLYPH.none,
         keyline, seatLine, alpha: 1, nameSlot, level,
+        // lost HP flashes for ~4 frames before the trail's 150 ms hold (trailHoldUntil = hit + 0.15)
+        flash: a.trailHoldUntil > 0 ? Math.max(0, 1 - (this.time - (a.trailHoldUntil - 0.15)) / 0.066) : 0,
       });
     }
     bars.end();

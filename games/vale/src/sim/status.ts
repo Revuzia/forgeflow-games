@@ -105,7 +105,8 @@ export function recomputeStatusFlags(e: Entity): void {
   e.targetable = e.alive && (mask & ST_UNTARGETABLE) === 0;
 }
 
-export interface StatusOpts { power?: number; decay?: boolean; depth?: number }
+/** source: the record whose effect applies it (EffectCtx.source.id; presentation only, never read by the sim) */
+export interface StatusOpts { power?: number; decay?: boolean; depth?: number; source?: string }
 
 /** apply a status; returns false when it was ignored (dead, unstoppable, zero duration) */
 export function applyStatus(w: World, src: Entity | null, dst: Entity, kind: StatusKindT, duration: number, opts: StatusOpts = {}): boolean {
@@ -123,12 +124,12 @@ export function applyStatus(w: World, src: Entity | null, dst: Entity, kind: Sta
     if (x.kind === kind && x.src === srcId) { s = x; break; }
   }
   if (s) {
-    if (duration > s.remaining) { s.remaining = duration; s.duration = duration; }
+    if (duration > s.remaining) { s.remaining = duration; s.duration = duration; if (opts.source) s.source = opts.source; }
     if (power > s.basePower) s.basePower = power;
     s.power = s.basePower;
     s.decay = !!opts.decay;
   } else {
-    s = { kind, remaining: duration, duration, power, basePower: power, src: srcId, srcTeam: src ? src.team : -1, decay: !!opts.decay };
+    s = { kind, remaining: duration, duration, power, basePower: power, src: srcId, srcTeam: src ? src.team : -1, source: opts.source ?? '', decay: !!opts.decay };
     dst.statuses.push(s);
   }
   if (kind === 'unstoppable') removeStatusKinds(dst, UNSTOPPABLE_IGNORES);

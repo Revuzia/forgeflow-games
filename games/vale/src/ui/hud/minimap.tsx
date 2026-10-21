@@ -4,14 +4,17 @@
 // the noon line; FRAY's plate with ten hour-marks on the rim). Fog of war from your team's vision grid
 // (unseen cells darkened). Marks keep their shape in every palette: structures by side (▲ spire, ◠
 // dome) in relationship colour, Wicks as dots, monsters and objectives as neutral squares with their
-// return timers, fighters as discs (ally plain ring, enemy notched ring + heading wedge, you a
-// Noonwhite ring + gnomon wedge), pings, and the camera's ground trapezoid.
+// return timers, fighters as round portraits (r12 m3: the fighter's icon clipped to a 13·k radius circle,
+// ≈ 26 px on the 352 px map, preloaded with the match; the palette disc only when no icon exists) in
+// their relationship ring (ally plain, enemy notched + heading wedge, you a Noonwhite ring + gnomon
+// wedge; FRAY: seat colours), pings, and the camera's ground trapezoid.
 // Input: left click / drag moves the camera (it unlocks; a locked camera scouts and snaps back), right
 // click moves your fighter, Alt + click (or the ping key held) pings "Look here".
 
 import type { CSSProperties, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import type { MapDefT } from '../../contracts/catalog.ts';
+import type { Settings } from '../../contracts/session.ts';
 import type { EntityView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
 import { cdText, useHud } from './ctx.ts';
@@ -51,6 +54,8 @@ const PING_PATHS: Record<string, string> = {
 };
 
 interface Fit { s: number; ox: number; oy: number; w: number; h: number; dpr: number }
+/** the minimap's size factor (Settings.access.minimapScale, clamped); the target plate docks on its frame by it */
+export const minimapScale = (s: Settings): number => Math.min(1.3, Math.max(0.8, s.access.minimapScale || 1));
 
 export function Minimap(): JSX.Element {
   const { cv, state } = useApp();
@@ -59,7 +64,7 @@ export function Minimap(): JSX.Element {
   const map = cv.map(client.setup.map);
   const [bw, bh] = SIZES[mapShape];
   const settings = state.settings.value;
-  const mk = Math.min(1.3, Math.max(0.8, settings.access.minimapScale || 1));
+  const mk = minimapScale(settings);
   const cvd = settings.access.colorblind;
   const drag = useRef<{ scouting: boolean } | null>(null);
 
@@ -73,6 +78,10 @@ export function Minimap(): JSX.Element {
     let stat: HTMLCanvasElement | null = null;
     let col = readColours();
     const fog = document.createElement('canvas');
+    const icons = loadIcons(model);
+    let dirty = true;
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => { dirty = true; }) : null;
+    ro?.observe(el);
     let img: HTMLImageElement | null = null;
     const src = cv.asset(map.art.minimap);
     if (src) { img = new Image(); img.src = src; img.onload = () => { stat = null; }; img.onerror = () => { img = null; stat = null; }; }
@@ -91,7 +100,7 @@ export function Minimap(): JSX.Element {
       raf = requestAnimationFrame(draw);
       if (now - lastDraw < DRAW_MS) return;
       lastDraw = now;
-      size();
+      if (dirty || !ro) { size(); dirty = false; }
       if (!stat) { col = readColours(); stat = buildStatic(map, fit, col, mapShape, model.myTeam, img); }
       if (now - lastFog > FOG_MS) { lastFog = now; drawFog(fog, model.view.visionGrid(model.myTeam)); }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -101,12 +110,12 @@ export function Minimap(): JSX.Element {
       clipShape(ctx, fit, mapShape);
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(fog, fit.ox, fit.oy, map.size[0] * fit.s, map.size[1] * fit.s);
-      drawDynamic(ctx, fit, col, model, now);
+      drawDynamic(ctx, fit, col, model, now, icons);
       drawCamera(ctx, fit, col, r);
       ctx.restore();
     };
     raf = requestAnimationFrame(draw);
-    return () => { stopped = true; cancelAnimationFrame(raf); };
+    return () => { stopped = true; cancelAnimationFrame(raf); ro?.disconnect(); };
   }, [map?.id, mapShape, mk, cvd]);
 
   const toSim = (e: PointerEvent): { x: number; y: number } | null => {
@@ -161,6 +170,45 @@ export function Minimap(): JSX.Element {
 }
 
 const fmtTimer = (s: number): string => (s >= 60 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : cdText(s));
+
+// ── fighter portraits ────────────────────────────────────────────────────────────────────────────
+interface Icon { img: HTMLImageElement; ok: boolean; circ: HTMLCanvasElement | null; d: number }
+/** every seat's fighter icon (else its skin's portrait), requested when the map mounts */
+function loadIcons(model: import('./model.ts').HudModel): Map<number, Icon> {
+  const out = new Map<number, Icon>();
+  const cv = model.cv;
+  for (const p of model.view.players) {
+    const f = cv.fighter(p.fighter);
+    const sk = cv.skin(p.skin);
+    const src = cv.asset(f?.art.icon) ?? cv.asset(sk?.portrait) ?? cv.asset(f?.art.portrait);
+    if (!src) continue;
+    const img = new Image();
+    const ic: Icon = { img, ok: false, circ: null, d: 0 };
+    img.decoding = 'async';
+    img.onload = () => { ic.ok = img.naturalWidth > 0; };
+    img.onerror = () => { ic.ok = false; };
+    img.src = src;
+    out.set(p.player, ic);
+  }
+  return out;
+}
+/** the icon clipped to a circle of diameter d (device px), rebuilt only when d changes */
+function circleOf(ic: Icon, d: number): HTMLCanvasElement | null {
+  if (!ic.ok) return null;
+  const D = Math.max(4, Math.round(d));
+  if (ic.circ && ic.d === D) return ic.circ;
+  const c = document.createElement('canvas');
+  c.width = c.height = D;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  g.beginPath(); g.arc(D / 2, D / 2, D / 2, 0, Math.PI * 2); g.clip();
+  const iw = ic.img.naturalWidth, ih = ic.img.naturalHeight;
+  const sc = Math.max(D / iw, D / ih);
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(ic.img, (D - iw * sc) / 2, (D - ih * sc) * 0.2, iw * sc, ih * sc);
+  ic.circ = c; ic.d = D;
+  return c;
+}
 
 // ── drawing ──────────────────────────────────────────────────────────────────────────────────────
 function clipShape(ctx: CanvasRenderingContext2D, f: Fit, shape: 'rect' | 'strip' | 'disc'): void {
@@ -269,7 +317,7 @@ function drawFog(cnv: HTMLCanvasElement, g: { width: number; height: number; dat
   ctx.putImageData(id, 0, 0);
 }
 
-function drawDynamic(ctx: CanvasRenderingContext2D, f: Fit, c: Record<string, string>, model: import('./model.ts').HudModel, now: number): void {
+function drawDynamic(ctx: CanvasRenderingContext2D, f: Fit, c: Record<string, string>, model: import('./model.ts').HudModel, now: number, icons: Map<number, Icon>): void {
   const v = model.view;
   const my = model.myTeam;
   const k = Math.max(0.7, f.w / 352);
@@ -317,27 +365,41 @@ function drawDynamic(ctx: CanvasRenderingContext2D, f: Fit, c: Record<string, st
   // fighters on top; you last
   const me = model.body;
   fighters.sort((a, b) => (a.id === me?.id ? 1 : b.id === me?.id ? -1 : 0));
+  // portraits: 13·k radius on the strip / rect maps (≈ 26 px at 352 px), a little smaller on the FRAY disc
+  const PR = (model.ffa ? 11 : 13) * k;
   for (const e of fighters) {
-    const x = X(f, e.x), y = Y(f, e.y), R = 6.4 * k;
+    const x = X(f, e.x), y = Y(f, e.y);
     const self = e.id === me?.id;
     const pv = e.owner >= 0 ? v.players[e.owner] : undefined;
-    const fd = pv ? model.cv.fighter(pv.fighter) : undefined;
+    const ic = pv ? icons.get(pv.player) : undefined;
+    const circ = ic ? circleOf(ic, 2 * PR) : null;
+    const R = circ ? PR : 6.4 * k;
     const ring = self ? c.self : model.ffa ? SEATS[(pv?.colorIndex ?? 0) % 10] : rel(e);
-    ctx.fillStyle = fd?.palette.primary ?? c.ink2;
-    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(11,13,17,0.35)'; ctx.beginPath(); ctx.arc(x, y + R * 0.25, R * 0.7, 0, Math.PI); ctx.fill();
-    ctx.lineWidth = (self ? 2.4 : 2) * k; ctx.strokeStyle = c.ink0;
-    ctx.beginPath(); ctx.arc(x, y, R + 1.2 * k, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = ring; ctx.lineWidth = (self ? 2.2 : 1.7) * k;
-    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.stroke();
+    if (circ) {
+      ctx.fillStyle = c.ink0;
+      ctx.beginPath(); ctx.arc(x, y, R + 2.4 * k, 0, Math.PI * 2); ctx.fill();
+      ctx.drawImage(circ, x - R, y - R, 2 * R, 2 * R);
+      ctx.strokeStyle = ring; ctx.lineWidth = (self ? 2.6 : 2) * k;
+      ctx.beginPath(); ctx.arc(x, y, R + 0.6 * k, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      const fd = pv ? model.cv.fighter(pv.fighter) : undefined;
+      ctx.fillStyle = fd?.palette.primary ?? c.ink2;
+      ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(11,13,17,0.35)'; ctx.beginPath(); ctx.arc(x, y + R * 0.25, R * 0.7, 0, Math.PI); ctx.fill();
+      ctx.lineWidth = (self ? 2.4 : 2) * k; ctx.strokeStyle = c.ink0;
+      ctx.beginPath(); ctx.arc(x, y, R + 1.2 * k, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = ring; ctx.lineWidth = (self ? 2.2 : 1.7) * k;
+      ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.stroke();
+    }
     const enemy = !self && (model.ffa || e.team !== my);
     if (enemy) {
-      // four inward notches + a heading wedge
+      // four inward notches on the ring + a heading wedge
       ctx.fillStyle = c.ink0;
-      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; ctx.beginPath(); ctx.arc(x + Math.cos(a) * R, y + Math.sin(a) * R, 1.2 * k, 0, Math.PI * 2); ctx.fill(); }
+      const rr = circ ? R + 0.6 * k : R;
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; ctx.beginPath(); ctx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr, (circ ? 1.7 : 1.2) * k, 0, Math.PI * 2); ctx.fill(); }
     }
     if (self || enemy) {
-      const a = e.facing, tip = R + 5 * k;
+      const a = e.facing, tip = R + (circ ? 7 : 5) * k;
       ctx.fillStyle = ring; ctx.strokeStyle = c.ink0; ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x + Math.cos(a) * tip, y + Math.sin(a) * tip);

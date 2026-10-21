@@ -88,6 +88,23 @@
 .announce__sub { color: var(--text-2); animation: announce-in var(--dur-base) var(--ease-dawn) 60ms both; }
 @keyframes announce-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes announce-life { 0% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
+.announce__text { position: relative; display: flex; flex-direction: column; align-items: center; }
+/* takedown banners (r12 m2): the two fighters as round portraits, in over 70 ms, out over 300 ms */
+.announce.is-kill { flex-direction: row; gap: calc(16 * var(--px)); padding: calc(8 * var(--px)) calc(34 * var(--px));
+  animation: ann-kill-in 70ms var(--ease-dawn) both, ann-kill-out 300ms var(--ease-dusk) calc(var(--life) - 300ms) forwards; }
+.announce.is-kill .announce__title, .announce.is-kill .announce__sub { animation: none; }
+.announce.is-kill .announce__rule { left: 10%; right: 10%; top: calc(-6 * var(--px)); }
+@keyframes ann-kill-in { from { opacity: 0; transform: translateY(-8px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes ann-kill-out { to { opacity: 0; } }
+.aface { position: relative; width: calc(48 * var(--px)); height: calc(48 * var(--px)); border-radius: 50%; flex: none; box-shadow: 0 0 0 2px var(--c), 0 0 0 4px rgba(11, 13, 17, 0.9); }
+.aface--empty { visibility: hidden; box-shadow: none; }
+.aface__img { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
+.aface.is-down .aface__img { filter: grayscale(0.85) brightness(0.62); }
+.aface__cut { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(150deg, transparent 50%, rgba(11, 13, 17, 0.6) 50%); }
+.aface--ally::after, .aface--self::after { content: none; }
+.aface--enemy::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 39deg, var(--ink-0) 0 12deg, transparent 12deg 90deg, var(--ink-0) 90deg 102deg, transparent 102deg 180deg, var(--ink-0) 180deg 192deg, transparent 192deg 270deg, var(--ink-0) 270deg 282deg, transparent 282deg);
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - 4px), #000 calc(50% - 3px)); mask: radial-gradient(circle, transparent calc(50% - 4px), #000 calc(50% - 3px)); }
 
 .vote { display: flex; align-items: center; gap: calc(12 * var(--px)); padding: calc(8 * var(--px)) calc(14 * var(--px)); box-shadow: inset 2px 0 0 var(--warn), inset 1px 1px 0 var(--catch-light); }
 .vote__btns { display: flex; gap: calc(6 * var(--px)); }
@@ -126,6 +143,40 @@
 .frow__lives i.is-on { background: var(--c, var(--chalk)); }
 .frow__score { position: relative; text-align: right; color: var(--text-1); font-size: calc(14 * var(--px)); }
 .frow__lead { position: absolute; right: calc(-8 * var(--px)); top: 50%; width: 0; height: 0; transform: translateY(-50%); border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-right: 5px solid var(--chalk); }
+
+/* ── the target plate (r12 M4), docked on the minimap's frame: it sits on the map's carved rim, on the map's
+   side (minimapSide), its relationship keyline on the outer edge ─────────────────────────────────────────── */
+.hud__map > .tplate { position: absolute; right: calc(-1 * var(--mb, 14) * var(--mk, 1) * var(--px)); bottom: calc(100% + (14 * var(--mk, 1) + 6) * var(--px)); pointer-events: auto; }
+.hud--map-left .hud__map > .tplate { right: auto; left: calc(-14 * var(--mk, 1) * var(--px)); }
+.tplate { display: flex; align-items: flex-start; gap: calc(10 * var(--px)); padding: calc(8 * var(--px)) calc(12 * var(--px)) calc(8 * var(--px)) calc(9 * var(--px));
+  background: linear-gradient(90deg, rgba(14, 17, 22, 0.94), rgba(22, 26, 33, 0.9)); border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(237, 230, 214, 0.08), inset -3px 0 0 var(--c), 0 4px 14px rgba(0, 0, 0, 0.4); animation: tplate-in var(--dur-base) var(--ease-dawn) both; }
+.hud--map-left .tplate { box-shadow: inset 0 1px 0 rgba(237, 230, 214, 0.08), inset 3px 0 0 var(--c), 0 4px 14px rgba(0, 0, 0, 0.4); }
+@keyframes tplate-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.tplate__face { position: relative; width: calc(52 * var(--px)); height: calc(52 * var(--px)); border-radius: 50%; flex: none; box-shadow: 0 0 0 2px var(--c), 0 0 0 4px var(--ink-0); }
+.tplate__face > .portrait { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
+.tplate--enemy .tplate__face::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 39deg, var(--ink-0) 0 12deg, transparent 12deg 90deg, var(--ink-0) 90deg 102deg, transparent 102deg 180deg, var(--ink-0) 180deg 192deg, transparent 192deg 270deg, var(--ink-0) 270deg 282deg, transparent 282deg);
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - 4px), #000 calc(50% - 3px)); mask: radial-gradient(circle, transparent calc(50% - 4px), #000 calc(50% - 3px)); }
+.tplate__mark { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; background: var(--ink-2); color: var(--c); }
+.tplate__mark--monster i { display: block; width: calc(16 * var(--px)); height: calc(16 * var(--px)); box-shadow: inset 0 0 0 2px var(--c); }
+.tplate__mark--minion i, .tplate__mark--summon i { display: block; width: calc(12 * var(--px)); height: calc(12 * var(--px)); border-radius: 50%; background: var(--c); }
+.tplate__lvl { position: absolute; right: -5px; bottom: -5px; min-width: calc(20 * var(--px)); height: calc(18 * var(--px)); padding: 0 3px; border-radius: 9px; background: var(--ink-0); color: var(--text-1);
+  font-size: max(12px, calc(12 * var(--px))); font-weight: 700; display: grid; place-items: center; box-shadow: 0 0 0 1px var(--line-2); }
+.tplate__body { display: flex; flex-direction: column; gap: calc(3 * var(--px)); width: calc(228 * var(--px)); }
+.tplate__name { display: flex; align-items: baseline; gap: calc(8 * var(--px)); white-space: nowrap; overflow: hidden; }
+.tplate__name .t-label { color: var(--text-1); overflow: hidden; text-overflow: ellipsis; }
+.tplate__hp { position: relative; display: block; height: max(15px, calc(16 * var(--px))); background: #07090C; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8); }
+.tplate__hp--ally, .tplate__hp--self { border-radius: calc(7 * var(--px)); }
+.tplate__hp--enemy { clip-path: polygon(calc(6 * var(--px)) 0, calc(100% - 6 * var(--px)) 0, 100% 50%, calc(100% - 6 * var(--px)) 100%, calc(6 * var(--px)) 100%, 0 50%); }
+.tplate__hp i { position: absolute; left: 0; top: 0; bottom: 0; display: block; }
+.tplate__trail { background: var(--dmg-trail); opacity: 0.9; }
+.tplate__fill { background: linear-gradient(180deg, color-mix(in srgb, var(--c) 70%, white), var(--c) 45%, color-mix(in srgb, var(--c) 72%, black)); }
+.tplate__shield { background: repeating-linear-gradient(45deg, var(--dmg-shield) 0 3px, rgba(220, 232, 238, 0.55) 3px 6px); }
+.tplate__num { position: absolute; inset: 0; display: grid; place-items: center; font-size: max(12px, calc(12 * var(--px))); line-height: 1; font-weight: 700; color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.tplate__res { position: relative; display: block; height: calc(4 * var(--px)); background: #07090C; }
+.tplate__res i { position: absolute; left: 0; top: 0; bottom: 0; display: block; background: var(--res); }
+.tplate__status { margin-top: calc(4 * var(--px)); }
 
 /* ── left edge: ally frames ───────────────────────────────────────────────────────────────────── */
 .allies { position: absolute; left: var(--edge); top: 50%; transform: translateY(-62%); display: flex; flex-direction: column; gap: calc(8 * var(--px)); }
@@ -206,15 +257,29 @@
 .aslot:active { transform: translateY(1px); }
 .aslot.is-unlearned .hglyph { filter: grayscale(1) brightness(0.4); }
 .aslot.is-nores .hglyph { filter: saturate(0.35) brightness(0.55) hue-rotate(200deg); }
-.aslot.is-aiming { box-shadow: inset 0 0 0 2px var(--chalk-hi), inset 0 0 16px rgba(255, 248, 234, 0.35); }
-.aslot.is-silenced .hglyph { filter: grayscale(1) brightness(0.45); }
+.aslot.is-aiming::after { box-shadow: inset 0 0 0 2px var(--chalk-hi), inset 0 0 16px rgba(255, 248, 234, 0.35); }   /* on the overlay: the glyph covers an inset shadow on the slot */
+/* the lock (r12 M4): you cannot cast it — darkened, an ember wash and the status mark */
+.aslot.is-locked .hglyph, .islot.is-locked .iglyph { filter: saturate(0.4) brightness(0.55); }
+.aslot__lock { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: rgba(90, 26, 18, 0.45); pointer-events: none; }
+.aslot__lockglyph { width: 46%; height: 46%; color: var(--chalk-hi); filter: drop-shadow(0 1px 1px var(--ink-0)) drop-shadow(0 0 2px var(--ink-0)); }
+.aslot.is-cd .aslot__lockglyph { opacity: 0.45; }
+.aslot--spell .aslot__lockglyph { width: 52%; height: 52%; }
+/* an ability's effect is running: a chalk-hi border, draining along the bottom (r12 m1) */
+.aslot__active { position: absolute; inset: 0; z-index: 3; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 2px var(--chalk-hi), inset 0 0 12px rgba(255, 248, 234, 0.28); }
+.aslot__active::after { content: ''; position: absolute; left: 0; bottom: 0; height: calc(3 * var(--px)); width: calc(var(--a, 1) * 100%); background: var(--chalk-hi); }
 .aslot__cd { position: absolute; inset: 0; z-index: 1;
-  background: conic-gradient(transparent calc(var(--e) * 360deg), rgba(8, 10, 13, 0.78) 0); }
-.aslot__cd::after { content: ''; position: absolute; left: 50%; top: 50%; width: 1.5px; height: 75%; transform-origin: 50% 0; transform: rotate(calc(var(--e) * 360deg + 180deg));
+  background: conic-gradient(transparent calc(var(--e, 0) * 360deg), rgba(8, 10, 13, 0.78) 0); }
+.aslot__cd::after { content: ''; position: absolute; left: 50%; top: 50%; width: 1.5px; height: 75%; transform-origin: 50% 0; transform: rotate(calc(var(--e, 0) * 360deg + 180deg));
   background: linear-gradient(180deg, rgba(255, 248, 234, 0.0), rgba(255, 248, 234, 0.75)); }
-.aslot__secs { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; font-size: calc(24 * var(--px)); font-weight: 700; color: var(--chalk-hi);
+.aslot__secs { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; font-size: calc(24 * var(--px)); font-weight: 700; color: var(--chalk-hi);
   text-shadow: 0 1px 2px var(--ink-0), 0 0 8px var(--ink-0), 0 0 2px var(--ink-0); }
-.aslot--spell .aslot__secs { font-size: calc(18 * var(--px)); }
+.aslot__secs.is-long { font-size: calc(20 * var(--px)); letter-spacing: -0.03em; }
+/* battle spells are the small slots: the seconds sit low, so a long "3:11" never runs into the key or the
+   charge count at the top (r12 m1; 32 px at 720p) */
+.aslot--spell .aslot__secs { align-items: end; padding-bottom: calc(4 * var(--px)); line-height: 1; font-size: max(12px, calc(18 * var(--px))); }
+.aslot--spell .aslot__secs.is-long { font-size: max(12px, calc(15 * var(--px))); letter-spacing: -0.04em; }
+.aslot--spell .aslot__key { left: 2px; top: 2px; padding: 0 2px; }
+.aslot--spell .aslot__charges { right: 3px; top: 2px; }
 .aslot__glint { position: absolute; top: 0; bottom: 0; left: 0; width: 45%; z-index: 3; background: linear-gradient(90deg, transparent, rgba(255, 248, 234, 0.6), transparent); opacity: 0; pointer-events: none; }
 .aslot__key { position: absolute; left: 4px; top: 3px; z-index: 3; font-family: var(--font-numeric); font-weight: 700; font-size: 12px; color: var(--chalk-hi);
   padding: 0 3px; border-radius: 2px; background: rgba(8, 10, 13, 0.72); line-height: 15px; }
@@ -222,7 +287,6 @@
 .aslot__cost.is-short { color: var(--team-enemy); }
 .aslot__charges { position: absolute; right: 4px; top: 3px; z-index: 3; font-size: 12px; font-weight: 700; color: var(--chalk-hi); text-shadow: 0 1px 2px var(--ink-0); }
 .aslot__recast { position: absolute; inset: 2px; z-index: 3; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--dawnglass-inlay), inset 0 0 12px rgba(191, 211, 230, 0.4); pointer-events: none; }
-.aslot__silence { position: absolute; left: 10%; right: 10%; top: 50%; z-index: 3; height: 3px; background: var(--team-enemy); transform: rotate(-30deg); box-shadow: 0 0 0 1px var(--ink-0); }
 .aslot__pips { position: absolute; left: 50%; bottom: calc(-11 * var(--px)); transform: translateX(-50%); z-index: 3; display: flex; gap: 3px; height: calc(5 * var(--px)); }
 .aslot__pips i { display: block; width: calc(7 * var(--px)); height: 100%; background: #23272F; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7); transform: skewX(-20deg); }
 .aslot__pips i.is-on { background: linear-gradient(180deg, var(--chalk-hi), #BDB4A2); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 5px rgba(255, 248, 234, 0.45); }
@@ -232,7 +296,7 @@
 .aslot__lvl svg { width: 64%; height: 64%; fill: none; stroke: currentColor; stroke-width: 2.6; margin-top: -4px; }
 @keyframes lvl-bob { from { transform: translate(-50%, 0); } to { transform: translate(-50%, -3px); } }
 
-.dbars { z-index: 1; display: flex; flex-direction: column; justify-content: space-between; }
+.dbars { display: flex; flex-direction: column; justify-content: space-between; }
 .hpbar { position: relative; height: calc(16 * var(--px)); background: #07090C; border-radius: 2px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8); }
 .hpbar__trail { position: absolute; left: 0; top: 0; bottom: 0; background: var(--dmg-trail); opacity: 0.9; }
 .hpbar__fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, #8CF0B2 0%, #63D88B 38%, #3EA867 62%, #2E8A52 100%); }
@@ -241,10 +305,16 @@
 .hpbar__ticks { position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(90deg, transparent 0 calc(var(--t1) - 1px), rgba(7, 9, 12, calc(0.55 * var(--show1))) calc(var(--t1) - 1px) var(--t1)),
               repeating-linear-gradient(90deg, transparent 0 calc(var(--t2) - 2px), rgba(7, 9, 12, 0.85) calc(var(--t2) - 2px) var(--t2)); }
-.hpbar__num { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(13 * var(--px)); font-weight: 700; color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+/* the numbers ride above the carved frame (z 2), whose inner lip shades the bar's top edge */
+.hpbar__num { position: absolute; z-index: 3; inset: 0; display: block; text-align: center; white-space: nowrap; line-height: calc(16 * var(--px)); font-size: calc(13 * var(--px)); font-weight: 700; color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
 .hpbar__num .quiet { color: rgba(255, 255, 255, 0.72); font-weight: 500; }
-.resbar { position: relative; height: calc(6 * var(--px)); background: #07090C; border-radius: 1px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8); }
-.resbar__fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--res) 60%, white), var(--res) 50%, color-mix(in srgb, var(--res) 70%, black)); transition: width var(--dur-fast) linear; }
+/* quiet regeneration readouts at the bars' right ends (r12 m1) */
+.hpbar__regen { position: absolute; z-index: 3; right: calc(6 * var(--px)); top: 0; bottom: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.74); text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.resbar { position: relative; height: calc(6 * var(--px)); background: #07090C; border-radius: 1px; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8); }
+.resbar__regen { position: absolute; right: 0; top: calc(23 * var(--px)); transform: translateY(-50%); z-index: 3; padding: 0 calc(4 * var(--px)); font-size: 12px; line-height: 13px; font-weight: 600; border-radius: 2px;
+  background: rgba(7, 9, 12, 0.94); color: color-mix(in srgb, var(--res) 55%, white); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.resbar__regen:empty, .hpbar__regen:empty { display: none; }
+.resbar__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 1px; background: linear-gradient(180deg, color-mix(in srgb, var(--res) 60%, white), var(--res) 50%, color-mix(in srgb, var(--res) 70%, black)); transition: width var(--dur-fast) linear; }
 .resbar--heat .resbar__fill { background: repeating-linear-gradient(45deg, var(--res) 0 4px, color-mix(in srgb, var(--res) 70%, var(--ink-0)) 4px 8px); }
 .resbar--none { visibility: hidden; }
 
@@ -252,7 +322,9 @@
 .dbar .islot { position: absolute; z-index: 1; }
 .islot:hover { box-shadow: inset 0 0 0 1px var(--chalk); }
 .islot.is-empty { background: rgba(11, 13, 17, 0.55); }
-.islot__secs { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(14 * var(--px)); font-weight: 700; color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0); }
+.islot__secs { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; font-size: max(12px, calc(14 * var(--px))); font-weight: 700; color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0); }
+.islot__secs.is-long { letter-spacing: -0.06em; }
+.islot .aslot__lockglyph { width: 50%; height: 50%; }
 .islot__key { position: absolute; right: 2px; bottom: 0; font-family: var(--font-numeric); font-size: 12px; color: var(--text-2); text-shadow: 0 1px 1px var(--ink-0); }
 .gleambtn { display: inline-flex; align-items: center; gap: calc(5 * var(--px)); padding: 0 calc(10 * var(--px)); border-radius: 999px; background: linear-gradient(180deg, #0B0D11, #161A21);
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8); color: var(--chalk-hi); z-index: 1; }
@@ -270,9 +342,74 @@
 .recallbar__track { display: block; width: 100%; height: calc(4 * var(--px)); background: var(--ink-0); }
 .recallbar__track i { display: block; height: 100%; background: var(--dawnglass-inlay); }
 .respawn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: calc(6 * var(--px)) calc(16 * var(--px)); background: rgba(11, 13, 17, 0.72); border-radius: var(--radius); pointer-events: none !important; }
-.lvlpop { position: absolute; left: 50%; bottom: calc(150 * var(--px)); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: calc(6 * var(--px)) calc(18 * var(--px));
-  background: rgba(11, 13, 17, 0.78); border-radius: var(--radius); pointer-events: none !important; white-space: nowrap; }
-.lvlpop__wedge { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 9px solid var(--chalk); }
+/* over the Dial Bar: the status row (on the frame), the recall / respawn / loss-of-control slot, then the
+   refusal caption — fixed heights, so nothing shifts and nothing reaches the clear centre */
+.hud__bottom > .recallbar, .hud__bottom > .respawn, .hud__bottom > .locchip { position: absolute; left: 50%; bottom: calc(196 * var(--px)); transform: translateX(-50%); }
+.dbar__status { top: auto !important; bottom: calc(100% + 4 * var(--px)); z-index: 4; }
+.srow { display: flex; gap: calc(4 * var(--px)); }
+.schip { --k: var(--team-ally); position: relative; display: block; width: calc(26 * var(--px)); height: calc(26 * var(--px)); flex: none; border-radius: 3px; overflow: hidden; background: var(--ink-1);
+  box-shadow: 0 0 0 1.5px var(--k), 0 0 0 3px rgba(11, 13, 17, 0.85); transition: opacity var(--dur-fast) linear; }
+.schip.is-bad { --k: var(--team-enemy); }
+.srow--s .schip { width: calc(22 * var(--px)); height: calc(22 * var(--px)); }
+.schip .hglyph, .schip .iglyph { border-radius: 0; }
+.schip .iglyph__ticks { display: none; }
+.schip__glyph { position: absolute; left: 14%; top: 14%; width: 72%; height: 72%; color: var(--chalk-hi); filter: drop-shadow(0 1px 0 rgba(11, 13, 17, 0.7)); }
+.schip--status.is-bad { background: radial-gradient(120% 120% at 30% 20%, #3A2320 0%, var(--ink-1) 75%); }
+.schip--status.is-good { background: radial-gradient(120% 120% at 30% 20%, #1D2E40 0%, var(--ink-1) 75%); }
+.schip__img { position: absolute; inset: 0; }
+.schip__img img { width: 100%; height: 100%; object-fit: cover; }
+/* time: the ink grows clockwise from 12 o'clock as it runs out */
+.schip__sweep { position: absolute; inset: 0; background: conic-gradient(rgba(8, 10, 13, 0.7) calc(var(--e, 0) * 360deg), transparent 0); pointer-events: none; }
+.schip__wedge { position: absolute; left: 0; top: 0; width: 38%; height: 38%; background: var(--team-enemy); clip-path: polygon(0 0, 100% 0, 0 100%); box-shadow: none; filter: drop-shadow(1px 1px 0 var(--ink-0)); }
+.schip__n { position: absolute; right: 1px; bottom: -1px; font-size: 12px; font-weight: 700; line-height: 1; color: var(--chalk-hi); text-shadow: 0 0 2px var(--ink-0), 0 1px 1px var(--ink-0), 0 0 3px var(--ink-0); }
+.schip.is-ending { opacity: 0.62; }
+.schip--more { display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line-2); background: rgba(11, 13, 17, 0.8); }
+.schip--more.is-bad { box-shadow: inset 0 0 0 1px var(--team-enemy); color: var(--text-1); }
+.locchip { display: grid; grid-template-columns: auto auto auto; align-items: center; column-gap: calc(8 * var(--px)); row-gap: calc(3 * var(--px)); padding: calc(5 * var(--px)) calc(12 * var(--px)) calc(5 * var(--px)) calc(10 * var(--px));
+  background: rgba(11, 13, 17, 0.9); border-radius: 3px; box-shadow: inset 0 2px 0 var(--team-enemy), 0 4px 14px rgba(0, 0, 0, 0.45); pointer-events: none !important; white-space: nowrap;
+  animation: loc-in 70ms var(--ease-dawn) both; }
+.locchip.is-out { animation: loc-out 200ms var(--ease-dusk) both; }
+.locchip__glyph { grid-row: 1 / span 2; width: calc(24 * var(--px)); height: calc(24 * var(--px)); color: var(--chalk-hi); }
+.locchip__word { color: var(--chalk-hi); line-height: 1.15; }
+.locchip__secs { justify-self: end; min-width: 3ch; text-align: right; font-size: calc(16 * var(--px)); line-height: 1.15; font-weight: 700; color: var(--chalk-hi); }
+.locchip__track { grid-column: 2 / span 2; display: block; height: calc(3 * var(--px)); background: var(--ink-0); }
+.locchip__track i { display: block; height: 100%; background: var(--chalk); }
+@keyframes loc-in { from { opacity: 0; transform: translate(-50%, 6px) scale(0.96); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes loc-out { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -4px); } }
+.hcap { position: absolute; left: 50%; bottom: calc(196 * var(--px)); transform: translateX(-50%); display: flex; align-items: center; gap: calc(8 * var(--px)); padding: calc(4 * var(--px)) calc(12 * var(--px));
+  background: rgba(11, 13, 17, 0.84); border-radius: 3px; box-shadow: inset 2px 0 0 var(--team-enemy); color: var(--text-1); font-family: var(--font-body); font-size: max(13px, calc(15 * var(--px))); line-height: 1.35;
+  white-space: nowrap; pointer-events: none !important; animation: hcap-life 1200ms linear both; }
+/* over a recall bar or a loss-of-control chip, the caption steps up a row (still clear of the centre) */
+.hud__bottom > .recallbar ~ .hcap, .hud__bottom > .locchip ~ .hcap { bottom: calc(240 * var(--px)); }
+.hcap__wedge { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--team-enemy); }
+@keyframes hcap-life { 0% { opacity: 0; transform: translate(-50%, 4px); } 6% { opacity: 1; transform: translate(-50%, 0); } 83% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -3px); } }
+/* the stats tab + flyout (r12 m1) */
+.dport__stats { position: absolute; left: calc(2 * var(--px)); top: calc(12 * var(--px)); width: calc(24 * var(--px)); height: calc(24 * var(--px)); display: grid; place-items: center; border-radius: 50%;
+  background: linear-gradient(180deg, #2A2F38, #14171D); color: var(--text-2); box-shadow: 0 0 0 1px #6E6A62, 0 0 0 2px var(--ink-0); }
+.dport__stats svg { width: 60%; height: 60%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.dport__stats:hover, .dport__stats.is-on { color: var(--chalk-hi); }
+.dport__stats.is-on { box-shadow: 0 0 0 1px var(--chalk), 0 0 0 2px var(--ink-0); }
+/* the stats ledger: four family rows rising off the medallion (left of your status row, clear of the centre),
+   the gnomon wedge pointing down at it; a chalk-hi rule on top like the level-up moment */
+.dledger { left: auto !important; top: auto !important; bottom: calc(100% + 6 * var(--px)); z-index: 2; display: grid; grid-template-columns: repeat(4, max-content); align-items: center;
+  column-gap: calc(10 * var(--px)); row-gap: calc(1 * var(--px)); padding: calc(6 * var(--px)) calc(12 * var(--px)) calc(7 * var(--px)) calc(10 * var(--px));
+  background: rgba(13, 16, 21, 0.94); border-radius: 3px; box-shadow: inset 0 2px 0 var(--chalk-hi), 0 4px 14px rgba(0, 0, 0, 0.45); animation: ledger-in var(--dur-base) var(--ease-dawn) both; }
+.dledger__row { display: contents; }
+.dledger__fam { grid-column: 1; display: inline-flex; align-items: center; gap: calc(6 * var(--px)); height: calc(20 * var(--px)); padding-right: calc(6 * var(--px)); box-shadow: inset -1px 0 0 var(--line-1);
+  color: var(--text-2); font-family: var(--font-heading); font-weight: 600; font-stretch: 90%; letter-spacing: 0.08em; text-transform: uppercase; font-size: max(12px, calc(12 * var(--px))); }
+.dledger__fam svg { width: calc(10 * var(--px)); height: calc(10 * var(--px)); flex: none; color: var(--chalk); }
+.dledger__cell { display: inline-flex; align-items: center; gap: calc(4 * var(--px)); height: calc(20 * var(--px)); color: var(--text-1); font-size: max(12px, calc(13 * var(--px))); }
+.dledger__cell svg { width: calc(13 * var(--px)); height: calc(13 * var(--px)); flex: none; color: var(--text-3); }
+.dledger__gnomon { position: absolute; top: 100%; width: 0; height: 0; transform: translateX(50%); border-left: calc(6 * var(--px)) solid transparent; border-right: calc(6 * var(--px)) solid transparent; border-top: calc(7 * var(--px)) solid rgba(13, 16, 21, 0.94); }
+@keyframes ledger-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* the level-up moment (r12 m2): rises off the medallion, 900 ms */
+.dport__flash--2 { box-shadow: 0 0 0 2px var(--chalk), 0 0 12px rgba(255, 248, 234, 0.4); }
+.lvlup { position: absolute; z-index: 3; left: 50%; bottom: calc(100% + 2 * var(--px)); display: flex; flex-direction: column; align-items: center; gap: 1px; padding: calc(4 * var(--px)) calc(14 * var(--px));
+  background: rgba(11, 13, 17, 0.84); border-radius: 3px; box-shadow: inset 0 2px 0 var(--chalk-hi); white-space: nowrap; pointer-events: none !important; animation: lvlup-life 900ms linear both; }
+.lvlup__wedge { position: absolute; left: 50%; top: calc(-9 * var(--px)); transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 8px solid var(--chalk-hi); }
+.lvlup__title { color: var(--chalk-hi); }
+.lvlup__sub { color: var(--text-2); }
+@keyframes lvlup-life { 0% { opacity: 0; transform: translate(-50%, 14px) scale(0.92); } 14% { opacity: 1; transform: translate(-50%, 0) scale(1); } 78% { opacity: 1; transform: translate(-50%, -4px); } 100% { opacity: 0; transform: translate(-50%, -12px); } }
 
 /* ── bottom right: minimap ────────────────────────────────────────────────────────────────────── */
 .hud__map { position: absolute; right: calc(var(--edge) + 12 * var(--px)); bottom: calc(var(--edge) + 12 * var(--px)); }
@@ -435,7 +572,20 @@
 .pwheel__item.is-on { color: var(--chalk-hi); }
 .pwheel__label { position: absolute; left: 0; top: 136px; transform: translateX(-50%); white-space: nowrap; padding: 2px 10px; background: rgba(11, 13, 17, 0.85); border-radius: var(--radius); }
 
+/* optional screen-edge marks (r12 M4 §5, Settings.access.locFlash / damageFlash): behind every widget */
+.hud > .hedge { position: absolute; inset: 0; z-index: 0; opacity: 0; pointer-events: none !important; }
+.hedge--harm { background: radial-gradient(ellipse 72% 68% at 50% 50%, transparent 50%, color-mix(in srgb, var(--team-enemy) 85%, transparent) 80%, var(--team-enemy) 100%); }
+.hedge--key { box-shadow: inset 0 0 0 calc(3 * var(--px)) var(--team-enemy), inset 0 0 0 calc(4 * var(--px)) rgba(11, 13, 17, 0.6); }
+.hedge--ink { background: radial-gradient(ellipse 72% 68% at 50% 50%, transparent 48%, rgba(5, 6, 8, 0.75) 80%, rgba(5, 6, 8, 0.96) 100%); }
+
 .reduce-motion .aslot__lvl, .reduce-motion .wping__ripple { animation: none !important; }
+.reduce-motion .dledger, .reduce-motion .tplate { animation: rm-fade 120ms linear both !important; }
+.reduce-motion .locchip, .reduce-motion .locchip.is-out, .reduce-motion .announce.is-kill { animation: rm-fade 120ms linear both !important; }
+.reduce-motion .locchip.is-out { animation-direction: reverse !important; }
+.reduce-motion .hcap { animation: rm-fade-life 1200ms linear both !important; }
+.reduce-motion .lvlup { animation: rm-fade-life 900ms linear both !important; }
+@keyframes rm-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rm-fade-life { 0% { opacity: 0; } 10% { opacity: 1; } 87% { opacity: 1; } 100% { opacity: 0; } }
 
 /* ── carved plates: the rendered 9-slice (src/ui/art/hud/plate.webp) on every HUD panel ─────────── */
 .hud .lshop.plate, .hud .hscore.plate, .hud .recap.plate, .hud .hboard.plate, .hud .ptools.plate, .hud .vote.plate {

@@ -92,6 +92,8 @@ export interface Status extends StatusView {
   src: EntityId;
   /** team of the applier (reveal grants vision to this team) */
   srcTeam: TeamId;
+  /** the record whose effect applied it (ability / item / spell id); presentation only, the sim never reads it */
+  source?: string;
   basePower: number;
   decay: boolean;
 }

@@ -17,7 +17,7 @@ import { useApp } from '../app_ctx.ts';
 import type { CatalogView } from '../catalog_view.ts';
 import { RichDesc } from '../components/Tooltip.tsx';
 import { fmtInt } from '../format.ts';
-import { useHud } from './ctx.ts';
+import { useHud, useViewKey } from './ctx.ts';
 import { GleamGlyph, HOUR_COLOR, ItemGlyph, itemHour } from './glyphs.tsx';
 import { statLines } from './itemtip.tsx';
 
@@ -82,8 +82,10 @@ export function ShopPanel(): JSX.Element | null {
   const pool = rules?.itemPool;
   const items = useMemo(() => cv.c.items.filter((it) => cv.inPool(it.pools, pool)), [pool]);
   const tags = useMemo(() => TAG_ORDER.filter((t) => items.some((it) => it.tags.includes(t))), [items]);
+  // r12 B4: the open shop (and every tile in it) re-renders when what it shows changes — your Gleam as
+  // displayed, your items, where you stand — never per sim tick
+  useViewKey(() => { const m = model.me; return shopOpen.peek() && m ? `${Math.round(m.gold)}|${m.items.join(',')}|${m.canShop ? 1 : 0}` : ''; });
   if (!shopOpen.value) return null;
-  model.frame.value;
   const me = model.me;
   if (!me) return null;
   const fighter = cv.fighter(me.fighter);
@@ -183,7 +185,6 @@ function accessLine(cv: CatalogView, mode: string): string {
 
 function Tile(p: { it: ItemDefT; me: PlayerView; sel: boolean; onSel(): void; onBuy(): void }): JSX.Element {
   const { cv } = useApp();
-  useHud().model.frame.value;
   const qt = quoteItem(cv, p.me, p.it);
   const owned = p.me.items.filter((x) => x === p.it.id).length;
   return (
@@ -199,7 +200,6 @@ function Tile(p: { it: ItemDefT; me: PlayerView; sel: boolean; onSel(): void; on
 
 function Detail(p: { it: ItemDefT; me: PlayerView; onBuy(): void; onSel(id: string): void; onSell(slot: number): void }): JSX.Element {
   const { cv } = useApp();
-  useHud().model.frame.value;
   const it = p.it;
   const qt = quoteItem(cv, p.me, it);
   const hour = itemHour(it.tier);

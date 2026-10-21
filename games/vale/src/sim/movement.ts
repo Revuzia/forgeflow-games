@@ -132,7 +132,7 @@ export function startDash(w: World, eff: EffOf<'dash'>, ctx: EffectCtx): void {
   };
   e.actionSeq++;
   if (len > 1e-6) e.facing = datan2(toY - e.y, toX - e.x);
-  if (eff.unstoppable) applyStatus(w, e, e, 'unstoppable', dur + TICK_DT);
+  if (eff.unstoppable) applyStatus(w, e, e, 'unstoppable', dur + TICK_DT, { source: ctx.source.id });
   e.path.length = 0; e.pathGoalX = NaN;
   w.emit({ e: 'dash', t: w.time, src: e.id, fromX: e.x, fromY: e.y, toX, toY, duration: dur, vfx: eff.present?.vfx });
 }
@@ -257,7 +257,7 @@ export function displaceUnit(w: World, ctx: EffectCtx, t: Entity, eff: EffOf<'di
   }
   w.nav.raycast(t.x, t.y, t.x + dx * d, t.y + dy * d, tmp);
   // airborne first: it would cancel a non-displacement dash; the displacement replaces any dash
-  applyStatus(w, src, t, 'airborne', eff.duration, { depth: ctx.depth });
+  applyStatus(w, src, t, 'airborne', eff.duration, { depth: ctx.depth, source: ctx.source.id });
   interruptCast(w, t, true);
   t.atkWindup = -1;
   t.dash = {

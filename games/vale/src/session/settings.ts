@@ -51,7 +51,7 @@ function rawDefaults(): Settings {
     video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false },
     audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true },
     controls: { binds: { ...DEFAULT_BINDS }, quickCast: false, cameraLock: false, edgePan: true, panSpeed: 0.5, attackMoveOnClick: false, selfCastModifier: 'AltLeft' },
-    access: { colorblind: 'off', uiScale: 1, hudScale: 1, minimapScale: 1, reduceMotion: false, screenShake: 1, subtitles: true },
+    access: { colorblind: 'off', uiScale: 1, hudScale: 1, minimapScale: 1, reduceMotion: false, screenShake: 1, subtitles: true, locFlash: false, damageFlash: false },
     gameplay: { showDamageNumbers: true, showAllyIndicators: true, healthBarTicks: true, minimapSide: 'right' },
   };
 }
@@ -116,6 +116,7 @@ export function normalizeSettings(raw: unknown, base: Settings = defaultSettings
       uiScale: clamp(x.uiScale, 0.5, 2, bx.uiScale), hudScale: clamp(x.hudScale, 0.5, 2, bx.hudScale),
       minimapScale: clamp(x.minimapScale, 0.5, 2, bx.minimapScale), reduceMotion: bool(x.reduceMotion, bx.reduceMotion),
       screenShake: clamp(x.screenShake, 0, 1, bx.screenShake), subtitles: bool(x.subtitles, bx.subtitles),
+      locFlash: bool(x.locFlash, bx.locFlash), damageFlash: bool(x.damageFlash, bx.damageFlash),
     },
     gameplay: {
       showDamageNumbers: bool(g.showDamageNumbers, bg.showDamageNumbers), showAllyIndicators: bool(g.showAllyIndicators, bg.showAllyIndicators),

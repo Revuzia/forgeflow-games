@@ -119,7 +119,7 @@
   --fs-num-gold: 18;
   --fs-num-clock: 20;
   --fs-num-cooldown: 22;
-  --fs-overhead-name: 12;
+  --fs-overhead-name: 14;
 }
 :root[data-cvd="deutan"] {
   --team-self: #FBF8F0;
@@ -246,7 +246,7 @@
 .t-overhead-name {
   font-family: var(--font-body);
   font-size: max(calc(var(--type-floor) * 1px), calc(var(--fs-overhead-name) * var(--k, 1) * 1px));
-  line-height: 1.1667;
+  line-height: 1.0714;
   font-weight: 600;
   letter-spacing: 0.02em;
 }

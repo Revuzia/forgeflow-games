@@ -5,6 +5,7 @@
 // shadow-line wipe to the post-game), and the practice tools (practice queue only).
 
 import type { CSSProperties, JSX } from 'preact';
+import { useMemo, useReducer } from 'preact/hooks';
 import type { DamageLogEntry } from '../../contracts/session.ts';
 import type { PlayerView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
@@ -12,7 +13,7 @@ import { Portrait } from '../components/Portrait.tsx';
 import { SeatGlyph } from '../components/Glyphs.tsx';
 import { roman } from '../components/Seat.tsx';
 import { fmtInt, fmtWait } from '../format.ts';
-import { REL_VAR, useHud } from './ctx.ts';
+import { REL_VAR, useHud, useViewKey } from './ctx.ts';
 import { ItemGlyph, SideGlyph } from './glyphs.tsx';
 import { rankFray } from './top.tsx';
 
@@ -20,8 +21,15 @@ import { rankFray } from './top.tsx';
 export function Scoreboard(): JSX.Element | null {
   const { cv } = useApp();
   const { model, board } = useHud();
+  // r12 B4: re-render on what the header shows (lead, team counts, the FRAY order); each row keys its own
+  useViewKey(() => {
+    if (!board.peek()) return '';
+    const v = model.view;
+    if (model.ffa) return rankFray(v.players).map((p) => `${p.player}:${p.placement ?? ''}`).join(',');
+    const tm = v.teams.find((t) => t.team === model.myTeam), tt = v.teams.find((t) => t.team !== model.myTeam);
+    return `${Math.round((tm?.gold ?? 0) - (tt?.gold ?? 0))}|${tm?.kills ?? 0}|${tm?.structuresDestroyed ?? 0}|${tt?.kills ?? 0}|${tt?.structuresDestroyed ?? 0}|${v.players.length}`;
+  });
   if (!board.value) return null;
-  model.frame.value;
   const v = model.view;
   if (model.ffa) {
     const rows = rankFray(v.players);
@@ -69,10 +77,15 @@ export function Scoreboard(): JSX.Element | null {
   );
 }
 
+/** what a scoreboard row shows (it re-renders when this changes, r12 B4) */
+function rowKey(model: ReturnType<typeof useHud>['model'], p: PlayerView): string {
+  const e = model.view.entity(p.entity);
+  const dead = !e || !e.alive;
+  return `${e?.level ?? ''}|${p.kills}/${p.deaths}/${p.assists}|${Math.round(p.cs)}|${Math.round(p.gold)}|${Math.round(p.damageToFighters)}|${p.items.join(',')}|${dead ? Math.ceil(p.respawnIn) : -1}|${p.lives ?? ''}|${Math.round(p.score ?? 0)}|${p.placement ?? ''}`;
+}
 function PlayerCell(p: { p: PlayerView }): JSX.Element {
   const { cv } = useApp();
   const { model } = useHud();
-  model.frame.value;
   const f = cv.fighter(p.p.fighter);
   const role = cv.role(p.p.role);
   return (
@@ -87,12 +100,11 @@ function PlayerCell(p: { p: PlayerView }): JSX.Element {
 }
 function Items(p: { p: PlayerView }): JSX.Element {
   const { cv } = useApp();
-  useHud().model.frame.value;
   return <td class="l"><span class="hscore__items">{p.p.items.map((id) => <span class="hscore__item">{id ? <ItemGlyph item={cv.item(id)} src={cv.asset(cv.item(id)?.icon)} /> : null}</span>)}</span></td>;
 }
 function TeamRow(p: { p: PlayerView; enemy: boolean }): JSX.Element {
   const { model } = useHud();
-  model.frame.value;
+  useViewKey(() => rowKey(model, p.p));
   const e = model.view.entity(p.p.entity);
   const dead = !e || !e.alive;
   const you = p.p.player === model.you;
@@ -112,7 +124,7 @@ function TeamRow(p: { p: PlayerView; enemy: boolean }): JSX.Element {
 function FrayRow(p: { p: PlayerView; place: number }): JSX.Element {
   const { cv, state } = useApp();
   const { model, client } = useHud();
-  model.frame.value;
+  useViewKey(() => rowKey(model, p.p));
   const e = model.view.entity(p.p.entity);
   const you = p.p.player === model.you;
   const seat = (p.p.colorIndex % 10) + 1;
@@ -141,11 +153,12 @@ export function DeathRecap(): JSX.Element | null {
   const { cv } = useApp();
   const { model, index } = useHud();
   const rc = model.recap.value;
-  model.frame.value;
+  // r12 B4: the open recap re-renders when its countdown's whole second changes, not every sim tick
+  useViewKey(() => { const r = model.recap.peek(); return r && r.open ? Math.ceil(model.me?.respawnIn ?? 0) : -1; });
+  const sources = useMemo(() => (rc ? groupLog(rc.log) : []), [rc]);
   if (!rc || !rc.open) return null;
   const me = model.me;
   const deathAt = rc.log.length ? rc.log[rc.log.length - 1].t : 0;
-  const sources = groupLog(rc.log);
   const total = sources.reduce((s, x) => s + x.total, 0);
   const types = { phys: 0, magic: 0, true: 0 };
   for (const s of sources) { types.phys += s.byType.phys; types.magic += s.byType.magic; types.true += s.byType.true; }
@@ -237,8 +250,9 @@ export function EndBanner(): JSX.Element | null {
 const SPEEDS = [0, 1, 2, 4, 8, 16];
 export function PracticePanel(): JSX.Element | null {
   const { cv } = useApp();
-  const { client, model } = useHud();
-  model.frame.value;
+  const { client } = useHud();
+  useViewKey(() => client.timeScale);
+  const [, bump] = useReducer((n: number) => n + 1, 0);
   if (cv.queue(client.setup.queue)?.kind !== 'practice') return null;
   const act = (action: 'gold' | 'level' | 'resetCooldowns' | 'toggleCooldowns' | 'spawnDummy' | 'heal' | 'resetMatch'): void => client.send({ type: 'practice', action });
   const scale = client.timeScale;
@@ -257,7 +271,7 @@ export function PracticePanel(): JSX.Element | null {
       <div class="ptools__speed" role="radiogroup" aria-label={cv.t('practice.panel.speed', 'Speed')}>
         <span class="t-caption muted">{cv.t('practice.panel.speed', 'Speed')}</span>
         {SPEEDS.map((s) => (
-          <button type="button" role="radio" aria-checked={Math.abs(scale - s) < 0.01} class={`hbtn hbtn--s ${Math.abs(scale - s) < 0.01 ? 'is-on' : ''}`} onClick={() => client.setTimeScale(s)}>
+          <button type="button" role="radio" aria-checked={Math.abs(scale - s) < 0.01} class={`hbtn hbtn--s ${Math.abs(scale - s) < 0.01 ? 'is-on' : ''}`} onClick={() => { client.setTimeScale(s); bump(0); }}>
             {s === 0 ? cv.t('practice.panel.paused', 'Paused') : cv.t('practice.panel.speed_x', '×{n}', { n: s })}
           </button>
         ))}

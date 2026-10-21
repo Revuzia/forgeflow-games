@@ -9,7 +9,8 @@
 // key of its discrete state changes (useViewKey in ctx.ts), and continuous values (cooldown sweeps and
 // seconds, bar widths, timers, Gleam) are written straight into the DOM by WRITERS (onWrite) that this
 // model runs once per new sim tick from the HUD's rAF loop. `derived()` caches what several widgets need
-// per tick (your loss-of-control status, which abilities' effects are running).
+// per tick (your loss-of-control status, which abilities' effects are running); `chips(e)` caches a unit's
+// status row (statuses, buffs, team buffs → buff / debuff chips) per tick.
 
 import { batch, signal } from '@preact/signals';
 import type { CatalogT, UnitDefT } from '../../contracts/catalog.ts';
@@ -38,22 +39,52 @@ export const CAST_LOCK = new Set<string>(['stun', 'airborne', 'sleep', 'taunt', 
 export const LOC_ORDER: readonly string[] = ['stun', 'airborne', 'sleep', 'fear', 'taunt', 'silence', 'root', 'disarm'];
 /** statuses that help their holder (a buff border); every other one is a debuff */
 export const HELPFUL = new Set<string>(['haste', 'invisible', 'untargetable', 'unstoppable']);
+/** one chip of a status row: a status kind (merged), a buff (per id and applier) or a team buff */
+export interface Chip {
+  /** stable across ticks: 's:<kind>' · 'b:<id>:<src>' · 't:<id>' */
+  key: string;
+  type: 'status' | 'buff' | 'team';
+  /** status kind · buff id · team buff id */
+  id: string;
+  /** the record that applied it (buffs: ability / item / spell id) */
+  source: string;
+  /** helps its holder (applied by its own side, or a helpful status) */
+  good: boolean;
+  stacks: number;
+  remaining: number;
+  duration: number;
+}
+export const CHIP_MAX = 12;
+/** what a row of at most `max` chips shows: everything when it fits; when it overflows, every harm first
+ *  (loss of control first, as chips() sorts it) and then as much help as is left — the harm you most need to
+ *  see is never what "+n" hides. The display order stays help, then harm. */
+export function rowFit(list: readonly Chip[], max: number): { shown: Chip[]; hidden: Chip[] } {
+  if (list.length <= max) return { shown: [...list], hidden: [] };
+  const good = list.filter((c) => c.good), bad = list.filter((c) => !c.good);
+  const nBad = Math.min(bad.length, max), nGood = Math.max(0, max - nBad);
+  return { shown: [...good.slice(0, nGood), ...bad.slice(0, nBad)], hidden: [...good.slice(nGood), ...bad.slice(nBad)] };
+}
 /** a refusal caption over the Dial Bar */
-export interface Caption { n: number; text: string; tone: 'warn' | 'lock' }
+export interface Caption { n: number; text: string; tone: 'warn' }
 /** per-tick derived state (cached on the view tick) */
 export interface Derived {
   tick: number;
-  /** ability / item / spell ids whose effect is running on you → seconds left (Infinity = while it lasts) */
+  /** ability / item / spell ids whose effect is running → seconds left (Infinity = while it lasts). Read from
+   *  the provenance the sim view carries: your buffs (BuffView.source), statuses you put on yourself
+   *  (StatusView.source + src), zones you placed (EntityView.def is the ability id) and your channel */
   active: Map<string, number>;
   /** the loss-of-control status the CC chip shows */
   loc: { kind: string; remaining: number; duration: number } | null;
   /** you cannot cast anything (stun, airborne, sleep, taunt, fear) — the status that does it */
   castLock: string | null;
   silenced: boolean;
+  /** rooted: dashes fail (the Dial Bar marks dash abilities) */
+  rooted: boolean;
 }
 export const RECAP_DELAY_MS = 1200;
 
 let seq = 1;
+const rankLoc = (kind: string): number => { const i = LOC_ORDER.indexOf(kind); return i < 0 ? 99 : i; };
 
 export class HudModel {
   readonly client: MatchClient;
@@ -76,6 +107,8 @@ export class HudModel {
   readonly pressed = signal<{ n: number; slot: string }>({ n: 0, slot: '' });
   /** the refusal caption over the Dial Bar (1.2 s) */
   readonly caption = signal<Caption>({ n: 0, text: '', tone: 'warn' });
+  /** a press while you cannot act: the loss-of-control chip pulses (it already says why) */
+  readonly locPulse = signal(0);
   /** your current target (selected, attacked or last hit fighter): the target frame */
   readonly target = signal<EntityId>(-1);
 
@@ -84,13 +117,15 @@ export class HudModel {
   private lastTick = -1;
   private off: (() => void) | null = null;
   private numberCbs: ((n: NumberPop) => void)[] = [];
+  private hurtCbs: ((amount: number) => void)[] = [];
   private wiped = new Set<number>();
   private units = new Map<string, UnitDefT>();
   private recapTimer = 0;
   private disposed = false;
   private writers = new Set<() => void>();
   private writeTick = -1;
-  private derivedCache: Derived = { tick: -1, active: new Map(), loc: null, castLock: null, silenced: false };
+  private derivedCache: Derived = { tick: -1, active: new Map(), loc: null, castLock: null, silenced: false, rooted: false };
+  private chipCache = new Map<EntityId, { tick: number; list: Chip[]; key: string }>();
   /** this batch's takedown that involves you (its banner waits for the batch's announces) */
   private pendingKill: { killer: PlayerId; victim: PlayerId } | null = null;
   private lastKill: { killer: Who | undefined; victim: Who } | null = null;
@@ -109,6 +144,7 @@ export class HudModel {
     this.off?.(); this.off = null;
     clearTimeout(this.bannerTimer); clearTimeout(this.recapTimer);
     this.numberCbs = [];
+    this.hurtCbs = [];
     this.writers.clear();
   }
 
@@ -125,14 +161,17 @@ export class HudModel {
   derived(): Derived {
     const v = this.view;
     if (this.derivedCache.tick === v.tick) return this.derivedCache;
-    const d: Derived = { tick: v.tick, active: new Map(), loc: null, castLock: null, silenced: false };
+    const d: Derived = { tick: v.tick, active: new Map(), loc: null, castLock: null, silenced: false, rooted: false };
     const body = this.body;
     if (body && body.alive) {
       for (const b of body.buffs) d.active.set(b.source, Math.max(d.active.get(b.source) ?? 0, b.remaining));
       let best = -1;
       for (const s of body.statuses) {
+        // a status your own ability (item, spell) put on you runs that ability's effect (StatusView.source)
+        if (s.source && s.src === body.id && s.remaining > 0) d.active.set(s.source, Math.max(d.active.get(s.source) ?? 0, s.remaining));
         if (CAST_LOCK.has(s.kind) && (!d.castLock || LOC_ORDER.indexOf(s.kind) < LOC_ORDER.indexOf(d.castLock))) d.castLock = s.kind;
         if (s.kind === 'silence') d.silenced = true;
+        if (s.kind === 'root') d.rooted = true;
         const rank = LOC_ORDER.indexOf(s.kind);
         if (rank < 0) continue;
         const score = (LOC_ORDER.length - rank) * 1000 + s.remaining;
@@ -149,6 +188,54 @@ export class HudModel {
     }
     this.derivedCache = d;
     return d;
+  }
+
+  /** a unit's status row for this tick: buffs first, then debuffs (loss of control first); cached per tick.
+   *  A row that overflows its cap drops help before harm (StatusRow, rowFit) */
+  chips(e: EntityView): { list: Chip[]; key: string } {
+    const v = this.view;
+    const c = this.chipCache.get(e.id);
+    if (c && c.tick === v.tick) return c;
+    const good: Chip[] = [], bad: Chip[] = [];
+    const byKind = new Map<string, Chip>();
+    for (const s of e.statuses) {
+      if (s.remaining <= 0) continue;
+      const k = byKind.get(s.kind);
+      if (k) { k.stacks++; if (s.remaining > k.remaining) { k.remaining = s.remaining; k.duration = Math.max(s.duration, s.remaining); } continue; }
+      const chip: Chip = { key: `s:${s.kind}`, type: 'status', id: s.kind, source: '', good: HELPFUL.has(s.kind), stacks: 1, remaining: s.remaining, duration: Math.max(s.duration, s.remaining, 0.01) };
+      byKind.set(s.kind, chip);
+      (chip.good ? good : bad).push(chip);
+    }
+    for (const ch of byKind.values()) if (ch.stacks < 2) ch.stacks = 0;   // merged statuses show no count
+    bad.sort((a, b) => rankLoc(a.id) - rankLoc(b.id));
+    for (const b of e.buffs) {
+      const src = b.src !== undefined && b.src >= 0 ? v.entity(b.src) : undefined;
+      const helps = !src || src.team === e.team;
+      const chip: Chip = { key: `b:${b.id}:${b.src ?? -1}`, type: 'buff', id: b.id, source: b.source, good: helps, stacks: b.stacks > 1 ? b.stacks : 0,
+        remaining: b.remaining, duration: Math.max(b.duration, b.remaining, 0.01) };
+      (helps ? good : bad).push(chip);
+    }
+    if (e.kind === 'fighter' && e.team >= 0) {
+      const t = v.teams.find((x) => x.team === e.team);
+      if (t) for (const tb of t.buffs) {
+        const def = (this.cv.c as CatalogT).teamBuffs.find((x) => x.id === tb.id);
+        good.push({ key: `t:${tb.id}`, type: 'team', id: tb.id, source: tb.id, good: true, stacks: 0, remaining: tb.remaining,
+          duration: def?.duration ?? (Number.isFinite(tb.remaining) ? Math.max(tb.remaining, 0.01) : Infinity) });
+      }
+    }
+    const list = [...good, ...bad];
+    const out = { tick: v.tick, list, key: list.map((x) => `${x.key}${x.stacks ? `x${x.stacks}` : ''}`).join(',') };
+    this.chipCache.set(e.id, out);
+    if (this.chipCache.size > 64) for (const id of this.chipCache.keys()) { if (id !== e.id && this.chipCache.get(id)!.tick !== v.tick) this.chipCache.delete(id); }
+    return out;
+  }
+
+  /** a unit you selected (left click) or ordered an attack on: the target plate follows it */
+  select(id: EntityId | null): void {
+    if (id === null) { this.target.value = -1; return; }
+    const e = this.view.entity(id);
+    if (!e || !e.alive || e.id === this.body?.id || e.kind === 'projectile' || e.kind === 'zone' || e.kind === 'pickup' || e.kind === 'ward' || e.maxHp <= 0) return;
+    this.target.value = id;
   }
 
 
@@ -197,6 +284,11 @@ export class HudModel {
   onNumber(cb: (n: NumberPop) => void): () => void {
     this.numberCbs.push(cb);
     return () => { this.numberCbs = this.numberCbs.filter((x) => x !== cb); };
+  }
+  /** damage your fighter takes (amount), for the optional damage edge (Settings.access.damageFlash) */
+  onHurt(cb: (amount: number) => void): () => void {
+    this.hurtCbs.push(cb);
+    return () => { this.hurtCbs = this.hurtCbs.filter((x) => x !== cb); };
   }
 
   // ── feed + banners ─────────────────────────────────────────────────────────────────────────────
@@ -348,6 +440,7 @@ export class HudModel {
       case 'damage': {
         const src = ev.src >= 0 ? v.entity(ev.src) : undefined;
         const me = this.me;
+        if (me && ev.dst === me.entity && ev.amount > 0) for (const cb of this.hurtCbs) { try { cb(ev.amount); } catch { /* never breaks the match */ } }
         if (!src || !me || src.owner !== this.you || ev.dst === me.entity || ev.amount <= 0) break;
         const dst = v.entity(ev.dst);
         if (!dst) break;

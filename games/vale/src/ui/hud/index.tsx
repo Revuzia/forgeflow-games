@@ -6,8 +6,10 @@
 //   .hudsurface  the full-screen pointer surface: world clicks go to the InputController from here
 //   .hudworld    world-anchored marks projected every frame (numbers, move/attack markers, pings)
 //   .hud         the widgets: sky strip + announcer (top centre), kill feed / Hour Board (top right),
-//                ally frames (left edge), feed (bottom left), Dial Bar (bottom centre), minimap
-//                (bottom right, swappable), and on demand: shop, scoreboard, death recap, ping wheel,
+//                ally frames (left edge), feed (bottom left), Dial Bar (bottom centre) with your status
+//                row, the loss-of-control chip and the refusal caption over it, minimap (bottom right,
+//                swappable) with the target plate docked on its frame, the optional screen-edge marks
+//                (behind every widget), and on demand: shop, scoreboard, death recap, ping wheel,
 //                practice tools, surrender vote, the end-of-match banner
 // The centre 40 % × 50 % of the screen holds no HUD (bible). Widgets catch the pointer; the gaps
 // between them fall through to the surface.
@@ -21,11 +23,12 @@ import { useApp, useEsc } from '../app_ctx.ts';
 import { keyShort } from '../keys.ts';
 import { HudContext, type HudCtx } from './ctx.ts';
 import { DialBar } from './dialbar.tsx';
-import { Minimap } from './minimap.tsx';
-import { HudModel } from './model.ts';
+import { Minimap, minimapScale } from './minimap.tsx';
+import { type Caption as CaptionT, HudModel } from './model.ts';
 import { DeathRecap, EndBanner, PracticePanel, Scoreboard } from './panels.tsx';
 import { ShopPanel } from './shop.tsx';
-import { AllyFrames, Feed, LevelUpPop, RecallBar, RespawnLine } from './side.tsx';
+import { AllyFrames, Feed, RecallBar, RespawnLine } from './side.tsx';
+import { Caption, LocChip, ScreenEdge, TargetPlate } from './status.tsx';
 import { Announcer, HourBoard, KillFeed, SkyStrip, SurrenderPlate } from './top.tsx';
 import { PingWheel, WorldLayer, type WorldMarks } from './world.tsx';
 import '../styles/hud.css';
@@ -54,24 +57,28 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
     const index = new AbilityIndex(cv.c);
     const shopOpen = signal(false);
     const board = signal(false);
+    const statsOpen = signal(false);
     const marks: WorldMarks = { markers: signal([]) };
-    return { model, index, shopOpen, board, marks };
+    return { model, index, shopOpen, board, statsOpen, marks };
   }, [client]);
-  const { model, index, shopOpen, board, marks } = built;
+  const { model, index, shopOpen, board, statsOpen, marks } = built;
 
   const mode = cv.mode(client.setup.mode);
   const lanes = cv.map(client.setup.map)?.lanes.length ?? 3;
   const mapShape: HudCtx['mapShape'] = model.ffa ? 'disc' : lanes <= 1 ? 'strip' : 'rect';
 
   const input = useMemo(() => new InputController({
-    client, renderer: r, index, settings: state.settings.peek(),
+    client, renderer: selecting(r, model), index, settings: state.settings.peek(),
     surface: document.body,
     hooks: {
       toggleShop: () => { shopOpen.value = !shopOpen.value; sound.play(shopOpen.value ? 'tab' : 'back'); },
       closeShop: () => { if (!shopOpen.value) return false; shopOpen.value = false; sound.play('back'); return true; },
       scoreboard: (on) => { board.value = on; },
-      denied: (slot, why) => denied(model, cv, slot, why),
-      marker: (m) => { marks.markers.value = [...marks.markers.peek().slice(-5), { ...m, id: markSeq++, at: performance.now() }]; },
+      denied: (slot, why) => denied(model, cv, index, slot, why),
+      marker: (m) => {
+        marks.markers.value = [...marks.markers.peek().slice(-5), { ...m, id: markSeq++, at: performance.now() }];
+        if (m.kind === 'attack' && m.target !== undefined) model.select(m.target);
+      },
       setCameraLock: (locked) => {
         r.camera?.setMode(locked ? 'locked' : 'semi');
         if (locked) r.camera?.centerOnSelf();
@@ -81,7 +88,11 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
       },
       blocked: () => overlay.modals.value.length > 0,
       pingsDisabled: () => model.ffa,
-      cast: (slot) => { model.pressed.value = { n: model.pressed.peek().n + 1, slot }; },
+      cast: (slot) => {
+        // the sim refuses a cast while you cannot act: the slot shakes and the loss-of-control chip pulses
+        if (model.derived().castLock) { lockPulse(model, slot); return; }
+        model.pressed.value = { n: model.pressed.peek().n + 1, slot };
+      },
     },
   }), [client]);
 
@@ -115,8 +126,10 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
       if (text) model.say(text, 'hint');
       timer = window.setTimeout(next, HINT_GAP_MS);
     };
+    let pre = false;
     const start = window.setInterval(() => {
-      if (client.view.phase === 'pregame' && i === 0) { model.say(cv.t('hud.pregame_shop', 'Buy items and set your abilities before the bell.'), 'hint'); i = 0; }
+      // once (this ticks every 500 ms through the pregame)
+      if (client.view.phase === 'pregame' && !pre) { pre = true; model.say(cv.t('hud.pregame_shop', 'Buy items and set your abilities before the bell.'), 'hint'); }
       if (client.view.phase === 'live') { clearInterval(start); timer = window.setTimeout(next, 1500); }
     }, 500);
     return () => { clearInterval(start); clearTimeout(timer); };
@@ -127,7 +140,7 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
   useEsc(() => { if (shopOpen.value) { shopOpen.value = false; return true; } return false; });
 
   const ctx: HudCtx = {
-    client, model, input, index, r, shopOpen, board, mapShape,
+    client, model, input, index, r, shopOpen, board, statsOpen, mapShape,
     key: (action: string) => keyShort(input.keymap.code(action as Action)),
   };
   const side = state.settings.value.gameplay.minimapSide;
@@ -137,6 +150,7 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
       <div ref={surface} class={`hudsurface cur-${cursor}`} aria-hidden="true" />
       <WorldLayer marks={marks} />
       <div class={`hud hud--${model.ffa ? 'ffa' : 'team'} hud--map-${side} hud--mode-${mode?.id ?? 'x'}`} style={{ '--hk': state.settings.value.access.hudScale || 1 } as CSSProperties}>
+        <ScreenEdge />
         <div class="hud__top">
           <SkyStrip />
           <Announcer />
@@ -153,10 +167,11 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
         <div class="hud__bottom">
           <RecallBar />
           <RespawnLine />
-          <LevelUpPop />
+          <LocChip />
+          <Caption />
           <DialBar />
         </div>
-        <div class="hud__map"><Minimap /></div>
+        <div class="hud__map" style={{ '--mk': minimapScale(state.settings.value) } as CSSProperties}><TargetPlate /><Minimap /></div>
         <PracticePanel />
         <ShopPanel />
         <Scoreboard />
@@ -170,23 +185,68 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
 
 let markSeq = 1;
 
-/** a refused press: the slot shakes, and the reason goes to the feed when it is not obvious */
-function denied(model: HudModel, cv: HudModel['cv'], slot: string, why: DenyReason): void {
+/** the renderer seam the input controller gets: the real renderer, plus target selection for the HUD's
+ *  target plate (a left click on a unit selects it) */
+function selecting(r: InputRenderer, model: HudModel): InputRenderer {
+  const w: InputRenderer = {
+    setTarget: (id) => { r.setTarget?.(id); model.select(id); },
+    get camera() { return r.camera; },
+  };
+  if (r.pickGround) w.pickGround = (x, y) => r.pickGround!(x, y);
+  if (r.pickEntity) w.pickEntity = (x, y) => r.pickEntity!(x, y);
+  if (r.worldToScreen) w.worldToScreen = (x, y, h) => r.worldToScreen!(x, y, h);
+  if (r.setAim) w.setAim = (a) => r.setAim!(a);
+  if (r.setHover) w.setHover = (id) => r.setHover!(id);
+  return w;
+}
+
+const CAPTION_MS = 1200;
+let captionTimer = 0;
+function caption(model: HudModel, text: string, tone: CaptionT['tone']): void {
+  if (!text) return;
+  model.caption.value = { n: model.caption.peek().n + 1, text, tone };
+  clearTimeout(captionTimer);
+  captionTimer = window.setTimeout(() => { model.caption.value = { ...model.caption.peek(), text: '' }; }, CAPTION_MS);
+}
+/** a press while you cannot act: the slot shakes and the loss-of-control chip (which names the status
+ *  and its seconds) pulses, instead of a second caption saying the same */
+function lockPulse(model: HudModel, slot: string): void {
+  model.denied.value = { n: model.denied.peek().n + 1, slot, why: 'locked' };
+  model.locPulse.value = model.locPulse.peek() + 1;
+}
+
+/** a refused press: the slot shakes, and a 1.2 s caption over the Dial Bar says why (pings: the feed) */
+function denied(model: HudModel, cv: HudModel['cv'], index: AbilityIndex, slot: string, why: DenyReason): void {
   model.denied.value = { n: model.denied.peek().n + 1, slot, why };
-  const say = (key: string, fallback: string, params?: Record<string, string | number>): void => model.say(cv.t(key, fallback, params), 'warn');
+  const say = (key: string, fallback: string, params?: Record<string, string | number>): void => caption(model, cv.t(key, fallback, params), 'warn');
+  const d = model.derived();
+  // you cannot act (the controller refuses at the press, 'cc'): the loss-of-control chip names it — pulse it
+  if (why === 'cc' && !d.loc) { say('hud.caption.cc', 'You cannot act right now'); return; }
+  if (why !== 'ping_limit' && why !== 'ping_fray' && why !== 'dead' && (why === 'cc' || d.castLock || (why === 'silenced' && d.loc))) { lockPulse(model, slot); return; }
   switch (why) {
-    case 'ping_limit': say('ping.limit', 'Pings are limited to 5 every 4 s.'); break;
-    case 'ping_fray': say('ping.unavailable_fray', 'Pings are for teammates. Nobody shares your side in FRAY.'); break;
+    case 'ping_limit': model.say(cv.t('ping.limit', 'Pings are limited to 5 every 4 s.'), 'warn'); break;
+    case 'ping_fray': model.say(cv.t('ping.unavailable_fray', 'Pings are for teammates. Nobody shares your side in FRAY.'), 'warn'); break;
+    case 'cooldown': {
+      const me = model.me;
+      const i = slot.startsWith('item') ? Number(slot.slice(4)) - 1 : -1;
+      const av = me?.abilities.find((a) => a.slot === slot);
+      const cd = i >= 0 ? me?.itemCooldowns[i] ?? 0 : av?.cooldown ?? 0;
+      const name = i >= 0 ? cv.item(me?.items[i])?.name ?? '' : index.get(av?.id)?.name ?? '';
+      if (cd > 0) say('hud.caption.cooldown', '{name} ready in {t}', { name, t: cd < 1 ? `${cd.toFixed(1)} s` : cdWords(Math.ceil(cd - 0.001)) });
+      else say('hud.ability.on_cooldown', 'Cooling down');
+      break;
+    }
     case 'resource': {
       const f = cv.fighter(model.me?.fighter);
       const res = cv.resource(f?.resource);
-      say('hud.denied.resource', 'Not enough {res}.', { res: res?.name ?? cv.t('hud.resource', 'Resource') });
+      say('hud.ability.no_resource', 'Not enough {resource}', { resource: res?.name ?? cv.t('hud.resource', 'Resource') });
       break;
     }
-    case 'rank': say('hud.denied.rank', 'Level up this ability first.'); break;
-    case 'silenced': say('hud.denied.silenced', 'You are silenced.'); break;
-    case 'target': say('hud.denied.target', 'No valid target there.'); break;
-    case 'no_active': say('hud.denied.no_active', 'That item has no active.'); break;
+    case 'rank': say('hud.caption.rank', 'Level this ability up first'); break;
+    case 'silenced': say('hud.caption.silenced', 'Silenced: abilities are sealed'); break;
+    case 'target': say('hud.caption.target', 'No valid target there'); break;
+    case 'no_active': say('hud.caption.no_active', 'That item has no active'); break;
     default: break;
   }
 }
+const cdWords = (t: number): string => (t >= 60 ? `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}` : `${t} s`);

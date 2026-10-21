@@ -1,16 +1,18 @@
 // VALE render — overhead bars + labels (STYLE_BIBLE "HUD density" overhead row; tokens.json
 // `hud.overheadBar`). Drawn in the overlay pass (after the grade), so every hex is the pixel.
 //
-// ONE instanced draw for every bar, ONE for every label (names, level numbers):
-//   fighter    HP 82×9 over resource 82×4 (1 px gap) on an 80 % ink-1 plate, level chip 18 px on
-//              the left, name 12/14 600 with a 2 px ink outline above, 2 px CC bar under the plate
-//   minion     40×4, only when damaged or targeted
-//   structure  120×10 with the team glyph (▲ spire = side a, ◠ dome = side b) on the left
-//   monster    82×6, Dialstone, no ring until aggro
+// ONE instanced draw for every bar, ONE for every label (names, level numbers). Sizes: tokens.json
+// hud.overheadBar (r12 M7, raised to read at LoL's gauge in VALE's own shapes):
+//   fighter    HP 104×10 over resource 104×4 (1 px gap) on an 80 % ink-1 plate, level chip 22 px on
+//              the left, name 14/15 600 with a 2 px ink outline above, 2 px CC bar under the plate
+//   minion     58×5: enemies always (on screen), allies when damaged or targeted
+//   structure  220×16 with ticks every 25 % and the team glyph (▲ spire = side a, ◠ dome = side b)
+//   monster    104×8, Dialstone, no ring until aggro
 // HP ticks every 100 (1 px, ink 35 %, hidden when closer than 4 px) and heavy every 1,000 (2 px, ink
-// 70 %); a Noonwhite damage trail (150 ms hold, 450 ms shrink); the shield as a hatched Dawnglass
-// segment (45°, 1 px line, 3 px gap) after HP. End shapes per relationship: self double frame,
-// ally rounded, enemy chevron, neutral square. FRAY: other seats in their seat colour (+ 1 px chalk /
+// 70 %); lost HP flashes white for ~4 frames (L* 100, the span stands 1 px proud), then the Noonwhite
+// damage trail holds 150 ms and shrinks over 450 ms; the shield as a hatched Dawnglass segment (45°,
+// 1 px line, 3 px gap) after HP. Your own fill is Sap (#63D88B, the Dial Bar's HP) so your trail
+// reads. End shapes per relationship: self double frame, ally rounded, enemy chevron, neutral square. FRAY: other seats in their seat colour (+ 1 px chalk /
 // ink keyline where the bible asks), your own seat colour as a 2 px line on top of your plate.
 // Bars are a fixed screen size: 1 reference px = max(0.8, height / 1080) × hudScale CSS px.
 
@@ -37,7 +39,15 @@ export interface BarSpec {
   alpha: number;
   /** label slot (names) and level */
   nameSlot: number; level: number;
+  /** 0..1: the lost-HP flash (1 on the hit, 0 after ~66 ms) */
+  flash?: number;
 }
+
+/** bar sizes in 1080p reference px (tokens.json hud.overheadBar) */
+export const BAR_SIZE = {
+  fighter: { w: 104, hp: 10, res: 4 }, minion: { w: 58, hp: 5 }, structure: { w: 220, hp: 16 }, monster: { w: 104, hp: 8 },
+  levelChip: 22, nameFontPx: 14, nameLinePx: 15,
+} as const;
 
 const MAX = 320;
 const NAME_ROWS = 24;
@@ -54,7 +64,7 @@ attribute vec4 aRes;      // res, cc, showRes, resHatch
 attribute vec4 aCol;      // rgb, shape
 attribute vec4 aResCol;   // rgb, alpha
 attribute vec4 aSeat;     // rgb, seat line on
-attribute vec4 aMisc;     // glyph, keyline, -, -
+attribute vec4 aMisc;     // glyph, keyline, lost-HP flash, -
 uniform vec2 uResolution;
 uniform float uPxScale;
 varying vec2 vP;
@@ -80,6 +90,7 @@ const vec3 NOON = vec3( 0.904661, 0.863157, 0.760525 );   // #F4EFE2
 const vec3 GLASS = vec3( 0.715694, 0.799103, 0.854993 );  // #DCE8EE
 const vec3 CHALK = vec3( 0.846873, 0.791298, 0.672443 );  // #EDE6D6
 const vec3 INK0 = vec3( 0.003347, 0.004025, 0.005605 );   // #0B0D11
+const vec3 SAP = vec3( 0.124772, 0.686685, 0.258216 );    // #63D88B (your own fill)
 float sdBox( vec2 p, vec2 b ) { vec2 d = abs( p ) - b; return length( max( d, 0.0 ) ) + min( max( d.x, d.y ), 0.0 ); }
 // bar silhouette with the relationship end shape; c = centre, hb = half size
 float sdBar( vec2 p, vec2 c, vec2 hb, float shape ) {
@@ -97,8 +108,8 @@ float cover( float d ) { float aa = 0.5 / uPxScale; return 1.0 - smoothstep( -aa
 void over( inout vec4 acc, vec3 c, float a ) { acc.rgb = mix( acc.rgb, c, a ); acc.a = a + acc.a * ( 1.0 - a ); }
 void main() {
   float kind = vBox.w, shape = vCol.w;
-  float barW = kind < 0.5 ? 82.0 : kind < 1.5 ? 40.0 : kind < 2.5 ? 120.0 : 82.0;
-  float hpH = kind < 0.5 ? 9.0 : kind < 1.5 ? 4.0 : kind < 2.5 ? 10.0 : 6.0;
+  float barW = kind < 0.5 ? 104.0 : kind < 1.5 ? 58.0 : kind < 2.5 ? 220.0 : 104.0;
+  float hpH = kind < 0.5 ? 10.0 : kind < 1.5 ? 5.0 : kind < 2.5 ? 16.0 : 8.0;
   float showRes = vRes.z;
   float resH = showRes > 0.5 ? 4.0 : 0.0, gap = showRes > 0.5 ? 1.0 : 0.0;
   float pad = kind > 0.5 && kind < 1.5 ? 1.0 : 2.0;
@@ -136,8 +147,11 @@ void main() {
   float fHp = 1.0 - smoothstep( hp - aa, hp + aa, u );
   float fTrail = ( 1.0 - smoothstep( trail - aa, trail + aa, u ) ) * ( 1.0 - fHp );
   float fShield = ( 1.0 - smoothstep( shEnd - aa, shEnd + aa, u ) ) * smoothstep( hp - aa, hp + aa, u );
-  over( acc, vCol.rgb, inRow * fHp );
-  over( acc, NOON, inRow * fTrail );
+  over( acc, sh < 0.5 ? SAP : vCol.rgb, inRow * fHp );
+  // lost HP: a white flash that stands 1 px proud for ~4 frames, then the Noonwhite trail
+  float fl = clamp( vMisc.z, 0.0, 1.0 );
+  float inPop = fl > 0.001 ? cover( sdBox( vP - hpC, hpHB + vec2( 0.0, 1.0 ) ) ) : inRow;
+  over( acc, mix( NOON, vec3( 1.0 ), fl ), inPop * fTrail );
   if ( shEnd > hp + 0.001 ) {
     float hatch = mod( ( vP.x + vP.y ) / 1.41421, 4.0 / 1.41421 * 1.41421 );
     float line = 1.0 - smoothstep( 0.5, 1.0 + 0.5 / uPxScale, abs( hatch - 0.5 ) );
@@ -149,9 +163,14 @@ void main() {
     float edge = cover( abs( dRow + 0.5 ) - 0.5 ) * ( 1.0 - smoothstep( hp, hp + aa * 2.0, u ) );
     over( acc, kc, edge );
   }
-  // ticks: light every 100, heavy every 1000 (HP row only)
+  // ticks: light every 100, heavy every 1000 (HP row only); structures: every 25 %
   float total = max( vHp.w, 1.0 );
-  if ( kind < 0.5 || kind > 1.5 ) {
+  if ( kind > 1.5 && kind < 2.5 ) {
+    float q = u * 4.0;
+    float dq = abs( q - floor( q + 0.5 ) ) * barW * 0.25;
+    float notEdgeQ = step( 2.0, vP.x + barW * 0.5 ) * step( 2.0, barW * 0.5 - vP.x );
+    over( acc, INK0, inRow * ( 1.0 - smoothstep( 1.0 - 0.25 / uPxScale, 1.0 + 0.25 / uPxScale, dq ) ) * 0.75 * notEdgeQ );
+  } else if ( kind < 0.5 || kind > 2.5 ) {
     float spacing = barW * 100.0 / total;
     float t100 = u * total / 100.0;
     float dl = abs( t100 - floor( t100 + 0.5 ) ) * spacing;
@@ -182,25 +201,25 @@ void main() {
   // left marks: level chip (fighters) or the side glyph (structures)
   float g = vMisc.x;
   if ( g > 0.5 ) {
-    vec2 cc = vec2( -plateHB.x - 3.0 - 9.0, 0.0 );
+    vec2 cc = vec2( -plateHB.x - 3.0 - 11.0, 0.0 );
     if ( g > 2.5 ) {
-      float dc = sdBox( vP - cc, vec2( 9.0 ) );
+      float dc = sdBox( vP - cc, vec2( 11.0 ) );
       over( acc, INK1, cover( dc ) * 0.9 );
       over( acc, vCol.rgb, cover( abs( dc + 0.5 ) - 0.5 ) );
     } else if ( g < 1.5 ) {
       // ▲ spire
       vec2 q = vP - cc; q.y += 1.0;
       float k = 1.7320508;
-      q.x = abs( q.x ) - 6.0; q.y = q.y + 6.0 / k;
+      q.x = abs( q.x ) - 8.0; q.y = q.y + 8.0 / k;
       if ( q.x + k * q.y > 0.0 ) q = vec2( q.x - k * q.y, -k * q.x - q.y ) / 2.0;
-      q.x -= clamp( q.x, -12.0, 0.0 );
+      q.x -= clamp( q.x, -16.0, 0.0 );
       float dt = -length( q ) * sign( q.y );
       over( acc, INK1, cover( dt - 1.5 ) * 0.8 );
       over( acc, vCol.rgb, cover( dt ) );
     } else {
       // ◠ dome
-      vec2 q = vP - cc + vec2( 0.0, 3.0 );
-      float dd = max( length( q ) - 7.0, -q.y );
+      vec2 q = vP - cc + vec2( 0.0, 4.0 );
+      float dd = max( length( q ) - 9.0, -q.y );
       over( acc, INK1, cover( dd - 1.5 ) * 0.8 );
       over( acc, vCol.rgb, cover( dd ) );
     }
@@ -306,13 +325,14 @@ export class BarLayer {
     const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
     if (fonts) {
       Promise.all([
-        fonts.load('600 24px "Atkinson Hyperlegible Next"').catch(() => []),
+        fonts.load('600 28px "Atkinson Hyperlegible Next"').catch(() => []),
         fonts.load('700 26px "Atkinson Hyperlegible Mono"').catch(() => []),
       ]).then(() => { this.fontsReady = true; this.redrawAll(); });
     }
   }
 
-  private nameFont(): string { return '600 24px "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif'; }
+  /** names at 2× the 14 px overhead size (bible: overhead name 14/15 600, 2 px ink outline) */
+  private nameFont(): string { return '600 28px "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif'; }
 
   private drawDigits(): void {
     const c = this.ctx;
@@ -375,9 +395,9 @@ export class BarLayer {
     if (this.count >= MAX) return;
     const i = this.count++;
     const isF = b.kind === BAR_KIND.fighter;
-    const barW = isF ? 82 : b.kind === BAR_KIND.minion ? 40 : b.kind === BAR_KIND.structure ? 120 : 82;
-    const quadW = barW + 2 * (2 + 3 + 18 + 4) + 8;
-    const quadH = 40;
+    const barW = isF ? BAR_SIZE.fighter.w : b.kind === BAR_KIND.minion ? BAR_SIZE.minion.w : b.kind === BAR_KIND.structure ? BAR_SIZE.structure.w : BAR_SIZE.monster.w;
+    const quadW = barW + 2 * (2 + 3 + BAR_SIZE.levelChip + 4) + 8;
+    const quadH = 44;
     const A = this.a;
     A.aAnchor.setXYZ(i, b.x, b.y, b.z);
     A.aBox.setXYZW(i, quadW, quadH, 0, b.kind);
@@ -386,11 +406,11 @@ export class BarLayer {
     A.aCol.setXYZW(i, b.color.r, b.color.g, b.color.b, b.shape);
     A.aResCol.setXYZW(i, b.resColor.r, b.resColor.g, b.resColor.b, b.alpha);
     if (b.seatLine) A.aSeat.setXYZW(i, b.seatLine.r, b.seatLine.g, b.seatLine.b, 1); else A.aSeat.setXYZW(i, 0, 0, 0, 0);
-    A.aMisc.setXYZW(i, b.glyph, b.keyline, 0, 0);
+    A.aMisc.setXYZW(i, b.glyph, b.keyline, b.flash ?? 0, 0);
     if (isF) {
-      const bodyH = 9 + (b.showRes ? 5 : 0);
+      const bodyH = BAR_SIZE.fighter.hp + (b.showRes ? BAR_SIZE.fighter.res + 1 : 0);
       const plateTop = bodyH / 2 + 2 + (b.shape === SHAPE.self ? 2 : 0);
-      if (b.nameSlot >= 0) this.pushLabel(b, 0, plateTop + 2 + 7, (this.slotWidth[b.nameSlot] ?? 200) / 2, ROW_H / 2,
+      if (b.nameSlot >= 0) this.pushLabel(b, 0, plateTop + 2 + BAR_SIZE.nameLinePx / 2, (this.slotWidth[b.nameSlot] ?? 200) / 2, ROW_H / 2,
         (ATLAS_W / 2 - (this.slotWidth[b.nameSlot] ?? 200) / 2) / ATLAS_W, 1 - (b.nameSlot * ROW_H + ROW_H) / ATLAS_H,
         (ATLAS_W / 2 + (this.slotWidth[b.nameSlot] ?? 200) / 2) / ATLAS_W, 1 - (b.nameSlot * ROW_H) / ATLAS_H, 1, 1, 1);
       if (b.level > 0) {
@@ -398,8 +418,8 @@ export class BarLayer {
         const col = (n - 1) % 36, row = Math.floor((n - 1) / 36);
         const u0 = (col * DIGIT_W) / ATLAS_W, u1 = ((col + 1) * DIGIT_W) / ATLAS_W;
         const v1 = 1 - (DIGIT_ROW_Y + row * DIGIT_H) / ATLAS_H, v0 = 1 - (DIGIT_ROW_Y + (row + 1) * DIGIT_H) / ATLAS_H;
-        const cx = -(barW / 2 + 2 + (b.shape === SHAPE.self ? 2 : 0)) - 3 - 9;
-        this.pushLabel(b, cx, 0.5, DIGIT_W / 2, DIGIT_H / 2, u0, v0, u1, v1, 1, 1, 1);
+        const cx = -(barW / 2 + 2) - 3 - BAR_SIZE.levelChip / 2;
+        this.pushLabel(b, cx, 0.5, DIGIT_W * 0.58, DIGIT_H * 0.58, u0, v0, u1, v1, 1, 1, 1);
       }
     }
   }

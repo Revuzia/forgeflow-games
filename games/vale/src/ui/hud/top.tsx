@@ -1,18 +1,21 @@
 // VALE HUD — the top of the screen: the sky strip (720 × 48, top centre: takedowns and structures per
 // side, the clock, objective chips with return rings; FRAY: the time left and "First to 12"; pregame
 // countdown; sudden death in HARM), the announcer banner under it (two lines, minor 2.4 s / major
-// 3.6 s, a queue of 2; it is also the subtitle), the surrender vote plate, the kill feed (top right,
+// 3.6 s, a queue of 2; it is also the subtitle; takedown banners carry the two fighters as 48 px round
+// portraits in their relationship rings, the fallen one cut by the 30° shadow line, in over 70 ms,
+// 3.5 s, out over 300 ms — r12 m2), the surrender vote plate, the kill feed (top right,
 // 3 rows, 6 s, newest on top; your rows in the Noonwhite double frame) and the FRAY Hour Board
 // (220 × 236, top right; the kill feed docks under it).
 
 import type { CSSProperties, JSX } from 'preact';
-import type { PlayerView } from '../../contracts/sim.ts';
+import { useRef } from 'preact/hooks';
+import type { ObjectiveTimerView, PlayerView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
 import { Portrait } from '../components/Portrait.tsx';
 import { roman } from '../components/Seat.tsx';
 import { SeatGlyph } from '../components/Glyphs.tsx';
 import { fmtClock, fmtInt } from '../format.ts';
-import { REL_VAR, useHud } from './ctx.ts';
+import { put, REL_VAR, setCls, setVar, useHud, useViewKey, useWriter } from './ctx.ts';
 import { SideGlyph } from './glyphs.tsx';
 import type { KillRow, Who } from './model.ts';
 
@@ -20,47 +23,56 @@ import type { KillRow, Who } from './model.ts';
 export function SkyStrip(): JSX.Element {
   const { cv } = useApp();
   const { model, client } = useHud();
-  model.frame.value;
-  const v = model.view;
-  const pre = v.phase === 'pregame';
+  const mine = (): ReturnType<typeof model.view.teams.find> => model.view.teams.find((t) => t.team === model.myTeam);
+  const theirs = (): ReturnType<typeof model.view.teams.find> => model.view.teams.find((t) => t.team !== model.myTeam);
+  useViewKey(() => { const v = model.view, a = mine(), b = theirs(); return `${v.phase}|${v.suddenDeath ? 1 : 0}|${a?.kills ?? 0}|${a?.structuresDestroyed ?? 0}|${b?.kills ?? 0}|${b?.structuresDestroyed ?? 0}`; });
   const mode = cv.mode(client.setup.mode);
   const q = cv.queue(client.setup.queue);
   const rules = q ? cv.rulesOf(q) : mode?.rules;
+  const limit = rules?.end.timeLimit ?? 0;
+  const clockEl = useRef<HTMLSpanElement>(null);
+  // the clock: pregame countdown (HARM in the last 5 s), match time, FRAY's time left (HARM in the last minute)
+  useWriter(() => {
+    const v = model.view;
+    const el = clockEl.current;
+    if (v.phase === 'pregame') { put(el, fmtClock(Math.ceil(-v.time))); setCls(el?.parentElement, 'is-harm', -v.time <= 5); return; }
+    if (model.ffa && limit) { const left = Math.max(0, limit - Math.max(0, v.time)); put(el, fmtClock(left)); setCls(el, 'is-harm', left <= 60); return; }
+    put(el, fmtClock(Math.max(0, v.time)));
+  });
+  const v = model.view;
+  const pre = v.phase === 'pregame';
   const clock = pre ? (
-    <span class={`sky__clock num ${-v.time <= 5 ? 'is-harm' : ''}`} aria-live="off">
-      <span class="t-caption sky__pre">{cv.t('hud.pregame', 'The match begins in {t}', { t: '' }).replace(/\s*$/, '')}</span> {fmtClock(Math.ceil(-v.time))}
+    <span class="sky__clock num" aria-live="off">
+      <span class="t-caption sky__pre">{cv.t('hud.pregame', 'The match begins in {t}', { t: '' }).replace(/\s*$/, '')}</span> <span ref={clockEl} />
     </span>
-  ) : <span class={`sky__clock num ${v.suddenDeath ? 'is-harm' : ''}`} title={cv.t('hud.clock', 'Match time')}>{fmtClock(Math.max(0, v.time))}</span>;
+  ) : <span class={`sky__clock num ${v.suddenDeath ? 'is-harm' : ''}`} title={cv.t('hud.clock', 'Match time')} ref={clockEl} />;
   if (model.ffa) {
-    const limit = rules?.end.timeLimit ?? 0;
-    const left = Math.max(0, limit - Math.max(0, v.time));
     const first = rules?.end.killScore ?? 0;
     return (
       <header class="sky sky--ffa" aria-label={cv.t('hud.score', 'Score')}>
         <span class="sky__side t-caption">{first ? cv.t('hud.fray.first_to', 'First to {n}', { n: first }) : ''}</span>
-        {pre ? clock : <span class={`sky__clock num ${left <= 60 && limit ? 'is-harm' : ''}`}>{limit ? fmtClock(left) : fmtClock(Math.max(0, v.time))}</span>}
+        {clock}
         <span class="sky__side t-caption">{limit && !pre ? cv.t('hud.fray.clock', 'Ends at {t}', { t: fmtClock(limit) }) : ''}</span>
         {v.suddenDeath ? <span class="sky__sd t-label">{cv.t('hud.sudden_death', 'Sudden death')}</span> : null}
       </header>
     );
   }
-  const mine = v.teams.find((t) => t.team === model.myTeam);
-  const theirs = v.teams.find((t) => t.team !== model.myTeam);
+  const a = mine(), b = theirs();
   return (
     <header class="sky" aria-label={cv.t('hud.score', 'Score')}>
       <div class="sky__team sky__team--ally">
         <span class="sky__mark" style={{ color: REL_VAR.ally }}><SideGlyph team={model.myTeam} size={14} /></span>
-        <span class="sky__struct num" title={cv.t('score.structures_down', 'Structures down')}><StructGlyph />{mine?.structuresDestroyed ?? 0}</span>
-        <span class="sky__kills num" title={cv.t('hud.takedowns', 'Takedowns')}>{mine?.kills ?? 0}</span>
+        <span class="sky__struct num" title={cv.t('score.structures_down', 'Structures down')}><StructGlyph />{a?.structuresDestroyed ?? 0}</span>
+        <span class="sky__kills num" title={cv.t('hud.takedowns', 'Takedowns')}>{a?.kills ?? 0}</span>
       </div>
       <div class="sky__mid">
         {clock}
         {v.suddenDeath ? <span class="sky__sd t-caption">{cv.t('hud.sudden_death', 'Sudden death')}</span> : null}
       </div>
       <div class="sky__team sky__team--enemy">
-        <span class="sky__kills num" title={cv.t('hud.takedowns', 'Takedowns')}>{theirs?.kills ?? 0}</span>
-        <span class="sky__struct num" title={cv.t('score.structures_down', 'Structures down')}>{theirs?.structuresDestroyed ?? 0}<StructGlyph /></span>
-        <span class="sky__mark" style={{ color: REL_VAR.enemy }}><SideGlyph team={theirs?.team ?? 1} size={14} /></span>
+        <span class="sky__kills num" title={cv.t('hud.takedowns', 'Takedowns')}>{b?.kills ?? 0}</span>
+        <span class="sky__struct num" title={cv.t('score.structures_down', 'Structures down')}>{b?.structuresDestroyed ?? 0}<StructGlyph /></span>
+        <span class="sky__mark" style={{ color: REL_VAR.enemy }}><SideGlyph team={b?.team ?? 1} size={14} /></span>
       </div>
       <ObjectiveChips />
     </header>
@@ -68,33 +80,48 @@ export function SkyStrip(): JSX.Element {
 }
 const StructGlyph = (): JSX.Element => <svg class="sky__sg" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1l3.5 9h-7z" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>;
 
-function ObjectiveChips(): JSX.Element | null {
-  const { cv } = useApp();
-  const { model } = useHud();
-  model.frame.value;
-  const objs = model.view.objectives;
-  if (!objs.length) return null;
-  // one chip per objective unit kind (camps of the same unit share a chip: the soonest one)
-  const byUnit = new Map<string, (typeof objs)[number]>();
+/** one chip per objective unit kind (camps of the same unit share a chip: the soonest one) */
+function objectivesByUnit(objs: readonly ObjectiveTimerView[]): Map<string, ObjectiveTimerView> {
+  const byUnit = new Map<string, ObjectiveTimerView>();
   for (const o of objs) {
     const cur = byUnit.get(o.unit);
     if (!cur || (cur.alive ? false : o.alive || o.respawnIn < cur.respawnIn)) byUnit.set(o.unit, o);
   }
+  return byUnit;
+}
+function ObjectiveChips(): JSX.Element | null {
+  const { cv } = useApp();
+  const { model } = useHud();
+  useViewKey(() => [...objectivesByUnit(model.view.objectives).values()].map((o) => `${o.unit}:${o.alive ? 1 : 0}`).join(','));
+  const objs = [...objectivesByUnit(model.view.objectives).values()];
+  if (!objs.length) return null;
   return (
     <div class="sky__objs" aria-label={cv.t('hud.objectives', 'Objectives')}>
-      {[...byUnit.values()].map((o) => {
-        const name = model.unit(o.unit)?.name ?? o.unit;
-        const max = model.unit(o.unit) ? (cv.map(model.client.setup.map)?.camps.find((c) => c.units.some((u) => u.unit === o.unit))?.respawn ?? 0) : 0;
-        const frac = !o.alive && max > 0 ? Math.max(0, Math.min(1, 1 - o.respawnIn / max)) : 1;
-        return (
-          <span class={`objchip ${o.alive ? 'is-up' : ''}`} title={o.alive ? `${name} · ${cv.t('hud.objective_up', 'Up')}` : `${name} · ${cv.t('hud.objective_returns', 'Returns in {t}', { t: fmtClock(o.respawnIn) })}`}>
-            <span class="objchip__ring" style={{ '--f': frac.toFixed(3) } as CSSProperties} />
-            <span class="t-caption objchip__name">{name}</span>
-            <span class="num objchip__t">{o.alive ? cv.t('hud.objective_up', 'Up') : fmtClock(o.respawnIn)}</span>
-          </span>
-        );
-      })}
+      {objs.map((o) => <ObjChip unit={o.unit} key={o.unit} />)}
     </div>
+  );
+}
+function ObjChip(p: { unit: string }): JSX.Element | null {
+  const { cv } = useApp();
+  const { model } = useHud();
+  const ring = useRef<HTMLSpanElement>(null), t = useRef<HTMLSpanElement>(null);
+  const max = model.unit(p.unit) ? (cv.map(model.client.setup.map)?.camps.find((c) => c.units.some((u) => u.unit === p.unit))?.respawn ?? 0) : 0;
+  const get = (): ObjectiveTimerView | undefined => objectivesByUnit(model.view.objectives).get(p.unit);
+  useWriter(() => {
+    const o = get();
+    if (!o) return;
+    setVar(ring.current, '--f', (!o.alive && max > 0 ? Math.max(0, Math.min(1, 1 - o.respawnIn / max)) : 1).toFixed(3));
+    put(t.current, o.alive ? cv.t('hud.objective_up', 'Up') : fmtClock(o.respawnIn));
+  });
+  const o = get();
+  if (!o) return null;
+  const name = model.unit(o.unit)?.name ?? o.unit;
+  return (
+    <span class={`objchip ${o.alive ? 'is-up' : ''}`} title={o.alive ? `${name} · ${cv.t('hud.objective_up', 'Up')}` : `${name} · ${cv.t('hud.objective_returns', 'Returns in {t}', { t: '' }).trim()}`}>
+      <span class="objchip__ring" ref={ring} />
+      <span class="t-caption objchip__name">{name}</span>
+      <span class="num objchip__t" ref={t} />
+    </span>
   );
 }
 
@@ -104,13 +131,33 @@ export function Announcer(): JSX.Element | null {
   const { model } = useHud();
   const b = model.banner.value;
   if (!b || !state.settings.value.access.subtitles) return null;
+  const kill = !!(b.a || b.b);
   return (
-    <div class={`announce announce--${b.tone} ${b.major ? 'is-major' : ''}`} key={b.id} role="status" aria-live="polite" aria-label={cv.t('a11y.announcer_region', 'Match announcements')}
+    <div class={`announce announce--${b.tone} ${b.major ? 'is-major' : ''} ${kill ? 'is-kill' : ''}`} key={b.id} role="status" aria-live="polite" aria-label={cv.t('a11y.announcer_region', 'Match announcements')}
       style={{ '--life': `${b.ms}ms` } as CSSProperties}>
-      <span class="announce__rule" aria-hidden="true" />
-      <span class="t-h1 announce__title">{b.title}</span>
-      {b.sub ? <span class="t-body-s announce__sub">{b.sub}</span> : null}
+      {kill ? <AnnounceFace w={b.a} /> : null}
+      <span class="announce__text">
+        <span class="announce__rule" aria-hidden="true" />
+        <span class="t-h1 announce__title">{b.title}</span>
+        {b.sub ? <span class="t-body-s announce__sub">{b.sub}</span> : null}
+      </span>
+      {kill ? <AnnounceFace w={b.b} down /> : null}
     </div>
+  );
+}
+/** a takedown banner's fighter: 48 px round portrait in its relationship ring (FRAY: seat colour) */
+function AnnounceFace(p: { w: Who | undefined; down?: boolean }): JSX.Element {
+  const { cv } = useApp();
+  const { model } = useHud();
+  const w = p.w;
+  if (!w) return <span class="aface aface--empty" aria-hidden="true" />;
+  const f = cv.fighter(w.fighter);
+  const color = model.ffa && w.rel !== 'self' && w.seat ? `var(--seat-${w.seat})` : REL_VAR[w.rel];
+  return (
+    <span class={`aface aface--${w.rel} ${p.down ? 'is-down' : ''}`} style={{ '--c': color } as CSSProperties} aria-hidden="true">
+      <span class="aface__img">{f ? <Portrait fighter={f} skin={w.skin} size="fill" round /> : null}</span>
+      {p.down ? <span class="aface__cut" /> : null}
+    </span>
   );
 }
 
@@ -189,7 +236,7 @@ export function rankFray(players: readonly PlayerView[]): PlayerView[] {
 export function HourBoard(): JSX.Element {
   const { cv, state } = useApp();
   const { model, client } = useHud();
-  model.frame.value;
+  useViewKey(() => model.view.players.map((p) => `${p.player}:${p.score ?? 0}:${p.lives ?? 0}:${p.placement ?? ''}:${Math.round(p.damageToFighters / 50)}`).join(','));
   const v = model.view;
   const q = cv.queue(client.setup.queue);
   const rules = q ? cv.rulesOf(q) : cv.mode(client.setup.mode)?.rules;

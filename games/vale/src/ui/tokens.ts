@@ -434,8 +434,8 @@ export const TOKENS = {
       },
       "overhead-name": {
         "role": "body",
-        "px": 12,
-        "line": 14,
+        "px": 14,
+        "line": 15,
         "weight": 600,
         "trackingEm": 0.02,
         "outlinePx": 2

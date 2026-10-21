@@ -208,7 +208,7 @@ export function runEffect(w: World, eff: EffectT, ctx: EffectCtx): void {
       const t = resolveTo(ctx, eff.to);
       if (!t) return;
       applyStatus(w, c, t, eff.status, ranked(eff.duration, ctx.rank), {
-        power: eff.power !== undefined ? ranked(eff.power, ctx.rank) : undefined, decay: eff.decay, depth: ctx.depth,
+        power: eff.power !== undefined ? ranked(eff.power, ctx.rank) : undefined, decay: eff.decay, depth: ctx.depth, source: ctx.source.id,
       });
       return;
     }
@@ -260,7 +260,7 @@ export function runEffect(w: World, eff: EffectT, ctx: EffectCtx): void {
     case 'form': setForm(w, c, eff.form, eff.duration); return;
     case 'reveal': {
       const t = resolveTo(ctx, eff.to);
-      if (t) applyStatus(w, c, t, 'reveal', eff.duration, { depth: ctx.depth });
+      if (t) applyStatus(w, c, t, 'reveal', eff.duration, { depth: ctx.depth, source: ctx.source.id });
       return;
     }
     case 'gold': {

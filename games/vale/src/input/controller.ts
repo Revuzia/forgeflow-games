@@ -44,7 +44,12 @@ export interface InputRenderer {
   camera?: CameraLike;
 }
 
-export type DenyReason = 'cooldown' | 'resource' | 'rank' | 'dead' | 'target' | 'empty' | 'silenced' | 'no_active' | 'ping_limit' | 'ping_fray';
+/** why a press was refused. 'cc': you cannot act (stun, airborne, sleep, taunt, fear: the sim's canCast
+ *  refuses every slot under them), refused at the press, before any aim starts */
+export type DenyReason = 'cooldown' | 'resource' | 'rank' | 'dead' | 'target' | 'empty' | 'silenced' | 'cc' | 'no_active' | 'ping_limit' | 'ping_fray';
+/** statuses under which the sim refuses every cast (sim status.ts canCast: hard CC, taunt, fear) —
+ *  status kinds are the catalog's code vocabulary, not content ids */
+const CAST_LOCK: ReadonlySet<string> = new Set(['stun', 'airborne', 'sleep', 'taunt', 'fear']);
 export interface Marker { x: number; y: number; kind: 'move' | 'attackMove' | 'attack'; target?: EntityId }
 export interface WheelState { x: number; y: number; gx: number; gy: number; target?: EntityId; sel: PingKind | null }
 
@@ -285,6 +290,7 @@ export class InputController {
   slotInfo(slot: SlotT): { def: AbilityCore | undefined; ready: boolean; why?: DenyReason } {
     const me = this.me;
     if (!me) return { def: undefined, ready: false, why: 'dead' };
+    const locked = this.castLocked();
     if (slot.startsWith('item')) {
       const i = Number(slot.slice(4)) - 1;
       const item = me.items[i];
@@ -292,6 +298,7 @@ export class InputController {
       const av = me.abilities.find((x) => x.slot === slot);
       const def = this.index.get(av?.id) ?? this.index.itemActive(item);
       if (!def) return { def: undefined, ready: false, why: 'no_active' };
+      if (locked) return { def, ready: false, why: 'cc' };
       const cd = av ? av.cooldown : me.itemCooldowns[i] ?? 0;
       if (cd > 0 && !(av?.recastWindow && av.recastWindow > 0)) return { def, ready: false, why: 'cooldown' };
       return { def, ready: true };
@@ -300,14 +307,23 @@ export class InputController {
     const def = this.index.get(av?.id);
     if (!av || !def) return { def, ready: false, why: 'empty' };
     if (av.rank <= 0) return { def, ready: false, why: 'rank' };
+    // you cannot act: refuse at the press (no aim starts), whatever else the slot is waiting on
+    if (locked) return { def, ready: false, why: 'cc' };
     if (av.ready) return { def, ready: true };
     const recast = (av.recastWindow ?? 0) > 0;
     if (av.cooldown > 0 && !recast && !(av.maxCharges && (av.charges ?? 0) > 0)) return { def, ready: false, why: 'cooldown' };
     const body = this.body;
     if (def.costKind === 'res' && body && av.cost > body.res + 1e-6) return { def, ready: false, why: 'resource' };
     if (body?.statuses.some((s) => s.kind === 'silence') && slot !== 'spell1' && slot !== 'spell2') return { def, ready: false, why: 'silenced' };
-    // not ready for a reason the view does not name (stunned, mid-cast): send it, the sim decides
+    // not ready for a reason the view does not name (mid-cast, mid-dash): send it, the sim decides
     return { def, ready: true };
+  }
+  /** you cannot cast anything right now (stun, airborne, sleep, taunt, fear) */
+  private castLocked(): boolean {
+    const b = this.body;
+    if (!b) return false;
+    for (const s of b.statuses) if (s.remaining > 0 && CAST_LOCK.has(s.kind)) return true;
+    return false;
   }
 
   /** a cast key (or a HUD slot click) was pressed */
@@ -355,6 +371,8 @@ export class InputController {
   private confirmAim(): boolean {
     const aim = this.aiming.value, body = this.body;
     if (!aim || !body) return false;
+    // aimed before the loss of control landed: refuse now (the aim stays, ready for when it ends)
+    if (this.castLocked()) { this.hooks.denied(aim.slot, 'cc'); return false; }
     if (aim.def.targeting.kind === 'unit') {
       const t = this.entityAt();
       if (!t || !unitMatches(aim.def.targeting.filter, body, t, this.team)) { this.hooks.denied(aim.slot, 'target'); return false; }

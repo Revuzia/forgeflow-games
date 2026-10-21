@@ -298,6 +298,12 @@ function Access(p: { s: Settings; set: SetFn }): JSX.Element {
       <Row id="x-shake" label={L('screenShake', 'Screen shake')} desc={D('screenShake')}>
         <Slider id="x-shake" label={L('screenShake', 'Screen shake')} value={x.screenShake} min={0} max={1} step={0.05} format={pct} onChange={(v) => p.set('access', { screenShake: v })} />
       </Row>
+      <Row id="x-loc" label={L('locFlash', 'Loss-of-control edge')} desc={D('locFlash')}>
+        <Toggle id="x-loc" label={L('locFlash', 'Loss-of-control edge')} checked={x.locFlash} onChange={(v) => p.set('access', { locFlash: v })} />
+      </Row>
+      <Row id="x-dmg" label={L('damageFlash', 'Hit edge')} desc={D('damageFlash')}>
+        <Toggle id="x-dmg" label={L('damageFlash', 'Hit edge')} checked={x.damageFlash} onChange={(v) => p.set('access', { damageFlash: v })} />
+      </Row>
       <Row id="x-sub" label={L('subtitles', 'Subtitles')} desc={D('subtitles')}>
         <Toggle id="x-sub" label={L('subtitles', 'Subtitles')} checked={x.subtitles} onChange={(v) => p.set('access', { subtitles: v })} />
       </Row>

@@ -65,7 +65,7 @@ You see yourself in Noonwhite with your glyph; your seat colour lines your bar p
 
 | 1080p | display-xl · l · m | h1 | h2 | label | body · s · caption | numbers | overhead name |
 |---|---|---|---|---|---|---|---|
-| px/line | 112/112 · 72/76 · 44/48 | 24/28 650 +.06em | 18/24 600 +.08em | 15/20 600 +.06em | 16/24 · 14/20 · 13/18 | gold 18 · clock 20 · cooldown 22/700 | 12/14 600, 2 px ink outline |
+| px/line | 112/112 · 72/76 · 44/48 | 24/28 650 +.06em | 18/24 600 +.08em | 15/20 600 +.06em | 16/24 · 14/20 · 13/18 | gold 18 · clock 20 · cooldown 22/700 | 14/15 600, 2 px ink outline |
 
 - Nothing below 12 px at any UI scale (0.8–1.5). Display is Title Case; CAPS only for one-word results and mode names.
 - Live numbers use the Mono or `tabular-nums`. No faux bold, outlined or gradient text, no text in images; 35% localisation headroom.
@@ -103,12 +103,13 @@ You see yourself in Noonwhite with your glyph; your seat colour lines your bar p
 | Sky strip: score, clock, objectives | top centre | 720×48 | 1.67% |
 | Ally frames (team modes) · Hour Board (FRAY) | left edge · top right | 4×168×52 · 220×236 | 1.69 · 2.50% |
 | Kill feed (3 rows) · announcer · chat | top right · under strip · bottom left | contextual | 1.46 · 1.73 · 2.67% |
-| Overhead bar | head + 0.35 m, fixed screen size | HP 82×9 over resource 82×4, 80% ink plate | ticks every 100 HP, heavy every 1,000 |
+| Overhead bar | head + 0.35 m, fixed screen size | fighter HP 104×10 over resource 104×4, level chip 22, 80% ink plate · Wick 58×5 · monster 104×8 · structure 220×16 | ticks every 100 HP, heavy every 1,000; structures every 25% |
 | Telegraph | overlay pass, 1 px dark outer keyline | enemy fill 16 → 30%, edge 90%, 3 px · ally edge 45% · own aim 8% / 60% | overlaps MAX-capped at 40% |
 
 - **Always-on ≤ 11%** (RIFT 10.79, BRIDGE 9.20, FRAY 10.84); **peak ≤ 17%** (16.65). The centre 40% × 50% holds no HUD.
 - Dial Bar: portrait with level ring, HP over resource, Gleam; items 3×2, abilities 64 px, ultimate 76, spells 48. Cooldowns are ink shadows sweeping clockwise from 12 o'clock.
-- Bars: Noonwhite damage trail (150 ms hold, 450 ms out), hatched shield; minion bars only when damaged or targeted.
+- Bars: lost HP flashes white for ~4 frames, then the Noonwhite damage trail (150 ms hold, 450 ms out); hatched shield; your own fill is Sap (the Dial Bar's HP) so your trail reads. Enemy Wick bars always show; allied ones when damaged or targeted.
+- Status: your buffs then debuffs ride over the Dial Bar (26 px chips, ink time sweep, Mono stacks; azure keyline helps, HARM keyline + corner wedge harms); loss of control names itself in a chip over the bar with its seconds; slots you cannot cast are darkened with an ember wash and the status mark; a refused press says why for 1.2 s.
 - Delayed areas sweep clockwise and land as the circle closes. Telegraphs are never white, never pulse above 2 Hz, and look identical on every quality tier.
 - Damage numbers: only your outgoing hits and heals ≥ 5% max HP; merged per 0.5 s; ≤ 8 on screen.
 

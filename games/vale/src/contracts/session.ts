@@ -57,7 +57,10 @@ export interface Settings {
     antialias: 'off' | 'smaa' | 'msaa'; particles: 0 | 1 | 2; scatter: 0 | 1 | 2; fpsCap: 0 | 30 | 60 | 120 | 144; maxDpr: number; fullscreen: boolean };
   audio: { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean };
   controls: { binds: Record<string, string>; quickCast: boolean; cameraLock: boolean; edgePan: boolean; panSpeed: number; attackMoveOnClick: boolean; selfCastModifier: string };
-  access: { colorblind: 'off' | 'deutan' | 'protan' | 'tritan'; uiScale: number; hudScale: number; minimapScale: number; reduceMotion: boolean; screenShake: number; subtitles: boolean };
+  access: { colorblind: 'off' | 'deutan' | 'protan' | 'tritan'; uiScale: number; hudScale: number; minimapScale: number; reduceMotion: boolean; screenShake: number; subtitles: boolean;
+    /** CHANGED(UI), r12 M4 §5, both default false: a 150 ms HARM screen-edge mark when you lose control /
+     *  a 120 ms ink screen-edge mark when a hit lands on you (a stored profile without them reads false) */
+    locFlash: boolean; damageFlash: boolean };
   gameplay: { showDamageNumbers: boolean; showAllyIndicators: boolean; healthBarTicks: boolean; minimapSide: 'right' | 'left' };
 }
 export interface Profile {

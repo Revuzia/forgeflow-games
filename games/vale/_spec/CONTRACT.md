@@ -628,6 +628,40 @@ the records. Code still never branches on these ids (it branches on `kind`, `pic
   placement board, Bridge bench in pick, surrender vote.
 - Input (`src/input/`): rebindable keymap (defaults in the bible), quick cast vs normal cast,
   attack-move, camera lock/edge pan, self-cast modifier.
+- CHANGED(UI), additive (r12 M4 / m1): two optional view fields the HUD reads, both already carried by the
+  sim's live objects (the view is zero-copy, so neither costs the sim anything):
+  `BuffView.src?: EntityId` — the entity that applied the buff (the HUD tells help, applied by the holder's
+  side, from harm, applied by another side); `FighterStatsView.hpRegen?` / `resRegen?` — per-second
+  regeneration (the Dial Bar's "+x.x" readouts). A view without them still renders (no regen readout; a buff
+  without `src` counts as help).
+- CHANGED(UI): HUD loss-of-control and status (r12 M4): your status row over the Dial Bar and the target
+  plate's (docked on the minimap's frame, on the map's side: the unit you select, order an attack on, or last
+  hit with your fighter) list `EntityView.statuses` (merged per kind), `EntityView.buffs` and the team's
+  `TeamView.buffs`; a row over its cap (12; 8 on the plate) drops help before harm, "+n" names the rest. The
+  ability and item slots lock under stun / airborne / sleep / taunt / fear (silence: abilities; root: dash
+  abilities), each with the status mark; a press the sim would refuse shows why for 1.2 s (cooldown,
+  resource, rank, target) or, while you cannot act, shakes the slot and pulses the loss-of-control chip. The
+  HUD re-renders on discrete changes only and writes continuous values (sweeps, bars, timers) per sim tick
+  (r12 B4; `ui/hud/ctx.ts` useViewKey / useWriter).
+- CHANGED(UI), r12 wave A fix pass (input + HUD):
+  - Input: `DenyReason` gains `'cc'`. Under stun / airborne / sleep / taunt / fear (the sim's canCast refuses
+    every slot) a cast press — ability, battle spell or item active, quick or normal cast — is refused at the
+    press: no aim starts, the HUD's `denied` hook fires. An aim started before the loss of control is refused
+    at its confirm (the aim stays for when it ends). Nothing new reaches the sim.
+  - `StatusView.src?` / `StatusView.source?` (additive, optional): the applier and the record (ability / item /
+    spell id, `''` when none) whose effect applied the status. The sim's `Status` records `source` from
+    `EffectCtx.source.id` (status, reveal, dash-unstoppable, displacement-airborne); it never reads it, and the
+    state digest does not include it. The Dial Bar's "effect running" border reads provenance off the view —
+    your buffs (`BuffView.source`), statuses you put on yourself (`source` + `src`), zones you placed
+    (`EntityView.def`), your channel — so a self-status ability (a haste on yourself) lights it too.
+  - `Settings.access.locFlash` / `damageFlash` (booleans, default false; Accessibility screen): a 150 ms HARM
+    edge vignette at 20 % plus a HARM keyline round the screen when a loss of control lands / a 120 ms ink
+    edge when a hit of ≥ 2 % of your health lands (at most twice a second). Opacity only, so reduce motion
+    keeps them.
+  - The stats tab opens the LEDGER (also while the scoreboard is held): ten numbers in VALE's four families —
+    Strike (attack, attack speed, critical chance), Craft (power, ability haste), Guard (armor, resist,
+    tenacity), Stride (move speed, attack range) — rising off the medallion, never beside the portrait.
+  - Reduce motion: the refused-press shake and the cast dip become a short light change (no movement).
 
 ## §11 Audio (`audio/`, `src/audio/`, lane AUDIO)
 - All music and SFX are original, synthesized by `audio/synth/*.py` (numpy + ffmpeg → OGG/Opus).
