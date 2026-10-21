@@ -120,10 +120,10 @@ const NS = STYLE_TAB.length;
 //   smoke / debris / skirt: explosion column puffs, debris chunks, ground dust puffs
 //   cloud: puffs per smoke-grenade cloud; motes: revive / DBNO light motes multiplier
 const FXQ = {
-  low:    { far: 120, lod: 40,  smoke: 12, debris: 8,  skirt: 4,  cloud: 12, motes: 0.5 },
-  medium: { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 18, motes: 1 },
-  high:   { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 22, motes: 1 },
-  ultra:  { far: 240, lod: 110, smoke: 26, debris: 18, skirt: 10, cloud: 28, motes: 1.5 },
+  low:    { far: 120, lod: 40,  smoke: 12, debris: 8,  skirt: 4,  cloud: 8,  motes: 0.5 },
+  medium: { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 12, motes: 1 },
+  high:   { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 18, motes: 1 },
+  ultra:  { far: 240, lod: 110, smoke: 26, debris: 18, skirt: 10, cloud: 26, motes: 1.5 },
 };
 /** The tier the FX follow: lane boot's W.gfxTier (C-GFX, adds 'ultra'), else the applied tier, else the saved setting. */
 function fxTierOf(W) {
@@ -871,102 +871,81 @@ function hash01(a, b) {
 
 const SMOKE_VS = /* glsl */`
 // instanceMatrix carries DATA, not a transform: [0] = size, alpha, ground y, occlusion; [1] = sheet puff 0..3, spin,
-// sun-side factor, veil flag; [3] = centre
-varying vec2 vUv;
-varying vec2 vQ;
-varying float vA;
-varying float vGy;
-varying float vAo;
-varying float vSun;
-varying float vVeil;
-varying float vCell;
-varying vec3 vWp;
-varying float vFogDepth;
-varying vec2 vNdc;
+// sun-side factor, veil flag; [3] = centre. The smoke's cost on the iGPU is its fill, so everything but the texture and
+// the fades is worked out HERE, per vertex: the puff is a two-ring disc (17 vertices) and its pseudo-sphere lighting is
+// sampled at each vertex and interpolated (soft smoke has no hard terminator to lose). P23/fx: the per-pixel lighting
+// cost 0.60 ms GPU for 3 clouds on the iGPU, the bar is 0.3.
+uniform vec3 uSunDir;
+uniform vec3 uSunCol;
+uniform vec3 uHemiA;      // (sky + ground) / 2 of the hemisphere light
+uniform vec3 uHemiB;      // (sky - ground) / 2
+uniform vec3 uAlb;
+uniform vec3 uFogColor;
+uniform float uFogDensity;
+uniform vec4 uBubble;     // the near veil's clear ellipse round your character (NDC centre, NDC radii)
+varying vec2 vUvS;        // the sheet uv of this pixel (cell offset applied)
+varying vec2 vQ;          // puffs: camera-aligned -1..1 across the puff; near veil: position in the clear ellipse's radii
+varying vec4 vP;          // alpha, height above its ground, view depth, veil flag
+varying vec3 vCol;        // the lit, fogged colour (linear, straight)
 void main() {
   vec3 c = instanceMatrix[3].xyz;
   float size = instanceMatrix[0].x;
-  vA = instanceMatrix[0].y; vGy = instanceMatrix[0].z; vAo = instanceMatrix[0].w;
-  vCell = instanceMatrix[1].x; float spin = instanceMatrix[1].y; vSun = instanceMatrix[1].z; vVeil = instanceMatrix[1].w;
+  float cell = instanceMatrix[1].x, spin = instanceMatrix[1].y, veil = instanceMatrix[1].w;
   float cs = cos( spin ), sn = sin( spin );
   vec2 q = vec2( cs * position.x - sn * position.y, sn * position.x + cs * position.y );
   vec3 right = vec3( viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0] );
   vec3 up = vec3( viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1] );
+  vec3 back = vec3( viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2] );    // towards the camera
   vec3 wp = c + ( right * q.x + up * q.y ) * size;
-  vQ = q * 2.0;                       // camera-aligned -1..1 across the puff: the per-pixel sphere normal
-  vUv = uv;
-  vWp = wp;
+  // the P1-E sheet's puff cells 8..11 (alpha = shape); the sheet's puffs fill only the middle half of their cell: sample
+  // that half so the puff fills its quad (twice the visible size for the same fill)
+  float sc = 8.0 + floor( cell + 0.5 );
+  vec2 off = vec2( mod( sc, 4.0 ), 3.0 - floor( sc * 0.25 ) ) * 0.25;
+  vUvS = off + ( vec2( 0.21 ) + uv * 0.58 ) * 0.25;
   vec4 mv = viewMatrix * vec4( wp, 1.0 );
-  vFogDepth = -mv.z;
   gl_Position = projectionMatrix * mv;
-  vNdc = gl_Position.xy / gl_Position.w;      // the veils face the camera: w is constant across them, so this is exact
+  vQ = q * 2.0;
+  if ( veil > 1.5 ) vQ = ( gl_Position.xy / gl_Position.w - uBubble.xy ) / uBubble.zw;   // the veils face the camera: exact
+  vP = vec4( instanceMatrix[0].y, wp.y - instanceMatrix[0].z, -mv.z, veil );
+  // lit like the world: hemisphere + a wrapped sun term, both divided by PI (three's Lambert), on a pseudo-sphere normal,
+  // shaded by the puff's place in the cloud (occlusion: low and inner puffs sit in the cloud's own shadow; the sun-facing
+  // side is brighter). The veils: one flat normal, tipped up.
+  vec2 lq = veil > 0.5 ? vec2( 0.0, 0.894 ) : vQ;
+  float r2 = min( dot( lq, lq ), 1.0 );
+  vec3 n = normalize( right * lq.x + up * lq.y + back * sqrt( 1.0 - r2 ) * 0.9 );
+  float wrapL = clamp( ( dot( n, uSunDir ) + 0.5 ) / 1.5, 0.0, 1.0 );
+  vec3 light = ( uHemiA + uHemiB * n.y + uSunCol * ( wrapL * instanceMatrix[1].z ) ) * ( 0.3183 * instanceMatrix[0].w );
+  float dc = -( viewMatrix * vec4( c, 1.0 ) ).z;
+  vCol = mix( uAlb * light, uFogColor, 1.0 - exp( -uFogDensity * uFogDensity * dc * dc ) );   // the scene's FogExp2
 }`;
 
 const SMOKE_FS = /* glsl */`
 uniform sampler2D map2;
-uniform vec3 uSunDir;
-uniform vec3 uSunCol;
-uniform vec3 uSky;
-uniform vec3 uGnd;
-uniform vec3 uAlb;
-uniform vec3 uFogColor;
-uniform float uFogDensity;
 uniform vec2 uNear;       // view-depth fade-in of the puffs: nothing is smoked over between the lens and your character
-uniform vec4 uBubble;     // the near veil's clear ellipse round your character (NDC centre, NDC radii)
-varying vec2 vUv;
+varying vec2 vUvS;
 varying vec2 vQ;
-varying float vA;
-varying float vGy;
-varying float vAo;
-varying float vSun;
-varying float vVeil;
-varying float vCell;
-varying vec3 vWp;
-varying float vFogDepth;
-varying vec2 vNdc;
+varying vec4 vP;
+varying vec3 vCol;
 void main() {
-  vec3 right = vec3( viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0] );
-  vec3 up = vec3( viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1] );
-  vec3 back = vec3( viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2] );    // towards the camera
   float a;
   float dens;
-  vec3 n;
-  if ( vVeil > 0.5 ) {
+  if ( vP.w > 0.5 ) {
     // inside a cloud: one flat lit layer just beyond your character (1) and one just past the lens (2) with a clear
     // ellipse round your character, so the near ground and walls white out too but you still see yourself
-    a = vA; dens = 1.0; n = normalize( up + back * 0.5 );
-    if ( vVeil > 1.5 ) a *= smoothstep( 0.55, 1.6, length( ( vNdc - uBubble.xy ) / uBubble.zw ) );
-    if ( a < 0.004 ) discard;
+    a = vP.x; dens = 1.0;
+    if ( vP.w > 1.5 ) a *= smoothstep( 0.55, 1.6, length( vQ ) );
   } else {
-    // the P1-E sheet's puff cells 8..11 (alpha = shape), thickened towards the core: a dozen of these must hide what is
-    // behind the cloud's middle, while the rim stays wispy
-    float sc = 8.0 + floor( vCell + 0.5 );
-    vec2 off = vec2( mod( sc, 4.0 ), 3.0 - floor( sc * 0.25 ) ) * 0.25;
-    // the sheet's puffs fill only the middle half of their cell: sample that half so the puff fills its quad (twice the
-    // visible size for the same fill), and round the corners off
-    float t = texture2D( map2, off + ( vec2( 0.21 ) + vUv * 0.58 ) * 0.25 ).a;
-    t *= 1.0 - smoothstep( 0.78, 1.0, length( vQ ) );
-    dens = clamp( t * 1.55, 0.0, 1.0 );
-    a = dens * vA;
-    a *= smoothstep( 0.0, 1.1, vWp.y - vGy );                                 // soft contact where a puff meets the ground
-    a *= smoothstep( uNear.x, uNear.y, vFogDepth );                           // never between the lens and you (the veils take over)
-    if ( a < 0.004 ) discard;
-    float r2 = min( dot( vQ, vQ ), 1.0 );
-    n = normalize( right * vQ.x + up * vQ.y + back * sqrt( 1.0 - r2 ) * 0.9 );
+    // thickened towards the core: a dozen of these must hide what is behind the cloud's middle, while the rim stays
+    // wispy; the edge rounded off; a soft contact where a puff meets the ground; never between the lens and you
+    float t = texture2D( map2, vUvS ).a * ( 1.0 - smoothstep( 0.61, 1.0, dot( vQ, vQ ) ) );
+    dens = min( t * 1.55, 1.0 );
+    a = dens * vP.x * smoothstep( 0.0, 1.1, vP.y ) * smoothstep( uNear.x, uNear.y, vP.z );
   }
-  // lit like the world: hemisphere + a wrapped sun term, both divided by PI (three's Lambert), shaded by the puff's place
-  // in the cloud (vAo: low and inner puffs sit in the cloud's own shadow; vSun: the sun-facing side is brighter). Thin
-  // edges let a little more light through (dens).
-  float ndl = dot( n, uSunDir );
-  float wrapL = clamp( ( ndl + 0.5 ) / 1.5, 0.0, 1.0 );
-  vec3 hemi = mix( uGnd, uSky, 0.5 + 0.5 * n.y );
-  vec3 light = ( hemi + uSunCol * wrapL * vSun ) * ( 0.3183 * vAo * ( 0.82 + 0.18 * ( 1.0 - dens ) ) );
-  vec3 col = uAlb * light;
-  float ff = 1.0 - exp( -uFogDensity * uFogDensity * vFogDepth * vFogDepth );   // the scene's FogExp2
-  col = mix( col, uFogColor, ff );
+  if ( a < 0.004 ) discard;
+  gl_FragColor = vec4( vCol * ( 1.0 - 0.18 * dens ), 1.0 );   // thin edges let a little more light through
   // tone-map and encode the UNpremultiplied colour, then premultiply: both curves are non-linear, and run on col * a
-  // they darkened every soft rim (a grey halo round each puff and round the in-cloud veil's clear ellipse)
-  gl_FragColor = vec4( col, 1.0 );
+  // they darkened every soft rim (a grey halo round each puff and round the in-cloud veil's clear ellipse). Render-target
+  // routes (medium and up) compile both chunks to nothing; the low tier's straight-to-canvas route runs them.
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
   gl_FragColor = vec4( gl_FragColor.rgb * a, a );   // premultiplied, ordinary blend: smoke HIDES, it does not glow
@@ -974,14 +953,30 @@ void main() {
 
 function ensureSmoke(W) {
   if (!smokeMesh) {
-    const geo = new THREE.PlaneGeometry(1, 1);
+    // a two-ring disc round the puff (|q| <= 0.5) instead of a square: the square's corners are always faded out by the
+    // rim (-17 % fill on the iGPU, where the smoke's cost is its fill), and the inner ring carries the per-vertex lighting
+    const geo = new THREE.BufferGeometry();
+    {
+      const R8 = 0.5 / Math.cos(Math.PI / 8), RI = 0.29, pos = [0, 0, 0], uvs = [0.5, 0.5], idx = [];
+      for (let ring = 0; ring < 2; ring++) for (let i = 0; i < 8; i++) {
+        const an = (i + 0.5) * Math.PI / 4, rr = ring ? R8 : RI, x = Math.cos(an) * rr, y = Math.sin(an) * rr;
+        pos.push(x, y, 0); uvs.push(x + 0.5, y + 0.5);
+      }
+      for (let i = 0; i < 8; i++) {
+        const j = (i + 1) & 7, a0 = 1 + i, a1 = 1 + j, b0 = 9 + i, b1 = 9 + j;
+        idx.push(0, a0, a1, a0, b0, b1, a0, b1, a1);
+      }
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(idx);
+    }
     smokeMat = new THREE.ShaderMaterial({
       uniforms: {
         map2: { value: sheet },
-        uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3) },
+        uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3).normalize() },
         uSunCol: { value: new THREE.Color(3, 3, 3) },
-        uSky: { value: new THREE.Color(0.9, 0.95, 1.0) },
-        uGnd: { value: new THREE.Color(0.25, 0.25, 0.25) },
+        uHemiA: { value: new THREE.Color(0.575, 0.6, 0.625) },
+        uHemiB: { value: new THREE.Color(0.325, 0.35, 0.375) },
         uAlb: { value: new THREE.Color(0.86, 0.86, 0.84) },
         uFogColor: { value: new THREE.Color(0.8, 0.85, 0.9) },
         uFogDensity: { value: 0 },
@@ -1051,8 +1046,9 @@ function smokeLights(W) {
     if (W.scene) W.scene.traverse((o) => { if (!_hemi && o.isHemisphereLight) _hemi = o; });
   }
   if (_hemi) {
-    u.uSky.value.copy(_hemi.color).multiplyScalar(_hemi.intensity);
-    u.uGnd.value.copy(_hemi.groundColor).multiplyScalar(_hemi.intensity);
+    const hi = _hemi.intensity, sc = _hemi.color, gc = _hemi.groundColor;
+    u.uHemiA.value.setRGB((sc.r + gc.r) * 0.5 * hi, (sc.g + gc.g) * 0.5 * hi, (sc.b + gc.b) * 0.5 * hi);
+    u.uHemiB.value.setRGB((sc.r - gc.r) * 0.5 * hi, (sc.g - gc.g) * 0.5 * hi, (sc.b - gc.b) * 0.5 * hi);
   }
   const fog = W.scene && W.scene.fog;
   if (fog && fog.isFogExp2) { u.uFogColor.value.copy(fog.color); u.uFogDensity.value = fog.density; }
