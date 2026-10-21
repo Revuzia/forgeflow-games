@@ -1622,7 +1622,7 @@ register3d("royale", async function (kernel, content) {
     for (const p of progs) {
       if (PW.ids.has(p.id)) continue;
       PW.ids.add(p.id);
-      if (PW.late.length < 64) PW.late.push({ name: p.name || "", key: String(p.cacheKey || "").slice(0, 120), t: +(W.t || 0).toFixed(2),
+      if (PW.late.length < 64) PW.late.push({ name: p.name || "", key: String(p.cacheKey || "").slice(0, 600), t: +(W.t || 0).toFixed(2),
         phase: W.phase, tier: W.gfxTier || W.settings.graphics, frame: kernel.frameNo });
     }
   }
