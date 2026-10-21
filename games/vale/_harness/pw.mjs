@@ -25,6 +25,9 @@ export async function open(path = '/?dev=1', o = {}) {
     args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
   });
   const context = await browser.newContext({ viewport: { width: o.width ?? 1920, height: o.height ?? 1080 }, deviceScaleFactor: 1 });
+  // o.hmr === false: a silent stand-in for the dev server's HMR socket, so edits other lanes make to the
+  // shared checkout mid-run never reload the page under a long measurement
+  if (o.hmr === false) await context.routeWebSocket(/.*/, () => {});
   const page = await context.newPage();
   const logs = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });

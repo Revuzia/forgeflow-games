@@ -64,7 +64,10 @@ export type EntityKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summo
 export type ActionState = 'idle' | 'move' | 'attack' | 'cast' | 'channel' | 'dash' | 'stunned' | 'dead' | 'recall';
 
 export interface StatusView { kind: StatusKindT; remaining: number; duration: number; power: number }
-export interface BuffView { id: string; source: string; remaining: number; duration: number; stacks: number; icon?: string }
+export interface BuffView { id: string; source: string; remaining: number; duration: number; stacks: number; icon?: string;
+  /** CHANGED(UI), additive: the entity that applied it (the sim's Buff already carries it). The HUD tells a buff
+   *  (applied by your side) from a debuff (by the other side) with it (r12 M4). */
+  readonly src?: EntityId }
 export interface AbilityView {
   slot: SlotT; id: string; rank: number; maxRank: number;
   cooldown: number; cooldownMax: number; cost: number;
@@ -109,6 +112,9 @@ export interface EntityView {
 export interface FighterStatsView {
   ad: number; ap: number; armor: number; resist: number; attackSpeed: number; moveSpeed: number;
   crit: number; haste: number; range: number; lifesteal: number; tenacity: number; armorPen: number; magicPen: number;
+  /** CHANGED(UI), additive: per-second regeneration (the sim's Stats already carries both; the Dial Bar's
+   *  "+x.x" readouts, r12 m1) */
+  readonly hpRegen?: number; readonly resRegen?: number;
 }
 
 export interface PlayerView {

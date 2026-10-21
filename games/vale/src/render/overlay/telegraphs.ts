@@ -13,7 +13,7 @@
 // telegraphs stay HARM with the caster's seat colour as a 6 px tick at the origin.
 
 import {
-  type Color, CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, MaxEquation, Mesh,
+  type Color, CustomBlending, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, MaxEquation, Mesh,
   OneFactor, PlaneGeometry, ShaderMaterial,
 } from 'three';
 import { DEPTH_TEST_GLSL, overlayUniforms } from './context.ts';
@@ -163,6 +163,10 @@ export class TelegraphLayer {
     const mat = new ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
       uniforms: { uSceneDepth: overlayUniforms.uSceneDepth, uHasDepth: overlayUniforms.uHasDepth, uResolution: overlayUniforms.uResolution, uNear: overlayUniforms.uNear, uFar: overlayUniforms.uFar },
+      // the quad's local (u, v) maps onto world (x, z) without the y flip rings.ts applies, which mirrors
+      // the winding: seen from above it is a back face. The shapes are SDFs in world space, so both faces
+      // draw the same decal; DoubleSide keeps any aim direction from culling it (r12 B2: 0 px drawn).
+      side: DoubleSide,
       transparent: true, depthTest: false, depthWrite: false,
       blending: CustomBlending, blendEquation: MaxEquation, blendSrc: OneFactor, blendDst: OneFactor,
       blendEquationAlpha: MaxEquation, blendSrcAlpha: OneFactor, blendDstAlpha: OneFactor,

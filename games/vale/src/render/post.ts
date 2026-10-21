@@ -6,26 +6,35 @@
 //   VfxPass                                 the VFX scene drawn into the HDR buffer (premultiplied, soft
 //                                           depth against the stable scene depth), so emissive blooms
 //                                           and the grade applies to effects like the world
-//   EffectPass(Bloom?, ToneMapping NEUTRAL, LUT3D vale_grade_01, Vignette)
-//                                           bloom: mipmap, threshold 1.0, smoothing 0.05, intensity 0.6,
-//                                           radius 0.7 (off when video.bloom is false); exposure 1.0;
-//                                           tetrahedral LUT on Ultra; vignette offset 0.35 darkness 0.25
+//   EffectPass(Distort?, Bloom?, Exposure, ToneMapping NEUTRAL, LUT3D vale_grade_01, Grade, Vignette)
+//                                           distort: the VFX offset map bends the HDR lookup (≤ 0.015 UV;
+//                                           T3/T4 distort layers; not built on Low); bloom: mipmap,
+//                                           threshold 1.0, smoothing 0.05, intensity 0.6, radius 0.7 (off
+//                                           when video.bloom is false); exposure 1.0 except the ultimate
+//                                           impact envelope (vfx/screen.ts: a local eased lift, applied as a
+//                                           multiply before tone mapping, never full-screen white);
+//                                           tetrahedral LUT on Ultra; grade: the dead player's world eases
+//                                           to grey (saturation × value) after the LUT; vignette offset 0.35
+//                                           darkness 0.25
 //   OverlayPass                             bars, rings, telegraphs, aim — drawn into the GRADED linear
 //                                           buffer (no tone map, no LUT), manually depth-tested against
 //                                           the scene's stable depth texture, so their hex is the pixel
 //   EffectPass(SMAA) | CopyPass             SMAA preset by tier; antialias 'off' ends with a plain copy
 //
 // The grade (tone map + LUT + vignette) and the overlay are identical on every tier; tiers only
-// change AO, bloom, AA and resolution. The identity LUT stands in until `map.art.lut` loads.
+// change AO, bloom, AA, distortion and resolution. The identity LUT stands in until `map.art.lut` loads.
+// The exposure envelope and the death grade run on every tier (they are game information, and cheap:
+// a few ALU per pixel, early-out when idle).
 
 import {
-  type Camera, Color, HalfFloatType, type Scene, type Texture, type WebGLRenderer, type WebGLRenderTarget,
+  type Camera, Color, HalfFloatType, type Scene, type Texture, type Uniform, type WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import {
-  BloomEffect, CopyPass, EffectComposer, EffectPass, LookupTexture, LUT3DEffect, Pass, RenderPass, SMAAEffect,
+  BlendFunction, BloomEffect, CopyPass, Effect, EffectComposer, EffectPass, LookupTexture, LUT3DEffect, Pass, RenderPass, SMAAEffect,
   SMAAPreset, ToneMappingEffect, ToneMappingMode, VignetteEffect,
 } from 'postprocessing';
 import { N8AOPostPass } from 'n8ao';
+import { MAX_LIFTS, screenFx, screenUniforms } from './vfx/screen.ts';
 
 export interface PostQuality {
   ao: 0 | 1 | 2;
@@ -53,6 +62,65 @@ class OverlayPass extends Pass {
 }
 
 export type VfxDraw = (renderer: WebGLRenderer, target: WebGLRenderTarget | null, sceneDepth: Texture | null, camera: Camera) => void;
+
+const U = screenUniforms;
+const uniformsOf = (o: Record<string, Uniform>): Map<string, Uniform> => new Map(Object.entries(o));
+
+/** the ultimate impact envelope (vfx/screen.ts): local eased lift + saturation drop + global dip, HDR */
+class ExposureEffect extends Effect {
+  constructor() {
+    super('ValeExposure', /* glsl */`
+uniform vec4 uLiftA[${MAX_LIFTS}];
+uniform vec4 uLiftB[${MAX_LIFTS}];
+uniform float uExpo;
+uniform float uBreath;
+uniform float uAspect;
+void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor ) {
+  vec3 c = inputColor.rgb * uExpo;
+  float lift = 0.0, desat = 0.0;
+  for ( int i = 0; i < ${MAX_LIFTS}; i ++ ) {
+    vec4 a = uLiftA[ i ];
+    if ( a.w <= 0.0 ) continue;
+    vec2 d = ( uv - a.xy ) * vec2( uAspect, 1.0 );
+    float k = 1.0 - smoothstep( a.z * 0.55, a.z * 1.35, length( d ) );
+    lift += a.w * ( k + uBreath * ( 1.0 - k ) );
+    desat = max( desat, uLiftB[ i ].x * k );
+  }
+  c *= 1.0 + lift;
+  float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+  outputColor = vec4( mix( c, vec3( l ), desat ), inputColor.a );
+}`, { blendFunction: BlendFunction.SET, uniforms: uniformsOf({ uLiftA: U.uLiftA, uLiftB: U.uLiftB, uExpo: U.uExpo, uBreath: U.uBreath, uAspect: U.uAspect }) });
+  }
+}
+
+/** the dead player's grade: saturation and value (after the LUT, before the overlay) */
+class GradeEffect extends Effect {
+  constructor() {
+    super('ValeGrade', /* glsl */`
+uniform float uSat;
+uniform float uVal;
+void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor ) {
+  vec3 c = inputColor.rgb;
+  if ( uSat < 0.999 || uVal < 0.999 ) {
+    float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+    c = mix( vec3( l ), c, uSat ) * uVal;
+  }
+  outputColor = vec4( c, inputColor.a );
+}`, { blendFunction: BlendFunction.SET, uniforms: uniformsOf({ uSat: U.uSat, uVal: U.uVal }) });
+  }
+}
+
+/** heat haze / lensing: the VFX distortion offsets bend every later lookup of the HDR buffer */
+class DistortEffect extends Effect {
+  constructor() {
+    super('ValeDistort', /* glsl */`
+uniform sampler2D uDistort;
+uniform float uDistortOn;
+void mainUv( inout vec2 uv ) {
+  if ( uDistortOn > 0.5 ) uv += clamp( texture2D( uDistort, uv ).rg, vec2( -0.015 ), vec2( 0.015 ) );
+}`, { uniforms: uniformsOf({ uDistort: U.uDistort, uDistortOn: U.uDistortOn }) });
+  }
+}
 
 /** draws the VFX into the current HDR buffer (no swap) */
 class VfxPass extends Pass {
@@ -146,16 +214,21 @@ export class PostChain {
       this.aoPass = ao;
     }
     if (this.vfx) c.addPass(this.vfx);
-    const effects = [];
+    const effects: Effect[] = [];
+    // distortion: medium and up (never on Low); the VFX system only spawns distort sprites when allowed
+    screenFx.distortAllowed = q.tier !== 'low';
+    if (screenFx.distortAllowed) effects.push(new DistortEffect());
     if (q.bloom) {
       effects.push(new BloomEffect({
         mipmapBlur: true, luminanceThreshold: 1.0, luminanceSmoothing: 0.05, intensity: 0.6, radius: 0.7,
         levels: q.tier === 'medium' ? 6 : 8,
       }));
     }
+    effects.push(new ExposureEffect());
     effects.push(new ToneMappingEffect({ mode: ToneMappingMode.NEUTRAL }));
     this.lutEffect = new LUT3DEffect(this.lutTex, { tetrahedralInterpolation: q.tier === 'ultra' || q.tier === 'high' });
     effects.push(this.lutEffect);
+    effects.push(new GradeEffect());
     effects.push(new VignetteEffect({ offset: 0.35, darkness: 0.25 }));
     c.addPass(new EffectPass(this.camera, ...effects));
     c.addPass(this.overlay);

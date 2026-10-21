@@ -28,8 +28,8 @@ export function ShopScreen(p: { params: Record<string, string> }): JSX.Element {
   const store = cv.c.store;
   const cur = cv.earnedCurrency();
   const balance = (id: string): number => profile.wallet[id] ?? 0;
-  const offers = store.offers.filter((o) => cv.offerAvailable(o) && cv.skin(o.ref));
-  const sel = cv.offer(p.params.sku) ?? offers[0];
+  const offers = store.offers.filter((o) => cv.offerAvailable(o) && cv.skinOnSale(o.ref));
+  const sel = (cv.skinOnSale(cv.offer(p.params.sku)?.ref) ? cv.offer(p.params.sku) : undefined) ?? offers[0];
   const selSkin = cv.skin(sel?.ref);
   const selFighter = cv.fighter(selSkin?.fighter);
   const owned = (o: OfferT): boolean => ownsSkin(profile.owned, o.ref);
@@ -144,7 +144,7 @@ export function ShopScreen(p: { params: Record<string, string> }): JSX.Element {
 
 function Shelf(p: { shelf: ShelfT; selected?: string; owned: (o: OfferT) => boolean; equipped: (o: OfferT) => boolean; onPick: (o: OfferT) => void }): JSX.Element {
   const { cv } = useApp();
-  const offers = p.shelf.skus.map((s) => cv.offer(s)).filter((o): o is OfferT => !!o && cv.offerAvailable(o) && !!cv.skin(o.ref));
+  const offers = p.shelf.skus.map((s) => cv.offer(s)).filter((o): o is OfferT => !!o && cv.offerAvailable(o) && cv.skinOnSale(o.ref));
   return (
     <section class={`shelf shelf--${p.shelf.layout} stg`} aria-label={p.shelf.name}>
       <h2 class="t-h2 shelf__title">{p.shelf.name}<span class="t-caption muted num">{offers.length}</span></h2>

@@ -438,7 +438,7 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
       const last = path[path.length - 1];
       if (last === 'behavior' || last === 'terrain' || last === 'params') return 'skip';
       if (last === 'present') {
-        for (const k of ['vfx', 'hitVfx'] as const) if (typeof node[k] === 'string' && !vfx.has(node[k] as string)) dg.err([...path, k], unknownRef('vfx id', node[k], vfx));
+        for (const k of ['vfx', 'hitVfx', 'windupVfx'] as const) if (typeof node[k] === 'string' && !vfx.has(node[k] as string)) dg.err([...path, k], unknownRef('vfx id', node[k], vfx));
         for (const k of ['sfx', 'hitSfx'] as const) if (typeof node[k] === 'string' && !cues.has(node[k] as string)) dg.err([...path, k], unknownRef('audio cue', node[k], cues));
         if (typeof node.anim === 'string') {
           const pool = ctx.clips ?? clipRoles;
@@ -695,7 +695,8 @@ const AT = E('origin', 'caster', 'target', 'path', 'ground');
 const BLEND = E('add', 'alpha', 'ink', 'chip');
 const TEX: VfxKey = ['enum', VFX_TEXTURE_NAMES];
 const VFX_COMMON: Record<string, VfxKey> = {
-  delay: 'nonneg', at: AT, phase: E('main', 'windup'), socket: 'str', offset: 'vec3', follow: 'bool', fit: 'bool', secondary: 'bool', chance: 'unit',
+  delay: 'nonneg', at: AT, phase: E('main', 'windup', 'release'), socket: 'str', offset: 'vec3', follow: 'bool', fit: 'bool', secondary: 'bool', chance: 'unit',
+  repeat: 'nonneg', fitTime: 'bool',
 };
 const EMITTER: Record<string, VfxKey> = {
   count: 'int', rate: 'nonneg', perMeter: 'nonneg', bursts: 'bursts', duration: 'num',
@@ -728,7 +729,7 @@ const VFX_LAYERS: Record<string, Record<string, VfxKey>> = {
   shockwave: SHOCKWAVE,
   beam: {
     width: 'nonneg', life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'nonneg', noise: 'nonneg', freq: 'nonneg', scroll: 'num',
-    flare: 'nonneg', flareTexture: TEX, taper: 'pair', core: 'nonneg', blend: BLEND, from: AT, to: AT, texture: TEX,
+    flare: 'nonneg', flareTexture: TEX, taper: 'pair', core: 'nonneg', blend: BLEND, from: AT, to: AT, texture: TEX, hold: 'unit',
   },
   flash: { radius: 'nonneg', life: 'nonneg', color: 'color', intensity: 'nonneg', texture: TEX, core: 'color', light: 'bool' },
   mesh: {
@@ -741,10 +742,12 @@ const VFX_LAYERS: Record<string, Record<string, VfxKey>> = {
   decal: {
     shape: E('circle', 'ring', 'cone', 'rect', 'line'), style: E('plain', 'scorch', 'crack', 'ink', 'frost', 'light'), radius: 'curve',
     life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'curve', rim: 'color', texture: TEX, angleDeg: 'nonneg', length: 'nonneg', width: 'nonneg',
+    hold: 'unit',
   },
   light: { color: 'color', intensity: 'nonneg', radius: 'nonneg', life: 'nonneg', attack: 'nonneg', flicker: 'unit' },
   distort: { mode: E('ring', 'haze', 'bulge'), size: 'curve', strength: 'curve', life: 'nonneg', align: E('camera', 'ground') },
-  feel: { shake: 'unit', who: E('self', 'all'), hitFlash: 'nonneg', hitStop: 'nonneg', squash: 'nonneg' },
+  feel: { shake: 'unit', who: E('self', 'all'), hitFlash: 'nonneg', hitStop: 'nonneg', squash: 'nonneg',
+    exposure: 'nonneg', exposureRadius: 'nonneg', exposureHold: 'nonneg', exposureFade: 'nonneg', exposureDip: 'unit', exposureDesat: 'unit' },
   bind: { event: 'str' },
 };
 const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element');

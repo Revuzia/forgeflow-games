@@ -112,6 +112,9 @@ export const Present = z.object({
   sfx: Id.optional(),                   // audio cue id
   hitVfx: Id.optional(), hitSfx: Id.optional(),
   telegraph: z.enum(['none', 'ally_only', 'everyone']).optional(), // ground warning visibility
+  /** CHANGED(RENDER), additive: the caster's anticipation VfxDef, played over the cast's wind-up (its clock fitted
+   *  so `duration` = castTime), sustained while the wind-up runs and cancelled with it (CONTRACT §9.5) */
+  windupVfx: Id.optional(),
 }).strict();
 
 // ── the effect DSL (CONTRACT §6) ─────────────────────────────────────────────────────────────────
@@ -123,7 +126,7 @@ export const ApplyTo = z.enum(['hit', 'self', 'target']);
 
 /** Parsed (defaults applied) effect records. The content build ships parsed JSON, so the runtime
  *  can rely on every defaulted field being present. Mirrors the zod union below exactly. */
-type PresentT = { anim?: string; vfx?: string; sfx?: string; hitVfx?: string; hitSfx?: string; telegraph?: 'none' | 'ally_only' | 'everyone' };
+type PresentT = { anim?: string; vfx?: string; sfx?: string; hitVfx?: string; hitSfx?: string; telegraph?: 'none' | 'ally_only' | 'everyone'; windupVfx?: string };
 type AnchorT = 'self' | 'target' | 'point' | 'hit' | 'end';
 type ApplyToT = 'hit' | 'self' | 'target';
 type RankedT = number | number[];
@@ -593,7 +596,8 @@ export const ClientDef = z.object({
   menuScene: z.object({ model: AssetRef.optional(), sky: AssetRef, lut: AssetRef, backdrop: AssetRef.optional() }).strict(),
   /** VFX for world events and statuses that carry no ability of their own (CONTRACT §9.5): role -> vfx id.
    *  events: levelUp, respawn, death, unitDeath, structureFall, recall, pickup, objective, blink, crit, heal,
-   *  shield, ultWindup · status: a StatusKind (stun, root, slow, silence, reveal, ...) */
+   *  shield, ultWindup, windup (generic cast anticipation), castFlash (casts under 0.12 s) · status: a
+   *  StatusKind (stun, root, slow, …; each look is sustained for the status' whole duration) */
   vfxEvents: z.record(z.string(), Id).default({}),
   vfxStatus: z.record(z.string(), Id).default({}),
   tips: z.array(z.string()).default([]),

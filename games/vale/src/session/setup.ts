@@ -26,6 +26,7 @@ import type { Rng } from '../sim/rng.ts';
 import type { FinalSeat, PickProtocol } from './draft.ts';
 import { ownsSkin, wornSkin } from './economy.ts';
 import type { Difficulty } from './ratings.ts';
+import { playableIds } from './roster.ts';
 
 type RoleT = CatalogT['roles'][number];
 
@@ -39,9 +40,10 @@ export function isFfaMode(mode: ModeDefT): boolean { return mode.pick === 'ffa_p
 
 export function pickProtocol(mode: ModeDefT, queue: QueueDefT): PickProtocol { return queue.pick ?? mode.pick; }
 
-/** fighters a draft may offer (catalog order) */
+/** fighters a draft may offer (catalog order): art-ready ones only (roster.ts, the B3 gate) */
 export function fighterPool(catalog: CatalogT): string[] {
-  return catalog.fighters.filter((f) => catalog.skins.some((s) => s.fighter === f.id)).map((f) => f.id);
+  const ready = playableIds(catalog);
+  return catalog.fighters.filter((f) => ready.has(f.id) && catalog.skins.some((s) => s.fighter === f.id)).map((f) => f.id);
 }
 
 // ── layout + roles ───────────────────────────────────────────────────────────────────────────────
@@ -263,7 +265,7 @@ export function buildCustomSetup(catalog: CatalogT, queue: QueueDefT, cfg: Custo
     const used = usedByTeam.get(s.team) ?? new Set<string>();
     usedByTeam.set(s.team, used);
     const cands = pool.filter((f) => !used.has(f));
-    const fighter = s.fighter ?? o.rng.pick(cands.length ? cands : pool);
+    const fighter = s.fighter && pool.includes(s.fighter) ? s.fighter : o.rng.pick(cands.length ? cands : pool);
     used.add(fighter);
     const name = s.you ? o.displayName : o.botNames[bot++ % Math.max(1, o.botNames.length)] ?? `Bot ${s.player + 1}`;
     return {

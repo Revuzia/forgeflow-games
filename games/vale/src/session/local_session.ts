@@ -34,6 +34,7 @@ import type {
 import type { LoadoutChoice, MatchResult, MatchSetup, PlayerId } from '../contracts/sim.ts';
 import { Rng, stream } from '../sim/rng.ts';
 import { BOTS_LINK, type PickLoadout } from './bots_link.ts';
+import { isPlayable } from './roster.ts';
 import { iso, RealClock, type Clock } from './clock.ts';
 import { DraftHost, type DraftSeatInit, type PickProtocol } from './draft.ts';
 import { createFallbackDraftBrain, type DraftBrainFactory } from './draft_brain.ts';
@@ -259,7 +260,7 @@ export class LocalSession implements Session {
     const mode = findMode(this.catalog, queue.mode);
     if (!mode) { this.error(`queue: '${queue.id}' names unknown mode '${queue.mode}'`); return; }
     if (queue.kind !== 'custom' && queue.kind !== 'practice' && pickProtocol(mode, queue) === 'role_preset') {
-      if (!req.preset || !this.catalog.fighters.some((f) => f.id === req.preset!.fighter)) { this.error('queue: choose a fighter for this queue (QueueRequest.preset)'); return; }
+      if (!req.preset || !isPlayable(this.catalog, req.preset.fighter)) { this.error('queue: choose a fighter for this queue (QueueRequest.preset)'); return; }
     }
     if (queue.kind === 'custom') {
       const chk = checkCustom(this.catalog, req.custom);
@@ -400,7 +401,7 @@ export class LocalSession implements Session {
       simCatalog = customCatalog(this.catalog, queue, mode, req.custom?.rulesOverride);
       protocol = pickProtocol(mode, findQueue(simCatalog, queue.id)!);
     } else if (queue.kind === 'practice') {
-      protocol = req.preset && this.catalog.fighters.some((f) => f.id === req.preset!.fighter) ? 'role_preset' : 'blind';
+      protocol = req.preset && isPlayable(this.catalog, req.preset.fighter) ? 'role_preset' : 'blind';
     }
     const simQueue = findQueue(simCatalog, queue.id)!;
     const rules = effectiveRules(mode, simQueue);

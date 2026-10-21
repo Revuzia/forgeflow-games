@@ -79,7 +79,7 @@ export function FighterGrid(p: FighterGridProps): JSX.Element {
   const [own, setOwn] = useState<GridFilter>(NO_FILTER);
   const f = p.filter ?? own;
   const set = p.onFilter ?? setOwn;
-  const list = useMemo(() => filterFighters(p.fighters ?? cv.fighters(), f, (x) => cv.originOf(x)), [p.fighters, f.cls, f.role, f.origin, f.q]);
+  const list = useMemo(() => filterFighters(p.fighters ?? cv.playable(), f, (x) => cv.originOf(x)), [p.fighters, f.cls, f.role, f.origin, f.q]);
   return (
     <div class={`fgrid ${p.class ?? ''}`}>
       <FilterBar value={f} onChange={set} origin={p.origin} compact={p.compactFilters} />

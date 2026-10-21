@@ -6,6 +6,7 @@ import type {
   CatalogT, ClassDefT, ModeDefT, QueueDefT, RankTierT, ResourceDefT, RoleDefT, SkinDefT,
 } from '../contracts/catalog.ts';
 import type { RatingRecord } from '../contracts/session.ts';
+import { isPlayable, playableIds, skinArtReady } from '../session/roster.ts';
 
 export type FighterDefT = CatalogT['fighters'][number];
 export type OfferT = CatalogT['store']['offers'][number];
@@ -74,6 +75,11 @@ export class CatalogView {
   offer(sku?: string | null): OfferT | undefined { return this.get('offer', sku); }
 
   fighters(): readonly FighterDefT[] { return this.c.fighters; }
+  /** the fighters a player may choose (session/roster.ts: art-ready ones; every fighter while none is) */
+  playable(): readonly FighterDefT[] { const ids = playableIds(this.c); return this.c.fighters.filter((f) => ids.has(f.id)); }
+  isPlayable(fighter: string | undefined | null): boolean { return isPlayable(this.c, fighter); }
+  /** a store offer's skin can be shown and worn: its fighter is playable and the skin's own art resolves */
+  skinOnSale(skin: string | undefined | null): boolean { const s = this.skin(skin); return !!s && this.isPlayable(s.fighter) && skinArtReady(s); }
   skinsOf(fighter: string): SkinDefT[] { return this.c.skins.filter((s) => s.fighter === fighter); }
   baseSkin(fighter: string): SkinDefT | undefined { return this.skinsOf(fighter).find((s) => s.tier === 'base') ?? this.skinsOf(fighter)[0]; }
   offerForSkin(skin: string): OfferT | undefined { return this.c.store.offers.find((o) => o.kind === 'skin' && o.ref === skin); }

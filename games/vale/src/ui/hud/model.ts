@@ -4,6 +4,12 @@
 // recap, the surrender vote, the end of the match) and turns SimEvents into words through the strings
 // (announce.*, killfeed.*, ping.*, hint.*). It never plays a match cue: the AUDIO lane hears the same
 // events. Damage / heal / Gleam numbers go to a listener (the world layer) instead of a signal.
+//
+// PER-TICK WORK (r12 B4): widgets do not re-render every sim tick. A widget re-renders only when a small
+// key of its discrete state changes (useViewKey in ctx.ts), and continuous values (cooldown sweeps and
+// seconds, bar widths, timers, Gleam) are written straight into the DOM by WRITERS (onWrite) that this
+// model runs once per new sim tick from the HUD's rAF loop. `derived()` caches what several widgets need
+// per tick (your loss-of-control status, which abilities' effects are running).
 
 import { batch, signal } from '@preact/signals';
 import type { CatalogT, UnitDefT } from '../../contracts/catalog.ts';
@@ -15,7 +21,9 @@ import { fmtInt } from '../format.ts';
 export type Rel = 'self' | 'ally' | 'enemy' | 'neutral';
 export interface Who { name: string; fighter?: string; skin?: string; player?: PlayerId; rel: Rel; seat?: number; team?: number }
 export interface KillRow { id: number; at: number; kind: 'takedown' | 'fell' | 'structure' | 'objective' | 'wipe' | 'out'; killer?: Who; victim?: Who; assists: Who[]; text: string; mine: boolean }
-export interface Banner { id: number; title: string; sub: string; major: boolean; ms: number; tone: 'own' | 'foe' | 'plain' }
+export interface Banner { id: number; title: string; sub: string; major: boolean; ms: number; tone: 'own' | 'foe' | 'plain';
+  /** kill banners: the fighter who scored (a) and the one who fell (b), shown as round portraits */
+  a?: Who; b?: Who }
 export interface FeedLine { id: number; at: number; text: string; tone: 'info' | 'warn' | 'ally' | 'hint' }
 export interface PingMark { id: number; at: number; kind: PingKind; x: number; y: number; target?: EntityId; player: PlayerId; self: boolean; fromX: number; fromY: number }
 export interface Recap { at: number; open: boolean; killer: EntityId | -1; killerName: string; killerDef: string; log: readonly DamageLogEntry[]; structure: boolean }
@@ -23,7 +31,26 @@ export interface Vote { yes: number; no: number; needed: number; by: PlayerId; a
 export interface NumberPop { kind: 'damage' | 'heal' | 'gold'; dtype?: 'phys' | 'magic' | 'true'; amount: number; crit: boolean; dst: EntityId; x: number; y: number }
 
 const KILLFEED_MS = 6000, FEED_MS = 6000, PING_MS = 4000;
-const MINOR_MS = 2400, MAJOR_MS = 3600;
+const MINOR_MS = 2400, MAJOR_MS = 3600, KILL_MS = 3500;
+/** statuses that stop casting (sim status.ts canCast: hard CC, taunt, fear); silence stops abilities only */
+export const CAST_LOCK = new Set<string>(['stun', 'airborne', 'sleep', 'taunt', 'fear']);
+/** loss of control the CC chip names, strongest first */
+export const LOC_ORDER: readonly string[] = ['stun', 'airborne', 'sleep', 'fear', 'taunt', 'silence', 'root', 'disarm'];
+/** statuses that help their holder (a buff border); every other one is a debuff */
+export const HELPFUL = new Set<string>(['haste', 'invisible', 'untargetable', 'unstoppable']);
+/** a refusal caption over the Dial Bar */
+export interface Caption { n: number; text: string; tone: 'warn' | 'lock' }
+/** per-tick derived state (cached on the view tick) */
+export interface Derived {
+  tick: number;
+  /** ability / item / spell ids whose effect is running on you → seconds left (Infinity = while it lasts) */
+  active: Map<string, number>;
+  /** the loss-of-control status the CC chip shows */
+  loc: { kind: string; remaining: number; duration: number } | null;
+  /** you cannot cast anything (stun, airborne, sleep, taunt, fear) — the status that does it */
+  castLock: string | null;
+  silenced: boolean;
+}
 export const RECAP_DELAY_MS = 1200;
 
 let seq = 1;
@@ -47,6 +74,10 @@ export class HudModel {
   readonly denied = signal<{ n: number; slot: string; why: string }>({ n: 0, slot: '', why: '' });
   /** casts you made (the slot press flash) */
   readonly pressed = signal<{ n: number; slot: string }>({ n: 0, slot: '' });
+  /** the refusal caption over the Dial Bar (1.2 s) */
+  readonly caption = signal<Caption>({ n: 0, text: '', tone: 'warn' });
+  /** your current target (selected, attacked or last hit fighter): the target frame */
+  readonly target = signal<EntityId>(-1);
 
   private bannerQ: Banner[] = [];
   private bannerTimer = 0;
@@ -57,6 +88,12 @@ export class HudModel {
   private units = new Map<string, UnitDefT>();
   private recapTimer = 0;
   private disposed = false;
+  private writers = new Set<() => void>();
+  private writeTick = -1;
+  private derivedCache: Derived = { tick: -1, active: new Map(), loc: null, castLock: null, silenced: false };
+  /** this batch's takedown that involves you (its banner waits for the batch's announces) */
+  private pendingKill: { killer: PlayerId; victim: PlayerId } | null = null;
+  private lastKill: { killer: Who | undefined; victim: Who } | null = null;
 
   constructor(client: MatchClient, cv: CatalogView) {
     this.client = client;
@@ -72,7 +109,48 @@ export class HudModel {
     this.off?.(); this.off = null;
     clearTimeout(this.bannerTimer); clearTimeout(this.recapTimer);
     this.numberCbs = [];
+    this.writers.clear();
   }
+
+  /** a DOM writer run once per new sim tick (and once now); returns its removal */
+  onWrite(fn: () => void): () => void {
+    this.writers.add(fn);
+    try { fn(); } catch (e) { console.error('[vale] hud writer', e); }
+    return () => { this.writers.delete(fn); };
+  }
+  /** run every writer on the next frame even without a new sim tick (paused practice, a re-render) */
+  flushWriters(): void { this.writeTick = -1; }
+
+  /** per-tick derived state, cached on the view tick */
+  derived(): Derived {
+    const v = this.view;
+    if (this.derivedCache.tick === v.tick) return this.derivedCache;
+    const d: Derived = { tick: v.tick, active: new Map(), loc: null, castLock: null, silenced: false };
+    const body = this.body;
+    if (body && body.alive) {
+      for (const b of body.buffs) d.active.set(b.source, Math.max(d.active.get(b.source) ?? 0, b.remaining));
+      let best = -1;
+      for (const s of body.statuses) {
+        if (CAST_LOCK.has(s.kind) && (!d.castLock || LOC_ORDER.indexOf(s.kind) < LOC_ORDER.indexOf(d.castLock))) d.castLock = s.kind;
+        if (s.kind === 'silence') d.silenced = true;
+        const rank = LOC_ORDER.indexOf(s.kind);
+        if (rank < 0) continue;
+        const score = (LOC_ORDER.length - rank) * 1000 + s.remaining;
+        if (score > best) { best = score; d.loc = { kind: s.kind, remaining: s.remaining, duration: Math.max(s.duration, s.remaining, 0.01) }; }
+      }
+      // zones you placed run their ability's effect (EntityView.def is the ability id for zones)
+      for (const e of v.entities) if (e.kind === 'zone' && e.owner === this.you && e.alive) d.active.set(e.def, Infinity);
+      // a channel runs the ability being channelled
+      if (body.state === 'channel') {
+        const slot = body.anim.startsWith('cast_') ? body.anim.slice(5) : '';
+        const av = this.me?.abilities.find((a) => a.slot === slot);
+        if (av) d.active.set(av.id, Math.max(d.active.get(av.id) ?? 0, Math.max(0, body.stateDuration - body.stateTime)));
+      }
+    }
+    this.derivedCache = d;
+    return d;
+  }
+
 
   // ── views ──────────────────────────────────────────────────────────────────────────────────────
   get view(): WorldView { return this.client.view; }
@@ -95,10 +173,16 @@ export class HudModel {
   }
   teamName(team: number): string { return this.cv.t(team === 0 ? 'team.aubade' : 'team.serenade', team === 0 ? 'Aubade' : 'Serenade'); }
 
-  /** per animation frame: bump the frame signal when the sim advanced */
+  /** per animation frame: bump the frame signal when the sim advanced, then run the DOM writers */
   tick(): void {
     const t = this.view.tick;
     if (t !== this.lastTick) { this.lastTick = t; this.frame.value = t; }
+    if (t !== this.writeTick) {
+      this.writeTick = t;
+      for (const w of this.writers) { try { w(); } catch (e) { console.error('[vale] hud writer', e); } }
+    }
+    const tg = this.target.peek();
+    if (tg >= 0) { const e = this.view.entity(tg); if (!e || !e.alive || (e.team !== this.myTeam && (e.visibleMask & (1 << this.myTeam)) === 0)) this.target.value = -1; }
     const now = performance.now();
     const kf = this.killfeed.peek();
     if (kf.length && now - kf[kf.length - 1].at > KILLFEED_MS) this.killfeed.value = kf.filter((r) => now - r.at <= KILLFEED_MS);
@@ -121,9 +205,9 @@ export class HudModel {
     const line: FeedLine = { id: seq++, at: performance.now(), text, tone };
     this.feed.value = [...this.feed.peek().slice(-4), line];
   }
-  announce(title: string, sub: string, major: boolean, tone: Banner['tone'] = 'plain'): void {
+  announce(title: string, sub: string, major: boolean, tone: Banner['tone'] = 'plain', who?: { a?: Who; b?: Who }): void {
     if (!title) return;
-    const b: Banner = { id: seq++, title, sub, major, ms: major ? MAJOR_MS : MINOR_MS, tone };
+    const b: Banner = { id: seq++, title, sub, major, ms: who ? KILL_MS : major ? MAJOR_MS : MINOR_MS, tone, ...(who?.a ? { a: who.a } : {}), ...(who?.b ? { b: who.b } : {}) };
     if (!this.banner.peek()) { this.showBanner(b); return; }
     this.bannerQ.push(b);
     if (this.bannerQ.length > 2) this.bannerQ.shift();
@@ -160,7 +244,19 @@ export class HudModel {
   private onEvents(evs: SimEvent[]): void {
     const deaths = new Map<EntityId, Extract<SimEvent, { e: 'death' }>>();
     for (const ev of evs) if (ev.e === 'death') deaths.set(ev.dst, ev);
-    batch(() => { for (const ev of evs) this.one(ev, deaths); });
+    batch(() => {
+      for (const ev of evs) this.one(ev, deaths);
+      // a takedown that involves you gets its own banner unless the batch announced it (first, multi, shutdown, streak)
+      const k = this.pendingKill;
+      this.pendingKill = null;
+      if (k) {
+        const you = k.killer === this.you;
+        const key = you ? 'announce.takedown.you' : k.victim === this.you ? 'announce.takedown.fell' : 'announce.takedown.assist';
+        const title = this.t(`${key}.title`);
+        if (title) this.announce(title, this.t(`${key}.sub`, { victim: this.nameOf(k.victim), killer: this.nameOf(k.killer) }), false, k.victim === this.you ? 'foe' : 'own',
+          { a: this.who(k.killer), b: this.who(k.victim) });
+      }
+    });
   }
 
   private one(ev: SimEvent, deaths: Map<EntityId, Extract<SimEvent, { e: 'death' }>>): void {
@@ -170,6 +266,8 @@ export class HudModel {
       case 'takedown': {
         const victim = this.who(ev.victim);
         const mine = ev.killer === this.you || ev.victim === this.you || ev.assists.includes(this.you);
+        this.lastKill = { killer: ev.killer >= 0 ? this.who(ev.killer) : undefined, victim };
+        if (ev.killer >= 0 && !this.ffa && (ev.killer === this.you || ev.victim === this.you || ev.assists.includes(this.you))) this.pendingKill = { killer: ev.killer, victim: ev.victim };
         if (ev.killer >= 0) {
           const assists = ev.assists.filter((a) => a !== ev.killer).map((a) => this.who(a));
           const text = assists.length
@@ -179,7 +277,7 @@ export class HudModel {
           if (ev.streak >= 3 && !this.ffa) {
             const n = Math.min(7, ev.streak);
             const title = this.t(`announce.streak.${n}.title`);
-            if (title) this.announce(title, this.t(`announce.streak.${n}.sub`, { name: this.nameOf(ev.killer), n: ev.streak }), ev.streak >= 5, this.side(v.players[ev.killer]?.team));
+            if (title) { this.pendingKill = null; this.announce(title, this.t(`announce.streak.${n}.sub`, { name: this.nameOf(ev.killer), n: ev.streak }), ev.streak >= 5, this.side(v.players[ev.killer]?.team), { a: this.who(ev.killer), b: victim }); }
           }
         } else {
           const vp = v.players[ev.victim];
@@ -253,6 +351,7 @@ export class HudModel {
         if (!src || !me || src.owner !== this.you || ev.dst === me.entity || ev.amount <= 0) break;
         const dst = v.entity(ev.dst);
         if (!dst) break;
+        if (dst.kind === 'fighter' && src.kind === 'fighter') this.target.value = dst.id;
         this.pop({ kind: 'damage', dtype: ev.dtype, amount: ev.amount, crit: ev.crit, dst: ev.dst, x: dst.x, y: dst.y });
         break;
       }
@@ -306,15 +405,19 @@ export class HudModel {
         this.announce(this.t(`announce.match_start.${mode}.title`) || this.cv.t('hud.live', 'Live'), this.t(`announce.match_start.${mode}.sub`), true);
         break;
       }
-      case 'first_blood': this.announce(this.t('announce.first_blood.title'), this.t('announce.first_blood.sub', { name }), true, this.side(ev.team)); break;
+      case 'first_blood': this.pendingKill = null; this.announce(this.t('announce.first_blood.title'), this.t('announce.first_blood.sub', { name }), true, this.side(ev.team), this.killWho(ev.player)); break;
       case 'multikill': {
         const n = Math.max(2, Math.min(5, Number(p.n) || 2));
-        this.announce(this.t(`announce.multikill.${n}.title`), this.t(`announce.multikill.${n}.sub`, { name }), n >= 3, this.side(ev.team));
+        this.pendingKill = null;
+        this.announce(this.t(`announce.multikill.${n}.title`), this.t(`announce.multikill.${n}.sub`, { name }), n >= 3, this.side(ev.team), this.killWho(ev.player));
         break;
       }
       case 'shutdown': {
-        const victim = this.nameOf(typeof p.victim === 'number' ? p.victim : Number(p.victim));
-        this.announce(this.t('announce.shutdown.title'), this.t('announce.shutdown.sub', { name, victim, gold: fmtInt(Number(p.gold) || 0) }), false, this.side(ev.team));
+        const vp = typeof p.victim === 'number' ? p.victim : Number(p.victim);
+        const victim = this.nameOf(vp);
+        this.pendingKill = null;
+        this.announce(this.t('announce.shutdown.title'), this.t('announce.shutdown.sub', { name, victim, gold: fmtInt(Number(p.gold) || 0) }), false, this.side(ev.team),
+          { a: ev.player !== undefined ? this.who(ev.player) : undefined, b: Number.isFinite(vp) && this.view.players[vp] ? this.who(vp) : undefined });
         break;
       }
       case 'structure_destroyed': {
@@ -377,6 +480,12 @@ export class HudModel {
         if (title) this.announce(title, this.t(`announce.${ev.key}.sub`, p), false);
       }
     }
+  }
+  /** portraits for a kill announce: the scorer and the fighter of this batch's takedown */
+  private killWho(killer: PlayerId | undefined): { a?: Who; b?: Who } | undefined {
+    if (killer === undefined) return undefined;
+    const k = this.lastKill;
+    return { a: this.who(killer), b: k && k.killer?.player === killer ? k.victim : undefined };
   }
   private isNeedleFamily(fam: string): boolean {
     // the roads' many structures are minor news; the stand-alone families (their own strings) are major

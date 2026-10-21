@@ -48,7 +48,7 @@ export function CustomScreen(): JSX.Element {
     { value: 'you', label: cv.t('custom.seat_you', 'You') }, { value: 'bot', label: cv.t('custom.seat_bot', 'Bot') }, { value: 'open', label: cv.t('custom.seat_open', 'Open') },
   ];
   const diffOpts: Option<NonNullable<Seat['difficulty']>>[] = (['novice', 'adept', 'veteran'] as const).map((d) => ({ value: d, label: cv.t(`custom.difficulty_${d}`, d) }));
-  const fighterOpts: Option<string>[] = [{ value: '', label: cv.t('custom.fighter_random', 'Random') }, ...cv.fighters().map((f) => ({ value: f.id, label: f.name }))];
+  const fighterOpts: Option<string>[] = [{ value: '', label: cv.t('custom.fighter_random', 'Random') }, ...cv.playable().map((f) => ({ value: f.id, label: f.name }))];
   const start = (): void => {
     if (!hasYou) return;
     const cfg: CustomLobbyConfig = {

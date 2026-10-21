@@ -9,11 +9,17 @@
 // protocol playable without it: ban a random available fighter no ally is hovering; hover then lock
 // a fighter of the seat's role (RoleDef id on FighterDef.role, then secondaryRole), else any; on a
 // Bridge bench swap once for a fighter of the seat's role when its own is off-role.
+//
+// ROSTER GATE (roster.ts, r12 B3): bots pick only art-ready fighters. The draft pool (setup.ts fighterPool)
+// is already gated, so DraftState.available never lists a fighter without its model, portrait, icon and
+// splash, and DraftHost refuses any action naming one; this brain also filters its candidates itself, so
+// it stays safe when handed a state built some other way.
 
 import type { CatalogT } from '../contracts/catalog.ts';
 import type { DraftAction, DraftState } from '../contracts/session.ts';
 import type { PlayerId } from '../contracts/sim.ts';
 import { Rng } from '../sim/rng.ts';
+import { playableIds } from './roster.ts';
 
 export interface DraftBrain {
   act(state: DraftState, seat: PlayerId): DraftAction | null;
@@ -23,6 +29,8 @@ export type DraftBrainFactory = (catalog: CatalogT, seed: number) => DraftBrain;
 export function createFallbackDraftBrain(catalog: CatalogT, seed: number): DraftBrain {
   const rng = new Rng(seed);
   const fighters = new Map(catalog.fighters.map((f) => [f.id, f]));
+  const ready = playableIds(catalog);
+  const avail = (s: DraftState): string[] => s.available.filter((f) => ready.has(f));
   const fits = (fighter: string, role: string | undefined): number => {
     if (!role) return 1;
     const f = fighters.get(fighter);
@@ -45,21 +53,21 @@ export function createFallbackDraftBrain(catalog: CatalogT, seed: number): Draft
         if (!myTurn) return null;
         const allyHovers = new Set(s.seats.filter((x) => x.team === me.team && x.hover).map((x) => x.hover as string));
         const ownBans = new Set(s.bans.filter((b) => b.team === me.team && b.fighter).map((b) => b.fighter as string));
-        const cands = s.available.filter((f) => !allyHovers.has(f) && !ownBans.has(f));
+        const cands = avail(s).filter((f) => !allyHovers.has(f) && !ownBans.has(f));
         return cands.length ? { a: 'ban', fighter: rng.pick(cands) } : null;
       }
       if (s.phase === 'pick') {
         if (me.locked) return null;
-        if (me.hover && s.available.includes(me.hover)) return myTurn ? { a: 'lock' } : null;
+        if (me.hover && avail(s).includes(me.hover)) return myTurn ? { a: 'lock' } : null;
         const allyHovers = new Set(s.seats.filter((x) => x.team === me.team && x.player !== seat && x.hover).map((x) => x.hover as string));
-        const cands = s.available.filter((f) => !allyHovers.has(f));
-        const f = best(cands.length ? cands : s.available, me.role);
+        const cands = avail(s).filter((f) => !allyHovers.has(f));
+        const f = best(cands.length ? cands : avail(s), me.role);
         return f ? { a: 'hover', fighter: f } : null;
       }
       if (s.phase === 'bench') {
         if (!me.locked || fits(me.locked, me.role) === 2) return null;
         const bench = s.bench[me.team] ?? [];
-        const better = bench.filter((f) => fits(f, me.role) > fits(me.locked as string, me.role));
+        const better = bench.filter((f) => ready.has(f) && fits(f, me.role) > fits(me.locked as string, me.role));
         return better.length ? { a: 'benchSwap', fighter: rng.pick(better) } : null;
       }
       return null;

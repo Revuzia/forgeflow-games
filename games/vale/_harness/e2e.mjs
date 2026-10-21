@@ -195,7 +195,7 @@ async function store() {
       const sku = await vale(page, (v) => {
         const cur = v.cv.earnedCurrency(); const bal = v.state.profile.value.wallet[cur.id] ?? 0;
         const owned = new Set(v.state.profile.value.owned.map((o) => o.ref));
-        const offers = v.cv.c.store.offers.filter((o) => o.kind === 'skin' && !owned.has(o.ref) && o.price.currency === cur.id && o.price.amount <= bal).sort((a, b) => a.price.amount - b.price.amount);
+        const offers = v.cv.c.store.offers.filter((o) => o.kind === 'skin' && v.cv.skinOnSale(o.ref) && !owned.has(o.ref) && o.price.currency === cur.id && o.price.amount <= bal).sort((a, b) => a.price.amount - b.price.amount);
         return offers[0]?.sku ?? null;
       });
       if (!sku) throw new Error('no affordable skin offer (grants too low?)');

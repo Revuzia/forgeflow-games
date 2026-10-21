@@ -22,18 +22,32 @@
 //     lookups go through PropertyBinding.sanitizeNodeName.
 //   * Missing art: no mesh, overlays only. In DEV builds behind ?dev=1 a fighter falls back to the
 //     proof mannequin GLB and other units to clearly-marked debug geometry (CONTRACT §0).
+//   * Unit outline (inverted hull, screen-space px): built ONCE per template (skinned parts that share a
+//     bind pose merged into one geometry with welded normals, so a fighter or a wick costs one extra draw)
+//     and cloned onto every actor in attach() hidden. Rest: 1 px ink #0B0D11 at 60 %, tinted 18 % toward
+//     the relationship colour, on fighters / wicks / monsters / summons. Hover: 2.5 px HARM (enemy and
+//     neutral: "this is what you attack"), 1.5 px ally colour on allies. Toggling it never touches the
+//     scene graph.
+//   * Victim reaction (tokens vfx.impact.victimRimMs, simHitStop false): a rim-weighted flash copy of the
+//     same hull geometry (front faces, premultiplied): chalkstone for physical, orchid-rose for magic, the
+//     value-inverted Shade (ink body, noonwhite rim) for true damage, dawnglass when a shield took it all.
+//     Peak on the impact frame, τ 70 ms, gone by 150 ms. Heavy hits add a presentation-only hit-stop
+//     (the clip clock dips, then catches up; the sim never waits) and a small flinch + squash.
 
 import {
-  type AnimationAction, type AnimationClip, AnimationMixer, BackSide, CapsuleGeometry, Color, CylinderGeometry,
-  type Material, Group, LatheGeometry, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D,
-  OctahedronGeometry, PropertyBinding, SkinnedMesh, Vector2, Vector3, type WebGLProgramParametersWithUniforms,
+  type AnimationAction, type AnimationClip, AnimationMixer, BackSide, BufferAttribute, BufferGeometry, CapsuleGeometry, Color,
+  CustomBlending, CylinderGeometry, Float32BufferAttribute, FrontSide, type Material, Matrix3, Matrix4, Group, LatheGeometry, LoopOnce,
+  LoopRepeat, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending, type Object3D, OctahedronGeometry, OneFactor,
+  OneMinusSrcAlphaFactor, PropertyBinding, ShaderMaterial, SkinnedMesh, Uint16BufferAttribute, Uint32BufferAttribute, Vector2,
+  Vector3, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import type { CatalogT, FighterDefT, UnitDefT } from '../contracts/catalog.ts';
-import type { EntityView, TeamId } from '../contracts/sim.ts';
+import type { EntityView, SimEvent, TeamId } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
 import type { Assets, LoadedModel } from './assets.ts';
-import type { Palette } from './palette.ts';
+import { INK, type Palette } from './palette.ts';
+import type { FeelEvent } from './vfx/system.ts';
 import { patchWorldMaterial } from './world_material.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
@@ -41,6 +55,15 @@ const IMPACT_AT = 0.4;
 const ACCENT_REST = 0.8;
 const ACCENT_WINDUP_MIN = 1.5;
 const SNAP_DIST = 3;
+// victim reaction (tokens vfx.impact.victimRimMs 80: ≈ 80 ms visible, exponential τ 70 ms, cleared by 150 ms)
+const FLASH_TAU = 0.07;
+const FLASH_END = 0.15;
+const WOB_DUR = 0.14;
+/** hit-stop: the clip clock runs at 8 % while stopped, then catches up at double speed */
+const STOP_RATE = 0.08;
+/** wicks this far from the camera focus animate at 15 Hz */
+export const ANIM_FAR_M = 12;
+const ANIM_FAR_DT = 1 / 15;
 
 export type ActorKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon' | 'ward' | 'pickup';
 const LOOPING = new Set(['idle', 'run', 'recall', 'channel', 'stunned', 'idle_lobby', 'victory', 'taunt']);
@@ -53,6 +76,236 @@ interface Template {
   /** extra scale (dev mannequin stand-in fitted to the authored height) */
   fit: number;
   dev: boolean;
+  /** outline / hit-flash hull parts (built once per template scene) */
+  hull: HullPart[];
+}
+
+// ── hull plan: outline + hit-flash geometry, once per template ───────────────────────────────────
+/** one hull draw: `lead` is the index (traverse order) of the mesh it binds to and hangs under */
+interface HullPart { lead: number; geometry: BufferGeometry; skinned: boolean }
+
+const FORM_RE = /^form_([a-z0-9]+(?:_[a-z0-9]+)*?)(?:[._]\d+)?$/i;
+const hullCache = new WeakMap<Object3D, HullPart[]>();
+const _m1 = new Matrix4();
+const _m2 = new Matrix4();
+const _n3 = new Matrix3();
+const _p = new Vector3();
+
+function meshesOf(root: Object3D): Mesh[] {
+  const out: Mesh[] = [];
+  root.traverse((o) => { if ((o as Mesh).isMesh) out.push(o as Mesh); });
+  return out;
+}
+
+/** nearest form node at or above `o` (form-swapped parts toggle visibility; a hull never spans two) */
+function formKey(o: Object3D): string {
+  for (let p: Object3D | null = o; p; p = p.parent) if (FORM_RE.test(p.name)) return p.uuid;
+  return '';
+}
+
+/** glow cards, flames and other see-through parts get no ink outline */
+function outlinable(m: Mesh): boolean {
+  const mats = Array.isArray(m.material) ? m.material : [m.material];
+  return mats.some((x) => !x.transparent && x.blending === NormalBlending && x.depthWrite !== false) && !!m.geometry.getAttribute('position');
+}
+
+/**
+ * B can share A's hull when one rigid transform C carries B's bind space into A's for every bone they share
+ * (C = (IBM_A · bind_A)⁻¹ · IBM_B · bind_B; a mesh exported with its own object offset differs by exactly
+ * that). Returns C (B's vertices go through it), or null when B binds differently.
+ */
+const _c0 = new Matrix4();
+function skinTransform(a: SkinnedMesh, b: SkinnedMesh): Matrix4 | null {
+  const ia = new Map(a.skeleton.bones.map((bone, i) => [bone, i]));
+  let first = true;
+  for (let j = 0; j < b.skeleton.bones.length; j++) {
+    const i = ia.get(b.skeleton.bones[j]);
+    if (i === undefined) return null;
+    _m1.multiplyMatrices(a.skeleton.boneInverses[i], a.bindMatrix).invert();
+    _m2.multiplyMatrices(b.skeleton.boneInverses[j], b.bindMatrix);
+    _m1.multiply(_m2);
+    if (first) { _c0.copy(_m1); first = false; continue; }
+    for (let k = 0; k < 16; k++) if (Math.abs(_m1.elements[k] - _c0.elements[k]) > 1e-3) return null;
+  }
+  return _c0.clone();
+}
+
+/** average the normals of coincident vertices (hard edges would crack a screen-space hull) */
+function weldNormals(pos: Float32Array, nrm: Float32Array): void {
+  const n = pos.length / 3;
+  const slot = new Int32Array(n);
+  const map = new Map<string, number>();
+  const acc: number[] = [];
+  for (let v = 0; v < n; v++) {
+    const key = `${Math.round(pos[v * 3] * 1e4)},${Math.round(pos[v * 3 + 1] * 1e4)},${Math.round(pos[v * 3 + 2] * 1e4)}`;
+    let s = map.get(key);
+    if (s === undefined) { s = acc.length / 3; map.set(key, s); acc.push(0, 0, 0); }
+    acc[s * 3] += nrm[v * 3]; acc[s * 3 + 1] += nrm[v * 3 + 1]; acc[s * 3 + 2] += nrm[v * 3 + 2];
+    slot[v] = s;
+  }
+  for (let v = 0; v < n; v++) {
+    const s = slot[v];
+    const x = acc[s * 3], y = acc[s * 3 + 1], z = acc[s * 3 + 2];
+    const l = Math.hypot(x, y, z);
+    if (l > 1e-3) { nrm[v * 3] = x / l; nrm[v * 3 + 1] = y / l; nrm[v * 3 + 2] = z / l; }
+  }
+}
+
+/** merge members into one hull geometry in the lead's space (positions, welded normals, skin remapped to the lead's bones) */
+function mergeHull(members: Mesh[], lead: Mesh, skinned: boolean, skinXf: (Matrix4 | null)[]): BufferGeometry {
+  let nv = 0, ni = 0;
+  for (const m of members) {
+    const g = m.geometry;
+    const c = g.getAttribute('position').count;
+    nv += c; ni += g.index ? g.index.count : c;
+  }
+  const P = new Float32Array(nv * 3), N = new Float32Array(nv * 3);
+  const SI = skinned ? new Uint16Array(nv * 4) : null, SW = skinned ? new Float32Array(nv * 4) : null;
+  const I = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+  const leadBones = skinned ? new Map((lead as SkinnedMesh).skeleton.bones.map((b, i) => [b, i])) : null;
+  _m1.copy(lead.matrix).invert();
+  let vo = 0, io = 0, missingNormals = false;
+  members.forEach((m, mi) => {
+    const g = m.geometry;
+    const pa = g.getAttribute('position'), na = g.getAttribute('normal');
+    // rigid siblings: into the lead's local frame; skinned members: into the lead's bind space (skinTransform)
+    const xf = skinned ? skinXf[mi] : m !== lead ? _m2.multiplyMatrices(_m1, m.matrix) : null;
+    if (xf) _n3.getNormalMatrix(xf);
+    for (let v = 0; v < pa.count; v++) {
+      _p.fromBufferAttribute(pa, v);
+      if (xf) _p.applyMatrix4(xf);
+      P[(vo + v) * 3] = _p.x; P[(vo + v) * 3 + 1] = _p.y; P[(vo + v) * 3 + 2] = _p.z;
+      if (na) {
+        _p.fromBufferAttribute(na, v);
+        if (xf) _p.applyMatrix3(_n3).normalize();
+        N[(vo + v) * 3] = _p.x; N[(vo + v) * 3 + 1] = _p.y; N[(vo + v) * 3 + 2] = _p.z;
+      } else missingNormals = true;
+    }
+    if (SI && SW && leadBones) {
+      const si = g.getAttribute('skinIndex'), sw = g.getAttribute('skinWeight');
+      const bones = (m as SkinnedMesh).skeleton.bones;
+      for (let v = 0; v < pa.count; v++) {
+        for (let k = 0; k < 4; k++) {
+          const j = si ? si.getComponent(v, k) : 0;
+          SI[(vo + v) * 4 + k] = leadBones.get(bones[j]) ?? 0;
+          SW[(vo + v) * 4 + k] = sw ? sw.getComponent(v, k) : k === 0 ? 1 : 0;
+        }
+      }
+    }
+    if (g.index) for (let k = 0; k < g.index.count; k++) I[io + k] = g.index.getX(k) + vo;
+    else for (let k = 0; k < pa.count; k++) I[io + k] = k + vo;
+    vo += pa.count; io += g.index ? g.index.count : pa.count;
+  });
+  const out = new BufferGeometry();
+  out.setAttribute('position', new Float32BufferAttribute(P, 3));
+  out.setIndex(I instanceof Uint32Array ? new Uint32BufferAttribute(I, 1) : new Uint16BufferAttribute(I, 1));
+  if (missingNormals) { out.computeVertexNormals(); N.set((out.getAttribute('normal') as BufferAttribute).array as Float32Array); }
+  weldNormals(P, N);
+  out.setAttribute('normal', new Float32BufferAttribute(N, 3));
+  if (SI && SW) { out.setAttribute('skinIndex', new Uint16BufferAttribute(SI, 4)); out.setAttribute('skinWeight', new Float32BufferAttribute(SW, 4)); }
+  out.computeBoundingSphere();
+  return out;
+}
+
+/** the hull parts of a template scene (cached per scene object) */
+function hullPlan(scene: Object3D): HullPart[] {
+  const hit = hullCache.get(scene);
+  if (hit) return hit;
+  scene.updateMatrixWorld(true);
+  const meshes = meshesOf(scene);
+  const groups: { lead: number; members: number[]; xf: (Matrix4 | null)[]; skinned: boolean; key: string }[] = [];
+  meshes.forEach((m, i) => {
+    if (!outlinable(m)) return;
+    const sk = (m as SkinnedMesh).isSkinnedMesh === true;
+    const key = sk ? `s|${formKey(m)}` : `r|${m.parent?.uuid ?? ''}|${FORM_RE.test(m.name) ? m.uuid : formKey(m)}`;
+    for (const g of groups) {
+      if (g.key !== key) continue;
+      if (!sk) { g.members.push(i); g.xf.push(null); return; }
+      const c = skinTransform(meshes[g.lead] as SkinnedMesh, m as SkinnedMesh);
+      if (c) { g.members.push(i); g.xf.push(c); return; }
+    }
+    groups.push({ lead: i, members: [i], xf: [null], skinned: sk, key });
+  });
+  const parts = groups.map((g) => ({ lead: g.lead, skinned: g.skinned, geometry: mergeHull(g.members.map((i) => meshes[i]), meshes[g.lead], g.skinned, g.xf) }));
+  hullCache.set(scene, parts);
+  return parts;
+}
+
+/** CSS-pixel viewport the outline widths are measured in (the renderer keeps it current) */
+export const outlineUniforms = { uOutlineRes: { value: new Vector2(1920, 1080) } };
+
+function outlineMaterial(): MeshBasicMaterial {
+  const mat = new MeshBasicMaterial({
+    color: 0x000000, side: BackSide, transparent: true, opacity: 0.6, depthWrite: false, fog: false,
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2,
+  });
+  const u = { uOutlinePx: { value: 1 }, uOutlineRes: outlineUniforms.uOutlineRes };
+  mat.userData.px = u.uOutlinePx;
+  mat.onBeforeCompile = (sh: WebGLProgramParametersWithUniforms) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uOutlinePx; uniform vec2 uOutlineRes;')
+      .replace('#include <project_vertex>', `#include <project_vertex>
+{
+  #ifdef USE_SKINNING
+  vec3 vn = normalize( normalMatrix * objectNormal );
+  #else
+  vec3 vn = normalize( normalMatrix * normal );
+  #endif
+  vec2 dir = normalize( ( projectionMatrix * vec4( vn, 0.0 ) ).xy + 1e-5 );
+  gl_Position.xy += dir * uOutlinePx * 2.0 / uOutlineRes * gl_Position.w;
+}`);
+  };
+  mat.customProgramCacheKey = () => 'vale_outline_v2';
+  return mat;
+}
+
+const FLASH_VERT = /* glsl */`
+#include <common>
+#include <skinning_pars_vertex>
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  #include <beginnormal_vertex>
+  #include <skinbase_vertex>
+  #include <skinnormal_vertex>
+  #include <defaultnormal_vertex>
+  #include <begin_vertex>
+  #include <skinning_vertex>
+  #include <project_vertex>
+  vN = transformedNormal;
+  vV = -mvPosition.xyz;
+}`;
+const FLASH_FRAG = /* glsl */`
+uniform vec3 uFlashColor;
+uniform vec3 uFlashRim;
+uniform float uFlashK;
+uniform float uFlashInk;
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  if ( uFlashK <= 0.002 ) discard;
+  float ndv = abs( dot( normalize( vN ), normalize( vV ) ) );
+  float rim = pow( 1.0 - ndv, 2.0 );
+  if ( uFlashInk < 0.5 ) {
+    // light: added (premultiplied, alpha 0), rim-weighted so the silhouette lights first
+    gl_FragColor = vec4( uFlashColor * uFlashK * ( 0.25 + 0.75 * rim ), 0.0 );
+  } else {
+    // Shade (true damage, value-inverted): the body drops to ink, the rim rings noonwhite
+    float halo = smoothstep( 0.3, 0.75, rim );
+    float a = clamp( uFlashK * mix( 1.6, 2.0, halo ), 0.0, mix( 0.85, 0.95, halo ) );
+    gl_FragColor = vec4( mix( uFlashColor, uFlashRim, halo ) * a, a );
+  }
+}`;
+
+function flashMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    vertexShader: FLASH_VERT, fragmentShader: FLASH_FRAG,
+    uniforms: { uFlashColor: { value: new Color() }, uFlashRim: { value: new Color() }, uFlashK: { value: 0 }, uFlashInk: { value: 0 } },
+    side: FrontSide, transparent: true, depthWrite: false, depthTest: true, fog: false,
+    blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor, blendSrcAlpha: OneFactor, blendDstAlpha: OneMinusSrcAlphaFactor,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2,
+  });
 }
 
 export interface ActorOptions {
@@ -142,7 +395,7 @@ export class ModelLibrary {
         for (const c of base?.gltf.animations ?? []) clips.set(c.name, c);
         for (const c of body.gltf.animations) if (!clips.has(c.name)) clips.set(c.name, c);
         this.patchMaterials(body.gltf.scene, true, def.art.accentMaterial);
-        return { scene: body.gltf.scene, clips, roles: def.art.clips as Record<string, string | undefined>, fit: 1, dev: false };
+        return { scene: body.gltf.scene, clips, roles: def.art.clips as Record<string, string | undefined>, fit: 1, dev: false, hull: hullPlan(body.gltf.scene) };
       }
       if (this.opts.dev && this.opts.devModelUrl) {
         const m = await this.assets.modelUrl(this.opts.devModelUrl);
@@ -152,7 +405,7 @@ export class ModelLibrary {
           this.patchMaterials(m.gltf.scene, true, def.art.accentMaterial);
           const roles: Record<string, string> = {};
           for (const c of clips.keys()) roles[c] = c;
-          return { scene: m.gltf.scene, clips, roles, fit: def.art.height / DEV_MANNEQUIN_HEIGHT, dev: true };
+          return { scene: m.gltf.scene, clips, roles, fit: def.art.height / DEV_MANNEQUIN_HEIGHT, dev: true, hull: hullPlan(m.gltf.scene) };
         }
       }
       return null;
@@ -179,7 +432,7 @@ export class ModelLibrary {
         this.patchMaterials(m.gltf.scene, false, 'accent');
         const roles: Record<string, string | undefined> = { ...def.art.clips };
         for (const c of clips.keys()) if (!(c in roles)) roles[c] = c;
-        return { scene: m.gltf.scene, clips, roles, fit: 1, dev: false };
+        return { scene: m.gltf.scene, clips, roles, fit: 1, dev: false, hull: hullPlan(m.gltf.scene) };
       }
       if (this.opts.dev) return devUnitTemplate(def);
       return null;
@@ -217,7 +470,7 @@ function devUnitTemplate(def: UnitDefT): Template {
     g.add(body, band);
   }
   g.traverse((o) => { if ((o as Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  return { scene: g, clips: new Map(), roles: {}, fit: 1, dev: true };
+  return { scene: g, clips: new Map(), roles: {}, fit: 1, dev: true, hull: hullPlan(g) };
 }
 
 // ── actor ────────────────────────────────────────────────────────────────────────────────────────
@@ -271,7 +524,28 @@ export class Actor {
   private glow = ACCENT_REST;
   private sockets = new Map<string, Object3D>();
   private socketNames: Record<string, string> = {};
-  private outline: Group | null = null;
+  // outline hull + hit flash (prebuilt hidden in attach; style changes never touch the scene graph)
+  private outlineMat: MeshBasicMaterial | null = null;
+  private flashMat: ShaderMaterial | null = null;
+  private readonly hullMeshes: Mesh[] = [];
+  private readonly flashMeshes: Mesh[] = [];
+  private outlinePx = -1;
+  private readonly outlineColor = new Color();
+  private outlineOpacity = -1;
+  /** frames left of the one-frame shader warm-up (programs compile at spawn, never on the first hover or hit) */
+  private warm = 0;
+  // victim reaction envelopes (presentation only)
+  private flashT = -1;
+  private flashK0 = 0;
+  private stopLeft = 0;
+  private stopLag = 0;
+  private wobT = -1;
+  private wobK = 0;
+  private wobSquash = 0;
+  private readonly wobDir = new Vector2();
+  private baseScale = 1;
+  /** animation LOD: dt held back while the mixer is skipped (off-frustum) or throttled (distant wicks) */
+  private animAcc = 0;
   disposed = false;
 
   constructor(v: EntityView) {
@@ -342,6 +616,8 @@ export class Actor {
     });
     this.shownForm = undefined;
     this.model = model;
+    this.baseScale = s;
+    this.buildHull(model, t);
     this.root.add(model);
     if (t.clips.size > 0) this.mixer = new AnimationMixer(model);
     for (const [k, bone] of Object.entries(this.socketNames)) {
@@ -398,8 +674,12 @@ export class Actor {
     }
   }
 
-  /** interpolate + animate; dt real seconds, alpha the sim interpolation fraction */
-  update(dt: number, alpha: number): void {
+  /**
+   * interpolate + animate; dt real seconds, alpha the sim interpolation fraction. `lod`: 0 animate every
+   * frame · 1 animate at 15 Hz (distant wicks) · 2 hold the clip (outside the frustum + margin); held time
+   * is replayed when the actor animates again, so loops and one-shots stay in phase.
+   */
+  update(dt: number, alpha: number, lod: 0 | 1 | 2 = 0): void {
     const a = Math.max(0, Math.min(1, alpha));
     this.x = this.px + (this.cx - this.px) * a;
     this.y = this.py + (this.cy - this.py) * a;
@@ -421,8 +701,15 @@ export class Actor {
     const target = v.alive && windup > 0 ? ACCENT_REST + (peak - ACCENT_REST) * Math.min(1, windup * 1.6) : ACCENT_REST;
     this.glow += (target - this.glow) * Math.min(1, dt * 18);
     for (const m of this.accent) m.emissiveIntensity = this.glow;
+    this.tickReactions(dt);
 
-    if (this.mixer && this.template) this.animate(v, dt, a);
+    if (this.mixer && this.template) {
+      this.animAcc = Math.min(1, this.animAcc + dt);
+      if (lod === 2 || (lod === 1 && this.animAcc < ANIM_FAR_DT - 1e-4)) return;
+      const step = this.animAcc;
+      this.animAcc = 0;
+      this.animate(v, step, a);
+    }
   }
 
   private clipFor(role: string): AnimationClip | null {
@@ -476,6 +763,18 @@ export class Actor {
 
   /** drive the clip for one frame */
   private animate(v: EntityView, dt: number, alpha: number): void {
+    // presentation hit-stop: the clip clock dips (scrubbed clips lag the sim by stopLag), then catches up
+    let adt = dt;
+    if (this.stopLeft > 0) {
+      const s = Math.min(dt, this.stopLeft);
+      this.stopLeft -= s;
+      this.stopLag += s * (1 - STOP_RATE);
+      adt = dt - s * (1 - STOP_RATE);
+    } else if (this.stopLag > 0) {
+      const c = Math.min(this.stopLag, dt);
+      this.stopLag -= c;
+      adt = dt + c;
+    }
     let role = this.roleOf(v);
     // held casts: entering a held cast starts the hold; afterwards idle/run keep the cast clip until it ends
     const delay = this.castHold.get(role);
@@ -512,7 +811,7 @@ export class Actor {
     }
     if (act) {
       const clipDur = act.getClip().duration || 1;
-      const st = v.stateTime + (v.state === 'dead' ? 0 : alpha * TICK_DT);
+      const st = Math.max(0, v.stateTime + (v.state === 'dead' ? 0 : alpha * TICK_DT) - this.stopLag);
       if (role === 'run') {
         const speed = Math.hypot(v.vx, v.vy);
         act.timeScale = Math.max(0.35, Math.min(2.2, speed / Math.max(0.1, this.runRef)));
@@ -538,7 +837,7 @@ export class Actor {
         act.timeScale = 1;
       }
     }
-    this.mixer!.update(dt);
+    this.mixer!.update(adt);
   }
 
   /** showcase (menu plinth): loop one role regardless of any view */
@@ -554,64 +853,128 @@ export class Actor {
       }
       this.currentKey = role;
     }
+    this.tickReactions(dt);
     this.mixer.update(dt);
   }
 
-  /** inverted-hull outline (hover); width in pixels, colour linear */
-  setOutline(on: boolean, color: Color, resolution: Vector2): void {
-    if (!this.model) return;
-    if (!on) { if (this.outline) this.outline.visible = false; return; }
-    if (!this.outline) {
-      const g = new Group();
-      const mat = new MeshBasicMaterial({ color, side: BackSide, depthWrite: true });
-      const u = { uOutlinePx: { value: 2.5 }, uOutlineRes: { value: resolution } };
-      mat.onBeforeCompile = (sh: WebGLProgramParametersWithUniforms) => {
-        Object.assign(sh.uniforms, u);
-        sh.vertexShader = sh.vertexShader
-          .replace('#include <common>', '#include <common>\nuniform float uOutlinePx; uniform vec2 uOutlineRes;')
-          .replace('#include <project_vertex>', `#include <project_vertex>
-{
-  #ifdef USE_SKINNING
-  vec3 vn = normalize( normalMatrix * objectNormal );
-  #else
-  vec3 vn = normalize( normalMatrix * normal );
-  #endif
-  vec2 dir = normalize( ( projectionMatrix * vec4( vn, 0.0 ) ).xy + 1e-5 );
-  gl_Position.xy += dir * uOutlinePx * 2.0 / uOutlineRes * gl_Position.w;
-}`);
-      };
-      mat.customProgramCacheKey = () => 'vale_outline_v1';
-      this.model.updateMatrixWorld(true);
-      this.model.traverse((o) => {
-        const m = o as Mesh;
-        if (!m.isMesh) return;
+  // ── outline hull + hit flash ────────────────────────────────────────────────────────────────────
+  /** clone the template's hull parts onto this actor's model, hidden (one warm-up frame compiles the programs) */
+  private buildHull(model: Object3D, t: Template): void {
+    if (!t.hull.length) return;
+    const cm = meshesOf(model);
+    this.outlineMat = outlineMaterial();
+    this.flashMat = flashMaterial();
+    for (const part of t.hull) {
+      const lead = cm[part.lead];
+      if (!lead) continue;
+      for (const flash of [false, true]) {
+        const mat = flash ? this.flashMat : this.outlineMat;
         let copy: Mesh;
-        if ((m as SkinnedMesh).isSkinnedMesh) {
-          const sm = m as SkinnedMesh;
-          const c = new SkinnedMesh(sm.geometry, mat);
+        if (part.skinned && (lead as SkinnedMesh).isSkinnedMesh) {
+          const sm = lead as SkinnedMesh;
+          const c = new SkinnedMesh(part.geometry, mat);
           c.bind(sm.skeleton, sm.bindMatrix);
           c.frustumCulled = false;
           copy = c;
-        } else {
-          copy = new Mesh(m.geometry, mat);
-        }
+        } else copy = new Mesh(part.geometry, mat);
+        copy.name = flash ? 'vale_flash' : 'vale_outline';
+        copy.userData.valeOutline = true;
         copy.castShadow = false; copy.receiveShadow = false;
-        copy.renderOrder = -1;
-        m.add(copy);
-        g.userData.copies = (g.userData.copies ?? 0) + 1;
-      });
-      g.userData.mat = mat;
-      this.outline = g;
+        copy.renderOrder = flash ? 2 : 1;
+        copy.matrixAutoUpdate = false;
+        lead.add(copy);
+        (flash ? this.flashMeshes : this.hullMeshes).push(copy);
+      }
     }
-    this.outline.visible = true;
-    const mat = this.outline.userData.mat as MeshBasicMaterial;
-    mat.color.copy(color);
-    this.model.traverse((o) => { if ((o as Mesh).isMesh && (o as Mesh).material === mat) o.visible = true; });
+    this.warm = 2;
+    this.outlinePx = -1;
+    this.applyOutline();
+    for (const m of this.flashMeshes) m.visible = true;
   }
-  hideOutline(): void {
-    if (!this.outline || !this.model) return;
-    const mat = this.outline.userData.mat as MeshBasicMaterial;
-    this.model.traverse((o) => { if ((o as Mesh).isMesh && (o as Mesh).material === mat) o.visible = false; });
+
+  /** outline style: `px` ≤ 0 hides it; colour linear; opacity 0..1. Cheap to call every frame. */
+  setOutline(px: number, color: Color, opacity = 1): void {
+    if (!this.outlineMat) return;
+    if (px === this.outlinePx && opacity === this.outlineOpacity && color.equals(this.outlineColor)) return;
+    this.outlinePx = px; this.outlineOpacity = opacity; this.outlineColor.copy(color);
+    this.applyOutline();
+  }
+  hideOutline(): void { this.setOutline(0, this.outlineColor, 0); }
+  /** the current outline width in px (0 = hidden; harness) */
+  get outlineWidth(): number { return Math.max(0, this.outlinePx); }
+
+  private applyOutline(): void {
+    const mat = this.outlineMat;
+    if (!mat) return;
+    const on = this.outlinePx > 0;
+    (mat.userData.px as { value: number }).value = Math.max(0, this.outlinePx);
+    mat.color.copy(this.outlineColor);
+    mat.opacity = on ? this.outlineOpacity : 0;
+    const vis = on || this.warm > 0;
+    for (const m of this.hullMeshes) m.visible = vis;
+  }
+
+  /** victim flash at strength k (≈ 0.45 basic … 1.0 ultimate): `rim` set = the Shade treatment (ink body, rim colour) */
+  flash(k: number, color: Color, rim: Color | null = null): void {
+    const fm = this.flashMat;
+    if (!fm || !(k > 0)) return;
+    // a weaker hit never cuts a stronger flash short
+    const cur = this.flashT >= 0 ? this.flashK0 * Math.exp(-this.flashT / FLASH_TAU) : 0;
+    if (k < cur) return;
+    this.flashT = 0; this.flashFresh = true; this.flashK0 = k;
+    (fm.uniforms.uFlashColor.value as Color).copy(color);
+    fm.uniforms.uFlashInk.value = rim ? 1 : 0;
+    if (rim) (fm.uniforms.uFlashRim.value as Color).copy(rim);
+    fm.uniforms.uFlashK.value = k;
+    for (const m of this.flashMeshes) m.visible = true;
+  }
+  private flashFresh = false;
+  /** a flash that started this frame or the last few: scale it (FeelL.hitFlash); false when none is live */
+  boostFlash(mult: number): boolean {
+    if (this.flashT < 0 || this.flashT > 0.05 || !this.flashMat) return false;
+    this.flashK0 = Math.min(1.2, this.flashK0 * mult);
+    this.flashMat.uniforms.uFlashK.value = this.flashK0 * Math.exp(-this.flashT / FLASH_TAU);
+    return true;
+  }
+  /** current flash strength (harness) */
+  get flashLevel(): number { return this.flashMat ? (this.flashMat.uniforms.uFlashK.value as number) : 0; }
+
+  /** presentation-only hit-stop: the clip clock slows for `sec`, then catches up (the sim never waits) */
+  hitStop(sec: number): void { if (sec > 0) this.stopLeft = Math.max(this.stopLeft, Math.min(0.12, sec)); }
+
+  /** flinch away from (dx, dz) by k metres with a squash of `squash` (0..0.3) */
+  flinch(dx: number, dz: number, k: number, squash: number): void {
+    const l = Math.hypot(dx, dz);
+    if (l > 1e-4) this.wobDir.set(dx / l, dz / l); else this.wobDir.set(0, 0);
+    this.wobT = 0; this.wobK = Math.min(0.15, k); this.wobSquash = Math.min(0.3, squash);
+  }
+
+  /** per-frame envelopes: warm-up, flash decay, flinch/squash */
+  private tickReactions(dt: number): void {
+    if (this.warm > 0 && --this.warm === 0) {
+      this.applyOutline();
+      if (this.flashT < 0) for (const m of this.flashMeshes) m.visible = false;
+    }
+    if (this.flashT >= 0 && this.flashMat) {
+      if (this.flashFresh) this.flashFresh = false; else this.flashT += dt;
+      if (this.flashT > FLASH_END) {
+        this.flashT = -1;
+        this.flashMat.uniforms.uFlashK.value = 0;
+        if (this.warm <= 0) for (const m of this.flashMeshes) m.visible = false;
+      } else this.flashMat.uniforms.uFlashK.value = this.flashK0 * Math.exp(-this.flashT / FLASH_TAU);
+    }
+    if (this.wobT >= 0) {
+      this.wobT += dt;
+      const u = this.wobT / WOB_DUR;
+      const e = u >= 1 ? 0 : Math.sin(Math.PI * Math.sqrt(u));   // fast out, eased back
+      if (u >= 1) this.wobT = -1;
+      this.root.position.x += this.wobDir.x * this.wobK * e;
+      this.root.position.z += this.wobDir.y * this.wobK * e;
+      if (this.model) {
+        const q = this.wobSquash * e, s = this.baseScale;
+        this.model.scale.set(s * (1 + q * 0.5), s * (1 - q), s * (1 + q * 0.5));
+      }
+    }
   }
 
   dispose(): void {
@@ -623,7 +986,8 @@ export class Actor {
     // shared materials belong to the cached template and stay)
     this.model?.traverse((o) => { const sm = o as SkinnedMesh; if (sm.isSkinnedMesh) sm.skeleton.dispose(); });
     for (const m of this.accent) m.dispose();
-    if (this.outline) (this.outline.userData.mat as MeshBasicMaterial).dispose();
+    this.outlineMat?.dispose();
+    this.flashMat?.dispose();   // hull geometry belongs to the template's plan and stays
     this.root.removeFromParent();
   }
 }
@@ -637,6 +1001,90 @@ function hasSkin(o: Object3D): boolean {
 /** relationship-coloured accents for every actor (called when the palette or a team changes) */
 export function accentHexFor(palette: Palette, v: { team: TeamId; owner: number; kind: string }): string {
   return palette.unitHex(v.team, v.owner, v.kind === 'fighter');
+}
+
+// ── victim reactions: damage events → flash / hit-stop / flinch on the struck actor (presentation only) ──
+/** flash strength by tier class: T1 basic attacks and passives, T2/T3 abilities, T4 ultimates (×1.3 on a crit) */
+const FLASH_K: Record<1 | 2 | 4, number> = { 1: 0.45, 2: 0.7, 4: 1.0 };
+const FLINCH_KINDS = new Set(['fighter', 'minion', 'monster', 'summon']);
+
+export class HitReactions {
+  /** ability id → tier class (fighter kits incl. forms and recasts; anything else is an ability, T2) */
+  private readonly tier = new Map<string, 1 | 2 | 4>();
+  /** Settings.access.reduceMotion: no flinch or squash (the flash stays: it is information, not motion) */
+  reduceMotion = false;
+  private readonly cPhysical = new Color().setStyle(INK.physical);
+  private readonly cMagic = new Color().setStyle(INK.magic);
+  private readonly cShade = new Color().setStyle(INK.trueDmg);
+  private readonly cShadeRim = new Color().setStyle(INK.noonwhite);
+  private readonly cShield = new Color().setStyle(INK.shield);
+  private readonly hits = new Map<number, { k: number; color: Color; rim: Color | null; src: number; cls: 1 | 2 | 4; crit: boolean }>();
+
+  constructor(catalog: CatalogT) {
+    for (const f of catalog.fighters) {
+      const kits = [f.kit, ...Object.values(f.kit.passive.forms ?? {}).map((fm) => fm.kit ?? {})] as Record<string, unknown>[];
+      for (const kit of kits) for (const slot of ['a1', 'a2', 'a3', 'ult'] as const) {
+        const a = kit[slot] as { id: string; recast?: { ability: { id: string } } } | undefined;
+        if (!a) continue;
+        const t = slot === 'ult' ? 4 : 2;
+        this.tier.set(a.id, t);
+        if (a.recast) this.tier.set(a.recast.ability.id, t);
+      }
+      this.tier.set(f.kit.passive.id, 1);
+    }
+  }
+
+  /** this frame's sim events (call before the director spawns their VFX) */
+  handle(events: readonly SimEvent[], actors: Map<number, Actor>): void {
+    const hits = this.hits;
+    hits.clear();
+    for (const ev of events) {
+      if (ev.e !== 'damage') continue;
+      const dst = actors.get(ev.dst);
+      if (!dst || !dst.visible || dst.leaving >= 0 || !dst.model) continue;
+      const cls: 1 | 2 | 4 = ev.ability ? (this.tier.get(ev.ability) ?? 2) : 1;
+      let k = FLASH_K[cls] * (ev.crit ? 1.3 : 1);
+      const maxHp = dst.view?.maxHp ?? 0;
+      if (ev.ability && maxHp > 0 && ev.amount < maxHp * 0.02) k *= 0.7;               // zone and DoT ticks read lighter
+      const src = ev.src >= 0 ? actors.get(ev.src) : undefined;
+      if (dst.kind === 'minion' && src?.kind === 'minion') k *= 0.75;                    // wave-on-wave stays quiet
+      const prev = hits.get(ev.dst);
+      if (prev && prev.k >= k) continue;
+      const absorbed = ev.shielded > 0 && ev.amount - ev.shielded <= 1e-6;
+      const color = absorbed ? this.cShield : ev.dtype === 'true' ? this.cShade : ev.dtype === 'magic' ? this.cMagic : this.cPhysical;
+      hits.set(ev.dst, { k, color, rim: !absorbed && ev.dtype === 'true' ? this.cShadeRim : null, src: ev.src, cls, crit: ev.crit });
+    }
+    for (const [id, h] of hits) {
+      const a = actors.get(id)!;
+      a.flash(Math.min(1.2, h.k), h.color, h.rim);
+      const src = h.src >= 0 ? actors.get(h.src) : undefined;
+      // heavy hits (crits, ultimates): a short presentation hit-stop on both bodies
+      if (h.crit || h.cls === 4) {
+        const sec = h.cls === 4 ? 0.07 : 0.05;
+        a.hitStop(sec);
+        if (src && src.visible) src.hitStop(sec);
+      }
+      if (!this.reduceMotion && FLINCH_KINDS.has(a.kind)) {
+        const dx = src ? a.x - src.x : 0, dz = src ? a.y - src.y : 0;
+        a.flinch(dx, dz, 0.03 + 0.05 * h.k, 0.02 + 0.04 * h.k);
+      }
+    }
+  }
+
+  /** a VFX `feel` layer fired: hitFlash multiplies the struck actor's flash, hitStop and squash apply to it */
+  feel(e: FeelEvent, actors: Map<number, Actor>): void {
+    if (!(e.hitFlash > 0 || e.hitStop > 0 || e.squash > 0)) return;
+    let best: Actor | null = null, bd = 1.5 * 1.5;
+    for (const a of actors.values()) {
+      if (!a.visible || a.leaving >= 0 || !a.model) continue;
+      const d = (a.x - e.at.x) ** 2 + (a.y - e.at.z) ** 2;
+      if (d < bd) { bd = d; best = a; }
+    }
+    if (!best) return;
+    if (e.hitFlash > 0 && !best.boostFlash(e.hitFlash)) best.flash(Math.min(1.2, FLASH_K[2] * e.hitFlash), this.cPhysical);
+    if (e.hitStop > 0) best.hitStop(e.hitStop);
+    if (e.squash > 0 && !this.reduceMotion && FLINCH_KINDS.has(best.kind)) best.flinch(0, 0, 0, e.squash);
+  }
 }
 
 export const _vec = new Vector3();

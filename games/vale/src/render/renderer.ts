@@ -12,7 +12,7 @@
 //     pickEntity(x, y)                CSS px → the visible entity under the cursor, or null
 //     worldToScreen(x, y, h?)         sim (x, y, height) → CSS px
 //     setAim(aim | null)              your own aim indicator (8 % fill, 60 % edge, dashed range ring)
-//     setHover(id) · setTarget(id)    enemy outline on hover; minion bars when targeted
+//     setHover(id) · setTarget(id)    hover outline (HARM 2.5 px enemy/neutral, ally 1.5 px); minion bars when targeted
 //     camera                          lock mode, scout, pointer (edge pan), key pan, zoom, focus
 //     setStation(name) · setMenuView  menu camera moves (720 ms) and the plinth fighter
 //     preload(setup, onProgress)      loading screen: every model, the sky and the grade of a match
@@ -23,14 +23,14 @@
 // Neutral tone map → LUT → vignette → overlay → SMAA).
 
 import {
-  Color, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, SRGBColorSpace, Vector2, Vector3,
-  WebGLRenderer,
+  Color, Frustum, Matrix4, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, Sphere, SRGBColorSpace,
+  Vector2, Vector3, WebGLRenderer,
 } from 'three';
 import type { CatalogT, MapDefT } from '../contracts/catalog.ts';
 import type { MatchClient, Settings } from '../contracts/session.ts';
 import type { EntityId, EntityView, MatchSetup, SimEvent, WorldView } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
-import { Actor, accentHexFor, ModelLibrary } from './actors.ts';
+import { Actor, accentHexFor, ANIM_FAR_M, HitReactions, ModelLibrary, outlineUniforms } from './actors.ts';
 import { Assets, type AssetUrlFn } from './assets.ts';
 import { CameraRig, type CameraMode } from './camera.ts';
 import { Director, type EventVfxMap, type StatusVfxMap } from './director.ts';
@@ -131,6 +131,13 @@ const HARD_CC = new Set(['stun', 'root', 'airborne', 'taunt', 'fear', 'sleep', '
 const _v = new Vector3();
 const _v2 = new Vector3();
 const _ndc = new Vector2();
+const _frustum = new Frustum();
+const _m4 = new Matrix4();
+const _sphere = new Sphere();
+const INK_OUTLINE = '#0B0D11';
+const _rest = { self: new Color(), ally: new Color(), enemy: new Color(), neutral: new Color() };
+/** kinds that always carry the thin ink outline (M10); the rest outline on hover only */
+const OUTLINED = new Set(['fighter', 'minion', 'monster', 'summon']);
 
 function devDefault(): boolean {
   let dev = false;
@@ -159,6 +166,7 @@ class ValeRenderer implements Renderer {
   private mapScene: import('three').Object3D | null = null;
   private readonly vfx: VfxSystem;
   private readonly director: Director;
+  private readonly reactions: HitReactions;
   private readonly actors = new Map<number, Actor>();
   private client: MatchClient | null = null;
   private offEvents: (() => void) | null = null;
@@ -221,7 +229,8 @@ class ValeRenderer implements Renderer {
     this.vfx = new VfxSystem(catalog.vfx, { entityPos: (id, out) => this.bodyPos(id, out) });
     this.vfx.setCamera(this.rig.camera);
     this.scene.add(this.vfx.group);
-    this.vfx.onFeel = (e) => { if (e.shake > 0) this.rig.shake(e.shake * 4, 90 + e.shake * 60); };
+    this.reactions = new HitReactions(catalog);
+    this.vfx.onFeel = (e) => { if (e.shake > 0) this.rig.shake(e.shake * 4, 90 + e.shake * 60); this.reactions.feel(e, this.actors); };
     this.director = new Director(catalog, this.vfx, {
       view: () => this.client?.view ?? null,
       palette: () => this.palette,
@@ -276,6 +285,7 @@ class ValeRenderer implements Renderer {
     if (s.controls.cameraLock && this.rig.mode !== 'locked') this.rig.setMode('locked');
     if (!s.controls.cameraLock && this.rig.mode === 'locked') this.rig.setMode('semi');
     this.menu.reduceMotion = s.access.reduceMotion;
+    this.reactions.reduceMotion = s.access.reduceMotion;
     this.hudScale = Math.max(0.75, Math.min(1.25, s.access.hudScale || 1));
     this.ticks = s.gameplay.healthBarTicks;
   }
@@ -298,6 +308,7 @@ class ValeRenderer implements Renderer {
     const w = Math.max(1, Math.round(width ?? (this.canvas.clientWidth || this.canvas.width || 1)));
     const h = Math.max(1, Math.round(height ?? (this.canvas.clientHeight || this.canvas.height || 1)));
     this.cssW = w; this.cssH = h;
+    outlineUniforms.uOutlineRes.value.set(w, h);
     this.rig.setViewport(w, h);
     this.menu.setAspect(w / h);
     this.applySize();
@@ -527,6 +538,18 @@ class ValeRenderer implements Renderer {
 
   private updateActors(dt: number, alpha: number): void {
     const hoverOn = this.hover;
+    const p = this.palette;
+    // animation LOD (presentation only): clips hold outside the view frustum (+ 2 m), distant wicks tick at 15 Hz
+    const cam = this.rig.camera;
+    _frustum.setFromProjectionMatrix(_m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    const fx = this.rig.focus.x, fz = this.rig.focus.z;
+    // outline styles: rest = ink 60 % tinted 18 % (display space) toward the relationship; hover = HARM 2.5 px
+    // (enemy, neutral) or ally 1.5 px
+    const ink = p.get(INK_OUTLINE);
+    for (const r of ['self', 'ally', 'enemy', 'neutral'] as const) {
+      _rest[r].copy(ink).convertLinearToSRGB().lerp(this.tmpColor.copy(p.relationColor(r)).convertLinearToSRGB(), 0.18).convertSRGBToLinear();
+    }
+    const harm = p.relationColor('enemy'), allyC = p.relationColor('ally');
     for (const a of this.actors.values()) {
       const v = a.view;
       if (!v) continue;
@@ -534,13 +557,19 @@ class ValeRenderer implements Renderer {
       a.visible = vis;
       a.root.visible = vis;
       if (!vis) continue;
-      const hex = accentHexFor(this.palette, v);
-      a.setAccentColor(hex, this.palette.get(hex));
-      a.update(dt, alpha);
+      const hex = accentHexFor(p, v);
+      a.setAccentColor(hex, p.get(hex));
+      _sphere.center.set(a.x, a.h + a.artHeight * 0.5, a.y);
+      _sphere.radius = a.artHeight * 0.5 + a.radius + 2;
+      const lod = !_frustum.intersectsSphere(_sphere) ? 2 : v.kind === 'minion' && Math.hypot(a.x - fx, a.y - fz) > ANIM_FAR_M ? 1 : 0;
+      a.update(dt, alpha, lod);
       if (a.model) {
-        const rel = this.palette.relation(v.team, v.owner, v.kind === 'fighter');
-        const outline = hoverOn === a.id && v.alive && (rel === 'enemy' || rel === 'neutral');
-        if (outline) a.setOutline(true, this.palette.relationColor(rel), _ndc.set(this.cssW, this.cssH)); else a.hideOutline();
+        const rel = p.relation(v.team, v.owner, v.kind === 'fighter');
+        const live = v.alive && a.leaving < 0 && lod !== 2;      // off-screen hulls cost vertex work for nothing
+        if (live && hoverOn === a.id && rel !== 'self') {
+          if (rel === 'ally') a.setOutline(1.5, allyC, 1); else a.setOutline(2.5, harm, 1);
+        } else if (live && OUTLINED.has(v.kind)) a.setOutline(1, _rest[rel], 0.6);
+        else a.hideOutline();
       }
     }
   }
@@ -729,7 +758,7 @@ class ValeRenderer implements Renderer {
     const alpha = client.alpha;
     this.syncActors(view);
     // events → VFX / telegraphs
-    if (this.pending.length) { const evs = this.pending.splice(0, this.pending.length); this.director.handle(evs); }
+    if (this.pending.length) { const evs = this.pending.splice(0, this.pending.length); this.reactions.handle(evs, this.actors); this.director.handle(evs); }
     this.director.update(view);
     this.updateActors(d, alpha);
     // camera follows your fighter

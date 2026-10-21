@@ -3,7 +3,8 @@
 
     python3 tools/vfx/build_vfx.py          # writes content/vfx.json, then: node tools/build_content.ts --check
 
-Sources: lib_defs.py (the shared lib_*), bespoke_defs.py (every <fighter>_<slot>_* def, when present).
+Sources: lib_defs.py (the shared lib_*), bespoke_defs.py (every <fighter>_<slot>_* def, when present),
+system_defs.py (lib_status_* looks, the generic wind-ups lib_windup* and lib_cast_flare: the VFX system's own).
 Defs in content/vfx.json that no source defines yet are KEPT as they are (a port in progress never
 drops a def the catalog references); `--prune` drops them instead.
 """
@@ -27,7 +28,7 @@ def main() -> None:
     ap.add_argument("--prune", action="store_true")
     a = ap.parse_args()
     built = []
-    for mod in ("lib_defs", "bespoke_defs"):
+    for mod in ("lib_defs", "bespoke_defs", "system_defs"):
         try:
             m = importlib.import_module(mod)
         except ModuleNotFoundError as e:

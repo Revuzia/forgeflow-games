@@ -764,6 +764,72 @@
     ]
   },
   {
+    "$comment": "T2 · instant cast flare — a 120 ms socket flare and a few glints drawn in (casts under 0.12 s)",
+    "id": "lib_cast_flare",
+    "duration": 0.14,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "sprite",
+        "at": "caster",
+        "socket": "weapon",
+        "texture": "flare",
+        "size": [
+          0.5,
+          0.75
+        ],
+        "color": "element",
+        "emissive": 3.0,
+        "alpha": [
+          [
+            0,
+            0.6
+          ],
+          [
+            0.35,
+            1
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.12,
+        "hold": 0
+      },
+      {
+        "type": "emitter",
+        "at": "caster",
+        "socket": "weapon",
+        "count": 5,
+        "shape": "sphere",
+        "radius": 0.35,
+        "surface": true,
+        "dir": "in",
+        "speed": [
+          2,
+          3
+        ],
+        "life": [
+          0.08,
+          0.12
+        ],
+        "size": [
+          0.1,
+          0.03
+        ],
+        "color": "element",
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.6,
+        "texture": "glint",
+        "blend": "add"
+      }
+    ]
+  },
+  {
     "$comment": "T2 · Lumen · sweeping cone strike: a team fan sweeps the arc (bright leading edge), streaks fly outward, a fading cone mark",
     "id": "lib_cone_sweep",
     "duration": 0.6,
@@ -4313,6 +4379,2536 @@
     ]
   },
   {
+    "$comment": "T3 · airborne — the left-behind shadow: an ink shadow and a team ring stay on the ground under the unit, wind streaks rush up past it; dust at the launch and at the landing",
+    "id": "lib_status_airborne",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "decal",
+        "shape": "circle",
+        "style": "ink",
+        "radius": 0.52,
+        "color": "#17181B",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.75
+          ],
+          [
+            0.75,
+            0.75
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "rim": "#2A2C33",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "decal",
+        "shape": "ring",
+        "style": "light",
+        "radius": 0.8,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.8,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "rate": 18,
+        "shape": "disc",
+        "radius": 0.36,
+        "dir": "up",
+        "spreadDeg": 6,
+        "speed": [
+          2.2,
+          3.6
+        ],
+        "life": [
+          0.14,
+          0.24
+        ],
+        "size": [
+          0.24,
+          0.05
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          0.85,
+          0
+        ],
+        "emissive": 2.6,
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "ground",
+        "count": 7,
+        "shape": "ring",
+        "radius": 0.5,
+        "dir": "out",
+        "spreadDeg": 30,
+        "speed": [
+          0.8,
+          1.8
+        ],
+        "life": [
+          0.45,
+          0.7
+        ],
+        "size": [
+          0.4,
+          0.8,
+          1.0
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.25,
+          0
+        ],
+        "gravity": -0.2,
+        "drag": 2.8,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3
+      },
+      {
+        "type": "emitter",
+        "phase": "release",
+        "at": "target",
+        "socket": "ground",
+        "count": 8,
+        "shape": "ring",
+        "radius": 0.5,
+        "dir": "out",
+        "spreadDeg": 30,
+        "speed": [
+          1,
+          2.2
+        ],
+        "life": [
+          0.45,
+          0.7
+        ],
+        "size": [
+          0.4,
+          0.85,
+          1.05
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.5,
+          0.3,
+          0
+        ],
+        "gravity": -0.2,
+        "drag": 2.8,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3
+      }
+    ]
+  },
+  {
+    "$comment": "T1 · chip · armour shred — a cracked chalk plate band around the chest (team-lit cracks), plate chips flaking off",
+    "id": "lib_status_armor_shred",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "chest",
+        "offset": [
+          0,
+          -0.05,
+          0
+        ],
+        "shape": "ringwave",
+        "scale": 0.78,
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.4,
+        "dissolve": 0.32,
+        "noise": 0.9,
+        "noiseScale": 2.4,
+        "edge": "team",
+        "edgeEmissive": 1.5,
+        "edgeWidth": 0.1,
+        "blend": "chip",
+        "align": "up",
+        "spinDeg": 20,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "chest",
+        "rate": 4,
+        "shape": "ring",
+        "radius": 0.36,
+        "dir": "down",
+        "spreadDeg": 40,
+        "speed": [
+          0.3,
+          0.8
+        ],
+        "life": [
+          0.28,
+          0.38
+        ],
+        "size": [
+          0.09,
+          0.09,
+          0.05
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "gravity": 10,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -400,
+          400
+        ]
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen/chip · disarmed — the broken edge: two cracked chalk arcs with team-lit breaks circle the hands, chips fall",
+    "id": "lib_status_disarm",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "chest",
+        "shape": "crescent",
+        "scale": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.1,
+            0.92
+          ],
+          [
+            1,
+            0.92
+          ]
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.4,
+        "rim": "team",
+        "rimEmissive": 1.6,
+        "edge": "team",
+        "edgeEmissive": 3.0,
+        "edgeWidth": 0.12,
+        "dissolve": 0.3,
+        "noise": 0.9,
+        "noiseScale": 2.2,
+        "blend": "chip",
+        "spinDeg": 150,
+        "align": "flat",
+        "rotateDeg": [
+          0,
+          0,
+          0
+        ],
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "mesh",
+        "socket": "chest",
+        "shape": "crescent",
+        "scale": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.1,
+            0.92
+          ],
+          [
+            1,
+            0.92
+          ]
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.4,
+        "rim": "team",
+        "rimEmissive": 1.6,
+        "edge": "team",
+        "edgeEmissive": 3.0,
+        "edgeWidth": 0.12,
+        "dissolve": 0.3,
+        "noise": 0.9,
+        "noiseScale": 2.2,
+        "blend": "chip",
+        "spinDeg": 150,
+        "align": "flat",
+        "rotateDeg": [
+          0,
+          180,
+          0
+        ],
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "chest",
+        "rate": 5,
+        "shape": "ring",
+        "radius": 0.44,
+        "dir": "down",
+        "spreadDeg": 30,
+        "speed": [
+          0.2,
+          0.6
+        ],
+        "life": [
+          0.3,
+          0.45
+        ],
+        "size": [
+          0.08,
+          0.08,
+          0.05
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "gravity": 9,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -400,
+          400
+        ]
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "chest",
+        "count": 10,
+        "shape": "sphere",
+        "radius": 0.2,
+        "dir": "out",
+        "spreadDeg": 160,
+        "speed": [
+          2,
+          4
+        ],
+        "life": [
+          0.25,
+          0.4
+        ],
+        "size": [
+          0.11,
+          0.1,
+          0.06
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "gravity": 12,
+        "bounce": 0.3,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -500,
+          500
+        ],
+        "rim": "team",
+        "rimAlpha": 0.5
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · Shade · feared — shade wisps: ink wisps jitter round the head over a shivering ink crown with a team rim, an ink pool",
+    "id": "lib_status_fear",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          -0.1,
+          0
+        ],
+        "rate": 16,
+        "shape": "sphere",
+        "radius": 0.42,
+        "dir": "random",
+        "speed": [
+          0.3,
+          0.8
+        ],
+        "life": [
+          0.35,
+          0.55
+        ],
+        "size": [
+          0.16,
+          0.42,
+          0.3
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0
+        ],
+        "turbulence": 5,
+        "turbulenceScale": 3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -90,
+          90
+        ],
+        "texture": "wisp",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.7,
+        "soft": 0.2,
+        "space": "local"
+      },
+      {
+        "type": "mesh",
+        "socket": "top",
+        "offset": [
+          0,
+          0.12,
+          0
+        ],
+        "shape": "ringwave",
+        "scale": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.1,
+            0.6
+          ],
+          [
+            1,
+            0.6
+          ]
+        ],
+        "color": "#17181B",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.95
+          ],
+          [
+            0.75,
+            0.95
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0,
+        "rim": "team",
+        "rimEmissive": 3.0,
+        "rimPow": 1.2,
+        "wobble": 0.07,
+        "noise": 0.8,
+        "blend": "ink",
+        "align": "up",
+        "spinDeg": -90,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "decal",
+        "shape": "circle",
+        "style": "ink",
+        "radius": 0.62,
+        "color": "#17181B",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "rim": "team",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      }
+    ]
+  },
+  {
+    "$comment": "T1 · Shade · grievous wounds — the sap runs black: ink drops drip from the chest, a dark band",
+    "id": "lib_status_grievous",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "chest",
+        "rate": 7,
+        "shape": "sphere",
+        "radius": 0.3,
+        "surface": true,
+        "dir": "down",
+        "spreadDeg": 30,
+        "speed": [
+          0.2,
+          0.6
+        ],
+        "life": [
+          0.3,
+          0.4
+        ],
+        "size": [
+          0.1,
+          0.07
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "gravity": 7,
+        "texture": "drop",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.35
+      },
+      {
+        "type": "mesh",
+        "socket": "chest",
+        "offset": [
+          0,
+          -0.15,
+          0
+        ],
+        "shape": "ringwave",
+        "scale": 0.72,
+        "color": "#17181B",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.9
+          ],
+          [
+            0.75,
+            0.9
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0,
+        "rim": "#2A2C33",
+        "rimEmissive": 0.6,
+        "noise": 0.7,
+        "dissolve": 0.15,
+        "blend": "ink",
+        "align": "up",
+        "spinDeg": 30,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      }
+    ]
+  },
+  {
+    "$comment": "T1 · hasted — low side streaks (the movement grammar) thrown back from the feet against the travel",
+    "id": "lib_status_haste",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "offset": [
+          0,
+          0.14,
+          0
+        ],
+        "rate": 14,
+        "shape": "disc",
+        "radius": 0.3,
+        "dir": "back",
+        "spreadDeg": 12,
+        "speed": [
+          2.5,
+          4
+        ],
+        "life": [
+          0.14,
+          0.24
+        ],
+        "size": [
+          0.34,
+          0.06
+        ],
+        "color": "team",
+        "alpha": [
+          0.8,
+          0
+        ],
+        "emissive": 1.5,
+        "drag": 2,
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "offset": [
+          0,
+          0.5,
+          0
+        ],
+        "rate": 6,
+        "shape": "disc",
+        "radius": 0.25,
+        "dir": "back",
+        "spreadDeg": 10,
+        "speed": [
+          2,
+          3
+        ],
+        "life": [
+          0.12,
+          0.2
+        ],
+        "size": [
+          0.26,
+          0.05
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          0.6,
+          0
+        ],
+        "emissive": 1.5,
+        "drag": 2,
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · unseen (allies only see it) — a dawnglass shimmer column with rim light, glints",
+    "id": "lib_status_invisible",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "base",
+        "shape": "column",
+        "scale": 0.9,
+        "stretch": [
+          0.8,
+          2.0,
+          0.8
+        ],
+        "color": "#BFD3E6",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.22
+          ],
+          [
+            0.75,
+            0.22
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.6,
+        "rim": "#BFD3E6",
+        "rimEmissive": 2.4,
+        "rimPow": 2.4,
+        "noise": 0.7,
+        "scroll": [
+          0.2,
+          0.8
+        ],
+        "blend": "add",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "rate": 6,
+        "shape": "aura",
+        "radius": 0.4,
+        "height": 1.8,
+        "dir": "up",
+        "speed": [
+          0.1,
+          0.3
+        ],
+        "life": [
+          0.3,
+          0.5
+        ],
+        "size": [
+          0,
+          0.12,
+          0
+        ],
+        "color": "#BFD3E6",
+        "alpha": [
+          0,
+          1,
+          0
+        ],
+        "emissive": 2.4,
+        "texture": "glint",
+        "blend": "add",
+        "space": "local"
+      }
+    ]
+  },
+  {
+    "$comment": "T1 · Lumen · resist shred — the cracked band in orchid glass (the magic colour), glass flakes falling",
+    "id": "lib_status_resist_shred",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "chest",
+        "offset": [
+          0,
+          -0.05,
+          0
+        ],
+        "shape": "ringwave",
+        "scale": 0.78,
+        "color": [
+          "#D9A7C7",
+          "#E59BB0"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.9
+          ],
+          [
+            0.75,
+            0.9
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2,
+        "dissolve": 0.32,
+        "noise": 0.9,
+        "noiseScale": 2.4,
+        "edge": "team",
+        "edgeEmissive": 1.5,
+        "edgeWidth": 0.1,
+        "blend": "add",
+        "align": "up",
+        "spinDeg": -20,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "chest",
+        "rate": 4,
+        "shape": "ring",
+        "radius": 0.36,
+        "dir": "down",
+        "spreadDeg": 40,
+        "speed": [
+          0.3,
+          0.8
+        ],
+        "life": [
+          0.28,
+          0.38
+        ],
+        "size": [
+          0.1,
+          0.03
+        ],
+        "color": [
+          "#D9A7C7",
+          "#E59BB0"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 1.4,
+        "gravity": 6,
+        "texture": "shard",
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · revealed — a thin team sun-shaft stands on the unit, a ring narrows onto it every 1.4 s",
+    "id": "lib_status_reveal",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "base",
+        "shape": "pillar",
+        "scale": [
+          [
+            0,
+            0.1
+          ],
+          [
+            0.12,
+            0.5
+          ],
+          [
+            1,
+            0.5
+          ]
+        ],
+        "stretch": [
+          0.6,
+          6.0,
+          0.6
+        ],
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.4
+          ],
+          [
+            0.75,
+            0.4
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.8,
+        "noise": 0.4,
+        "scroll": [
+          0,
+          1.2
+        ],
+        "mask": "top",
+        "maskParam": 0.35,
+        "blend": "add",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "shockwave",
+        "at": "target",
+        "radius": [
+          [
+            0,
+            0.9
+          ],
+          [
+            1,
+            0.32
+          ]
+        ],
+        "width": [
+          0.07,
+          0.04
+        ],
+        "life": 0.6,
+        "color": "team",
+        "alpha": [
+          0,
+          0.9,
+          0
+        ],
+        "emissive": 2.0,
+        "sharp": 1.6,
+        "blend": "add",
+        "repeat": 1.4
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · Shade · rooted — pinned to the hour-line: ink bands coil the feet under a team rim, three chalk stakes driven in around them, an ink pool; the stakes break into chips when it ends",
+    "id": "lib_status_root",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "base",
+        "shape": "spiral",
+        "scale": [
+          [
+            0,
+            0.25
+          ],
+          [
+            0.1,
+            0.86
+          ],
+          [
+            1,
+            0.86
+          ]
+        ],
+        "stretch": [
+          1,
+          0.7,
+          1
+        ],
+        "color": "#17181B",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0,
+        "rim": "team",
+        "rimEmissive": 3.2,
+        "rimPow": 1.5,
+        "blend": "ink",
+        "twist": -2.5,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "mesh",
+        "socket": "base",
+        "offset": [
+          0.44,
+          -0.04,
+          0.0
+        ],
+        "shape": "spike",
+        "scale": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.06,
+            0.6
+          ],
+          [
+            1,
+            0.6
+          ]
+        ],
+        "stretch": [
+          1.25,
+          1.0,
+          1.25
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.4,
+        "rim": "team",
+        "rimEmissive": 2.4,
+        "rimPow": 2.0,
+        "blend": "chip",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "mesh",
+        "socket": "base",
+        "offset": [
+          -0.22,
+          -0.04,
+          0.38
+        ],
+        "shape": "spike",
+        "scale": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.06,
+            0.6
+          ],
+          [
+            1,
+            0.6
+          ]
+        ],
+        "stretch": [
+          1.25,
+          1.0,
+          1.25
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.4,
+        "rim": "team",
+        "rimEmissive": 2.4,
+        "rimPow": 2.0,
+        "blend": "chip",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "mesh",
+        "socket": "base",
+        "offset": [
+          -0.22,
+          -0.04,
+          -0.38
+        ],
+        "shape": "spike",
+        "scale": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.06,
+            0.6
+          ],
+          [
+            1,
+            0.6
+          ]
+        ],
+        "stretch": [
+          1.25,
+          1.0,
+          1.25
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.4,
+        "rim": "team",
+        "rimEmissive": 2.4,
+        "rimPow": 2.0,
+        "blend": "chip",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "decal",
+        "shape": "circle",
+        "style": "ink",
+        "radius": 0.74,
+        "color": "#17181B",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.8
+          ],
+          [
+            0.75,
+            0.8
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "rim": "team",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "ground",
+        "count": 9,
+        "shape": "ring",
+        "radius": 0.4,
+        "dir": "up",
+        "spreadDeg": 50,
+        "speed": [
+          1.5,
+          3
+        ],
+        "life": [
+          0.25,
+          0.4
+        ],
+        "size": [
+          0.1,
+          0.1,
+          0.06
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "gravity": 12,
+        "bounce": 0.3,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -400,
+          400
+        ],
+        "rim": "team",
+        "rimAlpha": 0.5
+      },
+      {
+        "type": "emitter",
+        "phase": "release",
+        "at": "target",
+        "socket": "ground",
+        "count": 10,
+        "shape": "ring",
+        "radius": 0.42,
+        "dir": "up",
+        "spreadDeg": 60,
+        "speed": [
+          1.5,
+          3.2
+        ],
+        "life": [
+          0.25,
+          0.42
+        ],
+        "size": [
+          0.11,
+          0.1,
+          0.05
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "gravity": 12,
+        "bounce": 0.3,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -500,
+          500
+        ]
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · Shade · silenced — the muffled bell: an ink bell over the head with a pale rim, its lip a team ring, ink breath leaking from under it; a pale ring rings out when the voice returns",
+    "id": "lib_status_silence",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "top",
+        "offset": [
+          0,
+          0.1,
+          0
+        ],
+        "shape": "dome",
+        "scale": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.1,
+            0.46
+          ],
+          [
+            1,
+            0.46
+          ]
+        ],
+        "stretch": [
+          1,
+          1.3,
+          1
+        ],
+        "color": "#17181B",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.95
+          ],
+          [
+            0.75,
+            0.95
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0,
+        "rim": "#F4EFE2",
+        "rimEmissive": 2.4,
+        "rimPow": 1.8,
+        "noise": 0.35,
+        "blend": "ink",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "mesh",
+        "socket": "top",
+        "offset": [
+          0,
+          0.1,
+          0
+        ],
+        "shape": "ringwave",
+        "scale": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.1,
+            0.52
+          ],
+          [
+            1,
+            0.52
+          ]
+        ],
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 3.6,
+        "blend": "add",
+        "align": "up",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.05,
+          0
+        ],
+        "rate": 8,
+        "shape": "ring",
+        "radius": 0.24,
+        "dir": "down",
+        "spreadDeg": 40,
+        "speed": [
+          0.1,
+          0.35
+        ],
+        "life": [
+          0.45,
+          0.65
+        ],
+        "size": [
+          0.12,
+          0.3,
+          0.38
+        ],
+        "sizeVar": [
+          0.8,
+          1.2
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.85,
+          0
+        ],
+        "drag": 2.4,
+        "turbulence": 0.6,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -40,
+          40
+        ],
+        "texture": "ink_puff",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "soft": 0.2
+      },
+      {
+        "type": "shockwave",
+        "phase": "release",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.1,
+          0
+        ],
+        "mode": "vertical",
+        "radius": [
+          [
+            0,
+            0.2
+          ],
+          [
+            1,
+            0.9
+          ]
+        ],
+        "width": [
+          0.1,
+          0.02
+        ],
+        "life": 0.24,
+        "color": "#BFD3E6",
+        "alpha": [
+          0.9,
+          0
+        ],
+        "emissive": 2.4,
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · asleep — dusk motes: a dim ink veil over the eyes with a glass rim, a slow breathing glow (0.55 Hz), motes drifting up lazily, a dim ring",
+    "id": "lib_status_sleep",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "top",
+        "offset": [
+          0,
+          -0.12,
+          0
+        ],
+        "shape": "orb",
+        "scale": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.1,
+            0.42
+          ],
+          [
+            1,
+            0.42
+          ]
+        ],
+        "stretch": [
+          1,
+          0.8,
+          1
+        ],
+        "color": "#17181B",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.55
+          ],
+          [
+            0.75,
+            0.55
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0,
+        "rim": "#BFD3E6",
+        "rimEmissive": 1.8,
+        "rimPow": 2.0,
+        "noise": 0.5,
+        "blend": "ink",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "sprite",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.32,
+          0
+        ],
+        "texture": "glow",
+        "size": [
+          0.5,
+          0.75
+        ],
+        "color": "team",
+        "emissive": 2.4,
+        "alpha": [
+          0,
+          0.9,
+          0
+        ],
+        "life": 1.8,
+        "repeat": 1.8,
+        "hold": 0,
+        "soft": 0.2
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.25,
+          0
+        ],
+        "rate": 4,
+        "shape": "disc",
+        "radius": 0.16,
+        "dir": "up",
+        "spreadDeg": 20,
+        "speed": [
+          0.22,
+          0.38
+        ],
+        "life": [
+          1.1,
+          1.4
+        ],
+        "size": [
+          0,
+          0.16,
+          0.22,
+          0
+        ],
+        "color": [
+          "#BFD3E6",
+          "#F4EFE2"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0.6,
+          0
+        ],
+        "emissive": 2.0,
+        "gravity": -0.03,
+        "drag": 0.3,
+        "turbulence": 0.6,
+        "texture": "mote",
+        "blend": "add"
+      },
+      {
+        "type": "decal",
+        "shape": "ring",
+        "style": "light",
+        "radius": 0.62,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.35
+          ],
+          [
+            0.75,
+            0.35
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.8,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · slowed — dawnglass mire: a glass shackle at the shins, frost underfoot with a team rim, glass flakes sink (left behind as the unit drags on)",
+    "id": "lib_status_slow",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "decal",
+        "shape": "circle",
+        "style": "frost",
+        "radius": 0.62,
+        "color": "#BFD3E6",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.8,
+        "rim": "team",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "mesh",
+        "socket": "base",
+        "offset": [
+          0,
+          0.3,
+          0
+        ],
+        "shape": "ringwave",
+        "scale": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.1,
+            0.62
+          ],
+          [
+            1,
+            0.62
+          ]
+        ],
+        "color": [
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.9
+          ],
+          [
+            0.75,
+            0.9
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.2,
+        "noise": 0.5,
+        "blend": "add",
+        "align": "up",
+        "spinDeg": 24,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "offset": [
+          0,
+          0.36,
+          0
+        ],
+        "rate": 10,
+        "shape": "ring",
+        "radius": 0.28,
+        "dir": "down",
+        "spreadDeg": 20,
+        "speed": [
+          0.2,
+          0.5
+        ],
+        "life": [
+          0.4,
+          0.6
+        ],
+        "size": [
+          0.11,
+          0.03
+        ],
+        "color": [
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0
+        ],
+        "emissive": 2.0,
+        "texture": "shard",
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · stunned — the stopped hour: a team halo turns over the head (spiral = control), a glass inner ring counter-turns, sun-motes circle it, a held ring at the feet; the halo snaps shut when it ends",
+    "id": "lib_status_stun",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "top",
+        "offset": [
+          0,
+          0.24,
+          0
+        ],
+        "shape": "ringwave",
+        "scale": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.1,
+            0.66
+          ],
+          [
+            1,
+            0.66
+          ]
+        ],
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 4.2,
+        "blend": "add",
+        "spinDeg": 200,
+        "align": "up",
+        "noise": 0.25,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "mesh",
+        "socket": "top",
+        "offset": [
+          0,
+          0.24,
+          0
+        ],
+        "shape": "ringwave",
+        "scale": [
+          [
+            0,
+            0.15
+          ],
+          [
+            0.1,
+            0.46
+          ],
+          [
+            1,
+            0.46
+          ]
+        ],
+        "color": "#BFD3E6",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.85
+          ],
+          [
+            0.75,
+            0.85
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.6,
+        "blend": "add",
+        "spinDeg": -320,
+        "align": "up",
+        "rotateDeg": [
+          16,
+          0,
+          0
+        ],
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.24,
+          0
+        ],
+        "rate": 15,
+        "shape": "ring",
+        "radius": 0.4,
+        "dir": "none",
+        "speed": [
+          0,
+          0
+        ],
+        "life": [
+          0.42,
+          0.55
+        ],
+        "size": [
+          0,
+          0.17,
+          0
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          0,
+          1,
+          0
+        ],
+        "emissive": 4.2,
+        "orbitDeg": 330,
+        "texture": "mote",
+        "blend": "add",
+        "space": "local"
+      },
+      {
+        "type": "decal",
+        "shape": "ring",
+        "style": "light",
+        "radius": 0.72,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.6,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "shockwave",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.24,
+          0
+        ],
+        "mode": "vertical",
+        "radius": [
+          [
+            0,
+            0.15
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "width": [
+          0.14,
+          0.03
+        ],
+        "life": 0.22,
+        "color": "team",
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 4.0,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.24,
+          0
+        ],
+        "count": 8,
+        "shape": "ring",
+        "radius": 0.3,
+        "dir": "out",
+        "spreadDeg": 20,
+        "speed": [
+          2.5,
+          4
+        ],
+        "life": [
+          0.12,
+          0.22
+        ],
+        "size": [
+          0.14,
+          0.03
+        ],
+        "color": "team",
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 4.0,
+        "texture": "spark",
+        "stretch": 0.04,
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "phase": "release",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.24,
+          0
+        ],
+        "mode": "vertical",
+        "radius": [
+          [
+            0,
+            0.7
+          ],
+          [
+            1,
+            0.1
+          ]
+        ],
+        "width": [
+          0.06,
+          0.1
+        ],
+        "life": 0.16,
+        "color": "team",
+        "alpha": [
+          0.9,
+          0
+        ],
+        "emissive": 3.0,
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · taunted — the drawn line: a taut tether from the unit to its taunter in the TAUNTER's relationship colour, a ring at the feet, a slow glare over the head (1.7 Hz)",
+    "id": "lib_status_taunt",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "beam",
+        "from": "target",
+        "to": "caster",
+        "socket": "chest",
+        "width": 0.1,
+        "color": [
+          "element",
+          "element"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            1.0
+          ],
+          [
+            0.75,
+            1.0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 3.4,
+        "noise": 0.05,
+        "freq": 1.0,
+        "scroll": -3.0,
+        "core": 1.8,
+        "taper": [
+          0.45,
+          1.0
+        ],
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "decal",
+        "shape": "ring",
+        "style": "light",
+        "radius": 0.74,
+        "color": "element",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.7
+          ],
+          [
+            0.75,
+            0.7
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.0,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "sprite",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.2,
+          0
+        ],
+        "texture": "flare",
+        "size": [
+          0.55,
+          0.62
+        ],
+        "color": "element",
+        "emissive": 3.4,
+        "alpha": [
+          0,
+          1,
+          0
+        ],
+        "life": 0.6,
+        "repeat": 0.6,
+        "hold": 0
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · unstoppable — a chalk-bright rim shell round the body, chalk flakes shed at the feet",
+    "id": "lib_status_unstoppable",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "chest",
+        "offset": [
+          0,
+          -0.1,
+          0
+        ],
+        "shape": "orb",
+        "scale": 1.0,
+        "stretch": [
+          0.95,
+          1.9,
+          0.95
+        ],
+        "color": "#F4EFE2",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.12
+          ],
+          [
+            0.75,
+            0.12
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.6,
+        "rim": "#F4EFE2",
+        "rimEmissive": 3.0,
+        "rimPow": 2.4,
+        "noise": 0.3,
+        "blend": "add",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "rate": 6,
+        "shape": "disc",
+        "radius": 0.3,
+        "dir": "up",
+        "spreadDeg": 60,
+        "speed": [
+          1,
+          2
+        ],
+        "life": [
+          0.3,
+          0.45
+        ],
+        "size": [
+          0.08,
+          0.08,
+          0.05
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "gravity": 9,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -400,
+          400
+        ]
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · untargetable — under glass: a dithered dawnglass bell-jar stands over the unit, rim-lit, a pale ring",
+    "id": "lib_status_untargetable",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "socket": "base",
+        "shape": "dome",
+        "scale": [
+          [
+            0,
+            0.7
+          ],
+          [
+            0.1,
+            1.2
+          ],
+          [
+            1,
+            1.2
+          ]
+        ],
+        "stretch": [
+          1,
+          3.2,
+          1
+        ],
+        "color": "#BFD3E6",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.32
+          ],
+          [
+            0.75,
+            0.32
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 0.8,
+        "rim": "#F4EFE2",
+        "rimEmissive": 2.6,
+        "rimPow": 2.2,
+        "noise": 0.6,
+        "noiseScale": 3.0,
+        "dissolve": 0.2,
+        "edge": "#BFD3E6",
+        "edgeEmissive": 2.0,
+        "edgeWidth": 0.06,
+        "blend": "add",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "decal",
+        "shape": "ring",
+        "style": "light",
+        "radius": 0.66,
+        "color": "#F4EFE2",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.5
+          ],
+          [
+            0.75,
+            0.5
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      }
+    ]
+  },
+  {
     "$comment": "T4 · impact · Needle, Lantern or Hourbell falls: white core flash (T4), stone collapses into heavy chips, a team ring",
     "id": "lib_structure_fall",
     "duration": 1.6,
@@ -5541,6 +8137,471 @@
         "rimAlpha": 0.5,
         "delay": 0.03,
         "secondary": true
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · anticipation (generic, fitted to the cast time) — the fighter's light gathers at the weapon socket (0.8 -> 3.0 over the wind-up), motes converge on it, a 0.8 m team ring at the feet at 40 %, a glint along the aim near the end; on the release frame a 0.1 s flare, sparks forward and a small ring (a cancelled cast just fades)",
+    "id": "lib_windup",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "sprite",
+        "at": "caster",
+        "socket": "weapon",
+        "texture": "glow",
+        "size": [
+          [
+            0,
+            0.25
+          ],
+          [
+            1,
+            0.62
+          ]
+        ],
+        "color": "element",
+        "emissive": [
+          [
+            0,
+            0.8
+          ],
+          [
+            1,
+            3.0
+          ]
+        ],
+        "alpha": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.9,
+            1
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "soft": 0.2
+      },
+      {
+        "type": "emitter",
+        "at": "caster",
+        "socket": "weapon",
+        "rate": 36,
+        "duration": 0.92,
+        "shape": "sphere",
+        "radius": 0.75,
+        "surface": true,
+        "dir": "in",
+        "speed": [
+          1.4,
+          2.2
+        ],
+        "radial": -2,
+        "life": [
+          0.22,
+          0.32
+        ],
+        "size": [
+          0.09,
+          0.03
+        ],
+        "color": [
+          "element",
+          "team"
+        ],
+        "alpha": [
+          0,
+          1,
+          0.4
+        ],
+        "emissive": 3.0,
+        "texture": "mote",
+        "blend": "add",
+        "space": "local",
+        "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "ring",
+        "style": "light",
+        "radius": 0.8,
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.25,
+            0.4
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.0
+      },
+      {
+        "type": "emitter",
+        "at": "caster",
+        "socket": "weapon",
+        "delay": 0.86,
+        "count": 2,
+        "dir": "forward",
+        "spreadDeg": 4,
+        "speed": [
+          7,
+          9
+        ],
+        "life": [
+          0.08,
+          0.1
+        ],
+        "size": [
+          0.3,
+          0.08
+        ],
+        "color": [
+          "#F4EFE2",
+          "element"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 3.0,
+        "texture": "glint",
+        "stretch": 0.05,
+        "blend": "add"
+      },
+      {
+        "type": "sprite",
+        "phase": "release",
+        "at": "caster",
+        "socket": "weapon",
+        "texture": "flare",
+        "size": [
+          0.9,
+          0.5
+        ],
+        "color": "element",
+        "emissive": 3.0,
+        "alpha": [
+          1,
+          0
+        ],
+        "life": 0.1,
+        "space": "world"
+      },
+      {
+        "type": "emitter",
+        "phase": "release",
+        "at": "caster",
+        "socket": "weapon",
+        "count": 8,
+        "dir": "forward",
+        "spreadDeg": 50,
+        "speed": [
+          4.0,
+          7.0
+        ],
+        "life": [
+          0.08,
+          0.16
+        ],
+        "size": [
+          0.16,
+          0.04
+        ],
+        "color": "element",
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 3.0,
+        "texture": "spark",
+        "stretch": 0.04,
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "phase": "release",
+        "at": "caster",
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            1,
+            1.1
+          ]
+        ],
+        "width": [
+          0.16,
+          0.04
+        ],
+        "life": 0.18,
+        "color": "team",
+        "alpha": [
+          0.8,
+          0
+        ],
+        "emissive": 3.0,
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T4 · ultimate charge (generic, fitted to the cast time) — the T2 anticipation at 1.5x, the glow climbing to 6, a white-core flash on the release frame",
+    "id": "lib_windup_ult",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "sprite",
+        "at": "caster",
+        "socket": "weapon",
+        "texture": "glow",
+        "size": [
+          [
+            0,
+            0.375
+          ],
+          [
+            1,
+            0.9299999999999999
+          ]
+        ],
+        "color": "element",
+        "emissive": [
+          [
+            0,
+            0.8
+          ],
+          [
+            1,
+            6.0
+          ]
+        ],
+        "alpha": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.9,
+            1
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "soft": 0.2
+      },
+      {
+        "type": "emitter",
+        "at": "caster",
+        "socket": "weapon",
+        "rate": 54,
+        "duration": 0.92,
+        "shape": "sphere",
+        "radius": 1.125,
+        "surface": true,
+        "dir": "in",
+        "speed": [
+          2.0999999999999996,
+          3.3000000000000003
+        ],
+        "radial": -2,
+        "life": [
+          0.22,
+          0.32
+        ],
+        "size": [
+          0.09,
+          0.03
+        ],
+        "color": [
+          "element",
+          "team"
+        ],
+        "alpha": [
+          0,
+          1,
+          0.4
+        ],
+        "emissive": 3.0,
+        "texture": "mote",
+        "blend": "add",
+        "space": "local",
+        "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "ring",
+        "style": "light",
+        "radius": 1.3,
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.25,
+            0.4
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.0
+      },
+      {
+        "type": "emitter",
+        "at": "caster",
+        "socket": "weapon",
+        "delay": 0.86,
+        "count": 2,
+        "dir": "forward",
+        "spreadDeg": 4,
+        "speed": [
+          7,
+          9
+        ],
+        "life": [
+          0.08,
+          0.1
+        ],
+        "size": [
+          0.44999999999999996,
+          0.08
+        ],
+        "color": [
+          "#F4EFE2",
+          "element"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 3.0,
+        "texture": "glint",
+        "stretch": 0.05,
+        "blend": "add"
+      },
+      {
+        "type": "sprite",
+        "phase": "release",
+        "at": "caster",
+        "socket": "weapon",
+        "texture": "flare",
+        "size": [
+          1.35,
+          0.75
+        ],
+        "color": "element",
+        "emissive": 6.0,
+        "alpha": [
+          1,
+          0
+        ],
+        "life": 0.1,
+        "space": "world"
+      },
+      {
+        "type": "emitter",
+        "phase": "release",
+        "at": "caster",
+        "socket": "weapon",
+        "count": 12,
+        "dir": "forward",
+        "spreadDeg": 50,
+        "speed": [
+          6.0,
+          10.5
+        ],
+        "life": [
+          0.08,
+          0.16
+        ],
+        "size": [
+          0.16,
+          0.04
+        ],
+        "color": "element",
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 6.0,
+        "texture": "spark",
+        "stretch": 0.04,
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "phase": "release",
+        "at": "caster",
+        "radius": [
+          [
+            0,
+            0.44999999999999996
+          ],
+          [
+            1,
+            1.6500000000000001
+          ]
+        ],
+        "width": [
+          0.16,
+          0.04
+        ],
+        "life": 0.18,
+        "color": "team",
+        "alpha": [
+          0.8,
+          0
+        ],
+        "emissive": 3.0,
+        "blend": "add"
+      },
+      {
+        "type": "flash",
+        "phase": "release",
+        "at": "caster",
+        "socket": "weapon",
+        "radius": 0.75,
+        "life": 0.08,
+        "color": "element",
+        "intensity": 6.0,
+        "core": "#FFFFFF"
       }
     ]
   },

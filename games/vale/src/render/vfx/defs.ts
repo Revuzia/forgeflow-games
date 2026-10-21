@@ -6,9 +6,16 @@
 // their v1 keys and the v2 additions). Unknown keys are ignored here; the content build rejects them.
 //
 // Common keys on every drawable layer: type, delay (s), at (origin | caster | target | path | ground),
-// phase (main | windup), socket (fighter socket name), offset [forward, up, right] (m), follow (bool:
+// phase (main | windup | release), socket (fighter socket name), offset [forward, up, right] (m), follow (bool:
 // track the anchor every frame), fit (bool: radius-like values × the area radius; default on at
-// `ground`), secondary (bool: allies spawn half), chance (0..1).
+// `ground`), secondary (bool: allies spawn half), chance (0..1), repeat (s: re-fire the layer every
+// `repeat` seconds while the instance lives or is sustained), fitTime (bool: the layer's life stretches
+// with a time-fitted instance, e.g. a wind-up def fitted to the cast time; delays always do).
+//
+// Sustained instances (status visuals, wind-ups): while the spawner's `sustain` predicate holds, rate
+// emitters keep emitting and every element with a `hold` (mesh · sprite · decal · beam) stops ageing at
+// life × hold; on release they play the rest of their life (the eased fade-out), and `phase: 'release'`
+// layers fire (their delay counts from the release; a cancelled wind-up never fires them).
 
 import type { VfxDefT } from '../../contracts/catalog.ts';
 import { type ColorRef, colorRef, constCurve, type Curve, curve, curveMax, type Gradient, gradient } from './curves.ts';
@@ -26,12 +33,18 @@ export interface LayerBase {
   delay: number;
   at: Anchor | null;
   windup: boolean;
+  /** fires when a sustained instance is released (not cancelled); delay counts from the release */
+  release: boolean;
   socket: string | null;
   offset: [number, number, number] | null;
   follow: boolean;
   fit: boolean | null;
   secondary: boolean;
   chance: number;
+  /** re-fire period (s), 0 = once */
+  repeat: number;
+  /** life stretches with the instance's time fit (wind-ups fitted to castTime) */
+  fitTime: boolean;
 }
 
 export const SHAPE = { point: 0, sphere: 1, ring: 2, disc: 3, cone: 4, line: 5, path: 6, aura: 7 } as const;
@@ -61,6 +74,8 @@ export interface BeamL extends LayerBase {
   type: 'beam';
   width: number; life: number; color: Gradient; alpha: Curve; emissive: number; noise: number; freq: number; scroll: number;
   flare: number; flareTex: TexSpec; taper: [number, number]; core: number; blend: PBlend; from: Anchor; to: Anchor | null;
+  /** sustained instances (tethers): age stops at life × hold until released */
+  hold: number;
 }
 
 export interface MeshL extends LayerBase {
@@ -83,6 +98,8 @@ export interface DecalL extends LayerBase {
   type: 'decal';
   shape: number; style: number; radius: Curve; life: number; color: Gradient; alpha: Curve; emissive: Curve; rim: ColorRef | null;
   tex: TexSpec; angle: number; length: number; width: number; spinRandom: boolean;
+  /** sustained instances: age stops at life × hold until released */
+  hold: number;
 }
 
 export interface LightL extends LayerBase {
@@ -98,6 +115,10 @@ export interface DistortL extends LayerBase {
 export interface FeelL extends LayerBase {
   type: 'feel';
   shake: number; who: number; hitFlash: number; hitStop: number; squash: number;
+  /** the impact exposure envelope (M13): peak local lift (× scene light, 0 = none), its radius (m; × the
+   *  area radius when fitted), hold (s at ≥ 1.4×), fade half-life (s), the pre-peak dip and the peak
+   *  saturation drop (0..1). Applied by the post chain before tone mapping; never full-screen. */
+  exposure: number; exposureRadius: number; exposureHold: number; exposureFade: number; exposureDip: number; exposureDesat: number;
 }
 
 export type Layer = EmitterL | RibbonL | BeamL | MeshL | ShockwaveL | DecalL | LightL | DistortL | FeelL;
@@ -113,6 +134,8 @@ export interface Def {
   hasWindup: boolean;
   /** world-event / status bindings declared by `bind` pseudo-layers */
   binds: string[];
+  /** does a feel layer carry its own exposure envelope? (the director adds the default T4 one otherwise) */
+  hasExposure: boolean;
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────────────────────────
@@ -143,9 +166,10 @@ export const EMIT_ALIGN = { camera: 0, velocity: 1, ground: 2, axis: 3 } as cons
 
 function base(r: Record<string, unknown>): LayerBase {
   return {
-    type: String(r.type), delay: Math.max(0, num(r.delay, 0)), at: anchor(r.at), windup: r.phase === 'windup',
+    type: String(r.type), delay: Math.max(0, num(r.delay, 0)), at: anchor(r.at), windup: r.phase === 'windup', release: r.phase === 'release',
     socket: typeof r.socket === 'string' ? r.socket : null, offset: vec3(r.offset, null), follow: bool(r.follow, false),
     fit: typeof r.fit === 'boolean' ? r.fit : null, secondary: bool(r.secondary, false), chance: Math.max(0, Math.min(1, num(r.chance, 1))),
+    repeat: Math.max(0, num(r.repeat, 0)), fitTime: bool(r.fitTime, false),
   };
 }
 
@@ -241,7 +265,7 @@ function parseLayer(r: Record<string, unknown>, d: VfxDefT, binds: string[]): La
       ...b, type: 'beam', width: num(r.width, 0.2), life: Math.max(0.04, num(r.life, 0.2)), color: gradient(r.color, 'team'),
       alpha: curve(r.alpha, [1, 0]), emissive: num(r.emissive, 1.5), noise: num(r.noise, 0), freq: num(r.freq, 1.2), scroll: num(r.scroll, 2),
       flare: num(r.flare, 0), flareTex: texSpec(r.flareTexture ?? 'flare'), taper: pair(r.taper, [0.6, 1]), core: num(r.core, 1.2),
-      blend: blendOf(r.blend, 0), from: anchor(r.from) ?? 'origin', to: anchor(r.to),
+      blend: blendOf(r.blend, 0), from: anchor(r.from) ?? 'origin', to: anchor(r.to), hold: Math.max(0, Math.min(1, num(r.hold, 0.5))),
     }];
     case 'mesh': {
       const isCurve = Array.isArray(r.scale) && (r.scale.length > 2 || Array.isArray(r.scale[0]));
@@ -268,6 +292,7 @@ function parseLayer(r: Record<string, unknown>, d: VfxDefT, binds: string[]): La
         radius: curve(r.radius, 1), life: Math.max(0.05, num(r.life, 0.8)), color: gradient(r.color, 'team'), alpha: curve(r.alpha, [0.5, 0]),
         emissive: curve(r.emissive, style === DECAL_STYLES.light ? 1.5 : 0), rim: colorRef(r.rim), tex: texSpec(legacyTex),
         angle: deg(r.angleDeg, 60) / 2, length: num(r.length, 0), width: num(r.width, 0), spinRandom: r.shape === undefined || r.shape === 'circle' || r.shape === 'ring',
+        hold: Math.max(0, Math.min(1, num(r.hold, 0.5))),
       }];
     }
     case 'light': return [{
@@ -281,6 +306,9 @@ function parseLayer(r: Record<string, unknown>, d: VfxDefT, binds: string[]): La
     case 'feel': return [{
       ...b, type: 'feel', shake: Math.max(0, Math.min(1, num(r.shake, 0))), who: r.who === 'all' ? 1 : 0,
       hitFlash: Math.max(0, num(r.hitFlash, 0)), hitStop: Math.max(0, Math.min(0.12, num(r.hitStop, 0))), squash: Math.max(0, Math.min(0.3, num(r.squash, 0))),
+      exposure: Math.max(0, Math.min(4, num(r.exposure, 0))), exposureRadius: Math.max(0, num(r.exposureRadius, 1)),
+      exposureHold: Math.max(0, Math.min(0.6, num(r.exposureHold, 0.28))), exposureFade: Math.max(0.03, Math.min(0.4, num(r.exposureFade, 0.12))),
+      exposureDip: Math.max(0.5, Math.min(1, num(r.exposureDip, 0.92))), exposureDesat: Math.max(0, Math.min(1, num(r.exposureDesat, 0.35))),
     }];
     default: return [];
   }
@@ -306,7 +334,10 @@ export function parseDef(d: VfxDefT): Def {
   for (const raw of d.layers) for (const l of parseLayer(raw as Record<string, unknown>, d, binds)) layers.push(l);
   let span = d.duration;
   for (const l of layers) span = Math.max(span, l.delay + layerSpan(l, d.duration));
-  return { id: d.id, duration: d.duration, teamTint: d.teamTint, layers, span, hasWindup: layers.some((l) => l.windup), binds };
+  return {
+    id: d.id, duration: d.duration, teamTint: d.teamTint, layers, span, hasWindup: layers.some((l) => l.windup), binds,
+    hasExposure: layers.some((l) => l.type === 'feel' && l.exposure > 0),
+  };
 }
 
 /** the highest emissive any layer of the def asks for (gallery / audits) */

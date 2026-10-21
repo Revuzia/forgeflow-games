@@ -100,6 +100,10 @@ export class InputController {
   private middle: { gx: number; gy: number } | null = null;
   private hoverAt = 0;
   private hoverId: EntityId | null = null;
+  /** what the browser hit-tested under the pointer on its last move (free: no forced layout) */
+  private ptrTarget: EventTarget | null = null;
+  private hudAt = -1e9;
+  private hudHit = false;
   private centring: { prev: 'locked' | 'semi' | 'free' } | null = null;
   private pingTimes: number[] = [];
   private wheelAt = 0;
@@ -194,9 +198,10 @@ export class InputController {
     }
     if (now - this.hoverAt > HOVER_MS && this.ptr.inside) {
       this.hoverAt = now;
-      const e = this.ptr.x >= 0 && !this.overHud() ? this.entityAt() : null;
+      const e = this.ptr.x >= 0 && !this.overHud(now) ? this.entityAt() : null;
       const id = e && e.id !== body?.id ? e.id : null;
-      if (id !== this.hoverId) { this.hoverId = id; this.r.setHover?.(e && this.enemy(e) ? id : null); }
+      // every hovered unit but you: the renderer outlines enemies and neutrals in HARM, allies in their colour
+      if (id !== this.hoverId) { this.hoverId = id; this.r.setHover?.(id); }
       this.cursor.value = aim ? 'aim' : this.attackMove.value ? 'attackMove' : e && this.enemy(e) ? 'attack' : e && e.team === this.team && e.id !== body?.id ? 'ally' : 'default';
     }
     if (this.rightHeld && !aim && now - this.lastHoldMove > HOLD_MOVE_MS) {
@@ -207,9 +212,17 @@ export class InputController {
     if (this.centring) this.r.camera?.centerOnSelf();
   }
 
-  private overHud(): boolean {
-    const el = document.elementFromPoint(this.ptr.x, this.ptr.y);
-    return !!el && el !== this.surface && !this.surface.contains(el) && !!(el as HTMLElement).closest?.('.hud');
+  /** is the pointer over HUD chrome? The last pointermove's own hit-test target answers for free; without
+   *  one (no move since attach, or a synthetic pointer) elementFromPoint runs at most every 250 ms. */
+  private overHud(now: number): boolean {
+    let el = this.ptrTarget as Element | null;
+    if (!el || !(el as Element).isConnected) {
+      if (now - this.hudAt < 250) return this.hudHit;
+      this.hudAt = now;
+      el = document.elementFromPoint(this.ptr.x, this.ptr.y);
+    }
+    this.hudHit = !!el && el !== this.surface && !this.surface.contains(el) && !!(el as HTMLElement).closest?.('.hud');
+    return this.hudHit;
   }
 
   // ── keys ───────────────────────────────────────────────────────────────────────────────────────
@@ -363,6 +376,7 @@ export class InputController {
   // ── pointer ────────────────────────────────────────────────────────────────────────────────────
   private onMove(e: PointerEvent): void {
     this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.inside = true;
+    this.ptrTarget = e.target;
     this.r.camera?.setPointer(e.clientX, e.clientY, true);
     const w = this.wheel.value;
     if (w) {

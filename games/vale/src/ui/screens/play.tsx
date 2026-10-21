@@ -42,7 +42,7 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
   const [secondary, setSecondary] = useState<string>(prefs.roles?.[1] ?? '');
   const [preset, setPreset] = useState<{ fighter?: string; role?: string }>(() => {
     // a quick-queue preset starts filled (the fighter asked for, else the first of the roster) and stays changeable
-    const f = cv.fighter(p.params.fighter) ?? cv.c.fighters[0];
+    const f = (cv.isPlayable(p.params.fighter) ? cv.fighter(p.params.fighter) : undefined) ?? cv.playable()[0];
     return f ? { fighter: f.id, role: f.role } : {};
   });
   const party = state.party.value;
