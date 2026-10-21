@@ -151,11 +151,13 @@ def part_human(s, v, args):
     v.check("event (one 'fallDamage' per damaging landing, none otherwise)", ev_ok,
             {str(k): len(rows[k]["ev"]) for k in rows if rows[k]}, "1 per damaging, 0 per clean")
     walk = st_hard["walk"]
-    hs = speed_between(st_hard["rows"], 0.0, 0.3)
+    # 0.15-0.35 s: inside the 0.4 s stagger, after ground friction has taken the air-control momentum the fall carried in (W was held
+    # through the fall, as a player does; a 0-0.3 s window measured that momentum decay, not the stagger)
+    hs = speed_between(st_hard["rows"], 0.15, 0.35)
     hr = speed_between(st_hard["rows"], 0.6, 0.8)
     ss = speed_between(st_soft["rows"], 0.0, 0.3)
-    R["stagger"] = {"hard0_0.3": hs, "hard0.6_0.8": hr, "soft0_0.3": ss, "walk": walk}
-    v.check("stagger (10 m landing: <= 50 % of walk for 0.3 s, >= 85 % by 0.6-0.8 s; 1 m: >= 85 % at once)",
+    R["stagger"] = {"hard0.15_0.35": hs, "hard0.6_0.8": hr, "soft0_0.3": ss, "walk": walk}
+    v.check("stagger (10 m landing: <= 50 % of walk over 0.15-0.35 s, >= 85 % by 0.6-0.8 s; 1 m: >= 85 % at once)",
             None not in (hs, hr, ss) and hs <= 0.50 * walk and hr >= 0.85 * walk and ss >= 0.85 * walk,
             {k: (round(x, 2) if isinstance(x, float) else x) for k, x in R["stagger"].items()}, "stagger only on the hard landing")
     rw = rows["water20"]
@@ -172,8 +174,9 @@ BOT_DROP_JS = r"""([hs]) => {
   const out = [];
   bots.forEach((b, i) => { const h = hs[i]; const g = M.heightAt(b.pos.x, b.pos.z); b.hp = 100; b.shield = 0; b.pos.y = g + h; b.vel.set(0, 0, 0); b.onGround = false;
     out.push({ id: b.id, h, g }); });
-  for (let f = 0; f < 240; f++) P.step(1, 1 / 60, false);
-  return out.map((o) => { const b = W.actorById.get(o.id); return Object.assign(o, { hp: b.hp, alive: !!b.alive, onGround: !!b.onGround }); }); }"""
+  const gl = new Set(), fd = new Map(); W.events.on('fallDamage', (a, d) => { if (a) fd.set(a.id, (fd.get(a.id) || 0) + (+d || 0)); });
+  for (let f = 0; f < 360; f++) { P.step(1, 1 / 60, false); for (const o of out) { const b = W.actorById.get(o.id); if (b && b.gliding) gl.add(o.id); } }
+  return out.map((o) => { const b = W.actorById.get(o.id); return Object.assign(o, { hp: b.hp, alive: !!b.alive, onGround: !!b.onGround, canopy: gl.has(o.id), fallDmg: fd.get(o.id) || 0 }); }); }"""
 
 
 def part_bots(s, v, args):
@@ -186,12 +189,23 @@ def part_bots(s, v, args):
     s.step_frames(30, 1 / 60)
     if args.plant:
         L.plant_js(s, PLANTS[args.plant])
-    rows = s.js(BOT_DROP_JS, [[10, 10, 10, 20, 20, 20]])
+    rows = s.js(BOT_DROP_JS, [[10, 10, 10, 15, 15, 15, 20, 20, 20]])
     R["drops"] = rows
+    # the SAME rule as the human: 10 m and 15 m (both below the height at which a falling player can still open the canopy: > 12 m
+    # above the ground while already falling fast) cost what the human's drop cost (part human, +- 4 hp for the ground under a bot);
+    # 20 m: dead, OR the bot opened its canopy in the air exactly as a player may (SPACE mid-air) and took no fall damage = it avoided
+    # the lethal drop (C-FALL "bots avoid lethal drops"). A bot that survives a 20 m drop WITHOUT a canopy fails.
+    hum = (v.data.get("human") or {}).get("curve") or {}
     ten = [100 - r["hp"] for r in rows if r["h"] == 10 and r["alive"]]
+    fif = [100 - r["hp"] for r in rows if r["h"] == 15 and r["alive"]]
     twenty = [r for r in rows if r["h"] == 20]
-    ok = len(ten) == 3 and all(TEN_LO <= x <= TEN_HI for x in ten) and len(twenty) == 3 and all(not r["alive"] for r in twenty)
-    v.check("bots-rule (bots: 10 m costs %d-%d, 20 m kills)" % (TEN_LO, TEN_HI), ok, {"tenLost": ten, "twentyAlive": [r["alive"] for r in twenty]}, "same rule as the human")
+    h15 = hum.get("15")
+    ok15 = len(fif) == 3 and (all(abs(x - h15) <= 4 for x in fif) if h15 is not None else all(x > TEN_HI for x in fif))
+    ok20 = len(twenty) == 3 and all((not r["alive"]) or (r["canopy"] and r["fallDmg"] == 0) for r in twenty)
+    ok = len(ten) == 3 and all(TEN_LO <= x <= TEN_HI for x in ten) and ok15 and ok20
+    v.check("bots-rule (bots: 10 m costs %d-%d, 15 m = the human's 15 m +- 4 hp, 20 m kills unless the bot opened its canopy mid-air)" % (TEN_LO, TEN_HI), ok,
+            {"tenLost": ten, "fifteenLost": fif, "human15": h15,
+             "twenty": [{"alive": r["alive"], "canopy": r["canopy"], "fallDmg": round(r["fallDmg"], 2)} for r in twenty]}, "same rule as the human")
     # bots avoid lethal drops: 180 s of play, count deaths whose damage came from a fall
     av = s.js("""() => { const W = window.__LC__.W, C = window.__LC__; const deaths = [], falls = [];
         W.events.on('fallDamage', (a, d) => falls.push({ id: a && a.id, bot: !!(a && a.isBot), alive: !!(a && a.alive), t: W.t }));
