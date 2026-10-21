@@ -408,7 +408,7 @@ export function attachBrain(W, actor, nBots) {
       graceMul: 0, assist: null, ping: null, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
       nadeS: 0, nadeKind: 0, nadeSlot: -1, nadePrev: -1, nadeX: 0, nadeY: 0, nadeZ: 0, nadeYaw: 0, nadePitch: 0, nadeT: -99, nadeNextT: 0, nadeCheckT: 0, smokeWant: 0,
       reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
-      wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
+      wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
     },
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
@@ -4433,8 +4433,20 @@ function maybeFrag(W, b, t, seen, dist) {
   if (W.t < bb.nadeCheckT) return;
   bb.nadeCheckT = W.t + 0.5;
   if (bb.nadeS || W.t < bb.nadeNextT || (a.tier || 1) < 2 || t.downed || !bb.targetPos) return;
-  if (dist < 9 || dist > 30) return;
   if (throwSlot(a, 1) < 0) return;
+  bb.fdN++;                                                                       // (probe counters: checks / out of reach / no reason / no arc / pushes)
+  if (dist < 9 || dist > 30) {
+    bb.fdR++;
+    // OUT OF THROWING REACH (a frag carries ~27 m on the flat). Measured (Isla Viva seed 5, 12 frag carriers, 0 throws): 98 % of their checks
+    // were out of reach, 87 % of them past 60 m - the duels of an open map are long. A player with a nade in a stalled duel closes the gap to
+    // throw it: a tier 3+ bot with 100+ of bar, 5 s into a fight with a man holding his spot 30-60 m off, pushes (CLOSEIN, firing on the move)
+    // for the time it takes to come to ~24 m (2-4 s), and the reasons below get their chance; once per 30 s.
+    if (dist > 30 && dist < 60 && seen && (a.tier || 1) >= 3 && W.t >= bb.nadePushT && W.t - bb.acquireT > 5 && a.hp + a.shield >= 100 &&
+        t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 1.5) {
+      bb.nadePushT = W.t + 30; bb.closeInUntil = W.t + Math.min(4, Math.max(2, (dist - 24) / 6)); b.nextThink = 0; bb.fdP++;
+    }
+    return;
+  }
   const gone = W.t - bb.targetSeenT;
   let why = 0;
   if (!seen && gone > 0.5 && gone < 5) why = 1;                                   // he ducked behind something: put one there
@@ -4446,10 +4458,10 @@ function maybeFrag(W, b, t, seen, dist) {
     // weight 8 in two 6-match batches, a Deepwood match both times: its duels rarely met the room / cover / ducked tests)
     else if (W.t - bb.acquireT > 4 && b.rng() < 0.2) why = 4;
   }
-  if (!why) return;
+  if (!why) { bb.fdW++; return; }
   const tp = bb.targetPos;
   beginThrow(W, b, 1, tp.x, tp.y, tp.z);
-  if (!bb.nadeS) bb.nadeCheckT = W.t + 2;                                          // no clean arc from here: look again in a bit
+  if (!bb.nadeS) { bb.nadeCheckT = W.t + 2; bb.fdB++; }                                          // no clean arc from here: look again in a bit
 }
 /** (LC-14) a bot that knows a grenade is landing beside it sprints out of the blast (away from the predicted burst, over every state's legs). */
 function dodgeGrenade(W, b, dt) {
