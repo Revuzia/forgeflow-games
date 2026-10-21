@@ -798,13 +798,53 @@ if (require.main === module) (async () => {
       const par = Object.assign({}, PS[(k * 13) % PS.length], { theme: THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 }), Y = 2.37 + 3.11 * k;
       cmp(HGmod.generate(Object.assign({}, par, { y: Y })), HGmod.translateY(HGmod.generate(par), Y), "H");
       const H = HGmod.generate(par), tri = (md) => { let n = 0; for (const g of Object.values(md.groups)) for (const a of g.values()) n += a.idx.length / 3; return n; };
-      const m0 = HGmod.meshData(H, one), m1 = HGmod.meshData(H, one, { interior: true });
+      const m0 = HGmod.meshData(H, one, { wear: false }), m1 = HGmod.meshData(H, one, { interior: true, wear: false });      // (P23: the wear strips are checked in their own row below)
       const kitTris = H.furniture.reduce((a, q) => a + (q.src === "kit" ? q.tris : 0), 0);      // (the kit pieces are the GLBs' triangles, drawn by the caller)
       if (tri(m0) !== tri(m1) || tri(m0) + kitTris !== H.tris.total || [...m1.groups.walls.keys()].some((q) => !/^[a-z_]+(\|in)?$/.test(q))) splitBad++;
     }
     okP(bad.length === 0 && nums > 100000, "translateY == generate at that height, every number of 36 houses (" + nums + " numbers, <= 1.5 mm)", bad.slice(0, 3).join(" | "));
     okP(splitBad === 0, "meshData: the interior split keeps every face (its triangles + the kit pieces' == house.tris.total on 36 houses)", splitBad + " differ");
   }
+    // (P23 / LC-17) the wear strips: only on OUTSIDE faces of wall materials, WEAR_OFF in front of a face of a box, never brighter than the wall, the foot strip within
+    // WEAR_FOOT[1] of the ground floor and the eave strip within WEAR_EAVE of the top ceiling; the box faces (and so boxRanges) are untouched; <= 14 % more wall triangles
+    {
+      let wbad = [], wTris = 0, baseTris = 0, nFoot = 0, nEave = 0;
+      const grey = () => [0.5, 0.5, 0.5];
+      for (let k = 0; k < 36; k++) {
+        const par = Object.assign({}, PS[(k * 7) % PS.length], { theme: THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 });
+        const H = HGmod.generate(par);
+        const a = HGmod.meshData(H, grey, { interior: true }), b = HGmod.meshData(H, grey, { interior: true, wear: false });
+        if (JSON.stringify(a.boxRanges) !== JSON.stringify(b.boxRanges)) wbad.push(par.use + " boxRanges moved");
+        const yG = H.floors[0].y, top = H.floors[H.floors.length - 1].ceil;
+        for (const [key, g] of a.groups.walls) {
+          const g0 = b.groups.walls.get(key), n0 = g0 ? g0.pos.length / 3 : 0;
+          if (g0 && g.pos.slice(0, g0.pos.length).some((v, i) => v !== g0.pos[i])) wbad.push(par.use + " " + key + " box vertices changed");
+          baseTris += n0 / 2; wTris += (g.pos.length / 3 - n0) / 2;
+          if (g.pos.length / 3 > n0 && key.indexOf("|in") >= 0) wbad.push(par.use + " wear on an inside face (" + key + ")");
+          for (let v = n0; v < g.pos.length / 3; v++) {
+            const x = g.pos[v * 3], y = g.pos[v * 3 + 1], z = g.pos[v * 3 + 2], c = g.col[v * 3];
+            if (c > 0.5 + 1e-9 || c < 0.5 * HGmod.WEAR_K[0] - 1e-9) wbad.push(par.use + " wear colour " + c.toFixed(3));
+            const inFoot = y <= yG + HGmod.WEAR_FOOT[1] + 1e-6, inEave = y >= top - HGmod.WEAR_EAVE - 1e-6 && y <= top + 1e-6;
+            if (!inFoot && !inEave) wbad.push(par.use + " wear vertex at y " + y.toFixed(2));
+            if (v % 4 === 0) { if (inFoot) nFoot++; else nEave++; }
+            // in front of a box face: on a face plane + 0.012 m, inside that face's rectangle
+            let onFace = false;
+            for (const bx of H.boxes) {
+              for (let ax = 0; ax < 3 && !onFace; ax += 2) {
+                const q = ax === 0 ? x : z;
+                if (Math.abs(q - (bx.max[ax] + 0.012)) > 1e-6 && Math.abs(q - (bx.min[ax] - 0.012)) > 1e-6) continue;
+                const ua = ax === 0 ? 2 : 0, u = ua === 0 ? x : z;
+                if (u >= bx.min[ua] - 1e-6 && u <= bx.max[ua] + 1e-6 && y >= bx.min[1] - 1e-6 && y <= bx.max[1] + 1e-6) onFace = true;
+              }
+              if (onFace) break;
+            }
+            if (!onFace) wbad.push(par.use + " wear vertex " + x.toFixed(2) + "," + y.toFixed(2) + "," + z.toFixed(2) + " is not in front of a box face");
+            if (wbad.length > 6) break;
+          }
+        }
+      }
+      okP(wbad.length === 0 && nFoot > 200 && nEave > 50 && wTris <= 0.14 * baseTris, "meshData wear strips (LC-17): outside wall faces only, 12 mm in front of a box face, darker than the wall (foot " + nFoot + ", eave " + nEave + " strips on 36 houses), +" + (100 * wTris / Math.max(1, baseTris)).toFixed(1) + " % wall triangles (<= 14 %); box vertices and boxRanges untouched", wbad.slice(0, 4).join(" | "));
+    }
   // O3 on tall shells: <= 3 walkable floors, the rest closed (one exact mass: nobody gets in), the asked height kept
   {
     let bad = [];
@@ -822,7 +862,7 @@ if (require.main === module) (async () => {
     for (let i = 0; i < 30; i++) {
       const jI = jobs.slice(0, N_MAIN), r = jI[i * 149 % jI.length], [k, theme, st] = r.key.split(":");
       const H = HGmod.generate(Object.assign({}, PS[+k], { theme, storeys: storeysOf(PS[+k], +k, +st) }));
-      const built = HGmod.buildHouse(THREE, H);
+      const built = HGmod.buildHouse(THREE, H, { wear: false });
       const meshByMat = new Map(); for (const m of built.meshes) meshByMat.set(m.name, m);
       // each box: its 6 faces live in the meshes of their materials, 4 vertices each; collect them back
       const pos = new Map();
