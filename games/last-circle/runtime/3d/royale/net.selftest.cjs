@@ -196,6 +196,137 @@ function suite(M, label, count) {
   return bad;
 }
 
+/** PARITY WAVE P1, lane P1-D rows (the real module, or a planted-fault copy). Same counting rule as suite(). */
+function suiteP1D(M, SIM, count) {
+  let bad = 0;
+  const row = (cond, msg, detail) => { if (!cond) bad++; if (count) ok(cond, msg, detail); };
+  const mk = (id, gv, host, name) => new M.SquadHandshake({ id, name: name || id, gv, host });
+  // ── LC-11 presence: the phantom.mjs scenario (verify/lc11) ─────────────────────────────────────────────────────────────────────────────
+  {
+    const host = mk("a_host", 3, true, "Host");
+    const names = {};
+    for (const [id, nm] of [["b_alice", "Alice"], ["c_bob", "Bob"]]) { host.onHello(id, { name: nm, gv: 3, host: 0 }, 1000); names[id] = nm; }
+    host.onPresence(["a_host", "b_alice", "c_bob"]);
+    const left = host.onPresence(["a_host", "b_alice"]);                      // Bob closes his tab before START
+    row(left.length === 1 && left[0] === "c_bob", "presence: the peer that left is reported as gone", left);
+    const plan = host.planStart(names, 3, 5000);
+    row(plan.roster.length === 2 && plan.roster.every((r) => r.peerId !== "c_bob") && plan.gone.length === 1 && plan.gone[0].peerId === "c_bob",
+      "LC-11 phantom: a peer that joined, said hello and left before START gets NO roster slot", plan);
+    row(plan.roster[1].peerId === "b_alice" && plan.roster[1].slot === 1, "LC-11 phantom: the peer still here keeps slot 1", plan.roster);
+    // no presence report at all (an old transport): every hello'd peer counts, exactly as before
+    const h0 = mk("a_host", 3, true);
+    h0.onHello("b_x", { name: "X", gv: 3 }, 0);
+    row(h0.planStart({ b_x: "X" }, 3, 99999).roster.length === 2, "presence: with no presence report every peer counts (old behaviour)");
+    // a hello that beats its sender's presence: kept inside the grace window, dropped after it
+    const h1 = mk("a_host", 3, true);
+    h1.onPresence(["a_host"]);
+    h1.onHello("d_new", { name: "New", gv: 3 }, 10000);
+    row(h1.planStart({ d_new: "New" }, 3, 10000 + M.PRESENCE_GRACE_MS - 100).roster.length === 2, "presence: a hello ahead of its presence keeps its slot inside the grace window");
+    row(h1.planStart({ d_new: "New" }, 3, 10000 + M.PRESENCE_GRACE_MS + 100).roster.length === 1, "presence: ...and a hello whose sender never shows up in presence gets none after it");
+    h1.onPresence(["a_host", "d_new"]);
+    row(h1.planStart({ d_new: "New" }, 3, 99999).roster.length === 2, "presence: once in presence, the peer is rostered whenever START comes");
+    // a peer that comes BACK (presence flap) is present again
+    const h2 = mk("a_host", 3, true);
+    h2.onHello("b_f", { name: "F", gv: 3 }, 0);
+    h2.onPresence(["a_host", "b_f"]); h2.onPresence(["a_host"]); h2.onPresence(["a_host", "b_f"]);
+    row(h2.isPresent("b_f", 99999) === true, "presence: a peer that drops out and comes back is present again");
+    row(h2.isPresent("a_host", 0) === true, "presence: this page is always present to itself");
+    // a guest on ANOTHER version that refused and left before START is still named as left out (the host reads why), never rostered
+    const h3 = mk("a_host", 3, true);
+    h3.onHello("b_old", { name: "Old", gv: 2 }, 0);
+    h3.onPresence(["a_host", "b_old"]); h3.onPresence(["a_host"]);
+    const p3 = h3.planStart({ b_old: "Old" }, 3, 99999);
+    row(p3.roster.length === 1 && p3.left.length === 1 && p3.left[0].peerId === "b_old" && p3.gone.length === 0,
+      "presence: a version-mismatched guest that already left is still LEFT OUT by name (squadguard's notice), not silently gone", p3);
+  }
+  // ── LC-11 sender binding (verify/lc11 forgeries) ────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const roster = [{ peerId: "a_host", slot: 0 }, { peerId: "b_g1", slot: 1 }, { peerId: "c_g2", slot: 2 }];
+    const bots = new Set(["s10", "s20", "s49"]);
+    const actor = (id) => (bots.has(id) ? { isBot: true } : /^s[0-2]$/.test(id) ? { isBot: false } : null);
+    const onHost = { roster, isHost: true, actor, K: SIM }, onGuest = { roster, isHost: false, actor, K: SIM };
+    const may = (t, d, from, ctx) => M.senderMay(t, d, from, ctx) === null;
+    // the audit's forgeries, from a guest console
+    row(!may("hitYou", { target: "s0", dmg: 37, attacker: "s10", weapon: "ar" }, "b_g1", onHost), "LC-11: a guest's hitYou crediting a host bot is refused (audit: host HP 100 -> 63)");
+    row(!may("died", { slot: "s20", killer: "s1", weapon: "ar" }, "b_g1", onHost), "LC-11: a guest's 'died' for a host bot is refused (audit: the bot fell over)");
+    row(!may("takeover", { slot: "s10" }, "b_g1", onHost), "LC-11: a takeover arriving AT the host is refused (the host would stop simulating its bot)");
+    row(!may("takeover", { slot: "s2" }, "b_g1", onGuest), "LC-11: a takeover from a guest is refused on another guest");
+    row(!may("bye", { slot: "s2" }, "b_g1", onHost), "LC-11: a 'bye' for another guest's slot is refused");
+    row(!may("state", { id: "s2", x: 0, y: 0, z: 0 }, "b_g1", onHost), "LC-11: a state packet for another slot is refused");
+    row(!may("chat", { id: "s0", m: "hi" }, "b_g1", onHost), "LC-11: chat in another player's name is refused");
+    row(!may("hitYou", { target: "s0", dmg: 10, attacker: "s1", weapon: "ar" }, "z_stranger", onHost), "LC-11: anything from a peer outside the match roster is refused");
+    row(!may("hitYou", { target: "s0", dmg: 500, attacker: "s1", weapon: "ar" }, "b_g1", onHost), "LC-11: a hit bigger than the weapon's biggest single hit is refused");
+    row(!may("hitYou", { target: "s0", dmg: 10, attacker: "s1", weapon: "nuke" }, "b_g1", onHost), "LC-11: a hit with a weapon the sim does not have is refused");
+    row(!may("hitYou", { target: "s0", dmg: -5, attacker: "s1", weapon: "ar" }, "b_g1", onHost) && !may("hitYou", { target: "s0", dmg: NaN, attacker: "s1", weapon: "ar" }, "b_g1", onHost),
+      "LC-11: negative / NaN damage is refused");
+    // what the real game sends still passes
+    const arMax = M.maxHitDamage(SIM, "ar"), snMax = M.maxHitDamage(SIM, "sniper");
+    row(arMax >= 30 * 1.5 && arMax <= 120 && snMax >= 105 * 2.5, "maxHitDamage: AR and sniper caps cover a legendary point-blank headshot", { arMax, snMax });
+    row(may("hitYou", { target: "s0", dmg: 31, attacker: "s1", weapon: "ar" }, "b_g1", onHost), "LC-11: a guest's own hit on the host passes");
+    row(may("hitYou", { target: "s1", dmg: snMax - 1, attacker: "s10", weapon: "sniper" }, "a_host", onGuest), "LC-11: the host's bot hitting a guest passes (host speaks for its bots)");
+    row(may("hitYou", { target: "s1", dmg: 40, attacker: "s0", weapon: "glauncher" }, "a_host", onGuest), "LC-11: the host's own launcher splash on a guest passes");
+    row(may("died", { slot: "s1", killer: "s10", weapon: "ar" }, "b_g1", onHost), "LC-11: a guest announcing its OWN death passes");
+    row(may("died", { slot: "s20", killer: "s1", weapon: "ar" }, "a_host", onGuest), "LC-11: the host announcing its bot's death passes");
+    row(may("bye", { slot: "s1" }, "b_g1", onHost), "LC-11: a guest's own bye passes");
+    row(may("takeover", { slot: "s2" }, "a_host", onGuest) && may("sync", { t: 1 }, "a_host", onGuest), "LC-11: takeover / sync from the host pass on a guest");
+    row(may("state", { id: "s1" }, "b_g1", onHost) && may("state", { id: "s0", t: 3 }, "a_host", onGuest), "LC-11: own state packets pass (host's carries the clock)");
+    row(may("fire", { id: "s10" }, "a_host", onGuest) && !may("fire", { id: "s10" }, "b_g1", onHost), "LC-11: gunfire FX for a bot only from the host");
+    row(may("chest", { id: 5 }, "c_g2", onHost) && may("boom", { x: 1, y: 2, z: 3 }, "c_g2", onHost), "LC-11: world events (chest, blast) pass from any match member");
+    // the receiver knows its own actor: the host may speak for any OTHER actor (a body it took over keeps fighting), never for this client's own
+    const g1self = Object.assign({}, onGuest, { selfId: "s1" });
+    row(may("died", { slot: "s2", killer: "s10", weapon: "ar" }, "a_host", g1self), "LC-11: the host announcing the death of a body it took over (another guest's slot) passes");
+    row(!may("died", { slot: "s1", killer: "s10", weapon: "ar" }, "a_host", g1self), "LC-11: ...but a 'died' for THIS client's own actor is refused even from the host (own HP is this client's)");
+    row(!may("died", { slot: "s2", killer: "s1", weapon: "ar" }, "b_g1", Object.assign({}, onHost, { selfId: "s0" })), "LC-11: a guest still cannot announce another guest's death");
+    row(may("ping", { id: "s2", k: "go" }, "c_g2", onHost) && !may("ping", { id: "s1", k: "go" }, "c_g2", onHost), "LC-07: a ping must name the sender's own slot");
+  }
+  // ── LC-07 ping gate ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const L = new M.PingLimiter();
+    const a = L.allow("s1", 0), b = L.allow("s1", 500), c = L.allow("s1", 999), d = L.allow("s1", 1000), e = L.allow("s2", 100);
+    row(a && !b && !c && d && e, "LC-07: at most one ping per second per sender (0 ok, 500 no, 999 no, 1000 ok; another sender independent)", { a, b, c, d, e });
+    let n = 0; const L2 = new M.PingLimiter();
+    for (let t = 0; t < 10000; t += 16) if (L2.allow("spam", t)) n++;
+    row(n === 10, "LC-07: a sender spamming every frame for 10 s gets exactly 10 pings through", n);
+    row(M.pingTeamOk("sq", "sq") && !M.pingTeamOk("sq", null) && !M.pingTeamOk(null, null) && !M.pingTeamOk("sq", "s5") && !M.pingTeamOk("", ""),
+      "LC-07: pings are shown to the sender's team only (same non-empty teamId)");
+    const p = M.normPing({ k: "go", x: 12.345, y: 3.21, z: -40.06, src: "w" }, 850);
+    row(p && p.k === "go" && p.x === 12.3 && p.z === -40.1 && p.src === "w", "LC-07: a ping body is rounded and keeps its kind", p);
+    row(M.normPing({ k: "nuke", x: 0, y: 0, z: 0 }) === null && M.normPing({ k: "go", x: NaN, y: 0, z: 0 }) === null && M.normPing({ k: "go", x: 9000, y: 0, z: 0 }, 850) === null && M.normPing(null) === null,
+      "LC-07: unknown kinds, NaN and off-map coordinates are dropped");
+    const cl = M.normPing({ k: "clr", src: "m" });
+    row(cl && cl.k === "clr" && cl.src === "m", "LC-07: a clear names which ping it clears (world / map pin)", cl);
+  }
+  // ── LC-07 ping outbox: world pings and map pins are limited separately; a pin over the rate is held (newest wins), never dropped ─────
+  {
+    const go = { k: "go", src: "w", x: 1, y: 0, z: 1 }, pA = { k: "pin", src: "m", x: -320, y: 0, z: -320 }, pB = { k: "pin", src: "m", x: 320, y: 0, z: 320 };
+    const O1 = new M.PingOutbox();
+    const w0 = O1.offer("me:w", go, 0, false), m0 = O1.offer("me:m", pA, 100, true);
+    row(w0.now === go && m0.now === pA, "LC-07: a map pin right after a world ping goes out at once (separate 1/s per stream)", { w0, m0 });
+    const O2 = new M.PingOutbox();
+    const a = O2.offer("me:m", pA, 0, true), b = O2.offer("me:m", pB, 350, true);
+    const early = O2.due(999), late = O2.due(1000), again = O2.due(1500);
+    row(a.now === pA && b.now === null && b.wait === 650 && early.length === 0 && late.length === 1 && late[0][1] === pB && again.length === 0 && O2.pending === 0,
+      "LC-07: a pin moved twice within 1 s: the second is held and sent the moment the limit frees (650 ms later), once", { a, b, early, late, again });
+    const O3 = new M.PingOutbox();
+    let sent = [];
+    for (let t = 0; t <= 3000; t += 200) { const r = O3.offer("me:m", { k: "pin", src: "m", x: t / 10, y: 0, z: 0 }, t, true); if (r.now) sent.push(r.now.x); for (const [, bd] of O3.due(t + 1)) sent.push(bd.x); }
+    for (let t = 3001; t <= 5000; t += 16) for (const [, bd] of O3.due(t)) sent.push(bd.x);
+    row(sent[sent.length - 1] === 300 && sent.length <= 5 && O3.pending === 0, "LC-07: a pin dragged around for 3 s: at most 1/s on the wire and the LAST pin always arrives", sent);
+    const O4 = new M.PingOutbox();
+    O4.offer("me:m", pA, 0, true); O4.offer("me:m", pB, 300, true);
+    const c = O4.offer("me:m", { k: "clr", src: "m" }, 400, true), d4 = O4.due(2000);
+    row(c.now && c.now.k === "clr" && d4.length === 0, "LC-07: a clear goes out at once and cancels a held pin (the cleared pin never comes back)", { c, d4 });
+    const O5 = new M.PingOutbox();
+    O5.offer("me:w", go, 0, false);
+    const w5 = O5.offer("me:w", go, 500, false);
+    row(w5.now === null && w5.wait === null && O5.pending === 0 && O5.due(2000).length === 0, "LC-07: a world ping over the rate is dropped, not held (one world ping per second, as before)", w5);
+    const O6 = new M.PingOutbox(850);
+    const r1 = O6.offer("s1:m", pA, 0, true), r2 = O6.offer("s2:m", pB, 10, true), r3 = O6.offer("s1:w", go, 20, false);
+    row(r1.now && r2.now && r3.now, "LC-07: the receive gate is per sender AND per stream", { r1, r2, r3 });
+  }
+  return bad;
+}
+
 (async () => {
   // ── static: the version query rides every import edge ─────────────────────────────────────────────────────────────────────────────
   const src = fs.readFileSync(NET_JS, "utf8");
@@ -286,6 +417,55 @@ function suite(M, label, count) {
   for (const [name, over] of mutants) {
     const bad = suite(Object.assign({}, M, over), name, false);
     ok(bad >= 1, "planted fault caught: " + name + " fails " + bad + " row(s)", bad);
+  }
+
+  // ═══ PARITY WAVE P1, lane P1-D (LC-11 netcode safety, LC-07 ping, LC-09 sprint/foley relays, LC-14 remote blasts, LC-18 rematch) ══════════
+  console.log("\n-- P1-D: presence, sender binding, ping gate, relays, rematch --");
+  const SIM = require(path.join(__dirname, "..", "..", "sim", "royale.js"));
+  const rows2 = suiteP1D(M, SIM, true);
+  ok(rows2 === 0, "the real module passes every P1-D row");
+  // planted faults for the P1-D rows
+  class NoPresence extends M.SquadHandshake { isPresent() { return true; } }               // the live bug: departed peers keep their slot
+  const p1dMutants = [
+    ["a roster that ignores presence (the phantom-slot bug)", { SquadHandshake: NoPresence }],
+    ["a sender check that trusts the body's attacker", { senderMay: (t, d, from, ctx) => (t === "hitYou" ? null : M.senderMay(t, d, from, ctx)) }],
+    ["a sender check that lets a guest kill another slot", { senderMay: (t, d, from, ctx) => (t === "died" ? null : M.senderMay(t, d, from, ctx)) }],
+    ["a sender check that takes a takeover from anyone", { senderMay: (t, d, from, ctx) => (t === "takeover" ? null : M.senderMay(t, d, from, ctx)) }],
+    ["a damage cap that is not there", { maxHitDamage: () => null, senderMay: (t, d, from, ctx) => M.senderMay(t, d, from, Object.assign({}, ctx, { K: null })) }],
+    ["a ping limiter that always allows", { PingLimiter: class { allow() { return true; } } }],
+    ["a team filter that ignores teams", { pingTeamOk: () => true }],
+    ["a ping parser that keeps any kind", { normPing: (d) => (d && typeof d === "object" ? Object.assign({ k: d.k }, d) : null) }],
+    ["one ping limit shared by world pings and map pins (the wrong-pin bug)", { PingOutbox: class extends M.PingOutbox { offer(st, b, n, c) { return super.offer(st.split(":")[0], b, n, c); } due(n) { return super.due(n); } } }],
+    ["a pin over the rate that is dropped instead of held (the wrong-pin bug)", { PingOutbox: class extends M.PingOutbox { offer(st, b, n) { return super.offer(st, b, n, false); } } }],
+    ["a held pin that never goes out", { PingOutbox: class extends M.PingOutbox { due() { return []; } } }],
+  ];
+  for (const [name, over] of p1dMutants) {
+    const bad = suiteP1D(Object.assign({}, M, over), SIM, false);
+    ok(bad >= 1, "planted fault caught (P1-D): " + name + " fails " + bad + " row(s)", bad);
+  }
+  // static rows on the source: the wiring the pure parts cannot show
+  {
+    const src = fs.readFileSync(NET_JS, "utf8");
+    ok(!/onMsg\(W, \{ from: "watchdog"/.test(src), "LC-11: the silent-guest watchdog no longer routes through a forged-looking 'bye' (bye is sender-bound now)");
+    ok(/NEVER-SEEN watchdog/.test(src) && /S\.everSeen/.test(src) && /hostTakeOver\(W, id\)/.test(src), "LC-11: the host watchdog also covers guests that never sent a state packet");
+    ok(/senderMay\(t, d, from, \{ roster: S\.cfg && S\.cfg\.roster/.test(src), "LC-11: onMsg runs senderMay against the match roster before any in-match handler");
+    ok(/S\.hs\.onPresence\(ids\)/.test(src) && /planStart\(S\.peers, MAX_GUESTS, performance\.now\(\)\)/.test(src), "LC-11: presence feeds the handshake and START plans with it");
+    ok(/pingTeamOk\(W\.player\.teamId, a\.teamId\)/.test(src) && /new PingOutbox\(PING_MIN_MS - 150\)/.test(src) && /box\.offer\("me:" \+ body\.src, body, performance\.now\(\), body\.src === "m"\)/.test(src) &&
+      /if \(sendBudgetLeft\(\) > 2\) send\("ping", msg\); else qsend\("ping", msg\);/.test(src),
+      "LC-07: the ping is team-filtered, rate-limited on both ends, and on the wire at once while the budget allows (else it rides the state packet)");
+    ok(/box\.offer\(d\.id \+ ":" \+ p\.src, p, performance\.now\(\), p\.src === "m"\)/.test(src) && /if \(S\.pingOut && S\.pingOut\.pending\) flushPingOut\(W, S\.pingOut\)/.test(src) &&
+      /if \(S\.pingIn && S\.pingIn\.pending\) flushPingIn\(W, S\.pingIn\)/.test(src) && /S\.pingOut !== box/.test(src),
+      "LC-07: held pins are flushed by a timer AND update(), on both ends, and never into the next match (the box pins the session)");
+    {
+      const hud = fs.readFileSync(path.join(__dirname, "hud.js"), "utf8");
+      ok(!/q\.kind !== "pin" && W\.t - q\.born > PING_LIFE_S/.test(hud) && /if \(W\.t - q\.born > PING_LIFE_S\) continue;/.test(hud), "LC-07: map pins time out at 30 s like every ping (hud.js stepPings)");
+      ok(/R\.bigmap\.remove\(\); R\.bigmap = null; regrabCursor\(W\); return;/.test(hud) && /if \(ok\) W\._suppressNextShot = false;/.test(hud),
+        "closing the big map re-acquires pointer lock (and a successful re-lock does not eat the next shot)");
+    }
+    ok(/\(a\.sprinting \? 128 : 0\)/.test(src) && /a\.sprinting = !!\(f & 128\)/.test(src), "LC-09: the sprint bit rides the state packet and is applied to remote actors");
+    ok(/qsend\("heal"/.test(src) && /qsend\("rld"/.test(src) && /W\.events\.emit\("healStart", a, d\.c/.test(src) && /W\.events\.emit\("reloadStart", a, \{ id: d\.w \}\)/.test(src), "LC-09: heal / reload foley is relayed and replayed as the local events");
+    ok(/qsend\("boom"/.test(src) && /\{ net: true \}\)/.test(src) && /meta && meta\.net/.test(src), "LC-14: remote blasts are relayed once and the replay is never relayed again");
+    ok(typeof M.rematch === "function" && /S\.rematchN = \(S\.rematchN \| 0\) \+ 1/.test(src) && /rematch: S\.rematchN/.test(src), "LC-18: net.rematch() exists and the host's start carries a rematch counter");
   }
 
   console.log("");
