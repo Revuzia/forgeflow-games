@@ -3804,7 +3804,7 @@ function buildIndicatorPool() {
   }
 }
 function parkIndicator(d) {
-  d.el.style.display = "none"; d.el.style.opacity = "0";
+  d.el.style.display = "none"; d.el.style.opacity = "0"; d._op = 0;
   indFree.push(d);
 }
 function addIndicator(W, worldX, worldZ, kind) {
@@ -3823,7 +3823,7 @@ function addIndicator(W, worldX, worldZ, kind) {
     d.kind = kind;
   }
   d.ang = ang; d.t = 0; d.life = kind === "damage" ? 1.6 : kind === "shot" ? 1.2 : 0.9;
-  el.style.opacity = "0";        // stepIndicators places it and fades it in this frame
+  el.style.opacity = "0"; d._op = 0;   // stepIndicators places it and fades it in this frame (d._op: its last written opacity)
   el.style.display = "block";
   inds.push(d);
 }
@@ -3876,9 +3876,14 @@ function stepIndicators(W, dt) {
     if (d.t > d.life) { inds.splice(i, 1); parkIndicator(d); continue; }
     // screen angle relative to the camera facing (0 = up/forward)
     const rel = d.ang - p.yaw + Math.PI;
-    const sx = Math.sin(rel) * RAD, sy = -Math.cos(rel) * RAD;
-    d.el.style.transform = `translate(calc(${sx.toFixed(0)}px - 50%), calc(${sy.toFixed(0)}px - 50%)) rotate(${(rel * 180 / Math.PI).toFixed(0)}deg)`;
-    d.el.style.opacity = String(Math.max(0, 1 - d.t / d.life));
+    // written only when the rounded pixel / degree / opacity step changes (each write built 1-2 strings per cue per frame)
+    const sx = Math.round(Math.sin(rel) * RAD), sy = Math.round(-Math.cos(rel) * RAD), dg = Math.round(rel * 180 / Math.PI);
+    if (d._sx !== sx || d._sy !== sy || d._dg !== dg) {
+      d._sx = sx; d._sy = sy; d._dg = dg;
+      d.el.style.transform = `translate(calc(${sx}px - 50%), calc(${sy}px - 50%)) rotate(${dg}deg)`;
+    }
+    const op = Math.max(0, Math.round((1 - d.t / d.life) * 50)) / 50;
+    if (d._op !== op) { d._op = op; d.el.style.opacity = String(op); }
   }
 }
 
@@ -4148,10 +4153,12 @@ function pingColor(W, pg) {
   return mateColor(pg.owner);
 }
 /** A squadmate's colour: the same one on their pings, their minimap blip, their vitals chip and their tag. */
+const _mateIdx = new Map();                           // actor id -> palette index (ids never change; no per-call string work)
 function mateColor(id) {
   const pal = (R._cbPal || CB_PAL.off).mates;
-  const n = parseInt(String(id).slice(1), 10);
-  return pal[(Number.isFinite(n) ? n : 0) % pal.length];
+  let n = _mateIdx.get(id);
+  if (n === undefined) { n = parseInt(String(id).slice(1), 10); if (!Number.isFinite(n)) n = 0; _mateIdx.set(id, n); }
+  return pal[n % pal.length];
 }
 /** Add (or replace) a ping. `pg` = { owner, kind: "go" | "enemy" | "pin", src: "w" | "m", x, y, z }. Local pings go to the squad too. */
 function addPing(W, pg, local) {
@@ -6693,7 +6700,7 @@ function stepTagPolicy(W, p, dt) {
   const now = performance.now() / 1000;
   _tagPol.focus = p || null; _tagPol.now = now;
   R._tagAcc = (R._tagAcc || 0) + dt;
-  if (R._tagAcc >= 0.1) {
+  if (R._tagAcc >= 0.2) {                            // 5 Hz: a 0.2 s tag latency, well inside the 0.8 s hold
     R._tagAcc = 0;
     const a = aimedEnemy(W, p);
     if (a) { _tagPol.aimedId = a.id; _tagPol.aimedUntil = now + AIM_HOLD_S; }
@@ -6727,11 +6734,17 @@ function aimedEnemy(W, p) {
   if (!hitA) return null;
   // already named by distance: no ray needed
   if (Math.hypot(hitA.pos.x - me.pos.x, hitA.pos.y - me.pos.y, hitA.pos.z - me.pos.z) <= TAG_ENEMY_M) return hitA;
+  // the same target still holds for more than half the hold: its tag stays up without another world ray (the ray is the
+  // costly part - collider queries + the march - and a held answer is at most AIM_HOLD_S / 2 stale when it is next re-tested)
+  if (_tagPol.aimedId === hitA.id && _tagPol.aimedUntil - performance.now() / 1000 > AIM_HOLD_S * 0.5) return null;
   const ex = me.pos.x, ey = me.pos.y + 1.6, ez = me.pos.z;
   const dEye = (ex - o.x) * _adir.x + (ey - o.y) * _adir.y + (ez - o.z) * _adir.z;
   const d0 = dEye < 0.05 ? 0.05 : dEye > 8 ? 8 : dEye;
-  const map = W.map;
-  const dist = K.aimRayDist(o.x, o.y, o.z, _adir.x, _adir.y, _adir.z, d0, best,
-    (x, z) => map.heightAt(x, z), (x, z, rr, buf) => map.queryColliders(x, z, rr, buf), _acols);
+  if (_aMap !== W.map) {                               // the two world callbacks, built once per map (no per-test closures)
+    const map = _aMap = W.map;
+    _aH = (x, z) => map.heightAt(x, z); _aQ = (x, z, rr, buf) => map.queryColliders(x, z, rr, buf);
+  }
+  const dist = K.aimRayDist(o.x, o.y, o.z, _adir.x, _adir.y, _adir.z, d0, best, _aH, _aQ, _acols);
   return dist >= best - 0.6 ? hitA : null;
 }
+let _aMap = null, _aH = null, _aQ = null;

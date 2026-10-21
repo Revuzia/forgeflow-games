@@ -183,6 +183,8 @@ export function refresh(camera) {
     const h = s.handles[i];
     if (h.cell < 0) continue;
     const a = h.actor;
+    // hidden by player.js and not a teammate (whom the policy may show further out): nothing to compute
+    if (!h.visible && !(foc && a && foc.teamId != null && a.teamId === foc.teamId)) continue;
     const o = a && a.obj;
     if (!o || !o.parent) continue;
     const e = o.matrixWorld.elements;
