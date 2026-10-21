@@ -300,8 +300,8 @@ export const PLANS = {
       downtown: { kind: "core", cols: 4, rows: 4, minBlocks: 12, maxShift: 16 },
       metro: { kind: "town", cols: 3, rows: 2, minBlocks: 4, maxShift: 60 },
       overpass: { kind: "town", cols: 2, rows: 2, minBlocks: 3, maxShift: 60 },
-      yard: { kind: "yard", cols: 3, rows: 2, minBlocks: 3, maxShift: 60 },
-      mall: { kind: "town", cols: 3, rows: 2, minBlocks: 4, maxShift: 60 },
+      yard: { kind: "yard", cols: 3, rows: 2, minBlocks: 3, maxShift: 60, identity: "containers" },     // (P23: the container yard - container stacks on its biggest parcels, see applyIdentity)
+      mall: { kind: "town", cols: 3, rows: 2, minBlocks: 4, maxShift: 60, identity: "mall" },           // (P23: the Old Mall - a department store and its car park on the middle block)
       crane: { kind: "village", cols: 3, rows: 1, minBlocks: 2, maxShift: 50 },
       rubble: { kind: "village", cols: 2, rows: 1, minBlocks: 2, maxShift: 60 },
       motorpool: { kind: "yard", cols: 3, rows: 1, minBlocks: 2, maxShift: 50 },
@@ -326,7 +326,7 @@ export const PLANS = {
   deepwood: {
     theme: "lodge",
     pois: {
-      logging: { kind: "town", cols: 3, rows: 2, minBlocks: 3, maxShift: 110, reach: 440, preferGrid: true },
+      logging: { kind: "town", cols: 3, rows: 2, minBlocks: 3, maxShift: 110, reach: 440, preferGrid: true, identity: "woodyard" },     // (P23: the logging camp - woodyards with log piles)
       lakeside: { kind: "town", cols: 3, rows: 2, minBlocks: 3, maxShift: 110, reach: 440, preferGrid: true },
       ranger: { kind: "green", theme: "lodge", maxShift: 80 },
       hollow: { kind: "lane", theme: "lodge", maxShift: 70 },
@@ -933,6 +933,7 @@ function gridAttemptIn(seed, poi, S, waterY, theme, kind, opts) {
     const brng = subRng(seed, poi.id, "blk" + b.i + "," + b.j);
     pcount += fillBlock(S, brng, b, theme, kind, budget, pcount, holder);
   }
+  if (opts.identity) applyIdentity(S, L, theme, opts.identity, seed, poi);        // (P23 / LC-29: the POI's signature - container stacks, a department store, woodyards)
   settleShares(S, L, theme);
   attachStreets(L);
   for (const p of L.parcels) if (p.building) L.pads.push(padOf(p));
@@ -940,7 +941,7 @@ function gridAttemptIn(seed, poi, S, waterY, theme, kind, opts) {
   L.stats = summarize(L);
   return L;
 }
-const HARD_SHIFT = 260;                                    // m: how far a layout may move from its POI centre when the POI sits on water (maps.js snaps inland POIs up to 260 m)
+const HARD_SHIFT = 260;                                   // m: how far a layout may move from its POI centre when the POI sits on water (maps.js snaps inland POIs up to 260 m)
 function centreOf(L) {
   if (L.blocks.length) {
     let x = 0, z = 0;
@@ -1000,7 +1001,7 @@ function settleShares(S, L, theme) {
     let n = ps.filter((p) => p.building && p.building.enterable).length;
     for (const p of ps) {
       if (n >= 2) break;
-      if (p.use === "lot" || p.use === "shell") if (convertToEnterable(S, L, p, theme)) n++;
+      if ((p.use === "lot" || p.use === "shell") && !p.ident) if (convertToEnterable(S, L, p, theme)) n++;     // (P23: a POI's signature lot is never built over)
     }
   }
 }
@@ -1016,6 +1017,125 @@ function convertToEnterable(S, L, p, theme) {
   Object.assign(p, made.parcel);
   L.rooms.push(...made.inter.rooms); L.doors.push(...made.inter.doors); L.stairs.push(...made.inter.stairs);
   return true;
+}
+
+// ── POI identity (parity P2-I, LC-29) ─────────────────────────────────────────────────────────────────────────────────────────────────
+// The world audit (2026-10-20): the towns towngen lays out lost the signatures the hand-placed POIs had - the Container Yard was a street of warehouses with 5 containers on
+// the whole map (maps.js drops its authored containers where the yard town's blocks are), the Old Mall had no mall (its mall building exists only in the pre-town fallback)
+// and the Logging Camp's log piles only in the fallback too. plan.identity puts them back INSIDE the layout, after the blocks are filled and before the O3 shares settle:
+//   "containers"  the yard's biggest parcels become container lots (lot "yard", ident "containers"): rows of kit shipping containers in touching pairs with 3 m aisles between
+//                 the pairs (streetProps lays them, containerSlots below is the one packing), until the lots hold CONTAINER_TARGET slots; <= 2 lots a block, and a block keeps
+//                 >= 2 enterable buildings
+//   "mall"        the block nearest the POI becomes ONE department store (a two-storey 30 x 22.5 m shop, building.mall = true; housegen furnishes every storey of a shop that
+//                 wide as trading floors) facing the street away from the town centre, and its car park behind it
+//   "woodyard"    WOODYARD_N lots of the logging camp are yards (lot "yard", ident "woodyard"): maps.js themedLots builds a lodge town's yard as a woodyard (two round log piles,
+//                 a chopping stump, a sawhorse); existing lots first, then the smallest building parcels that fit one
+// Everything is drawn from the layout's own "ident" sub-stream; a signature lot is never converted back by settleShares (p.ident).
+export const CONTAINER_L = 6.016, CONTAINER_W = 2.884;           // kit props/shipping-container at its suggested scale (manifest bbox_m x / z; the selftest re-reads them)
+const CT_END = 0.35, CT_PAIR = 0.25, CT_AISLE = 3.0, CT_MARGIN = 0.7, CT_CROSS = 2.6;
+export const CONTAINER_TARGET = 54;                             // full slots over a yard's container lots (streetProps leaves ~12 % of them empty)
+export const CONTAINER_DROP = 0.12;
+const WOODYARD_N = 3, WOODYARD_MIN = 13;
+export const MALL_W = 30, MALL_D = 22.5, MALL_FLOORS = 2;
+/** The container slots of a lot: rows lying along the lot's long side, rows in touching pairs (0.25 m) with a 3 m aisle between pairs, containers end to end (0.35 m) with a
+ *  2.6 m cross aisle in the middle of a row of four or more, the whole block centred in the lot 0.7 m inside its edge. Pure of the rect.
+ *  -> [{ x, z, rot }] (rot 0: the container's long side along x, 1: along z), row by row. */
+export function containerSlots(rect) {
+  const w = rect[2] - rect[0], d = rect[3] - rect[1], alongX = w >= d;
+  const Lr = (alongX ? w : d) - 2 * CT_MARGIN, Sr = (alongX ? d : w) - 2 * CT_MARGIN;
+  if (Lr < CONTAINER_L || Sr < CONTAINER_W) return [];
+  let n = Math.floor((Lr + CT_END) / (CONTAINER_L + CT_END)), cross = false;
+  if (n >= 4) { cross = true; if (n * CONTAINER_L + (n - 2) * CT_END + CT_CROSS > Lr + 1e-9) n--; if (n < 4) cross = false; }
+  const runLen = n * CONTAINER_L + (n - 1) * CT_END + (cross ? CT_CROSS - CT_END : 0);
+  const along = [];
+  let u = -runLen / 2;
+  for (let k = 0; k < n; k++) { along.push(u + CONTAINER_L / 2); u += CONTAINER_L + (cross && k === (n >> 1) - 1 ? CT_CROSS : CT_END); }
+  const rows = [];
+  let used = 0;
+  for (let k = 0; ; k++) {
+    const gap = k === 0 ? 0 : k % 2 ? CT_PAIR : CT_AISLE;
+    if (used + gap + CONTAINER_W > Sr + 1e-9) break;
+    rows.push(used + gap + CONTAINER_W / 2); used += gap + CONTAINER_W;
+  }
+  const cx = (rect[0] + rect[2]) / 2, cz = (rect[1] + rect[3]) / 2, out = [];
+  for (const v0 of rows) {
+    const v = v0 - used / 2;
+    for (const a of along) out.push(alongX ? { x: r3(cx + a), z: r3(cz + v), rot: 0 } : { x: r3(cx + v), z: r3(cz + a), rot: 1 });
+  }
+  return out;
+}
+const pidNum = (p) => +String(p.id).slice(1);
+/** turn one parcel into a signature lot: its building (and the rooms / doors / stairs of its interior record) goes */
+function identityLot(L, p, lot, ident) {
+  const id = p.id;
+  for (const arr of [L.rooms, L.doors, L.stairs]) for (let i = arr.length - 1; i >= 0; i--) if (arr[i].parcel === id) arr.splice(i, 1);
+  const keep = { id, block: p.block, rect: p.rect, facing: p.facing };
+  for (const k of Object.keys(p)) delete p[k];
+  Object.assign(p, keep, { use: "lot", lot, building: null, ident });
+}
+function applyIdentity(S, L, theme, ident, seed, poi) {
+  const rng = subRng(seed, L.id, "ident");
+  const enterableIn = (bid) => L.parcels.filter((q) => q.block === bid && q.building && q.building.enterable).length;
+  const freeOf = (p) => p.use !== "shell" && !(p.use === "lot" && LANDMARK_LOTS.indexOf(p.lot) >= 0);
+  if (ident === "containers") {
+    const cand = L.parcels.filter(freeOf).map((p) => ({ p, n: containerSlots(p.rect).length, a: (p.rect[2] - p.rect[0]) * (p.rect[3] - p.rect[1]) })).filter((c) => c.n >= 6);
+    cand.sort((a, b) => b.n - a.n || b.a - a.a || pidNum(a.p) - pidNum(b.p));
+    const per = {};
+    let tot = 0;
+    for (const c of cand) {
+      if (tot >= CONTAINER_TARGET) break;
+      const bid = c.p.block;
+      if ((per[bid] || 0) >= 2) continue;
+      if (c.p.building && c.p.building.enterable && enterableIn(bid) < 3) continue;
+      identityLot(L, c.p, "yard", "containers");
+      per[bid] = (per[bid] || 0) + 1; tot += c.n;
+    }
+    L.identity = { kind: "containers", slots: tot, lots: L.parcels.filter((p) => p.ident === "containers").length };
+  } else if (ident === "woodyard") {
+    const fits = (p) => Math.min(p.rect[2] - p.rect[0], p.rect[3] - p.rect[1]) >= WOODYARD_MIN;
+    const cand = L.parcels.filter((p) => freeOf(p) && fits(p)).map((p) => ({ p, lot: p.use === "lot" ? 0 : 1, a: (p.rect[2] - p.rect[0]) * (p.rect[3] - p.rect[1]) }));
+    cand.sort((a, b) => a.lot - b.lot || a.a - b.a || pidNum(a.p) - pidNum(b.p));
+    const used = new Set();
+    let n = 0;
+    for (const c of cand) {
+      if (n >= WOODYARD_N) break;
+      const bid = c.p.block;
+      if (used.has(bid)) continue;
+      if (c.p.building && c.p.building.enterable && enterableIn(bid) < 3) continue;
+      identityLot(L, c.p, "yard", "woodyard");
+      used.add(bid); n++;
+    }
+    L.identity = { kind: "woodyard", lots: n };
+  } else if (ident === "mall") {
+    if (!L.blocks.length) return;
+    let blk = null, bd = Infinity;
+    for (const b of L.blocks) { const dd = dist2(b.cx - poi.x, b.cz - poi.z); if (dd < bd - 1e-9) { bd = dd; blk = b; } }
+    // the store faces away from the town's centre along the axis it is farther out on (a tie: the layout's own coin)
+    let gx = 0, gz = 0;
+    for (const b of L.blocks) { gx += b.cx / L.blocks.length; gz += b.cz / L.blocks.length; }
+    const ox = blk.cx - gx, oz = blk.cz - gz;
+    let f;
+    if (Math.abs(ox) > Math.abs(oz) + 1e-6) f = [ox > 0 ? 1 : -1, 0];
+    else if (Math.abs(oz) > Math.abs(ox) + 1e-6) f = [0, oz > 0 ? 1 : -1];
+    else f = FACE[Math.floor(rng() * 4)].slice();
+    const ps = L.parcels.filter((p) => p.block === blk.id);
+    if (ps.length < 2) return;
+    const ids = ps.map((p) => p.id).sort((a, b) => +a.slice(1) - +b.slice(1));
+    const at = L.parcels.indexOf(ps[0]);
+    for (const p of ps) for (const arr of [L.rooms, L.doors, L.stairs]) for (let i = arr.length - 1; i >= 0; i--) if (arr[i].parcel === p.id) arr.splice(i, 1);
+    for (let i = L.parcels.length - 1; i >= 0; i--) if (L.parcels[i].block === blk.id) L.parcels.splice(i, 1);
+    const x0 = blk.cx - PARCEL_HALF, z0 = blk.cz - PARCEL_HALF, x1 = blk.cx + PARCEL_HALF, z1 = blk.cz + PARCEL_HALF, DM = 25;
+    // the store's parcel: the DM m strip on its street side; the car park: the rest, facing the opposite street
+    const store = f[0] > 0 ? [x1 - DM, z0, x1, z1] : f[0] < 0 ? [x0, z0, x0 + DM, z1] : f[1] > 0 ? [x0, z1 - DM, x1, z1] : [x0, z0, x1, z0 + DM];
+    const park = f[0] > 0 ? [x0, z0, x1 - DM, z1] : f[0] < 0 ? [x0 + DM, z0, x1, z1] : f[1] > 0 ? [x0, z0, x1, z1 - DM] : [x0, z0 + DM, x1, z1];
+    const fit = { key: "shop", w: MALL_W, d: MALL_D, floors: MALL_FLOORS, fh: ARCH.shop.fh, use: "shop", gen: "house" };
+    const made = makeBuildingParcel(S, subRng(seed, L.id, ids[0]), ids[0], blk.id, store, f[0], f[1], fit, theme, { mall: true });
+    made.parcel.ident = "mall";
+    const lot = { id: ids[1], block: blk.id, use: "lot", lot: "parking", rect: [r3(park[0]), r3(park[1]), r3(park[2]), r3(park[3])], facing: [-f[0], -f[1]], building: null, ident: "mall" };
+    L.parcels.splice(at, 0, made.parcel, lot);
+    L.rooms.push(...made.inter.rooms); L.doors.push(...made.inter.doors); L.stairs.push(...made.inter.stairs);
+    L.identity = { kind: "mall", block: blk.id, facing: f, parcel: ids[0] };
+  }
 }
 
 // ── roads ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -2107,9 +2227,85 @@ function routeLink(S, waterY, a, b, avoid) {
   const out = [0];
   simplify(0, pts.length - 1, out);
   pts = out.map((k) => pts[k]);
+  pts = smoothRoute(pts, S, waterY, avoid, a, b);          // (P23 / LC-47: string-pull the grid's 45-degree zig-zags, then round every corner)
   let len = 0;
   for (let k = 0; k + 1 < pts.length; k++) len += dist2(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
   return { path: pts.map((p) => [r3(p[0]), r3(p[1])]), len: r3(len) };
+}
+
+// ── road smoothing (parity P2-I, LC-47) ───────────────────────────────────────────────────────────────────────────────────────────────
+// The audit: an A* route on a 12 m eight-neighbour grid, Douglas-Peucker'd at 6 m, keeps the grid's 45-degree steps and its doubling-back ends - Isla Viva and Deepwood links
+// turned up to 163 degrees at a vertex and 15-36 vertices a map turned more than 30 (a road no one would build). smoothRoute:
+//   1. string-pull: from each kept point, the FARTHEST later point the straight chord reaches while it stays a buildable road (routeOk: dry centre and edges, off every grown
+//      town rect except near the two ends, a 12 m grade <= ROUTE_GRADE) - the grid's zig-zags become one straight run
+//   2. fillet: every remaining corner becomes a circular arc of radius ROUTE_R (the tangent length capped at 45 % of either neighbour segment), drawn as chords of
+//      <= ROUTE_ARC_DEG and >= ROUTE_SEG m (maps.js drops a road piece under 8 m); an arc whose chords are not a buildable road is tried at half and a quarter of its tangent,
+//      and keeps its corner when none fits
+// Plain arithmetic, fixed order: the same on every client. Only the water maps route links (Savanna's straight links never come here).
+const ROUTE_R = 42, ROUTE_ARC_DEG = 16, ROUTE_SEG = 9, ROUTE_GRADE = 0.22;
+function routeOk(S, waterY, avoid, a, b, p, q) {
+  const dx = q[0] - p[0], dz = q[1] - p[1], L = dist2(dx, dz);
+  if (L < 1e-6) return true;
+  const n = Math.max(1, Math.ceil(L / 4)), ux = dx / L, uz = dz / L, dry = waterY + 1.0, dryEdge = waterY + 0.6;
+  let hPrev = null, sPrev = 0;
+  for (let k = 0; k <= n; k++) {
+    const t = k / n, x = p[0] + dx * t, z = p[1] + dz * t, h = S.h(x, z);
+    if (!(h >= dry) || S.h(x - uz * 5, z + ux * 5) < dryEdge || S.h(x + uz * 5, z - ux * 5) < dryEdge) return false;
+    const s = L * t;
+    if (hPrev === null) { hPrev = h; sPrev = s; } else if (s - sPrev >= 12 - 1e-9 || k === n) { if (s - sPrev > 1e-6 && Math.abs(h - hPrev) / Math.max(12, s - sPrev) > ROUTE_GRADE) return false; hPrev = h; sPrev = s; }
+    if (dist2(x - a.x, z - a.z) < 34 || dist2(x - b.x, z - b.z) < 34) continue;
+    for (const r of avoid) if (x > r[0] - 8 && x < r[2] + 8 && z > r[1] - 8 && z < r[3] + 8) return false;
+  }
+  return true;
+}
+function smoothRoute(pts, S, waterY, avoid, a, b) {
+  if (pts.length < 3) return pts;
+  const ok = (p, q) => routeOk(S, waterY, avoid, a, b, p, q);
+  // 1. string-pull (farthest reachable first; a pair that is already a DP chord is always kept, so the walk always advances)
+  const pulled = [pts[0]];
+  for (let i = 0; i < pts.length - 1;) {
+    let j = i + 1;
+    for (let k = pts.length - 1; k > i + 1; k--) if (ok(pts[i], pts[k])) { j = k; break; }
+    pulled.push(pts[j]); i = j;
+  }
+  if (pulled.length < 3) return pulled;
+  // 2. fillets
+  const outP = [pulled[0]];
+  for (let k = 1; k < pulled.length - 1; k++) {
+    const P = outP[outP.length - 1], V = pulled[k], Q = pulled[k + 1];
+    const l1 = dist2(V[0] - P[0], V[1] - P[1]), l2 = dist2(Q[0] - V[0], Q[1] - V[1]);
+    if (l1 < 1e-6 || l2 < 1e-6) { outP.push(V); continue; }
+    const u1x = (V[0] - P[0]) / l1, u1z = (V[1] - P[1]) / l1, u2x = (Q[0] - V[0]) / l2, u2z = (Q[1] - V[1]) / l2;
+    const th = Math.acos(clamp(u1x * u2x + u1z * u2z, -1, 1));
+    if (th < 0.12) { outP.push(V); continue; }                  // (< 7 degrees: a straight road)
+    const tMax = Math.min(ROUTE_R * Math.tan(th / 2), 0.45 * l1, 0.45 * l2);
+    let arc = null;
+    for (const f of [1, 0.5, 0.25]) {
+      const t = tMax * f;
+      if (t < 2) break;
+      const R = t / Math.tan(th / 2);
+      const A = [V[0] - u1x * t, V[1] - u1z * t], B = [V[0] + u2x * t, V[1] + u2z * t];
+      const cr = u1x * u2z - u1z * u2x, sg = cr > 0 ? 1 : -1;           // turn side
+      const nx = -u1z * sg, nz = u1x * sg;                             // towards the centre
+      const C = [A[0] + nx * R, A[1] + nz * R];
+      const arcLen = R * th;
+      let m = Math.max(1, Math.ceil(th * 180 / Math.PI / ROUTE_ARC_DEG));
+      while (m > 1 && arcLen / m < ROUTE_SEG) m--;
+      const a0 = Math.atan2(A[1] - C[1], A[0] - C[0]);
+      const ptsA = [A];
+      for (let s = 1; s < m; s++) { const ang = a0 + sg * th * s / m; ptsA.push([C[0] + Math.cos(ang) * R, C[1] + Math.sin(ang) * R]); }
+      ptsA.push(B);
+      let good = ok(P, A);
+      for (let s = 0; good && s + 1 < ptsA.length; s++) good = ok(ptsA[s], ptsA[s + 1]);
+      if (good) { arc = ptsA; break; }
+    }
+    if (arc) for (const q of arc) outP.push(q); else outP.push(V);
+  }
+  outP.push(pulled[pulled.length - 1]);
+  // drop a sliver (< 1 m) a fillet can leave against its neighbour's
+  const res = [outP[0]];
+  for (let k = 1; k < outP.length; k++) { const p = res[res.length - 1], q = outP[k]; if (k < outP.length - 1 && dist2(q[0] - p[0], q[1] - p[1]) < 1) continue; res.push(q); }
+  return res;
 }
 
 function buildLinks(towns, S, waterY) {
@@ -2230,6 +2426,105 @@ export function summarize(L) {
     storeys: floors, doors: L.doors.length, rooms: L.rooms.length, stairs: L.stairs.length, maxBlockRelief: rel, roadEdges: L.roads ? L.roads.edges.length : 0 };
 }
 
+// ── rotation cover (parity P2-I, LC-47) ───────────────────────────────────────────────────────────────────────────────────────────────
+// The world audit (2026-10-20, live seed 7): 43-59 % of the off-POI land was more than 20 m from anything that stops a bullet, and a straight rotation crossed up to 183 m of
+// open ground. PUBG / Warzone fields are crossed rock to rock, wall to wall, wreck to wreck. rotationCover fills the gaps the wild scatter leaves, AS DATA (maps.js builds the
+// pieces with what it already draws: the instanced rocks and cars - their baked colliders - and box walls in the structure batches; ZERO new meshes, programs or draw calls):
+//   a jittered grid of COVER_CELL[map] m cells over the map (the scatter's own extent, half - 40 m); a cell's candidate spot is skipped on water, on a slope too steep for its
+//   piece, on a road, where env.free() says no (POIs, towns, compounds, landmarks, buildings) and wherever existing cover (env.cover: the wild props and buildings so far) or a
+//   piece placed before it is within COVER_GAP m - so only the holes get cover, and a forest that already has trees gets nothing;
+//   a spot becomes one of three pieces:
+//     "rocks"  one rocks.glb outcrop at s 1.6-2.6 (its top 1.2-1.9 m: a crouch to a standing cover), plus a second, smaller one beside it 45 % of the time
+//     "wall"   a ruined wall: a straight run 3.5-6.5 m x 1.4-2.3 m x 0.5 m, an L return 2.4-3.8 m at one end half the time - QUARTER turns only (one exact box collider
+//              each; a yawed box is cut into 1 m colliders); only where the ground under it is near level. Savanna adobe / brick, Isla Viva coral stone, Deepwood field stone
+//     "car"    within 9-28 m of a road: an abandoned car beside it, parallel to the road (cars only on Savanna and Isla Viva; Deepwood's road wrecks are walls / rocks)
+// Every draw comes from the cell's own sub-stream (subRng(seed, "cover:" + map, "i,j")): a cell's piece does not depend on any other cell's dice, the map's shared stream is
+// never touched. The result is a pure function of (seed, mapId, env): env is the map's own deterministic data.
+export const COVER_CELL = { ashgrid: 38, isla_viva: 36, deepwood: 41 };
+export const COVER_GAP = 16;
+const COVER_WALL_SHARE = { ashgrid: 0.34, isla_viva: 0.26, deepwood: 0.22 };
+const COVER_CAR_SHARE = { ashgrid: 0.4, isla_viva: 0.3, deepwood: 0 };
+export const COVER_TONES = {
+  ashgrid: ["#b98a5e", "#a8774f", "#9c8268", "#8e5a40", "#b3a089"],        // adobe, fired brick, sandstone
+  isla_viva: ["#bdb3a0", "#a99f8c", "#c9bea6", "#8f877a"],                // coral stone, lime-washed rubble
+  deepwood: ["#8f8a80", "#7d786f", "#9a948a", "#6f6b63"],                 // field stone
+};
+/** rotation cover pieces. env = { half, waterY, h(x, z) base ground, free(x, z, pad) -> bool, cover: [[x, z, r]] existing hard cover, roads: [[x0, z0, x1, z1, width]] }
+ *  -> { pieces: [{ kind: "rocks", x, z, s, ry } | { kind: "car", x, z, ry } | { kind: "wall", x, z, w, h, d, quarter, tone }], stats } */
+export function rotationCover(seed, mapId, env) {
+  const C = COVER_CELL[mapId] || 32, EX = env.half - 40, n = Math.floor((EX * 2) / C), step = (EX * 2) / n;
+  const wallShare = COVER_WALL_SHARE[mapId] != null ? COVER_WALL_SHARE[mapId] : 0.25, carShare = COVER_CAR_SHARE[mapId] || 0, tones = COVER_TONES[mapId] || COVER_TONES.ashgrid;
+  const h = env.h, wy = env.waterY, roads = env.roads || [];
+  // spatial hash of the cover so far (16 m buckets)
+  const B = 16, hash = new Map();
+  const key = (i, j) => i * 65536 + j;
+  const addC = (x, z, r) => { const k = key(Math.floor(x / B), Math.floor(z / B)); const l = hash.get(k); if (l) l.push([x, z, r]); else hash.set(k, [[x, z, r]]); };
+  for (const c of env.cover || []) addC(c[0], c[1], c[2] || 0.5);
+  const coverWithin = (x, z, R) => {
+    const i0 = Math.floor((x - R - 8) / B), i1 = Math.floor((x + R + 8) / B), j0 = Math.floor((z - R - 8) / B), j1 = Math.floor((z + R + 8) / B);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const l = hash.get(key(i, j)); if (!l) continue; for (const c of l) if (dist2(c[0] - x, c[1] - z) - c[2] < R) return true; }
+    return false;
+  };
+  // the nearest road: [distance from its centreline, unit direction, half width]
+  const roadNear = (x, z) => {
+    let best = Infinity, dir = null, hw = 0;
+    for (const s of roads) {
+      const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz;
+      if (L2 < 1e-6) continue;
+      const t = clamp(((x - s[0]) * dx + (z - s[1]) * dz) / L2, 0, 1), d = dist2(x - s[0] - dx * t, z - s[1] - dz * t);
+      if (d < best) { best = d; const L = Math.sqrt(L2); dir = [dx / L, dz / L]; hw = (s[4] || ROAD_W) / 2; }
+    }
+    return { d: best, dir, hw };
+  };
+  const relief = (x, z, rx, rz) => { let lo = Infinity, hi = -Infinity; for (const [a, b] of [[0, 0], [rx, rz], [-rx, -rz], [rx, -rz], [-rx, rz]]) { const g = h(x + a, z + b); if (g < lo) lo = g; if (g > hi) hi = g; } return hi - lo; };
+  const pieces = [], st = { cells: 0, wet: 0, blocked: 0, covered: 0, rocks: 0, walls: 0, cars: 0 };
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    st.cells++;
+    const r = subRng(seed, "cover:" + mapId, i + "," + j);
+    const jx = r(), jz = r(), kindRoll = r(), v1 = r(), v2 = r(), v3 = r(), v4 = r(), v5 = r();
+    const x = r3(-EX + (i + 0.15 + jx * 0.7) * step), z = r3(-EX + (j + 0.15 + jz * 0.7) * step);
+    const g = h(x, z);
+    if (!(g >= wy + 1.0) || h(x + 4, z) < wy + 0.6 || h(x - 4, z) < wy + 0.6 || h(x, z + 4) < wy + 0.6 || h(x, z - 4) < wy + 0.6) { st.wet++; continue; }
+    if (!env.free(x, z, 6)) { st.blocked++; continue; }
+    const rn = roadNear(x, z);
+    if (rn.d < rn.hw + 3.5) { st.blocked++; continue; }
+    if (coverWithin(x, z, COVER_GAP)) { st.covered++; continue; }
+    const nearRoad = rn.d < 28 && rn.dir && carShare > 0;
+    let kind = nearRoad && kindRoll < carShare ? "car" : kindRoll < (nearRoad ? carShare : 0) + wallShare * (nearRoad ? 1 - carShare : 1) ? "wall" : "rocks";
+    if (kind === "car") {
+      // beside the road (the spot is already >= 3.5 m off the asphalt: the car's near side >= 2.2 m), parallel to it, a little askew, either way round
+      const ry = Math.atan2(rn.dir[0], rn.dir[1]) + (v1 - 0.5) * 0.5 + (v2 < 0.5 ? Math.PI : 0);
+      if (relief(x, z, 2.5, 2.5) > 0.9) kind = "rocks";
+      else { pieces.push({ kind: "car", x, z, ry: r3(ry) }); addC(x, z, 2.2); st.cars++; continue; }
+    }
+    if (kind === "wall") {
+      const w = r2(3.5 + v1 * 3), wh = r2(1.4 + v2 * 0.9), q = v3 < 0.5 ? 0 : 1, ex = q ? 0.25 : w / 2, ez = q ? w / 2 : 0.25;
+      if (relief(x, z, ex, ez) <= 0.7 && env.free(x, z, w / 2 + 1)) {
+        const tone = tones[Math.floor(v4 * tones.length) % tones.length];
+        pieces.push({ kind: "wall", x, z, w, h: wh, d: 0.5, quarter: q, tone });
+        if (v5 < 0.5) {
+          // an L return at one end, the same height, the other axis
+          const lw = r2(2.4 + v1 * 1.4), end = v2 < 0.5 ? -1 : 1, side = (v5 * 4) % 1 < 0.5 ? -1 : 1;
+          const ax = q ? 0 : end * (w / 2 - 0.25), az = q ? end * (w / 2 - 0.25) : 0;
+          const lx = r3(x + ax + (q ? side * (lw / 2 + 0.25) : 0)), lz = r3(z + az + (q ? 0 : side * (lw / 2 + 0.25)));
+          if (relief(lx, lz, q ? lw / 2 : 0.25, q ? 0.25 : lw / 2) <= 0.7 && env.free(lx, lz, lw / 2 + 1) && roadNear(lx, lz).d > rn.hw + 3.5) pieces.push({ kind: "wall", x: lx, z: lz, w: lw, h: wh, d: 0.5, quarter: 1 - q, tone });
+        }
+        addC(x, z, w / 2); st.walls++; continue;
+      }
+      kind = "rocks";
+    }
+    // rocks: an outcrop, and a smaller one beside it 45 % of the time
+    const s = r2(1.6 + v1 * 1.0), ry = r3(v2 * Math.PI * 2);
+    pieces.push({ kind: "rocks", x, z, s, ry });
+    if (v3 < 0.45) {
+      const a = v4 * Math.PI * 2, dd = 2.6 + v5 * 1.6, x2 = r3(x + Math.cos(a) * dd * s), z2 = r3(z + Math.sin(a) * dd * s);
+      if (h(x2, z2) >= wy + 1.0 && roadNear(x2, z2).d > rn.hw + 3.5 && env.free(x2, z2, 3)) pieces.push({ kind: "rocks", x: x2, z: z2, s: r2(1.45 + v5 * 0.5), ry: r3((ry + 2.1) % (Math.PI * 2)) });
+    }
+    addC(x, z, 1.4 * s); st.rocks++;
+  }
+  return { pieces, stats: st };
+}
+
 // ── street props (Wave 7, lane 7A): lights, hydrants, benches, planters, parked cars, lot dressing - as DATA, in the layout's own sub-RNG ──────────────────────────
 // Every entry is a citykit list item minus its height: { type, x, z, rot, kind }. x, z are the footprint ORIGIN of the manifest type (all these types are modelled
 // about their origin), rot is the quarter-turn index citykit takes (front +Z faces +Z, +X, -Z, -X for 0..3). maps.js puts each at the ground it stands on.
@@ -2241,6 +2536,8 @@ export const STREET_TYPES = ["props/light-curved", "props/hydrant", "props/grave
  *  (citykit recolours the saturated body texels of the car palette to it; the glass, tyres and lamps keep their own colours). Taxis and police cars keep their liveries. */
 export const CAR_TINTS = [[0xf0f0ee, 3], [0xc7cbd0, 4], [0x8c929a, 3], [0x3a3e44, 4], [0x1e2227, 3], [0x1f3553, 2], [0x5a2029, 2], [0x4b583b, 2], [0xb7a27b, 2], [0x68808f, 2], [0x7c2f26, 1.2], [0x9a6a3c, 1]];
 export const TINTABLE_CARS = ["cars/sedan", "cars/suv", "cars/hatchback-sports", "cars/van", "cars/truck", "cars/delivery"];
+/** (P23) shipping-container liveries [sRGB hex, weight]: the shipping lines' blues, a deep green, a rust red, an orange, a mustard, a cream, a grey - weathered, never saturated toys */
+export const CONTAINER_TINTS = [[0x2f4f7a, 4], [0x1f3a5c, 3], [0x2e5a3c, 2.5], [0x8a3226, 3.5], [0xb2582a, 2], [0xb08a2e, 1.5], [0xc9c2ad, 1.5], [0x6d7276, 2], [0x5e2a3a, 1]];
 const LIGHT_OFFSET = 6.4;       // m from a street centreline: the middle of the 3 m sidewalk (5 .. 8)
 const CAR_OFFSET = 3.55;        // m from a street centreline: the middle of the curb lane (a 2.55 m car spans 2.3 .. 4.8)
 const JUNCTION = 9.5;           // m from a node a street prop keeps clear (half the road + the curb radius + a car length of approach)
@@ -2337,6 +2634,16 @@ export function streetProps(L, seed) {
       add("props/planter", cx, cz - 4, 0, "planter", 0.9); add("props/planter", cx, cz + 4, 2, "planter", 0.9);
     } else if (city && LANDMARK_LOTS.indexOf(p.lot) >= 0) {
       /* a landmark lot: maps.js builds it */
+    } else if (p.ident === "containers") {
+      // (P23 / LC-29) a container lot: containerSlots, a slot left empty CONTAINER_DROP of the time, doors at either end (rot +2 on a coin), a livery each (citykit paints the
+      // container's body with the entry's tint: one InstancedMesh per part whatever the colours). Own sub-stream per lot: nothing else in the layout moves.
+      const cr = subRng(seed === undefined ? L.seed : seed, L.id, "ctr" + p.id);
+      for (const s of containerSlots(p.rect)) {
+        const drop = cr(), flip = cr() < 0.5, liv = wpick(cr, CONTAINER_TINTS, (q) => q[1])[0];
+        if (drop < CONTAINER_DROP) continue;
+        taken.push([s.x, s.z, "container", 3.2]);
+        out.push({ type: "props/shipping-container", x: s.x, z: s.z, rot: s.rot + (flip ? 2 : 0), kind: "container", tint: liv });
+      }
     } else if (city && L.kind === "yard" && w >= 14 && d >= 12) {
       const alongX = w >= d, rot = alongX ? 0 : 1;                       // a container yard: two containers (6 x 2.9 m) end to end along the lot's long side
       for (const off of [-3.4, 3.4]) add("props/shipping-container", alongX ? cx + off : cx, alongX ? cz : cz + off, rot, "container", 3.2);

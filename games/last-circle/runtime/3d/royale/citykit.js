@@ -656,6 +656,23 @@ export function createCityKit(env) {
     };
     m.customProgramCacheKey = () => "citykit-car-paint";
   }
+  // Container liveries (P23 / LC-29). The shipping-container GLB is two plain-colour materials (a grey frame, a red body). An entry with a `tint` (sRGB) paints the BODY: the
+  // most saturated part draws with a white copy of its material and the instance colour carries the paint (an entry without one keeps the authored red). One InstancedMesh per
+  // part as before - no draw call per colour; the copy is kit-owned (disposed with the palettes) and compiled by the warm-up like every kit material.
+  function paintPartOf(parts) {
+    let best = -1, bs = -1;
+    parts.forEach((q, i) => { const c = q.material && q.material.color; if (!c) return; const mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b), sat = mx > 1e-6 ? (mx - mn) / mx : 0; if (sat > bs + 1e-9) { bs = sat; best = i; } });
+    return bs > 0.3 ? best : -1;
+  }
+  function paintMaterial(src) {
+    const id = "paint:" + src.uuid;
+    if (palMats.has(id)) return palMats.get(id);
+    const m = src.clone();
+    m.color.setRGB(1, 1, 1);
+    m.name = (src.name || "kit") + ":paint";
+    palMats.set(id, m);
+    return m;
+  }
   function boxMaterial() {
     if (!proxyMat) { proxyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }); proxyMat.name = "citykit:boxes"; }
     return proxyMat;
@@ -854,10 +871,12 @@ export function createCityKit(env) {
     const M = new THREE.Matrix4(), _sc3 = new THREE.Vector3(), _carCol = new THREE.Color();
     for (const [key, list] of groups) {
       const type = list[0].type, r = glb.get(type), T = man.types[type], pal = list[0].pal;
+      const paintPi = T.role === "container" && list.some((it) => it.tint != null) ? paintPartOf(r.parts) : -1;     // (P23: a container's body wears its entry's livery)
       for (let pi = 0; pi < r.parts.length; pi++) {
         const part = r.parts[pi];
         let mat = part.material;
         if (T.palette) mat = await paletteMaterial(pal, T.double || (part.material && part.material.side === THREE.DoubleSide));
+        if (pi === paintPi) mat = paintMaterial(part.material);
         const im = new THREE.InstancedMesh(part.geometry, mat, list.length);
         im.name = "kit:" + id + ":" + type + (r.parts.length > 1 ? "#" + pi : "") + (T.palette && pal.variant !== "base" ? ":" + pal.variant : "");
         if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
@@ -871,6 +890,7 @@ export function createCityKit(env) {
           if (!part.identity) M.multiply(part.local);
           im.setMatrixAt(j, M);
           if (T.kind === "car") { _carCol.setHex(it.tint == null ? 0xffffff : it.tint); im.setColorAt(j, _carCol); }
+          else if (pi === paintPi) { if (it.tint == null) _carCol.copy(part.material.color); else _carCol.setHex(it.tint); im.setColorAt(j, _carCol); }
           sc3.copy(gs.center).applyMatrix4(M);
           const rr = gs.radius * M.getMaxScaleOnAxis();
           cen.push(sc3.x, sc3.y, sc3.z, rr);

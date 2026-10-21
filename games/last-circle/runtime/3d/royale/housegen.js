@@ -592,6 +592,7 @@ export function generate(parcel, opts) {
   const use = P.use || (rng() < TH.shop ? "shop" : "house");
   const FHu = P.fh != null ? P.fh : USE_FH[use];
   const tall = use === "tower" || use === "midrise";      // tall shells: the storeys over the walkable ones (O3) stay CLOSED
+  const store = use === "shop" && nx >= 11 && nz >= 8;    // (P23 / LC-29) a DEPARTMENT STORE (towngen's Old Mall, 30 x 22.5 m; no other shop is that wide): big trading floors on every storey, no flat upstairs
   let S = Math.min(P.storeysAsked, MAX_FLOORS);
   if (P.storeysAsked > MAX_FLOORS && !tall) notes.push("storeys " + P.storeysAsked + " -> " + MAX_FLOORS + " (O3: <= 3 walkable floors)");
   if (S >= 2 && FHu > STAIR_MAX_RISE + 1e-9) { notes.push("storeys " + S + " -> 1: a " + FHu + " m storey is too tall for a 5 m stair"); S = 1; }
@@ -622,7 +623,7 @@ export function generate(parcel, opts) {
   // ---- footprint (rectangle or L: a back corner removed)
   let cut = null;
   const wantL = P.plan === "L" ? true : P.plan === "rect" ? false : rng() < TH.L;
-  if (wantL && !tall && S <= 2 && nx >= 4 && nz >= 4 && (!strips.length || strips[0].axis === "col")) {
+  if (wantL && !tall && !store && S <= 2 && nx >= 4 && nz >= 4 && (!strips.length || strips[0].axis === "col")) {
     const side = strips.length ? (strips[0].at === 0 ? 1 : 0) : (rng() < 0.5 ? 0 : 1);       // 0 = cut on the -u side, 1 = +u side
     const cw = rint(rng, 1, Math.max(1, Math.min(nx >> 1, nx - 2 - (strips.length ? 1 : 0))));
     const cd = rint(rng, 1, Math.max(1, Math.min(nz >> 1, nz - 2)));
@@ -717,7 +718,8 @@ export function generate(parcel, opts) {
     for (let j = rj0; j < rj1; j++) for (let i = ri0; i < ri1; i++) if (type[cIdx(i, j)] === 1) restCells++;
     // about one room per 4 cells (25 m2): PUBG-sized rooms, cleared one by one, not 40 m2 halls
     const target = use === "shed" ? 1 : use === "barn" ? (restCells >= 24 ? 2 : 1) : use === "hall" ? (restCells >= 24 ? 3 : 2)
-      : use === "shop" && f === 0 ? (restCells >= 12 ? 2 : 1) : clamp(Math.round(restCells / 4), 1, 6);
+      : store ? clamp(Math.round(restCells / 14), 2, 4)
+        : use === "shop" && f === 0 ? (restCells >= 12 ? 2 : 1) : clamp(Math.round(restCells / 4), 1, 6);
     const rects = guillotine(rng, ri0, rj0, ri1, rj1, target);
     for (const r of rects) {
       const cells = [];
@@ -828,7 +830,7 @@ export function generate(parcel, opts) {
       if (root) order.push(root);
       const others = rest.filter((x) => x !== root).sort((a, b) => b.n - a.n || a.i - b.i);
       for (const o of others) order.push(o);
-      const seq = use === "shop" ? ["shop", "storage", "office", "storage"] : use === "shed" ? ["storage"] : use === "barn" ? ["barn", "storage"]
+      const seq = store ? ["shop", "shop", "storage", "office"] : use === "shop" ? ["shop", "storage", "office", "storage"] : use === "shed" ? ["storage"] : use === "barn" ? ["barn", "storage"]
         : use === "hall" ? ["warehouse", "office", "storage", "bath"] : tall ? ["lobby", "office", "storage", "bath", "office", "storage"]
           : P.theme === "lodge" || P.theme === "farm" ? ["living", "kitchen", "storage", "bedroom", "bath", "office"]
             : P.theme === "mill" ? ["warehouse", "office", "storage", "bath", "office", "storage"]
@@ -843,7 +845,7 @@ export function generate(parcel, opts) {
       }
     } else {
       const bySize = rest.slice().sort((a, b) => b.n - a.n || a.i - b.i);
-      const seq = use === "shop" && F.f === 1 ? ["office", "storage", "bedroom", "bath"] : tall ? ["office", "meeting", "bath", "office", "storage", "office"]
+      const seq = store ? ["shop", "shop", "storage", "office"] : use === "shop" && F.f === 1 ? ["office", "storage", "bedroom", "bath"] : tall ? ["office", "meeting", "bath", "office", "storage", "office"]
         : ["bedroom", "bath", "bedroom", "office", "bedroom", "storage"];
       bySize.forEach((o, k) => { o.r.kind = seq[Math.min(k, seq.length - 1)]; });
       if (bySize.length >= 3) {                                        // the bath is the SMALLEST room upstairs
