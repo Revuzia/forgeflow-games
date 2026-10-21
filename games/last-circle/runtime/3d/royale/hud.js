@@ -4054,8 +4054,9 @@ function paintSlots(W, p) {
         const def = K.WEAPONS[s.id];
         if (def && def.ammo) h("div", { position: "absolute", right: "3px", bottom: "5px", fontSize: FS(10), fontWeight: "900", textShadow: "0 1px 2px #000" }, String(p.inventory.ammo[def.ammo] || 0), cell);
       } else {
-        const img = h("img", { width: "40px", height: "36px", objectFit: "contain", display: "none" }, null, cell);
-        const glyph = h("div", { fontSize: "24px", lineHeight: "1", color: CON_COLOR[s.id] || "#8fd3a0" }, null, cell);
+        // a dark outline keeps a pale render (the olive frag) readable on a translucent cell over bright grass or sky
+        const img = h("img", { width: "40px", height: "36px", objectFit: "contain", display: "none", filter: "drop-shadow(0 0 1px rgba(0,0,0,0.9)) drop-shadow(0 1px 2px rgba(0,0,0,0.7))" }, null, cell);
+        const glyph = h("div", { fontSize: "24px", lineHeight: "1", color: CON_COLOR[s.id] || "#8fd3a0", filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.85))" }, null, cell);
         glyph.className = "lc-ic"; glyph.innerHTML = CON_ICON[s.id] || IC.shieldO;
         itemIcon(W, s.id).then((url) => {
           if (url && img.isConnected) { img.src = url; img.style.display = "block"; glyph.remove(); }
@@ -4601,7 +4602,7 @@ function wireEvents(W) {
       const hk = (W.settings && W.settings.flashReduce && !touchOn) ? 0.35 : 1;
       R.hurtTint.style.opacity = String(hk * Math.max(0.35, Math.min(1, +dmg / 60)));
     }
-    pickupMsg("FALL DAMAGE  −" + Math.round(+dmg));
+    pickupMsg("FALL DAMAGE  −" + Math.round(+dmg), (R._cbPal || CB_PAL.off).dmg);   // damage colour, not the pickup mint
     const L2 = R.dmgLog || (R.dmgLog = []);
     const last = L2[L2.length - 1];
     if (last && last.t === W.t && (last.src === "world" || last.src === "fall") && Math.abs(last.dmg - +dmg) < 0.6) last.src = "fall";
@@ -4888,9 +4889,10 @@ function flashMsg(text, ms) {
   clearTimeout(R._stormMsgT);
   R._stormMsgT = setTimeout(() => { if (R.stormMsg) R.stormMsg.style.opacity = "0"; }, ms || 2600);
 }
-function pickupMsg(text) {
+function pickupMsg(text, color) {
   if (!R.pickupMsg) return;
   R.pickupMsg.textContent = text;
+  R.pickupMsg.style.color = color || "#bfe9d2";       // the pickup mint; a damage line (fall) passes its own colour
   R.pickupMsg.style.opacity = "1";
   clearTimeout(R._pickupMsgT);
   R._pickupMsgT = setTimeout(() => { if (R.pickupMsg) R.pickupMsg.style.opacity = "0"; }, 1800);
