@@ -106,7 +106,7 @@ const STYLE_TAB = [
   /* ESPARK  */ [2,        1.00, 1.00, 0.30, 0.26, 2.3, 0, 0,    0,    0],   // the blast's sparks (HOT at a third of the light: they spawn stacked on the fireball)
   /* SKIRT   */ [C_PUFF,   0.00, 0.46, 2.20, 1.00, 1.0, 1, 0.40, 0.55, 0],   // the low dust skirt thrown out along the ground
   // ── P23/fx (C-DBNO). Additive light kept LOW (the glare bar): a ring adds ~0.1-0.2 scene-linear at its brightest texel.
-  /* DRING   */ [C_RING,   1.00, 0.85, 2.10, 0.45, 1.0, 0, 0,    0.70, 0],   // FLAT pulse expanding under a downed TEAMMATE ("over here")
+  /* DRING   */ [C_RING,   1.00, 0.85, 2.10, 0.70, 1.0, 0, 0,    0.70, 0],   // FLAT pulse expanding under a downed TEAMMATE ("over here")
   /* RRING   */ [C_RING,   1.00, 0.80, 0.45, 0.50, 1.0, 1, 0,    0.50, 0],   // FLAT ring contracting onto the downed player during a revive
   /* MOTE    */ [2,        1.00, 1.00, 0.40, 0.55, 2.3, 0, 0,    0.50, 0],   // rising light motes (revive channel / revived burst)
 ];
@@ -1013,10 +1013,13 @@ function smokeBind(W, e, s) {
     const h = (k) => hash01(e.seed + i * 131, k);
     // a squashed sphere: denser low and in the middle (the canister vents at the ground), the first puffs nearest the core
     const u = h(1), th = h(2) * 6.2832, ph = Math.acos(1 - 2 * h(3));
-    const rr = (0.12 + 0.56 * Math.cbrt(u)) * (i < 4 ? 0.5 : 1);
+    // every 4th puff is a CORE puff (whatever the tier's count): near the middle and smaller - it only thickens the
+    // middle, which the shell in front already covers, so its fill is kept down (the iGPU's smoke cost is its fill)
+    const core = (i & 3) === 0;
+    const rr = (0.12 + 0.56 * Math.cbrt(u)) * (core ? 0.5 : 1);
     let ox = Math.sin(ph) * Math.cos(th) * rr, oz = Math.sin(ph) * Math.sin(th) * rr, oy = Math.cos(ph) * rr * 0.62 - 0.08;
     e.st[o] = ox; e.st[o + 1] = oy; e.st[o + 2] = oz;
-    e.st[o + 3] = 0.78 + 0.34 * h(4);                 // quad edge / R (the puff fills its quad)
+    e.st[o + 3] = (0.78 + 0.34 * h(4)) * (core ? 0.72 : 1);   // quad edge / R (the puff fills its quad)
     e.st[o + 4] = 0.62 + 0.26 * h(5);                 // alpha
     e.st[o + 5] = h(6) * 6.2832;                      // spin
     e.st[o + 6] = (h(7) - 0.5) * 0.10;                // spin rate (rad/s)
@@ -1289,7 +1292,7 @@ function updateDbno(W, dt) {
         a._fxPulseT = 1.1;
         let busy = false;
         for (let j = 0; j < revives.length; j++) if (revives[j].a === a) { busy = true; break; }
-        if (!busy) { feetRing(a.pos.x, a.pos.y, a.pos.z, 0xff4a3a, 0.9, 0.9, ST_DRING); dbnoStats.pulseQuads++; }
+        if (!busy) { feetRing(a.pos.x, a.pos.y, a.pos.z, 0xff4a3a, 1.1, 0.9, ST_DRING); dbnoStats.pulseQuads++; }
       }
     }
   }
