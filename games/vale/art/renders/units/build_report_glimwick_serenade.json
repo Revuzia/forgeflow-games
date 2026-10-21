@@ -23,7 +23,7 @@
         "toe.R"
       ]
     },
-    "tris_sleeves": 210,
+    "tris_sleeves": 194,
     "bind_trousers": {
       "heat_ok": true,
       "unweighted": 0,
@@ -46,45 +46,41 @@
         "toe.R"
       ]
     },
-    "tris_trousers": 80,
-    "tris_dome": 400,
-    "tris_roll": 268,
-    "tris_band": 86,
-    "tris_lining": 118,
-    "tris_hollow": 58,
-    "tris_hoodlight": 78,
-    "tris_mantle": 208,
+    "tris_trousers": 56,
+    "tris_dome": 438,
+    "tris_roll": 400,
+    "tris_band": 148,
+    "tris_hoodlight": 128,
+    "tris_mantle": 188,
     "tris_cloak": 520,
-    "tris_hem_bands": 140,
-    "tris_sash": 108,
-    "tris_mitt_R": 110,
-    "tris_mitt_L": 110,
-    "tris_boot_L": 80,
-    "tris_boot_R": 80,
-    "tris_pole": 108,
-    "tris_knob": 70,
+    "tris_mitt_R": 92,
+    "tris_mitt_L": 106,
+    "tris_boot_L": 72,
+    "tris_boot_R": 72,
+    "tris_pole": 72,
+    "tris_knob": 110,
     "tris_crook": 60,
     "tris_ring": 36,
-    "tris_lamp_globe": 80,
-    "tris_lamp_cage": 170,
-    "tris_lamp_resin": 60,
-    "tris_cord": 28,
-    "validate_glimwick_serenade": "2796->2791",
-    "validate_glimwick_serenade_accent": "470->469"
+    "tris_lamp_globe": 84,
+    "tris_lamp_cage": 160,
+    "tris_lamp_resin": 56,
+    "tris_cord": 40,
+    "validate_glimwick_serenade": "2672->2669",
+    "validate_glimwick_serenade_accent": "360->359"
   },
-  "uv_coverage": 0.73,
+  "uv_coverage": 0.728,
   "bake": {
-    "base": 1.28,
-    "rough_metal": 1.01,
-    "normal": 0.58,
-    "ao": 0.51,
-    "normal_fixed_px": 29208,
-    "projection": 22.39,
-    "pack_save": 22.43,
-    "total": 25.94
+    "base": 4.95,
+    "rough_metal": 4.32,
+    "normal": 2.69,
+    "ao": 2.92,
+    "normal_fixed_px": 19574,
+    "projection": 212.72,
+    "pack_save": 213.28,
+    "total": 228.87
   },
-  "tris": 3260,
-  "mesh_top_m": 1.308,
+  "tris": 3028,
+  "mesh_top_m": 1.333,
   "clips": {
     "idle": {
       "frames": 60,
@@ -180,24 +176,24 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 893808,
+  "glb_bytes_raw": 885624,
   "optimize": {
     "ok": true,
-    "before": 893808,
-    "after": 340244
+    "before": 885624,
+    "after": 332832
   },
-  "glb_bytes": 340244,
+  "glb_bytes": 332832,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_serenade.glb (332 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: glimwick_serenade_base 1024x1024 94K, glimwick_serenade_normal 256x256 17K, glimwick_serenade_orm 256x256 19K",
-      "  skinned meshes: glimwick_serenade(3563v), glimwick_serenade_accent(231v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_serenade.glb (325 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: glimwick_serenade_base 1024x1024 90K, glimwick_serenade_normal 256x256 16K, glimwick_serenade_orm 256x256 19K",
+      "  skinned meshes: glimwick_serenade(3571v), glimwick_serenade_accent(178v)",
       "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b x_skirt_f x_skirt_l x_skirt_r)",
-      "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.833s/23tr, cast_a2:0.833s/23tr, cast_a3:0.833s/23tr, cast_ult:0.833s/23tr, channel:2.000s/19tr, dash:0.333s/25tr, death:1.500s/21tr, idle:2.000s/19tr, idle_lobby:2.000s/19tr, recall:2.000s/19tr, run:0.333s/25tr, stunned:2.000s/19tr, victory:2.000s/19tr",
-      "  tracks checked: 323; materials: body, accent; textures: body.map=1024x1024, body.normalMap=256x256, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 3260; bind-pose bounds (three units, Y up): 0.74 x 1.31 x 0.54; facing (0.00, 1.00); head bone y 0.66; runRefSpeed 3.25",
-      "  run: 10 f, planted samples 2, max foot-speed error 1.2%",
+      "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.833s/23tr, cast_a2:0.833s/23tr, cast_a3:0.833s/23tr, cast_ult:0.833s/23tr, channel:2.000s/19tr, dash:0.333s/25tr, death:1.500s/22tr, idle:2.000s/19tr, idle_lobby:2.000s/19tr, recall:2.000s/19tr, run:0.333s/25tr, stunned:2.000s/19tr, victory:2.000s/19tr",
+      "  tracks checked: 324; materials: body, accent; textures: body.map=1024x1024, body.normalMap=256x256, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 3028; bind-pose bounds (three units, Y up): 0.80 x 1.33 x 0.60; facing (0.00, 1.00); head bone y 0.66; runRefSpeed 3.25",
+      "  run: 10 f, planted samples 4, max foot-speed error 1.1%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -206,14 +202,14 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.431,
+        -0.473,
         -0.001,
         -0.252
       ],
       [
-        0.313,
-        1.308,
-        0.292
+        0.324,
+        1.333,
+        0.347
       ]
     ],
     "facing": [
@@ -221,34 +217,34 @@
       1
     ],
     "headY": 0.66,
-    "accentPct": 7.86,
-    "accentTopHalfPct": 52.5,
-    "heightPx1080": 69,
+    "accentPct": 5.78,
+    "accentTopHalfPct": 80.3,
+    "heightPx1080": 70,
     "size": [
       2400,
       900
     ],
     "clips": 15,
     "out": "art/renders/units/three_glimwick_serenade.png",
-    "seconds": 10.4,
+    "seconds": 42.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.19,
-      "model": 25.34,
-      "lows_bind": 4.0,
-      "uv": 12.3,
-      "bake": 25.94,
-      "clips": 0.24,
-      "export": 0.67,
-      "optimize": 0.42,
-      "load_test": 0.19,
-      "three_qa": 10.71,
-      "cache": 0.03
+      "rig": 0.01,
+      "materials": 0.39,
+      "model": 60.19,
+      "lows_bind": 0.08,
+      "uv": 61.33,
+      "bake": 229.08,
+      "clips": 1.21,
+      "export": 3.41,
+      "optimize": 0.76,
+      "load_test": 0.25,
+      "three_qa": 43.04,
+      "cache": 0.14
     },
-    "total_s": 80.08
+    "total_s": 400.01
   },
   "run_ref_speed": 3.25,
   "height_m": 0.93

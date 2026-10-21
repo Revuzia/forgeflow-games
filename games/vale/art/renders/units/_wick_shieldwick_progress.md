@@ -37,3 +37,39 @@ art/out/units/shieldwick_{aubade,serenade}.glb, art/renders/units/*shieldwick*.
 - Serenade lantern simplified (4 bars, larger accent globe), knob rounder, hood light smoother.
 - Colours: Aubade hood #93A7BA (blue linen), cloak #62748A; Serenade felt #B0916C / mantle #B79A74, pads #AD9C80.
 - Accent 6.2 % (A) / 7.4 % (S) at the game camera. Tris 3.18k / 3.32k, GLB 422 / 406 KiB.
+
+## 2026-10-20 14:05 resumed (usage-limit break) - hollow + crown fixes
+- Review of the 11:46 builds: Aubade hollow showed pale "shards", Serenade dome had a pale patch on the back
+  (back-plate band-erase fill), tris 3.27k / 3.39k (brief target <= 3.0k).
+- Serenade crown: `tops_full` (in the paint wrapper) re-blends the hood's top plate from n_z 0.10 (common paint
+  uses 0.55-0.85) -> uniform felt over the whole dome, patch gone. Aubade hood gets the same from n_z 0.05.
+- Hollow, three causes found one by one (flat-texture Blender renders with backface culling + face/texel probes):
+  1. the rim's inward-facing tube faces took the rim's front paint -> `hollow_ink` inks rim / hood texels whose
+     normal turns to the opening axis (inside the rim's centre line);
+  2. the lining's palette-fit gain clipped at 0.2 (painted median 0.42) -> a mid-grey pool under the hood light;
+     the lining is now pulled onto its ink (#101318 A / #15110D S);
+  3. the Aubade scarf's top rose through the hollow floor -> scarf cut 1.5 cm under the carve, its inside inked.
+  Also: `dilate_bake_maps` fills the rough/AO bakes between UV islands (common.bake leaves roughness 0 there and
+  the 256 ORM mixed it into island borders); ORM 18K -> 9K.
+- Tris trimmed (lining 380 -> 280, hood light 130 -> 80): 3118 (A) / 3244 (S); GLB ~395 KiB each.
+
+## 2026-10-20 15:20 final pass (both factions rebuilt)
+- Serenade opening lip fitted to a dark felt (#5C4A3B, brief §2.2 "dark felt rim"; it had read as a pale
+  ring); hollow linings lifted a touch to navy #141A24 (A) / umber #1C150F (S) so they read as cloth.
+- Gates: three.js load test OK, facing +Z, Aubade 3118 tris / 389 KiB / accent 6.21 % (63 % top half),
+  Serenade 3244 tris / 395 KiB / accent 7.44 % (89 % top half); mesh top 1.089 / 1.087 m (content 1.1).
+- 64 px IoU (scratchpad sil.py, front / game view): shieldwick A vs S 0.82 / 0.91 (>= 0.70); vs the other
+  kinds max 0.75 front / 0.79 game (<= 0.80).
+- Renders: three_shieldwick_{aubade,serenade}.png, three_clips_shieldwick_{aubade,serenade}.png,
+  shieldwick_beauty.png (close 3/4), shieldwick_review.png (game camera, ally/enemy tints, lane crowd),
+  shieldwick_clips.png (idle / run / attack1 / death strips, both factions).
+- Note: a --clip-sheet three_snapshot hung once under heavy machine load (killed; rerun fine).
+
+## 2026-10-20 15:47 FIX PASS start (independent review, 11 items)
+- Majors: (1) hood light invisible at 52 deg on both (0.00 %), (2) painted defects (Serenade white patch under the
+  right sleeve, white lantern-lid tip, white zig-zag cracks on both hoods, pale flecks in the S atlas top rows),
+  (3) Aubade opening: porthole + thin jagged lip + shards + octagon pill vs the concept's arch + broad chalk rim +
+  soft teardrop, (4) Serenade crown band lumpy / wavy / uneven -> clean inset glowing slit.
+- Minors: ink grooves under accents (team-0 contrast), job silhouette (disc outline, mace), crisp hems, faceting
+  on accent shapes + Aubade hood-back value step, stiffer clips (waddle, attack readability), tris <= 3.0k,
+  Serenade accent 7.4 % -> spread, metallicFactor 0.

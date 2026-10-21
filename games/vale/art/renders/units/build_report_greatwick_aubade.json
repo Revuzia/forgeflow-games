@@ -27,12 +27,12 @@
     },
     "tris_legs": 80,
     "tris_hood": 460,
-    "tris_hood_rim": 150,
+    "tris_hood_rim": 170,
     "tris_knob": 50,
     "tris_seam": 100,
     "tris_hoodlight": 40,
     "tris_cloak": 560,
-    "tris_stole": 98,
+    "tris_stole": 100,
     "tris_clasp": 40,
     "tris_clasp_core": 20,
     "tris_sleeve_R": 130,
@@ -45,28 +45,30 @@
     "tris_grip": 40,
     "tris_pommel": 40,
     "tris_hammer_head": 200,
-    "tris_hammer_bind": 70,
-    "tris_lantern_bars": 110,
-    "tris_lantern_slabs": 58,
-    "tris_lantern_glow": 70,
-    "tris_lantern_roof": 150,
-    "tris_spires": 88,
-    "tris_shelf": 50,
-    "tris_frame_posts": 88
+    "tris_hammer_bind": 120,
+    "tris_lantern_bars": 96,
+    "tris_lantern_slabs": 56,
+    "tris_lantern_glass": 40,
+    "tris_lantern_glow": 150,
+    "tris_lantern_roof": 120,
+    "tris_spires": 86,
+    "tris_shelf": 40,
+    "tris_frame_posts": 96,
+    "validate_greatwick_aubade": "2934->2933"
   },
-  "uv_coverage": 0.676,
+  "uv_coverage": 0.665,
   "bake": {
-    "base": 9.53,
-    "rough_metal": 4.73,
-    "normal": 3.34,
-    "ao": 3.94,
-    "normal_fixed_px": 17441,
-    "projection": 35.21,
-    "pack_save": 35.5,
-    "total": 58.31
+    "base": 8.55,
+    "rough_metal": 6.55,
+    "normal": 5.14,
+    "ao": 4.45,
+    "normal_fixed_px": 17115,
+    "projection": 94.25,
+    "pack_save": 94.51,
+    "total": 120.66
   },
-  "tris": 3102,
-  "mesh_top_m": 1.619,
+  "tris": 3243,
+  "mesh_top_m": 1.622,
   "clips": {
     "idle": {
       "frames": 72,
@@ -75,13 +77,13 @@
       "impact": null
     },
     "run": {
-      "frames": 10,
-      "duration_s": 0.3333,
+      "frames": 14,
+      "duration_s": 0.4667,
       "loop": true,
       "impact": null,
       "run_ref_speed": 3.2,
-      "stride_m": 0.533,
-      "cycle_s": 0.333
+      "stride_m": 0.747,
+      "cycle_s": 0.467
     },
     "attack1": {
       "frames": 30,
@@ -162,24 +164,25 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1070388,
+  "glb_bytes_raw": 1070020,
   "optimize": {
     "ok": true,
-    "before": 1070388,
-    "after": 435272
+    "before": 1070020,
+    "after": 435012,
+    "metallic_zero": 1
   },
-  "glb_bytes": 435272,
+  "glb_bytes": 435076,
   "three_load_test": {
     "ok": true,
     "log": [
       "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_aubade.glb (425 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: greatwick_aubade_base 1024x1024 105K, greatwick_aubade_normal 256x256 17K, greatwick_aubade_orm 256x256 16K",
-      "  skinned meshes: greatwick_aubade(3703v), greatwick_aubade_accent(126v)",
+      "  webp: greatwick_aubade_base 1024x1024 93K, greatwick_aubade_normal 256x256 17K, greatwick_aubade_orm 256x256 17K",
+      "  skinned meshes: greatwick_aubade(3983v), greatwick_aubade_accent(174v)",
       "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
-      "  clips: attack1:1.000s/20tr, attack2:1.000s/20tr, cast_a1:1.167s/20tr, cast_a2:1.167s/20tr, cast_a3:1.333s/20tr, cast_ult:2.000s/20tr, channel:1.333s/20tr, dash:0.667s/21tr, death:2.000s/20tr, idle:2.400s/19tr, idle_lobby:3.200s/20tr, recall:2.000s/21tr, run:0.333s/22tr, stunned:1.333s/20tr, victory:2.000s/20tr",
+      "  clips: attack1:1.000s/20tr, attack2:1.000s/20tr, cast_a1:1.167s/20tr, cast_a2:1.167s/20tr, cast_a3:1.333s/20tr, cast_ult:2.000s/20tr, channel:1.333s/20tr, dash:0.667s/21tr, death:2.000s/20tr, idle:2.400s/19tr, idle_lobby:3.200s/20tr, recall:2.000s/21tr, run:0.467s/22tr, stunned:1.333s/20tr, victory:2.000s/20tr",
       "  tracks checked: 303; materials: body, accent; textures: body.map=1024x1024, body.normalMap=256x256, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 3102; bind-pose bounds (three units, Y up): 1.11 x 1.62 x 1.11; facing (-0.00, 1.00); head bone y 0.88; runRefSpeed 3.2",
-      "  run: 10 f, planted samples 2, max foot-speed error 1.5%",
+      "  tris: 3243; bind-pose bounds (three units, Y up): 1.11 x 1.62 x 1.13; facing (-0.00, 1.00); head bone y 0.88; runRefSpeed 3.2",
+      "  run: 14 f, planted samples 4, max foot-speed error 1%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -190,12 +193,12 @@
       [
         -0.551,
         0,
-        -0.662
+        -0.66
       ],
       [
         0.559,
-        1.619,
-        0.453
+        1.622,
+        0.468
       ]
     ],
     "facing": [
@@ -203,8 +206,8 @@
       1
     ],
     "headY": 0.878,
-    "accentPct": 5.73,
-    "accentTopHalfPct": 85.8,
+    "accentPct": 5.46,
+    "accentTopHalfPct": 84.3,
     "heightPx1080": 86,
     "size": [
       2400,
@@ -212,25 +215,25 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_greatwick_aubade.png",
-    "seconds": 20.5,
+    "seconds": 53.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.05,
-      "materials": 1.61,
-      "model": 50.58,
-      "lows_bind": 0.34,
-      "uv": 30.16,
-      "bake": 58.31,
-      "clips": 3.08,
-      "export": 2.17,
-      "optimize": 0.77,
-      "load_test": 0.41,
-      "three_qa": 20.93,
-      "cache": 0.06
+      "rig": 0.0,
+      "materials": 0.96,
+      "model": 42.27,
+      "lows_bind": 0.11,
+      "uv": 19.19,
+      "bake": 120.67,
+      "clips": 34.06,
+      "export": 6.24,
+      "optimize": 1.26,
+      "load_test": 0.62,
+      "three_qa": 53.83,
+      "cache": 0.31
     },
-    "total_s": 168.77
+    "total_s": 279.62
   },
   "run_ref_speed": 3.2,
   "height_m": 1.1700000000000002

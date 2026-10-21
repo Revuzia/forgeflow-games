@@ -195,12 +195,24 @@ def grade(im: np.ndarray, fac: str, fr: dict) -> np.ndarray:
         zz[:, x0:x1] = model_z(fr, side, H)[:, None]
     if fac == "serenade":
         warm = np.clip(np.minimum(hue + 15.0, 62.0 - hue) / 8.0, 0, 1) * (mx - mn > 0.01)
+        # SAND (hood, mantle, tabard: hue 26-32 in the concept) vs UMBER (cloak, sleeves: hue 14-22): the
+        # concept paints the sand at L* 42-56, the palette wants 73 (cloth2), so the sand is lifted on its own
+        # and the cloak stays at L* 35-42: the sand-over-umber two-tone of the concept survives the grade
+        sand = np.clip((hue - 23.0) / 3.5, 0, 1) * np.clip((v - 0.26) / 0.14, 0, 1) * warm
         s2 = 0.40 * np.tanh(s / 0.40)
         s = s * (1 - warm) + s2 * warm
+        s = s * (1 - 0.18 * sand)                                     # sand felt 31 %: a little paler
         v = v * (1 - warm) + (v ** 0.88) * warm                      # lift the umber darks toward L* 40
-        v = v * ramp(zz, [(1.02, 1.0), (1.25, 1.10), (1.9, 1.12)])   # top band toward the palette (L* 70-80)
+        top = ramp(zz, [(1.02, 1.0), (1.25, 1.10), (1.9, 1.12)])     # top band toward the palette (L* 70-80)
+        gain = 1.0 + 0.36 * np.clip((0.80 - v) / 0.25, 0, 1)        # the darker the sand, the more it lifts
+        v = v * (top * (1 - sand) + np.maximum(gain, top) * sand)
+        v = np.where(v > 0.86, 0.86 + 0.14 * np.tanh((v - 0.86) / 0.14), v)
     else:
-        v = v * ramp(zz, [(0.0, 0.62), (0.14, 0.64), (0.45, 0.80), (0.90, 0.94), (1.20, 1.0)])
+        dark = ramp(zz, [(0.0, 0.62), (0.14, 0.64), (0.45, 0.80), (0.90, 0.94), (1.20, 1.0)])
+        # the chalk-white tabard, the pale staff and the cuffs keep most of their light above the feet quarter
+        # (the concept's white stole on blue-grey; the hem band, boots and cloak carry the dark bottom)
+        chalk = np.clip((v - 0.50) / 0.12, 0, 1) * np.clip((0.13 - s) / 0.06, 0, 1) * np.clip((zz - 0.36) / 0.12, 0, 1)
+        v = v * (dark + (1.0 - dark) * chalk)
         s = s * ramp(zz, [(0.0, 1.05), (0.5, 1.0)])
     v = np.clip(v, 0, 1)
     s = np.clip(s, 0, 1)

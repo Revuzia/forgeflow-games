@@ -29,7 +29,7 @@ import wick_glimwick as gw  # noqa: E402
 CACHE = os.path.join(scene.CACHE_DIR, "concept")
 OUT = gw.FIT_DIR
 WIN = (-0.62, 0.62, -0.02, 1.40)
-PROPS = {"pole", "finial", "crook", "lamp_panes", "lamp_frame", "cord", "knob_pole", "ring", "lamp_globe", "lamp_cage",
+PROPS = {"pole", "finial", "crook", "lamp_panes", "lamp_frame", "lamp_bars", "lamp_caps", "cord", "knob_pole", "ring", "lamp_globe", "lamp_cage",
          "lamp_resin"}
 
 

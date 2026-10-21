@@ -16,9 +16,9 @@ ART 2.0 (HANDOFF "Art 2.0 method", reference fighters/marund.py):
 CONCEPT SPACE vs MODEL SPACE. Each faction is sculpted where its concept paints it (concept space: metres on
 the plate frame, so the fit overlay is pixel-true), then each part is moved into the SHARED model layout by a
 small warp (`to_model`), because the two sheets disagree with each other and with the brief:
-  * Aubade: the lantern is drawn 0.37 m wide (narrower than the hood): widened x1.35 to the brief's ~0.5 m box
-    under a 0.63 m roof (wider than the shoulders, so it reads as "the house on its back"); the hood is
-    re-centred (the sheet draws it 2 cm off axis).
+  * Aubade: the hood is re-centred (the sheet draws it 2 cm off axis). The back-lantern is built in MODEL space
+    (`lantern_aubade`, AUB_LANT): a portrait dawnglass box, 0.41 x 0.30 m, 0.955-1.53 m, one tall pane per face
+    (the sheet's lantern; a first build widened it into a squat landscape case whose roof hid the glass).
   * Serenade: the sheet's whole upper body stands 13 cm taller than Aubade's (hood crown 1.33 m): the body is
     lowered (z 0.15-1.33 -> 0.15-1.25, a lower, broader dome as the brief asks) and narrowed 6 %; the drum is
     narrowed to 0.66 m and set 2 cm lower.
@@ -28,11 +28,26 @@ The projection pass inverts every warp (the PAINT POSE: vertices go back to wher
 the paint pass only; the burdam cleaver's trick, done here as a project.paint_object wrapper keyed by the
 spec's PROJECTION), so the painting lands exactly while the silhouette follows the shared layout.
 
-Paint after projection (same wrapper): per-part / per-zone TINTS move a part's painted mean onto its bible
-palette role (Serenade felt is painted at 60-78 % saturation, the palette wants 31-37 %) keeping the brush
-detail; the Aubade hem band (brief §2.4: the concept's feet are too light) is a zone tint on the cloak.
-Accent (§4): hood light (a single soft ellipsoid deep in the hollow, never two points), the hood mark (Aubade
-seams / Serenade crown band), the back-lantern panes (the biggest accent of any wick), the Aubade stole clasp.
+Paint (same wrapper): the projection paints the CLOTH only (cloak / tunic, sleeves, mitts, boots), each part
+from its own region of the plate and never from ghost colours (gw_exclude: CIE Lab tests per part, e.g. the
+sheet's ash haft across the Aubade stoles, its longer sand mantle on the Serenade tunic). Per-part / per-zone
+TINTS move a part's painted median onto its palette role keeping the brush detail; the Aubade hem band (brief
+§2.4) is a zone tint. Everything hard-surface, the trims and the hoods are PROCEDURAL-PAINTERLY (gw_proc:
+palette hex with the sheet's value structure, plus stone mottle / cracks / chips / block courses, wood grain,
+felt nap, dawnglass gradient): projected, they smeared or took the neighbours painted around them on the sheet.
+INK fills the hood hollows (the opening's tapered volume) and the cloak's neck seen through the Aubade opening;
+a value ramp darkens the Aubade's feet band.
+Accent (§4): hood light (ONE soft ellipsoid at mid-height of the opening, set back 3.5-4 cm: never two points,
+never a pool on the floor), the hood mark (Aubade seams / Serenade crown band), the back-lantern cores (Aubade:
+a tall oval on each pane + the roof light well; Serenade: the window ring), the Aubade stole clasp, the
+Serenade hammer window. No lid oculus (it read as a gem).
+
+Motion: every clip is checked against the real game mesh skinned in numpy (`_Ground`): the death is solved onto
+the ground on every frame (no float), the run's planted boots sit exactly on it and the bell never cuts it.
+
+Rule 0.1 (no tall, pointed or conical hood): the Aubade cowl is a broad helmet dome (`helmet`, a superellipse
+lathe) under a ROUND ball knob (4.5 % of the figure); the lantern's four corner spires stand at the roof corners,
+never behind the hood's axis.
 """
 from __future__ import annotations
 
@@ -183,14 +198,58 @@ def bell(c, prof_pts, depth: float, z0: float, z1: float, rmax: float):
     return Lathe(c, prof, rmax, z0 - 0.01, z1 + 0.01, axes=np.diag([1.0, 1.0 / depth, 1.0]))
 
 
-def shell_cone(c, z_top, r_top, z_bot, r_bot, thick, depth=1.0, rmax=0.6):
-    """A conical shell (capelet / mantle): the band between radius r(z) - thick and r(z), z_bot..z_top."""
+def helmet(c, a, b, h, n=3.0):
+    """A superellipsoid of revolution about Z through c: radius a in X, b in Y, half height h, exponent n
+    (n = 2 an ellipsoid; larger = broader shoulders and a flatter top, a helmet rather than an egg)."""
     def prof(r, z):
-        t = np.clip((z_top - z) / (z_top - z_bot), 0, 1)
-        rr = r_top + (r_bot - r_top) * t
+        q = ((r / a) ** n + (np.abs(z) / h) ** n) ** (1.0 / n)
+        return (q - 1.0) * min(a, h) * 0.9
+    # (Lathe.bounds maps rmax through the axes, which shrinks Y when b > a: pad rmax so the box covers b)
+    return Lathe(c, prof, max(a, b) * max(1.0, b / a) * 1.05, -h * 1.05, h * 1.05, axes=np.diag([1.0, a / b, 1.0]))
+
+
+def capelet(c, z_top, r_top, z_bot, r_bot, thick, depth=1.0, power=0.6):
+    """A thick shell of revolution whose radius grows fast under z_top and slowly toward z_bot
+    (r = r_top + (r_bot - r_top) * u ** power, u = 0 at the top): rounded shoulders, not a cone."""
+    def prof(r, z):
+        u = np.clip((z_top - z) / (z_top - z_bot), 0, 1)
+        rr = r_top + (r_bot - r_top) * u ** power
         d = np.abs(r - (rr - thick * 0.5)) - thick * 0.5
-        return np.maximum(np.maximum(d, z_bot - z), z - z_top)
-    return Lathe(c, prof, rmax, z_bot - 0.02, z_top + 0.02, axes=np.diag([1.0, 1.0 / depth, 1.0]))
+        return np.maximum(np.maximum(d, z_bot - z), z - z_top) * 0.8
+    return Lathe(c, prof, r_bot + 0.05, z_bot - 0.02, z_top + 0.02, axes=np.diag([1.0, 1.0 / depth, 1.0]))
+
+
+class TaperEllipsoid(sdf.Prim):
+    """An ellipsoid (radii rx, ry, rz about c) whose X half-width scales with height: x / s(z), s = 1 - taper *
+    (z - cz) / rz, so it narrows upward (taper > 0): the sheet's hood opening, a rounded arch over a wider sill
+    (a plain wide ellipse read as a gaping mouth)."""
+
+    def __init__(self, c, radii, taper):
+        self.c = np.asarray(c, float)
+        self.r = np.asarray(radii, float)
+        self.t = float(taper)
+
+    def bounds(self):
+        h = self.r * np.array([1.0 + abs(self.t), 1.0, 1.0])
+        return self.c - h, self.c + h
+
+    def d(self, P):
+        p = _arr(P) - self.c
+        s = np.clip(1.0 - self.t * p[:, 2] / self.r[2], 0.3, 2.0)
+        q = p.copy()
+        q[:, 0] /= s
+        k0 = np.linalg.norm(q / self.r, axis=1)
+        k1 = np.linalg.norm(q / (self.r * self.r), axis=1)
+        return k0 * (k0 - 1.0) / np.maximum(k1, 1e-9) * np.minimum(s, 1.0)
+
+    def ring(self, n: int, grow: float = 1.0, y: float | None = None):
+        """n points round the opening's outline (XZ), scaled about its centre by `grow`."""
+        t = np.linspace(0, 2 * np.pi, n + 1)[:-1]
+        z = self.r[2] * grow * np.sin(t)
+        s = 1.0 - self.t * z / self.r[2]
+        x = self.r[0] * grow * s * np.cos(t)
+        yy = np.full(n, self.c[1] if y is None else y)
+        return np.stack([self.c[0] + x, yy, self.c[2] + z], 1)
 
 
 def chips(amp, freq):
@@ -311,8 +370,9 @@ LAYOUT = {
         grip_r=(-0.305, -0.345, 0.468),  # right fist on the haft (prop.R head)
         haft=(0.925, 0.0, 0.135),        # haft direction toward the head (concept front view)
         grip_l_along=0.50,               # left fist this far along the haft
-        lantern_y=0.44,
-        topple=dict(pivot=(0.30, 0.10), corner=(0.662, 1.43), lie=77.5),   # death: back hem pivot, roof back edge
+        lantern_y=0.48,
+        topple=dict(pivot=(0.30, 0.10), corner=(0.66, 1.46), lie=67.5),    # death: back hem pivot; at `lie` the lantern
+                                                                            # and the back hem both touch (probed)
     ),
     "serenade": dict(
         crown=1.25,
@@ -323,7 +383,7 @@ LAYOUT = {
         haft=(0.995, 0.0, 0.10),
         grip_l_along=0.56,
         lantern_y=0.42,
-        topple=dict(pivot=(0.36, 0.15), corner=(0.666, 1.43), lie=81.5),
+        topple=dict(pivot=(0.36, 0.15), corner=(0.666, 1.43), lie=74.5),
     ),
 }
 
@@ -430,18 +490,21 @@ def boots_legs(L, out: list, boot_c, boot_half, toe_r, role="leather", sole_role
 
 
 def sleeves_mitts(L, out: list, concept_mitts: dict, r_up=0.085, r_fore=0.075, role="cloth", mitt_role="leather",
-                  mitt_r=0.062, body=None):
+                  mitt_r=0.062, body=None, top_dz=0.03, r_top=None):
     """Sleeves (model space, along the rest arms; heat-weighted on their own arm) and mitten fists (rigid on the
     hands, a thumb lobe). The rest pose is symmetric, the sheet's arms are not: the paint pose slides each sleeve
     progressively (0 at the shoulder, all of it at the cuff) and each fist onto the sheet's fists
-    (concept_mitts {side: concept xyz}), then undoes the faction's body warp (`body`, concept -> model)."""
+    (concept_mitts {side: concept xyz}), then undoes the faction's body warp (`body`, concept -> model).
+    top_dz / r_top: the sleeve cap's lift over the shoulder joint and its radius (a capelet over the shoulders
+    needs the cap tucked under it: the decimated lows have no room for a 1-2 cm gap)."""
     back = invert(body) if body is not None else None
     for s in ("R", "L"):
         sh, el, wr = rest_arm(L, s)
         sx = -1.0 if s == "R" else 1.0
         S = Sculpt(f"sleeve_{s}")
-        top = sh + np.array([sx * -0.02, 0.0, 0.03])
-        S.add(FlatCapsule(top, el, r_up, r_up * 0.92, r_up * 0.95, r_up * 0.9, side=(1, 0, 0)), k=0.0)
+        top = sh + np.array([sx * -0.02, 0.0, top_dz])
+        rt = r_up if r_top is None else r_top
+        S.add(FlatCapsule(top, el, rt, rt * 0.92, r_up * 0.95, r_up * 0.9, side=(1, 0, 0)), k=0.0)
         S.add(FlatCapsule(el, wr + (wr - el) * -0.12, r_fore, r_fore * 0.95, r_fore * 1.08, r_fore * 1.02, side=(1, 0, 0)), k=0.045)
         S.add(Sphere(el, r_up * 0.95), k=0.05)
         dw = (wr - el) / np.linalg.norm(wr - el)
@@ -475,13 +538,19 @@ def segment_pose(a_m, b_m, a_c, b_c):
     return f
 
 
-def hood_light(c, out: list, to_model=None):
+def hood_light(c, out: list, to_model=None, s: float = 1.0, radii=(0.088, 0.034, 0.052)):
     g = Sculpt("hoodlight")
-    g.add(Ellipsoid(c, (0.088, 0.034, 0.052)), k=0.0)        # one soft volume, wider than tall: never eyes
+    g.add(Ellipsoid(c, tuple(r * s for r in radii)), k=0.0)        # one soft volume, wider than tall: never eyes
     out.append(SP("hoodlight", g, "accent", "bone:head", 40, 0.8, to_model=to_model))
 
 
 # ══ AUBADE (concept space: front x = (px - 573) / 762, z = (1372 - py) / 762) ══════════════════════════════
+# the hood opening (concept space; the hood's own axis): a carve centred BEHIND the cowl's front so its full
+# section meets the curved cowl (centred in front of it, the hole came out 0.25 x 0.24 instead of 0.33 x 0.34)
+AUB_OPEN_C = np.array([-0.024, -0.17, 0.915])
+AUB_OPEN = (AUB_OPEN_C, (0.165, 0.17, 0.172), 0.28)
+
+
 def aubade_parts(L: dict) -> list:
     out: list = []
     hood_tf = shift(dx=0.022)
@@ -491,41 +560,51 @@ def aubade_parts(L: dict) -> list:
     hood.add(Ellipsoid(hc + (0, 0, -0.03), (0.25, 0.25, 0.245)), k=0.0)              # widest low: an arch, not a ball
     hood.add(Ellipsoid(hc + (0, 0.08, -0.11), (0.20, 0.14, 0.15)), k=0.07)              # nape, swept back + down
     hood.add(Ellipsoid(hc + (0, 0.03, -0.155), (0.268, 0.245, 0.09)), k=0.07)           # drape over the shoulders
-    hood.add(Ellipsoid(hc + (0, 0.0, 0.04), (0.215, 0.24, 0.235)).displaced(chips(0.003, 6.0), 0.003), k=0.03)
-    opening = Ellipsoid((-0.026, -0.25, 0.905), (0.19, 0.235, 0.168))
-    hood.sub(opening, k=0.018)
+    # the crown: a broad helmet dome (a superellipse lathe, n = 3: 0.43 m wide at 1.10 m like the sheet, flat
+    # on top at 1.19 m). An ellipsoid here narrowed into a bullet over the pale cowl (rule 0.1): never again.
+    hood.add(helmet((-0.022, 0.02, 0.95), 0.238, 0.245, 0.24, 3.0).displaced(chips(0.003, 6.0), 0.003), k=0.03)
+    # the opening: the sheet's rounded arch, narrow at the brow (0.11 m at 1.04) and widest low (0.28 m at
+    # 0.83), 0.30 m tall (0.765-1.065). The first build's 0.38 x 0.34 oval read as a gaping mouth.
+    opening = TaperEllipsoid(*AUB_OPEN)
+    hood.sub(opening, k=0.016)
     out.append(SP("hood", hood, "cloth2", "bone:head", 460, to_model=hood_tf))
-    # the carved chalk rim (3-4 cm) around the opening, laid on the cowl's surface
-    t = np.linspace(0, 2 * np.pi, 33)[:-1]
-    ring = np.stack([-0.026 + 0.205 * np.cos(t), np.full(len(t), -0.30), 0.905 + 0.183 * np.sin(t)], 1)
-    ring = onto(hood, ring, lift=0.004)
+    # the carved chalk rim (3.8 cm) round the opening, laid on the cowl's surface, coming to a soft point at the
+    # chin like the sheet's
+    # a FLAT carved band (a sunk 2.4 cm tube: 1.2 cm proud, 4 cm wide), not a round roll (a pale roll round a
+    # dark hole read as lips)
+    ring = opening.ring(48, grow=1.15, y=-0.30)
+    ring[:, 2] -= 0.04 * np.clip(-(ring[:, 2] - AUB_OPEN_C[2]) / 0.198, 0, 1) ** 4 * np.clip(
+        1 - np.abs(ring[:, 0] - AUB_OPEN_C[0]) / 0.09, 0, 1)
+    ring = onto(hood, ring, lift=-0.010)
     rim = Sculpt("hood_rim")
     pts = np.vstack([ring, ring[:1]])
-    rim.add(Tube(pts, [0.021] * len(pts), k=0.01), k=0.0)
-    out.append(SP("hood_rim", rim, "chalk", "bone:head", 150, 0.7, to_model=hood_tf))
-    # the knob: a small round chalk knob with a short point (crown 1.205 -> tip 1.275: 4.7 % of the figure)
+    rim.add(Tube(pts, [0.022] * len(pts), k=0.008), k=0.0)
+    out.append(SP("hood_rim", rim, "chalk", "bone:head", 170, 0.7, to_model=hood_tf))
+    # the knob: a small ROUND chalk knob on a collar ring (crown 1.19 -> top 1.257: 4.5 % of the figure). No
+    # point on it: over a pale cowl with a dark opening a tip is the one silhouette rule 0.1 forbids.
     knob = Sculpt("knob")
-    kc = np.array([-0.024, 0.005, 1.226])
-    knob.add(Sphere(kc, 0.031), k=0.0)
-    knob.add(RoundCone(kc + (0, 0, 0.012), kc + (0, 0, 0.048), 0.02, 0.005), k=0.012)
-    knob.add(Torus(kc + (0, 0, -0.022), 0.03, 0.009), k=0.01)
+    kc = np.array([-0.024, 0.005, 1.217])
+    knob.add(Ellipsoid(kc + (0, 0, -0.004), (0.037, 0.037, 0.036)), k=0.0)       # (all 50 tris on the ball: round)
     out.append(SP("knob", knob, "chalk", "bone:head", 50, 0.6, to_model=hood_tf))
     # the hood mark: accent seams from the rim's top corners over the crown to the knob, one down the back
     seam = Sculpt("seam")
     for sx in (-1, 1):
         a = np.linspace(0, 1, 9)
-        p0 = np.array([-0.026 + sx * 0.13, -0.17, 1.06])
+        p0 = np.array([AUB_OPEN_C[0] + sx * 0.115, -0.19, 1.07])        # the rim's upper corners
         p1 = kc + (sx * 0.03, -0.01, -0.02)
         mid = (p0 + p1) / 2 + np.array([sx * 0.04, -0.03, 0.06])
         pts = (1 - a)[:, None] ** 2 * p0 + 2 * (a * (1 - a))[:, None] * mid + (a ** 2)[:, None] * p1
         pts = onto(hood, pts, lift=0.002)
-        seam.add(Tube(pts, [0.0115] * len(pts), k=0.006), k=0.006)
+        seam.add(Tube(pts, [0.0135] * len(pts), k=0.006), k=0.006)
     ang = np.radians(np.linspace(8, 150, 14))
     back = np.stack([np.full(len(ang), -0.024), 0.02 + 0.30 * np.sin(ang), 0.93 + 0.30 * np.cos(ang)], 1)
     back = onto(hood, back, lift=0.002)
-    seam.add(Tube(back, [0.0115] * len(back), k=0.006), k=0.006)
+    seam.add(Tube(back, [0.0135] * len(back), k=0.006), k=0.006)
     out.append(SP("seam", seam, "accent", "bone:head", 100, 0.55, to_model=hood_tf))
-    hood_light(np.array([-0.026, -0.11, 0.805]), out, to_model=hood_tf)
+    # the light: ONE soft ellipsoid at mid-height of the opening, set back 3.5 cm behind the lip plane (y -0.24),
+    # wider than tall (rule 0.2). The first build's flat pool on the hollow's floor sat on the lower lip like a
+    # tongue in a mouth.
+    hood_light(np.array([AUB_OPEN_C[0], -0.145, 0.89]), out, to_model=hood_tf, radii=(0.066, 0.032, 0.045))
 
     # ── BODY: a straight-folded cloak bell to the shins, a pointed hem, chalk stoles, a dawnglass clasp ──────
     cloak = Sculpt("cloak")
@@ -543,18 +622,23 @@ def aubade_parts(L: dict) -> list:
     cloak.inter(HalfSpace((0, 0, 0.115), (0, 0, -1), 1.0).displaced(hem_cut, 0.04), k=0.004)
     out.append(SP("cloak", cloak, "cloth", ("gw_cloak",), 560))
     # chalk stoles over the cloak's front edges (the sheet: x -0.20..-0.10 and -0.02..+0.09, chin to 0.13)
+    # each ends in the sheet's slanted cut, lower on the inner edge (the first build's 45-degree tips read as
+    # loose pale shards at the hem)
     stole = Sculpt("stole")
-    for x0, x1 in ((-0.200, -0.098), (-0.018, 0.088)):
+    for (x0, x1), (zi, zo) in (((-0.200, -0.110), (0.150, 0.200)), ((-0.022, 0.078), (0.150, 0.190))):
         xc, hw = (x0 + x1) / 2, (x1 - x0) / 2
-        top, bot = np.array([xc, -0.17, 0.74]), np.array([xc, -0.305, 0.235])
+        top, bot = np.array([xc, -0.17, 0.74]), np.array([xc, -0.32, 0.12])
         top = onto(cloak, top[None], lift=0.011)[0]
         bot = onto(cloak, bot[None], lift=0.011)[0]
         d = bot - top
         Ld = np.linalg.norm(d)
         ax = sdf.frame(d / Ld, (1, 0, 0))
-        stole.add(RoundBox((top + bot) / 2, (hw, 0.011, Ld / 2), 0.008, axes=ax), k=0.0)
-        tip = bot + d / Ld * 0.035
-        stole.add(RoundBox(tip, (hw * 0.62, 0.010, 0.04), 0.008, axes=sdf.rot_y(45) @ ax), k=0.01)
+        S1 = Sculpt("s1")
+        S1.add(RoundBox((top + bot) / 2, (hw, 0.011, Ld / 2), 0.008, axes=ax), k=0.0)
+        xin, xout = (x1, x0) if xc < -0.05 else (x0, x1)
+        slope = (zo - zi) / (xout - xin)
+        S1.inter(HalfSpace((xin, 0.0, zi), (slope, 0.0, -1.0), 1.0), k=0.006)
+        stole.add(field_of(S1), k=0.0)
     out.append(SP("stole", stole, "chalk", ("gw_cloak",), 100, 0.8))
     # the dawnglass clasp between the stoles (a chalk ring around an accent core)
     cc = onto(cloak, np.array([[-0.058, -0.25, 0.62]]), lift=0.012)[0]
@@ -609,82 +693,100 @@ def hammer_aubade(L, out):
         a = head_c - d * 0.128 + up * 0.10 * sg + np.array([0, -0.09, 0])
         b = head_c - d * 0.128 - up * 0.10 * sg + np.array([0, 0.09, 0])
         st.add(Capsule(a, b, 0.016), k=0.004)
+        for fy in (-1, 1):                      # and crossed over the front and back faces (seen from the camera)
+            a = head_c + d * 0.095 * sg + up * 0.125 + np.array([0, fy * 0.108, 0])
+            b = head_c - d * 0.095 * sg - up * 0.125 + np.array([0, fy * 0.108, 0])
+            st.add(Capsule(a, b, 0.014), k=0.004)
     st.add(Torus(head_c - d * 0.16, 0.034, 0.013, axes=sdf.frame(d)), k=0.006)
-    out.append(SP("hammer_bind", st, "stone", "bone:prop.R", 70, 0.6))
+    out.append(SP("hammer_bind", st, "stone", "bone:prop.R", 120, 0.6))
+
+
+# the Aubade back-lantern (model space): a PORTRAIT dawnglass box. The first build widened the sheet's box into
+# a squat landscape case with cross-mullioned windows (a cottage window / TV read) whose roof hid the glass from
+# the game camera; the sheet's lantern is narrow and tall with one tall pane per face and a glowing core.
+AUB_LANT = dict(hw=0.205, hd=0.150, z_base=0.955, z_pane=(0.995, 1.405), z_cap=1.440, z_eave=1.462, z_ridge=1.530,
+                post=0.026, eave=0.030)
 
 
 def lantern_aubade(L, out):
-    """The box lantern on the back (concept: frame x 440-725 px = 0.37 m, panes 1.13-1.40 m, roof slab to
-    1.52 m, four corner spires to 1.62 m, a pale ash shelf 1.05-1.12 m on a back frame)."""
+    """Body 0.41 x 0.30 m, 0.955-1.53 m (brief: body 0.92-1.48, roof to 1.52): a chalk base slab, four chalk
+    corner posts that run on up into the four corner spires (upward lines), ONE tall dawnglass pane per face
+    (0.41 m tall) with a tall glowing core oval on it (the accent: it shows from the front over the hood, from the
+    sides and the back), a chalk cap course, a low four-sided roof with a small eave and a square light well
+    (the core from above), on a pale ash shelf and carrying frame. Panes are `dawnglass` (glossy, not emissive),
+    the cores are `accent`."""
+    A = AUB_LANT
     yl = L["lantern_y"]
-    sx = 1.35                                    # widen to the brief's box (wider than the shoulders)
-    xc = 0.012
-    lt = compose(scale_about((xc, 0, 0), (sx, 1, 1)), shift(dx=-xc))
-    hw, hd = 0.185, 0.155                        # concept half width; model half depth (Y)
-    z0, z1 = 1.135, 1.40
-    # uprights and slabs are separate parts: a cage with four windows is genus 5 and collapses shut under a
-    # 200-tri decimation; bars and plates decimate cleanly
+    hw, hd, po = A["hw"], A["hd"], A["post"]
+    zp0, zp1 = A["z_pane"]
+    zb, zc, ze, zr = A["z_base"], A["z_cap"], A["z_eave"], A["z_ridge"]
+    # corner posts (separate bars: a cage is genus 5 and collapses under a small decimation)
     bars = Sculpt("lantern_bars")
     for px in (-1, 1):
         for py in (-1, 1):
-            c0 = np.array([xc + px * hw, yl + py * hd, (z0 + z1) / 2])
-            bars.add(RoundBox(c0, (0.019, 0.026, (z1 - z0) / 2 + 0.01), 0.008), k=0.0)
-    for py in (-1, 1):                               # a mullion in the front and back faces
-        bars.add(RoundBox((xc, yl + py * (hd + 0.004), (z0 + z1) / 2), (0.011, 0.012, (z1 - z0) / 2), 0.005), k=0.0)
-    slabs_t = RoundBox((xc, yl, (z0 + z1) / 2 + 0.02), (hw + 0.006, hd + 0.008, 0.012), 0.006)   # the transom
-    out.append(SP("lantern_bars", bars, "chalk", "bone:chest", 110, 0.8, to_model=lt))
+            c0 = np.array([px * (hw - po), yl + py * (hd - po), (zb + zc) / 2])
+            bars.add(RoundBox(c0, (po, po, (zc - zb) / 2 + 0.004), 0.007), k=0.0)
+    out.append(SP("lantern_bars", bars, "chalk", "bone:chest", 96, 0.8))
+    # base slab + cap course (chalk plates, a little wider than the posts)
     slabs = Sculpt("lantern_slabs")
-    slabs.add(RoundBox((xc, yl, z0 - 0.005), (hw + 0.02, hd + 0.025, 0.018), 0.01), k=0.0)
-    slabs.add(RoundBox((xc, yl, z1 - 0.006), (hw + 0.012, hd + 0.018, 0.014), 0.008), k=0.0)
-    slabs.add(slabs_t, k=0.0)
-    out.append(SP("lantern_slabs", slabs, "chalk", "bone:chest", 60, 0.8, to_model=lt))
-    pane = Sculpt("lantern_glow")
-    pane.add(RoundBox((xc, yl, (z0 + z1) / 2 + 0.005), (hw - 0.004, hd - 0.006, (z1 - z0) / 2 - 0.02), 0.012), k=0.0)
-    pane.add(RoundBox((xc, yl, 1.47), (0.07, 0.068, 0.04), 0.012), k=0.0)                # the core, up the light well
-    out.append(SP("lantern_glow", pane, "accent", "bone:chest", 70, 0.8, to_model=lt))
-    # the roof: a thick chalk slab with a low four-sided top
+    slabs.add(RoundBox((0, yl, zb + 0.016), (hw + 0.016, hd + 0.016, 0.022), 0.009), k=0.0)
+    slabs.add(RoundBox((0, yl, (zp1 + zc) / 2), (hw + 0.010, hd + 0.010, (zc - zp1) / 2 + 0.003), 0.008), k=0.0)
+    out.append(SP("lantern_slabs", slabs, "chalk", "bone:chest", 56, 0.8))
+    # the glass: one box inset 1.5 cm behind the post faces (one tall pane per face)
+    glass = Sculpt("lantern_glass")
+    glass.add(RoundBox((0, yl, (zp0 + zp1) / 2), (hw - 0.015, hd - 0.015, (zp1 - zp0) / 2 + 0.004), 0.010), k=0.0)
+    out.append(SP("lantern_glass", glass, "dawnglass", "bone:chest", 36, 0.8))
+    # the glowing cores: a tall oval lens on each pane (half sunk into the glass) + the light well's core
+    glow = Sculpt("lantern_glow")
+    zm, hz = (zp0 + zp1) / 2 + 0.01, (zp1 - zp0) / 2 - 0.07
+    for py in (-1, 1):                             # front / back faces (normal -Y / +Y)
+        glow.add(Ellipsoid((0, yl + py * (hd - 0.015), zm), (hw - 0.10, 0.011, hz)), k=0.0)
+    for px in (-1, 1):                             # side faces
+        glow.add(Ellipsoid((px * (hw - 0.015), yl, zm), (0.011, hd - 0.085, hz)), k=0.0)
+    glow.add(RoundBox((0, yl, zr - 0.012), (0.050, 0.044, 0.016), 0.010), k=0.0)
+    out.append(SP("lantern_glow", glow, "accent", "bone:chest", 150, 0.6))
+    # the roof: an eave course + a low four-sided top (ridge flat at the light well), a 3 cm overhang only
     roof = Sculpt("lantern_roof")
-    rh, rd = 0.236, 0.21
+    rh, rd = hw + A["eave"], hd + A["eave"]
 
-    def slope(P):                                # a low four-sided top: 1.522 at the ridge, 1.452 at the eaves
-        q = np.abs(P - np.array([xc, yl, 0.0]))
-        return -(1.452 + 0.07 * (1 - np.maximum(q[:, 0] / rh, q[:, 1] / rd)))
-    roof.add(RoundBox((xc, yl, 1.455), (rh, rd, 0.06), 0.014), k=0.0)
-    roof.add(RoundBox((xc, yl, 1.48), (rh - 0.01, rd - 0.01, 0.045), 0.02), k=0.01)
-    roof.inter(sdf.Displaced(HalfSpace((xc, yl, 0.0), (0, 0, 1), 3.0), slope, 0.2), k=0.008)
-    roof.add(RoundBox((xc, yl, 1.415), (rh + 0.012, rd + 0.012, 0.016), 0.008), k=0.006)   # the eave course
-    roof.sub(RoundBox((xc, yl, 1.53), (0.072, 0.07, 0.05), 0.012), k=0.006)              # the light well (from above)
-    out.append(SP("lantern_roof", roof, "chalk", "bone:chest", 150, 0.9, to_model=lt))
-    # four short corner spires (no centre spire: it would line up with the hood knob, rule 0.1)
+    def slope(P):                                  # zr at the light well's rim, ze at the eave line
+        q = np.abs(P - np.array([0.0, yl, 0.0]))
+        f = np.clip(np.maximum((q[:, 0] - 0.07) / (rh - 0.07), (q[:, 1] - 0.065) / (rd - 0.065)), 0, 1)
+        return -(ze + (zr - ze) * (1 - f))
+    roof.add(RoundBox((0, yl, (zc + zr) / 2), (rh, rd, (zr - zc) / 2), 0.012), k=0.0)
+    roof.inter(sdf.Displaced(HalfSpace((0, yl, 0.0), (0, 0, 1), 3.0), slope, 0.2), k=0.006)
+    roof.sub(RoundBox((0, yl, zr + 0.02), (0.058, 0.052, 0.04), 0.010), k=0.004)             # the light well
+    out.append(SP("lantern_roof", roof, "chalk", "bone:chest", 120, 0.8))
+    # four short corner spires on the post lines (to 1.62 front, 1.60 back); never on the hood's axis
     sp = Sculpt("spires")
     for px in (-1, 1):
         for py in (-1, 1):
-            # placed in MODEL space at the widened roof corners; their own map shifts them back for paint
-            c = np.array([px * (rh * sx - 0.03), yl + py * (rd - 0.03), 1.47])
-            sp.add(Sphere(c + (0, 0, 0.02), 0.026), k=0.0)
-            sp.add(RoundCone(c + (0, 0, 0.03), c + (0, 0, 0.15 if py < 0 else 0.12), 0.019, 0.003), k=0.01)
-    out.append(SP("spires", sp, "chalk", "bone:chest", 90, 0.6,
-                  to_concept=lambda P: np.c_[np.sign(_arr(P)[:, 0]) * (np.abs(_arr(P)[:, 0]) - 0.115) + xc, _arr(P)[:, 1:]]))
-    # the pale ash shelf under the box and the back frame: two posts on the back of the hood to a cross bar
-    sh = Sculpt("frame")
-    sh.add(RoundBox((xc, yl, 1.09), (hw + 0.04, hd + 0.03, 0.022), 0.008).displaced(lambda P: 0.002 * np.sin(P[:, 0] * 120), 0.002), k=0.0)
-    out.append(SP("shelf", sh, "wood", "bone:chest", 50, 0.8, to_model=lt))
+            c = np.array([px * (hw - po + 0.004), yl + py * (hd - po + 0.004), ze])
+            top = 1.62 if py < 0 else 1.60
+            sp.add(RoundBox(c + (0, 0, 0.012), (0.026, 0.026, 0.016), 0.008), k=0.0)            # a plinth
+            sp.add(RoundCone(c + (0, 0, 0.03), c + (0, 0, top - ze), 0.020, 0.004), k=0.008)
+    out.append(SP("spires", sp, "chalk", "bone:chest", 88, 0.6))
+    # the pale ash shelf under the box and the carrying frame: two uprights up the back (waist to the shelf's
+    # front edge), a cross bar at the waist and two brackets under the shelf's back edge
+    sh = Sculpt("shelf")
+    sh.add(RoundBox((0, yl, zb - 0.014), (hw + 0.032, hd + 0.03, 0.016), 0.006), k=0.0)
+    out.append(SP("shelf", sh, "wood", "bone:chest", 40, 0.8))
     fr = Sculpt("frame_posts")
     for px in (-1, 1):
-        # an upright on the back (over the hood's nape) and a brace up to the shelf's far edge: a carrying frame
-        a = np.array([xc + px * 0.15, 0.245, 0.66])
-        b = np.array([xc + px * 0.15, 0.315, 1.075])
-        fr.add(RoundBox((a + b) / 2, (0.032, 0.028, np.linalg.norm(b - a) / 2), 0.01,
+        a = np.array([px * 0.15, 0.245, 0.64])
+        b = np.array([px * 0.15, yl - hd + 0.03, zb - 0.02])
+        fr.add(RoundBox((a + b) / 2, (0.026, 0.024, np.linalg.norm(b - a) / 2), 0.008,
                         axes=sdf.frame((b - a) / np.linalg.norm(b - a), (1, 0, 0))), k=0.0)
-        c = np.array([xc + px * 0.15, yl + 0.13, 1.075])
-        e = np.array([xc + px * 0.15, 0.27, 0.80])
-        fr.add(RoundBox((c + e) / 2, (0.024, 0.022, np.linalg.norm(c - e) / 2), 0.008,
+        c = np.array([px * 0.15, yl + hd - 0.035, zb - 0.025])
+        e = np.array([px * 0.15, 0.29, 0.80])
+        fr.add(RoundBox((c + e) / 2, (0.020, 0.019, np.linalg.norm(c - e) / 2), 0.007,
                         axes=sdf.frame((c - e) / np.linalg.norm(c - e), (1, 0, 0))), k=0.006)
-    fr.add(RoundBox((xc, 0.255, 0.72), (0.17, 0.024, 0.028), 0.009, axes=sdf.rot_x(-10)), k=0.01)   # bottom cross bar
-    out.append(SP("frame_posts", fr, "wood", "bone:chest", 90, 0.8, to_model=shift(dx=-xc)))
+    fr.add(RoundBox((0, 0.252, 0.70), (0.17, 0.022, 0.026), 0.008, axes=sdf.rot_x(-10)), k=0.008)   # cross bar
+    out.append(SP("frame_posts", fr, "wood", "bone:chest", 96, 0.8))
 
 
 # ══ SERENADE (concept space: front x = (px - 527) / 754.5, z = (1353 - py) / 754.5) ════════════════════════
+SER_OPEN = (np.array([-0.035, -0.185, 0.99]), (0.19, 0.19, 0.155), 0.16)
 SER_BODY = compose(zmap([(0.0, 0.0), (0.15, 0.15), (1.33, 1.25), (1.6, 1.4789)]), scale_about((0, 0, 0), (0.94, 1, 1)))
 
 
@@ -696,58 +798,84 @@ def serenade_parts(L: dict) -> list:
     hc = np.array([-0.035, 0.03, 1.07])
     hood = Sculpt("hood")
     hood.add(Ellipsoid(hc, (0.238, 0.245, 0.26)), k=0.0)
-    hood.add(Ellipsoid(hc + (0, 0.07, -0.13), (0.25, 0.21, 0.16)), k=0.07)
+    hood.add(Ellipsoid(hc + (0, 0.05, -0.12), (0.245, 0.19, 0.145)), k=0.06)          # the nape (above the collar roll)
     hood.add(Ellipsoid(hc + (0, 0.0, 0.03), (0.236, 0.24, 0.23)).displaced(lambda P: 0.003 * NOISE.fbm(P, 22.0, 2), 0.003), k=0.02)
-    hood.sub(Ellipsoid((-0.035, -0.26, 1.0), (0.205, 0.235, 0.152)), k=0.02)              # a rounded arch, not a slit
+    opening = TaperEllipsoid(*SER_OPEN)                                                      # a rounded arch, not a slit
+    hood.sub(opening, k=0.02)
     out.append(SP("hood", hood, "cloth2", "bone:head", 420, to_model=hood_tf))
-    # the dark felt rim round the opening (wide, soft) and the rolled collar under it
-    t = np.linspace(0, 2 * np.pi, 33)[:-1]
-    ring = np.stack([-0.035 + 0.232 * np.cos(t), np.full(len(t), -0.32), 1.0 + 0.178 * np.sin(t)], 1)
+    # the dark felt rim round the opening (wide, soft: thin over the brow, full at the chin); 48 stations and its
+    # own budget (with the collar in one 220-tri part it decimated into an octagon)
+    ring = opening.ring(48, grow=1.13, y=-0.32)
+    tt = np.linspace(0, 2 * np.pi, 49)[:-1]
     ring = onto(hood, ring, lift=0.006)
     rim = Sculpt("hood_rim")
     pts = np.vstack([ring, ring[:1]])
-    rr = 0.026 + 0.016 * np.clip(-np.sin(np.r_[t, t[:1]]), 0, 1)                       # thin over the brow, full at the chin
+    rr = 0.026 + 0.016 * np.clip(-np.sin(np.r_[tt, tt[:1]]), 0, 1)
     rim.add(Tube(pts, rr.tolist(), k=0.02), k=0.0)
-    rim.add(Torus((-0.035, 0.03, 0.89), 0.205, 0.052, rz=0.045), k=0.04)                 # rolled collar
-    out.append(SP("hood_rim", rim, "under", "bone:head", 220, 0.8, to_model=hood_tf))
+    out.append(SP("hood_rim", rim, "under", "bone:head", 180, 0.75, to_model=hood_tf))
+    # the rolled felt collar: a thick dark roll round the hood's foot, under the chin at the front and riding up
+    # to 1.0 m at the back where the sheet shows it above the mantle (it was buried in the hood's nape)
+    col = Sculpt("collar")
+    ax_c = np.diag([1.0, 1 / 1.18, 1.0]) @ sdf.rot_x(-21.0)
+    col.add(Torus((-0.035, 0.035, 0.90), 0.232, 0.050, axes=ax_c, rz=0.044).displaced(
+        lambda P: 0.003 * NOISE.fbm(P, 18.0, 2), 0.003), k=0.0)
+    out.append(SP("collar", col, "under", "bone:head", 150, 0.8, to_model=hood_tf))
     # the hood mark: an accent crown band round the dome, arching over the opening at the front
     a = np.linspace(0, 2 * np.pi, 41)
     zc = 1.105 + 0.11 * np.clip(-np.sin(a), 0, 1) ** 1.5
     band = np.stack([-0.035 + 0.30 * np.cos(a), 0.03 + 0.30 * np.sin(a), zc], 1)
     band = onto(hood, band, lift=0.003)
     cb = Sculpt("crown_band")
-    cb.add(Tube(band, [0.016] * len(band), k=0.008), k=0.0)
+    cb.add(Tube(band, [0.0185] * len(band), k=0.008), k=0.0)
     out.append(SP("crown_band", cb, "accent", "bone:head", 110, 0.55, to_model=hood_tf))
-    hood_light(np.array([-0.035, -0.12, 0.905]), out, to_model=hood_tf)
+    # the light: one soft ellipsoid at mid-height of the opening, set back ~4 cm (rule 0.2; the first build's pool
+    # lay low on the hollow's floor)
+    hood_light(np.array([SER_OPEN[0][0], -0.15, 0.975]), out, to_model=hood_tf, radii=(0.072, 0.032, 0.046))
 
     # ── BODY: wide umber bell, two dark hem bands, a belt, the sand mantle with pointed lapels ───────────────
     tunic = Sculpt("cloak")
-    prof = [(0.15, 0.452), (0.24, 0.452), (0.40, 0.415), (0.55, 0.37), (0.70, 0.33), (0.82, 0.29), (0.92, 0.22)]
+    # above the belt the tunic only has to stay inside the mantle (it never shows there): kept 5-7 cm in, so the
+    # decimated lows cannot cross (they did: umber patches through the sand mantle)
+    prof = [(0.15, 0.452), (0.24, 0.452), (0.40, 0.415), (0.55, 0.37), (0.70, 0.305), (0.80, 0.225), (0.92, 0.15)]
     tunic.add(bell((-0.0, 0.0, 0.0), prof, 0.80, 0.15, 0.93, 0.48).displaced(folds(0.010, 7, zfade=(0.6, 0.2), warp=1.2), 0.01), k=0.0)
     tunic.add(Torus((0.0, 0.0, 0.205), 0.43, 0.052, axes=np.diag([1.0, 1 / 0.80, 1.0]), rz=0.055), k=0.02)     # rolled hem band
     tunic.add(Torus((0.0, 0.0, 0.315), 0.428, 0.02, axes=np.diag([1.0, 1 / 0.80, 1.0])), k=0.012)              # upper band
     tunic.add(Torus((0.0, 0.0, 0.59), 0.355, 0.024, axes=np.diag([1.0, 1 / 0.82, 1.0]), rz=0.022), k=0.012)    # belt
     tunic.inter(HalfSpace((0, 0, 0.15), (0, 0, -1), 1.0), k=0.01)
-    out.append(SP("cloak", tunic, "cloth", ("gw_cloak",), 600, to_model=body))
+    out.append(SP("cloak", tunic, "cloth", ("gw_cloak",), 560, to_model=body))
     mantle = Sculpt("mantle")
-    mantle.add(shell_cone((-0.03, 0.02, 0.0), 0.955, 0.24, 0.70, 0.43, 0.035, depth=0.86).displaced(
-        folds(0.008, 6, cx=-0.03, cy=0.02, warp=1.0), 0.008), k=0.0)
+    # a thick felt capelet (8 cm: a thin shell decimates into a zigzag rim) with ROUNDED shoulders (a convex
+    # profile: a straight cone read as a lampshade), soft folds
+    mantle.add(capelet((-0.03, 0.02, 0.0), 0.95, 0.23, 0.625, 0.455, 0.08, depth=0.86).displaced(
+        folds(0.005, 6, cx=-0.03, cy=0.02, warp=1.0), 0.005), k=0.0)
 
     def lapels(P):
-        """two pointed lapels either side of the front (the sheet's mantle), a soft scallop elsewhere"""
+        """two pointed lapels either side of a V collar notch at the front (the sheet's mantle: the hood's chin
+        sits in the V), a smooth edge elsewhere (a scallop here decimated into a torn-paper zigzag)"""
         a = np.arctan2(P[:, 1] - 0.02, P[:, 0] + 0.03) + np.pi / 2       # 0 = the front
         a = (a + np.pi) % (2 * np.pi) - np.pi
         pts = np.zeros(len(P))
         for c in (-0.42, 0.42):
             pts = np.maximum(pts, np.clip(1 - np.abs(a - c) / 0.22, 0, 1) ** 1.6)
-        scal = 0.25 * np.clip(np.cos(a * 6.0), 0, 1) ** 2 * (np.abs(a) > 0.8)
-        return -0.075 * pts - 0.02 * scal
-    mantle.inter(HalfSpace((0, 0, 0.745), (0, 0, -1), 1.0).displaced(lapels, 0.06), k=0.01)
-    out.append(SP("mantle", mantle, "cloth2", "auto", 240, to_model=compose(shift(dx=0.03), body)))
+        notch = np.clip(1 - np.abs(a) / 0.28, 0, 1) ** 1.3
+        # the back hangs lower in a soft U between the frame posts (the sheet: 0.66 m at the centre, 0.78 at the
+        # shoulder blades); the first build cut it dead straight at 0.745
+        back = _smooth01((np.abs(a) - 1.55) / 1.3) ** 1.2
+        return -0.08 * pts + 0.21 * notch - 0.085 * back
+    mantle.inter(HalfSpace((0, 0, 0.745), (0, 0, -1), 1.0).displaced(lapels, 0.3), k=0.03)        # a rolled edge
+    out.append(SP("mantle", mantle, "cloth2", "auto", 400, to_model=compose(shift(dx=0.03), body)))
+    # leather straps from the frame posts over the shoulders (the sheet's back view), laid on the mantle
+    st = Sculpt("straps")
+    for sx in (-1, 1):
+        pts = np.array([[sx * 0.215 - 0.03, 0.30, 0.92], [sx * 0.265 - 0.03, 0.20, 0.905], [sx * 0.285 - 0.03, 0.06, 0.88],
+                        [sx * 0.275 - 0.03, -0.08, 0.845], [sx * 0.25 - 0.03, -0.17, 0.80]])
+        pts = onto(mantle, pts, lift=0.008)
+        st.add(Tube(pts, [0.019] * len(pts), k=0.01), k=0.0)
+    out.append(SP("straps", st, "leather", "auto", 70, 0.7, to_model=compose(shift(dx=0.03), body)))
 
     # ── ARMS, FISTS, LEGS, BOOTS ───────────────────────────────────────────────────────────────────────
     sleeves_mitts(L, out, {"R": (-0.365, -0.36, 0.53), "L": (0.24, -0.36, 0.56)}, r_up=0.092, r_fore=0.085,
-                  mitt_r=0.07, body=body)
+                  mitt_r=0.07, body=body, top_dz=-0.025, r_top=0.078)
     boots_legs(L, out, (0.205, -0.04, 0.055), (0.085, 0.115, 0.055), 0.08)
 
     hammer_serenade(L, out, body)
@@ -786,7 +914,7 @@ def hammer_serenade(L, out, body):
     for sz in (-1, 1):
         bands.add(Torus(head_c + up * sz * 0.075, 0.13, 0.024, axes=ax, rz=0.028), k=0.0)
     bands.add(Torus(head_c - d * 0.13, 0.04, 0.013, axes=sdf.frame(d)), k=0.006)         # haft collar
-    out.append(SP("hammer_bands", bands, "sandstone", "bone:prop.R", 90, 0.7, to_concept=pose))
+    out.append(SP("hammer_bands", bands, "sandstone", "bone:prop.R", 80, 0.7, to_concept=pose))
     win = Sculpt("hammer_window")
     wc_ = head_c + d * 0.122
     win.add(Ellipsoid(wc_, (0.012, 0.055, 0.055), axes=ax), k=0.0)
@@ -809,34 +937,37 @@ def lantern_serenade(L, out, body):
     bands.add(Torus((xc, yl, 1.438), R0 - 0.025, 0.052, axes=ax_oval, rz=0.04).displaced(chips(0.007, 9.0), 0.007), k=0.0)
     out.append(SP("drum_bands", bands, "ironstone", "bone:chest", 190, 0.9, to_model=lt))
     ups = Sculpt("drum_posts")                       # ironstone uprights between the windows (separate bars)
-    for i in range(10):
-        a = 2 * math.pi * (i + 0.5) / 10 - math.pi / 2
+    for i in range(8):
+        a = 2 * math.pi * (i + 0.5) / 8 - math.pi / 2
         c = np.array([xc + (R0 - 0.035) * math.cos(a), yl + (R0 - 0.035) * sy * math.sin(a), 1.33])
-        ups.add(RoundBox(c, (0.022, 0.022, 0.085), 0.008, axes=sdf.rot_z(math.degrees(a) + 90)), k=0.0)
-    out.append(SP("drum_posts", ups, "ironstone", "bone:chest", 120, 0.8, to_model=lt))
+        ups.add(RoundBox(c, (0.020, 0.022, 0.085), 0.008, axes=sdf.rot_z(math.degrees(a) + 90)), k=0.0)
+    out.append(SP("drum_posts", ups, "ironstone", "bone:chest", 100, 0.8, to_model=lt))
     glow = Sculpt("drum_glow")
-    glow.add(Lathe((xc, yl, 0), lambda r, z: np.maximum(r - (R0 - 0.05), np.maximum(1.245 - z, z - 1.418)), R0, 1.23, 1.43,
+    # the windows: the glowing ring flush with the posts' faces (8 cm back inside the bands, the upper band hid
+    # most of it from the game camera)
+    glow.add(Lathe((xc, yl, 0), lambda r, z: np.maximum(r - (R0 - 0.018), np.maximum(1.24 - z, z - 1.42)), R0, 1.22, 1.44,
                    axes=ax_oval), k=0.0)
-    glow.add(Capsule((xc, yl, 1.42), (xc, yl, 1.535), 0.095), k=0.0)                        # the core up the oculus
     out.append(SP("drum_glow", glow, "accent", "bone:chest", 80, 0.8, to_model=lt))
+    # no oculus in the lid (the sheet's lid is a closed padded dome): a glowing disc set in a ring of converging
+    # straps read as a faceted gem from the game camera, round or not (bible: no gems). The window ring shows
+    # over the hood, from the sides and from the 52-degree camera.
     lid = Sculpt("drum_lid")
 
     def lid_prof(r, z):
         q = np.sqrt((r / 0.30) ** 2 + ((z - 1.47) / 0.09) ** 2)
         return np.maximum((q - 1.0) * 0.09, 1.465 - z)
     lid.add(Lathe((xc, yl, 0), lid_prof, 0.32, 1.45, 1.57, axes=ax_oval).displaced(lambda P: 0.003 * NOISE.fbm(P, 20.0, 2), 0.003), k=0.0)
-    lid.sub(Capsule((xc, yl, 1.53), (xc, yl, 1.62), 0.10), k=0.01)                      # the oculus (from above)
     out.append(SP("drum_lid", lid, "cloth2", "bone:chest", 130, 0.9, to_model=lt))
     straps = Sculpt("lid_straps")
     for i in range(4):
         a = math.pi / 4 + i * math.pi / 2
         pts = []
-        for tt in np.linspace(0.40, 1.0, 6):
+        for tt in np.linspace(0.0, 1.0, 6):
             r = 0.30 * tt
             pts.append((xc + r * math.cos(a), yl + r * sy * math.sin(a), 1.47 + 0.09 * math.sqrt(max(0.0, 1 - tt * tt)) + 0.006))
-        straps.add(Tube(np.array(pts), [0.015] * 6, k=0.005), k=0.005)
-    straps.add(Torus((xc, yl, 1.548), 0.11, 0.018), k=0.006)                             # ironstone ring round the oculus
-    out.append(SP("lid_straps", straps, "leather", "bone:chest", 80, 0.6, to_model=lt))
+        straps.add(Tube(np.array(pts), [0.015] * len(pts), k=0.005), k=0.005)
+    straps.add(Ellipsoid((xc, yl, 1.562), (0.036, 0.036, 0.016)), k=0.008)              # the button where they cross
+    out.append(SP("lid_straps", straps, "wood", "bone:chest", 72, 0.6, to_model=lt))     # walnut (light side)
     # walnut posts from the drum's underside down to the belt at the back (model space; the paint follows the
     # sheet's back view: x +-0.265 at z 1.18 -> +-0.12 at z 0.64)
     posts = Sculpt("frame_posts")
@@ -861,45 +992,109 @@ GRADE = {
     "aubade": dict(sat=1.0, top_lift=1.0, glow=(0.84, 0.18)),
     "serenade": dict(sat=0.62, top_lift=1.05, glow=(0.78, 0.45)),
 }
-_A_LANT = (0.012, LAYOUT["aubade"]["lantern_y"])
+_A_LANT = (0.0, LAYOUT["aubade"]["lantern_y"])
 _S_LANT = (0.015, LAYOUT["serenade"]["lantern_y"])
+_AL = AUB_LANT
+# procedural-painterly parts (gw_proc): every hard-surface prop and the trims. Projected, they smeared: a part
+# whose sculpt runs where the sheet paints something else takes that paint (the sheet's X binding across the chalk
+# head, its haft across the stoles, streaks down the sides of the drum bands). Painted here from the palette with
+# the sheet's value structure (lit tops, key from the front-left, darker undersides), brush-scale mottling, chips,
+# cracks, stone courses and wood grain, they stay crisp at any distance.
+_CHALK = {"kind": "stone", "hex": "#D6D3CA", "light": (0.80, 1.07), "cracks": 0.07, "crack_t": 0.72, "freq": 6.0,
+          "mottle": 0.05}
+_ASH = {"kind": "wood", "hex": "#B9AB93", "light": (0.82, 1.08)}
+_IRON = {"kind": "stone", "hex": "#5C5149", "light": (0.80, 1.30), "cracks": 0.18, "freq": 9.0, "chip_light": 0.30}
+_WALNUT = {"kind": "wood", "hex": "#5A4436", "light": (0.82, 1.18)}
 PAINT = {
     "aubade": {
         # own-region erosion (plate cells of 2 px = ~5 mm): wide where the sheet's outline runs inside the sculpt
-        "gw_erode": {"*": 4, "hood": 7, "hood_rim": 2, "knob": 2, "stole": 2, "clasp": 1, "haft": 2, "grip": 1,
-                     "pommel": 2, "boot_L": 2, "boot_R": 2, "mitt_L": 3, "mitt_R": 3, "frame_posts": 2, "shelf": 2,
-                     "lantern_roof": 3},
-        "gw_flatpaint": {"spires": None, "lantern_bars": None, "lantern_slabs": None, "legs": None},
+        "gw_erode": {"*": 4, "hood": 7, "boot_L": 2, "boot_R": 2, "mitt_L": 3, "mitt_R": 3},
+        "gw_proc": {
+            "legs": {"kind": "flat"},
+            # the hood flat-painterly (the sheet's own look: a smooth blue-grey cowl, lighter on the crown):
+            # projected, its sides took the chalk rim and the ash frame painted around / behind it on the sheet
+            "hood": {"kind": "flat", "hex": "#9AA8B8", "light": (0.80, 1.20), "key": 0.07, "noise": 0.06},
+            "hood_rim": dict(_CHALK, light=(0.78, 1.06)), "knob": _CHALK, "clasp": _CHALK, "pommel": _CHALK,
+            "stole": {"kind": "felt", "hex": "#DAD6CC", "light": (0.84, 1.05), "nap": 0.025},
+            "hammer_head": dict(_CHALK, hex="#C9C4B9", light=(0.74, 1.05), cracks=0.10, chip_light=0.0),
+            "hammer_bind": {"kind": "felt", "hex": "#8C97A2", "light": (0.80, 1.10), "bands": 0.35},
+            "grip": {"kind": "felt", "hex": "#8C97A2", "light": (0.80, 1.10), "bands": 0.35},
+            "haft": _ASH, "shelf": _ASH,
+            "frame_posts": dict(_ASH, segs="frame"),
+            "lantern_bars": _CHALK, "lantern_slabs": _CHALK, "spires": dict(_CHALK, cracks=0.05),
+            "lantern_roof": _CHALK,
+            "lantern_glass": {"kind": "glass", "hex": "#A9C4DC",
+                              "box": (0.0, _A_LANT[1], _AL["hw"] - 0.015, _AL["hd"] - 0.015, *_AL["z_pane"])},
+        },
         "gw_top": {
-            "lantern_roof": {"kind": "roof", "box": (_A_LANT[0], _A_LANT[1], 0.248, 0.222), "from": 0.5},
+            "lantern_roof": {"kind": "roof", "box": (_A_LANT[0], _A_LANT[1], _AL["hw"] + _AL["eave"], _AL["hd"] + _AL["eave"]),
+                             "from": 0.5},
             "hood": {"kind": "patch", "rect": (-0.09, 1.125, 0.05, 1.185), "tile": 0.10, "from": 0.6},
-            "shelf": {"kind": "patch", "side": "back", "rect": (-0.20, 1.075, 0.20, 1.105), "tile": 0.2, "from": 0.6},
             "sleeve_L": {"kind": "patch", "rect": (-0.385, 0.58, -0.32, 0.68), "tile": 0.08, "from": 0.6},
             "sleeve_R": {"kind": "patch", "rect": (-0.385, 0.58, -0.32, 0.68), "tile": 0.08, "from": 0.6},
         },
+        # ghost paint the projected cloth must not take (CIE L*a*b* tests on the plate): the sheet's warm ash haft
+        # and frame (b* > 3), its chalk stoles / hammer (L* > 80), the black gap of its open robe (L* < 20)
+        "gw_exclude": {"cloak": {"b_gt": 3.0, "L_gt": 80.0, "L_lt": 20.0},
+                       "sleeve_L": {"b_gt": 3.0, "L_gt": 80.0}, "sleeve_R": {"b_gt": 3.0, "L_gt": 80.0},
+                       "mitt_L": {"b_gt": 3.0, "L_gt": 80.0}, "mitt_R": {"b_gt": 3.0, "L_gt": 80.0}},
         # (part, zone (z0, z1) in concept space or None, target hex (None = the part's role), strength)
-        "gw_tints": [("cloak", (0.0, 0.175), "#3E434A", 0.85), ("cloak", (0.175, 2.0), "#6E7A86", 0.45),
-                     ("hood", None, "#AEB9C4", 0.5)],
-        # the hood's hollow (the opening recess of aubade_parts): ink-dark, a little lighter at the lip
-        "gw_ink": [("hood", (-0.026, -0.25, 0.905), (0.19, 0.235, 0.168), "#15171B")],
+        "gw_tints": [("cloak", (0.0, 0.175), "#3E434A", 0.85), ("cloak", (0.175, 2.0), "#6E7A86", 0.65),
+                     ("sleeve_L", None, "#6E7A86", 0.55), ("sleeve_R", None, "#6E7A86", 0.55)],
+        # the hood's hollow (the opening recess of aubade_parts, its taper too): ink-dark; the cloak's neck that
+        # shows at the back of the hollow is inked as well (it read as a chin)
+        "gw_ink": [("hood", AUB_OPEN[0], (0.175, 0.185, 0.182), "#15171B", AUB_OPEN[2]),
+                   ("cloak", AUB_OPEN[0], (0.185, 0.20, 0.19), "#15171B", AUB_OPEN[2])],
+        # the bottom quarter measured L* 50-54 at the game camera (lineup_qa; target 30-38): darken the lower bell,
+        # the stoles' lower ends and the boots; the chalk hammer (the job read at hip height) is left alone
+        "gw_ramp": [{"stops": [(0.0, 0.60), (0.18, 0.68), (0.36, 0.82), (0.55, 0.96), (0.7, 1.0)],
+                     "skip": ("hammer_head", "hammer_bind", "haft", "grip", "pommel")},
+                    # the pale stoles fade into the dark hem band (front bottom quarter L* 52 at the game camera)
+                    {"stops": [(0.15, 0.62), (0.35, 0.80), (0.55, 1.0)], "only": ("stole",)}],
     },
     "serenade": {
-        "gw_erode": {"*": 4, "hood": 6, "hood_rim": 3, "crown_band": 1, "haft": 2, "pommel": 2, "boot_L": 2,
-                     "boot_R": 2, "mitt_L": 3, "mitt_R": 3, "frame_posts": 2, "hammer_bands": 2, "drum_bands": 2,
-                     "drum_posts": 1},
-        "gw_flatpaint": {"lid_straps": None, "legs": None},
+        "gw_erode": {"*": 4, "hood": 6, "boot_L": 2, "boot_R": 2, "mitt_L": 3, "mitt_R": 3},
+        "gw_proc": {
+            "legs": {"kind": "flat"},
+            # the mantle flat-painterly: the sheet paints tunic and collar where the shell sits (its arms cover the
+            # shoulders), and the own-region fill left hard-edged sand/umber patches on it
+            "mantle": {"kind": "flat", "light": (0.80, 1.10), "key": 0.05},
+            "hood": {"kind": "flat", "hex": "#C9AF8A", "light": (0.78, 1.12), "key": 0.07, "noise": 0.06},
+            "hood_rim": {"kind": "felt", "hex": "#3E332C", "light": (0.85, 1.30), "nap": 0.06},
+            "collar": {"kind": "felt", "hex": "#3E332C", "light": (0.80, 1.35), "nap": 0.06},
+            "straps": {"kind": "felt", "hex": "#4A3A2F", "light": (0.80, 1.25), "nap": 0.03},
+            "haft": _WALNUT, "pommel": _IRON,
+            "hammer_head": dict(_IRON, blocks="hammer"),
+            "hammer_bands": {"kind": "stone", "hex": "#C3A47A", "light": (0.80, 1.10), "cracks": 0.10, "freq": 10.0},
+            # the drum is the top quarter at the game camera (L* 51-54, the bible's top band 70-85): its ironstone
+            # is painted a weathered, lighter grey-brown with lit tops; the lid's felt lit
+            "drum_bands": dict(_IRON, hex="#74695F", light=(0.82, 1.38), chip_light=0.35, blocks="drum"),
+            "drum_posts": dict(_IRON, hex="#6E635A"),
+            "drum_lid": {"kind": "felt", "hex": "#CDB48F", "light": (0.86, 1.12), "nap": 0.05},
+            "lid_straps": {"kind": "wood", "hex": "#8A6C4E", "light": (0.85, 1.20)},
+            "frame_posts": dict(_WALNUT, segs="posts"),
+        },
         "gw_top": {
             "drum_lid": {"kind": "lid", "disc": (_S_LANT[0], _S_LANT[1], 0.30, 0.30 * 0.62), "from": 0.35},
             "hood": {"kind": "patch", "rect": (-0.16, 1.235, 0.04, 1.30), "tile": 0.10, "from": 0.6},
             "mantle": {"kind": "patch", "rect": (-0.36, 0.78, -0.22, 0.88), "tile": 0.10, "from": 0.55},
-            "hammer_head": {"kind": "patch", "rect": (0.36, 0.70, 0.56, 0.76), "tile": 0.10, "from": 0.6},
         },
-        "gw_tints": [("cloak", None, "#765E4E", 0.55), ("hood", None, "#C9AF8A", 0.85), ("mantle", None, "#C9AF8A", 0.6),
-                     ("hood_rim", None, "#4B4039", 0.35)],
-        "gw_ink": [("hood", (-0.035, -0.26, 1.0), (0.205, 0.235, 0.152), "#17150F"),
-                   ("hood_rim", (-0.035, -0.26, 1.0), (0.19, 0.235, 0.14), "#17150F")],
+        # the sheet's sand mantle hangs lower than the model's at the back (a sand ghost on the tunic): the
+        # projected umber cloth never takes sand-light paint
+        "gw_exclude": {"cloak": {"L_gt": 55.0}, "sleeve_L": {"L_gt": 58.0}, "sleeve_R": {"L_gt": 58.0}},
+        "gw_tints": [("cloak", None, "#7E6553", 0.6)],
+        "gw_ink": [("hood", SER_OPEN[0], (0.20, 0.20, 0.165), "#17150F", SER_OPEN[2]),
+                   ("hood_rim", SER_OPEN[0], (0.185, 0.20, 0.15), "#17150F", SER_OPEN[2])],
         "gw_inner": {"mantle": ((-0.03, 0.02), 0.45)},
+        "gw_ramp": [],
     },
+}
+# wood grain directions: per part, the segments (paint space) whose nearest one gives a texel its grain axis
+_SEGS = {
+    "frame": [((s * 0.15, 0.245, 0.64), (s * 0.15, 0.36, 0.935)) for s in (-1, 1)] +
+             [((s * 0.15, 0.595, 0.93), (s * 0.15, 0.29, 0.80)) for s in (-1, 1)] +
+             [((-0.17, 0.252, 0.70), (0.17, 0.252, 0.70))],
+    "posts": [((s * 0.265 + 0.015, 0.34, 1.18), (s * 0.12 + 0.015, 0.255, 0.64)) for s in (-1, 1)],
 }
 
 
@@ -934,6 +1129,47 @@ def _install() -> None:
 
         bind_part._greatwick = True
         pipeline.bind_part = bind_part
+    from common import export
+    if not getattr(export.optimize, "_greatwick", False):
+        orig_opt = export.optimize
+
+        def optimize(path, *a, **kw):
+            res = orig_opt(path, *a, **kw)
+            out = kw.get("out") or (a[0] if a else None) or path
+            if os.path.basename(out).startswith("greatwick_"):
+                res["metallic_zero"] = glb_metallic_zero(out)
+            return res
+
+        optimize._greatwick = True
+        export.optimize = optimize
+
+
+def glb_metallic_zero(path: str) -> int:
+    """Bible: every material has metalness 0. The exporter writes no metallicFactor (glTF default 1.0) and the
+    lossy-WebP ORM's metal channel picks up chroma noise from AO / roughness (up to 107/255 on stone): set
+    metallicFactor 0 on every material so the texture's B channel is ignored. Returns the materials patched."""
+    import json
+    import struct
+    with open(path, "rb") as fh:
+        data = fh.read()
+    magic, ver, _ = struct.unpack_from("<III", data, 0)
+    if magic != 0x46546C67:
+        return 0
+    jlen, jtype = struct.unpack_from("<II", data, 12)
+    js = json.loads(data[20:20 + jlen].decode("utf-8"))
+    rest = data[20 + jlen:]
+    n = 0
+    for m in js.get("materials", []):
+        pbr = m.setdefault("pbrMetallicRoughness", {})
+        if pbr.get("metallicFactor", 1.0) != 0.0:
+            pbr["metallicFactor"] = 0.0
+            n += 1
+    raw = json.dumps(js, separators=(",", ":")).encode("utf-8")
+    raw += b" " * ((4 - len(raw) % 4) % 4)
+    body = struct.pack("<II", len(raw), jtype) + raw + rest
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<III", magic, ver, 12 + len(body)) + body)
+    return n
 
 
 # ── the paint pass ─────────────────────────────────────────────────────────────────────────────────────
@@ -1052,7 +1288,8 @@ def paint_greatwick(obj, size, cfg, names, part_attr, log):
     erode = cfg.get("gw_erode") or {}
     pal = cfg.get("gw_palette") or {}
     roles = cfg.get("gw_roles") or {}
-    flatp = cfg.get("gw_flatpaint") or {}
+    procp = cfg.get("gw_proc") or {}
+    excl = cfg.get("gw_exclude") or {}
     cols, ok = {}, {}
     mask_img = None
     if cfg.get("gw_mask"):
@@ -1081,6 +1318,7 @@ def paint_greatwick(obj, size, cfg, names, part_attr, log):
             inside = np.zeros(sh, dtype=bool)
             inside[:mm.shape[0], :mm.shape[1]] = mm
             inside = _erode(inside, 2)
+        lab = _lab(small) if excl else None
         okk = np.ones(len(k), dtype=bool)
         for kk in np.unique(k):
             sel = k == kk
@@ -1090,6 +1328,10 @@ def paint_greatwick(obj, size, cfg, names, part_attr, log):
                 rm = reg & inside
                 if rm.sum() > max(8, 0.25 * reg.sum()):
                     reg = rm
+            if nm in excl and reg.any():               # ghost paint (another object on the sheet): never sampled
+                ex = _excluded(lab, excl[nm])
+                if (reg & ~ex).sum() > max(6, 0.15 * reg.sum()):
+                    reg = reg & ~ex
             if not reg.any():
                 reg = vis.part[side] == kk
             if not reg.any():
@@ -1107,27 +1349,29 @@ def paint_greatwick(obj, size, cfg, names, part_attr, log):
     col = cols["front"] * (1 - wb[:, None]) + cols["back"] * wb[:, None]
     neither = ~ok["front"] & ~ok["back"]
     col = _tint_texels(col, p, k, names, cfg, log)
-    # flat-painterly parts (and parts no plate shows): role colour, brush-scale value noise, top light
+    # procedural-painterly parts (and parts no plate shows: flat in their role colour)
     for kk in np.unique(k):
         nm = names[kk]
         sel = k == kk
-        if nm in flatp or (neither & sel).any():
-            hexc = flatp.get(nm) or pal.get(roles.get(nm, ""), "#808080")
-            base = np.asarray(scene.hex_srgb(hexc), np.float32)
-            pp = p[sel]
-            v = 1.0 + 0.07 * NOISE.fbm(pp, 9.0, 3) + 0.04 * NOISE(pp, 31.0)
-            top = 0.86 + 0.22 * _smooth01((nrm[sel, 2] + 0.4) / 1.2)
-            col[sel] = np.clip(base[None, :] * (v * top)[:, None], 0, 1)
-    # the hood hollows: ink, deepest at the back, a little lighter toward the lip (never black)
-    for nm, c0, rr, hexc in cfg.get("gw_ink") or []:
+        if nm in procp or (neither & sel).any():
+            spec = procp.get(nm) or {"kind": "flat"}
+            spec = dict(spec, hex=spec.get("hex") or pal.get(roles.get(nm, ""), "#808080"))
+            col[sel] = PROC_PAINTERS[spec["kind"]](p[sel], nrm[sel], spec)
+    # the hood hollows: ink (the opening's tapered volume grown a little), deepest at the back, barely lighter at
+    # the lip (a pale lip ring read as lips round a mouth)
+    for item in cfg.get("gw_ink") or []:
+        nm, c0, rr, hexc = item[:4]
+        taper = item[4] if len(item) > 4 else 0.0
         if nm not in names:
             continue
         sel = k == names.index(nm)
-        q = np.linalg.norm((p[sel] - np.asarray(c0)) / np.asarray(rr), axis=1)
+        d = p[sel] - np.asarray(c0)
+        d[:, 0] /= np.clip(1.0 - taper * d[:, 2] / rr[2], 0.3, 2.0)
+        q = np.linalg.norm(d / np.asarray(rr), axis=1)
         w = _smooth01((1.07 - q) / 0.06)
-        depth = _smooth01((p[sel, 1] - (c0[1] + 0.5 * rr[1] * 0.0) + 0.02) / 0.16)       # 0 at the lip -> 1 deep
+        depth = _smooth01((p[sel, 1] - c0[1] + 0.02) / 0.12)                              # 0 at the lip -> 1 deep
         ink = np.asarray(scene.hex_srgb(hexc), np.float32)
-        lip = np.clip(ink * 2.4, 0, 1)
+        lip = np.clip(ink * 1.5, 0, 1)
         tone = lip[None, :] * (1 - depth[:, None]) + ink[None, :] * depth[:, None]
         col[sel] = col[sel] * (1 - w[:, None]) + tone * w[:, None]
     # shells seen from inside (the mantle's lining between its lapels): in shadow
@@ -1149,6 +1393,17 @@ def paint_greatwick(obj, size, cfg, names, part_attr, log):
         wt = _smooth01((nrm[sel, 2] - spec.get("from", 0.45)) / spec.get("width", 0.35))[:, None]
         tcol = TOP_PAINTERS[spec["kind"]](p[sel], nrm[sel], spec, plates, pal)
         col[sel] = col[sel] * (1 - wt) + tcol * wt
+    # the value ramp (brief §2.4, the bible's light-top / dark-feet bands): a gain by height (paint-pose z), per
+    # part set; the projection replaces the procedural base, so the materials' own gradient never applies here
+    for rp in cfg.get("gw_ramp") or []:
+        zs = np.array([q[0] for q in rp["stops"]])
+        gs = np.array([q[1] for q in rp["stops"]])
+        for kk in np.unique(k):
+            nm = names[kk]
+            if nm in rp.get("skip", ()) or ("only" in rp and nm not in rp["only"]):
+                continue
+            sel = k == kk
+            col[sel] = np.clip(col[sel] * np.interp(p[sel, 2], zs, gs)[:, None], 0, 1)
     out = np.zeros((size, size, 3), dtype=np.float32)
     out[idx] = col
     iy, ix = project.nearest_index(have)
@@ -1208,6 +1463,148 @@ def _top_lid(p, nrm, spec, plates, pal):
 TOP_PAINTERS = {"patch": _top_patch, "roof": _top_roof, "lid": _top_lid}
 
 
+# ── procedural-painterly parts (gw_proc) ─────────────────────────────────────────────────────────────
+def _lab(rgb):
+    """sRGB 0..1 (..., 3) -> CIE L*a*b* (D65)."""
+    c = np.clip(np.asarray(rgb, np.float64), 0, 1)
+    lin = np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+    M = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
+    xyz = lin @ M.T / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], -1)
+
+
+def _excluded(lab, rule: dict):
+    m = np.zeros(lab.shape[:2], dtype=bool)
+    if "L_gt" in rule:
+        m |= lab[..., 0] > rule["L_gt"]
+    if "L_lt" in rule:
+        m |= lab[..., 0] < rule["L_lt"]
+    if "b_gt" in rule:
+        m |= lab[..., 2] > rule["b_gt"]
+    return m
+
+
+def _hash(i):
+    x = np.sin(np.asarray(i, np.float64) * 12.9898 + 78.233) * 43758.5453
+    return x - np.floor(x)
+
+
+def _lit(n, spec, lo=0.84, hi=1.08, key=0.06):
+    """The sheet's value structure: lit tops, a key from the front-left, darker undersides."""
+    lo, hi = spec.get("light", (lo, hi))
+    v = lo + (hi - lo) * _smooth01((n[:, 2] + 0.4) / 1.2)
+    return v * (1.0 + spec.get("key", key) * np.clip(-n[:, 1] * 0.6 - n[:, 0] * 0.4, -1, 1))
+
+
+def _pca(p):
+    c = p.mean(0)
+    w, V = np.linalg.eigh(np.cov((p - c).T))
+    return c, V[:, -1]
+
+
+def _out(base, v, tint=None):
+    col = np.asarray(scene.hex_srgb(base), np.float32)[None, :] * np.asarray(v, np.float32)[:, None]
+    if tint is not None:
+        col = col * tint
+    return np.clip(col, 0, 1).astype(np.float32)
+
+
+def _pp_flat(p, n, spec):
+    v = 1.0 + spec.get("noise", 0.07) * NOISE.fbm(p, 9.0, 3) + 0.04 * NOISE(p, 31.0)
+    return _out(spec["hex"], v * _lit(n, spec, 0.86, 1.08, spec.get("key", 0.0)))
+
+
+def _pp_felt(p, n, spec):
+    """Felt, linen, leather wraps: a soft mottle and a fine nap; `bands` = wrapped cloth (bands along the part)."""
+    v = _lit(n, spec) * (1.0 + 0.05 * NOISE.fbm(p, 8.0, 3) + spec.get("nap", 0.04) * NOISE(p, 70.0))
+    if spec.get("bands"):
+        c, a = _pca(p)
+        u = (p - c) @ a
+        v = v * (1.0 - spec["bands"] * 0.5 * (1 - np.abs(np.cos(u * math.pi / 0.032))) ** 4)
+    return _out(spec["hex"], v)
+
+
+def _pp_stone(p, n, spec):
+    """Honed stone (chalk, ironstone, sandstone): brush-scale mottle, ridged cracks, light chipped edges on the
+    lit tops; `blocks` cuts it into a ring of stone blocks (the drum bands, the hammer drum), each its own tone
+    with dark joints."""
+    v = _lit(n, spec, 0.82, 1.10, 0.07)
+    f = spec.get("freq", 8.0)
+    v = v * (1.0 + spec.get("mottle", 0.06) * NOISE.fbm(p, f, 3)) * (1.0 + 0.03 * NOISE(p, 55.0))
+    cr = np.clip((NOISE.ridged(p, f * 1.4, 3) - spec.get("crack_t", 0.68)) * 5.0, 0, 1)
+    v = v * (1.0 - spec.get("cracks", 0.12) * cr)
+    ch = np.clip((NOISE.ridged(p, f * 2.3, 2, offset=(3.0, 1.0, 7.0)) - 0.78) * 6.0, 0, 1)
+    v = v * (1.0 + spec.get("chip_light", 0.12) * ch * _smooth01((n[:, 2] + 0.1) / 0.7))
+    blocks = spec.get("blocks")
+    if blocks:
+        if blocks == "drum":
+            c, a = p.mean(0), np.array([0.0, 0.0, 1.0])
+            nb, sq = 11, 0.62
+        else:
+            c, a = _pca(p)
+            nb, sq = 7, 1.0
+        q = p - c
+        if blocks == "drum":            # the drum's oval about the vertical
+            ang = np.arctan2(q[:, 1] / sq, q[:, 0])
+        else:
+            e1 = np.cross(a, [0.0, 1.0, 0.0] if abs(a[1]) < 0.9 else [1.0, 0.0, 0.0])
+            e1 /= np.linalg.norm(e1)
+            ang = np.arctan2(q @ np.cross(a, e1), q @ e1)
+        u = (ang / (2 * math.pi) + 0.5) * nb + 0.37 * NOISE(p, 6.0)
+        bi = np.floor(u)
+        fr = u - bi
+        joint = np.clip(1.0 - np.minimum(fr, 1.0 - fr) * nb * 4.2, 0, 1) ** 2
+        v = v * (0.90 + 0.18 * _hash(bi)) * (1.0 - 0.45 * joint)
+        tint = (1.0 + 0.05 * (_hash(bi + 7.0) - 0.5)[:, None] * np.array([[1.0, 0.6, -0.4]])).astype(np.float32)
+        return _out(spec["hex"], v, tint)
+    return _out(spec["hex"], v)
+
+
+def _pp_wood(p, n, spec):
+    """Wood: grain streaks and dark grain lines along each texel's axis (the nearest of the part's segments, or
+    the part's long axis)."""
+    segs = _SEGS.get(spec.get("segs") or "")
+    if segs:
+        best = np.full(len(p), 1e9)
+        ax = np.zeros_like(p)
+        for a_, b_ in segs:
+            a_, b_ = np.asarray(a_, float), np.asarray(b_, float)
+            ab = b_ - a_
+            t = np.clip((p - a_) @ ab / (ab @ ab), 0, 1)
+            dd = np.linalg.norm(p - (a_ + t[:, None] * ab), axis=1)
+            m = dd < best
+            best[m] = dd[m]
+            ax[m] = ab / np.linalg.norm(ab)
+    else:
+        _, a = _pca(p)
+        ax = np.broadcast_to(a, p.shape)
+    u = (p * ax).sum(1)
+    perp = p - u[:, None] * ax
+    g = perp * 26.0 + (u * 1.3)[:, None] * ax
+    grain = NOISE.fbm(g, 1.0, 3)
+    lines = np.clip((NOISE.ridged(g * 1.7, 1.0, 2) - 0.72) * 5.0, 0, 1)
+    v = _lit(n, spec) * (1.0 + 0.11 * grain) * (1.0 - 0.22 * lines) * (1.0 + 0.04 * NOISE.fbm(p, 6.0, 2))
+    return _out(spec["hex"], v)
+
+
+def _pp_glass(p, n, spec):
+    """Dawnglass panes (glossy in the material; the core oval on each is the accent): cool, lighter toward the
+    top, deeper toward the frame, one soft diagonal sheen."""
+    cx, cy, hw, hd, z0, z1 = spec["box"]
+    t = np.clip((p[:, 2] - z0) / (z1 - z0), 0, 1)
+    front = np.abs(n[:, 1]) >= np.abs(n[:, 0])
+    lat = np.where(front, (p[:, 0] - cx) / hw, (p[:, 1] - cy) / hd)
+    v = (0.80 + 0.26 * t) * (1.0 - 0.22 * _smooth01((np.abs(lat) - 0.55) / 0.45))
+    sheen = np.clip(1.0 - np.abs(np.sin((lat * 0.9 + t * 1.6) * 2.2)) * 3.0, 0, 1)
+    v = v * (1.0 + 0.10 * sheen) * (1.0 + 0.03 * NOISE(p, 40.0))
+    v = v * (1.0 + 0.10 * _smooth01((n[:, 2] - 0.3) / 0.5))
+    return _out(spec["hex"], v)
+
+
+PROC_PAINTERS = {"flat": _pp_flat, "felt": _pp_felt, "stone": _pp_stone, "wood": _pp_wood, "glass": _pp_glass}
+
+
 def _tint_texels(col, p, k, names, cfg, log):
     """Move a part's (or a height zone's) painted median onto a palette colour, keeping the brush detail
     (per-channel gain in linear light, blended by `strength`). Runs on the projected paint, before the ink,
@@ -1216,7 +1613,7 @@ def _tint_texels(col, p, k, names, cfg, log):
     tints = cfg.get("gw_tints") or []
     pal = cfg.get("gw_palette") or {}
     roles = cfg.get("gw_roles") or {}
-    ink = {nm: (np.asarray(c0), np.asarray(rr)) for nm, c0, rr, _ in (cfg.get("gw_ink") or [])}
+    ink = {it[0]: (np.asarray(it[1]), np.asarray(it[2])) for it in (cfg.get("gw_ink") or [])}
     lin = project._lin(np.clip(col, 0, 1))
     for nm, zone, hexcol, kk in tints:
         if nm not in names:
@@ -1262,7 +1659,7 @@ def bind_cloak(ctx, obj) -> dict:
         w["hips"] = (1 - t1)
         w["spine"] = t1 * (1 - t2)
         w["chest"] = t2
-        leg = 0.42 * mesh.smoothstep(z_hip - 0.02, 0.14, p.z) * min(1.0, abs(p.x) / 0.14)
+        leg = 0.22 * mesh.smoothstep(z_hip - 0.02, 0.14, p.z) * min(1.0, abs(p.x) / 0.14)   # (0.42 dipped the hem 9 cm)
         side = "thigh.L" if p.x > 0 else "thigh.R"
         if leg > 0:
             w = {k: v_ * (1 - leg) for k, v_ in w.items()}
@@ -1383,9 +1780,109 @@ def _pose(torso: dict, hips=(0.0, 0.0, 0.0), ik: dict | None = None) -> dict:
     return p
 
 
+HAMMER_PARTS = ("haft", "hammer_head", "hammer_bind", "hammer_bands", "hammer_window", "grip", "pommel")
+
+
+class _Ground:
+    """The built game mesh skinned in numpy (linear blend, the exported weights) for any resolved pose: the clips
+    are solved against the real silhouette, so nothing floats or sinks (the first death hung 7-14 cm in the air
+    and the run's feet sat 1-2 cm in the ground)."""
+
+    def __init__(self, ctx, spec):
+        import bpy
+        self.skel = anim.Skeleton(ctx.info.armature)
+        self.bones = list(self.skel.order)
+        bi = {b: i for i, b in enumerate(self.bones)}
+        self.rest_inv = np.stack([np.array(self.skel.rest[b].inverted()) for b in self.bones])
+        names = [sp.name for sp in spec.parts()]
+        Vs, Bs, Ws, Ps = [], [], [], []
+        for o in (bpy.data.objects.get(spec.ID), bpy.data.objects.get(f"{spec.ID}_accent")):
+            if o is None or o.type != "MESH":
+                continue
+            me = o.data
+            n = len(me.vertices)
+            co = np.empty(n * 3, np.float32)
+            me.vertices.foreach_get("co", co)
+            mw = np.array(o.matrix_world)
+            co = co.reshape(n, 3) @ mw[:3, :3].T + mw[:3, 3]
+            pid = np.zeros(n, np.int64)
+            a = me.attributes.get("vale_part")
+            if a is not None and a.domain == "POINT":
+                a.data.foreach_get("value", pid)
+            gname = {g.index: g.name for g in o.vertex_groups}
+            B = np.zeros((n, 4), np.int64)
+            W = np.zeros((n, 4), np.float64)
+            for v in me.vertices:
+                ws = sorted(((bi[gname[g.group]], g.weight) for g in v.groups
+                             if gname.get(g.group) in bi and g.weight > 1e-4), key=lambda q: -q[1])[:4]
+                tot = sum(w for _, w in ws) or 1.0
+                for j, (b, w) in enumerate(ws):
+                    B[v.index, j], W[v.index, j] = b, w / tot
+            Vs.append(co)
+            Bs.append(B)
+            Ws.append(W)
+            Ps.append(pid)
+        self.V = np.concatenate(Vs)
+        self.Vh = np.c_[self.V, np.ones(len(self.V))]
+        self.B, self.W, self.pid = np.concatenate(Bs), np.concatenate(Ws), np.concatenate(Ps)
+        self.names = names
+
+    def sel(self, *prefixes):
+        m = np.zeros(len(self.V), bool)
+        for i, nm in enumerate(self.names):
+            if nm.startswith(prefixes):
+                m |= self.pid == i
+        return m
+
+    def points(self, pose: dict, mask=None) -> np.ndarray:
+        """World positions of the (masked) vertices under a RESOLVED pose (no ik left in it)."""
+        M = self.skel.fk(pose)
+        S = np.stack([np.array(M[b]) for b in self.bones]) @ self.rest_inv            # (nb, 4, 4)
+        B, W, Vh = (self.B, self.W, self.Vh) if mask is None else (self.B[mask], self.W[mask], self.Vh[mask])
+        X = np.einsum("nk,nkij,nj->ni", W, S[B], Vh)
+        return X[:, :3]
+
+    def grounded(self, fn, aim_key: str = "aim.R"):
+        """Wrap a clip sample: resolve its IK, then lift / drop the whole body so the lowest point of the BODY
+        (the hammer and the arms excluded: they must never prop it up) is on z = 0; then, if the hammer dips under
+        the ground, its aim is raised toward level just enough (bisection) that it rests on it."""
+        body = ~self.sel(*HAMMER_PARTS, "sleeve", "mitt")
+        prop = self.sel(*HAMMER_PARTS)
+
+        def sample(t):
+            raw = fn(t)
+            pose = anim.resolve(self.skel, raw)
+            lo = float(self.points(pose, body)[:, 2].min())
+            hx, hy, hz = pose.get("hips_loc", (0.0, 0.0, 0.0))
+            loc = (hx, hy, hz - lo)
+            pose["hips_loc"] = loc
+            am = (raw.get("ik") or {}).get(aim_key)
+            if am is None or float(self.points(pose, prop)[:, 2].min()) > -0.004:
+                return pose
+            d0 = np.asarray(am.dir, float)
+            lo_u, hi_u, best = 0.0, 1.0, pose
+            for _ in range(8):
+                u = (lo_u + hi_u) / 2
+                d = d0.copy()
+                d[2] = d0[2] * (1 - u) + 0.35 * u
+                d /= np.linalg.norm(d)
+                r2 = dict(raw)
+                r2["ik"] = dict(raw["ik"])
+                r2["ik"][aim_key] = AimUp(tuple(d), am.weight, getattr(am, "up", (0.0, 0.0, 1.0)))
+                p2 = anim.resolve(self.skel, r2)
+                p2["hips_loc"] = loc
+                if float(self.points(p2, prop)[:, 2].min()) < 0.0:
+                    lo_u = u
+                else:
+                    hi_u, best = u, p2
+            return best
+        return sample
+
+
 def motion_clips(ctx, spec) -> dict:
     _install_aim_up()
     A = _Arms(spec)
+    GR = _Ground(ctx, spec)
     L = spec.L
     d0 = np.asarray(L["haft"], float) / np.linalg.norm(L["haft"])
     g0 = np.asarray(L["grip_r"], float)
@@ -1410,7 +1907,7 @@ def motion_clips(ctx, spec) -> dict:
     # RUN (10 f at 3.2 m/s): a short-legged rolling waddle. Planted feet move back at exactly run_ref_speed;
     # the hips roll side to side, the chest counter-rolls so the lantern stays near level; the hammer is
     # carried diagonally (head up by the left shoulder), bouncing with the steps
-    out["run"] = _run_clip(spec, A, d0)
+    out["run"] = _run_clip(spec, A, d0, GR)
 
     # ATTACK1 (30 f, impact f12 = 40 % = the 0.40 s windup): a full two-hand swing from low behind the right
     # hip, up past the right shoulder (outside the lantern), forward; at the impact the head is at its highest
@@ -1419,25 +1916,31 @@ def motion_clips(ctx, spec) -> dict:
 
     # DEATH (60 f): the hammer drops, the wick sits back heavily against its lantern frame and tips back onto
     # it; ends at rest (propped on the lantern, the hammer flat on the ground beside it)
-    out["death"] = _death_clip(spec, A, G)
+    out["death"] = _death_clip(spec, A, G, GR)
     return out
 
 
-def _run_clip(spec, A, d0):
+def _run_clip(spec, A, d0, GR):
+    """A heavy rolling run (brief §3.3): 14 frames (0.467 s, 4.3 steps/s against the first build's 6), a 0.75 m
+    step with a short contact (each foot planted 30 % of the cycle, moving back at exactly run_ref_speed) and a
+    flight between steps; the body HEAVES 5.5 cm (low as the planted leg takes the weight, high in the flight),
+    sways 4.5 cm onto the planted side and rolls 9 degrees (the chest gives back 5: the lantern rocks, near
+    level), the hammer bounces late on the steps. Planted boots are solved onto the ground against the skinned
+    mesh every frame; swinging ones clear it."""
     v = spec.MOTION["run_ref_speed"]
-    N = 10
+    N = 14
     T = N / anim.FPS
-    c = 0.36
+    c = 0.26
     Ls = v * c * T                                   # planted foot travel (m) during contact
-    lift = 0.085
-    swing = [(0.00, Ls / 2, 0.0, -24.0), (0.25, Ls / 2 + 0.05, lift * 0.75, -40.0), (0.5, 0.0, lift, -18.0),
-             (0.78, -Ls / 2 - 0.03, lift * 0.45, 4.0), (1.0, -Ls / 2, 0.0, 6.0)]
+    lift = 0.10
+    swing = [(0.00, Ls / 2, 0.0, -22.0), (0.22, Ls / 2 + 0.06, lift * 0.8, -38.0), (0.5, 0.0, lift, -14.0),
+             (0.80, -Ls / 2 - 0.04, lift * 0.45, 6.0), (1.0, -Ls / 2, 0.0, 4.0)]
 
-    def swing_at(s):
+    def swing_at(s_):
         for i in range(1, len(swing)):
-            if s <= swing[i][0]:
+            if s_ <= swing[i][0]:
                 a_, b_ = swing[i - 1], swing[i]
-                u = anim.sine((s - a_[0]) / (b_[0] - a_[0]))
+                u = anim.sine((s_ - a_[0]) / (b_[0] - a_[0]))
                 return tuple(a_[k] + (b_[k] - a_[k]) * u for k in (1, 2, 3))
         return swing[-1][1:]
 
@@ -1445,36 +1948,70 @@ def _run_clip(spec, A, d0):
         q %= 1.0
         if q < c:
             u = q / c
-            return (0.0, -Ls / 2 + Ls * u, 0.0), 6.0 * (1 - u) - 24.0 * max(0.0, (u - 0.7) / 0.3) ** 1.5
+            return (0.0, -Ls / 2 + Ls * u, 0.0), 4.0 * (1 - u) - 16.0 * max(0.0, (u - 0.75) / 0.25) ** 1.5, True
         dy, dz, pitch = swing_at((q - c) / (1 - c))
-        return (0.0, dy, dz), pitch
+        return (0.0, dy, dz), pitch, False
+
+    def heave(q):
+        """hips z offset over one step (q in 0..0.5, 0 = a foot strikes): loading to the lowest at mid-stance,
+        then up through the push-off into the flight's peak."""
+        s_ = (q % 0.5) / 0.5
+        st = c / 0.5                                  # the stance share of a step
+        if s_ < st:
+            u = s_ / st
+            return -0.050 - 0.010 * math.sin(math.pi * u)        # -0.050 at strike / toe-off (the leg's reach), -0.060 mid-stance
+        u = (s_ - st) / (1 - st)
+        return -0.050 + 0.042 * math.sin(math.pi * u)            # the flight's peak -0.008
 
     L = spec.L
     grip = np.array([-0.27, -0.33, L["grip_r"][2] - 0.02])
     dr = np.array([0.88, -0.05, 0.47])
     dr /= np.linalg.norm(dr)
     hold = A.hold(grip, dr, (-0.47, 0.0, 0.88), 0.40)
+    sw = L["hip_w"] / 2 + L["stance"]                 # the feet's half spread
 
-    def sample(t):
+    def build(t, dz_l=0.0, dz_r=0.0, dh=0.0):
         q = t % 1.0
-        fl, pl = foot_at(q)
-        fr, pr = foot_at(q + 0.5)
+        fl, pl, cl = foot_at(q)
+        fr, pr, cr = foot_at(q + 0.5)
         ph = 2 * math.pi * q
-        roll = 6.0 * math.sin(ph)                    # the waddle: weight onto the planted side
-        bob = -0.045 - 0.016 * (0.5 + 0.5 * math.cos(2 * ph))
+        # weight on the planted side: the left foot plants at q 0..c (sin > 0 on that half)
+        side = math.sin(ph + 0.35)
+        roll = 6.5 * side
         pose = anim.merge(anim.arms_relaxed(), _P(
-            hips=(4.0, -4.0 * math.cos(ph), roll), spine=(5.0, 2.0 * math.cos(ph), -roll * 0.5),
-            chest=(3.0 + 1.5 * math.cos(2 * ph), 2.5 * math.cos(ph), -roll * 0.55),
-            neck=(-6.0, 0, 0), head=(-5.0, 0, -roll * 0.2)))
-        pose["hips_loc"] = (0.022 * math.sin(ph), 0.01, bob)
+            hips=(5.0, -6.0 * math.cos(ph), roll), spine=(5.0, 2.5 * math.cos(ph), -roll * 0.30),
+            chest=(3.0 + 2.5 * math.cos(2 * ph + 0.8), 3.0 * math.cos(ph), -roll * 0.25),
+            neck=(-6.0 - 2.5 * math.cos(2 * ph + 1.2), 0, 0), head=(-5.0, 0, -roll * 0.25)))
+        pose["hips_loc"] = (0.05 * side * (sw / 0.16), 0.012, heave(q) + dh)
         ik = dict(hold)
-        bounce = 0.012 * math.cos(2 * ph + 0.6)
+        bounce = 0.022 * math.cos(2 * ph + 1.4)
         h = ik["hand.R"]
         ik["hand.R"] = HT(rel=(h.rel[0], h.rel[1], h.rel[2] + bounce / A.len), pole=h.pole)
-        ik["foot.L"] = FT((0.012 + fl[0], fl[1] - 0.01, fl[2]), pl, 4.0, 0.0, 0.0)
-        ik["foot.R"] = FT((-0.012 + fr[0], fr[1] - 0.01, fr[2]), pr, -4.0, 0.0, 0.0)
+        ik["foot.L"] = FT((0.012 + fl[0], fl[1] - 0.01, fl[2] + dz_l), pl, 4.0, 0.0, 0.0)
+        ik["foot.R"] = FT((-0.012 + fr[0], fr[1] - 0.01, fr[2] + dz_r), pr, -4.0, 0.0, 0.0)
         pose["ik"] = ik
-        return pose
+        return pose, cl, cr
+
+    boots = {"L": GR.sel("boot_L"), "R": GR.sel("boot_R")}
+    bell = GR.sel("cloak", "stole", "legs", "mantle")
+
+    def sample(t):
+        dz = {"L": 0.0, "R": 0.0}
+        dh = 0.0
+        for _ in range(3):
+            pose, cl, cr = build(t, dz["L"], dz["R"], dh)
+            res = anim.resolve(GR.skel, pose)
+            lo = float(GR.points(res, bell)[:, 2].min())
+            if lo < 0.004:                             # the hem never cuts the ground: the body rides up instead
+                dh += 0.004 - lo
+            for s_, planted in (("L", cl), ("R", cr)):
+                lo = float(GR.points(res, boots[s_])[:, 2].min())
+                if planted:
+                    dz[s_] -= lo                       # the sole exactly on the ground
+                elif lo < 0.012:
+                    dz[s_] += 0.012 - lo               # a swinging boot clears it
+        pose, _, _ = build(t, dz["L"], dz["R"], dh)
+        return anim.resolve(GR.skel, pose)
 
     return anim.Clip("run", N, True, sample, meta={"run_ref_speed": v, "stride_m": round(v * T / 2, 3), "cycle_s": round(T, 3)})
 
@@ -1490,13 +2027,13 @@ def _attack_clip(spec, A, G, feet0):
     the lantern stays near level: the arms and the hips' turn carry the arc."""
     L = spec.L
     z0 = L["grip_r"][2]
-    wind_d = _unit((-0.50, 0.80, -0.30))
+    wind_d = _unit((-0.40, 0.72, -0.37))           # the head LOW behind the right hip (it read as held out sideways)
     up_d = _unit((-0.55, 0.22, 0.81))
     hit_d = _unit((-0.05, -0.68, 0.73))
     fol_d = _unit((0.04, -0.86, -0.50))
     lf = _feet((0.012, 0.0), dl=(0.0, -0.07, 0.0))
-    wind = _pose(_P(hips=(3, -24, 0), spine=(1, -12, 0), chest=(-1, -14, 0), neck=(0, 12, 0), head=(0, 12, 0)),
-                 (0.0, 0.02, -0.035), dict(A.hold((-0.19, 0.0, z0 + 0.06), wind_d, _unit((-0.3, -0.35, 0.88)), 0.14), **lf))
+    wind = _pose(_P(hips=(4, -24, 0), spine=(3, -12, 0), chest=(1, -14, 0), neck=(-2, 12, 0), head=(-2, 12, 0)),
+                 (0.0, 0.02, -0.045), dict(A.hold((-0.18, 0.03, z0 + 0.02), wind_d, _unit((-0.3, -0.35, 0.88)), 0.14), **lf))
     rise = _pose(_P(hips=(-1, -14, 0), spine=(-3, -6, 0), chest=(-3, -8, 0), neck=(-2, 6, 0), head=(-3, 6, 0)),
                  (0.0, 0.025, 0.0), dict(A.hold((-0.22, -0.10, z0 + 0.34), up_d, _unit((0.3, -0.9, 0.2)), 0.13), **lf))
     hf = _feet((0.012, 0.0), dl=(0.0, -0.17, 0.0))
@@ -1518,16 +2055,17 @@ def _attack_clip(spec, A, G, feet0):
     return anim.Clip("attack1", 30, False, fn, impact=anim.IMPACT)
 
 
-def _death_clip(spec, A, G):
-    """The hammer drops, the wick sits back heavily and topples backward as one heavy bell, lantern first: a
-    rotation of the whole body about the back of its hem; at rest the lantern's roof edge and the hem lie on the
-    ground (LAYOUT topple: the pivot and the lie angle, checked with proto/wick_greatwick_pose.py)."""
+def _death_clip(spec, A, G, GR):
+    """The hammer drops, the wick sits back heavily (knees give, the bell's back hem meets the ground) and
+    topples backward as one heavy bell, lantern first, accelerating; the lantern lands, the body rocks 1.5
+    degrees on it and rests there (propped on the lantern, the hammer on the ground beside it). Every frame is
+    solved onto the ground against the skinned mesh (no float, no rebound off the ground)."""
     L = spec.L
     tp = L["topple"]
     py_, pz_ = tp["pivot"]
     pel = np.array([0.0, 0.0, L["hip"] + 0.015])
 
-    def tilt(theta, extra=None, hips_d=(0.0, 0.0, 0.0), arms=None):
+    def tilt(theta, extra=None, hips_d=(0.0, 0.0, 0.0), ik=None):
         th = math.radians(theta)
         rel = pel - np.array([0.0, py_, pz_])
         y = rel[1] * math.cos(th) + rel[2] * math.sin(th)
@@ -1535,27 +2073,30 @@ def _death_clip(spec, A, G):
         loc = np.array([0.0, py_ + y, pz_ + z]) - pel + np.asarray(hips_d)
         p = anim.merge(anim.arms_relaxed(), _P(hips=(-theta, 0, 0)), extra or {})
         p["hips_loc"] = tuple(loc)
-        p["ik"] = dict(arms or {})
+        p["ik"] = dict(ik or {})
         return p
 
     lie = tp["lie"]
-    loose = {"hand.R": HT(rel=A.rel("R", (-0.36, -0.20, 0.36)), pole=(-0.9, 0.3, -0.3)),
-             "aim.R": AimUp(tuple(_unit((0.68, -0.62, -0.28))), 1.0, (0, 0, 1)),
+    loose = {"hand.R": HT(rel=A.rel("R", (-0.36, -0.22, 0.34)), pole=(-0.9, 0.3, -0.3)),
+             "aim.R": AimUp(tuple(_unit((0.55, -0.70, -0.45))), 1.0, (0, 0, 1)),
              "hand.L": HT(rel=A.rel("L", (0.34, -0.10, 0.40)), pole=(0.9, 0.3, -0.3))}
-    flop = {"hand.R": HT(rel=A.rel("R", (-0.42, -0.02, 0.36)), pole=(-0.9, 0.1, -0.2)),
-            "aim.R": AimUp(tuple(_unit((0.25, -0.97, 0.0))), 1.0, (-1.0, 0.0, 0.0)),
+    flop = {"hand.R": HT(rel=A.rel("R", (-0.42, -0.06, 0.36)), pole=(-0.9, 0.1, -0.2)),
+            "aim.R": AimUp(tuple(_unit((0.25, -0.97, -0.10))), 1.0, (-1.0, 0.0, 0.0)),
             "hand.L": HT(rel=A.rel("L", (0.42, 0.0, 0.40)), pole=(0.9, 0.1, -0.2))}
+    feet = _feet((0.012, 0.0))
     recoil = _pose(_P(hips=(-5, 6, 0), spine=(-6, 0, 0), chest=(-8, 4, 0), neck=(-6, 0, 0), head=(-10, 6, 0)),
-                   (0.0, 0.04, 0.0), dict(loose, **_feet((0.012, 0.0))))
-    legs = _P(thigh_L=(14, 0, -4), shin_L=(-10, 0, 0), thigh_R=(12, 0, 6), shin_R=(-8, 0, 0))
-    sit = tilt(14.0, anim.merge(legs, _P(spine=(-4, 0, 0), neck=(6, 0, 0), head=(8, 0, 0))), (0, 0, -0.05), loose)
-    tip = tilt(lie * 0.72, anim.merge(legs, _P(spine=(-2, 0, 0), neck=(10, 0, 0), head=(12, 4, 0))), (0, 0, -0.02), flop)
-    hit_g = tilt(lie + 2.0, anim.merge(legs, _P(neck=(14, 0, 0), head=(16, 6, 0))), (0, 0, 0.0), flop)
-    bounce = tilt(lie - 7.0, anim.merge(legs, _P(neck=(8, 0, 0), head=(6, 4, 0))), (0, 0, 0.0), flop)
+                   (0.0, 0.03, -0.01), dict(loose, **feet))
+    legs = _P(thigh_L=(30, 0, -6), shin_L=(-34, 0, 0), thigh_R=(26, 0, 8), shin_R=(-30, 0, 0))
+    # the sit: knees give (feet still planted), the body settles 5-9 cm and leans back onto its back hem
+    sink = -0.05 if spec.faction == "aubade" else -0.085
+    sit = tilt(10.0, _P(spine=(-4, 0, 0), neck=(6, 0, 0), head=(8, 0, 0)), (0, 0.0, sink), dict(loose, **feet))
+    tip = tilt(lie * 0.55, anim.merge(legs, _P(spine=(-2, 0, 0), neck=(10, 0, 0), head=(12, 4, 0))), (0, 0, 0), flop)
+    land = tilt(lie + 2.0, anim.merge(legs, _P(neck=(14, 0, 0), head=(16, 6, 0))), (0, 0, 0.0), flop)
     rest = tilt(lie, anim.merge(legs, _P(neck=(12, 0, 0), head=(12, -8, 0))), (0, 0, 0.0), flop)
-    keys = [(0.0, G, "linear"), (0.12, recoil, "snap"), (0.34, sit, "inout"), (0.56, tip, "in"),
-            (0.63, hit_g, "in"), (0.72, bounce, "out"), (0.84, rest, "inout"), (1.0, rest, "linear")]
-    return anim.Clip("death", 60, False, anim.drag(anim.keyed(keys), 60, {"head": 2.0, "neck": 1.0}))
+    keys = [(0.0, G, "linear"), (0.10, recoil, "snap"), (0.32, sit, "inout"), (0.50, tip, "in"),
+            (0.62, land, "in"), (0.74, rest, "out"), (1.0, rest, "linear")]
+    fn = anim.drag(anim.keyed(keys), 60, {"head": 2.0, "neck": 1.0})
+    return anim.Clip("death", 60, False, GR.grounded(fn))
 
 
 KINDS = [Greatwick]
