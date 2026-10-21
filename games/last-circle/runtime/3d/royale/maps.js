@@ -47,12 +47,20 @@ const _V = (() => { try { return new URL(import.meta.url).search || ""; } catch 
 // coverage 0..1 (P1.7), per map for identity.
 export const MAPS = {
   isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#9ed0e3", zenith: "#5c8dc1", cloud: 0.66, fog: 0.0018, themeColor: "#22d3a0", water: true,
-    sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 } },
+    sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 },
+    grade: { exposure: 0.72, ground: 0.6, water: 0.6 } },
   ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
-    sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 } },
+    sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 },
+    grade: { exposure: 0.80, ground: 0.6, water: 0.6 } },
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
-    sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 } },
+    sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
+    grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
 };
+// LC-04 / owner decision OD-2 (2026-10-20, grade "G2 Balanced" from the P1-G A/B sheets): the drop view was 2-2.5x the reference's luminance (0.67-0.81 vs
+// 0.32). G2 darkens the GROUND and the WATER (terrain, city ground and tufts x `ground`, water x `water`) and cuts the exposure a little, leaving the sun, the
+// sky fill and the environment as they were, so a room keeps its light (the other grades took Isla Viva's interiors to 0.07-0.08). Target: the drop view's
+// mean luminance 0.45-0.50 per map (Deepwood measured on its forest half: its snow half stays near-white on purpose), interiors >= 0.15. `exposure` replaces
+// the old global 1.15 (NeutralToneMapping is unchanged). The minimap keeps the undarkened palette (it is a 2D map read at a glance, not a lit surface).
 
 const SIZE = 1600;               // meters, square
 const HALF = SIZE / 2;
@@ -198,10 +206,24 @@ function stuccoTex(aniso) {
 }
 const KIND_TEX = { shingle: shingleTex, plank: plankTex, metal: metalTex, block: blockTex, stucco: stuccoTex };
 
+// LC-39: a PERIODIC fbm - the lattice indices wrap at the tile's own period (per x 2^octave cells), so the field at u = 1 is the field at u = 0. The water's
+// ripple field was _tfbm (lattice hashes at unwrapped integers) plus sin(u * 22 + v * 15) (22 and 15 are not multiples of 2 pi): neither wrapped, so the
+// tile edge was a seam every ~28 m, a square grid across the whole sea in the drop view's sun sheen. The sine is now 2 pi x (3, 2) cycles a tile.
+function _tpfbm(u, v, s, oct, per) {
+  let a = 1, f = per, sum = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    const x = u * f, y = v * f, ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), w = (k) => ((k % f) + f) % f;
+    const s00 = _thash(w(ix), w(iy), s + i), s10 = _thash(w(ix + 1), w(iy), s + i), s01 = _thash(w(ix), w(iy + 1), s + i), s11 = _thash(w(ix + 1), w(iy + 1), s + i);
+    sum += ((s00 + (s10 - s00) * sx) * (1 - sy) + (s01 + (s11 - s01) * sx) * sy) * a;
+    n += a; a *= 0.5; f *= 2;
+  }
+  return sum / n;
+}
 function waterNormalTex(aniso) {
   if (_texCache.waterN) return _texCache.waterN;
-  const t = _fieldTex("water_f", 256,
-    (u, v) => _tfbm(u * 6, v * 6, 31, 3) * 0.6 + (Math.sin(u * 22 + v * 15) * 0.5 + 0.5) * 0.4,
+  const t = _fieldTex("water_p", 256,
+    (u, v) => _tpfbm(u, v, 31, 3, 6) * 0.6 + (Math.sin((u * 3 + v * 2) * Math.PI * 2) * 0.5 + 0.5) * 0.4,
     (h) => h, aniso, 1.4).normal;
   _texCache.waterN = t; return t;
 }
@@ -307,6 +329,183 @@ vec3 lcDetail(sampler2D t, vec2 p, vec3 avg, float chroma, float gain) {
 }`);
   };
 }
+// ── P2/P3 WORLD SHADER LAYER (parity lane maps: LC-17 wear + grime, LC-41 contact AO, LC-74 cloud shadows, LC-38 wind, LC-39 water depth) ────────────
+// One set of LIVE uniform objects at module scope, shared by every material this file patches (the terrain, the roads, the city ground, the structure
+// materials, the foliage and grass clones, the water): buildMap sets their values once per match and the sky updater advances uLcT. Every feature is a
+// #define on the material, chosen at map BUILD time from the graphics tier (so a mid-match ladder step never recompiles anything) and compiled in the warm
+// frame with the rest of the map. Per tier: LOW = none of them (the materials are not patched at all); MEDIUM / HIGH / ULTRA = all of them. ZERO extra draw
+// calls: every one is a few lines in programs the map already draws with.
+const LCU = {
+  uLcT: { value: 0 },                                                   // seconds (the map's own clock)
+  uLcCloud: { value: null },                                            // the sky's baked cloud noise (R shape, G detail)
+  uLcCloudK: { value: new THREE.Vector4(0, 0, 0.62, 0) },              // xy = sun.xz / sun.y (the deck projects along the sun), z = noise threshold, w = strength (fraction of the SUN removed)
+  uLcCloudOff: { value: new THREE.Vector2() },                          // drift (uv)
+  uLcHgt: { value: null },                                              // the baked ground lattice as a half-float texture (wear band, water depth)
+  uLcHgtK: { value: new THREE.Vector4(0, 0, 0, 0) },                   // uv = xz * x + y
+  uLcAO: { value: null },                                               // blurred footprint occupancy of everything standing on the ground (contact AO)
+  uLcAOK: { value: new THREE.Vector4(0, 0, 0, 0) },                    // uv = xz * x + y; z = indirect strength, w = direct strength
+  uLcWind: { value: new THREE.Vector4(0.8, 0.6, 1, 0) },               // xy = wind direction, z = strength (0 = still)
+  uLcGrime: { value: null },                                            // the CC0 wall photograph (detail, divided by its own mean)
+  uLcGrimeK: { value: new THREE.Vector4(0, 0.42, 0, 0) },              // x = gain (0 = off), y = uv scale
+  uLcWater: { value: new THREE.Vector4(0, 0, 0, 0) },                  // x = water y
+  uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
+};
+const GRIME_FILE = { url: "assets/tex/wall_grime.jpg", avg: [0.6339, 0.4989, 0.3582] };   // Poly Haven "Concrete Wall 003" (CC0), 1k diffuse JPG (265 KB); avg = its LINEAR mean (numpy over the decoded sRGB pixels)
+let _grimeLoad = null;
+async function loadGrimeTexture(W) {
+  if (_texCache.grime) return _texCache.grime;
+  const r = W.kernel && W.kernel.renderer;
+  if (!r || typeof THREE.TextureLoader !== "function") return null;
+  if (!_grimeLoad) _grimeLoad = (async () => {
+    let to = 0;
+    try {
+      const t = await Promise.race([new THREE.TextureLoader().loadAsync((W.assetBase || "") + GRIME_FILE.url), new Promise((_, rej) => { to = setTimeout(() => rej(new Error("timeout")), 25000); })]);
+      t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = Math.min(r.capabilities && r.capabilities.getMaxAnisotropy ? r.capabilities.getMaxAnisotropy() : 4, Math.max(2, W._texAniso || 4));
+      _texCache.grime = t;
+    } catch (err) { console.warn("[maps] wall grime photo unavailable, procedural walls only:", err && err.message || err); }
+    finally { if (to) clearTimeout(to); _grimeLoad = null; }
+    return _texCache.grime || null;
+  })();
+  return _grimeLoad;
+}
+const LC_VERT_HEAD = `
+varying vec3 vLcW;
+varying vec3 vLcN;
+#ifdef LC_WIND
+uniform float uLcT; uniform vec4 uLcWind;
+#endif`;
+// wind: a sway of the whole crown (the square of the height over the kind's height, so the base never moves) under a slow gust front that crosses the map,
+// plus a fine leaf flutter; computed in WORLD metres, carried back into the instance's own frame (rotation x uniform scale: transpose / scale^2)
+const LC_VERT_WIND = `
+#ifdef LC_WIND
+{
+  vec4 lwp = vec4( transformed, 1.0 ); mat3 lim = mat3( 1.0 ); vec3 lorg = vec3( 0.0 );
+  #ifdef USE_INSTANCING
+    lwp = instanceMatrix * lwp; lim = mat3( instanceMatrix ); lorg = instanceMatrix[ 3 ].xyz;
+  #endif
+  float lhn = max( 0.0, lwp.y - lorg.y ) / LC_WIND_H;
+  float lph = dot( lorg.xz, vec2( 0.071, 0.053 ) );
+  float lsw = sin( uLcT * 1.27 + lph ) * 0.62 + sin( uLcT * 2.13 + lph * 1.7 ) * 0.38;
+  float lgu = 0.62 + 0.38 * sin( uLcT * 0.33 - dot( lorg.xz, uLcWind.xy ) * 0.006 );
+  float lfl = sin( uLcT * 6.3 + dot( lwp.xyz, vec3( 1.7, 2.3, 1.1 ) ) ) * LC_WIND_FLUT;
+  vec3 lwd = vec3( uLcWind.x, 0.0, uLcWind.y ) * ( LC_WIND_A * lhn * lhn * ( lsw * lgu + 0.45 ) ) + vec3( lfl, lfl * 0.45, lfl * 0.7 ) * lhn;
+  transformed += ( transpose( lim ) * ( lwd * uLcWind.z ) ) / max( 1e-8, dot( lim[ 0 ], lim[ 0 ] ) );
+}
+#endif`;
+const LC_VERT_WORLD = `
+{
+  vec4 lw = vec4( transformed, 1.0 ); vec3 ln = objectNormal;
+  #ifdef USE_BATCHING
+    lw = batchingMatrix * lw; ln = mat3( batchingMatrix ) * ln;
+  #endif
+  #ifdef USE_INSTANCING
+    lw = instanceMatrix * lw; ln = mat3( instanceMatrix ) * ln;
+  #endif
+  lw = modelMatrix * lw; vLcW = lw.xyz; vLcN = normalize( mat3( modelMatrix ) * ln );
+}`;
+const LC_FRAG_HEAD = `
+varying vec3 vLcW;
+varying vec3 vLcN;
+#ifdef LC_CLOUD
+uniform sampler2D uLcCloud; uniform vec4 uLcCloudK; uniform vec2 uLcCloudOff;
+#endif
+#ifdef LC_HGT
+uniform sampler2D uLcHgt; uniform vec4 uLcHgtK;
+float lcGround( vec2 xz ) { return texture2D( uLcHgt, xz * uLcHgtK.x + uLcHgtK.y ).r; }
+#endif
+#ifdef LC_AO
+uniform sampler2D uLcAO; uniform vec4 uLcAOK;
+#endif
+#ifdef LC_GRIME
+uniform sampler2D uLcGrime; uniform vec4 uLcGrimeK;
+#endif
+#ifdef LC_WATER
+uniform vec4 uLcWater; uniform vec3 uLcShallow; uniform vec3 uLcDeep;
+#endif`;
+// albedo terms (after map_fragment): the wall-base wear band (a vertical face within LC_WEAR_H m of the ground under it, darker by up to LC_WEAR_K) and the
+// grime photograph (its light / dark only, divided by its own mean so a wall still averages its colour)
+const LC_FRAG_ALBEDO = `
+#ifdef LC_WEAR
+{
+  float lvert = 1.0 - abs( vLcN.y );
+  float lhb = vLcW.y - lcGround( vLcW.xz );
+  float lband = ( 1.0 - smoothstep( 0.0, LC_WEAR_H, lhb ) ) * smoothstep( 0.25, 0.75, lvert ) * step( -0.6, lhb );
+  diffuseColor.rgb *= 1.0 - LC_WEAR_K * lband;
+}
+#endif
+#if defined( LC_GRIME ) && defined( USE_MAP ) && ! defined( USE_BATCHING )
+{
+  vec2 lgp = vMapUv * uLcGrimeK.y;
+  vec3 lg1 = texture2D( uLcGrime, lgp ).rgb, lg2 = texture2D( uLcGrime, mat2( 0.8, 0.6, -0.6, 0.8 ) * lgp * 0.53 + 0.29 ).rgb;
+  float lgl = dot( ( lg1 + lg2 ) * 0.5 / ${glslV3(GRIME_FILE.avg)}, ${PH_LUM} );
+  diffuseColor.rgb *= clamp( 1.0 + ( lgl - 1.0 ) * uLcGrimeK.x, 0.55, 1.35 );
+}
+#endif
+#ifdef LC_WATER
+{
+  float ldep = uLcWater.x - lcGround( vLcW.xz );
+  float lk = smoothstep( 0.0, 7.0, ldep );
+  diffuseColor.rgb = mix( uLcShallow, uLcDeep, lk );
+  float lfoam = ( 1.0 - smoothstep( 0.0, 0.55, ldep ) ) * ( 0.55 + 0.45 * sin( uLcWater.y * 1.9 + dot( vLcW.xz, vec2( 0.9, 1.3 ) ) ) );
+  diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), clamp( lfoam, 0.0, 1.0 ) * 0.75 );
+  diffuseColor.a = mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) );
+}
+#endif`;
+// light terms (after lights_fragment_end): a cloud's shadow takes a share of the SUN only (the sky fill stays: a shadowed field reads as overcast, not night),
+// contact AO darkens the sky fill most and the sun a little
+const LC_FRAG_LIGHT = `
+#ifdef LC_CLOUD
+{
+  vec2 lcp = ( vLcW.xz + uLcCloudK.xy * ( 380.0 - vLcW.y ) ) * 0.00105 + uLcCloudOff;
+  float lcn = texture2D( uLcCloud, lcp ).r * 0.72 + texture2D( uLcCloud, lcp * 2.9 + 0.31 ).g * 0.28;
+  float lcs = 1.0 - uLcCloudK.w * smoothstep( uLcCloudK.z, uLcCloudK.z + 0.2, lcn );
+  reflectedLight.directDiffuse *= lcs; reflectedLight.directSpecular *= lcs;
+}
+#endif
+#ifdef LC_AO
+{
+  float lao = texture2D( uLcAO, vLcW.xz * uLcAOK.x + uLcAOK.y ).r;
+  reflectedLight.indirectDiffuse *= 1.0 - uLcAOK.z * lao; reflectedLight.directDiffuse *= 1.0 - uLcAOK.w * lao;
+}
+#endif`;
+const LC_UNIFORMS = { LC_WIND: ["uLcT", "uLcWind"], LC_CLOUD: ["uLcCloud", "uLcCloudK", "uLcCloudOff"], LC_HGT: ["uLcHgt", "uLcHgtK"], LC_AO: ["uLcAO", "uLcAOK"],
+  LC_GRIME: ["uLcGrime", "uLcGrimeK"], LC_WATER: ["uLcWater", "uLcShallow", "uLcDeep"] };
+/** Patch a MeshStandardMaterial (or a MeshDepthMaterial for the wind) with the world-shader layer. `defs` = { LC_CLOUD: "", LC_WEAR: "", LC_WEAR_H: "0.9", ... }
+ *  (LC_WEAR and LC_WATER need LC_HGT, which is added). Chains any onBeforeCompile the material already had (the terrain photo, the struct mix); the program
+ *  cache key carries the previous key and the define set, so every match reuses the same programs. Idempotent per material. */
+function lcPatch(mat, defs) {
+  if (!mat || mat.userData.lcPatched) return mat;
+  defs = Object.assign({}, defs);
+  if (defs.LC_WEAR !== undefined || defs.LC_WATER !== undefined) defs.LC_HGT = "";
+  const keys = Object.keys(defs).sort();
+  if (!keys.length) return mat;
+  mat.userData.lcPatched = keys.join(",");
+  mat.defines = Object.assign({}, mat.defines || {}, defs);
+  const prevKey = mat.customProgramCacheKey && mat.customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : null;
+  const prevCompile = mat.onBeforeCompile && mat.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile ? mat.onBeforeCompile : null;
+  const sig = "lcw-v1:" + keys.map((k) => k + "=" + defs[k]).join(";");
+  mat.customProgramCacheKey = () => (prevKey ? prevKey() + "|" : "") + sig;
+  const depth = !!mat.isMeshDepthMaterial || !!mat.isMeshDistanceMaterial;
+  mat.onBeforeCompile = (sh, r) => {
+    // ours FIRST: a previous patch may expand an #include it replaces (the struct mix rewrites map_fragment's text), and ours anchors on the #include tokens
+    for (const d of keys) for (const u of LC_UNIFORMS[d] || []) sh.uniforms[u] = LCU[u];
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\n" + LC_VERT_HEAD)
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + LC_VERT_WIND);
+    if (!depth) {
+      sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n" + LC_VERT_WORLD);
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + LC_FRAG_HEAD)
+        .replace("#include <map_fragment>", "#include <map_fragment>\n" + LC_FRAG_ALBEDO)
+        .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + LC_FRAG_LIGHT);
+    }
+    if (prevCompile) prevCompile.call(mat, sh, r);
+  };
+  mat.needsUpdate = true;
+  return mat;
+}
+/** the graphics tier this map is built for (lane boot's C-GFX W.gfxTier, else the stored setting): low | medium | high | ultra */
+function gfxTierOf(W) { const t = W.gfxTier || (W.settings && W.settings.graphics) || "medium"; return t === "low" || t === "medium" || t === "high" || t === "ultra" ? t : "medium"; }
+
 /** the photo splat of a terrain vertex: weights of (grass/rock, beach, sand) - the same biome zones colorAt tints, so the detail and the colour agree */
 function splatAt(mapId, h, x, z, seed, out) {
   let g = 1, b = 0, s = 0;
@@ -809,6 +1008,7 @@ export function disposeMapResources(W) {
   // C-SKY handles belong to the map being torn down: never leave a consumer (STORMFX's storm tint)
   // holding the uniforms of a disposed dome between matches. Done before the idempotence guard.
   W.skyUniforms = null; W.skyDome = null;
+  if (W._lcOwned) { for (const t of W._lcOwned) { try { t.dispose(); } catch (e) { /* gone */ } } W._lcOwned = null; LCU.uLcHgt.value = null; LCU.uLcAO.value = null; }
   const g = W._groups && W._groups.map;
   if (W._cityKit) { try { W._cityKit.dispose(); } catch (e) { /* already gone */ } W._cityKit = null; }   // WAVE 7: the instanced districts' matrix buffers, palette textures and proxies (a group traverse frees none of them)
   if (!g) return { geometries: 0, materials: 0, textures: 0 };
@@ -912,6 +1112,23 @@ const CITY_THEME_TABLES = {
 export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
   const seed = W.seed;
+  // C-GFX: the tier this map is BUILT for (fixed for the match: the in-match ladder only moves bloom / DPR). LCFX = the world-shader layer (LCU) and the photo
+  // wall detail: off on low. ULTRA (lane boot) = the longest draw / foliage / grass / furniture distances and the 5 x 5 near terrain ring (see TIER_Q).
+  const TIER = gfxTierOf(W), LCFX = TIER !== "low";
+  const TIER_Q = {
+    low:    { propD: 600, nearR: 110, nearN: 64, clR: 55, clN: 1400, distD: 1100, furnD: 60, ring: 1, lamps: 0 },
+    medium: { propD: 780, nearR: 110, nearN: 64, clR: 55, clN: 1400, distD: 1100, furnD: 60, ring: 1, lamps: 4 },
+    high:   { propD: 1000, nearR: 125, nearN: 72, clR: 60, clN: 1700, distD: 1300, furnD: 70, ring: 1, lamps: 4 },
+    ultra:  { propD: 1650, nearR: 165, nearN: 112, clR: 78, clN: 2900, distD: 1750, furnD: 95, ring: 2, lamps: 6 },
+  }[TIER];
+  const GR = K.grade || { exposure: 1.15, ground: 1, water: 1 };   // LC-04 / OD-2 (see MAPS)
+  const grimePromise = LCFX ? loadGrimeTexture(W).catch(() => null) : Promise.resolve(null);   // LC-17: the CC0 wall photograph (medium and up)
+  // the world-shader layer's per-match textures (the ground lattice, the contact-AO mask): no material slot holds them (they are uniforms), so the map
+  // disposes them itself - the previous match's first (a rebuild without a teardown), the rest in disposeMapResources
+  if (W._lcOwned) { for (const t of W._lcOwned) { try { t.dispose(); } catch (e) { /* gone */ } } }
+  W._lcOwned = [];
+  const lcOwn = (t) => { W._lcOwned.push(t); return t; };
+  LCU.uLcHgt.value = null; LCU.uLcAO.value = null; LCU.uLcAOK.value.set(0, 0, 0, 0);
   const rng = W.SIM.mulberry32(seed ^ 0xabcdef);
   const baseH = mkHeightFn(mapId, seed);
   const field = new TerrainField(baseH, SIZE);          // C-PAD: the analytic ground + the pads and corridors the generators register (see the section above mkHeightFn's palette)
@@ -1011,7 +1228,7 @@ export async function buildMap(W, mapId) {
     // exposure at all — so 1.15 is a real +15% mid-tone lift, not a re-statement.
     // The menu is untouched: hud.js restores ACES 1.12 for the menu diorama.
     kn.renderer.toneMapping = THREE.NeutralToneMapping;
-    kn.renderer.toneMappingExposure = 1.15;
+    kn.renderer.toneMappingExposure = K.grade ? K.grade.exposure : 1.15;
     const sunK = K.sun || MAPS.isla_viva.sun, hemiK = K.hemi || MAPS.isla_viva.hemi;
     kn.sun.intensity = sunK.intensity; kn.sun.color.setHex(sunK.color);
     kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
@@ -1034,6 +1251,7 @@ export async function buildMap(W, mapId) {
   const FAR_SEG = 38, NEAR_SEG = 76;                 // ~5.3 / ~2.6 m per vertex; NEAR_SEG * CHUNKS === LAT_CELLS
   const TILE = 8;                                    // meters per texture tile
   const terrMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0 });
+  terrMat.color.setScalar(GR.ground);               // LC-04 (OD-2 G2): the ground's albedo (the vertex colours stay the biome palette the minimap and the tufts share)
   try {
     const gt = groundTex(aniso);
     terrMat.map = gt.map; terrMat.normalMap = gt.normal;
@@ -1090,6 +1308,7 @@ export async function buildMap(W, mapId) {
   }
   function buildTerrain() {
     if (photo && terrMat.map) patchTerrainPhoto(terrMat, photo); else photo = null;     // the splat attribute only exists with the patched program
+    if (LCFX) lcPatch(terrMat, { LC_CLOUD: "", LC_AO: "" });                              // LC-74 cloud shadows + LC-41 contact AO (medium and up)
     terrain = new THREE.Group();
     terrain.name = "terrain";
     const tChunks = [];
@@ -1112,7 +1331,7 @@ export async function buildMap(W, mapId) {
       if (ci !== _lodCi || cj !== _lodCj) {
         _lodCi = ci; _lodCj = cj;
         for (const c of tChunks) {
-          const ring = Math.abs(c.ci - ci) <= 1 && Math.abs(c.cj - cj) <= 1;
+          const ring = Math.abs(c.ci - ci) <= TIER_Q.ring && Math.abs(c.cj - cj) <= TIER_Q.ring;   // (ULTRA: a 5 x 5 near ring, 2.6 m terrain to ~500 m)
           if (ring && !c.near && _lodQueue.indexOf(c) < 0) _lodQueue.push(c);
           const useNear = ring && !!c.near;
           c.far.visible = !useNear;
@@ -1123,7 +1342,7 @@ export async function buildMap(W, mapId) {
         const c = _lodQueue.shift();
         c.near = buildChunk(c.ci, c.cj, NEAR_SEG, true);
         terrain.add(c.near);
-        const ring = Math.abs(c.ci - _lodCi) <= 1 && Math.abs(c.cj - _lodCj) <= 1;
+        const ring = Math.abs(c.ci - _lodCi) <= TIER_Q.ring && Math.abs(c.cj - _lodCj) <= TIER_Q.ring;
         c.near.visible = ring;
         if (ring) c.far.visible = false;
       }
@@ -1155,6 +1374,13 @@ export async function buildMap(W, mapId) {
       color: mapId === "isla_viva" ? 0x80c2ca : 0x4b7a84, transparent: true, opacity: 0.86,
       roughness: 0.30, metalness: 0.0, side: THREE.DoubleSide,
     });
+    wmat.color.multiplyScalar(GR.water);                                              // LC-04 (OD-2 G2)
+    // LC-39 (P3 half): depth colour + shoreline foam from the baked ground (LCU.uLcHgt): shallow water shows the sand under it, deep water the grade's colour
+    if (LCFX) {
+      LCU.uLcShallow.value.copy(wmat.color).lerp(new THREE.Color(mapId === "isla_viva" ? 0x9fe0d2 : 0x7fa89a), 0.55);
+      LCU.uLcDeep.value.copy(wmat.color).multiplyScalar(mapId === "isla_viva" ? 0.55 : 0.62);
+      lcPatch(wmat, { LC_WATER: "" });
+    }
     let wN = null;
     try {
       wN = waterNormalTex(aniso);
@@ -1296,6 +1522,16 @@ export async function buildMap(W, mapId) {
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
+    // LC-74 cloud shadows + LC-38 wind (the world-shader layer, LCU): the ground reads the SAME baked cloud noise the dome draws, projected along the sun onto a
+    // deck ~380 m up and drifting with the wind; the wind's direction is seeded per match (a separate stream: the world rng is untouched). Cloud cover per map
+    // sets how much of the ground is under a cloud (Deepwood's 0.72 -> ~40 %, Savanna's 0.54 -> ~25 %); a cloud takes 50 % of the sun.
+    {
+      const wr = W.SIM.mulberry32(seed ^ 0x77d1a5), wa = wr() * Math.PI * 2;
+      LCU.uLcWind.value.set(Math.cos(wa), Math.sin(wa), LCFX ? 1 : 0, 0);
+      LCU.uLcCloud.value = skyMat.uniforms.tNoise.value;
+      LCU.uLcCloudK.value.set(sunDir.x / Math.max(0.2, sunDir.y), sunDir.z / Math.max(0.2, sunDir.y), 1.02 - (K.cloud != null ? K.cloud : 0.5) * 0.62, LCFX ? 0.5 : 0);
+      LCU.uLcCloudOff.value.copy(cloudOff);
+    }
     const sky = new THREE.Mesh(skyGeo, skyMat);
     sky.renderOrder = -10; sky.frustumCulled = false; sky.name = "sky";
     g.add(sky);
@@ -1333,6 +1569,8 @@ export async function buildMap(W, mapId) {
       // else it parallaxes as you move and its far shell clips the 2000m far-plane at map corners
       if (W.camera) sky.position.copy(W.camera.position);
       skyMat.uniforms.cloudT.value = t;    // scrolls both baked cloud layers (replaces the sprite drift)
+      LCU.uLcT.value = t; LCU.uLcWater.value.y = t;
+      LCU.uLcCloudOff.value.set(cloudOff.x + t * 0.0072 * LCU.uLcWind.value.x, cloudOff.y + t * 0.0072 * LCU.uLcWind.value.y);   // ~7 m/s of drift
       for (const fl of flocks) {
         const u = fl.userData, a = t * u.spd + u.ph;
         fl.position.set(u.cx + Math.cos(a) * u.fr * 6, u.cy + Math.sin(a * 0.7) * 7, u.cz + Math.sin(a) * u.fr * 6);
@@ -3505,7 +3743,7 @@ export async function buildMap(W, mapId) {
   // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
   const HG_INDOOR = mapId === "deepwood" ? 0.95 : 0.8;
   const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
-  const HG_FURN_CELL = 32, HG_FURN_DIST = 60;
+  const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
   const _hgc = new THREE.Color(), hgColCache = new Map();
   const hgCol = (hex) => { let v = hgColCache.get(hex); if (!v) { _hgc.set(hex); v = [_hgc.r, _hgc.g, _hgc.b]; hgColCache.set(hex, v); } return v; };
   const hgStack = () => new Error().stack;
@@ -4195,7 +4433,9 @@ export async function buildMap(W, mapId) {
       geo.setAttribute("uv", new THREE.Float32BufferAttribute(T.uv, 2));
       geo.setIndex(T.idx);
       const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.96, metalness: 0, polygonOffset: true, polygonOffsetFactor: offset, polygonOffsetUnits: offset });
+      mat.color.setScalar(GR.ground);                                                   // LC-04 (OD-2 G2): the town ground is ground too
       try { const gt = groundTex(aniso); mat.map = gt.map; mat.normalMap = gt.normal; mat.normalScale = new THREE.Vector2(0.3, 0.3); } catch (e) { /* flat vertex colour */ }
+      if (LCFX) lcPatch(mat, { LC_CLOUD: "", LC_AO: "" });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.receiveShadow = true; mesh.castShadow = false; mesh.name = name;
       g.add(mesh);
@@ -4293,7 +4533,7 @@ export async function buildMap(W, mapId) {
       for (const m of meshes) {
         const bs = m.geometry.boundingSphere, dx = bs.center.x - cam.position.x, dy = bs.center.y - cam.position.y, dz = bs.center.z - cam.position.z;
         const d = Math.sqrt(dx * dx + dy * dy + dz * dz) - bs.radius;
-        m.visible = d < 1100;
+        m.visible = d < TIER_Q.distD;                     // (1,100 m; high 1,300, ULTRA 1,750)
         // (Wave 7b: a compound cell's sphere spans its 600 m cell, so the 170 m test passed from anywhere near it and the shadow pass drew every compound of the cell (15 k
         //  triangles of a Coco Village street view's shadow map for compounds 300 m away): a themed cell casts when one of ITS compounds is within 170 m)
         const P = m.userData.parts;
@@ -5037,6 +5277,18 @@ export async function buildMap(W, mapId) {
   field.bake();
   const bakeMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _bk0;
   heightAt0 = (x, z) => field.at(x, z);
+  // the world-shader layer's ground (LCU.uLcHgt): the baked lattice as a 609 x 609 half-float texture, linear-filtered, so the drawn ground height at any
+  // fragment is one fetch (the walls' wear band, the water's depth colour and foam). Medium and up; freed with the map.
+  if (LCFX) {
+    const L = field.lat, hp = new Uint16Array(LAT_N * LAT_N);
+    for (let i = 0; i < hp.length; i++) hp[i] = THREE.DataUtils.toHalfFloat(L[i]);
+    const ht = new THREE.DataTexture(hp, LAT_N, LAT_N, THREE.RedFormat, THREE.HalfFloatType);
+    ht.minFilter = ht.magFilter = THREE.LinearFilter; ht.generateMipmaps = false; ht.wrapS = ht.wrapT = THREE.ClampToEdgeWrapping; ht.needsUpdate = true;
+    lcOwn(ht);
+    LCU.uLcHgt.value = ht;
+    LCU.uLcHgtK.value.set(LAT_CELLS / (SIZE * LAT_N), (HALF * LAT_CELLS / SIZE + 0.5) / LAT_N, 0, 0);
+    LCU.uLcWater.value.x = waterY;
+  }
   photo = await photoPromise;
   buildTerrain();
   emitRoads();
@@ -5229,13 +5481,25 @@ export async function buildMap(W, mapId) {
   // their own mesh each: emissive is a uniform.
   const _vc = new THREE.Color();
   const structMats = {};                          // tkind -> the ONE material every structure mesh of that kind shares (the map-wide batches and the Wave-7 district meshes)
+  // LC-17 (P2-C): per-kind surface response. Every procedural wall was roughness 0.88 / metalness 0.04: brick, planks, plaster, shingles and corrugated steel
+  // all caught the sun the same way. Now plaster is the most matte, shingles a little glossier, and metal a real metal (0.45 / 0.5: the IBL exists since the
+  // look plan, so a metal lobe reflects the map's sky instead of black). Plus, on medium and up (LCFX), the world-shader layer: the wall-base wear band
+  // (vertical faces within 0.85 m of the ground under them, up to 22 % darker), the CC0 grime photograph (stains / weathering, its light / dark only, a 6 m
+  // tile and a turned second sample) and the cloud shadows. Same draw calls (the same meshes), one program per kind as before.
+  const KIND_PBR = { s: [0.86, 0.03], plank: [0.9, 0.0], shingle: [0.8, 0.02], metal: [0.45, 0.5], block: [0.84, 0.02], stucco: [0.93, 0.0] };
+  const STRUCT_LC = { LC_CLOUD: "", LC_WEAR: "", LC_WEAR_H: "0.85", LC_WEAR_K: "0.22" };
+  const grimeTex = await grimePromise;
+  if (grimeTex) { LCU.uLcGrime.value = grimeTex; LCU.uLcGrimeK.value.set(0.55, STRUCT_TILE / 6.0, 0, 0); STRUCT_LC.LC_GRIME = ""; }
+  else LCU.uLcGrimeK.value.set(0, STRUCT_TILE / 6.0, 0, 0);
   function structMaterial(tkind) {
     let mat = structMats[tkind];
     if (mat) return mat;
-    mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.88, metalness: 0.04 });
+    const pbr = KIND_PBR[tkind] || KIND_PBR.s;
+    mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: pbr[0], metalness: pbr[1] });
     let tx = null;
     try { tx = KIND_TEX[tkind] ? KIND_TEX[tkind](aniso) : _st; } catch (e) { tx = _st; }
     if (tx) { mat.map = tx.map; mat.normalMap = tx.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
+    if (LCFX) lcPatch(mat, STRUCT_LC);
     return (structMats[tkind] = mat);
   }
   /** Wave 7b: the brick/stone ("s") and plank textures in one material - vertex attribute `tki` 0 = s, 1 = plank (both 256 px tiling canvases, identity transforms, the same UVs) */
@@ -5250,8 +5514,10 @@ export async function buildMap(W, mapId) {
       const SC = THREE.ShaderChunk;
       // tki 0 = s (brick / stone), 1 = plank, 2 = stucco: weights from the flat per-vertex index (no interpolation across a box: every vertex of a box has the same index)
       const pick3 = (a, b, c, uv) => "( texture2D( " + a + ", " + uv + " ) * ( 1.0 - step( 0.5, vTki ) ) + texture2D( " + b + ", " + uv + " ) * ( step( 0.5, vTki ) - step( 1.5, vTki ) ) + texture2D( " + c + ", " + uv + " ) * step( 1.5, vTki ) )";
-      mat.customProgramCacheKey = () => "lc-struct-mix-v2";
+      mat.customProgramCacheKey = () => "lc-struct-mix-v3";
       mat.onBeforeCompile = (sh) => {
+        // LC-17: the per-kind roughness of the three kinds this material mixes (brick / stone, plank, plaster: KIND_PBR)
+        sh.fragmentShader = sh.fragmentShader.replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = vTki < 0.5 ? " + KIND_PBR.s[0].toFixed(3) + " : ( vTki < 1.5 ? " + KIND_PBR.plank[0].toFixed(3) + " : " + KIND_PBR.stucco[0].toFixed(3) + " );");
         sh.uniforms.map2 = { value: pk.map }; sh.uniforms.normalMap2 = { value: pk.normal }; sh.uniforms.map3 = { value: sc.map }; sh.uniforms.normalMap3 = { value: sc.normal };
         sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute float tki;\nvarying float vTki;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvTki = tki;");
         sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform sampler2D map2;\nuniform sampler2D normalMap2;\nuniform sampler2D map3;\nuniform sampler2D normalMap3;\nvarying float vTki;")
@@ -5259,6 +5525,7 @@ export async function buildMap(W, mapId) {
           .replace("#include <normal_fragment_maps>", SC.normal_fragment_maps.split("texture2D( normalMap, vNormalMapUv )").join(pick3("normalMap", "normalMap2", "normalMap3", "vNormalMapUv")));     // (every occurrence: the chunk samples the normal map in its object-space AND its tangent-space branch)
       };
     }
+    if (LCFX) lcPatch(mat, STRUCT_LC);
     return (dualMat = mat);
   }
   /** Merge one batch set (colour|kind -> geometries) into one mesh per texture kind plus one per emissive colour. `tag` = "" for the map-wide set, else the district id. */
@@ -5368,7 +5635,7 @@ export async function buildMap(W, mapId) {
   // rather than the 8 the audit suggested, and off entirely on 'low', because in a
   // forward renderer each one is evaluated per fragment on every lit material and
   // the performance dimension is also below parity.
-  const NLAMP = (W.settings && W.settings.graphics === "low") ? 0 : 4;
+  const NLAMP = TIER_Q.lamps;                         // (0 on low, 4; ULTRA 6: the count is fixed for the match, so no program ever changes)
   if (NLAMP && lampPts.length) {
     const pool = [];
     for (let i = 0; i < NLAMP; i++) {
@@ -5418,6 +5685,7 @@ export async function buildMap(W, mapId) {
 }`);
       };
     }
+    if (LCFX) lcPatch(rmat, { LC_CLOUD: "", LC_AO: "" });                                // LC-74 / LC-41: the roads are ground too
     const rmesh = new THREE.Mesh(rmerged, rmat);
     rmesh.receiveShadow = true; rmesh.name = "roads";
     g.add(rmesh);
@@ -5444,6 +5712,124 @@ export async function buildMap(W, mapId) {
   if (houses.length) propStats.treesNearHouses = hgTreesDropped;
   if (yardInfo) propStats.yard = yardInfo;
   const instRefs = {};   // kind -> [{inst, baseMatrixes}]
+  // ── LC-38 foliage wind (medium and up) ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // A map-local CLONE of a foliage GLB material (the GLB's own material is shared with the menu diorama and the probes' reference meshes) with the wind
+  // vertex term (see LC_VERT_WIND): kind height, sway at the top, leaf flutter. Plus the cloud shadows. The near shadow casters get a depth material with the
+  // same sway, so a tree's shadow moves with its crown.
+  const WIND_K = { tree: [6.5, 0.3, 0.03], pine: [8, 0.24, 0.015], birch: [7, 0.34, 0.035], palm: [7, 0.45, 0.04], bush: [1.4, 0.07, 0.02], grass: [0.6, 0.1, 0] };
+  const windDefs = (kind) => { const w = WIND_K[kind]; return { LC_WIND: "", LC_WIND_H: w[0].toFixed(2), LC_WIND_A: w[1].toFixed(3), LC_WIND_FLUT: w[2].toFixed(3) }; };
+  const windMats = new Map(), windDepth = new Map();
+  function windMat(kind, mat) {
+    if (!LCFX || !WIND_K[kind] || !mat || Array.isArray(mat) || !mat.isMeshStandardMaterial) return mat;
+    const key = kind + "|" + mat.uuid;
+    let m = windMats.get(key);
+    if (!m) { m = mat.clone(); m.name = (mat.name || kind) + ":wind"; lcPatch(m, Object.assign({ LC_CLOUD: "" }, windDefs(kind))); windMats.set(key, m); }
+    return m;
+  }
+  function windDepthMat(kind) {
+    if (!LCFX || !WIND_K[kind]) return undefined;
+    let m = windDepth.get(kind);
+    if (!m) { m = lcPatch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), windDefs(kind)); windDepth.set(kind, m); }
+    return m;
+  }
+  // ── LC-89 per-instance culled prop draws ───────────────────────────────────────────────────────────────────────────────────────────────────────
+  // Every prop kind was ONE InstancedMesh spanning the whole map (bounding radii 850-1,011 m): three can never cull it, so every tree, bush, rock, car and
+  // container of the map was drawn in every frame - 76-83 % of a ground frame's triangles (perf audit: 992 k of 1.31 M on Savanna, 1.19 M of 1.42 M on
+  // Deepwood), most of them behind the camera or fogged out. Chunking into cells buys that back with far MORE draw calls; instead each map-wide mesh stays
+  // the REFERENCE (invisible: every instance at its true matrix, index i = props[kind][i], what destroyProp, the placement / collision probes and the census
+  // read) and a DRAWN twin holds only the instances inside the camera frustum and within the tier's draw distance, compacted to the front of its instance
+  // buffer: the SAME one draw call per kind part, a fraction of the triangles. The cull re-runs only when it can matter (the camera moved > 2 m or turned
+  // > 3 degrees, the draw distance moved, a prop died, the near-tree swap changed), against the frustum widened by 4 m + 4 degrees so a recull is never
+  // late, and uploads only the live range. Distance: the tier's (low 600, medium 780, high 1,000, ULTRA 1,650 m), x up to 2.1 with height above the ground
+  // (the drop sees the map's forests to the horizon); the last 12 % of it shrinks an instance to nothing (no pop). Allocation-free per frame.
+  const culls = [];                                   // per kind: { list, parts: [{ draw, src, lod }], cx, cy, cz, cr, hid }
+  let cullDirty = true;
+  function addCulled(kind, list, ref, mat, lodPart) {
+    let K2 = null;
+    for (const q of culls) if (q.kind === kind) { K2 = q; break; }
+    if (!K2) { K2 = { kind, list, parts: [], cx: null, cy: null, cz: null, cr: null, hid: null }; culls.push(K2); }
+    const dg = ref.geometry.clone(); dg.userData = {};            // (no kind tag: the probes read the reference meshes only)
+    const draw = new THREE.InstancedMesh(dg, mat, list.length);
+    draw.castShadow = false; draw.receiveShadow = true; draw.frustumCulled = false; draw.count = 0;
+    draw.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    draw.name = "props:" + kind; draw.userData.lcCulled = kind;
+    g.add(draw);
+    ref.visible = false; ref.userData.lcReference = true;
+    K2.parts.push({ draw, src: ref.instanceMatrix.array.slice(0, list.length * 16), lod: !!lodPart, geo: ref.geometry });
+    return draw;
+  }
+  function finishCulls() {
+    const _sp = new THREE.Sphere(), _m = new THREE.Matrix4();
+    for (const K2 of culls) {
+      const n = K2.list.length;
+      K2.cx = new Float32Array(n); K2.cy = new Float32Array(n); K2.cz = new Float32Array(n); K2.cr = new Float32Array(n);
+      for (const pt of K2.parts) if (!pt.geo.boundingSphere) pt.geo.computeBoundingSphere();
+      for (let i = 0; i < n; i++) {
+        let cx = 0, cy = 0, cz = 0, r = -1;
+        for (const pt of K2.parts) {
+          _m.fromArray(pt.src, i * 16);
+          _sp.copy(pt.geo.boundingSphere).applyMatrix4(_m);
+          if (r < 0) { cx = _sp.center.x; cy = _sp.center.y; cz = _sp.center.z; r = _sp.radius; }
+          else { const d = Math.sqrt((_sp.center.x - cx) ** 2 + (_sp.center.y - cy) ** 2 + (_sp.center.z - cz) ** 2) + _sp.radius; if (d > r) r = d; }
+        }
+        K2.cx[i] = cx; K2.cy[i] = cy; K2.cz[i] = cz; K2.cr[i] = Math.max(0.5, r);
+      }
+    }
+    if (!culls.length) return;
+    const _f = new THREE.Frustum(), _pv = new THREE.Matrix4();
+    let lx = 1e9, ly = 1e9, lz = 1e9, lfx = 0, lfy = 0, lfz = 0, lD = 0, lAsp = 0, lFov = 0;
+    W._lcCullStats = { culls: 0, drawn: 0, total: 0, D: 0 };
+    trackUpdater(() => {
+      const cam = W.camera;
+      if (!cam || !cam.matrixWorld) return;
+      const e = cam.matrixWorld.elements, px = e[12], py = e[13], pz = e[14], fx = -e[8], fy = -e[9], fz = -e[10];
+      const agl = py - Math.max(heightAt0(px, pz), waterY);
+      const af = agl <= 40 ? 1 : agl >= 312 ? 2.1 : 1 + (agl - 40) / 247;
+      const D = TIER_Q.propD * af;
+      const moved = (px - lx) * (px - lx) + (py - ly) * (py - ly) + (pz - lz) * (pz - lz);
+      if (!cullDirty && moved < 4 && fx * lfx + fy * lfy + fz * lfz > 0.99863 && Math.abs(D - lD) < lD * 0.03 && cam.aspect === lAsp && cam.fov === lFov) return;
+      cullDirty = false; lx = px; ly = py; lz = pz; lfx = fx; lfy = fy; lfz = fz; lD = D; lAsp = cam.aspect; lFov = cam.fov;
+      _pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      _f.setFromProjectionMatrix(_pv);
+      const P = _f.planes, D2 = D * D, F0 = D * 0.88, FK = 1 / (D - F0);
+      let drawnN = 0, totalN = 0;
+      for (let q = 0; q < culls.length; q++) {
+        const K2 = culls[q], list = K2.list, n = list.length, hid = K2.hid;
+        const cxA = K2.cx, cyA = K2.cy, czA = K2.cz, crA = K2.cr;
+        const parts = K2.parts;
+        let nOut = 0, nLod = 0;
+        totalN += n;
+        for (let i = 0; i < n; i++) {
+          if (list[i].dead) continue;
+          const cx = cxA[i], cy = cyA[i], cz = czA[i], r = crA[i];
+          const dx = cx - px, dy = cy - py, dz = cz - pz, d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 > D2) continue;
+          const d = Math.sqrt(d2), pad = r + 4 + d * 0.07;
+          let inside = true;
+          for (let k = 0; k < 6; k++) { const pl = P[k], nn = pl.normal; if (nn.x * cx + nn.y * cy + nn.z * cz + pl.constant < -pad) { inside = false; break; } }
+          if (!inside) continue;
+          const fade = d > F0 ? Math.max(0, 1 - (d - F0) * FK) : 1;
+          const skipLod = hid !== null && hid.has(i);
+          for (let k = 0; k < parts.length; k++) {
+            const pt = parts[k];
+            if (pt.lod && skipLod) continue;
+            const o = (pt.lod ? nLod : nOut) * 16, a = pt.draw.instanceMatrix.array, sv = pt.src, si = i * 16;
+            if (fade === 1) for (let j = 0; j < 16; j++) a[o + j] = sv[si + j];
+            else { for (let j = 0; j < 12; j++) a[o + j] = (j & 3) === 3 ? sv[si + j] : sv[si + j] * fade; a[o + 12] = sv[si + 12]; a[o + 13] = sv[si + 13]; a[o + 14] = sv[si + 14]; a[o + 15] = sv[si + 15]; }
+          }
+          nOut++;
+          if (!skipLod) nLod++;
+        }
+        for (let k = 0; k < parts.length; k++) {
+          const pt = parts[k], im = pt.draw.instanceMatrix, c = pt.lod ? nLod : nOut;
+          pt.draw.count = c;
+          im.clearUpdateRanges(); if (c) im.addUpdateRange(0, c * 16); im.needsUpdate = true;
+        }
+        drawnN += nOut;
+      }
+      const st = W._lcCullStats; st.culls++; st.drawn = drawnN; st.total = totalN; st.D = Math.round(D);
+    });
+  }
   // Which kinds collide. The SHAPE of every collider comes from the baked table (pushPropColliders); these radii are only the legacy
   // fallback for a client whose table did not load.
   const propColliderKinds = { palm: 0.5, tree: 0.6, pine: 0.55, birch: 0.5, rocks: 1.4, car: 1.6, container: 2.2, barrel: 0.55 };
@@ -5627,7 +6013,9 @@ export async function buildMap(W, mapId) {
         inst.instanceMatrix.needsUpdate = true;
         g.add(inst);
         instRefs[kind].push(inst);
-        if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: m.material, mats, lo: lodPart ? inst : null, hid: new Set() });
+        const drawMat = windMat(kind, m.material);                                 // LC-38 (medium and up: a wind clone; low: the GLB's own)
+        addCulled(kind, list, inst, drawMat, lodPart);                               // LC-89: inst is now the invisible reference, a culled twin draws
+        if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: drawMat, mats, lo: lodPart ? inst : null, hid: new Set() });
       }
     }
     // colliders for solid props
@@ -5651,10 +6039,11 @@ export async function buildMap(W, mapId) {
   // buy the same triangles with far MORE colour-pass calls, on a frame the
   // scorecard proves is draw-call bound (64x36 costs the same as 1280x720).
   {
-    const NEAR_N = 64, NEAR_R2 = 110 * 110;
+    const NEAR_N = TIER_Q.nearN, NEAR_R2 = TIER_Q.nearR * TIER_Q.nearR;     // (64 within 110 m; high 72 / 125 m, ULTRA 112 / 165 m)
     const nearCasters = shadowSrc.map((ref) => {
       const im = new THREE.InstancedMesh(ref.geo, ref.mat, NEAR_N);
       im.castShadow = true; im.receiveShadow = !!ref.lo; im.count = 0;       // (a near tree that replaces its coarse twin keeps receiving shadow, as that twin did)
+      const wd = windDepthMat(ref.kind); if (wd) im.customDepthMaterial = wd;     // LC-38: its shadow sways with its crown
       im.frustumCulled = false;   // rebuilt around the focus; its own bounding sphere is stale by design
       g.add(im);
       // Wave 7b stage B: a LOD kind on a themed map also draws its STREET trees near the focus in full (the street palms / pines cast no near-field shadow, so the casters skip them;
@@ -5669,7 +6058,6 @@ export async function buildMap(W, mapId) {
       return { im, ref, street };
     });
     let _fx = 1e9, _fz = 1e9;
-    const _tinyM = new THREE.Matrix4();
     W._foliageDirty = true;
     if (nearCasters.length) trackUpdater(() => {
       const f = W._camFocus || W.player; if (!f) return;
@@ -5696,16 +6084,16 @@ export async function buildMap(W, mapId) {
         nc.im.count = n;
         nc.im.instanceMatrix.needsUpdate = true;
         if (nc.street) { nc.street.count = ns; nc.street.instanceMatrix.needsUpdate = true; }
-        if (lo) {                                  // the coarse map-wide twin hides exactly the trees the near proxy draws in full
-          const prev = nc.ref.hid;
-          for (const i of prev) if (!cur.has(i) && !list[i].dead) lo.setMatrixAt(i, mats[i]);
-          for (const i of cur) if (!prev.has(i)) { _tinyM.copy(mats[i]); const e = _tinyM.elements; for (let k = 0; k < 11; k++) if (k !== 3 && k !== 7) e[k] *= 1e-4; lo.setMatrixAt(i, _tinyM); }       // (hidden IN PLACE: the same position, a ten-thousandth of the size - never at the origin)
+        if (lo) {                                  // the coarse twin skips exactly the trees the near proxy draws in full
+          // (LC-89: the map-wide mesh is the invisible REFERENCE now and keeps every true matrix; the culled draw mesh of the kind reads this set and leaves them out)
           nc.ref.hid = cur;
-          lo.instanceMatrix.needsUpdate = true;
+          for (const K2 of culls) if (K2.kind === nc.ref.kind) K2.hid = cur;
+          cullDirty = true;
         }
       }
     });
   }
+  finishCulls();                                     // LC-89: the culled twins' instance spheres + their updater (after the near-caster swap set exists)
   if (city) { await placeCityKit(); installCityCull(); await buildHouseFurniture(); }
   await yieldPhase();                                // phase 3/3 done
 
@@ -5718,7 +6106,7 @@ export async function buildMap(W, mapId) {
   // Refreshed on a timer rather than per frame, and only when the camera moved.
   {
     const cityMask = city ? buildCityMask() : null;
-    const CL_N = 1400, CL_R = 55;
+    const CL_N = TIER_Q.clN, CL_R = TIER_Q.clR;         // (1,400 tufts in 55 m; high 1,700 / 60 m, ULTRA 2,900 / 78 m)
     const q1 = new THREE.PlaneGeometry(0.55, 0.45); q1.translate(0, 0.225, 0);
     const q2 = q1.clone(); q2.rotateY(Math.PI / 2);
     const clGeo = BufferGeometryUtils.mergeGeometries([q1, q2], false);
@@ -5731,6 +6119,7 @@ export async function buildMap(W, mapId) {
     // renders black.
     clGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(clGeo.attributes.position.count * 3).fill(1), 3));
     const clMat = new THREE.MeshStandardMaterial({ map: clutterTex(), alphaTest: 0.5, roughness: 1, metalness: 0, side: THREE.DoubleSide, vertexColors: true });
+    if (LCFX) lcPatch(clMat, Object.assign({ LC_CLOUD: "", LC_AO: "" }, windDefs("grass")));     // LC-38 the tufts sway, LC-74 / LC-41 like the ground under them
     const clutter = new THREE.InstancedMesh(clGeo, clMat, CL_N);
     clutter.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CL_N * 3), 3);
     clutter.castShadow = false; clutter.receiveShadow = false;
@@ -5739,6 +6128,7 @@ export async function buildMap(W, mapId) {
     const _cm = new THREE.Matrix4(), _cq = new THREE.Quaternion(), _cs = new THREE.Vector3(), _cp = new THREE.Vector3();
     const _cy = new THREE.Vector3(0, 1, 0), _hide = new THREE.Matrix4().makeScale(1e-4, 1e-4, 1e-4);
     const _clC = [0, 0, 0];                           // colorAt out (a rebuild colours up to 1,400 tufts)
+    const CLK = 0.82 * GR.ground;
     // The tufts used to be a golden-angle spiral bolted to the CAMERA: instance i
     // always sat at (clX + cos(i*GA)*r, ...), so the offset depended only on i and
     // every tuft was rigidly parented to the camera anchor. Re-snapping that
@@ -5752,7 +6142,7 @@ export async function buildMap(W, mapId) {
     // change as the camera moves. A rebuild only adds cells entering the ring and
     // drops cells leaving it, and the rim scale-fade makes even that sub-pixel.
     const CELL = 2.6;                                 // ~0.148 tufts/m^2, matches the old density
-    const FADE0 = 40;                                 // full size to here, shrink to 0 by CL_R
+    const FADE0 = CL_R - 15;                          // full size to here, shrink to 0 by CL_R (40 m at the default 55)
     let clT = 9, clAX = 1e9, clAZ = 1e9;
     trackUpdater((dt) => {
       clT += dt;
@@ -5789,7 +6179,7 @@ export async function buildMap(W, mapId) {
           _cm.compose(_cp.set(x, y, z), _cq.setFromAxisAngle(_cy, h2 * 6.283), _cs.set(s, s, s));
           clutter.setMatrixAt(n, _cm);
           const c = colorAt(mapId, y, x, z, seed, _clC);
-          clutter.instanceColor.setXYZ(n, c[0] * 0.82, c[1] * 0.82, c[2] * 0.82);   // contact darkening
+          clutter.instanceColor.setXYZ(n, c[0] * CLK, c[1] * CLK, c[2] * CLK);   // contact darkening x the ground grade (the tufts match the darkened ground)
           n++;
         }
       }
@@ -5819,7 +6209,7 @@ export async function buildMap(W, mapId) {
         for (const part of mergePartsByMaterial(meshes)) {
           const ig = part.geometry.clone();                                              // (a copy of its own, tagged as nothing: a sky-island tree is not a GROUND prop to the placement gates)
           ig.userData = {};
-          const inst = new THREE.InstancedMesh(ig, part.material, list.length);
+          const inst = new THREE.InstancedMesh(ig, windMat(kind, part.material), list.length);     // (LC-38: island trees sway too)
           inst.name = "island:" + kind;
           for (let i = 0; i < list.length; i++) {
             const t = list[i], s2 = (baseH2 / Math.max(0.001, sz2.y)) * t.s;
@@ -5848,6 +6238,63 @@ export async function buildMap(W, mapId) {
       m.rotation.y = t.ry;
       g.add(m);
     } catch (e) { /* crystal GLB may not exist yet — islands still work */ }
+  }
+
+  // ── LC-41 baked contact AO (medium and up) ────────────────────────────────────────────────────────────────────────
+  // Nothing darkened the ground where a wall, a rock, a car or a container stands on it: every base sat on fully lit ground (GTAO was cut: 268 -> 484
+  // calls). Baked once per match instead: every box collider that stands ON the ground (its foot within 0.35 m of the terrain, at least 0.5 m tall) is
+  // rasterised into a 2048 x 2048 occupancy mask over the map (0.78 m a texel, area-weighted at its edges, taller = denser up to 2.5 m), blurred by two
+  // running-sum box passes (~1.6 m), and the ground materials (terrain, roads, town ground, grass tufts) take it as AO: the sky fill under it x (1 - 0.55 ao),
+  // the sun x (1 - 0.2 ao). One R8 texture (4 MB + mips), one fetch per ground fragment, ZERO draw calls. A function of the colliders only: every client and
+  // every seed replay bakes the same mask.
+  if (LCFX) {
+    const _ao0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+    const N = 2048, inv = N / SIZE, occ = new Float32Array(N * N);
+    let nAO = 0;
+    for (let ci = 0; ci < colliders.length; ci++) {
+      const c = colliders[ci];
+      if (c.dead || c.kind !== "box") continue;
+      const w = c.maxX - c.minX, d = c.maxZ - c.minZ;
+      if (w * d > 6000 || w < 0.05 || d < 0.05) continue;
+      const gy = heightAt0((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2);
+      if (c.minY > gy + 0.35 || c.maxY < gy + 0.5) continue;
+      const hk = Math.min(1, (c.maxY - Math.max(c.minY, gy)) / 2.5);
+      const fx0 = (c.minX + HALF) * inv, fx1 = (c.maxX + HALF) * inv, fz0 = (c.minZ + HALF) * inv, fz1 = (c.maxZ + HALF) * inv;
+      const i0 = Math.max(0, Math.floor(fx0)), i1 = Math.min(N - 1, Math.floor(fx1)), j0 = Math.max(0, Math.floor(fz0)), j1 = Math.min(N - 1, Math.floor(fz1));
+      for (let j = j0; j <= j1; j++) {
+        const cz = Math.min(j + 1, fz1) - Math.max(j, fz0);
+        if (cz <= 0) continue;
+        for (let i = i0; i <= i1; i++) {
+          const cx = Math.min(i + 1, fx1) - Math.max(i, fx0);
+          if (cx <= 0) continue;
+          const v = cx * cz * hk, k = j * N + i;
+          if (v > occ[k]) occ[k] = v;
+        }
+      }
+      nAO++;
+    }
+    // two separable running-sum box blurs, radius 1 texel (a 3-texel box twice ~ a 1.6 m soft edge)
+    const tmp = new Float32Array(N * N), R = 1, D = 2 * R + 1;
+    const pass = (src, dst, horiz) => {
+      for (let a = 0; a < N; a++) {
+        let acc = 0;
+        const at = horiz ? (b) => src[a * N + (b < 0 ? 0 : b >= N ? N - 1 : b)] : (b) => src[(b < 0 ? 0 : b >= N ? N - 1 : b) * N + a];
+        for (let b = -R; b <= R; b++) acc += at(b);
+        for (let b = 0; b < N; b++) {
+          if (horiz) dst[a * N + b] = acc / D; else dst[b * N + a] = acc / D;
+          acc += at(b + R + 1) - at(b - R);
+        }
+      }
+    };
+    pass(occ, tmp, true); pass(tmp, occ, false); pass(occ, tmp, true); pass(tmp, occ, false);
+    const px = new Uint8Array(N * N);
+    for (let k = 0; k < px.length; k++) { const v = occ[k]; px[k] = v >= 1 ? 255 : v <= 0 ? 0 : Math.round(v * 255); }
+    const at = new THREE.DataTexture(px, N, N, THREE.RedFormat, THREE.UnsignedByteType);
+    at.minFilter = THREE.LinearMipmapLinearFilter; at.magFilter = THREE.LinearFilter; at.generateMipmaps = true; at.wrapS = at.wrapT = THREE.ClampToEdgeWrapping; at.needsUpdate = true;
+    lcOwn(at);
+    LCU.uLcAO.value = at;
+    LCU.uLcAOK.value.set(1 / SIZE, 0.5, 0.55, 0.2);
+    W._lcAOStats = { colliders: nAO, ms: Math.round(((typeof performance !== "undefined" ? performance.now() : Date.now()) - _ao0) * 10) / 10 };
   }
 
   // ── static collider spatial hash ──────────────────────────────────────────
@@ -6087,6 +6534,7 @@ export async function buildMap(W, mapId) {
     const lst = props[col.prop];
     if (lst && lst[col.idx]) lst[col.idx].dead = true;
     W._foliageDirty = true;
+    cullDirty = true;                                // LC-89: the culled twin drops it on its next pass
   }
 
   const lootAll = lootPoints.concat(chestPoints);
