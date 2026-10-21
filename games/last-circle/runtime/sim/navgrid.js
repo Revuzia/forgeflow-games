@@ -9,7 +9,9 @@
  * API (contract C-NAV, VERSION 2)
  *   NavGrid.createWorld({ colliders, heightFn, waterY, portals, tileSize: 32, cellOutdoor: 1.5, cellIndoor: 0.75,
  *                         cover: (tx, tz) => bool | zones: [{ x, z, r }] | rects: [{ minX, maxX, minZ, maxZ }], margin: 6, fineRects })   -> world
- *   NavGrid.findPath(world, sx, sy, sz, tx, ty, tz [, { pad, maxExpand, noPull }])          -> [{ x, y, z, k }, ...] | null
+ *   NavGrid.findPath(world, sx, sy, sz, tx, ty, tz [, { pad, maxExpand, noPull, maxDrop }])  -> [{ x, y, z, k }, ...] | null
+ *       (P2-E) opts.maxDrop (m): drop edges taller than this are left out (default: all, up to DROP_MAX 6 m). For C-FALL (a 4 m drop is safe, a
+ *       taller one hurts) and C-DBNO crawlers. A downed actor (0.6 m capsule, same radius) needs no grid of its own: every standing edge fits it.
  *       k = the kind of the leg that ARRIVES at the waypoint (0 walk, 1 drop, 2 ramp); the array also carries .cost .expanded
  *       .nodes; world.lastFail names why a query returned null: "no-goal" (no floor near the goal), "no-start", "start-blocked"
  *       (the walker cannot walk to any node near it), "no-path", "limit" (maxExpand reached, or the search table is full)
@@ -2545,6 +2547,7 @@
     var HWq = opts.hw != null ? +opts.hw : HW;                       // the weight this query uses
     var pad = opts.pad != null ? opts.pad : 0.15;
     if (pad > PAD_MAX) pad = PAD_MAX; if (pad < 0) pad = 0;
+    var mdq = opts.maxDrop != null && +opts.maxDrop >= 0 ? +opts.maxDrop : Infinity;      // (P2-E) the tallest drop edge this query may take (a downed crawler, a fall-damage budget); default: every drop the grid has
     // goal candidates first (the snap scratch is shared): nodes the mover can walk straight to the goal point from, else the nearest
     var nG = snapNodes(W, tx, ty, tz, 1.5, 2.6);
     if (nG === 0) { W.lastFail = "no-goal"; W.stats.queryMs += now() - t0; return null; }
@@ -2596,6 +2599,7 @@
         if (slotQ < 0) { full = true; break; }
         var fl = arF[slotQ];
         if ((fl & AR_CLOSED) !== 0) continue;
+        if (mdq !== Infinity && T1.edgeKind[e] === EDGE_DROP && T1.y[l1] - T1.y[l2] > mdq) continue;      // (P2-E) opts.maxDrop
         var g2 = g1 + T1.edgeCost[e];
         if ((fl & AR_SEEN) !== 0 && g2 >= arG[slotQ]) continue;
         arG[slotQ] = g2; arP[slotQ] = cur; arF[slotQ] = AR_SEEN | T1.edgeKind[e];
@@ -2656,6 +2660,7 @@
           if (slotQ < 0) { full = true; break; }
           var fl3 = arF[slotQ];
           if ((fl3 & AR_CLOSED) !== 0) continue;
+          if (mdq !== Infinity && T1.extKind[e] === EDGE_DROP && T1.y[l1] - T2.y[l3] > mdq) continue;      // (P2-E) opts.maxDrop
           var g3 = g1 + T1.extCost[e];
           if ((fl3 & AR_SEEN) !== 0 && g3 >= arG[slotQ]) continue;
           arG[slotQ] = g3; arP[slotQ] = cur; arF[slotQ] = AR_SEEN | T1.extKind[e];

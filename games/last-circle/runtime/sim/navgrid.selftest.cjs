@@ -316,6 +316,12 @@ const street = { x: 36.5, y: 0, z: 33 };
   const down = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25), up = NG.findPath(W1, 36.5, 0, 25, 33.4, 3.6, 25);
   ok(down && down.length <= 4 && down.some((w) => w.k === NG.EDGE_DROP), "balcony -> street is a short route with a drop (" + (down && down.length) + " waypoints)");
   ok(up && up.length > 10 && !up.some((w) => w.k === NG.EDGE_DROP && w.y > 3), "street -> balcony goes through the house, never up a 'drop' (" + (up && up.length) + " waypoints)");
+  // (P2-E) opts.maxDrop: a route that may not take the 3.6 m drop walks down through the house; a budget over the drop changes nothing
+  const downMd = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25, { maxDrop: 1.0 }), downMd6 = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25, { maxDrop: NG.DROP_MAX });
+  let tallest = 0;
+  if (downMd) for (let i = 1; i < downMd.length; i++) if (downMd[i].k === NG.EDGE_DROP) tallest = Math.max(tallest, downMd[i - 1].y - downMd[i].y);
+  ok(downMd && downMd.length > 10 && tallest <= 1.0 + 1e-6, "maxDrop 1 m: balcony -> street goes down through the house (" + (downMd && downMd.length) + " waypoints, tallest drop leg " + tallest.toFixed(2) + " m)");
+  ok(downMd6 && down && JSON.stringify(downMd6.map((w) => [w.x, w.y, w.z, w.k])) === JSON.stringify(down.map((w) => [w.x, w.y, w.z, w.k])), "maxDrop = DROP_MAX: the very route the default query returns");
   // islands
   const vault = NG.findPath(W1, 36.5, 0, 25, 43, 0, 23);
   ok(vault === null && W1.lastFail === "no-goal", "the sealed vault has no node (pruned): lastFail " + W1.lastFail);
