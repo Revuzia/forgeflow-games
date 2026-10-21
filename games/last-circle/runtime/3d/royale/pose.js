@@ -366,3 +366,28 @@ export function applyArmPose(obj, bones, mode, weight, pitch) {
     aim(bones.lLeg, bones.lFoot, _oq, P[7][0], P[7][1], P[7][2], bf);
   }
 }
+
+// ── LEG POSES (P23/player, parity P2-A) ─────────────────────────────────────
+// Procedural LEG layer for the two moves no local Mixamo clip covers (the library has no mantle / vault and no slide clip):
+//   mantle - the legs TUCK up and over the ledge (the old mantle froze the crouch clip, so the legs hung straight down
+//            through the wall top for the whole pull-up);
+//   slide  - the lead (right) leg reaches out ahead, the trailing (left) leg folds under the body: the genre's slide stance.
+// Same format as POSES' leg rows, actor-local (+Z = facing, +X = model left, +Y = up):
+//   [rUpLeg->rLeg, rLeg->rFoot, lUpLeg->lLeg, lLeg->lFoot]
+export const LEG_POSES = {
+  mantle: [[-0.14, -0.30, 0.94], [-0.08, -0.96, -0.26], [0.14, -0.62, 0.77], [0.10, -0.90, -0.42]],
+  slide: [[-0.10, -0.46, 0.88], [-0.06, -0.30, 0.95], [0.16, -0.86, 0.48], [0.10, -0.20, -0.97]],
+};
+
+/** Steer the leg chains toward LEG_POSES[mode] over the current animation frame, blended by `weight` (0..1). */
+export function applyLegPose(obj, bones, mode, weight) {
+  if (!bones || !(weight > 0)) return;
+  const P = LEG_POSES[mode];
+  if (!P) return;
+  obj.getWorldQuaternion(_oq);
+  const w = Math.min(1, weight);
+  aim(bones.rUpLeg, bones.rLeg, _oq, P[0][0], P[0][1], P[0][2], 0.95 * w);
+  aim(bones.lUpLeg, bones.lLeg, _oq, P[2][0], P[2][1], P[2][2], 0.95 * w);
+  aim(bones.rLeg, bones.rFoot, _oq, P[1][0], P[1][1], P[1][2], 0.92 * w);
+  aim(bones.lLeg, bones.lFoot, _oq, P[3][0], P[3][1], P[3][2], 0.92 * w);
+}
