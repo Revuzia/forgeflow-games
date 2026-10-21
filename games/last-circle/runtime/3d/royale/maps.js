@@ -1116,6 +1116,60 @@ const CITY_THEME_TABLES = {
   },
 };
 
+/** LC-41: the contact-AO mask (see buildMap). A module-level function, not a block inside buildMap: buildMap is far past V8's optimising-compiler size
+ *  limit, so a hot loop written inline there runs in the baseline tier (the 16 M-texel blur measured 1.6-3.3 s in the page vs 0.16 s optimised).
+ *  `gyc[i]` = the ground under collider i's centre (the caller's heightAt). Returns the R8 texels, the colliders rasterised and the raster's ms. */
+function bakeContactAO(colliders, gyc, N, size) {
+  const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  const half = size / 2, inv = N / size, occ = new Float32Array(N * N), rowHas = new Uint8Array(N);
+  let nAO = 0;
+  for (let ci = 0; ci < colliders.length; ci++) {
+    const c = colliders[ci];
+    if (c.dead || c.kind !== "box") continue;
+    const w = c.maxX - c.minX, d = c.maxZ - c.minZ;
+    if (w * d > 6000 || w < 0.05 || d < 0.05) continue;
+    const gy = gyc[ci];
+    if (c.minY > gy + 0.35 || c.maxY < gy + 0.5) continue;
+    const hk = Math.min(1, (c.maxY - Math.max(c.minY, gy)) / 2.5);
+    const fx0 = (c.minX + half) * inv, fx1 = (c.maxX + half) * inv, fz0 = (c.minZ + half) * inv, fz1 = (c.maxZ + half) * inv;
+    const i0 = Math.max(0, Math.floor(fx0)), i1 = Math.min(N - 1, Math.floor(fx1)), j0 = Math.max(0, Math.floor(fz0)), j1 = Math.min(N - 1, Math.floor(fz1));
+    for (let j = j0; j <= j1; j++) {
+      const cz = Math.min(j + 1, fz1) - Math.max(j, fz0);
+      if (cz <= 0) continue;
+      rowHas[j] = 1;
+      for (let i = i0; i <= i1; i++) {
+        const cx = Math.min(i + 1, fx1) - Math.max(i, fx0);
+        if (cx <= 0) continue;
+        const v = cx * cz * hk, k = j * N + i;
+        if (v > occ[k]) occ[k] = v;
+      }
+    }
+    nAO++;
+  }
+  const t1 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  // the blur: two 3-texel boxes (~ a 1.6 m soft edge) = ONE separable 5-tap [1 2 3 2 1] / 9 per axis, edges clamped; only the rows the raster touched (+-2)
+  // are filtered (the rest of the map stays 0) and the vertical pass writes the bytes directly
+  const tmp = new Float32Array(N * N), px = new Uint8Array(N * N), k9 = 1 / 9;
+  for (let r = 0; r < N; r++) {
+    if (!rowHas[r]) continue;
+    const o = r * N;
+    for (let c = 0; c < N; c++) {
+      const cm2 = c < 2 ? 0 : c - 2, cm1 = c < 1 ? 0 : c - 1, cp1 = c > N - 2 ? N - 1 : c + 1, cp2 = c > N - 3 ? N - 1 : c + 2;
+      tmp[o + c] = (occ[o + cm2] + 2 * occ[o + cm1] + 3 * occ[o + c] + 2 * occ[o + cp1] + occ[o + cp2]) * k9;
+    }
+  }
+  for (let r = 0; r < N; r++) {
+    const rm2 = r < 2 ? 0 : r - 2, rm1 = r < 1 ? 0 : r - 1, rp1 = r > N - 2 ? N - 1 : r + 1, rp2 = r > N - 3 ? N - 1 : r + 2;
+    if (!rowHas[rm2] && !rowHas[rm1] && !rowHas[r] && !rowHas[rp1] && !rowHas[rp2]) continue;
+    const o = r * N, a = rm2 * N, b = rm1 * N, d = rp1 * N, e = rp2 * N;
+    for (let c = 0; c < N; c++) {
+      const v = (tmp[a + c] + 2 * tmp[b + c] + 3 * tmp[o + c] + 2 * tmp[d + c] + tmp[e + c]) * k9;
+      px[o + c] = v >= 1 ? 255 : v <= 0 ? 0 : (v * 255 + 0.5) | 0;
+    }
+  }
+  return { px, nAO, rasterMs: Math.round((t1 - t0) * 10) / 10 };
+}
+
 export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
   const seed = W.seed;
@@ -3807,6 +3861,13 @@ export async function buildMap(W, mapId) {
   // housegen palette material -> the struct texture kind its faces wear (district merge: s / plank / stucco share the mix mesh; no metal mesh)
   const HG_COLSURF = { brick: "stone", stone: "stone", roof: "stone", roof_flat: "concrete", floor_tile: "concrete", floor_concrete: "concrete", lamp: "concrete", sheet: "metal", metal: "metal",
     glass: "concrete", plaster: "concrete", stucco: "concrete", fabric: "concrete", ceramic: "concrete", plank: "wood", plank_in: "wood", floor_wood: "wood", wood: "wood" };   // LC-52 (surfaceAt)
+  // a pitched "roof" is clay tile (stone) unless its tint is a DARK warm brown: the timber lodges' and cabins' shingles (wood)
+  const _hgC = new THREE.Color();
+  function hgSurf(pe) {
+    if (!pe) return "concrete";
+    if (pe.mat === "roof") { try { _hgC.set(pe.color); } catch (e) { return "stone"; } if (Math.max(_hgC.r, _hgC.g, _hgC.b) < 0.2 && _hgC.r >= _hgC.g && _hgC.g >= _hgC.b) return "wood"; }
+    return HG_COLSURF[pe.mat] || "concrete";
+  }
   const HG_MAT_KIND = { brick: "s", stone: "s", roof: "s", roof_flat: "s", floor_tile: "s", floor_concrete: "s", lamp: "s", sheet: "s", metal: "s", glass: "s",
     plaster: "stucco", stucco: "stucco", fabric: "stucco", ceramic: "stucco", plank: "plank", plank_in: "plank", floor_wood: "plank", wood: "plank" };
   // the indoor ambient term: interior faces and furniture take this share of their colour (lamp panels keep theirs). Deepwood's forest light is darker than the
@@ -3917,9 +3978,9 @@ export async function buildMap(W, mapId) {
     for (const c of HG.collidersOf(H, mkCollider)) colliders.push(c);
     {                                                // LC-52: what each house collider is made of (its top face's palette material; stairs are timber; a roof plank its roof's material)
       let k = c0;
-      for (const b of H.boxes) if (b.c) { const pe = H.palette[b.f && b.f[2]]; colSurf.set(colliders[k++], HG_COLSURF[pe && pe.mat] || "concrete"); }
+      for (const b of H.boxes) if (b.c) { const pe = H.palette[b.f && b.f[2]]; colSurf.set(colliders[k++], hgSurf(pe)); }
       let roofS = "stone";
-      for (const pe of H.palette) if (pe.mat === "roof" || pe.mat === "roof_flat" || pe.mat === "sheet") { roofS = HG_COLSURF[pe.mat]; break; }
+      for (const pe of H.palette) if (pe.mat === "roof" || pe.mat === "roof_flat" || pe.mat === "sheet") { roofS = hgSurf(pe); break; }
       for (const r of H.ramps) { if (k < colliders.length) colSurf.set(colliders[k++], r.roof ? roofS : "wood"); }
       for (; k < colliders.length; k++) colSurf.set(colliders[k], "wood");             // (furniture: tables, beds, crates)
     }
@@ -5969,7 +6030,7 @@ export async function buildMap(W, mapId) {
   // late, and uploads only the live range. Distance: the tier's (low 600, medium 780, high 1,000, ULTRA 1,650 m), x up to 2.1 with height above the ground
   // (the drop sees the map's forests to the horizon); the last 12 % of it shrinks an instance to nothing (no pop). Allocation-free per frame.
   const culls = [];                                   // per kind: { list, parts: [{ draw, src, lod }], cx, cy, cz, cr, hid }
-  let cullDirty = true;
+  let cullDirty = true, cullFn = null;              // (cullFn: the updater; map.cullNow() runs it at once - a camera CUT (spectate, a probe's pinned view) need not wait a frame)
   function addCulled(kind, list, ref, mat, lodPart) {
     let K2 = null;
     for (const q of culls) if (q.kind === kind) { K2 = q; break; }
@@ -6005,7 +6066,7 @@ export async function buildMap(W, mapId) {
     const _f = new THREE.Frustum(), _pv = new THREE.Matrix4();
     let lx = 1e9, ly = 1e9, lz = 1e9, lfx = 0, lfy = 0, lfz = 0, lD = 0, lAsp = 0, lFov = 0;
     W._lcCullStats = { culls: 0, drawn: 0, total: 0, D: 0 };
-    trackUpdater(() => {
+    trackUpdater(cullFn = () => {
       const cam = W.camera;
       if (!cam || !cam.matrixWorld) return;
       const e = cam.matrixWorld.elements, px = e[12], py = e[13], pz = e[14], fx = -e[8], fy = -e[9], fz = -e[10];
@@ -6475,59 +6536,15 @@ export async function buildMap(W, mapId) {
   // every seed replay bakes the same mask.
   if (LCFX) {
     const _ao0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
-    const N = 2048, inv = N / SIZE, occ = new Float32Array(N * N), rowHas = new Uint8Array(N);
-    let nAO = 0;
-    for (let ci = 0; ci < colliders.length; ci++) {
-      const c = colliders[ci];
-      if (c.dead || c.kind !== "box") continue;
-      const w = c.maxX - c.minX, d = c.maxZ - c.minZ;
-      if (w * d > 6000 || w < 0.05 || d < 0.05) continue;
-      const gy = heightAt0((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2);
-      if (c.minY > gy + 0.35 || c.maxY < gy + 0.5) continue;
-      const hk = Math.min(1, (c.maxY - Math.max(c.minY, gy)) / 2.5);
-      const fx0 = (c.minX + HALF) * inv, fx1 = (c.maxX + HALF) * inv, fz0 = (c.minZ + HALF) * inv, fz1 = (c.maxZ + HALF) * inv;
-      const i0 = Math.max(0, Math.floor(fx0)), i1 = Math.min(N - 1, Math.floor(fx1)), j0 = Math.max(0, Math.floor(fz0)), j1 = Math.min(N - 1, Math.floor(fz1));
-      for (let j = j0; j <= j1; j++) {
-        const cz = Math.min(j + 1, fz1) - Math.max(j, fz0);
-        if (cz <= 0) continue;
-        rowHas[j] = 1;
-        for (let i = i0; i <= i1; i++) {
-          const cx = Math.min(i + 1, fx1) - Math.max(i, fx0);
-          if (cx <= 0) continue;
-          const v = cx * cz * hk, k = j * N + i;
-          if (v > occ[k]) occ[k] = v;
-        }
-      }
-      nAO++;
-    }
-    const _ao1 = (typeof performance !== "undefined" ? performance.now() : Date.now());
-    // the blur: two 3-texel boxes (~ a 1.6 m soft edge) = ONE separable 5-tap [1 2 3 2 1] / 9 per axis, edges clamped; only the rows the raster touched (+-2)
-    // are filtered - the rest of the map stays 0 - and the vertical pass writes the bytes directly (was four full-map float passes + a quantise: 0.5-2.3 s
-    // on the contended box, now one horizontal pass over the touched rows + one vertical)
-    const tmp = new Float32Array(N * N), px = new Uint8Array(N * N), k9 = 1 / 9;
-    for (let r = 0; r < N; r++) {
-      if (!rowHas[r]) continue;
-      const o = r * N;
-      for (let c = 0; c < N; c++) {
-        const cm2 = c < 2 ? 0 : c - 2, cm1 = c < 1 ? 0 : c - 1, cp1 = c > N - 2 ? N - 1 : c + 1, cp2 = c > N - 3 ? N - 1 : c + 2;
-        tmp[o + c] = (occ[o + cm2] + 2 * occ[o + cm1] + 3 * occ[o + c] + 2 * occ[o + cp1] + occ[o + cp2]) * k9;
-      }
-    }
-    for (let r = 0; r < N; r++) {
-      const rm2 = r < 2 ? 0 : r - 2, rm1 = r < 1 ? 0 : r - 1, rp1 = r > N - 2 ? N - 1 : r + 1, rp2 = r > N - 3 ? N - 1 : r + 2;
-      if (!rowHas[rm2] && !rowHas[rm1] && !rowHas[r] && !rowHas[rp1] && !rowHas[rp2]) continue;
-      const o = r * N, a = rm2 * N, b = rm1 * N, d = rp1 * N, e = rp2 * N;
-      for (let c = 0; c < N; c++) {
-        const v = (tmp[a + c] + 2 * tmp[b + c] + 3 * tmp[o + c] + 2 * tmp[d + c] + tmp[e + c]) * k9;
-        px[o + c] = v >= 1 ? 255 : v <= 0 ? 0 : (v * 255 + 0.5) | 0;
-      }
-    }
+    const N = 2048, gyc = new Float32Array(colliders.length);
+    for (let ci = 0; ci < colliders.length; ci++) { const c = colliders[ci]; gyc[ci] = c.dead || c.kind !== "box" ? 0 : heightAt0((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2); }
+    const { px, nAO, rasterMs } = bakeContactAO(colliders, gyc, N, SIZE);
     const at = new THREE.DataTexture(px, N, N, THREE.RedFormat, THREE.UnsignedByteType);
     at.minFilter = THREE.LinearMipmapLinearFilter; at.magFilter = THREE.LinearFilter; at.generateMipmaps = true; at.wrapS = at.wrapT = THREE.ClampToEdgeWrapping; at.needsUpdate = true;
     lcOwn(at);
     LCU.uLcAO.value = at;
     LCU.uLcAOK.value.set(1 / SIZE, 0.5, 0.55, 0.2);
-    W._lcAOStats = { colliders: nAO, rasterMs: Math.round((_ao1 - _ao0) * 10) / 10, ms: Math.round(((typeof performance !== "undefined" ? performance.now() : Date.now()) - _ao0) * 10) / 10 };
+    W._lcAOStats = { colliders: nAO, rasterMs, ms: Math.round(((typeof performance !== "undefined" ? performance.now() : Date.now()) - _ao0) * 10) / 10 };
   }
 
   // ── static collider spatial hash ──────────────────────────────────────────
@@ -6912,6 +6929,7 @@ export async function buildMap(W, mapId) {
     lootPoints: lootAll, pois, portals,
     landmark: lookout,                                                          // LC-90: Deepwood's fire lookout { x, z, y, top } (null elsewhere)
     randomGroundPos, losBlocked,
+    cullNow: () => { if (cullFn) { cullDirty = true; cullFn(); } },          // LC-89: re-cull the prop twins against W.camera now (after a camera cut)
     minimap: mm, themeColor: K.themeColor,
     terrain, water: mapWater, sky: K.sky,
     // C-PAD (Wave 6): what the ground is made of - read-only, for the gates and for debugging. `genVersion` names the world GENERATOR: 1 = the
