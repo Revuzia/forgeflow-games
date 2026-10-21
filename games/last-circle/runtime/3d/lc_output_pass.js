@@ -28,7 +28,8 @@
  *    HDR input this pass already reads: edge test on 5 taps (centre + 4 diagonals), and only on
  *    an edge pixel the 4 directional taps of the classic FXAA (Timothy Lottes, NVIDIA FXAA white
  *    paper), each tone-mapped before blending (blending HDR values would let a bright sky
- *    sample swamp the edge). No extra pass, no extra target.
+ *    sample swamp the edge), with a continuous response (no pixel flips on a tiny change).
+ *    No extra pass, no extra target.
  *  - colour-vision correction (daltonize, LC-43 hook), after the storm grade.
  */
 import {
@@ -142,8 +143,13 @@ export const LCOutputShader = {
       float lM = lcLumaIn( mIn );
       float lMin = min( lM, min( min( lNW, lNE ), min( lSW, lSE ) ) );
       float lMax = max( lM, max( max( lNW, lNE ), max( lSW, lSE ) ) );
-      // FXAA_EDGE_THRESHOLD 1/8, FXAA_EDGE_THRESHOLD_MIN 1/24
-      if ( lMax - lMin < max( 0.0416667, lMax * 0.125 ) ) return mT;
+      // FXAA_EDGE_THRESHOLD 1/8, FXAA_EDGE_THRESHOLD_MIN 1/24. CONTINUOUS response: the classic hard cut (and the
+      // a-or-b pick below) flips whole edge pixels on a 1/255 change of a neighbour (a flash's faint bloom, a slow light
+      // change), which reads as shimmer; here the effect fades in over 1x..1.5x the threshold and the pick is a blend.
+      float thr = max( 0.0416667, lMax * 0.125 );
+      float range = lMax - lMin;
+      if ( range <= thr ) return mT;
+      float edge = smoothstep( thr, thr * 1.5, range );
       vec2 dir = vec2( -( ( lNW + lNE ) - ( lSW + lSE ) ), ( lNW + lSW ) - ( lNE + lSE ) );
       float dirReduce = max( ( lNW + lNE + lSW + lSE ) * 0.03125, 0.0078125 );   // REDUCE_MUL 1/8, REDUCE_MIN 1/128
       float rcpDirMin = 1.0 / ( min( abs( dir.x ), abs( dir.y ) ) + dirReduce );
@@ -153,7 +159,8 @@ export const LCOutputShader = {
       vec3 b = a * 0.5 + 0.25 * ( lcToneMap( texture2D( tDiffuse, vUv - dir * 0.5 ).rgb ) +
                                   lcToneMap( texture2D( tDiffuse, vUv + dir * 0.5 ).rgb ) );
       float lB = sqrt( clamp( dot( b, vec3( 0.299, 0.587, 0.114 ) ), 0.0, 1.0 ) );
-      return ( lB < lMin || lB > lMax ) ? a : b;
+      float wB = 1.0 - smoothstep( 0.0, 0.03, max( lMin - lB, lB - lMax ) );   // b outside the local range -> a
+      return mix( mT, mix( a, b, wB ), edge );
     }
 
     void main() {
