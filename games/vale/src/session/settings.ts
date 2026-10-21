@@ -51,7 +51,7 @@ function rawDefaults(): Settings {
     video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false },
     audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true },
     controls: { binds: { ...DEFAULT_BINDS }, quickCast: false, cameraLock: false, edgePan: true, panSpeed: 0.5, attackMoveOnClick: false, selfCastModifier: 'AltLeft' },
-    access: { colorblind: 'off', uiScale: 1, hudScale: 1, minimapScale: 1, reduceMotion: false, screenShake: 1, subtitles: true, locFlash: false, damageFlash: false },
+    access: { colorblind: 'off', uiScale: 1, hudScale: 1, minimapScale: 1, reduceMotion: false, screenShake: 0.5, subtitles: true, locFlash: false, damageFlash: false },
     gameplay: { showDamageNumbers: true, showAllyIndicators: true, healthBarTicks: true, minimapSide: 'right' },
   };
 }

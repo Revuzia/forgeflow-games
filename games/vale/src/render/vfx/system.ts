@@ -6,9 +6,12 @@
 //   emitter   pooled SoA CPU particles: count / bursts / rate / perMeter emission; point · sphere ·
 //             ring · disc · cone · line · path · aura shapes; up/out/in/forward/back/down/normal/random
 //             directions; drag, gravity, turbulence, orbit, radial pull, ground bounce; size / alpha /
-//             emissive / erode curves over life, gradients baked per spawn (team / element resolve here);
+//             emissive / erode curves over life, gradients baked per spawn (team / element / signature /
+//             secondary resolve here);
 //             flipbooks, variants, velocity stretch, ground / axis / camera alignment, local space
-//   ribbon    CPU strips that follow an anchor (projectiles, dashes, weapon sockets); camera or ground
+//   ribbon    CPU strips that follow an anchor (projectiles, dashes, weapon sockets); camera or ground;
+//             `fit` scales the width by the spawn scale (a crit swing is wider), `span` lets go after that
+//             many def-seconds (a swing trail stops at the follow-through)
 //   beam      instanced noise-displaced strips source → target
 //   shockwave instanced ground (or camera-facing) rings with a bright leading edge
 //   decal     instanced ground marks (plain · scorch · crack · ink · frost · light)
@@ -26,7 +29,8 @@
 // The VFX meshes live in `scene` (drawn by the post chain's VFX pass after AO, before bloom, so HDR
 // emissive blooms and the grade applies); pooled lights live in `group` (added to the world scene).
 //
-// Bible rules: emissive caps by tier T0–T4 = 0.8 · 1.5 · 3 · 6 · ≥10; only T4 reaches white (near-white
+// Bible rules: emissive caps by tier T0–T4 = 0.8 · 2 · 3 · 6 · ≥10 (T1 raised from 1.5 in r12 M5 so a basic hit's
+// 1-2 frame core reads on pale stone); only T4 reaches white (near-white
 // colours below T4 become Dawnglass); allies' effects at 65 % opacity with half the secondary
 // particles; own T1 at 85 %; quality changes particle DENSITY only.
 
@@ -51,7 +55,7 @@ import { buildShape, SHAPE_KIND, VFX_SHAPES } from './shapes.ts';
 
 export type VfxAnchor = 'origin' | 'target' | 'path' | 'ground';
 export type Tier = 0 | 1 | 2 | 3 | 4;
-const TIER_CAP = [0.8, 1.5, 3, 6, 10];
+const TIER_CAP = [0.8, 2, 3, 6, 10];
 const DAWNGLASS = new Color().setStyle('#BFD3E6');
 
 /** what the VFX system needs from the world (implemented by the renderer) */
@@ -66,6 +70,9 @@ export interface SpawnOpts {
   tier: Tier;
   team: Color;
   element: Color | null;
+  /** the caster fighter's signature hue and its companion (r12 M12; `signature` / `secondary` refs); null = team */
+  signature?: Color | null;
+  secondary?: Color | null;
   /** ally (not self) effects render at 65 % */
   ally: boolean;
   /** own basic attacks at 85 % */
@@ -118,6 +125,8 @@ const DISTORT_MAX = 48;
 const DISTORT_CAP = 0.015;
 /** how long a released sustained instance lives on for its elements' tails (s) */
 const RELEASE_TAIL = 1.0;
+/** a swing arc's sub-frame point spacing (radians) */
+const ARC_STEP = (4 * Math.PI) / 180;
 
 let uidSeq = 1;
 
@@ -143,6 +152,8 @@ class Inst {
   secondary = 1;
   team = new Color();
   element = new Color();
+  sig = new Color();
+  sec = new Color();
   origin = new Vector3();
   target = new Vector3();
   ground = new Vector3();
@@ -171,6 +182,10 @@ class Inst {
 interface Ribbon {
   on: boolean; inst: Inst | null; layer: RibbonL | null; n: number; xs: Float32Array; ys: Float32Array; zs: Float32Array; ts: Float32Array; ds: Float32Array;
   slot: number; opacity: number; cap: number; seed: number; rim: Color; born: number; rate: number;
+  /** width scale (`fit`: the spawn scale) */
+  s: number;
+  /** a synthesized arc (RibbonL.arc): the eased fraction last pushed and the clock of that push */
+  arcF: number; arcT: number;
 }
 interface Beam { on: boolean; inst: Inst | null; l: BeamL | null; a: Vector3; b: Vector3; age: number; slot: number; opacity: number; cap: number; seed: number; rate: number }
 interface Ring { on: boolean; l: ShockwaveL | null; x: number; y: number; z: number; age: number; s: number; slot: number; opacity: number; cap: number; seed: number; rate: number }
@@ -178,6 +193,8 @@ interface Decal {
   on: boolean; l: DecalL | null; x: number; z: number; rot: number; age: number; s: number; slot: number; opacity: number; cap: number; seed: number; rim: Color; rate: number;
   /** sustained / following owner (hold, tracking) */
   inst: Inst | null;
+  /** spawned by a sustained instance: its styled erosion (ink, scorch, crack, frost) runs only after the hold */
+  sus: boolean;
 }
 interface MeshEl {
   on: boolean; l: MeshL | null; inst: Inst | null; pos: Vector3; q: Quaternion; age: number; s: number; slot: number; opacity: number; cap: number;
@@ -203,6 +220,19 @@ const _up = new Vector3(0, 1, 0);
 const _fwd = new Vector3(0, 0, 1);
 
 const rnd = (a: number, b: number): number => a + Math.random() * (b - a);
+
+/** relative luminance of a linear colour; Y 0.13 ≈ L* 43 */
+const lumY = (c: Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+const BODY_Y = 0.13;
+/** lift a dark signature-coloured BODY toward the pair's pale member until it reaches BODY_Y (see VfxSystem.bake) */
+function liftBody(out: Color, sig: Color, sec: Color): void {
+  const y = lumY(out);
+  if (y >= BODY_Y) return;
+  const pale = lumY(sec) > lumY(sig) ? sec : sig;
+  const yp = lumY(pale);
+  if (yp <= y + 1e-4) return;
+  out.lerp(pale, Math.min(1, (BODY_Y - y) / (yp - y)));
+}
 
 function mkAttr(n: number, size: number): InstancedBufferAttribute {
   const a = new InstancedBufferAttribute(new Float32Array(n * size), size);
@@ -286,6 +316,8 @@ export class VfxSystem {
   /** reduce motion (accessibility): halves exposure envelopes, cuts the death grade (screen.ts) */
   set reduceMotion(on: boolean) { screenFx.reduceMotion = on; }
   get reduceMotion(): boolean { return screenFx.reduceMotion; }
+  /** the screen-level state (exposure envelopes, death grade) and its post-chain uniforms (harness / debug) */
+  get screen(): { fx: typeof screenFx; uniforms: typeof screenUniforms } { return { fx: screenFx, uniforms: screenUniforms }; }
 
   constructor(defs: readonly VfxDefT[], world: VfxWorld) {
     this.world = world;
@@ -327,7 +359,7 @@ export class VfxSystem {
       mesh.frustumCulled = false; mesh.renderOrder = 10;
       this.scene.add(mesh);
       this.ribDraw = { mesh, geo, pos, col, uv, prm, rim };
-      for (let i = 0; i < RIB_MAX; i++) this.ribbons.push({ on: false, inst: null, layer: null, n: 0, xs: new Float32Array(RIB_PTS), ys: new Float32Array(RIB_PTS), zs: new Float32Array(RIB_PTS), ts: new Float32Array(RIB_PTS), ds: new Float32Array(RIB_PTS), slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), born: 0, rate: 1 });
+      for (let i = 0; i < RIB_MAX; i++) this.ribbons.push({ on: false, inst: null, layer: null, n: 0, xs: new Float32Array(RIB_PTS), ys: new Float32Array(RIB_PTS), zs: new Float32Array(RIB_PTS), ts: new Float32Array(RIB_PTS), ds: new Float32Array(RIB_PTS), slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), born: 0, rate: 1, s: 1, arcF: -1, arcT: 0 });
     }
     {
       // beam strip: 32 segments along x ∈ [0, 1], y ∈ [-0.5, 0.5]
@@ -365,7 +397,7 @@ export class VfxSystem {
       mesh.frustumCulled = false; mesh.renderOrder = 8;
       this.scene.add(mesh);
       this.decalDraw = { mesh, geo, aPos, aRot, aCol, aMisc, aRimC };
-      for (let i = 0; i < DECAL_MAX; i++) this.decals.push({ on: false, l: null, x: 0, z: 0, rot: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), rate: 1, inst: null });
+      for (let i = 0; i < DECAL_MAX; i++) this.decals.push({ on: false, l: null, x: 0, z: 0, rot: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), rate: 1, inst: null, sus: false });
     }
     for (let i = 0; i < 192; i++) {
       this.meshEls.push({ on: false, l: null, inst: null, pos: new Vector3(), q: new Quaternion(), age: 0, s: 1, slot: 0, opacity: 1, cap: 1, spinA: 0, seed: 0, rim: new Color(), edge: new Color(), follow: false, rate: 1 });
@@ -432,6 +464,8 @@ export class VfxSystem {
     it.density = this.density * (o.ally ? 0.75 : 1);
     it.team.copy(o.team);
     it.element.copy(o.element ?? o.team);
+    it.sig.copy(o.signature ?? o.team);
+    it.sec.copy(o.secondary ?? o.signature ?? o.team);
     const fallback = o.ground ?? o.origin ?? o.target ?? _v.set(0, 0, 0);
     it.origin.copy(o.origin ?? fallback);
     it.target.copy(o.target ?? fallback);
@@ -496,14 +530,23 @@ export class VfxSystem {
   private resolve(ref: ColorRef | null, it: Inst, out: Color): Color {
     if (!ref || ref.k === 1) out.copy(it.team);
     else if (ref.k === 0) out.copy(ref.c);
+    else if (ref.k === 3) out.copy(it.sig);
+    else if (ref.k === 4) out.copy(it.sec);
     else out.copy(it.element);
     if (it.tier < 4 && out.r > 0.88 && out.g > 0.88 && out.b > 0.88) out.copy(DAWNGLASS);
     return out;
   }
 
-  private bake(it: Inst, li: number, g: import('./curves.ts').Gradient): number {
+  /** bake a layer's gradient for this instance. `body`: the layer draws its colour as a surface (alpha or chip blend,
+   *  not light): a dark signature (Dunsom's indigo, Hesmi's violet, L* 26-38) is lifted toward its pale companion to
+   *  L* ≥ 43 there, so a signature body never renders as ink on the ground (additive light keeps the true hue) */
+  private bake(it: Inst, li: number, g: import('./curves.ts').Gradient, body = false): number {
     if (it.grad[li] >= 0) return it.grad[li];
-    const slot = this.grads.bake(g, (r, out) => this.resolve(r, it, out));
+    const slot = this.grads.bake(g, (r, out) => {
+      this.resolve(r, it, out);
+      if (body && r && (r.k === 3 || r.k === 4)) liftBody(out, it.sig, it.sec);
+      return out;
+    });
     it.grad[li] = slot;
     return slot;
   }
@@ -551,7 +594,7 @@ export class VfxSystem {
     const c = this.anchorPos(it, l, _v3);
     if (at === 'ground') c.y = Math.max(c.y, 0.06);
     const s = this.fitOf(it, l);
-    const slot = this.bake(it, li, l.color);
+    const slot = this.bake(it, li, l.color, l.blend === 1 || l.blend === 3);
     const rim = l.rim ? this.rimSlot(this.resolve(l.rim, it, _c)) : -1;
     const li2 = this.emitterIndex.get(l) ?? 0;
     const fx = Math.cos(it.dir), fz = Math.sin(it.dir);
@@ -720,10 +763,18 @@ export class VfxSystem {
       case 'ribbon': {
         const r = this.ribbons.find((x) => !x.on);
         if (!r) return;
-        r.on = true; r.inst = it; r.layer = l; r.n = 0; r.slot = this.bake(it, li, l.color); r.opacity = it.opacity; r.cap = this.cap(it); r.seed = Math.random(); r.born = this.now;
+        r.on = true; r.inst = it; r.layer = l; r.n = 0; r.slot = this.bake(it, li, l.color, l.blend === 1 || l.blend === 3); r.opacity = it.opacity; r.cap = this.cap(it); r.seed = Math.random(); r.born = this.now;
         r.rate = l.fitTime ? it.rate : 1;
+        r.s = l.fit ? it.scale : 1;
         if (l.rim) this.resolve(l.rim, it, r.rim);
         it.el[li] = this.ribbons.indexOf(r);
+        if (l.arc) {
+          // a synthesized swing: its first point
+          r.arcF = 0; r.arcT = this.now;
+          this.ribPush(r, this.arcPoint(it, l, 0, _v));
+          return;
+        }
+        r.arcF = -1;
         this.ribPush(r, this.anchorPos(it, l, _v));
         return;
       }
@@ -732,7 +783,7 @@ export class VfxSystem {
         if ((l.from === 'caster' || l.to === 'caster') && it.sourceId < 0 && it.targetId >= 0) return;
         const b = this.beams.find((x) => !x.on);
         if (!b) return;
-        b.on = true; b.inst = it; b.l = l; b.age = 0; b.slot = this.bake(it, li, l.color); b.opacity = it.opacity; b.cap = this.cap(it); b.seed = Math.random();
+        b.on = true; b.inst = it; b.l = l; b.age = 0; b.slot = this.bake(it, li, l.color, l.blend === 1 || l.blend === 3); b.opacity = it.opacity; b.cap = this.cap(it); b.seed = Math.random();
         b.rate = l.fitTime ? it.rate : 1;
         this.beamEnds(it, b);
         return;
@@ -742,7 +793,7 @@ export class VfxSystem {
         if (!r) return;
         const p = this.anchorPos(it, l, _v);
         r.on = true; r.l = l; r.x = p.x; r.y = l.vertical ? p.y : (at === 'path' ? p.y : 0.06); r.z = p.z;
-        r.age = 0; r.s = s; r.slot = this.bake(it, li, l.color); r.opacity = it.opacity; r.cap = this.cap(it); r.seed = Math.random();
+        r.age = 0; r.s = s; r.slot = this.bake(it, li, l.color, l.blend === 1 || l.blend === 3); r.opacity = it.opacity; r.cap = this.cap(it); r.seed = Math.random();
         r.rate = l.fitTime ? it.rate : 1;
         return;
       }
@@ -755,6 +806,7 @@ export class VfxSystem {
         dc.age = 0; dc.s = s; dc.slot = this.bake(it, li, l.color); dc.opacity = it.opacity; dc.cap = this.cap(it); dc.seed = Math.random();
         dc.rate = l.fitTime ? it.rate : 1;
         dc.inst = it.sustained || l.follow ? it : null;
+        dc.sus = it.sustained && l.hold > 0;
         this.resolve(l.rim ?? null, it, dc.rim);
         if (!l.rim) dc.rim.copy(it.team);
         it.el[li] = this.decals.indexOf(dc);
@@ -767,7 +819,7 @@ export class VfxSystem {
         e.on = true; e.l = l; e.follow = at === 'path' || l.follow; e.inst = e.follow || it.sustained ? it : null;
         e.rate = l.fitTime ? it.rate : 1;
         e.pos.copy(p); if (at === 'ground') e.pos.y = 0.02;
-        e.age = 0; e.s = s; e.slot = this.bake(it, li, l.color); e.opacity = it.opacity; e.cap = this.cap(it); e.spinA = 0; e.seed = Math.random();
+        e.age = 0; e.s = s; e.slot = this.bake(it, li, l.color, l.blend === 1 || l.blend === 3); e.opacity = it.opacity; e.cap = this.cap(it); e.spinA = 0; e.seed = Math.random();
         if (l.rim) this.resolve(l.rim, it, e.rim); else e.rim.setRGB(0, 0, 0);
         if (l.edge) this.resolve(l.edge, it, e.edge); else e.edge.copy(it.team);
         this.orientMesh(e, it, l);
@@ -795,10 +847,52 @@ export class VfxSystem {
   private trackElement(it: Inst, li: number, l: Layer): void {
     const ei = it.el[li];
     if (ei < 0 || !it.following && this.atOf(it, l) === 'path') return;
-    if (l.type === 'ribbon') { const r = this.ribbons[ei]; if (r.on && r.inst === it) this.ribPush(r, this.anchorPos(it, l, _v)); }
+    if (l.type === 'ribbon') {
+      const r = this.ribbons[ei];
+      if (!r.on || r.inst !== it) return;
+      if (l.arc) { this.arcTrack(it, l, r); return; }
+      // `span`: the ribbon lets go of its anchor that long after it fired (def time) and fades out
+      if (l.span > 0 && it.t - l.delay > l.span) { r.inst = null; return; }
+      this.ribPush(r, this.anchorPos(it, l, _v));
+    }
     else if (l.type === 'mesh') { const e = this.meshEls[ei]; if (e.on && e.inst === it && e.follow) { this.anchorPos(it, l, e.pos); this.orientMesh(e, it, l); } }
     else if (l.type === 'decal') { const dc = this.decals[ei]; if (dc.on && dc.inst === it) { this.anchorPos(it, l, _v); dc.x = _v.x; dc.z = _v.z; } }
     else if (l.type === 'distort') { const de = this.distorts[ei]; if (de.on && de.inst === it) { this.anchorPos(it, l, de.pos); if (l.ground) de.pos.y = 0.05; } }
+  }
+
+  /** a point of a synthesized swing arc at eased fraction g (RibbonL.arc): round the caster's feet, in its facing frame */
+  private arcPoint(it: Inst, l: RibbonL, g: number, out: Vector3): Vector3 {
+    const a = l.arc!;
+    const src = it.sourceId;
+    if (!(src >= 0 && this.world.socketPos?.(src, 'origin', out))) {
+      if (!(src >= 0 && this.world.entityPos(src, out))) out.copy(it.origin);
+      out.y = 0;
+    }
+    const th = a.a0 + (a.a1 - a.a0) * g;
+    const cd = Math.cos(it.dir), sd = Math.sin(it.dir), ct = Math.cos(a.tilt), st = Math.sin(a.tilt);
+    const c = Math.cos(th) * a.r, s = Math.sin(th) * a.r;
+    out.x += c * cd - s * sd * ct;
+    out.y = Math.max(0.08, out.y + a.h + s * st);
+    out.z += c * sd + s * cd * ct;
+    return out;
+  }
+
+  /** advance a swing arc to this frame: sub-frame points every ≤ 4° (a clean crescent at any frame rate), each with its
+   *  own interpolated clock so the tail fades evenly; lets go at the end of `span` */
+  private arcTrack(it: Inst, l: RibbonL, r: Ribbon): void {
+    const a = l.arc!;
+    const f = Math.min(1, Math.max(0, (it.t - l.delay) / (l.span > 0 ? l.span : 0.3)));
+    const fe = Math.pow(f, a.ease);
+    const n = Math.min(24, Math.max(1, Math.ceil((Math.abs(fe - r.arcF) * Math.abs(a.a1 - a.a0)) / ARC_STEP)));
+    const f0 = r.arcF, t0 = r.arcT;
+    if (fe > f0) {
+      for (let k = 1; k <= n; k++) {
+        this.ribPush(r, this.arcPoint(it, l, f0 + ((fe - f0) * k) / n, _v));
+        r.ts[r.n - 1] = t0 + ((this.now - t0) * k) / n;
+      }
+    }
+    r.arcF = fe; r.arcT = this.now;
+    if (f >= 1) r.inst = null;
   }
 
   private orientMesh(e: MeshEl, it: Inst, l: MeshL): void {
@@ -858,7 +952,7 @@ export class VfxSystem {
     if (r.n > 0) {
       const j = r.n - 1;
       const dd = Math.hypot(p.x - r.xs[j], p.y - r.ys[j], p.z - r.zs[j]);
-      if (dd < l.minDist && r.n > 1) { r.xs[j] = p.x; r.ys[j] = p.y; r.zs[j] = p.z; r.ts[j] = this.now; r.ds[j] = r.ds[j - 1] + Math.hypot(p.x - r.xs[j - 1], p.y - r.ys[j - 1], p.z - r.zs[j - 1]); return; }
+      if (dd < (l.arc ? 0.015 : l.minDist) && r.n > 1) { r.xs[j] = p.x; r.ys[j] = p.y; r.zs[j] = p.z; r.ts[j] = this.now; r.ds[j] = r.ds[j - 1] + Math.hypot(p.x - r.xs[j - 1], p.y - r.ys[j - 1], p.z - r.zs[j - 1]); return; }
     }
     if (r.n >= RIB_PTS) {
       for (const a of [r.xs, r.ys, r.zs, r.ts, r.ds]) a.copyWithin(0, 1);
@@ -1063,7 +1157,7 @@ export class VfxSystem {
         if (_v.lengthSq() < 1e-8) _v.set(1, 0, 0); else _v.normalize();
         const age = Math.min(1, ((this.now - r.ts[jj]) * r.rate) / l.life);
         const u = jj / Math.max(1, r.n - 1);
-        const w = evalCurve(l.width, u) * 0.5 * (1 - age * 0.5);
+        const w = evalCurve(l.width, u) * 0.5 * (1 - age * 0.5) * r.s;
         const al = Math.max(0, evalCurve(l.alpha, u)) * (1 - age) * r.opacity;
         this.grads.sample(r.slot, 1 - u, _rgb, 0);
         const e = Math.min(r.cap, l.emissive);
@@ -1142,7 +1236,9 @@ export class VfxSystem {
       DD.aPos.setXYZW(nd, dc.x, 0.035, dc.z, rad);
       DD.aRot.setXYZW(nd, dc.rot, l.shape, l.style, Math.max(0, evalCurve(l.alpha, t)) * dc.opacity);
       DD.aCol.setXYZW(nd, _rgb[0], _rgb[1], _rgb[2], e);
-      DD.aMisc.setXYZW(nd, t, dc.seed, param, l.tex.cell + (l.tex.variants ? Math.floor(dc.seed * l.tex.frames) : 0));
+      // the styled erosion runs on the decal's own age; a held status mark stays whole while held and erodes in its tail
+      const ero = dc.sus ? Math.max(0, (t - l.hold) / Math.max(0.05, 1 - l.hold)) : t;
+      DD.aMisc.setXYZW(nd, ero, dc.seed, param, l.tex.cell + (l.tex.variants ? Math.floor(dc.seed * l.tex.frames) : 0));
       DD.aRimC.setXYZW(nd, dc.rim.r, dc.rim.g, dc.rim.b, 0.8);
       nd++;
     }
@@ -1227,6 +1323,24 @@ export class VfxSystem {
     sd = { mesh, n: 0, aColor, aRimC, aEdge, aNoise, aDiss, aMisc };
     this.shapeDraws.set(shape, sd);
     return sd;
+  }
+
+  /**
+   * compile every VFX program behind the loading screen (r12 perf: the first ultimate of a match compiled the mesh,
+   * distort and lensing programs mid-fight, a 350-450 ms frame): one instanced draw per mesh shape is made now, and
+   * every draw of the VFX and distortion scenes is compiled into `renderer`'s current target (the caller sets it up
+   * as the post chain's HDR buffer).
+   */
+  prewarm(renderer: WebGLRenderer, camera: PerspectiveCamera): void {
+    for (let i = 0; i < VFX_SHAPES.length; i++) this.shapeDraw(i);
+    const shown: [import('three').Object3D, boolean][] = [];
+    for (const sc of [this.scene, this.distortScene]) sc.traverse((o) => { shown.push([o, o.visible]); o.visible = true; });
+    try {
+      renderer.compile(this.scene, camera);
+      renderer.compile(this.distortScene, camera);
+    } finally {
+      for (const [o, v] of shown) o.visible = v;
+    }
   }
 
   // ── drawing (the post chain's VFX pass) ──────────────────────────────────────────────────────

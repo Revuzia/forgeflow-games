@@ -5,19 +5,20 @@ The kit encodes the bible (STYLE_BIBLE "VFX", tokens.json `vfx`) so recipes stay
 
   families   LUMEN  additive stored light: glass flares, sun-petals, lamp-fire, glass shards
              SHADE  the stopped shadow: alpha ink smoke and stains, always with a pale (#F4EFE2) rim
-  tiers      emissive caps T0-T4 = 0.8 · 1.5 · 3 · 6 · >=10 (the renderer clamps; recipes aim at the cap)
+  tiers      emissive caps T0-T4 = 0.8 · 2 · 3 · 6 · >=10 (the renderer clamps; recipes aim at the cap)
   impact     flash 0-50 ms (radius by tier) -> mark 50-250 ms -> settle 250-900 ms (L* <= 55)
   grammar    up = help · out / down = harm · side streak = movement · spiral = control
   rules      the danger element is brightest; impacts throw OPAQUE chips; trails <= 0.5 of the head
 
-Colours: "team" (the relationship colour for the viewer), "element" (the fighter's VFX tint), or hex.
+Colours: "team" (the relationship colour for the viewer: danger edges only), "signature" / "secondary" (the
+caster fighter's own hue, r12 M12), "element" (the palette / skin tint), or hex.
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-CAP = {0: 0.8, 1: 1.5, 2: 3.0, 3: 6.0, 4: 12.0}
+CAP = {0: 0.8, 1: 2.0, 2: 3.0, 3: 6.0, 4: 12.0}     # T1 2.0 since r12 M5 (a basic hit's core must read on pale stone)
 FLASH_R = {1: 0.45, 2: 0.75, 3: 1.1, 4: 1.6}   # tokens radiusM x1.5: the glow sprite reads at 82 px/m
 
 # bible palette (hex, sRGB)
@@ -180,7 +181,9 @@ def beam(color="team", width: float = 0.35, life: float = 0.25, emissive: float 
 
 
 def shake(amount: float, who: str = "self", delay: float = 0.0) -> list:
-    return [L("feel", shake=amount, who=who, delay=delay or None)]
+    """m4 (r12): no ability shakes the camera; impact is sold by flash, the exposure envelope, particles and ground
+    marks. Kept so recipes read as authored; it adds nothing (world events shake from the director)."""
+    return []
 
 
 # ── composite recipes ────────────────────────────────────────────────────────────────────────────

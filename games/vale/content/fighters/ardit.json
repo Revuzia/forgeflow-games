@@ -38,12 +38,13 @@
   },
   "attack": {
     "range": 1.9,
-    "windup": 0.34,
+    "windup": 0.26,
     "damageType": "phys",
     "present": {
       "sfx": "c_swing_light",
       "hitVfx": "lib_hit_phys_light",
-      "hitSfx": "c_hit_phys_light"
+      "hitSfx": "c_hit_phys_light",
+      "windupVfx": "ardit_atk_swing"
     }
   },
   "collisionRadius": 0.68,
@@ -172,7 +173,8 @@
         "sfx": "c_dash",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "ardit_a1_windup"
       }
     },
     "a2": {
@@ -268,7 +270,8 @@
         "anim": "cast_a2",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "ardit_a2_windup"
       }
     },
     "a3": {
@@ -349,7 +352,8 @@
         "anim": "cast_a3",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "ardit_a3_windup"
       }
     },
     "ult": {
@@ -467,7 +471,8 @@
       "present": {
         "anim": "cast_ult",
         "sfx": "c_ult_windup",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "ardit_ult_windup"
       }
     }
   },
@@ -525,5 +530,9 @@
   "palette": {
     "primary": "#CFCAC0",
     "secondary": "#8496A8"
+  },
+  "vfx": {
+    "signature": "#6D6CF2",
+    "secondary": "#141385"
   }
 }

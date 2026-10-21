@@ -7,8 +7,10 @@ zones sit on the `ground` (radius-like values scale with the area: `fit`); dashe
 """
 from __future__ import annotations
 
-from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, EMBER, INK, INK2, NOON, ORCHID, ROSE, SAP, WHITE, beam, chips, decal, dust,
-                    flash, glow, impact, ink, light, mesh, motes, petals, ribbon, shake, shards, shockwave, sparks, streaks, vfx, L)
+from vfxkit import (CAP, CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, EMBER, FLASH_R, INK, INK2, NOON, ORCHID, ROSE, SAP, WHITE, beam, chips, decal,
+                    dust, flash, glow, impact, ink, light, mesh, motes, petals, ribbon, shake, shards, shockwave, sparks, streaks, vfx, L)
+
+WARM = "#FFE4B8"   # the shared hit core: a warm white that stays warm below T4 (not Dawnglass-clamped)
 
 
 def defs() -> list:
@@ -69,26 +71,67 @@ def defs() -> list:
                  mesh("path", "spike", 0.9, 0.6, color=[DAWNGLASS, "team"], alpha=1, emissive=3.0, rim="team", rim_emissive=3.0, align="velocity",
                       stretch=[0.35, 0.35, 2.4], hold=1),
                  ribbon("path", "team", width=(0.0, 0.3), life=0.14, alpha=(0, 0.6), emissive=2.6, noise=0.2),
-                 comment="T2 · Lumen · a Needle (tower) fires: a long team spike with a hard streak; muzzle flash at the needle tip"))
+                 # the shot's heat: the air at the needle tip shimmers as it lets go, the bolt bends light along its way (T3)
+                 L("distort", at="origin", mode="haze", size=[0.7, 1.1], strength=[[0, 0.004], [0.25, 0.012], [1, 0]], life=0.4),
+                 L("distort", at="path", follow=True, mode="bulge", size=0.55, strength=[[0, 0.009], [0.8, 0.007], [1, 0]], life=0.6),
+                 comment="T3 · Lumen · a Needle (tower) fires: a long team spike with a hard streak; muzzle flash and a heat shimmer at the "
+                         "needle tip, light bent along the bolt"))
 
     # ── impacts (at target) ───────────────────────────────────────────────────────────────────────
-    D.append(vfx("lib_hit_phys_light", 0.35, impact(1, "physical"),
-                 comment="T1 · impact · basic physical hit: chalk flash, a few opaque chalk chips"))
-    D.append(vfx("lib_hit_phys_heavy", 0.9, impact(2, "physical", scale=1.2),
-                 decal("target", "crack", [[0, 0.6], [0.15, 1.1], [1, 1.1]], 0.8, color=INK2, alpha=(0.8, 0.7, 0), emissive=0.35, rim="team"),
-                 comment="T2 · impact · heavy physical hit: bigger chip spray, a short crack mark, dust settles"))
-    D.append(vfx("lib_hit_magic", 0.8, impact(2, "magic"),
-                 comment="T2 · impact · magic hit: orchid-rose flash and petals of light, a few opaque pale chips"))
+    # basic and ability hits (r12 M5): a 1-2 frame warm-white core big enough to read on pale stone (>= 0.6 m, L* >= 90),
+    # an ink body behind it with a light rim (the value contrast pale stone needs), an oriented cut along
+    # attacker -> victim (the instance's dir) for 100-130 ms, 4-6 radial streaks, opaque chips settled by 0.4 s.
+    # The core is shared warm white (every hit reads as a hit); the cut's tail and the streaks carry the
+    # attacker's signature (team for wicks and structures).
+    def hit(id_: str, tier: int, r: float, cut: float, n_streak: int, n_chip: int, comment: str, extra=()) -> dict:
+        e = CAP[tier]
+        return vfx(id_, 0.5 if tier <= 1 else 0.8,
+                   L("emitter", at="target", count=1, shape="point", dir="none", speed=[0, 0], life=[0.16, 0.2], size=[r * 1.5, r * 2.2],
+                     color=[INK, INK2], alpha=[0.75, 0.5, 0], texture="ink_puff", blend="ink", rim=WARM, rimAlpha=0.85, soft=0.25, rotDeg=[0, 360]),
+                   flash(tier, at="target", color=WARM, life=0.035, light=tier >= 2, scale=r / FLASH_R[tier]),
+                   mesh("target", "crescent", [[0, cut * 0.55], [0.4, cut], [1, cut * 1.05]], 0.11 if tier <= 1 else 0.13, color=[WARM, "signature"],
+                        alpha=(1, 0.9, 0), emissive=e, mask="sweep", mask_param=[0, 1.05], rotate=[18, 0, 0], stretch=[1.0, 1.0, 0.8]),
+                   L("emitter", at="target", count=n_streak, shape="sphere", radius=0.08, dir="out", spreadDeg=360, speed=[6, 10], life=[0.15, 0.2],
+                     size=[0.2, 0.04], color=[WARM, "signature"], alpha=[1, 0], emissive=e, drag=3, texture="spark", stretch=0.045, blend="add"),
+                   chips("target", n_chip, speed=(2.5, 5.5), life=(0.25, 0.38), size=0.15, rim=WARM),
+                   *extra, comment=comment)
+    D.append(hit("lib_hit_phys_light", 1, 0.62, 0.95, 5, 6,
+                 "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the "
+                 "attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s"))
+    D.append(hit("lib_hit_phys_heavy", 2, 0.85, 1.25, 6, 10,
+                 "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust",
+                 extra=(decal("target", "crack", [[0, 0.6], [0.15, 1.1], [1, 1.1]], 0.8, color=INK2, alpha=(0.8, 0.7, 0), emissive=0.35, rim="team"),
+                        *dust("target", 3, size=0.8, radius=0.2))))
+    D.append(vfx("lib_hit_magic", 0.8,
+                 L("emitter", at="target", count=1, shape="point", dir="none", speed=[0, 0], life=[0.18, 0.22], size=[1.0, 1.4], color=[INK, INK2],
+                   alpha=[0.7, 0.45, 0], texture="ink_puff", blend="ink", rim=ORCHID, rimAlpha=0.85, soft=0.25, rotDeg=[0, 360]),
+                 flash(2, at="target", color=WARM, life=0.035, scale=0.7 / FLASH_R[2]),
+                 shockwave("target", color=[ROSE, ORCHID], radius=(0.2, 0.95), width=(0.2, 0.04), life=0.2, emissive=3.0, vertical=True, noise=0.2),
+                 mesh("target", "orb", [[0, 0.25], [0.4, 0.8], [1, 0.9]], 0.16, color=[ORCHID, ROSE], alpha=(0.8, 0), emissive=2.6, rim=ROSE,
+                      rim_pow=1.6, rim_emissive=2.4, noise=0.6, dissolve=[0, 0.25, 1], edge="signature", edge_emissive=2.6),
+                 L("emitter", at="target", count=5, shape="sphere", radius=0.08, dir="out", spreadDeg=360, speed=[5, 8], life=[0.15, 0.2],
+                   size=[0.18, 0.04], color=[WARM, "signature"], alpha=[1, 0], emissive=3.0, drag=3, texture="spark", stretch=0.04, blend="add"),
+                 petals("target", 8, size=0.24),
+                 chips("target", 4, speed=(2, 4), life=(0.25, 0.38), size=0.12, rim=ORCHID),
+                 comment="T2 · impact · magic hit: a warm-white core over an ink puff with an orchid rim, an orchid-rose ring and bloom, "
+                         "streaks in the caster's signature, petals of light"))
     D.append(vfx("lib_hit_true", 0.6, impact(2, "true"),
                  comment="T2 · impact · true damage: ink splash inside a Noonwhite halo (value inversion)"))
     D.append(vfx("lib_crit", 0.8,
-                 flash(2, at="target", scale=1.2),
-                 mesh("target", "crescent", [[0, 0.5], [0.3, 1.25], [1, 1.35]], 0.2, color=[WHITE, "team"], alpha=(1, 0), emissive=3.0, mask="sweep",
-                      mask_param=[0, 1.05], rotate=[0, 0, 35], blend="add"),
-                 sparks("target", 10, speed=(6, 11), life=(0.08, 0.18), dir_="forward", spread=70, gravity=0),
-                 chips("target", 16, speed=(3, 7)),
+                 L("emitter", at="target", count=1, shape="point", dir="none", speed=[0, 0], life=[0.2, 0.24], size=[1.4, 1.9], color=[INK, INK2],
+                   alpha=[0.75, 0.5, 0], texture="ink_puff", blend="ink", rim=WARM, rimAlpha=0.9, soft=0.25, rotDeg=[0, 360]),
+                 # the starburst: >= 0.7 x a fighter's height, one hard frame then gone
+                 L("sprite", at="target", texture="flare", size=[[0, 1.2], [0.3, 1.6], [1, 1.7]], color=WARM, emissive=3.0, alpha=[[0, 1], [0.5, 0.8], [1, 0]],
+                   life=0.09, rotDeg=[0, 360], space="world", hold=0),
+                 flash(2, at="target", color=WARM, life=0.04, scale=1.2),
+                 mesh("target", "crescent", [[0, 0.8], [0.3, 1.6], [1, 1.75]], 0.16, color=[WARM, "signature"], alpha=(1, 0.9, 0), emissive=3.0, mask="sweep",
+                      mask_param=[0, 1.05], rotate=[18, 0, 0]),
+                 L("emitter", at="target", count=9, shape="sphere", radius=0.1, dir="out", spreadDeg=360, speed=[8, 13], life=[0.16, 0.22],
+                   size=[0.28, 0.05], color=[WARM, "signature"], alpha=[1, 0], emissive=3.0, drag=3, texture="spark", stretch=0.05, blend="add"),
+                 chips("target", 14, speed=(3, 7), life=(0.3, 0.45), rim=WARM),
                  dust("target", 4, size=0.7, delay=0.2),
-                 comment="T2 · impact · critical hit: a team slash across the target, heavy chip spray"))
+                 comment="T2 · impact · critical hit: a warm starburst >= 0.7 x fighter height for one beat over an ink puff, a big cut in "
+                         "the attacker's signature, 9 hard streaks, a heavy chip spray"))
 
     # ── detonations / sweeps (areas: at ground, fit to the area radius) ──────────────────────────
     D.append(vfx("lib_burst_lumen", 0.9,
@@ -274,12 +317,17 @@ def defs() -> list:
                  comment="T4 · Shade · ultimate release, shadow: white core flash (T4 only), an ink storm out under a bright team rim, ink rain"))
 
     # ── world events ──────────────────────────────────────────────────────────────────────────────
-    D.append(vfx("lib_level_up", 0.9,
-                 shockwave("origin", radius=(0.3, 1.0), width=(0.2, 0.05), life=0.5, emissive=2.6, vertical=False),
-                 mesh("origin", "column", [[0, 0.2], [0.3, 0.9], [1, 0.9]], 0.7, color="team", alpha=(0.7, 0), emissive=2.6, mask="top", mask_param=0.5,
-                      stretch=[0.9, 2.2, 0.9], offset=[0, -0.9, 0], noise=0.4, scroll=[0, 2.0]),
-                 motes("origin", 18, rise=2.8, radius=0.6, emissive=2.6),
-                 comment="T2 · Lumen · level up: a team ring rises off the ground, motes climb (help is up)"))
+    D.append(vfx("lib_level_up", 1.2,
+                 # a deliberate moment (m2): a column of the fighter's own light (L* 85-90), two rings rising up it over 1 s
+                 mesh("origin", "column", [[0, 0.5], [0.2, 0.9], [1, 0.9]], 1.0, color=["signature", "#FFF4DA"], alpha=[[0, 0], [0.12, 0.75], [0.6, 0.55], [1, 0]],
+                      emissive=2.8, mask="top", mask_param=0.5, stretch=[1.0, 2.4, 1.0], offset=[0, -0.9, 0], noise=0.4, scroll=[0, 2.0]),
+                 *[L("emitter", at="origin", delay=dl, count=1, offset=[0, -0.85, 0], shape="point", dir="up", spreadDeg=0, speed=[2.4, 2.4], life=[0.8, 0.8],
+                     size=[1.6, 1.9, 1.5], color=["signature", "#FFF4DA"], alpha=[[0, 0], [0.15, 1], [0.7, 0.8], [1, 0]], emissive=2.8, drag=1.2,
+                     texture="ring_thin", align="ground", blend="add") for dl in (0.0, 0.35)],
+                 shockwave("origin", color="team", radius=(0.3, 1.0), width=(0.2, 0.05), life=0.5, emissive=2.6),
+                 motes("origin", 18, color=["signature", "#FFF4DA"], rise=2.8, radius=0.6, emissive=2.6),
+                 comment="T2 · Lumen · level up: a 0.9 m column of the fighter's signature light, two rings rising up it over 1 s, a team "
+                         "ring at the feet, motes climb (help is up)"))
     D.append(vfx("lib_respawn", 0.9,
                  mesh("origin", "pillar", [[0, 1.0], [1, 0.7]], 0.7, color=[WHITE, "team"], alpha=(0.8, 0), emissive=3.0, mask="top", mask_param=0.3,
                       stretch=[0.7, 3.5, 0.7], offset=[0, -0.9, 0], dissolve=[0, 0.2, 1], edge="team"),

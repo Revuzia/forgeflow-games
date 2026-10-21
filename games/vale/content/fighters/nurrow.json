@@ -36,12 +36,13 @@
   },
   "attack": {
     "range": 1.7,
-    "windup": 0.3,
+    "windup": 0.25,
     "damageType": "phys",
     "present": {
       "sfx": "c_swing_light",
       "hitVfx": "lib_hit_phys_light",
-      "hitSfx": "c_hit_phys_light"
+      "hitSfx": "c_hit_phys_light",
+      "windupVfx": "nurrow_atk_swing"
     }
   },
   "collisionRadius": 0.5,
@@ -235,7 +236,8 @@
         "sfx": "c_cast_shade",
         "hitVfx": "nurrow_a2_drowse",
         "hitSfx": "c_slow",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "nurrow_a2_windup"
       }
     },
     "a3": {
@@ -302,7 +304,8 @@
         "anim": "cast_a3",
         "sfx": "c_swing_light",
         "hitVfx": "nurrow_a3_snuff",
-        "hitSfx": "c_hit_magic"
+        "hitSfx": "c_hit_magic",
+        "windupVfx": "nurrow_a3_windup"
       }
     },
     "ult": {
@@ -419,7 +422,8 @@
         "sfx": "c_ult_windup",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "nurrow_ult_windup"
       }
     }
   },
@@ -477,5 +481,9 @@
   "palette": {
     "primary": "#3E3440",
     "secondary": "#8C6F5A"
+  },
+  "vfx": {
+    "signature": "#F26CCC",
+    "secondary": "#851364"
   }
 }

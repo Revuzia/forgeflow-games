@@ -142,7 +142,7 @@ void main() {
   float v = vUv.y;
   float across = 1.0 - abs( v * 2.0 - 1.0 );
   float prof = smoothstep( 0.0, 0.6, across );
-  float core = pow( across, 5.0 );
+  float core = pow( max( across, 0.0 ), 5.0 );
   vec2 nuv = vec2( vUv.z * vPrm.w - uTime * vPrm.z, v * 0.55 + vUv.w );
   float n = texture2D( uNoise, nuv ).b * 0.65 + texture2D( uNoise, nuv * vec2( 0.5, 1.4 ) + 0.37 ).r * 0.55;
   float nm = mix( 1.0, smoothstep( 0.22, 0.78, n ), vPrm.y );
@@ -194,7 +194,7 @@ varying vec2 vUv; varying vec4 vC; varying vec4 vD; varying vec4 vE; varying flo
 void main() {
   float across = 1.0 - abs( vUv.y * 2.0 - 1.0 );
   float prof = smoothstep( 0.0, 0.7, across );
-  float core = pow( across, 7.0 );
+  float core = pow( max( across, 0.0 ), 7.0 );
   vec2 nuv = vec2( vUv.x * 0.32 - uTime * vD.x, vUv.y * 0.45 + vD.z );
   float n = texture2D( uNoise, nuv ).b * 0.6 + texture2D( uNoise, nuv * vec2( 1.9, 0.7 ) + 0.5 ).r * 0.5;
   float ends = smoothstep( 0.0, 0.04, vS ) * ( 1.0 - smoothstep( 0.96, 1.0, vS ) );
@@ -231,7 +231,7 @@ void main() {
   float W = max( vSty.x, 1e-3 );
   float x = ( d - ( vR - W ) ) / W;                       // 0 trailing edge → 1 leading edge
   float band = smoothstep( 0.0, 1.0, clamp( x, 0.0, 1.0 ) ) * ( 1.0 - smoothstep( 0.9, 1.06, x ) );
-  float lead = pow( band, max( 0.3, vSty.z ) );           // the danger (leading) edge is brightest
+  float lead = pow( max( band, 0.0 ), max( 0.3, vSty.z ) );           // the danger (leading) edge is brightest
   float fill = vMisc.z * smoothstep( 0.0, 1.0, clamp( d / max( vR, 1e-3 ), 0.0, 1.0 ) ) * ( 1.0 - step( 1.0, x ) ) * 0.35;
   float ang = atan( vL.y, vL.x );
   float n = texture2D( uNoise, vec2( ang * 0.6366 + vMisc.y, d * 0.12 - vMisc.w * 0.6 ) ).r;
@@ -299,13 +299,13 @@ void main() {
   } else if ( style < 1.5 ) { // scorch: char + an ember edge that cools
     float keep = smoothstep( age * 0.9, age * 0.9 + 0.15, t.b );
     a = alpha * t.a * keep;
-    float ember = t.g * pow( 1.0 - age, 2.0 ) * vCol.w;
+    float ember = t.g * pow( clamp( 1.0 - age, 0.0, 1.0 ), 2.0 ) * vCol.w;
     rgb = vCol.rgb * ( 0.5 + 0.5 * t.r ) + vRim.rgb * ember * 3.0;
   } else if ( style < 2.5 ) { // crack: dark fracture lines with light cooling in them
     float keep = smoothstep( age, age + 0.12, t.b );
     float line = t.g;
     a = alpha * clamp( line * 1.3 + t.a * 0.15, 0.0, 1.0 ) * keep;
-    float glow = line * pow( 1.0 - age, 1.6 ) * vCol.w;
+    float glow = line * pow( clamp( 1.0 - age, 0.0, 1.0 ), 1.6 ) * vCol.w;
     rgb = vCol.rgb + vRim.rgb * glow;
   } else if ( style < 3.5 ) { // ink splat with a light rim
     float keep = smoothstep( age, age + 0.14, t.b );
@@ -377,7 +377,9 @@ varying vec4 vColor; varying vec4 vRim; varying vec4 vEdge; varying vec4 vNoise;
 void main() {
   vec3 N = normalize( vN );
   float ndv = abs( dot( N, normalize( vV ) ) );
-  float fres = pow( 1.0 - ndv, max( 0.5, vRim.w ) );
+  // GLSL pow is undefined below 0: ndv can round past 1 where a face looks straight at the camera, and one NaN
+  // fragment, spread by the bloom, blacks out the whole frame (r12 wave A fix)
+  float fres = pow( clamp( 1.0 - ndv, 0.0, 1.0 ), max( 0.5, vRim.w ) );
   vec2 sc = vec2( vNoise.y, vNoise.z ) * uTime;
   vec2 uv = vUv * vec2( 1.0, 1.0 ) * vNoise.x;
   float n1 = texture2D( uNoise, uv + sc + vSeed ).r;
@@ -451,7 +453,8 @@ void main() {
   float mode = vPar.x, k = vPar.y;
   vec2 off;
   if ( mode < 0.5 ) {
-    float band = exp( -pow( ( d - 0.82 ) / 0.11, 2.0 ) );
+    float bq = ( d - 0.82 ) / 0.11;
+    float band = exp( -bq * bq );
     off = dir * band * k;
   } else if ( mode < 1.5 ) {
     vec2 nuv = vL * 0.6 + vec2( vPar.w, vPar.w * 1.7 ) + vec2( 0.0, -uTime * 0.35 );

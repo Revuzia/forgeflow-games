@@ -36,12 +36,13 @@
   },
   "attack": {
     "range": 2,
-    "windup": 0.36,
+    "windup": 0.28,
     "damageType": "phys",
     "present": {
       "sfx": "c_swing_heavy",
       "hitVfx": "lib_hit_phys_heavy",
-      "hitSfx": "c_hit_phys_heavy"
+      "hitSfx": "c_hit_phys_heavy",
+      "windupVfx": "burdam_atk_swing"
     }
   },
   "collisionRadius": 0.62,
@@ -384,7 +385,8 @@
         "anim": "cast_a3",
         "hitVfx": "lib_hit_phys_heavy",
         "hitSfx": "c_hit_phys_heavy",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "burdam_a3_windup"
       }
     },
     "ult": {
@@ -493,7 +495,8 @@
         "sfx": "c_ult_windup",
         "hitVfx": "lib_hit_phys_heavy",
         "hitSfx": "c_hit_phys_heavy",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "burdam_ult_windup"
       }
     }
   },
@@ -551,5 +554,9 @@
   "palette": {
     "primary": "#5E4F45",
     "secondary": "#9A7B62"
+  },
+  "vfx": {
+    "signature": "#B30300",
+    "secondary": "#FAABAA"
   }
 }

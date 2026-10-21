@@ -48,6 +48,7 @@ import { PostChain } from './post.ts';
 import { DynamicResolution, type FrameBound, GpuTimer, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
 import { buildTerrain, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
+import { SocketResolver } from './vfx/sockets.ts';
 import { VfxSystem } from './vfx/system.ts';
 import { patchWorldMaterial, worldUniforms } from './world_material.ts';
 
@@ -156,6 +157,18 @@ function devDefault(): boolean {
   try { return new URLSearchParams(location.search).get('dev') === '1'; } catch { return false; }
 }
 
+/** the body veil a unit's statuses ask for (actors.ts setVeil): 1 invisible, 2 untargetable, 0 none; a permanent
+ *  status (a rule of the unit) never veils */
+function veilOf(v: EntityView): 0 | 1 | 2 {
+  let m: 0 | 1 | 2 = 0;
+  for (const s of v.statuses) {
+    if (!(s.remaining > 0) || !Number.isFinite(s.remaining)) continue;
+    if (s.kind === 'invisible') return 1;
+    if (s.kind === 'untargetable') m = 2;
+  }
+  return m;
+}
+
 class ValeRenderer implements Renderer {
   readonly canvas: HTMLCanvasElement;
   readonly gl: WebGLRenderer;
@@ -250,7 +263,9 @@ class ValeRenderer implements Renderer {
     for (const r of catalog.resources) this.resources.set(r.id, { color: new Color().setStyle(r.color), model: r.model });
     this.scene.name = 'vale_match';
     this.scene.add(this.sun.light, this.sun.target);
-    this.vfx = new VfxSystem(catalog.vfx, { entityPos: (id, out) => this.bodyPos(id, out) });
+    // VFX sockets (weapon, top, base, ground …) resolve on the animated actors (vfx/sockets.ts)
+    const sockets = new SocketResolver(catalog, (id) => this.actors.get(id), () => this.time);
+    this.vfx = new VfxSystem(catalog.vfx, { entityPos: (id, out) => this.bodyPos(id, out), socketPos: (id, name, out) => sockets.socketPos(id, name, out) });
     this.vfx.setCamera(this.rig.camera);
     this.scene.add(this.vfx.group);
     this.scene.add(this.crowd.group);
@@ -311,6 +326,8 @@ class ValeRenderer implements Renderer {
     if (!s.controls.cameraLock && this.rig.mode === 'locked') this.rig.setMode('semi');
     this.menu.reduceMotion = s.access.reduceMotion;
     this.reactions.reduceMotion = s.access.reduceMotion;
+    // the screen envelopes (vfx/screen.ts): halved exposure peak, no dip or breath, a 120 ms death-grade cut
+    this.vfx.reduceMotion = s.access.reduceMotion;
     this.hudScale = Math.max(0.75, Math.min(1.25, s.access.hudScale || 1));
     this.ticks = s.gameplay.healthBarTicks;
   }
@@ -397,6 +414,7 @@ class ValeRenderer implements Renderer {
       if (t) this.sky.apply(this.scene, t, L.ambient);
       this.envReady = true;
       this.lib.warmAll();
+      for (const a of this.actors.values()) this.warmVeil(a);
     });
     this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
     // world: procedural terrain now; the Blender scene replaces it when it exists
@@ -553,7 +571,7 @@ class ValeRenderer implements Renderer {
           const def = this.lib.fighter(e.def);
           if (def) {
             a.configureFighter(def);
-            this.lib.fighterTemplate(e.def, e.skin).then((t) => { actor.attach(t, def.art.scale, def.art.accentMaterial); this.warmHover(actor); });
+            this.lib.fighterTemplate(e.def, e.skin).then((t) => { actor.attach(t, def.art.scale, def.art.accentMaterial); this.warmHover(actor); this.warmVeil(actor); });
           }
         } else {
           const def = this.lib.unit(e.def);
@@ -613,6 +631,8 @@ class ValeRenderer implements Renderer {
         a.setHover(hov ? (rel === 'ally' ? O.hoverAlly.px : O.hoverEnemy.px) : 0, hov ? (rel === 'ally' ? allyC : harm) : null);
         if (live && OUTLINED.has(v.kind)) a.setOutline(O.rest.px, _rest[rel], O.rest.alpha);
         else a.hideOutline();
+        // M2 veils on the body (actors.ts): unseen (its allies, or a reveal, still see it) · untargetable
+        a.setVeil(v.alive && v.kind !== 'structure' ? veilOf(v) : 0);
       }
     }
   }
@@ -933,6 +953,22 @@ class ValeRenderer implements Renderer {
     this.asIfComposer(() => this.hoverRim.prewarm(this.gl, this.rig.camera, this.warmScene, m));
   }
 
+  /** the veil's programs (see-through body, depth copy: actors.ts setVeil) for this fighter template, compiled against
+   *  the match's final environment at attach, not on the first stealth or untargetable moment */
+  private readonly veilWarm = new WeakSet<object>();
+  private warmVeil(a: Actor): void {
+    if (!this.envReady || a.disposed || a.kind !== 'fighter') return;
+    const m = a.hoverMeshes();
+    if (!m) return;
+    const key = m.hull[0].geometry;
+    if (this.veilWarm.has(key)) return;
+    this.veilWarm.add(key);
+    const was = a.veil;
+    a.setVeil(2);
+    this.asIfComposer(() => void this.gl.compileAsync(a.root, this.rig.camera, this.scene).catch(() => undefined));
+    a.setVeil(was);
+  }
+
   private drawHover(r: WebGLRenderer, cam: import('three').Camera): void {
     if (this.mode !== 'match' || this.hover === null) return;
     const a = this.actors.get(this.hover);
@@ -969,6 +1005,8 @@ class ValeRenderer implements Renderer {
     let done = 0;
     onProgress?.(0);
     await Promise.all(jobs.map((j) => j.then(() => { done++; onProgress?.(done / jobs.length); })));
+    // the VFX programs (every mesh shape, ribbons, decals, distortion) compile here, not on the first ultimate
+    this.asIfComposer(() => this.vfx.prewarm(this.gl, this.rig.camera));
     onProgress?.(1);
   }
 

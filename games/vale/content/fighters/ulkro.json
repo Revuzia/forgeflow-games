@@ -36,14 +36,15 @@
   },
   "attack": {
     "range": 5.4,
-    "windup": 0.28,
+    "windup": 0.21,
     "damageType": "phys",
     "projectileSpeed": 22,
     "present": {
-      "vfx": "lib_arrow",
+      "vfx": "ulkro_atk_shot",
       "sfx": "c_thrown",
       "hitVfx": "lib_hit_phys_light",
-      "hitSfx": "c_hit_phys_light"
+      "hitSfx": "c_hit_phys_light",
+      "windupVfx": "ulkro_atk_draw"
     }
   },
   "collisionRadius": 0.5,
@@ -229,7 +230,8 @@
         "sfx": "c_thrown",
         "hitVfx": "lib_hit_phys_heavy",
         "hitSfx": "c_hit_phys_heavy",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "ulkro_a1_windup"
       }
     },
     "a2": {
@@ -356,7 +358,8 @@
         "anim": "cast_a3",
         "sfx": "c_thrown",
         "hitVfx": "ulkro_a3_hamstring",
-        "hitSfx": "c_slow"
+        "hitSfx": "c_slow",
+        "windupVfx": "ulkro_a3_windup"
       }
     },
     "ult": {
@@ -411,7 +414,8 @@
       "present": {
         "anim": "cast_ult",
         "sfx": "c_ult_windup",
-        "telegraph": "none"
+        "telegraph": "none",
+        "windupVfx": "ulkro_ult_windup"
       }
     }
   },
@@ -469,5 +473,9 @@
   "palette": {
     "primary": "#6B6052",
     "secondary": "#A39C8C"
+  },
+  "vfx": {
+    "signature": "#5BD13B",
+    "secondary": "#1C8500"
   }
 }

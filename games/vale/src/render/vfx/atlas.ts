@@ -144,13 +144,13 @@ vec4 lightPuff( vec2 q, float f ) {
   float r = length( q ), a = atan( q.y, q.x );
   float core = exp( -r * r * ( 10.0 - 6.0 * p ) );
   float s = vnoise( vec2( a * 2.8649 + 3.0, p * 0.5 ) ) * 0.6 + vnoise( vec2( a * 6.3662 + 11.0, p ) ) * 0.4;
-  float rays = pow( s, 3.0 ) * exp( -r * ( 3.4 - 1.4 * p ) ) * 1.6;
+  float rays = pow( max( s, 0.0 ), 3.0 ) * exp( -r * ( 3.4 - 1.4 * p ) ) * 1.6;
   vec2 w = q * 2.4 + vec2( fbm( q * 3.0 + p ), fbm( q * 3.0 + 5.0 - p ) ) * 0.8;
   float wisp = fbm( w * 1.7 ) * exp( -r * r * ( 3.2 - 1.6 * p ) );
   float cov = clamp( core + rays * 0.8 + wisp * ( 0.35 + 0.6 * p ), 0.0, 1.0 ) * ( 1.0 - smoothstep( 0.72, 0.97, r ) );
   float bright = clamp( core * 1.3 + rays * 0.7 + wisp * 0.45, 0.0, 1.0 );
   float r0 = 0.22 + 0.6 * p;
-  float ring = exp( -pow( ( r - r0 ) / 0.045, 2.0 ) ) * ( 1.0 - p * 0.7 ) * ( 0.6 + 0.4 * vnoise( vec2( a * 4.0, 1.0 ) ) );
+  float ring = exp( -( ( r - r0 ) / 0.045 ) * ( ( r - r0 ) / 0.045 ) ) * ( 1.0 - p * 0.7 ) * ( 0.6 + 0.4 * vnoise( vec2( a * 4.0, 1.0 ) ) );
   float erode = clamp( 0.2 + 0.8 * clamp( core + wisp * 0.6 + rays * 0.3, 0.0, 1.0 ), 0.0, 1.0 );
   return vec4( bright, ring, erode, clamp( cov + ring * 0.5, 0.0, 1.0 ) * cellFade( q ) );
 }
@@ -166,7 +166,7 @@ vec4 splash( vec2 q, float f ) {
   float grow = smoothstep( 0.0, 0.55, p );
   float blobR = 0.16 + 0.2 * sqrt( p );
   float spike = ( 0.1 + 0.55 * h * h ) * grow;
-  float allowed = blobR + spike * pow( 1.0 - da, 2.2 ) + ( fbm( q * 6.0 + 2.0 ) - 0.5 ) * 0.09;
+  float allowed = blobR + spike * pow( clamp( 1.0 - da, 0.0, 1.0 ), 2.2 ) + ( fbm( q * 6.0 + 2.0 ) - 0.5 ) * 0.09;
   float sd = r - allowed;
   float m = 1.0 - smoothstep( -0.012, 0.012, sd );
   float rimBand = smoothstep( -0.06, -0.01, sd ) * m;
@@ -253,7 +253,7 @@ vec4 wisp( vec2 q, float seed ) {
   float dy = 0.42 * k * cos( x * k + seed * 3.0 );
   float d = abs( q.y - y0 ) / sqrt( 1.0 + dy * dy );
   float t = clamp( ( x + 0.92 ) / 1.84, 0.0, 1.0 );
-  float w = 0.13 * pow( sin( t * PI ), 0.7 ) * ( 0.55 + 0.45 * t );
+  float w = 0.13 * pow( max( sin( t * PI ), 0.0 ), 0.7 ) * ( 0.55 + 0.45 * t );
   float n = fbm( vec2( x * 6.0, q.y * 6.0 ) + seed * 9.0 );
   float m = 1.0 - smoothstep( w * 0.55, w, d + ( n - 0.5 ) * 0.05 );
   float rim = smoothstep( w * 0.35, w * 0.8, d ) * m;
@@ -276,8 +276,8 @@ vec4 cellFn( float cell, vec2 q ) {
   if ( cell < 34.0 ) { float g = exp( -r * r * 5.5 ) * ( 1.0 - smoothstep( 0.8, 0.98, r ) ); return vec4( 1.0, 0.0, 0.2 + 0.8 * g, g ); }
   if ( cell < 38.0 ) { float v = cell - 34.0; return facetPoly( q * 1.08, 0.31 + v * 0.17, 0.32 + 0.06 * v, 0.88, v * 0.4 - 0.3 ); }
   if ( cell < 39.0 ) {
-    float band = exp( -pow( ( r - 0.76 ) / 0.075, 2.0 ) );
-    float inner = exp( -pow( ( r - 0.7 ) / 0.22, 2.0 ) ) * 0.25;
+    float band = exp( -( ( r - 0.76 ) / 0.075 ) * ( ( r - 0.76 ) / 0.075 ) );
+    float inner = exp( -( ( r - 0.7 ) / 0.22 ) * ( ( r - 0.7 ) / 0.22 ) ) * 0.25;
     float n = 0.7 + 0.3 * fbm( vec2( a * 2.0, r * 6.0 ) + 3.0 );
     return vec4( 1.0, band, 0.2 + 0.8 * n, clamp( ( band + inner ) * n, 0.0, 1.0 ) * cellFade( q ) );
   }

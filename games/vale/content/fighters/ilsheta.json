@@ -37,14 +37,15 @@
   },
   "attack": {
     "range": 5.4,
-    "windup": 0.3,
+    "windup": 0.23,
     "damageType": "magic",
     "projectileSpeed": 18,
     "present": {
-      "vfx": "lib_bolt_lumen",
+      "vfx": "ilsheta_atk_shot",
       "sfx": "c_shot_bolt_lumen",
       "hitVfx": "lib_hit_magic",
-      "hitSfx": "c_hit_magic"
+      "hitSfx": "c_hit_magic",
+      "windupVfx": "ilsheta_atk_draw"
     }
   },
   "collisionRadius": 0.5,
@@ -54,7 +55,55 @@
       "name": "Warm Hands",
       "icon": "assets/ui/icons/abilities/ilsheta_warm_hands.webp",
       "desc": "Ilsheta's heals restore 40% more to allies who are stunned, rooted, slowed, airborne, asleep, feared or taunted, and give them 15% move speed for 1.5 s (once per 4 s per ally).",
-      "triggers": [{"on": "abilityHit", "filter": {"enemies": false, "allies": true, "self": false, "minions": false, "monsters": false, "summons": false}, "perTargetCooldown": 4, "cond": {"kind": "any", "conds": [{"kind": "targetHasStatus", "status": "stun"}, {"kind": "targetHasStatus", "status": "root"}, {"kind": "targetHasStatus", "status": "slow"}, {"kind": "targetHasStatus", "status": "airborne"}, {"kind": "targetHasStatus", "status": "sleep"}, {"kind": "targetHasStatus", "status": "fear"}, {"kind": "targetHasStatus", "status": "taunt"}]}, "effects": [], "$comment": "presentation only: the bonus heal is inline in her heals; this fires the Warm Hands look on the ally it lands on"}],
+      "triggers": [
+        {
+          "on": "abilityHit",
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": false,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "perTargetCooldown": 4,
+          "cond": {
+            "kind": "any",
+            "conds": [
+              {
+                "kind": "targetHasStatus",
+                "status": "stun"
+              },
+              {
+                "kind": "targetHasStatus",
+                "status": "root"
+              },
+              {
+                "kind": "targetHasStatus",
+                "status": "slow"
+              },
+              {
+                "kind": "targetHasStatus",
+                "status": "airborne"
+              },
+              {
+                "kind": "targetHasStatus",
+                "status": "sleep"
+              },
+              {
+                "kind": "targetHasStatus",
+                "status": "fear"
+              },
+              {
+                "kind": "targetHasStatus",
+                "status": "taunt"
+              }
+            ]
+          },
+          "effects": [],
+          "$comment": "presentation only: the bonus heal is inline in her heals; this fires the Warm Hands look on the ally it lands on"
+        }
+      ],
       "present": {
         "vfx": "ilsheta_passive_warm"
       }
@@ -141,7 +190,8 @@
         "sfx": "c_cast_lumen",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "ilsheta_a1_windup"
       }
     },
     "a2": {
@@ -342,7 +392,8 @@
       "present": {
         "anim": "cast_a2",
         "sfx": "c_heal",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "ilsheta_a2_windup"
       }
     },
     "a3": {
@@ -599,7 +650,8 @@
       "present": {
         "anim": "cast_ult",
         "sfx": "c_ult_windup",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "ilsheta_ult_windup"
       }
     }
   },
@@ -657,5 +709,9 @@
   "palette": {
     "primary": "#C9D3D6",
     "secondary": "#E8E2D2"
+  },
+  "vfx": {
+    "signature": "#74B300",
+    "secondary": "#568500"
   }
 }

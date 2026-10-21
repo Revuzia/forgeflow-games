@@ -34,6 +34,14 @@
 //     value-inverted Shade (ink body, noonwhite rim) for true damage, dawnglass when a shield took it all.
 //     Peak on the impact frame, τ 70 ms, gone by 150 ms, with a small flinch + squash. It ends when the unit
 //     leaves vision (hidden()). No hit-stop (simHitStop and presentationHitStop false).
+//   * Veils (r12 M2, statuses on the body itself; the renderer decides per viewer): an INVISIBLE unit its allies
+//     (or a reveal) still see draws at 35 % alpha with no ink outline, so the ground shows through it (the status
+//     look adds the shimmer); an UNTARGETABLE unit draws at 60 % (40 % see-through) under a 2 px dawnglass rim.
+//     Blended, not hashed (a hashed dither turned to dark noise under AO): per-actor transparent clones of the body
+//     materials over a depth-only copy of the body (the hull geometry, drawn last among the opaque), so only the
+//     nearest surface shows; made on first use (the renderer makes and compiles them once per template at attach)
+//     and kept, the accent clone toggles in place. A veiled body throws no shadow.
+//     Crowd wicks have no per-actor body and never veil.
 //   * CPU (r12 B4): the renderer culls actors outside the frustum and their shadow reach (no draw, no matrix
 //     work, the clip holds); body + accent share one Skeleton (shareSkeletons); UnitDef.art.instanced units
 //     draw as the instanced, GPU-skinned crowd (crowd.ts) through a BakedMixer that takes this file's
@@ -62,6 +70,12 @@ const DEV_MANNEQUIN_HEIGHT = 1.95;
 const CROWD_MAX_ROWS = 4096;
 const IMPACT_AT = 0.4;
 const ACCENT_REST = 0.8;
+/** veils (r12 M2): body coverage of an invisible unit its allies see, of an untargetable one; the glass rim */
+const VEIL_GHOST = 0.35;
+const VEIL_GLASS = 0.6;
+const VEIL_RIM_PX = 2;
+const VEIL_RIM_ALPHA = 0.9;
+const VEIL_RIM = new Color().setStyle('#BFD3E6');
 const ACCENT_WINDUP_MIN = 1.5;
 const SNAP_DIST = 3;
 /** tokens.json `hud.unitOutline` (r12 M10 rest ink, B1 hover): widths in CSS px, alpha 0..1, tint = sRGB share of
@@ -990,6 +1004,90 @@ export class Actor implements CrowdActor {
   }
   hideOutline(): void { this.setOutline(0, this.outlineColor, 0); }
 
+  // ── veils (invisible / untargetable: see the header) ──────────────────────────────────────────────
+  private veilMode: 0 | 1 | 2 = 0;
+  /** shared body material → this actor's see-through clone */
+  private readonly veilMats = new Map<Material, MeshStandardMaterial>();
+  /** body meshes and the material(s) they wore before the veil */
+  private readonly veilBase = new Map<Mesh, Material | Material[]>();
+  /** depth-only copies of the body (the hull geometry), drawn last among the opaque: the see-through body then
+   *  shows only its nearest surface (no inner layers, no sorting artefacts) */
+  private readonly veilDepth: Mesh[] = [];
+  private veilDepthMat: MeshBasicMaterial | null = null;
+  /** 0 none · 1 invisible (seen by allies: 35 % body, no ink outline) · 2 untargetable (60 % body, dawnglass rim) */
+  get veil(): 0 | 1 | 2 { return this.veilMode; }
+  setVeil(mode: 0 | 1 | 2): void {
+    if (mode === this.veilMode || !this.model || this.crowdBake) return;
+    this.veilMode = mode;
+    const on = mode !== 0;
+    const k = mode === 1 ? VEIL_GHOST : VEIL_GLASS;
+    if (on && !this.veilDepth.length && this.template?.hull.length) this.buildVeilDepth(this.model, this.template);
+    const prepass = this.veilDepth.length > 0;
+    for (const m of this.veilDepth) m.visible = on;
+    const accent = new Set<Material>(this.accent);
+    const see = (c: Material, base: number): void => {
+      c.transparent = true; c.opacity = base * k; c.depthWrite = !prepass;
+    };
+    this.model.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh || m.userData.valeOutline) return;
+      if (!on) {
+        const base = this.veilBase.get(m);
+        if (base) { m.material = base; m.castShadow = true; }
+        return;
+      }
+      const base = this.veilBase.get(m) ?? m.material;
+      this.veilBase.set(m, base);
+      // a veiled body throws no shadow (an unseen unit leaves no dark print; no see-through shadow programs either)
+      m.castShadow = false;
+      const swap = (mat: Material): Material => {
+        if (accent.has(mat)) return mat;     // per-actor already: set below
+        let c = this.veilMats.get(mat);
+        if (!c) {
+          c = (mat as MeshStandardMaterial).clone();
+          patchWorldMaterial(c, { fighter: this.kind === 'fighter' });
+          this.veilMats.set(mat, c);
+        }
+        see(c, mat.transparent ? mat.opacity : 1);
+        return c;
+      };
+      m.material = Array.isArray(base) ? base.map(swap) : swap(base);
+    });
+    for (const a of this.accent) {
+      if (on) see(a, 1); else { a.transparent = false; a.opacity = 1; a.depthWrite = true; }
+      a.needsUpdate = true;
+    }
+    this.applyOutline();
+  }
+
+  /** the depth prepass of the veil: one depth-only copy per hull part, bound to the body's skeleton */
+  private buildVeilDepth(model: Object3D, t: Template): void {
+    const cm = meshesOf(model).filter((m) => !m.userData.valeOutline);
+    const mat = new MeshBasicMaterial({ colorWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    mat.name = 'vale_veil_depth';
+    this.veilDepthMat = mat;
+    for (const part of t.hull) {
+      const lead = cm[part.lead];
+      if (!lead) continue;
+      let copy: Mesh;
+      if (part.skinned && (lead as SkinnedMesh).isSkinnedMesh) {
+        const sm = lead as SkinnedMesh;
+        const c = new SkinnedMesh(part.geometry, mat);
+        c.bind(sm.skeleton, sm.bindMatrix);
+        c.frustumCulled = false;
+        if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
+        c.boundingSphere = part.geometry.boundingSphere!.clone();
+        copy = c;
+      } else copy = new Mesh(part.geometry, mat);
+      copy.name = 'vale_veil_depth';
+      copy.userData.valeOutline = true;
+      copy.castShadow = false; copy.receiveShadow = false;
+      copy.renderOrder = 50;                 // after every opaque draw (the ground behind must already be there)
+      copy.matrixAutoUpdate = false;
+      lead.add(copy);
+      this.veilDepth.push(copy);
+    }
+  }
   /** the outline width in px the viewer sees: the hover rim's while hovered, else the rest ink's (0 = none; harness) */
   get outlineWidth(): number { return this.hoverPx > 0 ? this.hoverPx : Math.max(0, this.outlinePx); }
 
@@ -1016,10 +1114,13 @@ export class Actor implements CrowdActor {
   private applyOutline(): void {
     const mat = this.outlineMat;
     if (!mat) return;
-    const on = this.outlinePx > 0;
-    (mat.userData.px as { value: number }).value = Math.max(0, this.outlinePx);
-    mat.color.copy(this.outlineColor);
-    mat.opacity = on ? this.outlineOpacity : 0;
+    // veils: an unseen unit has no ink edge (the ground shows through it); an untargetable one a dawnglass rim
+    const veil = this.veilMode;
+    const px = veil === 1 ? 0 : veil === 2 && this.outlinePx > 0 ? Math.max(VEIL_RIM_PX, this.outlinePx) : this.outlinePx;
+    const on = px > 0;
+    (mat.userData.px as { value: number }).value = Math.max(0, px);
+    if (veil === 2) mat.color.copy(VEIL_RIM); else mat.color.copy(this.outlineColor);
+    mat.opacity = on ? (veil === 2 ? VEIL_RIM_ALPHA : this.outlineOpacity) : 0;
     const vis = on || this.warm > 0;
     for (const m of this.hullMeshes) m.visible = vis;
   }
@@ -1121,6 +1222,8 @@ export class Actor implements CrowdActor {
     // shared materials belong to the cached template and stay)
     this.model?.traverse((o) => { const sm = o as SkinnedMesh; if (sm.isSkinnedMesh) sm.skeleton.dispose(); });
     for (const m of this.accent) m.dispose();
+    for (const m of this.veilMats.values()) m.dispose();
+    this.veilDepthMat?.dispose();
     this.outlineMat?.dispose();
     this.flashMat?.dispose();   // hull geometry belongs to the template's plan and stays
     this.root.removeFromParent();

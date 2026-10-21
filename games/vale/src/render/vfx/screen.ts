@@ -2,15 +2,21 @@
 //
 //   exposure  the ultimate impact envelope (M13): a local, eased light lift centred on the impact,
 //             applied by post.ts as a multiply BEFORE tone mapping (so it shapes HDR light, never the
-//             overlay). Default shape (tokens: T4 "never full-screen white"):
+//             overlay). Every ratio below is a DISPLAY brightness ratio (what a frame capture measures):
+//             post.ts multiplies linear light by ratio^2.2, so the hold reads ×1.45 on screen until the tone
+//             curve's shoulder; a ground already brighter than half the display range clips toward white at
+//             the peak (pale plaza stone, display ≈ 0.57, tops out near ×1.75). Default shape (tokens: T4
+//             "never full-screen white"):
 //               dip    ×0.92 for 66 ms over the whole frame (the held breath before the light)
 //               peak   one beat (≈ 2 frames) at `peak` × scene light inside the area radius, saturation
 //                      dropping toward the stopped-sun white
 //               hold   ≥ 1.4× for `hold` s (default 0.28)
 //               fade   exponential, half-life `fade` s (default 0.12), until it is below 1 %
-//             The lift falls off smoothly outside 0.55–1.35 × the area radius; a small share (8 %) breathes
-//             the rest of the frame. Up to 4 envelopes overlap (the most recent win). reduceMotion halves
-//             the peak and drops the dip.
+//             The lift falls off smoothly outside 0.55–1.35 × the area radius; a small share (5 %: ≈ ×1.08 at
+//             the frame edge on the peak) breathes the rest of the frame. The dip and the breath only play for an
+//             impact whose area is on screen
+//             (an ally's ultimate in another lane never flickers your frame). Up to 4 envelopes overlap (the
+//             most recent win). reduceMotion halves the peak and drops the dip and the breath.
 //   grade     the dead player's world: saturation → 0 and value × 0.85 over 400 ms (eased), back over
 //             300 ms on respawn; reduceMotion cuts in 120 ms. Applied by post.ts after the LUT and before
 //             the overlay, so bars, rings and telegraphs keep their colour.
@@ -135,7 +141,6 @@ export class ScreenFx {
       const p = this.pulses[i];
       if (!p || !cam) { a.set(0, 0, 0, 0); b.set(0, 0, 0, 0); continue; }
       envelope(p, p.t, this.env);
-      global *= this.env.global;
       // screen centre and radius (height-normalised) of the area
       _a.copy(p.pos).project(cam);
       _r.set(1, 0, 0).applyQuaternion(cam.quaternion).multiplyScalar(p.radius);
@@ -143,12 +148,14 @@ export class ScreenFx {
       const behind = _a.z > 1 || _a.z < -1;
       const ux = _a.x * 0.5 + 0.5, uy = _a.y * 0.5 + 0.5;
       const rr = Math.hypot((_b.x - _a.x) * 0.5 * aspect, (_b.y - _a.y) * 0.5);
-      a.set(ux, uy, Math.max(0.02, rr), behind ? 0 : this.env.lift);
-      b.set(this.env.desat, 0, 0, 0);
-      breath = Math.max(breath, this.env.lift);
+      // on screen: the area (centre ± radius) overlaps the viewport (uv 0..1; rr is height-normalised)
+      const onScreen = !behind && ux > -rr / aspect && ux < 1 + rr / aspect && uy > -rr && uy < 1 + rr;
+      a.set(ux, uy, Math.max(0.02, rr), onScreen ? this.env.lift : 0);
+      b.set(onScreen ? this.env.desat : 0, 0, 0, 0);
+      if (onScreen) { global *= this.env.global; breath = Math.max(breath, this.env.lift); }
     }
     U.uExpo.value = global;
-    U.uBreath.value = breath > 0 ? 0.08 : 0;
+    U.uBreath.value = breath > 0 && !this.reduceMotion ? 0.05 : 0;
   }
 
   reset(): void {

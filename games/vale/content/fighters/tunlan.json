@@ -36,14 +36,15 @@
   },
   "attack": {
     "range": 5.2,
-    "windup": 0.3,
+    "windup": 0.24,
     "damageType": "magic",
     "projectileSpeed": 18,
     "present": {
-      "vfx": "lib_bolt_shade",
+      "vfx": "tunlan_atk_shot",
       "sfx": "c_shot_bolt_shade",
       "hitVfx": "lib_hit_magic",
-      "hitSfx": "c_hit_magic"
+      "hitSfx": "c_hit_magic",
+      "windupVfx": "tunlan_atk_draw"
     }
   },
   "collisionRadius": 0.55,
@@ -159,7 +160,8 @@
         "sfx": "c_cast_shade",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "tunlan_a1_windup"
       }
     },
     "a2": {
@@ -245,7 +247,8 @@
         "anim": "cast_a2",
         "sfx": "c_cast_shade",
         "hitVfx": "tunlan_a2_grip",
-        "hitSfx": "c_hit_magic"
+        "hitSfx": "c_hit_magic",
+        "windupVfx": "tunlan_a2_windup"
       }
     },
     "a3": {
@@ -315,7 +318,8 @@
       },
       "present": {
         "anim": "cast_a3",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "tunlan_a3_windup"
       }
     },
     "ult": {
@@ -397,7 +401,8 @@
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
         "telegraph": "everyone",
-        "vfx": "tunlan_ult_raise"
+        "vfx": "tunlan_ult_raise",
+        "windupVfx": "tunlan_ult_windup"
       }
     }
   },
@@ -455,5 +460,9 @@
   "palette": {
     "primary": "#463C38",
     "secondary": "#B49A78"
+  },
+  "vfx": {
+    "signature": "#9A00B4",
+    "secondary": "#EEAAFA"
   }
 }

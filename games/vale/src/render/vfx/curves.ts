@@ -5,7 +5,7 @@
 //   [1, 0]                    start → end (the legacy [start, end] pair), linear
 //   [0, 1, 1, 0.2, 0]         ≥ 3 numbers: evenly spaced keys over the particle's life
 //   [[0, 0], [0.1, 1], [1, 0]] explicit [t, value] keys (t in 0..1, ascending), linear between keys
-// Gradients take the same forms with colours ("#rrggbb" | "team" | "element"): one colour, a pair,
+// Gradients take the same forms with colours ("#rrggbb" | "team" | "element" | "signature" | "secondary"): one colour, a pair,
 // evenly spaced colours, or [[t, colour], …] keys. Curves are baked once at load into 32-sample
 // tables; gradients keep their colour REFS (team/element resolve per spawn) and are baked into a
 // pooled table when a layer fires (no per-frame allocation).
@@ -17,7 +17,9 @@ export const CURVE_N = 32;
 /** a number curve baked into CURVE_N samples over t ∈ [0, 1] */
 export type Curve = Float32Array;
 
-export type ColorRef = { k: 0; c: Color } | { k: 1 } | { k: 2 };
+/** k: 0 a fixed colour · 1 team (the relationship colour) · 2 element (palette / skin tint) · 3 signature (the
+ *  caster fighter's signature hue, r12 M12) · 4 secondary (its companion); 3/4 fall back to team for non-fighters */
+export type ColorRef = { k: 0; c: Color } | { k: 1 } | { k: 2 } | { k: 3 } | { k: 4 };
 export interface Gradient { t: number[]; c: ColorRef[] }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -73,6 +75,8 @@ export const curveMax = (c: Curve): number => { let m = -Infinity; for (let i = 
 export function colorRef(v: unknown): ColorRef | null {
   if (v === 'team') return { k: 1 };
   if (v === 'element') return { k: 2 };
+  if (v === 'signature') return { k: 3 };
+  if (v === 'secondary') return { k: 4 };
   if (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) return { k: 0, c: new Color().setStyle(v) };
   return null;
 }

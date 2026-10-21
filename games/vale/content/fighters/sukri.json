@@ -37,14 +37,15 @@
   },
   "attack": {
     "range": 5,
-    "windup": 0.3,
+    "windup": 0.23,
     "damageType": "magic",
     "projectileSpeed": 18,
     "present": {
-      "vfx": "lib_bolt_lumen",
+      "vfx": "sukri_atk_shot",
       "sfx": "c_shot_bolt_lumen",
       "hitVfx": "lib_hit_magic",
-      "hitSfx": "c_hit_magic"
+      "hitSfx": "c_hit_magic",
+      "windupVfx": "sukri_atk_draw"
     }
   },
   "collisionRadius": 0.5,
@@ -195,7 +196,7 @@
           "present": {
             "vfx": "sukri_a1_mote",
             "sfx": "c_burst_lumen",
-            "telegraph": "ally_only"
+            "telegraph": "everyone"
           }
         }
       ],
@@ -214,7 +215,8 @@
         "sfx": "c_thrown",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "ally_only"
+        "telegraph": "everyone",
+        "windupVfx": "sukri_a1_windup"
       }
     },
     "a2": {
@@ -307,7 +309,8 @@
         "vfx": "sukri_a2_beckon",
         "sfx": "c_shield",
         "telegraph": "ally_only",
-        "hitVfx": "sukri_a2_draw"
+        "hitVfx": "sukri_a2_draw",
+        "windupVfx": "sukri_a2_windup"
       }
     },
     "a3": {
@@ -402,7 +405,8 @@
         "sfx": "c_thrown",
         "hitVfx": "sukri_a3_bind",
         "hitSfx": "c_root",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "sukri_a3_windup"
       }
     },
     "ult": {
@@ -524,7 +528,8 @@
       "present": {
         "anim": "cast_ult",
         "sfx": "c_ult_windup",
-        "telegraph": "ally_only"
+        "telegraph": "everyone",
+        "windupVfx": "sukri_ult_windup"
       }
     }
   },
@@ -582,5 +587,9 @@
   "palette": {
     "primary": "#7B7266",
     "secondary": "#D9CDA8"
+  },
+  "vfx": {
+    "signature": "#F2F06C",
+    "secondary": "#858313"
   }
 }

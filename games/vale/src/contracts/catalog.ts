@@ -112,8 +112,9 @@ export const Present = z.object({
   sfx: Id.optional(),                   // audio cue id
   hitVfx: Id.optional(), hitSfx: Id.optional(),
   telegraph: z.enum(['none', 'ally_only', 'everyone']).optional(), // ground warning visibility
-  /** CHANGED(RENDER), additive: the caster's anticipation VfxDef, played over the cast's wind-up (its clock fitted
-   *  so `duration` = castTime), sustained while the wind-up runs and cancelled with it (CONTRACT §9.5) */
+  /** CHANGED(RENDER), additive: the caster's anticipation VfxDef, played over the wind-up (its clock fitted so
+   *  `duration` = the wind-up as the sim plays it), cancelled with the cast; on `attack.present` the basic attack's
+   *  swing / draw (CONTRACT §9.5 "Wind-ups", r12 wave A) */
   windupVfx: Id.optional(),
 }).strict();
 
@@ -383,6 +384,11 @@ export const FighterDef = z.object({
     preferredRange: z.number().positive(), comboOrder: z.array(Slot).optional() }).strict(),
   /** palette for collection/draft backgrounds */
   palette: z.object({ primary: Color, secondary: Color }).strict(),
+  /** CHANGED(RENDER), additive (r12 M12): the fighter's VFX signature hue and its companion, resolved by the
+   *  VFX colour refs "signature" / "secondary" (CONTRACT §9.5). Signature: HSV saturation ≥ 0.55, value 0.7–0.95,
+   *  hue outside tokens vfx.reservedHuesHSV; no two fighters within 25° of hue unless ≥ 25 L* apart (the content
+   *  build checks). Skins never change it (a skin's vfxTint recolours "element" only). */
+  vfx: z.object({ signature: Color, secondary: Color }).strict().optional(),
 }).strict();
 export type FighterDefT = z.infer<typeof FighterDef>;
 

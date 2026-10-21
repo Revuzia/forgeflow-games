@@ -66,7 +66,10 @@ export type VfxDraw = (renderer: WebGLRenderer, target: WebGLRenderTarget | null
 const U = screenUniforms;
 const uniformsOf = (o: Record<string, Uniform>): Map<string, Uniform> => new Map(Object.entries(o));
 
-/** the ultimate impact envelope (vfx/screen.ts): local eased lift + saturation drop + global dip, HDR */
+/** the ultimate impact envelope (vfx/screen.ts): local eased lift + saturation drop + global dip, HDR. The envelope's
+ *  values are DISPLAY brightness ratios (what the eye and a frame capture measure); they multiply linear HDR light
+ *  raised to the display gamma (≈ 2.2) so a ×1.45 hold reads ×1.45 on screen below the tone curve's shoulder, and the
+ *  peak saturates toward the stopped-sun white only inside the area (never full-screen white). */
 class ExposureEffect extends Effect {
   constructor() {
     super('ValeExposure', /* glsl */`
@@ -76,7 +79,7 @@ uniform float uExpo;
 uniform float uBreath;
 uniform float uAspect;
 void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor ) {
-  vec3 c = inputColor.rgb * uExpo;
+  vec3 c = inputColor.rgb * pow( max( uExpo, 0.0 ), 2.2 );
   float lift = 0.0, desat = 0.0;
   for ( int i = 0; i < ${MAX_LIFTS}; i ++ ) {
     vec4 a = uLiftA[ i ];
@@ -86,7 +89,7 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
     lift += a.w * ( k + uBreath * ( 1.0 - k ) );
     desat = max( desat, uLiftB[ i ].x * k );
   }
-  c *= 1.0 + lift;
+  c *= pow( 1.0 + lift, 2.2 );
   float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
   outputColor = vec4( mix( c, vec3( l ), desat ), inputColor.a );
 }`, { blendFunction: BlendFunction.SET, uniforms: uniformsOf({ uLiftA: U.uLiftA, uLiftB: U.uLiftB, uExpo: U.uExpo, uBreath: U.uBreath, uAspect: U.uAspect }) });

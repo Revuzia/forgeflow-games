@@ -170,32 +170,33 @@ def defs() -> list:
 
     # ── ult · Domefall: the landing (area circle 3.5; T4) ─────────────────────────────────────────
     D.append(vfx("marund_ult_domefall", 1.6,
-                 flash(4, at="ground", color="team", scale=1.5),
-                 # the shell lands whole (opaque stone, thin team rim), holds a beat, then splits along glowing seams
-                 mesh("ground", "dome", [[0, 2.3], [0.07, 1.98], [0.12, 2.0], [1, 2.0]], 0.8, color=[STONE, STONE_DK], alpha=[[0, 1], [0.75, 1], [1, 0]],
-                      emissive=0.35, rim="team", rim_pow=3.0, rim_emissive=3.5, blend="chip", noise=0.3, noise_scale=1.6,
-                      dissolve=[[0, 0], [0.22, 0.02], [0.45, 0.45], [1, 1]], edge="team", edge_width=0.14, edge_emissive=10, fit=True),
-                 # the banding course of the shell, lit as it breaks
-                 mesh("ground", "dome", 2.0, 0.5, color=[WHITE_T, "team"], alpha=[[0, 0.8], [0.6, 0.6], [1, 0]], emissive=4.0, mask="edge",
+                 # r12 M13: the primary element is the dome itself, glazed in Marund's jade: a deep-jade shell (L* ~48 against
+                 # the pale plaza's ~78) with a signature glaze rim; the team foot ring stays the brightest edge (the no-entry line)
+                 flash(4, at="ground", color="signature", scale=1.0),
+                 # the shell lands whole (opaque glazed stone), holds a beat, then splits along glowing jade seams
+                 mesh("ground", "dome", [[0, 2.3], [0.07, 1.98], [0.12, 2.0], [1, 2.0]], 0.8, color=["secondary", IRON], alpha=[[0, 1], [0.75, 1], [1, 0]],
+                      emissive=0.35, rim="signature", rim_pow=2.6, rim_emissive=3.0, blend="chip", noise=0.3, noise_scale=1.6,
+                      dissolve=[[0, 0], [0.22, 0.02], [0.45, 0.45], [1, 1]], edge="signature", edge_width=0.14, edge_emissive=8, fit=True),
+                 # the banding course of the shell, lit jade as it breaks
+                 mesh("ground", "dome", 2.0, 0.5, color=["signature", "secondary"], alpha=[[0, 0.7], [0.6, 0.5], [1, 0]], emissive=3.0, mask="edge",
                       mask_param=[[0, 0.1], [1, 0.55]], noise=0.3, delay=0.05, fit=True),
                  # the three windows flare as it breaks
                  [L("sprite", at="ground", texture="flare", size=[1.1, 1.2], color=HEARTH, emissive=6, alpha=[0, 1, 0], life=0.32, delay=0.06,
                     offset=[round(3.0 * c, 3), 1.1, round(3.0 * s_, 3)], soft=0.1) for c, s_ in ((1, 0), (-0.5, 0.866), (-0.5, -0.866))],
-                 # shell fragments thrown out (opaque stone and ironstone), then the brightest team ring
+                 # shell fragments thrown out (glazed jade and ironstone), then the brightest team ring
                  L("emitter", at="ground", count=20, delay=0.18, shape="ring", radius=0.8, dir="out", spreadDeg=35, speed=[4, 8], velocity=[0, 3.5, 0],
-                   life=[0.55, 0.9], size=[0.4, 0.36, 0.24], sizeVar=[0.6, 1.4], color=[STONE, IRON], alpha=[1, 1, 1, 0], gravity=14, drag=0.6,
-                   bounce=0.3, texture="chip", blend="chip", spinDeg=[-400, 400], rim="team", rimAlpha=0.6, fit=True),
-                 mesh("ground", "dome", [[0, 2.0], [1, 2.45]], 0.3, color="team", alpha=[[0, 0], [0.15, 0.2], [1, 0]], emissive=3.0, rim="team",
-                      rim_pow=2.0, rim_emissive=8.0, noise=0.6, delay=0.2, fit=True),
+                   life=[0.55, 0.9], size=[0.4, 0.36, 0.24], sizeVar=[0.6, 1.4], color=["secondary", IRON], alpha=[1, 1, 1, 0], gravity=14, drag=0.6,
+                   bounce=0.3, texture="chip", blend="chip", spinDeg=[-400, 400], rim="signature", rimAlpha=0.6, fit=True),
+                 mesh("ground", "dome", [[0, 2.0], [1, 2.45]], 0.3, color="signature", alpha=[[0, 0], [0.15, 0.2], [1, 0]], emissive=2.0, rim="signature",
+                      rim_pow=2.0, rim_emissive=4.0, noise=0.6, delay=0.2, fit=True),
                  shockwave("ground", radius=(0.35, 1.15), width=(0.7, 0.12), life=0.45, emissive=9.0, delay=0.18, fit=True),
                  shockwave("ground", radius=(0.2, 0.95), width=(0.3, 0.05), life=0.6, emissive=4.0, delay=0.28, alpha=(0.8, 0.4, 0), fit=True),
-                 chips("ground", 14, color=(STONE, CHALK_DK), speed=(4, 8), size=0.16),
+                 chips("ground", 14, color=("secondary", CHALK_DK), speed=(4, 8), size=0.16),
                  dust("ground", 12, size=1.5, speed=(2, 4), radius=0.9, delay=0.25, life=(0.7, 1.1)),
-                 decal("ground", "crack", [[0, 0.5], [0.1, 1.1], [1, 1.15]], 1.5, color=INK2, alpha=(0.9, 0.75, 0), emissive=3.0, rim="team",
+                 decal("ground", "crack", [[0, 0.5], [0.1, 1.1], [1, 1.15]], 1.5, color=INK2, alpha=(0.9, 0.75, 0), emissive=1.0, rim="signature",
                        texture="crack", fit=True),
-                 light("ground", "team", 22, 10, 0.55),
-                 shake(0.6),
-                 comment="T4 · Lumen · Domefall landing: white core flash, a whole stone dome shell slams down, holds a beat and splits along"
-                         " glowing team seams while a course of light runs up it and the windows flare, fragments fly out, the team ring is"
-                         " brightest, a cracked floor"))
+                 light("ground", "signature", 14, 10, 0.55),
+                 comment="T4 · Lumen · Domefall landing: a jade core flash (white heart), a whole deep-jade glazed shell slams down, holds a"
+                         " beat and splits along glowing jade seams while a course of light runs up it and the windows flare, glazed"
+                         " fragments fly out, the team ring is brightest, a dark cracked floor settles"))
     return D

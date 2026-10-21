@@ -39,12 +39,13 @@
   },
   "attack": {
     "range": 1.9,
-    "windup": 0.34,
+    "windup": 0.27,
     "damageType": "phys",
     "present": {
       "sfx": "c_swing_heavy",
       "hitVfx": "lib_hit_phys_heavy",
-      "hitSfx": "c_hit_phys_heavy"
+      "hitSfx": "c_hit_phys_heavy",
+      "windupVfx": "marund_atk_swing"
     }
   },
   "collisionRadius": 0.68,
@@ -205,7 +206,8 @@
         "sfx": "c_dash",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "marund_a1_windup"
       }
     },
     "a2": {
@@ -329,7 +331,8 @@
       "present": {
         "anim": "cast_a2",
         "sfx": "c_shield",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "marund_a2_windup"
       }
     },
     "a3": {
@@ -406,7 +409,7 @@
           "present": {
             "vfx": "marund_a3_mortar",
             "sfx": "c_slam",
-            "telegraph": "ally_only"
+            "telegraph": "everyone"
           }
         }
       ],
@@ -424,7 +427,8 @@
         "sfx": "c_thrown",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "ally_only"
+        "telegraph": "everyone",
+        "windupVfx": "marund_a3_windup"
       }
     },
     "ult": {
@@ -553,7 +557,8 @@
         "sfx": "c_ult_windup",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "marund_ult_windup"
       }
     }
   },
@@ -608,5 +613,9 @@
   "palette": {
     "primary": "#6E6358",
     "secondary": "#A58A6C"
+  },
+  "vfx": {
+    "signature": "#08B47F",
+    "secondary": "#00855C"
   }
 }

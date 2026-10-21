@@ -188,6 +188,14 @@ an explicit strict object (§12 required roles required, optional roles optional
 `setup.spells`/`setup.boons` use `.extend()` instead of `.and()` (an intersection let unknown keys
 through); `Scaling.perCounter`/`perMark` are `.strict()`.
 
+CHANGED(RENDER), additive optional fields in `catalog.ts` (no schema bump), r12 wave A:
+`Present.windupVfx` (VfxDef id: the caster's anticipation over a wind-up — on abilities the cast's, on
+`attack.present` the basic attack's; §9.5 "Wind-ups") and `FighterDef.vfx = { signature, secondary }` (#rrggbb: the
+fighter's VFX signature hue and its companion, resolved by the colour refs "signature" / "secondary"; HSV
+saturation ≥ 0.55, value 0.70–0.95, hue outside tokens.json `vfx.reservedHuesHSV`, no two fighters within 25° of
+hue unless ≥ 25 L* apart — the content build checks; skins never change it, a skin's `vfxTint` recolours
+"element" only). Sim ignores both.
+
 CHANGED(SIM), additive optional fields in `catalog.ts` (no schema bump): `FighterDef.sightRange` (fog-of-war
 sight in metres; omitted = 12) and `RulesParams.tuning` = `{ assistWindow, xpShareRange, killXpFraction,
 multiKillWindow, fountainHealPerSec, suddenDeathRespawnMult }`, every key optional, defaults = the numbers in
@@ -533,6 +541,13 @@ humans; zero drift; clients and server agree on every stat).
   N8AO (contact AO) → bloom (mipmap, threshold 1.0) → tone mapping (Khronos PBR Neutral, exposure 1.0)
   → LUT3D (`vale_grade_01`, one locked grade everywhere) → vignette → overlay pass (bars, rings,
   telegraphs: drawn AFTER the grade so their hex is the screen pixel) → SMAA. CHANGED(LEAD) per STYLE_BIBLE. Quality ladder §9.4.
+  CHANGED(RENDER) r12 wave A, the full order: RenderPass → N8AO (off on Low) → **VfxPass** (the VFX scene into the
+  HDR buffer, soft depth) → one EffectPass: **Distort** (Medium and up: the VFX distortion offsets bend the HDR
+  lookup, ≤ 0.015 UV) → Bloom (when `video.bloom`) → **Exposure** (the ultimate impact envelope: a local eased
+  lift + saturation drop + a global dip, before tone mapping; `src/render/vfx/screen.ts`) → ToneMapping (Neutral)
+  → LUT3D → **Grade** (the dead player's world: saturation → 0, value × 0.85 over 400 ms, back over 300 ms;
+  reduceMotion cuts in 120 ms) → Vignette → OverlayPass → SMAA | Copy. The envelope's dip and its 8 % frame-wide
+  "breath" only play for an impact whose area is on screen; reduceMotion halves the peak and drops dip + breath.
 - Sky: map `art.sky` equirect HDR → PMREM environment + background. Height/distance fog per map.
 - Shadows: one directional sun with a shadow frustum fitted to the camera view, texel-snapped.
 - Fog of war: `view.visionGrid(localTeam)` → R8 `DataTexture` (smoothed over time) sampled by a
@@ -605,14 +620,14 @@ by the renderer but flagged by the content build.
 CHANGED(RENDER), additive — the **v2 vocabulary** (`src/render/vfx/defs.ts` parses it; the v1 types
 above keep their meaning; `tools/build_content.ts` validates every key):
 - Common keys on drawable layers: `delay`, `at` (adds `caster`: the source body, tracked), `phase`
-  (`main`|`windup`: anticipation layers fire on the cast's windup), `socket` (a fighter socket: `weapon`,
+  (`main`|`windup`|`release`: anticipation layers fire on the cast's windup; release layers below), `socket` (a fighter socket: `weapon`,
   `head`, `hand_r` …), `offset [forward, up, right]` m in the facing frame, `follow` (track the anchor),
   `fit` (radius-like values × the area radius; default on at `ground`), `secondary` (allies spawn
   half), `chance` (0..1).
 - **Curves** (`size, alpha, emissive, erode, scale, radius, width, …`): a number · `[start, end]` ·
   ≥ 3 evenly spaced numbers · `[[t, v], …]` keys (t 0..1). **Gradients** (`color`): a color · colors
   evenly spaced · `[[t, color], …]`. `emissive` is HDR (> 1 blooms), capped per tier T0–T4 = 0.8 ·
-  1.5 · 3 · 6 · ≥ 10; near-white below T4 becomes Dawnglass.
+  2 · 3 · 6 · ≥ 10 (T1 1.5 before r12 wave A); near-white below T4 becomes Dawnglass.
 - `emitter`: `count, bursts [[t, n]], rate, perMeter, duration, shape (point|sphere|ring|disc|cone|line|path|aura),
   radius, radiusInner, angleDeg, length, width, surface, height, dir (up|out|in|forward|back|down|normal|random|none),
   spreadDeg, speed[], velocity [f,u,r], inherit, life[], gravity, drag, turbulence, turbulenceScale, orbitDeg,
@@ -630,12 +645,79 @@ above keep their meaning; `tools/build_content.ts` validates every key):
 - `decal`: `shape, style (plain|scorch|crack|ink|frost|light), radius~, life, color~, alpha~, emissive~, rim,
   texture, angleDeg, length, width`. `flash` adds `texture, core, light`. `light`: `color, intensity, radius,
   life, attack, flicker`. `distort`: `mode (ring|haze|bulge), size~, strength~, life, align`. `feel`:
-  `shake, who (self|all), hitFlash, hitStop, squash`. `bind`: `event` (a world event / status this def plays for).
+  `shake, who (self|all), hitFlash, hitStop, squash` + the exposure keys below. `bind`: `event` (a world event / status this def plays for).
 - Textures (generated on the GPU, `render/vfx/atlas.ts`): flipbooks `ink_puff light_puff dust_puff splash`;
   statics `spark glow shard ring streak petal ember drop rune crack mote flare wisp chip glint ring_thin frost
   caustic scorch splat`; v1 aliases `smoke dust shard_set`.
 - Draw: VFX render in a post pass after AO and before bloom / tone map / LUT (premultiplied, soft
   depth against the scene), so emissive blooms and the grade applies; lights are pooled per tier.
+
+CHANGED(RENDER), additive — r12 wave A (feel: anticipation, sustained statuses, ultimate envelope, signatures):
+- **Colours**: `"signature"` / `"secondary"` = the CASTER fighter's `FighterDef.vfx` pair (non-fighter sources,
+  and status looks, fall back to `"team"`; a zone's looping VFX resolve to its OWNER's pair). On a layer that draws
+  its colour as a surface (`blend` alpha or chip) a dark signature is lifted toward its pale companion to L* ≥ 43
+  (it never renders as ink; additive light keeps the true hue). House rule (applied to the bespoke kits by tools/vfx/passes.py):
+  `"team"` only on the danger edges — shockwaves, decal rings and marks, mesh fresnel rims, particle rims; a
+  kit's other light is its signature. On a status look `"element"` is the APPLIER's relationship colour (the
+  taunt tether is the taunter's). Tier caps T0–T4 = 0.8 · **2** · 3 · 6 · ≥ 10 (T1 raised from 1.5: a basic
+  hit's 1–2 frame core must read on pale stone).
+- **Common keys** add: `phase: "release"` (fires when a sustained instance lets go normally — never on a cancel —
+  its delay counted from the release), `repeat` (s: re-fire the layer every `repeat` def-seconds while the
+  instance lives / is held), `fitTime` (the layer's own life stretches with a time-fitted instance, see
+  Wind-ups). `hold` (0..1) now also on `decal` and `beam`: a sustained instance's element stops ageing at
+  life × hold until released, then plays its tail; a held decal's styled erosion (ink, scorch, crack, frost)
+  runs only in that tail.
+- **`ribbon`** adds `span` (def-seconds after it fires that it follows its anchor, then lets go and fades: a swing
+  trail stops at the follow-through) and honours `fit` (width × the spawn scale: a crit swing is twice as wide).
+  A synthesized swing (r12 M5 fix pass): `arcRadius` (m, > 0 turns it on), `arcDeg` [from, to] (degrees from the
+  facing, + toward the caster's left), `arcTiltDeg` (the arc plane tilted about the facing; keep |tilt| ≤ ~25° so
+  the top-down camera reads a crescent), `arcHeight` (m above the feet), `arcEase` (> 1 accelerates into the blow,
+  default 1.4): the head sweeps the arc round the caster (`at: caster`) over `span` def-seconds from `delay`, with
+  sub-frame points every ≤ 4° (a clean crescent at any frame rate), then lets go and fades over `life`.
+- **`decal`** with a `style` and no `texture` takes its style's pattern (light ring → `ring_thin`, light pool →
+  `caustic`, ink → `splat`, scorch → `scorch`, frost → `frost`, crack → `crack`); v1 decals keep `crack`.
+- **`feel`** adds the exposure envelope: `exposure` (peak × scene light inside the area, > 1 to fire),
+  `exposureRadius` (m, × the area when fitted), `exposureHold` (s at ≥ 1.4×, default 0.28), `exposureFade`
+  (half-life s, 0.12), `exposureDip` (the pre-peak whole-frame multiply, 0.92), `exposureDesat` (peak saturation
+  drop, 0.35). Every ratio is a DISPLAY brightness ratio (what a frame capture measures): the post chain multiplies
+  linear HDR light by ratio^2.2 before tone mapping, so the hold reads ×1.4-1.45 on screen below the tone curve's
+  shoulder and the peak clips toward white inside the area on pale ground. A T4 impact without its own gets the
+  default (2.4 / 0.28 / 0.12 / 0.92 / 0.35), as does an ultimate that lands as a zone (when the zone opens): one
+  per caster per event batch, an area landing preferred over a hit and the last landing over an earlier one, radius
+  capped at 3.5 m (the impact, never the whole fight); structure falls a softer one (1.7). m4: `shake` is accepted but no ability shakes the camera; only world events (structure falls,
+  ≤ 4 px for ≤ 120 ms × `access.screenShake`, default 0.5).
+- **`distort`** (T3/T4 only, never on Low): `mode` ring | haze | bulge, `size~` (radius m), `strength~` (UV,
+  clamped to 0.015), `life`, `align` camera | ground. A structure's basic shot plays at T3.
+- **Sockets**: a fighter's `FighterArt.sockets`, with fallbacks (weapon → weapon_r → hand_r; weapon_tip →
+  blade_tip → weapon …; a missing bone sits at 60 % of the art height), plus virtual sockets every unit has:
+  `top` (over the head: the art height), `base` (the feet, airborne height included), `ground` (under the unit at
+  y 0), `origin` (the feet).
+- **Wind-ups** (`Present.windupVfx`): spawned on the `cast` event of a cast with castTime ≥ 0.12 s, its clock
+  fitted so `duration` = the wind-up as the sim plays it (release on tick ⌈castTime / tick⌉ − 1 after the cast
+  tick), sustained while the caster is in `cast`/`channel`, cancelled (no release layers, held elements fade in
+  ≈ 0.1 s) when the caster leaves `cast` BEFORE that tick (stun, death). Without one: the cast def's
+  `phase: "windup"` layers, else `client.vfxEvents.windup` (`ultCharge` for ultimates, which also play
+  `ultWindup`); casts under 0.12 s play `castFlash`. On `attack.present`, `windupVfx` plays on the `attack` event
+  fitted to the attack wind-up (1.0 = the impact tick), spawned with scale 2 at T2 on a crit, cancelled with the
+  attack. Ground warnings start with the wind-up: an ability that is `telegraph: everyone` or holds a delayed
+  area that hurts enemies shows its shapes from the first tick — EVERY area / zone of the cast an enemy must read
+  (one that hurts or controls them, or whose own `present.telegraph` is `everyone`), each with its own visibility:
+  an area marked `telegraph: none` (a helper displacement field) is never warned, an ally-only one only when it is
+  delayed. Targeting point · direction · self · none (on the caster) · unit (a lunge's landing area sits on the
+  target and tracks it); a `repeat` warns its first strike (landing = castTime + delay, + dash travel for a dash
+  that lands an area); a cone / rect at the cast point starts there along the aim. The area event carrying exactly
+  that area's shape (or the dash event) takes each warning over; a zone's outline continues its warning (never
+  a second shape), and follows the zone's own `present.telegraph` per viewer (`none` draws no outline). The content build
+  requires every delayed area that damages or controls enemies to be `telegraph: everyone` (the default) and to
+  warn ≥ 0.6 s (castTime + delay for a top-level area, the delay alone for a nested or repeated one).
+- **Statuses** (`client.vfxStatus`): one sustained instance per (unit, status kind) for the status' whole duration
+  (released when the kind leaves `EntityView.statuses`, the unit dies or leaves vision). Structures and permanent
+  (non-finite) statuses get no look. Two act on the body itself (render/actors.ts `setVeil`, chosen by the
+  renderer per viewer): `invisible` — a unit its allies (or a reveal) still see draws at 35 % alpha with no ink
+  outline; `untargetable` — 60 % (40 % see-through) under a 2 px dawnglass rim. Blended over a depth-only copy of the
+  body (nearest surface only), no shadow while veiled; programs compiled per fighter template at attach.
+- **Warm-up**: `VfxSystem.prewarm` (called at the end of `preload`) builds every mesh shape's draw and compiles the
+  VFX and distortion programs, so no VFX program links mid-match.
 
 ### §9.6 Fixed internal ids (code vocabulary, not player-facing)
 Mode ids `rift`, `bridge`, `fray` · queue ids `rift_standard`, `rift_quick`, `rift_ranked`,
@@ -644,7 +726,8 @@ Mode ids `rift`, `bridge`, `fray` · queue ids `rift_standard`, `rift_quick`, `r
 the records. Code still never branches on these ids (it branches on `kind`, `pick`, `end.kind`).
 
 - CHANGED(RENDER): world-event and status looks are content: `client.vfxEvents` (levelUp, respawn, death, unitDeath,
-  structureFall, recall, pickup, objective, blink, crit, heal, shield, ultWindup → vfx id) and `client.vfxStatus`
+  structureFall, recall, pickup, objective, blink, crit, heal, shield, ultWindup, and since r12 wave A windup,
+  ultCharge, castFlash → vfx id) and `client.vfxStatus`
   (status kind → vfx id); the boot passes them to the renderer, the build checks every id exists.
 
 ## §10 Client UI (`src/ui/`, lane UI)

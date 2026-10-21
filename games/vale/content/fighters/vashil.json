@@ -38,14 +38,15 @@
   },
   "attack": {
     "range": 5.3,
-    "windup": 0.3,
+    "windup": 0.24,
     "damageType": "magic",
     "projectileSpeed": 18,
     "present": {
-      "vfx": "lib_bolt_lumen",
+      "vfx": "vashil_atk_shot",
       "sfx": "c_shot_bolt_lumen",
       "hitVfx": "lib_hit_magic",
-      "hitSfx": "c_hit_magic"
+      "hitSfx": "c_hit_magic",
+      "windupVfx": "vashil_atk_draw"
     }
   },
   "collisionRadius": 0.55,
@@ -230,7 +231,8 @@
         "anim": "cast_a1",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "vashil_a1_windup"
       }
     },
     "a2": {
@@ -308,7 +310,8 @@
         "sfx": "c_cast_lumen",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "vashil_a2_windup"
       }
     },
     "a3": {
@@ -392,7 +395,8 @@
         "anim": "cast_a3",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "vashil_a3_windup"
       }
     },
     "ult": {
@@ -430,7 +434,7 @@
                 "radius": 4.5
               },
               "at": "point",
-              "delay": 0.5,
+              "delay": 0.6,
               "onHit": [
                 {
                   "op": "damage",
@@ -469,7 +473,8 @@
         "sfx": "c_ult_windup",
         "hitVfx": "lib_hit_magic",
         "hitSfx": "c_hit_magic",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "vashil_ult_windup"
       }
     }
   },
@@ -527,5 +532,9 @@
   "palette": {
     "primary": "#E1DCCF",
     "secondary": "#A7B5C2"
+  },
+  "vfx": {
+    "signature": "#A66CF2",
+    "secondary": "#441385"
   }
 }

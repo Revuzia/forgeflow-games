@@ -8,7 +8,7 @@
 // Common keys on every drawable layer: type, delay (s), at (origin | caster | target | path | ground),
 // phase (main | windup | release), socket (fighter socket name), offset [forward, up, right] (m), follow (bool:
 // track the anchor every frame), fit (bool: radius-like values × the area radius; default on at
-// `ground`), secondary (bool: allies spawn half), chance (0..1), repeat (s: re-fire the layer every
+// `ground`; a ribbon's width × the spawn scale), secondary (bool: allies spawn half), chance (0..1), repeat (s: re-fire the layer every
 // `repeat` seconds while the instance lives or is sustained), fitTime (bool: the layer's life stretches
 // with a time-fitted instance, e.g. a wind-up def fitted to the cast time; delays always do).
 //
@@ -68,6 +68,15 @@ export interface RibbonL extends LayerBase {
   type: 'ribbon';
   width: Curve; life: number; color: Gradient; alpha: Curve; emissive: number; noise: number; scroll: number; tile: number;
   blend: PBlend; rim: ColorRef | null; rimAmt: number; minDist: number; flat: boolean;
+  /** follow window (def s after it fires, 0 = while the instance lives): a swing trail lets go at the follow-through */
+  span: number;
+  /** a synthesized swing (r12 M5): instead of following an anchor, the head sweeps an arc round the caster from
+   *  a0 to a1 (radians from the facing, + toward the caster's left) over `span` def-seconds (eased by `ease`: > 1
+   *  accelerates into the blow), radius r (m, × nothing: a slash is the fighter's own reach), h metres above the
+   *  feet, its plane tilted `tilt` radians about the facing (0 a flat sweep, + a falling diagonal cut; keep it under
+   *  ~25°: the top-down camera reads a mostly level arc as a crescent, a steep one goes edge-on). Sub-frame points
+   *  along the arc keep it a clean crescent at any frame rate; the band faces the camera like any ribbon. */
+  arc: { r: number; a0: number; a1: number; tilt: number; h: number; ease: number } | null;
 }
 
 export interface BeamL extends LayerBase {
@@ -248,6 +257,11 @@ function parseLayer(r: Record<string, unknown>, d: VfxDefT, binds: string[]): La
         color: gradient(r.color, 'team'), alpha: v1 ? curve([a * 0.25, a], a) : curve(r.alpha, [0, 1]), emissive: num(r.emissive, 1),
         noise: num(r.noise, v1 ? 0.25 : 0.4), scroll: num(r.scroll, 1.5), tile: num(r.tile, 0.6), blend: blendOf(r.blend, 0),
         rim: colorRef(r.rim), rimAmt: num(r.rimAlpha, colorRef(r.rim) ? 0.6 : 0), minDist: num(r.minDist, 0.12), flat: r.face === 'ground',
+        span: Math.max(0, num(r.span, 0)),
+        arc: typeof r.arcRadius === 'number' && r.arcRadius > 0
+          ? { r: r.arcRadius, a0: pair(r.arcDeg, [70, -70])[0] * Math.PI / 180, a1: pair(r.arcDeg, [70, -70])[1] * Math.PI / 180,
+            tilt: deg(r.arcTiltDeg, 0), h: num(r.arcHeight, 1.0), ease: Math.max(0.2, num(r.arcEase, 1.4)) }
+          : null,
       }];
     }
     case 'ring': case 'shockwave': {
@@ -284,8 +298,13 @@ function parseLayer(r: Record<string, unknown>, d: VfxDefT, binds: string[]): La
       }];
     }
     case 'decal': {
-      const legacyTex = typeof r.texture === 'string' ? r.texture : 'crack';
-      const style = typeof r.style === 'string' && r.style in DECAL_STYLES ? DECAL_STYLES[r.style as keyof typeof DECAL_STYLES]
+      // a v2 decal with a style and no texture takes its style's own pattern (a light ring a thin ring, a light pool
+      // caustics, ink a splat, scorch char, frost facets); v1 decals (no style) keep the v1 default, crack
+      const styled = typeof r.style === 'string' && r.style in DECAL_STYLES;
+      const styleTex = r.style === 'light' ? (r.shape === 'ring' ? 'ring_thin' : 'caustic') : r.style === 'ink' ? 'splat' : r.style === 'scorch' ? 'scorch'
+        : r.style === 'frost' ? 'frost' : 'crack';
+      const legacyTex = typeof r.texture === 'string' ? r.texture : styled ? styleTex : 'crack';
+      const style = styled ? DECAL_STYLES[r.style as keyof typeof DECAL_STYLES]
         : legacyTex === 'crack' ? DECAL_STYLES.crack : legacyTex === 'smoke' ? DECAL_STYLES.ink : legacyTex === 'glow' ? DECAL_STYLES.light : DECAL_STYLES.plain;
       return [{
         ...b, type: 'decal', shape: Math.max(0, DECAL_SHAPES.indexOf(String(r.shape ?? 'circle'))), style,
@@ -322,7 +341,7 @@ function layerSpan(l: Layer, dur: number): number {
       const lastBurst = l.bursts.reduce((m, x) => Math.max(m, x[0]), 0);
       return Math.max(emitFor, lastBurst) + l.life[1];
     }
-    case 'ribbon': return l.life;
+    case 'ribbon': return l.span > 0 ? l.span + l.life : l.life;
     case 'distort': case 'beam': case 'mesh': case 'shockwave': case 'decal': case 'light': return l.life;
     default: return 0;
   }

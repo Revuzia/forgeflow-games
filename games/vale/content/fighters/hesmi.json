@@ -36,12 +36,13 @@
   },
   "attack": {
     "range": 1.8,
-    "windup": 0.36,
+    "windup": 0.28,
     "damageType": "phys",
     "present": {
       "sfx": "c_swing_heavy",
       "hitVfx": "lib_hit_phys_heavy",
-      "hitSfx": "c_hit_phys_heavy"
+      "hitSfx": "c_hit_phys_heavy",
+      "windupVfx": "hesmi_atk_swing"
     }
   },
   "collisionRadius": 0.68,
@@ -212,7 +213,8 @@
         "sfx": "c_slam",
         "hitVfx": "lib_hit_phys_heavy",
         "hitSfx": "c_hit_phys_heavy",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "hesmi_a1_windup"
       }
     },
     "a2": {
@@ -514,7 +516,8 @@
         "sfx": "c_ult_windup",
         "hitVfx": "lib_hit_phys_heavy",
         "hitSfx": "c_hit_phys_heavy",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "hesmi_ult_windup"
       }
     }
   },
@@ -574,5 +577,9 @@
   "palette": {
     "primary": "#5C5A63",
     "secondary": "#8C8478"
+  },
+  "vfx": {
+    "signature": "#5C0EC2",
+    "secondary": "#CDAAFA"
   }
 }

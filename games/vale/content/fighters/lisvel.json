@@ -38,14 +38,15 @@
   },
   "attack": {
     "range": 5.9,
-    "windup": 0.28,
+    "windup": 0.21,
     "damageType": "phys",
     "projectileSpeed": 22,
     "present": {
-      "vfx": "lib_arrow",
+      "vfx": "lisvel_atk_shot",
       "sfx": "c_shot_bow",
       "hitVfx": "lib_hit_phys_light",
-      "hitSfx": "c_hit_phys_light"
+      "hitSfx": "c_hit_phys_light",
+      "windupVfx": "lisvel_atk_draw"
     }
   },
   "collisionRadius": 0.5,
@@ -217,7 +218,8 @@
         "sfx": "c_shot_bow",
         "hitVfx": "lib_hit_phys_light",
         "hitSfx": "c_hit_phys_light",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "lisvel_a1_windup"
       }
     },
     "a2": {
@@ -493,7 +495,8 @@
         "sfx": "c_ult_windup",
         "hitVfx": "lib_hit_phys_heavy",
         "hitSfx": "c_hit_phys_heavy",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "lisvel_ult_windup"
       }
     }
   },
@@ -551,5 +554,9 @@
   "palette": {
     "primary": "#D8D2C2",
     "secondary": "#8E9AA6"
+  },
+  "vfx": {
+    "signature": "#6BE0F2",
+    "secondary": "#137585"
   }
 }

@@ -38,14 +38,15 @@
   },
   "attack": {
     "range": 5.6,
-    "windup": 0.3,
+    "windup": 0.23,
     "damageType": "phys",
     "projectileSpeed": 20,
     "present": {
-      "vfx": "lib_arrow",
+      "vfx": "odrum_atk_shot",
       "sfx": "c_thrown",
       "hitVfx": "lib_hit_phys_light",
-      "hitSfx": "c_hit_phys_light"
+      "hitSfx": "c_hit_phys_light",
+      "windupVfx": "odrum_atk_draw"
     }
   },
   "collisionRadius": 0.55,
@@ -195,7 +196,8 @@
         "sfx": "c_thrown",
         "hitVfx": "lib_hit_phys_light",
         "hitSfx": "c_hit_phys_light",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "odrum_a1_windup"
       }
     },
     "a2": {
@@ -279,7 +281,8 @@
         "anim": "cast_a2",
         "hitVfx": "lib_hit_phys_light",
         "hitSfx": "c_hit_phys_light",
-        "telegraph": "ally_only"
+        "telegraph": "ally_only",
+        "windupVfx": "odrum_a2_windup"
       }
     },
     "a3": {
@@ -467,7 +470,8 @@
         "sfx": "c_ult_windup",
         "hitVfx": "lib_hit_phys_heavy",
         "hitSfx": "c_hit_phys_heavy",
-        "telegraph": "everyone"
+        "telegraph": "everyone",
+        "windupVfx": "odrum_ult_windup"
       }
     }
   },
@@ -527,5 +531,9 @@
   "palette": {
     "primary": "#7A6550",
     "secondary": "#BBA27F"
+  },
+  "vfx": {
+    "signature": "#B3A400",
+    "secondary": "#857900"
   }
 }

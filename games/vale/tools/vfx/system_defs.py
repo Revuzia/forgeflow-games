@@ -8,14 +8,15 @@ out over 250 ms when the status ends; `phase: release` layers mark the end. Anch
 sockets `top` (over the head), `base` (the feet, airborne height included), `ground` (under the unit at
 y 0), `chest`. Colours: "team" = the VICTIM's relationship colour (an enemy stunned reads HARM, you read
 Noonwhite); "element" on a taunt = the TAUNTER's relationship colour. Tiers (the director): hard control
-T3, movement / protection T2, light debuffs T1 (no decals, emissive <= 1.5).
+T3, movement / protection T2, light debuffs T1 (no decals, emissive <= 2). Every look carries an INK element with a
+team rim besides its light, so it reads on pale stone for every viewer (your own Noonwhite included).
 
 Each look is VALE's own, read by silhouette before colour (96-132 px fighters):
-  stun          the stopped hour: a team halo of light turning over the head, sun-motes circling it
-  root          pinned to the hour-line: ink bands coil the feet, three chalk stakes driven in around them
-  slow          dawnglass mire: a glass shackle at the shins, frost underfoot, flakes sinking
-  silence       the muffled bell: an ink bell (dome) over the head, its lip a team ring, ink breath leaking
-  disarm        the broken edge: two cracked chalk arcs circling the hands, chips falling
+  stun          the stopped hour: a hollow dial at the head (ink + team rings), sun-motes riding it like hour marks
+  root          pinned to the hour-line: ink bands coil the feet, three ink stakes driven in a pace around them
+  slow          dawnglass mire: a glass shackle on a dark band at the shins, a dark mire with frost, flakes sinking
+  silence       the muffled bell: a dark ink bell set over the head, a thin team lip, ink breath leaking
+  disarm        the broken edge: the two halves of a snapped blade circle the hands in a cracked ring, chips falling
   airborne      the left-behind shadow: an ink shadow and team ring on the ground, wind streaking up
   taunt         the drawn line: a taut tether to the taunter (taunter's colour), a ring at the feet
   fear          shade wisps: jittering ink wisps around the head over a shivering ink crown
@@ -61,73 +62,91 @@ def defs() -> list:
     D = []
     # ── hard control (T3) ────────────────────────────────────────────────────────────────────────
     D.append(vfx("lib_status_stun", 1.0,
-                 held("mesh", socket="top", offset=[0, 0.24, 0], shape="ringwave", scale=[[0, 0.2], [0.1, 0.66], [1, 0.66]], color="team",
-                      alpha=ha(1.0), emissive=4.2, blend="add", spinDeg=200, align="up", noise=0.25),
-                 held("mesh", socket="top", offset=[0, 0.24, 0], shape="ringwave", scale=[[0, 0.15], [0.1, 0.46], [1, 0.46]], color=DAWNGLASS,
-                      alpha=ha(0.85), emissive=2.6, blend="add", spinDeg=-320, align="up", rotateDeg=[16, 0, 0]),
-                 L("emitter", at="target", socket="top", offset=[0, 0.24, 0], rate=15, shape="ring", radius=0.4, dir="none", speed=[0, 0],
-                   life=[0.42, 0.55], size=[0, 0.17, 0], color=[NOON, "team"], alpha=[0, 1, 0], emissive=4.2, orbitDeg=330, texture="mote",
+                 # the stopped hour, read by silhouette from the top-down camera: a HOLLOW dial round the head (ink ring,
+                 # team ring inside it, the head showing through) with five sun-motes riding it like the hour marks of a
+                 # stopped clock; at head height, below the bar, so the bar never covers it
+                 held("mesh", socket="head", offset=[0, 0.12, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 1.12], [1, 1.12]], color=INK, alpha=ha(0.95),
+                      emissive=0, rim="team", rimEmissive=2.0, rimPow=1.4, blend="ink", spinDeg=-90, align="up"),
+                 held("mesh", socket="head", offset=[0, 0.14, 0], shape="ringwave", scale=[[0, 0.25], [0.1, 0.98], [1, 0.98]], color="team",
+                      alpha=ha(1.0), emissive=3.4, blend="add", spinDeg=160, align="up", noise=0.2, mask="band", maskParam=0.3),
+                 L("emitter", at="target", socket="head", offset=[0, 0.16, 0], rate=8, shape="ring", radius=0.47, dir="none", speed=[0, 0],
+                   life=[0.6, 0.66], size=[0, 0.3, 0.3, 0], color=[NOON, "team"], alpha=[0, 1, 1, 0], emissive=4.2, orbitDeg=240, texture="mote",
                    blend="add", space="local"),
-                 held("decal", shape="ring", style="light", radius=0.72, color="team", alpha=ha(0.6), emissive=1.6),
-                 L("shockwave", at="target", socket="top", offset=[0, 0.24, 0], mode="vertical", radius=[[0, 0.15], [1, 0.8]], width=[0.14, 0.03],
+                 L("emitter", at="target", socket="head", offset=[0, 0.15, 0], rate=8, shape="ring", radius=0.47, dir="none", speed=[0, 0],
+                   life=[0.6, 0.66], size=[0, 0.4, 0.4, 0], color=[INK, INK2], alpha=[0, 0.9, 0.9, 0], orbitDeg=240, texture="mote",
+                   blend="ink", rim="team", rimAlpha=0.8, space="local"),
+                 held("decal", shape="ring", style="light", radius=0.85, color="team", alpha=ha(0.6), emissive=1.6),
+                 L("shockwave", at="target", socket="head", offset=[0, 0.14, 0], mode="vertical", radius=[[0, 0.15], [1, 0.85]], width=[0.14, 0.03],
                    life=0.22, color="team", alpha=[1, 0], emissive=4.0, blend="add"),
-                 L("emitter", at="target", socket="top", offset=[0, 0.24, 0], count=8, shape="ring", radius=0.3, dir="out", spreadDeg=20,
+                 L("emitter", at="target", socket="head", offset=[0, 0.14, 0], count=8, shape="ring", radius=0.3, dir="out", spreadDeg=20,
                    speed=[2.5, 4], life=[0.12, 0.22], size=[0.14, 0.03], color="team", alpha=[1, 0], emissive=4.0, texture="spark", stretch=0.04,
                    blend="add"),
-                 L("shockwave", phase="release", at="target", socket="top", offset=[0, 0.24, 0], mode="vertical", radius=[[0, 0.7], [1, 0.1]],
+                 L("shockwave", phase="release", at="target", socket="head", offset=[0, 0.14, 0], mode="vertical", radius=[[0, 0.7], [1, 0.1]],
                    width=[0.06, 0.1], life=0.16, color="team", alpha=[0.9, 0], emissive=3.0, blend="add"),
-                 comment="T3 · Lumen · stunned — the stopped hour: a team halo turns over the head (spiral = control), a glass inner ring "
-                         "counter-turns, sun-motes circle it, a held ring at the feet; the halo snaps shut when it ends"))
+                 comment="T3 · Lumen · stunned — the stopped hour: a hollow dial at the head (an ink ring with a team rim, a team ring "
+                         "inside it, the head showing through), five sun-motes on ink riding it like a stopped clock's hour marks, a ring at the "
+                         "feet; below the bar, distinct from silence's dark bell by silhouette; it snaps shut at the end"))
     D.append(vfx("lib_status_root", 1.0,
-                 held("mesh", socket="base", shape="spiral", scale=[[0, 0.25], [0.1, 0.86], [1, 0.86]], stretch=[1, 0.7, 1], color=INK, alpha=ha(1.0),
+                 held("mesh", socket="base", shape="spiral", scale=[[0, 0.3], [0.1, 1.05], [1, 1.05]], stretch=[1, 0.7, 1], color=INK, alpha=ha(1.0),
                       emissive=0, rim="team", rimEmissive=3.2, rimPow=1.5, blend="ink", twist=-2.5),
-                 *[held("mesh", socket="base", offset=[f, -0.04, r], shape="spike", scale=[[0, 0.0], [0.06, 0.6], [1, 0.6]], stretch=[1.25, 1.0, 1.25],
-                        color=[CHALK, CHALK_DK], alpha=ha(1.0), emissive=0.4, rim="team", rimEmissive=2.4, rimPow=2.0, blend="chip")
-                   for (f, r) in ((0.44, 0.0), (-0.22, 0.38), (-0.22, -0.38))],
-                 held("decal", shape="circle", style="ink", radius=0.74, color=INK, alpha=ha(0.8), rim="team"),
-                 L("emitter", at="target", socket="ground", count=9, shape="ring", radius=0.4, dir="up", spreadDeg=50, speed=[1.5, 3], life=[0.25, 0.4],
-                   size=[0.1, 0.1, 0.06], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=12, bounce=0.3, texture="chip", blend="chip",
+                 *[held("mesh", socket="base", offset=[f, -0.04, r], shape="spike", scale=[[0, 0.0], [0.06, 0.82], [1, 0.82]], stretch=[1.4, 1.0, 1.4],
+                        color=[INK2, INK], alpha=ha(1.0), emissive=0, rim="team", rimEmissive=3.0, rimPow=1.6, blend="ink")
+                   for (f, r) in ((0.62, 0.0), (-0.31, 0.54), (-0.31, -0.54))],
+                 held("decal", shape="circle", style="ink", radius=1.0, color=INK, alpha=ha(0.85), rim="team"),
+                 L("emitter", at="target", socket="ground", count=9, shape="ring", radius=0.55, dir="up", spreadDeg=50, speed=[1.5, 3], life=[0.25, 0.4],
+                   size=[0.12, 0.12, 0.07], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=12, bounce=0.3, texture="chip", blend="chip",
                    spinDeg=[-400, 400], rim="team", rimAlpha=0.5),
-                 L("emitter", phase="release", at="target", socket="ground", count=10, shape="ring", radius=0.42, dir="up", spreadDeg=60, speed=[1.5, 3.2],
-                   life=[0.25, 0.42], size=[0.11, 0.1, 0.05], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=12, bounce=0.3, texture="chip",
-                   blend="chip", spinDeg=[-500, 500]),
-                 comment="T3 · Shade · rooted — pinned to the hour-line: ink bands coil the feet under a team rim, three chalk stakes driven in "
-                         "around them, an ink pool; the stakes break into chips when it ends"))
+                 L("emitter", phase="release", at="target", socket="ground", count=10, shape="ring", radius=0.6, dir="up", spreadDeg=60, speed=[1.5, 3.2],
+                   life=[0.25, 0.42], size=[0.12, 0.11, 0.06], color=[INK2, CHALK_DK], alpha=[1, 1, 0], gravity=12, bounce=0.3, texture="chip",
+                   blend="chip", spinDeg=[-500, 500], rim="team", rimAlpha=0.5),
+                 comment="T3 · Shade · rooted — pinned to the hour-line: ink bands coil the feet under a team rim, three ink stakes with team edges "
+                         "driven in a pace around them, a 1 m ink pool; the stakes break into chips when it ends"))
     D.append(vfx("lib_status_silence", 1.0,
-                 held("mesh", socket="top", offset=[0, 0.1, 0], shape="dome", scale=[[0, 0.2], [0.1, 0.46], [1, 0.46]], stretch=[1, 1.3, 1], color=INK,
-                      alpha=ha(0.95), emissive=0, rim=NOON, rimEmissive=2.4, rimPow=1.8, noise=0.35, blend="ink"),
-                 held("mesh", socket="top", offset=[0, 0.1, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 0.52], [1, 0.52]], color="team", alpha=ha(1.0),
-                      emissive=3.6, blend="add", align="up"),
-                 L("emitter", at="target", socket="top", offset=[0, 0.05, 0], rate=8, shape="ring", radius=0.24, dir="down", spreadDeg=40, speed=[0.1, 0.35],
-                   life=[0.45, 0.65], size=[0.12, 0.3, 0.38], sizeVar=[0.8, 1.2], color=[INK, INK2], alpha=[0, 0.85, 0], drag=2.4, turbulence=0.6,
-                   rotDeg=[0, 360], spinDeg=[-40, 40], texture="ink_puff", blend="ink", rim=NOON, rimAlpha=0.5, soft=0.2),
-                 L("shockwave", phase="release", at="target", socket="top", offset=[0, 0.1, 0], mode="vertical", radius=[[0, 0.2], [1, 0.9]],
+                 # the muffled bell, read by silhouette: a DARK ink bell set down over the head (a filled dark dome from
+                 # the top-down camera, where stun is a bright hollow dial), a thin team lip at its rim, ink breath
+                 # leaking from under it
+                 held("mesh", socket="head", offset=[0, -0.12, 0], shape="dome", scale=[[0, 0.3], [0.1, 0.78], [1, 0.78]], stretch=[1, 1.35, 1],
+                      color=INK, alpha=ha(0.97), emissive=0, rim="team", rimEmissive=2.2, rimPow=2.2, noise=0.3, blend="ink"),
+                 held("mesh", socket="head", offset=[0, -0.12, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 0.86], [1, 0.86]], color="team",
+                      alpha=ha(1.0), emissive=3.0, blend="add", align="up", mask="band", maskParam=0.35),
+                 L("emitter", at="target", socket="head", offset=[0, -0.15, 0], rate=10, shape="ring", radius=0.36, dir="down", spreadDeg=40,
+                   speed=[0.1, 0.35], life=[0.45, 0.65], size=[0.14, 0.36, 0.44], sizeVar=[0.8, 1.2], color=[INK, INK2], alpha=[0, 0.85, 0],
+                   drag=2.4, turbulence=0.6, rotDeg=[0, 360], spinDeg=[-40, 40], texture="ink_puff", blend="ink", rim=NOON, rimAlpha=0.5, soft=0.2),
+                 L("shockwave", phase="release", at="target", socket="head", offset=[0, 0.05, 0], mode="vertical", radius=[[0, 0.2], [1, 0.95]],
                    width=[0.1, 0.02], life=0.24, color=DAWNGLASS, alpha=[0.9, 0], emissive=2.4, blend="add"),
-                 comment="T3 · Shade · silenced — the muffled bell: an ink bell over the head with a pale rim, its lip a team ring, ink breath "
-                         "leaking from under it; a pale ring rings out when the voice returns"))
+                 comment="T3 · Shade · silenced — the muffled bell: a dark ink bell set over the head with a team rim and a thin team lip, "
+                         "ink breath leaking from under it (a dark filled dome from above, never stun's bright hollow dial); a pale ring rings "
+                         "out when the voice returns"))
     D.append(vfx("lib_status_disarm", 1.0,
-                 *[held("mesh", socket="chest", shape="crescent", scale=[[0, 0.3], [0.1, 0.92], [1, 0.92]], color=[CHALK, CHALK_DK], alpha=ha(1.0),
-                        emissive=0.4, rim="team", rimEmissive=1.6, edge="team", edgeEmissive=3.0, edgeWidth=0.12, dissolve=0.3, noise=0.9,
-                        noiseScale=2.2, blend="chip", spinDeg=150, align="flat", rotateDeg=[0, rot, 0])
+                 # the broken edge: the two halves of a snapped blade (ink with team-lit breaks) turn over the head
+                 *[held("mesh", socket="chest", offset=[0, 0.1, 0], shape="blade", scale=[[0, 0.4], [0.1, 1.35], [1, 1.35]], color=INK, alpha=ha(1.0),
+                        emissive=0, rim="team", rimEmissive=3.0, rimPow=1.2, edge="team", edgeEmissive=3.0, edgeWidth=0.1, dissolve=0.18, noise=0.9,
+                        noiseScale=2.2, blend="ink", spinDeg=110, align="flat", rotateDeg=[0, rot, 0])
                    for rot in (0, 180)],
-                 L("emitter", at="target", socket="chest", rate=5, shape="ring", radius=0.44, dir="down", spreadDeg=30, speed=[0.2, 0.6], life=[0.3, 0.45],
-                   size=[0.08, 0.08, 0.05], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=9, texture="chip", blend="chip", spinDeg=[-400, 400]),
+                 held("mesh", socket="chest", offset=[0, 0.08, 0], shape="ringwave", scale=[[0, 0.4], [0.1, 1.15], [1, 1.15]], color="team", alpha=ha(0.8),
+                      emissive=2.6, blend="add", align="up", noise=0.6, dissolve=0.3, spinDeg=-60),
+                 L("emitter", at="target", socket="chest", rate=6, shape="ring", radius=0.6, dir="down", spreadDeg=30, speed=[0.2, 0.6],
+                   life=[0.3, 0.45], size=[0.1, 0.1, 0.06], color=[INK2, CHALK_DK], alpha=[1, 1, 0], gravity=9, texture="chip", blend="chip",
+                   spinDeg=[-400, 400], rim="team", rimAlpha=0.5),
                  L("emitter", at="target", socket="chest", count=10, shape="sphere", radius=0.2, dir="out", spreadDeg=160, speed=[2, 4], life=[0.25, 0.4],
-                   size=[0.11, 0.1, 0.06], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=12, bounce=0.3, texture="chip", blend="chip",
+                   size=[0.12, 0.11, 0.06], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=12, bounce=0.3, texture="chip", blend="chip",
                    spinDeg=[-500, 500], rim="team", rimAlpha=0.5),
-                 comment="T3 · Lumen/chip · disarmed — the broken edge: two cracked chalk arcs with team-lit breaks circle the hands, chips fall"))
+                 comment="T3 · Shade/chip · disarmed — the broken edge: the two halves of a snapped blade (ink, team-lit breaks) circle the "
+                         "body at the hands inside a cracked team ring, chips fall; it starts with the weapon knocked to pieces"))
     D.append(vfx("lib_status_airborne", 1.0,
-                 held("decal", shape="circle", style="ink", radius=0.52, color=INK, alpha=ha(0.75), rim=INK2),
-                 held("decal", shape="ring", style="light", radius=0.8, color="team", alpha=ha(0.6), emissive=1.8),
-                 L("emitter", at="target", socket="base", rate=18, shape="disc", radius=0.36, dir="up", spreadDeg=6, speed=[2.2, 3.6], life=[0.14, 0.24],
-                   size=[0.24, 0.05], color=[NOON, "team"], alpha=[0.85, 0], emissive=2.6, texture="streak", stretch=0.06, blend="add"),
-                 L("emitter", at="target", socket="ground", count=7, shape="ring", radius=0.5, dir="out", spreadDeg=30, speed=[0.8, 1.8], life=[0.45, 0.7],
-                   size=[0.4, 0.8, 1.0], color=[DUST, DUST2], alpha=[0, 0.45, 0.25, 0], gravity=-0.2, drag=2.8, rotDeg=[0, 360], spinDeg=[-30, 30],
+                 held("decal", shape="circle", style="ink", radius=0.8, color=INK, alpha=ha(0.85), rim="team"),
+                 held("decal", shape="ring", style="light", radius=1.05, color="team", alpha=ha(0.7), emissive=2.0),
+                 L("emitter", at="target", socket="base", rate=26, shape="disc", radius=0.45, dir="up", spreadDeg=6, speed=[2.6, 4.2], life=[0.16, 0.26],
+                   size=[0.4, 0.07], color=[NOON, "team"], alpha=[0.9, 0], emissive=3.0, texture="streak", stretch=0.07, blend="add"),
+                 L("emitter", at="target", socket="base", rate=10, shape="disc", radius=0.4, dir="up", spreadDeg=8, speed=[2.2, 3.4], life=[0.18, 0.28],
+                   size=[0.34, 0.08], color=[INK, INK2], alpha=[0.85, 0], texture="streak", stretch=0.06, blend="ink", rim="team", rimAlpha=0.6),
+                 L("emitter", at="target", socket="ground", count=8, shape="ring", radius=0.6, dir="out", spreadDeg=30, speed=[0.8, 1.8], life=[0.45, 0.7],
+                   size=[0.45, 0.9, 1.1], color=[DUST, DUST2], alpha=[0, 0.5, 0.3, 0], gravity=-0.2, drag=2.8, rotDeg=[0, 360], spinDeg=[-30, 30],
                    texture="dust_puff", blend="alpha", soft=0.3),
-                 L("emitter", phase="release", at="target", socket="ground", count=8, shape="ring", radius=0.5, dir="out", spreadDeg=30, speed=[1, 2.2],
-                   life=[0.45, 0.7], size=[0.4, 0.85, 1.05], color=[DUST, DUST2], alpha=[0, 0.5, 0.3, 0], gravity=-0.2, drag=2.8, rotDeg=[0, 360],
+                 L("emitter", phase="release", at="target", socket="ground", count=9, shape="ring", radius=0.6, dir="out", spreadDeg=30, speed=[1, 2.2],
+                   life=[0.45, 0.7], size=[0.45, 0.95, 1.15], color=[DUST, DUST2], alpha=[0, 0.55, 0.3, 0], gravity=-0.2, drag=2.8, rotDeg=[0, 360],
                    spinDeg=[-30, 30], texture="dust_puff", blend="alpha", soft=0.3),
-                 comment="T3 · airborne — the left-behind shadow: an ink shadow and a team ring stay on the ground under the unit, wind "
+                 comment="T3 · airborne — the left-behind shadow: an ink shadow and a team ring stay on the ground under the unit, light and ink "
                          "streaks rush up past it; dust at the launch and at the landing"))
     D.append(vfx("lib_status_taunt", 1.0,
                  held("beam", **{"from": "target"}, to="caster", socket="chest", width=0.1, color=["element", "element"], alpha=ha(1.0), emissive=3.4,
@@ -138,13 +157,13 @@ def defs() -> list:
                  comment="T3 · taunted — the drawn line: a taut tether from the unit to its taunter in the TAUNTER's relationship colour, "
                          "a ring at the feet, a slow glare over the head (1.7 Hz)"))
     D.append(vfx("lib_status_fear", 1.0,
-                 L("emitter", at="target", socket="top", offset=[0, -0.1, 0], rate=16, shape="sphere", radius=0.42, dir="random", speed=[0.3, 0.8],
-                   life=[0.35, 0.55], size=[0.16, 0.42, 0.3], color=[INK, INK2], alpha=[0, 0.9, 0], turbulence=5, turbulenceScale=3, rotDeg=[0, 360],
-                   spinDeg=[-90, 90], texture="wisp", blend="ink", rim=NOON, rimAlpha=0.7, soft=0.2, space="local"),
-                 held("mesh", socket="top", offset=[0, 0.12, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 0.6], [1, 0.6]], color=INK, alpha=ha(0.95),
+                 L("emitter", at="target", socket="top", offset=[0, -0.1, 0], rate=20, shape="sphere", radius=0.55, dir="random", speed=[0.3, 0.8],
+                   life=[0.35, 0.55], size=[0.2, 0.52, 0.36], color=[INK, INK2], alpha=[0, 0.95, 0], turbulence=5, turbulenceScale=3, rotDeg=[0, 360],
+                   spinDeg=[-90, 90], texture="wisp", blend="ink", rim="team", rimAlpha=0.7, soft=0.2, space="local"),
+                 held("mesh", socket="top", offset=[0, 0.14, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 0.8], [1, 0.8]], color=INK, alpha=ha(0.95),
                       emissive=0, rim="team", rimEmissive=3.0, rimPow=1.2, wobble=0.07, noise=0.8, blend="ink", align="up", spinDeg=-90),
-                 held("decal", shape="circle", style="ink", radius=0.62, color=INK, alpha=ha(0.6), rim="team"),
-                 comment="T3 · Shade · feared — shade wisps: ink wisps jitter round the head over a shivering ink crown with a team rim, an ink pool"))
+                 held("decal", shape="circle", style="ink", radius=0.85, color=INK, alpha=ha(0.65), rim="team"),
+                 comment="T3 · Shade · feared — shade wisps: ink wisps with team rims jitter round the head over a shivering ink crown, an ink pool"))
     D.append(vfx("lib_status_sleep", 1.0,
                  held("mesh", socket="top", offset=[0, -0.12, 0], shape="orb", scale=[[0, 0.2], [0.1, 0.42], [1, 0.42]], stretch=[1, 0.8, 1], color=INK,
                       alpha=ha(0.55), emissive=0, rim=DAWNGLASS, rimEmissive=1.8, rimPow=2.0, noise=0.5, blend="ink"),
@@ -158,13 +177,16 @@ def defs() -> list:
                          "drifting up lazily, a dim ring"))
     # ── movement and protection (T2) ─────────────────────────────────────────────────────────────
     D.append(vfx("lib_status_slow", 1.0,
-                 held("decal", shape="circle", style="frost", radius=0.62, color=DAWNGLASS, alpha=ha(0.6), emissive=0.8, rim="team"),
-                 held("mesh", socket="base", offset=[0, 0.3, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 0.62], [1, 0.62]], color=[DAWNGLASS, "team"],
-                      alpha=ha(0.9), emissive=2.2, noise=0.5, blend="add", align="up", spinDeg=24),
-                 L("emitter", at="target", socket="base", offset=[0, 0.36, 0], rate=10, shape="ring", radius=0.28, dir="down", spreadDeg=20, speed=[0.2, 0.5],
-                   life=[0.4, 0.6], size=[0.11, 0.03], color=[DAWNGLASS, "team"], alpha=[0, 0.9, 0], emissive=2.0, texture="shard", blend="add"),
-                 comment="T2 · Lumen · slowed — dawnglass mire: a glass shackle at the shins, frost underfoot with a team rim, glass flakes sink "
-                         "(left behind as the unit drags on)"))
+                 held("decal", shape="circle", style="ink", radius=0.9, color=INK2, alpha=ha(0.6), rim="team"),
+                 held("decal", shape="circle", style="frost", radius=0.8, color=DAWNGLASS, alpha=ha(0.5), emissive=0.8),
+                 held("mesh", socket="base", offset=[0, 0.3, 0], shape="ringwave", scale=[[0, 0.35], [0.1, 0.82], [1, 0.82]], color=[DAWNGLASS, "team"],
+                      alpha=ha(0.95), emissive=2.4, noise=0.5, blend="add", align="up", spinDeg=24),
+                 held("mesh", socket="base", offset=[0, 0.28, 0], shape="ringwave", scale=[[0, 0.35], [0.1, 0.95], [1, 0.95]], color=INK, alpha=ha(0.7),
+                      emissive=0, rim="team", rimEmissive=1.6, blend="ink", align="up", spinDeg=-24),
+                 L("emitter", at="target", socket="base", offset=[0, 0.4, 0], rate=12, shape="ring", radius=0.36, dir="down", spreadDeg=20, speed=[0.2, 0.5],
+                   life=[0.4, 0.6], size=[0.14, 0.04], color=[DAWNGLASS, "team"], alpha=[0, 0.9, 0], emissive=2.0, texture="shard", blend="add"),
+                 comment="T2 · Lumen · slowed — dawnglass mire: a glass shackle on a dark band at the shins, a dark mire with frost underfoot "
+                         "(team rim), glass flakes sink (left behind as the unit drags on)"))
     D.append(vfx("lib_status_invisible", 1.0,
                  held("mesh", socket="base", shape="column", scale=0.9, stretch=[0.8, 2.0, 0.8], color=DAWNGLASS, alpha=ha(0.22), emissive=0.6,
                       rim=DAWNGLASS, rimEmissive=2.4, rimPow=2.4, noise=0.7, scroll=[0.2, 0.8], blend="add"),
@@ -178,44 +200,55 @@ def defs() -> list:
                  held("decal", shape="ring", style="light", radius=0.66, color=NOON, alpha=ha(0.5), emissive=1.2),
                  comment="T2 · Lumen · untargetable — under glass: a dithered dawnglass bell-jar stands over the unit, rim-lit, a pale ring"))
     D.append(vfx("lib_status_unstoppable", 1.0,
-                 held("mesh", socket="chest", offset=[0, -0.1, 0], shape="orb", scale=1.0, stretch=[0.95, 1.9, 0.95], color=NOON, alpha=ha(0.12),
-                      emissive=0.6, rim=NOON, rimEmissive=3.0, rimPow=2.4, noise=0.3, blend="add"),
-                 L("emitter", at="target", socket="base", rate=6, shape="disc", radius=0.3, dir="up", spreadDeg=60, speed=[1, 2], life=[0.3, 0.45],
-                   size=[0.08, 0.08, 0.05], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=9, texture="chip", blend="chip", spinDeg=[-400, 400]),
-                 comment="T2 · unstoppable — a chalk-bright rim shell round the body, chalk flakes shed at the feet"))
+                 held("mesh", socket="chest", offset=[0, -0.1, 0], shape="orb", scale=1.05, stretch=[0.95, 1.9, 0.95], color=NOON, alpha=ha(0.12),
+                      emissive=0.6, rim="team", rimEmissive=3.0, rimPow=2.4, noise=0.3, blend="add"),
+                 held("decal", shape="ring", style="ink", radius=0.85, color=INK, alpha=ha(0.75), rim="team"),
+                 L("emitter", at="target", socket="base", rate=8, shape="disc", radius=0.35, dir="up", spreadDeg=60, speed=[1, 2], life=[0.3, 0.45],
+                   size=[0.1, 0.1, 0.06], color=[INK2, CHALK_DK], alpha=[1, 1, 0], gravity=9, texture="chip", blend="chip", spinDeg=[-400, 400],
+                   rim="team", rimAlpha=0.5),
+                 comment="T2 · unstoppable — a bright team-rimmed shell round the body over a dark ring at the feet, flakes shed off it"))
     D.append(vfx("lib_status_reveal", 1.0,
                  held("mesh", socket="base", shape="pillar", scale=[[0, 0.1], [0.12, 0.5], [1, 0.5]], stretch=[0.6, 6.0, 0.6], color="team", alpha=ha(0.4),
                       emissive=1.8, noise=0.4, scroll=[0, 1.2], mask="top", maskParam=0.35, blend="add"),
                  L("shockwave", at="target", radius=[[0, 0.9], [1, 0.32]], width=[0.07, 0.04], life=0.6, color="team", alpha=[0, 0.9, 0], emissive=2.0,
                    sharp=1.6, blend="add", repeat=1.4),
                  comment="T2 · Lumen · revealed — a thin team sun-shaft stands on the unit, a ring narrows onto it every 1.4 s"))
-    # ── light debuffs (T1: no decals, emissive <= 1.5) ────────────────────────────────────────────
+    # ── light debuffs (T1: no decals, emissive <= 2) ────────────────────────────────────────────
     D.append(vfx("lib_status_haste", 1.0,
-                 L("emitter", at="target", socket="base", offset=[0, 0.14, 0], rate=14, shape="disc", radius=0.3, dir="back", spreadDeg=12, speed=[2.5, 4],
-                   life=[0.14, 0.24], size=[0.34, 0.06], color="team", alpha=[0.8, 0], emissive=1.5, drag=2, texture="streak", stretch=0.06, blend="add"),
-                 L("emitter", at="target", socket="base", offset=[0, 0.5, 0], rate=6, shape="disc", radius=0.25, dir="back", spreadDeg=10, speed=[2, 3],
-                   life=[0.12, 0.2], size=[0.26, 0.05], color=[NOON, "team"], alpha=[0.6, 0], emissive=1.5, drag=2, texture="streak", stretch=0.06,
+                 L("emitter", at="target", socket="base", offset=[0, 0.14, 0], rate=16, shape="disc", radius=0.35, dir="back", spreadDeg=12, speed=[2.5, 4],
+                   life=[0.16, 0.26], size=[0.44, 0.08], color="team", alpha=[0.85, 0], emissive=2.0, drag=2, texture="streak", stretch=0.07, blend="add"),
+                 L("emitter", at="target", socket="base", offset=[0, 0.1, 0], rate=10, shape="disc", radius=0.35, dir="back", spreadDeg=12, speed=[2.2, 3.4],
+                   life=[0.16, 0.26], size=[0.4, 0.1], color=[INK, INK2], alpha=[0.8, 0], drag=2, texture="streak", stretch=0.06, blend="ink", rim="team",
+                   rimAlpha=0.6),
+                 L("emitter", at="target", socket="base", offset=[0, 0.55, 0], rate=6, shape="disc", radius=0.3, dir="back", spreadDeg=10, speed=[2, 3],
+                   life=[0.12, 0.2], size=[0.3, 0.06], color=[NOON, "team"], alpha=[0.6, 0], emissive=2.0, drag=2, texture="streak", stretch=0.06,
                    blend="add"),
-                 comment="T1 · hasted — low side streaks (the movement grammar) thrown back from the feet against the travel"))
+                 comment="T1 · hasted — low side streaks (the movement grammar), light over ink so they read on pale stone, thrown back from the "
+                         "feet against the travel"))
     D.append(vfx("lib_status_grievous", 1.0,
-                 L("emitter", at="target", socket="chest", rate=7, shape="sphere", radius=0.3, surface=True, dir="down", spreadDeg=30, speed=[0.2, 0.6],
-                   life=[0.3, 0.4], size=[0.1, 0.07], color=[INK, INK2], alpha=[1, 1, 0], gravity=7, texture="drop", blend="ink", rim=NOON, rimAlpha=0.35),
-                 held("mesh", socket="chest", offset=[0, -0.15, 0], shape="ringwave", scale=0.72, color=INK, alpha=ha(0.9), emissive=0, rim=INK2,
-                      rimEmissive=0.6, noise=0.7, dissolve=0.15, blend="ink", align="up", spinDeg=30),
-                 comment="T1 · Shade · grievous wounds — the sap runs black: ink drops drip from the chest, a dark band"))
+                 L("emitter", at="target", socket="chest", rate=9, shape="sphere", radius=0.36, surface=True, dir="down", spreadDeg=30, speed=[0.2, 0.6],
+                   life=[0.32, 0.42], size=[0.13, 0.09], color=[INK, INK2], alpha=[1, 1, 0], gravity=7, texture="drop", blend="ink", rim="team", rimAlpha=0.5),
+                 # outside the body (r 0.43-0.68 m) so the top-down camera sees it round the shoulders
+                 held("mesh", socket="chest", offset=[0, -0.15, 0], shape="ringwave", scale=1.35, color=INK, alpha=ha(0.95), emissive=0, rim="team",
+                      rimEmissive=1.6, noise=0.7, dissolve=0.15, blend="ink", align="up", spinDeg=30),
+                 comment="T1 · Shade · grievous wounds — the sap runs black: ink drops drip from the chest, a dark band with a team rim"))
     D.append(vfx("lib_status_armor_shred", 1.0,
-                 held("mesh", socket="chest", offset=[0, -0.05, 0], shape="ringwave", scale=0.78, color=[CHALK, CHALK_DK], alpha=ha(1.0), emissive=0.4,
-                      dissolve=0.32, noise=0.9, noiseScale=2.4, edge="team", edgeEmissive=1.5, edgeWidth=0.1, blend="chip", align="up", spinDeg=20),
-                 L("emitter", at="target", socket="chest", rate=4, shape="ring", radius=0.36, dir="down", spreadDeg=40, speed=[0.3, 0.8], life=[0.28, 0.38],
-                   size=[0.09, 0.09, 0.05], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=10, texture="chip", blend="chip", spinDeg=[-400, 400]),
-                 comment="T1 · chip · armour shred — a cracked chalk plate band around the chest (team-lit cracks), plate chips flaking off"))
+                 # the band stands OUTSIDE the body (r 0.5-0.78 m) so the top-down camera sees it round the shoulders
+                 held("mesh", socket="chest", offset=[0, -0.05, 0], shape="ringwave", scale=1.55, color=[INK2, INK], alpha=ha(1.0), emissive=0,
+                      dissolve=0.32, noise=0.9, noiseScale=2.4, edge="team", edgeEmissive=2.0, edgeWidth=0.12, rim=CHALK, rimEmissive=1.2, blend="ink",
+                      align="up", spinDeg=20),
+                 L("emitter", at="target", socket="chest", rate=5, shape="ring", radius=0.44, dir="down", spreadDeg=40, speed=[0.3, 0.8], life=[0.28, 0.38],
+                   size=[0.11, 0.11, 0.06], color=[INK2, CHALK_DK], alpha=[1, 1, 0], gravity=10, texture="chip", blend="chip", spinDeg=[-400, 400],
+                   rim="team", rimAlpha=0.5),
+                 comment="T1 · chip · armour shred — a cracked dark plate band round the chest (team-lit cracks), plate chips flaking off"))
     D.append(vfx("lib_status_resist_shred", 1.0,
-                 held("mesh", socket="chest", offset=[0, -0.05, 0], shape="ringwave", scale=0.78, color=[ORCHID, ROSE], alpha=ha(0.9), emissive=1.2,
-                      dissolve=0.32, noise=0.9, noiseScale=2.4, edge="team", edgeEmissive=1.5, edgeWidth=0.1, blend="add", align="up", spinDeg=-20),
-                 L("emitter", at="target", socket="chest", rate=4, shape="ring", radius=0.36, dir="down", spreadDeg=40, speed=[0.3, 0.8], life=[0.28, 0.38],
-                   size=[0.1, 0.03], color=[ORCHID, ROSE], alpha=[1, 0], emissive=1.4, gravity=6, texture="shard", blend="add"),
-                 comment="T1 · Lumen · resist shred — the cracked band in orchid glass (the magic colour), glass flakes falling"))
-
+                 held("mesh", socket="chest", offset=[0, -0.05, 0], shape="ringwave", scale=0.98, color=INK, alpha=ha(0.9), emissive=0, rim=ORCHID,
+                      rimEmissive=1.6, blend="ink", align="up", spinDeg=-20),
+                 held("mesh", socket="chest", offset=[0, -0.03, 0], shape="ringwave", scale=0.9, color=[ORCHID, ROSE], alpha=ha(0.95), emissive=2.0,
+                      dissolve=0.32, noise=0.9, noiseScale=2.4, edge="team", edgeEmissive=2.0, edgeWidth=0.1, blend="add", align="up", spinDeg=-20),
+                 L("emitter", at="target", socket="chest", rate=5, shape="ring", radius=0.44, dir="down", spreadDeg=40, speed=[0.3, 0.8], life=[0.28, 0.38],
+                   size=[0.12, 0.04], color=[ORCHID, ROSE], alpha=[1, 0], emissive=2.0, gravity=6, texture="shard", blend="add"),
+                 comment="T1 · Lumen · resist shred — the cracked band in orchid glass (the magic colour) over a dark band, glass flakes falling"))
     # ── anticipation (r12 M3) ─────────────────────────────────────────────────────────────────────
     def windup(id_: str, k: float, cap: float, ring: float, comment: str, core: str | None = None) -> dict:
         rel = [

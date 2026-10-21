@@ -49,7 +49,8 @@
 // currencies, shelves → offers, queues → modes, modes → maps, map music, mode slots, team buffs,
 // setup defaults/paths, cues/vfx used by `present`, clip roles used by `present.anim`, form ids,
 // script ids → src/sim/scripts/<id>.ts) · VFX layer vocabulary (§9.5: types, keys, values; preset
-// naming is a warning) · required fighter clips (§12) · every fighter has a base
+// naming is a warning) · presentation rules (r12: delayed areas that hurt enemies are telegraphed to
+// everyone and warn >= 0.6 s; fighter VFX signatures in range and apart) · required fighter clips (§12) · every fighter has a base
 // skin in store.starterOwnership · every asset ref resolves · deny-listed names (tools/names_check.ts)
 // · item recipes (component costs ≤ total, no cycles) · kit completeness (passive + a1 a2 a3 ult,
 // each with icon, non-blank desc, ai hint) · map coordinates inside the map · nav grid size ·
@@ -711,7 +712,8 @@ const EMITTER: Record<string, VfxKey> = {
 };
 const RIBBON: Record<string, VfxKey> = {
   width: 'curve', life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'nonneg', noise: 'unit', scroll: 'num', tile: 'nonneg',
-  blend: BLEND, rim: 'color', rimAlpha: 'unit', minDist: 'nonneg', face: E('camera', 'ground'), texture: TEX,
+  blend: BLEND, rim: 'color', rimAlpha: 'unit', minDist: 'nonneg', face: E('camera', 'ground'), texture: TEX, span: 'nonneg',
+  arcRadius: 'nonneg', arcDeg: 'pair', arcTiltDeg: 'num', arcHeight: 'num', arcEase: 'nonneg',
 };
 const SHOCKWAVE: Record<string, VfxKey> = {
   radius: 'curve', width: 'curve', life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'curve', sharp: 'nonneg', noise: 'unit',
@@ -750,7 +752,7 @@ const VFX_LAYERS: Record<string, Record<string, VfxKey>> = {
     exposure: 'nonneg', exposureRadius: 'nonneg', exposureHold: 'nonneg', exposureFade: 'nonneg', exposureDip: 'unit', exposureDesat: 'unit' },
   bind: { event: 'str' },
 };
-const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element');
+const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element' || v === 'signature' || v === 'secondary');
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isNumPair = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && v.every(isNum);
 const isKeys = (v: unknown, val: (x: unknown) => boolean): boolean => Array.isArray(v) && v.length > 0 && v.every((k) => Array.isArray(k) && k.length === 2 && isNum(k[0]) && k[0] >= 0 && k[0] <= 1 && val(k[1]));
@@ -769,13 +771,91 @@ function vfxValueError(kind: VfxKey, v: unknown): string | null {
     case 'curve': return isNum(v) || (Array.isArray(v) && v.length >= 2 && v.every(isNum)) || isKeys(v, isNum) ? null
       : 'expected a curve: a number, [start, end], evenly spaced numbers, or [[t, value], …] keys (t in 0..1)';
     case 'gradient': return isColor(v) || (Array.isArray(v) && v.length >= 1 && v.every(isColor)) || isKeys(v, isColor) ? null
-      : 'expected a gradient: a color, colors evenly spaced, or [[t, color], …] keys ("#rrggbb" | "team" | "element")';
-    case 'color': return isColor(v) ? null : 'expected "#rrggbb", "team" or "element"';
+      : 'expected a gradient: a color, colors evenly spaced, or [[t, color], …] keys ("#rrggbb" | "team" | "element" | "signature" | "secondary")';
+    case 'color': return isColor(v) ? null : 'expected "#rrggbb", "team", "element", "signature" or "secondary"';
     case 'color2': return isColor(v) || (Array.isArray(v) && v.length >= 1 && v.every(isColor)) || isKeys(v, isColor) ? null : 'expected colors [start, end] or a gradient';
     case 'bursts': return Array.isArray(v) && v.every((b) => Array.isArray(b) && b.length === 2 && isNum(b[0]) && b[0] >= 0 && isNum(b[1]) && b[1] >= 0) ? null : 'expected [[time s, count], …]';
     default: return null;
   }
 }
+// ── 3c. presentation rules (r12 M1 delayed-area warnings, M12 fighter signatures) ────────────────────────────
+// Delayed areas that damage or control must be warned to everyone and give >= 0.6 s of ground warning: the
+// renderer shows the warning from the FIRST tick of the wind-up (CONTRACT §9.5 wind-up telegraphs), so the
+// warning is castTime + delay for a top-level area of a timed cast, the delay alone for a nested one.
+// Fighter VFX signatures (FighterDef.vfx): HSV saturation >= 0.55, value 0.70-0.95, hue outside tokens.json
+// vfx.reservedHuesHSV, no two fighters within 25 deg of hue unless >= 25 L* apart.
+const WARN_MIN_S = 0.6;
+type EffLike = { op?: string; delay?: number; filter?: { enemies?: boolean }; present?: { telegraph?: string }; [k: string]: unknown };
+const NESTED_KEYS = ['onHit', 'onArrive', 'onEnd', 'onExpire', 'onPass', 'onTick', 'onCenter', 'onEnter', 'then', 'else', 'effects'] as const;
+const harmsEnemies = (e: EffLike): boolean => (e.filter?.enemies !== false) && /"op":"(damage|status|displace|pull)"/.test(JSON.stringify(e));
+function checkDelayedAreas(effects: unknown, castTime: number, top: boolean, path: Seg[], dg: Diagnostics, warnOnly: boolean): void {
+  if (!Array.isArray(effects)) return;
+  effects.forEach((raw, i) => {
+    const e = raw as EffLike;
+    if (!e || typeof e !== 'object') return;
+    const p: Seg[] = [...path, i];
+    if ((e.op === 'area' || e.op === 'zone') && (e.delay ?? 0) > 0 && harmsEnemies(e)) {
+      const tg = e.present?.telegraph ?? 'everyone';
+      const warn = (top ? castTime : 0) + (e.delay ?? 0);
+      const say = warnOnly ? dg.warn.bind(dg) : dg.err.bind(dg);
+      if (tg !== 'everyone') say([...p, 'present', 'telegraph'], `a delayed ${e.op} that damages or controls enemies must be telegraphed to everyone (r12 M1), got "${tg}"`);
+      if (warn < WARN_MIN_S - 1e-6) say([...p, 'delay'], `delayed ${e.op} warns enemies for ${warn.toFixed(2)} s (castTime ${top ? castTime : 0} + delay ${e.delay}); it needs >= ${WARN_MIN_S} s (r12 M1)`);
+    }
+    // an `if` branch runs at once (the wind-up still counts); a `repeat` body's later passes and every on* list do not
+    for (const k of NESTED_KEYS) if (k in e) checkDelayedAreas(e[k], castTime, top && (k === 'then' || k === 'else'), [...p, k], dg, warnOnly);
+  });
+}
+const hexRgb = (h: string): [number, number, number] => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+function hexHsv(h: string): [number, number, number] {
+  const [r, g, b] = hexRgb(h);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let hue = 0;
+  if (d > 0) hue = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [((hue * 60) + 360) % 360, mx > 0 ? d / mx : 0, mx];
+}
+function hexLstar(h: string): number {
+  const lin = hexRgb(h).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  const y = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  return y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y;
+}
+function checkPresentation(c: CatalogT, designDir: string, dg: Diagnostics): void {
+  // delayed areas: fighters (kit, forms, recasts), item actives and setup spells are errors; monsters warn
+  c.fighters.forEach((f, fi) => {
+    const kits: [Seg[], Record<string, unknown>][] = [[['fighters', fi, 'kit'], f.kit as unknown as Record<string, unknown>]];
+    for (const [form, fm] of Object.entries(f.kit.passive.forms ?? {})) if (fm.kit) kits.push([['fighters', fi, 'kit', 'passive', 'forms', form, 'kit'], fm.kit as unknown as Record<string, unknown>]);
+    for (const [kp, kit] of kits) for (const slot of ['a1', 'a2', 'a3', 'ult']) {
+      const a = kit[slot] as { castTime?: number; effects?: unknown; recast?: { ability: { castTime?: number; effects?: unknown } } } | undefined;
+      if (!a) continue;
+      checkDelayedAreas(a.effects, a.castTime ?? 0, true, [...kp, slot, 'effects'], dg, false);
+      if (a.recast) checkDelayedAreas(a.recast.ability.effects, a.recast.ability.castTime ?? 0, true, [...kp, slot, 'recast', 'ability', 'effects'], dg, false);
+    }
+  });
+  c.items.forEach((it, ii) => { if (it.active) checkDelayedAreas(it.active.effects, it.active.castTime ?? 0, true, ['items', ii, 'active', 'effects'], dg, false); });
+  c.setup.spells.forEach((sp, si) => checkDelayedAreas(sp.effects, sp.castTime ?? 0, true, ['setup', 'spells', si, 'effects'], dg, false));
+  c.units.forEach((u, ui) => u.abilities.forEach((a, ai) => checkDelayedAreas(a.effects, a.castTime ?? 0, true, ['units', ui, 'abilities', ai, 'effects'], dg, true)));
+  // signatures
+  let reserved: Record<string, [number, number]> = { ally: [200, 225], harm: [28, 50], tritanAltRose: [340, 350], heal: [125, 150] };
+  try {
+    const tok = JSON.parse(readFileSync(join(designDir, 'tokens.json'), 'utf8')) as { vfx?: { reservedHuesHSV?: Record<string, unknown> } };
+    const r = tok.vfx?.reservedHuesHSV;
+    if (r) reserved = Object.fromEntries(Object.entries(r).filter(([, v]) => Array.isArray(v) && v.length === 2)) as Record<string, [number, number]>;
+  } catch { /* the design dir is optional for a content build; the defaults above mirror tokens.json */ }
+  const sig: { i: number; id: string; hex: string; h: number; l: number }[] = [];
+  c.fighters.forEach((f, fi) => {
+    if (!f.vfx) { dg.warn(['fighters', fi], `fighter "${f.id}" has no vfx { signature, secondary } (r12 M12): its effects fall back to the relationship colour`); return; }
+    const [h, s, v] = hexHsv(f.vfx.signature);
+    const p: Seg[] = ['fighters', fi, 'vfx', 'signature'];
+    if (s < 0.55 - 1e-3 || v < 0.7 - 1e-3 || v > 0.95 + 1e-3) dg.err(p, `signature ${f.vfx.signature} has HSV saturation ${s.toFixed(2)}, value ${v.toFixed(2)}; it needs saturation >= 0.55 and value 0.70-0.95`);
+    for (const [k, [a, b]] of Object.entries(reserved)) if (h >= a && h <= b) dg.err(p, `signature ${f.vfx.signature} (hue ${h.toFixed(0)}) is inside the reserved ${k} hues ${a}-${b} (tokens vfx.reservedHuesHSV)`);
+    sig.push({ i: fi, id: f.id, hex: f.vfx.signature, h, l: hexLstar(f.vfx.signature) });
+  });
+  for (let a = 0; a < sig.length; a++) for (let b = a + 1; b < sig.length; b++) {
+    const A = sig[a], B = sig[b];
+    let d = Math.abs(A.h - B.h); d = Math.min(d, 360 - d);
+    if (d < 25 && Math.abs(A.l - B.l) < 25) dg.err(['fighters', B.i, 'vfx', 'signature'], `signature ${B.hex} (${B.id}) is ${d.toFixed(0)} deg from ${A.hex} (${A.id}) and only ${Math.abs(A.l - B.l).toFixed(1)} L* apart; fighters need 25 deg or 25 L* between them`);
+  }
+}
+
 function checkVfx(c: CatalogT, dg: Diagnostics): void {
   const fighterIds = c.fighters.map((f) => f.id);
   c.vfx.forEach((v, i) => {
@@ -1045,7 +1125,7 @@ export function buildContent(opts: BuildOptions): BuildResult {
   if (!parsed.success) reportIssues(parsed.error.issues as unknown as IssueLike[], [], dg);
   const data = (parsed.success ? parsed.data : raw) as Record<string, unknown>;
 
-  if (parsed.success) { semanticChecks(parsed.data, opts, dg); checkVfx(parsed.data, dg); }
+  if (parsed.success) { semanticChecks(parsed.data, opts, dg); checkVfx(parsed.data, dg); checkPresentation(parsed.data, opts.designDir, dg); }
   else if (!opts.quiet) dg.fileWarn('(build)', 'schema errors present — cross-reference checks are skipped until they are fixed');
 
   // assets + names run on raw data too, so one pass shows as many problems as possible

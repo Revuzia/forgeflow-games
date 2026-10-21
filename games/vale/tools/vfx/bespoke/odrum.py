@@ -15,7 +15,7 @@ from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, INK2, NOON, WHITE, 
 
 RESIN_DK = "#4A2F18"    # set resin body (alpha)
 RESIN = "#9A6331"       # poured resin (opaque drops)
-AMBER = "#C98A47"       # lit amber (lampresin, glows a little)
+AMBER = "signature"     # lit resin: Odrum's resin-gold signature (r12 M12; the old amber #C98A47 sat in the harm hue band)
 HONEY = "#E8C48E"       # honey-glass highlight (low saturation: never reads as the Dusk marigold)
 
 
