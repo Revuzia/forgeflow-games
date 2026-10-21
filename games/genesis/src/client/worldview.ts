@@ -132,6 +132,14 @@ export class WorldView {
    * second carry the same tick, and extrapolating from each of them held the clock back into a sawtooth (hook H1)
    */
   private tickAt = 0;
+  /**
+   * the sim's tick went backwards (a rewind, the toast's Undo, a load): the render clock snaps to it on the next frame.
+   * Only a jump of more than max(30, 1.5 s of ticks) used to snap — thirty ticks were three seconds when 1× was ten
+   * ticks a second, half a minute at one: an Undo clicked a few seconds after the act rewinds a few ticks, and the
+   * monotonic clock stood still until the sim caught up again (the sun, the calendar and the people frozen for as long
+   * as the player had waited; the rewind never reached the renderers that clear the undone future's smoke)
+   */
+  private rewound = false;
 
   planet(id: number): PlanetView | undefined {
     for (const p of this.planets) if (p.id === id) return p;
@@ -141,6 +149,9 @@ export class WorldView {
   /** Merge a snapshot into the mirror. Field arrays are adopted (they were transferred to us), not copied. */
   apply(snap: Snapshot, now: number): void {
     this.measureRate(snap, now);
+    // (one snapshot request is in flight at a time and the sim's tick only grows while it runs: a smaller tick is a
+    // rewind or a load — measureRate restarts on the same condition)
+    if (this.snapshots > 0 && snap.tick < this.snapTick) this.rewound = true;
     if (this.snapshots === 0 || snap.tick !== this.snapTick) this.tickAt = now;
     this.snapTick = snap.tick;
     this.snapAt = now;
@@ -303,11 +314,13 @@ export class WorldView {
     let t = this.renderTick + dt * tps;
     const err = target - t;
     const jump = Math.max(30, tps * 1.5);
-    if (Math.abs(err) > jump) t = target; // big jumps (step, load, rewind, a stalled frame): snap
+    const snapTo = this.rewound || Math.abs(err) > jump;
+    this.rewound = false;
+    if (snapTo) t = target; // big jumps (step, load, a stalled frame) and every rewind: snap
     // snapshot ticks are integers: within ~a tick the error is mostly that quantisation (a ±0.5 tick sawtooth at 1x),
     // so it is corrected gently; larger errors are pulled in within a quarter second
     else t += err * Math.min(1, dt * (Math.abs(err) > 1.5 ? 4 : 1));
-    if (t < this.renderTick && Math.abs(err) <= jump) t = this.renderTick; // monotonic
+    if (t < this.renderTick && !snapTo) t = this.renderTick; // monotonic
     this.renderTick = t;
     this.updateBodies(t);
   }

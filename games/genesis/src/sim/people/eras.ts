@@ -27,10 +27,15 @@ import { capitalOf, histOf, type HistState } from './politics.ts';
 import { tell } from './story.ts';
 import { settlementRef, vars } from './util.ts';
 
-/** years a settlement must have held era e before the ideas of era e + 1 become its own to find (index = e) */
-export const DWELL = [0, 4, 16, 26, 10, 18, 14, 24, 12, 12, 0];
-/** years an idea of era e must be known before it can be built on — or PRACTICE_USES crafts of it */
-export const PRACTICE = [0, 0.5, 1, 3, 3, 3, 3, 2, 2, 1.5, 1.5];
+/** years a settlement must have held era e before the ideas of era e + 1 become its own to find (index = e)
+ * (second pass: the bronze era's 26 → 28, so iron smelting keeps to its 50–85 band — it came at year 48.8 in one of the
+ * integration's four 50-year worlds) */
+export const DWELL = [0, 4, 16, 28, 10, 18, 14, 24, 12, 12, 0];
+/** years an idea of era e must be known before it can be built on — or PRACTICE_USES crafts of it
+ * (second pass: the bronze era's 3 → 5 — bronze is no longer kept waiting for copper in the store (knowledge.ts
+ * inputsSeen), so the smiths' practice paces copper → tin → bronze: real history put ~2 200 years, ~19 game years at the
+ * §1.5 compression, between the first copper and the first bronze) */
+export const PRACTICE = [0, 0.5, 1, 5, 3, 3, 3, 2, 2, 1.5, 1.5];
 export const PRACTICE_USES = 24;
 /**
  * The institutions of an age come after its crafts: these ideas are found only by a people that has REACHED their era

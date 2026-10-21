@@ -8,6 +8,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Group, Vector3, type IUniform } from 'three';
 import { LaunchFx, PUFF, RIBBON_AGE, type EngineFire, type LaunchPlanetCtx } from '../src/render/fx/launch.ts';
+import { TICKS_PER_SECOND_1X } from '../src/sim/types.ts';
+
+/** ticks for `s` seconds at 1× (LIVING §1.1) */
+const sec = (s: number): number => s * TICKS_PER_SECOND_1X;
 
 const R = 3000, AIR = 600;
 
@@ -18,9 +22,9 @@ function ctx(): LaunchPlanetCtx {
   return { group: new Group(), uniforms, camBody: new Vector3(0, R + 10, 400), wind: new Vector3(), airTop: AIR, radius: R, hasAir: true };
 }
 
-/** a straight climb from the pad (body frame +y), `speed` m/s at 1× (10 ticks a second), lit at tick 0 */
+/** a straight climb from the pad (body frame +y), `speed` m/s at 1× (TICKS_PER_SECOND_1X ticks a second), lit at tick 0 */
 function climb(speed: number): (tick: number, out: Vector3) => Vector3 {
-  return (tick, out) => out.set(0, R + Math.max(0, tick / 10) * speed, 0);
+  return (tick, out) => out.set(0, R + Math.max(0, tick / TICKS_PER_SECOND_1X) * speed, 0);
 }
 
 function births(fx: LaunchFx): { x: number; y: number; z: number; t: number; kind: number }[] {
@@ -46,7 +50,7 @@ test('a fast climb seen in one late frame leaves a continuous trail, not beads',
   const fx = new LaunchFx();
   const c = ctx();
   const path = climb(260);
-  const tick = 20; // T+2 s at 1×: 520 m up
+  const tick = sec(2); // T+2 s at 1×: 520 m up
   fx.begin(tick);
   fx.engine(fire(path, tick));
   fx.update(() => c, [0, 0, 0], 0, 2, 0.016);
@@ -72,10 +76,10 @@ test('the trail is laid the same way frame by frame as in one late frame', () =>
     const c = ctx();
     const path = climb(200);
     for (let f = 1; f <= frames; f++) {
-      const tick = (20 * f) / frames;
+      const tick = (sec(2) * f) / frames;
       fx.begin(tick);
       fx.engine(fire(path, tick));
-      fx.update(() => c, [0, 0, 0], 0, tick / 10, 0.1);
+      fx.update(() => c, [0, 0, 0], 0, tick / TICKS_PER_SECOND_1X, 0.1);
     }
     return births(fx).filter((p) => p.kind === PUFF.smoke || p.kind === PUFF.trail).length;
   };
@@ -87,8 +91,8 @@ test('the newest stretch is a ribbon from the nozzle back', () => {
   const fx = new LaunchFx();
   const c = ctx();
   const path = climb(150);
-  fx.begin(15);
-  fx.engine(fire(path, 15));
+  fx.begin(sec(1.5));
+  fx.engine(fire(path, sec(1.5)));
   fx.update(() => c, [0, 0, 0], 0, 1.5, 0.016);
   const P = (fx as unknown as { planets: Map<number, { ribbons: Map<string, { mesh: { visible: boolean } }> }> }).planets.get(0)!;
   const rb = P.ribbons.get('r1:0');
@@ -98,8 +102,8 @@ test('the newest stretch is a ribbon from the nozzle back', () => {
 test("a lander's dust takes the colour of the ground it lifts off", () => {
   const fx = new LaunchFx();
   const c = ctx();
-  fx.begin(100);
-  fx.dust(0, c, new Vector3(0, R, 0), 1, 1, 90, [0.6, 0.32, 0.16]);
+  fx.begin(sec(10));
+  fx.dust(0, c, new Vector3(0, R, 0), 1, 1, sec(9), [0.6, 0.32, 0.16]);
   fx.update(() => c, [0, 0, 0], 0, 10, 0.016);
   const P = (fx as unknown as { planets: Map<number, { puffs: { uniforms: Record<string, IUniform> } }> }).planets.get(0)!;
   const tint = P.puffs.uniforms.uDustTint.value as Vector3;

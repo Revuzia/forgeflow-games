@@ -11,25 +11,28 @@ import { AgentFlag, AgentFlag2 } from '../src/sim/types.ts';
 import type { Settlement } from '../src/sim/people/state.ts';
 import type { PCtx } from '../src/sim/people/ctx.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
-import { DEATH, MEMK, ROLE, TASK, SKILL, NS } from '../src/sim/people/defs.ts';
+import { DEATH, MEM, MEMK, ROLE, TASK, SKILL, NS } from '../src/sim/people/defs.ts';
 import { NEED_N, STATUS, CURIO } from '../src/sim/people/needs.ts';
 import { distM, cellPos, isLand, drinkable, freshWater, sunElevation } from '../src/sim/people/world.ts';
-import { spawnHerd, reindexHerds, animalDef } from '../src/sim/life/herds.ts';
+import { spawnHerd, reindexHerds, animalDef, herdPos } from '../src/sim/life/herds.ts';
 import { die } from '../src/sim/people/lifecycle.ts';
 import { formCouple } from '../src/sim/people/social.ts';
 import { abandon, assignRoles, oldAge, planConstruction, settlementStep } from '../src/sim/people/settlement.ts';
 import { landOf, ledger, type LedgerYear } from '../src/sim/people/ledger.ts';
-import { HUNT_RANGE_M, carcass, isGame, huntQuota } from '../src/sim/people/hunt.ts';
+import { HUNT_RANGE_M, carcass, fetchTask, huntEncounter, huntHourly, isGame, huntQuota, parties, partyOf, partyOut } from '../src/sim/people/hunt.ts';
+import { daylightLeft } from '../src/sim/perf/pace.ts';
 import { herderQuota, herdWork, youngFromHunt } from '../src/sim/people/herding.ts';
 import { stockAt, stockFactor, fishWork, THIN } from '../src/sim/people/fishing.ts';
-import { cropsHourly, farmWork, fieldSite, newFieldCell, pruneFields, sowingTime, villageGround, yearPhase } from '../src/sim/people/crops.ts';
+import { cropsHourly, farmTask, farmWork, fieldSite, newFieldCell, pruneFields, sowingTime, villageGround, yearPhase } from '../src/sim/people/crops.ts';
+import { seedItems } from '../src/sim/people/decide.ts';
 import { ageFertility, birthGap, childhood, mouths, plentyFactor, spaced } from '../src/sim/people/demography.ts';
-import { companyNear, nextGathering, NEAR_M } from '../src/sim/people/gatherings.ts';
+import { companyNear, fireless, gatheringsHourly, nextGathering, NEAR_M } from '../src/sim/people/gatherings.ts';
 import { statusDaily, talkOutlet } from '../src/sim/people/outlets.ts';
 import { wantChain, wantPick } from '../src/sim/people/wants.ts';
 import { gatherable, itemIdx } from '../src/sim/people/resources.ts';
 import { storeAdd } from '../src/sim/people/store.ts';
-import { planBuilding } from '../src/sim/people/buildings.ts';
+import { planBuilding, removeBuilding, ruin } from '../src/sim/people/buildings.ts';
+import { roofless } from '../src/sim/people/land.ts';
 import { world, must, people, membersOf, adultsOf } from './helpers/peoples.ts';
 
 // ───────────────────────────── fixtures ─────────────────────────────
@@ -623,4 +626,219 @@ test('land: views — the settlement card\'s livelihood and the agents\' flags2'
     const i = Array.from(agents.id).indexOf(x.A.id[herder]);
     assert.ok(agents.flags2[i] & AgentFlag2.herder, 'a herder is flagged');
   }
+});
+
+// ───────────────────────────── round 5 (2026-10-21) ─────────────────────────────
+
+test('land: a people without fire feasts without one — sworn off fire, its festival lines never speak of the fire', () => {
+  const { sim, st } = village();
+  sim.step(120);
+  const tellAll = (): string[] => {
+    const out: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      sim.step(1);
+      const x = cx(sim);
+      const L = landOf(st);
+      const came = membersOf(sim, st).slice(0, 6).map((s) => x.A.id[s]);
+      L.told = -1;
+      L.gatherings.push({ kind: i % 2 ? 'midwinter' : 'rains', from: x.tick - 20, until: x.tick - 1, cell: st.cell, pos: [st.pos[0], st.pos[1], st.pos[2]], about: [], came });
+      const n = sim.u.chronicle.length;
+      gatheringsHourly(x, st);
+      const told = sim.u.chronicle.slice(n).map((e) => e.text);
+      assert.equal(told.length, 1, 'the feast is told');
+      out.push(told[0]);
+    }
+    return out;
+  };
+  const x = cx(sim);
+  assert.ok(st.library.includes(x.rt.byId.get('fire-keeping')!), 'the town keeps fire');
+  assert.ok(!fireless(x, st));
+  assert.ok(tellAll().some((t) => /fire/.test(t)), 'a town that keeps fire feasts by it (some of the lines say so)');
+  st.culture.taboos.push(x.rt.byId.get('fire-making')!);
+  assert.ok(fireless(x, st), 'sworn off fire');
+  const lines = tellAll();
+  assert.ok(lines.every((t) => !/fire/.test(t)), `no fire at the feasts of a people sworn off it: ${lines.filter((t) => /fire/.test(t)).join(' | ')}`);
+});
+
+test('land: the day\'s news feeds curiosity — a talk with someone who lived through something today, not stale or shared news', () => {
+  const { sim, st } = village();
+  const x = cx(sim);
+  const A = x.A;
+  const [s, o] = adultsOf(sim, st);
+  // the same crafts known (nothing new to learn of), no memories
+  for (let w = 0; w < A.kw; w++) A.know[s * A.kw + w] = A.know[o * A.kw + w];
+  const forget = (a: number) => { for (let k = 0; k < MEM; k++) A.memKind[a * MEM + k] = 0; };
+  forget(s); forget(o);
+  const cur = () => A.needs[s * NEED_N + CURIO];
+  A.needs[s * NEED_N + CURIO] = 0;
+  talkOutlet(x, s, [o]);
+  assert.equal(cur(), 0, 'nothing to tell');
+  A.remember(o, MEMK.hunted, x.tick - 60, 3);
+  talkOutlet(x, s, [o]);
+  assert.ok(cur() >= 0.07, `today's hunt is news (curiosity ${cur().toFixed(3)})`);
+  A.needs[s * NEED_N + CURIO] = 0;
+  forget(o);
+  A.remember(o, MEMK.hunted, x.tick - 2 * x.day, 3);
+  talkOutlet(x, s, [o]);
+  assert.equal(cur(), 0, 'a hunt two days past is old news');
+  forget(o);
+  A.remember(o, MEMK.hunted, x.tick - 60, 3);
+  A.remember(s, MEMK.hunted, x.tick - 60, 3);
+  talkOutlet(x, s, [o]);
+  assert.equal(cur(), 0, 'news they lived through together is no news');
+});
+
+test('land: hunters muster at home and take the trip\'s food — two parties after two herds when there are hunters enough', () => {
+  const { sim, st } = village();
+  const x0 = cx(sim);
+  clearWild(x0);
+  for (const it of x0.c.itemsByTag.get('meat') ?? []) st.store[it] = 0;
+  const deer = x0.c.animals.idx('deer');
+  spawnHerd(x0, deer, landAt(x0, st, 500, 800), 10);
+  spawnHerd(x0, deer, landAt(x0, st, 900, 1400), 10);
+  // a morning (six hours and more of daylight to walk out in)
+  const adult = adultsOf(sim, st)[0];
+  for (let i = 0; i < 200 && daylightLeft(cx(sim), adult) < 7 * 60; i++) sim.step(15);
+  const x = cx(sim);
+  const A = x.A;
+  assert.ok(daylightLeft(x, adult) >= 6 * 60, 'a morning');
+  const L = landOf(st);
+  L.party = null; delete L.more;
+  // seven hunters with empty hands: six at home, one out in the territory (past the muster's 250 m)
+  for (const s of membersOf(sim, st)) if (A.role[s] === ROLE.hunter) A.role[s] = ROLE.gatherer;
+  const hunters = adultsOf(sim, st).filter((s) => !A.mission[s] && A.health[s] >= 0.55).slice(0, 7);
+  assert.equal(hunters.length, 7, 'seven grown-ups to hunt');
+  for (const s of hunters) {
+    A.role[s] = ROLE.hunter; A.camp[s] = -1; A.trip[s] = 0;
+    A.place(s, st.pos[0], st.pos[1], st.pos[2], x.tick);
+    for (const it of x.info[A.species[s]].foods) A.take(s, it, 1e6);
+  }
+  const fc = landAt(x, st, 300, 900);
+  assert.ok(fc >= 0, 'ground out in the territory');
+  const fp = cellPos(x.p, fc);
+  A.place(hunters[6], fp[0], fp[1], fp[2], x.tick);
+  storeAdd(x, st, itemIdx(x, 'wild-grain'), 300);
+  const trips0 = sumRow(st, (r) => r.huntTrips);
+  huntHourly(x, st);
+  const ps = parties(st);
+  assert.equal(ps.length, 2, `two parties out (${ps.map((p) => p.members.length).join(', ')})`);
+  assert.notEqual(ps[0].herd, ps[1].herd, 'after two herds');
+  assert.deepEqual(ps.map((p) => p.members.length), [3, 3], 'of three each');
+  assert.equal(sumRow(st, (r) => r.huntTrips) - trips0, 2, 'two trips in the books');
+  const ids = ps.flatMap((p) => p.members);
+  assert.ok(!ids.includes(A.id[hunters[6]]), 'the hunter far out is not mustered');
+  for (const id of ids) {
+    const s = A.slotOf(id);
+    const sp = x.info[A.species[s]];
+    const fd = sp.foods.reduce((a, it) => a + A.carried(s, it) * sp.edible[it], 0);
+    assert.ok(fd >= 1, `each takes food for the trip (${fd.toFixed(2)} food-days)`);
+  }
+  assert.deepEqual([...partyOut(st)].sort(), [...ids].sort(), 'both parties are out (assignRoles keeps them hunters)');
+  assert.ok(partyOf(x, st, A.slotOf(ps[1].members[0])) === ps[1], 'a member of the second party is found in it');
+  // out of the day: the parties go after their herds and come home, and the books keep them apart
+  sim.step(3 * 1440);
+  assert.ok(sumRow(st, (r) => r.huntTrips) >= 2);
+  const loaded = Sim.load(sim.save());
+  assert.equal(loaded.hash(), sim.hash(), 'two parties save and load');
+});
+
+test('land: where there are no seasons a new field is sown when its own ground is wet — not the dry ground the town stands on', () => {
+  // (n = 64: cells of 56 m, fertile ground beyond the village's own)
+  const sim = world(64, 20261008);
+  must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
+  const st = people(sim, 'plains-folk', 30, { era: 'bronze', settled: true });
+  sim.step(30);
+  const x = cx(sim);
+  const f = x.p.f, sx = x.p.s;
+  const rice = x.c.plants.idx('rice');
+  x.p.st.axialTilt = 0; // (a world without seasons: sowing follows the soil's wetness — yearPhase −1)
+  assert.equal(yearPhase(x, st.cell), -1);
+  const L = landOf(st);
+  L.fields = []; st.fields = [];
+  st.crop = rice;
+  for (const it of seedItems(x)) storeAdd(x, st, it, 20);
+  // the town's own cell dry; one free cell of its fertile ground wet and warm (rice country), the rest dry
+  st.res!.fertile = (st.flow?.cells ?? []).filter((c) => isLand(x.p, c));
+  const free = st.res!.fertile.filter((c) => !villageGround(x, st, c));
+  assert.ok(free.length >= 1, 'fertile ground beyond the village');
+  for (const c of [st.cell, ...free]) { f.moisture[c] = 0.3; f.water[c] = 0; }
+  const wet = free[0];
+  f.moisture[wet] = 0.88; f.salinity[wet] = 0; f.temperature[wet] = 26; sx.tempYear[wet] = 26; f.soil[wet] = Math.max(f.soil[wet], 1);
+  assert.ok(fieldSite(x, rice, wet) > 0.3, `the wet cell suits rice (${fieldSite(x, rice, wet).toFixed(2)})`);
+  assert.equal(sowingTime(x, rice, st.cell), false, 'the town\'s own ground is too dry to sow rice');
+  assert.equal(sowingTime(x, rice, wet), true, 'the wet ground is ready');
+  const farmer = adultsOf(sim, st)[0];
+  const t = farmTask(x, farmer, st);
+  assert.ok(t && t.kind === TASK.farm && t.data2 === 0 && t.goalCell === wet, `a field is laid out and sown on the wet ground (${t ? `${t.kind}/${t.data2}@${t.goalCell}` : 'nothing'})`);
+});
+
+test('land: the rest of a big kill is fetched — what the hunters could not carry is left by it, and they come back for it while it keeps', () => {
+  const { sim, st } = village();
+  // a morning (the walk back to the kill wants daylight)
+  const adult = adultsOf(sim, st)[0];
+  for (let i = 0; i < 200 && daylightLeft(cx(sim), adult) < 7 * 60; i++) sim.step(15);
+  const x = cx(sim);
+  const A = x.A;
+  clearWild(x);
+  const horse = x.c.animals.idx('wild-horse');
+  const h = spawnHerd(x, horse, landAt(x, st, 250, 500), 12);
+  const L = landOf(st);
+  L.party = null; delete L.more;
+  const two = adultsOf(sim, st).slice(0, 2);
+  const q = [0, 0, 0];
+  herdPos(h, x.tick, q);
+  for (const s of two) {
+    A.role[s] = ROLE.hunter;
+    for (const it of x.info[A.species[s]].foods) A.take(s, it, 1e6);
+    A.place(s, q[0], q[1], q[2], x.tick);
+    A.task[s] = TASK.hunt; A.tData2[s] = 0; A.tTarget[s] = h.id;
+  }
+  L.party = { id: 777, members: two.map((s) => A.id[s]), herd: h.id, species: horse, since: x.tick, lastTry: -1, kills: 0 };
+  // stalk after stalk until the horse falls
+  for (let t = 1; t < 400 && L.party.kills === 0; t++) huntEncounter({ ...x, tick: x.tick + t * 61 }, two[0], st);
+  const p = L.party;
+  assert.equal(p.kills, 1, 'a wild horse brought down');
+  const meat = itemIdx(x, 'meat');
+  const carried = two.reduce((a, s) => a + A.carried(s, meat), 0);
+  assert.ok(carried > 40 && carried <= 60.5, `two hunters carry a load each (${carried.toFixed(1)} kg of meat)`);
+  assert.ok(p.cache && (p.cache.goods.meat ?? 0) > 60, `the rest is left by the kill (${p.cache?.goods.meat} kg of meat)`);
+  // home with the load, hands empty: back for the rest
+  const y = { ...x, tick: p.cache!.t + 30 };
+  const s = two[0];
+  A.place(s, st.pos[0], st.pos[1], st.pos[2], y.tick);
+  A.take(s, meat, 1e6);
+  for (const it of x.c.items.list.keys()) A.take(s, it, 1e6);
+  const t = fetchTask(y, s, p);
+  assert.ok(t && t.kind === TASK.hunt && t.data2 === 2 && t.goalCell === p.cache!.c, 'a hunter goes back to the kill');
+  // at the kill: a load taken up, in the books as the hunt's food
+  const food0 = ledger(y, st).food.hunt;
+  const left0 = p.cache!.goods.meat;
+  A.place(s, p.cache!.pos[0], p.cache!.pos[1], p.cache!.pos[2], y.tick);
+  A.tData2[s] = 2;
+  huntEncounter(y, s, st);
+  assert.ok(A.carried(s, meat) > 20, `a load of the rest carried (${A.carried(s, meat).toFixed(1)})`);
+  assert.ok((p.cache?.goods.meat ?? 0) < left0 - 20, 'taken from what was left');
+  assert.ok(ledger(y, st).food.hunt > food0 + 10, 'the fetched meat is the hunt\'s food in the books');
+  // what is not fetched in time is the scavengers'
+  huntHourly({ ...x, tick: p.cache!.t + 2 * x.day }, st);
+  assert.ok(!L.party || !L.party.cache, 'a stale kill is given up');
+});
+
+test('land: a town that has lost its roofs raises shelter before it mends its stores', () => {
+  const { sim, st } = village('stone', 20261008, 30);
+  const x = cx(sim);
+  const A = x.A;
+  // every dwelling burned; ten store pits, half fallen; a hut begun; wood, reeds and sticks by the hundred in the store
+  for (const b of x.ps.of(st.id).slice()) if (x.c.buildings.list[b.type].provides.includes('shelter')) { if (b.progress >= 1) ruin(x, st, b, 'fire'); else { st.sites = st.sites.filter((id) => id !== b.id); removeBuilding(x, b); } }
+  const pit = x.c.buildings.idx('store-pit');
+  for (let i = 0; i < 10; i++) { const b = planBuilding(x, st, pit, true); if (b) b.damage = 0.8; }
+  for (const id of ['wood', 'reeds', 'stick', 'stone', 'fiber']) storeAdd(x, st, itemIdx(x, id), 300);
+  const hut = planBuilding(x, st, x.c.buildings.idx('hut'));
+  assert.ok(hut, 'a hut begun');
+  for (const s of adultsOf(sim, st).slice(0, 5)) A.role[s] = ROLE.builder;
+  assert.ok(roofless(x, st), 'beds for fewer than half the people, a dwelling begun');
+  // a day of work: the hut goes up (its materials hauled, built), the pits wait
+  sim.step(1440);
+  const h = x.ps.building(hut!.id);
+  assert.ok(h && (h.delivered > 0 || h.progress > 0), `the hut is being built (delivered ${h?.delivered}, progress ${h?.progress.toFixed(2)})`);
 });

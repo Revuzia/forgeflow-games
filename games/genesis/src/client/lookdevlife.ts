@@ -19,7 +19,7 @@
 // Motion is analytic in the tick (frozen when paused), like the sim's movers.
 
 import type { BuildingBlock, FieldName, MoverBlock, SettlementView } from '../sim/types.ts';
-import { AgentFlag, AnimState, BuildingFlag } from '../sim/types.ts';
+import { AgentFlag, AnimState, BuildingFlag, TICKS_PER_SECOND_1X } from '../sim/types.ts';
 import type { IcoGrid } from '../sim/grid/icogrid.ts';
 import { Rng, hashFloat } from '../sim/core/rng.ts';
 import {
@@ -28,6 +28,15 @@ import {
 import { extractRoads, roadWidth, type RoadChain } from '../render/life/roadnet.ts';
 
 type Fields = Partial<Record<FieldName, Float32Array>>;
+
+/**
+ * metres per tick for a speed given in metres per real second at 1x: every walker, runner, flock and pack here is
+ * authored in what the eye sees at 1x (a walk 1.4–1.9 m/s, a flight 2–3.5 m/s) and moved in ticks (motion is analytic
+ * in the tick, like the sim's). The lookdev clock runs TICKS_PER_SECOND_1X ticks a second at 1x (lookdev.ts advance),
+ * and the limbs run on the life layer's clock, real seconds at 1x — so ground speed and stride agree at any pace
+ * (LIVING §1.1: these were m/tick tuned for the old ten ticks a second, a tenth of a walk once 1x became one).
+ */
+const MPS = 1 / TICKS_PER_SECOND_1X;
 type V3 = [number, number, number];
 
 export interface LifeWorld {
@@ -82,7 +91,7 @@ interface Agent {
   x2: number; z2: number;        // line end
   chain: Chain2 | null; s0: number; s1: number; lane: number;
   radius: number;
-  speed: number;                 // m / tick
+  speed: number;                 // m / tick (authored as m/s at 1x × MPS)
   heading: number;               // stand heading (local, rad from north toward east)
   anim: number; animMove: number;
   phase: number; flags: number; carry: number; scale: number; tint: number; id: number; group: number; alt: number;
@@ -876,7 +885,7 @@ export class LookdevLife {
     if (a.flags) flags |= a.flags;
     const ag: Agent = {
       site: s, species: s.species, mode: 0, x: 0, z: 0, x2: 0, z2: 0, chain: null, s0: 0, s1: 0, lane: 0, radius: 0,
-      speed: 0.14 + rng.float() * 0.05, heading: rng.float() * Math.PI * 2, anim: AnimState.idle, animMove: AnimState.walk,
+      speed: (1.4 + rng.float() * 0.5) * MPS, heading: rng.float() * Math.PI * 2, anim: AnimState.idle, animMove: AnimState.walk,
       phase: rng.float(), flags, carry: -1, scale: child ? 0.58 + rng.float() * 0.1 : elder ? 0.94 : 0.92 + rng.float() * 0.16,
       tint: this.clothTint(s, rng), id: 1 + this.agentList.length, group: s.id, alt: 0, ...a,
     };
@@ -964,7 +973,7 @@ export class LookdevLife {
         const d = this.toDir(s.frame, x, z);
         if (this.sample('crop', d) < 0.45 || this.sample('water', d) > 0.05) continue;
         const ang = rng.float() * Math.PI * 2;
-        this.agent(s, { mode: 3, x, z, x2: x + Math.sin(ang) * 14, z2: z + Math.cos(ang) * 14, speed: 0.02, animMove: rng.float() < 0.6 ? AnimState.dig : AnimState.work, carry: farmTool });
+        this.agent(s, { mode: 3, x, z, x2: x + Math.sin(ang) * 14, z2: z + Math.cos(ang) * 14, speed: 0.2 * MPS, animMove: rng.float() < 0.6 ? AnimState.dig : AnimState.work, carry: farmTool });
         n--;
       }
     };
@@ -987,10 +996,10 @@ export class LookdevLife {
         this.ring(s, 0, 0, 8, 4.5, 6, [AnimState.dance, AnimState.cheer], false);
         this.ring(s, 0, 0, 6, 7, 10, [AnimState.sleep], false);
         this.ring(s, 0, 0, 8, 6, 18, [AnimState.work, AnimState.idle, AnimState.idle], false);
-        for (let i = 0; i < 6; i++) { const a = rng.float() * 6.28; this.agent(s, { mode: 2, x: Math.sin(a) * 12, z: Math.cos(a) * 12, radius: 4 + rng.float() * 6, speed: 0.22, animMove: AnimState.run, flags: AgentFlag.child }); }
+        for (let i = 0; i < 6; i++) { const a = rng.float() * 6.28; this.agent(s, { mode: 2, x: Math.sin(a) * 12, z: Math.cos(a) * 12, radius: 4 + rng.float() * 6, speed: 2.2 * MPS, animMove: AnimState.run, flags: AgentFlag.child }); }
         // hunters coming home with meat, gatherers with baskets
-        for (let i = 0; i < 8; i++) { const a = rng.float() * 6.28; this.agent(s, { mode: 3, x: Math.sin(a) * 90, z: Math.cos(a) * 90, x2: Math.sin(a) * 14, z2: Math.cos(a) * 14, speed: 0.13, animMove: AnimState.carry, carry: i % 2 ? meat : basket }); }
-        for (let i = 0; i < 4; i++) { const a = rng.float() * 6.28; this.agent(s, { mode: 3, x: Math.sin(a) * 30, z: Math.cos(a) * 30, x2: Math.sin(a) * 120, z2: Math.cos(a) * 120, speed: 0.15, animMove: AnimState.walk, carry: spear }); }
+        for (let i = 0; i < 8; i++) { const a = rng.float() * 6.28; this.agent(s, { mode: 3, x: Math.sin(a) * 90, z: Math.cos(a) * 90, x2: Math.sin(a) * 14, z2: Math.cos(a) * 14, speed: 1.3 * MPS, animMove: AnimState.carry, carry: i % 2 ? meat : basket }); }
+        for (let i = 0; i < 4; i++) { const a = rng.float() * 6.28; this.agent(s, { mode: 3, x: Math.sin(a) * 30, z: Math.cos(a) * 30, x2: Math.sin(a) * 120, z2: Math.cos(a) * 120, speed: 1.5 * MPS, animMove: AnimState.walk, carry: spear }); }
         woodcut(4);
         this.ring(s, 0, 24, 4, 1.5, 2.5, [AnimState.pray, AnimState.mourn]);
         break;
@@ -1000,7 +1009,7 @@ export class LookdevLife {
           const b = this.blds[bi];
           this.ring(s, b.x, b.z, 14, b.r + 0.5, b.r + 6, [AnimState.work, AnimState.build, AnimState.idle, AnimState.dig], true);
         }
-        for (let i = 0; i < 40; i++) { const a = rng.float() * 6.28, r = 10 + rng.float() * 60; this.agent(s, { mode: 3, x: Math.sin(a) * r, z: Math.cos(a) * r, x2: Math.sin(a + 1) * 25, z2: Math.cos(a + 1) * 25, speed: 0.16, animMove: AnimState.carry, carry: basket }); }
+        for (let i = 0; i < 40; i++) { const a = rng.float() * 6.28, r = 10 + rng.float() * 60; this.agent(s, { mode: 3, x: Math.sin(a) * r, z: Math.cos(a) * r, x2: Math.sin(a + 1) * 25, z2: Math.cos(a + 1) * 25, speed: 1.6 * MPS, animMove: AnimState.carry, carry: basket }); }
         break;
       }
       case 'village': walkers(140); fieldWork(60, 160); woodcut(8); break;
@@ -1063,7 +1072,7 @@ export class LookdevLife {
       const [fx, fz] = this.forestward(s);
       for (let i = 0; i < 26; i++) {
         const sx = (rng.float() - 0.5) * 60, sz = (rng.float() - 0.5) * 60;
-        this.agent(s, { mode: 3, x: sx, z: sz, x2: sx - fx * 160, z2: sz - fz * 160, speed: 0.3, animMove: AnimState.flee, carry: rng.float() < 0.3 ? basket : -1 });
+        this.agent(s, { mode: 3, x: sx, z: sz, x2: sx - fx * 160, z2: sz - fz * 160, speed: 3 * MPS, animMove: AnimState.flee, carry: rng.float() < 0.3 ? basket : -1 });
       }
       this.ring(s, -fx * 45, -fz * 45, 8, 2, 8, [AnimState.mourn, AnimState.mourn, AnimState.pray]);
       // the dead the mourners kneel by
@@ -1110,21 +1119,22 @@ export class LookdevLife {
       const meadow = (d: V3) => this.sample('water', d) < 0.02 && this.sample('tree', d) < 0.35 && this.sample('grass', d) > 0.25 && this.sample('road', d) < 0.35;
       const edge = (d: V3) => this.sample('water', d) < 0.02 && this.sample('tree', d) > 0.25 && this.sample('tree', d) < 0.6;
       const sea = (d: V3) => this.sample('water', d) > 3;
-      const add = (sp: string, at: [number, number] | null, kind: Herd['kind'], n: number, radius: number, alt = 0, speed = 0.02) => {
+      // (mps: metres per real second at 1x — a grazer's few steps, a pack's trot, a flock's flight)
+      const add = (sp: string, at: [number, number] | null, kind: Herd['kind'], n: number, radius: number, alt = 0, mps = 0.2) => {
         if (!at) return;
         // a species the content does not have (songbirds, gulls: the renderer's ambient flocks draw those) is left out —
         // the lookup's fallback (the first animal, a deer) flew deer in circles over the fields
         const idx = animalIndex(sp), look = animalAt(idx);
         if (!look || (look.id !== sp && look.form !== sp)) return;
-        this.herd({ species: idx, cx: at[0], cz: at[1], site: s, radius, members: n, drift: rng.float() * 6.28, kind, alt, speed, seed: rng.float(), tint: tint(0), group: group++ });
+        this.herd({ species: idx, cx: at[0], cz: at[1], site: s, radius, members: n, drift: rng.float() * 6.28, kind, alt, speed: mps * MPS, seed: rng.float(), tint: tint(0), group: group++ });
       };
       if (s.kind === 'camp' || s.kind === 'village' || s.kind === 'town' || s.kind === 'hamlet') {
         add('deer', find(edge, 120, 320), 'graze', 6 + Math.floor(rng.float() * 6), 18);
-        add('songbird', find(meadow, 40, 200), 'flock', 14, 30, 22, 0.25);
+        add('songbird', find(meadow, 40, 200), 'flock', 14, 30, 22, 2.5);
       }
-      if (s.kind === 'camp') { add('boar', find(edge, 100, 260), 'graze', 5, 10); add('wolf', find(edge, 200, 380), 'pack', 5, 40, 0, 0.18); add('bear', find(edge, 200, 400), 'solo', 1, 6); add('wild-horse', find(meadow, 150, 360), 'graze', 8, 22); }
+      if (s.kind === 'camp') { add('boar', find(edge, 100, 260), 'graze', 5, 10); add('wolf', find(edge, 200, 380), 'pack', 5, 40, 0, 1.8); add('bear', find(edge, 200, 400), 'solo', 1, 6); add('wild-horse', find(meadow, 150, 360), 'graze', 8, 22); }
       if (s.kind === 'village') {
-        for (const b of this.bldOf(s, 'pen')) this.herd({ species: animalIndex(rng.float() < 0.5 ? 'sheep' : 'goat'), cx: b.x, cz: b.z, site: s, radius: Math.min(b.w, b.d) * 0.35, members: 9, drift: 0, kind: 'pen', alt: 0, speed: 0.01, seed: rng.float(), tint: 0, group: group++ });
+        for (const b of this.bldOf(s, 'pen')) this.herd({ species: animalIndex(rng.float() < 0.5 ? 'sheep' : 'goat'), cx: b.x, cz: b.z, site: s, radius: Math.min(b.w, b.d) * 0.35, members: 9, drift: 0, kind: 'pen', alt: 0, speed: 0.1 * MPS, seed: rng.float(), tint: 0, group: group++ });
         add('sheep', find(meadow, 140, 260), 'graze', 16, 20);
         add('chicken', [12, -8], 'graze', 7, 6);
         add('dog', [-6, 12], 'graze', 2, 8);
@@ -1139,15 +1149,15 @@ export class LookdevLife {
       }
       if (s.kind === 'city') {
         const [sx, sz] = this.seaward(s);
-        add('gull', [sx * 260, sz * 260], 'flock', 18, 40, 18, 0.3);
-        add('gull', [sx * 380 + 40, sz * 380], 'flock', 10, 25, 26, 0.35);
-        for (let i = 0; i < 5; i++) add('fish-shoal', find(sea, 300, 700), 'shoal', 1, 14, -2.5, 0.05);
-        add('whale', find(sea, 800, 1300), 'solo', 1, 30, -0.5, 0.06);
+        add('gull', [sx * 260, sz * 260], 'flock', 18, 40, 18, 3);
+        add('gull', [sx * 380 + 40, sz * 380], 'flock', 10, 25, 26, 3.5);
+        for (let i = 0; i < 5; i++) add('fish-shoal', find(sea, 300, 700), 'shoal', 1, 14, -2.5, 0.5);
+        add('whale', find(sea, 800, 1300), 'solo', 1, 30, -0.5, 0.6);
         add('horse', [0, 40], 'graze', 3, 30); add('dog', [-30, 0], 'graze', 4, 50);
       }
       if (s.kind === 'hamlet' && eraIdx(s.era) >= 3) add('cattle', find(meadow, 90, 200), 'graze', 6, 14);
-      if (s.kind === 'hive') { add('desert-lizard', find((d) => this.sample('water', d) < 0.02, 40, 200), 'graze', 3, 20); add('locust-swarm', find(meadow, 150, 400) ?? [120, 40], 'swarm', 1, 25, 4, 0.05); }
-      if (s.kind === 'burning') add('vulture', [0, 0], 'flock', 5, 45, 55, 0.2);
+      if (s.kind === 'hive') { add('desert-lizard', find((d) => this.sample('water', d) < 0.02, 40, 200), 'graze', 3, 20); add('locust-swarm', find(meadow, 150, 400) ?? [120, 40], 'swarm', 1, 25, 4, 0.5); }
+      if (s.kind === 'burning') add('vulture', [0, 0], 'flock', 5, 45, 55, 2);
     }
     void g; void TR; void GR; void W;
   }

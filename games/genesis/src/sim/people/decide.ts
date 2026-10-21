@@ -33,7 +33,7 @@ import { ctxOf, finishStretched, inPassing, litOf, lowHearthOf, penIn, rival, te
 import { LEAN_DAYS, PLENTY_DAYS, REACH_DAY, REACH_TRIP, SESSION, campWork, camping, foodSessionsLeft, keptFood, paceSleep, paceUtilities, paceWork, reachOf, storeFull, walkRate } from '../perf/pace.ts';
 // LIVING LAND — living off the land: hunting parties, herds, fish stocks, crops on the season's clock, children's play
 // and chores, raising infants, gatherings, company within reach (people/land.ts and its modules)
-import { landUtilities, planLand } from './land.ts';
+import { landUtilities, planLand, roofless } from './land.ts';
 import { wantPick } from './wants.ts';
 import { nextGathering } from './gatherings.ts';
 import { huntTask } from './hunt.ts';
@@ -894,8 +894,11 @@ function planBuild(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   // a building falling down comes before a new one: there is nearly always a site in hand, and repairs waited behind
   // them until whole villages of huts (thatch lasts ~40 days untended, wood ~70) stood in ruins, people still in them
   let worst: Building | null = null;
+  // (LIVING LAND round 5: a town that has lost its roofs raises shelter before it mends anything but a dwelling — people/land.ts roofless)
+  const noRoofs = roofless(x, st);
   for (const b of x.ps.of(st.id)) {
     if (b.progress < 1 || b.flags & 2 || b.damage < 0.6) continue;
+    if (noRoofs && !x.c.buildings.list[b.type].provides.includes('shelter')) continue;
     if (!worst || b.damage > worst.damage) worst = b;
   }
   if (worst) {

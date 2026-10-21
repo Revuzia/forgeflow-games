@@ -94,7 +94,7 @@ export function makeAnimal(u: Universe, p: Planet, name: string, like?: string):
   delete def.aliases;
   delete def.domesticatesTo;
   const idx = x.c.animals.size + x.ps.species.length;
-  x.ps.species.push({ idx, def, base, parent: base, born: u.tick });
+  x.ps.species.push({ idx, def, base, parent: base, born: u.tick, god: 1 });
   x.ps.eco.seen[String(idx)] = u.tick;
   x.ps.version++;
   return idx;

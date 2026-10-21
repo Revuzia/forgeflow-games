@@ -18,8 +18,12 @@
 //     surface from the linear depth, Lambert with derivative normals), so the pad, the gantry, the town and the rocket's
 //     own flanks glow orange-white; an explosion flashes the same way.
 //   * SHAKE — the camera trembles near a firing engine or an explosion (SHAKE.amp, read by camera/rig.ts).
-// Time is the render tick in "fx seconds" (ticks / 10: one second at 1×), so pausing freezes the smoke and stepping
-// moves it on exactly.
+// Time is the render tick in "fx seconds" (ticks / TICKS_PER_SECOND_1X: one second at 1×, LIVING §1.1), so pausing
+// freezes the smoke and stepping moves it on exactly. It is LINEAR in the tick, never clamped to real time like the god
+// layer's clock (godfx.ts): births are placed on the analytic path at their own tick (path(tb · ticks per fx second)),
+// so above 1× the smoke ages as fast as the climb runs, as it always did at the same preset. (Until the living-world
+// pace it was ticks / 10, written when 1× was ten ticks a second: at one tick a second a 40-tick climb aged its smoke
+// four seconds, a failure played in tenfold slow motion and a frame's few puffs rounded to none.)
 
 import {
   BufferAttribute, BufferGeometry, CustomBlending, CylinderGeometry, DoubleSide, DstColorFactor, DynamicDrawUsage, Float32BufferAttribute, FrontSide, Group,
@@ -30,6 +34,7 @@ import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { FX_EXPOSURE } from './particles.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
+import { TICKS_PER_SECOND_1X } from '../../sim/types.ts';
 
 /** the camera's tremble (0..1), set every frame from the engines and explosions near the camera */
 export const SHAKE = { amp: 0 };
@@ -93,7 +98,14 @@ export interface EngineFire {
 /** particle kinds (vertex shader branches) */
 export const PUFF = { smoke: 0, padCloud: 1, vent: 2, fireball: 3, spark: 4, dust: 5, trail: 6, flash: 7, debris: 8 } as const;
 
-const SEC_PER_TICK = 0.1;
+/** fx seconds per tick: one fx second is one real second at 1× */
+export const SEC_PER_TICK = 1 / TICKS_PER_SECOND_1X;
+/**
+ * the window (ticks, before the 60 m scan trims it) in which a pad engine first seen late may have been low over the
+ * pad: the hold-down on the clamps and the first ticks of the climb are phases of the sim, counted in ticks (it was
+ * 4 + 0.4·√scale fx s, the same 40 + 4·√scale ticks when 1× was ten ticks a second)
+ */
+const LOW_TICKS = 40;
 
 const smoothstepN = (a: number, b: number, x: number): number => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -1016,6 +1028,12 @@ export class LaunchFx {
   private plumes: PlumeSlot[] = [];
   private fires: EngineFire[] = [];
   private lastPos = new Map<string, { x: number; y: number; z: number; t: number; acc?: number }>();
+  /**
+   * the fraction of a birth each emitter carries from frame to frame: at 1× a frame is a sixtieth of an fx second, and
+   * a rate of a few puffs a second rounded frame by frame came to none (the vents, the trench's fire, a small rocket's
+   * hold-down column, a wreck's smoke)
+   */
+  private carry = new Map<string, number>();
   private spaceAnchor: [number, number, number] = [0, 0, 0];
   private time = 0;
   private lastT = -1;
@@ -1040,6 +1058,14 @@ export class LaunchFx {
     LAUNCH_FX.last = this;
   }
 
+  /** how many births an emitter owes this frame for `exact` (fractional) births' worth, at most `cap` */
+  private births(key: string, exact: number, cap: number): number {
+    const c = (this.carry.get(key) ?? 0) + Math.max(0, exact);
+    const n = Math.min(cap, Math.floor(c));
+    this.carry.set(key, n >= cap ? 0 : c - n);
+    return n;
+  }
+
   /** fx seconds now (the render tick at 1× seconds), relative to the epoch */
   get now(): number { return this.time - this.epoch; }
   private tSec(tick: number): number { return tick * SEC_PER_TICK - this.epoch; }
@@ -1051,6 +1077,7 @@ export class LaunchFx {
       // time ran backwards (a rewind, a load): the smoke of the future is gone
       for (const p of this.planets.values()) p.puffs.clear();
       this.lastPos.clear();
+      this.carry.clear();
     }
     // keep birth times small for float32: a new epoch when idle and far from it
     if (t - this.epoch > 20000) {
@@ -1160,7 +1187,7 @@ export class LaunchFx {
     } else {
       // standing still (held down on the pad), or no path: a column by time, thick at the pad, none above the air
       const rateMax = (!ctx || !ctx.hasAir) ? 0 : 22 * e.thrust * Math.min(2.5, scale);
-      const n = Math.min(Math.round(rateMax * (t1 - t0)), 2400);
+      const n = this.births(`${e.key}|col`, rateMax * (t1 - t0), 2400);
       for (let i = 0; i < n; i++) {
         const f = (i + hashFloat(i, Math.floor(t1 * 7))) / Math.max(1, n);
         const tb = t0 + (t1 - t0) * f;
@@ -1194,17 +1221,27 @@ export class LaunchFx {
       if (e.path && e.since !== undefined) e.path(e.since, padAt);
       const up = _w.copy(padAt).normalize();
       const ground = e.path && e.since !== undefined ? padAt.length() - 3 : e.pos.length() - e.alt;
-      let lowFor = e.path ? Math.min(t1 - t0, 4 + 0.4 * Math.sqrt(Math.max(0, scale))) : t1 - t0;
+      let lowFor = e.path ? Math.min(t1 - t0, (LOW_TICKS + 4 * Math.sqrt(Math.max(0, scale))) * SEC_PER_TICK) : t1 - t0;
       if (e.path) {
         // only while the engines were still low over the pad: from ignition until the climb took them ~60 m up (a
-        // capture that first sees the rocket high in the sky must not pour fresh cloud and fire at the pad)
+        // capture that first sees the rocket high in the sky must not pour fresh cloud and fire at the pad) — a coarse
+        // scan, then halving to the moment (the window is tens of fx seconds at 1×: 24 steps alone overshot by seconds)
+        let lo = 0, hi = -1;
         for (let k = 1; k <= 24; k++) {
-          const tk = t0 + (lowFor * k) / 24;
-          e.path((tk + this.epoch) * tickPerSec, _b);
-          if (_b.length() - ground > 60) { lowFor = (lowFor * k) / 24; break; }
+          e.path((t0 + (lowFor * k) / 24 + this.epoch) * tickPerSec, _b);
+          if (_b.length() - ground > 60) { hi = k / 24; break; }
+          lo = k / 24;
+        }
+        if (hi > 0) {
+          for (let j = 0; j < 7; j++) {
+            const m = 0.5 * (lo + hi);
+            e.path((t0 + lowFor * m + this.epoch) * tickPerSec, _b);
+            if (_b.length() - ground > 60) hi = m; else lo = m;
+          }
+          lowFor *= hi;
         }
       }
-      const nc = Math.min(Math.round(55 * e.thrust * lowFor * Math.min(2.5, scale) * (e.path ? 1 : low)), 600);
+      const nc = this.births(`${e.key}|pad`, 55 * e.thrust * lowFor * Math.min(2.5, scale) * (e.path ? 1 : low), 1000);
       for (let i = 0; i < nc; i++) {
         const tb = t0 + lowFor * ((i + 0.5) / Math.max(1, nc));
         const s = hashFloat(i, t1 * 17, 11);
@@ -1220,9 +1257,12 @@ export class LaunchFx {
       }
       // the flame itself, deflected out of both ends of the trench: fast tongues of fire that cool to smoke within a
       // second (fireball puffs glow for the first fifth of their life), while the engines are still low over the pad
-      const nf = Math.min(Math.round(26 * e.thrust * lowFor * Math.min(2.5, scale) * (e.path ? 1 : low)), 160);
+      // (only the tongues still alive now: a late first sight backfills the last 2.4 fx s of the fire, the longest a
+      // tongue lives — older ones would be born dead and only use up the count)
+      const f0 = Math.max(t0, t1 - 2.4), f1 = t0 + lowFor;
+      const nf = f1 > f0 ? this.births(`${e.key}|fire`, 26 * e.thrust * (f1 - f0) * Math.min(2.5, scale) * (e.path ? 1 : low), 160) : 0;
       for (let i = 0; i < nf; i++) {
-        const tb = t0 + lowFor * ((i + 0.5) / Math.max(1, nf));
+        const tb = f0 + (f1 - f0) * ((i + 0.5) / Math.max(1, nf));
         const s = hashFloat(i, t1 * 19, 61);
         const ang = (hashFloat(i, t1, 62) < 0.72 ? 0 : Math.PI) + (hashFloat(i, t1, 63) - 0.5) * 0.5;
         const e1 = this.trenchAxis(e, up, _a);
@@ -1313,7 +1353,7 @@ export class LaunchFx {
     // (a vent first seen has been boiling off for a while: its plume is whole on the first frame)
     const t0 = last && t1 - last.t < 5 && t1 >= last.t ? last.t : t1 - 5;
     this.lastPos.set(key, { x: pos.x, y: pos.y, z: pos.z, t: t1 });
-    const n = Math.min(Math.round(rate * (t1 - t0)), 200);
+    const n = this.births(key, rate * (t1 - t0), 200);
     for (let i = 0; i < n; i++) {
       const s = hashFloat(i, t1 * 31, pos.x);
       const tb = t0 + (t1 - t0) * ((i + s) / Math.max(1, n));
@@ -1334,7 +1374,7 @@ export class LaunchFx {
     // (first seen late — a cut, a paused capture: the dust it has been raising since the burn came near the ground)
     const t0 = last && t1 - last.t < 5 && t1 >= last.t ? last.t : sinceTick !== undefined ? Math.min(t1 - 0.05, Math.max(this.tSec(sinceTick), t1 - 8)) : t1 - 0.05;
     this.lastPos.set(key, { x: ground.x, y: ground.y, z: ground.z, t: t1 });
-    const n = Math.min(Math.round(80 * intensity * (t1 - t0) * scale), 300);
+    const n = this.births(key, 80 * intensity * (t1 - t0) * scale, 300);
     const up = _w.copy(ground).normalize();
     const e1 = _a.set(0, 1, 0).cross(up);
     if (e1.lengthSq() < 1e-8) e1.set(1, 0, 0);
@@ -1396,7 +1436,7 @@ export class LaunchFx {
     const t0 = last && t1 - last.t < 5 && t1 >= last.t ? last.t : t1 - 0.05;
     this.lastPos.set(key, { x: pos.x, y: pos.y, z: pos.z, t: t1 });
     const up = _w.copy(pos).normalize();
-    const n = Math.min(Math.round(9 * k * (t1 - t0) * scale), 60);
+    const n = this.births(key, 9 * k * (t1 - t0) * scale, 60);
     for (let i = 0; i < n; i++) {
       const s = hashFloat(i, t1 * 29, 77);
       const tb = t0 + (t1 - t0) * ((i + 0.5) / Math.max(1, n));

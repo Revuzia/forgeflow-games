@@ -1,5 +1,5 @@
 {
- "$comment": "GENESIS ships, launches, world events and cameras (render lane, phase 4b) on the lookdev world's fabricated missions and world events (src/client/lookdevspace.ts). Each params string is its own page (its own world); shots of one page follow one world through time. Scripts on dev=1 pages place cameras from the ship layer's own state. Run: node _harness/shots.mjs _harness/specs/ships.json --port=5199",
+ "$comment": "GENESIS ships, launches, world events and cameras (render lane, phase 4b) on the lookdev world's fabricated missions and world events (src/client/lookdevspace.ts). Each params string is its own page (its own world); shots of one page follow one world through time. Scripts on dev=1 pages place cameras from the ship layer's own state. Steps that time an effect in seconds at 1× (a burst, an explosion, the hold-down) are written for TICKS_PER_SECOND_1X = 1 (LIVING §1.1: G.step(1.6) is 1.6 s of the burst); steps that place a ship on its climb stay in ticks. Run: node _harness/shots.mjs _harness/specs/ships.json --port=5199",
  "shots": [
   {
    "name": "moon-falling",
@@ -67,7 +67,7 @@
      "k": "ship.launch",
      "kind": "rocket",
      "start": "pad",
-     "progress": 0.955,
+     "progress": 0.9955,
      "id": 1002
     }
    ],
@@ -201,7 +201,7 @@
     "hour": 14
    },
    "script": [
-    "await G.step(4); await G.frames(1); await G.step(5); await G.frames(1); await G.step(8);",
+    "await G.step(4); await G.frames(1); await G.step(5); await G.frames(1); await G.step(0.8);",
     "const sv = window.__GENESIS_APP__.sim.view.ships.find((s) => s.id === 1007); const m = await import('/src/render/fx/launch.ts'); return JSON.stringify({ phase: sv && sv.phase, fx: m.LAUNCH_FX.last.stats() });"
    ],
    "frames": 3
@@ -413,7 +413,7 @@
     "tilt": 50,
     "hour": 10
    },
-   "script": "await G.cmd({ k: 'world.erase', world: 3 }); await G.step(16);",
+   "script": "await G.cmd({ k: 'world.erase', world: 3 }); await G.step(1.6);",
    "frames": 3
   },
   {
@@ -424,7 +424,7 @@
     540
    ],
    "canvasOnly": true,
-   "script": "await G.step(30);",
+   "script": "await G.step(3);",
    "frames": 3
   },
   {
@@ -437,9 +437,9 @@
    "canvasOnly": true,
    "script": [
     "const r = await G.cmd({ k: 'world.birth', kind: 'desert', distance: 1.3, name: 'Nova' });",
-    "await G.step(2); await G.frames(2);",
+    "await G.step(0.2); await G.frames(2);",
     "await G.camera({ mode: 'orbit', planet: r.created[0].id, lat: 15, lon: 0, dist: 9000, tilt: 40 });",
-    "await G.step(30);"
+    "await G.step(3);"
    ],
    "frames": 3
   },

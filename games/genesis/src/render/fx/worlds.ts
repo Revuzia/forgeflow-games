@@ -26,6 +26,7 @@ import { blackbody, bodyQuat, orbitOffset, type D3 } from '../../client/orbits.t
 import { Rng, hashFloat } from '../../sim/core/rng.ts';
 import { tangentBasis } from '../../sim/core/vec3.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
+import { TICKS_PER_SECOND_1X } from '../../sim/types.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { FX_EXPOSURE } from './particles.ts';
 import { sunIlluminance, type CameraPose } from '../frame.ts';
@@ -40,7 +41,7 @@ const ROCK_VERT = /* glsl */ `
 #include <logdepthbuf_pars_vertex>
 attribute vec4 aOrbit;   // radius (m), phase (rad), height off the plane (m), size (m)
 attribute vec4 aSpin;    // tumble axis xyz, rate (rad/s)
-uniform float uT;        // seconds
+uniform float uT;        // seconds at 1× (render tick / TICKS_PER_SECOND_1X: the ring turns with the world's time)
 uniform float uOmega;    // angular rate (rad/s) at radius uR0
 uniform float uR0;
 uniform float uResY;     // the render height (px): rocks under a pixel are left to the dust
@@ -474,7 +475,7 @@ const VENT_VERT = /* glsl */ `
 attribute vec2 corner;
 attribute vec4 iV;      // vent (body frame), the rift's half-width there
 attribute vec2 iS;      // puff index phase (0..1), seed
-uniform float uT;
+uniform float uT;       // seconds of sim-paced time (real seconds at 1×, never faster; frozen while paused)
 uniform float uHeat;
 uniform vec3 uWindB;
 uniform vec3 uSunDirBody;
@@ -883,7 +884,7 @@ const SHARD_VERT = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
 attribute vec4 aF;   // side (+1 leading, −1 trailing), how far along the stream it goes (0..1), radial jitter, vertical jitter
-attribute vec4 aG;   // size (m), onset (0..1 of the break-up), spin seed, spin rate
+attribute vec4 aG;   // size (m), onset (0..1 of the break-up), spin seed, spin rate (rad per second at 1×)
 uniform vec3 uE1;
 uniform vec3 uE2;
 uniform vec3 uNrm;
@@ -996,6 +997,14 @@ export class WorldFx {
   private sphereGeo = new SphereGeometry(1, 64, 40);
   private uniformsShared: { tSceneDepth: IUniform<Texture | null>; uResolution: IUniform<Vector2> } = { tSceneDepth: { value: null }, uResolution: { value: new Vector2(1, 1) } };
   private tickNow = 0;
+  /**
+   * the vents' steam clock (godfx.ts's FX clock): real seconds at 1× (1× is TICKS_PER_SECOND_1X ticks a second, LIVING
+   * §1.1), never faster than real time — a looping puff that rose for a minute at 1× strobed in a few frames at 300× —
+   * and frozen while the sim is paused (the lava beside it flows on wall time)
+   */
+  private ventClock = 0;
+  private ventReal = -1;
+  private ventTick = 0;
   /** rock count (quality) */
   rockBudget = 2400;
 
@@ -1033,6 +1042,13 @@ export class WorldFx {
     if (this.spaceGroup.parent !== scene) scene.add(this.spaceGroup);
     const tick = view.renderTick;
     this.tickNow = tick;
+    if (this.ventReal >= 0) {
+      const realDt = Math.max(0, Math.min(0.1, time - this.ventReal));
+      const dTick = tick - this.ventTick;
+      if (dTick > 1e-6) this.ventClock += Math.min(realDt, dTick / TICKS_PER_SECOND_1X + 1e-3);
+    }
+    this.ventReal = time;
+    this.ventTick = tick;
     // ── who is here: worlds that vanished (erased), worlds that appeared (born) ──
     if (view.snapshots > 0) {
       const now = new Map<number, PlanetView>();
@@ -1087,7 +1103,9 @@ export class WorldFx {
       g.quaternion.set(qe[0], qe[1], qe[2], qe[3]);
       g.updateMatrixWorld(true);
       const u = rv.rockMat.uniforms;
-      u.uT.value = (tick / 10) % 1e5;
+      // (seconds at 1×, locked to the tick like the planet's spin it turns over: pausing stops it, a step moves it
+      // exactly, at 100× it turns 100× as fast; the /10 of the old pace turned it at a tenth of its speed at 1×)
+      u.uT.value = (tick / TICKS_PER_SECOND_1X) % 1e5;
       // the sun toward the star from the planet, in the ring's frame and in view space
       _q.copy(g.quaternion).invert();
       const sd = _v.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]);
@@ -1170,7 +1188,7 @@ export class WorldFx {
         }
         if (cv.ventMat) {
           const vu = cv.ventMat.uniforms;
-          vu.uT.value = (tick / 10) % 1e5;
+          vu.uT.value = this.ventClock % 1e5;
           vu.uHeat.value = cv.mat.uniforms.uHeat.value;
           const wx = pv.fields.get('windX'), wy = pv.fields.get('windY'), wz = pv.fields.get('windZ');
           // (a gentle drift: the mean wind over the world's face, or none)
@@ -1347,7 +1365,7 @@ export class WorldFx {
     const nrm = _bC.crossVectors(e1, e2);
     const u = mb.mat.uniforms;
     (u.uE1.value as Vector3).copy(e1); (u.uE2.value as Vector3).copy(e2); (u.uNrm.value as Vector3).copy(nrm);
-    u.uA.value = dm; u.uB.value = brk; u.uT.value = (view.renderTick / 10) % 1e4; u.uAir.value = Math.max(1, airTop);
+    u.uA.value = dm; u.uB.value = brk; u.uT.value = (view.renderTick / TICKS_PER_SECOND_1X) % 1e5; u.uAir.value = Math.max(1, airTop);
     const sun = _bD.set(-host.center[0], -host.center[1], -host.center[2]).normalize();
     (u.uSunSys.value as Vector3).copy(sun);
     (u.uSunView.value as Vector3).copy(sun).applyQuaternion(camQuatInv);
@@ -1443,7 +1461,9 @@ export class WorldFx {
   }
 
   private updateBurst(b: Burst, view: WorldView, pose: CameraPose, time: number, camQuatInv: Quaternion): void {
-    const t = Math.max(0, Math.min(time - b.t0, (view.renderTick - b.tick0) / 10));
+    // (the world's time in seconds at 1×: 1× is TICKS_PER_SECOND_1X ticks a second — divided by the old ten, the tick
+    // clock was always the slower one at 1× and an erasure's 1.4 s collapse took fourteen)
+    const t = Math.max(0, Math.min(time - b.t0, (view.renderTick - b.tick0) / TICKS_PER_SECOND_1X));
     // a world being born is followed along its orbit; one being erased too, for as long as the view still carries it
     // (a snapshot or two with alive = false) — the eye over it holds where it was when it went, and so does the wreck
     if (b.kind === 'birth' || b.kind === 'erase') {

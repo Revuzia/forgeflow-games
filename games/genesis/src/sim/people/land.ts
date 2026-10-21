@@ -13,7 +13,7 @@ import type { PCtx } from './ctx.ts';
 import type { Settlement } from './state.ts';
 import type { Gathering } from './ledger.ts';
 import type { TaskSpec } from './tasks.ts';
-import { AgentFlag, AgentFlag2 } from '../types.ts';
+import { AgentFlag, AgentFlag2, BuildingFlag } from '../types.ts';
 import { hashFloat } from '../core/rng.ts';
 import { NT, ROLE, TASK, TRAIT } from './defs.ts';
 import { BELONG, NEED_N, REST, WATER } from './needs.ts';
@@ -110,6 +110,23 @@ export function landDaily(x: PCtx, st: Settlement): void {
 /** the deaths of childhood of a wandering band (settlement.ts settlementStep: a band ages as it walks) */
 export function bandHourly(x: PCtx, st: Settlement, hours: number): void {
   childhood(x, st, hours, die);
+}
+
+/**
+ * LIVING LAND §2.5 (round 5): st has lost its roofs — standing beds for fewer than half its people, with a shelter site
+ * open. Its builders raise shelter before they mend anything but a dwelling (decide.ts planBuild): seed 5's town, its
+ * huts burned by a rift's fire, kept six builders mending for thirteen days while two hut sites waited untouched with
+ * wood, reeds and sticks by the hundred in its store, and forty people slept out (`r5/hsprobe.ts`, `r5/hsdump.ts`).
+ */
+export function roofless(x: PCtx, st: Settlement): boolean {
+  let beds = 0, site = false;
+  for (const b of x.ps.of(st.id)) {
+    if (b.flags & BuildingFlag.ruined) continue;
+    const def = x.c.buildings.list[b.type];
+    if (!def.provides.includes('shelter')) continue;
+    if (b.progress >= 1) beds += def.capacity; else site = true;
+  }
+  return site && beds * 2 < (x.ps.members.get(st.id)?.length ?? 0);
 }
 
 /** MoverBlock.flags2 bits LAND sets for agent s (people/snapshot.ts) */

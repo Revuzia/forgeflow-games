@@ -41,6 +41,44 @@ export const ISO_RANGE_M = 3200;
 export const ISO_DAYS = 36;
 /** LIVING CONTENT (§4.5): a lineage becomes its own species after ISO_YEARS[0]..ISO_YEARS[1] game years cut off (per lineage) */
 export const ISO_YEARS: [number, number] = [6, 12];
+/**
+ * LIVING CONTENT r2 (§4.5): a real animal gives rise to a new local form at most once in this many game years on a
+ * world (the integrated 50-year runs made 0.67 forms a world-year, a kind's every form in a stream: the deer of a world
+ * became Dune deer, then Highland deer, then Reed deer, and no deer were left).
+ */
+export const LINEAGE_YEARS = 25;
+
+/**
+ * Kinds that never become a new species here: a form born on this world (every animal stays a real one or a local form
+ * of one — never a form of a form), swarms and insects, and the beds of shellfish that do not move. A real kind the god
+ * brought (content.animal) is a real kind like the rest.
+ */
+export function mayDiverge(x: PCtx, sp: number, a: AnimalDef): boolean {
+  if (sp >= x.c.animals.size && !x.ps.species[sp - x.c.animals.size]?.god) return false;
+  if (a.domestic || a.swarm || a.kind === 'insect') return false;
+  return !a.products.some((io) => io.item === 'shellfish');
+}
+
+/**
+ * LIVING CONTENT r2 (§4.5): a world sees at most one new kind in this many game years, whatever its lineages (the pace of
+ * §4.5: ≤ 0.3 a world-year; a chronicle of a new kind every few months is no longer a rare wonder)
+ */
+export const FORM_GAP_YEARS = 4;
+
+/**
+ * May real kind `root` give rise to a new form now: no form of it born on this world within LINEAGE_YEARS, and no new
+ * kind of any lineage within FORM_GAP_YEARS (stateless: read from the forms' births; the kinds the god brought are not
+ * births, and every form is a form of a real kind, so its parent is its root).
+ */
+export function lineageRested(x: PCtx, root: number): boolean {
+  const need = LINEAGE_YEARS * x.year, gap = FORM_GAP_YEARS * x.year;
+  for (const d of x.ps.species) {
+    if (d.god) continue;
+    const age = x.tick - d.born;
+    if (age < gap || (d.parent === root && age < need)) return false;
+  }
+  return true;
+}
 
 /**
  * Days a herd of species sp must stay cut off from its kind before it may become a new species: 6–12 game years, by a
@@ -631,31 +669,48 @@ function migrationGoals(x: PCtx): void {
   }
 }
 
+/** the dot product a herd of kind `a` must reach to be within ISO_RANGE_M of another (fliers: five times as far) */
+function isoReach(x: PCtx, a: AnimalDef): number {
+  const m = a.habitat === 'air' ? ISO_RANGE_M * 5 : ISO_RANGE_M;
+  return Math.cos(Math.min(Math.PI, m / x.p.st.radius));
+}
+
+/** are herds h and o (of one kind) within the range in which they meet: one ocean is one population (its whales, and
+ * the shoals and seals of its open water — LIVING CONTENT r2) */
+function meets(x: PCtx, a: AnimalDef, h: Herd, o: Herd, r: number): boolean {
+  if (a.habitat === 'sea' || (x.p.s.ocean[h.cell] && x.p.s.ocean[o.cell])) return true;
+  const P = x.p.grid.pos;
+  return P[o.cell * 3] * P[h.cell * 3] + P[o.cell * 3 + 1] * P[h.cell * 3 + 1] + P[o.cell * 3 + 2] * P[h.cell * 3 + 2] >= r;
+}
+
 /** herds cut off from their kind drift apart; after years alone they become a new species */
 function isolationAndSpeciation(x: PCtx): void {
   const herds = x.ps.herds;
-  const P = x.p.grid.pos;
-  const reach = Math.cos(ISO_RANGE_M / x.p.st.radius);
-  const airReach = Math.cos(Math.min(Math.PI, (ISO_RANGE_M * 5) / x.p.st.radius));
   for (const h of herds) {
     if (h.owner >= 0 || h.count < 2) continue;
     const a = animalDef(x, h.species);
-    if (a.domestic || a.swarm) continue;
+    // LIVING CONTENT r2: a form born here, swarms, insects and shellfish beds do not split (mayDiverge)
+    if (!mayDiverge(x, h.species, a)) continue;
     // one connected ocean is one population (whale lineages were renamed every three years, each rename chronicled
     // with an extinction); fliers meet their kin over far greater distances than walkers
-    const sea = a.habitat === 'sea';
-    const r = a.habitat === 'air' ? airReach : reach;
-    let kin = false;
+    const r = isoReach(x, a);
+    let kin = false, rest = false;
     for (const o of herds) {
       if (o === h || o.species !== h.species || o.count < 1) continue;
+      if (!meets(x, a, h, o, r)) { if (o.owner < 0) rest = true; continue; }
       if ((o.iso ?? 0) > 0 && o.owner < 0 && sameGroup(x, h, o)) continue; // its own offshoots do not end its isolation
-      if (sea || P[o.cell * 3] * P[h.cell * 3] + P[o.cell * 3 + 1] * P[h.cell * 3 + 1] + P[o.cell * 3 + 2] * P[h.cell * 3 + 2] >= r) { kin = true; break; }
+      kin = true;
+      break;
     }
     if (kin) {
       h.iso = Math.max(0, (h.iso ?? 0) - 2);
       h.drift = Math.max(0, (h.drift ?? 0) - 0.05);
       continue;
     }
+    // LIVING CONTENT r2: cut off only while its kind lives on elsewhere on this world — the last herds of a kind are the
+    // kind itself, not a population cut off from it (the 50-year runs turned a world's last deer, wolves, bears and musk
+    // oxen into new kinds, one after another, until none of the real ones were left)
+    if (!rest) continue;
     h.iso = (h.iso ?? 0) + 1;
     // directional selection: the further its home is from what its kind is made for, the faster it changes (LIVING
     // CONTENT §4.5: over 6–12 game years of isolation, and only where its home is not what its kind is made for)
@@ -663,7 +718,8 @@ function isolationAndSpeciation(x: PCtx): void {
     const env = Math.min(1.5, Math.abs((h.envT ?? mid) - mid) / 12);
     const need = isoDaysOf(x, h.species);
     h.drift = Math.round(((h.drift ?? 0) + (0.5 + env) / need) * 1e6) / 1e6;
-    if (h.iso >= need && h.drift >= 1 && newHome(x, h, a) && hashFloat(h.id, x.tick, 0x5be) < 0.25) speciate(x, h);
+    // (LIVING CONTENT r2: and a kind gives rise to one form in LINEAGE_YEARS, a world to one in FORM_GAP_YEARS: lineageRested)
+    if (h.iso >= need && h.drift >= 1 && newHome(x, h, a) && lineageRested(x, h.species) && hashFloat(h.id, x.tick, 0x5be) < 0.25) speciate(x, h);
   }
 }
 
@@ -672,19 +728,47 @@ function sameGroup(x: PCtx, a: Herd, b: Herd): boolean {
   return Math.abs((a.iso ?? 0) - (b.iso ?? 0)) <= 3;
 }
 
-const PREFIX_COLD = ['Snow', 'Frost', 'Woolly', 'Pale'];
-const PREFIX_HOT = ['Dune', 'Desert', 'Sun', 'Red'];
-const PREFIX_SEA = ['Deep', 'Blue', 'Grey', 'Silver', 'Long-finned'];
-const PREFIX_FRESH = ['River', 'Lake', 'Silver', 'Speckled', 'Reed'];
-const PREFIX_AIR = ['Cloud', 'High', 'Wind', 'Broad-winged'];
-const PREFIX_COLD_AIR = ['Snow', 'Pale', 'Frost'];
-const PREFIX_HOT_AIR = ['Sun', 'Red', 'Dust'];
+// LIVING CONTENT r2: the names a naturalist gives a local form of a real animal — its country ('Highland deer', 'Island
+// fox', 'Marsh boar'), its climate ('Arctic hare', 'Desert wolf'), a woolly coat only on a furred kind; never a 'Sun
+// fox', a 'Cloud vulture', a 'Woolly desert lizard' or a 'Great little crag hare' (the names the 50-year runs made)
+const PREFIX_COLD = ['Snow', 'Arctic'];
+const PREFIX_HOT = ['Desert', 'Pale'];
+const PREFIX_SEA = ['Deep', 'Blue', 'Grey', 'Long-finned'];
+const PREFIX_FRESH = ['River', 'Lake', 'Spotted', 'Silver'];
 const PREFIX_BIOME: Record<string, string[]> = {
-  forest: ['Forest', 'Shade'], rainforest: ['Jungle', 'Canopy'], taiga: ['Pine', 'Taiga'], tundra: ['Tundra', 'Moss'],
-  mountain: ['Highland', 'Crag'], wetland: ['Marsh', 'Reed'], grassland: ['Plains', 'Grass'], steppe: ['Steppe', 'Wind'],
-  savanna: ['Thorn', 'Savanna'], scrub: ['Scrub', 'Brush'], desert: ['Dune', 'Sand'], coast: ['Shore', 'Island'], ice: ['Ice', 'Glacier'],
-  ocean: ['Deep', 'Blue'], reef: ['Reef', 'Coral'],
+  forest: ['Forest', 'Woodland'], rainforest: ['Jungle', 'Forest'], taiga: ['Taiga', 'Boreal'], tundra: ['Tundra', 'Arctic'],
+  mountain: ['Mountain', 'Highland'], volcanic: ['Mountain', 'Highland'], wetland: ['Marsh', 'Swamp'], grassland: ['Plains', 'Prairie'],
+  steppe: ['Steppe', 'Plains'], savanna: ['Savanna', 'Bush'], scrub: ['Scrub', 'Bush'], desert: ['Desert', 'Sand'], dune: ['Desert', 'Sand'],
+  coast: ['Island', 'Coastal'], ice: ['Polar', 'Arctic'], barren: ['Rock', 'Pale'], ocean: ['Deep', 'Blue'], reef: ['Reef', 'Coral'],
 };
+/** bodies that wear fur (a cold form of them may be 'Woolly') */
+const FURRED = /^(quadruped|small-hopper|camel|primate)/;
+/** the word of a root's name a form's name drops ('Wild boar' -> 'Marsh boar', 'Golden eagle' -> 'Steppe eagle') */
+const STEM_DROP = /^(wild|golden|harbour|desert|red) /;
+
+/**
+ * The name of a new form of `parent` (root `base`) for herd h: words of its climate or country first (the herd's own
+ * pick, then the rest), then its half of the world ('Northern'), then its size ('Lesser'); null when every one is
+ * taken on this world (then it stays what it is).
+ */
+function formName(x: PCtx, h: Herd, parent: AnimalDef, base: number, envT: number, cold: boolean, hot: boolean, biome: string, smaller: boolean): string | null {
+  const land = PREFIX_BIOME[biome] ?? [];
+  // the climate's words only where the climate is so to anyone (a lizard of a mild country is no 'Snow lizard')
+  const climate = cold && envT < 2 ? (FURRED.test(parent.body ?? '') ? [...PREFIX_COLD, 'Woolly'] : PREFIX_COLD) : hot && envT > 24 ? PREFIX_HOT : [];
+  const words = parent.habitat === 'sea' || (parent.habitat === 'water' && x.p.s.ocean[h.cell]) ? PREFIX_SEA : parent.habitat === 'water' ? PREFIX_FRESH : [...climate, ...land];
+  const first = words.length ? hash32(h.id, x.tick, 0x5c0) % words.length : 0;
+  const tries = [...words.slice(first), ...words.slice(0, first), x.p.grid.lat[h.cell] >= 0 ? 'Northern' : 'Southern', smaller ? 'Lesser' : 'Greater'];
+  // (a kind the god brought is its own root: a form of its zebras is a 'Highland zebra', not a horse)
+  const own = x.ps.species[h.species - x.c.animals.size];
+  const rootName = (own?.god ? parent.name : x.c.animals.list[base]?.name ?? parent.name).toLowerCase();
+  const stem = rootName.replace(STEM_DROP, '');
+  for (const w of tries) {
+    const name = `${w} ${stem}`;
+    if (animalIdx(x, slug(name)) >= 0 || x.c.animals.list.some((a) => a.name.toLowerCase() === name.toLowerCase()) || x.ps.species.some((d) => d.def.name.toLowerCase() === name.toLowerCase())) continue;
+    return name;
+  }
+  return null;
+}
 
 /** a new species from herd h, adapted to where it lives; chronicled */
 export function speciate(x: PCtx, h: Herd): number {
@@ -699,19 +783,11 @@ export function speciate(x: PCtx, h: Herd): number {
   const biome = x.c.biomes.list[f.biome[h.cell]]?.id ?? 'grassland';
   const roll = hashFloat(h.id, x.tick, 0x5bf);
   const isoDays = h.iso ?? ISO_DAYS;
-  // names by habitat: water kinds take water words (never a 'Woolly whale' or a 'Dune fish'), fliers sky words
-  const words = parent.habitat === 'sea' ? PREFIX_SEA : parent.habitat === 'water' ? PREFIX_FRESH
-    : parent.habitat === 'air' ? (cold ? PREFIX_COLD_AIR : hot ? PREFIX_HOT_AIR : PREFIX_AIR)
-      : cold ? PREFIX_COLD : hot ? PREFIX_HOT : PREFIX_BIOME[biome] ?? ['Lesser', 'Greater'];
-  let prefix = words[hash32(h.id, x.tick, 0x5c0) % words.length];
-  const rootName = x.c.animals.list[base]?.name ?? parent.name;
-  let name = `${prefix} ${rootName.toLowerCase()}`;
-  // unique among the species of this world
-  for (let k = 0; animalIdx(x, slug(name)) >= 0 || x.c.animals.list.some((a) => a.name === name) || x.ps.species.some((d) => d.def.name === name); k++) {
-    prefix = `${['Little', 'Great', 'Long-legged', 'Short-tailed', 'Striped', 'Spotted'][k % 6]} ${prefix.toLowerCase()}`;
-    name = `${prefix} ${rootName.toLowerCase()}`;
-  }
+  // names by habitat: water kinds take water words (never a 'Woolly whale' or a 'Desert fish'), the rest their climate
+  // or country; unique among the species of this world (LIVING CONTENT r2: formName)
   const size = Math.round(parent.size * (cold ? 1.12 : hot ? 0.88 : roll < 0.5 ? 0.9 : 1.1) * 1000) / 1000;
+  const name = formName(x, h, parent, base, envT, cold, hot, biome, size < parent.size);
+  if (!name) return -1;
   const tint = (hex: string) => shade(hex, cold ? 0.3 : hot ? 0.15 : biome === 'forest' || biome === 'rainforest' ? -0.2 : 0.08 * (roll - 0.5));
   const def: AnimalDef = {
     ...parent,
@@ -730,7 +806,10 @@ export function speciate(x: PCtx, h: Herd): number {
   x.ps.species.push({ idx, def, base, parent: h.species, born: x.tick });
   const from = h.species;
   // its isolated kin of the same group change with it; its kin left elsewhere on this world, if any, stay what they were
-  for (const o of x.ps.herds) if (o.species === from && o !== h && o.owner < 0 && (o.iso ?? 0) > 0 && sameGroup(x, o, h)) { o.species = idx; o.iso = 0; o.drift = 0; }
+  // (LIVING CONTENT r2: the group is the herds about it — the iso count alone made every herd of the kind cut off as
+  // long, anywhere on the world, one group, and the whole kind changed at once)
+  const r = isoReach(x, parent);
+  for (const o of x.ps.herds) if (o.species === from && o !== h && o.owner < 0 && (o.iso ?? 0) > 0 && sameGroup(x, o, h) && meets(x, parent, h, o, r)) { o.species = idx; o.iso = 0; o.drift = 0; }
   // (LIVING CONTENT §4.5: asked AFTER the group changed — asked before, the group counted as kin left behind, `became`
   // was never set and the parent was chronicled extinct: 33 of 44 extinction notices in the census were false)
   const others = x.ps.herds.some((o) => o !== h && o.species === from && o.count >= 0.5);

@@ -392,16 +392,31 @@ export function resolveExperiment(x: PCtx, s: number, k: number, triggered: bool
   return got;
 }
 
-/** every input of recipe r is in the settlement's store, in the agent's hands, or gatherable nearby */
-function inputsSeen(x: PCtx, s: number, st: Settlement, r: import('../recipes/recipes.ts').CRecipe): boolean {
+/**
+ * every input of recipe r is in the settlement's store, in the agent's hands, or gatherable nearby — or something the
+ * settlement knows how to make from such things, two crafts deep (LIVING HISTORY §5.6: a people that smelts copper and
+ * tin has seen both metals though none lies in the store today; it was waiting on copper in the store to think of
+ * bronze, and nothing asked for copper but bronze)
+ */
+export function inputsSeen(x: PCtx, s: number, st: Settlement, r: import('../recipes/recipes.ts').CRecipe): boolean {
   for (const inp of r.inputs) {
     let seen = false;
-    for (const it of inp.items) {
-      if ((st.store[it] ?? 0) > 0 || x.A.carried(s, it) > 0 || (st.res?.items[String(it)]?.length ?? 0) > 0) { seen = true; break; }
-    }
+    for (const it of inp.items) if (itemSeen(x, s, st, it, 2)) { seen = true; break; }
     if (!seen) return false;
   }
   return true;
+}
+
+/** item `it` is at hand (store, hands, reach) or, `depth` crafts deep, made by a recipe the settlement knows from such */
+function itemSeen(x: PCtx, s: number, st: Settlement, it: number, depth: number): boolean {
+  if ((st.store[it] ?? 0) > 0 || x.A.carried(s, it) > 0 || (st.res?.items[String(it)]?.length ?? 0) > 0) return true;
+  if (depth <= 0) return false;
+  for (const k of x.rt.producers[it] ?? []) {
+    if (!libHas(st, k)) continue;
+    const q = x.rt.list[k];
+    if (q.inputs.every((inp) => inp.items.some((j) => j !== it && itemSeen(x, s, st, j, depth - 1)))) return true;
+  }
+  return false;
 }
 
 /**

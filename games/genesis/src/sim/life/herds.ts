@@ -113,6 +113,15 @@ export function reindexHerds(x: PCtx): void {
   x.ps.herds.forEach((h, i) => x.ps.hIndex.set(h.id, i));
 }
 
+/**
+ * Can herds of species sp drift in from beyond (LIVING CONTENT r2): the real kinds and those the god brought — a kind
+ * born on this world lives only where it arose and spreads by its own herds (arrivals made the forms of the 50-year runs
+ * the game of the whole world: 'Desert hares' in every guild that had hares).
+ */
+export function immigrant(x: PCtx, sp: number): boolean {
+  return sp < x.c.animals.size || !!x.ps.species[sp - x.c.animals.size]?.god;
+}
+
 /** wild species that would form herds at cell c, with weights (predators are rarer than their prey) */
 function candidates(x: PCtx, c: number, minFit: number, out: { sp: number; w: number }[]): { sp: number; w: number }[] {
   out.length = 0;
@@ -121,8 +130,8 @@ function candidates(x: PCtx, c: number, minFit: number, out: { sp: number; w: nu
   for (let i = 0; i < n; i++) {
     const a = animalDef(x, i);
     if (a.domestic || !a.biomes.includes(biome)) continue;
-    // a species that died out here does not walk back in from nowhere
-    if (x.ps.eco.extinct[String(i)] !== undefined) continue;
+    // a species that died out here does not walk back in from nowhere, nor does a kind born here (LIVING CONTENT r2)
+    if (x.ps.eco.extinct[String(i)] !== undefined || !immigrant(x, i)) continue;
     if (habitatFit(x, i, c) <= minFit) continue;
     out.push({ sp: i, w: hunter(a) ? 0.3 : a.swarm ? 0.15 : 1 });
   }
@@ -219,7 +228,7 @@ export function guildTargets(x: PCtx): Guild[] {
     const prey: number[] = [], pred: number[] = [];
     for (let sp = 0; sp < n; sp++) {
       const a = animalDef(x, sp);
-      if (!a.biomes.includes(id) || x.ps.eco.extinct[String(sp)] !== undefined) continue;
+      if (!a.biomes.includes(id) || x.ps.eco.extinct[String(sp)] !== undefined || !immigrant(x, sp)) continue;
       if (landGame(a) && fits(sp)) prey.push(sp);
       else if (landHunter(a) && fits(sp)) pred.push(sp);
     }
@@ -318,9 +327,12 @@ export function herdArrivals(x: PCtx): void {
       .filter((q) => q.prey > 0 || q.pred > 0).sort((a, b) => (b.prey + b.pred) - (a.prey + a.pred) || a.g.biome - b.g.biome);
     let made = 0;
     for (const q of short) {
-      if (made >= 2 || landNow + made >= MAX_LAND_HERDS) break;
+      if (made >= 2) break;
       // game before hunters: a hunter comes to a guild with game enough for it
       const hunters = q.prey <= 0 && q.pred > 0;
+      // (LIVING CONTENT r2: a full land keeps out new game, never the hunters its guilds lack — the game's own herds
+      // split past MAX_LAND_HERDS, and the 50-year runs ended with 185 herds of game and 3 of hunters, most biomes none)
+      if (landNow + made >= MAX_LAND_HERDS && !hunters) continue;
       const list = hunters ? q.g.pred : q.g.prey;
       const sp = list[hash32(x.tick, p.seed, q.g.biome, 0x6d3) % list.length];
       const c = guildCell(x, q.g, sp, hash32(x.tick, q.g.biome, 0x6d4), !hunters);

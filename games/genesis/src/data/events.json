@@ -55,7 +55,7 @@
     {"id": "introduce", "kind": "god", "weight": 2, "text": ["Something new came to {settlement}: {item}.", "The god set {item} before the {people} of {settlement}."]},
     {"id": "burned", "kind": "disaster", "weight": 2, "text": ["Fire took {count} buildings in {settlement}.", "{settlement} burned."]},
     {"id": "extinction", "kind": "extinction", "weight": 2, "text": ["The last {animal} of {planet} died. They are gone.", "No {animal} live on {planet} any more: the last of them died."]},
-    {"id": "speciation", "kind": "speciation", "weight": 2, "text": ["Cut off from their kind for {years} years in the {place}, the {parent} of {planet} became something new: {animal}.", "On {planet}, {parent} long alone in the {place} grew into a kind of their own: {animal}."]},
+    {"id": "speciation", "kind": "speciation", "weight": 2, "text": ["Cut off from the rest of their kind for {years} years in the {place}, the {parent} there became something new: {animal}.", "On {planet}, {parent} long alone in the {place} grew into a kind of their own: {animal}."]},
     {"id": "invasive", "kind": "ecology", "weight": 1, "text": ["{animal} came to {planet} {cause}, and spread with no enemy to stop them."]},
     {"id": "blight", "kind": "disaster", "weight": 2, "text": ["Blight struck the {crop} fields of {settlement}.", "A grey rot crept through the {crop} of {settlement}."]},
     {"id": "plague.spread", "kind": "plague", "weight": 2, "text": ["{disease} came to {settlement} with {other}.", "{other} carried {disease} into {settlement}."]},
@@ -215,6 +215,9 @@
     {"id": "festival.harvest", "kind": "culture", "weight": 0, "text": ["At the harvest feast of {settlement} they danced until dawn.", "{settlement} gathered by the fire to eat the first of the harvest, {count} of them, and sang late into the night.", "The harvest was in, and {settlement} danced."]},
     {"id": "festival.midwinter", "kind": "culture", "weight": 0, "text": ["On the longest night {settlement} kept the fire high and told the old stories.", "{count} of {settlement} gathered at midwinter to feast and wait for the sun's return."]},
     {"id": "festival.rains", "kind": "culture", "weight": 0, "text": ["When the rains came {settlement} danced in them.", "{settlement} feasted the coming of the rains, {count} of them by the fire."]},
+    {"id": "festival.harvest.nofire", "kind": "culture", "weight": 0, "text": ["At the harvest feast of {settlement} they danced until dawn.", "{settlement} gathered to eat the first of the harvest, {count} of them, and sang late into the night.", "The harvest was in, and {settlement} danced."]},
+    {"id": "festival.midwinter.nofire", "kind": "culture", "weight": 0, "text": ["On the longest night {settlement} huddled close in the dark and told the old stories.", "{count} of {settlement} gathered at midwinter to feast and wait for the sun's return."]},
+    {"id": "festival.rains.nofire", "kind": "culture", "weight": 0, "text": ["When the rains came {settlement} danced in them.", "{settlement} feasted the coming of the rains, {count} of them together."]},
     {"id": "abandon.joined", "kind": "diaspora", "weight": 1, "text": ["The people of {other}, driven out by the drought, came to their kin at {settlement}, who took them in.", "{settlement} took in the people of {other}, whose water had failed."]},
     {"id": "era.label", "kind": "era", "weight": 2, "text": ["A new time began at {settlement}: {label}.", "{settlement} entered a new time: {label}."]},
     {"id": "era.god", "kind": "god", "weight": 2, "text": ["The god lifted {settlement} into a new age: {label}.", "At the god's word {settlement} learned in a season what its children's children would have found: {label}."]},
@@ -229,6 +232,10 @@
     {"id": "secession.raids", "kind": "polity", "weight": 2, "text": ["Raided by its own kin, {settlement} broke with {other}: {polity}.", "After the raids, {settlement} would not be ruled from {other}: {polity}."]},
     {"id": "secession.friction", "kind": "polity", "weight": 2, "text": ["Quarrels over fields and hunting grounds drove {settlement} from {other}: {polity}."]},
     {"id": "secession.outgrown", "kind": "polity", "weight": 2, "text": ["Grown larger than {other}, {settlement} would no longer bow to it: {polity}.", "The daughter outgrew the mother: {settlement} broke from {other} and is {polity} now."]},
-    {"id": "treaty.parting", "kind": "treaty", "weight": 1, "text": ["{settlement} and {other} parted in peace, and swore to keep the roads open between them.", "Kin still: {settlement} and {other} went their own ways with a pact of open roads."]}
+    {"id": "treaty.parting", "kind": "treaty", "weight": 1, "text": ["{settlement} and {other} parted in peace, and swore to keep the roads open between them.", "Kin still: {settlement} and {other} went their own ways with a pact of open roads."]},
+    {"id": "grievance.neglect", "kind": "polity", "weight": 1, "text": ["{settlement} buried its dead alone: no help came from {other}.", "When disaster struck {settlement}, {other} kept its granaries shut, and {settlement} did not forget it."]},
+    {"id": "secession.neglect", "kind": "polity", "weight": 2, "text": ["{other} left {settlement} alone in its hard times; {settlement} will stand alone now: {polity}.", "Forsaken by {other} in its hour of need, {settlement} broke away: {polity}."]},
+    {"id": "secession.refused", "kind": "polity", "weight": 2, "text": ["{other} would not let {settlement} go, and sent its warriors.", "The chief of {other} called the parting of {settlement} a rebellion: war."]},
+    {"id": "gift.kin.relief", "kind": "gift", "weight": 1, "text": ["After the disaster {settlement} sent {item} to {other}.", "{settlement} did not forget its kin: bearers carried {item} to stricken {other}."]}
   ]
 }

@@ -1,11 +1,14 @@
 // GENESIS — LIVING LAND (LIVING.md §2.1): hunting. A people that knows hunting and has game within its territory and
 // two kilometres beyond sends HUNTERS (15-30 % of a band's food workers, 5-15 % of a farming town's: settlement.ts
-// assignRoles reads huntQuota). The hunters go out as a PARTY of 2-6, led by the most skilled: the party picks a herd
+// assignRoles reads huntQuota). The hunters go out as a PARTY of 2-6, led by the most skilled, mustered at home with
+// food for the trip from the store; with hunters enough a second party goes out after another herd (PARTIES_MAX — two
+// parties of three rather than one of six when both can set out together): the party picks a herd
 // (the most meat for the walk), TRACKS it (each leg is re-planned toward where the herd is now, as far as the daylight
 // allows), camps at night where it is (perf/pace.ts: a hunt is a trip with a camp), and when it closes on the herd,
 // STALKS it: one encounter for the whole party at a time, won with a chance that grows with the hunters there, their
 // skill and weapons and falls with the prey's speed. A kill is butchered where it fell and the party carries home what it
-// can — one carcass-load each (LOAD_KG); the rest is left to the scavengers. Never more than a fifth of a herd at once,
+// can — one carcass-load each (LOAD_KG); the rest of a big beast is left by the kill and fetched in relays while it keeps
+// (CACHE_DAYS), then it is the scavengers'. Never more than a fifth of a herd at once,
 // and a herd of fewer than three is spared unless the people starve. Dangerous game (aurochs, bison, bears, wolves) only
 // for a party of four or more with spears or bows; prey may wound a hunter (rarely kill one). A kill of a species people
 // can tame may bring young home (people/herding.ts youngFromHunt). The first great hunt of a settlement and the first
@@ -22,9 +25,9 @@ import { animalDef, herdPos } from '../life/herds.ts';
 import { sacredAnimal } from './culture.ts';
 import { libHas, libraryEffect } from './knowledge.ts';
 import { distM, offsetPoint, spotInCell } from './world.ts';
-import { foodDays, storeAny } from './store.ts';
+import { bestFood, foodDays, storeAdd, storeAny, storeTake } from './store.ts';
 import { practise, die } from './lifecycle.ts';
-import { camping, daylightLeft, endTrip, walkRate } from '../perf/pace.ts';
+import { camping, daylightLeft, endTrip, walkRate, walkTicks } from '../perf/pace.ts';
 import { tell } from './story.ts';
 import { agentRef, emitAt, settlementRef, vars } from './util.ts';
 import { accident } from './knowledge.ts';
@@ -42,6 +45,25 @@ export const LOAD_KG = 30;
 export const DRESSED = 0.42;
 /** a party gives up after this many days out */
 export const PARTY_DAYS = 4;
+/**
+ * LAND round 5 (2026-10-21): a band with hunters enough sends out a second party while the first is away — a party
+ * of 2-3 was out ~3 days for one boar (`r5/pprobe.ts`: 13 parties, 7 kills in five years on seed 7), and the other
+ * hunters gathered. At most this many parties of a settlement are out at once, each after its own herd.
+ */
+export const PARTIES_MAX = 2;
+/**
+ * A party musters at home: hunters within this of the settlement's centre (m), who set out together with the trip's food
+ * from the store (PARTY_FOOD_DAYS). It took any hunter in the territory and the walk out of the one gathering 850 m off
+ * began when its session ended; without food in hand they walked home from the herd to eat (`r5/tprobe.ts`).
+ */
+export const MUSTER_M = 250;
+export const PARTY_FOOD_DAYS = 2;
+/**
+ * The rest of a big kill: what the hunters there cannot carry (more than CACHE_MIN_KG) is left by the kill, and they
+ * come back for it in relays while it keeps (CACHE_DAYS) — a party of three carried home 90 of a wild horse's 150 kg and
+ * left the rest to the scavengers (seed 7's game was horses and aurochs).
+ */
+export const CACHE_MIN_KG = 15, CACHE_DAYS = 1.5;
 /** encounters of a party are at least this far apart (ticks): the hunters there wait for one another */
 const ENCOUNTER_GAP = 60;
 
@@ -109,13 +131,13 @@ export function huntRange(st: Settlement): number {
  * The best game for a party of n of st from point `from`: the most meat they can carry home for the walk (null none).
  * Herds another party of this settlement already follows are left alone.
  */
-export function bestGame(x: PCtx, st: Settlement, from: ArrayLike<number>, n: number, bold: boolean): Herd | null {
+export function bestGame(x: PCtx, st: Settlement, from: ArrayLike<number>, n: number, bold: boolean, skip?: readonly number[]): Herd | null {
   const hungry = famine(x, st);
   const range = huntRange(st);
   const P = x.p.grid.pos, R = x.p.st.radius;
   let best: Herd | null = null, bv = 0;
   for (const h of x.ps.herds) {
-    if (!isGame(x, st, h, bold, hungry)) continue;
+    if (!isGame(x, st, h, bold, hungry) || (skip && skip.includes(h.id))) continue;
     const hc = h.cell;
     const dHome = Math.acos(Math.min(1, P[hc * 3] * st.pos[0] + P[hc * 3 + 1] * st.pos[1] + P[hc * 3 + 2] * st.pos[2])) * R;
     if (dHome > range) continue;
@@ -140,6 +162,10 @@ function itemKg(id: string): number {
   return KG[id] ?? 1;
 }
 
+/** the share of the food workers who hunt: in a band living off the wild (LIVING §2.1: 15-30 %; round 5: the top of the
+ * range, so two parties can be out), and in a farming town (5-15 %) */
+export const HUNTERS_BAND = 0.3, HUNTERS_TOWN = 0.1;
+
 /** hunters wanted (settlement.ts assignRoles): of `food` food workers, when hunting is known and game is within range */
 export function huntQuota(x: PCtx, st: Settlement, food: number): number {
   const k = x.rt.byId.get('hunting');
@@ -148,71 +174,129 @@ export function huntQuota(x: PCtx, st: Settlement, food: number): number {
   // only dangerous game within range (aurochs, bison, bears): a party of four with spears (planJobs makes spears for
   // the hunters it has)
   if (!easy && !bestGame(x, st, st.pos, 4, true)) return 0;
-  const share = farming(x, st) ? 0.1 : 0.25;
+  const share = farming(x, st) ? HUNTERS_TOWN : HUNTERS_BAND;
   let n = Math.round(food * share);
   if (n < PARTY_MIN && food >= 4) n = PARTY_MIN;
   if (!easy && n < 4 && food >= 6) n = 4;
   return Math.min(n, food - 1);
 }
 
-/** agent ids of st's hunting party while it is out (settlement.ts assignRoles keeps them hunters until it is back) */
+/** the parties of st out now, the first one first */
+export function parties(st: Settlement): HuntParty[] {
+  const L = st.land;
+  if (!L) return [];
+  const out: HuntParty[] = [];
+  if (L.party) out.push(L.party);
+  if (L.more) for (const p of L.more) out.push(p);
+  return out;
+}
+
+/** agent ids of st's hunting parties while they are out (settlement.ts assignRoles keeps them hunters until back) */
 export function partyOut(st: Settlement): readonly number[] {
-  return st.land?.party?.members ?? [];
+  const L = st.land;
+  if (!L?.more?.length) return L?.party?.members ?? [];
+  const ids: number[] = [];
+  for (const p of parties(st)) for (const id of p.members) ids.push(id);
+  return ids;
 }
 
 /** the party of st agent s belongs to (null none) */
 export function partyOf(x: PCtx, st: Settlement, s: number): HuntParty | null {
-  const p = st.land?.party;
-  return p && p.members.includes(x.A.id[s]) ? p : null;
+  const id = x.A.id[s];
+  for (const p of parties(st)) if (p.members.includes(id)) return p;
+  return null;
 }
 
 /**
  * Hourly (people/land.ts): a party sets out in the morning when two or more hunters are at home and game is within
- * range; a party that has made its kill and come home, lost its game, or been out too long, breaks up.
+ * range — a second one while the first is away when there are hunters enough (PARTIES_MAX), after other game; a party
+ * that has made its kill and come home, lost its game, or been out too long, breaks up.
  */
 export function huntHourly(x: PCtx, st: Settlement): void {
   const L = landOf(st);
   const A = x.A;
-  const p = L.party;
-  if (p) {
-    // the dead and the departed leave the party
-    p.members = p.members.filter((id) => { const s = A.slotOf(id); return s >= 0 && A.alive[s] && A.settlement[s] === st.id && A.role[s] === ROLE.hunter; });
-    const out = p.members.some((id) => { const s = A.slotOf(id); return s >= 0 && (A.camp[s] >= 0 || (A.task[s] === TASK.hunt)); });
-    const old = x.tick - p.since > PARTY_DAYS * x.day;
-    if (p.members.length === 0 || old || (p.kills > 0 && !out)) { L.party = null; return; }
-    // the herd is gone: the next game near the party, else home
-    const h = x.ps.herd(p.herd);
-    if (!h || h.count < 1) {
-      const lead = A.slotOf(p.members[0]);
-      if (lead >= 0) A.posAt(lead, x.tick, _p); else { _p[0] = st.pos[0]; _p[1] = st.pos[1]; _p[2] = st.pos[2]; }
-      const g = bestGame(x, st, _p, p.members.length, p.members.length >= 4 && armed(x, st));
-      if (g && p.kills === 0) { p.herd = g.id; p.species = g.species; } else L.party = null;
-    }
-    return;
+  if (L.party && !keepParty(x, st, L.party)) L.party = null;
+  if (L.more) {
+    L.more = L.more.filter((p) => keepParty(x, st, p));
+    if (!L.party && L.more.length) L.party = L.more.shift()!;
+    if (!L.more.length) delete L.more;
   }
+  const out = parties(st);
+  if (out.length >= PARTIES_MAX) return;
   // a new party: hunters of the settlement at home and free, in the morning (the walk out wants the day), when the meat
   // in store runs low (a store full of grain is no reason to rest the spears; one full of meat is)
   const k = x.rt.byId.get('hunting');
   if (k === undefined || !libHas(st, k) || st.besieged >= 0) return;
   if (daylightAt(x, st) < 6 * 60) return;
   if (!famine(x, st) && meatDays(x, st) >= MEAT_DAYS * ((x.ps.members.get(st.id)?.length ?? 0) + st.cohort.n[1])) return;
+  const busy = out.length ? partyOut(st) : null;
   const hunters: number[] = [];
   for (const m of x.ps.members.get(st.id) ?? []) {
     if (A.role[m] !== ROLE.hunter || A.mission[m] || A.flags[m] & AgentFlag.child || A.health[m] < 0.55 || A.camp[m] >= 0) continue;
-    // at home, not still on the way back with the last kill
+    if (busy && busy.includes(A.id[m])) continue;
+    // at home (the party sets out together), not still on the way back with the last kill
     A.posAt(m, x.tick, _p);
-    if (distM(x.p, _p, st.pos) > st.territory + 100 || carriedKg(x, m) > 5) continue;
+    if (distM(x.p, _p, st.pos) > Math.min(MUSTER_M, st.territory + 100) || carriedKg(x, m) > 5) continue;
     hunters.push(m);
   }
   if (hunters.length < PARTY_MIN) return;
   // the most skilled lead (ties: the elder id)
   hunters.sort((a, b) => A.skills[b * NS + SKILL.hunt] - A.skills[a * NS + SKILL.hunt] || A.id[a] - A.id[b]);
-  const party = hunters.slice(0, PARTY_MAX);
-  const bold = party.length >= 4 && armed(x, st);
-  const g = bestGame(x, st, st.pos, party.length, bold);
-  if (!g) return;
-  L.party = { id: x.tick, members: party.map((m) => A.id[m]), herd: g.id, species: g.species, since: x.tick, lastTry: -1, kills: 0 };
-  ledger(x, st).huntTrips++;
+  let free = hunters;
+  while (out.length < PARTIES_MAX && free.length >= PARTY_MIN) {
+    // hunters enough at home for two parties and none out: two parties of 2-3, after two herds (a party of three hunts as
+    // well as a crowd of six), unless only dangerous game is near — that wants the four together
+    const all = Math.min(PARTY_MAX, free.length);
+    const n = !out.length && PARTIES_MAX > 1 && free.length >= 2 * PARTY_MIN + 1 ? Math.ceil(free.length / 2) : all;
+    const skip = out.map((q) => q.herd);
+    let party = free.slice(0, n);
+    let g = bestGame(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip);
+    if (!g && n < all) { party = free.slice(0, all); g = bestGame(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip); }
+    if (!g) return;
+    const np: HuntParty = { id: x.tick + out.length, members: party.map((m) => A.id[m]), herd: g.id, species: g.species, since: x.tick, lastTry: -1, kills: 0 };
+    if (!L.party) L.party = np; else (L.more ??= []).push(np);
+    out.push(np);
+    for (const m of party) provision(x, st, m, PARTY_FOOD_DAYS);
+    ledger(x, st).huntTrips++;
+    free = free.slice(party.length);
+  }
+}
+
+/** a party out: the dead and the departed leave it; false when it breaks up (home with its kill, lost, out too long) */
+function keepParty(x: PCtx, st: Settlement, p: HuntParty): boolean {
+  const A = x.A;
+  p.members = p.members.filter((id) => { const s = A.slotOf(id); return s >= 0 && A.alive[s] && A.settlement[s] === st.id && A.role[s] === ROLE.hunter; });
+  const out = p.members.some((id) => { const s = A.slotOf(id); return s >= 0 && (A.camp[s] >= 0 || (A.task[s] === TASK.hunt)); });
+  const old = x.tick - p.since > PARTY_DAYS * x.day;
+  // (the rest of the kill left by it: kept for them while it is fresh, then the scavengers' and the flies')
+  if (p.cache && x.tick - p.cache.t > CACHE_DAYS * x.day) delete p.cache;
+  if (p.members.length === 0 || old || (p.kills > 0 && !out && !p.cache)) return false;
+  // the herd is gone: the next game near the party (not another party's), else home
+  const h = x.ps.herd(p.herd);
+  if (!h || h.count < 1) {
+    const lead = A.slotOf(p.members[0]);
+    if (lead >= 0) A.posAt(lead, x.tick, _p); else { _p[0] = st.pos[0]; _p[1] = st.pos[1]; _p[2] = st.pos[2]; }
+    const others = parties(st).filter((q) => q !== p).map((q) => q.herd);
+    const g = bestGame(x, st, _p, p.members.length, p.members.length >= 4 && armed(x, st), others);
+    if (!g || p.kills > 0) return false;
+    p.herd = g.id; p.species = g.species;
+  }
+  return true;
+}
+
+/** a hunter setting out takes food for `days` from the store (what they carry already counts) */
+function provision(x: PCtx, st: Settlement, m: number, days: number): void {
+  const A = x.A;
+  const sp = x.info[A.species[m]];
+  let have = 0;
+  for (const it of sp.foods) { const q = A.carried(m, it); if (q > 0) have += q * sp.edible[it]; }
+  if (have >= days * 0.5) return;
+  const f = bestFood(x, st);
+  if (f < 0) return;
+  const got = storeTake(st, f, (days - have) / Math.max(0.05, sp.edible[f]));
+  if (got <= 0) return;
+  const left = A.give(m, f, got);
+  if (left > 0) storeAdd(x, st, f, left);
 }
 
 /** days of meat a head the store holds before a party is no longer sent out */
@@ -248,8 +332,14 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   const A = x.A;
   const p = partyOf(x, st, s);
   if (!p) return null;
-  // the kill is made: those still out come home with the others (a camp of the hunt is struck)
-  if (p.kills > 0) { if (camping(x, s) && (A.tripTask[s] & 255) === TASK.hunt) endTrip(x, s); return null; }
+  // the kill is made: back for what was left of it, once the load in hand is home; else those still out come home with
+  // the others (a camp of the hunt is struck)
+  if (p.kills > 0) {
+    const f = fetchTask(x, s, p);
+    if (f) return f;
+    if (camping(x, s) && (A.tripTask[s] & 255) === TASK.hunt) endTrip(x, s);
+    return null;
+  }
   const h = x.ps.herd(p.herd);
   if (!h || h.count < 1) return null;
   herdPos(h, x.tick, _q);
@@ -295,11 +385,12 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
 /**
  * The end of a hunter's stalk (work.ts, TASK.hunt): the party's encounter with the herd — once per ENCOUNTER_GAP for the
  * whole party, with the hunters within reach of the herd. A tracking leg (data2 1) does nothing (the next decision
- * walks on).
+ * walks on); a walk back to the kill (data2 2) takes up a load of what was left of it (fetchCache).
  */
 export function huntEncounter(x: PCtx, s: number, st: Settlement | undefined): void {
   const A = x.A;
   if (!st || A.tData2[s] === 1) return;
+  if (A.tData2[s] === 2) { fetchCache(x, s, st); return; }
   const p = partyOf(x, st, s);
   if (!p || p.kills > 0) return;
   const h = x.ps.herd(A.tTarget[s]);
@@ -373,12 +464,62 @@ export function huntEncounter(x: PCtx, s: number, st: Settlement | undefined): v
     // a successful hunt is a thing to have done (people/outlets.ts)
     statusGain(x, m, 0.2);
   }
+  // what they could not carry is left by the kill, for them to come back for (fetchTask)
+  let restKg = 0;
+  for (const g of goods) if (g.qty > 0.01) restKg += g.qty * g.kg;
+  if (restKg >= CACHE_MIN_KG) {
+    const rest: Record<string, number> = {};
+    for (const g of goods) if (g.qty > 0.01) rest[x.c.items.list[g.item].id] = Math.round(g.qty * 100) / 100;
+    p.cache = { c: x.p.cellAt(_q), pos: [_q[0], _q[1], _q[2]], goods: rest, t: x.tick };
+  }
   // in a famine, the beast that feeds them may become sacred to them (culture.ts)
   if (hungry) st.recent.savedBy = h.species;
   emitAt(x, s, { t: 'hunt', ref: settlementRef(x, st), text: a.id, data: { settlement: st.id, species: a.id, kills, hunters: here.length } });
   chronicleHunt(x, st, a, kills, here);
   // young of a beast people can tame may come home with them (people/herding.ts)
   if (a.domesticable && a.domesticatesTo && hashFloat(p.id, h.id, 0x4b9) < 0.25) youngFromHunt(x, st, a, 1 + (hashFloat(p.id, h.id, 0x4ba) < 0.5 ? 1 : 0));
+}
+
+/**
+ * Back to the kill (huntTask, a party that has made its kill): a hunter of the party with empty hands walks to what was
+ * left of it while it keeps, with the daylight to get there (data2 2: fetchCache at the task's end). Null: nothing left
+ * to fetch, or the load in hand is not home yet.
+ */
+export function fetchTask(x: PCtx, s: number, p: HuntParty): TaskSpec | null {
+  const c = p.cache;
+  if (!c || x.tick - c.t > CACHE_DAYS * x.day || carriedKg(x, s) > 5) return null;
+  const A = x.A;
+  A.posAt(s, x.tick, _p);
+  if (walkTicks(x, s, _p, c.pos) + 30 > daylightLeft(x, s)) return null;
+  return { kind: TASK.hunt, goal: [c.pos[0], c.pos[1], c.pos[2]], goalCell: c.c, work: 20, target: -1, data2: 2 };
+}
+
+/** at the kill (a fetch's end): the hunter takes up a load of what was left (meat first), and it goes home with them */
+function fetchCache(x: PCtx, s: number, st: Settlement): void {
+  const A = x.A;
+  const p = partyOf(x, st, s);
+  const c = p?.cache;
+  if (!p || !c) return;
+  A.posAt(s, x.tick, _p);
+  if (distM(x.p, _p, c.pos) > 2 * x.p.edgeM) return;
+  let room = LOAD_KG - carriedKg(x, s);
+  const ids = Object.keys(c.goods).sort((a, b) => (a === 'meat' ? -1 : b === 'meat' ? 1 : a < b ? -1 : a > b ? 1 : 0));
+  for (const id of ids) {
+    const it = x.c.items.idx(id);
+    const kg = itemKg(id);
+    const want = Math.min(c.goods[id], room / kg);
+    const got = Math.round(want * 100) / 100;
+    if (it < 0 || got <= 0) continue;
+    const took = Math.round((got - A.give(s, it, got)) * 100) / 100;
+    if (took <= 0) continue;
+    c.goods[id] = Math.round((c.goods[id] - took) * 100) / 100;
+    room -= took * kg;
+    if (id === 'meat') addFood(x, st, 'hunt', it, took);
+    if (c.goods[id] <= 0.01) delete c.goods[id];
+  }
+  let left = 0;
+  for (const id in c.goods) left += c.goods[id] * itemKg(id);
+  if (left < 1) delete p.cache;
 }
 
 /** kg agent s carries */

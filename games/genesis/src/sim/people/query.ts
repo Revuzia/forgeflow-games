@@ -308,7 +308,9 @@ function ecologyQ(x: PCtx): unknown {
     out.push({
       id: a.id, name: a.name, kind: a.kind, herds, count: Math.round(count * 10) / 10, peak: x.ps.eco.peak[key] ?? 0,
       extinct: x.ps.eco.extinct[key] !== undefined, since: seen ?? null,
-      bornHere: derived ? { tick: derived.born, from: animalDef(x, derived.parent).name } : null,
+      bornHere: derived && !derived.god ? { tick: derived.born, from: animalDef(x, derived.parent).name } : null,
+      // (LIVING CONTENT r2: a real kind the god brought was not born here of its body's kind)
+      brought: derived?.god ? { tick: derived.born } : null,
     });
   }
   return { immigration: x.ps.eco.immigration, species: out, blightCells: x.ps.blight.length };

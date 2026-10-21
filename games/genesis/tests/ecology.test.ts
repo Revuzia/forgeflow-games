@@ -104,6 +104,19 @@ test('a herd cut off from its kind for years in a country its kind is not made f
   }
   assert.ok(best > 40, `a patch of new country (${best} cells)`);
   assert.ok(sim.applyNow({ k: 'life.spawn-animal', species: 'deer', count: 10, pos: [P[centre * 3], P[centre * 3 + 1], P[centre * 3 + 2]] }).ok);
+  // (LIVING CONTENT r2) the rest of its kind lives on far away, in deer country: a herd is cut off FROM its kind — the
+  // last deer of a world are the kind itself, not a population cut off from it
+  const dot = (a: number, b: number) => P[a * 3] * P[b * 3] + P[a * 3 + 1] * P[b * 3 + 1] + P[a * 3 + 2] * P[b * 3 + 2];
+  const farDot = Math.cos(6000 / p.st.radius);
+  let home = -1, hb = 0;
+  for (let c = 0; c < p.count; c += 3) {
+    if (dot(c, centre) > farDot || newHome(x, { cell: c, envT: p.s.tempMean[c] } as Herd, animalDef(x, deer))) continue;
+    const v = habitatFit(x, deer, c);
+    if (v > hb) { hb = v; home = c; }
+  }
+  assert.ok(home >= 0 && hb > 0.5, `deer country far away (fit ${hb.toFixed(2)})`);
+  const homeRing = p.cellsNear([P[home * 3], P[home * 3 + 1], P[home * 3 + 2]], 400).filter((c) => habitatFit(x, deer, c) > 0.4);
+  for (let k = 0; k < 3; k++) { const c = homeRing[(k * 7919) % homeRing.length]; assert.ok(sim.applyNow({ k: 'life.spawn-animal', species: 'deer', count: 9, pos: [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]] }).ok); }
   for (const h of p.people.herds) h.inv = -1;
   const year = p.st.orbit.period;
   let born: string | null = null, when = 0;
@@ -119,6 +132,7 @@ test('a herd cut off from its kind for years in a country its kind is not made f
   assert.ok(d.idx >= x.c.animals.size, 'a species index of its own');
   assert.equal(x.c.animals.list[d.base].id, 'deer', 'drawn as its ancestor');
   assert.ok(p.people.herds.some((h) => h.species === d.idx), 'herds of the new species live');
+  assert.ok(p.people.herds.some((h) => h.species === deer && h.count >= 1), 'and the deer live on in their own country');
   const line = sim.u.chronicle.find((e) => e.kind === 'speciation');
   assert.ok(line && line.text.toLowerCase().includes(born!.toLowerCase()), `chronicled: ${line?.text}`);
   // the snapshot shows it with its ancestor's body

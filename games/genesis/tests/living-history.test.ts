@@ -14,7 +14,7 @@ import { driftLanguage } from '../src/sim/people/names.ts';
 import { landingCell } from '../src/sim/people/spawn.ts';
 import { pathOptsFor } from '../src/sim/people/resources.ts';
 import { findPath } from '../src/sim/grid/pathfind.ts';
-import { accident, computeEra, refreshLibrary } from '../src/sim/people/knowledge.ts';
+import { accident, computeEra, refreshLibrary, inputsSeen } from '../src/sim/people/knowledge.ts';
 import { histOf, kinOpinion, POLITICS, sendAid, popOf, walkDays } from '../src/sim/people/politics.ts';
 import { politicsDaily, polityOf, plunder } from '../src/sim/people/war.ts';
 import { spawnHerd } from '../src/sim/life/herds.ts';
@@ -22,6 +22,7 @@ import { newMission, volunteers } from '../src/sim/people/missions.ts';
 import { DWELL, PRACTICE, PRACTICE_USES, eraLabel, inventable, practised } from '../src/sim/people/eras.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
 import { ERAS } from '../src/sim/content.ts';
+import { NT, TRAIT } from '../src/sim/people/defs.ts';
 
 const ctx = (sim: Sim): PCtx => makeCtx(sim.u, sim.u.planets[0]);
 const k = (x: PCtx, id: string): number => x.rt.byId.get(id)!;
@@ -310,6 +311,9 @@ test('a daughter whose grievance runs high breaks away: a new polity, a secessio
   const x3 = ctx(s3);
   const h3 = histOf(x3, d3);
   const p3 = d3.polity;
+  // (a calm chief with no war party at the capital: it lets its daughter go — a hot one may not, see the test below)
+  x3.A.traits[x3.A.slotOf(c3.leader) * NT + TRAIT.aggression] = 0;
+  c3.factions = (c3.factions ?? []).filter((f) => f.kind !== 'hawks');
   days(x3, 400, () => { if (d3.polity === p3) { h3.grievance = 0.8; h3.why = { tribute: 0.5, distance: 0.3 }; } });
   assert.notEqual(d3.polity, p3, 'it left');
   const r3 = x3.ps.relation(c3.polity, d3.polity)!;
@@ -385,4 +389,139 @@ test('history is saved: a daughter\'s grievance and era clock survive save and l
   assert.deepEqual(d2.hist!.eraAt, d.hist!.eraAt);
   sim.step(1440); b.step(1440);
   assert.equal(b.hash(), sim.hash(), 'and runs on the same');
+});
+
+// ───────────────────────────── §5.6 second pass: hard times, the restless everyday, the capital's answer ─────────────────────────────
+
+test('a disaster on a daughter that the capital, with food to spare, left unrelieved is neglect; aid in it is not held against it', () => {
+  const aidP = POLITICS.aidP;
+  try {
+    POLITICS.aidP = 0; // (the capital never thinks of it on its own here)
+    const { sim, cap, d } = kinTowns();
+    const x = ctx(sim);
+    feed(x, cap, 20);
+    feed(x, d, 20);
+    // a flood over the daughter (not the capital, 1.1–1.7 km away): a hard time though its granary is full
+    must(sim, { k: 'disaster.spawn', kind: 'flood', pos: [...d.pos] } as Command);
+    const c0 = sim.u.chronicle.length;
+    days(x, 3);
+    const h = histOf(x, d);
+    assert.ok((h.why.neglect ?? 0) >= POLITICS.neglect * 0.95, JSON.stringify(h.why));
+    assert.equal(h.why.famine ?? 0, 0, 'not a famine: its stores are full');
+    assert.ok(sim.u.chronicle.slice(c0).some((e) => e.text.includes(d.name) && /buried its dead alone|granaries shut/.test(e.text)), 'chronicled');
+    // the inspector sees the hard time and that no help came (query settlement → history.grievance.hard)
+    const hv = (sim.query('settlement', { id: d.id }) as { history: { grievance: { hard?: { kind: string; relieved: boolean } } } }).history.grievance.hard;
+    assert.deepEqual([hv?.kind, hv?.relieved], ['disaster', false], JSON.stringify(hv));
+    // the same flood with the capital's help sent at once: nothing held against it
+    const { sim: s2, cap: c2, d: d2 } = kinTowns();
+    const x2 = ctx(s2);
+    feed(x2, c2, 20);
+    feed(x2, d2, 20);
+    must(s2, { k: 'disaster.spawn', kind: 'flood', pos: [...d2.pos] } as Command);
+    s2.drainEvents();
+    days(x2, 3, (i) => { if (i === 0) assert.ok(sendAid(x2, c2, d2, 'disaster'), 'help sent'); });
+    assert.equal(histOf(x2, d2).why.neglect ?? 0, 0, 'relieved: no grievance');
+    const aid = s2.drainEvents().find((e) => e.t === 'aid');
+    assert.equal((aid?.data as { why: string } | undefined)?.why, 'disaster', 'the aid event says why');
+    assert.ok(s2.u.chronicle.some((e) => /After the disaster|stricken/.test(e.text)), 'the help is told as relief, not famine');
+    // a day of calamity deaths (fire, drowning ...) in the town's books is a hard time with no disaster seen over it
+    const { sim: s3, cap: c3, d: d3 } = kinTowns();
+    const x3 = ctx(s3);
+    feed(x3, c3, 20);
+    feed(x3, d3, 20);
+    days(x3, 1);
+    assert.equal(histOf(x3, d3).famine, -1, 'no hard time yet');
+    const row = landOf(d3).ledger.length ? landOf(d3).ledger[landOf(d3).ledger.length - 1] : null;
+    if (row) row.deaths.fire = (row.deaths.fire ?? 0) + 3;
+    else landOf(d3).ledger.push({ year: Math.floor(x3.tick / x3.year), deaths: { fire: 3 } } as never);
+    days(x3, 3);
+    assert.ok((histOf(x3, d3).why.neglect ?? 0) > 0, `three burned in a day: ${JSON.stringify(histOf(x3, d3).why)}`);
+    for (const why of ['neglect', 'refused']) assert.ok(sim.content.events.find(`secession.${why}`), `secession.${why}`);
+  } finally { POLITICS.aidP = aidP; }
+});
+
+test('the everyday makes a town restless, no more: tribute and distance stop at the ambient cap; a wrong on top carries it past 0.6', () => {
+  const aidP = POLITICS.aidP;
+  try {
+    POLITICS.aidP = 0;
+    const { sim, cap, d } = kinTowns();
+    const x = ctx(sim);
+    feed(x, cap, 30);
+    feed(x, d, 30);
+    assert.ok(walkDays(x, d, cap) > 1, 'more than a day\'s walk: the distance weighs');
+    const h = histOf(x, d);
+    h.grievance = POLITICS.ambientCap - 0.01;
+    h.why = { distance: 0.3, tribute: POLITICS.ambientCap - 0.31 };
+    days(x, 40);
+    assert.ok(h.grievance <= POLITICS.ambientCap + 1e-9, `restless, no more: ${h.grievance}`);
+    assert.ok(h.grievance >= POLITICS.ambientCap - 0.03, `and kept there by the everyday: ${h.grievance}`);
+    assert.ok(h.grievance < POLITICS.threshold);
+    // a wrong done on top of it: a disaster left unrelieved
+    must(sim, { k: 'disaster.spawn', kind: 'flood', pos: [...d.pos] } as Command);
+    days(x, 3);
+    assert.ok(h.grievance > POLITICS.threshold, `neglect on the restless: ${h.grievance}`);
+  } finally { POLITICS.aidP = aidP; }
+});
+
+test('a capital with a hot-headed chief will not let a daughter part in peace: war to bring it back; a calm one lets it go with a pact', () => {
+  const G = { refuse: POLITICS.refuse, refuseMax: POLITICS.refuseMax };
+  try {
+    const run = (aggr: number) => {
+      const { sim, cap, d } = kinTowns();
+      const x = ctx(sim);
+      const s = x.A.slotOf(cap.leader);
+      assert.ok(s >= 0, 'the capital has a chief');
+      x.A.traits[s * NT + TRAIT.aggression] = aggr;
+      cap.factions = (cap.factions ?? []).filter((f) => f.kind !== 'hawks');
+      const h = histOf(x, d);
+      const p0 = d.polity;
+      sim.drainEvents();
+      // the old grievance of tribute and distance, kept from fading (not bitter: no hunger, no raids, under 0.85)
+      days(x, 400, () => { if (d.polity === p0) { h.grievance = 0.75; h.why = { tribute: 0.45, neglect: 0.3 }; } });
+      assert.notEqual(d.polity, p0, 'it left');
+      return { sim, x, cap, d, evs: sim.drainEvents() };
+    };
+    POLITICS.refuse = 1; POLITICS.refuseMax = 1;
+    const hot = run(1);
+    const r = hot.x.ps.relation(hot.cap.polity, hot.d.polity)!;
+    assert.ok(r.war >= 0 || hot.evs.some((e) => e.t === 'war'), 'war');
+    const war = hot.evs.find((e) => e.t === 'war')!;
+    assert.equal((war.data as { aggressor: number }).aggressor, hot.cap.polity, 'the capital made the war');
+    assert.equal((war.data as { cause: string }).cause, 'revolt');
+    assert.ok(!r.treaties.includes('trade-pact'), 'no pact');
+    assert.ok(hot.sim.u.chronicle.some((e) => /would not let|rebellion/.test(e.text)), 'told');
+    POLITICS.refuse = G.refuse; POLITICS.refuseMax = G.refuseMax;
+    const calm = run(0);
+    const rc = calm.x.ps.relation(calm.cap.polity, calm.d.polity)!;
+    assert.equal(rc.war, -1, 'a calm chief lets it go');
+    assert.ok(rc.treaties.includes('trade-pact'), JSON.stringify(rc.treaties));
+  } finally { POLITICS.refuse = G.refuse; POLITICS.refuseMax = G.refuseMax; }
+});
+
+test('a people that smelts copper and tin has seen both metals: bronze is within its thinking though none lies in the store', () => {
+  const { sim, st } = town();
+  const x = ctx(sim);
+  const s = (x.ps.members.get(st.id) ?? [])[0];
+  const it = (id: string) => x.c.items.idx(id);
+  const bronze = x.rt.list[k(x, 'bronze')];
+  // ores and wood in the store; no copper, no tin, no charcoal; nothing in anyone's hands that matters here
+  for (const id of ['copper', 'tin', 'charcoal', 'bronze']) st.store[it(id)] = 0;
+  st.store[it('copper-ore')] = 6; st.store[it('tin-ore')] = 6; st.store[it('wood')] = 10;
+  if (st.res) for (const id of ['copper', 'tin', 'charcoal']) delete st.res.items[String(it(id))];
+  const without = (ids: string[]) => { st.library = st.library.filter((q) => !ids.map((i) => k(x, i)).includes(q)); };
+  assert.ok(st.library.includes(k(x, 'copper-smelting')) && st.library.includes(k(x, 'tin-smelting')) && st.library.includes(k(x, 'charcoal')));
+  assert.equal(inputsSeen(x, s, st, bronze), true, 'copper from its ore and charcoal from wood, tin from its ore: two crafts deep');
+  // a people that cannot smelt tin has never seen the metal
+  const lib = st.library.slice();
+  without(['tin-smelting']);
+  assert.equal(inputsSeen(x, s, st, bronze), false, 'no tin-smelting: no tin');
+  st.library = lib.slice();
+  // three crafts deep is beyond its thinking: no charcoal-burning, no wood but the charcoal itself to come from it
+  without(['charcoal']);
+  assert.equal(inputsSeen(x, s, st, bronze), false, 'no charcoal-burning: the smelting\'s fuel is not theirs');
+  st.library = lib.slice();
+  // and the ores must be there to see: without copper ore anywhere, no copper
+  st.store[it('copper-ore')] = 0;
+  if (st.res) delete st.res.items[String(it('copper-ore'))];
+  assert.equal(inputsSeen(x, s, st, bronze), false, 'no copper ore: no copper');
 });

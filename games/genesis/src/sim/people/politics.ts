@@ -15,10 +15,17 @@
 //             + a daughter grown as large as its capital (0.9 of it and more: +0.0015 a day at 1.2 times its size, up to
 //               0.0045 at twice it: the people of the larger town no longer bow to the smaller)
 //             − kin visits (trade caravans and gifts: −0.0005 each), aid in hard times (−0.15), time (−0.2 % a day)
+//             (second pass, 2026-10-21) hard times are not only hunger: a disaster on the town (a live disaster over it,
+//             a day of calamity deaths — fire, flood, storm, cold, heat, the god's blows — or an epidemic) that the
+//             capital with food to spare did not relieve within 2 days is NEGLECT (+0.35: "buried its dead alone").
+//             The everyday grievances (tribute, distance, tongue, outgrown, friction) make a town restless up to 0.45
+//             together, no further: it breaks away over a wrong done to it on top (neglect, hunger, raids, a feud), so a
+//             capital that stands by its daughters in hard times keeps them (LIVING.md §5.6)
 //   secession grievance > 0.6: a daily chance rising to 0.02 by 0.72, carried by the independence party's strength
 //             (0.5 .. 1: the hawks and the seekers of the new) — a bitter one (most of it raids or unrelieved famine, or grievance
 //             > 0.85 with a strong war party) is a revolt and war (war.ts secede / declareWar); otherwise a peaceful parting,
-//             sealed by a pact to keep the roads open between them unless a feud was at its root
+//             sealed by a pact to keep the roads open between them unless a feud was at its root — or refused: a capital
+//             with a hot-headed chief or a strong war party, and the strength, makes war to bring its daughter back
 //   kin raids a town with less than a day of food raids a neighbour within two days' walk (a raid is a march of a day or
 //             two) that has 5 days a head and whom it holds below 0.3 — inside one polity too (missions.ts raid; war.ts)
 //   aid       the capital relieves a hungry daughter when it has food to spare, more readily under a generous leader
@@ -41,7 +48,7 @@ import { langDistance } from './culture.ts';
 import { factionShare } from './social.ts';
 import { driftLanguage } from './names.ts';
 import { worldSalt } from './lifecycle.ts';
-import { relationOf, secede, polityName, polityOf } from './war.ts';
+import { relationOf, secede, polityName, polityOf, declareWar } from './war.ts';
 import { syncEra } from './eras.ts';
 
 /** a settlement's history: its grievance against its capital, its kin, its era clock (LIVING.md §5.1, §5.2) */
@@ -58,6 +65,16 @@ export interface HistState {
   aid: number;
   /** the hard time was judged (the grievance counted once) */
   judged: boolean;
+  /** (second pass) what the hard time is: 'famine' (hunger) or 'disaster' (a disaster on the town, a day of calamity
+   * deaths); absent = famine (a 1.4 / first-pass record) */
+  hard?: string;
+  /** deaths by calamity (fire, flood, storm, cold, heat, the god's blows) and by sickness counted so far in the LAND
+   * ledger (a day's rise is a calamity) */
+  calam?: number;
+  sick?: number;
+  /** the pressure of calamity and sickness deaths (each day's deaths, the days before fading by half and by 0.3) */
+  cp?: number;
+  ep?: number;
   /** tick tribute was last paid to the capital */
   paid: number;
   /** the leaders a feud was last weighed for ("<ours>:<theirs>") */
@@ -94,7 +111,26 @@ export const POLITICS = {
   /** a trade caravan or a gift between them (they come often: a little each) */
   visit: 0.0005,
   threshold: 0.6, maxP: 0.02, revolt: 0.85,
+  /** (second pass) a disaster on the town, or a day of calamity deaths, that the capital with food to spare did not
+   * relieve within judgeDays: the town buried its dead alone. calamityDeaths a day (fire, flood, storm, cold, heat, the
+   * god's blows), or epidemicDeaths of sickness in a day, make a hard time without a disaster seen on the town */
+  neglect: 0.35, calamityDeaths: 2, epidemicDeaths: 3,
+  /** the grievances of the everyday — tribute, distance, a drifting tongue, a daughter outgrowing its mother, quarrels
+   * over fields — make a town restless, up to this much; it breaks away over a wrong done to it on top: hunger or a
+   * disaster left unrelieved, raids, a feud (so a capital that stands by its daughters in hard times keeps them) */
+  ambientCap: 0.45,
+  /** a capital whose daughter parts in peace may not let it go (few rulers ever have): war if it is the stronger (× 1.2),
+   * with the chance 0.35 + (its chief's aggression − 0.3) × 1.2 + hawks − ½ doves, 0 .. 0.8 (a calm chief with a
+   * peace party lets it go) */
+  refuse: 0.35, refuseMax: 0.8,
 };
+
+/** the everyday grievances, capped together at POLITICS.ambientCap (the rest are wrongs done) */
+const AMBIENT = new Set(['tribute', 'distance', 'tongue', 'outgrown', 'friction']);
+/** death causes (defs.ts DEATH_NAMES) that are a calamity, not the course of life */
+const CALAMITY = ['cold', 'heat', 'fire', 'disaster', 'drowning', 'the god', 'bad air'];
+/** disasters that strike no one (signs in the sky) */
+const HARMLESS = new Set(['eclipse', 'solar-flare', 'magnetic-storm', 'rogue-flyby', 'aurora']);
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 /** grievances move by small daily steps: kept to a millionth */
@@ -142,6 +178,9 @@ export function kinOpinion(x: PCtx, st: Settlement, o: Settlement): number {
 }
 
 function addG(h: HistState, why: string, v: number): void {
+  // the everyday makes a town restless, no more: past POLITICS.ambientCap only a wrong done to it raises the grievance
+  if (v > 0 && AMBIENT.has(why)) v = Math.min(v, Math.max(0, POLITICS.ambientCap - h.grievance));
+  if (v === 0) return;
   h.grievance = r6(Math.max(0, Math.min(1, h.grievance + v)));
   if (v > 0) h.why[why] = r6((h.why[why] ?? 0) + v);
 }
@@ -196,28 +235,36 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
     h.paid = x.tick;
     if (payTithe(x, d, cap, P)) addG(h, 'tribute', G.tribute);
   }
-  // hard times: did the capital, with food to spare, relieve them?
+  // hard times — a famine (under a day of food a head, or a death of hunger), or a disaster on the town (a disaster
+  // over it today, or a day of calamity deaths, or an epidemic): did the capital, with food to spare, relieve them?
   const hungerDeaths = d.stats.starved - (h.starved ?? d.stats.starved);
   h.starved = d.stats.starved;
   const lean = foodDays(x, d) < P * G.leanDays || hungerDeaths > 0;
+  const struck = calamityToday(x, d, h) || disasterOn(x, d) !== '';
   const spare = foodDays(x, cap) - Pc * G.spareDays >= P * 2;
   // (aid sent the day before the hard time was noticed counts for it: relieved = aid since a day before it began)
-  if (lean) {
-    if (h.famine < 0) { h.famine = x.tick; h.spare = false; h.judged = false; }
+  if (lean || struck) {
+    if (h.famine < 0) { h.famine = x.tick; h.spare = false; h.judged = false; h.hard = lean ? 'famine' : 'disaster'; }
+    else if (lean && h.hard === 'disaster' && !h.judged) h.hard = 'famine';
+  }
+  // (a hard time is judged when its days are up, whether or not it is over: a day of burning is a hard time too)
+  if (h.famine >= 0 && !h.judged) {
     if (spare) h.spare = true;
     // the capital's own choice: a generous leader sends food sooner
-    if (spare && h.aid < h.famine - x.day && !h.judged) {
+    if (spare && h.aid < h.famine - x.day) {
       const gen = Math.max(0.1, 0.5 + leaderTrait(x, cap, TRAIT.sociability) - 0.6 * leaderTrait(x, cap, TRAIT.aggression));
-      if (hashFloat(cap.id, d.id, x.tick, worldSalt(x, 0xa1d)) < G.aidP * gen) sendAid(x, cap, d, 'famine');
+      if (hashFloat(cap.id, d.id, x.tick, worldSalt(x, 0xa1d)) < G.aidP * gen) sendAid(x, cap, d, h.hard === 'disaster' ? 'disaster' : 'famine');
     }
-    if (!h.judged && x.tick - h.famine >= G.judgeDays * x.day) {
+    if (x.tick - h.famine >= G.judgeDays * x.day) {
       h.judged = true;
       if (h.spare && h.aid < h.famine - x.day) {
-        addG(h, 'famine', G.famine);
-        tell(x.u, x.p, 'grievance.famine', vars(x, d, -1, { other: cap.name }), d, [settlementRef(x, d), settlementRef(x, cap)], 1);
+        const famine = h.hard !== 'disaster';
+        addG(h, famine ? 'famine' : 'neglect', famine ? G.famine : G.neglect);
+        tell(x.u, x.p, famine ? 'grievance.famine' : 'grievance.neglect', vars(x, d, -1, { other: cap.name }), d, [settlementRef(x, d), settlementRef(x, cap)], 1);
       }
     }
-  } else if (h.famine >= 0 && foodDays(x, d) >= P * G.leanDays * 1.5 && x.tick - h.famine >= G.judgeDays * x.day) h.famine = -1;
+  }
+  if (!lean && !struck && h.famine >= 0 && h.judged && foodDays(x, d) >= P * G.leanDays * 1.5) h.famine = -1;
   // a daughter grown as large as its mother
   if (P >= Pc * 0.9) addG(h, 'outgrown', G.outgrown * Math.min(3, (P / Pc - 0.8) / 0.4));
   // the leaders: a feud between them, or a rival party leading the daughter (weighed once for each pair of leaders)
@@ -249,6 +296,37 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   }
   const ld = langDistance(d, cap);
   if (ld > 0.3) addG(h, 'tongue', G.tongue * Math.min(3, (ld - 0.18) / 0.18));
+}
+
+/**
+ * A day of calamity at st: POLITICS.calamityDeaths deaths by fire, flood, storm, cold, heat or the god's blows in a day
+ * (the days before counting by half), or an epidemic — POLITICS.epidemicDeaths of sickness, the days before fading by 0.3
+ * a day (one a day, most days, is an epidemic). From the LAND ledger's deaths by cause; the counts are kept on `h`.
+ */
+export function calamityToday(x: PCtx, st: Settlement, h: HistState): boolean {
+  let cal = 0, sick = 0;
+  for (const row of st.land?.ledger ?? []) {
+    for (const k of CALAMITY) cal += row.deaths[k] ?? 0;
+    sick += row.deaths['sickness'] ?? 0;
+  }
+  // (the books keep 40 years: a dropped row lowers the sums — then today is the new baseline)
+  const dc = h.calam === undefined || cal < h.calam ? 0 : cal - h.calam;
+  const ds = h.sick === undefined || sick < h.sick ? 0 : sick - h.sick;
+  h.calam = cal;
+  h.sick = sick;
+  // (a slow epidemic — a death of sickness most days — is as hard a time as a bad day of one)
+  h.cp = r3((h.cp ?? 0) * 0.5 + dc);
+  h.ep = r3((h.ep ?? 0) * 0.7 + ds);
+  return h.cp >= POLITICS.calamityDeaths || h.ep >= POLITICS.epidemicDeaths;
+}
+
+/** the kind of a live disaster over st today ('' none; signs in the sky strike no one) */
+export function disasterOn(x: PCtx, st: Settlement): string {
+  for (const d of x.u.god.disasters) {
+    if (d.planet !== x.p.id || HARMLESS.has(d.kind)) continue;
+    if (distM(x.p, st.pos, d.pos) <= d.radius * Math.sqrt(Math.max(0.01, d.scale)) + st.territory) return d.kind;
+  }
+  return '';
 }
 
 /** a daughter's tithe to its capital: a tenth of its food above two days a head, of its metal and finery */
@@ -311,7 +389,7 @@ export function sendAid(x: PCtx, from: Settlement, to: Settlement, why: string):
   const m = (route.land || (route.sea && bestBoat(x, from) >= 0)) && who.length ? newMission(x, 'gift', from, to, who, goods) : null;
   if (!m) for (const [it, q] of goods) { const got = storeTake(from, it, q); storeAdd(x, to, it, got); }
   if (!m && capitalOf(x, to)?.id === from.id) relieve(h);
-  tell(x.u, x.p, 'gift.kin', vars(x, from, -1, { other: to.name, item: x.c.items.list[goods[0][0]].name.toLowerCase() }), from, [settlementRef(x, from), settlementRef(x, to)], 1);
+  tell(x.u, x.p, why === 'disaster' ? 'gift.kin.relief' : 'gift.kin', vars(x, from, -1, { other: to.name, item: x.c.items.list[goods[0][0]].name.toLowerCase() }), from, [settlementRef(x, from), settlementRef(x, to)], 1);
   x.u.emit({ t: 'aid', planet: x.p.id, pos: [to.pos[0], to.pos[1], to.pos[2]], a: Math.round(days * 10) / 10, ref: settlementRef(x, to), data: { from: from.id, to: to.id, why } });
   return true;
 }
@@ -357,8 +435,14 @@ function secessionCheck(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   if (r) {
     const k = r.a === d.polity ? 0 : 1;
     r.grievance[k] = Math.min(3, r.grievance[k] + h.grievance * 0.5);
+    // the capital's answer to a parting in peace: a hot-headed chief or a strong war party, and the strength to do it,
+    // will not let a daughter go (a war to bring it back: war.ts declareWar, cause 'revolt')
+    if (!bitter && refuses(x, cap, d)) {
+      tell(x.u, x.p, 'secession.refused', vars(x, d, -1, { other: cap.name, polity: polityName(x, polityOf(x, d)) }), d, [settlementRef(x, d), settlementRef(x, cap)], 2);
+      declareWar(x, from, d.polity, 'revolt');
+    }
     // kin who part in peace (not over a feud) seal it: the roads stay open between them (a pact, war.ts treaties)
-    if (!bitter && top !== 'feud' && !r.treaties.includes('trade-pact')) {
+    else if (!bitter && top !== 'feud' && !r.treaties.includes('trade-pact')) {
       r.treaties.push('trade-pact');
       tell(x.u, x.p, 'treaty.parting', vars(x, d, -1, { other: cap.name }), d, [settlementRef(x, d), settlementRef(x, cap)], 1);
       x.u.emit({ t: 'treaty', planet: x.p.id, pos: [d.pos[0], d.pos[1], d.pos[2]], ref: settlementRef(x, d), data: { a: r.a, b: r.b, kind: 'parting' } });
@@ -367,6 +451,17 @@ function secessionCheck(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   h.grievance = 0;
   h.why = {};
   h.famine = -1;
+}
+
+/** will the capital make war to keep a daughter that parted in peace? (its chief's temper and war party; the stronger) */
+function refuses(x: PCtx, cap: Settlement, d: Settlement): boolean {
+  const G = POLITICS;
+  if (cap.fallen >= 0) return false;
+  let ours = 0;
+  for (const st of x.ps.settlements) if (st.fallen < 0 && !st.band && st.polity === cap.polity) ours += popOf(x, st);
+  if (ours < popOf(x, d) * 1.2) return false;
+  const p = Math.min(G.refuseMax, Math.max(0, G.refuse + (leaderTrait(x, cap, TRAIT.aggression) - 0.3) * 1.2 + factionShare(cap, 'hawks') - 0.5 * factionShare(cap, 'doves')));
+  return hashFloat(cap.id, d.id, x.tick, worldSalt(x, 0x7ef)) < p;
 }
 
 // ───────────────────────────── friction and kin raids ─────────────────────────────
@@ -433,9 +528,12 @@ export function kinRaided(x: PCtx, from: Settlement, to: Settlement): void {
 // ───────────────────────────── views ─────────────────────────────
 
 /** for the inspector and the `polities` query: a settlement's grievance and its parts */
-export function grievanceView(x: PCtx, st: Settlement): { grievance: number; capital: number; why: Record<string, number> } | null {
+export function grievanceView(x: PCtx, st: Settlement): { grievance: number; capital: number; why: Record<string, number>; hard?: { kind: string; since: number; relieved: boolean; judged: boolean } } | null {
   const cap = capitalOf(x, st);
   if (!cap || !st.hist) return cap ? { grievance: 0, capital: cap.id, why: {} } : null;
-  return { grievance: st.hist.grievance, capital: cap.id, why: { ...st.hist.why } };
+  const h = st.hist;
+  // (second pass) a hard time in progress: famine or disaster, since when, and whether the capital has sent help
+  const hard = h.famine >= 0 ? { kind: h.hard === 'disaster' ? 'disaster' : 'famine', since: h.famine, relieved: h.aid >= h.famine - x.day, judged: h.judged } : undefined;
+  return { grievance: h.grievance, capital: cap.id, why: { ...h.why }, ...(hard ? { hard } : {}) };
 }
 

@@ -263,7 +263,7 @@ test('integration: in a heatwave an infant cools off at home, not on a swim of i
   assert.equal(tasks.camp ?? 0, 0, `infants camping out: ${JSON.stringify(tasks)}`);
 });
 
-test('integration: a default meteor whose crater fills with water over a town moves the town\'s heart to dry ground; the town stays', () => {
+test('integration: a crater that fills with water over a town moves the town\'s heart to dry ground; the town stays', () => {
   // (2026-10-20, the acceptance sessions, seed 4: the crater of a default-wrath meteor on Aru filled to a 5 m lake over
   // the cell that held 13 of its 15 buildings. The 'flood' discovery accident stamps `recent.flood`, the same key as the
   // abandonment timer, so the town lived 4.6 days in the lake; then it walked away — "Aru fell" — and its 31 people were
@@ -275,7 +275,11 @@ test('integration: a default meteor whose crater fills with water over a town mo
   const st = p.people.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
   sim.step(1440);
   const c0 = st.cell, name = st.name, n0 = p.people.members.get(st.id)?.length ?? 0;
-  must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: st.pos });
+  // (LIVING RELATIONSHIP, second pass, 2026-10-21: the default meteor bursts in the air now and digs no crater — the
+  // god's stone strikes the ground from wrath 0.5 up, god/disasters.ts AIRBURST_W — so the bowl it dug, 84 m across
+  // and 14 m deep at the heart, is dug here with the terrain brush; it fills from the town's spring as the crater did:
+  // 3.8 m of water at the old heart, the heart moved on the second day, _harness/scratch/living/relationship/live2/bowl.ts)
+  must(sim, { k: 'terrain.lower', pos: st.pos, radius: 84, strength: 14 });
   const told: string[] = [];
   for (let d = 0; d < 4; d++) {
     sim.step(1440);

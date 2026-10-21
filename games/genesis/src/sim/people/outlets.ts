@@ -4,14 +4,15 @@
 //              role's skill), age (an elder), heading a household with a roof over it (daily: statusDaily) — and from
 //              deeds: a successful hunt, a discovery, teaching, raising a building, a fulfilled prophecy (the
 //              RELATIONSHIP lane calls statusGain for its prophet)
-//   curiosity  rises from talk with someone who knows what they do not, watching a craft being worked, learning (being
-//              taught, books), a new place (exploring), an omen (RELATIONSHIP), a story at a festival (gatherings.ts)
+//   curiosity  rises from talk with someone who knows what they do not — or who brings the day's news (a hunt, a birth, a
+//              death, a find, a sign they lived through and the listener did not) — watching a craft being worked,
+//              learning (being taught, books), a new place (exploring), an omen (RELATIONSHIP), a story at a festival
 // Gains are added to the need directly (needs.ts integrates its decay lazily between an agent's turns).
 
 import type { PCtx } from './ctx.ts';
 import type { Settlement } from './state.ts';
 import { AgentFlag } from '../types.ts';
-import { NS, ROLE, SKILL, TASK } from './defs.ts';
+import { MEM, MEMK, NS, ROLE, SKILL, TASK } from './defs.ts';
 import { CURIO, NEED_N, STATUS } from './needs.ts';
 
 /** status a day from standing (each a share of the day's decay of 0.08: a leader is held high, a household head kept up) */
@@ -77,6 +78,37 @@ export function talkOutlet(x: PCtx, s: number, others: readonly number[]): void 
       if (A.know[o * kw + w] & ~A.know[s * kw + w]) { curiosityGain(x, s, 0.15); return; }
     }
   }
+  // (LAND round 5: and the day's news — in a town where everyone has long known the same crafts the talk was empty, and in
+  // the integrated 50-year runs up to 29 % of the adults sat with no curiosity at a year's end: integrate/out/alone-*)
+  for (const o of others) if (o !== s && newsFrom(x, o, s)) { curiosityGain(x, s, NEWS_GAIN); return; }
+}
+
+/** what one piece of news feeds curiosity (a talk tells one) */
+export const NEWS_GAIN = 0.08;
+
+/** memories that are news to tell: a hunt, a birth, a death, a find, a couple, a building raised, a sign, a wound, a
+ * trade, a voyage, a fight, a move, a prophecy come true, a pilgrimage, a healing, a gift */
+const NEWS = new Set<number>([
+  MEMK.hunted, MEMK.huntFeat, MEMK.birth, MEMK.death, MEMK.discovered, MEMK.partner, MEMK.built, MEMK.miracle,
+  MEMK.lightning, MEMK.injured, MEMK.traded, MEMK.sailed, MEMK.fought, MEMK.raided, MEMK.moved, MEMK.prophecy,
+  MEMK.pilgrimage, MEMK.omen, MEMK.healed, MEMK.gift,
+]);
+
+/** does agent o hold news for agent s: something o lived through in the last day that s has no memory of */
+export function newsFrom(x: PCtx, o: number, s: number): boolean {
+  const A = x.A;
+  for (let k = 0; k < MEM; k++) {
+    const i = o * MEM + k;
+    const kind = A.memKind[i];
+    if (!NEWS.has(kind) || x.tick - A.memTick[i] > x.day || A.memTick[i] > x.tick) continue;
+    let known = false;
+    for (let j = 0; j < MEM; j++) {
+      const q = s * MEM + j;
+      if (A.memKind[q] === kind && A.memA[q] === A.memA[i] && A.memTick[q] >= A.memTick[i] - x.day) { known = true; break; }
+    }
+    if (!known) return true;
+  }
+  return false;
 }
 
 /** a craft worked (work.ts, TASK.craft): those standing by watch it (curiosity), the maker's status for a fine piece */

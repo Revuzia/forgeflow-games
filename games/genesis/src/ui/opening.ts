@@ -460,7 +460,7 @@ export class Opening {
     else if (cur === 'fire' && now - this.curAt < 9000) next = 'fire';
     else next = 'rest';
     // (a night / day turn re-words the cold and the kindling whispers — not more often than every few seconds: at
-    // 100× a day passes in a breath)
+    // 1000× a day passes in a breath)
     const turned = (next === 'kindle' || next === 'night') && night !== this.curNight && now - this.renderedAt > 8000;
     const kindleLate = next === 'kindle' && cur === 'kindle' && !this.laterShown && this.kindleLate(pv);
     if (!force && cur === next && !this.pendingAck && !turned && !kindleLate) return;
@@ -612,7 +612,9 @@ export class Opening {
       };
       case 'rest': return {
         beat, line: 'Leave them. Come back in a hundred years.',
-        act: { label: 'let a century run', run: () => this.host.setSpeed(100) },
+        // (1000×: the time-lapse, a year in ~17 s and a century in ~half an hour — the old 100× it was written for;
+        // presets are ticks a second since the living-world pace, LIVING §1.1, and 100× now takes a century 4.8 hours)
+        act: { label: 'let a century run', run: () => this.host.setSpeed(1000) },
       };
     }
   }

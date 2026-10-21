@@ -158,8 +158,16 @@ function closeGathering(x: PCtx, st: Settlement, g: Gathering): void {
   const y = yearOf(x, g.from);
   if (L.told !== y && g.came.length >= 3) {
     L.told = y;
-    tell(x.u, x.p, `festival.${g.kind}`, vars(x, st, -1, { count: g.came.length }), st, [settlementRef(x, st)], 0);
+    // (a people without fire — sworn off it, or not keeping it yet — feasts without one: LIVING.md §9.1's note for LAND)
+    tell(x.u, x.p, `festival.${g.kind}${fireless(x, st) ? '.nofire' : ''}`, vars(x, st, -1, { count: g.came.length }), st, [settlementRef(x, st)], 0);
   }
+}
+
+/** st keeps no fire: fire-making or fire-keeping is taboo there, or it does not know how to keep a fire */
+export function fireless(x: PCtx, st: Settlement): boolean {
+  const make = x.rt.byId.get('fire-making'), keep = x.rt.byId.get('fire-keeping');
+  for (const k of st.culture.taboos) if (k === make || k === keep) return true;
+  return keep === undefined || !libHas(st, keep);
 }
 
 /** the gathering agent s of st is called to now (it is on, or begins within the walk there), or null — their own (a

@@ -10,6 +10,7 @@ import { PSYS, Particles, type FxEmitter } from '../fx/particles.ts';
 import { NightLights, type LightSource } from './nightlights.ts';
 import type { PlanetView } from '../../client/worldview.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
+import { TICKS_PER_SECOND_1X } from '../../sim/types.ts';
 import { Buildings } from './buildings.ts';
 import { Crowds } from './crowds.ts';
 import { Animals } from './animals.ts';
@@ -191,8 +192,10 @@ export class LifeLayer {
     if (this.lastTime >= 0) {
       const dt = Math.max(0, Math.min(0.25, ctx.time - this.lastTime));
       const dTick = tick - this.lastTick;
-      // 1x = 10 ticks per real second: the clock never runs faster than real time (limbs at 100x would blur)
-      if (dTick > 1e-6) this.animClock += Math.min(dt, dTick / 10 + 1e-3);
+      // seconds at 1x: 1x is TICKS_PER_SECOND_1X ticks per real second (LIVING §1.1 — one since the living-world pace,
+      // ten before: divided by the old ten, limbs cycled at a tenth of their speed at 1x under bodies walking 2 m/s, a
+      // moonwalk); never faster than real time (limbs at 100x would blur), frozen while the sim is paused
+      if (dTick > 1e-6) this.animClock += Math.min(dt, dTick / TICKS_PER_SECOND_1X + 1e-3);
     }
     this.lastTime = ctx.time;
     this.lastTick = tick;

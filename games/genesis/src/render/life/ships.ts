@@ -4,8 +4,8 @@
 //   building   the hull rises at the pad course by course (a clip line with welding sparks)
 //   fuelling   frost creeps over the tanks, vapour boils off the vents
 //   boarding   venting; the crew walk to the pad (they are agents, drawn by the crowds)
-//   pad        the countdown: venting thickens; the engines light in its last 40 % (an ignition flash, the plume
-//              held down, the ground cloud pouring out of the flame trench)
+//   pad        the countdown: venting thickens; the engines light about 1.2 s of 1× before its end (an ignition flash,
+//              the plume held down, the ground cloud pouring out of the flame trench)
 //   ascent     the analytic climb of the sim (transit.ts: up, bending east to orbit height) with the plume, Mach
 //              diamonds, the smoke column and trail, the exhaust's light on the ground; stages separate and tumble away,
 //              the escape tower and the payload fairing are jettisoned, strap-on boosters peel off
@@ -36,6 +36,7 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import type { PlanetView, WorldView } from '../../client/worldview.ts';
 import type { FieldName, ShipView } from '../../sim/types.ts';
+import { TICKS_PER_SECOND_1X } from '../../sim/types.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import { orbitOffset, spinAt, type D3 } from '../../client/orbits.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
@@ -528,8 +529,12 @@ const ASCENT_ARC = 0.35;
 /**
  * the engines light this far through the pad phase (the countdown, PAD_TICKS): about 1.2 s before lift-off at 1×, so
  * the ground cloud has poured out of the flame trench and the pad stands lit in its own fire when the clamps let go
+ * (1× is TICKS_PER_SECOND_1X ticks a second, LIVING §1.1; the fixed 0.6 — 12 ticks — was 1.2 s when 1× was ten ticks a
+ * second, and twelve seconds of a rocket burning on its clamps at one)
  */
-const IGNITE_AT = 0.6;
+export const IGNITE_AT = 1 - Math.min(0.4, (1.2 * TICKS_PER_SECOND_1X) / PAD_TICKS);
+/** the umbilicals let go a quarter of the hold-down before lift-off: after the engines light, as they always did */
+export const RELEASE_AT = 1 - 0.25 * (1 - IGNITE_AT);
 
 function rotY(v: ArrayLike<number>, a: number, out: D3 = [0, 0, 0]): D3 {
   const c = Math.cos(a), s = Math.sin(a);
@@ -699,6 +704,11 @@ export class ShipLayer {
   private resolution = new Vector2(1280, 720);
   private pixelRatio = 1;
   private lastTick = -1;
+  /**
+   * seconds of sim-paced motion (godfx.ts's FX clock): real seconds at 1× and never faster than real time, frozen while
+   * the sim is paused — a derelict's slow tumble reads the same at 1× and at 1000×
+   */
+  private fxClock = 0;
   /** 0..1: how much of the system view's overlay is shown (the orbit lines' visibility) */
   overlayVis = 0;
   /** drawn this frame */
@@ -859,10 +869,14 @@ export class ShipLayer {
    */
   update(view: WorldView, pose: CameraPose, planets: Map<number, ShipPlanetRef>, scene: Scene, time: number, dt: number, primary: number, shadows: boolean): void {
     const tick = view.renderTick;
-    if (this.lastTick >= 0 && tick < this.lastTick - 5) {
+    // (the render clock never runs backwards but for a rewind or a load — worldview.ts: it snaps back at once — so half
+    // a tick back is one; five ticks was half a second when 1× was ten ticks a second)
+    if (this.lastTick >= 0 && tick < this.lastTick - 0.5) {
       // a rewind: separations and wrecks of the undone future go
       for (const t of this.tracks.values()) { t.fired.clear(); this.build(t); t.samples.length = 0; }
     }
+    const dTick = tick - this.lastTick;
+    if (this.lastTick >= 0 && dTick > 1e-6) this.fxClock += Math.min(Math.max(0, Math.min(0.1, dt)), dTick / TICKS_PER_SECOND_1X + 1e-3);
     this.lastTick = tick;
     if (this.spaceGroup.parent !== scene) scene.add(this.spaceGroup);
     if (this.overlay.parent !== scene) scene.add(this.overlay);
@@ -1244,8 +1258,9 @@ export class ShipLayer {
         }
       }
       if (ph === 'stranded') {
-        // tumbling, dark
-        _q.setFromAxisAngle(_v3.set(0.3, 1, 0.2).normalize(), (tick * 0.004 + t.id) % (Math.PI * 2));
+        // tumbling, dark: 0.04 rad per second of sim-paced time (a turn in ~2.6 min at any speed; it was 0.004 rad per
+        // tick, the same 0.04 rad/s when 1× was ten ticks a second and a turn in 26 min — still — at one)
+        _q.setFromAxisAngle(_v3.set(0.3, 1, 0.2).normalize(), (this.fxClock * 0.04 + t.id) % (Math.PI * 2));
         up.applyQuaternion(_q); fwd.applyQuaternion(_q);
         u2.y = 0;
       }
@@ -1345,8 +1360,8 @@ export class ShipLayer {
     const shape = t.model.shape;
     if (shape === 'generation-ship') return { stage1: 0.55, boosters: 0.28, tower: 2, fairing: 0.68 };
     if (shape === 'orbiter') return { stage1: 0.45, boosters: 2, tower: 2, fairing: 0.62 };
-    // (the sim's climb is short — 40 ticks, four seconds at 1× — so the first stage burns most of it: the big plume and
-    // the smoke column are the launch; the upper stage takes it on into orbit)
+    // (the sim's climb is short — ASCENT_TICKS, 40 ticks: forty seconds at 1× — so the first stage burns most of it: the
+    // big plume and the smoke column are the launch; the upper stage takes it on into orbit)
     if (shape === 'rocket' && eraRank(t.era) < ERA.space) return { stage1: eraRank(t.era) < ERA.electric ? 2 : 0.62, boosters: 2, tower: 2, fairing: 2 };
     return { stage1: 0.64, boosters: 2, tower: 0.5, fairing: 2 };
   }
@@ -1454,7 +1469,9 @@ export class ShipLayer {
         // a separated part: its own ballistic arc in the body frame, tumbling
         const d = n.detached;
         const tau = Math.max(0, tick - d.t0);
-        const g = 1.6; // m per tick² (art-directed: stages fall away visibly within seconds at 1×)
+        // m per tick² (art-directed): the arc is in ticks like the climb it falls away from (a pure function of the tick,
+        // so a stepped capture shows it exactly), visibly apart within a few ticks of the separation
+        const g = 1.6;
         const p = _v3.copy(d.p).addScaledVector(d.v, tau).addScaledVector(d.up, -0.5 * g * tau * tau);
         n.pivot.position.copy(p);
         _q.setFromAxisAngle(d.axis, Math.min(2.4, d.spin * tau * tau * 0.5 + d.spin * tau * 6));
@@ -1496,7 +1513,7 @@ export class ShipLayer {
   private padRig(t: Track, s: ShipView, ref: ShipPlanetRef | null, ph: string, f: number): void {
     const want = !!ref && !!t.padDir && t.model.umbilicals.length > 0 && (ph === 'building' || ph === 'fuelling' || ph === 'boarding' || ph === 'pad' || (ph === 'ascent' && f < 0.15));
     if (!want) { if (t.rig) t.rig.visible = false; return; }
-    const released = ph === 'ascent' || (ph === 'pad' && f > 0.9);
+    const released = ph === 'ascent' || (ph === 'pad' && f > RELEASE_AT);
     const key = released ? 'r' : 'h';
     if (!t.rig || t.rig.userData.key !== key || t.rig.parent !== ref!.group) {
       if (t.rig) { t.rig.parent?.remove(t.rig); for (const c of t.rig.children) (c as Mesh).geometry?.dispose(); }

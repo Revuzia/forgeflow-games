@@ -280,10 +280,13 @@ export function farmTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
       if (!sowingTime(x, sp, fs.c) || fieldSite(x, sp, fs.c) < 0.15) continue;
       return at(fs.c, 180, 0, sp);
     }
-    // lay out a new field: the best-suited free ground the settlement has found
-    if (L.fields.length < fieldsWanted(x, st) && st.res && sowingTime(x, st.crop, st.cell)) {
+    // lay out a new field: the best-suited free ground the settlement has found, in its sowing window there (LAND round 5:
+    // the window was read at the town's own cell — where there are no seasons, sowing follows the soil's wetness, and the
+    // dry ground a town stands on never grew wet enough for rice: seed 7's town knew agriculture, kept 170-240 units of
+    // seed, named five farmers and laid out no field in eight years, with seven cells around it suiting rice — r5/fprobe.ts)
+    if (L.fields.length < fieldsWanted(x, st) && st.res) {
       const best = newFieldCell(x, st);
-      if (best >= 0) return at(best, 210, 0, st.crop);
+      if (best >= 0 && sowingTime(x, st.crop, best)) return at(best, 210, 0, st.crop);
     }
   }
   // tend a growing field (weeding, watering, scaring off birds): the one in the worst health, else one in turn

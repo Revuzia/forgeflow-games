@@ -62,9 +62,9 @@ import { settlementRef, vars } from '../people/util.ts';
 import { distM } from '../people/world.ts';
 import { BuildingFlag } from '../types.ts';
 import { godAct } from './belief.ts';
-import { hurtPeople, hurtHerds, shielded, stripPlants, wreckBuildings } from './harm.ts';
+import { hurtPeople, hurtHerds, onRoad, shielded, stripPlants, wreckBuildings } from './harm.ts';
 import { launch } from './projectiles.ts';
-import { currentWarning, currentWrath, harmScale, popWrath, pushWrath, wrathLaw } from './wrath.ts';
+import { WRATH_DEFAULT, currentWarning, currentWrath, harmScale, lethality, popWrath, pushWrath, wrathLaw } from './wrath.ts';
 import { beginAct, endAct } from './regard.ts';
 import { warningTicks, warningStart, warningTick, warningEnd, seenComing } from './precursors.ts';
 import { bearingDir, cellPos3, clamp, frame, herePos, moveBy, nearestSettlement, norm, placeName, r3, tangent } from './util.ts';
@@ -410,6 +410,22 @@ function triggers(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, re
   }
 }
 
+/**
+ * LIVING §3.7 (second pass): a god-sent stone below this wrath bursts in the air (no crater: the flash, the blast, fires
+ * and star iron); from it up — a "great" meteor, 0.6 — it strikes the ground as before. Nature's stones always strike.
+ */
+export const AIRBURST_W = 0.5;
+/** the stones from the sky that may burst in the air (a moon does not; a supervolcano's caldera is no stone) */
+const AIRBURSTS = new Set(['meteor', 'comet']);
+/**
+ * a blast's wounds kill one caught on the road with chance (blow − k0) × gain, at most cap × (L(w) / L(0.3))² — god/
+ * harm.ts hurtPeople `mortal`. Calibrated with `_harness/scratch/living/relationship/live2/meteor.ts` (the probe may
+ * set the fields before it builds a world): a warned town 30–300 m out on the roads at the blow loses a tenth to a
+ * quarter of its people, and the cap holds a town still near its heart (the tests' town, within 55 m in its first hour)
+ * to the same.
+ */
+export const BLAST_MORTAL = { k0: 0.1, gain: 2, cap: 0.25 };
+
 function impact(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, e: EffectorDef): void {
   const R = effR(d), I = effI(d);
   const pos = d.pos;
@@ -425,12 +441,27 @@ function impact(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, e: E
   // harm scales inside hurtPeople / wreckBuildings; nature's keeps its size)
   const ws = harmScale();
   const craterR = R * num(e, 'craterK', 1) * ws.R;
-  if (num(e, 'crater') > 0) crater(u, p, pos, sea ? craterR * 0.6 : craterR, num(e, 'crater') * Math.sqrt(I) * ws.L);
+  // (who is on the road when it falls: the crater's first blow breaks off what everyone near it was doing)
+  const road = num(e, 'shock') > 0 ? onRoad(p) : undefined;
+  // (LIVING §3.7, second pass: below AIRBURST_W the god's stone bursts in the air over its mark — the flash, the blast,
+  // fires and star iron, but no crater. At the default wrath a 14 m bowl at a town's heart filled with water within the
+  // hour and drowned 13 of its 15 standing houses two days later; a small stone does what Chelyabinsk and Tunguska did)
+  const airburst = AIRBURSTS.has(def.id) && num(e, 'crater') > 0 && !sea && ws.w !== null && ws.w < AIRBURST_W;
+  if (airburst) {
+    // (the ground is scorched, the trees thrown down and the roofs stove in under it, as a crater's blow would wreck
+    // them — people/people.ts onImpact's damageArea; the blow to people is the shock below: the ground's own blow,
+    // onImpact's harmArea, is a striking stone's)
+    stripPlants(p, pos, craterR, { tree: 0.7, shrub: 0.8, grass: 0.6, crop: 0.9 }, 0.9);
+    wreckBuildings(u, p, pos, R * num(e, 'craterK', 1) * 1.5, 1, d.kind);
+    u.emit({ t: 'impact', planet: p.id, pos: [...pos], a: craterR, b: 0, data: { kind: d.kind, airburst: 1 } });
+  } else if (num(e, 'crater') > 0) crater(u, p, pos, sea ? craterR * 0.6 : craterR, num(e, 'crater') * Math.sqrt(I) * ws.L);
   else u.emit({ t: 'impact', planet: p.id, pos: [...pos], a: R, b: I, data: { kind: d.kind } });
   if (sea && num(e, 'sea') > 0) waterImpulse(p, pos, R * 1.6, num(e, 'sea') * Math.sqrt(I), null, -1);
   const shockR = R * num(e, 'shockK', 2);
   if (num(e, 'shock') > 0) {
-    hurtPeople(u, p, pos, shockR, num(e, 'shock') * I * 0.75, DEATH.disaster, { fear: 0.4 });
+    // (those caught on the road by the blast may die of it — mortal, harm.ts: at the default wrath a tenth to a third of
+    // a warned town that had not got clear of it, instead of nobody; LIVING §3.9 second pass)
+    hurtPeople(u, p, pos, shockR, num(e, 'shock') * I * 0.75, DEATH.disaster, { fear: 0.4, salt: d.seed, mortal: { k0: BLAST_MORTAL.k0, gain: BLAST_MORTAL.gain, cap: BLAST_MORTAL.cap * Math.min(4, (ws.L / lethality(WRATH_DEFAULT)) ** 2), road } });
     wreckBuildings(u, p, pos, shockR, num(e, 'shock') * I * 0.9, d.kind);
   }
   if (num(e, 'kill') > 0) hurtHerds(u, p, pos, shockR, num(e, 'kill') * Math.min(1, I));
@@ -439,7 +470,8 @@ function impact(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, e: E
   // wrath left 65 % standing at the blow and its fire took the rest down to 45–55 % in ten days)
   if (num(e, 'fire') > 0 && p.airy) igniteArea(u, p, pos, R * num(e, 'fireK', 1.5) * ws.R, clamp(num(e, 'fire') * ws.B, 0.05, 1));
   if (num(e, 'dust') > 0 && p.airy) addDust(u, p, num(e, 'dust') * Math.sqrt(I));
-  const ej = Math.round(num(e, 'ejecta') * Math.min(3, Math.sqrt(I)) * ws.L);
+  // (a burst in the air throws up no ejecta)
+  const ej = airburst ? 0 : Math.round(num(e, 'ejecta') * Math.min(3, Math.sqrt(I)) * ws.L);
   for (let k = 0; k < ej; k++) {
     const b = hashFloat(d.seed, k, 0xe1ec) * Math.PI * 2;
     const dist = R * (1.6 + 2.6 * hashFloat(d.seed, k, 0xe1ed));

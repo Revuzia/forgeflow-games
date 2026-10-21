@@ -154,6 +154,8 @@ export interface DerivedAnimal {
   base: number;
   parent: number;
   born: number;
+  /** LIVING CONTENT r2: a real kind the god brought to this world (content.animal), not one born of another here */
+  god?: 1;
 }
 
 /** long-term ecology of a planet (CONTRACT §10) */

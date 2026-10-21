@@ -998,6 +998,139 @@ columns, no `prophet.call` / `place.sacred`, no warning, no shelter task, no epi
 `npm run check` (2026-10-14 08:00, `out/check-final.log`): detban 137 files clean, typecheck clean, 375 tests — 371
 pass, 0 fail, 2 skipped (the throughput floors: overloaded machine), 2 todo (hooks H1 and H4).
 
+### 3.10 Second pass (RELATIONSHIP lane, 2026-10-21; probes and logs in `_harness/scratch/living/relationship/live2/`, `out2/`)
+The integrated acceptance (`_harness/scratch/living/acceptance.json`, §3.7 meteor row) left one RELATIONSHIP target
+not met: the default meteor killed 0.4 % of the town against 10–35 %. Measured on this tree first (`live2/meteor.ts`,
+the integration sessions' town: n = 64, 30 bronze-age people warmed a day, the meteor cast on the centre at the law's
+wrath, 8 seeds; `out2/meteor-before2-*.json` on `base2/`, the tree without this pass):
+- **Nobody died, by construction.** The blast peaks at 1.2 × 0.75 × L(0.3) × 1.4 = 0.76 of a body at its heart, and a
+  death needs a blow past what the body has left. At the blow (the 36-tick warning, then the 24-tick fall) the warned
+  town was 69–669 m out on the roads, 40–93 % of it still inside the 218 m blast.
+- **The crater drowned the town.** At the default wrath the stone dug a 14 m bowl, 84 m across, at the town's heart. Next
+  to the town's water it filled within the hour (7 m of water), and two days later the flood rule ruined the houses
+  standing in it (13 of 15 on seed 1). On 3 of 8 worlds the heart moved (the integration fix, `settlement.ts moveHeart`).
+  By day 10, 35–100 % of the buildings stood (mean 72 %).
+
+**Changes** (`god/disasters.ts impact`, `god/harm.ts hurtPeople`, `god/precursors.ts`):
+- **A burst in the air.** Below `AIRBURST_W` = 0.5, a god-sent meteor or comet bursts over its mark, as small stones do
+  (Chelyabinsk, Tunguska). It gives the flash, the shock, the fires and star iron. It digs no crater and throws up no
+  ejecta. The ground under it is scorched and its trees thrown down. Roofs are stove in as the crater's blow did it
+  (`wreckBuildings` at 1.5 × the crater radius, B(w)). The `impact` event carries `data.airburst = 1`. From wrath 0.5
+  up ("a great meteor") it strikes the ground and digs its crater as before. Nature's stones always strike.
+- **Caught on the road.** Someone on the road when the blast comes (`TASK.evacuate` or `TASK.flee` as the act begins,
+  `onRoad`) is thrown and struck. A blow k kills them with chance min(cap, 2 (k − 0.1)), where cap = 0.25 × (L(w) /
+  L(0.3))². The draw is the person's own, salted with the disaster's seed. Those at home or at work take the blow as
+  before. The full-wrath stone gives no warning, so nobody is on the road and its lethality is unchanged.
+  - The tests' town (n = 20) is still within 55 m of its heart in its first hour. With the crater's own blow added to
+    the shock (the first form of the burst), it lost 77–83 %. With the shock alone and the cap, it loses 13–27 %
+    (`live2/tmeteor.ts`).
+  - Without the salt, every town of the same ids lost the same people.
+- **The streak.** The meteor is seen 36 minutes before the blow: 12 ticks of warning, then the 24 of its fall (it was
+  36 + 24). An hour let the warned town walk clear. Calibration over the 8 worlds, killed at the blow:
+  - warning 0, no cap: 23–60 %;
+  - warning 12, gain 1.5, no cap: 10–33 %;
+  - warning 12, gain 2, cap 0.25: final, below.
+
+**Measured** (8 seeds, `out2/meteor-before2-*`, the final code `out2/meteor-final.log`):
+
+| default meteor (target) | before | after |
+|---|---|---|
+| killed at the blow (10–35 %) | 0 on 8 of 8 | 10–28 %, mean 17.9 % |
+| killed by day 10 | 0–3.1 % | 10–31 %, mean 18.3 % |
+| buildings standing after the blow (≥ 60 %) | 75–76 % | 70–76 % |
+| … on day 10 | 35–100 %, mean 72 % | 67–100 %, mean 82 % |
+| fallen (never) | 0 of 8 (3 hearts moved off the crater lake) | 0 of 8 (no crater, no heart moved) |
+| crater at the heart | −14.1 m on every world | none |
+| new buildings within 10 days | 2–10 | 5–11 on every world |
+| streak before the blow (≥ 20 min) | 60 min | 36 min |
+
+Between the blow and day 3 the meteor's fire still burns part of a town (seed 3: 14 → 5 standing, rebuilt to 14 by
+day 10). That is the fire model's work on wooden towns, and nobody fights fires.
+
+**Seed-bound.** `meteor.test.ts` is cast at wrath 1: no warning, nobody on the road, crater path unchanged.
+CONTENT's `sb-meteor-full.ts` (every assertion of the test, seeds 1–12) holds on 5 of 12 on `base2/` and on 5 of 12 now,
+the same seeds (2, 4, 6, 10, 12; `out2/sb-meteor-base2.log`, `out2/sb-meteor-live3.log`). The test's seed 10 holds on
+both. A first form of the road rule that struck everyone hurt, at every wrath, held on 1 of 12 (`out2/sb-meteor-live1.log`:
+21–28 of 31 dead at wrath 1). It was dropped, which is why the rule asks who is on the road.
+`tests/living-integration.test.ts` ("a crater that fills with water over a town moves the town's heart") cast a default
+meteor to make its crater lake. The default meteor digs none now, so the test digs the same bowl with `terrain.lower`
+(84 m, 14 m). It fills from the town's spring (3.8 m at the old heart), the heart moves on day 2, 31 of 32 live
+(`live2/bowl.ts`). Every assertion of the test is unchanged.
+
+Tests (`tests/living-relationship.test.ts`, both fail on `base2/`):
+- "the default meteor bursts in the air …": the `impact` event has `airburst`, there is no crater at the heart, the
+  streak is ≥ 20 min with the town on the roads, 0 < killed ≤ 35 %, standing ≥ 60 % and < 100 %, and a 0.6 meteor digs
+  a crater.
+- "a blast kills one caught on the road …": a flat 0.5 blow kills exactly the people in the `road` set. With `TASK.evacuate`
+  and a cap of 0.25, between 1 and half die.
+
+**The survivable table on this tree** (`rel2.ts lethality`, the §3.9 probe re-run with fresh towns: n = 64, 30 bronze-age
+people warmed an hour, seeds 20261008, 7, 1234, 1; `out2/rel-lethality-p2{a,b}.json`). The meteor row is the new code
+(with its ejecta, dropped since; `out2/meteor-final.log` is the final code). Every other row runs code this pass did
+not touch, so it shows what the lanes since 2026-10-14 left:
+
+| cast (target) | killed at the cast's end: mean (max) | by day 10 | ruined | the town on day 10 |
+|---|---|---|---|---|
+| meteor (10–35 %, ≥ 60 % standing) | 24.2 % (26.7 %) | 24.2 % | 35 % (40 %) | standing, 22–27 people |
+| volcano (≤ 15 %) | 0 | 1.7 % (3.3 %) | 100 % (lava) | left on day 4 and founded anew nearby with all its people (seed 1234: "Reis by the Lake", `live2/dbg-volc.ts`) |
+| drought (≤ 10 %) | 0 | 0.8 % (3.3 %) | 13 % | standing |
+| lightning sigil (1–3 struck) | 0.8 % (3.3 %) | 0.8 % | 10 % | standing |
+| falling flame (≤ 20 %) | 0 | 0.8 % (3.3 %) | 10 % | standing |
+| tornado (≤ 20 %) | 9.2 % (16.7 %) | 9.2 % | 0 | standing |
+| firestorm (≤ 30 %) | 4.2 % (6.7 %) | 4.2 % | 23 % | standing |
+| quake / flood / hurricane (≤ 15 %) | 0 | 0 | 0 | standing |
+| plague (≤ 25 % over its course) | 0 in its first 3 days | **33.3 % on all 4** (26.7 % on 2026-10-14) | — | standing, 21–24 people |
+
+**Short of target: the plague.** Its toll is the disease model's, not the wrath's. The god's plague seeds L(w) of its
+cases a round, but in a town of 30 everyone catches it. A case turns grave by the person's own frailty draw,
+`life/disease.ts grave`: `hashFloat(id, disease)` < case fatality × relief. That draw holds no world seed, so towns
+whose people share ids lose the same people: exactly 8 of 30 on every world on 2026-10-14, and exactly 10 of 30 now.
+The lever sits in `life/disease.ts`, which no lane of §6.2 owns. The god can still save them: the plague raises a healing
+prayer, and the mending sigil answers it.
+
+**§3.8 re-measured on this tree.** Two probes:
+- the lane's own fixtures on the tests' town (`rel2.ts prayer`, `rel2.ts influence`, n = 20; `out2/rel-prayer.json`,
+  `out2/rel-influence.json`);
+- the integration's god sessions on the n = 64 town of 8 seeds (`live2/god-rel.ts`, a copy of `integrate/god.ts`;
+  `out2/god-final-<seed>.json`).
+
+"2026-10-14" is §3.9's column.
+
+| metric (target) | 2026-10-14 | now |
+|---|---|---|
+| praying + worshipping, 20 quiet days (≥ 2 %) | 0.032 | **0.004** |
+| … 3 days after a tornado (≥ 8 %) | 0.111 | **0.070** |
+| worship from prayer and worship (≥ 50 % of the pool) | 0.926 | 0.708 |
+| prophet, 3 fulfilled: credibility (≥ 0.7) | 0.705 | 0.705 (fixture); 0.705 on all 8 (sessions) |
+| … worship by day 6 vs nothing (≥ +60 %) | ×21 | ×29 (213.9 vs 7.4); sessions 173–269 vs 0 |
+| … praying on day 6 (≥ 3 %) | 4.4 % | **1.6 %** (fixture); **1.7–3.8 %, mean 2.5 %** (sessions; 3 of 8 ≥ 3 %) |
+| … loyalty (+0.2), mean trust (≤ 0.9) | +0.62, 0.880 | +0.56, 0.781; sessions +0.47–0.68, trust 0.76–0.84 (all 8 ≤ 0.9: the integration's `regard.ts rise` taper) |
+| 3 failed: credibility (≤ 0.15), preaching (≤ 25 % as effective) | 0, 15.7 % | 0, 17.4 % (0.348 vs 1.997 an hour) |
+| storm over the town: in or sheltering (≥ 50 %), outdoor work below the control (≥ 60 %) | — | sessions 26–96 %, mean 61 %; 43–100 %, mean 72 % |
+| drought, every prayer answered vs ignored: trust / loyalty on day 6 | — | 0.61–0.75 / 0.07–0.29 vs 0.00–0.01 / 0.00–0.01; thirst dead ≤ 3.3 % |
+| comet read, its meaning made true vs contradicted: credibility / trust / loyalty on day 4 | — | 0.475 / 0.25–0.31 / 0.17–0.19 vs 0.05 / 0.21–0.24 / 0.07–0.09 |
+| default meteor (10–35 % dead) | — | sessions: 10–31 %, mean 18 %; never fallen; fear on day 10 0.38–0.44 |
+| persecution, disloyal ruler (≥ 1 within 10 days in ≥ 6 of 8) | 7 of 8 | 7 of 8 (`out2/rel-persecution.log`) |
+
+The prayer shares fell, and the 2026-10-14 numbers were not what they seemed. The integration fixed evening worship
+(`relationship.ts relDecide`, 2026-10-20): infants under four no longer pray or worship, and every adult gets the whole
+window from just before sunset to the end of dusk. Its own trace found that infants had made up the town's worship:
+idle, they decided every few minutes, while 4 % of the adults came where the formula asks 18 %. So the lane's 3.2 % and
+4.4 % were mostly infants.
+
+At the §3.2 formula the targets are out of reach in an ordinary town. Attendance is 0.5 faith + 0.3 loyalty, for 30–60
+minutes:
+- At the quiet town's faith of 0.22, that is 0.14 × 45 / 1440 ≈ 0.4 % of a person's day.
+- At the prophet's town's faith of 0.9 and loyalty of 0.6, adults spend about 2.2 % of the day at worship, and children
+  half that.
+
+Prayer in peace stays under the pull of work. The 2 % and 3 % rows need either a faithful town or more devotion than
+§3.2 gives. That is a calibration for the lead: a short daily prayer at home, or longer worship where a prophet leads it.
+This pass leaves it alone.
+
+`npm run check` (2026-10-21 02:20, `out2/check-final.log`): detban 145 files clean, typecheck clean, 483 tests — 481
+pass, 0 fail, 2 skipped (the throughput floors skip themselves on an overloaded machine: load average 13).
+
 ---
 
 ## 4. CONTENT — materials, plants and real animals

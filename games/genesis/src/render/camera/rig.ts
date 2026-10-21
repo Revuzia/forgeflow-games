@@ -9,6 +9,7 @@
 // smoothly. Orientation slerps; FOV lerps. Ease-in-out over `duration`.
 
 import type { WorldView } from '../../client/worldview.ts';
+import { TICKS_PER_SECOND_1X } from '../../sim/types.ts';
 import { qRotateInv, type D3 } from '../../client/orbits.ts';
 import { copyPose, newPose, type CameraPose } from '../frame.ts';
 import { CAMERA_NOW, qSlerp, type CameraController, type CameraMode, type InputState } from './common.ts';
@@ -101,13 +102,14 @@ export class CameraRig {
     // the world under the camera was unmade (world.erase, a moon that struck): hold where the eye was — the collapse,
     // the flash and the debris play in front of it (render/fx/worlds.ts) — then rise over the nearest world left
     // (held on the slower of the two clocks, like the collapse itself: seven seconds of real time and of the world's
-    // time — paused, the eye waits with the frozen debris; a drag or the wheel takes the camera back at once)
+    // time — seconds at 1×, TICKS_PER_SECOND_1X ticks each — paused, the eye waits with the frozen debris; a drag or the
+    // wheel takes the camera back at once)
     const dp = this.desired.planet;
     if (dp >= 0 && view.snapshots > 0 && !view.planet(dp) && view.planets.length) {
       this.goneFor += dt;
       if (this.goneTick < 0) this.goneTick = view.renderTick;
       const touched = input.dragL[0] || input.dragL[1] || input.dragR[0] || input.dragR[1] || input.wheel;
-      if (!touched && (this.goneFor < 7 || view.renderTick - this.goneTick < 70)) { if (this.blendT >= 1) copyPose(this.pose, this.desired); return this.pose; }
+      if (!touched && (this.goneFor < 7 || view.renderTick - this.goneTick < 7 * TICKS_PER_SECOND_1X)) { if (this.blendT >= 1) copyPose(this.pose, this.desired); return this.pose; }
       this.goneFor = 0;
       this.goneTick = -1;
       this.modes.backToOrbit();

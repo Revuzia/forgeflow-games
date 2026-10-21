@@ -7,14 +7,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
-import { town, twoTowns, must } from './helpers/god.ts';
+import { town, twoTowns, must, standing } from './helpers/god.ts';
 import { GODS, TASK } from '../src/sim/people/defs.ts';
 import { AgentFlag2 } from '../src/sim/types.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
 import { distM } from '../src/sim/people/world.ts';
 import { sacredAnimal } from '../src/sim/people/culture.ts';
 import { lethality, reach } from '../src/sim/god/wrath.ts';
-import { spawnDisaster } from '../src/sim/god/disasters.ts';
+import { spawnDisaster, AIRBURST_W } from '../src/sim/god/disasters.ts';
+import { hurtPeople, onRoad } from '../src/sim/god/harm.ts';
 import { PRAYER_KINDS } from '../src/sim/god/prayers.ts';
 import { srel } from '../src/sim/god/regard.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
@@ -340,6 +341,65 @@ test('wrath: a law at 0.3 by default; the meteor at the law leaves the town stan
   assert.ok(atLaw.killed <= 0.35, `meteor at the law: ${(atLaw.killed * 100).toFixed(0)} % killed (today 100 %)`);
   assert.equal(atLaw.fallen, false, 'the town stands and rebuilds around the crater');
   assert.ok(atOne.killed >= 0.8, `meteor at wrath 1: ${(atOne.killed * 100).toFixed(0)} % killed`);
+});
+
+test('wrath: the default meteor bursts in the air — no crater to drown the town, roofs stove in, and of a warned town on the roads a few die; from wrath 0.5 it strikes and digs one', () => {
+  // (LIVING §3.9, second pass: the default meteor's 14 m crater filled with water within the hour and drowned the heart of
+  // 3 of the 8 acceptance towns, and its warned town, out on the roads, lost nobody — against the §3.7 table's 10–35 %)
+  const { sim: s0, st } = town();
+  const bytes = s0.save();
+  const cast = (w?: number) => {
+    const sim = Sim.load(bytes);
+    const p = sim.u.planets[0], ps = p.people, A = ps.agents;
+    const ids = (ps.members.get(st.id) ?? []).map((s) => A.id[s]);
+    const c0 = p.cellAt(st.pos), z0 = p.f.surface[c0];
+    const b0 = standing(sim, st.id);
+    const r = must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: st.pos, ...(w === undefined ? {} : { wrath: w }) });
+    const d = sim.u.god.disasters.find((q) => q.id === r.created![0].id)!;
+    const warned = d.st.Wn ?? 0;
+    const impacts: Record<string, unknown>[] = [];
+    let onRoad = 0;
+    for (let t = 0; t < 120; t++) {
+      if (sim.u.god.disaster(d.id)) for (const s of ps.members.get(st.id) ?? []) if (A.task[s] === TASK.evacuate) onRoad = Math.max(onRoad, 1);
+      sim.step(1);
+      for (const e of sim.drainEvents()) if (e.t === 'impact' && (e.data as { kind?: string } | undefined)?.kind === 'meteor') impacts.push(e.data as Record<string, unknown>);
+    }
+    const killed = ids.filter((id) => A.slotOf(id) < 0).length / ids.length;
+    return { killed, dz: p.f.surface[c0] - z0, standing: standing(sim, st.id) / b0, fallen: ps.settlement(st.id)!.fallen >= 0, warned, impacts, onRoad };
+  };
+  const law = cast();
+  assert.ok(law.impacts.length === 1 && law.impacts[0].airburst === 1, `a burst in the air: ${JSON.stringify(law.impacts)}`);
+  assert.ok(Math.abs(law.dz) < 0.01, `no crater at the town's heart (${law.dz.toFixed(2)} m)`);
+  assert.ok(law.warned + 24 >= 20 && law.onRoad, `seen coming ${law.warned + 24} minutes before the blow, the town out on the roads`);
+  assert.ok(law.killed > 0 && law.killed <= 0.35, `of the warned town ${(law.killed * 100).toFixed(0)} % died`);
+  assert.ok(law.standing >= 0.6 && law.standing < 1, `roofs stove in, the town standing: ${(law.standing * 100).toFixed(0)} %`);
+  assert.equal(law.fallen, false);
+  const great = cast(0.6);
+  assert.ok(AIRBURST_W <= 0.6 && great.impacts.every((e) => e.airburst === undefined), 'a great meteor strikes the ground');
+  assert.ok(great.dz < -5, `and digs a crater (${great.dz.toFixed(1)} m)`);
+});
+
+test('wrath: a blast kills one caught on the road with a chance that grows with the blow, at most its cap; those at home take the blow as before', () => {
+  const { sim, st } = town();
+  const p = sim.u.planets[0], ps = p.people, A = ps.agents;
+  const all = (ps.members.get(st.id) ?? []).slice();
+  const road = new Set(all.filter((_, i) => i % 2 === 0));
+  const ids = all.map((s) => A.id[s]);
+  const roadIds = new Set([...road].map((s) => A.id[s]));
+  // a flat blow of 0.5 to everyone: past what nobody's body can bear only on the road, and there with certainty
+  hurtPeople(sim.u, p, st.pos, 5000, 0.5, undefined, { flat: true, mortal: { k0: 0.1, gain: 100, cap: 1, road } });
+  const dead = ids.filter((id) => A.slotOf(id) < 0);
+  assert.ok(dead.length === roadIds.size && dead.every((id) => roadIds.has(id)), `the dead are those on the road (${dead.length} of ${roadIds.size})`);
+  // without a set: whoever is fleeing now (TASK.evacuate / flee); the cap holds the chance down
+  const { sim: s2, st: t2 } = town();
+  const p2 = s2.u.planets[0], A2 = p2.people.agents;
+  const m2 = (p2.people.members.get(t2.id) ?? []).slice();
+  for (const s of m2) A2.task[s] = TASK.evacuate;
+  const n0 = m2.length;
+  assert.equal(onRoad(p2).size, n0, 'onRoad: everyone fleeing');
+  hurtPeople(s2.u, p2, t2.pos, 5000, 0.5, undefined, { flat: true, mortal: { k0: 0.1, gain: 100, cap: 0.25 } });
+  const died = m2.filter((s) => !A2.alive[s]).length;
+  assert.ok(died >= 1 && died <= Math.ceil(n0 * 0.5), `capped at a quarter: ${died} of ${n0}`);
 });
 
 test('warnings: a volcano rumbles for at least 12 hours, the town is ordered out past the danger and the view says so', () => {

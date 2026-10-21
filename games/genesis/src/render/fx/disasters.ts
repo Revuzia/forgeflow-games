@@ -44,7 +44,7 @@
 
 import { BufferAttribute, BufferGeometry, Group, Matrix4, Mesh, SphereGeometry, Vector3, type IUniform, type MeshStandardMaterial } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
-import type { DisasterView, SimEvent } from '../../sim/types.ts';
+import { TICKS_PER_SECOND_1X, type DisasterView, type SimEvent } from '../../sim/types.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { DECAL, decal, type Decal, type DecalPass } from './decals.ts';
 import { SYS, type EmitterDef, type Vfx } from './vfx.ts';
@@ -449,8 +449,11 @@ export class DisasterFx {
           bo.u.uW.value = r * 0.9;
           const trailLen = Math.min(4000, (P.alt0 ?? 24000) / down) ;
           this.em(st, 'plasma', { sys: SYS.plasma, x: head.x, y: head.y, z: head.z, ax: dir.x, ay: dir.y, az: dir.z, size: r * 0.8, life: 0.6, count: 160, p0: Math.min(sAlong, r * 40), r: 1, g: 0.7, b: 0.35, power: k }, ctx);
-          // the smoke trail it leaves, along its path
-          this.em(st, 'trail', { sys: SYS.trail, x: g.x, y: g.y, z: g.z, ax: -dir.x, ay: -dir.y, az: -dir.z, size: r * 2.2, life: 25, count: Math.round(420 * q), p0: sAlong, p1: Math.max(sAlong + 1, trailLen), p2: Math.max(50, (st.altRate === 0 ? 1000 : -st.altRate) * 10 / down), r: 0.5, g: 0.47, b: 0.44, power: k }, ctx);
+          // the smoke trail it leaves, along its path (p2: its speed along the path in m per second at 1× — altRate is m per
+          // tick, TICKS_PER_SECOND_1X ticks a second at 1×; a puff's age is geometric, (s − p0) / p2, so it does not
+          // pop on a pause or blink out at 1000×: above 1× the trail keeps its 1× look. Times the old ten, the whole
+          // 4 km read a tenth of its age at 1×: hot, thin and orange to the top)
+          this.em(st, 'trail', { sys: SYS.trail, x: g.x, y: g.y, z: g.z, ax: -dir.x, ay: -dir.y, az: -dir.z, size: r * 2.2, life: 25, count: Math.round(420 * q), p0: sAlong, p1: Math.max(sAlong + 1, trailLen), p2: Math.max(50, (st.altRate === 0 ? 1000 : -st.altRate) * TICKS_PER_SECOND_1X / down), r: 0.5, g: 0.47, b: 0.44, power: k }, ctx);
           // the ground lit from above as it comes, the light sweeping along under the head and swelling as it nears
           const hu = _w.copy(head).normalize();
           const gh = groundAt(pv, hu, _v, false);

@@ -97,6 +97,9 @@ export interface HuntParty {
   lastTry: number;
   /** head killed so far on this trip */
   kills: number;
+  /** what was left of a kill too big for the hunters there to carry, by item id, and where and when (people/hunt.ts:
+   * they come back for it while it keeps) */
+  cache?: { c: number; pos: [number, number, number]; goods: Record<string, number>; t: number };
 }
 
 /** a crop field on the seasonal clock (people/crops.ts) */
@@ -141,6 +144,8 @@ export interface Gathering {
 export interface LandState {
   ledger: LedgerYear[];
   party: HuntParty | null;
+  /** further parties out at once (people/hunt.ts PARTIES_MAX; absent while there is at most one — older saves) */
+  more?: HuntParty[];
   fields: FieldState[];
   gatherings: Gathering[];
   /** the year index of the last festival of each kind ('harvest', 'winter') */

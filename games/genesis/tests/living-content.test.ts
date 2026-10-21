@@ -10,8 +10,8 @@ import { Sim } from '../src/sim/sim.ts';
 import { makeCtx, type PCtx } from '../src/sim/people/ctx.ts';
 import type { Herd } from '../src/sim/people/state.ts';
 import { readSave, SaveWriter, SAVE_MAJOR } from '../src/sim/core/serialize.ts';
-import { animalDef, guildTargets, habitatFit, herdArrivals, landGame, reindexHerds, spawnHerd } from '../src/sim/life/herds.ts';
-import { ecoDaily, isoDaysOf, newHome, preyOf, speciate } from '../src/sim/life/ecology.ts';
+import { animalDef, guildTargets, habitatFit, herdArrivals, landGame, landHunter, MAX_LAND_HERDS, reindexHerds, spawnHerd } from '../src/sim/life/herds.ts';
+import { ecoDaily, FORM_GAP_YEARS, ISO_RANGE_M, isoDaysOf, LINEAGE_YEARS, lineageRested, mayDiverge, newHome, preyOf, speciate } from '../src/sim/life/ecology.ts';
 import { animalWord, IDS_14 } from '../src/sim/life/fauna.ts';
 import { plantYield, seasonPhase } from '../src/sim/life/plants.ts';
 import { availability, itemIdx } from '../src/sim/people/resources.ts';
@@ -294,8 +294,11 @@ test('content: lentils feed the soil they grow in', () => {
 
 // ───────────────────────────── ecology ─────────────────────────────
 
-/** a closed sandbox world (no herds drifting in) with one herd of `species` at a cell chosen by `pick` */
-function lone(species: string, pick: (x: PCtx, c: number) => boolean, seed = 5): { sim: Sim; x: PCtx; h: Herd } {
+/**
+ * A closed sandbox world (no herds drifting in) with one herd of `species` at a cell chosen by `pick`; with `rest`, the
+ * rest of its kind too: a herd of it in its own country (not a new home) at least 5 km away, beyond ISO_RANGE_M.
+ */
+function lone(species: string, pick: (x: PCtx, c: number) => boolean, seed = 5, rest = false): { sim: Sim; x: PCtx; h: Herd; kin: Herd | null } {
   const sim = world(24, seed);
   const p = sim.u.planets[0];
   p.people.eco.immigration = false;
@@ -309,12 +312,25 @@ function lone(species: string, pick: (x: PCtx, c: number) => boolean, seed = 5):
   assert.ok(at >= 0, 'a place for it');
   const h = spawnHerd(x, sp, at, 10);
   h.inv = -1;
-  return { sim, x, h };
+  let kin: Herd | null = null;
+  if (rest) {
+    let home = -1, hb = 0.3;
+    for (let c = 0; c < p.count; c += 2) {
+      if (distM(p, cellPos(p, c), cellPos(p, at)) < Math.max(ISO_RANGE_M * 1.5, 5000)) continue;
+      if (newHome(x, { cell: c, envT: p.s.tempMean[c] } as Herd, animalDef(x, sp))) continue;
+      const v = habitatFit(x, sp, c);
+      if (v > hb) { hb = v; home = c; }
+    }
+    assert.ok(home >= 0, 'its own country far away');
+    kin = spawnHerd(x, sp, home, 10);
+    kin.inv = -1;
+  }
+  return { sim, x, h, kin };
 }
 
 test('ecology: a lineage becomes a species only after 6-12 years cut off, and only in a home its kind is not made for', () => {
   // in its own country: never, however long
-  const home = lone('deer', (x, c) => { const t = x.p.s.tempMean[c]; return t > 2 && t < 18 && ['forest', 'grassland'].includes(x.c.biomes.list[x.p.f.biome[c]].id); });
+  const home = lone('deer', (x, c) => { const t = x.p.s.tempMean[c]; return t > 2 && t < 18 && ['forest', 'grassland'].includes(x.c.biomes.list[x.p.f.biome[c]].id); }, 5, true);
   // the temperature it has lived in (its envT follows the cell's over the years): here, the cell's mean
   home.h.envT = home.x.p.s.tempMean[home.h.cell];
   const need = isoDaysOf(home.x, home.h.species);
@@ -325,7 +341,7 @@ test('ecology: a lineage becomes a species only after 6-12 years cut off, and on
   for (let d = 0; d < 20; d++) ecoDaily(makeCtx(home.sim.u, home.sim.u.planets[0]));
   assert.equal(home.sim.u.planets[0].people.species.length, 0, 'no new species at home');
   // in a new home (a climate warmer than its kind's comfort): once the years are served
-  const away = lone('deer', (x, c) => x.p.s.tempMean[c] > 23);
+  const away = lone('deer', (x, c) => x.p.s.tempMean[c] > 23, 5, true);
   away.h.envT = away.x.p.s.tempMean[away.h.cell];
   assert.equal(newHome(away.x, away.h, animalDef(away.x, away.h.species)), true);
   const needA = isoDaysOf(away.x, away.h.species);
@@ -350,6 +366,159 @@ test('ecology: the last herd of a kind becoming a new species is not chronicled 
   ecoDaily(makeCtx(sim.u, p));
   assert.ok(!sim.drainEvents().some((e) => e.t === 'extinction'), 'no extinction notice');
   assert.ok(!sim.u.chronicle.some((e) => e.kind === 'extinction'));
+});
+
+// LIVING CONTENT r2 (§4.5): the integrated 50-year runs made 0.67 new kinds a world-year, and the real kinds were gone
+// by year 50 — every isolated herd of a kind anywhere was 'one group' by its iso count alone, the last herds of a kind
+// counted as cut off, and forms split into forms of forms ('Great little crag hare', depth 4).
+
+test('ecology r2: the last herds of a kind are the kind itself — cut off from nothing, they never become another', () => {
+  const { sim, x, h } = lone('deer', (q, c) => q.p.s.tempMean[c] > 23);
+  const p = sim.u.planets[0];
+  h.envT = p.s.tempMean[h.cell];
+  assert.equal(newHome(x, h, animalDef(x, h.species)), true, 'a home its kind is not made for');
+  h.iso = isoDaysOf(x, h.species) + 40; h.drift = 1.5;
+  for (let d = 0; d < 24; d++) sim.step(1440);
+  assert.equal(p.people.species.length, 0, 'no new kind');
+  assert.ok(p.people.herds.some((o) => o.species === x.c.animals.idx('deer')), 'the deer are still deer');
+});
+
+test('ecology r2: a new kind takes only the herds about it; a population as long cut off elsewhere stays what it is', () => {
+  const { sim, x, h, kin } = lone('deer', (q, c) => q.p.s.tempMean[c] > 23, 5, true);
+  const p = sim.u.planets[0];
+  const near = spawnHerd(x, h.species, h.cell, 5);
+  near.inv = -1;
+  // cut off for exactly as long (the iso count alone made them one group), but 5 km and more apart
+  h.iso = 900; near.iso = 900; kin!.iso = 900;
+  const from = h.species;
+  const idx = speciate(makeCtx(sim.u, p), h);
+  assert.ok(idx >= x.c.animals.size);
+  assert.equal(near.species, idx, 'the herd beside it changed with it');
+  assert.equal(kin!.species, from, 'the far population stayed deer');
+  assert.equal(p.people.eco.became?.[String(from)], undefined, 'the kind lives on: it did not become the new one');
+  ecoDaily(makeCtx(sim.u, p));
+  assert.ok(!sim.drainEvents().some((e) => e.t === 'extinction'), 'and nothing is told extinct');
+  // a kind born here lives where it arose: no herd of it drifts in from beyond (the deer still may)
+  const guilds = guildTargets(makeCtx(sim.u, p));
+  assert.ok(guilds.some((g) => g.prey.includes(from)), 'deer are game of a guild');
+  assert.ok(!guilds.some((g) => g.prey.includes(idx) || g.pred.includes(idx)), 'the new kind is no guild\'s immigrant');
+});
+
+test('ecology r2: one new kind from a real kind in LINEAGE_YEARS; never a form of a form, a shellfish bed or a bee', () => {
+  const { sim, x, h, kin } = lone('deer', (q, c) => q.p.s.tempMean[c] > 23, 5, true);
+  const p = sim.u.planets[0];
+  const deer = h.species;
+  const first = speciate(makeCtx(sim.u, p), h);
+  assert.ok(first >= x.c.animals.size);
+  // the world's pace: no new kind of any lineage within FORM_GAP_YEARS of the last
+  const wolf = x.c.animals.idx('wolf');
+  assert.equal(lineageRested(makeCtx(sim.u, p), wolf), false, `no new kind of wolf within ${FORM_GAP_YEARS} years of the deer's`);
+  p.people.species[0].born -= FORM_GAP_YEARS * x.year;
+  assert.equal(lineageRested(makeCtx(sim.u, p), wolf), true, `then the wolves may`);
+  assert.equal(lineageRested(makeCtx(sim.u, p), deer), false, 'but not the deer again');
+  // a second deer population in country too warm for deer (as the first), as far from the deer at home as can be
+  let c2 = -1, fd = Math.max(ISO_RANGE_M * 1.5, 5000);
+  for (let c = 0; c < p.count; c += 3) {
+    if (p.s.tempMean[c] <= 24 || habitatFit(x, deer, c) <= 0.35 || c === h.cell) continue;
+    const d = distM(p, cellPos(p, c), cellPos(p, kin!.cell));
+    if (d > fd) { fd = d; c2 = c; }
+  }
+  assert.ok(c2 >= 0 && newHome(x, { cell: c2, envT: p.s.tempMean[c2] } as Herd, animalDef(x, deer)), 'another new country for deer');
+  const h2 = spawnHerd(x, deer, c2, 10);
+  h2.inv = -1;
+  const serve = () => { h2.iso = isoDaysOf(x, deer) + 40; h2.drift = 1.5; h2.envT = p.s.tempMean[h2.cell]; };
+  serve();
+  for (let d = 0; d < 20; d++) { sim.step(1440); if (h2.species === deer) { h2.iso = Math.max(h2.iso ?? 0, isoDaysOf(x, deer) + 40); h2.drift = 1.5; } }
+  assert.equal(p.people.species.length, 1, `no second kind of deer within ${LINEAGE_YEARS} years of the first`);
+  // the years go by (the first kind was born LINEAGE_YEARS ago): then it may
+  p.people.species[0].born -= LINEAGE_YEARS * x.year;
+  serve();
+  for (let d = 0; d < 40 && p.people.species.length < 2; d++) { sim.step(1440); if (h2.species === deer) { h2.iso = Math.max(h2.iso ?? 0, isoDaysOf(x, deer) + 40); h2.drift = 1.5; } }
+  assert.equal(p.people.species.length, 2, 'then a second kind of deer arises');
+  assert.equal(p.people.species[1].parent, deer, 'of the deer themselves');
+  // a form born here, swarms, bees and shellfish beds never split
+  const cx2 = makeCtx(sim.u, p);
+  assert.equal(mayDiverge(cx2, first, animalDef(cx2, first)), false, 'a form of a form');
+  for (const id of ['shellfish', 'honey-bees', 'locust-swarm', 'pig']) assert.equal(mayDiverge(cx2, cx2.c.animals.idx(id), cx2.c.animals.get(id)), false, id);
+  for (const id of ['deer', 'wolf', 'golden-eagle', 'fish-shoal', 'harbour-seal']) assert.equal(mayDiverge(cx2, cx2.c.animals.idx(id), cx2.c.animals.get(id)), true, id);
+  // a shellfish bed cut off in water its kind does not live in, its years served, stays a shellfish bed
+  const sh = lone('shellfish', (q, c) => q.c.biomes.list[q.p.f.biome[c]].id === 'ocean', 5, true);
+  const ps = sh.sim.u.planets[0];
+  sh.h.envT = ps.s.tempMean[sh.h.cell];
+  assert.equal(newHome(sh.x, sh.h, animalDef(sh.x, sh.h.species)), true);
+  for (let d = 0; d < 24; d++) { sh.h.iso = isoDaysOf(sh.x, sh.h.species) + 40; sh.h.drift = 1.5; sh.sim.step(1440); }
+  assert.equal(ps.people.species.length, 0, 'shellfish beds do not become a new kind');
+});
+
+test('ecology r2: a real kind the god brings is a real kind — its coming is no birth, and a form of it bears its own name', () => {
+  const { sim, x, h } = lone('deer', (q, c) => q.p.s.tempMean[c] > 23, 5, true);
+  const p = sim.u.planets[0];
+  assert.ok(sim.applyNow({ k: 'content.animal', name: 'zebra', count: 6 }).ok);
+  const z = p.people.species.find((d) => d.def.id === 'zebra')!;
+  assert.equal(z.god, 1, 'marked as the god\'s');
+  // the inspector says the god brought them, not that they were born here of wild horses
+  const eco = sim.query('ecology') as { species: { id: string; bornHere: unknown; brought: { tick: number } | null }[] };
+  const zq = eco.species.find((s) => s.id === 'zebra')!;
+  assert.ok(zq && zq.bornHere === null && zq.brought !== null, JSON.stringify(zq));
+  const cx2 = makeCtx(sim.u, p);
+  assert.equal(mayDiverge(cx2, z.idx, z.def), true, 'zebras may become a local form');
+  assert.equal(lineageRested(cx2, h.species), true, 'the zebras\' coming does not hold back the deer');
+  // a herd of zebras cut off in a new home becomes '<word> zebra', not a kind of horse
+  const zh = spawnHerd(x, z.idx, h.cell, 8);
+  const idx = speciate(makeCtx(sim.u, p), zh);
+  assert.ok(idx >= 0);
+  assert.match(animalDef(x, idx).name, /^\S+ zebra$/, animalDef(x, idx).name);
+  assert.equal(p.people.species.find((d) => d.idx === idx)!.parent, z.idx);
+  assert.equal(lineageRested(makeCtx(sim.u, p), z.idx), false, 'and the zebras rest after their form');
+});
+
+test('ecology r2: the shoals of one open sea are one population — a shoal far off in the same ocean is not cut off', () => {
+  const { sim, x, h } = lone('fish-shoal', (q, c) => !!q.p.s.ocean[c] && q.p.f.water[c] > 5);
+  const p = sim.u.planets[0];
+  let far = -1, fd = 0;
+  for (let c = 0; c < p.count; c += 2) {
+    if (!p.s.ocean[c] || p.f.water[c] <= 5 || habitatFit(x, h.species, c) <= 0.3) continue;
+    const d = distM(p, cellPos(p, c), cellPos(p, h.cell));
+    if (d > fd) { fd = d; far = c; }
+  }
+  assert.ok(far >= 0 && fd > ISO_RANGE_M * 1.2, `open sea far off (${Math.round(fd)} m)`);
+  const o = spawnHerd(x, h.species, far, 60);
+  o.inv = -1;
+  h.iso = 50; o.iso = 0;
+  ecoDaily(makeCtx(sim.u, p));
+  assert.ok((h.iso ?? 0) < 50, `in touch with its kind across the sea: iso ${h.iso}`);
+});
+
+test('ecology r2: a new kind is named as a naturalist would — its country or climate and the real kind\'s name, never stacked words', () => {
+  const ALLOWED = new Set(['Snow', 'Arctic', 'Woolly', 'Desert', 'Pale', 'Deep', 'Blue', 'Grey', 'Long-finned', 'River', 'Lake', 'Spotted', 'Silver',
+    'Forest', 'Woodland', 'Jungle', 'Taiga', 'Boreal', 'Tundra', 'Mountain', 'Highland', 'Marsh', 'Swamp', 'Plains', 'Prairie', 'Steppe',
+    'Savanna', 'Bush', 'Scrub', 'Sand', 'Island', 'Coastal', 'Polar', 'Rock', 'Reef', 'Coral', 'Northern', 'Southern', 'Lesser', 'Greater']);
+  const cases: [string, string, (q: PCtx, c: number) => boolean][] = [
+    ['deer', 'deer', (q, c) => q.p.s.tempMean[c] > 23],
+    ['boar', 'boar', (q, c) => q.p.s.tempMean[c] < 6],
+    ['golden-eagle', 'eagle', (q, c) => q.p.s.tempMean[c] > 20],
+    ['desert-lizard', 'lizard', (q, c) => q.p.s.tempMean[c] < 26],
+    ['wild-sheep', 'mouflon', (q, c) => q.p.s.tempMean[c] < 0],
+  ];
+  for (const [id, stem, pick] of cases) {
+    const { sim, x, h } = lone(id, pick, 5);
+    const p = sim.u.planets[0];
+    const names: string[] = [];
+    // the same place again and again: every word of its own, then its half of the world, then its size, then none
+    for (let k = 0; k < 16; k++) {
+      const o = k ? spawnHerd(x, h.species, h.cell, 6) : h;
+      const idx = speciate(makeCtx(sim.u, p), o);
+      if (idx < 0) break;
+      names.push(animalDef(x, idx).name);
+    }
+    assert.ok(names.length >= 3 && names.length < 16, `${id}: ${names.length} names, then none (${names.join(', ')})`);
+    assert.equal(new Set(names).size, names.length, `${id}: all different`);
+    for (const n of names) {
+      const m = /^(\S+) (.+)$/.exec(n);
+      assert.ok(m && ALLOWED.has(m[1]) && m[2] === stem, `${id}: '${n}' is a word of its place and the kind's name '${stem}'`);
+    }
+    if (id === 'desert-lizard') assert.ok(!names.some((n) => /^(Woolly|Snow|Arctic)/.test(n)), `a lizard is never woolly or of the snow: ${names.join(', ')}`);
+  }
 });
 
 test('ecology: real hunters of every kind — a raptor takes hares, a seal takes fish, a walker never takes a bird', () => {
@@ -388,6 +557,32 @@ test('ecology: every biome guild holds its game and hunters; a people with no ga
   const near = p.people.herds.filter((h) => landGame(animalDef(x, h.species)) && distM(p, cellPos(p, h.cell), st.pos) <= 1000);
   assert.ok(near.length >= 1, 'game came near the people');
   for (const h of near) assert.ok(distM(p, cellPos(p, h.cell), st.pos) >= 250, 'at the edge of their country, not in the town');
+});
+
+test('ecology r2: a land full of game still lets in the hunters its guilds lack (and no more game)', () => {
+  // (the game's herds split past MAX_LAND_HERDS; the cap on arrivals kept the hunters out: 185 herds of game and 3 of
+  // hunters at year 50 of the integrated run, most biomes with none)
+  const sim = world(24, 7);
+  const p = sim.u.planets[0];
+  const x = cx(sim);
+  const guilds = guildTargets(x).filter((g) => g.pred.length);
+  assert.ok(guilds.length >= 1, 'a guild with hunters of its own');
+  // every hunter gone; every guild's game at its target and over, the land past its cap
+  p.people.herds = p.people.herds.filter((h) => !landHunter(animalDef(x, h.species)));
+  reindexHerds(cx(sim));
+  const land = () => p.people.herds.filter((h) => h.owner < 0 && (landGame(animalDef(x, h.species)) || landHunter(animalDef(x, h.species)))).length;
+  for (let k = 0; land() < MAX_LAND_HERDS + 10; k++) {
+    const g = guilds[k % guilds.length];
+    spawnHerd(x, g.prey[k % g.prey.length], g.cells[(k * 7919) % g.cells.length], 8);
+  }
+  for (const g of guildTargets(x)) for (let k = 0; k < g.preyTarget; k++) spawnHerd(x, g.prey[k % g.prey.length], g.cells[(k * 104729) % g.cells.length], 8);
+  const game0 = p.people.herds.filter((h) => landGame(animalDef(x, h.species))).length;
+  assert.ok(land() > MAX_LAND_HERDS);
+  for (let d = 0; d < 4; d++) { sim.u.tick += 1440; herdArrivals(cx(sim)); }
+  const hunters = p.people.herds.filter((h) => h.owner < 0 && landHunter(animalDef(x, h.species)));
+  assert.ok(hunters.length >= 2, `hunters came (${hunters.length})`);
+  for (const h of hunters) assert.ok(guilds.some((g) => g.pred.includes(h.species)), `${animalDef(x, h.species).id} is a hunter of a guild`);
+  assert.equal(p.people.herds.filter((h) => landGame(animalDef(x, h.species))).length, game0, 'no game came to a full land');
 });
 
 // ───────────────────────────── saves ─────────────────────────────

@@ -11,7 +11,7 @@ import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import { BuildingFlag, AgentFlag } from '../types.ts';
 import { makeCtx } from '../people/ctx.ts';
-import { DEATH, MEMK } from '../people/defs.ts';
+import { DEATH, MEMK, TASK } from '../people/defs.ts';
 import { die } from '../people/lifecycle.ts';
 import { interrupt } from '../people/people.ts';
 import { ruin } from '../people/buildings.ts';
@@ -42,7 +42,7 @@ const _pt = [0, 0, 0];
  * everywhere inside), frightens them and breaks off what they were doing. `chance` < 1 hits only some (a plague of
  * collapses, not a blast).
  */
-export function hurtPeople(u: Universe, p: Planet, pos: ArrayLike<number>, radius: number, severity: number, cause: number = DEATH.disaster, o: { flat?: boolean; chance?: number; salt?: number; fear?: number; max?: number } = {}): HurtResult {
+export function hurtPeople(u: Universe, p: Planet, pos: ArrayLike<number>, radius: number, severity: number, cause: number = DEATH.disaster, o: { flat?: boolean; chance?: number; salt?: number; fear?: number; max?: number; mortal?: { k0: number; gain: number; cap: number; road?: ReadonlySet<number> } } = {}): HurtResult {
   const out = { hurt: 0, dead: 0 };
   if (!p.people || p.people.agents.count === 0 || severity <= 0) return out;
   const x = makeCtx(u, p);
@@ -76,6 +76,14 @@ export function hurtPeople(u: Universe, p: Planet, pos: ArrayLike<number>, radiu
     const k = sev * harmK * (o.flat ? 1 : (1 - d / Math.max(1, R)) * 1.4);
     if (k <= 0.005) continue;
     A.health[s] -= k;
+    // (o.mortal: caught on the road — one fleeing in the open when the blast comes (out of the danger on the god's
+    // warning, or running from it) is thrown and struck, and a blow k kills them with chance (k − k0) × gain, at most
+    // `cap` (most are thrown down and hurt, not killed), beside the sure death of a blow past what the body has left; the
+    // draw is the person's own, stateless. LIVING §3.7 second pass: the warned town of the default meteor was 30–300 m
+    // out on the roads when it burst, under a blast that peaked at 0.76, and nobody died of it. Those at home or at work
+    // take the blow as before — the full-wrath stone, which gives no warning, is today's. `road`: who was on the road
+    // when the act began — onRoad — since the blow's first part breaks off what everyone near it was doing)
+    if (o.mortal && A.health[s] > 0 && k > o.mortal.k0 && (o.mortal.road ? o.mortal.road.has(s) : onRoadNow(A.task[s])) && hash01(A.id[s], u.tick, (o.salt ?? 0) ^ 0x3a7a) < Math.min(o.mortal.cap, (k - o.mortal.k0) * o.mortal.gain)) A.health[s] = 0;
     // (the god's harm frightens through its witnesses' reading, god/regard.ts; nature's frightens the hurt themselves —
     // as the god's only to those who believe it acts)
     if (ws.w === null && A.faith[s * 4] > 0.3) A.fear[s * 4] = Math.min(1, A.fear[s * 4] + (o.fear ?? 0.15) * Math.min(1, severity) * 0.5);
@@ -87,6 +95,17 @@ export function hurtPeople(u: Universe, p: Planet, pos: ArrayLike<number>, radiu
   // the survivors see their dead: a killing act is harm to all who saw it (LIVING §3.1)
   const act = currentAct();
   if (out.dead > 0 && act && !act.natural) witness(p, pos, R * 1.5 + 150, 'harm', Math.min(1, 0.3 + 0.05 * out.dead), act.god);
+  return out;
+}
+
+const onRoadNow = (task: number): boolean => task === TASK.evacuate || task === TASK.flee;
+
+/** the people of planet p on the road now: out of a danger on the god's warning, or running from one (slots) */
+export function onRoad(p: Planet): Set<number> {
+  const out = new Set<number>();
+  const A = p.people?.agents;
+  if (!A) return out;
+  for (let s = 0; s < A.hi; s++) if (A.alive[s] && onRoadNow(A.task[s])) out.add(s);
   return out;
 }
 

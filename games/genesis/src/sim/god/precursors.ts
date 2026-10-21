@@ -34,8 +34,11 @@ export function warningTicks(u: Universe, kind: string, w: number, override?: nu
     case 'volcano': case 'supervolcano':
       return Math.round(w <= 0.5 ? 720 + 120 * hashFloat(Math.round(w * 1000), 0x7a1c) : lerp(720, 120, (w - 0.5) / 0.5));
     case 'meteor':
-      // the fall itself (24 min) is the streak at wrath 1; at the default the sky shows it for an hour
-      return Math.round(w <= 0.5 ? 36 : lerp(36, 0, (w - 0.5) / 0.5));
+      // the fall itself (24 min) is the streak at wrath 1; at the default the sky shows it for 36 minutes in all. (LIVING
+      // second pass: an hour of it — 36 + 24 — let a warned town walk clear of the blast, and nobody died of a meteor at
+      // the default wrath, against the §3.7 table's 10–35 %; with 12 + 24 and the blast's wounds to those caught on the
+      // road 10–28 % die, mean 18 %, on the 8 acceptance worlds: _harness/scratch/living/relationship/live2/meteor.ts)
+      return Math.round(w <= 0.5 ? 12 : lerp(12, 0, (w - 0.5) / 0.5));
     case 'tsunami':
       return Math.round(w < 1 ? 40 : 30);
     default:
