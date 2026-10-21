@@ -57,22 +57,50 @@
     // must pay in the COD way instead: ~80% of AR DPS (20 dmg → 133), hard
     // range falloff (18/38m — CoD sidearm band), head 1.75 (between BO's 1.4
     // and FN's 2.0). Ladder: SMG 204 close > AR 165 mid > pistol 133 backup.
-    pistol:   { cls: "pistol", damage: 20, headMult: 1.75, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [18, 38], spreadDeg: 1.3, adsFov: 48 },
-    smg:      { cls: "smg", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2, adsFov: 47 },
-    ar:       { cls: "ar", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5, adsFov: 42 },
+    //
+    // EXPLICIT FIRE MODE (parity P2-D, LC-16). `fire` is "auto" (held trigger cycles at rpm), "semi" (one round per
+    // click; held on touch re-arms at rpm) or "burst" (one click or a held trigger fires burst.n rounds burst.gapS
+    // apart, then waits burst.delayS). weapons.js used to infer auto from cls === "smg" || "ar", which a burst rifle
+    // or an LMG could never fit. `like` names the nearest legacy class for consumers that key tables on cls
+    // (audio report samples, reticle shapes, bot burst discipline): read `def.like || def.cls` for a fallback.
+    // adsTimeS (LC-34, owner OD-6: per-class ADS time yes): the ADS accuracy bonus (and the sniper scope) is
+    // EARNED after this long holding ADS (player.js accrues a._adsT; weapons.js fire() and hud.js read it).
+    // Warzone ADS runs ~150 ms pistols, ~200 SMG, 240-280 AR, ~350 DMR, 400-500 LMG, 520-650 sniper (COMBAT_CALIBRATION.md).
+    pistol:   { cls: "pistol", fire: "semi", damage: 20, headMult: 1.75, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [18, 38], spreadDeg: 1.3, adsFov: 48, adsTimeS: 0.15 },
+    smg:      { cls: "smg", fire: "auto", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2, adsFov: 47, adsTimeS: 0.20 },
+    ar:       { cls: "ar", fire: "auto", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5, adsFov: 42, adsTimeS: 0.26 },
+    // ── P2-D roster (LC-16): the three classes PUBG / Apex / Warzone all carry and we did not ──────────────────
+    // DMR: the semi-auto marksman rifle between the AR and the bolt sniper. 46 a round (2 body shots break a full
+    // shield's 100 + leave 8 hp: 4 to kill 200 EHP vs the sniper's 2 and the AR's 7), 160 rpm, flat to 120 m, tight
+    // cone, a 2x zoom without the sniper's scope overlay. gunValueAt: beats the AR at 90 m, loses to it at 15 m.
+    dmr:      { cls: "dmr", like: "ar", fire: "semi", damage: 46, headMult: 2.0, rpm: 160, mag: 10, reloadS: 2.8, ammo: "medium", speed: 600, falloff: [120, 260], spreadDeg: 0.35, adsFov: 30, adsTimeS: 0.34 },
+    // LMG: the sustained-fire gun. 75-round magazine, 650 rpm x 24 = 260 raw DPS (the highest), a wild hip cone
+    // (3.2 deg) that ADS tightens much harder than any rifle (adsSpreadMult 0.35 -> 1.12 deg), the slowest ADS
+    // (0.42 s) and a 5 s reload: it wins the 30 m lane it was built for (gunValueAt: highest of every gun at 30 m)
+    // and pays for it up close (hip) and after the mag (reload).
+    lmg:      { cls: "lmg", like: "ar", fire: "auto", damage: 24, headMult: 1.4, rpm: 650, mag: 75, reloadS: 5.0, ammo: "medium", speed: 420, falloff: [45, 100], spreadDeg: 3.2, adsSpreadMult: 0.35, adsFov: 44, adsTimeS: 0.42 },
+    // BURST RIFLE: a 3-round burst, 0.075 s between rounds, 0.42 s before the next burst = a sustained 5.2 rounds/s
+    // x 28 = 147 DPS (AR 165; 373 inside a burst) for a tighter cone and a softer climb: it loses the AR's 7-30 m lane
+    // (gunValueAt 130 vs 143 at 7 m, 93 vs 94 at 30 m) and wins past it (35 vs 33 at 60 m, 10 vs 9 at 90 m) - the pick
+    // for players who land bursts at range. (29 dmg / 0.36 s out-valued the AR at EVERY range: strictly dominant.)
+    // cls "ar" (the rifle animation family, the AR's report and bot burst discipline); `fire` is what differs.
+    burst:    { cls: "ar", fire: "burst", burst: { n: 3, gapS: 0.075, delayS: 0.42 }, damage: 28, headMult: 1.6, rpm: 800, mag: 30, reloadS: 2.5, ammo: "medium", speed: 320, falloff: [60, 130], spreadDeg: 1.1, adsFov: 40, adsTimeS: 0.26 },
     // Shotgun was 10 dmg / 70 rpm / 4.0 s reload = 90 per blast, 105 DPS: the WORST
     // gun in the table at its own 7 m preferred range (SMG 204, AR 165, pistol 160)
     // and 3 blasts to break a 200 EHP bar in 1.71 s vs the SMG's 0.92 s. 13 dmg is
     // 117 per blast — a clean 2-blast kill at 156 DPS, still under the SMG's sustained
     // lane. It also un-collapses the rarity ladder: hitDamage rounds PER PELLET, so
     // base 10 gave 10/11/12/12/13 (rare and epic identical); base 13 gives 13/14/15/16/17.
-    shotgun:  { cls: "shotgun", damage: 13, headMult: 1.75, rpm: 80, mag: 5, reloadS: 3.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0, adsFov: 49 },
+    shotgun:  { cls: "shotgun", fire: "semi", damage: 13, headMult: 1.75, rpm: 80, mag: 5, reloadS: 3.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0, adsFov: 49, adsTimeS: 0.24 },
     // adsTimeS: scope-in gate. Instant full-accuracy zoom on a 2.5x-headshot
     // one-tap breaks the genre contract hardest on this weapon — Warzone sniper
     // ADS runs 520-650ms vs AR 240-280ms (COMBAT_CALIBRATION.md, secondary).
     // The 0.5x ADS spread bonus, the scope camera and the overlay all gate on it.
-    sniper:   { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 700, falloff: [200, 400], spreadDeg: 0.15, scope: true, adsFov: 20, adsTimeS: 0.5 },
-    glauncher:{ cls: "launcher", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45 },
+    sniper:   { cls: "sniper", fire: "semi", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 700, falloff: [200, 400], spreadDeg: 0.15, scope: true, adsFov: 20, adsTimeS: 0.5 },
+    // impact: true (parity P2-D, P1-A check note): a launcher round BURSTS on contact with a wall, the ground or a
+    // body, the way every reference launcher does; the 2 s fuse is the air-burst for a round that touches nothing.
+    // (It used to bounce off walls like a hand grenade and roll back toward the shooter.)
+    glauncher:{ cls: "launcher", fire: "semi", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, impact: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45, adsTimeS: 0.30 },
     // FRAG GRENADE (parity P1-A, LC-14; BUILT DARK). The blast definition explode() and hitDamage() read by
     // id - it is NOT a gun: it is deliberately absent from WEAPON_IDS (loot, bot weapon choice and every
     // per-gun selftest loop iterate that list), it has no magazine or ammo, and nothing ever equips "frag"
@@ -80,24 +108,50 @@
     // weapons.js stepWeapon, never through useConsumable / applyHeal). Apex's frag deals 100 with falloff;
     // splashScale here runs linearly to 25 % at splashR + 0.8 (the launcher's convention), fuse from the throw.
     frag:     { cls: "throwable", damage: 100, headMult: 1.0, rpm: 60, speed: 20, arc: true, fuseS: 3.0, splashR: 4.5, spreadDeg: 0 },
+    // SMOKE GRENADE (contract C-SMOKE, LC-14 round 2; BUILT DARK like the frag: loot weight 0 until the integrator
+    // turns it on with the frag). Thrown by the same branch, bounces like the frag, and on its fuse it does NO damage:
+    // weapons.js pushes a sphere {x,y,z,r,t0,t1} onto W.smokes (sizes in SMOKE below) that maps.js losBlocked treats as
+    // solid for sight, fx.js draws and bots.js reads. Not in WEAPON_IDS; damage 0 and no splashR, so explode() is
+    // never called for it.
+    smoke:    { cls: "throwable", damage: 0, headMult: 1.0, rpm: 60, speed: 20, arc: true, fuseS: 1.6, smoke: true, spreadDeg: 0 },
   };
-  var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"]; // lootable guns (never the frag: see WEAPONS.frag)
+  // lootable guns (never a throwable: see WEAPONS.frag). APPEND-ONLY ORDER: FLOOR_GUN_WEIGHTS, rollChest and
+  // rollSupplyDrop each carry one weight per entry IN THIS ORDER (positional), so a new gun is appended here and to
+  // all three lists together - a list one entry short silently never rolls the last gun (LC-16 note).
+  var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher", "dmr", "lmg", "burst"];
   // Display names. The kill feed threw away the weaponId it was handed and the
   // death screen printed the raw internal id ("glauncher"), so the one place a
   // player learns what killed them showed them a variable name.
   var WEAPON_NAMES = {
     pistol: "Pistol", smg: "SMG", ar: "Assault Rifle",
     shotgun: "Shotgun", sniper: "Sniper", glauncher: "Grenade Launcher",
-    frag: "Frag Grenade",
-    storm: "the Storm",
+    dmr: "Marksman Rifle", lmg: "Light Machine Gun", burst: "Burst Rifle",
+    frag: "Frag Grenade", smoke: "Smoke Grenade",
+    storm: "the Storm", fall: "a fall",
   };
   function weaponName(id) { return WEAPON_NAMES[id] || String(id || "?"); }
+  /** Mean time between rounds when the trigger is held for a while (s). auto / semi: 60 / rpm. burst: n rounds
+   *  per ((n - 1) x gapS + delayS), i.e. the burst cadence averaged over a whole cycle. ONE definition, shared by
+   *  gunScore / gunValueAt (bot weapon choice) and the selftest, so a burst gun is never valued at its cyclic rpm. */
+  function fireInterval(idOrDef) {
+    var d = typeof idOrDef === "string" ? WEAPONS[idOrDef] : idOrDef;
+    if (!d || !d.rpm) return Infinity;
+    if (d.fire === "burst" && d.burst && d.burst.n > 1) return ((d.burst.n - 1) * d.burst.gapS + d.burst.delayS) / d.burst.n;
+    return 60 / d.rpm;
+  }
+  /** "auto" | "semi" | "burst" for a weapon id (defaults: the old inference, for a table without the field). */
+  function fireMode(idOrDef) {
+    var d = typeof idOrDef === "string" ? WEAPONS[idOrDef] : idOrDef;
+    if (!d) return "semi";
+    if (d.fire) return d.fire;
+    return d.cls === "smg" || d.cls === "ar" ? "auto" : "semi";
+  }
   /** Rough sustained-DPS worth of a gun, rarity weighted. `damage` is PER PELLET,
    *  so a shotgun scores below a pistol without the pellet term. */
   function gunScore(id, rarity) {
     var d = WEAPONS[id];
     if (!d) return -1;
-    return (d.damage * (d.pellets || 1) * d.rpm / 60) + (rarity || 0) * 20;
+    return (d.damage * (d.pellets || 1) / fireInterval(d)) + (rarity || 0) * 20;
   }
 
   var AMMO = {
@@ -119,7 +173,77 @@
     // bots.js usable(): `c.heals === "hp" ? ... : a.shield < c.cap` reads cap undefined -> false). `throws`
     // names the WEAPONS entry the blast uses. Loot weight 0 until P2-D turns it on with bot throws (P2-B).
     frag:        { throws: "frag", useS: 0, stack: 3 },
+    // C-SMOKE: the same shape as the frag (no heal fields, so every heal path refuses it), built dark at loot weight 0
+    smoke:       { throws: "smoke", useS: 0, stack: 3 },
   };
+
+  /** Smoke cloud tunables (C-SMOKE). On its fuse a smoke round becomes a sphere at its rest point: radius grows from
+   *  r0Frac x r to r over growS (eased), holds, and the entry is dropped at t1 = t0 + lifeS (fx fades the last fadeS).
+   *  W.smokes entries carry {x, y, z, r, t0, t1} (the contract) plus rMax/grow/ownerId: r is the LIVE radius,
+   *  rewritten every tick by weapons.js, so losBlocked never blocks more than the cloud already covers.
+   *  Sizes: PUBG's smoke is ~6 m across at 2 s and lasts ~40 s; Apex's Bangalore canister ~30 s. 6 m radius / 20 s
+   *  covers a doorway or a street crossing for a revive (owner D-DBNO) without blanking a whole compound. */
+  var SMOKE = { r: 6.0, r0Frac: 0.35, growS: 1.6, lifeS: 20, fadeS: 3, maxLive: 12, yOff: 1.2 };
+  /** Live radius of a smoke entry at time t (0 outside [t0, t1]). Pure. */
+  function smokeRadiusAt(s, t) {
+    if (!s || t < s.t0 || t > s.t1) return 0;
+    var rMax = s.rMax || s.r, k = SMOKE.growS > 0 ? clamp((t - s.t0) / SMOKE.growS, 0, 1) : 1;
+    k = 1 - (1 - k) * (1 - k);                                    // ease-out: billows fast, settles
+    return rMax * (SMOKE.r0Frac + (1 - SMOKE.r0Frac) * k);
+  }
+  /** Does the segment a->b pass through any live smoke sphere in `smokes` at time t? (the C-SMOKE sight rule for
+   *  maps.js losBlocked: a segment that ENTERS a sphere is blocked; a sight line from inside one is blocked too,
+   *  so two players standing in the same cloud cannot see each other either, as in the reference games). Pure. */
+  function segmentSmoked(ax, ay, az, bx, by, bz, smokes, t) {
+    if (!smokes || !smokes.length) return false;
+    var dx = bx - ax, dy = by - ay, dz = bz - az, l2 = dx * dx + dy * dy + dz * dz;
+    for (var i = 0; i < smokes.length; i++) {
+      var s = smokes[i];
+      if (t != null && (t < s.t0 || t > s.t1)) continue;
+      var r = s.r;
+      if (!(r > 0)) continue;
+      var u = l2 > 0 ? ((s.x - ax) * dx + (s.y - ay) * dy + (s.z - az) * dz) / l2 : 0;
+      u = u < 0 ? 0 : u > 1 ? 1 : u;
+      var ex = ax + dx * u - s.x, ey = ay + dy * u - s.y, ez = az + dz * u - s.z;
+      if (ex * ex + ey * ey + ez * ez < r * r) return true;
+    }
+    return false;
+  }
+
+  // ── TEAM MODES (contract C-MODE, LC-19, owner OD-4: Duos / Trios with bot teammates, no ranked) ──────────────
+  // W.match.mode is one of these; the storm / loot PACING is W.match.pace (MODE below: standard / quick / practice),
+  // orthogonal to it. dbno: knock-and-revive is ON only in team modes (owner OD-3: "only in SQUAD mode, not FFA";
+  // solo / free-for-all: a lethal hit kills). Every actor carries a.teamId; in solo it is unique per actor.
+  var TEAM_SIZE = { solo: 1, duo: 2, trio: 3, squad: 4 };
+  var TEAM_MODES = {
+    solo:  { size: 1, dbno: false, label: "Solo" },
+    duo:   { size: 2, dbno: true,  label: "Duos" },
+    trio:  { size: 3, dbno: true,  label: "Trios" },
+    squad: { size: 4, dbno: true,  label: "Squads" },
+  };
+  function teamSize(mode) { return TEAM_SIZE[mode] || 1; }
+  /** Knock-and-revive applies in this mode (C-DBNO / OD-3). Unknown or missing mode = solo = never. */
+  function dbnoOn(mode) { return !!(TEAM_MODES[mode] && TEAM_MODES[mode].dbno); }
+  /** How many teams a lobby of `players` makes in `mode` (the last team may be short). */
+  function teamCount(players, mode) { return Math.ceil((players || 0) / teamSize(mode)); }
+
+  // ── DBNO: DOWN-BUT-NOT-OUT (contract C-DBNO, LC-15, owner OD-3) ────────────────────────────────────────────
+  // Constants only; the state machine lives in player.js (hurtActor), bots.js, net.js, hud.js, loot.js.
+  //  * a lethal hit on an actor whose team still has a member alive and NOT downed knocks it: a.downed = true,
+  //    a.downedHp = DBNO_HP (the bleed pool), a.knocks++, a.downedT = W.t;
+  //  * the pool bleeds at dbnoBleedRate(a.knocks) per second: 100 over 60 s on the first knock (PUBG's first knock
+  //    is ~1 min of crawling; Apex 90 s), then 1.5x, 2x ... faster on every further knock in the same life (PUBG's
+  //    "each knock bleeds out faster");
+  //  * damage to a downed actor hits downedHp (armour does not apply); downedHp <= 0 or the bleed kills;
+  //  * downed actors crawl at DBNO_CRAWL m/s with a DBNO_HEIGHT capsule (actorHeight below), cannot shoot, loot,
+  //    heal or throw (weapons.js gates); a teammate within REVIVE_RANGE holding E for REVIVE_S revives to REVIVE_HP;
+  //  * when every member of a team is downed or dead, all downed members die (team eliminated).
+  var DBNO_HP = 100, DBNO_BLEED_HPS = 100 / 60, DBNO_KNOCK_MULT = 0.5, DBNO_CRAWL = 1.4, DBNO_HEIGHT = 0.6, DBNO_EYE = 0.45;
+  var REVIVE_S = 5, REVIVE_HP = 30, REVIVE_RANGE = 2.0;
+  /** Bleed rate (hp/s of the downed pool) for an actor on its Nth knock of this life (N >= 1). */
+  function dbnoBleedRate(knocks) { return DBNO_BLEED_HPS * (1 + DBNO_KNOCK_MULT * Math.max(0, (knocks || 1) - 1)); }
+  var DBNO = { HP: DBNO_HP, BLEED_HPS: DBNO_BLEED_HPS, KNOCK_MULT: DBNO_KNOCK_MULT, CRAWL: DBNO_CRAWL, HEIGHT: DBNO_HEIGHT, EYE: DBNO_EYE,
+               REVIVE_S: REVIVE_S, REVIVE_HP: REVIVE_HP, REVIVE_RANGE: REVIVE_RANGE };
 
   /** Throw tunables for CONSUMABLES with `throws` (weapons.js throwRound). The launch is the aim direction
    *  raised by `loft` (a natural over-arm release, so a level aim still carries ~25 m), at `speed` m/s, under
@@ -185,6 +309,35 @@
 
   var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };
 
+  // ── FALL DAMAGE (contract C-FALL, owner OD-8 CHANGED: "fall damage should exist naturally") ─────────────────
+  // Applied by player.js on touchdown from the vertical impact speed v (m/s), NOT while gliding / under canopy, NOT
+  // on a mantle, NOT into water; armour does not absorb it (PUBG). The curve is set by HEIGHTS, then converted with
+  // THIS game's gravity (MOVE.gravity -22 m/s^2, the value player.js integrates), so it stays right if gravity is
+  // retuned: a drop of FALL_SAFE_H (4 m, a storey: ledges, stairs, a jump off a container) is free; 10 m costs ~42;
+  // 15 m ~86; 20 m and more is lethal from full health (>= 100). (The contract's "4 m ~ 8.9 m/s" assumed 9.8 m/s^2;
+  // here a 4 m drop lands at 13.3 m/s.) dmg = FALL_DMG_PER_V x (v - FALL_SAFE_V)^FALL_EXP, rounded.
+  // A hard landing (v > LAND_STAGGER_V, the same 4 m) also staggers for LAND_STAGGER_S (LC-61).
+  var FALL_SAFE_H = 4, FALL_EXP = 1.5, LAND_STAGGER_S = 0.4;
+  function fallSpeedForHeight(h) { return Math.sqrt(2 * Math.abs(MOVE.gravity) * Math.max(0, h)); }
+  var FALL_SAFE_V = fallSpeedForHeight(FALL_SAFE_H);
+  // calibrated so a 10 m drop costs FALL_REF_DMG (the middle of the contract's 35-50 band)
+  var FALL_REF_H = 10, FALL_REF_DMG = 42;
+  var FALL_DMG_PER_V = FALL_REF_DMG / Math.pow(fallSpeedForHeight(FALL_REF_H) - FALL_SAFE_V, FALL_EXP);
+  var LAND_STAGGER_V = FALL_SAFE_V;
+  /** HP lost to a landing at vertical impact speed v (m/s, positive down). 0 for v <= FALL_SAFE_V. Pure. */
+  function fallDamage(v) {
+    if (!(v > FALL_SAFE_V)) return 0;
+    return Math.round(FALL_DMG_PER_V * Math.pow(v - FALL_SAFE_V, FALL_EXP));
+  }
+  /** The tallest drop (m) that costs no HP / that a full-health (100 hp) actor survives - for bots' ledge checks. */
+  function fallSafeHeight() { return FALL_SAFE_H; }
+  function fallLethalHeight(hp) {
+    hp = hp == null ? PLAYERK.hp : hp;
+    var v = FALL_SAFE_V + Math.pow(hp / FALL_DMG_PER_V, 1 / FALL_EXP);
+    return v * v / (2 * Math.abs(MOVE.gravity));
+  }
+  var FALL = { SAFE_H: FALL_SAFE_H, SAFE_V: FALL_SAFE_V, DMG_PER_V: FALL_DMG_PER_V, EXP: FALL_EXP, STAGGER_S: LAND_STAGGER_S, STAGGER_V: LAND_STAGGER_V };
+
   // Crouch: the one basic shooter verb the game did not have. Today it trades
   // 55% of your movement speed for a markedly tighter hipfire cone and a lower
   // camera.
@@ -213,10 +366,173 @@
    *  HAS the crouch clip loaded — if a skin's clip failed to bake it still
    *  stands upright, and shrinking its capsule would reintroduce the lie. */
   function actorHeight(a) {
+    if (a && a.downed) return DBNO_HEIGHT;        // C-DBNO: a knocked actor is down on the ground, whatever its clip set
     return PLAYERK.height * (a && a.crouching && a.hasCrouchClip ? CROUCH.heightMult : 1);
   }
-  /** Eye height, accounting for crouch (camera + muzzle origin). */
-  function actorEyeY(a) { return PLAYERK.eyeY * (a && a.crouching ? CROUCH.eyeMult : 1); }
+  /** Eye height, accounting for crouch (camera + muzzle origin) and the downed crawl (C-DBNO). */
+  function actorEyeY(a) {
+    if (a && a.downed) return DBNO_EYE;
+    return PLAYERK.eyeY * (a && a.crouching ? CROUCH.eyeMult : 1);
+  }
+
+  // ── HIT VOLUMES (parity P2-D, LC-22: bone-derived) ──────────────────────────────────────────────────────────────
+  // Bullets used to test ONE vertical cylinder of radius 0.57 m (PLAYERK.radius + 0.12) from the feet to 0.12 m over
+  // the 1.8 m capsule: body hits landed 0.55-0.75 m off the spine where the rig's arms end at 0.18-0.31 m, and a shot
+  // 0.37 m over the head bone still counted as a body hit. They now test the BODY THAT IS DRAWN: 12 capsules along the
+  // rig's bone segments + a head sphere, in the actor's own frame (x right, y up from the feet, z = facing). The joint
+  // positions are MEASURED off the live Mixamo-clip rigs (F:/lc_p23/sim/probe_bones4.py: every skin x hold x stance x
+  // pitch, the skinned mesh evaluated on the CPU), the radii from the skinned vertices around each segment (a quantile
+  // of their distance, so the capsule stays inside the flesh), the head sphere from the vertices whose dominant weight
+  // is the Head bone. Volumes are a pure function of sim state (a.skin, the held gun's family, ADS, crouch, a.pitch,
+  // a.yaw), NOT of live bones: player.js skips and staggers mixers by camera distance, so a live-bone test would make
+  // a hit depend on who is watching (and break same-seed replay). Pitch interpolates linearly between the keys.
+  // Swimming keeps the old short cylinder (the rig is under water); downed (C-DBNO) a 0.6 m cylinder until a measured
+  // crawl table exists. Unknown skin -> soldier.
+  var HITVOL = (function () {
+    // joint order in every pose record; segments index into it with their radius slot
+    var JOINTS = ["Hips", "Spine2", "Neck", "LeftArm", "LeftForeArm", "LeftHand", "RightArm", "RightForeArm", "RightHand",
+                  "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot"];
+    // Points 0-14 are JOINTS; 15-20 are derived per pose (hitVolJoints): the torso is TWO side-by-side columns, not one
+    // round capsule (a chest is ~0.4 m wide and ~0.25 m deep: a single capsule fat enough for the width stood 0.13 m
+    // proud of the chest and back). 15/16 = Hips -/+ kh along the hip line, 17/18 = Spine2 -/+ ks along the shoulder
+    // line, 19/20 = Neck -/+ kn along it. [point a, point b, radius slot]; per-skin PARAMS (RADII) =
+    // [0 torso column, 1 shoulder line, 2 upper arm, 3 forearm, 4 thigh, 5 shin, 6 hip line, 7 kh, 8 ks, 9 kn].
+    var SEGS = [[15, 17, 0], [16, 18, 0], [17, 19, 0], [18, 20, 0], [3, 6, 1], [3, 4, 2], [4, 5, 3], [6, 7, 2], [7, 8, 3],
+                [9, 12, 6], [9, 10, 4], [10, 11, 5], [12, 13, 4], [13, 14, 5]];
+    var PITCH = [-0.6, -0.3, 0, 0.3, 0.6];
+    var NV = JOINTS.length * 3 + 4;                     // + head sphere cx, cy, cz, r
+    var DOFF = NV;                                      // derived points 15-20 live after the head in the scratch
+    /*@@HITVOL_DATA_BEGIN@@*/
+    // generated by F:/lc_p23/sim/tools/gen_hitvol.py from F:/lc_p23/sim/out/bones4_all.json (probe_bones4.py, worktree p23-sim)
+    var SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"];
+    var RADII = {"soldier":[0.253,0.207,0.088,0.064,0.123,0.089,0.121,0.231]};
+    var DATA = {
+      soldier: {
+        "pistolAds|crouch": "b5ceb4avdfasapduama7dnaxajd3avbbcsatb5dta9b9d7a2bacvataxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2ane9albib5ceb4awdgatardwapa9dpazakd4b2bdd0b6b8dvacbbd8aabdd3b4axc9bbb2ciciaubic3bdc7axbxb4b1bkbga2aqecarbib5ceb4axdgavatdxasabdrb1and8b8bgdabgbadwafbdd9ajbfdcbdaxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2ateeawbhb5ceb4aydhawawdyavaddsb4ardcbebidlbnbcdxaibgdcarbhdnbjaxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2axecb1bhb5ceb4b0dhaxaydyayafdtb6awdjbjbldxbsbfdyalbidgazbkdxboaxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2b1e9b7bi",
+        "pistolAds|stand": "b4dyb5b1f1axb0fhasagf9avavetb1bjeebablfcasbpeqambrecbdaudrb5aqcjbdaobjaybfdsb4brclb8bybkazb0fyasbib4dyb5b3f1azb2fiawaifdayaxexb7blekbjbnfcaubrepatbteibnaudrb5apckbcalbjaybfdsb3bqclb9bvbkazb2fzb0bhb4dyb5b5f1b1b6fib0alffb1b0f2bcboesbrbqfdawbueqb0bwerbuatdsb4akckb7adbjaxbedrb4blckbabnbiayb6fxb6bib4dyb5b5f1b2b6fib4amfcb2b0f2bibneyc1bqfbb3bueqbdbvexc6atdsb3aiclbaaablaybfdrb5bkckbdbkbjazb7fvbcbib4dyb5b5f1b4b5fib8alfcb4b0f7blbmf8c6bqfcb7bueublbuf8cbatdsb3ajckb6acbjawbfdrb5bkcjbabmbjaxb5fqbkbi",
+        "pistol|crouch": "b5ceb4axdgavatdxasabdrb1a5d6b9afctbybadwafbfdaambgcvbbaxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2ateeawbhb5ceb4axdgavatdxasabdrb1a5d6b9afctbybadwafbfdaambgcvbbaxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2ateeawbhb5ceb4axdgavatdxasabdrb1a5d6b9afctbybadwafbfdaambgcvbbaxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2ateeawbhb5ceb4axdgavatdxasabdrb1a5d6b9afctbybadwafbfdaambgcvbbaxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2ateeawbhb5ceb4axdgavatdxasabdrb1a5d6b9afctbybadwafbfdaambgcvbbaxc9bbb2ciciaubic3bdc7axbxb4b1bkbga2ateeawbh",
+        "pistol|stand": "b4dyb5b2f1b0b1fiayahfbb0abeqb8aledbxbmfcazbrerb6bsebbvaudrb4aockbdakblawbfdsb4bpclbcbtblaxb1fyb4bhb4dyb5b4f1b0b4fiazakfcb0adeqb8ameebxbpfcaybteqb5bvebbuatdrb4alckbcagbkaxbfdsb4bnckbcbpbkayb4fyb5bib4dyb5b6f1b0b8fiazanfdazagesb7apegbwbsfbaxbxepb4byeabtatdsb4ajclb6aabkawbedrb4bjcjbbbkbjaxb8fxb5bib4dyb5b6f1b0b7fiazamfcazagerb7apeebxbrfbaybwepb5bxe9buatdsb4aiclbaaablawbedrb5bjckbdbjbkayb7fxb5bib4dyb5b4f2b2b4fjb1akfcb0aderb7ameebwbpfdazbuerb6bvecbvatdsb4alckb8afbjaxbfdsb4bmckb9bpbjayb4fxb8bi",
+        "rifle|crouch": "b4dyb5b2ecaxb8eebdaoeabgajdnbkb0dpc8bqecb0bvdsapbldvbhatdsb8aydbcdaqclblbddrb0bld6c2bicabgbdeebrbkb4dyb5b5f1b9b4fhb5amfdbgapfkc3atgcbtbofcb1c4f8bibjftbhatdsb8aydbcdaqclblbddrb0bld6c2bicabgb5fwb2bkb4dyb5b5f1b9b4fhb5amfdbgapfkc3atgcbtbofcb1c4f8bibjftbhatdsb8aydbcdaqclblbddrb0bld6c2bicabgb5fwb2bkb4dyb5b2ecaxb8eebdaoeabgajdnbkb0dpc8bqecb0bvdsapbldvbhatdsb8aydbcdaqclblbddrb0bld6c2bicabgbdeebrbkb4dyb5b3ezb3ayf5aoagf6b0acfrbaaag1aibjf6ambvflazb6fqalatdsb8aydbcdaqclblbddrb0bld6c2bicabgawfbaabk",
+        "rifle|stand": "b4dyb5b3f1b2b8fhb4ayf9blavenbrbkewc5blf8aqbremambveubeaxdsbeb2crc2asbpc6badraxbvcoaqbmbpadbdfsbbbjb4dyb5b2f1b1b6fib2awfbbkavepbsbkf0c4bjf9apbrenambuexbeaxdsbeb1cqc1asbpc5b9drawbucoapblboacbafvb8bjb4dyb5b2f1b1b4fib1awfbbjaweqbsbkf4c4bifaaobsepambuf0beaxdsbeb2crc2asbpc6badraxbvcoaqblboadb7fwb7bib4dyb5b1f1b0b3fib0aufbbiaxeqbsbjf6c3bhfaanbsepambuf2bdaxdsbeb1crc2asbpc6badrawbucoapblboadb5fxb6bib4dyb5b0f1b0b0fiayatfcbhaxesbsbifac2bgfbambserambtf6bdaxdsbeb1cqc1asbpc6badrawbucoapblboacb2fyb3bi",
+      },
+    };
+    /*@@HITVOL_DATA_END@@*/
+    // decode: 2 base-36 chars per value, centimetres + 400 (range -4.00 .. +8.95 m)
+    function dec(str) {
+      var n = str.length / 2, out = new Float32Array(n);
+      for (var i = 0; i < n; i++) out[i] = (parseInt(str.substr(i * 2, 2), 36) - 400) / 100;
+      return out;
+    }
+    var T = {}, reach = 0;
+    if (DATA) for (var sk in DATA) {
+      T[sk] = {};
+      for (var hold in DATA[sk]) {
+        var v = dec(DATA[sk][hold]);
+        T[sk][hold] = v;
+        for (var k = 0; k < PITCH.length; k++) {
+          for (var j = 0; j < JOINTS.length; j++) {
+            var x = v[k * NV + j * 3], z = v[k * NV + j * 3 + 2];
+            var rr = Math.sqrt(x * x + z * z) + 0.2;
+            if (rr > reach) reach = rr;
+          }
+        }
+      }
+    }
+    return { JOINTS: JOINTS, SEGS: SEGS, PITCH: PITCH, NV: NV, DOFF: DOFF, T: T, RADII: RADII || {}, SKINS: SKINS, reach: Math.max(reach, PLAYERK.radius + 0.12),
+             ok: !!DATA };
+  })();
+
+  /** The pose key of an actor (hold | stance). hold: "rifle" for every long gun (player.js gunFamily), "pistol" for the
+   *  procedural pistol carry, "pistolAds" for its raised-arms aim. stance: "stand" | "crouch" (crouch only when the
+   *  rig HAS the crouch clip, exactly as actorHeight). */
+  function hitVolPose(a) {
+    var w = a && a.weapon && a.weapon.id, def = w && WEAPONS[w];
+    var hold = def && def.cls === "pistol" ? (a.input && a.input.ads ? "pistolAds" : "pistol") : "rifle";
+    return hold + "|" + (a && a.crouching && a.hasCrouchClip ? "crouch" : "stand");
+  }
+  var _hvJ = new Float64Array(72);
+  /** Fill _hvJ with the actor's interpolated joints + head (local frame). Returns the radius table or null (no data). */
+  function hitVolJoints(a) {
+    if (!HITVOL.ok) return null;
+    var sk = HITVOL.T[a && a.skin] ? a.skin : "soldier";
+    var tab = HITVOL.T[sk];
+    if (!tab) return null;
+    var v = tab[hitVolPose(a)] || tab["rifle|stand"];
+    if (!v) return null;
+    var P = HITVOL.PITCH, NV = HITVOL.NV, p = clamp((a && a.pitch) || 0, P[0], P[P.length - 1]);
+    var k = 0;
+    while (k < P.length - 2 && p > P[k + 1]) k++;
+    var f = (p - P[k]) / (P[k + 1] - P[k]);
+    for (var i = 0; i < NV; i++) _hvJ[i] = v[k * NV + i] + (v[(k + 1) * NV + i] - v[k * NV + i]) * f;
+    var R = HITVOL.RADII[sk] || HITVOL.RADII.soldier;
+    // torso columns: offsets along the hip line (LeftUpLeg 9 -> RightUpLeg 12) and the shoulder line (LeftArm 3 -> RightArm 6)
+    hvSide(0, 9, 12, R[7], 15); hvSide(1, 3, 6, R[8], 17); hvSide(2, 3, 6, R[9], 19);
+    return R;
+  }
+  /** Derived points: joint `c` (0 Hips, 1 Spine2, 2 Neck) -/+ k along the unit line a -> b, written as points d, d + 1. */
+  function hvSide(c, a, b, k, d) {
+    var J = _hvJ, ux = J[b * 3] - J[a * 3], uy = J[b * 3 + 1] - J[a * 3 + 1], uz = J[b * 3 + 2] - J[a * 3 + 2];
+    var l = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
+    ux = ux / l * k; uy = uy / l * k; uz = uz / l * k;
+    var o = HITVOL.DOFF + (d - 15) * 3;
+    J[o] = J[c * 3] - ux; J[o + 1] = J[c * 3 + 1] - uy; J[o + 2] = J[c * 3 + 2] - uz;
+    J[o + 3] = J[c * 3] + ux; J[o + 4] = J[c * 3 + 1] + uy; J[o + 5] = J[c * 3 + 2] + uz;
+  }
+  function hvOff(i) { return i < 15 ? i * 3 : HITVOL.DOFF + (i - 15) * 3; }
+  /** Entry parameter (0..1) of segment p0 -> p0 + d into the capsule a-b of radius r (all local), or -1. */
+  function segCapsule(px, py, pz, dx, dy, dz, ax, ay, az, bx, by, bz, r) {
+    // closest approach between the shot segment and the bone segment, then a sphere test at the closest bone point,
+    // refined with the exact infinite-cylinder entry when the closest point is inside the bone span
+    var ux = bx - ax, uy = by - ay, uz = bz - az;
+    var wx = px - ax, wy = py - ay, wz = pz - az;
+    var aa = dx * dx + dy * dy + dz * dz, bb = dx * ux + dy * uy + dz * uz, cc = ux * ux + uy * uy + uz * uz;
+    var dd = dx * wx + dy * wy + dz * wz, ee = ux * wx + uy * wy + uz * wz;
+    var den = aa * cc - bb * bb, s, t;
+    if (cc < 1e-9) { s = clamp(-dd / aa, 0, 1); t = 0; }
+    else {
+      s = den > 1e-12 ? clamp((bb * ee - cc * dd) / den, 0, 1) : 0;
+      t = clamp((bb * s + ee) / cc, 0, 1);
+      s = clamp((bb * t - dd) / aa, 0, 1);
+    }
+    var cx = px + dx * s - (ax + ux * t), cy = py + dy * s - (ay + uy * t), cz = pz + dz * s - (az + uz * t);
+    if (cx * cx + cy * cy + cz * cz > r * r) return -1;
+    // entry: sphere at the bone point nearest the closest approach (a conservative, monotone back-off along the shot)
+    var qx = ax + ux * t, qy = ay + uy * t, qz = az + uz * t;
+    var ox = px - qx, oy = py - qy, oz = pz - qz;
+    var B = ox * dx + oy * dy + oz * dz, C = ox * ox + oy * oy + oz * oz - r * r;
+    var disc = B * B - aa * C;
+    if (disc < 0) return s;
+    var e = (-B - Math.sqrt(disc)) / aa;
+    return e < 0 ? (C <= 0 ? 0 : s) : e > s ? s : e;
+  }
+  /** LC-22: does the WORLD segment (ax..bz) hit actor t's body? Returns the entry parameter in [0, 1] or -1, and sets
+   *  HITVOL_HIT.head (head sphere) / .part (segment index, -1 head). Swimming / downed / no data: the legacy cylinder
+   *  rule (callers keep their own broad phase). Pure: no allocation. */
+  var HITVOL_HIT = { head: false, part: -1, legacy: false };
+  function hitVolSegment(t, ax, ay, az, bx, by, bz) {
+    HITVOL_HIT.head = false; HITVOL_HIT.part = -1; HITVOL_HIT.legacy = false;
+    var R = (t && !t.swimming && !t.downed) ? hitVolJoints(t) : null;
+    if (!R) { HITVOL_HIT.legacy = true; return -2; }
+    var s = Math.sin(t.yaw || 0), c = Math.cos(t.yaw || 0);
+    // world -> local (x right = (c, -s), z forward = (-s, -c) in world xz)
+    var px = ax - t.pos.x, pz = az - t.pos.z, qx = bx - t.pos.x, qz = bz - t.pos.z;
+    var lpx = px * c - pz * s, lpz = -px * s - pz * c, lqx = qx * c - qz * s, lqz = -qx * s - qz * c;
+    var lpy = ay - t.pos.y, lqy = by - t.pos.y;
+    var dx = lqx - lpx, dy = lqy - lpy, dz = lqz - lpz;
+    if (dx * dx + dy * dy + dz * dz < 1e-12) return -1;
+    var J = _hvJ, best = 2, part = -1, head = false, S = HITVOL.SEGS;
+    for (var i = 0; i < S.length; i++) {
+      var g = S[i], a3 = hvOff(g[0]), b3 = hvOff(g[1]);
+      var e = segCapsule(lpx, lpy, lpz, dx, dy, dz, J[a3], J[a3 + 1], J[a3 + 2], J[b3], J[b3 + 1], J[b3 + 2], R[g[2]]);
+      if (e >= 0 && e < best) { best = e; part = i; }
+    }
+    var h = HITVOL.JOINTS.length * 3, hr = J[h + 3];
+    var eh = segCapsule(lpx, lpy, lpz, dx, dy, dz, J[h], J[h + 1], J[h + 2], J[h], J[h + 1], J[h + 2], hr);
+    if (eh >= 0 && eh <= best) { best = eh; part = -1; head = true; }
+    if (best > 1) return -1;
+    HITVOL_HIT.head = head; HITVOL_HIT.part = part;
+    return best;
+  }
 
   /** The ONE movement basis for a given yaw: forward (f*) and strafe-right (r*).
    *  Ground movement and the glide each derived this inline, and the glide got
@@ -237,7 +553,7 @@
     if (!def) return 1;
     st = st || {};
     var spread = (def.spreadDeg || 1) * (RARITY_SPREAD_MULT[rarity] || 1);
-    if (st.ads) spread *= 0.5;
+    if (st.ads) spread *= def.adsSpreadMult || 0.5;      // the LMG's ADS bonus is bigger (0.35): wild hip, steady ADS
     // Movement penalty GRADED BY SPEED, not a binary "are you moving".
     // It used to be a flat 1.4x for anything over 1 m/s, which meant walking and
     // sprinting cost exactly the same accuracy — so sprint was free and plain
@@ -285,6 +601,11 @@
     ar:        { perShot: 0.20 },
     sniper:    { perShot: 0.50 },
     glauncher: { perShot: 0.50 },
+    // P2-D roster: a DMR follow-up is 0.45x (tap, don't spam), the LMG opens slowest of the automatics (its hip
+    // cone is already wide: shot 2 at 0.24x of 3.2 deg), the burst rifle's 3 rounds stay inside 0.59x
+    dmr:       { perShot: 0.35 },
+    lmg:       { perShot: 0.10 },
+    burst:     { perShot: 0.16 },
     holdS: 0.30, coolPerS: 3.0,
   };
   function heatNow(heatAfterShot, sinceS) {
@@ -322,6 +643,14 @@
       return { pitch: t.pitch, yaw: t.yaw, jitter: 0.0008, cap: 0.07, hipMult: 1.15, crouchMult: 0.85, recoverPerS: 0.26, recoverYawPerS: 0.15 }; })(),
     smg: (function () { var t = recoilTable(30, 0.0047, 8, 0.0002, 0.0010, 0.6, 2.0);
       return { pitch: t.pitch, yaw: t.yaw, jitter: 0.0007, cap: 0.05, hipMult: 1.15, crouchMult: 0.85, recoverPerS: 0.22, recoverYawPerS: 0.15 }; })(),
+    // P2-D: the LMG climbs hard for ~10 rounds then settles into a slow drift you hold down for the rest of the 75
+    // (uncompensated ADS: 4.2 deg at round 30, capped at 0.08 rad); a heavier sideways wander than the AR.
+    lmg: (function () { var t = recoilTable(75, 0.0065, 8, 0.00025, 0.0016, 0.33, 1.1);
+      return { pitch: t.pitch, yaw: t.yaw, jitter: 0.0010, cap: 0.08, hipMult: 1.25, crouchMult: 0.8, recoverPerS: 0.24, recoverYawPerS: 0.15 }; })(),
+    // the burst rifle: a 3-round burst climbs 0.78 deg ADS (the AR's first three: 1.15), and the pause between
+    // bursts recovers it (recovery runs whenever no round is due), so held bursts walk up only slowly.
+    burst: (function () { var t = recoilTable(30, 0.0055, 5, 0.0003, 0.0009, 0.7, 0.3);
+      return { pitch: t.pitch, yaw: t.yaw, jitter: 0.0006, cap: 0.05, hipMult: 1.15, crouchMult: 0.85, recoverPerS: 0.26, recoverYawPerS: 0.15 }; })(),
   };
   /** Pitch kick (rad) of shot `idx` (0-based) of a burst, before the cap. stance: {ads, crouching}. */
   function recoilPitchKick(weaponId, idx, stance) {
@@ -646,9 +975,28 @@
 
   var LOOT_WEIGHTS = {
     floor: [40, 30, 18, 9, 3],
-    chest: [15, 30, 30, 18, 7],
+    // LC-77 (parity P2-D): a chest never holds a COMMON gun (it was 15 % of chest guns: opening a chest and finding
+    // the floor's grey rifle read as a broken chest; Fortnite chests and PUBG crates roll uncommon+ only). The 15 is
+    // spread over the other tiers in proportion.
+    chest: [0, 35, 35, 21, 9],
     supply: [0, 0, 10, 35, 55],
+    // LC-29 POI LOOT TIERS (parity P2-D tables; loot.js P2-H picks the tier per POI and the hot zone). "floor" IS
+    // the basic tier (unchanged, so a basic POI rolls exactly what every point rolled before). Rare share
+    // (index 2): basic 18 %, mid 23 %, high 28 % (1.56x basic: the >= 1.5x gate), hot 32 % (1.78x); rare+ share
+    // 30 / 38 / 52 / 64 %.
+    floor_mid:  [32, 31, 23, 11, 3],
+    floor_high: [20, 28, 28, 18, 6],
+    floor_hot:  [10, 26, 32, 22, 10],
   };
+  /** POI loot tiers (LC-29): the rarity table and the floor-roll multiplier (into floorRollCount's lootMult) per tier.
+   *  basic = today's table and today's roll count, so an untiered point is unchanged. */
+  var LOOT_TIERS = {
+    basic: { table: "floor",      rollMult: 1.0 },
+    mid:   { table: "floor_mid",  rollMult: 1.15 },
+    high:  { table: "floor_high", rollMult: 1.35 },
+    hot:   { table: "floor_hot",  rollMult: 1.6 },
+  };
+  function lootTier(tier) { return LOOT_TIERS[tier] || LOOT_TIERS.basic; }
 
   // AI skill tiers (1-indexed by tier-1) — wide spread so the lobby reads as
   // real players: beginners whiff constantly, experts are genuinely scary
@@ -796,8 +1144,21 @@
     // Precompute circle sequence: each target circle fully inside the previous.
     this.circles = [{ x: 0, z: 0, r: startR }];
     var prev = this.circles[0];
+    // LC-13 (owner OD-1, applied at F = 1.0 per the P1-G pack): STANDARD mode places every circle AREA-UNIFORM inside
+    // the disc it can occupy (radius F x (prev.r - r) around the previous centre), LAND-CHECKED (opts.landAt).
+    // Quick Match and practice keep the near-concentric rule below byte for byte (OD-1: "Quick unchanged").
+    var place = this.mode === "standard" && STORM_PLACE.modes.indexOf(this.mode) >= 0;
+    var landAt = typeof opts.landAt === "function" ? opts.landAt : null;
+    this.placement = place ? "area" : "concentric";
+    this.landChecked = place && !!landAt;
     for (var i = 0; i < this.phases.length; i++) {
       var r = this.phases[i].radiusFrac * this.half;
+      if (place) {
+        var c0 = placeCircle(rng, prev, r, this.half, landAt, i);
+        this.circles.push(c0);
+        prev = c0;
+        continue;
+      }
       // 0.5 (was 0.8): the offset ADDS to how far the trailing edge sweeps, and
       // at 0.8 a bad roll made the far side close at (1.8 x dR)/shrink — up to
       // 10 m/s on standard phase 1 and 19 m/s on quick vs 8.0 sprint: a death
@@ -849,6 +1210,38 @@
       t += ph.wait + this.shrinkS[j];
     }
     this.totalS = t;
+  }
+
+  /** LC-13 circle placement (P1-G storm study `proposed()`, owner OD-1 at F = 1.0, standard mode only).
+   *  Up to `tries` candidates per circle (a FIXED budget drawn from the storm's own seeded stream, so the plan is a
+   *  pure function of seed + mode + half + the land predicate): angle uniform, offset sqrt(u) x slack = uniform BY
+   *  AREA over the disc of radius F x (prev.r - r), so the new circle is always fully inside the old one (nesting
+   *  holds by construction; the map-bounds clamp can only move it inward). Each candidate is scored by a 9-point
+   *  land share (the centre + 8 points at 0.6 r); the first to reach `need` (circles 1-5: 6 of 9, circles 6-8: all
+   *  9) is taken, else the best seen. Measured on 2000 seeds x 3 maps (P1-G): final-centre p50 164 / 186 / 189 m
+   *  (was 37), 0 final centres in water (Deepwood was 192 of 2000), total storm time 920 s on every seed, no phase
+   *  extended by the edge-speed cap, 0 nesting violations. landAt(x, z) -> true on land; null = all land. */
+  var STORM_PLACE = { modes: ["standard"], F: 1.0, tries: 12, need: 0.67, needLate: 1.0, lateFrom: 5, ringFrac: 0.6 };
+  function placeCircle(rng, prev, r, half, landAt, i) {
+    var P = STORM_PLACE, slack = Math.max(0, prev.r - r) * P.F, need = i >= P.lateFrom ? P.needLate : P.need;
+    var bx = 0, bz = 0, bs = -1, bk = -1;
+    for (var k = 0; k < P.tries; k++) {
+      var ang = rng() * Math.PI * 2, off = Math.sqrt(rng()) * slack;
+      var cx = clamp(prev.x + Math.cos(ang) * off, -half + r, half - r), cz = clamp(prev.z + Math.sin(ang) * off, -half + r, half - r);
+      var score = 1, centre = true;
+      if (landAt) {
+        centre = !!landAt(cx, cz);
+        var n = centre ? 1 : 0;
+        for (var j = 0; j < 8; j++) { var a = j * Math.PI / 4; if (landAt(cx + Math.cos(a) * r * P.ringFrac, cz + Math.sin(a) * r * P.ringFrac)) n++; }
+        score = n / 9;
+      }
+      // a dry CENTRE is required on every circle (the P1-G rule only asked it of circles 6-8, so 115 Isla / 381 Deepwood
+      // seeds of 2000 had an early circle centred on the sea or the river); ranking: dry centre first, then land share
+      var key = (centre ? 2 : 0) + score;
+      if (key > bk) { bx = cx; bz = cz; bs = score; bk = key; }
+      if (centre && score >= need) break;
+    }
+    return { x: bx, z: bz, r: r, land: bs };
   }
 
   /** The state is a pure function of t, and every frame asks for the SAME t many
@@ -917,6 +1310,9 @@
     smg:    0.12,      // 15-19 at base 17
     shotgun: 0.15,     // per PELLET, on top of how many pellets land
     frag: 0.10,        // same explosive yield swing as the launcher
+    dmr: 0.05,         // 44-48 at base 46: a marksman rifle, nearly as tight as the sniper
+    burst: 0.07,       // 26-30 at base 28
+    lmg: 0.10,         // 22-26 at base 24
   };
 
   /** `roll` is an optional [0,1) sample. Omit it for the NOMINAL value — every
@@ -978,25 +1374,34 @@
   // spawns holding one, so a floor pistol is the least useful gun in the game.
   var FLOOR_GUN_SHARE = 0.55;
   var FLOOR_AMMO_SHARE = 0.20;           // standalone ammo; guns bring their own
-  var FLOOR_GUN_WEIGHTS = [8, 24, 26, 20, 12, 10];   // pistol smg ar shotgun sniper glauncher
-  // consumable rolls; the trailing "frag" entry is weight 0 until P2-D (LC-14 built dark)
-  var FLOOR_CON_IDS = ["bandage", "mini_shield", "medkit", "big_shield", "frag"];
-  var FLOOR_CON_WEIGHTS = [32, 34, 18, 16, 0];
-  var CHEST_CON_IDS = ["mini_shield", "big_shield", "medkit", "bandage", "frag"];
-  var CHEST_CON_WEIGHTS = [34, 26, 20, 20, 0];
+  // POSITIONAL, one weight per WEAPON_IDS entry in its order (see WEAPON_IDS):
+  //   pistol smg ar shotgun sniper glauncher | dmr lmg burst   (P2-D: the six old weights trimmed to make room;
+  //   the LMG is the rarest floor gun, as PUBG's M249 is; the burst rifle sits with the AR)
+  var FLOOR_GUN_WEIGHTS  = [8, 22, 21, 18, 9, 8, 8, 4, 12];
+  var CHEST_GUN_WEIGHTS  = [6, 17, 20, 17, 11, 9, 9, 6, 11];
+  var SUPPLY_GUN_WEIGHTS = [0, 3, 18, 10, 18, 14, 14, 13, 10];
+  // consumable rolls; the trailing "frag" and "smoke" entries are weight 0 (LC-14 built dark: the integrator raises
+  // them together once bots throw, with a MAP_GEN_VERSION bump). Trailing zeros never roll (see rollFloorItem).
+  var FLOOR_CON_IDS = ["bandage", "mini_shield", "medkit", "big_shield", "frag", "smoke"];
+  var FLOOR_CON_WEIGHTS = [32, 34, 18, 16, 0, 0];
+  var CHEST_CON_IDS = ["mini_shield", "big_shield", "medkit", "bandage", "frag", "smoke"];
+  var CHEST_CON_WEIGHTS = [34, 26, 20, 20, 0, 0];
+  function conCount(cid) { return cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : (cid === "frag" || cid === "smoke") ? 2 : 1; }
 
   /** One floor-spawn item. kind: weapon|ammo|consumable.
    *  A weapon carries `companions`: its own ammo, 1-2 boxes' worth, as ONE item
-   *  (one pickup, one mesh — a box per box would double the loot draw calls). */
-  function rollFloorItem(rng) {
+   *  (one pickup, one mesh — a box per box would double the loot draw calls).
+   *  `tier` (LC-29, optional): "basic" | "mid" | "high" | "hot" picks the rarity table (lootTier); omitted =
+   *  basic = exactly the old draw sequence. A big-magazine gun brings proportionally more boxes (the LMG: 3-4). */
+  function rollFloorItem(rng, tier) {
     var r = rng();
     if (r < FLOOR_GUN_SHARE) {
       var wid = WEAPON_IDS[weightedIndex(rng, FLOOR_GUN_WEIGHTS)];
-      var gun = { kind: "weapon", id: wid, rarity: rollRarity(rng, "floor") };
+      var gun = { kind: "weapon", id: wid, rarity: rollRarity(rng, lootTier(tier).table) };
       var am = WEAPONS[wid].ammo;
       if (am && AMMO[am]) {
         var boxes = rng() < 0.5 ? 1 : 2;
-        gun.companions = [{ kind: "ammo", id: am, count: AMMO[am].box * boxes }];
+        gun.companions = [{ kind: "ammo", id: am, count: AMMO[am].box * boxes * ammoBoxMult(wid) }];
       }
       return gun;
     }
@@ -1008,13 +1413,16 @@
     // entry (the running roll is already <= 0 at the last positive weight) and the total is unchanged, so
     // every seed rolls exactly what it rolled before. P2-D raises the weight with MAP_GEN_VERSION.
     var cid = FLOOR_CON_IDS[weightedIndex(rng, FLOOR_CON_WEIGHTS)];
-    return { kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : cid === "frag" ? 2 : 1 };
+    return { kind: "consumable", id: cid, count: conCount(cid) };
   }
+  /** Ammo boxes scale with the magazine: 1x for every 30-round-or-smaller gun (all six old guns: unchanged), 3x for
+   *  the LMG's 75 so its floor drop is a usable belt (60-120 rounds), not a third of one magazine. */
+  function ammoBoxMult(wid) { var d = WEAPONS[wid]; return Math.max(1, Math.round(((d && d.mag) || 0) / 30)); }
 
   /** Flat list for one floor roll: [item, ...its companions], companions stripped
-   *  off the item so they never ride along into an inventory slot. */
-  function rollFloorSpawn(rng) {
-    var it = rollFloorItem(rng);
+   *  off the item so they never ride along into an inventory slot. `tier`: see rollFloorItem. */
+  function rollFloorSpawn(rng, tier) {
+    var it = rollFloorItem(rng, tier);
     var out = [it];
     if (it.companions) {
       for (var i = 0; i < it.companions.length; i++) out.push(it.companions[i]);
@@ -1026,8 +1434,8 @@
   /** How many floor rolls a loot point gets. First roll almost always, a second
    *  one sometimes — a pile, not a single item. `lootMult` is MODE[mode].lootMult. */
   var FLOOR_ROLL_P = [0.85, 0.25];
-  function floorRollCount(rng, lootMult) {
-    var m = lootMult || 1;
+  function floorRollCount(rng, lootMult, tier) {
+    var m = (lootMult || 1) * (tier ? lootTier(tier).rollMult : 1);
     var n = 0;
     if (rng() < Math.min(0.97, FLOOR_ROLL_P[0] * Math.sqrt(m))) n++;
     if (rng() < Math.min(0.9, FLOOR_ROLL_P[1] * m)) n++;
@@ -1066,7 +1474,7 @@
     var dist = Math.max(0.5, distM || 0);
     if (d.arc && dist > LAUNCHER_MAX_M) return 0;             // shell cannot reach
     var ehp = Math.max(1, opts.ehp != null ? opts.ehp : 150);
-    var interval = 60 / d.rpm;
+    var interval = fireInterval(d);                             // a burst gun at its sustained cadence, not its cyclic rpm
     var loaded = opts.mag != null ? opts.mag : d.mag;
     var reserve = opts.reserve != null ? opts.reserve : Infinity;
     if (loaded + reserve <= 0) return 0;                        // dry: worth nothing
@@ -1111,16 +1519,16 @@
     return v;
   }
 
-  /** Chest burst: weapon + ammo for it + one extra. */
+  /** Chest burst: weapon + ammo for it + one extra. Never a common gun (LC-77: LOOT_WEIGHTS.chest[0] = 0). */
   function rollChest(rng) {
-    var wid = WEAPON_IDS[weightedIndex(rng, [8, 20, 26, 20, 14, 12])];
+    var wid = WEAPON_IDS[weightedIndex(rng, CHEST_GUN_WEIGHTS)];
     var w = WEAPONS[wid];
     var items = [{ kind: "weapon", id: wid, rarity: rollRarity(rng, "chest") }];
-    if (w.ammo) items.push({ kind: "ammo", id: w.ammo, count: AMMO[w.ammo].box * 2 });
+    if (w.ammo) items.push({ kind: "ammo", id: w.ammo, count: AMMO[w.ammo].box * 2 * ammoBoxMult(wid) });
     var r = rng();
     if (r < 0.55) {
-      var cid = CHEST_CON_IDS[weightedIndex(rng, CHEST_CON_WEIGHTS)];   // frag last at weight 0 (see rollFloorItem)
-      items.push({ kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : cid === "frag" ? 2 : 1 });
+      var cid = CHEST_CON_IDS[weightedIndex(rng, CHEST_CON_WEIGHTS)];   // frag + smoke last at weight 0 (see rollFloorItem)
+      items.push({ kind: "consumable", id: cid, count: conCount(cid) });
     } else {
       items.push({ kind: "ammo", id: ["light", "medium", "shells"][weightedIndex(rng, [34, 34, 32])], count: 20 });
     }
@@ -1128,12 +1536,12 @@
   }
 
   function rollSupplyDrop(rng) {
-    var wid = WEAPON_IDS[weightedIndex(rng, [0, 5, 30, 20, 25, 20])];
+    var wid = WEAPON_IDS[weightedIndex(rng, SUPPLY_GUN_WEIGHTS)];
     return [
       { kind: "weapon", id: wid, rarity: rollRarity(rng, "supply") },
       { kind: "consumable", id: "big_shield", count: 2 },
       { kind: "consumable", id: "medkit", count: 1 },
-      { kind: "ammo", id: WEAPONS[wid].ammo || "medium", count: (AMMO[WEAPONS[wid].ammo || "medium"] || AMMO.medium).box * 3 },
+      { kind: "ammo", id: WEAPONS[wid].ammo || "medium", count: (AMMO[WEAPONS[wid].ammo || "medium"] || AMMO.medium).box * 3 * ammoBoxMult(wid) },
     ];
   }
 
@@ -1225,6 +1633,18 @@
     BLOOM: BLOOM, FIRST_SHOT_MULT: FIRST_SHOT_MULT, heatNow: heatNow, heatAfterShot: heatAfterShot, setLiveHeat: setLiveHeat,
     RECOIL: RECOIL, recoilPitchKick: recoilPitchKick,
     FLOOR_CON_IDS: FLOOR_CON_IDS, FLOOR_CON_WEIGHTS: FLOOR_CON_WEIGHTS, CHEST_CON_IDS: CHEST_CON_IDS, CHEST_CON_WEIGHTS: CHEST_CON_WEIGHTS,
+    // parity P2-D / P3 (lane sim)
+    fireInterval: fireInterval, fireMode: fireMode, ammoBoxMult: ammoBoxMult, conCount: conCount,
+    CHEST_GUN_WEIGHTS: CHEST_GUN_WEIGHTS, SUPPLY_GUN_WEIGHTS: SUPPLY_GUN_WEIGHTS, LOOT_TIERS: LOOT_TIERS, lootTier: lootTier,
+    STORM_PLACE: STORM_PLACE, placeCircle: placeCircle,
+    SMOKE: SMOKE, smokeRadiusAt: smokeRadiusAt, segmentSmoked: segmentSmoked,
+    TEAM_SIZE: TEAM_SIZE, TEAM_MODES: TEAM_MODES, teamSize: teamSize, dbnoOn: dbnoOn, teamCount: teamCount,
+    DBNO: DBNO, DBNO_HP: DBNO_HP, DBNO_BLEED_HPS: DBNO_BLEED_HPS, DBNO_KNOCK_MULT: DBNO_KNOCK_MULT, DBNO_CRAWL: DBNO_CRAWL,
+    DBNO_HEIGHT: DBNO_HEIGHT, DBNO_EYE: DBNO_EYE, REVIVE_S: REVIVE_S, REVIVE_HP: REVIVE_HP, REVIVE_RANGE: REVIVE_RANGE, dbnoBleedRate: dbnoBleedRate,
+    FALL: FALL, FALL_SAFE_H: FALL_SAFE_H, FALL_SAFE_V: FALL_SAFE_V, FALL_DMG_PER_V: FALL_DMG_PER_V, FALL_EXP: FALL_EXP,
+    LAND_STAGGER_S: LAND_STAGGER_S, LAND_STAGGER_V: LAND_STAGGER_V, fallDamage: fallDamage, fallSpeedForHeight: fallSpeedForHeight,
+    fallSafeHeight: fallSafeHeight, fallLethalHeight: fallLethalHeight,
+    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FFG = root.FFG || {};

@@ -191,7 +191,7 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
 
 // ── Weapon roster (BR shooter, no melee/building) ────────────────────────────
 {
-  ok(R.WEAPON_IDS.length === 6, "weapons: exactly 6 lootable guns");
+  ok(R.WEAPON_IDS.length === 9, "weapons: exactly 9 lootable guns (P2-D roster: + DMR, LMG, burst rifle)");
   ok(["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"].every((w) => R.WEAPON_IDS.includes(w)), "weapons: pistol/SMG/AR/shotgun/sniper/grenade-launcher");
   ok(!R.WEAPONS.pickaxe && !R.WEAPONS.rocket && !R.WEAPONS.grenade, "weapons: pickaxe/rocket/hand-grenade removed");
   ok(R.WEAPONS.glauncher.arc && R.WEAPONS.glauncher.splashR > 0 && R.WEAPONS.glauncher.fuseS > 0, "weapons: grenade launcher lobs fused splash rounds");
@@ -241,12 +241,13 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     if (!it.companions || it.companions.length !== 1) { compOk = false; continue; }
     withComp++;
     const c = it.companions[0];
-    const box = R.AMMO[want].box;
+    // P2-D: a big-magazine gun brings proportionally more boxes (R.ammoBoxMult: the LMG 3x, every old gun 1x)
+    const box = R.AMMO[want].box * R.ammoBoxMult(it.id);
     if (c.kind !== "ammo" || c.id !== want || !(c.count === box || c.count === box * 2)) compOk = false;
     boxesSeen.add(c.count / box);
   }
   ok(guns > 0 && withComp === guns, "floor loot: every floor gun has an ammo companion (" + withComp + "/" + guns + ")");
-  ok(compOk, "floor loot: the companion is the gun's OWN ammo type, 1 or 2 boxes");
+  ok(compOk, "floor loot: the companion is the gun's OWN ammo type, 1 or 2 boxes (x ammoBoxMult)");
   ok(boxesSeen.has(1) && boxesSeen.has(2), "floor loot: both 1-box and 2-box companions occur");
   ok(pistols / guns < 0.12, "floor loot: floor pistols are rare (everyone spawns with one) (" + (100 * pistols / guns).toFixed(1) + "%)");
 
@@ -1045,7 +1046,7 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(approx(R.effectiveSpread("ar", 0, Object.assign({}, still, { sinceLastShotS: 0.1 })), 1.5), "bloom: a cleared registry is the legacy rule again");
 
   // LC-14: the frag, built dark
-  ok(!R.WEAPON_IDS.includes("frag") && R.WEAPON_IDS.length === 6, "frag: not a lootable gun (WEAPON_IDS untouched)");
+  ok(!R.WEAPON_IDS.includes("frag") && !R.WEAPON_IDS.includes("smoke"), "frag: not a lootable gun (no throwable in WEAPON_IDS)");
   const fc = R.CONSUMABLES.frag, fw = R.WEAPONS.frag;
   ok(fc && fc.throws === "frag" && fc.heals === undefined && fc.amount === undefined && fc.cap === undefined, "frag: a consumable that THROWS and carries no heal fields (every heal path refuses it)");
   ok(fw && fw.arc && fw.fuseS > 0 && fw.splashR > 0 && !fw.mag && !fw.ammo && R.hitDamage("frag", 0, 0, false) === 100, "frag: blast definition (100 at the centre, splash " + fw.splashR + " m, fuse " + fw.fuseS + " s), no magazine, no ammo");
@@ -1087,7 +1088,8 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
 
   // source pins: the browser halves of the contract (weapons.js; read-only check, skipped outside the repo)
   let wj = null;
-  try { wj = require("fs").readFileSync(require("path").join(__dirname, "..", "3d", "royale", "weapons.js"), "utf8"); } catch (e) { /* skip */ }
+  // CRLF -> LF: a Windows checkout (core.autocrlf true) has CRLF files, and the pins below are written for "\n"
+  try { wj = require("fs").readFileSync(require("path").join(__dirname, "..", "3d", "royale", "weapons.js"), "utf8").replace(/\r\n/g, "\n"); } catch (e) { /* skip */ }
   if (wj) {
     ok(/if \(!slot\) return;\s*\n(\s*\/\/[^\n]*\n)*\s*if \(a\.healing && !a\.isBot && idx !== a\.inventory\.active && W\.cancelHeal\) W\.cancelHeal\(W, a\);/.test(wj),
        "LC-05: equipSlot opens with the inert human-only cancelHeal hook");
@@ -1098,6 +1100,193 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(/const modern = !a\.isBot && !touchOn\(W\);/.test(wj) && /heat: modern \? \(a\._heat \|\| 0\) : null/.test(wj) && /K\.RECOIL\[a\.weapon\.id\] : null/.test(wj),
        "LC-01/33: patterns, bloom and disc pellets are gated on a non-touch human (bots + touch keep the legacy path)");
   } else console.log("  INFO  weapons.js not found next to this file: source pins skipped");
+}
+
+// ── Parity P2-D / P3 (lane sim): roster, fire modes, loot tables, storm placement, smoke, team modes, DBNO, fall,
+//    hit volumes ─────────────────────────────────────────────────────────────────────────────────────────────────
+{
+  const ids = R.WEAPON_IDS;
+  ok(ids.length === 9 && ["dmr", "lmg", "burst"].every((w) => ids.includes(w)), "P2-D roster: 9 guns incl. DMR, LMG and burst rifle");
+  ok(ids.every((w) => ["auto", "semi", "burst"].includes(R.WEAPONS[w].fire) && R.fireMode(w) === R.WEAPONS[w].fire),
+     "P2-D fire field: every gun declares fire auto|semi|burst explicitly (and fireMode reads it)");
+  ok(R.fireMode("smg") === "auto" && R.fireMode("ar") === "auto" && R.fireMode("lmg") === "auto" && R.fireMode("pistol") === "semi" &&
+     R.fireMode("dmr") === "semi" && R.fireMode("sniper") === "semi" && R.fireMode("burst") === "burst", "P2-D fire field: the old SMG/AR auto + every other semi unchanged; LMG auto, DMR semi, burst burst");
+  ok(R.fireMode({ cls: "ar" }) === "auto" && R.fireMode({ cls: "shotgun" }) === "semi", "P2-D fire field: a table without the field falls back to the old cls inference");
+  const B = R.WEAPONS.burst.burst;
+  ok(B && B.n === 3 && B.gapS > 0 && B.delayS > B.gapS && approx(R.fireInterval("burst"), ((B.n - 1) * B.gapS + B.delayS) / B.n, 1e-12),
+     "P2-D burst cadence: n " + B.n + ", gap " + B.gapS + " s, delay " + B.delayS + " s -> sustained interval " + R.fireInterval("burst").toFixed(3) + " s");
+  ok(ids.every((w) => w === "burst" || approx(R.fireInterval(w), 60 / R.WEAPONS[w].rpm, 1e-12)), "P2-D fireInterval: every non-burst gun is exactly 60 / rpm (gunValueAt / gunScore unchanged for them)");
+  const gv = (w, d) => R.gunValueAt(w, 0, d);
+  ok(gv("dmr", 90) > gv("ar", 90), "P2-D gate: DMR beats AR at 90 m (" + gv("dmr", 90).toFixed(1) + " > " + gv("ar", 90).toFixed(1) + ")");
+  ok(gv("ar", 15) > gv("dmr", 15), "P2-D gate: AR beats DMR at 15 m (" + gv("ar", 15).toFixed(1) + " > " + gv("dmr", 15).toFixed(1) + ")");
+  const at30 = ids.map((w) => [w, gv(w, 30)]).sort((a, b) => b[1] - a[1]);
+  ok(at30[0][0] === "lmg", "P2-D gate: LMG has the highest sustained value at 30 m (" + at30.slice(0, 3).map((x) => x[0] + " " + x[1].toFixed(1)).join(", ") + ")");
+  ok(gv("ar", 7) > gv("burst", 7) && gv("ar", 30) > gv("burst", 30) && gv("burst", 60) > gv("ar", 60) && gv("smg", 7) > gv("ar", 7),
+     "P2-D niches: the burst rifle does not dominate the AR (AR wins 7-30 m, burst 60 m+); the SMG still owns 7 m");
+  ok(R.FLOOR_GUN_WEIGHTS.length === ids.length && R.CHEST_GUN_WEIGHTS.length === ids.length && R.SUPPLY_GUN_WEIGHTS.length === ids.length,
+     "P2-D positional weight lists: floor / chest / supply each carry exactly one weight per gun (" + ids.length + ")");
+  const seen = { floor: {}, chest: {}, supply: {} }, lr = R.mulberry32(9001);
+  for (let i = 0; i < 20000; i++) {
+    for (const it of R.rollFloorSpawn(lr)) if (it.kind === "weapon") seen.floor[it.id] = (seen.floor[it.id] || 0) + 1;
+    const ch = R.rollChest(lr)[0]; seen.chest[ch.id] = (seen.chest[ch.id] || 0) + 1;
+    const sd = R.rollSupplyDrop(lr)[0]; seen.supply[sd.id] = (seen.supply[sd.id] || 0) + 1;
+  }
+  ok(["dmr", "lmg", "burst"].every((w) => seen.floor[w] > 0 && seen.chest[w] > 0 && seen.supply[w] > 0),
+     "P2-D gate: each new gun spawns from seeded floor / chest / supply rolls (floor " + ["dmr", "lmg", "burst"].map((w) => w + " " + seen.floor[w]).join(", ") + ")");
+  ok(R.ammoBoxMult("lmg") === 3 && ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher", "dmr", "burst"].every((w) => R.ammoBoxMult(w) === 1),
+     "P2-D ammo: the LMG's 75-round belt brings 3x boxes, every other gun 1x (unchanged)");
+  // LC-34 per-class ADS (owner OD-6)
+  const ads = (w) => R.WEAPONS[w].adsTimeS;
+  ok(ids.every((w) => ads(w) > 0 && ads(w) <= 0.5) && ads("pistol") < ads("smg") && ads("smg") < ads("ar") && ads("ar") < ads("dmr") && ads("dmr") < ads("lmg") && ads("lmg") < ads("sniper") && ads("sniper") === 0.5,
+     "LC-34: per-class ADS times pistol " + ads("pistol") + " < smg " + ads("smg") + " < ar " + ads("ar") + " < dmr " + ads("dmr") + " < lmg " + ads("lmg") + " < sniper " + ads("sniper") + " (unchanged)");
+  ok(R.effectiveSpread("lmg", 0, { ads: true }) < R.effectiveSpread("lmg", 0, {}) * 0.36 && R.effectiveSpread("ar", 0, { ads: true }) === R.effectiveSpread("ar", 0, {}) * 0.5,
+     "P2-D: the LMG's ADS bonus is 0.35x (wild hip, steady ADS); every other gun keeps 0.5x");
+  // LC-77 chests: no commons
+  let chestCommon = 0, chestN = 0;
+  const cr = R.mulberry32(4711);
+  for (let i = 0; i < 20000; i++) for (const it of R.rollChest(cr)) if (it.kind === "weapon") { chestN++; if (it.rarity === 0) chestCommon++; }
+  ok(chestN === 20000 && chestCommon === 0 && R.LOOT_WEIGHTS.chest[0] === 0, "LC-77: 0 common guns in " + chestN + " chest rolls");
+  // LC-29 tier tables
+  const share = (tab, i) => R.LOOT_WEIGHTS[tab][i] / R.LOOT_WEIGHTS[tab].reduce((a, b) => a + b, 0);
+  ok(share("floor_high", 2) >= 1.5 * share("floor", 2) && share("floor_hot", 2) >= share("floor_high", 2) && share("floor_mid", 2) > share("floor", 2),
+     "LC-29: rare share basic " + (100 * share("floor", 2)).toFixed(0) + "% < mid " + (100 * share("floor_mid", 2)).toFixed(0) + "% < high " + (100 * share("floor_high", 2)).toFixed(0) + "% (>= 1.5x) <= hot " + (100 * share("floor_hot", 2)).toFixed(0) + "%");
+  const ta = R.mulberry32(31337), tb = R.mulberry32(31337);
+  let tierSame = true;
+  for (let i = 0; i < 5000 && tierSame; i++) {
+    if (JSON.stringify(R.rollFloorSpawn(ta)) !== JSON.stringify(R.rollFloorSpawn(tb, "basic"))) tierSame = false;
+    if (R.floorRollCount(ta, 1) !== R.floorRollCount(tb, 1, "basic")) tierSame = false;
+  }
+  ok(tierSame && R.lootTier("nope") === R.LOOT_TIERS.basic, "LC-29: an untiered point (or tier 'basic') rolls exactly the old floor draw sequence and roll count");
+  let rareB = 0, rareH = 0, gB = 0, gH = 0;
+  const rb = R.mulberry32(77), rh = R.mulberry32(77);
+  for (let i = 0; i < 40000; i++) {
+    const a1 = R.rollFloorItem(rb), a2 = R.rollFloorItem(rh, "high");
+    if (a1.kind === "weapon") { gB++; if (a1.rarity >= 2) rareB++; }
+    if (a2.kind === "weapon") { gH++; if (a2.rarity >= 2) rareH++; }
+  }
+  ok(rareH / gH >= 1.5 * (rareB / gB), "LC-29: rolled rare+ share high " + (100 * rareH / gH).toFixed(1) + "% vs basic " + (100 * rareB / gB).toFixed(1) + "% (>= 1.5x)");
+}
+
+// LC-13 storm placement (owner OD-1 at F = 1.0, STANDARD only)
+{
+  const crypto = require("crypto"), h = crypto.createHash("sha1");
+  for (let s = 0; s < 500; s++) for (const m of ["quick", "practice"]) {
+    const S = new R.Storm({ seed: (Math.imul(s + 1, 2654435761) >>> 0), mode: m, half: 784 });
+    h.update(JSON.stringify([S.circles, S.shrinkS, S.totalS]));
+  }
+  ok(h.digest("hex") === "d9fbf8c94ba1d76987ddcd61a9252afc7f54ce65", "LC-13: Quick Match and practice storm plans are byte-identical to the pre-P2 build (500 seeds, digest pin)");
+  const wet = (x, z) => !(x > 260 || (z < -200 && z > -320));        // a synthetic sea (east) + river band
+  let wetCentres = 0, nest = 0, tot = new Set(), fin = [], placedArea = true;
+  for (let s = 0; s < 400; s++) {
+    const S = new R.Storm({ seed: (Math.imul(s + 1, 2654435761) >>> 0), mode: "standard", half: 784, landAt: wet });
+    if (S.placement !== "area" || !S.landChecked) placedArea = false;
+    for (let i = 1; i < S.circles.length; i++) {
+      const a = S.circles[i - 1], b = S.circles[i];
+      if (!wet(b.x, b.z)) wetCentres++;
+      if (Math.hypot(a.x - b.x, a.z - b.z) + b.r > a.r + 1e-6) nest++;
+    }
+    tot.add(Math.round(S.totalS));
+    const L = S.circles[S.circles.length - 1]; fin.push(Math.hypot(L.x, L.z));
+  }
+  fin.sort((a, b) => a - b);
+  ok(placedArea && wetCentres === 0 && nest === 0 && tot.size === 1 && tot.has(920),
+     "LC-13: standard circles are area-placed + land-checked, 0 centres in water (" + 400 * 8 + " circles), 0 nesting violations, total storm time 920 s on every seed");
+  ok(fin[200] >= 150, "LC-13: final-centre p50 " + fin[200].toFixed(0) + " m from the map centre (>= 150; was ~37)");
+  const S0 = new R.Storm({ seed: 42, mode: "standard", half: 784 });
+  ok(S0.placement === "area" && !S0.landChecked && JSON.stringify(S0.circles) === JSON.stringify(new R.Storm({ seed: 42, mode: "standard", half: 784 }).circles),
+     "LC-13: no landAt -> area placement without the land test, still a pure function of the seed");
+}
+
+// C-SMOKE
+{
+  const s = { x: 0, y: 1.2, z: 0, r: 6, t0: 10, t1: 30 };
+  ok(R.smokeRadiusAt(s, 9) === 0 && R.smokeRadiusAt(s, 31) === 0 && approx(R.smokeRadiusAt(s, 10), 6 * R.SMOKE.r0Frac) && approx(R.smokeRadiusAt(s, 10 + R.SMOKE.growS), 6) &&
+     R.smokeRadiusAt(s, 10.5) > R.smokeRadiusAt(s, 10.2), "C-SMOKE: the cloud grows from " + (6 * R.SMOKE.r0Frac).toFixed(1) + " m to 6 m over " + R.SMOKE.growS + " s and is gone outside [t0, t1]");
+  const L = [{ x: 0, y: 1.2, z: 0, r: 6, t0: 0, t1: 20 }];
+  ok(R.segmentSmoked(-20, 1.5, 0, 20, 1.5, 0, L, 5) && !R.segmentSmoked(-20, 1.5, 8, 20, 1.5, 8, L, 5) && !R.segmentSmoked(-20, 1.5, 0, 20, 1.5, 0, L, 25) &&
+     R.segmentSmoked(0, 1.5, 0, 0, 1.5, 1, L, 5) && !R.segmentSmoked(-20, 1.5, 0, -10, 1.5, 0, L, 5),
+     "C-SMOKE: a sight line through a live cloud (or from inside it) is smoked; beside it, before it, or after it expires is not");
+  ok(R.CONSUMABLES.smoke && R.CONSUMABLES.smoke.throws === "smoke" && R.CONSUMABLES.smoke.heals === undefined && R.WEAPONS.smoke.smoke && !R.WEAPONS.smoke.splashR && R.WEAPONS.smoke.damage === 0 &&
+     !R.WEAPON_IDS.includes("smoke"), "C-SMOKE: a throwable consumable with no heal fields, no splash, no damage, not a lootable gun");
+  let n = 0;
+  const lr = R.mulberry32(5150);
+  for (let i = 0; i < 30000; i++) { for (const it of R.rollFloorSpawn(lr)) if (it.id === "smoke") n++; for (const it of R.rollChest(lr)) if (it.id === "smoke") n++; }
+  ok(n === 0 && R.FLOOR_CON_WEIGHTS[R.FLOOR_CON_IDS.indexOf("smoke")] === 0 && R.CHEST_CON_WEIGHTS[R.CHEST_CON_IDS.indexOf("smoke")] === 0,
+     "C-SMOKE: built dark - loot weight 0, 0 smokes in 30,000 floor + chest rolls");
+}
+
+// C-MODE, C-DBNO, C-FALL
+{
+  ok(R.TEAM_SIZE.solo === 1 && R.TEAM_SIZE.duo === 2 && R.TEAM_SIZE.trio === 3 && R.TEAM_SIZE.squad === 4 && R.teamCount(50, "trio") === 17 && R.teamSize("nope") === 1,
+     "C-MODE: TEAM_SIZE solo 1 / duo 2 / trio 3 / squad 4; 50 players make 17 trios");
+  ok(!R.dbnoOn("solo") && !R.dbnoOn(undefined) && R.dbnoOn("duo") && R.dbnoOn("trio") && R.dbnoOn("squad"), "C-DBNO (OD-3): knock-and-revive only in team modes, never solo / unknown");
+  const up = { crouching: false }, dn = { downed: true, crouching: true, hasCrouchClip: true };
+  ok(R.actorHeight(dn) === 0.6 && R.actorEyeY(dn) < 0.6 && R.actorHeight(up) === 1.8, "C-DBNO: a downed actor's capsule is 0.6 m (K.actorHeight), eye " + R.actorEyeY(dn));
+  ok(approx(R.dbnoBleedRate(1), 100 / 60) && approx(R.dbnoBleedRate(2), 1.5 * 100 / 60) && R.dbnoBleedRate(3) > R.dbnoBleedRate(2) && R.DBNO_HP === 100,
+     "C-DBNO: the 100-pt bleed pool runs 60 s on the first knock, faster on every further knock");
+  ok(R.REVIVE_S === 5 && R.REVIVE_HP === 30 && R.REVIVE_RANGE === 2 && R.DBNO_CRAWL === 1.4, "C-DBNO: revive 5 s at <= 2 m to 30 hp, crawl 1.4 m/s");
+  const v = R.fallSpeedForHeight;
+  ok(R.fallDamage(v(1)) === 0 && R.fallDamage(v(4)) === 0 && R.fallDamage(v(5)) > 0, "C-FALL: no damage up to a 4 m drop (" + v(4).toFixed(1) + " m/s at this game's gravity)");
+  const d10 = R.fallDamage(v(10)), d15 = R.fallDamage(v(15)), d20 = R.fallDamage(v(20));
+  ok(d10 >= 35 && d10 <= 50 && d15 > d10 && d20 >= 100, "C-FALL: 10 m costs " + d10 + " (35-50), 15 m " + d15 + ", 20 m " + d20 + " (lethal from full hp)");
+  let mono = true;
+  for (let h = 0; h < 40; h += 0.25) if (R.fallDamage(v(h + 0.25)) < R.fallDamage(v(h))) mono = false;
+  const lh = R.fallLethalHeight(100);
+  ok(mono && lh > 15 && lh < 20 && R.fallDamage(v(lh + 0.05)) >= 100 && R.fallDamage(v(lh - 0.3)) < 100, "C-FALL: monotone; a full-health actor dies from " + lh.toFixed(1) + " m (fallLethalHeight for bots)");
+  ok(R.LAND_STAGGER_S === 0.4 && R.weaponName("fall") === "a fall", "C-FALL: 0.4 s landing stagger; the kill feed names the fall");
+}
+
+// LC-22 bone-derived hit volumes
+{
+  const H = R.HITVOL;
+  ok(H && H.ok && ["soldier", "athlete", "wraith", "juggernaut", "viper"].every((k) => H.T[k] && H.T[k]["rifle|stand"] && H.T[k]["rifle|crouch"] && H.T[k]["pistol|stand"] && H.T[k]["pistolAds|stand"] && H.RADII[k]),
+     "LC-22: measured volumes for all 5 skins x rifle / pistol / pistol-ADS x stand / crouch");
+  const actor = (o) => Object.assign({ pos: { x: 10, y: 2, z: -5 }, yaw: 0, pitch: 0, skin: "soldier", weapon: { id: "ar" }, input: {}, alive: true }, o || {});
+  const shoot = (a, lat, y) => {   // a level shot across the actor's front (from its left, at height y over its feet, lat m in front)
+    const s = Math.sin(a.yaw), c = Math.cos(a.yaw), fx = -s, fz = -c;
+    const cx = a.pos.x + fx * lat, cz = a.pos.z + fz * lat, rx = c, rz = -s;
+    return R.hitVolSegment(a, cx - rx * 5, a.pos.y + y, cz - rz * 5, cx + rx * 5, a.pos.y + y, cz + rz * 5);
+  };
+  const frontal = (a, lat, y) => {  // a level shot at the actor's face from 20 m in front, lat m to its right
+    const s = Math.sin(a.yaw), c = Math.cos(a.yaw), fx = -s, fz = -c, rx = c, rz = -s;
+    const ox = a.pos.x + fx * 20 + rx * lat, oz = a.pos.z + fz * 20 + rz * lat;
+    return R.hitVolSegment(a, ox, a.pos.y + y, oz, ox - fx * 40, a.pos.y + y, oz - fz * 40);
+  };
+  const a = actor();
+  ok(frontal(a, 0, 1.2) >= 0 && !R.HITVOL_HIT.head, "LC-22: a chest-high frontal shot through the body hits (body)");
+  ok(frontal(a, 0.55, 1.2) < 0 && frontal(a, -0.55, 1.2) < 0, "LC-22: 0.55 m beside the spine at chest height misses (the old 0.57 m cylinder hit there)");
+  const top = (k, hold) => { const v = H.T[k][hold], NV = H.NV, h = H.JOINTS.length * 3, k0 = 2 * NV; return v[k0 + h + 1] + v[k0 + h + 3]; };
+  ok(frontal(a, 0, top("soldier", "rifle|stand") + 0.1) < 0 && frontal(a, 0, 2.05) < 0, "LC-22: head-top + 0.1 m misses (and the audit's 2.05 m body hit is gone)");
+  const hy = (() => { const v = H.T.soldier["rifle|stand"], h = H.JOINTS.length * 3, k0 = 2 * H.NV; return [v[k0 + h], v[k0 + h + 1]]; })();
+  ok(frontal(a, hy[0], hy[1]) >= 0 && R.HITVOL_HIT.head, "LC-22: a shot through the head sphere is a headshot");
+  let inv = true;
+  for (const yaw of [0.7, 2.1, -2.8, 3.1]) {
+    const b = actor({ yaw });
+    for (const [lat, y] of [[0, 1.2], [0.3, 1.4], [0.1, 0.5], [0.4, 1.0]]) if ((frontal(a, lat, y) >= 0) !== (frontal(b, lat, y) >= 0) || Math.abs(frontal(a, lat, y) - frontal(b, lat, y)) > 1e-6) inv = false;
+  }
+  ok(inv, "LC-22: the volume turns with the actor (same hits in its own frame at any yaw)");
+  const cr = actor({ crouching: true, hasCrouchClip: true });
+  ok(frontal(cr, 0, 1.0) >= 0 && frontal(cr, 0, top("soldier", "rifle|crouch") + 0.1) < 0 && top("soldier", "rifle|crouch") < top("soldier", "rifle|stand") - 0.3,
+     "LC-22: crouched, the body is " + (top("soldier", "rifle|stand") - top("soldier", "rifle|crouch")).toFixed(2) + " m lower (its own measured pose)");
+  ok(R.hitVolSegment(actor({ swimming: true }), 0, 3, -5, 20, 3, -5) === -2 && R.hitVolSegment(actor({ downed: true }), 0, 2.3, -5, 20, 2.3, -5) === -2,
+     "LC-22: swimming and downed actors fall back to the legacy cylinder (-2)");
+  ok(frontal(actor({ skin: "nobody" }), 0, 1.2) === frontal(a, 0, 1.2), "LC-22: an unknown skin uses the soldier's volume");
+  const p1 = actor({ pitch: 0.25 }), p2 = actor({ pitch: 0.6 });
+  ok(frontal(p1, 0, 1.2) >= 0 && frontal(p2, 0, 1.2) >= 0, "LC-22: pitched poses (interpolated keys) still hold the torso");
+  ok(H.reach > 0.5 && H.reach < 1.0, "LC-22: broad-phase reach " + H.reach.toFixed(2) + " m covers every measured joint");
+}
+
+// weapons.js source pins for the P2-D / P3 halves (read-only; skipped outside the repo)
+{
+  let wj = null;
+  try { wj = require("fs").readFileSync(require("path").join(__dirname, "..", "3d", "royale", "weapons.js"), "utf8").replace(/\r\n/g, "\n"); } catch (e) { /* skip */ }
+  if (wj) {
+    ok(/const mode = K\.fireMode\(def\);/.test(wj) && !/const isAuto = def\.cls === "smg" \|\| def\.cls === "ar";/.test(wj), "P2-D: weapons.js reads the explicit fire mode (no cls inference left)");
+    ok(/p\.bounce = !!def\.arc && !def\.impact;/.test(wj) && R.WEAPONS.glauncher.impact === true, "P2-D: launcher shells are impact-fused (no bounce), frags still bounce");
+    ok(/else if \(p\.weaponId === "smoke"\) deploySmoke\(W, p\.x, p\.y, p\.z, p\.ownerId\);/.test(wj) && /W\.smokes\.length = 0;/.test(wj), "C-SMOKE: the fuse pops a cloud onto W.smokes; reset clears it in place");
+    ok(/if \(a\.downed\) \{\s*\n\s*inp\.slot = -1; inp\.reload = false;/.test(wj), "C-DBNO: stepWeapon's first gate - a downed actor cannot switch, reload, fire, throw or heal");
+    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz\)/.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume and its head sphere");
+  } else console.log("  INFO  weapons.js not found next to this file: P2-D source pins skipped");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

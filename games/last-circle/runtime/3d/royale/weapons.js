@@ -1,6 +1,9 @@
 /**
- * royale/weapons.js — the 6-gun BR arsenal: pistol, SMG, AR, shotgun, sniper,
- * grenade launcher. Firing, projectiles, recoil, reload, splash.
+ * royale/weapons.js — the 9-gun BR arsenal: pistol, SMG, AR, shotgun, sniper,
+ * grenade launcher + (parity P2-D, LC-16) marksman rifle, LMG and burst rifle.
+ * Firing (explicit fire modes: auto / semi / burst, sim WEAPONS[id].fire),
+ * projectiles, recoil, reload, splash, smoke clouds (C-SMOKE: W.smokes) and the
+ * bone-derived hit volumes (LC-22, sim HITVOL).
  *
  * Projectiles are REAL (position + velocity), stepped in
  * segments each frame and tested against static world boxes → terrain → actor
@@ -14,10 +17,14 @@
  * is a pure BR shooter. One throwable exists BUILT DARK (parity P1-A, LC-14): the
  * frag grenade, a CONSUMABLE with `throws` thrown by its own branch in stepWeapon
  * (throwRound) as a pooled bouncing round that bursts through explode(). Its loot
- * weight is 0 until bots can throw it (P2-B / P2-D).
+ * weight is 0 until bots can throw it (P2-B / P2-D). The smoke grenade (C-SMOKE)
+ * is thrown by the same branch and on its fuse becomes a sphere on W.smokes.
+ * Launcher shells burst on CONTACT (wall, ground, body), not on a bounce.
+ * A downed actor (C-DBNO) cannot fire, reload, throw, heal or switch.
  *
- * View models: pistol/shotgun are real GLBs; AR/SMG/sniper/grenade launcher
- * are multi-part composed low-poly builds (distinct silhouettes per class).
+ * View models: Meshy GLBs for the six original guns (composed low-poly builds
+ * as the fallback); the P2-D guns are CC0 Poly Pizza models baked to
+ * assets/props/wpn_cc0/ (credits: F:/lc_p23/sim/credits.md -> CREDITS.md).
  */
 import * as THREE from "three";
 
@@ -34,6 +41,13 @@ export function init(W) {
   // stayed the spawn pistol for the whole match no matter what they carried
   W.refreshWeaponMesh = (a) => refreshWeaponMesh(W, a);
   W.explode = (x, y, z, weaponId, rarity, ownerId) => explode(W, x, y, z, weaponId, rarity, ownerId);
+  // C-SMOKE: the live smoke spheres. ONE array for the session, mutated in place (fx.js / maps.js losBlocked /
+  // bots.js may keep the reference). W.deploySmoke lets net.js replay a remote client's smoke at its own spot.
+  if (!Array.isArray(W.smokes)) W.smokes = [];
+  W.deploySmoke = (x, y, z, ownerId, t0) => deploySmoke(W, x, y, z, ownerId, t0);
+  // LC-22: the same bone-derived volumes the bullets test, for any caller that needs "is this ray on the body"
+  // (hud.js aim-at name tags per OD-11, bots' line checks). Returns the entry distance along the unit ray or -1.
+  W.hitVolRay = (t, ox, oy, oz, dx, dy, dz, maxT) => hitVolRay(t, ox, oy, oz, dx, dy, dz, maxT, null);
   protosPromise = null;
   W.weaponProto = (id) => protos(W).then((p) => p[id]);
 }
@@ -212,7 +226,75 @@ async function buildProtos(W) {
       protos[id] = g;
     } catch (e) { /* not generated yet — composed/GLB fallback stays */ }
   }
+
+  // ── P2-D roster (LC-16): CC0 models (Poly Pizza, baked by F:/lc_p23/sim/tools/bake_gun.py: +Z barrel, metres, origin
+  // at the pistol grip, static, flat PBR factors). Each source model is ~6 primitives = 6 draw calls per held gun, x 50
+  // actors in the drop frame (player.js hides far guns, but the drop cluster is near): they are MERGED here into ONE
+  // mesh with per-vertex colours and one material, so a held DMR / LMG / burst rifle costs one draw like a Meshy gun,
+  // and loot.js instances it as one pool. Fallbacks (a failed fetch): the composed sniper (DMR) / AR (LMG, burst).
+  protos.dmr = protos.sniper.clone();
+  protos.lmg = protos.ar.clone();
+  protos.burst = protos.ar.clone();
+  const CC0 = { dmr: "wpn_dmr.glb", lmg: "wpn_lmg.glb", burst: "wpn_burst.glb" };
+  await Promise.all(Object.keys(CC0).map(async (id) => {
+    try {
+      const m = await W.kernel.loadGLTF(base + "wpn_cc0/" + CC0[id]);
+      const g = mergeColoured(m);
+      if (g) protos[id] = g;
+    } catch (e) { console.warn("[weapons] CC0 GLB fail", id, e && e.message); }
+  }));
   return protos;
+}
+
+/** ONE vertex-coloured mesh from a static multi-material GLB scene (see the P2-D block above). The flat Poly Pizza
+ *  factors are near-black (linear 0.004-0.07) at roughness 1, which renders as a silhouette in this game's light
+ *  (the Meshy guns had the same defect, fixed the same way in the Meshy loop): colours get a gunmetal floor, and
+ *  one material at roughness 0.55 / metalness 0.35. Non-indexed output (the sources are flat-shaded anyway). */
+function mergeColoured(root) {
+  root.updateMatrixWorld(true);
+  const parts = [];
+  let n = 0;
+  root.traverse((o) => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+    const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    parts.push({ o, geo, mats });
+    n += geo.attributes.position.count;
+  });
+  if (!n) return null;
+  const P = new Float32Array(n * 3), N = new Float32Array(n * 3), Cc = new Float32Array(n * 3);
+  const v = new THREE.Vector3(), nm = new THREE.Matrix3(), col = new THREE.Color();
+  let k = 0;
+  for (const { o, geo, mats } of parts) {
+    const pa = geo.attributes.position, na = geo.attributes.normal;
+    nm.getNormalMatrix(o.matrixWorld);
+    const groups = geo.groups && geo.groups.length ? geo.groups : [{ start: 0, count: pa.count, materialIndex: 0 }];
+    for (const gr of groups) {
+      const mat = mats[gr.materialIndex || 0] || mats[0];
+      col.copy(mat && mat.color ? mat.color : col.setRGB(0.05, 0.05, 0.05));
+      // gunmetal floor (linear): the blacks read as dark steel, the brass / white details keep their hue
+      const lum = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
+      if (lum < 0.018) { const f = lum > 1e-5 ? 0.018 / lum : 0; if (f) col.multiplyScalar(f); else col.setRGB(0.018, 0.018, 0.019); }
+      for (let i = gr.start; i < gr.start + gr.count && i < pa.count; i++) {
+        v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld);
+        P[k * 3] = v.x; P[k * 3 + 1] = v.y; P[k * 3 + 2] = v.z;
+        if (na) { v.fromBufferAttribute(na, i).applyMatrix3(nm).normalize(); N[k * 3] = v.x; N[k * 3 + 1] = v.y; N[k * 3 + 2] = v.z; }
+        Cc[k * 3] = col.r; Cc[k * 3 + 1] = col.g; Cc[k * 3 + 2] = col.b;
+        k++;
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(P.subarray(0, k * 3), 3));
+  geo.setAttribute("normal", new THREE.BufferAttribute(N.subarray(0, k * 3), 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(Cc.subarray(0, k * 3), 3));
+  if (!parts[0].geo.attributes.normal) geo.computeVertexNormals();
+  geo.computeBoundingSphere(); geo.computeBoundingBox();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }));
+  mesh.name = "wpn_cc0";
+  const g = new THREE.Group();
+  g.add(mesh);
+  return g;
 }
 
 function equipSlot(W, a, idx) {
@@ -296,6 +378,7 @@ export function reset(W) {
     POOL.push(p);
   }
   projectiles.length = 0;
+  if (Array.isArray(W.smokes)) W.smokes.length = 0;   // C-SMOKE: no cloud outlives its match (same array kept)
   // sway/breath state lives on W and outlived the match (sweep finding): a
   // player who quit while WINDED started the next match still winded
   W._swayP = 0; W._swayY = 0; W._breathT = null; W._winded = false;
@@ -387,6 +470,7 @@ export function update(W, dt) {
   }
   // the reticle's bloom registry describes the LIVE local human only
   if (W.player && !W.player.alive) K.setLiveHeat(null);
+  tickSmokes(W);
   stepProjectiles(W, dt);
 }
 
@@ -423,6 +507,14 @@ function stepWeapon(W, a, dt) {
   // onto the projectile: swapping shotgun -> sniper on a live trigger spawned
   // 9 pellets each resolving as sniper damage, and the outgoing object's ammo
   // decrement was written to an orphan.
+  // C-DBNO downed gate: a knocked actor cannot fire, reload, throw, heal or switch (PUBG / Apex: the gun is away
+  // while you crawl). A reload in progress is abandoned (the magazine keeps what it had); a started burst is dropped.
+  if (a.downed) {
+    inp.slot = -1; inp.reload = false;
+    const w0 = a.weapon;
+    if (w0) { w0.burstLeft = 0; if (w0.state === "reloading") { w0.state = "ready"; w0.reloadT = 0; W.events.emit("reloadCancel", a, w0); } }
+    return;
+  }
   if (inp.slot >= 0) { equipSlot(W, a, inp.slot); inp.slot = -1; }
   const wpn = a.weapon;
   if (!wpn) return;
@@ -469,12 +561,15 @@ function stepWeapon(W, a, dt) {
   }
 
   // firing — no shooting while gliding, healing, or swimming (weapon's wet).
-  // AUTO weapons (SMG/AR) fire while the trigger is HELD; SEMI weapons (pistol/
-  // shotgun/sniper/launcher) fire once per CLICK. The human input is rebuilt from
-  // the live button every frame, so a held-state guard (inp.fire=false) is
-  // overwritten next frame → auto-cycle. Gate semi weapons on the mousedown EDGE
-  // (W._fireEdge, set on click, cleared on release/consume) so one click = one shot.
-  const isAuto = def.cls === "smg" || def.cls === "ar";
+  // The FIRE MODE is the definition's explicit `fire` field (parity P2-D, LC-16; it used to be inferred from
+  // cls === "smg" || "ar", which no burst rifle or LMG could fit): AUTO weapons fire while the trigger is HELD;
+  // SEMI weapons fire once per CLICK; BURST weapons fire def.burst.n rounds def.burst.gapS apart for one click or a
+  // held trigger (held: the next burst follows def.burst.delayS later), and a started burst completes unless the
+  // magazine runs dry or a no-fire state (glide, heal, swim, mantle, downed) interrupts it. The human input is
+  // rebuilt from the live button every frame, so a held-state guard (inp.fire=false) is overwritten next frame →
+  // auto-cycle. Gate semi weapons on the mousedown EDGE (W._fireEdge, set on click, cleared on release/consume).
+  const mode = K.fireMode(def);
+  const isAuto = mode === "auto", isBurst = mode === "burst" && !!def.burst;
   // SEMI-AUTO INPUT, two paths (owner playtest: "pressing mouse button
   // doesn't actually fire ... it gets stuck"):
   //   1. click buffer — the edge is a timestamp honoured for 420 ms (covers
@@ -495,14 +590,39 @@ function stepWeapon(W, a, dt) {
   // pistol's rate instead of once per tap. Mouse play is unchanged: W.touch is
   // absent or inactive there. Feature-detected; touch.js (L10) owns W.touch.
   const touchHeld = !a.isBot && a === W.player && !!(W.touch && W.touch.active && W.touch.fire);
-  const wantFire = (a.isBot || isAuto) ? inp.fire : (!!edgeLive || touchHeld);
-  if (wantFire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming && a.mantleT == null) {
+  const blocked = a.gliding || a.healing || a.swimming || a.mantleT != null;
+  if (isBurst && (wpn.burstLeft || 0) > 0) {
+    // the rest of a started burst needs no trigger: only the gun, the magazine and free hands
+    if (blocked || (def.mag > 0 && wpn.magAmmo <= 0)) { wpn.burstLeft = 0; wpn.cd = Math.max(wpn.cd, def.burst.delayS); return; }
+    if (wpn.cd > 0) return;
+    fire(W, a, def);
+    wpn.magAmmo--;
+    if (wpn.slotRef) wpn.slotRef.mag = wpn.magAmmo;
+    wpn.burstLeft--;
+    wpn.cd = Math.max(wpn.cd, -dt) + (wpn.burstLeft > 0 ? def.burst.gapS : def.burst.delayS);
+    return;
+  }
+  // burst: a held trigger (bots: inp.fire) or a buffered click starts a burst
+  const wantFire = (a.isBot || isAuto) ? inp.fire
+    : isBurst ? (inp.fire || !!edgeLive || touchHeld) : (!!edgeLive || touchHeld);
+  if (wantFire && wpn.cd <= 0 && !blocked) {
     if (def.mag > 0 && wpn.magAmmo <= 0) {
       // auto reload attempt
       if (a.inventory.ammo[def.ammo] > 0) { inp.reload = true; }
       else W.events.emit("dryFire", a);
       wpn.cd = 0.25;
       if (!a.isBot && !isAuto) W._fireEdge = 0;   // the click is spent even on a dry trigger
+      return;
+    }
+    if (isBurst) {
+      // a fresh burst replays the SAME learnable climb (sim RECOIL.burst) once the last one has recovered
+      if (a._rcBase == null) a._rcN = 0;
+      fire(W, a, def);
+      wpn.magAmmo--;
+      if (wpn.slotRef) wpn.slotRef.mag = wpn.magAmmo;
+      wpn.burstLeft = Math.max(0, def.burst.n - 1);
+      wpn.cd = Math.max(wpn.cd, -dt) + (wpn.burstLeft > 0 ? def.burst.gapS : def.burst.delayS);
+      if (!a.isBot) W._fireEdge = 0;
       return;
     }
     fire(W, a, def);
@@ -606,6 +726,17 @@ function crosshairPoint(W, shooter, out) {
     const u = (dx * _camDir.x + dz * _camDir.z) / denom;   // ray param of closest XZ approach
     if (u < 1 || u > bestT) continue;
     const px = o.x + _camDir.x * u, pz = o.z + _camDir.z * u, py = o.y + _camDir.y * u;
+    // LC-22: the crosshair is ON a body only where the bullet's own test (the bone-derived volume) would hit it, so
+    // a reticle 0.4 m beside a shoulder aims PAST the body at what is behind it, exactly as the round will fly
+    const HV = W.SIM.HITVOL, reach = HV ? Math.max(HV.reach, W.SIM.PLAYERK.radius + 0.15) : W.SIM.PLAYERK.radius + 0.15;
+    if ((px - t.pos.x) ** 2 + (pz - t.pos.z) ** 2 > reach * reach) continue;
+    if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.actorHeight(t) + 0.3) continue;
+    if (W.SIM.hitVolSegment) {
+      const L = bestT;
+      const hv = W.SIM.hitVolSegment(t, o.x, o.y, o.z, o.x + _camDir.x * L, o.y + _camDir.y * L, o.z + _camDir.z * L);
+      if (hv >= 0) { if (hv * L >= 1) bestT = hv * L; continue; }
+      if (hv === -1) continue;
+    }
     const r = W.SIM.PLAYERK.radius + 0.15;
     if ((px - t.pos.x) ** 2 + (pz - t.pos.z) ** 2 > r * r) continue;
     if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.actorHeight(t) + 0.15) continue;
@@ -634,9 +765,12 @@ const _aimHeight = (x, z) => _aimW.map.heightAt(x, z);
 const _aimQuery = (x, z, r, buf) => _aimW.map.queryColliders(x, z, r, buf);
 
 // Per-shot tables, hoisted: fire() built three object literals per trigger pull.
-const VM_KICK = { pistol: 0.7, smg: 0.5, ar: 0.75, shotgun: 1.6, sniper: 1.9, launcher: 1.2 };
-const HUMAN_KICK = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035 };
-const BARREL_LEN = { pistol: 0.5, smg: 0.7, ar: 0.95, shotgun: 0.85, sniper: 1.15, glauncher: 0.8 };
+// P2-D: the DMR kicks between the AR and the bolt sniper (a 46-damage semi round: 0.022 rad, recovered before the
+// next 0.375 s shot); the LMG / burst rifle use their spray tables on mouse + keyboard (sim RECOIL) and these legacy
+// kicks only on touch. VM_KICK is keyed by cls (the burst rifle is cls "ar").
+const VM_KICK = { pistol: 0.7, smg: 0.5, ar: 0.75, shotgun: 1.6, sniper: 1.9, launcher: 1.2, dmr: 1.25, lmg: 0.65 };
+const HUMAN_KICK = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035, dmr: 0.022, lmg: 0.009, burst: 0.010 };
+const BARREL_LEN = { pistol: 0.5, smg: 0.7, ar: 0.95, shotgun: 0.85, sniper: 1.15, glauncher: 0.8, dmr: 1.15, lmg: 1.08, burst: 0.96 };
 const _eyeFire = { x: 0, y: 0, z: 0 };
 function fire(W, a, def) {
   const eye = eyePos(a, _eyeFire);
@@ -701,7 +835,9 @@ function fire(W, a, def) {
     // gravity key, so it always resolved to 0 and bullets were always flat.
     p.gravity = def.arc ? -18 : 0;
     p.tLeft = def.arc ? def.fuseS : 3.5;
-    p.splash = def.splashR || 0; p.bounce = !!def.arc; p.mesh = !!def.arc; p.noActor = false;
+    // impact-fused shells (def.impact, the launcher) BURST on the first wall / ground / body they touch, as every
+    // reference launcher does; they used to bounce like a hand grenade and could roll back to the shooter
+    p.splash = def.splashR || 0; p.bounce = !!def.arc && !def.impact; p.mesh = !!def.arc; p.noActor = false;
     p.origin.x = eye.x; p.origin.y = eye.y; p.origin.z = eye.z;
     launchRound(W, p);
   }
@@ -821,9 +957,12 @@ function launchRound(W, p) {
     p.m = new THREE.Mesh(_shellGeo, _shellMat);
   }
   if (p.m && o.mesh) {
-    const frag = p.weaponId === "frag";
-    p.m.material = frag ? _fragMat : _shellMat;
-    p.m.scale.setScalar(frag ? 0.8 : 1);
+    const frag = p.weaponId === "frag", smoke = p.weaponId === "smoke";
+    // the smoke canister: the same geometry and material TYPE again (no new shader program), pale grey with a faint
+    // green fuse glow so it reads apart from the frag in flight
+    if (smoke && !_smokeMat) _smokeMat = new THREE.MeshStandardMaterial({ color: 0x8a9088, emissive: 0x7dff9a, emissiveIntensity: 0.55 });
+    p.m.material = frag ? _fragMat : smoke ? _smokeMat : _shellMat;
+    p.m.scale.setScalar(frag || smoke ? 0.8 : 1);
   }
   // Only SHOW the mesh when THIS spawn is a mesh projectile. kill() removes p.m
   // from the scene but keeps it on the pooled object for the next grenade to
@@ -839,7 +978,37 @@ function launchRound(W, p) {
   if (!p.noActor) W.events.emit("tracer", p);
 }
 
-let _shellGeo = null, _shellMat = null, _fragMat = null;
+let _shellGeo = null, _shellMat = null, _fragMat = null, _smokeMat = null;
+
+// ── smoke (contract C-SMOKE) ────────────────────────────────────────────────
+/** A smoke canister pops at (x, y, z): one sphere on W.smokes = {x, y, z, r, t0, t1} (+ rMax, ownerId). r is the LIVE
+ *  radius (tickSmokes rewrites it every frame from K.smokeRadiusAt), so losBlocked never blocks more than the cloud
+ *  already covers; the entry is dropped at t1. The centre sits K.SMOKE.yOff over the rest point (a canister rolls to
+ *  the floor), so a standing head is inside the cloud from the first second. Oldest entry recycled past maxLive.
+ *  Pure sim state from the seeded round's path: same seed, same clouds. */
+function deploySmoke(W, x, y, z, ownerId, t0) {
+  if (!Array.isArray(W.smokes)) W.smokes = [];
+  const S = K.SMOKE, now = t0 != null ? t0 : W.t;
+  if (W.smokes.length >= S.maxLive) W.smokes.shift();
+  const s = { x, y: y + S.yOff, z, r: 0, t0: now, t1: now + S.lifeS, rMax: S.r, ownerId: ownerId == null ? null : ownerId };
+  s.r = K.smokeRadiusAt(s, W.t);
+  W.smokes.push(s);
+  W.events.emit("smokeDeployed", s);
+  return s;
+}
+/** Grow / expire the live clouds (in place: the array identity is the contract). */
+function tickSmokes(W) {
+  const L = W.smokes;
+  if (!L || !L.length) return;
+  let j = 0;
+  for (let i = 0; i < L.length; i++) {
+    const s = L[i];
+    if (W.t > s.t1) { W.events.emit("smokeExpired", s); continue; }
+    s.r = K.smokeRadiusAt(s, W.t);
+    L[j++] = s;
+  }
+  L.length = j;
+}
 const NO_ACTORS = [];
 const BOUNCED = 2;          // testSegment: the round bounced and its position + velocity are already set
 // Colliders along ONE projectile's whole frame of travel. testSegment used to run a
@@ -853,6 +1022,7 @@ function stepProjectiles(W, dt) {
     p.tLeft -= dt;
     if (p.tLeft <= 0) {
       if (p.splash) explode(W, p.x, p.y, p.z, p.weaponId, p.rarity, p.ownerId); // fused shells burst
+      else if (p.weaponId === "smoke") deploySmoke(W, p.x, p.y, p.z, p.ownerId);  // C-SMOKE: the canister pops
       kill(W, i, p);
       continue;
     }
@@ -955,16 +1125,28 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
   // Broad phase first: an actor whose axis is outside the sub-segment's XZ box
   // (grown by the capsule reach) cannot be hit, so it costs four compares, not a
   // projection and a Math.hypot (60 KB/frame of hypot garbage measured).
+  // The broad-phase box grows by the widest reach of any measured pose (feet and the gun hand reach ~0.7 m from the
+  // axis), the legacy cylinder's 0.57 m otherwise.
   const REACH = K.PLAYERK.radius + 0.12;
-  const bx0 = (ax < bx ? ax : bx) - REACH, bx1 = (ax < bx ? bx : ax) + REACH;
-  const bz0 = (az < bz ? az : bz) - REACH, bz1 = (az < bz ? bz : az) + REACH;
-  let hitT = Infinity, hitActor = null, hitPx = 0, hitPy = 0, hitPz = 0, hitDh = 0;
+  const BREACH = K.HITVOL ? Math.max(REACH, K.HITVOL.reach) : REACH;
+  const bx0 = (ax < bx ? ax : bx) - BREACH, bx1 = (ax < bx ? bx : ax) + BREACH;
+  const bz0 = (az < bz ? az : bz) - BREACH, bz1 = (az < bz ? bz : az) + BREACH;
+  let hitT = Infinity, hitActor = null, hitPx = 0, hitPy = 0, hitPz = 0, hitDh = 0, hitHead = false, hitVol = false;
   const acts = p.noActor ? NO_ACTORS : W.actors;
   for (let ai = 0; ai < acts.length; ai++) {
     const t = acts[ai];
     if (!t.alive || t.id === p.ownerId) continue;
     const cx = t.pos.x, cz = t.pos.z;
     if (cx < bx0 || cx > bx1 || cz < bz0 || cz > bz1) continue;
+    // LC-22: the bone-derived body (sim HITVOL); -2 = no measured volume here (swimming, downed, no data): the cylinder
+    const hv = K.hitVolSegment ? K.hitVolSegment(t, ax, ay, az, bx, by, bz) : -2;
+    if (hv !== -2) {
+      if (hv >= 0 && hv < hitT) {
+        hitT = hv; hitActor = t; hitVol = true; hitHead = K.HITVOL_HIT.head;
+        hitPx = ax + (bx - ax) * hv; hitPy = ay + (by - ay) * hv; hitPz = az + (bz - az) * hv; hitDh = 0;
+      }
+      continue;
+    }
     const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));
     // closest point of segment to vertical axis of capsule
     const dx = bx - ax, dz = bz - az;
@@ -975,7 +1157,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
     const ex2 = px - cx, ez2 = pz - cz;
     const dh = Math.sqrt(ex2 * ex2 + ez2 * ez2);
     if (dh < REACH && py > feetY - 0.05 && py < headY + 0.12) {
-      if (u < hitT) { hitT = u; hitActor = t; hitPx = px; hitPy = py; hitPz = pz; hitDh = dh; }
+      if (u < hitT) { hitT = u; hitActor = t; hitPx = px; hitPy = py; hitPz = pz; hitDh = dh; hitVol = false; hitHead = false; }
     }
   }
   // the round only reaches the actor if no solid surface is nearer along the path
@@ -993,7 +1175,10 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
       // 105 * 2.5 = 263 and one-shot a full 100 shield + 100 HP bar. Body
       // registration on the line above is deliberately left as forgiving as it
       // was; only the multiplier tightens, to a 0.4 m band in the top 14%.
-      const isHead = py > feetY + (headY - feetY) * 0.86 && dh < 0.2;
+      // LC-22: a measured-volume hit is a headshot when it entered the HEAD SPHERE (fitted to the Head-weighted
+      // vertices); the legacy cylinder (swimming / downed) keeps this band rule, with no headshots on a downed body
+      // (its crawl pose has no measured head yet)
+      const isHead = hitVol ? hitHead : (!t.downed && py > feetY + (headY - feetY) * 0.86 && dh < 0.2);
       const dmg = K.hitDamage(p.weaponId, p.rarity, distFromOrigin, isHead, dmgRoll(W));
       if (t.netRemote && !t.isDummy) {
         // remote-owned actor: its client (or the host, for bots) applies damage.
@@ -1024,7 +1209,13 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
     const c = sh.c;
     // impact at the ENTRY point on the face, not the overshot endpoint
     const hx = ax + (bx - ax) * sh.t, hy = ay + (by - ay) * sh.t, hz = az + (bz - az) * sh.t;
-    if (p.splash && !p.bounce) { explode(W, hx, hy, hz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
+    if (p.splash && !p.bounce) {
+      // contact burst: 0.15 m back out along the face normal, so the blast point is outside the solid and
+      // blastBlocked (losBlocked from the blast) sees the shooter's side of the wall, not the wall's own inside
+      const on = sh.nx || sh.ny || sh.nz ? 0.15 : 0;
+      explode(W, hx + sh.nx * on, hy + sh.ny * on, hz + sh.nz * on, p.weaponId, p.rarity, p.ownerId);
+      p.dead = true; return true;
+    }
     if (p.bounce) {
       // reflect off the face we actually entered through (the old code derived
       // the normal from the overshot endpoint's smallest penetration axis)
@@ -1064,7 +1255,14 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
   // 3) terrain
   const th = W.map.heightAt(bx, bz);
   if (by <= th) {
-    if (p.splash && !p.bounce) { explode(W, bx, th + 0.1, bz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
+    if (p.splash && !p.bounce) {
+      // burst where the shell actually touched down inside this sub-step (not its overshot end point)
+      const ha = W.map.heightAt(ax, az), da = ay - ha, db = by - th;
+      const f = da > 0 && da - db > 1e-9 ? da / (da - db) : 1;
+      const cx = ax + (bx - ax) * f, cz = az + (bz - az) * f;
+      explode(W, cx, W.map.heightAt(cx, cz) + 0.15, cz, p.weaponId, p.rarity, p.ownerId);
+      p.dead = true; return true;
+    }
     if (p.bounce) {
       // contact INSIDE the segment (the ground under a and b, interpolated), not the overshot end point:
       // up to v x dt = 0.3-0.7 m past where a lob actually touched down
@@ -1116,8 +1314,11 @@ function bounceOff(p, nx, ny, nz) {
 function blastBlocked(W, x, y, z, t) {
   const los = W.map && W.map.losBlocked;
   if (!los) return false;
-  const top = t.pos.y + (t.swimming ? 0.8 : K.actorHeight(t)) - 0.2;
-  if (!los(x, y, z, t.pos.x, t.pos.y + 1.0, t.pos.z)) return false;
+  const h = t.swimming ? 0.8 : K.actorHeight(t);
+  const top = t.pos.y + h - 0.2;
+  // chest line: 1.0 m on a standing body, half the 0.6 m capsule on a downed one (C-DBNO) so a knocked body is
+  // judged at the height it actually lies at
+  if (!los(x, y, z, t.pos.x, t.pos.y + (t.downed ? h * 0.5 : 1.0), t.pos.z)) return false;
   return !!los(x, y, z, t.pos.x, top, t.pos.z);
 }
 function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
@@ -1126,7 +1327,8 @@ function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
   const R = def.splashR || 3.5;
   for (const t of W.actors) {
     if (!t.alive) continue;
-    const d = Math.hypot(t.pos.x - x, (t.pos.y + 0.9) - y, t.pos.z - z);
+    // body centre: 0.9 m standing (unchanged), 0.3 m for a downed body lying on the ground (C-DBNO)
+    const d = Math.hypot(t.pos.x - x, (t.pos.y + (t.downed ? K.actorHeight(t) * 0.5 : 0.9)) - y, t.pos.z - z);
     const k = K.splashScale(d, R + 0.8);
     if (k > 0 && !blastBlocked(W, x, y, z, t)) {
       const dmg = Math.round(K.hitDamage(weaponId, rarity, 0, false, dmgRoll(W)) * k);
