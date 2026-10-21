@@ -33,6 +33,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--res", type=int, default=900)
     ap.add_argument("--views", default="front,back,threeq,game")
+    ap.add_argument("--albedo", action="store_true", help="flat base colour (emission), suffix _albedo")
     a = ap.parse_args(scene.script_args())
     bpy.ops.wm.open_mainfile(filepath=os.path.join(scene.CACHE_DIR, "fighters", "hesmi.blend"))
     sc = bpy.context.scene
@@ -50,6 +51,22 @@ def main():
                     for l in list(nd.inputs["Alpha"].links):
                         m.node_tree.links.remove(l)
                     nd.inputs["Alpha"].default_value = 1.0
+    if a.albedo:                           # the painted base colour only (no lighting): paint QA
+        for m in bpy.data.materials:
+            if not m.use_nodes:
+                continue
+            nt = m.node_tree
+            bs = next((nd for nd in nt.nodes if nd.type == "BSDF_PRINCIPLED"), None)
+            out = next((nd for nd in nt.nodes if nd.type == "OUTPUT_MATERIAL"), None)
+            if bs is None or out is None:
+                continue
+            src = bs.inputs["Base Color"].links[0].from_socket if bs.inputs["Base Color"].links else None
+            em = nt.nodes.new("ShaderNodeEmission")
+            if src is not None:
+                nt.links.new(src, em.inputs["Color"])
+            else:
+                em.inputs["Color"].default_value = bs.inputs["Base Color"].default_value
+            nt.links.new(em.outputs[0], out.inputs["Surface"])
     sc.render.engine = "BLENDER_EEVEE"
     sc.render.film_transparent = False
     sc.view_settings.view_transform = "Standard"
@@ -90,7 +107,7 @@ def main():
             co.location = p
             look(co, p, (0, 0, 1.15))
             sc.render.resolution_x, sc.render.resolution_y = int(a.res * 0.75), a.res
-        sc.render.filepath = os.path.join(OUT, f"compare_{kind}.png")
+        sc.render.filepath = os.path.join(OUT, f"compare_{kind}{'_albedo' if a.albedo else ''}.png")
         bpy.ops.render.render(write_still=True)
         scene.log(f"rendered {kind}")
 

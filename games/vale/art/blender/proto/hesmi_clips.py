@@ -28,6 +28,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(scene.CACHE_DIR, "hesmi_clips.glb"))
     ap.add_argument("--only", default="", help="comma list: export just these clips (faster sheets)")
+    ap.add_argument("--save", action="store_true", help="save the re-authored actions into the cached blend (portrait previews)")
     a = ap.parse_args(scene.script_args())
     path = os.path.join(scene.BLENDER_DIR, "fighters", "hesmi.py")
     s = importlib.util.spec_from_file_location("fighter_hesmi", path)
@@ -44,6 +45,8 @@ def main():
     if a.only:
         clips = {k: v for k, v in clips.items() if k in a.only.split(",")}
     info = anim.write_clips(arm, clips, [])
+    if a.save:
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.join(scene.CACHE_DIR, "fighters", "hesmi.blend"), copy=True)
     objs = [arm] + [o for o in bpy.context.scene.objects if o.type == "MESH" and o.parent == arm and not o.hide_render]
     export.export_glb(objs, a.out, animations=True)
     for k, v in info.items():

@@ -58,7 +58,7 @@
         "toe.R"
       ]
     },
-    "tris_belt": 618,
+    "tris_belt": 518,
     "bind_legs": {
       "heat_ok": true,
       "unweighted": 0,
@@ -103,27 +103,27 @@
         "thigh.R"
       ]
     },
-    "tris_boots": 758,
-    "tris_helm": 1100,
-    "tris_visor": 420,
+    "tris_boots": 640,
+    "tris_helm": 1220,
+    "tris_crest_glass": 160,
     "tris_crest": 700,
-    "tris_scarf": 948,
-    "tris_breastplate": 800,
-    "tris_pauldron_R": 520,
-    "tris_lames_R": 720,
-    "tris_pauldron_L": 520,
-    "tris_lames_L": 720,
-    "tris_backplate": 450,
+    "tris_scarf": 800,
+    "tris_breastplate": 680,
+    "tris_pauldron_R": 498,
+    "tris_lames_R": 560,
+    "tris_pauldron_L": 500,
+    "tris_lames_L": 560,
+    "tris_backplate": 600,
     "tris_rerebrace_R": 300,
-    "tris_vambrace_R": 320,
+    "tris_vambrace_R": 300,
     "tris_hand_R": 380,
     "tris_rerebrace_L": 300,
-    "tris_vambrace_L": 320,
+    "tris_vambrace_L": 300,
     "tris_hand_L": 380,
     "tris_tabard": 348,
     "tris_skirt_R": 300,
     "tris_skirt_L": 300,
-    "tris_coat": 1750,
+    "tris_coat": 1380,
     "tris_greave_R": 420,
     "tris_greave_L": 420,
     "tris_grip": 220,
@@ -133,46 +133,47 @@
     "tris_blade": 200,
     "tris_blade_hilt": 80,
     "tris_blade_great": 200,
-    "tris_lamp_cage": 260,
+    "tris_lamp_cage": 280,
     "tris_lamp_bead": 100,
-    "validate_ervet": "15986->15980",
-    "validate_ervet_accent": "620->618"
+    "tris_visor": 420,
+    "validate_ervet": "15178->15172",
+    "validate_ervet_accent": "685->683"
   },
-  "uv_coverage": 0.6,
+  "uv_coverage": 0.588,
   "bake": {
-    "base": 4.16,
-    "rough_metal": 3.55,
-    "normal": 2.95,
-    "ao": 3.83,
-    "normal_fixed_px": 24894,
-    "projection": 34.35,
-    "pack_save": 34.5,
-    "total": 49.33
+    "base": 5.72,
+    "rough_metal": 5.17,
+    "normal": 3.03,
+    "ao": 4.0,
+    "normal_fixed_px": 21281,
+    "projection": 87.62,
+    "pack_save": 87.97,
+    "total": 106.28
   },
   "forms": [
     "form_base",
     "form_hilt",
     "form_great"
   ],
-  "tris": 17528,
-  "mesh_top_m": 2.148,
-  "glb_bytes_raw": 2315176,
+  "tris": 16720,
+  "mesh_top_m": 2.15,
+  "glb_bytes_raw": 2410756,
   "optimize": {
     "ok": true,
-    "before": 2315176,
-    "after": 979760
+    "before": 2410756,
+    "after": 1009596
   },
-  "glb_bytes": 979760,
+  "glb_bytes": 1009596,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ervet/ervet_lamplit.glb (957 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ervet_lamplit_base 2048x2048 317K, ervet_lamplit_normal 512x512 32K, ervet_lamplit_orm 512x512 68K",
-      "  skinned meshes: ervet_accent(356v), ervet_lamplit(14516v), form_base(172v), form_great(172v), form_hilt(93v)",
-      "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_crossguard x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_f_1)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ervet/ervet_lamplit.glb (986 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ervet_lamplit_base 2048x2048 335K, ervet_lamplit_normal 512x512 36K, ervet_lamplit_orm 512x512 71K",
+      "  skinned meshes: ervet_accent(438v), ervet_lamplit(14652v), form_base(174v), form_great(169v), form_hilt(93v)",
+      "  bones: 31 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_crossguard x_cape_L_1 x_cape_L_2 x_cape_R_1 x_cape_R_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_f_1)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 17528; bind-pose bounds (three units, Y up): 1.69 x 2.15 x 0.82; facing (-0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
+      "  tris: 16720; bind-pose bounds (three units, Y up): 1.74 x 2.15 x 0.82; facing (-0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -182,8 +183,8 @@
       "portrait": "art/out/fighters/ervet/ervet_lamplit_portrait.png"
     },
     "seconds": {
-      "splash": 5.68,
-      "portrait": 2.59
+      "splash": 18.37,
+      "portrait": 4.42
     }
   },
   "three_qa": {
@@ -191,13 +192,13 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.69,
+        -0.638,
         0,
-        -0.328
+        -0.301
       ],
       [
         0.752,
-        2.148,
+        2.15,
         0.416
       ]
     ],
@@ -207,7 +208,7 @@
     ],
     "headY": 1.854,
     "accentPct": 1.68,
-    "accentTopHalfPct": 98.1,
+    "accentTopHalfPct": 98,
     "heightPx1080": 115,
     "size": [
       2400,
@@ -215,24 +216,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ervet/three_ervet_lamplit.png",
-    "seconds": 6.4,
+    "seconds": 16.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 1.8,
-      "model": 20.0,
-      "lows_bind": 13.25,
-      "uv": 12.74,
-      "bake": 49.33,
-      "export": 0.06,
-      "optimize": 0.44,
-      "load_test": 0.09,
-      "render": 8.3,
-      "three_qa": 6.55
+      "rig": 0.0,
+      "materials": 0.42,
+      "model": 30.44,
+      "lows_bind": 12.77,
+      "uv": 7.76,
+      "bake": 106.29,
+      "export": 0.22,
+      "optimize": 1.02,
+      "load_test": 0.19,
+      "render": 22.85,
+      "three_qa": 16.75
     },
-    "total_s": 114.33
+    "total_s": 198.85
   },
   "run_ref_speed": 3.45,
   "height_m": 2.06

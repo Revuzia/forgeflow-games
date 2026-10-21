@@ -3,7 +3,7 @@
   "portrait": "assets/fighters/hesmi/portrait.png",
   "splash": "assets/fighters/hesmi/splash.png",
   "icon": "assets/fighters/hesmi/icon.png",
-  "height": 2.31,
+  "height": 2.3,
   "scale": 1,
   "runRefSpeed": 3.35,
   "clips": {

@@ -5,9 +5,9 @@ The cleaver lives in its own 2D frame: u along the blade axis (0 = the guard, wh
 heel; + toward the tip), v across it (+ = the notched spine, - = the cutting edge), w through the blade.
 Measured on the concept (front plate, mask crown 2.15 m, 10 cm grid; the run profiles across the axis
 every 4 cm, + the 9 px the cut erodes): the blade 1.43 m from the guard to the tip, 0.22-0.26 m wide,
-the heel collar (ironstone) from the guard to u 0.43, a short wrapped haft (0.35 m painted) and a
-diamond pommel. The heel's spine carries five chevron notches (V cuts 8 cm wide, 6 cm deep: tallies),
-each holding one accent slab (a diamond nested in the V; brief section 4/7). No accent on the pommel.
+the heel (ironstone) a broad crenellated spine band from the guard to u 0.60, a short wrapped haft (0.35 m
+painted) and a diamond pommel. The heel's spine carries five scalloped notches (round bites 7.4 cm across,
+4.6 cm deep: tallies) with one accent diamond inlaid below each (brief section 4/7). No accent on the pommel.
 
 PROP SPACE (rig.prop_matrix): grip at the origin, +Z along the cleaver (u), +Y the spine (v; so the
 edge faces -Y, the rig convention), +X = w. The game haft is longer than the painted one (0.62 m to the
@@ -29,10 +29,10 @@ NV = np.array([-AX[1], AX[0]])
 Y_PAINT = {"blade": 0.21, "heel": 0.21, "gems": 0.21, "haft": 0.34, "pommel": 0.34}
 
 U_GRIP = -0.15            # the main fist on the haft (u); the off hand OFF_GRIP lower
-OFF_GRIP = -0.30          # the off hand's grip along the haft from the main fist (two-handed swings, plants)
-HAFT_U0 = -0.57           # game haft end (pommel joint)
-POMMEL_U = -0.62          # game pommel centre
-PAINT_HAFT_SCALE = 0.35 / 0.62    # painted pommel centre at u -0.35
+OFF_GRIP = -0.17          # the off hand's grip along the haft from the main fist (two-handed swings, plants)
+HAFT_U0 = -0.40           # game haft end (pommel joint): the concept's short wrapped haft (Burdam's arms are
+POMMEL_U = -0.45          # short; a longer tail drove the pommel into his belly in every two-handed chop)
+PAINT_HAFT_SCALE = 0.35 / 0.45    # painted pommel centre at u -0.35
 PAINT_HAFT_BEND = 0.055 / 0.35    # the painted haft drops 5.5 cm below the axis at the pommel
 
 # blade outline (u, v): the cutting edge (with two chips near the heel) and the spine, guard -> tip
@@ -41,18 +41,29 @@ EDGE = [(0.20, -0.100), (0.45, -0.102), (0.58, -0.100), (0.61, -0.078), (0.635, 
         (1.29, -0.028), (1.36, -0.008), (1.437, 0.012)]
 SPINE = [(0.30, 0.118), (0.50, 0.126), (0.64, 0.134), (0.76, 0.146), (0.90, 0.160), (1.00, 0.166),
          (1.03, 0.150), (1.10, 0.150), (1.20, 0.128), (1.28, 0.094), (1.36, 0.048), (1.437, 0.012)]
-# the heel collar: guard -> along the edge side -> the concave front toward the blade -> the spine end
-HEEL = [(-0.050, 0.128), (-0.040, 0.020), (-0.020, -0.070), (0.020, -0.108), (0.15, -0.112), (0.25, -0.110),
-        (0.30, -0.060), (0.35, 0.000), (0.40, 0.060), (0.440, 0.122)]
-HEEL_SPINE_V = 0.122
-# five chevron notches (u of the V's apex) cut into the heel's spine: 8 cm wide at the spine, 6 cm deep
-NOTCHES = [0.000, 0.088, 0.176, 0.264, 0.352]
-NOTCH_HALF_W = 0.040
-NOTCH_DEPTH = 0.060
-# the accent slab nested in each notch (u, v of its centre, half-diagonal along u, across v): its upper
-# half fills the V's bottom, its lower half is set into the heel (a recess on both faces)
-GEMS = [(nu, HEEL_SPINE_V - NOTCH_DEPTH + 0.002, 0.044, 0.040) for nu in NOTCHES]
+# the heel: a broad carved ironstone SPINE BAND over the blade's back, from the haft collar along ~40 % of
+# the blade (the concept's dark crenellated spine), its lower edge sweeping up to the spine at u 0.60;
+# the pale honed blade shows below it
+HEEL = [(-0.050, 0.130), (-0.042, 0.020), (-0.022, -0.068), (0.020, -0.108), (0.13, -0.112), (0.22, -0.108),
+        (0.30, -0.086), (0.38, -0.072), (0.46, -0.058), (0.52, -0.030), (0.56, 0.020), (0.585, 0.080),
+        (0.605, 0.134), (0.30, 0.134)]
+HEEL_SPINE_V = 0.132
+# five scalloped notches (the concept's crenellations: round bites between flat merlons, 7.4 cm across at the
+# spine and 4.6 cm deep), u of each bite's centre
+NOTCHES = [0.035, 0.143, 0.251, 0.359, 0.467]
+NOTCH_HALF_W = 0.037
+NOTCH_DEPTH = 0.046
+# the accent slab under each notch: a diamond inlay (u, v of its centre, half-diagonal along u, across v),
+# set flush in the ironstone a little below the bite (the concept's blue diamonds), rising toward the tip
+GEMS = [(nu, 0.006 + 0.030 * nu, 0.047, 0.050) for nu in NOTCHES]
 POMMEL_INSET = (0.044, 0.038)             # the carved (not lit) diamond recess on the pommel plate
+
+
+def notch_circle(nu: float) -> tuple:
+    """the bite as a circle (u, v centre, radius) whose chord at the spine is 2 * NOTCH_HALF_W"""
+    c, d = NOTCH_HALF_W, NOTCH_DEPTH
+    r = (c * c + d * d) / (2 * d)
+    return nu, HEEL_SPINE_V - d + r, r
 
 
 def blade_poly() -> list:
@@ -91,36 +102,43 @@ def sd_polygon(u, v, poly) -> np.ndarray:
     return s * np.sqrt(d)
 
 
-def notch_polys() -> list:
-    """the V cuts as triangles (u, v), opened 3 cm above the spine so they cut cleanly through it"""
+def notch_cores(fill: float = 0.022, n: int = 16) -> list:
+    """the accent core sitting in the bottom of each bite (u, v polygons): the circle segment below
+    `fill` above the bite's deepest point (an ember set in the cut; brief section 7)"""
     out = []
-    a = HEEL_SPINE_V - NOTCH_DEPTH
-    k = NOTCH_HALF_W / NOTCH_DEPTH
-    top = HEEL_SPINE_V + 0.03
     for nu in NOTCHES:
-        out.append([(nu, a), (nu + k * (top - a), top), (nu - k * (top - a), top)])
+        cu, cv, r = notch_circle(nu)
+        vb = cv - r
+        h = vb + fill
+        a = np.arccos(np.clip((h - cv) / r, -1, 1))       # angle from +v of the chord's ends
+        ts = np.linspace(-np.pi / 2 - (np.pi - a), -np.pi / 2 + (np.pi - a), n)
+        ts = np.linspace(np.pi / 2 + a, np.pi / 2 + 2 * np.pi - a, n)
+        pts = [(cu + r * np.cos(t), cv + r * np.sin(t)) for t in ts]
+        out.append(pts)
     return out
 
 
-def notch_liners(width: float = 0.015, into: float = 0.002) -> list:
-    """the accent band lining both walls of each V notch (u, v quads): `width` into the heel from the wall,
-    `into` past it into the cut, so the wall faces the camera and sky see are lit"""
+def notch_floors(proud: float = 0.005, into: float = 0.010, n: int = 18) -> list:
+    """the accent set in each bite's FLOOR (u, v polygons): an arc band following the bite's curve below its
+    chord, `proud` of the stone into the bite and `into` the heel; seen from above the spine it is a glowing
+    floor in the cut, from the blade's face only a thin glowing arc (brief section 7: the accent in the notches)"""
     out = []
-    a = HEEL_SPINE_V - NOTCH_DEPTH
-    k = NOTCH_HALF_W / NOTCH_DEPTH
-    h = HEEL_SPINE_V - a
     for nu in NOTCHES:
-        A = np.array([nu, a])
-        for sgn in (-1.0, 1.0):
-            T = np.array([nu + sgn * k * h, HEEL_SPINE_V])
-            w = (T - A) / np.linalg.norm(T - A)
-            n = np.array([sgn * w[1], -sgn * w[0]])          # away from the notch, into the heel
-            if np.dot(n, np.array([0.0, -1.0])) < 0 and abs(n[0]) < 1e-9:
-                n = -n
-            if np.dot(n, A + 0.5 * (T - A) - np.array([nu, HEEL_SPINE_V])) < 0:
-                n = -n
-            p0, p1 = A - n * into - w * 0.004, T - n * into + w * 0.004
-            out.append([tuple(p0), tuple(p1), tuple(p1 + n * (width + into)), tuple(p0 + n * (width + into))])
+        cu, cv, r = notch_circle(nu)
+        a = np.arcsin(np.clip((HEEL_SPINE_V - cv) / r, -1.0, 1.0))      # the chord ends' angle
+        ts = np.linspace(np.pi - a, 2 * np.pi + a, n)                   # the lower arc, left end to right end
+        outer = [(cu + (r + into) * np.cos(t), cv + (r + into) * np.sin(t)) for t in ts]
+        inner = [(cu + (r - proud) * np.cos(t), cv + (r - proud) * np.sin(t)) for t in ts[::-1]]
+        out.append(outer + inner)
+    return out
+
+
+def notch_polys(n: int = 24) -> list:
+    """the scalloped bites as polygons (u, v) (circles, opened above the spine so they cut cleanly)"""
+    out = []
+    for nu in NOTCHES:
+        cu, cv, r = notch_circle(nu)
+        out.append([(cu + r * np.cos(t), cv + r * np.sin(t)) for t in np.linspace(0, 2 * np.pi, n, endpoint=False)])
     return out
 
 

@@ -34,6 +34,10 @@ def args():
     p.add_argument("--out", default="pose_preview.png")
     p.add_argument("--measure", default="", help="comma list of clips: ground contact per sampled frame")
     p.add_argument("--step", type=int, default=3)
+    p.add_argument("--rebind", action="store_true")
+    p.add_argument("--partcolors", action="store_true", help="flat colour per part (find which part is where)")
+    p.add_argument("--tex", default="", help="swap the cached base colour for this image (post-paint work)")
+    p.add_argument("--lit", action="store_true", help="studio lighting instead of flat (reads values)")
     return p.parse_args(scene.script_args())
 
 
@@ -66,6 +70,11 @@ def main():
             for n in m.node_tree.nodes:
                 if n.type == "TEX_IMAGE" and n.image and n.image.name.endswith("_base"):
                     m.node_tree.nodes.active = n
+                    if a.tex:
+                        img = bpy.data.images.load(a.tex, check_existing=False)
+                        n.image = img
+    if a.lit:
+        sh.light = "STUDIO"
     if "pv_ground" not in bpy.data.objects:
         bpy.ops.mesh.primitive_plane_add(size=8)
         g = bpy.context.active_object
@@ -84,6 +93,15 @@ def main():
             yaw = {"lhand": 0.0, "lhand_s": 70.0, "lhand_t": 0.0}[view]
             pitch = 55.0 if view == "lhand_t" else 10.0
             dist = 1.6
+        elif view.startswith("lsh") or view.startswith("rsh") or view.startswith("headc"):
+            bn = {"l": "upper_arm.L", "r": "upper_arm.R", "h": "head"}[view[0]]
+            pbh = bpy.data.objects["burdam_rig"].pose.bones[bn]
+            tgt = (bpy.data.objects["burdam_rig"].matrix_world @ pbh.matrix).translation.copy()
+            cam_data.lens = 80
+            yaw = {"": 0.0, "_s": 70.0 if view[0] != "r" else -70.0, "_b": 180.0, "_3": 35.0 if view[0] != "r" else -35.0}[
+                view[3:] if not view.startswith("headc") else view[5:]]
+            pitch = 15.0
+            dist = 1.8
         elif view == "game":
             cam_data.lens = 115
             pitch, yaw, dist = 52.0, 0.0, 9.5
@@ -98,7 +116,22 @@ def main():
         cam.rotation_euler = (tgt - loc).to_track_quat("-Z", "Y").to_euler()
 
     names = [x[0] for x in F.sculpts()]
+    if a.rebind:
+        import burdam_audit
+        burdam_audit.rebind_cache(bpy.data.objects["burdam"], arm, names, {x[0]: x[4] for x in F.sculpts()})
     cleaver = {names.index(n) for n in F.CLEAVER if n in names}
+    if a.partcolors:
+        me = bpy.data.objects["burdam"].data
+        pv = np.zeros(len(me.vertices), dtype=np.int64)
+        me.attributes["vale_part"].data.foreach_get("value", pv)
+        rng = np.random.default_rng(3)
+        pal = rng.uniform(0.15, 1.0, (len(names) + 4, 3))
+        ca = me.color_attributes.new("partcol", "FLOAT_COLOR", "POINT")
+        cols = np.concatenate([pal[pv], np.ones((len(pv), 1))], axis=1).astype(np.float32)
+        ca.data.foreach_set("color", cols.ravel())
+        me.color_attributes.active_color = ca
+        sh.color_type = "VERTEX"
+        print("part colours:", {nm: tuple(int(c * 255) for c in pal[i]) for i, nm in enumerate(names)})
     body = bpy.data.objects["burdam"]
 
     def clearance():

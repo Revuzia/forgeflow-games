@@ -3,67 +3,70 @@
   "fighter": "kemdo",
   "skin": true,
   "parts": {
-    "tris_hood": 1598,
-    "tris_face": 780,
-    "tris_brow": 498,
-    "tris_head_core": 118,
-    "tris_shirt": 950,
+    "tris_hood": 1400,
+    "tris_face": 700,
+    "tris_brow": 520,
+    "tris_head_core": 260,
+    "tris_shirt": 850,
     "tris_sleeves": 600,
-    "tris_cowl": 1550,
-    "tris_wrap": 900,
-    "tris_pauldron_1": 360,
-    "tris_pauldron_2": 300,
-    "tris_pauldron_3": 300,
-    "tris_medallion": 100,
-    "tris_belt": 750,
-    "tris_robe": 1700,
-    "tris_panel": 650,
+    "tris_cowl": 1350,
+    "tris_wrap": 800,
+    "tris_pauldron_1": 420,
+    "tris_pauldron_2": 330,
+    "tris_pauldron_3": 328,
+    "tris_medallion": 320,
+    "tris_belt": 650,
+    "tris_robe": 1500,
+    "tris_panel": 520,
+    "tris_lining": 160,
     "tris_trousers": 698,
-    "tris_boots": 950,
+    "tris_boots": 996,
     "tris_forearms": 700,
-    "tris_vambrace": 592,
+    "tris_vambrace": 620,
+    "tris_vambrace_straps": 240,
     "tris_hand_R": 450,
     "tris_hand_L": 450,
     "tris_glaive_blade": 280,
     "tris_glaive_collar": 108,
-    "tris_glaive_frame": 1450,
-    "tris_glaive_lens": 440,
+    "tris_glaive_frame": 1250,
+    "tris_glaive_lens": 400,
     "tris_glaive_ring": 300,
-    "tris_glaive_wrap": 360,
+    "tris_glaive_wrap": 440,
     "tris_glaive_haft": 160,
-    "tris_glaive_butt": 418,
-    "validate_kemdo": "18210->18194"
+    "tris_glaive_butt": 480,
+    "tris_glaive_grip": 120,
+    "validate_kemdo": "18100->18089"
   },
-  "uv_coverage": 0.606,
+  "uv_coverage": 0.605,
   "bake": {
-    "base": 19.04,
-    "rough_metal": 14.77,
-    "normal": 12.53,
-    "ao": 10.91,
-    "normal_fixed_px": 17104,
-    "projection": 441.59,
-    "pack_save": 444.56,
-    "total": 506.53
+    "base": 4.34,
+    "rough_metal": 3.4,
+    "normal": 2.63,
+    "ao": 3.25,
+    "normal_fixed_px": 15609,
+    "projection": 114.38,
+    "pack_save": 114.71,
+    "total": 128.76
   },
-  "tris": 18494,
+  "tris": 18389,
   "mesh_top_m": 2.121,
-  "glb_bytes_raw": 2447424,
+  "glb_bytes_raw": 2321416,
   "optimize": {
     "ok": true,
-    "before": 2447424,
-    "after": 1046364
+    "before": 2321416,
+    "after": 1008780
   },
-  "glb_bytes": 1046364,
+  "glb_bytes": 1008780,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_highrim.glb (1022 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: kemdo_highrim_base 2048x2048 342K, kemdo_highrim_normal 512x512 48K, kemdo_highrim_orm 384x384 47K",
-      "  skinned meshes: kemdo_accent(150v), kemdo_highrim(16847v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_highrim.glb (985 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: kemdo_highrim_base 2048x2048 298K, kemdo_highrim_normal 512x512 51K, kemdo_highrim_orm 256x256 27K",
+      "  skinned meshes: kemdo_accent(149v), kemdo_highrim(17728v)",
       "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
-      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=384x384, body.metalnessMap=384x384, body.aoMap=384x384",
-      "  tris: 18494; bind-pose bounds (three units, Y up): 1.21 x 2.12 x 2.17; facing (0.00, 1.00); head bone y 1.81; runRefSpeed 3.45",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 18389; bind-pose bounds (three units, Y up): 1.21 x 2.12 x 2.17; facing (0.00, 1.00); head bone y 1.81; runRefSpeed 3.45",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -73,8 +76,8 @@
       "portrait": "art/out/fighters/kemdo/kemdo_highrim_portrait.png"
     },
     "seconds": {
-      "splash": 33.15,
-      "portrait": 15.32
+      "splash": 11.04,
+      "portrait": 4.17
     }
   },
   "three_qa": {
@@ -87,7 +90,7 @@
         -0.844
       ],
       [
-        0.46,
+        0.456,
         2.121,
         1.329
       ]
@@ -97,8 +100,8 @@
       1
     ],
     "headY": 1.808,
-    "accentPct": 1.5,
-    "accentTopHalfPct": 67.1,
+    "accentPct": 1.64,
+    "accentTopHalfPct": 67.8,
     "heightPx1080": 114,
     "size": [
       2400,
@@ -106,24 +109,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/kemdo/three_kemdo_highrim.png",
-    "seconds": 69,
+    "seconds": 10.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 1.77,
-      "model": 113.63,
-      "lows_bind": 111.76,
-      "uv": 12.39,
-      "bake": 506.53,
-      "export": 2.9,
-      "optimize": 11.45,
-      "load_test": 0.32,
-      "render": 48.55,
-      "three_qa": 69.93
+      "materials": 0.19,
+      "model": 17.25,
+      "lows_bind": 7.45,
+      "uv": 4.73,
+      "bake": 128.77,
+      "export": 0.25,
+      "optimize": 1.17,
+      "load_test": 0.24,
+      "render": 15.35,
+      "three_qa": 10.46
     },
-    "total_s": 879.69
+    "total_s": 185.95
   },
   "run_ref_speed": 3.45,
   "height_m": 2.1

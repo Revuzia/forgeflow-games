@@ -41,6 +41,8 @@ def args():
     p.add_argument("--samples", type=int, default=8)
     p.add_argument("--ts", default="")
     p.add_argument("--debug", default="", help="clip:frame -> list the worst edges with their weights")
+    p.add_argument("--probe", action="store_true", help="bones only (fast): per-frame jumps + planted-foot slides")
+    p.add_argument("--jump", type=float, default=0.25, help="probe: report frame-to-frame moves above this (m)")
     p.add_argument("--out", default=os.path.join(scene.CACHE_DIR, "_fit", "kemdo_qa.png"))
     p.add_argument("--json", default=os.path.join(scene.CACHE_DIR, "_fit", "kemdo_qa.json"))
     return p.parse_args(scene.script_args())
@@ -66,6 +68,9 @@ def main():
     if a.clips:
         clips = {k: v for k, v in clips.items() if k in a.clips.split(",")}
     anim.write_clips(arm, clips, [])
+    if a.probe:
+        probe(a, arm, clips)
+        return
     names = json.load(open(os.path.join(scene.CACHE_DIR, "fighters", "kemdo_parts.json")))
     me = body.data
     pid = np.empty(len(me.vertices), dtype=np.int64)
@@ -158,6 +163,64 @@ def main():
     json.dump(out, open(a.json, "w"))
     if a.render:
         render_sheet(a, sc, arm, list(clips))
+
+
+PROBE_BONES = ("hips", "head", "hand.L", "hand.R", "x_blade_tip", "x_lens", "foot.L", "foot.R", "toe.L", "toe.R")
+
+
+def probe(a, arm, clips):
+    """Per frame world positions of the key bones; prints the frame-to-frame jumps over --jump (m) and the planted
+    feet's slides (ball and heel on the floor in both frames, horizontal move > 1.5 cm), per clip."""
+    out = {}
+    mw = arm.matrix_world
+    for clip in clips:
+        act = bpy.data.actions[clip]
+        n = int(round(act.frame_range[1] - act.frame_range[0]))
+        rows = []
+        for f in range(n + 1):
+            anim.set_action_frame(arm, clip, f)
+            r = {}
+            for b in PROBE_BONES:
+                pb = arm.pose.bones.get(b)
+                if pb is None:
+                    continue
+                r[b] = np.array(mw @ pb.head)
+                if b.startswith("toe."):
+                    r[b + "_tip"] = np.array(mw @ pb.tail)
+            pbR, pbL = arm.pose.bones["prop.R"], arm.pose.bones["prop.L"]
+            o = np.array(mw @ pbR.head)
+            ax = np.array((mw.to_3x3() @ pbR.matrix.to_3x3()).col[1].normalized())
+            q = np.array(mw @ pbL.head) - o
+            r["lgap"] = np.array([float(np.linalg.norm(q - ax * q.dot(ax)))])
+            rows.append(r)
+        out[clip] = [{k: [round(float(x), 3) for x in v] for k, v in r.items()} for r in rows]
+        jumps = []
+        for f in range(1, len(rows)):
+            for b in ("hand.L", "hand.R", "x_blade_tip", "x_lens", "foot.L", "foot.R", "hips", "head"):
+                if b in rows[f]:
+                    dd = float(np.linalg.norm(rows[f][b] - rows[f - 1][b]))
+                    if dd > a.jump:
+                        jumps.append(f"{f - 1}>{f} {b} {dd:.2f}")
+        slides = []
+        tot = {"L": 0.0, "R": 0.0}
+        for sd in "LR":
+            for f in range(1, len(rows)):
+                A, B = rows[f - 1], rows[f]
+                planted = all(R_[f"toe.{sd}"][2] < 0.06 and R_[f"foot.{sd}"][2] < 0.14 for R_ in (A, B))
+                if planted:
+                    dd = float(np.linalg.norm((B[f"toe.{sd}"] - A[f"toe.{sd}"])[:2]))
+                    if dd > 0.015:
+                        tot[sd] += dd
+                        slides.append(f"{sd}{f - 1}>{f} {dd:.2f}")
+        mx = max((float(np.linalg.norm(rows[f][b] - rows[f - 1][b])) for f in range(1, len(rows))
+                  for b in ("hand.L", "hand.R", "x_blade_tip")), default=0.0)
+        print(f"== {clip} ({n} f) max hand/tip step {mx:.2f} m | planted slide L {tot['L']:.2f} R {tot['R']:.2f}")
+        print("   lgap: " + " ".join(f"{f}:{rows[f]['lgap'][0]:.2f}" for f in range(0, len(rows), max(1, len(rows) // 25))))
+        if jumps:
+            print("   jumps: " + ", ".join(jumps))
+        if slides:
+            print("   slides: " + ", ".join(slides))
+    json.dump(out, open(a.json.replace(".json", "_probe.json"), "w"))
 
 
 def debug_edges(body, ed, r, ok_e, rest, vname):

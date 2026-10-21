@@ -3,90 +3,71 @@
   "fighter": "kemdo",
   "skin": true,
   "parts": {
-    "bind_forearms": {
-      "heat_ok": true,
-      "unweighted": 0,
-      "fixed_vertices": 0,
-      "empty_groups": [
-        "hips",
-        "spine",
-        "chest",
-        "neck",
-        "head",
-        "shoulder.L",
-        "shoulder.R",
-        "thigh.L",
-        "shin.L",
-        "foot.L",
-        "toe.L",
-        "thigh.R",
-        "shin.R",
-        "foot.R",
-        "toe.R"
-      ]
-    },
-    "tris_forearms": 700,
-    "tris_hood": 1598,
-    "tris_face": 780,
-    "tris_brow": 498,
-    "tris_head_core": 118,
-    "tris_shirt": 1150,
+    "tris_hood": 1400,
+    "tris_face": 700,
+    "tris_brow": 520,
+    "tris_head_core": 260,
+    "tris_shirt": 850,
     "tris_sleeves": 600,
-    "tris_cowl": 1650,
-    "tris_wrap": 900,
-    "tris_pauldron_1": 380,
-    "tris_pauldron_2": 300,
-    "tris_pauldron_3": 300,
-    "tris_medallion": 100,
-    "tris_belt": 750,
-    "tris_robe": 1800,
-    "tris_panel": 650,
+    "tris_cowl": 1350,
+    "tris_wrap": 800,
+    "tris_pauldron_1": 420,
+    "tris_pauldron_2": 330,
+    "tris_pauldron_3": 328,
+    "tris_medallion": 320,
+    "tris_belt": 650,
+    "tris_robe": 1500,
+    "tris_panel": 520,
+    "tris_lining": 160,
     "tris_trousers": 698,
-    "tris_boots": 1098,
-    "tris_vambrace": 592,
+    "tris_boots": 996,
+    "tris_forearms": 700,
+    "tris_vambrace": 620,
+    "tris_vambrace_straps": 240,
     "tris_hand_R": 450,
     "tris_hand_L": 450,
-    "tris_glaive_blade": 260,
-    "tris_glaive_collar": 110,
-    "tris_glaive_frame": 1100,
-    "tris_glaive_lens": 420,
+    "tris_glaive_blade": 280,
+    "tris_glaive_collar": 108,
+    "tris_glaive_frame": 1250,
+    "tris_glaive_lens": 400,
     "tris_glaive_ring": 300,
-    "tris_glaive_wrap": 380,
-    "tris_glaive_haft": 200,
-    "tris_glaive_butt": 260,
-    "tris_tassel_plates": 360,
-    "validate_kemdo": "18652->18636"
+    "tris_glaive_wrap": 440,
+    "tris_glaive_haft": 160,
+    "tris_glaive_butt": 480,
+    "tris_glaive_grip": 120,
+    "tris_tassel_plates": 420,
+    "validate_kemdo": "18520->18509"
   },
-  "uv_coverage": 0.59,
+  "uv_coverage": 0.573,
   "bake": {
-    "base": 3.92,
-    "rough_metal": 3.58,
-    "normal": 3.01,
-    "ao": 3.39,
-    "normal_fixed_px": 29794,
-    "projection": 50.85,
-    "pack_save": 51.13,
-    "total": 65.39
+    "base": 4.24,
+    "rough_metal": 4.13,
+    "normal": 2.43,
+    "ao": 3.19,
+    "normal_fixed_px": 14567,
+    "projection": 137.93,
+    "pack_save": 138.42,
+    "total": 152.68
   },
-  "tris": 18936,
-  "mesh_top_m": 2.44,
-  "glb_bytes_raw": 2648460,
+  "tris": 18809,
+  "mesh_top_m": 2.121,
+  "glb_bytes_raw": 2369196,
   "optimize": {
     "ok": true,
-    "before": 2648460,
-    "after": 1143368
+    "before": 2369196,
+    "after": 1028460
   },
-  "glb_bytes": 1143368,
+  "glb_bytes": 1028460,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_long_evening.glb (1117 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: kemdo_long_evening_base 2048x2048 387K, kemdo_long_evening_normal 512x512 47K, kemdo_long_evening_orm 512x512 74K",
-      "  skinned meshes: kemdo_accent(150v), kemdo_long_evening(17617v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_long_evening.glb (1004 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: kemdo_long_evening_base 2048x2048 279K, kemdo_long_evening_normal 512x512 50K, kemdo_long_evening_orm 256x256 29K",
+      "  skinned meshes: kemdo_accent(149v), kemdo_long_evening(19013v)",
       "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
-      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 18936; bind-pose bounds (three units, Y up): 1.18 x 2.44 x 0.58; facing (0.00, 1.00); head bone y 1.81; runRefSpeed 3.45",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 18809; bind-pose bounds (three units, Y up): 1.21 x 2.12 x 2.17; facing (0.00, 1.00); head bone y 1.81; runRefSpeed 3.45",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -96,8 +77,8 @@
       "portrait": "art/out/fighters/kemdo/kemdo_long_evening_portrait.png"
     },
     "seconds": {
-      "splash": 6.54,
-      "portrait": 5.61
+      "splash": 30.62,
+      "portrait": 7.81
     }
   },
   "three_qa": {
@@ -105,14 +86,14 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.728,
-        0.001,
-        -0.238
+        -0.753,
+        0,
+        -0.844
       ],
       [
-        0.451,
-        2.44,
-        0.341
+        0.456,
+        2.121,
+        1.329
       ]
     ],
     "facing": [
@@ -120,33 +101,33 @@
       1
     ],
     "headY": 1.808,
-    "accentPct": 1.97,
-    "accentTopHalfPct": 100,
-    "heightPx1080": 132,
+    "accentPct": 1.62,
+    "accentTopHalfPct": 67.8,
+    "heightPx1080": 114,
     "size": [
       2400,
       900
     ],
     "clips": 0,
     "out": "art/renders/fighters/kemdo/three_kemdo_long_evening.png",
-    "seconds": 8.8,
+    "seconds": 16.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.34,
-      "model": 15.08,
-      "lows_bind": 6.41,
-      "uv": 6.12,
-      "bake": 65.39,
-      "export": 0.1,
-      "optimize": 0.91,
-      "load_test": 0.21,
-      "render": 12.19,
-      "three_qa": 9.13
+      "materials": 0.23,
+      "model": 13.27,
+      "lows_bind": 4.98,
+      "uv": 2.84,
+      "bake": 152.69,
+      "export": 0.22,
+      "optimize": 3.93,
+      "load_test": 0.71,
+      "render": 38.61,
+      "three_qa": 17.25
     },
-    "total_s": 116.23
+    "total_s": 234.93
   },
   "run_ref_speed": 3.45,
   "height_m": 2.1

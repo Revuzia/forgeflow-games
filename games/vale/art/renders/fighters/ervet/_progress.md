@@ -87,3 +87,90 @@
   (back cape included), smoked-resin blade, lamp cage at the pommel end.
 - Final: victory keeps its authored blade roll (the splash blade went edge-on with the roll), glass paler;
   base build 7 + skins build 4 running.
+
+## 2026-10-20 19:33 CDT — FIX PASS 2 started (22 review items)
+- State: fix pass 1 committed (55c27509); outputs from 16:39-16:43 (base 17,168 tris / 1094 KiB, skins pass).
+- Plan: visor = slim tapered star slit + thin cheek lines (geometry, smooth ink), white shard/ball, back collar +
+  large back plate, smaller scarf with knot + fold values, desaturated lames, arms, upswept pauldron caps,
+  boots darker, ochre trim, lamp cage visible; motion: prone death (cape drapes), leap/lunge dash, split
+  cape tails with run flutter + taper, relaxed idle (left hand free), victory both hands on the pommel,
+  great blade longer, idle amplitude.
+
+## 2026-10-20 19:57 CDT — fix pass 2: model + motion rewritten, build 1 running
+- Face: helm_sculpt (domed kite face plate, beak), the glass = visor_low (parametric: a slim tapered slit with a
+  four-point star + two thin cheek lines, set in constant-depth grooves (Groove prim) of the curved face); the
+  helm painted fully procedurally (no projected slit/star ghost), anti-aliased ink borders from the outline
+  distance; helm uv_weight 2.2. Crest glass split into its own accent part.
+- Scarf: two wraps below the chin (no hood/cowl), swag, knot on her left collarbone, two ends over the left
+  breastplate (lames now start at 12 deg so nothing pokes through); fold-value paint (curvature, undersides).
+- Caps: BentPlate stone shells drooping down the back into the concept's collar, upswept points, ochre bead,
+  carved ring, a stone clasp on her right shoulder. Lames: jittered seams, flare 0.42, rows sloping outward and
+  down the back, softer seams, desaturated slate (#4A5A66). Back plate: large BentPlate, chevron at 1.215 m.
+- Arms: chalk shells (rerebrace with a fan couter, vambrace swept over the elbow), dark wraps between.
+- Coat: rx 0.30 -> 0.27 (tapers), back slit from 1.04 m, two tails on chains cape_L/cape_R (custom weights),
+  outer back corners cut up; trims ochre #8C7A5C, clean hem band. Boots darker, no pale cuff.
+- Motion: idle = concept stance (right hand at the hip, left arm free), bigger breathing + glance; dash = leaping
+  lunge (rise, apex, fall, landing held 25 %); cast_ult grounded until the f14 push-off; death ends prone (coat
+  over the legs, sword lands to her right); victory hold both hands on top of the planted blade; run tails
+  driven per leg + a "_cape" wind key; Shatter lands out to her right; great blade 1.85 m.
+- New helper: proto/ervet_preview.py (Workbench geometry preview, ~1 min).
+
+## 2026-10-20 20:25 CDT — builds 1-3 of fix pass 2, build 4 running
+- Build 1: 20,052 tris, 1369 KiB (over): hollow arm-plate shells kept 2x their triangles and split into islands
+  (1.8 verts per tri). Arm plates made solid half-shells, lames 2 samples per plate, part budgets trimmed.
+- Build 2: 1203 KiB (over). Build 3: 1165 KiB but the bind pose failed (the 1.85 m great blade reached 4 cm
+  below the ground): great blade 1.76 m; the face glass was flat-shaded (1,248 accent verts): smooth now.
+- Looks: face reads as the concept (slit + star + cheek lines, chalk mask, no ghost paint); back = collar +
+  large back plate + split tails; scarf below the chin with a knot; death ends prone with the coat over the
+  legs; dash = leaping lunge; run tails flutter (tail drive keyed per leg in the run, gravity 0.55).
+- Splash: the forward right arm lifted the right lames and showed their dark inside: lames follow the upper
+  arm only in their lower rows (dblend 0.16..0.60); victory hold = blade planted ahead, both hands stacked on
+  the grip under the pommel; splash yaw back to 24 (the brief's 22), cooler rim 0.35. Tails limit 30 deg.
+
+## 2026-10-20 20:50 CDT — build 5 green, skins pass, final base + skins build running
+- Build 5: 16,340 tris, 1147 KiB, load test OK, facing +Z, accent 1.69 % (97 % top half; hilt 1.79, great 1.58).
+  Caps now crescents (thinning to a swept-up point), lames follow the upper arm again in their lower rows
+  (dblend 0.12..0.48: an elbow pierced them in the hold), victory elbows down, arm plates inked rims.
+- Skins pass: stillwater 943 KiB / 16,340 tris, lamplit 998 KiB / 16,700 tris, both load OK, accent 1.68 %.
+  Lamplit's cage was lost against the chest in the splash: darker walnut cage, bigger amber bead (skin palette
+  wood/lampresin), cage 6.8 cm.
+- Picks (three.js, art/.cache/fighters/_ervet_qa/ervet_base.glb): cast_ult stays grounded through f14 (push-off),
+  dash = rise/apex/fall/landing, death ends prone with the coat on her back (no sail, feet on the ground),
+  Shatter now lands out to her right (the blade reads from behind). In game (art2_ervet_*): blade trails in run.
+- Final: lames #4F5A60 (hero renders still ~44 % sat in the cool sky light, game material 13 %).
+
+## 2026-10-20 21:22 CDT — fix pass 2 done (not committed)
+- Base (build 8): 16,340 tris, 1146 KiB (1,173,848 B), three load test OK, facing +Z, accent 1.69 % (97.2 % top
+  half; hilt 1.79, great 1.58), 14 clips, run foot error 0 %. Skins: stillwater 943 KiB / 16,340 tris / 1.69 %,
+  lamplit 986 KiB / 16,720 tris / 1.68 % (cage now hangs off the pommel's side: reads in the deluxe splash);
+  all load OK, facing +Z.
+- Run trail back to ~45 deg back-and-right (a pure side trail hid the blade whenever her right side faced away).
+- Content: art.json identical to the content art block (no edit needed); build_content --check
+  --allow-missing-assets OK; strict check lists nothing for ervet. In game: art2_ervet_{game,close,close2}.png.
+- Open: one dash clip serves Quick Jab and Whole Again (present.anim is a ClipRole; a separate jab clip needs a
+  kit/contract change outside this lane); victory has no break-and-reform (no in-clip form swap); hero renders
+  still lift the lames to ~44 % saturation in the cool sky light (albedo 18 %, game 13 %).
+
+## 2026-10-20 21:51 CDT — FIX PASS 3 started (20 review items)
+- State: fix pass 2 outputs (21:18-21:21, base 16,340 tris / 1146 KiB). Items: helm egg (no paint, bald back),
+  crest reads as one ear off-front, mannequin arms, mitten hands, guard/blade likeness, coat left board, boots/shins,
+  dark hero lames, visor cross + accent spread, skins too similar, clasp sticker; in game: no jab (dash clip),
+  attack1 coat slab, idle vs clip start/end snap, run blade hidden behind mantle, one-handed attack2/Heavy Arc,
+  ult leap low, recall snap, victory reform; renderer/bot items (19, 20) are outside this lane.
+
+## 2026-10-20 22:20 CDT — fix pass 3: model, paint and motion rewritten, build 1 running
+- Helm: the concept's face projected again (its glow painted out of the plate: _clean_face_plate), sides/top
+  procedural chalk in the concept's brushwork (_detail: the breastplate's high-pass, triplanar); the back is
+  a flat-topped stone column under the crest; crest 9 cm deep over the column; crest glass strip removed;
+  star arms shortened (tips at 3.5 cm).
+- Hands: real fists (four curled fingers round the grip line, knuckles, thumb, cuff); prop.R moved into the
+  right fist's curl, prop.L = its mirror (the two-handed holds lay the left fist on the grip below).
+- Arms: two overlapping rerebrace lames with rims, a disc couter with a boss, a keeled vambrace; painted
+  with ink outlines, bevels, carved lines. Guard heavier (6 cm arms, langet, boss, tight centre setting, no
+  ink), blade 15 cm, clean glass paint (no speckle/bump). Coat folds deeper + ragged hem; shins thicker,
+  calves, chunkier boots (toe box, sole, cuff, strap); clasp a carved boss; lames lighter; skins: plates,
+  caps, helm, scarf, gloves per skin (stillwater green wet-stone, lamplit warm walnut).
+- Motion: guard == idle (anim.guard wrapper) so every clip starts/ends on the idle; dash = leaping thrust
+  (blade overhead at the apex, point-first thrust, landing lunge); Heavy Arc lunge 0.46 m; attack2 a
+  two-handed return slash with a step; run trail near level + wider; cape tails on the hips; recall 270 f
+  with a kneel-down intro (rise hidden past 8.5 s, loop closed).

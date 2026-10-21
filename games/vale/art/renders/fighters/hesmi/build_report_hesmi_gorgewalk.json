@@ -3,71 +3,71 @@
   "fighter": "hesmi",
   "skin": true,
   "parts": {
-    "tris_hood": 1798,
-    "tris_eyeband": 518,
-    "tris_eyeslit": 58,
+    "tris_hood": 1550,
+    "tris_eyeband": 520,
+    "tris_eyeslit": 60,
     "tris_facewrap": 650,
-    "tris_mantle": 2200,
-    "tris_pauldron_R": 500,
-    "tris_pauldron_L": 500,
-    "tris_torso": 2098,
-    "tris_belt": 650,
-    "tris_sash": 1150,
-    "tris_tunic": 1698,
-    "tris_legs": 1250,
-    "tris_shinguard_R": 320,
-    "tris_shinguard_L": 320,
-    "tris_boots": 1050,
-    "tris_forearms": 648,
-    "tris_gauntlet_R": 560,
-    "tris_gauntlet_L": 560,
-    "tris_fist_R": 430,
-    "tris_knuckle_R": 230,
-    "tris_fist_L": 430,
-    "tris_knuckle_L": 230,
-    "tris_shard_up_L": 520,
-    "tris_shard_up_R": 520,
-    "tris_shard_mid": 760,
-    "tris_shard_lo_L": 520,
-    "tris_shard_lo_R": 520,
-    "tris_brace": 420,
-    "tris_inlays": 240,
-    "tris_eyes": 260,
-    "tris_eye_rings": 220,
-    "tris_rope_coils": 900,
+    "tris_mantle": 1850,
+    "tris_pauldron_R": 438,
+    "tris_pauldron_L": 440,
+    "tris_torso": 1750,
+    "tris_belt": 560,
+    "tris_sash": 950,
+    "tris_tunic": 1400,
+    "tris_legs": 1150,
+    "tris_shinguard_R": 380,
+    "tris_shinguard_L": 380,
+    "tris_straps_R": 684,
+    "tris_straps_L": 680,
+    "tris_boots": 948,
+    "tris_forearms": 560,
+    "tris_gauntlet_R": 480,
+    "tris_gauntlet_L": 480,
+    "tris_fist_R": 380,
+    "tris_knuckle_R": 200,
+    "tris_fist_L": 380,
+    "tris_knuckle_L": 200,
+    "tris_shard_up_L": 480,
+    "tris_shard_up_R": 480,
+    "tris_shard_mid": 620,
+    "tris_shard_lo_L": 400,
+    "tris_shard_lo_R": 400,
+    "tris_brace": 380,
+    "tris_inlays": 60,
+    "tris_rope_coils": 1342,
     "tris_iron_pins": 300,
-    "validate_hesmi": "22788->22782"
+    "validate_hesmi": "21472->21468"
   },
-  "uv_coverage": 0.605,
+  "uv_coverage": 0.585,
   "bake": {
-    "base": 12.46,
-    "rough_metal": 14.56,
-    "normal": 9.97,
-    "ao": 7.61,
-    "normal_fixed_px": 51110,
-    "projection": 143.84,
-    "pack_save": 145.27,
-    "total": 191.06
+    "base": 3.67,
+    "rough_metal": 3.11,
+    "normal": 1.9,
+    "ao": 2.86,
+    "normal_fixed_px": 119629,
+    "projection": 16.08,
+    "pack_save": 16.47,
+    "total": 28.32
   },
-  "tris": 23022,
-  "mesh_top_m": 2.309,
-  "glb_bytes_raw": 2483832,
+  "tris": 21528,
+  "mesh_top_m": 2.301,
+  "glb_bytes_raw": 2655588,
   "optimize": {
     "ok": true,
-    "before": 2483832,
-    "after": 1065060
+    "before": 2655588,
+    "after": 1142832
   },
-  "glb_bytes": 1065060,
+  "glb_bytes": 1142832,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_gorgewalk.glb (1040 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: hesmi_gorgewalk_base 2048x2048 264K, hesmi_gorgewalk_normal 512x512 41K, hesmi_gorgewalk_orm 512x512 69K",
-      "  skinned meshes: hesmi_accent(126v), hesmi_gorgewalk(18871v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_gorgewalk.glb (1116 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_gorgewalk_base 2048x2048 283K, hesmi_gorgewalk_normal 512x512 54K, hesmi_gorgewalk_orm 512x512 81K",
+      "  skinned meshes: hesmi_accent(120v), hesmi_gorgewalk(20330v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 23022; bind-pose bounds (three units, Y up): 1.40 x 2.31 x 0.94; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
+      "  tris: 21528; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -77,8 +77,8 @@
       "portrait": "art/out/fighters/hesmi/hesmi_gorgewalk_portrait.png"
     },
     "seconds": {
-      "splash": 29.17,
-      "portrait": 11.8
+      "splash": 12.99,
+      "portrait": 4.05
     }
   },
   "three_qa": {
@@ -88,11 +88,11 @@
       [
         -0.701,
         0,
-        -0.541
+        -0.57
       ],
       [
         0.701,
-        2.309,
+        2.301,
         0.399
       ]
     ],
@@ -101,33 +101,33 @@
       1
     ],
     "headY": 1.962,
-    "accentPct": 1.99,
+    "accentPct": 1.75,
     "accentTopHalfPct": 100,
-    "heightPx1080": 125,
+    "heightPx1080": 124,
     "size": [
       2400,
       900
     ],
     "clips": 0,
     "out": "art/renders/fighters/hesmi/three_hesmi_gorgewalk.png",
-    "seconds": 42.7,
+    "seconds": 11.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.79,
-      "model": 41.88,
-      "lows_bind": 28.3,
-      "uv": 7.91,
-      "bake": 191.07,
-      "export": 3.95,
-      "optimize": 4.66,
-      "load_test": 0.74,
-      "render": 41.08,
-      "three_qa": 43.37
+      "rig": 0.0,
+      "materials": 0.27,
+      "model": 8.05,
+      "lows_bind": 7.5,
+      "uv": 4.55,
+      "bake": 28.33,
+      "export": 0.19,
+      "optimize": 0.97,
+      "load_test": 0.15,
+      "render": 17.09,
+      "three_qa": 11.72
     },
-    "total_s": 364.23
+    "total_s": 78.98
   },
   "run_ref_speed": 3.35,
   "height_m": 2.22
