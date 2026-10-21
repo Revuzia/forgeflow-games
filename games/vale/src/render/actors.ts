@@ -22,20 +22,26 @@
 //     lookups go through PropertyBinding.sanitizeNodeName.
 //   * Missing art: no mesh, overlays only. In DEV builds behind ?dev=1 a fighter falls back to the
 //     proof mannequin GLB and other units to clearly-marked debug geometry (CONTRACT §0).
-//   * Unit outline (inverted hull, screen-space px): built ONCE per template (skinned parts that share a
-//     bind pose merged into one geometry with welded normals, so a fighter or a wick costs one extra draw)
-//     and cloned onto every actor in attach() hidden. Rest: 1 px ink #0B0D11 at 60 %, tinted 18 % toward
-//     the relationship colour, on fighters / wicks / monsters / summons. Hover: 2.5 px HARM (enemy and
-//     neutral: "this is what you attack"), 1.5 px ally colour on allies. Toggling it never touches the
+//   * Unit outline (inverted hull, screen-space px; tokens hud.unitOutline = UNIT_OUTLINE): built ONCE per
+//     template (skinned parts that share a bind pose merged into one geometry with welded normals, so a
+//     fighter or a wick costs one extra draw) and cloned onto every actor in attach() hidden. Rest: 1 px ink
+//     at 60 %, tinted 18 % toward the relationship colour, on fighters / wicks / monsters / summons. Hover:
+//     a clean silhouette rim in the overlay pass (overlay/hover.ts) from the same prebuilt meshes, 2.5 px HARM
+//     (enemy and neutral: "this is what you attack"), 1.5 px ally colour on allies. Neither ever touches the
 //     scene graph.
-//   * Victim reaction (tokens vfx.impact.victimRimMs, simHitStop false): a rim-weighted flash copy of the
-//     same hull geometry (front faces, premultiplied): chalkstone for physical, orchid-rose for magic, the
+//   * Victim reaction (tokens vfx.impact.victimFlash = VICTIM_FLASH): a rim-weighted flash copy of the same
+//     hull geometry (front faces, premultiplied): chalkstone for physical, orchid-rose for magic, the
 //     value-inverted Shade (ink body, noonwhite rim) for true damage, dawnglass when a shield took it all.
-//     Peak on the impact frame, τ 70 ms, gone by 150 ms. Heavy hits add a presentation-only hit-stop
-//     (the clip clock dips, then catches up; the sim never waits) and a small flinch + squash.
+//     Peak on the impact frame, τ 70 ms, gone by 150 ms, with a small flinch + squash. It ends when the unit
+//     leaves vision (hidden()). No hit-stop (simHitStop and presentationHitStop false).
+//   * CPU (r12 B4): the renderer culls actors outside the frustum and their shadow reach (no draw, no matrix
+//     work, the clip holds); body + accent share one Skeleton (shareSkeletons); UnitDef.art.instanced units
+//     draw as the instanced, GPU-skinned crowd (crowd.ts) through a BakedMixer that takes this file's
+//     animation logic unchanged; ModelLibrary.onReady lets the renderer upload a template's textures and
+//     compile its programs when it is built.
 
 import {
-  type AnimationAction, type AnimationClip, AnimationMixer, BackSide, BufferAttribute, BufferGeometry, CapsuleGeometry, Color,
+  type AnimationActionLoopStyles, type AnimationClip, AnimationMixer, BackSide, BufferAttribute, BufferGeometry, CapsuleGeometry, Color,
   CustomBlending, CylinderGeometry, Float32BufferAttribute, FrontSide, type Material, Matrix3, Matrix4, Group, LatheGeometry, LoopOnce,
   LoopRepeat, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending, type Object3D, OctahedronGeometry, OneFactor,
   OneMinusSrcAlphaFactor, PropertyBinding, ShaderMaterial, SkinnedMesh, Uint16BufferAttribute, Uint32BufferAttribute, Vector2,
@@ -47,20 +53,30 @@ import type { EntityView, SimEvent, TeamId } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
 import type { Assets, LoadedModel } from './assets.ts';
 import { INK, type Palette } from './palette.ts';
+import { BakedMixer, bakeCrowd, type CrowdActor, type CrowdBake, VICTIM_FLASH_GLSL } from './crowd.ts';
 import type { FeelEvent } from './vfx/system.ts';
 import { patchWorldMaterial } from './world_material.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
+/** baked rows a crowd texture may hold (WebGL2 guarantees 2048; every desktop GPU VALE targets has ≥ 8192) */
+const CROWD_MAX_ROWS = 4096;
 const IMPACT_AT = 0.4;
 const ACCENT_REST = 0.8;
 const ACCENT_WINDUP_MIN = 1.5;
 const SNAP_DIST = 3;
-// victim reaction (tokens vfx.impact.victimRimMs 80: ≈ 80 ms visible, exponential τ 70 ms, cleared by 150 ms)
-const FLASH_TAU = 0.07;
-const FLASH_END = 0.15;
+/** tokens.json `hud.unitOutline` (r12 M10 rest ink, B1 hover): widths in CSS px, alpha 0..1, tint = sRGB share of
+ *  the relationship colour mixed into the rest ink. Hover colours are the relationship's (HARM for enemies and
+ *  neutrals, ally azure for allies), so colourblind modes follow the palette. */
+export const UNIT_OUTLINE = {
+  rest: { px: 1, color: INK.ink0, alpha: 0.6, relationTint: 0.18 },
+  hoverEnemy: { px: 2.5, alpha: 1 },
+  hoverAlly: { px: 1.5, alpha: 1 },
+} as const;
+/** tokens.json `vfx.impact.victimFlash` (victimRimMs 80: ≈ 80 ms visible, exponential τ 70 ms, cleared by 150 ms) */
+export const VICTIM_FLASH = { k: { T1: 0.45, T2: 0.7, T4: 1.0 }, critMult: 1.3, tauMs: 70, endMs: 150 } as const;
+const FLASH_TAU = VICTIM_FLASH.tauMs / 1000;
+const FLASH_END = VICTIM_FLASH.endMs / 1000;
 const WOB_DUR = 0.14;
-/** hit-stop: the clip clock runs at 8 % while stopped, then catches up at double speed */
-const STOP_RATE = 0.08;
 /** wicks this far from the camera focus animate at 15 Hz */
 export const ANIM_FAR_M = 12;
 const ANIM_FAR_DT = 1 / 15;
@@ -78,7 +94,19 @@ interface Template {
   dev: boolean;
   /** outline / hit-flash hull parts (built once per template scene) */
   hull: HullPart[];
+  /** the baked crowd form (UnitDef.art.instanced units that qualify; crowd.ts), else null */
+  crowd?: CrowdBake | null;
+  /** a patched accent clone that only holds the warm-up program (ModelLibrary.ready) */
+  warmAccent?: MeshStandardMaterial;
 }
+
+/** the AnimationAction / AnimationMixer surface the Actor drives (three's, or crowd.ts' baked stand-ins) */
+interface ActionLike {
+  time: number; timeScale: number; enabled: boolean; clampWhenFinished: boolean;
+  reset(): unknown; setLoop(mode: AnimationActionLoopStyles, n: number): unknown; setEffectiveWeight(w: number): unknown;
+  crossFadeFrom(a: ActionLike, d: number, warp: boolean): unknown; fadeIn(d: number): unknown; play(): unknown; getClip(): AnimationClip;
+}
+interface MixerLike { clipAction(c: AnimationClip): ActionLike; update(dt: number): unknown; stopAllAction(): unknown; uncacheRoot(o: Object3D): void }
 
 // ── hull plan: outline + hit-flash geometry, once per template ───────────────────────────────────
 /** one hull draw: `lead` is the index (traverse order) of the mesh it binds to and hangs under */
@@ -283,19 +311,10 @@ uniform float uFlashK;
 uniform float uFlashInk;
 varying vec3 vN;
 varying vec3 vV;
+${VICTIM_FLASH_GLSL}
 void main() {
   if ( uFlashK <= 0.002 ) discard;
-  float ndv = abs( dot( normalize( vN ), normalize( vV ) ) );
-  float rim = pow( 1.0 - ndv, 2.0 );
-  if ( uFlashInk < 0.5 ) {
-    // light: added (premultiplied, alpha 0), rim-weighted so the silhouette lights first
-    gl_FragColor = vec4( uFlashColor * uFlashK * ( 0.25 + 0.75 * rim ), 0.0 );
-  } else {
-    // Shade (true damage, value-inverted): the body drops to ink, the rim rings noonwhite
-    float halo = smoothstep( 0.3, 0.75, rim );
-    float a = clamp( uFlashK * mix( 1.6, 2.0, halo ), 0.0, mix( 0.85, 0.95, halo ) );
-    gl_FragColor = vec4( mix( uFlashColor, uFlashRim, halo ) * a, a );
-  }
+  gl_FragColor = valeVictimFlash( vN, vV, uFlashColor, uFlashRim, uFlashK, uFlashInk );
 }`;
 
 function flashMaterial(): ShaderMaterial {
@@ -312,6 +331,8 @@ export interface ActorOptions {
   dev: boolean;
   /** URL of the proof mannequin GLB (dev fallback for fighters) */
   devModelUrl: string | null;
+  /** draw UnitDef.art.instanced units as the instanced crowd (crowd.ts); default on */
+  crowd?: boolean;
 }
 
 // ── template library ─────────────────────────────────────────────────────────────────────────────
@@ -323,6 +344,10 @@ export class ModelLibrary {
   private readonly patched = new WeakSet<Material>();
   private readonly assets: Assets;
   private readonly opts: ActorOptions;
+  /** called once per template when it is built (the renderer uploads its textures and compiles its programs
+   *  then, at load, instead of on the frame the unit first walks into view) */
+  onReady: ((scene: Object3D, crowd: CrowdBake | null, again: boolean) => void) | null = null;
+  private readonly built: { t: Template; accentName: string; fighter: boolean }[] = [];
 
   constructor(catalog: CatalogT, assets: Assets, opts: ActorOptions) {
     this.assets = assets;
@@ -409,9 +434,39 @@ export class ModelLibrary {
         }
       }
       return null;
-    })();
+    })().then((t) => this.ready(t, def.art.accentMaterial, true));
     this.templates.set(key, p);
     return p;
+  }
+
+  private ready(t: Template | null, accentName: string, fighter: boolean): Template | null {
+    if (t && !this.built.some((b) => b.t === t)) {
+      // skinned parts: a bind-pose bounding sphere per clone (three would otherwise skin every vertex on the CPU
+      // to compute it the first time the part is sorted; the actor cull and the hover pick never use it)
+      t.scene.traverse((o) => { const m = o as SkinnedMesh; if (m.isSkinnedMesh && !m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); });
+      const b = { t, accentName, fighter };
+      this.built.push(b);
+      this.warm(b, false);
+    }
+    return t;
+  }
+
+  /** every template built so far, warmed again (the match's lighting and environment are part of a program's key) */
+  warmAll(): void { for (const b of this.built) this.warm(b, true); }
+
+  private warm(b: { t: Template; accentName: string; fighter: boolean }, again: boolean): void {
+    const t = b.t;
+    // actors draw a per-actor PATCHED clone of the accent, never the template's own: the warm-up compiles that
+    // variant (one clone kept per template so its program stays alive), not the unpatched one
+    const swaps: [Mesh, Material][] = [];
+    t.scene.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh || Array.isArray(m.material) || m.material.name !== b.accentName) return;
+      if (!t.warmAccent) { const c = (m.material as MeshStandardMaterial).clone(); patchWorldMaterial(c, { fighter: b.fighter }); t.warmAccent = c; }
+      swaps.push([m, m.material]);
+      m.material = t.warmAccent;
+    });
+    try { this.onReady?.(t.scene, t.crowd ?? null, again); } finally { for (const [m, mat] of swaps) m.material = mat; }
   }
 
   /** one template per (unit, model): `team` picks art.teamModels[team] (null = FFA → art.model); a team model
@@ -432,11 +487,13 @@ export class ModelLibrary {
         this.patchMaterials(m.gltf.scene, false, 'accent');
         const roles: Record<string, string | undefined> = { ...def.art.clips };
         for (const c of clips.keys()) if (!(c in roles)) roles[c] = c;
-        return { scene: m.gltf.scene, clips, roles, fit: 1, dev: false, hull: hullPlan(m.gltf.scene) };
+        const hull = hullPlan(m.gltf.scene);
+        const crowd = def.art.instanced && this.opts.crowd !== false ? bakeCrowd(m.gltf.scene, clips, hull, 'accent', CROWD_MAX_ROWS) : null;
+        return { scene: m.gltf.scene, clips, roles, fit: 1, dev: false, hull, crowd };
       }
       if (this.opts.dev) return devUnitTemplate(def);
       return null;
-    })();
+    })().then((t) => this.ready(t, 'accent', false));
     this.templates.set(key, p);
     return p;
   }
@@ -482,7 +539,7 @@ function lerpAngle(a: number, b: number, t: number): number {
 }
 function luma(c: Color): number { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
 
-export class Actor {
+export class Actor implements CrowdActor {
   readonly id: number;
   readonly kind: ActorKind;
   readonly def: string;
@@ -512,10 +569,10 @@ export class Actor {
   trailHoldUntil = -1;
   lastHpFrac = 1;
   // animation
-  private mixer: AnimationMixer | null = null;
+  private mixer: MixerLike | null = null;
   private template: Template | null = null;
-  private readonly actions = new Map<string, AnimationAction>();
-  private current: AnimationAction | null = null;
+  private readonly actions = new Map<string, ActionLike>();
+  private current: ActionLike | null = null;
   private currentKey = '';
   private lastStateTime = 0;
   private accent: MeshStandardMaterial[] = [];
@@ -537,8 +594,6 @@ export class Actor {
   // victim reaction envelopes (presentation only)
   private flashT = -1;
   private flashK0 = 0;
-  private stopLeft = 0;
-  private stopLag = 0;
   private wobT = -1;
   private wobK = 0;
   private wobSquash = 0;
@@ -560,7 +615,15 @@ export class Actor {
     this.ph = this.ch = this.h = v.height;
     this.pf = this.cf = this.facing = v.facing;
     this.radius = v.radius;
+    // a culled actor (outside the view and its shadow reach) is neither drawn nor matrix-updated: three
+    // re-multiplies every node's world matrix every frame, and a fighter or wick carries 40-90 bone nodes
+    const root = this.root;
+    root.updateMatrixWorld = (force?: boolean): void => { if (!this.culled) Group.prototype.updateMatrixWorld.call(root, force); };
   }
+
+  /** not drawn this frame (outside the view frustum and its shadow reach, or out of vision; renderer.updateActors):
+   *  root hidden, no matrix work */
+  culled = false;
 
   configureFighter(def: FighterDefT): void {
     this.artHeight = def.art.height * def.art.scale;
@@ -588,6 +651,22 @@ export class Actor {
     if (this.disposed || !t) return;
     this.template = t;
     this.dev = t.dev;
+    if (t.crowd) {
+      // the crowd draws this unit (crowd.ts): an empty body node carries the root placement and the scale/squash
+      const body = new Group();
+      body.name = 'crowd_body';
+      body.position.copy(t.crowd.rootPos); body.quaternion.copy(t.crowd.rootQuat); body.scale.setScalar(scale * t.fit);
+      this.crowdBake = t.crowd;
+      this.accent = [];
+      this.formNodes = new Map();
+      this.shownForm = undefined;
+      this.model = body;
+      this.baseScale = scale * t.fit;
+      this.root.add(body);
+      this.mixer = new BakedMixer(t.crowd);
+      this.accentHex = '';
+      return;
+    }
     const model = t.clips.size > 0 || hasSkin(t.scene) ? cloneSkinned(t.scene) : t.scene.clone(true);
     const s = scale * t.fit;
     model.scale.setScalar(s);
@@ -595,7 +674,12 @@ export class Actor {
     model.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh) return;
-      if ((m as SkinnedMesh).isSkinnedMesh) m.frustumCulled = false;
+      if ((m as SkinnedMesh).isSkinnedMesh) {
+        // the actor cull (renderer.updateActors) stands in for three's: a skinned part's bounds move with the clip
+        m.frustumCulled = false;
+        const bs = m.geometry.boundingSphere;
+        if (bs) (m as SkinnedMesh).boundingSphere = bs.clone();
+      }
       const mats = Array.isArray(m.material) ? m.material : [m.material];
       const next = mats.map((mat) => {
         if (mat.name !== accentName) return mat;
@@ -615,6 +699,7 @@ export class Actor {
       (this.formNodes.get(k) ?? this.formNodes.set(k, []).get(k)!).push(o);
     });
     this.shownForm = undefined;
+    shareSkeletons(model);
     this.model = model;
     this.baseScale = s;
     this.buildHull(model, t);
@@ -729,7 +814,7 @@ export class Actor {
     return null;
   }
 
-  private action(role: string): AnimationAction | null {
+  private action(role: string): ActionLike | null {
     let act = this.actions.get(role);
     if (act) return act;
     const clip = this.clipFor(role);
@@ -763,18 +848,6 @@ export class Actor {
 
   /** drive the clip for one frame */
   private animate(v: EntityView, dt: number, alpha: number): void {
-    // presentation hit-stop: the clip clock dips (scrubbed clips lag the sim by stopLag), then catches up
-    let adt = dt;
-    if (this.stopLeft > 0) {
-      const s = Math.min(dt, this.stopLeft);
-      this.stopLeft -= s;
-      this.stopLag += s * (1 - STOP_RATE);
-      adt = dt - s * (1 - STOP_RATE);
-    } else if (this.stopLag > 0) {
-      const c = Math.min(this.stopLag, dt);
-      this.stopLag -= c;
-      adt = dt + c;
-    }
     let role = this.roleOf(v);
     // held casts: entering a held cast starts the hold; afterwards idle/run keep the cast clip until it ends
     const delay = this.castHold.get(role);
@@ -811,7 +884,7 @@ export class Actor {
     }
     if (act) {
       const clipDur = act.getClip().duration || 1;
-      const st = Math.max(0, v.stateTime + (v.state === 'dead' ? 0 : alpha * TICK_DT) - this.stopLag);
+      const st = Math.max(0, v.stateTime + (v.state === 'dead' ? 0 : alpha * TICK_DT));
       if (role === 'run') {
         const speed = Math.hypot(v.vx, v.vy);
         act.timeScale = Math.max(0.35, Math.min(2.2, speed / Math.max(0.1, this.runRef)));
@@ -837,7 +910,7 @@ export class Actor {
         act.timeScale = 1;
       }
     }
-    this.mixer!.update(adt);
+    this.mixer!.update(dt);
   }
 
   /** showcase (menu plinth): loop one role regardless of any view */
@@ -875,6 +948,8 @@ export class Actor {
           const c = new SkinnedMesh(part.geometry, mat);
           c.bind(sm.skeleton, sm.bindMatrix);
           c.frustumCulled = false;
+          if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
+          c.boundingSphere = part.geometry.boundingSphere!.clone();
           copy = c;
         } else copy = new Mesh(part.geometry, mat);
         copy.name = flash ? 'vale_flash' : 'vale_outline';
@@ -892,16 +967,51 @@ export class Actor {
     for (const m of this.flashMeshes) m.visible = true;
   }
 
+  // ── crowd surface (crowd.ts CrowdActor) ────────────────────────────────────────────────────────
+  /** the baked crowd form this actor draws through, or null (a per-actor model) */
+  crowdBake: CrowdBake | null = null;
+  get accentKey(): string { return this.accentHex; }
+  get accentTint(): Color { return this.accentColor; }
+  get glowLevel(): number { return this.glow; }
+  get restOutline(): { px: number; color: Color; opacity: number } { this.restOut.px = Math.max(0, this.outlinePx); this.restOut.opacity = this.outlineOpacity; return this.restOut; }
+  private readonly restOut = { px: 0, color: this.outlineColor, opacity: 0 };
+  get flashState(): { k: number; color: Color; rim: Color | null } { this.flashOut.k = this.flashK; this.flashOut.rim = this.flashInk ? this.flashRim : null; return this.flashOut; }
+  private readonly flashOut: { k: number; color: Color; rim: Color | null } = { k: 0, color: new Color(), rim: null };
+  crowdPose(out: { a: number; b: number; w: number }): void {
+    if (this.mixer instanceof BakedMixer) this.mixer.pose(out); else { out.a = out.b = 0; out.w = 1; }
+  }
+
   /** outline style: `px` ≤ 0 hides it; colour linear; opacity 0..1. Cheap to call every frame. */
   setOutline(px: number, color: Color, opacity = 1): void {
-    if (!this.outlineMat) return;
+    if (!this.outlineMat && !this.crowdBake) return;
     if (px === this.outlinePx && opacity === this.outlineOpacity && color.equals(this.outlineColor)) return;
     this.outlinePx = px; this.outlineOpacity = opacity; this.outlineColor.copy(color);
     this.applyOutline();
   }
   hideOutline(): void { this.setOutline(0, this.outlineColor, 0); }
-  /** the current outline width in px (0 = hidden; harness) */
-  get outlineWidth(): number { return Math.max(0, this.outlinePx); }
+
+  /** the outline width in px the viewer sees: the hover rim's while hovered, else the rest ink's (0 = none; harness) */
+  get outlineWidth(): number { return this.hoverPx > 0 ? this.hoverPx : Math.max(0, this.outlinePx); }
+
+  /** hover rim (drawn by overlay/hover.ts in the overlay pass, on top of the rest ink): px ≤ 0 = none; colour linear */
+  setHover(px: number, color: Color | null): void {
+    this.hoverPx = this.outlineMat || this.crowdBake ? Math.max(0, px) : 0;
+    if (color) this.hoverColor.copy(color);
+  }
+  private hoverPx = 0;
+  private readonly hoverColor = new Color();
+  /** what the overlay hover pass draws: the body silhouette (hull geometry) and the hull, or null (no rim) */
+  hoverTarget(): { model: Object3D; mask: readonly Mesh[]; hull: readonly Mesh[]; px: number; color: Color } | null {
+    if (this.hoverPx <= 0 || !this.model || !this.root.visible || this.disposed || this.crowdBake) return null;
+    return { model: this.model, mask: this.flashMeshes, hull: this.hullMeshes, px: this.hoverPx, color: this.hoverColor };
+  }
+  /** the prebuilt hover meshes whatever the hover state (renderer: compile the hover programs at attach) */
+  hoverMeshes(): { model: Object3D; mask: readonly Mesh[]; hull: readonly Mesh[] } | null {
+    return this.model && !this.crowdBake && this.hullMeshes.length ? { model: this.model, mask: this.flashMeshes, hull: this.hullMeshes } : null;
+  }
+  /** the hover rim's width (px, 0 = none) and colour (the crowd draws a crowd unit's rim itself) */
+  get hoverWidth(): number { return this.hoverPx; }
+  get hoverTint(): Color { return this.hoverColor; }
 
   private applyOutline(): void {
     const mat = this.outlineMat;
@@ -917,30 +1027,39 @@ export class Actor {
   /** victim flash at strength k (≈ 0.45 basic … 1.0 ultimate): `rim` set = the Shade treatment (ink body, rim colour) */
   flash(k: number, color: Color, rim: Color | null = null): void {
     const fm = this.flashMat;
-    if (!fm || !(k > 0)) return;
+    if ((!fm && !this.crowdBake) || !(k > 0)) return;
     // a weaker hit never cuts a stronger flash short
     const cur = this.flashT >= 0 ? this.flashK0 * Math.exp(-this.flashT / FLASH_TAU) : 0;
     if (k < cur) return;
     this.flashT = 0; this.flashFresh = true; this.flashK0 = k;
-    (fm.uniforms.uFlashColor.value as Color).copy(color);
-    fm.uniforms.uFlashInk.value = rim ? 1 : 0;
-    if (rim) (fm.uniforms.uFlashRim.value as Color).copy(rim);
-    fm.uniforms.uFlashK.value = k;
-    for (const m of this.flashMeshes) m.visible = true;
+    this.flashOut.color.copy(color);
+    this.flashInk = !!rim;
+    if (rim) this.flashRim.copy(rim);
+    this.setFlashK(k);
+    if (fm) {
+      (fm.uniforms.uFlashColor.value as Color).copy(color);
+      fm.uniforms.uFlashInk.value = rim ? 1 : 0;
+      if (rim) (fm.uniforms.uFlashRim.value as Color).copy(rim);
+      for (const m of this.flashMeshes) m.visible = true;
+    }
   }
   private flashFresh = false;
+  private flashK = 0;
+  private flashInk = false;
+  private readonly flashRim = new Color();
+  private setFlashK(k: number): void {
+    this.flashK = k;
+    if (this.flashMat) this.flashMat.uniforms.uFlashK.value = k;
+  }
   /** a flash that started this frame or the last few: scale it (FeelL.hitFlash); false when none is live */
   boostFlash(mult: number): boolean {
-    if (this.flashT < 0 || this.flashT > 0.05 || !this.flashMat) return false;
+    if (this.flashT < 0 || this.flashT > 0.05 || (!this.flashMat && !this.crowdBake)) return false;
     this.flashK0 = Math.min(1.2, this.flashK0 * mult);
-    this.flashMat.uniforms.uFlashK.value = this.flashK0 * Math.exp(-this.flashT / FLASH_TAU);
+    this.setFlashK(this.flashK0 * Math.exp(-this.flashT / FLASH_TAU));
     return true;
   }
   /** current flash strength (harness) */
-  get flashLevel(): number { return this.flashMat ? (this.flashMat.uniforms.uFlashK.value as number) : 0; }
-
-  /** presentation-only hit-stop: the clip clock slows for `sec`, then catches up (the sim never waits) */
-  hitStop(sec: number): void { if (sec > 0) this.stopLeft = Math.max(this.stopLeft, Math.min(0.12, sec)); }
+  get flashLevel(): number { return this.flashK; }
 
   /** flinch away from (dx, dz) by k metres with a squash of `squash` (0..0.3) */
   flinch(dx: number, dz: number, k: number, squash: number): void {
@@ -949,19 +1068,35 @@ export class Actor {
     this.wobT = 0; this.wobK = Math.min(0.15, k); this.wobSquash = Math.min(0.3, squash);
   }
 
+  /**
+   * the entity left the viewer's vision this frame: its reaction ends now. Envelopes only tick while the actor
+   * updates, so a flash or squash left running would replay as a false "just hit" when the unit reappears.
+   */
+  hidden(): void {
+    if (this.flashT >= 0) {
+      this.flashT = -1;
+      this.setFlashK(0);
+      if (this.warm <= 0) for (const m of this.flashMeshes) m.visible = false;
+    }
+    if (this.wobT >= 0) {
+      this.wobT = -1;
+      this.model?.scale.setScalar(this.baseScale);
+    }
+  }
+
   /** per-frame envelopes: warm-up, flash decay, flinch/squash */
   private tickReactions(dt: number): void {
     if (this.warm > 0 && --this.warm === 0) {
       this.applyOutline();
       if (this.flashT < 0) for (const m of this.flashMeshes) m.visible = false;
     }
-    if (this.flashT >= 0 && this.flashMat) {
+    if (this.flashT >= 0) {
       if (this.flashFresh) this.flashFresh = false; else this.flashT += dt;
       if (this.flashT > FLASH_END) {
         this.flashT = -1;
-        this.flashMat.uniforms.uFlashK.value = 0;
+        this.setFlashK(0);
         if (this.warm <= 0) for (const m of this.flashMeshes) m.visible = false;
-      } else this.flashMat.uniforms.uFlashK.value = this.flashK0 * Math.exp(-this.flashT / FLASH_TAU);
+      } else this.setFlashK(this.flashK0 * Math.exp(-this.flashT / FLASH_TAU));
     }
     if (this.wobT >= 0) {
       this.wobT += dt;
@@ -998,15 +1133,54 @@ function hasSkin(o: Object3D): boolean {
   return s;
 }
 
+/**
+ * One Skeleton per bone set. GLTFLoader and SkeletonUtils.clone give every skinned primitive its own Skeleton,
+ * and three updates and uploads a bone texture per Skeleton per frame. A body and its accent are separate
+ * skins over the same bones whose inverse bind matrices differ by the accent node's offset: when
+ * IBM_A,i⁻¹ · IBM_B,i · bind_B is one matrix X for every bone, B binds A's skeleton with bindMatrix X (exactly
+ * the same skinned positions; three re-derives bindMatrixInverse from matrixWorld in attached mode). A wick
+ * then uploads one bone texture instead of two.
+ */
+function shareSkeletons(model: Object3D): void {
+  const kept: SkinnedMesh[] = [];
+  model.traverse((o) => {
+    const sm = o as SkinnedMesh;
+    if (!sm.isSkinnedMesh) return;
+    const s = sm.skeleton;
+    for (const k of kept) {
+      const ks = k.skeleton;
+      if (ks === s) return;
+      if (ks.bones.length !== s.bones.length || !ks.bones.every((b, i) => b === s.bones[i])) continue;
+      let ok = true;
+      for (let i = 0; i < s.bones.length && ok; i++) {
+        _m1.copy(ks.boneInverses[i]).invert().multiply(s.boneInverses[i]).multiply(sm.bindMatrix);
+        if (i === 0) _m2.copy(_m1);
+        else for (let j = 0; j < 16 && ok; j++) ok = Math.abs(_m1.elements[j] - _m2.elements[j]) < 1e-4;
+      }
+      if (!ok) continue;
+      s.dispose();
+      sm.skeleton = ks;
+      sm.bindMatrix.copy(_m2);
+      sm.bindMatrixInverse.copy(_m2).invert();
+      return;
+    }
+    kept.push(sm);
+  });
+}
+
 /** relationship-coloured accents for every actor (called when the palette or a team changes) */
 export function accentHexFor(palette: Palette, v: { team: TeamId; owner: number; kind: string }): string {
   return palette.unitHex(v.team, v.owner, v.kind === 'fighter');
 }
 
-// ── victim reactions: damage events → flash / hit-stop / flinch on the struck actor (presentation only) ──
-/** flash strength by tier class: T1 basic attacks and passives, T2/T3 abilities, T4 ultimates (×1.3 on a crit) */
-const FLASH_K: Record<1 | 2 | 4, number> = { 1: 0.45, 2: 0.7, 4: 1.0 };
+// ── victim reactions: damage events → flash / flinch on the struck actor (presentation only) ─────────
+// No hit-stop anywhere (tokens vfx.impact.simHitStop false; r12 M6 "keep hitStop at 0"): the sim never waits
+// and no clip clock pauses. A VFX `feel` layer's hitStop is parsed for the schema and ignored here.
+/** flash strength by tier class: T1 basic attacks and passives, T2/T3 abilities, T4 ultimates (tokens vfx.impact.victimFlash) */
+const FLASH_K: Record<1 | 2 | 4, number> = { 1: VICTIM_FLASH.k.T1, 2: VICTIM_FLASH.k.T2, 4: VICTIM_FLASH.k.T4 };
 const FLINCH_KINDS = new Set(['fighter', 'minion', 'monster', 'summon']);
+/** a feel layer (hitFlash / squash) lands on a unit struck this recently (s), never on a bystander or the caster */
+const FEEL_VICTIM_S = 0.25;
 
 export class HitReactions {
   /** ability id → tier class (fighter kits incl. forms and recasts; anything else is an ability, T2) */
@@ -1019,6 +1193,9 @@ export class HitReactions {
   private readonly cShadeRim = new Color().setStyle(INK.noonwhite);
   private readonly cShield = new Color().setStyle(INK.shield);
   private readonly hits = new Map<number, { k: number; color: Color; rim: Color | null; src: number; cls: 1 | 2 | 4; crit: boolean }>();
+  /** recent victims: actor id → presentation time and look of its last hit (feel layers resolve against these) */
+  private readonly struck = new Map<number, { t: number; color: Color; rim: Color | null }>();
+  private now = 0;
 
   constructor(catalog: CatalogT) {
     for (const f of catalog.fighters) {
@@ -1034,8 +1211,9 @@ export class HitReactions {
     }
   }
 
-  /** this frame's sim events (call before the director spawns their VFX) */
-  handle(events: readonly SimEvent[], actors: Map<number, Actor>): void {
+  /** this frame's sim events (call before the director spawns their VFX); `now` the presentation clock (s) */
+  handle(events: readonly SimEvent[], actors: Map<number, Actor>, now = this.now): void {
+    this.now = now;
     const hits = this.hits;
     hits.clear();
     for (const ev of events) {
@@ -1043,7 +1221,7 @@ export class HitReactions {
       const dst = actors.get(ev.dst);
       if (!dst || !dst.visible || dst.leaving >= 0 || !dst.model) continue;
       const cls: 1 | 2 | 4 = ev.ability ? (this.tier.get(ev.ability) ?? 2) : 1;
-      let k = FLASH_K[cls] * (ev.crit ? 1.3 : 1);
+      let k = FLASH_K[cls] * (ev.crit ? VICTIM_FLASH.critMult : 1);
       const maxHp = dst.view?.maxHp ?? 0;
       if (ev.ability && maxHp > 0 && ev.amount < maxHp * 0.02) k *= 0.7;               // zone and DoT ticks read lighter
       const src = ev.src >= 0 ? actors.get(ev.src) : undefined;
@@ -1057,13 +1235,8 @@ export class HitReactions {
     for (const [id, h] of hits) {
       const a = actors.get(id)!;
       a.flash(Math.min(1.2, h.k), h.color, h.rim);
+      this.struck.set(id, { t: now, color: h.color, rim: h.rim });
       const src = h.src >= 0 ? actors.get(h.src) : undefined;
-      // heavy hits (crits, ultimates): a short presentation hit-stop on both bodies
-      if (h.crit || h.cls === 4) {
-        const sec = h.cls === 4 ? 0.07 : 0.05;
-        a.hitStop(sec);
-        if (src && src.visible) src.hitStop(sec);
-      }
       if (!this.reduceMotion && FLINCH_KINDS.has(a.kind)) {
         const dx = src ? a.x - src.x : 0, dz = src ? a.y - src.y : 0;
         a.flinch(dx, dz, 0.03 + 0.05 * h.k, 0.02 + 0.04 * h.k);
@@ -1071,18 +1244,24 @@ export class HitReactions {
     }
   }
 
-  /** a VFX `feel` layer fired: hitFlash multiplies the struck actor's flash, hitStop and squash apply to it */
-  feel(e: FeelEvent, actors: Map<number, Actor>): void {
-    if (!(e.hitFlash > 0 || e.hitStop > 0 || e.squash > 0)) return;
-    let best: Actor | null = null, bd = 1.5 * 1.5;
-    for (const a of actors.values()) {
-      if (!a.visible || a.leaving >= 0 || !a.model) continue;
+  /**
+   * a VFX `feel` layer fired at e.at: hitFlash multiplies the flash of the unit struck there, squash squashes it.
+   * Only a unit damaged within FEEL_VICTIM_S and within 1.5 m qualifies (never the caster beside it); hitStop
+   * is ignored (see above).
+   */
+  feel(e: FeelEvent, actors: Map<number, Actor>, now = this.now): void {
+    this.now = Math.max(this.now, now);
+    if (!(e.hitFlash > 0 || e.squash > 0)) return;
+    let best: Actor | null = null, hit: { color: Color; rim: Color | null } | null = null, bd = 1.5 * 1.5;
+    for (const [id, s] of this.struck) {
+      if (this.now - s.t > FEEL_VICTIM_S) { this.struck.delete(id); continue; }
+      const a = actors.get(id);
+      if (!a || !a.visible || a.leaving >= 0 || !a.model) continue;
       const d = (a.x - e.at.x) ** 2 + (a.y - e.at.z) ** 2;
-      if (d < bd) { bd = d; best = a; }
+      if (d < bd) { bd = d; best = a; hit = s; }
     }
-    if (!best) return;
-    if (e.hitFlash > 0 && !best.boostFlash(e.hitFlash)) best.flash(Math.min(1.2, FLASH_K[2] * e.hitFlash), this.cPhysical);
-    if (e.hitStop > 0) best.hitStop(e.hitStop);
+    if (!best || !hit) return;
+    if (e.hitFlash > 0 && !best.boostFlash(e.hitFlash)) best.flash(Math.min(1.2, FLASH_K[2] * e.hitFlash), hit.color, hit.rim);
     if (e.squash > 0 && !this.reduceMotion && FLINCH_KINDS.has(best.kind)) best.flinch(0, 0, 0, e.squash);
   }
 }

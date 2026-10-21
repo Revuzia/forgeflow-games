@@ -66,6 +66,7 @@ async function main(): Promise<void> {
     eventVfx: catalog.client.vfxEvents, statusVfx: catalog.client.vfxStatus,   // the same tables the game boots with
     dynamicResolution: qs.get('dyn') === '1',
     preserveDrawingBuffer: true, quiet: true,
+    crowd: qs.get('crowd') !== '0',                                  // crowd=0: every Wick as its own model (A/B)
   });
   const resize = (): void => renderer.resize(canvas.clientWidth, canvas.clientHeight);
   addEventListener('resize', resize);

@@ -24,13 +24,13 @@
 
 import {
   Color, Frustum, Matrix4, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, Sphere, SRGBColorSpace,
-  Vector2, Vector3, WebGLRenderer,
+  Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import type { CatalogT, MapDefT } from '../contracts/catalog.ts';
 import type { MatchClient, Settings } from '../contracts/session.ts';
 import type { EntityId, EntityView, MatchSetup, SimEvent, WorldView } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
-import { Actor, accentHexFor, ANIM_FAR_M, HitReactions, ModelLibrary, outlineUniforms } from './actors.ts';
+import { Actor, accentHexFor, ANIM_FAR_M, HitReactions, ModelLibrary, outlineUniforms, UNIT_OUTLINE } from './actors.ts';
 import { Assets, type AssetUrlFn } from './assets.ts';
 import { CameraRig, type CameraMode } from './camera.ts';
 import { Director, type EventVfxMap, type StatusVfxMap } from './director.ts';
@@ -39,11 +39,13 @@ import { Sun } from './lighting.ts';
 import { MenuWorld } from './menu.ts';
 import { BAR_KIND, BarLayer, GLYPH, SHAPE } from './overlay/bars.ts';
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
+import { HoverOutline, hoverRimUniforms, MASK_FRAG, RIM_FRAG } from './overlay/hover.ts';
+import { CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
 import { TELE_SHAPE, TelegraphLayer, type TeleSpec } from './overlay/telegraphs.ts';
-import { FRAY_SEATS, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
+import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
 import { PostChain } from './post.ts';
-import { DynamicResolution, resolveQuality, type ResolvedQuality } from './quality.ts';
+import { DynamicResolution, type FrameBound, GpuTimer, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
 import { buildTerrain, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
 import { VfxSystem } from './vfx/system.ts';
@@ -63,6 +65,8 @@ export interface RendererOptions {
   preserveDrawingBuffer?: boolean;
   /** silence missing-asset warnings */
   quiet?: boolean;
+  /** draw UnitDef.art.instanced units (the Wicks) as the instanced crowd (default on; off = one model each) */
+  crowd?: boolean;
 }
 
 export interface AimSpec {
@@ -82,6 +86,9 @@ export interface RenderStats {
   programs: number; geometries: number; textures: number;
   renderScale: number; pixelRatio: number; tier: string; width: number; height: number;
   particles: number; vfx: number; actors: number; telegraphs: number; mode: 'menu' | 'match' | 'none';
+  /** GPU time of the last measured frame (ms; null = no timer query, or dynamic resolution off) and what the
+   *  dynamic-resolution controller last found limiting a slow second ('cpu' holds the scale) */
+  gpuMs: number | null; bound: FrameBound;
 }
 
 export interface CameraControl {
@@ -134,10 +141,13 @@ const _ndc = new Vector2();
 const _frustum = new Frustum();
 const _m4 = new Matrix4();
 const _sphere = new Sphere();
-const INK_OUTLINE = '#0B0D11';
 const _rest = { self: new Color(), ally: new Color(), enemy: new Color(), neutral: new Color() };
 /** kinds that always carry the thin ink outline (M10); the rest outline on hover only */
 const OUTLINED = new Set(['fighter', 'minion', 'monster', 'summon']);
+
+function isDevBuild(): boolean {
+  try { return !!import.meta.env?.DEV; } catch { return false; }
+}
 
 function devDefault(): boolean {
   let dev = false;
@@ -156,6 +166,7 @@ class ValeRenderer implements Renderer {
   private readonly opts: RendererOptions;
   private q: ResolvedQuality;
   private readonly dyn = new DynamicResolution();
+  private readonly gpuTimer: GpuTimer;
   // match world
   private readonly scene = new Scene();
   private readonly rig = new CameraRig();
@@ -183,6 +194,9 @@ class ValeRenderer implements Renderer {
   private readonly bars = new BarLayer();
   private readonly rings = new RingLayer();
   private readonly teles = new TelegraphLayer();
+  private readonly hoverRim = new HoverOutline(INK.ink0);
+  /** instanced, GPU-skinned units (UnitDef.art.instanced: the Wicks; crowd.ts) */
+  private readonly crowd = new CrowdLayer(outlineUniforms.uOutlineRes, { maskFrag: MASK_FRAG, rimFrag: RIM_FRAG, rimUniforms: hoverRimUniforms });
   private aim: AimSpec | null = null;
   private hover: EntityId | null = null;
   private target: EntityId | null = null;
@@ -199,6 +213,8 @@ class ValeRenderer implements Renderer {
   private skipAcc = 0;
   private readonly resources = new Map<string, { color: Color; model: string }>();
   private readonly tmpColor = new Color();
+  /** ground offset of a shadow per metre of caster height (−sun.xz / sun.y, ≤ 3 m/m); the actor cull reaches over it */
+  private readonly shadowDir = new Vector2();
   private readonly raycaster = new Raycaster();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
   private hudScale = 1;
@@ -216,11 +232,19 @@ class ValeRenderer implements Renderer {
     this.gl.shadowMap.enabled = true;
     this.gl.shadowMap.type = PCFShadowMap;
     this.gl.info.autoReset = false;
+    this.gpuTimer = new GpuTimer(this.gl.getContext() as WebGL2RenderingContext);
+    // production: no synchronous shader-log read on a program's first use (a GPU round trip, 4-40 ms measured
+    // under load on the first hover or wave); dev builds keep three's error checks
+    this.gl.debug.checkShaderErrors = isDevBuild();
     this.assets = new Assets(this.gl, assetUrl);
     this.assets.quiet = !!opts.quiet;
     const dev = opts.dev ?? devDefault();
     const devModelUrl = opts.devModelUrl ?? (dev ? new URL('art/out/_proof/_proof_mannequin.glb', document.baseURI).href : null);
-    this.lib = new ModelLibrary(catalog, this.assets, { dev, devModelUrl });
+    this.lib = new ModelLibrary(catalog, this.assets, { dev, devModelUrl, crowd: opts.crowd !== false });
+    this.lib.onReady = (root, crowd, again) => {
+      this.warmTemplate(root, !crowd, again);
+      if (crowd && this.envReady) this.asIfComposer(() => this.crowd.warm(crowd, this.gl, this.rig.camera, this.scene, this.warmScene, again));
+    };
     this.sky = new Sky(this.gl);
     this.palette = new Palette(catalog, null, -1, settings.access.colorblind as ColorblindMode);
     for (const r of catalog.resources) this.resources.set(r.id, { color: new Color().setStyle(r.color), model: r.model });
@@ -229,8 +253,9 @@ class ValeRenderer implements Renderer {
     this.vfx = new VfxSystem(catalog.vfx, { entityPos: (id, out) => this.bodyPos(id, out) });
     this.vfx.setCamera(this.rig.camera);
     this.scene.add(this.vfx.group);
+    this.scene.add(this.crowd.group);
     this.reactions = new HitReactions(catalog);
-    this.vfx.onFeel = (e) => { if (e.shake > 0) this.rig.shake(e.shake * 4, 90 + e.shake * 60); this.reactions.feel(e, this.actors); };
+    this.vfx.onFeel = (e) => { if (e.shake > 0) this.rig.shake(e.shake * 4, 90 + e.shake * 60); this.reactions.feel(e, this.actors, this.time); };
     this.director = new Director(catalog, this.vfx, {
       view: () => this.client?.view ?? null,
       palette: () => this.palette,
@@ -246,7 +271,7 @@ class ValeRenderer implements Renderer {
     this.menu = new MenuWorld(this.gl);
     this.overlay.teleScene.add(this.teles.mesh);
     this.overlay.scene.add(this.rings.mesh, this.bars.mesh, this.bars.labels);
-    this.post = new PostChain(this.gl, this.scene, this.rig.camera, (r, target, depth) => this.overlay.draw(r, target, depth),
+    this.post = new PostChain(this.gl, this.scene, this.rig.camera, (r, target, depth) => this.overlay.draw(r, target, depth, (cam) => this.drawHover(r, cam)),
       (r, target, depth, cam) => { this.vfx.setCamera(cam as import('three').PerspectiveCamera); this.vfx.draw(r, target, depth); });
     this.q = resolveQuality(settings.video);
     this.dyn.enabled = opts.dynamicResolution !== false;
@@ -360,10 +385,19 @@ class ValeRenderer implements Renderer {
     // light + sky
     const L = map.art.lighting;
     this.sun.configure({ sunDir: L.sunDir, sunColor: L.sunColor, sunIntensity: L.sunIntensity });
+    { const [sx, sy, sz] = L.sunDir; const k = 1 / Math.max(0.05, Math.abs(sy)); this.shadowDir.set(-sx * k, -sz * k); if (this.shadowDir.length() > 3) this.shadowDir.setLength(3); }
     const sc = new Color().setStyle(L.sunColor);
     this.sky.makeFallback(L.sunDir, sc, new Color(0.16, 0.25, 0.42), new Color().setStyle(L.fogColor).multiplyScalar(0.9));
     this.sky.apply(this.scene, null, L.ambient);
-    this.assets.hdr(map.art.sky).then((t) => { if (gen === this.matchGen && t) this.sky.apply(this.scene, t, L.ambient); });
+    // the environment map is part of every lit program's key: once this match's sky is final, warm every built
+    // template against it (and every template built later, as it is built)
+    this.envReady = false;
+    this.assets.hdr(map.art.sky).then((t) => {
+      if (gen !== this.matchGen) return;
+      if (t) this.sky.apply(this.scene, t, L.ambient);
+      this.envReady = true;
+      this.lib.warmAll();
+    });
     this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
     // world: procedural terrain now; the Blender scene replaces it when it exists
     this.terrain = buildTerrain(map);
@@ -403,12 +437,14 @@ class ValeRenderer implements Renderer {
     this.offEvents = null;
     this.pending.length = 0;
     for (const a of this.actors.values()) a.dispose();
+    this.crowd.clear();
     this.actors.clear();
     this.director.clear();
     this.vfx.clear();
     if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
     if (this.mapScene) { this.scene.remove(this.mapScene); this.mapScene = null; }
     this.fog.dispose();
+    this.envReady = false;
     this.client = null;
     this.map = null;
     this.mode = 'none';
@@ -517,13 +553,13 @@ class ValeRenderer implements Renderer {
           const def = this.lib.fighter(e.def);
           if (def) {
             a.configureFighter(def);
-            this.lib.fighterTemplate(e.def, e.skin).then((t) => actor.attach(t, def.art.scale, def.art.accentMaterial));
+            this.lib.fighterTemplate(e.def, e.skin).then((t) => { actor.attach(t, def.art.scale, def.art.accentMaterial); this.warmHover(actor); });
           }
         } else {
           const def = this.lib.unit(e.def);
           if (def) {
             a.configureUnit(def);
-            this.lib.unitTemplate(e.def, this.palette.ffa ? null : e.team).then((t) => actor.attach(t, def.art.scale, 'accent'));
+            this.lib.unitTemplate(e.def, this.palette.ffa ? null : e.team).then((t) => { actor.attach(t, def.art.scale, 'accent'); this.warmHover(actor); });
           }
         }
         a.pushTick(e, tick);
@@ -543,32 +579,39 @@ class ValeRenderer implements Renderer {
     const cam = this.rig.camera;
     _frustum.setFromProjectionMatrix(_m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
     const fx = this.rig.focus.x, fz = this.rig.focus.z;
-    // outline styles: rest = ink 60 % tinted 18 % (display space) toward the relationship; hover = HARM 2.5 px
-    // (enemy, neutral) or ally 1.5 px
-    const ink = p.get(INK_OUTLINE);
+    // outline styles (tokens hud.unitOutline): rest = ink at 60 % tinted 18 % (display space) toward the
+    // relationship, in the scene; hover = a clean rim in the overlay pass, HARM 2.5 px (enemy, neutral) or ally 1.5 px
+    const O = UNIT_OUTLINE;
+    const ink = p.get(O.rest.color);
     for (const r of ['self', 'ally', 'enemy', 'neutral'] as const) {
-      _rest[r].copy(ink).convertLinearToSRGB().lerp(this.tmpColor.copy(p.relationColor(r)).convertLinearToSRGB(), 0.18).convertSRGBToLinear();
+      _rest[r].copy(ink).convertLinearToSRGB().lerp(this.tmpColor.copy(p.relationColor(r)).convertLinearToSRGB(), O.rest.relationTint).convertSRGBToLinear();
     }
     const harm = p.relationColor('enemy'), allyC = p.relationColor('ally');
+    const sdx = this.shadowDir.x, sdz = this.shadowDir.y, sdl = Math.hypot(sdx, sdz);
     for (const a of this.actors.values()) {
       const v = a.view;
       if (!v) continue;
       const vis = this.entityVisible(v) && (v.alive || v.kind === 'fighter' || a.leaving >= 0 || v.state === 'dead');
       a.visible = vis;
-      a.root.visible = vis;
-      if (!vis) continue;
+      // out of the viewer's vision: not drawn, no matrix work, and any reaction ends now (actors.ts hidden())
+      if (!vis) { a.root.visible = false; a.culled = true; a.hidden(); continue; }
       const hex = accentHexFor(p, v);
       a.setAccentColor(hex, p.get(hex));
-      _sphere.center.set(a.x, a.h + a.artHeight * 0.5, a.y);
-      _sphere.radius = a.artHeight * 0.5 + a.radius + 2;
+      // the body (+ 2 m for swings and leaps) and the shadow it throws (half its height along the sun's
+      // ground offset, covering the whole shadow) must miss the frustum for the actor to be culled
+      const H = a.artHeight;
+      _sphere.center.set(a.x + sdx * H * 0.5, a.h + H * 0.5, a.y + sdz * H * 0.5);
+      _sphere.radius = H * 0.5 + a.radius + 2 + sdl * H * 0.5;
       const lod = !_frustum.intersectsSphere(_sphere) ? 2 : v.kind === 'minion' && Math.hypot(a.x - fx, a.y - fz) > ANIM_FAR_M ? 1 : 0;
+      a.culled = lod === 2 && a.leaving < 0;
+      a.root.visible = !a.culled;
       a.update(dt, alpha, lod);
       if (a.model) {
         const rel = p.relation(v.team, v.owner, v.kind === 'fighter');
         const live = v.alive && a.leaving < 0 && lod !== 2;      // off-screen hulls cost vertex work for nothing
-        if (live && hoverOn === a.id && rel !== 'self') {
-          if (rel === 'ally') a.setOutline(1.5, allyC, 1); else a.setOutline(2.5, harm, 1);
-        } else if (live && OUTLINED.has(v.kind)) a.setOutline(1, _rest[rel], 0.6);
+        const hov = live && hoverOn === a.id && rel !== 'self';
+        a.setHover(hov ? (rel === 'ally' ? O.hoverAlly.px : O.hoverEnemy.px) : 0, hov ? (rel === 'ally' ? allyC : harm) : null);
+        if (live && OUTLINED.has(v.kind)) a.setOutline(O.rest.px, _rest[rel], O.rest.alpha);
         else a.hideOutline();
       }
     }
@@ -710,13 +753,14 @@ class ValeRenderer implements Renderer {
     if (aim) {
       const self = p.relationColor('self');
       if (aim.range && aim.range > 0) {
-        t.push({ ...spec, x: aim.casterX ?? aim.x, z: aim.casterY ?? aim.y, dir: 0, shape: TELE_SHAPE.circle, radius: aim.range, inner: 0, color: self, fill: 0, edge: 0.25, edgePx: 2, sweep: 1, dashed: true, tick: null });
+        t.push({ ...spec, x: aim.casterX ?? aim.x, z: aim.casterY ?? aim.y, dir: 0, shape: TELE_SHAPE.circle, radius: aim.range, inner: 0, color: self, fill: 0, edge: 0.45, edgePx: 2, sweep: 1, dashed: true, tick: null, key: 0.45 });
       }
       const sh = aim.shape === 'circle' ? TELE_SHAPE.circle : aim.shape === 'ring' ? TELE_SHAPE.ring : aim.shape === 'cone' ? TELE_SHAPE.cone : TELE_SHAPE.rect;
       t.push({
         ...spec, x: aim.x, z: aim.y, dir: aim.dir ?? 0, shape: sh, radius: aim.radius ?? 1, inner: aim.inner ?? 0,
         halfAngle: ((aim.angleDeg ?? 60) * Math.PI) / 360, length: aim.length ?? 6, width: aim.shape === 'line' ? Math.min(aim.width ?? 0.4, 0.6) : aim.width ?? 1.2,
-        color: aim.heal ? p.get('#63D88B') : self, fill: 0.08, edge: 0.6, edgePx: 2, sweep: 1, dashed: false, tick: null,
+        // tokens hud.telegraph.self: it must read on pale lane stone (Noonwhite edge + a stronger ink keyline)
+        color: aim.heal ? p.get('#63D88B') : self, fill: 0.12, edge: 0.9, edgePx: 2.5, sweep: 1, dashed: false, tick: null, key: 0.55,
       });
     }
     t.end();
@@ -737,7 +781,8 @@ class ValeRenderer implements Renderer {
     if (this.lastFrameAt > 0) {
       const iv = t0 - this.lastFrameAt;
       this.fpsEma = this.fpsEma > 0 ? this.fpsEma * 0.9 + (1000 / Math.max(1, iv)) * 0.1 : 1000 / Math.max(1, iv);
-      if (this.dyn.sample(iv)) this.applySize();
+      // the previous frame's own CPU time and (when timed) its GPU time tell a CPU-late frame from a GPU-late one
+      if (this.dyn.sample(iv, this.frameMs, this.dyn.enabled ? this.gpuTimer.poll() : null)) this.applySize();
     }
     this.lastFrameAt = t0;
     this.time += d;
@@ -749,7 +794,10 @@ class ValeRenderer implements Renderer {
 
     const info = this.gl.info;
     info.reset();
+    const timed = this.dyn.enabled && this.mode === 'match';
+    if (timed) this.gpuTimer.begin();
     this.post.render(d);
+    if (timed) this.gpuTimer.end();
     this.sceneCalls = info.render.calls;
     this.sceneTris = info.render.triangles;
     this.frameMs = performance.now() - t0;
@@ -761,9 +809,13 @@ class ValeRenderer implements Renderer {
     const alpha = client.alpha;
     this.syncActors(view);
     // events → VFX / telegraphs
-    if (this.pending.length) { const evs = this.pending.splice(0, this.pending.length); this.reactions.handle(evs, this.actors); this.director.handle(evs); }
+    if (this.pending.length) { const evs = this.pending.splice(0, this.pending.length); this.reactions.handle(evs, this.actors, this.time); this.director.handle(evs); }
     this.director.update(view);
     this.updateActors(d, alpha);
+    // the crowd's instances: every live, visible, on-screen crowd unit, after its envelopes ran
+    this.crowd.begin();
+    for (const a of this.actors.values()) if (a.crowdBake && a.model && a.root.visible) this.crowd.push(a);
+    this.crowd.end();
     // camera follows your fighter
     const me = view.players.find((p) => p.player === client.you);
     const a = me ? this.actors.get(me.entity) : undefined;
@@ -822,6 +874,72 @@ class ValeRenderer implements Renderer {
     return { x: sx, y: sy, visible: _v.z < 1 && _v.z > -1 && sx >= 0 && sy >= 0 && sx <= this.cssW && sy <= this.cssH };
   }
 
+  /** the hovered unit's rim (overlay pass, after the grade; overlay/hover.ts) */
+  /**
+   * A template was built: upload its textures now and compile its programs in parallel
+   * (KHR_parallel_shader_compile), so the frame a unit first walks into view does not stall on a 2048²
+   * upload (≈ 0.1-0.9 s measured) or a synchronous shader link (r12 B4 hitches).
+   */
+  private readonly warmed = new WeakSet<import('three').Object3D>();
+  private warmTemplate(root: import('three').Object3D, programs = true, again = false): void {
+    const gl = this.gl;
+    if (!again) {
+      if (this.warmed.has(root)) return;
+      this.warmed.add(root);
+      this.uploadTextures(root);
+    }
+    // programs only against the match's final environment (it is part of every lit program's key: a variant
+    // compiled before the sky lands would never be drawn); a crowd template never draws as a model of its own
+    // (its programs are the crowd's: CrowdLayer.warm)
+    if (programs && this.envReady) this.asIfComposer(() => void gl.compileAsync(root, this.rig.camera, this.scene).catch(() => undefined));
+  }
+  /** the match's sky environment is final (setupMatch): template programs can be warmed against it */
+  private envReady = false;
+
+  private uploadTextures(root: import('three').Object3D): void {
+    const gl = this.gl;
+    root.traverse((o) => {
+      const m = o as import('three').Mesh;
+      if (!m.isMesh) return;
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+        for (const v of Object.values(mat)) if (v && (v as import('three').Texture).isTexture) gl.initTexture(v as import('three').Texture);
+      }
+    });
+  }
+
+  /**
+   * Run a warm-up compile as if drawing into the composer's buffers: a program's key includes the output colour
+   * space, which is the working space for any render target and sRGB for the canvas, so a compile with the canvas
+   * bound would build a variant the frame never uses.
+   */
+  private warmRT: WebGLRenderTarget | null = null;
+  private readonly warmScene = new Scene();
+  private asIfComposer(fn: () => void): void {
+    this.warmRT ??= new WebGLRenderTarget(1, 1);
+    const prev = this.gl.getRenderTarget();
+    this.gl.setRenderTarget(this.warmRT);
+    try { fn(); } finally { this.gl.setRenderTarget(prev); }
+  }
+
+  /** the hover pass' programs for this actor's kind of hull (skinned / rigid), compiled at attach, not on first hover */
+  private readonly hoverWarm = new WeakSet<object>();
+  private warmHover(a: Actor): void {
+    const m = a.hoverMeshes();
+    if (!m || a.disposed) return;
+    const key = m.hull[0].geometry;
+    if (this.hoverWarm.has(key)) return;
+    this.hoverWarm.add(key);
+    // the hover pass draws an actor's model as its own root: no lights, no fog (an empty scene matches that)
+    this.asIfComposer(() => this.hoverRim.prewarm(this.gl, this.rig.camera, this.warmScene, m));
+  }
+
+  private drawHover(r: WebGLRenderer, cam: import('three').Camera): void {
+    if (this.mode !== 'match' || this.hover === null) return;
+    const a = this.actors.get(this.hover);
+    const t = a?.crowdBake ? (a.root.visible ? this.crowd.hoverTarget(a, a.hoverWidth, a.hoverTint) : null) : a?.hoverTarget();
+    if (t) this.hoverRim.draw(r, cam, r.getRenderTarget(), t);
+  }
+
   setAim(aim: AimSpec | null): void { this.aim = aim; }
   setHover(id: EntityId | null): void { this.hover = id; }
   setTarget(id: EntityId | null): void { this.target = id; }
@@ -846,6 +964,8 @@ class ValeRenderer implements Renderer {
     const jobs: Promise<unknown>[] = refs.map((r) => this.assets.model(r));
     if (map) { jobs.push(this.assets.hdr(map.art.sky), this.assets.lut(map.art.lut), this.assets.model(map.art.scene)); }
     for (const s of setup.seats) jobs.push(this.lib.fighterTemplate(s.fighter, s.skin));
+    // unit templates too (per side): their textures upload and their programs compile behind the loading screen
+    for (const u of units) for (const t of teams ? [...new Set(teams)] : [null]) jobs.push(this.lib.unitTemplate(u, t));
     let done = 0;
     onProgress?.(0);
     await Promise.all(jobs.map((j) => j.then(() => { done++; onProgress?.(done / jobs.length); })));
@@ -861,6 +981,7 @@ class ValeRenderer implements Renderer {
       programs: info.programs?.length ?? 0, geometries: info.memory.geometries, textures: info.memory.textures,
       renderScale: this.dyn.scale, pixelRatio: this.gl.getPixelRatio(), tier: this.q.tier, width: size.x, height: size.y,
       particles: this.vfx.particleCount, vfx: this.vfx.instanceCount, actors: this.actors.size, telegraphs: this.teles.size, mode: this.mode,
+      gpuMs: this.dyn.enabled ? this.gpuTimer.last : null, bound: this.dyn.bound,
     };
   }
 
@@ -870,10 +991,12 @@ class ValeRenderer implements Renderer {
     this.teardownMatch();
     this.menu.dispose();
     this.vfx.dispose();
-    this.bars.dispose(); this.rings.dispose(); this.teles.dispose();
+    this.bars.dispose(); this.rings.dispose(); this.teles.dispose(); this.hoverRim.dispose(); this.crowd.dispose();
     this.overlay.dispose();
     this.post.dispose();
     this.sky.dispose();
+    this.gpuTimer.dispose();
+    this.warmRT?.dispose();
     this.gl.dispose();
   }
 }

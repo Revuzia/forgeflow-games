@@ -74,6 +74,8 @@ const PING_LIMIT = 5, PING_WINDOW_MS = 4000;
 const WHEEL_DEADZONE = 26;
 const HOLD_MOVE_MS = 140;
 const HOVER_MS = 50;
+/** the pointer's cached hit-test target is trusted this long before the browser hit-tests again */
+const HUD_RETEST_MS = 250;
 
 const isField = (t: EventTarget | null): boolean => {
   const el = t as HTMLElement | null;
@@ -217,14 +219,21 @@ export class InputController {
     if (this.centring) this.r.camera?.centerOnSelf();
   }
 
-  /** is the pointer over HUD chrome? The last pointermove's own hit-test target answers for free; without
-   *  one (no move since attach, or a synthetic pointer) elementFromPoint runs at most every 250 ms. */
+  /**
+   * is the pointer over HUD chrome? The last pointermove's own hit-test target answers for free, but only for
+   * HUD_RETEST_MS: a panel can open (or close) under a pointer that never moves, so the browser hit-test
+   * (elementFromPoint) re-runs on that cadence and on any frame without a usable target (no move since attach,
+   * a synthetic pointer, a target that left the DOM). Hover, attack cursor and outline then stop at the panel
+   * within 250 ms.
+   */
   private overHud(now: number): boolean {
     let el = this.ptrTarget as Element | null;
-    if (!el || !(el as Element).isConnected) {
-      if (now - this.hudAt < 250) return this.hudHit;
+    const stale = now - this.hudAt >= HUD_RETEST_MS;
+    if (!el || !el.isConnected || stale) {
+      if (!stale) return this.hudHit;
       this.hudAt = now;
       el = document.elementFromPoint(this.ptr.x, this.ptr.y);
+      this.ptrTarget = el;
     }
     this.hudHit = !!el && el !== this.surface && !this.surface.contains(el) && !!(el as HTMLElement).closest?.('.hud');
     return this.hudHit;
@@ -395,6 +404,7 @@ export class InputController {
   private onMove(e: PointerEvent): void {
     this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.inside = true;
     this.ptrTarget = e.target;
+    this.hudAt = performance.now();
     this.r.camera?.setPointer(e.clientX, e.clientY, true);
     const w = this.wheel.value;
     if (w) {

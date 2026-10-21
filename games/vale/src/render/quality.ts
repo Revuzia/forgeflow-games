@@ -15,6 +15,11 @@
 // Dynamic resolution: when the frame interval stays above the target (1 / fpsCap, 60 Hz when
 // uncapped) the render scale steps down by 0.05 to a floor of min(scale, 0.8); it steps back up after
 // a sustained headroom. Hysteresis windows are 1 s; never more than one step per window.
+// It only steps down for GPU-bound frames (r12 B4): a smaller buffer cannot shorten a frame the CPU is
+// late on. Each window is classified from the GPU time (EXT_disjoint_timer_query_webgl2 around the
+// frame's draws, GpuTimer) when the driver offers it, else from the renderer's own CPU time:
+//   gpu   GPU time ≥ 85 % of the target (or, without a timer, renderer CPU < 60 % of it) → step down
+//   cpu   otherwise → hold the scale; a scale already lowered steps back up while the GPU has headroom
 
 import type { Settings } from '../contracts/session.ts';
 
@@ -81,7 +86,9 @@ export function resolveQuality(v: Video): ResolvedQuality {
   };
 }
 
-/** frame-interval driven render-scale controller */
+export type FrameBound = 'cpu' | 'gpu' | '';
+
+/** frame-interval driven render-scale controller (GPU-bound windows only; see the header) */
 export class DynamicResolution {
   enabled = true;
   private base = 1;
@@ -90,28 +97,47 @@ export class DynamicResolution {
   private acc = 0;
   private frames = 0;
   private sum = 0;
+  private cpuSum = 0;
+  private gpuSum = 0;
+  private gpuN = 0;
   private slow = 0;
   private fast = 0;
   private targetMs = 1000 / 60;
+  /** what limited the last slow window ('' = on target) */
+  bound: FrameBound = '';
 
   configure(base: number, fpsCap: number): void {
     this.base = base;
     this.floor = Math.min(base, 0.8);
     this.current = base;
     this.targetMs = 1000 / (fpsCap > 0 ? Math.min(fpsCap, 144) : 60);
-    this.acc = this.frames = this.sum = this.slow = this.fast = 0;
+    this.acc = this.frames = this.sum = this.cpuSum = this.gpuSum = this.gpuN = this.slow = this.fast = 0;
+    this.bound = '';
   }
 
   get scale(): number { return this.enabled ? this.current : this.base; }
 
-  /** feed one frame's interval (ms); returns true when the scale changed */
-  sample(frameMs: number): boolean {
-    if (!this.enabled || !(frameMs > 0) || frameMs > 250) return false;
-    this.acc += frameMs; this.frames++; this.sum += frameMs;
+  /**
+   * feed one frame: its interval (ms), the renderer's own CPU time for it (ms) and the GPU time of its draws
+   * when a timer query measured it (ms, null = unknown); returns true when the scale changed
+   */
+  sample(intervalMs: number, cpuMs = 0, gpuMs: number | null = null): boolean {
+    if (!this.enabled || !(intervalMs > 0) || intervalMs > 250) return false;
+    this.acc += intervalMs; this.frames++; this.sum += intervalMs; this.cpuSum += Math.max(0, cpuMs);
+    if (gpuMs !== null && gpuMs >= 0) { this.gpuSum += gpuMs; this.gpuN++; }
     if (this.acc < 1000) return false;
-    const avg = this.sum / this.frames;
-    this.acc = this.frames = this.sum = 0;
-    if (avg > this.targetMs * 1.12) { this.slow++; this.fast = 0; } else if (avg < this.targetMs * 0.8) { this.fast++; this.slow = 0; } else { this.slow = this.fast = 0; }
+    const avg = this.sum / this.frames, cpu = this.cpuSum / this.frames, gpu = this.gpuN > 0 ? this.gpuSum / this.gpuN : null;
+    this.acc = this.frames = this.sum = this.cpuSum = this.gpuSum = this.gpuN = 0;
+    const t = this.targetMs;
+    const gpuBound = gpu !== null ? gpu >= t * 0.85 : cpu < t * 0.6;
+    if (avg > t * 1.12) {
+      this.bound = gpuBound ? 'gpu' : 'cpu';
+      if (gpuBound) { this.slow++; this.fast = 0; } else {
+        // CPU-late: the scale is not the problem; give back resolution the GPU has room for
+        this.slow = 0;
+        if (gpu !== null && gpu < t * 0.6) this.fast++; else this.fast = 0;
+      }
+    } else if (avg < t * 0.8) { this.bound = ''; this.fast++; this.slow = 0; } else { this.bound = ''; this.slow = this.fast = 0; }
     if (this.slow >= 2 && this.current > this.floor + 1e-3) {
       this.current = Math.max(this.floor, Math.round((this.current - 0.05) * 100) / 100); this.slow = 0; return true;
     }
@@ -119,5 +145,63 @@ export class DynamicResolution {
       this.current = Math.min(this.base, Math.round((this.current + 0.05) * 100) / 100); this.fast = 0; return true;
     }
     return false;
+  }
+}
+
+/**
+ * GPU time of a span of draws (EXT_disjoint_timer_query_webgl2), read back a few frames later without
+ * blocking. `last` stays null where the extension is missing (Safari, some drivers) or a result was disjoint.
+ * Never nest it inside another TIME_ELAPSED query (the harness' own timers run with dynamic resolution off).
+ */
+export class GpuTimer {
+  private readonly gl: WebGL2RenderingContext;
+  private readonly ext: { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null;
+  private readonly pool: WebGLQuery[] = [];
+  private readonly pending: WebGLQuery[] = [];
+  private active: WebGLQuery | null = null;
+  last: number | null = null;
+
+  constructor(gl: WebGL2RenderingContext) {
+    this.gl = gl;
+    this.ext = (gl.getExtension('EXT_disjoint_timer_query_webgl2') as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null) ?? null;
+  }
+
+  get available(): boolean { return this.ext !== null; }
+
+  begin(): void {
+    if (!this.ext || this.active || this.pending.length >= 4) return;
+    const q = this.pool.pop() ?? this.gl.createQuery();
+    if (!q) return;
+    this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, q);
+    this.active = q;
+  }
+
+  end(): void {
+    if (!this.ext || !this.active) return;
+    this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
+    this.pending.push(this.active);
+    this.active = null;
+  }
+
+  /** the newest finished measurement (ms), or null */
+  poll(): number | null {
+    const gl = this.gl, ext = this.ext;
+    if (!ext) return null;
+    while (this.pending.length) {
+      const q = this.pending[0];
+      if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+      const ns = gl.getQueryParameter(q, gl.QUERY_RESULT) as number;
+      const disjoint = !!gl.getParameter(ext.GPU_DISJOINT_EXT);
+      this.pending.shift();
+      this.pool.push(q);
+      this.last = disjoint ? null : ns / 1e6;
+    }
+    return this.last;
+  }
+
+  dispose(): void {
+    for (const q of [...this.pool, ...this.pending]) this.gl.deleteQuery(q);
+    if (this.active) this.gl.deleteQuery(this.active);
+    this.pool.length = 0; this.pending.length = 0; this.active = null;
   }
 }

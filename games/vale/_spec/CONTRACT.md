@@ -540,14 +540,50 @@ humans; zero drift; clients and server agree on every stat).
 - Characters: fighter GLB cloned per entity (`SkeletonUtils.clone`), `AnimationMixer` driven by
   `state/anim/stateTime`; run clip scaled by speed / `runRefSpeed`; attack/cast clips scaled so the
   authored impact (40 % of clip) meets the sim windup. Accent material emissive = readability color.
+  CHANGED(RENDER) r12 wave A (B4 CPU; presentation only, the sim is untouched):
+  - **Cull**: an actor whose body (+ 2 m) and the shadow it throws (half its height along the sun's ground
+    offset) miss the view frustum is neither drawn (no draw, no shadow, no skeleton upload) nor matrix-updated,
+    and its clip holds; held time replays when it is back, so loops and one-shots stay in phase. Wicks farther
+    than 12 m from the camera focus animate at 15 Hz.
+  - **One skeleton per bone set**: skinned parts that bind the same bones (a body and its accent) share one
+    Skeleton (one bone texture per actor), the accent's offset folded into its bind matrix.
+  - **Crowd** (`src/render/crowd.ts`): units with `UnitDef.art.instanced` (every Wick) draw as instanced,
+    GPU-skinned crowds when their template qualifies (all meshes skinned over one bone set, no form nodes,
+    single standard materials): every clip baked once at 60 Hz into a float texture; per (template, accent
+    colour) one instanced draw per part, the rest-outline hull and the victim flash, plus the shadow casters.
+    The Actor keeps its own animation logic (roles, scrubbed attacks, 60–100 ms crossfades, held casts) through a
+    baked mixer; anything that does not qualify stays a per-actor model. `RendererOptions.crowd: false` (bench
+    `?crowd=0`) turns it off.
+  - **Warm-up**: a template uploads its textures and compiles its programs (`compileAsync`) when it is built —
+    `preload` builds every seat's fighter and every unit of the match per side — never on the frame it first
+    walks into view.
 - Readability: team/player ground ring, overhead bars (hp with tick marks, shield, resource,
   level), enemy outline on hover, telegraph decals (shader) per `Present.telegraph`, colorblind
   palettes from settings.
+  CHANGED(RENDER) r12 wave A (tokens `hud.unitOutline`, `vfx.impact.victimFlash`, `hud.telegraph.self`):
+  - **Rest outline** (M10): fighters, minions, monsters and summons carry a 1 px screen-space ink outline (ink0 at
+    60 %, tinted 18 % toward the viewer relationship), an inverted hull built once per template.
+  - **Hover** (B1): every hovered unit but you gets a clean silhouette rim drawn in the OVERLAY pass (after the
+    grade, so it is the exact relationship hex): HARM 2.5 px on enemies and neutrals, ally 1.5 px on allies, a 1 px
+    ink keyline outside, hidden behind what stands in front. Hovering restyles prebuilt meshes; it never adds a
+    scene node. Input hit-tests HUD chrome with the pointer's own target, re-tested every 250 ms, so a panel that
+    opens under a still pointer stops the hover.
+  - **Victim flash** (M6): a damage event the viewer can see flashes the struck unit on the impact frame (T1 0.45,
+    abilities 0.7, ultimates 1.0, × 1.3 on a crit; τ 70 ms, gone by 150 ms) with a small flinch and squash
+    (none under reduceMotion). It ends the moment the unit leaves vision. No hit-stop anywhere: the sim never
+    waits and no clip clock pauses; a VFX `feel` layer's `hitFlash`/`squash` act on a unit struck within
+    0.25 s at its spot (never the caster), its `hitStop` is ignored.
+  - **Own aim** (B2): fill 12 %, edge 90 % at 2.5 px with a 55 % ink keyline, dashed range ring 45 %.
 - §9.5 VFX: see §9.5 below.
 - §9.4 Quality ladder (settings.video): Low (scale 0.75, no AO, shadows 1024 hard, no bloom, FXAA-off,
   particles 0, scatter 0) · Medium (0.9, AO half-res, 2048, bloom, SMAA, 1, 1) · High (1.0, AO, 2048
   PCF, bloom, SMAA, 2, 2) · Ultra (1.0 + DPR up to 2, AO full, 4096, bloom, SMAA, 2, 2). Target:
   stable 1080p60 on High on a mid-range gaming GPU; dynamic resolution may drop scale to 0.8.
+  CHANGED(RENDER) r12 B4: dynamic resolution steps down only for GPU-bound seconds — it reads the GPU time of the
+  frame's draws (EXT_disjoint_timer_query_webgl2, never blocking) or, without the extension, the renderer's own
+  CPU time; a CPU-late second holds the scale (a smaller buffer cannot shorten it) and gives back resolution the
+  GPU has room for. `RenderStats` adds `gpuMs` (null untimed or with dynamic resolution off) and `bound`
+  (`'cpu' | 'gpu' | ''`, what limited the last slow second).
 
 ### §9.5 VFX vocabulary (content/vfx.json → render/vfx/)
 A `VfxDef` is `{ id, duration, teamTint, layers: Layer[] }`. Every layer has `type`, optional

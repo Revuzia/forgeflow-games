@@ -3,9 +3,10 @@
 //
 //   enemy     fill 16 % → 30 % as the area lands, edge 90 % at 3 px
 //   ally      edge 45 % at 2 px, no fill (heals: Sap edge 50 %)
-//   own aim   fill 8 %, edge 60 % at 2 px, dashed range ring 25 %
+//   own aim   fill 12 %, edge 90 % at 2.5 px, keyline 55 %; dashed range ring 45 % (keyline 45 %): it must
+//             read on pale lane stone, where a 60 % Noonwhite edge alone measured ≈ 1.5:1 (r12 B2 review)
 //   neutral   fill 12 %, edge 80 % at 2 px
-//   every telegraph has a 1 px dark keyline OUTSIDE the edge (#000 at 35 %)
+//   every telegraph has a 1 px dark keyline OUTSIDE the edge (#000 at 35 % unless the spec raises it)
 // Delayed areas sweep clockwise from 12 o'clock and land as the circle closes; lines and cones fill
 // origin → tip. On landing a 150 ms impact flash raises the fill (never to white, never pulsing above
 // 2 Hz). Overlaps never stack: telegraphs render into their own target with MAX blending (premultiplied)
@@ -33,6 +34,8 @@ export interface TeleSpec {
   dashed: boolean;
   /** FRAY caster tick colour (null = none) */
   tick: Color | null;
+  /** keyline alpha (default 0.35) */
+  key?: number;
 }
 
 const MAX = 128;
@@ -41,7 +44,7 @@ const VERT = /* glsl */`
 attribute vec4 aA;      // x, z, dir, shape
 attribute vec4 aB;      // radius, inner, halfAngle, length
 attribute vec4 aC;      // width, fill, edge, edgePx
-attribute vec4 aD;      // sweep, dashed, tick on, -
+attribute vec4 aD;      // sweep, dashed, tick on, keyline alpha
 attribute vec3 aColor;
 attribute vec3 aTick;
 varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec3 vColor; varying vec3 vTick;
@@ -129,7 +132,7 @@ void main() {
     float t = 1.0 - smoothstep( 3.0 * px - 0.75 * px, 3.0 * px + 0.75 * px, length( p ) );
     if ( t > 0.0 ) { col = mix( col, vTick, t ); a = max( a, t ); }
   }
-  float k35 = key * 0.35;
+  float k35 = key * vD.w;
   float vis = valeVisible( 0.2 );
   // premultiplied; the keyline is black (rgb 0)
   float outA = max( a, k35 ) * vis;
@@ -183,7 +186,7 @@ export class TelegraphLayer {
     this.aA.setXYZW(i, t.x, t.z, t.dir, t.shape);
     this.aB.setXYZW(i, t.radius, t.inner, t.halfAngle, t.length);
     this.aC.setXYZW(i, t.width, t.fill, t.edge, t.edgePx);
-    this.aD.setXYZW(i, t.sweep, t.dashed ? 1 : 0, t.tick ? 1 : 0, 0);
+    this.aD.setXYZW(i, t.sweep, t.dashed ? 1 : 0, t.tick ? 1 : 0, t.key ?? 0.35);
     this.aColor.setXYZ(i, t.color.r, t.color.g, t.color.b);
     if (t.tick) this.aTick.setXYZ(i, t.tick.r, t.tick.g, t.tick.b);
   }

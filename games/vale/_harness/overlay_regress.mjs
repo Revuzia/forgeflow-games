@@ -5,12 +5,20 @@
 //
 //   B1   hover a live enemy (fighter, then a wick / monster) for 180 frames: the scene's node count is the
 //        same before and after (the outline hull is prebuilt; hovering only restyles it), the actor's
-//        outline is at the hover width, and the console stays clean.
+//        outline is at the hover width, and the console stays clean. Clean rim: with rings and bars held
+//        off, the pixels the hover changes lie OUTSIDE the unit's silhouette (the hover pass' own mask,
+//        eroded 2 px): ≤ 0.5 % of the silhouette may change (no interior seams, no back-face specks), and
+//        the rim itself must draw ≥ 150 px.
 //   B2   per quality tier, a layer-only render of the telegraph pass (into an 8-bit target, alpha > 0 counted):
 //        an injected enemy delayed circle (r 3 m, delay 0.6 s) must draw ≥ 5,000 px two frames in, and an own
 //        rect aim (9 × 0.9 m + its range ring) ≥ 20,000 px. Fails below either threshold on any tier.
 //   M10  every live, visible fighter / wick / monster carries the 1 px rest outline.
-//   M6   an injected damage event flashes its victim on the impact frame and the flash is gone by 150 ms.
+//   M6   an injected damage event flashes its victim (an enemy fighter, then an enemy wick) on the impact
+//        frame and the flash is gone by 150 ms; render-only (the sim is held, so fog, a death or a wave cannot
+//        take the victim away mid-envelope). Fog return: a crit, the victim out of vision for 1 s, back: no
+//        flash and no squash may replay.
+//   CPU  every actor outside the frustum (+ shadow reach) is culled (root hidden); every visible on-screen
+//        instanced unit (UnitDef.art.instanced) is drawn by the crowd, not by a model of its own.
 //   perf (--perf 1): GPU time of a full frame with outlines on vs off at the densest fight (timer query,
 //        else a finish()-fenced wall clock), and the actors' animation LOD split.
 // Exit 1 on any failure. Report: _harness/_reports/overlay_regress.json; shots: _harness/_shots/<name>_*.png.
@@ -109,7 +117,34 @@ const b1 = await B((b) => {
     try { render(179); } catch (e) { err = err ?? String(e).slice(0, 160); }
     const after = b.__nodes(), subAfter = sub();
     b.hover(null); render(1);
-    out.push({ kind, id: a.id, def: a.def, before, afterFirst, after, subBefore, subAfter, width, restWidth: a.outlineWidth, err });
+    // clean rim: the frame with the hover vs without (time held: render(0)), rings and bars held off
+    const rp = R.rings.push, bp = R.bars.push;
+    R.rings.push = () => {}; R.bars.push = () => {};
+    const gl = R.gl.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight;
+    const grab = () => { R.render(0); R.render(0); const px = new Uint8Array(W * H * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
+    const off = grab();
+    b.hover(a.id);
+    const on = grab();
+    let mask = null;
+    try { const t = R.hoverRim.target; mask = new Uint8Array(t.width * t.height * 4); R.gl.readRenderTargetPixels(t, 0, 0, t.width, t.height, mask); if (t.width !== W || t.height !== H) mask = null; } catch { mask = null; }
+    b.hover(null); R.rings.push = rp; R.bars.push = bp; render(1);
+    let rim = null;
+    if (mask) {
+      // the mask came back as RED (1 byte per px) or RGBA: read the red channel either way
+      const stride = mask.length >= W * H * 4 && mask.slice(W * H, W * H * 4).some((v) => v) ? 4 : 1;
+      const inMask = (x, y) => mask[(y * W + x) * stride] > 127;
+      let silhouette = 0, interior = 0, outside = 0;
+      for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
+        const i = (y * W + x) * 4;
+        const d = Math.abs(on[i] - off[i]) + Math.abs(on[i + 1] - off[i + 1]) + Math.abs(on[i + 2] - off[i + 2]);
+        const m = inMask(x, y);
+        // eroded 2 px: SMAA blends the rim's inner edge one or two pixels into the body
+        const deep = m && inMask(x - 2, y) && inMask(x + 2, y) && inMask(x, y - 2) && inMask(x, y + 2);
+        if (deep) { silhouette++; if (d > 48) interior++; } else if (!m && d > 48) outside++;
+      }
+      rim = { silhouette, interior, outside, interiorShare: silhouette ? +(interior / silhouette).toFixed(4) : null };
+    }
+    out.push({ kind, id: a.id, def: a.def, crowd: !!a.crowdBake, before, afterFirst, after, subBefore, subAfter, width, restWidth: a.outlineWidth, rim, err });
   }
   return out;
 });
@@ -120,6 +155,11 @@ for (const h of b1) {
   if (h.err) fail(`B1 ${h.kind}: ${h.err}`);
   if (h.before !== h.after || h.before !== h.afterFirst || h.subBefore !== h.subAfter) fail(`B1 ${h.kind}: scene nodes ${h.before} → ${h.afterFirst} → ${h.after} (actor ${h.subBefore} → ${h.subAfter})`);
   if (Math.abs(h.width - 2.5) > 1e-6) fail(`B1 ${h.kind}: hover outline ${h.width} px (want 2.5)`);
+  if (!h.rim || !h.rim.silhouette) fail(`B1 ${h.kind}: could not read the hover silhouette mask`);
+  else {
+    if (h.rim.outside < 150) fail(`B1 ${h.kind}: the hover rim drew ${h.rim.outside} px outside the silhouette (< 150)`);
+    if (h.rim.interiorShare > 0.005) fail(`B1 ${h.kind}: the hover changed ${h.rim.interior} px inside the silhouette (${(h.rim.interiorShare * 100).toFixed(2)} % > 0.5 %: seams or specks)`);
+  }
 }
 if (!b1.some((h) => !h.skipped)) fail('B1: no enemy unit visible to hover');
 const errorsAfter = logs.filter((l) => /\[(error|pageerror)\]/.test(l)).length;
@@ -132,39 +172,69 @@ const m10 = await B((b) => {
   const R = b.renderer;
   const rows = b.__actors().filter((a) => a.view && a.model && a.visible && a.view.alive && ['fighter', 'minion', 'monster'].includes(a.view.kind) && R.worldToScreen(a.x, a.y, 1).visible);
   const missing = rows.filter((a) => a.outlineWidth !== 1).map((a) => `${a.view.kind}:${a.def}:${a.outlineWidth}`);
-  return { units: rows.length, missing };
+  // CPU: culling and the crowd on this frame
+  const all = b.__actors().filter((a) => a.view && a.model && a.visible);
+  const offscreenDrawn = all.filter((a) => a.root.visible && !R.worldToScreen(a.x, a.y, 1).visible && Math.hypot(a.x - R.rig.focus.x, a.y - R.rig.focus.z) > 40).map((a) => a.def);
+  const crowdUnits = all.filter((a) => a.crowdBake && a.root.visible && a.view.alive && a.leaving < 0).length;
+  return { units: rows.length, missing, culled: all.filter((a) => !a.root.visible).length, drawn: all.filter((a) => a.root.visible).length, offscreenDrawn, crowdUnits, crowdInstances: R.crowd.instances, crowdSets: R.crowd.setCount };
 });
 report.m10 = m10;
 console.log('M10', JSON.stringify(m10));
 if (m10.missing.length) fail(`M10: ${m10.missing.length} unit(s) without the rest outline: ${m10.missing.slice(0, 4).join(', ')}`);
+if (m10.offscreenDrawn.length) fail(`CPU: ${m10.offscreenDrawn.length} actor(s) far off screen still drawn: ${m10.offscreenDrawn.slice(0, 4).join(', ')}`);
+if (m10.crowdInstances < m10.crowdUnits) fail(`CPU: ${m10.crowdUnits} instanced unit(s) visible but the crowd drew ${m10.crowdInstances}`);
 await shot(page, `${NAME}_fight_outlines`);
 
-// ── M6: the victim flashes on the impact frame, gone by 150 ms ──────────────────────────────────────
+// ── M6: the victim flashes on the impact frame, gone by 150 ms; nothing replays after fog ─────────────
 const m6 = await B((b) => {
   const R = b.renderer;
   const me = b.__me();
   const v = b.host.view;
-  const a = b.__actors().find((x) => x.view && x.model && x.view.alive && x.visible && x.view.kind === 'fighter' && x.view.team !== me.team)
-    ?? b.__actors().find((x) => x.view && x.model && x.view.alive && x.visible && x.view.kind === 'minion' && x.view.team !== me.team);
-  if (!a) return { skipped: 'no visible enemy' };
-  const rows = [];
-  for (const [dtype, crit] of [['physical', false], ['magic', false], ['true', false], ['physical', true]]) {
-    R.injectEvents([{ e: 'damage', t: v.time, src: me.id, dst: a.id, amount: 40, dtype, crit, shielded: 0 }]);
-    b.frames(1, 1 / 60);
-    const peak = a.flashLevel;
-    b.frames(5, 1 / 60);               // ≈ 83 ms
-    const at83 = a.flashLevel;
-    b.frames(5, 1 / 60);               // ≈ 167 ms
-    const at167 = a.flashLevel;
-    rows.push({ dtype, crit, peak: +peak.toFixed(3), at83: +at83.toFixed(3), at167 });
+  // render-only: the sim is held, so the victim cannot leave vision, die or walk off mid-envelope
+  const render = (n) => { for (let i = 0; i < n; i++) R.render(1 / 60); };
+  const out = [];
+  for (const kind of ['fighter', 'minion']) {
+    // in the viewer's vision (fog), anywhere on the map: the camera goes to it (an off-screen actor is culled)
+    const a = b.__actors().find((x) => x.view && x.model && x.view.alive && x.visible && x.leaving < 0 && x.view.kind === kind && x.view.team !== me.team);
+    if (!a) { out.push({ kind, skipped: 'no visible enemy' }); continue; }
+    b.focus(a.x, a.y); render(12);
+    if (!a.root.visible) { out.push({ kind, skipped: 'still culled after focusing on it' }); continue; }
+    const rows = [];
+    for (const [dtype, crit] of [['physical', false], ['magic', false], ['true', false], ['physical', true]]) {
+      R.injectEvents([{ e: 'damage', t: v.time, src: me.id, dst: a.id, amount: 40, dtype, crit, shielded: 0 }]);
+      render(1);
+      const peak = a.flashLevel;
+      render(5);               // ≈ 83 ms
+      const at83 = a.flashLevel;
+      render(5);               // ≈ 167 ms
+      const at167 = a.flashLevel;
+      rows.push({ dtype, crit, peak: +peak.toFixed(3), at83: +at83.toFixed(3), at167 });
+    }
+    render(12);
+    // fog return: a crit, the victim out of vision for 1 s (the viewer's fog says so), then back
+    R.injectEvents([{ e: 'damage', t: v.time, src: me.id, dst: a.id, amount: 400, dtype: 'physical', crit: true, shielded: 0 }]);
+    render(2);
+    const hit = { flash: +a.flashLevel.toFixed(3), squash: +(1 - a.model.scale.y / a.baseScale).toFixed(4) };
+    const ev = R.entityVisible;
+    R.entityVisible = function (e) { return e.id === a.id ? false : ev.call(this, e); };
+    render(60);
+    R.entityVisible = ev;
+    render(1);
+    const back = { flash: a.flashLevel, squash: +(1 - a.model.scale.y / a.baseScale).toFixed(4) };
+    out.push({ kind, victim: a.def, crowd: !!a.crowdBake, rows, hit, back });
   }
-  return { victim: `${a.view.kind}:${a.def}`, rows };
+  return out;
 });
 report.m6 = m6;
 console.log('M6', JSON.stringify(m6));
-if (!m6.skipped) for (const r of m6.rows) {
-  if (!(r.peak > 0.3)) fail(`M6 ${r.dtype}${r.crit ? ' crit' : ''}: flash ${r.peak} on the impact frame`);
-  if (r.at167 !== 0) fail(`M6 ${r.dtype}: flash still ${r.at167} at 167 ms`);
+for (const vct of m6) {
+  if (vct.skipped) { if (vct.kind === 'fighter') fail(`M6: ${vct.skipped}`); continue; }
+  for (const r of vct.rows) {
+    if (!(r.peak > 0.3)) fail(`M6 ${vct.kind} ${r.dtype}${r.crit ? ' crit' : ''}: flash ${r.peak} on the impact frame`);
+    if (r.at167 !== 0) fail(`M6 ${vct.kind} ${r.dtype}: flash still ${r.at167} at 167 ms`);
+  }
+  if (!(vct.hit.flash > 0.3)) fail(`M6 ${vct.kind} fog: the crit before the fog did not flash (${vct.hit.flash})`);
+  if (vct.back.flash !== 0 || Math.abs(vct.back.squash) > 1e-4) fail(`M6 ${vct.kind} fog: back from 1 s out of vision still flashing ${vct.back.flash} / squashed ${vct.back.squash}`);
 }
 
 // ── perf: outline cost (GPU) and the animation LOD split ────────────────────────────────────────────
@@ -222,7 +292,8 @@ if (PERF) {
     if (ext) {
       const shown = (o) => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
       const hulls = [];
-      R.scene.traverse((o) => { if (o.name === 'vale_outline' && shown(o)) hulls.push(o); });
+      // per-actor hulls and the crowd's instanced outline draws (one per crowd set)
+      R.scene.traverse((o) => { if ((o.name === 'vale_outline' || o.name === 'crowd_outline') && shown(o)) hulls.push(o); });
       for (const h of hulls) h.layers.enable(5);
       const cam = R.rig.camera, mask = cam.layers.mask;
       const RT = new R.overlay.teleTarget.constructor(1920, 1080, { depthBuffer: true, type: 1016 /* HalfFloatType */ });
@@ -250,7 +321,9 @@ if (PERF) {
       for (const h of hulls) h.layers.disable(5);
       RT.dispose();
       const m = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
-      hullOnly = { hullDraws: hulls.length, outlineMedianMs: m(samples), outlineMinMs: Math.min(...samples), sceneMedianMs: m(base), samples: samples.length };
+      const p10 = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length * 0.1)];
+      // on a shared GPU the median carries other processes' work; the low percentiles are the outlines' own cost
+      hullOnly = { hullDraws: hulls.length, outlineMedianMs: m(samples), outlineP10Ms: p10(samples), outlineMinMs: Math.min(...samples), sceneMedianMs: m(base), sceneP10Ms: p10(base), samples: samples.length };
     }
     const med = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
     const trim = (a) => { const s = [...a].sort((x, y) => x - y); const k = Math.floor(s.length * 0.15); const t = s.slice(k, s.length - k); return t.length ? t.reduce((x, y) => x + y, 0) / t.length : null; };
@@ -264,6 +337,8 @@ if (PERF) {
       deltaMedianMs: med(on) !== null && med(off) !== null ? med(on) - med(off) : null,
       deltaTrimMs: trim(on) !== null && trim(off) !== null ? trim(on) - trim(off) : null,
       hullOnly, samples: [on.length, off.length], camDistance: cam.position.distanceTo(R.rig.focus),
+      drawnActors: b.__actors().filter((a) => a.root.visible).length, culledActors: b.__actors().filter((a) => a.visible && !a.root.visible).length,
+      crowdInstances: R.crowd.instances, crowdSets: R.crowd.setCount,
     };
   });
   report.perf = perf;
