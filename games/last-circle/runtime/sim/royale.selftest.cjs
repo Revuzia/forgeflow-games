@@ -958,5 +958,147 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   } else console.log("  INFO  player.js not found next to this file: source pins skipped");
 }
 
+// ── PARITY P1-A: gunplay core (LC-01 recoil, LC-33 bloom, LC-14 frag built dark, LC-25, LC-05) ─────────
+{
+  const D = (r) => r * 180 / Math.PI;
+  // LC-01: the spray pattern tables, replayed with weapons.js's rule (kick on each shot, recovery held
+  // while the trigger is held and cycling, then recoverPerS, never under the baseline). The browser probe
+  // (F:/lc_p1/P1-A) measures the real code; these rows pin the data the code reads.
+  const spray = (id, hz, shots, stance, holdS) => {
+    const rc = R.RECOIL[id], dt = 1 / hz, iv = 60 / R.WEAPONS[id].rpm;
+    let pitch = 0, acc = 0, cd = 0, n = 0, t = 0, last = -9, peak = 0, backAt = null;
+    const per = [];
+    const relT = holdS != null ? holdS : shots * iv + dt;
+    for (let f = 0; f < hz * (relT + 1.5); f++) {
+      const fire = t < relT;
+      cd -= dt;
+      if (fire && n < shots && cd <= 0) {
+        const k = Math.min(R.recoilPitchKick(id, n, stance), Math.max(0, rc.cap - acc));
+        pitch += k; acc += k; n++; last = t; per.push(pitch); cd = Math.max(cd, -dt) + iv;
+      }
+      if (!(fire && t - last < iv + 0.1) && acc > 1e-4) { const r = Math.min(acc, dt * rc.recoverPerS, Math.max(0, pitch)); pitch -= r; acc = pitch - 0 <= 1e-6 ? 0 : acc - r; }
+      peak = Math.max(peak, pitch);
+      t += dt;
+      if (!fire && backAt === null && pitch < 1e-4) backAt = t - relT;
+    }
+    return { peakDeg: D(peak), backS: backAt, per };
+  };
+  const ads = { ads: true, crouching: false }, hip = { ads: false, crouching: false };
+  const ar60 = spray("ar", 60, 30, ads), ar144 = spray("ar", 144, 30, ads), ar30 = spray("ar", 30, 30, ads);
+  ok(ar60.peakDeg >= 3 && ar60.peakDeg <= 4, "recoil: uncompensated 30-round AR ADS spray peaks at " + ar60.peakDeg.toFixed(3) + " deg (3-4)");
+  ok(Math.abs(ar144.peakDeg - ar60.peakDeg) < 1e-9 && Math.abs(ar30.peakDeg - ar60.peakDeg) < 1e-9, "recoil: the climb is per SHOT, not per frame: 30 / 60 / 144 Hz peak identically");
+  ok(ar60.backS !== null && ar60.backS <= 0.4, "recoil: AR pitch back to the baseline " + (ar60.backS || -1).toFixed(3) + " s after release (<= 0.4)");
+  ok(D(spray("ar", 60, 30, hip).peakDeg * Math.PI / 180) <= D(R.RECOIL.ar.cap) + 1e-9 && R.RECOIL.ar.cap === 0.07, "recoil: AR hip spray is capped at 0.07 rad (" + spray("ar", 60, 30, hip).peakDeg.toFixed(3) + " deg)");
+  const smg = spray("smg", 60, 30, hip);
+  ok(R.RECOIL.smg.cap === 0.05 && smg.peakDeg <= D(0.05) + 1e-9 && smg.peakDeg > 1.5, "recoil: SMG hip spray climbs " + smg.peakDeg.toFixed(3) + " deg, capped at 0.05 rad");
+  ok(R.RECOIL.ar.pitch.every((k, i, a) => k > 0 && (i === 0 || k <= a[i - 1])) && R.RECOIL.smg.pitch.every((k, i, a) => k > 0 && (i === 0 || k <= a[i - 1])),
+     "recoil: every kick is positive and the pattern only eases (a learnable opening climb)");
+  const again = spray("ar", 60, 30, ads);
+  ok(JSON.stringify(again.per) === JSON.stringify(ar60.per), "recoil: the per-shot pitch sequence is a pure table: the same every run");
+  ok(!R.RECOIL.pistol && !R.RECOIL.shotgun && !R.RECOIL.sniper && !R.RECOIL.glauncher, "recoil: patterns exist for the automatics only (pistol/shotgun/sniper/launcher keep the legacy kick)");
+  // a tapped pistol keeps the legacy kick 0.008 rad (weapons.js HUMAN_KICK) recovering at 0.12 rad/s: one tap = 0.458 deg
+  ok(D(0.008) <= 0.5, "recoil: a tapped pistol peaks at " + D(0.008).toFixed(3) + " deg (<= 0.5)");
+
+  // LC-33: per-shot bloom. Standing still on the ground, the cone at shot k of a held trigger.
+  const still = { ads: false, speed: 0, airborne: false, crouching: false };
+  const bloomRun = (id) => {
+    const iv = 60 / R.WEAPONS[id].rpm, max = R.effectiveSpread(id, 0, Object.assign({}, still, { sinceLastShotS: 0, heat: 1 }));
+    let heat = 0, since = 9; const fr = [];
+    for (let k = 0; k < 40; k++) {
+      const sp = R.effectiveSpread(id, 0, Object.assign({}, still, { sinceLastShotS: since, heat }));
+      fr.push(sp / max);
+      heat = R.heatAfterShot(id, R.heatNow(heat, since)); since = iv;
+    }
+    const n = fr.findIndex((f) => f >= 0.95) + 1;
+    return { first: fr[0], second: fr[1], n };
+  };
+  for (const id of ["ar", "smg", "pistol"]) {
+    const b = bloomRun(id);
+    ok(approx(b.first, 0.15) && b.second <= 0.35 && b.n > 1 && b.n <= 8, "bloom: " + id + " shot 1 " + b.first.toFixed(3) + "x, shot 2 (after shot 1) " + b.second.toFixed(3) + "x (<= 0.35), >= 0.95x from shot " + b.n);
+  }
+  ok(approx(R.effectiveSpread("sniper", 0, Object.assign({}, still, { sinceLastShotS: 60 / 35, heat: R.heatAfterShot("sniper", 0) })), 0.15 * 0.15),
+     "bloom: a bolt-action sniper is cold again by its next round (0.15x every shot, as before)");
+  ok(approx(R.effectiveSpread("shotgun", 0, Object.assign({}, still, { sinceLastShotS: 0, heat: 0 })), 4.0), "bloom: the shotgun has no first-shot regime (always its full 4.0 deg)");
+  // a full spray cools back to first-shot accuracy after holdS + 1 / coolPerS (legacy rule: 0.5 s)
+  const coolS = R.BLOOM.holdS + 1 / R.BLOOM.coolPerS;
+  ok(R.heatNow(1, coolS + 1e-9) === 0 && R.heatNow(1, coolS - 0.05) > 0 && coolS < 0.7, "bloom: a full spray is cold again " + coolS.toFixed(3) + " s after the last round");
+  ok(R.heatNow(0.6, R.BLOOM.holdS) === 0.6, "bloom: heat is HELD for holdS after each shot (an automatic's interval is shorter, so a held trigger accumulates)");
+  // legacy: bots (heat null) and every caller without a registry entry see the old binary rule exactly
+  let legacy = true;
+  for (const id of ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"]) for (const s of [0, 0.2, 0.5, 0.51, 3]) for (const sp of [0, 0.5, 3]) {
+    const base = R.effectiveSpread(id, 1, { ads: false, speed: sp, airborne: false, crouching: false, sinceLastShotS: s, heat: null });
+    const none = R.effectiveSpread(id, 1, { ads: false, speed: sp, airborne: false, crouching: false, sinceLastShotS: s });
+    const d = R.WEAPONS[id], old = d.spreadDeg * R.RARITY_SPREAD_MULT[1] * (1 + Math.min(0.8, sp * 0.075)) * ((d.cls !== "shotgun" && sp < 0.6 && s > 0.5) ? 0.15 : 1);
+    if (!approx(base, old, 1e-12) || !approx(none, old, 1e-12)) legacy = false;
+  }
+  ok(legacy, "bloom: heat:null (bots) and no-heat callers keep the legacy binary first-shot rule exactly (6 guns x 5 gaps x 3 speeds)");
+  // the live-heat registry: the reticle's call (no heat field) reads the local human's heat; nothing else does
+  const gv0 = R.gunValueAt("ar", 0, 40, {});
+  R.setLiveHeat("ar", 1);
+  const hudHot = R.effectiveSpread("ar", 0, Object.assign({}, still, { sinceLastShotS: 0.1 }));
+  const hudCold = R.effectiveSpread("ar", 0, Object.assign({}, still, { sinceLastShotS: 2 }));
+  const otherGun = R.effectiveSpread("smg", 0, Object.assign({}, still, { sinceLastShotS: 0.1 }));
+  const gv1 = R.gunValueAt("ar", 0, 40, {});
+  R.setLiveHeat(null);
+  ok(approx(hudHot, 1.5) && approx(hudCold, 1.5 * 0.15) && approx(otherGun, 2.2), "bloom: the reticle (no heat field) reads the registered human heat for that gun only (" + hudHot + " / " + hudCold + ")");
+  ok(gv0 === gv1, "bloom: gunValueAt (bot weapon choice) never reads the registry");
+  ok(approx(R.effectiveSpread("ar", 0, Object.assign({}, still, { sinceLastShotS: 0.1 })), 1.5), "bloom: a cleared registry is the legacy rule again");
+
+  // LC-14: the frag, built dark
+  ok(!R.WEAPON_IDS.includes("frag") && R.WEAPON_IDS.length === 6, "frag: not a lootable gun (WEAPON_IDS untouched)");
+  const fc = R.CONSUMABLES.frag, fw = R.WEAPONS.frag;
+  ok(fc && fc.throws === "frag" && fc.heals === undefined && fc.amount === undefined && fc.cap === undefined, "frag: a consumable that THROWS and carries no heal fields (every heal path refuses it)");
+  ok(fw && fw.arc && fw.fuseS > 0 && fw.splashR > 0 && !fw.mag && !fw.ammo && R.hitDamage("frag", 0, 0, false) === 100, "frag: blast definition (100 at the centre, splash " + fw.splashR + " m, fuse " + fw.fuseS + " s), no magazine, no ammo");
+  ok(R.weaponName("frag") === "Frag Grenade", "frag: the kill feed names it");
+  const lv = R.fragLaunch(0, 0, -1);
+  ok(approx(Math.hypot(lv.vx, lv.vy, lv.vz), R.FRAG.speed, 1e-9) && approx(Math.atan2(lv.vy, Math.hypot(lv.vx, lv.vz)), R.FRAG.loft, 1e-9) && approx(lv.vx, 0, 1e-12) && lv.vz < 0,
+     "frag: a level aim launches at FRAG.speed, raised by the loft, along the aim");
+  // predictArc on flat ground = the closed-form parabola landing
+  const flat = () => 0, g = R.FRAG.gravity;
+  const pa = R.predictArc(0, 1.6, 0, lv.vx, lv.vy, lv.vz, g, 5, flat);
+  const tl = (lv.vy + Math.sqrt(lv.vy * lv.vy - 2 * g * 1.6)) / -g;
+  ok(pa.kind === "terrain" && Math.abs(pa.z - lv.vz * tl) < 0.01 && Math.abs(pa.t - tl) < 0.002, "frag: predictArc on flat ground lands at the analytic parabola (" + pa.z.toFixed(3) + " m vs " + (lv.vz * tl).toFixed(3) + ")");
+  const wall = { kind: "box", minX: -2, maxX: 2, minY: 0, maxY: 4, minZ: -8.3, maxZ: -8 };
+  const pw = R.predictArc(0, 1.6, 0, lv.vx, lv.vy, lv.vz, g, 5, flat, () => [wall], []);
+  ok(pw.kind === "collider" && approx(pw.z, -8, 1e-6) && pw.nz === 1, "frag: predictArc stops on a wall face with its normal (z " + pw.z.toFixed(3) + ")");
+  // LOOT: the frag rides at weight 0, so every roll is what it was. Replay the PRE-P1 literals against the tables.
+  const oldFloorCon = (rng) => ["bandage", "mini_shield", "medkit", "big_shield"][R.weightedIndex(rng, [32, 34, 18, 16])];
+  const oldChestCon = (rng) => ["mini_shield", "big_shield", "medkit", "bandage"][R.weightedIndex(rng, [34, 26, 20, 20])];
+  let same = 0, n = 0;
+  for (let sd = 1; sd <= 20000; sd++) {
+    const a = R.mulberry32(sd), b = R.mulberry32(sd);
+    if (R.FLOOR_CON_IDS[R.weightedIndex(a, R.FLOOR_CON_WEIGHTS)] === oldFloorCon(b) && a() === b()) same++;
+    const c = R.mulberry32(sd ^ 0x55), d = R.mulberry32(sd ^ 0x55);
+    if (R.CHEST_CON_IDS[R.weightedIndex(c, R.CHEST_CON_WEIGHTS)] === oldChestCon(d) && c() === d()) same++;
+    n += 2;
+  }
+  ok(same === n, "frag: loot rolls at weight 0 are identical to the pre-P1 tables on " + same + " / " + n + " seeded rolls (and the stream stays in step)");
+  // the edges of weightedIndex: a roll of 0 and the largest double below 1 never land on the trailing zero
+  ok(R.weightedIndex(() => 0, R.FLOOR_CON_WEIGHTS) === 0 && R.weightedIndex(() => 1 - Math.pow(2, -53), R.FLOOR_CON_WEIGHTS) === 3 &&
+     R.weightedIndex(() => 1 - Math.pow(2, -53), R.CHEST_CON_WEIGHTS) === 3, "frag: weightedIndex never returns the trailing weight-0 frag (rng 0 and 1 - 2^-53)");
+  let floorFrag = 0, chestFrag = 0;
+  const lr = R.mulberry32(777);
+  for (let i = 0; i < 50000; i++) {
+    for (const it of R.rollFloorSpawn(lr)) if (it.id === "frag") floorFrag++;
+    for (const it of R.rollChest(lr)) if (it.id === "frag") chestFrag++;
+    for (const it of R.rollSupplyDrop(lr)) if (it.id === "frag") chestFrag++;
+  }
+  ok(floorFrag === 0 && chestFrag === 0, "frag: 0 frags in 50,000 floor spawns, chests and supply drops (built dark)");
+
+  // source pins: the browser halves of the contract (weapons.js; read-only check, skipped outside the repo)
+  let wj = null;
+  try { wj = require("fs").readFileSync(require("path").join(__dirname, "..", "3d", "royale", "weapons.js"), "utf8"); } catch (e) { /* skip */ }
+  if (wj) {
+    ok(/if \(!slot\) return;\s*\n(\s*\/\/[^\n]*\n)*\s*if \(a\.healing && !a\.isBot && idx !== a\.inventory\.active && W\.cancelHeal\) W\.cancelHeal\(W, a\);/.test(wj),
+       "LC-05: equipSlot opens with the inert human-only cancelHeal hook");
+    const ib = wj.indexOf("if (tdef && tdef.throws) { stepThrow("), iu = wj.indexOf('W.events.emit("useConsumable"');
+    ok(ib > 0 && iu > ib && !/function stepThrow[\s\S]*?\n}\n/.exec(wj)[0].includes("useConsumable") && !/function throwRound[\s\S]*?\n}\n/.exec(wj)[0].match(/applyHeal|useConsumable|\.hp\b|\.shield\b/),
+       "LC-14: a throwable branches off BEFORE useConsumable and the throw code never touches the heal path, hp or shield");
+    ok(/if \(k > 0 && !blastBlocked\(W, x, y, z, t\)\)/.test(wj) && /W\.map && W\.map\.losBlocked/.test(wj), "LC-25: explode() gates every victim on maps.js losBlocked (chest + head)");
+    ok(/const modern = !a\.isBot && !touchOn\(W\);/.test(wj) && /heat: modern \? \(a\._heat \|\| 0\) : null/.test(wj) && /K\.RECOIL\[a\.weapon\.id\] : null/.test(wj),
+       "LC-01/33: patterns, bloom and disc pellets are gated on a non-touch human (bots + touch keep the legacy path)");
+  } else console.log("  INFO  weapons.js not found next to this file: source pins skipped");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

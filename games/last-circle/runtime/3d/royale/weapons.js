@@ -10,8 +10,11 @@
  * used to promise was never actually simulated. Only the grenade launcher arcs,
  * lobbing shells that burst on a body hit or after a short fuse.
  *
- * No firing while swimming (industry standard). No melee, no throwables, no
- * building — this is a pure BR shooter.
+ * No firing while swimming (industry standard). No melee and no building — this
+ * is a pure BR shooter. One throwable exists BUILT DARK (parity P1-A, LC-14): the
+ * frag grenade, a CONSUMABLE with `throws` thrown by its own branch in stepWeapon
+ * (throwRound) as a pooled bouncing round that bursts through explode(). Its loot
+ * weight is 0 until bots can throw it (P2-B / P2-D).
  *
  * View models: pistol/shotgun are real GLBs; AR/SMG/sniper/grenade launcher
  * are multi-part composed low-poly builds (distinct silhouettes per class).
@@ -216,6 +219,10 @@ function equipSlot(W, a, idx) {
   const inv = a.inventory;
   const slot = inv.slots[idx];
   if (!slot) return;
+  // LC-05 hook (parity P1-A, inert until P2-A defines W.cancelHeal in player.js): switching to another
+  // slot mid-heal cancels the heal for a HUMAN. Bots are exempt: bots.js ensureGunOut calls equipSlot
+  // before its HEAL override, so cancelling there would abort every bot heal.
+  if (a.healing && !a.isBot && idx !== a.inventory.active && W.cancelHeal) W.cancelHeal(W, a);
   // Swapping used to hand back a weapon with cd: 0, so tap-2-tap-1 cancelled the
   // fire-rate timer and double-pumped the shotgun. Each slot remembers its own
   // remaining cooldown, and the incoming weapon also inherits whatever the
@@ -229,6 +236,9 @@ function equipSlot(W, a, idx) {
   // Applies to spawns, pickups and swaps alike; bots inherit it automatically.
   const startCd = Math.max(carry, Math.max(0, slot.cd || 0), 0.4);
   inv.active = idx;
+  // bloom heat belongs to the gun in your hands: a fresh draw starts cold (the 0.4 s ready delay already
+  // outlasts most of a cool-down), and the reticle's live heat is dropped with it
+  if (!a.isBot) { a._heat = 0; if (a === W.player) K.setLiveHeat(null); }
   if (slot.kind === "weapon") {
     a.weapon = { id: slot.id, rarity: slot.rarity || 0, magAmmo: slot.mag != null ? slot.mag : 0, state: "ready", cd: startCd, reloadT: 0, slotRef: slot };
   } else {
@@ -279,6 +289,7 @@ export function reset(W) {
   W._dmgRng = null;               // fresh damage-roll stream per match
   W._spreadRng = null;            // fresh spread stream per match (fire())
   W._recoilRng = null;            // fresh human recoil-yaw stream per match
+  if (K && K.setLiveHeat) K.setLiveHeat(null);   // the reticle's bloom registry (sim/royale.js LIVE_HEAT)
   for (const p of projectiles) {
     if (p.m && p.m.parent) p.m.parent.remove(p.m);
     p.dead = true;
@@ -313,14 +324,17 @@ export function update(W, dt) {
     const a = acts[ai];
     if (!a.alive || a.netRemote) continue;
     stepWeapon(W, a, dt);
+    if (!a.isBot && !a.input.fire) a._rcN = 0;     // a released trigger restarts the spray pattern
+    // PATTERN recoil (automatics, human, not touch: fire() set _rcBase) recovers by its own rule
+    if (a._rcBase != null) recoverPattern(W, a, dt);
     // recoil recovery: re-center what the kicks added (~0.3s), leaving the
     // player's own mouse aim untouched
-    if (a.recoilPitch > 0.0001) {
+    else if (a.recoilPitch > 0.0001) {
       const r = Math.min(a.recoilPitch, dt * 0.12);
       a.input.pitch = K.clamp(a.input.pitch - r, -1.35, 1.35);
       a.recoilPitch -= r;
     }
-    if (a.recoilYaw && Math.abs(a.recoilYaw) > 0.0001) {
+    if (a._rcBase == null && a.recoilYaw && Math.abs(a.recoilYaw) > 0.0001) {
       const r = Math.sign(a.recoilYaw) * Math.min(Math.abs(a.recoilYaw), dt * 0.08);
       a.input.yaw -= r;
       a.recoilYaw -= r;
@@ -371,8 +385,35 @@ export function update(W, dt) {
       if (a.weaponMesh) a.weaponMesh.position.z = -a.vmKick * 0.05;
     }
   }
+  // the reticle's bloom registry describes the LIVE local human only
+  if (W.player && !W.player.alive) K.setLiveHeat(null);
   stepProjectiles(W, dt);
 }
+
+/** LC-01 recovery for the spray pattern: HELD while the trigger is held and the gun is cycling (a shot
+ *  within one interval + 0.1 s), then the climb re-centres at the pattern's recoverPerS - never below the
+ *  pitch the burst started from, so a player who pulled down against the climb keeps their aim (the old
+ *  accumulator would have dragged them under the target by everything they compensated). */
+function recoverPattern(W, a, dt) {
+  const rc = a._rc;
+  const def = a.weapon && K.WEAPONS[a.weapon.id];
+  if (a.input.fire && def && def.rpm && (W.t - a.lastShotT) < 60 / def.rpm + 0.1) return;
+  if (a.recoilPitch > 0.0001) {
+    const room = a.input.pitch - a._rcBase;
+    const r = Math.min(a.recoilPitch, dt * rc.recoverPerS, room > 0 ? room : 0);
+    if (r > 0) a.input.pitch = K.clamp(a.input.pitch - r, -1.35, 1.35);
+    a.recoilPitch = room - r <= 1e-6 ? 0 : a.recoilPitch - r;
+  } else a.recoilPitch = 0;
+  if (a.recoilYaw && Math.abs(a.recoilYaw) > 0.0001) {
+    const r = Math.sign(a.recoilYaw) * Math.min(Math.abs(a.recoilYaw), dt * rc.recoverYawPerS);
+    a.input.yaw -= r;
+    a.recoilYaw -= r;
+  } else a.recoilYaw = 0;
+  if (a.recoilPitch === 0 && a.recoilYaw === 0) a._rcBase = null;
+}
+
+/** The touch layer is live (contract C6): the touch path keeps the legacy kick, spread and pellets. */
+function touchOn(W) { return !!(W.touch && W.touch.active); }
 
 function stepWeapon(W, a, dt) {
   const inp = a.input;
@@ -388,6 +429,10 @@ function stepWeapon(W, a, dt) {
 
   // consumable "weapon" — fire = use
   if (wpn.id.startsWith("consumable:")) {
+    // THROWABLES (LC-14) have their own branch: a throw is never a heal, so it never reaches
+    // useConsumable / applyHeal (and so can never move hp or shield)
+    const tdef = K.CONSUMABLES[wpn.id.slice(11)];
+    if (tdef && tdef.throws) { stepThrow(W, a, wpn, tdef, dt); return; }
     if (inp.fire && !a.healing) {
       const cid = wpn.id.slice("consumable:".length);
       W.events.emit("useConsumable", a, cid);
@@ -474,8 +519,68 @@ function stepWeapon(W, a, dt) {
   }
 }
 
+// ── throwing (LC-14, built dark) ────────────────────────────────────────────
+/** Fire = throw for a held throwable. Same input contract as a semi-auto gun (one click edge = one throw
+ *  for the human, the held FIRE button re-arms at cycleS on touch, bots throw while inp.fire is set), the
+ *  same no-throw states (gliding, healing, swimming, mantling), and the swap ready delay (wpn.cd). The
+ *  stack is spent here; the last one empties the slot and puts a gun back in the hands (as useConsumable
+ *  does for the last heal). */
+function stepThrow(W, a, wpn, tdef, dt) {
+  const inp = a.input;
+  wpn.cd -= dt;
+  const human = !a.isBot;
+  const edgeLive = human && W._fireEdge && (performance.now() - W._fireEdge) < 420;
+  const touchHeld = human && a === W.player && !!(W.touch && W.touch.active && W.touch.fire);
+  const want = a.isBot ? inp.fire : (!!edgeLive || touchHeld);
+  if (!want || wpn.cd > 0 || a.gliding || a.healing || a.swimming || a.mantleT != null) return;
+  const slot = wpn.slotRef;
+  if (!slot || !(slot.count > 0)) return;
+  throwRound(W, a, tdef.throws);
+  slot.count--;
+  wpn.cd = K.FRAG.cycleS;
+  if (human) W._fireEdge = 0;
+  if (slot.count <= 0) {
+    const inv = a.inventory, idx = inv.slots.indexOf(slot);
+    if (idx >= 0) inv.slots[idx] = null;
+    if (idx >= 0 && inv.active === idx) {
+      const gun = inv.slots.findIndex((s2) => s2 && s2.kind === "weapon");
+      if (gun >= 0) equipSlot(W, a, gun);
+    }
+  }
+}
+
+const _thrDir = new THREE.Vector3(), _thrV = { vx: 0, vy: 0, vz: 0 }, _thrCols = [];
+/** Launch one thrown round: the aim (the human's camera forward = where the reticle points; a bot's
+ *  yaw/pitch) through K.fragLaunch, from the eye nudged 0.3 m forward unless a collider is in the way.
+ *  The round is a pooled arcing round: it bounces off the world, passes bodies (a frag is not a
+ *  contact charge), and bursts through explode() when its fuse runs out. */
+function throwRound(W, a, wid) {
+  const def = K.WEAPONS[wid];
+  if (!def) return null;
+  const eye = eyePos(a, _eyeFire);
+  if (a === W.player && W.camera) W.camera.getWorldDirection(_thrDir);
+  else aimDir(a, _thrDir);
+  const v = K.fragLaunch(_thrDir.x, _thrDir.y, _thrDir.z, _thrV);
+  let ox = eye.x, oy = eye.y, oz = eye.z;
+  const fx = eye.x + _thrDir.x * 0.3, fy = eye.y + _thrDir.y * 0.3, fz = eye.z + _thrDir.z * 0.3;
+  const cols = W.map.queryColliders((eye.x + fx) / 2, (eye.z + fz) / 2, 0.9, _thrCols);
+  if (!(cols && cols.length && K.segmentColliders(eye.x, eye.y, eye.z, fx, fy, fz, cols))) { ox = fx; oy = fy; oz = fz; }
+  const p = takeRound();
+  p.x = ox; p.y = oy; p.z = oz;
+  p.vx = v.vx; p.vy = v.vy; p.vz = v.vz;
+  p.weaponId = wid; p.rarity = 0; p.ownerId = a.id;
+  p.gravity = K.FRAG.gravity;
+  p.tLeft = def.fuseS;
+  p.splash = def.splashR || 0; p.bounce = true; p.mesh = true; p.noActor = true;
+  p.origin.x = ox; p.origin.y = oy; p.origin.z = oz;
+  launchRound(W, p);
+  W.events.emit("grenadeThrown", a, wid, { x: ox, y: oy, z: oz }, { x: v.vx, y: v.vy, z: v.vz });
+  return p;
+}
+
 // ── firing ───────────────────────────────────────────────────────────────────
 const _d = new THREE.Vector3(), _right = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _pdir = new THREE.Vector3();
+const _up2 = new THREE.Vector3(), _stance = { ads: false, crouching: false };
 const _camDir = new THREE.Vector3(), _camPt = new THREE.Vector3();
 
 /** What is the crosshair actually ON? March the camera-forward ray against
@@ -542,17 +647,29 @@ function fire(W, a, def) {
     _d.set(_camPt.x - eye.x, _camPt.y - eye.y, _camPt.z - eye.z).normalize();
   }
   const pellets = def.pellets || 1;
+  // MODERN gunplay (parity P1-A): per-shot bloom, disc pellets, spray patterns - for the local human on
+  // mouse + keyboard. Bots (their aim-error model is tuned against D8 pacing) and the touch path keep the
+  // legacy rules byte for byte.
+  const modern = !a.isBot && !touchOn(W);
+  const since = W.t - a.lastShotT;
+  const adsReady = !!a.input.ads && (a._adsT || 0) >= (def.adsTimeS || 0);
   // spread: one shared model (sim.effectiveSpread) so the crosshair can draw the
   // SAME number this fires with — it used to guess with a cruder formula
   const spread = K.effectiveSpread(a.weapon.id, a.weapon.rarity, {
     // the ADS accuracy bonus is EARNED at adsTimeS, not on the frame RMB lands —
     // player.js accrues a._adsT while ads is held (bots included)
-    ads: !!a.input.ads && (a._adsT || 0) >= (def.adsTimeS || 0),
+    ads: adsReady,
     speed: Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z),
     airborne: !a.onGround,
     crouching: !!a.crouching,
-    sinceLastShotS: W.t - a.lastShotT,
+    sinceLastShotS: since,
+    heat: modern ? (a._heat || 0) : null,
   });
+  if (modern) {
+    // heat after THIS shot (the cone the next one starts from), published for the reticle
+    a._heat = K.heatAfterShot(a.weapon.id, K.heatNow(a._heat || 0, since));
+    if (a === W.player) K.setLiveHeat(a.weapon.id, a._heat);
+  }
 
   // Per-system seeded stream (never Math.random, never a shared global one): the
   // pellet cone of every bot shot is sim state, and Math.random here was one of
@@ -561,9 +678,18 @@ function fire(W, a, def) {
   const srng = W._spreadRng;
   const sr = (spread * Math.PI / 180);
   _right.crossVectors(_d, _up).normalize();
+  // DISC sampling for the modern path (LC-33): the square (+-sr, +-sr) put 21 % of pellets outside the
+  // cone the reticle draws (its corners reach sr x 1.41). r = sr x sqrt(u) is area-uniform over the disc,
+  // on a true perpendicular basis (world up only is perpendicular at pitch 0); the SAME two draws per
+  // pellet, so the seeded stream stays in step with the legacy path.
+  if (modern) _up2.crossVectors(_right, _d).normalize();
   for (let p = 0; p < pellets; p++) {
-    const ox = (srng() - 0.5) * 2 * sr, oy = (srng() - 0.5) * 2 * sr;
-    const dir = _pdir.copy(_d).addScaledVector(_right, ox).addScaledVector(_up, oy).normalize();
+    let ox, oy;
+    if (modern) {
+      const rr = sr * Math.sqrt(srng()), th = srng() * Math.PI * 2;
+      ox = rr * Math.cos(th); oy = rr * Math.sin(th);
+    } else { ox = (srng() - 0.5) * 2 * sr; oy = (srng() - 0.5) * 2 * sr; }
+    const dir = _pdir.copy(_d).addScaledVector(_right, ox).addScaledVector(modern ? _up2 : _up, oy).normalize();
     // (fields written straight onto a pooled round: this used to build a spawn
     // object plus an origin object per PELLET and Object.assign them in)
     const p = takeRound();
@@ -575,7 +701,7 @@ function fire(W, a, def) {
     // gravity key, so it always resolved to 0 and bullets were always flat.
     p.gravity = def.arc ? -18 : 0;
     p.tLeft = def.arc ? def.fuseS : 3.5;
-    p.splash = def.splashR || 0; p.bounce = !!def.arc; p.mesh = !!def.arc;
+    p.splash = def.splashR || 0; p.bounce = !!def.arc; p.mesh = !!def.arc; p.noActor = false;
     p.origin.x = eye.x; p.origin.y = eye.y; p.origin.z = eye.z;
     launchRound(W, p);
   }
@@ -601,13 +727,32 @@ function fire(W, a, def) {
   // kick made the crosshair CLIMB forever (aim drifted ~2m high after a few
   // shots: "my pistol doesn't work").
   if (!a.isBot) {
-    const kick = HUMAN_KICK[a.weapon.id] || 0.01;
     if (!W._recoilRng) W._recoilRng = K.mulberry32((((W.seed >>> 0) ^ 0x7ec011) >>> 0));
-    const yawKick = (W._recoilRng() - 0.5) * kick * 0.6;
-    a.input.pitch = K.clamp(a.input.pitch + kick, -1.35, 1.35);
-    a.input.yaw += yawKick;
-    a.recoilPitch = (a.recoilPitch || 0) + kick;
-    a.recoilYaw = (a.recoilYaw || 0) + yawKick;
+    const rc = modern && K.RECOIL ? K.RECOIL[a.weapon.id] : null;
+    if (rc) {
+      // SPRAY PATTERN (LC-01): shot n of the burst kicks pitch[n] (sim/royale.js RECOIL), capped so the
+      // whole climb never exceeds rc.cap; the yaw follows the table's wobble plus the seeded jitter (one
+      // draw per shot, as the legacy kick). The baseline is taken only from a fully recovered aim, so a
+      // quick re-press keeps the original floor (recoverPattern never pulls below it).
+      if (a._rcBase == null || !((a.recoilPitch || 0) > 0.0001)) a._rcBase = a.input.pitch;
+      const n = a._rcN || 0;
+      _stance.ads = adsReady; _stance.crouching = !!a.crouching;
+      const room = rc.cap - (a.recoilPitch || 0);
+      const kick = Math.min(K.recoilPitchKick(a.weapon.id, n, _stance), room > 0 ? room : 0);
+      const yawKick = rc.yaw[n < rc.yaw.length ? n : rc.yaw.length - 1] + (W._recoilRng() - 0.5) * rc.jitter;
+      a.input.pitch = K.clamp(a.input.pitch + kick, -1.35, 1.35);
+      a.input.yaw += yawKick;
+      a.recoilPitch = (a.recoilPitch || 0) + kick;
+      a.recoilYaw = (a.recoilYaw || 0) + yawKick;
+      a._rcN = n + 1; a._rc = rc;
+    } else {
+      const kick = HUMAN_KICK[a.weapon.id] || 0.01;
+      const yawKick = (W._recoilRng() - 0.5) * kick * 0.6;
+      a.input.pitch = K.clamp(a.input.pitch + kick, -1.35, 1.35);
+      a.input.yaw += yawKick;
+      a.recoilPitch = (a.recoilPitch || 0) + kick;
+      a.recoilYaw = (a.recoilYaw || 0) + yawKick;
+    }
     W.stats.shotsFired += pellets;
   }
   a.lastShotT = W.t;
@@ -650,7 +795,7 @@ function dmgRoll(W) {
  *  projectile loop stays monomorphic and nothing is allocated per pellet. */
 function takeRound() {
   return POOL.pop() || { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, weaponId: "", rarity: 0, ownerId: null,
-    gravity: 0, tLeft: 0, splash: 0, bounce: false, mesh: false, origin: { x: 0, y: 0, z: 0 },
+    gravity: 0, tLeft: 0, splash: 0, bounce: false, mesh: false, noActor: false, origin: { x: 0, y: 0, z: 0 },
     dead: false, whizzed: false, m: null };
 }
 function launchRound(W, p) {
@@ -669,8 +814,16 @@ function launchRound(W, p) {
     if (!_shellGeo) {
       _shellGeo = new THREE.SphereGeometry(0.15, 6, 6);
       _shellMat = new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 1.2 });
+      // the frag: same geometry and material TYPE (one shader program, no new link mid-match), a dark
+      // olive body with a dimmer fuse glow that still clears the 0.72 bloom threshold, shown at 0.8 scale
+      _fragMat = new THREE.MeshStandardMaterial({ color: 0x2f3a26, emissive: 0xff3a1a, emissiveIntensity: 0.9 });
     }
     p.m = new THREE.Mesh(_shellGeo, _shellMat);
+  }
+  if (p.m && o.mesh) {
+    const frag = p.weaponId === "frag";
+    p.m.material = frag ? _fragMat : _shellMat;
+    p.m.scale.setScalar(frag ? 0.8 : 1);
   }
   // Only SHOW the mesh when THIS spawn is a mesh projectile. kill() removes p.m
   // from the scene but keeps it on the pooled object for the next grenade to
@@ -682,10 +835,13 @@ function launchRound(W, p) {
     else { p.m.visible = false; }
   }
   projectiles.push(p);
-  W.events.emit("tracer", p);
+  // a thrown grenade is not a bullet: no tracer streak behind it (the fuse glow is its read)
+  if (!p.noActor) W.events.emit("tracer", p);
 }
 
-let _shellGeo = null, _shellMat = null;
+let _shellGeo = null, _shellMat = null, _fragMat = null;
+const NO_ACTORS = [];
+const BOUNCED = 2;          // testSegment: the round bounced and its position + velocity are already set
 // Colliders along ONE projectile's whole frame of travel. testSegment used to run a
 // fresh queryColliders per 2.5 m sub-step (up to 8 a frame per round, each building
 // an array, a Set and string keys) — the top allocation site of the whole frame,
@@ -712,9 +868,18 @@ function stepProjectiles(W, dt) {
     let hit = false;
     for (let s = 0; s < steps && !hit; s++) {
       const h = dt / steps;
+      // EXACT ballistic step (parity P1-A): y += (vy0 + vy1) / 2 * h is the parabola itself, so an arcing
+      // round lands where K.predictArc says at ANY frame rate (the old vy-first Euler step moved a lob by
+      // g t h / 2: ~0.2 m at 60 Hz, ~0.5 m at 30 Hz). With gravity 0 it is the old arithmetic exactly.
+      const vy0 = p.vy;
       p.vy += (p.gravity || 0) * h;
-      const nx = p.x + p.vx * h, ny = p.y + p.vy * h, nz = p.z + p.vz * h;
-      hit = testSegment(W, p, p.x, p.y, p.z, nx, ny, nz, cols);
+      const nx = p.x + p.vx * h, ny = p.y + (vy0 + p.vy) * 0.5 * h, nz = p.z + p.vz * h;
+      const r = testSegment(W, p, p.x, p.y, p.z, nx, ny, nz, cols);
+      // A BOUNCE placed the round at the contact itself. It used to be thrown away here (the round was
+      // moved on to the segment's END - through a wall - and then reflected), so shells and frags passed
+      // through walls on a bounce and burst on the far side.
+      if (r === BOUNCED) continue;
+      hit = r;
       if (!hit) { p.x = nx; p.y = ny; p.z = nz; }
     }
     // Whiz-by: a round passing close is the ONLY cue that you are under fire —
@@ -794,7 +959,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
   const bx0 = (ax < bx ? ax : bx) - REACH, bx1 = (ax < bx ? bx : ax) + REACH;
   const bz0 = (az < bz ? az : bz) - REACH, bz1 = (az < bz ? bz : az) + REACH;
   let hitT = Infinity, hitActor = null, hitPx = 0, hitPy = 0, hitPz = 0, hitDh = 0;
-  const acts = W.actors;
+  const acts = p.noActor ? NO_ACTORS : W.actors;
   for (let ai = 0; ai < acts.length; ai++) {
     const t = acts[ai];
     if (!t.alive || t.id === p.ownerId) continue;
@@ -866,8 +1031,9 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
       let nx = sh.nx, ny = sh.ny, nz = sh.nz;
       if (!nx && !ny && !nz) ny = 1;                 // started inside: shove it up
       p.x = hx + nx * 0.06; p.y = hy + ny * 0.06; p.z = hz + nz * 0.06;
+      bounceEvent(W, p, nx, ny, nz);
       bounceOff(p, nx, ny, nz);
-      return false;
+      return BOUNCED;
     }
     // destructible prop (barrel/tree): a direct hit chips its hp; barrels detonate
     // on any hit, trees drop once their hp is gone (then the collider is removed).
@@ -900,19 +1066,37 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
   if (by <= th) {
     if (p.splash && !p.bounce) { explode(W, bx, th + 0.1, bz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
     if (p.bounce) {
+      // contact INSIDE the segment (the ground under a and b, interpolated), not the overshot end point:
+      // up to v x dt = 0.3-0.7 m past where a lob actually touched down
+      const ha = W.map.heightAt(ax, az), da = ay - ha, db = by - th;
+      const f = da > 0 && da - db > 1e-9 ? da / (da - db) : 1;
+      const cx = ax + (bx - ax) * f, cz = az + (bz - az) * f;
       // approximate normal from height gradient
       const e = 0.6;
-      const nx2 = W.map.heightAt(bx - e, bz) - W.map.heightAt(bx + e, bz);
-      const nz2 = W.map.heightAt(bx, bz - e) - W.map.heightAt(bx, bz + e);
-      const n = new THREE.Vector3(nx2, 2 * e, nz2).normalize();
-      bounceOff(p, n.x, n.y, n.z);
-      p.y = th + 0.12;
-      return false;
+      const nx2 = W.map.heightAt(cx - e, cz) - W.map.heightAt(cx + e, cz);
+      const nz2 = W.map.heightAt(cx, cz - e) - W.map.heightAt(cx, cz + e);
+      const inv = 1 / Math.sqrt(nx2 * nx2 + 4 * e * e + nz2 * nz2);
+      const nnx = nx2 * inv, nny = 2 * e * inv, nnz = nz2 * inv;
+      p.x = cx; p.z = cz; p.y = W.map.heightAt(cx, cz) + 0.12;
+      bounceEvent(W, p, nnx, nny, nnz);
+      bounceOff(p, nnx, nny, nnz);
+      return BOUNCED;
     }
     W.events.emit("impact", { x: bx, y: th, z: bz }, "dirt");
     p.dead = true; return true;
   }
   return false;
+}
+
+/** "roundBounce" (pos, weaponId, impact speed into the surface): a clink for audio (P1-B), and the
+ *  landing point the frag gate compares with K.predictArc. Only real impacts (> 1.5 m/s into the face):
+ *  a resting round re-touches the ground every few frames. */
+const _bncPos = { x: 0, y: 0, z: 0 };
+function bounceEvent(W, p, nx, ny, nz) {
+  const vin = -(p.vx * nx + p.vy * ny + p.vz * nz);
+  if (vin < 1.5) return;
+  _bncPos.x = p.x; _bncPos.y = p.y; _bncPos.z = p.z;
+  W.events.emit("roundBounce", _bncPos, p.weaponId, vin);
 }
 
 function bounceOff(p, nx, ny, nz) {
@@ -923,6 +1107,19 @@ function bounceOff(p, nx, ny, nz) {
 }
 
 // ── explosions ───────────────────────────────────────────────────────────────
+/** LC-25: splash used to reach every actor inside the radius THROUGH walls, floors and hills. A victim
+ *  is shielded when the line from the blast to its chest AND the line to its head are both blocked
+ *  (maps.js losBlocked: swept colliders + terrain; read-only use of the maps API). Two lines, so a body
+ *  half behind a low wall is still caught. Blast points sit outside solids by construction (a bounce
+ *  rests 0.06 m off the face or 0.12 m over the ground; a barrel's own collider is dead before it
+ *  bursts). A map without losBlocked keeps the old open splash. */
+function blastBlocked(W, x, y, z, t) {
+  const los = W.map && W.map.losBlocked;
+  if (!los) return false;
+  const top = t.pos.y + (t.swimming ? 0.8 : K.actorHeight(t)) - 0.2;
+  if (!los(x, y, z, t.pos.x, t.pos.y + 1.0, t.pos.z)) return false;
+  return !!los(x, y, z, t.pos.x, top, t.pos.z);
+}
 function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
   depth = depth || 0;
   const def = K.WEAPONS[weaponId] || K.WEAPONS.glauncher;
@@ -931,7 +1128,7 @@ function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
     if (!t.alive) continue;
     const d = Math.hypot(t.pos.x - x, (t.pos.y + 0.9) - y, t.pos.z - z);
     const k = K.splashScale(d, R + 0.8);
-    if (k > 0) {
+    if (k > 0 && !blastBlocked(W, x, y, z, t)) {
       const dmg = Math.round(K.hitDamage(weaponId, rarity, 0, false, dmgRoll(W)) * k);
       if (t.netRemote && !t.isDummy) {
         // remote-owned actor: its own client is authoritative over its HP — route
