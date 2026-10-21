@@ -1,326 +1,429 @@
 """Dialwood trees (RIFT brief §6: "lacquered fan-leaved plates, bevelled, instanced").
 
-Budget first: RIFT instances ~920 trees (×2 with the shadow pass), so a tree is ≤ 750 triangles (average
-~600). Silhouette second: the 52° camera sees a crown from above, and every variant must keep units on the
-road beside its block in view, so trees are short (≤ 3.4 m in game, the brief's south-of-play cap) and a
-crown overhangs its trunk by ≤ 1.6 m.
+Budget first: RIFT instances ~2,400 trees (×2 with the shadow pass), so a tree is ≤ 750 triangles (average
+~550). Silhouette second: the 52° camera sees a crown from above, and every variant keeps units on the road
+beside its block in view, so crowns overhang their trunk by ≤ 1.7 m (render/terrain.ts sizes each tree
+to the room its spot has).
 
-A crown is an envelope with PUFFS (clumps) budding from its upper surface. Single-sided fan leaves (5
-triangles each: a stem and a rounded, pleated leading edge) are dealt over the exposed hull of all of them
-at once (a Poisson-disk pick: even cover, nothing spent inside, no spiral rosette), each lying down its
-puff's slope with a free twist, so every fan edge stands a little off the one below and the silhouette is
-scalloped with fans. Closed low cores (the envelope's, and a 12-triangle bipyramid per puff) fill whatever
-a leaf turned away from the camera would show. Each leaf takes its puff's normal blended with the crown's
-and a little of its own pleat: a clump shades as one soft painted mass in the real sun (lit crown, cool
-turned-away side), the fans read through their scalloped edges, pleats and a gentle stem-to-edge ramp, not
-as salt-and-pepper facets. Pleats are the dial's hour-lines radiating from each stem.
+A crown is a set of PADS — the dial-maker's pruned clouds. A pad is a closed, flattened CUSHION (the
+foliage in shade, what any gap between leaves shows) crowned by a ROSETTE of crimped fan leaves that
+radiate from its top like a dial's hour-lines: an outer ring hanging over the cushion's rim, an inner ring,
+a small cap. Every leaf of a ring follows one paraboloid dome (droop and curl matched to its curvature) and
+each inner ring rides a little higher than the one outside it, so every tip lies over the stems of the ring
+below — a clean shingle, no two leaves fighting for a depth. Leaves tilt ≤ ~35° from level, so from the
+52° camera no leaf is ever seen edge-on (no shards); the cushions close every flank and underside.
 
-Painting (vertex colour, sRGB ramps, rotation-invariant: terrain spins every instance): the puff's big form
-(up-facing of the puff normal, sky visibility, height in the tree), occlusion where puffs tuck into each
-other, a darker stem and a warm chalky lit edge on every fan, a pale lacquer glint on the lit ribs, and a
-small per-variant drift (warmer, cooler, fresher) so the forest never reads as copies. The value range is
-held below the roads: the lit crown lands ~L* 50 on screen, the cool underside ~L* 18, never black.
+Variety lives in the pad layout: a tiered stack, an umbrella, a trunkless mound, a slim young tree, a
+stepping lean; pads differ in size, squash, turn and droop, so are their leaves.
+
+Shading normals: the pad's dome, blended toward the whole crown's form and a good share of the leaf's own
+facet, plus a rib/valley tilt along every pleat: the crown shades as soft painted masses, while the
+lacquer highlight (COLOR_0.a: leaves glossy, cushions a little, bark matte) breaks leaf by leaf and rib by
+rib.
+
+Painting (vertex colour, sRGB ramps, rotation-invariant: terrain spins every instance): a value FIELD over
+the crown (up-facing, open sky and occlusion cast against the cushions and wood only, height), blurred, then
+each leaf's brushwork on top — dark at the stem where it tucks under the ring above, light toward its tip,
+light ribs and darker valleys like a fan brushed in three strokes, a warm lit rim on the ribs — and hue
+drift per pad, per leaf and per variant. Value stays under the roads: lit crowns ~L* 55–60 on screen, the
+cool undersides ~L* 15–20, never black.
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
-from kit import Part, ellipsoid, fan_leaf, frame, merge, smooth_normals, tube
+from kit import Part, ellipsoid, fan_plate, frame, merge, smooth_normals, tube
 from paint import Occluder, fbm3, hash01, hexc, ramp, smooth
 
 
 @dataclass
-class Puff:
-    c: np.ndarray
-    rh: float
-    rv: float
-    crown: int
-    env: bool = False                             # the crown's envelope itself (its exposed flanks take leaves too)
-
-
-@dataclass
-class Crown:
-    """A crown mass: an envelope ellipsoid with `n` puffs (leaf clumps) budding from its upper surface plus
-    one on its top, so the silhouette is lumpy with clumps of fans. Leaves are dealt over the exposed hull
-    of all of them at once (even cover, nothing wasted inside), `leaves` in all."""
+class Pad:
+    """A cushion crowned by a fan rosette. `c` is the cushion's centre (authored m); the rosette's tips reach
+    ~`r` from it."""
     c: tuple[float, float, float]
-    rh: float
-    rv: float
-    n: int                                        # puffs round the envelope (the top one comes on its own)
-    pr: float                                     # mean puff radius (m)
-    leaves: int = 60                              # fan leaves on this crown
-    cap: float = 1.05                             # puffs bud from the top down to this polar angle (rad)
+    r: float
+    h: float = 0.34                               # cushion half-height
+    n: int = 0                                    # leaves on the pad (0: from its size)
+    tilt: float = 0.48                            # the dome's slope at the rim (rad below level)
+    sq: float = 0.92                              # elliptic: y squash
+    yaw: float = 0.0
+    hang: float = 0.0                             # an off-axis pad tips this far (rad) out toward its offset
+    leaf: float = 1.0                             # leaf length × this
 
 
 @dataclass
 class TreeSpec:
     seed: int
-    crowns: list[Crown]
-    top: float                                    # trunk height (it ends inside the top crown)
+    pads: list[Pad]
+    spine: list[tuple[float, float, float]]       # the trunk, foot → into the top pad
     r0: float                                     # trunk radius at the foot (above the root flare)
-    lean: tuple[float, float] = (0.0, 0.0)        # where the trunk top leans to (m)
-    bow: float = 0.0
-    leaf_len: float = 0.50                        # nominal fan length (m)
-    roots: int = 3                                # root buttresses (the flare ring alternates root / hollow)
-    tint: str = "#808080"                         # the variant's leaf drift (×(1 + 0.5·(tint − 0.5)); grey = none)
+    roots: int = 3
+    tint: str = "#808080"                         # the variant's hue drift (same value)
+    reach: float = 9.0                            # max crown reach from the trunk's foot (authored m)
+    scale: float = 1.0                            # the whole tree, uniformly (leaves too)
 
 
-# leaves: deep cool blue-green → sap green → warm lit yellow-green; on screen the canopy lands L* ~20–55,
-# its lit crown kept a full step under the pale roads (L* ~66), its shade never black
-LEAF = [(0.00, "#152822"), (0.16, "#1B342B"), (0.34, "#234430"), (0.52, "#315435"), (0.68, "#43643A"),
-        (0.84, "#5A743F"), (1.00, "#728447")]
-RIM = hexc("#B3AE70")          # warm chalky light on a lit fan edge
-SHEEN = hexc("#B8C4A2")        # lacquer: a cool pale glint on a lit rib
-HUES = [hexc("#56703A"), hexc("#41664A"), hexc("#5E6B35")]   # per-leaf drift: yellow-green, blue-green, olive
-BARK = [(0.00, "#1C1612"), (0.30, "#30261D"), (0.60, "#4A3C2F"), (0.85, "#655240"), (1.00, "#7A6650")]
-MOSS = hexc("#46593A")
-LIFT = 0.16                    # how far (rad) a fan's edge stands off its puff
+# leaves: deep cool teal underside → sap green → warm lit yellow-green crown (the hue turns with the value,
+# like a painter's mix)
+LEAF = [(0.00, "#0F1F28"), (0.15, "#142B2E"), (0.31, "#1B3833"), (0.48, "#264935"), (0.64, "#355A37"),
+        (0.80, "#466839"), (0.92, "#58773F"), (1.00, "#6A8446")]
+RIM = hexc("#C9C17A")          # warm chalky light on a lit rib tip (the lacquer's bevel)
+HUES = [hexc("#71812E"), hexc("#3A6E5C"), hexc("#6E6C34"), hexc("#55853F"), hexc("#467A6E")]
+HUE_W = 0.16                   # how far a leaf leans to its hue (same value)
+TINT_W = 0.6                   # the variant's hue drift
+BARK = [(0.00, "#1E1813"), (0.30, "#33281E"), (0.60, "#503F30"), (0.85, "#6C5643"), (1.00, "#857059")]
+MOSS = hexc("#4A5C3A")
+
+K_LEAF = 6                     # triangles per leaf (three lobes)
+DOME_W, CROWN_W, OWN_W = 0.45, 0.35, 0.42   # shading normal: pad dome · whole crown · the leaf's own facet
+RIB_T = 0.22                   # rib normals tilt out along the leaf, valleys in: the lacquer streaks per pleat
+LAYER = 0.032                  # leaves nearer the tree's axis ride up to 2× this higher (m): the shingle
+UPSTREAM = 0.44                # the stems' spread sits this far (× pad radius) toward the tree's axis
+GAP = 0.045                    # the outer ring's stems ride this far over the cushion
+STEM = 0.12                    # value: stem → tip ramp on every leaf
+STROKE = 0.035                 # value: rib light / valley dark
+PAD_TONE = 0.06                # value step between pads
+BLUR = 0.10                    # the value field's softness (m)
 
 
-def _ell_normal(P: np.ndarray, c, rh: float, rv: float) -> np.ndarray:
-    g = (np.atleast_2d(P) - np.asarray(c)) / np.array([rh, rh, rv]) ** 2
+def _rot(axis: np.ndarray, ang: float) -> np.ndarray:
+    a = np.asarray(axis, float) / np.linalg.norm(axis)
+    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    return np.eye(3) + math.sin(ang) * K + (1 - math.cos(ang)) * K @ K
+
+
+def _ell_normal(P: np.ndarray, c, r) -> np.ndarray:
+    g = (np.atleast_2d(P) - np.asarray(c)) / np.asarray(r, float) ** 2
     return g / np.maximum(np.linalg.norm(g, axis=1, keepdims=True), 1e-9)
 
 
-def _inside(p: np.ndarray, c, rh: float, rv: float, k: float) -> bool:
-    d = (p - np.asarray(c)) / (np.array([rh, rh, rv]) * k)
-    return float(np.dot(d, d)) < 1.0
+def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator) -> list[Part]:
+    """The cushion and its rosette, built round the origin, then squashed, turned, tipped and moved to the
+    pad's place. Leaves carry dome / own normals separately (blended once the crown's form is known)."""
+    r, h = pad.r, pad.h
+    kappa = math.tan(pad.tilt) / (2 * r)                 # dome z = z0 − κ ρ²: slope tan(tilt) at ρ = r
+    z0 = h + GAP
+    parts = []
+    # the FLOW: every leaf points out from the TREE's axis (the crown's gesture; the crown pad, on the axis,
+    # takes one loose direction instead, so no pad has a flower's centre). Stems are an even Poisson-disk set
+    # over the pad's top; leaves are sized so neighbours overlap; the further from the axis, the lower a leaf
+    # lies (its stem tucks under the tips of the leaves nearer the axis: the shingle).
+    off = np.asarray(pad.c[:2], float) - np.asarray(trunk_xy, float)
+    cy, sy = math.cos(-pad.yaw), math.sin(-pad.yaw)
+    if np.linalg.norm(off) > 0.2:
+        fdir = off / np.linalg.norm(off)
+        fdir = np.array([cy * fdir[0] - sy * fdir[1], sy * fdir[0] + cy * fdir[1]])
+        radial = True
+    else:
+        a0 = rng.uniform(0, 2 * math.pi)
+        fdir = np.array([math.cos(a0), math.sin(a0)])
+        radial = False
+    axis_xy = -fdir * (np.linalg.norm(off) if radial else 0.0)        # the tree's axis in the pad's frame
+    n = pad.n or int(round(np.clip(14 * (r / 0.75) ** 1.2, 9, 18)))
+    m = 600
+    # stems over the pad's top, shifted upstream (toward the axis) so the leaves that start there cover the
+    # pad's inner side too: a leaf covers only what lies downstream of its stem
+    rr = 0.74 * r * np.sqrt(rng.uniform(size=m))
+    aa = rng.uniform(0, 2 * math.pi, m)
+    cand = np.column_stack([rr * np.cos(aa), rr * np.sin(aa)]) - UPSTREAM * r * fdir
+    cand = cand[np.hypot(cand[:, 0], cand[:, 1]) < 0.86 * r]
+    m = len(cand)
 
-
-def _puffs(ci: int, cr: Crown, rng: np.random.Generator) -> list[Puff]:
-    """The envelope, puff centres on its upper surface (golden-angle spread, jittered) sunk in by ~40 % of
-    their radius (the crown's core reaches under their leaves), and the top puff."""
-    C = np.asarray(cr.c, float)
-    out = [Puff(C, cr.rh, cr.rv, ci, env=True),
-           Puff(C + np.array([rng.uniform(-0.08, 0.08), rng.uniform(-0.08, 0.08), cr.rv * 0.72]), cr.pr * 1.06, cr.pr * 0.80, ci)]
-    ga = math.pi * (3 - math.sqrt(5))
-    az0 = rng.uniform(0, 2 * math.pi)
-    for k in range(cr.n):
-        f = (k + 0.5) / cr.n
-        th = 0.45 * cr.cap + 0.55 * cr.cap * math.sqrt(f) + rng.uniform(-0.08, 0.08)
-        az = az0 + k * ga * (cr.n / max(cr.n - 1, 1)) + rng.uniform(-0.25, 0.25)
-        s = np.array([math.sin(th) * math.cos(az), math.sin(th) * math.sin(az), math.cos(th)])
-        r = cr.pr * rng.uniform(0.85, 1.15)
-        n = _ell_normal(C + s * [cr.rh, cr.rh, cr.rv], C, cr.rh, cr.rv)[0]
-        out.append(Puff(C + s * np.array([cr.rh, cr.rh, cr.rv]) - n * 0.42 * r, r, r * 0.80, ci))
-    return out
-
-
-def _hull_sites(puffs: list[Puff], n: int, rng: np.random.Generator, th_max: float = 2.05):
-    """n well-spaced sites on the exposed hull (the union of the puffs' surfaces, down to th_max on each):
-    a dense random sample, then a greedy Poisson-disk pick whose spacing is bisected to land on n.
-    → [(puff index, polar, azimuth, point)], spacing."""
-    cand = []
-    for i, pf in enumerate(puffs):
-        m = int(900 * pf.rh * max(pf.rh, pf.rv))
-        for _ in range(m):
-            th = math.acos(1 - (1 - math.cos(th_max)) * rng.uniform())
-            az = rng.uniform(0, 2 * math.pi)
-            p = pf.c + np.array([pf.rh * math.sin(th) * math.cos(az), pf.rh * math.sin(th) * math.sin(az), pf.rv * math.cos(th)])
-            if any(_inside(p, q.c, q.rh, q.rv, 0.98) for j, q in enumerate(puffs) if j != i):
-                continue
-            cand.append((i, th, az, p))
-    order = rng.permutation(len(cand))
-    pts = np.array([c[3] for c in cand])
-
-    def pick(d):
+    def pick(dmin):
         acc = []
-        for k in order:
-            if not acc or np.min(np.linalg.norm(pts[acc] - pts[k], axis=1)) > d:
+        for k in range(m):
+            if not acc or np.min(np.linalg.norm(cand[acc] - cand[k], axis=1)) > dmin:
                 acc.append(k)
         return acc
-    lo, hi = 0.05, 1.5
-    for _ in range(18):
-        mid = 0.5 * (lo + hi)
-        if len(pick(mid)) > n:
-            lo = mid
+    lo_, hi_ = 0.02 * r, 1.2 * r
+    for _ in range(16):
+        mid = 0.5 * (lo_ + hi_)
+        if len(pick(mid)) >= n:
+            lo_ = mid
         else:
-            hi = mid
-    acc = pick(hi)
-    return [cand[k] for k in acc], hi
-
-
-def crown_leaves(ci: int, cr: Crown, puffs: list[Puff], spec: TreeSpec, rng: np.random.Generator) -> list[Part]:
-    mine = [p for p in puffs if p.crown == ci]
-    sites, d = _hull_sites(mine, cr.leaves, rng)
-    L0 = min(spec.leaf_len, max(0.3, 1.45 * d))
-    parts = []
-    for i, th, az, p in sorted(sites, key=lambda s: s[3][2], reverse=True):
-        pf = mine[i]
-        rh, rv = pf.rh, pf.rv
-        lat = th / 2.05
-        s = np.array([math.sin(th) * math.cos(az), math.sin(th) * math.sin(az), math.cos(th)])
-        ns = s / np.array([rh, rh, rv]); ns /= np.linalg.norm(ns)
-        dt = np.array([rh * math.cos(th) * math.cos(az), rh * math.cos(th) * math.sin(az), -rv * math.sin(th)])
-        dt /= np.linalg.norm(dt)
-        psi = rng.uniform(-math.pi, math.pi) if th < 0.42 else rng.uniform(-0.9, 0.9)
-        bt = np.cross(ns, dt)
-        dt = math.cos(psi) * dt + math.sin(psi) * bt
-        lift = LIFT * (0.6 + 0.9 * min(lat, 1.0)) + rng.uniform(-0.04, 0.04)
-        axis = math.cos(lift) * dt + math.sin(lift) * ns
-        nrm = -math.sin(lift) * dt + math.cos(lift) * ns
-        roll = rng.uniform(-0.2, 0.2)
-        side = np.cross(axis, nrm)
-        nrm = math.cos(roll) * nrm + math.sin(roll) * side
-        L = L0 * rng.uniform(0.88, 1.12)
-        apex = p - axis * 0.40 * L - ns * 0.05 * L
-        leaf = fan_leaf(L, rng.uniform(1.95, 2.3), K=5, pleat=rng.uniform(0.016, 0.024),
-                        droop=0.10 + 0.08 * min(lat, 1.0), curl=rng.uniform(0.07, 0.12), round_=rng.uniform(0.16, 0.24))
-        part = leaf.transformed(frame(apex, axis, nrm))
-        pn = _ell_normal(part.P, pf.c, rh, rv)
-        en = _ell_normal(part.P, cr.c, cr.rh, cr.rv)
-        n = 0.66 * pn + 0.34 * en + 0.18 * part.N
-        part.N = n / np.linalg.norm(n, axis=1, keepdims=True)
-        part.set(kind=1, lat=lat, jit=rng.uniform(), hue=rng.integers(0, len(HUES)), puff=ci * 16 + i)
-        part.A["pnz"] = part.N[:, 2].copy()
+            hi_ = mid
+    stems = cand[pick(lo_)[:n]]
+    leaves = []
+    for a_xy in stems:
+        if radial:
+            v = a_xy - axis_xy
+            d2 = v / np.linalg.norm(v)
+        else:
+            d2 = fdir
+        ang = math.atan2(d2[1], d2[0]) + rng.uniform(-0.35, 0.35)
+        d2 = np.array([math.cos(ang), math.sin(ang)])
+        # long enough to reach past the rim where it points out, never a stub
+        ad = float(np.dot(a_xy, d2))
+        t = -ad + math.sqrt(max(ad * ad - float(np.dot(a_xy, a_xy)) + (1.04 * r) ** 2, 0.0))
+        L = float(np.clip(max(t, 0.55 * r) * rng.uniform(0.9, 1.1), 0.45 * r, 0.80 * r)) * pad.leaf
+        spread = float(np.clip(1.5 * lo_ / (0.5 * L), 1.7, 2.5))
+        key = float(np.dot(a_xy - axis_xy, d2))           # downstream: lower
+        leaves.append((key, a_xy, d2, L, spread))
+    keys = np.array([l[0] for l in leaves])
+    kmin, kmax = keys.min(), max(keys.max(), keys.min() + 1e-3)
+    leaves = [(2.0 * (1.0 - (l[0] - kmin) / (kmax - kmin)), *l[1:]) for l in leaves]
+    for k, a_xy, d2, L, spread in leaves:
+        ad = float(np.dot(a_xy, d2))
+        d = np.array([d2[0], d2[1], 0.0])
+        slope = 2 * kappa * ad                           # the dome's slope along the leaf at its stem
+        ax = d - np.array([0, 0, slope])
+        ax /= np.linalg.norm(ax)
+        nz = np.array([2 * kappa * a_xy[0], 2 * kappa * a_xy[1], 1.0])
+        nz /= np.linalg.norm(nz)
+        lift = LAYER * k + rng.uniform(-0.003, 0.003)
+        apex = np.array([a_xy[0], a_xy[1], z0 - kappa * float(np.dot(a_xy, a_xy)) + lift])
+        roll = rng.uniform(-0.10, 0.10)
+        nz = nz + roll * np.cross(ax, nz)
+        leaf = fan_plate(L, spread * rng.uniform(0.94, 1.06), K=K_LEAF, crimp=rng.uniform(0.10, 0.16),
+                         pleat=rng.uniform(0.012, 0.018), droop=kappa * L, curl=kappa * L * 0.5,
+                         round_=rng.uniform(0.22, 0.32))
+        part = leaf.transformed(frame(apex, ax, nz))
+        # the dome normal at each vertex (local, before the pad's transform)
+        Q = part.P
+        nd = np.column_stack([2 * kappa * Q[:, 0], 2 * kappa * Q[:, 1], np.ones(len(Q))])
+        part.A["ndx"], part.A["ndy"], part.A["ndz"] = nd[:, 0], nd[:, 1], nd[:, 2]
+        part.A["ax_x"], part.A["ax_y"], part.A["ax_z"] = (np.broadcast_to(ax[i], (len(Q),)) for i in range(3))
+        part.set(kind=1, ring=k, pad=pi, leafid=rng.uniform(), hue=rng.uniform(), gl=rng.uniform())
         parts.append(part)
+    core = ellipsoid((0, 0, 0), (0.84 * r, 0.84 * r, h), seg=9, rings=3)
+    core.set(kind=2, ring=-1, pad=pi, leafid=0.5, hue=0.5, gl=0.5)
+    nd = _ell_normal(core.P, (0, 0, 0), (0.84 * r, 0.84 * r, h))
+    core.A["ndx"], core.A["ndy"], core.A["ndz"] = nd[:, 0], nd[:, 1], nd[:, 2]
+    for i in range(3):
+        core.A[("ax_x", "ax_y", "ax_z")[i]] = np.zeros(len(core.P))
+    parts.append(core)
+    # the pad's transform: squash (y), turn, tip outward (off-axis pads), move
+    c = np.asarray(pad.c, float)
+    S = np.diag([1.0, pad.sq, 1.0])
+    R = _rot([0, 0, 1], pad.yaw)
+    off = c[:2] - trunk_xy
+    if pad.hang and np.linalg.norm(off) > 1e-3:
+        o = np.array([off[0], off[1], 0.0]) / np.linalg.norm(off)
+        R = _rot(np.cross([0, 0, 1.0], o), pad.hang) @ R
+    M = R @ S
+    Mn = np.linalg.inv(M).T
+    for p in parts:
+        p.P = p.P @ M.T + c
+        p.N = p.N @ Mn.T
+        p.N /= np.maximum(np.linalg.norm(p.N, axis=1, keepdims=True), 1e-9)
+        nd = np.column_stack([p.A["ndx"], p.A["ndy"], p.A["ndz"]]) @ Mn.T
+        nd /= np.maximum(np.linalg.norm(nd, axis=1, keepdims=True), 1e-9)
+        p.A["ndx"], p.A["ndy"], p.A["ndz"] = nd[:, 0], nd[:, 1], nd[:, 2]
+        ax = np.column_stack([p.A["ax_x"], p.A["ax_y"], p.A["ax_z"]]) @ M.T
+        p.A["ax_x"], p.A["ax_y"], p.A["ax_z"] = ax[:, 0], ax[:, 1], ax[:, 2]
     return parts
 
 
 def build_tree(spec: TreeSpec) -> Part:
     rng = np.random.default_rng(spec.seed)
+    spine = np.asarray(spec.spine, float)
     parts: list[Part] = []
-    puffs = [p for ci, cr in enumerate(spec.crowns) for p in _puffs(ci, cr, rng)]
-    for ci, cr in enumerate(spec.crowns):
-        parts += crown_leaves(ci, cr, puffs, spec, rng)
-    for ci, cr in enumerate(spec.crowns):                        # the crown's closed core: shade, never daylight
-        core = ellipsoid(np.asarray(cr.c) - np.array([0, 0, 0.04 * cr.rv]), (cr.rh * 0.97, cr.rh * 0.97, cr.rv * 0.95),
-                         seg=7, rings=4)                         # (the leaves cover the puffs; no core of their own)
-        core.N = _ell_normal(core.P, cr.c, cr.rh, cr.rv)
-        core.set(kind=2, lat=1.0, jit=0.5)
-        core.A["pnz"] = core.N[:, 2].copy()
-        parts.append(core)
-    for ci, cr in enumerate(spec.crowns):                        # each puff a 12-triangle bipyramid core: no daylight
-        for i, pf in enumerate([p for p in puffs if p.crown == ci]):  # in the pockets between its leaves and the next puff's
-            if pf.env:
-                continue
-            core = ellipsoid(pf.c - np.array([0, 0, 0.06 * pf.rv]), (pf.rh * 0.84, pf.rh * 0.84, pf.rv * 0.84), seg=6, rings=2)
-            n = 0.66 * _ell_normal(core.P, pf.c, pf.rh, pf.rv) + 0.34 * _ell_normal(core.P, cr.c, cr.rh, cr.rv)
-            core.N = n / np.linalg.norm(n, axis=1, keepdims=True)
-            core.set(kind=2, lat=1.0, jit=0.5, puff=ci * 16 + i)
-            core.A["pnz"] = core.N[:, 2].copy()
-            parts.append(core)
+    for pi, pad in enumerate(spec.pads):
+        zc = pad.c[2]
+        k = int(np.clip(np.searchsorted(spine[:, 2], zc), 1, len(spine) - 1))
+        f = (zc - spine[k - 1, 2]) / max(spine[k, 2] - spine[k - 1, 2], 1e-6)
+        txy = spine[k - 1, :2] * (1 - f) + spine[k, :2] * f if zc <= spine[-1, 2] else spine[-1, :2]
+        parts += build_pad(pi, pad, txy, rng)
     # trunk: six facets, a flare ring at the foot that alternates root buttress and hollow
-    spine = np.asarray(_spine(spec.top, spec.lean, spec.bow), float)
-    rad = spec.r0 * np.array([1.0, 0.86, 0.56, 0.34])
+    n_s = len(spine)
+    rad = spec.r0 * np.linspace(1.0, 0.42, n_s) ** 1.2
+    rad[1] = spec.r0 * 0.88
     sides = 6
     trunk = tube(spine, rad, sides=sides, rng=rng, jitter=0.07, phase=rng.uniform(0, 1))
-    for k in range(sides):
-        root = k % 2 == 0 and k // 2 < spec.roots
-        for ring, (f, dz) in enumerate(((2.1, -0.04), (1.25, 0.0)) if root else ((1.2, 0.0), (1.05, 0.0))):
-            vi = ring * sides + k
+    for kk in range(sides):
+        root = kk % 2 == 0 and kk // 2 < spec.roots
+        for ring, (fl, dz) in enumerate(((2.1, -0.04), (1.25, 0.0)) if root else ((1.2, 0.0), (1.05, 0.0))):
+            vi = ring * sides + kk
             d = trunk.P[vi] - spine[ring]
             d[2] = 0.0
-            trunk.P[vi] = spine[ring] + d * f + np.array([0, 0, dz])
+            trunk.P[vi] = spine[ring] + d * fl + np.array([0, 0, dz])
     trunk.N = smooth_normals(trunk.P, trunk.F)
     parts.append(trunk.set(kind=3))
-    # limbs: into every off-axis crown, and two into the largest outer puffs of the lowest crown
+    # limbs into every off-axis pad (seen between the tiers: the tree's gesture)
     zs = spine[:, 2]
-    targets = [np.asarray(cr.c) - np.array([0, 0, cr.rv * 0.3]) for cr in spec.crowns]
-    low = [p for p in puffs if p.crown == 0 and not p.env][1:]
-    low.sort(key=lambda p: -np.linalg.norm(p.c[:2] - np.asarray(spec.crowns[0].c)[:2]))
-    targets += [p.c - np.array([0, 0, p.rv * 0.5]) for p in low[:2]]
-    for end in targets:
-        z = np.clip(end[2] - 0.75, zs[0] + 0.7, zs[-1] - 0.2)
+    for pad in spec.pads:
+        end = np.asarray(pad.c, float) - np.array([0, 0, pad.h * 0.4])
+        z = float(np.clip(end[2] - 0.55, zs[0] + 0.45, zs[-1] - 0.15))
         j = int(np.clip(np.searchsorted(zs, z), 1, len(zs) - 1))
         f = (z - zs[j - 1]) / max(zs[j] - zs[j - 1], 1e-6)
         start = spine[j - 1] * (1 - f) + spine[j] * f
-        rr = rad[j - 1] * (1 - f) + rad[j] * f
-        if np.linalg.norm((end - start)[:2]) < 0.45:
+        if np.linalg.norm((end - start)[:2]) < 0.28:
             continue
-        mid = start + (end - start) * 0.5 + np.array([0, 0, 0.15])
-        parts.append(tube([start, mid, end], [rr * 0.6, rr * 0.42, rr * 0.26], sides=5, rng=rng, jitter=0.05).set(kind=3))
-    return merge(parts)
+        rr = rad[j - 1] * (1 - f) + rad[j] * f
+        mid = start + (end - start) * 0.5 + np.array([0, 0, 0.10])
+        parts.append(tube([start, mid, end], [rr * 0.62, rr * 0.45, rr * 0.3], sides=5, rng=rng, jitter=0.05).set(kind=3))
+    t = merge(parts)
+    t.P *= spec.scale
+    # the crown's form: one ellipsoid round all the foliage
+    leafy = (t.A["kind"] == 1) | (t.A["kind"] == 2)
+    lo, hi = t.P[leafy].min(0), t.P[leafy].max(0)
+    cc = 0.5 * (lo + hi) - np.array([0, 0, 0.12 * (hi[2] - lo[2])])
+    cr = np.maximum(0.5 * (hi - lo), 0.3) * np.array([1.0, 1.0, 1.15])
+    ncr = _ell_normal(t.P, cc, cr)
+    nd = np.column_stack([t.A["ndx"], t.A["ndy"], t.A["ndz"]])
+    ax = np.column_stack([t.A["ax_x"], t.A["ax_y"], t.A["ax_z"]])
+    leaf = t.A["kind"] == 1
+    core = t.A["kind"] == 2
+    lobe = t.A.get("lobe", np.zeros(len(t.P)))
+    u = t.A.get("u", np.zeros(len(t.P)))
+    nl = DOME_W * nd + CROWN_W * ncr + OWN_W * t.N + RIB_T * (lobe * u)[:, None] * ax
+    nc = 0.62 * nd + 0.38 * ncr
+    N = t.N.copy()
+    N[leaf] = nl[leaf]
+    N[core] = nc[core]
+    t.N = N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
+    t.A["cnz"] = ncr[:, 2]                                       # the crown's up-facing (paint)
+    t.A["dnz"] = nd[:, 2]                                        # the pad dome's up-facing (paint)
+    for k in ("ndx", "ndy", "ndz", "ax_x", "ax_y", "ax_z"):
+        del t.A[k]
+    # hold the crown's reach (the lane-edge occlusion budget): draw the crown in horizontally
+    reach = float(np.hypot(t.P[leafy, 0], t.P[leafy, 1]).max())
+    if reach > spec.reach:
+        f = spec.reach / reach
+        t.P[leafy, :2] *= f
+        n = t.N[leafy] * np.array([1 / f, 1 / f, 1.0])
+        t.N[leafy] = n / np.linalg.norm(n, axis=1, keepdims=True)
+    return t
 
 
-def paint_tree(t: Part, seed: int, tint: str = "#808080") -> np.ndarray:
-    """→ sRGB colours (n,3)."""
+def _lum(c: np.ndarray) -> np.ndarray:
+    return (c @ np.array([0.2126, 0.7152, 0.0722]))[:, None]
+
+
+def _keep_lum(c: np.ndarray, ref: np.ndarray) -> np.ndarray:
+    """c re-scaled to ref's luminance: hue moves, the value structure stays."""
+    return c * (_lum(ref) / np.maximum(_lum(c), 1e-6))
+
+
+def _blur(P: np.ndarray, x: np.ndarray, sigma: float) -> np.ndarray:
+    """Gaussian blur of a per-vertex field over 3-D distance: the crown's value is painted in soft masses,
+    never in leaf-sized steps."""
+    d2 = ((P[:, None, :] - P[None, :, :]) ** 2).sum(-1)
+    w = np.exp(-d2 / (2 * sigma * sigma))
+    return (w @ x) / w.sum(1)
+
+
+def paint_tree(t: Part, seed: int, tint: str = "#808080") -> tuple[np.ndarray, np.ndarray]:
+    """→ sRGB colours (n,3) and the GLOSS mask (n,) for COLOR_0.a (1 lacquered leaf, 0 bark)."""
     P, N, A = t.P, t.N, t.A
     kind = A["kind"]
-    occ = Occluder(P, t.F, ground=True)
-    ao = occ.ao(P, N, rays=24, dist=0.9)
-    sky = occ.sky(P, N, rays=24, cone_deg=60.0, dist=12.0)
+    leaf = kind == 1
+    core = kind == 2
+    leafy = leaf | core
+    proxy = ~leaf[t.F].any(1)                                    # cushions + wood: the crown's closed body
+    occ = Occluder(P, t.F[proxy], ground=True)
+    O = P + N * np.where(leafy, 0.06, 0.012)[:, None]
+    ao = occ.ao(O, N, rays=32, dist=1.0, eps=0.0)
+    sky = occ.sky(O, N, rays=24, cone_deg=60.0, dist=12.0, eps=0.0)
     col = np.zeros((len(P), 3))
-    leafy = (kind == 1) | (kind == 2)
+    gloss = np.zeros(len(P))
     z = P[:, 2]
     zl = z[leafy]
-    h = np.zeros(len(P))
-    h[leafy] = smooth(zl.min() + 0.2, zl.max(), zl)
-    pnz = A.get("pnz", N[:, 2])
+    hgt = np.zeros(len(P))
+    hgt[leafy] = smooth(zl.min() + 0.1, zl.max(), zl)
     u = A.get("u", np.zeros(len(P)))
     lobe = A.get("lobe", np.zeros(len(P)))
-    jit = A.get("jit", np.full(len(P), 0.5))
-    # ── the puff's big form first: one soft painted mass per puff ──
-    form = 0.42 * smooth(-0.55, 0.95, pnz) + 0.36 * sky + 0.22 * h
-    v = 0.10 + 0.86 * form
-    v *= 0.60 + 0.40 * smooth(0.25, 0.95, ao)                    # tucked under / between puffs
-    v += 0.05 * (hash01(A.get("puff", np.zeros(len(P))) + seed * 3.1) - 0.5)   # every clump its own tone
-    # ── then each fan, gently: a darker stem, its edge a touch lighter, ribs over valleys ──
-    leaf = kind == 1
-    lat = A.get("lat", np.ones(len(P)))
-    v += np.where(leaf, -0.045 * (1 - u) * smooth(0.15, 0.4, lat) + 0.02 * u * lobe + 0.025 * (jit - 0.5), 0.0)
-    v = np.where(kind == 2, v - 0.04, v)                         # the cores sit just behind the fans
+    pad = A.get("pad", np.zeros(len(P)))
+    ring = A.get("ring", np.zeros(len(P)))
+    lid = A.get("leafid", np.full(len(P), 0.5))
+    dnz, cnz = A.get("dnz", N[:, 2]), A.get("cnz", N[:, 2])
+    # ── the crown's big form: up-facing (dome, crown, shading normal), open sky, height ──
+    form = 0.12 * smooth(-0.5, 0.95, dnz) + 0.24 * smooth(-0.7, 0.95, cnz) + 0.12 * smooth(-0.6, 0.95, N[:, 2]) \
+        + 0.30 * sky + 0.22 * hgt
+    v = 0.03 + 0.87 * form
+    v *= 0.42 + 0.58 * smooth(0.12, 0.95, ao)
+    v += PAD_TONE * (hash01(pad * 1.31 + seed * 3.1) - 0.5)       # every pad its own tone
+    vb = v.copy()
+    vb[leafy] = _blur(P[leafy], v[leafy], BLUR)
+    v = np.where(leafy, vb, v)
+    # ── then each leaf's brushwork: dark where it tucks under the ring above, light toward the tip; the ribs
+    # lighter, the valleys darker (three strokes from the stem); stronger where the light falls ──
+    lit = smooth(0.25, 0.85, sky) * smooth(-0.1, 0.7, N[:, 2])
+    v += np.where(leaf, STEM * (u - 0.62) * (0.45 + 0.55 * lit), 0.0)
+    v += np.where(leaf, STROKE * lobe * u * (0.35 + 0.65 * lit) + 0.025 * (lid - 0.5), 0.0)
+    v = np.where(core, v - 0.11, v)                               # the cushions: inner foliage, deeper in shade (the gaps read as depth)
     c = ramp(np.clip(v, 0, 1), LEAF)
-    hue = np.array([HUES[int(i) % len(HUES)] for i in A.get("hue", np.zeros(len(P)))])
-    c = c * 0.9 + hue * 0.1 * (c.mean(1, keepdims=True) / hue.mean(1, keepdims=True))
-    # every clump leans a little warmer (sun-fed, yellow-green) or cooler (blue-green), like paint mixed per mass
-    warm = hash01(A.get("puff", np.zeros(len(P))) * 1.37 + seed * 0.71) - 0.5
-    c = c * (1 + 0.22 * warm[:, None] * np.array([0.9, 0.35, -1.2]))
+    # leaf hue at the same value (yellow-green / blue-green / olive / fresh / jade), mixed per leaf
+    hue = A.get("hue", np.zeros(len(P)))
+    hk = np.floor(hue * len(HUES)).astype(int) % len(HUES)
+    hc = np.array([HUES[k] for k in hk])
+    hw = HUE_W * leaf
+    c = c * (1 - hw[:, None]) + _keep_lum(hc, c) * hw[:, None]
+    # every pad leans warmer (sun-fed) or cooler, like paint mixed per mass; the tips of the lit crown warmer
+    warm = hash01(pad * 1.37 + seed * 0.71) - 0.5
+    c = c * (1 + (0.22 * warm + 0.10 * (lit * u - 0.3) * leaf)[:, None] * np.array([0.9, 0.35, -1.2]))
     tv = hexc(tint)
-    c = c * (1 + 0.5 * (tv - 0.5))                               # the variant's drift
-    lit = smooth(0.35, 0.85, sky) * smooth(0.1, 0.8, pnz) * smooth(0.4, 0.9, ao)
-    c = c + (RIM - c) * (0.16 * lit * u * leaf)[:, None]                   # warm lit fan edges (the bevel)
-    c = c + (SHEEN - c) * (0.14 * lit * u * (lobe > 0) * leaf * (jit > 0.45))[:, None]   # lacquer glint
+    c = _keep_lum(c * (1 + TINT_W * (tv - 0.5)), c)
+    rim = smooth(0.4, 0.9, lit) * u * (lobe > 0) * leaf * smooth(0.3, 0.8, ao)
+    c = c + (RIM - c) * (0.20 * rim)[:, None]                       # warm lit rib tips (the lacquer's bevel)
     col[leafy] = c[leafy]
+    # lacquer: glossiest along the ribs and toward the tip, each leaf its own; the cushions a little; bark none
+    gl = A.get("gl", np.ones(len(P)))
+    gloss[leaf] = ((0.50 + 0.28 * u + 0.22 * (lobe > 0)) * (0.80 + 0.20 * gl))[leaf]
+    gloss[core] = 0.25
     # ── bark ──
     bark = kind == 3
     s = A.get("s", np.zeros(len(P)))
     streak = hash01(np.floor(s * 6) + seed, np.floor(z * 2.0))
-    bv = 0.22 + 0.36 * sky + 0.16 * (0.5 + 0.5 * N[:, 2]) + 0.12 * (streak - 0.5) + 0.10 * fbm3(P, 3.0, 2, seed)
+    bv = 0.24 + 0.38 * sky + 0.16 * (0.5 + 0.5 * N[:, 2]) + 0.12 * (streak - 0.5) + 0.10 * fbm3(P, 3.0, 2, seed)
     bv *= 0.45 + 0.55 * ao
     bv *= 0.62 + 0.38 * smooth(-0.05, 0.6, z)                    # the foot in the shade of its roots
     bc = ramp(np.clip(bv, 0, 1), BARK)
     moss = smooth(0.45, 0.05, z) * smooth(0.0, 0.6, N[:, 2] + 0.3) * (fbm3(P, 4.0, 2, seed + 3) > 0.42)
     bc = bc * (1 - 0.6 * moss[:, None]) + MOSS * (0.6 * moss[:, None]) * (0.7 + 0.5 * ao[:, None])
     col[bark] = bc[bark]
-    return np.clip(col, 0, 1)
+    return np.clip(col, 0, 1), gloss
 
 
-# ── the five Dialwood variants (authored size; the terrain scales a tree ×0.74–0.87) ─────────────
-def _spine(top, lean=(0.0, 0.0), bow=0.0):
-    t = np.array([0.0, 0.34 / top, 0.62, 1.0])                  # foot, root-flare top, mid, into the crown
-    x = lean[0] * t ** 1.4 + bow * np.sin(t * math.pi)
-    y = lean[1] * t ** 1.4
-    return [tuple(p) for p in np.column_stack([x, y, t * top])]
-
-
+# ── the Dialwood variants (authored size; render/terrain.ts scales each to the room its spot has) ─────
 TREES: dict[str, TreeSpec] = {
-    # tall: an egg-shaped crown, clumps budding all the way down its flanks
+    # tall: an egg of pads round a straight bole — two low shoulders, one mid, two crown lobes (no pad on the
+    # axis: from above the crown parts round its centre like a real tree's, no single "head")
     "dialwood_tall": TreeSpec(
-        seed=7, tint="#6E8A8E",
-        crowns=[Crown((0.0, 0.0, 2.05), 0.95, 1.08, 6, 0.50, 74, cap=1.8)],
-        top=2.8, r0=0.21, lean=(0.08, -0.05), bow=0.05),
-    # broad: a wide umbrella of clumps on spreading limbs, its skirt low
+        seed=7, tint="#5E8E86",                                    # jade: the coolest
+        spine=[(0, 0, 0), (0.02, 0.0, 0.34), (0.05, 0.01, 1.2), (-0.03, 0.03, 1.9), (0.02, -0.01, 2.25)],
+        pads=[Pad((0.34, -0.16, 1.04), 0.78, 0.36, hang=0.18, yaw=0.3),
+              Pad((-0.36, 0.20, 1.18), 0.74, 0.35, hang=0.18, yaw=1.9, sq=0.9),
+              Pad((0.06, 0.40, 1.70), 0.68, 0.34, hang=0.16, yaw=3.0),
+              Pad((0.26, -0.20, 2.20), 0.58, 0.31, hang=0.12, yaw=4.4, sq=0.9),
+              Pad((-0.24, 0.10, 2.32), 0.56, 0.30, hang=0.12, yaw=0.9)],
+        r0=0.20, reach=1.30, scale=1.10),
+    # broad: an umbrella — two crown lobes over two drooping side pads on spreading limbs
     "dialwood_broad": TreeSpec(
-        seed=19,
-        crowns=[Crown((0.0, 0.0, 1.90), 1.26, 0.80, 7, 0.54, 74, cap=1.6)],
-        top=2.1, r0=0.24, lean=(0.05, 0.0), bow=0.05),
-    # squat: a low, dense mound on a short thick bole
+        seed=19, tint="#7E8A70",                                   # sap green (near neutral)
+        spine=[(0, 0, 0), (0.02, 0.0, 0.34), (0.04, 0.0, 1.0), (0.03, 0.02, 1.75)],
+        pads=[Pad((0.30, 0.20, 1.90), 0.74, 0.34, hang=0.10, yaw=0.2),
+              Pad((-0.32, -0.18, 1.84), 0.72, 0.34, hang=0.10, yaw=2.2, sq=0.9),
+              Pad((-0.30, 0.86, 1.40), 0.74, 0.34, hang=0.18, yaw=1.1, sq=0.88),
+              Pad((0.40, -0.84, 1.34), 0.72, 0.33, hang=0.18, yaw=4.0, sq=0.9)],
+        r0=0.23, reach=1.64, scale=1.07),
+    # squat: a trunkless mound — a wide skirt pad near the ground, two shoulders, a small crown lobe
     "dialwood_squat": TreeSpec(
-        seed=31, tint="#94886A",
-        crowns=[Crown((0.0, 0.0, 1.45), 1.20, 0.78, 6, 0.54, 64, cap=1.65)],
-        top=1.5, r0=0.27, roots=3),
-    # young: slim, a small crown on a thin stem; more of its trunk shows
+        seed=31, tint="#9C8E60",                                   # warm olive-gold
+        spine=[(0, 0, 0), (0.0, 0.0, 0.3), (0.05, 0.02, 0.8), (0.0, 0.04, 1.3)],
+        pads=[Pad((0.0, 0.0, 0.52), 1.10, 0.30, tilt=0.5, yaw=0.5, sq=0.9),
+              Pad((0.44, 0.24, 0.98), 0.72, 0.33, hang=0.18, yaw=1.9),
+              Pad((-0.42, -0.20, 1.06), 0.68, 0.32, hang=0.18, yaw=3.3, sq=0.88),
+              Pad((-0.10, 0.36, 1.38), 0.52, 0.28, hang=0.12, yaw=0.9)],
+        r0=0.24, roots=3, reach=1.59, scale=1.34),
+    # young: a slim, swaying stem with three small pads; its trunk shows
     "dialwood_young": TreeSpec(
-        seed=43, tint="#7C9470",
-        crowns=[Crown((0.04, 0.0, 2.02), 0.76, 0.66, 4, 0.42, 42, cap=1.55)],
-        top=2.2, r0=0.15, lean=(0.06, 0.0), bow=0.04, leaf_len=0.44),
-    # leaning: the trunk bends out and a lopsided crown follows it, a small clump left behind near the bole
+        seed=43, tint="#8EA860",                                   # fresh spring green
+        spine=[(0, 0, 0), (0.03, 0.0, 0.3), (0.13, 0.02, 0.95), (-0.04, 0.05, 1.55), (0.06, 0.0, 2.0)],
+        pads=[Pad((0.32, 0.06, 1.42), 0.62, 0.30, hang=0.18, yaw=0.7),
+              Pad((-0.22, -0.14, 1.64), 0.52, 0.27, hang=0.18, yaw=4.0),
+              Pad((0.16, -0.18, 2.04), 0.54, 0.28, hang=0.12, yaw=2.4, sq=0.9)],
+        r0=0.14, roots=2, reach=1.14, scale=1.22),
+    # leaning: the bole bends out; pads step up along it, a small one left behind near the foot
     "dialwood_lean": TreeSpec(
-        seed=59, tint="#868A70",
-        crowns=[Crown((0.45, 0.04, 2.12), 0.98, 0.72, 5, 0.52, 56, cap=1.6), Crown((-0.12, 0.2, 1.38), 0.50, 0.44, 1, 0.36, 16)],
-        top=2.2, r0=0.21, lean=(0.45, 0.04), bow=-0.10),
+        seed=59, tint="#748C7C",                                   # sage-teal
+        spine=[(0, 0, 0), (0.04, 0.0, 0.32), (0.22, 0.02, 0.95), (0.52, 0.05, 1.55), (0.80, 0.04, 2.05)],
+        pads=[Pad((-0.14, 0.22, 1.02), 0.62, 0.30, hang=0.18, yaw=0.4),
+              Pad((0.40, -0.10, 1.58), 0.86, 0.35, hang=0.12, yaw=1.7, sq=0.9),
+              Pad((0.92, 0.30, 1.86), 0.60, 0.30, hang=0.18, yaw=5.0),
+              Pad((0.64, -0.26, 2.22), 0.56, 0.29, hang=0.12, yaw=3.1)],
+        r0=0.20, reach=1.76, scale=1.16),
 }

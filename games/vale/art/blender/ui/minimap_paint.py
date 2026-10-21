@@ -10,7 +10,8 @@ Cycles (GPU) under the map's sun, then given a light painterly pass:
           (north) and the Fallen Shaft's shallow water (south); the Seat and its engraved hour-ring;
           chalk (west, Aubade) and ironstone (east, Serenade) base terraces
   BRIDGE  the needle's shaft over the gorge: a pale deck, the drop on both sides, the Snap's crack
-  FRAY    the Noonplate: a honed basalt disc, hour-lines to the ten hour-marks, the cart ring
+  FRAY    the Noonplate: a honed pale dial-stone disc, dark inlaid hour-lines to the ten hour-marks, the cart
+          ring; the hour-stones, the cart and the rim dark basalt (the obstacles read dark on the bright stage)
 Screen-top = low sim y (the camera looks −Z): the image's top row is y = 0.
 """
 from __future__ import annotations
@@ -304,15 +305,15 @@ def build_fray(m, col):
     g.scale = (W + 20, H + 20, 1); g.data.materials.append(outside)
     for c in g.users_collection: c.objects.unlink(g)
     col.objects.link(g)
-    plate = mat("basalt", t["colors"]["jungle"], rough=0.45, noise=0.1, scale=0.15, voronoi=0.2, vscale=0.12)
+    plate = mat("dial_stone", t["colors"].get("lane", "#A19A8B"), rough=0.45, noise=0.06, scale=0.15, voronoi=0.2, vscale=0.12)
     disc("plate", (cx, cy), W / 2 - 1.0, 0.05, plate, col, depth=0.1, verts=128)
     inscr = mat("inscription", t["colors"]["inscription"], rough=0.55, noise=0.05)
     ring("band", (cx, cy), W / 2 - 4.5, 1.2, 0.12, inscr, col)
     for sx, sy in m["spawns"]:
         ribbon(f"hourline{sx}", [(cx, cy), (sx, sy)], 0.45, 0.11, inscr, col)
         disc(f"mark{sx}", (sx, sy), 1.4, 0.12, inscr, col, depth=0.06)
-    ring("cart_ring", (cx, cy), 4.5, 0.6, 0.12, inscr, col)
-    stone = mat("hour_stone", "#8E887C", rough=0.6, noise=0.1, scale=0.4)
+    ring("cart_ring", (cx, cy), 4.5, 0.6, 0.12, mat("shop_ring", t["colors"].get("midInlay", "#7A766C"), rough=0.55, noise=0.05), col)
+    stone = mat("hour_stone", t["colors"].get("cliffFace", "#3E3D40"), rough=0.6, noise=0.1, scale=0.4)
     for i, poly in enumerate(m["walls"]):
         prism(f"wall{i}", poly, 1.2, stone, col, bevel=0.2)
     grass = mat("needlegrass", "#4A5A40", rough=0.85, noise=0.3, scale=1.2)

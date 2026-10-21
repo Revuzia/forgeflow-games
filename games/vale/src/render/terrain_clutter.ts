@@ -155,6 +155,72 @@ export function bladeTuft(root: Color, tip: Color): BufferGeometry {
 }
 
 /** a gorge spire: a tall chiselled rock pillar (prism with a broken top), 1 m wide, 1 m tall at scale 1 */
+/** a rock stack standing in the gorge, in world metres, appended to (pos, idx): bedded drums of rock (1.2-2.6 m
+ *  beds near the top, coarser with depth), each bed its own irregular 11-gon, a notch or a ledge between beds,
+ *  the stack flaring toward its foot, a domed cap. Smooth round the circumference, crisp at every bed joint
+ *  (each strip owns its vertices), so it reads as a weathered column, never a faceted prism. */
+export function rockStack(pos: number[], idx: number[], cx: number, cz: number, top: number, bottom: number, w: number, seed: number): void {
+  const rnd = mulberry(seed);
+  const S = 11;
+  const ring = (y: number, r: number, prof: number[], rot: number, dx: number, dz: number): number => {
+    const base = pos.length / 3;
+    for (let s = 0; s < S; s++) {
+      const a = rot + (s / S) * Math.PI * 2;
+      pos.push(cx + dx + Math.cos(a) * r * prof[s], y, cz + dz + Math.sin(a) * r * prof[s]);
+    }
+    return base;
+  };
+  const strip = (r0: number, r1: number): void => {
+    for (let s = 0; s < S; s++) {
+      const a = r0 + s, b = r0 + ((s + 1) % S), c = r1 + ((s + 1) % S), d = r1 + s;
+      idx.push(a, b, c, a, c, d);
+    }
+  };
+  const profile = (): number[] => {
+    const p: number[] = [];
+    for (let s = 0; s < S; s++) p.push(0.78 + rnd() * 0.42);
+    // smooth the outline a little (a boulder's round, not a star)
+    return p.map((v, s) => (v * 2 + p[(s + 1) % S] + p[(s + S - 1) % S]) / 4);
+  };
+  let y = top;
+  let prev = -1;
+  let rot = rnd() * 6.283;
+  let dx = 0, dz = 0;
+  let k = 0;
+  while (y > bottom) {
+    const depthT = Math.min(1, (top - y) / 22);
+    const bed = (1.2 + rnd() * 1.4) * (1 + depthT * 1.6);
+    const r = w * 0.5 * (1 + depthT * 0.35) * (0.88 + rnd() * 0.24);
+    const prof = profile();
+    rot += (rnd() - 0.5) * 0.5;
+    dx += (rnd() - 0.5) * 0.18 * w; dz += (rnd() - 0.5) * 0.18 * w;
+    const taper = 0.9 + rnd() * 0.12;                // a bed narrows a touch toward its top
+    const t0 = ring(y, r * taper, prof, rot, dx, dz);
+    const t1 = ring(y - bed, r, prof, rot, dx, dz);
+    if (prev < 0) {
+      // the cap: a low dome over the top bed
+      const c = pos.length / 3;
+      pos.push(cx + dx + (rnd() - 0.5) * 0.3 * w, y + 0.05 * w + rnd() * 0.06 * w, cz + dz + (rnd() - 0.5) * 0.3 * w);
+      const cr = ring(y + 0.04 * w, r * taper * 0.72, prof, rot, dx, dz);
+      for (let s = 0; s < S; s++) idx.push(c, cr + ((s + 1) % S), cr + s);
+      // the cap's rim rolls over onto the bed's face (its own strip: a crisp edge)
+      const rr = ring(y + 0.04 * w, r * taper * 0.72, prof, rot, dx, dz);
+      const rt = ring(y, r * taper, prof, rot, dx, dz);
+      strip(rr, rt);
+    } else {
+      // the joint between beds: a ledge (this bed wider) or a notch (narrower), its own strip
+      const j = ring(y, r * taper, prof, rot, dx, dz);
+      strip(prev, j);
+    }
+    strip(t0, t1);
+    // the bed's foot ring again as the start of the next joint strip (own vertices: a crisp joint)
+    prev = ring(y - bed, r, prof, rot, dx, dz);
+    y -= bed;
+    k++;
+    if (k > 60) break;
+  }
+}
+
 export function spire(seed: number): BufferGeometry {
   const rnd = mulberry(seed);
   const sides = 6;

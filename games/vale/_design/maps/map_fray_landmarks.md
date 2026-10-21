@@ -9,7 +9,7 @@ For the Blender map artist (`art/blender/maps/map_fray.py` → `art/out/maps/map
 
 ## 1. The map in one paragraph
 
-The Noonplate is the needle's round seat-stone at the **Shadowless Noon**. It is a disc of honed basalt 60 m across (r 30, centred on (32, 32) in a 64 × 64 m plane), with the sun straight overhead. Nobody has a side here, so the plate has **ten-fold symmetry**: every seat sees the same plate from its own mark.
+The Noonplate is the needle's round seat-stone at the **Shadowless Noon**. It is a disc of honed pale dial-stone 60 m across (r 30, centred on (32, 32) in a 64 × 64 m plane), luminous under the sun straight overhead; everything that stands on it (the hour-stones, the cart, the rim) is dark basalt, so obstacles read at a glance on the bright stage. Nobody has a side here, so the plate has **ten-fold symmetry**: every seat sees the same plate from its own mark.
 - **Rim.** Ten **hour-marks** (seats I–X) lie on the rim at r 26, clockwise from 12.
 - **Centre.** The **Lampwright's cart** stands at the centre and is the only shop.
 - **Inner ring.** Sunmotes fall on the inner ring at r 15, in the gaps between marks. Mending and Quick alternate, so every mark has one of each beside it, 12.6 m away.
@@ -27,19 +27,22 @@ The sun is at 86° elevation, so shadows pool straight under everything. Height 
 | **Centre** | The **Lampwright's cart**: a two-wheeled stall with a striped awning and one thin lamp mast. The cart body is a **wall** (a ten-sided 1.3 m footprint, a pillar to fight round). The 4 m shop circle is the ring of floor around it. | (32.0, 32.0) | r 1.3 · body 3 m, mast 6 m × 0.15 m (thin, so it hides nothing) | walnut and felt, a lamp with a lampresin chimney (emissive ≤ 0.8). Wheels are spoked wood: no gears, no brass |
 | **Shop ring** | A flush ring inlaid in the floor at r 4: the edge of the shop circle | (32.0, 32.0) | r 4 · flush | L* 40 |
 | **Grass ring** (r 11.5) | Ten **Needlegrass** tufts, 3.4 × 2.2 m, each on the hour-line in front of its mark | `thickets[]` | blades ≤ 1.2 m | stone-green blades on a carved curb, L* 48–54 |
-| **Inner ring** (r 15) | Sunmote dishes: shallow flush bowls where the motes fall. Mending at 18°, 90°, 162°, 234° and 306°; Quick at 54°, 126°, 198°, 270° and 342°. Gleam at r 7, east and west of the cart | `pickups[]` | flush | chalk-rimmed basalt bowls. The motes themselves are units with their own GLBs |
-| **Stone ring** (r 19.5) | Ten **hour-stones**: low carved blocks, 4.6 × 1.8 m, set tangentially in each gap between marks | the ten small `walls[]` | **1.2 m** (low: fighters behind them stay visible) | the plate's basalt with a chalk top edge. Each face carries the half-hour tick |
-| **Rim** (r 26–30) | The ten **hour-marks**: carved numerals I–X inlaid flush at each seat's spawn. Each is lit in its **seat colour** (bible FRAY seats: Crimson, Olive, Lime, Green, Cyan, Blue, Indigo, Violet, Plum, Rose) and is the respawn mark | `spawns[k]`: I (32, 6), II (47.3, 11), III (56.7, 24), IV (56.7, 40), V (47.3, 53), VI (32, 58), VII (16.7, 53), VIII (7.3, 40), IX (7.3, 24), X (16.7, 11) | 2.4 m numerals · flush | chalk inlay. The seat-colour light sits in a groove round the numeral, emissive ≤ 0.8 (it blooms only on that seat's respawn) |
+| **Inner ring** (r 15) | Sunmote dishes: shallow flush bowls where the motes fall. Mending at 18°, 90°, 162°, 234° and 306°; Quick at 54°, 126°, 198°, 270° and 342°. Gleam at r 7, east and west of the cart | `pickups[]` | flush | basalt-rimmed bowls inlaid in the pale stone. The motes themselves are units with their own GLBs |
+| **Stone ring** (r 19.5) | Ten **hour-stones**: low carved blocks, 4.6 × 1.8 m, set tangentially in each gap between marks | the ten small `walls[]` | **1.2 m** (low: fighters behind them stay visible) | dark basalt (the frame stone, never the plate's pale stone) with a chalk top edge. Each face carries the half-hour tick |
+| **Rim** (r 26–30) | The ten **hour-marks**: carved numerals I–X inlaid flush at each seat's spawn. Each is lit in its **seat colour** (bible FRAY seats: Crimson, Olive, Lime, Green, Cyan, Blue, Indigo, Violet, Plum, Rose) and is the respawn mark | `spawns[k]`: I (32, 6), II (47.3, 11), III (56.7, 24), IV (56.7, 40), V (47.3, 53), VI (32, 58), VII (16.7, 53), VIII (7.3, 40), IX (7.3, 24), X (16.7, 11) | 2.4 m numerals · flush | dark basalt inlay in the pale stone. The seat-colour light sits in a groove round the numeral, emissive ≤ 0.8 (it blooms only on that seat's respawn) |
 | **Beyond the rim** (the four corner walls) | A low carved **rim wall** (2.4 m) closes the plate. Past it the world **whites out** into noon glare `#E6E1D6`: a bright boundary, not dark fog. The **fair's stands** (stepped stone terraces of the Shadowless Noon, low and empty of detail) sit in the four corners, below the glare | corner walls · stands 6 × 6 m centred at (4, 4), (60, 4), (4, 60) and (60, 60) | rim 2.4 m · north stands 3 m, south stands 1 m (they are south of the plate) | basalt rim with chalk lip. The stands are pale, low-contrast, part of the glare |
 
 ## 3. Floor and values
 
 | Surface | Material | Value (L*) |
 |---|---|---|
-| The plate | **polished basalt**, the one dark stone in the Vale ("the noon would blind otherwise"), so all ten seat colours pop | 28–36 |
-| Hour-lines | ten chalk-inlaid lines, 0.15 m wide, from the cart ring to each mark | 60 |
-| Shop ring | flush inlay at r 4 | 40 |
-| Hour-stones and rim tops | basalt with a chalk lip | lit top 55–62, faces 18–25 |
+| The plate | **honed pale dial-stone** in rings of great slabs, each slab its own even tone, faint grey veins, a satin sheen of the overhead sun (not a mirror). Luminous at the Shadowless Noon; the fog of war still darkens what is unseen. The seat colours sit in carved grooves round each numeral and pop against the pale stone | 66–72 in vision (≈ 30 under fog of war) |
+| Hour-lines and numerals | ten basalt-inlaid lines, 0.15 m wide, from the cart ring to each mark: dark in the pale stone, like a sundial's cut lines | 30 |
+| Hour-ring | a carved chapter ring round the marks: a double groove inside them, one outside, a half-hour tick between every two marks, quarter ticks on the outer band | grooves ≤ 40 |
+| Shop ring | flush mid-grey inlay at r 4 | 48 |
+| Hour-stones, cart and rim | dark basalt with a chalk lip (the obstacles read dark on the bright stage) | lit top 55–62, faces 18–25 |
+
+(2026-10-20, terrain polish: the plate moved from polished basalt, L* 28–36, to pale dial-stone at the noon; the obstacles kept the basalt. Render: `src/render/terrain_glsl.ts` VALE_STYLE_PLATE.)
 
 - **Light.** Sun 86° elevation, bearing 200° (`#FFF3E6`, 3.0). sunDir (−0.0239, 0.9976, 0.0655). Ambient 0.55.
 - **Fog.** There is no fog in the arena; the glare is beyond the rim.
@@ -52,10 +55,10 @@ There is none on the plate: it is a clean stone stage. Sun-motes drifting in the
 ## 5. Minimap (a 232 px disc, about 3.9 px/m)
 
 Paint it flat:
-- **Plate:** L* 30.
-- **Hour-lines:** L* 60, 1 px.
+- **Plate:** L* 66.
+- **Hour-lines:** L* 30, 1 px.
 - **Hour-stones:** L* 12 bars.
-- **Cart:** an L* 70 dot.
+- **Cart:** an L* 15 dot (dark on the pale plate).
 - **Grass:** L* 45.
 - **Hour-marks:** leave them to the UI. Each mark is drawn live as its seat's glyph in its seat colour (bible: the glyph is the sure key).
 

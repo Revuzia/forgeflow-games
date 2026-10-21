@@ -14,7 +14,7 @@
 // 0.9 m resample), and each quad's winding is matched to its normal. A position-based chisel noise moves
 // every vertex along the outline normal, identical for coincident vertices (no cracks).
 
-import { BufferAttribute, BufferGeometry, ShapeGeometry, Shape, ShapeUtils, Vector2 } from 'three';
+import { BufferAttribute, BufferGeometry, Path, ShapeGeometry, Shape, ShapeUtils, Vector2 } from 'three';
 
 export type V2 = readonly [number, number];
 
@@ -23,7 +23,9 @@ export const WK = {
   face: 0, step: 1, lipFace: 2, chamfer: 3, lipTop: 4, lipIn: 5, top: 6, flank: 7, rock: 8, band: 9,
 } as const;
 
-export interface ProfilePt { off: number; y: number }
+/** a profile point; `lk` (optional) counts the terraces' ledges above it (fractional on a ledge), so `extra`
+ *  can widen or narrow each ledge along the wall */
+export interface ProfilePt { off: number; y: number; lk?: number }
 export interface Strip { from: ProfilePt; to: ProfilePt; kind: number; course: number }
 
 function h2(x: number, y: number): number {
@@ -56,11 +58,17 @@ export class WallMesh {
     for (const k of order) this.vert(P[k], N[k], A[k], B[k]);
   }
 
-  /** flat top polygon (kind top), from a ShapeGeometry in the x/−y plane */
-  cap(outline: readonly V2[], y: number, aRow: readonly number[], bRow: readonly number[]): void {
+  /** flat top polygon (kind top), from a ShapeGeometry in the x/−y plane; optional holes */
+  cap(outline: readonly V2[], y: number, aRow: readonly number[], bRow: readonly number[], holes: readonly (readonly V2[])[] = []): void {
     let pts = outline.map(([x, z]) => new Vector2(x, -z));
     if (ShapeUtils.isClockWise(pts)) pts = pts.reverse();
-    const g = new ShapeGeometry(new Shape(pts), 1);
+    const shape = new Shape(pts);
+    for (const hl of holes) {
+      let hp = hl.map(([x, z]) => new Vector2(x, -z));
+      if (!ShapeUtils.isClockWise(hp)) hp = hp.reverse();
+      shape.holes.push(new Path(hp));
+    }
+    const g = new ShapeGeometry(shape, 1);
     const p = g.getAttribute('position') as BufferAttribute;
     const idx = g.index;
     const n = idx ? idx.count : p.count;
@@ -74,6 +82,19 @@ export class WallMesh {
       for (const k of ord) this.vert(P[k], [0, 1, 0], [P[k][0], P[k][2], aRow[2], aRow[3]], bRow);
     }
     g.dispose();
+  }
+
+  /** a planar polygon given in its own 2D frame (to3 lifts a point into the world), facing `n` */
+  planar(pts: readonly V2[], to3: (p: V2) => number[], n: readonly number[], aOf: (p: V2) => number[], bOf: (p: V2) => number[]): void {
+    const tris = ShapeUtils.triangulateShape(pts.map(([a, b]) => new Vector2(a, b)), []);
+    for (const t of tris) {
+      const P = t.map((k) => to3(pts[k]));
+      const ux = P[1][0] - P[0][0], uy = P[1][1] - P[0][1], uz = P[1][2] - P[0][2];
+      const vx = P[2][0] - P[0][0], vy = P[2][1] - P[0][1], vz = P[2][2] - P[0][2];
+      const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+      const ord = cx * n[0] + cy * n[1] + cz * n[2] >= 0 ? [0, 1, 2] : [0, 2, 1];
+      for (const k of ord) this.vert(P[k], n, aOf(pts[t[k]]), bOf(pts[t[k]]));
+    }
   }
 
   geometry(): BufferGeometry {
@@ -99,9 +120,14 @@ export interface SweepOpts {
   /** vertices on the map border stay put (border walls must meet the map edge exactly) */
   pinned?: (x: number, y: number) => boolean;
   /** per-vertex extra offset (m) along the normal, e.g. a bulge that varies along the wall */
-  extra?: (x: number, y: number, h: number, u: number) => number;
+  extra?: (x: number, y: number, h: number, u: number, lk: number) => number;
+  /** per-vertex extra height (m), e.g. terraces that dip and rise along the wall (the strata stay level in the
+   *  profile's own height, aWallB.z, so they follow the terraces) */
+  yExtra?: (x: number, y: number, h: number, u: number) => number;
   /** fade the chisel in over the top `taper` m below height 0 (a face that must meet the ground plane exactly) */
   taper?: number;
+  /** open outlines: tilt the normals toward the outline's ends over this many metres (a rounded shoulder) */
+  roundEnds?: number;
 }
 
 /** sweep an outline along a list of strips */
@@ -140,11 +166,12 @@ export function sweep(out: WallMesh, outline: readonly V2[], strips: readonly St
         const k = o.chisel * (o.taper ? Math.min(1, Math.max(0, -pp.y / o.taper)) : 1);
         off += (vn(v[0] * 0.9 + pp.y * 1.3 + o.seed, v[1] * 0.9) - 0.5) * k + (vn(v[0] * 2.7 - pp.y * 2.1, v[1] * 2.7 + o.seed) - 0.5) * k * 0.45;
       }
-      if (o.extra) off += o.extra(v[0], v[1], pp.y, U[i]);
+      if (o.extra) off += o.extra(v[0], v[1], pp.y, U[i], pp.lk ?? 0);
     } else if (pp.off > 0) {
       off = 0;
     }
-    return [v[0] + nr[0] * off, pp.y, v[1] + nr[1] * off];
+    const dy = !pinned && o.yExtra ? o.yExtra(v[0], v[1], pp.y, U[i]) : 0;
+    return [v[0] + nr[0] * off, pp.y + dy, v[1] + nr[1] * off];
   };
   for (const st of strips) {
     const dOff = st.to.off - st.from.off, dY = st.to.y - st.from.y;
@@ -157,7 +184,17 @@ export function sweep(out: WallMesh, outline: readonly V2[], strips: readonly St
       const P = [place(i, st.from), place(j, st.from), place(j, st.to), place(i, st.to)];
       const nrm = (k: number): number[] => {
         const v = vnrm[k % n];
-        const x = v[0] * pn[0], z = v[1] * pn[0], y = pn[1];
+        let x = v[0] * pn[0], z = v[1] * pn[0];
+        const y = pn[1];
+        if (o.roundEnds && !o.closed) {
+          // tangent along the outline (start → end); the shoulder leans the normal out over each end
+          const a = outline[0], b = outline[n - 1];
+          const tl = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+          const tx = (b[0] - a[0]) / tl, tz = (b[1] - a[1]) / tl;
+          const s0 = Math.max(0, 1 - U[k] / o.roundEnds), s1 = Math.max(0, 1 - (U[segs] - U[k]) / o.roundEnds);
+          const s = (s1 - s0) * 1.1;
+          x += tx * s; z += tz * s;
+        }
         const l = Math.hypot(x, y, z) || 1;
         return [x / l, y / l, z / l];
       };
@@ -240,29 +277,70 @@ export function flankProfile(depth: number, seed: number, bulge = 1): Strip[] {
   return strips;
 }
 
-/** a plain rock face falling from `top` to `depth` (gorge far walls, map-border chasm edges), facing the
- *  outline's outward normal; benches and overhangs from the seed */
-export function rockFaceProfile(top: number, depth: number, seed: number, faceOut: boolean): Strip[] {
+/** a gorge's far wall (Needlespan's map-border chasm edges), seen from across the drop: a rounded, sunlit lip
+ *  rolling over from the plateau, then the rock falls in TERRACES — battered faces of 2.6-5.4 m, each ending on
+ *  a ledge that steps 0.5-1.7 m out toward the gorge (offset is along the outline's outward normal, away from
+ *  the gorge; the profile runs top → down). Up-facing ledges and battered faces catch the sun and the sky, so
+ *  from the 52° camera the wall reads as stacked lit bands with mist pooling on the benches, narrowing into
+ *  the depth like a canyon: depth, not a flat wall. Now and then a bed is undercut (a dark overhang). */
+export function farWallProfile(depth: number, seed: number): Strip[] {
   const pts: ProfilePt[] = [];
-  const s = faceOut ? 1 : -1;
-  let y = top;
-  let off = 0;
-  pts.push({ off: 0, y });
+  // the lip: tucked just under the plateau ground 0.55 m back, rounding over to the first face (the ground
+  // covers its flat start, so the plateau meets the rounded edge without a seam)
+  for (let k = 0; k <= 4; k++) {
+    const a = (k / 4) * (Math.PI / 2);
+    pts.push({ off: 0.55 * (1 - Math.sin(a)), y: -0.55 * (1 - Math.cos(a)) - 0.03 });
+  }
+  let y = pts[pts.length - 1].y, off = pts[pts.length - 1].off;
   let i = 0;
   while (y > -depth) {
-    const bed = 1.4 + h2(seed + i * 1.3, 7.7) * 2.8;
-    const lean = (h2(seed * 2.3 + i, 5.1) - 0.4) * 0.7;
-    pts.push({ off: off + s * lean * 0.3, y: y - bed * 0.8 });
-    off += s * lean;
-    y -= bed;
-    pts.push({ off, y });
+    const bed = 2.6 + h2(seed + i * 1.7, 3.3) * 2.8;
+    const under = i > 0 && h2(seed * 1.9 + i, 8.2) < 0.2;
+    const batter = under ? -0.55 : 0.18 + h2(seed + i, 5.5) * 0.4;   // > 0: the face leans back (lit)
+    pts.push({ off: off - batter * 0.45 - (under ? 0 : 0.12), y: y - bed * 0.4, lk: i });
+    pts.push({ off: off - batter * 0.85, y: y - bed * 0.85, lk: i });
+    off -= batter; y -= bed;
+    pts.push({ off, y, lk: i });
+    // the ledge: a bench stepping out toward the gorge, its edge rounded down into the next face
+    // the canyon narrows ~1 m per bed, never more than 8 m in (the deck's flank stands across the gorge)
+    const ledge = off < -8 ? 0 : (under ? 1.0 : 0.4) + h2(seed * 2.7 + i, 1.1) * 0.9;
+    pts.push({ off: off - ledge * 0.7, y: y - 0.04, lk: i + 0.7 });
+    off -= ledge;
+    pts.push({ off, y: y - 0.22, lk: i + 1 });
+    y -= 0.22;
     i++;
   }
   const strips: Strip[] = [];
-  for (let k = 1; k < pts.length; k++) {
-    // faceOut: profile ordered bottom → top so normals face outward
-    if (faceOut) strips.push({ from: pts[k], to: pts[k - 1], kind: WK.rock, course: k });
-    else strips.push({ from: pts[k - 1], to: pts[k], kind: WK.rock, course: k });
-  }
+  for (let k = 1; k < pts.length; k++) strips.push({ from: pts[k - 1], to: pts[k], kind: WK.rock, course: k });
   return strips;
+}
+
+/** a carved hour-band: the section of a ring of the shaft where it crosses a deck edge (off > 0 into the deck,
+ *  `D` = how far the notch reaches into it). A low inner face toward the walkable deck, a rounded shoulder, a
+ *  crown rising to `bH` at the edge, then it rolls over and runs down the flank (flankProfile's quarter-round)
+ *  standing ~0.4 m proud of it, and tucks back under. `section` closes the outline through the shaft's body
+ *  (the ring's cut end, for planar end caps). */
+export function bandRing(D: number, bH: number): { strips: Strip[]; section: V2[] } {
+  const pts: ProfilePt[] = [
+    { off: D, y: -0.15 }, { off: D, y: 0.32 * bH },
+    { off: D - 0.12, y: 0.42 * bH }, { off: D - 0.3, y: 0.47 * bH },
+    { off: D * 0.62, y: 0.64 * bH }, { off: D * 0.32, y: 0.84 * bH }, { off: 0.35, y: 0.96 * bH }, { off: 0.05, y: bH },
+  ];
+  const rc = Math.min(0.9, bH * 0.9);
+  for (let k = 1; k <= 6; k++) {
+    const a = (k / 6) * (Math.PI / 2);
+    pts.push({ off: 0.05 - rc * Math.sin(a), y: bH - rc + rc * Math.cos(a) });
+  }
+  const R = 4.6, T = 0.4;
+  for (let k = 1; k <= 8; k++) {
+    const a = (k / 8) * Math.PI * 0.62;
+    const y = -(1 - Math.cos(a)) * R * 0.9;
+    if (y > pts[pts.length - 1].y - 0.05) continue;
+    pts.push({ off: -Math.sin(a) * R * 0.42 - T, y });
+  }
+  const last = pts[pts.length - 1];
+  pts.push({ off: last.off + T + 0.9, y: last.y - 0.6 });
+  const strips: Strip[] = [];
+  for (let k = 1; k < pts.length; k++) strips.push({ from: pts[k - 1], to: pts[k], kind: WK.band, course: k });
+  return { strips, section: pts.map((p): V2 => [p.off, p.y]) };
 }

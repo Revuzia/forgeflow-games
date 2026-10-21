@@ -22,13 +22,14 @@ from kit import Part, merge
 from paint import Occluder, fbm3, hash01, hexc, posterize, ramp, smooth
 
 FLAG_CHAMFER, FLAG_GROOVE, FLAG_BREAK, FLAG_BAND = 1, 2, 4, 8
+SMOOTH_DEG = 40.0              # a hull lump's planes melt across turns gentler than this
 
 
 @dataclass
 class StoneSpec:
     seed: int
     size: tuple[float, float, float]              # x (long), y, z (height) of the uncut block (m)
-    shape: str = "block"                          # block | drum (an annular sector of the needle's shaft)
+    shape: str = "block"                          # block | drum (an annular sector of the needle's shaft) | hull (a lump)
     chips: int = 6                                # corner/edge chisel cuts
     broken: bool = True                           # a jagged broken face on the +x end
     bevel: float = 0.035
@@ -43,15 +44,21 @@ class StoneSpec:
     yaw: float = 0.0
     detail: float = 0.0                           # chisel micro-planes: how far a poked face centre moves (m)
     taper: float = 0.0                            # worn: the top drawn in by this fraction (a sunk, weathered piece)
+    seg: int = 1                                  # bevel segments (2: a rounded, weathered edge)
+    soft: float = 0.0                             # shading across the chamfers: 0 crisp facets, 1 the edge rolls from
+                                                  # one face's normal to the other's (a soft, hand-painted bevel)
+    dome: float = 0.0                             # the top face crowned this much (m): worn round, never a flat lid
 
 
 PALETTES = {
     # RIFT dial-stone: warm grey, lit faces land L* 40-55 on screen (below the pale roads), worn lit edges
-    "dial": dict(stops=[(0.0, "#272523"), (0.25, "#3E3A35"), (0.5, "#555049"), (0.75, "#6C665D"), (1.0, "#827B6E")],
-                 chalk="#948D7C", groove="#9C9583", broken="#776F62", moss="#38432F", moss_hi="#555D3D"),
+    "dial": dict(stops=[(0.0, "#262421"), (0.25, "#3B3732"), (0.5, "#514C44"), (0.75, "#6A645A"), (1.0, "#837B6D")],
+                 chalk="#B3AA94", groove="#B0A891", broken="#8A8173", moss="#3E4A32", moss_hi="#66703F", warm=0.07, keep=0.8),
     # BRIDGE needle stone: pale chalk-grey, cooler; fracture faces paler still (brief: L* 72 raw face)
-    "needle": dict(stops=[(0.0, "#24262A"), (0.25, "#3E4044"), (0.5, "#5F6163"), (0.75, "#83837F"), (1.0, "#A3A199")],
-                   chalk="#C4C0B2", groove="#3A3C40", broken="#A9A497", moss="#55663F", moss_hi="#7D8A52"),
+    # BRIDGE needle stone: pale chalk-grey and COOL against the warm deck (#A59B86) and terraces; fracture faces
+    # paler still (brief: L* 72 raw face); its carved groove and hour-band hold chalk inlay like the deck's script
+    "needle": dict(stops=[(0.0, "#2A2D33"), (0.25, "#474B52"), (0.5, "#6A6E72"), (0.75, "#90938F"), (1.0, "#B2B2AA")],
+                   chalk="#D3D0C2", groove="#CFC8B4", broken="#BDB7A8", moss="#55663F", moss_hi="#7D8A52", band=0.84),
     # FRAY basalt: the one dark stone, chalk lips
     "basalt": dict(stops=[(0.0, "#1A1B1F"), (0.25, "#2A2B30"), (0.5, "#3A3B40"), (0.75, "#4C4D52"), (1.0, "#5F5F62")],
                    chalk="#8E897C", groove="#A49E8E", broken="#3D3E42", moss="#3F4D35", moss_hi="#5E6B45"),
@@ -84,6 +91,29 @@ def _bm_block(sp: StoneSpec, rng) -> tuple[bmesh.types.BMesh, float]:
         for v in bm.verts:
             v.co.z -= zmin
         axis_z = -zmin
+    elif sp.shape == "hull":
+        # a weathered lump: points on a rounded box (superellipsoid), each pushed in or out a little, wrapped
+        # in their convex hull — big irregular planes, no box left in the silhouette
+        n = 26 if sx < 1.6 * max(sy, 1e-3) else 34
+        ga = math.pi * (3 - math.sqrt(5))
+        pts = []
+        for i in range(n):
+            z = 1 - 2 * (i + 0.5) / n
+            r = math.sqrt(max(0.0, 1 - z * z))
+            a = i * ga + rng.uniform(-0.3, 0.3)
+            d = np.array([r * math.cos(a), r * math.sin(a), z])
+            q = np.sign(d) * np.abs(d) ** (2.0 / 2.8)              # rounded box
+            q *= 1 + rng.uniform(-0.16, 0.06)
+            pts.append((q[0] * sx / 2, q[1] * sy / 2, (max(q[2], -0.55) * 0.5 / 1.0 + 0.5) * sz / 0.75))
+        vs = [bm.verts.new(p) for p in pts]
+        bmesh.ops.convex_hull(bm, input=vs)
+        loose = [v for v in bm.verts if not v.link_faces]
+        if loose:
+            bmesh.ops.delete(bm, geom=loose, context="VERTS")
+        zmin = min(v.co.z for v in bm.verts)
+        for v in bm.verts:
+            v.co.z -= zmin
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
     else:
         bmesh.ops.create_cube(bm, size=1.0)
         for v in bm.verts:
@@ -142,13 +172,14 @@ def stone_mesh(sp: StoneSpec) -> Part:
     # chamfer every hard edge
     hard = [e for e in bm.edges if len(e.link_faces) == 2 and e.calc_face_angle(0) > math.radians(28)]
     if sp.bevel > 0 and hard:
-        res = bmesh.ops.bevel(bm, geom=hard, offset=sp.bevel, offset_type="OFFSET", segments=1, profile=0.5,
+        res = bmesh.ops.bevel(bm, geom=hard, offset=sp.bevel, offset_type="OFFSET", segments=sp.seg,
+                              profile=0.5 if sp.seg == 1 else 0.62,
                               affect="EDGES", clamp_overlap=True)
         for f in res["faces"]:
             f[flag] = FLAG_CHAMFER
         bm.normal_update()
     # bands / grooves as loop cuts, then recess them (crisp: engraved after the chamfer)
-    if sp.groove > 0:
+    if sp.groove > 0 and sp.shape != "hull":
         top = max(v.co.z for v in bm.verts)
         for s in (-1, 1):
             _split(bm, Vector((0, s * sp.groove / 2, 0)), Vector((0, 1, 0)))
@@ -197,6 +228,15 @@ def stone_mesh(sp: StoneSpec) -> Part:
                 c = f.calc_center_median()
                 if abs(f.normal.y) > 0.7 and abs(abs(c.y - yc) - w / 2) < 1e-3 and rad(c) > 0.8 * r_out:
                     f[flag] = FLAG_BAND
+    # a worn crown: the top faces poked and their centres raised (the weather rounds a carved lid)
+    if sp.dome > 0:
+        tops = [f for f in bm.faces if not (f[flag] & (FLAG_CHAMFER | FLAG_GROOVE | FLAG_BAND)) and f.normal.z > 0.75
+                and f.calc_area() > (0.12 * span) ** 2]
+        if tops:
+            res = bmesh.ops.poke(bm, faces=tops)
+            for v in res["verts"]:
+                v.co.z += sp.dome * rng.uniform(0.7, 1.15)
+            bm.normal_update()
     # chisel texture: poke the big planes and nudge each new centre in or out, so every face breaks into a
     # few hand-cut micro-planes the painter can mottle (chamfers, grooves and bands stay crisp)
     if sp.detail > 0:
@@ -226,6 +266,37 @@ def stone_mesh(sp: StoneSpec) -> Part:
     for i, f in enumerate(bm.faces):
         f[fid] = i
     normals = {i: tuple(f.normal) for i, f in enumerate(bm.faces)}
+    # soft bevels: a chamfer corner takes the area-weighted normal of every face round its vertex, so the edge
+    # rolls from one plane's light to the other's (the big planes stay flat: chiselled, never blobby)
+    corner_n = {}
+    if sp.soft > 0 and sp.shape == "hull":
+        # a sculpted lump: each corner smooths over the faces round it that turn less than SMOOTH_DEG from its own
+        # face (the planes melt into each other; a sharp break or a carved groove stays a crisp line)
+        cmax = math.cos(math.radians(SMOOTH_DEG))
+        for f in bm.faces:
+            if f[flag] & (FLAG_GROOVE | FLAG_BAND):
+                continue
+            for v in f.verts:
+                acc = Vector((0.0, 0.0, 0.0))
+                for g in v.link_faces:
+                    if g[flag] & (FLAG_GROOVE | FLAG_BAND) or g.normal.dot(f.normal) < cmax:
+                        continue
+                    acc += g.normal * g.calc_area()
+                if acc.length > 1e-9:
+                    acc.normalize()
+                    corner_n[(f[fid], v.index)] = tuple((acc * sp.soft + f.normal * (1 - sp.soft)).normalized())
+    elif sp.soft > 0:
+        for f in bm.faces:
+            if not (f[flag] & FLAG_CHAMFER):
+                continue
+            for v in f.verts:
+                acc = Vector((0.0, 0.0, 0.0))
+                for g in v.link_faces:
+                    acc += g.normal * g.calc_area()
+                if acc.length > 1e-9:
+                    acc.normalize()
+                    n = (acc * sp.soft + f.normal * (1 - sp.soft)).normalized()
+                    corner_n[(f[fid], v.index)] = tuple(n)
     bmesh.ops.triangulate(bm, faces=bm.faces[:])
     keys, P, N, Fl, Fi, F = {}, [], [], [], [], []
     for f in bm.faces:
@@ -234,7 +305,7 @@ def stone_mesh(sp: StoneSpec) -> Part:
             k = (f[fid], v.index)
             if k not in keys:
                 keys[k] = len(P)
-                P.append(tuple(v.co)); N.append(normals[f[fid]]); Fl.append(f[flag]); Fi.append(f[fid])
+                P.append(tuple(v.co)); N.append(corner_n.get(k, normals[f[fid]])); Fl.append(f[flag]); Fi.append(f[fid])
             tri.append(keys[k])
         F.append(tri)
     bm.free()
@@ -292,6 +363,49 @@ def moss_cushion(rock: Part, occ_rock: Occluder, x: float, y: float, r: float, r
     return Part(P, F, None, ring=np.asarray(ring_id, float), kind=6)
 
 
+def inlay_strip(occ_rock: Occluder, sp: StoneSpec, top: float) -> Part | None:
+    """The hour-tick's carved line on a weathered lump: a thin chalk strip laid along the piece's long axis
+    (−0.30 … +0.22 of its length, like the dial's ticks), each point dropped onto the stone from above and
+    lifted 3 mm. Single-sided, facing up; kind 7 (painted as the groove's chalk inlay)."""
+    from mathutils import Vector as V
+    ax = np.array([math.cos(sp.yaw), math.sin(sp.yaw)])
+    sd = np.array([-ax[1], ax[0]])
+    o = np.array(sp.offset[:2])
+    xs = np.linspace(-0.30, 0.22, 9) * sp.size[0]
+    rows = []
+    for x in xs:
+        row = []
+        for s_ in (-1, 1):
+            q = o + ax * x + sd * s_ * sp.groove * 0.5
+            loc, nrm, *_ = occ_rock.bvh.ray_cast(V((q[0], q[1], top + 1.0)), V((0, 0, -1)), 10.0)
+            if loc is None or nrm.z < 0.7:
+                row = None
+                break
+            row.append((loc.x, loc.y, loc.z + 0.003))
+        rows.append(row)
+    # the longest run of rows that all landed on the stone's top
+    best, cur = [], []
+    for row in rows:
+        cur = cur + [row] if row is not None else []
+        if len(cur) > len(best):
+            best = cur
+    if len(best) < 3:
+        return None
+    P = np.array([p for row in best for p in row])
+    # a carved line is straight: lay it on the plane through its hits, never below the stone
+    A_ = np.column_stack([P[:, 0], P[:, 1], np.ones(len(P))])
+    coef, *_ = np.linalg.lstsq(A_, P[:, 2], rcond=None)
+    P[:, 2] = np.maximum(A_ @ coef + 0.003, P[:, 2])
+    F = []
+    for i in range(len(best) - 1):
+        a, b, c, d = 2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 3
+        F += [[a, c, b], [b, c, d]]
+    P = np.asarray(P); F = np.asarray(F)
+    fn = np.cross(P[F[:, 1]] - P[F[:, 0]], P[F[:, 2]] - P[F[:, 0]])
+    F[fn[:, 2] < 0] = F[fn[:, 2] < 0][:, [0, 2, 1]]
+    return Part(P, F, None, kind=7, flag=float(FLAG_GROOVE))
+
+
 def build_stone(sp: StoneSpec) -> Part:
     pieces = [stone_mesh(sp)] + [stone_mesh(e) for e in sp.extra]
     rock = merge(pieces)
@@ -302,6 +416,10 @@ def build_stone(sp: StoneSpec) -> Part:
         c = moss_cushion(rock, occ, x, y, r, rng)
         if c is not None:
             cushions.append(c)
+    if sp.shape == "hull" and sp.groove > 0:
+        strip = inlay_strip(occ, sp, float(rock.P[:, 2].max()))
+        if strip is not None:
+            cushions.append(strip)
     return merge([rock] + cushions)
 
 
@@ -323,8 +441,12 @@ def paint_stone(st: Part, palette: str, seed: int) -> np.ndarray:
     v *= 0.45 + 0.55 * ao
     v *= 0.62 + 0.38 * zr                                         # contact darkening at the foot
     v += 0.10 * (fbm3(P, 7.0 / span, 3, seed + 2) - 0.5)                 # weathering mottle
-    v = posterize(np.clip(v, 0, 1), 5, keep=0.65)
+    v = posterize(np.clip(v, 0, 1), 5, keep=pal.get("keep", 0.65))
     c = ramp(v, pal["stops"])
+    # lit planes lean warm, turned-away planes cool (rotation-invariant: up-facing only), like a painted stone
+    wk = pal.get("warm", 0.0)
+    if wk:
+        c = c * (1 + wk * (smooth(-0.3, 0.9, up) - 0.45)[:, None] * np.array([1.0, 0.35, -0.9]))
     lit = smooth(0.15, 0.6, sky) * smooth(0.3, 0.8, ao)
     brk = (flag & FLAG_BREAK) > 0
     c = np.where(brk[:, None], c * 0.55 + hexc(pal["broken"]) * 0.45 * (0.5 + 0.5 * lit[:, None]), c)
@@ -335,7 +457,7 @@ def paint_stone(st: Part, palette: str, seed: int) -> np.ndarray:
     gr = (flag & FLAG_GROOVE) > 0
     c = np.where(gr[:, None], hexc(pal["groove"]) * (0.7 + 0.3 * ao[:, None]), c)
     bd = (flag & FLAG_BAND) > 0
-    c = np.where(bd[:, None], c * 0.72, c)
+    c = np.where(bd[:, None], c * pal.get("band", 0.72), c)
     moss = kind == 6
     if moss.any():
         ring = A.get("ring", np.zeros(len(P)))
@@ -350,6 +472,6 @@ def paint_stone(st: Part, palette: str, seed: int) -> np.ndarray:
         c[moss] = mc[moss]
     # moss creeping into the stone's upward facets near cushions and in sheltered tops
     if palette == "dial":
-        creep = (kind == 5) * smooth(0.55, 0.9, up) * smooth(0.5, 0.68, fbm3(P, 3.2 / span, 3, seed + 5)) * (~ch) * (~gr)
-        c = c * (1 - 0.4 * creep[:, None]) + hexc(pal["moss"]) * (0.4 * creep[:, None])
+        creep = (kind == 5) * smooth(0.5, 0.9, up) * smooth(0.46, 0.64, fbm3(P, 3.2 / span, 3, seed + 5)) * (~ch) * (~gr)
+        c = c * (1 - 0.5 * creep[:, None]) + hexc(pal["moss"]) * (0.5 * creep[:, None])
     return np.clip(c, 0, 1)

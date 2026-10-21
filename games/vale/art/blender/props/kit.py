@@ -93,17 +93,20 @@ def scale4(s) -> np.ndarray:
 
 # ── the Dialwood leaf: a lacquered fan plate ─────────────────────────────────────────────────────
 def fan_leaf(L: float, spread: float, K: int = 6, pleat: float = 0.015, droop: float = 0.10, curl: float = 0.08,
-             round_: float = 0.42) -> Part:
+             round_: float = 0.42, notch: float = 0.0) -> Part:
     """A fan-shaped leaf plate, apex (the stem) at the origin, opening along +Y, top facing +Z: the apex and
     K+1 points on a rounded leading edge, K triangles. Single-sided: the crown's closed cores fill whatever
     the camera would see behind a plate turned away from it, so a plate costs K triangles, not 4·(K+2).
 
     `pleat` folds the fan along its ribs (alternate edge points up and down, per metre of length): hour-lines
-    radiating from the stem that catch the light; `droop` bends the tip down, `curl` the two corners.
+    radiating from the stem that catch the light; `droop` bends the tip down, `curl` the two corners;
+    `notch` (even K) draws the middle of the leading edge in by that fraction: the fan leaf's cleft.
     Attributes: u (0 stem → 1 edge), lobe (+1 rib, -1 valley, 0 stem), corner (1 on the two fan corners)."""
     a = np.linspace(-spread / 2, spread / 2, K + 1)
     w = np.abs(a) / (spread / 2)
     prof = 1.0 - round_ * w ** 2.4                   # a rounded shell-like blade: the corners drawn in toward the stem
+    if notch and K % 2 == 0:
+        prof[K // 2] *= 1.0 - notch
     x, y = L * prof * np.sin(a), L * prof * np.cos(a)
     lobe = np.where(np.arange(K + 1) % 2 == (K // 2) % 2, 1.0, -1.0)   # the middle point is a rib
     z = pleat * L * lobe - droop * L * (y / L) ** 2 - curl * L * (x / L) ** 2
@@ -114,6 +117,33 @@ def fan_leaf(L: float, spread: float, K: int = 6, pleat: float = 0.015, droop: f
     u = np.concatenate([[0.0], np.ones(K + 1)])
     corner = np.concatenate([[0.0], (np.arange(K + 1) == 0) | (np.arange(K + 1) == K)]).astype(float)
     return Part(P, F, None, u=u, lobe=np.concatenate([[0.0], lobe]), corner=corner)
+
+
+def fan_plate(L: float, spread: float, K: int = 6, crimp: float = 0.12, pleat: float = 0.02, droop: float = 0.08,
+              curl: float = 0.06, round_: float = 0.30) -> Part:
+    """The Dialwood fan leaf as a crimped, pleated plate: apex (the stem) at the origin, opening along +Y, top
+    facing +Z; the apex and K+1 points on the leading edge, K triangles (K even). The edge alternates RIB
+    (odd points: full length, raised by `pleat`) and VALLEY (even points, the two corners among them: drawn
+    in by `crimp`, lowered), so the outline is a lobed fan (three lobes at K = 6), never a polygon disc, and
+    every wedge runs from a rib to a valley: the painter strokes it light-to-dark like a brushed hour-line.
+    `droop` bends the tip down along the axis, `curl` the corners down, `round_` draws the corners in.
+    Attributes: u (0 stem → 1 edge), lobe (+1 rib, -1 valley, 0 stem), corner (1 on the two corners),
+    side (-1 … 1 across the fan)."""
+    a = np.linspace(-spread / 2, spread / 2, K + 1)
+    w = np.abs(a) / (spread / 2)
+    rib = (np.arange(K + 1) % 2 == 1)
+    lobe = np.where(rib, 1.0, -1.0)
+    prof = (1.0 - round_ * w ** 2.2) * np.where(rib, 1.0, 1.0 - crimp)
+    x, y = L * prof * np.sin(a), L * prof * np.cos(a)
+    z = pleat * L * lobe * (0.6 + 0.4 * (1 - w)) - droop * L * (y / L) ** 2 - curl * L * (x / L) ** 2
+    P = np.vstack([[0.0, 0.0, 0.0], np.column_stack([x, y, z])])
+    F = np.array([[0, i + 2, i + 1] for i in range(K)])
+    fn = face_normals(P, F)
+    F[fn[:, 2] < 0] = F[fn[:, 2] < 0][:, [0, 2, 1]]
+    u = np.concatenate([[0.0], np.ones(K + 1)])
+    corner = np.concatenate([[0.0], (np.arange(K + 1) == 0) | (np.arange(K + 1) == K)]).astype(float)
+    return Part(P, F, None, u=u, lobe=np.concatenate([[0.0], lobe]), corner=corner,
+                side=np.concatenate([[0.0], a / (spread / 2)]))
 
 
 # ── faceted tubes (trunk, limbs, roots) ──────────────────────────────────────────────────────────
@@ -199,14 +229,20 @@ def ellipsoid(center, radii, seg: int = 8, rings: int = 5) -> Part:
 
 
 # ── GLB ──────────────────────────────────────────────────────────────────────────────────────────
-def write_glb(path: str, P, N, C, F, name: str, roughness: float = 0.86) -> int:
+def write_glb(path: str, P, N, C, F, name: str, roughness: float = 0.86, gloss=None) -> int:
     """Write one vertex-coloured mesh as a binary glTF. P/N in Blender Z-up metres, C linear RGB 0..1.
-    COLOR_0 is RGBA unsigned-short normalised (precise darks), indices uint16/uint32. Returns bytes."""
+    COLOR_0 is RGBA unsigned-short normalised (precise darks), indices uint16/uint32. Returns bytes.
+
+    COLOR_0.a is the GLOSS mask (the scatter-prop interface shared with render/terrain.ts): 1 = lacquered
+    leaf (roughness ~0.42, a soft clearcoat-like spec), 0 = bark / stone (roughness 0.86); `gloss` (n,) in
+    0..1, None = all 0 (matte, the same as a GLB without vertex alpha)."""
     P = np.asarray(P, float); N = np.asarray(N, float); C = np.clip(np.asarray(C, float), 0, 1); F = np.asarray(F)
+    G = np.zeros(len(C)) if gloss is None else np.clip(np.asarray(gloss, float).reshape(-1), 0, 1)
+    assert len(G) == len(C), "gloss: one value per vertex"
     Py = np.column_stack([P[:, 0], P[:, 2], -P[:, 1]]).astype(np.float32)
     Ny = np.column_stack([N[:, 0], N[:, 2], -N[:, 1]])
     Ny = (Ny / np.maximum(np.linalg.norm(Ny, axis=1, keepdims=True), 1e-12)).astype(np.float32)
-    Cq = np.round(np.column_stack([C, np.ones(len(C))]) * 65535).astype(np.uint16)
+    Cq = np.round(np.column_stack([C, G]) * 65535).astype(np.uint16)
     big = len(P) > 65535
     Iq = F.astype(np.uint32 if big else np.uint16).ravel()
     chunks, views, off = [], [], 0

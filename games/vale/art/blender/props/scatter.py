@@ -2,7 +2,9 @@
 (src/render/terrain.ts instances them from each map's `art.terrain.props`: tree / rock / stone).
 
     Blender -b --factory-startup --python-exit-code 1 --python art/blender/props/scatter.py -- [--only a,b]
-        [--preview [--res 1920] [--samples 48]]          (VALE_CYCLES_DEVICE=CPU when the GPU is busy)
+        [--preview] [--trees] [--bridge] [--res 1920] [--samples 48]   (VALE_CYCLES_DEVICE=CPU when the GPU is busy)
+    --preview  the whole set on a floor (scatter.png) · --trees  the Dialwood look-dev sheet, paint over final
+    (scatter_trees.png) · --bridge  the needle set on BRIDGE's deck, terraces and a stub (scatter_bridge.png)
 
 Modules (this folder): kit.py (numpy mesh parts, fan leaves, tubes, GLB writer), paint.py (ray-cast
 occlusion and painterly ramps), dialwood.py (the trees), stones.py (chiselled stone pieces).
@@ -50,7 +52,7 @@ from common import scene  # noqa: E402
 import dialwood  # noqa: E402
 import kit  # noqa: E402
 import stones  # noqa: E402
-from paint import srgb2lin  # noqa: E402
+from paint import hexc, srgb2lin  # noqa: E402
 from stones import StoneSpec  # noqa: E402
 
 OUT = os.path.join(scene.OUT_DIR, "props")
@@ -63,43 +65,70 @@ STONES: dict[str, tuple[str, StoneSpec]] = {
     # RIFT rock role: fallen hour-tick stones at the cliff feet, on walkable floor, so ≤ 0.4 m in game (brief
     # §6, checklist §8): authored ≤ 0.33 m tall (terrain ×1.1·s vertically, s ≤ 1.1, sunk 4 cm). Low, broken,
     # half-sunk carved pieces that read as floor dressing, never as walls.
-    "boulder_block": ("rock", StoneSpec(seed=5, size=(0.92, 0.64, 0.30), chips=7, broken=True, bevel=0.05, taper=0.16,
-                                        moss=[(-0.16, 0.06, 0.22)], tilt=(0.04, -0.03), sink=0.05, palette="dial")),
-    "boulder_tick": ("rock", StoneSpec(seed=17, size=(1.18, 0.38, 0.27), chips=7, broken=True, bevel=0.045, groove=0.08, taper=0.2,
-                                       tilt=(0.0, 0.05), yaw=0.25, sink=0.06, palette="dial")),
-    "boulder_pair": ("rock", StoneSpec(seed=29, size=(0.70, 0.54, 0.27), chips=6, broken=True, bevel=0.045, taper=0.15,
-                                       moss=[(-0.04, 0.04, 0.13)], tilt=(-0.04, 0.05), offset=(-0.16, 0.10, 0.0), sink=0.05, palette="dial",
-                                       extra=[StoneSpec(seed=31, size=(0.38, 0.30, 0.20), chips=4, broken=True, bevel=0.035, taper=0.1,
-                                                        tilt=(0.18, 0.2), offset=(0.36, -0.30, 0.0), yaw=0.7, palette="dial")])),
+    "boulder_block": ("rock", StoneSpec(seed=5, size=(0.92, 0.70, 0.27), shape="hull", chips=3, broken=True, bevel=0.0,
+                                        soft=1.0, taper=0.12, moss=[(-0.12, 0.06, 0.24)], tilt=(0.05, -0.04), sink=0.05,
+                                        palette="dial")),
+    "boulder_tick": ("rock", StoneSpec(seed=17, size=(1.12, 0.42, 0.27), shape="hull", chips=3, broken=True, bevel=0.0, soft=1.0,
+                                       groove=0.075, taper=0.1, tilt=(0.0, 0.05), yaw=0.25, sink=0.05, palette="dial")),
+    "boulder_pair": ("rock", StoneSpec(seed=29, size=(0.74, 0.58, 0.26), shape="hull", chips=3, broken=True, bevel=0.0, soft=1.0,
+                                       taper=0.1, moss=[(-0.04, 0.04, 0.15)], tilt=(-0.05, 0.06), offset=(-0.16, 0.10, 0.0),
+                                       sink=0.05, palette="dial",
+                                       extra=[StoneSpec(seed=31, size=(0.42, 0.34, 0.20), shape="hull", chips=2, broken=True,
+                                                        bevel=0.0, soft=1.0, tilt=(0.18, 0.2), offset=(0.38, -0.30, 0.0),
+                                                        yaw=0.7, palette="dial")])),
     # RIFT stones (terrain scale 0.10–0.46): fallen hour-tick fragments
-    "stone_tick": ("stone", StoneSpec(seed=41, size=(0.84, 0.30, 0.24), chips=3, broken=True, bevel=0.03, groove=0.07, taper=0.1,
-                                      tilt=(0.06, 0.0), palette="dial")),
-    "stone_chip": ("stone", StoneSpec(seed=47, size=(0.62, 0.50, 0.34), chips=5, broken=True, bevel=0.035, taper=0.15,
-                                      tilt=(0.12, -0.08), palette="dial")),
+    "stone_tick": ("stone", StoneSpec(seed=41, size=(0.86, 0.34, 0.25), shape="hull", chips=2, broken=True, bevel=0.0, soft=1.0,
+                                      groove=0.07, taper=0.1, tilt=(0.06, 0.0), palette="dial")),
+    "stone_chip": ("stone", StoneSpec(seed=47, size=(0.64, 0.54, 0.32), shape="hull", chips=3, broken=True, bevel=0.0, soft=1.0,
+                                      taper=0.1, tilt=(0.12, -0.08), palette="dial")),
     # BRIDGE (brief §5: needle fragments ≤ 0.8 m on the stubs, broken edges and gorge lip, never on the deck):
     # built for that placement; the terrain places no rock on the span today, so the map does not list them
     "needle_drum": ("rock", StoneSpec(seed=53, size=(0.70, 0.42, 0.0), shape="drum", chips=3, broken=False, bevel=0.03,
                                       band=True, palette="needle")),
     "needle_slab": ("rock", StoneSpec(seed=59, size=(0.52, 0.30, 0.23), chips=4, broken=True, bevel=0.03, groove=0.05,
                                       tilt=(0.05, 0.10), palette="needle")),
+    # BRIDGE stones (terrain stone scale 0.10–0.42, so authored ≤ 0.85 m → ≤ 0.36 m): loose needle chips for the
+    # broken deck edges, the stubs and the gorge lip (brief §5: never on the open deck)
+    "needle_chip": ("stone", StoneSpec(seed=61, size=(0.66, 0.46, 0.30), chips=5, broken=True, bevel=0.03, taper=0.12,
+                                       tilt=(0.10, -0.06), palette="needle")),
+    "needle_shard": ("stone", StoneSpec(seed=67, size=(0.84, 0.24, 0.20), chips=4, broken=True, bevel=0.025, groove=0.05,
+                                        taper=0.08, tilt=(0.04, 0.12), yaw=0.2, palette="needle")),
 }
+BRIDGE_SET = ["needle_drum", "needle_slab", "needle_chip", "needle_shard"]
 
 
-def build(name: str) -> tuple[str, kit.Part, np.ndarray]:
+def build(name: str) -> tuple[str, kit.Part, np.ndarray, np.ndarray]:
+    """→ role, mesh, sRGB colours, GLOSS mask (COLOR_0.a: 1 lacquered leaf, 0 bark / stone)."""
     if name in dialwood.TREES:
         sp = dialwood.TREES[name]
         part = dialwood.build_tree(sp)
-        col = dialwood.paint_tree(part, sp.seed, sp.tint)
-        return "tree", part, col
+        col, gloss = dialwood.paint_tree(part, sp.seed, sp.tint)
+        return "tree", part, col, gloss
     role, sp = STONES[name]
     part = stones.build_stone(sp)
     col = stones.paint_stone(part, sp.palette, sp.seed)
-    return role, part, col
+    return role, part, col, np.zeros(len(part.P))             # stone and moss: matte
 
 
-def export(name: str, part: kit.Part, col: np.ndarray) -> int:
+def export(name: str, part: kit.Part, col: np.ndarray, gloss: np.ndarray) -> int:
     os.makedirs(OUT, exist_ok=True)
-    return kit.write_glb(os.path.join(OUT, f"{name}.glb"), part.P, part.N, srgb2lin(col), part.F, name)
+    return kit.write_glb(os.path.join(OUT, f"{name}.glb"), part.P, part.N, srgb2lin(col), part.F, name, gloss=gloss)
+
+
+def _front_side(nt):
+    """The game draws props FrontSide (single-sided plates): make back faces transparent in Cycles too, so the
+    previews never show a plate's unlit back that the game culls."""
+    out = nt.nodes["Material Output"]
+    link = out.inputs["Surface"].links[0]
+    src = link.from_socket
+    nt.links.remove(link)
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    tr = nt.nodes.new("ShaderNodeBsdfTransparent")
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(geo.outputs["Backfacing"], mix.inputs["Fac"])
+    nt.links.new(src, mix.inputs[1])
+    nt.links.new(tr.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], out.inputs["Surface"])
 
 
 # ── preview sheet: the game's camera pitch, RIFT's sun, a cliff-top floor ──────────────────────────
@@ -134,6 +163,7 @@ def preview(names: list[str], res: int = 1920, samples: int = 48):
     bsdf = nt.nodes["Principled BSDF"]
     attr = nt.nodes.new("ShaderNodeVertexColor")
     nt.links.new(attr.outputs["Color"], bsdf.inputs["Base Color"])
+    _front_side(nt)
     bsdf.inputs["Roughness"].default_value = 0.86
     floor_m = bpy.data.materials.new("floor")
     floor_m.use_nodes = True
@@ -178,6 +208,178 @@ def preview(names: list[str], res: int = 1920, samples: int = 48):
     bpy.ops.render.render(write_still=True)
 
 
+def preview_trees(res: int = 1920, samples: int = 48):
+    """Dialwood look-dev sheet: the five trees at their in-game size (×0.8) and the gameplay pitch (52°) under
+    RIFT's sun, two rows: the PAINT alone (vertex colour as emission) and the FINAL (lit, roughness from the
+    COLOR_0.a gloss mask: 1 → 0.42, 0 → 0.86) → scatter_trees.png."""
+    from mathutils import Vector
+    rows = []
+    for mode in ("paint", "final"):
+        scene.reset()
+        sc = bpy.context.scene
+        sc.render.engine = "CYCLES"
+        scene.cycles_device(sc)
+        sc.cycles.samples = samples
+        sc.cycles.use_denoising = True
+        sc.render.resolution_x, sc.render.resolution_y = res, res * 9 // 32
+        try:
+            sc.view_settings.view_transform = "Khronos PBR Neutral"
+        except TypeError:
+            sc.view_settings.view_transform = "Standard"
+        w = bpy.data.worlds.new("w")
+        sc.world = w
+        w.use_nodes = True
+        w.node_tree.nodes["Background"].inputs["Color"].default_value = (0.55, 0.62, 0.74, 1)
+        w.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.75
+        sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
+        sun.data.energy = 3.0
+        sun.data.color = (1.0, 0.92, 0.85)
+        sun.data.angle = math.radians(2.0)
+        sc.collection.objects.link(sun)
+        sun.rotation_euler = (-Vector((-0.3531, -0.5043, 0.788))).to_track_quat("-Z", "Y").to_euler()
+        fl = bpy.data.materials.new("floor")
+        fl.use_nodes = True
+        fl.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.05, 0.075, 0.035, 1)  # the moss block top
+        fl.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.9
+        bpy.ops.mesh.primitive_plane_add(size=80)
+        bpy.context.active_object.data.materials.append(fl)
+        m = bpy.data.materials.new(mode)
+        m.use_nodes = True
+        nt = m.node_tree
+        vc = nt.nodes.new("ShaderNodeVertexColor")
+        if mode == "paint":
+            em = nt.nodes.new("ShaderNodeEmission")
+            nt.links.new(vc.outputs["Color"], em.inputs["Color"])
+            nt.links.new(em.outputs[0], nt.nodes["Material Output"].inputs["Surface"])
+        else:
+            bsdf = nt.nodes["Principled BSDF"]
+            nt.links.new(vc.outputs["Color"], bsdf.inputs["Base Color"])
+            mr = nt.nodes.new("ShaderNodeMapRange")
+            mr.inputs["To Min"].default_value, mr.inputs["To Max"].default_value = 0.86, 0.42
+            nt.links.new(vc.outputs["Alpha"], mr.inputs["Value"])
+            nt.links.new(mr.outputs[0], bsdf.inputs["Roughness"])
+        _front_side(nt)
+        names = list(dialwood.TREES)
+        for i, n in enumerate(names):
+            bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, f"{n}.glb"))
+            for ob in bpy.context.selected_objects:
+                if ob.type != "MESH":
+                    continue
+                ca = ob.data.color_attributes
+                if len(ca):
+                    vc.layer_name = ca[0].name
+                ob.data.materials.clear()
+                ob.data.materials.append(m)
+                ob.location = ((i - (len(names) - 1) / 2) * 3.3, 0.0, 0.0)
+                ob.scale = (0.8, 0.8, 0.8)
+                ob.rotation_euler[2] = 0.6 + i * 1.3
+        cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
+        sc.collection.objects.link(cam)
+        cam.data.type = "ORTHO"
+        cam.data.ortho_scale = 17.0
+        pitch = math.radians(52)
+        tgt = Vector((0.0, 0.0, 1.5))
+        cam.location = tgt + Vector((0, -math.cos(pitch) * 40, math.sin(pitch) * 40))
+        cam.rotation_euler = (tgt - cam.location).to_track_quat("-Z", "Y").to_euler()
+        sc.camera = cam
+        path = os.path.join(scene.CACHE_DIR, "props", f"trees_{mode}.png")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        sc.render.filepath = path
+        bpy.ops.render.render(write_still=True)
+        rows.append(path)
+    imgs = [bpy.data.images.load(p) for p in rows]
+    W, H = imgs[0].size
+    out = bpy.data.images.new("trees_sheet", W, H * len(imgs))
+    px = np.zeros((H * len(imgs), W, 4), dtype=np.float32)
+    for k, im in enumerate(imgs):                                  # Blender images are bottom-up: paint on top
+        px[(len(imgs) - 1 - k) * H:(len(imgs) - k) * H] = np.asarray(im.pixels[:], dtype=np.float32).reshape(H, W, 4)
+    out.pixels = px.ravel()
+    out.filepath_raw = os.path.join(RENDERS, "scatter_trees.png")
+    out.file_format = "PNG"
+    out.save()
+
+
+def preview_bridge(res: int = 1920, samples: int = 48):
+    """BRIDGE read check: the needle set at its in-game sizes on the deck (lane #A59B86), the Aubade and
+    Serenade terraces, a stub top and the gorge lip, under Needlespan's sun (46°, #FFC890)."""
+    from mathutils import Vector
+    scene.reset()
+    sc = bpy.context.scene
+    sc.render.engine = "CYCLES"
+    scene.cycles_device(sc)
+    sc.cycles.samples = samples
+    sc.cycles.use_denoising = True
+    sc.render.resolution_x, sc.render.resolution_y = res, res * 9 // 16
+    try:
+        sc.view_settings.view_transform = "Khronos PBR Neutral"
+    except TypeError:
+        sc.view_settings.view_transform = "Standard"
+    w = bpy.data.worlds.new("w")
+    sc.world = w
+    w.use_nodes = True
+    w.node_tree.nodes["Background"].inputs["Color"].default_value = (0.45, 0.5, 0.68, 1)
+    w.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.7
+    sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
+    sun.data.energy = 2.9
+    sun.data.color = (1.0, 0.784, 0.565)
+    sun.data.angle = math.radians(2.0)
+    sc.collection.objects.link(sun)
+    sun_dir = Vector((-0.2376, -0.6528, 0.7193))                  # BRIDGE sunDir (three) → Blender (x, -z, y)
+    sun.rotation_euler = (-sun_dir).to_track_quat("-Z", "Y").to_euler()
+    vmat = bpy.data.materials.new("prev_vcol")
+    vmat.use_nodes = True
+    vnt = vmat.node_tree
+    vattr = vnt.nodes.new("ShaderNodeVertexColor")
+    vnt.links.new(vattr.outputs["Color"], vnt.nodes["Principled BSDF"].inputs["Base Color"])
+    _front_side(vnt)
+    vnt.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.86
+
+    def slab(name, hexcol, loc, size):
+        m = bpy.data.materials.new(name)
+        m.use_nodes = True
+        m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*srgb2lin(hexc(hexcol)), 1)
+        m.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.8
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc)
+        ob = bpy.context.active_object
+        ob.scale = size
+        ob.data.materials.append(m)
+    # four floors left → right: Aubade terrace, the deck, a stub top (raised 1.4 m), Serenade terrace
+    slab("aubade", "#A3A7A8", (-6.0, 0.0, -0.5), (4.0, 8.0, 1.0))
+    slab("deck", "#A59B86", (-2.0, 0.0, -0.5), (4.0, 8.0, 1.0))
+    slab("stub", "#8E8979", (2.0, 0.0, 0.7), (4.0, 8.0, 1.4))
+    slab("serenade", "#A8916E", (6.0, 0.0, -0.5), (4.0, 8.0, 1.0))
+    sizes = {"rock": [1.375, 0.85], "stone": [0.42 * 1.1, 0.25]}
+    k = 0
+    for fx, z in [(-6.0, 0.0), (-2.0, 0.0), (2.0, 1.4), (6.0, 0.0)]:
+        for j, n in enumerate(BRIDGE_SET):
+            role = STONES[n][0]
+            for si, s in enumerate(sizes[role]):
+                bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, f"{n}.glb"))
+                for ob in bpy.context.selected_objects:
+                    if ob.type != "MESH":
+                        continue
+                    ca = ob.data.color_attributes
+                    if len(ca):
+                        vattr.layer_name = ca[0].name
+                    ob.data.materials.clear()
+                    ob.data.materials.append(vmat)
+                    ob.location = (fx - 1.1 + si * 1.3, -2.6 + j * 1.6, z)
+                    ob.scale = (s, s, s * (0.88 if role == "rock" else 0.82))
+                    ob.rotation_euler[2] = 0.4 + 1.7 * k
+                    k += 1
+    cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
+    sc.collection.objects.link(cam)
+    cam.data.type = "ORTHO"
+    cam.data.ortho_scale = 16.4
+    pitch = math.radians(52)
+    tgt = Vector((0.0, 0.2, 0.4))
+    cam.location = tgt + Vector((0, -math.cos(pitch) * 40, math.sin(pitch) * 40))
+    cam.rotation_euler = (tgt - cam.location).to_track_quat("-Z", "Y").to_euler()
+    sc.camera = cam
+    sc.render.filepath = os.path.join(RENDERS, "scatter_bridge.png")
+    bpy.ops.render.render(write_still=True)
+
+
 def main():
     import argparse
     p = argparse.ArgumentParser()
@@ -185,6 +387,8 @@ def main():
     p.add_argument("--preview", action="store_true")
     p.add_argument("--res", type=int, default=1920)
     p.add_argument("--samples", type=int, default=48)
+    p.add_argument("--bridge", action="store_true", help="also render the BRIDGE read check (scatter_bridge.png)")
+    p.add_argument("--trees", action="store_true", help="also render the Dialwood look-dev sheet (scatter_trees.png)")
     a = p.parse_args(scene.script_args())
     scene.reset()
     names = [n for n in list(dialwood.TREES) + list(STONES) if not a.only or n in a.only.split(",")]
@@ -193,11 +397,12 @@ def main():
     if os.path.exists(rp):
         report = {k: v for k, v in json.load(open(rp)).items() if k in dialwood.TREES or k in STONES}
     for n in names:
-        role, part, col = build(n)
-        size = export(n, part, col)
+        role, part, col, gloss = build(n)
+        size = export(n, part, col, gloss)
         ext = np.ptp(part.P, axis=0)
         report[n] = dict(role=role, tris=int(part.tris), verts=int(len(part.P)), kb=round(size / 1024, 1),
-                         size_m=[round(float(x), 2) for x in ext], budget=BUDGET[role])
+                         size_m=[round(float(x), 2) for x in ext], budget=BUDGET[role],
+                         gloss=dict(mean=round(float(gloss.mean()), 3), glossy_verts=int((gloss > 0.5).sum())))
         flag = "" if part.tris <= BUDGET[role] else "  OVER BUDGET"
         if role == "rock" and STONES[n][1].palette == "dial" and part.P[:, 2].max() > ROCK_MAX_H:
             flag += f"  TOO TALL (> {ROCK_MAX_H} m authored)"
@@ -208,6 +413,10 @@ def main():
         json.dump(report, fh, indent=1, sort_keys=True)
     if a.preview:
         preview(list(report) if not a.only else names, a.res, a.samples)
+    if a.trees:
+        preview_trees(a.res, a.samples)
+    if a.bridge:
+        preview_bridge(a.res, a.samples)
 
 
 if __name__ == "__main__":
