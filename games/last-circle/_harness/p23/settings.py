@@ -1,0 +1,243 @@
+#!/usr/bin/env python
+"""settings - P2-G settings / map / onboarding (lane hud) + C-GFX graphics tiers incl. ULTRA (lane boot). Plan P2-G gates: "every tab except Controls
+fits at 1280x720; rebinding Drop to G works and Q does nothing; at 130% HUD scale every panel stays inside its anchor corner; each hint fires exactly
+once" + section 5 "3 colour-blind modes", "local minimap at 3 m/px or finer" + the owner's LOW / MEDIUM / HIGH / ULTRA.
+
+    python _harness/p23/settings.py --disk
+    python _harness/p23/settings.py --rev 9aa2b746                 # control: the P2 base (3 tiers, one settings page, whole-map minimap) - MUST FAIL
+    python _harness/p23/settings.py --disk --plant ultra-noop      # W.setGfx('tier', 'ultra') applies HIGH - MUST FAIL (ultra row)
+    python _harness/p23/settings.py --disk --plant scale-center    # HUD scale grows every anchor from its centre - MUST FAIL (anchor row)
+    python _harness/p23/settings.py --lanes hud,boot               # validation: those lanes' work served over the base
+
+One Chrome at 1280x720 (fresh profile = a first run on this box's default GPU, the UHD iGPU; ?hints=1). Rows:
+  contract       W.setGfx, W.gfxTier, the settings modal with tab buttons
+  auto-tier      the first-run pick on the iGPU is never ULTRA (owner: auto-tier never picks ultra unless the GPU is clearly fast)
+  tabs           GAME / VIDEO / AUDIO / CONTROLS / ACCESSIBILITY; every tab but CONTROLS: every visible control inside 1280x720 and the card
+  presets        VIDEO shows LOW / MEDIUM / HIGH / ULTRA; REAL clicks: W.gfxTier follows; pixel ratio and shadow map size never fall going
+                 low -> medium -> high -> ultra and ULTRA is strictly above HIGH in at least one (DPR up to 2 / shadow / draw distance)
+  ultra-persists ULTRA chosen, the page reloaded: still ULTRA (a player's choice is never auto-overridden)
+  rebind         CONTROLS: the Drop row rebound to G by a REAL click + key; in a practice match Q drops nothing, G drops the held gun
+  colour-blind   ACCESSIBILITY lists 3 colour-vision modes; each changes the rendered frame (mean |diff| >= 1/255 vs off), off restores it
+  hud-scale      130 %: every anchored HUD panel keeps its anchor corner (+-2 px) and stays inside the viewport
+  minimap        the local minimap draws <= 3 m per CSS px (hud readback) and is local (not the whole map)
+  hints          a standard match with ?hints=1: no hint id shown twice; a second match shows none of the first match's ids again
+  errors
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import p23lib as L  # noqa: E402
+C = L.C
+
+PLANTS = {
+    "ultra-noop": "const sg = W.setGfx; W.setGfx = function (k, v) { if (k === 'tier' && v === 'ultra') v = 'high'; return sg.call(this, k, v); }",
+    "scale-center": "const st = document.createElement('style'); st.textContent = '[data-lc] { transform-origin: 50% 50% !important; }'; document.head.appendChild(st)",
+}
+HUDMOD_JS = r"""async () => { if (window.__HUDMOD__) return true; const sc = [...document.scripts].find((x) => /ffg_boot3d\.js/.test(x.src)); if (!sc) return false;
+  window.__HUDMOD__ = await import(new URL('royale/hud.js' + new URL(sc.src).search, sc.src).href); return true; }"""
+BTN_JS = r"""(re) => { const b = [...document.querySelectorAll('button, .lc-tab, .lc-sopt, [role=button]')].find((x) => x.offsetParent && new RegExp(re, 'i').test((x.textContent || '').trim()));
+  if (!b) return null; b.scrollIntoView({ block: 'nearest' }); const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"""
+FIT_JS = r"""() => { const tabs = document.querySelector('[data-lc="settabs"]'); const box = tabs ? tabs.parentElement : null; if (!box) return null; const B = box.getBoundingClientRect();
+  const out = []; for (const e of box.querySelectorAll('button, input, select, .lc-sopt, [role=slider]')) { if (!e.offsetParent) continue; const r = e.getBoundingClientRect(); if (r.width === 0) continue;
+    if (r.left < -0.5 || r.top < -0.5 || r.right > innerWidth + 0.5 || r.bottom > innerHeight + 0.5 || r.left < B.left - 0.5 || r.right > B.right + 0.5 || r.top < B.top - 0.5 || r.bottom > B.bottom + 0.5)
+      out.push((e.textContent || e.value || e.tagName).trim().slice(0, 24)); }
+  return { out, box: [B.left, B.top, B.right, B.bottom].map(Math.round) }; }"""
+GFX_JS = r"""() => { const W = window.__LC__.W, k = W.kernel, r = k.renderer; const sun = k.sun || (W.scene && W.scene.children.find((c) => c.isDirectionalLight));
+  return { tier: W.gfxTier || (W.settings && W.settings.graphics), pr: r.getPixelRatio(), shadow: sun && sun.shadow ? sun.shadow.mapSize.x : 0, shadowOn: !!r.shadowMap.enabled,
+           far: W.camera ? W.camera.far : null, gfx: W._gfx ? JSON.parse(JSON.stringify(W._gfx, (kk, vv) => typeof vv === 'object' && vv && kk !== '' && Object.keys(vv).length > 20 ? undefined : vv)) : null }; }"""
+MEAN_JS = r"""() => { const W = window.__LC__.W, k = W.kernel; window.__LC__.stepFrames(2, 1 / 60, true); const gl = k.renderer.getContext(); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+  const px = new Uint8Array(4 * 64 * 64); const out = []; for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { gl.readPixels(Math.floor((i + 0.5) * w / 8) - 4, Math.floor((j + 0.5) * h / 8) - 4, 8, 8, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    let r = 0, g = 0, b = 0; for (let q = 0; q < 64; q++) { r += px[4 * q]; g += px[4 * q + 1]; b += px[4 * q + 2]; } out.push(r / 64, g / 64, b / 64); }
+  return out; }"""
+ANCH_JS = r"""() => { const out = {}; for (const k of ['minimap', 'compass', 'stormrow', 'meta', 'bars', 'slotcol', 'feed', 'chat']) { const e = document.querySelector('[data-lc="' + k + '"]'); if (!e || !e.offsetParent) continue;
+  const r = e.getBoundingClientRect(); out[k] = [r.left, r.top, r.right, r.bottom].map((x) => +x.toFixed(1)); } return { W: innerWidth, H: innerHeight, a: out }; }"""
+
+
+def click(s, re_):
+    xy = s.js(BTN_JS, re_)
+    if xy:
+        s.page.mouse.click(xy[0], xy[1])
+        s.sleep(0.35)
+    return bool(xy)
+
+
+def open_settings(s):
+    for re_ in (r"^\W*SETTINGS$", r"SETTINGS"):
+        if click(s, re_):
+            if s.wait_js("() => !!document.querySelector('[data-lc=\"settabs\"]') || /SETTINGS/.test(document.body.innerText)", 4, 0.2):
+                return True
+    return False
+
+
+def close_settings(s):
+    if not click(s, r"^(DONE|CLOSE|BACK|SAVE)$"):
+        s.page.keyboard.press("Escape")
+    s.sleep(0.4)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    L.add_args(ap, plants=PLANTS)
+    args = L.parse(ap)
+    shots = os.path.join(C.REPORTS, "p23_shots")
+    os.makedirs(shots, exist_ok=True)
+
+    def body(v):
+        with C.Session(args, "p23_settings", viewport={"width": 1280, "height": 720}) as s:
+            url = args.base + ("&" if "?" in args.base else "?") + "hints=1"
+            s.boot(url=url)
+            s.sleep(2.0)
+            L.dismiss_cards(s)
+            have = L.contract(s, {"W.setGfx": "typeof W.setGfx === 'function'", "W.gfxTier": "['low', 'medium', 'high', 'ultra'].includes(W.gfxTier)"})
+            if args.plant:
+                L.plant_js(s, PLANTS[args.plant])
+            s.wait_js("() => { const W = window.__LC__.W; return W._autoTier || W.gfxTier ? true : null; }", 20, 0.5)
+            s.sleep(6.0)                     # the first-run auto-tier measures the menu before it decides
+            first = s.js(GFX_JS)
+            v.data["firstRun"] = first
+            v.check("auto-tier (the first-run pick on this box's default GPU is never ULTRA)", first["tier"] in ("low", "medium", "high"), {"tier": first["tier"], "autoTier": s.safe_js("() => window.__LC__.W._autoTier || null")}, "low / medium / high")
+            ok_open = open_settings(s)
+            tabs = s.js("() => [...document.querySelectorAll('.lc-tab')].filter((x) => x.offsetParent).map((x) => x.textContent.trim().toUpperCase())")
+            have["settings tabs"] = bool(tabs)
+            L.contract_row(v, "contract (W.setGfx, W.gfxTier, the settings modal with tabs)", have)
+            v.check("tabs (GAME / VIDEO / AUDIO / CONTROLS / ACCESSIBILITY)", ok_open and tabs == ["GAME", "VIDEO", "AUDIO", "CONTROLS", "ACCESSIBILITY"], {"opened": ok_open, "tabs": tabs}, "5 tabs")
+            fit = {}
+            for t in ("GAME", "VIDEO", "AUDIO", "ACCESSIBILITY"):
+                click(s, "^%s$" % t)
+                fit[t] = s.js(FIT_JS)
+                s.screenshot(os.path.join(shots, "settings_%s.png" % t.lower()))
+            v.check("tabs-fit (every tab but CONTROLS: every control inside 1280x720 and the card)", all(f is not None and not f["out"] for f in fit.values()) and len(fit) == 4,
+                    {k: (f or {}).get("out") for k, f in fit.items()}, "0 outside")
+            # presets
+            click(s, "^VIDEO$")
+            names = s.js("() => [...document.querySelectorAll('.lc-sopt, button')].filter((x) => x.offsetParent).map((x) => x.textContent.trim().toUpperCase()).filter((t) => ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'].includes(t))")
+            seq = {}
+            for t in ("LOW", "MEDIUM", "HIGH", "ULTRA"):
+                if click(s, "^%s$" % t):
+                    s.sleep(0.6)
+                    seq[t] = s.js(GFX_JS)
+            v.data["tiers"] = seq
+            order = [seq.get(t) for t in ("LOW", "MEDIUM", "HIGH", "ULTRA")]
+            mono = all(order) and all(b["pr"] >= a["pr"] - 1e-6 and b["shadow"] >= a["shadow"] for a, b in zip(order, order[1:]))
+            above = all(order) and (order[3]["pr"] > order[2]["pr"] + 1e-6 or order[3]["shadow"] > order[2]["shadow"] or (order[3]["far"] or 0) > (order[2]["far"] or 0))
+            v.check("presets (LOW / MEDIUM / HIGH / ULTRA by real clicks; W.gfxTier follows; quality never falls going up; ULTRA above HIGH)",
+                    sorted(set(names)) == ["HIGH", "LOW", "MEDIUM", "ULTRA"] and all(seq.get(t, {}).get("tier") == t.lower() for t in ("LOW", "MEDIUM", "HIGH", "ULTRA")) and mono and above,
+                    {"buttons": sorted(set(names)), "tiers": {t: {k: x[k] for k in ("tier", "pr", "shadow", "far")} for t, x in seq.items()}}, "follows, monotonic, ultra > high")
+            close_settings(s)
+            s.page.reload()
+            s.boot(url=url)
+            s.sleep(3.0)
+            if args.plant:
+                L.plant_js(s, PLANTS[args.plant])
+            after = s.js(GFX_JS)
+            v.check("ultra-persists (ULTRA chosen, page reloaded: still ULTRA)", after["tier"] == "ultra", {"tier": after["tier"], "pr": after["pr"]}, "ultra")
+            s.js("() => window.__LC__.W.setGfx('tier', 'medium')")
+            # rebind Drop -> G in CONTROLS
+            L.dismiss_cards(s)
+            open_settings(s)
+            click(s, "^CONTROLS$")
+            row = s.js("""() => { const g = document.querySelector('[data-lc="keybinds"]'); if (!g) return null; const rows = [...g.querySelectorAll('*')].filter((e) => e.children.length === 0 && /^Drop\\b/i.test((e.textContent || '').trim()));
+                if (!rows.length) return null; const lab = rows[0]; let host = lab.parentElement; let btn = null; for (let i = 0; i < 3 && host && !btn; i++) { btn = [...host.querySelectorAll('button, .lc-key, .lc-sopt')].find((b) => b !== lab); host = host.parentElement; }
+                if (!btn) return null; btn.scrollIntoView({ block: 'center' }); const r = btn.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, was: btn.textContent.trim() }; }""")
+            bound = None
+            if row:
+                s.page.mouse.click(row["x"], row["y"])
+                s.sleep(0.3)
+                s.page.keyboard.press("g")
+                s.sleep(0.4)
+                bound = s.js("([x, y]) => { const e = document.elementFromPoint(x, y); return e ? e.textContent.trim() : null; }", [row["x"], row["y"]])
+            close_settings(s)
+            drop = {"row": row, "boundTo": bound}
+            if row:
+                L.practice(s, 4242, "ashgrid")
+                L.lock_pointer(s)
+                s.js("() => { const p = window.__LC__.W.player; p.inventory.slots[1] = { kind: 'weapon', id: 'ar', rarity: 0, mag: 30 }; }")
+                s.press("Digit2")
+                s.step_frames(30, 1 / 60)
+                cnt = "() => { const p = window.__LC__.W.player; return p.inventory.slots.filter((x) => x && x.kind === 'weapon').length; }"
+                n0 = s.js(cnt)
+                s.press("KeyQ")
+                s.step_frames(20, 1 / 60)
+                nq = s.js(cnt)
+                s.press("KeyG")
+                s.step_frames(20, 1 / 60)
+                ng = s.js(cnt)
+                drop.update({"weapons": [n0, nq, ng]})
+            v.check("rebind (Drop -> G by a real click + key: Q drops nothing, G drops the held gun)", bool(row) and (bound or "").upper() == "G" and drop.get("weapons") and drop["weapons"][1] == drop["weapons"][0] and drop["weapons"][2] == drop["weapons"][0] - 1,
+                    drop, "Q: same, G: -1")
+            # colour-blind: the three modes change the frame, off restores it
+            s.step_frames(10, 1 / 60, render=True)
+            modes = s.safe_js("() => { const o = [...document.querySelectorAll('[data-lc=\"cvd\"] button, [data-lc=\"cvd\"] .lc-sopt')].map((b) => b.textContent.trim()); return o; }", default=None)
+            base = s.js(MEAN_JS)
+            diffs = {}
+            for m in ("protanopia", "deuteranopia", "tritanopia"):
+                try:
+                    s.js("(m) => window.__LC__.W.setGfx('daltonize', m)", m)
+                    x = s.js(MEAN_JS)
+                    diffs[m] = round(sum(abs(a - b) for a, b in zip(x, base)) / len(base), 3)
+                except Exception as e:
+                    diffs[m] = "error: " + str(e).splitlines()[0][:80]
+            s.js("() => window.__LC__.W.setGfx('daltonize', 'off')")
+            back = s.js(MEAN_JS)
+            rest = round(sum(abs(a - b) for a, b in zip(back, base)) / len(base), 3)
+            v.check("colour-blind (3 modes each change the frame >= 1/255; off restores it)", all(isinstance(d, float) and d >= 1.0 for d in diffs.values()) and rest < 0.5,
+                    {"modesInUi": modes, "meanAbsDiff": diffs, "offRestore": rest}, ">= 1.0 each, < 0.5 back")
+            # HUD scale 130 %: the anchor corner stays
+            s.step_frames(5, 1 / 60, render=True)
+            a1 = s.js(ANCH_JS)
+            s.js("() => { const W = window.__LC__.W; W.settings.hudScale = 1.3; }")
+            s.js(HUDMOD_JS)
+            s.safe_js("() => { const H = window.__HUDMOD__; if (H && H.applyA11y) H.applyA11y(window.__LC__.W); }")
+            s.step_frames(5, 1 / 60, render=True)
+            s.sleep(0.3)
+            a2 = s.js(ANCH_JS)
+            s.screenshot(os.path.join(shots, "settings_hud130.png"))
+            bad = {}
+            Wv, Hv = a2["W"], a2["H"]
+            for k, r1 in a1["a"].items():
+                r2 = a2["a"].get(k)
+                if not r2:
+                    continue
+                cx, cy = (r1[0] + r1[2]) / 2, (r1[1] + r1[3]) / 2
+                left, top = cx < Wv / 2, cy < Hv / 2
+                cornerX = abs(r2[0] - r1[0]) if left else abs(r2[2] - r1[2])
+                cornerY = abs(r2[1] - r1[1]) if top else abs(r2[3] - r1[3])
+                grew = (r2[2] - r2[0]) > (r1[2] - r1[0]) * 1.15
+                inside = r2[0] >= -1 and r2[1] >= -1 and r2[2] <= Wv + 1 and r2[3] <= Hv + 1
+                centred = abs(cx - Wv / 2) < 40          # a centred panel (compass, storm row) keeps its centre instead
+                if centred:
+                    cornerX = abs((r2[0] + r2[2]) / 2 - cx)
+                if not (grew and inside and cornerX <= 2 and cornerY <= 2):
+                    bad[k] = {"100": r1, "130": r2, "grew": grew, "inside": inside, "dx": round(cornerX, 1), "dy": round(cornerY, 1)}
+            v.check("hud-scale (130 %: every anchored panel grows from its anchor corner, +-2 px, inside the viewport)", bool(a1["a"]) and not bad,
+                    {"panels": len(a1["a"]), "bad": bad}, "0 bad")
+            s.js("() => { window.__LC__.W.settings.hudScale = 1; }")
+            s.safe_js("() => { const H = window.__HUDMOD__; if (H && H.applyA11y) H.applyA11y(window.__LC__.W); }")
+            rb = s.safe_js("() => { const H = window.__HUDMOD__; return H && H.readback ? H.readback(window.__LC__.W) : null; }", default=None) or {}
+            mm = rb.get("minimap")
+            v.check("minimap (local, <= 3 m per CSS px)", bool(mm) and mm["mpp"] <= 3.0 and mm["local"], {"minimap": mm}, "<= 3 m/px, local")
+            # hints: a standard match, then a second one
+            s.thaw_loop()
+            shown = []
+            for seed in (7, 8):
+                L.start(s, "standard", seed, "ashgrid", guard=True)
+                s.land(140, protect=True)
+                s.js("() => { const C = window.__LC__; for (let i = 0; i < 60; i++) C.fastForward(1, 1 / 30); }")
+                rb = s.safe_js("() => { const H = window.__HUDMOD__; return H && H.readback ? H.readback(window.__LC__.W) : null; }", default=None) or {}
+                shown.append(list(((rb.get("hints") or {}).get("shown")) or []))
+            new = shown[1][len(shown[0]):] if shown[1][:len(shown[0])] == shown[0] else shown[1]      # the log may run across matches
+            dup = [x for x in shown[0] if shown[0].count(x) > 1] + [x for x in new if new.count(x) > 1]
+            again = [x for x in new if x in shown[0]]
+            v.check("hints (no hint id twice in a match; none of match 1's again in match 2)", bool(shown[0]) and not dup and not again,
+                    {"match1": shown[0], "match2": shown[1]}, "each once")
+            L.errors_row(v, s)
+    return C.run_gate("p23_settings", body, args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

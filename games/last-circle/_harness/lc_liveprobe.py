@@ -137,9 +137,15 @@ INSTRUMENT_JS = r"""() => {
   const r = k.renderer, info = r.info;
   const S = k.__lm = { on: false, f: [], snaps: [], cur: null };
   info.autoReset = false;
+  // P2-F (2026-10-20): the kernel resets renderer.info ONCE at the top of every frame (ffg_kernel_3d.js _frame, autoReset off) BEFORE
+  // _stepTweens runs, so finish() below used to read the counters of an already-reset frame: calls_med / tris 0 in every perfcheck since
+  // the counter fix. Snapshot the totals at each reset (tagged with the kernel frame number) and read the snapshot when it belongs to this frame.
+  const ir = info.reset.bind(info);
+  info.reset = function () { S.lc = info.render.calls; S.lt = info.render.triangles; S.lf = k.frameNo; return ir(); };
   info.reset();
   const finish = () => {
     const c = S.cur; if (!c) return;
+    const kreset = S.lf === k.frameNo && info.render.calls === 0;     // the kernel reset this frame already: the previous frame's totals are the snapshot
     S.cur = null;
     if (!S.on) return;
     const W = window.__LC__.W;
@@ -149,7 +155,7 @@ INSTRUMENT_JS = r"""() => {
     tgt.push([
       c.t1 != null ? +(c.t1 - c.t0).toFixed(3) : null,        // 0 update ms (tweens + mixers + updaters)
       c.t2 != null ? +(c.t2 - c.t1).toFixed(3) : null,        // 1 render submission ms (composer.render)
-      info.render.calls, c.scene, c.shadow, info.render.triangles,   // 2..5
+      kreset ? S.lc : info.render.calls, c.scene, c.shadow, kreset ? S.lt : info.render.triangles,   // 2..5
       c.shadowTris,                                            // 6 shadow-pass triangles
       info.programs ? info.programs.length : -1,               // 7 programs alive at frame end
       info.memory.textures, info.memory.geometries,            // 8, 9

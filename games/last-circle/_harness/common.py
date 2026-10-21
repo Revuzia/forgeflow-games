@@ -86,6 +86,10 @@ FLAGS = [
 ]
 GPU_PROFILES = {
     "d3d11": [],
+    # P2-F (parity P2+P3): the iGPU profile = a player's FIRST RUN. Chrome's own adapter choice with vsync on and no GPU forcing (the audits measured
+    # "ANGLE (Intel UHD Graphics 0x9A60 D3D11)" for every powerPreference without --force_high_performance_gpu), so the UHD iGPU on this box; the
+    # gate's fresh browser profile makes the first-run auto-tier decide. Same flags as d3d11 today, named for what it means (p23/tierprof, perfcheck_igpu)
+    "default": [],
     # live-measure: on this box the ONLY config in which rAF runs (vsync'd presentation goes through the
     # Intel iGPU that dwm + the DisplayLink host hold at ~95%)
     "dgpu": ["--force_high_performance_gpu", "--disable-gpu-vsync", "--disable-frame-rate-limit"],
@@ -425,6 +429,7 @@ def run_gate(gate, main_fn, args):
     else:
         v.data["servedFrom"] = "working copy via page routing" if getattr(args, "disk", False) else args.base
     print("%s: serving %s" % (gate, v.data["servedFrom"]), flush=True)
+    stamp_validation(v, args)
     n, err = automated_chromes()
     v.data["otherAutomatedChromes"] = n if err is None else ("unknown: " + err)
     print("%s: other automated Chromes on the box: %s" % (gate, v.data["otherAutomatedChromes"]), flush=True)
@@ -470,7 +475,59 @@ def add_common_args(ap: argparse.ArgumentParser):
     ap.add_argument("--boot-timeout", type=float, default=300.0, help="seconds to wait for __LC__ (the box is shared)")
     ap.add_argument("--load-timeout", type=float, default=1500.0,
                     help="seconds to wait for a match load (measured 106-600+ s with 9-12 other Chromes on this box)")
+    # P2-F (parity waves P2+P3): validate a gate against another lane's work or a stub BEFORE integration. Neither is ever used by gate.py's
+    # integration run (that judges the working copy as it is); a report records both, so a stubbed / overlaid run can never pass for a plain one.
+    ap.add_argument("--overlay", action="append", default=[], metavar="DIR[=rel,rel]",
+                    help="serve files of another games/last-circle directory (READ-ONLY, e.g. another lane's worktree) over the served build: "
+                         "DIR alone = every file DIR has; DIR=runtime/3d/royale/player.js,runtime/sim/royale.js = only those (repeatable; later wins)")
+    ap.add_argument("--inject", action="append", default=[], metavar="JS_FILE",
+                    help="add a JS file as an init script of every document (a contract STUB for a gate's own validation; repeatable)")
     return ap
+
+
+def overlay_specs(args):
+    """--overlay DIR[=rel,...] -> [(realdir, set(rels) | None)]. DIR may be a worktree root (it holds games/last-circle) or the game dir itself."""
+    out = []
+    for spec in (getattr(args, "overlay", None) or []):
+        d, _, rels = spec.partition("=")
+        d = os.path.realpath(d)
+        if os.path.isdir(os.path.join(d, "games", "last-circle")):
+            d = os.path.join(d, "games", "last-circle")
+        if not os.path.isfile(os.path.join(d, "index.html")):
+            raise HarnessError("--overlay %s: not a games/last-circle directory" % spec)
+        if rels.strip() == "@changed":
+            out.append((d, changed_files(d)))
+            continue
+        out.append((d, set(r.strip().replace("\\", "/") for r in rels.split(",") if r.strip()) or None))
+    return out
+
+
+def changed_files(game_dir):
+    """--overlay DIR=@changed: the files of DIR (a games/last-circle dir inside a git worktree) that differ from its HEAD (modified or untracked),
+    relative to the game dir. Lets one run serve several lanes' work at once (each worktree holds the WHOLE game: a plain DIR would serve its
+    unchanged copies over the other lanes' changes)."""
+    r = subprocess.run(["git", "-C", game_dir, "status", "--porcelain", "--untracked-files=all", "--", "."], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    top = subprocess.run(["git", "-C", game_dir, "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    rels = set()
+    for ln in r.stdout.splitlines():
+        if len(ln) < 4 or ln[0] == "D" or ln[1] == "D":
+            continue
+        p = ln[3:].strip().strip('"')
+        if " -> " in p:
+            p = p.split(" -> ", 1)[1]
+        full = os.path.realpath(os.path.join(top, p))
+        rel = os.path.relpath(full, os.path.realpath(game_dir)).replace("\\", "/")
+        if not rel.startswith("..") and "/_harness/" not in "/" + rel and not rel.startswith("_"):
+            rels.add(rel)
+    return rels
+
+
+def stamp_validation(v, args):
+    """record --overlay / --inject in the report and as an INFO row (a stubbed run is a validation of the gate, not of the game)."""
+    ov, inj = list(getattr(args, "overlay", None) or []), list(getattr(args, "inject", None) or [])
+    if ov or inj:
+        v.data["validation"] = {"overlay": ov, "inject": inj}
+        v.info("VALIDATION RUN (not a game verdict)", {"overlay": ov, "inject": inj})
 
 
 # ─────────────────────────────── disk server (page routing) ───────────────────────────────
@@ -545,13 +602,27 @@ def git_blobs(rev):
 class DiskServer:
     """context.route handler serving the game dir for a set of origins (read-only; working copy or a git revision)."""
 
-    def __init__(self, origins, rev=None, game_path=None):
+    def __init__(self, origins, rev=None, game_path=None, overlays=None):
         self.origins = [o.rstrip("/") for o in origins]
         self.game_path = game_path or GAME_PATH       # the URL path the game dir is served under (the live CDN: /last-circle/)
         self.served = 0
         self.missing = []
         self.overrides = []          # (predicate(url) -> bool, handler(route) -> None) checked first
         self.git = git_blobs(rev) if rev else None
+        self.overlays = list(overlays or [])          # [(dir, rels | None)] from --overlay: checked after overrides, before the build
+        self.overlaid = {}                            # rel -> dir actually served from an overlay (reported)
+
+    def _overlay_file(self, rel):
+        if not rel or ".." in rel.split("/"):
+            return None
+        for d, rels in reversed(self.overlays):
+            if rels is not None and rel not in rels:
+                continue
+            f = os.path.join(d, rel.replace("/", os.sep))
+            if os.path.isfile(f):
+                self.overlaid[rel] = d
+                return f
+        return None
 
     def matches(self, url):
         return any(url.startswith(o + "/") or url == o for o in self.origins)
@@ -565,6 +636,16 @@ class DiskServer:
             except Exception:
                 pass
         u = urllib.parse.urlparse(url)
+        if self.overlays and u.path.startswith(self.game_path):
+            rel0 = urllib.parse.unquote(u.path[len(self.game_path):]) or "index.html"
+            of = self._overlay_file(rel0)
+            if of is not None:
+                with open(of, "rb") as f:
+                    body = f.read()
+                ext = os.path.splitext(of)[1].lower()
+                self.served += 1
+                return route.fulfill(status=200, body=body, headers={"Content-Type": CTYPES.get(ext) or mimetypes.guess_type(of)[0] or "application/octet-stream",
+                                                                     "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
         if self.git is not None:
             rel = urllib.parse.unquote(u.path[len(self.game_path):]) if u.path.startswith(self.game_path) else None
             if rel is not None and (rel == "" or rel.endswith("/")):
@@ -657,8 +738,14 @@ class Session:
         self.context.add_init_script(INIT_JS)
         for s in self.init_scripts:
             self.context.add_init_script(s)
+        for f in (getattr(self.args, "inject", None) or []):
+            with open(f, encoding="utf-8") as fh:
+                self.context.add_init_script(fh.read())
+        ovl = overlay_specs(self.args)
+        if ovl and not disk:
+            raise HarnessError("--overlay needs --disk or --rev (it rides on the page-routing server)")
         if disk:
-            self.disk = DiskServer([self.origin()] + list(self.extra_origins), getattr(self.args, "rev", None))
+            self.disk = DiskServer([self.origin()] + list(self.extra_origins), getattr(self.args, "rev", None), overlays=ovl)
             self.context.route(lambda url: self.disk.matches(url), self.disk.handle)
         self.page = self.context.new_page()
         self.page.set_default_timeout(120_000)
