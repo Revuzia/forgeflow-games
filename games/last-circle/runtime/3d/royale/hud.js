@@ -4115,7 +4115,7 @@ function stepPings(W, p, hdg) {
   if (PINGS.list.length) {
     const keep = [];
     for (const q of PINGS.list) {
-      if (q.kind !== "pin" && W.t - q.born > PING_LIFE_S) continue;
+      if (W.t - q.born > PING_LIFE_S) continue;          // every kind, map pins included (PLAN LC-07: 30 s, or on arrival)
       if (q.kind !== "enemy" && W.t - q.born > 1) {
         const ow = W.actorById && W.actorById.get(q.owner);
         if (ow && ow.alive && Math.hypot(ow.pos.x - q.x, ow.pos.z - q.z) <= PING_ARRIVE_M) continue;
@@ -4600,8 +4600,36 @@ function showAnnouncement(text, sub, color, ms, p, now) {
   }, dur);
 }
 
+/** The big map gave the mouse back on open (pin clicks); CLOSING it (M, Esc, a click beside the map, the Pause button) takes it back, so
+ *  mouse-look works again at once, as it did before the map released the lock. The release was our own exitPointerLock(), so the browser lets
+ *  the page re-lock from this gesture (a key press included); when it refuses anyway (lock denied, focus elsewhere) "CLICK TO LOOK AROUND"
+ *  shows at once and the next click re-grabs without firing (releaseCursor's _suppressNextShot stays armed). A successful re-lock disarms
+ *  that flag, or the player's first real shot after the map would be swallowed. Mouse only: touch has no pointer lock. */
+function regrabCursor(W) {
+  if (touchOn || !W || !W.player || !W.player.alive || W.paused || (W.phase !== "match" && W.phase !== "drop")) return;
+  if (R.pause || R.settings || R.post || R.death || R.howto || R.career) return;
+  const dom = W.kernel && W.kernel.renderer && W.kernel.renderer.domElement;
+  if (!dom || !dom.requestPointerLock || document.pointerLockElement === dom) return;
+  let done = false;
+  const fin = (ok) => {
+    if (done) return;
+    done = true;
+    document.removeEventListener("pointerlockchange", onChange);
+    document.removeEventListener("pointerlockerror", onErr);
+    if (ok) W._suppressNextShot = false;
+    else if (R.lookHint && W.player && W.player.alive) R.lookHint.style.display = "block";
+    W._mapRegrab = ok ? "locked" : "hint";        // test surface (read-only by probes)
+  };
+  const onChange = () => { if (document.pointerLockElement === dom) fin(true); };
+  const onErr = () => fin(false);
+  document.addEventListener("pointerlockchange", onChange);
+  document.addEventListener("pointerlockerror", onErr);
+  W._mapRegrab = "asked";
+  try { const pr = dom.requestPointerLock(); if (pr && pr.catch) pr.catch(onErr); } catch (e) { onErr(); }
+}
+
 function toggleBigMap(W) {
-  if (R.bigmap) { R.bigmap.remove(); R.bigmap = null; return; }
+  if (R.bigmap) { R.bigmap.remove(); R.bigmap = null; regrabCursor(W); return; }
   const L = layer("bigmap", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center" });
   const size = Math.min(window.innerHeight - (touchOn ? 116 : 100), 640);
   const cv = h("canvas", { borderRadius: "14px", border: "2px solid rgba(120,180,255,0.35)", width: size + "px", height: size + "px" }, null, L);
@@ -4637,6 +4665,7 @@ function toggleBigMap(W) {
   // LC-07 MAP PIN (mouse only; touch keeps "tap anywhere to close"). With the pointer locked every click went to the game canvas behind the
   // map, so the mouse is released while the map is up (releaseCursor also stops the click that re-grabs it from firing a shot). A click ON
   // the map drops this player's pin there and the map stays open; a right-click on it clears the pin; a click beside the map closes it.
+  // However the map closes (M, Esc, that click), regrabCursor takes the mouse back so mouse-look is live again without an extra click.
   if (!touchOn) {
     releaseCursor(W);
     cv.style.cursor = "crosshair";

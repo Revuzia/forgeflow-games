@@ -296,6 +296,34 @@ function suiteP1D(M, SIM, count) {
     const cl = M.normPing({ k: "clr", src: "m" });
     row(cl && cl.k === "clr" && cl.src === "m", "LC-07: a clear names which ping it clears (world / map pin)", cl);
   }
+  // ── LC-07 ping outbox: world pings and map pins are limited separately; a pin over the rate is held (newest wins), never dropped ─────
+  {
+    const go = { k: "go", src: "w", x: 1, y: 0, z: 1 }, pA = { k: "pin", src: "m", x: -320, y: 0, z: -320 }, pB = { k: "pin", src: "m", x: 320, y: 0, z: 320 };
+    const O1 = new M.PingOutbox();
+    const w0 = O1.offer("me:w", go, 0, false), m0 = O1.offer("me:m", pA, 100, true);
+    row(w0.now === go && m0.now === pA, "LC-07: a map pin right after a world ping goes out at once (separate 1/s per stream)", { w0, m0 });
+    const O2 = new M.PingOutbox();
+    const a = O2.offer("me:m", pA, 0, true), b = O2.offer("me:m", pB, 350, true);
+    const early = O2.due(999), late = O2.due(1000), again = O2.due(1500);
+    row(a.now === pA && b.now === null && b.wait === 650 && early.length === 0 && late.length === 1 && late[0][1] === pB && again.length === 0 && O2.pending === 0,
+      "LC-07: a pin moved twice within 1 s: the second is held and sent the moment the limit frees (650 ms later), once", { a, b, early, late, again });
+    const O3 = new M.PingOutbox();
+    let sent = [];
+    for (let t = 0; t <= 3000; t += 200) { const r = O3.offer("me:m", { k: "pin", src: "m", x: t / 10, y: 0, z: 0 }, t, true); if (r.now) sent.push(r.now.x); for (const [, bd] of O3.due(t + 1)) sent.push(bd.x); }
+    for (let t = 3001; t <= 5000; t += 16) for (const [, bd] of O3.due(t)) sent.push(bd.x);
+    row(sent[sent.length - 1] === 300 && sent.length <= 5 && O3.pending === 0, "LC-07: a pin dragged around for 3 s: at most 1/s on the wire and the LAST pin always arrives", sent);
+    const O4 = new M.PingOutbox();
+    O4.offer("me:m", pA, 0, true); O4.offer("me:m", pB, 300, true);
+    const c = O4.offer("me:m", { k: "clr", src: "m" }, 400, true), d4 = O4.due(2000);
+    row(c.now && c.now.k === "clr" && d4.length === 0, "LC-07: a clear goes out at once and cancels a held pin (the cleared pin never comes back)", { c, d4 });
+    const O5 = new M.PingOutbox();
+    O5.offer("me:w", go, 0, false);
+    const w5 = O5.offer("me:w", go, 500, false);
+    row(w5.now === null && w5.wait === null && O5.pending === 0 && O5.due(2000).length === 0, "LC-07: a world ping over the rate is dropped, not held (one world ping per second, as before)", w5);
+    const O6 = new M.PingOutbox(850);
+    const r1 = O6.offer("s1:m", pA, 0, true), r2 = O6.offer("s2:m", pB, 10, true), r3 = O6.offer("s1:w", go, 20, false);
+    row(r1.now && r2.now && r3.now, "LC-07: the receive gate is per sender AND per stream", { r1, r2, r3 });
+  }
   return bad;
 }
 
@@ -407,6 +435,9 @@ function suiteP1D(M, SIM, count) {
     ["a ping limiter that always allows", { PingLimiter: class { allow() { return true; } } }],
     ["a team filter that ignores teams", { pingTeamOk: () => true }],
     ["a ping parser that keeps any kind", { normPing: (d) => (d && typeof d === "object" ? Object.assign({ k: d.k }, d) : null) }],
+    ["one ping limit shared by world pings and map pins (the wrong-pin bug)", { PingOutbox: class extends M.PingOutbox { offer(st, b, n, c) { return super.offer(st.split(":")[0], b, n, c); } due(n) { return super.due(n); } } }],
+    ["a pin over the rate that is dropped instead of held (the wrong-pin bug)", { PingOutbox: class extends M.PingOutbox { offer(st, b, n) { return super.offer(st, b, n, false); } } }],
+    ["a held pin that never goes out", { PingOutbox: class extends M.PingOutbox { due() { return []; } } }],
   ];
   for (const [name, over] of p1dMutants) {
     const bad = suiteP1D(Object.assign({}, M, over), SIM, false);
@@ -419,9 +450,18 @@ function suiteP1D(M, SIM, count) {
     ok(/NEVER-SEEN watchdog/.test(src) && /S\.everSeen/.test(src) && /hostTakeOver\(W, id\)/.test(src), "LC-11: the host watchdog also covers guests that never sent a state packet");
     ok(/senderMay\(t, d, from, \{ roster: S\.cfg && S\.cfg\.roster/.test(src), "LC-11: onMsg runs senderMay against the match roster before any in-match handler");
     ok(/S\.hs\.onPresence\(ids\)/.test(src) && /planStart\(S\.peers, MAX_GUESTS, performance\.now\(\)\)/.test(src), "LC-11: presence feeds the handshake and START plans with it");
-    ok(/pingTeamOk\(W\.player\.teamId, a\.teamId\)/.test(src) && /new PingLimiter\(PING_MIN_MS - 150\)/.test(src) && /S\.pingOut\.allow\("me"/.test(src) &&
+    ok(/pingTeamOk\(W\.player\.teamId, a\.teamId\)/.test(src) && /new PingOutbox\(PING_MIN_MS - 150\)/.test(src) && /box\.offer\("me:" \+ body\.src, body, performance\.now\(\), body\.src === "m"\)/.test(src) &&
       /if \(sendBudgetLeft\(\) > 2\) send\("ping", msg\); else qsend\("ping", msg\);/.test(src),
       "LC-07: the ping is team-filtered, rate-limited on both ends, and on the wire at once while the budget allows (else it rides the state packet)");
+    ok(/box\.offer\(d\.id \+ ":" \+ p\.src, p, performance\.now\(\), p\.src === "m"\)/.test(src) && /if \(S\.pingOut && S\.pingOut\.pending\) flushPingOut\(W, S\.pingOut\)/.test(src) &&
+      /if \(S\.pingIn && S\.pingIn\.pending\) flushPingIn\(W, S\.pingIn\)/.test(src) && /S\.pingOut !== box/.test(src),
+      "LC-07: held pins are flushed by a timer AND update(), on both ends, and never into the next match (the box pins the session)");
+    {
+      const hud = fs.readFileSync(path.join(__dirname, "hud.js"), "utf8");
+      ok(!/q\.kind !== "pin" && W\.t - q\.born > PING_LIFE_S/.test(hud) && /if \(W\.t - q\.born > PING_LIFE_S\) continue;/.test(hud), "LC-07: map pins time out at 30 s like every ping (hud.js stepPings)");
+      ok(/R\.bigmap\.remove\(\); R\.bigmap = null; regrabCursor\(W\); return;/.test(hud) && /if \(ok\) W\._suppressNextShot = false;/.test(hud),
+        "closing the big map re-acquires pointer lock (and a successful re-lock does not eat the next shot)");
+    }
     ok(/\(a\.sprinting \? 128 : 0\)/.test(src) && /a\.sprinting = !!\(f & 128\)/.test(src), "LC-09: the sprint bit rides the state packet and is applied to remote actors");
     ok(/qsend\("heal"/.test(src) && /qsend\("rld"/.test(src) && /W\.events\.emit\("healStart", a, d\.c/.test(src) && /W\.events\.emit\("reloadStart", a, \{ id: d\.w \}\)/.test(src), "LC-09: heal / reload foley is relayed and replayed as the local events");
     ok(/qsend\("boom"/.test(src) && /\{ net: true \}\)/.test(src) && /meta && meta\.net/.test(src), "LC-14: remote blasts are relayed once and the replay is never relayed again");

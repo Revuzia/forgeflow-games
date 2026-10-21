@@ -335,6 +335,31 @@ export class PingLimiter {
     return true;
   }
 }
+/** The ping gate, one per STREAM: a sender's world ping ("<id>:w") and map pin ("<id>:m") each get their own 1/s, so a pin is never refused
+ *  because a world ping just went out (or the other way round). A stream with `coalesce` (map pins) never DROPS the newest body when it is
+ *  over the rate: it is held (newest replaces older) and handed out by due() the moment the limit frees, so a player who moves a pin twice in
+ *  one second ends with the LAST pin on every peer. A clear ("clr") always passes at once and cancels anything held on its stream.
+ *  offer() -> { now: body | null, wait: ms | null }  (now = send / show it now; wait = a held body is due in that many ms). */
+export class PingOutbox {
+  constructor(minMs) { this.lim = new PingLimiter(minMs); this.held = new Map(); }
+  offer(stream, body, nowMs, coalesce) {
+    if (!body) return { now: null, wait: null };
+    if (body.k === "clr") { this.held.delete(stream); return { now: body, wait: null }; }
+    if (this.lim.allow(stream, nowMs)) { this.held.delete(stream); return { now: body, wait: null }; }
+    if (!coalesce) return { now: null, wait: null };
+    this.held.set(stream, body);
+    return { now: null, wait: this.waitMs(stream, nowMs) };
+  }
+  waitMs(stream, nowMs) { const t = this.lim.last.get(stream); return t == null ? 0 : Math.max(0, this.lim.minMs - (nowMs - t)); }
+  /** Every held body whose limit has freed by `nowMs` (booked as sent), as [stream, body] pairs. */
+  due(nowMs) {
+    const out = [];
+    for (const [stream, body] of this.held) if (this.lim.allow(stream, nowMs)) out.push([stream, body]);
+    for (const [stream] of out) this.held.delete(stream);
+    return out;
+  }
+  get pending() { return this.held.size; }
+}
 /** Pings go to the SENDER'S team only: a receiver shows one only when both actors carry the same non-empty teamId. */
 export function pingTeamOk(myTeam, senderTeam) {
   return myTeam != null && myTeam !== "" && myTeam === senderTeam;
@@ -440,20 +465,20 @@ export function init(W) {
     }
     if (near) qsend("boom", { x: +(+pos.x).toFixed(2), y: +(+pos.y).toFixed(2), z: +(+pos.z).toFixed(2), r: +(+r || 3.5).toFixed(2) });
   });
-  // PING (parity LC-07): hud.js builds the ping and calls this; one per second (PingLimiter), sent at once (or, over budget, riding the state
-  // envelope like chat). Returns true
-  // when it went out. Receivers show it only for their own team (onMsg "ping"). (Sent directly while the budget allows - see below.)
+  // PING (parity LC-07): hud.js builds the ping and calls this; one per second PER STREAM (PingOutbox: world pings and map pins are limited
+  // separately), sent at once (or, over budget, riding the state envelope like chat). A map pin over the rate is HELD and sent the moment
+  // the limit frees (newest wins) - dropping it left the squad on the player's previous pin while their own map showed the new one.
+  // Returns true when it went out or is held to go out. Receivers show it only for their own team (onMsg "ping").
   W.sendPing = (p) => {
     if (!S || !S.started || !W.player || !p) return false;
     const body = normPing(p, W.map && W.map.size ? W.map.size / 2 + 50 : 2000);
     if (!body) return false;
-    S.pingOut = S.pingOut || new PingLimiter();
-    if (body.k !== "clr" && !S.pingOut.allow("me", performance.now())) return false;
-    // ON THE WIRE AT ONCE when the outbound budget has room (a ping is <= 1 message a second per human), else it boards the next state packet
-    // like chat (free). Riding the envelope only made its latency the host's FRAME cadence: measured 921 ms on a starved box against the
-    // 500 ms bar, where a direct send is one relay hop.
-    const msg = Object.assign({ id: W.player.id }, body);
-    if (sendBudgetLeft() > 2) send("ping", msg); else qsend("ping", msg);
+    const box = S.pingOut = S.pingOut || new PingOutbox();
+    const r = box.offer("me:" + body.src, body, performance.now(), body.src === "m");
+    if (r.now) { pingWire(W, r.now); return true; }
+    if (r.wait == null) return false;
+    S.pingHeld = (S.pingHeld || 0) + 1;
+    setTimeout(() => flushPingOut(W, box, true), r.wait + 5);          // update() flushes too (a throttled timer cannot strand the pin)
     return true;
   };
   // squad chat: rate-limited, rides the ev envelope (one billed message = the
@@ -513,6 +538,29 @@ function send(t, d) {
   if (sendBudgetLeft() <= 0 && !CRITICAL_MSG[t]) { S.droppedMsgs = (S.droppedMsgs || 0) + 1; return; }
   S.sendWinN = (S.sendWinN || 0) + 1;
   S.net.send(t, d);
+}
+
+/** LC-07: one ping on the wire. ON THE WIRE AT ONCE when the outbound budget has room (a ping is <= 2 messages a second per human: one world
+ *  ping + one pin), else it boards the next state packet like chat (free). Riding the envelope only made its latency the host's FRAME
+ *  cadence: measured 921 ms on a starved box against the 500 ms bar, where a direct send is one relay hop. */
+function pingWire(W, body) {
+  if (!S || !W.player) return;
+  const msg = Object.assign({ id: W.player.id }, body);
+  if (sendBudgetLeft() > 2) send("ping", msg); else qsend("ping", msg);
+}
+/** LC-07: send the held map pin once its limit frees (timer + update()). `box` pins the session: a rematch / leave replaced S.pingOut, so a
+ *  pin held in the last match never lands in the next one. */
+function flushPingOut(W, box, timer) {
+  if (!S || !S.started || !box || S.pingOut !== box || !box.pending) return;
+  for (const [, body] of box.due(performance.now())) { pingWire(W, body); S.pingHeldSent = (S.pingHeldSent || 0) + 1; }
+  if (timer && box.pending) setTimeout(() => flushPingOut(W, box, true), box.waitMs("me:m", performance.now()) + 5);   // timer early: re-arm
+}
+/** LC-07, receiving side: a squad-mate's map pin that came in faster than the receive limit is shown when that limit frees (newest wins),
+ *  never dropped - the sender coalesces too, but relay jitter can bunch two of its 1/s sends closer than the receive limit. */
+function flushPingIn(W, box, timer) {
+  if (!S || !S.started || !box || S.pingIn !== box || !box.pending) return;
+  for (const [stream, body] of box.due(performance.now())) W.events.emit("netPing", Object.assign({ owner: stream.slice(0, stream.lastIndexOf(":")) }, body));
+  if (timer && box.pending) setTimeout(() => flushPingIn(W, box, true), 60);
 }
 
 /** Queue a COSMETIC event instead of sending it now. Five separate relays
@@ -1265,9 +1313,13 @@ function onMsg(W, { from, t, d }) {
     if (!pingTeamOk(W.player.teamId, a.teamId)) { reject(t, from, "ping from another team"); return; }
     const p = normPing(d, W.map && W.map.size ? W.map.size / 2 + 50 : 2000);
     if (!p) { reject(t, from, "malformed ping"); return; }
-    S.pingIn = S.pingIn || new PingLimiter(PING_MIN_MS - 150);     // a little slack for jitter on the sender's 1/s
-    if (p.k !== "clr" && !S.pingIn.allow(d.id, performance.now())) { reject(t, from, "ping rate"); return; }
-    W.events.emit("netPing", Object.assign({ owner: d.id }, p));
+    // Per sender AND per stream (world ping / map pin), like the sender's own gate; a map pin over the rate is held and shown when the
+    // limit frees (newest wins), a world ping over the rate is dropped.
+    const box = S.pingIn = S.pingIn || new PingOutbox(PING_MIN_MS - 150);     // a little slack for jitter on the sender's 1/s
+    const r = box.offer(d.id + ":" + p.src, p, performance.now(), p.src === "m");
+    if (r.now) { W.events.emit("netPing", Object.assign({ owner: d.id }, r.now)); return; }
+    if (r.wait != null) { setTimeout(() => flushPingIn(W, box, true), r.wait + 5); return; }
+    reject(t, from, "ping rate");
     return;
   }
   if (t === "drop") { W.netSpawnItem && W.netSpawnItem(d); return; }
@@ -1505,6 +1557,8 @@ export function update(W, dt) {
   if (S.pendingRematch && tryFollowRematch(W)) return;      // LC-18: the host started the next match and ours is over
   if (S.mapFallback && !S.fallbackDone) { leaveForFallback(W, detectMapFallback(W, S.gv, S.mapFallback)); return; }   // (onMatchStart normally got there first)
   if (S.pendingTakeovers || S.hostGone) drainPending(W);
+  if (S.pingOut && S.pingOut.pending) flushPingOut(W, S.pingOut);   // LC-07: a held map pin goes out as soon as its 1/s frees
+  if (S.pingIn && S.pingIn.pending) flushPingIn(W, S.pingIn);
   const now = performance.now();
   // OWN STATE, rate scaled by room size. Every send is billed once per receiving
   // subscriber, so H humans at 12 Hz cost 12·H·H messages/s: 48 for a pair but
