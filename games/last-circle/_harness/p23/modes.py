@@ -38,9 +38,11 @@ TEAMS_JS = r"""() => { const W = window.__LC__.W, p = W.player; const by = new M
            mine: mine.map((a) => ({ id: a.id, bot: !!a.isBot, human: a === p })) }; }"""
 # every actor's first touchdown, recorded per frame through the drop (fastForward slices)
 DROP_JS = r"""() => { const C = window.__LC__, W = C.W; const land = new Map(); let n = 0;
-  while (n < 3000 && W.actors.some((a) => a.alive && !land.has(a.id) && (a.gliding || !a.onGround || W.phase === 'drop'))) {
+  W.events.on('landed', (a) => { if (a && !land.has(a.id)) land.set(a.id, [a.pos.x, a.pos.z]); });     // the glide touchdown itself (player.js emits it)
+  // the FIRST frame each actor stands on the ground (W.phase stays 'drop' ~15 s after touchdown: the touchdown itself is what LC-18 places)
+  while (n < 3000 && W.actors.some((a) => a.alive && !land.has(a.id))) {
     C.fastForward(1 / 15, 1 / 30); n++; const p = W.player; if (p && p.alive) { p.hp = Math.max(p.hp, 100); p.shield = Math.max(p.shield || 0, 100); }
-    for (const a of W.actors) if (a.alive && !land.has(a.id) && a.onGround && !a.gliding && W.phase !== 'drop') land.set(a.id, [a.pos.x, a.pos.z]); }
+  }
   const by = new Map(); for (const a of W.actors) { if (!land.has(a.id) || a.teamId == null) continue; if (!by.has(a.teamId)) by.set(a.teamId, []); by.get(a.teamId).push(land.get(a.id)); }
   let teams = 0, together = 0; const worst = [];
   for (const [t, l] of by) { if (l.length < 2) continue; teams++; let m = 0; for (const a of l) for (const b of l) m = Math.max(m, Math.hypot(a[0] - b[0], a[1] - b[1]));

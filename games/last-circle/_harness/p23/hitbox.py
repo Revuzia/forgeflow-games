@@ -38,7 +38,8 @@ SETUP_JS = r"""([dist]) => { const C = window.__LC__, W = C.W, K = W.SIM, T = W.
   K.WEAPONS.pistol.spreadDeg = 1e-5;
   const Q = window.__P23H__ = { d, shots: [] };
   // the ROUND itself (the projectile record weapons.js launches: ownerId, origin, velocity), not the cosmetic dash (no ownerId)
-  W.events.on('tracer', (q) => { if (q && q.ownerId === p.id && Q.on && q.vx != null) { const o = q.origin || q; Q.cur = [o.x, o.y, o.z, q.vx, q.vy, q.vz]; } });
+  // (q.x, q.y, q.z) is where the round STARTS (eye + 0.6 m along its direction, 5 cm low); q.origin is the eye, off that line: read the start
+  W.events.on('tracer', (q) => { if (q && q.ownerId === p.id && Q.on && q.vx != null) Q.cur = [q.x, q.y, q.z, q.vx, q.vy, q.vz]; });
   W.events.on('shotFired', (a, wid, m, dir) => { if (a === p && Q.on) Q.m = [m.x, m.y, m.z, dir.x, dir.y, dir.z]; });
   return { ok: true }; }"""
 # place the dummy at `dist` m in front of the player facing `face` (rad, relative), pre-skin its meshes into one static triangle soup

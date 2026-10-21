@@ -107,9 +107,12 @@ def main():
             L.contract_row(v, "contract (W.setGfx, W.gfxTier, the settings modal with tabs)", have)
             v.check("tabs (GAME / VIDEO / AUDIO / CONTROLS / ACCESSIBILITY)", ok_open and tabs == ["GAME", "VIDEO", "AUDIO", "CONTROLS", "ACCESSIBILITY"], {"opened": ok_open, "tabs": tabs}, "5 tabs")
             fit = {}
+            cvd_modes = []
             for t in ("GAME", "VIDEO", "AUDIO", "ACCESSIBILITY"):
                 click(s, "^%s$" % t)
                 fit[t] = s.js(FIT_JS)
+                if t == "ACCESSIBILITY":     # the colour-vision options as the player sees them (any button naming a protan / deuter / tritan mode)
+                    cvd_modes = s.js("() => [...document.querySelectorAll('button, .lc-sopt')].filter((b) => b.offsetParent && /protan|deuter|tritan/i.test((b.textContent || '') + ' ' + (b.dataset.v || ''))).map((b) => (b.dataset.v || b.textContent).trim())")
                 s.screenshot(os.path.join(shots, "settings_%s.png" % t.lower()))
             v.check("tabs-fit (every tab but CONTROLS: every control inside 1280x720 and the card)", all(f is not None and not f["out"] for f in fit.values()) and len(fit) == 4,
                     {k: (f or {}).get("out") for k, f in fit.items()}, "0 outside")
@@ -172,7 +175,7 @@ def main():
                     drop, "Q: same, G: -1")
             # colour-blind: the three modes change the frame, off restores it
             s.step_frames(10, 1 / 60, render=True)
-            modes = s.safe_js("() => { const o = [...document.querySelectorAll('[data-lc=\"cvd\"] button, [data-lc=\"cvd\"] .lc-sopt')].map((b) => b.textContent.trim()); return o; }", default=None)
+            modes = sorted(set(cvd_modes))
             base = s.js(MEAN_JS)
             diffs = {}
             for m in ("protanopia", "deuteranopia", "tritanopia"):
@@ -185,17 +188,36 @@ def main():
             s.js("() => window.__LC__.W.setGfx('daltonize', 'off')")
             back = s.js(MEAN_JS)
             rest = round(sum(abs(a - b) for a, b in zip(back, base)) / len(base), 3)
-            v.check("colour-blind (3 modes each change the frame >= 1/255; off restores it)", all(isinstance(d, float) and d >= 1.0 for d in diffs.values()) and rest < 0.5,
+            v.check("colour-blind (the ACCESSIBILITY row lists off + 3 modes; each changes the frame >= 1/255; off restores it)",
+                    len(modes) >= 3 and all(isinstance(d, float) and d >= 1.0 for d in diffs.values()) and rest < 0.5,
                     {"modesInUi": modes, "meanAbsDiff": diffs, "offRestore": rest}, ">= 1.0 each, < 0.5 back")
             # HUD scale 130 %: the anchor corner stays
             s.step_frames(5, 1 / 60, render=True)
             a1 = s.js(ANCH_JS)
-            s.js("() => { const W = window.__LC__.W; W.settings.hudScale = 1.3; }")
-            s.js(HUDMOD_JS)
-            s.safe_js("() => { const H = window.__HUDMOD__; if (H && H.applyA11y) H.applyA11y(window.__LC__.W); }")
+            # the REAL slider: Escape -> the pause card -> SETTINGS -> ACCESSIBILITY -> a click at the right end of the HUD scale range (= 130 %)
+            s.thaw_loop()
+            s.page.keyboard.press("Escape")
+            s.sleep(0.6)
+            scaled = None
+            if open_settings(s):
+                click(s, "^ACCESSIBILITY$")
+                rr = s.js("""() => { const lab = [...document.querySelectorAll('div')].find((d) => d.children.length === 0 && /^HUD scale$/i.test((d.textContent || '').trim()));
+                    const inp = lab && lab.parentElement ? lab.parentElement.querySelector('input[type=range]') : null; if (!inp) return null; inp.scrollIntoView({ block: 'center' });
+                    const r = inp.getBoundingClientRect(); return [r.right - 2, r.top + r.height / 2]; }""")
+                if rr:
+                    s.page.mouse.click(rr[0], rr[1])
+                    s.sleep(0.4)
+                    scaled = s.js("() => window.__LC__.W.settings.hudScale")
+                close_settings(s)
+            for _ in range(2):
+                if s.js("() => !!window.__LC__.W.paused"):
+                    s.page.keyboard.press("Escape")
+                    s.sleep(0.5)
+            s.freeze_loop()
             s.step_frames(5, 1 / 60, render=True)
             s.sleep(0.3)
             a2 = s.js(ANCH_JS)
+            v.data["hudScaleSet"] = scaled
             s.screenshot(os.path.join(shots, "settings_hud130.png"))
             bad = {}
             Wv, Hv = a2["W"], a2["H"]
@@ -214,10 +236,9 @@ def main():
                     cornerX = abs((r2[0] + r2[2]) / 2 - cx)
                 if not (grew and inside and cornerX <= 2 and cornerY <= 2):
                     bad[k] = {"100": r1, "130": r2, "grew": grew, "inside": inside, "dx": round(cornerX, 1), "dy": round(cornerY, 1)}
-            v.check("hud-scale (130 %: every anchored panel grows from its anchor corner, +-2 px, inside the viewport)", bool(a1["a"]) and not bad,
-                    {"panels": len(a1["a"]), "bad": bad}, "0 bad")
-            s.js("() => { window.__LC__.W.settings.hudScale = 1; }")
-            s.safe_js("() => { const H = window.__HUDMOD__; if (H && H.applyA11y) H.applyA11y(window.__LC__.W); }")
+            v.check("hud-scale (130 % by the real slider: every anchored panel grows from its anchor corner, +-2 px, inside the viewport)",
+                    bool(a1["a"]) and scaled is not None and abs(scaled - 1.3) < 0.01 and not bad, {"set": scaled, "panels": len(a1["a"]), "bad": bad}, "1.3, 0 bad")
+            s.js(HUDMOD_JS)
             rb = s.safe_js("() => { const H = window.__HUDMOD__; return H && H.readback ? H.readback(window.__LC__.W) : null; }", default=None) or {}
             mm = rb.get("minimap")
             v.check("minimap (local, <= 3 m per CSS px)", bool(mm) and mm["mpp"] <= 3.0 and mm["local"], {"minimap": mm}, "<= 3 m/px, local")

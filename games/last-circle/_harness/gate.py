@@ -162,6 +162,15 @@ WAVE5B_REV = "bd523284"      # the Wave-5 leftovers release (live; the build Wav
 WAVE5_REV = "3fce7529"       # the Wave-5 release ("Wave 5", live): the frozen "must fail" build of the 2026-10-13 leftovers-round rows
                              # (heal-pockets, container-lean, sprints-rocks, ramps-walk-fine): each fails here AND on the Wave-4 commit (heal-pockets there on geometry-only placements: no C-RAMP)
 
+# ---- Parity waves P2 + P3 (lane P2-F "harness", 2026-10-20; README "Parity waves P2 + P3"). Gates live in _harness/p23/ (p23lib.py shared).
+BASE_P23 = "9aa2b746"        # int-p1 = the Wave-8 snapshot + the verified P1 lanes: the base of every P2/P3 lane. The frozen "must fail" build of every P2/P3 FEATURE gate
+                             # (the feature is absent there). NEVER moves
+PREP1_REV = "e10b9836"       # the Wave-8 working-tree snapshot BEFORE P1: the frozen "must fail" build of the PORTED P1 probes (spray, lobby, ping, loadbar, audiotap). NEVER moves
+# P23_PENDING: the P2/P3 feature gates run as INFORMATION until the integrator has merged the lanes (their contract rows FAIL on a tree without the
+# feature: a missing feature is a failing gate, never a pass). The INTEGRATOR sets this False after the merge: the rows count, and the planted
+# faults of those gates join the negative controls (P23_PENDING_NEG). The ports of the P1 probes count NOW (their features are in the base).
+P23_PENDING = True
+
 # (name, script, extra args, timeout s, informational)
 GATES = [
     # Wave 5 (lane 5D): the permanent gates that SEE the world-foundation defects. placementcheck is Node only (no browser, ~25 s), so
@@ -346,6 +355,30 @@ GATES = [
     # information only (never exits 1): LOW tier with vs without the composer, interleaved ABAB. --no-lp drops its lc_liveprobe
     # arms (rAF windows - perfcheck above already reports those); the stepped GPU-synced bench stays
     ("orch_lowpost_ab", "new/orch_lowpost_ab.py", ["--no-lp"], 5400, True),
+    # ---- Parity waves P2 + P3 (lane P2-F). The P1 probes promoted (COUNTED: P1 is in the base; each also FAILS on PREP1_REV, see NEGATIVE):
+    ("p23_spray", "p23/spray.py", [], 3600, False),             # LC-01 recoil climb 3-4 deg + identical pattern, LC-33 bloom, disc pellets, LC-25 blast LOS, frag arc
+    ("p23_lobby", "p23/lobby.py", [], 600, False),              # LC-11 phantom slot + 8 forgeries + grace, LC-07 ping streams (Node)
+    ("p23_ping", "p23/ping.py", [], 3600, False),               # LC-07 ping: one tick, 120 m, rate, MMB, edge, expiry, big-map pin, pointer regrab
+    ("p23_loadbar", "p23/loadbar.py", [], 3600, False),         # LC-23 bar never backwards, LC-82 FIGHT copy, LC-19 Quick challenges
+    ("p23_audiotap", "p23/audiotap.py", [], 3600, False),       # LC-02 listener, LC-08 tail / 450 m delay, LC-26 occlusion 4-8 dB, LC-53 mix >= 6 dB (tap on the output)
+    # the P2 / P3 feature gates (INFORMATION while P23_PENDING; the integrator counts them after the merge):
+    ("p23_stormplace", "p23/stormplace.py", [], 3600, P23_PENDING),       # LC-13 / OD-1: 2000 seeds x 3 maps, p50 >= 150 m, 0 wet finals, 920 s, Quick unchanged (Node)
+    ("p23_roster", "p23/roster.py", ["--parts", "node,fire"], 3600, P23_PENDING),    # LC-16 DMR / LMG / burst lanes, rolls, burst cadence, LC-34 ADS earned
+    ("p23_roster_soak", "p23/roster.py", ["--parts", "soak", "--soak", "10"], 14400, P23_PENDING),   # plan: every gun >= 1 kill over 10 matches
+    ("p23_hitbox", "p23/hitbox.py", [], 5400, P23_PENDING),               # LC-22: no body hit > 0.06 m outside the drawn silhouette, head-top + 0.1 m misses
+    ("p23_heal", "p23/heal.py", [], 3600, P23_PENDING),                   # C-HEAL / LC-05: cancel keeps the item, gun ready <= 0.4 s, spent on completion
+    ("p23_fall", "p23/fall.py", [], 5400, P23_PENDING),                   # C-FALL / OD-8: curve, stagger, armour untouched, water / glide free, bots
+    ("p23_move", "p23/move.py", [], 3600, P23_PENDING),                   # LC-21 slide curve, LC-31 shoulder swap + crosshair truth, LC-10 strafe skate <= 1.25x
+    ("p23_smoke", "p23/smoke.py", [], 3600, P23_PENDING),                 # C-SMOKE: W.smokes, losBlocked, bot sight 0 through it, <= +0.3 ms for 3 on the iGPU
+    ("p23_dbno", "p23/dbno.py", [], 7200, P23_PENDING),                   # C-DBNO: solo unchanged; knock / crawl / bleed / revive (bot + human), trio elimination; two humans
+    ("p23_modes", "p23/modes.py", [], 7200, P23_PENDING),                 # C-MODE: team sizes, drop together, bot mates follow <= 60 m, the menu card
+    ("p23_settings", "p23/settings.py", [], 5400, P23_PENDING),           # P2-G tabs fit, LOW..ULTRA, rebind, colour-blind x3, HUD 130 %, minimap <= 3 m/px, hints once
+    ("p23_lootp2", "p23/lootp2.py", [], 7200, P23_PENDING),               # P2-H death pile, supply drops (>= 3 by 760 s, beacons, open), tiers 1.5x + hot zone
+    ("p23_footsteps", "p23/footsteps.py", [], 3600, P23_PENDING),         # LC-52 footstep census >= 90 % per zone
+    ("p23_tierprof", "p23/tierprof.py", ["--gpu", "default"], 5400, P23_PENDING),    # C-GFX per-tier profile on the iGPU: KB/frame, queryColliders, programs, GPU order
+    ("p23_botbatch", "p23/botbatch.py", [], 36000, P23_PENDING),          # P2-B 24-match AFK batch: re-sight, cover, shields, AFK survival, frags, match length
+    # INFORMATION (never counted): the live-measure probe on the iGPU profile (a player's first run; perfcheck's own default is the dGPU)
+    ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
 # The post-deploy check (`python _harness/gate.py --disk --post-deploy`, README "Wave-7 completion round"): run it AFTER the CDN has the new build and AFTER common.LIVE_REV was moved to the deployed commit. Every row
@@ -607,7 +640,69 @@ NEGATIVE = [
     # artb_check / artb_decode exempt collider_mode 'none' (rugs, pallet) only: a boxed type whose colliders are emptied in memory must fail the collider row
     ("artb_check-plant-drop-colliders", "new/artb_check.py", ["--plant", "drop-colliders"], 600),
     ("artb_decode-plant-drop-colliders", "new/artb_decode.py", ["--groups", "suburban", "--plant", "drop-colliders"], 1800),
+    # ---- Parity waves P2 + P3 (lane P2-F): the ported P1 probes FAIL on the snapshot before P1 and on each planted fault
+    ("p23_spray-rev-pre-p1", "p23/spray.py", ["--rev", PREP1_REV], 3600),
+    ("p23_spray-plant-flat-pattern", "p23/spray.py", ["--plant", "flat-pattern"], 3600),
+    ("p23_spray-plant-los-off", "p23/spray.py", ["--plant", "los-off"], 3600),
+    ("p23_spray-plant-cone-leak", "p23/spray.py", ["--plant", "cone-leak"], 3600),
+    ("p23_lobby-rev-pre-p1", "p23/lobby.py", ["--rev", PREP1_REV], 600),
+    ("p23_lobby-plant-presence-blind", "p23/lobby.py", ["--plant", "presence-blind"], 600),
+    ("p23_lobby-plant-forgery-open", "p23/lobby.py", ["--plant", "forgery-open"], 600),
+    ("p23_lobby-plant-ping-merged", "p23/lobby.py", ["--plant", "ping-merged"], 600),
+    ("p23_ping-rev-pre-p1", "p23/ping.py", ["--rev", PREP1_REV], 3600),
+    ("p23_ping-plant-no-expiry", "p23/ping.py", ["--plant", "no-expiry"], 3600),
+    ("p23_ping-plant-flood", "p23/ping.py", ["--plant", "flood"], 3600),
+    ("p23_loadbar-rev-pre-p1", "p23/loadbar.py", ["--rev", PREP1_REV], 3600),
+    ("p23_loadbar-plant-bar-dip", "p23/loadbar.py", ["--plant", "bar-dip"], 3600),
+    ("p23_audiotap-rev-pre-p1", "p23/audiotap.py", ["--rev", PREP1_REV], 3600),
+    ("p23_audiotap-plant-no-occlusion", "p23/audiotap.py", ["--plant", "no-occlusion"], 3600),
+    ("p23_audiotap-plant-team-blind", "p23/audiotap.py", ["--plant", "team-blind"], 3600),
+    # the P2 / P3 feature gates FAIL on the P2 base (the feature absent): meaningful now and after the merge
+    ("p23_stormplace-rev-base", "p23/stormplace.py", ["--rev", BASE_P23], 3600),
+    ("p23_roster-rev-base", "p23/roster.py", ["--rev", BASE_P23, "--parts", "node,fire"], 3600),
+    ("p23_hitbox-rev-base", "p23/hitbox.py", ["--rev", BASE_P23], 5400),
+    ("p23_heal-rev-base", "p23/heal.py", ["--rev", BASE_P23], 3600),
+    ("p23_fall-rev-base", "p23/fall.py", ["--rev", BASE_P23, "--parts", "human"], 3600),
+    ("p23_move-rev-base", "p23/move.py", ["--rev", BASE_P23], 3600),
+    ("p23_smoke-rev-base", "p23/smoke.py", ["--rev", BASE_P23], 3600),
+    ("p23_dbno-rev-base", "p23/dbno.py", ["--rev", BASE_P23, "--parts", "bot"], 3600),
+    ("p23_modes-rev-base", "p23/modes.py", ["--rev", BASE_P23, "--modes", "duo"], 3600),
+    ("p23_settings-rev-base", "p23/settings.py", ["--rev", BASE_P23], 3600),
+    ("p23_lootp2-rev-base", "p23/lootp2.py", ["--rev", BASE_P23, "--parts", "pile"], 3600),
+    ("p23_footsteps-rev-base", "p23/footsteps.py", ["--rev", BASE_P23, "--maps", "ashgrid,isla_viva"], 3600),
+    ("p23_tierprof-rev-base", "p23/tierprof.py", ["--rev", BASE_P23, "--gpu", "default"], 5400),
+    ("p23_botbatch-rev-base", "p23/botbatch.py", ["--rev", BASE_P23, "--runs", "2:isla_viva,3:ashgrid,4:deepwood"], 14400),
 ]
+# the P2 / P3 feature gates' planted faults: they bite only on a tree that HAS the feature (on the base every one of them fails anyway, which proves
+# nothing), so they join the negative controls when the integrator sets P23_PENDING = False
+P23_PENDING_NEG = [
+    ("p23_stormplace-plant-land-ignored", "p23/stormplace.py", ["--plant", "land-ignored"], 3600),
+    ("p23_roster-plant-dmr-weak", "p23/roster.py", ["--plant", "dmr-weak", "--parts", "node"], 900),
+    ("p23_hitbox-plant-fat", "p23/hitbox.py", ["--plant", "fat"], 5400),
+    ("p23_hitbox-plant-thin", "p23/hitbox.py", ["--plant", "thin"], 5400),
+    ("p23_heal-plant-no-cancel", "p23/heal.py", ["--plant", "no-cancel"], 3600),
+    ("p23_heal-plant-refund-lost", "p23/heal.py", ["--plant", "refund-lost"], 3600),
+    ("p23_fall-plant-no-damage", "p23/fall.py", ["--plant", "no-damage", "--parts", "human"], 3600),
+    ("p23_fall-plant-harsh", "p23/fall.py", ["--plant", "harsh", "--parts", "human"], 3600),
+    ("p23_fall-plant-no-event", "p23/fall.py", ["--plant", "no-event", "--parts", "human"], 3600),
+    ("p23_move-plant-slide-flat", "p23/move.py", ["--plant", "slide-flat", "--parts", "slide"], 3600),
+    ("p23_move-plant-no-swap", "p23/move.py", ["--plant", "no-swap", "--parts", "shoulder"], 3600),
+    ("p23_smoke-plant-los-ignores", "p23/smoke.py", ["--plant", "los-ignores"], 3600),
+    ("p23_smoke-plant-short-life", "p23/smoke.py", ["--plant", "short-life"], 3600),
+    ("p23_dbno-plant-crawl-fast", "p23/dbno.py", ["--plant", "crawl-fast", "--parts", "bot"], 3600),
+    ("p23_dbno-plant-no-bleed", "p23/dbno.py", ["--plant", "no-bleed", "--parts", "bot"], 3600),
+    ("p23_dbno-plant-revive-quick", "p23/dbno.py", ["--plant", "revive-quick", "--parts", "bot"], 3600),
+    ("p23_modes-plant-teams-off", "p23/modes.py", ["--plant", "teams-off", "--modes", "duo"], 3600),
+    ("p23_settings-plant-ultra-noop", "p23/settings.py", ["--plant", "ultra-noop"], 3600),
+    ("p23_settings-plant-scale-center", "p23/settings.py", ["--plant", "scale-center"], 3600),
+    ("p23_lootp2-plant-ammo-cap", "p23/lootp2.py", ["--plant", "ammo-cap", "--parts", "pile"], 3600),
+    ("p23_lootp2-plant-no-supply", "p23/lootp2.py", ["--plant", "no-supply", "--parts", "tiers"], 7200),
+    ("p23_footsteps-plant-beside-wood", "p23/footsteps.py", ["--plant", "beside-wood", "--maps", "ashgrid"], 3600),
+    ("p23_tierprof-plant-alloc-leak", "p23/tierprof.py", ["--plant", "alloc-leak", "--gpu", "default"], 5400),
+    ("p23_tierprof-plant-query-flood", "p23/tierprof.py", ["--plant", "query-flood", "--gpu", "default"], 5400),
+]
+if not P23_PENDING:
+    NEGATIVE = NEGATIVE + P23_PENDING_NEG
 
 
 def node_selftests():

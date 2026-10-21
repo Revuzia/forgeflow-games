@@ -310,55 +310,9 @@ def part_bot(args, v):
 
 # ───────────────────────── part HUMAN2: two pages, the squad relay stand-in ─────────────────────────
 def part_human2(args, v):
-    import squadguard_live as SQ                                    # the relay stand-in (FAKE_SB) + the lobby helpers, read-only reuse
-
-    class Rig(SQ.Rig):
-        def new_ctx(self):
-            ctx = super().new_ctx()
-            for f in (getattr(self.args, "inject", None) or []):
-                with open(f, encoding="utf-8") as fh:
-                    ctx.add_init_script(fh.read())
-            return ctx
-
-    if C.overlay_specs(args):
-        # the squad rig's DiskServer has no overlays: wrap its constructor for this run (validation only)
-        ovl = C.overlay_specs(args)
-        D0 = C.DiskServer
-
-        class DS(D0):
-            def __init__(self, origins, rev=None, game_path=None, overlays=None):
-                super().__init__(origins, rev, game_path, overlays=overlays or ovl)
-        C.DiskServer = DS
-    args.full_now = True
-    rig = Rig(args)
+    rig, SQ = L.squad_rig(args)
     try:
-        ctx = rig.new_ctx()
-        hpg, hrec = rig.page(ctx, "dbno/host")
-        gpg, grec = rig.page(ctx, "dbno/guest")
-        for label, pg in (("host", hpg), ("guest", gpg)):
-            if SQ.boot_url(pg, args.base, args.boot_timeout) is None:
-                raise C.EnvFailure("human2 %s never booted" % label)
-        for label, pg in (("host", hpg), ("guest", gpg)):
-            if not SQ.open_lobby(pg):
-                raise C.EnvFailure("human2 %s: the SQUAD UP lobby never opened" % label)
-        code = SQ.host_create(hpg)
-        if not code:
-            raise C.EnvFailure("human2: no room code")
-        SQ.guest_join(gpg, code)
-        if not SQ.wait(hpg, "() => document.body.innerText.includes('2 player')", 40):
-            raise C.EnvFailure("human2: the guest never showed in the host's lobby")
-        SQ.press_start(hpg)
-        for pg in (hpg, gpg):
-            if not SQ.wait(pg, "() => ['drop','match'].includes(window.__LC__.W.phase)", args.load_timeout, 1.0):
-                for _ in range(3):
-                    pg.keyboard.press("Enter")
-                    pg.wait_for_timeout(1500)
-        ok = all(SQ.wait(pg, "() => ['drop','match'].includes(window.__LC__.W.phase)", 120, 1.0) for pg in (hpg, gpg))
-        if not ok:
-            raise C.EnvFailure("human2: a page never reached the drop")
-        land = "() => { const C = window.__LC__, W = C.W, p = W.player; let n = 0; while (n < 900 && p.alive && (p.gliding || !p.onGround || W.phase === 'drop')) { C.fastForward(1 / 30, 1 / 30); p.hp = 100; p.shield = 100; n++; } return { n, onGround: p.onGround }; }"
-        for pg in (hpg, gpg):
-            pg.evaluate(land)
+        ctx, hpg, hrec, gpg, grec, code = L.squad_pair(rig, SQ, args, "dbno")
         ids = {k: pg.evaluate("() => { const W = window.__LC__.W; return { me: W.player.id, team: W.player.teamId, mode: W.match && W.match.mode }; }") for k, pg in (("host", hpg), ("guest", gpg))}
         v.data["human2_ids"] = ids
         v.check("human2: both humans on one team in a duo", ids["host"]["team"] is not None and ids["host"]["team"] == ids["guest"]["team"] and ids["host"]["mode"] == "duo",
@@ -371,11 +325,11 @@ def part_human2(args, v):
         for pg, dx in ((hpg, 0.0), (gpg, 6.0)):
             pg.evaluate("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x, W.map.heightAt(x, z), z); p.vel.set(0, 0, 0); }", [spot["x"] + dx, spot["z"]])
         hpg.wait_for_timeout(2500)
-        size_js = "() => { const L = window.__SQ_LOG__ || []; const st = L.filter((m) => m.t === 'state' && m.dir === 'out').slice(-40); return st.length ? st.reduce((s, m) => s + (m.bytes || JSON.stringify(m.d || m).length), 0) / st.length : null; }"
+        size_js = "() => { const S = (window.__SQ_STATE__ || []).slice(-40); return S.length >= 10 ? S.reduce((a, b) => a + b, 0) / S.length : null; }"     # p23lib.fake_sb_plus
         up_b = gpg.evaluate(size_js)
         src = gpg.evaluate("() => { const W = window.__LC__.W, p = W.player; const e = W.actors.find((a) => a.isBot && a.alive && a.teamId !== p.teamId); return e && e.id; }")
         gpg.evaluate("(src) => { const W = window.__LC__.W, p = W.player; p.hp = 100; p.shield = 0; W.hurtActor(p, 250, src, 'ar', false); }", src)
-        seen = SQ.wait(hpg, "(id) => { const a = window.__LC__.W.actorById.get(id); return a && a.downed ? window.__LC__.W.t : null; }", 3, 0.1, g_id)
+        seen = SQ.wait(hpg, "(id) => { const a = window.__LC__.W.actorById.get(id); return a && a.downed ? window.__LC__.W.t : null; }", 1.0, 0.05, g_id)
         gd = gpg.evaluate("() => { const p = window.__LC__.W.player; return { alive: p.alive, downed: !!p.downed }; }")
         v.check("human2: knocked on its own page, seen downed on the host's within 1 s", gd["downed"] and gd["alive"] and seen is not None, {"guest": gd, "hostSaw": seen}, "downed both")
         p0 = hpg.evaluate("(id) => { const a = window.__LC__.W.actorById.get(id); return [a.pos.x, a.pos.z]; }", g_id)

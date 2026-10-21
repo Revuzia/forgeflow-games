@@ -306,3 +306,80 @@ def pin_actor(s, aid, xyz=None):
     return s.js("""([id, p]) => { const W = window.__LC__.W, k = W.kernel; window.__P23PIN__ = window.__P23PIN__ || {};
         if (!window.__P23PINF__) { window.__P23PINF__ = () => { for (const [i, q] of Object.entries(window.__P23PIN__)) { const a = W.actorById.get(i); if (a && a.alive) { a.pos.set(q[0], q[1], q[2]); a.vel.set(0, 0, 0); } } }; k._updaters.push(window.__P23PINF__); }
         if (id == null) { window.__P23PIN__ = {}; return 'cleared'; } if (p == null) { delete window.__P23PIN__[id]; return 'off'; } window.__P23PIN__[id] = p; return 'on'; }""", [aid, xyz])
+
+
+# ───────────────────────── two pages over the squad relay stand-in (squadguard_live's FAKE_SB) ─────────────────────────
+def fake_sb_plus():
+    """squadguard_live's relay stand-in + (1) every OUTGOING 'state' payload's JSON size kept in window.__SQ_STATE__ (the stand-in's own log skips
+    state packets), (2) an inbound REORDER switch: while window.__SQ_REORDER__ = { every: n, holdMs: ms } every n-th inbound 'state' broadcast
+    is held back holdMs and delivered late, after newer ones (LC-49: out-of-order injection on the wire)."""
+    import squadguard_live as SQ
+    src = SQ.FAKE_SB
+    a = "send(msg) { if (closed) return Promise.resolve('error'); note('out', msg.payload);"
+    assert a in src, "FAKE_SB send() anchor moved"
+    src = src.replace(a, a + " try { if (msg.payload && msg.payload.t === 'state') { const S = window.__SQ_STATE__ = window.__SQ_STATE__ || []; S.push(JSON.stringify(msg.payload).length); if (S.length > 600) S.shift(); } } catch (e) {}", 1)
+    b = "if (m.k === 'bc') { note('in', m.payload); L.broadcast.forEach("
+    assert b in src, "FAKE_SB onmessage anchor moved"
+    src = src.replace(b, "if (m.k === 'bc' && m.payload && m.payload.t === 'state' && window.__SQ_REORDER__ && !m.__late) { const R = window.__SQ_REORDER__; R.n = (R.n || 0) + 1;"
+                         " if (R.n % R.every === 0) { R.held = (R.held || 0) + 1; const mm = Object.assign({}, m, { __late: true }); setTimeout(() => bc.onmessage({ data: mm }), R.holdMs); return; } }"
+                         "\n        " + b, 1)
+    return src
+
+
+def squad_rig(args):
+    """a squadguard_live Rig whose contexts serve --overlay / --inject like Session (validation runs) and answer esm.sh with fake_sb_plus()."""
+    import squadguard_live as SQ
+    ovl = C.overlay_specs(args) if getattr(args, "overlay", None) else []
+    fsb = fake_sb_plus()
+
+    class Rig(SQ.Rig):
+        def new_ctx(self):
+            ctx = super().new_ctx()
+            if ovl and not self.live:
+                disk = C.DiskServer([self.origin], getattr(self.args, "rev", None), self.gpath, overlays=ovl)
+                ctx.route(lambda url: disk.matches(url), disk.handle)
+            ctx.route(lambda url: "esm.sh/" in url, lambda r: r.fulfill(status=200, body=fsb, headers={
+                "Content-Type": "text/javascript; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
+            for f in (getattr(self.args, "inject", None) or []):
+                with open(f, encoding="utf-8") as fh:
+                    ctx.add_init_script(fh.read())
+            return ctx
+    args.full_now = True
+    return Rig(args), SQ
+
+
+def squad_pair(rig, SQ, args, name, team_mode=None):
+    """host + guest pages in a fresh context, real lobby clicks (SQUAD UP, CREATE ROOM, JOIN by code, START MATCH), both REAL matches loaded and
+    landed (sim only, hp topped). Returns (ctx, hpg, hrec, gpg, grec, code)."""
+    ctx = rig.new_ctx()
+    hpg, hrec = rig.page(ctx, name + "/host")
+    gpg, grec = rig.page(ctx, name + "/guest")
+    for label, pg in (("host", hpg), ("guest", gpg)):
+        if SQ.boot_url(pg, args.base, args.boot_timeout) is None:
+            raise C.EnvFailure("%s %s never booted" % (name, label))
+    for label, pg in (("host", hpg), ("guest", gpg)):
+        if not SQ.open_lobby(pg):
+            raise C.EnvFailure("%s %s: the SQUAD UP lobby never opened" % (name, label))
+    code = SQ.host_create(hpg)
+    if not code:
+        raise C.EnvFailure("%s: no room code" % name)
+    SQ.guest_join(gpg, code)
+    if not SQ.wait(hpg, "() => document.body.innerText.includes('2 player')", 40):
+        raise C.EnvFailure("%s: the guest never showed in the host's lobby" % name)
+    SQ.press_start(hpg)
+    for pg in (hpg, gpg):
+        if not SQ.wait(pg, "() => ['lobby','drop','match'].includes(window.__LC__.W.phase)", args.load_timeout, 1.0):
+            raise C.EnvFailure("%s: a page never loaded its match" % name)
+    for pg in (hpg, gpg):
+        for _ in range(3):
+            if pg.evaluate("() => ['drop','match'].includes(window.__LC__.W.phase)"):
+                break
+            pg.keyboard.press("Enter")
+            pg.wait_for_timeout(1500)
+    if not all(SQ.wait(pg, "() => ['drop','match'].includes(window.__LC__.W.phase)", 120, 1.0) for pg in (hpg, gpg)):
+        raise C.EnvFailure("%s: a page never reached the drop" % name)
+    land = ("() => { const C = window.__LC__, W = C.W, p = W.player; let n = 0; while (n < 900 && p.alive && (p.gliding || !p.onGround)) { C.fastForward(1 / 30, 1 / 30);"
+            " p.hp = 100; p.shield = 100; n++; } return { n, onGround: p.onGround }; }")
+    for pg in (hpg, gpg):
+        pg.evaluate(land)
+    return ctx, hpg, hrec, gpg, grec, code
