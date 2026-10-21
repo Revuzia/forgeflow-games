@@ -14,7 +14,11 @@
  *   kit.dispose();                                                                            // from disposeMapResources: frees what a group traverse cannot
  *
  * list = [{ type, x, y, z, rot, scale?, district, palette? }, ...]
- *   type     a manifest id such as "suburban/building-type-a" (typeIds() lists the 81). Unknown types are skipped and reported in `skipped`.
+ *   type     a manifest id such as "suburban/building-type-a" (typeIds() lists the 136). Unknown types are skipped and reported in `skipped`.
+ *            Wave 8 (stage A2, lane H5): the interior kit is merged - 55 furniture / wall types (Kenney Furniture Kit 2.0 + 3 Quaternius pieces, CC0) with exact
+ *            colliders in COLLIDER_BOXES below: collider_mode "steps" (stairs: one box per tread, nothing to hide under), "none" (rugs, the pallet: nothing at body
+ *            height, so colliderFor gives [] and the far / fallback box drawing skips them). Only the GLBs of the types a place() list DRAWS are fetched
+ *            (place -> preload(drawn types)); a type no map places costs nothing but its manifest row.
  *   x y z    world metres of the footprint CENTRE at GROUND (the manifest origin). y is the pad height from lane 6A; the module never samples terrain.
  *   rot      an INTEGER is a quarter-turn index (rot * 90 degrees about +Y, as maps.js `Q.setFromAxisAngle(Y, ry)`; the authored front +Z faces +Z, +X, -Z,
  *            -X for 0, 1, 2, 3; quarterFacing(dx, dz) gives the index that faces a street); a NON-integer is radians; `ry` (radians) overrides `rot`.
@@ -131,21 +135,73 @@ const COLLIDER_BOXES = Object.freeze({
   "cars/taxi": [-1.125,0,-2.33,1.175,1.377,2.32,-1.275,0,0.72,1.325,1.377,0.92],
   "cars/truck": [-1.125,0,-2.5,1.175,1.326,2.5,-1.275,0,0.9,1.325,1.326,1.1],
   "cars/van": [-1.125,0,-2.33,1.175,1.377,2.32,-1.275,0,0.87,1.325,1.377,1.12],
+  "furniture/bathroomCabinet": [-0.253,0,-0.143,0.253,0.858,0.143],
+  "furniture/bathroomSinkSquare": [-0.473,0,-0.33,0.473,1.276,0.33],
+  "furniture/bathtub": [-1.309,0,-0.616,1.309,0.924,0.616],
+  "furniture/bedDouble": [-1.052,0,-1.238,1.052,0.825,1.238],
+  "furniture/bedSingle": [-0.628,0,-1.238,0.628,0.825,1.238],
   "furniture/bookcaseClosed": [0,0,-0.55,0.88,1.87,0],
+  "furniture/bookcaseClosedDoors": [-0.44,0,-0.275,0.44,1.87,0.275],
+  "furniture/bookcaseClosedWide": [-0.88,0,-0.275,0.88,1.738,0.275],
+  "furniture/bookcaseOpen": [-0.44,0,-0.275,0.44,1.936,0.275],
+  "furniture/bookcaseOpenLow": [-0.44,0,-0.275,0.44,0.88,0.275],
+  "furniture/books": [-0.165,0,-0.104,0.165,0.229,0.104],
+  "furniture/cabinetBed": [-0.293,0,-0.237,0.293,0.513,0.237],
+  "furniture/cabinetBedDrawer": [-0.293,0,-0.239,0.293,0.579,0.239],
   "furniture/cabinetTelevision": [0,0,-0.55,1.76,0.682,0],
   "furniture/cardboardBoxClosed": [0,0,-0.468,0.468,0.618,0],
+  "furniture/cardboardBoxOpen": [-0.409,0,-0.234,0.409,0.618,0.234],
   "furniture/chair": [0,0,-0.44,0.44,1.034,0],
+  "furniture/chairCushion": [-0.22,0,-0.22,0.22,1.012,0.22],
   "furniture/chairDesk": [0,0,-0.692,0.737,1.337,0],
+  "furniture/chairModernCushion": [-0.22,0,-0.22,0.22,1.012,0.22],
+  "furniture/coatRackStanding": [-0.25,0,-0.1,0.3,1.694,0.15,-0.1,0,-0.25,0.15,1.694,0.3],
+  "furniture/computerScreen": [-0.432,0,-0.114,0.432,0.647,0.114],
   "furniture/desk": [-0.022,0,-0.836,1.594,0.846,0.027],
+  "furniture/deskCorner": [0.128,0,-1.072,1.128,0.846,1.128,-1.072,0,-1.072,0.078,0.846,-0.172],
+  "furniture/dryer": [-0.429,0,-0.418,0.429,1.034,0.418],
+  "furniture/hoodModern": [-0.223,0,-0.313,0.277,0.879,-0.013],
+  "furniture/kitchenBar": [-0.473,0,-0.231,0.473,0.924,0.231],
+  "furniture/kitchenBarEnd": [-0.112,0,-0.231,0.112,0.924,0.231],
+  "furniture/kitchenCabinet": [-0.473,0,-0.495,0.473,0.99,0.495],
+  "furniture/kitchenCabinetCornerInner": [-0.506,0,-0.506,0.506,0.99,0.506],
+  "furniture/kitchenCabinetDrawer": [-0.473,0,-0.495,0.473,0.99,0.495],
+  "furniture/kitchenCabinetUpper": [-0.473,0,-0.242,0.473,0.858,0.242],
   "furniture/kitchenFridge": [0,0,-0.62,0.946,2.024,0.022],
+  "furniture/kitchenMicrowave": [-0.319,0,-0.253,0.319,0.396,0.253],
   "furniture/kitchenSink": [0,0,-0.99,0.946,1.078,0],
   "furniture/kitchenStove": [0,0,-0.99,0.946,0.99,0],
+  "furniture/kitchenStoveElectric": [-0.473,0,-0.495,0.473,0.99,0.495],
+  "furniture/lampRoundFloor": [-0.167,0,-0.193,0.233,1.892,0.257],
+  "furniture/lampSquareCeiling": [-0.132,0,-0.132,0.132,0.506,0.132],
+  "furniture/lampSquareFloor": [-0.132,0,-0.132,0.168,1.892,0.168],
+  "furniture/lampSquareTable": [-0.132,0,-0.132,0.132,0.638,0.132],
+  "furniture/lampWall": [-0.249,0,-0.165,0.249,0.204,0.165],
+  "furniture/loungeChair": [-0.539,0,-0.451,0.539,1.012,0.451],
+  "furniture/loungeDesignSofa": [-1.232,0,-0.451,1.232,0.88,0.451],
   "furniture/loungeSofa": [0,0,-0.902,2.156,1.012,0],
+  "furniture/loungeSofaCorner": [0.122,0,-1.078,1.122,1.012,1.122,-1.078,0,-1.078,0.072,1.012,-0.128],
+  "furniture/loungeSofaLong": [-1.078,0,-0.902,1.122,1.012,0.098,-0.028,0,0.148,0.972,1.012,0.948],
+  "furniture/loungeSofaOttoman": [-0.484,0,-0.495,0.484,0.506,0.495],
+  "furniture/pallet": [],
+  "furniture/plantSmall1": [-0.104,0,-0.104,0.104,0.308,0.104],
   "furniture/pottedPlant": [-0.233,0,-0.266,0.233,1.439,0.266],
+  "furniture/rugRectangle": [],
+  "furniture/rugRound": [],
+  "furniture/rugSquare": [],
+  "furniture/shelfLarge": [-0.061,0,-0.17,0.389,1.997,0.18,-0.761,0,-0.17,-0.661,1.997,0.18,0.739,0,-0.17,0.789,1.997,0.18],
+  "furniture/shelfTall": [-0.658,0,-0.259,0.658,1.988,0.259],
   "furniture/sideTable": [-0.022,0,-0.462,1.154,0.846,0.022],
+  "furniture/sideTableDrawers": [-0.588,0,-0.245,0.588,0.846,0.245],
   "furniture/stoolBar": [0,0,-0.506,0.584,0.957,0],
   "furniture/table": [0,0,-0.984,1.851,0.719,0],
+  "furniture/tableCloth": [-0.926,0,-0.492,0.926,0.719,0.492],
   "furniture/tableCoffee": [-1.014,0,-0.66,0.44,0.506,0.22],
+  "furniture/tableCoffeeSquare": [-0.44,0,-0.44,0.44,0.506,0.44],
+  "furniture/tableCross": [-0.937,0,-0.492,0.937,0.764,0.492],
+  "furniture/tableRound": [-0.762,0,-0.58,0.838,0.807,0.62,-0.312,0,-0.83,0.388,0.807,0.87],
+  "furniture/televisionModern": [-0.753,0,-0.141,0.753,1,0.141],
+  "furniture/toilet": [-0.344,0,-0.525,0.344,0.992,0.525],
   "furniture/trashcan": [-0.229,0,-0.246,0.229,0.941,0.269],
   "walls/doorway": [0,0,-0.223,1.1,2.25,0.027],
   "walls/doorwayFront": [0,0,-0.223,1.1,2.25,0.027],
@@ -155,6 +211,8 @@ const COLLIDER_BOXES = Object.freeze({
   "walls/floorFull": [0,0,-2.2,2.2,0.11,0],
   "walls/floorHalf": [0,0,-2.2,1.1,0.11,0],
   "walls/paneling": [0,0,0,1.1,1.308,0.066],
+  "walls/stairs": [0,0,-1.738,0.361,0.268,0,0.361,0,-1.738,0.721,0.536,0,0.721,0,-1.738,1.082,0.804,0,1.082,0,-1.738,1.443,1.071,0,1.443,0,-1.738,1.803,1.34,0,1.803,0,-1.738,2.164,1.608,0,2.164,0,-1.738,2.569,1.875,0,2.569,0,-1.738,2.886,2.143,0,2.886,0,-1.738,3.246,2.411,0,3.246,0,-1.738,3.607,2.679,0,3.607,0,-1.738,4.012,2.947,0],
+  "walls/stairsCorner": [0.361,0,-1.738,0.721,0.268,0,0.721,0,-1.738,1.082,0.536,0,1.082,0,-1.738,1.443,0.804,0,1.443,0,-1.738,1.803,1.071,0,1.803,0,-1.738,2.164,1.34,0,2.164,0,-1.738,2.525,1.608,0,2.525,0,-1.65,4.263,1.875,0,2.525,0,-2.011,4.263,2.143,-1.65,2.525,0,-2.371,4.263,2.411,-2.011,2.525,0,-2.732,4.263,2.679,-2.371,2.525,0,-3.137,4.263,2.947,-2.732],
   "walls/wall": [0,0,-0.11,2.2,2.837,0],
   "walls/wallCorner": [1,0,-1.21,1.25,2.837,-0.01,0,0,-0.11,1,2.837,0.04],
   "walls/wallCornerRond": [0,0,-0.21,1.25,2.837,0.04,1.1,0,-1.21,1.25,2.837,-0.26],
@@ -162,6 +220,7 @@ const COLLIDER_BOXES = Object.freeze({
   "walls/wallDoorwayWide": [0,2.15,-0.153,2.25,2.9,0.043,0,0,-0.153,0.2,2.15,0.043,2.05,0,-0.153,2.25,2.15,0.043],
   "walls/wallHalf": [0,0,-0.11,1.1,2.837,0],
   "walls/wallWindow": [0,0,-0.153,2.2,2.837,0.043],
+  "walls/wallWindowPort": [0,0,-0.153,2.2,1.2,0.043,0,1.2,-0.153,0.796,2.837,0.043,1.404,1.2,-0.153,2.2,2.837,0.043,0.796,2.3,-0.153,1.404,2.837,0.043],
   "walls/wallWindowSlide": [0,0,-0.153,2.2,2.837,0.043]
 });
 
@@ -917,8 +976,18 @@ export function createCityKit(env) {
     return { geometries: g, materials: m, textures: t, instancedMeshes: im };
   }
 
+  /** Wave 8 stage B (lane I1): the parsed GLB of ONE type, for a caller that bakes the pieces into merged meshes of its own (maps.js merges the furnished
+   *  interiors' kit furniture per 32 m chunk: one draw call for every piece of a chunk, not one per type). Resolves { parts: [{ geometry, material, local
+   *  (the mesh's matrix in the GLB), identity, tris }], tris } or { failed }; never rejects. The geometry is the kit's shared parse: read it, never dispose it. */
+  async function parts(type) {
+    assertAlive();
+    await ready();
+    if (!hasType(type)) return { failed: "unknown type " + type };
+    return loadType(type);
+  }
+
   return {
-    api: KIT_API, place, preload, dispose, stats, ready, warmObjects, setShadows, setFarDistance,
+    api: KIT_API, place, preload, parts, dispose, stats, ready, warmObjects, setShadows, setFarDistance,
     colliderFor, footprintFor, typeIds, hasType, resolvePalette,
     get manifest() { return man; },
     get disposed() { return disposed; },

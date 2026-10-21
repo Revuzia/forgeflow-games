@@ -496,7 +496,7 @@ function mkHeightFn(mapId, seed) {
 //   bake()            freeze into the Float32 lattice; from then on at(x, z) is the ground
 // Everything is deterministic: pads come from the seeded layout only and the bake is plain IEEE arithmetic (+, -, *, /, sqrt), the same on
 // every client.
-export const MAP_GEN_VERSION = 5;                   // see map.genVersion (5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
+export const MAP_GEN_VERSION = 6;                   // see map.genVersion (6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
 const FALLBACK_GEN_VERSION = { ashgrid: 2, isla_viva: 4, deepwood: 4 };   // the generator version of the layout a page plays when towngen.js / citykit.js do not load (see prepareCity): Savanna's Wave-6 layout is 2; Isla Viva's and Deepwood's pre-7b worlds are 4 (their maps were identical in 2, 3 and 4, only the loot settled differently from 3)
 export const LAT_CELLS = 608;                       // 8 chunks x 76 near-LOD cells (see CHUNKS / NEAR_SEG in buildMap)
 export const LAT_N = LAT_CELLS + 1;                 // 609 nodes per side
@@ -826,6 +826,8 @@ export function disposeMapResources(W) {
   const seenG = new Set(), seenM = new Set(), seenT = new Set();
   let geometries = 0, materials = 0, textures = 0;
   g.traverse((o) => {
+    // (Wave 8 fix round, lane K1) a BatchedMesh (the furnished houses' insides) owns its geometry AND two data textures (instance matrices, indirection): dispose() frees all three
+    if (o.isBatchedMesh && o.geometry && !seenG.has(o.geometry)) { seenG.add(o.geometry); try { o.dispose(); } catch (e) { /* already gone */ } geometries++; textures += 2; }
     if (o.geometry && !seenG.has(o.geometry)) { seenG.add(o.geometry); o.geometry.dispose(); geometries++; }
     const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
     for (const m of mats) {
@@ -2126,6 +2128,7 @@ export async function buildMap(W, mapId) {
     }
     for (let i = 0; i < n; i++) for (let j = 0; j < W2 - 1; j++) {
       const a = i * W2 + j, b = a + 1, c = a + W2, dI = c + 1;
+      if (houses.length && (underHouse(posA[a * 3], posA[a * 3 + 2]) || underHouse(posA[b * 3], posA[b * 3 + 2]) || underHouse(posA[c * 3], posA[c * 3 + 2]) || underHouse(posA[dI * 3], posA[dI * 3 + 2]))) continue;   // (WAVE 8: no piece of ribbon over a house's floor)
       idx.push(a, b, c, b, dI, c);           // winding gives +Y normals (p x u = +Y)
     }
     const geo = new THREE.BufferGeometry();
@@ -2552,17 +2555,18 @@ export async function buildMap(W, mapId) {
   // `map.fallback` = { reason, genVersion, wanted }, and a "mapFallback" event on W.events (see the end of buildMap).
   let cityFallback = null;
   async function prepareCity() {
-    let TG, CK, err = null;
+    let TG, CK, HG, err = null;
     for (let attempt = 0; attempt < 2 && !TG; attempt++) {
       try {
         if (attempt) await new Promise((res) => setTimeout(res, 400));
         const q = attempt ? _V + (_V ? "&" : "?") + "retry=1" : _V;
-        [TG, CK] = await Promise.all([import("./towngen.js" + q), import("./citykit.js" + q)]);
-      } catch (e) { err = e; TG = CK = undefined; console.warn("[maps] the town generator did not load (try " + (attempt + 1) + " of 2):", e && e.message || e); }
+        // (WAVE 8: housegen.js - the furnished houses - is one of the city modules: a page without it builds the pre-city layout, like a page without towngen.js)
+        [TG, CK, HG] = await Promise.all([import("./towngen.js" + q), import("./citykit.js" + q), import("./housegen.js" + q)]);
+      } catch (e) { err = e; TG = CK = HG = undefined; console.warn("[maps] the town generator did not load (try " + (attempt + 1) + " of 2):", e && e.message || e); }
     }
     if (!TG) {
       cityFallback = { reason: String(err && err.message || err || "import failed").slice(0, 200), genVersion: FALLBACK_GEN_VERSION[mapId] || 2, wanted: MAP_GEN_VERSION };
-      console.error("[maps] towngen.js / citykit.js failed to load twice: " + K.name + " is built on its pre-city layout (genVersion " + cityFallback.genVersion + ", not " + MAP_GEN_VERSION + "); a squad host with the towns builds a different map.");
+      console.error("[maps] towngen.js / citykit.js / housegen.js failed to load twice: " + K.name + " is built on its pre-city layout (genVersion " + cityFallback.genVersion + ", not " + MAP_GEN_VERSION + "); a squad host with the towns builds a different map.");
       return null;
     }
     // landmarks that stay: Savanna's overpass (pillars, decks, the access ramp, the station) and the crane with its jib ramp. The other maps keep their landmarks by drawing
@@ -2585,7 +2589,7 @@ export async function buildMap(W, mapId) {
     for (const T of lay.towns.concat(lay.compounds)) for (const p of T.parcels) if (p.building) { const a = p.building.aabb; cityBld.push([a[0], a[1], a[2], a[3]]); }
     for (const T of lay.towns) if (T.kind === "docks" && T.docks) for (const dk of T.docks.decks) cityDecks.push([dk.rect[0], dk.rect[1], dk.rect[2], dk.rect[3]]);
     for (const T of lay.compounds) for (const q of T.compound.props) cityBld.push(q.kind === "container" ? [q.x - 3.4, q.z - 3.4, q.x + 3.4, q.z + 3.4] : [q.x - 5, q.z - 5, q.x + 5, q.z + 5]);   // (silo / water tower / containers: wild loot keeps out)
-    return { TG, CK, lay, kit: [], stats: lay.stats, lights: 0, kitStats: null, skyline: [], landmarks: [] };
+    return { TG, CK, HG, lay, kit: [], stats: lay.stats, lights: 0, kitStats: null, skyline: [], landmarks: [] };
   }
   // the streets and the links between towns go into the ground field NOW (before any pad), as ROAD_W-wide corridors
   function registerCityRoads() {
@@ -3476,6 +3480,346 @@ export async function buildMap(W, mapId) {
     }
   }
 
+  // ── WAVE 8 (stage B, lane I1): the furnished houses ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // Every enterable building of a town / compound parcel (house, shop, hall, shed, barn, mid-rise, tower; the crater village's ruins and the docks' stilt houses too) is ONE
+  // housegen.js house: walls, floors, stairs, roofs, glass, furniture and every collider come from its data (generate at y 0 -> the pad under everything it stands on ->
+  // translateY onto the pad). Drawing:
+  //  - the OUTSIDE of the structure (every face with open air in front of it: facades, roofs, trim, porches) goes into the district's sink as pre-coloured geometry
+  //    ("vc|<kind>": the struct textures, no new material and no new draw call - the district's mix mesh, which casts the shadows);
+  //  - the INSIDE (the faces that look into the house: room walls, floors, ceilings, stair steps, door leaves, lamp panels) and the furniture (authored pieces + the
+  //    Kenney kit GLBs baked in, see buildHouseFurniture) go into ONE mesh per 32 m chunk with the same mix material (textured, the same program), drawn within
+  //    HG_FURN_DIST of the camera, no shadow pass. The inside is darkened by HG_INDOOR (the hemisphere light and the IBL are not occluded indoors: without the term
+  //    a room under a roof is as bright as the street in the shade); lamp panels keep their colour;
+  //  - the glass panes of every house: ONE transparent mesh for the whole map (one draw call, no collider: the cover rule - bullets and eyes pass, bodies do not),
+  //    clear near the camera and turning to dark sky-lit glass with distance (beyond the inside's 60 m an empty house would otherwise show through its windows).
+  // Colliders: collidersOf(house) in its fixed order (structure boxes, ramps - the stairs AND the pitched roofs' planks, see house.roofRamps -, furniture), nothing else.
+  // Loot: housegen's points reach loot.js as map.houses (lane I3's per-room pass): no house point is added to map.lootPoints here.
+  // DETERMINISM: generate() is a pure function of the parcel (towngen's record + the map seed); nothing here draws from the shared `rng`.
+  const houses = [];                 // map.houses: the housegen records as built, in build order (+ town, parcel, district, chunk, index, cols, roofRamps)
+  const hgChunks = new Map();        // inside / furniture chunk key -> { key, x0, z0, x1, z1, y0, y1, pos, nor, uv, col, tki, idx, kit: [{ type, x, y, z, rot, min, max }] }
+  const hgGlass = { pos: [], nor: [], col: [], idx: [] };
+  // housegen palette material -> the struct texture kind its faces wear (district merge: s / plank / stucco share the mix mesh; no metal mesh)
+  const HG_MAT_KIND = { brick: "s", stone: "s", roof: "s", roof_flat: "s", floor_tile: "s", floor_concrete: "s", lamp: "s", sheet: "s", metal: "s", glass: "s",
+    plaster: "stucco", stucco: "stucco", fabric: "stucco", ceramic: "stucco", plank: "plank", plank_in: "plank", floor_wood: "plank", wood: "plank" };
+  // the indoor ambient term: interior faces and furniture take this share of their colour (lamp panels keep theirs). Deepwood's forest light is darker than the
+  // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
+  const HG_INDOOR = mapId === "deepwood" ? 0.95 : 0.8;
+  const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
+  const HG_FURN_CELL = 32, HG_FURN_DIST = 60;
+  const _hgc = new THREE.Color(), hgColCache = new Map();
+  const hgCol = (hex) => { let v = hgColCache.get(hex); if (!v) { _hgc.set(hex); v = [_hgc.r, _hgc.g, _hgc.b]; hgColCache.set(hex, v); } return v; };
+  const hgStack = () => new Error().stack;
+  // is (x, z) inside a furnished house's walls (its outer faces, minus an L plan's cut)? The ground decals and the road ribbons drawn there would lie OVER the house's
+  // floor (5 cm over its pad; a ribbon is 6 cm over the ground, a decal 10 cm): they are not drawn inside a house. Hash built on the first call (the houses are done by then).
+  let hgUH = null;
+  const HG_QC = [1, 0, -1, 0], HG_QS = [0, 1, 0, -1];
+  function underHouse(x, z) {
+    if (!houses.length) return false;
+    if (!hgUH) {
+      hgUH = new Map();
+      for (const H of houses) { const a = H.aabb; for (let i = Math.floor(a.min[0] / 16); i <= Math.floor(a.max[0] / 16); i++) for (let j = Math.floor(a.min[2] / 16); j <= Math.floor(a.max[2] / 16); j++) { const k = i * 4096 + j; if (!hgUH.has(k)) hgUH.set(k, []); hgUH.get(k).push(H); } }
+    }
+    const l = hgUH.get(Math.floor(x / 16) * 4096 + Math.floor(z / 16));
+    if (l) for (const H of l) {
+      const dx = x - H.cx, dz = z - H.cz, c = HG_QC[H.turn], sn = HG_QS[H.turn], u = dx * c - dz * sn, v = dx * sn + dz * c, hw = H.W / 2 + 0.12, hd = H.D / 2 + 0.12;
+      if (u <= -hw || u >= hw || v <= -hd || v >= hd) continue;
+      if (H.cut) { const cu0 = -H.W / 2 + H.cut[0] * H.U, cv0 = -H.D / 2 + H.cut[1] * H.U, cu1 = -H.W / 2 + H.cut[2] * H.U, cv1 = -H.D / 2 + H.cut[3] * H.U; if (u > cu0 + 0.12 && u < cu1 - 0.12 && v > cv0 + 0.12 && v < cv1 - 0.12) continue; }
+      return true;
+    }
+    return false;
+  }   // (the placement census reads the generator's name from the frame under this one: "hgHouse")
+  /** The shared-`rng` draws the live generators (house() / towerTurn() / ruinHouse() and house()'s upper floor) made for this building - their loot rolls - made
+   *  again and thrown away: the furnished house's loot comes from its own stream (loot.js), and with these draws everything the shared stream places after the
+   *  towns (props, landmarks, portals, wild loot) is what the live build placed. Same branches and probabilities as the live code below. */
+  function legacyRolls(T, b, isCmp, core, sr, PAL, roofC) {
+    if (b.gen === "tower") {
+      const base = core ? SAV.tower.core : SAV.tower.town;
+      for (let f = 0; f < b.floors; f++) if (rng() < base.loot) { rng(); rng(); }          // a floor item per storey (+ its x / z jitter)
+      rng(); rng();                                                                         // the roof chest, the ground-floor item
+      return;
+    }
+    const lt = isCmp ? (b.use === "shed" ? SAV.loot.cmpShed : SAV.loot.cmpHouse) : (SAV.loot[b.use] || SAV.loot.house);
+    if (mapId !== "ashgrid" && T.kind !== "crater" && !b.deck && themedStyle(b, sr, PAL, roofC, b.floorH || 3.4).storeys === 2) rng();   // the upper floor's item
+    rng();                                                                                  // the floor item
+    if (rng() < lt[1]) { rng(); rng(); }                                                    // the chest (+ its jitter)
+  }
+  // (Wave 8 fix round, lane K1) the other buildings round a parcel (every town / compound building's layout footprint, + 0.3 m): housegen opens no street / back
+  // door onto one closer than its DOOR_OUT (verify_b: 11 Savanna downtown back doors faced a tower wall 1-3 m across an alley - a door nobody can approach)
+  let hgNearAll = null;
+  function hgNear(b) {
+    if (!hgNearAll) { hgNearAll = []; for (const T of city.lay.towns.concat(city.lay.compounds)) for (const q of T.parcels) if (q.building && q.building.aabb) hgNearAll.push(q.building.aabb); }
+    const a = b.aabb, M = 6, out = [];
+    if (!a) return out;
+    for (const r of hgNearAll) { if (r === a || r[2] < a[0] - M || r[0] > a[2] + M || r[3] < a[1] - M || r[1] > a[3] + M) continue; out.push([r[0] - 0.3, r[1] - 0.3, r[2] + 0.3, r[3] + 0.3]); }
+    return out;
+  }
+  /** One parcel building -> one furnished house. Returns { H, look, roofTop }. */
+  function hgHouse(T, p, b, did, wallC, roofC) {
+    const HG = city.HG;
+    const use = p.use && HG.USES.indexOf(p.use) >= 0 ? p.use : (b.use && HG.USES.indexOf(b.use) >= 0 ? b.use : "house");
+    const theme = T.theme || (mapId === "isla_viva" ? "resort" : mapId === "deepwood" ? "lodge" : "city");
+    const par = { id: T.id + "@" + p.id, cx: b.cx, cz: b.cz, y: 0, w: b.w, d: b.d, turn: b.turn, theme, storeys: Math.max(1, b.floors || 1), seed: seed >>> 0, use, fh: b.floorH, near: hgNear(b) };
+    // Savanna's towns keep their block palettes (cityPalette: a block's two wall colours and two roof colours, the colours the live towns wear): the city theme's own
+    // colours are brick reds and plasters only
+    if (mapId === "ashgrid" && theme === "city" && wallC && roofC) { par.facadeColor = parseInt(wallC.slice(1), 16); par.roofColor = parseInt(roofC.slice(1), 16); }
+    const H0 = HG.generate(par);
+    // the pad: the old roof-deck rectangle (the parcel + 0.4 m) and everything the house stands on the ground with (walls, porch decks, stoops, steps)
+    const rc = Math.abs(Math.cos(b.rot || 0)), rs = Math.abs(Math.sin(b.rot || 0));
+    const ohx = (rc * (b.w + 0.7) + rs * (b.d + 0.7)) / 2 + 0.05, ohz = (rs * (b.w + 0.7) + rc * (b.d + 0.7)) / 2 + 0.05;
+    let x0 = b.cx - ohx, x1 = b.cx + ohx, z0 = b.cz - ohz, z1 = b.cz + ohz;
+    for (const bx of H0.boxes) {
+      if (bx.min[1] > 0.6 || bx.p === "glass" || bx.p === "deco" || bx.p === "skin" || bx.p === "furn") continue;
+      if (bx.min[0] - 0.05 < x0) x0 = bx.min[0] - 0.05;
+      if (bx.max[0] + 0.05 > x1) x1 = bx.max[0] + 0.05;
+      if (bx.min[2] - 0.05 < z0) z0 = bx.min[2] - 0.05;
+      if (bx.max[2] + 0.05 > z1) z1 = bx.max[2] + 0.05;
+    }
+    const y = b.deck && b.y0 != null ? b.y0 : groundPad((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2, { gen: "house" });
+    const H = HG.translateY(H0, y);
+    // the inside / furniture chunk of this house (by its centre: a house's inside shows and hides as one)
+    const ck = Math.floor(b.cx / HG_FURN_CELL) + "," + Math.floor(b.cz / HG_FURN_CELL);
+    let C = hgChunks.get(ck);
+    if (!C) hgChunks.set(ck, C = { key: ck, x0: 1e9, z0: 1e9, x1: -1e9, z1: -1e9, y0: 1e9, y1: -1e9, parts: [], inside: [], kit: [] });
+    C.x0 = Math.min(C.x0, H.aabb.min[0]); C.x1 = Math.max(C.x1, H.aabb.max[0]); C.z0 = Math.min(C.z0, H.aabb.min[2]); C.z1 = Math.max(C.z1, H.aabb.max[2]);
+    C.y0 = Math.min(C.y0, H.aabb.min[1]); C.y1 = Math.max(C.y1, H.aabb.max[1]);
+    const toChunk = (a, k, tki, inside) => { if (a.idx.length) (inside ? C.inside : C.parts).push(a, k, tki); };   // (copied once into the chunk's typed arrays, see buildHouseFurniture; K1: the insides and the furniture apart)
+    // structure: the outside -> the district sink, the inside -> the chunk
+    const md = HG.meshData(H, hgCol, { interior: true });
+    for (const [key, a] of md.groups.walls) {
+      if (!a.idx.length) continue;
+      const bar = key.indexOf("|"), mat = bar < 0 ? key : key.slice(0, bar), kind = HG_MAT_KIND[mat] || "s";
+      if (bar >= 0) { toChunk(a, mat === "lamp" ? 1 : HG_INDOOR, HG_TKI[kind] || 0, true); continue; }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
+      geo.setAttribute("normal", new THREE.Float32BufferAttribute(a.nor, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(a.uv, 2));
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(a.col, 3));
+      geo.setIndex(a.idx);
+      pushGeo("vc|" + kind, geo);
+    }
+    for (const [, a] of md.groups.glass) {
+      const base = hgGlass.pos.length / 3;
+      for (let i = 0; i < a.pos.length; i++) { hgGlass.pos.push(a.pos[i]); hgGlass.nor.push(a.nor[i]); hgGlass.col.push(a.col[i]); }
+      for (let i = 0; i < a.idx.length; i++) hgGlass.idx.push(a.idx[i] + base);
+    }
+    for (const [key, a] of md.groups.furniture) { const mat = key.split("|")[0]; toChunk(a, HG_INDOOR, mat === "wood" ? 1 : 2); }
+    for (const f of H.furniture) if (f.src === "kit") C.kit.push({ type: f.kit.type, x: f.kit.x, y: f.kit.y, z: f.kit.z, rot: f.kit.rot, min: f.min, max: f.max });
+    // colliders: structure boxes, ramps (stairs + roof planks), furniture - housegen's order
+    const c0 = colliders.length, nBox = H.boxes.reduce((n, q) => n + (q.c ? 1 : 0), 0), roofRamps = [];
+    for (const c of HG.collidersOf(H, mkCollider)) colliders.push(c);
+    H.ramps.forEach((r, k) => { if (r.roof) roofRamps.push(c0 + nBox + k); });
+    H.town = T.id; H.parcel = p.id; H.district = did; H.chunk = ck; H.index = houses.length;
+    H.cols = [c0, nBox + H.ramps.length, colliders.length - c0];      // [first collider, structure colliders (boxes + ramps), all of the house's]
+    H.roofRamps = roofRamps;
+    houses.push(H);
+    // the house's loot points are listed on map.lootPoints too, tagged `house` (loot.js spawns a house's loot from map.houses and SKIPS these; bots.assignDrops reads
+    // lootPoints for its landing spots - a spot qualifies when a gun lies within 1.8 m of it - and its per-POI cap). `w` = this house's expected loot units (lane I3's
+    // per-room budget: min(3, 0.6 + 0.12 x rooms with points) + a chest slot's 0.4 x 2) spread over its points, so a cap can weigh a town by what it will hold
+    {
+      const rooms = new Set(H.loot.map((l) => l.room)), E = Math.min(3, 0.6 + 0.12 * rooms.size) + (H.chests.length ? 0.8 : 0), w = H.loot.length ? Math.round(E / H.loot.length * 1000) / 1000 : 0;
+      for (const l of H.loot) { lootPoints.push({ x: l.x, y: l.y, z: l.z, kind: "floor", poi: T.id, house: H.index, room: l.room, w }); lootG.push(heightAt0(l.x, l.z)); }
+    }
+    cityBld.push([H.aabb.min[0], H.aabb.min[2], H.aabb.max[0], H.aabb.max[2]]);
+    // the placement census (Node gate only: globalThis.__LC_BOXES is null in the game) sees every drawn structure box with this generator's name on its stack
+    if (globalThis.__LC_BOXES) {
+      const st = hgStack();
+      // (the attic's gable layers and the ramps - the roof planks a chimney or a ridge rests on, the stairs - are structure too: their boxes join the record)
+      // (a roof plank is drawn hv above and below its ramp's walk line - housegen rampHalfV - and the ridge cap rests on the DRAWN plank: its box is the ramp's grown by hv)
+      const planks = H.ramps.map((r) => { const hv = r.roof ? HG.rampHalfV(r) : 0; return { p: "ramp", min: [r.min[0], r.min[1] - hv, r.min[2]], max: [r.max[0], r.max[1] + hv, r.max[2]] }; });
+      for (const bx of H.boxes.concat(planks)) {
+        if (bx.p === "glass" || bx.p === "deco" || bx.p === "furn") continue;
+        const P = [];
+        for (const xi of [bx.min[0], bx.max[0]]) for (const yi of [bx.min[1], bx.max[1]]) for (const zi of [bx.min[2], bx.max[2]]) P.push(xi, yi, zi);
+        globalThis.__LC_BOXES.push({ geo: { attributes: { position: { count: 8, getX: (k) => P[k * 3], getY: (k) => P[k * 3 + 1], getZ: (k) => P[k * 3 + 2] } } }, w: bx.max[0] - bx.min[0], h: bx.max[1] - bx.min[1], d: bx.max[2] - bx.min[2], stack: st });
+      }
+    }
+    const fc = H.facade || {}, look = "hg:" + (fc.mat || "") + (fc.color != null ? fc.color.toString(16) : "") + "|" + H.roof + "|" + H.storeys + "|" + b.w + "x" + b.d + "|" + H.plan + "|" + (H.trim != null ? H.trim.toString(16) : "");
+    return { H, look, roofTop: H.floors[H.floors.length - 1].ceil + HG.SLAB };
+  }
+  /** WAVE 8: the furniture chunks and the map's glass, after the kit (its GLBs are the kit's: one parse, the same lazy loader). Kit pieces are baked into the
+   *  chunk mesh (their GLB triangles, the GLB materials' colours as vertex colours, x HG_INDOOR); a type whose GLB did not load (or a page on the ultra-low tier)
+   *  draws its collider box instead - the collider never depends on the GLB. One MeshStandardMaterial (vertex colours) for every chunk: one program,
+   *  compiled in the warm frame (it forces the hidden chunks visible). */
+  async function buildHouseFurniture() {
+    if (!houses.length) return;
+    const kit = W._cityKit, low = W.settings && W.settings.graphics === "ultra-low";
+    const types = new Set();
+    for (const C of hgChunks.values()) for (const e of C.kit) types.add(e.type);
+    const tpl = new Map();                                                     // type -> [{ pos (the GLB mesh's matrix applied), nor, idx, col [r, g, b] }] | null
+    const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _nm = new THREE.Matrix3();
+    if (kit && !low && typeof kit.parts === "function") {
+      for (const t of types) {
+        let rec = null;
+        try { rec = await kit.parts(t); } catch (e) { rec = null; }
+        if (!rec || rec.failed || !rec.parts) { tpl.set(t, null); continue; }
+        const out = [];
+        for (const pt of rec.parts) {
+          const gp = pt.geometry.attributes.position, gn = pt.geometry.attributes.normal, gi = pt.geometry.index;
+          if (!gp) continue;
+          _nm.getNormalMatrix(pt.local);
+          const pos = new Float32Array(gp.count * 3), nor = new Float32Array(gp.count * 3);
+          for (let i = 0; i < gp.count; i++) {
+            _v.set(gp.getX(i), gp.getY(i), gp.getZ(i)).applyMatrix4(pt.local); pos[i * 3] = _v.x; pos[i * 3 + 1] = _v.y; pos[i * 3 + 2] = _v.z;
+            if (gn) _n.set(gn.getX(i), gn.getY(i), gn.getZ(i)).applyMatrix3(_nm).normalize(); else _n.set(0, 1, 0);
+            nor[i * 3] = _n.x; nor[i * 3 + 1] = _n.y; nor[i * 3 + 2] = _n.z;
+          }
+          const idx = gi ? Array.from(gi.array) : Array.from({ length: gp.count }, (_, i) => i);
+          const m = Array.isArray(pt.material) ? pt.material[0] : pt.material, c = m && m.color ? [m.color.r, m.color.g, m.color.b] : [0.6, 0.6, 0.6];
+          out.push({ pos, nor, idx, col: c });
+        }
+        tpl.set(t, out.length ? out : null);
+      }
+    }
+    const COSQ = [1, 0, -1, 0], SINQ = [0, 1, 0, -1];
+    const mat = dualStructMaterial();                                         // (the district meshes' material: one program for the town, its insides and its furniture)
+    const meshes = [];
+    let kitBoxes = 0;
+    const BOXV = 20, BOXI = 30;                                               // (a collider-box stand-in: five faces, no underside)
+    // size of a part list (housegen's inside faces / authored furniture) + kit pieces (their GLB parts, or a box)
+    const sizeOf = (parts, kitL) => {
+      let nv = 0, ni = 0;
+      for (let q = 0; q < parts.length; q += 3) { nv += parts[q].pos.length / 3; ni += parts[q].idx.length; }
+      for (const e of kitL) { const kp = tpl.get(e.type); if (kp) for (const t of kp) { nv += t.pos.length / 3; ni += t.idx.length; } else { nv += BOXV; ni += BOXI; } }
+      return [nv, ni];
+    };
+    // (Wave 8 fix round, lane K1) TWO BatchedMeshes per map: the houses' INSIDES ("houses:inside@all": room walls, floors, ceilings, stair steps, door leaves, lamp
+    // panels - structure) and their FURNITURE ("houses:pieces@all": authored pieces and the baked kit GLBs, lcPart furniture); the 32 m chunks are their instances,
+    // each shown / hidden by the distance check below (the same chunks, the same triangles, the same 60 m rule; three culls each instance by the frustum too).
+    //  - the 32 m chunk meshes were one geometry each: 131-220 per map, and how many depended on the seed's layout (Isla Viva 158-193 over five seeds) - every lobby
+    //    held a different count (hud_cycle: lobby geometries 324-386 between rounds, the bar +-30, ~1.7x the live build). A batch is one geometry (+ its two small
+    //    data textures: instance matrices, draw ids), one material, one multi-draw call: every map holds exactly two, whatever the seed (a batch per region made the
+    //    texture count follow the layout instead).
+    //  - a chunk mixed both, so whoever reads the drawn triangles (interiorcheck's page judge) had to guess by box which triangle was furniture: a piece's own faces
+    //    lie ON its box, read as walls, and hid the piece and what stood behind it (verify_b furniture-view 148/150). Two meshes say which is which.
+    const regions = new Map();                                                // region key -> { key, chunks: [[C, insideSize, piecesSize]], sizes, bm: { inside, pieces } }
+    for (const C of hgChunks.values()) {
+      const si = sizeOf(C.inside, []), sp = sizeOf(C.parts, C.kit);
+      if (!si[1] && !sp[1]) continue;
+      const rk = "all";
+      let Rg = regions.get(rk);
+      if (!Rg) regions.set(rk, Rg = { key: rk, chunks: [], n: { inside: [0, 0, 0], pieces: [0, 0, 0] }, bm: {} });
+      Rg.chunks.push([C, si, sp]);
+      if (si[1]) { Rg.n.inside[0]++; Rg.n.inside[1] += si[0]; Rg.n.inside[2] += si[1]; }
+      if (sp[1]) { Rg.n.pieces[0]++; Rg.n.pieces[1] += sp[0]; Rg.n.pieces[2] += sp[1]; }
+    }
+    const lod = [];                                                           // per chunk: { box, on, inst: [[bm, iid], ...] }
+    const batches = [];
+    for (const Rg of regions.values()) for (const kind of ["inside", "pieces"]) {
+      const [nI, nV, nIdx] = Rg.n[kind];
+      if (!nI) continue;
+      const bm = new THREE.BatchedMesh(nI, nV, nIdx, mat);
+      bm.name = "houses:" + kind + "@" + Rg.key; bm.castShadow = false; bm.receiveShadow = true;
+      bm.sortObjects = false;                                                  // (opaque chunks: no per-frame depth sort and its garbage; per-chunk frustum culling stays on)
+      bm.userData.hgChunk = kind + ":" + Rg.key; bm.userData.lcPart = kind === "pieces" ? "furniture" : "inside";
+      Rg.bm[kind] = bm; batches.push(bm);
+    }
+    const n8 = (x) => (x >= 1 ? 127 : x <= -1 ? -127 : Math.round(x * 127)), c8 = (x) => (x >= 1 ? 255 : x <= 0 ? 0 : Math.round(x * 255));
+    // one chunk's part list + kit list -> a BufferGeometry in the batches' layout (never drawn itself: copied into the batch)
+    const chunkGeo = (parts, kitL, nv, ni) => {
+      const P = new Float32Array(nv * 3), N = new Int8Array(nv * 3), UV = new Float32Array(nv * 2), CO = new Uint8Array(nv * 3), TK = new Uint8Array(nv), ID = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+      let v = 0, ii = 0;
+      for (let q = 0; q < parts.length; q += 3) {
+        const a = parts[q], k = parts[q + 1], tki = parts[q + 2], n = a.pos.length / 3, base = v;
+        for (let i = 0; i < n * 3; i++) { P[v * 3 + i] = a.pos[i]; N[v * 3 + i] = n8(a.nor[i]); CO[v * 3 + i] = c8(a.col[i] * k); }
+        for (let i = 0; i < n * 2; i++) UV[v * 2 + i] = a.uv[i];
+        TK.fill(tki, v, v + n);
+        for (let i = 0; i < a.idx.length; i++) ID[ii++] = a.idx[i] + base;
+        v += n;
+      }
+      for (const e of kitL) {
+        const kp = tpl.get(e.type), c = COSQ[e.rot & 3], sn = SINQ[e.rot & 3];
+        if (kp) {
+          for (const t of kp) {
+            const base = v, cr = c8(t.col[0] * HG_INDOOR), cg = c8(t.col[1] * HG_INDOOR), cb = c8(t.col[2] * HG_INDOOR);
+            for (let i = 0; i < t.pos.length; i += 3) {
+              const lx = t.pos[i], ly = t.pos[i + 1], lz = t.pos[i + 2], px = e.x + lx * c + lz * sn, py = e.y + ly, pz = e.z - lx * sn + lz * c;
+              const nx = t.nor[i], ny = t.nor[i + 1], nz = t.nor[i + 2], wx = nx * c + nz * sn, wz = -nx * sn + nz * c;
+              P[v * 3] = px; P[v * 3 + 1] = py; P[v * 3 + 2] = pz;
+              N[v * 3] = n8(wx); N[v * 3 + 1] = n8(ny); N[v * 3 + 2] = n8(wz);
+              CO[v * 3] = cr; CO[v * 3 + 1] = cg; CO[v * 3 + 2] = cb;
+              // a planar uv on the face's dominant axis (the stucco grain at 2 m a tile: the pieces read as painted / upholstered, not as flat plastic)
+              const ax = Math.abs(wx), ay = Math.abs(ny), az = Math.abs(wz);
+              if (ay >= ax && ay >= az) { UV[v * 2] = px / 2; UV[v * 2 + 1] = pz / 2; } else if (ax >= az) { UV[v * 2] = pz / 2; UV[v * 2 + 1] = py / 2; } else { UV[v * 2] = px / 2; UV[v * 2 + 1] = py / 2; }
+              TK[v] = 2; v++;
+            }
+            for (let i = 0; i < t.idx.length; i++) ID[ii++] = t.idx[i] + base;
+          }
+        } else {                                                                 // the collider box, five faces (no underside), a neutral brown
+          kitBoxes++;
+          const x0 = e.min[0], y0 = e.min[1], z0 = e.min[2], x1 = e.max[0], y1 = e.max[1], z1 = e.max[2], cc = hgCol(0x8a7560);
+          const quad = (a, b2, c2, d, n) => {
+            const base = v;
+            for (const w of [a, b2, c2, d]) {
+              P[v * 3] = w[0]; P[v * 3 + 1] = w[1]; P[v * 3 + 2] = w[2]; N[v * 3] = n[0] * 127; N[v * 3 + 1] = n[1] * 127; N[v * 3 + 2] = n[2] * 127;
+              CO[v * 3] = c8(cc[0] * HG_INDOOR); CO[v * 3 + 1] = c8(cc[1] * HG_INDOOR); CO[v * 3 + 2] = c8(cc[2] * HG_INDOOR);
+              UV[v * 2] = n[1] ? w[0] / 2 : n[0] ? w[2] / 2 : w[0] / 2; UV[v * 2 + 1] = n[1] ? w[2] / 2 : w[1] / 2; TK[v] = 1; v++;
+            }
+            ID[ii++] = base; ID[ii++] = base + 1; ID[ii++] = base + 2; ID[ii++] = base; ID[ii++] = base + 2; ID[ii++] = base + 3;
+          };
+          quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0]);
+          quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1]);
+          quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1]);
+          quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0]);
+          quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0]);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(P, 3));
+      geo.setAttribute("normal", new THREE.BufferAttribute(N, 3, true));
+      geo.setAttribute("color", new THREE.BufferAttribute(CO, 3, true));
+      geo.setAttribute("uv", new THREE.BufferAttribute(UV, 2));
+      geo.setAttribute("tki", new THREE.BufferAttribute(TK, 1));
+      geo.setIndex(new THREE.BufferAttribute(ID, 1));
+      return geo;
+    };
+    for (const Rg of regions.values()) for (const [C, si, sp] of Rg.chunks) {
+      const L = { box: [C.x0, C.y0, C.z0, C.x1, C.y1, C.z1], on: false, inst: [] };
+      for (const [kind, sz, parts, kitL] of [["inside", si, C.inside, []], ["pieces", sp, C.parts, C.kit]]) {
+        if (!sz[1]) continue;
+        // (copied into the region's batch: the chunk geometry is never drawn, never uploaded)
+        const bm = Rg.bm[kind], gid = bm.addGeometry(chunkGeo(parts, kitL, sz[0], sz[1])), iid = bm.addInstance(gid);
+        bm.setVisibleAt(iid, false);                                           // (shown by the distance check below once a camera exists; the warm frame draws the batch - its program and buffers)
+        L.inst.push([bm, iid]);
+      }
+      C.kit.length = 0; C.parts.length = 0; C.inside.length = 0;
+      lod.push(L);
+    }
+    for (const bm of batches) { bm.computeBoundingBox(); bm.computeBoundingSphere(); g.add(bm); meshes.push(bm); }
+    if (hgGlass.idx.length) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(hgGlass.pos, 3));
+      geo.setAttribute("normal", new THREE.Float32BufferAttribute(hgGlass.nor, 3));
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(hgGlass.col, 3));
+      geo.setIndex(hgGlass.idx);
+      geo.computeBoundingSphere();
+      const gm = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.3, depthWrite: false, roughness: 0.05, metalness: 0 });
+      gm.name = "houses:glass";
+      // clear (0.3) up to 35 m, a dark glazing (0.9, the sky's reflection) from 60 m: past HG_FURN_DIST the inside of a house is not drawn
+      gm.customProgramCacheKey = () => "lc-house-glass-v1";
+      gm.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace("#include <opaque_fragment>", "diffuseColor.a = mix(diffuseColor.a, 0.9, smoothstep(35.0, 60.0, length(vViewPosition)));\n#include <opaque_fragment>");
+      };
+      const glass = new THREE.Mesh(geo, gm);
+      glass.name = "houses:glass"; glass.castShadow = false; glass.receiveShadow = false; glass.renderOrder = 2; glass.userData.lcPart = "glass";
+      g.add(glass);
+      hgGlass.pos = hgGlass.nor = hgGlass.col = hgGlass.idx = null;
+    }
+    // furniture beyond HG_FURN_DIST of the camera is not drawn (distance to the chunk's box), checked 4 times a second
+    let t = 9;
+    trackUpdater((dt) => {
+      t += dt; if (t < 0.25) return;
+      const cam = W.camera; if (!cam) return;
+      t = 0;
+      const px = cam.position.x, py = cam.position.y, pz = cam.position.z, D2 = HG_FURN_DIST * HG_FURN_DIST;
+      for (let i = 0; i < lod.length; i++) {
+        const L = lod[i], bx = L.box;
+        const dx = px < bx[0] ? bx[0] - px : px > bx[3] ? px - bx[3] : 0, dy = py < bx[1] ? bx[1] - py : py > bx[4] ? py - bx[4] : 0, dz = pz < bx[2] ? bx[2] - pz : pz > bx[5] ? pz - bx[5] : 0;
+        const on = dx * dx + dy * dy + dz * dz <= D2;
+        if (on !== L.on) { L.on = on; for (const q of L.inst) q[0].setVisibleAt(q[1], on); }
+      }
+    });
+    city.furniture = { chunks: lod.length, regions: batches.length, kitTypes: types.size, kitBaked: [...tpl.values()].filter(Boolean).length, kitBoxes };
+  }
   function buildCityBuildings() {
     const { TG, lay } = city;
     const cell = mapId === "ashgrid" ? 600 : 300;   // (Wave 7b: a themed map's compounds share a district per 300 m cell - fewer compounds per mesh: the frustum drops the ones behind a street camera and the shadow pass the far ones) (7A2: compounds share a district per 600 m cell, was 300 m: a compound is 3-5 small buildings, and every district costs 2-3 structure draw calls (twice with the shadow pass) in every view that sees it - 9 compound districts were 36 calls of a seed-1 drop view)
@@ -3497,6 +3841,7 @@ export async function buildMap(W, mapId) {
         const b = mapId !== "ashgrid" && p.building && p.building.use == null ? Object.assign({}, p.building, { use: p.use }) : p.building;
         if (!b) continue;
         const nLoot0 = lootPoints.length + chestPoints.length;
+        let nHouseLoot = 0;                                       // (WAVE 8: a housegen house's own points - loot.js lays them - count as the block's loot)
         const wallKey = b.arch === "shop" ? "shop" : (b.gen === "tower" ? "big" : b.use === "barn" ? "barn" : b.use === "hall" ? "hall" : b.use === "shed" ? "shed" : "house");
         const PAL = cityPalette(T, isCmp ? -1 : p.block, core), cr = TG.subRng(seed, T.id, "col" + p.id), sr = TG.subRng(seed, T.id, "sty" + p.id);
         const q1 = cr(), q2 = cr(), q3 = cr(), q4 = cr(), vr = TG.subRng(seed, T.id, "var" + p.id), v1 = vr(), v2 = vr();
@@ -3514,6 +3859,18 @@ export async function buildMap(W, mapId) {
           city.kit.push({ type: b.kit, x: b.cx - (ctr[0] * cs + ctr[1] * sn), y, z: b.cz - (-ctr[0] * sn + ctr[1] * cs), rot: q, district: did, palette: b.palette && b.palette.variant ? b.palette.variant : undefined, sy: b.sy });
           look = b.kit + "|" + (b.palette && b.palette.variant || "") + "|" + (b.sy || 1);
           if (b.height > 30) city.skyline.push({ x: b.cx, z: b.cz, h: b.height, kind: "shell", town: T.id });
+        } else if (city.HG) {
+          // WAVE 8: a furnished housegen house (see hgHouse); a tower / mid-rise keeps its rooftop crown (the units, a mast, Savanna's curtain-wall shaft, a resort terrace)
+          // standing on the housegen roof (the crown functions measure from y + floors x 4 + 0.3: they are handed the y that puts that on the roof slab's top)
+          legacyRolls(T, b, isCmp, core, sr, PAL, roofC);
+          const hr = hgHouse(T, p, b, did, wallC, roofC);
+          look = hr.look;
+          nHouseLoot += hr.H.loot.length + hr.H.chests.length;
+          if (b.gen === "tower") {
+            const yc = hr.roofTop - b.floors * 4 - 0.3;
+            const shaftH = mapId === "ashgrid" ? towerCrown(b, yc, sr, core, wallC, T.id) : themedCrown(b, yc, sr);
+            look += shaftH ? "s" + Math.round(shaftH / 6) : "";
+          }
         } else if (b.gen === "tower") {
           const base = core ? SAV.tower.core : SAV.tower.town, mull = SAV.mullions[Math.floor(sr() * SAV.mullions.length)];
           const tO = { loot: base.loot, chest: base.chest, mullion: mull };
@@ -3552,7 +3909,7 @@ export async function buildMap(W, mapId) {
           look += st.roof + "" + storeys + (st.chimney ? "c" : "") + (st.porch ? "p" : "") + (st.awning || "") + b.w + "x" + b.d + st.glass + structTile + st.trim;
         }
         city.looks.set(T.id + ":" + p.id, look);
-        blockLoot.set(p.block, (blockLoot.get(p.block) || 0) + (lootPoints.length + chestPoints.length - nLoot0));
+        blockLoot.set(p.block, (blockLoot.get(p.block) || 0) + (lootPoints.length + chestPoints.length - nLoot0) + nHouseLoot);
         if (b.enterable && b.gen !== "shell" && !blockHome.has(p.block)) blockHome.set(p.block, b);
       }
       structTile = STRUCT_TILE;
@@ -3685,7 +4042,10 @@ export async function buildMap(W, mapId) {
       }
       return v;
     };
+    // WAVE 8: a furnished house has its own floor (5 cm over its pad); the block's paving / a yard's earth (10 cm over the ground) drawn inside its walls lay OVER that
+    // floor (lane I3 found it hiding the floor loot's rings in a Palm Bay shop). A slab cell whose centre is inside a house's walls is not drawn.
     const quad = (T, x0, z0, x1, z1, lift, hex) => {
+      if (T === slab && houses.length && underHouse((x0 + x1) / 2, (z0 + z1) / 2)) return;
       const y00 = vl(x0, z0), y10 = vl(x1, z0), y01 = vl(x0, z1), y11 = vl(x1, z1);
       const dx = x1 - x0, dz = z1 - z0, gx = ((y10 + y11) - (y00 + y01)) / (2 * dx), gz = ((y01 + y11) - (y00 + y10)) / (2 * dz), il = 1 / Math.sqrt(gx * gx + 1 + gz * gz);
       _c.set(hex);
@@ -3884,6 +4244,24 @@ export async function buildMap(W, mapId) {
     for (const r of cityRoadLog) { const hw = r[4] / 2 + 1; mark(Math.min(r[0], r[2]) - hw, Math.min(r[1], r[3]) - hw, Math.max(r[0], r[2]) + hw, Math.max(r[1], r[3]) + hw); }
     for (const T of city.lay.compounds.concat(city.lay.towns.filter((q) => !q.blocks.length && q.compound))) { const q = T.compound.bounds; mark(q[0] - 2, q[1] - 2, q[2] + 2, q[3] + 2); }
     for (const a of cityBld) mark(a[0] - 2, a[1] - 2, a[2] + 2, a[3] + 2);
+    // (Wave 8 fix round, lane K1) and the trodden approach of every street / back door of a furnished house: 6 m out, 4 m wide. A room's floor seen from above
+    // shows the ground through its doorway well past the 2 m ring (interiorcheck grass-indoors: a crater-rim ruin room on the slope, 255 px of tufts)
+    // ... and round a house whose ground falls away below its floor (a terrace on a slope: the crater-rim village): a window or a doorway on the downhill side
+    // looks down past the 2 m ring at grass far below the floor (grass-indoors: volcano_rim@p40.f0r0 255 px) - the ring widens 2 m per metre of drop (<= 10 m)
+    for (const H of houses) {
+      const a = H.aabb, y = H.y0;
+      let lo = Infinity;
+      for (const [sx, sz] of [[a.min[0] - 3, a.min[2] - 3], [a.max[0] + 3, a.min[2] - 3], [a.min[0] - 3, a.max[2] + 3], [a.max[0] + 3, a.max[2] + 3], [(a.min[0] + a.max[0]) / 2, a.min[2] - 3], [(a.min[0] + a.max[0]) / 2, a.max[2] + 3], [a.min[0] - 3, (a.min[2] + a.max[2]) / 2], [a.max[0] + 3, (a.min[2] + a.max[2]) / 2]]) lo = Math.min(lo, heightAt0(sx, sz));
+      const drop = y - lo;
+      if (drop > 0.5) { const M = Math.min(10, 2 + 2 * drop); mark(a.min[0] - M, a.min[2] - M, a.max[0] + M, a.max[2] + M); }
+    }
+    for (const H of houses) for (const d of H.doors) {
+      if (!d.rooms || d.rooms[1] != null || d.floor !== 0) continue;
+      let nx = d.nx || 0, nz = d.nz || 0;
+      if (d.out) { const ox = d.out[0] - d.x, oz = d.out[1] - d.z, l = Math.hypot(ox, oz); if (l > 1e-6) { nx = ox / l; nz = oz / l; } }
+      const ex = d.x + nx * 6, ez = d.z + nz * 6, wx = Math.abs(nz) * 2 + 0.5, wz = Math.abs(nx) * 2 + 0.5;
+      mark(Math.min(d.x, ex) - wx, Math.min(d.z, ez) - wz, Math.max(d.x, ex) + wx, Math.max(d.z, ez) + wz);
+    }
     return m;
   }
   // The district meshes (every town and compound has one per texture kind, with its own bounding sphere): three already frustum-culls them, so what is left is
@@ -3951,6 +4329,37 @@ export async function buildMap(W, mapId) {
   // ONLY from generators that already exist, are seeded off the same rng, and are
   // recorded in `landmarks` so scatterTrees does not grow a pine through the roof.
   // MUST be called after every poi() and BEFORE that branch's scatterTrees block.
+  // (Wave 8 fix round, lane K1) FREE WALL FRAGMENTS NEVER MEET. A fragment at a free yaw collides as a stepped chain of ~1 m AABBs (boxColliders), and two
+  // fragments that touch or cross (a T, a V, an X) leave junction pockets narrower than a capsule where the chains of BOTH walls overlap a body: a bot that came
+  // down into one (a glider has no side collision) stood inside the chain with every way out but one blocked by the other wall (verify_b: Savanna seed 51002,
+  // a ruin's two fragments in a T at (489, -153), a bot wedged ~200 s). Every fragment keeps its draws; where its footprint grown by FRAG_GAP / 2 meets an
+  // earlier fragment of the same cluster it is pushed away from the cluster's centre in 0.75 m steps (no draw) until it clears (cover stays, the junction goes).
+  const FRAG_GAP = 1.2;                                                     // > the capsule's 0.9 m: the gap between two fragments is a walkway, not a pocket
+  function fragClearOf(list, x, z, w, d, rot) {
+    const c = Math.cos(rot), s = Math.sin(rot), ax = [[c, -s], [s, c]];          // the fragment's local x / z axes in the world (three's rotateY)
+    for (const f of list) {
+      const axes = ax.concat(f.ax);
+      let sep = false;
+      for (const n of axes) {
+        const ra = (w / 2) * Math.abs(ax[0][0] * n[0] + ax[0][1] * n[1]) + (d / 2) * Math.abs(ax[1][0] * n[0] + ax[1][1] * n[1]);
+        const rb = (f.w / 2) * Math.abs(f.ax[0][0] * n[0] + f.ax[0][1] * n[1]) + (f.d / 2) * Math.abs(f.ax[1][0] * n[0] + f.ax[1][1] * n[1]);
+        if (Math.abs((f.x - x) * n[0] + (f.z - z) * n[1]) > ra + rb + FRAG_GAP) { sep = true; break; }
+      }
+      if (!sep) return false;
+    }
+    return true;
+  }
+  /** the spot a fragment of the cluster `list` (centre ox, oz) stands at: (x, z) when it clears the others, else pushed outward; recorded in list. null = no room */
+  function fragSpot(list, ox, oz, x, z, w, d, rot) {
+    let dx = x - ox, dz = z - oz;
+    const l = Math.hypot(dx, dz);
+    if (l < 1e-6) { dx = Math.cos(rot); dz = -Math.sin(rot); } else { dx /= l; dz /= l; }
+    for (let k = 0; k <= 16; k++) {
+      const px = x + dx * 0.75 * k, pz = z + dz * 0.75 * k;
+      if (fragClearOf(list, px, pz, w, d, rot)) { list.push({ x: px, z: pz, w, d, ax: [[Math.cos(rot), -Math.sin(rot)], [Math.sin(rot), Math.cos(rot)]] }); return [px, pz]; }
+    }
+    return null;
+  }
   function minorLandmarks(n, wallCs, roofC, opts) {
     opts = opts || {};
     const minH = opts.minH != null ? opts.minH : waterY + 1.0;
@@ -3973,9 +4382,13 @@ export async function buildMap(W, mapId) {
       } else if (kind === 2) {
         rangerTower(x, z, wallCs[1 % wallCs.length], null);
       } else if (kind === 3) {                              // ruin — same fragment pattern as Rubble Row
+        const frags = [];
         for (let i = 0; i < 4; i++) {
-          const rx = x + (rng() - 0.5) * 14, rz = z + (rng() - 0.5) * 14, ry2 = heightAt0(rx, rz);
+          const rx0 = x + (rng() - 0.5) * 14, rz0 = z + (rng() - 0.5) * 14;
           const fw = 3.5 + rng() * 3, fh = 2.2 + rng() * 1.4, fc = shade(wallCs[0], 0.8 + Math.floor(rng() * 4) * 0.1), fr = rng() * Math.PI;   // same draws, same order
+          const sp = fragSpot(frags, x, z, rx0, rz0, fw, 0.5, fr);         // (K1: never a junction with the ruin's other fragments)
+          if (!sp) continue;
+          const rx = sp[0], rz = sp[1], ry2 = heightAt0(rx, rz);
           addBox(rx, Math.min(ry2 + 1.1, lowGround(rx, rz, fw, 0.5, fr) + fh / 2), rz, fw, fh, 0.5, fc, { rotY: fr });
         }
         if (!city || openSpot(x, y + 0.5, z)) loot(x, y + 0.5, z, null);
@@ -4445,19 +4858,24 @@ export async function buildMap(W, mapId) {
       // cover on its own, which is scattered debris rather than a fight space. ~35
       // in 6 KNOTS of 5-7 instead: inside a knot the pieces interlock, and the gaps
       // between knots are the rotations.
+      // (Wave 8 fix round, lane K1: the pieces of a knot stand CLOSE, never touching - fragSpot - so a knot is a maze of walkways >= 1.2 m, not of junction pockets)
+      const frags = [];
       for (let k = 0; k < 6; k++) {
         const kx = p.x + (rng() - 0.5) * p.r * 1.6, kz = p.z + (rng() - 0.5) * p.r * 1.6;
         const n = 5 + Math.floor(rng() * 3);
         for (let i = 0; i < n; i++) {
-          const x = kx + (rng() - 0.5) * 22, z = kz + (rng() - 0.5) * 22;
-          const y = heightAt0(x, z);
+          const x0 = kx + (rng() - 0.5) * 22, z0 = kz + (rng() - 0.5) * 22;
           // The tint is QUANTISED to 4 steps on purpose: addBox keys its batches by
           // the colour string and shade() returns a hex, so a continuous multiplier
           // gave every wall a unique key — one merged mesh each, with its own
           // MeshStandardMaterial + map + normalMap, for one pile of rubble.
           // This is the only shade() call site in the file that passes a random k.
           const fw = 3.5 + rng() * 3, fh = 1.8 + rng() * 1.6, fc = shade(C_BRICKB, 0.8 + Math.floor(rng() * 4) * 0.1), fr = rng() * Math.PI;   // same draws, same order
-          if (inCity(x, z, 3)) continue;                    // (Wave 7: no rubble inside the village's blocks)
+          if (inCity(x0, z0, 3)) continue;                  // (Wave 7: no rubble inside the village's blocks)
+          const sp = fragSpot(frags, kx, kz, x0, z0, fw, 0.5, fr);
+          if (!sp) continue;
+          if (inCity(sp[0], sp[1], 3)) { frags.pop(); continue; }
+          const x = sp[0], z = sp[1], y = heightAt0(x, z);
           addBox(x, Math.min(y + 0.9, lowGround(x, z, fw, 0.5, fr) + fh / 2), z, fw, fh, 0.5, fc, { rotY: fr });
         }
         if (k % 2 === 0 && !inRects(cityBld, kx, kz, 2) && !inRects(cityDecks, kx, kz, 2) && (!city || openSpot(kx, heightAt0(kx, kz) + 0.5, kz))) loot(kx, heightAt0(kx, kz) + 0.5, kz, p.id);
@@ -4623,7 +5041,7 @@ export async function buildMap(W, mapId) {
   buildTerrain();
   emitRoads();
   if (city) buildCityGround();
-  for (let i = 0; i < lootPoints.length; i++) { const p = lootPoints[i], d = p.y - lootG[i]; if (d >= 0 && d <= 1) p.y += heightAt0(p.x, p.z) - lootG[i]; }
+  for (let i = 0; i < lootPoints.length; i++) { const p = lootPoints[i], d = p.y - lootG[i]; if (p.house == null && d >= 0 && d <= 1) p.y += heightAt0(p.x, p.z) - lootG[i]; }   // (WAVE 8: a house point lies on its floor / furniture: as given)
   for (let i = 0; i < chestPoints.length; i++) { const p = chestPoints[i], d = p.y - chestG[i]; if (d >= 0 && d <= 1) p.y += heightAt0(p.x, p.z) - chestG[i]; }
   await yieldPhase();                                // phase 1/3 done — let the loader paint
 
@@ -4855,8 +5273,9 @@ export async function buildMap(W, mapId) {
       const bk = bkey.slice(bar + 1);
       const tkind = (tag || city) && (bk === "block" || bk === "shingle") ? "s" : bk;
       if (EMIT[color]) continue;                    // built below, one mesh per colour
-      _vc.set(color);
       const list = kindGroups[tkind] || (kindGroups[tkind] = []);
+      if (color === "vc") { for (const geo of bset[bkey]) list.push(geo); continue; }        // (WAVE 8: a housegen house's faces carry their own vertex colours)
+      _vc.set(color);
       for (const geo of bset[bkey]) {
         const n = geo.attributes.position.count, ca = new Float32Array(n * 3);
         for (let i = 0; i < n; i++) { ca[i * 3] = _vc.r; ca[i * 3 + 1] = _vc.g; ca[i * 3 + 2] = _vc.b; }
@@ -4868,7 +5287,7 @@ export async function buildMap(W, mapId) {
     // were two draw calls (four with the shadow pass) in every view that saw it: 10-13 districts in a Deepwood street view. A per-vertex texture index picks the texture
     // (dualStructMaterial: the same lighting, the same UVs and texture transforms, two samplers); Savanna keeps its kinds (its frames are untouched).
     const DUAL = [["s", 0], ["plank", 1], ["stucco", 2]];
-    if (tag && city && mapId !== "ashgrid" && DUAL.filter(([k]) => kindGroups[k]).length >= 2) {
+    if (tag && city && (mapId !== "ashgrid" || houses.length) && DUAL.filter(([k]) => kindGroups[k]).length >= 2) {      // (WAVE 8: Savanna's districts too, now that its houses wear brick, plaster and plank in one district)
       const both = [];
       for (const [k, v] of DUAL) for (const geo of (kindGroups[k] || [])) { geo.setAttribute("tki", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(v), 1)); both.push(geo); }
       const mergedB = BufferGeometryUtils.mergeGeometries(both, false);
@@ -4876,7 +5295,7 @@ export async function buildMap(W, mapId) {
         for (const [k] of DUAL) delete kindGroups[k];
         const mesh = new THREE.Mesh(mergedB, dualStructMaterial());
         mesh.castShadow = true; mesh.receiveShadow = true;
-        mesh.name = "structures:mix@" + tag; mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag);
+        mesh.name = "structures:mix@" + tag; mesh.userData.district = tag; mesh.userData.lcPart = "structure"; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag);
         g.add(mesh);
       }
     }
@@ -4885,6 +5304,7 @@ export async function buildMap(W, mapId) {
       const mesh = new THREE.Mesh(merged, structMaterial(tkind));
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.name = "structures:" + tkind + (tag ? "@" + tag : "");
+      mesh.userData.lcPart = "structure";                                         // (WAVE 8: what the mesh IS, for the gates: a town called "yard" is not a yard decal)
       if (tag) { mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag); }
       g.add(mesh);
     }
@@ -5004,7 +5424,24 @@ export async function buildMap(W, mapId) {
   }
 
   // ── instanced props from GLBs ─────────────────────────────────────────────
+  // WAVE 8: a tree whose crown would reach into a furnished house's upper storey (a palm 4 m from a two-storey wall put its fronds through the upstairs window:
+  // interiorcheck kit-agree, Isla Viva s1) is not planted. Crown radius x the tree's scale: palm 4.2 m, broadleaf 3.8 m, pine / birch 2.2 m; one-storey houses keep their trees (the crown
+  // overhangs the roof). Draw-then-reject: every tree was drawn before this filter, nothing else moves.
+  let hgTreesDropped = 0;
+  if (houses.length) {
+    const tall = houses.filter((H) => H.storeys >= 2);
+    for (const kind of ["palm", "tree", "pine", "birch"]) {
+      const l = props[kind]; if (!l || !l.length || !tall.length) continue;
+      const cr = kind === "palm" ? 4.2 : kind === "tree" ? 3.8 : 2.2;
+      props[kind] = l.filter((it) => {
+        const r = cr * (it.s || 1);
+        for (const H of tall) { const a = H.aabb; const dx = Math.max(a.min[0] - it.x, 0, it.x - a.max[0]), dz = Math.max(a.min[2] - it.z, 0, it.z - a.max[2]); if (dx * dx + dz * dz < r * r) { hgTreesDropped++; return false; } }
+        return true;
+      });
+    }
+  }
   const propStats = finalizeProps();   // slope rejection + ground fit for every placed prop (see the grounding block above scatterTrees)
+  if (houses.length) propStats.treesNearHouses = hgTreesDropped;
   if (yardInfo) propStats.yard = yardInfo;
   const instRefs = {};   // kind -> [{inst, baseMatrixes}]
   // Which kinds collide. The SHAPE of every collider comes from the baked table (pushPropColliders); these radii are only the legacy
@@ -5269,7 +5706,7 @@ export async function buildMap(W, mapId) {
       }
     });
   }
-  if (city) { await placeCityKit(); installCityCull(); }
+  if (city) { await placeCityKit(); installCityCull(); await buildHouseFurniture(); }
   await yieldPhase();                                // phase 3/3 done
 
   // ── ground clutter ────────────────────────────────────────────────────────
@@ -5427,7 +5864,10 @@ export async function buildMap(W, mapId) {
   // WAVE 7: Savanna's towns put 60-100 colliders into a 16 m cell (a house is ~20 boxes): every query returned them all and every caller slab-tested them. With a
   // city the cell is 8 m (a quarter of the candidates, the same colliders, the same insertion order inside a cell); the other maps keep 16 m, so their
   // nearest-hit tie-breaks (cells x-major, then insertion order) are exactly what they were.
-  const CELL = city ? 8 : 16;
+  // WAVE 8: the furnished houses hold 60-680 colliders each (ashgrid ~61 k in all, was ~10 k): with 8 m cells a 0.6 m query at a room's centre returned 88
+  // colliders on average (max 412), with 4 m cells 40 (max 177) - the mover, bullets and bots slab-test every one they get. Wide queries visit more cells
+  // (r 16: 949 entries vs 782) - lane I2's bots use queryCollidersY / hasCollidersNear for those.
+  const CELL = city ? (houses.length ? 4 : 8) : 16;
   const chash = new Map();
   const cKey = (cx, cz) => (cx + 8192) * 16384 + (cz + 8192);
   colliders.forEach((c, idx) => {
@@ -5449,23 +5889,108 @@ export async function buildMap(W, mapId) {
   //   Same colliders, same order.
   const qOut = [];
   const Q_EMPTY = Object.freeze([]);
-  function queryColliders(x, z, r, out) {
+  // WAVE 8 (lane I2's proposal, lane I1): only the colliders whose box meets the query SQUARE are returned (a cell holds whole wall runs, a house's furniture;
+  // every caller's own test needs a collider within its reach, so the answer of every caller is unchanged - lane I2: whole-match fingerprints identical on 3 maps).
+  // (Wave 8 fix round, lane K1) an optional vertical band: queryColliders(x, z, r, out, y0, y1) returns only the colliders whose span meets [y0, y1] (the
+  // mover's capsule band, a bullet segment's height range). A furnished house stacks two or three storeys, an attic and its roof over the same square metres:
+  // a ground-floor mover query got every storey's walls, slabs, gables and furniture (Deepwood: 23 per r 1.6 query at a room, 11 of them on the actor's storey;
+  // houseload collider-load-frame x1.371). Without y0 / y1 the answer is exactly what it was.
+  function queryColliders(x, z, r, out, y0, y1) {
+    if (y0 !== undefined) return queryCollidersY(x, z, r, y0, y1, out || qOut);
     const o = out || qOut;
     let n = 0;
     const stamp = ++qStamp;
-    const x0 = Math.floor((x - r) / CELL), x1 = Math.floor((x + r) / CELL);
-    const z0 = Math.floor((z - r) / CELL), z1 = Math.floor((z + r) / CELL);
+    const qx0 = x - r, qx1 = x + r, qz0 = z - r, qz1 = z + r;
+    const x0 = Math.floor(qx0 / CELL), x1 = Math.floor(qx1 / CELL);
+    const z0 = Math.floor(qz0 / CELL), z1 = Math.floor(qz1 / CELL);
     for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
       const l = chash.get(cKey(cx, cz));
       if (!l) continue;
       for (let i = 0; i < l.length; i++) {
         const c = l[i];
-        if (!c.dead && c._qs !== stamp) { c._qs = stamp; o[n++] = c; }
+        if (!c.dead && c._qs !== stamp && c.maxX >= qx0 && c.minX <= qx1 && c.maxZ >= qz0 && c.minZ <= qz1) { c._qs = stamp; o[n++] = c; }
       }
     }
     if (n === 0 && !out) return Q_EMPTY;
     if (o.length !== n) o.length = n;
     return o;
+  }
+
+  // WAVE 8 (lane I1, for lane I2's bots and anyone else whose query covers whole houses): a furnished house holds 60-680 colliders (walls, slabs, stairs, roof
+  // planks, furniture) in a few cells, so a 16 m query returns houses whole. Two cheaper forms, same cells, same order, same scratch contract as queryColliders:
+  //   queryCollidersY(x, z, r, y0, y1, out?)  only the colliders whose vertical span meets [y0, y1] (one storey: [feet - 0.6, feet + 2.4]);
+  //   hasCollidersNear(x, z, r)               true at the FIRST live collider of the cells the disc touches (an emptiness test returns nothing).
+  const qOutY = [];
+  function queryCollidersY(x, z, r, y0, y1, out) {
+    const o = out || qOutY;
+    let n = 0;
+    const stamp = ++qStamp;
+    const qx0 = x - r, qx1 = x + r, qz0 = z - r, qz1 = z + r;
+    const x0 = Math.floor(qx0 / CELL), x1 = Math.floor(qx1 / CELL);
+    const z0 = Math.floor(qz0 / CELL), z1 = Math.floor(qz1 / CELL);
+    for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+      const l = chash.get(cKey(cx, cz));
+      if (!l) continue;
+      for (let i = 0; i < l.length; i++) {
+        const c = l[i];
+        if (!c.dead && c._qs !== stamp && c.maxY >= y0 && c.minY <= y1 && c.maxX >= qx0 && c.minX <= qx1 && c.maxZ >= qz0 && c.minZ <= qz1) { c._qs = stamp; o[n++] = c; }
+      }
+    }
+    if (n === 0 && !out) return Q_EMPTY;
+    if (o.length !== n) o.length = n;
+    return o;
+  }
+  function hasCollidersNear(x, z, r) {                // == queryColliders(x, z, r).length > 0, without building the list
+    const qx0 = x - r, qx1 = x + r, qz0 = z - r, qz1 = z + r;
+    const x0 = Math.floor(qx0 / CELL), x1 = Math.floor(qx1 / CELL);
+    const z0 = Math.floor(qz0 / CELL), z1 = Math.floor(qz1 / CELL);
+    for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+      const l = chash.get(cKey(cx, cz));
+      if (!l) continue;
+      for (let i = 0; i < l.length; i++) { const c = l[i]; if (!c.dead && c.maxX >= qx0 && c.minX <= qx1 && c.maxZ >= qz0 && c.minZ <= qz1) return true; }
+    }
+    return false;
+  }
+  // WAVE 8: which house / storey / room a point is in (bots' "which room and floor am I on", loot, the footstep surface, the gates). houseAt(x, z, y?) ->
+  // { house (index into map.houses), id, floor, room (a rooms[] index of that house, -1 = inside the walls but in no room: a stair strip's landing / a wall),
+  // y (that storey's floor), surf ("wood" | "concrete") } or null outside every house. y = the feet (default: the ground storey). Rooms by their cell rects.
+  const HOUSE_CELL = 16, houseHash = new Map(), houseFloors = [];
+  const HG_SURF = { floor_wood: "wood", plank: "wood", plank_in: "wood", wood: "wood" };      // a floor slab's top material -> the footstep surface (else "concrete")
+  houses.forEach((H, hi) => {
+    const a = H.aabb, i0 = Math.floor(a.min[0] / HOUSE_CELL), i1 = Math.floor(a.max[0] / HOUSE_CELL), j0 = Math.floor(a.min[2] / HOUSE_CELL), j1 = Math.floor(a.max[2] / HOUSE_CELL);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const k = cKey(i, j); if (!houseHash.has(k)) houseHash.set(k, []); houseHash.get(k).push(hi); }
+    // the floor slabs (their walkable tops): [x0, z0, x1, z1, top, surf]
+    const sl = [];
+    for (const b of H.boxes) if (b.p === "slab" && b.c) { const pe = H.palette[b.f[2]]; sl.push([b.min[0], b.min[2], b.max[0], b.max[2], b.max[1], HG_SURF[pe && pe.mat] || "concrete"]); }
+    houseFloors.push(sl);
+  });
+  const _ha = { house: -1, id: "", floor: 0, room: -1, y: 0, surf: "concrete" };
+  function houseAt(x, z, y) {
+    const l = houseHash.get(cKey(Math.floor(x / HOUSE_CELL), Math.floor(z / HOUSE_CELL)));
+    if (!l) return null;
+    for (let k = 0; k < l.length; k++) {
+      const H = houses[l[k]], fl = houseFloors[l[k]];
+      // inside the walls' outer faces: one of the house's floor slabs is under the point
+      let best = -Infinity, surf = null;
+      for (let i = 0; i < fl.length; i++) {
+        const q = fl[i];
+        if (x < q[0] || x > q[2] || z < q[1] || z > q[3]) continue;
+        if (y == null) { if (surf === null || q[4] < best) { best = q[4]; surf = q[5]; } }                 // (no feet given: the ground storey)
+        else if (q[4] <= y + 0.35 && (surf === null || q[4] > best)) { best = q[4]; surf = q[5]; }       // (the highest floor at or under the feet)
+      }
+      if (surf === null) continue;
+      let f = 0;
+      for (let i = 0; i < H.floors.length; i++) if (Math.abs(H.floors[i].y - best) < 0.2) f = i;
+      let room = -1;
+      for (let i = 0; i < H.rooms.length && room < 0; i++) {
+        const R = H.rooms[i];
+        if (R.floor !== f) continue;
+        for (const r of R.rects) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) { room = i; break; }
+      }
+      _ha.house = l[k]; _ha.id = H.id; _ha.floor = f; _ha.room = room; _ha.y = H.floors[f].y; _ha.surf = surf;
+      return _ha;
+    }
+    return null;
   }
 
   // ── LOS (coarse march vs terrain + static boxes) ──────────────────────────
@@ -5572,7 +6097,8 @@ export async function buildMap(W, mapId) {
   // matches what you see, and falls back to the map's base ground otherwise.
   // Structures are checked first — standing on a deck or a roof reads as wood.
   const BASE_SURF = { isla_viva: "grass", ashgrid: "concrete", deepwood: "grass" };
-  function surfaceAt(x, z) {
+  function surfaceAt(x, z, y) {
+    if (houses.length) { const h = houseAt(x, z, y); if (h) return h.surf; }          // (WAVE 8: a house floor: its boards or its tiles / concrete, upstairs when the caller gives the feet)
     const gy = heightAt0(x, z);
     const near = queryColliders(x, z, 0.6);
     for (const c of near) {
@@ -5597,6 +6123,9 @@ export async function buildMap(W, mapId) {
     id: mapId, K, half: HALF * 0.98, size: SIZE, waterY,
     heightAt: heightAt0, groundAt: heightAt0, surfaceAt,
     colliders, queryColliders, destroyProp,
+    // WAVE 8: the furnished houses (housegen records as built: rooms, doors, stairs, nav links, loot / chest points, furniture, cols = [first collider, structure
+    // colliders, all], roofRamps = the collider indices of the pitched roofs' planks - a roof you land on, not a stair) and the queries over them
+    houses, houseAt, queryCollidersY, hasCollidersNear,
     // the placed prop lists ({x, y, z, s, ry, ...} per kind: the ANCHOR, the final base y, the seeded scale and yaw) and what the slope
     // limits dropped - read-only, for the placement / collision gates (_harness) and for debugging
     propInstances: props, propStats,
@@ -5611,7 +6140,7 @@ export async function buildMap(W, mapId) {
     fallback: cityFallback,                                                     // null, or { reason, genVersion, wanted }: the towns did not load, this is the Wave-6 Savanna
     // WAVE 7: the Savanna city as built (null on the other maps): towngen's layout (towns, compounds, links, stats), the citykit list and what it placed, the
     // decals - read-only, for the gates (citycheck, placementcheck, perf_district) and for debugging
-    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog } : null,
+    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog, furniture: city.furniture || null, houseVersion: city.HG ? city.HG.VERSION : null } : null,
     ground: { lattice: field.lat, latN: LAT_N, pitch: LAT_PITCH, pads: field.pads.length, corridors: field.corridors, corridorSegments: field.segs.length, bakeMs, roads: roadStats, roadSections: roadLog, padLog },
     // the look to restore to when the camera surfaces (underwater overrides it)
     fogSurface: { color: K.sky, density: K.fog },

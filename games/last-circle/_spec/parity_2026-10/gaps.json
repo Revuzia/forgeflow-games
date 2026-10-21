@@ -1,0 +1,2295 @@
+{
+ "plan": "_spec/parity_2026-10/PLAN.md",
+ "date": "2026-10-20",
+ "build_audited": "LIVE 9115494d (Waves 1-7b, ?v=1792458191)",
+ "wave8_files": [
+  "_harness",
+  "bots.js",
+  "citykit.js",
+  "housegen.js",
+  "loot.js",
+  "maps.js",
+  "navgrid.js",
+  "player.js",
+  "towngen.js"
+ ],
+ "score_formula": "severity x impact / effort weight (S=1, M=2, L=3, XL=5)",
+ "verification_legend": {
+  "verified-real": "two (or one complete) skeptic votes confirmed the gap with code + live measurement",
+  "verified-partly": "real, but narrowed or corrected by a skeptic",
+  "reproduced in final pass": "re-run or re-read from a verifier artifact in the final pass",
+  "not-voted (audit-lane evidence only; vote text not in the synthesis input)": "carried from the audit lane; the vote text for these IDs did not reach the final pass"
+ },
+ "gaps": [
+  {
+   "id": "LC-01",
+   "title": "Recoil fully self-cancels: no spray pattern, no recoil-control skill",
+   "dimension": "gunplay",
+   "severity": 4,
+   "impact": 5,
+   "effort": "S",
+   "score": 20.0,
+   "files": [
+    "runtime/3d/royale/weapons.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes)",
+   "evidence": "Live: 0.5157 deg on every shot of a 30-round AR spray at 60 and 144 Hz, 0.0 deg at the end (verify/lc01/spray_probe_result.json). Kick 0.011 rad (weapons.js:533) vs recovery 0.12 rad/s (weapons.js:318-322) at 330 rpm (royale.js:62).",
+   "acceptance_gate": "Uncompensated 30-round AR ADS burst at 60 Hz: peak climb 3-4 deg; pitch back to baseline within 0.4 s of release; pistol tapped peak <= 0.5 deg; touch path byte-identical; same seed -> same per-shot pitch sequence; feelcheck SMG/shield rows still pass (add a pitch reset if needed)",
+   "note": "Cap the climb (AR 0.07 rad, SMG 0.05 rad), automatics only, human only, skip touch; owner's 'my pistol doesn't work' history at weapons.js:599-602."
+  },
+  {
+   "id": "LC-02",
+   "title": "Audio listener sits at the third-person camera, ~4.3 m behind the character",
+   "dimension": "audio",
+   "severity": 4,
+   "impact": 4,
+   "effort": "S",
+   "score": 16.0,
+   "files": [
+    "runtime/3d/royale/audio.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (1 vote received in full; the second vote text was truncated)",
+   "evidence": "Listener = camera within 4.4e-7 m, 4.258 m horizontal / 4.650 m 3D from the feet; crouched step 9 m ahead culled vs -7.7 dB distance gain at 9 m behind; walking step at 16 m 21.8 dB louder behind (verify/lc02/lc02_probe_result.json). audio.js:661,665,678-680.",
+   "acceptance_gate": "Footstep pairs at +/-9 m and +/-16 m from the character within 1.5 dB of each other; crouched step 9 m ahead audible (> -45 dBFS); L/R ILD sign unchanged"
+  },
+  {
+   "id": "LC-03",
+   "title": "No anti-aliasing on any graphics tier (main view)",
+   "dimension": "visuals/perf",
+   "severity": 4,
+   "impact": 5,
+   "effort": "S",
+   "score": 20.0,
+   "files": [
+    "runtime/3d/ffg_kernel_3d.js",
+    "runtime/3d/ffg_royale3d.js",
+    "assets/vendor/three/examples/jsm/postprocessing/SMAAPass.js",
+    "assets/vendor/three/examples/jsm/shaders/SMAAShader.js",
+    "assets/vendor/three/examples/jsm/shaders/FXAAShader.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-C",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes)",
+   "evidence": "Live main canvas antialias:false, SAMPLES:0; composer target single-sampled (ffg_kernel_3d.js:188, :498); W._gfx.aa=false (ffg_royale3d.js:455); SMAAPass/FXAAShader 404 on the CDN; r172 copies exist in games/ascendant (MIT).",
+   "acceptance_gate": "Stair-step edge pixels -50% on 3 fixed views at medium and high; cost <= 0.8 ms GPU on the UHD iGPU at medium (?prof=1, ABAB); <= +3 composer passes; storm grade unchanged; touch and low tier unchanged",
+   "note": "Medium: FXAA (look-plan bench ~ a copy pass) unless SMAA measures within the 0.8 ms budget; high: SMAA. Never renderer antialias:true (BUILD_ORDER item 69)."
+  },
+  {
+   "id": "LC-04",
+   "title": "Drop view washed out: 2-2.5x the reference luminance, lifted blacks",
+   "dimension": "visuals",
+   "severity": 4,
+   "impact": 5,
+   "effort": "M",
+   "score": 10.0,
+   "files": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-C",
+   "owner_decision": "OD-2",
+   "status": "planned",
+   "verification": "verified-partly (1 real, 1 partly: gap real, exposure is NOT the main cause; full reference match by grading alone not achievable)",
+   "evidence": "Live drop toward centre: mean/p5 ashgrid 0.672/0.313, isla 0.737/0.408, deepwood 0.805/0.317 vs reference 0.317-0.332 mean. Exposure 1.15 -> 0.9 moves the mean only ~11% (verify/lc04/grade_probe.json); hemi x0.6 + env 0.25 + albedo x0.6 reaches 0.41-0.51.",
+   "acceptance_gate": "imgstats on dropc0/dropc1, seed 7, all three maps: luminance mean 0.45-0.55, p5 <= 0.25, saturation 0.25-0.32; probe3 Weber readability re-run; draw calls unchanged",
+   "note": "Reverses the owner-approved bright look of 2026-07-20 (CHANGELOG.md:1448-1453) = look-plan D4 step B. P1-G produces the A/B sheet from the live build without repo writes."
+  },
+  {
+   "id": "LC-05",
+   "title": "Heals spent at start, cannot be cancelled; gun locked up to 8 s",
+   "dimension": "loot",
+   "severity": 4,
+   "impact": 4,
+   "effort": "S",
+   "score": 16.0,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "runtime/3d/royale/weapons.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-A (weapons.js hook ships inert in P1-A)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes)",
+   "evidence": "Live: count 2->1 at heal start; Digit1 at 1 s -> heal continues (tLeft 6.217), count stays 1, pistol mag delta 0 over 6 clicks (verify/lc05/lc05_out.json). player.js:3561 before :3575; only clear at :1906; weapons.js:454.",
+   "acceptance_gate": "Medkit at hp 30, switch slot at 1.0 s: healing null, medkit count unchanged, pistol fires (mag -1); full 8 s heal: count -1, hp 100, gun re-equipped; probe_pockets + navcheck heal-yaw unchanged (bots exempt)",
+   "note": "Cancel must be human-only: bots.js:513 ensureGunOut calls equipSlot before the HEAL override at bots.js:578."
+  },
+  {
+   "id": "LC-06",
+   "title": "iGPU performance at default settings; no auto-tier, no dynamic resolution",
+   "dimension": "perf",
+   "severity": 4,
+   "impact": 5,
+   "effort": "M",
+   "score": 10.0,
+   "files": [
+    "runtime/3d/ffg_royale3d.js",
+    "runtime/3d/ffg_kernel_3d.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-C (+ P2-C LC-89, P2-E LC-88 for the drop)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes; all ms are upper bounds - the iGPU was shared)",
+   "evidence": "Live UHD medium (dpr 1, 1600x900, contended): drop p50 64.7 ms (15.5 fps), ground p50 62.2 ms (16.1 fps), no step-down (verify/lc06_measure_result.json). Lane A/B ground GPU p50 ashgrid: medium 22.4, bloom off 16.1, DPR 1.0 13.7, low 9.1 ms. No deviceMemory/renderer/frame-time adaptation anywhere (grep).",
+   "acceptance_gate": "UHD iGPU, quiet box, ABAB vs current: first-run auto-tier decided within the menu warm-up; ground raw p50 <= 20 ms on all three maps at the auto-picked settings; at most one quality step per 2 s; 0 shader programs compiled after the first drop frame; phones unchanged",
+   "note": "DPR is already 1.0 on DPR-1 laptops, so the ladder is bloom-off -> DPR 1.25 -> 1.0, floor 1.0 (gains below 1.0 did not reproduce); first-run auto-tier may pick low. Drop phase also needs LC-88 + LC-89."
+  },
+  {
+   "id": "LC-07",
+   "title": "No ping / world marker / map pin",
+   "dimension": "ui/online",
+   "severity": 4,
+   "impact": 4,
+   "effort": "M",
+   "score": 8.0,
+   "files": [
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/royale/net.js",
+    "runtime/3d/royale/net.selftest.cjs"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes)",
+   "evidence": "Live: MMB/Z/G add 0 DOM nodes (411 elements constant); no ping/marker code (grep); net.js message types fallback/bye/center/s/state only (verify/lc07_probe*_result.json).",
+   "acceptance_gate": "MMB (and rebindable Ping key) on a point ~120 m away -> one marker in world, compass and minimap within one HUD tick reading 120 +/- 3 m; big-map click places a pin and the map stays open; guest sees host's ping <= 500 ms; HUD anchor gate 0 moves; net.selftest rows for team filter + 1/s rate limit; touch byte-identical",
+   "note": "Correction: with pointer lock held, a big-map click passes to the game canvas instead of closing the map. Key + MMB listeners can live in hud.js (it already has window keydown listeners, hud.js:1930/2098) so player.js is not needed; world point via K.aimRayDist (royale.js:416, read-only)."
+  },
+  {
+   "id": "LC-08",
+   "title": "Gun reports: one dry take per class, no distant layer, no tail, no sound delay",
+   "dimension": "audio",
+   "severity": 4,
+   "impact": 4,
+   "effort": "M",
+   "score": 8.0,
+   "files": [
+    "runtime/3d/royale/audio.js",
+    "assets/audio/sfx/"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: every recorded shot decays to -40 dB within 30-60 ms at every distance; sniper onset at 450 m = 317 ms vs 323 ms at 5 m; FFSL mid-distance takes shipped-library but unused (audio/notes.md).",
+   "acceptance_gate": "AR at 5 m: time to -40 dB >= 250 ms; sniper at 450 m starts >= 1.2 s after emit; mid-distance FFSL take used beyond 80 m; added SFX <= 450 KB, all CC0 and recorded"
+  },
+  {
+   "id": "LC-09",
+   "title": "Online: remote actors silent (no steps/reload/heal foley); sprint not replicated",
+   "dimension": "audio/online",
+   "severity": 4,
+   "impact": 4,
+   "effort": "M",
+   "score": 8.0,
+   "files": [
+    "runtime/3d/royale/audio.js",
+    "runtime/3d/royale/net.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B + P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: footstep emitter only in stepActor (player.js:2080-2087); on a guest every bot is netRemote (ffg_royale3d.js:884) -> no enemy footsteps; net.js:1247 flags carry crouch not sprint.",
+   "acceptance_gate": "Two-client probe: footstep count heard on the guest for host bots >= 80% of the host's; remote sprint plays the sprint row; heal/reload foley heard for remote actors",
+   "note": "Wave-8-safe route: audio.js synthesizes steps for netRemote actors from position deltas; net.js adds the sprint bit and relays host-side healStart/reload events."
+  },
+  {
+   "id": "LC-10",
+   "title": "No directional locomotion: combat strafes slide a forward clip sideways",
+   "dimension": "movement/visuals",
+   "severity": 4,
+   "impact": 5,
+   "effort": "M",
+   "score": 10.0,
+   "files": [
+    "_tools/art_a_make_strafes.mjs",
+    "assets/chars/clips/",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P1 (bake) + P2 (wiring)",
+   "lane": "P1-F bake, P2-A wiring",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes)",
+   "evidence": "Live: ADS strafe right plays rifle_walk at -90 deg to the body, skate 4.32 vs 1.61 m/s forward (verify/lc10/probe_lc10.json). MESHY_CLIPS has no strafe clips (player.js:328-336). Rifle_8-Way_Locomotion_Pack on F: has every needed FBX.",
+   "acceptance_gate": "probe_feet: ADS and hip-fire combat strafe planted-foot skate <= 1.25x forward (today 2.68-2.78x ADS, 2.2x hip); rigcheck on all 5 skins; download delta <= +260 KB for the rifle set",
+   "note": "Corrected scope: backpedal does NOT moonwalk (reverse stride, 1.78 vs 1.61 m/s) and out-of-combat strafes face velocity. The gap is combat strafing only."
+  },
+  {
+   "id": "LC-11",
+   "title": "Phantom lobby slot -> immortal frozen squadmate (match cannot end); trusted-sender holes",
+   "dimension": "online",
+   "severity": 4,
+   "impact": 3,
+   "effort": "S",
+   "score": 12.0,
+   "files": [
+    "runtime/3d/royale/net.js",
+    "runtime/3d/royale/net.selftest.cjs"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "reproduced in final pass",
+   "evidence": "Reproduced in the final pass: phantom.mjs on the live net.js gives roster slot 2 to a peer who left before START ('phantom slot given to departed peer: true'). Lane: forged hitYou took host HP 100->63; forged died killed a host bot.",
+   "acceptance_gate": "Phantom probe (join + leave before START): no roster slot; forged hitYou/died/takeover/bye from a guest console change nothing on the host; node net.selftest.cjs green incl. new rows"
+  },
+  {
+   "id": "LC-12",
+   "title": "Bot AI not human-like: no concealment/stance in perception, no re-peek reaction delay, omniscient HUNT, little cover",
+   "dimension": "ai_flow",
+   "severity": 4,
+   "impact": 4,
+   "effort": "M",
+   "score": 8.0,
+   "files": [
+    "runtime/3d/royale/bots.js",
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js",
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-B (+ P2-C exports concealAt)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes)",
+   "evidence": "Verifier live (3 matches): sight lines to a crouched chest at bush centres clear 452/456 vs rocks 68/423; reappear-to-shot p10 0.05-0.10 s every tier; HUNT goal 14-29 m from an enemy 61-225 m away with no LOS 9/10; ENGAGE in cover 2.6% (lane batch E 3.4%).",
+   "acceptance_gate": "Re-run the 24-match AFK batch: re-sight-to-first-shot median >= each tier's reactionMs; ENGAGE in-cover share >= 15%; crouched player in a bush unseen beyond ~12 m; HUNT goal never the true enemy position without a recent heard shot; match-end median still 10-15 min; navcheck/botcheck no regression",
+   "note": "Do NOT add bush to propColliderKinds (that changes collision and the baked collider table); add a separate W.map.concealAt read only by bot sight. Re-peek reset threshold 0.9 s."
+  },
+  {
+   "id": "LC-13",
+   "title": "Endgame shape: final circle always near the map centre; late storm phases rarely play",
+   "dimension": "world/ai_flow",
+   "severity": 5,
+   "impact": 4,
+   "effort": "M",
+   "score": 10.0,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/sim/royale.selftest.cjs",
+    "runtime/3d/royale/storm.js",
+    "runtime/3d/royale/maps.js",
+    "_harness/*"
+   ],
+   "wave8_files_touched": [
+    "_harness/*",
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-D (+ integrator bumps MAP_GEN_VERSION, P2-F updates harness Storm callers)",
+   "owner_decision": "OD-1",
+   "status": "planned",
+   "verification": "verified-partly (1 real, 1 partly: placement half fixable cheaply; late-phase half has no cheap fix)",
+   "evidence": "Verifier 2000 seeds: final-centre p50 37.0 m, p90 67.4 m, max 119.7 m; 99.8% within 100 m; on Isla Viva 100% of final centres on the volcano cone. 12 live matches: phase 6 started in 4, closed in 1; phases 7-8 never. Lane 27 matches: phase 6 started in 9.",
+   "acceptance_gate": "2000-seed sim: final-centre p50 >= 150 m from map centre, 0 final circles in water, totalS unchanged (920 s), 0 nesting violations; royale.selftest storm block green; 27-match AFK pacing re-run reported (match-end median, alive at P5 start)",
+   "note": "Re-opens world-plan O4 (storm left unchanged, endgame areas built instead) and the 'concentric like Fortnite' choice at royale.js:661-667. Root cause is the near-concentric early circles (circle 1 <= 10.3 m off centre), not only late OFF_FRAC."
+  },
+  {
+   "id": "LC-14",
+   "title": "No throwables (frag first, then smoke)",
+   "dimension": "gunplay/loot/ai_flow",
+   "severity": 4,
+   "impact": 5,
+   "effort": "M",
+   "score": 10.0,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/sim/royale.selftest.cjs",
+    "runtime/3d/royale/weapons.js",
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/royale/net.js",
+    "runtime/3d/royale/bots.js",
+    "runtime/3d/royale/player.js",
+    "assets/chars/clips/"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P1 (dark) + P2 (live)",
+   "lane": "P1-A core, P1-D HUD/net, P1-F clip, P2-A throw, P2-B bot throws, P2-D loot weight on",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes; effort corrected to M for the frag)",
+   "evidence": "Live royale.js:77 WEAPON_IDS has no throwable; CONSUMABLES are 4 heals (royale.js:105-110); weapons.js:13 'No melee, no throwables'. Owner listed 'grenades as a throwable' (CHANGELOG.md:1541). Mixamo 'toss grenade.fbx' on F:.",
+   "acceptance_gate": "Thrown frag lands within 0.5 m of the computed arc; 0 damage through a wall to a dummy 1.5 m behind it; a frag never changes HP/shield of the thrower via the heal path; remote clients see the blast; >= 1 bot throw per match; loot layout per seed unchanged while weight is 0; selftest green",
+   "note": "Smoke is P3 (fx.js clouds + maps.js losBlocked spheres, <= +0.3 ms with 3 smokes on the iGPU). Flash/molotov cut for now."
+  },
+  {
+   "id": "LC-15",
+   "title": "No knock/revive (DBNO) and no respawn in squads",
+   "dimension": "online/meta",
+   "severity": 4,
+   "impact": 4,
+   "effort": "L",
+   "score": 5.3,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "runtime/sim/royale.js",
+    "runtime/3d/royale/weapons.js",
+    "runtime/3d/royale/loot.js",
+    "runtime/3d/royale/net.js",
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/royale/bots.js",
+    "assets/chars/clips/"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js",
+    "runtime/3d/royale/loot.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3 feature split by file owner",
+   "owner_decision": "OD-3 (respawn style only; DBNO itself recommended as standard)",
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes)",
+   "evidence": "Live grep: no revive/respawn/downed logic (only a camera comment at player.js:3200 and the unused downedAt field at player.js:72/81); killActor sets alive=false immediately (player.js:3350, :3490); squads exist (team 'sq', ffg_royale3d.js:878).",
+   "acceptance_gate": "Two-human probe: lethal hit -> downed (crawl, 0.6 m capsule); revive by holding E 5 s restores 30 HP; bleed-out kills at timer end; squad eliminated only when all members are downed or dead; solo unaffected; net per-tick traffic unchanged (one flag bit)"
+  },
+  {
+   "id": "LC-16",
+   "title": "Thin roster: 6 guns, one per class, no DMR/LMG/burst",
+   "dimension": "gunplay",
+   "severity": 4,
+   "impact": 4,
+   "effort": "M",
+   "score": 8.0,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/sim/royale.selftest.cjs",
+    "runtime/3d/royale/weapons.js",
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/royale/fx.js",
+    "runtime/3d/royale/bots.js",
+    "assets/weapons/ (CC0 models)"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-D (+ P2-B PREFER_RANGE, P2-G icons)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (2 of 2 votes)",
+   "evidence": "Live royale.js:77 = pistol/smg/ar/shotgun/sniper/glauncher; weapons.js:432 isAuto only for smg/ar; hud.js:2578 AUTO/SEMI only.",
+   "acceptance_gate": "Selftest roster length 9; gunValueAt: DMR beats AR at 90 m, AR beats DMR at 15 m, LMG highest sustained value at 30 m; seeded loot roll spawns each new gun; 10-match bot soak every gun >= 1 kill; loot draw calls +<= 2; all three positional weight lists extended together",
+   "note": "Art must be CC0 (no Meshy - spends credits; no primitive composites - owner rule). Burst AR may reuse the AR model. Loot weight lists are positional (royale.js:836/963/978) - a missed list silently never spawns the gun."
+  },
+  {
+   "id": "LC-17",
+   "title": "Building surfaces: one roughness response, near-white procedural grain, no wear layer",
+   "dimension": "visuals",
+   "severity": 4,
+   "impact": 4,
+   "effort": "M",
+   "score": 8.0,
+   "files": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/towngen.js",
+    "runtime/3d/royale/citykit.js",
+    "runtime/3d/royale/housegen.js",
+    "assets/tex/"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/citykit.js",
+    "runtime/3d/royale/housegen.js",
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/towngen.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-C (maps.js materials) + P2-I (town/house materials)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-partly (1 partly, 1 real: narrowed - six texture kinds, trim geometry, ground decals and photo asphalt already exist)",
+   "evidence": "At 9115494d every procedural wall is roughness 0.88 / metalness 0.04 (maps.js:4814-4827), 256 px canvases with albedo 0.84-1.0 (maps.js:132-199); no roughness/AO maps.",
+   "acceptance_gate": "Facade local contrast +30%; wall-base band 15-25% darker; download <= +1.5 MB; 0 extra draw calls for per-kind roughness, photo detail and baked wear; world placement hash unchanged"
+  },
+  {
+   "id": "LC-18",
+   "title": "Squad cohesion: squadmates spawn far apart, spectate defaults to killer, squad dissolves after every match",
+   "dimension": "online/ui",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "runtime/3d/ffg_royale3d.js",
+    "runtime/3d/royale/net.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P1 (rematch) + P2 (spawn, spectate)",
+   "lane": "P1-C/P1-D rematch, P2-A spawn + spectate",
+   "owner_decision": "OD-9 (teammate status panel only)",
+   "status": "planned",
+   "verification": "reproduced in final pass (separation measured by a verifier probe; vote text not in input)",
+   "evidence": "Final-pass reading of verify/lc18/result.json (live): standard squad drop points 440-1019 m apart on 6 of 6 seeds; quick spawns 81-602 m apart. Lane: spectate default = killer (player.js:3536); PLAY AGAIN calls netMod.leave (ffg_royale3d.js:1077,1080).",
+   "acceptance_gate": "Squad standard drop: squadmates' touchdown within 100 m on >= 95% of 400 seeds; dead squad member spectates a living squadmate first; Run it back keeps the room and both clients start the next match"
+  },
+  {
+   "id": "LC-19",
+   "title": "Modes/meta thin: no duos/trios with bot teammates, 8 unlocks, 2 emotes, no weekly challenges, W.stats never incremented, impossible Quick challenge",
+   "dimension": "meta",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/hud.js",
+    "runtime/sim/royale.js",
+    "runtime/3d/ffg_royale3d.js",
+    "runtime/3d/royale/bots.js",
+    "assets/chars/clips/"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P1 (fixes) + P3 (modes)",
+   "lane": "P1-D challenge/stat fixes, P1-F emote bake, P3 modes",
+   "owner_decision": "OD-4 (modes)",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: MODE_CARDS standard/quick/practice only (hud.js:749-753); CHAL_POOL 14 per-match entries, pickChallenges not mode-aware (hud.js:2387-2396, survive 480 s offered in a 239 s Quick storm); W.stats init ffg_royale3d.js:818 never incremented; 2 emotes (hud.js:4664).",
+   "acceptance_gate": "Quick Match never offers a challenge longer than its storm; W.stats heads/heals/legendaries/longestKillM increment in a scripted match; >= 6 emotes; duos/trios (if OD-4) start with bot teammates sharing teamId"
+  },
+  {
+   "id": "LC-20",
+   "title": "Shield economy: calm bots below 50 shield carry unused shield items",
+   "dimension": "loot/ai_flow",
+   "severity": 3,
+   "impact": 4,
+   "effort": "S",
+   "score": 12.0,
+   "files": [
+    "runtime/3d/royale/bots.js",
+    "runtime/sim/royale.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-B (table retune in P2-D only if still needed)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "reproduced in final pass (measured by a verifier probe; vote text not in input)",
+   "evidence": "Final-pass reading of verify/lc20/lc20_result.json (live, 3 seeds): 41.7-57.8% of calm low-shield samples held an unused shield item, all with heal score 0. Lane batch D: 52.0%.",
+   "acceptance_gate": "Calm bots (no target, >5 s since damage) with shield < 50 holding a usable shield item <= 10% of samples on 3 seeds; median alive-bot shield at t >= 600 s >= 75",
+   "note": "Root cause is bot HEAL scoring (bots.js HEAL 75 only if hp<45 or shield<30 && hp<80), not the loot table; fix the bot first."
+  },
+  {
+   "id": "LC-21",
+   "title": "No slide",
+   "dimension": "movement",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: sprint + hold C keeps sprinting at 8.0 m/s, crouching false (player.js:1947 live / :1960 tree).",
+   "acceptance_gate": "Sprint + C: slide peak 9.5 +/- 0.3 m/s decaying to <= 4.4 m/s in 0.7-0.9 s; collision sweep never tunnels a 0.2 m wall; no local Mixamo slide clip -> crouch pose + body pitch, owner screenshot review"
+  },
+  {
+   "id": "LC-22",
+   "title": "Body hit volume 2-3x wider than the model; shot 0.37 m over the head counts as a body hit",
+   "dimension": "gunplay",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/weapons.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P2",
+   "lane": "P2-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: body hits from -0.55 to +0.75 m lateral vs upper-arm bones -0.18/+0.22 m; a shot at 2.05 m (head bone 1.685) still a body hit 102-107 (gunplay/probe_out.json).",
+   "acceptance_gate": "Hitbox sweep: no body hit > 0.06 m outside the bone silhouette; head-top + 0.1 m misses; crosshair truth at 12/35/80 m within 0.05 m; bots' hit rate change reported"
+  },
+  {
+   "id": "LC-23",
+   "title": "Cold first match 21-30 s; loading bar goes backwards; no tips",
+   "dimension": "ui/perf",
+   "severity": 4,
+   "impact": 4,
+   "effort": "M",
+   "score": 8.0,
+   "files": [
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/ffg_royale3d.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-C prefetch + P1-D bar",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: cold BR click -> control 21.45 s, cold Quick 29.73 s / 26.2 s; bar 92% -> 15% at 12 s (hud.js:1784-1793); actor models load only at match start (player.js:551-576). JS served Cache-Control no-store (perf/notes.md).",
+   "acceptance_gate": "Cold cache + 15 s menu idle: Quick Match click-to-control <= 20 s (median of 3, CrazyGames bar); loading bar sampled at 4 Hz never decreases; map name + tip shown",
+   "note": "no-store on JS is a CDN/worker setting outside this game folder - named as an out-of-scope finding, not a lane task."
+  },
+  {
+   "id": "LC-24",
+   "title": "Minimap = whole map at 8.9 m/px; big map has no zoom/pan/grid",
+   "dimension": "ui/world",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P2",
+   "lane": "P2-G",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: 1600 m drawn into 180 px (hud.js:3834); big map click closes / passes through (hud.js:4223).",
+   "acceptance_gate": "Local minimap <= 3 m/px around the player; big map zoom 2 steps + pan + grid letters; anchors unchanged"
+  },
+  {
+   "id": "LC-25",
+   "title": "Explosions damage through walls",
+   "dimension": "gunplay",
+   "severity": 3,
+   "impact": 3,
+   "effort": "S",
+   "score": 9.0,
+   "files": [
+    "runtime/3d/royale/weapons.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "verified-real (confirmed inside the LC-14 votes)",
+   "evidence": "explode() (weapons.js:926-969) applies splash to every actor within R+0.8 with no LOS test (gunplay notes; confirmed by the LC-14 verifier).",
+   "acceptance_gate": "Shell/frag burst against a wall: 0 damage to a dummy 1.5 m behind it; open-ground splash unchanged"
+  },
+  {
+   "id": "LC-26",
+   "title": "No indoor/outdoor acoustics or occlusion",
+   "dimension": "audio",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/audio.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: reverb wet 0.179 indoors but tail ~50 dB down; reverb applies to all sounds by listener location; 'occlusion deliberately skipped' (audio.js:1291).",
+   "acceptance_gate": "Occluded AR at 20 m 4-8 dB lower with spectral centroid >= 40% lower; indoor reverb tail audible (> -40 dB at 200 ms) only for sources indoors; re-measured inside a Wave-8 house after its deploy"
+  },
+  {
+   "id": "LC-27",
+   "title": "Death loot is an unreadable scatter; ammo capped at 2 boxes",
+   "dimension": "loot",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/loot.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/loot.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-H",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: 8 items over 2.44 m with 5 overlapping pills; ammo min(reserve, 2 boxes) (loot.js:1684).",
+   "acceptance_gate": "Killing a bot with 240 medium drops 240 medium; one pile marker in RARITY_COLOR of the best item; merged sorted label readable at 4 m"
+  },
+  {
+   "id": "LC-28",
+   "title": "Supply drops: max 2, unmarked when landed, burst instantly, stale banner",
+   "dimension": "loot/world",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/loot.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/loot.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-H (+ P2-G banner)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: one drop in 604 s; no crate/smoke column visible at 45 m; INBOUND banner shown with HAS LANDED (loot.js:1299-1306).",
+   "acceptance_gate": ">= 3 drops landed by t = 760 s on 3 seeds; beacon visible above occluders until opened; hold-E open; no 'INBOUND' banner after landing"
+  },
+  {
+   "id": "LC-29",
+   "title": "No POI loot tiers / hot zone; POI identity lost (Container Yard 5 containers)",
+   "dimension": "loot/world",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/loot.js",
+    "runtime/sim/royale.js",
+    "runtime/3d/royale/towngen.js",
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/loot.js",
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/towngen.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-H + P2-D tables + P2-I identity",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: one floor table for every point (loot.js 202-250); containers dropped inside town blocks (maps.js:4355 at 9115494d) -> 5 map-wide.",
+   "acceptance_gate": "High-tier POIs >= 1.5x rare share of basic; one hot zone per match marked on the big map; Container Yard >= 30 containers on every seed; squad determinism gate passes"
+  },
+  {
+   "id": "LC-30",
+   "title": "Jump/fall/land animation missing; mantle frozen pose; pistol crouch-walk legs frozen",
+   "dimension": "movement",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "assets/chars/clips/"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P1 (bake) + P2 (wiring)",
+   "lane": "P1-F + P2-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: crouch.glb leg tracks span 0.008-0.011 (static pose used as a walk, player.js:2747-2748); jump clip once-and-clamp; mantle legs through a car door.",
+   "acceptance_gate": "Jump plays up/loop/down; fall > 1 s plays falling idle; land from > 6 m plays landing; pistol crouch-walk foot height range > 0.1 m (today 0.0002 m); mantle shows no leg interpenetration in 3 screenshots"
+  },
+  {
+   "id": "LC-31",
+   "title": "No shoulder swap, no free-look",
+   "dimension": "gunplay/movement",
+   "severity": 3,
+   "impact": 4,
+   "effort": "S",
+   "score": 12.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: shoulder +0.7 right always (player.js:3121-3122); no swap/free-look (grep).",
+   "acceptance_gate": "Shoulder swap: offset -0.70 +/- 0.02 m within 0.25 s, crosshair truth passes on both shoulders; free-look (hold Alt) returns aim exactly"
+  },
+  {
+   "id": "LC-32",
+   "title": "Wall pull-in collapses shoulder offset; body covers reticle near cover",
+   "dimension": "movement",
+   "severity": 2,
+   "impact": 4,
+   "effort": "M",
+   "score": 4.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: at 1.5 m the body sits dead centre on the reticle (movement/cam_ashgrid_7_wall_back_1.5m.png).",
+   "acceptance_gate": "Back 1.5 m from a wall: character never overlaps the reticle; dither fade when lens < 0.75 m"
+  },
+  {
+   "id": "LC-33",
+   "title": "Spread does not grow per shot; square pellet sampling",
+   "dimension": "gunplay",
+   "severity": 2,
+   "impact": 4,
+   "effort": "S",
+   "score": 8.0,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/3d/royale/weapons.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: binary first-shot 0.15x then full spread (royale.js:188); uniform square distribution (weapons.js:565).",
+   "acceptance_gate": "Spread after shot 1 <= 0.35x max and >= 0.95x by shot N; 0 of 10k pellets outside the reticle radius (disc sampling)"
+  },
+  {
+   "id": "LC-34",
+   "title": "ADS instant except sniper",
+   "dimension": "gunplay",
+   "severity": 2,
+   "impact": 4,
+   "effort": "S",
+   "score": 8.0,
+   "files": [
+    "runtime/sim/royale.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P2",
+   "lane": "P2-D",
+   "owner_decision": "OD-6",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: adsTimeS only on sniper (royale.js:74).",
+   "acceptance_gate": "Per-class adsTimeS applied; feelcheck ADS rows pass"
+  },
+  {
+   "id": "LC-35",
+   "title": "Reload animation wrong (pistol none, long guns cut short)",
+   "dimension": "gunplay",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "assets/chars/clips/"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: pistol clip never advances; AR clip cut at 72% (2.4/3.333 s).",
+   "acceptance_gate": "Reload clip timescale = clip length / reloadS per class; pistol plays a reload"
+  },
+  {
+   "id": "LC-36",
+   "title": "No bullet drop; sniper reticle advertises drop",
+   "dimension": "gunplay",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/weapons.js",
+    "runtime/3d/royale/bots.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: flat bullets (weapons.js:8-11); drop hint tick hud.js:3728.",
+   "acceptance_gate": "Sniper round at 300 m drops per a stated gravity; bots lead/lob correctly; reticle ticks match"
+  },
+  {
+   "id": "LC-37",
+   "title": "No attachments/optics",
+   "dimension": "gunplay/loot",
+   "severity": 3,
+   "impact": 3,
+   "effort": "L",
+   "score": 3.0,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/3d/royale/weapons.js",
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/royale/loot.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/loot.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": "OD-5",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: none (weapons.js:13-14).",
+   "acceptance_gate": "If approved: optic rolled by rarity at spawn; zoom levels; no loose pickups"
+  },
+  {
+   "id": "LC-38",
+   "title": "Foliage sparse and static (no wind)",
+   "dimension": "visuals",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-G",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: grep wind|sway maps.js 0 hits.",
+   "acceptance_gate": "Canopy motion >= 2% of pixels in a still frame pair; +0 draw calls"
+  },
+  {
+   "id": "LC-39",
+   "title": "Water: visible tile seams, no depth colour or foam",
+   "dimension": "visuals",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-C (seam) / P3-G (depth, foam)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: water_tiling_crop.png; sine terms 22/15 do not wrap (maps.js:201-207, cause inferred).",
+   "acceptance_gate": "No seam grid in the drop sheen crop; shallow vs deep Delta-E >= 15"
+  },
+  {
+   "id": "LC-40",
+   "title": "Explosions and impacts tiny, ~3 frames",
+   "dimension": "visuals",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/fx.js",
+    "assets/fx/"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-E",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: frame 1 ~40 px glow, nothing by frame 8 (visuals/fx_sheet_ashgrid.png).",
+   "acceptance_gate": "Explosion at 14 m changes >= 2,000 px for >= 1.5 s, smoke top >= 6 m; 4 simultaneous blasts inside the 1,024-quad pool; +0 draw calls"
+  },
+  {
+   "id": "LC-41",
+   "title": "No baked AO / contact darkening",
+   "dimension": "visuals",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/housegen.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/housegen.js",
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-G",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: no aoMap/contact AO (grep).",
+   "acceptance_gate": "Wall-base and corner darkening measurable in 3 views; +0 draw calls"
+  },
+  {
+   "id": "LC-42",
+   "title": "Enemy readability in shade/indoors unmeasured; enemy name tags to 70 m",
+   "dimension": "visuals",
+   "severity": 3,
+   "impact": 3,
+   "effort": "S",
+   "score": 9.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-A",
+   "owner_decision": "OD-11",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: tags to 70 m (player.js:1775); open-sun Weber -0.15..-0.86.",
+   "acceptance_gate": "Weber contrast measured for all 5 skins in shade and indoors; enemy tags only within the OD-11 distance"
+  },
+  {
+   "id": "LC-43",
+   "title": "Accessibility: colour-blind, HUD scale, brightness, invert-Y, flash reduction",
+   "dimension": "ui",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/lc_output_pass.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-G (+ P1-C output-pass hook)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: grep colour-blind/invert/subtitle -> none in runtime.",
+   "acceptance_gate": "3 colour-blind modes; 130% HUD scale keeps every panel inside its anchor corner; brightness slider; flash reduction"
+  },
+  {
+   "id": "LC-44",
+   "title": "Quit while alive records 51/50; no quit confirmation",
+   "dimension": "ui",
+   "severity": 3,
+   "impact": 3,
+   "effort": "S",
+   "score": 9.0,
+   "files": [
+    "runtime/3d/ffg_royale3d.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-C + P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: ffg_royale3d.js:1007 placement = placementOf(id) || aliveCount()+1; screenshot shows 'PLACEMENT 51 / 50'.",
+   "acceptance_gate": "Quit at 4 s: placement N/50 with N = alive count; career best not overwritten with 51; confirm dialog before quitting"
+  },
+  {
+   "id": "LC-45",
+   "title": "No guided training / contextual hints",
+   "dimension": "ui",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P2",
+   "lane": "P2-G",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: How To Play is a static card (hud.js:4681-4776).",
+   "acceptance_gate": "Each one-time hint fires exactly once; practice offers a short guided sequence"
+  },
+  {
+   "id": "LC-46",
+   "title": "Settings untabbed; Drop/Chat/Ping/Fire not rebindable",
+   "dimension": "ui",
+   "severity": 2,
+   "impact": 3,
+   "effort": "M",
+   "score": 3.0,
+   "files": [
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-G (+ P2-A input read)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: 1150 px content in a 588 px box; Q hardcoded (player.js:1103).",
+   "acceptance_gate": "Every tab except Controls fits at 1280x720; rebinding Drop to G works and Q does nothing"
+  },
+  {
+   "id": "LC-47",
+   "title": "Rotation cover sparse outside POIs",
+   "dimension": "world",
+   "severity": 4,
+   "impact": 3,
+   "effort": "L",
+   "score": 4.0,
+   "files": [
+    "runtime/3d/royale/towngen.js",
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/towngen.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-I",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane census (live seed 7).",
+   "acceptance_gate": "Off-POI points > 20 m from hard cover <= 30% (today 43-55%)"
+  },
+  {
+   "id": "LC-48",
+   "title": "Storm start circle misfit (Isla circle 1 holds 100% of land; Savanna/Deepwood corners outside)",
+   "dimension": "world",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-E",
+   "owner_decision": "OD-12 (start radius)",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: eval_stormland.json / eval_corners.json.",
+   "acceptance_gate": "Phase 1 removes land on Isla; corner compounds inside phase 1 on 95% of seeds"
+  },
+  {
+   "id": "LC-49",
+   "title": "Netcode: exp-lerp ~260 ms display delay, no seq/timestamps, no host migration or rejoin",
+   "dimension": "online",
+   "severity": 3,
+   "impact": 3,
+   "effort": "L",
+   "score": 3.0,
+   "files": [
+    "runtime/3d/royale/net.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-D + P3-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane probe: best-fit display delay 260 ms with 50-150 ms injected; pack() has no seq (net.js:1237-1251).",
+   "acceptance_gate": "Out-of-order injection never pulls a remote backwards; guest reload at t=60 s rejoins within 15 s with its own actor id"
+  },
+  {
+   "id": "LC-50",
+   "title": "Supabase realtime quota: one 4-human relay room ~80 msg/s vs 100 msg/s project-wide",
+   "dimension": "online",
+   "severity": 3,
+   "impact": 2,
+   "effort": "L",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/royale/net.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "cut-unless-approved",
+   "lane": "-",
+   "owner_decision": "OD-10",
+   "status": "owner-gated (spend)",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: net.js:1101-1117; 16-22 FFG games share the project.",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-51",
+   "title": "Launch portals slower than sprint, scarce, not on the map",
+   "dimension": "movement/world",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/player.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-G",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: portal 119 m in 16.4 s = 7.3 m/s < sprint 8.0.",
+   "acceptance_gate": ">= 4 ground portals per map x 5 seeds; portal travel average > 12 m/s; portals on the big map"
+  },
+  {
+   "id": "LC-52",
+   "title": "Footstep surfaces wrong on most of every map",
+   "dimension": "audio/world",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/audio.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-C (+ P1-B passes feet height)",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: ashgrid concrete 3366 / grass 0 though the west is grass; 342/355 'wood' readings come from colliders beside the point.",
+   "acceptance_gate": "surfaceAt census >= 90% correct per zone on all three maps"
+  },
+  {
+   "id": "LC-53",
+   "title": "No teammate/enemy mix or threat ducking",
+   "dimension": "audio",
+   "severity": 3,
+   "impact": 3,
+   "effort": "S",
+   "score": 9.0,
+   "files": [
+    "runtime/3d/royale/audio.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: audio.js:981-993 own vs other only.",
+   "acceptance_gate": "Teammate step >= 6 dB under an enemy step at equal range"
+  },
+  {
+   "id": "LC-54",
+   "title": "Music arc: no final-circle track; loop gaps",
+   "dimension": "audio",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/audio.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: endgame track only at results (audio.js:629-631); 586 ms lead silence.",
+   "acceptance_gate": "No 50 ms window below -45 dBFS across a loop boundary; endgame track crossfades in at <= 10 alive"
+  },
+  {
+   "id": "LC-55",
+   "title": "Hit-confirm and explosion sounds synthesized; no shield-vs-flesh",
+   "dimension": "gunplay/audio",
+   "severity": 2,
+   "impact": 4,
+   "effort": "S",
+   "score": 8.0,
+   "files": [
+    "runtime/3d/royale/audio.js",
+    "assets/audio/sfx/"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: synth blips (audio.js:1010, 1088-1092).",
+   "acceptance_gate": "Distinct CC0 samples for shield hit, flesh hit, shield break, explosion"
+  },
+  {
+   "id": "LC-56",
+   "title": "Melee",
+   "dimension": "gunplay",
+   "severity": 2,
+   "impact": 3,
+   "effort": "M",
+   "score": 3.0,
+   "files": [
+    "runtime/3d/royale/weapons.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "cut",
+   "lane": "-",
+   "owner_decision": "OD-6",
+   "status": "cut (recommendation)",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Removed in v2.0 (CHANGELOG.md:2045).",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-57",
+   "title": "Per-shell shotgun / tactical reload",
+   "dimension": "gunplay",
+   "severity": 2,
+   "impact": 2,
+   "effort": "M",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/royale/weapons.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "cut",
+   "lane": "-",
+   "owner_decision": "OD-6",
+   "status": "cut (recommendation)",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: whole-mag 3.0 s (royale.js:69).",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-58",
+   "title": "Scope glint, zoom steps",
+   "dimension": "gunplay",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/weapons.js",
+    "runtime/3d/royale/player.js",
+    "runtime/3d/royale/fx.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: none.",
+   "acceptance_gate": "Glint visible to a target within the scope cone at > 50 m"
+  },
+  {
+   "id": "LC-59",
+   "title": "Landing choice limited to ~200 m around an auto-picked POI",
+   "dimension": "movement",
+   "severity": 3,
+   "impact": 3,
+   "effort": "S",
+   "score": 9.0,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-A (if approved)",
+   "owner_decision": "OD-7",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: horizontal glide 199.6 m.",
+   "acceptance_gate": "Big-map waypoint during freefall reachable from 240 m; default stays auto"
+  },
+  {
+   "id": "LC-60",
+   "title": "Ziplines / ascenders",
+   "dimension": "movement/world",
+   "severity": 2,
+   "impact": 3,
+   "effort": "L",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: grep ladder|zipline 0.",
+   "acceptance_gate": "Zipline per town; no fall damage; bots use them"
+  },
+  {
+   "id": "LC-61",
+   "title": "No landing consequence / terminal velocity",
+   "dimension": "movement",
+   "severity": 2,
+   "impact": 2,
+   "effort": "S",
+   "score": 4.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": "OD-8",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: 80 m fall, hp 100, vy -59.",
+   "acceptance_gate": "Fall > 12 m: 0.4 s landing stagger (no HP loss unless OD-8)"
+  },
+  {
+   "id": "LC-62",
+   "title": "Crouch speed 4.32 m/s",
+   "dimension": "movement",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/sim/royale.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "cut",
+   "lane": "-",
+   "owner_decision": "OD-6",
+   "status": "cut (owner already decided)",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Owner approved 0.72 on 2026-07-28 (COMBAT_CALIBRATION.md:109).",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-63",
+   "title": "No diving underwater",
+   "dimension": "movement",
+   "severity": 2,
+   "impact": 2,
+   "effort": "M",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": "OD-12",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: surface only.",
+   "acceptance_gate": "Dive 20 s with breath cue inside an existing anchor"
+  },
+  {
+   "id": "LC-64",
+   "title": "No turn-in-place",
+   "dimension": "movement",
+   "severity": 1,
+   "impact": 3,
+   "effort": "S",
+   "score": 3.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-A",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: feet pivot with body.",
+   "acceptance_gate": "Idle 90 deg turn plays the Mixamo turn clip; foot skate <= 0.2 m/s"
+  },
+  {
+   "id": "LC-65",
+   "title": "No crouch toggle, no invert-Y",
+   "dimension": "movement/ui",
+   "severity": 2,
+   "impact": 2,
+   "effort": "S",
+   "score": 4.0,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-A + P3-C",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: crouch hold only (player.js:1290).",
+   "acceptance_gate": "Toggle and invert settings persist and work"
+  },
+  {
+   "id": "LC-66",
+   "title": "No slope speed",
+   "dimension": "movement",
+   "severity": 1,
+   "impact": 2,
+   "effort": "S",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "cut",
+   "lane": "-",
+   "owner_decision": null,
+   "status": "cut",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Severity 1; no player-facing complaint recorded.",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-67",
+   "title": "No vocal layer (hurt/death/effort)",
+   "dimension": "audio",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/audio.js",
+    "assets/audio/sfx/"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: no vocal clips shipped.",
+   "acceptance_gate": "CC0 vocals from AUDIO_SOURCES.md section B play on hurt/death; licences recorded"
+  },
+  {
+   "id": "LC-68",
+   "title": "No drop wind/chute soundscape; storm motion audio thin",
+   "dimension": "audio",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/audio.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: chute thump + portal whoosh only.",
+   "acceptance_gate": "Freefall wind loop audible and speed-dependent"
+  },
+  {
+   "id": "LC-69",
+   "title": "Audio settings: no headphones/speakers, focused mix, mono",
+   "dimension": "audio/ui",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/audio.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1 (engine) + P2 (rows)",
+   "lane": "P1-B + P2-G",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: 3 sliders only (hud.js:4874-4876).",
+   "acceptance_gate": "audio.setOutput/setMix/setMono exist and the Settings rows drive them"
+  },
+  {
+   "id": "LC-70",
+   "title": "Sound-indicator ring shows crouched enemies and teammates",
+   "dimension": "audio/ui",
+   "severity": 2,
+   "impact": 2,
+   "effort": "S",
+   "score": 4.0,
+   "files": [
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: any actor within 30 m moving > 2 m/s (hud.js:3569-3583).",
+   "acceptance_gate": "Indicator obeys the audio stance radius and hides teammates"
+  },
+  {
+   "id": "LC-71",
+   "title": "Single shadow map, no cascades",
+   "dimension": "visuals",
+   "severity": 2,
+   "impact": 2,
+   "effort": "M",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/ffg_royale3d.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: single PCFSoft map.",
+   "acceptance_gate": "CSM on high only; iGPU medium unchanged"
+  },
+  {
+   "id": "LC-72",
+   "title": "Storm streaks cover the sky in early circles",
+   "dimension": "visuals",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/storm.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-E",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live: streaks over the whole sky at t=48 with storm r=784.",
+   "acceptance_gate": "Circle-1 sky pixels changed by the wall <= 15%; storm gates still pass"
+  },
+  {
+   "id": "LC-73",
+   "title": "Sky islands primitive; braziers as cones",
+   "dimension": "visuals/world",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-G",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: 9-gon disc + 14-seg cone (maps.js:5122,5133).",
+   "acceptance_gate": "Owner screenshot review; +0 draw calls"
+  },
+  {
+   "id": "LC-74",
+   "title": "No cloud shadows; no time-of-day/weather variants",
+   "dimension": "visuals",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-G",
+   "owner_decision": "OD-12",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane.",
+   "acceptance_gate": "Cloud shadows visible from the drop; variants only if approved"
+  },
+  {
+   "id": "LC-75",
+   "title": "Character style mix / random tints",
+   "dimension": "visuals",
+   "severity": 2,
+   "impact": 3,
+   "effort": "M",
+   "score": 3.0,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": "OD-12",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: soldier realistic vs viper anime.",
+   "acceptance_gate": "Owner-approved palette per skin"
+  },
+  {
+   "id": "LC-76",
+   "title": "Ammo/item readability: one ammo model for 5 types",
+   "dimension": "loot",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/loot.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/loot.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-H",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: ITEM_POOL_KEY 'ammo' (loot.js:1072).",
+   "acceptance_gate": "Each ammo type has a distinct tint/label at 6 m"
+  },
+  {
+   "id": "LC-77",
+   "title": "Chest polish: commons in chests; ammo left on the lid",
+   "dimension": "loot",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/3d/royale/loot.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/loot.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-D table + P2-H burst",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane live shots.",
+   "acceptance_gate": "0 common guns from chests over 1000 rolls; ammo bursts reachable"
+  },
+  {
+   "id": "LC-78",
+   "title": "No capacity/inventory screen; cannot drop ammo",
+   "dimension": "loot/ui",
+   "severity": 2,
+   "impact": 2,
+   "effort": "M",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/royale/loot.js",
+    "runtime/3d/royale/hud.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/loot.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane.",
+   "acceptance_gate": "Tab inventory inside anchors (OD if a new panel)"
+  },
+  {
+   "id": "LC-79",
+   "title": "No boost / full-restore items",
+   "dimension": "loot",
+   "severity": 2,
+   "impact": 2,
+   "effort": "M",
+   "score": 2.0,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane.",
+   "acceptance_gate": "Boost item heals over time; selftest"
+  },
+  {
+   "id": "LC-80",
+   "title": "No armour/gear layer",
+   "dimension": "loot",
+   "severity": 3,
+   "impact": 3,
+   "effort": "L",
+   "score": 3.0,
+   "files": [
+    "runtime/sim/royale.js",
+    "runtime/3d/royale/player.js",
+    "runtime/3d/royale/loot.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/loot.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": "OD-12",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane.",
+   "acceptance_gate": "If approved: 3 tiers, damage reduction measured"
+  },
+  {
+   "id": "LC-81",
+   "title": "Death recap shows only the killer",
+   "dimension": "ui",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane.",
+   "acceptance_gate": "Recap lists every damage source in the last 10 s with totals"
+  },
+  {
+   "id": "LC-82",
+   "title": "False/stale copy ('FIGHTING IN 10 SECONDS', 'Pick a landing zone', 'Every key can be rebound', DEPLOY in Quick, 'ranked', SEASON 1)",
+   "dimension": "ui/meta",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: hud.js:1397-1400, :4704, :4755, :4799, :1254.",
+   "acceptance_gate": "Each listed string greps to 0 or is made true"
+  },
+  {
+   "id": "LC-83",
+   "title": "Menu clips at 1280x720 / 1366x768",
+   "dimension": "ui",
+   "severity": 2,
+   "impact": 3,
+   "effort": "S",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: reticle row clipped 9 px, key hint below fold.",
+   "acceptance_gate": "FIT probe at 1280x720/1366x768/1536x864/1920x1080: no control outside the viewport"
+  },
+  {
+   "id": "LC-84",
+   "title": "No gamepad",
+   "dimension": "ui",
+   "severity": 2,
+   "impact": 2,
+   "effort": "L",
+   "score": 1.3,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "runtime/3d/royale/hud.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": "OD-12",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: getGamepads 0 hits.",
+   "acceptance_gate": "Standard-mapping gamepad plays a full match"
+  },
+  {
+   "id": "LC-85",
+   "title": "Squad panel off-style",
+   "dimension": "ui",
+   "severity": 1,
+   "impact": 2,
+   "effort": "S",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/royale/net.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-D",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: system-ui font (net.js:360-420).",
+   "acceptance_gate": "Squad panel uses the game font and button style"
+  },
+  {
+   "id": "LC-86",
+   "title": "Voice / proximity chat",
+   "dimension": "audio/online",
+   "severity": 2,
+   "impact": 2,
+   "effort": "L",
+   "score": 1.3,
+   "files": [
+    "runtime/3d/royale/net.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "cut",
+   "lane": "-",
+   "owner_decision": null,
+   "status": "cut (moderation + messaging-people gate)",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: no getUserMedia; iframe lacks microphone permission.",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-87",
+   "title": "Context loss reloads to menu; WebKit crash on missing AudioContext; favicon 404",
+   "dimension": "perf",
+   "severity": 2,
+   "impact": 2,
+   "effort": "S",
+   "score": 4.0,
+   "files": [
+    "runtime/3d/ffg_royale3d.js",
+    "runtime/3d/royale/audio.js",
+    "index.html"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-C + P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: audio.js:452 unguarded; ctxloss.py reloads to menu.",
+   "acceptance_gate": "0 page errors in a WebKit build without Web Audio; no favicon 404; context restore within 10 s resumes the match"
+  },
+  {
+   "id": "LC-88",
+   "title": "Nav tiles baked on the main thread during the drop",
+   "dimension": "perf",
+   "severity": 3,
+   "impact": 3,
+   "effort": "M",
+   "score": 4.5,
+   "files": [
+    "runtime/3d/royale/navgrid.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/navgrid.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-E",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: bots 7.6-17 ms/frame; CDP top bakeTileGen navgrid.js:900.",
+   "acceptance_gate": "Drop-frame bots section <= 3 ms p95; navcheck unchanged"
+  },
+  {
+   "id": "LC-89",
+   "title": "Map-wide instanced props never frustum-culled (76-83% of frame triangles)",
+   "dimension": "perf",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-C",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane census: 16 InstancedMeshes = 992 K tris (ashgrid), bounding radii 850-1011 m.",
+   "acceptance_gate": "Ground-frame triangles -40% on Deepwood; world placement hash unchanged"
+  },
+  {
+   "id": "LC-90",
+   "title": "No in-world signage; Deepwood lacks a landmark; Isla Viva small (0.58 km2 land)",
+   "dimension": "world",
+   "severity": 2,
+   "impact": 3,
+   "effort": "M",
+   "score": 3.0,
+   "files": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/towngen.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/towngen.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P3",
+   "lane": "P3-G",
+   "owner_decision": "OD-12 (Isla size)",
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane census.",
+   "acceptance_gate": "One map-scale landmark per map visible from the drop"
+  },
+  {
+   "id": "LC-91",
+   "title": "No doors / destructible walls",
+   "dimension": "world",
+   "severity": 3,
+   "impact": 3,
+   "effort": "L",
+   "score": 3.0,
+   "files": [
+    "runtime/3d/royale/housegen.js",
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/bots.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js",
+    "runtime/3d/royale/housegen.js",
+    "runtime/3d/royale/maps.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P4",
+   "lane": "P4",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: doors are open gaps (maps.js:1659-1662).",
+   "acceptance_gate": "Doors open/close for players and bots; navcheck unchanged"
+  },
+  {
+   "id": "LC-92",
+   "title": "No bullet penetration",
+   "dimension": "gunplay",
+   "severity": 1,
+   "impact": 2,
+   "effort": "M",
+   "score": 1.0,
+   "files": [
+    "runtime/3d/royale/weapons.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "cut",
+   "lane": "-",
+   "owner_decision": null,
+   "status": "cut",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Severity 1.",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-93",
+   "title": "No prone",
+   "dimension": "movement",
+   "severity": 1,
+   "impact": 2,
+   "effort": "L",
+   "score": 0.7,
+   "files": [
+    "runtime/3d/royale/player.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "cut",
+   "lane": "-",
+   "owner_decision": "OD-12",
+   "status": "cut (recommendation)",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "No local Mixamo prone set (movement notes); L effort.",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-94",
+   "title": "No vehicles",
+   "dimension": "movement/world",
+   "severity": 1,
+   "impact": 2,
+   "effort": "XL",
+   "score": 0.4,
+   "files": [
+    "runtime/3d/royale/player.js",
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/net.js",
+    "runtime/3d/royale/bots.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js",
+    "runtime/3d/royale/maps.js",
+    "runtime/3d/royale/player.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "cut",
+   "lane": "-",
+   "owner_decision": "OD-12",
+   "status": "cut (recommendation; owner decision)",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Sprint 8 m/s crosses the 1.6 km map in ~200 s; vehicles need physics, net sync, bot driving.",
+   "acceptance_gate": "n/a"
+  },
+  {
+   "id": "LC-95",
+   "title": "Audio hygiene: music element registry grows; UI sounds decoded but unused",
+   "dimension": "audio",
+   "severity": 1,
+   "impact": 2,
+   "effort": "S",
+   "score": 2.0,
+   "files": [
+    "runtime/3d/royale/audio.js"
+   ],
+   "wave8_files_touched": [],
+   "waits_for_wave8_deploy": false,
+   "wave": "P1",
+   "lane": "P1-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: audio.js:522-523; :314-317.",
+   "acceptance_gate": "__GAME_AUDIO__ holds <= 1 element per track; ui_back/close/ok/err wired"
+  },
+  {
+   "id": "LC-96",
+   "title": "New-player fairness: AFK human dies median ~86 s after landing",
+   "dimension": "ai_flow",
+   "severity": 3,
+   "impact": 4,
+   "effort": "M",
+   "score": 6.0,
+   "files": [
+    "runtime/3d/royale/bots.js"
+   ],
+   "wave8_files_touched": [
+    "runtime/3d/royale/bots.js"
+   ],
+   "waits_for_wave8_deploy": true,
+   "wave": "P2",
+   "lane": "P2-B",
+   "owner_decision": null,
+   "status": "planned",
+   "verification": "not-voted (audit-lane evidence only; vote text not in the synthesis input)",
+   "evidence": "Lane: 27 AFK matches - first targeted median 16 s after landing, died median 85.6 s, placement median 45.",
+   "acceptance_gate": "AFK human median survival >= 150 s across 24 matches; skilled-play pacing unchanged"
+  }
+ ]
+}

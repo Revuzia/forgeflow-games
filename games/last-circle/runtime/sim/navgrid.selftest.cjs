@@ -76,6 +76,31 @@ function minOf(n, fn) { let best = Infinity; for (let i = 0; i < n; i++) { const
   ok(bad === 0 && blockedN > 1000 && blockedN < N - 1000, "rampBlocks: navgrid = sim on " + N + " random cases (" + blockedN + " blocked, " + (N - blockedN) + " clear)");
 }
 
+// ── 1b. tall furniture (Wave 8, lane I2): opts.noFloor = collider kind 3, never a floor, a wall from a step away ─────────
+{
+  const mkc = (minX, maxX, minY, maxY, minZ, maxZ) => ({ kind: "box", minX, maxX, minY, maxY, minZ, maxZ, dir: -1, prop: null, idx: -1, hp: 0, dead: false, _qs: 0 });
+  const table = mkc(10, 11.2, 0, 0.76, 10, 10.8);          // a dining table: wide enough to be a floor (>= MIN_FLOOR_DIM 0.7 a side), over a step tall
+  const bed = mkc(10, 12, 0, 0.45, 11.4, 12.8);             // a bed: low furniture (a step up): stays a floor
+  const cols = [table, bed, mkc(13, 14.5, 0, 1.9, 10, 10.5)];   // + a tall shelf
+  const rect = { minX: 6, minZ: 6, maxX: 18, maxZ: 16 };
+  const plain = NG.bakeTile(cols, () => 0, rect, 0.75);
+  const tall = NG.bakeTile(cols, () => 0, rect, 0.75, { noFloor: new Set([table, cols[2]]) });
+  const nodesAt = (T, y) => { let n = 0; for (let i = 0; i < T.n; i++) if (Math.abs(T.y[i] - y) < 0.02) n++; return n; };
+  ok(nodesAt(plain, 0.76) > 0 && nodesAt(tall, 0.76) === 0, "tall furniture: the table top is a floor of the grid without noFloor (" + nodesAt(plain, 0.76) + " nodes), none with it (" + nodesAt(tall, 0.76) + ")");
+  ok(nodesAt(plain, 0.45) > 0 && nodesAt(tall, 0.45) === nodesAt(plain, 0.45), "tall furniture: low furniture (the bed, a step up) stays a floor either way (" + nodesAt(tall, 0.45) + " nodes)");
+  // from the bed's top straight across the table: the mover would be lifted onto the table (0.31 m up from 0.45); with the table tall furniture it is a wall
+  const hp = NG.hop(null, plain, 11.0, 0.45, 12.4, 11.0, 10.4, NG.RADIUS, false), ht = NG.hop(null, tall, 11.0, 0.45, 12.4, 11.0, 10.4, NG.RADIUS, false);
+  ok(hp !== null && hp.y > 0.7 && ht === null, "tall furniture: a walk from the bed onto the table is a lift without noFloor (ends at y " + (hp ? hp.y.toFixed(2) : "blocked") + "), blocked with it (" + (ht ? "y " + ht.y.toFixed(2) : "blocked") + ")");
+  const empty = NG.bakeTile(cols, () => 0, rect, 0.75, { noFloor: new Set() });
+  ok(NG.tileHash(empty) === NG.tileHash(plain), "tall furniture: an empty noFloor set bakes the tile of no noFloor (hash " + NG.tileHash(plain) + ")");
+  // tallFurniture(map): the furniture colliders of the houses (after the structure ones, map.houses[].cols) more than a step over their storey floor
+  const st0 = mkc(0, 5, -0.15, 0.05, 0, 5), fA = mkc(1, 2, 0.05, 0.85, 1, 2), fB = mkc(3, 4, 0.05, 0.45, 1, 2), fC = mkc(1, 2, 3.45, 4.4, 3, 4);
+  const fakeMap = { colliders: [mkc(-9, -8, 0, 3, -9, -8), st0, fA, fB, fC], houses: [{ cols: [1, 1, 4], floors: [{ f: 0, y: 0.05, ceil: 3.15 }, { f: 1, y: 3.45, ceil: 6.55 }], y0: 0 }] };
+  const tf = NG.tallFurniture(fakeMap);
+  ok(tf && tf.size === 2 && tf.has(fA) && tf.has(fC) && !tf.has(fB) && !tf.has(st0), "tallFurniture: the 0.8 m piece and the upstairs 0.95 m piece, not the 0.4 m one or the structure (" + (tf ? tf.size : 0) + ")");
+  ok(NG.tallFurniture({ colliders: [st0] }) === null, "tallFurniture: a map without houses gives null (the world it always was)");
+}
+
 // ── a synthetic town block ───────────────────────────────────────────────────────────────────────────────────────────
 function mk(kind, minX, maxX, minY, maxY, minZ, maxZ, dir) { return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir: dir == null ? -1 : dir, prop: null, idx: -1, hp: 0, dead: false, _qs: 0 }; }
 function buildScene() {
@@ -810,7 +835,9 @@ async function realMap() {
   const L = M.city.layout;
   const picks = [L.towns[0], L.towns[Math.min(5, L.towns.length - 1)]].concat(L.compounds.slice(0, 3));
   const t0 = nowMs();
-  const town = NG.bakeTown(M.colliders, M.heightAt, picks, { waterY: M.waterY, portals: M.portals });
+  // (Wave 8, lane I2) the world the GAME bakes: with furnished houses (map.houses) its tall furniture is never a floor (NG.tallFurniture, bots.js startNav)
+  const noFloor = typeof NG.tallFurniture === "function" ? NG.tallFurniture(M) : null;
+  const town = NG.bakeTown(M.colliders, M.heightAt, picks, { waterY: M.waterY, portals: M.portals, noFloor });
   const bakeMs = nowMs() - t0;
   const ws = NG.worldStats(town.world);
   ok(town.done && town.world.slots.length > 20, "bakeTown over the real Savanna (" + M.colliders.length + " colliders, genVersion " + M.genVersion + "): " + picks.length + " areas, " + town.world.slots.length + " tiles in " + bakeMs.toFixed(0) + " ms");

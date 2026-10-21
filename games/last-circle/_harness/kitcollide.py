@@ -162,7 +162,7 @@ def main_fn(v, args):
             v.info(name + " (not counted)", detail)
 
     bad = doc["decode"]["bad"]
-    want = n if args.only else 81                      # a partial run (--only) is judged on the types it was asked for
+    want = n if args.only else 136                      # a partial run (--only) is judged on the types it was asked for
     row("decode", n == want and not bad and doc["decode"]["ok"] == n, {"decoded": doc["decode"]["ok"], "of": n, "bad": bad[:3]}, expect="%d of %d" % (want, want))
 
     def worst(key, k=6):

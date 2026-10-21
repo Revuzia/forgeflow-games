@@ -89,6 +89,26 @@ walk only, 5 seeds: 30/30 on the stage-B tree, whose E-W decks fail 6-8 of 20 at
 'settled' = canopy open >= 1 s (was |tiltX| <= 0.3; new control player_dive-plant-canopy-dive-pose); squadguard_live_cdn_fallback_full_isla_viva / _deepwood (INFORMATION until the
 deploy, COUNTED in POST_DEPLOY). See README "Wave-7b stage C".
 
+Wave 8 stage B (lane I4, 2026-10-19; furnished interiors wired into the maps): interiorcheck (NEW, BLOCKING on all three maps, --source match: every sampled house
+of a real match has housegen records, a real floor, a ceiling, >= 3 of its OWN furniture pieces in view, kit visuals = colliders at sills / headers, doors >= 2 m,
+reach + loot-reach by the real mover, grass masked indoors, light, and Wave 4's camera pull-in inside EVERY sampled house (--camwall-houses = --houses));
+interiorcheck_housegen / interiorcheck_fixture (housegen.js on its own / the gate's reference house); housegen_demo_nav (2100 rooms walked by the real mover on the
+nav grid); housegen_demo_looks (INFORMATION until it is green: LOOKS_INFO); houseload (NEW: colliders RETURNED per bot query and per frame vs the live build,
+x1.25 - they must not grow with the houses - and <= 16 draw calls per district); navcheck upper-rooms bar 85 % -> 98 % (plan section 4). interiorcheck's
+definition corrections (probe_interior.js VERSION 2): a room counts only its OWN furniture pieces (a neighbour's seen through the doorway never makes it pass), and
+the route planner never stands on a furniture top. Controls: interiorcheck on the frozen Wave-7b release WAVE7B_REV (empty boxes on terrain floors: MUST FAIL), the
+housegen / fixture plants furniture-in-door, window-solid, no-ceiling, empty-room (+ crate-steps on the fixture), housegen_demo_nav --plant doors-blocked,
+houseload --plant query-flood / district-split; navcheck-plant-nav-l3 keeps failing upper-rooms. See README "Wave 8 stage B".
+
+Wave 8 fix round (lane K3, 2026-10-20; definition corrections from the stage-B verify, none lowers a bar, each keeps a failing control): placementcheck ramp-start-step and
+collisioncheck ramps-climb / ramps-lip leave housegen's pitched-roof PLANKS (house.roofRamps) out (roofs, not stairs; control placementcheck-plant-house-stair-lip);
+collisioncheck doors walks housegen's own street-door records (control collisioncheck-plant-door-shift); genversion target 6, no held-identical map (Savanna changes on
+purpose; genversion-plant-savanna-shift re-pinned to WAVE7B_REV vs WAVE7C_REV + its unplanted twin, exit 0); worldcheck --wild-info-maps ashgrid (control
+worldcheck-plant-rng-shift-wave8); navcheck-plant-nav-l3 replaced by navcheck-plant-coarse-indoor (the bots' town grid at 3 m indoor cells); navtown / navcheck rooms surveys drop furniture tops and furniture-fenced pockets (lane I2's request); lootcheck judges a house chest as
+its own box (lane I3's request; lootcheck-wave6-loot-js still fails); worldlive aim judges a box between muzzle / camera and the wall correctly and ramp-sides walks
+30 / 50 / 70 % of the run; artb_check / artb_decode exempt collider_mode 'none' (controls *-plant-drop-colliders); loot_beams_rings skips an off-screen sample instead of
+throwing; houseload's battery look-around radius follows bots.js (WALL_QR 2.4 on the Wave-8 bots, 16 on the live build). See README "Wave 8 fix round".
+
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
 0 pass / 1 fail / 2 could-not-judge; a timeout or a crash of the gate process is could-not-judge. The overall verdict:
 any fail -> FAIL (exit 1); else any could-not-judge -> COULD-NOT-JUDGE (exit 2, re-run those gates; never counted as a
@@ -119,7 +139,7 @@ WAVE7C_REV = "6191b380"      # the Wave-7 COMPLETION release (live until the Wav
                              # MAP_GEN_VERSION 4). NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
 # ---- Wave 7b (lane B2). Which maps' rows COUNT. Isla Viva and Deepwood get their towns and endgame areas from lane B1 in the same stage; each constant was set at the END of the stage to what B1
 # reported landed (README "Wave-7b gates"). A map left out of a list runs as INFORMATION ("would PASS / would FAIL"), never silently skipped.
-MAP_GEN_TARGET = 5                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps
+MAP_GEN_TARGET = 6                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings)
 ALL_MAPS = "isla_viva,ashgrid,deepwood"
 CITY_BLOCK = ALL_MAPS                                  # citycheck --block-maps (all three maps: lane B1 landed the themed towns, compounds and both endgame areas)
 NAVTOWN_BLOCK = ALL_MAPS                               # navtown --block-maps
@@ -130,6 +150,11 @@ COLSEEDS_MAPS = ALL_MAPS                               # collisioncheck_seeds --
                                                        # prop containers), so it is no longer could-not-judge there; phantom-rocks passes on the 7b tree (the live build: 1 of 12)
 ENDGAME_BLOCK = "isla_viva,deepwood"                   # endgamecheck --block-maps (both endgame areas landed)
 THEMES_INFO = False                                    # themeshots (lane B3's gate: the resort / lodge colourways + looks): information until lane B1 applies B3's palette patch to the tree; counted afterwards
+ # ---- Wave 8 (lane I4). WAVE7B_REV: the Wave-7b release (live from 2026-10-19 until the Wave-8 deploy): its houses are today's empty house()/tower() boxes on terrain floors - the frozen
+# "must fail" build of interiorcheck --source match. NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
+WAVE7B_REV = "9115494d"
+INTERIOR_MAPS = ALL_MAPS                               # interiorcheck --source match --maps: BLOCKING on all three maps (owner O3 + plan Wave 8 verify "every map")
+LOOKS_INFO = True                                      # housegen_demo_looks: INFORMATION until it is green (stage A: view-pixels 115/116, lodge_tower.f1r1 storage shows 2 pieces); counted afterwards
 PREL5_REV = "874ab0ca"       # the last-circle build BEFORE lane L5 (3474f1c0, 2026-10-04): every chute deploy allocated geometries (200 -> 212 over the 10 SPACE toggles on isla_viva): the frozen "must fail" build of framecheck's
                              # 10-SPACE-toggle row (Wave-7 fix round: the row now excludes the terrain's lazily built chunks and must still see this)
 WAVE4_REV = "7f6a9fb2"       # the Wave-4 merge commit: the frozen "must fail" build of the Wave-5 gates
@@ -144,13 +169,16 @@ GATES = [
     ("placementcheck", "placementcheck.py", [], 1800, False),
     # Wave-5 fix round (lane F1): worldcheck is Node only too (same reason, runs second); worldlive loads one Chrome per map (PRACTICE: ~40 s)
     # Wave 7b: Savanna's RNG stream must equal the LIVE build's (genversion's gv-identical is the whole-world twin); Isla Viva / Deepwood change on purpose (printed as information)
-    ("worldcheck", "worldcheck.py", ["--baseline-rev", LIVE_REV, "--rng-maps", "ashgrid"], 1800, False),
+    # Wave 8 fix round (lane K3): Savanna's WILD LOOT is information (housegen footprints reject other draws of the last rng consumer); its POIs + prop anchors stay judged
+    ("worldcheck", "worldcheck.py", ["--baseline-rev", LIVE_REV, "--rng-maps", "ashgrid", "--wild-info-maps", "ashgrid"], 1800, False),
     # Wave 7 (lane 7D), Node only: no non-finite ground on 200 seeds x 3 maps (~4 min), and lane 7C's loot probe (15 builds, ~15 s)
     ("nancheck", "nancheck.py", [], 1800, False),
     # Wave-7 completion round (D5), Node only (~25 s): the squad world contract - if anything a peer must agree on (colliders, ground, POIs, prop anchors, loot points, the settled loot items) differs from
     # the LIVE build's on 3 maps x seeds 1, 7, 1234, MAP_GEN_VERSION must be higher than the live build's. Lane D2 owns the constant and bumps it ONCE; every other lane that changes the world tells D2
     # Wave 7b: + gv-target (MAP_GEN_VERSION == MAP_GEN_TARGET on all three maps) and gv-identical (Savanna hashes IDENTICALLY to the live build: col / heights / pois / props / points / items)
-    ("genversion", "genversion.py", ["--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid"], 1800, False),
+    # Wave 8 fix round (lane K3): Savanna changes ON PURPOSE (housegen's furnished houses on every map), so no map is held identical; gv-bumped (the world moved -> the version moved)
+    # and gv-target (6 on all three maps) carry the squad contract. gv-identical keeps its own control (genversion-plant-savanna-shift, re-pinned to the 7b release vs 7c)
+    ("genversion", "genversion.py", ["--expect-version", str(MAP_GEN_TARGET)], 1800, False),
     ("lootcheck", "lootcheck.py", [], 900, False),
     # NavGrid.bakeTown over the Savanna towns + compounds: every room street -> room -> street, planned by the grid and walked by the real mover (Node, ~1 min)
     # Wave 7b: every map's towns + compounds (+ the Deepwood bridge). Rows of the maps in NAVTOWN_BLOCK count; the others print would PASS / would FAIL
@@ -213,6 +241,20 @@ GATES = [
     ("rocksweep", "rocksweep.py", [], 3600, False),
     ("rocksweep_nolip", "rocksweep.py", ["--strip-lip"], 3600, True),       # INFORMATION: a QUESTION about the bake config (is the lip redundant?), not a bar on the game - the lip ships either way
     ("navcheck", "navcheck.py", [], 5400, False),
+    # ---- Wave 8 stage B (lane I4): the furnished interiors. interiorcheck --source match judges 10 houses per map in a real PRACTICE match (one Chrome per map, ~4-8 min per map):
+    # BLOCKING on every map in INTERIOR_MAPS; the camera-wall sweep (Wave 4's pull-in, W.noCamWall as its own control) runs inside EVERY sampled house (--camwall-houses 10)
+    ("interiorcheck", "interiorcheck.py", ["--source", "match", "--maps", INTERIOR_MAPS, "--camwall-houses", "10"], 7200, False),
+    # housegen.js on its own (Node: seeds 1, 7, 1234 x 12 houses; then 4 houses stood on Savanna in a real page): the generator, independent of the maps.js wiring (~3 min)
+    ("interiorcheck_housegen", "interiorcheck.py", ["--source", "housegen"], 3600, False),
+    # the gate's own reference house: every row must PASS on it (its plants below must FAIL) - the judge is checked before it judges the game (~1 min)
+    ("interiorcheck_fixture", "interiorcheck.py", ["--source", "fixture"], 1800, False),
+    # lane H4's nav gate: 300 housegen houses, every room planned on NavGrid.bakeTown and walked IN and OUT by the real mover (Node, ~30 s)
+    ("housegen_demo_nav", "housegen_demo_nav.py", [], 1800, False),
+    # lane H4/H6's looks gate (first-person views of 12 buildings, glass, kit extents): INFORMATION until green (LOOKS_INFO)
+    ("housegen_demo_looks", "housegen_demo_looks.py", [], 1800, LOOKS_INFO),
+    # NEW: colliders returned per bot query (battery at every footprint centre, exact) and per frame (600 stepped frames), vs common.LIVE_REV x1.25; <= 16 draw calls per district.
+    # Two Chromes per map (candidate, baseline), ~1 min each
+    ("houseload", "houseload.py", [], 3600, False),
     # Wave 7b (lane B3's gate, registered here by lane B2): what the kit's town THEMES look like (resort / lodge colourways, palette looks, tables in sync with towngen / citykit, 0 new programs); one
     # Chrome at the menu, ~1 min. THEMES_INFO until the palette patch is on the tree
     ("themeshots", "themeshots.py", ["--themes", "resort,lodge,city", "--label", "gate"], 1800, THEMES_INFO),
@@ -348,7 +390,11 @@ NEGATIVE = [
     ("placementcheck-plant-perimeter-drop", "placementcheck.py", ["--plant", "perimeter-drop"], 900),
     ("placementcheck-plant-tree-float", "placementcheck.py", ["--plant", "tree-float"], 900),
     ("collisioncheck-wave4-commit", "collisioncheck.py", ["--rev", WAVE4_REV], 3600),
-    ("navcheck-plant-nav-l3", "navcheck.py", ["--plant", "nav-l3"], 3600),
+    # Wave 8 fix round (lane K3): navcheck-plant-nav-l3 RETIRED from the battery and replaced by navcheck-plant-coarse-indoor. The Wave-8 bots plan houses on the town grid
+    # (bakeTown), so the NAV_L layer count no longer bites: with the corrected rooms survey nav-l3 PASSES (upper 239 / 240, top 329 / 339), and with the old survey it "failed" only on
+    # furniture-top pseudo-rooms that fail without the plant too (215 / 240 vs 220 / 240 unplanted). coarse-indoor bakes the bots' town grid at 3 m indoor cells: upper 191 / 240, top 11 / 339 FAIL.
+    # (nav-l3 / nav-l2 stay available as --plant for information: nav-l2 reads top 321 / 339 = 94.7 %, a 0.3-point margin - too thin for a control)
+    ("navcheck-plant-coarse-indoor", "navcheck.py", ["--plant", "coarse-indoor"], 3600),
     ("navcheck-plant-raw-strafe", "navcheck.py", ["--plant", "raw-strafe"], 3600),
     ("navcheck-plant-heal-yaw", "navcheck.py", ["--plant", "heal-yaw"], 3600),
     # Wave-5 fix round (lane F1). placementcheck stack-float: ONE stacked upper container is lifted 0.30 m (the stack-support rule must not forgive
@@ -504,7 +550,11 @@ NEGATIVE = [
     ("kitcollide-wave7c-themed", "kitcollide.py", ["--rev", WAVE7C_REV, "--census", "7", "--census-maps", "isla_viva,deepwood", "--census-require", "isla_viva,deepwood"], 1800),
     # genversion: the live build is version 4, not the target (gv-target FAILS); Savanna one compound short (a scratch towngen.js) breaks gv-identical
     ("genversion-wave7c-target", "genversion.py", ["--rev", WAVE7C_REV, "--live-rev", WAVE7C_REV, "--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid"], 900),
-    ("genversion-plant-savanna-shift", "genversion.py", ["--disk", "--live-rev", WAVE7C_REV, "--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid", "--plant", "savanna-shift"], 900),
+    # Wave 8 fix round (lane K3): re-pinned. On the Wave-8 tree Savanna differs from every earlier build ON PURPOSE, so the --disk control failed with OR without its plant (gv-identical
+    # and the stale target): it proved nothing. Pinned to the Wave-7b release vs the 7c one (Savanna byte-identical there, version 5): the unplanted twin must PASS (exit 0) and the
+    # planted one (one Savanna compound fewer) must FAIL gv-identical
+    ("genversion-plant-savanna-shift", "genversion.py", ["--rev", WAVE7B_REV, "--live-rev", WAVE7C_REV, "--expect-version", "5", "--identical-maps", "ashgrid", "--plant", "savanna-shift"], 900),
+    ("genversion-savanna-shift-unplanted", "genversion.py", ["--rev", WAVE7B_REV, "--live-rev", WAVE7C_REV, "--expect-version", "5", "--identical-maps", "ashgrid"], 900, 0),
     # worldcheck: the extra rng() draw (existing) judged the new way - Savanna against the live build
     ("worldcheck-plant-rng-shift-wave7c", "worldcheck.py", ["--plant", "rng-shift", "--baseline-rev", WAVE7C_REV, "--rng-maps", "ashgrid"], 900),
     # perf_district: the same sized plants on the themed maps (Isla Viva is the tight one), and the phone tier's x1.20
@@ -528,6 +578,35 @@ NEGATIVE = [
     ("framecheck-plant-extra-tris-isla-viva", "framecheck.py", ["--plant", "extra-tris"], 1800),
     ("squadguard_live_fallback_full_deepwood-wave7c-live", "squadguard_live.py", ["--rev", WAVE7C_REV, "--full", "--cases", "fallback-full", "--fallback-map", "deepwood"], 1800),
     ("squadguard_live_fallback_full_isla_viva-wave7c-live", "squadguard_live.py", ["--rev", WAVE7C_REV, "--full", "--cases", "fallback-full", "--fallback-map", "isla_viva"], 1800),
+    # ---- Wave 8 stage B (lane I4). interiorcheck --source match on the frozen Wave-7b release: no house records, terrain floors, empty rooms, kit / collider disagreements (stage A measured
+    # 6 pass / 9 fail there) - MUST FAIL. The housegen and fixture plants each fail ONLY their designated rows (interiorcheck PLANT_ROWS); empty-room is the control of the own-pieces
+    # correction (a room whose only visible furniture is its neighbour's), crate-steps the control of the planner correction (a door reachable only over furniture tops: the
+    # stage-A planner walked the fixture's 3 rooms through it, VERSION 2 must not)
+    ("interiorcheck-wave7b-live", "interiorcheck.py", ["--rev", WAVE7B_REV, "--source", "match", "--maps", INTERIOR_MAPS], 5400),
+    ("interiorcheck_housegen-plant-furniture-in-door", "interiorcheck.py", ["--source", "housegen", "--plant", "furniture-in-door"], 3600),
+    ("interiorcheck_housegen-plant-window-solid", "interiorcheck.py", ["--source", "housegen", "--plant", "window-solid"], 3600),
+    ("interiorcheck_housegen-plant-no-ceiling", "interiorcheck.py", ["--source", "housegen", "--plant", "no-ceiling"], 3600),
+    ("interiorcheck_housegen-plant-empty-room", "interiorcheck.py", ["--source", "housegen", "--plant", "empty-room"], 3600),
+    ("interiorcheck_fixture-plant-furniture-in-door", "interiorcheck.py", ["--source", "fixture", "--plant", "furniture-in-door"], 1800),
+    ("interiorcheck_fixture-plant-window-solid", "interiorcheck.py", ["--source", "fixture", "--plant", "window-solid"], 1800),
+    ("interiorcheck_fixture-plant-no-ceiling", "interiorcheck.py", ["--source", "fixture", "--plant", "no-ceiling"], 1800),
+    ("interiorcheck_fixture-plant-empty-room", "interiorcheck.py", ["--source", "fixture", "--plant", "empty-room"], 1800),
+    ("interiorcheck_fixture-plant-crate-steps", "interiorcheck.py", ["--source", "fixture", "--plant", "crate-steps"], 1800),
+    # housegen_demo_nav: a 3 m crate in every street doorway -> nav-rooms 0 %
+    ("housegen_demo_nav-plant-doors-blocked", "housegen_demo_nav.py", ["--plant", "doors-blocked"], 1800),
+    # houseload: 64 dead far-away colliders appended to every queryColliders result (collider-load + collider-load-frame), 20 extra meshes in one district (district-calls)
+    ("houseload-plant-query-flood", "houseload.py", ["--maps", "deepwood", "--plant", "query-flood"], 1800),
+    ("houseload-plant-district-split", "houseload.py", ["--maps", "ashgrid", "--plant", "district-split"], 1800),
+    # ---- Wave 8 fix round (lane K3): each corrected row keeps a failing control
+    # placementcheck ramp-start-step no longer judges housegen ROOF planks (house.roofRamps): the first housegen STAIR lifted 0.8 m must still fail it
+    ("placementcheck-plant-house-stair-lip", "placementcheck.py", ["--plant", "house-stair-lip", "--quick"], 900),
+    # collisioncheck doors walks housegen's own street-door records: every record moved 2 m along its wall (the walk aims at solid wall) must fail it
+    ("collisioncheck-plant-door-shift", "collisioncheck.py", ["--plant", "door-shift"], 1800),
+    # worldcheck with Savanna's wild loot as information: one extra rng() draw still moves Savanna's prop anchors (rng-stream FAILS) under the gate's own arguments
+    ("worldcheck-plant-rng-shift-wave8", "worldcheck.py", ["--plant", "rng-shift", "--baseline-rev", WAVE7B_REV, "--rng-maps", "ashgrid", "--wild-info-maps", "ashgrid"], 900),
+    # artb_check / artb_decode exempt collider_mode 'none' (rugs, pallet) only: a boxed type whose colliders are emptied in memory must fail the collider row
+    ("artb_check-plant-drop-colliders", "new/artb_check.py", ["--plant", "drop-colliders"], 600),
+    ("artb_decode-plant-drop-colliders", "new/artb_decode.py", ["--groups", "suburban", "--plant", "drop-colliders"], 1800),
 ]
 
 

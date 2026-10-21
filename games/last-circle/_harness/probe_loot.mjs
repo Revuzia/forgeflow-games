@@ -84,6 +84,22 @@ function measure(M, W) {
     }
     return null;
   };
+  const inSolidBox = (x, z, y, hx, hz, lo, hi) => {
+    for (const c of colsAt(x, z, Math.max(hx, hz) + 0.1)) {
+      if (c.kind !== "box") continue;
+      if (x + hx <= c.minX || x - hx >= c.maxX || z + hz <= c.minZ || z - hz >= c.maxZ) continue;
+      if (c.maxY <= y + 0.05) continue;                       // the floor it stands on
+      if (y + hi > c.minY + 0.05 && y + lo < c.maxY - 0.05) return c;
+    }
+    return null;
+  };
+  // a house item's given surface must be one of its house's record surfaces (a loot point's y or a chest slot's floor) within 1.6 m: the ring row trusts it.surf only then
+  const HS = Array.isArray(M.houses) ? M.houses : [], hById = new Map(HS.map((H) => [H.id, H]));
+  const onRecord = (it) => {
+    const H = hById.get(it.house); if (!H) return false;
+    for (const l of (H.loot || []).concat(H.chests || [])) if (Math.abs(l.y - it.surf) < 1e-6 && Math.hypot(l.x - it.pos.x, l.z - it.pos.z) <= 1.6) return true;
+    return false;
+  };
   const ceilingOver = (x, z, floor, rad) => {
     let ceil = Infinity;
     for (const c of colsAt(x, z, rad)) {
@@ -136,7 +152,10 @@ function measure(M, W) {
       const info = lootMod.debugLootFx(it.id);
       const ring = info && info.obj && info.obj.ring;
       if (ring) {
-        const want = s.f + (s.box ? 0.035 : 0.065);
+        // a furnished house's item (Wave 8) lies on its record's surface AS GIVEN (it.surf: a counter, a shelf - possibly under that piece's coarser collider top):
+        // its ring belongs there; the surface is checked against the house record (W.map.houses loot y) below
+        const want = it.surf != null ? it.surf + 0.035 : s.f + (s.box ? 0.035 : 0.065);
+        if (it.surf != null && !onRecord(it)) note(out.ringMisplaced, it, { surf: r3(it.surf), unrecorded: true });
         // a ring that fell back to "15 cm under the item" (no support in reach) is the floating case: reported through noBlob / gapOver too
         if (Math.abs(ring.y - want) > 0.10) note(out.ringMisplaced, it, { ringY: r3(ring.y), support: r3(s.f), box: s.box });
         if (inSolid(ring.x, ring.z, ring.y - 0.1, 0.05, 0, 0.2)) note(out.ringInSolid, it, { ringY: r3(ring.y) });
@@ -158,7 +177,10 @@ function measure(M, W) {
     const s = support(x, z, y + 0.35);
     const gap = y - s.f;
     gaps.push(gap);
-    const sol = inSolid(x, z, y, 0.55, 0.05, 0.9);
+    // a chest's body: the outdoor 1.6 m chest is judged as a 0.55 m disc; a furnished house's chest (Wave 8, loot.js PER-ROOM LOOT) is drawn at 0.625 to fit
+    // its 1.0 x 0.75 m slot against a wall and reports its own half extents (c.half, axis-aligned: quarter turns) - judged as that box (2 cm tolerance), to its
+    // drawn height 0.62 m (the disc would put a wall 0.375 m behind every slot inside it)
+    const sol = c.half ? inSolidBox(x, z, y, c.half[0] - 0.02, c.half[1] - 0.02, 0.05, 0.62) : inSolid(x, z, y, 0.55, 0.05, 0.9);
     const rec = { id: c.id, x: r3(x), y: r3(y), z: r3(z) };
     if (sol) out.inSolid.push(Object.assign({ chest: true }, rec, { box: [r3(sol.minX), r3(sol.maxX), r3(sol.minY), r3(sol.maxY), r3(sol.minZ), r3(sol.maxZ)], prop: sol.prop || null }));
     if (Math.abs(gap) > 0.1) {

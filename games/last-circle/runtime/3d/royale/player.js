@@ -69,6 +69,9 @@ export function init(W) {
 }
 
 // ── actor factory ────────────────────────────────────────────────────────────
+const ACTOR_DOUBLES = ["yaw", "pitch", "hp", "shield", "downedAt", "aimErr", "lastShotT", "lastDamageT", "_mixT", "_mixRate", "_dEff", "_agl", "_bodyYaw",
+  "_tiltX", "_tiltZ", "_eyeY", "_armW", "_animTS", "_adsT", "_stepAcc", "hitReactT", "_hitReactAt", "_portalT", "_sinkT", "_sinkHold", "_sinkY0", "_sinkVy",
+  "_sinkFloor", "lastHurtByActorT", "dummyDamage", "_flashT", "_eHoldT", "_fireRelayT", "_stormT", "vmKick", "recoilYaw", "recoilPitch", "_pyaw"];
 export function createActor(W, opts) {
   const a = {
     id: opts.id, name: opts.name, isBot: !!opts.isBot,
@@ -135,6 +138,13 @@ export function createActor(W, opts) {
     // (0 = not at all, 1 = full view sync, 2 = position only: emote / mantle)
     _pp: new THREE.Vector3(), _pyaw: 0, _ppT: -1, _vmode: 0,
   };
+  // (Wave 8, lane I2) the number fields that ever hold a FRACTION are double fields from birth: a double stored, then the start value put back (the
+  // values are exactly the ones above). Born as small integers they were Smi fields, and the first fraction ANY actor stored into one (a timer += dt, a yaw)
+  // deprecated the shared actor map mid-match - every optimized function that touches an actor thrown away and run interpreted, boxing every number,
+  // until re-optimized (framecheck isla_viva: thousands of map deprecations, in bursts through the measured window). Now that happens here, once.
+  for (let i = 0; i < ACTOR_DOUBLES.length; i++) { const k = ACTOR_DOUBLES[i], v = a[k]; a[k] = 0.5; a[k] = v; }
+  { const I = a.input; I.mx = 0.5; I.mx = 0; I.mz = 0.5; I.mz = 0; I.yaw = 0.5; I.yaw = 0; I.pitch = 0.5; I.pitch = 0; }
+  { const w = a.weapon; w.cd = 0.5; w.cd = 0; w.reloadT = 0.5; w.reloadT = 0; }
   a.obj.name = "actor_" + a.id;
   // yaw outermost: the dive / canopy tilts (syncObj) pitch and roll about the BODY's own axes
   a.obj.rotation.order = "YXZ";
@@ -1612,6 +1622,9 @@ function cornerSlide(W, cols, a, c) {
   return true;
 }
 
+/** (Wave 8 fix round, lane K2) does a standing actor's capsule fit with its feet at (x, y, z): nothing it would overlap (blockedHoriz, the mantle's ledge probe).
+ *  bots.js escapeSolid reads it to push a bot that ended up INSIDE a solid box out to the nearest spot it fits. */
+export function fitsAt(W, x, z, y) { return !blockedHoriz(W, x, z, y, K.PLAYERK.height); }
 /** "does a standing capsule fit HERE" (the mantle's ledge probe): the plain
  *  overlap test at the given feet height, no move rules */
 function blockedHoriz(W, x, z, y, h) {

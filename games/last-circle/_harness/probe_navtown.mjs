@@ -134,6 +134,23 @@ function surveyRooms(M) {
   }
   const bldOf = (c) => (c && par.has(c) ? colIdx.get(find(c)) : -1);
   const pts = new Map();
+  // (Wave 8, lane I2 request) a furnished house's FURNITURE (house.cols = [first, structures, all]: furniture last) is no room floor, like a crate top (sc.prop),
+  // and a point on a house storey inside a room but > 0.5 m outside that room's WALK rects is a pocket the furniture fences off. No houses: unchanged.
+  const furn = new Set();
+  for (const H of M.houses || []) { if (!H.cols) continue; for (let i = H.cols[0] + H.cols[1]; i < H.cols[0] + H.cols[2]; i++) furn.add(cols[i]); }
+  const offWalk = (x, s, z) => {
+    for (const H of M.houses || []) {
+      const mn = H.aabb && H.aabb.min, mx = H.aabb && H.aabb.max;
+      if (!mn || x < mn[0] || x > mx[0] || z < mn[2] || z > mx[2]) continue;
+      for (const r of H.rooms) {
+        const F = H.floors[r.floor]; if (!F || Math.abs(s - F.y) > 0.3) continue;
+        if (!r.rects.some((q) => x >= q[0] && x <= q[2] && z >= q[1] && z <= q[3])) continue;
+        let d = 1e9; for (const q of r.walk || []) d = Math.min(d, Math.hypot(Math.max(q[0] - x, 0, x - q[2]), Math.max(q[1] - z, 0, z - q[3])));
+        return d > 0.5;
+      }
+    }
+    return false;
+  };
   let pockets = 0;
   for (const Rf of roofish) {
     for (let x = Math.ceil(Rf.minX + 0.4); x <= Rf.maxX - 0.4; x += 1) for (let z = Math.ceil(Rf.minZ + 0.4); z <= Rf.maxZ - 0.4; z += 1) {
@@ -146,8 +163,9 @@ function surveyRooms(M) {
         const top = topAt(c, x, z);
         if (top <= Rf.minY - 1.0 && top > s) { s = top; sc = c; }
       }
-      if (sc && sc.prop) continue;
+      if (sc && (sc.prop || furn.has(sc))) continue;
       if (Rf.minY - s > 12 || Rf.minY - s < 0.3) continue;
+      if (furn.size && offWalk(x, s, z)) continue;
       let lower = false;
       for (const c of L) { if (c === Rf || c.dead) continue; if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue; if (c.minY > s + 0.3 && c.minY < Rf.minY - 1e-3) { lower = true; break; } }
       if (lower) continue;
@@ -222,6 +240,7 @@ for (const MAP of MAPS) for (const seed of SEEDS) {
   const ids = [...L.towns.map((t) => t.id), ...L.compounds.map((c) => c.id)];
   const cover = rects.map((r) => NG.rectOfLayout(r, 6));
   const bakeOpts = { waterY: M.waterY, portals: M.portals };
+  if (typeof NG.tallFurniture === "function") bakeOpts.noFloor = NG.tallFurniture(M);   // (Wave 8) the game's grid: tall furniture is never a floor (bots.js startNav)
   if (PLANT === "coarse-indoor") bakeOpts.cellIndoor = 3.0;
   const t0 = process.hrtime.bigint();
   const town = NG.bakeTown(M.colliders, M.heightAt, rects, bakeOpts);
