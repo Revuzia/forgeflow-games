@@ -53,9 +53,14 @@ TAP_JS = r"""(() => {
         oc.call(this, ctx.__tapSP); } } catch (e) { window.__TAP__.err = String(e); }
     return r; }; })();"""
 # every GainNode -> PannerNode connect while __PLON__: the distance gain the game computed (deterministic)
-PL_HOOK = r"""(() => { const oc = AudioNode.prototype.connect; window.__PL__ = [];
-  AudioNode.prototype.connect = function (dst) { try { if (window.__PLON__ && this instanceof GainNode && dst instanceof PannerNode)
-    window.__PL__.push({ gain: this.gain.value, model: dst.panningModel }); } catch (e) {} return oc.apply(this, arguments); }; })();"""
+PL_HOOK = r"""(() => { const oc = AudioNode.prototype.connect; window.__PL__ = []; const PG = new WeakSet();
+  // the placement gain = the GainNode feeding a PannerNode. audio.js POOLS its positional strips (gain -> panner wired once, at strip
+  // creation; a reused strip only gets g.gain.value = vol x occ), so record both a fresh connect AND every later write to such a gain.
+  AudioNode.prototype.connect = function (dst) { try { if (this instanceof GainNode && dst instanceof PannerNode) { PG.add(this.gain);
+    if (window.__PLON__) window.__PL__.push({ gain: this.gain.value, model: dst.panningModel, via: 'connect' }); } } catch (e) {} return oc.apply(this, arguments); };
+  const d = Object.getOwnPropertyDescriptor(AudioParam.prototype, 'value');
+  Object.defineProperty(AudioParam.prototype, 'value', { configurable: true, enumerable: d.enumerable, get: d.get,
+    set(v) { d.set.call(this, v); try { if (window.__PLON__ && PG.has(this)) window.__PL__.push({ gain: +v, via: 'set' }); } catch (e) {} } }); })();"""
 DRAIN_JS = r"""() => { const T = window.__TAP__; const ch = T.chunks, tm = T.times; T.chunks = []; T.times = [];
   let n = 0; for (const c of ch) n += c.length; const f = new Float32Array(n); let k = 0; for (const c of ch) { f.set(c, k); k += c.length; }
   let s = ''; const u = new Uint8Array(f.buffer); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
