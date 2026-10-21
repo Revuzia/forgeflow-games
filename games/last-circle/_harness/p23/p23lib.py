@@ -68,11 +68,11 @@ def parse(ap, argv=None):
 
 
 # ───────────────────────── Node gates: the tree a Node run reads ─────────────────────────
-def _rev_root(rev, parts=("runtime", "assets/props")):
+def _rev_root(rev, parts=("runtime", "assets/props", "assets/vendor/three/build", "assets/vendor/three/examples/jsm")):
     sha = subprocess.run(["git", "-C", C.REPO, "rev-parse", rev], capture_output=True, text=True).stdout.strip()
     if not sha:
         raise C.HarnessError("unknown git revision %r" % rev)
-    dst = os.path.join(tempfile.gettempdir(), "lc_p23_rev", sha)
+    dst = os.path.join(tempfile.gettempdir(), "lc_p23_rev2", sha)   # rev2: + the vendored three (Node gates import it)
     mark = os.path.join(dst, ".complete")
     if not os.path.exists(mark):
         os.makedirs(dst, exist_ok=True)
@@ -105,12 +105,13 @@ def node_root(args, rev=None):
     ovl = C.overlay_specs(args) if getattr(args, "overlay", None) else []
     if ovl:
         dst = tempfile.mkdtemp(prefix="lc_p23_ovl_")
-        for part in ("runtime", os.path.join("assets", "props")):
-            shutil.copytree(os.path.join(root, part), os.path.join(dst, part))
+        for part in ("runtime", os.path.join("assets", "props"), os.path.join("assets", "vendor")):   # vendor: three.module.js for three_hooks
+            if os.path.isdir(os.path.join(root, part)):
+                shutil.copytree(os.path.join(root, part), os.path.join(dst, part))
         shutil.copy2(os.path.join(root, "index.html"), os.path.join(dst, "index.html"))
         n = 0
         for d, rels in ovl:
-            for base, _dirs, files in os.walk(os.path.join(d, "runtime")):
+            for base, _dirs, files in [w for sub in ("runtime", os.path.join("assets", "props")) for w in os.walk(os.path.join(d, sub))]:
                 for f in files:
                     src = os.path.join(base, f)
                     rel = os.path.relpath(src, d).replace(os.sep, "/")

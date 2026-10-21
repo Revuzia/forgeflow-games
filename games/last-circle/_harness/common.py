@@ -502,20 +502,32 @@ def overlay_specs(args):
     return out
 
 
+OVERLAY_BASE = "9aa2b746"   # int-p1 = the base of every P2/P3 lane (--overlay DIR=@changed diffs against it)
+
+
 def changed_files(game_dir):
     """--overlay DIR=@changed: the files of DIR (a games/last-circle dir inside a git worktree) that differ from its HEAD (modified or untracked),
     relative to the game dir. Lets one run serve several lanes' work at once (each worktree holds the WHOLE game: a plain DIR would serve its
     unchanged copies over the other lanes' changes)."""
-    r = subprocess.run(["git", "-C", game_dir, "status", "--porcelain", "--untracked-files=all", "--", "."], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    # lanes COMMIT their checkpoints: "changed" = every file that differs from the wave base (OVERLAY_BASE, committed or not) + the untracked
+    # files (a HEAD-only status missed every committed checkpoint and served e.g. maps.js without its new texture -> 404).
     top = subprocess.run(["git", "-C", game_dir, "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    paths = []
+    d = subprocess.run(["git", "-C", game_dir, "-c", "core.quotepath=off", "diff", "--name-only", "--diff-filter=d", "--relative=", OVERLAY_BASE, "--", "."],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if d.returncode == 0:
+        paths += [x for x in d.stdout.splitlines() if x.strip()]
+    else:  # base unknown to this repo: fall back to the working-tree status
+        r0 = subprocess.run(["git", "-C", game_dir, "status", "--porcelain", "--", "."], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        paths += [ln[3:].strip().strip('"').split(" -> ")[-1] for ln in r0.stdout.splitlines() if len(ln) >= 4 and "D" not in ln[:2]]
+    u = subprocess.run(["git", "-C", game_dir, "-c", "core.quotepath=off", "ls-files", "--others", "--exclude-standard", "--full-name", "--", "."],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    paths += [x for x in u.stdout.splitlines() if x.strip()]
     rels = set()
-    for ln in r.stdout.splitlines():
-        if len(ln) < 4 or ln[0] == "D" or ln[1] == "D":
-            continue
-        p = ln[3:].strip().strip('"')
-        if " -> " in p:
-            p = p.split(" -> ", 1)[1]
+    for p in paths:
         full = os.path.realpath(os.path.join(top, p))
+        if not os.path.isfile(full):
+            continue
         rel = os.path.relpath(full, os.path.realpath(game_dir)).replace("\\", "/")
         if not rel.startswith("..") and "/_harness/" not in "/" + rel and not rel.startswith("_"):
             rels.add(rel)
