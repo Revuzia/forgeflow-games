@@ -130,6 +130,9 @@ function wrapOutputChunks(fs, pre, post) {
 }
 function lcCanvasOutput(parameters) {
   if (parameters.isRawShaderMaterial || parameters.outputColorSpace !== THREE.SRGBColorSpace) return;   // render targets: untouched
+  // post AA (kernel setAA, LC-03) draws an image that is ALREADY tone-mapped + sRGB onto the canvas: appending the
+  // chunks (case 1 below) would tone-map and encode it a second time
+  if (this.userData && this.userData.lcNoCanvasOut) return;
   const fs = parameters.fragmentShader;
   if (typeof fs !== "string" || fs.indexOf("lcCanvasOut") !== -1) return;
   let out = null;
@@ -360,9 +363,50 @@ register3d("royale", async function (kernel, content) {
   // composer's OutputPass would have shown it. It is keyed to the program's output
   // colour space, so the render-target programs of medium/high are never touched.
 
+  // ── video settings beyond the tier (LC-03 AA, LC-06 W.setGfx + ladder, LC-43 daltonize) ──────
+  // W.settings.gfx is saved with the rest of lc_settings (hud.js save writes the whole object).
+  //   aa: "auto" (tier default: high SMAA, medium MED_AA, low/touch off) | "off" | "fxaa" | "smaa"
+  //   bloom: "auto" (tier) | "off" | "on";   dpr: "auto" | a ceiling 0.5..1.5;   autoQuality: the in-match ladder
+  //   daltonize: "off" | "protan" | "deutan" | "tritan" (+ daltonizeAmt 0..1)
+  const GFX_DEF = { aa: "auto", bloom: "auto", dpr: "auto", autoQuality: true, daltonize: "off", daltonizeAmt: 1 };
+  function gfxPrefs() {
+    const cur = W.settings.gfx;
+    if (cur && typeof cur === "object" && cur._full === GFX_DEF) return cur;    // per-frame callers: no allocation
+    const g = Object.assign({}, GFX_DEF, (cur && typeof cur === "object") ? cur : {});
+    Object.defineProperty(g, "_full", { value: GFX_DEF, enumerable: false });   // not saved (JSON skips it)
+    W.settings.gfx = g;
+    return g;
+  }
+  // MEDIUM's AA: FXAA. The plan allowed SMAA on medium only if it measured inside the +0.8 ms GPU budget on the UHD
+  // iGPU (P1-C ABAB in F:/lc_p1/P1-C/notes.txt); HIGH gets SMAA.
+  const MED_AA = "fxaa";
+  // URL / automation switches. Auto-tier, the ladder and the idle prefetch read the box they run on, so they are OFF
+  // under browser automation (navigator.webdriver) unless asked for: every harness gate boots a fresh profile on this
+  // shared iGPU, and an auto-pick there would silently move the whole suite to another tier. ?autotier= / ?ladder= /
+  // ?prefetch= 1 forces one on, 0 off (A/B and rollback).
+  const QS = (() => { try { return new URLSearchParams(location.search); } catch (e) { return new URLSearchParams(""); } })();
+  const AUTOMATED = (() => { try { return !!navigator.webdriver; } catch (e) { return false; } })();
+  const qsOn = (k) => QS.get(k) === "1" || (QS.get(k) !== "0" && !AUTOMATED);
+  const AUTOTIER_ON = qsOn("autotier"), LADDER_ON = qsOn("ladder"), PREFETCH_ON = qsOn("prefetch");
+  const AA_OFF = QS.get("aa") === "0";     // ?aa=0: no post AA whatever the settings (A/B and rollback, like ?lowpost / ?canvasfix)
+  // the in-match quality ladder's state (see ladderFrame); its level survives match to match in a session
+  const LAD = { level: 0, lastChange: 0, lastAbove: 0, settleUntil: 0, rawSettle: 0, p75: null, src: null, hist: [], steps: 0 };
+  const LADDER_DPR = [Infinity, Infinity, 1.25, 1.0];   // level 0..3: none, bloom off, DPR 1.25, DPR 1.0
+  // the first-run auto-tier's state (see autoTierFrame)
+  const AUTO = { state: "idle", frames: 0, from: 0, rawFrom: 0, why: null };
+
+  /** A player's choice (hud.js Settings calls this with the picked tier): the auto-tier never overrides it again, and
+   *  the ladder restarts from the top of the new tier. The game's own boot / match-start applies go through applyTier. */
   W.applyGraphics = function (tier) {
+    if (tier) { W.settings.gfxUser = true; LAD.level = 0; LAD.hist.push({ t: Math.round(performance.now()), from: null, to: 0, why: "player tier " + tier }); }
+    return applyTier(tier, "user");
+  };
+
+  function applyTier(tier, src) {
     tier = tier || W.settings.graphics || "medium";
+    const g = gfxPrefs();
     const r = kernel.renderer;
+
     const DPR = { low: 1, medium: 1.5, high: 2 };
     const SHADOW = { low: 0, medium: 2048, high: 4096 };
     const ANISO = { low: 1, medium: 4, high: 8 };
@@ -385,7 +429,13 @@ register3d("royale", async function (kernel, content) {
     // tier, BUDGET.dprMax 1.5))), which also re-sizes the composer's render targets —
     // EffectComposer only reads the renderer's ratio once, at construction.
     const touch = isTouchDevice();
+    // the DPR ceiling under the tier: the player's own (gfx.dpr) and the ladder's, whichever is lower
+    const ladderOn = ladderActive(tier, touch);
+    if (!ladderOn) LAD.level = 0;
+    const userCap = +g.dpr > 0 ? Math.min(1.5, Math.max(0.5, +g.dpr)) : Infinity;
+    if (kernel.setDprCap) kernel.setDprCap(Math.min(userCap, LADDER_DPR[LAD.level] || Infinity));
     const dprEff = kernel.setDpr ? kernel.setDpr(DPR[tier] || 1.5) : (r.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR[tier] || 1.5)), r.getPixelRatio());
+
     const shadows = tier !== "low";
     r.shadowMap.enabled = shadows;
     // Shadow VOLUME lives here rather than in the vendored kernel literal, which
@@ -430,9 +480,9 @@ register3d("royale", async function (kernel, content) {
       // TOUCH PROFILE (CONTRACT_MOBILE M7): a phone/tablet GPU shares memory and
       // thermals with everything else, so the shadow map is capped at 1024 there
       // whatever tier is picked (a 2048 map is 16 MB of depth for a ~6" screen).
-      // Anti-aliasing is already off on every device (the kernel builds the
-      // renderer with antialias:false and the composer's RT is single-sampled), so
-      // the "AA off at DPR >= 2" rule holds without a switch here.
+      // Anti-aliasing: the renderer is antialias:false and the composer's RT is
+      // single-sampled everywhere; the desktop post AA (LC-03, below) is never
+      // switched on for touch, so the "AA off at DPR >= 2" rule still holds there.
       const sz = Math.min(SHADOW[tier] || 2048, touch ? 1024 : Infinity);
       if (kernel.sun.shadow.mapSize.x !== sz) {
         kernel.sun.shadow.mapSize.set(sz, sz);
@@ -464,13 +514,263 @@ register3d("royale", async function (kernel, content) {
     // world has called enableBloom, hence the guard - the BOOT-time applyGraphics()
     // below runs before that, and the per-match re-apply in _startMatch is what
     // actually lands the tier's setting.
-    const post = routePost(tier === "low" && !LOW_POST);
-    if (kernel.bloom && post !== "direct") kernel.bloom.enabled = (BLOOM[tier] || 0) > 0;
+    // Colour-vision correction lives in the output pass, which the low tier's direct route does not run: with it on,
+    // low keeps the composer (no bloom, no AA) - the player's own choice, so its one-time program compile is theirs.
+    const cbOn = !!g.daltonize && g.daltonize !== "off";
+    const post = routePost(tier === "low" && !LOW_POST && !cbOn);
+    let bloomOn = (BLOOM[tier] || 0) > 0;
+    if (g.bloom === "off") bloomOn = false;
+    else if (g.bloom === "on" && tier !== "low") bloomOn = true;
+    if (LAD.level >= 1) bloomOn = false;                                        // ladder step 1
+    if (kernel.bloom && post !== "direct") kernel.bloom.enabled = bloomOn;
     W._gfx.post = post;
+    W._gfx.bloom = post !== "direct" && !!kernel.bloom && kernel.bloom.enabled;
+    // POST AA (LC-03), after the output pass: never on touch (CONTRACT_MOBILE M7) and never on the direct (low) route.
+    // Never antialias:true on the renderer (BUILD_ORDER item 69): the scene is drawn into the composer's RT.
+    let aa = "off";
+    if (!touch && post !== "direct" && !AA_OFF) {
+      if (g.aa === "auto") aa = tier === "high" ? "smaa" : tier === "medium" ? MED_AA : "off";
+      else if (g.aa === "fxaa" || g.aa === "smaa") aa = g.aa;
+    }
+    const aaNow = kernel.setAA ? kernel.setAA(aa) : "off";
+    W._gfx.aa = aa !== "off" ? aa : false;    // the mode asked for (in force once the AA module has loaded: aaNow)
+    W._gfx.aaNow = aaNow;
+    W._gfx.daltonize = kernel.setDaltonize ? kernel.setDaltonize(cbOn ? g.daltonize : 0, g.daltonizeAmt) : null;
+    W._gfx.dprCap = kernel._dprCap === Infinity ? null : kernel._dprCap;
+    W._gfx.ladder = { on: ladderOn, level: LAD.level };
+    W._gfx.src = src || null;
     // keep the kernel's own quality key in sync (shell buttons + next boot)
     try { const s = JSON.parse(localStorage.getItem("ffg_settings") || "{}"); s.quality = tier === "medium" ? "med" : tier; localStorage.setItem("ffg_settings", JSON.stringify(s)); } catch (e) {}
+    return W._gfx;
+  }
+  applyTier(W.settings.graphics, "boot");   // BOOT-apply the stored tier (the fix)
+
+  function saveSettings() { try { localStorage.setItem("lc_settings", JSON.stringify(W.settings)); } catch (e) {} }
+
+  /** W.setGfx(key, val) - the Video tab's one entry point (P2-G builds the rows). Keys:
+   *    "tier" low|medium|high (a player's choice, like the Settings buttons), "aa" auto|off|fxaa|smaa,
+   *    "bloom" auto|off|on, "dpr" auto|0.5..1.5, "autoQuality" true|false (the in-match ladder),
+   *    "daltonize" off|protan|deutan|tritan, "daltonizeAmt" 0..1, "autoTier" "rerun" (forget the first-run pick).
+   *  Applies at once, saves lc_settings, returns W.getGfx(). An unknown key or value throws (a UI bug, said loudly).
+   *  Mid-match it never touches what the plan keeps fixed in a match: loot / weapon cull, the map build, the low route
+   *  (only an explicit "tier" does, exactly as the Settings buttons always have). */
+  W.setGfx = function (key, val) {
+    const g = gfxPrefs();
+    const bad = () => { throw new Error("W.setGfx: bad value for " + key + ": " + val); };
+    switch (key) {
+      case "tier":
+        if (!["low", "medium", "high"].includes(val)) bad();
+        W.settings.graphics = val; W.settings.gfxUser = true; LAD.level = 0;
+        break;
+      case "aa": if (!["auto", "off", "fxaa", "smaa"].includes(val)) bad(); g.aa = val; break;
+      case "bloom": if (!["auto", "off", "on"].includes(val)) bad(); g.bloom = val; break;
+      case "dpr":
+        if (val === "auto" || val == null) g.dpr = "auto";
+        else if (+val >= 0.5 && +val <= 1.5) g.dpr = +val; else bad();
+        break;
+      case "autoQuality": g.autoQuality = !!val; if (!val) LAD.level = 0; break;
+      case "daltonize": if (!["off", "protan", "deutan", "tritan"].includes(val)) bad(); g.daltonize = val; break;
+      case "daltonizeAmt": if (!(+val >= 0 && +val <= 1)) bad(); g.daltonizeAmt = +val; break;
+      case "autoTier": if (val !== "rerun") bad(); delete W.settings.gfxAuto; W.settings.gfxUser = false; AUTO.state = "idle"; break;
+      default: bad();
+    }
+    applyTier(W.settings.graphics, "setGfx:" + key);
+    saveSettings();
+    return W.getGfx();
   };
-  W.applyGraphics();          // BOOT-apply the stored tier (the fix)
+  W.getGfx = () => ({
+    tier: W.settings.graphics, prefs: Object.assign({}, gfxPrefs()), user: !!W.settings.gfxUser,
+    auto: W.settings.gfxAuto || null, autoState: AUTO.state, autoWhy: AUTO.why, applied: Object.assign({}, W._gfx),
+    // read from the kernel NOW (W._gfx is the last apply; the menu builds its composer after the boot apply)
+    live: { post: kernel.composer ? (kernel.composer.isDirectPost ? "direct" : "composer") : "none", bloom: !!(kernel.bloom && kernel.bloom.enabled && kernel.composer && !kernel.composer.isDirectPost),
+            aa: kernel.aaMode || "off", dpr: kernel.dpr, dprCap: kernel._dprCap === Infinity ? null : kernel._dprCap },
+    ladder: { on: ladderActive(W.settings.graphics, isTouchDevice()), level: LAD.level, p75: LAD.p75, src: LAD.src, steps: LAD.steps, hist: LAD.hist.slice(-12) },
+    gpuTimer: !!(kernel.gpuTimer && kernel.gpuTimer.supported),
+  });
+
+  // ── LC-06 first-run auto-tier (desktop, never clicked a tier) ───────────────────────────────
+  // About 90 menu frames on the GPU timer, after the menu has settled (its first frames compile programs and upload
+  // textures). GPU p50 over AUTO_GPU_MS -> low. Without a timer (Firefox, Safari): live frame intervals, p50 over
+  // AUTO_RAW_MS -> low (a vsync'd 60 Hz menu reads 16.7 ms whatever the GPU does, so only a clear miss counts).
+  // Decided once, saved as W.settings.gfxAuto. A stored "low" / "high" (the default is medium) is a past choice.
+  const AUTO_SKIP = 30, AUTO_N = 90, AUTO_GPU_MS = 12, AUTO_RAW_MS = 22;
+  function autoTierEligible() {
+    if (!AUTOTIER_ON) return "off";
+    if (isTouchDevice()) return "touch";
+    if (W.settings.gfxUser) return "player chose a tier";
+    if (W.settings.gfxAuto) return "decided";
+    if (W.settings.graphics === "low" || W.settings.graphics === "high") return "stored " + W.settings.graphics;
+    return null;
+  }
+  function pctl(arr, p) {
+    if (!arr.length) return null;
+    const a = arr.slice().sort((x, y) => x - y);
+    return a[Math.min(a.length - 1, Math.max(0, Math.round((a.length - 1) * p)))];
+  }
+  function autoTierFrame() {
+    if (AUTO.state === "done" || AUTO.state === "skipped") return;
+    if (AUTO.state === "idle") {
+      const no = autoTierEligible();
+      if (no) { AUTO.state = "skipped"; AUTO.why = no; schedulePrefetch(); return; }
+      AUTO.state = "measuring"; AUTO.frames = 0;
+      if (kernel.gpuTimer) kernel.gpuTimer.on = true;
+    }
+    if (W.settings.gfxUser) { autoTierDecide(false); return; }
+    if (document.visibilityState === "hidden") return;
+    AUTO.frames++;
+    if (AUTO.frames === AUTO_SKIP) { AUTO.from = kernel.gpuTimer ? kernel.gpuTimer.count : 0; AUTO.rawFrom = kernel.rawCount || 0; }
+    if (AUTO.frames <= AUTO_SKIP) return;
+    const gt = kernel.gpuTimer;
+    if (gt && gt.supported && gt.count - AUTO.from >= AUTO_N) autoTierDecide(false);
+    else if (!(gt && gt.supported) && (kernel.rawCount || 0) - AUTO.rawFrom >= AUTO_N) autoTierDecide(false);
+  }
+  /** Decide from what has been measured. early (PLAY pressed first): from >= 30 samples, else not this session. */
+  function autoTierDecide(early) {
+    if (AUTO.state !== "measuring") return;
+    const gt = kernel.gpuTimer;
+    if (W.settings.gfxUser) {        // the player picked a tier in Settings while it measured: theirs wins
+      AUTO.state = "skipped"; AUTO.why = "player chose a tier";
+      if (gt && !ladderWantsTimer()) gt.on = false;
+      schedulePrefetch();
+      return;
+    }
+    const useGpu = !!(gt && gt.supported);
+    const n = AUTO.frames <= AUTO_SKIP ? 0
+      : useGpu ? Math.min(gt.count - AUTO.from, gt.ms.length) : Math.min((kernel.rawCount || 0) - AUTO.rawFrom, kernel.rawMs.length);
+    if (n < (early ? 30 : AUTO_N)) {
+      AUTO.state = "skipped"; AUTO.why = "too few samples before PLAY (" + Math.max(0, n) + ")";
+      if (gt && !ladderWantsTimer()) gt.on = false;
+      return;
+    }
+    const xs = (useGpu ? gt.ms : kernel.rawMs).slice(-n);
+    const p50 = pctl(xs, 0.5), p90 = pctl(xs, 0.9);
+    const lim = useGpu ? AUTO_GPU_MS : AUTO_RAW_MS;
+    const from = W.settings.graphics || "medium";
+    const tier = p50 > lim ? "low" : from;
+    const rec = { v: 1, tier, from, src: useGpu ? "gpu" : "raw", p50: +p50.toFixed(2), p90: +p90.toFixed(2), n,
+                  limit: lim, early: !!early, dpr: kernel.dpr, at: Date.now() };
+    W.settings.gfxAuto = rec;
+    AUTO.state = "done";
+    if (tier !== from) { W.settings.graphics = tier; applyTier(tier, "auto"); }
+    saveSettings();
+    if (gt && !ladderWantsTimer()) gt.on = false;
+    try { console.info("[LC] auto graphics: " + rec.src + " p50 " + rec.p50 + " ms -> " + tier); } catch (e) {}
+    schedulePrefetch();
+  }
+
+  // ── LC-06 in-match quality ladder ────────────────────────────────────────────────────────────
+  // Steps, best first: bloom off, then DPR 1.25, then 1.0 (a step that would change nothing on this screen is skipped).
+  // Down when the GPU frame time's p75 over the last LADDER_WIN samples tops LADDER_DOWN ms; back up after LADDER_UP_HOLD
+  // ms with that p75 under LADDER_UP ms; at most one step per LADDER_GAP ms. GPU time, not frame time: the levers only
+  // remove pixels, and a CPU-bound drop (nav baking) must not throw away resolution that buys nothing. Without a GPU
+  // timer the live frame interval stands in. Nothing else changes mid-match: loot / weapon cull, the map build and
+  // the low route stay exactly as the match started.
+  const LADDER_WIN = 30, LADDER_DOWN = 22, LADDER_UP = 14, LADDER_UP_HOLD = 4000, LADDER_GAP = 2000, LADDER_SETTLE = 6;
+  function ladderActive(tier, touch) {
+    return LADDER_ON && !touch && tier !== "low" && gfxPrefs().autoQuality !== false;
+  }
+  function ladderWantsTimer() { return ladderActive(W.settings.graphics, isTouchDevice()) && (W.phase === "match" || W.phase === "drop"); }
+  /** the next level from `lv` in direction dir (+1 down in quality, -1 up) that changes something on this screen, or null */
+  function ladderNext(lv, dir) {
+    const g = gfxPrefs();
+    const bloomAt0 = W.settings.graphics !== "low" && g.bloom !== "off";
+    const unc = kernel.dprUncapped ? kernel.dprUncapped() : kernel.dpr;
+    const userCap = +g.dpr > 0 ? +g.dpr : Infinity;
+    const looks = (l) => (l >= 1 ? 0 : bloomAt0 ? 1 : 0) + "|" + Math.min(unc, userCap, LADDER_DPR[l]);
+    for (let l = lv + dir; l >= 0 && l < LADDER_DPR.length; l += dir) if (looks(l) !== looks(lv)) return l;
+    return null;
+  }
+  function ladderSet(to, why, p75) {
+    const from = LAD.level, now = performance.now();
+    LAD.level = to; LAD.lastChange = now; LAD.lastAbove = now; LAD.steps++;
+    LAD.settleUntil = (kernel.gpuTimer ? kernel.gpuTimer.count : 0) + LADDER_SETTLE;
+    LAD.rawSettle = (kernel.rawCount || 0) + LADDER_SETTLE;
+    LAD.hist.push({ t: Math.round(now), simT: +(W.t || 0).toFixed(1), from, to, why, p75: p75 == null ? null : +p75.toFixed(2), phase: W.phase });
+    if (LAD.hist.length > 40) LAD.hist.shift();
+    applyTier(W.settings.graphics, "ladder");
+  }
+  function ladderFrame() {
+    const gt = kernel.gpuTimer;
+    if (!ladderActive(W.settings.graphics, isTouchDevice())) return;
+    if (gt && gt.supported && !gt.on) { gt.on = true; LAD.settleUntil = gt.count + LADDER_SETTLE; }
+    const useGpu = !!(gt && gt.supported);
+    const count = useGpu ? gt.count : (kernel.rawCount || 0);
+    const fresh = count - (useGpu ? LAD.settleUntil : LAD.rawSettle);
+    if (fresh < LADDER_WIN) return;
+    const ring = useGpu ? gt.ms : kernel.rawMs;
+    const p75 = pctl(ring.slice(-Math.min(LADDER_WIN, ring.length)), 0.75);
+    if (p75 == null) return;
+    LAD.p75 = +p75.toFixed(2); LAD.src = useGpu ? "gpu" : "raw";
+    const now = performance.now();
+    if (p75 >= LADDER_UP) LAD.lastAbove = now;
+    if (now - LAD.lastChange < LADDER_GAP) return;
+    if (p75 > LADDER_DOWN) {
+      const nx = ladderNext(LAD.level, +1);
+      if (nx != null) ladderSet(nx, "p75 " + p75.toFixed(1) + " > " + LADDER_DOWN, p75);
+    } else if (LAD.level > 0 && now - LAD.lastAbove >= LADDER_UP_HOLD) {
+      const nx = ladderNext(LAD.level, -1);
+      ladderSet(nx == null ? 0 : nx, "p75 < " + LADDER_UP + " for " + (LADDER_UP_HOLD / 1000) + " s", p75);
+    }
+  }
+  /** the GPU timer runs only while someone reads it (the auto-tier at the menu, the ladder in a match) */
+  function timerHousekeeping() {
+    const gt = kernel.gpuTimer;
+    if (gt && gt.on && AUTO.state !== "measuring" && !ladderWantsTimer()) gt.on = false;
+  }
+
+  // ── LC-23 idle prefetch: the actor + clip GLBs, while the menu sits idle ─────────────────────
+  // A cold Quick Match spent its first seconds downloading and parsing the five skins, their LOD1 bodies and the 22
+  // shared clips, all only requested at match start (player.js loadActorModels). The menu now fetches them in its
+  // idle time, ONE file at a time on requestIdleCallback, after the auto-tier has measured (so no parse sits inside its
+  // sample window): skins parse straight into the kernel's loadCharacter cache; the LOD1 bodies and clips (plain
+  // loader.loadAsync calls in player.js, which keep no cache) as bytes the kernel hands to the next request for exactly
+  // that URL. PLAY aborts whatever is still in flight, so nothing is downloaded twice.
+  // THE LIST: player.js exports no URL list (its SKINS / MESHY_CLIPS / DEATH_CLIPS are module-private and player.js is a
+  // Wave-8 file this wave). Skin keys come from hud.js's exported MENU_SKINS, the death falls from player.js's own
+  // clipLoadStats(), the loco names are player.js's MESHY_CLIPS (player.js:318-326). P1-C's probe compares the list
+  // with the GLB requests of a real match load (no extras, no misses). P2: export the list from player.js.
+  const PREFETCH_LOCO = ["idle", "walk", "run", "death", "hit", "dance", "cheer", "jump", "swim", "crouch",
+    "rifle_idle", "rifle_walk", "rifle_run", "rifle_reload", "rifle_crouch"];
+  const PF = { state: "idle", list: null, i: 0, done: 0, bytes: 0, failed: 0, ctl: null, t0: 0, ms: 0, why: null };
+  function prefetchList() {
+    const base = W.assetBase;
+    const skins = (hudMod.MENU_SKINS || []).map((m) => m && m.key).filter(Boolean);
+    let deaths = [];
+    try { deaths = (playerMod.clipLoadStats && playerMod.clipLoadStats().deathClips) || []; } catch (e) { deaths = []; }
+    const out = [];
+    for (const k of skins) out.push({ kind: "char", url: base + "assets/chars/meshy/" + k + ".glb" });
+    for (const k of skins) out.push({ kind: "bytes", url: base + "assets/chars/meshy/" + k + "_lod1.glb" });
+    for (const c of PREFETCH_LOCO.concat(deaths)) out.push({ kind: "bytes", url: base + "assets/chars/clips/" + c + ".glb" });
+    return out;
+  }
+  function schedulePrefetch() {
+    if (!PREFETCH_ON || PF.state !== "idle" || W.phase !== "menu") return;
+    // the shared clips are fetched once per page session by player.js: after the first match there is nothing to win
+    try { if (playerMod.clipLoadStats && playerMod.clipLoadStats().mode !== "unknown") { PF.state = "done"; PF.why = "clips already loaded"; return; } } catch (e) {}
+    PF.state = "running"; PF.list = prefetchList(); PF.i = 0; PF.t0 = performance.now();
+    PF.ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const ric = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 1500 }) : (f) => setTimeout(f, 50);
+    const next = () => {
+      if (PF.state !== "running") return;
+      if (W.phase !== "menu" || PF.i >= PF.list.length) { prefetchStop(PF.i >= PF.list.length ? "done" : "left the menu"); return; }
+      const it = PF.list[PF.i++];
+      const p = it.kind === "char" ? kernel.prefetchCharacter(it.url) : kernel.prefetchBytes(it.url, { signal: PF.ctl ? PF.ctl.signal : undefined });
+      Promise.resolve(p).then((r) => { if (r) { PF.done++; if (typeof r === "number") PF.bytes += r; } else PF.failed++; }, () => { PF.failed++; })
+        .then(() => { if (PF.state === "running") ric(next); });
+    };
+    ric(next);
+  }
+  function prefetchStop(why) {
+    if (PF.state !== "running") return;
+    PF.state = why === "done" ? "done" : "stopped";
+    PF.why = why; PF.ms = Math.round(performance.now() - PF.t0);
+    if (why !== "done" && PF.ctl) { try { PF.ctl.abort(); } catch (e) {} }
+  }
+  W.prefetchStats = () => ({ on: PREFETCH_ON, state: PF.state, why: PF.why, n: PF.list ? PF.list.length : 0, next: PF.i, done: PF.done,
+    failed: PF.failed, bytes: PF.bytes, ms: PF.state === "running" ? Math.round(performance.now() - PF.t0) : PF.ms,
+    used: kernel._prefetchUsed || 0, waiting: kernel._prefetchBlobs ? kernel._prefetchBlobs.size : 0,
+    list: (PF.list || prefetchList()).map((x) => x.url) });
+
 
   // Snapshot the kernel's DEFAULT match lighting now, before the cinematic menu
   // (buildMenuWorld) warms the sun to golden-hour + raises exposure. buildMap
@@ -574,6 +874,10 @@ register3d("royale", async function (kernel, content) {
     if (W._starting) return;
     W._starting = true;
     hideMatchNotice();
+    // LC-06: PLAY before the auto-tier finished decides from what it has (>= 30 samples) BEFORE the map is built, so
+    // maps.js builds the tier that will be drawn. LC-23: PLAY stops the idle prefetch (in-flight bytes are aborted).
+    try { if (AUTO.state === "measuring") autoTierDecide(true); } catch (e) { console.warn("[royale] auto-tier decision failed:", e); }
+    try { prefetchStop("play"); } catch (e) {}
     try {
       return await _startMatch(opts || {});
     } catch (err) {
@@ -731,15 +1035,18 @@ register3d("royale", async function (kernel, content) {
   function showErrorCard(err, info) {
     const lost = !!(info && info.kind === "contextlost");
     const title = lost ? "Graphics were interrupted" : "Something went wrong";
+    // LC-87: a match survives a context loss (see onContextRestored below); the menu still reloads
+    const keeps = lost && resumable();
     const detail = lost
-      ? "The browser reset the graphics (this happens on phones and in background tabs). The game reloads when they come back, or press RELOAD."
+      ? (keeps ? "The browser reset the graphics (this happens on phones and in background tabs). Your match carries on when they come back, or press RELOAD."
+               : "The browser reset the graphics (this happens on phones and in background tabs). The game reloads when they come back, or press RELOAD.")
       : "The game stopped on an error: " + (err && err.message ? err.message : String(err)) + ". MAIN MENU tries to carry on; RELOAD starts fresh.";
     const reload = () => { try { location.reload(); } catch (e) {} };
     const actions = lost ? [{ label: "RELOAD", onClick: reload }] : [{ label: "MAIN MENU", onClick: recoverToMenu }, { label: "RELOAD", onClick: reload }];
     W._errorCard = { title, kind: (info && info.kind) || "error", t: Math.round(performance.now()) };
     const B = window.__LC_BOOT__;
     if (B && typeof B.fail === "function") {
-      try { B.fail(title, detail, actions); } catch (e) { console.error("[royale] __LC_BOOT__.fail threw:", e); }
+      try { W._errorCardHandle = B.fail(title, detail, actions); } catch (e) { console.error("[royale] __LC_BOOT__.fail threw:", e); }
       if (document.getElementById("lc-fail")) return;
     }
     paintErrorCard(title, detail, actions);
@@ -796,6 +1103,33 @@ register3d("royale", async function (kernel, content) {
     }
   }
   if (typeof kernel.onError === "function") kernel.onError(showErrorCard);
+
+  // ── LC-87: a lost WebGL context no longer costs the match ───────────────────
+  // The kernel used to reload the page on webglcontextrestored, so a phone that dropped the GPU for a second, or a
+  // driver reset, threw the whole match away. three re-creates every GPU object from its CPU copy on first use
+  // (textures from their images, buffers from their arrays, render targets and the shadow map from their
+  // descriptions, programs recompile), and the sim never ran while the loop was stopped. So a match picks up where it
+  // was: the card closes, the tier is re-applied, the loop restarts, and a SOLO match comes back paused, exactly as
+  // from a hidden tab (the player resumes it). On the menu or mid-load there is nothing to keep: reload, as before.
+  function resumable() { return !!W.match && (W.phase === "match" || W.phase === "drop" || W.phase === "over") && !W._starting; }
+  kernel.onContextRestored = () => {
+    if (!resumable()) { try { location.reload(); } catch (e) {} return; }
+    try {
+      try { if (W._errorCardHandle && W._errorCardHandle.close) W._errorCardHandle.close(); } catch (e) {}
+      W._errorCardHandle = null;
+      for (const id of ["lc-error-card", "ffg-kernel-error"]) { const el = document.getElementById(id); if (el) el.remove(); }
+      W._errorCard = null;
+      applyTier(W.settings.graphics, "restore");
+      kernel.renderer.shadowMap.needsUpdate = true;
+      if (kernel.start) kernel.start();
+      pauseForHide();
+      W._ctxRestores = (W._ctxRestores || 0) + 1;
+      W._lastRestore = { t: Math.round(performance.now()), phase: W.phase, paused: !!W.paused, simT: +(W.t || 0).toFixed(2) };
+    } catch (e) {
+      console.error("[royale] resuming after the context came back failed; reloading:", e);
+      try { location.reload(); } catch (x) {}
+    }
+  };
   // hud.js's MAIN MENU path has to run the SAME disposal the match teardown
   // does, but it cannot import maps.js/loot.js without creating a second
   // uninitialized module copy — so hand it the functions instead of the modules.
@@ -906,7 +1240,7 @@ register3d("royale", async function (kernel, content) {
     // the GLTFLoader default of 1, and "high" only ever sharpened the terrain.
     // The kernel caches by URL and clones share texture objects, so one traverse
     // here fixes every present and future clone of those assets.
-    W.applyGraphics(W.settings.graphics);
+    applyTier(W.settings.graphics, "match");
 
     playerMod.spawnAll(W);          // positions actors (glider line or ground by mode)
     if (W.mode === "practice") playerMod.placePracticeRange(W);  // ...then line the range up
@@ -1002,6 +1336,14 @@ register3d("royale", async function (kernel, content) {
 
   function endMatch(victory) {
     if (W.phase === "over") return;
+    // LC-44 FORFEIT: QUIT TO MENU while still alive used to fall through to aliveCount() + 1, which counts the quitter
+    // too - "PLACEMENT 51 / 50" at the start of a match. Quitting is an elimination: record it through the sim first,
+    // so the placement is the alive count at that moment (N / 50) and everything that reads placementOf agrees.
+    // Only the local sim's bookkeeping: no death event, no kill feed line, nothing sent to peers.
+    if (!victory && W.match && !W.match.over && W.player && W.player.alive && W.match.placementOf(W.player.id) == null) {
+      const r = W.match.eliminate(W.player.id, null, "forfeit", W.t);
+      W._forfeit = { t: +(W.t || 0).toFixed(2), placement: r ? r.placement : null, aliveAfter: W.match.aliveCount() };
+    }
     W.phase = "over";
     W.hooks.gameplayStop();
     const placement = W.match.placementOf(W.player.id) || W.match.aliveCount() + 1;
@@ -1077,7 +1419,17 @@ register3d("royale", async function (kernel, content) {
       onMenu: () => { W.phase = "menu"; netMod.leave(W); shadowsEveryFrame(); hudMod.showMenu(W, startMatch); },
       // requeue straight into a fresh match (new random map, same mode) without
       // rebuilding the cinematic menu world and re-reading the skin GLBs
-      onAgain: () => { netMod.leave(W); startMatch({ mapId: hudMod.randomMap(), mode: W.mode }); },
+      // LC-18: in a squad room the next match keeps the room (net.rematch, lane P1-D) instead of leaving it; offline,
+      // or with a net.js that has no rematch, the old path. randomMap() first and synchronously: it consumes the
+      // "Run it back" map seam (hud.js _nextMap).
+      onAgain: () => {
+        const mapId = hudMod.randomMap();
+        if (W.net && typeof netMod.rematch === "function") {
+          try { netMod.rematch(W, { mapId, mode: W.mode }); return; }
+          catch (e) { console.warn("[royale] net.rematch failed, leaving the room instead:", e); }
+        }
+        netMod.leave(W); startMatch({ mapId, mode: W.mode });
+      },
     };
   }
   W.endMatch = endMatch;
@@ -1145,10 +1497,13 @@ register3d("royale", async function (kernel, content) {
       if (PROF) PROF.begin("menu");
       hudMod.updateMenuWorld(W, Math.min(dt, 0.05));
       if (PROF) PROF.end("menu");
+      autoTierFrame();        // LC-06 first-run auto-tier (measures the menu's own frames)
+      timerHousekeeping();
       return;
     }
-    if (W.paused) { LOOP.frozen = true; return; }
-    if (W.phase !== "match" && W.phase !== "drop" && W.phase !== "over") { LOOP.frozen = true; return; }
+    if (W.paused) { LOOP.frozen = true; timerHousekeeping(); return; }
+    if (W.phase !== "match" && W.phase !== "drop" && W.phase !== "over") { LOOP.frozen = true; timerHousekeeping(); return; }
+    if (W.phase === "over") timerHousekeeping(); else ladderFrame();   // LC-06 in-match quality ladder
     // Victory hold: ~120° of orbit and a slow pull-back across the 2600 ms beat
     // endMatch already pays for. Read by player.js updateCamera — the winning
     // frame used to be a 34 px banner over a motionless world at the default
