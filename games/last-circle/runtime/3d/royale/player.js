@@ -2911,6 +2911,14 @@ function combatKey(a, gs, q) {
 // steps round with the Mixamo turn clip once the aim is TURN_START off (60 deg out of combat, 17 deg in combat, where the body
 // has to face the aim). The clip's own pelvis yaw curve (extractRootYaw) drives the body, scaled to the angle actually needed.
 const TWIST_MAX = 0.95;
+/** (P23) add a yaw twist to a spine bone this frame WITHOUT compounding: a clip that does not key the bone leaves last frame's
+ *  value in place (bit for bit), so last frame's addition is taken back first; a re-keyed bone just gets the new one. */
+function addTwistY(b, v) {
+  const ud = b.userData;
+  if (ud._twY !== undefined && b.rotation.y === ud._twY) b.rotation.y -= ud._twA;
+  b.rotation.y += v;
+  ud._twA = v; ud._twY = b.rotation.y;
+}
 const TURN_START = 0.9, TURN_START_COMBAT = 0.3, TURN_MAX = 1.9, TURN_RATE = 1.35, TURN_RATE_COMBAT = 2.0;
 function turnInPlace(W, a, combat, dt) {
   const C = a.clips;
@@ -3103,7 +3111,18 @@ function animate(W, a, dt) {
       while (aimDelta < -Math.PI) aimDelta += Math.PI * 2;
       // (P23, LC-10 / LC-64) the chest twists back onto the aim over the orientation warp of a combat strafe and the planted
       // feet of a turn-in-place (up to ~54 deg), so the gun points where the shot goes
-      const twist = K.clamp(aimDelta, -TWIST_MAX, TWIST_MAX);
+      let twist = K.clamp(aimDelta, -TWIST_MAX, TWIST_MAX);
+      // (P23, LC-10 / LC-64) a PISTOL (procedural arms) in combat - a warped strafe, a planted turn - twists its chest back onto
+      // the aim as well (base pistols always squared the whole body to the aim in combat, so their chest never left it); the
+      // arms below aim in that twisted frame. Out of combat it keeps the base carry: chest on the run, barrel <= 0.6 rad off it.
+      const pistolTwist = !useMixamoGun && armed && isPistol(a) && (combat || a._turnT >= 0) && a.onGround && !a.gliding &&
+        !a.swimming && !a.emoting && a.alive && !a.downed && !a.mantleT;
+      if (!useMixamoGun && !pistolTwist) twist = K.clamp(aimDelta, -0.6, 0.6);
+      if (layers && a.armBones && pistolTwist) {
+        const bs = a.armBones.spine1 && a.armBones.spine2 ? [a.armBones.spine1, a.armBones.spine2] : [];   // (not Spine: uprightTorso re-aims it after this)
+        for (const b of bs) addTwistY(b, twist / bs.length);
+      }
+      a._armYawOff = (layers && pistolTwist) ? twist : 0;
       if (layers && a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed) {
         // negative: +rotation.x on these spines bends FORWARD, and looking UP
         // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
@@ -3129,7 +3148,7 @@ function animate(W, a, dt) {
       if (mode) a._armMode = mode;
       // input.pitch > 0 = looking UP (verified: mouse-up → +pitch; aimDir/camera use sin(pitch));
       // tiltDir(+) raises the muzzle, so pass pitch un-negated or the gun tilts the wrong way
-      if (layers && a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, a.pitch);
+      if (layers && a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, a.pitch, a._armYawOff || 0);
       // ── BARREL AIM ────────────────────────────────────────────────────────
       // HAND_AIM_ROT is a STATIC local rotation grid-searched against ONE frame
       // of the idle clip. But applyArmPose aims the arm CHAIN (rArm->rFore,
@@ -3695,7 +3714,10 @@ function camWall(W, cam, focus, dt, snapped) {
     }
   }
   const k1 = _camWallF1 < 1 ? _camWallF1 : 1, k2 = _camWallF < 1 ? _camWallF : 1;
-  let nx = ox + lx * k1 + bx * k2, ny = oy + ly * k1 + by * k2, nz = oz + lz * k1 + bz * k2;
+  // a free boom IS the free camera, bit for bit (the lateral + back legs summed again round off the last ulp: f = 0.9999999)
+  const freeB = k1 === 1 && k2 === 1;
+  let nx = freeB ? cam.position.x : ox + lx * k1 + bx * k2, ny = freeB ? cam.position.y : oy + ly * k1 + by * k2,
+    nz = freeB ? cam.position.z : oz + lz * k1 + bz * k2;
   // the straight sight line from the eye must be clear too (a wall the two legs went round)
   let clipped = false;
   if (cols && cols.length && (k1 < 0.999 || k2 < 0.999)) {
@@ -3718,7 +3740,19 @@ function camWall(W, cam, focus, dt, snapped) {
   _camWallOff.set(nx - cam.position.x, ny - cam.position.y, nz - cam.position.z);
   cam.position.set(nx, ny, nz);
   const ex = nx - ox, ey = ny - oy, ez = nz - oz, dl = Math.sqrt(ex * ex + ey * ey + ez * ez);
-  const target = len > 1e-3 ? Math.min(1, (Math.sqrt((lx * f1 + bx * f2) ** 2 + (ly * f1 + by * f2) ** 2 + (lz * f1 + bz * f2) ** 2)) / len) : 1;
+  // the target: where the UNSMOOTHED legs (f1, f2) put the lens after the same straight sight-line check - what a snap-in
+  // reaches in one frame (on a snap frame k == f and the lens itself is the answer; otherwise one more cast, no new query)
+  let tl;
+  if (k1 === f1 && k2 === f2) tl = dl;
+  else {
+    const tx = lx * f1 + bx * f2, ty = ly * f1 + by * f2, tz = lz * f1 + bz * f2;
+    tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+    if (cols && cols.length && tl > 0.05) {
+      const t4 = camRayHit(cols, ox, oy, oz, tx, ty, tz, CAM_R, 1);
+      if (t4 < 1) tl *= Math.max(CAM_MIN_D / tl, t4 - 0.015);
+    }
+  }
+  const target = len > 1e-3 ? Math.min(1, tl / len) : 1;
   if (st) { st.f = len > 1e-3 ? Math.min(1, dl / len) : 1; st.target = target; st.dist = dl; st.free = len; st.pulled = clipped || k1 < 0.999 || k2 < 0.999; st.lat = k1; }
 }
 
