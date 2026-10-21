@@ -14,7 +14,7 @@
  */
 import * as THREE from "three";
 // ?v= must propagate to intra-runtime imports (FFG gotcha) → top-level await
-const { findArmBones, applyArmPose, measureLean, uprightTorso, twoBoneIK } = await import("./pose.js" + (new URL(import.meta.url).search || ""));
+const { findArmBones, applyArmPose, applyLegPose, measureLean, uprightTorso, twoBoneIK } = await import("./pose.js" + (new URL(import.meta.url).search || ""));
 const rigPipe = await import("./rig_pipeline.js" + (new URL(import.meta.url).search || ""));
 const tagsMod = await import("./nametags.js" + (new URL(import.meta.url).search || ""));
 
@@ -41,8 +41,34 @@ export function init(W) {
     deathClips: DEATH_CLIPS.slice(),
   };
   W.hurtActor = (victim, dmg, attackerId, weaponId, isHead) => hurtActor(W, victim, dmg, attackerId, weaponId, isHead);
-  W.killActor = (victim, killerId, weaponId) => killActor(W, victim, killerId, weaponId);
+  // W.killActor is the OUTSIDE callers' door (storm.js lethal tick, net.js "died"): a storm tick that would kill a member
+  // of a team with someone still up KNOCKS instead (C-DBNO, team modes only), and a storm tick on a downed actor drains its
+  // bleed pool (storm.js has already taken the tick off a.hp, which sits at 0 while downed). Everything else is a real death.
+  W.killActor = (victim, killerId, weaponId) => {
+    if (weaponId === "storm" && victim && victim.alive) {
+      if (victim.downed) {
+        const tick = victim.hp < 0 ? -victim.hp : 0;
+        victim.hp = 0;
+        victim.downedHp -= tick;
+        if (victim.downedHp > 0) return;
+        return finishDowned(W, victim, killerId || victim._knockedBy, "storm");
+      }
+      if (dbnoApplies(W, victim)) { knockActor(W, victim, killerId, "storm"); return; }
+    }
+    return killActor(W, victim, killerId, weaponId);
+  };
   W.useConsumable = (a, id) => useConsumable(W, a, id);
+  // C-HEAL: switching away from a heal cancels it (weapons.js equipSlot hook, humans only); nothing was spent yet
+  W.cancelHeal = (W2, a) => cancelHeal(W2 || W, a);
+  // C-DBNO read-backs for hud.js / bots.js / net.js: is `a` a revive target for `by`, the live revive channel of `a`
+  W.canRevive = (by, target) => canRevive(W, by, target);
+  W.reviveProgress = (a) => (a && a._reviveOf ? { target: a._reviveOf, t: a._reviveT, of: REVIVE_S() } : null);
+  W.teamElimCheck = (teamId) => teamElimCheck(W, teamId);
+  // LC-18: the squad's shared landing zone, from the seed and the team only (identical on every client)
+  W.squadDropTarget = (teamId) => squadDropTarget(W, teamId);
+  // LC-59 (OD-7): an optional landing waypoint during the drop (hud's big map may call it; the local player's own map
+  // pin is read as one too). null clears it (auto stays the default).
+  W.setDropWaypoint = (x, z) => setDropWaypoint(W, x, z);
   // net.js replays peers' emotes through the SAME path the local one uses, so a
   // remote wave looks identical to your own rather than being a second system
   W.attachToBone = rigPipe.attachToBone;          // the ONLY sanctioned attach path
@@ -65,13 +91,22 @@ export function init(W) {
     }, 2400);
   };
   W.events.on("useConsumable", (a, id) => useConsumable(W, a, id));
+  // (P23, LC-14) every throw plays the toss on the thrower's upper body; a quick throw gets its previous slot back
+  W.events.on("grenadeThrown", (a) => onThrown(W, a));
+  // (P23, LC-59 / OD-7) the local player's own BIG-MAP pin placed during the drop is the landing waypoint
+  W.events.on("pingPlaced", (pg) => {
+    if (pg && pg.own && pg.src === "m" && W.player && (W.player.gliding || W.player._portalBoost) && W.phase !== "menu") setDropWaypoint(W, pg.x, pg.z);
+  });
   installHumanInput(W);
 }
 
 // ── actor factory ────────────────────────────────────────────────────────────
 const ACTOR_DOUBLES = ["yaw", "pitch", "hp", "shield", "downedAt", "aimErr", "lastShotT", "lastDamageT", "_mixT", "_mixRate", "_dEff", "_agl", "_bodyYaw",
   "_tiltX", "_tiltZ", "_eyeY", "_armW", "_animTS", "_adsT", "_stepAcc", "hitReactT", "_hitReactAt", "_portalT", "_sinkT", "_sinkHold", "_sinkY0", "_sinkVy",
-  "_sinkFloor", "lastHurtByActorT", "dummyDamage", "_flashT", "_eHoldT", "_fireRelayT", "_stormT", "vmKick", "recoilYaw", "recoilPitch", "_pyaw"];
+  "_sinkFloor", "lastHurtByActorT", "dummyDamage", "_flashT", "_eHoldT", "_fireRelayT", "_stormT", "vmKick", "recoilYaw", "recoilPitch", "_pyaw",
+  // P23/player (parity P2-A + P3): DBNO, air / landing, slide, locomotion warp, turn-in-place, throw overlay
+  "downedHp", "downedT", "_reviveT", "_airT", "_airPeakY", "_landT", "_landUntil", "_slideT", "_slideV", "_slideDx", "_slideDz", "_slideCd",
+  "_warp", "_turnT", "_turnYaw0", "_turnAmt", "_turnRate", "_throwT", "_throwStart", "_locoAng", "_fallV"];
 export function createActor(W, opts) {
   const a = {
     id: opts.id, name: opts.name, isBot: !!opts.isBot,
@@ -137,6 +172,22 @@ export function createActor(W, opts) {
     // and pos), the tick it was taken on, and how the frame shows this actor
     // (0 = not at all, 1 = full view sync, 2 = position only: emote / mantle)
     _pp: new THREE.Vector3(), _pyaw: 0, _ppT: -1, _vmode: 0,
+    // C-DBNO (team modes only): downed = knocked, crawling on a bleed pool; _knockedBy = who knocked it (bleed-out credit);
+    // _reviveOf / _reviveT = THIS actor's revive channel on a teammate (id, seconds held); _revivedBy = who is reviving it
+    downed: false, downedHp: 0, downedT: 0, knocks: 0, _knockedBy: null, _reviveOf: null, _reviveT: 0, _revivedBy: null,
+    // air / landing (LC-30, C-FALL): time off the ground, highest feet height, whether it left by a jump, the landing
+    // kind (0 none, 1 soft, 2 hard) and until when it plays / staggers, the impact speed of the last fall
+    _airT: 0, _airPeakY: 0, _jumped: false, _landKind: 0, _landT: 0, _landUntil: 0, _fallV: 0,
+    // slide (LC-21): seconds into the slide (-1 = none), speed, direction, cooldown clock
+    _slideT: -1, _slideV: 0, _slideDx: 0, _slideDz: 0, _slideCd: 0, _crouchPrev: false,
+    // directional locomotion (LC-10): quadrant 0 fwd / 1 left / 2 back / 3 right, the orientation warp, the move angle
+    _locoQ: 0, _warp: 0, _locoAng: 0, _locoRun: false, _locoCombat: false, _locoKey: null, _dbnoHid: false,
+    // turn-in-place (LC-64): clock (-1 = none), body yaw at the start, the turn it covers (rad, signed), the clip
+    _turnT: -1, _turnYaw0: 0, _turnAmt: 0, _turnClip: null, _turnRate: 1, _turnNew: false,
+    // throw overlay (LC-14): seconds left on the upper-body toss; the clip time to start the next toss at (-1 = none pending)
+    _throwT: 0, _throwStart: -1, _throwOv: false,
+    // waypoint auto-glide on (LC-59); a death that finished a downed actor (C-DBNO)
+    _autoGlide: false, _downedDeath: false,
   };
   // (Wave 8, lane I2) the number fields that ever hold a FRACTION are double fields from birth: a double stored, then the start value put back (the
   // values are exactly the ones above). Born as small integers they were Smi fields, and the first fraction ANY actor stored into one (a timer += dt, a yaw)
@@ -243,9 +294,31 @@ function stripRootMotion(clip) {
     // model two body-heights up with its feet a metre above the collider.
     // Strip Y only where the engine drives height.
     const flatY = /^(jump)$/i.test(clip.name || "");
+    // (P23, LC-30) the in-AIR Mixamo set (jump_up / jump_loop / fall_idle) is played while the engine owns the arc too, so
+    // its hips height is flattened as well - to the clip's HIGHEST hips, not its first key: jump_up starts in the crouched
+    // wind-up (0.68 m) and flattening to that would sink the body 0.27 m below its own feet line for the whole jump. The
+    // landing clips (jump_down, land_hard) are played on the ground and keep their authored dip.
+    const flatMax = AIR_FLAT_Y.has(clip.name || "");
+    let yMax = -Infinity;
+    if (flatMax) for (let i = 1; i < v.length; i += 3) if (v[i] > yMax) yMax = v[i];
+    // jump_up's TAKE-OFF, read before the flatten: the key after the wind-up's lowest hips where they rise fastest (the
+    // game's jump leaves the ground at once, so the clip is started there)
+    if (clip.name === "jump_up" && tr.times && tr.times.length > 2) {
+      let iMin = 0;
+      for (let i = 1; i < v.length / 3; i++) if (v[i * 3 + 1] < v[iMin * 3 + 1]) iMin = i;
+      let best = -Infinity, tBest = tr.times[iMin];
+      for (let i = iMin + 1; i < v.length / 3; i++) {
+        const dtk = tr.times[i] - tr.times[i - 1];
+        if (dtk <= 0) continue;
+        const r = (v[i * 3 + 1] - v[(i - 1) * 3 + 1]) / dtk;
+        if (r > best) { best = r; tBest = tr.times[i]; }
+      }
+      clip.__lcTakeoff = tBest;
+    }
     for (let i = 0; i < v.length; i += 3) {
       v[i] = x0; v[i + 2] = z0;
       if (flatY) v[i + 1] = y0;
+      else if (flatMax) v[i + 1] = yMax;
     }
     // FOREIGN-UNIT GUARD: a root track authored in centimetres (or bone-local
     // micro-units) would put the body 100x off. The proven standing root height
@@ -319,6 +392,45 @@ function endsUpright(clip, rootName) {
   return y > 0.6 && up > 0.8;
 }
 
+/** (P23, LC-64) Lift the vertical-axis yaw out of a clip's root rotation track: every key q becomes Ry(-yaw) * q, where yaw is
+ *  the twist about +Y of q * inv(q0) (q0 = the first key), unwrapped. Returns { times, yaw } (radians, yaw[0] = 0; +yaw =
+ *  a turn to the character's LEFT, the same sense as obj.rotation.y). The root's parent is the identity GameRig node on every
+ *  shipped rig (rebaseRootTracks made it so), so +Y here is the world vertical. */
+const _ryQ0 = new THREE.Quaternion(), _ryQ = new THREE.Quaternion(), _ryD = new THREE.Quaternion(), _ryT = new THREE.Quaternion();
+const _ryUp = new THREE.Vector3(0, 1, 0);
+function extractRootYaw(clip, rootName) {
+  const tq = clip.tracks.find((t) => t.name === rootName + ".quaternion");
+  if (!tq) return null;
+  const v = tq.values, n = v.length / 4;
+  const yaw = new Float32Array(n);
+  _ryQ0.fromArray(v, 0).normalize();
+  const q0i = _ryQ0.clone().invert();
+  let prev = 0;
+  for (let i = 0; i < n; i++) {
+    _ryQ.fromArray(v, i * 4).normalize();
+    _ryD.copy(_ryQ).multiply(q0i);
+    // twist about Y of the delta
+    let y = 2 * Math.atan2(_ryD.y, _ryD.w);
+    while (y - prev > Math.PI) y -= Math.PI * 2;
+    while (y - prev < -Math.PI) y += Math.PI * 2;
+    yaw[i] = y; prev = y;
+    _ryT.setFromAxisAngle(_ryUp, -y);
+    _ryQ.premultiply(_ryT).normalize();
+    _ryQ.toArray(v, i * 4);
+  }
+  return { times: Float32Array.from(tq.times), yaw };
+}
+/** The yaw curve of extractRootYaw at clip time t (linear between keys, clamped). */
+function yawAt(c, t) {
+  const T = c.times, Y = c.yaw, n = T.length;
+  if (t <= T[0]) return Y[0];
+  if (t >= T[n - 1]) return Y[n - 1];
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] <= t) lo = m; else hi = m; }
+  const k = (t - T[lo]) / Math.max(1e-6, T[hi] - T[lo]);
+  return Y[lo] + (Y[hi] - Y[lo]) * k;
+}
+
 // Base loco + combat set, then Mixamo BR weapon holds + freefall.
 // File names on disk: assets/chars/clips/{clip}.glb (ONE shared file per clip, P1.1) with
 // assets/chars/meshy/{skin}_{clip}.glb as the per-skin fallback for the names below.
@@ -338,7 +450,46 @@ const MESHY_CLIPS = [
 // shot from the front / back / right, the same from the head, a crouching headshot, and a
 // walking-to-dying. Chosen per kill in pickDeath from where the last hit came from.
 const DEATH_CLIPS = ["death_front", "death_front_head", "death_back", "death_back_head", "death_right", "death_crouch_head", "death_walking"];
-const ALL_CLIPS = MESHY_CLIPS.concat(DEATH_CLIPS);
+// (P23/player, parity P2-A + P3) the P1-F Mixamo set (assets/chars/clips/manifest_p1f.json) and the P23 feet-down forward
+// rifle set + turn-in-place clips (manifest_p23.json, F:/lc_p23/player/credits.md). Shared files only, like DEATH_CLIPS:
+// no per-skin fallback exists, so a server without them (the per-skin fallback mode) simply leaves every state below on
+// the clips it used before - each use is guarded by `a.clips[name]`.
+const EXT_CLIPS = [
+  "rifle_idle_g", "rifle_walk_g", "rifle_run_g", "rifle_sprint_g", "rifle_crouch_g",
+  "rifle_walk_left", "rifle_walk_right", "rifle_walk_back", "rifle_run_left", "rifle_run_right", "rifle_run_back",
+  "rifle_crouch_left", "rifle_crouch_right", "rifle_crouch_back", "pistol_strafe_left", "pistol_strafe_right",
+  "jump_up", "jump_loop", "jump_down", "fall_idle", "land_hard", "toss_grenade",
+  "dbno_crawl", "dbno_crawl_fast", "injured_idle", "turn_left_90", "turn_right_90", "rifle_sprint_left", "rifle_sprint_right",
+];
+const ALL_CLIPS = MESHY_CLIPS.concat(DEATH_CLIPS, EXT_CLIPS);
+const AIR_FLAT_Y = new Set(["jump_up", "jump_loop", "fall_idle"]);
+// The baked stride speed of each locomotion clip (measured at bake time: manifest_p1f.json / manifest_p23.json). Play rate =
+// actor ground speed / this, so a planted foot stays planted (LC-10: "timescale from the baked stride"; the old forward clips
+// ran at a guessed gs/3.0 and skated).
+const CLIP_SPEED = {
+  // the PLANTED-FOOT sweep speed of each clip played in place on the game rig (m/s at rate 1): the rate that makes the ground
+  // speed equal it keeps a planted foot still. Measured IN GAME by F:/lc_p23/player/probes/p23_calib.py (median planted-foot
+  // velocity relative to the body / play rate; ADS 3.8 and hip 6.0 m/s averaged) where it ran, else the bake-time manifest
+  // contactSpeed. The Mixamo root travel (rootSpeed) is NOT this: 4.72 vs 4.48 m/s on the forward run, 4.72 vs 3.89 on the
+  // strafe right (heel roll and the run's float phase).
+  rifle_walk_g: 1.72, rifle_run_g: 4.475, rifle_sprint_g: 6.7, rifle_crouch_g: 1.80,
+  rifle_walk_left: 1.785, rifle_walk_right: 1.762, rifle_walk_back: 1.805,
+  rifle_run_left: 3.848, rifle_run_right: 3.893, rifle_run_back: 4.024,
+  rifle_crouch_left: 1.801, rifle_crouch_right: 1.908, rifle_crouch_back: 1.779,
+  pistol_strafe_left: 1.822, pistol_strafe_right: 2.031,
+  rifle_sprint_left: 6.946, rifle_sprint_right: 6.369,
+  dbno_crawl: 0.426, dbno_crawl_fast: 1.504,
+};
+// directional sets per stance: [forward, left, back, right] (quadrant order of a._locoQ)
+// The measured travel heading of a directional clip relative to its nominal quadrant centre (rad, + = toward the character's
+// left), from the in-game skate calibration (F:/lc_p23/player/probes/p23_calib.py); 0 = exactly on its axis.
+const CLIP_DIR = {};
+const DIR_SETS = {
+  rifleWalk: ["rifle_walk_g", "rifle_walk_left", "rifle_walk_back", "rifle_walk_right"],
+  rifleRun: ["rifle_run_g", "rifle_run_left", "rifle_run_back", "rifle_run_right"],
+  crouch: ["rifle_crouch_g", "rifle_crouch_left", "rifle_crouch_back", "rifle_crouch_right"],
+  pistol: [null, "pistol_strafe_left", null, "pistol_strafe_right"],
+};
 
 // ── P1.1: every clip downloaded ONCE ────────────────────────────────────────────────────
 // The 17 loco clips were md5-identical across the five skins, yet fetched as <skin>_<clip>.glb
@@ -400,8 +551,12 @@ function loadSharedClips(W, tick) {
   return SHARED.p;
 }
 /** test / probe read-back */
+/** probe read-back (P23): the stride table the locomotion rates are derived from (a live reference: calibration probes may
+ *  write it in their own page) */
+export function locoClipSpeeds() { return { speed: CLIP_SPEED, dir: CLIP_DIR }; }
 export function clipLoadStats() {
-  return { mode: SHARED.mode, requests: SHARED.requests, loaded: SHARED.hits, shared: ALL_CLIPS.length, deathClips: DEATH_CLIPS.slice() };
+  // extClips: the P1-F / P23 shared-only set (ffg_royale3d.js's idle prefetch can add these to its list)
+  return { mode: SHARED.mode, requests: SHARED.requests, loaded: SHARED.hits, shared: ALL_CLIPS.length, deathClips: DEATH_CLIPS.slice(), extClips: EXT_CLIPS.slice() };
 }
 
 const _v3 = new THREE.Vector3();
@@ -507,6 +662,19 @@ async function preloadMeshySkin(W, key, tick, sharedP, grow, baseSettled) {
     if (rl && !cached.animations.some((c) => c.name === "rifle_reload_upper")) {
       const tracks = rl.tracks.filter((t) => /Spine|Neck|Head|Shoulder|Arm|ForeArm|Hand/.test(t.name));
       if (tracks.length) cached.animations.push(new THREE.AnimationClip("rifle_reload_upper", rl.duration, tracks));
+    }
+    // (P23, LC-14) the grenade toss is an UPPER-BODY layer too: the legs keep walking while the arm throws
+    const tg = cached.animations.find((c) => c.name === "toss_grenade");
+    if (tg && !cached.animations.some((c) => c.name === "toss_grenade_upper")) {
+      const tracks = tg.tracks.filter((t) => /Spine|Neck|Head|Shoulder|Arm|ForeArm|Hand/.test(t.name));
+      if (tracks.length) cached.animations.push(new THREE.AnimationClip("toss_grenade_upper", tg.duration, tracks));
+    }
+    // (P23, LC-64) turn-in-place: the Mixamo turn rotates the HIPS 90 deg about the vertical over the clip. That yaw is lifted
+    // out of the root track into a curve (clip.__lcYaw) and the game turns the BODY by it instead, so a turn can be scaled to
+    // the angle actually needed and the crossfades in and out of it never blend a rotated pelvis against an unrotated one.
+    const rb2 = rootBone(cached.scene);
+    for (const c of cached.animations) {
+      if (rb2 && /^turn_(left|right)_90$/.test(c.name) && !c.__lcYaw) c.__lcYaw = extractRootYaw(c, rb2.name);
     }
   } else if (tick) tick(1);   // warm cache: this skin's LOD1 (the shared clips are once per session) is already done, say so
   // The warm-up clone exists only to populate the gltf cache, but
@@ -694,7 +862,8 @@ export async function loadActorModels(W) {
         // "Rim1": the readability rim (P1.8) is part of this program now; the key MUST
         // change whenever the injected GLSL does, or three would hand a stale program
         // from the cache to a material expecting the new uniforms
-        m.customProgramCacheKey = () => "lcZoneTintRim1";
+        // "Dith1" (P23, LC-32): the camera-focus body's screen-door dither (uniform zDither, 1 = opaque) is in the program too
+        m.customProgramCacheKey = () => "lcZoneTintRim1Dith1";
         m.onBeforeCompile = (sh) => {
           sh.uniforms.zLegs = { value: zc[0] }; sh.uniforms.zTorso = { value: zc[1] }; sh.uniforms.zHead = { value: zc[2] };
           // rim light: colour + (near, far) strength per material (SQUAD UP allies get
@@ -710,12 +879,16 @@ export async function loadActorModels(W) {
           // shipped dead on 100% of actors. Give the flash its own uniform.
           sh.uniforms.zFlash = { value: new THREE.Vector3(1, 1, 1) };
           m.userData.zFlash = sh.uniforms.zFlash;
+          sh.uniforms.zDither = { value: 1 };
+          m.userData.zDither = sh.uniforms.zDither;
           sh.vertexShader = "varying float vZoneY;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vZoneY = position.y;");
           // injected AFTER <color_fragment>, which in three r172's meshphysical
           // fragment runs after <map_fragment> — so diffuseColor is already
           // (diffuse * texture) and dividing `diffuse` out leaves the texture.
-          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\n" + sh.fragmentShader.replace(
+          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\nuniform float zDither;\n" + sh.fragmentShader.replace(
             "#include <color_fragment>",
+            // (P23, LC-32) 4x4 ordered (Bayer) screen-door: a fragment whose threshold is at or above zDither is dropped
+            "if ( zDither < 0.999 ) {\n    vec2 zdp = mod( floor( gl_FragCoord.xy ), 4.0 );\n    vec4 zr = zdp.y < 0.5 ? vec4( 0.0, 8.0, 2.0, 10.0 ) : zdp.y < 1.5 ? vec4( 12.0, 4.0, 14.0, 6.0 ) : zdp.y < 2.5 ? vec4( 3.0, 11.0, 1.0, 9.0 ) : vec4( 15.0, 7.0, 13.0, 5.0 );\n    float zb = ( zdp.x < 0.5 ? zr.x : zdp.x < 1.5 ? zr.y : zdp.x < 2.5 ? zr.z : zr.w ) / 16.0 + 0.03125;\n    if ( zb >= zDither ) discard;\n  }\n" +
             "#include <color_fragment>\n  vec3 zTint = mix(zLegs, zTorso, smoothstep(0.80, 1.00, vZoneY));\n  zTint = mix(zTint, zHead, smoothstep(1.45, 1.60, vZoneY));\n  diffuseColor.rgb = diffuseColor.rgb / max(vec3(0.0001), diffuse) * zTint * zFlash;"
           ).replace(
             // RIM (VALORANT-style readability edge): added to the OUTGOING light, so it
@@ -861,7 +1034,14 @@ function classifyClips(rig) {
     rifle_run: find([/^rifle_run$/i]),
     rifle_reload: find([/^rifle_reload$/i]),
     rifle_crouch: find([/^rifle_crouch$/i]),
+    // (P23) the P1-F / P23 shared set, every name exact-anchored (no loose pattern may hand one state another's clip)
+    ...EXT_CLASSIFY(find),
   };
+}
+function EXT_CLASSIFY(find) {
+  const o = {};
+  for (const n of EXT_CLIPS) o[n] = find([new RegExp("^" + n + "$", "i")]);
+  return o;
 }
 
 function playAnim(a, key, opts) {
@@ -1018,6 +1198,9 @@ export function setDropTarget(W, t) {
 export function autoDropTarget(W) {
   const pois = (W.map && W.map.pois) || [];
   if (!pois.length) return null;
+  W._dropWp = null;                              // (P23, LC-59) a new drop starts with no waypoint (auto is the default)
+  // (P23, LC-18) a SQUAD lands together: its zone comes from the seed and the team (squadDropTarget), the same on every client
+  if (W.player && hasTeammate(W, W.player)) { const sq = squadDropTarget(W, W.player.teamId); if (sq) return sq; }
   const wy = W.map.waterY;
   const dryness = (p) => {
     if (W.map.heightAt(p.x, p.z) <= wy + 0.5) return 0;   // wet centre disqualifies
@@ -1073,6 +1256,11 @@ function installHumanInput(W) {
     if (rm[c]) return rm[c];
     return c === "ShiftRight" ? (rm.ShiftLeft || "ShiftLeft") : c;
   };
+  // LC-46 (P23): FIRE and ADS go through the same remap. A mouse button's physical code is "Mouse<button>" (Mouse0 = left,
+  // Mouse1 = middle, Mouse2 = right, Mouse3/4 = the side buttons) and the canonical actions are "Mouse0" (Fire) and
+  // "Mouse2" (Aim): settings.remap {"KeyF": "Mouse0", "Mouse0": "__unbound"} fires on F, {"Mouse4": "KeyG"} throws on a side
+  // button. With an empty remap every path below is exactly the old one.
+  const UNB = "__unbound";
   window.addEventListener("keydown", (ev) => {
     if (ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA")) return;
     if (W.captureKey) { W.captureKey(ev.code); ev.preventDefault(); return; }
@@ -1081,6 +1269,13 @@ function installHumanInput(W) {
     // undefined, so `!e.repeat` was permanently true and the gate it documents
     // never once fired — holding SPACE still strobed the chute.
     const e = { code: canon(ev.code), repeat: ev.repeat, preventDefault: () => ev.preventDefault() };
+    // free-look on Alt: the browser's own Alt (menu-bar focus on Windows) must not take the key
+    if (e.code === "AltLeft") ev.preventDefault();
+    if (e.code === "Mouse0" || e.code === "Mouse2") { if (!ev.repeat) buttonDown(e.code === "Mouse0" ? 0 : 2); return; }
+    keyDown(e, ev);
+  });
+  /** One canonical key press (a keyboard key through canon(), or a mouse button remapped onto a key action). */
+  const keyDown = (e, ev) => {
     keys[e.code] = true;
     // ESC before the guard: W.player is null until the first match and phase is
     // "menu" after one, so the guard swallowed Escape on exactly the screen where
@@ -1113,7 +1308,10 @@ function installHumanInput(W) {
     // way to look at anyone else — including the friend still alive in your
     // room. A/D (or the arrows) now step through the survivors.
     if (!W.player.alive && (e.code === "KeyA" || e.code === "KeyD" || ev.code === "ArrowLeft" || ev.code === "ArrowRight")) {
-      const alive = W.actors.filter((x) => x.alive && !x.isDummy);
+      // (P23, LC-18) squadmates first in the cycle, then everyone else (stable order otherwise)
+      const tm = W.player.teamId;
+      const alive = W.actors.filter((x) => x.alive && !x.isDummy && tm && x.teamId === tm)
+        .concat(W.actors.filter((x) => x.alive && !x.isDummy && !(tm && x.teamId === tm)));
       if (alive.length) {
         const dir = (e.code === "KeyD" || ev.code === "ArrowRight") ? 1 : -1;
         const cur = alive.findIndex((x) => x.id === W.player.spectating);
@@ -1126,11 +1324,23 @@ function installHumanInput(W) {
     if (e.code === "KeyM") W.events.emit("toggleBigMap");
     if (e.code === "KeyB") inp.emote = "dance";
     if (e.code === "KeyN") inp.emote = "cheer";
-  });
-  window.addEventListener("keyup", (ev) => {
-    const code = canon(ev.code);
+    // (P23) [G] quick-throw the first throwable you carry (LC-14), [V] shoulder swap (LC-31), [Alt] held = free-look (LC-31),
+    // [C] in crouch-TOGGLE mode flips the crouch latch (LC-65; hold mode reads the held key in the per-frame rebuild)
+    if (e.code === "KeyG" && !ev.repeat && W.player.alive) quickThrow(W, W.player);
+    if (e.code === "KeyV" && !ev.repeat) W._shoulderSide = (W._shoulderSide || 1) > 0 ? -1 : 1;
+    if (e.code === "AltLeft" && !ev.repeat) W._freeLook = true;
+    if (e.code === "KeyC" && !ev.repeat && W.settings.crouchToggle) W._crouchLatch = !W._crouchLatch;
+  };
+  const keyUp = (code) => {
     keys[code] = false;
     if (code === "KeyE" && W.player) W.player.input.interactDown = false;
+    if (code === "AltLeft") W._freeLook = false;
+  };
+  window.addEventListener("keyup", (ev) => {
+    const code = canon(ev.code);
+    if (code === "AltLeft") ev.preventDefault();
+    if (code === "Mouse0" || code === "Mouse2") { buttonUp(code === "Mouse0" ? 0 : 2); return; }
+    keyUp(code);
   });
 
   // Mouse model — mouse-look is the PRIMARY control (owner: "moving the mouse
@@ -1153,7 +1363,27 @@ function installHumanInput(W) {
   // touch.js W.touch is undefined and nothing below changes.
   const touchOn = () => !!(W.touch && W.touch.active);
   let rmbDrag = false;
+  // canonical button of a physical mouse button: 0 = Fire, 2 = Aim, -1 = unbound, or a key action's code (string)
+  const mouseCanon = (b) => {
+    const rm = W.settings.remap || {};
+    const phys = "Mouse" + b;
+    const c = rm[phys];
+    if (c === UNB) return -1;
+    if (c === "Mouse0") return 0;
+    if (c === "Mouse2") return 2;
+    if (c) return c;
+    return b;
+  };
   dom.addEventListener("mousedown", (e) => {
+    if (!W.player || W.phase === "menu" || W.paused) return;
+    if (touchOn()) return;
+    tryLock();                     // ANY click grabs the mouse for looking
+    const c = mouseCanon(e.button);
+    if (typeof c === "string") { keyDown({ code: c, repeat: false, preventDefault: () => e.preventDefault() }, e); return; }
+    if (c === 0 || c === 2) buttonDown(c);
+  });
+  /** The FIRE (0) / AIM (2) action pressed - from its mouse button or a key remapped onto it. */
+  const buttonDown = (b) => {
     if (!W.player || W.phase === "menu" || W.paused) return;
     if (touchOn()) return;
     // Whether the mouse was ALREADY captured decides what this click means. Any
@@ -1175,28 +1405,40 @@ function installHumanInput(W) {
     // Semi-autos just show it worse because each one is a discrete lost shot.
     // Now only a click following a DELIBERATE release (menu, map, end panel —
     // see releaseCursor in hud.js) is swallowed.
-    tryLock();                     // ANY click grabs the mouse for looking
-    if (e.button === 0 && W._suppressNextShot) { W._suppressNextShot = false; return; }
-    if (e.button === 0) {
+    if (b === 0 && W._suppressNextShot) { W._suppressNextShot = false; return; }
+    // ADS toggle latch: flips on the AIM press edge (hold mode ignores it). Same liveness guards as above - a right-click on
+    // the menu / pause / death screen must not arm the latch (you spawned already toggled into ADS: sweep finding)
+    if (b === 2 && W.settings.adsToggle && W.player.alive) W._adsLatch = !W._adsLatch;
+    // (P23, LC-31) a free-look in progress ends on FIRE / AIM. The camera is still turned away this frame, and every shot
+    // goes down the crosshair ray of the camera as drawn - so the click's shot is held until the camera is back on the aim
+    // (updateCamera releases it on its next frame), never fired into the free-look direction.
+    if ((b === 0 || b === 2) && freeLookOff(W)) {
+      W._freeLook = false;
+      if (b === 0) { W._lmbDown = true; W._flHoldFire = true; return; }
+    }
+    if (b === 0) {
       W._lmbDown = true;
       W._fireEdge = performance.now();  // fresh click — semis consume it within the 300 ms buffer
       W.player.input.fire = true;   // never swallow the shot
     }
-    if (e.button === 2) { W._rmbDown = true; W.player.input.ads = true; rmbDrag = document.pointerLockElement !== dom; }
-  });
-  window.addEventListener("mouseup", (e) => {
-    // mouseup does NOT clear the fire edge any more (owner playtest: "pressing
-    // mouse button doesn't actually fire ... it gets stuck") — a quick click
-    // during a weapon's cooldown window (0.4 s ready delay after a swap, or
-    // between semi shots) set the edge and erased it before the gun could
-    // fire. The edge is a TIMESTAMP now; weapons.js honours it for 300 ms
-    // (the standard input buffer) and consumes it on fire.
-    if (e.button === 0) { W._lmbDown = false; }
-    if (e.button === 2) { W._rmbDown = false; rmbDrag = false; }
+    if (b === 2) { W._rmbDown = true; W.player.input.ads = true; rmbDrag = document.pointerLockElement !== dom; }
+  };
+  // releasing does NOT clear the fire edge (owner playtest: "pressing mouse button doesn't actually fire ... it gets stuck"):
+  // a quick click during a weapon's cooldown window (0.4 s ready delay after a swap, or between semi shots) set the edge and
+  // erased it before the gun could fire. The edge is a TIMESTAMP; weapons.js honours it for its input buffer and consumes it.
+  const buttonUp = (b) => {
+    if (b === 0) { W._lmbDown = false; W._flHoldFire = false; }
+    if (b === 2) { W._rmbDown = false; rmbDrag = false; }
     if (!W.player) return;
-    if (e.button === 0) W.player.input.fire = false;
-    if (e.button === 2) W.player.input.ads = false;
+    if (b === 0) W.player.input.fire = false;
+    if (b === 2) W.player.input.ads = false;
+  };
+  window.addEventListener("mouseup", (e) => {
+    const c = mouseCanon(e.button);
+    if (typeof c === "string") { keyUp(c); return; }
+    if (c === 0 || c === 2) buttonUp(c);
   });
+
   // safety: a mouseup outside the window would otherwise leave fire/ADS stuck
   // (stuck ADS = permanent 3.4 m/s — feels like the game is broken-slow)
   const clearButtons = () => { W._lmbDown = false; W._rmbDown = false; if (W.player) { W.player.input.fire = false; W.player.input.ads = false; } rmbDrag = false; };
@@ -1236,7 +1478,19 @@ function installHumanInput(W) {
     const locked = document.pointerLockElement === dom;
     if (!locked && !rmbDrag) return;
     const sens = (W.player.input.ads ? W.settings.adsSensitivity : W.settings.sensitivity) * 0.0022;
-    const mx2 = e.movementX || 0, my2 = e.movementY || 0;
+    const mx2 = e.movementX || 0;
+    // (P23, LC-65) invert-Y is a mouse setting (touch look is untouched)
+    const my2 = (e.movementY || 0) * (W.settings.invertY ? -1 : 1);
+    // (P23, LC-31) FREE-LOOK: while Alt is held the mouse turns the CAMERA only (W._flYaw / W._flPitch, offsets from the aim);
+    // the aim, the body and the glide heading keep the input yaw / pitch they had. Released, the camera eases back onto the
+    // aim (updateCamera) and the aim is exactly what it was. Not while aiming down sights or dead.
+    if (W._freeLook && W.player.alive && !W.player.input.ads) {
+      W._flYaw = (W._flYaw || 0) - mx2 * sens;
+      W._flPitch = K.clamp((W._flPitch || 0) - my2 * sens, -1.2 - W.player.input.pitch, 1.2 - W.player.input.pitch);
+      // the turn is capped like a neck: about 120 deg either side of the aim
+      W._flYaw = K.clamp(W._flYaw, -2.1, 2.1);
+      return;
+    }
     W.player.input.yaw -= mx2 * sens;
     W.player.input.pitch = K.clamp(W.player.input.pitch - my2 * sens, -1.35, 1.35);
   });
@@ -1287,23 +1541,26 @@ function installHumanInput(W) {
     inp.sprint = (W.settings.sprintToggle ? !!W._sprintLatch : sprintHeld) || !!(Tm && Tm.sprint);
     // Crouch defaults to C, NOT Ctrl: this runs in a browser next to WASD, and
     // Ctrl+W closes the tab. Rebindable like any other action.
-    inp.crouch = !!keys.KeyC;
-    inp.fire = !!W._lmbDown || !!(Tm && Tm.fire);
+    // (P23, LC-65) settings.crouchToggle: C flips a latch (keyDown) instead of being held. A sprint stands you up and
+    // clears the latch, exactly as it already wins over a held C (stepActor: "you stand up to run"), so a toggled crouch
+    // never comes back by itself after the run.
+    if (W.settings.crouchToggle) {
+      if (W._crouchLatch && inp.sprint && inp.mz > 0.5 && !(W.player._slideT >= 0)) W._crouchLatch = false;
+      inp.crouch = !!W._crouchLatch;
+    } else inp.crouch = !!keys.KeyC;
+    // (P23, LC-31) a click held back by a free-look waits for the camera (updateCamera releases it)
+    inp.fire = (!!W._lmbDown && !W._flHoldFire) || !!(Tm && Tm.fire);
+    // (P23, LC-14) quick throw in flight: keep the throw's click edge alive until the throwable is out of its ready delay
+    // and thrown (weapons.js stepThrow honours the edge for 420 ms; the 0.4 s swap delay would otherwise race it)
+    quickThrowFrame(W, W.player);
     inp.ads = (W.settings.adsToggle ? !!W._adsLatch : !!W._rmbDown) || !!(Tm && Tm.ads);
     if (T && !Tm) T.applyTo(inp, dt);
     else if (Tm) touchFrame(W, Tm, inp, keys, dt);
     else W._touchPrev = null;
   });
-  // ADS toggle latch: flip on the RMB press edge (hold mode ignores it).
-  // Same liveness guards as the main mousedown handler — without them a
-  // right-click on the menu/pause/death screen armed the latch and you
-  // spawned already toggled into ADS (sweep finding).
-  dom.addEventListener("mousedown", (ev2) => {
-    if (ev2.button === 2 && W.settings.adsToggle && !touchOn() &&
-        W.player && W.player.alive && W.phase !== "menu" && !W.paused) W._adsLatch = !W._adsLatch;
-  });
   W.pointerLocked = () => document.pointerLockElement === dom;
-  W.resetInputState = () => { for (const k in keys) keys[k] = false; W._lmbDown = false; W._rmbDown = false; W._sprintLatch = false; W._adsLatch = false; W._touchPrev = null; };
+  W.resetInputState = () => { for (const k in keys) keys[k] = false; W._lmbDown = false; W._rmbDown = false; W._sprintLatch = false; W._adsLatch = false; W._touchPrev = null;
+    W._crouchLatch = false; W._freeLook = false; W._flYaw = 0; W._flPitch = 0; W._flHoldFire = false; W._quickThrow = null; };
 }
 
 /** One frame of touch input (C6), after the held axes/buttons above:
@@ -1900,10 +2157,21 @@ function stepActor(W, a, dt) {
   const inp = a.input;
   a.yaw = inp.yaw; a.pitch = inp.pitch;
 
-  // healing channel
+  // healing channel (C-HEAL, P23 LC-05: the item is spent HERE, on completion - a cancelled heal costs nothing)
   if (a.healing) {
     a.healing.tLeft -= dt;
-    if (a.healing.tLeft <= 0) { applyHeal(W, a, a.healing.id); a.healing = null; }
+    if (a.healing.tLeft <= 0) finishHeal(W, a);
+  }
+  // C-DBNO: a downed actor cannot shoot, aim, reload, swap, loot or heal (its brain / keys may still ask). The human's
+  // semi-auto click edge is a W field (weapons.js reads it, not input.fire), so it is dropped too.
+  if (a.downed) {
+    inp.fire = false; inp.ads = false; inp.reload = false; inp.slot = -1; inp.interact = false; inp.interactDown = false;
+    inp.jump = false; inp.sprint = false; inp.emote = null;
+    if (a === W.player) W._fireEdge = 0;
+    if (a.healing) cancelHeal(W, a);
+    // the bleed pool drains (faster with every knock this match), then the actor dies
+    a.downedHp -= dbnoBleed(a) * dt;
+    if (a.downedHp <= 0) { finishDowned(W, a, a._knockedBy, "bleed"); return; }
   }
 
   // glide phase — real skydive: fast belly-down freefall with forward
@@ -1928,7 +2196,7 @@ function stepActor(W, a, dt) {
 
   // EMOTES: dance/cheer on the spot (B / N). Starts only grounded + safe;
   // any human input cancels; bots ride the timer (or cancel when shot).
-  if (inp.emote) emoteStart(W, a, inp);
+  if (inp.emote && !a.downed) emoteStart(W, a, inp);
   if (a.emoting && emoteStep(W, a, inp, dt)) return;
 
   // ── MANTLE — modal, like emoting: a short scripted up-and-over ───────────
@@ -1939,7 +2207,7 @@ function stepActor(W, a, dt) {
 
   // LAUNCH PORTALS: walk into a ring → flung back into the atmosphere, canopy
   // auto-opens on the way down (Final Drop-style island escape / rotation)
-  if (W.map.portals && !a._portalBoost && W.t - (a._portalT || 0) > 2.5) portalCheck(W, a);
+  if (W.map.portals && !a._portalBoost && !a.downed && W.t - (a._portalT || 0) > 2.5) portalCheck(W, a);
   // portal ascent: ballistic climb at half gravity (~80m), then hand over to
   // the skydive — canopy failsafe auto-opens at 60m on the way down
   if (a._portalBoost) { portalStep(W, a, dt); return; }
@@ -1957,7 +2225,13 @@ function stepActor(W, a, dt) {
 
   // desired horizontal velocity (local axes → world by yaw)
   // crouch: ground-only, and sprinting always wins (you stand up to run)
-  a.crouching = !!inp.crouch && a.onGround && !a.swimming && !a.gliding && !(inp.sprint && inp.mz > 0.5);
+  // (P23, LC-21) SLIDE: a crouch PRESS while sprinting on the ground (humans: a brain's crouch flag is a stance, not a verb)
+  const crouchEdge = !!inp.crouch && !a._crouchPrev;
+  a._crouchPrev = !!inp.crouch;
+  if (crouchEdge && a._slideT < 0 && !a.isBot && a.sprinting && a.onGround && !a.swimming && !a.downed && !inp.ads &&
+      W.t >= a._slideCd && Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z) > SLIDE_MIN_V) slideStart(W, a);
+  a.crouching = !!inp.crouch && a.onGround && !a.swimming && !a.gliding && !(inp.sprint && inp.mz > 0.5) && !a.downed;
+  if (a._slideT >= 0) a.crouching = true;           // the slide is a crouched stance (capsule, eye, spread)
   // Using a heal LOCKS OUT SPRINT for the whole channel (owner direction): you
   // may keep moving and reposition behind cover, you just cannot run while you
   // drink. Sprint is gated here rather than by clearing inp.sprint, so the
@@ -1972,7 +2246,7 @@ function stepActor(W, a, dt) {
   // INFINITE — the stamina meter (added 07-22) was removed by owner direction
   // 2026-07-28: no drain, no exhaust lock, no bar. !inp.ads: you can't sprint
   // while aiming (speed picks the ADS cap below).
-  const wantsSprint = inp.sprint && inp.mz > 0.5 && !inp.ads && !(healingNow && K.HEAL.blocksSprint);
+  const wantsSprint = inp.sprint && inp.mz > 0.5 && !inp.ads && !(healingNow && K.HEAL.blocksSprint) && !a.downed && a._slideT < 0;
   const sprinting = wantsSprint;
   const spd = a.swimming
     ? (sprinting ? K.MOVE.swimSprint : K.MOVE.swim)
@@ -1980,6 +2254,10 @@ function stepActor(W, a, dt) {
   let wspd = (a.inWater && !a.swimming) ? spd * 0.55 : spd;   // wading is slow
   if (a.crouching) wspd *= K.CROUCH.speedMult;
   if (healingNow) wspd *= K.HEAL.speedMult;                   // heals cost tempo
+  // (P23) C-DBNO crawl speed; C-FALL landing stagger; a revive channel holds the reviver still
+  if (a.downed) wspd = K.DBNO_CRAWL != null ? K.DBNO_CRAWL : DBNO_CRAWL_DEF;
+  if (W.t < a._landT) wspd *= LAND_STAGGER_SPEED;
+  if (!a.downed && reviveStep(W, a, inp, dt)) wspd = 0;
   const GB = K.moveBasis(a.yaw, _mb);
   const dx = GB.rx * inp.mx + GB.fx * inp.mz, dz = GB.rz * inp.mx + GB.fz * inp.mz;
   const dl = Math.sqrt(dx * dx + dz * dz) || 1;
@@ -1988,6 +2266,8 @@ function stepActor(W, a, dt) {
   const k = (a.onGround || a.swimming) ? Math.min(1, dt / K.MOVE.accelT) : K.MOVE.airControl * Math.min(1, dt / K.MOVE.accelT);
   a.vel.x += (tx - a.vel.x) * k;
   a.vel.z += (tz - a.vel.z) * k;
+  // (P23, LC-21) the slide owns the horizontal velocity while it lasts (a little steering, no input acceleration)
+  if (a._slideT >= 0) slideStep(W, a, inp, dt);
 
   a.sprinting = sprinting;   // heal-gated, so the run anim + FOV kick match the real speed
 
@@ -1995,8 +2275,12 @@ function stepActor(W, a, dt) {
   else {
     // jump — and SPACE in mid-air with enough height re-opens the parachute
     // (stepping off a sky island must be an escape, not a death sentence)
-    if (inp.jump && a.onGround) { a.vel.y = K.MOVE.jumpV; a.onGround = false; W.events.emit("jump", a); }
-    else if (inp.jump && !a.onGround) {
+    // (P23) no jump while downed or in the landing stagger; a jump out of a slide keeps its speed (slideEnd)
+    if (inp.jump && a.onGround && !a.downed && W.t >= a._landT) {
+      if (a._slideT >= 0) slideEnd(W, a, true);
+      a.vel.y = K.MOVE.jumpV; a.onGround = false; a._jumped = true; a._airT = 0; a._airPeakY = a.pos.y; W.events.emit("jump", a);
+    }
+    else if (inp.jump && !a.onGround && !a.downed) {
       const aglJ = a.pos.y - Math.max(supportAt(W, a.pos.x, a.pos.z, a.pos.y), W.map.waterY);
       if (aglJ > 12) { a.gliding = true; a.chuteToggled = true; deployChute(W, a); }
     }
@@ -2031,7 +2315,7 @@ function stepActor(W, a, dt) {
       // a slab in the pull-up space; the capsule-fits check covers walls.
       // Humans only — the bot aim/nav model doesn't need it and brains would
       // trip it on every wall they rub.
-      if (hitWall && !a.onGround && !a.isBot && !a.netRemote && !a.gliding &&
+      if (hitWall && !a.onGround && !a.isBot && !a.netRemote && !a.gliding && !a.downed &&
           !a.swimming && inp.mz > 0 && a.vel.y < 6) mantleTrigger(W, a, h);
     }
     const feetY0 = a.pos.y;
@@ -2060,6 +2344,7 @@ function stepActor(W, a, dt) {
     // in deep water the "support" is the swim surface, not the seabed
     if (deepWater && a.pos.y <= wy + 0.05) {
       a.pos.y = wy - 0.55;   // enter swim next frame
+      a._airT = 0; a._jumped = false;                // into the water: no fall damage, no landing (C-FALL)
     } else if (a.pos.y <= sup + 0.02) {
       // "landed" is emitted ONLY from the glide branch (the parachute touchdown),
       // so it fires once per actor per match and never for a jump — which left
@@ -2070,9 +2355,24 @@ function stepActor(W, a, dt) {
       const impactV = -a.vel.y;
       if (impactV > 16) W.events.emit("hardLand", a, impactV);
       else if (impactV > 2.5) W.events.emit("touchdown", a, impactV);
+      const wasAir = !a.onGround;
       a.pos.y = sup; a.vel.y = 0; a.onGround = true;
+      // (P23) C-FALL + LC-30: the impact of a real fall (never a glide / chute / mantle / water landing: those leave by their own
+      // branches) costs hp by the fall curve, and a hard one staggers and plays the landing clip
+      if (wasAir) { landed(W, a, impactV, terrH < wy); if (!a.alive) return; }
     } else if (a.pos.y - sup > 0.1) {
+      if (a.onGround) { a._airT = 0; a._airPeakY = a.pos.y; }
       a.onGround = false;
+    }
+    if (!a.onGround) {
+      a._airT += dt;
+      if (a.pos.y > a._airPeakY) a._airPeakY = a.pos.y;
+      // (P23, C-FALL) a BOT falling fast from high up opens its canopy, exactly like the human's mid-air SPACE (> 12 m above
+      // the ground): bots get the same fall rule and do not walk to their death off a sky island. The support is this tick's
+      // own (no extra collider query).
+      if (a.isBot && !a.netRemote && a.vel.y < -12 && !a.downed && a.pos.y - Math.max(sup, wy) > 14) {
+        a.gliding = true; a.chuteToggled = true; a._airT = 0; a._jumped = false; deployChute(W, a);
+      }
     }
   }
 
@@ -2125,17 +2425,22 @@ function glideStep(W, a, inp, dt) {
   const glideF = chuted ? Math.max(0.15, Math.max(0, fwd)) : Math.max(0, fwd);
   // strafe uses the SAME basis as forward — it previously used (cos, +sin)
   // against a (cos, -sin) ground basis, so A/D steered wrong off-axis
-  const txv = dirX * speed * glideF + B.rx * speed * 0.5 * inp.mx;
-  const tzv = dirZ * speed * glideF + B.rz * speed * 0.5 * inp.mx;
+  let txv = dirX * speed * glideF + B.rx * speed * 0.5 * inp.mx;
+  let tzv = dirZ * speed * glideF + B.rz * speed * 0.5 * inp.mx;
+  let fallT = fallTarget;
+  // (P23, LC-59) a waypoint and no move input: the glide steers itself onto it (may open the canopy early to reach far)
+  if (waypointGlide(W, a, inp, agl, dt)) { txv = _wpOut.vx; tzv = _wpOut.vz; fallT = _wpOut.vy; }
   a.vel.x += (txv - a.vel.x) * Math.min(1, dt * 2.2);      // air has inertia
   a.vel.z += (tzv - a.vel.z) * Math.min(1, dt * 2.2);
-  a.vel.y += (fallTarget - a.vel.y) * Math.min(1, dt * (chuted ? 3 : 1.4));
+  a.vel.y += (fallT - a.vel.y) * Math.min(1, dt * (a.chute ? 3 : 1.4));
   a.pos.addScaledVector(a.vel, dt);
 
   if (a.pos.y <= landY + 1.0) {
+    if (a === W.player) { W._dropWp = null; a._autoGlide = false; }
     a.pos.y = landY + 0.05; a.gliding = false; a.vel.set(0, 0, 0); a.onGround = true;
     removeChute(a);
     a.chuteToggled = false;
+    a._airT = 0; a._jumped = false;                   // (P23, C-FALL) a canopy / glide touchdown is never a fall
     W.events.emit("landed", a);
   }
   clampToMap(W, a);
@@ -2184,7 +2489,7 @@ function mantleStep(a, dt) {
   a.pos.x = a._mFrom.x + (a._mTo.x - a._mFrom.x) * sf;
   a.pos.z = a._mFrom.z + (a._mTo.z - a._mFrom.z) * sf;
   a.vel.set(0, 0, 0);
-  if (a.mantleT <= 0) { a.mantleT = null; a.onGround = true; }
+  if (a.mantleT <= 0) { a.mantleT = null; a.onGround = true; a._airT = 0; a._jumped = false; }
   a._vmode = 2;                 // frame() moves it; the mantle owns the pose
 }
 
@@ -2546,6 +2851,106 @@ function installRenderHook(W) {
   scene.__lcActorHook = true;
 }
 
+/** (P23, LC-10) the directional clip set is loaded and this carry plays it (a rifle-family Mixamo carry or a pistol). */
+function dirClipsFor(a) {
+  const C = a.clips;
+  if (!C || !C.rifle_walk_g || !C.rifle_walk_left) return false;
+  const fam = gunFamily(a);
+  return fam === "rifle" ? !!C.rifle_idle : isPistol(a);
+}
+// (P23, LC-10) quadrant centres (rad, relative to the aim; + = left): forward, left, back, right
+const Q_CENTER = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+const Q_HYST = 10 * Math.PI / 180, WARP_MAX = Math.PI / 4 + Q_HYST;
+/** The orientation warp for a combat mover: updates a._locoQ (with hysteresis) and returns the body yaw offset from the aim. */
+function locoWarp(a, spd) {
+  const mv = Math.atan2(-a.vel.x, -a.vel.z);          // movement heading in the aim's yaw convention
+  let phi = mv - a.yaw;
+  while (phi > Math.PI) phi -= Math.PI * 2;
+  while (phi < -Math.PI) phi += Math.PI * 2;
+  a._locoAng = phi;
+  const off = (q) => { let d = phi - Q_CENTER[q]; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
+  let q = a._locoQ | 0;
+  if (Math.abs(off(q)) > Math.PI / 4 + Q_HYST) {
+    let best = 0, bd = 9;
+    for (let i = 0; i < 4; i++) { const d = Math.abs(off(i)); if (d < bd) { bd = d; best = i; } }
+    q = best;
+  }
+  a._locoQ = q;
+  // the clip this quadrant plays, and its MEASURED travel heading (CLIP_DIR: a Mixamo strafe does not walk exactly at 90 deg):
+  // the body turns so that heading lies on the velocity
+  const key = combatKey(a, spd, q);
+  a._locoKey = key;
+  const w = Math.max(-WARP_MAX, Math.min(WARP_MAX, off(q) - (CLIP_DIR[key] || 0)));
+  a._warp = w;
+  return w;
+}
+/** The directional clip a combat mover plays for quadrant q (0 fwd, 1 left, 2 back, 3 right) at ground speed gs. */
+function combatKey(a, gs, q) {
+  const C = a.clips;
+  let set, fwd;
+  if (a.crouching) { set = DIR_SETS.crouch; fwd = C.rifle_crouch_g ? "rifle_crouch_g" : "rifle_crouch"; }
+  else {
+    const run = runPick(a, gs);
+    if (!run && (q === 1 || q === 3) && isPistol(a)) {
+      const pk = q === 1 ? "pistol_strafe_left" : "pistol_strafe_right";
+      if (C[pk]) return pk;
+    }
+    // the hip-fire combat run (6.0 m/s) strafes on the Mixamo sprint strafes (stride 3.5 m at ~0.9x) instead of the run strafes
+    // at 1.55x, whose feet skated 1.5-1.7x the forward run in game
+    if (run && gs > SPRINT_STRAFE_ON && (q === 1 || q === 3)) {
+      const sk = q === 1 ? "rifle_sprint_left" : "rifle_sprint_right";
+      if (C[sk]) return sk;
+    }
+    if (run) { set = DIR_SETS.rifleRun; fwd = C.rifle_run_g ? "rifle_run_g" : "rifle_run"; }
+    else { set = DIR_SETS.rifleWalk; fwd = C.rifle_walk_g ? "rifle_walk_g" : "rifle_walk"; }
+  }
+  const k = q === 0 ? fwd : set[q];
+  return k && C[k] ? k : fwd;
+}
+// (P23, LC-64) TURN-IN-PLACE: standing still, the body holds its yaw while the aim moves (the chest twists up to ~54 deg) and
+// steps round with the Mixamo turn clip once the aim is TURN_START off (60 deg out of combat, 17 deg in combat, where the body
+// has to face the aim). The clip's own pelvis yaw curve (extractRootYaw) drives the body, scaled to the angle actually needed.
+const TWIST_MAX = 0.95;
+const TURN_START = 0.9, TURN_START_COMBAT = 0.3, TURN_MAX = 1.9, TURN_RATE = 1.35, TURN_RATE_COMBAT = 2.0;
+function turnInPlace(W, a, combat, dt) {
+  const C = a.clips;
+  if (!C || !C.turn_left_90 || !C.turn_right_90) { a._turnT = -1; return false; }
+  const fwd = a._bodyYaw - Math.PI;
+  let d = a.yaw - fwd;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  if (a._turnT >= 0) {
+    // the turn runs on its own clock (clip time = elapsed x rate), so a mixer the view policy holds back can never stall it
+    const act = a.rig && a.rig.actions && a.rig.actions[C[a._turnClip]];
+    const clip = act && act.getClip();
+    const cv = clip && clip.__lcYaw;
+    if (!cv) { a._turnT = -1; return false; }
+    a._turnT += dt;
+    // the turn re-targets onto the aim while it runs (an aim still sweeping when the step began is followed to where it
+    // stops), in the direction the clip turns, up to TURN_MAX
+    let d0 = a.yaw - (a._turnYaw0 - Math.PI);
+    while (d0 > Math.PI) d0 -= Math.PI * 2;
+    while (d0 < -Math.PI) d0 += Math.PI * 2;
+    if (d0 * a._turnAmt > 0) a._turnAmt = Math.max(-TURN_MAX, Math.min(TURN_MAX, d0));
+    const tc = Math.min(clip.duration, a._turnT * a._turnRate);
+    const end = cv.yaw[cv.yaw.length - 1] || 1;
+    const k = yawAt(cv, tc) / end;
+    a._bodyYaw = a._turnYaw0 + a._turnAmt * Math.max(0, Math.min(1, k));
+    if (tc >= clip.duration * 0.97 || k >= 0.997) { a._bodyYaw = a._turnYaw0 + a._turnAmt; a._turnT = -1; }
+    return true;
+  }
+  if (Math.abs(d) > (combat ? TURN_START_COMBAT : TURN_START)) {
+    a._turnT = 0;
+    a._turnYaw0 = a._bodyYaw;
+    a._turnAmt = Math.max(-TURN_MAX, Math.min(TURN_MAX, d));
+    a._turnClip = d > 0 ? "turn_left_90" : "turn_right_90";
+    a._turnRate = combat ? TURN_RATE_COMBAT : TURN_RATE;
+    a._turnNew = true;
+    return true;
+  }
+  return true;                                       // inside the twist range: the body stays planted
+}
+
 /** View sync for one actor, from frame() (its obj.position is already set,
  *  interpolated between the last two ticks): body facing and the glide tilt,
  *  eased with the FRAME dt. */
@@ -2557,14 +2962,37 @@ function syncObj(W, a, dt) {
   let wantYaw = a.yaw + Math.PI;
   const spd2 = Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z);
   const combat = a.input.ads || (W.t - a.lastShotT < 1.5);
-  if (!a.gliding && !a.swimming && !combat && spd2 > 1.2) {
-    wantYaw = Math.atan2(-a.vel.x, -a.vel.z) + Math.PI;
-  }
+  const grounded = !a.gliding && !a.swimming;
   if (!a._hasBodyYaw) { a._bodyYaw = wantYaw; a._hasBodyYaw = true; }
-  let dy = wantYaw - a._bodyYaw;
-  while (dy > Math.PI) dy -= Math.PI * 2;
-  while (dy < -Math.PI) dy += Math.PI * 2;
-  a._bodyYaw += dy * Math.min(1, dt * 10);
+  let hold = false;                                  // (P23) the body keeps its yaw this frame (turn-in-place / downed still)
+  a._warp = 0;
+  a._locoCombat = false;
+  if (a.downed) {
+    // (C-DBNO) a downed body crawls where it goes and stays put when still
+    if (spd2 > 0.3) wantYaw = Math.atan2(-a.vel.x, -a.vel.z) + Math.PI; else hold = true;
+    a._turnT = -1;
+  } else if (a.gliding && a._autoGlide && spd2 > 1) {
+    // (LC-59) the waypoint auto-glide flies toward the waypoint: the body faces its travel, not the camera
+    wantYaw = Math.atan2(-a.vel.x, -a.vel.z) + Math.PI;
+  } else if (grounded && !combat && spd2 > 1.2) {
+    wantYaw = Math.atan2(-a.vel.x, -a.vel.z) + Math.PI;
+    a._turnT = -1;
+  } else if (grounded && combat && spd2 > 0.7 && a.onGround && a._slideT < 0 && dirClipsFor(a)) {
+    // (P23, LC-10) COMBAT STRAFING: the body squares to the aim, plus an ORIENTATION WARP - the move angle relative to the aim
+    // picks one of four cardinal clips (quadrant, 10 deg of hysteresis) and the body turns by what is left over (<= 55 deg),
+    // so a cardinal clip always walks exactly along the velocity; the spine twists the chest back onto the aim (animate)
+    wantYaw = a.yaw + Math.PI + locoWarp(a, spd2);
+    a._locoCombat = true;
+    a._turnT = -1;
+  } else if (grounded && a.onGround && spd2 < 0.4 && a._slideT < 0 && a.mantleT == null) {
+    hold = turnInPlace(W, a, combat, dt);
+  } else a._turnT = -1;
+  if (!hold) {
+    let dy = wantYaw - a._bodyYaw;
+    while (dy > Math.PI) dy -= Math.PI * 2;
+    while (dy < -Math.PI) dy += Math.PI * 2;
+    a._bodyYaw += dy * Math.min(1, dt * 10);
+  }
   a.obj.rotation.y = a._bodyYaw;
   // body pose: freefall = belly-down skydive with banking; canopy = upright
   // with a gentle pendulum sway; everything else level
@@ -2583,6 +3011,9 @@ function syncObj(W, a, dt) {
   } else if (a.gliding && a.chute) {
     wantTiltX = -0.12 - Math.sin(W.t * 1.7) * 0.06;          // sway under canopy (reclined in the harness)
     wantTiltZ = -a.input.mx * 0.18 + Math.cos(W.t * 1.3) * 0.04;
+  } else if (a._slideT >= 0) {
+    // (P23, LC-21) no Mixamo slide clip exists locally: the crouch pose leans BACK into the slide (plus the leg layer, animate)
+    wantTiltX = -0.32;
   }
   a._tiltX = (a._tiltX || 0) + (wantTiltX - (a._tiltX || 0)) * Math.min(1, dt * 4);
   a._tiltZ = (a._tiltZ || 0) + (wantTiltZ - (a._tiltZ || 0)) * Math.min(1, dt * 4);
@@ -2615,11 +3046,18 @@ function animate(W, a, dt) {
       const fam = gunFamily(a);
       const FK = fam ? FAM_KEYS[fam] : null;
       const useMixamoGun = !!(FK && a.clips[FK.idle]);
-      selectClip(a, gs, fam, FK, useMixamoGun);
+      selectClip(W, a, gs, fam, FK, useMixamoGun);
 
       // moving reload overlay: upper-body reload layered over the locomotion
       // clip playing above (disjoint track sets — the mixer blends them clean)
       reloadOverlay(a, gs, useMixamoGun);
+      // (P23, LC-14) the toss on the upper body of any throw
+      throwOverlay(a, dt);
+      // (C-DBNO) the gun is put away while downed (the crawl uses both hands)
+      if (a.hand) {
+        if (a.downed && a.hand.visible) { a.hand.visible = false; a._dbnoHid = true; }
+        else if (!a.downed && a._dbnoHid) { a.hand.visible = true; a._dbnoHid = false; }
+      }
 
       // (g) GATE FOR EVERYTHING BELOW THAT WRITES BONES (spine aim offset,
       // upright fix, arm pose, barrel weld, support-hand IK). Two conditions:
@@ -2645,7 +3083,7 @@ function animate(W, a, dt) {
       let mode = null;
       const armed = a.weapon && !a.weapon.id.startsWith("consumable");
       const mixamoOwnsArms = useMixamoGun;   // freefall skydive pose is back (fall clip unloaded)
-      if (!a.alive || a.emoting || mixamoOwnsArms) mode = null;
+      if (!a.alive || a.emoting || mixamoOwnsArms || a.downed || a._throwOv) mode = null;
       else if (a.gliding && !a.chute) mode = "skydive";
       else if (a.gliding) mode = "hang";
       else if (a.swimming) mode = null;
@@ -2663,8 +3101,10 @@ function animate(W, a, dt) {
       let aimDelta = a.yaw - bodyFwdYaw;
       while (aimDelta > Math.PI) aimDelta -= Math.PI * 2;
       while (aimDelta < -Math.PI) aimDelta += Math.PI * 2;
-      const twist = K.clamp(aimDelta, -0.6, 0.6);
-      if (layers && a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive) {
+      // (P23, LC-10 / LC-64) the chest twists back onto the aim over the orientation warp of a combat strafe and the planted
+      // feet of a turn-in-place (up to ~54 deg), so the gun points where the shot goes
+      const twist = K.clamp(aimDelta, -TWIST_MAX, TWIST_MAX);
+      if (layers && a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed) {
         // negative: +rotation.x on these spines bends FORWARD, and looking UP
         // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
         const lean = K.clamp(a.pitch, -1.1, 1.1) * -0.30;
@@ -2675,7 +3115,14 @@ function animate(W, a, dt) {
       // straighten a slouched rig BEFORE the arm layer (arms hang off the
       // spine, so upright must happen first) — skip mid-air/emote where the
       // clip owns the whole body
-      if (layers && a.torsoFix && !a.gliding && !a.emoting) uprightTorso(a.obj, a.armBones, 1);
+      if (layers && a.torsoFix && !a.gliding && !a.emoting && !a.downed) uprightTorso(a.obj, a.armBones, 1);
+      // (P23, LC-30 / LC-21) procedural LEG layer: the mantle tuck (eased in and out over the pull-up) and the slide stance
+      if (layers && a.armBones && a.alive && !a.downed) {
+        let lw = 0, lm = null;
+        if (a.mantleT != null) { lm = "mantle"; lw = Math.sin(Math.PI * K.clamp(1 - a.mantleT / 0.45, 0, 1)); }
+        else if (a._slideT >= 0) { lm = "slide"; lw = Math.min(1, a._slideT / 0.12); }
+        if (lm && lw > 0.01) applyLegPose(a.obj, a.armBones, lm, lw);
+      }
       const wantW = mode ? 1 : 0;
       a._armW = (!a._hasArmW ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));
       a._hasArmW = true;
@@ -2710,7 +3157,7 @@ function animate(W, a, dt) {
       // the static grip - gun backwards in its shadow, and for the one frame it
       // re-entered the frustum on a non-evaluating frame (rigcheck (c): 3 bots,
       // barrel . chest -0.31 / -0.99 / -0.98, all off screen, 7.7-30.2 m).
-      if ((layers || a._evalNow) && a.hand && a.handBone && !a.emoting && (poseAim || mixamoAim)) barrelWeld(a, bodyFwdYaw, twist, mixamoAim);
+      if ((layers || a._evalNow) && a.hand && a.handBone && !a.emoting && !a.downed && (poseAim || mixamoAim)) barrelWeld(a, bodyFwdYaw, twist, mixamoAim);
       // ── SUPPORT HAND — two-bone IK onto the foregrip ─────────────────────
       // History, so nobody hunts ghosts: this call spent weeks disabled under
       // the theory that "something later in the frame re-poses the arm". Wrong.
@@ -2729,8 +3176,16 @@ function animate(W, a, dt) {
   }
 }
 
-/** Clip selection for one actor this frame (freefall / canopy / swim / jump / hit / reload / crouch / locomotion). */
-function selectClip(a, gs, fam, FK, useMixamoGun) {
+/** Clip selection for one actor this frame (downed / freefall / canopy / swim / mantle / air / landing / hit / reload / slide /
+ *  crouch / locomotion / turn-in-place / idle). (P23/player) every new state is guarded by its clip being loaded: a server
+ *  without the P1-F / P23 shared files (the per-skin fallback mode) keeps exactly the old chain. */
+function selectClip(W, a, gs, fam, FK, useMixamoGun) {
+  const C = a.clips;
+  if (a.downed) {
+    // (C-DBNO) crawl on the baked Mixamo running crawl, stride-matched to the crawl speed; holds its pose when still
+    if (C.dbno_crawl_fast) { playAnim(a, "dbno_crawl_fast", paTs(gs > 0.2 ? K.clamp(gs / CLIP_SPEED.dbno_crawl_fast, 0.35, 1.4) : 0)); return; }
+    if (C.dbno_crawl) { playAnim(a, "dbno_crawl", paTs(gs > 0.2 ? K.clamp(gs / CLIP_SPEED.dbno_crawl, 0.5, 3.5) : 0)); return; }
+  }
   if (a.gliding && !a.chute) {
     // ORIGINAL freefall (owner: "falling isnt FREEFALL, check animation on
     // the original fall"): frozen run + the skydive arm pose reads as a
@@ -2740,42 +3195,79 @@ function selectClip(a, gs, fam, FK, useMixamoGun) {
   }
   else if (a.gliding) playAnim(a, "idle");
   else if (a.swimming) playAnim(a, "swim", paTs(gs > 4.5 ? 1.25 : 1));
-  else if (a.mantleT != null && a.clips.crouch) {
-    playAnim(a, "crouch", PA_FREEZE);
+  else if (a.mantleT != null && (C.jump_loop || C.crouch)) {
+    // (P23, LC-30) mantle: the in-air tuck (jump_loop) under the procedural leg tuck (animate -> applyLegPose "mantle")
+    if (C.jump_loop) playAnim(a, "jump_loop", PA_FREEZE);
+    else playAnim(a, "crouch", PA_FREEZE);
   }
-  else if (!a.onGround) playAnim(a, "jump", PA_JUMP);
-  else if (a.hitReactT > 0 && a.clips.hit) {
+  else if (!a.onGround && (a._jumped || a._airT > AIR_CLIP_MIN_S || a.netRemote || a.vel.y < -4 || !C.jump_loop)) airClip(a);
+  else if (a._landKind && W.t < a._landUntil && landClip(W, a, gs)) { /* the landing clip owns the body */ }
+  else if (a.hitReactT > 0 && C.hit) {
     playAnim(a, "hit", PA_ONCE);
   }
-  else if (useMixamoGun && a.weapon && a.weapon.state === "reloading" && a.clips.rifle_reload && gs <= 0.7) {
+  else if (useMixamoGun && a.weapon && a.weapon.state === "reloading" && C.rifle_reload && gs <= 0.7) {
     // standing still: the full-body reload clip owns everything.
     // MOVING reloads fall through to the locomotion branch below — legs
     // keep walking/running and the upper-body overlay (managed after this
-    // chain) swaps the mag.
-    playAnim(a, "rifle_reload", PA_ONCE);
+    // chain) swaps the mag. (P23, LC-35) timed to the weapon's own reloadS.
+    _paOnceTs.timeScale = reloadTs(a, C.rifle_reload);
+    playAnim(a, "rifle_reload", _paOnceTs);
   }
-  else if (useMixamoGun && a.crouching && fam === "rifle" && a.clips.rifle_crouch) {
+  else if (a._slideT >= 0 && (C.rifle_crouch_g || C.rifle_crouch || C.crouch)) {
+    // (P23, LC-21) slide: a held crouch frame under the procedural slide legs (animate) and the lean-back (syncObj)
+    playAnim(a, C.rifle_crouch_g ? "rifle_crouch_g" : C.rifle_crouch ? "rifle_crouch" : "crouch", PA_FREEZE);
+  }
+  else if (a.crouching && (C.rifle_crouch_g || (useMixamoGun && fam === "rifle" && C.rifle_crouch))) {
+    // (P23, LC-10 + LC-30) crouch: the Mixamo crouch walk in four directions, stride-matched, for EVERY carry (a pistol or
+    // empty hands take the legs under the procedural arms: the old pistol crouch played the Meshy crouch, whose legs
+    // never moved - measured 0.0002 m of foot travel while gliding at 4.3 m/s)
+    if (gs > 0.7 && a._locoCombat && a._locoKey && C[a._locoKey]) playLocoKey(a, gs);
+    else if (gs > 0.7) {
+      const fk = C.rifle_crouch_g ? "rifle_crouch_g" : "rifle_crouch";
+      playAnim(a, fk, paTs(K.clamp(gs / (CLIP_SPEED[fk] || 1.8), 0.4, 2.6)));
+    }
+    else playAnim(a, C.rifle_crouch_g ? "rifle_crouch_g" : "rifle_crouch", PA_FREEZE);
+  }
+  else if (useMixamoGun && a.crouching && fam === "rifle" && C.rifle_crouch) {
     playAnim(a, "rifle_crouch", paTs(gs > 0.7 ? K.clamp(gs / 2.7, 0.55, 1.4) : 0));
   }
-  else if (a.crouching && a.clips.crouch && !(useMixamoGun && fam === "rifle" && a.clips.rifle_crouch)) {
+  else if (a.crouching && C.crouch && !(useMixamoGun && fam === "rifle" && C.rifle_crouch)) {
     playAnim(a, "crouch", paTs(gs > 0.7 ? K.clamp(gs / 2.7, 0.55, 1.4) : 0));
+  }
+  else if (gs > 0.7 && a._locoCombat && !a.crouching && a._locoKey && C[a._locoKey]) {
+    // (P23, LC-10) COMBAT STRAFE: the cardinal clip for the move angle (quadrant picked in syncObj with hysteresis), at the
+    // clip's own authored stride rate; the orientation warp turned the body so the clip walks exactly along the velocity
+    playLocoKey(a, gs);
   }
   else if (useMixamoGun && gs > 0.7) {
     const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
     const dirK = back ? -0.9 : 1;
     const runKey = FK.run;
     const walkKey = FK.walk;
-    if ((a.sprinting && gs > 5.5 && !back) || (gs > 4.4 && !back)) {
-      if (a.clips[runKey]) playAnim(a, runKey, paTs(K.clamp(gs / 6.5, 0.85, 1.5)));
+    if (C.rifle_run_g && !back) {
+      // (P23, LC-10) forward rifle set re-baked feet-down; play rate = ground speed / the authored stride speed
+      if (a.sprinting && gs > 5.5 && C.rifle_sprint_g) playAnim(a, "rifle_sprint_g", paTs(K.clamp(gs / CLIP_SPEED.rifle_sprint_g, 0.6, 1.6)));
+      else if (runPick(a, gs)) playAnim(a, "rifle_run_g", paTs(K.clamp(gs / CLIP_SPEED.rifle_run_g, 0.55, 1.7)));
+      else playAnim(a, "rifle_walk_g", paTs(K.clamp(gs / CLIP_SPEED.rifle_walk_g, 0.4, 2.2)));
+    }
+    else if ((a.sprinting && gs > 5.5 && !back) || (gs > 4.4 && !back)) {
+      if (C[runKey]) playAnim(a, runKey, paTs(K.clamp(gs / 6.5, 0.85, 1.5)));
       else playAnim(a, "run", paTs(K.clamp(gs / 6.5, 0.9, 1.5)));
-    } else if (a.clips[walkKey]) {
+    } else if (C[walkKey]) {
       playAnim(a, walkKey, paTs(dirK * K.clamp(gs / 3.0, 0.85, 2.0)));
     } else {
       playAnim(a, "walk", paTs(dirK * K.clamp(gs / 3.0, 0.85, 2.0)));
     }
   }
+  else if (a._turnT >= 0 && a._turnClip && C[a._turnClip] && gs < 0.7) {
+    // (P23, LC-64) turn-in-place: the Mixamo 90-degree step turn (its pelvis yaw drives the body in syncObj)
+    _paTurn.timeScale = a._turnRate || 1;
+    _paTurn.force = !!a._turnNew;
+    a._turnNew = false;
+    playAnim(a, a._turnClip, _paTurn);
+  }
   else if (useMixamoGun) {
-    playAnim(a, FK.idle);
+    playAnim(a, C.rifle_idle_g ? "rifle_idle_g" : FK.idle);
   }
   else if (gs > 0.7) {
     const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
@@ -2791,12 +3283,98 @@ function selectClip(a, gs, fam, FK, useMixamoGun) {
   else { playAnim(a, "idle"); }
 }
 
+// (P23) shared option objects (playAnim and the kernel's play() only read them)
+const _paOnceTs = { once: true, timeScale: 1 }, _paTurn = { once: true, timeScale: 1, force: false };
+const _paJumpUp = { once: true, startAt: 0 }, _paLand = { once: true, timeScale: 1, startAt: 0, force: true };
+const AIR_CLIP_MIN_S = 0.16;          // unsupported for less than this (a stair, a kerb) keeps the ground clip
+// walk <-> run clip hysteresis (m/s). The ADS pace (3.8 m/s) stays on the WALK set (at ~2x): in game its strafes skate 0.91-1.16x
+// its forward, against 1.3-2.2x for the run strafes at 0.85x (F:/lc_p23/player/reports/calib2.log, calib3.log)
+const RUN_ON = 4.6, RUN_OFF = 4.2, SPRINT_STRAFE_ON = 5.3;
+/** A pistol in the hands (the procedural-arms carry). */
+function isPistol(a) {
+  const def = a.weapon && K.WEAPONS && K.WEAPONS[a.weapon.id];
+  return !!(def && def.cls === "pistol");
+}
+/** walk or run stride for this ground speed, with hysteresis (a._locoRun) */
+function runPick(a, gs) {
+  a._locoRun = a._locoRun ? gs > RUN_OFF : gs > RUN_ON;
+  return a._locoRun;
+}
+/** Combat locomotion (LC-10): the clip syncObj picked for the quadrant (a._locoKey), at the stride-matched rate. */
+function playLocoKey(a, gs) {
+  const key = a._locoKey;
+  const rs = CLIP_SPEED[key] || 2.0;
+  playAnim(a, key, paTs(K.clamp(gs / rs, 0.4, 2.6)));
+}
+/** In-air clip (LC-30): the take-off of a real jump, the hang near the apex, the long-fall flail. */
+function airClip(a) {
+  const C = a.clips;
+  if (a._jumped && a.vel.y > 0.5 && C.jump_up) {
+    if (a.anim !== "jump_up") {
+      const act = a.rig.actions[C.jump_up];
+      const clip = act && act.getClip();
+      _paJumpUp.startAt = clip && clip.__lcTakeoff != null ? Math.min(clip.duration * 0.6, clip.__lcTakeoff) : 0.15;
+    }
+    playAnim(a, "jump_up", _paJumpUp);
+  } else if (C.fall_idle && (a.vel.y < -11 || (a._airT > 0.75 && a.vel.y < -4))) {
+    playAnim(a, "fall_idle");
+  } else if (C.jump_loop) {
+    playAnim(a, "jump_loop");
+  } else playAnim(a, "jump", PA_JUMP);
+}
+/** Landing clip (LC-30, C-FALL): a hard landing plays the Mixamo hard landing (its absorb and recovery, ~0.7 s, over the
+ *  0.4 s stagger); a soft one plays the jump's landing only when the actor is (nearly) standing - a running landing runs on.
+ *  false = no landing clip this frame (the chain carries on). */
+function landClip(W, a, gs) {
+  const C = a.clips;
+  if (a._landKind === 2 && C.land_hard) {
+    if (a.anim !== "land_hard") { _paLand.timeScale = 1.6; _paLand.startAt = 0.18; playAnim(a, "land_hard", _paLand); }
+    return true;
+  }
+  if (a._landKind === 1 && C.jump_down && gs < 2.5) {
+    if (a.anim !== "jump_down") { _paLand.timeScale = 1.2; _paLand.startAt = 0.22; playAnim(a, "jump_down", _paLand); }
+    return true;
+  }
+  a._landKind = 0;
+  return false;
+}
+/** (LC-35) the reload clip's play rate so it ends with the weapon's reload (K.WEAPONS[id].reloadS). */
+function reloadTs(a, clipName) {
+  const act = a.rig && a.rig.actions && a.rig.actions[clipName];
+  const clip = act && act.getClip();
+  const def = a.weapon && K.WEAPONS[a.weapon.id];
+  if (!clip || !def || !(def.reloadS > 0)) return 1;
+  return K.clamp(clip.duration / def.reloadS, 0.5, 2.5);
+}
+
+/** (P23, LC-14) the grenade toss on the upper body (the legs keep their clip): started at a._throwStart (clip seconds) by a
+ *  throw, faded out after its follow-through. Weight 3: over the locomotion clip's upper body (three.js normalises the
+ *  accumulated weights per track) the toss takes 75 % of the arms and spine instead of an even half. */
+function throwOverlay(a, dt) {
+  const ov = a.rig.actions.toss_grenade_upper;
+  if (!ov) { a._throwStart = -1; return; }
+  if (a._throwStart >= 0) {
+    ov.reset(); ov.setLoop(THREE.LoopOnce, 1); ov.clampWhenFinished = true;
+    ov.time = a._throwStart;
+    ov.setEffectiveTimeScale(TOSS_RATE);
+    ov.setEffectiveWeight(3); ov.fadeIn(0.08); ov.play();
+    a._throwT = Math.max(0.2, (TOSS_RELEASE + TOSS_TAIL - a._throwStart) / TOSS_RATE);
+    a._throwStart = -1;
+    a._throwOv = true;
+  } else if (a._throwOv) {
+    a._throwT -= dt;
+    if (a._throwT <= 0 || !a.alive || a.downed) { ov.fadeOut(0.18); a._throwOv = false; }
+  }
+}
+
 /** Moving reload: the upper-body reload clip layered over locomotion (disjoint track sets). */
 function reloadOverlay(a, gs, useMixamoGun) {
   const wantOv = useMixamoGun && a.weapon && a.weapon.state === "reloading" && gs > 0.7 && a.rig.actions.rifle_reload_upper;
   if (wantOv && !a._ovReload) {
     const ov = a.rig.actions.rifle_reload_upper;
     ov.reset(); ov.setLoop(THREE.LoopOnce, 1); ov.clampWhenFinished = true;
+    // (P23, LC-35) the mag change ends with the weapon's reload
+    ov.setEffectiveTimeScale(reloadTs(a, "rifle_reload_upper"));
     ov.setEffectiveWeight(1); ov.fadeIn(0.08); ov.play();
     a._ovReload = true;
   } else if (!wantOv && a._ovReload) {
@@ -2997,6 +3575,9 @@ const CAM_R = 0.28;              // lens sphere radius (m): near plane 0.1 + mar
 const CAM_EASE_RATE = 2.2;       // 1/s release rate once the view is free (slow on purpose)
 const CAM_HIDE_IN = 0.75, CAM_HIDE_OUT = 0.95;   // the body is hidden when the lens is this close to the eye (hysteresis)
 const CAM_MIN_D = 0.12;          // the lens never comes closer than this to the eye
+const CAM_DITHER_M = 1.6, CAM_DITHER_MIN = 0.35;   // (P23, LC-32) dither band: lens within 1.6 m of the eye fades the body to 0.35
+const _camLat = new THREE.Vector3();             // (P23, LC-32) this frame's lateral boom leg (shoulder + lift), world space
+let _camWallF1 = 1;              // (P23, LC-32) fraction of the LATERAL leg kept (eye -> shoulder pivot)
 const _camWallOff = new THREE.Vector3();         // last frame's pull-in offset (output - free-space position)
 let _camWallF = 1;               // fraction of the free boom kept (1 = nothing in the way)
 let _camWallFocus = null;        // the actor _camWallF belongs to (a focus change resets it)
@@ -3065,32 +3646,80 @@ function camRayHit(cols, ox, oy, oz, dx, dy, dz, r, best) {
   return best;
 }
 
-/** Pull `cam.position` (the free-space smoothed camera) in along the boom when a wall is in the
- *  way. Writes the offset to _camWallOff and the state to W._camWall (read by the probes). */
+/** Pull `cam.position` (the free-space smoothed camera) in when a wall is in the way. Writes the offset to _camWallOff and the
+ *  state to W._camWall (read by the probes).
+ *  (P23, LC-32) The boom is cast as TWO legs, the way third-person cameras keep their shoulder: eye -> shoulder pivot (the
+ *  lateral offset + lift, _camLat) and pivot -> lens (straight back). A wall BEHIND the player now only shortens the back leg,
+ *  so the body stays off to the side of the reticle instead of sliding onto it (the old single eye -> lens cast scaled the
+ *  shoulder offset down with the boom: at 1.5 m from a wall the body sat dead centre). A last straight eye -> lens cast keeps
+ *  the old guarantee that the lens is never behind a wall as seen from the eye. Still ONE queryColliders per frame. */
 function camWall(W, cam, focus, dt, snapped) {
   const st = W._camWall;
   const ox = camTarget.x, oy = camTarget.y, oz = camTarget.z;
   const dx = cam.position.x - ox, dy = cam.position.y - oy, dz = cam.position.z - oz;
   const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  let f = 1;
+  const lx = _camLat.x, ly = _camLat.y, lz = _camLat.z;
+  // the back leg = the smoothed free position minus the lateral leg
+  const bx = dx - lx, by = dy - ly, bz = dz - lz;
+  let f1 = 1, f2 = 1;
+  let cols = null;
   if (len > 0.3 && W.map && W.map.queryColliders && !W.noCamWall) {
-    const cols = W.map.queryColliders(ox + dx * 0.5, oz + dz * 0.5, len * 0.5 + CAM_R + 0.1, _cwCols);
+    // one query over the box holding the eye, the pivot and the lens
+    const x0 = Math.min(0, lx, dx), x1 = Math.max(0, lx, dx), z0 = Math.min(0, lz, dz), z1 = Math.max(0, lz, dz);
+    const hx = (x1 - x0) * 0.5, hz = (z1 - z0) * 0.5;
+    cols = W.map.queryColliders(ox + (x0 + x1) * 0.5, oz + (z0 + z1) * 0.5, Math.sqrt(hx * hx + hz * hz) + CAM_R + 0.1, _cwCols);
     if (cols.length) {
-      const t = camRayHit(cols, ox, oy, oz, dx, dy, dz, CAM_R, 1);
-      if (t < 1) f = Math.max(CAM_MIN_D / len, t - 0.015);
+      const ll = Math.sqrt(lx * lx + ly * ly + lz * lz);
+      if (ll > 0.02) {
+        const t1 = camRayHit(cols, ox, oy, oz, lx, ly, lz, CAM_R, 1);
+        if (t1 < 1) f1 = Math.max(0, t1 - 0.015);
+      }
+      const bl = Math.sqrt(bx * bx + by * by + bz * bz);
+      if (bl > 0.05) {
+        const t2 = camRayHit(cols, ox + lx * f1, oy + ly * f1, oz + lz * f1, bx, by, bz, CAM_R, 1);
+        if (t2 < 1) f2 = Math.max(CAM_MIN_D / bl, t2 - 0.015);
+      }
     }
   }
-  if (focus !== _camWallFocus || snapped) { _camWallFocus = focus; _camWallF = f; }       // new subject / teleport: no ease
-  else if (f < _camWallF) _camWallF = f;                                                    // snap IN on contact
-  else if (f > _camWallF) {                                                                 // ease OUT, slowly, never past the safe fraction
-    _camWallF += (f - _camWallF) * Math.min(1, dt * CAM_EASE_RATE);
-    if (f - _camWallF < 0.002) _camWallF = f;
+  if (focus !== _camWallFocus || snapped) { _camWallFocus = focus; _camWallF = f2; _camWallF1 = f1; }    // new subject / teleport: no ease
+  else {
+    if (f2 < _camWallF) _camWallF = f2;                                                    // snap IN on contact
+    else if (f2 > _camWallF) {                                                             // ease OUT, slowly, never past the safe fraction
+      _camWallF += (f2 - _camWallF) * Math.min(1, dt * CAM_EASE_RATE);
+      if (f2 - _camWallF < 0.002) _camWallF = f2;
+    }
+    if (f1 < _camWallF1) _camWallF1 = f1;
+    else if (f1 > _camWallF1) {
+      _camWallF1 += (f1 - _camWallF1) * Math.min(1, dt * CAM_EASE_RATE);
+      if (f1 - _camWallF1 < 0.002) _camWallF1 = f1;
+    }
   }
-  const kept = _camWallF < 1 ? _camWallF : 1;
-  const nx = ox + dx * kept, ny = oy + dy * kept, nz = oz + dz * kept;
+  const k1 = _camWallF1 < 1 ? _camWallF1 : 1, k2 = _camWallF < 1 ? _camWallF : 1;
+  let nx = ox + lx * k1 + bx * k2, ny = oy + ly * k1 + by * k2, nz = oz + lz * k1 + bz * k2;
+  // the straight sight line from the eye must be clear too (a wall the two legs went round)
+  let clipped = false;
+  if (cols && cols.length && (k1 < 0.999 || k2 < 0.999)) {
+    const sx = nx - ox, sy = ny - oy, sz = nz - oz, sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
+    if (sl > 0.05) {
+      const t3 = camRayHit(cols, ox, oy, oz, sx, sy, sz, CAM_R, 1);
+      if (t3 < 1) {
+        const f3 = Math.max(CAM_MIN_D / sl, t3 - 0.015);
+        nx = ox + sx * f3; ny = oy + sy * f3; nz = oz + sz * f3; clipped = true;
+      }
+    }
+  } else if (cols && cols.length) {
+    // free boom: the same straight check as the old single cast (an open-field frame changes nothing)
+    const t3 = camRayHit(cols, ox, oy, oz, dx, dy, dz, CAM_R, 1);
+    if (t3 < 1) {
+      const f3 = Math.max(CAM_MIN_D / Math.max(len, 1e-3), t3 - 0.015);
+      nx = ox + dx * f3; ny = oy + dy * f3; nz = oz + dz * f3; clipped = true;
+    }
+  }
   _camWallOff.set(nx - cam.position.x, ny - cam.position.y, nz - cam.position.z);
   cam.position.set(nx, ny, nz);
-  if (st) { st.f = kept; st.target = f; st.dist = len * kept; st.free = len; st.pulled = kept < 0.999; }
+  const ex = nx - ox, ey = ny - oy, ez = nz - oz, dl = Math.sqrt(ex * ex + ey * ey + ez * ez);
+  const target = len > 1e-3 ? Math.min(1, (Math.sqrt((lx * f1 + bx * f2) ** 2 + (ly * f1 + by * f2) ** 2 + (lz * f1 + bz * f2) ** 2)) / len) : 1;
+  if (st) { st.f = len > 1e-3 ? Math.min(1, dl / len) : 1; st.target = target; st.dist = dl; st.free = len; st.pulled = clipped || k1 < 0.999 || k2 < 0.999; st.lat = k1; }
 }
 
 function updateCamera(W, dt, alpha) {
@@ -3119,9 +3748,16 @@ function updateCamera(W, dt, alpha) {
   // _winDist is the victory hold's slow pull-back (ffg_royale3d.js advances it
   // only while W._winHold), so it is 0 in every normal frame.
   const dist = (focus.gliding ? (focus.chute ? 10 : 9) : firstPerson ? 0.02 : ads ? 1.7 : 4.2) + (W._winDist || 0);
-  const sh = firstPerson ? 0 : ads ? 0.95 : 0.7;
+  // (P23, LC-31) SHOULDER SWAP: [V] flips the side the boom sits on for the local player (+1 right, -1 left); the side eases
+  // over ~0.15 s (rate 30/s, then the camera's own follow filter: the offset is within 2 cm of -0.70 m by 0.25 s). A
+  // spectated actor keeps the default right shoulder.
+  const own = focus === W.player;
+  const sideWant = own && (W._shoulderSide || 1) < 0 ? -1 : 1;
+  W._shK = W._shK == null || !own ? sideWant : W._shK + (sideWant - W._shK) * (1 - Math.exp(-30 * dt));
+  const sh = (firstPerson ? 0 : ads ? 0.95 : 0.7) * W._shK;
   // crouch dips the camera, but SMOOTHLY — snapping the eye 0.65m is nauseating
-  const wantEye = focus.swimming ? 0.7 : K.actorEyeY(focus);
+  // (P23, C-DBNO) a downed actor's eye is on the ground with it (lane sim's K.actorEyeY may already say so: the lower wins)
+  const wantEye = focus.swimming ? 0.7 : focus.downed ? Math.min(K.actorEyeY(focus), DOWNED_EYE_Y) : K.actorEyeY(focus);
   focus._eyeY = !focus._hasEyeY ? wantEye : focus._eyeY + (wantEye - focus._eyeY) * Math.min(1, dt * 12);
   focus._hasEyeY = true;
   // FIXED TICK: follow the actor where it is DRAWN this frame (obj.position,
@@ -3141,11 +3777,24 @@ function updateCamera(W, dt, alpha) {
   // the actor, so the shot circles them rather than panning off them. It also
   // rotates the aim ray with the camera, which is harmless: hurtActor returns
   // immediately once W.phase === "over".
-  const camYaw = fYaw + (W._winOrbit || 0);
+  // (P23, LC-31) FREE-LOOK offsets (local live player only): eased back onto the aim once Alt is up (or while aiming); a
+  // click held back by the free-look snaps them to 0 this frame and is released at the end of this function
+  let flY = 0, flP = 0;
+  if (liveLook) {
+    if (W._flHoldFire) { W._flYaw = 0; W._flPitch = 0; }
+    else if (!W._freeLook || focus.input.ads) {
+      const kk = Math.exp(-16 * dt);
+      W._flYaw = (W._flYaw || 0) * kk; W._flPitch = (W._flPitch || 0) * kk;
+      if (Math.abs(W._flYaw) < 0.002) W._flYaw = 0;
+      if (Math.abs(W._flPitch) < 0.002) W._flPitch = 0;
+    }
+    flY = W._flYaw || 0; flP = W._flPitch || 0;
+  } else if (W._flYaw || W._flPitch) { W._flYaw = 0; W._flPitch = 0; }
+  const camYaw = fYaw + (W._winOrbit || 0) + flY;
   const sy = Math.sin(camYaw), cy = Math.cos(camYaw);
   // during freefall the camera tracks the dive (looks down at the island)
   const pitchBias = focus.gliding ? (focus.chute ? -0.18 : -0.62) : 0;
-  const effPitch = K.clamp(fPitch + pitchBias, -1.35, 1.35);
+  const effPitch = K.clamp(fPitch + pitchBias + flP, -1.35, 1.35);
   const sp = Math.sin(effPitch), cp = Math.cos(effPitch);
   camDir.set(sy * cp, -sp, cy * cp).multiplyScalar(-1); // forward
   // A model THIS function hid (first-person scope, or the lens right at the eye) goes back the
@@ -3161,6 +3810,8 @@ function updateCamera(W, dt, alpha) {
     .addScaledVector(camDir, -dist)
     .add(tmpV.set(cy, 0, -sy).multiplyScalar(sh));
   camPos.y += firstPerson ? 0.05 : 0.25;
+  // (P23, LC-32) the boom's LATERAL leg (shoulder offset + lift) - the wall pull-in keeps it, so the body stays off the reticle
+  _camLat.set(cy * sh, firstPerson ? 0.05 : 0.25, -sy * sh);
   // Swim camera: the third-person rig lifted the eye to y ~0.37 over a y=0
   // surface, so you always floated ABOVE the water and it read as a blank
   // near-opaque sheet — "it wasn't really watching someone swim". Pull the
@@ -3206,8 +3857,8 @@ function updateCamera(W, dt, alpha) {
   // freefall (open sky; the boom is 9-10 m and nothing but a sky island can be in it).
   if (!firstPerson && !focus.gliding) camWall(W, cam, focus, dt, camSnapped);
   else {
-    _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallFocus = focus;
-    const st0 = W._camWall; if (st0) { st0.f = 1; st0.target = 1; st0.pulled = false; st0.dist = 0; st0.free = 0; }
+    _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallF1 = 1; _camWallFocus = focus;
+    const st0 = W._camWall; if (st0) { st0.f = 1; st0.target = 1; st0.pulled = false; st0.dist = 0; st0.free = 0; st0.lat = 1; }
   }
   // the body is hidden while the lens is right at the eye (a head filling the screen is worse than
   // no head), with hysteresis so it cannot flicker on the threshold
@@ -3215,6 +3866,11 @@ function updateCamera(W, dt, alpha) {
   _camClose = !!(!firstPerson && stc && stc.pulled && (_camClose ? stc.dist < CAM_HIDE_OUT : stc.dist < CAM_HIDE_IN));
   if (focus.rig && focus.rig.scene) focus.rig.scene.visible = !(firstPerson || _camClose);
   _camHidden = (firstPerson || _camClose) ? focus : null;
+  // (P23, LC-32) DITHER: between the hide distance and 1.6 m the pulled-in body fades through a screen-door pattern
+  // (alpha 0.35 -> 1) instead of filling the view; every other actor stays opaque
+  const dith = (!firstPerson && !_camClose && stc && stc.pulled && stc.dist < CAM_DITHER_M)
+    ? Math.max(CAM_DITHER_MIN, Math.min(1, CAM_DITHER_MIN + (1 - CAM_DITHER_MIN) * (stc.dist - CAM_HIDE_OUT) / (CAM_DITHER_M - CAM_HIDE_OUT))) : 1;
+  setDither(focus, dith);
   shakeT += dt;
   _shakeOff.set(0, 0, 0);
   let roll = 0;
@@ -3266,6 +3922,24 @@ function updateCamera(W, dt, alpha) {
   cam.fov = W._fovBase + (W.fovPunch || 0) * Math.min(1, W._fovBase / 57);
   cam.updateProjectionMatrix();
   W.events.emit("scopeState", !!scope);
+  // (P23, LC-31) the camera is back on the aim: the click a free-look held back fires now
+  if (W._flHoldFire && liveLook) {
+    W._flHoldFire = false;
+    if (W._lmbDown) { W._fireEdge = performance.now(); if (W.player) W.player.input.fire = true; }
+  }
+}
+// (P23, LC-32) dither state: one actor at a time carries a dither below 1 (the camera focus); a focus change hands it back
+let _ditherActor = null;
+function setDither(a, v) {
+  if (_ditherActor && _ditherActor !== a) { applyDither(_ditherActor, 1); _ditherActor = null; }
+  if (!a) return;
+  applyDither(a, v);
+  _ditherActor = v < 1 ? a : null;
+}
+function applyDither(a, v) {
+  const b = a._bodies && a._bodies[0];
+  const ud = b && b.material && b.material.userData;
+  if (ud && ud.zDither && ud.zDither.value !== v) ud.zDither.value = v;
 }
 
 /** Underwater treatment: fog/background tint and the audio low-pass while the camera is below the surface. */
@@ -3290,6 +3964,375 @@ function underwaterFx(W, cam, wy, dt) {
   if (W.__audio && W.__audio.setUnderwater) W.__audio.setUnderwater(W._underwater);
 }
 
+// ── P23/player (parity Waves P2-A + P3): heals, DBNO, falls, slide, quick throw, squad drop, waypoint ─────────────────────
+// Lane sim owns the K.* tunables of the shared contracts (C-DBNO, C-FALL); until they exist the defaults below apply, so this
+// file runs on its own and reads the sim's value the moment it is there.
+const kNum = (name, d) => (K && typeof K[name] === "number" && isFinite(K[name]) ? K[name] : d);
+// C-DBNO: 100 hp bleed pool, ~45 s on the first knock (+50 % drain per further knock this match), 1.4 m/s crawl, a 5 s revive
+// to 30 hp from <= 2 m. DOWNED_EYE_Y: the camera eye of a downed actor (on the ground with it).
+const DBNO_HP_DEF = 100, DBNO_BLEED_DEF = 100 / 45, DBNO_CRAWL_DEF = 1.4, REVIVE_S_DEF = 5, REVIVE_HP = 30, REVIVE_R = 2.0;
+const DOWNED_EYE_Y = 0.5;
+const REVIVE_S = () => kNum("REVIVE_S", REVIVE_S_DEF);
+function dbnoBleed(a) { return kNum("DBNO_BLEED_HPS", DBNO_BLEED_DEF) * (1 + 0.5 * Math.max(0, (a.knocks || 1) - 1)); }
+// C-FALL defaults, in THIS game's gravity (22 m/s^2): a 4.2 m drop lands at 13.6 m/s (no damage), 10 m at 21.0 m/s (~42 hp),
+// 15 m at 25.7 m/s (~88 hp), 20 m at 29.7 m/s (~135 hp: lethal through any hp). Shield never absorbs it (PUBG).
+const FALL_SAFE_V_DEF = 13.6, FALL_PER_V_DEF = 2.1, LAND_STAGGER_DEF = 0.4, LAND_STAGGER_SPEED = 0.35, HARD_LAND_V = 16;
+// LC-21 slide: entry speed 9.5 m/s, exponential friction tau 1.04 s (4.4 m/s at 0.80 s), ends at 4.3 m/s (the crouch walk),
+// 1.1 s at most; needs a sprint of > 6.5 m/s; 0.6 s before the next one; a little steering.
+const SLIDE_PEAK = 9.5, SLIDE_TAU = 1.04, SLIDE_END_V = 4.3, SLIDE_MAX_S = 1.1, SLIDE_MIN_V = 6.5, SLIDE_CD_S = 0.6, SLIDE_STEER = 1.1;
+
+// ── C-HEAL (LC-05): spend on completion, cancel for free ────────────────────────────────────────────────────────────────────
+/** Cancel `a`'s heal channel (nothing was spent: the item is only taken by finishHeal). Event 'healCancel'(a, id). */
+function cancelHeal(W, a) {
+  if (!a || !a.healing) return false;
+  const id = a.healing.id;
+  a.healing = null;
+  W.events.emit("healCancel", a, id);
+  return true;
+}
+/** The channel ran its full time: take ONE of the item now (looked up by id - the stack may have moved slots or merged) and
+ *  heal. An item that left the inventory during the channel (dropped) heals nothing. The last one empties its slot and, if it
+ *  was in the hands, a gun goes back into them (as the old start-of-channel spend did). */
+function finishHeal(W, a) {
+  const id = a.healing.id;
+  a.healing = null;
+  const inv = a.inventory;
+  const slot = inv.slots.find((s) => s && s.kind === "consumable" && s.id === id && s.count > 0);
+  if (!slot) return false;
+  slot.count--;
+  applyHeal(W, a, id);
+  if (slot.count <= 0) {
+    const idx = inv.slots.indexOf(slot);
+    inv.slots[idx] = null;
+    if (inv.active === idx) {
+      const gun = inv.slots.findIndex((s2) => s2 && s2.kind === "weapon");
+      if (gun >= 0 && W.equipSlot) W.equipSlot(a, gun);
+    }
+  }
+  return true;
+}
+
+// ── C-DBNO (LC-15, owner OD-3: knock-and-revive in TEAM modes only) ──────────────────────────────────────────────────────
+const TEAM_MODES = { duo: true, trio: true, squad: true };
+/** Team mode: W.match.mode duo / trio / squad (C-MODE). "solo" never. Until lane boot sets the C-MODE value (today W.match.mode
+ *  carries the pace: quick / standard / practice) a side is a team when two actors share a non-null teamId (the friends' SQUAD UP). */
+function teamModeOn(W) {
+  if (W.mode === "practice") return false;
+  const m = W.match && W.match.mode;
+  if (m === "solo") return false;
+  if (TEAM_MODES[m]) return true;
+  return m !== "practice";
+}
+/** Does a lethal hit on `v` knock instead of kill: team mode, `v` has a team, and another member is alive and not downed.
+ *  Never while gliding / swimming / already downed, never a practice dummy, never after the match. */
+function dbnoApplies(W, v) {
+  if (!v || !v.alive || v.downed || v.isDummy || !v.teamId || v.gliding || v.swimming || W.phase === "over") return false;
+  if (!teamModeOn(W)) return false;
+  const A = W.actors;
+  for (let i = 0; i < A.length; i++) {
+    const b = A[i];
+    if (b !== v && b.alive && !b.downed && b.teamId === v.teamId && !b.isDummy) return true;
+  }
+  return false;
+}
+/** Knock `v`: downed on a fresh bleed pool. Events 'actorDowned'(v, attackerId). */
+function knockActor(W, v, attackerId, weaponId) {
+  v.downed = true;
+  v.knocks = (v.knocks || 0) + 1;
+  v.downedHp = kNum("DBNO_HP", DBNO_HP_DEF);
+  v.downedT = W.t;
+  v._knockedBy = attackerId || null;
+  v.hp = 0; v.shield = 0;
+  if (v.healing) cancelHeal(W, v);
+  if (v.emoting) { v.emoting = null; if (v.hand) v.hand.visible = true; }
+  v.mantleT = null;
+  if (v._slideT >= 0) v._slideT = -1;
+  if (v._reviveOf) cancelRevive(W, v);
+  v.crouching = false; v.sprinting = false;
+  v.hitReactT = 0; v._turnT = -1; v._landKind = 0;
+  W.events.emit("actorDowned", v, attackerId || null, weaponId || null);
+  teamElimCheck(W, v.teamId);
+}
+/** A downed actor dies (finished, bled out, or its team is out). The kill is credited to `killerId` (the finisher, or for a
+ *  bleed-out the actor that knocked it). */
+function finishDowned(W, v, killerId, weaponId) {
+  if (!v.alive) return;
+  if (v._revivedBy) { const r = W.actorById.get(v._revivedBy); if (r && r._reviveOf === v.id) cancelRevive(W, r); }
+  v.downed = false; v.downedHp = 0;
+  v._downedDeath = true;
+  killActor(W, v, killerId || v._knockedBy || null, weaponId);
+}
+/** TEAM ELIMINATION: when every member of `teamId` is downed or dead, the downed ones die (credited to whoever knocked each). */
+let _elimBusy = false;
+function teamElimCheck(W, teamId) {
+  if (!teamId || _elimBusy) return false;
+  const A = W.actors;
+  let up = 0, downed = 0;
+  for (let i = 0; i < A.length; i++) {
+    const b = A[i];
+    if (b.teamId !== teamId || !b.alive || b.isDummy) continue;
+    if (b.downed) downed++; else up++;
+  }
+  if (up > 0 || downed === 0) return false;
+  _elimBusy = true;
+  try {
+    for (let i = 0; i < A.length; i++) {
+      const b = A[i];
+      if (b.teamId === teamId && b.alive && b.downed) finishDowned(W, b, b._knockedBy, "bleed");
+    }
+  } finally { _elimBusy = false; }
+  W.events.emit("teamEliminated", teamId);
+  return true;
+}
+/** Can `by` revive `t` right now: teammates, `by` up, `t` downed, within REVIVE_R (and 1.5 m of height), nobody else on it. */
+function canRevive(W, by, t) {
+  if (!by || !t || by === t || !by.alive || by.downed || !t.alive || !t.downed) return false;
+  if (!by.teamId || by.teamId !== t.teamId || by.gliding || by.swimming) return false;
+  if (t._revivedBy && t._revivedBy !== by.id) { const o = W.actorById.get(t._revivedBy); if (o && o.alive && o._reviveOf === t.id) return false; }
+  const dx = t.pos.x - by.pos.x, dz = t.pos.z - by.pos.z, dy = t.pos.y - by.pos.y;
+  return dx * dx + dz * dz <= REVIVE_R * REVIVE_R && dy > -1.5 && dy < 1.5;
+}
+/** The reviver's side of the channel (copied from loot.js's chest channel: HOLD E, progress while held, reset on release).
+ *  Runs for every up actor (human: E; bot: its brain's interactDown). true = channelling this tick (the reviver holds still). */
+function reviveStep(W, a, inp, dt) {
+  if (a._reviveOf) {
+    const t = W.actorById.get(a._reviveOf);
+    if (!inp.interactDown || !t || !canRevive(W, a, t) || a.healing) { cancelRevive(W, a); return false; }
+    a._reviveT += dt;
+    if (a._reviveT >= REVIVE_S()) { completeRevive(W, a, t); return false; }
+    return true;
+  }
+  if (!inp.interactDown || !a.teamId || a.healing) return false;
+  const A = W.actors;
+  let best = null, bd = 1e9;
+  for (let i = 0; i < A.length; i++) {
+    const t = A[i];
+    if (!t.downed || t.teamId !== a.teamId || !canRevive(W, a, t)) continue;
+    const d = (t.pos.x - a.pos.x) ** 2 + (t.pos.z - a.pos.z) ** 2;
+    if (d < bd) { bd = d; best = t; }
+  }
+  if (!best) return false;
+  a._reviveOf = best.id; a._reviveT = 0; best._revivedBy = a.id;
+  W.events.emit("reviveStart", a, best);
+  return true;
+}
+function cancelRevive(W, a) {
+  const t = a._reviveOf ? W.actorById.get(a._reviveOf) : null;
+  a._reviveOf = null; a._reviveT = 0;
+  if (t && t._revivedBy === a.id) t._revivedBy = null;
+  W.events.emit("reviveCancel", a, t);
+}
+function completeRevive(W, a, t) {
+  a._reviveOf = null; a._reviveT = 0;
+  t._revivedBy = null;
+  t.downed = false; t.downedHp = 0;
+  t.hp = REVIVE_HP; t.shield = 0;
+  t.lastDamageT = W.t;
+  t._turnT = -1; t._landKind = 0;
+  W.events.emit("actorRevived", t, a);
+}
+
+// ── C-FALL + LC-30 landing ─────────────────────────────────────────────────────────────────────────────────────────────
+/** A real fall touched down at vertical speed v (m/s). wet = the ground there is under water (no damage, as a water landing). */
+function landed(W, a, v, wet) {
+  a._airT = 0; a._jumped = false; a._fallV = v;
+  let dmg = 0;
+  if (!wet && !a.isDummy) dmg = fallHurt(W, a, v);
+  if (!a.alive) return;
+  const hard = !wet && (v > HARD_LAND_V || dmg >= 5);
+  if (hard) {
+    a._landKind = 2; a._landUntil = W.t + 0.7;
+    a._landT = W.t + kNum("LAND_STAGGER_S", LAND_STAGGER_DEF);
+    if (a._slideT >= 0) slideEnd(W, a, false);
+  } else if (v > 6) { a._landKind = 1; a._landUntil = W.t + 0.28; }
+}
+/** C-FALL damage for an impact at v: K.FALL_DMG_PER_V * (v - K.FALL_SAFE_V)^1.5 straight off hp (shield / armour never take
+ *  it), the same lethal rule as any hit (a knock in a team mode). Events 'fallDamage'(a, dmg, v) and an 'actorHurt' with no
+ *  attacker (hud's damage log reads that as "FALL / BLAST"). Returns the damage dealt. */
+function fallHurt(W, a, v) {
+  const safe = kNum("FALL_SAFE_V", FALL_SAFE_V_DEF), per = kNum("FALL_DMG_PER_V", FALL_PER_V_DEF);
+  if (!(v > safe) || W.phase === "over") return 0;
+  const dmg = per * Math.pow(v - safe, 1.5);
+  if (!(dmg > 0.05)) return 0;
+  a.lastDamageT = W.t;
+  W.events.emit("fallDamage", a, dmg, v);
+  if (a.downed) {
+    a.downedHp -= dmg;
+    if (a.downedHp <= 0) finishDowned(W, a, a._knockedBy, "fall");
+    return dmg;
+  }
+  const dealt = Math.min(a.hp, dmg);
+  a.hp -= dmg;
+  W.events.emit("actorHurt", a, { dmg: dealt, attackerId: null, weaponId: null, isHead: false, broke: false, toShield: 0 });
+  if (a.hp <= 0) {
+    a.hp = 0;
+    // a recent attacker (8 s, the storm's rule) gets the kill
+    const credit = a.lastAttacker && W.t - (a.lastHurtByActorT || -99) < 8 ? a.lastAttacker : null;
+    if (dbnoApplies(W, a)) knockActor(W, a, credit, "fall");
+    else killActor(W, a, credit, "fall");
+  }
+  return dmg;
+}
+
+// ── LC-21 slide ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+function slideStart(W, a) {
+  const sp = Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z) || 1;
+  a._slideDx = a.vel.x / sp; a._slideDz = a.vel.z / sp;
+  a._slideV = Math.max(SLIDE_PEAK, sp);
+  a._slideT = 0;
+  // the run ends in the slide: you come out of it crouched (C held / toggled) or walking, never back into a sprint by itself
+  if (a === W.player) W._sprintLatch = false;
+  W.events.emit("slideStart", a);
+}
+function slideStep(W, a, inp, dt) {
+  // a wall stopped it last tick (the mover zeroed the velocity against it): the slide is over
+  if (a._slideT > 0.05 && Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z) < a._slideV * 0.5) { slideEnd(W, a, false); return; }
+  // the entry speed holds for the slide's first tick (the peak is 9.5, not 9.5 less one tick of friction)
+  if (a._slideT > 0) a._slideV *= Math.exp(-dt / SLIDE_TAU);
+  a._slideT += dt;
+  // steering: the slide bends toward the stick / camera heading, at most SLIDE_STEER rad/s
+  if (Math.abs(inp.mx) + Math.abs(inp.mz) > 0.1) {
+    const B = K.moveBasis(a.yaw, _mb);
+    const wx = B.rx * inp.mx + B.fx * inp.mz, wz = B.rz * inp.mx + B.fz * inp.mz;
+    const cur = Math.atan2(a._slideDx, a._slideDz), want = Math.atan2(wx, wz);
+    let d = want - cur;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    if (Math.abs(d) < 2.2) {
+      const st = Math.max(-SLIDE_STEER * dt, Math.min(SLIDE_STEER * dt, d));
+      const ang = cur + st;
+      a._slideDx = Math.sin(ang); a._slideDz = Math.cos(ang);
+    }
+  }
+  a.vel.x = a._slideDx * a._slideV; a.vel.z = a._slideDz * a._slideV;
+  if (a._slideV <= SLIDE_END_V || a._slideT >= SLIDE_MAX_S || (!a.onGround && a._slideT > 0.15) || a.swimming || a.downed) slideEnd(W, a, false);
+}
+function slideEnd(W, a, jumped) {
+  if (a._slideT < 0) return;
+  a._slideT = -1;
+  a._slideCd = W.t + SLIDE_CD_S;
+  W.events.emit("slideEnd", a, !!jumped);
+}
+
+// ── LC-14 quick throw ───────────────────────────────────────────────────────────────────────────────────────────────────
+// toss_grenade (Mixamo, 3.2 s) is played as an upper-body layer at TOSS_RATE; TOSS_RELEASE = the clip time of the release
+// (measured on the game rig: the right hand's forward speed peaks there), TOSS_TAIL = the follow-through kept after it.
+const TOSS_RATE = 1.6, TOSS_RELEASE = 1.05, TOSS_TAIL = 0.55, TOSS_WINDUP = 0.42;
+function throwableSlot(a) {
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) {
+    const it = sl[i];
+    if (!it || it.kind !== "consumable" || !(it.count > 0)) continue;
+    const c = K.CONSUMABLES[it.id];
+    if (c && c.throws) return i;
+  }
+  return -1;
+}
+/** [G]: take the first throwable out (the 0.4 s ready delay is the wind-up), throw it, then the previous slot comes back. */
+function quickThrow(W, a) {
+  if (!a || !a.alive || a.downed || a.gliding || a.swimming || a.mantleT != null || W._quickThrow) return false;
+  const idx = throwableSlot(a);
+  if (idx < 0) return false;
+  const inv = a.inventory;
+  const prev = inv.active;
+  W._quickThrow = { idx, prev: prev === idx ? -1 : prev, t0: W.t, thrown: false };
+  if (prev !== idx) a.input.slot = idx;
+  W._fireEdge = performance.now();
+  a._throwStart = Math.max(0, TOSS_RELEASE - TOSS_WINDUP * TOSS_RATE);      // the arm winds up through the ready delay
+  W.events.emit("quickThrow", a, inv.slots[idx].id);
+  return true;
+}
+function quickThrowFrame(W, a) {
+  const q = W._quickThrow;
+  if (!q) return;
+  if (!a || !a.alive || a.downed || W.t - q.t0 > 1.6) { W._quickThrow = null; return; }
+  if (!q.thrown) W._fireEdge = performance.now();
+}
+/** Any actor threw (weapons.js 'grenadeThrown'): the toss plays on its upper body; a quick throw hands the previous slot back. */
+function onThrown(W, a) {
+  if (!a) return;
+  if (!(a._throwStart >= 0) && !a._throwOv) a._throwStart = TOSS_RELEASE - 0.06;   // a click / bot throw: the release is NOW
+  const q = W._quickThrow;
+  if (q && a === W.player) {
+    q.thrown = true;
+    W._quickThrow = null;
+    const inv = a.inventory;
+    if (q.prev >= 0 && inv.slots[q.prev]) a.input.slot = q.prev;
+  }
+}
+/** A free-look is turned away from the aim right now (LC-31). */
+function freeLookOff(W) { return Math.abs(W._flYaw || 0) + Math.abs(W._flPitch || 0) > 1e-3; }
+
+// ── LC-18 squad drop + LC-59 waypoint ──────────────────────────────────────────────────────────────────────────────────
+/** The squad's landing zone from the SEED and the TEAM only: a dry named POI (the same dryness rule as autoDropTarget), picked
+ *  by a stream seeded with (seed, teamId). It reads nothing a client computes differently (the bots' declared drop targets,
+ *  which only the host's brains have), so every member - host, guest, bot teammate - lands on the same spot. */
+function squadDropTarget(W, teamId) {
+  const pois = (W.map && W.map.pois) || [];
+  if (!pois.length || !teamId) return null;
+  const wy = W.map.waterY;
+  const land = (p) => {
+    if (W.map.heightAt(p.x, p.z) <= wy + 0.5) return 0;
+    let n = 0;
+    for (let i = 0; i < 8; i++) {
+      const th = (i / 8) * Math.PI * 2;
+      if (W.map.heightAt(p.x + Math.cos(th) * 35, p.z + Math.sin(th) * 35) > wy + 0.5) n++;
+    }
+    return n;
+  };
+  const scored = pois.map((p) => ({ p, land: land(p) }));
+  let pool = scored.filter((c) => c.land >= 5);
+  if (!pool.length) pool = scored.filter((c) => c.land > 0);
+  if (!pool.length) return null;
+  const rng = K.mulberry32((((W.seed >>> 0) ^ 0x5d70 ^ Math.imul(hashCode(String(teamId)), 2654435761)) >>> 0));
+  const c = pool[Math.floor(rng() * pool.length) % pool.length];
+  return { x: c.p.x, z: c.p.z, name: c.p.name || "" };
+}
+/** Does `a` have a teammate in this match (another actor with its non-null teamId)? */
+function hasTeammate(W, a) {
+  if (!a || !a.teamId) return false;
+  for (const b of W.actors) if (b !== a && b.teamId === a.teamId && !b.isDummy) return true;
+  return false;
+}
+/** OD-7: the local player's optional landing waypoint (null = none, the auto landing zone stays). Only while still in the air
+ *  of the drop; the LZ marker (W.dropTarget) moves to it. */
+function setDropWaypoint(W, x, z) {
+  const a = W.player;
+  if (x == null || z == null || !isFinite(x) || !isFinite(z)) { W._dropWp = null; return false; }
+  if (!a || !a.alive || !(a.gliding || a._portalBoost) || W.phase === "menu") return false;
+  const lim = W.map.half - 12;
+  const wx = K.clamp(+x, -lim, lim), wz = K.clamp(+z, -lim, lim);
+  W._dropWp = { x: wx, z: wz };
+  W.dropTarget = { x: wx, z: wz, name: "WAYPOINT" };
+  W.events.emit("dropWaypoint", wx, wz);
+  return true;
+}
+/** Auto-steer of a glide toward the waypoint while the player gives no move input: the canopy opens early when the waypoint is
+ *  beyond what the dive + a late canopy can carry (the canopy's glide ratio 8.5 : 5.5 beats the dive's 22 : 17), the dive
+ *  tracks toward it otherwise. Writes the wanted horizontal velocity and fall rate into _wpOut, or returns false. */
+const _wpOut = { vx: 0, vz: 0, vy: 0 };
+const WP_TRACK_V = 22, WP_TRACK_FALL = -17;
+function waypointGlide(W, a, inp, agl, dt) {
+  const wp = W._dropWp;
+  if (!wp || a !== W.player || Math.abs(inp.mx) + Math.abs(inp.mz) > 0.1) { a._autoGlide = false; return false; }
+  const dx = wp.x - a.pos.x, dz = wp.z - a.pos.z, D = Math.sqrt(dx * dx + dz * dz);
+  a._autoGlide = true;
+  const ux = D > 1e-3 ? dx / D : 0, uz = D > 1e-3 ? dz / D : 0;
+  if (!a.chute) {
+    // reach if it dives to 110 m and opens there, vs reach under the canopy from here
+    const diveReach = Math.max(0, agl - 110) * (WP_TRACK_V / -WP_TRACK_FALL) + Math.min(agl, 110) * (8.5 / 5.5);
+    if (D > diveReach - 10 && agl > 16) { deployChute(W, a); a.chuteToggled = true; }
+  }
+  if (a.chute) {
+    const v = Math.min(8.5, D * 0.6);
+    _wpOut.vx = ux * v; _wpOut.vz = uz * v; _wpOut.vy = -5.5;
+  } else {
+    const v = Math.min(WP_TRACK_V, D * 0.5);
+    _wpOut.vx = ux * v; _wpOut.vz = uz * v; _wpOut.vy = D > 40 ? WP_TRACK_FALL : -20;
+  }
+  return true;
+}
+
 // ── damage / death ───────────────────────────────────────────────────────────
 function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   if (!victim.alive || W.phase === "over") return;
@@ -3301,6 +4344,8 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   // damage passes a null attackerId so it is untouched.
   const att = attackerId ? W.actorById.get(attackerId) : null;
   if (att && att !== victim && att.teamId && att.teamId === victim.teamId) return;
+  // (P23, C-DBNO) a DOWNED actor takes damage on its bleed pool (no shield, no flinch); at 0 it is finished
+  if (victim.downed) return hurtDowned(W, victim, dmg, attackerId, weaponId, isHead, att);
   const res = K.applyDamage(victim.shield, victim.hp, dmg);
   victim.shield = res.shield; victim.hp = res.hp;
   victim.lastDamageT = W.t;
@@ -3347,7 +4392,28 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
     }
     return;
   }
-  if (res.dead) killActor(W, victim, attackerId, weaponId);
+  // (P23, C-DBNO) a lethal hit KNOCKS a team member while someone on its team is still up (team modes only; solo / FFA:
+  // a lethal hit kills, exactly as before)
+  if (res.dead) {
+    if (dbnoApplies(W, victim)) knockActor(W, victim, attackerId, weaponId);
+    else killActor(W, victim, attackerId, weaponId);
+  }
+}
+/** Damage to a downed actor: straight off its bleed pool; 'actorHurt' as any hit (toShield 0); at 0 it dies (finisher credited). */
+function hurtDowned(W, victim, dmg, attackerId, weaponId, isHead, att) {
+  const dealt = Math.max(0, Math.min(victim.downedHp, dmg));
+  victim.downedHp -= dmg;
+  victim.lastDamageT = W.t;
+  if (attackerId) { victim.lastAttacker = attackerId; victim.lastHurtByActorT = W.t; }
+  W.match.recordDamage(attackerId, dealt);
+  if (attackerId) {
+    victim.dmgFrom = victim.dmgFrom || {};
+    victim.dmgFrom[attackerId] = (victim.dmgFrom[attackerId] || 0) + dealt;
+    victim.lastHit = { attackerId, weaponId, isHead, dist: att ? Math.round(att.pos.distanceTo(victim.pos)) : null,
+      attHp: att ? Math.max(0, Math.round(att.hp)) : null, attShield: att ? Math.max(0, Math.round(att.shield)) : null };
+  }
+  W.events.emit("actorHurt", victim, { dmg: dealt, attackerId, weaponId, isHead, broke: false, toShield: 0, downed: true });
+  if (victim.downedHp <= 0) finishDowned(W, victim, attackerId, weaponId);
 }
 
 // ── corpses + death falls (P1.6) ───────────────────────────────────────────────────────────
@@ -3512,13 +4578,24 @@ export function killActor(W, victim, killerId, weaponId) {
   // an actor killed mid-mantle must not freeze mid-air in the scripted arc —
   // update() skips dead actors, so nothing else would ever clear the state
   victim.mantleT = null;
+  const wasDowned = !!victim._downedDeath;
+  victim._downedDeath = false;
+  victim.downed = false; victim._reviveOf = null; victim._revivedBy = null; victim._slideT = -1; victim._turnT = -1;
+  if (victim.healing) victim.healing = null;
   if (victim.rig) {
+    if (wasDowned && victim.clips && victim.clips.dbno_crawl) {
+      // (P23, C-DBNO) a body finished on the ground is already lying down: it stays in its crawl pose (frozen), it does not
+      // stand up to play a standing death fall
+      playAnim(victim, victim.anim === "dbno_crawl_fast" && victim.clips.dbno_crawl_fast ? "dbno_crawl_fast" : "dbno_crawl", PA_FREEZE);
+      if (PICK_LOG.length < 256) PICK_LOG.push([victim.id, "downed", "-", false, false, false]);
+    } else {
     // P1.6: one of the seven Mixamo falls, matched to where the last hit came from (pickDeath).
     // SEEDED, so the same match and the same kill play the same fall (the old Math.random() pick
     // could not be replayed). None of the seven shipped = the single baked `death`.
     const dk = pickDeath(W, victim) || (victim.clips.death ? "death" : null);
     if (PICK_LOG.length < 256) PICK_LOG.push([victim.id, dk, _pickWhy.dir, _pickWhy.moving, _pickWhy.head, _pickWhy.heavy]);
     if (dk) playAnim(victim, dk, { once: true });
+    }
   }
   // The corpse holds its death pose, then sinks under the terrain and is removed. That timeline
   // runs on SIM time (corpseStep, from tick): it used to be a wall-clock setTimeout(3000) plus a
@@ -3533,11 +4610,16 @@ export function killActor(W, victim, killerId, weaponId) {
     // `spectating` being truthy — so the most common non-combat death in the
     // genre pinned the camera to your own corpse for the rest of the match.
     // Fall back to any survivor so the handover always happens.
-    victim.spectating = killerId
+    // (P23, LC-18) a SQUADMATE still in the match comes first (an up one before a downed one), then the killer, then anyone
+    const mates = victim.teamId ? W.actors.filter((x) => x.alive && x !== victim && !x.isDummy && x.teamId === victim.teamId) : [];
+    const mate = mates.find((x) => !x.downed) || mates[0] || null;
+    victim.spectating = (mate && mate.id) || killerId
       || (W.actors.find((x) => x.alive && x !== victim && !x.isDummy) || {}).id
       || null;
     W.events.emit("playerDied", killerId, weaponId);
   }
+  // (P23, C-DBNO) a death can leave the rest of the team all downed: they are out
+  if (victim.teamId) teamElimCheck(W, victim.teamId);
 }
 
 function applyHeal(W, a, id) {
@@ -3558,20 +4640,10 @@ export function useConsumable(W, a, id) {
   if (!c) return false;
   if (c.heals === "hp" && a.hp >= c.cap) return false;
   if (c.heals === "shield" && a.shield >= c.cap) return false;
-  slot.count--;
-  if (slot.count <= 0) {
-    const idx = inv.slots.indexOf(slot);
-    inv.slots[idx] = null;
-    // Using your LAST bandage emptied the slot but left a.weapon pointing at
-    // "consumable:<id>" with a dangling slotRef, so the next click routed back
-    // into useConsumable and returned false: the human was left holding nothing
-    // and literally unable to shoot until they pressed a number key. Bots
-    // recovered via ensureGunOut; the human had no equivalent.
-    if (inv.active === idx) {
-      const gun = inv.slots.findIndex((s2) => s2 && s2.kind === "weapon");
-      if (gun >= 0) W.equipSlot(a, gun);
-    }
-  }
+  if (a.downed || !a.alive) return false;
+  // (P23, LC-05 / C-HEAL) NOTHING is spent here any more: the item is taken when the channel COMPLETES (finishHeal), so a heal
+  // cancelled by a weapon switch costs nothing and the gun is usable after its normal 0.4 s ready delay (it used to burn the
+  // item at the start and lock the gun for the whole 8 s medkit). The last-one-in-hand re-equip moved to finishHeal with it.
   a.healing = { id, tLeft: c.useS };
   W.events.emit("healStart", a, id, c.useS);
   return true;
@@ -3625,7 +4697,7 @@ export function warmObjects(W) {
     m.frustumCulled = false;
     out.push(m);
   }
-  // The zone-tint body program carries the rim light (P1.8, key "lcZoneTintRim1").
+  // The zone-tint body program carries the rim light (P1.8) and the focus dither (P23 LC-32): key "lcZoneTintRim1Dith1".
   // Every live rig is already in the scene and the warm frame forces all of it
   // visible, so that program compiles there; this throwaway body on a LIVE body
   // material guarantees it even for a roster whose skins have no far LOD (each
@@ -3660,7 +4732,7 @@ export function disposeMatch(W) {
   R.mats.length = 0;
   PICK_LOG.length = 0;
   // camera wall pull-in state belongs to the match that is ending (its rigs are gone)
-  _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallFocus = null; _camClose = false; _camHidden = null;
+  _camWallOff.set(0, 0, 0); _camWallF = 1; _camWallF1 = 1; _camWallFocus = null; _camClose = false; _camHidden = null; _ditherActor = null;
   out.tags = tagsMod.disposeMatch().tags;
   CH.list.length = 0;
   if (CH.mesh) {
