@@ -69,14 +69,16 @@ ARMOUR_CONFORM = False
 AO_INTO_BASE = 0.25       # the projected painting already carries its painted occlusion; only deepen creases
 # ART 2.0 skins re-colour the projected painting part by part (each part's paint moves by the skin role /
 # base role gain; pipeline -> project.recolour), plus skin-only extras painted flat (SKIN_FLAT part -> role).
-# Palettes: _design/fighters/burdam.md section 9.
+# "match" lists a skin's identity roles: those parts take the skin hex as their painted MEAN (see
+# _install_skin_print), so the change reads across the whole figure. Palettes: _design/fighters/burdam.md §9.
 SKINS: list = [
     {"id": "burdam_stillwater", "extra": {"reed_plates": True, "river_glass": True},
+     "match": ["rust", "ironstone", "cloth", "cloth2", "under"],
      "card": {"primary": "#3E4A4C", "secondary": "#8FB3A8"},
      "palette": {"sandstone": "#D4C9A9", "cloth2": "#C2C3B8", "rust": "#9AA7A9", "stone": "#C4C8C4",
                  "ironstone": "#4D5A5C", "leather": "#554A3E", "cloth": "#6E7B7B", "under": "#343B3D",
                  "reed": "#7D8460", "dawnglass": "#8FB3A8"}},
-    {"id": "burdam_almanac", "extra": {"almanac_board": True},
+    {"id": "burdam_almanac", "extra": {"almanac_board": True}, "match": ["rust", "cloth", "ironstone"],
      "card": {"primary": "#4A453E", "secondary": "#D8CDB4"},
      "palette": {"cloth2": "#C6B9A5", "rust": "#D8CDB4", "stone": "#CFC8B8", "ironstone": "#2E2A26",
                  "cloth": "#8A7F72", "parchment": "#D8CDB4", "walnut": "#5A4639"}},
@@ -209,26 +211,6 @@ def tier_pts(top, thick):
     return np.concatenate([top, top - np.array([0.0, 0.0, thick])])
 
 
-class _NotchLiner(sdf.Prim):
-    """an accent crescent lining the bottom of one spine notch: the notch circle's rim band inside the heel"""
-
-    def __init__(self, su):
-        self.su, self.sv = su, cl.HEEL_SPINE_V + 0.012
-        self.r0, self.r1 = cl.SCALLOP_R - 0.002, cl.SCALLOP_R + cl.NOTCH_LINER
-
-    def bounds(self):
-        lo = np.array([-0.032, self.sv - self.r1, self.su - self.r1 - cl.U_GRIP])
-        hi = np.array([0.032, self.sv, self.su + self.r1 - cl.U_GRIP])
-        return lo, hi
-
-    def d(self, P):
-        w, v, u = P[:, 0], P[:, 1], P[:, 2] + cl.U_GRIP
-        rr = np.hypot(u - self.su, v - self.sv)
-        band = np.maximum(self.r0 - rr, rr - self.r1)
-        inside = cl.sd_polygon(u, v, cl.HEEL)
-        return np.maximum(np.maximum(band, inside - 0.004), np.abs(w) - 0.0325)
-
-
 def _uvw(u, v, w=0.0) -> np.ndarray:
     """cleaver (u, v, w) -> prop space"""
     return np.array([w, v, u - cl.U_GRIP], dtype=np.float64)
@@ -254,13 +236,14 @@ def sculpts() -> list:
         out.append((name, S, vs, role, bind, tris, space))
 
     # MASK: a lacquered helmet-mask over the whole head (the back of the head is the mask's shell too)
+    # one carved surface: skull, cheeks and chin are one volume cut by one face plane (no separate jaw)
     mask = Sculpt("mask")
     mask.add(Ellipsoid((-0.012, -0.005, 1.985), (0.142, 0.158, 0.172)), k=0.0)
-    mask.add(RoundBox((-0.012, -0.03, 1.965), (0.118, 0.13, 0.15), 0.075), k=0.03)
+    mask.add(RoundBox((-0.012, -0.03, 1.955), (0.118, 0.13, 0.16), 0.075), k=0.03)
+    mask.add(RoundBox((-0.012, -0.10, 1.862), (0.096, 0.075, 0.055), 0.045), k=0.05)    # chin, flush below
     mask.inter(HalfSpace((0, -0.168, 0), (0, -1, 0), 1.0), k=0.035)                 # the flat lacquered face
     mask.add(RoundBox((-0.012, -0.160, 2.035), (0.112, 0.022, 0.013), 0.011), k=0.02)   # brow shelf
     mask.add(RoundCone((-0.012, -0.164, 1.99), (-0.012, -0.198, 1.905), 0.026, 0.013), k=0.022)   # beak keel
-    mask.add(RoundBox((-0.012, -0.150, 1.840), (0.085, 0.03, 0.03), 0.025), k=0.03)     # the jaw block
     for sx, xc in ((-1, -0.068), (1, 0.058)):
         mask.sub(Ellipsoid((xc, -0.178, 2.002), (0.040, 0.032, 0.0165), axes=rot(ry=sx * 9)), k=0.006)
         mask.sub(RoundBox((xc - sx * 0.012, -0.166, 1.92), (0.004, 0.012, 0.03), 0.003, axes=rot(ry=sx * 14)),
@@ -280,8 +263,9 @@ def sculpts() -> list:
     cowl.add(Ellipsoid((-0.10, 0.19, 1.82), (0.24, 0.10, 0.11)), k=0.06)
     cowl.add(Ellipsoid((0.10, 0.12, 1.86), (0.12, 0.09, 0.08)), k=0.05)
     cowl.sub(Capsule((-0.012, -0.02, 1.80), (-0.012, -0.02, 2.2), 0.118), k=0.02)      # the head sits in it
+    cowl.sub(Ellipsoid((-0.012, -0.235, 1.905), (0.135, 0.115, 0.105)), k=0.035)       # bunched below the chin
     part("cowl", _displaced(cowl, folds(0.012, 22.0, axis=2, phase=0.7)), "cloth2",
-         ("zblend", "chest", "neck", 1.74, 1.90), 1600)
+         ("zblend", "chest", "neck", 1.74, 1.90), 1450)
 
     # COAT (heat weights): a barrel chest over a narrow waist, heavy short sleeves
     coat = Sculpt("coat")
@@ -292,13 +276,13 @@ def sculpts() -> list:
         coat.add(Sphere((sx * 0.40, 0.02, 1.53), 0.11), k=0.07)
         coat.add(FlatCapsule((sx * 0.43, 0.02, 1.50), (sx * 0.475, -0.01, 1.30), 0.13, 0.13, 0.12, 0.12,
                              side=(1, 0, 0)), k=0.05)
-    part("coat", _displaced(coat, folds(0.008, 26.0, axis=2, phase=0.4)), "cloth", "auto", 2400)
+    part("coat", _displaced(coat, folds(0.008, 26.0, axis=2, phase=0.4)), "cloth", "auto", 2050)
     skirt = Sculpt("skirt")
     sk = FlatCapsule((0.0, 0.0, 0.62), (0.0, -0.005, 1.20), 0.43, 0.31, 0.30, 0.255, side=(1, 0, 0))
     skirt.add(sk.displaced(folds(0.016, 14.0, axis=0, phase=1.3, zfade=(1.05, 0.66)), 0.016), k=0.0)
     skirt.inter(HalfSpace((0, 0, 0.665), (0, 0, -1), 2.0), k=0.01)
     skirt.sub(RoundBox((-0.25, -0.30, 0.74), (0.006, 0.06, 0.10), 0.003), k=0.004)        # the front slit
-    part("skirt", skirt, "cloth", "body", 1450)
+    part("skirt", skirt, "cloth", "body", 1250)
 
     # BELTS (heat weights)
     belt = Sculpt("belt")
@@ -306,7 +290,7 @@ def sculpts() -> list:
     belt.add(RoundBox((-0.10, -0.283, 1.235), (0.045, 0.014, 0.05), 0.008, axes=rot(rz=-18)), k=0.004)   # buckle
     belt.add(Torus((-0.015, -0.005, 1.095), 0.300, 0.024, axes=np.diag([1.0, 0.300 / 0.29, 1.0]) @ rot(ry=-8),
                    rz=0.042), k=0.0)                                                    # the slung hip belt
-    part("belt", belt, "leather", "body", 950)
+    part("belt", belt, "leather", "body", 820)
 
     # TALLY STICKS (rigid on the hips, no sway): a front bundle left of the buckle, one behind; each stick
     # hangs on the coat's curve (skirt section ~0.34 x 0.27 m at the sticks), turned to its tangent
@@ -338,20 +322,33 @@ def sculpts() -> list:
                          side=(1, 0, 0))
         fore.add(fa.displaced(wraps(0.006, 70.0), 0.007), k=0.0)
     part("forearms", fore, "leather", "auto", 900)
-    for s, sx in (("R", -1), ("L", 1)):
-        fist = Sculpt(f"fist_{s}")
-        c = np.array([sx * 0.505, -0.075, 0.958])
-        fist.add(RoundBox(c, (0.098, 0.090, 0.088), 0.055), k=0.0)
-        for i in range(4):                                             # knuckle rolls, facing front-down
-            fist.add(Capsule(c + (sx * -0.065 + sx * 0.0, -0.075, 0.055 - i * 0.038),
-                             c + (sx * 0.055, -0.075, 0.055 - i * 0.038), 0.026), k=0.02)
-        fist.add(Capsule(c + (sx * -0.085, -0.05, 0.065), c + (sx * -0.06, -0.085, -0.015), 0.032), k=0.02)   # thumb
-        part(f"fist_{s}", fist, "leather", f"bone:hand.{s}", 650)
+    fist = Sculpt("fist_R")
+    c = np.array([-0.505, -0.075, 0.958])
+    fist.add(RoundBox(c, (0.098, 0.090, 0.088), 0.055), k=0.0)
+    for i in range(4):                                                 # knuckle rolls, facing front-down
+        fist.add(Capsule(c + (0.065, -0.075, 0.055 - i * 0.038), c + (-0.055, -0.075, 0.055 - i * 0.038),
+                         0.026), k=0.02)
+    fist.add(Capsule(c + (0.085, -0.05, 0.065), c + (0.06, -0.085, -0.015), 0.032), k=0.02)   # thumb
+    part("fist_R", fist, "leather", "bone:hand.R", 650)
+    # the LEFT hand opens (the Settled Account reach, the victory's palm-up host): the back of the hand and
+    # the thumb ride hand.L; the four fingers are one gloved slab on prop.L, modelled OPEN (hanging straight
+    # from the palm) and curled into the fist by the clips (FIST_CURL on prop.L)
+    palm = Sculpt("palm_L")
+    c = np.array([0.520, -0.058, 1.000])
+    palm.add(RoundBox(c, (0.066, 0.086, 0.062), 0.038), k=0.0)
+    palm.add(Capsule(c + (-0.050, -0.070, 0.015), c + (-0.072, -0.118, -0.050), 0.027), k=0.02)   # thumb
+    part("palm_L", palm, "leather", "bone:hand.L", 380)
+    fingers = Sculpt("fingers_L")                                      # four gloved fingers, a slight curl
+    for i, fy in enumerate((-0.118, -0.080, -0.042, -0.006)):
+        ln = (0.098, 0.108, 0.104, 0.090)[i]
+        a = np.array([0.530, fy, 0.962])
+        fingers.add(Capsule(a, a + (-0.014, 0.0, -ln), 0.0215), k=0.004)
+    part("fingers_L", fingers, "leather", "bone:prop.L", 340)
 
     # FOREARM PLATES: the big carved vambrace on the left, an iron strip on the right (rigid on the forearms)
     vb = Sculpt("vambrace")
-    outer = FlatCapsule((0.468, -0.012, 1.40), (0.522, -0.06, 0.99), 0.172, 0.16, 0.13, 0.135, side=(1, 0, 0))
-    inner = FlatCapsule((0.468, -0.012, 1.46), (0.522, -0.06, 0.94), 0.142, 0.133, 0.097, 0.102, side=(1, 0, 0))
+    outer = FlatCapsule((0.468, -0.012, 1.38), (0.515, -0.05, 1.135), 0.165, 0.155, 0.125, 0.128, side=(1, 0, 0))
+    inner = FlatCapsule((0.468, -0.012, 1.44), (0.515, -0.05, 1.08), 0.135, 0.128, 0.092, 0.095, side=(1, 0, 0))
     vb.add(outer.displaced(chips(0.008, 8.0), 0.008), k=0.0)
     vb.sub(inner, k=0.004)
     vb.inter(HalfSpace((0.455, 0, 0), (-1, 0.0, 0), 1.0), k=0.012)                     # the front-outer shell
@@ -391,7 +388,7 @@ def sculpts() -> list:
     panel = [ap + 0.62 * (np.array(q) - ap) + (0, 0, 0.004) for q in t1_top[1:]]
     t1.add(Hull(tier_pts([tuple(ap + (0, 0, 0.012))] + [tuple(q + (0, 0, 0.012)) for q in panel], 0.03), k=0.008),
            k=0.006)                                                     # the raised inner panel
-    part("tier1", t1, "rust", "bone:shoulder.L", 700)
+    part("tier1", t1, "rust", "bone:shoulder.L", 620)
     t2 = Sculpt("tier2")
     t2_top = [(0.20, 0.0, 1.745), (0.40, 0.0, 1.80), (0.60, 0.0, 1.79), (0.79, 0.0, 1.672), (0.60, -0.24, 1.605),
               (0.60, 0.24, 1.605), (0.36, -0.22, 1.66), (0.36, 0.22, 1.66)]
@@ -414,7 +411,7 @@ def sculpts() -> list:
                              side=(1, 0, 0)), k=0.0)
         legs.add(Ellipsoid((sx * 0.207, -0.01, 0.55), (0.165, 0.150, 0.11)), k=0.06)
         legs.add(Torus((sx * 0.222, -0.005, 0.425), 0.092, 0.03, rz=0.026), k=0.03)              # the cuff roll
-    part("trousers", _displaced(legs, folds(0.012, 18.0, axis=2, phase=2.1)), "under", "body", 1050)
+    part("trousers", _displaced(legs, folds(0.012, 18.0, axis=2, phase=2.1)), "under", "body", 920)
     boots = Sculpt("boots")
     for sx in (-1, 1):
         shin = FlatCapsule((sx * 0.225, -0.005, 0.43), (sx * 0.24, 0.02, 0.13), 0.098, 0.10, 0.088, 0.095,
@@ -424,7 +421,7 @@ def sculpts() -> list:
         boots.add(foot, k=0.06)
         boots.add(Ellipsoid((sx * 0.24, 0.03, 0.12), (0.095, 0.10, 0.08)), k=0.04)        # heel / ankle
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "leather", "body", 1150)
+    part("boots", boots, "leather", "body", 1000)
 
     # THE CLEAVER (prop space; see proto/burdam_cleaver.py)
     blade = Sculpt("blade")
@@ -432,31 +429,30 @@ def sculpts() -> list:
     part("blade", blade, "stone", "bone:prop.R", 1000, 0.6, "prop")
     heel = Sculpt("heel")
     heel.add(Plate(cl.HEEL, 0.030, r=0.008), k=0.0)
-    for su in cl.SCALLOPS:
-        c = _uvw(su, cl.HEEL_SPINE_V + 0.012)
-        heel.sub(Capsule(c + (-0.06, 0, 0), c + (0.06, 0, 0), cl.SCALLOP_R), k=0.006)
-    for (gu, gv, a, b) in cl.GEMS:                                     # the notch recesses the gems sit in
+    for tri in cl.notch_polys():                                       # the five chevron notches (tallies)
+        heel.sub(Plate(tri, 0.06, r=0.0), k=0.004)
+    for (gu, gv, a, b) in cl.GEMS:                                     # each slab's seat, both faces
         for side in (-1, 1):
-            heel.sub(Plate(_diamond(gu, gv, a + 0.008, b + 0.008), 0.009, r=0.002, dw=side * 0.031), k=0.003)
+            heel.sub(Plate(_diamond(gu, gv, a + 0.007, b + 0.007), 0.008, r=0.002, dw=side * 0.031), k=0.003)
     heel.add(Torus(_uvw(-0.012, 0.0), 0.038, 0.013, axes=np.eye(3)), k=0.006)          # the haft collar
     part("heel", heel, "ironstone", "bone:prop.R", 720, 0.6, "prop")
     gems = Sculpt("gems")
-    for (gu, gv, a, b) in cl.GEMS:
+    for (gu, gv, a, b) in cl.GEMS:                                     # one accent slab nested in each notch
         gems.add(Plate(_diamond(gu, gv, a, b), 0.0325, r=0.003), k=0.0)
-    gems.add(Plate(_diamond(cl.POMMEL_U, 0.0, *cl.POMMEL_GEM), 0.0365, r=0.003), k=0.0)
-    for su in cl.SCALLOPS:                                             # liners in the notch bottoms
-        gems.add(_NotchLiner(su), k=0.0)
-    part("gems", gems, "accent", "bone:prop.R", 240, 0.6, "prop")
+    for quad in cl.notch_liners():                                     # the lit walls of each chevron cut
+        gems.add(Plate(quad, 0.0322, r=0.002), k=0.0)
+    part("gems", gems, "accent", "bone:prop.R", 260, 0.6, "prop")
     haft = Sculpt("haft")
     hf = Capsule(_uvw(cl.HAFT_U0, 0.0), _uvw(0.01, 0.0), 0.037)
     haft.add(hf.displaced(lambda P: 0.004 * np.sin((P[:, 2] + 0.5 * P[:, 0]) * 95.0), 0.004), k=0.0)
-    part("haft", haft, "leather", "bone:prop.R", 400, 0.7, "prop")
+    for uu in (-0.25, -0.43):                                          # leather binding rings on the long haft
+        haft.add(Torus(_uvw(uu, 0.0), 0.039, 0.008, axes=np.eye(3)), k=0.004)
+    part("haft", haft, "leather", "bone:prop.R", 480, 0.7, "prop")
     pom = Sculpt("pommel")
-    pom.add(Plate(_diamond(cl.POMMEL_U, 0.0, 0.088, 0.078), 0.036, r=0.012), k=0.0)
+    pom.add(Plate(_diamond(cl.POMMEL_U, 0.0, 0.080, 0.070), 0.034, r=0.012), k=0.0)
     pom.add(Capsule(_uvw(cl.HAFT_U0 - 0.02, 0.0), _uvw(cl.HAFT_U0 + 0.025, 0.0), 0.042), k=0.01)
-    for side in (-1, 1):
-        pom.sub(Plate(_diamond(cl.POMMEL_U, 0.0, cl.POMMEL_GEM[0] + 0.009, cl.POMMEL_GEM[1] + 0.009), 0.009,
-                      r=0.002, dw=side * 0.035), k=0.003)
+    for side in (-1, 1):                                               # a carved diamond, not a gem
+        pom.sub(Plate(_diamond(cl.POMMEL_U, 0.0, *cl.POMMEL_INSET), 0.008, r=0.002, dw=side * 0.033), k=0.003)
     part("pommel", pom, "ironstone", "bone:prop.R", 300, 0.6, "prop")
     return out
 
@@ -480,27 +476,31 @@ def skin_extras(extra: dict) -> list:
     river-glass inlays set in the pauldron tiers; Almanac's rigid board hung at the belt on the right"""
     out = []
     if extra.get("reed_plates"):
-        # three flat reed plates per shoulder (2 cm thick, no sway): on the right they lie over the fringe
-        # and fan down the upper arm's back; on the left they rise from behind the top tier, fanned outward
-        for side, sx, bone in (("R", -1, "upper_arm.R"), ("L", 1, "shoulder.L")):
+        # three flat reed plates per shoulder (2 cm thick, 30 cm long, no sway), fanned so they read from the
+        # game camera: on the left they rise as a crest behind the stacked pauldron's top tier, fanned out
+        # over the arm; on the right they spread out and back over the carved shoulder plate (clear of the
+        # cleaver, which leaves that shoulder up and to the left)
+        for side in ("L", "R"):
             reeds = Sculpt(f"reed_plates_{side}")
-            for k, fan in enumerate((-22.0, 0.0, 22.0)):
-                if side == "R":
-                    c = np.array([-0.47, 0.10 + 0.012 * k, 1.60])
-                    ax = rot(rx=fan - 30.0, ry=-38.0, rz=10.0)
-                    half = (0.012, 0.042, 0.15)
-                else:
-                    c = np.array([0.40, 0.17, 1.86])
-                    ax = rot(rx=-26.0, ry=34.0 + fan, rz=0.0)
-                    half = (0.042, 0.010, 0.17)
-                plate = RoundBox(c, half, 0.008, axes=ax)
-                reeds.add(plate.displaced(lambda P: 0.0025 * np.sin(P[:, 0] * 160.0 + P[:, 1] * 160.0), 0.003), k=0.004)
-            reeds.add(Torus((sx * 0.43 if side == "L" else -0.45, 0.13, 1.74 if side == "L" else 1.66), 0.04, 0.009,
-                            axes=rot(rx=70.0)), k=0.004)                       # the lashing that binds the fan
-            out.append((f"reed_plates_{side}", reeds, 0.6, "wood", f"bone:{bone}", 450, "world"))
+            if side == "L":
+                base, bone = np.array([0.33, 0.10, 1.86]), "shoulder.L"
+                fans, tilt, ln = (18.0, 40.0, 62.0), -28.0, 0.15
+            else:
+                base, bone = np.array([-0.30, 0.12, 1.74]), "shoulder.R"
+                fans, tilt, ln = (-52.0, -72.0, -92.0), -34.0, 0.14
+            for k, fan in enumerate(fans):
+                ax = rot(rx=tilt, ry=fan)                  # long axis (local Z) fanned in the frontal plane
+                d = ax[2]
+                c = base + d * (ln + 0.01) + np.array([0.0, 0.025 * k, 0.0])
+                plate = RoundBox(c, (0.036, 0.010, ln), 0.009, axes=ax)
+                reeds.add(plate.displaced(lambda P: 0.0025 * np.sin(P[:, 0] * 150.0 + P[:, 2] * 40.0), 0.003),
+                          k=0.004)
+                reeds.add(Capsule(c - d * ln * 0.95, c + d * ln * 0.95, 0.007), k=0.004)   # the reed's rib
+            reeds.add(Torus(base + np.array([0.0, 0.02, 0.0]), 0.045, 0.011, axes=rot(rx=70.0)), k=0.004)   # lashing
+            out.append((f"reed_plates_{side}", reeds, 0.6, "wood", f"bone:{bone}", 520, "world"))
     if extra.get("river_glass"):
-        # lens inlays on the pauldron tiers' front slopes (front and back faces), glossy, never emissive
-        # (surface points and normals measured on the tier hulls: proto snap, see the module doc)
+        # river-glass lenses set flush into the pauldron tiers' slopes (front and back), each in a thin
+        # basalt bezel; glossy, never emissive (surface points and normals measured on the tier hulls)
         spots = {"tier1": [((0.31, -0.111, 1.765), (-0.51, -0.76, 0.39)), ((0.45, -0.12, 1.77), (0.40, -0.77, 0.49)),
                            ((0.38, 0.123, 1.781), (-0.34, 0.79, 0.51))],
                  "tier2": [((0.62, -0.111, 1.689), (0.38, -0.55, 0.75)), ((0.62, 0.11, 1.687), (0.36, 0.56, 0.75))],
@@ -510,8 +510,8 @@ def skin_extras(extra: dict) -> list:
             g = Sculpt(f"river_glass_{tier}")
             for (p, n) in pts:
                 n = np.asarray(n) / np.linalg.norm(n)
-                g.add(Ellipsoid(np.asarray(p) + n * 0.003, (0.040, 0.028, 0.011), axes=sdf.frame(n, (1.0, 0.0, 0.0))),
-                      k=0.0)
+                F_ = sdf.frame(n, (1.0, 0.0, 0.0))
+                g.add(Ellipsoid(np.asarray(p) - n * 0.001, (0.050, 0.036, 0.006), axes=F_), k=0.0)
             out.append((f"river_glass_{tier}", g, 0.5, "dawnglass", f"bone:{bones[tier]}", 160, "world"))
     if extra.get("almanac_board"):
         # a carved walnut board (0.20 x 0.26 m, 2 cm thick) with a parchment face, hung from the belt on the
@@ -549,6 +549,8 @@ def rig_extras(ctx) -> None:
 
 
 _STATE: dict = {}
+# texel share: the blade's honed rim and chips, and the scored mask, carry the read up close
+UV_WEIGHTS = {"blade": 1.6, "mask": 1.35, "heel": 1.2}
 
 
 def model(ctx) -> list:
@@ -564,14 +566,22 @@ def model(ctx) -> list:
             v = v @ M[:3, :3].T + M[:3, 3]
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
         ob.data.materials.append(ctx.mats[role])
-        P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
+        P.append(fighter.Part(name, high=ob, tris=tris, bind=bind, uv_weight=UV_WEIGHTS.get(name, 1.0)))
     return P
 
 
 def extra_materials(ctx) -> dict:
-    """the oxidised-iron `rust` role (pauldrons, vambrace, plates): matte honed stone, non-metallic"""
+    """the oxidised-iron `rust` role (pauldrons, vambrace, plates): matte honed stone, non-metallic; the
+    cleaver's `stone` honed smooth (the shared honed stone's pore bump bakes a sandpaper speckle into a thin
+    blade's normals) and the lacquered mask matte"""
+    stone = materials.honed_stone("stone", ctx.palette, "stone", ctx.gradient, rough=0.66, chisel=0.35)
+    mask = materials.honed_stone("sandstone", ctx.palette, "sandstone", ctx.gradient, rough=0.8, chisel=0.5, veins=0.2)
+    for m, k in ((stone, 0.015), (mask, 0.04)):
+        for n in m.node_tree.nodes:
+            if n.type == "BUMP":
+                n.inputs["Strength"].default_value = k
     return {"rust": materials.honed_stone("rust", ctx.palette, "rust", ctx.gradient, rough=0.74, chisel=0.8,
-                                          speckle=0.5)}
+                                          speckle=0.5), "stone": stone, "sandstone": mask}
 
 
 # ── motion: the cleaver rests on the right shoulder; bespoke clips for every role ─────────────────
@@ -641,14 +651,23 @@ def _P(**kw) -> dict:
 
 
 FT = anim.FootTarget
-CARRY = dict(rel=(-0.40, 0.10, 0.45), pole=(-0.9, 0.0, -0.4), d=(0.78, 0.42, 0.47), up=(-0.30, -0.35, 0.89))
+# the shoulder carry: right fist over the right shoulder, the cleaver up and back behind the head to the upper
+# left, its FLAT turned to the front and the sky (the concept's broad blade behind the head, never edge-on to
+# the game camera), the spine up and back
+CARRY = dict(rel=(-0.40, 0.10, 0.45), pole=(-0.9, 0.0, -0.4), d=(0.78, 0.42, 0.47), up=(0.05, 0.76, -0.65))
 BELT_L = (0.10, -0.16, -0.94)          # the free left fist at the belt
 EDGE_DOWN = (1.0, 0.0, 0.0)            # flat normal for chops in the sagittal plane (the edge leads down)
+FIST_CURL = (0.0, -100.0, 0.0)         # prop.L: the left fingers curled into the fist
+OPEN = (0.0, 0.0, 0.0)                 # prop.L: the left hand open (the fingers as modelled)
+GRIP2 = -0.17                          # the off hand on the haft, below the main fist (two-handed chops)
+BLADE_REACH = 1.437 - cl.U_GRIP        # the grip to the blade tip (m)
+TIP_Z = -0.03                          # plants: the tip bites 3 cm into the ground
+CHOP_TIP_Z = 0.015                     # chop keys (the strike timing then drops the hips ~3 cm into the hit)
 
 
 def carry_ik(rel=None, pole=None, d=None, up=None, left=BELT_L, lpole=(0.9, 0.3, -0.3)) -> dict:
-    """the shoulder carry: right fist over the right shoulder, the cleaver up and back behind the head to
-    the upper left (the concept's diagonal; flat up-forward, the gems toward the sky); left fist at the belt"""
+    """the shoulder carry: right fist over the right shoulder, the cleaver up and back behind the head to the
+    upper left; left fist at the belt"""
     c = CARRY
     ik = {"hand.R": HT(rel=rel or c["rel"], pole=pole or c["pole"]), "aim.R": AimRoll(d or c["d"], 1.0, up or c["up"])}
     if left is not None:
@@ -661,13 +680,13 @@ def feet_b(l=(0.03, -0.05, 0.0), r=(-0.03, 0.06, 0.0), yl=8.0, yr=-14.0, pl=0.0,
 
 
 def stance_b(crouch: float = 1.0, feet=None) -> dict:
-    """Burdam's planted stance: square and heavy, the weight on the back (right) foot"""
-    torso = _P(hips=(3, 4, 0), spine=(3, -2, 0), chest=(2, -3, 0), neck=(-3, 1, 0), head=(-3, 2, 0))
+    """Burdam's planted stance: square and heavy, the weight on the back (right) foot; left fist closed"""
+    torso = _P(hips=(3, 4, 0), spine=(3, -2, 0), chest=(2, -3, 0), neck=(-3, 1, 0), head=(-3, 2, 0), prop_L=FIST_CURL)
     return anim.merge(torso, {"hips_loc": (0.012, 0.015, -0.062 * crouch), "ik": feet or feet_b()})
 
 
 def guard_pose(crouch: float = 1.0) -> dict:
-    return anim.merge(stance_b(crouch), anim.arms_relaxed(), {"ik": carry_ik()})
+    return anim.merge(stance_b(crouch), anim.arms_relaxed(), {"ik": carry_ik()}, _P(prop_L=FIST_CURL))
 
 
 def _pose(base: dict, torso: dict | None = None, hips=(0.0, 0.0, 0.0), ik: dict | None = None) -> dict:
@@ -677,8 +696,26 @@ def _pose(base: dict, torso: dict | None = None, hips=(0.0, 0.0, 0.0), ik: dict 
     return anim._with_hips(p, hips)
 
 
-def two(rel, d, up, pole=(-0.8, 0.3, -0.4), grip=-0.17, lpole=(0.8, 0.4, -0.4)) -> dict:
-    """both fists on the haft (the off hand 0.17 m below the main one)"""
+def palm_aim(palm, fingers) -> "AimRoll":
+    """aim.L for the OPEN left hand: the palm normal (prop.L +X) and the fingers' direction (world); the aim
+    axis is the knuckle line, prop.L +Y = palm x fingers"""
+    n, f = V(palm).normalized(), V(fingers).normalized()
+    f = (f - n * f.dot(n)).normalized()
+    return AimRoll(tuple(n.cross(f)), 1.0, tuple(n))
+
+
+def with_hand(p: dict, open_=None, hand=None) -> dict:
+    """set the left hand: open_ (prop.L euler, OPEN / FIST_CURL) and the wrist (hand.L euler, absolute)"""
+    out = dict(p)
+    if open_ is not None:
+        out["prop.L"] = open_
+    if hand is not None:
+        out["hand.L"] = hand
+    return out
+
+
+def two(rel, d, up, pole=(-0.8, 0.3, -0.4), grip=GRIP2, lpole=(0.8, 0.4, -0.4)) -> dict:
+    """both fists on the haft (the off hand `grip` m along it from the main one)"""
     return {"hand.R": HT(rel=rel, pole=pole), "aim.R": AimRoll(d, 1.0, up),
             "hand.L": HT(to_prop=("prop.R", grip), pole=lpole)}
 
@@ -702,7 +739,7 @@ class Rig:
     def __init__(self, ctx):
         self.skel = anim.Skeleton(ctx.info.armature)
 
-    def left_rel(self, pose: dict, along: float = -0.17) -> tuple:
+    def left_rel(self, pose: dict, along: float = GRIP2) -> tuple:
         """the `rel` (chest frame, arm lengths) that puts the left wrist where a to_prop grip would"""
         sk = self.skel
         p = dict(pose)
@@ -717,7 +754,24 @@ class Rig:
         r = Rc.inverted() @ (wrist - sh) / L
         return (r.x, r.y, r.z)
 
-    def soft_grip(self, pose: dict, along: float = -0.17) -> dict:
+    def tip_to(self, pose: dict, z: float = TIP_Z) -> dict:
+        """the same pose with the cleaver pitched (about the grip, keeping its heading) so the blade tip meets
+        height z: chops land ON the ground and plants bite a few cm, never bury the blade"""
+        sk = self.skel
+        q = anim.resolve(sk, pose)
+        grip = sk.fk(q)["prop.R"].translation
+        a = pose["ik"]["aim.R"]
+        d = V(a.dir).normalized()
+        dz = max(-0.995, min(0.995, (z - grip.z) / BLADE_REACH))
+        h = V((d.x, d.y, 0.0))
+        h = h.normalized() if h.length > 1e-4 else V((0.0, -1.0, 0.0))
+        nd = h * math.sqrt(1.0 - dz * dz) + V((0.0, 0.0, dz))
+        out = dict(pose)
+        out["ik"] = dict(pose["ik"])
+        out["ik"]["aim.R"] = AimRoll(tuple(nd), a.weight, getattr(a, "up", (0.0, 0.0, 1.0)))
+        return out
+
+    def soft_grip(self, pose: dict, along: float = GRIP2) -> dict:
         """the same pose with the off hand's haft grip as a rel target (lerps smoothly from a free hand)"""
         out = dict(pose)
         out["ik"] = dict(pose["ik"])
@@ -734,17 +788,31 @@ def clip(name, N, keys, lags=None, loop=False, impact=None, wobble=None) -> anim
     return anim.Clip(name, N, loop, fn, impact=impact)
 
 
+def _fisted(c: anim.Clip) -> anim.Clip:
+    """every clip keeps the left fingers curled unless a pose opens them"""
+    base = c.sample
+
+    def sample(t):
+        p = base(t)
+        if "prop.L" not in p:
+            p = dict(p)
+            p["prop.L"] = FIST_CURL
+        return p
+    return anim.Clip(c.name, c.frames, c.loop, sample, impact=c.impact, secondary=c.secondary, meta=c.meta)
+
+
 def gen_idle_carry() -> anim.Clip:
+    """the carry, breathing: the shoulders rise ~2 cm on each breath, a slow weight sway"""
     base = guard_pose()
     N = 72
 
     def sample(t):
         b = anim.osc(t, 2)
         s = anim.osc(t, 1, 0.1)
-        d = _P(chest=(1.6 * b, 0, 0), spine=(0.6 * b, 0, 0.7 * s), neck=(-1.0 * b, 0, 0), head=(-0.6 * b, 1.8 * s, 0),
-               shoulder_L=(0, 0, 2.2 * b), shoulder_R=(0, 0, -2.2 * b), hips=(0, 1.4 * s, -1.2 * s))
+        d = _P(chest=(2.4 * b, 0, 0), spine=(0.8 * b, 0, 0.7 * s), neck=(-1.5 * b, 0, 0), head=(-0.8 * b, 1.8 * s, 0),
+               shoulder_L=(0, 0, 3.5 * b), shoulder_R=(0, 0, -3.5 * b), hips=(0, 1.4 * s, -1.2 * s))
         p = anim.add(base, d)
-        return anim._with_hips(p, (0.010 * s, 0.0, -0.005 * (0.5 + 0.5 * b)))
+        return anim._with_hips(p, (0.012 * s, 0.0, -0.006 * (0.5 + 0.5 * b)))
 
     return anim.Clip("idle", N, True, sample)
 
@@ -768,113 +836,113 @@ def gen_run_carry() -> anim.Clip:
         if a is not None:
             ik["aim.R"] = AimRoll(a.dir, a.weight, up)
         p["ik"] = ik
+        p["prop.L"] = FIST_CURL
         return p
 
     return anim.Clip("run", base.frames, True, sample, meta=base.meta)
 
 
+def chop_poses(R, G, lunge: float = 0.0):
+    """the overhead chop (attack1, Bear Down, the dash): the right fist lifts the cleaver off the shoulder high
+    over the right shoulder while the left hand reaches in; both fists meet on the haft as it drives down to
+    the belly, the front foot stepping in, and the tip bites the ground ahead (two hands at the hit and the
+    follow-through: Burdam's short arms only meet in front of the chest). `lunge` (0..1) adds Bear Down's long
+    step and 20 degree lean."""
+    L = lunge
+    feet_w = step(G, dl=(0.0, -0.06, 0.0), dr=(0.0, 0.03, 0.0))
+    wind = _pose(G, _P(hips=(-4, -8, 0), spine=(-6, -6, 0), chest=(-8, -10, 0), head=(-4, 8, 0)), (0, 0.05, 0.01),
+                 dict(one((-0.12, 0.10, 0.96), (0.06, 0.42, 0.90), EDGE_DOWN, pole=(-0.9, -0.1, 0.0),
+                          left=(0.0, -0.66, 0.20), lpole=(0.9, 0.2, -0.3)), **feet_w))
+    fdl = (0.0, -0.20 - 0.24 * L, 0.0)
+    feet_h = step(G, dl=fdl, dr=(0.0, 0.04 + 0.04 * L, 0.0), pr=-16 - 10 * L)
+    hit = _pose(G, _P(hips=(12 + 8 * L, 6, 0), spine=(10 + 4 * L, 4, 0), chest=(10 + 4 * L, 6, 0), neck=(-8, 0, 0),
+                      head=(-10, -4, 0)), (0, -0.14 - 0.16 * L, -0.10 - 0.04 * L),
+                dict(two((0.58, -0.72, -0.30), (0.02, -0.52, -0.85), EDGE_DOWN, pole=(-0.9, 0.3, -0.3), lpole=(0.9, 0.3, -0.4)),
+                     **feet_h))
+    fol = _pose(G, _P(hips=(16 + 6 * L, 8, 0), spine=(12 + 4 * L, 5, 0), chest=(10 + 4 * L, 8, 0), neck=(-10, 0, 0),
+                      head=(-12, -5, 0)), (0, -0.16 - 0.16 * L, -0.13 - 0.04 * L),
+                dict(two((0.55, -0.66, -0.45), (0.04, -0.40, -0.92), EDGE_DOWN, pole=(-0.9, 0.3, -0.3), lpole=(0.9, 0.3, -0.4)),
+                     **feet_h))
+    # the off hand's grip as a rel target (lerps smoothly in from the free reach)
+    hit = R.soft_grip(R.tip_to(hit, CHOP_TIP_Z))
+    fol = R.soft_grip(R.tip_to(fol, CHOP_TIP_Z + 0.02))
+    return wind, hit, fol
+
+
 def clip_overrides(ctx) -> dict:
     """Brief section 8 -> gestures (impact at 40 % of every attack / cast):
-      attack1  overhand chop off the shoulder (30 f, f12); attack2 backhand horizontal cut (40 f, f16)
-      cast_a1  Bear Down: off the shoulder in one overhand arc, a lunge with a 20 degree lean (25 f, f10)
+      attack1  two-handed overhead chop off the shoulder, the front foot steps in (30 f, f12)
+      attack2  backhand horizontal cut, the left foot steps, the free arm counter-swings (40 f, f16)
+      cast_a1  Bear Down: off the shoulder overhead in both fists, a lunge with a 20 degree lean (25 f, f10)
       cast_a2  Stubborn: the tip planted in front, both hands on the pommel, the stance locks (30 f, f12)
       cast_a3  Old Wound: a wide waist-high sweep right to left, 90 degree draw, pause at f20 (30 f, f12)
-      cast_ult Settled Account: the left arm reaches, the fist yanks back to the chest as the cleaver stamps
-               down in front, the body rocks back (45 f, f18)"""
+      cast_ult Settled Account: the left arm thrown OUT open-palmed, then the fist closes and yanks back to the
+               chest as the cleaver stamps down in front, the body rocks back (45 f, f18)
+      dash     Bear Down's lunge (the sim dashes him; the clip is stretched over the dash): the cleaver held
+               high in both fists, chopped down on arrival"""
     R = Rig(ctx)
     G = guard_pose()
     out = {"idle": gen_idle_carry(), "run": gen_run_carry()}
     I = anim.IMPACT
 
-    # Burdam's arms are short (0.54 m to the wrist) under shoulders 0.8 m apart: the hands meet only in front
-    # of the chest, so the big swings are one-handed (the cleaver is light for him) and the free left fist
-    # counter-swings; two hands only where they can meet (the plant, the channel).
-
-    # attack1: overhand chop off the shoulder, a short step in
-    wind = _pose(G, _P(hips=(-4, -6, 0), spine=(-6, -4, 0), chest=(-8, -8, 0), head=(-4, 6, 0)), (0, 0.04, 0.0),
-                 one((-0.10, 0.12, 0.95), (0.05, 0.40, 0.92), EDGE_DOWN, pole=(-0.9, -0.1, 0.0),
-                     left=(0.25, -0.60, -0.35), lpole=(0.9, 0.2, -0.3)))
-    hit = _pose(G, _P(hips=(8, 8, 0), spine=(6, 6, 0), chest=(6, 8, 0), head=(-6, -6, 0)), (0, -0.08, -0.05),
-                dict(one((0.12, -0.92, -0.12), (0.02, -0.88, -0.47), EDGE_DOWN, pole=(-0.9, 0.3, -0.3),
-                         left=(0.15, 0.10, -0.85)), **step(G, dl=(0, -0.16, 0))))
-    fol = _pose(G, _P(hips=(10, 10, 0), spine=(8, 7, 0), chest=(8, 10, 0), head=(-8, -7, 0)), (0, -0.10, -0.07),
-                dict(one((0.15, -0.80, -0.42), (0.02, -0.78, -0.63), EDGE_DOWN, pole=(-0.9, 0.3, -0.3),
-                         left=(0.18, 0.18, -0.82)), **step(G, dl=(0, -0.16, 0))))
+    # attack1: the two-handed overhead chop, a step in
+    wind, hit, fol = chop_poses(R, G, 0.0)
     out["attack1"] = anim.Clip("attack1", 30, False, anim.drag(anim.keyed(anim.strike_keys(MOTION, wind, hit, fol, G)), 30,
-                                                                {"head": 1.5, "neck": 1.0, "hand.L": 1.0}), impact=I)
+                                                                {"head": 1.5, "neck": 1.0}), impact=I)
 
-    # attack2: backhand horizontal cut, left to right across the front
+    # attack2: backhand horizontal cut, left to right across the front; the left foot steps, the hips turn and
+    # travel, the free arm swings out the other way as a counterweight
     flat_cw = (0.0, 0.0, -1.0)                 # flat normal for a left -> right sweep (the edge leads)
-    wind = _pose(G, _P(hips=(2, 22, 0), spine=(2, 14, 0), chest=(4, 22, 0), head=(0, -18, 0)), (0, 0.03, -0.02),
-                 one((0.45, -0.50, -0.20), (0.75, 0.60, -0.05), flat_cw, pole=(-0.4, -0.7, -0.4),
-                     left=(0.30, 0.22, -0.80), lpole=(0.9, 0.3, -0.3)))
-    hit = _pose(G, _P(hips=(4, -8, 0), spine=(4, -6, 0), chest=(5, -10, 0), head=(0, 8, 0)), (0, -0.05, -0.05),
+    wind = _pose(G, _P(hips=(2, 24, 0), spine=(2, 16, 0), chest=(4, 24, 0), head=(0, -20, 0)), (0.03, 0.04, -0.03),
+                 dict(one((0.45, -0.50, -0.20), (0.75, 0.60, -0.05), flat_cw, pole=(-0.4, -0.7, -0.4),
+                          left=(0.40, 0.30, -0.70), lpole=(0.9, 0.3, -0.3)), **step(G, dl=(0.02, 0.04, 0), pl=-8)))
+    hit = _pose(G, _P(hips=(6, -10, 0), spine=(4, -6, 0), chest=(5, -12, 0), head=(0, 10, 0)), (-0.04, -0.12, -0.07),
                 dict(one((-0.05, -0.92, -0.15), (-0.35, -0.93, -0.05), flat_cw, pole=(-0.8, 0.3, -0.4),
-                         left=(0.25, -0.30, -0.75)), **step(G, dl=(0, -0.10, 0))))
-    fol = _pose(G, _P(hips=(4, -24, 0), spine=(4, -14, 0), chest=(5, -24, 0), head=(0, 18, 0)), (0, -0.05, -0.06),
+                         left=(0.80, -0.20, -0.45)), **step(G, dl=(0.04, -0.20, 0), dr=(0.0, 0.04, 0), pr=-14, yr=-24)))
+    fol = _pose(G, _P(hips=(6, -26, 0), spine=(4, -16, 0), chest=(5, -26, 0), head=(0, 20, 0)), (-0.06, -0.14, -0.08),
                 dict(one((-0.65, -0.50, -0.10), (-0.92, 0.32, 0.05), flat_cw, pole=(-0.6, 0.6, -0.5),
-                         left=(0.20, -0.55, -0.55)), **step(G, dl=(0, -0.10, 0))))
+                         left=(0.85, 0.05, -0.40)), **step(G, dl=(0.04, -0.20, 0), dr=(0.0, 0.04, 0), pr=-18, yr=-30)))
     out["attack2"] = anim.Clip("attack2", 40, False, anim.drag(anim.keyed(anim.strike_keys(MOTION, wind, hit, fol, G)), 40,
                                                                 {"head": 2.0, "neck": 1.5, "hand.L": 1.5}), impact=I)
 
-    # cast_a1 Bear Down: 4-frame anticipation, one overhand arc into a lunge (20 degree lean), the chop lands
-    # at f10 with the blade 20 degrees past vertical (biting down), follow-through to f17, back on the shoulder
-    up_ = _pose(G, _P(hips=(-3, -4, 0), spine=(-6, -2, 0), chest=(-8, -6, 0), head=(-6, 4, 0)), (0, 0.02, 0.02),
-                one((-0.10, 0.10, 0.97), (0.05, 0.30, 0.95), EDGE_DOWN, pole=(-0.9, -0.1, 0.0),
-                    left=(0.25, -0.55, -0.40), lpole=(0.9, 0.2, -0.3)))
-    arc = _pose(G, _P(hips=(8, 2, 0), spine=(6, 2, 0), chest=(2, 4, 0), head=(-6, -2, 0)), (0, -0.14, 0.02),
-                dict(one((0.05, -0.55, 0.80), (0.03, -0.62, 0.78), EDGE_DOWN, pole=(-0.9, 0.0, 0.0),
-                         left=(0.22, -0.20, -0.70)), **step(G, dl=(0, -0.20, 0.06), pl=-10)))
-    lunge = step(G, dl=(0.0, -0.36, 0.0), dr=(0.0, 0.06, 0.0), pr=-14)
-    hit = _pose(G, _P(hips=(14, 4, 0), spine=(8, 4, 0), chest=(6, 6, 0), neck=(-6, 0, 0), head=(-10, -4, 0)),
-                (0, -0.24, -0.12), dict(one((0.12, -0.94, 0.02), (0.02, -0.50, -0.866), EDGE_DOWN, pole=(-0.9, 0.3, -0.3),
-                                            left=(0.20, 0.30, -0.80)), **lunge))
+    # cast_a1 Bear Down: 4-frame anticipation, the cleaver up over the head in both fists, one overhand arc
+    # into the lunge (20 degree lean), the chop lands at f10 biting the ground ahead, follow-through to f17,
+    # back on the shoulder by f25
+    wind, hit, fol = chop_poses(R, G, 1.0)
+    up_ = anim.lerp_pose(G, wind, 0.55)
     hold = anim._with_hips(hit, (0, -0.01, -0.02))
-    fol = _pose(G, _P(hips=(16, 6, 0), spine=(9, 5, 0), chest=(7, 8, 0), neck=(-8, 0, 0), head=(-12, -5, 0)),
-                (0, -0.26, -0.14), dict(one((0.14, -0.88, -0.08), (0.02, -0.45, -0.89), EDGE_DOWN, pole=(-0.9, 0.3, -0.3),
-                                            left=(0.20, 0.34, -0.80)), **lunge))
     rec = _pose(G, _P(hips=(4, -4, 0), spine=(2, -2, 0), chest=(-2, -4, 0)), (0, -0.06, -0.02),
                 one((-0.12, 0.05, 0.90), (0.30, 0.45, 0.84), CARRY["up"], pole=(-0.9, -0.1, -0.2), left=BELT_L))
-    out["cast_a1"] = clip("cast_a1", 25, [(0.0, G, "linear"), (0.12, up_, "out"), (0.28, arc, "inout"), (I, hit, "accel"),
+    out["cast_a1"] = clip("cast_a1", 25, [(0.0, G, "linear"), (0.12, up_, "out"), (0.28, wind, "inout"), (I, hit, "accel"),
                                           (0.50, hold, "out"), (0.68, fol, "out"), (0.84, rec, "inout"), (1.0, G, "settle")],
                           impact=I)
+    # dash: stretched over Bear Down's travel; the cleaver stays high in both fists through the lunge and
+    # comes down on arrival (the hit lands as the dash ends)
+    lean = _pose(wind, _P(hips=(10, 0, 0), spine=(6, 0, 0), chest=(2, 0, 0), neck=(-6, 0, 0), head=(-6, 0, 0)),
+                 (0, -0.10, -0.05), step(G, dl=(0.0, -0.30, 0.05), dr=(0.0, 0.16, 0.03), pl=12, pr=-32))
+    # front-loaded: a short dash lasts 3 ticks (0.1 s), so the chop must already have landed by 2/3 of the clip
+    out["dash"] = anim.Clip("dash", 20, False, anim.keyed([(0.0, wind, "linear"), (0.22, lean, "out"),
+                                                            (0.40, anim.lerp_pose(lean, wind, 0.3), "inout"),
+                                                            (0.62, hit, "accel"), (1.0, hold, "out")]))
 
-    # cast_a2 Stubborn: plant the tip in front (sunk), the right fist on the grip at the belly, the left hand
-    # cupping the pommel; head down, chest up, the stance locks wide at f12; hold, breathe
-    wide = feet_b(l=(0.08, -0.06, 0.0), r=(-0.08, 0.07, 0.0), yl=14, yr=-16)
-    plant_d = (0.03, -0.18, -0.98)
-    plant_up = (0.0, -0.98, 0.18)              # the flat to the front (the gems face the camera)
-    lift = _pose(G, _P(hips=(2, 0, 0), spine=(2, 0, 0), chest=(-2, 0, 0), head=(-4, 0, 0)), (0, 0.0, 0.0),
-                 one((0.30, -0.45, 0.45), (0.10, -0.30, 0.95), plant_up, pole=(-0.9, 0.1, -0.3), left=(0.10, -0.40, -0.55)))
-    pole_r = (-0.9, 0.2, -0.4)
-    fold = _pose(G, _P(hips=(4, 0, 0), spine=(4, 0, 0), chest=(4, 0, 0), neck=(4, 0, 0), head=(10, 0, 0)), (0, 0.0, -0.05),
-                 dict(two((0.74, -0.62, -0.32), plant_d, plant_up, pole=pole_r, grip=-0.31)))
-    fold = R.soft_grip(fold, along=-0.31)
-    setp = anim.merge(anim.arms_relaxed(),
-                      _pose(stance_b(1.25, wide), _P(hips=(2, 0, 0), spine=(-2, 0, 0), chest=(-6, 0, 0), neck=(6, 0, 0),
-                                                     head=(14, 0, 0), shoulder_L=(0, 0, 4), shoulder_R=(0, 0, -4)),
-                            (0, 0.0, -0.02), dict(two((0.74, -0.62, -0.32), plant_d, plant_up, pole=pole_r, grip=-0.31),
-                                                  **wide)))
-    breath = anim.add(setp, _P(chest=(-2, 0, 0), head=(-2, 0, 0)))
-    out_ = anim._with_hips(anim.add(setp, _P(chest=(3, 0, 0), spine=(2, 0, 0), head=(6, 0, 0))), (0, 0, -0.012))
-    over = anim._with_hips(setp, (0, 0, -0.022))
-    out["cast_a2"] = clip("cast_a2", 30, [(0.0, G, "linear"), (0.14, lift, "inout"), (0.28, fold, "inout"),
-                                          (0.36, over, "out"), (I, setp, "settle"), (0.62, breath, "sine"),
-                                          (0.80, setp, "sine"), (1.0, out_, "inout")], impact=I)
+    # cast_a2 Stubborn: plant the tip in front, both hands folded on the pommel, head down, chest up; the stance
+    # locks wide at f12; hold, breathe
+    out["cast_a2"] = _stubborn(R, G)
 
-    # cast_a3 Old Wound: draw back to the right with a 90 degree turn, sweep waist-high across the cone,
-    # follow through 100 degrees and pause at f20 (the wound reopening), then back to the shoulder
+    # cast_a3 Old Wound: draw back to the right with a 90 degree turn, sweep waist-high across the cone, follow
+    # through 100 degrees and pause at f20 (the wound reopening), then back to the shoulder; the left foot steps
+    # out, the right heel turns, the free arm swings back against the sweep
     flat_ccw = (0.0, 0.0, 1.0)                 # right -> left sweep
-    draw = _pose(G, _P(hips=(4, -30, 0), spine=(4, -22, 0), chest=(4, -30, 0), head=(-2, 26, 0)), (0, 0.05, -0.05),
-                 one((-0.58, 0.18, -0.38), (-0.86, 0.48, -0.10), flat_ccw, pole=(-0.5, 0.8, -0.3),
-                     left=(0.35, -0.45, -0.55), lpole=(0.9, 0.2, -0.3)))
-    hit = _pose(G, _P(hips=(8, 6, 0), spine=(6, 4, 0), chest=(6, 6, 0), head=(-4, -6, 0)), (0, -0.06, -0.10),
+    draw = _pose(G, _P(hips=(4, -32, 0), spine=(4, -22, 0), chest=(4, -30, 0), head=(-2, 26, 0)), (0.04, 0.06, -0.06),
+                 dict(one((-0.58, 0.18, -0.38), (-0.86, 0.48, -0.10), flat_ccw, pole=(-0.5, 0.8, -0.3),
+                          left=(0.55, -0.55, -0.40), lpole=(0.9, 0.2, -0.3)), **step(G, dr=(0, 0.05, 0), pl=-10)))
+    hit = _pose(G, _P(hips=(8, 8, 0), spine=(6, 4, 0), chest=(6, 6, 0), head=(-4, -6, 0)), (-0.04, -0.12, -0.12),
                 dict(one((0.10, -0.92, -0.32), (0.12, -0.98, -0.10), flat_ccw, pole=(-0.9, 0.2, -0.3),
-                         left=(0.30, 0.05, -0.80)), **step(G, dl=(0.04, -0.12, 0))))
-    fol = _pose(G, _P(hips=(8, 30, 0), spine=(6, 20, 0), chest=(6, 30, 0), head=(-4, -24, 0)), (0, -0.06, -0.10),
+                         left=(0.60, 0.40, -0.55)), **step(G, dl=(0.06, -0.18, 0), pr=-12, yr=-26)))
+    fol = _pose(G, _P(hips=(8, 32, 0), spine=(6, 20, 0), chest=(6, 30, 0), head=(-4, -24, 0)), (-0.06, -0.12, -0.12),
                 dict(one((0.62, -0.45, -0.35), (0.92, 0.36, -0.10), flat_ccw, pole=(-0.4, -0.6, -0.6),
-                         left=(0.25, 0.25, -0.80)), **step(G, dl=(0.04, -0.12, 0))))
-    pause = anim._with_hips(anim.add(fol, _P(chest=(2, 2, 0), head=(4, 0, 0))), (0, 0, -0.01))
+                         left=(0.35, 0.55, -0.65)), **step(G, dl=(0.06, -0.18, 0), pr=-16, yr=-6)))
+    pause = anim._with_hips(anim.add(fol, _P(chest=(2, 2, 0), head=(4, 0, 0))), (0, 0, -0.012))
     rec = _pose(G, _P(hips=(2, 8, 0), spine=(0, 4, 0), chest=(-2, 4, 0)), (0, -0.02, -0.03),
                 one((-0.10, 0.02, 0.88), (0.40, 0.45, 0.80), CARRY["up"], pole=(-0.9, -0.1, -0.2), left=BELT_L))
     out["cast_a3"] = clip("cast_a3", 30, [(0.0, G, "linear"), (0.08, anim.lerp_pose(G, draw, -0.08), "inout"),
@@ -882,106 +950,179 @@ def clip_overrides(ctx) -> dict:
                                           (I, hit, "accel"), (0.55, fol, "out"), (0.667, pause, "out"),
                                           (0.84, rec, "inout"), (1.0, G, "settle")], impact=I)
 
-    # cast_ult Settled Account: the left arm reaches out open (f0-10), the cleaver cocked back; at f18 the fist
-    # yanks back to the chest as the cleaver stamps down in front, the body rocking back 10 degrees; hold to f30
-    reach = _pose(G, _P(hips=(6, -10, 0), spine=(6, -6, 0), chest=(4, -8, 0), head=(-6, 6, 0),
-                        shoulder_L=(0, 0, -8)), (0, -0.06, -0.04),
-                  dict(one((-0.30, 0.18, 0.55), (-0.25, 0.55, 0.80), EDGE_DOWN, pole=(-0.9, 0.0, -0.3),
-                           left=(0.06, -0.97, 0.18), lpole=(1.0, 0.0, -0.4)), **step(G, dl=(0, -0.14, 0))))
-    reach2 = anim.add(reach, _P(chest=(2, -2, 0), shoulder_L=(0, 0, -3)))
-    stamp = _pose(G, _P(hips=(-6, 8, 0), spine=(-6, 4, 0), chest=(-8, 6, 0), neck=(4, 0, 0), head=(6, -4, 0),
-                        shoulder_L=(0, 0, 6)), (0, 0.06, -0.08),
-                  dict(one((-0.16, -0.78, -0.42), (-0.06, -0.64, -0.77), EDGE_DOWN, pole=(-0.9, 0.2, -0.3),
-                           left=(-0.30, -0.48, -0.22), lpole=(0.9, 0.2, -0.5)), **step(G, dl=(0, -0.14, 0))))
+    # cast_ult Settled Account: the left arm thrown OUT, open-palmed toward the enemies, the cleaver cocked high
+    # (f0-10); at f18 the fist closes and yanks back to the chest as the cleaver stamps down in front and the
+    # body rocks back 10 degrees: a ring closing; hold the stamp f18-f30, then straighten
+    reach = _pose(G, _P(hips=(4, -12, 0), spine=(4, -8, 0), chest=(2, -10, 0), head=(-8, 8, 0),
+                        shoulder_L=(0, 0, 10)), (0.02, -0.06, -0.04),
+                  dict(one((-0.32, 0.16, 0.62), (-0.30, 0.50, 0.81), EDGE_DOWN, pole=(-0.9, 0.0, -0.3),
+                           left=(0.62, -0.74, 0.20), lpole=(0.6, 0.6, -0.6)), **step(G, dl=(0.04, -0.16, 0), pr=-8)))
+    # the open left hand: aim.L turns the hand so the palm (prop.L +X) faces the enemy, fingers up (the knuckle
+    # line, prop.L +Y = palm x fingers, runs inward)
+    reach = with_hand(reach, OPEN)
+    reach["ik"] = dict(reach["ik"], **{"aim.L": palm_aim((0.45, -0.88, 0.10), (0.0, 0.10, 1.0))})
+    reach2 = anim.add(reach, _P(chest=(2, -2, 0), shoulder_L=(0, 0, 3)))
+    stamp = _pose(G, _P(hips=(-8, 8, 0), spine=(-8, 4, 0), chest=(-10, 6, 0), neck=(6, 0, 0), head=(8, -4, 0),
+                        shoulder_L=(0, 0, 6)), (0, 0.10, -0.10),
+                  dict(one((0.20, -0.80, -0.40), (0.02, -0.40, -0.92), EDGE_DOWN, pole=(-0.9, 0.2, -0.3),
+                           left=(-0.12, -0.66, -0.12), lpole=(0.9, 0.2, -0.5)),
+                       **step(G, dl=(0.04, -0.16, 0), dr=(0.0, 0.10, 0), pl=-6)))
+    stamp = R.tip_to(with_hand(stamp, FIST_CURL))
     hold = anim.add(stamp, _P(chest=(-1, 0, 0)))
-    out["cast_ult"] = clip("cast_ult", 45, [(0.0, G, "linear"), (0.08, anim.lerp_pose(G, reach, -0.08), "inout"),
-                                            (0.22, reach, "out"), (0.33, reach2, "inout"), (I, stamp, "snap"),
+    out["cast_ult"] = clip("cast_ult", 45, [(0.0, G, "linear"), (0.08, anim.lerp_pose(G, reach, -0.06), "inout"),
+                                            (0.20, reach, "out"), (0.33, reach2, "inout"), (I, stamp, "snap"),
                                             (0.47, anim._with_hips(stamp, (0, 0.01, -0.012)), "out"),
                                             (0.67, hold, "linear"), (0.86, anim.lerp_pose(hold, G, 0.6), "inout"),
                                             (1.0, G, "settle")], impact=I)
 
     out.update(_gen_rest_clips(R, G))
-    return out
+    return {k: _fisted(v) for k, v in out.items()}
+
+
+# the planted cleaver (Stubborn, the channel, recall, victory): the tip bites ~3 cm into the ground in front
+PLANT_D = (0.04, -0.40, -0.915)
+PLANT_UP = (0.0, -0.915, 0.40)                 # the flat to the front (the slabs face the camera)
+
+
+def _plant_two(crouch=1.25, feet=None):
+    """both hands folded over the pommel, the tip in the ground in front"""
+    wide = feet or feet_b(l=(0.08, -0.06, 0.0), r=(-0.08, 0.07, 0.0), yl=14, yr=-16)
+    return anim.merge(anim.arms_relaxed(),
+                      _pose(stance_b(crouch, wide), _P(hips=(2, 0, 0), spine=(-2, 0, 0), chest=(-6, 0, 0), neck=(6, 0, 0),
+                                                       head=(14, 0, 0), shoulder_L=(0, 0, 4), shoulder_R=(0, 0, -4)),
+                            (0, 0.0, -0.02), dict(two(PLANT_REL, PLANT_D, PLANT_UP, pole=(-0.9, 0.2, -0.4), grip=PLANT_GRIP),
+                                                  **wide)), _P(prop_L=FIST_CURL))
+
+
+PLANT_REL = (0.74, -0.62, -0.14)
+PLANT_GRIP = -0.31
+
+
+def _stubborn(R, G) -> anim.Clip:
+    plant_d, plant_up = PLANT_D, PLANT_UP
+    lift = _pose(G, _P(hips=(2, 0, 0), spine=(2, 0, 0), chest=(-2, 0, 0), head=(-4, 0, 0)), (0, 0.0, 0.0),
+                 one((0.30, -0.45, 0.45), (0.10, -0.30, 0.95), plant_up, pole=(-0.9, 0.1, -0.3), left=(0.10, -0.40, -0.55)))
+    fold = _pose(G, _P(hips=(4, 0, 0), spine=(4, 0, 0), chest=(4, 0, 0), neck=(4, 0, 0), head=(10, 0, 0)), (0, 0.0, -0.05),
+                 dict(two(PLANT_REL, plant_d, plant_up, pole=(-0.9, 0.2, -0.4), grip=PLANT_GRIP)))
+    fold = R.soft_grip(R.tip_to(fold, 0.02), along=PLANT_GRIP)
+    setp = R.tip_to(_plant_two(1.25))
+    breath = anim.add(setp, _P(chest=(-2.5, 0, 0), head=(-3, 0, 0)))
+    out_ = anim._with_hips(anim.add(setp, _P(chest=(3, 0, 0), spine=(2, 0, 0), head=(6, 0, 0))), (0, 0, -0.012))
+    over = anim._with_hips(setp, (0, 0, -0.022))
+    I = anim.IMPACT
+    return clip("cast_a2", 30, [(0.0, G, "linear"), (0.14, lift, "inout"), (0.28, fold, "inout"),
+                                (0.36, over, "out"), (I, setp, "settle"), (0.62, breath, "sine"),
+                                (0.80, setp, "sine"), (1.0, out_, "inout")], impact=I)
 
 
 def _gen_rest_clips(R, G) -> dict:
     out = {}
     hip_h = R.skel.rest_point("hips").z
 
-    # death: one knee down on the planted cleaver, then forward over it onto the ground
-    plant_d = (-0.10, -0.25, -0.96)
-    hit = _pose(G, _P(hips=(-8, 8, 0), spine=(-10, 2, 0), chest=(-14, 4, 0), neck=(-8, 0, 0), head=(-16, 6, 0)), (0, 0.08, 0.0))
-    kneel = anim.merge(anim.arms_relaxed(), _P(hips=(18, -6, 0), spine=(14, 0, 0), chest=(16, 0, 0), neck=(10, 0, 0),
-                                               head=(18, 0, 0), toe_R=(60, 0, 0)))
-    kneel["hips_loc"] = (0.0, 0.08, -hip_h * 0.40)
-    kneel["ik"] = dict(anim.feet(l=(0.03, -0.30, 0.0), r=(-0.02, 0.36, 0.06), yl=-6, yr=-8, pr=-62, kr=8),
-                       **one((-0.10, -0.62, -0.30), plant_d, (0.0, -0.96, 0.25), pole=(-0.9, 0.3, -0.3),
+    # death: knocked back, down on the right knee over the planted cleaver, then forward over it onto the
+    # ground (face down, the head turned, the cleaver flat in the right fist); the body never dips under the
+    # ground and the legs stay FK from the fall on (no IK hand-over pop)
+    hit = _pose(G, _P(hips=(-8, 8, 0), spine=(-10, 2, 0), chest=(-14, 4, 0), neck=(-8, 0, 0), head=(-16, 6, 0)),
+                (0, 0.10, 0.0), step(G, dr=(0.0, 0.12, 0.0), pr=-10))
+    kneel = anim.merge(anim.arms_relaxed(), _P(hips=(16, -6, 0), spine=(12, 0, 0), chest=(14, 0, 0), neck=(10, 0, 0),
+                                               head=(18, 0, 0), toe_R=(60, 0, 0), prop_L=FIST_CURL))
+    kneel["hips_loc"] = (0.0, 0.08, -hip_h * DEATH_KNEEL)
+    kneel["ik"] = dict(anim.feet(l=(0.03, -0.30, 0.0), r=(-0.02, 0.36, 0.09), yl=-6, yr=-8, pr=-56, kr=8),
+                       **one(DEATH_PLANT_REL, (-0.08, -0.72, -0.69), (0.0, -0.69, 0.72), pole=(-0.9, 0.3, -0.3),
                              left=(-0.05, -0.55, -0.55), lpole=(0.9, 0.3, -0.3)))
+    kneel = R.tip_to(kneel)
     slump = anim.add(kneel, _P(spine=(10, 0, 0), chest=(10, 0, 0), head=(12, 0, 0)))
-    slump = anim._with_hips(slump, (0, -0.04, -0.04))
-    down = anim.merge(anim.arms_relaxed(), _P(hips=(84, -8, 4), spine=(4, 0, 0), chest=(4, 4, 0), neck=(-20, 0, 0),
-                                              head=(-24, 18, 0), thigh_L=(-6, 0, -8), shin_L=(-10, 0, 0),
-                                              thigh_R=(-2, 0, 8), shin_R=(-24, 0, 0), foot_L=(-30, 0, 0),
-                                              foot_R=(-20, 0, 0)))
+    slump = R.tip_to(anim._with_hips(slump, (0, -0.04, -0.03)))
+    down = anim.merge(anim.arms_relaxed(), _P(hips=(88, -6, 4), spine=(2, 0, 0), chest=(0, 4, 0), neck=(-12, 0, 0),
+                                              head=(-10, 62, 0), thigh_L=(-4, 0, -6), shin_L=(6, 0, 0),
+                                              thigh_R=(2, 0, 6), shin_R=(14, 0, 0), foot_L=(55, 0, 0),
+                                              foot_R=(50, 0, 0), toe_L=(20, 0, 0), toe_R=(20, 0, 0),
+                                              prop_L=FIST_CURL))
     k = hip_h / 0.95
-    down["hips_loc"] = (0.03, -0.55 * k, -hip_h + 0.20)
-    down["ik"] = {"hand.R": HT(pos=(-0.42 * k, -1.30 * k, 0.07), pole=(-1.0, 0.0, 0.2)),
+    down["hips_loc"] = (0.03, -0.62 * k, -hip_h + DEATH_LIE)
+    down["ik"] = {"hand.R": HT(pos=(-0.46 * k, -1.30 * k, 0.10), pole=(-1.0, 0.0, 0.2)),
                   "aim.R": AimRoll((-0.30, -0.95, 0.0), 1.0, (0.0, 0.0, 1.0)),
-                  "hand.L": HT(pos=(0.55 * k, -1.05 * k, 0.07), pole=(1.0, 0.0, 0.2))}
-    bounce = anim._with_hips(anim.add(down, _P(spine=(-5, 0, 0), chest=(-4, 0, 0), head=(-6, 0, 0))), (0, 0, 0.03))
-    rest = anim.add(down, _P(head=(0, 6, 0)))
+                  "hand.L": HT(pos=(0.52 * k, -1.02 * k, 0.09), pole=(1.0, 0.0, 0.2)),
+                  "foot.L": FT((0, 0, 0), 0, 0, weight=0.0), "foot.R": FT((0, 0, 0), 0, 0, weight=0.0)}
+    topple = anim.lerp_pose(slump, down, 0.45)
+    topple = anim._with_hips(topple, (0, 0, 0.27))
+    bounce = anim._with_hips(anim.add(down, _P(spine=(-4, 0, 0), chest=(-3, 0, 0), head=(-4, 0, 0))), (0, 0, 0.035))
+    rest = anim.add(down, _P(head=(0, 4, 0)))
     out["death"] = anim.Clip("death", 60, False, anim.keyed([(0.0, G, "linear"), (0.10, hit, "snap"),
                                                              (0.32, kneel, "inout"), (0.48, slump, "inout"),
-                                                             (0.70, down, "in"), (0.78, bounce, "out"),
+                                                             (0.60, topple, "in"), (0.72, down, "in"), (0.79, bounce, "out"),
                                                              (0.88, rest, "inout"), (1.0, rest, "linear")]))
 
-    # recall: the cleaver planted at his right, the fist on the grip; the left thumb lights a tally stub
+    # recall (3 s loop): the cleaver planted at his right, the fist on the grip; the left hand takes a tally
+    # stub from the belt, brings it up to the chest, strikes it alight with the thumb (two flicks), holds it up
+    # watching it burn, breathing, and lowers it again
     rec = anim.merge(stance_b(0.6), anim.arms_relaxed(),
-                     {"ik": one((-0.22, -0.40, -0.30), (-0.08, -0.18, -0.98), (0.30, -0.95, 0.0), pole=(-0.9, 0.3, -0.3),
-                                left=(-0.10, -0.62, -0.20), lpole=(0.9, 0.3, -0.4))})
-    rec = anim.add(rec, _P(neck=(10, 0, 0), head=(16, -6, 0), chest=(4, -4, 0)))
+                     {"ik": one(REC_REL, (-0.10, -0.42, -0.90), (0.30, -0.90, -0.42), pole=(-0.9, 0.3, -0.3),
+                                left=(0.12, -0.20, -0.90), lpole=(0.9, 0.3, -0.4))}, _P(prop_L=FIST_CURL))
+    rec = anim.add(rec, _P(neck=(6, 0, 0), head=(10, -6, 0), chest=(2, -4, 0)))
+    take = anim.merge(rec, {"ik": {"hand.L": HT(rel=(0.02, -0.30, -0.85), pole=(0.9, 0.2, -0.3))}})
+    take = anim.add(take, _P(head=(8, 4, 0), spine=(3, 0, 0)))
+    up_ = anim.merge(rec, {"ik": {"hand.L": HT(rel=(-0.05, -0.80, -0.10), pole=(0.9, 0.2, -0.5))}})
+    up_ = anim.add(up_, _P(head=(14, 8, 0), neck=(4, 0, 0), chest=(-2, 0, 0)))
+    flick = anim.merge(up_, {"ik": {"hand.L": HT(rel=(0.00, -0.82, -0.04), pole=(0.9, 0.2, -0.5))}})
+    flick = anim.add(flick, _P(hand_L=(-18, 0, 0)))
+    lit = anim.merge(up_, {"ik": {"hand.L": HT(rel=(0.02, -0.86, 0.06), pole=(0.9, 0.2, -0.5))}})
+    lit = anim.add(lit, _P(head=(-6, 0, 0), chest=(-3, 0, 0)))
+    rec, take, up_, flick, lit = (R.tip_to(x) for x in (rec, take, up_, flick, lit))
+    rkeys = [(0.0, rec, "linear"), (0.16, take, "inout"), (0.36, up_, "inout"), (0.44, flick, "out"), (0.50, up_, "in"),
+             (0.56, flick, "out"), (0.62, up_, "in"), (0.72, lit, "inout"), (0.86, lit, "linear"), (1.0, rec, "inout")]
+    rb = anim.keyed(rkeys)
 
     def recall(t):
-        b = anim.osc(t, 2)
-        p = anim.add(rec, _P(chest=(1.2 * b, 0, 0), head=(-0.8 * b, 0, 0)))
-        return anim._nudge_hands(p, (0, 0, 0.004 * b), (0.012 * anim.osc(t, 4), 0.0, 0.010 * anim.osc(t, 2, 0.2)))
-    out["recall"] = anim.Clip("recall", 60, True, recall)
+        b = anim.osc(t, 3)
+        return anim._with_hips(anim.add(rb(t), _P(chest=(2.0 * b, 0, 0), shoulder_L=(0, 0, 1.5 * b),
+                                                  shoulder_R=(0, 0, -1.5 * b), head=(-1.2 * b, 0, 0))),
+                               (0.008 * anim.osc(t, 1), 0.0, -0.004 * b))
+    out["recall"] = anim.Clip("recall", 90, True, anim.drag(recall, 90, {"head": 2.0, "neck": 1.0, "hand.L": 1.0}, loop=True))
 
-    # idle_lobby (120 f loop): the left thumb counts along the notches on the right shoulder, a nod at
-    # something only he remembers; then the cleaver crosses to the left shoulder and back
-    lob = anim.merge(stance_b(0.6), anim.arms_relaxed(), {"ik": carry_ik()})
+    # idle_lobby (120 f loop): the left thumb counts along the notches on the right shoulder, a 5 degree tilt and
+    # a nod at something only he remembers; then the cleaver crosses to the LEFT shoulder (the right fist in front
+    # of the chest, the blade over the stacked pauldron) and back
+    lob = anim.merge(stance_b(0.6), anim.arms_relaxed(), {"ik": carry_ik()}, _P(prop_L=FIST_CURL))
     count = anim.add(lob, _P(head=(6, -8, -5), neck=(4, -4, 0)))
     count["ik"] = dict(count["ik"], **{"hand.L": HT(rel=R.left_rel(lob, 0.30), pole=(0.6, -0.6, -0.5))})
     count2 = dict(count)
     count2["ik"] = dict(count["ik"], **{"hand.L": HT(rel=R.left_rel(lob, 0.48), pole=(0.6, -0.6, -0.5))})
     nod = anim.add(count2, _P(head=(10, -8, -5)))
-    left_sh = anim.add(lob, _P(chest=(0, 8, 0), head=(0, -10, 4)))
-    left_sh["ik"] = dict(left_sh["ik"], **one((0.30, -0.25, 0.42), (-0.66, 0.50, 0.56), (0.30, -0.35, 0.89),
-                                              pole=(-0.6, -0.4, -0.6), left=(0.12, -0.10, -0.94)))
-    keys = [(0.0, lob, "linear"), (0.10, count, "inout"), (0.22, count2, "inout"), (0.28, nod, "inout"),
-            (0.34, count2, "inout"), (0.44, lob, "inout"), (0.55, left_sh, "inout"), (0.78, left_sh, "linear"),
-            (0.90, lob, "inout"), (1.0, lob, "linear")]
+    left_sh = anim.add(lob, _P(chest=(0, 10, 0), spine=(0, 4, 0), head=(0, -10, 4)))
+    left_sh["ik"] = dict(left_sh["ik"], **one(LOBBY_REL, LOBBY_D, LOBBY_UP, pole=(-0.6, -0.4, -0.6),
+                                              left=(-0.10, -0.55, -0.55), lpole=(0.9, 0.3, -0.3)))
+    mid = anim.lerp_pose(lob, left_sh, 0.5)
+    mid["ik"] = dict(mid["ik"], **{"aim.R": AimRoll((0.10, -0.30, 0.95), 1.0, (0.0, -0.98, 0.2))})
+    keys = [(0.0, lob, "linear"), (0.10, count, "inout"), (0.20, count2, "inout"), (0.26, nod, "inout"),
+            (0.32, count2, "inout"), (0.40, lob, "inout"), (0.47, mid, "inout"), (0.54, left_sh, "inout"),
+            (0.78, left_sh, "linear"), (0.85, mid, "inout"), (0.92, lob, "inout"), (1.0, lob, "linear")]
     base = anim.keyed(keys)
 
     def lobby(t):
         b = anim.osc(t, 4)
-        return anim.add(base(t), _P(chest=(1.0 * b, 0, 0), shoulder_L=(0, 0, 1.2 * b), shoulder_R=(0, 0, -1.2 * b)))
+        return anim.add(base(t), _P(chest=(1.6 * b, 0, 0), shoulder_L=(0, 0, 2.0 * b), shoulder_R=(0, 0, -2.0 * b)))
     out["idle_lobby"] = anim.Clip("idle_lobby", 120, True, anim.drag(lobby, 120, {"head": 3.0, "neck": 2.0}, loop=True))
 
-    # victory: no celebration. Plant the tip, take a tally stick, score it, nod; the final hold is the
-    # cleaver planted at his right and the left hand held out palm up ("you are forgiven")
+    # victory: no celebration. Plant the tip, take a tally stick from the belt, score it with the thumbnail, nod;
+    # the final hold: the cleaver planted at his right and the left hand held out, OPEN and palm up
+    # ("you are forgiven")
     plant = anim.merge(stance_b(0.7), anim.arms_relaxed(),
-                       {"ik": one((-0.22, -0.42, -0.28), (-0.10, -0.20, -0.97), (0.30, -0.95, 0.0), pole=(-0.9, 0.3, -0.3),
-                                  left=BELT_L)})
-    take = anim.merge(plant, {"ik": {"hand.L": HT(rel=(-0.02, -0.30, -0.70), pole=(0.9, 0.2, -0.3))}})
+                       {"ik": one(VIC_REL, (-0.10, -0.42, -0.90), (0.30, -0.90, -0.42), pole=(-0.9, 0.3, -0.3),
+                                  left=BELT_L)}, _P(prop_L=FIST_CURL))
+    take = anim.merge(plant, {"ik": {"hand.L": HT(rel=(0.02, -0.28, -0.85), pole=(0.9, 0.2, -0.3))}})
     take = anim.add(take, _P(head=(14, 0, 0), neck=(6, 0, 0)))
-    score = anim.merge(plant, {"ik": {"hand.L": HT(rel=(-0.12, -0.60, -0.18), pole=(0.9, 0.3, -0.4))}})
+    score = anim.merge(plant, {"ik": {"hand.L": HT(rel=(-0.12, -0.62, -0.20), pole=(0.9, 0.3, -0.4))}})
     score = anim.add(score, _P(head=(16, 4, 0), neck=(6, 0, 0)))
+    scratch = anim.add(score, _P(hand_L=(0, 0, 14)))
     nod = anim.add(score, _P(head=(8, 0, 0)))
-    host = anim.merge(plant, {"ik": {"hand.L": HT(rel=(0.18, -0.85, -0.38), pole=(1.0, 0.0, -0.5))}})
-    host = anim.add(host, _P(chest=(-4, 6, 0), head=(-4, 10, 0), shoulder_L=(0, 0, -4)))
-    keys = [(0.0, G, "linear"), (0.22, plant, "inout"), (0.36, take, "inout"), (0.52, score, "inout"),
-            (0.60, nod, "inout"), (0.66, score, "inout"), (0.80, host, "inout"), (1.0, host, "linear")]
+    host = anim.merge(plant, {"ik": {"hand.L": HT(rel=VIC_HOST, pole=(0.9, -0.2, -0.6))}})
+    host = with_hand(anim.add(host, _P(chest=(-4, 8, 0), head=(-4, 10, 0), shoulder_L=(0, 0, -2))), OPEN)
+    host["ik"] = dict(host["ik"], **{"aim.L": palm_aim((0.40, -0.40, 0.82), (0.45, -0.89, 0.0))})   # palm up, open to his left
+    plant, take, score, scratch, nod, host = (R.tip_to(x) for x in (plant, take, score, scratch, nod, host))
+    keys = [(0.0, G, "linear"), (0.20, plant, "inout"), (0.32, take, "inout"), (0.44, score, "inout"),
+            (0.48, scratch, "inout"), (0.52, score, "inout"), (0.60, nod, "inout"), (0.66, score, "inout"),
+            (0.80, host, "inout"), (1.0, host, "linear")]
     vb = anim.keyed(keys)
 
     def victory(t):
@@ -989,35 +1130,44 @@ def _gen_rest_clips(R, G) -> dict:
         if t > 0.8:
             p = anim.add(p, _P(chest=(0.8 * anim.osc(t, 2), 0, 0)))
         return p
-    out["victory"] = anim.Clip("victory", 60, False, anim.drag(victory, 60, {"head": 2.0, "neck": 1.0, "hand.L": 1.5}))
+    out["victory"] = anim.Clip("victory", 60, False, anim.drag(victory, 60, {"head": 2.0, "neck": 1.0}))
 
-    # dash: a heavy lunge with the cleaver kept on the shoulder
-    lunge = _pose(G, _P(hips=(18, 0, 0), spine=(10, 0, 0), chest=(8, 0, 0), neck=(-12, 0, 0), head=(-12, 0, 0)),
-                  (0, -0.06, -0.08), dict(carry_ik(left=(0.18, -0.55, -0.70)),
-                                         **anim.feet(l=(0.03, -0.32, 0.06), r=(-0.03, 0.30, 0.02), pl=10, pr=-30)))
-    out["dash"] = anim.Clip("dash", 20, False, anim.keyed([(0.0, G, "linear"), (0.3, lunge, "snap"), (0.75, lunge, "linear"),
-                                                            (1.0, G, "inout")]))
-
-    # stunned: staggered back half a step, the cleaver slid off the shoulder and hanging, its tip down, head lolling
-    sag = _pose(G, _P(spine=(10, 0, 0), chest=(12, 0, 0), neck=(10, 0, 0), head=(14, 0, 0)), (0, 0.05, -0.04),
+    # stunned: staggered back a half step (the right foot back, the hips back and down), the cleaver slid off the
+    # shoulder and hanging tip-down, the head lolling, the whole body swaying for balance
+    sag = _pose(G, _P(spine=(10, 0, 0), chest=(12, 0, 0), neck=(10, 0, 0), head=(14, 0, 0)), (0.0, 0.10, -0.06),
                 dict(one((-0.38, -0.04, -0.80), (-0.62, 0.50, -0.60), (0.0, 0.0, 1.0), pole=(-0.9, 0.3, -0.2),
-                         left=(0.08, -0.10, -0.96)),
-                     **step(G, dr=(0, 0.12, 0), dl=(0, 0.06, 0))))
+                         left=(0.25, -0.10, -0.90)),
+                     **step(G, dr=(-0.03, 0.18, 0), dl=(0.02, 0.08, 0), pl=6)))
 
     def stunned(t):
         a, b = anim.osc(t, 1), anim.osc(t, 1, 0.25)
-        return anim.add(sag, _P(hips=(0, 0, 4 * a), spine=(3 * b, 0, -3 * a), chest=(3 * b, 0, -3 * a), neck=(6 * b, 0, 6 * a),
-                                head=(8 * b, 4 * a, 8 * a)))
+        p = anim.add(sag, _P(hips=(2 * b, 0, 4 * a), spine=(3 * b, 0, -3 * a), chest=(3 * b, 0, -3 * a),
+                             neck=(6 * b, 0, 6 * a), head=(8 * b, 4 * a, 8 * a)))
+        return anim._with_hips(p, (0.03 * a, 0.02 * b, -0.01 * abs(a)))
     out["stunned"] = anim.Clip("stunned", 40, True, stunned)
 
-    # channel: the cleaver planted in front, both hands on the pommel, breathing
-    chan = anim.merge(stance_b(1.1), anim.arms_relaxed(),
-                      {"ik": two((0.74, -0.62, -0.32), (0.03, -0.18, -0.98), (0.0, -0.98, 0.18), pole=(-0.9, 0.2, -0.4),
-                                 grip=-0.31)})
-    chan = anim.add(chan, _P(neck=(6, 0, 0), head=(10, 0, 0)))
-    out["channel"] = anim.Clip("channel", 40, True, lambda t: anim.add(chan, _P(chest=(1.5 * anim.osc(t, 2), 0, 0),
-                                                                                 head=(-1 * anim.osc(t, 2), 0, 0))))
+    # channel: the cleaver planted in front, both hands on the pommel, breathing deep, the weight rolling
+    chan = _plant_two(1.1)
+    chan = R.tip_to(anim.add(chan, _P(neck=(6, 0, 0), head=(10, 0, 0))))
+
+    def channel(t):
+        b, s = anim.osc(t, 2), anim.osc(t, 1, 0.2)
+        p = anim.add(chan, _P(chest=(3.0 * b, 0, 0), spine=(1.0 * b, 0, 1.5 * s), shoulder_L=(0, 0, 2.5 * b),
+                              shoulder_R=(0, 0, -2.5 * b), head=(-2.5 * b, 2.0 * s, 0)))
+        return anim._with_hips(p, (0.015 * s, 0.0, -0.008 * b))
+    out["channel"] = anim.Clip("channel", 40, True, anim.drag(channel, 40, {"head": 2.0, "neck": 1.0}, loop=True))
     return out
+
+
+DEATH_KNEEL = 0.385         # the kneel's hip drop (share of the hip height)
+DEATH_LIE = 0.33            # the hips' height lying face down (m)
+DEATH_PLANT_REL = (-0.05, -0.85, -0.25)
+REC_REL = (-0.22, -0.40, -0.17)
+VIC_REL = (-0.22, -0.42, -0.16)
+VIC_HOST = (0.30, -0.86, -0.30)        # the left hand held out in front, a little to his left, at the belt line
+LOBBY_REL = (0.58, -0.74, -0.08)
+LOBBY_D = (0.82, 0.34, 0.46)
+LOBBY_UP = (-0.30, -0.45, 0.84)
 
 
 # ── the paint pose (project.paint_object wrapper) ─────────────────────────────────────────────────
@@ -1036,13 +1186,98 @@ def paint_pose(co: np.ndarray, part_of_vertex: np.ndarray, names: list, M: np.nd
     return out
 
 
-def _install_paint_pose() -> None:
+# LAYERS: the mask and the cleaver overlap in the concept (the mask in front of the blade's root, the
+# blade over the cranium from the back), so each paints from its own plates (proto/burdam_plates.py):
+# the mask from burdam_head (the painted head, its rim extended; the cleaver hidden from the cameras),
+# the cleaver from burdam_cleaver (the blade bridged behind the mask; the mask hidden), the rest from the
+# plain plates. The head layer is also WARPED row by row so the model head's silhouette, as each camera
+# sees it, spans the painted head (the back view paints the cranium narrower than the front's mask).
+PAINT_LAYERS = (("burdam_head", ("mask",), CLEAVER), ("burdam_cleaver", CLEAVER, ("mask",)))
+# value lift (brief section 6: the painting is darker than the bible bands, the body reads as one dark
+# column in game): each part's paint is scaled in linear light toward its role's palette value,
+# (target / painted mean) ** LIFT_ALPHA, never darker, at most LIFT_MAX
+LIFT_ALPHA = 0.62
+LIFT_MAX = 2.6
+LIFT_SKIP = ("mask",) + CLEAVER
+
+
+def _lum(lin: np.ndarray) -> np.ndarray:
+    return lin[..., 0] * 0.2126 + lin[..., 1] * 0.7152 + lin[..., 2] * 0.0722
+
+
+def _lstar(Y):
+    Y = np.asarray(Y, dtype=np.float64)
+    f = np.where(Y > 0.008856, np.cbrt(Y), 7.787 * Y + 16 / 116)
+    return 116 * f - 16
+
+
+def _warp_head(plates, vis, mask_id: int, cache: str, log=print) -> None:
+    """fit the painted head to the model head's visible silhouette, per plate side (in place)"""
+    from common.hifi import project
+    for side in ("front", "back"):
+        reg = project.load_rgb(os.path.join(cache, f"burdam_head_region_{side}.png"))[..., 0] > 0.5
+        pid = vis.part[side]
+        s = vis.step
+        mm = pid == mask_id
+        if not mm.any() or not reg.any():
+            continue
+        img = plates.img[side]
+        H, W = img.shape[:2]
+        half = (0, W // 2) if side == "front" else (W // 2, W)
+        rows_m = np.nonzero(mm.any(axis=1))[0]
+        R0, R1 = rows_m[0] * s, (rows_m[-1] + 1) * s
+        rows_p = np.nonzero(reg[:, half[0]:half[1]].any(axis=1))[0]
+        r0, r1 = rows_p[0], rows_p[-1]
+        # vertical: the model's visible head rows onto the painted ones (a gentle squeeze at most)
+        k = (r1 - r0) / max(R1 - R0, 1)                          # crown to crown, then a gentle squeeze
+        k = 1.0 if abs(k - 1.0) < 0.12 else float(np.clip(k, 0.78, 1.08))   # the front fits as painted
+        A = np.full(H, np.nan)
+        B = np.full(H, np.nan)
+        for j in rows_m:
+            cols = np.nonzero(mm[j])[0]
+            A[j * s:(j + 1) * s] = cols[0] * s
+            B[j * s:(j + 1) * s] = (cols[-1] + 1) * s
+        a = np.full(H, np.nan)
+        b = np.full(H, np.nan)
+        for r in rows_p:
+            cols = np.nonzero(reg[r, half[0]:half[1]])[0]
+            a[r], b[r] = cols[0] + half[0] + 4, cols[-1] + half[0] - 3     # inside the painted outline
+        rows = np.arange(H, dtype=np.float64)
+        ok = ~np.isnan(a)
+        a = np.interp(rows, rows[ok], a[ok])
+        b = np.interp(rows, rows[ok], b[ok])
+        okm = ~np.isnan(A)
+        A = np.interp(rows, rows[okm], A[okm])
+        B = np.interp(rows, rows[okm], B[okm])
+        sm = lambda v: project.blur(v[:, None, None].astype(np.float32), 6.0)[:, 0, 0]  # noqa: E731
+        A, B, a, b = sm(A), sm(B), sm(a), sm(b)
+        y0, y1 = max(0, R0 - 24), min(H, R1 + 24)
+        ys, xs = np.mgrid[y0:y1, half[0]:half[1]]
+        src_r = np.clip(r0 + (ys - R0) * k, r0, r1).astype(np.float64)
+        ri = np.clip(ys, 0, H - 1)
+        sri = np.clip(src_r.astype(np.int64), 0, H - 1)
+        Am, Bm = A[ri], B[ri]
+        am, bm = a[sri], b[sri]
+        t = (xs - Am) / np.maximum(Bm - Am, 4.0)
+        src_x = am + t * (bm - am)
+        band = (xs > Am - 24) & (xs < Bm + 24)
+        col = project.bilinear(img, src_x + 0.5, src_r + 0.5)
+        out = img.copy()
+        sub = out[y0:y1, half[0]:half[1]]
+        sub[band] = col[band]
+        plates.img[side] = out
+        mid = int(0.5 * (R0 + R1))
+        log(f"burdam: head layer {side}: model rows {R0}-{R1} -> painted {r0}-{r1} (k {k:.2f}), "
+            f"width at row {mid}: {B[mid] - A[mid]:.0f} px -> {b[int(src_r[mid - y0, 0])] - a[int(src_r[mid - y0, 0])]:.0f} px")
+
+
+def _install_paint_layers() -> None:
     from common.hifi import project
     if getattr(project.paint_object, "_burdam", False):
         return
-    orig = project.paint_object
 
     def paint_object(obj, size, cfg, names, part_attr="vale_part", log=print, return_maps=False):
+        from common import scene
         me = obj.data
         n = len(me.vertices)
         co = np.empty(n * 3, dtype=np.float32)
@@ -1052,19 +1287,153 @@ def _install_paint_pose() -> None:
         pv = np.zeros(n, dtype=np.int64)
         if a is not None and a.domain == "POINT":
             a.data.foreach_get("value", pv)
+        names = list(names)
         M = _STATE.get("prop")
-        moved = paint_pose(co.astype(np.float64), pv, list(names), M).astype(np.float32) if M is not None else co
-        me.vertices.foreach_set("co", moved.ravel())
-        me.update()
-        try:
-            log("burdam: the cleaver painted in its concept pose (behind the head)")
-            return orig(obj, size, cfg, names, part_attr=part_attr, log=log, return_maps=return_maps)
-        finally:
-            me.vertices.foreach_set("co", co.ravel())
+        posed = paint_pose(co.astype(np.float64), pv, names, M).astype(np.float32) if M is not None else co.copy()
+        cache = os.path.join(scene.CACHE_DIR, "concept")
+        ids = {nm: i for i, nm in enumerate(names)}
+
+        def setco(arr):
+            me.vertices.foreach_set("co", arr.ravel())
             me.update()
+        try:
+            setco(posed)
+            log("burdam: the cleaver painted in its concept pose (behind the head); mask + cleaver layers")
+            maps = project.rasterize(obj, size, part_attr)
+            flat = {k: scene.hex_srgb(h) for k, h in (cfg.get("flat") or {}).items()}
+            part = maps["part"]
+            have = part >= 0
+            out = np.zeros((size, size, 3), dtype=np.float32)
+            layered = set()
+            jobs = []
+            for fid, own, hide in PAINT_LAYERS:
+                own_ids = [ids[x] for x in own if x in ids]
+                layered.update(own_ids)
+                jobs.append((fid, own_ids, [ids[x] for x in hide if x in ids]))
+            rest = [i for i in range(len(names)) if i not in layered]
+            jobs.insert(0, (cfg["concept"], rest, []))
+            for fid, own_ids, hide_ids in jobs:
+                if not own_ids:
+                    continue
+                plates = project.Plates(cache, fid, cfg["height"])
+                if hide_ids:
+                    moved = posed.copy()
+                    moved[np.isin(pv, hide_ids)] += np.array([0.0, 0.0, -100.0], dtype=np.float32)
+                    setco(moved)
+                vis = project.VisibilityMaps.build(obj, plates, step=2, part_attr=part_attr)
+                if hide_ids:
+                    setco(posed)
+                if fid == "burdam_head" and "mask" in ids:
+                    _warp_head(plates, vis, ids["mask"], cache, log=log)
+                sub = dict(maps)
+                sub["part"] = np.where(np.isin(part, own_ids), part, -1).astype(part.dtype)
+                img = project.paint(sub, plates, vis, names, tops=None, flat=flat, bleed=False, log=log)
+                sel = np.isin(part, own_ids)
+                out[sel] = img[sel]
+            out = _post_paint(out, maps, names, log=log)
+            iy, ix = project.nearest_index(have)
+            out = out[iy, ix]
+            return (out, maps) if return_maps else out
+        finally:
+            setco(co)
 
     paint_object._burdam = True
     project.paint_object = paint_object
+
+
+def _post_paint(img: np.ndarray, maps: dict, names: list, log=print) -> np.ndarray:
+    """the value lift per part (brief section 6) and the cleaver's crisp painted rim (section 4)"""
+    from common import scene
+    from common.hifi import project
+    part = maps["part"]
+    lin = project._lin(img)
+    out = lin.copy()
+    roles = {nm: r for (nm, _S, _v, r, _b, _t, _sp) in sculpts() + skin_extras({"reed_plates": 1, "river_glass": 1,
+                                                                                     "almanac_board": 1})}
+    if "mask" in names:
+        # the cranium (back plate) is painted a paler, cooler ochre than the face (front plate): pull the back
+        # half's mean onto the face's so the whole head reads as one gold lacquer, crown included
+        m = part == names.index("mask")
+        ny = maps["N"][..., 1][m]
+        pz = maps["P"][..., 2][m]
+        c = out[m]
+        front, back = (ny < -0.5) & (pz > 1.97), (ny > 0.25) & (pz > 2.0)     # the painted face / cranium
+        if front.any() and back.any():
+            g = np.clip(np.median(c[front], axis=0) / np.maximum(np.median(c[back], axis=0), 1e-4), 0.7, 1.4)
+            w = np.clip((ny + 0.25) / 0.6, 0.0, 1.0)[:, None]
+            c = c * (1.0 + (g - 1.0) * w)
+            log(f"burdam: cranium matched to the face, gain {np.round(g, 2).tolist()}")
+        # lacquer depth: the crown, temples and back a step deeper and richer than the lit face (the concept's
+        # cranium), so strong key and sky light keep the head gold instead of washing it to cream
+        away = np.clip((ny + 0.6) / 0.8, 0.0, 1.0)[:, None]
+        Y = _lum(c)[:, None]
+        c = Y + (c - Y) * (1.0 + 0.25 * away)
+        out[m] = np.clip(c * (1.0 - 0.22 * away), 0.0, None)
+    report = []
+    for i, nm in enumerate(names):
+        m = part == i
+        if not m.any() or nm in LIFT_SKIP or nm in SKIN_FLAT:
+            continue
+        role = roles.get(nm)
+        hexv = PALETTE.get(role) if isinstance(PALETTE, dict) else None
+        if not hexv or role == "accent":
+            continue
+        Ym = float(np.mean(_lum(lin[m])))
+        Yt = float(_lum(project._lin(np.asarray(scene.hex_srgb(hexv), dtype=np.float32))))
+        g = float(np.clip((Yt / max(Ym, 1e-4)) ** LIFT_ALPHA, 1.0, LIFT_MAX))
+        out[m] = lin[m] * g
+        report.append(f"{nm} L*{_lstar(Ym):.0f}->{_lstar(Ym * g):.0f} (role {role} L*{_lstar(Yt):.0f})")
+    log("burdam: value lift " + ", ".join(report))
+    out = blade_rim(out, maps, names)
+    return project._srgb(out).astype(np.float32)
+
+
+def blade_rim(lin: np.ndarray, maps: dict, names: list) -> np.ndarray:
+    """The blade's painted rim, which the plate cut erodes (9 px): a thin dark outline round the blade,
+    the honed edge band (one step lighter, never above L* 84) with its bevel line, a pale highlight under
+    the spine and darker chips where the edge is nicked. Drawn from each texel's cleaver (u, v) (the
+    texels sit in the paint pose)."""
+    if "blade" not in names:
+        return lin
+    P, part = maps["P"], maps["part"]
+    bl = part == names.index("blade")
+    if not bl.any():
+        return lin
+    u, v = cl.to_uv(P[..., 0][bl], P[..., 2][bl])
+    ve, vs = cl.v_edge(u), cl.v_spine(u)
+    de = v - ve                                  # in from the cutting edge (m)
+    ds = vs - v                                  # in from the spine
+    d_out = np.minimum(de, ds)
+    tip = np.clip((1.437 - u) / 0.02, 0, 1)
+    c = lin[bl].copy()
+    Y = _lum(c)[:, None]
+    band = np.clip(1.0 - np.abs(de - 0.018) / 0.014, 0, 1) * tip           # the honed band (3-32 mm in)
+    bevel = np.clip(1.0 - np.abs(de - 0.036) / 0.0035, 0, 1) * (u > 0.25)   # the bevel line
+    shine = np.clip(1.0 - np.abs(ds - 0.008) / 0.004, 0, 1)                # light under the spine
+    rim = np.clip(1.0 - d_out / 0.0045, 0, 1)                              # the outline
+    hon = np.array([0.66, 0.68, 0.64], dtype=np.float32)                   # L* ~85 at most after the mix
+    c = c * (1 - 0.55 * band[:, None]) + hon * 0.55 * band[:, None]
+    c = c * (1 - 0.25 * bevel[:, None])                                   # the bevel line, a quarter darker
+    c = c + (hon - c) * 0.35 * shine[:, None]
+    ink = np.array([0.035, 0.032, 0.03], dtype=np.float32)
+    c = c * (1 - 0.8 * rim[:, None]) + ink * 0.8 * rim[:, None]
+    # chips: short dark nicks into the edge at the outline's dents and a few scattered along it
+    nick = np.zeros_like(u)
+    for uc, w in ((0.61, 0.012), (0.74, 0.012), (0.93, 0.006), (1.08, 0.008), (1.19, 0.006)):
+        nick = np.maximum(nick, np.clip(1.0 - np.hypot((u - uc) / w, de / 0.016), 0, 1))
+    c = c * (1 - 0.6 * nick[:, None]) + ink * 0.6 * nick[:, None]
+    # two long scratches (the concept's crack lines), thin and dark
+    for (u0, v0, u1, v1) in ((0.62, 0.02, 0.95, 0.05), (1.02, 0.07, 1.20, 0.04)):
+        du, dv = u1 - u0, v1 - v0
+        L = math.hypot(du, dv)
+        t = np.clip(((u - u0) * du + (v - v0) * dv) / (L * L), 0, 1)
+        dd = np.hypot(u - (u0 + t * du), v - (v0 + t * dv))
+        ln = np.clip(1.0 - dd / 0.0022, 0, 1) * np.sin(np.pi * t) ** 0.5
+        c = c * (1 - 0.5 * ln[:, None]) + ink * 0.5 * ln[:, None]
+    del Y
+    out = lin.copy()
+    out[bl] = c
+    return out
 
 
 RUST_PARTS = ("tier1", "tier2", "tier3", "tier4", "shoulder_plate", "vambrace", "strap_plate")
@@ -1126,8 +1495,38 @@ def _install_skin_print() -> None:
     orig = project.recolour
 
     def recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
-        out = orig(img, maps, names, roles, base_pal, skin_pal, skip=skip, log=log)
         skin = _STATE.get("skin") or {}
+        match = set(skin.get("match") or ())
+        # the skin's IDENTITY roles are matched, not scaled: each such part's painted mean becomes the skin
+        # hex exactly (per channel, linear light; the painting's shading rides on top), so a dark painted
+        # coat really turns warm grey and the oxidised pauldrons really turn parchment. The other roles
+        # keep the shared ratio re-colour (skin hex / base hex).
+        rest = {n: r for n, r in roles.items() if r not in match}
+        out = orig(img, maps, names, rest, base_pal, skin_pal, skip=skip, log=log)
+        if match:
+            from common import scene
+            lin = project._lin(out)
+            part = maps["part"]
+            iy, ix = project.nearest_index(part >= 0)
+            pid = part[iy, ix]
+            for i, n in enumerate(names):
+                r = roles.get(n)
+                if r not in match or n in (skip or set()) or r not in skin_pal:
+                    continue
+                m = pid == i
+                own = part == i
+                if not own.any():
+                    continue
+                mean = lin[own].mean(axis=0)
+                t = project._lin(np.asarray(scene.hex_srgb(skin_pal[r]), dtype=np.float32))
+                gain = np.clip(t / np.maximum(mean, 1e-4), 0.05, 8.0)
+                # mostly a tint of the painting's VALUES (the skin hex times each texel's luminance over the
+                # part's mean), a quarter the per-channel scale: the painted hue noise is not blown up 3-8x
+                l = np.clip(_lum(lin[m]) / max(float(_lum(mean[None])[0]), 1e-4), 0.12, 2.6)[:, None]
+                lin[m] = (t[None] * l) * (1.0 - MATCH_HUE) + (lin[m] * gain) * MATCH_HUE
+                log(f"  match {n} ({r}): mean {np.round(project._srgb(mean) * 255).astype(int).tolist()} -> "
+                    f"{skin_pal[r]}, gain {np.round(gain, 2).tolist()}")
+            out = project._srgb(lin).astype(np.float32)
         if (skin.get("extra") or {}).get("almanac_board"):
             log("burdam: Almanac Ledger print (ruled pauldrons, day-marks on the cleaver's back)")
             out = almanac_print(out, maps, list(names), skin_pal.get("ironstone", "#2E2A26"))
@@ -1138,6 +1537,40 @@ def _install_skin_print() -> None:
 
 
 ARM_BONES = tuple(f"{b}.{s}" for s in "LR" for b in ("shoulder", "upper_arm", "forearm", "hand", "prop"))
+
+
+MATCH_HUE = 0.25          # skin identity roles: share of the painting's own hue variation kept (see recolour)
+BASE_WEBP_Q = 74          # base-colour WebP quality (optimize.mjs default 80): the lifted painting carries more
+                          # shadow detail; the GLB budget (1172 KiB) holds with the painting at q74
+
+
+def _install_webp_quality() -> None:
+    """export.optimize with `--q-base BASE_WEBP_Q` (the shared wrapper passes no quality; optimize.mjs takes it)"""
+    import subprocess
+    from common import export, scene
+    if getattr(export.optimize, "_burdam", False):
+        return
+    orig = export.optimize
+
+    def optimize(path, out=None, quantize=False, fighter=False):
+        if not fighter:
+            return orig(path, out, quantize=quantize, fighter=fighter)
+        out = out or path
+        script = os.path.join(scene.TOOLS_DIR, "optimize.mjs")
+        node = export.node_exe()
+        before = os.path.getsize(path)
+        if not node or not os.path.isfile(script):
+            return orig(path, out, quantize=quantize, fighter=fighter)
+        args = [node, script, path, out, "--fighter", "--q-base", str(BASE_WEBP_Q)] + (["--quantize"] if quantize else [])
+        r = subprocess.run(args, cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+        if r.returncode != 0:
+            scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
+            return {"ok": False, "before": before, "after": before, "error": r.stderr[-800:]}
+        scene.log(r.stdout.strip() + f" (burdam: base webp q{BASE_WEBP_Q})")
+        return {"ok": True, "before": before, "after": os.path.getsize(out)}
+
+    optimize._burdam = True
+    export.optimize = optimize
 
 
 def _install_body_bind() -> None:
@@ -1160,6 +1593,7 @@ def _install_body_bind() -> None:
 
 if __name__ == "__main__":
     _install_body_bind()
-    _install_paint_pose()
+    _install_paint_layers()
+    _install_webp_quality()
     _install_skin_print()
     fighter.main(sys.modules[__name__])

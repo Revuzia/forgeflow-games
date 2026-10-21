@@ -46,3 +46,44 @@
 - Content checks: --allow-missing-assets OK; strict check lists nothing for ervet or its skins.
 - Open: splash chalk blows out under the splash key (helm reads white from the low hero camera); the body is a
   clean painted read in game but the coat's back is plain (the concept's back is plain too).
+
+## 2026-10-20 15:02 CDT — FIX PASS started (24 review items)
+- Committed state (d46af9ef) read; the reviewers' items: blade/guard likeness, painted arms, tiled lames, cape
+  ghosts, tan patch, gems + accent spread, splash, visor, helm back, skins, wedge, gold trim; in game: ult leap,
+  cast follow-through, Shard Kick, dark blade, run carry, death, recall, victory, coat slab, ult VFX.
+- ervet.py reworked: blade 13.4 cm wide rolled 30 deg toward the camera + procedural dawnglass paint (core,
+  fuller, pale bevels), dawnglass roughness 0.40 (extra_materials); broad recurved chalk crossguard (Extrude)
+  with lozenge inlays; gems removed (crest diamonds, clasps, back + buckle diamonds); visor = a prism pane in an
+  ink-painted slot; lames = 5 rows of separate plates (slot cuts) painted per plate; pauldron tops smaller,
+  sloped, carved groove, procedural stone; chalk rerebraces + elbow cops, blued vambraces, wrapped forearms,
+  gloves, new boots (sole, heel, toe, cuff); coat narrower (hem 0.71 m vs mantle 0.85 m), fully procedural
+  cloth (no slit/arm/background ghosts) + 'coatmix' binding (front flaps on hips/thighs); ochre trims -> warm
+  stone; helm back/sides chalk, scarf cream at its painted value, crest back lifted.
+- Motion: cast_a2 = planted blade + straight left front kick at f10; run two-handed, blade trailing out to the
+  right; death drops the sword (prop.R location keys via a write_action wrapper), kneels, topples left;
+  recall 90 f with a bow/look beat; victory ends planted at a long diagonal, left hand on the hip; dash =
+  leaping arc (hips +0.34 m) ending in the downward swing (plays over Whole Again's dash in game).
+- Fit IoU front 0.833 / back 0.83 (was 0.82 / 0.82). Next: base build.
+
+## 2026-10-20 15:44 CDT — fix builds 1-3
+- Build 1: 20.3k tris, 1463 KiB (over): decimated oblique voxel blades kept 680/1240 tris and shattered into UV
+  islands; slot-cut lames fragmented (2.6k split verts per side). Fixes: parametric clean blade lows (10-point
+  section, sharp bevels, 200 tris, the stub's jagged break) and parametric lames (5 grid bands per side, plates
+  ridged + scalloped, a lip) -> build 3: 17,168 tris, 1095 KiB, load test OK, facing +Z, accent 1.87 % (97.8 %
+  top half; hilt 1.94, great 1.80), run foot error 0 %.
+- Matte overrides (leather 0.84, ironstone 0.88, chalk/stone 0.80) + render-only specular 0.2 + sun 1.45: the
+  splash boots/greaves no longer turn pale. In game (art2_ervet_*): blade, mantle, coat read; ult = cast_ult
+  coil then the leaping dash clip (blade overhead -> swung down at the landing); the landing VFX whiteout is VFX.
+- Now: build 4 (helm slot ink limited to the slot, deeper lames), then skins.
+
+## 2026-10-20 16:32 CDT — builds 4-6, skins pass 1, final builds running
+- Build 5: blades get rounded custom shading normals (a pale band catches the light at any facing); stone
+  darker; cape chain stiffer (limit -10..22, inertia 0.10) so strikes no longer fling the back panel as a board.
+- Build 6: a wrist roll after the aim (anim._solve_aim wrapper) turns the blade's flat toward the sky (80 %, up
+  to 70 deg): in game the blade now reads as a wide bar with its guard from the high camera (was a dark
+  edge-on stick). Gates: 17,168 tris, 1094 KiB, load OK, accent 1.87 %.
+- Skins pass 1 (stillwater 915 KiB / 17,168 tris / accent 1.68 %, lamplit 957 KiB / 17,528 tris / 1.68 %; both
+  load OK): Stillwater reads slate wet-stone with sea-glass blade and sea-grey scarf; Lamplit walnut all round
+  (back cape included), smoked-resin blade, lamp cage at the pommel end.
+- Final: victory keeps its authored blade roll (the splash blade went edge-on with the roll), glass paler;
+  base build 7 + skins build 4 running.

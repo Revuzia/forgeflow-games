@@ -437,7 +437,7 @@
     "portrait": "assets/fighters/kemdo/portrait.png",
     "splash": "assets/fighters/kemdo/splash.png",
     "icon": "assets/fighters/kemdo/icon.png",
-    "height": 2.44,
+    "height": 2.12,
     "scale": 1,
     "runRefSpeed": 3.45,
     "clips": {

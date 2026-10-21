@@ -3,16 +3,17 @@
   "fighter": "hesmi",
   "skin": true,
   "parts": {
-    "tris_hood": 1800,
-    "tris_eyeband": 448,
-    "tris_facewrap": 648,
+    "tris_hood": 1798,
+    "tris_eyeband": 518,
+    "tris_eyeslit": 58,
+    "tris_facewrap": 650,
     "tris_mantle": 2200,
     "tris_pauldron_R": 500,
     "tris_pauldron_L": 500,
     "tris_torso": 2098,
     "tris_belt": 650,
     "tris_sash": 1150,
-    "tris_tunic": 1350,
+    "tris_tunic": 1698,
     "tris_legs": 1250,
     "tris_shinguard_R": 320,
     "tris_shinguard_L": 320,
@@ -30,43 +31,43 @@
     "tris_shard_lo_L": 520,
     "tris_shard_lo_R": 520,
     "tris_brace": 420,
-    "tris_eyes": 418,
-    "tris_tips": 300,
-    "tris_eye_rings": 360,
+    "tris_inlays": 240,
+    "tris_eyes": 260,
+    "tris_eye_rings": 220,
     "tris_rope_coils": 900,
     "tris_iron_pins": 300,
-    "validate_hesmi": "22192->22186"
+    "validate_hesmi": "22788->22782"
   },
-  "uv_coverage": 0.61,
+  "uv_coverage": 0.605,
   "bake": {
-    "base": 7.85,
-    "rough_metal": 7.52,
-    "normal": 5.15,
-    "ao": 5.94,
-    "normal_fixed_px": 56025,
-    "projection": 180.68,
-    "pack_save": 181.87,
-    "total": 209.92
+    "base": 12.46,
+    "rough_metal": 14.56,
+    "normal": 9.97,
+    "ao": 7.61,
+    "normal_fixed_px": 51110,
+    "projection": 143.84,
+    "pack_save": 145.27,
+    "total": 191.06
   },
-  "tris": 22904,
-  "mesh_top_m": 2.305,
-  "glb_bytes_raw": 2556384,
+  "tris": 23022,
+  "mesh_top_m": 2.309,
+  "glb_bytes_raw": 2483832,
   "optimize": {
     "ok": true,
-    "before": 2556384,
-    "after": 1092672
+    "before": 2483832,
+    "after": 1065060
   },
-  "glb_bytes": 1092672,
+  "glb_bytes": 1065060,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_gorgewalk.glb (1067 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: hesmi_gorgewalk_base 2048x2048 296K, hesmi_gorgewalk_normal 512x512 43K, hesmi_gorgewalk_orm 512x512 71K",
-      "  skinned meshes: hesmi_accent(370v), hesmi_gorgewalk(18362v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_gorgewalk.glb (1040 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_gorgewalk_base 2048x2048 264K, hesmi_gorgewalk_normal 512x512 41K, hesmi_gorgewalk_orm 512x512 69K",
+      "  skinned meshes: hesmi_accent(126v), hesmi_gorgewalk(18871v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 22904; bind-pose bounds (three units, Y up): 1.40 x 2.31 x 0.92; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
+      "  tris: 23022; bind-pose bounds (three units, Y up): 1.40 x 2.31 x 0.94; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -76,8 +77,8 @@
       "portrait": "art/out/fighters/hesmi/hesmi_gorgewalk_portrait.png"
     },
     "seconds": {
-      "splash": 24.86,
-      "portrait": 12.96
+      "splash": 29.17,
+      "portrait": 11.8
     }
   },
   "three_qa": {
@@ -87,11 +88,11 @@
       [
         -0.701,
         0,
-        -0.524
+        -0.541
       ],
       [
         0.701,
-        2.305,
+        2.309,
         0.399
       ]
     ],
@@ -100,33 +101,33 @@
       1
     ],
     "headY": 1.962,
-    "accentPct": 2.15,
+    "accentPct": 1.99,
     "accentTopHalfPct": 100,
-    "heightPx1080": 124,
+    "heightPx1080": 125,
     "size": [
       2400,
       900
     ],
     "clips": 0,
     "out": "art/renders/fighters/hesmi/three_hesmi_gorgewalk.png",
-    "seconds": 38.5,
+    "seconds": 42.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.43,
-      "model": 13.19,
-      "lows_bind": 19.48,
-      "uv": 21.16,
-      "bake": 209.92,
-      "export": 0.79,
-      "optimize": 3.03,
-      "load_test": 0.7,
-      "render": 37.94,
-      "three_qa": 39.1
+      "rig": 0.01,
+      "materials": 0.79,
+      "model": 41.88,
+      "lows_bind": 28.3,
+      "uv": 7.91,
+      "bake": 191.07,
+      "export": 3.95,
+      "optimize": 4.66,
+      "load_test": 0.74,
+      "render": 41.08,
+      "three_qa": 43.37
     },
-    "total_s": 345.86
+    "total_s": 364.23
   },
   "run_ref_speed": 3.35,
   "height_m": 2.22

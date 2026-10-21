@@ -5,12 +5,14 @@ The cleaver lives in its own 2D frame: u along the blade axis (0 = the guard, wh
 heel; + toward the tip), v across it (+ = the notched spine, - = the cutting edge), w through the blade.
 Measured on the concept (front plate, mask crown 2.15 m, 10 cm grid; the run profiles across the axis
 every 4 cm, + the 9 px the cut erodes): the blade 1.43 m from the guard to the tip, 0.22-0.26 m wide,
-the heel collar (ironstone) from the guard to u 0.43 with four scallops on the spine, a short wrapped
-haft (0.35 m painted) and a diamond pommel.
+the heel collar (ironstone) from the guard to u 0.43, a short wrapped haft (0.35 m painted) and a
+diamond pommel. The heel's spine carries five chevron notches (V cuts 8 cm wide, 6 cm deep: tallies),
+each holding one accent slab (a diamond nested in the V; brief section 4/7). No accent on the pommel.
 
 PROP SPACE (rig.prop_matrix): grip at the origin, +Z along the cleaver (u), +Y the spine (v; so the
-edge faces -Y, the rig convention), +X = w. The game haft is longer than the painted one (0.47 m to the
-pommel's centre against 0.35 m) so two fists fit on it; the paint pose squeezes it back.
+edge faces -Y, the rig convention), +X = w. The game haft is longer than the painted one (0.62 m to the
+pommel's centre against 0.35 m: the brief's long two-handed haft, the off hand 0.30 m below the main one);
+the paint pose squeezes it back.
 
 PAINT POSE: where the concept paints the cleaver (behind the head, the haft over the right shoulder):
 world (x, z) = G + u * AX + v * NV, world y = Y_PAINT[part] - w (w > 0 faces the front plate).
@@ -26,10 +28,11 @@ AX = (_T - G) / np.linalg.norm(_T - G)
 NV = np.array([-AX[1], AX[0]])
 Y_PAINT = {"blade": 0.21, "heel": 0.21, "gems": 0.21, "haft": 0.34, "pommel": 0.34}
 
-U_GRIP = -0.15            # the main fist on the haft (u); the off hand 0.17 m lower (anim two_hand grip)
-HAFT_U0 = -0.42           # game haft end (pommel joint)
-POMMEL_U = -0.475         # game pommel centre
-PAINT_HAFT_SCALE = 0.35 / 0.475   # painted pommel centre at u -0.35
+U_GRIP = -0.15            # the main fist on the haft (u); the off hand OFF_GRIP lower
+OFF_GRIP = -0.30          # the off hand's grip along the haft from the main fist (two-handed swings, plants)
+HAFT_U0 = -0.57           # game haft end (pommel joint)
+POMMEL_U = -0.62          # game pommel centre
+PAINT_HAFT_SCALE = 0.35 / 0.62    # painted pommel centre at u -0.35
 PAINT_HAFT_BEND = 0.055 / 0.35    # the painted haft drops 5.5 cm below the axis at the pommel
 
 # blade outline (u, v): the cutting edge (with two chips near the heel) and the spine, guard -> tip
@@ -42,13 +45,14 @@ SPINE = [(0.30, 0.118), (0.50, 0.126), (0.64, 0.134), (0.76, 0.146), (0.90, 0.16
 HEEL = [(-0.050, 0.128), (-0.040, 0.020), (-0.020, -0.070), (0.020, -0.108), (0.15, -0.112), (0.25, -0.110),
         (0.30, -0.060), (0.35, 0.000), (0.40, 0.060), (0.440, 0.122)]
 HEEL_SPINE_V = 0.122
-SCALLOPS = [0.085, 0.195, 0.330]          # notches (u) cut into the heel's spine between its four lobes
-SCALLOP_R = 0.042
-# the accent slabs set in the heel's notch line (u, v, half-diagonal along u, across v) + the pommel gem
-GEMS = [(0.050, -0.006, 0.054, 0.039), (0.166, 0.020, 0.054, 0.039), (0.282, 0.044, 0.054, 0.039),
-        (0.395, 0.062, 0.050, 0.036)]
-POMMEL_GEM = (0.046, 0.040)
-NOTCH_LINER = 0.016       # accent liners in the bottoms of the three spine notches (the grudge count)
+# five chevron notches (u of the V's apex) cut into the heel's spine: 8 cm wide at the spine, 6 cm deep
+NOTCHES = [0.000, 0.088, 0.176, 0.264, 0.352]
+NOTCH_HALF_W = 0.040
+NOTCH_DEPTH = 0.060
+# the accent slab nested in each notch (u, v of its centre, half-diagonal along u, across v): its upper
+# half fills the V's bottom, its lower half is set into the heel (a recess on both faces)
+GEMS = [(nu, HEEL_SPINE_V - NOTCH_DEPTH + 0.002, 0.044, 0.040) for nu in NOTCHES]
+POMMEL_INSET = (0.044, 0.038)             # the carved (not lit) diamond recess on the pommel plate
 
 
 def blade_poly() -> list:
@@ -87,10 +91,43 @@ def sd_polygon(u, v, poly) -> np.ndarray:
     return s * np.sqrt(d)
 
 
+def notch_polys() -> list:
+    """the V cuts as triangles (u, v), opened 3 cm above the spine so they cut cleanly through it"""
+    out = []
+    a = HEEL_SPINE_V - NOTCH_DEPTH
+    k = NOTCH_HALF_W / NOTCH_DEPTH
+    top = HEEL_SPINE_V + 0.03
+    for nu in NOTCHES:
+        out.append([(nu, a), (nu + k * (top - a), top), (nu - k * (top - a), top)])
+    return out
+
+
+def notch_liners(width: float = 0.015, into: float = 0.002) -> list:
+    """the accent band lining both walls of each V notch (u, v quads): `width` into the heel from the wall,
+    `into` past it into the cut, so the wall faces the camera and sky see are lit"""
+    out = []
+    a = HEEL_SPINE_V - NOTCH_DEPTH
+    k = NOTCH_HALF_W / NOTCH_DEPTH
+    h = HEEL_SPINE_V - a
+    for nu in NOTCHES:
+        A = np.array([nu, a])
+        for sgn in (-1.0, 1.0):
+            T = np.array([nu + sgn * k * h, HEEL_SPINE_V])
+            w = (T - A) / np.linalg.norm(T - A)
+            n = np.array([sgn * w[1], -sgn * w[0]])          # away from the notch, into the heel
+            if np.dot(n, np.array([0.0, -1.0])) < 0 and abs(n[0]) < 1e-9:
+                n = -n
+            if np.dot(n, A + 0.5 * (T - A) - np.array([nu, HEEL_SPINE_V])) < 0:
+                n = -n
+            p0, p1 = A - n * into - w * 0.004, T - n * into + w * 0.004
+            out.append([tuple(p0), tuple(p1), tuple(p1 + n * (width + into)), tuple(p0 + n * (width + into))])
+    return out
+
+
 def in_heel(u, v) -> np.ndarray:
     d = sd_polygon(u, v, HEEL)
-    for su in SCALLOPS:
-        d = np.maximum(d, -(np.hypot(u - su, v - (HEEL_SPINE_V + 0.012)) - SCALLOP_R))
+    for tri in notch_polys():
+        d = np.maximum(d, -sd_polygon(u, v, tri))
     return d < 0
 
 

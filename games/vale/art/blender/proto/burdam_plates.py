@@ -17,8 +17,16 @@ blade tips (the back figure is painted 2 % smaller). Fixes over the shared cut:
   * the BACK plate paints the hood over the blade, but the blade passes BEHIND the head (the front
     plate shows it there), so from the back the blade covers the hood's crown: the blade band over the
     head is bridged along the blade axis from the paint on either side of the head.
-Writes art/.cache/concept/burdam_{front,back}.png, burdam_mask.png, burdam_plates.json (+ a debug overlay
-burdam_plates_debug.png in the same folder).
+LAYERS (fighters/burdam.py paints the mask and the cleaver from their own plates, so neither takes the
+other's paint where the two overlap in the concept):
+  * burdam_head_{front,back}: the plates as painted (no back bridge: the gold cranium with its tally
+    cuts), the painted head (gold segmentation, hole-filled) extended outward with its own rim paint, so a
+    model head a little wider than the painting never samples blade, cowl or background;
+  * burdam_cleaver_{front,back}: the back bridge as above, and on the FRONT the blade and heel behind the
+    mask bridged the same way along the blade axis (no gold under the cleaver's outline).
+Writes art/.cache/concept/burdam_{front,back}.png, burdam_mask.png, burdam_plates.json, the layer plates
+(+ burdam_head_region_{front,back}.png, the painted head masks) and a debug overlay
+burdam_plates_debug.png in the same folder.
 """
 from __future__ import annotations
 
@@ -119,9 +127,21 @@ def main() -> None:
     fill = np.stack([nd.gaussian_filter(im[iy, ix][..., c], 2.5) for c in range(3)], -1)
     a = nd.gaussian_filter((blue & keep).astype(np.float32), 1.5)[..., None]
     padded = padded * (1 - a) + fill * a
+    painted = padded.copy()
     padded = bridge_back_blade(padded, meta)
     for side, _ in halves:
         Image.fromarray(padded.clip(0, 255).astype(np.uint8)).save(out / f"{ID}_{side}.png")
+    # the layer plates (see the module doc)
+    heads = {side: head_region(im, side) for side, _ in halves}
+    head_img = painted.copy()
+    for side, (x0, x1) in halves:
+        head_img[:, x0:x1] = extend_head(painted[:, x0:x1], heads[side][:, x0:x1])
+        Image.fromarray((heads[side] * 255).astype(np.uint8)).save(out / f"{ID}_head_region_{side}.png")
+    cleaver_img = bridge_front_blade(padded, meta, heads["front"])
+    for layer, img_l in (("head", head_img), ("cleaver", cleaver_img)):
+        for side, _ in halves:
+            Image.fromarray(img_l.clip(0, 255).astype(np.uint8)).save(out / f"{ID}_{layer}_{side}.png")
+        (out / f"{ID}_{layer}_plates.json").write_text(json.dumps(dict(meta, id=f"{ID}_{layer}"), indent=2))
     Image.fromarray((keep * 255).astype(np.uint8)).save(out / f"{ID}_mask.png")
     meta["m_per_px"] = (meta["front"]["ground"] - meta["front"]["top"]) and HEIGHT / (meta["front"]["ground"] - meta["front"]["top"])
     (out / f"{ID}_plates.json").write_text(json.dumps(meta, indent=2))
@@ -131,6 +151,81 @@ def main() -> None:
     Image.fromarray(np.concatenate([dbg, padded], 0).clip(0, 255).astype(np.uint8)).resize((W // 2, H)).save(
         out / f"{ID}_plates_debug.png")
     print(json.dumps(meta))
+
+
+# ── the painted head and its layer ────────────────────────────────────────────────────────────────
+def head_region(im: np.ndarray, side: str) -> np.ndarray:
+    """the painted gold mask / cranium: saturated ochre-gold pixels near the head, the largest blob,
+    closed and hole-filled (the ink tally cuts and eye holes inside it count as head)"""
+    W = im.shape[1]
+    x0, x1 = (0, W // 2) if side == "front" else (W // 2, W)
+    r, g, b = im[..., 0], im[..., 1], im[..., 2]
+    mx, mn = im.max(axis=2), im.min(axis=2)
+    sat = (mx - mn) / np.maximum(mx, 1)
+    gold = (r > g) & (g > b + 22) & (sat > 0.30) & (r > 95)
+    m = np.zeros(gold.shape, bool)
+    m[200:560, x0:x1] = gold[200:560, x0:x1]
+    m = nd.binary_opening(m, iterations=2)                 # drops the thin warm streak along the blade's edge
+    lbl, n = nd.label(nd.binary_closing(m, iterations=3))
+    sizes = nd.sum(m, lbl, range(1, n + 1))
+    reg = lbl == (int(np.argmax(sizes)) + 1)
+    reg = nd.binary_fill_holes(nd.binary_closing(reg, iterations=8))
+    return nd.binary_opening(reg, iterations=3)
+
+
+def extend_head(img: np.ndarray, reg: np.ndarray, band: int = 90) -> np.ndarray:
+    """outside the painted head (a band around it) take the nearest head paint a few px inside its rim
+    (past the dark outline), softened: a slightly wider model head keeps the lacquer to its silhouette"""
+    src = nd.binary_erosion(reg, iterations=5)
+    _, (iy, ix) = nd.distance_transform_edt(~src, return_indices=True)
+    near = img[iy, ix]
+    near = np.stack([nd.gaussian_filter(near[..., c], 2.5) for c in range(3)], -1)
+    ring = nd.binary_dilation(reg, iterations=band) & ~nd.binary_erosion(reg, iterations=2)
+    out = img.copy()
+    out[ring] = near[ring]
+    return out
+
+
+def bridge_front_blade(img: np.ndarray, meta: dict, head: np.ndarray) -> np.ndarray:
+    """Front plate: the mask stands in front of the cleaver. Where the cleaver (paint pose) runs behind the
+    painted mask, repaint it with the cleaver's own paint from beside the mask along the blade axis (heel
+    from the heel left of the mask, blade from the blade right of it), so no gold sits under its outline."""
+    info = meta["front"]
+    k = (info["ground"] - info["top"]) / HEIGHT
+    to_px = lambda x, z: (info["cx"] + np.asarray(x) * k, info["ground"] - np.asarray(z) * k)  # noqa: E731
+    over_px = nd.binary_dilation(head, iterations=7)
+    ys, xs = np.nonzero(over_px)
+    wx = (xs - info["cx"]) / k
+    wz = (info["ground"] - ys) / k
+    u, v = cl.to_uv(wx, wz)
+    heel = cl.in_heel(u, v)
+    blade = cl.in_blade(u, v) & ~heel
+    hx = wx[(heel | blade)] if (heel | blade).any() else wx
+    xl, xr = float(wx.min()) - 0.015, float(wx.max()) + 0.015     # the dilated mask's extent across the cleaver
+    out = img.copy()
+    for sel, xe in ((heel, xl), (blade, xr)):
+        if not sel.any():
+            continue
+        uu, vv = u[sel], v[sel]
+        ue = (xe - cl.G[0] - vv * cl.NV[0]) / cl.AX[0]
+        shift = float((ue - uu).max()) if xe > 0 else float((ue - uu).min())
+        su = uu + shift
+        if xe > 0:
+            e0, s0 = cl.v_edge(uu), cl.v_spine(uu)
+            e1, s1 = cl.v_edge(su), cl.v_spine(su)
+            vv = e1 + (vv - e0) / np.maximum(s0 - e0, 1e-3) * (s1 - e1)
+        sx = cl.G[0] + su * cl.AX[0] + vv * cl.NV[0]
+        sz = cl.G[1] + su * cl.AX[1] + vv * cl.NV[1]
+        px, py = to_px(sx, sz)
+        col = np.stack([nd.map_coordinates(img[..., c], [py, px], order=1, mode="nearest") for c in range(3)], -1)
+        out[ys[sel], xs[sel]] = col
+    del hx
+    band = np.zeros(img.shape[:2], bool)
+    band[ys[heel | blade], xs[heel | blade]] = True
+    soft = np.stack([nd.gaussian_filter(out[..., c], 1.2) for c in range(3)], -1)
+    edge = nd.binary_dilation(band, iterations=2) & ~nd.binary_erosion(band, iterations=2)
+    out[edge] = soft[edge]
+    return out
 
 
 # ── the blade over the hood (back plate) ──────────────────────────────────────────────────────────

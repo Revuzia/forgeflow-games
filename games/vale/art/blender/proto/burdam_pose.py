@@ -32,6 +32,8 @@ def args():
     p.add_argument("--views", default="3q,front,side,game")
     p.add_argument("--cell", type=int, default=400)
     p.add_argument("--out", default="pose_preview.png")
+    p.add_argument("--measure", default="", help="comma list of clips: ground contact per sampled frame")
+    p.add_argument("--step", type=int, default=3)
     return p.parse_args(scene.script_args())
 
 
@@ -75,11 +77,18 @@ def main():
 
     def place(view):
         tgt = Vector((0, 0, 1.15))
-        if view == "game":
+        if view.startswith("lhand"):
+            pbh = bpy.data.objects["burdam_rig"].pose.bones["hand.L"]
+            tgt = (bpy.data.objects["burdam_rig"].matrix_world @ pbh.matrix).translation.copy()
+            cam_data.lens = 80
+            yaw = {"lhand": 0.0, "lhand_s": 70.0, "lhand_t": 0.0}[view]
+            pitch = 55.0 if view == "lhand_t" else 10.0
+            dist = 1.6
+        elif view == "game":
             cam_data.lens = 115
             pitch, yaw, dist = 52.0, 0.0, 9.5
             tgt = Vector((0, 0, 1.0))
-        else:
+        elif not view.startswith("lhand"):
             cam_data.lens = 80
             pitch, dist = 8.0, 6.6
             yaw = {"3q": -35.0, "front": 0.0, "side": 90.0, "back": 180.0, "3qb": 145.0}[view]
@@ -119,6 +128,9 @@ def main():
         ev.to_mesh_clear()
         return hits
 
+    if a.measure:
+        measure(a, clips, arm, body, cleaver)
+        return
     keys = [k.split(":") for k in a.keys.split(",")]
     views = a.views.split(",")
     C = a.cell
@@ -146,6 +158,54 @@ def main():
     out = os.path.join(scene.RENDERS_DIR, "fighters", "burdam", a.out)
     project.save_rgb(sheet, out)
     print("wrote", out)
+
+
+def measure(a, clips, arm, body, cleaver):
+    """per sampled frame: the body's lowest point (skinned, cleaver excluded), the cleaver's lowest point,
+    the blade tip socket, toes, hips and both wrists (m); flags anything below the ground"""
+    from common import anim
+    deps = bpy.context.evaluated_depsgraph_get()
+    pb = arm.pose.bones
+    import burdam as F
+    F_sculpts = F.sculpts()
+    names = list(a.measure.split(","))
+    for name in names:
+        clip = clips[name]
+        print(f"== {name} ({clip.frames} f, impact {clip.impact})")
+        print("   f    body  cleav   tip   toeL  toeR  hipsZ  hipsY  handL(x,y,z)        handR z  prop.L")
+        rng = {"handL": [], "handR": [], "chest": [], "hips": []}
+        for f in list(range(0, clip.frames, a.step)) + [clip.frames - 1]:
+            pose = clip.sample(f / clip.frames)
+            anim.apply_pose(arm, pose)
+            deps.update()
+            ev = body.evaluated_get(deps)
+            me = ev.to_mesh()
+            co = np.empty(len(me.vertices) * 3, dtype=np.float32)
+            me.vertices.foreach_get("co", co)
+            co = co.reshape(-1, 3) @ np.array(body.matrix_world)[:3, :3].T + np.array(body.matrix_world)[:3, 3]
+            at = me.attributes.get("vale_part")
+            pv = np.zeros(len(co), dtype=np.int64)
+            if at is not None:
+                at.data.foreach_get("value", pv)
+            cl_ = np.isin(pv, list(cleaver))
+            ev.to_mesh_clear()
+            W = lambda b: (arm.matrix_world @ pb[b].matrix).translation  # noqa: E731
+            tip = W("x_blade_tip").z if "x_blade_tip" in pb else float("nan")
+            hl, hr = W("hand.L"), W("hand.R")
+            rng["handL"].append(tuple(hl)); rng["handR"].append(tuple(hr))
+            rng["chest"].append(tuple(W("chest"))); rng["hips"].append(tuple(W("hips")))
+            flag = " <" if co[~cl_, 2].min() < -0.03 or (cl_.any() and co[cl_, 2].min() < -0.08) else ""
+            if flag:
+                lo = int(np.argmin(np.where(cl_, 9.0, co[:, 2])))
+                pn = [x[0] for x in F_sculpts][pv[lo]] if pv[lo] < len(F_sculpts) else pv[lo]
+                flag += f" {pn}"
+            plr = pose.get("prop.L", (0, 0, 0))
+            print(f"  {f:3d}  {co[~cl_, 2].min():+.2f}  {co[cl_, 2].min() if cl_.any() else 0:+.2f}  {tip:+.2f}  "
+                  f"{W('toe.L').z:+.2f}  {W('toe.R').z:+.2f}  {W('hips').z:+.2f}  {W('hips').y:+.2f}  "
+                  f"({hl.x:+.2f},{hl.y:+.2f},{hl.z:+.2f})  {hr.z:+.2f}   {plr[1]:+.0f}{flag}")
+        for k, v in rng.items():
+            v = np.array(v)
+            print(f"   range {k}: {np.round(v.max(0) - v.min(0), 3).tolist()}")
 
 
 if __name__ == "__main__":

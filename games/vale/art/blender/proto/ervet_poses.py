@@ -102,6 +102,14 @@ def main():
         cam.rotation_euler = (Vector(tuple(tgt)) - cam.location).to_track_quat("-Z", "Y").to_euler()
     aim_cam(90.0 if a.side else a.yaw, 5.0 if a.side else a.pitch)
     names = [c for c in a.clips.split(",") if c in clips]
+    _apply = anim.apply_pose
+
+    def apply_pose(arm_, pose):                       # + the dropped sword's prop.R location (death)
+        _apply(arm_, pose)
+        if "prop.R_loc" in pose:
+            arm_.pose.bones["prop.R"].location = pose["prop.R_loc"]
+            bpy.context.view_layer.update()
+    anim.apply_pose = apply_pose
     rows = []
     tmp = os.path.join(OUT, "_pose_tmp.png")
     os.makedirs(OUT, exist_ok=True)
