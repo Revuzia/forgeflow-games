@@ -1305,6 +1305,8 @@ function pickLoot(W, a, near) {
       score = n.data.id.includes("shield") ? 45 : 34;
       // (P23, LC-20) a calm bot with a thin bar and no shield in the bag goes for the shield first
       if (score === 45 && a.brain && a.brain.bb.wantShield) score = n.data.id === "big_shield" ? 70 : 62;
+      // ...and a big shield is the only item that takes the bar past 50 (a mini caps there): one in the bag is worth a detour
+      else if (n.data.id === "big_shield" && !carriesShield(a, true)) score = 54;
     }
     else if (n.data.kind === "ammo") score = dry ? 80 : (feedsStarvingPrimary(a, n.data.id) ? 70 : 38);
     score -= n.d * 0.4;
@@ -4431,7 +4433,7 @@ function maybeFrag(W, b, t, seen, dist) {
   if (W.t < bb.nadeCheckT) return;
   bb.nadeCheckT = W.t + 0.5;
   if (bb.nadeS || W.t < bb.nadeNextT || (a.tier || 1) < 2 || t.downed || !bb.targetPos) return;
-  if (dist < 9 || dist > 28) return;
+  if (dist < 9 || dist > 30) return;
   if (throwSlot(a, 1) < 0) return;
   const gone = W.t - bb.targetSeenT;
   let why = 0;
@@ -4440,6 +4442,9 @@ function maybeFrag(W, b, t, seen, dist) {
     const tr = IND.H !== null ? targetRoom(W, b, bb.targetPos) : -1;
     if (tr >= 0 && myRoom(W, b) !== tr) why = 2;                                 // camping a room
     else if (occAny(W, bb.targetPos.x, bb.targetPos.z, 3) && b.rng() < 0.35) why = 3;   // planted by cover
+    // a duel that has gone on 4 s+ against a man standing his ground: break the stalemate (measured: 1 match in 6 had no bot frag at loot
+    // weight 8 in two 6-match batches, a Deepwood match both times: its duels rarely met the room / cover / ducked tests)
+    else if (W.t - bb.acquireT > 4 && b.rng() < 0.2) why = 4;
   }
   if (!why) return;
   const tp = bb.targetPos;
