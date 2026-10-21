@@ -150,15 +150,19 @@ def part_crosshair(s, v, spot):
         s.step_frames(2, 1 / 60)
         shot = s.js("() => window.__P23X__[0] || null")
         miss = None
-        if shot and aim["aimD"]:
-            P = [aim["cam"][i] + aim["dir"][i] * aim["aimD"] for i in range(3)]
+        if shot and aim.get("target"):
+            # the crosshair point = the camera ray at the DUMMY's depth (the game converges the muzzle line on what the crosshair is on -
+            # the dummy at 20 m; aimRayDist sees only terrain + colliders and ran on to the ground behind it at ~32 m, which charged
+            # the shoulder parallax past the dummy as a miss: 0.57 m on both shoulders)
+            tdep = sum((aim["target"][i] - aim["cam"][i]) * aim["dir"][i] for i in range(3))
+            P = [aim["cam"][i] + aim["dir"][i] * tdep for i in range(3)]
             m, d = shot["m"], shot["d"]
             n = math.sqrt(sum(x * x for x in d)) or 1
             d = [x / n for x in d]
             w = [P[i] - m[i] for i in range(3)]
             tt = sum(w[i] * d[i] for i in range(3))
             miss = math.sqrt(sum((w[i] - tt * d[i]) ** 2 for i in range(3)))
-        res[side] = {"missM": miss and round(miss, 4), "aimD": aim["aimD"] and round(aim["aimD"], 2)}
+        res[side] = {"missM": miss and round(miss, 4), "aimD": aim["aimD"] and round(aim["aimD"], 2), "targetDepth": shot and aim.get("target") and round(tdep, 2)}
         s.step_frames(30, 1 / 60)
     s.press("KeyV")
     s.step_frames(20, 1 / 60)

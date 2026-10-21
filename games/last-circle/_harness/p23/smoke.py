@@ -37,14 +37,18 @@ PLANTS = {
 }
 
 ISO_JS = r"""() => { const W = window.__LC__.W, M = W.map, p = W.player; const others = W.actors.filter((a) => a.alive && a !== p);
+  // a DETERMINISTIC grid sweep (was 4,000 Math.random samples needing 120 m from every actor + a 34 m collider-free disc: none on the
+  // Savanna of the lanes' world); the test needs open flat ground 30 m around (the bot sits 26 m north) and quiet: the farthest such
+  // spot from every other actor wins, >= 60 m preferred
+  const out = [];
   const flat = (x, z) => { const h = M.heightAt(x, z); if (h < M.waterY + 1) return false;
-    for (let r = 4; r <= 32; r += 7) for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; if (Math.abs(M.heightAt(x + Math.cos(a) * r, z + Math.sin(a) * r) - h) > 0.6) return false; }
-    for (const c of M.queryColliders(x, z, 34, [])) if (!c.dead && c.maxY > M.heightAt((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2) + 0.3) return false; return true; };
-  let best = null;
-  for (let k = 0; k < 4000; k++) { const x = (Math.random() * 2 - 1) * (M.half * 0.6), z = (Math.random() * 2 - 1) * (M.half * 0.6);
-    const d = others.reduce((m, a) => Math.min(m, Math.hypot(a.pos.x - x, a.pos.z - z)), 1e9); if (d < 120 || !flat(x, z)) continue;
-    if (!best || d > best.d) best = { x, z, d: +d.toFixed(1), y: M.heightAt(x, z) }; if (best.d > 220) break; }
-  return best; }"""
+    for (let r = 4; r <= 30; r += 6.5) for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; if (Math.abs(M.heightAt(x + Math.cos(a) * r, z + Math.sin(a) * r) - h) > 0.8) return false; }
+    for (const c of M.queryColliders(x, z - 13, 22, out)) if (!c.dead && c.maxY > M.heightAt((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2) + 0.3) return false; return true; };
+  let best = null; const span = M.half * 0.8, step = 16;
+  for (let x = -span; x <= span; x += step) for (let z = -span; z <= span; z += step) {
+    const d = others.reduce((m, a) => Math.min(m, Math.hypot(a.pos.x - x, a.pos.z - z)), 1e9); if (best && d <= best.d) continue; if (!flat(x, z)) continue;
+    best = { x, z, d: +d.toFixed(1), y: M.heightAt(x, z) }; }
+  return best && best.d >= 40 ? best : null; }"""
 SNAP_JS = r"""() => { const W = window.__LC__.W; return (W.smokes || []).map((q) => ({ x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2), r: +(q.r || 0).toFixed(2), t0: +(q.t0 || 0).toFixed(2), t1: +(q.t1 || 0).toFixed(2) })); }"""
 
 
