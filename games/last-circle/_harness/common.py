@@ -974,7 +974,9 @@ class Session:
                     break
             res["phaseAfterEnter"] = self.phase()
             if res["phaseAfterEnter"] not in ("drop", "match"):
-                raise HarnessError("a real Enter did not leave the lobby (phase %s)" % res["phaseAfterEnter"])
+                # a load that failed lands on the MENU with the reason on screen (ffg_royale3d matchLoadFailed): carry it in the error
+                why = self.safe_js("() => { const e = document.querySelector('[data-lc=matchnotice], [data-lc=loadfail], .lc-notice'); return (e ? e.innerText : document.body.innerText).slice(0, 300); }")
+                raise HarnessError("a real Enter did not leave the lobby (phase %s; after load %s; screen: %r)" % (res["phaseAfterEnter"], res.get("phaseAfterLoad"), why))
         self.stage(self.phase() or "match")
         return res
 
