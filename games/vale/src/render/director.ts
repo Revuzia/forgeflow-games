@@ -523,7 +523,10 @@ export class Director {
           if (ev.shape?.kind === 'rect' && ev.shape.length) C.set(ev.x + Math.cos(areaDir) * ev.shape.length * 0.5, 0, ev.y + Math.sin(areaDir) * ev.shape.length * 0.5);
           if (!this.host.bodyPos(ev.src, A)) A.copy(C);
           const id = ev.vfx;
-          const spawn = (): void => { this.fire(id, ev.src, tier, { origin: A.clone(), ground: C.clone(), scale: R, dir: areaDir, anchor: 'ground' }); };
+          // capture the points NOW: A and C are shared scratch vectors that later events overwrite before a
+          // delayed landing runs (the impact would play wherever the last event left them)
+          const origin = A.clone(), ground = C.clone();
+          const spawn = (): void => { this.fire(id, ev.src, tier, { origin, ground, scale: R, dir: areaDir, anchor: 'ground' }); };
           if (ev.delay > 0) this.delayed.push({ at: this.host.now() + ev.delay, run: spawn }); else spawn();
           // the ultimate impact envelope at the landing (the def may carry its own)
           if (tier >= 4 && !this.vfx.def(id)?.hasExposure) this.queuePulse(ev.src, C.clone().setY(0.4), Math.max(1.5, R), Math.max(0, ev.delay), true);
