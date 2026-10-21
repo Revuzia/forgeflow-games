@@ -33,6 +33,23 @@
  * splinters), dirt (a spurt + clods), metal (spark streaks + a pin flash) and water (a splash
  * where a round meets the sea). Persistent marks (bullet holes, scorches) live in the scene
  * group "decals", not "fx": "fx" is the transient layer.
+ *
+ * PARITY P2+P3 (lane fx):
+ *  - C-SMOKE: smoke-grenade clouds from W.smokes [{x,y,z,r,t0,t1}] (weapons.js owns the list; maps.js blocks sight through
+ *    the same spheres). They are NOT pool quads: a cloud lives ~20-30 s and the 1,024-slot ring would recycle it in a busy
+ *    fight. One more InstancedMesh, "fx-smoke", in its own scene group "smoke": lit soft puffs (sun + hemisphere read from
+ *    the live scene lights, a per-pixel sphere normal, per-puff cloud occlusion), faded where they meet the ground (soft
+ *    intersection without a depth texture) and near the camera, sorted far-to-near, plus a veil when the camera is inside a
+ *    cloud (placed just beyond your character, so you still see yourself). Positions are a pure function of the smoke entry
+ *    and W.t (no per-puff state). No smoke = count 0 = no draw call.
+ *  - C-DBNO: collapse dust + mist on 'actorDowned', blood drips while crawling, a pulsing ground ring under a downed
+ *    TEAMMATE, a contracting light ring + rising motes during a revive channel, a burst on 'actorRevived'.
+ *  - C-FALL: 'fallDamage' kicks a ground ring, a dust skirt and clods scaled by the damage.
+ *  - LC-16 guns: dmr / lmg / burst muzzle and tracer variants (class fallback for any id the sim adds).
+ *  - P1-E check items: the young fireball frames (first 0.05-0.15 s) re-made in fx_sheet.png (they read as pale cream blobs);
+ *    the scorch decal is charred grey-brown, not near-black (a second blast on a scorch measured 7.9-13.9x glare).
+ *  - C-GFX: per-tier FX quality (fxQ below): low trims quad counts, medium / high keep the P1-E look, ultra adds puffs and
+ *    impact distance. Touch devices always get the medium set (phone paths unchanged).
  */
 import * as THREE from "three";
 
@@ -79,7 +96,7 @@ const STYLE_TAB = [
   // ── P1-E. Sizes here are quad edges in metres (qs 1): the sheet cells fill their quad, the soft Wave-4 masks did not.
   /* FIRE    */ [C_FIRE,   0.12, 1.00, 1.90, 0.62, 1.0, 0, 0.35, 0.45, 8],   // 8-frame flipbook, mostly NORMAL blend (layers replace, never stack light): glare bar <= 8x the ground behind
   /* COLUMN  */ [C_PUFF,   0.00, 0.58, 2.20, 1.00, 1.0, 1, 0.22, 0.45, 0],   // the smoke column (variant cell picked per puff)
-  /* DEBRIS  */ [C_DEBRIS, 0.00, 1.00, 1.00, 1.00, 1.0, 0, 7.0,  0.18, 0],   // tumbling chunks
+  /* DEBRIS  */ [C_DEBRIS, 0.00, 1.00, 1.00, 1.00, 1.0, 1, 7.0,  0.18, 0],   // tumbling chunks. P23/fx: fade in over the first 1/12 of life (~0.1 s): born on the young fireball they read as black specks on it (P1-E check item)
   /* RING    */ [C_RING,   0.30, 0.60, 4.60, 1.00, 1.0, 0, 0,    1.00, 0],   // FLAT dust ring racing out along the ground
   /* SPLINTER*/ [C_SPLINTER, 0.00, 1.00, 1.00, 1.00, 1.0, 0, 9.0, 0.25, 0],  // wood splinters
   /* SPATTER */ [C_SPATTER, 0.00, 0.90, 1.50, 1.00, 1.0, 0, 0,    0.55, 0],   // blood / water droplets
@@ -88,8 +105,33 @@ const STYLE_TAB = [
   /* BFLASH  */ [2,        1.00, 1.00, 1.30, 0.10, 1.0, 0, 0,    1.00, 0],   // the blast flash (was a separate additive Sprite + its own draw); START LOW
   /* ESPARK  */ [2,        1.00, 1.00, 0.30, 0.26, 2.3, 0, 0,    0,    0],   // the blast's sparks (HOT at a third of the light: they spawn stacked on the fireball)
   /* SKIRT   */ [C_PUFF,   0.00, 0.46, 2.20, 1.00, 1.0, 1, 0.40, 0.55, 0],   // the low dust skirt thrown out along the ground
+  // ── P23/fx (C-DBNO). Additive light kept LOW (the glare bar): a ring adds ~0.1-0.2 scene-linear at its brightest texel.
+  /* DRING   */ [C_RING,   1.00, 0.85, 2.10, 0.45, 1.0, 0, 0,    0.70, 0],   // FLAT pulse expanding under a downed TEAMMATE ("over here")
+  /* RRING   */ [C_RING,   1.00, 0.80, 0.45, 0.50, 1.0, 1, 0,    0.50, 0],   // FLAT ring contracting onto the downed player during a revive
+  /* MOTE    */ [2,        1.00, 1.00, 0.40, 0.55, 2.3, 0, 0,    0.50, 0],   // rising light motes (revive channel / revived burst)
 ];
+const ST_DRING = 23, ST_RRING = 24, ST_MOTE = 25;
 const NS = STYLE_TAB.length;
+
+// ── C-GFX: per-tier FX quality ───────────────────────────────────────────────
+// Read per EVENT (a field lookup, no allocation), so a Video-tab change applies to the next shot / blast. medium and high
+// are the P1-E numbers bit-for-bit (every P1-E gate measured them); low trims the counts, ultra spends more.
+//   far / lod: bullet-impact distances (nothing beyond far; only the puff beyond lod)
+//   smoke / debris / skirt: explosion column puffs, debris chunks, ground dust puffs
+//   cloud: puffs per smoke-grenade cloud; motes: revive / DBNO light motes multiplier
+const FXQ = {
+  low:    { far: 120, lod: 40,  smoke: 12, debris: 8,  skirt: 4,  cloud: 12, motes: 0.5 },
+  medium: { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 18, motes: 1 },
+  high:   { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 22, motes: 1 },
+  ultra:  { far: 240, lod: 110, smoke: 26, debris: 18, skirt: 10, cloud: 28, motes: 1.5 },
+};
+/** The tier the FX follow: lane boot's W.gfxTier (C-GFX, adds 'ultra'), else the applied tier, else the saved setting. */
+function fxTierOf(W) {
+  if (W && W._gfx && W._gfx.touch) return "medium";               // phones / tablets: the P1-E set, whatever the tier
+  const t = (W && (W.gfxTier || (W._gfx && W._gfx.tier) || (W.settings && W.settings.graphics))) || "medium";
+  return FXQ[t] ? t : "medium";
+}
+const fxQ = (W) => FXQ[fxTierOf(W)];
 const sCell = new Float32Array(NS), sAdd = new Float32Array(NS), sA0 = new Float32Array(NS),
   sS1 = new Float32Array(NS), sGain = new Float32Array(NS), sQs = new Float32Array(NS),
   sFadeIn = new Float32Array(NS), sSpin = new Float32Array(NS), sFo = new Float32Array(NS), sFb = new Uint8Array(NS);
@@ -368,6 +410,8 @@ export function init(W) {
   }
   W.group("fx").add(inst);
   W.camShake = 0;
+  _simW = W;                    // gunFx's class fallback reads W.SIM.WEAPONS
+  ensureSmoke(W);
 
   // DOM damage-number layer + its fixed node pool (built once, never grown)
   dmgLayer = document.createElement("div");
@@ -469,17 +513,60 @@ function burst(o) {
 // sparks. Start-low brightness (gain 0.48 / 0.42, see STYLE_TAB) and a 55-70 ms life: it must read as a flash, not a lamp.
 const FLASH_K = { pistol: 0.8, smg: 0.85, ar: 1.0, shotgun: 1.5, sniper: 1.3, glauncher: 1.4 };
 function muzzleFlash(x, y, z, dir, weaponId) {
-  const k = FLASH_K[weaponId] || 1;
+  const gx = gunFx(weaponId);
+  const k = gx ? gx.k : (FLASH_K[weaponId] || 1);
   spawnRaw(x, y, z, 0, 0, 0, 0xffe9a8, 0.14 * k, 0.055, 0, 0, null, 0, ST_FLASH);
-  spawnRaw(x + dir.x * 0.06, y + dir.y * 0.06, z + dir.z * 0.06, 0, 0, 0, 0xffb85c, 0.12 * k, 0.07, 0, 0, null, 0, ST_HALO);
+  spawnRaw(x + dir.x * 0.06, y + dir.y * 0.06, z + dir.z * 0.06, 0, 0, 0, gx ? gx.halo : 0xffb85c, 0.12 * k, 0.07, 0, 0, null, 0, ST_HALO);
   for (let i = 0; i < 3; i++) {
     spawnRaw(x, y, z, dir.x * 7 + (Math.random() - 0.5) * 3, dir.y * 7 + (Math.random() - 0.3) * 3, dir.z * 7 + (Math.random() - 0.5) * 3,
       i ? 0xfff2b0 : 0xffb84d, 0.035, 0.09, 0, 4, null, 0, ST_FSPARK);
+  }
+  if (!gx) return;
+  // LC-16 variants (new guns only; the six P1-E guns above are unchanged): a forward flame tongue (the streak path:
+  // oriented along the barrel) and, for the DMR / LMG, two short side jets - a muzzle-brake read that tells the
+  // three new guns apart from the AR at a glance. Same pool, no new draw.
+  _tdir.set(dir.x, dir.y, dir.z);
+  spawnRaw(x + dir.x * 0.10, y + dir.y * 0.10, z + dir.z * 0.10, dir.x * 2, dir.y * 2, dir.z * 2, gx.tongue, 0.07 * k, 0.05, 0, 0, _tdir, gx.tongueL, ST_MSPARK);
+  if (gx.jets) {
+    // the side axis: dir x up (a level barrel), falling back to x when the barrel points straight up or down
+    let sx = -dir.z, sz = dir.x;
+    const sl = Math.hypot(sx, sz);
+    if (sl < 1e-3) { sx = 1; sz = 0; } else { sx /= sl; sz /= sl; }
+    for (let j = -1; j <= 1; j += 2) {
+      _tdir.set(sx * j + dir.x * 0.25, dir.y * 0.25, sz * j + dir.z * 0.25).normalize();
+      spawnRaw(x + dir.x * 0.04, y + dir.y * 0.04, z + dir.z * 0.04, _tdir.x * 1.5, _tdir.y * 1.5, _tdir.z * 1.5, gx.tongue, 0.05 * k, 0.045, 0, 0, _tdir, 0.16 * gx.jets, ST_MSPARK);
+    }
   }
 }
 
 const SHOT_SHAKE = { pistol: 0.06, smg: 0.045, ar: 0.07, shotgun: 0.20, sniper: 0.26, glauncher: 0.18 };
 const SHOT_FOV   = { pistol: 2, smg: 2, ar: 2.5, shotgun: 5, sniper: 5, glauncher: 4.5 };
+
+// LC-16 new guns (P2-D adds them to sim/royale.js WEAPONS). k = flash size, shake / fov = own-gun kick (each decays inside
+// its fire interval like the six above: DMR ~ semi 260 rpm, LMG ~ 600 rpm, burst = AR rounds), tracer = colour, length (m)
+// and width. Ids the sim might use are aliased; an unknown id falls back on its WEAPONS[id].cls, then on the AR.
+const NEW_GUN_FX = {
+  dmr:   { k: 1.15, halo: 0xffc070, tongue: 0xffd28a, tongueL: 0.42, jets: 1.0, shake: 0.13, fov: 3.5, tracer: 0xffe9b0, len: 6, w: 0.12 },
+  lmg:   { k: 1.10, halo: 0xffa850, tongue: 0xffb45c, tongueL: 0.34, jets: 1.3, shake: 0.085, fov: 2.5, tracer: 0xff9a40, len: 4.5, w: 0.14 },
+  burst: { k: 0.95, halo: 0xffb85c, tongue: 0xffcf80, tongueL: 0.26, jets: 0, shake: 0.065, fov: 2.2, tracer: 0xffd24a, len: 4, w: 0.12 },
+};
+const GUN_ALIAS = { marksman: "dmr", dmr_rifle: "dmr", burst_ar: "burst", ar_burst: "burst", burstar: "burst", burst_rifle: "burst", lmg_rifle: "lmg", mg: "lmg" };
+const CLS_ALIAS = { dmr: "dmr", marksman: "dmr", lmg: "lmg", burst: "burst" };
+const _gunCache = new Map();    // weaponId -> NEW_GUN_FX row or null (resolved once per id)
+let _simW = null;
+function gunFx(id) {
+  if (id == null) return null;
+  let g = _gunCache.get(id);
+  if (g !== undefined) return g;
+  g = NEW_GUN_FX[id] || NEW_GUN_FX[GUN_ALIAS[id]] || null;
+  if (!g && !(id in FLASH_K)) {
+    // an id this file has never heard of: the sim's class, or its fire mode ('burst'), names the variant
+    const def = _simW && _simW.SIM && _simW.SIM.WEAPONS ? _simW.SIM.WEAPONS[id] : null;
+    if (def) g = NEW_GUN_FX[CLS_ALIAS[def.cls]] || (def.fire === "burst" ? NEW_GUN_FX.burst : null);
+  }
+  _gunCache.set(id, g);
+  return g;
+}
 
 // Explosion flash. A 95-damage launcher round with a 3.5 m splash resolved as 40
 // cubes and a low-passed thump. A real PointLight would force a shader recompile
@@ -527,7 +614,9 @@ function makeDecalTexture() {
       for (const sp of spots) { const dd = Math.hypot(u - sp[0], v - sp[1]); soot = Math.max(soot, 1 - smooth(dd / sp[2])); }
       a = Math.min(1, a * (0.86 + 0.14 * soot));
       const k = (y * S + x) * 4;
-      d[k] = 20 - 6 * soot; d[k + 1] = 16 - 5 * soot; d[k + 2] = 12 - 4 * soot;
+      // P23/fx: charred grey-brown (the scorch's own colour); bullet holes are darkened back to the old near-black by their
+      // instance colour. Soot clots are a gentle step darker, never black: a second blast over a black clot measured 13.9x glare.
+      d[k] = 25 - 4 * soot; d[k + 1] = 22 - 4 * soot; d[k + 2] = 19 - 3 * soot;
       d[k + 3] = Math.round(Math.max(0, Math.min(1, a * 0.9)) * 255);
     }
   }
@@ -551,6 +640,14 @@ function ensureDecals(W) {
     DECAL_ALL);
   decalMesh.name = "decals";
   decalMesh.frustumCulled = false;   // quads scattered map-wide: one sphere would span the map anyway
+  // per-slot tint, made BEFORE the first compile (the instancing-colour program is linked by the warm-up, never mid-match):
+  // the 64 bullet slots keep their old near-black, the 8 scorch slots show the mask's charred grey-brown
+  const tint = new Float32Array(DECAL_ALL * 3);
+  for (let i = 0; i < DECAL_ALL; i++) {
+    const sc = i >= DECAL_N;
+    tint[i * 3] = sc ? 1.0 : 0.78; tint[i * 3 + 1] = sc ? 0.97 : 0.72; tint[i * 3 + 2] = sc ? 0.94 : 0.64;
+  }
+  decalMesh.instanceColor = new THREE.InstancedBufferAttribute(tint, 3);
   parkDecals();
   W.group("decals").add(decalMesh);
 }
@@ -585,8 +682,8 @@ function camDist(W, x, z) {
 }
 const SMOKE_COLS = [0x5d554b, 0x6e655a, 0x7b7266, 0x51493f];   // grey-brown dust smoke (black read as a chain of soot beads in this bright art)
 const ROCK_COLS = [0x3a3631, 0x4d463c, 0x2e2a26, 0x5a5248];
-const IMPACT_FAR = 180;          // beyond this a bullet impact is sub-pixel: nothing is spawned
-const IMPACT_LOD = 70;           // beyond this only the puff (no chips / splinters / sparks)
+// bullet impacts: beyond fxQ.far (180 m on medium / high) a hit is sub-pixel and nothing is spawned; beyond fxQ.lod
+// (70 m) only the puff (no chips / splinters / sparks). Per tier in FXQ above.
 let blastCount = 0, blastLastQuads = 0, scorchPlaced = 0;
 const impactCounts = { flesh: 0, stone: 0, wood: 0, dirt: 0, metal: 0, water: 0 };
 const rPuff = () => C_PUFF + ((Math.random() * 4) | 0);
@@ -594,8 +691,9 @@ const rPuff = () => C_PUFF + ((Math.random() * 4) | 0);
 function impactFx(W, pos, surface) {
   const x = pos.x, y = pos.y, z = pos.z;
   const dc = camDist(W, x, z);
-  if (dc > IMPACT_FAR) return;
-  const near = dc < IMPACT_LOD;
+  const q = fxQ(W);                                           // C-GFX: medium / high = IMPACT_FAR / IMPACT_LOD
+  if (dc > q.far) return;
+  const near = dc < q.lod;
   let nx = pos.nx || 0, ny = pos.ny || 0, nz = pos.nz || 0;
   const hasN = !!(nx || ny || nz);
   if (!hasN) ny = 1;
@@ -626,7 +724,7 @@ function impactFx(W, pos, surface) {
     }
     case "wood": {
       d = coneDir(nx, ny, nz, 0.35);
-      setCode(spawnRaw(x + nx * 0.06, y + ny * 0.06, z + nz * 0.06, d.x * 1.0, d.y * 1.0 + 0.2, d.z * 1.0, 0xcdb68e, 0.30, 0.6, 0.1, 2.6, null, 0, ST_PUFF), rPuff());
+      setCode(spawnRaw(x + nx * 0.06, y + ny * 0.06, z + nz * 0.06, d.x * 1.0, d.y * 1.0 + 0.2, d.z * 1.0, 0xd8c294, 0.30, 0.6, 0.1, 2.6, null, 0, ST_PUFF), rPuff());   // P23/fx: paler sawdust (vs dirt's brown: was 11.5/255 apart)
       if (near) for (let i = 0; i < 4; i++) { d = coneDir(nx, ny, nz, 0.8); const sp = 3.5 + Math.random() * 2; spawnRaw(x, y, z, d.x * sp, d.y * sp + 1.2, d.z * sp, 0xd2b07a, 0.10 + Math.random() * 0.06, 0.5 + Math.random() * 0.3, -11, 0.4, null, 0, ST_SPLINTER); }
       if (hasN) decalAt(W, x, y, z, nx, ny, nz, 0.8 + Math.random() * 0.55);
       break;
@@ -643,7 +741,7 @@ function impactFx(W, pos, surface) {
       }
       // and a thin grey wisp off the plate once the sparks are gone
       d = coneDir(nx, ny, nz, 0.3);
-      setCode(spawnRaw(x + nx * 0.06, y + ny * 0.06, z + nz * 0.06, d.x * 0.8, d.y * 0.8 + 0.3, d.z * 0.8, 0x8c8a86, 0.24, 0.6, 0.2, 2.6, null, 0, ST_PUFF), rPuff());
+      setCode(spawnRaw(x + nx * 0.06, y + ny * 0.06, z + nz * 0.06, d.x * 0.8, d.y * 0.8 + 0.3, d.z * 0.8, 0x7b8592, 0.24, 0.6, 0.2, 2.6, null, 0, ST_PUFF), rPuff());   // P23/fx: cool blue-grey (stone's warm grey read the same: 10-12/255 apart)
       if (hasN) decalAt(W, x, y, z, nx, ny, nz, 0.7 + Math.random() * 0.4);
       break;
     }
@@ -653,7 +751,7 @@ function impactFx(W, pos, surface) {
       break;
     }
     default: {      // dirt / grass: a spurt kicked up off the ground + clods
-      for (let i = 0; i < 2; i++) setCode(spawnRaw(x + (Math.random() - 0.5) * 0.15, y + 0.05, z + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.6, 1.5 + Math.random() * 1.0, (Math.random() - 0.5) * 0.6, 0x8f7a58, 0.34, 0.75, -1.2, 2.0, null, 0, ST_PUFF), rPuff());
+      for (let i = 0; i < 2; i++) setCode(spawnRaw(x + (Math.random() - 0.5) * 0.15, y + 0.05, z + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.6, 1.5 + Math.random() * 1.0, (Math.random() - 0.5) * 0.6, 0x84694a, 0.34, 0.75, -1.2, 2.0, null, 0, ST_PUFF), rPuff());
       if (near) for (let i = 0; i < 4; i++) { d = coneDir(0, 1, 0, 0.6); const sp = 3 + Math.random() * 2; spawnRaw(x, y + 0.03, z, d.x * sp, d.y * sp, d.z * sp, 0x5e4c34, 0.05 + Math.random() * 0.035, 0.5 + Math.random() * 0.25, -12, 0.3, null, 0, ST_DEBRIS); }
       break;
     }
@@ -701,10 +799,14 @@ function explosionFx(W, pos, R) {
   // 4) sparks
   burst({ x, y: y + 0.2, z, n: 16, color: [0xffd28a, 0xff8a3c, 0xff5522], speed: 12, up: 5, size: 0.24, life: 0.7, drag: 1.5, st: ST_ESPARK });
   // 5) debris: tumbling chunks (dirt and rock on the ground, shrapnel in the air); over the sea, falling water
+  const q = fxQ(W);                                   // C-GFX counts (medium / high: 14 debris, 20 column puffs, 8 skirt puffs)
   if (!wet) {
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < q.debris; i++) {
       const d = coneDir(0, 1, 0, onGround ? 0.85 : 1.4), sp = (7 + Math.random() * 6) * Math.sqrt(k);
-      spawnRaw(x, Math.max(gy + 0.3, y), z, d.x * sp, d.y * sp, d.z * sp, ROCK_COLS[i & 3], (0.10 + Math.random() * 0.18) * k, 1.1 + Math.random() * 0.6, -15, 0.35, null, 0, ST_DEBRIS);
+      // P23/fx: launched from the fireball's SKIN (0.9 m out at the reference size), not its centre: spawned in the middle,
+      // the dark chunks sat stacked on the young fireball for its first frames and read as black specks on a pale disc
+      const r0 = 0.9 * k;
+      spawnRaw(x + d.x * r0, Math.max(gy + 0.3, y + d.y * r0), z + d.z * r0, d.x * sp, d.y * sp, d.z * sp, ROCK_COLS[i & 3], (0.10 + Math.random() * 0.18) * k, 1.1 + Math.random() * 0.6, -15, 0.35, null, 0, ST_DEBRIS);
     }
   } else {
     for (let i = 0; i < 10; i++) { const d = coneDir(0, 1, 0, 0.45); spawnRaw(x, wy + 0.1, z, d.x * 4, d.y * 9, d.z * 4, 0xd8ecf2, 0.3 * k, 1.0 + Math.random() * 0.4, -12, 0.3, null, 0, ST_SPATTER); }
@@ -712,8 +814,9 @@ function explosionFx(W, pos, R) {
   // 6) the smoke column: overlapping puffs launched at graded speeds so the cloud stands from the ground to ~7-9 m and
   //    spreads as it climbs, buoyant, slow to thin out (full strength for the first ~60 % of a 3.0-4.4 s life).
   //    Over the sea: a white spray column that falls back.
-  for (let i = 0; i < 20; i++) {
-    const f = i / 19;
+  const nCol = q.smoke;
+  for (let i = 0; i < nCol; i++) {
+    const f = i / (nCol - 1);
     const p = wet
       ? spawnRaw(x + (Math.random() - 0.5) * 1.4 * k, wy + 0.2, z + (Math.random() - 0.5) * 1.4 * k, (Math.random() - 0.5) * 1.6, (4 + 8 * f) * k, (Math.random() - 0.5) * 1.6,
         f > 0.5 ? 0xeef5f7 : 0xdfe9ec, (1.3 + 0.8 * Math.random()) * k, 1.8 + Math.random() * 1.0, -5, 0.5, null, 0, ST_COLUMN)
@@ -725,7 +828,7 @@ function explosionFx(W, pos, R) {
   // 7) dust skirt thrown out along the ground, and 8) a scorch along the terrain normal
   if (onGround) {
     // random angles, speeds and sizes: evenly spaced identical puffs read as a ring of beads (look sheet run 1)
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < q.skirt; i++) {
       const a = Math.random() * 6.2832, sp = (2.2 + Math.random() * 4.2) * k, r0 = Math.random() * 1.2;
       setCode(spawnRaw(x + Math.cos(a) * r0, gy + (0.3 + Math.random() * 0.6) * k, z + Math.sin(a) * r0, Math.cos(a) * sp, 0.3 + Math.random() * 1.0, Math.sin(a) * sp,
         i & 1 ? 0xb3a283 : 0xa29274, (1.0 + Math.random() * 1.3) * k, 1.6 + Math.random() * 1.0, 0.2, 2.0, null, 0, ST_SKIRT), rPuff());
@@ -739,6 +842,481 @@ function explosionFx(W, pos, R) {
   blastCount++;
   blastLastQuads = (cursor - c0 + N) % N;
   return blastLastQuads;
+}
+
+// ── C-SMOKE: smoke-grenade clouds ────────────────────────────────────────────
+// W.smokes = [{x, y, z, r, t0, t1}] (weapons.js, lane sim; times on W.t). The cloud is a pure function of its entry and
+// W.t: puff offsets / sizes / spins come from a hash of the entry, so nothing per puff is stored but a cached ground
+// height. Life: billows out over SMOKE_GROW s (85 % of its radius in ~1.3 s), holds, then over the last
+// min(SMOKE_FADE_MAX, 25 %) of its life thins, swells and lifts. Sight through it is cut by maps.js losBlocked (the
+// same spheres); this is the picture: dense enough in the middle that nothing reads through it.
+const SMOKE_MAX = 6;                              // clouds drawn at once
+const SPUFF_MAX = 28;                             // puffs per cloud at the top tier (FXQ.cloud)
+const SMOKE_SLOTS = SMOKE_MAX * SPUFF_MAX + 2;    // + the two in-cloud veils
+const SMOKE_GROW = 2.2, SMOKE_FADE_MAX = 3, SMOKE_DRAW_MAX = 520;
+const SP = 10;                                    // static floats per puff in the cache
+let smokeMesh = null, smokeMat = null;
+const smokeCache = [];                            // per drawn cloud: { ref, seed, used, gy: Float32Array, st: Float32Array, jetAcc }
+const _sKey = new Float32Array(SMOKE_SLOTS), _sOrd = new Int32Array(SMOKE_SLOTS), _sBuf = new Float32Array(SMOKE_SLOTS * 16);
+const smokeStats = { clouds: 0, puffs: 0, veil: 0, inside: false, jets: 0, maxClouds: 0 };
+const _sunDir = new THREE.Vector3(0.4, 0.8, 0.3);
+let _hemi = null, _hemiScene = null;
+
+function hash01(a, b) {
+  let h = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+const SMOKE_VS = /* glsl */`
+// instanceMatrix carries DATA, not a transform: [0] = size, alpha, ground y, occlusion; [1] = sheet puff 0..3, spin,
+// sun-side factor, veil flag; [3] = centre
+varying vec2 vUv;
+varying vec2 vQ;
+varying float vA;
+varying float vGy;
+varying float vAo;
+varying float vSun;
+varying float vVeil;
+varying float vCell;
+varying vec3 vWp;
+varying float vFogDepth;
+varying vec2 vNdc;
+void main() {
+  vec3 c = instanceMatrix[3].xyz;
+  float size = instanceMatrix[0].x;
+  vA = instanceMatrix[0].y; vGy = instanceMatrix[0].z; vAo = instanceMatrix[0].w;
+  vCell = instanceMatrix[1].x; float spin = instanceMatrix[1].y; vSun = instanceMatrix[1].z; vVeil = instanceMatrix[1].w;
+  float cs = cos( spin ), sn = sin( spin );
+  vec2 q = vec2( cs * position.x - sn * position.y, sn * position.x + cs * position.y );
+  vec3 right = vec3( viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0] );
+  vec3 up = vec3( viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1] );
+  vec3 wp = c + ( right * q.x + up * q.y ) * size;
+  vQ = q * 2.0;                       // camera-aligned -1..1 across the puff: the per-pixel sphere normal
+  vUv = uv;
+  vWp = wp;
+  vec4 mv = viewMatrix * vec4( wp, 1.0 );
+  vFogDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
+  vNdc = gl_Position.xy / gl_Position.w;      // the veils face the camera: w is constant across them, so this is exact
+}`;
+
+const SMOKE_FS = /* glsl */`
+uniform sampler2D map2;
+uniform vec3 uSunDir;
+uniform vec3 uSunCol;
+uniform vec3 uSky;
+uniform vec3 uGnd;
+uniform vec3 uAlb;
+uniform vec3 uFogColor;
+uniform float uFogDensity;
+uniform vec2 uNear;       // view-depth fade-in of the puffs: nothing is smoked over between the lens and your character
+uniform vec4 uBubble;     // the near veil's clear ellipse round your character (NDC centre, NDC radii)
+varying vec2 vUv;
+varying vec2 vQ;
+varying float vA;
+varying float vGy;
+varying float vAo;
+varying float vSun;
+varying float vVeil;
+varying float vCell;
+varying vec3 vWp;
+varying float vFogDepth;
+varying vec2 vNdc;
+void main() {
+  vec3 right = vec3( viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0] );
+  vec3 up = vec3( viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1] );
+  vec3 back = vec3( viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2] );    // towards the camera
+  float a;
+  float dens;
+  vec3 n;
+  if ( vVeil > 0.5 ) {
+    // inside a cloud: one flat lit layer just beyond your character (1) and one just past the lens (2) with a clear
+    // ellipse round your character, so the near ground and walls white out too but you still see yourself
+    a = vA; dens = 1.0; n = normalize( up + back * 0.5 );
+    if ( vVeil > 1.5 ) a *= smoothstep( 0.55, 1.6, length( ( vNdc - uBubble.xy ) / uBubble.zw ) );
+    if ( a < 0.004 ) discard;
+  } else {
+    // the P1-E sheet's puff cells 8..11 (alpha = shape), thickened towards the core: a dozen of these must hide what is
+    // behind the cloud's middle, while the rim stays wispy
+    float sc = 8.0 + floor( vCell + 0.5 );
+    vec2 off = vec2( mod( sc, 4.0 ), 3.0 - floor( sc * 0.25 ) ) * 0.25;
+    // the sheet's puffs fill only the middle half of their cell: sample that half so the puff fills its quad (twice the
+    // visible size for the same fill), and round the corners off
+    float t = texture2D( map2, off + ( vec2( 0.21 ) + vUv * 0.58 ) * 0.25 ).a;
+    t *= 1.0 - smoothstep( 0.78, 1.0, length( vQ ) );
+    dens = clamp( t * 1.55, 0.0, 1.0 );
+    a = dens * vA;
+    a *= smoothstep( 0.0, 1.1, vWp.y - vGy );                                 // soft contact where a puff meets the ground
+    a *= smoothstep( uNear.x, uNear.y, vFogDepth );                           // never between the lens and you (the veils take over)
+    if ( a < 0.004 ) discard;
+    float r2 = min( dot( vQ, vQ ), 1.0 );
+    n = normalize( right * vQ.x + up * vQ.y + back * sqrt( 1.0 - r2 ) * 0.9 );
+  }
+  // lit like the world: hemisphere + a wrapped sun term, both divided by PI (three's Lambert), shaded by the puff's place
+  // in the cloud (vAo: low and inner puffs sit in the cloud's own shadow; vSun: the sun-facing side is brighter). Thin
+  // edges let a little more light through (dens).
+  float ndl = dot( n, uSunDir );
+  float wrapL = clamp( ( ndl + 0.5 ) / 1.5, 0.0, 1.0 );
+  vec3 hemi = mix( uGnd, uSky, 0.5 + 0.5 * n.y );
+  vec3 light = ( hemi + uSunCol * wrapL * vSun ) * ( 0.3183 * vAo * ( 0.82 + 0.18 * ( 1.0 - dens ) ) );
+  vec3 col = uAlb * light;
+  float ff = 1.0 - exp( -uFogDensity * uFogDensity * vFogDepth * vFogDepth );   // the scene's FogExp2
+  col = mix( col, uFogColor, ff );
+  // tone-map and encode the UNpremultiplied colour, then premultiply: both curves are non-linear, and run on col * a
+  // they darkened every soft rim (a grey halo round each puff and round the in-cloud veil's clear ellipse)
+  gl_FragColor = vec4( col, 1.0 );
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  gl_FragColor = vec4( gl_FragColor.rgb * a, a );   // premultiplied, ordinary blend: smoke HIDES, it does not glow
+}`;
+
+function ensureSmoke(W) {
+  if (!smokeMesh) {
+    const geo = new THREE.PlaneGeometry(1, 1);
+    smokeMat = new THREE.ShaderMaterial({
+      uniforms: {
+        map2: { value: sheet },
+        uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3) },
+        uSunCol: { value: new THREE.Color(3, 3, 3) },
+        uSky: { value: new THREE.Color(0.9, 0.95, 1.0) },
+        uGnd: { value: new THREE.Color(0.25, 0.25, 0.25) },
+        uAlb: { value: new THREE.Color(0.86, 0.86, 0.84) },
+        uFogColor: { value: new THREE.Color(0.8, 0.85, 0.9) },
+        uFogDensity: { value: 0 },
+        uNear: { value: new THREE.Vector2(0.7, 3.2) },
+        uBubble: { value: new THREE.Vector4(0, 0, 0.3, 0.6) },
+      },
+      vertexShader: SMOKE_VS, fragmentShader: SMOKE_FS,
+      transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending,
+      depthWrite: false, depthTest: true, side: THREE.DoubleSide, fog: false,
+    });
+    smokeMat.name = "FxSmoke";
+    smokeMesh = new THREE.InstancedMesh(geo, smokeMat, SMOKE_SLOTS);
+    smokeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    smokeMesh.count = 0;
+    smokeMesh.frustumCulled = false;      // the matrices carry data, not transforms: a bounding sphere would be nonsense
+    smokeMesh.castShadow = false; smokeMesh.receiveShadow = false;
+    // after the loot beams / rings (>= 6), before the particle pool (7): a beam behind a cloud is hidden; a muzzle
+    // flash or tracer in front of one is never smoked over (one mesh cannot sort against the other per particle)
+    smokeMesh.renderOrder = 6.5;
+    smokeMesh.name = "fx-smoke";
+    for (let i = 0; i < SMOKE_MAX; i++) smokeCache.push({ ref: null, seed: 0, used: false, gy: new Float32Array(SPUFF_MAX), st: new Float32Array(SPUFF_MAX * SP), jetAcc: 0, gyc: 0 });
+  }
+  if (W && !smokeMesh.parent) W.group("smoke").add(smokeMesh);
+}
+
+/** The cloud's static puff table (unit offsets, size, alpha, spin, swirl, bob phase, occlusion) and the ground under
+ *  each puff's full-grown position, made once when the cloud is first drawn. */
+function smokeBind(W, e, s) {
+  e.ref = s; e.used = true; e.jetAcc = 0;
+  e.seed = (Math.round(s.x * 10) * 73856093) ^ (Math.round(s.z * 10) * 19349663) ^ (Math.round((s.t0 || 0) * 100) * 83492791);
+  const R = s.r || 5, map = W.map;
+  for (let i = 0; i < SPUFF_MAX; i++) {
+    const o = i * SP;
+    const h = (k) => hash01(e.seed + i * 131, k);
+    // a squashed sphere: denser low and in the middle (the canister vents at the ground), the first puffs nearest the core
+    const u = h(1), th = h(2) * 6.2832, ph = Math.acos(1 - 2 * h(3));
+    const rr = (0.12 + 0.56 * Math.cbrt(u)) * (i < 4 ? 0.5 : 1);
+    let ox = Math.sin(ph) * Math.cos(th) * rr, oz = Math.sin(ph) * Math.sin(th) * rr, oy = Math.cos(ph) * rr * 0.62 - 0.08;
+    e.st[o] = ox; e.st[o + 1] = oy; e.st[o + 2] = oz;
+    e.st[o + 3] = 0.78 + 0.34 * h(4);                 // quad edge / R (the puff fills its quad)
+    e.st[o + 4] = 0.62 + 0.26 * h(5);                 // alpha
+    e.st[o + 5] = h(6) * 6.2832;                      // spin
+    e.st[o + 6] = (h(7) - 0.5) * 0.10;                // spin rate (rad/s)
+    e.st[o + 7] = (h(8) - 0.5) * 0.06;                // swirl round the cloud's axis (rad/s)
+    e.st[o + 8] = h(9) * 6.2832;                      // bob phase
+    // occlusion: a puff low and deep inside sits in the cloud's own shadow
+    e.st[o + 9] = 0.60 + 0.40 * Math.max(0, Math.min(1, 0.55 + 0.75 * oy + 0.35 * Math.hypot(ox, oz)));
+    e.gy[i] = map && map.heightAt ? map.heightAt(s.x + ox * R, s.z + oz * R) : (s.y - R * 0.5);
+    // a cloud on a roof / upstairs floor: the floor under it is the sphere's own base, never the terrain far below
+    if (e.gy[i] < s.y - R * 1.2) e.gy[i] = s.y - R * 0.7;
+  }
+}
+
+/** Live scene lights -> the smoke uniforms (cheap field reads; the hemisphere light is found once per scene). */
+function smokeLights(W) {
+  const u = smokeMat.uniforms, k = W.kernel;
+  const sun = k && k.sun;
+  if (sun) {
+    _sunDir.copy(sun.position);
+    if (sun.target) _sunDir.sub(sun.target.position);
+    if (_sunDir.lengthSq() > 1e-6) _sunDir.normalize(); else _sunDir.set(0.4, 0.8, 0.3).normalize();
+    u.uSunDir.value.copy(_sunDir);
+    u.uSunCol.value.copy(sun.color).multiplyScalar(sun.intensity);
+  }
+  if (!_hemi || _hemiScene !== W.scene || !_hemi.parent) {
+    _hemi = null; _hemiScene = W.scene;
+    if (W.scene) W.scene.traverse((o) => { if (!_hemi && o.isHemisphereLight) _hemi = o; });
+  }
+  if (_hemi) {
+    u.uSky.value.copy(_hemi.color).multiplyScalar(_hemi.intensity);
+    u.uGnd.value.copy(_hemi.groundColor).multiplyScalar(_hemi.intensity);
+  }
+  const fog = W.scene && W.scene.fog;
+  if (fog && fog.isFogExp2) { u.uFogColor.value.copy(fog.color); u.uFogDensity.value = fog.density; }
+  else u.uFogDensity.value = 0;
+}
+
+const _vFwd = new THREE.Vector3(), _vA = new THREE.Vector3(), _vB = new THREE.Vector3();
+function updateSmoke(W, dt) {
+  if (!smokeMesh) return;
+  if (!smokeMesh.parent) W.group("smoke").add(smokeMesh);
+  const S = W.smokes, cam = W.camera;
+  smokeStats.clouds = 0; smokeStats.puffs = 0; smokeStats.veil = 0; smokeStats.inside = false;
+  for (let i = 0; i < smokeCache.length; i++) smokeCache[i].used = false;
+  let n = 0, veilA = 0;
+  if (S && S.length && cam) {
+    const t = W.t || 0, q = fxQ(W), np = Math.min(SPUFF_MAX, q.cloud);
+    const cx = cam.position.x, cy = cam.position.y, cz = cam.position.z;
+    // your character's view depth: puffs fade in from just in front of you (third person: the 3-4 m between the lens and
+    // you is never smoked over, so you always see yourself; inside a cloud the veils cover the rest)
+    cam.getWorldDirection(_vFwd);
+    const p = W.player;
+    let pd = -1;
+    if (p && p.pos && p.alive !== false) pd = (p.pos.x - cx) * _vFwd.x + (p.pos.y + 1.0 - cy) * _vFwd.y + (p.pos.z - cz) * _vFwd.z;
+    const nearA = pd > 1.2 && pd < 9 ? pd - 0.45 : 0.7, nearB = pd > 1.2 && pd < 9 ? pd + 0.55 : 3.2;
+    smokeMat.uniforms.uNear.value.set(nearA, nearB);
+    for (let si = 0; si < S.length && smokeStats.clouds < SMOKE_MAX; si++) {
+      const s = S[si];
+      if (!s || !(t >= s.t0) || !(t < s.t1)) continue;
+      const dxc = s.x - cx, dzc = s.z - cz;
+      if (dxc * dxc + dzc * dzc > SMOKE_DRAW_MAX * SMOKE_DRAW_MAX) continue;
+      // its cache entry (same object as last frame), else a free one
+      let e = null;
+      for (let j = 0; j < smokeCache.length; j++) if (smokeCache[j].ref === s) { e = smokeCache[j]; break; }
+      if (!e) {
+        for (let j = 0; j < smokeCache.length; j++) {
+          const c = smokeCache[j];
+          if (!c.used && (!c.ref || S.indexOf(c.ref) < 0 || !(t < c.ref.t1))) { e = c; break; }
+        }
+        if (!e) continue;
+        smokeBind(W, e, s);
+      }
+      e.used = true;
+      smokeStats.clouds++;
+      const R = s.r || 5, age = t - s.t0, life = Math.max(1, s.t1 - s.t0);
+      const g0 = Math.min(1, age / SMOKE_GROW), grow = 1 - (1 - g0) * (1 - g0) * (1 - g0);
+      const fadeD = Math.min(SMOKE_FADE_MAX, 0.12 * life);   // sight is cut for the whole life: the picture holds until the end
+      let fade = Math.max(0, Math.min(1, (s.t1 - t) / fadeD)); fade = fade * fade * (3 - 2 * fade);
+      const aIn = Math.min(1, age / 0.45);
+      const spread = (0.28 + 0.72 * grow) * (1 + 0.14 * (1 - fade));
+      const sizeK = (0.42 + 0.58 * grow) * (1 + 0.30 * (1 - fade));
+      const lift = (1 - fade) * 1.6;
+      for (let i = 0; i < np; i++) {
+        const o = i * SP, st = e.st;
+        const sw = st[o + 7] * age, c = Math.cos(sw), sn = Math.sin(sw);
+        const ox = st[o] * c - st[o + 2] * sn, oz = st[o] * sn + st[o + 2] * c;
+        const size = st[o + 3] * R * sizeK;
+        const px = s.x + ox * R * spread, pz = s.z + oz * R * spread;
+        let py = s.y + st[o + 1] * R * spread + 0.12 * Math.sin(age * 0.45 + st[o + 8]) + lift;
+        const gy = e.gy[i];
+        if (py < gy + 0.30 * size) py = gy + 0.30 * size;
+        const sunK = 0.50 + 0.50 * Math.max(0, Math.min(1, 0.5 + 0.9 * (ox * _sunDir.x + st[o + 1] * _sunDir.y + oz * _sunDir.z)));
+        const b = n * 16;
+        _sBuf[b] = size; _sBuf[b + 1] = st[o + 4] * aIn * fade; _sBuf[b + 2] = gy; _sBuf[b + 3] = st[o + 9];
+        _sBuf[b + 4] = (hash01(e.seed, i) * 4) | 0; _sBuf[b + 5] = st[o + 5] + st[o + 6] * age; _sBuf[b + 6] = sunK; _sBuf[b + 7] = 0;
+        _sBuf[b + 8] = 0; _sBuf[b + 9] = 0; _sBuf[b + 10] = 0; _sBuf[b + 11] = 0;
+        _sBuf[b + 12] = px; _sBuf[b + 13] = py; _sBuf[b + 14] = pz; _sBuf[b + 15] = 1;
+        const ddx = px - cx, ddy = py - cy, ddz = pz - cz;
+        // wholly inside the clear slab before your character: it would draw nothing but cost a screenful of fill
+        if (ddx * _vFwd.x + ddy * _vFwd.y + ddz * _vFwd.z + 0.5 * size < nearA) continue;
+        _sKey[n] = ddx * ddx + ddy * ddy + ddz * ddz;
+        n++;
+      }
+      // inside the cloud's body: the veils. Measured from YOUR EYES, not the lens: maps.js cuts every sight line that
+      // starts inside the sphere, so with your head in the cloud the picture whites out all round (ramping in over the
+      // outer fifth of the grown radius); a camera boom poking into a cloud behind you does not.
+      const Reff = R * (0.30 + 0.70 * grow);
+      const ex = pd > -1 ? p.pos.x : cx, ey = pd > -1 ? p.pos.y + 1.5 : cy, ez = pd > -1 ? p.pos.z : cz;
+      const dIn = Math.hypot(s.x - ex, s.y - ey, s.z - ez);
+      if (dIn < Reff) { smokeStats.inside = true; const k = Math.min(1, (1 - dIn / Reff) * 5); veilA = Math.max(veilA, 0.94 * k * k * (3 - 2 * k) * fade * aIn); }
+      // the canister's vent: a jet of quick puffs from the ground while the cloud billows out (pool quads, short-lived)
+      if (age < 2.6 && dt > 0 && dxc * dxc + dzc * dzc < 150 * 150) {
+        e.jetAcc += dt;
+        const gy0 = e.gy[0] > -1e8 ? Math.min(e.gy[0], s.y) : s.y;
+        while (e.jetAcc > 0.08) {
+          e.jetAcc -= 0.08;
+          const a = Math.random() * 6.2832, sp = 0.8 + Math.random() * 1.4;
+          setCode(spawnRaw(s.x + Math.cos(a) * 0.2, gy0 + 0.25, s.z + Math.sin(a) * 0.2, Math.cos(a) * sp, 2.2 + Math.random() * 1.6, Math.sin(a) * sp,
+            0xdcdcd8, 0.9 + Math.random() * 0.6, 1.1 + Math.random() * 0.5, 0.3, 1.4, null, 0, ST_PUFF), rPuff());
+          smokeStats.jets++;
+        }
+      }
+    }
+    if (smokeStats.clouds > smokeStats.maxClouds) smokeStats.maxClouds = smokeStats.clouds;
+    if (n > 0) smokeLights(W);
+    // the veils (camera inside a cloud): (1) a flat layer just past your character - the world beyond whites out - and
+    // (2) one just past the lens with a clear ellipse round your character, so the ground and walls between you and the
+    // lens white out too while you still see yourself
+    if (veilA > 0.01) {
+      let dv = 3.2;
+      if (pd > 0) dv = Math.max(1.4, Math.min(8, pd + 0.9));
+      const tanH = Math.tan((cam.fov || 60) * Math.PI / 360), asp = Math.max(1, cam.aspect || 1.78);
+      for (let vi = 0; vi < 2; vi++) {
+        const d = vi ? 0.6 : dv, b = n * 16;
+        _sBuf[b] = d * tanH * asp * 2.6; _sBuf[b + 1] = vi ? veilA * 0.92 : veilA; _sBuf[b + 2] = -1e9; _sBuf[b + 3] = 0.74;   // lit like the cloud's middle puffs
+        _sBuf[b + 4] = 0; _sBuf[b + 5] = 0; _sBuf[b + 6] = 0.66; _sBuf[b + 7] = vi ? 2 : 1;
+        _sBuf[b + 8] = 0; _sBuf[b + 9] = 0; _sBuf[b + 10] = 0; _sBuf[b + 11] = 0;
+        _sBuf[b + 12] = cx + _vFwd.x * d; _sBuf[b + 13] = cy + _vFwd.y * d; _sBuf[b + 14] = cz + _vFwd.z * d; _sBuf[b + 15] = 1;
+        _sKey[n] = vi ? -1 : d * d;                      // the far veil sorts with the puffs; the near one is drawn last
+        n++;
+      }
+      // the clear ellipse: your character's screen box (feet .. head), a little wider than the body
+      const bu = smokeMat.uniforms.uBubble.value;
+      if (p && p.pos && pd > 0.5) {
+        _vA.set(p.pos.x, p.pos.y + 0.05, p.pos.z).project(cam);
+        _vB.set(p.pos.x, p.pos.y + 1.85, p.pos.z).project(cam);
+        const ry = Math.max(0.05, Math.abs(_vB.y - _vA.y) * 0.62);
+        bu.set((_vA.x + _vB.x) * 0.5, (_vA.y + _vB.y) * 0.5, ry * 0.62 / (cam.aspect || 1.78), ry);
+      } else bu.set(0, 0, 0.0001, 0.0001);
+      smokeStats.veil = +veilA.toFixed(3);
+    }
+  }
+  if (n > 0) {
+    // far -> near (one InstancedMesh draws in instance order; ordinary alpha blending needs the back first)
+    for (let i = 0; i < n; i++) _sOrd[i] = i;
+    for (let i = 1; i < n; i++) {
+      const v = _sOrd[i], kv = _sKey[v];
+      let j = i - 1;
+      while (j >= 0 && _sKey[_sOrd[j]] < kv) { _sOrd[j + 1] = _sOrd[j]; j--; }
+      _sOrd[j + 1] = v;
+    }
+    const m = smokeMesh.instanceMatrix.array;
+    for (let i = 0; i < n; i++) {
+      const src = _sOrd[i] * 16, dst = i * 16;
+      for (let k = 0; k < 16; k++) m[dst + k] = _sBuf[src + k];
+    }
+    smokeMesh.instanceMatrix.needsUpdate = true;
+  }
+  smokeMesh.count = n;
+  smokeStats.puffs = n - (smokeStats.veil > 0 ? 2 : 0);
+}
+
+// ── C-DBNO / C-FALL ──────────────────────────────────────────────────────────
+const downedList = [];          // actors between 'actorDowned' and their revive / death
+const revives = [];             // live revive channels { r: reviver, a: target, age, acc }
+const REVIVE_S_DEF = 5;
+const dbnoStats = { downedFx: 0, revivedFx: 0, reviveQuads: 0, dripQuads: 0, pulseQuads: 0, fallFx: 0, lastFall: null };
+const FALL_DUST = { grass: 0x9a8562, sand: 0xd2bf92, snow: 0xeef2f6, concrete: 0xb5afa4, stone: 0xb5afa4, road: 0xa9a49b, tile: 0xb8b2a8, wood: 0xb59a72, deepwood: 0x8a7a5a };
+const isTeammate = (W, a) => !!(W.player && a !== W.player && a.teamId != null && W.player.teamId != null && a.teamId === W.player.teamId);
+function dropDowned(a) {
+  const i = downedList.indexOf(a);
+  if (i >= 0) downedList.splice(i, 1);
+}
+function dropRevives(a) {
+  for (let i = revives.length - 1; i >= 0; i--) if (revives[i].a === a || revives[i].r === a) revives.splice(i, 1);
+}
+/** A flat ring on the ground at an actor's feet (pool quad, level). */
+function feetRing(x, y, z, color, size, life, st) {
+  return setCode(spawnRaw(x, y + 0.06, z, 0, 0, 0, color, size, life, 0, 0, null, 0, st), C_RING, true);
+}
+
+function downedFx(W, a) {
+  if (!a || !a.pos) return;
+  const x = a.pos.x, y = a.pos.y, z = a.pos.z;
+  dbnoStats.downedFx++;
+  // the collapse: a dust skirt off the ground, a short blood mist at the chest and a few drops
+  for (let i = 0; i < 4; i++) {
+    const ang = Math.random() * 6.2832, sp = 0.8 + Math.random() * 1.2;
+    setCode(spawnRaw(x + Math.cos(ang) * 0.3, y + 0.25, z + Math.sin(ang) * 0.3, Math.cos(ang) * sp, 0.3 + Math.random() * 0.4, Math.sin(ang) * sp,
+      0xa89676, 0.55 + Math.random() * 0.35, 0.9 + Math.random() * 0.4, 0.1, 2.2, null, 0, ST_SKIRT), rPuff());
+  }
+  setCode(spawnRaw(x, y + 1.0, z, 0, 0.3, 0, 0x7a1414, 0.42, 0.5, -0.5, 2.5, null, 0, ST_PUFF), rPuff());
+  for (let i = 0; i < 3; i++) { const d = coneDir(0, 0.5, 0, 1.0); spawnRaw(x, y + 0.9, z, d.x * 2.2, d.y * 2.0 + 0.6, d.z * 2.2, 0x6e0c0c, 0.12, 0.45, -9, 0.6, null, 0, ST_SPATTER); }
+}
+
+function revivedFx(W, a) {
+  if (!a || !a.pos) return;
+  const x = a.pos.x, y = a.pos.y, z = a.pos.z, q = fxQ(W);
+  dbnoStats.revivedFx++;
+  feetRing(x, y, z, 0xbff0ff, 1.4, 0.55, ST_DRING);
+  const nm = Math.round(14 * q.motes);
+  for (let i = 0; i < nm; i++) {
+    const ang = Math.random() * 6.2832, r = 0.2 + Math.random() * 0.5;
+    spawnRaw(x + Math.cos(ang) * r, y + 0.2 + Math.random() * 0.8, z + Math.sin(ang) * r, Math.cos(ang) * 0.4, 1.4 + Math.random() * 1.4, Math.sin(ang) * 0.4,
+      i & 1 ? 0xc8f6ff : 0x8fe0ff, 0.06 + Math.random() * 0.05, 0.8 + Math.random() * 0.5, 0.6, 1.2, null, 0, ST_MOTE);
+  }
+  burst({ x, y: y + 0.05, z, n: 4, color: 0xa89676, speed: 1.4, up: 0.5, size: 0.09, life: 0.45, gravity: -5, drag: 2.5, st: ST_DUST });
+}
+
+function fallFx(W, a, dmg, v) {
+  if (!a || !a.pos) return;
+  const x = a.pos.x, y = a.pos.y, z = a.pos.z;
+  const mine = a === W.player;
+  // the landing shake already scales with impact speed (hardLand / touchdown); damage adds its own beat on top
+  if (mine) W.camShake = Math.max(W.camShake || 0, Math.min(0.40, 0.10 + 0.0045 * (dmg || 0)));
+  if (!mine && camDist(W, x, z) > 70) return;
+  dbnoStats.fallFx++;
+  dbnoStats.lastFall = { dmg: Math.round(dmg || 0), v: v != null ? +(+v).toFixed(1) : null };
+  const k = Math.max(0.35, Math.min(1.6, (dmg || 0) / 45 + 0.3)), q = fxQ(W);
+  let surf = "grass";
+  try { if (W.map && typeof W.map.surfaceAt === "function") surf = W.map.surfaceAt(x, z, y) || "grass"; } catch (e) { /* default dust */ }
+  const col = FALL_DUST[surf] != null ? FALL_DUST[surf] : 0xa08b63;
+  feetRing(x, y, z, col, 1.2 + 1.0 * k, 0.5, ST_RING);
+  const ns = Math.max(3, Math.round(q.skirt * (0.5 + 0.5 * k)));
+  for (let i = 0; i < ns; i++) {
+    const ang = Math.random() * 6.2832, sp = (1.6 + Math.random() * 2.4) * k, r0 = Math.random() * 0.4;
+    setCode(spawnRaw(x + Math.cos(ang) * r0, y + 0.2, z + Math.sin(ang) * r0, Math.cos(ang) * sp, 0.25 + Math.random() * 0.6, Math.sin(ang) * sp,
+      col, (0.6 + Math.random() * 0.6) * (0.6 + 0.4 * k), 1.0 + Math.random() * 0.8, 0.15, 2.4, null, 0, ST_SKIRT), rPuff());
+  }
+  const nd = Math.round(3 + 4 * Math.min(1, k));
+  for (let i = 0; i < nd; i++) {
+    const d = coneDir(0, 1, 0, 0.7), sp = 2.5 + Math.random() * 2.5 * k;
+    spawnRaw(x, y + 0.05, z, d.x * sp, d.y * sp, d.z * sp, ROCK_COLS[i & 3], 0.05 + Math.random() * 0.05, 0.5 + Math.random() * 0.3, -12, 0.3, null, 0, ST_DEBRIS);
+  }
+}
+
+/** Per frame: blood drips / scuffs under crawling downed actors, the teammate pulse, revive channel rings + motes. */
+function updateDbno(W, dt) {
+  if (!downedList.length && !revives.length) return;
+  const q = fxQ(W);
+  for (let i = downedList.length - 1; i >= 0; i--) {
+    const a = downedList[i];
+    if (!a || !a.alive || !a.downed || !a.pos) { downedList.splice(i, 1); continue; }
+    const mate = isTeammate(W, a);
+    if (!mate && camDist(W, a.pos.x, a.pos.z) > 45) continue;
+    a._fxDripT = (a._fxDripT || 0) - dt;
+    if (a._fxDripT <= 0) {
+      const moved = a._fxX != null ? Math.hypot(a.pos.x - a._fxX, a.pos.z - a._fxZ) : 0;
+      a._fxX = a.pos.x; a._fxZ = a.pos.z;
+      a._fxDripT = moved > 0.15 ? 0.45 + Math.random() * 0.2 : 1.1 + Math.random() * 0.5;
+      spawnRaw(a.pos.x + (Math.random() - 0.5) * 0.3, a.pos.y + 0.35, a.pos.z + (Math.random() - 0.5) * 0.3, 0, -0.5, 0, 0x5e0a0a, 0.09, 0.4, -9, 0.4, null, 0, ST_SPATTER);
+      dbnoStats.dripQuads++;
+      if (moved > 0.15) { burst({ x: a.pos.x, y: a.pos.y + 0.04, z: a.pos.z, n: 2, color: 0x9a8562, speed: 0.8, up: 0.3, size: 0.06, life: 0.3, gravity: -5, drag: 3, st: ST_DUST }); dbnoStats.dripQuads += 2; }
+    }
+    // your downed teammate pulses on the ground (where to go), unless someone is already reviving them
+    if (mate) {
+      a._fxPulseT = (a._fxPulseT || 0) - dt;
+      if (a._fxPulseT <= 0) {
+        a._fxPulseT = 1.1;
+        let busy = false;
+        for (let j = 0; j < revives.length; j++) if (revives[j].a === a) { busy = true; break; }
+        if (!busy) { feetRing(a.pos.x, a.pos.y, a.pos.z, 0xff4a3a, 0.9, 0.9, ST_DRING); dbnoStats.pulseQuads++; }
+      }
+    }
+  }
+  const RS = (W.SIM && W.SIM.REVIVE_S) || REVIVE_S_DEF;
+  for (let i = revives.length - 1; i >= 0; i--) {
+    const r = revives[i];
+    r.age += dt;
+    const a = r.a, b = r.r;
+    if (!a || !a.alive || !a.downed || !b || !b.alive || b.downed || r.age > RS + 2.5 || Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z) > 3.2) { revives.splice(i, 1); continue; }
+    if (!isTeammate(W, a) && a !== W.player && b !== W.player && camDist(W, a.pos.x, a.pos.z) > 60) continue;
+    r.acc += dt;
+    if (r.acc < 0.24) continue;
+    r.acc = 0;
+    const p = Math.min(1, r.age / RS);
+    // a ring closing in on the downed player, tighter as the channel completes, and motes rising off them
+    feetRing(a.pos.x, a.pos.y, a.pos.z, 0x9fe8ff, 1.9 - 0.9 * p, 0.6, ST_RRING);
+    const nm = Math.max(1, Math.round(2 * q.motes));
+    for (let j = 0; j < nm; j++) {
+      const ang = Math.random() * 6.2832, rr = 0.25 + Math.random() * 0.45;
+      spawnRaw(a.pos.x + Math.cos(ang) * rr, a.pos.y + 0.15, a.pos.z + Math.sin(ang) * rr, 0, 0.9 + Math.random() * 0.6, 0, 0xbff4ff, 0.05 + 0.03 * p, 0.9, 0.2, 0.8, null, 0, ST_MOTE);
+    }
+    dbnoStats.reviveQuads += 1 + nm;
+  }
 }
 
 // Enemies never reacted to being hit: 4 cubes at size 0.08 and a floating number,
@@ -785,8 +1363,9 @@ function wireEvents(W) {
     // ungated kick would shake the camera on every gunshot on the island.
     // fovPunch is the camera's kick channel — inert until updateCamera consumes it.
     if (a === W.player) {
-      W.camShake = Math.max(W.camShake, SHOT_SHAKE[weaponId] || 0.05);
-      W.fovPunch = Math.max(W.fovPunch || 0, SHOT_FOV[weaponId] || 2);
+      const gx = gunFx(weaponId);
+      W.camShake = Math.max(W.camShake, gx ? gx.shake : (SHOT_SHAKE[weaponId] || 0.05));
+      W.fovPunch = Math.max(W.fovPunch || 0, gx ? gx.fov : (SHOT_FOV[weaponId] || 2));
     }
     // One brass casing per shot — the only thing this game leaves behind after a
     // firefight. Ejected right-and-back: right = dir x up(0,1,0) = (-dz, 0, dx).
@@ -810,7 +1389,8 @@ function wireEvents(W) {
     const dx = pr.vx / speed, dy = pr.vy / speed, dz = pr.vz / speed;
     // short punchy bolt (owner: streaks were "too long") — a compact dash,
     // not a laser beam
-    const len = pr.weaponId === "sniper" ? 7 : pr.weaponId === "glauncher" ? 3 : 4;
+    const gx = gunFx(pr.weaponId);
+    const len = gx ? gx.len : pr.weaponId === "sniper" ? 7 : pr.weaponId === "glauncher" ? 3 : 4;
     // COSMETIC speed cap: hitscan rounds (999 m/s) cross the screen in one
     // frame — the eye never sees them. The damage ray is already resolved;
     // the bolt flies at a readable pace instead.
@@ -818,8 +1398,8 @@ function wireEvents(W) {
     _tdir.set(dx, dy, dz);    // copied into the slot's own dirV by spawnRaw
     spawnRaw(pr.x + dx * 1.4, pr.y + dy * 1.4, pr.z + dz * 1.4,
       dx * vs, dy * vs, dz * vs,
-      TRACER_COLOR[pr.weaponId] || 0xffd24a,
-      0.12, 0.22, 0, 0, _tdir, len, ST_TRACER);
+      gx ? gx.tracer : (TRACER_COLOR[pr.weaponId] || 0xffd24a),
+      gx ? gx.w : 0.12, 0.22, 0, 0, _tdir, len, ST_TRACER);
   });
 
   // weapons.js emits flesh, wood, stone, dirt and (props: cars / containers) metal. The old
@@ -928,6 +1508,40 @@ function wireEvents(W) {
 
   W.events.on("chestOpened", (a, c) => {
     burst({ x: c.pos.x, y: c.pos.y + 0.8, z: c.pos.z, n: 12, color: [0xffd700, 0xfff2b0], speed: 3.5, up: 4, size: 0.1, life: 0.9, gravity: -3, st: ST_HOT });
+  });
+
+  // ── C-DBNO (team modes only: player.js never emits these in solo) ──
+  W.events.on("actorDowned", (a) => {
+    if (!a) return;
+    if (downedList.indexOf(a) < 0) downedList.push(a);
+    a._fxDripT = 0.3; a._fxPulseT = 0; a._fxX = null;
+    if (a === W.player || isTeammate(W, a) || nearCam(a.pos.x, a.pos.z, 80)) downedFx(W, a);
+  });
+  W.events.on("reviveStart", (reviver, target) => {
+    if (!reviver || !target) return;
+    for (let i = 0; i < revives.length; i++) if (revives[i].a === target && revives[i].r === reviver) { revives[i].age = 0; return; }
+    revives.push({ r: reviver, a: target, age: 0, acc: 0.24 });
+  });
+  W.events.on("reviveCancel", (reviver, target) => {
+    for (let i = revives.length - 1; i >= 0; i--) {
+      const r = revives[i];
+      if ((reviver && (r.r === reviver || r.a === reviver)) || (target && r.a === target)) revives.splice(i, 1);
+    }
+  });
+  W.events.on("actorRevived", (a) => {
+    if (!a) return;
+    dropDowned(a); dropRevives(a);
+    a._fxX = null;
+    if (a === W.player || isTeammate(W, a) || nearCam(a.pos.x, a.pos.z, 80)) revivedFx(W, a);
+  });
+  W.events.on("actorDied", (victim) => { if (victim) { dropDowned(victim); dropRevives(victim); } });
+
+  // ── C-FALL: (a, dmg, v) or (a, { dmg | damage, v | speed }) ──
+  W.events.on("fallDamage", (a, x, y) => {
+    const o = x && typeof x === "object" ? x : null;
+    const dmg = typeof x === "number" ? x : o ? (o.dmg != null ? o.dmg : o.damage) : 0;
+    const v = typeof y === "number" ? y : o ? (o.v != null ? o.v : o.speed) : null;
+    fallFx(W, a, +dmg || 0, v);
   });
 }
 
@@ -1057,6 +1671,7 @@ export function prewarm(W) {
   // P1-E: the blast Sprite / RingGeometry pool is gone (an explosion is pool quads now), so only the decal mesh
   // has to be in the graph; the particle pool's program is linked by the warm-up through warmObjects.
   ensureDecals(W);
+  ensureSmoke(W);
   uploadTextures(W);
   try {
     if (W.kernel && W.kernel.renderer && W.kernel.renderer.compile) {
@@ -1075,6 +1690,9 @@ export function reset() {
   for (const d of dmgPool) dmgPark(d);
   // actors are rebuilt every match, so a live entry would pin a discarded roster
   flashing.length = 0;
+  downedList.length = 0; revives.length = 0;
+  for (const e of smokeCache) { e.ref = null; e.used = false; }
+  if (smokeMesh) smokeMesh.count = 0;
   shakePrev = 0;
   lastBreak = null;
 }
@@ -1130,9 +1748,11 @@ export function warmObjects(W) {
   uploadTextures(W);
   const g = W.group("fx");
   if (inst && !inst.parent) g.add(inst);
+  ensureSmoke(W);               // C-SMOKE: its program is linked here, never by the first grenade
   const out = [];
   if (inst) out.push(inst);
   if (decalMesh) out.push(decalMesh);
+  if (smokeMesh) out.push(smokeMesh);
   // (the supply-crate balloon's program is linked where the balloon is made: loot.js makeSupplyCrate() / warmObjects - one source, Wave 7 round D1)
   return out;
 }
@@ -1173,6 +1793,13 @@ export function readback(W) {
                  material: inst ? inst.material.type : null, renderOrder: inst ? inst.renderOrder : null, atlas: atlasSrc, sheet: sheetSrc },
     blasts: { count: blastCount, lastQuads: blastLastQuads, scorches: scorchPlaced, smokeLive, smokeTopY: smokeLive ? +smokeTop.toFixed(2) : null },
     impacts: Object.assign({}, impactCounts),
+    // P23/fx read-backs
+    tier: fxTierOf(W),
+    smoke: { clouds: smokeStats.clouds, puffs: smokeStats.puffs, veil: smokeStats.veil, inside: smokeStats.inside, jets: smokeStats.jets, maxClouds: smokeStats.maxClouds,
+             count: smokeMesh ? smokeMesh.count : 0, slots: SMOKE_SLOTS, group: smokeMesh && smokeMesh.parent ? smokeMesh.parent.name : null, perCloud: Math.min(SPUFF_MAX, fxQ(W).cloud) },
+    dbno: { downedTracked: downedList.length, revivesLive: revives.length, downedFx: dbnoStats.downedFx, revivedFx: dbnoStats.revivedFx,
+            reviveQuads: dbnoStats.reviveQuads, dripQuads: dbnoStats.dripQuads, pulseQuads: dbnoStats.pulseQuads },
+    fall: { count: dbnoStats.fallFx, last: dbnoStats.lastFall },
     decals: decalMesh ? { slots: DECAL_ALL, bullet: Math.min(decalCursor, DECAL_N), scorch: Math.min(scorchPlaced, SCORCH_N), group: decalMesh.parent ? decalMesh.parent.name : null } : null,
     camShake: W ? +(W.camShake || 0).toFixed(3) : 0,
   };
@@ -1227,6 +1854,10 @@ export function update(W, dt) {
   // particle (muzzle flash / tracer / impact / explosion) ever renders
   // in a match (root cause of "when shooting i dont see bullets")
   if (inst && !inst.parent) W.group("fx").add(inst);
+  // P23/fx: smoke clouds (their own mesh) and the DBNO / revive emitters. Both run BEFORE the pool loop so a quad they
+  // spawn this frame is integrated and drawn this frame.
+  updateSmoke(W, dt);
+  updateDbno(W, dt);
   // particles. Matrices are written straight into the instance array (no Object3D, no quaternion, no
   // allocation): a billboard needs only a position and a size (the vertex shader faces the camera), a
   // tracer a size (width), a position and its axis (direction * length) in column 2.
