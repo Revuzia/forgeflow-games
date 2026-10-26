@@ -3676,12 +3676,12 @@ export function defaultMaterials(THREE) {
 // clean plastic boxes. wearBands lays two thin overlay strips (WEAR_OFF in front of the face, the face's own material, colour and uv - no new material, program
 // or draw call: they join the face's material group) on every OUTSIDE wall face of the house:
 //   foot   the ground storey's faces that reach the slab: 0 .. WEAR_FOOT[0] m above the ground floor at WEAR_K[0] .. WEAR_K[1] of the wall colour, then a fade to the
-//          wall colour at WEAR_FOOT[1] m (linear working-space colour: the darkest strip reads ~20 % darker on screen)
+//          wall colour at WEAR_FOOT[1] m (linear working-space colour: the band 0 .. WEAR_FOOT[1] reads 15-25 % darker on screen, the LC-17 gate)
 //   eave   the top storey's faces that reach its ceiling: a fade from the wall colour WEAR_EAVE m under the top to WEAR_K[2] at it
 // Appended after every box's 24 vertices (boxRanges unchanged); meshData(..., { wear: false }) leaves them out. 2-4 triangles a face; nothing collides.
 const WEAR_MATS = { brick: 1, plaster: 1, stucco: 1, plank: 1, stone: 1, sheet: 1 };
 const WEAR_PARTS = { wall: 1, skin: 1, shell: 1, slab: 1, gable: 1 };
-export const WEAR_FOOT = [0.5, 1.15], WEAR_EAVE = 0.7, WEAR_K = [0.56, 0.7, 0.8];
+export const WEAR_FOOT = [0.5, 1.15], WEAR_EAVE = 0.7, WEAR_K = [0.44, 0.56, 0.8];
 const WEAR_OFF = 0.012;
 function wearBands(H, groups, acc, faceIn, colOf) {
   const yG = H.floors[0].y, top = H.floors[H.floors.length - 1].ceil;
