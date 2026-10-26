@@ -697,6 +697,7 @@ P23_PENDING_NEG = [
     ("p23_modes-plant-teams-off", "p23/modes.py", ["--plant", "teams-off", "--modes", "duo"], 3600),
     ("p23_settings-plant-ultra-noop", "p23/settings.py", ["--plant", "ultra-noop"], 3600),
     ("p23_settings-plant-scale-center", "p23/settings.py", ["--plant", "scale-center"], 3600),
+    ("p23_settings-plant-cvd-sticky", "p23/settings.py", ["--plant", "cvd-sticky"], 3600),
     ("p23_lootp2-plant-ammo-cap", "p23/lootp2.py", ["--plant", "ammo-cap", "--parts", "pile"], 3600),
     ("p23_lootp2-plant-no-supply", "p23/lootp2.py", ["--plant", "no-supply", "--parts", "tiers"], 7200),
     ("p23_footsteps-plant-beside-wood", "p23/footsteps.py", ["--plant", "beside-wood", "--maps", "ashgrid"], 3600),

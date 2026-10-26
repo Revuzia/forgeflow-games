@@ -116,7 +116,12 @@ def analyse(sr, x, t0=None, emit_t=None):
     pk = float(a.max())
     if pk < 1e-5:
         return {"silent": True}
-    on = int(np.argmax(a > pk * 0.05))
+    # the onset of the LOUDEST event: the first sample over 5 % of the peak within 60 ms before the peak (the first version took the first such
+    # sample of the whole window, so on a loaded box a stray earlier sound - a late-scheduled step, an ambient chirp - set the window: ild read
+    # 1.48 / -1.89 dB in two of four runs on the SAME build that measured +-4.9 dB in the other two)
+    pki = int(np.argmax(a))
+    lo = max(0, pki - int(sr * 0.06))
+    on = lo + int(np.argmax(a[lo:pki + 1] > pk * 0.05))
     hop = int(sr * 0.01)
     seg = m[on:]
     r = np.array([np.sqrt(np.mean(seg[i:i + hop] ** 2)) for i in range(0, max(0, len(seg) - hop), hop)])
@@ -209,10 +214,12 @@ def main():
                     {"pairDiffDb": pairs, "gains": {k: x["gain_dB"] for k, x in R["steps"].items()}}, "<= 1.5 dB")
             c9 = R["steps"]["crouch+9"]
             v.check("crouch-heard (a crouched step at 9 m reaches the ear)", c9["heard"] >= 2 and (c9["peak"] or -200) > -60, c9, "heard, peak > -60 dBFS")
-            ild = [capture(s, SHOT_JS, ["ar", 20, side, None, None, None], 1.5) for side in ("r", "l")]
-            R["ild"] = ild
-            v.check("ild (AR 20 m right: right ear louder; left: left ear louder; >= 2 dB)", (ild[0].get("LmR") or 0) <= -2 and (ild[1].get("LmR") or 0) >= 2,
-                    {"rightLmR": ild[0].get("LmR"), "leftLmR": ild[1].get("LmR")}, "<= -2 / >= +2")
+            # three shots per side, the MEDIAN judged (one capture is one sample of a loaded box's audio thread)
+            ildr = {side: [capture(s, SHOT_JS, ["ar", 20, side, None, None, None], 1.5) for _ in range(3)] for side in ("r", "l")}
+            R["ild"] = ildr
+            med = {side: (float(np.median([q["LmR"] for q in rows if q.get("LmR") is not None])) if any(q.get("LmR") is not None for q in rows) else None) for side, rows in ildr.items()}
+            v.check("ild (AR 20 m right: right ear louder; left: left ear louder; >= 2 dB)", (med["r"] if med["r"] is not None else 0) <= -2 and (med["l"] if med["l"] is not None else 0) >= 2,
+                    {"rightLmR": med["r"], "leftLmR": med["l"], "each": {k: [q.get("LmR") for q in rows] for k, rows in ildr.items()}}, "median <= -2 / >= +2")
             ar5 = capture(s, SHOT_JS, ["ar", 5, "f", None, None, None], 2.6)
             sn450 = capture(s, SHOT_JS, ["sniper", 450, "f", None, None, None], 3.2)
             R["ar5"], R["sniper450"] = ar5, sn450

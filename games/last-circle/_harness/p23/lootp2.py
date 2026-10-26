@@ -10,7 +10,7 @@ section 5 "one readable pile with all ammo"; "supply drops: >= 3 per match, beac
     python _harness/p23/lootp2.py --lanes loot,hud              # validation: those lanes' work served over the base
 
 Rows:
-  tiers [3 seeds]     STANDARD Savanna / Isla Viva / Deepwood seeds 7 / 21 / 1234 at match start: W.lootTiers.pois carry tiers; the rare+ share of guns
+  tiers [6 seeds]     STANDARD Savanna / Isla Viva / Deepwood seeds 7 / 21 / 1234 (+ 8 / 22 / 1235, start only) at match start: W.lootTiers.pois carry tiers; the rare+ share of guns
                       lying in HIGH POIs >= 1.5 x the share in BASIC POIs (aggregated); W.lootHotZone exists on every seed
   supply [3 seeds]    the same matches fastForwarded to t = 760 s (the human guarded): >= 3 W.supplyDrops landed on every seed; every landed,
                       unopened drop still has its beacon
@@ -35,6 +35,9 @@ PLANTS = {
     "no-supply": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'supplyDropLanded') return; return em.apply(null, arguments); }; W.kernel._updaters.push(() => { if (Array.isArray(W.supplyDrops)) W.supplyDrops.length = 0; })",
 }
 RUNS = [("ashgrid", 7), ("isla_viva", 21), ("deepwood", 1234)]
+# tiers only (match start, no fast-forward): three more seeds. lootp2_all (10-26 03:44) read 1.469 on 49 BASIC guns over 3 seeds - a rare+ share
+# of 0.367 +- 0.07 (1 s.e.): one 3-seed sample cannot tell 1.47 from 1.6, so the ratio is judged on ~2x the guns
+RUNS_TIERS_EXTRA = [("ashgrid", 8), ("isla_viva", 22), ("deepwood", 1235)]
 
 TIER_JS = r"""() => { const W = window.__LC__.W, T = W.lootTiers; if (!T || !Array.isArray(T.pois) || !W.debugItems) return null;
   const tierAt = (x, z) => { let best = null, bk = Infinity; for (const p of T.pois) { const dx = x - p.x, dz = z - p.z, k = (dx * dx + dz * dz) / (p.r * p.r); if (k < 1 && k < bk) { bk = k; best = p; } } return best ? (best.hot ? 'hot' : best.tier) : 'out'; };
@@ -68,10 +71,21 @@ def part_tiers_supply(s, v):
         if opened is None:
             opened = open_drop(s, sp)
         s.thaw_loop()
+    for mp, seed in RUNS_TIERS_EXTRA:
+        L.start(s, "standard", seed, mp, guard=True)
+        s.freeze_loop()
+        tr = s.js(TIER_JS)
+        s.thaw_loop()
+        v.data.setdefault("tiers", {})["%s_%d" % (mp, seed)] = tr
+        if tr:
+            for k, e in tr["counts"].items():
+                a = agg.setdefault(k, {"n": 0, "rare": 0})
+                a["n"] += e["n"]
+                a["rare"] += e["rare"]
     share = {k: round(e["rare"] / e["n"], 3) if e["n"] else None for k, e in agg.items()}
-    hot_all = all((v.data["tiers"].get("%s_%d" % r) or {}).get("hot") for r in RUNS)
+    hot_all = all((v.data["tiers"].get("%s_%d" % r) or {}).get("hot") for r in RUNS + RUNS_TIERS_EXTRA)
     ratio = round(share["high"] / share["basic"], 3) if share.get("high") and share.get("basic") else None
-    v.check("tiers (rare+ share of guns in HIGH POIs >= 1.5 x BASIC, 3 seeds; a hot zone on every seed)", ratio is not None and ratio >= 1.5 and hot_all,
+    v.check("tiers (rare+ share of guns in HIGH POIs >= 1.5 x BASIC, 6 seeds; a hot zone on every seed)", ratio is not None and ratio >= 1.5 and hot_all,
             {"share": share, "ratioHighBasic": ratio, "hotZones": hot_all, "n": {k: e["n"] for k, e in agg.items()}}, ">= 1.5, hot zone")
     for k, sp in sup.items():
         landed = [x for x in sp["list"] if x["landed"]]

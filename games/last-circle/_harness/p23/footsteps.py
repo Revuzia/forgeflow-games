@@ -15,7 +15,7 @@ Each map (STANDARD seed 7, the lobby only: no Enter, nothing runs) sampled on a 
   inland [isla_viva]     ground waterY + 6 m .. 34 m, open: 'grass'       (above 34 m colorAt paints the volcano basalt: maps.js colorAt 'h > 34')
   volcano [isla_viva]    ground >= 36 m, open: 'stone'                     (the drawn basalt cone, 2 m clear of the 34 m colour edge)
   beside [every map]     0.35 m outside a face of a standing box collider (a wall, a rock, a car), on the ground: the SAME answer surfaceAt gives at
-                         that very point with that collider removed (dead for one call) - LC-52 "not from neighbouring colliders": a wall beside
+                         that very point with every collider within 1 m removed (dead for one call) - LC-52 "not from neighbouring colliders": a wall beside
                          you is not the floor under you. (The first version compared the point 3 m further out: that judged the PAINT - a yard's
                          laid dirt 3 m out vs the grass at the wall - not the collider leak; it failed 17-26 % on real paint edges. The 3 m pair
                          stays as an INFO row.)
@@ -50,7 +50,7 @@ CENSUS_JS = r"""() => { const W = window.__LC__.W, M = W.map; const N = 121, H =
     if (M.id === 'isla_viva' && wy > -100 && h >= wy + 6 && h <= 34) add('inland', s === 'grass', s);
     if (M.id === 'isla_viva' && h >= 36) add('volcano', s === 'stone', s);
   }
-  // beside a standing box collider: 0.35 m off each face; truth = surfaceAt at the same point with that collider dead for the call
+  // beside a standing box collider: 0.35 m off each face; truth = surfaceAt at the same point with every collider within 1 m dead for the call
   let k = 0;
   for (const c of M.colliders) { if (c.dead || c.kind !== 'box' || k > 1500) continue; const g = M.heightAt((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2);
     if (c.minY > g + 0.3 || c.maxY < g + 0.8 || c.maxY > g + 12) continue; k++;
@@ -61,7 +61,10 @@ CENSUS_JS = r"""() => { const W = window.__LC__.W, M = W.map; const N = 121, H =
       if (Math.abs(h0 - g) > 1.0) continue;                                                                        // on the ground beside it, not down a slope
       if (M.queryColliders(px, pz, 0.25, []).some((o) => !o.dead && px > o.minX && px < o.maxX && pz > o.minZ && pz < o.maxZ)) continue;   // the point itself is on something
       const a = M.surfaceAt(px, pz, h0);
-      c.dead = true; let ref; try { ref = M.surfaceAt(px, pz, h0); } finally { c.dead = false; }
+      // the reference: EVERY collider within 1 m of the point dead for the call (a wall is several segment colliders; killing only this one
+      // left its neighbours in reach and the beside-wood plant read wood|wood on 683 / 683 points - it did not bite)
+      const nb = M.queryColliders(px, pz, 1.0, []).filter((o) => !o.dead); let ref;
+      for (const o of nb) o.dead = true; try { ref = M.surfaceAt(px, pz, h0); } finally { for (const o of nb) o.dead = false; }
       add('beside', a === ref, a + '|' + ref);
       const h1 = M.heightAt(px + ox, pz + oz);
       if (Math.abs(h1 - h0) <= 0.4 && open(px + ox, pz + oz, 1.0)) { const b = M.surfaceAt(px + ox, pz + oz, h1); add('beside3m_info', a === b, a + '|' + b); }

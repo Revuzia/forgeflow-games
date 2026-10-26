@@ -7,6 +7,7 @@ once" + section 5 "3 colour-blind modes", "local minimap at 3 m/px or finer" + t
     python _harness/p23/settings.py --rev 9aa2b746                 # control: the P2 base (3 tiers, one settings page, whole-map minimap) - MUST FAIL
     python _harness/p23/settings.py --disk --plant ultra-noop      # W.setGfx('tier', 'ultra') applies HIGH - MUST FAIL (ultra row)
     python _harness/p23/settings.py --disk --plant scale-center    # HUD scale grows every anchor from its centre - MUST FAIL (anchor row)
+    python _harness/p23/settings.py --disk --plant cvd-sticky      # colour-vision 'off' keeps the last mode - MUST FAIL (colour-blind row)
     python _harness/p23/settings.py --lanes hud,boot               # validation: those lanes' work served over the base
 
 One Chrome at 1280x720 (fresh profile = a first run on this box's default GPU, the UHD iGPU; ?hints=1). Rows:
@@ -35,6 +36,8 @@ import p23lib as L  # noqa: E402
 C = L.C
 
 PLANTS = {
+    # setGfx('daltonize', 'off') keeps the last mode on: a mode that never turns off - MUST FAIL (colour-blind: off restores)
+    "cvd-sticky": "const sg = W.setGfx; let last = null; W.setGfx = function (k, v) { if (k === 'daltonize') { if (v === 'off' && last) v = last; else if (v !== 'off') last = v; } return sg.call(this, k, v); }",
     "ultra-noop": "const sg = W.setGfx; W.setGfx = function (k, v) { if (k === 'tier' && v === 'ultra') v = 'high'; return sg.call(this, k, v); }",
     # the HUD scale grows each anchored panel from its CENTRE (whatever the build's own scaling does): applied while hudScale > 1. A page-wide
     # stylesheet switched by an html attribute on a wall-clock timer that re-reads window.__LC__.W (the first version hung off kernel._updaters,
@@ -193,27 +196,39 @@ def main():
             s.freeze_loop()
             s.step_frames(10, 1 / 60, render=True)
             modes = sorted(set(cvd_modes))
-            base = s.js(MEAN_JS)
-            base2 = s.js(MEAN_JS)          # the frame's own drift over 2 stepped frames (foliage, storm, clouds): the noise floor of this measure
-            noise = round(sum(abs(a - b) for a, b in zip(base2, base)) / len(base), 3)
-            diffs = {}
-            # lane boot's W.setGfx contract names (off | protan | deutan | tritan); the long clinical names as a fallback
-            for m, alt in (("protan", "protanopia"), ("deutan", "deuteranopia"), ("tritan", "tritanopia")):
+            mad = lambda a, b: round(sum(abs(x - y) for x, y in zip(a, b)) / len(a), 3)
+
+            def set_cvd(m, alt=None):
                 try:
-                    try:
-                        s.js("(m) => window.__LC__.W.setGfx('daltonize', m)", m)
-                    except Exception:
-                        s.js("(m) => window.__LC__.W.setGfx('daltonize', m)", alt)
+                    s.js("(m) => window.__LC__.W.setGfx('daltonize', m)", m)
+                except Exception:
+                    if alt is None:
+                        raise
+                    s.js("(m) => window.__LC__.W.setGfx('daltonize', m)", alt)
+
+            # each mode as its own off -> mode -> off cycle, and one CONTROL cycle (off -> off -> off) with the same reads in between: the
+            # control's drift is the noise floor of exactly this spacing (settings_all5: 'off restores' 3.97 against a back-to-back noise of
+            # 1.1 - the old floor was two adjacent reads, the restore read came six reads and seconds of wall-clock shader time later)
+            cyc = {}
+            for m, alt in (("ctl", None), ("protan", "protanopia"), ("deutan", "deuteranopia"), ("tritan", "tritanopia")):
+                try:
+                    set_cvd("off")
+                    o0 = s.js(MEAN_JS)
+                    set_cvd("off" if m == "ctl" else m, alt)
                     x = s.js(MEAN_JS)
-                    diffs[m] = round(sum(abs(a - b) for a, b in zip(x, base)) / len(base), 3)
+                    set_cvd("off")
+                    o1 = s.js(MEAN_JS)
+                    cyc[m] = {"diff": mad(x, o0), "restore": mad(o1, o0)}
                 except Exception as e:
-                    diffs[m] = "error: " + str(e).splitlines()[0][:80]
-            s.js("() => window.__LC__.W.setGfx('daltonize', 'off')")
-            back = s.js(MEAN_JS)
-            rest = round(sum(abs(a - b) for a, b in zip(back, base)) / len(base), 3)
+                    cyc[m] = {"error": str(e).splitlines()[0][:80]}
+            ctl = cyc.get("ctl", {})
+            noise = max(ctl.get("diff", 9e9), ctl.get("restore", 9e9))
+            diffs = {m: c.get("diff", c.get("error")) for m, c in cyc.items() if m != "ctl"}
+            rests = {m: c.get("restore") for m, c in cyc.items() if m != "ctl"}
+            rest = max([r for r in rests.values() if isinstance(r, float)] or [9e9])
             v.check("colour-blind (the ACCESSIBILITY row lists off + 3 modes; each changes the frame >= 1/255; off restores it)",
                     len(modes) >= 3 and all(isinstance(d, float) and d >= 1.0 + noise for d in diffs.values()) and rest < 0.5 + noise,
-                    {"modesInUi": modes, "meanAbsDiff": diffs, "offRestore": rest, "noise": noise}, ">= 1.0 + noise each, < 0.5 + noise back")
+                    {"modesInUi": modes, "meanAbsDiff": diffs, "offRestore": rests, "noise": noise, "control": ctl}, ">= 1.0 + noise each, < 0.5 + noise back (noise = the off/off/off control cycle)")
             # HUD scale 130 %: the anchor corner stays
             s.step_frames(5, 1 / 60, render=True)
             a1 = s.js(ANCH_JS)
@@ -282,6 +297,14 @@ def main():
             s.thaw_loop()
             shown = []
             for seed in (7, 8):
+                # the tips are gated at MODULE LOAD by ?hints=1 (navigator.webdriver); settings_all4/5 read location.search "" here (the page had
+                # been re-opened without the query by the time of this section), so the row judged a page whose tips were off by design. Re-open
+                # the hints URL whenever the query is gone (localStorage lc_hints survives: match 2 still sees match 1's ids)
+                if "hints=1" not in (s.safe_js("() => location.search") or ""):
+                    v.data.setdefault("hintsReboot", []).append(seed)
+                    s.boot(url=url)
+                    s.sleep(2.0)
+                    L.dismiss_cards(s)
                 L.start(s, "standard", seed, "ashgrid", guard=True)
                 s.land(140, protect=True)
                 # past t = 50 s in sim (the 'map' tip's moment), then LIVE frames: the tips run from the HUD's own 2 Hz update and show one at a
