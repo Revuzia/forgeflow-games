@@ -1033,9 +1033,9 @@ function smokeBind(W, e, s) {
     // through the cloud's middle from ANY side and height, whatever the seed did with the rest (without it 1 throw in ~7
     // left a hole a box 7 m behind showed through: transmittance up to 0.36)
     const heart = i === 0;
-    if (heart) { ox = 0; oz = 0; oy = 0.04; }
+    if (heart) { ox = 0; oz = 0; oy = 0.14; }   // a little above the middle: a cloud's mass sits high, and a sight line from above (a hill, a roof) to a man behind crosses the cloud above its centre
     e.st[o] = ox; e.st[o + 1] = oy; e.st[o + 2] = oz;
-    e.st[o + 3] = heart ? 1.05 : (0.78 + 0.34 * h(4)) * (core ? 0.72 : 1);   // quad edge / R (the puff fills its quad)
+    e.st[o + 3] = heart ? 1.15 : (0.78 + 0.34 * h(4)) * (core ? 0.72 : 1);   // quad edge / R (the puff fills its quad)
     e.st[o + 4] = heart ? 0.96 : core ? 0.86 + 0.10 * h(5) : 0.62 + 0.26 * h(5);   // alpha (the core is the line of sight through the middle from any side: near opaque, free in fill)
     e.st[o + 5] = h(6) * 6.2832;                      // spin
     e.st[o + 6] = (h(7) - 0.5) * 0.10;                // spin rate (rad/s)
