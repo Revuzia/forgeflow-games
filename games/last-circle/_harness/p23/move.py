@@ -32,7 +32,9 @@ import p23lib as L  # noqa: E402
 C = L.C
 
 PLANTS = {
-    "slide-flat": "W.kernel._updaters.unshift(() => { const p = W.player, m = K.MOVE.sprint; if (!p) return; const v = Math.hypot(p.vel.x, p.vel.z); if (v > m) { p.vel.x *= m / v; p.vel.z *= m / v; } })",
+    # the sprint cap runs LAST in the frame (kernel updaters run in order: an unshifted cap ran before the player step, which then applied the
+    # slide boost again - pl_move_slideflat 10-26 PASSED under it)
+    "slide-flat": "W.kernel._updaters.push(() => { const p = W.player, m = K.MOVE.sprint; if (!p) return; const v = Math.hypot(p.vel.x, p.vel.z); if (v > m) { p.vel.x *= m / v; p.vel.z *= m / v; } })",
     # the aim point lands 60 % PAST what the reticle is on (the old fixed-convergence bug class): the eye-launched round crosses the reticle line
     # behind the dummy - MUST FAIL (crosshair row)
     "aim-past": "const f = K.aimRayDist; K.aimRayDist = function () { return f.apply(this, arguments) * 1.6; }",
