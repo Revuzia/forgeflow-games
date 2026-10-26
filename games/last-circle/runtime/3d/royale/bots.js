@@ -4481,8 +4481,11 @@ function maybeFrag(W, b, t, seen, dist) {
     // for the time it takes to come to ~24 m (2-4 s), and the reasons below get their chance; once per 30 s.
     // (F24, 21 matches at weight 8: 0-1 pushes a match, 2 matches with no frag at all from 8-10 carriers - "holding his spot" was a stationary
     // target only, and a duellist strafes: up to 3 m/s now, tier 2+, 80+ of bar, 4 s into the fight, 30-70 m, once per 20 s)
-    if (dist > 30 && dist < 70 && seen && (a.tier || 1) >= 2 && W.t >= bb.nadePushT && bb.fightT > 4 && a.hp + a.shield >= 80 &&
-        t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 9) {
+    // (J24, Deepwood seed 46: 3 carriers, 508 of 516 checks out of reach, 0 pushes - in the trees the man is in and out of sight, and the push
+    // asked for him in sight: a man who ducked behind a trunk 0-3 s ago at his last spot counts too - the frag is for exactly him)
+    const lastSeen = seen || W.t - bb.targetSeenT < 3;
+    if (dist > 30 && dist < 70 && lastSeen && (a.tier || 1) >= 2 && W.t >= bb.nadePushT && bb.fightT > 4 && a.hp + a.shield >= 80 &&
+        (!seen || (t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 9))) {
       bb.nadePushT = W.t + 20; bb.closeInUntil = W.t + Math.min(7, Math.max(2, (dist - 22) / 5)); b.nextThink = 0; bb.fdP++;   // (g2: 5 s left a 60 m push at 35-45 m)
     }
     return;
@@ -4731,12 +4734,22 @@ function coverStepQ(W, b, dt, tp, seen) {
   const wcls = a.weapon && K.WEAPONS[a.weapon.id] ? K.WEAPONS[a.weapon.id].cls : null;
   // (mid-range too: past 20 m with anything but a shotgun / pistol, unless he is nearly finished - then press)
   const tA = bb.target ? W.actorById.get(bb.target) : null;
-  const pressIt = !!tA && (tA.downed || (tA.hp || 0) + (tA.shield || 0) < 40);
+  // (...or he is cracked by this bot's own fire in the last 3 s: a player who just landed a rifle / sniper hit stays on him for the follow-up, he does not
+  // duck back behind the rock and let him heal - probe_match: sniper kills fell from 43 in 24 matches (21 with one) to 27 (13) with the ranged hold)
+  // (slowGun: a bolt / single-round gun, rpm < 100 - the sniper. A rifle's next round is 0.2 s away and its cover cycle already shoots; J24 with the
+  // two rules below on every gun: ENGAGE in cover 16.0 -> 13.7 %)
+  const wdef = a.weapon && K.WEAPONS[a.weapon.id], slowGun = !!wdef && wdef.rpm > 0 && wdef.rpm < 100;
+  const pressIt = !!tA && (tA.downed || (tA.hp || 0) + (tA.shield || 0) < 40 ||
+    (slowGun && (tA.hp || 0) + (tA.shield || 0) < 100 && tA.lastAttacker === a.id && W.t - (tA.lastHurtByActorT || -99) < 3));
   const ranged = seen && !pressIt && ((dist > 30 && !!LONG_CLS[wcls]) || (dist > 20 && wcls !== "shotgun" && wcls !== "pistol"));
   if (!reloading && !hurt && !shotAt && !ranged) return false;     // no reason to break off
   if (dist < 6) return false;                           // point-blank: fight, don't hide
   // (P23, LC-12) HIDE - PEEK - HIDE: a ranged hold that has just peeked from its wall goes back behind the SAME wall (no search, no budget) while
   // the man it is trading with is still about where he was when the wall was picked (8 m), and the wall is a step away (5 m)
+  // ...but only once the peek has done its job: a shot fired since it came out (a bolt sniper needs its re-sight + ADS + one round, which the bare
+  // 1.2 s peek often cut off) or 2.6 s out in the open
+  const peekLive = slowGun && W.t - bb.coverPeekT < 2.6 && !(a.lastShotT > bb.coverPeekT);
+  if (peekLive && !reloading && !hurt && !shotAt) return false;       // (no new wall either: the peek stays out until it has shot)
   if (ranged && bb.coverFace === 2 && bb.coverPt && W.t - bb.coverPeekT < 8 && hyp(bb.coverPt.x - a.pos.x, bb.coverPt.z - a.pos.z) < 5 &&
       hyp(tp.x - bb.coverTX, tp.z - bb.coverTZ) < 8) {
     bb.coverState = "MOVING"; bb.coverGiveUp = W.t + 2.5;
