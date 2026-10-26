@@ -349,6 +349,22 @@ def squad_rig(args):
     return Rig(args), SQ
 
 
+def _screen_text(pg):
+    try:
+        return " | ".join(t for t in pg.evaluate("() => document.body.innerText").splitlines() if t.strip())[:400]
+    except Exception as e:
+        return "<unreadable: %s>" % e
+
+
+def _pair_shot(pg, tag):
+    try:
+        d = os.path.join(C.REPORTS, "p23_shots")
+        os.makedirs(d, exist_ok=True)
+        pg.screenshot(path=os.path.join(d, "pair_%s.png" % tag))
+    except Exception:
+        pass
+
+
 def squad_pair(rig, SQ, args, name, team_mode=None):
     """host + guest pages in a fresh context, real lobby clicks (SQUAD UP, CREATE ROOM, JOIN by code, START MATCH), both REAL matches loaded and
     landed (sim only, hp topped). Returns (ctx, hpg, hrec, gpg, grec, code)."""
@@ -361,9 +377,15 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
     for label, pg in (("host", hpg), ("guest", gpg)):
         if not SQ.open_lobby(pg):
             raise C.EnvFailure("%s %s: the SQUAD UP lobby never opened" % (name, label))
-    code = SQ.host_create(hpg)
+    try:
+        code = SQ.host_create(hpg)
+    except Exception as e:      # name what the host saw (a renamed / covered CREATE ROOM is a lobby defect, not a timeout to retry)
+        code = None
+        _pair_shot(hpg, name + "_host_create")
+        raise C.EnvFailure("%s: CREATE ROOM not clickable (%s); host screen: %s" % (name, str(e).splitlines()[0][:120], _screen_text(hpg)))
     if not code:
-        raise C.EnvFailure("%s: no room code" % name)
+        _pair_shot(hpg, name + "_host_nocode")
+        raise C.EnvFailure("%s: no room code; host screen: %s" % (name, _screen_text(hpg)))
     SQ.guest_join(gpg, code)
     if not SQ.wait(hpg, "() => document.body.innerText.includes('2 player')", 40):
         raise C.EnvFailure("%s: the guest never showed in the host's lobby" % name)

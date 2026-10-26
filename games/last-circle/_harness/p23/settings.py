@@ -48,7 +48,10 @@ FIT_JS = r"""() => { const tabs = document.querySelector('[data-lc="settabs"]');
       out.push((e.textContent || e.value || e.tagName).trim().slice(0, 24)); }
   return { out, box: [B.left, B.top, B.right, B.bottom].map(Math.round) }; }"""
 GFX_JS = r"""() => { const W = window.__LC__.W, k = W.kernel, r = k.renderer; const sun = k.sun || (W.scene && W.scene.children.find((c) => c.isDirectionalLight));
-  return { tier: W.gfxTier || (W.settings && W.settings.graphics), pr: r.getPixelRatio(), shadow: sun && sun.shadow ? sun.shadow.mapSize.x : 0, shadowOn: !!r.shadowMap.enabled,
+  const sOn = !!r.shadowMap.enabled && !!(sun && sun.castShadow !== false && sun.shadow);
+  return { tier: W.gfxTier || (W.settings && W.settings.graphics), pr: r.getPixelRatio(), dprMax: k._dprMax != null ? (k._dprMax === Infinity ? 9 : k._dprMax) : null,
+           shadow: sOn ? sun.shadow.mapSize.x : 0, shadowOn: sOn, shadowExt: sOn ? Math.abs(sun.shadow.camera.right || 0) : 0,
+           aniso: W._texAniso != null ? W._texAniso : null, lootCull: W.lootCull != null ? W.lootCull : null, wpnLOD: W.wpnLOD != null ? W.wpnLOD : null,
            far: W.camera ? W.camera.far : null, gfx: W._gfx ? JSON.parse(JSON.stringify(W._gfx, (kk, vv) => typeof vv === 'object' && vv && kk !== '' && Object.keys(vv).length > 20 ? undefined : vv)) : null }; }"""
 MEAN_JS = r"""() => { const W = window.__LC__.W, k = W.kernel; window.__LC__.stepFrames(2, 1 / 60, true); const gl = k.renderer.getContext(); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
   const px = new Uint8Array(4 * 64 * 64); const out = []; for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { gl.readPixels(Math.floor((i + 0.5) * w / 8) - 4, Math.floor((j + 0.5) * h / 8) - 4, 8, 8, gl.RGBA, gl.UNSIGNED_BYTE, px);
@@ -126,11 +129,17 @@ def main():
                     seq[t] = s.js(GFX_JS)
             v.data["tiers"] = seq
             order = [seq.get(t) for t in ("LOW", "MEDIUM", "HIGH", "ULTRA")]
-            mono = all(order) and all(b["pr"] >= a["pr"] - 1e-6 and b["shadow"] >= a["shadow"] for a, b in zip(order, order[1:]))
-            above = all(order) and (order[3]["pr"] > order[2]["pr"] + 1e-6 or order[3]["shadow"] > order[2]["shadow"] or (order[3]["far"] or 0) > (order[2]["far"] or 0))
+            # the quality vector: every knob a tier sets that a player sees (an absent knob = 0 on every tier, so it never decides);
+            # the shadow map counts only while the shadow pass is ON (a LOW that keeps a 2048 map allocated but disabled is 0)
+            QK = ("pr", "dprMax", "shadow", "shadowExt", "aniso", "lootCull", "wpnLOD", "far")
+            qv = lambda x: [float(x.get(k) or 0) for k in QK]
+            mono = all(order) and all(all(qb >= qa - 1e-6 for qa, qb in zip(qv(a), qv(b))) for a, b in zip(order, order[1:]))
+            above = all(order) and any(qb > qa + 1e-6 for qa, qb in zip(qv(order[2]), qv(order[3])))
+            below = all(order) and any(qb > qa + 1e-6 for qa, qb in zip(qv(order[0]), qv(order[1])))
             v.check("presets (LOW / MEDIUM / HIGH / ULTRA by real clicks; W.gfxTier follows; quality never falls going up; ULTRA above HIGH)",
-                    sorted(set(names)) == ["HIGH", "LOW", "MEDIUM", "ULTRA"] and all(seq.get(t, {}).get("tier") == t.lower() for t in ("LOW", "MEDIUM", "HIGH", "ULTRA")) and mono and above,
-                    {"buttons": sorted(set(names)), "tiers": {t: {k: x[k] for k in ("tier", "pr", "shadow", "far")} for t, x in seq.items()}}, "follows, monotonic, ultra > high")
+                    sorted(set(names)) == ["HIGH", "LOW", "MEDIUM", "ULTRA"] and all(seq.get(t, {}).get("tier") == t.lower() for t in ("LOW", "MEDIUM", "HIGH", "ULTRA")) and mono and above and below,
+                    {"buttons": sorted(set(names)), "mono": mono, "ultraAboveHigh": above, "mediumAboveLow": below,
+                     "tiers": {t: {k: x.get(k) for k in ("tier",) + QK} for t, x in seq.items()}}, "follows, monotonic on every knob, ultra > high and medium > low on >= 1")
             close_settings(s)
             s.page.reload()
             s.boot(url=url)

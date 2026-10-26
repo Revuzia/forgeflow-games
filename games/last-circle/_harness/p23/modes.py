@@ -126,14 +126,19 @@ def main():
                     if (!c) return null; c.scrollIntoView({ block: 'center' }); const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }""")
                 if card:
                     s.page.mouse.click(card[0], card[1])
-                got = s.wait_js("() => { const W = window.__LC__.W; return W.match && W.match.mode === 'duo' && ['lobby', 'drop', 'match'].includes(W.phase) ? W.match.mode : null; }",
-                                args.load_timeout, 0.5)
+                # wait for the match to START (any team mode), then judge the mode it started in - a start in the wrong mode is a
+                # FAIL with the mode named, not a 25-minute wait for a 'duo' that never comes
+                seen = s.wait_js("() => { const W = window.__LC__.W; return W.match && ['lobby', 'drop', 'match'].includes(W.phase) ? (W.match.mode || 'none') : null; }",
+                                 args.load_timeout, 0.5)
+                got = seen
+                v.data["menuStart"] = s.safe_js("() => { const W = window.__LC__.W; return { phase: W.phase, matchMode: W.match && W.match.mode, teamMode: W.teamMode, pace: W.match && W.match.pace,"
+                                                " mates: W.player ? W.actors.filter((a) => a !== W.player && a.teamId === W.player.teamId).length : null }; }")
             else:
                 got = None
             norm = set(t[:-1] if t.endswith("S") and t != "SOLO" else t for t in texts)
             v.check("menu-card (team row SOLO / DUO / TRIO; real DUO click + QUICK MATCH starts a duo match)",
                     {"SOLO", "DUO", "TRIO"} <= norm and duo is not None and got == "duo",
-                    {"buttons": texts, "started": got}, "duo")
+                    {"buttons": texts, "started": got, "at": v.data.get("menuStart")}, "duo")
             L.errors_row(v, s)
     return C.run_gate("p23_modes", body, args)
 
