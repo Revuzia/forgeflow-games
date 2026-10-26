@@ -407,8 +407,8 @@ export function attachBrain(W, actor, nBots) {
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
       graceMul: 0, assist: null, ping: null, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
       nadeS: 0, nadeKind: 0, nadeSlot: -1, nadePrev: -1, nadeX: 0, nadeY: 0, nadeZ: 0, nadeYaw: 0, nadePitch: 0, nadeT: -99, nadeNextT: 0, nadeCheckT: 0, smokeWant: 0,
-      reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
-      wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
+      reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, followBack: false, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
+      wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, fdS: 0, arcSweepT: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
     },
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
@@ -982,7 +982,10 @@ function think(W, b) {
     const L = leaderOf(W, b);
     if (L) {
       const ld = hyp(L.pos.x - a.pos.x, L.pos.z - a.pos.z);
-      s.FOLLOW = ld > 60 ? (liveTarget && tDist < 60 ? 0 : 84) : (ld > 28 ? 52 : 0);
+      // (hysteresis: p23_modes read the mates' median 59.4 / 59.6 m - the 60 m line was where they turned round, so they lived on it. A bot
+      // 45 m+ out now comes all the way back in, to 18 m, before anything calm takes it away again)
+      if (ld > 45) bb.followBack = true; else if (ld < 18) bb.followBack = false;
+      s.FOLLOW = bb.followBack ? (liveTarget && tDist < 60 ? 0 : (ld > 60 ? 84 : 76)) : (ld > 28 ? 52 : 0);
       if (L.gliding) s.FOLLOW = 0;
     }
     // PING (C-PING): a squadmate's spot ping / map pin is where to go (72: over loot and follow, under a live fight); an enemy ping is a fight
@@ -4393,14 +4396,43 @@ function beginThrow(W, b, kind, tx, ty, tz) {
     if (kind === 1) for (const m of W.actors) {             // ... nor at a squadmate's feet
       if (m !== a && m.alive && sameTeam(a, m) && hyp(m.pos.x - L.x, m.pos.z - L.z) < 6) return false;
     }
-    bb.nadeS = 1; bb.nadeKind = kind; bb.nadeSlot = slot; bb.nadePrev = a.inventory.active; bb.nadeT = W.t;
-    bb.nadeX = L.x; bb.nadeY = L.y; bb.nadeZ = L.z;
-    bb.nadeYaw = Math.atan2(-hx, -hz); bb.nadePitch = el - (F.loft || 0.17);
-    bb.smokeWant = 0;
-    if (W.equipSlot) W.equipSlot(a, slot);
-    return true;
+    return armThrow(W, b, kind, slot, L, hx, hz, el);
+  }
+  // NEITHER EXACT ARC IS CLEAN (F24 + g1: 16-33 planned throws a match fell here, and the two matches with no frag were all of them): the man is
+  // behind a wall or in a room, the flat arc meets the wall and the lob is past maxElev or meets a roof. A player arcs it OVER: sweep the
+  // elevations and take the first whose landing is within reach of him with nothing between the burst and him (one sight test per candidate).
+  if (W.t >= (bb.arcSweepT || 0)) {
+    bb.arcSweepT = W.t + 1.5;
+    const F = K.FRAG || { loft: 0.17, minElev: -0.7, maxElev: 1.25 };
+    const near = kind === 1 ? 3.5 : 4.5;
+    for (let el = Math.max(F.minElev, -0.2); el <= F.maxElev + 1e-6; el += 0.09) {
+      const L = arcLanding(W, eye.x, eye.y, eye.z, hx, hz, el, d * 1.4);
+      if (!L.ok) continue;
+      const lx = L.x, ly = L.y, lz = L.z;
+      if (hyp(lx - tx, lz - tz) > near || Math.abs(ly - ty) > 2.5) continue;
+      if (kind === 1 && hyp(lx - a.pos.x, lz - a.pos.z) < 6) continue;
+      if (kind === 1) {
+        let mateNear = false;
+        for (const m of W.actors) if (m !== a && m.alive && sameTeam(a, m) && hyp(m.pos.x - lx, m.pos.z - lz) < 6) { mateNear = true; break; }
+        if (mateNear) continue;
+        if (W.map.losBlocked(lx, ly + 0.35, lz, tx, ty + 0.9, tz)) continue;     // the burst must reach him (no wall between)
+      }
+      _arc.x = lx; _arc.y = ly; _arc.z = lz;
+      bb.fdS = (bb.fdS || 0) + 1;
+      return armThrow(W, b, kind, slot, _arc, hx, hz, el);
+    }
   }
   return false;
+}
+function armThrow(W, b, kind, slot, L, hx, hz, el) {
+  const a = b.actor, bb = b.bb;
+  const F = K.FRAG || { loft: 0.17 };
+  bb.nadeS = 1; bb.nadeKind = kind; bb.nadeSlot = slot; bb.nadePrev = a.inventory.active; bb.nadeT = W.t;
+  bb.nadeX = L.x; bb.nadeY = L.y; bb.nadeZ = L.z;
+  bb.nadeYaw = Math.atan2(-hx, -hz); bb.nadePitch = el - (F.loft || 0.17);
+  bb.smokeWant = 0;
+  if (W.equipSlot) W.equipSlot(a, slot);
+  return true;
 }
 /** The throw machine, every frame while bb.nadeS: hold still, turn to the throw heading, set the pitch, and pull once the draw (0.4 s) is done. */
 function throwRun(W, b, dt) {
@@ -4441,9 +4473,11 @@ function maybeFrag(W, b, t, seen, dist) {
     // were out of reach, 87 % of them past 60 m - the duels of an open map are long. A player with a nade in a stalled duel closes the gap to
     // throw it: a tier 3+ bot with 100+ of bar, 5 s into a fight with a man holding his spot 30-60 m off, pushes (CLOSEIN, firing on the move)
     // for the time it takes to come to ~24 m (2-4 s), and the reasons below get their chance; once per 30 s.
-    if (dist > 30 && dist < 60 && seen && (a.tier || 1) >= 3 && W.t >= bb.nadePushT && W.t - bb.acquireT > 5 && a.hp + a.shield >= 100 &&
-        t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 1.5) {
-      bb.nadePushT = W.t + 30; bb.closeInUntil = W.t + Math.min(4, Math.max(2, (dist - 24) / 6)); b.nextThink = 0; bb.fdP++;
+    // (F24, 21 matches at weight 8: 0-1 pushes a match, 2 matches with no frag at all from 8-10 carriers - "holding his spot" was a stationary
+    // target only, and a duellist strafes: up to 3 m/s now, tier 2+, 80+ of bar, 4 s into the fight, 30-70 m, once per 20 s)
+    if (dist > 30 && dist < 70 && seen && (a.tier || 1) >= 2 && W.t >= bb.nadePushT && W.t - bb.acquireT > 4 && a.hp + a.shield >= 80 &&
+        t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 9) {
+      bb.nadePushT = W.t + 20; bb.closeInUntil = W.t + Math.min(5, Math.max(2, (dist - 24) / 6)); b.nextThink = 0; bb.fdP++;
     }
     return;
   }
@@ -4458,6 +4492,8 @@ function maybeFrag(W, b, t, seen, dist) {
     // weight 8 in two 6-match batches, a Deepwood match both times: its duels rarely met the room / cover / ducked tests)
     else if (W.t - bb.acquireT > 4 && b.rng() < 0.2) why = 4;
   }
+  // ...and a man strafing in the open 12-28 m off, 6 s into the duel: a frag at his feet moves him off his line (a player's "nade the duel")
+  else if (seen && dist > 12 && W.t - bb.acquireT > 6 && b.rng() < 0.08) why = 5;
   if (!why) { bb.fdW++; return; }
   const tp = bb.targetPos;
   beginThrow(W, b, 1, tp.x, tp.y, tp.z);
@@ -4517,7 +4553,9 @@ function chuteRescue(W, b) {
   const g = Math.abs((K.MOVE && K.MOVE.gravity) || 22), vy = -a.vel.y;
   const vLand = Math.sqrt(vy * vy + 2 * g * agl);
   const hEq = vLand * vLand / (2 * g);                     // the drop that lands at this speed
-  if (hEq > lethalDrop(a) * 0.8) {
+  // (only a drop that KILLS: the rule is the human's - p23_fall measured bots lifted 15 m at hp 100 opening the canopy and taking 0 where the
+  // human takes 86; the 0.8 factor rescued every drop past ~13 m. Half a metre of margin for the 5 Hz probe and the ground under the landing)
+  if (hEq > lethalDrop(a) - 0.5) {
     a.input.jump = true;
     // the canopy brings it down HERE (the glide branch steers to dropTarget: the match's first landing spot would be a long glide away)
     const dtg = bb.dropTarget || (bb.dropTarget = { x: 0, z: 0 });
