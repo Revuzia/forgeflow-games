@@ -5125,7 +5125,13 @@ function actEngage(W, b, dt) {
       // NOTE: coverStep owns inp.mx/mz when it is active — only fire+crouch here.
       if (bb.coverState === "NONE" || !bb.coverState) { inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.jump = false; }
       inp.crouch = true;
-      if (a.vel.x * a.vel.x + a.vel.z * a.vel.z < 2.25) inp.fire = true;   // < 1.5 m/s
+      // (P23, LC-20 x sniper) A BOLT ROUND IS TIMED: a player with one round in the chamber squeezes as the crosshair crosses the man, he does not
+      // fire wherever the wobble happens to sit. With calm bots topping their shields up a body round rarely finishes anyone (pm6 10-26, the
+      // probe_match seeds: 12 sniper hits from 327 rounds - 3.7 % - and 7 of the 12 left the man standing; base 11 of 12 killed), so the hits
+      // the bolt does land have to come from the rounds it aims. The yaw wobble crosses zero about once a second (errPhase, 3.1 rad/s): fire
+      // inside its middle 20 % (|sin| < 0.3), or at once when the error is already under 0.4 deg. A DMR past 45 m is a rifle: it keeps the old rule.
+      const timed = !(def.rpm > 0 && def.rpm < 100) || errDeg < 0.4 || Math.abs(Math.sin(bb.errPhase)) < 0.3;
+      if (timed && a.vel.x * a.vel.x + a.vel.z * a.vel.z < 2.25) inp.fire = true;   // < 1.5 m/s
     } else {
       inp.fire = true;
     }
