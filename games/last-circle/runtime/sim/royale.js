@@ -560,9 +560,37 @@
     // per-HOLD radii (HRADII) where a hold's rendered pose sways (the pistol carry plays the generic idle clip),
     // else the skin's radii
     var R = (tab[key] && HITVOL.HRADII[sk] && HITVOL.HRADII[sk][key]) || HITVOL.RADII[sk] || HITVOL.RADII.soldier;
+    // AIM TWIST (player.js syncObj aim-offset layer, Mixamo long guns on the ground only): the upper body turns toward
+    // the camera by aimDelta = aim yaw - body yaw clamped to +-0.6 (half on spine1, half on spine2). Nonzero for a rifle
+    // carrier moving off its aim axis out of combat (its body faces the velocity). Rotate about the hips' vertical:
+    // Spine2 by half, neck / arms / head by the whole twist (local frame: x' = x cos - z sin, z' = x sin + z cos).
+    if (key.charCodeAt(0) === 114 /* r: rifle */ && a.onGround !== false && !a.swimming && !a.gliding) {
+      var tw = (a.yaw || 0) - hitVolFacing(a, now);
+      while (tw > Math.PI) tw -= Math.PI * 2;
+      while (tw < -Math.PI) tw += Math.PI * 2;
+      tw = clamp(tw, -0.6, 0.6);
+      if (tw > 1e-4 || tw < -1e-4) {
+        // the spine's own axis (Hips -> Neck of this row: a runner leans ~25 deg forward), not the world vertical
+        var ux = _hvJ[6] - _hvJ[0], uy = _hvJ[7] - _hvJ[1], uz = _hvJ[8] - _hvJ[2], ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
+        _hvU[0] = ux / ul; _hvU[1] = uy / ul; _hvU[2] = uz / ul;
+        hvTwist(1, tw * 0.5);
+        for (var q = 2; q <= 8; q++) hvTwist(q, tw);
+        hvTwist(15, tw);                                // head sphere centre (slot after the 15 joints)
+      }
+    }
     // torso columns: offsets along the hip line (LeftUpLeg 9 -> RightUpLeg 12) and the shoulder line (LeftArm 3 -> RightArm 6)
     hvSide(0, 9, 12, R[7], 15); hvSide(1, 3, 6, R[8], 17); hvSide(2, 3, 6, R[9], 19);
     return R;
+  }
+  /** Rotate joint j (or 15 = the head centre) about the axis _hvU through Hips (joint 0) by th (local frame; positive
+   *  th turns the chest toward -x for an upright spine: x' = x cos - z sin, z' = x sin + z cos). Rodrigues, angle -th. */
+  var _hvU = new Float64Array(3);
+  function hvTwist(j, th) {
+    var J = _hvJ, o = j * 3, cs = Math.cos(-th), sn = Math.sin(-th), ux = _hvU[0], uy = _hvU[1], uz = _hvU[2];
+    var x = J[o] - J[0], y = J[o + 1] - J[1], z = J[o + 2] - J[2], d = (ux * x + uy * y + uz * z) * (1 - cs);
+    J[o] = J[0] + x * cs + (uy * z - uz * y) * sn + ux * d;
+    J[o + 1] = J[1] + y * cs + (uz * x - ux * z) * sn + uy * d;
+    J[o + 2] = J[2] + z * cs + (ux * y - uy * x) * sn + uz * d;
   }
   /** Derived points: joint `c` (0 Hips, 1 Spine2, 2 Neck) -/+ k along the unit line a -> b, written as points d, d + 1. */
   function hvSide(c, a, b, k, d) {
@@ -1766,7 +1794,7 @@
     FALL: FALL, FALL_SAFE_H: FALL_SAFE_H, FALL_SAFE_V: FALL_SAFE_V, FALL_DMG_PER_V: FALL_DMG_PER_V, FALL_EXP: FALL_EXP,
     LAND_STAGGER_S: LAND_STAGGER_S, LAND_STAGGER_V: LAND_STAGGER_V, fallDamage: fallDamage, fallSpeedForHeight: fallSpeedForHeight,
     fallSafeHeight: fallSafeHeight, fallLethalHeight: fallLethalHeight,
-    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
+    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, HITVOL_J: _hvJ, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FFG = root.FFG || {};
