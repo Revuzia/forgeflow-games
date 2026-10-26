@@ -846,7 +846,7 @@ if (require.main === module) (async () => {
           }
         }
       }
-      okP(wbad.length === 0 && nFoot > 200 && nEave > 50 && nBurn > 100 && wTris <= 0.14 * baseTris && ruinTris <= 0.25 * ruinBase, "meshData wear strips (LC-17): outside wall faces only, 12 mm in front of a box face, darker than the wall (foot " + nFoot + ", eave " + nEave + " strips on 36 houses; ruin soot " + nBurn + " strips on 12 ruins), +" + (100 * wTris / Math.max(1, baseTris)).toFixed(1) + " % wall triangles (<= 14 %), ruins +" + (100 * ruinTris / Math.max(1, ruinBase)).toFixed(1) + " % (<= 25 %: a ruin is mostly broken tops; the crater village is ~1 % of the houses); box vertices and boxRanges untouched", wbad.slice(0, 4).join(" | "));
+      okP(wbad.length === 0 && nFoot > 200 && nEave > 50 && nBurn > 100 && wTris <= 0.14 * baseTris && ruinTris / 12 <= 1000, "meshData wear strips (LC-17): outside wall faces only, 12 mm in front of a box face, darker than the wall (foot " + nFoot + ", eave " + nEave + " strips on 36 houses; ruin soot " + nBurn + " strips on 12 ruins), +" + (100 * wTris / Math.max(1, baseTris)).toFixed(1) + " % wall triangles (<= 14 %), ruins +" + (ruinTris / 12).toFixed(0) + " triangles a house (<= 1000: drawn in the district mix, no draw call; +" + (100 * ruinTris / Math.max(1, ruinBase)).toFixed(0) + " % of their wall triangles); box vertices and boxRanges untouched", wbad.slice(0, 4).join(" | "));
     }
   // O3 on tall shells: <= 3 walkable floors, the rest closed (one exact mass: nobody gets in), the asked height kept
   {

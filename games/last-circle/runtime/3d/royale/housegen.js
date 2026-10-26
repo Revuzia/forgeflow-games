@@ -3684,9 +3684,10 @@ const WEAR_PARTS = { wall: 1, skin: 1, shell: 1, slab: 1, gable: 1 };
 export const WEAR_FOOT = [0.5, 1.15], WEAR_EAVE = 0.7, WEAR_K = [0.44, 0.56, 0.8];
 // (P23 / LC-17, the Wave-8 stage-B "crater village does not read as a ruin" look) a RUIN's every broken top is charred: on the outside faces of its walls,
 // parapet, stubs, remnants and standing corners that reach the roof line (face top >= the top ceiling), a soot fade from the wall colour WEAR_BURN.h0 ..
-// WEAR_BURN.h1 m under the face's top to WEAR_BURN.k at it, in tongues WEAR_BURN.seg m wide whose depths are a hash of the face and the tongue (ragged, no stream
-// drawn: the first look, one even band per face, read as a shadow under the cornice, not as fire). Drawn only, like the wear strips; replaces the eave strip there.
-export const WEAR_BURN = { k: 0.2, h0: 0.6, h1: 2.4, seg: 1.3 };
+// WEAR_BURN.h1 m under the face's top to WEAR_BURN.k at it. Its lower edge is a zig-zag: a depth every ~WEAR_BURN.seg m along the face (a hash of the face and the
+// point: ragged, no stream drawn), each piece a trapezoid between two depths (looks: one even band per face read as a shadow under the cornice; square tongues read
+// as painted panels). Two pieces deep: 1 -> km over the lower 1 - f of the depth, km -> k over the top f (a charred lip). Drawn only; replaces the eave strip there.
+export const WEAR_BURN = { k: 0.1, km: 0.4, f: 0.45, h0: 0.5, h1: 2.7, seg: 1.1 };
 const BURN_PARTS = { wall: 1, skin: 1, shell: 1, gable: 1, trim: 1 };
 const WEAR_OFF = 0.012;
 function wearBands(H, groups, acc, faceIn, colOf) {
@@ -3730,10 +3731,26 @@ function wearBands(H, groups, acc, faceIn, colOf) {
         footTop = yb;
       }
       if (burnP) {                                                     // (a ruin: soot down from the broken top, never over the foot strip)
-        const nSeg = Math.max(1, Math.round((u1 - u0) / WEAR_BURN.seg)), sw = (u1 - u0) / nSeg;
+        const nSeg = Math.max(1, Math.round((u1 - u0) / WEAR_BURN.seg)), sw = (u1 - u0) / nSeg, floor = Math.max(y0, footTop);
+        const depth = (q) => WEAR_BURN.h0 + (WEAR_BURN.h1 - WEAR_BURN.h0) * hash01(b, fi, q);
+        // the colour at height y of a column whose soot reaches hb down from the top
+        const kAt = (y, hb) => { const ym = y1 - hb * WEAR_BURN.f; return y <= ym ? Math.min(1, 1 - (1 - WEAR_BURN.km) * (y - (y1 - hb)) / (hb * (1 - WEAR_BURN.f))) : WEAR_BURN.km - (WEAR_BURN.km - WEAR_BURN.k) * (y - ym) / (hb * WEAR_BURN.f); };
+        const rgb = colOf(pe.color), cK = (k) => [rgb[0] * k, rgb[1] * k, rgb[2] * k], tile = TILE[pe.mat] || 2, a = acc("walls", pe.mat, false);
+        // a trapezoid from (ua, ya0 .. ya1) to (ub, yb0 .. yb1), corners in the face's winding (as strip): bottom-left, bottom-right, top-right, top-left
+        const trap = (ua, ub, ya0, ya1, yb0, yb1, ka0, ka1, kb0, kb1) => {
+          if (ya1 - ya0 < 0.01 && yb1 - yb0 < 0.01) return;
+          const L = fwd ? [ua, ya0, ya1, ka0, ka1] : [ub, yb0, yb1, kb0, kb1], R = fwd ? [ub, yb0, yb1, kb0, kb1] : [ua, ya0, ya1, ka0, ka1];
+          quad(a, n, [P(L[0], L[1]), P(R[0], R[1]), P(R[0], R[2]), P(L[0], L[2])], [cK(L[3]), cK(R[3]), cK(R[4]), cK(L[4])], uvAx, tile);
+        };
+        let dA = depth(0);
         for (let q = 0; q < nSeg; q++) {
-          const hb = WEAR_BURN.h0 + (WEAR_BURN.h1 - WEAR_BURN.h0) * hash01(b, fi, q), yb0 = Math.max(y0, footTop, y1 - hb);
-          if (y1 - yb0 >= 0.05) strip(yb0, y1, 1 - (1 - WEAR_BURN.k) * (yb0 - (y1 - hb)) / hb, WEAR_BURN.k, u0 + q * sw, u0 + (q + 1) * sw);
+          const dB = depth(q + 1), ua = u0 + q * sw, ub = u0 + (q + 1) * sw;
+          const bA = Math.max(floor, y1 - dA), bB = Math.max(floor, y1 - dB), mA = Math.max(bA, y1 - dA * WEAR_BURN.f), mB = Math.max(bB, y1 - dB * WEAR_BURN.f);
+          if (y1 - bA >= 0.05 || y1 - bB >= 0.05) {
+            trap(ua, ub, bA, mA, bB, mB, kAt(bA, dA), kAt(mA, dA), kAt(bB, dB), kAt(mB, dB));
+            trap(ua, ub, mA, y1, mB, y1, kAt(mA, dA), WEAR_BURN.k, kAt(mB, dB), WEAR_BURN.k);
+          }
+          dA = dB;
         }
         continue;
       }
