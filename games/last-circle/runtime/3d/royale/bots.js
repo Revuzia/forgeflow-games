@@ -4550,13 +4550,20 @@ function edgeGuard(W, b) {
   if (!(lim < 1e6)) return;
   GA[0] = a.pos.x; GA[1] = a.pos.z; groundA(W, GA, 0);
   const elevated = a.pos.y - GA[2] > 1.0;
-  for (let k = 1; k <= 3; k++) {
+  // (a CLIFF FACE, not just a ledge: the stub-duo batch lost 2 bots of 2 matches at the same Isla Viva cliff (-22, -34), terrain 55.5 -> 44.5 m
+  // over 4 m. No 0.8-2.4 m sample was ever more than the bot's limit below it, but past the first steep step the capsule leaves the ground and
+  // falls the whole face. So a run of steep samples (more than STEEP_STEP down per 0.8 m) that starts within the first 3 is followed down to
+  // its foot (up to 8 samples, 6.4 m) and the fall is measured from the top of the run to the foot)
+  let runTop = NaN, prev = a.pos.y;
+  for (let k = 1; k <= 8; k++) {
     const px = a.pos.x + wx * 0.8 * k, pz = a.pos.z + wz * 0.8 * k;
     let sup;
     if (elevated) sup = supportAt(W, px, pz, a.pos.y);
     else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
     if (W.map.waterY != null && sup < W.map.waterY) sup = W.map.waterY;      // water breaks a fall
-    if (a.pos.y - sup > lim) {
+    const steep = prev - sup > STEEP_STEP;
+    if (steep && runTop !== runTop && k <= 3) runTop = prev;
+    if ((k <= 3 && a.pos.y - sup > lim) || (runTop === runTop && runTop - sup > lim)) {
       bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
       inp.mz = 0; inp.mx = 0; inp.sprint = false;
       bb.nextPathT = 0;
@@ -4564,8 +4571,11 @@ function edgeGuard(W, b) {
       return;
     }
     if (a.pos.y - sup < -1.0) break;                                           // rising ground / a wall: no edge this way
+    if (k >= 3 && !(runTop === runTop && steep)) break;                        // past the first 3: only while the face goes on down
+    prev = sup;
   }
 }
+const STEEP_STEP = 0.9;           // m down per 0.8 m sample (~48 deg): steeper than this the capsule is in the air, not walking
 /** (C-FALL) Falling toward a landing that kills: open the canopy (the player's own escape: Space in the air more than 12 m up). */
 function chuteRescue(W, b) {
   const a = b.actor, bb = b.bb;
