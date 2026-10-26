@@ -5485,6 +5485,29 @@ export async function buildMap(W, mapId) {
     scatterTrees("bush", 16, 0.8, 40, null);
     scatterTrees("rocks", 12, 2, 60, "brick");
     lookoutTower();                                  // LC-90: the map-scale landmark Deepwood lacked (after the scatter: it draws nothing from the world stream)
+    if (lookout) lookoutBeacon(lookout);
+  }
+  // LC-90: the lookout's BEACON reads through the haze. From the plane the timber tower is 83 % fog at 700 m (FogExp2), a grey ghost (lm_probe crops); a
+  // lamp is what carries through haze, so the beacon gets a warm additive glow that ignores the fog: a sprite whose size follows the camera distance so it
+  // stays ~10 px across from 75 m out (1.2 m up close: a lit lamp, not a halo), with a slow 0.5 Hz pulse. One sprite, one draw call, the birds' sprite
+  // program (no new shader); every tier (a landmark is not a quality feature). Cosmetic: no collider, no world-stream draw.
+  function lookoutBeacon(L) {
+    if (typeof document === "undefined") return;
+    const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+    const cx = cv.getContext("2d"), gr = cx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(255,246,214,1)"); gr.addColorStop(0.18, "rgba(255,214,130,0.9)"); gr.addColorStop(0.5, "rgba(255,170,70,0.28)"); gr.addColorStop(1, "rgba(255,150,40,0)");
+    cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, toneMapped: false });
+    const sp = new THREE.Sprite(mat);
+    sp.name = "lookout:beacon"; sp.position.set(L.x, L.top - 0.15, L.z); sp.renderOrder = 2;
+    g.add(sp);
+    trackUpdater((dt, t) => {
+      const c = W.camera; if (!c) return;
+      const d = c.position.distanceTo(sp.position);
+      sp.scale.setScalar(Math.min(20, Math.max(1.2, d * 0.016)));
+      mat.opacity = (0.82 + 0.18 * Math.sin(t * 3.1)) * Math.min(1, 0.35 + d / 160);
+    });
   }
 
   // (the road network between the POIs is registered right after each branch declares its POIs, above: its corridors must be in the ground
