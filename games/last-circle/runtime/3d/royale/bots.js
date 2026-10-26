@@ -1198,28 +1198,61 @@ function insideSolid(W, x, y, z) {
   return false;
 }
 const ESC_RINGS = 10, ESC_STEP = 0.4, ESC_DIRS = 16;   // escapeSolid: rings of 0.4 m out to 4 m, 16 headings each (fixed order: deterministic)
+const ESC_FACE_M = [0.45, 1.0, 2.0];                    // (K2, re-run 4) how far past a containing box's face: the capsule clear of it, then further out
+const ESC_FAR_RINGS = 12, ESC_FAR_STEP = 1.0;           // (K2, re-run 4) last resort: rings of 1 m from 5 m out to 16 m
 /** (K2) put a bot that is inside a solid at the nearest spot round it where a standing capsule fits (player.js fitsAt), on the floor there
- *  (supportAt at its own height: never up onto a roof), dry, not more than 4 m below; its path is dropped and re-planned. No spot: nothing changes. */
+ *  (supportAt at its own height: never up onto a roof), dry, not more than 4 m below; its path is dropped and re-planned. No spot: nothing changes.
+ *  (K2, re-run 4) The rings out to 4 m come first (unchanged). A bot deeper inside a big box than that - a whole block's box: the wedge probe's bot put at
+ *  the middle of a 9.7 x 10.2 x 21.6 m box on Savanna seed 51002 was still inside after 20 s, every ring point inside the same box - then steps out
+ *  through the faces of the boxes it is inside (nearest face first, 0.45 / 1.0 / 2.0 m past it), and last the far rings (5-16 m). */
 function escapeSolid(W, b) {
-  const a = b.actor, bb = b.bb, M = W.map;
+  const a = b.actor, M = W.map;
   const wy = M.waterY != null ? M.waterY : -1e9;
+  const px = a.pos.x, pz = a.pos.z, py = a.pos.y;
   for (let ri = 1; ri <= ESC_RINGS; ri++) {
     const r = ri * ESC_STEP;
     for (let k = 0; k < ESC_DIRS; k++) {
       const an = k * (Math.PI * 2 / ESC_DIRS);
-      const x = a.pos.x + Math.cos(an) * r, z = a.pos.z + Math.sin(an) * r;
-      const s = supportAt(W, x, z, a.pos.y);
-      if (!(s === s) || s < a.pos.y - 4 || s < wy + 0.2) continue;
-      if (insideSolid(W, x, s, z) || !fitsAt(W, x, z, s)) continue;
-      a.pos.x = x; a.pos.y = s; a.pos.z = z;
-      a.vel.x = 0; a.vel.y = 0; a.vel.z = 0;
-      bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.nextPathT = 0; bb.stuckT = 0;
-      bb.solidX = x; bb.solidZ = z;
-      nav.st.solidEsc++;
-      return true;
+      if (escTry(W, b, px + Math.cos(an) * r, pz + Math.sin(an) * r, wy)) return true;
+    }
+  }
+  // the faces of every box the bot is inside (insideSolid's test), as exits sorted by distance (Array sort is stable: ties keep the collider order).
+  // Copied out first: escTry's own queries reuse the shared query array. (Rare path: the bot is inside a solid with no free spot within 4 m.)
+  const cols = M.queryColliders(px, pz, 0.6, _solidCols), h = K.PLAYERK.height, ex = [];
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    if (c.dead || c.kind === "ramp") continue;
+    if (px <= c.minX + 0.02 || px >= c.maxX - 0.02 || pz <= c.minZ + 0.02 || pz >= c.maxZ - 0.02) continue;
+    if (!(c.maxY > py + NAV_STEP_UP && c.minY < py + h - 0.1)) continue;
+    ex.push([px - c.minX, c.minX, pz, -1, 0], [c.maxX - px, c.maxX, pz, 1, 0], [pz - c.minZ, px, c.minZ, 0, -1], [c.maxZ - pz, px, c.maxZ, 0, 1]);
+  }
+  ex.sort((p, q) => p[0] - q[0]);
+  for (let i = 0; i < ex.length; i++) {
+    const e = ex[i];
+    for (let k = 0; k < ESC_FACE_M.length; k++) if (escTry(W, b, e[1] + e[3] * ESC_FACE_M[k], e[2] + e[4] * ESC_FACE_M[k], wy)) return true;
+  }
+  for (let ri = 1; ri <= ESC_FAR_RINGS; ri++) {
+    const r = ESC_RINGS * ESC_STEP + ri * ESC_FAR_STEP;
+    for (let k = 0; k < ESC_DIRS; k++) {
+      const an = k * (Math.PI * 2 / ESC_DIRS);
+      if (escTry(W, b, px + Math.cos(an) * r, pz + Math.sin(an) * r, wy)) return true;
     }
   }
   return false;
+}
+/** (K2) one escapeSolid candidate: the floor at (x, z) under the bot's own height (dry, not more than 4 m below) where a standing capsule fits and is not
+ *  inside a solid - the bot is put there (its path dropped and re-planned). false = not this spot. */
+function escTry(W, b, x, z, wy) {
+  const a = b.actor, bb = b.bb;
+  const s = supportAt(W, x, z, a.pos.y);
+  if (!(s === s) || s < a.pos.y - 4 || s < wy + 0.2) return false;
+  if (insideSolid(W, x, s, z) || !fitsAt(W, x, z, s)) return false;
+  a.pos.x = x; a.pos.y = s; a.pos.z = z;
+  a.vel.x = 0; a.vel.y = 0; a.vel.z = 0;
+  bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.nextPathT = 0; bb.stuckT = 0;
+  bb.solidX = x; bb.solidZ = z;
+  nav.st.solidEsc++;
+  return true;
 }
 const FURN_ESC_N = 8;     // (K2, re-run) 0.5 s windows (4 s) pinned off the room's floor before escapeToWalk
 /** (K2, re-run) The room (IND.R index) the bot stands in when its feet are OFF that room's walkable floor: 0.3-3 m over the floor (a piece of furniture),

@@ -90,12 +90,18 @@ interface SkillProfile {
   strafe: number;                      // 0..1 strafe intensity
   /** s from a NEEDLE-GLINT glint first aimed at the bot to its dodge (CHANGED(BOTFIX): rolled once per glint) */
   glintMin: number; glintMax: number;
+  /** chance to break into a dodge (a lateral run, as from a glint) when HIT in a fight by any kit (owner 2026-10-26) */
+  evade: number;
+  /** s between two strafe-side rolls in a fight (min, span): shorter = harder to track */
+  strafeEvery: number; strafeSpan: number;
 }
 
 const SKILLS: Record<BotSkill, SkillProfile> = {
-  breeze: { reactMin: 0.62, reactMax: 0.8, jitter: 0.018 * 2.4, turnRate: 4.5, turnAccel: 28, aimEase: 7, lead: 0.25, engage: 9.0, fireCone: 0.13, coverBias: 0.35, retreatHp: 0, strafe: 0.5, glintMin: 0.8, glintMax: 1.05 },
-  swell: { reactMin: 0.45, reactMax: 0.62, jitter: 0.018 * 1.6, turnRate: 6.5, turnAccel: 42, aimEase: 10, lead: 0.6, engage: 10.0, fireCone: 0.1, coverBias: 0.55, retreatHp: 30, strafe: 0.8, glintMin: 0.42, glintMax: 0.58 },
-  storm: { reactMin: 0.3, reactMax: 0.42, jitter: 0.018, turnRate: 9, turnAccel: 60, aimEase: 14, lead: 0.9, engage: 10.8, fireCone: 0.08, coverBias: 0.7, retreatHp: 38, strafe: 1.0, glintMin: 0.18, glintMax: 0.28 },
+  breeze: { reactMin: 0.62, reactMax: 0.8, jitter: 0.018 * 2.4, turnRate: 4.5, turnAccel: 28, aimEase: 7, lead: 0.25, engage: 9.0, fireCone: 0.13, coverBias: 0.35, retreatHp: 0, strafe: 0.5, glintMin: 0.8, glintMax: 1.05, evade: 0, strafeEvery: 0.4, strafeSpan: 0.7 },
+  swell: { reactMin: 0.45, reactMax: 0.62, jitter: 0.018 * 1.6, turnRate: 6.5, turnAccel: 42, aimEase: 10, lead: 0.6, engage: 10.0, fireCone: 0.1, coverBias: 0.55, retreatHp: 30, strafe: 0.8, glintMin: 0.42, glintMax: 0.58, evade: 0, strafeEvery: 0.4, strafeSpan: 0.7 },
+  // STORM (owner 2026-10-26, "actually challenging"): faster reactions, steadier and better-led aim, harder-to-track strafing,
+  // and it dodges when hit by any kit (still human-plausible: ~0.24 s reactions)
+  storm: { reactMin: 0.24, reactMax: 0.34, jitter: 0.018 * 0.6, turnRate: 11, turnAccel: 75, aimEase: 18, lead: 1.0, engage: 10.8, fireCone: 0.07, coverBias: 0.7, retreatHp: 45, strafe: 1.0, glintMin: 0.14, glintMax: 0.22, evade: 0.65, strafeEvery: 0.25, strafeSpan: 0.45 },
 };
 
 const THINK_EVERY = 6;          // ticks between decisions (10 Hz)
@@ -309,6 +315,8 @@ class Brain {
   coverNode = -1; peekNode = -1; coverUntil = 0; peekPhase = 0; peekT = 0; coverCd = 0;
   // fight movement
   strafeSign = 1; strafeT = 0;
+  /** lastHitT at the previous fight think (a new hit = it dropped below 0.25 s since) */
+  evadeSeen = 99;
   // aim
   aimYaw = 0; aimPitch = 0; desYaw = 0; desPitch = 0; aimDist = 8;
   aimVy = 0; aimVp = 0;               // aim angular velocity (rad/s)
@@ -1481,9 +1489,15 @@ export class BotDirector {
       return;
     }
     if (now >= b.strafeT) {
-      b.strafeT = now + Math.round((0.4 + 0.7 * b.rnd()) / TICK);
+      b.strafeT = now + Math.round((b.sk.strafeEvery + b.sk.strafeSpan * b.rnd()) / TICK);
       if (b.rnd() < 0.55) b.strafeSign = -b.strafeSign;
     }
+    // hit in the fight (any kit): by skill, break into a dodge across the shooter's line (STORM mostly does)
+    if (r.lastHitT < 0.25 && b.evadeSeen >= 0.25 && r.lastAttacker >= 0 && now >= b.dodgeUntil + DODGE_GAP && b.sk.evade > 0) {
+      const a = this.world.runners[r.lastAttacker];
+      if (a && a.alive && b.rnd() < b.sk.evade) this.startDodge(b, a, false);
+    }
+    b.evadeSeen = r.lastHitT;
     // paint targets still refresh (used when out of the fire cone)
     if (now >= b.paintRetargetAt) this.pickPaintTarget(b);
     void t;
