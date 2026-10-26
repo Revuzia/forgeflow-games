@@ -244,7 +244,7 @@ export function attachBrain(W, actor, nBots) {
       standGoal: null, solidT: -99, solidX: 0, solidZ: 0, solidN: 0,
       // (K2, re-run) offFurn*: offFurniture's committed heading (until when, which heading, where the window began, which candidate, for which room);
       // furn*: the off-the-floor pin detector's 0.5 s window (escapeToWalk)
-      offFurnUntil: -99, offFurnYaw: 0, offFurnX: 0, offFurnZ: 0, offFurnK: 0, offFurnGi: -1, furnT: -99, furnX: 0, furnZ: 0, furnN: 0,
+      offFurnUntil: -99, offFurnYaw: 0, offFurnX: 0, offFurnZ: 0, offFurnK: 0, offFurnGi: -1, furnT: -99, furnX: 0, furnZ: 0, furnN: 0, furnD: 0,
     },
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
@@ -267,7 +267,7 @@ export function attachBrain(W, actor, nBots) {
  *  function that reads a blackboard is thrown away and runs interpreted - boxing every number - until it is optimized again. Over a match that
  *  happened once per field, at the moment the match first used it (framecheck, isla_viva: ~8,500 map deprecations and ~2,300 deopts, 195 of them in
  *  bots.js, in bursts through the measured window; the housed maps' new indoor fields added their own). Done here, it happens once, in the lobby. */
-const INT_FIELDS = new Set(["solidN", "offFurnK", "offFurnGi", "furnN", "roomI", "tRoomI", "strafeDir", "healSide", "hdHold", "pinN", "heldN", "breaks", "slideFlips", "progKind", "wallSide", "detourDir",
+const INT_FIELDS = new Set(["solidN", "offFurnK", "offFurnGi", "furnN", "furnD", "roomI", "tRoomI", "strafeDir", "healSide", "hdHold", "pinN", "heldN", "breaks", "slideFlips", "progKind", "wallSide", "detourDir",
   "coverFace", "ramp", "pushRoll", "chuteRoll"]);      // small integers / indexes / signs: they stay Smi fields (they never hold a fraction)
 function doubleFields(o) {
   for (const k in o) {
@@ -1134,13 +1134,20 @@ function act(W, b, dt) {
   // nearest free spot of that room's walk area, on its floor (escapeToWalk): the push-out the detector above gives a bot inside a box. By then
   // offFurniture has tried its committed headings (0.6 s each). Measured: a bot on a crate stack's top in a Deepwood lakeside house (furntop probe,
   // seed 7) still stood there after 15 s.
+  // (K2, re-run 4) ... and a TRAVELLING bot (LOOT / ROTATE / ...) that stays off the walkable area FURN_DWELL_N windows running however much it moves:
+  // a floor pocket closed by furniture (the planners answer null from inside it: findPath / findExit start on a blocked cell) where it hops on and off
+  // the low pieces round it. Measured (furntop, ashgrid seed 7, cmp09@p4's storage room): a ROTATE bot, path null, bounced between the floor and a drum
+  // inside 5 m for 11 s - never still for 0.5 s, so the detector above never ran.
   if (IND.H !== null && (W.t - bb.furnT >= 0.5 || W.t < bb.furnT)) {
     const fx = a.pos.x - bb.furnX, fz = a.pos.z - bb.furnZ;
-    const still = fx * fx + fz * fz < 0.15 * 0.15 && (inp.mz || inp.mx || MOVING_STATES[b.state]) && a.onGround && !a.gliding && !bb.chestId;
+    const free = !a.gliding && !bb.chestId, travel = free && !!MOVING_STATES[b.state];
+    const still = fx * fx + fz * fz < 0.15 * 0.15 && (inp.mz || inp.mx || MOVING_STATES[b.state]) && a.onGround && free;
     bb.furnT = W.t; bb.furnX = a.pos.x; bb.furnZ = a.pos.z;
-    const gi = still ? offWalkRoom(W, b) : -1;
-    if (gi >= 0) { if (++bb.furnN >= FURN_ESC_N) { bb.furnN = 0; escapeToWalk(W, b, gi); } }
-    else bb.furnN = 0;
+    const gi = still ? offWalkRoom(W, b, true) : travel ? offWalkRoom(W, b, false) : -1;     // (the travel-only test reads the room without refreshing the brain's cached one)
+    if (gi >= 0 && still && ++bb.furnN >= FURN_ESC_N) { bb.furnN = 0; bb.furnD = 0; escapeToWalk(W, b, gi); }
+    else if (gi >= 0 && travel && ++bb.furnD >= FURN_DWELL_N) { bb.furnN = 0; bb.furnD = 0; if (escapeToWalk(W, b, gi)) nav.st.furnDwell++; }
+    if (!(gi >= 0 && still)) bb.furnN = 0;
+    if (!(gi >= 0 && travel)) bb.furnD = 0;
   }
 
   // PROGRESS BREAKER for the fight and the heal (Wave 5; Unreal's path follower does block detection the same way). The
@@ -1255,10 +1262,12 @@ function escTry(W, b, x, z, wy) {
   return true;
 }
 const FURN_ESC_N = 8;     // (K2, re-run) 0.5 s windows (4 s) pinned off the room's floor before escapeToWalk
+const FURN_DWELL_N = 16;  // (K2, re-run 4) 0.5 s windows (8 s) a travelling bot stays off the room's walkable area, moving or not, before escapeToWalk
 /** (K2, re-run) The room (IND.R index) the bot stands in when its feet are OFF that room's walkable floor: 0.3-3 m over the floor (a piece of furniture),
- *  or on the floor outside the walk rects (a pocket). -1 = outdoors, on the walk area, on / beside a stair (its own rules), or a room without walk data. */
-function offWalkRoom(W, b) {
-  const a = b.actor, gi = myRoom(W, b);
+ *  or on the floor outside the walk rects (a pocket). -1 = outdoors, on the walk area, on / beside a stair (its own rules), or a room without walk data.
+ *  cached: the room from the brain's own cache (myRoom, which refreshes it); false = a fresh lookup that leaves the cache alone. */
+function offWalkRoom(W, b, cached) {
+  const a = b.actor, gi = cached ? myRoom(W, b) : roomAt(W, a.pos.x, a.pos.y, a.pos.z);
   if (gi < 0) return -1;
   const R = IND.R[gi], dy = a.pos.y - R.y;
   if (dy > 3.0 || dy < -0.3) return -1;
@@ -1286,27 +1295,47 @@ function onStairOf(h, x, y, z) {
   return false;
 }
 /** (K2, re-run) Put a bot pinned off its room's floor at the nearest spot (rings of 0.4 m out to 4 m, 16 headings: deterministic) that lies 0.1 m inside
- *  one of the room's walk rects, on the room's floor (support within 0.35 m of it), where a standing capsule fits. No spot: nothing changes. */
+ *  one of the room's walk rects, on the room's floor (support within 0.35 m of it), where a standing capsule fits. No spot: nothing changes.
+ *  (K2, re-run 4) No such spot within 4 m: the walk rects themselves, nearest first - the point of each nearest the bot (0.1 m inside it), then its centre.
+ *  Measured (furntop, isla_viva seed 51204): a bot on a carton in the corner of palm_bay@p1's office, whose walkable area is a strip along the far wall
+ *  5.1 m away - every ring point lay outside it, the escape fired every 4 s and found nothing for 15 s. */
 function escapeToWalk(W, b, gi) {
-  const a = b.actor, bb = b.bb, R = IND.R[gi];
+  const a = b.actor, R = IND.R[gi], px = a.pos.x, pz = a.pos.z;
   for (let ri = 1; ri <= ESC_RINGS; ri++) {
     const r = ri * ESC_STEP;
     for (let k = 0; k < ESC_DIRS; k++) {
       const an = k * (Math.PI * 2 / ESC_DIRS);
-      const x = a.pos.x + Math.cos(an) * r, z = a.pos.z + Math.sin(an) * r;
+      const x = px + Math.cos(an) * r, z = pz + Math.sin(an) * r;
       if (!inWalk(R, x, z, -0.1)) continue;
-      const s = supportAt(W, x, z, R.y + 0.3);
-      if (!(s === s) || s > R.y + 0.35 || s < R.y - 0.35) continue;
-      if (insideSolid(W, x, s, z) || !fitsAt(W, x, z, s)) continue;
-      a.pos.x = x; a.pos.y = s; a.pos.z = z;
-      a.vel.x = 0; a.vel.y = 0; a.vel.z = 0;
-      bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.nextPathT = 0; bb.stuckT = 0; bb.offFurnUntil = -99;
-      bb.furnX = x; bb.furnZ = z; bb.solidX = x; bb.solidZ = z;
-      nav.st.furnEsc++;
-      return true;
+      if (walkTry(W, b, R, x, z)) return true;
     }
   }
+  const wk = R.r.walk || [], ord = [];
+  for (let k = 0; k < wk.length; k++) {
+    const q = wk[k], dx = Math.max(q[0] - px, 0, px - q[2]), dz = Math.max(q[1] - pz, 0, pz - q[3]);
+    ord.push([dx * dx + dz * dz, k]);
+  }
+  ord.sort((p, q) => p[0] - q[0]);                       // (stable: ties keep the rect order)
+  for (let i = 0; i < ord.length; i++) {
+    const q = wk[ord[i][1]], cx = (q[0] + q[2]) * 0.5, cz = (q[1] + q[3]) * 0.5;
+    const nx = q[2] - q[0] > 0.2 ? Math.min(Math.max(px, q[0] + 0.1), q[2] - 0.1) : cx, nz = q[3] - q[1] > 0.2 ? Math.min(Math.max(pz, q[1] + 0.1), q[3] - 0.1) : cz;
+    if (walkTry(W, b, R, nx, nz) || walkTry(W, b, R, cx, cz)) return true;
+  }
   return false;
+}
+/** (K2) one escapeToWalk candidate: the room's floor at (x, z) (support within 0.35 m of it) where a standing capsule fits and is not inside a solid -
+ *  the bot is put there (its path dropped and re-planned). false = not this spot. */
+function walkTry(W, b, R, x, z) {
+  const a = b.actor, bb = b.bb;
+  const s = supportAt(W, x, z, R.y + 0.3);
+  if (!(s === s) || s > R.y + 0.35 || s < R.y - 0.35) return false;
+  if (insideSolid(W, x, s, z) || !fitsAt(W, x, z, s)) return false;
+  a.pos.x = x; a.pos.y = s; a.pos.z = z;
+  a.vel.x = 0; a.vel.y = 0; a.vel.z = 0;
+  bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.nextPathT = 0; bb.stuckT = 0; bb.offFurnUntil = -99;
+  bb.furnX = x; bb.furnZ = z; bb.solidX = x; bb.solidZ = z;
+  nav.st.furnEsc++;
+  return true;
 }
 /** (Wave 5) A fighter / healer pinned solid with a move intent for FIGHT_UNSTICK_S. First time: ENGAGE flips its strafe, HEAL
  *  bans the heading that pinned it for 1.5 s (pickRetreat takes the next one). Pinned again within 8 s: ENGAGE closes in on a
@@ -2290,7 +2319,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, furnEsc: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {

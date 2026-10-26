@@ -110,7 +110,8 @@ its own box (lane I3's request; lootcheck-wave6-loot-js still fails); worldlive 
 throwing; houseload's battery look-around radius follows bots.js (WALL_QR 2.4 on the Wave-8 bots, 16 on the live build). Re-run (2026-10-25), on lane K1's request and the
 fix-round verify: interiorcheck grass-indoors counts a changed pixel only when its ray is still inside the room 0.65 m over the floor (the frame's view out of a window is
 information; control interiorcheck-plant-grass-on-floor); mobile's USE row stands the player where it SEES the chest by the game's own pickup rule (control
-mobile_ashgrid-plant-chest-through-wall). See README "Wave 8 fix round".
+mobile_ashgrid-plant-chest-through-wall); mobile's minimap row records the HUD's own tap readback and calls a tap the HUD refused for a > 1200 ms real-time hold
+could-not-judge (environment; every other miss still FAILS). See README "Wave 8 fix round" + "Wave 8 fix round, re-run".
 
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
 0 pass / 1 fail / 2 could-not-judge; a timeout or a crash of the gate process is could-not-judge. The overall verdict:
