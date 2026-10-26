@@ -6,6 +6,8 @@ it after newer ones).
 
     python _harness/p23/netseq.py --disk
     python _harness/p23/netseq.py --rev 9aa2b746                # control: the P2 base (no sequence numbers: a late packet pulls the body back) - MUST FAIL
+    python _harness/p23/netseq.py --disk --plant pull-back      # the guest's copy of the host is set back 0.3 m along its walk every 4th frame
+                                                                # (what an applied late packet does) - MUST FAIL (no-backward / baseline)
     python _harness/p23/netseq.py --lanes all                   # validation: every lane's work served over the base
 
 Rows:
@@ -27,6 +29,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import p23lib as L  # noqa: E402
 C = L.C
 
+# the planted fault proves the MEASURE: a body pulled back the way a stale snapshot pulls it must fail the no-backward row (the base build is the
+# logic control: --rev BASE_P23 has no sequence numbers at all)
+PLANTS = {
+    "pull-back": "window.__P23PB__ = { n: 0 }; W.kernel._updaters.push(() => { const P = window.__P23PB__; if (!P.id || (++P.n % 4)) return; const a = W.actorById.get(P.id);"
+                 " if (!a || !a.vel) return; const sp = Math.hypot(a.vel.x, a.vel.z); if (sp < 0.5) return; a.pos.x -= 0.3 * a.vel.x / sp; a.pos.z -= 0.3 * a.vel.z / sp; })",
+}
+
 TRACK_JS = r"""([id, ms, dx, dz]) => new Promise((res) => { const W = window.__LC__.W; const out = []; const t0 = performance.now();
   const iv = setInterval(() => { const a = W.actorById.get(id); if (a) out.push(+(a.pos.x * dx + a.pos.z * dz).toFixed(3));
     if (performance.now() - t0 > ms) { clearInterval(iv); res(out); } }, 50); })"""
@@ -45,7 +54,7 @@ def walk_and_track(hpg, gpg, h_id, ms=3000):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    L.add_args(ap)
+    L.add_args(ap, plants=PLANTS)
     args = L.parse(ap)
 
     def body(v):
@@ -54,6 +63,9 @@ def main():
             ctx, hpg, hrec, gpg, grec, code = L.squad_pair(rig, SQ, args, "netseq")
             h_id = hpg.evaluate("() => window.__LC__.W.player.id")
             g_id = gpg.evaluate("() => window.__LC__.W.player.id")
+            if args.plant:
+                gpg.evaluate("() => { const W = window.__LC__.W, K = W.SIM; %s; return true; }" % PLANTS[args.plant])
+                gpg.evaluate("(id) => { window.__P23PB__.id = id; }", h_id)
             spot = hpg.evaluate(L.FLAT_SPOT_JS, [0, 0, 6.0, 700, []])
             if spot:
                 hpg.evaluate("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x, W.map.heightAt(x, z), z); p.vel.set(0, 0, 0); p.input.yaw = 0; }", [spot["x"], spot["z"]])

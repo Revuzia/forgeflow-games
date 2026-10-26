@@ -5,6 +5,8 @@ harness (p23/js/botbatch_probe.js, from lane P23/bots' scratch probe, itself fro
     python _harness/p23/botbatch.py --disk                          # 24 whole STANDARD matches (the long one)
     python _harness/p23/botbatch.py --disk --runs 2:isla_viva,3:ashgrid,4:deepwood     # a short subset (validation only: bars need the batch)
     python _harness/p23/botbatch.py --rev 9aa2b746                  # control: the P2 base (cover 3.4 %, neglect 48.8 %, shield@600 9) - MUST FAIL
+    python _harness/p23/botbatch.py --disk --runs 2:isla_viva --plant shield-cap      # every bot's shield held <= 50 (a bot that never tops up)
+                                                                    # - MUST FAIL (shield-600; the measure's control, the base is the logic one)
     python _harness/p23/botbatch.py --lanes bots                    # validation: lane bots' work served over the base
 
 Each match: STANDARD solo on the seed / map of the run list, the human AFK (no input; the probe never protects it), fastForwarded in 30 s slices
@@ -36,6 +38,7 @@ DEFAULT_RUNS = ",".join("%d:%s" % (s, m) for s, m in [
     (9, "isla_viva"), (10, "ashgrid"), (12, "deepwood"), (41, "isla_viva"), (42, "ashgrid"), (43, "deepwood"),
     (44, "isla_viva"), (45, "ashgrid"), (46, "deepwood"), (51, "isla_viva"), (52, "ashgrid"), (53, "deepwood"),
     (61, "isla_viva"), (62, "ashgrid"), (63, "deepwood"), (71, "isla_viva"), (72, "ashgrid"), (73, "deepwood")])
+PLANTS = {"shield-cap": "W.kernel._updaters.push(() => { for (const a of W.actors) if (a.isBot && a.alive && a.shield > 50) a.shield = 50; })"}
 COVER_MIN, NEGLECT_MAX, SH600_MIN, SURV_MIN, END_LO, END_HI = 15.0, 10.0, 75.0, 150.0, 600.0, 900.0
 
 
@@ -83,7 +86,7 @@ def analyze(results):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    L.add_args(ap)
+    L.add_args(ap, plants=PLANTS)
     ap.add_argument("--runs", default=DEFAULT_RUNS)
     ap.add_argument("--maxs", type=float, default=1150)
     args = L.parse(ap)
@@ -100,6 +103,8 @@ def main():
                 t0 = time.time()
                 L.start(s, "standard", int(seed), mp, team="solo", guard=False)
                 s.freeze_loop()
+                if args.plant:
+                    L.plant_js(s, PLANTS[args.plant])
                 s.page.evaluate("(o) => window.__AF.install(o)", {"human": "afk"})
                 el = 0
                 while el < args.maxs:

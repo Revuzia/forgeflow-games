@@ -376,7 +376,8 @@ GATES = [
     ("p23_lootp2", "p23/lootp2.py", [], 7200, P23_PENDING),               # P2-H death pile, supply drops (>= 3 by 760 s, beacons, open), tiers 1.5x + hot zone
     ("p23_footsteps", "p23/footsteps.py", [], 3600, P23_PENDING),         # LC-52 footstep census >= 90 % per zone
     ("p23_tierprof", "p23/tierprof.py", ["--gpu", "default"], 5400, P23_PENDING),    # C-GFX per-tier profile on the iGPU: KB/frame, queryColliders, programs, GPU order
-    ("p23_botbatch", "p23/botbatch.py", [], 36000, P23_PENDING),          # P2-B 24-match AFK batch: re-sight, cover, shields, AFK survival, frags, match length
+    ("p23_botbatch", "p23/botbatch.py", [], 36000, P23_PENDING),
+    ("p23_netseq", "p23/netseq.py", [], 3600, P23_PENDING),               # LC-49: late (reordered) state packets never pull a remote back; rejoin <= 60 s on ?room=          # P2-B 24-match AFK batch: re-sight, cover, shields, AFK survival, frags, match length
     # INFORMATION (never counted): the live-measure probe on the iGPU profile (a player's first run; perfcheck's own default is the dGPU)
     ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
@@ -671,6 +672,7 @@ NEGATIVE = [
     ("p23_lootp2-rev-base", "p23/lootp2.py", ["--rev", BASE_P23, "--parts", "pile"], 3600),
     ("p23_footsteps-rev-base", "p23/footsteps.py", ["--rev", BASE_P23, "--maps", "ashgrid,isla_viva"], 3600),
     ("p23_tierprof-rev-base", "p23/tierprof.py", ["--rev", BASE_P23, "--gpu", "default"], 5400),
+    ("p23_netseq-rev-base", "p23/netseq.py", ["--rev", BASE_P23], 3600),
     ("p23_botbatch-rev-base", "p23/botbatch.py", ["--rev", BASE_P23, "--runs", "2:isla_viva,3:ashgrid,4:deepwood"], 14400),
 ]
 # the P2 / P3 feature gates' planted faults: they bite only on a tree that HAS the feature (on the base every one of them fails anyway, which proves
@@ -699,6 +701,8 @@ P23_PENDING_NEG = [
     ("p23_lootp2-plant-no-supply", "p23/lootp2.py", ["--plant", "no-supply", "--parts", "tiers"], 7200),
     ("p23_footsteps-plant-beside-wood", "p23/footsteps.py", ["--plant", "beside-wood", "--maps", "ashgrid"], 3600),
     ("p23_tierprof-plant-alloc-leak", "p23/tierprof.py", ["--plant", "alloc-leak", "--gpu", "default"], 5400),
+    ("p23_botbatch-plant-shield-cap", "p23/botbatch.py", ["--plant", "shield-cap", "--runs", "2:isla_viva"], 5400),
+    ("p23_netseq-plant-pull-back", "p23/netseq.py", ["--plant", "pull-back"], 3600),
     ("p23_tierprof-plant-query-flood", "p23/tierprof.py", ["--plant", "query-flood", "--gpu", "default"], 5400),
 ]
 if not P23_PENDING:
