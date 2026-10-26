@@ -194,6 +194,10 @@ def main():
             drop = {"row": row, "boundTo": bound}
             if row:
                 L.practice(s, 4242, "ashgrid")
+                # practice() BOOTS a fresh page: a plant applied before it is gone (scale-center / cvd-sticky never bit, 10-26: both rows run in
+                # this practice match) - re-apply it
+                if args.plant:
+                    L.plant_js(s, PLANTS[args.plant] + "; window.__P23_PLANT__ = 1")
                 L.lock_pointer(s)
                 s.js("() => { const p = window.__LC__.W.player; p.inventory.slots[1] = { kind: 'weapon', id: 'ar', rarity: 0, mag: 30 }; }")
                 s.press("Digit2")
@@ -211,6 +215,8 @@ def main():
                     drop, "Q: same, G: -1")
             # colour-blind: the three modes change the frame, off restores it - on the FROZEN loop (a live rAF frame between two reads moved
             # the view: 6.8 / 255 'noise' with the loop running)
+            if args.plant:
+                v.info("plant live in the colour-blind / HUD-scale page", {"plant": args.plant, "live": s.safe_js("() => !!window.__P23_PLANT__", default=None)})
             s.freeze_loop()
             s.step_frames(10, 1 / 60, render=True)
             modes = sorted(set(cvd_modes))
