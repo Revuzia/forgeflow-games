@@ -216,7 +216,6 @@ const ITEMS = {
   gun:    { color: '#ff8a3d', weight: 15, label: 'RAPID FIRE' },
   slow:   { color: '#9d86ff', weight: 14, label: 'SLOW-MO' },
   shield: { color: '#7cff6b', weight: 14, label: 'FORCE FIELD' },
-  dyna:   { color: '#ff4b3a', weight: 8,  label: 'DYNAMITE' },
   life:   { color: '#ff3d8b', weight: 5,  label: '1UP' },
 };
 const DROP_CHANCE = 0.16;
@@ -338,7 +337,7 @@ const Sound = (() => {
     m.connect(mg); mg.connect(c.frequency); env(g, t, 0.002, dur, vol); c.connect(g); g.connect(bus || sfxBus);
     c.start(t); m.start(t); c.stop(t + dur + 0.05); m.stop(t + dur + 0.05);
   }
-  // Throttle so dynamite / chain reactions don't stack 40 identical sounds in one frame
+  // Throttle so chain reactions don't stack 40 identical sounds in one frame
   function ok(name, gap) { if (!ctx) return false; const n = ctx.currentTime; if (last[name] && n - last[name] < gap) return false; last[name] = n; return true; }
   const semi = (f, s) => f * Math.pow(2, s / 12);
 
@@ -659,9 +658,9 @@ const game = {
   players: [], coop: false, modeSel: 1, credit: 0, bubbles: [], harpoons: [], bullets: [], items: [], platforms: [], pending: [],
   enemies: [], shots: [], enemyT: 0, contT: 0, fireworks: [], shotId: 0,
   particles: [], texts: [], banner: null, toastMsg: null,
-  slowT: 0, dynaOwner: 0, uid: 0, epoch: 0,
+  slowT: 0, uid: 0, epoch: 0,
   slowmoT: 0, timeScale: 1, hitstop: 0, shake: 0, flash: 0, flashColor: '#fff',
-  combo: 0, comboT: 0, nearCd: 0, timeLeft: 0, lastTick: 99, dyna: 0, dynaCd: 0,
+  combo: 0, comboT: 0, nearCd: 0, timeLeft: 0, lastTick: 99,
   backdrop: null, stats: freshStats(), clearInfo: null, scores: store('harpoonpop.scores') || [],
 };
 // Per-player state lives on the player objects. These aliases point at P1 so single-player code
@@ -722,7 +721,7 @@ function resetStage() {
   game.enemies = []; game.shots = []; game.enemyT = rand(7, 11);
   // every player with lives left (re)spawns with fresh gear; lives and points carry over
   game.players = game.players.map((p) => Object.assign(makePlayer(p.id, p.lives), { points: p.points, out: p.lives <= 0 }));
-  game.slowT = 0; game.dyna = 0;
+  game.slowT = 0;
   game.combo = 0; game.comboT = 0; game.timeLeft = def.time; game.lastTick = 99;
   game.slowmoT = 0; game.timeScale = 1;
   setState('intro');
@@ -1015,7 +1014,7 @@ function wallHit(b, side) {
   if (b.size >= 2) for (let i = 0; i < 3; i++) spawn({ x: b.x - side * b.r, y: b.y + rand(-b.r / 2, b.r / 2), vx: side * rand(40, 140), vy: rand(-80, 80), life: 0.25, size: 2, color: SIZES[b.size].color, type: 'spark' });
 }
 
-// Core hit: score, combo, bonuses, VFX, split, drops. src: wire | gun | chain | dyna
+// Core hit: score, combo, bonuses, VFX, split, drops. src: wire | gun | chain
 function hitBubble(b, src, hx, hy) {
   if (b.dead) return; b.dead = true;
   const S = SIZES[b.size], st = game.stats;
@@ -1025,10 +1024,9 @@ function hitBubble(b, src, hx, hy) {
   st.bestCombo = Math.max(st.bestCombo, game.combo);
   const mult = comboMult();
   let bonus = 1; const tags = [];
-  if (src !== 'dyna' && src !== 'chain' && Math.abs(b.vy) < 85 && b.age > 0.3) { bonus *= 2; tags.push('APEX ×2'); st.apex++; sfx.apex(); }
+  if (src !== 'chain' && Math.abs(b.vy) < 85 && b.age > 0.3) { bonus *= 2; tags.push('APEX ×2'); st.apex++; sfx.apex(); }
   if (b.fromSplit && b.age < 0.5 && (src === 'wire' || src === 'gun')) { bonus *= 1.5; tags.push('JUGGLE'); st.juggles++; }
   if (src === 'chain') { tags.push('CHAIN'); st.chains++; }
-  if (src === 'dyna') bonus *= 0.5;
   const pts = Math.round((S.score * mult * bonus) / 10) * 10;
   addScore(pts);
   popup(b.x, b.y - b.r * 0.3, '+' + pts, mult > 1 ? '#ffd23f' : '#ffffff', 18 + b.size * 3);
@@ -1038,7 +1036,7 @@ function hitBubble(b, src, hx, hy) {
 
   popFx(b, hx, hy);
   sfx.pop(b.size);
-  game.hitstop = Math.max(game.hitstop, src === 'dyna' || src === 'gun' ? S.hitstop * 0.4 : S.hitstop);
+  game.hitstop = Math.max(game.hitstop, src === 'gun' ? S.hitstop * 0.4 : S.hitstop);
   addShake(S.shake);
 
   // Split: two children pop upward and outward, a touch faster than the parent
@@ -1051,7 +1049,7 @@ function hitBubble(b, src, hx, hy) {
     }
   }
   if (b.kind === 'bomb') explode(b.x, b.y, 120 + b.r);
-  if (src !== 'dyna' && Math.random() < DROP_CHANCE) dropItem(b.x, b.y);
+  if (Math.random() < DROP_CHANCE) dropItem(b.x, b.y);
 
   // Last bubble: big slow-motion finish
   if (!game.bubbles.some((o) => !o.dead) && !game.pending.length) { game.slowmoT = 0.6; game.hitstop = 0.12; addShake(0.5); flash('#ffffff', 0.35); }
@@ -1212,7 +1210,7 @@ function levelClear() {
   game.clearInfo = { timeBonus, secs: t };
   setState('clear'); sfx.clear();
   game.shots = []; game.enemies.forEach((e) => { if (!e.dying) killEnemy(e); });
-  game.fireworks = Array.from({ length: 6 }, (_, i) => ({ t: 0.35 + i * 0.32, x: rand(160, 800), y: rand(120, 260), c: Object.values(ITEMS)[i % 7].color, done: false }));
+  game.fireworks = Array.from({ length: 6 }, (_, i) => ({ t: 0.35 + i * 0.32, x: rand(160, 800), y: rand(120, 260), c: Object.values(ITEMS)[i % Object.keys(ITEMS).length].color, done: false }));
   banner('STAGE CLEAR', game.def.name, 2.2, '#7cff6b');
   fx('confetti');
 }
@@ -1232,7 +1230,6 @@ function updatePlay(dt, pdt) {
   updateBubbles(dt * (game.slowT > 0 ? 0.4 : 1));
   updatePending(dt);
   updateItems(dt);
-  updateDynamite(dt);
   updateEnemies(dt); maybeSpawnEnemy(dt);
   game.bubbles = game.bubbles.filter((b) => !b.dead);
   if (game.comboT > 0) { game.comboT -= dt; if (game.comboT <= 0) game.combo = 0; }
@@ -1240,7 +1237,7 @@ function updatePlay(dt, pdt) {
   updateDowned(dt);
   checkPlayers();
   if (game.state !== 'play') return;
-  if (!game.bubbles.length && !game.pending.length && game.dyna <= 0) { levelClear(); return; }
+  if (!game.bubbles.length && !game.pending.length) { levelClear(); return; }
   game.timeLeft -= dt;
   const sec = Math.ceil(game.timeLeft);
   if (sec <= 10 && sec !== game.lastTick && sec > 0) { game.lastTick = sec; sfx.tick(sec <= 5); }
@@ -1272,24 +1269,12 @@ function applyItem(it, p = game.player) {
     case 'slow': game.slowT = 7; break;
     case 'shield': p.shield = true; break;
     case 'life': p.lives = Math.min(9, p.lives + 1); break;
-    case 'dyna': game.dyna = 1; game.dynaCd = 0.15; game.dynaOwner = p.id; break;
   }
   it.type === 'life' ? sfx.life() : sfx.item();
   popup(p.x, ARENA.b - 80, p.weapon === 'triple' && it.type === 'double' ? 'TRIPLE WIRE' : def.label, def.color, 20);
   fx('pickup', p.x, it.x, it.y, def.color);
   // Risk/reward: grabbing a power-up with a bubble right on top of you pays out
   if (game.bubbles.some((b) => Math.hypot(b.x - p.x, b.y - (ARENA.b - 20)) < b.r + 70)) { const pts = 500 * comboMult(); addScore(pts); popup(p.x, ARENA.b - 104, 'DARING! +' + pts, '#ff3d8b', 18); }
-}
-// Dynamite: every 0.15s, split every bubble bigger than tiny, until only tiny ones remain (classic Pang)
-function updateDynamite(dt) {
-  if (game.dyna <= 0) return;
-  game.dynaCd -= dt; if (game.dynaCd > 0) return;
-  game.dynaCd = 0.15;
-  const big = game.bubbles.filter((b) => !b.dead && b.size > 0);
-  if (!big.length) { game.dyna = 0; return; }
-  addShake(0.3); flash('#ff4b3a', 0.12);
-  game.credit = game.dynaOwner;
-  big.forEach((b) => hitBubble(b, 'dyna', b.x, b.y));
 }
 
 /* ============================ §9 JUICE ============================ */
@@ -1354,7 +1339,7 @@ const FX = {
     spawn({ x, y, type: 'flash', size: 40, life: 0.12, color: '#ffffff' });
     spawn({ x, y, type: 'light', size: 4, life: 0.4, color: c });
   },
-  confetti() { for (let i = 0; i < 60; i++) spawn({ x: rand(ARENA.l, ARENA.r), y: ARENA.t + rand(0, 40), vx: rand(-60, 60), vy: rand(0, 120), life: rand(1.2, 2.2), size: rand(3, 6), color: Object.values(ITEMS)[i % 7].color, type: 'confetti', g: 140, rot: rand(0, 6) }); },
+  confetti() { for (let i = 0; i < 60; i++) spawn({ x: rand(ARENA.l, ARENA.r), y: ARENA.t + rand(0, 40), vx: rand(-60, 60), vy: rand(0, 120), life: rand(1.2, 2.2), size: rand(3, 6), color: Object.values(ITEMS)[i % Object.keys(ITEMS).length].color, type: 'confetti', g: 140, rot: rand(0, 6) }); },
 };
 function popFx(b, hx, hy) { fx('pop', b.x, b.y, b.r, b.size, hx, hy); }
 function popBurst(b, hx, hy) {
@@ -1460,7 +1445,6 @@ function drawItemIcon(c, type, x, y, s = 1) {
     case 'slow': c.beginPath(); c.moveTo(-6, -8); c.lineTo(6, -8); c.lineTo(0, 0); c.lineTo(6, 8); c.lineTo(-6, 8); c.lineTo(0, 0); c.closePath(); c.fill(); break;
     case 'shield': c.beginPath(); c.moveTo(0, -8); c.lineTo(7, -5); c.lineTo(6, 3); c.lineTo(0, 8); c.lineTo(-6, 3); c.lineTo(-7, -5); c.closePath(); c.fill(); break;
     case 'life': c.beginPath(); c.moveTo(0, 7); c.bezierCurveTo(-10, 0, -7, -9, 0, -4); c.bezierCurveTo(7, -9, 10, 0, 0, 7); c.fill(); break;
-    case 'dyna': roundRect(c, -3.5, -5, 7, 13, 2); c.fill(); c.beginPath(); c.moveTo(0, -5); c.quadraticCurveTo(3, -8, 5, -8); c.stroke(); c.fillStyle = '#ffd23f'; c.beginPath(); c.arc(6, -9, 2.5, 0, 7); c.fill(); break;
   }
   c.restore();
 }

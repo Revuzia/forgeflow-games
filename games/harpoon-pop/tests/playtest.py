@@ -121,11 +121,11 @@ with sync_playwright() as pw:
     check('double + double = triple wire', page.evaluate('__hp.game.weapon') == 'triple')
     page.evaluate("for (let i=0;i<3;i++){ __hp.input.pressed = true; __hp.advance(0.03, false); }")
     check('triple wire fires 3 at once', page.evaluate('__hp.game.harpoons.length') == 3, page.evaluate('__hp.game.harpoons.length'))
-    for t in ['power', 'gun', 'slow', 'shield', 'life', 'dyna']:
+    for t in ['power', 'gun', 'slow', 'shield', 'life']:
         ok = page.evaluate(f"(() => {{ try {{ __hp.applyItem({{type:'{t}', x: __hp.game.player.x, y: 470}}); __hp.advance(0.3, false); return true; }} catch(e) {{ return String(e); }} }})()")
         check(f'power-up {t} applies', ok is True, ok)
     page.evaluate("__hp.game.items.push({type:'shield',x:300,y:478,vy:0,t:0,landed:true},{type:'gun',x:640,y:478,vy:0,t:0,landed:true},{type:'life',x:820,y:478,vy:0,t:0,landed:true})")
-    page.evaluate("__hp.keys.Space = true; __hp.advance(0.35); __hp.keys.Space = false;"); shot('06_dynamite_gun_items')
+    page.evaluate("__hp.keys.Space = true; __hp.advance(0.35); __hp.keys.Space = false;"); shot('06_gun_items')
 
     # --- Near-miss bullet-time
     page.evaluate("__hp.loadLevel(1); __hp.advance(2, false); (() => { const g=__hp.game, b=g.bubbles[0]; g.invuln=0; g.nearCd=0; b.x = g.player.x + 10 + b.r + 8; b.y = 470 - b.r; b.vy = 0; })(); __hp.advance(0.05)")
