@@ -459,9 +459,16 @@ const EXT_CLIPS = [
   "rifle_walk_left", "rifle_walk_right", "rifle_walk_back", "rifle_run_left", "rifle_run_right", "rifle_run_back",
   "rifle_crouch_left", "rifle_crouch_right", "rifle_crouch_back", "pistol_strafe_left", "pistol_strafe_right",
   "jump_up", "jump_loop", "jump_down", "fall_idle", "land_hard", "toss_grenade",
-  "dbno_crawl", "dbno_crawl_fast", "injured_idle", "turn_left_90", "turn_right_90", "rifle_sprint_left", "rifle_sprint_right",
+  "dbno_crawl_fast", "turn_left_90", "turn_right_90", "rifle_sprint_left", "rifle_sprint_right",
 ];
+// (P23, download budget) not requested: P1-F's slow `dbno_crawl` (80 KB; the running crawl dbno_crawl_fast covers every downed
+// move) and `injured_idle` (46 KB; a still downed body holds its crawl pose), and the four Mixamo rifle clips the P23 feet-down
+// re-bakes supersede: in shared mode rifle_idle / rifle_walk / rifle_run / rifle_crouch are bound from their *_g file (same
+// Mixamo source, hips on the ground), so the old names keep working and 117 KB are not fetched twice. A server without the
+// *_g files still serves the old names (per-skin), exactly as before.
+const SUPERSEDED = { rifle_idle: "rifle_idle_g", rifle_walk: "rifle_walk_g", rifle_run: "rifle_run_g", rifle_crouch: "rifle_crouch_g" };
 const ALL_CLIPS = MESHY_CLIPS.concat(DEATH_CLIPS, EXT_CLIPS);
+const SHARED_REQ = ALL_CLIPS.filter((n) => !SUPERSEDED[n]);
 const AIR_FLAT_Y = new Set(["jump_up", "jump_loop", "fall_idle"]);
 // The baked stride speed of each locomotion clip (measured at bake time: manifest_p1f.json / manifest_p23.json). Play rate =
 // actor ground speed / this, so a planted foot stays planted (LC-10: "timescale from the baked stride"; the old forward clips
@@ -538,11 +545,11 @@ function loadSharedClips(W, tick) {
     const g0 = await load(probe);
     if (!g0 || !g0.animations || !g0.animations[0]) {
       SHARED.mode = "per-skin";
-      if (tick) tick(ALL_CLIPS.length - 1);
+      if (tick) tick(SHARED_REQ.length - 1);
       return out;
     }
     out.set(probe, g0);
-    const rest = ALL_CLIPS.filter((n) => n !== probe);
+    const rest = SHARED_REQ.filter((n) => n !== probe);
     const got = await Promise.all(rest.map(load));
     got.forEach((g, i) => { if (g && g.animations && g.animations[0]) out.set(rest[i], g); });
     SHARED.mode = "shared";
@@ -556,7 +563,9 @@ function loadSharedClips(W, tick) {
 export function locoClipSpeeds() { return { speed: CLIP_SPEED, dir: CLIP_DIR }; }
 export function clipLoadStats() {
   // extClips: the P1-F / P23 shared-only set (ffg_royale3d.js's idle prefetch can add these to its list)
-  return { mode: SHARED.mode, requests: SHARED.requests, loaded: SHARED.hits, shared: ALL_CLIPS.length, deathClips: DEATH_CLIPS.slice(), extClips: EXT_CLIPS.slice() };
+  return { mode: SHARED.mode, requests: SHARED.requests, loaded: SHARED.hits, shared: SHARED_REQ.length, deathClips: DEATH_CLIPS.slice(), extClips: EXT_CLIPS.slice(),
+           // (P23) the exact shared file names a shared-mode match load requests (the idle prefetch list: no extras, no misses)
+           sharedReq: SHARED_REQ.slice() };
 }
 
 const _v3 = new THREE.Vector3();
@@ -615,7 +624,7 @@ async function preloadMeshySkin(W, key, tick, sharedP, grow, baseSettled) {
     // what this skin must still fetch ITSELF (the old per-skin path): every MESHY_CLIPS name the
     // shared set lacks (all of them when the server has no shared files). The death falls have no
     // per-skin file, so a missing one simply leaves that fall out of the pool.
-    const own = MESHY_CLIPS.filter((n) => !shared.has(n));
+    const own = MESHY_CLIPS.filter((n) => !shared.has(n) && !(SUPERSEDED[n] && shared.has(SUPERSEDED[n])));
     if (own.length && grow) grow(own.length);   // the loading bar counts these extra files too
     const ownLoaded = await Promise.allSettled(own.map(async (clip) => {
       // async wrapper, not a bare .finally(): it turns a SYNCHRONOUS throw out of
@@ -631,7 +640,7 @@ async function preloadMeshySkin(W, key, tick, sharedP, grow, baseSettled) {
       else console.warn("[chars] clip load failed", key, n, r.reason);
     });
     for (const name of ALL_CLIPS) {
-      const sg = shared.get(name);
+      const sg = shared.get(name) || (SUPERSEDED[name] ? shared.get(SUPERSEDED[name]) : undefined);
       const g = sg || ownMap.get(name);
       if (!g || !g.animations || !g.animations[0]) continue;
       // a SHARED clip is cloned (AnimationClip.clone copies every track's times + values), so the
@@ -727,7 +736,7 @@ export async function loadActorModels(W) {
   // straight through and the bar completes fast instead of pretending to work.
   // mesh + LOD1 body per skin, plus the shared clip files once per page session (P1.1). A skin that
   // has to fetch its own <skin>_<clip>.glb (no shared file on the server) grows the total itself.
-  let total = SKINS.length * 2 + (SHARED.p ? 0 : ALL_CLIPS.length);
+  let total = SKINS.length * 2 + (SHARED.p ? 0 : SHARED_REQ.length);
   let done = 0;
   // The previous match's rigs are gone from the scene by now (the orchestrator
   // cleared the groups); free what they still hold on the GPU before building
@@ -2911,6 +2920,14 @@ function combatKey(a, gs, q) {
 // steps round with the Mixamo turn clip once the aim is TURN_START off (60 deg out of combat, 17 deg in combat, where the body
 // has to face the aim). The clip's own pelvis yaw curve (extractRootYaw) drives the body, scaled to the angle actually needed.
 const TWIST_MAX = 0.95;
+/** (P23) add a yaw twist to a spine bone this frame WITHOUT compounding: a clip that does not key the bone leaves last frame's
+ *  value in place (bit for bit), so last frame's addition is taken back first; a re-keyed bone just gets the new one. */
+function addTwistY(b, v) {
+  const ud = b.userData;
+  if (ud._twY !== undefined && b.rotation.y === ud._twY) b.rotation.y -= ud._twA;
+  b.rotation.y += v;
+  ud._twA = v; ud._twY = b.rotation.y;
+}
 const TURN_START = 0.9, TURN_START_COMBAT = 0.3, TURN_MAX = 1.9, TURN_RATE = 1.35, TURN_RATE_COMBAT = 2.0;
 function turnInPlace(W, a, combat, dt) {
   const C = a.clips;
@@ -3103,7 +3120,18 @@ function animate(W, a, dt) {
       while (aimDelta < -Math.PI) aimDelta += Math.PI * 2;
       // (P23, LC-10 / LC-64) the chest twists back onto the aim over the orientation warp of a combat strafe and the planted
       // feet of a turn-in-place (up to ~54 deg), so the gun points where the shot goes
-      const twist = K.clamp(aimDelta, -TWIST_MAX, TWIST_MAX);
+      let twist = K.clamp(aimDelta, -TWIST_MAX, TWIST_MAX);
+      // (P23, LC-10 / LC-64) a PISTOL (procedural arms) in combat - a warped strafe, a planted turn - twists its chest back onto
+      // the aim as well (base pistols always squared the whole body to the aim in combat, so their chest never left it); the
+      // arms below aim in that twisted frame. Out of combat it keeps the base carry: chest on the run, barrel <= 0.6 rad off it.
+      const pistolTwist = !useMixamoGun && armed && isPistol(a) && (combat || a._turnT >= 0) && a.onGround && !a.gliding &&
+        !a.swimming && !a.emoting && a.alive && !a.downed && !a.mantleT;
+      if (!useMixamoGun && !pistolTwist) twist = K.clamp(aimDelta, -0.6, 0.6);
+      if (layers && a.armBones && pistolTwist) {
+        const bs = a.armBones.spine1 && a.armBones.spine2 ? [a.armBones.spine1, a.armBones.spine2] : [];   // (not Spine: uprightTorso re-aims it after this)
+        for (const b of bs) addTwistY(b, twist / bs.length);
+      }
+      a._armYawOff = (layers && pistolTwist) ? twist : 0;
       if (layers && a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed) {
         // negative: +rotation.x on these spines bends FORWARD, and looking UP
         // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
@@ -3129,7 +3157,7 @@ function animate(W, a, dt) {
       if (mode) a._armMode = mode;
       // input.pitch > 0 = looking UP (verified: mouse-up → +pitch; aimDir/camera use sin(pitch));
       // tiltDir(+) raises the muzzle, so pass pitch un-negated or the gun tilts the wrong way
-      if (layers && a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, a.pitch);
+      if (layers && a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, a.pitch, a._armYawOff || 0);
       // ── BARREL AIM ────────────────────────────────────────────────────────
       // HAND_AIM_ROT is a STATIC local rotation grid-searched against ONE frame
       // of the idle clip. But applyArmPose aims the arm CHAIN (rArm->rFore,
@@ -3695,7 +3723,10 @@ function camWall(W, cam, focus, dt, snapped) {
     }
   }
   const k1 = _camWallF1 < 1 ? _camWallF1 : 1, k2 = _camWallF < 1 ? _camWallF : 1;
-  let nx = ox + lx * k1 + bx * k2, ny = oy + ly * k1 + by * k2, nz = oz + lz * k1 + bz * k2;
+  // a free boom IS the free camera, bit for bit (the lateral + back legs summed again round off the last ulp: f = 0.9999999)
+  const freeB = k1 === 1 && k2 === 1;
+  let nx = freeB ? cam.position.x : ox + lx * k1 + bx * k2, ny = freeB ? cam.position.y : oy + ly * k1 + by * k2,
+    nz = freeB ? cam.position.z : oz + lz * k1 + bz * k2;
   // the straight sight line from the eye must be clear too (a wall the two legs went round)
   let clipped = false;
   if (cols && cols.length && (k1 < 0.999 || k2 < 0.999)) {
@@ -3718,7 +3749,19 @@ function camWall(W, cam, focus, dt, snapped) {
   _camWallOff.set(nx - cam.position.x, ny - cam.position.y, nz - cam.position.z);
   cam.position.set(nx, ny, nz);
   const ex = nx - ox, ey = ny - oy, ez = nz - oz, dl = Math.sqrt(ex * ex + ey * ey + ez * ez);
-  const target = len > 1e-3 ? Math.min(1, (Math.sqrt((lx * f1 + bx * f2) ** 2 + (ly * f1 + by * f2) ** 2 + (lz * f1 + bz * f2) ** 2)) / len) : 1;
+  // the target: where the UNSMOOTHED legs (f1, f2) put the lens after the same straight sight-line check - what a snap-in
+  // reaches in one frame (on a snap frame k == f and the lens itself is the answer; otherwise one more cast, no new query)
+  let tl;
+  if (k1 === f1 && k2 === f2) tl = dl;
+  else {
+    const tx = lx * f1 + bx * f2, ty = ly * f1 + by * f2, tz = lz * f1 + bz * f2;
+    tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+    if (cols && cols.length && tl > 0.05) {
+      const t4 = camRayHit(cols, ox, oy, oz, tx, ty, tz, CAM_R, 1);
+      if (t4 < 1) tl *= Math.max(CAM_MIN_D / tl, t4 - 0.015);
+    }
+  }
+  const target = len > 1e-3 ? Math.min(1, tl / len) : 1;
   if (st) { st.f = len > 1e-3 ? Math.min(1, dl / len) : 1; st.target = target; st.dist = dl; st.free = len; st.pulled = clipped || k1 < 0.999 || k2 < 0.999; st.lat = k1; }
 }
 
@@ -4583,10 +4626,10 @@ export function killActor(W, victim, killerId, weaponId) {
   victim.downed = false; victim._reviveOf = null; victim._revivedBy = null; victim._slideT = -1; victim._turnT = -1;
   if (victim.healing) victim.healing = null;
   if (victim.rig) {
-    if (wasDowned && victim.clips && victim.clips.dbno_crawl) {
+    if (wasDowned && victim.clips && (victim.clips.dbno_crawl_fast || victim.clips.dbno_crawl)) {
       // (P23, C-DBNO) a body finished on the ground is already lying down: it stays in its crawl pose (frozen), it does not
       // stand up to play a standing death fall
-      playAnim(victim, victim.anim === "dbno_crawl_fast" && victim.clips.dbno_crawl_fast ? "dbno_crawl_fast" : "dbno_crawl", PA_FREEZE);
+      playAnim(victim, victim.clips.dbno_crawl_fast ? "dbno_crawl_fast" : "dbno_crawl", PA_FREEZE);
       if (PICK_LOG.length < 256) PICK_LOG.push([victim.id, "downed", "-", false, false, false]);
     } else {
     // P1.6: one of the seven Mixamo falls, matched to where the last hit came from (pickDeath).

@@ -80,6 +80,7 @@ export function uprightTorso(obj, bones, weight) {
 // scratch (module-local, reused every frame — no per-call allocation)
 const _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3(), _t = new THREE.Vector3();
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion(), _oq = new THREE.Quaternion();
+const _qYaw = new THREE.Quaternion(), _yAxis = new THREE.Vector3(0, 1, 0);
 
 /** Slerp `arm` so the arm→child segment points along local dir (tx,ty,tz),
  *  where local = the actor object's frame (+Z forward, +Y up). */
@@ -331,11 +332,14 @@ function applySpineAim(bone, off) {
   bone.rotation.x = bone.userData._aimBaseX + (off || 0);
 }
 
-export function applyArmPose(obj, bones, mode, weight, pitch) {
+export function applyArmPose(obj, bones, mode, weight, pitch, yawOff) {
   if (!bones || weight <= 0) return;
   const P = POSES[mode];
   if (!P) return;
   obj.getWorldQuaternion(_oq);
+  // (P23/player) yawOff: the arms aim in a frame turned by this much about the body's up axis (a pistol's chest twisted back onto
+  // the aim over a combat strafe warp / a planted turn); 0 / undefined = the body frame, as before
+  if (yawOff) _oq.multiply(_qYaw.setFromAxisAngle(_yAxis, yawOff));
   // AIM PITCH (AAA upper-body layer): the gun and torso track the camera's
   // vertical aim — only for weapon poses, capped so the spine stays sane
   const pk = (mode === "gunReady" || mode === "reload") ? Math.max(-0.9, Math.min(0.9, pitch || 0)) : 0;
