@@ -808,10 +808,12 @@ if (require.main === module) (async () => {
     // (P23 / LC-17) the wear strips: only on OUTSIDE faces of wall materials, WEAR_OFF in front of a face of a box, never brighter than the wall, the foot strip within
     // WEAR_FOOT[1] of the ground floor and the eave strip within WEAR_EAVE of the top ceiling; the box faces (and so boxRanges) are untouched; <= 14 % more wall triangles
     {
-      let wbad = [], wTris = 0, baseTris = 0, nFoot = 0, nEave = 0;
-      const grey = () => [0.5, 0.5, 0.5];
-      for (let k = 0; k < 36; k++) {
-        const par = Object.assign({}, PS[(k * 7) % PS.length], { theme: THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 });
+      // (+ 12 RUIN houses: their broken tops wear the WEAR_BURN soot fade, from the face top down <= WEAR_BURN.h1, never over the foot strip)
+      let wbad = [], wTris = 0, baseTris = 0, nFoot = 0, nEave = 0, nBurn = 0, ruinTris = 0, ruinBase = 0;
+      const grey = () => [0.5, 0.5, 0.5], kMin = Math.min(HGmod.WEAR_K[0], HGmod.WEAR_BURN.k);
+      for (let k = 0; k < 48; k++) {
+        const ruin = k >= 36;
+        const par = Object.assign({}, PS[(k * 7) % PS.length], { theme: ruin ? "ruin" : THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 });
         const H = HGmod.generate(par);
         const a = HGmod.meshData(H, grey, { interior: true }), b = HGmod.meshData(H, grey, { interior: true, wear: false });
         if (JSON.stringify(a.boxRanges) !== JSON.stringify(b.boxRanges)) wbad.push(par.use + " boxRanges moved");
@@ -819,14 +821,15 @@ if (require.main === module) (async () => {
         for (const [key, g] of a.groups.walls) {
           const g0 = b.groups.walls.get(key), n0 = g0 ? g0.pos.length / 3 : 0;
           if (g0 && g.pos.slice(0, g0.pos.length).some((v, i) => v !== g0.pos[i])) wbad.push(par.use + " " + key + " box vertices changed");
-          baseTris += n0 / 2; wTris += (g.pos.length / 3 - n0) / 2;
+          if (ruin) { ruinBase += n0 / 2; ruinTris += (g.pos.length / 3 - n0) / 2; } else { baseTris += n0 / 2; wTris += (g.pos.length / 3 - n0) / 2; }
           if (g.pos.length / 3 > n0 && key.indexOf("|in") >= 0) wbad.push(par.use + " wear on an inside face (" + key + ")");
           for (let v = n0; v < g.pos.length / 3; v++) {
             const x = g.pos[v * 3], y = g.pos[v * 3 + 1], z = g.pos[v * 3 + 2], c = g.col[v * 3];
-            if (c > 0.5 + 1e-9 || c < 0.5 * HGmod.WEAR_K[0] - 1e-9) wbad.push(par.use + " wear colour " + c.toFixed(3));
-            const inFoot = y <= yG + HGmod.WEAR_FOOT[1] + 1e-6, inEave = y >= top - HGmod.WEAR_EAVE - 1e-6 && y <= top + 1e-6;
-            if (!inFoot && !inEave) wbad.push(par.use + " wear vertex at y " + y.toFixed(2));
-            if (v % 4 === 0) { if (inFoot) nFoot++; else nEave++; }
+            if (c > 0.5 + 1e-9 || c < 0.5 * kMin - 1e-9) wbad.push(par.use + " wear colour " + c.toFixed(3));
+            const inFoot = y <= yG + HGmod.WEAR_FOOT[1] + 1e-6, inEave = !ruin && y >= top - HGmod.WEAR_EAVE - 1e-6 && y <= top + 1e-6;
+            const inBurn = ruin && y >= top - 0.05 - HGmod.WEAR_BURN.h1 - 1e-6 && y <= H.aabb.max[1] + 1e-6;
+            if (!inFoot && !inEave && !inBurn) wbad.push(par.use + (ruin ? " (ruin)" : "") + " wear vertex at y " + y.toFixed(2));
+            if (v % 4 === 0) { if (inFoot && !(inBurn && c < 0.5 * HGmod.WEAR_K[0] - 1e-9)) nFoot++; else if (inBurn) nBurn++; else nEave++; }
             // in front of a box face: on a face plane + 0.012 m, inside that face's rectangle
             let onFace = false;
             for (const bx of H.boxes) {
@@ -843,7 +846,7 @@ if (require.main === module) (async () => {
           }
         }
       }
-      okP(wbad.length === 0 && nFoot > 200 && nEave > 50 && wTris <= 0.14 * baseTris, "meshData wear strips (LC-17): outside wall faces only, 12 mm in front of a box face, darker than the wall (foot " + nFoot + ", eave " + nEave + " strips on 36 houses), +" + (100 * wTris / Math.max(1, baseTris)).toFixed(1) + " % wall triangles (<= 14 %); box vertices and boxRanges untouched", wbad.slice(0, 4).join(" | "));
+      okP(wbad.length === 0 && nFoot > 200 && nEave > 50 && nBurn > 100 && wTris <= 0.14 * baseTris && ruinTris <= 0.25 * ruinBase, "meshData wear strips (LC-17): outside wall faces only, 12 mm in front of a box face, darker than the wall (foot " + nFoot + ", eave " + nEave + " strips on 36 houses; ruin soot " + nBurn + " strips on 12 ruins), +" + (100 * wTris / Math.max(1, baseTris)).toFixed(1) + " % wall triangles (<= 14 %), ruins +" + (100 * ruinTris / Math.max(1, ruinBase)).toFixed(1) + " % (<= 25 %: a ruin is mostly broken tops; the crater village is ~1 % of the houses); box vertices and boxRanges untouched", wbad.slice(0, 4).join(" | "));
     }
   // O3 on tall shells: <= 3 walkable floors, the rest closed (one exact mass: nobody gets in), the asked height kept
   {

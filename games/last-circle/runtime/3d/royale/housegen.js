@@ -3682,9 +3682,17 @@ export function defaultMaterials(THREE) {
 const WEAR_MATS = { brick: 1, plaster: 1, stucco: 1, plank: 1, stone: 1, sheet: 1 };
 const WEAR_PARTS = { wall: 1, skin: 1, shell: 1, slab: 1, gable: 1 };
 export const WEAR_FOOT = [0.5, 1.15], WEAR_EAVE = 0.7, WEAR_K = [0.44, 0.56, 0.8];
+// (P23 / LC-17, the Wave-8 stage-B "crater village does not read as a ruin" look) a RUIN's every broken top is charred: on the outside faces of its walls,
+// parapet, stubs, remnants and standing corners that reach the roof line (face top >= the top ceiling), a soot fade from the wall colour WEAR_BURN.h0 ..
+// WEAR_BURN.h1 m under the face's top to WEAR_BURN.k at it, in tongues WEAR_BURN.seg m wide whose depths are a hash of the face and the tongue (ragged, no stream
+// drawn: the first look, one even band per face, read as a shadow under the cornice, not as fire). Drawn only, like the wear strips; replaces the eave strip there.
+export const WEAR_BURN = { k: 0.2, h0: 0.6, h1: 2.4, seg: 1.3 };
+const BURN_PARTS = { wall: 1, skin: 1, shell: 1, gable: 1, trim: 1 };
 const WEAR_OFF = 0.012;
 function wearBands(H, groups, acc, faceIn, colOf) {
   const yG = H.floors[0].y, top = H.floors[H.floors.length - 1].ceil;
+  const ruin = !!(THEMES[H.theme] && THEMES[H.theme].ruined);
+  const hash01 = (b, fi, q) => { let h = 0x811c9dc5; for (const v of [b.min[0], b.min[2], b.max[0], b.max[2], b.max[1], fi, q]) { h ^= Math.round(v * 100) | 0; h = Math.imul(h, 0x01000193); h ^= h >>> 13; } return ((h >>> 0) % 10007) / 10007; };
   const quad = (a, n, P, rgbs, uvAx, tile) => {
     const base = a.pos.length / 3;
     for (let k = 0; k < 4; k++) { const p = P[k]; a.pos.push(p[0], p[1], p[2]); a.nor.push(n[0], n[1], n[2]); a.uv.push(p[uvAx[0]] / tile, p[uvAx[1]] / tile); a.col.push(rgbs[k][0], rgbs[k][1], rgbs[k][2]); }
@@ -3692,33 +3700,44 @@ function wearBands(H, groups, acc, faceIn, colOf) {
   };
   const VERT = [[0, [1, 0, 0], [2, 1]], [1, [-1, 0, 0], [2, 1]], [4, [0, 0, 1], [0, 1]], [5, [0, 0, -1], [0, 1]]];
   H.boxes.forEach((b) => {
-    if (!WEAR_PARTS[b.p]) return;
+    const wearP = !!WEAR_PARTS[b.p], burnP = ruin && !!BURN_PARTS[b.p] && b.max[1] >= top - 0.05;
+    if (!wearP && !burnP) return;
     for (const [fi, n, uvAx] of VERT) {
       if (b.h & (1 << fi)) continue;
       const pe = H.palette[b.f[fi]];
       if (!pe || !WEAR_MATS[pe.mat] || faceIn(b, fi)) continue;
       const y0 = b.min[1], y1 = b.max[1];
-      if (y1 - y0 < 0.3) continue;
+      if (y1 - y0 < (burnP ? 0.1 : 0.3)) continue;                       // (a ruin's charred stub tops: >= 0.1 m)
       const ax = fi >> 1, side = fi & 1 ? b.min[ax] - WEAR_OFF : b.max[ax] + WEAR_OFF;         // the face's plane, nudged out
       const ua = ax === 0 ? 2 : 0, u0 = b.min[ua], u1 = b.max[ua];
       if (u1 - u0 < 0.45) continue;                                    // (not the 0.24 m reveal of an opening or a jamb: 2-4 triangles for a sliver)
       const P = (u, y) => { const p = [0, y, 0]; p[ax] = side; p[ua] = u; return p; };
       // corner order of FACES (counter-clockwise seen from outside): +x / -z run u from max to min, -x / +z from min to max
       const fwd = fi === 1 || fi === 4;
-      const strip = (ya, yb, ka, kb) => {
+      const strip = (ya, yb, ka, kb, sa, sb) => {                     // (sa .. sb: a part of the face's width, default all of it)
         if (yb - ya < 0.02) return;
         const rgb = colOf(pe.color), ca = [rgb[0] * ka, rgb[1] * ka, rgb[2] * ka], cb = [rgb[0] * kb, rgb[1] * kb, rgb[2] * kb];
-        const ul = fwd ? u0 : u1, ur = fwd ? u1 : u0;
+        const a0 = sa == null ? u0 : sa, a1 = sb == null ? u1 : sb, ul = fwd ? a0 : a1, ur = fwd ? a1 : a0;
         quad(acc("walls", pe.mat, false), n, [P(ul, ya), P(ur, ya), P(ur, yb), P(ul, yb)], [ca, ca, cb, cb], uvAx, TILE[pe.mat] || 2);
       };
-      if (y0 <= yG + 0.25 && y1 > yG) {
+      let footTop = -1e9;
+      if (wearP && y0 <= yG + 0.25 && y1 > yG) {
         const f0 = yG + WEAR_FOOT[0], f1 = yG + WEAR_FOOT[1];
         const kAt = (y) => (y <= f0 ? WEAR_K[0] + (WEAR_K[1] - WEAR_K[0]) * Math.max(0, (y - (yG - FLOOR0 - BASE0))) / (f0 - (yG - FLOOR0 - BASE0)) : y >= f1 ? 1 : WEAR_K[1] + (1 - WEAR_K[1]) * (y - f0) / (f1 - f0));
         const ya = Math.max(y0, yG - FLOOR0 - BASE0), ym = Math.min(y1, f0), yb = Math.min(y1, f1);
         strip(ya, ym, kAt(ya), kAt(ym));
         if (yb > ym) strip(ym, yb, kAt(ym), kAt(yb));
+        footTop = yb;
       }
-      if (y1 >= top - 0.05 && y1 <= top + 0.3 && y0 < top - WEAR_EAVE && top - yG >= WEAR_FOOT[1] + WEAR_EAVE) {        // (a face that ends at the top ceiling; not a tall shell's)
+      if (burnP) {                                                     // (a ruin: soot down from the broken top, never over the foot strip)
+        const nSeg = Math.max(1, Math.round((u1 - u0) / WEAR_BURN.seg)), sw = (u1 - u0) / nSeg;
+        for (let q = 0; q < nSeg; q++) {
+          const hb = WEAR_BURN.h0 + (WEAR_BURN.h1 - WEAR_BURN.h0) * hash01(b, fi, q), yb0 = Math.max(y0, footTop, y1 - hb);
+          if (y1 - yb0 >= 0.05) strip(yb0, y1, 1 - (1 - WEAR_BURN.k) * (yb0 - (y1 - hb)) / hb, WEAR_BURN.k, u0 + q * sw, u0 + (q + 1) * sw);
+        }
+        continue;
+      }
+      if (wearP && y1 >= top - 0.05 && y1 <= top + 0.3 && y0 < top - WEAR_EAVE && top - yG >= WEAR_FOOT[1] + WEAR_EAVE) {        // (a face that ends at the top ceiling; not a tall shell's)
         const e0 = Math.max(y0, top - WEAR_EAVE);
         strip(e0, Math.min(y1, top), 1, WEAR_K[2]);
       }
