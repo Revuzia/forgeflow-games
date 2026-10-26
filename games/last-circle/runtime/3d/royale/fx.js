@@ -708,13 +708,16 @@ function impactFx(W, pos, surface) {
       // a short dark-red mist and droplets (no glow: blood is not a light)
       d = coneDir(0, 1, 0, 0.6);
       setCode(spawnRaw(x, y, z, d.x * 0.7, d.y * 0.5 + 0.2, d.z * 0.7, 0x6c0e0e, 0.36, 0.36, -0.6, 3.0, null, 0, ST_PUFF), rPuff());
+      d = coneDir(0, 0.4, 0, 0.9); setCode(spawnRaw(x, y, z, d.x * 1.1, d.y * 0.6, d.z * 1.1, 0x5e0a0a, 0.24, 0.3, -1.0, 3.2, null, 0, ST_PUFF), rPuff());   // P23/fx: a second, smaller exit mist
       if (near) for (let i = 0; i < 2; i++) { d = coneDir(0, 0.6, 0, 1.0); spawnRaw(x, y, z, d.x * 2.6, d.y * 2.6 + 0.8, d.z * 2.6, 0x6e0c0c, 0.13, 0.42, -9, 0.6, null, 0, ST_SPATTER); }
       burst({ x, y, z, n: 4, color: 0xb02a2a, speed: 2.8, size: 0.075, life: 0.32, st: ST_BLOOD });
       break;
     }
     case "stone": {
       d = coneDir(nx, ny, nz, 0.3);
-      setCode(spawnRaw(x + nx * 0.08, y + ny * 0.08, z + nz * 0.08, d.x * 1.3, d.y * 1.3 + 0.25, d.z * 1.3, 0x9eabbd, 0.38, 0.75, 0.15, 2.4, null, 0, ST_PUFF), rPuff());   // P23/fx: COOL concrete-grey dust (wood is warm tan, metal hot orange: the three read apart)
+      setCode(spawnRaw(x + nx * 0.08, y + ny * 0.08, z + nz * 0.08, d.x * 1.3, d.y * 1.3 + 0.25, d.z * 1.3, 0xaebbcd, 0.38, 0.75, 0.15, 2.4, null, 0, ST_PUFF), rPuff());
+      d = coneDir(nx, ny, nz, 0.5);   // P23/fx: concrete throws a second, lower dust wad (the stone read is the dusty grey cloud, not the fleck)
+      setCode(spawnRaw(x + nx * 0.05, y + ny * 0.05 - 0.04, z + nz * 0.05, d.x * 0.8, d.y * 0.5, d.z * 0.8, 0xb4c0d0, 0.26, 0.6, 0.1, 2.8, null, 0, ST_PUFF), rPuff());   // P23/fx: COOL concrete-grey dust (wood is warm tan, metal hot orange: the three read apart)
       if (near) {
         for (let i = 0; i < 4; i++) { d = coneDir(nx, ny, nz, 0.75); const sp = 4 + Math.random() * 2.5; spawnRaw(x, y, z, d.x * sp, d.y * sp + 1, d.z * sp, 0x8b9096, 0.05 + Math.random() * 0.035, 0.5 + Math.random() * 0.3, -12, 0.3, null, 0, ST_DEBRIS); }
         d = coneDir(nx, ny, nz, 0.9); spawnRaw(x, y, z, d.x * 5, d.y * 5, d.z * 5, 0xffd08a, 0.04, 0.10, -6, 0.5, null, 0, ST_HOT);   // one small hot fleck (metal owns the spark shower)
