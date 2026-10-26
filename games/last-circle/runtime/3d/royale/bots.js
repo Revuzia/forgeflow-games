@@ -93,20 +93,33 @@ function fallDmgForDrop(h) {
   if (v <= K.FALL_SAFE_V) return 0;
   return (K.FALL_DMG_PER_V || 1) * Math.pow(v - K.FALL_SAFE_V, K.FALL_EXP || K.FALL_DMG_EXP || 1.5);
 }
-function buildFallTable() {
-  LETHAL_H = null;
-  if (!K || !(K.FALL_SAFE_V > 0)) return;
+let WALK_H = null;
+function dropTable(margin) {
   const T = new Float64Array(201);
   for (let hp = 0; hp <= 200; hp++) {
+    const left = hp - margin(hp);
     let lo = 0, hi = 120;
-    if (fallDmgForDrop(hi) < hp - 2) { T[hp] = hi; continue; }
-    for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fallDmgForDrop(m) < hp - 2) lo = m; else hi = m; }
+    if (fallDmgForDrop(hi) < left) { T[hp] = hi; continue; }
+    for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fallDmgForDrop(m) < left) lo = m; else hi = m; }
     T[hp] = lo;
   }
-  LETHAL_H = T;
+  return T;
 }
-/** The highest drop this actor survives with >= 2 hp (Infinity when the sim has no fall damage). */
-function lethalDrop(a) { return LETHAL_H ? LETHAL_H[Math.max(0, Math.min(200, Math.round(a.hp || 0)))] : Infinity; }
+function buildFallTable() {
+  LETHAL_H = null; WALK_H = null;
+  if (!K || !(K.FALL_SAFE_V > 0)) return;
+  LETHAL_H = dropTable(() => 2);
+  // walking off an edge keeps a real margin: the guard samples the ground ahead at 0.8 m steps 4 times a second, a jump or a strafe adds
+  // height and speed, and a wounded bot dies of what the table calls survivable (stub duo 10-26, Isla seed 2: a 2-attacker fight at 738 s,
+  // a bot took 6 then 11.4 hp of falls and died of the second)
+  WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));
+}
+/** The highest drop this actor survives with >= 2 hp (Infinity when the sim has no fall damage): the canopy rescue's rule. */
+// (a knocked man's pool is downedHp: damage to a downed actor comes off it, C-DBNO)
+const fallHp = (a) => Math.max(0, Math.min(200, Math.round((a.downed ? a.downedHp : a.hp) || 0)));
+function lethalDrop(a) { return LETHAL_H ? LETHAL_H[fallHp(a)] : Infinity; }
+/** The highest drop a bot walks off on purpose (a quarter of its hp, at least 6, left over). */
+function walkDrop(a) { return WALK_H ? WALK_H[fallHp(a)] : Infinity; }
 // (C-DBNO) who revives whom: target id -> reviver id (bots' own channel and the humans' via the events), and the hook into player.js
 const reviving = new Map();
 const REVIVE_R = 1.6;             // m: a bot channels from this close (the contract's reach is 2 m)
@@ -1494,7 +1507,12 @@ function act(W, b, dt) {
 
   // (P23, C-DBNO) knocked: crawl (player.js sets the crawl speed and the low capsule), never fire, never loot
   if (a.downed || b.state === "DOWNED") {
-    if (a.downed) { actDowned(W, b, dt); return; }
+    if (a.downed) {
+      actDowned(W, b, dt);
+      // (the crawl keeps the edge rule: stub duo 10-26, Isla seed 2, a knocked bot crawled off a 5 m bank and died of it)
+      if (LETHAL_H && (a.onGround || W.t < bb.edgeBanUntil) && (inp.mz || inp.mx)) edgeGuard(W, b);
+      return;
+    }
   }
   // (P23, C-SMOKE) a smoke that rolls between this bot and its target cuts the sight line THIS frame (perceive runs on the think cadence):
   // the target is out of sight from now, so ENGAGE / fireOnTheMove stop shooting at him at once
@@ -1530,10 +1548,10 @@ function act(W, b, dt) {
   // (P23, LC-14) a live grenade landing here: get out of its blast (over every state but a revive channel and a throw)
   if (bb.dangerUntil > W.t && !bb.nadeS && !(b.state === "REVIVE" && bb.reviveStarted)) dodgeGrenade(W, b, dt);
   // (P23, C-FALL) never walk off a drop that would kill (only when the sim has fall damage)
-  if (LETHAL_H && a.onGround && (inp.mz || inp.mx)) edgeGuard(W, b);
+  if (LETHAL_H && (a.onGround || W.t < bb.edgeBanUntil) && (inp.mz || inp.mx)) edgeGuard(W, b);
   // ...and in a real fall (2 m+ of drop already under it, no canopy) it drops straight: air control steered by the state's goal carried bots
   // downhill onto lower ground (p23_fall: a 10 m lift cost 53.9 hp, the human's curve says 41.4)
-  else if (LETHAL_H && !a.onGround && !a.gliding && !a.swimming && a.vel.y < -9) { inp.mx = 0; inp.mz = 0; inp.sprint = false; }
+  if (LETHAL_H && !a.onGround && !a.gliding && !a.swimming && a.vel.y < -9) { inp.mx = 0; inp.mz = 0; inp.sprint = false; }
 
   // now inp.mx / inp.mz carry this frame's intent: barely moved while TRYING to
   // move => stuck
@@ -3350,10 +3368,10 @@ function deckExitPoint(W, a, preferYaw) {
       const sup = supportAt(W, x, z, h);
       if (sup < h - DECK_DROP) {
         if (W.map.heightAt(x + dx * 1.5, z + dz * 1.5) < wy + 0.4) break;      // the ground under the edge is water
-        // (P23, C-FALL) with fall damage a drop is not free: never an edge that kills (lethalDrop: < 2 hp left), and a lower edge is preferred
+        // (P23, C-FALL) with fall damage a drop is not free: never an edge that kills (walkDrop: a quarter of the hp left), and a lower edge is preferred
         // (+0.5 a hit point). Without fall damage in the sim: Infinity / 0, the old choice.
         const drop = h - sup;
-        if (drop > lethalDrop(a)) break;
+        if (drop > walkDrop(a)) break;
         const cost = s + Math.abs(off) * 6 + fallDmgForDrop(drop) * 0.5;
         if (cost < best) { best = cost; _dkx.x = x + dx * 2.0; _dkx.z = z + dz * 2.0; _dkx.d = s; }
         break;
@@ -4533,8 +4551,8 @@ function dodgeGrenade(W, b, dt) {
   inp.sprint = true; inp.crouch = false;
   guardMove(W, b, false);
 }
-/** (C-FALL) Before the legs move this frame: would this heading walk off a drop that kills (lethalDrop for the bot's hp)? Probed 4x a second along
- *  the heading at 0.8 / 1.6 / 2.4 m - the terrain alone where the bot stands on it, the support (colliders: a roof, a tower, a wall top) where it
+/** (C-FALL) Before the legs move this frame: would this heading walk off a drop that kills (walkDrop for the bot's hp)? Probed 4x a second
+ *  (7x past 4 m/s) along the heading at 0.8 m steps (3-6 of them, then down any face found) - the terrain alone where the bot stands on it, the support (colliders: a roof, a tower, a wall top) where it
  *  stands over the terrain. A refused heading is held for 0.6 s and the bot re-plans (a route takes the stairs). */
 function edgeGuard(W, b) {
   const a = b.actor, bb = b.bb, inp = a.input;
@@ -4543,29 +4561,66 @@ function edgeGuard(W, b) {
   const m = hyp(wx, wz);
   if (m < 0.05) return;
   wx /= m; wz /= m;
-  if (W.t < bb.edgeBanUntil && wx * bb.edgeBanX + wz * bb.edgeBanZ > 0.7) { inp.mz = 0; inp.mx = 0; inp.sprint = false; return; }
-  if (W.t < bb.edgeT) return;
-  bb.edgeT = W.t + 0.25;
-  const lim = lethalDrop(a);
+  // (a held heading holds the jump too, and holds in the air: stub duo 10-26, Isla seed 2, a camper held at a 10 m lip hopped - the state's step
+  // hop - and the next airborne frames' air control carried it over the lip it was being held at)
+  if (W.t < bb.edgeBanUntil && wx * bb.edgeBanX + wz * bb.edgeBanZ > 0.7) { inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false; return; }
+  if (!a.onGround || W.t < bb.edgeT) return;
+  // (the probe interval and the look-ahead scale with the speed: at a sprint's ~8 m/s a 0.25 s probe let the bot travel 2 m between looks, and the
+  // lip of a face first seen in the 4th sample was already under its feet at the next look - stub duo 10-26, Isla seed 2: s11 fleeing at 20 hp
+  // found the face at 0.8 m, too late to stop, and fell 10 m; s43 following at 30 hp crossed a slope break at speed, flew, and met the face airborne)
+  const spd = hyp(a.vel.x, a.vel.z);
+  bb.edgeT = W.t + (spd > 4 ? 0.15 : 0.25);
+  const lim = walkDrop(a);
   if (!(lim < 1e6)) return;
   GA[0] = a.pos.x; GA[1] = a.pos.z; groundA(W, GA, 0);
   const elevated = a.pos.y - GA[2] > 1.0;
-  for (let k = 1; k <= 3; k++) {
+  // (a CLIFF FACE, not just a ledge: the stub-duo batch lost 2 bots of 2 matches at the same Isla Viva cliff (-22, -34), terrain 55.5 -> 44.5 m
+  // over 4 m. No 0.8-2.4 m sample was ever more than the bot's limit below it, but past the first steep step the capsule leaves the ground and
+  // falls the whole face. So a run of steep samples (more than STEEP_STEP down per 0.8 m) that starts within the look-ahead window is followed
+  // down to its foot (up to 10 more samples, 8 m; 6 on a deck / rock top, where each sample is a supportAt collider query) and the fall is
+  // measured from the top of the run to the foot. The window is a sprint's travel to the next probe plus 3 m to stop in, whatever the speed
+  // NOW: a bot held at a lip stands still when its hold ends and is back at 7.8 m/s 0.4 s later (sq_duo6, Isla seed 5: a follower at 12 hp
+  // on a rock top - window 3 - ran the 2.8 m to the lip it had been held at). 6 samples on the ground, 4 up on a collider
+  const win = elevated ? 4 : 6, kMax = win + (elevated ? 6 : 10);
+  let runTop = NaN, prev = a.pos.y;
+  for (let k = 1; k <= kMax; k++) {
     const px = a.pos.x + wx * 0.8 * k, pz = a.pos.z + wz * 0.8 * k;
     let sup;
     if (elevated) sup = supportAt(W, px, pz, a.pos.y);
     else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
     if (W.map.waterY != null && sup < W.map.waterY) sup = W.map.waterY;      // water breaks a fall
-    if (a.pos.y - sup > lim) {
+    const steep = prev - sup > STEEP_STEP;
+    if (steep && runTop !== runTop && k <= win) runTop = prev;
+    if ((k <= 3 && a.pos.y - sup > lim) || (runTop === runTop && runTop - sup > lim)) {
       bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
-      inp.mz = 0; inp.mx = 0; inp.sprint = false;
+      inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
       bb.nextPathT = 0;
       nav.st.edgeHolds++;
       return;
     }
-    if (a.pos.y - sup < -1.0) break;                                           // rising ground / a wall: no edge this way
+    if (a.pos.y - sup < -1.0 && runTop !== runTop) break;                     // rising ground / a wall: no edge this way
+    if (runTop === runTop ? !steep : k >= win) break;                         // a face is followed while it goes on down; the window ends the look
+    prev = sup;
   }
 }
+/** (C-FALL) a fight's hop lands where it was: no ground more than 2.5 m lower along the run or the strafe within a hop's 4.5 m (stub duo 10-26,
+ *  Isla seed 2: a bot strafe-hopping on a hilltop at 56 hp was shot to 5 in the air and the hop carried it over a 9 m lip). Terrain only. */
+function jumpLandsSafe(W, a) {
+  if (!LETHAL_H) return true;
+  const inp = a.input, B = K.moveBasis(inp.yaw, _mb1);
+  for (let d = 0; d < 2; d++) {
+    let wx = d === 0 ? a.vel.x : B.fx * inp.mz + B.rx * inp.mx, wz = d === 0 ? a.vel.z : B.fz * inp.mz + B.rz * inp.mx;
+    const m = hyp(wx, wz);
+    if (m < 0.05) continue;
+    wx /= m; wz /= m;
+    for (let k = 1; k <= 3; k++) {
+      GA[0] = a.pos.x + wx * 1.5 * k; GA[1] = a.pos.z + wz * 1.5 * k; groundA(W, GA, 0);
+      if (a.pos.y - GA[2] > 2.5) return false;
+    }
+  }
+  return true;
+}
+const STEEP_STEP = 0.9;           // m down per 0.8 m sample (~48 deg): steeper than this the capsule is in the air, not walking
 /** (C-FALL) Falling toward a landing that kills: open the canopy (the player's own escape: Space in the air more than 12 m up). */
 function chuteRescue(W, b) {
   const a = b.actor, bb = b.bb;
@@ -4975,7 +5030,7 @@ function actEngage(W, b, dt) {
   // (Wave 5) the dodge hop is for open air: indoors it is a bot pogo-ing in a house, and under a low ceiling the head meets
   // the slab and a capsule jammed under it is blocked in every direction (the draw is kept either way, so the rng stream does
   // not depend on the roof)
-  if (a.onGround && b.actor.tier >= 3 && b.rng() < dt * 0.35 && !roofedForJump(W, b)) inp.jump = true;
+  if (a.onGround && b.actor.tier >= 3 && b.rng() < dt * 0.35 && !roofedForJump(W, b) && jumpLandsSafe(W, a)) inp.jump = true;
 
   // aiming with human error model
   const eye = eyePos(a, _eye_actEngage);
