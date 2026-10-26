@@ -1956,6 +1956,12 @@ export function frame(W, dt, alpha) {
     if (k < 1 && a._ppT === _tickN && a._pp.distanceToSquared(a.pos) < TELEPORT2) a.obj.position.lerpVectors(a._pp, a.pos, k);
     else a.obj.position.copy(a.pos);
     if (a._vmode === 1) syncObj(W, a, dt);
+    else if (a.mantleT != null) {
+      // (P23, LC-30) a MANTLE keeps its body yaw (no syncObj) but runs the clip chain + pose layers: the mantle branch of
+      // selectClip and the procedural leg tuck (applyLegPose "mantle"). Before this the view pass never animated a mantling
+      // actor, so the legs hung in whatever clip was playing at the trigger for the whole pull-up.
+      a._synced = true; a._warp = 0; a._locoCombat = false; a._turnT = -1;
+    }
   }
   updateCamera(W, dt, k);
   viewPass(W, dt);
