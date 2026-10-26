@@ -4731,12 +4731,19 @@ function coverStepQ(W, b, dt, tp, seen) {
   const wcls = a.weapon && K.WEAPONS[a.weapon.id] ? K.WEAPONS[a.weapon.id].cls : null;
   // (mid-range too: past 20 m with anything but a shotgun / pistol, unless he is nearly finished - then press)
   const tA = bb.target ? W.actorById.get(bb.target) : null;
-  const pressIt = !!tA && (tA.downed || (tA.hp || 0) + (tA.shield || 0) < 40);
+  // (...or he is cracked by this bot's own fire in the last 3 s: a player who just landed a rifle / sniper hit stays on him for the follow-up, he does not
+  // duck back behind the rock and let him heal - probe_match: sniper kills fell from 43 in 24 matches (21 with one) to 27 (13) with the ranged hold)
+  const pressIt = !!tA && (tA.downed || (tA.hp || 0) + (tA.shield || 0) < 40 ||
+    ((tA.hp || 0) + (tA.shield || 0) < 100 && tA.lastAttacker === a.id && W.t - (tA.lastHurtByActorT || -99) < 3));
   const ranged = seen && !pressIt && ((dist > 30 && !!LONG_CLS[wcls]) || (dist > 20 && wcls !== "shotgun" && wcls !== "pistol"));
   if (!reloading && !hurt && !shotAt && !ranged) return false;     // no reason to break off
   if (dist < 6) return false;                           // point-blank: fight, don't hide
   // (P23, LC-12) HIDE - PEEK - HIDE: a ranged hold that has just peeked from its wall goes back behind the SAME wall (no search, no budget) while
   // the man it is trading with is still about where he was when the wall was picked (8 m), and the wall is a step away (5 m)
+  // ...but only once the peek has done its job: a shot fired since it came out (a bolt sniper needs its re-sight + ADS + one round, which the bare
+  // 1.2 s peek often cut off) or 2.6 s out in the open
+  const peekLive = W.t - bb.coverPeekT < 2.6 && !(a.lastShotT > bb.coverPeekT);
+  if (peekLive && !reloading && !hurt && !shotAt) return false;       // (no new wall either: the peek stays out until it has shot)
   if (ranged && bb.coverFace === 2 && bb.coverPt && W.t - bb.coverPeekT < 8 && hyp(bb.coverPt.x - a.pos.x, bb.coverPt.z - a.pos.z) < 5 &&
       hyp(tp.x - bb.coverTX, tp.z - bb.coverTZ) < 8) {
     bb.coverState = "MOVING"; bb.coverGiveUp = W.t + 2.5;
