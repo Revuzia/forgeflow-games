@@ -3438,6 +3438,8 @@ export function update(W, dt) {
       }
     }
     expireFeed(performance.now());
+    // teams that arrive after showHUD (a net start / rejoin publishing teamIds late) still get their chips; matesOf is cached
+    if (!R.mateEls && R.bars && W.player && W.player.teamId != null && matesOf(W, W.player).length) buildMates(W);
     if (R.mateEls || R.bleedRow || (p && p.downed)) updateMates(W, p);     // OD-9 teammate chips + C-DBNO BLEEDING OUT
     const alN = W.match ? W.match.aliveCount() : -1;
     if (C.alN !== alN) { C.alN = alN; R.aliveText.textContent = alN < 0 ? "—" : String(alN); }
