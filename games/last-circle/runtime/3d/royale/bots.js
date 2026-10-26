@@ -1137,7 +1137,7 @@ function act(W, b, dt) {
   // (K2, re-run 4) ... and a TRAVELLING bot (LOOT / ROTATE / ...) that stays off the walkable area FURN_DWELL_N windows running however much it moves:
   // a floor pocket closed by furniture (the planners answer null from inside it: findPath / findExit start on a blocked cell) where it hops on and off
   // the low pieces round it. Measured (furntop, ashgrid seed 7, cmp09@p4's storage room): a ROTATE bot, path null, bounced between the floor and a drum
-  // inside 5 m for 11 s - never still for 0.5 s, so the detector above never ran.
+  // inside 5 m for 32 s (the previous file) - never still for 0.5 s, so the detector above never ran.
   if (IND.H !== null && (W.t - bb.furnT >= 0.5 || W.t < bb.furnT)) {
     const fx = a.pos.x - bb.furnX, fz = a.pos.z - bb.furnZ;
     const free = !a.gliding && !bb.chestId, travel = free && !!MOVING_STATES[b.state];
@@ -1262,7 +1262,9 @@ function escTry(W, b, x, z, wy) {
   return true;
 }
 const FURN_ESC_N = 8;     // (K2, re-run) 0.5 s windows (4 s) pinned off the room's floor before escapeToWalk
-const FURN_DWELL_N = 16;  // (K2, re-run 4) 0.5 s windows (8 s) a travelling bot stays off the room's walkable area, moving or not, before escapeToWalk
+const FURN_DWELL_N = 20;  // (K2, re-run 4) 0.5 s windows (10 s) a travelling bot stays off the room's walkable area, moving or not, before escapeToWalk.
+                          // (8 s was tried: in Deepwood's real-step matches seeds 14 / 15 / 22 it fired once each, 0.5-1 s before the bot - a LOOT bot hopping in a pocket -
+                          // jumped out on its own (the control run, 8-9 s in the pocket); the furntop drum bot stayed 32 s without it)
 /** (K2, re-run) The room (IND.R index) the bot stands in when its feet are OFF that room's walkable floor: 0.3-3 m over the floor (a piece of furniture),
  *  or on the floor outside the walk rects (a pocket). -1 = outdoors, on the walk area, on / beside a stair (its own rules), or a room without walk data.
  *  cached: the room from the brain's own cache (myRoom, which refreshes it); false = a fresh lookup that leaves the cache alone. */
