@@ -4478,12 +4478,14 @@ function maybeFrag(W, b, t, seen, dist) {
     // for the time it takes to come to ~24 m (2-4 s), and the reasons below get their chance; once per 30 s.
     // (F24, 21 matches at weight 8: 0-1 pushes a match, 2 matches with no frag at all from 8-10 carriers - "holding his spot" was a stationary
     // target only, and a duellist strafes: up to 3 m/s now, tier 2+, 80+ of bar, 4 s into the fight, 30-70 m, once per 20 s)
-    if (dist > 30 && dist < 70 && seen && (a.tier || 1) >= 2 && W.t >= bb.nadePushT && W.t - bb.acquireT > 4 && a.hp + a.shield >= 80 &&
+    if (dist > 30 && dist < 70 && seen && (a.tier || 1) >= 2 && W.t >= bb.nadePushT && bb.fightT > 4 && a.hp + a.shield >= 80 &&
         t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 9) {
-      bb.nadePushT = W.t + 20; bb.closeInUntil = W.t + Math.min(5, Math.max(2, (dist - 24) / 6)); b.nextThink = 0; bb.fdP++;
+      bb.nadePushT = W.t + 20; bb.closeInUntil = W.t + Math.min(7, Math.max(2, (dist - 22) / 5)); b.nextThink = 0; bb.fdP++;   // (g2: 5 s left a 60 m push at 35-45 m)
     }
     return;
   }
+  // (the fight's age is bb.fightT, the engage clock: acquireT restarts at every re-sight past 0.9 s since LC-12, so a peek duel never got
+  // 4 s old by it)
   const gone = W.t - bb.targetSeenT;
   let why = 0;
   if (!seen && gone > 0.5 && gone < 5) why = 1;                                   // he ducked behind something: put one there
@@ -4493,10 +4495,10 @@ function maybeFrag(W, b, t, seen, dist) {
     else if (occAny(W, bb.targetPos.x, bb.targetPos.z, 3) && b.rng() < 0.35) why = 3;   // planted by cover
     // a duel that has gone on 4 s+ against a man standing his ground: break the stalemate (measured: 1 match in 6 had no bot frag at loot
     // weight 8 in two 6-match batches, a Deepwood match both times: its duels rarely met the room / cover / ducked tests)
-    else if (W.t - bb.acquireT > 4 && b.rng() < 0.2) why = 4;
+    else if (bb.fightT > 4 && b.rng() < 0.2) why = 4;
   }
   // ...and a man strafing in the open 12-28 m off, 6 s into the duel: a frag at his feet moves him off his line (a player's "nade the duel")
-  else if (seen && dist > 12 && W.t - bb.acquireT > 6 && b.rng() < 0.08) why = 5;
+  else if (seen && dist > 12 && bb.fightT > 6 && b.rng() < 0.08) why = 5;
   if (!why) { bb.fdW++; return; }
   const tp = bb.targetPos;
   beginThrow(W, b, 1, tp.x, tp.y, tp.z);
