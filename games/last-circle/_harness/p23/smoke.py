@@ -119,9 +119,18 @@ def main():
             s.step_frames(30, 1 / 60)
             s.js("() => { const p = window.__LC__.W.player; p.input.yaw = 0; p.input.pitch = 0.25; p.recoilPitch = 0; }")
             s.step_frames(10, 1 / 60)
-            s.page.mouse.down(button="left")
-            s.step_frames(1, 1 / 60)
-            s.page.mouse.up(button="left")
+            # the human throw reads the click EDGE for 420 ms of wall time (weapons.js stepThrow: W._fireEdge): on a loaded box the next stepped
+            # frame can come later than that, so a real click that threw nothing (the slot still holds 3) is clicked again, up to 4 times
+            clicks = 0
+            for _ in range(4):
+                clicks += 1
+                s.page.mouse.down(button="left")
+                s.step_frames(1, 1 / 60)
+                s.page.mouse.up(button="left")
+                if s.js("() => { const sl = window.__LC__.W.player.inventory.slots[3]; return !sl || sl.count < 3; }"):
+                    break
+                s.js("() => { const p = window.__LC__.W.player; p.input.yaw = 0; p.input.pitch = 0.25; p.recoilPitch = 0; }")
+            v.data["throwClicks"] = clicks
             prog0 = None
             sm = []
             for _ in range(240):
