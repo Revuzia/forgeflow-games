@@ -2,7 +2,7 @@
 """netseq - LC-49 netcode (P3 lane net): sequence numbers + server-time stamps in pack(); rejoin within 60 s on ?room=. Plan gate: "out-of-order
 injection never pulls a remote backwards" (+ section 5 Online "rejoin within 60 s; no backward pulls from out-of-order packets"). Two REAL pages over
 the squad relay stand-in (squadguard_live's FAKE_SB + p23lib.fake_sb_plus: the inbound REORDER switch holds every 3rd state packet 250 ms and delivers
-it after newer ones).
+it after newer ones) - and the same switch on the guest's DataChannel receive (state travels P2P over unordered DataChannels first).
 
     python _harness/p23/netseq.py --disk
     python _harness/p23/netseq.py --rev 9aa2b746                # control: the P2 base (no sequence numbers: a late packet pulls the body back) - MUST FAIL
@@ -48,8 +48,11 @@ def walk_and_track(hpg, gpg, h_id, ms=3000):
     hpg.keyboard.down("KeyW")
     tr = gpg.evaluate(TRACK_JS, [h_id, ms, dx, dz])
     hpg.keyboard.up("KeyW")
-    back = max((tr[i - 1] - tr[i] for i in range(1, len(tr))), default=None)
-    return {"samples": len(tr), "progress": round(tr[-1] - tr[0], 2) if tr else None, "maxBackM": round(back, 3) if back is not None else None}
+    steps = [tr[i - 1] - tr[i] for i in range(1, len(tr))]
+    back = max(steps, default=None)
+    at = steps.index(back) + 1 if steps else None
+    return {"samples": len(tr), "progress": round(tr[-1] - tr[0], 2) if tr else None, "maxBackM": round(back, 3) if back is not None else None,
+            "backSteps>0.05": sum(1 for x in steps if x > 0.05), "atSample": at, "around": tr[max(0, (at or 0) - 4):(at or 0) + 3] if at else None}
 
 
 def main():
@@ -66,10 +69,20 @@ def main():
             if args.plant:
                 gpg.evaluate("() => { const W = window.__LC__.W, K = W.SIM; %s; return true; }" % PLANTS[args.plant])
                 gpg.evaluate("(id) => { window.__P23PB__.id = id; }", h_id)
+            # the state envelope travels P2P first: ffg_rtc.js DataChannels, UNORDERED ({ordered:false, maxRetransmits:0}) - the relay stand-in's
+            # REORDER switch never saw a state packet when the DCs were open (netseq_all3 10-26: 0 late packets). The same switch on the guest's
+            # DataChannel receive (W.net.rtc.onMessage, read per message by RTCMesh) - out-of-order delivery as the wire can really do it
+            hook = gpg.evaluate("""() => { const W = window.__LC__.W, S = W.net; if (!S || !S.rtc || S.rtc.__p23ro) return !!(S && S.rtc && S.rtc.__p23ro); const om = S.rtc.onMessage;
+                S.rtc.onMessage = function (m) { const R = window.__SQ_REORDER__; if (R && m && m.t === 'state' && !m.__late) { R.n = (R.n || 0) + 1;
+                  if (R.n % R.every === 0) { R.held = (R.held || 0) + 1; const mm = Object.assign({}, m, { __late: true }); setTimeout(() => S.rtc.onMessage(mm), R.holdMs); return; } }
+                  return om.call(this, m); }; S.rtc.__p23ro = true; return true; }""")
+            v.info("reorder hook on the guest's DataChannel receive", {"hooked": hook})
             spot = hpg.evaluate(L.FLAT_SPOT_JS, [0, 0, 6.0, 700, []])
             if spot:
                 hpg.evaluate("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x, W.map.heightAt(x, z), z); p.vel.set(0, 0, 0); p.input.yaw = 0; }", [spot["x"], spot["z"]])
+            hpg.bring_to_front()          # the walker's page must tick (a hidden tab gets no rAF)
             hpg.wait_for_timeout(1500)
+            v.info("page visibility during the walks", {k: pg.evaluate("() => document.visibilityState") for k, pg in (("host", hpg), ("guest", gpg))})
             b = walk_and_track(hpg, gpg, h_id)
             v.check("baseline (reorder off: the guest's copy of the host moves forward only)", b["progress"] is not None and b["progress"] > 5 and (b["maxBackM"] or 0) <= 0.05,
                     b, "> 5 m, never back > 0.05 m")
@@ -94,6 +107,7 @@ def main():
             moved = None
             if back:
                 p0 = hpg.evaluate("(id) => { const a = window.__LC__.W.actorById.get(id); return a ? [a.pos.x, a.pos.z] : null; }", g_id)
+                g2.bring_to_front()
                 g2.keyboard.down("KeyW")
                 g2.wait_for_timeout(2000)
                 g2.keyboard.up("KeyW")
