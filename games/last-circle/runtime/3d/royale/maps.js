@@ -5580,7 +5580,7 @@ export async function buildMap(W, mapId) {
   {
     const nIsl = 5 + Math.floor(rng() * 3);
     const grassC = new THREE.Color(mapId === "ashgrid" ? "#a7ad55" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62").multiplyScalar(Math.min(1, GRADE.ground * 1.25));   // (LC-04: the turf takes the ground grade, a little lighter: it is lit from above, the terrain mostly grazed)
-    const turfSideC = new THREE.Color("#5b4632").multiplyScalar(Math.min(1, GRADE.ground * 1.25)), islWhite = new THREE.Color(1, 1, 1);   // (LC-73: the turf's earth-and-root side)
+    const turfSideC = new THREE.Color("#7a5f45").multiplyScalar(Math.min(1, GRADE.ground * 1.25)), islWhite = new THREE.Color(1, 1, 1);   // (LC-73: the turf's earth-and-root side)
     // #7a6a58 is linear ~(0.19, 0.14, 0.10). The cone is rotated 180 degrees below,
     // so its lit faces all point DOWN and the only light reaching them is the
     // hemisphere's groundColor — at that albedo the signature feature of the map
