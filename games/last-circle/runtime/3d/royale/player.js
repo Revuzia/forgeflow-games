@@ -2876,6 +2876,8 @@ function dirClipsFor(a) {
 // (P23, LC-10) quadrant centres (rad, relative to the aim; + = left): forward, left, back, right
 const Q_CENTER = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
 const Q_HYST = 10 * Math.PI / 180, WARP_MAX = Math.PI / 4 + Q_HYST;
+/** The wrapped angle from quadrant q's centre to the move angle phi (no per-frame closure). */
+function qOff(phi, q) { let d = phi - Q_CENTER[q]; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }
 /** The orientation warp for a combat mover: updates a._locoQ (with hysteresis) and returns the body yaw offset from the aim. */
 function locoWarp(a, spd) {
   const mv = Math.atan2(-a.vel.x, -a.vel.z);          // movement heading in the aim's yaw convention
@@ -2883,11 +2885,10 @@ function locoWarp(a, spd) {
   while (phi > Math.PI) phi -= Math.PI * 2;
   while (phi < -Math.PI) phi += Math.PI * 2;
   a._locoAng = phi;
-  const off = (q) => { let d = phi - Q_CENTER[q]; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
   let q = a._locoQ | 0;
-  if (Math.abs(off(q)) > Math.PI / 4 + Q_HYST) {
+  if (Math.abs(qOff(phi, q)) > Math.PI / 4 + Q_HYST) {
     let best = 0, bd = 9;
-    for (let i = 0; i < 4; i++) { const d = Math.abs(off(i)); if (d < bd) { bd = d; best = i; } }
+    for (let i = 0; i < 4; i++) { const d = Math.abs(qOff(phi, i)); if (d < bd) { bd = d; best = i; } }
     q = best;
   }
   a._locoQ = q;
@@ -2895,7 +2896,7 @@ function locoWarp(a, spd) {
   // the body turns so that heading lies on the velocity
   const key = combatKey(a, spd, q);
   a._locoKey = key;
-  const w = Math.max(-WARP_MAX, Math.min(WARP_MAX, off(q) - (CLIP_DIR[key] || 0)));
+  const w = Math.max(-WARP_MAX, Math.min(WARP_MAX, qOff(phi, q) - (CLIP_DIR[key] || 0)));
   a._warp = w;
   return w;
 }
@@ -3134,8 +3135,8 @@ function animate(W, a, dt) {
         !a.swimming && !a.emoting && a.alive && !a.downed && !a.mantleT;
       if (!useMixamoGun && !pistolTwist) twist = K.clamp(aimDelta, -0.6, 0.6);
       if (layers && a.armBones && pistolTwist) {
-        const bs = a.armBones.spine1 && a.armBones.spine2 ? [a.armBones.spine1, a.armBones.spine2] : [];   // (not Spine: uprightTorso re-aims it after this)
-        for (const b of bs) addTwistY(b, twist / bs.length);
+        // (not Spine: uprightTorso re-aims it after this)
+        if (a.armBones.spine1 && a.armBones.spine2) { addTwistY(a.armBones.spine1, twist / 2); addTwistY(a.armBones.spine2, twist / 2); }
       }
       a._armYawOff = (layers && pistolTwist) ? twist : 0;
       if (layers && a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed) {
