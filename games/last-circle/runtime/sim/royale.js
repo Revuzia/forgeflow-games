@@ -471,7 +471,7 @@
         }
       }
     }
-    return { JOINTS: JOINTS, SEGS: SEGS, PITCH: PITCH, NV: NV, DOFF: DOFF, T: T, RADII: RADII || {}, SKINS: SKINS, reach: Math.max(reach, PLAYERK.radius + 0.12),
+    return { JOINTS: JOINTS, SEGS: SEGS, PITCH: PITCH, NV: NV, DOFF: DOFF, T: T, RADII: RADII || {}, HRADII: (typeof HRADII !== "undefined" && HRADII) || {}, SKINS: SKINS, reach: Math.max(reach, PLAYERK.radius + 0.12),
              ok: !!DATA };
   })();
 
@@ -490,14 +490,16 @@
     var sk = HITVOL.T[a && a.skin] ? a.skin : "soldier";
     var tab = HITVOL.T[sk];
     if (!tab) return null;
-    var v = tab[hitVolPose(a)] || tab["rifle|stand"];
+    var key = hitVolPose(a), v = tab[key] || tab["rifle|stand"];
     if (!v) return null;
     var P = HITVOL.PITCH, NV = HITVOL.NV, p = clamp((a && a.pitch) || 0, P[0], P[P.length - 1]);
     var k = 0;
     while (k < P.length - 2 && p > P[k + 1]) k++;
     var f = (p - P[k]) / (P[k + 1] - P[k]);
     for (var i = 0; i < NV; i++) _hvJ[i] = v[k * NV + i] + (v[(k + 1) * NV + i] - v[k * NV + i]) * f;
-    var R = HITVOL.RADII[sk] || HITVOL.RADII.soldier;
+    // per-HOLD radii (HRADII) where a hold's rendered pose sways (the pistol carry plays the generic idle clip),
+    // else the skin's radii
+    var R = (tab[key] && HITVOL.HRADII[sk] && HITVOL.HRADII[sk][key]) || HITVOL.RADII[sk] || HITVOL.RADII.soldier;
     // torso columns: offsets along the hip line (LeftUpLeg 9 -> RightUpLeg 12) and the shoulder line (LeftArm 3 -> RightArm 6)
     hvSide(0, 9, 12, R[7], 15); hvSide(1, 3, 6, R[8], 17); hvSide(2, 3, 6, R[9], 19);
     return R;
