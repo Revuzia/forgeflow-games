@@ -1135,6 +1135,34 @@ const CITY_THEME_TABLES = {
 /** LC-41: the contact-AO mask (see buildMap). A module-level function, not a block inside buildMap: buildMap is far past V8's optimising-compiler size
  *  limit, so a hot loop written inline there runs in the baseline tier (the 16 M-texel blur measured 1.6-3.3 s in the page vs 0.16 s optimised).
  *  `gyc[i]` = the ground under collider i's centre (the caller's heightAt). Returns the R8 texels, the colliders rasterised and the raster's ms. */
+// LC-89: one kind's cull pass, at MODULE level (allocation-free): the same loop as a closure inside buildMap showed 1.9 MB of heap samples per 600 match
+// frames in framecheck (its doubles boxed - the contact-AO bake had the same problem, see bakeContactAO). PL = the 6 frustum planes as [nx, ny, nz, c] x 6;
+// out = [instances drawn, LOD instances drawn].
+function lcCullKind(list, cxA, cyA, czA, crA, hid, parts, PL, px, py, pz, D2, F0, FK, out) {
+  const n = list.length;
+  let nOut = 0, nLod = 0;
+  for (let i = 0; i < n; i++) {
+    if (list[i].dead) continue;
+    const cx = cxA[i], cy = cyA[i], cz = czA[i], r = crA[i];
+    const dx = cx - px, dy = cy - py, dz = cz - pz, d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > D2) continue;
+    const d = Math.sqrt(d2), pad = -(r + 4 + d * 0.07);
+    if (PL[0] * cx + PL[1] * cy + PL[2] * cz + PL[3] < pad || PL[4] * cx + PL[5] * cy + PL[6] * cz + PL[7] < pad || PL[8] * cx + PL[9] * cy + PL[10] * cz + PL[11] < pad ||
+        PL[12] * cx + PL[13] * cy + PL[14] * cz + PL[15] < pad || PL[16] * cx + PL[17] * cy + PL[18] * cz + PL[19] < pad || PL[20] * cx + PL[21] * cy + PL[22] * cz + PL[23] < pad) continue;
+    const fade = d > F0 ? Math.max(0, 1 - (d - F0) * FK) : 1;
+    const skipLod = hid !== null && hid.has(i);
+    for (let k = 0; k < parts.length; k++) {
+      const pt = parts[k];
+      if (pt.lod && skipLod) continue;
+      const o = (pt.lod ? nLod : nOut) * 16, a = pt.arr, sv = pt.src, si = i * 16;
+      if (fade === 1) for (let j = 0; j < 16; j++) a[o + j] = sv[si + j];
+      else { for (let j = 0; j < 12; j++) a[o + j] = (j & 3) === 3 ? sv[si + j] : sv[si + j] * fade; a[o + 12] = sv[si + 12]; a[o + 13] = sv[si + 13]; a[o + 14] = sv[si + 14]; a[o + 15] = sv[si + 15]; }
+    }
+    nOut++;
+    if (!skipLod) nLod++;
+  }
+  out[0] = nOut; out[1] = nLod;
+}
 function bakeContactAO(colliders, gyc, N, size) {
   const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
   const half = size / 2, inv = N / size, occ = new Float32Array(N * N), rowHas = new Uint8Array(N);
@@ -6101,7 +6129,7 @@ export async function buildMap(W, mapId) {
     draw.name = "props:" + kind; draw.userData.lcCulled = kind;
     g.add(draw);
     ref.visible = false; ref.userData.lcReference = true;
-    K2.parts.push({ draw, src: ref.instanceMatrix.array.slice(0, list.length * 16), lod: !!lodPart, geo: ref.geometry });
+    K2.parts.push({ draw, arr: draw.instanceMatrix.array, src: ref.instanceMatrix.array.slice(0, list.length * 16), lod: !!lodPart, geo: ref.geometry });
     return draw;
   }
   function finishCulls() {
@@ -6123,49 +6151,32 @@ export async function buildMap(W, mapId) {
     }
     if (!culls.length) return;
     const _f = new THREE.Frustum(), _pv = new THREE.Matrix4();
-    let lx = 1e9, ly = 1e9, lz = 1e9, lfx = 0, lfy = 0, lfz = 0, lD = 0, lAsp = 0, lFov = 0;
+    // the last cull's camera (x, y, z, fwd x, y, z, distance, aspect, fov) in a typed array: no boxed doubles in the closure; PL / CO: the planes, the counts
+    const LS = new Float64Array([1e9, 1e9, 1e9, 0, 0, 0, 0, 0, 0]), PL = new Float64Array(24), CO = new Int32Array(2);
     W._lcCullStats = { culls: 0, drawn: 0, total: 0, D: 0 };
     trackUpdater(cullFn = () => {
       const cam = W.camera;
       if (!cam || !cam.matrixWorld) return;
-      const e = cam.matrixWorld.elements, px = e[12], py = e[13], pz = e[14], fx = -e[8], fy = -e[9], fz = -e[10];
+      const e = cam.matrixWorld.elements;
+      if (!cullDirty) {                               // (the every-frame test, as few float ops as possible: under 2 m and 3 degrees nothing re-culls; the distance only
+        const mx = e[12] - LS[0], my = e[13] - LS[1], mz = e[14] - LS[2];          //  changes with height, so it is re-derived on a re-cull only)
+        if (mx * mx + my * my + mz * mz < 4 && e[8] * LS[3] + e[9] * LS[4] + e[10] * LS[5] < -0.99863 && cam.aspect === LS[7] && cam.fov === LS[8]) return;
+      }
+      const px = e[12], py = e[13], pz = e[14], fx = -e[8], fy = -e[9], fz = -e[10];
       const agl = py - Math.max(heightAt0(px, pz), waterY);
       const af = agl <= 40 ? 1 : agl >= 312 ? 2.1 : 1 + (agl - 40) / 247;
       const D = TIER_Q.propD * af;
-      const moved = (px - lx) * (px - lx) + (py - ly) * (py - ly) + (pz - lz) * (pz - lz);
-      if (!cullDirty && moved < 4 && fx * lfx + fy * lfy + fz * lfz > 0.99863 && Math.abs(D - lD) < lD * 0.03 && cam.aspect === lAsp && cam.fov === lFov) return;
-      cullDirty = false; lx = px; ly = py; lz = pz; lfx = fx; lfy = fy; lfz = fz; lD = D; lAsp = cam.aspect; lFov = cam.fov;
+      cullDirty = false; LS[0] = px; LS[1] = py; LS[2] = pz; LS[3] = fx; LS[4] = fy; LS[5] = fz; LS[6] = D; LS[7] = cam.aspect; LS[8] = cam.fov;
       _pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
       _f.setFromProjectionMatrix(_pv);
-      const P = _f.planes, D2 = D * D, F0 = D * 0.88, FK = 1 / (D - F0);
+      for (let k = 0; k < 6; k++) { const pl = _f.planes[k]; PL[k * 4] = pl.normal.x; PL[k * 4 + 1] = pl.normal.y; PL[k * 4 + 2] = pl.normal.z; PL[k * 4 + 3] = pl.constant; }
+      const D2 = D * D, F0 = D * 0.88, FK = 1 / (D - F0);
       let drawnN = 0, totalN = 0;
       for (let q = 0; q < culls.length; q++) {
-        const K2 = culls[q], list = K2.list, n = list.length, hid = K2.hid;
-        const cxA = K2.cx, cyA = K2.cy, czA = K2.cz, crA = K2.cr;
-        const parts = K2.parts;
-        let nOut = 0, nLod = 0;
-        totalN += n;
-        for (let i = 0; i < n; i++) {
-          if (list[i].dead) continue;
-          const cx = cxA[i], cy = cyA[i], cz = czA[i], r = crA[i];
-          const dx = cx - px, dy = cy - py, dz = cz - pz, d2 = dx * dx + dy * dy + dz * dz;
-          if (d2 > D2) continue;
-          const d = Math.sqrt(d2), pad = r + 4 + d * 0.07;
-          let inside = true;
-          for (let k = 0; k < 6; k++) { const pl = P[k], nn = pl.normal; if (nn.x * cx + nn.y * cy + nn.z * cz + pl.constant < -pad) { inside = false; break; } }
-          if (!inside) continue;
-          const fade = d > F0 ? Math.max(0, 1 - (d - F0) * FK) : 1;
-          const skipLod = hid !== null && hid.has(i);
-          for (let k = 0; k < parts.length; k++) {
-            const pt = parts[k];
-            if (pt.lod && skipLod) continue;
-            const o = (pt.lod ? nLod : nOut) * 16, a = pt.draw.instanceMatrix.array, sv = pt.src, si = i * 16;
-            if (fade === 1) for (let j = 0; j < 16; j++) a[o + j] = sv[si + j];
-            else { for (let j = 0; j < 12; j++) a[o + j] = (j & 3) === 3 ? sv[si + j] : sv[si + j] * fade; a[o + 12] = sv[si + 12]; a[o + 13] = sv[si + 13]; a[o + 14] = sv[si + 14]; a[o + 15] = sv[si + 15]; }
-          }
-          nOut++;
-          if (!skipLod) nLod++;
-        }
+        const K2 = culls[q], parts = K2.parts;
+        totalN += K2.list.length;
+        lcCullKind(K2.list, K2.cx, K2.cy, K2.cz, K2.cr, K2.hid, parts, PL, px, py, pz, D2, F0, FK, CO);
+        const nOut = CO[0], nLod = CO[1];
         for (let k = 0; k < parts.length; k++) {
           const pt = parts[k], im = pt.draw.instanceMatrix, c = pt.lod ? nLod : nOut;
           pt.draw.count = c;
