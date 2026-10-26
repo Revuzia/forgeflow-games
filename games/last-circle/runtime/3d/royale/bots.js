@@ -93,20 +93,31 @@ function fallDmgForDrop(h) {
   if (v <= K.FALL_SAFE_V) return 0;
   return (K.FALL_DMG_PER_V || 1) * Math.pow(v - K.FALL_SAFE_V, K.FALL_EXP || K.FALL_DMG_EXP || 1.5);
 }
-function buildFallTable() {
-  LETHAL_H = null;
-  if (!K || !(K.FALL_SAFE_V > 0)) return;
+let WALK_H = null;
+function dropTable(margin) {
   const T = new Float64Array(201);
   for (let hp = 0; hp <= 200; hp++) {
+    const left = hp - margin(hp);
     let lo = 0, hi = 120;
-    if (fallDmgForDrop(hi) < hp - 2) { T[hp] = hi; continue; }
-    for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fallDmgForDrop(m) < hp - 2) lo = m; else hi = m; }
+    if (fallDmgForDrop(hi) < left) { T[hp] = hi; continue; }
+    for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fallDmgForDrop(m) < left) lo = m; else hi = m; }
     T[hp] = lo;
   }
-  LETHAL_H = T;
+  return T;
 }
-/** The highest drop this actor survives with >= 2 hp (Infinity when the sim has no fall damage). */
+function buildFallTable() {
+  LETHAL_H = null; WALK_H = null;
+  if (!K || !(K.FALL_SAFE_V > 0)) return;
+  LETHAL_H = dropTable(() => 2);
+  // walking off an edge keeps a real margin: the guard samples the ground ahead at 0.8 m steps 4 times a second, a jump or a strafe adds
+  // height and speed, and a wounded bot dies of what the table calls survivable (stub duo 10-26, Isla seed 2: a 2-attacker fight at 738 s,
+  // a bot took 6 then 11.4 hp of falls and died of the second)
+  WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));
+}
+/** The highest drop this actor survives with >= 2 hp (Infinity when the sim has no fall damage): the canopy rescue's rule. */
 function lethalDrop(a) { return LETHAL_H ? LETHAL_H[Math.max(0, Math.min(200, Math.round(a.hp || 0)))] : Infinity; }
+/** The highest drop a bot walks off on purpose (a quarter of its hp, at least 6, left over). */
+function walkDrop(a) { return WALK_H ? WALK_H[Math.max(0, Math.min(200, Math.round(a.hp || 0)))] : Infinity; }
 // (C-DBNO) who revives whom: target id -> reviver id (bots' own channel and the humans' via the events), and the hook into player.js
 const reviving = new Map();
 const REVIVE_R = 1.6;             // m: a bot channels from this close (the contract's reach is 2 m)
@@ -3350,10 +3361,10 @@ function deckExitPoint(W, a, preferYaw) {
       const sup = supportAt(W, x, z, h);
       if (sup < h - DECK_DROP) {
         if (W.map.heightAt(x + dx * 1.5, z + dz * 1.5) < wy + 0.4) break;      // the ground under the edge is water
-        // (P23, C-FALL) with fall damage a drop is not free: never an edge that kills (lethalDrop: < 2 hp left), and a lower edge is preferred
+        // (P23, C-FALL) with fall damage a drop is not free: never an edge that kills (walkDrop: a quarter of the hp left), and a lower edge is preferred
         // (+0.5 a hit point). Without fall damage in the sim: Infinity / 0, the old choice.
         const drop = h - sup;
-        if (drop > lethalDrop(a)) break;
+        if (drop > walkDrop(a)) break;
         const cost = s + Math.abs(off) * 6 + fallDmgForDrop(drop) * 0.5;
         if (cost < best) { best = cost; _dkx.x = x + dx * 2.0; _dkx.z = z + dz * 2.0; _dkx.d = s; }
         break;
@@ -4546,7 +4557,7 @@ function edgeGuard(W, b) {
   if (W.t < bb.edgeBanUntil && wx * bb.edgeBanX + wz * bb.edgeBanZ > 0.7) { inp.mz = 0; inp.mx = 0; inp.sprint = false; return; }
   if (W.t < bb.edgeT) return;
   bb.edgeT = W.t + 0.25;
-  const lim = lethalDrop(a);
+  const lim = walkDrop(a);
   if (!(lim < 1e6)) return;
   GA[0] = a.pos.x; GA[1] = a.pos.z; groundA(W, GA, 0);
   const elevated = a.pos.y - GA[2] > 1.0;
