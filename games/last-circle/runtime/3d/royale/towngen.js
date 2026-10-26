@@ -2644,6 +2644,9 @@ export function streetProps(L, seed) {
         taken.push([s.x, s.z, "container", 3.2]);
         out.push({ type: "props/shipping-container", x: s.x, z: s.z, rot: s.rot + (flip ? 2 : 0), kind: "container", tint: liv });
       }
+    } else if (p.ident === "woodyard") {
+      /* (P23 / LC-29) a woodyard: maps.js themedLots dresses it (log piles, a chopping stump, a sawhorse) - no dumpster / crates: those kit types were new to a lodge town's
+         district and cost the Logging Camp view one instanced draw per type and palette (+6 objects, measured) */
     } else if (city && L.kind === "yard" && w >= 14 && d >= 12) {
       const alongX = w >= d, rot = alongX ? 0 : 1;                       // a container yard: two containers (6 x 2.9 m) end to end along the lot's long side
       for (const off of [-3.4, 3.4]) add("props/shipping-container", alongX ? cx + off : cx, alongX ? cz : cz + off, rot, "container", 3.2);
