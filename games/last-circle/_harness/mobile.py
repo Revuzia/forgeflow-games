@@ -300,7 +300,16 @@ def run_device(v, args, dev):
             T.tap(*MK.center(sl["minimap"]))
             s.step_frames(10, 1 / 60, render=False)
             s1 = rd()
-            v.check(P + "a tap on the minimap opens the big map", bool(s1["bigmap"]) and not s0["bigmap"], {"bigMapVisible": [s0["bigmap"], s1["bigmap"]], "minimap": [round(x) for x in sl["minimap"]]})
+            # (Wave 8 fix round, lane K3) what the HUD made of the tap (hud.js readback touch.lastTap: kind, moved px, heldMs, acted): the HUD acts on a tap only
+            # when it is held <= TAP_MS (1200 ms of REAL time) - a box too loaded to deliver touchend within that is could-not-judge, never a verdict.
+            # 2026-10-26 the se row failed 3 of 6 runs on a box with ~100 other automated Chromes and passed 3 of 6, with and without the USE spot change.
+            tap = s.safe_js("() => { const f = window.__LC__ && window.__LC__.feel ? window.__LC__.feel() : null; return f && f.hud && f.hud.touch ? { taps: f.hud.touch.taps, last: f.hud.touch.lastTap } : null; }")
+            det = {"bigMapVisible": [s0["bigmap"], s1["bigmap"]], "minimap": [round(x) for x in sl["minimap"]], "hudTap": tap}
+            last = (tap or {}).get("last") or {}
+            if not (bool(s1["bigmap"]) and not s0["bigmap"]) and last.get("kind") == "map" and not last.get("acted") and (last.get("heldMs") or 0) > 1200:
+                v.cnj(P + "a tap on the minimap opens the big map", "the box held the finger %s ms (the HUD's tap limit is 1200 ms of real time): environment %s" % (last.get("heldMs"), det))
+            else:
+                v.check(P + "a tap on the minimap opens the big map", bool(s1["bigmap"]) and not s0["bigmap"], det)
             if s1["bigmap"]:
                 T.tap(*MK.center(sl["minimap"]))
         else:
