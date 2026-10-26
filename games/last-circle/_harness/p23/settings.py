@@ -36,7 +36,10 @@ C = L.C
 
 PLANTS = {
     "ultra-noop": "const sg = W.setGfx; W.setGfx = function (k, v) { if (k === 'tier' && v === 'ultra') v = 'high'; return sg.call(this, k, v); }",
-    "scale-center": "const st = document.createElement('style'); st.textContent = '[data-lc] { transform-origin: 50% 50% !important; }'; document.head.appendChild(st)",
+    # the HUD scale grows each anchored panel from its CENTRE (whatever the build's own scaling does): applied while hudScale > 1
+    "scale-center": "const css = '[data-lc=minimap],[data-lc=bars],[data-lc=slotcol],[data-lc=meta],[data-lc=compass],[data-lc=stormrow] { transform: scale(1.3) !important; transform-origin: 50% 50% !important; }';"
+                    " W.kernel._updaters.push(() => { const on = !!(W.settings && W.settings.hudScale > 1.01); let st = document.getElementById('p23-scale-center');"
+                    " if (on && !st) { st = document.createElement('style'); st.id = 'p23-scale-center'; st.textContent = css; document.head.appendChild(st); } else if (!on && st) st.remove(); })",
 }
 HUDMOD_JS = r"""async () => { if (window.__HUDMOD__) return true; const sc = [...document.scripts].find((x) => /ffg_boot3d\.js/.test(x.src)); if (!sc) return false;
   window.__HUDMOD__ = await import(new URL('royale/hud.js' + new URL(sc.src).search, sc.src).href); return true; }"""
