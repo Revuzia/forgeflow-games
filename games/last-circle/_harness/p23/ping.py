@@ -32,7 +32,9 @@ import p23lib as L  # noqa: E402
 C = L.C
 
 PLANTS = {
-    "no-expiry": "W.kernel._updaters.push(() => { const P = W._hudPings; if (P) for (const q of P.list) q.born = W.t; })",
+    # every ping's birth READS as now (a getter, so the HUD's own frame order cannot age it first; the old per-frame
+    # re-birth ran after stepPings in the same frame and the 31 s fast-forward still expired the ping - did not bite)
+    "no-expiry": "W.kernel._updaters.push(() => { const P = W._hudPings; if (P) for (const q of P.list) if (!q.__pl) { Object.defineProperty(q, 'born', { configurable: true, get: () => W.t, set: () => {} }); q.__pl = 1; } })",
     "flood": "Object.defineProperty(W._hudPings, 'lastLocal', { configurable: true, get: () => -1e9, set: () => {} })",
 }
 
