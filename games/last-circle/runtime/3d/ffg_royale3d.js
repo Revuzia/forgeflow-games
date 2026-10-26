@@ -722,6 +722,20 @@ register3d("royale", async function (kernel, content) {
   // timer the live frame interval stands in. Nothing else changes mid-match: loot / weapon cull, the map build and
   // the low route stay exactly as the match started.
   const LADDER_WIN = 30, LADDER_DOWN = 22, LADDER_UP = 14, LADDER_UP_HOLD = 4000, LADDER_GAP = 2000, LADDER_SETTLE = 6;
+  // C-GFX CPU cut: the window's p75 is re-read every LADDER_EVAL new samples (not every frame) into one reusable typed
+  // array - the old per-frame ring.slice + slice + comparator sort allocated ~3 arrays a frame for every real player.
+  // 6 samples = 0.1 s at 60 fps against decisions spaced LADDER_GAP 2 s apart: the ladder decides exactly as before.
+  const LADDER_EVAL = 6;
+  const _ladBuf = new Float64Array(LADDER_WIN);
+  let _ladLastEval = -1;
+  function ladderP75(ring) {
+    const n = Math.min(LADDER_WIN, ring.length);
+    if (!n) return null;
+    const a = n === LADDER_WIN ? _ladBuf : _ladBuf.subarray(0, n);
+    for (let i = 0, o = ring.length - n; i < n; i++) a[i] = ring[o + i];
+    a.sort();                                   // typed-array sort: numeric, in place, no comparator closure
+    return a[Math.min(n - 1, Math.max(0, Math.round((n - 1) * 0.75)))];
+  }
   function ladderActive(tier, touch) {
     return LADDER_ON && !touch && tier !== "low" && gfxPrefs().autoQuality !== false;
   }
@@ -780,8 +794,10 @@ register3d("royale", async function (kernel, content) {
     const count = useGpu ? gt.count : (kernel.rawCount || 0);
     const fresh = count - (useGpu ? LAD.settleUntil : LAD.rawSettle);
     if (fresh < LADDER_WIN) return;
+    if (count === _ladLastEval || (_ladLastEval >= 0 && count > _ladLastEval && count - _ladLastEval < LADDER_EVAL)) return;
+    _ladLastEval = count;
     const ring = useGpu ? gt.ms : kernel.rawMs;
-    const p75 = pctl(ring.slice(-Math.min(LADDER_WIN, ring.length)), 0.75);
+    const p75 = ladderP75(ring);
     if (p75 == null) return;
     LAD.p75 = +p75.toFixed(2); LAD.src = useGpu ? "gpu" : "raw";
     const now = performance.now();
