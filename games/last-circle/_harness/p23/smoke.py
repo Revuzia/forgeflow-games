@@ -92,6 +92,11 @@ def main():
                  " b.inventory.slots[1] = { kind: 'weapon', id: 'ar', rarity: 2, mag: 30 }; b.inventory.ammo.medium = 999; W.equipSlot(b, 1); }", [e, ex, ez])
             L.pin_actor(s, e, [ex, ey, ez])
             L.guard_ids(s, [e])
+            # SETUP ONLY: the bot faces the human and counts as PROVOKED by him every frame (the human "just shot it"), so it answers
+            # whatever its notice reach / grace / cone says - the sight rule left to judge is the one under test (smoke, then walls)
+            s.js("""([id, me]) => { const W = window.__LC__.W, b = W.actorById.get(id), p = W.player; window.__P23PROV__ = () => { const a = W.actorById.get(id);
+                if (!a || !a.alive) return; a.lastAttacker = me; a.lastDamageT = W.t; a.yaw = Math.atan2(-(p.pos.x - a.pos.x), -(p.pos.z - a.pos.z)); };
+                W.kernel._updaters.push(window.__P23PROV__); }""", [e, me])
             s.js("([me, e]) => { const W = window.__LC__.W; window.__P23K__ = { hits: [], shots: 0 }; W.events.on('actorHurt', (a, d) => { if (a && a.id === me && d && d.attackerId === e) window.__P23K__.hits.push(+W.t.toFixed(2)); });"
                  " W.events.on('shotFired', (a) => { if (a && a.id === e) window.__P23K__.shots++; }); }", [me, e])
             # positive control: in the open the bot finds and shoots the human within 6 s
@@ -114,9 +119,18 @@ def main():
             s.step_frames(30, 1 / 60)
             s.js("() => { const p = window.__LC__.W.player; p.input.yaw = 0; p.input.pitch = 0.25; p.recoilPitch = 0; }")
             s.step_frames(10, 1 / 60)
-            s.page.mouse.down(button="left")
-            s.step_frames(1, 1 / 60)
-            s.page.mouse.up(button="left")
+            # the human throw reads the click EDGE for 420 ms of wall time (weapons.js stepThrow: W._fireEdge): on a loaded box the next stepped
+            # frame can come later than that, so a real click that threw nothing (the slot still holds 3) is clicked again, up to 4 times
+            clicks = 0
+            for _ in range(4):
+                clicks += 1
+                s.page.mouse.down(button="left")
+                s.step_frames(1, 1 / 60)
+                s.page.mouse.up(button="left")
+                if s.js("() => { const sl = window.__LC__.W.player.inventory.slots[3]; return !sl || sl.count < 3; }"):
+                    break
+                s.js("() => { const p = window.__LC__.W.player; p.input.yaw = 0; p.input.pitch = 0.25; p.recoilPitch = 0; }")
+            v.data["throwClicks"] = clicks
             prog0 = None
             sm = []
             for _ in range(240):
@@ -126,10 +140,12 @@ def main():
                     prog0 = L.programs(s)
                     break
             v.data["smokes"] = sm
+            v.data["throwState"] = s.safe_js("() => { const W = window.__LC__.W, p = W.player, w = p.weapon; return { weapon: w && w.id, wstate: w && w.state, slots: p.inventory.slots.map((x) => x && (x.id + ':' + (x.count != null ? x.count : ''))),"
+                                             " active: p.inventory.active, projectiles: (W.projectiles || []).length, t: W.t }; }", default=None)
             q = sm[0] if sm else None
             ahead = None if not q else ((q["x"] - iso["x"]) ** 2 + (q["z"] - iso["z"]) ** 2) ** 0.5
             v.check("spawn (a real throw: one W.smokes entry {x,y,z,r,t0,t1} within 4 s, 6-35 m ahead)", len(sm) == 1 and q["r"] > 0 and q["t1"] > q["t0"] and 6 <= ahead <= 35,
-                    {"smokes": sm, "aheadM": ahead and round(ahead, 1)}, "1 entry, 6-35 m")
+                    {"smokes": sm, "aheadM": ahead and round(ahead, 1), "throw": v.data.get("throwState")}, "1 entry, 6-35 m")
             if not q:
                 L.errors_row(v, s)
                 return

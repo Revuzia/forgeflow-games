@@ -53,7 +53,7 @@ GFX_JS = r"""() => { const W = window.__LC__.W, k = W.kernel, r = k.renderer; co
            shadow: sOn ? sun.shadow.mapSize.x : 0, shadowOn: sOn, shadowExt: sOn ? Math.abs(sun.shadow.camera.right || 0) : 0,
            aniso: W._texAniso != null ? W._texAniso : null, lootCull: W.lootCull != null ? W.lootCull : null, wpnLOD: W.wpnLOD != null ? W.wpnLOD : null,
            far: W.camera ? W.camera.far : null, gfx: W._gfx ? JSON.parse(JSON.stringify(W._gfx, (kk, vv) => typeof vv === 'object' && vv && kk !== '' && Object.keys(vv).length > 20 ? undefined : vv)) : null }; }"""
-MEAN_JS = r"""() => { const W = window.__LC__.W, k = W.kernel; window.__LC__.stepFrames(2, 1 / 60, true); const gl = k.renderer.getContext(); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+MEAN_JS = r"""() => { const W = window.__LC__.W, k = W.kernel; window.__LC__.stepFrames(2, 1e-5, true); const gl = k.renderer.getContext(); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
   const px = new Uint8Array(4 * 64 * 64); const out = []; for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { gl.readPixels(Math.floor((i + 0.5) * w / 8) - 4, Math.floor((j + 0.5) * h / 8) - 4, 8, 8, gl.RGBA, gl.UNSIGNED_BYTE, px);
     let r = 0, g = 0, b = 0; for (let q = 0; q < 64; q++) { r += px[4 * q]; g += px[4 * q + 1]; b += px[4 * q + 2]; } out.push(r / 64, g / 64, b / 64); }
   return out; }"""
@@ -267,7 +267,7 @@ def main():
                     bool(a1["a"]) and scaled is not None and abs(scaled - 1.3) < 0.01 and not bad and len(a1["a"]) - len(empty) >= 5,
                     {"set": scaled, "panels": len(a1["a"]), "judged": len(a1["a"]) - len(empty), "empty": empty, "bad": bad}, "1.3, >= 5 judged, 0 bad")
             s.js(HUDMOD_JS)
-            rb = s.safe_js("() => { const H = window.__HUDMOD__; return H && H.readback ? H.readback(window.__LC__.W) : null; }", default=None) or {}
+            rb = s.safe_js("() => { const C = window.__LC__; const f = C.feel ? C.feel() : null; if (f && f.hud) return f.hud; const H = window.__HUDMOD__; return H && H.readback ? H.readback(C.W) : null; }", default=None) or {}
             mm = rb.get("minimap")
             v.check("minimap (local, <= 3 m per CSS px)", bool(mm) and mm["mpp"] <= 3.0 and mm["local"], {"minimap": mm}, "<= 3 m/px, local")
             # hints: a standard match, then a second one
@@ -281,7 +281,7 @@ def main():
                 s.js("() => { const C = window.__LC__, W = C.W; let n = 0; while (W.t < 50 && n++ < 120) C.fastForward(1, 1 / 30); }")
                 s.thaw_loop()
                 s.sleep(25.0)
-                rb = s.safe_js("() => { const H = window.__HUDMOD__; return H && H.readback ? H.readback(window.__LC__.W) : null; }", default=None) or {}
+                rb = s.safe_js("() => { const C = window.__LC__; const f = C.feel ? C.feel() : null; if (f && f.hud) return f.hud; const H = window.__HUDMOD__; return H && H.readback ? H.readback(C.W) : null; }", default=None) or {}
                 shown.append(list(((rb.get("hints") or {}).get("shown")) or []))
             new = shown[1][len(shown[0]):] if shown[1][:len(shown[0])] == shown[0] else shown[1]      # the log may run across matches
             dup = [x for x in shown[0] if shown[0].count(x) > 1] + [x for x in new if new.count(x) > 1]
