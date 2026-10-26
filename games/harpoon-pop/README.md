@@ -15,7 +15,7 @@ One `index.html`, no build step, no asset files. Open it directly or from any st
 ## What's in it
 - Classic rules: fixed bounce height per bubble size, split on hit, one wire on screen, touch = lose a life, per-stage timer, stage restarts on death.
 - Scoring: combo multiplier up to ×8, **APEX** (hit at the top of the arc), **JUGGLE** (hit a fresh split), **CLOSE** (near-miss triggers bullet-time), **DARING** (grab a power-up under a bubble), **BLOCKED** (wire stops a stinger).
-- Power-ups: double wire (twice = triple), power wire (sticks to the ceiling), rapid fire, slow-mo, force field, dynamite, 1UP.
+- Power-ups: double wire (twice = triple), power wire (sticks to the ceiling), rapid fire, slow-mo, force field, 1UP.
 - Bomb bubbles cause chain reactions, glass shelves break, and from stage 3 a Stinger drone telegraphs (red glow and shake) and then lobs stingers at you.
 - 12 hand-built world-tour stages, then generated stages. Arcade CONTINUE countdown. Top-5 local best runs.
 - Juice: hitstop, trauma screen shake, bloom, chromatic aberration, burst shells, dynamic pop lights, GPU particles, squash and stretch, fireworks, and music that is muffled during bullet-time.
