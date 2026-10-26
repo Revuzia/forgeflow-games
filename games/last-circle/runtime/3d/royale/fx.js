@@ -118,9 +118,12 @@ const NS = STYLE_TAB.length;
 // are the P1-E numbers bit-for-bit (every P1-E gate measured them); low trims the counts, ultra spends more.
 //   far / lod: bullet-impact distances (nothing beyond far; only the puff beyond lod)
 //   smoke / debris / skirt: explosion column puffs, debris chunks, ground dust puffs
-//   cloud: puffs per smoke-grenade cloud; motes: revive / DBNO light motes multiplier
+//   cloud: puffs per smoke-grenade cloud - NEVER fewer than medium's 12: a cloud must hide what is behind it on every
+//   tier (the sim's sight cut is the same for everyone; a thinner low-tier cloud would let low-tier players see
+//   through smoke - 8 puffs let up to 19 % through); high / ultra add puffs for a fuller silhouette;
+//   motes: revive / DBNO light motes multiplier
 const FXQ = {
-  low:    { far: 120, lod: 40,  smoke: 12, debris: 8,  skirt: 4,  cloud: 8,  motes: 0.5 },
+  low:    { far: 120, lod: 40,  smoke: 12, debris: 8,  skirt: 4,  cloud: 12, motes: 0.5 },
   medium: { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 12, motes: 1 },
   high:   { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 18, motes: 1 },
   ultra:  { far: 240, lod: 110, smoke: 26, debris: 18, skirt: 10, cloud: 26, motes: 1.5 },
@@ -941,8 +944,8 @@ void main() {
     // thickened towards the core: a dozen of these must hide what is behind the cloud's middle, while the rim stays
     // wispy; the edge rounded off; a soft contact where a puff meets the ground; never between the lens and you
     float t = texture2D( map2, vUvS ).a * ( 1.0 - smoothstep( 0.61, 1.0, dot( vQ, vQ ) ) );
-    dens = min( t * 1.55, 1.0 );
-    a = dens * vP.x * smoothstep( 0.0, 1.1, vP.y ) * smoothstep( uNear.x, uNear.y, vP.z );
+    dens = min( t * 1.9, 1.0 );
+    a = dens * vP.x * smoothstep( 0.0, 0.7, vP.y ) * smoothstep( uNear.x, uNear.y, vP.z );
   }
   if ( a < 0.004 ) discard;
   gl_FragColor = vec4( vCol * ( 1.0 - 0.18 * dens ), 1.0 );   // thin edges let a little more light through
@@ -1015,15 +1018,25 @@ function smokeBind(W, e, s) {
     const o = i * SP;
     const h = (k) => hash01(e.seed + i * 131, k);
     // a squashed sphere: denser low and in the middle (the canister vents at the ground), the first puffs nearest the core
-    const u = h(1), th = h(2) * 6.2832, ph = Math.acos(1 - 2 * h(3));
+    // directions from the R2 low-discrepancy sequence (offset by the cloud's seed): ANY prefix of the table - each tier
+    // draws its first 8 / 12 / 18 / 26 - spreads evenly over the sphere, so no seed leaves a see-through gap in the shell
+    // (pure random directions let 4-6 % of a box behind the cloud show through on some throws)
+    const u = h(1);
+    const r2a = (h(2) + i * 0.7548776662) % 1, r2b = (h(3) + i * 0.5698402910) % 1;
+    const th = r2a * 6.2832, ph = Math.acos(1 - 2 * r2b);
     // every 4th puff is a CORE puff (whatever the tier's count): near the middle and smaller - it only thickens the
     // middle, which the shell in front already covers, so its fill is kept down (the iGPU's smoke cost is its fill)
     const core = (i & 3) === 0;
-    const rr = (0.12 + 0.56 * Math.cbrt(u)) * (core ? 0.5 : 1);
-    let ox = Math.sin(ph) * Math.cos(th) * rr, oz = Math.sin(ph) * Math.sin(th) * rr, oy = Math.cos(ph) * rr * 0.62 - 0.08;
+    const rr = core ? (0.06 + 0.28 * Math.cbrt(u)) : (0.36 + 0.32 * Math.sqrt(u));
+    let ox = Math.sin(ph) * Math.cos(th) * rr, oz = Math.sin(ph) * Math.sin(th) * rr, oy = Math.cos(ph) * rr * 0.74 - 0.05;   // a dome, not a pancake: at 0.62 the lumpy top dipped below a standing box's top on some throws
+    // puff 0 is the HEART: dead centre, full size, near opaque. A camera-facing puff at the middle covers every sight line
+    // through the cloud's middle from ANY side and height, whatever the seed did with the rest (without it 1 throw in ~7
+    // left a hole a box 7 m behind showed through: transmittance up to 0.36)
+    const heart = i === 0;
+    if (heart) { ox = 0; oz = 0; oy = 0.14; }   // a little above the middle: a cloud's mass sits high, and a sight line from above (a hill, a roof) to a man behind crosses the cloud above its centre
     e.st[o] = ox; e.st[o + 1] = oy; e.st[o + 2] = oz;
-    e.st[o + 3] = (0.78 + 0.34 * h(4)) * (core ? 0.72 : 1);   // quad edge / R (the puff fills its quad)
-    e.st[o + 4] = 0.62 + 0.26 * h(5);                 // alpha
+    e.st[o + 3] = heart ? 1.15 : (0.78 + 0.34 * h(4)) * (core ? 0.72 : 1);   // quad edge / R (the puff fills its quad)
+    e.st[o + 4] = heart ? 0.96 : core ? 0.86 + 0.10 * h(5) : 0.62 + 0.26 * h(5);   // alpha (the core is the line of sight through the middle from any side: near opaque, free in fill)
     e.st[o + 5] = h(6) * 6.2832;                      // spin
     e.st[o + 6] = (h(7) - 0.5) * 0.10;                // spin rate (rad/s)
     e.st[o + 7] = (h(8) - 0.5) * 0.06;                // swirl round the cloud's axis (rad/s)
