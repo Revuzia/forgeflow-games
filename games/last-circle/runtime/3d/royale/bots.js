@@ -894,8 +894,8 @@ function think(W, b) {
     else if (hpItem && a.hp < 90) s.HEAL = Math.max(s.HEAL, 62);
   }
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
-  // (P23, LC-20) ...and goes and gets a shield when it has none: calm, upgraded, bar under 75, no shield item carried, one seen within 40 m.
-  // pickLoot ranks shields first while bb.wantShield is set.
+  // (P23, LC-20) ...and goes and gets a shield when it has none: calm, upgraded, bar under 75, no shield item carried, a shield it could take
+  // (or make room for: makeRoom) or an unopened chest within SHIELD_SEEK_M. pickLoot ranks shields first while bb.wantShield is set.
   bb.wantShield = calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= 50);
   if (bb.wantShield && W.t >= bb.shieldScanT) {
     bb.shieldScanT = W.t + 2;
