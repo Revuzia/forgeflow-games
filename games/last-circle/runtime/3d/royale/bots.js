@@ -1505,7 +1505,10 @@ function act(W, b, dt) {
   // Being shot outranks whatever the brain had planned. This may flip b.state to
   // ENGAGE, so it runs BEFORE the dispatch below and the fight starts this frame.
   // (P23) not mid-revive: a bot channelling a revive answers fire only when it breaks the channel off (actRevive)
-  const answering = b.state === "REVIVE" && bb.reviveStarted ? false : underFire(W, b, dt);
+  // (P23, LC-14) ...nor mid-throw: underFire turns the yaw to the shooter every frame of his burst, and against throwRun's pull to the throw heading
+  // the yaw settled outside the 0.05 rad release window - K24, Deepwood seed 63: 10 planned frags timed out in the hand, 0 thrown. The throw is
+  // 0.4-1 s; it counts as the answer (no suppression reflex either).
+  const answering = b.state === "REVIVE" && bb.reviveStarted ? false : bb.nadeS ? true : underFire(W, b, dt);
 
   // (P23, LC-14 / C-SMOKE) a throw in progress owns the aim, the legs and the trigger: the state's act is skipped for its 0.4-1 s. It used to
   // run first and steer the yaw to the target while throwRun steered it to the throw heading, two pulls whose rest point could sit outside
@@ -4449,7 +4452,13 @@ function throwRun(W, b, dt) {
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.jump = false;
   steerYaw(a, bb.nadeYaw, dt, 14);
   inp.pitch = Math.max(-1.3, Math.min(1.3, bb.nadePitch));
-  const dyaw = Math.abs(((inp.yaw - bb.nadeYaw) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+  // (the yaw is unbounded - steerYaw wraps the DIFFERENCE, not the angle - so it settles on the heading + 2 pi k; the old one-shot `% 2 pi` gave
+  // 2 pi for a yaw a turn or more below the heading (JS % keeps the sign) and the frag never left the hand: g10, Deepwood seed 4, 11 of 11
+  // timed-out throws read 6.28 rad here)
+  let dyaw = inp.yaw - bb.nadeYaw;
+  while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+  while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+  dyaw = Math.abs(dyaw);
   if (bb.nadeS === 1 && w.cd <= 0 && dyaw < 0.05) { inp.fire = true; bb.nadeS = 2; bb.nadeT = W.t; if (bb.nadeKind === 1) nav.st.frags++; else nav.st.smokes++; return; }   // released: weapons.js throws this tick
   if (bb.nadeS === 2) endThrow(W, b);
 }
