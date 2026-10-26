@@ -9,11 +9,16 @@ sim's verdict = whether the dummy took the round. Plan gate: "no body hit more t
     python _harness/p23/hitbox.py --disk --plant thin           # every measured hit radius x 0.4 - MUST FAIL (coverage row)
     python _harness/p23/hitbox.py --lanes sim                   # validation: lane sim's work served over the base
 
-PRACTICE (Savanna seed 4242), loop frozen, frames stepped; the pistol's cone set to ~0 and its cooldown cleared each frame (SETUP: every shot is a
-first shot along the aim). The dummy is held at 16 m; four views (front, right side, back, 45 deg) x a raster of target points at ~3 cm over
-its box (+ a 0.25 m margin) on the dummy's plane, reached through an aim map calibrated from real rounds (the third-person round flies eye ->
-camera-ray world point, so camera angles alone miss the body), one round at a time. Truth per shot line: does it cross the drawn mesh; and does any of 8 lines offset
-0.06 m around it (outside-by-more-than-6-cm test), or do all 8 (deep inside). Rows:
+PRACTICE (Savanna seed 4242), loop frozen, frames stepped. The dummy is held 16 m from the player; four views (front, right side, back, 45 deg)
+x a raster of PARALLEL shot lines at ~3 cm over its box (+ a 0.25 m margin), each line starting 3 m in front of the dummy and flying straight at
+it. Each shot is a REAL pistol round: the player fires (cooldown cleared, one fire edge) and the round weapons.js launches is re-aimed in its own
+'tracer' event (launch time, before its first step) onto the line - position, velocity (same speed), no drop - so the game's projectile step and
+hit test resolve exactly that line (black-box: the sim's verdict = whether the dummy took the round). Truth per line: the dummy's skinned meshes
+skinned on the CPU in the pose DRAWN at that shot (re-skinned whenever a bone moved > 1 mm). Earlier versions aimed the player instead (a camera-
+angle raster, then a calibrated aim map): a third-person round flies eye -> crosshair world point and the camera follows with lag, so lines
+scattered by 0.09-5.1 m from their targets (hitbox_all2 / pl_hitbox_fat, 10-26) and the static pose snapshot drifted under thousands of idle
+frames - the verdicts were noise. Each line: does it cross the drawn mesh; does any of 8 lines offset 0.06 m around it, or do all 8 (deep inside).
+Rows:
   dummy        the range dummy draws skinned meshes (the truth needs a body)
   outside [v]  sim hits whose line and all 8 offset lines miss the mesh = 0 (no body hit > 0.06 m outside the silhouette)
   coverage [v] lines deep inside the silhouette (all 8 offsets cross it): >= 95 % are sim hits (a hitbox that hits nothing cannot pass)
@@ -37,73 +42,56 @@ PLANTS = {
 
 SETUP_JS = r"""([dist]) => { const C = window.__LC__, W = C.W, K = W.SIM, T = W.THREE, p = W.player, d = W.rangeDummies && W.rangeDummies[0]; if (!d || !d.obj) return { err: 'no dummy' };
   K.WEAPONS.pistol.spreadDeg = 1e-5;
-  const Q = window.__P23H__ = { d, shots: [] };
-  // the ROUND itself (the projectile record weapons.js launches: ownerId, origin, velocity), not the cosmetic dash (no ownerId)
-  // (q.x, q.y, q.z) is where the round STARTS (eye + 0.6 m along its direction, 5 cm low); q.origin is the eye, off that line: read the start
-  W.events.on('tracer', (q) => { if (q && q.ownerId === p.id && Q.on && q.vx != null) Q.cur = [q.x, q.y, q.z, q.vx, q.vy, q.vz]; });
-  W.events.on('shotFired', (a, wid, m, dir) => { if (a === p && Q.on) Q.m = [m.x, m.y, m.z, dir.x, dir.y, dir.z]; });
+  const Q = window.__P23H__ = { d, line: null, got: 0 };
+  // the ROUND itself (the pooled projectile weapons.js launches: ownerId, position, velocity; 'tracer' fires inside launchRound, before the round's
+  // first step): re-aimed onto the wanted line, same speed, no drop. The cosmetic dash (no ownerId) is left alone.
+  W.events.on('tracer', (q) => { const L = Q.line; if (!L || !q || q.ownerId !== p.id || q.vx == null) return;
+    const sp = Math.hypot(q.vx, q.vy, q.vz) || 300; q.x = L[0]; q.y = L[1]; q.z = L[2]; q.vx = L[3] * sp; q.vy = L[4] * sp; q.vz = L[5] * sp; q.gravity = 0;
+    if (q.origin) { q.origin.x = L[0]; q.origin.y = L[1]; q.origin.z = L[2]; } Q.line = null; Q.got++; });
   return { ok: true }; }"""
-# place the dummy at `dist` m in front of the player facing `face` (rad, relative), pre-skin its meshes into one static triangle soup
+# place the dummy at `dist` m in front of the player facing `face` (rad), and the skinning helper (the pose drawn NOW -> one static triangle soup)
 POSE_JS = r"""([dist, face]) => { const C = window.__LC__, W = C.W, T = W.THREE, p = W.player, Q = window.__P23H__, d = Q.d;
   const x = p.pos.x, z = p.pos.z - dist; d.pos.set(x, W.map.heightAt(x, z), z); d.vel.set(0, 0, 0); d.yaw = face; if (d.obj) { d.obj.position.copy(d.pos); d.obj.rotation.y = face; }
-  d.hp = 1e6; d.shield = 0; d.alive = true; C.stepFrames(3, 1 / 60, true); d.obj.updateMatrixWorld(true);
-  const pos = [], v = new T.Vector3(); let skinned = 0;
-  d.obj.traverse((o) => { if (!(o.isMesh && o.visible !== false && o.geometry && o.geometry.attributes.position)) return; if (o.isSkinnedMesh) skinned++; else return;
-    const g = o.geometry, P = g.attributes.position, idx = g.index; const n = idx ? idx.count : P.count;
-    for (let i = 0; i < n; i++) { const k = idx ? idx.getX(i) : i; v.fromBufferAttribute(P, k); if (o.isSkinnedMesh) o.applyBoneTransform(k, v); v.applyMatrix4(o.matrixWorld); pos.push(v.x, v.y, v.z); } });
-  const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); geo.computeBoundingBox(); geo.computeBoundingSphere();
-  Q.mesh = new T.Mesh(geo, new T.MeshBasicMaterial({ side: T.DoubleSide })); Q.mesh.updateMatrixWorld(true); Q.ray = new T.Raycaster();
-  const bb = geo.boundingBox; return { skinned, tris: pos.length / 9, box: [bb.min.x, bb.min.y, bb.min.z, bb.max.x, bb.max.y, bb.max.z].map((x) => +x.toFixed(3)) }; }"""
-# raster: shot LINES swept over the dummy. A third-person round leaves the EYE for the point the CAMERA ray meets the world (actors ignored,
-# player.js aimRayDist), so camera angles do not say where a round crosses the dummy: the map (yaw, pitch) -> the round's crossing of the dummy's
-# plane (z = the box centre) is CALIBRATED from real rounds (3 per region, twice: a Newton step), and the targets on that plane at `step` m are
-# reached through it. Each shot: the new aim settles 3 rendered frames (the camera follows), one fire edge, the round flies to resolution.
+  d.hp = 1e6; d.shield = 0; d.alive = true; C.stepFrames(3, 1 / 60, true);
+  Q.skin = () => { d.obj.updateMatrixWorld(true); const v = new T.Vector3(); let skinned = 0; const pos = Q._pos || (Q._pos = []); pos.length = 0;
+    d.obj.traverse((o) => { if (!(o.isMesh && o.visible !== false && o.geometry && o.geometry.attributes.position) || !o.isSkinnedMesh) return; skinned++;
+      const g = o.geometry, P = g.attributes.position, idx = g.index; const n = idx ? idx.count : P.count;
+      for (let i = 0; i < n; i++) { const k = idx ? idx.getX(i) : i; v.fromBufferAttribute(P, k); o.applyBoneTransform(k, v); v.applyMatrix4(o.matrixWorld); pos.push(v.x, v.y, v.z); } });
+    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); geo.computeBoundingBox(); geo.computeBoundingSphere();
+    if (Q.mesh) Q.mesh.geometry.dispose(); Q.mesh = new T.Mesh(geo, Q.mat || (Q.mat = new T.MeshBasicMaterial({ side: T.DoubleSide }))); Q.mesh.updateMatrixWorld(true);
+    Q.reskins = (Q.reskins || 0) + 1; return skinned; };
+  // a pose signature: every bone's world position (re-skin when any moved > 1 mm)
+  Q.sig = () => { const out = []; d.obj.updateMatrixWorld(true); d.obj.traverse((o) => { if (o.isBone) out.push(o.matrixWorld.elements[12], o.matrixWorld.elements[13], o.matrixWorld.elements[14]); }); return out; };
+  Q.ray = Q.ray || new T.Raycaster(); Q.reskins = 0;
+  const skinned = Q.skin(); Q.lastSig = Q.sig();
+  const bb = Q.mesh.geometry.boundingBox; return { skinned, tris: Q._pos.length / 9, box: [bb.min.x, bb.min.y, bb.min.z, bb.max.x, bb.max.y, bb.max.z].map((x) => +x.toFixed(3)) }; }"""
+# raster: parallel lines along -Z (from the player's side) over the dummy's box, one REAL round per line (see the docstring)
 RASTER_JS = r"""([step, margin, headTop]) => { const C = window.__LC__, W = C.W, T = W.THREE, p = W.player, Q = window.__P23H__, d = Q.d, P = window.__H_PUMP__;
-  const bb = Q.mesh.geometry.boundingBox; const cam = W.camera; C.stepFrames(1, 1 / 60, true); const o = cam.position.clone();
-  const cz = (bb.min.z + bb.max.z) / 2, D = Math.hypot(d.pos.x - o.x, d.pos.z - o.z);
-  const fly = Math.ceil((D + 6) / (W.SIM.WEAPONS.pistol.speed || 300) * 60) + 1;
-  const rayHit = (ox, oy, oz, dx, dy, dz) => { Q.ray.set(new T.Vector3(ox, oy, oz), new T.Vector3(dx, dy, dz).normalize()); Q.ray.far = 200; return Q.ray.intersectObject(Q.mesh, false).length > 0; };
-  Q.on = true;
-  const shoot = (yw, pt) => { p.input.yaw = yw; p.input.pitch = pt; p.recoilPitch = 0; p.recoilYaw = 0; p._rcBase = null; p.vel.set(0, 0, 0);
-    if (p.weapon) { p.weapon.cd = 1; p.weapon.magAmmo = 12; p.weapon.state = 'ready'; }
-    P.step(3, 1 / 60, true);                                    // the camera settles on the new aim (no shot: cd > 0)
-    if (p.weapon) p.weapon.cd = 0;
-    const before = d.dummyDamage || 0; Q.cur = null; Q.m = null; W._fireEdge = performance.now(); P.step(1, 1 / 60, false);
+  const bb0 = Q.mesh.geometry.boundingBox.clone(); const z0 = bb0.max.z + 3;
+  const ray = (ox, oy, oz, dx, dy, dz) => { Q.ray.set(new T.Vector3(ox, oy, oz), new T.Vector3(dx, dy, dz).normalize()); Q.ray.far = 10; return Q.ray.intersectObject(Q.mesh, false).length > 0; };
+  const fly = Math.max(3, Math.ceil(6 / ((W.SIM.WEAPONS.pistol.speed || 300) / 60)) + 1);   // the line starts 3 m out: >= 6 m of flight
+  let miss = 0;
+  const shoot = (X, Y) => { p.recoilPitch = 0; p.recoilYaw = 0; p._rcBase = null; p.vel.set(0, 0, 0);
+    if (p.weapon) { p.weapon.cd = 0; p.weapon.magAmmo = 12; p.weapon.state = 'ready'; }
+    const before = d.dummyDamage || 0; Q.line = [X, Y, z0, 0, 0, -1]; const g0 = Q.got; W._fireEdge = performance.now();
+    P.step(1, 1 / 60, false);
+    if (Q.got === g0) { Q.line = null; miss++; return null; }          // no round left the gun this frame
+    // the pose drawn in the frame the round flew (re-skinned when a bone moved)
+    const sg = Q.sig(); let moved = sg.length !== Q.lastSig.length; for (let i = 0; !moved && i < sg.length; i++) if (Math.abs(sg[i] - Q.lastSig[i]) > 0.001) moved = true;
+    if (moved) { Q.skin(); Q.lastSig = sg; }
     for (let f = 1; f < fly; f++) P.step(1, 1 / 60, false);
-    d.hp = 1e6; d.shield = 0; d.alive = true;
-    const L = Q.cur || Q.m; if (!L) return null;
-    const n = Math.hypot(L[3], L[4], L[5]); const u = [L[3] / n, L[4] / n, L[5] / n];
-    const k = Math.abs(u[2]) > 1e-6 ? (cz - L[2]) / u[2] : NaN;   // where this round crosses the dummy's plane
-    return { o: [L[0], L[1], L[2]], u, X: L[0] + u[0] * k, Y: L[1] + u[1] * k, sim: (d.dummyDamage || 0) > before }; };
-  // calibration: J = d(X, Y) / d(yaw, pitch) around s0, then one Newton step onto the region's centre and a second J there
-  const tx = (bb.min.x + bb.max.x) / 2, ty = headTop ? bb.max.y + 0.1 : (bb.min.y + bb.max.y) / 2;
-  let s0 = [Math.atan2(-(tx - o.x), -(cz - o.z)), Math.atan2(ty - o.y, Math.hypot(tx - o.x, cz - o.z))], J = null, c0 = null; const h = 0.006;
-  for (let it = 0; it < 2; it++) {
-    const a = shoot(s0[0], s0[1]), b = shoot(s0[0] + h, s0[1]), c = shoot(s0[0], s0[1] + h); if (!a || !b || !c) { Q.on = false; return { err: 'no round to calibrate' }; }
-    J = [[(b.X - a.X) / h, (c.X - a.X) / h], [(b.Y - a.Y) / h, (c.Y - a.Y) / h]]; c0 = a;
-    const det = J[0][0] * J[1][1] - J[0][1] * J[1][0]; if (!(Math.abs(det) > 1e-6)) { Q.on = false; return { err: 'singular aim map', J }; }
-    const ex = tx - a.X, ey = ty - a.Y; s0 = [s0[0] + (J[1][1] * ex - J[0][1] * ey) / det, s0[1] + (-J[1][0] * ex + J[0][0] * ey) / det];
-    if (it === 1) c0 = { X: tx, Y: ty };
-  }
-  const det = J[0][0] * J[1][1] - J[0][1] * J[1][0];
-  const aimFor = (X, Y) => { const ex = X - c0.X, ey = Y - c0.Y; return [s0[0] + (J[1][1] * ex - J[0][1] * ey) / det, s0[1] + (-J[1][0] * ex + J[0][0] * ey) / det]; };
-  const xs = []; for (let x = bb.min.x - margin; x <= bb.max.x + margin + 1e-9; x += step) xs.push(x);
-  const ys = []; if (headTop) ys.push(bb.max.y + 0.1); else for (let y = bb.min.y - margin; y <= bb.max.y + margin + 1e-9; y += step) ys.push(y);
-  const out = []; let err = 0, nErr = 0;
+    const sim = (d.dummyDamage || 0) > before; d.hp = 1e6; d.shield = 0; d.alive = true;
+    return sim; };
+  const xs = []; for (let x = bb0.min.x - margin; x <= bb0.max.x + margin + 1e-9; x += step) xs.push(x);
+  const ys = []; if (headTop) ys.push(bb0.max.y + 0.1); else for (let y = bb0.min.y - margin; y <= bb0.max.y + margin + 1e-9; y += step) ys.push(y);
+  const out = [];
   for (const Y of ys) for (const X of xs) {
-    const sv = aimFor(X, Y); const r = shoot(sv[0], sv[1]); if (!r) continue;
-    err += Math.hypot(r.X - X, r.Y - Y); nErr++;
-    const [ux, uy, uz] = r.u, [ox, oy, oz] = r.o;
-    const c = rayHit(ox, oy, oz, ux, uy, uz);
-    // 8 lines 0.06 m off this one, perpendicular to it
-    const ax = Math.abs(uy) < 0.9 ? [0, 1, 0] : [1, 0, 0]; let e1 = [uy * ax[2] - uz * ax[1], uz * ax[0] - ux * ax[2], ux * ax[1] - uy * ax[0]]; const l1 = Math.hypot(...e1); e1 = e1.map((x) => x / l1);
-    const e2 = [uy * e1[2] - uz * e1[1], uz * e1[0] - ux * e1[2], ux * e1[1] - uy * e1[0]];
-    let off = 0; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, cs = Math.cos(a) * 0.06, sn = Math.sin(a) * 0.06;
-      if (rayHit(ox + e1[0] * cs + e2[0] * sn, oy + e1[1] * cs + e2[1] * sn, oz + e1[2] * cs + e2[2] * sn, ux, uy, uz)) off++; }
-    out.push([r.sim ? 1 : 0, c ? 1 : 0, off]);
+    const sim = shoot(X, Y); if (sim === null) { if (miss > 20 && out.length === 0) return { err: 'no round left the gun', miss }; continue; }
+    const c = ray(X, Y, z0, 0, 0, -1);
+    let off = 0; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; if (ray(X + Math.cos(a) * 0.06, Y + Math.sin(a) * 0.06, z0, 0, 0, -1)) off++; }
+    out.push([sim ? 1 : 0, c ? 1 : 0, off]);
   }
-  Q.on = false; return { n: out.length, rows: out, grid: [xs.length, ys.length], aimErrM: nErr ? +(err / nErr).toFixed(4) : null, J: J.map((r) => r.map((x) => +x.toFixed(3))), stepM: step }; }"""
-
+  return { n: out.length, rows: out, grid: [xs.length, ys.length], noRound: miss, reskins: Q.reskins, stepM: step }; }"""
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -134,20 +122,20 @@ def main():
                         return
                 r = s.js(RASTER_JS, [args.step, 0.25, False])
                 if r.get("err"):
-                    v.cnj("outside [%s]" % name, "aim calibration: %s" % r)
+                    v.cnj("outside [%s]" % name, "raster: %s" % r)
                     continue
                 rows = r["rows"]
                 outside = sum(1 for h, c, off in rows if h and not c and off == 0)
                 deep = [(h, c, off) for h, c, off in rows if c and off == 8]
                 cov = sum(1 for h, _c, _o in deep if h) / len(deep) if deep else None
                 res[name] = {"shots": r["n"], "simHits": sum(x[0] for x in rows), "meshHits": sum(x[1] for x in rows), "outsideBy6cm": outside,
-                             "deep": len(deep), "coverage": cov and round(cov, 4), "box": pose["box"], "grid": r.get("grid"), "aimErrM": r.get("aimErrM")}
+                             "deep": len(deep), "coverage": cov and round(cov, 4), "box": pose["box"], "grid": r.get("grid"), "noRound": r.get("noRound"), "reskins": r.get("reskins")}
                 v.check("outside [%s] (sim hits > 0.06 m outside the drawn silhouette = 0)" % name, r["n"] > 400 and outside == 0, res[name], "0")
                 v.check("coverage [%s] (lines deep inside the silhouette: >= 95 %% sim hits)" % name, cov is not None and cov >= 0.95, {"deep": len(deep), "coverage": res[name]["coverage"]}, ">= 0.95")
             s.js(POSE_JS, [16, 0.0])
             ht = s.js(RASTER_JS, [args.step, 0.10, True])
             if ht.get("err"):
-                v.cnj("head-top", "aim calibration: %s" % ht)
+                v.cnj("head-top", "raster: %s" % ht)
                 ht = {"n": 0, "rows": []}
             hits = sum(x[0] for x in ht["rows"])
             res["headTop"] = {"shots": ht["n"], "simHits": hits}
