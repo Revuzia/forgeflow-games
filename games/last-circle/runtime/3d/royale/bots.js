@@ -5128,10 +5128,18 @@ function actEngage(W, b, dt) {
       // (P23, LC-20 x sniper) A BOLT ROUND IS TIMED: a player with one round in the chamber squeezes as the crosshair crosses the man, he does not
       // fire wherever the wobble happens to sit. With calm bots topping their shields up a body round rarely finishes anyone (pm6 10-26, the
       // probe_match seeds: 12 sniper hits from 327 rounds - 3.7 % - and 7 of the 12 left the man standing; base 11 of 12 killed), so the hits
-      // the bolt does land have to come from the rounds it aims. The yaw wobble crosses zero about once a second (errPhase, 3.1 rad/s): fire
-      // inside its middle 20 % (|sin| < 0.3), or at once when the error is already under 0.4 deg. A DMR past 45 m is a rifle: it keeps the old rule.
-      const timed = !(def.rpm > 0 && def.rpm < 100) || errDeg < 0.4 || Math.abs(Math.sin(bb.errPhase)) < 0.3;
+      // the bolt does land have to come from the rounds it aims. The wobble below (yaw sin, pitch cos x 0.6) is read against the man's own
+      // angular size (0.4 m half-width, 0.8 m half-height at this range): squeeze when both are inside it, or after 2.5 s of waiting (a
+      // player takes the shot he has). A DMR past 45 m is a rifle: the old rule.
+      let timed = true;
+      if (def.rpm > 0 && def.rpm < 100) {
+        const ey = Math.abs(Math.sin(bb.errPhase) * err), ep = Math.abs(Math.cos(bb.errPhase * 0.83) * err * 0.6);
+        const on = ey < Math.atan2(0.4, dist) && ep < Math.atan2(0.8, dist);
+        if (!(bb.boltWaitT > 0) || W.t - bb.boltWaitT > 6) bb.boltWaitT = W.t;          // (a wait older than 6 s is another fight)
+        timed = on || W.t - bb.boltWaitT > 2.5;
+      }
       if (timed && a.vel.x * a.vel.x + a.vel.z * a.vel.z < 2.25) inp.fire = true;   // < 1.5 m/s
+      if (inp.fire) bb.boltWaitT = 0;
     } else {
       inp.fire = true;
     }
