@@ -408,7 +408,7 @@ export function attachBrain(W, actor, nBots) {
       graceMul: 0, assist: null, ping: null, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
       nadeS: 0, nadeKind: 0, nadeSlot: -1, nadePrev: -1, nadeX: 0, nadeY: 0, nadeZ: 0, nadeYaw: 0, nadePitch: 0, nadeT: -99, nadeNextT: 0, nadeCheckT: 0, smokeWant: 0,
       reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, followBack: false, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
-      wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, fdS: 0, arcSweepT: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
+      wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, fdS: 0, fdA: 0, arcSweepT: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
     },
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
@@ -1507,7 +1507,11 @@ function act(W, b, dt) {
   // (P23) not mid-revive: a bot channelling a revive answers fire only when it breaks the channel off (actRevive)
   const answering = b.state === "REVIVE" && bb.reviveStarted ? false : underFire(W, b, dt);
 
-  switch (b.state) {
+  // (P23, LC-14 / C-SMOKE) a throw in progress owns the aim, the legs and the trigger: the state's act is skipped for its 0.4-1 s. It used to
+  // run first and steer the yaw to the target while throwRun steered it to the throw heading, two pulls whose rest point could sit outside
+  // throwRun's 0.05 rad release window (g6, Ashgrid seed 62: 8 planned frags timed out in the hand, 0 thrown)
+  if (bb.nadeS) throwRun(W, b, dt);
+  else switch (b.state) {
     case "ENGAGE": actEngage(W, b, dt); break;
     case "FLEE": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
     case "HEAL": actHeal(W, b, dt); break;
@@ -1520,8 +1524,6 @@ function act(W, b, dt) {
     case "REVIVE": actRevive(W, b, dt); break;
     case "FOLLOW": case "PING": case "ASSIST": actSquadMove(W, b, dt); fireOnTheMove(W, b, dt); break;
   }
-  // (P23, LC-14 / C-SMOKE) a throw in progress owns the aim and the trigger this frame (the state above has written the legs)
-  if (bb.nadeS) throwRun(W, b, dt);
   // (P23, LC-14) a live grenade landing here: get out of its blast (over every state but a revive channel and a throw)
   if (bb.dangerUntil > W.t && !bb.nadeS && !(b.state === "REVIVE" && bb.reviveStarted)) dodgeGrenade(W, b, dt);
   // (P23, C-FALL) never walk off a drop that would kill (only when the sim has fall damage)
@@ -4442,7 +4444,7 @@ function throwRun(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   const w = a.weapon, slot = a.inventory.slots[bb.nadeSlot];
   inp.fire = false; inp.ads = false; inp.reload = false;
-  if (!slot || !(slot.count > 0) || W.t - bb.nadeT > 2.5 || a.healing || a.swimming) { endThrow(W, b); return; }
+  if (!slot || !(slot.count > 0) || W.t - bb.nadeT > 2.5 || a.healing || a.swimming) { if (bb.nadeS === 1) bb.fdA++; endThrow(W, b); return; }   // (fdA: probe counter, a planned throw that never left the hand)
   if (!w || w.slotRef !== slot) { if (W.t - bb.nadeT > 0.1 && W.equipSlot) W.equipSlot(a, bb.nadeSlot); return; }
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.jump = false;
   steerYaw(a, bb.nadeYaw, dt, 14);
@@ -4493,15 +4495,16 @@ function maybeFrag(W, b, t, seen, dist) {
   else if (seen && t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 1.5) {
     const tr = IND.H !== null ? targetRoom(W, b, bb.targetPos) : -1;
     if (tr >= 0 && myRoom(W, b) !== tr) why = 2;                                 // camping a room
-    else if (occAny(W, bb.targetPos.x, bb.targetPos.z, 3) && b.rng() < 0.35) why = 3;   // planted by cover
+    else if (occAny(W, bb.targetPos.x, bb.targetPos.z, 3) && b.rng() < 0.6) why = 3;   // planted by cover
     // a duel that has gone on 4 s+ against a man standing his ground: break the stalemate (measured: 1 match in 6 had no bot frag at loot
     // weight 8 in two 6-match batches, a Deepwood match both times: its duels rarely met the room / cover / ducked tests)
-    else if (bb.fightT > 2.5 && b.rng() < 0.25) why = 4;
+    else if (bb.fightT > 2 && b.rng() < 0.35) why = 4;
   }
   // (fragdist, Ashgrid seed 62: frag carriers spent 136 s of 2308 within 9-30 m of their man and those fights were 0-4.6 s old - the close
-  // fight is short, so the stalemate / duel reasons come at 2.5-3 s, not 4-6 s)
+  // fight is short, so the stalemate / duel reasons come at 2-2.5 s, not 4-6 s; H24: 25 of 31 in-reach checks still had no reason in a
+  // match without a frag, so a fight in reach that lasts past 2 s gets one with high odds)
   // ...and a man strafing in the open 12-28 m off, 3 s into the duel: a frag at his feet moves him off his line (a player's "nade the duel")
-  else if (seen && dist > 12 && bb.fightT > 3 && b.rng() < 0.1) why = 5;
+  else if (seen && dist > 12 && bb.fightT > 2.5 && b.rng() < 0.2) why = 5;
   if (!why) { bb.fdW++; return; }
   const tp = bb.targetPos;
   beginThrow(W, b, 1, tp.x, tp.y, tp.z);
