@@ -465,9 +465,14 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(P.endgamePhase >= 4 && P.endgamePhase <= R.STORM_PHASES.standard.length, "pace: the endgame hunt starts in a circle that exists, from circle 4 on");
   ok(P.earlyChutePct > 0 && P.earlyChutePct <= 60, "pace: some bots float down under an early canopy, never most of them (70 % measured worse: 4 of 9 matches reached circle 5)");
   // the owner's 5-tier difficulty curve is untouched by this change (measured: softer rows did not help in combination)
-  const T = R.BOT_TIERS;
-  ok(T[0].reactionMs === 700 && T[0].aimErrDeg === 7.5 && T[2].reactionMs === 380 && T[2].aimErrDeg === 2.8 && T[4].reactionMs === 210 && T[4].aimErrDeg === 0.9,
-     "pace: BOT_TIERS rows are exactly the shipped difficulty curve");
+  // P2-D (LC-22): the curve is pinned on BOT_TIERS_SHIPPED; the live rows scale the aim error by BOT_AIM_HITVOL_K because
+  // the bone-derived hit volumes are ~1/3 the old cylinder's target (evidence: royale.js BOT_AIM_HITVOL_K comment,
+  // probe_match + sim_pacing on the lane's worktree)
+  const TS = R.BOT_TIERS_SHIPPED, T = R.BOT_TIERS;
+  ok(TS[0].reactionMs === 700 && TS[0].aimErrDeg === 7.5 && TS[2].reactionMs === 380 && TS[2].aimErrDeg === 2.8 && TS[4].reactionMs === 210 && TS[4].aimErrDeg === 0.9,
+     "pace: BOT_TIERS_SHIPPED rows are exactly the shipped difficulty curve");
+  ok(R.BOT_AIM_HITVOL_K === 0.5 && T.every((r, i) => r.reactionMs === TS[i].reactionMs && Math.abs(r.aimErrDeg - TS[i].aimErrDeg * (R.HITVOL.ok ? R.BOT_AIM_HITVOL_K : 1)) < 1e-9),
+     "pace: live BOT_TIERS = the shipped curve with the aim error x" + R.BOT_AIM_HITVOL_K + " for the bone-derived hit volumes (same reactions)");
   let tiersOrdered = true;
   for (let i = 1; i < 5; i++) if (!(T[i].aimErrDeg < T[i - 1].aimErrDeg && T[i].reactionMs < T[i - 1].reactionMs)) tiersOrdered = false;
   ok(tiersOrdered, "pace: every tier is faster AND more accurate than the one below it");
