@@ -1456,11 +1456,11 @@ export function showMenu(W, startMatch) {
     c.onclick = () => {
       selMode = m.id; W.events.emit("uiClick"); paint();
       teardownMenuWorld(W);
-      // C-MODE: the team size rides along as `team` (solo / duo / trio / squad; practice is always solo). `mode` keeps
+      // C-MODE: the team size rides along as `teamMode` (solo / duo / trio / squad; practice is always solo). `mode` keeps
       // meaning the pace (standard / quick / practice) the orchestrator has always read.
       const team = m.id === "practice" || touchOn ? "solo" : selTeam;
       W.teamMode = team;
-      startMatch({ mapId: randomMap(), mode: m.id, team });
+      startMatch({ mapId: randomMap(), mode: m.id, teamMode: team, team });   // lane boot reads opts.teamMode (C-MODE)
     };
     // Tab-reachable. SQUAD UP / SETTINGS / HOW TO PLAY and the locker arrows are
     // real <button>s, so the keyboard reached everything on this screen EXCEPT
@@ -3516,7 +3516,8 @@ export function update(W, dt) {
         }
       }
       const ch = chs.find((c) => !c.done) || null;
-      if (ch && W.match) {
+      // the card steps aside once the match is over: it sat on top of the result card's title
+      if (ch && W.match && !W.match.over) {
         const cur = Math.min(ch.goal, ch.prog(W));
         R.chalCard.style.display = "flex";
         const sig = ch.id + ":" + cur;
@@ -3551,7 +3552,7 @@ export function update(W, dt) {
   if (hint && hint.type === "revive") { rvT = hint.data || hint.target || null; rvP = +hint.progress || 0; }
   else if (R.mateEls && W.player && W.player.alive && !W.player.downed) {
     rvT = reviveTarget(W);
-    if (rvT && R._revive && R._revive.reviver === W.player && R._revive.target === rvT) rvP = Math.max(0, Math.min(1, (W.t - R._revive.t0) / reviveS()));
+    if (rvT && R._revive && R._revive.reviver === W.player && R._revive.target === rvT) rvP = reviveFrac(W, R._revive);
   }
   if (rvT || hint) {
     if (C.iaOn !== true) { R.interact.style.display = "block"; C.iaOn = true; }
@@ -3671,7 +3672,8 @@ export function update(W, dt) {
   if (R.lookHint) {
     // never in touch mode: a phone has no pointer lock and looks with the
     // right thumb (touch.js), so "CLICK TO LOOK" would be a lie there
-    const wantHint = !touchOn && !locked && meAlive && !W.paused && W.phase !== "menu";
+    // ...nor over the result card of a match that is over (a winner is still alive there)
+    const wantHint = !touchOn && !locked && meAlive && !W.paused && W.phase !== "menu" && !(W.match && W.match.over);
     const d2 = wantHint ? "block" : "none";
     if (R.lookHint.style.display !== d2) R.lookHint.style.display = d2;
   }
@@ -5996,7 +5998,10 @@ function showSettings(W, tab) {
       kbd(optRow(V, "Anti-aliasing", [["AUTO", "auto"], ["OFF", "off"], ["FXAA", "fxaa"], ["SMAA", "smaa"]], pf.aa || "auto", sg("aa"), "aa"));
       kbd(optRow(V, "Bloom", [["AUTO", "auto"], ["OFF", "off"], ["ON", "on"]], pf.bloom || "auto", sg("bloom"), "bloom"));
       const dprCur = pf.dpr === "auto" || pf.dpr == null ? "auto" : +pf.dpr;
-      kbd(optRow(V, "Resolution scale", [["AUTO", "auto"], ["75%", 0.75], ["100%", 1], ["125%", 1.25], ["150%", 1.5]], dprCur, sg("dpr"), "dpr"));
+      // above 150 % only ULTRA renders it (C-GFX: full DPR, cap 2), so the 200 % option shows with that preset
+      const dprOpts = [["AUTO", "auto"], ["75%", 0.75], ["100%", 1], ["125%", 1.25], ["150%", 1.5]];
+      if ((W.gfxTier || tierNow) === "ultra") dprOpts.push(["200%", 2]);
+      kbd(optRow(V, "Resolution scale", dprOpts, dprCur, sg("dpr"), "dpr"));
       kbd(optRow(V, "Auto quality", [["OFF", false], ["ON", true]], pf.autoQuality !== false, sg("autoQuality"), "autoq"));
       kbd(note(V, "Auto quality steps bloom and resolution down in a match when frames run long, and back up when they recover. It never steps up into ULTRA."));
       // rows another lane adds (C-GFX: "every lane that adds a visual feature declares its per-tier behaviour"):
@@ -6372,7 +6377,7 @@ function updateMates(W, p) {
   let frac = 0, title = "", sub = "";
   if (dn) {
     if (rv) {
-      frac = Math.max(0, Math.min(1, (W.t - rv.t0) / reviveS()));
+      frac = reviveFrac(W, rv);
       title = "BEING REVIVED"; sub = rv.reviver && rv.reviver.name ? rv.reviver.name.toUpperCase() : "";
     } else {
       frac = Math.max(0, Math.min(1, (+p.downedHp || 0) / 100));
@@ -6389,6 +6394,13 @@ function updateMates(W, p) {
   if (R.wCard) R.wCard.style.opacity = dn ? "0.35" : "";       // a downed player cannot shoot (C-DBNO)
   R.bleedTitle.textContent = title; R.bleedSub.textContent = sub;
   R.bleedFill.style.transform = "scaleX(" + frac.toFixed(3) + ")";
+}
+/** 0..1 of a revive channel: lane player's W.reviveProgress(reviver) = { target, t: seconds held, of: K.REVIVE_S } when it
+ *  exists (exact, pauses with the channel), else the reviveStart event's clock. */
+function reviveFrac(W, rv) {
+  const q = typeof W.reviveProgress === "function" && rv.reviver ? W.reviveProgress(rv.reviver) : null;
+  const f = q && +q.of > 0 ? (+q.t || 0) / +q.of : (W.t - rv.t0) / reviveS();
+  return Math.max(0, Math.min(1, f));
 }
 /** The nearest downed teammate the local player can revive right now (C-DBNO: alive, not downed, within 2 m). */
 function reviveTarget(W) {
@@ -6701,9 +6713,10 @@ function stepTagPolicy(W, p, dt) {
   if (!_tagsMod || !_tagsMod.setPolicy) return;
   const now = performance.now() / 1000;
   _tagPol.focus = p || null; _tagPol.now = now;
-  R._tagAcc = (R._tagAcc || 0) + dt;
-  if (R._tagAcc >= 0.2) {                            // 5 Hz: a 0.2 s tag latency, well inside the 0.8 s hold
-    R._tagAcc = 0;
+  // 5 Hz on the SAME clock as the hold (wall time): counted in sim dt, a slow frame rate (the dt clamp) stretched the gap
+  // between tests past the 0.8 s hold and an aimed tag blinked off between them
+  if (!(now - (R._tagLast || 0) < 0.2)) {           // a 0.2 s tag latency, well inside the 0.8 s hold
+    R._tagLast = now;
     const a = aimedEnemy(W, p);
     if (a) { _tagPol.aimedId = a.id; _tagPol.aimedUntil = now + AIM_HOLD_S; }
   }
