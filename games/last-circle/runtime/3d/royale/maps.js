@@ -1132,14 +1132,11 @@ const CITY_THEME_TABLES = {
   },
 };
 
-/** LC-41: the contact-AO mask (see buildMap). A module-level function, not a block inside buildMap: buildMap is far past V8's optimising-compiler size
- *  limit, so a hot loop written inline there runs in the baseline tier (the 16 M-texel blur measured 1.6-3.3 s in the page vs 0.16 s optimised).
- *  `gyc[i]` = the ground under collider i's centre (the caller's heightAt). Returns the R8 texels, the colliders rasterised and the raster's ms. */
-// LC-89: one kind's cull pass, at MODULE level (allocation-free): the same loop as a closure inside buildMap showed 1.9 MB of heap samples per 600 match
-// frames in framecheck (its doubles boxed - the contact-AO bake had the same problem, see bakeContactAO). PL = the 6 frustum planes as [nx, ny, nz, c] x 6;
+// LC-89: one kind's cull pass, at MODULE level (the hot loop optimised, like bakeContactAO below). PL = the 6 frustum planes as [nx, ny, nz, c] x 6;
+// Q = [camera x, y, z, draw distance^2, fade start, 1 / fade length] (a Float64Array: doubles passed as plain arguments are boxed per call);
 // out = [instances drawn, LOD instances drawn].
-function lcCullKind(list, cxA, cyA, czA, crA, hid, parts, PL, px, py, pz, D2, F0, FK, out) {
-  const n = list.length;
+function lcCullKind(list, cxA, cyA, czA, crA, hid, parts, PL, Q, out) {
+  const n = list.length, px = Q[0], py = Q[1], pz = Q[2], D2 = Q[3], F0 = Q[4], FK = Q[5];
   let nOut = 0, nLod = 0;
   for (let i = 0; i < n; i++) {
     if (list[i].dead) continue;
@@ -1163,6 +1160,9 @@ function lcCullKind(list, cxA, cyA, czA, crA, hid, parts, PL, px, py, pz, D2, F0
   }
   out[0] = nOut; out[1] = nLod;
 }
+/** LC-41: the contact-AO mask (see buildMap). A module-level function, not a block inside buildMap: buildMap is far past V8's optimising-compiler size
+ *  limit, so a hot loop written inline there runs in the baseline tier (the 16 M-texel blur measured 1.6-3.3 s in the page vs 0.16 s optimised).
+ *  `gyc[i]` = the ground under collider i's centre (the caller's heightAt). Returns the R8 texels, the colliders rasterised and the raster's ms. */
 function bakeContactAO(colliders, gyc, N, size) {
   const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
   const half = size / 2, inv = N / size, occ = new Float32Array(N * N), rowHas = new Uint8Array(N);
@@ -6152,7 +6152,7 @@ export async function buildMap(W, mapId) {
     if (!culls.length) return;
     const _f = new THREE.Frustum(), _pv = new THREE.Matrix4();
     // the last cull's camera (x, y, z, fwd x, y, z, distance, aspect, fov) in a typed array: no boxed doubles in the closure; PL / CO: the planes, the counts
-    const LS = new Float64Array([1e9, 1e9, 1e9, 0, 0, 0, 0, 0, 0]), PL = new Float64Array(24), CO = new Int32Array(2);
+    const LS = new Float64Array([1e9, 1e9, 1e9, 0, 0, 0, 0, 0, 0]), PL = new Float64Array(24), CQ = new Float64Array(6), CO = new Int32Array(2);
     W._lcCullStats = { culls: 0, drawn: 0, total: 0, D: 0 };
     trackUpdater(cullFn = () => {
       const cam = W.camera;
@@ -6170,12 +6170,12 @@ export async function buildMap(W, mapId) {
       _pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
       _f.setFromProjectionMatrix(_pv);
       for (let k = 0; k < 6; k++) { const pl = _f.planes[k]; PL[k * 4] = pl.normal.x; PL[k * 4 + 1] = pl.normal.y; PL[k * 4 + 2] = pl.normal.z; PL[k * 4 + 3] = pl.constant; }
-      const D2 = D * D, F0 = D * 0.88, FK = 1 / (D - F0);
+      CQ[0] = px; CQ[1] = py; CQ[2] = pz; CQ[3] = D * D; CQ[4] = D * 0.88; CQ[5] = 1 / (D * 0.12);
       let drawnN = 0, totalN = 0;
       for (let q = 0; q < culls.length; q++) {
         const K2 = culls[q], parts = K2.parts;
         totalN += K2.list.length;
-        lcCullKind(K2.list, K2.cx, K2.cy, K2.cz, K2.cr, K2.hid, parts, PL, px, py, pz, D2, F0, FK, CO);
+        lcCullKind(K2.list, K2.cx, K2.cy, K2.cz, K2.cr, K2.hid, parts, PL, CQ, CO);
         const nOut = CO[0], nLod = CO[1];
         for (let k = 0; k < parts.length; k++) {
           const pt = parts[k], im = pt.draw.instanceMatrix, c = pt.lod ? nLod : nOut;
