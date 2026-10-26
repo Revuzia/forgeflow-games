@@ -4469,6 +4469,7 @@ function maybeFrag(W, b, t, seen, dist) {
   bb.nadeCheckT = W.t + 0.5;
   if (bb.nadeS || W.t < bb.nadeNextT || (a.tier || 1) < 2 || t.downed || !bb.targetPos) return;
   if (throwSlot(a, 1) < 0) return;
+  if (bb.graceMul > 0.3 && !t.isBot) return;                                       // (LC-96) no frag at a new player in his grace
   bb.fdN++;                                                                       // (probe counters: checks / out of reach / no reason / no arc / pushes)
   if (dist < 9 || dist > 30) {
     bb.fdR++;
@@ -4495,10 +4496,12 @@ function maybeFrag(W, b, t, seen, dist) {
     else if (occAny(W, bb.targetPos.x, bb.targetPos.z, 3) && b.rng() < 0.35) why = 3;   // planted by cover
     // a duel that has gone on 4 s+ against a man standing his ground: break the stalemate (measured: 1 match in 6 had no bot frag at loot
     // weight 8 in two 6-match batches, a Deepwood match both times: its duels rarely met the room / cover / ducked tests)
-    else if (bb.fightT > 4 && b.rng() < 0.2) why = 4;
+    else if (bb.fightT > 2.5 && b.rng() < 0.25) why = 4;
   }
-  // ...and a man strafing in the open 12-28 m off, 6 s into the duel: a frag at his feet moves him off his line (a player's "nade the duel")
-  else if (seen && dist > 12 && bb.fightT > 6 && b.rng() < 0.08) why = 5;
+  // (fragdist, Ashgrid seed 62: frag carriers spent 136 s of 2308 within 9-30 m of their man and those fights were 0-4.6 s old - the close
+  // fight is short, so the stalemate / duel reasons come at 2.5-3 s, not 4-6 s)
+  // ...and a man strafing in the open 12-28 m off, 3 s into the duel: a frag at his feet moves him off his line (a player's "nade the duel")
+  else if (seen && dist > 12 && bb.fightT > 3 && b.rng() < 0.1) why = 5;
   if (!why) { bb.fdW++; return; }
   const tp = bb.targetPos;
   beginThrow(W, b, 1, tp.x, tp.y, tp.z);
