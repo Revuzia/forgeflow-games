@@ -1861,6 +1861,30 @@ export function generate(parcel, opts) {
         const u = rr() < 0.5 ? rU0 + rr() * 0.4 : rU1 - rr() * 0.4, v = rV0 + rr() * Math.max(0, rV1 - rV0), w = 0.1 + rr() * 0.12;
         if (onRoof(u - w, u + w, v - w, v + w)) deco(u - w, u + w, rf, rf + 0.12 + rr() * 0.2, v - w, v + w, rr() < 0.5 ? P_WEED : P_WEED2);
       }
+      // (7) (K1 re-run) A BURNT-THROUGH ROOF, as the drop sees it: from the air the rim village still read as whole flat roofs (crater_after7_air0: dusty roofs,
+      // jagged parapets, no holes). A real hole would leave a room with no drawn ceiling (interiorcheck ceiling) and open the storey to the sky, so the roof
+      // keeps its slab and the hole is PAINTED on it: a charred ring, a near-black core of three overlapping lobes and burnt rafters across it - deco skins
+      // <= 2 cm on the roof top (drawn only, no collider, never hides a face), materials the ruin already uses (no new material / program / draw call).
+      // Last in this stream (rr5): every earlier ruin draw is unchanged.
+      if (parapetRoof) {
+        const P_CHAR = pal(fMat, 0x2e2924), P_HOLE = pal("fabric", 0x16130f), P_RAFT = pal("wood", 0x3b2f25);
+        const area = (rU1 - rU0) * (rV1 - rV0);
+        for (let k = 0, nh = (rr() < 0.85 ? 1 : 0) + (area > 60 && rr() < 0.4 ? 1 : 0); k < nh; k++) {
+          const a = 0.7 + rr() * 0.5, uc = rU0 + a * 1.3 + rr() * Math.max(0, rU1 - rU0 - a * 2.6), vc = rV0 + a * 1.3 + rr() * Math.max(0, rV1 - rV0 - a * 2.6);
+          const lob = (fu0, fu1, fv0, fv1) => [uc - a * fu0, uc + a * fu1, vc - a * fv0, vc + a * fv1];
+          const ring = [lob(1.25, 1.1, 0.75, 0.9), lob(0.8, 0.95, 1.2, 1.05)];
+          const core = [lob(1.0, 0.75, 0.5, 0.6), lob(0.5, 0.6, 0.95, 0.8), lob(0.25, 0.95, 0.3, 0.45)].map((q) => q.map((x, i) => x + (rr() - 0.5) * 0.12 * a));
+          if (!ring.concat(core).every((q) => onRoof(q[0], q[1], q[2], q[3]))) continue;
+          for (const q of ring) deco(q[0], q[1], rf, rf + 0.006, q[2], q[3], P_CHAR);
+          for (const q of core) deco(q[0], q[1], rf, rf + 0.012, q[2], q[3], P_HOLE);
+          const alongU = rr() < 0.5, nR = 2 + (rr() < 0.5 ? 1 : 0);
+          for (let r = 0; r < nR; r++) {
+            const off = (r - (nR - 1) / 2) * (0.45 + rr() * 0.2) * a, len0 = a * (0.9 + rr() * 0.4), len1 = a * (0.7 + rr() * 0.5), w = 0.1;
+            const q = alongU ? [uc - len0, uc + len1, vc + off - w / 2, vc + off + w / 2] : [uc + off - w / 2, uc + off + w / 2, vc - len0, vc + len1];
+            if (onRoof(q[0], q[1], q[2], q[3])) deco(q[0], q[1], rf + 0.012, rf + 0.02, q[2], q[3], P_RAFT);
+          }
+        }
+      }
     }
   }
 

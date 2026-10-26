@@ -18,7 +18,7 @@ Per device:
   look       a 160 px drag in the look zone turns the camera >= 0.3 rad (today: 0 - no pointer lock on a phone)
   fire       the FIRE control's first press after the menu drops the magazine; holding it 2 s with the pistol fires >= 3
   together   stick + look + FIRE held at once: moved > 0.5 m, turned > 0.05 rad, fired
-  use        holding USE 2 s next to a chest opens it
+  use        holding USE 2 s next to a chest opens it (the player stands 1.0-1.5 m away at a free spot that SEES the chest by the game's own pickup rule)
   slots      a tap on HUD slot 2 makes it active; a tap on the minimap opens the big map
   lock       no requestPointerLock call in the whole touch session (__H_LOCKREQ__ == 0)
   portrait   turning the phone upright mid-match shows a rotate overlay
@@ -82,31 +82,45 @@ SLOTS_JS = r"""() => {
   return { slots, minimap: mm };
 }"""
 
-CHEST_JS = r"""() => { const W = window.__LC__.W, p = W.player;
+CHEST_JS = r"""(mode) => { const W = window.__LC__.W, p = W.player;
   // Wave 7b: the nearest UNOPENED chest a walker reaches on the ground (base <= 1 m over the terrain): a Deepwood seed-7 chest sits on top of an 11 m ranger tower, which a player teleported to the
   // foot of the tower cannot open (the row measures the USE control, not the climb); nearbyLoot (within a few metres of the player's height) is the fallback for a build with no debugChests
-  let c = null;
+  // Wave 8 fix round (lane K3): the player's spot must also SEE the chest by the game's own pickup rule (loot.js pickLos: a clear W.map.losBlocked line from the taker's feet + 1.5 m to
+  // the chest + 0.45 m; a HOUSE chest is refused through a wall by design). The verify of the fix round put the player 1.2 m from an ashgrid chest on the far side of a hall wall
+  // (the first free spot round it), so the row measured "a chest through a wall", not the USE control. The nearest chest (up to 12 tried) with a free spot that sees it is used;
+  // with none, the old free spot of the nearest chest is used and reported (seesChest false). --plant chest-through-wall (the control) takes the nearest HOUSE chest with a free spot
+  // that does NOT see it: the game must refuse it, so the row MUST FAIL.
+  const plantWall = mode === 'chest-through-wall';
+  let pool = [];
   if (W.debugChests) {
-    const pool = W.debugChests().filter((h) => !h.opened && h.pos && h.pos.y - W.map.heightAt(h.pos.x, h.pos.z) <= 1.0);
+    pool = W.debugChests().filter((h) => !h.opened && h.pos && h.pos.y - W.map.heightAt(h.pos.x, h.pos.z) <= 1.0 && (!plantWall || h.house));
     pool.sort((a, b) => Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z) - Math.hypot(b.pos.x - p.pos.x, b.pos.z - p.pos.z));
-    if (pool.length) { const h = pool[0]; c = { type: 'chest', id: h.id, x: h.pos.x, y: h.pos.y, z: h.pos.z, d: Math.hypot(h.pos.x - p.pos.x, h.pos.z - p.pos.z) }; }
+    pool = pool.slice(0, plantWall ? 60 : 12).map((h) => ({ type: 'chest', id: h.id, x: h.pos.x, y: h.pos.y, z: h.pos.z, d: Math.hypot(h.pos.x - p.pos.x, h.pos.z - p.pos.z), house: !!h.house }));
   }
-  if (!c) { const near = W.nearbyLoot ? W.nearbyLoot(p.pos, 400) : []; c = near.filter((n) => n.type === 'chest').sort((a, b) => a.d - b.d)[0]; }
-  if (!c) return null;
-  const cx = c.x != null ? c.x : (c.pos ? c.pos.x : null), cz = c.z != null ? c.z : (c.pos ? c.pos.z : null);
-  if (cx == null) return { keys: Object.keys(c) };
+  if (!pool.length && !plantWall) { const near = W.nearbyLoot ? W.nearbyLoot(p.pos, 400) : []; const c0 = near.filter((n) => n.type === 'chest').sort((a, b) => a.d - b.d)[0]; if (c0) pool = [c0]; }
+  if (!pool.length) return plantWall ? { plantNoChest: true } : null;
+  if (pool[0].x == null && !pool[0].pos) return { keys: Object.keys(pool[0]) };
   // Wave 7b: stand 1.0-1.5 m from the chest at the first of 24 spots that is NOT inside a wall / prop / container (a chest in a town building has a wall on one side; the old fixed +1.2 m east
   // spot put the player in it on a themed map's chest), at the chest's own floor height
-  const cy = c.y != null ? c.y : W.map.heightAt(cx, cz);
   const blocked = (x, z, y) => { const o = []; try { W.map.queryColliders(x, z, 1.0, o); } catch (e) { return false; }
     for (const q of o) { if (q.dead || q.kind === 'ramp') continue; if (q.maxY <= y + 0.55 || q.minY >= y + 1.8) continue;
       const ex = x - Math.min(Math.max(x, q.minX), q.maxX), ez = z - Math.min(Math.max(z, q.minZ), q.maxZ); if (ex * ex + ez * ez < 0.45 * 0.45) return true; } return false; };
-  let sx = cx + 1.2, sz = cz, found = false;
-  for (const rr of [1.2, 1.0, 1.5]) for (let k = 0; k < 8 && !found; k++) { const a = k * Math.PI / 4, x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
-    if (!blocked(x, z, Math.max(W.map.heightAt(x, z), cy - 0.6))) { sx = x; sz = z; found = true; } }
-  const y = W.map.heightAt(sx, sz);
-  p.pos.set(sx, Math.max(y, cy), sz); p.vel && p.vel.set(0, 0, 0);
-  p.input.yaw = Math.atan2(cx - sx, cz - sz) + Math.PI; return { d: c.d, id: c.id, x: cx, z: cz, freeSpot: found, at: [Math.round(sx * 10) / 10, Math.round(sz * 10) / 10] }; }"""
+  const pick = (c, wantSee) => { const cx = c.x != null ? c.x : c.pos.x, cz = c.z != null ? c.z : c.pos.z, cy = c.y != null ? c.y : W.map.heightAt(cx, cz);
+    let free = null;
+    for (const rr of [1.2, 1.0, 1.5]) for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+      if (blocked(x, z, Math.max(W.map.heightAt(x, z), cy - 0.6))) continue;
+      if (!free) free = [x, z];
+      const fy = Math.max(W.map.heightAt(x, z), cy);
+      const sees = !(W.map.losBlocked && W.map.losBlocked(x, fy + 1.5, z, cx, cy + 0.45, cz));
+      if (sees === wantSee) return { cx, cy, cz, sx: x, sz: z, found: true, sees, free }; }
+    return { cx, cy, cz, sx: free ? free[0] : cx + 1.2, sz: free ? free[1] : cz, found: !!free, sees: null, free }; };
+  let c = null, sp = null, tried = 0;
+  for (const cand of pool) { tried++; const q = pick(cand, !plantWall); if (q.sees === !plantWall) { c = cand; sp = q; break; } }
+  if (!c) { if (plantWall) return { plantNoSpot: true, tried }; c = pool[0]; sp = pick(c, true); sp.sees = false; }
+  const y = W.map.heightAt(sp.sx, sp.sz);
+  p.pos.set(sp.sx, Math.max(y, sp.cy), sp.sz); p.vel && p.vel.set(0, 0, 0);
+  p.input.yaw = Math.atan2(sp.cx - sp.sx, sp.cz - sp.sz) + Math.PI;
+  return { d: c.d, id: c.id, x: sp.cx, z: sp.cz, house: c.house, freeSpot: sp.found, seesChest: sp.sees, chestsTried: tried, plant: plantWall ? mode : null, at: [Math.round(sp.sx * 10) / 10, Math.round(sp.sz * 10) / 10] }; }"""
 
 ROTATE_JS = r"""() => { const t = (document.body.innerText || ''); return { rotate: /rotate|turn your (phone|device)|landscape/i.test(t), sample: (t.match(/[^\n]*(rotate|landscape)[^\n]*/i) || [null])[0] }; }"""
 
@@ -247,8 +261,10 @@ def run_device(v, args, dev):
             v.check(P + "stick + look + FIRE held together all register", False, "stick/fire control missing (%s)" % list(ctl))
         # USE at a chest
         use = ctl.get("use") or ctl.get("loot") or ctl.get("e")
-        ch = s.js(CHEST_JS)
-        if not ch or "x" not in ch:
+        ch = s.js(CHEST_JS, getattr(args, "plant", None) or "")
+        if ch and (ch.get("plantNoChest") or ch.get("plantNoSpot")):
+            v.cnj(P + "holding USE 2 s at a chest opens it", "plant chest-through-wall: no house chest with a free spot behind a wall near the player %s" % ch)
+        elif not ch or "x" not in ch:
             v.cnj(P + "holding USE 2 s at a chest opens it", "no chest found near the player (setup) %s" % ch)
         elif not use:
             v.check(P + "holding USE 2 s at a chest opens it", False, "there is no USE control (%s)" % list(ctl))
@@ -312,7 +328,8 @@ def main():
     C.add_common_args(ap)
     ap.add_argument("--devices", default="pixel7,iphone14,se,ipad")
     ap.add_argument("--map", default="isla_viva", choices=sorted(C.MAPS), help="the map of the match every device plays (default isla_viva; Wave 7 gates ashgrid = Savanna too)")
-    ap.add_argument("--plant", default=None, choices=["no-touch-ui"], help="negative control (Wave 7b): every touch control display:none; the touch rows MUST fail")
+    ap.add_argument("--plant", default=None, choices=["no-touch-ui", "chest-through-wall"], help="negative controls: no-touch-ui (Wave 7b): every touch control display:none; the touch rows MUST fail. "
+                    "chest-through-wall (Wave 8 fix round): the USE row's player stands at a free spot that does NOT see a house chest (a wall between): the game refuses it, the row MUST fail")
     ap.set_defaults(gpu="swiftshader")
     args = ap.parse_args()
     if args.map != "isla_viva" and not args.report:

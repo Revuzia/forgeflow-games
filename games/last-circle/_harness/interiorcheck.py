@@ -35,8 +35,9 @@ Rows (each judged over every sampled house; counts are exact; a row that measure
   loot-reach          every loot point in the house: the mover gets within loot.js's 1.5 m walk-over radius, and back out
   furniture-clear     no furniture collider or drawn furniture inside a door's clear zone (width x 0.9 m each side x 1.8 m; the records' doors when the
                       house has them, else the bitmaps') or a stair + 1 m landings
-  grass-indoors       (match source) a top-down render of every room floor with the map's ground clutter drawn vs hidden changes 0 pixels; INFO for the
-                      injected sources (masking grass under a house is stage B's maps.js work)
+  grass-indoors       (match source) a top-down render of every room floor with the map's ground clutter drawn vs hidden changes 0 pixels that can
+                      show the room (Wave 8 fix round: a pixel counts when its ray, 0.65 m over the floor = the tallest tuft, is still inside the
+                      room; the wider-than-the-room frame's view out of a window / doorway is information); INFO for the injected sources
   light               every interior view (entrances, room centre x 4 headings, rendered by the game) mean luma >= 25 / 255 and <= 30 % of
                       pixels darker than 16 / 255 (an outdoor view of the same house is printed beside it; the bar was set on the first
                       measurements, before registration - see LUMA_ABS)
@@ -52,6 +53,8 @@ Plants (`--plant`, fixture and housegen sources; only the designated rows count,
   furniture-in-door   a 1.4 m crate inside the front door              -> furniture-clear FAILS
   window-solid        a box collider filling one ground-floor window   -> windows-shootable and kit-agree FAIL
   no-ceiling          the top storey's roof and ceiling not drawn      -> ceiling FAILS
+  grass-on-floor      (MATCH source only; Wave 8 fix round) three grass tufts stood on every room's own floor lattice for the grass render
+                                                                       -> grass-indoors FAILS (the control of the counted-pixel correction)
 Exit 0 pass / 1 fail / 2 could-not-judge.
 """
 from __future__ import annotations
@@ -78,7 +81,10 @@ NODE_PROBE = os.path.join(HERE, "probe_interior_node.js")
 PLANT_ROWS = {"furniture-in-door": {"furniture-clear"}, "window-solid": {"windows-shootable", "kit-agree"}, "no-ceiling": {"ceiling"},
               # Wave 8 stage B (lane I4): the controls of the two definition corrections (VERSION 2 of probe_interior.js)
               "empty-room": {"furniture-view", "furniture-pixels"},      # one room holds no furniture: only a neighbour's pieces can be seen from its door
-              "crate-steps": {"reach", "loot-reach"}}                   # (fixture) the front door reachable only over furniture tops
+              "crate-steps": {"reach", "loot-reach"},                   # (fixture) the front door reachable only over furniture tops
+              # Wave 8 fix round (lane K3, on lane K1's request): the control of the grass-indoors pixel correction (match source only)
+              "grass-on-floor": {"grass-indoors"}}
+MATCH_PLANTS = {"grass-on-floor"}
 FURN_MIN = 3
 DOOR_MIN = 2.0
 LUMA_ABS = 25.0              # every interior view: mean luma >= 25 / 255 ("not black") and <= 30 % of its pixels under 16 / 255. Set on the first measurements,
@@ -298,8 +304,10 @@ def main(v, args):
         with open(hg, "rb") as f:
             v.data["housegenSha1"] = hashlib.sha1(f.read()).hexdigest()[:12]
         v.data["housegenMtime"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(hg)))
-    if args.plant and args.source == "match":
-        raise C.HarnessError("--plant applies to --source fixture / housegen (a planted fault is planted into the house the gate builds)")
+    if args.plant and args.source == "match" and args.plant not in MATCH_PLANTS:
+        raise C.HarnessError("--plant %s applies to --source fixture / housegen (a planted fault is planted into the house the gate builds)" % args.plant)
+    if args.plant in MATCH_PLANTS and args.source != "match":
+        raise C.HarnessError("--plant %s applies to --source match only (grass-indoors is information on the injected sources)" % args.plant)
     node_h = None
     if args.source in ("fixture", "housegen") and not args.browser_only:
         node_h = node_half(args, v)
@@ -339,8 +347,14 @@ def main(v, args):
             v.info("furniture-pixels", "no injected furniture objects to hide (match source: the furniture is batched into the map's meshes); the geometric furniture-view row judges it")
         gr = [(l, g) for l, _, _, x in br for g in x["views"].get("grass", [])]
         gbad = [(l, g) for l, g in gr if g["px"] > 0]
-        gdet = "%d of %d rooms show no ground grass on their floor (top-down render, clutter drawn vs hidden; >0 changed pixels = grass inside) %s" % (
+        gdet = "%d of %d rooms show no ground grass on their floor (top-down render, clutter drawn vs hidden; >0 changed pixels whose ray is inside the room 0.65 m over the floor = grass inside) %s" % (
             len(gr) - len(gbad), len(gr), [(l, g["room"], g["px"]) for l, g in gbad[:6]])
+        if gr and "pxAll" in gr[0][1]:
+            gout = [(l, g["room"], g.get("pxOutside")) for l, g in gr if g.get("pxOutside")]
+            gall = [(l, g) for l, g in gr if g.get("pxAll")]
+            v.info("grass-indoors (seen through an opening, not counted)", "%d rooms: changed pixels whose ray leaves the room below 0.65 m (the landscape through a window / doorway at the frame's edge) %s; "
+                   "the pre-correction count (every changed pixel) would read %d of %d rooms clean %s; planted tufts %s" % (
+                       len(gout), gout[:6], len(gr) - len(gall), len(gr), [(l, g["room"], g["pxAll"]) for l, g in gall[:6]], sum(g.get("planted") or 0 for _, g in gr)))
         if args.source == "match" and not args.simulate_records:
             rows.check("grass-indoors", None if not gr else not gbad, gdet)
         else:
