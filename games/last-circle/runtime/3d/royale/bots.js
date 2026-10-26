@@ -48,9 +48,10 @@ const slotOf = (a) => parseInt(String(a.id).slice(1), 10) || 0;
 // (LC-15) finish a downed enemy, by tier: the share of bots that keep shooting a knocked man when nobody standing is in sight (the rest let him
 // bleed and go on). A stable per-slot draw (never the rng stream: a draw there would reshuffle every other decision of every bot).
 const FINISH_PCT = [25, 40, 60, 80, 92];
-// (LC-96) new-player grace (PLAN: the first 60-90 s after landing; the 90 s end of it, then a 60 s taper so it never ends on a cliff): full for GRACE_FULL_S after a human touches down, tapering to nothing at GRACE_END_S; scaled by the account's
+// (LC-96) new-player grace (PLAN: the first 60-90 s after landing; the 90 s end of it, then a 90 s taper so it never ends on a cliff - a 60 s taper
+// measured AFK-human median survival 134-138 s over 9 matches, the deaths inside the taper): full for GRACE_FULL_S after a human touches down, tapering to nothing at GRACE_END_S; scaled by the account's
 // skill (full at <= 0.35, gone at >= 0.75), so a skilled player's match is the match it was. A human who shoots a bot ends the grace for that bot.
-const GRACE_FULL_S = 90, GRACE_END_S = 150;
+const GRACE_FULL_S = 90, GRACE_END_S = 180, GRACE_ERR = 2.5, GRACE_REACT_S = 0.9;
 const humanLandT = new Map();     // human actor id -> W.t of its touchdown (this match)
 function graceOf(W, t) {
   if (t.isBot) return 0;
@@ -90,7 +91,7 @@ function fallDmgForDrop(h) {
   const v = Math.sqrt(2 * g * h);
   if (typeof K.fallDamage === "function") { const d = K.fallDamage(v); return d > 0 ? d : 0; }
   if (v <= K.FALL_SAFE_V) return 0;
-  return (K.FALL_DMG_PER_V || 1) * Math.pow(v - K.FALL_SAFE_V, K.FALL_DMG_EXP || 1.5);
+  return (K.FALL_DMG_PER_V || 1) * Math.pow(v - K.FALL_SAFE_V, K.FALL_EXP || K.FALL_DMG_EXP || 1.5);
 }
 function buildFallTable() {
   LETHAL_H = null;
@@ -110,6 +111,8 @@ function lethalDrop(a) { return LETHAL_H ? LETHAL_H[Math.max(0, Math.min(200, Ma
 const reviving = new Map();
 const REVIVE_R = 1.6;             // m: a bot channels from this close (the contract's reach is 2 m)
 const REVIVE_SEEK_M = 80;         // a downed squadmate within this range is worth going to
+/** player.js runs the revive channel itself (lane player: W.canRevive + reviveStep on every up actor's interactDown) - the bots then only hold E. */
+const PLAYER_REVIVE = (W) => typeof W.canRevive === "function";
 /** Revive `t` by `by`: player.js's own entry when it exports one (the integrator wires W.reviveActor), else the contract's state change. */
 function finishRevive(W, t, by) {
   if (typeof W.reviveActor === "function") { W.reviveActor(t, by); return; }
@@ -405,7 +408,7 @@ export function attachBrain(W, actor, nBots) {
       graceMul: 0, assist: null, ping: null, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
       nadeS: 0, nadeKind: 0, nadeSlot: -1, nadePrev: -1, nadeX: 0, nadeY: 0, nadeZ: 0, nadeYaw: 0, nadePitch: 0, nadeT: -99, nadeNextT: 0, nadeCheckT: 0, smokeWant: 0,
       reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
-      wantShield: false, shieldScanT: 0, shieldNear: false, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
+      wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
     },
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
@@ -891,12 +894,12 @@ function think(W, b) {
     else if (hpItem && a.hp < 90) s.HEAL = Math.max(s.HEAL, 62);
   }
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
-  // (P23, LC-20) ...and goes and gets a shield when it has none: calm, upgraded, bar under 75, no shield item carried, one seen within 40 m.
-  // pickLoot ranks shields first while bb.wantShield is set.
+  // (P23, LC-20) ...and goes and gets a shield when it has none: calm, upgraded, bar under 75, no shield item carried, a shield it could take
+  // (or make room for: makeRoom) or an unopened chest within SHIELD_SEEK_M. pickLoot ranks shields first while bb.wantShield is set.
   bb.wantShield = calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= 50);
   if (bb.wantShield && W.t >= bb.shieldScanT) {
     bb.shieldScanT = W.t + 2;
-    bb.shieldNear = !!nearShield(W, a, 60);
+    bb.shieldNear = !!nearShield(W, a, SHIELD_SEEK_M);
   }
   if (bb.wantShield && bb.shieldNear) s.LOOT = Math.max(s.LOOT, 58);
   // ...and loots the body of the man it just killed, once nobody is in sight (his shields, ammo and heals are the restock a player takes)
@@ -1094,7 +1097,7 @@ function perceive(W, b) {
     const weak = ehp < 50 ? 0.6 : ehp < 100 ? 0.85 : 1;
     const attacker = a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 3 ? 0.6 : 1;
     // (P23, C-DBNO) a downed man is no threat: anyone standing comes first (x4 for most, x1.8 for a finisher)
-    const sd = d * bias * weak * attacker * (t.downed ? (finisher ? 1.8 : 4) : 1);
+    const sd = d * bias * weak * attacker * (t.downed ? (finisher ? 1.8 : 4) : 1) * (t.isBot || provoked ? 1 : 1 + 2 * graceOf(W, t));   // (LC-96) anyone else first
     // (Wave 7b, S1) the sight line LAST, and only for a candidate that would win: a seen candidate replaces the best only when
     // sd < bestD, so one that cannot win needs no march (the same choice as before; losBlocked has no lasting side effect - its
     // collider queries only stamp their own results). It was the costliest call of the think tick (maps.js losBlocked 3.7 KB
@@ -1141,6 +1144,7 @@ function onEnter(W, b, state) {
     if (!pick) { bb.pileT = -99; bb.shieldNear = false; }        // (P23) nothing left to take: the restock marks are spent
     bb.lootId = pick ? pick.id : null;
     bb.lootType = pick ? pick.type : null;
+    bb.roomFor = pick && pick.type === "item" && bb.wantShield && shieldNeedsRoom(W, a, pick.data) ? pick.id : null;   // (P23, LC-20) make room on arrival
     if (pick) {
       setLootGoal(bb, pick);                                         // y: loot on an upper floor
     } else {
@@ -1289,8 +1293,8 @@ function pickLoot(W, a, near) {
     // Skip anything give() would refuse. Without this a bot at the gun cap kept
     // re-selecting the same weapon, walking to it, being refused, and re-planning
     // to it again — a twitch loop in the open, next to loot it could not take.
-    if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data)) continue;
-    if (n.type === "chest") score = dry ? 82 : (upgraded ? 55 : 72);
+    if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data) && !(a.brain && a.brain.bb.wantShield && shieldNeedsRoom(W, a, n.data))) continue;
+    if (n.type === "chest") score = dry ? 82 : (upgraded ? (a.brain && a.brain.bb.wantShield ? 60 : 55) : 72);   // (P23, LC-20) a shield restock
     else if (n.data.kind === "weapon") {
       score = dry ? 76 + n.data.rarity * 4 : (upgraded ? 30 + n.data.rarity * 8 : 66 + n.data.rarity * 6);
       // a copy of a gun already carried at the same or better rarity adds nothing
@@ -1301,6 +1305,8 @@ function pickLoot(W, a, near) {
       score = n.data.id.includes("shield") ? 45 : 34;
       // (P23, LC-20) a calm bot with a thin bar and no shield in the bag goes for the shield first
       if (score === 45 && a.brain && a.brain.bb.wantShield) score = n.data.id === "big_shield" ? 70 : 62;
+      // ...and a big shield is the only item that takes the bar past 50 (a mini caps there): one in the bag is worth a detour
+      else if (n.data.id === "big_shield" && !carriesShield(a, true)) score = 54;
     }
     else if (n.data.kind === "ammo") score = dry ? 80 : (feedsStarvingPrimary(a, n.data.id) ? 70 : 38);
     score -= n.d * 0.4;
@@ -1445,6 +1451,7 @@ function act(W, b, dt) {
   // so without a clear here a bot that crouched once at a camp spot would stay
   // crouched — and at CROUCH.speedMult 0.45 — for the rest of the match.
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false; inp.crouch = false;
+  inp.interactDown = false;       // (P23, C-DBNO) held only by actRevive, frame by frame (player.js reviveStep channels while it is held)
 
   if (a.gliding) {
     // steer toward drop target, dive (sprint) when above it
@@ -2608,7 +2615,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -3681,7 +3688,7 @@ function fireOnTheMove(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   const t = bb.target && W.actorById.get(bb.target);
   if (!t || !t.alive || W.t - bb.targetSeenT > 0.4) return;
-  if (W.t - bb.acquireT < b.tierK.reactionMs / 1000 + (bb.graceMul > 0 && !t.isBot ? bb.graceMul * 0.6 : 0)) return;   // (P23, LC-96) the grace delay too
+  if (W.t - bb.acquireT < b.tierK.reactionMs / 1000 + (bb.graceMul > 0 && !t.isBot ? bb.graceMul * GRACE_REACT_S : 0)) return;   // (P23, LC-96) the grace delay too
   const def = K.WEAPONS[a.weapon ? a.weapon.id : "pistol"] || K.WEAPONS.pistol;
   if (a.weapon && (a.weapon.state === "reloading" || a.weapon.magAmmo === 0)) {
     /* An empty mag is only a reload if there is something to reload FROM.
@@ -3703,7 +3710,8 @@ function fireOnTheMove(W, b, dt) {
   const wx = b0.fx * inp.mz + b0.rx * inp.mx, wz = b0.fz * inp.mz + b0.rz * inp.mx;
   const eye = eyePos(a, _eye_fireOnTheMove);
   const aimY = t.pos.y + K.actorHeight(t) * 0.64;
-  const err = (b.tierK.aimErrDeg * 1.5 * Math.PI) / 180;
+  const gmv = bb.graceMul > 0 && !t.isBot && !(a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 4) ? bb.graceMul : 0;   // (P23, LC-96)
+  const err = (b.tierK.aimErrDeg * 1.5 * (1 + GRACE_ERR * gmv) * Math.PI) / 180;
   bb.errPhase = (bb.errPhase || b.rng() * 9) + dt * 3.1;
   steerYaw(a, Math.atan2(-(t.pos.x - eye.x), -(t.pos.z - eye.z)) + Math.sin(bb.errPhase) * err, dt, 10);
   inp.pitch = K.clamp(Math.atan2(aimY - eye.y, dist) + Math.cos(bb.errPhase * 0.83) * err * 0.6, -1.3, 1.3);
@@ -3748,6 +3756,7 @@ function actLoot(W, b, dt) {
   // (Wave 8 fix round, lane K2) los = true: a HOUSE item / chest is taken only along a clear line from the bot's chest (loot.js pickLos, the player's rule) -
   // a bot on the street used to take the gun on a shelf behind the wall. The bot walks to the thing's STAND point (setLootGoal) so the line is clear there.
   const near = nearGoal ? W.nearbyLoot(a.pos, 2.4, 2.2, true) : _noLoot;
+  if (bb.roomFor && bb.roomFor === bb.lootId && mt && hyp(mt.x - a.pos.x, mt.z - a.pos.z) < 3.5) makeRoom(W, b);
   for (const n of near) {
     if (n.type === "chest") {
       // chests take a 2s channel — bots obey the same rule as the player
@@ -4188,7 +4197,7 @@ function downedMate(W, b) {
 function actDowned(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   inp.fire = false; inp.sprint = false; inp.ads = false; inp.crouch = false; inp.jump = false; inp.reload = false;
-  if (reviving.has(a.id)) { inp.mx = 0; inp.mz = 0; return; }
+  if (reviving.has(a.id) || a._revivedBy) { inp.mx = 0; inp.mz = 0; return; }     // (a._revivedBy: player.js's channel, a human or a bot on it)
   let best = null, bd = 80;
   for (const t of W.actors) {
     if (t === a || !t.alive || t.downed || !sameTeam(a, t)) continue;
@@ -4215,7 +4224,11 @@ function actDowned(W, b, dt) {
 function actRevive(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   const t = bb.reviveId ? W.actorById.get(bb.reviveId) : null;
-  if (!t || !t.alive || !t.downed) { if (bb.reviveStarted) cancelRevive(W, b, true); bb.reviveId = null; b.state = "WANDER"; b.nextThink = 0; return; }
+  if (!t || !t.alive || !t.downed) {
+    if (bb.reviveStarted && t && t.alive && PLAYER_REVIVE(W)) { if (reviving.get(t.id) === a.id) reviving.delete(t.id); bb.reviveStarted = false; nav.st.revives++; }   // player.js revived him
+    else if (bb.reviveStarted) cancelRevive(W, b, true);
+    bb.reviveId = null; b.state = "WANDER"; b.nextThink = 0; return;
+  }
   const by = reviving.get(t.id);
   if (by && by !== a.id) { bb.reviveId = null; b.state = "WANDER"; b.nextThink = 0; return; }       // someone else got there first
   const d = hyp(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
@@ -4230,9 +4243,10 @@ function actRevive(W, b, dt) {
       return;
     }
     if (bb.nadeS) { inp.mx = 0; inp.mz = 0; return; }                 // let the smoke go first
+    if (t._revivedBy && t._revivedBy !== a.id) { bb.reviveId = null; b.state = "WANDER"; b.nextThink = 0; return; }   // a human (player.js) is on him
     bb.reviveStarted = true; bb.reviveT = 0; bb.reviveHurtT = a.lastDamageT || -99;
     reviving.set(t.id, a.id);
-    W.events.emit("reviveStart", a, t);
+    if (!PLAYER_REVIVE(W)) W.events.emit("reviveStart", a, t);       // player.js emits its own when it runs the channel
   }
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.crouch = true;
   steerYaw(a, Math.atan2(-(t.pos.x - a.pos.x), -(t.pos.z - a.pos.z)), dt, 6);
@@ -4240,6 +4254,13 @@ function actRevive(W, b, dt) {
   if ((a.lastDamageT || -99) > bb.reviveHurtT && a.hp + a.shield < 60) {   // shot hard mid-channel: fight first
     cancelRevive(W, b);
     b.state = "ENGAGE"; b.nextThink = 0;
+    return;
+  }
+  if (PLAYER_REVIVE(W)) {
+    // player.js owns the channel (reviveStep: HOLD E within K.REVIVE_RANGE for K.REVIVE_S, its events, completeRevive): hold the key, watch it end.
+    // A refusal (canRevive false: out of reach on the stairs, someone else on him) walks up again rather than holding E at nothing.
+    if (!W.canRevive(a, t) && a._reviveOf !== t.id) { cancelRevive(W, b, true); return; }
+    inp.interactDown = true;
     return;
   }
   bb.reviveT += dt;
@@ -4256,7 +4277,7 @@ function cancelRevive(W, b, quiet) {
   const t = bb.reviveId ? W.actorById.get(bb.reviveId) : null;
   if (bb.reviveStarted) {
     if (t && reviving.get(t.id) === a.id) reviving.delete(t.id);
-    if (!quiet || (t && t.alive)) W.events.emit("reviveCancel", a, t || null);
+    if (!PLAYER_REVIVE(W) && (!quiet || (t && t.alive))) W.events.emit("reviveCancel", a, t || null);   // player.js: releasing E is its cancel
   }
   bb.reviveStarted = false; bb.reviveT = 0;
 }
@@ -4412,8 +4433,20 @@ function maybeFrag(W, b, t, seen, dist) {
   if (W.t < bb.nadeCheckT) return;
   bb.nadeCheckT = W.t + 0.5;
   if (bb.nadeS || W.t < bb.nadeNextT || (a.tier || 1) < 2 || t.downed || !bb.targetPos) return;
-  if (dist < 9 || dist > 28) return;
   if (throwSlot(a, 1) < 0) return;
+  bb.fdN++;                                                                       // (probe counters: checks / out of reach / no reason / no arc / pushes)
+  if (dist < 9 || dist > 30) {
+    bb.fdR++;
+    // OUT OF THROWING REACH (a frag carries ~27 m on the flat). Measured (Isla Viva seed 5, 12 frag carriers, 0 throws): 98 % of their checks
+    // were out of reach, 87 % of them past 60 m - the duels of an open map are long. A player with a nade in a stalled duel closes the gap to
+    // throw it: a tier 3+ bot with 100+ of bar, 5 s into a fight with a man holding his spot 30-60 m off, pushes (CLOSEIN, firing on the move)
+    // for the time it takes to come to ~24 m (2-4 s), and the reasons below get their chance; once per 30 s.
+    if (dist > 30 && dist < 60 && seen && (a.tier || 1) >= 3 && W.t >= bb.nadePushT && W.t - bb.acquireT > 5 && a.hp + a.shield >= 100 &&
+        t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 1.5) {
+      bb.nadePushT = W.t + 30; bb.closeInUntil = W.t + Math.min(4, Math.max(2, (dist - 24) / 6)); b.nextThink = 0; bb.fdP++;
+    }
+    return;
+  }
   const gone = W.t - bb.targetSeenT;
   let why = 0;
   if (!seen && gone > 0.5 && gone < 5) why = 1;                                   // he ducked behind something: put one there
@@ -4421,11 +4454,14 @@ function maybeFrag(W, b, t, seen, dist) {
     const tr = IND.H !== null ? targetRoom(W, b, bb.targetPos) : -1;
     if (tr >= 0 && myRoom(W, b) !== tr) why = 2;                                 // camping a room
     else if (occAny(W, bb.targetPos.x, bb.targetPos.z, 3) && b.rng() < 0.35) why = 3;   // planted by cover
+    // a duel that has gone on 4 s+ against a man standing his ground: break the stalemate (measured: 1 match in 6 had no bot frag at loot
+    // weight 8 in two 6-match batches, a Deepwood match both times: its duels rarely met the room / cover / ducked tests)
+    else if (W.t - bb.acquireT > 4 && b.rng() < 0.2) why = 4;
   }
-  if (!why) return;
+  if (!why) { bb.fdW++; return; }
   const tp = bb.targetPos;
   beginThrow(W, b, 1, tp.x, tp.y, tp.z);
-  if (!bb.nadeS) bb.nadeCheckT = W.t + 2;                                          // no clean arc from here: look again in a bit
+  if (!bb.nadeS) { bb.nadeCheckT = W.t + 2; bb.fdB++; }                                          // no clean arc from here: look again in a bit
 }
 /** (LC-14) a bot that knows a grenade is landing beside it sprints out of the blast (away from the predicted burst, over every state's legs). */
 function dodgeGrenade(W, b, dt) {
@@ -4497,17 +4533,64 @@ function carriesShield(a, bigOnly) {
   }
   return false;
 }
-/** (LC-20) a ground shield item the inventory would take within r (nearbyLoot; one query per 2 s per calm bot that wants one). */
+/** (LC-20) a ground shield item the inventory would take within r, or an unopened chest (6 in 10 of a chest's consumable rolls are shields;
+ *  late in a match the floor shields are gone and the chests in the houses are where the restock is). nearbyLoot; one query per 2 s per calm
+ *  bot that wants one. */
+const SHIELD_SEEK_M = 80;
 function nearShield(W, a, r) {
   if (!W.nearbyLoot) return null;
   const near = W.nearbyLoot(a.pos, r);
+  let chest = null;
   for (let i = 0; i < near.length; i++) {
     const n = near[i];
+    if (n.type === "chest") { if (!chest && !(a.brain && a.brain.bb.badLoot && a.brain.bb.badLoot[n.id] > W.t)) chest = n; continue; }
     if (n.type !== "item" || n.data.kind !== "consumable") continue;
     const c = K.CONSUMABLES[n.data.id];
-    if (c && c.heals === "shield" && (!W.wouldAcceptItem || W.wouldAcceptItem(a, n.data))) return n;
+    if (c && c.heals === "shield" && (!W.wouldAcceptItem || W.wouldAcceptItem(a, n.data) || shieldNeedsRoom(W, a, n.data))) return n;
   }
-  return null;
+  return chest;
+}
+/** (LC-20) MAKE ROOM FOR A SHIELD. Measured (3 AFK matches, t >= 600 s): every calm bot under 75 shield with no shield item carried three guns,
+ *  and 2 in 3 had no free slot at all (a bandage stack and a frag in the other two) - the walkover had filled the bag before a shield came by, so
+ *  the shield on the floor beside it was refused (loot.js wouldAccept) and the bar stayed empty for the rest of the match. A player drops the
+ *  sidearm for the shield. The gun to drop: the weakest of THREE (gunScore: the pistol first), only while another carried gun has a full
+ *  magazine on hand (never the bot's last real firepower). -1 = keep everything. */
+function roomGunSlot(a) {
+  const sl = a.inventory.slots;
+  let guns = 0, worst = -1, ws = 1e9;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (!s2) return -1;                                   // a free slot already: nothing to drop
+    if (s2.kind !== "weapon") continue;
+    guns++;
+    const sc = K.gunScore(s2.id, s2.rarity || 0);
+    if (sc < ws) { ws = sc; worst = i; }
+  }
+  if (guns < 3 || worst < 0) return -1;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (i !== worst && s2 && s2.kind === "weapon" && !lowOnAmmo(a, s2, 1)) return worst;
+  }
+  return -1;
+}
+/** A shield item the bag refuses only for want of a slot, and that dropping a gun (roomGunSlot) would let in. */
+function shieldNeedsRoom(W, a, data) {
+  if (!data || data.kind !== "consumable" || !W.dropActive) return false;
+  const c = K.CONSUMABLES[data.id];
+  if (!c || c.heals !== "shield" || !(c.cap > a.shield)) return false;
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) if (sl[i] && sl[i].kind === "consumable" && sl[i].id === data.id) return false;   // a stack of it: full, or it would fit
+  return roomGunSlot(a) >= 0;
+}
+/** Drop the roomGunSlot gun (loot.js W.dropActive: tossed 2 m ahead, the dropper's walkover ignores it for 1.5 s - the shield is taken first),
+ *  then draw the best gun again. */
+function makeRoom(W, b) {
+  const a = b.actor, bb = b.bb;
+  bb.roomFor = null;
+  const i = roomGunSlot(a);
+  if (i < 0 || a.healing) return;
+  if (a.inventory.active !== i && W.equipSlot) W.equipSlot(a, i);
+  if (a.inventory.active === i && W.dropActive(a)) { nav.st.roomDrops++; ensureGunOut(W, a); }
 }
 
 // ── combat ───────────────────────────────────────────────────────────────────
@@ -4861,9 +4944,10 @@ function actEngage(W, b, dt) {
   const acquireMul = sinceAcq < 0.6 ? 3 - (sinceAcq / 0.6) * 2 : 1;
   const tgtSpeed = seen && t.vel ? Math.sqrt(t.vel.x * t.vel.x + t.vel.z * t.vel.z) : 0;
   const motionMul = 1 + Math.min(1.2, tgtSpeed / 9.6) * 0.55 + (t.onGround === false ? 0.35 : 0);   // = aimMotionMul (inlined)
-  // (P23, LC-96) a new player in his grace window: the bot that found him aims like a tier lower (up to 2x the error) and reacts up to 0.6 s later
+  // (P23, LC-96) a new player in his grace window: the bot that found him aims up to 3.5x wider and reacts up to 0.9 s later (2x / 0.6 s
+  // measured AFK-human median survival 130 s over 6 matches: a tier-5 pistol at 16 m still hit a standing man with twice its error)
   const gm = bb.graceMul > 0 && !t.isBot && !(a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 4) ? bb.graceMul : 0;
-  const errDeg = b.tierK.aimErrDeg * acquireMul * motionMul * (duel ? 0.55 : 1) * (1 + gm);
+  const errDeg = b.tierK.aimErrDeg * acquireMul * motionMul * (duel ? 0.55 : 1) * (1 + GRACE_ERR * gm);
   const err = (errDeg * Math.PI) / 180;
   // wander the error smoothly (not white noise): per-brain sine wobble
   bb.errPhase = (bb.errPhase || b.rng() * 9) + dt * 3.1;
@@ -4879,7 +4963,7 @@ function actEngage(W, b, dt) {
   inp.pitch = Math.max(-1.3, Math.min(1.3, inp.pitch + (wantPitch - inp.pitch) * Math.min(1, dt * 9)));
 
   // fire discipline: reaction delay, LOS, range, bursts
-  const reacted = sinceAcq > b.tierK.reactionMs / 1000 + gm * 0.6;
+  const reacted = sinceAcq > b.tierK.reactionMs / 1000 + gm * GRACE_REACT_S;
   // (P23, LC-14) flush him with a frag (behind cover / camping a room / planted by cover; 9-28 m; tier 2+; one per 9-15 s)
   if (!bb.nadeS && bb.coverState !== "IN") maybeFrag(W, b, t, seen, dist);
   const inRange = dist < (def.falloff ? def.falloff[1] * 1.3 : 30);      // fireRangeM(def), inlined          // the same reach ensureGunOut values a gun at
