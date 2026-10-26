@@ -62,6 +62,7 @@ with sync_playwright() as pw:
         page.evaluate('__hp.game.players[0].invuln = 999; if (__hp.game.timeLeft < 20) __hp.game.timeLeft = 60')
         time.sleep(0.5)
     p2 = page.evaluate('__hp.game.players[1].points')
+    fired = fired or page.evaluate('__hp.game.players[1].shotId') > 0  # a shot and its pop can both land between two polls
     check('bot: moves, fires and scores points on its own', fired and p2 > 0, f'P2 points {p2}')
     page.screenshot(path=f'{OUT}/bot_play.png')
     # menu behaves like an online game

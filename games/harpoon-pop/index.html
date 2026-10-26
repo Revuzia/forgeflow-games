@@ -661,8 +661,12 @@ const game = {
   slowT: 0, uid: 0, epoch: 0,
   slowmoT: 0, timeScale: 1, hitstop: 0, shake: 0, flash: 0, flashColor: '#fff',
   combo: 0, comboT: 0, nearCd: 0, timeLeft: 0, lastTick: 99,
-  backdrop: null, stats: freshStats(), clearInfo: null, scores: store('harpoonpop.scores') || [],
+  backdrop: null, stats: freshStats(), clearInfo: null, scoreTables: { solo: store('harpoonpop.scores') || [], coop: store('harpoonpop.scores.coop') || [] }, runCoop: false,
 };
+// Solo and co-op keep separate best-run tables (owner 2026-10-26): a two-diver score never lands in the solo table.
+// game.scores is the table for the run in play; on the title it follows the mode the picker is on.
+const scoreMode = () => (game.state === 'title' ? (game.modeSel === 1 ? 'solo' : 'coop') : (game.runCoop ? 'coop' : 'solo'));
+Object.defineProperty(game, 'scores', { get: () => game.scoreTables[scoreMode()], set: (v) => { game.scoreTables[scoreMode()] = v; } });
 // Per-player state lives on the player objects. These aliases point at P1 so single-player code
 // paths, tools and the test harness can keep reading game.player / game.lives / game.weapon / ...
 Object.defineProperty(game, 'player', { get() { return game.players[0] || null; } });
@@ -701,7 +705,7 @@ function makePlayer(id, lives) {
 }
 
 function newGame(coop = false) {
-  game.coop = coop; game.botMatch = false; game.players = coop ? [makePlayer(0, 3), makePlayer(1, 3)] : [makePlayer(0, 3)];
+  game.coop = coop; game.runCoop = coop; game.botMatch = false; game.players = coop ? [makePlayer(0, 3), makePlayer(1, 3)] : [makePlayer(0, 3)];
   game.score = 0; game.level = 1; game.stats = freshStats();
   loadLevel(1);
 }
@@ -1201,7 +1205,7 @@ function gameOver() {
 function saveRun(score, stage) {
   const entry = { score, stage, date: new Date().toISOString().slice(0, 10) };
   const list = [...game.scores, entry].sort((a, b) => b.score - a.score).slice(0, 5);
-  game.scores = list; store('harpoonpop.scores', list);
+  game.scores = list; store(scoreMode() === 'coop' ? 'harpoonpop.scores.coop' : 'harpoonpop.scores', list);
   return list[0] === entry && score > 0;
 }
 function levelClear() {
@@ -1584,7 +1588,7 @@ function drawTitle() {
   // item legend
   const types = Object.keys(ITEMS);
   // high scores
-  ctx.fillStyle = '#9a8fc0'; ctx.font = '700 12px "Chakra Petch", sans-serif'; ctx.fillText('BEST RUNS', 560, 360);
+  ctx.fillStyle = '#9a8fc0'; ctx.font = '700 12px "Chakra Petch", sans-serif'; ctx.fillText(`BEST RUNS · ${scoreMode() === 'coop' ? 'CO-OP' : 'SOLO'}`, 560, 360);
   const sc = game.scores.length ? game.scores : [];
   if (!sc.length) { ctx.fillStyle = '#6f6596'; ctx.font = '700 14px "Chakra Petch", sans-serif'; ctx.fillText('No runs yet. Set the first one.', 560, 386); }
   sc.forEach((s, i) => {
@@ -2571,7 +2575,7 @@ function startGuest(mode) {
   Net.role = 'guest'; Net.mode = mode; Net.started = true; Net.epoch = -1; Net.pressCount = 0;
   if (mode === 'relay' && Net.pc) { try { Net.pc.close(); } catch (e) { /* closed */ } Net.pc = null; }
   closeLobby(true);
-  game.coop = true; game.players = [makePlayer(0, 3), makePlayer(1, 3)];
+  game.coop = true; game.runCoop = true; game.players = [makePlayer(0, 3), makePlayer(1, 3)];
   game.score = 0; game.stats = freshStats(); game.level = 0; game.def = null; game.state = 'intro'; game.stateT = 0;
   game.bubbles = []; game.items = []; game.harpoons = []; game.bullets = []; game.enemies = []; game.shots = []; game.platforms = [];
   Sound.playMusic(true);
@@ -2869,7 +2873,7 @@ function start() {
   joinFromLink();
 }
 // Debug handle for console tinkering (e.g. __hp.loadLevel(9)).
-window.__hp = { game, keys, input, newGame, Net, qm, bot, botJoin, QUALITY, MOBILE, openLobby, goOnline, buildSnap, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
+window.__hp = { game, keys, input, newGame, Net, qm, bot, botJoin, gameOver, scoreMode, QUALITY, MOBILE, openLobby, goOnline, buildSnap, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
   gpu: () => ({ ...renderer.info.memory, programs: renderer.info.programs.length }),
   // step the game deterministically (used by the headless test harness); draw=false skips per-step rendering
   setManualClock(on) { manualClock = on; },
