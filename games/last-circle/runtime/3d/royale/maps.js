@@ -208,7 +208,8 @@ const KIND_TEX = { shingle: shingleTex, plank: plankTex, metal: metalTex, block:
 
 // LC-39: a PERIODIC fbm - the lattice indices wrap at the tile's own period (per x 2^octave cells), so the field at u = 1 is the field at u = 0. The water's
 // ripple field was _tfbm (lattice hashes at unwrapped integers) plus sin(u * 22 + v * 15) (22 and 15 are not multiples of 2 pi): neither wrapped, so the
-// tile edge was a seam every ~28 m, a square grid across the whole sea in the drop view's sun sheen. The sine is now 2 pi x (3, 2) cycles a tile.
+// tile edge was a seam every ~28 m, a square grid across the whole sea in the drop view's sun sheen. The sine is now 2 pi x (3, 2) cycles a tile,
+// and a minor term (0.18) under a 4-octave fbm, so the sheen reads as ripples, not ridges.
 function _tpfbm(u, v, s, oct, per) {
   let a = 1, f = per, sum = 0, n = 0;
   for (let i = 0; i < oct; i++) {
@@ -223,7 +224,7 @@ function _tpfbm(u, v, s, oct, per) {
 function waterNormalTex(aniso) {
   if (_texCache.waterN) return _texCache.waterN;
   const t = _fieldTex("water_p", 256,
-    (u, v) => _tpfbm(u, v, 31, 3, 6) * 0.6 + (Math.sin((u * 3 + v * 2) * Math.PI * 2) * 0.5 + 0.5) * 0.4,
+    (u, v) => _tpfbm(u, v, 31, 4, 6) * 0.82 + (Math.sin((u * 3 + v * 2) * Math.PI * 2) * 0.5 + 0.5) * 0.18,   // (the swell sine 0.4 -> 0.18: at 0.4 the sun sheen read as parallel zebra ridges from the drop)
     (h) => h, aniso, 1.4).normal;
   _texCache.waterN = t; return t;
 }
@@ -469,7 +470,12 @@ const LC_FRAG_ALBEDO = `
   float ldep = uLcWater.x - lcGround( vLcW.xz );
   float lk = smoothstep( 0.0, 7.0, ldep );
   diffuseColor.rgb = mix( uLcShallow, uLcDeep, lk );
-  float lfoam = ( 1.0 - smoothstep( 0.0, 0.55, ldep ) ) * ( 0.55 + 0.45 * sin( uLcWater.y * 1.9 + dot( vLcW.xz, vec2( 0.9, 1.3 ) ) ) );
+  // surf lines follow the depth contours (so they run along the shore and roll in), broken into ~12 m patches; once a band is under ~2 px (the drop
+  // view) its sine is replaced by its mean, so the plane sees a soft white rim, not stripes (was one world-space diagonal sine: zebra bands from the air)
+  float lph = ldep * 11.0 - uLcWater.y * 1.6;
+  float law = clamp( fwidth( lph ) - 0.6, 0.0, 1.0 );
+  float lbr = 0.62 + 0.38 * sin( dot( vLcW.xz, vec2( 0.45, 0.27 ) ) + 2.0 * sin( vLcW.z * 0.083 + vLcW.x * 0.031 ) );
+  float lfoam = ( 1.0 - smoothstep( 0.0, 0.55, ldep ) ) * mix( 0.55 + 0.45 * sin( lph ), 0.5, law ) * lbr;
   diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), clamp( lfoam, 0.0, 1.0 ) * 0.75 );
   diffuseColor.a = mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) );
 }
@@ -944,18 +950,40 @@ export class TerrainField {
   }
   /** Triangle-exact ground height: the lattice cell (ix, iz) is two triangles split along the diagonal (ix, iz+1)-(ix+1, iz) exactly as
    *  three's PlaneGeometry indexes them ((a, b, d) where u + v <= 1, then (b, c, d)); outside the lattice the edge value is held. */
-  at(x, z) {
-    const L = this.lat;
+  at(x, z) { return latAt(this.lat, x, z); }
+}
+/** TerrainField.at's body (the triangle-exact lattice height), at module level so a hot loop can call it with unboxed doubles (lcTerrainBlocks). */
+function latAt(L, x, z) {
+  let fx = (x + 800) * (LAT_CELLS / SIZE), fz = (z + 800) * (LAT_CELLS / SIZE);
+  fx = fx < 0 ? 0 : fx > LAT_CELLS ? LAT_CELLS : fx; fz = fz < 0 ? 0 : fz > LAT_CELLS ? LAT_CELLS : fz;
+  let ix = fx | 0, iz = fz | 0;
+  if (ix >= LAT_CELLS) ix = LAT_CELLS - 1;
+  if (iz >= LAT_CELLS) iz = LAT_CELLS - 1;
+  const u = fx - ix, v = fz - iz, i = iz * LAT_N + ix;
+  if (u + v <= 1) return L[i] + u * (L[i + 1] - L[i]) + v * (L[i + LAT_N] - L[i]);
+  const h11 = L[i + LAT_N + 1];
+  return h11 + (1 - u) * (L[i + LAT_N] - h11) + (1 - v) * (L[i + 1] - h11);
+}
+/** losBlocked's terrain march over the baked lattice: the same samples, the same comparison, the same answer as the closure loop
+ *  `heightAt0(ax + dx * t, az + dz * t) > ay + dy * t`. Q = [ax, ay, az, dx, dy, dz] (a Float64Array: no boxed doubles per call or per sample - the closure
+ *  loop called heightAt0 -> field.at up to 59 times a sight line, boxing two arguments and the result each time). */
+function lcTerrainBlocks(L, Q, steps) {
+  const ax = Q[0], ay = Q[1], az = Q[2], dx = Q[3], dy = Q[4], dz = Q[5];
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps, x = ax + dx * t, z = az + dz * t;
+    // latAt(L, x, z), written out: the page's first optimising tier did not inline the call (heap samples: two boxed arguments + a boxed result a sample)
     let fx = (x + 800) * (LAT_CELLS / SIZE), fz = (z + 800) * (LAT_CELLS / SIZE);
     fx = fx < 0 ? 0 : fx > LAT_CELLS ? LAT_CELLS : fx; fz = fz < 0 ? 0 : fz > LAT_CELLS ? LAT_CELLS : fz;
     let ix = fx | 0, iz = fz | 0;
     if (ix >= LAT_CELLS) ix = LAT_CELLS - 1;
     if (iz >= LAT_CELLS) iz = LAT_CELLS - 1;
-    const u = fx - ix, v = fz - iz, i = iz * LAT_N + ix;
-    if (u + v <= 1) return L[i] + u * (L[i + 1] - L[i]) + v * (L[i + LAT_N] - L[i]);
-    const h11 = L[i + LAT_N + 1];
-    return h11 + (1 - u) * (L[i + LAT_N] - h11) + (1 - v) * (L[i + 1] - h11);
+    const u = fx - ix, v = fz - iz, k = iz * LAT_N + ix;
+    let h;
+    if (u + v <= 1) h = L[k] + u * (L[k + 1] - L[k]) + v * (L[k + LAT_N] - L[k]);
+    else { const h11 = L[k + LAT_N + 1]; h = h11 + (1 - u) * (L[k + LAT_N] - h11) + (1 - v) * (L[k + 1] - h11); }
+    if (h > ay + dy * t) return true;
   }
+  return false;
 }
 
 // ── palette / biome coloring per map ────────────────────────────────────────
@@ -1241,6 +1269,7 @@ export async function buildMap(W, mapId) {
   // GENERATION-TIME ground = base + every pad / corridor registered so far. After the bake (below, once every POI, building and road has
   // registered) this is rebound to the lattice, and from then on it IS the ground: physics, bots, loot, props, roads and the drawn surface.
   let heightAt0 = (x, z) => field.liveLat(x, z);
+  let heightAtLat = null;                              // (set once the lattice is the ground: see losBlocked's terrain march)
   // DECISIONS that gate a seeded random draw (does this lot / landmark / tree / portal / loot spot exist?) read baseH, the analytic ground, NOT
   // heightAt0: a pad, a corridor or the lattice interpolation moves a height by a few cm, which near a waterline flips a yes/no, and one
   // conditional draw more or less reshuffles every placement after it (the shared map RNG stream must see the same draws in the same order as
@@ -5548,7 +5577,8 @@ export async function buildMap(W, mapId) {
   const _bk0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
   field.bake();
   const bakeMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _bk0;
-  heightAt0 = (x, z) => field.at(x, z);
+  heightAtLat = (x, z) => field.at(x, z);               // (losBlocked's terrain march takes the lattice directly while this is the ground)
+  heightAt0 = heightAtLat;
   // the world-shader layer's ground (LCU.uLcHgt): the baked lattice as a 609 x 609 half-float texture, linear-filtered, so the drawn ground height at any
   // fragment is one fetch (the walls' wear band, the water's depth colour and foam). Medium and up; freed with the map.
   if (LCFX) {
@@ -6762,6 +6792,7 @@ export async function buildMap(W, mapId) {
 
   // ── LOS (coarse march vs terrain + static boxes) ──────────────────────────
   const losCols = [];
+  const LOS_Q = new Float64Array(6);
   function spanTouches(cols, x0, y0, z0, x1, y1, z1) {
     const lx = (x0 < x1 ? x0 : x1) - 0.01, hx = (x0 < x1 ? x1 : x0) + 0.01;
     const ly = (y0 < y1 ? y0 : y1) - 0.01, hy = (y0 < y1 ? y1 : y0) + 0.01;
@@ -6824,6 +6855,10 @@ export async function buildMap(W, mapId) {
       if (cols.length && spanTouches(cols, x0, y0, z0, x1, y1, z1) && S.segmentColliders(x0, y0, z0, x1, y1, z1, cols)) return true;
     }
     const steps = Math.min(60, Math.max(6, Math.floor(len / 3)));
+    if (heightAt0 === heightAtLat && field.lat) {
+      LOS_Q[0] = ax; LOS_Q[1] = ay; LOS_Q[2] = az; LOS_Q[3] = dx; LOS_Q[4] = dy; LOS_Q[5] = dz;
+      return lcTerrainBlocks(field.lat, LOS_Q, steps);
+    }
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
       if (heightAt0(ax + dx * t, az + dz * t) > ay + dy * t) return true;
