@@ -548,6 +548,7 @@ export function createCityKit(env) {
   const texP = new Map();                              // palette file -> Promise<Texture|null>
   const palMats = new Map();                           // palette id -> material (kit-owned)
   const textures = new Set();                          // kit-owned textures
+  const surfTextures = new Set();                      // (P23 / LC-17) the derived surface maps + the facade detail: kit-owned, counted apart (stats.surfaceTextures)
   const placements = [];                               // { id, districts: Map, entries }
   let proxyMat = null;
   const shadowsOpt = { value: env.shadows === undefined ? "auto" : env.shadows };
@@ -682,7 +683,7 @@ export function createCityKit(env) {
           const t = new THREE.CanvasTexture(cv);
           t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
           t.name = "citykit:surface:" + kind + ":" + (tex.name || ""); t.needsUpdate = true;
-          textures.add(t);
+          surfTextures.add(t);
           out = t;
         }
       }
@@ -706,7 +707,7 @@ export function createCityKit(env) {
   function detailTexture() {
     if (detailP) return detailP;
     const pf = { file: DETAIL_PATH, sampler: "LINEAR/LINEAR_MIPMAP_LINEAR" };
-    detailP = loadTexture(pf).then((t) => { if (t) { t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; } return t; });
+    detailP = loadTexture(pf).then((t) => { if (t) { textures.delete(t); surfTextures.add(t); t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; } return t; });
     return detailP;
   }
   function installFacadeDetail(m, det) {
@@ -1053,7 +1054,7 @@ export function createCityKit(env) {
   // -- stats ---------------------------------------------------------------------------------------------------------------------------------
   function stats() {
     const out = { districts: {}, totals: { districts: 0, instances: 0, detailDrawCalls: 0, detailTriangles: 0, proxyDrawCalls: 0, proxyTriangles: 0, currentDrawCalls: 0, currentTriangles: 0,
-      fallbackBoxes: 0, textures: textures.size, materials: palMats.size + (proxyMat ? 1 : 0) }, failedTypes: [], inexactEntries: 0, oversize: [], tableDrift: man ? man.drift.slice() : null };
+      fallbackBoxes: 0, textures: textures.size, surfaceTextures: surfTextures.size, materials: palMats.size + (proxyMat ? 1 : 0) }, failedTypes: [], inexactEntries: 0, oversize: [], tableDrift: man ? man.drift.slice() : null };
     const failed = new Set();
     for (const P of placements) {
       out.inexactEntries += P.inexact || 0;
@@ -1100,7 +1101,8 @@ export function createCityKit(env) {
     for (const mat of palMats.values()) { mat.dispose(); m++; }
     if (proxyMat) { proxyMat.dispose(); m++; }
     for (const tex of textures) { tex.dispose(); t++; }
-    palMats.clear(); textures.clear(); texP.clear(); glb.clear(); glbP.clear(); placements.length = 0; proxyMat = null;
+    for (const tex of surfTextures) { tex.dispose(); t++; }
+    palMats.clear(); textures.clear(); surfTextures.clear(); surfCache.clear(); detailP = null; texP.clear(); glb.clear(); glbP.clear(); placements.length = 0; proxyMat = null;
     return { geometries: g, materials: m, textures: t, instancedMeshes: im };
   }
 
