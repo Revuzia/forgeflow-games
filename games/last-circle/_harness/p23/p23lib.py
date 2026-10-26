@@ -374,9 +374,21 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
     for label, pg in (("host", hpg), ("guest", gpg)):
         if SQ.boot_url(pg, args.base, args.boot_timeout) is None:
             raise C.EnvFailure("%s %s never booted" % (name, label))
+    create_vis = r"() => [...document.querySelectorAll('button')].some((b) => b.offsetParent && /^\s*CREATE ROOM\s*$/.test(b.textContent || ''))"
     for label, pg in (("host", hpg), ("guest", gpg)):
-        if not SQ.open_lobby(pg):
-            raise C.EnvFailure("%s %s: the SQUAD UP lobby never opened" % (name, label))
+        ok = SQ.open_lobby(pg)
+        # the lobby is OPEN when its CREATE ROOM button is on screen (squadguard's 380 px-panel test can be met by another menu panel);
+        # a SQUAD UP click that landed on nothing (a menu card still animating in on a loaded box) is clicked again, then the menu's own event
+        for attempt in range(3):
+            if SQ.wait(pg, create_vis, 6 if attempt else 2):
+                break
+            if attempt == 0:
+                SQ.open_lobby(pg)
+            else:
+                pg.evaluate("() => window.__LC__.W.events.emit('openOnline', { mode: 'standard' })")
+        else:
+            _pair_shot(pg, name + "_" + label + "_lobby")
+            raise C.EnvFailure("%s %s: the SQUAD UP lobby never opened (no CREATE ROOM); screen: %s" % (name, label, _screen_text(pg)))
     try:
         code = SQ.host_create(hpg)
     except Exception as e:      # name what the host saw (a renamed / covered CREATE ROOM is a lobby defect, not a timeout to retry)
