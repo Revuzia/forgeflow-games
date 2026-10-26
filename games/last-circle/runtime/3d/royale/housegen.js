@@ -1649,6 +1649,7 @@ export function generate(parcel, opts) {
     // foot of the walls and on the roof (drawn only: skins on a collider face, or deco tufts outside every opening's approach), broken panes (no glass in most
     // windows). Openings stay clear: nothing within 0.6 m of a doorway's sides or in front of it, nothing in a window's aperture.
     if (TH.ruined) {
+      const nbRuin = boxes.length;                        // (K1 re-run: every box of the wreckage below is flagged ns - drawn, never in the shadow pass; see the end of this block)
       const rr = rr5, P_SOOT = pal(fMat, 0x3a332c), P_SOOT2 = pal(fMat, 0x5e554a), P_MOSS = pal("fabric", 0x5f6c47), P_WEED = pal("fabric", 0x5d7036), P_WEED2 = pal("fabric", 0x7c8546);
       const P_RUB = pal("stone", 0xa39a88), P_RUB2 = pal("stone", 0x857d70), P_BEAM = pal("wood", 0x2f2620), P_CRACK = pal(fMat, 0x3a342e);
       const top = s[S] + (parapetRoof ? PARAPET : 0), rf = s[S];
@@ -1895,6 +1896,11 @@ export function generate(parcel, opts) {
           }
         }
       }
+      // (K1 re-run) THE WRECKAGE CASTS NO SHADOW: a ruin district's mesh is drawn twice whenever it casts (the main pass and the sun's depth pass, the whole merged
+      // mesh once its sphere meets the shadow box), and the dressing above is ~375 triangles a house - perf_district Isla Viva s1234's endgame view over the crater
+      // read x1.271 of the live build's triangles (x1.191 without the dressing; bar x1.25). meshData(..., { ns: true }) keys these faces "<mat>#ns" and maps.js
+      // draws them in the district's no-shadow twin mesh (same material and program, receives shadow). Drawing and colliders are unchanged; 'deco' tufts are furniture.
+      for (let q = nbRuin; q < boxes.length; q++) if (boxes[q].p !== "deco") boxes[q].ns = 1;
     }
   }
 
@@ -3302,7 +3308,9 @@ export function generate(parcel, opts) {
   const outBoxes = boxes.map((b) => {
     const wb = wbox(b.u0, b.u1, b.y0, b.y1, b.v0, b.v1);
     let hw = 0; for (let w = 0; w < 6; w++) if (b.h & (1 << faceMap[w])) hw |= 1 << w;
-    return { p: b.p, min: wb.min, max: wb.max, f: faceMap.map((li) => b.f[li]), h: hw, c: b.c, fl: b.fl };
+    const ob = { p: b.p, min: wb.min, max: wb.max, f: faceMap.map((li) => b.f[li]), h: hw, c: b.c, fl: b.fl };
+    if (b.ns) ob.ns = 1;                                  // (K1 re-run: a ruin's wreckage - drawn without a shadow; absent on every other box)
+    return ob;
   });
   // furniture: kit entries and authored boxes
   const furniture = [];
@@ -3731,7 +3739,9 @@ export function meshData(H, colOf, opts) {
   };
   const groups = { walls: new Map(), furniture: new Map(), glass: new Map() };      // mat -> { pos, nor, uv, col, idx, boxes }
   const boxRanges = new Array(H.boxes.length);
-  const acc = (grp, mat, inn) => { const key = inn ? mat + "|in" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
+  // (K1 re-run) opts.ns: an OUTSIDE face of a box flagged ns (a ruin's wreckage) is keyed "<mat>#ns" (maps.js: the no-shadow twin mesh); without opts.ns nothing changes
+  const nsSplit = !!opts.ns;
+  const acc = (grp, mat, inn, ns) => { const key = inn ? mat + "|in" : ns ? mat + "#ns" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
   // a box -> faces grouped by material (one box can span two materials: brick outside, plaster inside)
   const FACES = [                                    // [normal, 4 corners as (x, y, z) picks 0 = min 1 = max], uv axes
     [[1, 0, 0], [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], [2, 1]],
@@ -3747,7 +3757,7 @@ export function meshData(H, colOf, opts) {
     let first = null;
     for (let fi = 0; fi < 6; fi++) {
       if (b.h & (1 << fi)) continue;
-      const pe = H.palette[b.f[fi]], a = acc(grp, pe.mat, split && grp !== "glass" && faceIn(b, fi)), base = a.pos.length / 3;
+      const pe = H.palette[b.f[fi]], a = acc(grp, pe.mat, split && grp !== "glass" && faceIn(b, fi), nsSplit && grp === "walls" && b.ns === 1), base = a.pos.length / 3;
       if (!first) first = [grp, pe.mat, base];
       const [n, cs, ax] = FACES[fi], tile = TILE[pe.mat] || 2, rgb = colOf(pe.color);
       for (const cr of cs) {
