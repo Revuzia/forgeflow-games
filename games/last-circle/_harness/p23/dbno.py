@@ -251,7 +251,7 @@ def part_bot(args, v):
         v.check("human-revive (E 3 s + release = cancel, still downed; E again = revived after 5.0 +- 0.15 s, hp 30; prompt shown)",
                 any(x["n"] == "reviveCancel" for x in part) and m1["downed"] and m1["alive"] and chan is not None and abs(chan - 5.0) <= 0.15
                 and m2["alive"] and not m2["downed"] and abs(m2["hp"] - 30) <= 1 and prompt,
-                {"firstHold": [x["n"] for x in part if x["n"] != "shotFired"], "afterCancel": {k: m1[k] for k in ("alive", "downed")}, "channelS": chan, "K.REVIVE_S": rs,
+                {"firstHold": [x["n"] + ("" if x.get("a") == me else "@%s" % x.get("a")) for x in part if x["n"] != "shotFired"], "afterCancel": {k: m1[k] for k in ("alive", "downed")}, "channelS": chan, "K.REVIVE_S": rs,
                  "after": {k: m2[k] for k in ("alive", "downed", "hp")}, "prompt": prompt}, "cancel, then 5.0 s, hp 30")
         # bleed-out: the HUMAN's second knock, the mate held 100 m away (nobody can revive)
         s.guard_player(False)
@@ -324,9 +324,16 @@ def part_human2(args, v):
             raise C.EnvFailure("human2: no isolated spot")
         for pg, dx in ((hpg, 0.0), (gpg, 6.0)):
             pg.evaluate("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x, W.map.heightAt(x, z), z); p.vel.set(0, 0, 0); }", [spot["x"] + dx, spot["z"]])
+        # state travels P2P first (ffg_rtc.js DataChannels): the relay stand-in's size log (p23lib.fake_sb_plus) saw no state packet with the DCs
+        # open (dbno_h2_all5 10-26: upBytes null) - log the envelope size on the guest's RTC send too; whichever path carried >= 10 is judged
+        gpg.evaluate("""() => { const S = window.__LC__.W.net; if (!S || !S.rtc || S.rtc.__p23sz) return; const f = S.rtc.sendState;
+            S.rtc.sendState = function (env) { try { if (env && env.t === 'state') { const A = window.__SQ_STATE_RTC__ = window.__SQ_STATE_RTC__ || []; A.push(JSON.stringify(env.d).length); if (A.length > 600) A.shift(); } } catch (e) {}
+              return f.apply(this, arguments); }; S.rtc.__p23sz = true; }""")
         hpg.wait_for_timeout(2500)
-        size_js = "() => { const S = (window.__SQ_STATE__ || []).slice(-40); return S.length >= 10 ? S.reduce((a, b) => a + b, 0) / S.length : null; }"     # p23lib.fake_sb_plus
+        size_js = ("() => { const pick = (S) => (S || []).slice(-40); const R = pick(window.__SQ_STATE_RTC__), B = pick(window.__SQ_STATE__); const S = R.length >= 10 ? R : B;"
+                   " return S.length >= 10 ? S.reduce((a, b) => a + b, 0) / S.length : null; }")
         up_b = gpg.evaluate(size_js)
+        gpg.bring_to_front()          # the page that acts must be the visible one: a background tab gets no rAF, so its game does not tick
         src = gpg.evaluate("() => { const W = window.__LC__.W, p = W.player; const e = W.actors.find((a) => a.isBot && a.alive && a.teamId !== p.teamId); return e && e.id; }")
         gpg.evaluate("(src) => { const W = window.__LC__.W, p = W.player; p.hp = 100; p.shield = 0; W.hurtActor(p, 250, src, 'ar', false); }", src)
         seen = SQ.wait(hpg, "(id) => { const a = window.__LC__.W.actorById.get(id); return a && a.downed ? window.__LC__.W.t : null; }", 1.0, 0.05, g_id)
@@ -343,7 +350,10 @@ def part_human2(args, v):
         v.check("human2: the guest crawls (real W) and the host sees it move (> 1 m)", moved > 1.0, {"movedOnHostM": round(moved, 2)}, "> 1 m")
         gp = gpg.evaluate("() => { const p = window.__LC__.W.player.pos; return [p.x, p.z]; }")
         hpg.evaluate("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x + 1.2, W.map.heightAt(x + 1.2, z), z); p.vel.set(0, 0, 0); }", gp)
+        hpg.bring_to_front()          # the reviver's page ticks the 5 s channel (dbno_h2_all5: the host was the hidden tab, no revive)
         hpg.wait_for_timeout(500)
+        vis = {k: pg.evaluate("() => document.visibilityState") for k, pg in (("host", hpg), ("guest", gpg))}
+        v.info("human2: page visibility during the revive", vis)
         hpg.keyboard.down("KeyE")
         hpg.wait_for_timeout(5600)
         hpg.keyboard.up("KeyE")
