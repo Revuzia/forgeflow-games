@@ -1408,10 +1408,18 @@
   var FLOOR_AMMO_SHARE = 0.20;           // standalone ammo; guns bring their own
   // POSITIONAL, one weight per WEAPON_IDS entry in its order (see WEAPON_IDS):
   //   pistol smg ar shotgun sniper glauncher | dmr lmg burst   (P2-D: the six old weights trimmed to make room;
-  //   the LMG is the rarest floor gun, as PUBG's M249 is; the burst rifle sits with the AR)
-  var FLOOR_GUN_WEIGHTS  = [8, 22, 21, 18, 9, 8, 8, 4, 12];
-  var CHEST_GUN_WEIGHTS  = [6, 17, 20, 17, 11, 9, 9, 6, 11];
-  var SUPPLY_GUN_WEIGHTS = [0, 3, 18, 10, 18, 14, 14, 13, 10];
+  //   the LMG is the rarest floor gun, as PUBG's M249 is; the burst rifle sits with the AR). The sniper keeps ~its old
+  //   share (floor 10 %, chest 12 %, supply 22 %): the first cut (9 / 11 / 18) took bot sniper kills from 11 to 4 in the
+  //   6-match probe_match soak and failed "sniper kills in most matches" (3 / 6); the DMR does not replace it.
+  var FLOOR_GUN_WEIGHTS  = [8, 22, 20, 18, 11, 8, 8, 4, 11];
+  var CHEST_GUN_WEIGHTS  = [6, 17, 19, 17, 13, 9, 9, 6, 10];
+  var SUPPLY_GUN_WEIGHTS = [0, 3, 16, 10, 22, 14, 13, 12, 10];
+  // Standalone floor ammo [light, medium, shells, heavy, grenades], ~proportional to the guns that eat it. Medium now
+  // feeds four guns (AR, DMR, LMG, burst: 43 of 110 floor weight, was the AR's 26 of 100) - the old [30, 28, 22, 12, 8]
+  // left bots with every gun dry in 2-10 % of landed samples (0-0.2 % before P2-D) and stretched matches ~100 s.
+  var FLOOR_AMMO_WEIGHTS = [25, 41, 16, 11, 7];
+  // a chest's spare-ammo extra [light, medium, shells] (was [34, 34, 32]: the same medium shortfall)
+  var CHEST_AMMO_WEIGHTS = [28, 46, 26];
   // consumable rolls; the trailing "frag" and "smoke" entries are weight 0 (LC-14 built dark: the integrator raises
   // them together once bots throw, with a MAP_GEN_VERSION bump). Trailing zeros never roll (see rollFloorItem).
   var FLOOR_CON_IDS = ["bandage", "mini_shield", "medkit", "big_shield", "frag", "smoke"];
@@ -1438,7 +1446,7 @@
       return gun;
     }
     if (r < FLOOR_GUN_SHARE + FLOOR_AMMO_SHARE) {
-      var aid = ["light", "medium", "shells", "heavy", "grenades"][weightedIndex(rng, [30, 28, 22, 12, 8])];
+      var aid = ["light", "medium", "shells", "heavy", "grenades"][weightedIndex(rng, FLOOR_AMMO_WEIGHTS)];
       return { kind: "ammo", id: aid, count: AMMO[aid].box };
     }
     // "frag" rides LAST at weight 0 (LC-14, built dark): weightedIndex never lands on a trailing zero-weight
@@ -1562,7 +1570,7 @@
       var cid = CHEST_CON_IDS[weightedIndex(rng, CHEST_CON_WEIGHTS)];   // frag + smoke last at weight 0 (see rollFloorItem)
       items.push({ kind: "consumable", id: cid, count: conCount(cid) });
     } else {
-      items.push({ kind: "ammo", id: ["light", "medium", "shells"][weightedIndex(rng, [34, 34, 32])], count: 20 });
+      items.push({ kind: "ammo", id: ["light", "medium", "shells"][weightedIndex(rng, CHEST_AMMO_WEIGHTS)], count: 20 });
     }
     return items;
   }
@@ -1667,7 +1675,7 @@
     FLOOR_CON_IDS: FLOOR_CON_IDS, FLOOR_CON_WEIGHTS: FLOOR_CON_WEIGHTS, CHEST_CON_IDS: CHEST_CON_IDS, CHEST_CON_WEIGHTS: CHEST_CON_WEIGHTS,
     // parity P2-D / P3 (lane sim)
     fireInterval: fireInterval, fireMode: fireMode, ammoBoxMult: ammoBoxMult, conCount: conCount,
-    CHEST_GUN_WEIGHTS: CHEST_GUN_WEIGHTS, SUPPLY_GUN_WEIGHTS: SUPPLY_GUN_WEIGHTS, LOOT_TIERS: LOOT_TIERS, lootTier: lootTier,
+    CHEST_GUN_WEIGHTS: CHEST_GUN_WEIGHTS, SUPPLY_GUN_WEIGHTS: SUPPLY_GUN_WEIGHTS, FLOOR_AMMO_WEIGHTS: FLOOR_AMMO_WEIGHTS, CHEST_AMMO_WEIGHTS: CHEST_AMMO_WEIGHTS, LOOT_TIERS: LOOT_TIERS, lootTier: lootTier,
     STORM_PLACE: STORM_PLACE, placeCircle: placeCircle,
     SMOKE: SMOKE, smokeRadiusAt: smokeRadiusAt, segmentSmoked: segmentSmoked,
     TEAM_SIZE: TEAM_SIZE, TEAM_MODES: TEAM_MODES, teamSize: teamSize, dbnoOn: dbnoOn, teamCount: teamCount,
