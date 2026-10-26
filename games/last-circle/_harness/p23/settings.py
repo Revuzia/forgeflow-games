@@ -115,7 +115,7 @@ def main():
                 click(s, "^%s$" % t)
                 fit[t] = s.js(FIT_JS)
                 if t == "ACCESSIBILITY":     # the colour-vision options as the player sees them (any button naming a protan / deuter / tritan mode)
-                    cvd_modes = s.js("() => [...document.querySelectorAll('button, .lc-sopt')].filter((b) => b.offsetParent && /protan|deuter|tritan/i.test((b.textContent || '') + ' ' + (b.dataset.v || ''))).map((b) => (b.dataset.v || b.textContent).trim())")
+                    cvd_modes = s.js("() => [...document.querySelectorAll('button, .lc-sopt')].filter((b) => b.offsetParent && /protan|deut|tritan/i.test((b.textContent || '') + ' ' + (b.dataset.v || ''))).map((b) => (b.dataset.v || b.textContent).trim())")
                 s.screenshot(os.path.join(shots, "settings_%s.png" % t.lower()))
             v.check("tabs-fit (every tab but CONTROLS: every control inside 1280x720 and the card)", all(f is not None and not f["out"] for f in fit.values()) and len(fit) == 4,
                     {k: (f or {}).get("out") for k, f in fit.items()}, "0 outside")
@@ -186,10 +186,16 @@ def main():
             s.step_frames(10, 1 / 60, render=True)
             modes = sorted(set(cvd_modes))
             base = s.js(MEAN_JS)
+            base2 = s.js(MEAN_JS)          # the frame's own drift over 2 stepped frames (foliage, storm, clouds): the noise floor of this measure
+            noise = round(sum(abs(a - b) for a, b in zip(base2, base)) / len(base), 3)
             diffs = {}
-            for m in ("protanopia", "deuteranopia", "tritanopia"):
+            # lane boot's W.setGfx contract names (off | protan | deutan | tritan); the long clinical names as a fallback
+            for m, alt in (("protan", "protanopia"), ("deutan", "deuteranopia"), ("tritan", "tritanopia")):
                 try:
-                    s.js("(m) => window.__LC__.W.setGfx('daltonize', m)", m)
+                    try:
+                        s.js("(m) => window.__LC__.W.setGfx('daltonize', m)", m)
+                    except Exception:
+                        s.js("(m) => window.__LC__.W.setGfx('daltonize', m)", alt)
                     x = s.js(MEAN_JS)
                     diffs[m] = round(sum(abs(a - b) for a, b in zip(x, base)) / len(base), 3)
                 except Exception as e:
@@ -198,8 +204,8 @@ def main():
             back = s.js(MEAN_JS)
             rest = round(sum(abs(a - b) for a, b in zip(back, base)) / len(base), 3)
             v.check("colour-blind (the ACCESSIBILITY row lists off + 3 modes; each changes the frame >= 1/255; off restores it)",
-                    len(modes) >= 3 and all(isinstance(d, float) and d >= 1.0 for d in diffs.values()) and rest < 0.5,
-                    {"modesInUi": modes, "meanAbsDiff": diffs, "offRestore": rest}, ">= 1.0 each, < 0.5 back")
+                    len(modes) >= 3 and all(isinstance(d, float) and d >= 1.0 + noise for d in diffs.values()) and rest < 0.5 + noise,
+                    {"modesInUi": modes, "meanAbsDiff": diffs, "offRestore": rest, "noise": noise}, ">= 1.0 + noise each, < 0.5 + noise back")
             # HUD scale 130 %: the anchor corner stays
             s.step_frames(5, 1 / 60, render=True)
             a1 = s.js(ANCH_JS)
@@ -229,15 +235,27 @@ def main():
             v.data["hudScaleSet"] = scaled
             s.screenshot(os.path.join(shots, "settings_hud130.png"))
             bad = {}
+            empty = []
             Wv, Hv = a2["W"], a2["H"]
+            sc = scaled if scaled else 1.3
             for k, r1 in a1["a"].items():
                 r2 = a2["a"].get(k)
                 if not r2:
                     continue
+                if (r1[2] - r1[0]) < 2 or (r1[3] - r1[1]) < 2:
+                    empty.append(k)          # an empty panel (no kill feed / chat line yet) has no size to judge
+                    continue
                 cx, cy = (r1[0] + r1[2]) / 2, (r1[1] + r1[3]) / 2
                 left, top = cx < Wv / 2, cy < Hv / 2
-                cornerX = abs(r2[0] - r1[0]) if left else abs(r2[2] - r1[2])
-                cornerY = abs(r2[1] - r1[1]) if top else abs(r2[3] - r1[3])
+                # "grows from its anchor corner": the panel's own corner stays put (+-2 px), OR the whole anchored layer scales from the
+                # SCREEN corner (margin included: corner offset x scale, +-2 px) - both keep the panel in its corner; growing from the
+                # panel's centre (the plant) does neither
+                ox1 = r1[0] if left else Wv - r1[2]
+                ox2 = r2[0] if left else Wv - r2[2]
+                oy1 = r1[1] if top else Hv - r1[3]
+                oy2 = r2[1] if top else Hv - r2[3]
+                cornerX = min(abs(ox2 - ox1), abs(ox2 - ox1 * sc))
+                cornerY = min(abs(oy2 - oy1), abs(oy2 - oy1 * sc))
                 grew = (r2[2] - r2[0]) > (r1[2] - r1[0]) * 1.15
                 inside = r2[0] >= -1 and r2[1] >= -1 and r2[2] <= Wv + 1 and r2[3] <= Hv + 1
                 centred = abs(cx - Wv / 2) < 40          # a centred panel (compass, storm row) keeps its centre instead
@@ -246,7 +264,8 @@ def main():
                 if not (grew and inside and cornerX <= 2 and cornerY <= 2):
                     bad[k] = {"100": r1, "130": r2, "grew": grew, "inside": inside, "dx": round(cornerX, 1), "dy": round(cornerY, 1)}
             v.check("hud-scale (130 % by the real slider: every anchored panel grows from its anchor corner, +-2 px, inside the viewport)",
-                    bool(a1["a"]) and scaled is not None and abs(scaled - 1.3) < 0.01 and not bad, {"set": scaled, "panels": len(a1["a"]), "bad": bad}, "1.3, 0 bad")
+                    bool(a1["a"]) and scaled is not None and abs(scaled - 1.3) < 0.01 and not bad and len(a1["a"]) - len(empty) >= 5,
+                    {"set": scaled, "panels": len(a1["a"]), "judged": len(a1["a"]) - len(empty), "empty": empty, "bad": bad}, "1.3, >= 5 judged, 0 bad")
             s.js(HUDMOD_JS)
             rb = s.safe_js("() => { const H = window.__HUDMOD__; return H && H.readback ? H.readback(window.__LC__.W) : null; }", default=None) or {}
             mm = rb.get("minimap")
@@ -257,7 +276,11 @@ def main():
             for seed in (7, 8):
                 L.start(s, "standard", seed, "ashgrid", guard=True)
                 s.land(140, protect=True)
-                s.js("() => { const C = window.__LC__; for (let i = 0; i < 60; i++) C.fastForward(1, 1 / 30); }")
+                # past t = 50 s in sim (the 'map' tip's moment), then LIVE frames: the tips run from the HUD's own 2 Hz update and show one at a
+                # time on the wall clock (fastForward alone never draws a HUD frame, so it can never show one)
+                s.js("() => { const C = window.__LC__, W = C.W; let n = 0; while (W.t < 50 && n++ < 120) C.fastForward(1, 1 / 30); }")
+                s.thaw_loop()
+                s.sleep(25.0)
                 rb = s.safe_js("() => { const H = window.__HUDMOD__; return H && H.readback ? H.readback(window.__LC__.W) : null; }", default=None) or {}
                 shown.append(list(((rb.get("hints") or {}).get("shown")) or []))
             new = shown[1][len(shown[0]):] if shown[1][:len(shown[0])] == shown[0] else shown[1]      # the log may run across matches

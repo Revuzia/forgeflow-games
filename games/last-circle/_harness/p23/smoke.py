@@ -11,13 +11,14 @@ bot line of sight to 0 for its lifetime, at +0.3 ms or less with 3 smokes on the
 
 STANDARD solo match (Savanna seed 7), landed under the guard, the human moved to an isolated flat spot, loop frozen, frames stepped at 60 Hz:
   contract       K.SMOKE (lifeS, r), W.map.losBlocked
-  spawn          a REAL throw (a smoke in slot 4, LMB, pitch 0.25): one W.smokes entry {x, y, z, r, t0, t1} within 4 s, 6-20 m ahead
+  spawn          a REAL throw (a smoke in slot 4, LMB, pitch 0.25): one W.smokes entry {x, y, z, r, t0, t1} within 4 s, 6-35 m ahead (a lob + roll: PUBG ~30 m)
   lifetime       t1 - t0 = K.SMOKE.lifeS (+-0.5 s) and >= 15 s (PUBG / Apex class); the entry is gone after t1 (+1 s)
   los            losBlocked through the cloud's centre at 1.2 m: false before the throw, true every 0.25 s from t0 + 2 s to t1 - 1 s, false after t1
   bot-sight      an enemy bot pinned 26 m away facing the human (positive control first: it shoots the human in the open within 6 s); the smoke
                  between them: from t0 + 2 s to t1 - 1 s it lands 0 hits on the human
   programs       the first cloud links no shader program after the first rendered frame of it (fx warmed)
-  cost           GPU frame time with 3 live smokes in view minus none, ABAB x 4 at 60 rendered frames: median <= +0.3 ms (the iGPU: --gpu d3d11)
+  cost           GPU frame time with 3 live smokes in view minus none, ABAB x 4 at 60 rendered frames: median <= +0.3 ms (the iGPU: --gpu d3d11);
+                 COUNTED on a quiet box (no other automated Chrome), else information (the shared GPU's timer counts the others' work)
   errors
 """
 from __future__ import annotations
@@ -97,6 +98,11 @@ def main():
             t_open = s.js("() => window.__LC__.W.t")
             s.step_frames(360, 1 / 60)
             ctrl = s.js("(t) => ({ hits: window.__P23K__.hits.filter((x) => x >= t).length, shots: window.__P23K__.shots })", t_open)
+            # what the bot was doing (names a control that never fired: no weapon / no ammo / no target / asleep)
+            ctrl["bot"] = s.safe_js("""(id) => { const W = window.__LC__.W, b = W.actorById.get(id), p = W.player; if (!b) return null; const w = b.weapon, br = b.brain || {};
+                const pick = (o) => { const r = {}; for (const k in o) { const x = o[k]; if (x == null || typeof x === 'number' || typeof x === 'string' || typeof x === 'boolean') r[k] = x; else if (x && x.id) r[k] = 'actor:' + x.id; } return r; };
+                return { alive: b.alive, weapon: w ? { id: w.id, magAmmo: w.magAmmo, state: w.state } : null, ammo: b.inventory && b.inventory.ammo, brain: pick(br),
+                         dist: +Math.hypot(b.pos.x - p.pos.x, b.pos.z - p.pos.z).toFixed(1), los: W.map.losBlocked(b.pos.x, b.pos.y + 1.5, b.pos.z, p.pos.x, p.pos.y + 1.2, p.pos.z) }; }""", e, default=None)
             v.data["openControl"] = ctrl
             # the line through the future cloud: from the bot's eye to the human's chest
             seg = [ex, ey + 1.5, ez, iso["x"], iso["y"] + 1.2, iso["z"]]
@@ -122,8 +128,8 @@ def main():
             v.data["smokes"] = sm
             q = sm[0] if sm else None
             ahead = None if not q else ((q["x"] - iso["x"]) ** 2 + (q["z"] - iso["z"]) ** 2) ** 0.5
-            v.check("spawn (a real throw: one W.smokes entry {x,y,z,r,t0,t1} within 4 s, 6-20 m ahead)", len(sm) == 1 and q["r"] > 0 and q["t1"] > q["t0"] and 6 <= ahead <= 20,
-                    {"smokes": sm, "aheadM": ahead and round(ahead, 1)}, "1 entry, 6-20 m")
+            v.check("spawn (a real throw: one W.smokes entry {x,y,z,r,t0,t1} within 4 s, 6-35 m ahead)", len(sm) == 1 and q["r"] > 0 and q["t1"] > q["t0"] and 6 <= ahead <= 35,
+                    {"smokes": sm, "aheadM": ahead and round(ahead, 1)}, "1 entry, 6-35 m")
             if not q:
                 L.errors_row(v, s)
                 return
@@ -182,7 +188,13 @@ def main():
                 v.cnj("cost (3 smokes in view: GPU <= +0.3 ms)", "no GPU timer on this Chrome (EXT_disjoint_timer_query) or no frames")
             else:
                 d = statistics.median(diffs)
-                v.check("cost (3 smokes in view minus none, ABAB x 4: median GPU <= +0.3 ms)", d <= 0.3, {"medianDiffMs": round(d, 3), "on": arms["on"], "off": arms["off"]}, "<= 0.3 ms")
+                det = {"medianDiffMs": round(d, 3), "on": arms["on"], "off": arms["off"], "otherAutomatedChromes": v.data.get("otherAutomatedChromes")}
+                # the GPU timer on a SHARED iGPU counts the other Chromes' work queued in between (seen: 120-4000 ms "frames" with 10 other
+                # automated Chromes): the row COUNTS on a quiet box only, else it is information (tierprof's rule; the bar is unchanged)
+                if v.data.get("otherAutomatedChromes") == 0:
+                    v.check("cost (3 smokes in view minus none, ABAB x 4: median GPU <= +0.3 ms, quiet box)", d <= 0.3, det, "<= 0.3 ms")
+                else:
+                    v.info("cost (3 smokes in view minus none, ABAB x 4: median GPU <= +0.3 ms) would %s - the box is SHARED: not judged" % ("PASS" if d <= 0.3 else "FAIL"), det)
             L.errors_row(v, s)
     return C.run_gate("p23_smoke", body, args)
 
