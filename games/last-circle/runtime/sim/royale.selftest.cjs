@@ -1271,8 +1271,10 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   }
   ok(inv, "LC-22: the volume turns with the actor (same hits in its own frame at any yaw)");
   const cr = actor({ crouching: true, hasCrouchClip: true });
-  ok(frontal(cr, 0, 1.0) >= 0 && frontal(cr, 0, top("soldier", "rifle|crouch") + 0.1) < 0 && top("soldier", "rifle|crouch") < top("soldier", "rifle|stand") - 0.3,
-     "LC-22: crouched, the body is " + (top("soldier", "rifle|stand") - top("soldier", "rifle|crouch")).toFixed(2) + " m lower (its own measured pose)");
+  ok(frontal(cr, 0, 1.0) >= 0 && frontal(cr, 0, top("soldier", "rifle|crouch") + 0.1) < 0 && top("soldier", "rifle|crouch") < top("soldier", "rifle|stand") - 0.1
+     && top("soldier", "pistol|crouch") < top("soldier", "pistol|stand") - 0.4,
+     "LC-22: crouched, the body is lower by its own measured pose (rifle_crouch clip " + (top("soldier", "rifle|stand") - top("soldier", "rifle|crouch")).toFixed(2)
+     + " m: an upright crouch-walk, measured with the mixer re-keyed every frame; crouch clip " + (top("soldier", "pistol|stand") - top("soldier", "pistol|crouch")).toFixed(2) + " m)");
   ok(R.hitVolSegment(actor({ swimming: true }), 0, 3, -5, 20, 3, -5) === -2 && R.hitVolSegment(actor({ downed: true }), 0, 2.3, -5, 20, 2.3, -5) === -2,
      "LC-22: swimming and downed actors fall back to the legacy cylinder (-2)");
   ok(frontal(actor({ skin: "nobody" }), 0, 1.2) === frontal(a, 0, 1.2), "LC-22: an unknown skin uses the soldier's volume");
