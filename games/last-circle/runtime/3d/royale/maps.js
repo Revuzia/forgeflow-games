@@ -4935,7 +4935,7 @@ export async function buildMap(W, mapId) {
     for (const sx of [-1, 1]) addBox(x + sx * (W2 / 2 + 0.75), y + TOP + 0.75, z, 0.08, 0.9, W2 + 1.6, C_TIM2, NC);   // catwalk rails
     for (const sz of [-1, 1]) addBox(x, y + TOP + 0.75, z + sz * (W2 / 2 + 0.75), W2 + 1.6, 0.9, 0.08, C_TIM2, NC);
     coneAt(x, y + TOP + CAB, z, (W2 + 1.4) * 0.72, 2.6, 4, C_ROOF, Math.PI / 4, "shingle");                   // hipped roof
-    addBox(x, y + TOP + CAB + 2.6 + 3.5, z, 0.16, 7, 0.16, "#9a9a96", NC);                                  // mast
+    addBox(x, y + TOP + CAB + 4.7, z, 0.16, 9.8, 0.16, "#9a9a96", NC);                                      // mast: stepped on the eaves plate, up through the roof (it stood on the cone's apex: placementcheck structure-contact read a 2.6 m hover)
     addBox(x, y + TOP + CAB + 2.6 + 7.1, z, 0.5, 0.5, 0.5, "#ffe9a8", NC);                                  // the beacon
     chest(x, y + 0.4, z, null);
     // the scatter's props under it go (finalizeProps drops a `drop` entry): nothing grows through the legs or the bracing
