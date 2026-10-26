@@ -89,9 +89,45 @@ RASTER_JS = r"""([step, margin, headTop]) => { const C = window.__LC__, W = C.W,
     const sim = shoot(X, Y); if (sim === null) { if (miss > 20 && out.length === 0) return { err: 'no round left the gun', miss }; continue; }
     const c = ray(X, Y, z0, 0, 0, -1);
     let off = 0; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; if (ray(X + Math.cos(a) * 0.06, Y + Math.sin(a) * 0.06, z0, 0, 0, -1)) off++; }
-    out.push([sim ? 1 : 0, c ? 1 : 0, off]);
+    out.push([sim ? 1 : 0, c ? 1 : 0, off, +(X - d.pos.x).toFixed(3), +(Y - d.pos.y).toFixed(3)]);
   }
-  return { n: out.length, rows: out, grid: [xs.length, ys.length], noRound: miss, reskins: Q.reskins, stepM: step }; }"""
+  const w = d.weapon && d.weapon.id, K = W.SIM;
+  return { n: out.length, rows: out, grid: [xs.length, ys.length], noRound: miss, reskins: Q.reskins, stepM: step,
+           target: { id: d.id, skin: d.skin || null, weapon: w || null, crouch: !!d.crouching, pitch: +(d.pitch || 0).toFixed(3) } }; }"""
+
+def plot_view(rows, name, step):
+    """a PNG per view (the harness _reports/p23_shots/): grey = the drawn body only, green = body + sim hit, red = a sim hit > 0.06 m outside the
+    drawn body, blue = a deep-inside line the sim missed - the picture to LOOK at next to the counts"""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception:
+        return
+    d = os.path.join(C.REPORTS, "p23_shots")
+    os.makedirs(d, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(4, 7), dpi=110)
+    cols = {"body": [], "hit": [], "out": [], "miss": [], "edge": []}
+    for h, c, off, x, y in rows:
+        if h and not c and off == 0:
+            cols["out"].append((x, y))
+        elif c and off == 8 and not h:
+            cols["miss"].append((x, y))
+        elif h:
+            cols["hit"].append((x, y))
+        elif c:
+            cols["body"].append((x, y))
+    for k, colr in (("body", "#bbbbbb"), ("hit", "#3cb043"), ("out", "#e02020"), ("miss", "#2050e0")):
+        if cols[k]:
+            xs, ys = zip(*cols[k])
+            ax.scatter(xs, ys, s=max(2, step * 400), c=colr, marker="s", linewidths=0, label="%s (%d)" % (k, len(cols[k])))
+    ax.set_aspect("equal")
+    ax.set_title("hitbox %s: body / hit / OUTSIDE / deep MISSED" % name, fontsize=8)
+    ax.legend(fontsize=6, loc="upper right")
+    fig.tight_layout()
+    fig.savefig(os.path.join(d, "hitbox_%s.png" % name))
+    plt.close(fig)
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -125,11 +161,16 @@ def main():
                     v.cnj("outside [%s]" % name, "raster: %s" % r)
                     continue
                 rows = r["rows"]
-                outside = sum(1 for h, c, off in rows if h and not c and off == 0)
-                deep = [(h, c, off) for h, c, off in rows if c and off == 8]
+                outside = sum(1 for h, c, off, _x, _y in rows if h and not c and off == 0)
+                deep = [(h, c, off) for h, c, off, _x, _y in rows if c and off == 8]
+                plot_view(rows, name, args.step)
+                # where they are (feet-relative metres: x across the view, y up), for the sim lane
+                where = {"outside": [[x, y] for h, c, off, x, y in rows if h and not c and off == 0][:15],
+                         "deepMissed": [[x, y] for h, c, off, x, y in rows if c and off == 8 and not h][:15]}
                 cov = sum(1 for h, _c, _o in deep if h) / len(deep) if deep else None
                 res[name] = {"shots": r["n"], "simHits": sum(x[0] for x in rows), "meshHits": sum(x[1] for x in rows), "outsideBy6cm": outside,
-                             "deep": len(deep), "coverage": cov and round(cov, 4), "box": pose["box"], "grid": r.get("grid"), "noRound": r.get("noRound"), "reskins": r.get("reskins")}
+                             "deep": len(deep), "coverage": cov and round(cov, 4), "box": pose["box"], "grid": r.get("grid"), "noRound": r.get("noRound"), "reskins": r.get("reskins"),
+                             "target": r.get("target"), "where": where}
                 v.check("outside [%s] (sim hits > 0.06 m outside the drawn silhouette = 0)" % name, r["n"] > 400 and outside == 0, res[name], "0")
                 v.check("coverage [%s] (lines deep inside the silhouette: >= 95 %% sim hits)" % name, cov is not None and cov >= 0.95, {"deep": len(deep), "coverage": res[name]["coverage"]}, ">= 0.95")
             s.js(POSE_JS, [16, 0.0])

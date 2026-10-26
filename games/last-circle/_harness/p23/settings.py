@@ -70,8 +70,9 @@ MEAN_JS = r"""() => { const W = window.__LC__.W, k = W.kernel; window.__LC__.ste
   for (let y = 0; y < h; y += 2) { const by = Math.min(BY - 1, Math.floor(y * BY / h)); for (let x = 0; x < w; x += 2) { const bx = Math.min(BX - 1, Math.floor(x * BX / w)), q = 4 * (y * w + x), b = by * BX + bx;
     acc[3 * b] += px[q]; acc[3 * b + 1] += px[q + 1]; acc[3 * b + 2] += px[q + 2]; n[b]++; } }
   const out = []; for (let b = 0; b < BX * BY; b++) out.push(acc[3 * b] / n[b], acc[3 * b + 1] / n[b], acc[3 * b + 2] / n[b]); return out; }"""
-ANCH_JS = r"""() => { const out = {}; for (const k of ['minimap', 'compass', 'stormrow', 'meta', 'bars', 'slotcol', 'feed', 'chat']) { const e = document.querySelector('[data-lc="' + k + '"]'); if (!e || !e.offsetParent) continue;
-  const r = e.getBoundingClientRect(); out[k] = [r.left, r.top, r.right, r.bottom].map((x) => +x.toFixed(1)); } return { W: innerWidth, H: innerHeight, a: out }; }"""
+ANCH_JS = r"""() => { const out = {}, css = {}; for (const k of ['minimap', 'compass', 'stormrow', 'meta', 'bars', 'slotcol', 'feed', 'chat']) { const e = document.querySelector('[data-lc="' + k + '"]'); if (!e || !e.offsetParent) continue;
+  const r = e.getBoundingClientRect(); out[k] = [r.left, r.top, r.right, r.bottom].map((x) => +x.toFixed(1)); const cs = getComputedStyle(e); css[k] = [cs.scale, cs.transform, cs.transformOrigin].join(' | '); }
+  return { W: innerWidth, H: innerHeight, a: out, css, planted: document.documentElement.hasAttribute('data-p23sc') }; }"""
 
 
 def click(s, re_):
@@ -292,7 +293,8 @@ def main():
                     bad[k] = {"100": r1, "130": r2, "grew": grew, "inside": inside, "dx": round(cornerX, 1), "dy": round(cornerY, 1)}
             v.check("hud-scale (130 % by the real slider: every anchored panel grows from its anchor corner, +-2 px, inside the viewport)",
                     bool(a1["a"]) and scaled is not None and abs(scaled - 1.3) < 0.01 and not bad and len(a1["a"]) - len(empty) >= 5,
-                    {"set": scaled, "panels": len(a1["a"]), "judged": len(a1["a"]) - len(empty), "empty": empty, "bad": bad}, "1.3, >= 5 judged, 0 bad")
+                    {"set": scaled, "panels": len(a1["a"]), "judged": len(a1["a"]) - len(empty), "empty": empty, "bad": bad,
+                     "css130": {k: a2.get("css", {}).get(k) for k in ("minimap", "bars")}, "plantActive": a2.get("planted")}, "1.3, >= 5 judged, 0 bad")
             s.js(HUDMOD_JS)
             rb = s.safe_js("() => { const C = window.__LC__; const f = C.feel ? C.feel() : null; if (f && f.hud) return f.hud; const H = window.__HUDMOD__; return H && H.readback ? H.readback(C.W) : null; }", default=None) or {}
             mm = rb.get("minimap")

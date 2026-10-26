@@ -133,6 +133,9 @@ def part_human(s, v, args):
     rows[20] = drop(s, spot, 20)
     R["rows"] = {str(k): {kk: vv for kk, vv in r.items() if kk != "trace"} if r else None for k, r in rows.items()}
     lost = {k: (r["lost"] if r else None) for k, r in rows.items()}
+    # the curve the bots row compares against (fall_all3 10-26: bots-rule read "human15": null - nothing stored it, so the row fell back to
+    # "> 50 hp" instead of the human's own 15 m)
+    R["curve"] = {"10": lost.get("10n"), "15": lost.get(15), "6": lost.get(6)}
     v.check("safe-drops (1 / 3 / 4 m cost 0 hp)", all(lost[h] == 0 for h in (1, 3, 4)), {h: lost[h] for h in (1, 3, 4)}, "0")
     v.check("jumps (10 real Space jumps cost 0 hp, 0 events)", jumps["hp"] == 100 and jumps["ev"] == 0 and jumps["jumps"] >= 8, jumps, "hp 100, 0 events, >= 8 jumps happened")
     ten = lost["10n"]
@@ -228,13 +231,17 @@ def part_glide(s, v, args):
     g = s.js("""() => { const W = window.__LC__.W, C = window.__LC__; const ev = [], glEnd = new Map(), was = new Map();
         W.events.on('fallDamage', (a, d) => { if (a) ev.push({ id: a.id, d, t: +W.t.toFixed(2), sinceGlide: glEnd.has(a.id) ? +(W.t - glEnd.get(a.id)).toFixed(2) : null }); });
         let n = 0;
-        while (n < 1600 && W.actors.some((a) => a.alive && (a.gliding || !a.onGround))) { C.fastForward(0.1, 1 / 30); n++;
+        // airborne = gliding, or off the ground and NOT swimming (a swimmer is off the ground by design: fall_all3 10-26 ended its 160 s with
+        // 3 'still airborne' actors on Isla Viva)
+        const air = (a) => a.alive && (a.gliding || (!a.onGround && !a.swimming));
+        while (n < 1600 && W.actors.some(air)) { C.fastForward(0.1, 1 / 30); n++;
           for (const a of W.actors) { const gl = !!a.gliding; if (was.get(a.id) && !gl) glEnd.set(a.id, W.t); was.set(a.id, gl); } }
         // a touchdown that ends a glide: a fallDamage within 2 s of that actor's glide end (later ones are ordinary drops on the ground)
         const atLanding = ev.filter((e) => e.sinceGlide != null && e.sinceGlide <= 2.0);
-        const still = W.actors.filter((a) => a.alive && (a.gliding || !a.onGround)).length;
+        const stillA = W.actors.filter(air), still = stillA.length;
+        const stuck = stillA.slice(0, 5).map((a) => ({ id: a.id, y: +a.pos.y.toFixed(2), ground: +W.map.heightAt(a.pos.x, a.pos.z).toFixed(2), vy: +a.vel.y.toFixed(2), gliding: !!a.gliding, swim: !!a.swimming }));
         return { eventsAtLanding: atLanding.length, sample: atLanding.slice(0, 5), laterDrops: ev.length - atLanding.length, stillAirborne: still, t: W.t,
-                 glidesEnded: glEnd.size }; }""")
+                 glidesEnded: glEnd.size, stuck }; }""")
     R["result"] = g
     v.check("glide (the whole drop: 0 fallDamage at any glide / canopy touchdown, human and every bot)", g["eventsAtLanding"] == 0 and g["stillAirborne"] == 0 and g["glidesEnded"] >= 40,
             g, "0 events within 2 s of a glide end; everyone landed")
