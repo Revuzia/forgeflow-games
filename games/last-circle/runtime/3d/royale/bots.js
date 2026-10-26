@@ -4559,6 +4559,7 @@ function edgeGuard(W, b) {
   bb.edgeT = W.t + 0.25;
   const lim = walkDrop(a);
   if (!(lim < 1e6)) return;
+  bb._eg = [+W.t.toFixed(2), +lim.toFixed(2)];   // DBG-EG
   GA[0] = a.pos.x; GA[1] = a.pos.z; groundA(W, GA, 0);
   const elevated = a.pos.y - GA[2] > 1.0;
   // (a CLIFF FACE, not just a ledge: the stub-duo batch lost 2 bots of 2 matches at the same Isla Viva cliff (-22, -34), terrain 55.5 -> 44.5 m
@@ -4573,6 +4574,7 @@ function edgeGuard(W, b) {
     else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
     if (W.map.waterY != null && sup < W.map.waterY) sup = W.map.waterY;      // water breaks a fall
     const steep = prev - sup > STEEP_STEP;
+    bb._eg.push([k, +sup.toFixed(2), steep ? 1 : 0]);   // DBG-EG
     if (steep && runTop !== runTop && k <= 3) runTop = prev;
     if ((k <= 3 && a.pos.y - sup > lim) || (runTop === runTop && runTop - sup > lim)) {
       bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
