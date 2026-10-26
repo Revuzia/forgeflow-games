@@ -185,7 +185,9 @@ def main():
                 drop.update({"weapons": [n0, nq, ng]})
             v.check("rebind (Drop -> G by a real click + key: Q drops nothing, G drops the held gun)", bool(row) and (bound or "").upper() == "G" and drop.get("weapons") and drop["weapons"][1] == drop["weapons"][0] and drop["weapons"][2] == drop["weapons"][0] - 1,
                     drop, "Q: same, G: -1")
-            # colour-blind: the three modes change the frame, off restores it
+            # colour-blind: the three modes change the frame, off restores it - on the FROZEN loop (a live rAF frame between two reads moved
+            # the view: 6.8 / 255 'noise' with the loop running)
+            s.freeze_loop()
             s.step_frames(10, 1 / 60, render=True)
             modes = sorted(set(cvd_modes))
             base = s.js(MEAN_JS)
@@ -286,11 +288,14 @@ def main():
                 s.sleep(25.0)
                 rb = s.safe_js("() => { const C = window.__LC__; const f = C.feel ? C.feel() : null; if (f && f.hud) return f.hud; const H = window.__HUDMOD__; return H && H.readback ? H.readback(C.W) : null; }", default=None) or {}
                 shown.append(list(((rb.get("hints") or {}).get("shown")) or []))
+                v.data.setdefault("hintState", []).append(s.safe_js("""() => { const W = window.__LC__.W, p = W.player, el = document.querySelector('[data-lc=hint]'); let ls = null; try { ls = localStorage.getItem('lc_hints'); } catch (e) {}
+                    return { search: location.search, setting: W.settings && W.settings.hints, mode: W.mode, phase: W.phase, t: +W.t.toFixed(1), onGround: p && p.onGround, running: !!W.kernel._running,
+                             frameNo: W.kernel.frameNo, el: el ? el.textContent.slice(0, 60) : null, ls }; }""", default=None))
             new = shown[1][len(shown[0]):] if shown[1][:len(shown[0])] == shown[0] else shown[1]      # the log may run across matches
             dup = [x for x in shown[0] if shown[0].count(x) > 1] + [x for x in new if new.count(x) > 1]
             again = [x for x in new if x in shown[0]]
             v.check("hints (no hint id twice in a match; none of match 1's again in match 2)", bool(shown[0]) and not dup and not again,
-                    {"match1": shown[0], "match2": shown[1]}, "each once")
+                    {"match1": shown[0], "match2": shown[1], "state": v.data.get("hintState")}, "each once")
             L.errors_row(v, s)
     return C.run_gate("p23_settings", body, args)
 

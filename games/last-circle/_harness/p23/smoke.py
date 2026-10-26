@@ -14,8 +14,8 @@ STANDARD solo match (Savanna seed 7), landed under the guard, the human moved to
   spawn          a REAL throw (a smoke in slot 4, LMB, pitch 0.25): one W.smokes entry {x, y, z, r, t0, t1} within 4 s, 6-35 m ahead (a lob + roll: PUBG ~30 m)
   lifetime       t1 - t0 = K.SMOKE.lifeS (+-0.5 s) and >= 15 s (PUBG / Apex class); the entry is gone after t1 (+1 s)
   los            losBlocked through the cloud's centre at 1.2 m: false before the throw, true every 0.25 s from t0 + 2 s to t1 - 1 s, false after t1
-  bot-sight      an enemy bot pinned 26 m away facing the human (positive control first: it shoots the human in the open within 6 s); the smoke
-                 between them: from t0 + 2 s to t1 - 1 s it lands 0 hits on the human
+  bot-sight      an enemy bot pinned 26 m away facing the human, provoked by him (positive control first: >= 5 rounds at him in the open in
+                 6 s); the smoke between them: 0 rounds from t0 + 3 s and 0 hits from t0 + 2 s, to t1 - 1 s (LOS cut = it stops shooting)
   programs       the first cloud links no shader program after the first rendered frame of it (fx warmed)
   cost           GPU frame time with 3 live smokes in view minus none, ABAB x 4 at 60 rendered frames: median <= +0.3 ms (the iGPU: --gpu d3d11);
                  COUNTED on a quiet box (no other automated Chrome), else information (the shared GPU's timer counts the others' work)
@@ -97,8 +97,8 @@ def main():
             s.js("""([id, me]) => { const W = window.__LC__.W, b = W.actorById.get(id), p = W.player; window.__P23PROV__ = () => { const a = W.actorById.get(id);
                 if (!a || !a.alive) return; a.lastAttacker = me; a.lastDamageT = W.t; a.yaw = Math.atan2(-(p.pos.x - a.pos.x), -(p.pos.z - a.pos.z)); };
                 W.kernel._updaters.push(window.__P23PROV__); }""", [e, me])
-            s.js("([me, e]) => { const W = window.__LC__.W; window.__P23K__ = { hits: [], shots: 0 }; W.events.on('actorHurt', (a, d) => { if (a && a.id === me && d && d.attackerId === e) window.__P23K__.hits.push(+W.t.toFixed(2)); });"
-                 " W.events.on('shotFired', (a) => { if (a && a.id === e) window.__P23K__.shots++; }); }", [me, e])
+            s.js("([me, e]) => { const W = window.__LC__.W; window.__P23K__ = { hits: [], shots: 0, shotT: [] }; W.events.on('actorHurt', (a, d) => { if (a && a.id === me && d && d.attackerId === e) window.__P23K__.hits.push(+W.t.toFixed(2)); });"
+                 " W.events.on('shotFired', (a) => { if (a && a.id === e) { window.__P23K__.shots++; window.__P23K__.shotT.push(+W.t.toFixed(2)); } }); }", [me, e])
             # positive control: in the open the bot finds and shoots the human within 6 s
             t_open = s.js("() => window.__LC__.W.t")
             s.step_frames(360, 1 / 60)
@@ -168,6 +168,9 @@ def main():
                 samples.append((round(t, 2), bool(b), bool(bs)))
                 s.step_frames(15, 1 / 60)
             hits = s.js("([a, b]) => window.__P23K__.hits.filter((x) => x >= a && x <= b)", [t_from, t_to])
+            # LINE OF SIGHT = the bot keeps firing at the man it is fighting while it sees him; through the cloud it must stop (1 s after the
+            # bloom window opens for its last trigger pull to end). Hits alone cannot judge it: bots miss a new player on purpose (LC-96 grace)
+            shots_in = s.js("([a, b]) => window.__P23K__.shotT.filter((x) => x >= a && x <= b)", [t_from + 1.0, t_to])
             after = s.js(SNAP_JS)
             span = q["t1"] - q["t0"]
             seen = None if last_present is None else round(last_present - q["t0"], 2)
@@ -180,8 +183,9 @@ def main():
                     before is False and mid and all(x[1] for x in mid) and late and not any(x[1] for x in late),
                     {"before": before, "midBlocked": "%d/%d" % (sum(1 for x in mid if x[1]), len(mid)), "lateBlocked": sum(1 for x in late if x[1])}, "open / blocked / open")
             sight_blocked = "%d/%d" % (sum(1 for x in mid if x[2]), len(mid))
-            v.check("bot-sight (open control: the bot hits the human; through the smoke: 0 hits from t0 + 2 s to t1 - 1 s)", ctrl["hits"] > 0 and not hits,
-                    {"openHits": ctrl["hits"], "openShots": ctrl["shots"], "hitsInSmoke": hits, "botLineBlocked": sight_blocked}, "> 0 open, 0 in smoke")
+            v.check("bot-sight (open control: the bot fires >= 5 rounds at the human in 6 s; through the smoke: 0 rounds from t0 + 3 s and 0 hits from t0 + 2 s to t1 - 1 s)",
+                    ctrl["shots"] >= 5 and not hits and not shots_in,
+                    {"openHits": ctrl["hits"], "openShots": ctrl["shots"], "hitsInSmoke": hits, "shotsInSmoke": shots_in[:20], "botLineBlocked": sight_blocked}, ">= 5 open, 0 in smoke")
             # cost: 3 smokes in view vs none, ABAB (GPU timer on the default iGPU profile)
             L.pin_actor(s, None)
             s.js("() => { const W = window.__LC__.W, p = W.player; p.input.pitch = 0.05; }")
