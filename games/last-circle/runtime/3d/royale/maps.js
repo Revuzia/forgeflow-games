@@ -208,7 +208,8 @@ const KIND_TEX = { shingle: shingleTex, plank: plankTex, metal: metalTex, block:
 
 // LC-39: a PERIODIC fbm - the lattice indices wrap at the tile's own period (per x 2^octave cells), so the field at u = 1 is the field at u = 0. The water's
 // ripple field was _tfbm (lattice hashes at unwrapped integers) plus sin(u * 22 + v * 15) (22 and 15 are not multiples of 2 pi): neither wrapped, so the
-// tile edge was a seam every ~28 m, a square grid across the whole sea in the drop view's sun sheen. The sine is now 2 pi x (3, 2) cycles a tile.
+// tile edge was a seam every ~28 m, a square grid across the whole sea in the drop view's sun sheen. The sine is now 2 pi x (3, 2) cycles a tile,
+// and a minor term (0.18) under a 4-octave fbm, so the sheen reads as ripples, not ridges.
 function _tpfbm(u, v, s, oct, per) {
   let a = 1, f = per, sum = 0, n = 0;
   for (let i = 0; i < oct; i++) {
@@ -223,7 +224,7 @@ function _tpfbm(u, v, s, oct, per) {
 function waterNormalTex(aniso) {
   if (_texCache.waterN) return _texCache.waterN;
   const t = _fieldTex("water_p", 256,
-    (u, v) => _tpfbm(u, v, 31, 3, 6) * 0.6 + (Math.sin((u * 3 + v * 2) * Math.PI * 2) * 0.5 + 0.5) * 0.4,
+    (u, v) => _tpfbm(u, v, 31, 4, 6) * 0.82 + (Math.sin((u * 3 + v * 2) * Math.PI * 2) * 0.5 + 0.5) * 0.18,   // (the swell sine 0.4 -> 0.18: at 0.4 the sun sheen read as parallel zebra ridges from the drop)
     (h) => h, aniso, 1.4).normal;
   _texCache.waterN = t; return t;
 }
@@ -469,7 +470,12 @@ const LC_FRAG_ALBEDO = `
   float ldep = uLcWater.x - lcGround( vLcW.xz );
   float lk = smoothstep( 0.0, 7.0, ldep );
   diffuseColor.rgb = mix( uLcShallow, uLcDeep, lk );
-  float lfoam = ( 1.0 - smoothstep( 0.0, 0.55, ldep ) ) * ( 0.55 + 0.45 * sin( uLcWater.y * 1.9 + dot( vLcW.xz, vec2( 0.9, 1.3 ) ) ) );
+  // surf lines follow the depth contours (so they run along the shore and roll in), broken into ~12 m patches; once a band is under ~2 px (the drop
+  // view) its sine is replaced by its mean, so the plane sees a soft white rim, not stripes (was one world-space diagonal sine: zebra bands from the air)
+  float lph = ldep * 11.0 - uLcWater.y * 1.6;
+  float law = clamp( fwidth( lph ) - 0.6, 0.0, 1.0 );
+  float lbr = 0.62 + 0.38 * sin( dot( vLcW.xz, vec2( 0.45, 0.27 ) ) + 2.0 * sin( vLcW.z * 0.083 + vLcW.x * 0.031 ) );
+  float lfoam = ( 1.0 - smoothstep( 0.0, 0.55, ldep ) ) * mix( 0.55 + 0.45 * sin( lph ), 0.5, law ) * lbr;
   diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), clamp( lfoam, 0.0, 1.0 ) * 0.75 );
   diffuseColor.a = mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) );
 }
