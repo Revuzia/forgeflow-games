@@ -373,6 +373,15 @@ export function readback(W) {
  * threat duck and the acoustic cache (it holds collider-derived answers).
  * Voices in flight are left to finish — the victory/defeat sting is one of them.
  */
+/** Test hook: forget an actor's vocal state (voice key, hurt-grunt gap and busy window) so a probe can fire the
+ *  next cue at once. The state is a module WeakMap (see voSt), never fields on the actor. */
+export function resetVocal(a, keepVoice) {
+  if (!a) return;
+  const s = _voSt.get(a);
+  if (!s) return;
+  s.t = -1e9; s.end = 0;
+  if (!keepVoice) s.v = null;
+}
 export function disposeMatch(W) {
   cancelReload();
   duckFireRelease(true);
@@ -1556,8 +1565,19 @@ const VO_P = {
   revive: { g: 0.2,  own: 0.12, d: 30, gap: 0,   len: 0.7,  tier: VOICE_TIER.step },
 };
 const _mouth = { x: 0, y: 0, z: 0 };
+// Per-actor vocal state lives HERE, never as new fields on the actor: stamping a._audVo* on the bots that happen to
+// grunt mid-match changed their hidden class, the sim's hot actor loops (bots.js / player.js / loot.js) went
+// polymorphic and lost escape analysis - framecheck measured 125-129 KB/frame vs the base's 89-94 on the SAME world
+// state (fingerprint identical at t 65.533). actor -> { v: voice key | null, t: last start, end: busy until }
+const _voSt = new WeakMap();
+function voSt(a) {
+  let s = _voSt.get(a);
+  if (!s) { s = { v: null, t: -1e9, end: 0 }; _voSt.set(a, s); }
+  return s;
+}
 function voiceOf(a) {
-  if (a._audVo) return a._audVo;
+  const st = voSt(a);
+  if (st.v) return st.v;
   let v;
   if (a.skin && FEMALE_SKINS[a.skin]) v = "f";
   else {
@@ -1566,7 +1586,7 @@ function voiceOf(a) {
     for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
     v = (h >>> 0) & 1 ? "m2" : "m1";
   }
-  if (a.skin) a._audVo = v;             // stable once the rig (and so the skin) is known
+  if (a.skin) st.v = v;                 // stable once the rig (and so the skin) is known
   return v;
 }
 function vocal(a, kind, force) {
@@ -1574,8 +1594,9 @@ function vocal(a, kind, force) {
   if (!ctx || !W || !a || a.isDummy || !a.pos) return false;
   const P = VO_P[kind];
   const now = ctx.currentTime;
-  if (!force && kind === "hurt" && ((a._audVoT != null && now - a._audVoT < P.gap) || (a._audVoEnd || 0) > now)) { _acc.vocalsDropped++; return false; }
-  a._audVoT = now; a._audVoEnd = now + P.len;
+  const st = voSt(a);
+  if (!force && kind === "hurt" && (now - st.t < P.gap || st.end > now)) { _acc.vocalsDropped++; return false; }
+  st.t = now; st.end = now + P.len;
   const own = a === W.player;
   let pos = null;
   if (!own) { _mouth.x = a.pos.x; _mouth.y = a.pos.y + (a.downed ? 0.45 : a.crouching ? 1.1 : 1.55); _mouth.z = a.pos.z; pos = _mouth; }
