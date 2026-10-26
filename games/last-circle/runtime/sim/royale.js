@@ -1031,14 +1031,27 @@
   function lootTier(tier) { return LOOT_TIERS[tier] || LOOT_TIERS.basic; }
 
   // AI skill tiers (1-indexed by tier-1) — wide spread so the lobby reads as
-  // real players: beginners whiff constantly, experts are genuinely scary
-  var BOT_TIERS = [
+  // real players: beginners whiff constantly, experts are genuinely scary.
+  // BOT_TIERS_SHIPPED is the owner's 5-tier curve as it was tuned against the legacy 1.14 m-wide hit cylinder.
+  var BOT_TIERS_SHIPPED = [
     { reactionMs: 700, aimErrDeg: 7.5 },
     { reactionMs: 500, aimErrDeg: 4.5 },
     { reactionMs: 380, aimErrDeg: 2.8 },
     { reactionMs: 300, aimErrDeg: 1.8 },
     { reactionMs: 210, aimErrDeg: 0.9 },
   ];
+  // LC-22 (parity P2-D) shrank every body from that 0.57 m-radius cylinder to the drawn silhouette (torso ~0.4 m wide):
+  // with the same hand, a bot's hit chance fell to ~1/3 (Monte Carlo of the bots.js wobble + the gun's spread,
+  // F:/lc_p23/sim/tools/aim_cal.cjs: tier 3 at 15 m 0.41 -> 0.13), so fights ran ~3x the rounds - in the 6-match
+  // probe_match soak bots ran every gun dry in 7 % of landed samples (0.1 % on the legacy cylinder), matches ended
+  // ~130 s later and storm kills went 6 -> 20. The difficulty curve is the hit rate the owner tuned, not the degrees:
+  // the aim error scales by BOT_AIM_HITVOL_K (the Monte Carlo restore factor 0.42-0.58 for tiers 1-4 at 15-50 m),
+  // so every tier hits a human about as often as before. Tier 5 is spread-limited (0.97 -> 0.48 at 15 m even with a
+  // perfect hand): the gun's cone, not the bot, is the ceiling there - as for a human.
+  var BOT_AIM_HITVOL_K = 0.5;
+  var BOT_TIERS = BOT_TIERS_SHIPPED.map(function (r) {
+    return { reactionMs: r.reactionMs, aimErrDeg: +(r.aimErrDeg * (HITVOL.ok ? BOT_AIM_HITVOL_K : 1)).toFixed(4) };
+  });
   // Difficulty BANDS, indexed by the account skill rating (see hud.js `skill`).
   // Every band sums to 49 (the lobby is always modeK.players and the local player
   // takes one slot). >=69% of every band sits in tiers 3-5, per the owner's call:
@@ -1660,7 +1673,7 @@
     segmentColliders: segmentColliders,
     RAMP_THICK: RAMP_THICK, rampHalfV: rampHalfV, rampBlocks: rampBlocks, rampBlocksA: rampBlocksA, sweepSupport: sweepSupport, supportProbeY: supportProbeY, aimRayDist: aimRayDist,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
-    BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
+    BOT_TIERS: BOT_TIERS, BOT_TIERS_SHIPPED: BOT_TIERS_SHIPPED, BOT_AIM_HITVOL_K: BOT_AIM_HITVOL_K, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
     BOT_TIER_BANDS: BOT_TIER_BANDS, skillMix: skillMix, mixRating: mixRating, interpTierK: interpTierK, BOT_PACE: BOT_PACE,
     clamp: clamp,
     Storm: Storm, Match: Match,
