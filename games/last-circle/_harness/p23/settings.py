@@ -62,10 +62,14 @@ GFX_JS = r"""() => { const W = window.__LC__.W, k = W.kernel, r = k.renderer; co
            shadow: sOn ? sun.shadow.mapSize.x : 0, shadowOn: sOn, shadowExt: sOn ? Math.abs(sun.shadow.camera.right || 0) : 0,
            aniso: W._texAniso != null ? W._texAniso : null, lootCull: W.lootCull != null ? W.lootCull : null, wpnLOD: W.wpnLOD != null ? W.wpnLOD : null,
            far: W.camera ? W.camera.far : null, gfx: W._gfx ? JSON.parse(JSON.stringify(W._gfx, (kk, vv) => typeof vv === 'object' && vv && kk !== '' && Object.keys(vv).length > 20 ? undefined : vv)) : null }; }"""
+# the frame as 16 x 9 BLOCK means (each block averages its whole 1/144 of the drawing buffer, read in one readPixels): settings_all6 read
+# 2.2-2.4 / 255 of drift between two near-frozen reads on 64 tiny 8x8 probes (wall-clock wind / water / particles move local pixels), more
+# than the deutan mode's own change - block means average that motion out
 MEAN_JS = r"""() => { const W = window.__LC__.W, k = W.kernel; window.__LC__.stepFrames(2, 1e-5, true); const gl = k.renderer.getContext(); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
-  const px = new Uint8Array(4 * 64 * 64); const out = []; for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { gl.readPixels(Math.floor((i + 0.5) * w / 8) - 4, Math.floor((j + 0.5) * h / 8) - 4, 8, 8, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    let r = 0, g = 0, b = 0; for (let q = 0; q < 64; q++) { r += px[4 * q]; g += px[4 * q + 1]; b += px[4 * q + 2]; } out.push(r / 64, g / 64, b / 64); }
-  return out; }"""
+  const px = new Uint8Array(4 * w * h); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); const BX = 16, BY = 9, acc = new Float64Array(BX * BY * 3), n = new Float64Array(BX * BY);
+  for (let y = 0; y < h; y += 2) { const by = Math.min(BY - 1, Math.floor(y * BY / h)); for (let x = 0; x < w; x += 2) { const bx = Math.min(BX - 1, Math.floor(x * BX / w)), q = 4 * (y * w + x), b = by * BX + bx;
+    acc[3 * b] += px[q]; acc[3 * b + 1] += px[q + 1]; acc[3 * b + 2] += px[q + 2]; n[b]++; } }
+  const out = []; for (let b = 0; b < BX * BY; b++) out.push(acc[3 * b] / n[b], acc[3 * b + 1] / n[b], acc[3 * b + 2] / n[b]); return out; }"""
 ANCH_JS = r"""() => { const out = {}; for (const k of ['minimap', 'compass', 'stormrow', 'meta', 'bars', 'slotcol', 'feed', 'chat']) { const e = document.querySelector('[data-lc="' + k + '"]'); if (!e || !e.offsetParent) continue;
   const r = e.getBoundingClientRect(); out[k] = [r.left, r.top, r.right, r.bottom].map((x) => +x.toFixed(1)); } return { W: innerWidth, H: innerHeight, a: out }; }"""
 
