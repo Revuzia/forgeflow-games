@@ -448,6 +448,13 @@ function suiteP23(M, SIM, count) {
     row(may("rejoin", { k: "ready", slot: 1 }, "b_g1", onHost) && !may("rejoin", { k: "ready", slot: 2 }, "b_g1", onHost) && may("rejoin", { k: "back", slot: 1 }, "a_host", onGuest) &&
         !may("rejoin", { k: "ok", slot: 2, peer: "b_g1" }, "b_g1", onGuest) && !may("rejoin", { k: "ok", slot: 2 }, "a_host", onHost),
       "LC-49: 'ready' only from the slot's own peer; ok / back only from the host (a guest cannot move another player's slot)");
+    // LC-49 RECONNECT: a body the silent-guest watchdog gave to a bot goes back to ITS peer when that peer speaks again inside 60 s
+    const rc = (o) => M.judgeReclaim(Object.assign({ takenAt: 1000, nowMs: 21000, senderSlot: 1, id: "s1", alive: true, isBot: true, rejoinedBy: null, from: "b_g1" }, o));
+    row(rc({}) === "ok" && rc({ nowMs: 1000 + 60000 }) === "ok", "LC-49 reconnect: the stalled guest's next state packet inside 60 s of the take-over gets its body back");
+    row(rc({ nowMs: 1000 + 60001 }) === "expired", "LC-49 reconnect: past the 60 s window the bot keeps the body");
+    row(rc({ senderSlot: 2 }) === "no" && rc({ senderSlot: 0 }) === "no" && rc({ senderSlot: null }) === "no", "LC-49 reconnect: only the slot's own peer reclaims it (never another guest, never the host)");
+    row(rc({ alive: false }) === "no" && rc({ isBot: false }) === "no" && rc({ takenAt: null }) === "no", "LC-49 reconnect: a dead body, a body nobody took over, or one not taken for silence is never reclaimed");
+    row(rc({ rejoinedBy: "z_new" }) === "no" && rc({ rejoinedBy: "b_g1" }) === "ok", "LC-49 reconnect: a slot already handed to a reloaded page stays with that page");
   }
   return bad;
 }
@@ -609,6 +616,8 @@ function suiteP23(M, SIM, count) {
     ["a rejoin 'ok' accepted from anyone", { senderMay: (t, d, from, c) => (t === "rejoin" ? null : M.senderMay(t, d, from, c)) }],
     ["a team cross-check that compares names, not grouping", { teamPartitionDiff: (rows) => rows.filter((r) => r[1] !== r[2]).map((r) => [r[0]]) }],
     ["a team-mode rule that ignores the head count", { resolveTeamMode: (w, n, p, K) => M.normTeamMode(w) || "solo" }],
+    ["a reconnect judge with no time window", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { nowMs: c.takenAt })) }],
+    ["a reconnect judge that lets any peer reclaim a body", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { senderSlot: parseInt(String(c.id).slice(1), 10) })) }],
     ["a smoke parser with no radius / life cap", { normSmoke: (d) => (d && typeof d === "object" && [d.x, d.y, d.z].every(Number.isFinite) ? d : null) }],
   ];
   for (const [name, over] of p23Mutants) {
@@ -637,6 +646,10 @@ function suiteP23(M, SIM, count) {
     ok(lob.indexOf("box.appendChild(startB);") > 0 && lob.indexOf("box.appendChild(modeRow);") > lob.indexOf("box.appendChild(startB);") && lob.indexOf("box.appendChild(rosterEl);") < lob.indexOf("box.appendChild(noteEl);"),
       "C-MODE: the team-mode row sits after START, so the lobby keeps the child order squadguard_live.py reads (title, status, buttons, roster, notices, START)");
     ok(/S\.rxGate = null; S\.reviveIn = null;/.test(src) && /if \(!a\.brain\) import\("\.\/bots\.js" \+ V\)/.test(src), "P23: run-it-back resets the order gate / revive / rejoin books; a re-taken body reuses its brain (never two brains on one body)");
+    ok(/if \(a && S\.net\.isHost\(\) && !a\.netRemote && a !== W\.player\) reclaimSilentBody\(W, a, from, d\);\s*if \(a && a\.netRemote\) \{ applyRemoteState/.test(src) &&
+      /if \(hostTakeOver\(W, id\)\) \(S\.silentTake = S\.silentTake \|\| \{\}\)\[id\] = now;/.test(src) && /if \(!gone\) \(S\.silentTake = S\.silentTake \|\| \{\}\)\[id\] = now;/.test(src) &&
+      /if \(S\.silentTake\) delete S\.silentTake\[r\.id\];/.test(src) && /if \(S\.silentTake\) delete S\.silentTake\[d\.slot\];/.test(src),
+      "LC-49 reconnect: only the silence watchdogs mark a body reclaimable (a bye or a map fallback never does) and a fresh state packet reclaims it before it is applied");
     ok(/if \(d\.to && d\.to !== S\.net\.id\) return;/.test(sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState")), "LC-49: a sync addressed to a rejoining page is ignored by everyone else (no clock snap)");
   }
 
