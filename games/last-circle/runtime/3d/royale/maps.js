@@ -394,6 +394,21 @@ const LC_VERT_WIND = `
   transformed += ( transpose( lim ) * ( lwd * uLcWind.z ) ) / max( 1e-8, dot( lim[ 0 ], lim[ 0 ] ) );
 }
 #endif`;
+// the leaves catching the light: the same flutter tilts the crown's shading normals a little (x3 the flutter, by height), so a crown shimmers as a whole, not
+// only along its silhouette (a low-poly crown's facets slide over themselves and barely change a pixel: Deepwood's pines moved 1.4-1.5 % of a forest-edge frame).
+// Injected after beginnormal_vertex (the depth materials have no normal: no-op there); grass (flutter 0) is untouched.
+const LC_NRM_WIND = `
+#ifdef LC_WIND
+{
+  vec3 lnp = position; vec3 lno = vec3( 0.0 );
+  #ifdef USE_INSTANCING
+    lnp = ( instanceMatrix * vec4( position, 1.0 ) ).xyz; lno = instanceMatrix[ 3 ].xyz;
+  #endif
+  float lnh = clamp( ( lnp.y - lno.y ) / LC_WIND_H, 0.0, 1.0 );
+  float lsh = LC_WIND_FLUT * 3.0 * lnh * uLcWind.z;
+  objectNormal = normalize( objectNormal + lsh * vec3( sin( uLcT * 5.1 + dot( lnp, vec3( 2.1, 1.3, 1.7 ) ) ), 0.0, cos( uLcT * 4.3 + dot( lnp, vec3( 1.1, 2.7, 1.9 ) ) ) ) );
+}
+#endif`;
 const LC_VERT_WORLD = `
 {
   vec4 lw = vec4( transformed, 1.0 ); vec3 ln = objectNormal;
@@ -498,6 +513,7 @@ function lcPatch(mat, defs) {
     // ours FIRST: a previous patch may expand an #include it replaces (the struct mix rewrites map_fragment's text), and ours anchors on the #include tokens
     for (const d of keys) for (const u of LC_UNIFORMS[d] || []) sh.uniforms[u] = LCU[u];
     sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\n" + LC_VERT_HEAD)
+      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\n" + LC_NRM_WIND)
       .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + LC_VERT_WIND);
     if (!depth) {
       sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n" + LC_VERT_WORLD);
