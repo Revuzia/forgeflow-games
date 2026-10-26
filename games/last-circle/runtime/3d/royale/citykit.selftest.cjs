@@ -49,14 +49,15 @@ function refBox(b, q, k, x, y, z) {
   ok(typeof K.createCityKit === "function" && typeof K.colliderFor === "function" && typeof K.footprintFor === "function", "citykit.js imports in Node with no THREE, no DOM and no resolve hook");
   ok(typeof globalThis.window === "undefined" && typeof globalThis.document === "undefined", "no browser globals were needed to import it");
   const ids = K.typeIds();
-  ok(ids.length === 81, "81 types in the embedded table", ids.length);
+  ok(ids.length === 136, "136 types in the embedded table (81 + the 55 of the Wave-8 interior kit)", ids.length);
   const mIds = Object.keys(manifest.types);
-  ok(mIds.length === 81 && mIds.every((id) => ids.includes(id)) && ids.every((id) => mIds.includes(id)), "the embedded table and manifest.json name the same 81 types");
+  ok(mIds.length === 136 && mIds.every((id) => ids.includes(id)) && ids.every((id) => mIds.includes(id)), "the embedded table and manifest.json name the same 136 types");
   const drift = K.tableDrift(manifest);
   ok(drift.length === 0, "the embedded collider table equals manifest.json EXACTLY (every box, every number)" + (drift.length ? " - run: node citykit.selftest.cjs --emit-table" : ""), drift.slice(0, 5));
   const modes = {};
   for (const id of mIds) modes[manifest.types[id].collider_mode] = (modes[manifest.types[id].collider_mode] || 0) + 1;
-  ok(modes.footprint === 31 && modes.bbox === 34 && modes.bands === 8 && modes.elevation === 5 && modes.pole === 3, "collider modes (the intake re-run of Wave 7, art_b_city.py: two more footprint-baked types): footprint 31, bbox 34, bands 8, elevation 5, pole 3", modes);
+  ok(Object.keys(modes).length === 7 && modes.bands === 8 && modes.bbox === 73 && modes.elevation === 6 && modes.footprint === 40 && modes.none === 4 && modes.pole === 3 && modes.steps === 2,
+    "collider modes (Wave 8 stage A2: the interior kit merged into manifest.json by art_b_city.py --interior-into-main): bands 8, bbox 73, elevation 6, footprint 40, none 4, pole 3, steps 2", modes);
 
   // ---------------------------------------------------------------- mkCollider contract (maps.js:228)
   const mk = K.mkCollider("box", 1, 2, 3, 4, 5, 6, -1, null, -1, 0);
@@ -113,10 +114,10 @@ function refBox(b, q, k, x, y, z) {
   ok(detFail === 0, "two calls give identical colliders (deterministic, no hidden state)", detFail);
   ok(aliasFail === 0, "q + 4 and the radian spelling of a quarter turn give the same boxes as the index", aliasFail);
   const fp = fnv(all.map(dump).join("|"));
-  console.log("  INFO  fingerprint of " + all.length + " collider lists (81 types x 4 turns x 3 placements): " + fp + ", " + boxesChecked + " boxes");
+  console.log("  INFO  fingerprint of " + all.length + " collider lists (" + mIds.length + " types x 4 turns x 3 placements): " + fp + ", " + boxesChecked + " boxes");
 
   // ---------------------------------------------------------------- matches the manifest bboxes
-  let bboxFail = 0, bboxFirst = null, covFail = 0, covFirst = null;
+  let bboxFail = 0, bboxFirst = null, covFail = 0, covFirst = null, covN = 0, noneBad = [];
   for (const id of mIds) {
     const m = manifest.types[id], cs = K.colliderFor(id, 0, 0, 0, 0);
     let mnX = Infinity, mxX = -Infinity, mnY = Infinity, mxY = -Infinity, mnZ = Infinity, mxZ = -Infinity;
@@ -126,10 +127,14 @@ function refBox(b, q, k, x, y, z) {
     // and they COVER the body: the union reaches at least half of the bbox height and 40 % of each footprint side (a collider that shrank to nothing is a bug)
     const bh = hi[1] - lo[1], bw = hi[0] - lo[0], bd = hi[2] - lo[2];
     if (m.collider_mode === "pole") continue;                                       // a pole collider is the shaft only (the lamp arm is overhead)
+    // none (Wave 8): a rug / the pallet - NO collider by design, and the intake refuses the mode for anything drawn above the 0.30 m body-band floor (art_b_city.py BAND[0]); prove both here
+    if (m.collider_mode === "none") { if (cs.length !== 0 || m.colliders.length !== 0 || !(hi[1] <= 0.30)) noneBad.push([id, cs.length, hi[1]]); continue; }
+    covN++;
     if ((mxY - mnY) < 0.5 * bh - 1e-9 || (mxX - mnX) < 0.4 * bw - 1e-9 || (mxZ - mnZ) < 0.4 * bd - 1e-9) { covFail++; covFirst = covFirst || [id, mxY - mnY, bh, mxX - mnX, bw, mxZ - mnZ, bd]; }
   }
-  ok(bboxFail === 0, "all 81 collider sets sit inside the manifest bbox_m (+0.3 m, the intake's own rule)", { bboxFail, bboxFirst });
-  ok(covFail === 0, "all 78 non-pole collider sets cover the body (>= 50 % of the height, >= 40 % of each footprint side)", { covFail, covFirst });
+  ok(bboxFail === 0, "all " + mIds.length + " collider sets sit inside the manifest bbox_m (+0.3 m, the intake's own rule)", { bboxFail, bboxFirst });
+  ok(covFail === 0 && covN === 129, "all " + covN + " collider sets that are neither pole nor none (129 = 136 - 3 pole - 4 none) cover the body (>= 50 % of the height, >= 40 % of each footprint side)", { covN, covFail, covFirst });
+  ok(noneBad.length === 0, "the 4 collider-mode-none types (rugs, pallet) have no collider box and are drawn no higher than 0.30 m, the body band's floor (a player never meets them)", noneBad);
 
   // ---------------------------------------------------------------- composition, scale and translation are exact
   let compFail = 0, scaleFail = 0, moveFail = 0, quartFail = 0;
@@ -228,6 +233,42 @@ function refBox(b, q, k, x, y, z) {
   const noThree = await K.createCityKit({}).place(list, {});
   ok(dump(noThree.colliders) === dump(res.colliders) && noThree.meshes.length === 0 && /no THREE/.test(noThree.error || ""), "asked to draw with no THREE it still returns every collider and says why it drew nothing", noThree.error);
   ok(kit.dispose().instancedMeshes === 0 && kit.disposed, "dispose() on a kit that drew nothing is a clean no-op");
+
+  // ---------------------------------------------------------------- Wave 8 (stage A2, lane H5): the interior kit through place(), and lazy GLB loading
+  {
+    const room = [
+      { type: "furniture/bedDouble", x: 3, y: 0.11, z: 4, rot: 1 }, { type: "furniture/toilet", x: -2, y: 3.06, z: 1, rot: 2 }, { type: "walls/stairs", x: 0, y: 0.11, z: 0, rot: 3 },
+      { type: "walls/wallWindowPort", x: 6.6, y: 0.11, z: 0, rot: 0 }, { type: "furniture/rugRound", x: 1, y: 0.11, z: 1, rot: 0 }, { type: "furniture/shelfLarge", x: -4, y: 0.11, z: -3, rot: 2 },
+    ];
+    const rr = await K.createCityKit({}).place(room, { draw: false });
+    const wantR = [].concat(...room.map((e) => K.colliderFor(e.type, e.x, e.y, e.z, e.rot)));
+    ok(dump(rr.colliders) === dump(wantR) && rr.skipped.length === 0 && rr.colliders.every((c) => c.kind === "box" && c.prop === null && c.hp === 0 && c.dir === -1), "place() places interior furniture, stairs and walls with the exact table colliders (quarter turns, any floor height), plain mkCollider boxes", rr.colliders.length);
+    const cnt = (i) => rr.ranges[i * 2 + 1];
+    ok(cnt(0) === 1 && cnt(1) === 1 && cnt(2) === 11 && cnt(3) === 4 && cnt(4) === 0 && cnt(5) === 3, "per-entry collider counts: bed 1, toilet 1, stairs 11 (one per tread), window-port wall 4 (sill, two jambs, header), rug 0 (collider mode none), Quaternius shelf 3", Array.from(rr.ranges));
+    const st = K.colliderFor("walls/stairs", 0, 0, 0, 0), tops = st.map((c) => c.maxY);
+    ok(st.length === 11 && tops.every((t, i) => i === 0 ? t > 0 && t <= 0.55 : t - tops[i - 1] > 0 && t - tops[i - 1] <= 0.55) && st.every((c) => c.minY === 0) && Math.abs(tops[10] - 2.947) < 1e-9,
+      "stairs: 11 treads each rising <= 0.55 m (the mover's step) to the 2.947 m storey, every tread solid down to the floor (nothing to hide under)", tops);
+    const wp = K.colliderFor("walls/wallWindowPort", 0, 0, 0, 0);
+    const sill = wp.find((c) => c.minY === 0 && c.maxX - c.minX > 2), head = wp.find((c) => c.minY > 2);
+    ok(wp.length === 4 && sill && Math.abs(sill.maxY - 1.2) < 1e-9 && head && Math.abs(head.minY - 2.3) < 1e-9, "the window-port wall leaves exactly the 1.20-2.30 m aperture free (maps.js house() cover rule: standing eye clears the sill, crouched does not)", wp.map((c) => [c.minX, c.maxX, c.minY, c.maxY]));
+
+    // lazy loading: a kit fetches the GLB of a type only when asked to draw it. A stub kernel records every loadGLTF url.
+    const urls = [];
+    const fakeRoot = () => ({ updateMatrixWorld() {}, traverse(fn) { fn({ isMesh: true, geometry: { index: { count: 3 }, attributes: { position: { count: 3 } } }, material: {}, matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], clone() { return this; } } }); } });
+    const lk = K.createCityKit({ manifest, manifestUrl: "assets/props/city/manifest.json", kernel: { loadGLTF: async (u) => { urls.push(u); return fakeRoot(); } } });
+    await lk.ready();
+    await lk.place(room, { draw: false });
+    const none0 = urls.length;
+    const pre = await lk.preload(["furniture/bedDouble", "walls/stairs", "furniture/bedDouble", "nope/none"]);
+    ok(none0 === 0 && urls.length === 2 && urls[0] === "assets/props/city/" + manifest.types["furniture/bedDouble"].file && urls[1] === "assets/props/city/" + manifest.types["walls/stairs"].file && pre.loaded.length === 2 && pre.failed.length === 0,
+      "lazy: creating the kit, loading the manifest and placing colliders fetch NO GLB; preload of 2 types (one repeated, one unknown) fetches exactly those 2 files", urls);
+    await lk.preload(["furniture/bedDouble"]);
+    ok(urls.length === 2, "a type already loaded is never fetched again", urls.length);
+    const srcL = fs.readFileSync(path.join(__dirname, "citykit.js"), "utf8");
+    ok(/const drawn = entries\.filter\(\(n\) => modeOf\(n\.district\) !== "far"\);/.test(srcL) && /await preload\(drawn\.map\(\(n\) => n\.type\)\);/.test(srcL) && srcL.split("\n").filter((l) => !/^\s*(\*|\/\/)/.test(l) && /\bpreload\(/.test(l)).length === 2,
+      "place() preloads ONLY the types of its own list that it draws (a far-only district loads none); preload is called nowhere else in the module, so the 55 interior types cost a map nothing until it places them");
+    lk.dispose();
+  }
 
   // ---------------------------------------------------------------- palettes and themes
   const RP = K.resolvePalette;

@@ -55,9 +55,15 @@ rotated-wall rows come from the Node census (placement_census.mjs: every box map
   mean terrain under it) is a step, not an obstacle: it is left out on BOTH sides, and an instance with only steps is skipped.
   rotated-walls  turned walls/planks/decks: no collider corner > 0.5 m beyond the drawn outline (Wave 4: up to 8.4 m, 1,158 m2 at seed 7)
   ramps          no bullet-proof hide cell under a tall ramp (a standing cell where a chest-high shot from EVERY one of 8 directions is
-                 stopped by the slab: 0 m2); every sampled ramp climbed AND descended with the real mover; foot lip <= 0.10 m on every ramp
+                 stopped by the slab: 0 m2); every sampled ramp climbed AND descended with the real mover; foot lip <= 0.10 m on every ramp.
+                 Wave 8 (lane K3): housegen's pitched-roof planks (house.roofRamps) are roofs, not stairs (eave ~3.6 m over the street): not in the lip /
+                 climb / descend samples (information line); house stairs are judged like every ramp; ramps-hide keeps every ramp
   falls          drops of 5-60 m onto 0.3 m slabs: 0 pass-through
-  doors          >= 99 % of real walks into house doors get in (Wave 4: 107/108)
+  doors          >= 99 % of real walks into house doors get in (Wave 4: 107/108). Wave 8 (lane K3): a furnished housegen house is walked through its OWN
+                 street-door records (house.doors, outward side from the record), not the lintel survey (which reads interior doorways and porch beams /
+                 window headers inside furnished houses as doors: 72.6-81.1 % on the stage-B tree); the survey still covers every other building. A run-up
+                 whose 3.5 m start stands behind another building (a narrow alley) starts where the approach is clear (>= 1.5 m); a door with no clear
+                 approach at any angle is a FAILED walk. Control --plant door-shift (every record moved 2 m along its wall) must FAIL
   thin-walls     0 sprints cross a thin wall from either side at 90/60/30/10 deg (Wave 4: 0/288)
   errors         0 page errors / console errors / failed requests / shader errors
 
@@ -105,9 +111,13 @@ MIN_KIND_N = 5
 # negative controls (--plant): the rows that must FAIL, and the prop kind whose baked collider table is edited in memory (served through a page route;
 # no file is touched). container-narrow: container boxes 0.30 m narrower than the drawn body on each side (what a leaned container does to a level box);
 # rocks-small: every rock box shrunk to 35 % of its outline, so the capsule walks into the drawn rock.
-PLANTS = {"container-narrow": {"container-lean"}, "rocks-small": {"sprints-rocks"}}
+# door-shift (Wave 8, lane K3): in the page, every housegen street-door record is moved 2.0 m along its wall before the walk (nothing served, no file touched): the walk aims at
+# solid wall and the doors row must FAIL - the control that the corrected door set (housegen's own records) is walked, not trusted
+PLANTS = {"container-narrow": {"container-lean"}, "rocks-small": {"sprints-rocks"}, "door-shift": {"doors"}}
 PLANT_KIND = {"container-narrow": "container", "rocks-small": "rocks"}
 PLANT_SKIP = "doors,walls,ramps,falls"       # a plant run needs props + live only
+PLANT_SKIPS = {"door-shift": "props,live,walls,ramps,falls"}   # ... except door-shift: doors only
+PLANT_MAPS_BY = {"door-shift": "deepwood"}   # door-shift: a map with housegen houses and few kit shells (stage-B verify: 451 street doors on seed 7)
 PLANT_MAPS = "ashgrid"                       # containers and rocks are both plentiful there
 LEAN_OPTIONAL = "isla_viva,deepwood"         # container-lean: maps that place NO prop containers (the container yard is Savanna's; Wave 7b stage B, lane S3). A map listed here with no container is
                                              # information; any other map of the run must measure >= MIN_KIND_N containers or the row is could-not-judge. "none" = every map required
@@ -198,7 +208,7 @@ def measure_map(v, args, map_id, src, quick):
     res = {"map": map_id, "seed": args.seed}
     t0 = time.time()
     with C.Session(args, "collision_" + map_id, viewport={"width": 960, "height": 600}) as s:
-        if args.plant:                   # BEFORE boot: the page fetches the table during startMatch, through the route
+        if args.plant and args.plant in PLANT_KIND:   # BEFORE boot: the page fetches the table during startMatch, through the route
             if not (args.disk or args.rev):
                 raise C.EnvFailure("--plant needs --disk or --rev (it patches the served table)")
             res["plant"] = install_plant(s, args, args.plant)
@@ -225,7 +235,7 @@ def measure_map(v, args, map_id, src, quick):
 
         res["props"] = run("props", "props")
         res["live"] = run("live", "live", {"perKind": 4 if quick else 8})
-        res["doors"] = run("doors", "doors", {"max": 6 if quick else 14})
+        res["doors"] = run("doors", "doors", {"max": 6 if quick else 14, "plant": args.plant})
         res["walls"] = run("walls", "walls", {"max": 8 if quick else 16})
         res["ramps"] = run("ramps", "ramps", {"max": 6 if quick else 14})
         res["falls"] = run("falls", "falls", {"slabs": 3 if quick else 6})
@@ -399,6 +409,9 @@ def judge(v, per_map, rot, args):
         v.check("ramps-descend", dr > 0 and du == dr, "%d of %d sampled ramps walked down to the foot%s" % (du, dr, ("; failed " + json.dumps([d.get("failed") for _, d in ds if d.get("failed")])[:300]) if du != dr else ""), "all")
         lips = [(m, (r.get("ramps") or {}).get("lip") or {}) for m, r in per_map.items()]
         worst = max([(l.get("max") or 0) for _, l in lips] or [0])
+        roofp = {m: (r.get("ramps") or {}).get("roofPlanks") for m, r in per_map.items() if (r.get("ramps") or {}).get("roofPlanks")}
+        if roofp:
+            v.info("ramps: house roof planks (house.roofRamps; roofs, not stairs - not in the lip / climb / descend samples, kept in ramps-hide)", ", ".join("%s %d" % (m, n) for m, n in roofp.items()))
         v.check("ramps-lip", worst <= LIP_MAX + 1e-9, "foot lip max %s m over %d ramps (%s)" % (f(worst, 2), sum(l.get("n", 0) for _, l in lips), ", ".join("%s: %d over 0.10, %d over 0.55" % (m, l.get("over10", 0), l.get("over055", 0)) for m, l in lips)), "<= 0.10 m")
     else:
         v.cnj("ramps", "no ramp colliders measured")
@@ -417,7 +430,12 @@ def judge(v, per_map, rot, args):
     dr = sum((r.get("doors") or {}).get("runs", 0) for r in per_map.values())
     dg = sum((r.get("doors") or {}).get("gotIn", 0) for r in per_map.values())
     if dr:
-        v.check("doors", dg / dr >= DOOR_MIN, "%d of %d door walks got inside (%.1f%%; %d doors on %d maps)" % (dg, dr, 100.0 * dg / dr, sum((r.get("doors") or {}).get("doorsTested", 0) for r in per_map.values()), len(per_map)), ">= 99 %")
+        fails = [x for r in per_map.values() for x in ((r.get("doors") or {}).get("failed") or [])]
+        v.check("doors", dg / dr >= DOOR_MIN, "%d of %d door walks got inside (%.1f%%; %d doors on %d maps; %s)%s" % (dg, dr, 100.0 * dg / dr, sum((r.get("doors") or {}).get("doorsTested", 0) for r in per_map.values()), len(per_map),
+                ", ".join("%s: %d housegen street-door walks + %d lintel-survey walks, %d doors with no approach" % (m, ((r.get("doors") or {}).get("bySrc") or {}).get("housegen", 0), ((r.get("doors") or {}).get("bySrc") or {}).get("lintel", 0), (r.get("doors") or {}).get("noApproach", 0)) for m, r in per_map.items()),
+                ("; failed " + json.dumps(fails)[:400]) if fails else ""), ">= 99 %")
+        v.info("doors survey", " | ".join("%s: %s housegen street doors, lintel survey %s (%s outside housegen houses), %s run-ups pulled in to a clear approach%s" % (m, (r.get("doors") or {}).get("housegenDoors"), (r.get("doors") or {}).get("surveyed"), (r.get("doors") or {}).get("lintelUsed"), (r.get("doors") or {}).get("pulledIn"),
+                ", PLANT shifted %s" % (r.get("doors") or {}).get("housegenShifted") if (r.get("doors") or {}).get("housegenShifted") else "") for m, r in per_map.items()))
     else:
         v.cnj("doors", "no usable ground-level house door was found")
     wr = sum((r.get("walls") or {}).get("runs", 0) for r in per_map.values())
@@ -438,8 +456,8 @@ def main_fn(v, args):
         if args.plant not in PLANTS:
             raise C.HarnessError("unknown --plant %r (known: %s)" % (args.plant, ", ".join(sorted(PLANTS))))
         plant_rows = PLANTS[args.plant]
-        args.maps = args.maps or PLANT_MAPS
-        args.skip = args.skip or PLANT_SKIP
+        args.maps = args.maps or PLANT_MAPS_BY.get(args.plant, PLANT_MAPS)
+        args.skip = args.skip or PLANT_SKIPS.get(args.plant, PLANT_SKIP)
         print("%s: PLANT MODE %s - only %s count; exit 1 = the planted fault was detected (maps %s, skipping %s)" % (GATE, args.plant, sorted(plant_rows), args.maps, args.skip), flush=True)
         v = PlantView(v, plant_rows)
     maps = [m for m in (args.maps or ",".join(C.MAPS)).split(",") if m]

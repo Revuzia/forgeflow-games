@@ -23,6 +23,13 @@
  *   NavGrid.rectOfLayout(layout [, margin])   the ground a towngen layout covers
  *   NavGrid.prewarm(world, { x, z, r } | rect, maxMs)  -> { baked, remaining }   bake AND stitch ahead of the first query, a few ms a frame
  *   NavGrid.tileFor / tiles / edgesOf / worldStats / worldHash / makeColSet / findBuildingRects / snapNodes / linkTile   (inspection)
+ *   (Wave 8, lane I2) opts.noFloor (createWorld / bakeTown / bakeTile): a Set of collider objects that are TALL FURNITURE - never a floor, a wall from TALL_LIFT
+ *       over the feet (see TALL_LIFT). NavGrid.tallFurniture(map) -> that Set for a map with furnished houses (map.houses), null otherwise (the old world exactly).
+ *   (Wave 8, lane I2) GARBAGE: the replay's hot calls pass their numbers through module Float64Arrays (hopQ / supportTQ / rampBlocksTQ / clearTierQ / evalEdgeQ /
+ *       hopListQ / quietFlatQ / floorFragileQ / tileForQ / segRectD2Q) and coerce received numbers (x = +x): a call that is not inlined boxes every double argument,
+ *       and a parameter used as received stays a boxed number in TurboFan's phis. The bake made ~350 B of garbage per replayed step (~2 MB a frame at
+ *       NAV_STEPS_TICK 6000), now ~50; every tile and route is bit for bit what it was (world hash + 900 routes compared on 3 housed maps). A tile no longer copies
+ *       its colliders: it reads the world's collider set (T.lx0 === cs.minX ...) and its cell lists hold collider-set indices, in the same order.
  *
  * LAZY WORLDS (Wave 7, lane 7B2; the way bots.js uses the grid in play)
  *   NavGrid.createWorld({ ..., lazy: true }) / bakeTown(..., { lazy: true })   a world whose queries NEVER bake a tile: a tile that is not baked reads as
@@ -147,6 +154,11 @@
   }
   var _rest = 0;                 // 1 while a hop starts from a standstill (see REST_D)
   var RAMP_THICK = 0.3;          // sim RAMP_THICK
+  // (Wave 8, lane I2) TALL FURNITURE: a box the world was told is furniture standing more than a step over its own floor (opts.noFloor: a Set of the
+  // maps.js collider objects) is collider kind 3 - NEVER a floor (no node on a table, a bed, a shelf, a counter: bots never route over the furniture, the
+  // 'furniture staircase' of the stage-A check) and it BLOCKS the capsule whenever its top is more than TALL_LIFT over the feet (a step up onto it is a
+  // wall, never a lift). Both err toward 'blocked', the grid's rule: the real mover may still climb furniture, the grid never plans it.
+  var TALL_LIFT = 0.02;
   // ── the grid ──────────────────────────────────────────────────────────────────────────────────────────────────────
   var BAKE_SKIN = 0.005;         // baked clearance is the capsule + 5 mm, so float32 rounding can never put a node on the boundary
   var GLUE_DROP = 0.026;         // terrain that drops more than this in one 60 Hz step is left by the feet (gravity sinks them 6 mm and they land within 2 cm)
@@ -189,7 +201,7 @@
   /** Copy the geometry of a collider list into typed arrays (dead colliders are left out AT THIS MOMENT: the set is a
    *  snapshot, so a prop destroyed later changes nothing and every client's tiles stay identical). `blockers` = extra
    *  boxes {minX..maxZ} that stop the capsule like a wall but are never a floor (kind 2): the launch portals. */
-  function makeColSet(list, blockers) {
+  function makeColSet(list, blockers, noFloor) {
     if (list && list.isColSet) return list;
     var n = 0, i, c, nb = blockers ? blockers.length : 0;
     for (i = 0; i < list.length; i++) if (!list[i].dead) n++;
@@ -204,7 +216,7 @@
       c = list[i];
       if (c.dead) continue;
       cs.minX[j] = c.minX; cs.maxX[j] = c.maxX; cs.minY[j] = c.minY; cs.maxY[j] = c.maxY;
-      cs.minZ[j] = c.minZ; cs.maxZ[j] = c.maxZ; cs.kind[j] = c.kind === "ramp" ? 1 : 0; cs.dir[j] = c.dir | 0;
+      cs.minZ[j] = c.minZ; cs.maxZ[j] = c.maxZ; cs.kind[j] = c.kind === "ramp" ? 1 : (noFloor && noFloor.has(c) ? 3 : 0); cs.dir[j] = c.dir | 0;
       j++;
     }
     for (i = 0; i < nb; i++) {
@@ -230,6 +242,7 @@
   var _strictRamp = 0;           // 1 while a graph edge is validated: ramps give no side-margin support
 
   function rampTopT(T, i, x, z) {
+    x = +x; z = +z;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var dir = T.ld[i], f;
     if (dir === 0) f = (x - T.lx0[i]) / Math.max(0.01, T.lx1[i] - T.lx0[i]);
     else if (dir === 1) f = (T.lx1[i] - x) / Math.max(0.01, T.lx1[i] - T.lx0[i]);
@@ -240,16 +253,18 @@
 
   /** player.js supportIn: the highest walkable top at or below y + STEP_G (terrain always counts). H = the terrain height at (x, z). */
   function supportT(T, items, a, b, x, z, y, H) {
+    x = +x; z = +z; y = +y; H = +H;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var s = H;
     for (var k = a; k < b; k++) {
       var i = items[k], kd = T.lk[i];
-      if (kd === 2) continue;                           // a blocker is never a floor
+      if (kd >= 2) continue;                            // a blocker (2) / tall furniture (3) is never a floor
       // strict mode (graph edges): a ramp holds a walker up only inside its footprint. The real mover also holds one up for 0.3 m
       // past it, which lets a walker be lifted onto a ramp from its SIDE; that works at exact positions only, so edges never rely on it.
       var m = (kd === 1 && _strictRamp === 1) ? 0 : SUP_MARGIN;
       if (x < T.lx0[i] - m || x > T.lx1[i] + m || z < T.lz0[i] - m || z > T.lz1[i] + m) continue;
-      var isRamp = kd === 1;
-      var top = isRamp ? rampTopT(T, i, x, z) : T.ly1[i];
+      var isRamp = kd === 1, top;
+      if (isRamp) { var x0r = T.lx0[i], x1r = T.lx1[i], z0r = T.lz0[i], z1r = T.lz1[i], dr = T.ld[i], fr; if (dr === 0) fr = (x - x0r) / Math.max(0.01, x1r - x0r); else if (dr === 1) fr = (x1r - x) / Math.max(0.01, x1r - x0r); else if (dr === 2) fr = (z - z0r) / Math.max(0.01, z1r - z0r); else fr = (z1r - z) / Math.max(0.01, z1r - z0r);
+        top = T.ly0[i] + (T.ly1[i] - T.ly0[i]) * (fr < 0 ? 0 : fr > 1 ? 1 : fr); } else top = T.ly1[i];
       // equal tops (a stair that ends flush with its landing) are won by the RAMP, never by whichever collider happens to come first: the order of the colliders
       // must not decide whether a walk "used a ramp" (the edge kind, the strict and the margin replays)
       if (top <= y + STEP_G && (top > s + 1e-7 || (isRamp && _supRamp === 0 && top > s - 1e-7))) {
@@ -260,8 +275,56 @@
     return s;
   }
 
+  /** supportT with its numbers in _tq ([0] x, [1] z, [2] y, [3] H) and the answer in _tq[4]: the same expressions, term for term (hop's per-step calls: a call
+   *  that is not inlined boxes its double arguments and its result) */
+  var _tq = new Float64Array(5);
+  function supportTQ(T, items, a, b) {
+    var x = _tq[0], z = _tq[1], y = _tq[2], s = _tq[3];
+    for (var k = a; k < b; k++) {
+      var i = items[k], kd = T.lk[i];
+      if (kd >= 2) continue;
+      var m = (kd === 1 && _strictRamp === 1) ? 0 : SUP_MARGIN;
+      var x0 = T.lx0[i], x1 = T.lx1[i], z0 = T.lz0[i], z1 = T.lz1[i];
+      if (x < x0 - m || x > x1 + m || z < z0 - m || z > z1 + m) continue;
+      var isRamp = kd === 1, top;
+      if (isRamp) { var dr = T.ld[i], fr; if (dr === 0) fr = (x - x0) / Math.max(0.01, x1 - x0); else if (dr === 1) fr = (x1 - x) / Math.max(0.01, x1 - x0); else if (dr === 2) fr = (z - z0) / Math.max(0.01, z1 - z0); else fr = (z1 - z) / Math.max(0.01, z1 - z0);
+        top = T.ly0[i] + (T.ly1[i] - T.ly0[i]) * (fr < 0 ? 0 : fr > 1 ? 1 : fr); } else top = T.ly1[i];
+      if (top <= y + STEP_G && (top > s + 1e-7 || (isRamp && _supRamp === 0 && top > s - 1e-7))) {
+        s = top > s ? top : s; _supRamp = isRamp ? 1 : 0;
+        if (isRamp && (x < x0 || x > x1 || z < z0 || z > z1)) _marginUse = 1;
+      }
+    }
+    _tq[4] = s;
+  }
+
+  /** rampBlocksT with its numbers in _rbq ([0] x, [1] z, [2] yd, [3] rad): the same expressions (the per-step callers: no boxed call) */
+  var _rbq = new Float64Array(4);
+  function rampBlocksTQ(T, i) {
+    var x = _rbq[0], z = _rbq[1], yd = _rbq[2], rad = _rbq[3];
+    var x0 = T.lx0[i], x1 = T.lx1[i], z0 = T.lz0[i], z1 = T.lz1[i];
+    var qx = x < x0 ? x0 : x > x1 ? x1 : x;
+    var qz = z < z0 ? z0 : z > z1 ? z1 : z;
+    var ex = x - qx, ez = z - qz;
+    if (ex * ex + ez * ez >= rad * rad) return false;
+    var dir = T.ld[i], along, uc, ev;
+    if (dir === 0) { along = x1 - x0; uc = x - x0; ev = ez; }
+    else if (dir === 1) { along = x1 - x0; uc = x1 - x; ev = ez; }
+    else if (dir === 2) { along = z1 - z0; uc = z - z0; ev = ex; }
+    else { along = z1 - z0; uc = z1 - z; ev = ex; }
+    var al = along > 0.01 ? along : 0.01;
+    var k = (T.ly1[i] - T.ly0[i]) / al;
+    var uN = uc < 0 ? 0 : uc > al ? al : uc;
+    if (T.ly0[i] + k * uN <= yd + STEP_G) return false;
+    var reach = rad * rad - ev * ev;
+    reach = reach > 0 ? Math.sqrt(reach) : 0;
+    var uLow = uc - reach;
+    if (uLow < 0) uLow = 0; else if (uLow > al) uLow = al;
+    return T.ly0[i] + k * uLow - RAMP_THICK * 0.5 * Math.sqrt(1 + k * k) < yd + HEIGHT_G;
+  }
+
   /** sim rampBlocks (C-RAMP), over a tile's local arrays. */
   function rampBlocksT(T, i, x, z, yd, rad) {
+    x = +x; z = +z; yd = +yd; rad = +rad;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var x0 = T.lx0[i], x1 = T.lx1[i], z0 = T.lz0[i], z1 = T.lz1[i];
     var qx = x < x0 ? x0 : x > x1 ? x1 : x;
     var qz = z < z0 ? z0 : z > z1 ? z1 : z;
@@ -286,11 +349,12 @@
   /** player.js blockedIn without the "already inside" leniency (conservative): does a capsule of radius rad, standing
    *  on yd, overlap a collider that is above step reach and below the head? */
   function blockedT(T, items, a, b, x, z, yd, rad) {
+    x = +x; z = +z; yd = +yd; rad = +rad;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var r2 = rad * rad;
     for (var k = a; k < b; k++) {
       var i = items[k];
-      if (T.lk[i] === 1) { if (rampBlocksT(T, i, x, z, yd, rad)) return true; continue; }
-      if (T.ly1[i] <= yd + STEP_G || T.ly0[i] >= yd + HEIGHT_G) continue;
+      if (T.lk[i] === 1) { _rbq[0] = x; _rbq[1] = z; _rbq[2] = yd; _rbq[3] = rad; if (rampBlocksTQ(T, i)) return true; continue; }
+      if (T.ly1[i] <= yd + (T.lk[i] === 3 ? TALL_LIFT : STEP_G) || T.ly0[i] >= yd + HEIGHT_G) continue;
       var x0 = T.lx0[i], x1 = T.lx1[i], z0 = T.lz0[i], z1 = T.lz1[i];
       var ex = x - (x < x0 ? x0 : x > x1 ? x1 : x), ez = z - (z < z0 ? z0 : z > z1 ? z1 : z);
       if (ex * ex + ez * ez < r2) return true;
@@ -370,11 +434,13 @@
       if (!(ex * ex + ez * ez < r2)) continue;
       if (nn < 48) _sbN[nn++] = i; else over = true;
       var kd = lk[i];
-      if (kd === 2) continue;                           // a blocker is never a floor
+      if (kd >= 2) continue;                            // a blocker (2) / tall furniture (3) is never a floor
       var m = (kd === 1 && strict) ? 0 : SUP_MARGIN;
       if (x < x0 - m || x > x1 + m || z < z0 - m || z > z1 + m) continue;
       var isRamp = kd === 1;
-      var top = isRamp ? rampTopT(T, i, x, z) : T.ly1[i];
+      var top;
+      if (isRamp) { var dr = T.ld[i], fr; if (dr === 0) fr = (x - x0) / Math.max(0.01, x1 - x0); else if (dr === 1) fr = (x1 - x) / Math.max(0.01, x1 - x0); else if (dr === 2) fr = (z - z0) / Math.max(0.01, z1 - z0); else fr = (z1 - z) / Math.max(0.01, z1 - z0);
+        top = T.ly0[i] + (T.ly1[i] - T.ly0[i]) * (fr < 0 ? 0 : fr > 1 ? 1 : fr); } else top = T.ly1[i];
       if (top <= yq + STEP_G && (top > s + 1e-7 || (isRamp && _supRamp === 0 && top > s - 1e-7))) {
         s = top > s ? top : s; _supRamp = isRamp ? 1 : 0;
         if (isRamp && (x < x0 || x > x1 || z < z0 || z > z1)) _marginUse = 1;
@@ -386,8 +452,8 @@
       var blk = 0;
       for (var q = 0; q < nn && blk === 0; q++) {
         var j = _sbN[q];
-        if (lk[j] === 1) { if (rampBlocksT(T, j, x, z, yd, rad)) blk = 1; continue; }
-        if (T.ly1[j] <= yd + STEP_G || T.ly0[j] >= yd + HEIGHT_G) continue;
+        if (lk[j] === 1) { _rbq[0] = x; _rbq[1] = z; _rbq[2] = yd; _rbq[3] = rad; if (rampBlocksTQ(T, j)) blk = 1; continue; }
+        if (T.ly1[j] <= yd + (lk[j] === 3 ? TALL_LIFT : STEP_G) || T.ly0[j] >= yd + HEIGHT_G) continue;
         blk = 1;                                         // within the radius horizontally (the test above) and in the vertical band
       }
       _sbBlk = blk;
@@ -400,13 +466,17 @@
    *  ramp's reach grows with r), so one pass finds the nearest box (squared horizontal distance) and sets the ramps aside, and each radius is then a comparison and, for the ramps, the
    *  same rampBlocksT call blockedT makes. Same expressions as blockedT: the answers are the same. */
   var _ctR = new Int32Array(32);
-  function clearTier(T, items, a, b, x, z, yd, rad) {
+  var _ctq = new Float64Array(4);
+  function clearTier(T, items, a, b, x, z, yd, rad) { _ctq[0] = x; _ctq[1] = z; _ctq[2] = yd; _ctq[3] = rad; return clearTierQ(T, items, a, b); }
+  function clearTierQ(T, items, a, b) {
+    var x = _ctq[0], z = _ctq[1], yd = _ctq[2], rad = _ctq[3];      // (Wave 8, I2: the numbers come through _ctq - a call boxes double arguments)
+    x = +x; z = +z; yd = +yd; rad = +rad;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var lx0 = T.lx0, lx1 = T.lx1, lz0 = T.lz0, lz1 = T.lz1, ly0 = T.ly0, ly1 = T.ly1, lk = T.lk;
     var d2min = 1e30, nr = 0, over = false;
     for (var k = a; k < b; k++) {
       var i = items[k];
       if (lk[i] === 1) { if (nr < 32) _ctR[nr++] = i; else over = true; continue; }
-      if (ly1[i] <= yd + STEP_G || ly0[i] >= yd + HEIGHT_G) continue;
+      if (ly1[i] <= yd + (lk[i] === 3 ? TALL_LIFT : STEP_G) || ly0[i] >= yd + HEIGHT_G) continue;
       var x0 = lx0[i], x1 = lx1[i], z0 = lz0[i], z1 = lz1[i];
       var ex = x - (x < x0 ? x0 : x > x1 ? x1 : x), ez = z - (z < z0 ? z0 : z > z1 ? z1 : z);
       var d2 = ex * ex + ez * ez;
@@ -422,13 +492,15 @@
     for (var step = 0; step < 4; step++) {
       r = step === 0 ? rad : RADIUS + 0.1 * step;
       blk = d2min < r * r;
-      for (q = 0; q < nr && !blk; q++) if (rampBlocksT(T, _ctR[q], x, z, yd, r)) blk = true;
+      _rbq[0] = x; _rbq[1] = z; _rbq[2] = yd; _rbq[3] = r;
+      for (q = 0; q < nr && !blk; q++) if (rampBlocksTQ(T, _ctR[q])) blk = true;
       if (blk) return step === 0 ? -1 : step - 1;
     }
     return 3;
   }
 
   function cellOf(T, x, z) {
+    x = +x; z = +z;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var ix = ((x - T.minX) * T.inv) | 0, iz = ((z - T.minZ) * T.inv) | 0;
     if (ix >= T.nx) ix = T.nx - 1; if (iz >= T.nz) iz = T.nz - 1;
     return iz * T.nx + ix;
@@ -442,7 +514,12 @@
    *  the result is in _hr. W is the world (tiles are looked up as the line leaves T0) or null (stay inside T0).
    *  fN >= 0: T0's colliders `fItems[0..fN)` are the ONLY ones that can touch this hop (the bake builds that list
    *  once per hop: the vertical band and the corridor it can reach); fN < 0: read each cell's own list as the line goes. */
-  function hop(W, T0, ax, ay, az, bx, bz, rad, fItems, fN) {
+  /** hop with its numbers in _hp ([0] ax, [1] ay, [2] az, [3] bx, [4] bz, [5] rad): the hot callers pass them through the array (a call boxes double
+   *  arguments: the bake's garbage). The numbers are read at entry, so a nested replay that refills _hp changes nothing here. */
+  var _hp = new Float64Array(6);
+  function hop(W, T0, ax, ay, az, bx, bz, rad, fItems, fN) { _hp[0] = ax; _hp[1] = ay; _hp[2] = az; _hp[3] = bx; _hp[4] = bz; _hp[5] = rad; return hopQ(W, T0, fItems, fN); }
+  function hopQ(W, T0, fItems, fN) {
+    var ax = _hp[0], ay = _hp[1], az = _hp[2], bx = _hp[3], bz = _hp[4], rad = _hp[5];
     var dx = bx - ax, dz = bz - az;
     var L = Math.sqrt(dx * dx + dz * dz), rest = _rest === 1 && L > 1e-9;
     var n = rest ? restTicks(L) : Math.ceil(L / HOP_STEP);
@@ -460,11 +537,12 @@
     _marginUse = 0;
     var water = T0.deepY > -1e8;
     for (var s = 1; s <= n; s++) {
-      var f = rest ? (s >= n ? 1 : restDist(s) / L) : s / n, px = ax + dx * f, pz = az + dz * f;
+      var f = rest ? (s >= n ? 1 : (s <= REST_N ? REST_D[s] : REST_D[REST_N] + (s - REST_N) * HOP_STEP) / L) : s / n, px = ax + dx * f, pz = az + dz * f;      // (restDist, inlined)
       // X move (the destination floor decides the band, player.js blockedIn)
       if (!fixed) {
-        if (px < T.minX || px >= T.maxX || z < T.minZ || z >= T.maxZ) { T = W ? tileFor(W, px, z, true) : null; if (T === null) return false; }
-        ci = cellOf(T, px, z); a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
+        if (px < T.minX || px >= T.maxX || z < T.minZ || z >= T.maxZ) { T = W ? (_tf[0] = px, _tf[1] = z, tileForQ(W, true)) : null; if (T === null) return false; }
+        { var cix0 = ((px - T.minX) * T.inv) | 0, ciz0 = ((z - T.minZ) * T.inv) | 0; if (cix0 >= T.nx) cix0 = T.nx - 1; if (ciz0 >= T.nz) ciz0 = T.nz - 1; ci = ciz0 * T.nx + cix0; }      // (cellOf, inlined: no boxed call per step)
+        a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
       }
       if (b > a) {
         if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; gT = false; vy = 0; air = false; }
@@ -477,8 +555,9 @@
       x = px;
       // Z move
       if (!fixed) {
-        if (x < T.minX || x >= T.maxX || pz < T.minZ || pz >= T.maxZ) { T = W ? tileFor(W, x, pz, true) : null; if (T === null) return false; }
-        ci = cellOf(T, x, pz); a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
+        if (x < T.minX || x >= T.maxX || pz < T.minZ || pz >= T.maxZ) { T = W ? (_tf[0] = x, _tf[1] = pz, tileForQ(W, true)) : null; if (T === null) return false; }
+        { var cix1 = ((x - T.minX) * T.inv) | 0, ciz1 = ((pz - T.minZ) * T.inv) | 0; if (cix1 >= T.nx) cix1 = T.nx - 1; if (ciz1 >= T.nz) ciz1 = T.nz - 1; ci = ciz1 * T.nx + cix1; }
+        a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
       }
       if (b === a && !fixed) {
         // OPEN cell: nothing within reach of the capsule, so nothing blocks, nothing lifts, the floor is the terrain. Over GENTLE ground the feet ride it
@@ -495,7 +574,7 @@
           var sLast = rest ? restTicks(tEx * L) - 1 : Math.ceil(tEx * n) - 1;
           if (sLast > n) sLast = n;
           if (sLast > s) {
-            var jf = rest ? restDist(sLast) / L : sLast / n, jx = ax + dx * jf, jz = az + dz * jf;
+            var jf = rest ? (sLast <= REST_N ? REST_D[sLast] : REST_D[REST_N] + (sLast - REST_N) * HOP_STEP) / L : sLast / n, jx = ax + dx * jf, jz = az + dz * jf;
             // the terrain can dip under the swim line between two checked points: jump only where it is clear of the line at both ends,
             // else walk the steps one by one with the swim test (the mover swims the moment the ground under it is DEEP)
             _hq[0] = jx; _hq[1] = jz; hfQ(T);
@@ -548,7 +627,7 @@
         // (yStood = the height that call used), and its answer is the same too - when that call started from a clear ramp flag, which is what this one forces: then it
         // IS this call, side effects included, and is not run twice. (From a set flag the tie rule differs, so the full call runs.)
         if (!air && sr0 === 0) { if (_supRamp === 1 && sup >= y - 0.02) usedRamp = 1; }
-        else { _supRamp = 0; sup = supportT(T, items, a, b, x, z, air ? y - AIR_PAD : yStood, Hz); if (_supRamp === 1 && sup >= y - 0.02) usedRamp = 1; }
+        else { _supRamp = 0; _tq[0] = x; _tq[1] = z; _tq[2] = air ? y - AIR_PAD : yStood; _tq[3] = Hz; supportTQ(T, items, a, b); sup = _tq[4]; if (_supRamp === 1 && sup >= y - 0.02) usedRamp = 1; }
       }
       else sup = Hz;
       if (y <= sup + 0.02) { y = sup; vy = 0; air = false; } else { air = true; airTicks++; if (y - sup > BIG_GAP) bigTicks++; }
@@ -556,7 +635,8 @@
     }
     if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; }
     else if (y > sup + 0.02) {      // the horizontal run is over and the feet are in the air (a drop): they fall straight down onto the highest top under them
-      var land = b > a ? supportT(T, items, a, b, x, z, y, Hz) : Hz;
+      var land = Hz;
+      if (b > a) { _tq[0] = x; _tq[1] = z; _tq[2] = y; _tq[3] = Hz; supportTQ(T, items, a, b); land = _tq[4]; }
       if (y - land > BIG_GAP) bigTicks += 30;                  // it left the walk and fell to something far below
       airTicks++;
       y = land;
@@ -571,14 +651,15 @@
    *  up 0.3 m past a footprint) and the 0.55 step are hairline conditions; an edge that works only on the exact line fails in a
    *  walker that is 5 cm off it (measured: a mall stair entered from a node sitting exactly on the margin boundary). */
   function hopJ(W, T0, ax, ay, az, bx, bz, rad, fItems, fN, by) {
-    if (!hop(W, T0, ax, ay, az, bx, bz, rad, fItems, fN)) return false;
+    ax = +ax; ay = +ay; az = +az; bx = +bx; bz = +bz; rad = +rad; by = +by;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
+    if (!(_hp[0] = ax, _hp[1] = ay, _hp[2] = az, _hp[3] = bx, _hp[4] = bz, _hp[5] = rad, hopQ(W, T0, fItems, fN))) return false;
     if (Math.abs(_hr[0] - by) > FLOOR_TOL) return false;
     var y0 = _hr[0], g0 = _hr[1], r0 = _hr[2], m0 = _hr[3], a0 = _hr[4], u0 = _hr[5];
     var dx = bx - ax, dz = bz - az, L = Math.sqrt(dx * dx + dz * dz);
     if (L > 1e-6) {
       var ux = -dz / L * JITTER, uz = dx / L * JITTER;
       for (var sgn = -1; sgn <= 1; sgn += 2) {
-        if (!hop(W, T0, ax + sgn * ux, ay, az + sgn * uz, bx + sgn * ux, bz + sgn * uz, rad, fItems, fN)) return false;
+        if (!(_hp[0] = ax + sgn * ux, _hp[1] = ay, _hp[2] = az + sgn * uz, _hp[3] = bx + sgn * ux, _hp[4] = bz + sgn * uz, _hp[5] = rad, hopQ(W, T0, fItems, fN))) return false;
         if (Math.abs(_hr[0] - by) > FLOOR_TOL) return false;
       }
     }
@@ -590,9 +671,10 @@
    *  edge stands only if it still lands on the same floor. A walker lifted onto a ramp from its side, or caught by a ramp's margin
    *  while falling past it, is a result that exists at exact positions only. */
   function sameWithoutRampMargin(W, T0, ax, ay, az, bx, bz, rad, items, n) {
+    ax = +ax; ay = +ay; az = +az; bx = +bx; bz = +bz; rad = +rad;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var y0 = _hr[0], g0 = _hr[1], r0 = _hr[2], m0 = _hr[3], a0 = _hr[4], u0 = _hr[5];
     _strictRamp = 1;
-    var ok = hop(W, T0, ax, ay, az, bx, bz, rad, items, n);
+    var ok = (_hp[0] = ax, _hp[1] = ay, _hp[2] = az, _hp[3] = bx, _hp[4] = bz, _hp[5] = rad, hopQ(W, T0, items, n));
     _strictRamp = 0;
     var agree = ok && Math.abs(_hr[0] - y0) <= 0.1;
     _hr[0] = y0; _hr[1] = g0; _hr[2] = r0; _hr[3] = m0; _hr[4] = a0; _hr[5] = u0;
@@ -603,9 +685,10 @@
    *  the air over a ledge, a stair side or a steep slope. Run the same walk from a standstill: the edge / leg stands only if it ends on the same
    *  floor. (An edge that works at speed only is the one a bot gets stuck on at a waypoint: it stops at the lip, lifts too little, walks into the deck.) */
   function restAgrees(W, T0, ax, ay, az, bx, bz, rad, items, n) {
+    ax = +ax; ay = +ay; az = +az; bx = +bx; bz = +bz; rad = +rad;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var y0 = _hr[0], g0 = _hr[1], r0 = _hr[2], m0 = _hr[3], a0 = _hr[4], u0 = _hr[5];
     _rest = 1;
-    var ok = hop(W, T0, ax, ay, az, bx, bz, rad, items, n);
+    var ok = (_hp[0] = ax, _hp[1] = ay, _hp[2] = az, _hp[3] = bx, _hp[4] = bz, _hp[5] = rad, hopQ(W, T0, items, n));
     _rest = 0;
     var agree = ok && _hr[1] <= MAX_WALK_GAP && Math.abs(_hr[0] - y0) <= FLOOR_AGREE;
     _hr[0] = y0; _hr[1] = g0; _hr[2] = r0; _hr[3] = m0; _hr[4] = a0; _hr[5] = u0;
@@ -616,6 +699,7 @@
    *  the places a walker can stand within 0.4 m of a, along the leg and across it. A start that is itself blocked, or is a different
    *  floor (past a lip), is not a place this walker stands and is skipped. Used for ramp and drop edges, where the margin is thin. */
   function perturbOK(W, T0, ax, ay, az, bx, by, bz, rad, items, n) {
+    ax = +ax; ay = +ay; az = +az; bx = +bx; by = +by; bz = +bz; rad = +rad;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var dx = bx - ax, dz = bz - az, L = Math.sqrt(dx * dx + dz * dz);
     if (L < 1e-6) return true;
     var ux = dx / L * PERTURB, uz = dz / L * PERTURB;
@@ -625,14 +709,15 @@
       var T = T0, its = items, a = 0, b = n;
       if (!fixed || sx < T0.minX || sx >= T0.maxX || sz < T0.minZ || sz >= T0.maxZ) {
         if (fixed && !W) continue;
-        if (sx < T0.minX || sx >= T0.maxX || sz < T0.minZ || sz >= T0.maxZ) { T = tileFor(W, sx, sz, true); if (T === null) continue; }
+        if (sx < T0.minX || sx >= T0.maxX || sz < T0.minZ || sz >= T0.maxZ) { T = (_tf[0] = sx, _tf[1] = sz, tileForQ(W, true)); if (T === null) continue; }
         var ci = cellOf(T, sx, sz); its = T.nearItems; a = T.nearStart[ci]; b = T.nearStart[ci + 1];
         fixed = false;
       }
-      var Hs = T.hf(sx, sz), sup = b > a ? supportT(T, its, a, b, sx, sz, ay, Hs) : Hs;
+      _hq[0] = sx; _hq[1] = sz; hfQ(T); var Hs = _hq[2], sup = Hs;
+      if (b > a) { _tq[0] = sx; _tq[1] = sz; _tq[2] = ay; _tq[3] = Hs; supportTQ(T, its, a, b); sup = _tq[4]; }
       if (Math.abs(sup - ay) > 0.45) continue;                           // another floor: not a place this walker stands
       if (b > a && blockedT(T, its, a, b, sx, sz, sup, rad)) continue;   // inside something: not a place it stands either
-      if (!hop(W, T, sx, sup, sz, bx, bz, rad, fixed ? items : null, fixed ? n : -1)) return false;
+      if (!(_hp[0] = sx, _hp[1] = sup, _hp[2] = sz, _hp[3] = bx, _hp[4] = bz, _hp[5] = rad, hopQ(W, T, fixed ? items : null, fixed ? n : -1))) return false;
       if (Math.abs(_hr[0] - by) > FLOOR_TOL) return false;
       fixed = n >= 0;
     }
@@ -643,7 +728,11 @@
   // the vertical band the feet can occupy and to the corridor of the hop. A slab a storey above or a wall a storey below
   // never matters, which is most of what a multi-storey cell lists.
   var _bl = new Int32Array(512), _bn = 0, _mk = new Int32Array(0), _mkStamp = 0;
-  function hopList(T, ay, by, ax, az, bx, bz, rad, big) {
+  var _hlq = new Float64Array(7);
+  function hopList(T, ay, by, ax, az, bx, bz, rad, big) { _hlq[0] = ay; _hlq[1] = by; _hlq[2] = ax; _hlq[3] = az; _hlq[4] = bx; _hlq[5] = bz; _hlq[6] = rad; return hopListQ(T, big); }
+  function hopListQ(T, big) {
+    var ay = _hlq[0], by = _hlq[1], ax = _hlq[2], az = _hlq[3], bx = _hlq[4], bz = _hlq[5], rad = _hlq[6];      // (Wave 8, I2: the numbers come through _hlq - a call boxes double arguments)
+    ay = +ay; by = +by; ax = +ax; az = +az; bx = +bx; bz = +bz; rad = +rad;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     if (_mk.length < T.m) _mk = new Int32Array(T.m + 64);
     var stamp = ++_mkStamp;
     if (stamp > 2000000000) { _mk.fill(0); _mkStamp = stamp = 1; }
@@ -698,6 +787,7 @@
   // ── the quiet corridor ───────────────────────────────────────────────────────────────────────────────────────────
   /** squared distance from the segment (ax,az)-(bx,bz) to the rectangle [x0,x1] x [z0,z1] (0 when they touch) */
   function segRectD2(ax, az, bx, bz, x0, x1, z0, z1) {
+    ax = +ax; az = +az; bx = +bx; bz = +bz; x0 = +x0; x1 = +x1; z0 = +z0; z1 = +z1;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     // clip the segment against the rectangle (Liang-Barsky): any part inside = touching
     var dx = bx - ax, dz = bz - az, t0 = 0, t1 = 1, p, q, r;
     for (var e = 0; e < 4; e++) {
@@ -717,13 +807,37 @@
     }
     return best;
   }
+  /** segRectD2 over _sr ([0..3] the segment ax az bx bz, [4..7] the rectangle x0 x1 z0 z1): quietFlat's per-collider call without 8 boxed numbers */
+  var _sr = new Float64Array(8);
+  function segRectD2Q() { var ax = _sr[0], az = _sr[1], bx = _sr[2], bz = _sr[3], x0 = _sr[4], x1 = _sr[5], z0 = _sr[6], z1 = _sr[7];
+    var dx = bx - ax, dz = bz - az, t0 = 0, t1 = 1, p, q, r;
+    for (var e = 0; e < 4; e++) {
+      if (e === 0) { p = -dx; q = ax - x0; } else if (e === 1) { p = dx; q = x1 - ax; } else if (e === 2) { p = -dz; q = az - z0; } else { p = dz; q = z1 - az; }
+      if (p === 0) { if (q < 0) { t0 = 2; break; } }
+      else { r = q / p; if (p < 0) { if (r > t1) { t0 = 2; break; } if (r > t0) t0 = r; } else { if (r < t0) { t0 = 2; break; } if (r < t1) t1 = r; } }
+    }
+    if (t0 <= t1) return 0;
+    var best = 1e18, ex, ez, d2, i, cx, cz, L2 = dx * dx + dz * dz, t;
+    ex = ax < x0 ? x0 - ax : ax > x1 ? ax - x1 : 0; ez = az < z0 ? z0 - az : az > z1 ? az - z1 : 0; d2 = ex * ex + ez * ez; if (d2 < best) best = d2;
+    ex = bx < x0 ? x0 - bx : bx > x1 ? bx - x1 : 0; ez = bz < z0 ? z0 - bz : bz > z1 ? bz - z1 : 0; d2 = ex * ex + ez * ez; if (d2 < best) best = d2;
+    for (i = 0; i < 4; i++) {
+      cx = (i & 1) ? x1 : x0; cz = (i & 2) ? z1 : z0;
+      t = L2 > 0 ? ((cx - ax) * dx + (cz - az) * dz) / L2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      ex = cx - (ax + dx * t); ez = cz - (az + dz * t); d2 = ex * ex + ez * ez; if (d2 < best) best = d2;
+    }
+    return best;
+  }
   var QUIET_SKIN = 0.07;         // the replay moves X then Z: its corner points leave the straight line by up to 5 cm
   var _qf = new Int32Array(64);
   /** Is the flat walk a -> b over the floor at height y a walk NOTHING can disturb? True only when the full replay is certain to succeed with the feet
    *  glued to the floor all the way: no ramp, no wall or head-height slab within the capsule (+ skin) of the line, no step within the support margin
    *  (it would lift the walker), the line lies on top of floor boxes at this very height, and the terrain stays under it. It decides nothing else:
    *  false means "run the replay". items = _bl[0..n), the colliders of the hop corridor (hopList). */
-  function quietFlat(T, y, ax, az, bx, bz, n) {
+  var _qfq = new Float64Array(5);
+  function quietFlat(T, y, ax, az, bx, bz, n) { _qfq[0] = y; _qfq[1] = ax; _qfq[2] = az; _qfq[3] = bx; _qfq[4] = bz; return quietFlatQ(T, n); }
+  function quietFlatQ(T, n) {
+    var y = _qfq[0], ax = _qfq[1], az = _qfq[2], bx = _qfq[3], bz = _qfq[4];      // (Wave 8, I2: the numbers come through _qfq - a call boxes double arguments)
+    y = +y; ax = +ax; az = +az; bx = +bx; bz = +bz;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var nf = 0, k, i;
     var wallR2 = (RADIUS + BAKE_SKIN + QUIET_SKIN) * (RADIUS + BAKE_SKIN + QUIET_SKIN), liftR2 = (SUP_MARGIN + QUIET_SKIN) * (SUP_MARGIN + QUIET_SKIN);
     for (k = 0; k < n; k++) {
@@ -732,13 +846,14 @@
       if (kd === 1) return false;                                   // a ramp near the line: run the replay
       var top = T.ly1[i], bot = T.ly0[i];
       if (bot >= y + HEIGHT_G) continue;                            // above the head: blocks nothing, holds nothing up
+      if (kd === 3) { if (top > y + TALL_LIFT && (_sr[0] = ax, _sr[1] = az, _sr[2] = bx, _sr[3] = bz, _sr[4] = T.lx0[i], _sr[5] = T.lx1[i], _sr[6] = T.lz0[i], _sr[7] = T.lz1[i], segRectD2Q()) < wallR2) return false; continue; }     // tall furniture: a wall once over the feet, never a floor
       if (top <= y + STEP_G) {                                      // a step or the floor itself: never blocks
         if (kd === 2) continue;
         if (top >= y - 0.02 && top <= y + 0.02) { if (nf < 64) _qf[nf++] = i; else return false; }
-        else if (top > y + 0.02 && segRectD2(ax, az, bx, bz, T.lx0[i] - 0, T.lx1[i], T.lz0[i], T.lz1[i]) < liftR2) return false;     // would lift the walker
+        else if (top > y + 0.02 && (_sr[0] = ax, _sr[1] = az, _sr[2] = bx, _sr[3] = bz, _sr[4] = T.lx0[i] - 0, _sr[5] = T.lx1[i], _sr[6] = T.lz0[i], _sr[7] = T.lz1[i], segRectD2Q()) < liftR2) return false;     // would lift the walker
         continue;
       }
-      if (segRectD2(ax, az, bx, bz, T.lx0[i], T.lx1[i], T.lz0[i], T.lz1[i]) < wallR2) return false;                             // a wall within the capsule
+      if ((_sr[0] = ax, _sr[1] = az, _sr[2] = bx, _sr[3] = bz, _sr[4] = T.lx0[i], _sr[5] = T.lx1[i], _sr[6] = T.lz0[i], _sr[7] = T.lz1[i], segRectD2Q()) < wallR2) return false;                             // a wall within the capsule
     }
     if (nf === 0) return false;
     // the line stays on the floor boxes: every 8 cm sample lies inside one of them
@@ -751,7 +866,8 @@
     // the ground under the floor does not rise to it (it would hold the walker up), nor reach the swim line below a dock
     var water = T.deepY > -1e8;
     for (s2 = 0; s2 <= 2; s2++) {
-      var hx = ax + dx * 0.5 * s2, hz = az + dz * 0.5 * s2, Hh = T.hf(hx, hz);
+      var hx = ax + dx * 0.5 * s2, hz = az + dz * 0.5 * s2;
+      _hq[0] = hx; _hq[1] = hz; hfQ(T); var Hh = _hq[2];
       if (!(Hh <= y + 0.02)) return false;
       if (water && Hh < T.deepY && y <= T.wetY) return false;
     }
@@ -763,7 +879,11 @@
 
   /** The kind of the edge a -> b (EDGE_*), or -1 when the mover cannot make it (cost in _ec[0]). fa / fb = node flags.
    *  ca >= 0: both nodes are in tile T0 and the bake may cut the colliders to this hop; ca < 0: read each cell as the line goes. */
-  function evalEdge(W, T0, ax, ay, az, fa, bx, by, bz, fb, ca, cb) {
+  var _eq = new Float64Array(6);
+  function evalEdge(W, T0, ax, ay, az, fa, bx, by, bz, fb, ca, cb) { _eq[0] = ax; _eq[1] = ay; _eq[2] = az; _eq[3] = bx; _eq[4] = by; _eq[5] = bz; return evalEdgeQ(W, T0, fa, fb, ca, cb); }
+  function evalEdgeQ(W, T0, fa, fb, ca, cb) {
+    var ax = _eq[0], ay = _eq[1], az = _eq[2], bx = _eq[3], by = _eq[4], bz = _eq[5];      // (Wave 8, I2: the numbers come through _eq - a call boxes double arguments)
+    ax = +ax; ay = +ay; az = +az; bx = +bx; by = +by; bz = +bz;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     var dx = bx - ax, dz = bz - az, dy = by - ay;
     var dxz = Math.sqrt(dx * dx + dz * dz);
     if (dxz < 1e-6) return -1;
@@ -784,9 +904,10 @@
           kind = EDGE_DROP;
           // what a faller meets at b's column is the highest top at or below its feet: it must be b's floor
           var Tb = T0;
-          if (bx < Tb.minX || bx >= Tb.maxX || bz < Tb.minZ || bz >= Tb.maxZ) { Tb = W ? tileFor(W, bx, bz, true) : null; if (Tb === null) return -1; }
+          if (bx < Tb.minX || bx >= Tb.maxX || bz < Tb.minZ || bz >= Tb.maxZ) { Tb = W ? (_tf[0] = bx, _tf[1] = bz, tileForQ(W, true)) : null; if (Tb === null) return -1; }
           var cbb = cellOf(Tb, bx, bz), sb = Tb.nearStart[cbb], eb = Tb.nearStart[cbb + 1];
-          var hb = Tb.hf(bx, bz), land = eb > sb ? supportT(Tb, Tb.nearItems, sb, eb, bx, bz, ay, hb) : hb;
+          _hq[0] = bx; _hq[1] = bz; hfQ(Tb); var hb = _hq[2], land = hb;
+          if (eb > sb) { _tq[0] = bx; _tq[1] = bz; _tq[2] = ay; _tq[3] = hb; supportTQ(Tb, Tb.nearItems, sb, eb); land = _tq[4]; }
           if (Math.abs(land - by) > FLOOR_TOL) return -1;
         }
       }
@@ -794,25 +915,25 @@
     var ln = -1;
     // bake: only what can touch this hop (the capsule and the support margin reach 0.455 m). The follower checks (perturbOK starts a walker
     // 0.4 m off the node) need the wide corridor: it is built only where they run.
-    if (ca >= 0) ln = hopList(T0, ay, by, ax, az, bx, bz, rad, false);
+    if (ca >= 0) ln = (_hlq[0] = ay, _hlq[1] = by, _hlq[2] = ax, _hlq[3] = az, _hlq[4] = bx, _hlq[5] = bz, _hlq[6] = rad, hopListQ(T0, false));
     if (terr) {
       // terrain is followed at any slope (supportIn: terrain always counts); only a collider can refuse the hop
       if (ln !== 0) {
-        if (!hop(W, T0, ax, ay, az, bx, bz, rad, _bl, ln)) return -1;
+        if (!(_hp[0] = ax, _hp[1] = ay, _hp[2] = az, _hp[3] = bx, _hp[4] = bz, _hp[5] = rad, hopQ(W, T0, _bl, ln))) return -1;
         if (Math.abs(_hr[0] - by) > FLOOR_TOL) return -1;
         if (_hr[4] > 0 && !restAgrees(W, T0, ax, ay, az, bx, bz, rad, _bl, ln)) return -1;
       }
       cost = len3 * (1 + 0.4 * Math.min(1, Math.abs(dy) / dxz));
     } else {
       if (ln === 0) return -1;                             // a non-terrain floor with nothing under it: no such edge
-      if (ln > 0 && kind === EDGE_WALK && !rampInv && dy < 0.02 && dy > -0.02 && quietFlat(T0, ay, ax, az, bx, bz, ln)) {
+      if (ln > 0 && kind === EDGE_WALK && !rampInv && dy < 0.02 && dy > -0.02 && (_qfq[0] = ay, _qfq[1] = ax, _qfq[2] = az, _qfq[3] = bx, _qfq[4] = bz, quietFlatQ(T0, ln))) {
         _hr[0] = by; _hr[1] = 0; _hr[2] = 0; _hr[3] = ay < by ? ay : by; _hr[4] = 0; _hr[5] = 0;        // the replay would walk it flat: skip it
-      } else if (!hop(W, T0, ax, ay, az, bx, bz, rad, _bl, ln)) return -1;
+      } else if (!(_hp[0] = ax, _hp[1] = ay, _hp[2] = az, _hp[3] = bx, _hp[4] = bz, _hp[5] = rad, hopQ(W, T0, _bl, ln))) return -1;
       if (Math.abs(_hr[0] - by) > FLOOR_TOL) return -1;    // the feet must land on the floor this edge claims
       if (kind !== EDGE_DROP && _hr[4] > 0 && !restAgrees(W, T0, ax, ay, az, bx, bz, rad, _bl, ln)) return -1;
       if (kind === EDGE_DROP) {
         if (_hr[5] === 1 && !sameWithoutRampMargin(W, T0, ax, ay, az, bx, bz, rad, _bl, ln)) return -1;
-        if (ln >= 0) { ln = hopList(T0, ay, by, ax, az, bx, bz, rad, true); if (!perturbOK(W, T0, ax, ay, az, bx, by, bz, rad, _bl, ln)) return -1; }        // a drop is optional: only the robust ones
+        if (ln >= 0) { ln = (_hlq[0] = ay, _hlq[1] = by, _hlq[2] = ax, _hlq[3] = az, _hlq[4] = bx, _hlq[5] = bz, _hlq[6] = rad, hopListQ(T0, true)); if (!perturbOK(W, T0, ax, ay, az, bx, by, bz, rad, _bl, ln)) return -1; }        // a drop is optional: only the robust ones
         cost = len3 + DROP_COST + 0.3 * -dy;
       } else {
         if (_hr[1] > MAX_WALK_GAP) return -1;              // it fell: not a walk
@@ -820,11 +941,11 @@
         if (rampInv || _hr[2] === 1) {
           kind = EDGE_RAMP;
           if (_hr[5] === 1 && !sameWithoutRampMargin(W, T0, ax, ay, az, bx, bz, rad, _bl, ln)) return -1;         // not a margin trick (a lift from a ramp's side); no margin used = the replay would be the same walk
-          if (ln >= 0) { ln = hopList(T0, ay, by, ax, az, bx, bz, rad, true); if (!perturbOK(W, T0, ax, ay, az, bx, by, bz, rad, _bl, ln)) return -1; }      // thin margins: must survive a follower's error
+          if (ln >= 0) { ln = (_hlq[0] = ay, _hlq[1] = by, _hlq[2] = ax, _hlq[3] = az, _hlq[4] = bx, _hlq[5] = bz, _hlq[6] = rad, hopListQ(T0, true)); if (!perturbOK(W, T0, ax, ay, az, bx, by, bz, rad, _bl, ln)) return -1; }      // thin margins: must survive a follower's error
         }
         else if (((fa ^ fb) & F_TERR) !== 0 || dy > 0.2 || dy < -0.2) {
           // a step between floor types (terrain to a deck, a raft, a porch): a lift that works from exact positions only is no edge
-          if (ln >= 0) { ln = hopList(T0, ay, by, ax, az, bx, bz, rad, true); if (!perturbOK(W, T0, ax, ay, az, bx, by, bz, rad, _bl, ln)) return -1; }
+          if (ln >= 0) { ln = (_hlq[0] = ay, _hlq[1] = by, _hlq[2] = ax, _hlq[3] = az, _hlq[4] = bx, _hlq[5] = bz, _hlq[6] = rad, hopListQ(T0, true)); if (!perturbOK(W, T0, ax, ay, az, bx, by, bz, rad, _bl, ln)) return -1; }
         }
         cost = len3 * (kind === EDGE_RAMP ? 1.05 : 1);
       }
@@ -840,7 +961,11 @@
    *  that is 5 cm off falls, is lifted onto the wrong thing, or is stopped. own = the collider the floor is (-1 terrain). */
   function robOf(tier, fragile) { var r = tier - (fragile ? 2 : 0); return r < 0 ? 0 : r; }
   var _ff = new Int32Array(256);
-  function floorFragile(T, items, a, b, x, z, y, own) {
+  var _ffq = new Float64Array(3);
+  function floorFragile(T, items, a, b, x, z, y, own) { _ffq[0] = x; _ffq[1] = z; _ffq[2] = y; return floorFragileQ(T, items, a, b, own); }
+  function floorFragileQ(T, items, a, b, own) {
+    var x = _ffq[0], z = _ffq[1], y = _ffq[2];      // (Wave 8, I2: the numbers come through _ffq - a call boxes double arguments)
+    x = +x; z = +z; y = +y;      // (Wave 8, I2: numbers in float registers - a parameter used as received stays a boxed number in TurboFan's phis)
     // the eight probes lie within 0.3 m of the node, and a collider holds up (supportT) only within 0.3 m of its footprint: the ones farther than 0.6 m (0.61 for rounding)
     // from the node hold nobody up at any probe. The probes are asked of this short list, in the same order.
     var nf = 0, ffl = items, fa = a, fb = b;
@@ -855,7 +980,8 @@
     }
     for (var k = 0; k < 8; k++) {
       var ang = k * 0.7853981633974483, px = x + 0.3 * Math.cos(ang), pz = z + 0.3 * Math.sin(ang);
-      var Hp = T.hf(px, pz), sup = supportT(T, ffl, fa, fb, px, pz, y, Hp);
+      _hq[0] = px; _hq[1] = pz; hfQ(T); var Hp = _hq[2];
+      _tq[0] = px; _tq[1] = pz; _tq[2] = y; _tq[3] = Hp; supportTQ(T, ffl, fa, fb); var sup = _tq[4];
       if (own < 0) { if (sup > Hp + 0.05) return true; }                              // terrain: nothing may lift the walker
       else if (T.lk[own] === 1) {
         // a ramp: the strip within 0.3 m of its sides is held up by the support margin only
@@ -901,7 +1027,7 @@
   function* bakeTileGen(colliders, heightFn, rect, cell, opts) {
     var t0 = now();
     opts = opts || {};
-    var cs = makeColSet(colliders, opts.blockers), hf = heightFn;
+    var cs = makeColSet(colliders, opts.blockers, opts.noFloor), hf = heightFn;
     var minX = rect.minX, minZ = rect.minZ;
     var nx = Math.max(1, Math.round((rect.maxX - minX) / cell));
     cell = (rect.maxX - minX) / nx;
@@ -919,18 +1045,16 @@
       sel.push(i);
     }
     var m = sel.length;
+    // (Wave 8, lane I2) the tile reads the collider set's own arrays and its lists hold collider-set indices: it used to copy its colliders (6 Float64 + 2 bytes
+    // each, ~50 B a collider a tile: 3.1 MB in a furnished downtown, the biggest part of its tiles). Same numbers, same order in every list (the selection runs
+    // in collider-set order and the lists are built in that order), so every replay reads exactly what it read before. T.m = the index space (_mk's size).
     var T = {
       isTile: true, grp: null, island: null, key: opts.key != null ? opts.key : 0, minX: minX, minZ: minZ, maxX: maxX, maxZ: maxZ, cell: cell, nx: nx, nz: nz, inv: inv, hf: hf, hl: latFor(hf),
       deepY: waterY - DEEP, wetY: waterY + 0.3,
-      m: m, lx0: new Float64Array(m), lx1: new Float64Array(m), ly0: new Float64Array(m), ly1: new Float64Array(m),
-      lz0: new Float64Array(m), lz1: new Float64Array(m), lk: new Uint8Array(m), ld: new Int8Array(m),
+      m: cs.n, lx0: cs.minX, lx1: cs.maxX, ly0: cs.minY, ly1: cs.maxY,
+      lz0: cs.minZ, lz1: cs.maxZ, lk: cs.kind, ld: cs.dir,
       nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
     };
-    for (j = 0; j < m; j++) {
-      q = sel[j];
-      T.lx0[j] = cs.minX[q]; T.lx1[j] = cs.maxX[q]; T.ly0[j] = cs.minY[q]; T.ly1[j] = cs.maxY[q];
-      T.lz0[j] = cs.minZ[q]; T.lz1[j] = cs.maxZ[q]; T.lk[j] = cs.kind[q]; T.ld[j] = cs.dir[q];
-    }
     var lx0 = T.lx0, lx1 = T.lx1, ly0 = T.ly0, ly1 = T.ly1, lz0 = T.lz0, lz1 = T.lz1, lk = T.lk;
 
     // 2. per-cell collider lists: every collider within E1 (capsule + pad) of the cell's rectangle. An empty list = an
@@ -940,13 +1064,14 @@
     for (var pass = 0; pass < 2; pass++) {
       var cur = pass === 1 ? nearStart.slice(0, ncell) : null;
       for (j = 0; j < m; j++) {
-        i0 = Math.floor((lx0[j] - E1 - minX) * inv); i1 = Math.floor((lx1[j] + E1 - minX) * inv);
-        k0 = Math.floor((lz0[j] - E1 - minZ) * inv); k1 = Math.floor((lz1[j] + E1 - minZ) * inv);
+        q = sel[j];
+        i0 = Math.floor((lx0[q] - E1 - minX) * inv); i1 = Math.floor((lx1[q] + E1 - minX) * inv);
+        k0 = Math.floor((lz0[q] - E1 - minZ) * inv); k1 = Math.floor((lz1[q] + E1 - minZ) * inv);
         if (i1 < 0 || k1 < 0 || i0 >= nx || k0 >= nz) continue;
         if (i0 < 0) i0 = 0; if (k0 < 0) k0 = 0; if (i1 >= nx) i1 = nx - 1; if (k1 >= nz) k1 = nz - 1;
         for (iz = k0; iz <= k1; iz++) for (ix = i0; ix <= i1; ix++) {
           ci = iz * nx + ix;
-          if (pass === 0) nearStart[ci + 1]++; else nearItems[cur[ci]++] = j;
+          if (pass === 0) nearStart[ci + 1]++; else nearItems[cur[ci]++] = q;
         }
       }
       if (pass === 0) { for (ci = 0; ci < ncell; ci++) nearStart[ci + 1] += nearStart[ci]; nearItems = new Int32Array(nearStart[ncell]); }
@@ -994,7 +1119,7 @@
       var cxm = minX + (ix + 0.5) * cell, czm = minZ + (iz + 0.5) * cell;
       var a = nearStart[ci], b = nearStart[ci + 1];
       if (a === b) {                                       // OPEN: the terrain at the centre
-        var h0 = hf(cxm, czm);
+        _hq[0] = cxm; _hq[1] = czm; hfQ(T); var h0 = _hq[2];      // (the lattice read when the height function carries it: no boxed call)
         if (!(h0 >= waterY - DEEP) || h0 === Infinity) continue;           // swimming, or no ground at all (a non-finite height: NaN poisons every cost it touches)
         pushNode(cxm, h0, czm, ci, -1, F_OPEN | F_TERR | (3 << 4) | (h0 < waterY ? F_WET : 0));
         openCells++;
@@ -1009,12 +1134,12 @@
         else if (si <= 4) { sx = cxm + OFFS[si - 1] * cell; sz = czm; }
         else { sx = cxm; sz = czm + OFFS[si - 5] * cell; }
         var dd = Math.abs(sx - cxm) + Math.abs(sz - czm);
-        var H = hf(sx, sz), nC = 1, nM = 0;
+        _hq[0] = sx; _hq[1] = sz; hfQ(T); var H = _hq[2], nC = 1, nM = 0;
         if (!(H > -1e9 && H < 1e9)) continue;                                           // the terrain function gave no height here
         cY[0] = H; cO[0] = -1;
         for (k = a; k < b; k++) {
           q = nearItems[k];
-          if (lk[q] === 2) continue;                                                   // a blocker is never a floor and never lifts
+          if (lk[q] >= 2) continue;                                                    // a blocker / tall furniture is never a floor and never lifts
           if (sx < lx0[q] - SUP_MARGIN || sx > lx1[q] + SUP_MARGIN || sz < lz0[q] - SUP_MARGIN || sz > lz1[q] + SUP_MARGIN) continue;
           var top = lk[q] === 1 ? rampTopT(T, q, sx, sz) : ly1[q];
           if (top <= H + 1e-6) continue;
@@ -1031,7 +1156,7 @@
           if (cO[cj] < 0 && H < waterY - DEEP) continue;                               // swimming, not walking
           // a standing capsule must fit; clearance tier 0..3 (a capsule 0.1 / 0.2 / 0.3 m fatter still fits): nodes sit in the middle of a doorway, not on
           // whichever lattice point happens to be nearest the cell centre (clearTier: one pass for the four questions)
-          var tier = clearTier(T, nearItems, a, b, sx, sz, cy, rad);
+          var tier = (_ctq[0] = sx, _ctq[1] = sz, _ctq[2] = cy, _ctq[3] = rad, clearTierQ(T, nearItems, a, b));
           if (tier < 0) continue;
           if (nE < 2040) { eY[nE] = cy; eX[nE] = sx; eZ[nE] = sz; eD[nE] = dd - 10 * tier; eO[nE] = cO[cj]; eR[nE] = tier; nE++; }
         }
@@ -1054,7 +1179,7 @@
           taken[eq] = 1;
           if (eD[eq] < eD[bestR]) bestR = eq;
         }
-        pushNode(eX[bestR], eY[bestR], eZ[bestR], ci, ow0, F_RAMP | ((eY[bestR] - ly0[ow0] <= 0.6 || ly1[ow0] - eY[bestR] <= 0.6) ? F_RAMPEND : 0) | (robOf(eR[bestR], floorFragile(T, nearItems, a, b, eX[bestR], eZ[bestR], eY[bestR], ow0)) << 4));
+        pushNode(eX[bestR], eY[bestR], eZ[bestR], ci, ow0, F_RAMP | ((eY[bestR] - ly0[ow0] <= 0.6 || ly1[ow0] - eY[bestR] <= 0.6) ? F_RAMPEND : 0) | (robOf(eR[bestR], (_ffq[0] = eX[bestR], _ffq[1] = eZ[bestR], _ffq[2] = eY[bestR], floorFragileQ(T, nearItems, a, b, ow0))) << 4));
       }
       // everything else: chains of heights closer than 0.15 m are one floor (a floor slab laid as several flush boxes)
       jj = 0;
@@ -1070,7 +1195,7 @@
         for (q = jj; q <= kk; q++) { var eq2 = ord[q]; if (taken[eq2] === 0 && eD[eq2] < eD[best]) best = eq2; }
         var ow = eO[best], fl = ow < 0 ? F_TERR : 0;
         if (ow < 0 && eY[best] < waterY) fl |= F_WET;
-        pushNode(eX[best], eY[best], eZ[best], ci, ow, fl | (robOf(eR[best], floorFragile(T, nearItems, a, b, eX[best], eZ[best], eY[best], ow)) << 4));
+        pushNode(eX[best], eY[best], eZ[best], ci, ow, fl | (robOf(eR[best], (_ffq[0] = eX[best], _ffq[1] = eZ[best], _ffq[2] = eY[best], floorFragileQ(T, nearItems, a, b, ow))) << 4));
         jj = kk + 1;
       }
     }
@@ -1132,7 +1257,7 @@
             continue;
           }
           if (_cnt[1] - yAt >= YIELD_STEPS) { yAt = _cnt[1]; yield 0; }       // (never between an evalEdge and the read of its result in _ec / _hr: a slice boundary restores that scratch)
-          kd = evalEdge(null, T, nX[na], nY[na], nZ[na], nFlag[na], nX[nbn], nY[nbn], nZ[nbn], nFlag[nbn], ci, cj2);
+          kd = (_eq[0] = nX[na], _eq[1] = nY[na], _eq[2] = nZ[na], _eq[3] = nX[nbn], _eq[4] = nY[nbn], _eq[5] = nZ[nbn], evalEdgeQ(null, T, nFlag[na], nFlag[nbn], ci, cj2));
           cst = _ec[0];
           replays++;
           if (kd < 0) continue;
@@ -1166,7 +1291,7 @@
             var isBridge = !isDrop && ((nFlag[na] | nFlag[nbn2]) & F_RAMPEND) !== 0 && ((nFlag[na] ^ nFlag[nbn2]) & F_RAMP) !== 0 && ddy <= BRIDGE_DY && ddy >= -BRIDGE_DY && dd2 <= BRIDGE_D * BRIDGE_D;
             if (!isDrop && !isBridge) continue;
             if (_cnt[1] - yAt >= YIELD_STEPS) { yAt = _cnt[1]; yield 0; }
-            var kd2 = evalEdge(null, T, nX[na], nY[na], nZ[na], nFlag[na], nX[nbn2], nY[nbn2], nZ[nbn2], nFlag[nbn2], ci, cj3);
+            var kd2 = (_eq[0] = nX[na], _eq[1] = nY[na], _eq[2] = nZ[na], _eq[3] = nX[nbn2], _eq[4] = nY[nbn2], _eq[5] = nZ[nbn2], evalEdgeQ(null, T, nFlag[na], nFlag[nbn2], ci, cj3));
             dropTests++;
             if (isDrop ? kd2 !== EDGE_DROP : kd2 < 0) continue;
             addEdge(na, nbn2, _ec[0], kd2);
@@ -1231,7 +1356,7 @@
     T.bordCount = bordCount; T.holes = holeList;
     T.extStart = null; T.extTo = null; T.extCost = null; T.extKind = null; T.pend = null; T.linked = [];
     // the lookup lists were built wide for the bake; keep them narrow (they are read by every replay of this tile for the rest of the match)
-    if (nearItems.length < 65535 && m < 65535) {
+    if (nearItems.length < 65535 && cs.n < 65535) {
       T.nearStart = Uint16Array.from(nearStart); T.nearItems = Uint16Array.from(nearItems);
     }
     if (nK >= STRIDE) throw new Error("navgrid: a tile may hold at most " + (STRIDE - 1) + " nodes");
@@ -1247,22 +1372,25 @@
   }
 
   function tileBytes(T) {
-    var s = 0, names = ["lx0", "lx1", "ly0", "ly1", "lz0", "lz1", "lk", "ld", "nearStart", "nearItems", "x", "y", "z", "flag", "bord", "adj",
+    var s = 0, names = ["nearStart", "nearItems", "x", "y", "z", "flag", "bord", "adj",
       "cellStart", "edgeStart", "edgeTo", "edgeCost", "edgeKind", "extStart", "extTo", "extCost", "extKind"];
     for (var i = 0; i < names.length; i++) if (T[names[i]]) s += T[names[i]].byteLength;
     return s;
   }
 
   /** FNV-1a over the tile's graph (rounded to the millimetre / centimetre): the determinism fingerprint. */
+  // (Wave 8, lane I2) the running hash in an Int32Array: a closure's captured int that leaves the small-integer range is a fresh heap number at every write
+  // (tileHash was 10 MB of garbage in a 600-frame window of the housed Savanna's bake). Same arithmetic, same hash.
+  var _th = new Int32Array(1);
+  function mix(v) { var h = _th[0]; h ^= v & 0xff; h = Math.imul(h, 16777619); h ^= (v >>> 8) & 0xff; h = Math.imul(h, 16777619); h ^= (v >>> 16) & 0xff; h = Math.imul(h, 16777619); h ^= (v >>> 24) & 0xff; h = Math.imul(h, 16777619); _th[0] = h; }
   function tileHash(T) {
-    var h = 0x811c9dc5 | 0;
-    function mix(v) { h ^= v & 0xff; h = Math.imul(h, 16777619); h ^= (v >>> 8) & 0xff; h = Math.imul(h, 16777619); h ^= (v >>> 16) & 0xff; h = Math.imul(h, 16777619); h ^= (v >>> 24) & 0xff; h = Math.imul(h, 16777619); }
+    _th[0] = 0x811c9dc5 | 0;
     mix(T.n); mix(T.nx); mix(T.nz);
     var i;
     for (i = 0; i < T.n; i++) { mix(Math.round(T.x[i] * 1000)); mix(Math.round(T.y[i] * 1000)); mix(Math.round(T.z[i] * 1000)); mix(T.flag[i]); mix(T.adj[i]); }
     mix(T.edgeTo.length);
     for (i = 0; i < T.edgeTo.length; i++) { mix(T.edgeTo[i]); mix(Math.round(T.edgeCost[i] * 100)); mix(T.edgeKind[i]); }
-    return (h >>> 0).toString(16);
+    return (_th[0] >>> 0).toString(16);
   }
 
   // ── the world: lazy coarse tiles + one fine tile per building ───────────────────────────────────────────────────
@@ -1371,7 +1499,7 @@
     var t0 = now();
     var blockers = [];
     if (opts.portals) for (var pi = 0; pi < opts.portals.length; pi++) blockers.push(portalBlocker(opts.portals[pi]));
-    var cs = makeColSet(opts.colliders, blockers);
+    var cs = makeColSet(opts.colliders, blockers, opts.noFloor);
     var W = {
       isWorld: true, cs: cs, hf: opts.heightFn, tileSize: opts.tileSize || 32,
       cellOutdoor: opts.cellOutdoor || 1.5, cellIndoor: opts.cellIndoor || 0.75, waterY: opts.waterY != null ? opts.waterY : -Infinity,
@@ -1525,7 +1653,10 @@
   }
 
   /** The tile that owns (x, z): the building tile if one stands there, else the coarse tile (baked on demand when `bake`; never in a lazy world). */
-  function tileFor(W, x, z, bake) {
+  var _tf = new Float64Array(2);
+  function tileFor(W, x, z, bake) { _tf[0] = x; _tf[1] = z; return tileForQ(W, bake); }
+  function tileForQ(W, bake) {
+    var x = _tf[0], z = _tf[1];      // (Wave 8, I2: the numbers come through _tf - a call boxes double arguments)
     var tx = Math.floor(x / W.tileSize), tz = Math.floor(z / W.tileSize), key = coarseKey(tx, tz);
     var fl = W.fineByCoarse.get(key);
     if (fl !== undefined) {
@@ -1633,9 +1764,9 @@
             var bx = U.x[m], by = U.y[m], bz = U.z[m], dx = bx - ax, dz = bz - az;
             if (dx * dx + dz * dz > reach * reach) continue;
             var fb = U.flag[m];
-            var kd = evalEdge(W, T, ax, ay, az, fa, bx, by, bz, fb, -1, -1);
+            var kd = (_eq[0] = ax, _eq[1] = ay, _eq[2] = az, _eq[3] = bx, _eq[4] = by, _eq[5] = bz, evalEdgeQ(W, T, fa, fb, -1, -1));
             if (kd >= 0) { (T.pend || (T.pend = [])).push(n, U.base + m, _ec[0], kd); }
-            kd = evalEdge(W, U, bx, by, bz, fb, ax, ay, az, fa, -1, -1);
+            kd = (_eq[0] = bx, _eq[1] = by, _eq[2] = bz, _eq[3] = ax, _eq[4] = ay, _eq[5] = az, evalEdgeQ(W, U, fb, fa, -1, -1));
             if (kd >= 0) { (U.pend || (U.pend = [])).push(m, T.base + n, _ec[0], kd); }
             if (_cnt[1] - yL >= YIELD_STEPS) { yL = _cnt[1]; yield 0; }
           }
@@ -1659,9 +1790,9 @@
     W.noWant = true;
     var x = T.x[n], z = T.z[n], D = LINK_BAND + 0.2;
     var dx = (m & 1) ? -D : (m & 2) ? D : 0, dz = (m & 4) ? -D : (m & 8) ? D : 0;
-    if (dx !== 0) tileFor(W, x + dx, z, true);
-    if (dz !== 0) tileFor(W, x, z + dz, true);
-    if (dx !== 0 && dz !== 0) tileFor(W, x + dx, z + dz, true);
+    if (dx !== 0) (_tf[0] = x + dx, _tf[1] = z, tileForQ(W, true));
+    if (dz !== 0) (_tf[0] = x, _tf[1] = z + dz, tileForQ(W, true));
+    if (dx !== 0 && dz !== 0) (_tf[0] = x + dx, _tf[1] = z + dz, tileForQ(W, true));
     if ((m & 16) !== 0) {
       for (var k = 0; k < T.holes.length; k++) {
         var h = T.holes[k];
@@ -1845,7 +1976,7 @@
     for (g = 0; g < nG; g++) gc.push(snapGid[g]);
     for (g = 0; g < gc.length && goals.length < 3; g++) {
       var Tq = W.slots[gc[g] / STRIDE | 0], lq = gc[g] % STRIDE;
-      if (hop(W, Tq, Tq.x[lq], Tq.y[lq], Tq.z[lq], tx, tz, RADIUS, null, -1) && _hr[1] <= MAX_WALK_GAP && Math.abs(_hr[0] - ty) <= 0.6) goals.push(gc[g]);
+      if ((_hp[0] = Tq.x[lq], _hp[1] = Tq.y[lq], _hp[2] = Tq.z[lq], _hp[3] = tx, _hp[4] = tz, _hp[5] = RADIUS, hopQ(W, Tq, null, -1)) && _hr[1] <= MAX_WALK_GAP && Math.abs(_hr[0] - ty) <= 0.6) goals.push(gc[g]);
     }
     var goalVerified = goals.length > 0;
     if (!goalVerified) goals.push(gc[0]);
@@ -1854,10 +1985,10 @@
     if (nS === 0) { W.lastFail = "no-start"; W.stats.queryMs += now() - t0; return null; }
     var starts = [], sc0 = [], scc = [], ssc = [];
     for (g = 0; g < nS; g++) { scc.push(snapGid[g]); ssc.push(snapSc[g]); }
-    var Ts0 = tileFor(W, sx, sz, true);
+    var Ts0 = (_tf[0] = sx, _tf[1] = sz, tileForQ(W, true));
     for (g = 0; g < scc.length && starts.length < 3; g++) {
       var Tr = W.slots[scc[g] / STRIDE | 0], lr = scc[g] % STRIDE;
-      if (Ts0 !== null && hop(W, Ts0, sx, sy, sz, Tr.x[lr], Tr.z[lr], RADIUS, null, -1) && _hr[1] <= MAX_WALK_GAP && Math.abs(_hr[0] - Tr.y[lr]) <= 0.6) { starts.push(scc[g]); sc0.push(ssc[g]); }
+      if (Ts0 !== null && (_hp[0] = sx, _hp[1] = sy, _hp[2] = sz, _hp[3] = Tr.x[lr], _hp[4] = Tr.z[lr], _hp[5] = RADIUS, hopQ(W, Ts0, null, -1)) && _hr[1] <= MAX_WALK_GAP && Math.abs(_hr[0] - Tr.y[lr]) <= 0.6) { starts.push(scc[g]); sc0.push(ssc[g]); }
     }
     if (starts.length === 0) { W.lastFail = "start-blocked"; W.stats.queryMs += now() - t0; return null; }
     var Tg = W.slots[goals[0] / STRIDE | 0], lg = goals[0] % STRIDE, gx = Tg.x[lg], gy = Tg.y[lg], gz = Tg.z[lg];
@@ -1979,8 +2110,8 @@
     // the exact goal, when the walk from the last node reaches it on the same floor
     var ldx = tx - px[cnt - 1], ldz = tz - pz[cnt - 1];
     if (goalVerified && ldx * ldx + ldz * ldz > 0.16) {
-      var Tl = tileFor(W, px[cnt - 1], pz[cnt - 1], true);
-      if (Tl !== null && hop(W, Tl, px[cnt - 1], py[cnt - 1], pz[cnt - 1], tx, tz, RADIUS, null, -1) && Math.abs(_hr[0] - ty) <= 0.6 && _hr[1] <= MAX_WALK_GAP) {
+      var Tl = (_tf[0] = px[cnt - 1], _tf[1] = pz[cnt - 1], tileForQ(W, true));
+      if (Tl !== null && (_hp[0] = px[cnt - 1], _hp[1] = py[cnt - 1], _hp[2] = pz[cnt - 1], _hp[3] = tx, _hp[4] = tz, _hp[5] = RADIUS, hopQ(W, Tl, null, -1)) && Math.abs(_hr[0] - ty) <= 0.6 && _hr[1] <= MAX_WALK_GAP) {
         px[cnt] = tx; py[cnt] = _hr[0]; pz[cnt] = tz; pk[cnt] = _hr[2] === 1 ? EDGE_RAMP : EDGE_WALK; cnt++;
       }
     }
@@ -2029,11 +2160,11 @@
 
   /** Can the mover walk the straight leg from waypoint i to waypoint j (padded), ending on j's floor? */
   function legOk(W, px, py, pz, pf, i, j, pad) {
-    var T = tileFor(W, px[i], pz[i], true);
+    var T = (_tf[0] = px[i], _tf[1] = pz[i], tileForQ(W, true));
     if (T === null) return false;
     var dx = px[j] - px[i], dz = pz[j] - pz[i];
     if (dx * dx + dz * dz > 1600) return false;
-    if (!hop(W, T, px[i], py[i], pz[i], px[j], pz[j], RADIUS + pad, null, -1)) return false;
+    if (!(_hp[0] = px[i], _hp[1] = py[i], _hp[2] = pz[i], _hp[3] = px[j], _hp[4] = pz[j], _hp[5] = RADIUS + pad, hopQ(W, T, null, -1))) return false;
     if (!(_hr[1] <= MAX_WALK_GAP && Math.abs(_hr[0] - py[j]) <= FLOOR_TOL)) return false;
     if (_hr[4] > 0 && !restAgrees(W, T, px[i], py[i], pz[i], px[j], pz[j], RADIUS + pad, null, -1)) return false;     // a leg that works at speed only
     if (Math.abs(py[j] - py[i]) < 0.3 && ((pf[i] | pf[j]) & F_TERR) === 0 && _hr[3] < (py[i] < py[j] ? py[i] : py[j]) - 0.2) return false;     // a flat deck leg whose floor dips under the feet
@@ -2050,7 +2181,7 @@
   var _wsRamp = false;
   function walkOnce(W, T, ax, ay, az, bx, bz, rad, mode) {
     _rest = mode;
-    var ok = hop(W, T, ax, ay, az, bx, bz, rad, null, -1);
+    var ok = (_hp[0] = ax, _hp[1] = ay, _hp[2] = az, _hp[3] = bx, _hp[4] = bz, _hp[5] = rad, hopQ(W, T, null, -1));
     _rest = 0;
     if (!ok || _hr[1] > MAX_WALK_GAP) return NaN;
     var yB = _hr[0], yLow = _hr[3];
@@ -2059,12 +2190,12 @@
     // down, a walker that starts from rest falls through. legOk and evalEdge refuse the same leg; terrain legs dip with the ground, so
     // only a leg with neither end on the terrain counts.
     var dx = bx - ax, dz = bz - az, L = Math.sqrt(dx * dx + dz * dz);
-    var Tb = L > 1e-6 ? tileFor(W, bx, bz, true) : T;
+    var Tb = L > 1e-6 ? (_tf[0] = bx, _tf[1] = bz, tileForQ(W, true)) : T;
     if (Tb === null) return NaN;
     if (Math.abs(yB - ay) < 0.3 && yLow < (ay < yB ? ay : yB) - 0.2 && Math.abs(ay - T.hf(ax, az)) > 0.05 && Math.abs(yB - Tb.hf(bx, bz)) > 0.05) return NaN;
     // a walker arrives a few centimetres past its waypoint: the floor must hold OVERSHOOT m beyond the end of the segment
     if (L > 1e-6) {
-      if (!hop(W, Tb, bx, yB, bz, bx + dx / L * OVERSHOOT, bz + dz / L * OVERSHOOT, rad, null, -1)) return NaN;
+      if (!(_hp[0] = bx, _hp[1] = yB, _hp[2] = bz, _hp[3] = bx + dx / L * OVERSHOOT, _hp[4] = bz + dz / L * OVERSHOOT, _hp[5] = rad, hopQ(W, Tb, null, -1))) return NaN;
       if (_hr[1] > 0 || Math.abs(_hr[0] - yB) > 0.3) return NaN;           // the floor ends right there: the walker would step off
     }
     return yB;
@@ -2076,9 +2207,10 @@
   function endStretchOK(W, bx, bz, ux, uz, yEnd, rad) {
     for (var k = 1; k <= 6; k++) {
       var px = bx - ux * 0.01 * k, pz = bz - uz * 0.01 * k;
-      var T = tileFor(W, px, pz, true);
+      var T = (_tf[0] = px, _tf[1] = pz, tileForQ(W, true));
       if (T === null) return false;
-      var ci = cellOf(T, px, pz), a = T.nearStart[ci], b = T.nearStart[ci + 1], H = T.hf(px, pz);
+      var ci = cellOf(T, px, pz), a = T.nearStart[ci], b = T.nearStart[ci + 1];
+      _hq[0] = px; _hq[1] = pz; hfQ(T); var H = _hq[2];
       var sup = b > a ? supportT(T, T.nearItems, a, b, px, pz, yEnd, H) : H;
       if (!(Math.abs(sup - yEnd) <= FLOOR_AGREE)) return false;
       if (b > a && blockedT(T, T.nearItems, a, b, px, pz, yEnd > sup ? yEnd : sup, rad)) return false;
@@ -2094,7 +2226,7 @@
    *  one case only is a hairline the real mover does not reproduce, and the grid errs toward blocked. */
   function walkSegment(W, ax, ay, az, bx, bz, opts) {
     var pad = opts && opts.pad ? Math.max(-0.1, Math.min(PAD_MAX, opts.pad)) : 0;     // a negative pad is for tests: a thinner capsule
-    var T = tileFor(W, ax, az, true);
+    var T = (_tf[0] = ax, _tf[1] = az, tileForQ(W, true));
     if (T === null) return null;
     var rad = RADIUS + pad;
     var y0 = walkOnce(W, T, ax, ay, az, bx, bz, rad, 0);
@@ -2108,7 +2240,7 @@
       var ex = bx - dx / L * ARRIVE, ez = bz - dz / L * ARRIVE;
       for (var m = 0; m < 2; m++) {
         _rest = m;
-        var okE = hop(W, T, ax, ay, az, ex, ez, rad, null, -1);
+        var okE = (_hp[0] = ax, _hp[1] = ay, _hp[2] = az, _hp[3] = ex, _hp[4] = ez, _hp[5] = rad, hopQ(W, T, null, -1));
         _rest = 0;
         if (!okE || _hr[1] > MAX_WALK_GAP || Math.abs(_hr[0] - (m === 0 ? y0 : y1)) > FLOOR_AGREE) return null;
       }
@@ -2179,6 +2311,31 @@
     return { baked: baked, remaining: remaining };
   }
 
+  /** (Wave 8, lane I2) The tall furniture of a map built with furnished houses (maps.js map.houses: housegen records, each with cols = [first collider,
+   *  structure colliders, all colliders] into map.colliders - collidersOf's order: structure boxes, ramps, then the furniture): the furniture boxes whose top
+   *  stands more than a step (0.55 m) over the storey floor they stand on. Pass the Set as opts.noFloor to bakeTown / createWorld / bakeTile (collider kind 3,
+   *  see TALL_LIFT). null when the map has no houses (every older build): the world is then exactly what it was. */
+  function tallFurniture(map, minRise) {
+    var rise = minRise != null ? +minRise : STEP_UP;
+    var HS = map && map.houses, cols = map && map.colliders;
+    if (!HS || !HS.length || !cols) return null;
+    var set = new Set();
+    for (var h = 0; h < HS.length; h++) {
+      var H = HS[h];
+      if (!H || !H.cols || H.cols.length < 3 || !H.floors) continue;
+      var c0 = H.cols[0], end = c0 + H.cols[2];
+      for (var i = c0 + H.cols[1]; i < end; i++) {
+        var c = cols[i];
+        if (!c || c.kind === "ramp") continue;
+        var fy = -Infinity;
+        for (var f = 0; f < H.floors.length; f++) { var Fy = H.floors[f].y; if (Fy <= c.minY + 0.05 && Fy > fy) fy = Fy; }
+        if (fy === -Infinity) fy = H.y0 != null ? H.y0 : c.minY;
+        if (c.maxY > fy + rise) set.add(c);
+      }
+    }
+    return set.size ? set : null;
+  }
+
   // ── towns ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   /** A rect from any of the shapes a caller holds: {minX, maxX, minZ, maxZ}, [x0, z0, x1, z1], a disc {x, z, r}, or a towngen layout (rectOfLayout). */
   function normRect(r, margin) {
@@ -2226,7 +2383,7 @@
     var t0 = now(), margin = opts.margin != null ? opts.margin : 6, W = opts.world || null, i;
     if (W === null) {
       W = createWorld({ colliders: colliders, heightFn: heightFn, waterY: opts.waterY, portals: opts.portals, tileSize: opts.tileSize, cellOutdoor: opts.cellOutdoor,
-        cellIndoor: opts.cellIndoor, maxFine: opts.maxFine, fineRects: opts.fineRects, rects: rects, margin: margin, lazy: opts.lazy });
+        cellIndoor: opts.cellIndoor, maxFine: opts.maxFine, fineRects: opts.fineRects, rects: rects, margin: margin, lazy: opts.lazy, noFloor: opts.noFloor });
     } else addCoverRects(W, rects, margin);
     var areas = [];
     for (i = 0; i < rects.length; i++) areas.push(normRect(rects[i], margin));
@@ -2324,7 +2481,7 @@
     bakeTile: bakeTile, createWorld: createWorld, findPath: findPath, walkSegment: walkSegment, tileFor: tileFor, prewarm: prewarm,
     VERSION: VERSION, bakeTown: bakeTown, rectOfLayout: rectOfLayout, edgesOf: edgesOf, linkTile: linkTile,
     makeColSet: makeColSet, findBuildingRects: findBuildingRects, tiles: tiles, worldHash: worldHash, worldStats: worldStats, tileHash: tileHash,
-    collectJobs: collectJobs, runJob: runJob, takeWanted: takeWanted, beginJob: beginJob, stepJob: stepJob, work: function () { return _cnt[1]; },
+    collectJobs: collectJobs, runJob: runJob, tallFurniture: tallFurniture, TALL_LIFT: TALL_LIFT, takeWanted: takeWanted, beginJob: beginJob, stepJob: stepJob, work: function () { return _cnt[1]; },
     tilesAround: tilesAround, snapNodes: function (W, x, y, z, maxDy, R) { var n = snapNodes(W, x, y, z, maxDy, R), o = []; for (var i = 0; i < n; i++) o.push(snapGid[i]); return o; },
     // the mover model, exposed for the selftest and the harness (pure given a tile)
     // (Wave 7 round 2) the one-pass forms the bake uses, exposed so the selftest can hold them to the two-call reference (supportT + blockedT, four blockedT)
@@ -2332,7 +2489,7 @@
     clearTier: clearTier, supRampState: function () { return { ramp: _supRamp, margin: _marginUse }; }, resetMover: function (ramp, margin, strict) { _supRamp = ramp; _marginUse = margin; _strictRamp = strict ? 1 : 0; },
     rampBlocksT: rampBlocksT, supportT: supportT, blockedT: blockedT, hop: function (W, T0, ax, ay, az, bx, bz, rad, strict) {
       _strictRamp = strict ? 1 : 0;
-      var ok = hop(W, T0, ax, ay, az, bx, bz, rad, null, -1);
+      var ok = (_hp[0] = ax, _hp[1] = ay, _hp[2] = az, _hp[3] = bx, _hp[4] = bz, _hp[5] = rad, hopQ(W, T0, null, -1));
       _strictRamp = 0;
       return ok ? { y: _hr[0], gap: _hr[1], ramp: _hr[2] === 1, yMin: _hr[3] } : null;
     },

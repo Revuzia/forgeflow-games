@@ -16,7 +16,7 @@ import * as THREE from "three";
 // instances (a bare "./weapons.js" would be a second, uninitialized copy).
 const V = new URL(import.meta.url).search;
 const { aimDir, eyePos } = await import("./weapons.js" + V);
-const { supportAt, supportA, groundA } = await import("./player.js" + V);
+const { supportAt, supportA, groundA, fitsAt } = await import("./player.js" + V);
 const SPQ = new Float64Array(4);          // supportA scratch: x, z, y -> [3] the support (Wave 7b, S1)
 // (Wave 7b, S1) the ground under a probe point, read unboxed: GA[0] = x, GA[1] = z -> groundA -> GA[2] = W.map.heightAt(x, z) (a call with
 // double arguments boxes them and its result: the bots' per-frame wall probes read the terrain at every step)
@@ -119,6 +119,8 @@ export function disposeMatch(W) {
   navCols.length = 0;
   _wq.length = 0; _mq.length = 0;     // (Wave 5) the wall probes' collider scratch: references to the old map's colliders
   navReset();                         // (Wave 7) the town grid: typed arrays + the old map's colliders
+  IND.map = null; IND.H = null; IND.R.length = 0; IND.ix.clear(); IND.grid = null;      // (Wave 8) the room graph: the old map's house records
+  OCC.map = null; OCC.cells = null;                                                    // (Wave 8) the cover test's cell table: the old map's colliders
   return { brains: n };
 }
 
@@ -234,6 +236,12 @@ export function attachBrain(W, actor, nBots) {
       threatFor: undefined, threatT: -99, threatAt: null,
       coverState: undefined, coverPt: null, coverGiveUp: 0, coverUntil: 0, coverFailUntil: 0, coverReflexUntil: 0,
       noRouteT: -99, deckT: -99, heldN: 0, heldT: -99, heldAcc: 0,        // (Wave 7, round 2) the last "no route" answer of a path request / the next time a roof exit may be looked for
+      // (Wave 8) indoors: the bot's own room (IND.R index, -1 outdoors) and when / where it was read; the target's room; the doorway an indoor cover
+      // spot is held beside (coverFace: 1 = face that doorway while holding)
+      roomI: -1, roomT: -99, roomX: 0, roomZ: 0, roomY: 0, tRoomI: -1, tRoomT: -99, coverFace: 0, coverFX: 0, coverFZ: 0, nearLootT: 0,
+      // (Wave 8 fix round, lane K2) standGoal: the moveTo object that is a house loot STAND point (arrive closer: LOOT_STAND_M); solid*: the
+      // inside-a-solid detector's 0.5 s window (escapeSolid)
+      standGoal: null, solidT: -99, solidX: 0, solidZ: 0, solidN: 0,
     },
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
@@ -244,9 +252,25 @@ export function attachBrain(W, actor, nBots) {
   };
   actor.brain = brain;
   brains.push(brain);
+  doubleFields(brain); doubleFields(brain.bb);
   // (Wave 7) the town grid's outdoor tiles bake in the idle time of startMatch's awaits and of the lobby; update() is the barrier (navArm). Lobby phase only.
   if (nav.map !== W.map && W.phase === "lobby") startNav(W);
   return brain;
+}
+
+/** (Wave 8, lane I2) Every NUMBER field of a new brain / blackboard is made a double field at birth (a double stored, then the start value put back:
+ *  the values are exactly the ones above). A field born holding a small integer (0, -99, -1) is a Smi field, and the first time ANY bot stores a fraction
+ *  into it (W.t, a timer += dt) V8 deprecates the shared map and re-builds the whole blackboard transition chain (120-odd fields): every optimized
+ *  function that reads a blackboard is thrown away and runs interpreted - boxing every number - until it is optimized again. Over a match that
+ *  happened once per field, at the moment the match first used it (framecheck, isla_viva: ~8,500 map deprecations and ~2,300 deopts, 195 of them in
+ *  bots.js, in bursts through the measured window; the housed maps' new indoor fields added their own). Done here, it happens once, in the lobby. */
+const INT_FIELDS = new Set(["solidN", "roomI", "tRoomI", "strafeDir", "healSide", "hdHold", "pinN", "heldN", "breaks", "slideFlips", "progKind", "wallSide", "detourDir",
+  "coverFace", "ramp", "pushRoll", "chuteRoll"]);      // small integers / indexes / signs: they stay Smi fields (they never hold a fraction)
+function doubleFields(o) {
+  for (const k in o) {
+    const v = o[k];
+    if (typeof v === "number" && !INT_FIELDS.has(k)) { o[k] = 0.5; o[k] = v; }
+  }
 }
 
 // One bot per this many loot-point units at a POI (a chest counts 2: it bursts into
@@ -261,7 +285,8 @@ export function assignDrops(W) {
   const pts = Object.create(null);
   for (const lp of (W.map.lootPoints || [])) {
     if (lp.poi == null) continue;
-    pts[lp.poi] = (pts[lp.poi] || 0) + (lp.kind === "chest" ? 2 : 1);
+    // (Wave 8) a house's loot point carries w = the items loot.js expects there (it fills only a few of a house's points: lane I3's per-house budget)
+    pts[lp.poi] = (pts[lp.poi] || 0) + (lp.kind === "chest" ? 2 : (lp.w != null ? lp.w : 1));
   }
   const cap = pois.map((p) => Math.max(1, Math.floor((pts[p.id] || 0) / DROP_PTS_PER_BOT)));
   const used = pois.map(() => 0);
@@ -316,8 +341,13 @@ export function assignDrops(W) {
     }
     return null;
   };
+  // (Wave 8 fix round, lane K2) a furnished house's loot lands bots by loot.js's own list of the spots it USED (W.houseLootSpots: a chest, or a floor / top
+  // spot where a non-pistol gun lies), aimed at the spot's STAND point inside its room. The house lootPoints are skipped: the 1.8 m query round one found
+  // a gun through the wall of the next room or the street (no clear-line rule), and most of a house's points hold nothing (lane I3's per-room budget).
+  const HSP = Array.isArray(W.houseLootSpots) && W.map.houses ? W.houseLootSpots : null;
   if (W.nearbyLoot) {
     for (const lp of (W.map.lootPoints || [])) {
+      if (HSP && lp.house != null) continue;
       let ok = lp.kind === "chest";
       if (!ok) {
         const near = W.nearbyLoot(lp, 1.8);
@@ -335,6 +365,15 @@ export function assignDrops(W) {
       // gun / chest spot, so the number of bots a compound takes scales with its loot points, as a POI's cap does).
       if (lp.poi == null || (typeof lp.poi === "string" && lp.poi.startsWith("cmp"))) spots.wild.push(s);
       else (byPoi[lp.poi] || (byPoi[lp.poi] = [])).push(s);
+    }
+    if (HSP) for (let i = 0; i < HSP.length; i++) {
+      const hs = HSP[i];
+      if (!hs.gun) continue;
+      const at = landingFor(hs.stand || hs);
+      if (!at) continue;
+      const s = { x: at.x, z: at.z, taken: false };
+      if (hs.poi == null || (typeof hs.poi === "string" && hs.poi.startsWith("cmp"))) spots.wild.push(s);
+      else (byPoi[hs.poi] || (byPoi[hs.poi] = [])).push(s);
     }
   }
   // BOT_PACE.dropSepM: a landing spot must be at least this far from every drop already assigned.
@@ -435,8 +474,10 @@ export function assignDrops(W) {
 // ═════════════════════════════════════════════════════════════════════════════
 export function update(W, dt) {
   if (!brains.length) return;
+  if (IND.map !== W.map) indEnsure(W);       // (Wave 8) the room graph and the cover test's cell table: built once per map, before the first brain tick
+  if (OCC.map !== W.map && !W.map.hasCollidersNear) occBuild(W.map);
   if (nav.job && !nav.ready) navArm(W);      // (Wave 7) the barrier: the first tick of a match never runs on a half-baked grid
-  if (nav.ready) navTick();                  // (Wave 7) the bake schedule: a slice of the building tile in progress
+  if (nav.ready) navTick(W);                 // (Wave 7) the bake schedule: a slice of the building tile in progress
   // Cover scans are the one genuinely expensive thing a brain can do, so they are
   // rationed GLOBALLY rather than per-bot: 2 full scans per frame across all 49
   // brains. With ~24 bots fighting at once every fighter still gets a slot about
@@ -636,8 +677,8 @@ function think(W, b) {
   for (const k in s) if (s[k] > bs) { bs = s[k]; best = k; }
   if (b.state !== best) { b.state = best; onEnter(W, b, best); }
   if (best === "LOOT" && grab && bb.lootId !== grab.id) {
-    bb.lootId = grab.id; bb.lootType = "item";
-    bb.moveTo = { x: grab.pos.x, z: grab.pos.z, y: grab.pos.y };
+    bb.lootId = grab.id; bb.lootType = "item"; bb.nearLootT = 0;
+    setLootGoal(bb, grab);
   }
 }
 
@@ -733,10 +774,11 @@ function onEnter(W, b, state) {
       near = near.filter((n) => !(bad[n.id] > W.t));
     }
     const pick = pickLoot(W, a, near);
+    if (!pick || pick.id !== bb.lootId) bb.nearLootT = 0;
     bb.lootId = pick ? pick.id : null;
     bb.lootType = pick ? pick.type : null;
     if (pick) {
-      bb.moveTo = { x: pick.pos.x, z: pick.pos.z, y: pick.pos.y };   // y: loot on an upper floor
+      setLootGoal(bb, pick);                                         // y: loot on an upper floor
     } else {
       // no loot in reach — head to one of the 3 nearest POIs (random pick, so
       // a bot on a barren POI doesn't orbit it forever)
@@ -870,6 +912,9 @@ function pickLoot(W, a, near) {
   // is not "8 m away" and the one across a street is not "nearer" than the one on the way; a candidate with no route loses 25 points.
   const K = nav.ready ? NAV_PICK_K : 1;
   _pkS.length = 0; _pkN.length = 0;
+  // (Wave 8) CLEAR THE HOUSE: inside a furnished house the loot of that house is worth IND_LOOT_HOUSE points more (its own room IND_LOOT_ROOM): a bot
+  // takes what the house holds before it crosses the street for the next one (a candidate's room from roomAt; -1 = no houses / outdoors: no change)
+  const myR = IND.H !== null && a.brain ? myRoom(W, a.brain) : -1;
   for (const n of near) {
     let score = 0;
     // Skip anything give() would refuse. Without this a bot at the gun cap kept
@@ -886,6 +931,7 @@ function pickLoot(W, a, near) {
     else if (n.data.kind === "consumable") score = n.data.id.includes("shield") ? 45 : 34;
     else if (n.data.kind === "ammo") score = dry ? 80 : (feedsStarvingPrimary(a, n.data.id) ? 70 : 38);
     score -= n.d * 0.4;
+    if (myR >= 0) { RAQ[0] = n.pos.x; RAQ[1] = n.pos.y; RAQ[2] = n.pos.z; const lr = roomAtQ(W); if (lr >= 0 && IND.R[lr].h === IND.R[myR].h) score += lr === myR ? IND_LOOT_ROOM : IND_LOOT_HOUSE; }
     if (score > (_pkN.length < K ? -1 : _pkS[K - 1]) && !lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) && !offShore(W, a, n.pos)) {   // (only a would-be winner pays for the probes)
       let i = _pkN.length;
       while (i > 0 && _pkS[i - 1] < score) i--;          // after the equal scores: the first of equals wins
@@ -905,7 +951,8 @@ function pickLoot(W, a, near) {
     // were these candidates before this margin)
     if (nav.q > 0 && (i === 0 || _pkS[0] - _pkS[i] <= NAV_PICK_MARGIN) && navBoth(a.pos.x, a.pos.z, n.pos.x, n.pos.z)) {
       nav.q--;
-      p = gridPath(a.pos.x, a.pos.y, a.pos.z, n.pos.x, n.pos.z, n.pos.y, i > 0, true);     // only the straight-line favourite queues its building when it is not baked yet
+      const gq = n.stand || n.pos;                         // (K2) a house thing is priced by the route to where it is taken from (its stand point)
+      p = gridPath(a.pos.x, a.pos.y, a.pos.z, gq.x, gq.z, gq.y, i > 0, true);     // only the straight-line favourite queues its building when it is not baked yet
       if (p) { v += n.d * 0.4 - Math.max(n.d, navLen(a, p)) * 0.4; nav.st.pickPaths++; }
       else if (navMiss) nav.st.pickMiss++;                // the tiles are queued, not baked yet: no verdict
       else { v -= NAV_UNREACHABLE; nav.st.pickNulls++; }
@@ -1067,6 +1114,19 @@ function act(W, b, dt) {
     if (bb.pinN >= 2) { bb.pinN = 0; pinRecover(W, b); }
   }
 
+  // (Wave 8 fix round, lane K2) INSIDE A SOLID. A bot whose capsule centre is INSIDE a solid box (not on it: the box spans its body) cannot walk out -
+  // player.js lets it leave a box only by not going deeper, and inside two overlapping boxes every heading goes deeper into one of them. Measured: seed
+  // 51002 Savanna, a bot that landed inside a diagonal stepped wall at (489.3, -153.2) held there ~200 s, onGround false (so the pin detector, which
+  // wants the ground, never ran). Every 0.5 s: if it moved < 15 cm across the ground (and was trying to, or is in the air) and its centre is inside a solid for two
+  // windows running, it is put at the nearest spot round it where a standing capsule fits (escapeSolid). Never fires for a bot that is not inside a box.
+  if (!a.gliding && (W.t - bb.solidT >= 0.5 || W.t < bb.solidT)) {
+    const sx = a.pos.x - bb.solidX, sz = a.pos.z - bb.solidZ;      // (horizontal: the wedged bot bobbed 10.5-11.8 m up and down in place)
+    const still = sx * sx + sz * sz < 0.15 * 0.15 && (inp.mz || inp.mx || !a.onGround);
+    bb.solidT = W.t; bb.solidX = a.pos.x; bb.solidZ = a.pos.z;
+    if (still && insideSolid(W, a.pos.x, a.pos.y, a.pos.z)) { if (++bb.solidN >= 2) { bb.solidN = 0; escapeSolid(W, b); } }
+    else bb.solidN = 0;
+  }
+
   // PROGRESS BREAKER for the fight and the heal (Wave 5; Unreal's path follower does block detection the same way). The
   // hard breaker below exempts them - standing still is their job - but a bot that is TRYING to move (strafe, back off,
   // retreat) and is pinned solid is not standing still by choice. guardMove keeps most of these from happening; this is
@@ -1108,6 +1168,43 @@ function act(W, b, dt) {
 }
 
 const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1 };
+/** (K2) the point (x, y = feet, z) lies inside the footprint of a solid box that spans the body above the step-up (a ramp never counts: its own rules hold) */
+const _solidCols = [];
+function insideSolid(W, x, y, z) {
+  const cols = W.map.queryColliders(x, z, 0.6, _solidCols);
+  const h = K.PLAYERK.height;
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    if (c.dead || c.kind === "ramp") continue;
+    if (x <= c.minX + 0.02 || x >= c.maxX - 0.02 || z <= c.minZ + 0.02 || z >= c.maxZ - 0.02) continue;
+    if (c.maxY > y + NAV_STEP_UP && c.minY < y + h - 0.1) return true;
+  }
+  return false;
+}
+const ESC_RINGS = 10, ESC_STEP = 0.4, ESC_DIRS = 16;   // escapeSolid: rings of 0.4 m out to 4 m, 16 headings each (fixed order: deterministic)
+/** (K2) put a bot that is inside a solid at the nearest spot round it where a standing capsule fits (player.js fitsAt), on the floor there
+ *  (supportAt at its own height: never up onto a roof), dry, not more than 4 m below; its path is dropped and re-planned. No spot: nothing changes. */
+function escapeSolid(W, b) {
+  const a = b.actor, bb = b.bb, M = W.map;
+  const wy = M.waterY != null ? M.waterY : -1e9;
+  for (let ri = 1; ri <= ESC_RINGS; ri++) {
+    const r = ri * ESC_STEP;
+    for (let k = 0; k < ESC_DIRS; k++) {
+      const an = k * (Math.PI * 2 / ESC_DIRS);
+      const x = a.pos.x + Math.cos(an) * r, z = a.pos.z + Math.sin(an) * r;
+      const s = supportAt(W, x, z, a.pos.y);
+      if (!(s === s) || s < a.pos.y - 4 || s < wy + 0.2) continue;
+      if (insideSolid(W, x, s, z) || !fitsAt(W, x, z, s)) continue;
+      a.pos.x = x; a.pos.y = s; a.pos.z = z;
+      a.vel.x = 0; a.vel.y = 0; a.vel.z = 0;
+      bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.nextPathT = 0; bb.stuckT = 0;
+      bb.solidX = x; bb.solidZ = z;
+      nav.st.solidEsc++;
+      return true;
+    }
+  }
+  return false;
+}
 /** (Wave 5) A fighter / healer pinned solid with a move intent for FIGHT_UNSTICK_S. First time: ENGAGE flips its strafe, HEAL
  *  bans the heading that pinned it for 1.5 s (pickRetreat takes the next one). Pinned again within 8 s: ENGAGE closes in on a
  *  PATH for 3 s when its target was seen in the last 3 s (CLOSEIN: moveToward's A* and shoot-on-the-move, the exit the
@@ -1169,9 +1266,12 @@ function breakOut(W, b) {
     bb.badLoot[bb.lootId] = W.t + 60;
     bb.lootId = null;
   }
-  const ex = findExit(W, a.pos.x, a.pos.y, a.pos.z, 6);
+  // (Wave 8) inside a furnished house the way out is the room graph's nearest street door, walked on the grid (houseExitPath); the window planner's
+  // exit search (1.5 m cells) reads a furnished room as a maze. Without houses: findExit, as before.
+  const hx = IND.H !== null ? houseExitPath(W, b) : null;
+  const ex = hx || findExit(W, a.pos.x, a.pos.y, a.pos.z, 6);
   if (ex && ex.length) {
-    extendExit(W, a, ex);
+    if (!hx) extendExit(W, a, ex);
     const last = ex[ex.length - 1];
     bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
     bb.moveTo = { x: last.x, z: last.z };
@@ -1316,13 +1416,15 @@ function wallAheadQ(W, a) {
   const ax = a.pos.x, az = a.pos.z, ex = ax + dx * look, ez = az + dz * look;
   const got = W.map.queryColliders((ax + ex) * 0.5, (az + ez) * 0.5, look * 0.5 + 0.9, _wq);
   const x0 = (ax < ex ? ax : ex) - 0.35, x1 = (ax < ex ? ex : ax) + 0.35, z0 = (az < ez ? az : ez) - 0.35, z1 = (az < ez ? ez : az) + 0.35;
-  _mq.length = 0;
-  let ramps = false;
+  // (Wave 8) written by index, the length set once (maps.js queryColliders' rule): `length = 0` then push() dropped the backing store every call - garbage that
+  // grows with the colliders of a furnished house
+  let ramps = false, nq = 0;
   for (let i = 0; i < got.length; i++) {
     const c = got[i];
-    if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) { _mq.push(c); if (c.kind === "ramp") ramps = true; }
+    if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) { _mq[nq++] = c; if (c.kind === "ramp") ramps = true; }
   }
-  if (!_mq.length) return false;
+  if (_mq.length !== nq) _mq.length = nq;
+  if (!nq) return false;
   // 0.5 m steps where a ramp is near (a steep stair rises ~1 m per step at 0.5 m), 1.5 m steps elsewhere (a plain floor)
   const stepM = ramps ? 0.5 : 1.5;
   const n = look > stepM ? Math.ceil(look / stepM) : 1;
@@ -1391,11 +1493,12 @@ function wallCols(W, b) {
   if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M) return list;
   const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq);
   const x0 = a.pos.x - WALL_QR, x1 = a.pos.x + WALL_QR, z0 = a.pos.z - WALL_QR, z1 = a.pos.z + WALL_QR;
-  list.length = 0;
+  let n = 0;                       // (Wave 8) by index, the length set once (see wallAheadQ)
   for (let i = 0; i < got.length; i++) {
     const c = got[i];
-    if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) list.push(c);
+    if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) list[n++] = c;
   }
+  if (list.length !== n) list.length = n;
   bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z;
   return list;
 }
@@ -2070,6 +2173,11 @@ const NAV_PICK_K = 3;             // pickLoot keeps the best this-many candidate
 const NAV_PICK_MARGIN = 12;       // ... and prices a runner-up only when it is within this many points of the favourite
 const NAV_PLAN_MIN_M = 8;         // moveToward plans a route at once for a goal at least this far away inside a town (a nearer one is walked at, and the wall reflexes ask when a wall is in the way)
 const NAV_STEPS_TICK = 6000;      // replayed 10 cm steps of tile-bake work per sim tick (~6 ms; a building tile is ~20,000 of them, the whole city ~13 million: in by ~40 s)
+// (Wave 8) ... while the DROP lasts (W.phase 'drop': somebody is still in the air) the schedule takes NAV_STEPS_TICK_DROP. The furnished houses made the city's bake
+// ~22 million steps on the Savanna (live: 11.6 M), in by ~70 s at 6,000 a tick - past the landing, so the first half-minute of the fight still paid for it. At
+// 10,000 during the drop it is in by ~40-45 s again (the Wave-7 design: 'in by the end of the glide'); a step costs ~0.6 us here and makes ~50 B of garbage
+// since navgrid's Wave-8 pass (it was ~350 B: the live build's drop already made ~2 MB of bake garbage a frame, this one ~0.5 MB). The phase is sim state.
+const NAV_STEPS_TICK_DROP = 10000;
 // A* weight 1.6 and the search table's whole 22,000 nodes: on 150 loot-to-loot routes of 10-110 m in the downtown 129 of 150 were found at
 // (1.3, 9000) - 15 hit the limit; 144 at (1.3, 22000) and (1.6, 22000) [the other 6 start inside furniture] - at a median 5-7 ms (max 53 ms)
 // and routes 1-3 % longer than the optimal ones (7B1 measured hw 1.3; routes of more than ~100 m between upper floors need the larger table)
@@ -2077,7 +2185,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -2096,7 +2204,7 @@ function startNav(W) {
   if (nav.map === W.map) return;
   navReset();
   nav.map = W.map;
-  nav.st = navStats0();
+  nav.st = navStats0(); doubleFields(nav.st);      // (Wave 8) ms / maxMs take fractions: double fields from birth (see doubleFields)
   const G = typeof globalThis !== "undefined" && globalThis.FFG && globalThis.FFG.sim && globalThis.FFG.sim.NavGrid;
   const city = W.map && W.map.city;
   if (!G || typeof G.bakeTown !== "function" || typeof G.runJob !== "function" || typeof G.beginJob !== "function" || typeof G.stepJob !== "function" || typeof G.takeWanted !== "function" || !(G.VERSION >= 2) || !city || !city.layout) return;
@@ -2107,7 +2215,10 @@ function startNav(W) {
     // reads the ground in place (latFor checks the two agree on 600 points first) instead of a boxed call per 10 cm step
     const M0 = W.map, hfn = (x, z) => M0.heightAt(x, z);
     hfn.ground = M0.ground; hfn.size = M0.size;
-    const town = G.bakeTown(W.map.colliders, hfn, lay.towns.concat(lay.compounds), { waterY: W.map.waterY, portals: W.map.portals, maxMs: 0, lazy: true });
+    // (Wave 8) the tall furniture of the furnished houses is never a floor of the grid (no routes over tables, beds, counters, shelves) and walls
+    // the capsule from a step away (navgrid TALL_LIFT); null on a map without houses: the world of Wave 7b, hash for hash
+    const noFloor = typeof G.tallFurniture === "function" ? G.tallFurniture(W.map) : null;
+    const town = G.bakeTown(W.map.colliders, hfn, lay.towns.concat(lay.compounds), { waterY: W.map.waterY, portals: W.map.portals, maxMs: 0, lazy: true, noFloor });
     nav.G = G; nav.world = town.world; nav.areas = town.rects; nav.qKeys = new Set();
     nav.st.areas = town.rects.length;
     const jobs = [], seen = new Set();
@@ -2187,8 +2298,8 @@ function navPrefetch() {
 /** One tick of the bake schedule (update(), before the brains): slices of the building tile in progress, until NAV_STEPS_TICK replayed steps of work
  *  have been done - the clock is the replay counter navgrid keeps, never the wall clock - then the next tile starts, a requested one first. A tile
  *  is ~20,000 steps (4-5 ticks), so a tick costs about the same whatever the building; with the queue empty it costs nothing. */
-function navTick() {
-  const w = nav.world, G = nav.G, st = nav.st, w0 = G.work(), budget = NAV_STEPS_TICK;
+function navTick(W) {
+  const w = nav.world, G = nav.G, st = nav.st, w0 = G.work(), budget = W.phase === "drop" && IND.H !== null ? NAV_STEPS_TICK_DROP : NAV_STEPS_TICK;      // (a map without furnished houses: the Wave-7b schedule)
   let guard = 0;
   while (G.work() - w0 < budget && guard++ < 48) {
     if (!nav.cur) {
@@ -2243,6 +2354,32 @@ function navBoth(sx, sz, tx, tz) {
   }
   return false;
 }
+/** (Wave 8) navBoth for the planner, one end just OUTSIDE the rect (and the route to / from an upper storey, see navUp): one point inside a town / compound rect, the other within NAV_NEAR_M of that rect and on a
+ *  grid tile the world covers (the coarse tiles touching a rect + its margin reach up to a tile past its edge, and they are baked with the rect). A goal in
+ *  a furnished house's upper storey asked from the street just outside town got the window planner's partial route (navcheck top-floor-paths: 36 of 36
+ *  failures had the start outside the rect, every one of them routed by the grid once both ends are on its tiles). Only findPath asks; the loot pricing and
+ *  the exits keep navBoth. Without houses: never asked (the caller tests IND.H). */
+const NAV_NEAR_M = 32;
+/** ... and only for a route to or from an UPPER storey (an end 1.5 m and more over the terrain under it): a ground-level goal is the window planner's job as before
+ *  (it walks the bot to the rect, where the grid takes over), so the outdoor routing of the match does not change. */
+function navUp(W, sx, sy, sz, tx, tz, ty) {
+  const M = W.map;
+  return (ty != null && ty - M.heightAt(tx, tz) > 1.5) || sy - M.heightAt(sx, sz) > 1.5;
+}
+function navNear(sx, sz, tx, tz) {
+  const A = nav.areas, Wd = nav.world;
+  if (!A || !Wd || typeof Wd.cover !== "function") return false;
+  const ts = Wd.tileSize;
+  for (let i = 0; i < A.length; i++) {
+    const r = A[i];
+    const sIn = sx >= r.minX && sx <= r.maxX && sz >= r.minZ && sz <= r.maxZ, tIn = tx >= r.minX && tx <= r.maxX && tz >= r.minZ && tz <= r.maxZ;
+    if (sIn === tIn) continue;                   // both in (navBoth's case) or both out
+    const ox = sIn ? tx : sx, oz = sIn ? tz : sz;
+    if (ox < r.minX - NAV_NEAR_M || ox > r.maxX + NAV_NEAR_M || oz < r.minZ - NAV_NEAR_M || oz > r.maxZ + NAV_NEAR_M) continue;
+    if (Wd.cover(Math.floor(ox / ts), Math.floor(oz / ts))) return true;
+  }
+  return false;
+}
 let navMiss = false;               // the last findPath() asked the grid and it came back empty because tiles it needs are not baked yet (not because there is no route)
 /** One grid query: waypoints {x, y, z, k} (k = the kind of the leg that arrives there: 0 walk, 1 drop, 2 ramp) or null. NOT rationed here. A null
  *  answer that needed building tiles sets navMiss (and queues them); a route found keeps its asks to itself (a tile beside a street is not needed). */
@@ -2257,19 +2394,55 @@ function gridPath(ax, ay, az, tx, tz, ty, noQueue, price) {
     st.nulls++;
     if (noQueue) { if (nav.world.wanted.length > 0) { navMiss = true; st.misses++; nav.world.wanted.length = 0; } }      // a candidate that is not (yet) the bot's choice does not queue its building
     else if (navDrainWanted() > 0) { navMiss = true; st.misses++; }
+    // (Wave 8) THE WAY IN, WALKED OUT. Every edge is certified for the direction it was replayed in, and in a furnished room a gap of a few centimetres over the
+    // capsule can pass one way only (the mover moves X then Z: a diagonal past a stair's wall end and a cabinet holds going in, not coming back - measured: a
+    // Savanna mid-rise whose whole upper floor had a route IN and none OUT, 15 rooms). With the house's tiles in (no miss) and no route this way: the route
+    // the other way, reversed, when it has no drop in it (a drop is not climbed back). Not for the pricing queries. Without houses: never reached.
+    if (!navMiss && !price && IND.H !== null && nav.world.lastFail === "no-path") {
+      const q = reverseRoute(ax, ay, az, tx, tz, ty);
+      if (q) { st.reversed++; return q; }
+    }
     return null;
   }
   nav.world.wanted.length = 0;
   p.nav = !price;                   // a priced route is a length, not a route to follow
   return p;
 }
+/** (Wave 8) A grid route from (tx, ty, tz) back to (sx, sy, sz), reversed into one from s to t: the waypoints in the other order, the goal last, each waypoint
+ *  carrying the kind of the leg that now arrives at it (the same leg walked the other way). null when there is no such route or it holds a drop. */
+function reverseRoute(sx, sy, sz, tx, tz, ty) {
+  let q = null;
+  const y0 = ty != null ? ty : nav.world.hf(tx, tz);
+  try { q = nav.G.findPath(nav.world, tx, y0, tz, sx, sy, sz, NAV_OPTS); } catch (err) { navFail(err); return null; }
+  if (!q || !q.length || nav.world.wanted.length) { nav.world.wanted.length = 0; return null; }
+  for (let i = 0; i < q.length; i++) if (q[i].k === 1) return null;
+  const out = [];
+  for (let i = q.length - 2; i >= 0; i--) out.push({ x: q[i].x, y: q[i].y, z: q[i].z, k: q[i + 1].k });
+  out.push({ x: tx, y: y0, z: tz, k: q[0].k });
+  out.nav = true; out.rev = true;
+  return out;
+}
 /** The planner every caller uses: the grid inside a town / compound, else (or when the grid finds nothing) the window planner. */
 function findPath(W, sx, sy, sz, tx, tz, ty) {
   navMiss = false;
-  if (nav.ready && navBoth(sx, sz, tx, tz)) {
+  if (IND.map !== W.map) indEnsure(W);       // (a probe plans before the first tick: the room index is built by update() otherwise)
+  if (nav.ready && (navBoth(sx, sz, tx, tz) || (IND.H !== null && navUp(W, sx, sy, sz, tx, tz, ty) && navNear(sx, sz, tx, tz)))) {
     const p = gridPath(sx, sy, sz, tx, tz, ty);
     if (p) return p;
+    // (Wave 8) no route on the grid (its tiles are in): over the room graph, one door / stair at a time (roomHopPath; null without houses)
+    if (!navMiss && IND.H !== null) { const q = roomHopPath(W, sx, sy, sz, tx, tz, ty); if (q) return q; }
     nav.st.fallbacks++;
+  }
+  // (Wave 8) OUT OF THE HOUSE FIRST. From a room of a furnished house to a goal outside that house that the grid cannot plan (another town, the open
+  // ground, the storm's centre): the 64 m window planner reads the furnished rooms as a maze (stuck windows on the housed maps: bots in a room walking at
+  // a goal 25-190 m away with no route, or with a window-planner route through the furniture). Walk out through the room graph's street door on the grid,
+  // then plan from the street. Without houses: nothing changes.
+  if (nav.ready && IND.H !== null) {
+    const si = roomAt(W, sx, sy, sz);
+    if (si >= 0) {
+      const gi = roomAt(W, tx, ty == null ? W.map.heightAt(tx, tz) : ty, tz);
+      if (gi < 0 || IND.R[gi].h !== IND.R[si].h) { const q = houseExitFrom(si, sx, sy, sz); if (q) return q; }
+    }
   }
   const p = findPathOld(W, sx, sy, sz, tx, tz, ty);
   // (Wave 7, round 2) a START inside a town / compound and a goal outside it: the grid cannot plan out of its rect and the window planner's first leg out of a town crosses a wall
@@ -2378,7 +2551,278 @@ export function debugNav() {
   return { findPath: findPathSettled, findPathGame: findPath, findExit, findPathOld, CELL, GRID_R, wallAhead, navInfo, navBoth,
     // (Wave 7b, S1) the heal / fight steering probes, for the probes only: headingBlocked's two halves along a world heading (hx, hz)
     headingBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return headingBlocked(W, wallCols(W, b), b.actor); },
-    rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b.actor); } };
+    rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b.actor); },
+    // (Wave 8) the room graph, for the probes: where a point is (house, room, storey) and the brain's own room
+    roomAt: (W, x, y, z) => { const i = roomAt(W, x, y, z); return i < 0 ? null : { house: IND.R[i].h.id, room: IND.R[i].r.id, kind: IND.R[i].r.kind, floor: IND.R[i].f, index: i }; },
+    indoors: () => ({ houses: IND.H ? IND.H.length : 0, rooms: IND.R.length, built: IND.built }),
+    roomRoute: (from, to) => { const L = roomRoute(from, to); if (!L) return null; linkTarget(from, L); return { to: L.to, door: L.d ? L.d.id : null, stair: L.s ? L.s.id : null, at: [LT[0], LT[1], LT[2]], exitDoor: to === -1 && _bfsEnd && _bfsEnd.d ? _bfsEnd.d.id : null }; },
+    occAny: (W, x, z, r) => occAny(W, x, z, r),
+    houseExitPath: (W, b) => houseExitPath(W, b), roomHopPath: (W, sx, sy, sz, tx, tz, ty) => roomHopPath(W, sx, sy, sz, tx, tz, ty) };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// INDOORS: THE ROOM GRAPH OF THE FURNISHED HOUSES (Wave 8, lane I2; plan "Lane 8C").
+// maps.js (Wave 8 stage B) builds every parcel building with runtime/3d/royale/housegen.js and lists the records on W.map.houses: rooms (floor, kind,
+// rects on the wall centre lines, walkable rects, an anchor), doors (2.26 m, the two rooms or the street), stairs (approach room -> exit room) and the
+// nav links between them. What the brains take from it:
+//   WHERE AM I   roomAt(x, y, z) -> a room index (or -1 = outdoors): the house, the storey and the room of a point. A spatial table of the houses
+//                (16 m cells) and the storey from the floors' heights; no collider query, no allocation. The bots keep their own room (bb.roomI)
+//                and, while fighting, the target's (bb.tRoomI), refreshed on the think tick.
+//   THE GRAPH    rooms joined by their doors and stairs (and the street through the outer doors). The brains route over it for what the grid
+//                cannot do alone: the way OUT of a room (the nearest street door through the graph, walked on the grid; findExit's 64 m window
+//                planner reads a furnished room as a maze), a route the grid's search gives up on (a goal several rooms and a storey away: the
+//                grid plans to the next door / stair of the graph path instead, and the bot plans on from there), and the door a threat in
+//                another room will come through.
+//   INSIDE A ROOM the route is ALWAYS the collider grid's (navgrid, the town tiles: every leg replayed through the mover), never a straight line
+//                node to node: furniture blocks 15 % of the straight lines between a room's doors (stage-A check).
+//   FIGHTS       cover indoors is the wall beside a doorway of the bot's own room (hold the room, then peek); a target in another room is
+//                closed on along a route, not by a straight push into the wall between; a lost target on another storey is followed up the stairs
+//                (the search walks to HIS floor).
+//   LOOT         a candidate in the house the bot is already in is worth a few points more (clear the house, then leave), one in the same room more.
+// Without W.map.houses (every build before Wave 8 stage B) none of this runs: roomAt answers -1 and every brain decision is the Wave-7b one, draw for draw.
+const IND = { map: null, H: null, R: [], ix: new Map(), grid: null, built: 0 };
+const IND_CELL = 16;                       // m: the house table's cells (a house is at most 30 m a side: one to four cells)
+const LOOT_NEAR_M = 3.0;                    // actLoot: a loot goal this near and not taken for 2.5 s is parked (houses only)
+const LOOT_STAND_M = 0.6;                   // actLoot: a house loot STAND point is reached at this distance (1.8 m from it can be 3 m from the thing: out of the 2.4 m pickup)
+/** (Wave 8 fix round, lane K2) the walk goal for loot n: a house item / chest's STAND point (loot.js: the nearest point of its room's walk area, on the room's
+ *  floor) - the bot takes it from inside the room, along a clear line; anything else: the thing itself, as before. */
+function setLootGoal(bb, n) {
+  const s = n.stand;
+  bb.moveTo = s ? { x: s.x, z: s.z, y: s.y } : { x: n.pos.x, z: n.pos.z, y: n.pos.y };
+  bb.standGoal = s ? bb.moveTo : null;
+}
+const IND_FLOOR_DY = 0.7;                  // a point counts on storey f from 0.7 m under its floor up to 0.3 m under its ceiling (a roof top is outdoors)
+const IND_ROOM_S = 0.25;                   // s: a brain's own room is refreshed at most this often (think tick; the fight reads it every frame)
+const IND_LOOT_HOUSE = 5, IND_LOOT_ROOM = 8;   // pickLoot points for a candidate in the house / the room the bot is in (0.4 points a metre: 12.5 / 20 m of walk)
+const indKey = (cx, cz) => (cx + 4096) * 8192 + (cz + 4096);
+/** Build (once per map) the house table, the room records and the graph. Every map without houses gets IND.H = null. */
+function indEnsure(W) {
+  const M = W.map;
+  if (IND.map === M) return IND.H !== null;
+  IND.map = M; IND.H = null; IND.R.length = 0; IND.ix.clear(); IND.grid = null; IND.built++;
+  const HS = M && M.houses;
+  if (!Array.isArray(HS) || !HS.length) return false;
+  const grid = new Map();
+  for (let hi = 0; hi < HS.length; hi++) {
+    const h = HS[hi];
+    if (!h || !h.aabb || !Array.isArray(h.rooms) || !Array.isArray(h.floors)) continue;
+    const doorById = new Map(), roomIx = new Map();
+    for (let k = 0; k < (h.doors || []).length; k++) doorById.set(h.doors[k].id, h.doors[k]);
+    const first = IND.R.length;
+    for (let k = 0; k < h.rooms.length; k++) {
+      const r = h.rooms[k], F = h.floors[r.floor];
+      if (!F) continue;
+      roomIx.set(r.id, IND.R.length);
+      IND.R.push({ hi, h, r, f: r.floor, y: F.y, ceil: F.ceil, rects: r.rects || [[r.x0, r.z0, r.x1, r.z1]], doors: [], stairs: [], nb: [] });
+    }
+    // the graph: a door joins its two rooms (an outer door: the room and the street, to = -1), a stair its approach and exit rooms
+    for (let gi = first; gi < IND.R.length; gi++) {
+      const R = IND.R[gi];
+      for (const did of (R.r.doors || [])) { const d = doorById.get(did); if (d) R.doors.push(d); }
+    }
+    for (const d of (h.doors || [])) {
+      const a = d.rooms && d.rooms[0] != null ? roomIx.get(d.rooms[0]) : undefined, b = d.rooms && d.rooms[1] != null ? roomIx.get(d.rooms[1]) : undefined;
+      if (a === undefined) continue;
+      if (b === undefined) IND.R[a].nb.push({ to: -1, d, s: null });
+      else { IND.R[a].nb.push({ to: b, d, s: null }); IND.R[b].nb.push({ to: a, d, s: null }); }
+    }
+    for (const s of (h.stairs || [])) {
+      const a = s.approachRoom != null ? roomIx.get(s.approachRoom) : undefined, b = s.exitRoom != null ? roomIx.get(s.exitRoom) : undefined;
+      if (a === undefined || b === undefined) continue;
+      IND.R[a].nb.push({ to: b, d: null, s }); IND.R[b].nb.push({ to: a, d: null, s });
+      IND.R[a].stairs.push(s); if (b !== a) IND.R[b].stairs.push(s);
+    }
+    const x0 = Math.floor(h.aabb.min[0] / IND_CELL), x1 = Math.floor(h.aabb.max[0] / IND_CELL), z0 = Math.floor(h.aabb.min[2] / IND_CELL), z1 = Math.floor(h.aabb.max[2] / IND_CELL);
+    for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+      const k = indKey(cx, cz);
+      let l = grid.get(k);
+      if (!l) { l = []; grid.set(k, l); }
+      l.push(hi);
+    }
+  }
+  for (let i = 0; i < IND.R.length; i++) IND.ix.set(IND.R[i].r, i);      // (the house records are shared with the view and the gates: never written; these side tables are ours)
+  IND.grid = grid; IND.H = HS;
+  return true;
+}
+/** The room (index into IND.R) of the point (x, y feet, z), or -1: outdoors, on a roof, under a house, in a wall. */
+function roomAt(W, x, y, z) {
+  RAQ[0] = x; RAQ[1] = y; RAQ[2] = z;
+  return roomAtQ(W);
+}
+/** roomAt with the point in RAQ (the per-frame callers: a call boxes double arguments) */
+const RAQ = new Float64Array(3);
+function roomAtQ(W) {
+  const x = RAQ[0], y = RAQ[1], z = RAQ[2];
+  if (IND.map !== W.map) indEnsure(W);
+  if (IND.H === null) return -1;
+  const l = IND.grid.get(indKey(Math.floor(x / IND_CELL), Math.floor(z / IND_CELL)));
+  if (!l) return -1;
+  for (let i = 0; i < l.length; i++) {
+    const h = IND.H[l[i]], mn = h.aabb.min, mx = h.aabb.max;
+    if (x < mn[0] || x > mx[0] || z < mn[2] || z > mx[2]) continue;
+    let f = -1;          // the highest storey whose floor is at most 0.7 m above the feet, feet under its ceiling - 0.3 (ceil + 0.3 = the slab top: the next floor, or the ROOF)
+    for (let k = h.floors.length - 1; k >= 0; k--) { const F = h.floors[k]; if (y >= F.y - IND_FLOOR_DY) { if (y <= F.ceil - 0.3) f = k; break; } }
+    if (f < 0) continue;
+    for (let k = 0; k < h.rooms.length; k++) {
+      const r = h.rooms[k];
+      if (r.floor !== f) continue;
+      const rs = r.rects;
+      for (let q = 0; q < rs.length; q++) {
+        const rc = rs[q];
+        if (x >= rc[0] && x <= rc[2] && z >= rc[1] && z <= rc[3]) return roomIndexOf(h, r);
+      }
+    }
+  }
+  return -1;
+}
+/** The IND.R index of room record r (house h). */
+function roomIndexOf(h, r) {
+  const i = IND.ix.get(r);
+  return i === undefined ? -1 : i;
+}
+/** The brain's own room, refreshed at most every IND_ROOM_S (sim time) or when it moved > 1 m. */
+function myRoom(W, b) {
+  const a = b.actor, bb = b.bb;
+  if (IND.map !== W.map) indEnsure(W);
+  if (IND.H === null) return -1;
+  const dx = a.pos.x - bb.roomX, dz = a.pos.z - bb.roomZ, dy = a.pos.y - bb.roomY;
+  if (W.t - bb.roomT < IND_ROOM_S && W.t >= bb.roomT && dx * dx + dz * dz < 1 && dy * dy < 0.36) return bb.roomI;
+  RAQ[0] = a.pos.x; RAQ[1] = a.pos.y; RAQ[2] = a.pos.z; bb.roomI = roomAtQ(W); bb.roomT = W.t; bb.roomX = a.pos.x; bb.roomZ = a.pos.z; bb.roomY = a.pos.y;
+  return bb.roomI;
+}
+
+/** Breadth-first over the room graph from room `from` (index) to room `to` (index, or -1 = the street): the first hop's link { to, d, s } or null.
+ *  Costs are door / stair counts (rooms are small; the grid prices the walk itself). Deterministic: the links are visited in the house's own order. */
+const _bfsQ = [], _bfsLink = [], _bfsPrev = [];
+let _bfsMark = new Int32Array(0), _bfsStamp = 0, _bfsEnd = null;
+/** The point just past link L taken from room u, into LT[0..2] (x, y feet, z): through a door 1.0 m into the next room (or 2 m out into the street),
+ *  up / down a stair at its exit / approach cell. */
+const LT = new Float64Array(3);
+function linkTarget(u, L) {
+  const R = IND.R;
+  if (L.s) {
+    const s = L.s, up = R[u].r.id === s.approachRoom;
+    if (up) { LT[0] = s.exit[0]; LT[1] = s.top[1]; LT[2] = s.exit[1]; } else { LT[0] = s.approach[0]; LT[1] = s.foot[1]; LT[2] = s.approach[1]; }
+    return;
+  }
+  const d = L.d;
+  // the side of the door room u is on: an outer door's normal points out of rooms[0]; an interior door's from rooms[0] to rooms[1]
+  const out = d.kind !== "interior" || d.rooms[0] === R[u].r.id ? 1 : -1, k = L.to === -1 ? 2.0 : 1.0;
+  LT[0] = d.x + d.nx * out * k; LT[1] = L.to === -1 && d.out ? R[u].h.y0 : d.y; LT[2] = d.z + d.nz * out * k;
+}
+function roomRoute(from, to) {
+  const R = IND.R;
+  if (from < 0 || from >= R.length || from === to) return null;
+  if (_bfsMark.length < R.length) { _bfsMark = new Int32Array(R.length + 64); _bfsStamp = 0; }
+  const st = ++_bfsStamp, h = R[from].h;
+  _bfsQ.length = 0; _bfsQ.push(from); _bfsMark[from] = st; _bfsPrev[from] = -1;
+  let end = -1, endLink = null;
+  for (let qi = 0; qi < _bfsQ.length && end < 0; qi++) {
+    const u = _bfsQ[qi], nb = R[u].nb;
+    for (let k = 0; k < nb.length; k++) {
+      const L = nb[k];
+      if (L.to === -1) { if (to === -1) { end = u; endLink = L; break; } continue; }
+      if (_bfsMark[L.to] === st || R[L.to].h !== h) continue;
+      _bfsMark[L.to] = st; _bfsPrev[L.to] = u; _bfsLink[L.to] = L;
+      if (L.to === to) { end = to; break; }
+      _bfsQ.push(L.to);
+    }
+  }
+  if (end < 0) return null;
+  _bfsEnd = endLink;                                       // (to -1: the street door the route leaves by)
+  if (to === -1 && end === from) return endLink;           // this room has a street door
+  let v = end;
+  while (_bfsPrev[v] !== from) v = _bfsPrev[v];
+  return _bfsLink[v];
+}
+
+/** (Wave 8) The grid found no route (not a miss: its tiles are in) and a house room is at one end: route over the ROOM GRAPH and plan on the grid to
+ *  the far side of the graph route's first door / stair only (from inside a house; from outside it, to just inside the goal house's street door). The
+ *  answer is a partial route (.partial, .hop): the bot walks it and plans on from there. null when there is no graph route or the hop does not plan
+ *  either. A search the grid gives up on (the 22,000-node table, a goal three rooms and a storey away through furnished rooms) is the case it is for. */
+function roomHopPath(W, sx, sy, sz, tx, tz, ty) {
+  if (IND.map !== W.map) indEnsure(W);
+  if (IND.H === null) return null;
+  const si = roomAt(W, sx, sy, sz), gi = roomAt(W, tx, ty == null ? W.map.heightAt(tx, tz) : ty, tz);
+  if (si < 0 && gi < 0) return null;
+  let L = null, u = -1;
+  if (si >= 0) {
+    u = si;
+    L = gi >= 0 && IND.R[gi].h === IND.R[si].h ? roomRoute(si, gi) : roomRoute(si, -1);
+    if (!L) return null;
+    linkTarget(u, L);
+  } else {
+    // from outside: to the goal house's street door (the one the graph leaves the goal room by), a metre inside it
+    if (!roomRoute(gi, -1) || !_bfsEnd || !_bfsEnd.d) return null;
+    const d = _bfsEnd.d;
+    LT[0] = d.x - d.nx * 1.0; LT[1] = d.y; LT[2] = d.z - d.nz * 1.0;
+  }
+  const hx = LT[0], hy = LT[1], hz = LT[2];
+  if ((hx - sx) * (hx - sx) + (hz - sz) * (hz - sz) < 1.0 && Math.abs(hy - sy) < 1.0) return null;      // already there: the hop is no progress
+  const p = gridPath(sx, sy, sz, hx, hz, hy);
+  if (!p) return null;
+  p.partial = true; p.hop = true;
+  nav.st.hops++;
+  return p;
+}
+/** (Wave 8) The way OUT of the house the bot is in, through the room graph's nearest street door, on the grid: 2 m past that door into the street
+ *  (or, when the grid cannot plan that far, to the far side of the first door / stair of the graph route). null outdoors / no route. */
+function houseExitPath(W, b) {
+  const a = b.actor;
+  if (!nav.ready) return null;
+  const gi = myRoom(W, b);
+  if (gi < 0) return null;
+  return houseExitFrom(gi, a.pos.x, a.pos.y, a.pos.z);
+}
+function houseExitFrom(gi, sx, sy, sz) {
+  const L0 = roomRoute(gi, -1);
+  if (!L0 || !_bfsEnd || !_bfsEnd.d) return null;
+  const d = _bfsEnd.d, ex = d.x + d.nx * 2.0, ez = d.z + d.nz * 2.0;
+  if (!navBoth(sx, sz, ex, ez)) return null;
+  let p = gridPath(sx, sy, sz, ex, ez, IND.R[gi].h.y0);
+  if (p) { p.partial = true; p.hop = true; }               // (the street is not the goal: the bot plans on from there at once)
+  else if (!navMiss) {
+    linkTarget(gi, L0);
+    p = gridPath(sx, sy, sz, LT[0], LT[2], LT[1]);
+    if (p) { p.partial = true; p.hop = true; }
+  }
+  if (p) nav.st.houseExits++;
+  return p;
+}
+
+// ── "IS ANYTHING NEAR?" without a collider query (Wave 8, lane I2) ──────────────────────────────────────────────────────────────────────
+// coverStepQ asked queryColliders(x, z, 16) to learn ONE boolean (is there any collider round me at all?). On a map of furnished houses that call hands
+// back whole houses - every collider of the 5 x 5 cells the 32 m square touches (a house alone is 50-680 boxes) - and stamps each one. occAny answers the
+// same question from a table of the same cells (maps.js queryColliders: 8 m cells on a map with a city, 16 m otherwise, a collider listed in every cell
+// its box touches): the cells the square [x - r, x + r] x [z - r, z + r] touches, any live collider listed there. Same cells, same live test (c.dead),
+// so the same answer as `queryColliders(x, z, r).length > 0`, with no stamping, no output array and no per-call cost that grows with the houses.
+const OCC = { map: null, cell: 16, cells: null };
+function occBuild(M) {
+  OCC.map = M; OCC.cells = new Map();
+  OCC.cell = M && typeof M.queryCell === "number" && M.queryCell > 0 ? M.queryCell : (M && M.city ? 8 : 16);
+  const C = OCC.cell, cols = (M && M.colliders) || [];
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    const x0 = Math.floor(c.minX / C), x1 = Math.floor(c.maxX / C), z0 = Math.floor(c.minZ / C), z1 = Math.floor(c.maxZ / C);
+    for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+      const k = (cx + 8192) * 16384 + (cz + 8192);
+      let l = OCC.cells.get(k);
+      if (!l) { l = []; OCC.cells.set(k, l); }
+      l.push(c);
+    }
+  }
+}
+function occAny(W, x, z, r) {
+  if (W.map.hasCollidersNear) return W.map.hasCollidersNear(x, z, r);      // (Wave 8 maps.js, lane I1: the same test over the map's own cells - no table of ours)
+  if (OCC.map !== W.map) occBuild(W.map);
+  const C = OCC.cell;
+  const x0 = Math.floor((x - r) / C), x1 = Math.floor((x + r) / C), z0 = Math.floor((z - r) / C), z1 = Math.floor((z + r) / C);
+  for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+    const l = OCC.cells.get((cx + 8192) * 16384 + (cz + 8192));
+    if (!l) continue;
+    for (let i = 0; i < l.length; i++) if (!l[i].dead) return true;
+  }
+  return false;
 }
 
 /** Floor-aware "can I stand here" for local probes (cover candidates): the
@@ -2582,6 +3026,16 @@ function moveTowardQ(W, b, dt, sprint, ty) {
       if (navMiss) bb.navT = W.t + 1.0;
     }
   }
+  // (Wave 8) inside a furnished house with a goal OUTSIDE it (and out of the grid's reach: the case above did not plan): plan at once - findPath walks
+  // the bot out through the street door on the grid (see findPath) - instead of walking straight at the goal through the furniture until a wall stops it
+  if (nav.ready && IND.H !== null && !bb.path && W.t >= bb.nextPathT && goalD > 3) {
+    const mi = myRoom(W, b);
+    if (mi >= 0) {
+      RAQ[0] = tx; RAQ[1] = ty == null ? a.pos.y : ty; RAQ[2] = tz;
+      const gi = roomAtQ(W);
+      if (gi < 0 || IND.R[gi].h !== IND.R[mi].h) { reqWhy = 3; requestPath(W, b, tx, tz, ty); }
+    }
+  }
   // (T-tick-actors B2) a waypoint is reached on ITS floor: horizontal distance alone
   // consumed the ground-floor waypoint of a stair descent while the bot was upstairs.
   // (Wave 5) and the same on the way UP: the first-floor waypoint of a stair climb is not reached from the room below it.
@@ -2605,7 +3059,10 @@ function moveTowardQ(W, b, dt, sprint, ty) {
       if (shiftIt) bb.path.shift();
     }
   }
-  if (bb.path && !bb.path.length) { bb.path = null; bb.pathGoal = null; }
+  if (bb.path && !bb.path.length) {
+    if (bb.path.hop) { bb.navT = 0; bb.nextPathT = 0; }      // (Wave 8) a room-graph hop is walked: plan the next one now, not after the 6 s / 2.5 s cool-downs
+    bb.path = null; bb.pathGoal = null;
+  }
   // (Wave 7, round 2) A window-planner waypoint a storey and more UNDER the feet and less than a metre away is a drop the planner took at a spot the bot is not at: it stands on the deck
   // above the lower floor's cell (seed 27, s8: loot on the floor below, the route's one waypoint under the bot's own feet; it paced over it until the 3 s progress test parked the goal,
   // 8 s on the deck). It is never taken ("on its floor" needs the feet within 1.5 m), so: off the nearest open edge, as for a roof with no way down.
@@ -2679,12 +3136,18 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   const aheadZ = a.pos.z - Math.cos(a.input.yaw) * 1.4;
   SPQ[0] = aheadX; SPQ[1] = aheadZ; SPQ[2] = a.pos.y + 0.6; supportA(W, SPQ, 0);
   const sup = SPQ[3];
-  if (sup > a.pos.y + 0.55 && sup < a.pos.y + 2.2 && a.onGround) inp.jump = true;
+  // (Wave 8) NO HOPS INSIDE A FURNISHED HOUSE. "Support ahead higher than the feet" in a room is a bed, a table, a counter, a wardrobe: the hop put bots
+  // ON the furniture (stuck windows on the housed maps: bots 1-2.5 m over the floor on a table / a shelf top, one under the ceiling with 0.7 m of
+  // headroom, walled in every direction), and the stuck hop below did the same. The grid never asks for a jump (its edges are walks, drops and ramps).
+  // (and none at a house from outside it: the hop probe 1.4 m ahead of a bot in a street doorway lands in the room - a bot jumped onto a bathroom sink)
+  const inHouse = IND.H !== null && myRoom(W, b) >= 0;
+  const hopIndoors = IND.H !== null && (inHouse || ((RAQ[0] = aheadX), (RAQ[1] = a.pos.y), (RAQ[2] = aheadZ), roomAtQ(W)) >= 0);
+  if (!hopIndoors && sup > a.pos.y + 0.55 && sup < a.pos.y + 2.2 && a.onGround) inp.jump = true;
   if (bb.stuckT > 0.7) {
     // jump at most once every 0.9s — the old EVERY-FRAME jump while stuck
     // read as a bot pogo-ing in place inside a house for a minute straight
     // (owner witnessed it). One hop per second is a real "try to get over it".
-    if ((bb.nextJumpT || 0) <= W.t) { inp.jump = true; bb.nextJumpT = W.t + 0.9; }
+    if (!hopIndoors && (bb.nextJumpT || 0) <= W.t) { inp.jump = true; bb.nextJumpT = W.t + 0.9; }
     // COMMIT to one detour side — the old per-frame random ±1 jittered the bot
     // left-right against the same wall face forever
     if (!bb.detourDir) bb.detourDir = b.rng() < 0.5 ? -1 : 1;
@@ -2698,9 +3161,10 @@ function moveTowardQ(W, b, dt, sprint, ty) {
         // Escape search at the bot's OWN floor height (the old ring probed cells
         // at terrain height, so on an upper floor it picked a spot 1.5 m away on
         // the ground below that the bot could never reach — audit S7).
-        const ex = findExit(W, a.pos.x, a.pos.y, a.pos.z, 3);
+        const hx = IND.H !== null ? houseExitPath(W, b) : null;        // (Wave 8) indoors: out through the room graph's street door (see breakOut)
+        const ex = hx || findExit(W, a.pos.x, a.pos.y, a.pos.z, 3);
         if (ex && ex.length) {
-          extendExit(W, a, ex);
+          if (!hx) extendExit(W, a, ex);
           const last = ex[ex.length - 1];
           bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
           bb.moveTo = { x: last.x, z: last.z };
@@ -2725,6 +3189,10 @@ function moveTowardQ(W, b, dt, sprint, ty) {
     // on the outer ledge of a wall top stood 9.5 s (Savanna seed 26, s25). After 0.25 s of it: ask for a route NOW (the cool-down is for a bot that keeps walking), and on a
     // roof / wall top / ledge with still no route, walk off the nearest open edge.
     if ((gm === 3 || holdStill) && a.onGround) { bb.heldN++; bb.heldAcc += dt; } else { bb.heldN = 0; bb.heldAcc = bb.heldAcc > dt * 2 ? bb.heldAcc - dt * 2 : 0; }
+    // (Wave 8) HELD ON A PIECE OF FURNITURE (a sink, a table, a shelf top: the feet 0.3-3 m over the room's floor, not on a stair): the wall probes judge the
+    // band from the knee to 2 m over the FEET, never below them, so up there the ceiling slab reads as a wall in every direction and the grid refuses the
+    // start (1.95 m of headroom asked) - measured: a bot on a bathroom sink 1.82 m under the slab held for 640 s. The mover can step off (a drop): walk it
+    // straight at the nearest part of the room's walkable floor.
     // ... and 1 s of it is as stuck as 3 s without the goal getting closer: the goal-distance timer at the top is reset whenever a route appears and is consumed or is asked
     // for again, so a bot beside an item that lies inside a solid never tripped it (measured: Savanna seed 14, s4, 10 s beside a death drop inside a tower's footprint)
     if (bb.heldAcc >= HELD_STUCK_S) { bb.heldAcc = 0; if (bb.progT < 3.0) bb.progT = 3.01; }
@@ -2734,8 +3202,46 @@ function moveTowardQ(W, b, dt, sprint, ty) {
       if (!bb.path && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL) deckExitPath(W, b, tx, tz);
     }
   }
+  // (Wave 8) ... and the same for a bot PINNED (pushing, not moving: stuckT) in a pocket of the furniture outside the room's walkable area
+  // (pinned: stuckT - frozen legs - or the pin window - a bot jittering 2-3 cm a frame in a nook never runs stuckT up, the 0.5 s net-displacement window sees it)
+  if (inHouse && a.onGround && (bb.heldN > 0 || holdStill || bb.stuckT > 0.3 || bb.pinN >= 1) && offFurniture(W, b, dt)) { bb.heldN = 0; bb.heldAcc = 0; }
   qx = tx - a.pos.x; qz = tz - a.pos.z;
   MTQ[2] = Math.sqrt(qx * qx + qz * qz);
+}
+
+/** (Wave 8) A bot standing on furniture in its room (feet 0.3-3 m over the floor, not over a stair) walks off it: raw input straight at the centre of the
+ *  nearest of the room's walkable rects at least 0.8 m away. true = it did (the caller's hold is overridden). */
+function offFurniture(W, b, dt) {
+  const a = b.actor, gi = b.bb.roomI;        // (fresh: the caller's inHouse test read myRoom this frame)
+  if (gi < 0) return false;
+  const R = IND.R[gi], dy = a.pos.y - R.y;
+  if (dy > 3.0 || dy < -0.3) return false;
+  // on the floor: only when the bot stands OUTSIDE the room's walkable area (a pocket behind a chair and a plant, a corner the generator's capsule
+  // never reached: the grid finds no way out of it and every probe heading is walled)
+  if (dy < 0.3 && inWalk(R, a.pos.x, a.pos.z, 0.2)) return false;
+  const st = R.h.stairs || [];
+  for (let k = 0; k < st.length; k++) { const s = st[k]; if (a.pos.x > s.x0 - 0.6 && a.pos.x < s.x1 + 0.6 && a.pos.z > s.z0 - 0.6 && a.pos.z < s.z1 + 0.6) return false; }
+  const wk = R.r.walk || [];
+  let bx = 0, bz = 0, bd = 1e9;
+  for (let k = 0; k < wk.length; k++) {
+    const q = wk[k], cx = (q[0] + q[2]) * 0.5, cz = (q[1] + q[3]) * 0.5, dx = cx - a.pos.x, dz = cz - a.pos.z, d = dx * dx + dz * dz;
+    if (d >= 0.64 && d < bd) { bd = d; bx = cx; bz = cz; }
+  }
+  if (bd >= 1e9) return false;
+  // a loot goal a few metres off is what led the bot in (an item in the pocket / on the piece): park it, or the bot walks back in the moment it is out
+  const bb = b.bb;
+  if (bb.lootId && bb.moveTo && hyp(bb.moveTo.x - a.pos.x, bb.moveTo.z - a.pos.z) < 4) {
+    if (!bb.badLoot) bb.badLoot = {};
+    bb.badLoot[bb.lootId] = W.t + 30;
+    bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
+  }
+  nav.st.offFurn++;
+  SYQ[0] = Math.atan2(-(bx - a.pos.x), -(bz - a.pos.z)); steerYawQ(a, dt, 20);
+  // a pocket on the FLOOR is often closed by low pieces (a side table, a chair): pinned there, hop (a 0.85 m table is in reach: then this walks off it)
+  if (dy < 0.3 && (b.bb.stuckT > 0.7 || b.bb.pinN >= 1) && b.bb.nextJumpT <= W.t) { a.input.jump = true; b.bb.nextJumpT = W.t + 0.9; }
+  const B = K.moveBasis(a.input.yaw, _mb0), wdx = -Math.sin(SYQ[0]), wdz = -Math.cos(SYQ[0]);
+  a.input.mz = wdx * B.fx + wdz * B.fz; a.input.mx = wdx * B.rx + wdz * B.rz; a.input.sprint = false;
+  return true;
 }
 
 /** Fight WHILE running (owner playtest: bots "all just run instead of always
@@ -2812,7 +3318,9 @@ function actLoot(W, b, dt) {
   const mt = bb.moveTo;
   const nearGoal = !mt || bb.chestId || hyp(mt.x - a.pos.x, mt.z - a.pos.z) < 3.5;
   // 2.2 = loot.js REACH_DY (lane 7C): a bot, like the player, does not take the loot of the floor below / above through a slab
-  const near = nearGoal ? W.nearbyLoot(a.pos, 2.4, 2.2) : _noLoot;
+  // (Wave 8 fix round, lane K2) los = true: a HOUSE item / chest is taken only along a clear line from the bot's chest (loot.js pickLos, the player's rule) -
+  // a bot on the street used to take the gun on a shelf behind the wall. The bot walks to the thing's STAND point (setLootGoal) so the line is clear there.
+  const near = nearGoal ? W.nearbyLoot(a.pos, 2.4, 2.2, true) : _noLoot;
   for (const n of near) {
     if (n.type === "chest") {
       // chests take a 2s channel — bots obey the same rule as the player
@@ -2830,7 +3338,23 @@ function actLoot(W, b, dt) {
     const gy = bb.moveTo.y;     // (moveToward can clear moveTo itself: a parked loot id)
     MTQ[0] = bb.moveTo.x; MTQ[1] = bb.moveTo.z; moveTowardQ(W, b, dt, far, gy); // sprint the long hauls
     const d = MTQ[2];
-    if (d < 1.8 && onFloorOf(a, gy)) bb.moveTo = null;   // (Wave 5) arrived = on the item's floor too
+    const arrived = d < (bb.moveTo && bb.moveTo === bb.standGoal ? LOOT_STAND_M : 1.8) && onFloorOf(a, gy);   // (Wave 5) arrived = on the item's floor too
+    // (Wave 8) AT THE ITEM AND NOT GETTING IT. A house item on a shelf or a counter 1.3-1.6 m over the floor, or one the pickup's clear-line rule refuses
+    // (loot.js: a house item needs a clear line from the chest), is within reach of the bot's feet but never "arrived" (onFloorOf wants 1.5 m) and never
+    // taken: the goal-distance test needs > 2 m to trip, so the bot paced round it (measured: 52 s beside one shelf). 2.5 s within 2 m of a loot goal
+    // without taking it parks that item for 30 s. Without houses: unchanged. (3 m, not 2: an item on a shelf behind a counter held a bot 2.0-2.5 m from it,
+    // under both tests, for 15 s - ashgrid seed 31, crane@p15.)
+    // (K2) counted BEFORE the arrival clears the goal: an arrived-but-not-taken goal is re-planned every other frame, and the old order reset the timer
+    // on each arrival, so the park never fired within the arrival radius (the 12 s hard breaker did).
+    if (IND.H !== null && bb.lootId && bb.moveTo && d < LOOT_NEAR_M) {
+      bb.nearLootT += dt;
+      if (bb.nearLootT > 2.5) {
+        if (!bb.badLoot) bb.badLoot = {};
+        bb.badLoot[bb.lootId] = W.t + 30;
+        bb.lootId = null; bb.moveTo = null; bb.nearLootT = 0; b.nextThink = 0; nav.st.lootParked++;
+      }
+    } else if (!(IND.H !== null && bb.lootId && !bb.moveTo)) bb.nearLootT = 0;
+    if (arrived && bb.moveTo) bb.moveTo = null;
   } else {
     // plan exhausted → re-plan NOW (state may stay LOOT, so onEnter must be
     // re-run explicitly or the bot stands idle forever)
@@ -3130,7 +3654,19 @@ function actHeal(W, b, dt) {
   a.input.sprint = false;                   // the sim blocks it anyway; be explicit
 }
 
-const RETREAT_FAN = [0, 0.61, -0.61, 1.22, -1.22, 1.75, -1.75];   // radians off straight-away: 0, 35, 70, 100 degrees, both sides
+const RETREAT_FAN = [0, 0.61, -0.61, 1.22, -1.22, 1.75, -1.75];
+const POCKET_PROBE_M = 0.9;      // (K2) pickRetreat: a heading whose point this far ahead is in the room but off its walkable area is a pocket
+/** (K2) heading (hx, hz) from a bot on room R's floor leads into a pocket: the point POCKET_PROBE_M ahead lies inside the room's rects but outside its
+ *  walkable area (housegen rooms[].walk + 0.2 m: the floor its capsule could stand on), while the bot itself stands on that area. A point that
+ *  leaves the room's rects (a doorway) is no pocket (headingBlocked judges its walls); off the floor (a stair) / no walk data: never. */
+function retreatPocket(R, a, hx, hz) {
+  if (Math.abs(a.pos.y - R.y) > 0.3 || !R.r.walk || !R.r.walk.length) return false;
+  if (!inWalk(R, a.pos.x, a.pos.z, 0.2)) return false;     // (already off it: offFurniture's business, any heading may be the way back)
+  const px = a.pos.x + hx * POCKET_PROBE_M, pz = a.pos.z + hz * POCKET_PROBE_M;
+  let inRoom = false;
+  for (let k = 0; k < R.rects.length; k++) { const q = R.rects[k]; if (px >= q[0] && px <= q[2] && pz >= q[1] && pz <= q[3]) { inRoom = true; break; } }
+  return inRoom && !inWalk(R, px, pz, 0.2);
+}   // radians off straight-away: 0, 35, 70, 100 degrees, both sides
 const HEAL_HOLD_S = 0.45;         // (Wave 7b, S1) the longest a healer holds a corner before it takes the way back out (pickRetreat)
 /** The heal retreat heading: the first FREE heading in a fan of +-100 degrees around straight-away-from-the-threat (never a
  *  heading with a component toward it). The fan opens on the side last used first, so the choice does not dither. Writes the
@@ -3141,9 +3677,12 @@ function pickRetreat(W, b, list, ux, uz) {
   // flip-flopped a healing bot in a small room between two headings 135 degrees apart (measured: 14 % of the indoor heal
   // ticks blocked, a bot shuffling in place for the whole channel), because each step it takes changes which of the fan's
   // headings is free.
+  // (Wave 8 fix round, lane K2) inside a furnished room: no heading into a furniture POCKET (navcheck heal-indoor: a healer backed between a shop
+  // cooler and a gondola 0.68 m apart and ground there 64 + 48 + 45 ticks - Savanna seed 7, (422.6, 414.3)); see retreatPocket. Outdoors: unchanged.
+  const gi = IND.H !== null ? myRoom(W, b) : -1;
   if (W.t - bb.hdT < 0.6 && bb.hdX * ux + bb.hdZ * uz > -0.17) {
     _hd.x = bb.hdX; _hd.z = bb.hdZ;
-    if (!headingBlocked(W, list, a)) { _gh.x = bb.hdX; _gh.z = bb.hdZ; return true; }
+    if (!headingBlocked(W, list, a) && !(gi >= 0 && retreatPocket(IND.R[gi], a, bb.hdX, bb.hdZ))) { _gh.x = bb.hdX; _gh.z = bb.hdZ; return true; }
   }
   const side = bb.healSide;
   for (let k = 0; k < RETREAT_FAN.length; k++) {
@@ -3153,6 +3692,7 @@ function pickRetreat(W, b, list, ux, uz) {
     if (W.t < bb.hdBadUntil && hx * bb.hdBadX + hz * bb.hdBadZ > 0.9) continue;    // the heading a pin just proved wrong
     _hd.x = hx; _hd.z = hz;
     if (headingBlocked(W, list, a)) continue;
+    if (gi >= 0 && retreatPocket(IND.R[gi], a, hx, hz)) continue;
     // a REVERSAL of the retreat inside a second (the way it was going just closed): hold the corner instead of pacing - for at most
     // HEAL_HOLD_S. (Wave 7b, S1) The hold renewed itself (it set hdT, which re-armed the 1 s window on every frame of the hold), so a healer
     // whose only way out lay behind its last heading - under a stair against a wall, the new house stairs of Isla Viva / Deepwood - stood
@@ -3247,7 +3787,10 @@ function coverStepQ(W, b, dt, tp, seen) {
     }
     // reload and heal while the wall is doing the work
     inp.mx = 0; inp.mz = 0; inp.sprint = false;
-    steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 6);
+    // (Wave 8) HOLD THE ROOM: indoors the spot is beside a doorway of the bot's own room and the threat comes through that doorway - face IT (the
+    // threat's last position is behind a wall), so the peek / the man stepping through meets a gun already pointing at the opening
+    if (bb.coverFace) steerYaw(a, Math.atan2(-(bb.coverFX - a.pos.x), -(bb.coverFZ - a.pos.z)), dt, 6);
+    else steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 6);
     return true;
   }
 
@@ -3261,13 +3804,18 @@ function coverStepQ(W, b, dt, tp, seen) {
   if (_coverBudget <= 0) return false;
 
   // Open terrain is the common case and must cost almost nothing: one cheap
-  // collider query rejects it before any raycast.
-  const near = W.map.queryColliders(a.pos.x, a.pos.z, 16);
-  if (!near || !near.length) { bb.coverFailUntil = W.t + COVER_FAIL_MEMO; return false; }
+  // test rejects it before any raycast. (Wave 8) occAny answers what queryColliders(x, z, 16).length did, from a cell table: on a map of furnished
+  // houses the query handed back whole houses (up to ~680 colliders) to read one boolean.
+  if (!occAny(W, a.pos.x, a.pos.z, 16)) { bb.coverFailUntil = W.t + COVER_FAIL_MEMO; return false; }
 
   _coverBudget--;
-  const found = findCover(W, a, tp);
-  if (!found) { bb.coverFailUntil = W.t + COVER_FAIL_MEMO; return false; }
+  // (Wave 8) indoors (a room of a furnished house): the cover is the wall beside one of this room's doorways, or a tall piece of furniture in it - never
+  // the outdoor ring's 7 / 14 m points, which lie in other rooms and outside, through walls
+  const gi = myRoom(W, b);
+  const found = gi >= 0 ? findCoverIndoor(W, b, gi, tp) : findCover(W, a, tp);
+  bb.coverFace = 0;
+  if (!found) { if (gi >= 0) nav.st.coverInFail++; bb.coverFailUntil = W.t + COVER_FAIL_MEMO; return false; }
+  if (gi >= 0) { nav.st.coverIn++; if (_icDoor) { nav.st.coverInDoor++; bb.coverFace = 1; bb.coverFX = _icDoor.x; bb.coverFZ = _icDoor.z; } }
   bb.coverPt = found;
   bb.coverState = "MOVING";
   bb.coverGiveUp = W.t + 3.5;             // never chase a cover point forever
@@ -3294,6 +3842,56 @@ function findCover(W, a, tp) {
       // prefer close cover, and prefer keeping some distance from the target
       const score = -r + Math.min(20, hyp(x - tp.x, z - tp.z)) * 0.35;
       if (score > bestScore) { bestScore = score; best = { x, z }; }
+    }
+  }
+  return best;
+}
+
+/** (Wave 8) Is (x, z) inside room R's walkable rects (housegen rooms[].walk: where its r 0.6 capsule stood), grown by m? */
+function inWalk(R, x, z, m) {
+  const wk = R.r.walk;
+  if (!wk || !wk.length) return true;                      // (no walk data: no opinion)
+  for (let k = 0; k < wk.length; k++) { const q = wk[k]; if (x >= q[0] - m && x <= q[2] + m && z >= q[1] - m && z <= q[3] + m) return true; }
+  return false;
+}
+/** (Wave 8) Cover INSIDE a room (gi): beside each of its doorways, 0.9 m in from the wall and 1.85 m along it from the doorway's centre (the 2.26 m
+ *  opening + a capsule and a hand: the bot stands against the wall, out of the line through the door), and a ring of 2.5 / 4.5 m points in the room
+ *  (a wardrobe, a shelf, a fridge, a kitchen run between it and the threat). A spot must be in THIS room (roomAt), standable on this floor and break the
+ *  line to the threat (losTruncated). Doorways nearer the threat score higher (the one he will come through). Sets _icDoor = the doorway the spot
+ *  holds (null for a furniture spot). */
+let _icDoor = null;
+function findCoverIndoor(W, b, gi, tp) {
+  const a = b.actor, R = IND.R[gi], gy = a.pos.y, rid = R.r.id;
+  let best = null, bestScore = -1e9;
+  _icDoor = null;
+  for (let k = 0; k < R.doors.length; k++) {
+    const d = R.doors[k];
+    // the normal INTO this room: an outer door's normal points out of rooms[0], an interior door's from rooms[0] to rooms[1]
+    const into = d.kind === "interior" && d.rooms[1] === rid ? 1 : -1;
+    const ix = d.nx * into, iz = d.nz * into, tx = -iz, tz = ix;
+    const dd = hyp(d.x - tp.x, d.z - tp.z);
+    for (let s = -1; s <= 1; s += 2) {
+      const x = d.x + ix * 0.9 + tx * s * 1.85, z = d.z + iz * 0.9 + tz * s * 1.85;
+      if (!inWalk(R, x, z, 0) || roomAt(W, x, gy, z) !== gi) continue;      // (in the room's walkable area: never a pocket behind the furniture)
+      const h = standAt(W, x, z, gy);
+      if (h !== h || h - gy > 0.6 || gy - h > 0.6) continue;
+      if (!losTruncated(W, x, h, z, tp)) continue;
+      const score = -dd * 0.6 - hyp(x - a.pos.x, z - a.pos.z) * 0.5;
+      if (score > bestScore) { bestScore = score; best = { x, z }; _icDoor = d; }
+    }
+  }
+  const toT = Math.atan2(tp.x - a.pos.x, tp.z - a.pos.z);
+  for (let ri = 0; ri < 2; ri++) {
+    const r = ri === 0 ? 2.5 : 4.5;
+    for (let i = 0; i < 6; i++) {
+      const ang = toT + Math.PI + (i - 2.5) * 0.62;
+      const x = a.pos.x + Math.sin(ang) * r, z = a.pos.z + Math.cos(ang) * r;
+      if (!inWalk(R, x, z, 0) || roomAt(W, x, gy, z) !== gi) continue;      // (in the room's walkable area: never a pocket behind the furniture)
+      const h = standAt(W, x, z, gy);
+      if (h !== h || h - gy > 0.6 || gy - h > 0.6) continue;
+      if (!losTruncated(W, x, h, z, tp)) continue;
+      const score = -r - 4 + Math.min(20, hyp(x - tp.x, z - tp.z)) * 0.2;    // a doorway (above) is the better spot when there is one
+      if (score > bestScore) { bestScore = score; best = { x, z }; _icDoor = null; }
     }
   }
   return best;
@@ -3382,9 +3980,24 @@ function actEngage(W, b, dt) {
   // target for 6 s instead was tried and measured worse: the 6-s avoid made the bot blind to exactly that man,
   // who then walked up on it - isla_viva seed 1 first-minute deaths 8 -> 15, stuck 0.1 % -> 1.7 % (SIM lane, wave 4).
   const chaseOk = dist <= paceAt(PACE.chaseM, a.tier || 3) || W.t - a.lastDamageT < 4 || W.match.aliveCount() <= 6;
-  if (dist > prefer * 1.5 && chaseOk) { inp.mz = 1; inp.sprint = dist > prefer * 3; }
+  // (Wave 8) INDOORS, THE APPROACH IS A ROUTE. A man seen through a doorway or a window of another room (or from the street into a room, or from a room
+  // out) is not closed on by a straight push: that walks into the wall between (guardMove then slides along it) - through the doors, up the stairs, on
+  // the grid, the way CLOSEIN goes. The route's world heading is kept and re-expressed in the aim yaw below (fireOnTheMove's reprojection). No strafe
+  // while closing in that way (the legs follow the route). Off when there are no houses: the Wave-7b fight, draw for draw.
+  let routeX = 0, routeZ = 0, routed = false;
+  if (dist > prefer * 1.5 && chaseOk && IND.H !== null) {
+    const mi = myRoom(W, b), ti = targetRoom(W, b, tp);
+    if ((mi >= 0 || ti >= 0) && mi !== ti) {
+      MTQ[0] = tp.x; MTQ[1] = tp.z; moveTowardQ(W, b, dt, dist > prefer * 3, tp.y);
+      const B0 = K.moveBasis(inp.yaw, _mb0);
+      routeX = B0.fx * inp.mz + B0.rx * inp.mx; routeZ = B0.fz * inp.mz + B0.rz * inp.mx;
+      routed = true; nav.st.routedFrames++;
+    }
+  }
+  if (routed) { /* the legs follow the route (re-expressed after the aim, below) */ }
+  else if (dist > prefer * 1.5 && chaseOk) { inp.mz = 1; inp.sprint = dist > prefer * 3; }
   else if (dist < prefer * 0.5) inp.mz = -0.7;
-  inp.mx = bb.strafeDir * (dist < 50 ? 1 : a.personality === "flanker" ? 0.8 : 0.4);
+  if (!routed) inp.mx = bb.strafeDir * (dist < 50 ? 1 : a.personality === "flanker" ? 0.8 : 0.4);
   // (Wave 5) the dodge hop is for open air: indoors it is a bot pogo-ing in a house, and under a low ceiling the head meets
   // the slab and a capsule jammed under it is blocked in every direction (the draw is kept either way, so the rng stream does
   // not depend on the roof)
@@ -3435,6 +4048,11 @@ function actEngage(W, b, dt) {
   wantPitch += Math.cos(bb.errPhase * 0.83) * err * 0.6;
 
   SYQ[0] = wantYaw; steerYawQ(a, dt, 10);
+  if (routed) {                                   // (Wave 8) the route's world heading in the new aim yaw's frame
+    const B1 = K.moveBasis(inp.yaw, _mb1);
+    inp.mz = routeX * B1.fx + routeZ * B1.fz;
+    inp.mx = routeX * B1.rx + routeZ * B1.rz;
+  }
   inp.pitch = Math.max(-1.3, Math.min(1.3, inp.pitch + (wantPitch - inp.pitch) * Math.min(1, dt * 9)));
 
   // fire discipline: reaction delay, LOS, range, bursts
@@ -3483,10 +4101,21 @@ function actEngage(W, b, dt) {
   // Search last-known if lost. Guarded on coverState: `seen` goes false the
   // instant LOS breaks, which is exactly what coverStep just achieved — ungated,
   // this walks the bot straight back out of the cover it reached.
-  if (!seen && bb.targetPos && (bb.coverState === "NONE" || !bb.coverState)) {
-    MTQ[0] = bb.targetPos.x; MTQ[1] = bb.targetPos.z; moveTowardQ(W, b, dt, false);
+  // (Wave 8) PUSH THE STAIRS: with houses the search goes to HIS floor (moveToward is floor-aware: a last-known spot a storey up is reached by
+  // the stairs, not by standing under it); without houses the floor-blind search of Wave 7b.
+  if (!routed && !seen && bb.targetPos && (bb.coverState === "NONE" || !bb.coverState)) {
+    if (IND.H !== null && Math.abs(bb.targetPos.y - a.pos.y) >= ARRIVE_DY) nav.st.stairSearch++;
+    MTQ[0] = bb.targetPos.x; MTQ[1] = bb.targetPos.z; moveTowardQ(W, b, dt, false, IND.H !== null ? bb.targetPos.y : undefined);
   }
   // (Wave 5) wall-aware fight steering: the strafe / approach / back-off above are raw input; this is the one place they
   // meet the walls. After the yaw has been steered, so the heading it judges is the one the mover will use this tick.
-  guardMove(W, b, true);
+  guardMove(W, b, !routed);
+}
+
+/** (Wave 8) The room the fight's target stands in (from the position the bot knows: tp), refreshed at most every IND_ROOM_S. -1 outdoors. */
+function targetRoom(W, b, tp) {
+  const bb = b.bb;
+  if (W.t - bb.tRoomT < IND_ROOM_S && W.t >= bb.tRoomT) return bb.tRoomI;
+  RAQ[0] = tp.x; RAQ[1] = tp.y; RAQ[2] = tp.z; bb.tRoomI = roomAtQ(W); bb.tRoomT = W.t;
+  return bb.tRoomI;
 }

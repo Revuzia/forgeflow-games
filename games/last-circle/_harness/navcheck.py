@@ -25,7 +25,8 @@ could-not-judge). Per map, two matches:
 Rows (thresholds from the plan, section 4; baselines re-measured on 7f6a9fb2 in lane 5D's REPORT.md):
   ground-rooms        ground-floor rooms: walk in >= 96 % and walk out >= 96 %   (plan 98 %, Wave 4: 53/53 in, 52/53 out on 53 rooms;
                       on the 256 rooms this gate walks the Wave-4 build is 254/256 in, 249/256 out = 97.3 %: the row holds that baseline)
-  upper-rooms         upper floors (>= 40 rooms across the 3 maps): walk in >= 85 % and out >= 85 %  (Wave 4: 6/19 in, 9/19 out)
+  upper-rooms         upper floors (>= 40 rooms across the 3 maps): walk in >= 98 % and out >= 98 %  (plan section 4: >= 85 % after Wave 5, >= 98 % after
+                      Wave 8 - raised by lane I4, Wave 8 stage B; Wave 4: 6/19 in, 9/19 out)
   top-floor-paths     the planner finds a path from open ground to the 4th storey of a tower >= 95 % (NAV_L 3 runs out of layers)
   long-trips          street -> street trips of 120-180 m >= 95 %                                    (Wave 4: 30/30)
   engage-indoor       ENGAGE ticks indoors: blocked (runs >= 6 ticks) <= 1.5 %                                           (raw strafe into walls fails it)
@@ -47,7 +48,16 @@ conditional on lane 5B shipping a marched wallAhead probe; the research version 
 cannot judge a changed bots.js).
 
 Negative controls (--plant; the served files are patched IN MEMORY by a page route, no file is edited; needs --disk or --rev):
-  nav-l3      bots.js served with `const NAV_L = 3;`         -> top-floor-paths / upper-rooms must fail
+  nav-l3      bots.js served with `const NAV_L = 3;`         -> top-floor-paths / upper-rooms must fail (Wave-7b towers; on the Wave-8
+              tree it no longer bites: housegen houses have <= 3 walkable floors, and with the corrected rooms survey (no furniture tops)
+              3 layers reach upper 239 / 240 and top 329 / 339 - lane K3, 2026-10-20)
+  coarse-indoor (Wave 8, lane K3) bots.js served with its town grid (NavGrid.bakeTown) baked at 3 m indoor cells: no door fits a
+              cell, so every room the grid plans is lost -> upper-rooms / top-floor-paths must fail. This is THE rooms control on the
+              Wave-8 tree: the bots plan houses on the town grid, and the NAV_L plants no longer bite (nav-l3: upper 239 / 240,
+              top 329 / 339 PASS; nav-l2: top 321 / 339 = 94.7 %, a 0.3-point margin). With the pre-K3 rooms survey nav-l3 "failed"
+              only on furniture-top pseudo-rooms that fail with or without the plant (215 / 240, top 953 / 1265)
+  nav-l2      (Wave 8, lane K3) bots.js served with `const NAV_L = 2;` (terrain + ONE slab per cell: every second-storey floor of a
+              2-storey house over a ground floor loses its layer) -> upper-rooms / top-floor-paths must fail
   raw-strafe  every ENGAGE bot's input overwritten, after the brains and before the mover (a hook added to ffg_royale3d.js's simTick),
               with the Wave-4 raw fight input: an unconditional strafe plus a straight advance / retreat along the line to the
               target, no look at the walls                   -> engage-indoor must fail
@@ -82,7 +92,7 @@ SEEDS = {"isla_viva": (7, [7, 1]), "ashgrid": (5, [11, 5]), "deepwood": (13, [13
 
 GROUND_MIN = 0.96
 GROUND_PLAN = 0.98
-UPPER_MIN = 0.85
+UPPER_MIN = 0.98              # Wave 8 (plan section 4 'upper floors >= 98 % after Wave 8'; lane I4, stage B). Was 0.85 (the Wave-5 bar) since lane 5D
 UPPER_ROOMS_MIN = 40
 TOP_PATH_MIN = 0.95
 TOP_PATH_N_MIN = 10
@@ -102,10 +112,10 @@ MIN_INDOOR_INTENT = 3000
 POCKET_MIN = 0.98             # heal-pockets: placements whose healer ends >= 2 m away within 2 s / counted placements
 POCKET_MIN_TRIALS = 150
 
-PLANT_ROWS = {"nav-l3": {"top-floor-paths", "upper-rooms"}, "raw-strafe": {"engage-indoor"}, "heal-yaw": {"heal-direction"},
+PLANT_ROWS = {"nav-l3": {"top-floor-paths", "upper-rooms"}, "nav-l2": {"top-floor-paths", "upper-rooms"}, "coarse-indoor": {"upper-rooms", "top-floor-paths"}, "raw-strafe": {"engage-indoor"}, "heal-yaw": {"heal-direction"},
               "pocket-raw": {"heal-pockets"},
               "nav-l6": {"top-floor-paths"}}   # nav-l6 = a POSITIVE control for calibration (Wave-4 bots.js with 6 layers): its row must PASS
-PLANT_ONLY = {"nav-l3": "rooms", "raw-strafe": "ticks", "heal-yaw": "ticks", "pocket-raw": "pockets", "nav-l6": "rooms"}
+PLANT_ONLY = {"nav-l3": "rooms", "nav-l2": "rooms", "coarse-indoor": "rooms", "raw-strafe": "ticks", "heal-yaw": "ticks", "pocket-raw": "pockets", "nav-l6": "rooms"}
 
 # the hook the raw-strafe / heal-yaw plants ride on: simTick calls it between the brains and the mover
 HOOK_ANCHOR = "botsMod.update(W, h);"
@@ -182,7 +192,16 @@ def install_plant(s, args, plant):
         s.disk.overrides.append((lambda url, rel=rel: urllib.parse.urlparse(url).path.endswith("/" + rel),
                                  lambda route, body=body: route.fulfill(status=200, body=body, headers={"Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})))
 
-    if plant in ("nav-l3", "nav-l6"):
+    if plant == "coarse-indoor":
+        # (Wave 8, lane K3) the bots' TOWN grid baked with 3 m indoor cells (no 2.26 m door fits a cell): the grid the Wave-8 bots plan houses on loses every room
+        rel = "runtime/3d/royale/bots.js"
+        src = orig(rel)
+        anchor = "maxMs: 0, lazy: true, noFloor }"
+        if src.count(anchor) != 1:
+            raise C.EnvFailure("plant coarse-indoor: anchor %r found %d times in %s" % (anchor, src.count(anchor), rel))
+        serve(rel, src.replace(anchor, "maxMs: 0, lazy: true, noFloor, cellIndoor: 3.0 }"))
+        return "bots.js served with the town grid baked at cellIndoor 3.0 m"
+    if plant in ("nav-l3", "nav-l2", "nav-l6"):
         rel = "runtime/3d/royale/bots.js"
         src = orig(rel)
         layers = plant[-1]
@@ -318,7 +337,7 @@ def judge(v, per_map, args, plant_rows):
                 for fl in ((x.get("walk") or {}).get("fails") or [])[:3]:
                     fails.append("%s s%s %s" % (m, x.get("seed"), json.dumps({k: fl["room"].get(k) for k in ("agl", "poi", "planIn", "planExit")}) + " in:%s out:%s" % (fl["in"]["ok"], fl["out"]["ok"])))
             chk("upper-rooms", oku, "upper floors (%d rooms): in %d/%d (%.1f%%), out %d/%d (%.1f%%)%s" % (
-                uin[0], uin[1], uin[0], 100.0 * uin[1] / uin[0], uout[1], uout[0], 100.0 * uout[1] / max(1, uout[0]), (" ; e.g. " + " | ".join(fails[:4])) if not oku else ""), ">= 85 % each way, >= 40 rooms")
+                uin[0], uin[1], uin[0], 100.0 * uin[1] / uin[0], uout[1], uout[0], 100.0 * uout[1] / max(1, uout[0]), (" ; e.g. " + " | ".join(fails[:4])) if not oku else ""), ">= %.0f %% each way, >= %d rooms" % (UPPER_MIN * 100, UPPER_ROOMS_MIN))
         else:
             cnj("upper-rooms", "only %d upper rooms were walked across %d maps (need >= %d): rerun with --walk-matches 2 or a larger --max-upper" % (uin[0], len(maps), UPPER_ROOMS_MIN))
         v.info("top floors walked", "in %d/%d, out %d/%d" % (tin[1], tin[0], tout[1], tout[0]))

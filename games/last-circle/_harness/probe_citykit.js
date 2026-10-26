@@ -300,7 +300,7 @@
         out = Math.max(out, box.min.x - c.minX, c.maxX - box.max.x, box.min.z - c.minZ, c.maxZ - box.max.z, box.min.y - c.minY, c.maxY - box.max.y);
       }
       if (out > worst) worst = out;
-      if (out > 0.3 + 1e-6 || box.isEmpty() || !rn) { bad++; if (rows.length < 6) rows.push({ type: e.type, q: e.rot, out: r3(out), n: rn, empty: box.isEmpty() }); }
+      if (out > 0.3 + 1e-6 || box.isEmpty() || (!rn && MAN.types[e.type].collider_mode !== "none")) { bad++; if (rows.length < 6) rows.push({ type: e.type, q: e.rot, out: r3(out), n: rn, empty: box.isEmpty() }); }
     });
     const out = { entries: list.length, meshes: meshes.length, worst: r3(worst), bad, rows };
     kit.dispose();

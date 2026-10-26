@@ -500,9 +500,28 @@
   }
   const roofedAt = (x, z, y) => { for (const o of qc(x, z, 0.4)) { if (o.dead || o.kind === "ramp") continue; if (x < o.minX || x > o.maxX || z < o.minZ || z > o.maxZ) continue; if (o.minY > y + 2.0 && o.minY < y + 12) return true; } return false; };
   async function doors(opt) {
-    const m = M(), all = doorSurvey();
+    const m = M(), HS = m.houses || [];
+    // (Wave 8, lane K3) a furnished housegen house is judged on its OWN street-door records (house.doors with rooms[1] == null on the ground storey: x, z, y, out),
+    // not on the lintel survey: inside a furnished house the survey reads interior doorways (whose 3-m side point lands outside the house: it walks into the exterior
+    // wall) and porch beams / window headers as doors (stage-B verify: 72.6-81.1 % "got in" where the same walk on the real door records got in 98.6-99.95 %).
+    // Lintel doors inside a housegen footprint are dropped; every other building (kit shells, towers, the live build's houses) keeps the old survey unchanged.
+    const inHouse = (x, z) => HS.some((H) => H.aabb && H.aabb.min && x >= H.aabb.min[0] - 0.5 && x <= H.aabb.max[0] + 0.5 && z >= H.aabb.min[2] - 0.5 && z <= H.aabb.max[2] + 0.5);
+    const surveyed = doorSurvey(), all = HS.length ? surveyed.filter((dr) => !inHouse(dr.cx, dr.cz)) : surveyed;
     // ground-level doors only (the floor at the door within 0.6 m of the terrain), outside = the unroofed side
     const usable = [];
+    let hgDoors = 0, hgShifted = 0;
+    for (const H of HS) for (const d of H.doors || []) {
+      if (!d || d.rooms == null || d.rooms[1] != null || d.floor !== 0) continue;
+      let nx = d.nx, nz = d.nz;
+      if (d.out) { const ox = d.out[0] - d.x, oz = d.out[1] - d.z, l = Math.hypot(ox, oz); if (l > 1e-6) { nx = ox / l; nz = oz / l; } }
+      if (!(Math.hypot(nx, nz) > 0.5)) continue;
+      let cx = d.x, cz = d.z;
+      // --plant door-shift: every street door record moved 2.0 m along its wall (the walk now aims at solid wall): the row must FAIL
+      if (opt && opt.plant === "door-shift") { cx += -nz * 2.0; cz += nx * 2.0; hgShifted++; }
+      if (m.heightAt(cx + nx * 3, cz + nz * 3) < m.waterY + 0.3) continue;
+      hgDoors++;
+      usable.push({ c: null, cx, cz, alongX: Math.abs(nz) > Math.abs(nx), floor: d.y, head: d.height || 2.4, nx, nz, src: "housegen", id: d.id });
+    }
     for (const dr of all) {
       if (dr.floor - m.heightAt(dr.cx, dr.cz) > 0.6) continue;
       const n0 = dr.alongX ? [0, 1] : [1, 0];
@@ -513,27 +532,46 @@
       const nx = n0[0] * out, nz = n0[1] * out;
       if (Math.abs(m.heightAt(dr.cx + nx * 3, dr.cz + nz * 3) - dr.floor) > 0.6) continue;
       if (m.heightAt(dr.cx + nx * 3, dr.cz + nz * 3) < m.waterY + 0.5) continue;
-      usable.push({ ...dr, nx, nz });
+      usable.push({ ...dr, nx, nz, src: "lintel" });
     }
     usable.sort((a, b) => a.cx - b.cx || a.cz - b.cz);
     const want = (opt && opt.max) || 14, pick = [];
     for (let k = 0; k < Math.min(want, usable.length); k++) pick.push(usable[Math.floor((usable.length - 1) * (want === 1 ? 0 : k / (Math.min(want, usable.length) - 1 || 1)))]);
     const res = [];
+    const groundAt = (x, z, y0) => { let y = m.heightAt(x, z); for (const o of qc(x, z, 0.3)) if (!o.dead && o.kind !== "ramp" && x >= o.minX && x <= o.maxX && z >= o.minZ && z <= o.maxZ && o.maxY < y0 + 0.6 && o.maxY > y) y = o.maxY; return y; };
+    let noApproach = 0, pulledIn = 0;
     for (const L of [...new Set(pick)]) {
+      let ran = 0;
       for (const deg of [0, 20, 35, 50]) {
         const a = deg * Math.PI / 180, ox = L.nx * Math.cos(a) - L.nz * Math.sin(a), oz = L.nx * Math.sin(a) + L.nz * Math.cos(a);
-        const sx = L.cx + ox * 3.5, sz = L.cz + oz * 3.5;
-        if (!freeAt(sx, sz, m.heightAt(sx, sz), R)) continue;
-        place(sx, sz);
+        let dist = 3.5, sx = L.cx + ox * dist, sz = L.cz + oz * dist;
+        if (L.src === "housegen") {
+          // a housegen street door may open onto a narrow alley (Savanna downtown back doors: another building < 3.5 m away). The run-up starts where the
+          // approach line is CLEAR at waist height (the old 3.5 m start stood behind the other building and walked into its wall): pulled in up to 1.5 m from
+          // the door; a door with no clear 1.5 m approach at any angle is a FAILED walk (below), never skipped
+          const yy = L.floor + 1.0, mxp = (L.cx + sx) / 2, mzp = (L.cz + sz) / 2;
+          const hit = S.segmentColliders(L.cx + ox * 0.3, yy, L.cz + oz * 0.3, sx, yy, sz, qc(mxp, mzp, 2.6));
+          if (hit) { const hd = 0.3 + hit.t * (dist - 0.3); dist = hd - R - 0.15; if (dist < 1.5) continue; sx = L.cx + ox * dist; sz = L.cz + oz * dist; pulledIn++; }
+          const gy = groundAt(sx, sz, L.floor);
+          if (!freeAt(sx, sz, gy, R) || m.heightAt(sx, sz) < m.waterY + 0.3) continue;
+          place(sx, sz, gy + 0.02);
+        } else {
+          if (!freeAt(sx, sz, m.heightAt(sx, sz), R)) continue;
+          place(sx, sz);
+        }
+        ran++;
         const dx = L.cx - L.nx * 2 - sx, dz = L.cz - L.nz * 2 - sz, dl = Math.hypot(dx, dz);
         const tr = walk(dx / dl, dz / dl, 90, false);
         let stuck = 0; for (let k = 1; k < tr.length; k++) if (Math.hypot(tr[k][0] - tr[k - 1][0], tr[k][2] - tr[k - 1][2]) < 0.02) stuck++;
         const last = tr[tr.length - 1];
         const inside = -((last[0] - L.cx) * L.nx + (last[2] - L.cz) * L.nz);
-        res.push({ x: r3(L.cx), z: r3(L.cz), deg, inside: r3(inside), gotIn: inside > 0.8, stuckTicks: stuck, head: r3(L.head) });
+        res.push({ x: r3(L.cx), z: r3(L.cz), deg, inside: r3(inside), gotIn: inside > 0.8, stuckTicks: stuck, head: r3(L.head), src: L.src, id: L.id, start: r3(dist) });
       }
+      if (!ran && L.src === "housegen") { noApproach++; res.push({ x: r3(L.cx), z: r3(L.cz), deg: null, inside: null, gotIn: false, stuckTicks: 0, head: r3(L.head), src: L.src, id: L.id, why: "no clear 1.5 m approach at any angle" }); }
     }
-    return { surveyed: all.length, usable: usable.length, doorsTested: new Set(res.map((r) => r.x + "," + r.z)).size, runs: res.length, gotIn: res.filter((r) => r.gotIn).length,
+    return { surveyed: surveyed.length, lintelUsed: all.length, housegenDoors: hgDoors, housegenShifted: hgShifted, noApproach, pulledIn, usable: usable.length,
+      bySrc: { housegen: res.filter((r) => r.src === "housegen").length, lintel: res.filter((r) => r.src === "lintel").length },
+      doorsTested: new Set(res.map((r) => r.x + "," + r.z)).size, runs: res.length, gotIn: res.filter((r) => r.gotIn).length,
       stuckP50: pct(res.map((r) => r.stuckTicks), 0.5), stuckMax: pct(res.map((r) => r.stuckTicks), 1), failed: res.filter((r) => !r.gotIn).slice(0, 10) };
   }
 
@@ -587,8 +625,13 @@
   async function ramps(opt) {
     const m = M();
     const cols = m.colliders;
-    const rs = cols.map((c, i) => ({ c, i })).filter((o) => o.c.kind === "ramp" && !o.c.dead);
-    const out = { n: rs.length };
+    // (Wave 8, lane K3) a furnished house's pitched-roof PLANKS (house.roofRamps: collider indices, maps.js) are ROOFS, not stairs - their low edge is the eave, ~3.6 m over the
+    // ground by design, and nobody climbs them from the street. They are left out of the foot-lip and climb/descend samples (counted as information); the hide-cell scan keeps
+    // every ramp (stricter). House STAIRS stay judged like every other ramp. A map without houses: nothing changes.
+    const roofIdx = new Set(); for (const H of m.houses || []) for (const i of H.roofRamps || []) roofIdx.add(i);
+    const all = cols.map((c, i) => ({ c, i })).filter((o) => o.c.kind === "ramp" && !o.c.dead);
+    const rs = all.filter((o) => !roofIdx.has(o.i));
+    const out = { n: rs.length, roofPlanks: all.length - rs.length };
     // ---- foot lip: how far the low edge sits above whatever it starts from (terrain or a floor slab within 0.6 m of it)
     const lips = [];
     for (const { c } of rs) {
@@ -639,7 +682,7 @@
     const CELL = 0.5;
     let hideCells = 0, anyCells = 0, standCells = 0, cells = 0; const hideEx = [];
     const dirs8 = []; for (let k = 0; k < 8; k++) dirs8.push([Math.cos(k * Math.PI / 4 + 0.1), Math.sin(k * Math.PI / 4 + 0.1)]);
-    for (const { c } of rs) {
+    for (const { c } of all) {
       const h = c.maxY - c.minY; if (h < 2.1) continue;
       const along = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
       for (let x = c.minX + CELL / 2; x < c.maxX; x += CELL) for (let z = c.minZ + CELL / 2; z < c.maxZ; z += CELL) {
@@ -664,7 +707,7 @@
         if (stopped === dirs8.length) { hideCells++; if (hideEx.length < 4) hideEx.push([r3(x), r3(z), r3(floor)]); }
       }
     }
-    out.hide = { tallRamps: rs.filter(({ c }) => c.maxY - c.minY >= 2.1).length, cellsUnderSlab: cells, standable: standCells, shielded: hideCells, hideM2: r3(hideCells * CELL * CELL), shieldedFromSomeSide: anyCells, anySideM2: r3(anyCells * CELL * CELL), example: hideEx };
+    out.hide = { tallRamps: all.filter(({ c }) => c.maxY - c.minY >= 2.1).length, cellsUnderSlab: cells, standable: standCells, shielded: hideCells, hideM2: r3(hideCells * CELL * CELL), shieldedFromSomeSide: anyCells, anySideM2: r3(anyCells * CELL * CELL), example: hideEx };
     return out;
   }
 

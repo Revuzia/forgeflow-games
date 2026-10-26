@@ -107,6 +107,7 @@ LG_JS = r"""() => {
   // exactly as displayed. rect = [x, y, w, h] in canvas px, top-left origin.
   LG.frame = (rect, wantHdr, wantSrgb) => {
     const out = {}; const w = cvs.width, h = cvs.height; const [x, y, rw, rh] = rect;
+    if (!(rw > 0 && rh > 0) || x >= w || y >= h || x + rw <= 0 || y + rh <= 0) throw new Error('LG.frame: rect ' + JSON.stringify(rect) + ' is off the ' + w + 'x' + h + ' canvas (NOT FRAMED)');
     if (wantHdr) {
       if (!LG.rt || LG.rt.width !== w || LG.rt.height !== h) { if (LG.rt) LG.rt.dispose();
         LG.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.FloatType, format: THREE.RGBAFormat, depthBuffer: true }); }
@@ -238,6 +239,12 @@ def save_png(arr, path):
     Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).save(path)
 
 
+class NotFramed(Exception):
+    """(Wave 8, lane K3) a sample rect that is off the canvas (house chests / items under ceilings framed from outside: the projected point lies below the
+    screen). The old crop went negative (rect[3] = H - rect[1] < 0) and the page threw 'Invalid typed array length', which killed every later section; now
+    the sample is skipped (a loop row) or the row is could-not-judge - never a pass."""
+
+
 class Rig:
     """Thin wrapper over a Session with the in-page helper installed."""
 
@@ -271,7 +278,14 @@ class Rig:
         y0 = max(0, int(min(ys)) - pad); y1 = min(H, int(max(ys)) + pad)
         return [x0, y0, max(8, x1 - x0), max(8, y1 - y0)]
 
+    def framed(self, rect):
+        """True when the rect overlaps the canvas by at least 8 x 8 px (a crop that went negative or lies past an edge is not framed)."""
+        W, H = self.size
+        return rect[2] >= 8 and rect[3] >= 8 and rect[0] <= W - 8 and rect[1] <= H - 8 and rect[0] + rect[2] >= 8 and rect[1] + rect[3] >= 8
+
     def grab(self, rect, hdr=True, srgb=True):
+        if not self.framed(rect):
+            raise NotFramed("rect %s is off the %dx%d canvas" % (rect, self.size[0], self.size[1]))
         o = self.js("([r, a, b]) => window.__LG__.frame(r, a, b)", [rect, hdr, srgb])
         w, h = rect[2], rect[3]
         res = {}
@@ -573,105 +587,108 @@ def main():
                 if not spot:
                     v.cnj("pickup rows", "no free patch of ground for the pickup probe")
                 else:
-                    sx, sz = spot["x"], spot["z"]
-                    # the landing walkover may have filled the 3-gun cap, and a plain pickup then (correctly) refuses a gun: make room
-                    s.js("() => { const p = window.__LC__.W.player; const sl = p.inventory.slots; let kept = 0; for (let i = 0; i < sl.length; i++) { if (sl[i] && sl[i].kind === 'weapon') { if (++kept > 1 && i !== p.inventory.active) sl[i] = null; } } }")
-                    s.js("([x, z]) => { const L = window.__LG__; L.spawn('t_pick', { kind: 'weapon', id: 'ar', rarity: 3, mag: 30 }, x, z); L.spawn('t_net', { kind: 'weapon', id: 'smg', rarity: 2, mag: 30 }, x + 6, z); }", [sx, sz])
-                    rig.place(sx, sz, dist=3.0, pitch=-0.25, yaw_off=0.3)
-                    pre = s.js("() => ({ p: window.__LG__.info('t_pick'), n: window.__LG__.info('t_net'), fx: (() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live]; })() })")
-                    rect = rig.rect_around(sx, s.js("([x, z]) => window.__LC__.W.map.heightAt(x, z)", [sx, sz]) + 3, sz, 2.5, pad=40)
-                    rect[1] = max(0, rect[1] - 160); rect[3] = min(rig.size[1] - rect[1], rect[3] + 200)
-                    alive_pre = bool(pre["p"] and pre["p"]["ring"] and pre["p"]["ring"]["alive"] and pre["p"]["beam"] and pre["p"]["beam"]["alive"])
-                    slots_p = (pre["p"]["ring"]["slot"], pre["p"]["beam"]["slot"]) if alive_pre else None
-                    slots_n = (pre["n"]["ring"]["slot"], pre["n"]["beam"]["slot"]) if pre["n"] and pre["n"]["ring"] and pre["n"]["beam"] else None
-                    # BEFORE: the picked item's OWN marker pixels = (all markers) vs (all but its ring + beam slots); pixels any OTHER marker
-                    # touches (all-but-target vs none, low threshold, dilated 1 px) are excluded, so a far beam crossing the region (chest
-                    # beams are drawn to 1.8 km) can neither pass nor fail this row. Frames of one A/B are rendered without stepping time.
-                    rig.js("() => window.__LG__.vis(true, true, true)")
-                    f_all = rig.grab(rect, False, True)["srgb"][..., :3]
-                    rig.js("(p) => window.__LG__.hide(p)", [[0, slots_p[0]], [1, slots_p[1]]] if slots_p else [])
-                    f_not = rig.grab(rect, False, True)["srgb"][..., :3]
-                    rig.js("() => window.__LG__.unhide()")
-                    rig.js("() => window.__LG__.vis(false, false, false)")
-                    f_none = rig.grab(rect, False, True)["srgb"][..., :3]
-                    rig.js("() => window.__LG__.vis(true, true, true)")
-                    tmask = np.abs(f_all - f_not).max(axis=-1) > 6
-                    omask = np.abs(f_not - f_none).max(axis=-1) > 3
-                    om = omask.copy()
-                    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-                        om |= np.roll(np.roll(omask, dy, axis=0), dx, axis=1)
-                    mask = tmask & ~om
-                    before_px = int(mask.sum())
-                    ok_pick = s.js("() => window.__LC__.W.pickupItem(window.__LC__.W.player, 't_pick')")
-                    s.js("() => window.__LC__.W.netTakeItem('t_net')")
-                    s.step_frames(3, 1 / 60, True)
-                    post = s.js("""([sp, sn]) => { const W = window.__LC__.W, D = W.debugLootFx(), m = D.meshes;
-                        const zero = (mesh, slot) => { const a = mesh.instanceMatrix.array; let t = 0; for (let i = 0; i < 16; i++) t += Math.abs(a[slot * 16 + i]); return t === 0; };
-                        const free = (k, slot) => D.free ? D.free[k].indexOf(slot) >= 0 : null;
-                        // a freed slot may be taken again at once by loot a BOT spawns during the 3 stepped frames (a bot opening a chest bursts items that reuse it): then it is
-                        // neither zero nor free, but it is owned by someone else - the item that was picked no longer owns it. That is reuse, not a leak (the accounting row below
-                        // proves every live slot has exactly one live owner).
-                        const ownerOf = (k, slot) => { for (const o of W.debugItems().concat(W.debugChests())) { if (o[k] === slot) return o.id; } return null; };
-                        return { ringOwner: ownerOf('ring', sp[0]), beamOwner: ownerOf('beam', sp[1]), netRingOwner: sn ? ownerOf('ring', sn[0]) : null, netBeamOwner: sn ? ownerOf('beam', sn[1]) : null,
-                                 ringZero: zero(m[0], sp[0]), beamZero: zero(m[1], sp[1]), netRingZero: sn ? zero(m[0], sn[0]) : null, netBeamZero: sn ? zero(m[1], sn[1]) : null,
-                                 ringFree: free('rings', sp[0]), beamFree: free('beams', sp[1]), netRingFree: sn ? free('rings', sn[0]) : null, netBeamFree: sn ? free('beams', sn[1]) : null,
-                                 itemGone: !W.debugItems().some((q) => q.id === 't_pick' || q.id === 't_net'),
-                                 nearby: W.nearbyLoot(W.player.pos, 12).filter((q) => q.id === 't_pick' || q.id === 't_net').length }; }""", [slots_p, slots_n]) if slots_p else None
-                    p_all = rig.grab(rect, False, True)["srgb"][..., :3]
-                    rig.js("() => window.__LG__.vis(false, false, false)")
-                    p_none = rig.grab(rect, False, True)["srgb"][..., :3]
-                    rig.js("() => window.__LG__.vis(true, true, true)")
-                    after_px = int(((np.abs(p_all - p_none).max(axis=-1) > 6) & mask).sum())
-                    # slot ACCOUNTING instead of a global live-count delta (49 bots keep looting during the stepped frames): every live slot
-                    # of every pool is owned by exactly one live item / chest, and nothing owns a freed slot
-                    acct = s.js("""() => { const W = window.__LC__.W, d = W.debugLootFx(); const own = { beams: [], rings: [], glows: [] };
-                        for (const o of W.debugItems().concat(W.debugChests())) { if (o.beam >= 0) own.beams.push(o.beam); if (o.ring >= 0) own.rings.push(o.ring); if (o.glow >= 0) own.glows.push(o.glow); }
-                        const out = {};
-                        for (const k of ['beams', 'rings', 'glows']) { const set = new Set(own[k]); const fr = d.free ? new Set(d.free[k]) : new Set();
-                          out[k] = { owned: own[k].length, distinct: set.size, live: d[k].live, ownedButFree: own[k].filter((x) => fr.has(x)).length }; }
-                        return out; }""")
-                    acct_ok = all(a["owned"] == a["live"] == a["distinct"] and a["ownedButFree"] == 0 for a in acct.values())
-                    # a picked item's slot is PARKED when it is zero and on the free list, or - reused at once by loot a bot spawned in the stepped frames - owned by anything but the
-                    # picked item itself (with the accounting row, every live slot has exactly one live owner: a leaked slot has none)
-                    def parked(zero_k, free_k, owner_k):
-                        if post is None:
-                            return False
-                        own = post.get(owner_k)
-                        if own in ("t_pick", "t_net"):
-                            return False
-                        if own is not None:
-                            return True
-                        return bool(post.get(zero_k)) and post.get(free_k) is not False
-                    v.check("pickup: picking an item and a net-take mirror each park their ring + beam (zero matrix, back on the free list) and the pools stay "
-                            "consistent (every live slot owned by exactly one live item / chest)",
-                            bool(ok_pick) and alive_pre and post is not None and parked("ringZero", "ringFree", "ringOwner") and parked("beamZero", "beamFree", "beamOwner")
-                            and parked("netRingZero", "netRingFree", "netRingOwner") and parked("netBeamZero", "netBeamFree", "netBeamOwner")
-                            and post["itemGone"] and post["nearby"] == 0 and acct_ok,
-                            {"pickupReturned": ok_pick, "aliveBefore": alive_pre, "liveBefore": pre["fx"], "post": post, "accounting": acct})
-                    if before_px < 30:
-                        v.cnj("pickup: the item's own marker pixels are gone once it is picked", "only %d own-marker pixels before the pickup (framing)" % before_px)
-                    else:
-                        v.check("pickup: the item's own marker pixels are gone once it is picked (all markers vs none, inside its own pre-pickup marker mask)",
-                                after_px == 0, {"ownMarkerPixelsBefore": before_px, "ofThoseStillMarkerAfter": after_px}, expect="after == 0, before >= 30")
-                    # chest open parks its three slots
-                    ch = s.js("() => { const W = window.__LC__.W; const c = W.debugChests().find((q) => !q.opened && q.ring >= 0 && q.beam >= 0 && q.glow >= 0); return c ? { id: c.id, ring: c.ring, beam: c.beam, glow: c.glow } : null; }")
-                    if not ch:
-                        v.cnj("pickup: opening a chest parks its ring + beam + glow", "no unopened chest with all three markers")
-                    else:
-                        before = s.js("() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live, d.glows.live]; }")
-                        # the opened chest's slots go back to the free list and the loot it drops may reuse them at once (a gun's beam, an item's
-                        # ring), so ownership - not a zero matrix - is what proves the chest let go: the chest record holds no slot, its glow
-                        # (drops get none) is gone from the live count, and the chest is no longer a pickup target
-                        s.js("(id) => window.__LC__.W.openChest(window.__LC__.W.player, id)", ch["id"])
-                        s.step_frames(2, 1 / 60, True)
-                        after = s.js("""(id) => { const W = window.__LC__.W, d = W.debugLootFx(), c = W.debugChests().find((q) => q.id === id);
-                            const own = []; for (const o of W.debugItems().concat(W.debugChests())) { if (o.glow >= 0) own.push(o.glow); }
-                            return { live: [d.beams.live, d.rings.live, d.glows.live], glowOwned: own.length, glowDistinct: new Set(own).size, rec: { opened: c.opened, ring: c.ring, beam: c.beam, glow: c.glow },
-                                     targetable: W.nearbyLoot({ x: c.pos.x, y: c.pos.y, z: c.pos.z }, 3).some((q) => q.type === 'chest' && q.id === id) }; }""", ch["id"])
-                        v.check("pickup: opening a chest parks its ring + beam + glow slots (the record lets go of all three, the glow count drops by at least 1 - a bot may open another chest in the same frames - and every live glow has exactly one owner)",
-                                after["rec"]["opened"] and after["rec"]["ring"] == -1 and after["rec"]["beam"] == -1 and after["rec"]["glow"] == -1
-                                and after["live"][2] <= before[2] - 1 and after["glowOwned"] == after["live"][2] == after["glowDistinct"] and not after["targetable"],
-                                {"before": before, "after": after, "note": "rings / beams live may rise: the loot the chest drops takes slots of its own"})
+                    try:
+                        sx, sz = spot["x"], spot["z"]
+                        # the landing walkover may have filled the 3-gun cap, and a plain pickup then (correctly) refuses a gun: make room
+                        s.js("() => { const p = window.__LC__.W.player; const sl = p.inventory.slots; let kept = 0; for (let i = 0; i < sl.length; i++) { if (sl[i] && sl[i].kind === 'weapon') { if (++kept > 1 && i !== p.inventory.active) sl[i] = null; } } }")
+                        s.js("([x, z]) => { const L = window.__LG__; L.spawn('t_pick', { kind: 'weapon', id: 'ar', rarity: 3, mag: 30 }, x, z); L.spawn('t_net', { kind: 'weapon', id: 'smg', rarity: 2, mag: 30 }, x + 6, z); }", [sx, sz])
+                        rig.place(sx, sz, dist=3.0, pitch=-0.25, yaw_off=0.3)
+                        pre = s.js("() => ({ p: window.__LG__.info('t_pick'), n: window.__LG__.info('t_net'), fx: (() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live]; })() })")
+                        rect = rig.rect_around(sx, s.js("([x, z]) => window.__LC__.W.map.heightAt(x, z)", [sx, sz]) + 3, sz, 2.5, pad=40)
+                        rect[1] = max(0, rect[1] - 160); rect[3] = min(rig.size[1] - rect[1], rect[3] + 200)
+                        alive_pre = bool(pre["p"] and pre["p"]["ring"] and pre["p"]["ring"]["alive"] and pre["p"]["beam"] and pre["p"]["beam"]["alive"])
+                        slots_p = (pre["p"]["ring"]["slot"], pre["p"]["beam"]["slot"]) if alive_pre else None
+                        slots_n = (pre["n"]["ring"]["slot"], pre["n"]["beam"]["slot"]) if pre["n"] and pre["n"]["ring"] and pre["n"]["beam"] else None
+                        # BEFORE: the picked item's OWN marker pixels = (all markers) vs (all but its ring + beam slots); pixels any OTHER marker
+                        # touches (all-but-target vs none, low threshold, dilated 1 px) are excluded, so a far beam crossing the region (chest
+                        # beams are drawn to 1.8 km) can neither pass nor fail this row. Frames of one A/B are rendered without stepping time.
+                        rig.js("() => window.__LG__.vis(true, true, true)")
+                        f_all = rig.grab(rect, False, True)["srgb"][..., :3]
+                        rig.js("(p) => window.__LG__.hide(p)", [[0, slots_p[0]], [1, slots_p[1]]] if slots_p else [])
+                        f_not = rig.grab(rect, False, True)["srgb"][..., :3]
+                        rig.js("() => window.__LG__.unhide()")
+                        rig.js("() => window.__LG__.vis(false, false, false)")
+                        f_none = rig.grab(rect, False, True)["srgb"][..., :3]
+                        rig.js("() => window.__LG__.vis(true, true, true)")
+                        tmask = np.abs(f_all - f_not).max(axis=-1) > 6
+                        omask = np.abs(f_not - f_none).max(axis=-1) > 3
+                        om = omask.copy()
+                        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+                            om |= np.roll(np.roll(omask, dy, axis=0), dx, axis=1)
+                        mask = tmask & ~om
+                        before_px = int(mask.sum())
+                        ok_pick = s.js("() => window.__LC__.W.pickupItem(window.__LC__.W.player, 't_pick')")
+                        s.js("() => window.__LC__.W.netTakeItem('t_net')")
+                        s.step_frames(3, 1 / 60, True)
+                        post = s.js("""([sp, sn]) => { const W = window.__LC__.W, D = W.debugLootFx(), m = D.meshes;
+                            const zero = (mesh, slot) => { const a = mesh.instanceMatrix.array; let t = 0; for (let i = 0; i < 16; i++) t += Math.abs(a[slot * 16 + i]); return t === 0; };
+                            const free = (k, slot) => D.free ? D.free[k].indexOf(slot) >= 0 : null;
+                            // a freed slot may be taken again at once by loot a BOT spawns during the 3 stepped frames (a bot opening a chest bursts items that reuse it): then it is
+                            // neither zero nor free, but it is owned by someone else - the item that was picked no longer owns it. That is reuse, not a leak (the accounting row below
+                            // proves every live slot has exactly one live owner).
+                            const ownerOf = (k, slot) => { for (const o of W.debugItems().concat(W.debugChests())) { if (o[k] === slot) return o.id; } return null; };
+                            return { ringOwner: ownerOf('ring', sp[0]), beamOwner: ownerOf('beam', sp[1]), netRingOwner: sn ? ownerOf('ring', sn[0]) : null, netBeamOwner: sn ? ownerOf('beam', sn[1]) : null,
+                                     ringZero: zero(m[0], sp[0]), beamZero: zero(m[1], sp[1]), netRingZero: sn ? zero(m[0], sn[0]) : null, netBeamZero: sn ? zero(m[1], sn[1]) : null,
+                                     ringFree: free('rings', sp[0]), beamFree: free('beams', sp[1]), netRingFree: sn ? free('rings', sn[0]) : null, netBeamFree: sn ? free('beams', sn[1]) : null,
+                                     itemGone: !W.debugItems().some((q) => q.id === 't_pick' || q.id === 't_net'),
+                                     nearby: W.nearbyLoot(W.player.pos, 12).filter((q) => q.id === 't_pick' || q.id === 't_net').length }; }""", [slots_p, slots_n]) if slots_p else None
+                        p_all = rig.grab(rect, False, True)["srgb"][..., :3]
+                        rig.js("() => window.__LG__.vis(false, false, false)")
+                        p_none = rig.grab(rect, False, True)["srgb"][..., :3]
+                        rig.js("() => window.__LG__.vis(true, true, true)")
+                        after_px = int(((np.abs(p_all - p_none).max(axis=-1) > 6) & mask).sum())
+                        # slot ACCOUNTING instead of a global live-count delta (49 bots keep looting during the stepped frames): every live slot
+                        # of every pool is owned by exactly one live item / chest, and nothing owns a freed slot
+                        acct = s.js("""() => { const W = window.__LC__.W, d = W.debugLootFx(); const own = { beams: [], rings: [], glows: [] };
+                            for (const o of W.debugItems().concat(W.debugChests())) { if (o.beam >= 0) own.beams.push(o.beam); if (o.ring >= 0) own.rings.push(o.ring); if (o.glow >= 0) own.glows.push(o.glow); }
+                            const out = {};
+                            for (const k of ['beams', 'rings', 'glows']) { const set = new Set(own[k]); const fr = d.free ? new Set(d.free[k]) : new Set();
+                              out[k] = { owned: own[k].length, distinct: set.size, live: d[k].live, ownedButFree: own[k].filter((x) => fr.has(x)).length }; }
+                            return out; }""")
+                        acct_ok = all(a["owned"] == a["live"] == a["distinct"] and a["ownedButFree"] == 0 for a in acct.values())
+                        # a picked item's slot is PARKED when it is zero and on the free list, or - reused at once by loot a bot spawned in the stepped frames - owned by anything but the
+                        # picked item itself (with the accounting row, every live slot has exactly one live owner: a leaked slot has none)
+                        def parked(zero_k, free_k, owner_k):
+                            if post is None:
+                                return False
+                            own = post.get(owner_k)
+                            if own in ("t_pick", "t_net"):
+                                return False
+                            if own is not None:
+                                return True
+                            return bool(post.get(zero_k)) and post.get(free_k) is not False
+                        v.check("pickup: picking an item and a net-take mirror each park their ring + beam (zero matrix, back on the free list) and the pools stay "
+                                "consistent (every live slot owned by exactly one live item / chest)",
+                                bool(ok_pick) and alive_pre and post is not None and parked("ringZero", "ringFree", "ringOwner") and parked("beamZero", "beamFree", "beamOwner")
+                                and parked("netRingZero", "netRingFree", "netRingOwner") and parked("netBeamZero", "netBeamFree", "netBeamOwner")
+                                and post["itemGone"] and post["nearby"] == 0 and acct_ok,
+                                {"pickupReturned": ok_pick, "aliveBefore": alive_pre, "liveBefore": pre["fx"], "post": post, "accounting": acct})
+                        if before_px < 30:
+                            v.cnj("pickup: the item's own marker pixels are gone once it is picked", "only %d own-marker pixels before the pickup (framing)" % before_px)
+                        else:
+                            v.check("pickup: the item's own marker pixels are gone once it is picked (all markers vs none, inside its own pre-pickup marker mask)",
+                                    after_px == 0, {"ownMarkerPixelsBefore": before_px, "ofThoseStillMarkerAfter": after_px}, expect="after == 0, before >= 30")
+                        # chest open parks its three slots
+                        ch = s.js("() => { const W = window.__LC__.W; const c = W.debugChests().find((q) => !q.opened && q.ring >= 0 && q.beam >= 0 && q.glow >= 0); return c ? { id: c.id, ring: c.ring, beam: c.beam, glow: c.glow } : null; }")
+                        if not ch:
+                            v.cnj("pickup: opening a chest parks its ring + beam + glow", "no unopened chest with all three markers")
+                        else:
+                            before = s.js("() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live, d.glows.live]; }")
+                            # the opened chest's slots go back to the free list and the loot it drops may reuse them at once (a gun's beam, an item's
+                            # ring), so ownership - not a zero matrix - is what proves the chest let go: the chest record holds no slot, its glow
+                            # (drops get none) is gone from the live count, and the chest is no longer a pickup target
+                            s.js("(id) => window.__LC__.W.openChest(window.__LC__.W.player, id)", ch["id"])
+                            s.step_frames(2, 1 / 60, True)
+                            after = s.js("""(id) => { const W = window.__LC__.W, d = W.debugLootFx(), c = W.debugChests().find((q) => q.id === id);
+                                const own = []; for (const o of W.debugItems().concat(W.debugChests())) { if (o.glow >= 0) own.push(o.glow); }
+                                return { live: [d.beams.live, d.rings.live, d.glows.live], glowOwned: own.length, glowDistinct: new Set(own).size, rec: { opened: c.opened, ring: c.ring, beam: c.beam, glow: c.glow },
+                                         targetable: W.nearbyLoot({ x: c.pos.x, y: c.pos.y, z: c.pos.z }, 3).some((q) => q.type === 'chest' && q.id === id) }; }""", ch["id"])
+                            v.check("pickup: opening a chest parks its ring + beam + glow slots (the record lets go of all three, the glow count drops by at least 1 - a bot may open another chest in the same frames - and every live glow has exactly one owner)",
+                                    after["rec"]["opened"] and after["rec"]["ring"] == -1 and after["rec"]["beam"] == -1 and after["rec"]["glow"] == -1
+                                    and after["live"][2] <= before[2] - 1 and after["glowOwned"] == after["live"][2] == after["glowDistinct"] and not after["targetable"],
+                                    {"before": before, "after": after, "note": "rings / beams live may rise: the loot the chest drops takes slots of its own"})
+                    except NotFramed as e:
+                        v.cnj("pickup rows", "the pickup sample is not framed on screen (%s): could not judge" % e)
 
             # ---- deaths ------------------------------------------------------------------------------------------------
             if want("deaths"):
@@ -783,6 +800,10 @@ def main():
                             continue
                         ry = info["ring"]["y"]
                         rect = rig.rect_around(sp["x"], ry, sp["z"], 1.15, pad=16)
+                        if not rig.framed(rect):
+                            RES.append({"surface": surf, "rarity": rar, "skipped": "not framed on screen", "rect": rect})
+                            s.js("(id) => window.__LC__.W.netTakeItem(id)", iid)
+                            continue
                         # rings A/B: beams + glows hidden in BOTH frames so only the ring differs
                         rig.js("() => window.__LG__.vis(true, false, false)")
                         on = rig.grab(rect, True, True)
@@ -879,6 +900,9 @@ def main():
                         W_, H_ = rig.size
                         x0 = int(p0[0]) - 24; rect = [max(0, x0), max(0, int(min(p0[1], p1[1])) - 6), 49, int(abs(p0[1] - p1[1])) + 12]
                         rect[3] = min(rect[3], H_ - rect[1])
+                        if not rig.framed(rect):
+                            G.append({"rarity": RARITY_NAME[rar], "skipped": "not framed on screen", "rect": rect})
+                            continue
                         # THIS beam's own slot hidden vs shown, rings + glows hidden in both: a far chest beam crossing the 49 px rect
                         # (drawn to 1.8 km) used to be counted as this beam's peak (run 2: "uncommon" 0.775, above its own maximum)
                         rig.js("() => window.__LG__.vis(false, true, false)")

@@ -638,10 +638,19 @@ async function censusOne(mapId, seed, lootMod) {
     }
     rec.structures = { boxes: boxes.length, comps: Object.keys(comps).length, floating, grounded, pads, padRects, padApi: !!(M.ground && Array.isArray(M.ground.padLog)) };
     // ramps: step from the supporting floor onto the ramp's low edge (physics ground, or a box top within 0.6 m)
+    // (Wave 8, lane K3) a furnished house's pitched-roof PLANKS (house.roofRamps = collider indices, maps.js) are ROOFS, not stairs: their low edge is the eave
+    // ~3.6 m over the ground by design, nobody starts a climb there. They are counted apart (information) and never judged as a stair start; every other ramp
+    // (house stairs included) is judged as before. A map without houses: the set is empty (unchanged). The ramp-lip plant lifts the first NON-roof ramp.
+    const roofSet = new Set();
+    for (const h of (M.houses || [])) for (const i of (h.roofRamps || [])) if (M.colliders[i]) roofSet.add(M.colliders[i]);
+    // house-stair-lip plant (Wave 8, lane K3): lift the first house STAIR (a ramp inside a house's collider range that is not a roof plank) 0.8 m - the roof exclusion must not hide a real stair
+    const houseStair = new Set();
+    for (const h of (M.houses || [])) if (h.cols) for (let i = h.cols[0]; i < h.cols[0] + h.cols[2]; i++) { const c2 = M.colliders[i]; if (c2 && c2.kind === "ramp" && !roofSet.has(c2)) houseStair.add(c2); }
+    if (PLANTS.has("house-stair-lip")) { const c2 = [...houseStair][0]; if (c2) { c2.minY += 0.8; planted.push("house-stair-lip:1"); } else planted.push("house-stair-lip:NO-STAIR"); }
     const rampsOut = [];
     let rampPlanted = false;
     for (const c of M.colliders) if (c.kind === "ramp") {
-      if (PLANTS.has("ramp-lip") && !rampPlanted) { c.minY += 0.8; rampPlanted = true; planted.push("ramp-lip:1"); }
+      if (PLANTS.has("ramp-lip") && !rampPlanted && !roofSet.has(c)) { c.minY += 0.8; rampPlanted = true; planted.push("ramp-lip:1"); }
       const pts = [];
       for (let t = 0; t <= 4; t++) {
         const u = t / 4;
@@ -651,7 +660,7 @@ async function censusOne(mapId, seed, lootMod) {
       const supAt = (x, z) => { let f = H0(x, z), what = "ground"; for (const o of M.queryColliders(x, z, 0.05, [])) { if (o === c || o.kind !== "box" || x < o.minX || x > o.maxX || z < o.minZ || z > o.maxZ) continue; if (o.maxY <= c.minY + 0.6 && o.maxY > f) { f = o.maxY; what = "box"; } } return [f, what]; };
       const sups = pts.map((p) => supAt(p[0], p[1]));
       const onWater = waterY > -100 && sups.every((s2) => s2[1] === "ground" && s2[0] < waterY);
-      if (!onWater) rampsOut.push({ step: r3(Math.max(...sups.map((s2) => c.minY - s2[0]))), onBox: sups[2][1] === "box", climb: r3(c.maxY - c.minY) });
+      if (!onWater) rampsOut.push({ step: r3(Math.max(...sups.map((s2) => c.minY - s2[0]))), onBox: sups[2][1] === "box", climb: r3(c.maxY - c.minY), roof: roofSet.has(c) });
     }
     if (PLANTS.has("ramp-lip") && !rampPlanted) planted.push("ramp-lip:NO-RAMP");
     rec.ramps = rampsOut;
@@ -838,7 +847,9 @@ function summarise(results) {
       rectsWorst: (S.padRects || []).slice().sort((a2, b2) => b2.flatPhys - a2.flatPhys).slice(0, 5).map((r4) => ({ seed: r4.seed, gen: r4.gen, x: r4.x, z: r4.z, flatPhys: r4.flatPhys, flatDraw: r4.flatDraw })),
       rectsByGen: Object.entries((S.padRects || []).reduce((m3, r4) => { const b3 = m3[r4.gen] || (m3[r4.gen] = { n: 0, over: 0 }); b3.n++; if (r4.flatPhys > 0.02) b3.over++; return m3; }, {})).filter(([, b3]) => b3.over).map(([g, b3]) => ({ gen: g, n: b3.n, over: b3.over })) };
     o.rampSlope = { n: (S.rampSlopes || []).length, gt45: (S.rampSlopes || []).filter((d) => d > 45.05).length, max: q(S.rampSlopes || [], 1), p50: q(S.rampSlopes || [], 0.5) };
-    o.ramps = { n: S.ramps.length, stepGt055: S.ramps.filter((r) => r.step > 0.55).length, stepMax: q(S.ramps.map((r) => r.step), 1) };
+    const stairR = S.ramps.filter((r) => !r.roof), roofR = S.ramps.filter((r) => r.roof);
+    o.ramps = { n: stairR.length, stepGt055: stairR.filter((r) => r.step > 0.55).length, stepMax: q(stairR.map((r) => r.step), 1),
+      roofN: roofR.length, roofStepGt055: roofR.filter((r) => r.step > 0.55).length, roofStepMax: q(roofR.map((r) => r.step), 1) };
     o.doors = { n: S.doors.length, minClear: q(S.doors.map((d) => d.clearance), 0), ltCapsule: S.doors.filter((d) => d.clearance < 1.85).length, lt20: S.doors.filter((d) => d.clearance < 2.0).length };
     o.roads = { n: S.roads.n, floatShare: S.roads.n ? +(S.roads.floatN / S.roads.n).toFixed(5) : null, pokeShare: S.roads.n ? +(S.roads.pokeN / S.roads.n).toFixed(5) : null };
     const ct = S.chests.filter((c) => !c.onBox), cb = S.chests.filter((c) => c.onBox);

@@ -70,7 +70,8 @@ export function init(W) {
     } catch (e) { itemProtoCache[id] = null; }   // not generated yet — fallback shapes
     return itemProtoCache[id];
   };
-  W.nearbyLoot = (pos, r, maxDy) => nearby(pos, r, maxDy);   // maxDy: vertical reach (default NEAR_DY); bots' walkover and the player's pickup pass REACH_DY
+  W.nearbyLoot = (pos, r, maxDy, los) => nearby(pos, r, maxDy, !!los);   // maxDy: vertical reach (default NEAR_DY); bots' walkover and the player's pickup pass REACH_DY;
+                                                                           // los: a house item / chest only with a clear line to it (the player's own pickup always; see PICK_LOS_R)
   W.pickupItem = (a, id) => pickup(W, a, id);
   W.openChest = (a, id) => openChest(W, a, id);
   W.giveItem = (a, data) => give(W, a, data);
@@ -110,6 +111,7 @@ export function init(W) {
   };
   W.lootSyncState = () => ({ taken: takenIds.slice(), opened: [...chests.values()].filter((c) => c.opened).map((c) => c.id) });
   W.debugChests = () => [...chests.values()]; // test hook (preview verification)
+  W.debugHouseLoot = debugHouseLoot;           // test hook (Wave 8 per-room loot: houses, points used / skipped, chests, per room kind)
   W.debugItems = debugItems;                   // test hook (loot census)
   W.debugLootFx = debugLootFx;                 // test hook (marker pools: live slots, beam tops, ceilings)
 }
@@ -223,6 +225,7 @@ export function populate(W) {
   const floorPts = [];
   let light = 0;
   for (const lp of W.map.lootPoints) {
+    if (lp.house != null && Array.isArray(W.map.houses)) continue;   // a furnished house's point (lane I1 lists them for the bots' landing spots): spawned by the per-room pass below
     fi++;
     if (lp.kind === "chest") {
       spawnChest(W, lp.x, lp.y, lp.z);
@@ -242,11 +245,23 @@ export function populate(W) {
       }
     }
   }
-  // Light-ammo floor guarantee (deterministic: same rng, fixed order).
+  // WAVE 8 (lane I3): the furnished houses' own loot, room by room (see PER-ROOM LOOT). Each house draws from its OWN stream (seed x house id), so
+  // the shared `rng` above and below sees exactly the draws it saw before on a map without houses.
+  const houseFloor = [];
+  houseStatsReset();
+  houseSpots.length = 0;
+  W.houseLootSpots = houseSpots;     // (the bots' landing-spot list: the spots the per-room pass USED - a chest or a floor / top point with its items)
+  losMap = W.map;
+  const HS = W.map.houses;
+  if (Array.isArray(HS)) for (let hi = 0; hi < HS.length; hi++) light += houseLoot(W, HS[hi], modeK, houseFloor);
+  // Light-ammo floor guarantee (deterministic: same rng, fixed order). (A map whose loot is all indoors draws its pick from the house floor points.)
   const need = Math.ceil(LIGHT_MIN_PER_50 * (modeK.players || 50) / 50) - light;
-  for (let i = 0; i < need && floorPts.length; i++) {
-    const lp = floorPts[Math.floor(rng() * floorPts.length)];
-    spawnItem(W, { kind: "ammo", id: "light", count: K.AMMO.light.box }, lp.x - 0.6, lp.y, lp.z + 1.0, "fl:" + i);
+  const gPool = floorPts.length ? floorPts : houseFloor;
+  for (let i = 0; i < need && gPool.length; i++) {
+    const lp = gPool[Math.floor(rng() * gPool.length)];
+    const data = { kind: "ammo", id: "light", count: K.AMMO.light.box };
+    if (lp.H) houseItem(W, data, lp, lp.k++, "fl:" + i);
+    else spawnItem(W, data, lp.x - 0.6, lp.y, lp.z + 1.0, "fl:" + i);
   }
   blobFlush();
   fxFlush();
@@ -342,6 +357,7 @@ export function disposeMatch(W) {
   takenIds.length = 0;
   supplyState = null;
   chestChannel.id = null; chestChannel.t = 0;
+  losMap = null;                   // (the per-room pickup's line-of-sight map: never keep a finished match's colliders alive)
   return r;
 }
 
@@ -481,7 +497,8 @@ function surfaceUnder(W, x, y, z) {
 function blobAlloc(W, it) {
   if (!blobMesh || !W.map) return -1;
   const x = it.pos.x, y = it.pos.y, z = it.pos.z;
-  if (!surfaceUnder(W, x, y, z)) return -1;
+  if (it.surf != null) { _surf.floor = it.surf; _surf.onBox = true; _surf.q.identity(); }   // a house loot point: its surface AS GIVEN (PER-ROOM LOOT)
+  else if (!surfaceUnder(W, x, y, z)) return -1;
   const slot = blobFree.length ? blobFree.pop() : (blobN < BLOB_MAX ? blobN++ : -1);
   if (slot < 0) return -1;
   if (blobN > blobMesh.count) blobMesh.count = blobN;
@@ -865,15 +882,16 @@ function phaseOf(id) { let h2 = 0; for (let i = 0; i < id.length; i++) h2 = (h2 
  *  terrain within 0.9 m below - a flat floor 15 cm under the thing itself. A marker must never
  *  be skipped for want of a floor: the ring is the item's only ground cue and a chest's beam
  *  is the beacon the glider steers to. */
-function markerSurface(W, x, y, z) {
+function markerSurface(W, x, y, z, surf) {
+  if (surf != null) { _surf.floor = surf; _surf.onBox = true; _surf.q.identity(); return true; }   // a house loot point / chest slot: the surface AS GIVEN
   if (surfaceUnder(W, x, y, z)) return true;
   _surf.floor = y - 0.15; _surf.onBox = true; _surf.q.identity();
   return true;
 }
 /** Ring slot for something lying at (x, y, z); -1 only when the pool is full. */
-function ringAlloc(W, x, y, z, hex, small, diameter, id) {
+function ringAlloc(W, x, y, z, hex, small, diameter, id, surf) {
   const P = FX.pools && FX.pools.rings;
-  if (!P || !markerSurface(W, x, y, z)) return -1;
+  if (!P || !markerSurface(W, x, y, z, surf)) return -1;
   _bM.compose(_bP.set(x, _surf.floor + (_surf.onBox ? 0.035 : 0.065), z), _surf.q, _fxS.set(diameter, 1, diameter));
   return poolAlloc(P, _bM, ringColour(hex, small ? RING_Y_SMALL : RING_Y_WEAPON), small ? 1 : 0, phaseOf(id));
 }
@@ -902,14 +920,14 @@ function itemFx(W, it) {
   it.ceil = Infinity;
   if (d.kind === "weapon") {
     const rar = d.rarity || 0, hex = K.RARITY_COLOR[K.RARITY[rar]] || K.RARITY_COLOR.common;
-    it.ring = ringAlloc(W, x, y, z, hex, false, RING_D_WEAPON, it.id);
+    it.ring = ringAlloc(W, x, y, z, hex, false, it.ringD || RING_D_WEAPON, it.id, it.surf);
     if (it.ring >= 0) {
       it.ceil = ceilingAbove(W, x, z, _surf.floor, BEAM_R[rar] + 0.12);
       it.beam = beamAlloc(x, _surf.floor, z, hex, BEAM_H[rar], BEAM_R[rar], BEAM_GAIN[rar], BEAM_FAR[rar], it.ceil);
     }
   } else {
     const hex = d.kind === "ammo" ? AMMO_HEX : (d.id && d.id.indexOf("shield") >= 0 ? SHIELD_HEX : HEAL_HEX);
-    it.ring = ringAlloc(W, x, y, z, hex, true, RING_D_SMALL, it.id);
+    it.ring = ringAlloc(W, x, y, z, hex, true, Math.min(RING_D_SMALL, it.ringD || RING_D_SMALL), it.id, it.surf);
   }
 }
 function itemFxShow(it, on) { if (FX.pools) poolShow(FX.pools.rings, it.ring, on); }
@@ -1113,9 +1131,9 @@ function visFrame(cam) {
       const o = P.items[i];
       if (!o.vis) continue;
       if (viewTest) { _vT.center.set(o.pos.x, o.pos.y, o.pos.z); _vT.radius = rr; if (!_vF.intersectsSphere(_vT)) continue; }
-      const x = o.pos.x, z = o.pos.z, y = chest ? o.pos.y : o.pos.y + Math.sin(bobT * 2 + x) * 0.08 + 0.08;
-      const c = chest ? o.rc : cs, s = chest ? o.rs : sn, k = n * 16;
-      a[k] = c; a[k + 1] = 0; a[k + 2] = -s; a[k + 3] = 0; a[k + 4] = 0; a[k + 5] = 1; a[k + 6] = 0; a[k + 7] = 0;
+      const x = o.pos.x, z = o.pos.z, y = chest ? o.pos.y : o.pos.y + Math.sin(bobT * 2 + x) * 0.08 + 0.08 - o.drop;   // (drop: a house item on a furniture top is drawn lower, see PER-ROOM LOOT)
+      const q = chest ? o.sc : 1, c = (chest ? o.rc : cs) * q, s = (chest ? o.rs : sn) * q, k = n * 16;   // (q: a house chest is drawn to fit its slot)
+      a[k] = c; a[k + 1] = 0; a[k + 2] = -s; a[k + 3] = 0; a[k + 4] = 0; a[k + 5] = q; a[k + 6] = 0; a[k + 7] = 0;
       a[k + 8] = s; a[k + 9] = 0; a[k + 10] = c; a[k + 11] = 0; a[k + 12] = x; a[k + 13] = y; a[k + 14] = z; a[k + 15] = 1;
       if (ca) { const v = o.opened ? 0.45 : 1; ca[n * 3] = v; ca[n * 3 + 1] = v; ca[n * 3 + 2] = v; }
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
@@ -1220,15 +1238,20 @@ function lowerOnSlope(W, x, z, gy) {
 
 /** id must be DETERMINISTIC across clients (derived from source, not spawn
  * order) so multiplayer "take" mirroring removes the right item everywhere. */
-export function spawnItem(W, data, x, y, z, id) {
+export function spawnItem(W, data, x, y, z, id, opt) {
   id = id || "i" + (nextId++);
   if (items.has(id)) return id;
-  let gy = Math.max(y, W.map.heightAt(x, z) + 0.15);
-  const st = settle(W, x, gy, z, 0.15, 0.7);          // out of walls, off the stairwell hole (see SETTLE above)
-  if (st.moved) { x = st.x; z = st.z; gy = Math.max(y, W.map.heightAt(x, z) + 0.15); }
-  gy = lowerOnSlope(W, x, z, gy);
+  let gy;
+  if (opt && opt.surf != null) gy = y;                 // a house loot point (PER-ROOM LOOT): the spot and the surface AS GIVEN - never settled, never snapped
+  else {
+    gy = Math.max(y, W.map.heightAt(x, z) + 0.15);
+    const st = settle(W, x, gy, z, 0.15, 0.7);          // out of walls, off the stairwell hole (see SETTLE above)
+    if (st.moved) { x = st.x; z = st.z; gy = Math.max(y, W.map.heightAt(x, z) + 0.15); }
+    gy = lowerOnSlope(W, x, z, gy);
+  }
   // the model is an instance of its kind's pool (see INSTANCED LOOT MODELS); vis = inside the model cull (set by update)
-  const it = { id, data, pos: { x, y: gy, z }, taken: false, vis: true, vp: null, vi: -1, blob: -1, ring: -1, beam: -1, glow: -1, ceil: Infinity };
+  const it = { id, data, pos: { x, y: gy, z }, taken: false, vis: true, vp: null, vi: -1, blob: -1, ring: -1, beam: -1, glow: -1, ceil: Infinity,
+    surf: opt && opt.surf != null ? opt.surf : null, ringD: opt && opt.ringD ? opt.ringD : 0, house: opt && opt.house ? opt.house : null, drop: opt && opt.drop ? opt.drop : 0, rr: opt && opt.rr ? opt.rr : null };   // rr: a house item's room rects (K2)
   const P = itemPool(W, data);
   if (P) visAdd(P, it);
   items.set(id, it);
@@ -1265,35 +1288,317 @@ async function ensureChestProto(W) {
   return chestProto;
 }
 
-function spawnChest(W, x, y, z) {
+function spawnChest(W, x, y, z, opt) {
   const id = "c" + (nextId++);
   // The chest rests ON the surface under it (the highest floor at or just below its authored height, else the terrain). Every authoring
   // site passes surface + 0.6, so the old `y - 0.4` hung it 0.20 m over the grass (all 193-245 terrain chests per 5 seeds) and sank it
   // 0.10 m into a roof slab. Nothing within 0.9 m under it (a chest on a hull over the sea, a sky island) keeps the old formula.
   const restY = (px, pz) => (surfaceUnder(W, px, y, pz) ? _surf.floor : Math.max(y - 0.4, W.map.heightAt(px, pz)));
-  // SETTLE (see above): a 1.6 m chest clear of every wall (its body is judged from the floor it rests on) and standing on a floor, not over a hole
-  const st = settle(W, x, restY(x, z), z, 0.55, 0.9);
-  if (st.moved) { x = st.x; z = st.z; }
-  const gy = restY(x, z);
-  const ry = (x * 13.7 + z * 7.3) % (Math.PI * 2);          // varied facing (the census probes re-derive it from the position)
+  let gy, ry;
+  if (opt) { gy = opt.surf; ry = opt.ry; }                  // a house chest (PER-ROOM LOOT): its slot, floor and heading AS GIVEN - never settled
+  else {
+    // SETTLE (see above): a 1.6 m chest clear of every wall (its body is judged from the floor it rests on) and standing on a floor, not over a hole
+    const st = settle(W, x, restY(x, z), z, 0.55, 0.9);
+    if (st.moved) { x = st.x; z = st.z; }
+    gy = restY(x, z);
+    ry = (x * 13.7 + z * 7.3) % (Math.PI * 2);              // varied facing (the census probes re-derive it from the position)
+  }
   // gold ring, light beam and glow so chests read from far away: three slots in the
   // shared instanced pools (no per-chest meshes, sprites or materials)
   fxInit();
-  const ring = ringAlloc(W, x, gy + 0.15, z, K.RARITY_COLOR.legendary, false, RING_D_CHEST, id);
+  const ring = ringAlloc(W, x, gy + 0.15, z, K.RARITY_COLOR.legendary, false, opt ? HOUSE_CHEST_RING : RING_D_CHEST, id, opt ? gy : null);
   let beam = -1, glow = -1, ceil = Infinity;
   if (ring >= 0) {
     ceil = ceilingAbove(W, x, z, _surf.floor, CHEST_BEAM.r + 0.12);
     beam = beamAlloc(x, _surf.floor, z, GOLD_HEX, CHEST_BEAM.h, CHEST_BEAM.r, CHEST_BEAM.gain, CHEST_BEAM.far, ceil);
-    glow = glowAlloc(x, _surf.floor + 0.9, z, 3.2, GOLD_HEX, GLOW_GAIN);
+    glow = opt ? glowAlloc(x, _surf.floor + 0.9 * opt.sc, z, 3.2 * opt.sc, GOLD_HEX, GLOW_GAIN) : glowAlloc(x, _surf.floor + 0.9, z, 3.2, GOLD_HEX, GLOW_GAIN);
   }
   // the model: an instance of the chest pools (see INSTANCED LOOT MODELS). It starts in the casting "near" pool, so the match warm-up
   // frame links the instanced depth variant; update() moves it by distance (on inside 45 m, off past 50 m) and culls it past the model cull.
-  const rec = { id, pos: { x, y: gy, z }, opened: false, glow, beam, ring, ringOn: true, ceil, rc: Math.cos(ry), rs: Math.sin(ry), vis: true, cast: true, vp: null, vi: -1 };
+  const rec = { id, pos: { x, y: gy, z }, opened: false, glow, beam, ring, ringOn: true, ceil, rc: Math.cos(ry), rs: Math.sin(ry), vis: true, cast: true, vp: null, vi: -1,
+    sc: opt ? opt.sc : 1, R: opt ? opt.R : null, house: opt ? opt.house : null, room: opt ? opt.room : null, half: opt ? opt.half : null };
   visAdd(chestPools(W)[1], rec);
   chests.set(id, rec);
   gridAdd("chest", id, { x, z });
   return id;
 }
+
+// ── PER-ROOM LOOT (Wave 8, lane I3) ─────────────────────────────────────────────────────────────────────────────────────────────────
+// W.map.houses (maps.js, lane I1) holds the furnished houses as housegen.js generated them (its header: rooms[{ id, floor, kind, walk, rects }],
+// furniture[{ id, cat, room, floor, min, max }], loot[{ id, room, floor, x, y, z, on 'floor' | <catalog id> }], chests[{ id, room, floor, x, y, z }]).
+// housegen has already put every point where the real mover reaches it, never under or inside a piece, out of door and stair zones; so here:
+//  - the point and its y are used AS GIVEN: y is the visible surface the item lies on (a floor, a counter, a shelf). It can sit UNDER that piece's
+//    collider top (a sink's top 0.95 under its backsplash's 1.08, a gondola's mid shelf 1.13 under its 1.35 top): settle() / surfaceUnder() would
+//    lift the ring to the collider top or move the item, so a house item carries `surf` and its contact blob, ring and beam stand on it;
+//  - the extra items of a pile stay in the room (its walk rects, clear of every piece) or on the same top (inside that piece's footprint);
+//  - an item never hangs inside what is over it (a wall cabinet over a counter): its hover shrinks under it, and a point with no room left is skipped;
+//  - density (PUBG-like: most rooms none or one spot, kitchens / bedrooms / shops first, a corridor or a bath rarely): a per-house budget of spots
+//    (HOUSE_SPOTS_*) handed to rooms by a draw weighted on the room kind (ROOM_W); in a room its points in housegen's order (furniture tops first,
+//    so a shop loots its shelves), each with the usual floor roll;
+//  - chests: housegen offers at most one slot per floor; a house keeps at most HOUSE_CHESTS (1, 2 from 3 storeys), never in a bath or a corridor,
+//    drawn at HOUSE_CHEST_SC so it fits the 1.0 x 0.75 m slot (the 1.6 m outdoor chest does not), its back to the nearest wall;
+//  - every draw comes from the house's own stream (seed x house id, record order): the shared populate() stream is untouched.
+// A house's loot spots: HOUSE_SPOTS_BASE + HOUSE_SPOTS_PER_ROOM x (rooms with a usable point), at most HOUSE_SPOTS_MAX (the fraction is a draw), given room
+// by room with these weights (a room gets a second spot only when every room with points has one). Today's maps lay ~0.7 floor points and ~0.17 chests per
+// town building; the per-room pass keeps the census in the same band (see the lane report), so a small cabin has its one or two spots, a big villa three.
+const ROOM_W = { kitchen: 3, bedroom: 3, shop: 3.5, warehouse: 2.5, storage: 2, barn: 2, living: 1.6, office: 1.6, ruin: 1.6, lobby: 1.2, meeting: 1, bath: 0.5, hall: 0.2 };
+const HOUSE_SPOTS_BASE = 0.85, HOUSE_SPOTS_PER_ROOM = 0.07, HOUSE_SPOTS_MAX = 2.5;
+const HOUSE_CHEST_P = 0.4;                  // a house keeps an offered chest slot with this chance (at most HOUSE_CHESTS)
+const REACH_IN_ROOM = 1.25;                 // m: a point is used only this close to its OWN room's walk rects (housegen's reach also counts samples through a wall)
+const NO_CHEST_ROOM = new Set(["bath", "hall"]);
+const HOUSE_HOVER = 0.5;                    // m over the surface: the same hover as every authored floor point (surface + 0.5)
+const TOP_SINK = 0.3;                       // a model on a furniture top is DRAWN (hover + TOP_SINK) lower than its spot (pos.y keeps surface + hover for the
+                                            // pickup and the gates): the models float ~0.5 m over their spot (+ the bob), so a gun on a box hung a metre over it;
+                                            // drawn lower it lies ~0.2 m over the top, bobbing
+const HOUSE_HOVER_MIN = 0.15;               // under something lower than this (item body 0.7 m) the point is not used
+const HOUSE_CHEST_SC = 0.625;               // 1.6 m x 1.18 m outdoor chest -> 1.0 x 0.74 m: the slot housegen keeps free is 1.0 x 0.75
+const HOUSE_CHEST_HALF = [0.8 * HOUSE_CHEST_SC, 0.59 * HOUSE_CHEST_SC];   // half length (local x), half depth (local z, the lid opens to +z)
+const HOUSE_RING_FLOOR = 1.4;               // m: a gun's floor ring indoors (2.0 outdoors ran under the door jambs and the furniture of a 2.5 m room)
+const HOUSE_CHEST_RING = 1.8;               // m: the outdoor 3.4 m ring would run under the furniture and the walls round a slot
+const houseSpots = [];                      // [{ x, y (the item's spot), z, kind 'floor' | 'top' | 'chest', house, room, gun (a non-pistol gun lies there) }]
+const houseStats = { houses: 0, points: 0, used: 0, skippedKind: 0, skippedLow: 0, items: 0, chestsOffered: 0, chests: 0, chestsKind: 0, chestsCap: 0, chestsTight: 0, chestsDice: 0, skippedReach: 0, byKind: {} };
+function houseStatsReset() { for (const k in houseStats) houseStats[k] = 0; houseStats.byKind = {}; }
+function strHash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+const _hCols = [];
+/** horizontal distance from (x, z) to the room's walk rects */
+function walkDist(R, x, z) {
+  let best = Infinity;
+  for (const r of R.walk) { const dx = Math.max(r[0] - x, 0, x - r[2]), dz = Math.max(r[1] - z, 0, z - r[3]); const d = dx * dx + dz * dz; if (d < best) best = d; }
+  return Math.sqrt(best);
+}
+/** (K2) (x, z) within `m` of one of a room's rects */
+function inRects(rr, x, z, m) {
+  for (let i = 0; i < rr.length; i++) { const r = rr[i]; if (x >= r[0] - m && x <= r[2] + m && z >= r[1] - m && z <= r[3] + m) return true; }
+  return false;
+}
+/** is (x, z) inside the room's walkable rects (housegen rooms[].walk; else its cell rects less a wall and a body) */
+function inRoom(R, x, z) {
+  if (!R) return false;
+  const W2 = R.walk && R.walk.length ? R.walk : null;
+  if (W2) { for (const r of W2) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) return true; return false; }
+  for (const r of R.rects || []) if (x >= r[0] + 0.45 && x <= r[2] - 0.45 && z >= r[1] + 0.45 && z <= r[3] - 0.45) return true;
+  return false;
+}
+/** no solid box over a disc of radius rad round (x, z) from just above the surface up to 1.0 m (the slab it lies on is not a solid) */
+function spotClear(M, x, z, surf, rad) {
+  const cs = M.queryColliders(x, z, rad + 0.05, _hCols);
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (c.kind !== "box" || c.dead) continue;
+    if (x < c.minX - rad || x > c.maxX + rad || z < c.minZ - rad || z > c.maxZ + rad) continue;
+    if (c.maxY > surf + 0.05 && c.minY < surf + 1.0) return false;
+  }
+  return true;
+}
+/** the highest top of the host piece's own colliders within 0.12 m of (x, z) (-Infinity: none there) */
+function hostTop(M, x, z, p) {
+  const cs = M.queryColliders(x, z, 0.15, _hCols);
+  let t = -Infinity;
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (c.kind !== "box" || c.dead || x < c.minX - 0.12 || x > c.maxX + 0.12 || z < c.minZ - 0.12 || z > c.maxZ + 0.12) continue;
+    if (c.minX >= p.min[0] - 0.01 && c.maxX <= p.max[0] + 0.01 && c.minZ >= p.min[2] - 0.01 && c.maxZ <= p.max[2] + 0.01 && c.maxY <= p.max[1] + 0.01 && c.maxY > t) t = c.maxY;
+  }
+  return t;
+}
+/** nothing but the host piece itself over a 0.12 m disc round (x, z) from just above its top surface up to 0.9 m (a lamp, a TV, a box standing on it) */
+function topClear(M, x, z, surf, p) {
+  const cs = M.queryColliders(x, z, 0.17, _hCols);
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (c.kind !== "box" || c.dead) continue;
+    if (x < c.minX - 0.12 || x > c.maxX + 0.12 || z < c.minZ - 0.12 || z > c.maxZ + 0.12) continue;
+    if (c.maxY <= surf + 0.05 || c.minY >= surf + 0.9) continue;
+    if (c.minX >= p.min[0] - 0.01 && c.maxX <= p.max[0] + 0.01 && c.minZ >= p.min[2] - 0.01 && c.maxZ <= p.max[2] + 0.01 && c.maxY <= p.max[1] + 0.01) continue;   // (the host's own box)
+    return false;
+  }
+  return true;
+}
+/** the hover an item at (x, z) on `surf` can have under whatever starts above it (a wall cabinet, a shelf board, the ceiling); -1 = no room */
+function hoverAt(M, x, z, surf) {
+  const cs = M.queryColliders(x, z, 0.2, _hCols);
+  let ceil = Infinity;
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (c.kind !== "box" || c.dead) continue;
+    if (x < c.minX - 0.15 || x > c.maxX + 0.15 || z < c.minZ - 0.15 || z > c.maxZ + 0.15) continue;
+    if (c.minY > surf + 0.05 && c.minY < ceil) ceil = c.minY;
+  }
+  const h = Math.min(HOUSE_HOVER, ceil - surf - 0.72);
+  return h >= HOUSE_HOVER_MIN ? h : -1;
+}
+const TOP_OFFS = [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.22], [0, -0.22], [0.55, 0], [-0.55, 0], [0.3, 0.22], [-0.3, -0.22]];
+const RING8 = []; for (let i = 0; i < 8; i++) RING8.push([Math.cos(i * Math.PI / 4) * 0.4, Math.sin(i * Math.PI / 4) * 0.4]);
+const _hs = { x: 0, z: 0, hover: 0 };
+/** where the k-th item of a house loot point lies (fills `_hs`); false = nowhere (the point is not used) */
+function houseSpot(M, e, k) {
+  const l = e.l, surf = l.y, p = e.top;
+  if (p) {                                                   // on a furniture top: inside its footprint (inset 0.12 m), along its long side first
+    const long = p.max[0] - p.min[0] >= p.max[2] - p.min[2];
+    for (let j = 0; j < TOP_OFFS.length; j++) {
+      const o = TOP_OFFS[(k + j) % TOP_OFFS.length];
+      const x = l.x + (long ? o[0] : o[1]), z = l.z + (long ? o[1] : o[0]);
+      if (x < p.min[0] + 0.12 || x > p.max[0] - 0.12 || z < p.min[2] + 0.12 || z > p.max[2] - 0.12) { if (k === 0 && j === 0) { /* the given point itself */ } else continue; }
+      if ((k || j) && e.R && e.R.walk && e.R.walk.length && walkDist(e.R, x, z) > 1.4) continue;   // (the pile's other items stay within the walk-over of the room)
+      if ((k || j) && (!topClear(M, x, z, surf, p) || Math.abs(hostTop(M, x, z, p) - hostTop(M, l.x, l.z, p)) > 0.02)) continue;   // (nor inside what else stands on
+      // that top - a lamp, a TV, a register - nor over a taller part of the piece itself: a counter run's sink block, a gondola's upper shelf)
+      const h = hoverAt(M, x, z, surf);
+      if (h < 0) { if (k === 0 && j === 0) return false; continue; }   // nothing fits over the given point: the point is not used
+      _hs.x = x; _hs.z = z; _hs.hover = h;
+      return true;
+    }
+    return false;
+  }
+  for (let j = 0; j < PILE.length + RING8.length; j++) {     // on the floor: the pile offsets (0.75 x), then a 0.4 m ring, in the room and clear
+    const o = j < PILE.length ? PILE[(k + j) % PILE.length] : RING8[(k + j) % RING8.length];
+    const sc = j < PILE.length ? 0.75 : 1;
+    const x = l.x + o[0] * sc, z = l.z + o[1] * sc;
+    const given = k === 0 && j === 0;
+    if (!given && (!inRoom(e.R, x, z) || !spotClear(M, x, z, surf, 0.2))) continue;
+    const h = hoverAt(M, x, z, surf);
+    if (h < 0) { if (given) return false; continue; }
+    _hs.x = x; _hs.z = z; _hs.hover = h;
+    return true;
+  }
+  return false;
+}
+function houseItem(W, data, e, k, id) {
+  if (!houseSpot(W.map, e, k)) { if (k === 0 || !houseSpot(W.map, e, 0)) return null; }   // (a later item of the pile with no free spot shares the first one's)
+  houseStats.items++;
+  const iid = spawnItem(W, data, _hs.x, e.l.y + _hs.hover, _hs.z, id, { surf: e.l.y, ringD: e.ringD, house: e.H.id, drop: e.top ? _hs.hover + TOP_SINK : 0, rr: e.R ? e.R.rects : null });
+  const it = items.get(iid);
+  if (it) { it.room = e.R ? e.R.id : null; it.stand = standFor(e.R, it.pos.x, it.pos.z); }
+  return iid;
+}
+/** where a body stands to take a house thing at (x, z): the nearest point of its room's walk rects (where housegen's 0.6 m capsule stood), at the room's
+ *  floor - W.nearbyLoot hands it out as `stand` (a bot outside the wall 1.2 m from a shelf cannot take its gun: the pickup needs a clear line) */
+function standFor(R, x, z) {
+  if (!R || !R.walk || !R.walk.length) return null;
+  let best = Infinity, bx = x, bz = z;
+  for (const r of R.walk) {
+    const px = Math.min(r[2], Math.max(r[0], x)), pz = Math.min(r[3], Math.max(r[1], z)), d = (px - x) * (px - x) + (pz - z) * (pz - z);
+    if (d < best) { best = d; bx = px; bz = pz; }
+  }
+  return { x: bx, y: R.y, z: bz };
+}
+/** the heading (front = local +z away from the nearest wall behind it) and the spot of a house chest in its slot */
+function chestPlace(M, c) {
+  const surf = c.y, cs = M.queryColliders(c.x, c.z, 1.3, _hCols);
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  let best = -1, bestD = Infinity;
+  for (let d = 0; d < 4; d++) {                              // the nearest solid face (body height) in each axis direction, within 1.2 m
+    for (let t = 0; t <= 1.2; t += 0.05) {
+      const x = c.x + DIRS[d][0] * t, z = c.z + DIRS[d][1] * t;
+      let hit = false;
+      for (let i = 0; i < cs.length && !hit; i++) { const q = cs[i]; if (q.kind === "box" && !q.dead && q.maxY > surf + 0.3 && q.minY < surf + 1.0 && x > q.minX && x < q.maxX && z > q.minZ && z < q.maxZ) hit = true; }
+      if (hit) { if (t < bestD) { bestD = t; best = d; } break; }
+    }
+  }
+  const back = best >= 0 ? DIRS[best] : [0, -1];
+  const fx = -back[0], fz = -back[1];
+  const ry = Math.atan2(fx, fz);
+  // stand the chest's back 3 cm off that face (the slot is 0.75 m deep; its centre is 0.375 m from the wall)
+  let x = c.x, z = c.z;
+  if (best >= 0) { const push = HOUSE_CHEST_HALF[1] + 0.03 - bestD; x += fx * push; z += fz * push; }
+  return { x, z, ry, half: back[0] ? [HOUSE_CHEST_HALF[1], HOUSE_CHEST_HALF[0]] : [HOUSE_CHEST_HALF[0], HOUSE_CHEST_HALF[1]] };
+}
+/** a box-shaped chest body (half extents hx, hz from surf + 0.05 to surf + top) clear of every solid but the floor it stands on */
+function chestClear(M, x, z, surf, hx, hz, top) {
+  const cs = M.queryColliders(x, z, Math.max(hx, hz) + 0.05, _hCols);
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (c.kind !== "box" || c.dead) continue;
+    if (x + hx <= c.minX || x - hx >= c.maxX || z + hz <= c.minZ || z - hz >= c.maxZ) continue;
+    if (c.maxY > surf + 0.05 && c.minY < surf + top) return false;
+  }
+  return true;
+}
+/** a chest's burst spot in its room: 1.1 m out at `ang`, else nearer, else on the chest's front edge */
+function chestBurstSpot(W, c, ang) {
+  const M = W.map, R = c.R;
+  for (const r of [1.1, 0.8, 1.4, 0.6]) {
+    const x = c.pos.x + Math.cos(ang) * r, z = c.pos.z + Math.sin(ang) * r;
+    if (inRoom(R, x, z) && spotClear(M, x, z, c.pos.y, 0.2) && hoverAt(M, x, z, c.pos.y) >= 0) return { x, z };
+  }
+  for (let j = 0; j < 8; j++) {                              // any heading at 1.0 m
+    const a2 = ang + j * Math.PI / 4, x = c.pos.x + Math.cos(a2), z = c.pos.z + Math.sin(a2);
+    if (inRoom(R, x, z) && spotClear(M, x, z, c.pos.y, 0.2)) return { x, z };
+  }
+  return { x: c.pos.x + c.rs * 0.7, z: c.pos.z + c.rc * 0.7 };   // in front of it
+}
+/** spawn one house's loot (records order, its own stream). Returns the light-ammo boxes it laid (populate's guarantee counts them). */
+function houseLoot(W, H, modeK, floorOut) {
+  if (!H || !Array.isArray(H.loot)) return 0;
+  houseStats.houses++;
+  const rng = K.mulberry32((((W.seed >>> 0) ^ 0x4005e1) ^ strHash(String(H.id))) >>> 0);
+  const rooms = new Map();
+  for (const r of H.rooms || []) rooms.set(r.id, r);
+  const byRoom = new Map();
+  for (const l of H.loot) { let a = byRoom.get(l.room); if (!a) byRoom.set(l.room, (a = [])); a.push(l); houseStats.points++; }
+  const furn = H.furniture || [];
+  let light = 0;
+  // the usable points per room (within the walk-over of the room's own walk rects), then the house's spot BUDGET: HOUSE_SPOTS(rooms that have one)
+  // spots, given room by room by a weighted draw on the room kind (a room is drawn again only when every other is used)
+  const cand = [];
+  for (const [rid, pts] of byRoom) {
+    const R = rooms.get(rid) || null, kind = R ? R.kind : "hall";
+    const ok = [];
+    for (const l of pts) { if (R && R.walk && R.walk.length && walkDist(R, l.x, l.z) > REACH_IN_ROOM) { houseStats.skippedReach++; continue; } ok.push(l); }
+    const bk = houseStats.byKind[kind] || (houseStats.byKind[kind] = { rooms: 0, points: 0, spots: 0, rolls: 0, items: 0 });
+    bk.rooms++; bk.points += ok.length;
+    if (ok.length) cand.push({ rid, R, kind, pts: ok, used: 0, w: ROOM_W[kind] != null ? ROOM_W[kind] : 1, bk });
+  }
+  const E = Math.min(HOUSE_SPOTS_MAX, HOUSE_SPOTS_BASE + HOUSE_SPOTS_PER_ROOM * cand.length);
+  let budget = Math.floor(E) + (rng() < E - Math.floor(E) ? 1 : 0);
+  while (budget > 0) {
+    let tot = 0;
+    const minUsed = cand.reduce((m, c) => (c.used < c.pts.length ? Math.min(m, c.used) : m), Infinity);
+    if (minUsed === Infinity) break;
+    for (const c of cand) if (c.used === minUsed && c.used < c.pts.length) tot += c.w;
+    let u = rng() * tot, C = null;
+    for (const c of cand) { if (c.used !== minUsed || c.used >= c.pts.length) continue; C = c; u -= c.w; if (u < 0) break; }
+    const l = C.pts[C.used++];
+    budget--;
+    let top = null;
+    if (l.on && l.on !== "floor") {
+      for (const p of furn) if (p.room === C.rid && p.floor === l.floor && !p.deco && (p.cat === l.on || p.type === l.on) && l.x >= p.min[0] - 0.01 && l.x <= p.max[0] + 0.01 && l.z >= p.min[2] - 0.01 && l.z <= p.max[2] + 0.01) { top = p; break; }
+    }
+    const e = { H, R: C.R, l, top, k: 0, x: l.x, y: l.y, z: l.z, ringD: top ? Math.max(0.45, Math.min(RING_D_WEAPON, top.max[0] - top.min[0], top.max[2] - top.min[2])) : HOUSE_RING_FLOOR };
+    const rolls = K.floorRollCount ? K.floorRollCount(rng, modeK.lootMult || 1) : (rng() < 0.55 * Math.min(1.6, modeK.lootMult || 1) ? 1 : 0);
+    C.bk.spots++; C.bk.rolls += rolls;
+    if (!houseSpot(W.map, e, 0)) { houseStats.skippedLow++; for (let r = 0; r < rolls; r++) K.rollFloorSpawn ? K.rollFloorSpawn(rng) : K.rollFloorItem(rng); continue; }   // (same draws either way)
+    houseStats.used++;
+    for (let r = 0; r < rolls; r++) {
+      const spawn = K.rollFloorSpawn ? K.rollFloorSpawn(rng) : [K.rollFloorItem(rng)];
+      for (const data of spawn) {
+        if (houseItem(W, data, e, e.k, e.k ? "h" + e.k + ":" + l.id : "h:" + l.id)) { C.bk.items++; if (data.kind === "ammo" && data.id === "light") light++; if (data.kind === "weapon" && data.id !== "pistol") e.gun = true; }
+        e.k++;
+      }
+    }
+    if (!top) floorOut.push(e);
+    houseSpots.push({ x: l.x, y: l.y + HOUSE_HOVER, z: l.z, kind: top ? "top" : "floor", house: H.id, room: C.rid, gun: !!e.gun, poi: H.town != null ? H.town : null, stand: standFor(C.R, l.x, l.z) });   // (K2) stand: where a bot takes it (its room's walk area); poi: its town
+  }
+  // chests: the slots in record order, never in a bath or a corridor, at most HOUSE_CHESTS per house
+  const cap = (H.storeys || 1) >= 3 ? 2 : 1;
+  let n = 0;
+  for (const c of H.chests || []) {
+    houseStats.chestsOffered++;
+    const R = rooms.get(c.room) || null;
+    if (!R || NO_CHEST_ROOM.has(R.kind)) { houseStats.chestsKind++; continue; }
+    if (n >= cap) { houseStats.chestsCap++; continue; }
+    if (rng() >= HOUSE_CHEST_P) { houseStats.chestsDice++; continue; }
+    const pl = chestPlace(W.map, c);
+    if (!chestClear(W.map, pl.x, pl.z, c.y, pl.half[0] - 0.02, pl.half[1] - 0.02, 0.62)) { houseStats.chestsTight++; pl.x = c.x; pl.z = c.z; }   // (pushed into something: back to the slot's middle)
+    const cid = spawnChest(W, pl.x, c.y, pl.z, { surf: c.y, ry: pl.ry, sc: HOUSE_CHEST_SC, R: { walk: R.walk, rects: R.rects }, house: H.id, room: c.room, half: pl.half });
+    const cr = chests.get(cid); if (cr) cr.stand = standFor(R, pl.x + Math.sin(pl.ry) * 0.9, pl.z + Math.cos(pl.ry) * 0.9);   // (in front of it)
+    houseStats.chests++;
+    houseSpots.push({ x: pl.x, y: c.y + 0.6, z: pl.z, kind: "chest", house: H.id, room: c.room, gun: true, poi: H.town != null ? H.town : null, stand: cr ? cr.stand : null });
+    n++;
+  }
+  return light;
+}
+/** Test hook: what the per-room pass did this match (houses, points used / skipped, chests, per room kind). */
+export function debugHouseLoot() { return JSON.parse(JSON.stringify(houseStats)); }
 
 // ── supply drops ─────────────────────────────────────────────────────────────
 function maybeSupplyDrop(W, dt) {
@@ -1347,7 +1652,22 @@ function maybeSupplyDrop(W, dt) {
 // 16-17 % of the items on every seed (probe_loot: items within 1.5 m of a ramp-reached slab 2.2-4 m above them, live 60b854d0 and the Wave-7 tree).
 // The player's walkover / E / chest reach and the bots' walkover (WALK_DY) use this one number.
 const NEAR_DY = 4, REACH_DY = 2.2;
-function nearby(pos, r, maxDy) {
+// A house item or chest is taken from INSIDE its room: a pickup-range query (r <= PICK_LOS_R) asked WITH los - the player's walk-over and E always; a bot when
+// bots.js passes the 4th argument, which it should once it walks to the `stand` point nearbyLoot hands out (without that a bot parked outside the wall loops on
+// a gun it cannot take: probe_match ashgrid 12/13 worst bot 9 / 8 stuck episodes with it, 1 / 4 without) - needs a clear
+// line from the taker's chest (feet + 1.5) to the thing (its spot + lift) - an exterior or interior wall is 0.24 m, and the 1.5 m walk-over used to
+// reach through it from the street or the next room. One cached answer per thing (the taker's 0.25 m cell): a bot standing at a shelf asks every tick.
+const PICK_LOS_R = 3;
+let losMap = null;
+function pickLos(pos, o, lift) {
+  if (!losMap || !losMap.losBlocked) return true;
+  const k = Math.round(pos.x * 4) * 73856093 ^ Math.round(pos.z * 4) * 19349663 ^ Math.round(pos.y * 4) * 83492791;
+  if (o._losK === k) return o._losV;
+  const v = !losMap.losBlocked(pos.x, pos.y + 1.5, pos.z, o.pos.x, o.pos.y + lift, o.pos.z);
+  o._losK = k; o._losV = v;
+  return v;
+}
+function nearby(pos, r, maxDy, los) {
   const out = [];
   const r2 = r * r;
   const dyMax = maxDy == null ? NEAR_DY : maxDy;
@@ -1364,16 +1684,16 @@ function nearby(pos, r, maxDy) {
           if (!it || it.taken) continue;
           const dx = it.pos.x - pos.x, dz = it.pos.z - pos.z;
           const d2 = dx * dx + dz * dz;                     // squared compare: no sqrt per candidate
-          if (d2 < r2 && Math.abs(it.pos.y - pos.y) < dyMax) {
-            out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d: Math.sqrt(d2) });
+          if (d2 < r2 && Math.abs(it.pos.y - pos.y) < dyMax && (!los || !it.house || r > PICK_LOS_R || pickLos(pos, it, 0.1))) {
+            out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d: Math.sqrt(d2), stand: it.stand || null });
           }
         } else {
           const c = chests.get(e.id);
           if (!c || c.opened) continue;
           const dx = c.pos.x - pos.x, dz = c.pos.z - pos.z;
           const d2 = dx * dx + dz * dz;
-          if (d2 < r2 && Math.abs(c.pos.y - pos.y) < dyMax) {
-            out.push({ type: "chest", id: c.id, pos: c.pos, d: Math.sqrt(d2) });
+          if (d2 < r2 && Math.abs(c.pos.y - pos.y) < dyMax && (!los || !c.house || r > PICK_LOS_R || pickLos(pos, c, 0.45))) {
+            out.push({ type: "chest", id: c.id, pos: c.pos, d: Math.sqrt(d2), stand: c.stand || null });
           }
         }
       }
@@ -1395,7 +1715,8 @@ function openChest(W, a, id) {
   let i = 0;
   for (const d of drops) {
     const ang = (i / drops.length) * Math.PI * 2 + 0.6;
-    spawnItem(W, d, c.pos.x + Math.cos(ang) * 1.1, c.pos.y + 0.2, c.pos.z + Math.sin(ang) * 1.1, "cb:" + id + ":" + i);
+    if (c.R) { const sp = chestBurstSpot(W, c, ang); spawnItem(W, d, sp.x, c.pos.y + HOUSE_HOVER, sp.z, "cb:" + id + ":" + i, { surf: c.pos.y, house: c.house, rr: c.R.rects || null }); }   // a house chest: the room's floor, never through its wall
+    else spawnItem(W, d, c.pos.x + Math.cos(ang) * 1.1, c.pos.y + 0.2, c.pos.z + Math.sin(ang) * 1.1, "cb:" + id + ":" + i);
     i++;
   }
   W.events.emit("chestOpened", a, c);
@@ -1737,7 +2058,7 @@ export function update(W, dt) {
   //  - HOLD E for 2 s on a chest → open (progress surfaces on the HUD)
   const a = W.player;
   if (a && a.alive) {
-    const near = nearby(a.pos, 2.4, REACH_DY);
+    const near = nearby(a.pos, 2.4, REACH_DY, true);
     // walkover auto-pickup: ammo/heals always (if they fit); weapons only up
     // to 3 carried — hoarding 5 guns left NO room for shield potions, which
     // read as "shields don't work". Tap E to take/swap anything explicitly.
@@ -1816,6 +2137,10 @@ function botWalkover(W, a) {
         if (dx * dx + dz * dz >= WALK_R * WALK_R || Math.abs(it.pos.y - a.pos.y) > WALK_DY) continue;
         if (it.noWalkoverBy === a.id && W.t < it.noWalkoverUntil) continue;
         if (!wouldAccept(W, a, it.data)) continue;
+        // (Wave 8 fix round, lane K2) a HOUSE item is walked over from inside its room only: the same clear line the player's walk-over needs (pickLos);
+        // a bot on the street 1.2 m from a shelf behind the wall used to take its gun through the wall (verify_b). Non-house items: unchanged.
+        // (the room test first: no sight line is cast for a bot outside the item's room - the street side of the wall, the next room)
+        if (it.house && ((it.rr && !inRects(it.rr, px, pz, 0.3)) || !pickLos(a.pos, it, 0.1))) continue;
         pickup(W, a, it.id);
       }
     }

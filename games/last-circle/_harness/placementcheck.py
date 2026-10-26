@@ -36,6 +36,8 @@ Wave-6 rows (lane 6E; gating since the default is --wave 6, information with --w
   base-edges          grounded structure base edges <= 0.10 m over the rendered ground: <= 1 % of any plan generator over it   (Wave 5: house 85-93 %, hut 76-90 %, tower 98-100 %)
   doorway-clearance   every doorway >= 2.0 m under its lintel                                                              (Wave 5: min 1.16 m, 8 under 2.0)
   ramp-start-step     every ramp starts within 0.55 m of the floor                                                        (Wave 4: 42 over; Wave 5 release: 0, kept as a guard)
+                      Wave 8 (lane K3): a furnished house's pitched-roof planks (house.roofRamps) are roofs, not stairs (eave ~3.6 m up by design):
+                      counted apart as information; house STAIRS are judged like every other ramp (stage-B verify: 26 over = all roof planks, 0 stairs)
   roads-float         road ribbon > 0.10 m over the ground <= 1 % of the samples                                          (Wave 5: 2.3 / 16.3 / 6.6 %)
   ground-match        |heightAt - rendered near ring| p99 <= 1e-4 m (Wave 5 bar: 0.05 m)                                  (Wave 5: 0.012 / 0.037 / 0.023 m)
   pads                the ground under every pad rect (M.ground.padLog) and under every pad-generator footprint is flat within 0.02 m (physics AND drawn)   (Wave 5: slopes of 0.1-3 m)
@@ -46,6 +48,7 @@ Exit 0 pass / 1 fail / 2 could-not-judge (the census crashed, a prop kind is mis
   stack-float -> stack-contact + props-float-worst
   Wave 6: no-pads -> base-edges + pads (the drawn ground is 0.35 m lower on half of every footprint)   door-buried -> doorway-clearance
           ramp-lip -> ramp-start-step   roads-lifted -> roads-float   ground-shift -> ground-match (3 mm)
+  Wave 8: house-stair-lip -> ramp-start-step (the first housegen STAIR lifted 0.8 m: the roof-plank exclusion must not hide a stair)
 In plant mode only the designated rows count: exit 1 = the fault was detected, exit 0 = the gate is blind to it.
 --rows a,b,c does the same for a named set of rows without planting anything (a frozen revision must FAIL them).
 """
@@ -102,7 +105,7 @@ FLOAT_TOL = 0.10          # the "resting on" tolerance (also the census FLOAT): 
 PLANT_ROWS = {"y-only-recentre": {"anchor-offset", "rocks-floating"}, "perimeter-drop": {"ground-match"}, "tree-float": {"props-float-worst"},
               "stack-float": {"stack-contact", "props-float-worst"},
               # Wave 6 (lane 6E)
-              "no-pads": {"base-edges", "pads"}, "door-buried": {"doorway-clearance"}, "ramp-lip": {"ramp-start-step"}, "roads-lifted": {"roads-float"},
+              "no-pads": {"base-edges", "pads"}, "door-buried": {"doorway-clearance"}, "ramp-lip": {"ramp-start-step"}, "house-stair-lip": {"ramp-start-step"}, "roads-lifted": {"roads-float"},
               "ground-shift": {"ground-match"}}
 WAVE6_ROWS = ("base-edges", "doorway-clearance", "ramp-start-step", "roads-float", "ground-match", "pads")
 
@@ -335,7 +338,10 @@ def judge(v, doc, args, plant_rows):
     d = ["%s min %s (%d < 1.85 capsule, %d < 2.0)" % (m, f(S[m]["doors"]["minClear"], 2), S[m]["doors"]["ltCapsule"], S[m]["doors"]["lt20"]) for m in S if S[m]["doors"]["lt20"]]
     chk("doorway-clearance", not d, "every doorway >= 2.0 m: min " + per_map(lambda s: "%s over %d doorways" % (f(s["doors"]["minClear"], 2), s["doors"]["n"])) if not d else " | ".join(d), ">= 2.0 m", wave6_row=True)
     d = ["%s %d of %d starts > 0.55 m (max %s)" % (m, S[m]["ramps"]["stepGt055"], S[m]["ramps"]["n"], f(S[m]["ramps"]["stepMax"], 2)) for m in S if S[m]["ramps"]["stepGt055"]]
-    chk("ramp-start-step", not d, "every ramp starts within 0.55 m of the floor" if not d else " | ".join(d), "0 over 0.55 m", wave6_row=True)
+    chk("ramp-start-step", not d, ("every ramp starts within 0.55 m of the floor (%s; house roof planks excluded)" % per_map(lambda s: "%d ramps" % s["ramps"]["n"])) if not d else " | ".join(d), "0 over 0.55 m", wave6_row=True)
+    # Wave 8 (lane K3): housegen's pitched-roof planks (house.roofRamps) are roofs, not stairs - their eave sits ~3.6 m over the ground by design. Information only.
+    if any((S[m]["ramps"].get("roofN") or 0) for m in S):
+        v.info("ramp-start-step, house roof planks (not stairs; not judged)", per_map(lambda s: "%d planks, %d start > 0.55 m (max %s)" % (s["ramps"].get("roofN") or 0, s["ramps"].get("roofStepGt055") or 0, f(s["ramps"].get("roofStepMax"), 2))))
     d = ["%s %s%%" % (m, f(100 * (S[m]["roads"]["floatShare"] or 0), 1)) for m in S if (S[m]["roads"]["floatShare"] or 0) > 0.01]
     chk("roads-float", not d, ("road ribbon float > 0.10 m <= 1 %%: %s" % per_map(lambda s: f(100 * (s["roads"]["floatShare"] or 0), 2) + " %")) if not d else " | ".join(d), "<= 1 %", wave6_row=True)
     v.info("roads below the surface", per_map(lambda s: "%s %% of %d samples under the rendered ground" % (f(100 * (s["roads"]["pokeShare"] or 0), 2), s["roads"]["n"])))
