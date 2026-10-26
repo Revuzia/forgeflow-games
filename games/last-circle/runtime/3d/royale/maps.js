@@ -5579,7 +5579,8 @@ export async function buildMap(W, mapId) {
   let _pKind = "island";          // LC-51: every portal record says where it stands ("island" | "ground"), for the big map (hud) and the gates
   {
     const nIsl = 5 + Math.floor(rng() * 3);
-    const grassC = mapId === "ashgrid" ? "#a7ad55" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62";
+    const grassC = new THREE.Color(mapId === "ashgrid" ? "#a7ad55" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62").multiplyScalar(Math.min(1, GRADE.ground * 1.25));   // (LC-04: the turf takes the ground grade, a little lighter: it is lit from above, the terrain mostly grazed)
+    const turfSideC = new THREE.Color("#5b4632").multiplyScalar(Math.min(1, GRADE.ground * 1.25)), islWhite = new THREE.Color(1, 1, 1);   // (LC-73: the turf's earth-and-root side)
     // #7a6a58 is linear ~(0.19, 0.14, 0.10). The cone is rotated 180 degrees below,
     // so its lit faces all point DOWN and the only light reaching them is the
     // hemisphere's groundColor — at that albedo the signature feature of the map
@@ -5620,6 +5621,16 @@ export async function buildMap(W, mapId) {
         P.setX(v, x * f); P.setZ(v, z * f);
       }
       g.computeVertexNormals();
+      // LC-73: the turf's 1.6 m side read as a bright green slab edge (the top one flat colour): the side is a dark earth-and-root band, the cap rim a little
+      // darker than its crown, as vertex colours x the material (no extra draw)
+      // (the material is white: the vertex colour IS the colour - turf on the cap, earth on the side)
+      const N = g.attributes.normal, col = new Float32Array(P.count * 3);
+      for (let v = 0; v < P.count; v++) {
+        const up = N.getY(v), r = Math.hypot(P.getX(v), P.getZ(v)) / rad;
+        const c = up > 0.5 ? grassC : turfSideC, f = up > 0.5 ? (r < 1e-3 ? 1.06 : 0.86) : 1;
+        col[v * 3] = c.r * f; col[v * 3 + 1] = c.g * f; col[v * 3 + 2] = c.b * f;
+      }
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
       return g;
     };
     const islandRockGeo = (rad, k) => {
@@ -5665,7 +5676,7 @@ export async function buildMap(W, mapId) {
       const topGeo = islandTopGeo(rad, i);
       // D2 (Savanna only): the islands' discs and rocks are baked into ONE mesh each after the loop (a drop view over the whole map saw five islands = ten draw calls); they cast no
       // shadow there (a floating island 26-52 m up never shadows anything a player can see: the shadow box is +-55 m around the player and the merged mesh would sit in it for ever)
-      const top = isl ? null : new THREE.Mesh(topGeo, islMat(grassC, 0.95, topGeo, (rad * 2) / TILE));
+      const top = isl ? null : new THREE.Mesh(topGeo, Object.assign(islMat(islWhite, 0.95, topGeo, (rad * 2) / TILE), { vertexColors: true }));
       if (isl) { islScaleUV(topGeo, (rad * 2) / TILE); topGeo.translate(ix, topY - 0.8, iz); isl.tops.push(topGeo); }
       else {
         top.position.set(ix, topY - 0.8, iz);
@@ -5715,11 +5726,19 @@ export async function buildMap(W, mapId) {
     }
     // ground launch portals at POIs: quick rotation + the way UP to islands
     _pKind = "ground";
+    // LC-51: a portal never stands in the city kit's street dressing (a parked van ran through Isla Viva's first ground portal: the kit is placed after the
+    // portals, from city.kit). A kit-blocked draw still burns its yaw draw, so the world stream is byte-identical; the top-up below replaces it.
+    const nearKit = (x, z, r) => {
+      if (!city || !city.kit.length) return false;
+      for (let k = 0; k < city.kit.length; k++) { const e = city.kit[k]; if (/building|shell/.test(e.type)) continue; const dx = e.x - x, dz = e.z - z; if (dx * dx + dz * dz < r * r) return true; }
+      return false;
+    };
     for (let i = 0; i < Math.min(4, pois.length); i++) {
       const p = pois[Math.floor(rng() * pois.length)];
       const px = p.x + 14 + (rng() - 0.5) * 24, pz = p.z + 14 + (rng() - 0.5) * 24;
       const py = heightAt0(px, pz);
       if (baseH(px, pz) < waterY + 0.5 || inRects(cityBld, px, pz, 3.5) || (cityKeepClear.length && inRects(cityKeepClear, px, pz, 3))) continue;
+      if (nearKit(px, pz, 7.5)) { rng(); continue; }
       addPortal(px, py, pz, rng() * Math.PI * 2);
     }
     // LC-51: the four draws above are kept exactly (the world stream feeds everything after them), but each one is skipped when it lands in the sea or in a
@@ -5737,6 +5756,7 @@ export async function buildMap(W, mapId) {
         if (Math.abs(px) > HALF - 60 || Math.abs(pz) > HALF - 60) continue;
         if (baseH(px, pz) < waterY + 0.8 || heightAt0(px, pz) < waterY + 0.8 || inRects(cityBld, px, pz, 4) || (cityKeepClear.length && inRects(cityKeepClear, px, pz, 4))) continue;
         if (houses.length && underHouse(px, pz)) continue;
+        if (nearKit(px, pz, 7.5)) continue;
         const py = heightAt0(px, pz);
         let flat = true;
         for (let k = 0; k < 6 && flat; k++) { const b = k / 6 * Math.PI * 2; if (Math.abs(heightAt0(px + Math.cos(b) * 2.2, pz + Math.sin(b) * 2.2) - py) > 0.6) flat = false; }
@@ -5758,7 +5778,7 @@ export async function buildMap(W, mapId) {
     _pKind = "island";
     if (isl && isl.tops.length) {
       const nullGeo = { attributes: {} };                                           // (islMat only scales a UV it finds: the baked geometries carry their own)
-      const topM = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(isl.tops, false), islMat(grassC, 0.95, nullGeo, 1));
+      const topM = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(isl.tops, false), Object.assign(islMat(islWhite, 0.95, nullGeo, 1), { vertexColors: true }));
       topM.name = "island:tops"; topM.castShadow = false; topM.receiveShadow = true; g.add(topM);
       const rockMat = islMat(rockC, 1, nullGeo, 1);
       rockMat.emissive.set(K.sky); rockMat.emissiveIntensity = 0.12;
