@@ -5,7 +5,7 @@ section 5 "one readable pile with all ammo"; "supply drops: >= 3 per match, beac
 
     python _harness/p23/lootp2.py --disk
     python _harness/p23/lootp2.py --rev 9aa2b746                # control: the P2 base (2-box ammo cap, no tiers, no beacons) - MUST FAIL
-    python _harness/p23/lootp2.py --disk --plant ammo-cap       # the victim's medium ammo capped at 60 before it dies - MUST FAIL (pile row)
+    python _harness/p23/lootp2.py --disk --plant ammo-cap       # the death path caps every ammo stack at 60 (the base's pile cap) - MUST FAIL (pile row)
     python _harness/p23/lootp2.py --disk --plant no-supply      # every 'supplyDropLanded' swallowed and W.supplyDrops emptied - MUST FAIL
     python _harness/p23/lootp2.py --lanes loot,hud              # validation: those lanes' work served over the base
 
@@ -30,7 +30,8 @@ import p23lib as L  # noqa: E402
 C = L.C
 
 PLANTS = {
-    "ammo-cap": "window.__P23_AMMOCAP__ = 60",
+    # the death path itself caps every ammo stack at 60 (the base's 2-box pile cap, put back into the game's killActor)
+    "ammo-cap": "const ka = W.killActor; W.killActor = function (a) { if (a && a.inventory && a.inventory.ammo) for (const t in a.inventory.ammo) a.inventory.ammo[t] = Math.min(a.inventory.ammo[t], 60); return ka.apply(this, arguments); }",
     "no-supply": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'supplyDropLanded') return; return em.apply(null, arguments); }; W.kernel._updaters.push(() => { if (Array.isArray(W.supplyDrops)) W.supplyDrops.length = 0; })",
 }
 RUNS = [("ashgrid", 7), ("isla_viva", 21), ("deepwood", 1234)]
@@ -105,7 +106,7 @@ def open_drop(s, sp):
 PILE_JS = r"""() => { const W = window.__LC__.W, K = W.SIM, p = W.player; const b = W.actors.find((a) => a.isBot && a.alive); if (!b) return null;
   b.pos.set(p.pos.x + 3, W.map.heightAt(p.pos.x + 3, p.pos.z), p.pos.z); b.vel.set(0, 0, 0);
   b.inventory.slots[1] = { kind: 'weapon', id: 'ar', rarity: 3, mag: 30 }; b.inventory.slots[2] = { kind: 'weapon', id: 'smg', rarity: 1, mag: 20 };
-  b.inventory.slots[3] = { kind: 'consumable', id: 'medkit', count: 1 }; b.inventory.ammo.medium = 240; if (window.__P23_AMMOCAP__) b.inventory.ammo.medium = Math.min(b.inventory.ammo.medium, window.__P23_AMMOCAP__);
+  b.inventory.slots[3] = { kind: 'consumable', id: 'medkit', count: 1 }; b.inventory.ammo.medium = 240;
   const before = W.debugItems ? W.debugItems().length : 0;
   W.killActor(b, p.id, 'ar'); window.__LC__.stepFrames(3, 1 / 60, true);
   const all = W.debugItems ? W.debugItems() : []; const near = all.filter((it) => { const q = it.pos || it; return Math.hypot(q.x - b.pos.x, q.z - b.pos.z) < 4; });
@@ -119,10 +120,12 @@ PILE_JS = r"""() => { const W = window.__LC__.W, K = W.SIM, p = W.player; const 
            memberMarkers, bestColor: best, before }; }"""
 
 
-def part_pile(s, v):
+def part_pile(s, v, plant=None):
     L.start(s, "standard", 7, "ashgrid", guard=True)
     s.land(140, protect=True)
     s.freeze_loop()
+    if plant:                       # after the match start (a start may rebuild the W hooks a plant wraps)
+        L.plant_js(s, plant)
     s.install_pump()
     r = s.js(PILE_JS)
     v.data["pile"] = r
@@ -146,9 +149,7 @@ def main():
             if args.plant:
                 s.js("() => { window.__P23PLANT__ = true; }")
             if "pile" in args.parts:
-                if args.plant:
-                    L.plant_js(s, PLANTS[args.plant])
-                part_pile(s, v)
+                part_pile(s, v, PLANTS[args.plant] if args.plant else None)
                 s.thaw_loop()
             if "tiers" in args.parts:
                 if args.plant:
