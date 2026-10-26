@@ -481,12 +481,35 @@
    *  procedural pistol carry (player.js lowReady), "pistolAds" for its raised-arms aim (player.js gunReady: ADS OR a
    *  shot within COMBAT_POSE_S, the same window player.js syncObj uses; `now` = W.t, omitted -> ADS only). stance: "stand" | "crouch" (crouch only when the
    *  rig HAS the crouch clip, exactly as actorHeight). */
-  var COMBAT_POSE_S = 1.5;
+  // gait (a third key part, standing only): the clip player.js stepActor picks from the ground speed gs = |vel.xz|:
+  // gs > HV_RUN_GS (4.4) and not backing up -> the run clip ("|run"), gs > HV_WALK_GS (0.7) -> the walk clip ("|walk"),
+  // else idle (no suffix). The clip's PHASE is not sim state, so those rows are the mean over sampled phases with
+  // radii that hold every phase (probe_bones9.py). Airborne, crouched, reloading and hit-react clips use the idle rows.
+  var COMBAT_POSE_S = 1.5, HV_RUN_GS = 4.4, HV_WALK_GS = 0.7, HV_FACE_GS = 1.2;
+  var HV_KEYS = {};
+  ["rifle", "pistol", "pistolAds"].forEach(function (h) {
+    HV_KEYS[h] = { crouch: h + "|crouch", stand: h + "|stand", walk: h + "|stand|walk", run: h + "|stand|run" };
+  });
+  function hvCombat(a, now) {
+    return !!(a && a.input && a.input.ads) || (now != null && a && a.lastShotT != null && now - a.lastShotT < COMBAT_POSE_S);
+  }
+  /** The body's facing (sim yaw convention: forward = (-sin, -cos)): player.js syncObj turns the body toward its
+   *  VELOCITY when out of combat and moving faster than 1.2 m/s (on foot), else squares it to the aim (a.yaw). */
+  function hitVolFacing(a, now) {
+    var vx = (a.vel && a.vel.x) || 0, vz = (a.vel && a.vel.z) || 0;
+    if (!a.gliding && !a.swimming && !hvCombat(a, now) && vx * vx + vz * vz > HV_FACE_GS * HV_FACE_GS) return Math.atan2(-vx, -vz);
+    return a.yaw || 0;
+  }
   function hitVolPose(a, now) {
     var w = a && a.weapon && a.weapon.id, def = w && WEAPONS[w];
-    var combat = !!(a && a.input && a.input.ads) || (now != null && a && a.lastShotT != null && now - a.lastShotT < COMBAT_POSE_S);
-    var hold = def && def.cls === "pistol" ? (combat ? "pistolAds" : "pistol") : "rifle";
-    return hold + "|" + (a && a.crouching && a.hasCrouchClip ? "crouch" : "stand");
+    var K3 = HV_KEYS[def && def.cls === "pistol" ? (hvCombat(a, now) ? "pistolAds" : "pistol") : "rifle"];
+    if (a && a.crouching && a.hasCrouchClip) return K3.crouch;
+    if (!a || !a.vel || a.onGround === false) return K3.stand;
+    var vx = a.vel.x || 0, vz = a.vel.z || 0, gs = Math.sqrt(vx * vx + vz * vz);
+    if (gs <= HV_WALK_GS) return K3.stand;
+    var f = hitVolFacing(a, now);
+    var back = vx * -Math.sin(f) + vz * -Math.cos(f) < -0.5;
+    return gs > HV_RUN_GS && !back ? K3.run : K3.walk;
   }
   var _hvJ = new Float64Array(72);
   /** Fill _hvJ with the actor's interpolated joints + head (local frame). Returns the radius table or null (no data). */
@@ -495,7 +518,9 @@
     var sk = HITVOL.T[a && a.skin] ? a.skin : "soldier";
     var tab = HITVOL.T[sk];
     if (!tab) return null;
-    var key = hitVolPose(a, now), v = tab[key] || tab["rifle|stand"];
+    var key = hitVolPose(a, now), v = tab[key];
+    if (!v && key.length > 12 && key.indexOf("|stand|") > 0) key = key.slice(0, key.indexOf("|stand|") + 6), v = tab[key];   // no gait rows -> idle
+    if (!v) key = "rifle|stand", v = tab[key];
     if (!v) return null;
     var P = HITVOL.PITCH, NV = HITVOL.NV, p = clamp((a && a.pitch) || 0, P[0], P[P.length - 1]);
     var k = 0;
@@ -553,7 +578,7 @@
     HITVOL_HIT.head = false; HITVOL_HIT.part = -1; HITVOL_HIT.legacy = false;
     var R = (t && !t.swimming && !t.downed) ? hitVolJoints(t, now) : null;
     if (!R) { HITVOL_HIT.legacy = true; return -2; }
-    var s = Math.sin(t.yaw || 0), c = Math.cos(t.yaw || 0);
+    var fy = hitVolFacing(t, now), s = Math.sin(fy), c = Math.cos(fy);
     // world -> local (x right = (c, -s), z forward = (-s, -c) in world xz)
     var px = ax - t.pos.x, pz = az - t.pos.z, qx = bx - t.pos.x, qz = bz - t.pos.z;
     var lpx = px * c - pz * s, lpz = -px * s - pz * c, lqx = qx * c - qz * s, lqz = -qx * s - qz * c;
@@ -1705,7 +1730,7 @@
     FALL: FALL, FALL_SAFE_H: FALL_SAFE_H, FALL_SAFE_V: FALL_SAFE_V, FALL_DMG_PER_V: FALL_DMG_PER_V, FALL_EXP: FALL_EXP,
     LAND_STAGGER_S: LAND_STAGGER_S, LAND_STAGGER_V: LAND_STAGGER_V, fallDamage: fallDamage, fallSpeedForHeight: fallSpeedForHeight,
     fallSafeHeight: fallSafeHeight, fallLethalHeight: fallLethalHeight,
-    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, COMBAT_POSE_S: COMBAT_POSE_S,
+    HITVOL: HITVOL, HITVOL_HIT: HITVOL_HIT, hitVolSegment: hitVolSegment, hitVolPose: hitVolPose, hitVolJoints: hitVolJoints, COMBAT_POSE_S: COMBAT_POSE_S, hitVolFacing: hitVolFacing,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FFG = root.FFG || {};

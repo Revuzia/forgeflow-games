@@ -1291,6 +1291,16 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
      R.hitVolPose(actor({ weapon: { id: "pistol" }, lastShotT: 10 }), 10 + R.COMBAT_POSE_S + 0.01) === "pistol|stand" &&
      R.hitVolPose(actor({ weapon: { id: "pistol" }, lastShotT: 10 })) === "pistol|stand" && R.COMBAT_POSE_S === 1.5,
      "LC-22: a pistol hip-fired within 1.5 s is drawn in the raised gunReady arms (player.js combat window) and tests that volume");
+  {
+    const mv = (vx, vz, o) => actor(Object.assign({ vel: { x: vx, y: 0, z: vz }, onGround: true }, o || {}));
+    ok(R.hitVolPose(mv(0, -6)) === "rifle|stand|run" && R.hitVolPose(mv(0, -3)) === "rifle|stand|walk" && R.hitVolPose(mv(0, -0.5)) === "rifle|stand" &&
+       R.hitVolPose(mv(0, 6, { input: { ads: true } })) === "rifle|stand|walk" && R.hitVolPose(mv(0, -6, { onGround: false })) === "rifle|stand" &&
+       R.hitVolPose(mv(0, -6, { crouching: true, hasCrouchClip: true })) === "rifle|crouch" && R.hitVolPose(mv(0, -6, { weapon: { id: "pistol" } })) === "pistol|stand|run",
+       "LC-22: the gait key follows player.js's clip choice (run > 4.4 m/s not backing up, walk > 0.7, airborne / crouched -> idle rows)");
+    ok(Math.abs(R.hitVolFacing(mv(6, 0)) - Math.atan2(-6, 0)) < 1e-9 && R.hitVolFacing(mv(6, 0, { input: { ads: true }, yaw: 0.3 })) === 0.3 &&
+       R.hitVolFacing(mv(0.5, 0, { yaw: 0.3 })) === 0.3 && R.hitVolFacing(mv(6, 0, { lastShotT: 5, yaw: 0.3 }), 5.5) === 0.3,
+       "LC-22: a mover out of combat is tested facing its velocity (player.js body yaw); aiming / just fired / slow -> the aim yaw");
+  }
   ok(H.reach > 0.5 && H.reach < 1.0, "LC-22: broad-phase reach " + H.reach.toFixed(2) + " m covers every measured joint");
 }
 
