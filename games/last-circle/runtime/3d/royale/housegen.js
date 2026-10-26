@@ -3671,6 +3671,61 @@ export function defaultMaterials(THREE) {
   return cache;
 }
 
+// ── wear (parity P2-I, LC-17) ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The audit: every house wall was one flat value from the pavement to the eaves - no splash grime at the foot, no shadowed band under the eaves, so a street read as
+// clean plastic boxes. wearBands lays two thin overlay strips (WEAR_OFF in front of the face, the face's own material, colour and uv - no new material, program
+// or draw call: they join the face's material group) on every OUTSIDE wall face of the house:
+//   foot   the ground storey's faces that reach the slab: 0 .. WEAR_FOOT[0] m above the ground floor at WEAR_K[0] .. WEAR_K[1] of the wall colour, then a fade to the
+//          wall colour at WEAR_FOOT[1] m (linear working-space colour: the darkest strip reads ~20 % darker on screen)
+//   eave   the top storey's faces that reach its ceiling: a fade from the wall colour WEAR_EAVE m under the top to WEAR_K[2] at it
+// Appended after every box's 24 vertices (boxRanges unchanged); meshData(..., { wear: false }) leaves them out. 2-4 triangles a face; nothing collides.
+const WEAR_MATS = { brick: 1, plaster: 1, stucco: 1, plank: 1, stone: 1, sheet: 1 };
+const WEAR_PARTS = { wall: 1, skin: 1, shell: 1, slab: 1, gable: 1 };
+export const WEAR_FOOT = [0.5, 1.15], WEAR_EAVE = 0.7, WEAR_K = [0.56, 0.7, 0.8];
+const WEAR_OFF = 0.012;
+function wearBands(H, groups, acc, faceIn, colOf) {
+  const yG = H.floors[0].y, top = H.floors[H.floors.length - 1].ceil;
+  const quad = (a, n, P, rgbs, uvAx, tile) => {
+    const base = a.pos.length / 3;
+    for (let k = 0; k < 4; k++) { const p = P[k]; a.pos.push(p[0], p[1], p[2]); a.nor.push(n[0], n[1], n[2]); a.uv.push(p[uvAx[0]] / tile, p[uvAx[1]] / tile); a.col.push(rgbs[k][0], rgbs[k][1], rgbs[k][2]); }
+    a.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const VERT = [[0, [1, 0, 0], [2, 1]], [1, [-1, 0, 0], [2, 1]], [4, [0, 0, 1], [0, 1]], [5, [0, 0, -1], [0, 1]]];
+  H.boxes.forEach((b) => {
+    if (!WEAR_PARTS[b.p]) return;
+    for (const [fi, n, uvAx] of VERT) {
+      if (b.h & (1 << fi)) continue;
+      const pe = H.palette[b.f[fi]];
+      if (!pe || !WEAR_MATS[pe.mat] || faceIn(b, fi)) continue;
+      const y0 = b.min[1], y1 = b.max[1];
+      if (y1 - y0 < 0.3) continue;
+      const ax = fi >> 1, side = fi & 1 ? b.min[ax] - WEAR_OFF : b.max[ax] + WEAR_OFF;         // the face's plane, nudged out
+      const ua = ax === 0 ? 2 : 0, u0 = b.min[ua], u1 = b.max[ua];
+      if (u1 - u0 < 0.45) continue;                                    // (not the 0.24 m reveal of an opening or a jamb: 2-4 triangles for a sliver)
+      const P = (u, y) => { const p = [0, y, 0]; p[ax] = side; p[ua] = u; return p; };
+      // corner order of FACES (counter-clockwise seen from outside): +x / -z run u from max to min, -x / +z from min to max
+      const fwd = fi === 1 || fi === 4;
+      const strip = (ya, yb, ka, kb) => {
+        if (yb - ya < 0.02) return;
+        const rgb = colOf(pe.color), ca = [rgb[0] * ka, rgb[1] * ka, rgb[2] * ka], cb = [rgb[0] * kb, rgb[1] * kb, rgb[2] * kb];
+        const ul = fwd ? u0 : u1, ur = fwd ? u1 : u0;
+        quad(acc("walls", pe.mat, false), n, [P(ul, ya), P(ur, ya), P(ur, yb), P(ul, yb)], [ca, ca, cb, cb], uvAx, TILE[pe.mat] || 2);
+      };
+      if (y0 <= yG + 0.25 && y1 > yG) {
+        const f0 = yG + WEAR_FOOT[0], f1 = yG + WEAR_FOOT[1];
+        const kAt = (y) => (y <= f0 ? WEAR_K[0] + (WEAR_K[1] - WEAR_K[0]) * Math.max(0, (y - (yG - FLOOR0 - BASE0))) / (f0 - (yG - FLOOR0 - BASE0)) : y >= f1 ? 1 : WEAR_K[1] + (1 - WEAR_K[1]) * (y - f0) / (f1 - f0));
+        const ya = Math.max(y0, yG - FLOOR0 - BASE0), ym = Math.min(y1, f0), yb = Math.min(y1, f1);
+        strip(ya, ym, kAt(ya), kAt(ym));
+        if (yb > ym) strip(ym, yb, kAt(ym), kAt(yb));
+      }
+      if (y1 >= top - 0.05 && y1 <= top + 0.3 && y0 < top - WEAR_EAVE && top - yG >= WEAR_FOOT[1] + WEAR_EAVE) {        // (a face that ends at the top ceiling; not a tall shell's)
+        const e0 = Math.max(y0, top - WEAR_EAVE);
+        strip(e0, Math.min(y1, top), 1, WEAR_K[2]);
+      }
+    }
+  });
+}
+
 /** meshData(H, colOf, opts?) -> { groups: { walls, furniture, glass }: Map(key -> { pos, nor, uv, col, idx, boxes }), boxRanges }   (pure: no THREE)
  *  The drawn geometry of a house as flat arrays, the one definition buildHouse and the game's integration (maps.js, stage B) both draw from: every box face
  *  not hidden (h bits), the pitched roofs' planks exactly as their ramps collide, the gables' end polygons. key = the palette material ("brick", "floor_wood",
@@ -3761,6 +3816,7 @@ export function meshData(H, colOf, opts) {
     }
   }
   for (const g of H.gables || []) { const pe = pick0(H.palette, g.pal); poly(pe.mat, pe.color, g.pts, g.n, (P) => [g.n[0] ? P[2] : P[0], P[1]]); }
+  if (opts.wear !== false) wearBands(H, groups, acc, faceIn, colOf);           // (P23 / LC-17: after every box face and roof polygon)
   return { groups, boxRanges };
 }
 
@@ -3775,7 +3831,7 @@ export function buildHouse(THREE, H, opts) {
   const col3 = (c) => { const k = new THREE.Color(c); return [k.r, k.g, k.b]; };     // sRGB hex -> working colour space (three r152+ colour management)
   const colCache = new Map();
   const colOf = (c) => { let v = colCache.get(c); if (!v) { v = col3(c); colCache.set(c, v); } return v; };
-  const { groups, boxRanges } = meshData(H, colOf);
+  const { groups, boxRanges } = meshData(H, colOf, { wear: opts.wear });                 // (P23: opts.wear === false leaves the wear strips out)
   const meshOf = (a, mat) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));

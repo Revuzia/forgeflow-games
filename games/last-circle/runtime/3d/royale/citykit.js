@@ -629,12 +629,118 @@ export function createCityKit(env) {
     const pf = paletteFile(pal.key, pal.variant);
     const tex = pf ? await loadTexture(pf) : null;
     if (palMats.has(id)) return palMats.get(id);
+    const bldg = pal.key === "suburban" || pal.key === "commercial";
+    const det = tex && bldg ? await detailTexture() : null;
+    if (palMats.has(id)) return palMats.get(id);
     const m = new THREE.MeshStandardMaterial({ map: tex || null, roughness: 1, metalness: 0, side: double ? THREE.DoubleSide : THREE.FrontSide });
     m.color.setHex(tex ? pal.tint : 0xb4b8c4);
     m.name = "citykit:" + id;
+    if (tex && (bldg || pal.key === "car")) installSurfaceMap(m, tex, pal.key === "car" ? "car" : "building");
     if (pal.key === "car") installCarPaint(m);
+    else if (det) installFacadeDetail(m, det);
     palMats.set(id, m);
     return m;
+  }
+  // -- surfaces (parity P2-I, LC-17) ---------------------------------------------------------------------------------------------------------
+  // The audit: every kit surface was roughness 1 / metalness 0 - the windows of a tower as matte as its concrete, a car body as dull as its tyres, so the IBL (maps.js
+  // scene.environment) had nothing to show. installSurfaceMap reads the palette's own colormap once (the swatches are flat 64 px cells) and writes a 128 x 128
+  // roughness (G) / metalness (B) map beside it, by what each swatch IS:
+  //   building  glass (pale blue, saturation 0.12-0.7, value >= 0.5): rough 0.14 | white / pale trim: 0.62 | the darkest greys (frames, rails): 0.5, metal 0.45 | the rest 0.9
+  //   car       the saturated body swatches: rough 0.32, metal 0.25 (citykit's car paint recolours them; the paint stays glossy) | glass: 0.08 | light greys (chrome,
+  //             rims, lamps): 0.3, metal 0.6 | near-black (tyres, trim): 0.86 | the rest 0.6
+  // A map, not a program per swatch: one extra texture fetch, the material's own program (compiled by the warm-up with the kit). Node / no canvas: untouched.
+  const surfCache = new Map();
+  function surfaceMapFor(tex, kind) {
+    const img = tex && tex.image, key = (tex && tex.uuid) + ":" + kind;
+    if (surfCache.has(key)) return surfCache.get(key);
+    let out = null;
+    try {
+      if (typeof document !== "undefined" && img && img.width > 0) {
+        const N = Math.min(128, img.width), cv = document.createElement("canvas"); cv.width = cv.height = N;
+        const g = cv.getContext("2d");
+        g.imageSmoothingEnabled = false;
+        g.drawImage(img, 0, 0, N, N);
+        const src = g.getImageData(0, 0, N, N), d = src.data, o = g.createImageData(N, N), od = o.data;
+        let any = 0;
+        for (let i = 0; i < N * N; i++) {
+          const r = d[i * 4] / 255, gg = d[i * 4 + 1] / 255, b = d[i * 4 + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), s = mx > 1e-6 ? (mx - mn) / mx : 0;
+          let hue = 0;
+          if (mx - mn > 1e-6) hue = mx === r ? 60 * (((gg - b) / (mx - mn)) % 6) : mx === gg ? 60 * ((b - r) / (mx - mn) + 2) : 60 * ((r - gg) / (mx - mn) + 4);
+          if (hue < 0) hue += 360;
+          const glass = hue >= 195 && hue <= 235 && s >= 0.12 && s <= 0.7 && mx >= 0.5;
+          let ro = 0.9, me = 0;
+          if (kind === "car") {
+            if (glass) ro = 0.08; else if (s > 0.55 && mx > 0.25) { ro = 0.32; me = 0.25; } else if (s < 0.15 && mx > 0.55) { ro = 0.3; me = 0.6; } else if (mx < 0.2) ro = 0.86; else ro = 0.6;
+          } else if (glass) ro = 0.14;
+          else if (s < 0.1 && mx > 0.88) ro = 0.62;
+          else if (s < 0.15 && mx < 0.3 && mx > 0.08) { ro = 0.5; me = 0.45; }
+          if (ro !== 0.9 || me) any++;
+          od[i * 4] = 255; od[i * 4 + 1] = Math.round(ro * 255); od[i * 4 + 2] = Math.round(me * 255); od[i * 4 + 3] = 255;
+        }
+        if (any) {
+          g.putImageData(o, 0, 0);
+          const t = new THREE.CanvasTexture(cv);
+          t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+          t.name = "citykit:surface:" + kind + ":" + (tex.name || ""); t.needsUpdate = true;
+          textures.add(t);
+          out = t;
+        }
+      }
+    } catch (e) { warn("surface map failed:", e && e.message || e); out = null; }
+    surfCache.set(key, out);
+    return out;
+  }
+  function installSurfaceMap(m, tex, kind) {
+    const sm = surfaceMapFor(tex, kind);
+    if (!sm) return;
+    m.roughnessMap = sm; m.metalnessMap = sm; m.roughness = 1; m.metalness = 1;
+  }
+  // Facade detail (LC-17): the kit's colormaps are flat swatches - a 40 m tower face is one colour. A CC0 photographic plaster (assets/tex/facade_detail.jpg, Poly Haven,
+  // greyscale, mean 0.5, low frequencies removed) multiplies the albedo of every building swatch that is not glass or trim (the surface map's roughness >= 0.75), projected
+  // in WORLD space on the face's dominant plane at two scales (2.6 m and 9 m), faded out from 40 to 120 m (no shimmer at range). One shared texture and uniform for every
+  // building palette: no draw call; the program is the material's own (customProgramCacheKey), compiled in the warm frame. setDetail(0) (the low tier) turns it off
+  // without a recompile.
+  const DETAIL_PATH = "../../tex/facade_detail.jpg";
+  const detailU = { value: env.detail != null ? +env.detail : 0.62 };
+  let detailP = null;
+  function detailTexture() {
+    if (detailP) return detailP;
+    const pf = { file: DETAIL_PATH, sampler: "LINEAR/LINEAR_MIPMAP_LINEAR" };
+    detailP = loadTexture(pf).then((t) => { if (t) { t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; } return t; });
+    return detailP;
+  }
+  function installFacadeDetail(m, det) {
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.tLcDetail = { value: det };
+      sh.uniforms.uLcDetail = detailU;
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vLcW;\nvarying vec3 vLcN;")
+        .replace("#include <worldpos_vertex>", `#include <worldpos_vertex>
+{
+  vec4 lcW = vec4(transformed, 1.0);
+  vec3 lcN = objectNormal;
+#ifdef USE_INSTANCING
+  lcW = instanceMatrix * lcW;
+  lcN = mat3(instanceMatrix) * lcN;
+#endif
+  vLcW = (modelMatrix * lcW).xyz;
+  vLcN = mat3(modelMatrix) * lcN;
+}`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform sampler2D tLcDetail;\nuniform float uLcDetail;\nvarying vec3 vLcW;\nvarying vec3 vLcN;")
+        .replace("#include <map_fragment>", `#include <map_fragment>
+{
+  vec3 lcN = normalize(vLcN), lcA = abs(lcN);
+  vec2 lcUv = lcA.y > 0.6 ? vLcW.xz : (lcA.x > lcA.z ? vLcW.zy : vLcW.xy);
+  float lcF = uLcDetail * (1.0 - smoothstep(40.0, 120.0, distance(cameraPosition, vLcW)));
+#ifdef USE_ROUGHNESSMAP
+  lcF *= smoothstep(0.7, 0.85, texture2D(roughnessMap, vRoughnessMapUv).g);
+#endif
+  float lcD = texture2D(tLcDetail, lcUv * 0.3846).r * 1.2 + texture2D(tLcDetail, lcUv * 0.1111 + 0.37).r * 0.8;
+  diffuseColor.rgb *= mix(1.0, clamp(lcD, 0.5, 1.55), lcF);
+}`);
+    };
+    m.customProgramCacheKey = () => "citykit-facade-detail";
   }
   // Car paint (Wave 7 polish). The Kenney car palette paints every model in ONE saturated swatch (green sedans, red hatchbacks, ...), which in a street of 20 parked cars
   // is a toy shop. Every car InstancedMesh carries an instance colour (white = untouched): where the texel is a saturated body swatch (HSV saturation > ~0.65) it is replaced
@@ -972,6 +1078,8 @@ export function createCityKit(env) {
     shadowsOpt.value = on;
     for (const P of placements) for (const D of P.districts.values()) for (const it of D.meshes) it.mesh.castShadow = on === "auto" ? (it.type ? casts(it.type) : true) : !!on;
   }
+  /** (P23 / LC-17) the facade detail's strength, 0 = off (the low tier); every building palette shares the uniform: no recompile */
+  function setDetail(v) { detailU.value = Math.max(0, +v || 0); }
   function setFarDistance(m) {
     opt.farDistance = m;
     for (const P of placements) for (const D of P.districts.values()) if (D.lod.levels.length > 1) D.lod.levels[1].distance = m + D.radius;
@@ -1007,7 +1115,7 @@ export function createCityKit(env) {
   }
 
   return {
-    api: KIT_API, place, preload, parts, dispose, stats, ready, warmObjects, setShadows, setFarDistance,
+    api: KIT_API, place, preload, parts, dispose, stats, ready, warmObjects, setShadows, setFarDistance, setDetail,
     colliderFor, footprintFor, typeIds, hasType, resolvePalette,
     get manifest() { return man; },
     get disposed() { return disposed; },
