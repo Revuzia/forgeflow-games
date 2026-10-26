@@ -1281,7 +1281,12 @@ register3d("royale", async function (kernel, content) {
     // one (opts.teamMode); every human in the room is one team, so a room larger than the asked team size plays the
     // smallest mode that holds it. Teams are a pure function of (total, the humans' slots, mode): no rng draw, so the
     // world / sim streams and same-seed replay are untouched, and every peer of an online match derives the same teams.
-    const teamMode = resolveTeamMode(opts.teamMode, humans.length, W.mode);
+    // The menu may pass it (opts.teamMode) or keep the player's last pick in W.settings.teamMode (lane hud's mode card).
+    // The stored pick is an OFFLINE default only: an online match takes the room's choice (opts.*), never one page's own
+    // setting, or two peers could derive different teams from one start message.
+    const online = !!(opts.humans || opts.guestOf);
+    const wantMode = opts.teamMode != null ? opts.teamMode : (!online && W.settings ? W.settings.teamMode : null);
+    const teamMode = resolveTeamMode(wantMode, humans.length, W.mode);
     const teamIds = assignTeams(total, humans.map((h) => h.slot), teamSize(teamMode));
     W.teamMode = teamMode;
     // teamOf is resolved LAZILY, at elimination time: the actors it reads are
@@ -1413,7 +1418,11 @@ register3d("royale", async function (kernel, content) {
     // loot.populate; a bounded wait lets the ones that answer join the warm frame
     if (W.itemProto) {
       try {
+        // the four heals + EVERY consumable the sim declares (P1-A frag; the P2 smoke and any later one join on their own
+        // the moment lane loot gives them a model - an id without one answers null and adds nothing)
         const ids = ["medkit", "bandage", "mini_shield", "big_shield"];
+        const CON = W.SIM && W.SIM.CONSUMABLES;
+        if (CON) for (const id of Object.keys(CON)) if (!ids.includes(id)) ids.push(id);
         const got = await withTimeout(Promise.all(ids.map((id) => W.itemProto(id).catch(() => null))), 8000);
         add(got, "itemProtos");
       } catch (e) { /* bounded wait: the fallback capsules are already warm */ }
