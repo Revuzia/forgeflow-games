@@ -22,6 +22,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -375,13 +376,17 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
         if SQ.boot_url(pg, args.base, args.boot_timeout) is None:
             raise C.EnvFailure("%s %s never booted" % (name, label))
     create_vis = r"() => [...document.querySelectorAll('button')].some((b) => b.offsetParent && /^\s*CREATE ROOM\s*$/.test(b.textContent || ''))"
+    veils = "() => document.querySelectorAll('[data-net=\"lobby\"]').length"
     for label, pg in (("host", hpg), ("guest", gpg)):
-        ok = SQ.open_lobby(pg)
-        # the lobby is OPEN when its CREATE ROOM button is on screen (squadguard's 380 px-panel test can be met by another menu panel);
-        # a SQUAD UP click that landed on nothing (a menu card still animating in on a loaded box) is clicked again, then the menu's own event
-        for attempt in range(3):
-            if SQ.wait(pg, create_vis, 6 if attempt else 2):
+        SQ.open_lobby(pg)
+        # the lobby is OPEN when its CREATE ROOM button is on screen (squadguard's 380 px-panel test can be met by another menu panel). Re-open
+        # ONLY while no lobby veil exists: net.js openLobby has no duplicate guard, and a second veil over the first left the first veil's
+        # CREATE ROOM (the locator's .first) covered - the 20 s click timeout of three dbno human2 runs (10-26 03:00 / 05:11)
+        for attempt in range(4):
+            if SQ.wait(pg, create_vis, 8):
                 break
+            if pg.evaluate(veils):
+                continue                       # a lobby is up, still styling in on a loaded box: wait, never stack a second one
             if attempt == 0:
                 SQ.open_lobby(pg)
             else:
@@ -389,16 +394,25 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
         else:
             _pair_shot(pg, name + "_" + label + "_lobby")
             raise C.EnvFailure("%s %s: the SQUAD UP lobby never opened (no CREATE ROOM); screen: %s" % (name, label, _screen_text(pg)))
+        nv = pg.evaluate(veils)
+        if nv != 1:
+            print("  [squad_pair] %s: %d lobby veils open (the top one is used)" % (label, nv))
+    top = '[data-net="lobby"] >> nth=-1'
     try:
-        code = SQ.host_create(hpg)
+        hpg.locator(top).locator('button:text-is("CREATE ROOM")').first.click(timeout=30_000)
+        code = None
+        if SQ.wait(hpg, r"() => /Room\s+[A-Z0-9]{4}\s+[-—]/.test(document.body.innerText)", 40):
+            m = re.search(r"Room\s+([A-Z0-9]{4})", hpg.evaluate("() => document.body.innerText"))
+            code = m.group(1) if m else None
     except Exception as e:      # name what the host saw (a renamed / covered CREATE ROOM is a lobby defect, not a timeout to retry)
         code = None
         _pair_shot(hpg, name + "_host_create")
-        raise C.EnvFailure("%s: CREATE ROOM not clickable (%s); host screen: %s" % (name, str(e).splitlines()[0][:120], _screen_text(hpg)))
+        raise C.EnvFailure("%s: CREATE ROOM not clickable (%s); veils %s; host screen: %s" % (name, str(e).splitlines()[0][:160], hpg.evaluate(veils), _screen_text(hpg)))
     if not code:
         _pair_shot(hpg, name + "_host_nocode")
         raise C.EnvFailure("%s: no room code; host screen: %s" % (name, _screen_text(hpg)))
-    SQ.guest_join(gpg, code)
+    gpg.locator(top).locator('input[placeholder="CODE"]').first.fill(code)
+    gpg.locator(top).locator('button:text-is("JOIN")').first.click(timeout=30_000)
     if not SQ.wait(hpg, "() => document.body.innerText.includes('2 player')", 40):
         raise C.EnvFailure("%s: the guest never showed in the host's lobby" % name)
     SQ.press_start(hpg)
