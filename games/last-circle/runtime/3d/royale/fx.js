@@ -1211,8 +1211,23 @@ function dropRevives(a) {
   for (let i = revives.length - 1; i >= 0; i--) if (revives[i].a === a || revives[i].r === a) revives.splice(i, 1);
 }
 /** A flat ring on the ground at an actor's feet (pool quad, level). */
-function feetRing(x, y, z, color, size, life, st) {
-  return setCode(spawnRaw(x, y + 0.06, z, 0, 0, 0, color, size, life, 0, 0, null, 0, st), C_RING, true);
+function feetRing(W, x, y, z, color, size, life, st) {
+  // on a slope the ring lies IN the ground plane (tilted to the terrain normal): a level ring on a hillside sank
+  // half under the grass and read as a stray arc. Indoors / on roofs (feet well above the terrain) floors are level.
+  const map = W && W.map;
+  let nx, ny, nz;
+  if (map && typeof map.heightAt === "function") {
+    const g = map.heightAt(x, z);
+    if (Math.abs(g - y) < 0.35) {
+      y = g;                                     // on the terrain: sit ON it (a crawling actor's y lags the ground by a frame or two)
+      const e = 0.6, dx = map.heightAt(x + e, z) - map.heightAt(x - e, z), dz = map.heightAt(x, z + e) - map.heightAt(x, z - e);
+      const il = 1 / Math.hypot(dx, 2 * e, dz);
+      nx = -dx * il; ny = 2 * e * il; nz = -dz * il;
+    }
+  }
+  const lift = 0.06 + 0.03 * size;               // terrain mesh triangles sit a little off the smooth heightAt surface
+  const p = spawnRaw(x + (nx || 0) * lift, y + (ny != null ? ny : 1) * lift, z + (nz || 0) * lift, 0, 0, 0, color, size, life, 0, 0, null, 0, st);
+  return nx === undefined ? setCode(p, C_RING, true) : setCode(p, C_RING, true, nx, ny, nz);
 }
 
 function downedFx(W, a) {
@@ -1233,7 +1248,7 @@ function revivedFx(W, a) {
   if (!a || !a.pos) return;
   const x = a.pos.x, y = a.pos.y, z = a.pos.z, q = fxQ(W);
   dbnoStats.revivedFx++;
-  feetRing(x, y, z, 0xbff0ff, 1.4, 0.55, ST_DRING);
+  feetRing(W, x, y, z, 0xbff0ff, 1.4, 0.55, ST_DRING);
   const nm = Math.round(14 * q.motes);
   for (let i = 0; i < nm; i++) {
     const ang = Math.random() * 6.2832, r = 0.2 + Math.random() * 0.5;
@@ -1256,7 +1271,7 @@ function fallFx(W, a, dmg, v) {
   let surf = "grass";
   try { if (W.map && typeof W.map.surfaceAt === "function") surf = W.map.surfaceAt(x, z, y) || "grass"; } catch (e) { /* default dust */ }
   const col = FALL_DUST[surf] != null ? FALL_DUST[surf] : 0xa08b63;
-  feetRing(x, y, z, col, 1.2 + 1.0 * k, 0.5, ST_RING);
+  feetRing(W, x, y, z, col, 1.2 + 1.0 * k, 0.5, ST_RING);
   const ns = Math.max(3, Math.round(q.skirt * (0.5 + 0.5 * k)));
   for (let i = 0; i < ns; i++) {
     const ang = Math.random() * 6.2832, sp = (1.6 + Math.random() * 2.4) * k, r0 = Math.random() * 0.4;
@@ -1295,7 +1310,7 @@ function updateDbno(W, dt) {
         a._fxPulseT = 1.1;
         let busy = false;
         for (let j = 0; j < revives.length; j++) if (revives[j].a === a) { busy = true; break; }
-        if (!busy) { feetRing(a.pos.x, a.pos.y, a.pos.z, 0xff4a3a, 1.1, 0.9, ST_DRING); dbnoStats.pulseQuads++; }
+        if (!busy) { feetRing(W, a.pos.x, a.pos.y, a.pos.z, 0xff4a3a, 1.1, 0.9, ST_DRING); dbnoStats.pulseQuads++; }
       }
     }
   }
@@ -1311,7 +1326,7 @@ function updateDbno(W, dt) {
     r.acc = 0;
     const p = Math.min(1, r.age / RS);
     // a ring closing in on the downed player, tighter as the channel completes, and motes rising off them
-    feetRing(a.pos.x, a.pos.y, a.pos.z, 0x9fe8ff, 1.9 - 0.9 * p, 0.6, ST_RRING);
+    feetRing(W, a.pos.x, a.pos.y, a.pos.z, 0x9fe8ff, 1.9 - 0.9 * p, 0.6, ST_RRING);
     const nm = Math.max(1, Math.round(2 * q.motes));
     for (let j = 0; j < nm; j++) {
       const ang = Math.random() * 6.2832, rr = 0.25 + Math.random() * 0.45;
