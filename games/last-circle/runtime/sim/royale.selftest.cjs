@@ -1280,6 +1280,17 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(frontal(actor({ skin: "nobody" }), 0, 1.2) === frontal(a, 0, 1.2), "LC-22: an unknown skin uses the soldier's volume");
   const p1 = actor({ pitch: 0.25 }), p2 = actor({ pitch: 0.6 });
   ok(frontal(p1, 0, 1.2) >= 0 && frontal(p2, 0, 1.2) >= 0, "LC-22: pitched poses (interpolated keys) still hold the torso");
+  // pistol STAND holds sway with the generic idle clip: their rows are the 8-phase mean and they carry their own radii
+  ok(["soldier", "athlete", "wraith", "juggernaut", "viper"].every((k) => H.HRADII[k] && H.HRADII[k]["pistol|stand"] && H.HRADII[k]["pistolAds|stand"] &&
+       H.HRADII[k]["pistol|stand"].length === 10 && !H.HRADII[k]["rifle|stand"]) &&
+     R.hitVolJoints(actor({ weapon: { id: "pistol" } })) === H.HRADII.soldier["pistol|stand"] &&
+     R.hitVolJoints(actor({ weapon: { id: "pistol" }, input: { ads: true } })) === H.HRADII.soldier["pistolAds|stand"] &&
+     R.hitVolJoints(actor()) === H.RADII.soldier,
+     "LC-22: pistol stand holds use their own (phase-fitted) radii; rifle holds keep the skin radii");
+  ok(R.hitVolPose(actor({ weapon: { id: "pistol" }, lastShotT: 10 }), 11) === "pistolAds|stand" &&
+     R.hitVolPose(actor({ weapon: { id: "pistol" }, lastShotT: 10 }), 10 + R.COMBAT_POSE_S + 0.01) === "pistol|stand" &&
+     R.hitVolPose(actor({ weapon: { id: "pistol" }, lastShotT: 10 })) === "pistol|stand" && R.COMBAT_POSE_S === 1.5,
+     "LC-22: a pistol hip-fired within 1.5 s is drawn in the raised gunReady arms (player.js combat window) and tests that volume");
   ok(H.reach > 0.5 && H.reach < 1.0, "LC-22: broad-phase reach " + H.reach.toFixed(2) + " m covers every measured joint");
 }
 
@@ -1292,7 +1303,7 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(/p\.bounce = !!def\.arc && !def\.impact;/.test(wj) && R.WEAPONS.glauncher.impact === true, "P2-D: launcher shells are impact-fused (no bounce), frags still bounce");
     ok(/else if \(p\.weaponId === "smoke"\) deploySmoke\(W, p\.x, p\.y, p\.z, p\.ownerId\);/.test(wj) && /W\.smokes\.length = 0;/.test(wj), "C-SMOKE: the fuse pops a cloud onto W.smokes; reset clears it in place");
     ok(/if \(a\.downed\) \{\s*\n\s*inp\.slot = -1; inp\.reload = false;/.test(wj), "C-DBNO: stepWeapon's first gate - a downed actor cannot switch, reload, fire, throw or heal");
-    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz\)/.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume and its head sphere");
+    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz, W\.t\)/.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume and its head sphere");
   } else console.log("  INFO  weapons.js not found next to this file: P2-D source pins skipped");
 }
 

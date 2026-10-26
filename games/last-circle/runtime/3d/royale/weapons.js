@@ -733,7 +733,7 @@ function crosshairPoint(W, shooter, out) {
     if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.actorHeight(t) + 0.3) continue;
     if (W.SIM.hitVolSegment) {
       const L = bestT;
-      const hv = W.SIM.hitVolSegment(t, o.x, o.y, o.z, o.x + _camDir.x * L, o.y + _camDir.y * L, o.z + _camDir.z * L);
+      const hv = W.SIM.hitVolSegment(t, o.x, o.y, o.z, o.x + _camDir.x * L, o.y + _camDir.y * L, o.z + _camDir.z * L, W.t);
       if (hv >= 0) { if (hv * L >= 1) bestT = hv * L; continue; }
       if (hv === -1) continue;
     }
@@ -1139,7 +1139,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
     const cx = t.pos.x, cz = t.pos.z;
     if (cx < bx0 || cx > bx1 || cz < bz0 || cz > bz1) continue;
     // LC-22: the bone-derived body (sim HITVOL); -2 = no measured volume here (swimming, downed, no data): the cylinder
-    const hv = K.hitVolSegment ? K.hitVolSegment(t, ax, ay, az, bx, by, bz) : -2;
+    const hv = K.hitVolSegment ? K.hitVolSegment(t, ax, ay, az, bx, by, bz, W.t) : -2;
     if (hv !== -2) {
       if (hv >= 0 && hv < hitT) {
         hitT = hv; hitActor = t; hitVol = true; hitHead = K.HITVOL_HIT.head;
