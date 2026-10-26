@@ -707,32 +707,32 @@ function impactFx(W, pos, surface) {
     case "flesh": {
       // a short dark-red mist and droplets (no glow: blood is not a light)
       d = coneDir(0, 1, 0, 0.6);
-      setCode(spawnRaw(x, y, z, d.x * 0.7, d.y * 0.5 + 0.2, d.z * 0.7, 0x7a1414, 0.32, 0.36, -0.6, 3.0, null, 0, ST_PUFF), rPuff());
+      setCode(spawnRaw(x, y, z, d.x * 0.7, d.y * 0.5 + 0.2, d.z * 0.7, 0x6c0e0e, 0.36, 0.36, -0.6, 3.0, null, 0, ST_PUFF), rPuff());
       if (near) for (let i = 0; i < 2; i++) { d = coneDir(0, 0.6, 0, 1.0); spawnRaw(x, y, z, d.x * 2.6, d.y * 2.6 + 0.8, d.z * 2.6, 0x6e0c0c, 0.13, 0.42, -9, 0.6, null, 0, ST_SPATTER); }
-      burst({ x, y, z, n: 3, color: 0xc23b3b, speed: 2.8, size: 0.07, life: 0.32, st: ST_BLOOD });
+      burst({ x, y, z, n: 4, color: 0xb02a2a, speed: 2.8, size: 0.075, life: 0.32, st: ST_BLOOD });
       break;
     }
     case "stone": {
       d = coneDir(nx, ny, nz, 0.3);
-      setCode(spawnRaw(x + nx * 0.08, y + ny * 0.08, z + nz * 0.08, d.x * 1.3, d.y * 1.3 + 0.25, d.z * 1.3, 0xb5afa4, 0.38, 0.75, 0.15, 2.4, null, 0, ST_PUFF), rPuff());
+      setCode(spawnRaw(x + nx * 0.08, y + ny * 0.08, z + nz * 0.08, d.x * 1.3, d.y * 1.3 + 0.25, d.z * 1.3, 0x9eabbd, 0.38, 0.75, 0.15, 2.4, null, 0, ST_PUFF), rPuff());   // P23/fx: COOL concrete-grey dust (wood is warm tan, metal hot orange: the three read apart)
       if (near) {
-        for (let i = 0; i < 4; i++) { d = coneDir(nx, ny, nz, 0.75); const sp = 4 + Math.random() * 2.5; spawnRaw(x, y, z, d.x * sp, d.y * sp + 1, d.z * sp, 0x8d8a84, 0.05 + Math.random() * 0.035, 0.5 + Math.random() * 0.3, -12, 0.3, null, 0, ST_DEBRIS); }
-        for (let i = 0; i < 2; i++) { d = coneDir(nx, ny, nz, 0.9); spawnRaw(x, y, z, d.x * 5, d.y * 5, d.z * 5, 0xffd08a, 0.05, 0.12, -6, 0.5, null, 0, ST_HOT); }
+        for (let i = 0; i < 4; i++) { d = coneDir(nx, ny, nz, 0.75); const sp = 4 + Math.random() * 2.5; spawnRaw(x, y, z, d.x * sp, d.y * sp + 1, d.z * sp, 0x8b9096, 0.05 + Math.random() * 0.035, 0.5 + Math.random() * 0.3, -12, 0.3, null, 0, ST_DEBRIS); }
+        d = coneDir(nx, ny, nz, 0.9); spawnRaw(x, y, z, d.x * 5, d.y * 5, d.z * 5, 0xffd08a, 0.04, 0.10, -6, 0.5, null, 0, ST_HOT);   // one small hot fleck (metal owns the spark shower)
       }
       if (hasN) decalAt(W, x, y, z, nx, ny, nz, 0.8 + Math.random() * 0.55);
       break;
     }
     case "wood": {
       d = coneDir(nx, ny, nz, 0.35);
-      setCode(spawnRaw(x + nx * 0.06, y + ny * 0.06, z + nz * 0.06, d.x * 1.0, d.y * 1.0 + 0.2, d.z * 1.0, 0xd8c294, 0.30, 0.6, 0.1, 2.6, null, 0, ST_PUFF), rPuff());   // P23/fx: paler sawdust (vs dirt's brown: was 11.5/255 apart)
-      if (near) for (let i = 0; i < 4; i++) { d = coneDir(nx, ny, nz, 0.8); const sp = 3.5 + Math.random() * 2; spawnRaw(x, y, z, d.x * sp, d.y * sp + 1.2, d.z * sp, 0xd2b07a, 0.10 + Math.random() * 0.06, 0.5 + Math.random() * 0.3, -11, 0.4, null, 0, ST_SPLINTER); }
+      setCode(spawnRaw(x + nx * 0.06, y + ny * 0.06, z + nz * 0.06, d.x * 1.0, d.y * 1.0 + 0.2, d.z * 1.0, 0xd6a862, 0.30, 0.6, 0.1, 2.6, null, 0, ST_PUFF), rPuff());   // P23/fx: yellow sawdust (warm vs stone's cool grey, pale vs dirt's brown)
+      if (near) for (let i = 0; i < 5; i++) { d = coneDir(nx, ny, nz, 0.8); const sp = 3.5 + Math.random() * 2; spawnRaw(x, y, z, d.x * sp, d.y * sp + 1.2, d.z * sp, 0xcc9e5c, 0.10 + Math.random() * 0.06, 0.5 + Math.random() * 0.3, -11, 0.4, null, 0, ST_SPLINTER); }
       if (hasN) decalAt(W, x, y, z, nx, ny, nz, 0.8 + Math.random() * 0.55);
       break;
     }
     case "metal": {
       // hot spark STREAKS off the plate (the tracer path orients each one along its flight) + a pin flash
       spawnRaw(x + nx * 0.03, y + ny * 0.03, z + nz * 0.03, 0, 0, 0, 0xffd9a0, 0.06, 0.05, 0, 0, null, 0, ST_FLASH);
-      const n = near ? 7 : 3;
+      const n = near ? 9 : 4;
       for (let i = 0; i < n; i++) {
         d = coneDir(nx, ny, nz, 0.85);
         const sp = 6 + Math.random() * 5;
@@ -741,7 +741,7 @@ function impactFx(W, pos, surface) {
       }
       // and a thin grey wisp off the plate once the sparks are gone
       d = coneDir(nx, ny, nz, 0.3);
-      setCode(spawnRaw(x + nx * 0.06, y + ny * 0.06, z + nz * 0.06, d.x * 0.8, d.y * 0.8 + 0.3, d.z * 0.8, 0x7b8592, 0.24, 0.6, 0.2, 2.6, null, 0, ST_PUFF), rPuff());   // P23/fx: cool blue-grey (stone's warm grey read the same: 10-12/255 apart)
+      setCode(spawnRaw(x + nx * 0.06, y + ny * 0.06, z + nz * 0.06, d.x * 0.8, d.y * 0.8 + 0.3, d.z * 0.8, 0x766a5e, 0.20, 0.6, 0.2, 2.6, null, 0, ST_PUFF), rPuff());   // P23/fx: dark scorched-paint wisp (stone's dust is the pale cool grey)
       if (hasN) decalAt(W, x, y, z, nx, ny, nz, 0.7 + Math.random() * 0.4);
       break;
     }
@@ -751,7 +751,7 @@ function impactFx(W, pos, surface) {
       break;
     }
     default: {      // dirt / grass: a spurt kicked up off the ground + clods
-      for (let i = 0; i < 2; i++) setCode(spawnRaw(x + (Math.random() - 0.5) * 0.15, y + 0.05, z + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.6, 1.5 + Math.random() * 1.0, (Math.random() - 0.5) * 0.6, 0x84694a, 0.34, 0.75, -1.2, 2.0, null, 0, ST_PUFF), rPuff());
+      for (let i = 0; i < 2; i++) setCode(spawnRaw(x + (Math.random() - 0.5) * 0.15, y + 0.05, z + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.6, 1.5 + Math.random() * 1.0, (Math.random() - 0.5) * 0.6, 0x6a5236, 0.34, 0.75, -1.2, 2.0, null, 0, ST_PUFF), rPuff());
       if (near) for (let i = 0; i < 4; i++) { d = coneDir(0, 1, 0, 0.6); const sp = 3 + Math.random() * 2; spawnRaw(x, y + 0.03, z, d.x * sp, d.y * sp, d.z * sp, 0x5e4c34, 0.05 + Math.random() * 0.035, 0.5 + Math.random() * 0.25, -12, 0.3, null, 0, ST_DEBRIS); }
       break;
     }
