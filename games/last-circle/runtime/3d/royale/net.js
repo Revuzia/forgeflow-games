@@ -540,6 +540,18 @@ export function judgeRejoin(req, from, ctx) {
   return { ok: true, slot: req.slot };
 }
 
+/** HOST, LC-49 RECONNECT: may the body `id`, which the silent-guest watchdog gave to a bot at `takenAt`, go back to peer `from` whose state packet
+ *  just arrived? ctx = { takenAt, nowMs, senderSlot (the roster slot of `from`), id, alive, isBot, rejoinedBy (the peer a rejoin gave the slot
+ *  to, or null), from }. "ok" | "expired" (past REJOIN_MS: forget it) | "no". */
+export function judgeReclaim(c) {
+  c = c || {};
+  if (typeof c.takenAt !== "number" || !c.alive || !c.isBot) return "no";
+  if (!(c.senderSlot > 0) || "s" + c.senderSlot !== c.id) return "no";
+  if (c.rejoinedBy != null && c.rejoinedBy !== c.from) return "no";
+  if (c.nowMs - c.takenAt > REJOIN_MS) return "expired";
+  return "ok";
+}
+
 // ── C-DBNO: knock and revive (owner OD-3: team modes only) ────────────────────────────────────────────────────────────────────────────
 /** Bit 256 of the state packet's stance byte: the actor is DOWNED (crawling, bleeding out). Older peers ignore unknown bits. */
 export const F_DOWNED = 256;
@@ -1666,6 +1678,35 @@ function takeOverBody(W, a) {
   if (sl > 0) markGone(sl);
 }
 
+/** HOST, LC-49 RECONNECT: a state packet (sender already bound to its own slot by senderMay) for body `a`, which this host's watchdog gave to a
+ *  bot because the peer was SILENT - not because it said bye, failed its map or was replaced by a rejoin. Inside REJOIN_MS of that take-over
+ *  the body goes back to the peer: its brain idles (bots.js skips netRemote actors), the packet's position wins (the guest's page kept
+ *  simulating it), and every guest is told the body is a human's again ("rejoin" back, addressed to the peer, which ignores it). */
+function reclaimSilentBody(W, a, from, d) {
+  const at = S.silentTake && S.silentTake[a.id];
+  if (at == null) return false;
+  const now = performance.now();
+  const slot = slotOfPeer(S.cfg && S.cfg.roster, from);
+  const j = judgeReclaim({ takenAt: at, nowMs: now, senderSlot: slot, id: a.id, alive: a.alive, isBot: a.isBot,
+    rejoinedBy: S.rejoined && S.rejoined[a.id] ? S.rejoined[a.id].peer : null, from });
+  if (j === "expired") delete S.silentTake[a.id];
+  if (j !== "ok") return false;
+  const fin = (v) => typeof v === "number" && Number.isFinite(v);
+  delete S.silentTake[a.id];
+  if (S.goneAt) delete S.goneAt[a.id];
+  if (S.tookOver) delete S.tookOver[a.id];
+  a.isBot = false; a.netRemote = true;
+  if (fin(d.x) && fin(d.y) && fin(d.z)) a.pos.set(d.x, d.y, d.z);
+  if (!a.netTarget) a.netTarget = { pos: a.pos.clone(), yaw: a.yaw };
+  else { a.netTarget.pos.copy(a.pos); a.netTarget.yaw = a.yaw; }
+  (S.reclaimed = S.reclaimed || []).push({ id: a.id, peer: from, afterMs: Math.round(now - at) });
+  if (S.reclaimed.length > 16) S.reclaimed.shift();
+  send("rejoin", Object.assign({ k: "back", slot, to: from }, bodySnap(a)));
+  notify(W, String(((S.cfg.roster.find((r) => r.slot === slot) || {}).name) || "A squad-mate").slice(0, 24) + " reconnected.");
+  W.events.emit("squadRejoin", { slot, peerId: from, stage: "reconnect", ms: Math.round(now - at) });
+  return true;
+}
+
 /** HOST: free slot `id` (a "mapfail" / "bye" for it arrived). false = the body does not exist yet (this host is still loading its match when the
  *  guest's message arrives): the caller remembers the slot and drainPending does it once the actors exist. */
 function hostTakeOver(W, id) {
@@ -1847,6 +1888,7 @@ function onMsg(W, { from, t, d }) {
     if (!r) return;
     (S.mapFails = S.mapFails || []).push({ from, id: r.id, name: r.name, host: r.host, wanted: r.wanted, built: r.built });
     tellRoom(W, r.line, from);
+    if (S.silentTake) delete S.silentTake[r.id];          // LC-49: a squad-mate on another world never reclaims its body
     if (S.net.isHost()) { if (!hostTakeOver(W, r.id)) (S.pendingTakeovers = S.pendingTakeovers || new Set()).add(r.id); }
     else if (r.host) { if (W.player) hostLost(W); else S.hostGone = true; }
     W.events.emit("squadMapFallback", { peerId: from, name: r.name, wanted: r.wanted, built: r.built, host: r.host, by: "peer" });
@@ -1881,6 +1923,11 @@ function onMsg(W, { from, t, d }) {
       if (d.evs) { for (const m of d.evs) if (m && m.t !== "ev") onMsg(W, { from, t: m.t, d: m.d }); }
       return;
     }
+    // LC-49 RECONNECT: the host's watchdog handed this guest's body to a bot because the guest went SILENT (a stalled tab, a dropped socket),
+    // and now that same peer speaks again inside REJOIN_MS: the body is the human's again (its page never stopped owning it). Without this the
+    // host's bot and the guest's page both drove s<N> for the rest of the match (split brain), and the guest's knocks, throws and revives
+    // were dropped on the host because the body was no longer netRemote.
+    if (a && S.net.isHost() && !a.netRemote && a !== W.player) reclaimSilentBody(W, a, from, d);
     if (a && a.netRemote) { applyRemoteState(W, a, d); S.lastSeen = S.lastSeen || {}; S.lastSeen[d.id] = performance.now(); (S.everSeen = S.everSeen || {})[d.id] = true; }
     // OUTSIDE the actor guard on purpose: the match clock rides the host's own
     // state packet, and a packet whose actor has not been created yet (or has
@@ -2030,7 +2077,7 @@ function onMsg(W, { from, t, d }) {
   if (t === "bye") {
     // a guest left mid-match: host re-attaches a bot brain so the slot fights on
     const a = W.actorById.get(d.slot);
-    { const sl = slotOfPeer(S.cfg && S.cfg.roster, from); if (sl > 0 && d.slot === "s" + sl) markGone(sl); }   // LC-49: the rejoin window opens
+    { const sl = slotOfPeer(S.cfg && S.cfg.roster, from); if (sl > 0 && d.slot === "s" + sl) { markGone(sl); if (S.silentTake) delete S.silentTake[d.slot]; } }   // LC-49: the rejoin window opens (a bye is not a silence)
     if (a && a.alive && S.net.isHost() && a.netRemote) takeOverBody(W, a);
     // the HOST left mid-match: this bye used to be silently ignored by guests
     // (the branch above is host-only), stranding them in a frozen world — all
@@ -2176,7 +2223,7 @@ function resetMatchState() {
   S.pingIn = null; S.pingOut = null;
   // P23: the receive order gate, the revive book, the rejoin book and the relayed smokes belong to the match that ended (txSeq keeps counting)
   S.rxGate = null; S.reviveIn = null; S.reviveOut = null; S.goneAt = null; S.rejoined = null; S.rejoin = null; S.slotKeys = null;
-  S.teamCheck = null; S.rjSavedAt = 0;
+  S.teamCheck = null; S.rjSavedAt = 0; S.silentTake = null; S.reclaimed = null;
 }
 
 let _waitCard = null;
@@ -2426,7 +2473,7 @@ export function update(W, dt) {
     for (const id in S.lastSeen) {
       if (now - S.lastSeen[id] > 12000) {
         delete S.lastSeen[id];
-        hostTakeOver(W, id);
+        if (hostTakeOver(W, id)) (S.silentTake = S.silentTake || {})[id] = now;   // LC-49: reclaimable if the peer speaks again
       }
     }
   }
@@ -2445,7 +2492,10 @@ export function update(W, dt) {
       if (!gone) S.absentSince[id] = 0;
       else if (!S.absentSince[id]) S.absentSince[id] = now;
       if ((gone && now - S.absentSince[id] > 2000) || now - S.matchLiveAt > NEVER_SEEN_MS) {
-        if (hostTakeOver(W, id)) { S.tookOver[id] = { at: Math.round(now - S.matchLiveAt), why: gone ? "left the room" : "never sent state" }; }
+        if (hostTakeOver(W, id)) {
+          S.tookOver[id] = { at: Math.round(now - S.matchLiveAt), why: gone ? "left the room" : "never sent state" };
+          if (!gone) (S.silentTake = S.silentTake || {})[id] = now;        // LC-49: a slow load that finally arrives gets its body back
+        }
       }
     }
   }
