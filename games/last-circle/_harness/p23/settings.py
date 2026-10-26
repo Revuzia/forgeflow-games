@@ -70,6 +70,19 @@ MEAN_JS = r"""() => { const W = window.__LC__.W, k = W.kernel; window.__LC__.ste
   for (let y = 0; y < h; y += 2) { const by = Math.min(BY - 1, Math.floor(y * BY / h)); for (let x = 0; x < w; x += 2) { const bx = Math.min(BX - 1, Math.floor(x * BX / w)), q = 4 * (y * w + x), b = by * BX + bx;
     acc[3 * b] += px[q]; acc[3 * b + 1] += px[q + 1]; acc[3 * b + 2] += px[q + 2]; n[b]++; } }
   const out = []; for (let b = 0; b < BX * BY; b++) out.push(acc[3 * b] / n[b], acc[3 * b + 1] / n[b], acc[3 * b + 2] / n[b]); return out; }"""
+# every off -> mode -> off cycle (and the off/off/off control) in ONE page task: settings_all6 / pl_center3 / pl_cvd read the cycles as separate
+# evaluate() calls seconds apart on a loaded box and the control drifted 1.4-2.7 / 255 between them (wall-clock-driven shader time: water,
+# wind, storm), as large as the deutan change itself; inside one task the reads are milliseconds apart
+CVD_JS = r"""([modes]) => { const W = window.__LC__.W, k = W.kernel; const gl = k.renderer.getContext();
+  const read = () => { window.__LC__.stepFrames(2, 1e-5, true); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; const px = new Uint8Array(4 * w * h);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); const BX = 16, BY = 9, acc = new Float64Array(BX * BY * 3), n = new Float64Array(BX * BY);
+    for (let y = 0; y < h; y += 2) { const by = Math.min(BY - 1, Math.floor(y * BY / h)); for (let x = 0; x < w; x += 2) { const bx = Math.min(BX - 1, Math.floor(x * BX / w)), q = 4 * (y * w + x), b = by * BX + bx;
+      acc[3 * b] += px[q]; acc[3 * b + 1] += px[q + 1]; acc[3 * b + 2] += px[q + 2]; n[b]++; } }
+    const out = []; for (let b = 0; b < BX * BY; b++) out.push(acc[3 * b] / n[b], acc[3 * b + 1] / n[b], acc[3 * b + 2] / n[b]); return out; };
+  const set = (m, alt) => { try { W.setGfx('daltonize', m); } catch (e) { if (!alt) throw e; W.setGfx('daltonize', alt); } };
+  const res = {}; for (const [m, alt] of modes) { try { set('off'); const t0 = performance.now(); const o0 = read(); set(m === 'ctl' ? 'off' : m, alt); const x = read(); set('off'); const o1 = read();
+    res[m] = { o0, x, o1, ms: +(performance.now() - t0).toFixed(1) }; } catch (e) { res[m] = { error: String(e).slice(0, 80) }; } }
+  return res; }"""
 ANCH_JS = r"""() => { const out = {}, css = {}; for (const k of ['minimap', 'compass', 'stormrow', 'meta', 'bars', 'slotcol', 'feed', 'chat']) { const e = document.querySelector('[data-lc="' + k + '"]'); if (!e || !e.offsetParent) continue;
   const r = e.getBoundingClientRect(); out[k] = [r.left, r.top, r.right, r.bottom].map((x) => +x.toFixed(1)); const cs = getComputedStyle(e); css[k] = [cs.scale, cs.transform, cs.transformOrigin].join(' | '); }
   return { W: innerWidth, H: innerHeight, a: out, css, planted: document.documentElement.hasAttribute('data-p23sc') }; }"""
@@ -181,6 +194,10 @@ def main():
             drop = {"row": row, "boundTo": bound}
             if row:
                 L.practice(s, 4242, "ashgrid")
+                # practice() BOOTS a fresh page: a plant applied before it is gone (scale-center / cvd-sticky never bit, 10-26: both rows run in
+                # this practice match) - re-apply it
+                if args.plant:
+                    L.plant_js(s, PLANTS[args.plant] + "; window.__P23_PLANT__ = 1")
                 L.lock_pointer(s)
                 s.js("() => { const p = window.__LC__.W.player; p.inventory.slots[1] = { kind: 'weapon', id: 'ar', rarity: 0, mag: 30 }; }")
                 s.press("Digit2")
@@ -198,6 +215,8 @@ def main():
                     drop, "Q: same, G: -1")
             # colour-blind: the three modes change the frame, off restores it - on the FROZEN loop (a live rAF frame between two reads moved
             # the view: 6.8 / 255 'noise' with the loop running)
+            if args.plant:
+                v.info("plant live in the colour-blind / HUD-scale page", {"plant": args.plant, "live": s.safe_js("() => !!window.__P23_PLANT__", default=None)})
             s.freeze_loop()
             s.step_frames(10, 1 / 60, render=True)
             modes = sorted(set(cvd_modes))
@@ -215,17 +234,12 @@ def main():
             # control's drift is the noise floor of exactly this spacing (settings_all5: 'off restores' 3.97 against a back-to-back noise of
             # 1.1 - the old floor was two adjacent reads, the restore read came six reads and seconds of wall-clock shader time later)
             cyc = {}
-            for m, alt in (("ctl", None), ("protan", "protanopia"), ("deutan", "deuteranopia"), ("tritan", "tritanopia")):
-                try:
-                    set_cvd("off")
-                    o0 = s.js(MEAN_JS)
-                    set_cvd("off" if m == "ctl" else m, alt)
-                    x = s.js(MEAN_JS)
-                    set_cvd("off")
-                    o1 = s.js(MEAN_JS)
-                    cyc[m] = {"diff": mad(x, o0), "restore": mad(o1, o0)}
-                except Exception as e:
-                    cyc[m] = {"error": str(e).splitlines()[0][:80]}
+            raw = s.js(CVD_JS, [[["ctl", None], ["protan", "protanopia"], ["deutan", "deuteranopia"], ["tritan", "tritanopia"]]])
+            for m, r in (raw or {}).items():
+                if r.get("error"):
+                    cyc[m] = {"error": r["error"]}
+                else:
+                    cyc[m] = {"diff": mad(r["x"], r["o0"]), "restore": mad(r["o1"], r["o0"]), "ms": r.get("ms")}
             ctl = cyc.get("ctl", {})
             noise = max(ctl.get("diff", 9e9), ctl.get("restore", 9e9))
             diffs = {m: c.get("diff", c.get("error")) for m, c in cyc.items() if m != "ctl"}

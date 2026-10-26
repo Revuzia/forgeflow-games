@@ -12,7 +12,7 @@ on this box, vsync on: what a player's first run gets; common.GPU_PROFILES).
 One Chrome at 1280x720 (fresh profile), STANDARD solo on each map in --maps (default Savanna), landed under the guard, then for EACH tier (set
 through W.setGfx('tier', t), as the Video tab does):
   tier [t]        W.gfxTier = t
-  kb [t]          JS heap ALLOCATED per stepped ground frame (positive heap steps summed / frames, 240 frames after a 120-frame warm) <= 85 KB
+  kb [t]          JS heap ALLOCATED per stepped, rendered ground frame (CDP HeapProfiler sampling as framecheck; 240 frames after a 120-frame warm) <= 85 KB
   qc [t]          W.map.queryColliders calls per frame, max over the 240 frames <= 150
   programs [t]    no shader program linked in the 240 measured frames (the tier's own programs link in its warm frames)
   gpu [t] (info)  GPU ms per rendered frame (the kernel's timer query), median
@@ -82,7 +82,29 @@ def main():
                         continue
                     s.step_frames(120, 1 / 60, render=True)
                     got = s.js("() => window.__LC__.W.gfxTier || window.__LC__.W.settings.graphics")
+                    # KB/frame the way framecheck measures it (the bar's own source): CDP HeapProfiler sampling (4 KB interval, objects a
+                    # minor / major GC already collected included) over the measured frames - the usedJSHeapSize positive-step sum read
+                    # 167-231 on frames framecheck's sampler puts under its bar (tierprof_all 10-26); kept as INFO
+                    cdp = s.cdp()
+                    cdp.send("HeapProfiler.enable")
+                    cdp.send("HeapProfiler.startSampling", {"samplingInterval": 4096, "includeObjectsCollectedByMajorGC": True,
+                                                           "includeObjectsCollectedByMinorGC": True})
                     m = s.js(MEASURE_JS, [240])
+                    hp = cdp.send("HeapProfiler.stopSampling")["profile"]
+                    tot, files = [0], {}
+
+                    def walk(n):
+                        sz = n.get("selfSize", 0)
+                        if sz:
+                            tot[0] += sz
+                            f = n["callFrame"].get("url", "").split("/")[-1].split("?")[0] or "(native)"
+                            files[f] = files.get(f, 0) + sz
+                        for ch in n.get("children", []):
+                            walk(ch)
+                    walk(hp["head"])
+                    m["heapStepKb"] = m.get("kbPerFrame")
+                    m["kbPerFrame"] = round(tot[0] / 1024 / 240, 2)
+                    m["topFiles"] = [[k, round(x / 1024 / 240, 1)] for k, x in sorted(files.items(), key=lambda kv: -kv[1])[:6]]
                     g = L.gpu_ms(s, 90)
                     s.thaw_loop()
                     raw = s.js(RAW_JS, [4000])
@@ -90,7 +112,7 @@ def main():
                     prof[t] = dict(m, tier=got, gpu=L.med(g) if g else None, raw=raw)
                     v.check("tier [%s %s] (W.gfxTier = %s)" % (mp, t, t), got == t, {"gfxTier": got}, t)
                     v.check("kb [%s %s] (JS heap allocated per ground frame <= %.0f KB)" % (mp, t, KB_MAX), m["kbPerFrame"] is not None and m["kbPerFrame"] <= KB_MAX,
-                            {"kbPerFrame": m["kbPerFrame"]}, "<= %.0f" % KB_MAX)
+                            {"kbPerFrame": m["kbPerFrame"], "topFilesKbPerFrame": m["topFiles"], "heapStepKbInfo": m["heapStepKb"]}, "<= %.0f (HeapProfiler sampling, as framecheck)" % KB_MAX)
                     v.check("qc [%s %s] (queryColliders per frame, max <= %d)" % (mp, t, QC_MAX), m["qcMax"] <= QC_MAX, {"qcMax": m["qcMax"]}, "<= %d" % QC_MAX)
                     v.check("programs [%s %s] (no shader linked in 240 measured frames)" % (mp, t), m["programsAfter"] == m["programsBefore"],
                             {"before": m["programsBefore"], "after": m["programsAfter"]}, "unchanged")

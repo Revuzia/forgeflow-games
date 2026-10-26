@@ -6,6 +6,7 @@ LC-10 combat strafe foot skate (the audit probe F:/lc_p23/harness/src_probes/aud
     python _harness/p23/move.py --rev 9aa2b746                  # control: the P2 base (no slide, no swap, strafes skate 2.7x) - MUST FAIL
     python _harness/p23/move.py --disk --plant slide-flat       # W.events 'slideStart' still fires but the body keeps sprint speed (velocity
                                                                 # clamped to K.MOVE.sprint every frame) - MUST FAIL (slide row)
+    python _harness/p23/move.py --disk --plant aim-past         # the shot converges 60 % past the reticle's target - MUST FAIL (crosshair row)
     python _harness/p23/move.py --disk --plant no-swap          # the V key event swallowed before the game sees it - MUST FAIL (shoulder row)
     python _harness/p23/move.py --lanes player                  # validation: lane player's work served over the base
 
@@ -32,6 +33,9 @@ C = L.C
 
 PLANTS = {
     "slide-flat": "W.kernel._updaters.unshift(() => { const p = W.player, m = K.MOVE.sprint; if (!p) return; const v = Math.hypot(p.vel.x, p.vel.z); if (v > m) { p.vel.x *= m / v; p.vel.z *= m / v; } })",
+    # the aim point lands 60 % PAST what the reticle is on (the old fixed-convergence bug class): the eye-launched round crosses the reticle line
+    # behind the dummy - MUST FAIL (crosshair row)
+    "aim-past": "const f = K.aimRayDist; K.aimRayDist = function () { return f.apply(this, arguments) * 1.6; }",
     "no-swap": "window.addEventListener('keydown', (e) => { if (e.code === 'KeyV') e.stopImmediatePropagation(); }, true)",
 }
 SKATE_MAX = 1.25
@@ -131,7 +135,12 @@ AIM_DUMMY_JS = r"""([dist]) => { const C = window.__LC__, W = C.W, p = W.player,
 
 def part_crosshair(s, v, spot):
     level_spot(s, spot)
-    s.js("() => { const W = window.__LC__.W, p = W.player; window.__P23X__ = []; W.events.on('shotFired', (a, w, m, d) => { if (a === p && m && d) window.__P23X__.push({ m: [m.x, m.y, m.z], d: [d.x, d.y, d.z] }); }); }")
+    # the ROUND's line, not the FX muzzle: weapons.js fire() launches every round from the EYE (+0.6 m along the aim, -0.05 m) and moves only
+    # the flash to the barrel ('Physics/aim stay eye-based; only the FX origin moves'); shotFired carries that muzzle, so a muzzle + aim-dir
+    # line sat 0.57 m off on both shoulders (move_all2 10-26). The 'tracer' event fire() emits just before shotFired IS the round's base line
+    # (origin + velocity, no pellet spread): pair it with the player's shotFired (same synchronous fire() call)
+    s.js("() => { const W = window.__LC__.W, p = W.player; window.__P23X__ = []; let last = null; W.events.on('tracer', (t) => { last = t; });"
+         " W.events.on('shotFired', (a, w, m, d) => { if (a === p && last) window.__P23X__.push({ m: [last.x, last.y, last.z], d: [last.vx, last.vy, last.vz], fx: m ? [m.x, m.y, m.z] : null }); last = null; }); }")
     s.press("Digit1")
     s.step_frames(40, 1 / 60)
     res = {}
@@ -162,7 +171,7 @@ def part_crosshair(s, v, spot):
             w = [P[i] - m[i] for i in range(3)]
             tt = sum(w[i] * d[i] for i in range(3))
             miss = math.sqrt(sum((w[i] - tt * d[i]) ** 2 for i in range(3)))
-        res[side] = {"missM": miss and round(miss, 4), "aimD": aim["aimD"] and round(aim["aimD"], 2), "targetDepth": shot and aim.get("target") and round(tdep, 2)}
+        res[side] = {"missM": miss and round(miss, 4), "src": "tracer" if shot else None, "aimD": aim["aimD"] and round(aim["aimD"], 2), "targetDepth": shot and aim.get("target") and round(tdep, 2)}
         s.step_frames(30, 1 / 60)
     s.press("KeyV")
     s.step_frames(20, 1 / 60)

@@ -689,6 +689,7 @@ P23_PENDING_NEG = [
     ("p23_fall-plant-no-event", "p23/fall.py", ["--plant", "no-event", "--parts", "human"], 3600),
     ("p23_move-plant-slide-flat", "p23/move.py", ["--plant", "slide-flat", "--parts", "slide"], 3600),
     ("p23_move-plant-no-swap", "p23/move.py", ["--plant", "no-swap", "--parts", "shoulder"], 3600),
+    ("p23_move-plant-aim-past", "p23/move.py", ["--plant", "aim-past", "--parts", "crosshair"], 3600),
     ("p23_smoke-plant-los-ignores", "p23/smoke.py", ["--plant", "los-ignores"], 3600),
     ("p23_smoke-plant-short-life", "p23/smoke.py", ["--plant", "short-life"], 3600),
     ("p23_dbno-plant-crawl-fast", "p23/dbno.py", ["--plant", "crawl-fast", "--parts", "bot"], 3600),

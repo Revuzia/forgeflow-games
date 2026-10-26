@@ -52,12 +52,14 @@ SUPPLY_JS = r"""([toT]) => { const C = window.__LC__, W = C.W; if (!window.__P23
   return { t: +W.t.toFixed(1), events: window.__P23SD__.slice(), list, beacons: list.filter((s) => s.landed && !s.opened).map((s) => beaconAt(s)) }; }"""
 
 
-def part_tiers_supply(s, v):
+def part_tiers_supply(s, v, plant=None):
     agg = {}
     sup = {}
     opened = None
     for mp, seed in RUNS:
         L.start(s, "standard", seed, mp, guard=True)
+        if plant:                  # per match: a match start drops kernel updaters a plant hung there (the settings scale-center lesson)
+            L.plant_js(s, plant)
         s.freeze_loop()
         tr = s.js(TIER_JS)
         v.data.setdefault("tiers", {})["%s_%d" % (mp, seed)] = tr
@@ -166,9 +168,7 @@ def main():
                 part_pile(s, v, PLANTS[args.plant] if args.plant else None)
                 s.thaw_loop()
             if "tiers" in args.parts:
-                if args.plant:
-                    L.plant_js(s, PLANTS[args.plant])
-                part_tiers_supply(s, v)
+                part_tiers_supply(s, v, PLANTS[args.plant] if args.plant else None)
             have["W.lootTiers"] = bool(s.safe_js("() => !!window.__LC__.W.lootTiers", default=False))
             have["W.supplyDrops"] = bool(s.safe_js("() => Array.isArray(window.__LC__.W.supplyDrops)", default=False))
             L.contract_row(v, "contract (W.debugItems, W.lootTiers, W.supplyDrops)", have)
