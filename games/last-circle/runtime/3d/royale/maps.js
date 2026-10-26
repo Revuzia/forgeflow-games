@@ -950,40 +950,18 @@ export class TerrainField {
   }
   /** Triangle-exact ground height: the lattice cell (ix, iz) is two triangles split along the diagonal (ix, iz+1)-(ix+1, iz) exactly as
    *  three's PlaneGeometry indexes them ((a, b, d) where u + v <= 1, then (b, c, d)); outside the lattice the edge value is held. */
-  at(x, z) { return latAt(this.lat, x, z); }
-}
-/** TerrainField.at's body (the triangle-exact lattice height), at module level so a hot loop can call it with unboxed doubles (lcTerrainBlocks). */
-function latAt(L, x, z) {
-  let fx = (x + 800) * (LAT_CELLS / SIZE), fz = (z + 800) * (LAT_CELLS / SIZE);
-  fx = fx < 0 ? 0 : fx > LAT_CELLS ? LAT_CELLS : fx; fz = fz < 0 ? 0 : fz > LAT_CELLS ? LAT_CELLS : fz;
-  let ix = fx | 0, iz = fz | 0;
-  if (ix >= LAT_CELLS) ix = LAT_CELLS - 1;
-  if (iz >= LAT_CELLS) iz = LAT_CELLS - 1;
-  const u = fx - ix, v = fz - iz, i = iz * LAT_N + ix;
-  if (u + v <= 1) return L[i] + u * (L[i + 1] - L[i]) + v * (L[i + LAT_N] - L[i]);
-  const h11 = L[i + LAT_N + 1];
-  return h11 + (1 - u) * (L[i + LAT_N] - h11) + (1 - v) * (L[i + 1] - h11);
-}
-/** losBlocked's terrain march over the baked lattice: the same samples, the same comparison, the same answer as the closure loop
- *  `heightAt0(ax + dx * t, az + dz * t) > ay + dy * t`. Q = [ax, ay, az, dx, dy, dz] (a Float64Array: no boxed doubles per call or per sample - the closure
- *  loop called heightAt0 -> field.at up to 59 times a sight line, boxing two arguments and the result each time). */
-function lcTerrainBlocks(L, Q, steps) {
-  const ax = Q[0], ay = Q[1], az = Q[2], dx = Q[3], dy = Q[4], dz = Q[5];
-  for (let i = 1; i < steps; i++) {
-    const t = i / steps, x = ax + dx * t, z = az + dz * t;
-    // latAt(L, x, z), written out: the page's first optimising tier did not inline the call (heap samples: two boxed arguments + a boxed result a sample)
+  at(x, z) {
+    const L = this.lat;
     let fx = (x + 800) * (LAT_CELLS / SIZE), fz = (z + 800) * (LAT_CELLS / SIZE);
     fx = fx < 0 ? 0 : fx > LAT_CELLS ? LAT_CELLS : fx; fz = fz < 0 ? 0 : fz > LAT_CELLS ? LAT_CELLS : fz;
     let ix = fx | 0, iz = fz | 0;
     if (ix >= LAT_CELLS) ix = LAT_CELLS - 1;
     if (iz >= LAT_CELLS) iz = LAT_CELLS - 1;
-    const u = fx - ix, v = fz - iz, k = iz * LAT_N + ix;
-    let h;
-    if (u + v <= 1) h = L[k] + u * (L[k + 1] - L[k]) + v * (L[k + LAT_N] - L[k]);
-    else { const h11 = L[k + LAT_N + 1]; h = h11 + (1 - u) * (L[k + LAT_N] - h11) + (1 - v) * (L[k + 1] - h11); }
-    if (h > ay + dy * t) return true;
+    const u = fx - ix, v = fz - iz, i = iz * LAT_N + ix;
+    if (u + v <= 1) return L[i] + u * (L[i + 1] - L[i]) + v * (L[i + LAT_N] - L[i]);
+    const h11 = L[i + LAT_N + 1];
+    return h11 + (1 - u) * (L[i + LAT_N] - h11) + (1 - v) * (L[i + 1] - h11);
   }
-  return false;
 }
 
 // ── palette / biome coloring per map ────────────────────────────────────────
@@ -1269,7 +1247,6 @@ export async function buildMap(W, mapId) {
   // GENERATION-TIME ground = base + every pad / corridor registered so far. After the bake (below, once every POI, building and road has
   // registered) this is rebound to the lattice, and from then on it IS the ground: physics, bots, loot, props, roads and the drawn surface.
   let heightAt0 = (x, z) => field.liveLat(x, z);
-  let heightAtLat = null;                              // (set once the lattice is the ground: see losBlocked's terrain march)
   // DECISIONS that gate a seeded random draw (does this lot / landmark / tree / portal / loot spot exist?) read baseH, the analytic ground, NOT
   // heightAt0: a pad, a corridor or the lattice interpolation moves a height by a few cm, which near a waterline flips a yes/no, and one
   // conditional draw more or less reshuffles every placement after it (the shared map RNG stream must see the same draws in the same order as
@@ -4958,7 +4935,7 @@ export async function buildMap(W, mapId) {
     for (const sx of [-1, 1]) addBox(x + sx * (W2 / 2 + 0.75), y + TOP + 0.75, z, 0.08, 0.9, W2 + 1.6, C_TIM2, NC);   // catwalk rails
     for (const sz of [-1, 1]) addBox(x, y + TOP + 0.75, z + sz * (W2 / 2 + 0.75), W2 + 1.6, 0.9, 0.08, C_TIM2, NC);
     coneAt(x, y + TOP + CAB, z, (W2 + 1.4) * 0.72, 2.6, 4, C_ROOF, Math.PI / 4, "shingle");                   // hipped roof
-    addBox(x, y + TOP + CAB + 2.6 + 3.5, z, 0.16, 7, 0.16, "#9a9a96", NC);                                  // mast
+    addBox(x, y + TOP + CAB + 4.7, z, 0.16, 9.8, 0.16, "#9a9a96", NC);                                      // mast: stepped on the eaves plate, up through the roof (it stood on the cone's apex: placementcheck structure-contact read a 2.6 m hover)
     addBox(x, y + TOP + CAB + 2.6 + 7.1, z, 0.5, 0.5, 0.5, "#ffe9a8", NC);                                  // the beacon
     chest(x, y + 0.4, z, null);
     // the scatter's props under it go (finalizeProps drops a `drop` entry): nothing grows through the legs or the bracing
@@ -5577,8 +5554,7 @@ export async function buildMap(W, mapId) {
   const _bk0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
   field.bake();
   const bakeMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _bk0;
-  heightAtLat = (x, z) => field.at(x, z);               // (losBlocked's terrain march takes the lattice directly while this is the ground)
-  heightAt0 = heightAtLat;
+  heightAt0 = (x, z) => field.at(x, z);
   // the world-shader layer's ground (LCU.uLcHgt): the baked lattice as a 609 x 609 half-float texture, linear-filtered, so the drawn ground height at any
   // fragment is one fetch (the walls' wear band, the water's depth colour and foam). Medium and up; freed with the map.
   if (LCFX) {
@@ -6792,7 +6768,6 @@ export async function buildMap(W, mapId) {
 
   // ── LOS (coarse march vs terrain + static boxes) ──────────────────────────
   const losCols = [];
-  const LOS_Q = new Float64Array(6);
   function spanTouches(cols, x0, y0, z0, x1, y1, z1) {
     const lx = (x0 < x1 ? x0 : x1) - 0.01, hx = (x0 < x1 ? x1 : x0) + 0.01;
     const ly = (y0 < y1 ? y0 : y1) - 0.01, hy = (y0 < y1 ? y1 : y0) + 0.01;
@@ -6855,10 +6830,6 @@ export async function buildMap(W, mapId) {
       if (cols.length && spanTouches(cols, x0, y0, z0, x1, y1, z1) && S.segmentColliders(x0, y0, z0, x1, y1, z1, cols)) return true;
     }
     const steps = Math.min(60, Math.max(6, Math.floor(len / 3)));
-    if (heightAt0 === heightAtLat && field.lat) {
-      LOS_Q[0] = ax; LOS_Q[1] = ay; LOS_Q[2] = az; LOS_Q[3] = dx; LOS_Q[4] = dy; LOS_Q[5] = dz;
-      return lcTerrainBlocks(field.lat, LOS_Q, steps);
-    }
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
       if (heightAt0(ax + dx * t, az + dz * t) > ay + dy * t) return true;
