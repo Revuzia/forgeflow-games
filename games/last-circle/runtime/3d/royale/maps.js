@@ -346,8 +346,8 @@ const LCU = {
   uLcAOK: { value: new THREE.Vector4(0, 0, 0, 0) },                    // uv = xz * x + y; z = indirect strength, w = direct strength
   uLcWind: { value: new THREE.Vector4(0.8, 0.6, 1, 0) },               // xy = wind direction, z = strength (0 = still)
   uLcGrime: { value: null },                                            // the CC0 wall photograph (detail, divided by its own mean)
-  uLcGrimeK: { value: new THREE.Vector4(0, 0.42, 0, 0) },              // x = gain (0 = off), y = uv scale
-  uLcWear: { value: new THREE.Vector2(0.22, 0.85) },                    // x = how much darker the base of a wall is at the ground, y = the band's height (m)
+  uLcGrimeK: { value: new THREE.Vector4(0, 1 / 6, 0, 0) },             // x = gain (0 = off), y = 1 / the photo's tile (m, world-planar)
+  uLcWear: { value: new THREE.Vector2(0.30, 0.85) },                    // x = how much darker the base of a wall is at the ground, y = the band's height (m)
   uLcWater: { value: new THREE.Vector4(0, 0, 0, 0) },                  // x = water y
   uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
 };
@@ -438,9 +438,12 @@ const LC_FRAG_ALBEDO = `
   diffuseColor.rgb *= 1.0 - uLcWear.x * lband;
 }
 #endif
-#if defined( LC_GRIME ) && defined( USE_MAP ) && ! defined( USE_BATCHING )
+#ifdef LC_GRIME
 {
-  vec2 lgp = vMapUv * uLcGrimeK.y;
+  // world-space planar mapping (a wall's own plane, a floor's / roof's xz), so every structure mesh - the procedural batches, the district merges AND the
+  // furnished houses' BatchedMeshes, whose UVs are per-material - wears the photograph at one scale: uLcGrimeK.y = 1 / its tile (m)
+  vec3 lan = abs( vLcN );
+  vec2 lgp = ( lan.y > 0.7 ? vLcW.xz : ( lan.x > lan.z ? vLcW.zy : vLcW.xy ) ) * uLcGrimeK.y;
   vec3 lg1 = texture2D( uLcGrime, lgp ).rgb, lg2 = texture2D( uLcGrime, mat2( 0.8, 0.6, -0.6, 0.8 ) * lgp * 0.53 + 0.29 ).rgb;
   float lgl = dot( ( lg1 + lg2 ) * 0.5 / ${glslV3(GRIME_FILE.avg)}, ${PH_LUM} );
   diffuseColor.rgb *= clamp( 1.0 + ( lgl - 1.0 ) * uLcGrimeK.x, 0.55, 1.35 );
@@ -1112,6 +1115,60 @@ const CITY_THEME_TABLES = {
       minimap: { block: "#c9bd9c" } },
   },
 };
+
+/** LC-41: the contact-AO mask (see buildMap). A module-level function, not a block inside buildMap: buildMap is far past V8's optimising-compiler size
+ *  limit, so a hot loop written inline there runs in the baseline tier (the 16 M-texel blur measured 1.6-3.3 s in the page vs 0.16 s optimised).
+ *  `gyc[i]` = the ground under collider i's centre (the caller's heightAt). Returns the R8 texels, the colliders rasterised and the raster's ms. */
+function bakeContactAO(colliders, gyc, N, size) {
+  const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  const half = size / 2, inv = N / size, occ = new Float32Array(N * N), rowHas = new Uint8Array(N);
+  let nAO = 0;
+  for (let ci = 0; ci < colliders.length; ci++) {
+    const c = colliders[ci];
+    if (c.dead || c.kind !== "box") continue;
+    const w = c.maxX - c.minX, d = c.maxZ - c.minZ;
+    if (w * d > 6000 || w < 0.05 || d < 0.05) continue;
+    const gy = gyc[ci];
+    if (c.minY > gy + 0.35 || c.maxY < gy + 0.5) continue;
+    const hk = Math.min(1, (c.maxY - Math.max(c.minY, gy)) / 2.5);
+    const fx0 = (c.minX + half) * inv, fx1 = (c.maxX + half) * inv, fz0 = (c.minZ + half) * inv, fz1 = (c.maxZ + half) * inv;
+    const i0 = Math.max(0, Math.floor(fx0)), i1 = Math.min(N - 1, Math.floor(fx1)), j0 = Math.max(0, Math.floor(fz0)), j1 = Math.min(N - 1, Math.floor(fz1));
+    for (let j = j0; j <= j1; j++) {
+      const cz = Math.min(j + 1, fz1) - Math.max(j, fz0);
+      if (cz <= 0) continue;
+      rowHas[j] = 1;
+      for (let i = i0; i <= i1; i++) {
+        const cx = Math.min(i + 1, fx1) - Math.max(i, fx0);
+        if (cx <= 0) continue;
+        const v = cx * cz * hk, k = j * N + i;
+        if (v > occ[k]) occ[k] = v;
+      }
+    }
+    nAO++;
+  }
+  const t1 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  // the blur: two 3-texel boxes (~ a 1.6 m soft edge) = ONE separable 5-tap [1 2 3 2 1] / 9 per axis, edges clamped; only the rows the raster touched (+-2)
+  // are filtered (the rest of the map stays 0) and the vertical pass writes the bytes directly
+  const tmp = new Float32Array(N * N), px = new Uint8Array(N * N), k9 = 1 / 9;
+  for (let r = 0; r < N; r++) {
+    if (!rowHas[r]) continue;
+    const o = r * N;
+    for (let c = 0; c < N; c++) {
+      const cm2 = c < 2 ? 0 : c - 2, cm1 = c < 1 ? 0 : c - 1, cp1 = c > N - 2 ? N - 1 : c + 1, cp2 = c > N - 3 ? N - 1 : c + 2;
+      tmp[o + c] = (occ[o + cm2] + 2 * occ[o + cm1] + 3 * occ[o + c] + 2 * occ[o + cp1] + occ[o + cp2]) * k9;
+    }
+  }
+  for (let r = 0; r < N; r++) {
+    const rm2 = r < 2 ? 0 : r - 2, rm1 = r < 1 ? 0 : r - 1, rp1 = r > N - 2 ? N - 1 : r + 1, rp2 = r > N - 3 ? N - 1 : r + 2;
+    if (!rowHas[rm2] && !rowHas[rm1] && !rowHas[r] && !rowHas[rp1] && !rowHas[rp2]) continue;
+    const o = r * N, a = rm2 * N, b = rm1 * N, d = rp1 * N, e = rp2 * N;
+    for (let c = 0; c < N; c++) {
+      const v = (tmp[a + c] + 2 * tmp[b + c] + 3 * tmp[o + c] + 2 * tmp[d + c] + tmp[e + c]) * k9;
+      px[o + c] = v >= 1 ? 255 : v <= 0 ? 0 : (v * 255 + 0.5) | 0;
+    }
+  }
+  return { px, nAO, rasterMs: Math.round((t1 - t0) * 10) / 10 };
+}
 
 export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
@@ -3650,7 +3707,9 @@ export async function buildMap(W, mapId) {
     const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * q.w / structTile * 2, uv.getY(i) * q.h / structTile * 2);
     pushGeo(c + "|block", geo);
     const yt = base + q.h * 0.92;
+    const n0 = colliders.length;
     boxColliders(q.x, (lo - 0.35 + yt) / 2, q.z, q.w * 0.8, yt - lo + 0.35, q.d * 0.8, q.rot || 0);
+    for (let i = n0; i < colliders.length; i++) colSurf.set(colliders[i], "stone");      // LC-52: a boulder is rock (the untagged default is timber)
   }
   /** The water mill beside the bridge (towngen's L.mill.wheel): a two-storey timber millhouse on a stone base that stands in the river's edge, a gable roof, an overshot wheel on its side wall
    *  (it TURNS: one mesh of its own, turned about its axle every frame within 320 m of the camera), the axle into the base, a flume on trestles from a stone sluice up the bank to the wheel's top.
@@ -3802,6 +3861,13 @@ export async function buildMap(W, mapId) {
   // housegen palette material -> the struct texture kind its faces wear (district merge: s / plank / stucco share the mix mesh; no metal mesh)
   const HG_COLSURF = { brick: "stone", stone: "stone", roof: "stone", roof_flat: "concrete", floor_tile: "concrete", floor_concrete: "concrete", lamp: "concrete", sheet: "metal", metal: "metal",
     glass: "concrete", plaster: "concrete", stucco: "concrete", fabric: "concrete", ceramic: "concrete", plank: "wood", plank_in: "wood", floor_wood: "wood", wood: "wood" };   // LC-52 (surfaceAt)
+  // a pitched "roof" is clay tile (stone) unless its tint is a DARK warm brown: the timber lodges' and cabins' shingles (wood)
+  const _hgC = new THREE.Color();
+  function hgSurf(pe) {
+    if (!pe) return "concrete";
+    if (pe.mat === "roof") { try { _hgC.set(pe.color); } catch (e) { return "stone"; } if (Math.max(_hgC.r, _hgC.g, _hgC.b) < 0.2 && _hgC.r >= _hgC.g && _hgC.g >= _hgC.b) return "wood"; }
+    return HG_COLSURF[pe.mat] || "concrete";
+  }
   const HG_MAT_KIND = { brick: "s", stone: "s", roof: "s", roof_flat: "s", floor_tile: "s", floor_concrete: "s", lamp: "s", sheet: "s", metal: "s", glass: "s",
     plaster: "stucco", stucco: "stucco", fabric: "stucco", ceramic: "stucco", plank: "plank", plank_in: "plank", floor_wood: "plank", wood: "plank" };
   // the indoor ambient term: interior faces and furniture take this share of their colour (lamp panels keep theirs). Deepwood's forest light is darker than the
@@ -3912,9 +3978,9 @@ export async function buildMap(W, mapId) {
     for (const c of HG.collidersOf(H, mkCollider)) colliders.push(c);
     {                                                // LC-52: what each house collider is made of (its top face's palette material; stairs are timber; a roof plank its roof's material)
       let k = c0;
-      for (const b of H.boxes) if (b.c) { const pe = H.palette[b.f && b.f[2]]; colSurf.set(colliders[k++], HG_COLSURF[pe && pe.mat] || "concrete"); }
+      for (const b of H.boxes) if (b.c) { const pe = H.palette[b.f && b.f[2]]; colSurf.set(colliders[k++], hgSurf(pe)); }
       let roofS = "stone";
-      for (const pe of H.palette) if (pe.mat === "roof" || pe.mat === "roof_flat" || pe.mat === "sheet") { roofS = HG_COLSURF[pe.mat]; break; }
+      for (const pe of H.palette) if (pe.mat === "roof" || pe.mat === "roof_flat" || pe.mat === "sheet") { roofS = hgSurf(pe); break; }
       for (const r of H.ramps) { if (k < colliders.length) colSurf.set(colliders[k++], r.roof ? roofS : "wood"); }
       for (; k < colliders.length; k++) colSurf.set(colliders[k], "wood");             // (furniture: tables, beds, crates)
     }
@@ -4769,13 +4835,14 @@ export async function buildMap(W, mapId) {
   // legs to a 29 m cab, cross-braced on every face, a glazed cab (its windows the warm emissive the lamps use, so it reads from the plane at dusk too), a
   // hipped roof and a mast. The cab is a SOLID block (no room nobody can reach: navcheck's room survey), the legs are exact colliders, the braces cosmetic.
   // A chest stands between the legs. Placed by a deterministic search (no random draw: the world stream is untouched): a 40 m grid over the forest half,
-  // dry, below the rocky tops, clear of towns / POIs / roads / landmarks, nearly flat across 10 m; the highest wins. The trees, bushes and rocks the scatter
+  // within 520 m of the centre, dry, below the rocky tops, clear of towns / POIs / roads / landmarks, nearly flat across 10 m; the highest wins. The trees, bushes and rocks the scatter
   // put within 7 m of it are dropped (drop flag: finalizeProps' own path, no stream change). WORLD CHANGE (colliders, one chest, dropped props): the
   // MAP_GEN_VERSION bump is the integrator's.
   function lookoutTower() {
     let best = null;
     for (let gx = -HALF + 140; gx <= HALF - 140; gx += 40) for (let gz = -60; gz <= HALF - 140; gz += 40) {
       const h = baseH(gx, gz);
+      if (gx * gx + gz * gz > 520 * 520) continue;                                   // (inside the playable heart: a beacon on the map's rim orients nobody)
       if (h < waterY + 4 || h > 40 || (best && h <= best.h)) continue;
       if (nearPoi(gx, gz, 45) || nearLandmark(gx, gz) || cityBlocks(gx, gz, 40)) continue;
       let lm = false;
@@ -5704,13 +5771,13 @@ export async function buildMap(W, mapId) {
   // LC-17 (P2-C): per-kind surface response. Every procedural wall was roughness 0.88 / metalness 0.04: brick, planks, plaster, shingles and corrugated steel
   // all caught the sun the same way. Now plaster is the most matte, shingles a little glossier, and metal a real metal (0.45 / 0.5: the IBL exists since the
   // look plan, so a metal lobe reflects the map's sky instead of black). Plus, on medium and up (LCFX), the world-shader layer: the wall-base wear band
-  // (vertical faces within 0.85 m of the ground under them, up to 22 % darker), the CC0 grime photograph (stains / weathering, its light / dark only, a 6 m
+  // (vertical faces within 0.85 m of the ground under them, up to 30 % darker at the ground: the 0.1-0.5 m band ~ 20 %), the CC0 grime photograph (stains / weathering, its light / dark only, a 6 m
   // tile and a turned second sample) and the cloud shadows. Same draw calls (the same meshes), one program per kind as before.
   const KIND_PBR = { s: [0.86, 0.03], plank: [0.9, 0.0], shingle: [0.8, 0.02], metal: [0.45, 0.5], block: [0.84, 0.02], stucco: [0.93, 0.0] };
   const STRUCT_LC = { LC_CLOUD: "", LC_WEAR: "" };
   const grimeTex = await grimePromise;
-  if (grimeTex) { LCU.uLcGrime.value = grimeTex; LCU.uLcGrimeK.value.set(0.55, STRUCT_TILE / 6.0, 0, 0); STRUCT_LC.LC_GRIME = ""; }
-  else LCU.uLcGrimeK.value.set(0, STRUCT_TILE / 6.0, 0, 0);
+  if (grimeTex) { LCU.uLcGrime.value = grimeTex; LCU.uLcGrimeK.value.set(0.7, 1 / 6.0, 0, 0); STRUCT_LC.LC_GRIME = ""; }
+  else LCU.uLcGrimeK.value.set(0, 1 / 6.0, 0, 0);
   function structMaterial(tkind) {
     let mat = structMats[tkind];
     if (mat) return mat;
@@ -5936,7 +6003,7 @@ export async function buildMap(W, mapId) {
   // A map-local CLONE of a foliage GLB material (the GLB's own material is shared with the menu diorama and the probes' reference meshes) with the wind
   // vertex term (see LC_VERT_WIND): kind height, sway at the top, leaf flutter. Plus the cloud shadows. The near shadow casters get a depth material with the
   // same sway, so a tree's shadow moves with its crown.
-  const WIND_K = { tree: [6.5, 0.3, 0.03], pine: [8, 0.24, 0.015], birch: [7, 0.34, 0.035], palm: [7, 0.45, 0.04], bush: [1.4, 0.07, 0.02], grass: [0.6, 0.1, 0] };
+  const WIND_K = { tree: [6.5, 0.42, 0.065], pine: [8, 0.34, 0.04], birch: [7, 0.46, 0.075], palm: [7, 0.6, 0.07], bush: [1.4, 0.09, 0.035], grass: [0.6, 0.12, 0] };   // [kind height m, crown sway m, leaf flutter m]
   const windDefs = (kind) => { const w = WIND_K[kind]; return { LC_WIND: "", LC_WIND_H: w[0].toFixed(2), LC_WIND_A: w[1].toFixed(3), LC_WIND_FLUT: w[2].toFixed(3) }; };
   const windMats = new Map(), windDepth = new Map();
   function windMat(kind, mat) {
@@ -5963,7 +6030,7 @@ export async function buildMap(W, mapId) {
   // late, and uploads only the live range. Distance: the tier's (low 600, medium 780, high 1,000, ULTRA 1,650 m), x up to 2.1 with height above the ground
   // (the drop sees the map's forests to the horizon); the last 12 % of it shrinks an instance to nothing (no pop). Allocation-free per frame.
   const culls = [];                                   // per kind: { list, parts: [{ draw, src, lod }], cx, cy, cz, cr, hid }
-  let cullDirty = true;
+  let cullDirty = true, cullFn = null;              // (cullFn: the updater; map.cullNow() runs it at once - a camera CUT (spectate, a probe's pinned view) need not wait a frame)
   function addCulled(kind, list, ref, mat, lodPart) {
     let K2 = null;
     for (const q of culls) if (q.kind === kind) { K2 = q; break; }
@@ -5999,7 +6066,7 @@ export async function buildMap(W, mapId) {
     const _f = new THREE.Frustum(), _pv = new THREE.Matrix4();
     let lx = 1e9, ly = 1e9, lz = 1e9, lfx = 0, lfy = 0, lfz = 0, lD = 0, lAsp = 0, lFov = 0;
     W._lcCullStats = { culls: 0, drawn: 0, total: 0, D: 0 };
-    trackUpdater(() => {
+    trackUpdater(cullFn = () => {
       const cam = W.camera;
       if (!cam || !cam.matrixWorld) return;
       const e = cam.matrixWorld.elements, px = e[12], py = e[13], pz = e[14], fx = -e[8], fy = -e[9], fz = -e[10];
@@ -6469,53 +6536,15 @@ export async function buildMap(W, mapId) {
   // every seed replay bakes the same mask.
   if (LCFX) {
     const _ao0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
-    const N = 2048, inv = N / SIZE, occ = new Float32Array(N * N);
-    let nAO = 0;
-    for (let ci = 0; ci < colliders.length; ci++) {
-      const c = colliders[ci];
-      if (c.dead || c.kind !== "box") continue;
-      const w = c.maxX - c.minX, d = c.maxZ - c.minZ;
-      if (w * d > 6000 || w < 0.05 || d < 0.05) continue;
-      const gy = heightAt0((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2);
-      if (c.minY > gy + 0.35 || c.maxY < gy + 0.5) continue;
-      const hk = Math.min(1, (c.maxY - Math.max(c.minY, gy)) / 2.5);
-      const fx0 = (c.minX + HALF) * inv, fx1 = (c.maxX + HALF) * inv, fz0 = (c.minZ + HALF) * inv, fz1 = (c.maxZ + HALF) * inv;
-      const i0 = Math.max(0, Math.floor(fx0)), i1 = Math.min(N - 1, Math.floor(fx1)), j0 = Math.max(0, Math.floor(fz0)), j1 = Math.min(N - 1, Math.floor(fz1));
-      for (let j = j0; j <= j1; j++) {
-        const cz = Math.min(j + 1, fz1) - Math.max(j, fz0);
-        if (cz <= 0) continue;
-        for (let i = i0; i <= i1; i++) {
-          const cx = Math.min(i + 1, fx1) - Math.max(i, fx0);
-          if (cx <= 0) continue;
-          const v = cx * cz * hk, k = j * N + i;
-          if (v > occ[k]) occ[k] = v;
-        }
-      }
-      nAO++;
-    }
-    // two separable running-sum box blurs, radius 1 texel (a 3-texel box twice ~ a 1.6 m soft edge)
-    const tmp = new Float32Array(N * N), k3 = 1 / 3;
-    const passH = (src, dst) => {                   // (direct indexing, edges clamped: ~40 ms for the four passes, was ~1.6 s through a per-texel closure)
-      for (let r = 0; r < N; r++) {
-        const o = r * N;
-        dst[o] = (src[o] * 2 + src[o + 1]) * k3;
-        for (let c = 1; c < N - 1; c++) dst[o + c] = (src[o + c - 1] + src[o + c] + src[o + c + 1]) * k3;
-        dst[o + N - 1] = (src[o + N - 2] + src[o + N - 1] * 2) * k3;
-      }
-    };
-    const passV = (src, dst) => {
-      for (let c = 0; c < N; c++) { dst[c] = (src[c] * 2 + src[N + c]) * k3; dst[(N - 1) * N + c] = (src[(N - 2) * N + c] + src[(N - 1) * N + c] * 2) * k3; }
-      for (let r = 1; r < N - 1; r++) { const o = r * N; for (let c = 0; c < N; c++) dst[o + c] = (src[o - N + c] + src[o + c] + src[o + N + c]) * k3; }
-    };
-    passH(occ, tmp); passV(tmp, occ); passH(occ, tmp); passV(tmp, occ);
-    const px = new Uint8Array(N * N);
-    for (let k = 0; k < px.length; k++) { const v = occ[k]; px[k] = v >= 1 ? 255 : v <= 0 ? 0 : Math.round(v * 255); }
+    const N = 2048, gyc = new Float32Array(colliders.length);
+    for (let ci = 0; ci < colliders.length; ci++) { const c = colliders[ci]; gyc[ci] = c.dead || c.kind !== "box" ? 0 : heightAt0((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2); }
+    const { px, nAO, rasterMs } = bakeContactAO(colliders, gyc, N, SIZE);
     const at = new THREE.DataTexture(px, N, N, THREE.RedFormat, THREE.UnsignedByteType);
     at.minFilter = THREE.LinearMipmapLinearFilter; at.magFilter = THREE.LinearFilter; at.generateMipmaps = true; at.wrapS = at.wrapT = THREE.ClampToEdgeWrapping; at.needsUpdate = true;
     lcOwn(at);
     LCU.uLcAO.value = at;
     LCU.uLcAOK.value.set(1 / SIZE, 0.5, 0.55, 0.2);
-    W._lcAOStats = { colliders: nAO, ms: Math.round(((typeof performance !== "undefined" ? performance.now() : Date.now()) - _ao0) * 10) / 10 };
+    W._lcAOStats = { colliders: nAO, rasterMs, ms: Math.round(((typeof performance !== "undefined" ? performance.now() : Date.now()) - _ao0) * 10) / 10 };
   }
 
   // ── static collider spatial hash ──────────────────────────────────────────
@@ -6801,7 +6830,7 @@ export async function buildMap(W, mapId) {
   // Labels: wood, stone, concrete, metal, dirt, sand, snow, grass, water (audio.js keys wood / snow / stone + concrete today; the rest play its grass step
   // until lane audio adds samples - integrator note). Allocation-free (queryColliders fills a reused array).
   const PROP_SURF = { rocks: "stone", car: "metal", container: "metal", barrel: "metal", tree: "wood", palm: "wood", pine: "wood", birch: "wood" };
-  const _sfCols = [];
+  const _sfCols = [], _sfW = [0, 0, 0];
   function surfaceAt(x, z, y) {
     if (houses.length) { const h = houseAt(x, z, y); if (h) return h.surf; }          // (WAVE 8: a house floor: its boards or its tiles / concrete, upstairs when the caller gives the feet)
     const gy = heightAt0(x, z), hasY = typeof y === "number" && y === y;
@@ -6819,28 +6848,17 @@ export async function buildMap(W, mapId) {
       if (on && top > bestTop) { bestTop = top; best = c; }
     }
     if (best) return colSurf.get(best) || (best.prop != null ? (PROP_SURF[best.prop] || "stone") : (city && mapId === "ashgrid" ? "concrete" : "wood"));
+    if (K.water && gy < waterY - 0.05 && (!hasY || y <= waterY + 0.3)) return "water";             // (wading: the feet are at the waterline, above the sea bed; before the raster - a sunken lot edge is still water)
     if (!hasY || y <= gy + 0.6) {
       const i = Math.floor(x + HALF), j = Math.floor(z + HALF);
       if (i >= 0 && j >= 0 && i < SGN && j < SGN) { const k = surfG[j * SGN + i]; if (k) return SG_NAMES[k]; }
     }
-    if (K.water && gy < waterY - 0.05 && (!hasY || y <= waterY + 0.3)) return "water";             // (wading: the feet are at the waterline, above the sea bed)
-    if (mapId === "isla_viva") {
-      if (gy > 34) return "stone";
-      return gy < 2.2 ? "sand" : "grass";                         // (colorAt's sand tint: h < 2.2)
-    }
-    if (mapId === "ashgrid") {
-      if (gy < 0.5) return "sand";
-      if (gy > 28) return "stone";
-      const edge = fbm(x / 260, z / 260, seed + 61, 2, 2, 0.5) * 120;
-      return (x - 40 + edge) / 320 > 0.38 ? "sand" : "grass";     // (colorAt's savanna -> desert blend: the ground reads as sand from ~0.4 of the way)
-    }
-    if (mapId === "deepwood") {
-      const edge = fbm(x / 240, z / 240, seed + 91, 2, 2, 0.5) * 90;
-      if ((-z - 100 + edge) / 260 > 0.35) return "snow";
-      if (gy < 0.6) return "dirt";
-      if (gy > 44) return "stone";
-      return "grass";
-    }
+    // the bare terrain: the DOMINANT layer of the splat the ground is textured with (splatAt: grass/rock, beach, sand - the same weights colorAt blends
+    // its tint by), so the step sounds like the ground looks; then the zones colorAt paints outright (basalt, bluffs, rocky tops, river mud)
+    const w = splatAt(mapId, gy, x, z, seed, _sfW);
+    if (mapId === "isla_viva") return gy > 34 ? "stone" : w[1] >= 0.5 ? "sand" : "grass";
+    if (mapId === "ashgrid") return gy > 28 ? "stone" : w[2] >= 0.5 ? "sand" : "grass";
+    if (mapId === "deepwood") return w[1] >= 0.5 ? "snow" : gy < 0.6 ? "dirt" : gy > 44 ? "stone" : "grass";
     return "grass";
   }
   // LC-12 (P2-C export for lane bots): how hidden a point is INSIDE A BUSH, 0 (in the open) .. 1 (at a bush's heart). Bushes have no collider (adding one
@@ -6911,6 +6929,7 @@ export async function buildMap(W, mapId) {
     lootPoints: lootAll, pois, portals,
     landmark: lookout,                                                          // LC-90: Deepwood's fire lookout { x, z, y, top } (null elsewhere)
     randomGroundPos, losBlocked,
+    cullNow: () => { if (cullFn) { cullDirty = true; cullFn(); } },          // LC-89: re-cull the prop twins against W.camera now (after a camera cut)
     minimap: mm, themeColor: K.themeColor,
     terrain, water: mapWater, sky: K.sky,
     // C-PAD (Wave 6): what the ground is made of - read-only, for the gates and for debugging. `genVersion` names the world GENERATOR: 1 = the
