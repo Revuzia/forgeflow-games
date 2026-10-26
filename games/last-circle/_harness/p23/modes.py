@@ -130,7 +130,8 @@ def main():
                 # FAIL with the mode named, not a 25-minute wait for a 'duo' that never comes
                 seen = s.wait_js("() => { const W = window.__LC__.W; return W.match && ['lobby', 'drop', 'match'].includes(W.phase) ? (W.match.mode || 'none') : null; }",
                                  args.load_timeout, 0.5)
-                got = seen
+                got = s.safe_js("() => { const W = window.__LC__.W; return W.match && W.match.mode || null; }") if seen is not None else None     # wait_js returns the seconds waited
+                v.data["menuStartS"] = seen
                 v.data["menuStart"] = s.safe_js("() => { const W = window.__LC__.W; return { phase: W.phase, matchMode: W.match && W.match.mode, teamMode: W.teamMode, pace: W.match && W.match.pace,"
                                                 " mates: W.player ? W.actors.filter((a) => a !== W.player && a.teamId === W.player.teamId).length : null }; }")
             else:
