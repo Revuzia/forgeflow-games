@@ -194,8 +194,9 @@ export function refresh(camera) {
     if (foc && !a.isDummy) {
       if (foc.teamId != null && a.teamId === foc.teamId) {
         // teammate: out to mateM from the camera, never the watched actor itself, in the squad colour
-        // the same near cut as player.js (d2 > 12, about 3.5 m from the camera): a mate at your shoulder is not labelled in your face
-        vis = a.alive && a !== foc && d2 > 12 && d2 < pol.mateM * pol.mateM;
+        // near cut 10 m from the camera: the tag is world-sized (2.6 m wide), so a squadmate a few metres away got a tag a third
+        // of the screen wide; up close a mate is known by their squad colour (vitals chip, blip, pings) - the tag is for finding them far
+        vis = a.alive && a !== foc && d2 > 100 && d2 < pol.mateM * pol.mateM;
         const col = vis && pol.colorOf ? pol.colorOf(a) : null;
         if (col && h.mate !== col) { h.mate = col; drawCell(s, h.cell, h.name, h.human, col); }
       } else if (vis) {
