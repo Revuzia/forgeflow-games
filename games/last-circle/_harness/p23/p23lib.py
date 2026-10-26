@@ -373,7 +373,9 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
     hpg, hrec = rig.page(ctx, name + "/host")
     gpg, grec = rig.page(ctx, name + "/guest")
     for label, pg in (("host", hpg), ("guest", gpg)):
-        if SQ.boot_url(pg, args.base, args.boot_timeout) is None:
+        # two cold boots back to back in one context: on a loaded box (16 automated Chromes, 10-26) the guest's boot alone passed the 300 s
+        # default ("netseq guest never booted") - a pair gets at least 1200 s per page
+        if SQ.boot_url(pg, args.base, max(args.boot_timeout or 0, 1200)) is None:
             raise C.EnvFailure("%s %s never booted" % (name, label))
     create_vis = r"() => [...document.querySelectorAll('button')].some((b) => b.offsetParent && /^\s*CREATE ROOM\s*$/.test(b.textContent || ''))"
     veils = "() => document.querySelectorAll('[data-net=\"lobby\"]').length"
