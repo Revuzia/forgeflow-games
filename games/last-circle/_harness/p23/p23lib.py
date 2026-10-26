@@ -380,10 +380,12 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
     create_vis = r"() => [...document.querySelectorAll('button')].some((b) => b.offsetParent && /^\s*CREATE ROOM\s*$/.test(b.textContent || ''))"
     veils = "() => document.querySelectorAll('[data-net=\"lobby\"]').length"
     for label, pg in (("host", hpg), ("guest", gpg)):
+        pg.bring_to_front()
         SQ.open_lobby(pg)
         # the lobby is OPEN when its CREATE ROOM button is on screen (squadguard's 380 px-panel test can be met by another menu panel). Re-open
-        # ONLY while no lobby veil exists: net.js openLobby has no duplicate guard, and a second veil over the first left the first veil's
-        # CREATE ROOM (the locator's .first) covered - the 20 s click timeout of three dbno human2 runs (10-26 03:00 / 05:11)
+        # ONLY while no lobby veil exists: net.js openLobby has no duplicate guard (a re-open stacks a second veil). (That was suspected for the
+        # CREATE ROOM click timeouts of 10-26 03:00 / 05:11; the next run counted ONE veil and still timed out - the cause was the background
+        # tab, see bring_to_front below.)
         for attempt in range(4):
             if SQ.wait(pg, create_vis, 8):
                 break
@@ -400,6 +402,10 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
         if nv != 1:
             print("  [squad_pair] %s: %d lobby veils open (the top one is used)" % (label, nv))
     top = '[data-net="lobby"] >> nth=-1'
+    # each page is brought to the front before its clicks: the guest page opened last, so the host was a BACKGROUND tab - no rAF there, and a
+    # locator click waits on rAF for its stability check (lobbydbg 10-26: the same click on a lone foreground page landed at once; with ONE veil,
+    # enabled and on top, the host's click timed out at 30 s in pl_netseq_pullback)
+    hpg.bring_to_front()
     try:
         hpg.locator(top).locator('button:text-is("CREATE ROOM")').first.click(timeout=30_000)
         code = None
@@ -413,10 +419,12 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
     if not code:
         _pair_shot(hpg, name + "_host_nocode")
         raise C.EnvFailure("%s: no room code; host screen: %s" % (name, _screen_text(hpg)))
+    gpg.bring_to_front()
     gpg.locator(top).locator('input[placeholder="CODE"]').first.fill(code)
     gpg.locator(top).locator('button:text-is("JOIN")').first.click(timeout=30_000)
     if not SQ.wait(hpg, "() => document.body.innerText.includes('2 player')", 40):
         raise C.EnvFailure("%s: the guest never showed in the host's lobby" % name)
+    hpg.bring_to_front()
     SQ.press_start(hpg)
     for pg in (hpg, gpg):
         if not SQ.wait(pg, "() => ['lobby','drop','match'].includes(window.__LC__.W.phase)", args.load_timeout, 1.0):
