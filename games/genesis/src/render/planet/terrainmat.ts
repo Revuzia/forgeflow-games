@@ -542,8 +542,13 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // broken by a little noise: a bush in every 2.8 m cell, every one round, spread a regular dot grid over the land
       // that a dusting of snow turned into a dalmatian print)
       float keepS = fine ? smoothstep(sv.z - 0.12, sv.z + 0.12, mix(0.3, 1.1, sw)) : 1.0;
-      float edgeS = fine ? snoise(P * 0.9 + 3.7) * 0.12 * aaF(fw, 0.6) : 0.0;
-      float blobRaw = (1.0 - smoothstep(0.15, 0.75, sv.x + edgeS)) * keepS;
+      float edgeS = fine ? snoise(P * 0.9 + 3.7) * 0.22 * aaF(fw, 0.6) : 0.0;
+      // each bush its own size (crown radius 0.32–0.62 of a cell) and a CRISP outline, about a pixel and a half wide
+      // (a soft 0.15–0.75 ramp drew every crown as a blurred disc: in a dusting of snow, grey smudges of dirty snow in a
+      // dot print — the crowns shed their snow by this same mask — instead of white ground and dark bushes)
+      float rS = mix(0.32, 0.62, fract(sv.z * 7.13));
+      float eS = max(0.05, fw * 0.54);
+      float blobRaw = (1.0 - smoothstep(rS - eS, rS + eS, sv.x + edgeS)) * keepS;
       float blob = blobRaw * aaF(fw, 2.0);
       shrubLocal = sw * mix(0.45 * mix(0.3, 1.1, sw), blobRaw, aaF(fw, 2.0));
       vec3 shc = mix(vec3(0.045, 0.07, 0.025), vec3(0.09, 0.09, 0.04), cold * 0.5 + sv.z * 0.4);
