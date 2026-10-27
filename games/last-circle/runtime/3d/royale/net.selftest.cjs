@@ -327,6 +327,138 @@ function suiteP1D(M, SIM, count) {
   return bad;
 }
 
+/** PARITY WAVES P2+P3, lane net rows: C-MODE, LC-49 (order + rejoin), C-DBNO, LC-14 relays (the real module, or a planted-fault copy). */
+function suiteP23(M, SIM, count) {
+  let bad = 0;
+  const row = (cond, msg, detail) => { if (!cond) bad++; if (count) ok(cond, msg, detail); };
+  // ── C-MODE ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const R = (w, n, p) => M.resolveTeamMode(w, n, p || "standard", SIM);
+    row(R(null, 1) === "solo" && R(null, 2) === "duo" && R(null, 3) === "trio" && R(null, 4) === "squad", "C-MODE: AUTO plays the smallest mode that holds the room (1 solo, 2 duo, 3 trio, 4 squad)",
+      [R(null, 1), R(null, 2), R(null, 3), R(null, 4)]);
+    row(R("duo", 3) === "trio" && R("duo", 4) === "squad" && R("trio", 4) === "squad", "C-MODE: a pick too small for the room becomes the smallest that holds everyone (every human is one team)",
+      [R("duo", 3), R("duo", 4), R("trio", 4)]);
+    row(R("squad", 2) === "squad" && R("trio", 1) === "trio" && R("duo", 2) === "duo", "C-MODE: a pick that holds the room is played as picked (the rest of the team = bot teammates)", [R("squad", 2), R("trio", 1)]);
+    row(R("squad", 3, "practice") === "solo" && R("nuke", 2) === "duo" && R(7, 1) === "solo", "C-MODE: practice is solo; an unknown pick is AUTO", [R("squad", 3, "practice"), R("nuke", 2), R(7, 1)]);
+    row(M.resolveTeamMode(null, 2, "standard", { TEAM_SIZE: { solo: 1, duo: 3, trio: 3, squad: 4 } }) === "duo", "C-MODE: K.TEAM_SIZE from the sim wins over the contract table");
+    row(M.humanTeamId(3, "solo", SIM) === "s3" && M.humanTeamId(2, "duo", SIM) === "t0" && M.humanTeamId(0, "squad", SIM) === "t0" && M.humanTeamId(1, "bogus", SIM) === "s1",
+      "C-MODE: a human's teamId is its own id in solo, 't0' (the humans' team) in duo / trio / squad");
+    const D = M.teamPartitionDiff;
+    row(D([["s0", "sq", "t0"], ["s1", "sq", "t0"]]).length === 0 && D([["s0", null, "s0"]]).length === 0 && D([["s0", null, "s0"], ["s1", null, "s1"]]).length === 0,
+      "C-MODE cross-check: the boot's own team name ('sq') or a solo null team agrees with the start's grouping");
+    row(D([["s0", null, "t0"], ["s1", null, "t0"]]).length === 1 && D([["s0", "a", "s0"], ["s1", "a", "s1"]]).length === 1,
+      "C-MODE cross-check: humans split where the start teams them (or teamed where it splits them) are reported", [D([["s0", null, "t0"], ["s1", null, "t0"]])]);
+    const ro = [{ peerId: "a", slot: 0, name: "H" }, { peerId: "b", slot: 1, name: "G" }];
+    const rt2 = M.rosterWithTeams(ro, "trio", SIM);
+    row(rt2.length === 2 && rt2[0].teamId === "t0" && rt2[1].teamId === "t0" && rt2[1].peerId === "b" && rt2[1].name === "G" && ro[0].teamId === undefined,
+      "C-MODE: the start roster carries each human's teamId, keeps every old field and does not touch the input", rt2);
+    const hs = new M.SquadHandshake({ id: "a", name: "H", gv: 6, host: true });
+    const msg = rt(hs.startMsg({ seed: 7, mapId: "ashgrid", mode: "quick", teamMode: "trio", roster: rt2 }));
+    row(msg.mode === "quick" && msg.teamMode === "trio" && msg.gv === 6 && msg.roster[1].teamId === "t0", "C-MODE: the start keeps `mode` = the pace and adds teamMode + roster teamIds (JSON round trip)", msg);
+  }
+  // ── LC-49: order ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const G = new M.SeqGate();
+    const seq = [1, 2, 3, 5, 4, 5, 6, 4, 9, 7, 8, 9, 10];
+    const got = seq.map((q) => G.accept("p", q));
+    row(got.join() === "new,new,new,new,old,dup,new,dup,new,old,old,dup,new", "LC-49: SeqGate says new / old (late, never seen) / dup (seen) for an out-of-order stream with copies", got);
+    row(G.accept("p", undefined) === "new" && G.accept("p", "7") === "new" && G.accept("p", -1) === "new", "LC-49: a packet with no sequence number (an older peer) is always applied, as before");
+    row(G.accept("other", 3) === "new" && G.accept("other", 2) === "old", "LC-49: each sender has its own counter");
+    const G2 = new M.SeqGate(64);
+    G2.accept("p", 200);
+    row(G2.accept("p", 100) === "dup" && G2.accept("p", 150) === "old", "LC-49: a packet more than 64 behind is too old to tell: dropped whole");
+    G2.reset("p");
+    row(G2.accept("p", 1) === "new", "LC-49: reset() forgets a sender (a rejoined slot's old peer)");
+    // the behaviour the gate exists for: a remote body fed an adversarial stream never moves backwards, and every packet's events apply once
+    let rng = 12345; const rnd = () => ((rng = (rng * 1103515245 + 12345) >>> 0) / 4294967296);
+    const pk = []; for (let q = 1; q <= 400; q++) pk.push({ q, x: q * 0.5, ev: "e" + q });
+    const wire = [];
+    for (const p of pk) { wire.push(p); if (rnd() < 0.3) wire.push(p); }                      // 30 % duplicated (RTC + relay)
+    for (let i = 0; i < wire.length; i++) { const j = Math.min(wire.length - 1, i + Math.floor(rnd() * 6)); const t = wire[i]; wire[i] = wire[j]; wire[j] = t; }   // jitter
+    const G3 = new M.SeqGate(); let x = -1, back = 0; const evs = new Map();
+    for (const p of wire) {
+      const o = G3.accept("s1", p.q);
+      if (o === "dup") continue;
+      evs.set(p.ev, (evs.get(p.ev) || 0) + 1);
+      if (o === "new") { if (p.x < x) back++; x = p.x; }
+    }
+    const once = [...evs.values()].every((n) => n === 1);
+    row(back === 0 && x === 200 && evs.size === 400 && once, "LC-49: 400 packets, 30 % duplicated, reordered up to 5 deep: the body never moves backwards, ends on the newest, and every packet's events apply exactly once",
+      { back, x, events: evs.size, once, late: G3.n.old, dups: G3.n.dup });
+  }
+  // ── LC-49: rejoin ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s1 = M.newRejoinSecret(), s2 = M.newRejoinSecret();
+    row(/^[0-9a-f]{32}$/.test(s1) && s1 !== s2, "LC-49: a rejoin secret is 128 random bits", [s1, s2]);
+    row(M.rejoinHash(s1) === M.rejoinHash(s1) && M.rejoinHash(s1) !== M.rejoinHash(s2) && M.rejoinHash(s1).length >= 8 && M.rejoinHash(s1) !== s1, "LC-49: the commitment is a stable hash that is not the secret");
+    row(M.normRejoinReq({ slot: 2, key: s1 }).length === 1 && M.normRejoinReq([{ slot: 1, key: s1 }, { slot: 0, key: s1 }, { slot: 2, key: "x" }, null, { slot: 3.5, key: s1 }]).length === 1 &&
+        M.normRejoinReq(null).length === 0 && M.normRejoinReq("s").length === 0 && M.normRejoinReq(Array(9).fill({ slot: 1, key: s1 })).length === 3,
+      "LC-49: a rejoin request is up to 3 { guest slot, key } pairs; slot 0, a short key or garbage is dropped");
+    const roster = [{ peerId: "h", slot: 0, name: "Host" }, { peerId: "g_old", slot: 1, name: "Gus" }, { peerId: "k", slot: 2, name: "Kat" }];
+    const keys = new Map([[1, M.rejoinHash(s1)], [2, M.rejoinHash(s2)]]);
+    const ctx = (o) => Object.assign({ roster, keys, goneAt: { s1: 1000 }, nowMs: 21000, live: true, gvOk: true }, o || {});
+    const J = (req, from, o) => M.judgeRejoin(req, from || "g_new", ctx(o));
+    row(J({ slot: 1, key: s1 }).ok === true && J({ slot: 1, key: s1 }).slot === 1, "LC-49 rejoin: the reloaded page with the right secret gets slot 1 back 20 s after it left");
+    row(!J({ slot: 1, key: s2 }).ok && J({ slot: 1, key: s2 }).why === "wrong rejoin key", "LC-49 rejoin: another player's secret cannot take slot 1 (a squad-mate's console cannot steal a slot)");
+    row(!J({ slot: 2, key: s2 }).ok && J({ slot: 2, key: s2 }).retry === true, "LC-49 rejoin: a slot whose player has NOT left is refused (retry: its leave may still be on the way)");
+    row(!J({ slot: 1, key: s1 }, null, { nowMs: 1000 + M.REJOIN_MS + 1 }).ok && J({ slot: 1, key: s1 }, null, { nowMs: 1000 + M.REJOIN_MS - 1 }).ok, "LC-49 rejoin: the window is REJOIN_MS (60 s) from the leave");
+    row(!J({ slot: 1, key: s1 }, null, { live: false }).ok && !J({ slot: 1, key: s1 }, null, { gvOk: false }).ok && !J({ slot: 0, key: s1 }).ok && !J({ slot: 7, key: s1 }).ok && !J({ slot: 1, key: s1 }, "g_old").ok,
+      "LC-49 rejoin: refused with no match running, on another game version, for the host's slot, a slot not in the match, or the peer that already has it");
+    row(M.REJOIN_MS === 60000, "LC-49: the rejoin window is 60 s (plan: rejoin within 60 s on ?room=)");
+    const now = 1e6;
+    const own = { room: "ABCD", slot: 1, key: s1, at: now - 5000 };
+    const list = [{ room: "ABCD", slot: 2, key: s2, at: now - 20000 }, { room: "ABCD", slot: 3, key: s2, at: now - 1000 }, { room: "ZZZZ", slot: 2, key: s2, at: now - 9000 },
+      { room: "ABCD", slot: 1, key: s1, at: now - 6000 }, { room: "ABCD", slot: 2, key: s2, at: now - M.REJOIN_MS - 20000 }];
+    const c = M.rejoinCandidates("ABCD", own, list, now);
+    row(c.length === 2 && c[0].slot === 1 && c[1].slot === 2 && c[1].at === now - 20000, "LC-49: the candidates are this tab's record first, then a closed tab's stale record; a live tab (< 3 s), another room and an expired record are not", c);
+    row(M.rejoinCandidates("ABCD", null, null, now).length === 0 && M.rejoinCandidates("ABCD", { room: "ABCD", slot: 1, key: s1, at: now - M.REJOIN_MS - 16000 }, [], now).length === 0,
+      "LC-49: no record / an expired record -> no rejoin ask");
+  }
+  // ── C-DBNO ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    row(M.F_DOWNED === 256 && (255 | M.F_DOWNED) === 511 && String(255).length === String(511).length, "C-DBNO: downed is bit 256 of the stance byte (max 255 -> 511, still 3 digits: a normal packet is byte-identical)");
+    row(M.normRevive({ k: "done", id: "s1", by: "s0" }) && M.normRevive({ k: "down", id: "s1" }) && !M.normRevive({ k: "done", id: "s1" }) && !M.normRevive({ k: "heal", id: "s1", by: "s0" }) && !M.normRevive(null) && !M.normRevive({ k: "start", id: 5, by: "s0" }),
+      "C-DBNO: a revive body is { k: down|start|cancel|done, id, by } (by optional only for a knock)");
+    row(!M.reviveDoneOk(null, "s0", 9000, 5000) && !M.reviveDoneOk({ by: "s2", at: 0 }, "s0", 9000, 5000) && !M.reviveDoneOk({ by: "s0", at: 0 }, "s0", 4000, 5000) && M.reviveDoneOk({ by: "s0", at: 0 }, "s0", 4300, 5000),
+      "C-DBNO: the owner accepts a done only from the reviver whose start it saw, a full channel (5 s, 750 ms jitter) earlier");
+    const roster = [{ peerId: "a_host", slot: 0 }, { peerId: "b_g1", slot: 1 }];
+    const actor = (id) => (id === "s10" ? { isBot: true } : /^s[01]$/.test(id) ? { isBot: false } : null);
+    const onHost = { roster, isHost: true, actor, K: SIM }, onGuest = { roster, isHost: false, actor, K: SIM };
+    const may = (t, d, from, c2) => M.senderMay(t, d, from, c2) === null;
+    row(may("revive", { k: "down", id: "s1", by: "s10" }, "b_g1", onHost) && !may("revive", { k: "down", id: "s10", by: "s1" }, "b_g1", onHost) && may("revive", { k: "down", id: "s10" }, "a_host", onGuest),
+      "C-DBNO: a knock is announced by the downed actor's owner only (a guest cannot knock a host bot from its console)");
+    row(may("revive", { k: "done", id: "s0", by: "s1" }, "b_g1", onHost) && !may("revive", { k: "done", id: "s0", by: "s10" }, "b_g1", onHost) && may("revive", { k: "start", id: "s1", by: "s10" }, "a_host", onGuest),
+      "C-DBNO: start / done come from the reviver's own client (the host for its bot teammates)");
+  }
+  // ── LC-14 relays + LC-49 rejoin binding ───────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = M.normSmoke({ x: 10.123, y: 2, z: -4, r: 6, t0: 100, t1: 118 }, 850);
+    row(s && s.x === 10.12 && s.r === 6 && s.t1 === 118, "LC-14: a smoke cloud travels as { x, y, z, r, t0, t1 }", s);
+    row(!M.normSmoke({ x: 0, y: 0, z: 0, r: 60, t0: 0, t1: 10 }) && !M.normSmoke({ x: 0, y: 0, z: 0, r: 5, t0: 10, t1: 5 }) && !M.normSmoke({ x: 0, y: 0, z: 0, r: 5, t0: 0, t1: 600 }) &&
+        !M.normSmoke({ x: 9000, y: 0, z: 0, r: 5, t0: 0, t1: 10 }, 850) && !M.normSmoke({ x: NaN, y: 0, z: 0, r: 5, t0: 0, t1: 10 }) && !M.normSmoke(null),
+      "LC-14: a smoke that is huge, ends before it starts, lasts over 60 s, is off the map or not a number is dropped");
+    row(M.SMOKE_MAX_PER_SENDER === 6, "LC-14: at most 6 relayed smokes alive per sender");
+    const roster = [{ peerId: "a_host", slot: 0 }, { peerId: "b_g1", slot: 1 }, { peerId: "c_g2", slot: 2 }];
+    const actor = (id) => (id === "s10" ? { isBot: true } : /^s[0-2]$/.test(id) ? { isBot: false } : null);
+    const onHost = { roster, isHost: true, actor, K: SIM }, onGuest = { roster, isHost: false, actor, K: SIM };
+    const may = (t, d, from, c2) => M.senderMay(t, d, from, c2) === null;
+    row(may("smoke", { by: "s1" }, "b_g1", onHost) && !may("smoke", { by: "s2" }, "b_g1", onHost) && may("smoke", { by: "s10" }, "a_host", onGuest) && !may("smoke", { by: "s10" }, "b_g1", onHost),
+      "LC-14: a smoke belongs to its thrower's client (a guest cannot drop smokes in another player's name)");
+    row(may("nade", { id: "s2" }, "c_g2", onHost) && !may("nade", { id: "s1" }, "c_g2", onHost), "LC-14: a throw is relayed only for the sender's own actor (or the host's bots)");
+    row(may("rejoin", { k: "ready", slot: 1 }, "b_g1", onHost) && !may("rejoin", { k: "ready", slot: 2 }, "b_g1", onHost) && may("rejoin", { k: "back", slot: 1 }, "a_host", onGuest) &&
+        !may("rejoin", { k: "ok", slot: 2, peer: "b_g1" }, "b_g1", onGuest) && !may("rejoin", { k: "ok", slot: 2 }, "a_host", onHost),
+      "LC-49: 'ready' only from the slot's own peer; ok / back only from the host (a guest cannot move another player's slot)");
+    // LC-49 RECONNECT: a body the silent-guest watchdog gave to a bot goes back to ITS peer when that peer speaks again inside 60 s
+    const rc = (o) => M.judgeReclaim(Object.assign({ takenAt: 1000, nowMs: 21000, senderSlot: 1, id: "s1", alive: true, isBot: true, rejoinedBy: null, from: "b_g1" }, o));
+    row(rc({}) === "ok" && rc({ nowMs: 1000 + 60000 }) === "ok", "LC-49 reconnect: the stalled guest's next state packet inside 60 s of the take-over gets its body back");
+    row(rc({ nowMs: 1000 + 60001 }) === "expired", "LC-49 reconnect: past the 60 s window the bot keeps the body");
+    row(rc({ senderSlot: 2 }) === "no" && rc({ senderSlot: 0 }) === "no" && rc({ senderSlot: null }) === "no", "LC-49 reconnect: only the slot's own peer reclaims it (never another guest, never the host)");
+    row(rc({ alive: false }) === "no" && rc({ isBot: false }) === "no" && rc({ takenAt: null }) === "no", "LC-49 reconnect: a dead body, a body nobody took over, or one not taken for silence is never reclaimed");
+    row(rc({ rejoinedBy: "z_new" }) === "no" && rc({ rejoinedBy: "b_g1" }) === "ok", "LC-49 reconnect: a slot already handed to a reloaded page stays with that page");
+  }
+  return bad;
+}
+
 (async () => {
   // ── static: the version query rides every import edge ─────────────────────────────────────────────────────────────────────────────
   const src = fs.readFileSync(NET_JS, "utf8");
@@ -357,7 +489,7 @@ function suiteP1D(M, SIM, count) {
   const onStartSrc = sliceOf("export function onMatchStart(W)", "export function update(W, dt)");
   ok(/detectMapFallback\(W, S\.gv, S\.mapFallback\)[\s\S]*leaveForFallback\(W, fb\)/.test(onStartSrc), "onMatchStart judges the built map and leaves the squad on a fallback (before it sends any sync)");
   ok(onStartSrc.indexOf("leaveForFallback") > 0 && onStartSrc.indexOf("leaveForFallback") < onStartSrc.indexOf('send("sync"'), "...and does so BEFORE the host's sync goes out");
-  ok(/S\.mapFallback && !S\.fallbackDone\) \{ leaveForFallback\(/.test(sliceOf("export function update(W, dt)", "function pack(a)")), "update acts on a fallback noted by the event too (onMatchStart normally gets there first)");
+  ok(/S\.mapFallback && !S\.fallbackDone\) \{ leaveForFallback\(/.test(sliceOf("export function update(W, dt)", "function pack(a")), "update acts on a fallback noted by the event too (onMatchStart normally gets there first)");
   const leaveSrc = sliceOf("function leaveForFallback(W, fb)", "function beginOnlineMatch(W, cfg)");
   const leaveOk = (t) => /out\("mapfail"/.test(t) && /out\("bye"/.test(t) && /convertRemotesToBots\(W\)/.test(t) && /W\.net = null/.test(t) && /showFallbackCard\(W, j\)/.test(t) && /squadMapFallback/.test(t);
   ok(leaveOk(leaveSrc), "the leaving client sends mapfail + the old-style bye, converts its remote bodies to bots, clears W.net and shows the card");
@@ -459,13 +591,66 @@ function suiteP1D(M, SIM, count) {
     {
       const hud = fs.readFileSync(path.join(__dirname, "hud.js"), "utf8");
       ok(!/q\.kind !== "pin" && W\.t - q\.born > PING_LIFE_S/.test(hud) && /if \(W\.t - q\.born > PING_LIFE_S\) continue;/.test(hud), "LC-07: map pins time out at 30 s like every ping (hud.js stepPings)");
-      ok(/R\.bigmap\.remove\(\); R\.bigmap = null; regrabCursor\(W\); return;/.test(hud) && /if \(ok\) W\._suppressNextShot = false;/.test(hud),
+      ok(/R\.bigmap\.remove\(\); R\.bigmap = null;[^\n]*? regrabCursor\(W\); return;/.test(hud) && /if \(ok\) W\._suppressNextShot = false;/.test(hud),
         "closing the big map re-acquires pointer lock (and a successful re-lock does not eat the next shot)");
     }
     ok(/\(a\.sprinting \? 128 : 0\)/.test(src) && /a\.sprinting = !!\(f & 128\)/.test(src), "LC-09: the sprint bit rides the state packet and is applied to remote actors");
     ok(/qsend\("heal"/.test(src) && /qsend\("rld"/.test(src) && /W\.events\.emit\("healStart", a, d\.c/.test(src) && /W\.events\.emit\("reloadStart", a, \{ id: d\.w \}\)/.test(src), "LC-09: heal / reload foley is relayed and replayed as the local events");
     ok(/qsend\("boom"/.test(src) && /\{ net: true \}\)/.test(src) && /meta && meta\.net/.test(src), "LC-14: remote blasts are relayed once and the replay is never relayed again");
     ok(typeof M.rematch === "function" && /S\.rematchN = \(S\.rematchN \| 0\) \+ 1/.test(src) && /rematch: S\.rematchN/.test(src), "LC-18: net.rematch() exists and the host's start carries a rematch counter");
+  }
+
+  // ═══ PARITY WAVES P2+P3, lane net (C-MODE, C-DBNO, LC-49 order + rejoin, LC-14 smoke / frag relay) ═══════════════════════════════════
+  console.log("\n-- P23 net: team modes, knock/revive, sequence numbers, rejoin, smoke/frag relay --");
+  const rows3 = suiteP23(M, SIM, true);
+  ok(rows3 === 0, "the real module passes every P23 row");
+  const p23Mutants = [
+    ["a gate that applies every packet (the live bug: late packets pull bodies back)", { SeqGate: class { constructor() { this.n = { new: 0, old: 0, dup: 0 }; } accept() { return "new"; } reset() {} } }],
+    ["a gate that drops late packets whole (their chat / pickups are lost)", { SeqGate: class extends M.SeqGate { accept(k, q) { const r = super.accept(k, q); return r === "old" ? "dup" : r; } } }],
+    ["a gate that applies duplicates (chat shown twice)", { SeqGate: class extends M.SeqGate { accept(k, q) { const r = super.accept(k, q); return r === "dup" ? "old" : r; } } }],
+    ["a rejoin judge with no key check", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { keys: new Map([[req && req.slot, M.rejoinHash(req && req.key)]]) })) }],
+    ["a rejoin judge that hands out a live player's slot", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { goneAt: { ["s" + (req && req.slot)]: c.nowMs } })) }],
+    ["a rejoin judge with no time window", { judgeRejoin: (req, from, c) => M.judgeRejoin(req, from, Object.assign({}, c, { nowMs: Math.min(c.nowMs, ((c.goneAt || {})["s" + (req && req.slot)] || 0) + 1) })) }],
+    ["a revive owner that takes any done", { reviveDoneOk: () => true }],
+    ["a sender check that trusts the reviver named in the body", { senderMay: (t, d, from, c) => (t === "revive" ? null : M.senderMay(t, d, from, c)) }],
+    ["a rejoin 'ok' accepted from anyone", { senderMay: (t, d, from, c) => (t === "rejoin" ? null : M.senderMay(t, d, from, c)) }],
+    ["a team cross-check that compares names, not grouping", { teamPartitionDiff: (rows) => rows.filter((r) => r[1] !== r[2]).map((r) => [r[0]]) }],
+    ["a team-mode rule that ignores the head count", { resolveTeamMode: (w, n, p, K) => M.normTeamMode(w) || "solo" }],
+    ["a reconnect judge with no time window", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { nowMs: c.takenAt })) }],
+    ["a reconnect judge that lets any peer reclaim a body", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { senderSlot: parseInt(String(c.id).slice(1), 10) })) }],
+    ["a smoke parser with no radius / life cap", { normSmoke: (d) => (d && typeof d === "object" && [d.x, d.y, d.z].every(Number.isFinite) ? d : null) }],
+  ];
+  for (const [name, over] of p23Mutants) {
+    const bad = suiteP23(Object.assign({}, M, over), SIM, false);
+    ok(bad >= 1, "planted fault caught (P23): " + name + " fails " + bad + " row(s)", bad);
+  }
+  // static rows on the source: the wiring the pure parts cannot show (the browser proof: F:/lc_p23/net/p23_net_live.py)
+  {
+    const src = fs.readFileSync(NET_JS, "utf8");
+    const sl = (from, to) => { const a = src.indexOf(from), b = src.indexOf(to, a + 1); return a >= 0 && b > a ? src.slice(a, b) : ""; };
+    const stateSrc = sl('if (t === "state") {', 'if (t === "bots" && !S.net.isHost())');
+    const iGate = stateSrc.indexOf("accept(from, d.q)"), iDup = stateSrc.indexOf('if (order === "dup") return;'), iOld = stateSrc.indexOf('if (order === "old") {');
+    const oldBlk = stateSrc.slice(iOld, stateSrc.indexOf("return;", iOld));
+    ok(iGate > 0 && iDup > iGate && iOld > iDup && iOld < stateSrc.indexOf("applyRemoteState") && !/applyRemoteState|slewClock/.test(oldBlk) && /d\.evs/.test(oldBlk),
+      "LC-49: onMsg orders every state packet before it touches a body: duplicates dropped, a late packet applies only its events (no positions, no clock)");
+    ok(/S\.txSeq = \(S\.txSeq \| 0\) \+ 1;\s*\r?\n\s*const st = pack\(W\.player, \{ q: S\.txSeq, t: \+W\.t\.toFixed\(2\) \}\);/.test(src) && /if \(stamp\) \{ st\.q = stamp\.q; st\.t = stamp\.t; \}/.test(src),
+      "LC-49: pack() stamps every sender's state packet with q (its counter) and t (its match clock = the host's: the server-time stamp)");
+    ok(/\(a\.downed \? F_DOWNED : 0\)/.test(src) && /if \(a\.downed\) st\.dh = /.test(src) && /const dn = !!\(f & F_DOWNED\);/.test(src), "C-DBNO: the downed bit (and the bleed pool while downed) rides the state packet and is applied to remotes");
+    ok(/revive: 1, smoke: 1, rejoin: 1, room: 1/.test(src) && !/qsend\("revive"/.test(src) && /send\("revive", \{ k: "done"/.test(src) && /send\("smoke"/.test(src),
+      "P23: revive / smoke / rejoin / room are CRITICAL and sent at once (never batched, never shed)");
+    ok(/function myHello\(\) \{ return Object\.assign\(S\.hs\.helloMsg\(\), S\.rk \? \{ rk: S\.rk \} : \{\}\); \}/.test(src) && /hello\.rj = cands\.map/.test(src) && /if \(hr\.first\) send\("hello", myHello\(\)\);/.test(src),
+      "LC-49: every hello carries the tab's rejoin commitment; a reloaded page's hello asks with its secret");
+    ok(/teamMode = resolveTeamMode\(teamWant, plan\.roster\.length, pace, W\.SIM\)/.test(src) && /rosterWithTeams\(plan\.roster, teamMode, W\.SIM\)/.test(src) && /if \(teamMode\) opts\.teamMode = teamMode;/.test(src),
+      "C-MODE: START (and run-it-back) carry the team mode and the roster teamIds, and the guests hand them to startMatch");
+    const lob = sl("function openLobby(W, sel) {", "// host + 3 guests.");
+    ok(lob.indexOf("box.appendChild(startB);") > 0 && lob.indexOf("box.appendChild(modeRow);") > lob.indexOf("box.appendChild(startB);") && lob.indexOf("box.appendChild(rosterEl);") < lob.indexOf("box.appendChild(noteEl);"),
+      "C-MODE: the team-mode row sits after START, so the lobby keeps the child order squadguard_live.py reads (title, status, buttons, roster, notices, START)");
+    ok(/S\.rxGate = null; S\.reviveIn = null;/.test(src) && /if \(!a\.brain\) import\("\.\/bots\.js" \+ V\)/.test(src), "P23: run-it-back resets the order gate / revive / rejoin books; a re-taken body reuses its brain (never two brains on one body)");
+    ok(/if \(a && S\.net\.isHost\(\) && !a\.netRemote && a !== W\.player\) reclaimSilentBody\(W, a, from, d\);\s*if \(a && a\.netRemote\) \{ applyRemoteState/.test(src) &&
+      /if \(hostTakeOver\(W, id\)\) \(S\.silentTake = S\.silentTake \|\| \{\}\)\[id\] = now;/.test(src) && /if \(!gone\) \(S\.silentTake = S\.silentTake \|\| \{\}\)\[id\] = now;/.test(src) &&
+      /if \(S\.silentTake\) delete S\.silentTake\[r\.id\];/.test(src) && /if \(S\.silentTake\) delete S\.silentTake\[d\.slot\];/.test(src),
+      "LC-49 reconnect: only the silence watchdogs mark a body reclaimable (a bye or a map fallback never does) and a fresh state packet reclaims it before it is applied");
+    ok(/if \(d\.to && d\.to !== S\.net\.id\) return;/.test(sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState")), "LC-49: a sync addressed to a rejoining page is ignored by everyone else (no clock snap)");
   }
 
   console.log("");
