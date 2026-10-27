@@ -48,6 +48,8 @@ function refBox(b, q, k, x, y, z) {
   // ---------------------------------------------------------------- module surface
   ok(typeof K.createCityKit === "function" && typeof K.colliderFor === "function" && typeof K.footprintFor === "function", "citykit.js imports in Node with no THREE, no DOM and no resolve hook");
   ok(typeof globalThis.window === "undefined" && typeof globalThis.document === "undefined", "no browser globals were needed to import it");
+  // (P23-fix / D10) the facade detail per graphics tier: OFF on low (the kit never fetches facade_detail.jpg at 0 - proven in the browser by F:/lc_p23/towns/fix/detail_probe.py)
+  { const D = K.DETAIL_BY_TIER; ok(!!D && Object.isFrozen(D) && D.low === 0 && ["medium", "high", "ultra"].every((t) => D[t] > 0 && D[t] <= 1.5), "DETAIL_BY_TIER: low 0 (facade detail off), medium / high / ultra > 0", D); }
   const ids = K.typeIds();
   ok(ids.length === 136, "136 types in the embedded table (81 + the 55 of the Wave-8 interior kit)", ids.length);
   const mIds = Object.keys(manifest.types);
