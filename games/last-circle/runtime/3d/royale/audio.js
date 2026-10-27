@@ -430,6 +430,12 @@ const SFX = {
   step_concrete: ["step_concrete_000", "step_concrete_001", "step_concrete_002", "step_concrete_003"],
   step_wood:     ["step_wood_000", "step_wood_001", "step_wood_002", "step_wood_003"],
   step_snow:     ["step_snow_000", "step_snow_001", "step_snow_002", "step_snow_003"],
+  // P23 fix round: the rest of maps.surfaceAt's labels (CC0; OGA Fantozzi / TinyWorlds / rubberduck / Peludo + Kenney
+  // impact layers for metal; F:/lc_p23/audio/fixtools/build_steps.py, loudest-50 ms RMS matched to step_grass)
+  step_sand:     ["step_sand_000", "step_sand_001", "step_sand_002", "step_sand_003"],
+  step_dirt:     ["step_dirt_000", "step_dirt_001", "step_dirt_002", "step_dirt_003"],
+  step_metal:    ["step_metal_000", "step_metal_001", "step_metal_002", "step_metal_003"],
+  step_water:    ["step_water_000", "step_water_001", "step_water_002", "step_water_003"],
   imp_stone:     ["impactPlate_light_000", "impactPlate_light_001", "impactPlate_light_002"],
   imp_wood:      ["impactPlank_medium_000", "impactPlank_medium_001", "impactPlank_medium_002"],
   imp_metal:     ["impactMetal_light_000", "impactMetal_light_001", "impactMetal_light_002"],
@@ -1490,6 +1496,11 @@ function isMate(a) {
  *  ducks the ambience, the music and the friendly footsteps under it. */
 function bumpThreat(v) { if (v > _threat) _threat = Math.min(1, v); }
 
+// maps.surfaceAt label -> footstep cue (every label it returns: grass, concrete, stone, wood, snow, metal, sand, dirt,
+// water); anything else, or no surfaceAt, is grass
+const STEP_KEY = { grass: "step_grass", wood: "step_wood", snow: "step_snow", stone: "step_concrete", concrete: "step_concrete",
+                   sand: "step_sand", dirt: "step_dirt", metal: "step_metal", water: "step_water" };
+
 /** One footstep for actor `a` — the "footstep" event and the remote-step
  *  synthesiser both land here. */
 function playStep(a, sprintGuess) {
@@ -1506,11 +1517,12 @@ function playStep(a, sprintGuess) {
   // footstep's whole identity is its surface texture. The feet height goes
   // along (LC-52, part): Wave 8's surfaceAt reads house storeys from it.
   const surf = (W.map && W.map.surfaceAt) ? W.map.surfaceAt(a.pos.x, a.pos.z, a.pos.y) : null;
-  const keyed = surf === "wood" ? "step_wood" : surf === "snow" ? "step_snow"
-              : surf === "stone" || surf === "concrete" ? "step_concrete" : "step_grass";
+  const keyed = STEP_KEY[surf] || "step_grass";
   // footsteps (yours included) sit below every gunshot in the voice pool
   const gain = (own ? s.own : s.g) * k;
   if (sample(keyed, own ? null : a.pos, gain, s.d, s.f, VOICE_TIER.step, FX_STEP)) return;
+  // a surface whose takes have not decoded (blocked fetch, old cache) plays the grass step it played before
+  if (keyed !== "step_grass" && sample("step_grass", own ? null : a.pos, gain, s.d, s.f, VOICE_TIER.step, FX_STEP)) return;
   thump((300 + Math.random() * 90) * s.f, 0.055, gain, own ? null : a.pos, s.d, VOICE_TIER.step, FX_STEP);
 }
 
