@@ -21,8 +21,11 @@ STANDARD solo match (Savanna seed 7), landed under the guard, the human moved to
   hides          the cloud at full size HIDES a body 7 m behind its centre on screen (what losBlocked cuts for bots, the human must not
                  see either): visibility = mean |smoke+bot - smoke| / mean |bot - nothing| over the bot's projected box <= 0.15, at the
                  tier in use and at LOW (one page task, four renders at dt 1e-5)
-  cost           GPU frame time with 3 live smokes in view minus none, ABAB x 4 at 60 rendered frames: median <= +0.3 ms (the iGPU: --gpu d3d11);
-                 COUNTED on a quiet box (no other automated Chrome), else information (the shared GPU's timer counts the others' work)
+  cost           GPU frame time with 3 live smokes in view minus none, ABAB x 8 at 60 rendered frames per arm, <= +0.3 ms (the iGPU: --gpu d3d11).
+                 Two readings: median frame per arm, and the 10th-percentile frame per arm (contention only ever ADDS time to a GPU timer query).
+                 0 other automated Chromes: BOTH must meet the bar; 1-2 others: the p10 reading counts when the timer is stable (each arm's p10
+                 within x1.5 over the 8 repeats; unstable = could-not-judge); more: information. The reading is always printed ("smoke cost
+                 reading") and kept in the report (smokeCost)
   errors
 """
 from __future__ import annotations
@@ -60,7 +63,7 @@ ISO_JS = r"""() => { const W = window.__LC__.W, M = W.map, p = W.player; const o
 # the cloud HIDES what it blocks: losBlocked cuts the bots' sight, so a human must not see through it either (and the reverse). One page task,
 # four renders at dt 1e-5 (the cloud at full size: t0 = now - 5 s): A smoke on + the bot 7 m behind its centre, B smoke on + the bot gone,
 # C smoke off + bot, D smoke off + no bot. visibility = mean |A - B| / mean |C - D| over the bot's projected box (1 = the cloud hides nothing)
-HIDE_JS = r"""([bid, cx, cy, cz, bx, bz]) => { const C = window.__LC__, W = C.W, K = W.SIM, k = W.kernel, gl = k.renderer.getContext(), cam = W.camera;
+HIDE_JS = r"""([bid, cx, cy, cz, bx, bz, wantShot]) => { const C = window.__LC__, W = C.W, K = W.SIM, k = W.kernel, gl = k.renderer.getContext(), cam = W.camera;
   // the subject: the pinned bot if it still lives (and is drawn), else the nearest live, drawn bot (pl_smoke_nocloud 10-26: open diff 0.03 - the
   // pinned bot no longer drawn)
   const drawn = (a) => a && a.alive && a.obj && a.obj.parent && !a.downed;
@@ -81,11 +84,12 @@ HIDE_JS = r"""([bid, cx, cy, cz, bx, bz]) => { const C = window.__LC__, W = C.W,
   // the OPEN pair first: a cloud taken out of W.smokes fades out on fx time, which dt 1e-5 never advances (smoke_all8 10-26: the cost
   // section's three clouds still stood in front of the bot at the first tier - open diff 0.64 / 255)
   smoke(false); place(true); const Cc = read(); place(false); const D = read();
-  smoke(true); place(true); const A = read(); place(false); const B = read();
+  smoke(true); place(true); const A = read(); let shot = null; if (wantShot) { try { shot = k.renderer.domElement.toDataURL('image/png'); } catch (e) { shot = 'err:' + e; } }
+  place(false); const B = read();
   smoke(false); place(true); C.stepFrames(180, 1 / 60, true);
   const dAB = diff(A, B), dCD = diff(Cc, D);
   return { visibility: dCD > 0 ? +(dAB / dCD).toFixed(3) : null, smokedDiff: +dAB.toFixed(2), openDiff: +dCD.toFixed(2), boxPx: [x0, y0, x1, y1], tier: W.gfxTier, subject: b.id, pinnedWas: was,
-         }; }"""
+         shot }; }"""
 SNAP_JS = r"""() => { const W = window.__LC__.W; return (W.smokes || []).map((q) => ({ x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2), r: +(q.r || 0).toFixed(2), t0: +(q.t0 || 0).toFixed(2), t1: +(q.t1 || 0).toFixed(2) })); }"""
 
 
@@ -216,7 +220,7 @@ def main():
             mid = [x for x in samples if t_from <= x[0] <= t_to]
             late = [x for x in samples if x[0] > q["t1"] + 0.6]
             v.check("los (through the centre: open before the throw, blocked from t0 + 2 s to t1 - 1 s, open after t1)",
-                    before is False and mid and all(x[1] for x in mid) and late and not any(x[1] for x in late),
+                    before is False and bool(mid) and all(x[1] for x in mid) and bool(late) and not any(x[1] for x in late),
                     {"before": before, "midBlocked": "%d/%d" % (sum(1 for x in mid if x[1]), len(mid)), "lateBlocked": sum(1 for x in late if x[1])}, "open / blocked / open")
             sight_blocked = "%d/%d" % (sum(1 for x in mid if x[2]), len(mid))
             v.check("bot-sight (open control: the bot fires >= 5 rounds at the human in 6 s; through the smoke: 0 rounds from t0 + 3 s and 0 hits from t0 + 2 s to t1 - 1 s)",
@@ -225,9 +229,13 @@ def main():
             # cost: 3 smokes in view vs none, ABAB (GPU timer on the default iGPU profile)
             L.pin_actor(s, None)
             s.js("() => { const W = window.__LC__.W, p = W.player; p.input.pitch = 0.05; }")
+            # ABAB x 8 (was x 4): each arm = 60 GPU-timed frames. Two readings per arm: the MEDIAN frame (the quiet-box measure, unchanged) and
+            # the 10th-percentile frame (CONTENTION-ROBUST: another context's work queued between our queries only ever ADDS time to a
+            # TIME_ELAPSED query, never removes it, so the low quantile reads the uncontended cost)
             arms = {"on": [], "off": []}
-            for k in range(4):
-                for arm in ("off", "on"):
+            lo = {"on": [], "off": []}
+            for k in range(8):
+                for arm in (("off", "on") if k % 2 == 0 else ("on", "off")):
                     if arm == "on":
                         s.js("([x, y, z]) => { const W = window.__LC__.W, t = W.t; W.smokes = W.smokes || []; W.smokes.length = 0;"
                              " for (let i = 0; i < 3; i++) W.smokes.push({ x: x - 8 + 8 * i, y: y + 1.2, z: z - 16, r: W.SIM.SMOKE.r, rMax: W.SIM.SMOKE.r, t0: t - 5, t1: t + 60 }); }",
@@ -238,19 +246,39 @@ def main():
                     g = L.gpu_ms(s, 60)
                     if g:
                         arms[arm].append(L.med(g))
+                        lo[arm].append(quantile(g, 0.10))
             s.js("() => { const W = window.__LC__.W; if (W.smokes) W.smokes.length = 0; }")
             diffs = [a - b for a, b in zip(arms["on"], arms["off"]) if a is not None and b is not None]
+            diffs_lo = [a - b for a, b in zip(lo["on"], lo["off"]) if a is not None and b is not None]
+            others = v.data.get("otherAutomatedChromes")
             if not diffs:
                 v.cnj("cost (3 smokes in view: GPU <= +0.3 ms)", "no GPU timer on this Chrome (EXT_disjoint_timer_query) or no frames")
             else:
                 d = statistics.median(diffs)
-                det = {"medianDiffMs": round(d, 3), "on": arms["on"], "off": arms["off"], "otherAutomatedChromes": v.data.get("otherAutomatedChromes")}
-                # the GPU timer on a SHARED iGPU counts the other Chromes' work queued in between (seen: 120-4000 ms "frames" with 10 other
-                # automated Chromes): the row COUNTS on a quiet box only, else it is information (tierprof's rule; the bar is unchanged)
-                if v.data.get("otherAutomatedChromes") == 0:
-                    v.check("cost (3 smokes in view minus none, ABAB x 4: median GPU <= +0.3 ms, quiet box)", d <= 0.3, det, "<= 0.3 ms")
+                d_lo = statistics.median(diffs_lo) if diffs_lo else None
+                det = {"medianDiffMs": round(d, 3), "p10DiffMs": None if d_lo is None else round(d_lo, 3), "on": [round(x, 3) for x in arms["on"]],
+                       "off": [round(x, 3) for x in arms["off"]], "onP10": [round(x, 3) for x in lo["on"]], "offP10": [round(x, 3) for x in lo["off"]],
+                       "otherAutomatedChromes": others}
+                v.data["smokeCost"] = det
+                print("  smoke cost reading: median-frame diff %+.3f ms, p10-frame diff %s ms, other automated Chromes %s" % (
+                    d, "n/a" if d_lo is None else "%+.3f" % d_lo, others), flush=True)
+                name = "cost (3 smokes in view minus none, ABAB x 8: GPU <= +0.3 ms)"
+                # the timer is STABLE when each arm's p10 frames agree within x1.5 across the 8 repeats (3 other Chromes, 10-26 22:45: one 'off'
+                # arm read 1501 ms against 31-112 ms for the others - the GPU queue of other contexts, not our frames)
+                spread = lambda xs: (max(xs) / max(1e-6, min(xs))) if xs else None
+                det["p10SpreadOn"], det["p10SpreadOff"] = (round(spread(lo["on"]), 2) if lo["on"] else None), (round(spread(lo["off"]), 2) if lo["off"] else None)
+                stable = bool(lo["on"]) and bool(lo["off"]) and spread(lo["on"]) <= 1.5 and spread(lo["off"]) <= 1.5
+                det["stable"] = stable
+                # COUNTED on a quiet box (0 other automated Chromes): BOTH readings must meet the bar. With 1-2 others the contention-robust
+                # p10 reading is judged when the timer is stable (unstable = could-not-judge: a busy box, D16); with more: information only
+                if others == 0:
+                    v.check(name + " [quiet box: median AND p10 readings]", d <= 0.3 and (d_lo is None or d_lo <= 0.3), det, "<= 0.3 ms")
+                elif isinstance(others, int) and others <= 2 and d_lo is not None and stable:
+                    v.check(name + " [%d other Chromes, stable timer: the p10 reading]" % others, d_lo <= 0.3, det, "<= 0.3 ms")
+                elif isinstance(others, int) and others <= 2:
+                    v.cnj(name, "the GPU timer is unstable with %d other automated Chromes (p10 spread on %s / off %s > x1.5): %s" % (others, det["p10SpreadOn"], det["p10SpreadOff"], det))
                 else:
-                    v.info("cost (3 smokes in view minus none, ABAB x 4: median GPU <= +0.3 ms) would %s - the box is SHARED: not judged" % ("PASS" if d <= 0.3 else "FAIL"), det)
+                    v.info(name + " would %s - %s other automated Chromes: not judged" % ("PASS" if (d_lo if d_lo is not None else d) <= 0.3 else "FAIL", others), det)
             # hides: the cloud hides a body 7 m behind its centre on screen, at the tier in use and at LOW (fx: every tier hides)
             hide = {}
             tier0 = s.js("() => window.__LC__.W.gfxTier")
@@ -263,7 +291,8 @@ def main():
                     continue
                 s.js("() => { const W = window.__LC__.W; if (W.smokes) W.smokes.length = 0; }")
                 s.step_frames(180, 1 / 60, render=True)       # 3 s of fx time: every earlier cloud has faded out
-                hide[tier] = s.js(HIDE_JS, [e, iso["x"], iso["y"] + K_YOFF(s), iso["z"] - 14, iso["x"], iso["z"] - 21])
+                hide[tier] = s.js(HIDE_JS, [e, iso["x"], iso["y"] + K_YOFF(s), iso["z"] - 14, iso["x"], iso["z"] - 21, True])
+                save_shot(hide[tier], os.path.join(shots, "smoke_hides_%s.png" % tier))
             try:
                 s.js("(t) => window.__LC__.W.setGfx('tier', t)", tier0)
             except Exception:
@@ -275,9 +304,35 @@ def main():
             else:
                 v.check("hides (a body 7 m behind the cloud's centre: visibility <= 0.15 of the open view, the tier in use and LOW)",
                         all(x is not None and x <= 0.15 for x in vis.values()), hide, "<= 0.15 each")
-            s.screenshot(os.path.join(shots, "smoke_hides.png"))
+            # smoke_hides*.png = the SMOKED render the hides row judged (A: the cloud at full size, the bot 7 m behind it), grabbed inside the
+            # row's own page task (fix round: the old screenshot came after the row, once the clouds were gone, and showed no smoke)
+            first = next((r for r in hide.values() if isinstance(r, dict) and r.get("shotPath")), None)
+            if first:
+                import shutil
+                shutil.copyfile(first["shotPath"], os.path.join(shots, "smoke_hides.png"))
             L.errors_row(v, s)
     return C.run_gate("p23_smoke", body, args)
+
+
+def quantile(xs, q):
+    xs = sorted(x for x in (xs or []) if isinstance(x, (int, float)))
+    if not xs:
+        return None
+    i = q * (len(xs) - 1)
+    lo_, hi_ = int(i), min(len(xs) - 1, int(i) + 1)
+    return xs[lo_] + (xs[hi_] - xs[lo_]) * (i - lo_)
+
+
+def save_shot(r, path):
+    """write the data URL HIDE_JS grabbed (the smoked frame) to `path`; the row keeps the path, not the bytes"""
+    import base64
+    if not isinstance(r, dict):
+        return
+    u = r.pop("shot", None)
+    if isinstance(u, str) and u.startswith("data:image/png;base64,"):
+        with open(path, "wb") as fh:
+            fh.write(base64.b64decode(u.split(",", 1)[1]))
+        r["shotPath"] = path
 
 
 def K_YOFF(s):

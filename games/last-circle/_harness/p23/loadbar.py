@@ -34,8 +34,12 @@ SAMPLER_JS = r"""() => {
     const mp = document.querySelector('[data-lc="loadmap"]'); if (mp) window.__LB__.maps.add(mp.textContent);
   }, 250);
   return true; }"""
-DIP_JS = r"""() => { setTimeout(() => { const t0 = performance.now(); const iv = setInterval(() => { const f = document.querySelector('[data-lc="loadfill"]');
-  if (f) f.style.transform = 'scaleX(0.02)'; if (performance.now() - t0 > 800) clearInterval(iv); }, 10); }, 1500); return true; }"""
+# the dip is anchored on the BAR, not on the clock (fix round: gateA 10-27 the plant did not bite - the old dip ran 1.5-2.3 s after the click,
+# before / while the integrated tree's loading card painted, so no sample saw it): once the fill reads >= 0.15 it is forced to 2 % for 0.8 s,
+# re-written every 5 ms so the game's own writes in between cannot win a 4 Hz sample
+DIP_JS = r"""() => { let t0 = null; const iv = setInterval(() => { const f = document.querySelector('[data-lc="loadfill"]'); if (!f) return;
+  if (t0 === null) { const m = /scaleX\(([0-9.]+)\)/.exec(f.style.transform || ''); if (!m || +m[1] < 0.15) return; t0 = performance.now(); }
+  f.style.transform = 'scaleX(0.02)'; if (performance.now() - t0 > 800) clearInterval(iv); }, 5); return true; }"""
 CARD_JS = r"""(name) => { const c = [...document.querySelectorAll('.lc-mode-card')].find((x) => x.offsetParent && x.textContent.includes(name)); if (!c) return null;
   c.scrollIntoView({ block: 'center' }); const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"""
 HUDMOD_JS = r"""async () => { if (window.__HUDMOD__) return true;

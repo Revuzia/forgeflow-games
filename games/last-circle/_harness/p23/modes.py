@@ -32,7 +32,7 @@ PLANTS = {"teams-off": "for (const a of W.actors) a.teamId = a.id"}
 SIZE = {"solo": 1, "duo": 2, "trio": 3, "squad": 4}
 
 TEAMS_JS = r"""() => { const W = window.__LC__.W, p = W.player; const by = new Map(); let nulls = 0;
-  for (const a of W.actors) { if (a.teamId == null) { nulls++; continue; } if (!by.has(a.teamId)) by.set(a.teamId, []); by.get(a.teamId).push(a); }
+  for (const a of W.actors) { if (!a.teamId) { nulls++; continue; } if (!by.has(a.teamId)) by.set(a.teamId, []); by.get(a.teamId).push(a); }
   const mine = by.get(p.teamId) || [p];
   return { mode: W.match && W.match.mode, pace: W.match && W.match.pace, n: W.actors.length, nulls, sizes: [...by.values()].map((l) => l.length).sort((a, b) => b - a),
            mine: mine.map((a) => ({ id: a.id, bot: !!a.isBot, human: a === p })) }; }"""
@@ -43,13 +43,13 @@ DROP_JS = r"""() => { const C = window.__LC__, W = C.W; const land = new Map(); 
   while (n < 3000 && W.actors.some((a) => a.alive && !land.has(a.id))) {
     C.fastForward(1 / 15, 1 / 30); n++; const p = W.player; if (p && p.alive) { p.hp = Math.max(p.hp, 100); p.shield = Math.max(p.shield || 0, 100); }
   }
-  const by = new Map(); for (const a of W.actors) { if (!land.has(a.id) || a.teamId == null) continue; if (!by.has(a.teamId)) by.set(a.teamId, []); by.get(a.teamId).push(land.get(a.id)); }
+  const by = new Map(); for (const a of W.actors) { if (!land.has(a.id) || !a.teamId) continue; if (!by.has(a.teamId)) by.set(a.teamId, []); by.get(a.teamId).push(land.get(a.id)); }
   let teams = 0, together = 0; const worst = [];
   for (const [t, l] of by) { if (l.length < 2) continue; teams++; let m = 0; for (const a of l) for (const b of l) m = Math.max(m, Math.hypot(a[0] - b[0], a[1] - b[1]));
     if (m <= 100) together++; else worst.push([t, Math.round(m)]); }
   return { teams, together, share: teams ? +(together / teams).toFixed(3) : null, worst: worst.slice(0, 6), t: +W.t.toFixed(1) }; }"""
 FOLLOW_JS = r"""([S]) => { const C = window.__LC__, W = C.W, p = W.player; const ds = [];
-  const mates = W.actors.filter((a) => a !== p && a.teamId != null && a.teamId === p.teamId);
+  const mates = W.actors.filter((a) => a !== p && !!a.teamId && a.teamId === p.teamId);
   for (let i = 0; i < S; i++) { C.fastForward(1, 1 / 30); if (p.alive) { p.hp = 100; p.shield = 100; }
     for (const m of mates) if (m.alive) ds.push(Math.hypot(m.pos.x - p.pos.x, m.pos.z - p.pos.z)); }
   ds.sort((a, b) => a - b); return { mates: mates.length, alive: mates.filter((m) => m.alive).length, samples: ds.length, median: ds.length ? +ds[ds.length >> 1].toFixed(1) : null, p90: ds.length ? +ds[Math.floor(ds.length * 0.9)].toFixed(1) : null }; }"""

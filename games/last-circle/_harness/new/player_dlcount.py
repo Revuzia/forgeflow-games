@@ -14,7 +14,8 @@ menu's own files are reported as information.
 Asserts (counts and bytes, never milliseconds):
   * the BEFORE match load fetched 85 per-skin clip files (17 clips x 5 skins), the AFTER match load 0
   * AFTER fetched each shared assets/chars/clips/<clip>.glb exactly once (15 clips + 7 death falls = 22, none twice)
-  * clip bytes AFTER <= 25 % of BEFORE (the plan: 8.83 MB -> ~0.7 MB)
+  * clip bytes AFTER <= 25 % of BEFORE (the plan: 8.83 MB -> ~0.7 MB); absolute: <= 1.65 MB (P2/P3 fix round: the Wave-4 1.2 MB + P1-F's
+    700 KB clip budget; the count rows follow W._playerProbe.clips().requests, >= the Wave-4 22, each exactly once)
   * base meshes and LOD1 bodies unchanged: 5 + 5 requests, same bytes in both runs
   * W._playerProbe.clips() reports mode "shared" with 22 requests
   * 0 console / page / window errors, 0 failed requests (a 404 on a shared file would be a failed request), 0 [rig] lines
@@ -25,6 +26,8 @@ Exit 0 pass / 1 fail / 2 could-not-judge.
     python _harness/new/player_dlcount.py --disk [--isolate --before] [--skip-fallback]
 """
 from __future__ import annotations
+
+CLIP_BUDGET_B = 1_650_000      # P1-F budget (fix round): the Wave-4 22 shared files (943,364 B) under 1.2 MB + "all P1-F clips together <= 700 KB"
 
 import argparse
 import os
@@ -187,8 +190,10 @@ def main():
         v.info("AFTER menu locker preview (hud.js, not lane PLAYER: still per-skin, see requests_for_other_lanes)",
                {"perSkinClips": amenu["perSkinClips"], "bytes": sum(b for _, b in amenu["perSkinClips"])})
         abs_b = sum(b for _, b in after["shared"]) + sum(b for _, b in after["perSkinClips"])
-        v.check("match-load clip bytes <= 1.2 MB with 0 per-skin clip files (22 shared files; the old per-skin path was 8.83 MB)",
-                abs_b <= 1200000 and len(after["perSkinClips"]) == 0, {"bytes": abs_b, "shared": len(after["shared"]), "perSkin": len(after["perSkinClips"])})
+        # (P2/P3 fix round) the budget is P1-F's: the Wave-4 1.2 MB (22 files, 943 KB measured) + "all [P1-F] clips together 700 KB or less"
+        # (PLAN P1-F gates) = 1.65 MB; the P1-F locomotion / DBNO / emote clips are shared files of the same kind
+        v.check("match-load clip bytes <= %.2f MB with 0 per-skin clip files (the Wave-4 22 shared files + P1-F's <= 700 KB; the old per-skin path was 8.83 MB)" % (CLIP_BUDGET_B / 1e6),
+                abs_b <= CLIP_BUDGET_B and len(after["perSkinClips"]) == 0, {"bytes": abs_b, "shared": len(after["shared"]), "perSkin": len(after["perSkinClips"])})
         v.data["after"] = {k: [list(x) for x in vv] for k, vv in after.items()}
         v.data["afterMenu"] = {k: [list(x) for x in vv] for k, vv in amenu.items()}
         if before is not None:
@@ -218,10 +223,14 @@ def main():
         else:
             v.cnj("AFTER: shared clips after the bases", "bases %d / clips %d / full roster %s" % (len(mb), len(sc), full_roster))
         v.check("AFTER: the match load makes 0 per-skin clip requests", len(after["perSkinClips"]) == 0, {"n": len(after["perSkinClips"]), "first": after["perSkinClips"][:4]})
-        v.check("AFTER: each shared clip fetched exactly once over the page, 22 files (15 clips + 7 death falls)",
-                len(sh_names) == 22 and len(set(sh_names)) == 22, {"n": len(sh_names), "unique": len(set(sh_names)), "dupes": sorted({n for n in sh_names if sh_names.count(n) > 1})})
+        # (fix round) the file count follows the build's own shared list (Wave 4: 22 = 15 clips + 7 falls; P1-F added locomotion / DBNO / emote
+        # clips): every one fetched exactly once, the page's count = what player.js requested, and never fewer than the Wave-4 22
+        nreq = (probe or {}).get("requests")
+        v.check("AFTER: each shared clip fetched exactly once over the page (n = W._playerProbe.clips().requests, >= the Wave-4 22)",
+                len(sh_names) >= 22 and len(set(sh_names)) == len(sh_names) and len(sh_names) == nreq,
+                {"n": len(sh_names), "unique": len(set(sh_names)), "probeRequests": nreq, "dupes": sorted({n for n in sh_names if sh_names.count(n) > 1})})
         v.check("AFTER: no death2 / death3 requested (the Meshy falls are gone)", not any(n in ("death2", "death3") for n in sh_names), sh_names)
-        v.check("W._playerProbe.clips(): mode shared, 22 requests, 22 loaded", bool(probe) and probe.get("mode") == "shared" and probe.get("requests") == 22 and probe.get("loaded") == 22, probe)
+        v.check("W._playerProbe.clips(): mode shared, requests == loaded (>= 22)", bool(probe) and probe.get("mode") == "shared" and (probe.get("requests") or 0) >= 22 and probe.get("loaded") == probe.get("requests"), probe)
         for lab, d in (("AFTER", da),) + ((("BEFORE", db),) if before is not None else ()):
             C.print_diagnostics(d)
         v.check("AFTER: 0 console errors", not da["consoleErrors"], da["consoleErrors"][:5])

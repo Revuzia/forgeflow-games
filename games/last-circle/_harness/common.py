@@ -360,6 +360,10 @@ class Verdict:
         self.started = time.strftime("%Y-%m-%d %H:%M:%S")
 
     def check(self, name, ok, detail="", expect=None):
+        # a truthy / falsy non-bool (an `a and b and []` chain returns the list) is a verdict, never a crash of the report (P2/P3 fix round:
+        # p23_smoke under --plant short-life died in finish() with 'unhashable type: list' and its control counted only by accident)
+        if ok is not None and not isinstance(ok, bool):
+            ok = bool(ok)
         self.rows.append({"name": name, "ok": ok, "kind": "gate", "detail": detail, "expect": expect})
         tag = {True: "PASS", False: "FAIL", None: "CNJ "}[ok if ok in (True, False) else None]
         print("  %-4s %s :: %s" % (tag, name, _short(detail)), flush=True)

@@ -22,6 +22,11 @@ Rows:
   dummy        the range dummy draws skinned meshes (the truth needs a body)
   outside [v]  sim hits whose line and all 8 offset lines miss the mesh = 0 (no body hit > 0.06 m outside the silhouette)
   coverage [v] lines deep inside the silhouette (all 8 offsets cross it): >= 95 % are sim hits (a hitbox that hits nothing cannot pass)
+  NOISE (fix round): each view starts from the same animation phase (the dummy's mixer reset to clip time 0) and the frames are stepped,
+               so two runs on identical code fire the same lines at the same poses; before that, coverage moved by 0.014-0.054 between
+               runs (front 0.952 / 0.938, side 0.771 / 0.717) from the idle clip's wall-clock phase alone. Measured after the fix (10-27,
+               two runs, identical code): every count identical to the line - front 541 sim / 635 mesh / 2 outside / 153 deep / 0.9412,
+               side 318 / 409 / 55 / 104 / 0.7212, back 547 / 649 / 1 / 151 / 0.9536, 45deg 490 / 598 / 34 / 158 / 0.8544 (noise 0.000)
   head-top     horizontal shots at the drawn head top + 0.10 m across the body width: 0 sim hits
   errors
 """
@@ -56,7 +61,11 @@ SETUP_JS = r"""([dist]) => { const C = window.__LC__, W = C.W, K = W.SIM, T = W.
 # place the dummy at `dist` m in front of the player facing `face` (rad), and the skinning helper (the pose drawn NOW -> one static triangle soup)
 POSE_JS = r"""([dist, face]) => { const C = window.__LC__, W = C.W, T = W.THREE, p = W.player, Q = window.__P23H__, d = Q.d;
   const x = p.pos.x, z = p.pos.z - dist; d.pos.set(x, W.map.heightAt(x, z), z); d.vel.set(0, 0, 0); d.yaw = face; if (d.obj) { d.obj.position.copy(d.pos); d.obj.rotation.y = face; }
-  d.hp = 1e6; d.shield = 0; d.alive = true; C.stepFrames(3, 1 / 60, true);
+  d.hp = 1e6; d.shield = 0; d.alive = true;
+  // (fix round) the SAME pose phase every run: the dummy's animation mixer is reset to clip time 0 at each view's start (its phase used to be
+  // whatever wall-clock frames the load and the earlier views had run: coverage moved 0.01-0.05 between runs on identical code, 10-26)
+  const mx = d.rig && d.rig.mixer; let phase = null; if (mx && mx.setTime) { mx.setTime(0); phase = 0; }
+  C.stepFrames(3, 1 / 60, true);
   Q.skin = () => { d.obj.updateMatrixWorld(true); const v = new T.Vector3(); let skinned = 0; const pos = Q._pos || (Q._pos = []); pos.length = 0;
     d.obj.traverse((o) => { if (!(o.isMesh && o.visible !== false && o.geometry && o.geometry.attributes.position) || !o.isSkinnedMesh) return; skinned++;
       const g = o.geometry, P = g.attributes.position, idx = g.index; const n = idx ? idx.count : P.count;
@@ -68,7 +77,7 @@ POSE_JS = r"""([dist, face]) => { const C = window.__LC__, W = C.W, T = W.THREE,
   Q.sig = () => { const out = []; d.obj.updateMatrixWorld(true); d.obj.traverse((o) => { if (o.isBone) out.push(o.matrixWorld.elements[12], o.matrixWorld.elements[13], o.matrixWorld.elements[14]); }); return out; };
   Q.ray = Q.ray || new T.Raycaster(); Q.reskins = 0;
   const skinned = Q.skin(); Q.lastSig = Q.sig();
-  const bb = Q.mesh.geometry.boundingBox; return { skinned, tris: Q._pos.length / 9, box: [bb.min.x, bb.min.y, bb.min.z, bb.max.x, bb.max.y, bb.max.z].map((x) => +x.toFixed(3)) }; }"""
+  const bb = Q.mesh.geometry.boundingBox; return { skinned, phase, mixerT: mx ? +mx.time.toFixed(4) : null, tris: Q._pos.length / 9, box: [bb.min.x, bb.min.y, bb.min.z, bb.max.x, bb.max.y, bb.max.z].map((x) => +x.toFixed(3)) }; }"""
 # raster: parallel lines along -Z (from the player's side) over the dummy's box, one REAL round per line (see the docstring)
 RASTER_JS = r"""([step, margin, headTop]) => { const C = window.__LC__, W = C.W, T = W.THREE, p = W.player, Q = window.__P23H__, d = Q.d, P = window.__H_PUMP__;
   const bb0 = Q.mesh.geometry.boundingBox.clone(); const z0 = bb0.max.z + 3;
