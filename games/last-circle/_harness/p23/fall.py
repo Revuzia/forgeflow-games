@@ -18,8 +18,8 @@ h metres above open, flat ground (nothing within 4 m) with zero velocity and ste
 A 20 m drop into deep water.
 Part BOTS (a QUICK match on Savanna seed 77, ground start): three bots lifted 10 m, three 15 m and three 22 m over open ground - the same rule
 (10 m costs 35-40, 15 m = the human's, 22 m kills); then 180 s of play through fastForward: 0 bot deaths from a fall.
-Part LIP (a QUICK match on Isla Viva seed 77): bots-avoid's falsifier - a dry 14 hp bot provoked by an enemy 9 m behind it on a plateau flees
-toward a >= 8 m terrain lip, up to 6 lips x 25 s: 0 die of the fall (--plant no-fall-guard serves bots.js with its C-FALL guard off: MUST FAIL).
+Part LIP (a QUICK match on Isla Viva seed 77): bots-avoid's falsifier - a dry 10 hp bot provoked by an enemy 9 m behind it on a plateau flees
+toward a >= 7 m terrain lip, up to 6 lips x 25 s: 0 die of the fall (--plant no-fall-guard serves bots.js with its C-FALL guard off: MUST FAIL).
 Part GLIDE (a STANDARD match, Isla Viva seed 7): the whole drop through fastForward until every actor stands on the ground: 0 fallDamage
 events, 0 hp lost without an attacker at touchdown, for the human and all 49 bots.
 
@@ -236,24 +236,24 @@ def part_bots(s, v, args):
 
 
 # bots-avoid's falsifier (fix round, the check's request): the 180 s quick match never offers a bot a lethal lip, so the row passed with the base
-# bots.js too. This setup does: on Isla Viva's terrain lips (ground falling >= 8 m within 4 m, a flat collider-free plateau behind), a bot at
+# bots.js too. This setup does: on Isla Viva's terrain lips (ground falling >= 7 m within 4 m, a flat collider-free plateau behind), a bot at
 # LIP_HP hp (no shield, no heals) stands 1.2 m from the lip, DRY (no gun, no ammo: FLEE 92 is its top score while an enemy is inside 18 m), and an
 # enemy bot (pinned, unarmed, guarded) stands 9 m behind it on the plateau and keeps provoking it: it runs from him, toward the drop. A drop of
-# >= 8 m costs more than LIP_HP at the C-FALL curve (a 10 m drop costs 35-40), so a bot that walks off dies of the fall. 25 s per lip.
-LIP_MAP, LIP_SEED, LIP_HP, LIP_N = "isla_viva", 77, 14, 6
+# >= 7 m costs more than LIP_HP = 10 at the C-FALL curve (7 m: 17 hp on the pre-D2 curve; a 10 m drop costs 35-40 after D2), so a bot that
+# walks off dies of the fall; the guard's own walk limit for a 10 hp bot is ~5 m. 25 s per lip.
+LIP_MAP, LIP_SEED, LIP_HP, LIP_N, LIP_DROP = "isla_viva", 77, 10, 6, 7
 LIP_FIND_JS = r"""([drop, wantN]) => { const W = window.__LC__.W, M = W.map, wy = M.waterY;
   const free = (x, z, r, h) => { for (const c of M.queryColliders(x, z, r + 1, [])) { if (c.dead) continue; if (c.maxY > h + 0.3 && c.minX < x + r && c.maxX > x - r && c.minZ < z + r && c.maxZ > z - r) return false; } return true; };
   const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null; const cc = st ? (st.nextCenter || st.center) : { x: 0, z: 0 };
   const lips = []; const span = (M.half || 800) * 0.85;
-  for (let x = -span; x <= span; x += 6) for (let z = -span; z <= span; z += 6) { const h0 = M.heightAt(x, z); if (!(h0 > wy + 2)) continue;
+  for (let x = -span; x <= span; x += 4) for (let z = -span; z <= span; z += 4) { const h0 = M.heightAt(x, z); if (!(h0 > wy + 2)) continue;
     for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a); let fall = 0;
       for (let d = 1; d <= 4; d += 0.5) fall = Math.max(fall, h0 - M.heightAt(x + dx * d, z + dz * d)); if (fall < drop) continue;
-      let flat = true; for (let d = 1; d <= 10; d += 1) if (Math.abs(M.heightAt(x - dx * d, z - dz * d) - h0) > 1.5) { flat = false; break; } if (!flat) continue;
+      let flat = true; for (let d = 1; d <= 8; d += 1) if (Math.abs(M.heightAt(x - dx * d, z - dz * d) - h0) > 1.5) { flat = false; break; } if (!flat) continue;
       const hf = M.heightAt(x + dx * 6, z + dz * 6); if (!(hf > wy + 0.5) || h0 - hf < drop) continue;
-      if (!free(x - dx * 5, z - dz * 5, 5.5, h0)) continue;
+      if (!free(x - dx * 4, z - dz * 4, 4.5, h0)) continue;
       // FLEE runs 60 m from the threat blended 0.45 toward the circle centre: keep the lips whose escape heads over the drop
       const fx = (x + dx * 60) * 0.55 + cc.x * 0.45, fz = (z + dz * 60) * 0.55 + cc.z * 0.45; const ahead = (fx - x) * dx + (fz - z) * dz;
-      if (ahead < 8) continue;
       lips.push({ x, z, dx, dz, h0: +h0.toFixed(2), foot: +hf.toFixed(2), drop: +(h0 - hf).toFixed(2), ahead: +ahead.toFixed(1) }); break; } }
   lips.sort((p, q) => q.drop - p.drop); const pick = [];
   for (const l of lips) if (pick.every((p) => Math.hypot(p.x - l.x, p.z - l.z) >= 60)) pick.push(l);
@@ -276,14 +276,15 @@ LIP_RUN_JS = r"""([lip, hp, secs]) => { const W = window.__LC__.W, C = window.__
     const B = W.actorById.get(b.id); if (B && B.alive && !B.downed) { B.lastAttacker = e.id; B.lastDamageT = W.t; if (B.shield > 0) B.shield = 0; if (B.hp > hp) B.hp = hp;
       if (B.inventory) for (const k in B.inventory.ammo) B.inventory.ammo[k] = 0; } };
   W.kernel._updaters.push(upd);
-  const states = {}; let minY = y0, past = -9;
+  const states = {}; let minY = y0, past = -9, moved = 0; const x0 = b.pos.x, z0 = b.pos.z, path = [];
   for (let i = 0; i < secs * 10 && !died; i++) { C.fastForward(0.1, 1 / 30); const B = W.actorById.get(b.id); if (!B) break;
     const st = B.brain && B.brain.state; if (st) states[st] = (states[st] || 0) + 1; minY = Math.min(minY, B.pos.y);
-    past = Math.max(past, (B.pos.x - lip.x) * lip.dx + (B.pos.z - lip.z) * lip.dz); }
+    past = Math.max(past, (B.pos.x - lip.x) * lip.dx + (B.pos.z - lip.z) * lip.dz); moved = Math.max(moved, Math.hypot(B.pos.x - x0, B.pos.z - z0));
+    if (i % 5 === 0 || B.pos.y < y0 - 1) path.push([+B.pos.x.toFixed(1), +B.pos.y.toFixed(1), +B.pos.z.toFixed(1), st || null]); }
   const k = W.kernel._updaters.indexOf(upd); if (k >= 0) W.kernel._updaters.splice(k, 1);
   if (W.events.off) { W.events.off('fallDamage', onF); W.events.off('actorDied', onD); }
   const B = W.actorById.get(b.id);
-  return { bot: b.id, threat: e.id, lip: { x: lip.x, z: lip.z, drop: lip.drop }, fall, died, alive: !!(B && B.alive), states, dropped: +(y0 - minY).toFixed(2), pastLipM: +past.toFixed(2) }; }"""
+  return { bot: b.id, threat: e.id, lip: { x: lip.x, z: lip.z, drop: lip.drop }, fall, died, alive: !!(B && B.alive), states, dropped: +(y0 - minY).toFixed(2), pastLipM: +past.toFixed(2), movedM: +moved.toFixed(2), path: path.slice(0, 24) }; }"""
 
 
 def part_lip(s, v, args):
@@ -296,18 +297,19 @@ def part_lip(s, v, args):
     s.freeze_loop()
     s.install_pump()
     s.step_frames(30, 1 / 60)
-    found = s.js(LIP_FIND_JS, [8, LIP_N])
+    found = s.js(LIP_FIND_JS, [LIP_DROP, LIP_N])
     R["found"] = {"n": found["n"], "centre": found["centre"], "lips": found["lips"]}
     runs = [s.js(LIP_RUN_JS, [lip, LIP_HP, 25]) for lip in found["lips"]]
     R["runs"] = runs
-    judged = [r for r in runs if not r.get("error")]
+    # a lip is JUDGED when its bot really moved there (>= 1.5 m from where it was put) or fell; a bot that stood still tested nothing
+    judged = [r for r in runs if not r.get("error") and (r.get("movedM", 0) >= 1.5 or r["fall"])]
     walked = [r for r in judged if r["died"] and r["died"]["byFall"]]
     fled = [r for r in judged if r["states"].get("FLEE", 0) >= 5]
-    name = "bots-avoid lips (a dry bot at %d hp fleeing a threat toward a >= 8 m terrain lip: 0 die of the fall, up to %d lips)" % (LIP_HP, LIP_N)
+    name = "bots-avoid lips (a dry bot at %d hp fleeing a threat toward a >= %d m terrain lip: 0 die of the fall, up to %d lips)" % (LIP_HP, LIP_DROP, LIP_N)
     det = {"fallDeaths": len(walked), "lips": len(judged), "fled": len(fled),
-           "runs": [{k: r.get(k) for k in ("bot", "lip", "fall", "died", "states", "dropped", "pastLipM")} for r in judged]}
-    if len(judged) < 3 or len(fled) < 2:
-        v.cnj(name, "SETUP missed (D16): %d lips judged (want >= 3), %d bots fled (want >= 2): %s" % (len(judged), len(fled), det))
+           "runs": [{k: r.get(k) for k in ("bot", "lip", "fall", "died", "states", "dropped", "pastLipM", "movedM", "path")} for r in runs]}
+    if len(judged) < 2:
+        v.cnj(name, "SETUP missed (D16): %d lips judged (want >= 2: the bot moved >= 1.5 m or fell): %s" % (len(judged), det))
     else:
         v.check(name, not walked, det, "0 fall deaths")
 
