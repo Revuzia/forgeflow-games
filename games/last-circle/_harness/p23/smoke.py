@@ -220,7 +220,7 @@ def main():
             mid = [x for x in samples if t_from <= x[0] <= t_to]
             late = [x for x in samples if x[0] > q["t1"] + 0.6]
             v.check("los (through the centre: open before the throw, blocked from t0 + 2 s to t1 - 1 s, open after t1)",
-                    before is False and mid and all(x[1] for x in mid) and late and not any(x[1] for x in late),
+                    before is False and bool(mid) and all(x[1] for x in mid) and bool(late) and not any(x[1] for x in late),
                     {"before": before, "midBlocked": "%d/%d" % (sum(1 for x in mid if x[1]), len(mid)), "lateBlocked": sum(1 for x in late if x[1])}, "open / blocked / open")
             sight_blocked = "%d/%d" % (sum(1 for x in mid if x[2]), len(mid))
             v.check("bot-sight (open control: the bot fires >= 5 rounds at the human in 6 s; through the smoke: 0 rounds from t0 + 3 s and 0 hits from t0 + 2 s to t1 - 1 s)",
