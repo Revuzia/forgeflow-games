@@ -4,8 +4,10 @@
 //
 //   * Weather (baked): a body-frame cube (192² × 6 at High) holds the ORGANISED cloud field — coverage, storm strength,
 //     cloud type and anvil cover — computed from the sim's per-cell cloud / precipitation cube and its weather systems:
-//     a low-frequency weather mask with full range (clusters, cloud streets and clear holes, a power-law spread of
-//     sizes), fronts as long curved bands trailing behind their system (comma clouds), convective storms as clusters of
+//     the sim's regional cover arranged into CLOUD MASSES — a fractal mass field (three tilings of a Perlin fBm, ranked
+//     to a uniform 0..1) is cloud where it exceeds 1 − cover, so masses of every size with ragged margins, holes and
+//     satellite clumps cover the sim's share of the sky, heaps merging into decks inside them (cloud streets in some
+//     regions) — fronts as long curved bands trailing behind their system (comma clouds), convective storms as clusters of
 //     cumulonimbus columns under a merged anvil, tropical cyclones as a smooth central dense overcast with spiral bands
 //     and a clear eye, and a planet-wide override as meandering storm tracks. It is re-baked only when the weather
 //     changes (at most every few frames). A second cube holds each column's cloud-shadow optical depth (four penumbra
@@ -295,19 +297,33 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
   // cover: round clusters of round heaps read as popcorn from orbit)
   float lobes = textureLod(uCloudDetail, pb * (1.0 / 2600.0) + warp * 0.2 + vec3(0.21, 0.63, 0.47), 0.0).r * 0.65
               + textureLod(uCloudDetail, pb * (1.0 / 1050.0) + vec3(0.83, 0.37, 0.11), 0.0).g * 0.35;
-  // ... and most of the mask is a FRACTAL field: a Perlin fBm over two tiles (5.2 and 1.7 km: masses from ~1.3 km
-  // down to ~50 m, the detail texture's A, σ ≈ 0.045 for the 0.6 / 0.4 sum, stretched to a uniform 0..1), so cloud
-  // masses come in every size, with ragged margins, holes and outliers — the look of a real cloud field from orbit. (A
-  // Worley cluster noise carrying the mask made every mass an oval of one size, evenly spread: cotton wool, whatever
-  // the heaps inside it did.)
-  float fA = textureLod(uCloudDetail, pb * (1.0 / 5200.0) + warp * 0.25 + vec3(0.37, 0.11, 0.83), 0.0).a;
-  float fB = textureLod(uCloudDetail, pb * (1.0 / 1700.0) + warp * 0.1 + vec3(0.59, 0.77, 0.21), 0.0).a;
-  float fractM = smoothstep(0.41, 0.59, 0.6 * fA + 0.4 * fB);
-  float mask = clamp(0.4 * big + 0.25 * cluster + 0.7 * fractM - 0.17 + 0.3 * (lobes - 0.62) * (1.0 - abs(big - 0.5) * 1.2), 0.0, 1.0);
-  mask = mix(mask, mask * (0.25 + 1.0 * streets), streetsW * 0.6);
-  // broken cover only: an overcast stays overcast
-  float brk = 1.0 - smoothstep(0.75, 0.97, cov);
-  cov *= mix(1.0, 0.15 + 1.1 * mask, brk);
+  // CLOUD MASSES. The sim's cover is a share of the sky; what it does not say is how that share is arranged. Spread as
+  // a density of independent heaps (each place cloudy in proportion to the cover) a half-cloudy world wore evenly
+  // scattered heaps of one size — popcorn from orbit, where one heap is a twentieth of this small world's disc — and
+  // only a few percent of its disc read as cloud. Real cloud fields are organised: coherent masses of every size with
+  // ragged, fractal margins, holes and satellite clumps, and clear air between. So the cover decides WHERE the masses
+  // are: a fractal mass field M — the Perlin fBm (the detail texture's A) over three tilings, 6 / 2.1 / 0.7 km (masses
+  // from ~1.5 km down to ~90 m, drifting with the wind), re-spread to a uniform 0..1 by the normal CDF (logistic
+  // approximation; A's σ ≈ 0.062 per sample, 0.04 for the 0.55 / 0.3 / 0.15 sum) — is cloud where M > 1 − cover, so the
+  // masses cover the sim's share of the sky. Inside a mass the heaps merge (cover 0.62 at its margin, 0.95 in its
+  // heart: a deck with knobbly tops, its edge breaking into separate heaps); outside it the air is clear. Under the
+  // camera that is a sky of cloud clusters and open blue, as real fair weather is; from orbit, soft volumes.
+  vec3 mq = pb + uCloudWind * 0.25;
+  float mA = textureLod(uCloudDetail, mq * (1.0 / 6000.0) + warp * 0.3 + vec3(0.37, 0.11, 0.83), 0.0).a;
+  float mB = textureLod(uCloudDetail, mq * (1.0 / 2100.0) + warp * 0.12 + vec3(0.59, 0.77, 0.21), 0.0).a;
+  float mC = textureLod(uCloudDetail, mq * (1.0 / 700.0) + vec3(0.13, 0.41, 0.67), 0.0).a;
+  float mz = (0.55 * mA + 0.3 * mB + 0.15 * mC - 0.5) * (1.0 / 0.04);
+  float M = 1.0 / (1.0 + exp(-1.702 * mz));
+  // (the organised systems below break their bands with it too)
+  float mask = M;
+  float C = clamp(cov, 0.0, 1.0);
+  float massK = smoothstep(1.0 - C - 0.06, 1.0 - C + 0.06, M);
+  float heart = smoothstep(1.0 - C + 0.06, 1.0 - C + 0.35, M);
+  // (cloud streets: in some regions a mass is drawn out into rows of heaps along the flow)
+  float rows = mix(1.0, 0.3 + 0.9 * streets, streetsW * 0.6 * (1.0 - heart));
+  // (and the lobes of the old cluster mask still break the masses' margins a little further)
+  cov = massK * (0.62 + 0.33 * heart) * rows * (1.0 + 0.25 * (lobes - 0.62) * (1.0 - heart)) * (0.9 + 0.1 * big + 0.05 * cluster);
+  cov = clamp(cov, 0.0, 1.0);
   // fair-weather cumulus where cover is broken, stratocumulus as it closes, regional variety from the synoptic warp
   ctype = clamp(1.0 - 0.62 * smoothstep(0.5, 0.92, cov) + 0.5 * warp.x, 0.0, 1.0);
   if (uGlobalBands > 0.0) {
@@ -381,7 +397,9 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
       float priK = smoothstep(mix(0.8, 0.88, outer), mix(0.94, 0.98, outer), pri) * smoothstep(0.22, 0.34, ang);
       float secK = smoothstep(0.82, 0.95, sec) * smoothstep(0.42, 0.56, ang) * (1.0 - smoothstep(0.85, 1.15, ang)) * 0.9;
       // the CDO: about a third of the system, its ragged edge drawn out along the principal band where it peels off
-      float cdo = 1.0 - smoothstep(0.25, 0.39, ang + 0.08 * (lobes - 0.6) + 0.04 * warp.y - 0.1 * priK * (1.0 - outer));
+      // (~0.4 of the radius: at a third, with its eye, it read from orbit as a white ring — a spiral logo — rather than
+      // the broad bright disc a mature cyclone wears)
+      float cdo = 1.0 - smoothstep(0.3, 0.47, ang + 0.08 * (lobes - 0.6) + 0.04 * warp.y - 0.1 * priK * (1.0 - outer));
       // the bands are lines of convective cells with clear air between them (the cluster mask and a finer cell pattern)
       float cellsB = textureLod(uCloudDetail, pb * (1.0 / 1300.0) + vec3(0.29, 0.61, 0.83), 0.0).r;
       float bandK = max(priK, secK) * mix(1.0, smoothstep(0.32, 0.68, 0.45 * mask + 0.55 * cellsB + 0.08), 0.35 + 0.65 * outer)
@@ -391,8 +409,8 @@ void cloudOrganise(vec3 pb, inout float cov, inout float storm, out float ctype,
       float cb = mix(cov, cov0, K.x * reach);
       cov = mix(cov, clamp(max(cb, 0.35) * m * 1.25, 0.0, 1.0), reach * K.x);
       sysW = max(sysW, K.x * reach);
-      float eye = smoothstep(0.06, 0.11, ang);
-      float wall = eye * (1.0 - smoothstep(0.11, 0.22, ang));
+      float eye = smoothstep(0.045, 0.085, ang);
+      float wall = eye * (1.0 - smoothstep(0.085, 0.2, ang));
       storm = mix(storm, mix((0.35 + 0.6 * arms * max(priK, secK)), 0.8, cdo) + 0.2 * wall, reach * K.x);
       // the overcast's top is smooth (stratiform), the eyewall and the bands tower
       ctype = mix(ctype, mix(0.85, 0.12, cdo * (1.0 - wall)), reach * K.x);
@@ -469,7 +487,9 @@ float cloudField(vec3 pb, float hf, float cov, float storm, float ctype, float a
   // stronger toward the top (one that only started above the base left a wider skirt under a narrower waist:
   // mushroom-shaped heaps); decks stay smooth
   float bil = (1.0 - (0.4 * n.b + 0.6 * n.a)) * (0.65 + 0.35 * smoothstep(0.1, 0.6, hn)) * smoothstep(0.3, 0.8, ctype);
-  lo = 1.0 - 0.85 * cov;
+  // (far away, inside a mass, the heaps merge into its deck: the threshold opens a little further, so a mass seen from
+  // orbit is a body of cloud with a knobbly top, not a cluster of separate heaps)
+  lo = 1.0 - mix(0.85, 1.05, cl_far) * cov;
   return shape * bottom * upper - bil * 0.14;
 }
 // coverage-faithful threshold with a NARROW ramp: a cumulus goes from clear air to its dense interior within a few

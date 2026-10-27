@@ -139,3 +139,57 @@ test('migration: a 1.4 band saved at the legacy time-lapse loads at the same lev
   assert.equal(twin.hash(), sim.hash(), 'two loads live a day alike');
   assert.equal(lapseLevel(sim.u), 2);
 });
+
+// ───────────────────────────── a save of the previous 1.5 build ─────────────────────────────
+// (LIVING integration, 2026-10-27) The lanes' second passes and the fifth and sixth integrations added optional saved
+// fields under 1.5 without a bump (HISTORY's HistState hard / calam / sick / cp / ep, CONTENT's DerivedAnimal.god, LAND's
+// LandState.more and HuntParty.cache, the god's plague stamp in Settlement.recent). This fixture was written by the 1.5
+// build of 2026-10-21 00:10, before all of them (LAND's copy of that tree, _harness/scratch/living/land/r5/base, with
+// _harness/scratch/living/integrate/r6/fixture15.ts): Aru and its daughter Lune of one polity, Lune's grievance on the
+// books with a famine being judged, a zebra the god brought, two days into their lives.
+const kin = new Uint8Array(gunzipSync(readFileSync(new URL('save-1.5a-kin.gnss.gz', DIR))));
+const kinFacts = JSON.parse(readFileSync(new URL('save-1.5a-kin.json', DIR), 'utf8')) as {
+  tick: number; hash: string; bytes: number; capital: number; daughter: number; agentIds: number[];
+  settlements: { id: number; name: string; polity: number; parent: number; hist: { grievance: number; famine: number } | null }[];
+  species: { id: string; god: number | null }[];
+};
+
+test('migration: a save of the previous 1.5 build loads as the same world — its hash, people, towns, polity and grievance', () => {
+  assert.equal(kin.length, kinFacts.bytes);
+  assert.equal(readSave(kin).header.migratedFrom, undefined, 'a 1.5 save: no migration step');
+  const sim = Sim.load(kin);
+  assert.equal(sim.tick, kinFacts.tick);
+  assert.equal(sim.hash(), kinFacts.hash, 'the same world, hash for hash, as the old build saw it');
+  const ps = sim.u.planets[0].people; const A = ps.agents;
+  const alive: number[] = [];
+  for (let s = 0; s < A.hi; s++) if (A.alive[s]) alive.push(A.id[s]);
+  assert.deepEqual(alive.sort((a, b) => a - b), [...kinFacts.agentIds].sort((a, b) => a - b));
+  for (const f of kinFacts.settlements) {
+    const st = ps.settlement(f.id)!;
+    assert.ok(st && st.name === f.name && st.polity === f.polity && st.parent === f.parent, `${f.name} as it was`);
+    if (f.hist) assert.equal(st.hist?.grievance, f.hist.grievance, `${f.name}'s grievance`);
+  }
+  // the god's zebra is there (a kind the old build could not mark as brought: it reads as born here — LIVING §4.8)
+  assert.equal(kinFacts.species[0].id, 'zebra');
+  assert.equal(kinFacts.species[0].god, null);
+  const eco = sim.query('ecology') as { species: { id: string; herds: number }[] };
+  assert.ok(eco.species.some((s) => s.id === 'zebra' && s.herds > 0), 'its herds live on');
+});
+
+test('migration: the previous 1.5 build\'s grievance record is judged by this build\'s rules, and the world saves, loads and lives on alike', () => {
+  const sim = Sim.load(kin);
+  const d = sim.u.planets[0].people.settlement(kinFacts.daughter)!;
+  // a first-pass record has no `hard`: it is a famine, and this build's view says so while it is judged
+  const view0 = (sim.query('settlement', { id: d.id }) as { history: { grievance: { hard?: { kind: string; judged: boolean } } } }).history;
+  assert.deepEqual([view0.grievance.hard?.kind, view0.grievance.hard?.judged], ['famine', false]);
+  const twin = Sim.load(kin);
+  const back = Sim.load(sim.save());
+  assert.equal(back.hash(), sim.hash());
+  sim.step(3 * 1440); twin.step(3 * 1440); back.step(3 * 1440);
+  assert.equal(twin.hash(), sim.hash(), 'two loads live three days alike');
+  assert.equal(back.hash(), sim.hash(), 'and a re-saved copy with them');
+  // the famine was judged (Aru had food to spare and sent none): the new counters were taken up on the old record
+  assert.equal(d.hist!.judged, true);
+  assert.ok(d.hist!.grievance > kinFacts.settlements.find((s) => s.id === d.id)!.hist!.grievance, `the unrelieved famine weighed (${d.hist!.grievance})`);
+  assert.ok(d.hist!.calam !== undefined && d.hist!.cp !== undefined, 'the calamity counters began');
+});

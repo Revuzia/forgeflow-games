@@ -49,8 +49,11 @@ void main() {
   // rising from its foot, thinning away upward; light climbing it in slow pulses
   float along = smoothstep(0.0, 0.06, vT) * pow(1.0 - vT, 1.6);
   float climb = 0.7 + 0.3 * snoise(vec3(vT * 6.0 - uFxTime * 0.9, vSeed, 0.5));
-  float k = (core * 1.6 + glow * 0.5) * along * climb;
-  gl_FragColor = vec4(vCol.rgb * k * vCol.a * vis * fxDisplay(0.85), 0.0);
+  // (kept below the tone curve's shoulder and deepened toward its heart: brighter, a prophet's warm thread burned to
+  // a white wire and every sign's colour was lost)
+  float k = (core * 1.05 + glow * 0.5) * along * climb;
+  vec3 col = mix(vCol.rgb, vCol.rgb * vCol.rgb, 0.4 * core);
+  gl_FragColor = vec4(col * k * vCol.a * vis * fxDisplay(0.85), 0.0);
 }
 `;
 
@@ -143,6 +146,9 @@ export class Beams {
   private seed: Float32Array;
   private n = 0;
   readonly cap: number;
+  /** a multiplier on every beam added this frame (signs.ts fades the threads out from orbit, where a thread hundreds of
+   *  metres long stood off the limb into space like a scratch on the view) */
+  scale = 1;
 
   constructor(fx: Record<string, IUniform>, cap = 48) {
     this.cap = cap;
@@ -178,6 +184,7 @@ export class Beams {
    * camera-facing round its own axis
    */
   add(foot: Vector3, dir: Vector3, len: number, w: number, r: number, g: number, b: number, k: number, cam: Vector3, seed = 0): void {
+    k *= this.scale;
     if (this.n >= this.cap || k <= 0.001 || len <= 0) return;
     const bi = this.n++;
     const view = _d.copy(cam).sub(foot);

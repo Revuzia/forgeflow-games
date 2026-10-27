@@ -1,0 +1,163 @@
+{
+ "written": "1.5 (before the second passes)",
+ "by": "_harness/scratch/living/land/r5/base (the tree of 2026-10-21 00:10)",
+ "tick": 3120,
+ "hash": "8a07301846261933",
+ "bytes": 1493152,
+ "capital": 1,
+ "daughter": 2,
+ "settlements": [
+  {
+   "id": 1,
+   "name": "Aru",
+   "polity": 1,
+   "parent": -1,
+   "members": 32,
+   "fields": 0,
+   "hist": {
+    "grievance": 0,
+    "famine": -1,
+    "keys": [
+     "aid",
+     "eraAt",
+     "famine",
+     "feud",
+     "genAt",
+     "grievance",
+     "judged",
+     "kin",
+     "label",
+     "paid",
+     "since",
+     "spare",
+     "visits",
+     "why"
+    ]
+   },
+   "land": [
+    "fest",
+    "fields",
+    "firsts",
+    "gatherings",
+    "ledger",
+    "milked",
+    "party",
+    "told"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Lune",
+   "polity": 1,
+   "parent": 1,
+   "members": 22,
+   "fields": 0,
+   "hist": {
+    "grievance": 0.52,
+    "famine": 2280,
+    "keys": [
+     "aid",
+     "eraAt",
+     "famine",
+     "feud",
+     "genAt",
+     "grievance",
+     "judged",
+     "kin",
+     "label",
+     "paid",
+     "since",
+     "spare",
+     "starved",
+     "visits",
+     "why"
+    ]
+   },
+   "land": [
+    "fest",
+    "fields",
+    "firsts",
+    "gatherings",
+    "ledger",
+    "milked",
+    "party",
+    "told"
+   ]
+  }
+ ],
+ "agentIds": [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30,
+  31,
+  32,
+  33,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+  40,
+  41,
+  42,
+  43,
+  44,
+  45,
+  46,
+  47,
+  48,
+  49,
+  50,
+  51,
+  52,
+  53,
+  54
+ ],
+ "species": [
+  {
+   "idx": 42,
+   "id": "zebra",
+   "name": "Zebra",
+   "base": 8,
+   "god": null
+  }
+ ],
+ "hunting": [
+  {
+   "id": 1,
+   "party": false
+  },
+  {
+   "id": 2,
+   "party": false
+  }
+ ]
+}

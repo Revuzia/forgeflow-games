@@ -647,12 +647,17 @@ void main() {
   float core = exp(-x * x * 6.0), halo = exp(-x * x * 1.8) * (1.0 - smoothstep(0.8, 1.0, x));
   float drawn = 1.0 - smoothstep(uTrace - 0.004, uTrace + 0.004, vT);
   float head = exp(-pow((vT - uTrace) / 0.025, 2.0)) * (1.0 - step(0.999, uTrace));
-  float k = (core * 1.1 + halo * 0.3) * drawn + head * (core * 3.0 + halo * 0.8);
+  // (below the tone curve's shoulder, its colour deepened at the line's heart: brighter, the regard's gold — or a feared
+  // god's cold blue — burned to a white thread)
+  // (and nearly display-referred: drawn as physical light it blazed into a white bar at dusk, when the view's exposure
+  // opens up, while it read right by day)
+  float k = (core * 0.66 + halo * 0.26) * drawn + head * (core * 1.95 + halo * 0.57);
   vec3 col = mix(uCol, uRim, uDark * 0.75);
+  col = mix(col, col * col, 0.35 * core) + vec3(0.3) * head * core;
   // (the air behind the line a little veiled: against a bright sky light added alone summed to a white thread and the
   // glyph's shape and colour were lost; over the night it changes nothing)
   float veil = clamp(halo * 0.28 + core * 0.18, 0.0, 0.4) * max(drawn, head) * uGlyphK * uPres * vis;
-  gl_FragColor = vec4(col * k * uGlyphK * uPres * vis * fxDisplay(0.7), veil);
+  gl_FragColor = vec4(col * k * uGlyphK * uPres * vis * fxDisplay(0.92), veil);
 }
 `;
 const CRACKLE_FRAG = /* glsl */ `
@@ -1038,7 +1043,7 @@ export class HandVisual {
     this.grasp = grasp;
     this.u.uGrasp.value = grasp;
     // (a trusted god's shaft is warm daylight let down to them: stronger than an awed god's pale one)
-    this.u.uBeamK.value = (0.5 + 0.2 * grasp + 0.55 * W.point + 0.35 * W.soothe + 0.6 * ck) * (1 - 0.3 * feared) * (1 + 0.7 * trusted);
+    this.u.uBeamK.value = (0.5 + 0.2 * grasp + 0.55 * W.point + 0.35 * W.soothe + 0.35 * ck) * (1 - 0.3 * feared) * (1 + 0.7 * trusted);
     this.u.uGroundK.value = Math.min(1, 0.16 + 0.75 * W.point + 0.45 * W.soothe + 0.3 * ck);
     this.u.uFlashK.value = rk * 1.2;
     this.u.uStreakK.value = Math.max(0.08, 0.32 + 0.4 * grasp + 0.35 * W.reach - 0.2 * W.soothe - 0.25 * W.point + 1.1 * rk + 0.3 * ck);
@@ -1101,7 +1106,7 @@ export class HandVisual {
     // the heart: what it holds hangs in its light
     this.u.uHeartC.value.copy(this.cradle);
     this.u.uHeartR.value = L * (0.55 + 0.3 * ck + 0.3 * W.soothe) * (1 - 0.5 * grasp) + grasp * Math.max(this.cradleR, this.cradleH) * 0.4;
-    this.u.uHeartK.value = (0.22 + 0.2 * W.reach + 0.6 * ck + 0.25 * W.soothe + 0.8 * rk) * (1 - 0.3 * grasp) + 0.3 * grasp + 0.2 * trusted;
+    this.u.uHeartK.value = (0.22 + 0.2 * W.reach + 0.25 * W.soothe + 0.8 * rk) * (1 - 0.3 * grasp) + 0.3 * grasp + 0.2 * trusted;
     this.u.uHeartBack.value = grasp;
     // ── a trusted god is warm light more than weather: its cloud thins, the light at its heart swells and its shaft
     //    brightens, motes of light thicken in the air and almost no dust is raised (open, as fully as it can: a sunlit
@@ -1117,6 +1122,9 @@ export class HandVisual {
       this.u.uDustK.value *= 1 - trusted * (0.8 - 0.15 * grasp);
       this.u.uGlowK.value *= 1 + 0.8 * tw;
     }
+    // a cast's own swell of light, added after the regard's: multiplied by a trusted god's warmth with the rest, the
+    // heart of a cast burned the town round it and the sigil traced over it to white
+    this.u.uHeartK.value += 0.4 * ck;
     // ── far away (from the god's height and beyond) the Touch condenses to a point of light under its whorl: its cloud,
     //    its wind and its dust fade, its heart glows (at ~140 m it would read as a weather system from orbit) ──
     const camD = this.pos.distanceTo(f.camBody);
@@ -1174,7 +1182,7 @@ export class HandVisual {
     const pool = decal(DECAL.light, gp, reachL);
     pool.cr = col.r; pool.cg = col.g; pool.cb = col.b;
     pool.p0 = reachL; pool.p2 = hAbove * 0.7; pool.p3 = Math.max(1, L * 0.5);
-    pool.p1 = (2 + 4 * W.soothe + 2.5 * W.point + 6 * ck + 2 * grasp) * L * L * this.presence * (1 - 0.8 * feared) * (1 - 0.5 * smooth(2 * L, 8 * L, hAbove));
+    pool.p1 = (2 + 4 * W.soothe + 2.5 * W.point + 3.5 * ck + 2 * grasp) * L * L * this.presence * (1 - 0.8 * feared) * (1 - 0.5 * smooth(2 * L, 8 * L, hAbove));
     f.decals.add(pool);
     this.cloudShadow(f, up, gR, L, feared, grasp, air);
     // (decal colours are radiance: the dust is lit by the day, dark at night)
@@ -1488,7 +1496,7 @@ export class HandVisual {
       const sx = -ty / tl, sy = tx / tl;
       const d = Math.hypot(cam.x - px, cam.y - py, cam.z - pz);
       // (the line itself three or four pixels wide at any distance: at 2.5 px of strip it was a one-pixel thread)
-      const w = Math.max(L * 0.05, d * wpx * 4.5);
+      const w = Math.max(L * 0.04, d * wpx * 3.8);
       const ox = (right.x * sx + up.x * sy) * w, oy = (right.y * sx + up.y * sy) * w, oz = (right.z * sx + up.z * sy) * w;
       pos.setXYZ(i * 2, px + ox, py + oy, pz + oz);
       pos.setXYZ(i * 2 + 1, px - ox, py - oy, pz - oz);

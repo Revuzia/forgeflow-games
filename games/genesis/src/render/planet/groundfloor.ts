@@ -483,9 +483,11 @@ vec4 swardDetail(vec3 P, float fw, float NdV) {
     float cA = snoise(vec3(dot(P, S1) * 1.6, dot(P, L1) * 0.33, dot(P, T1) * 1.6) + 41.0);
     float cB = snoise(vec3(dot(P, S2) * 1.6, dot(P, L2) * 0.33, dot(P, T2) * 1.6) + 57.0);
     float drift = mix(cA, cB, smoothstep(0.3, 0.7, lean));
-    val *= 1.0 + 0.09 * drift * a3b;
-    tip += max(drift, 0.0) * 0.22 * a3b;
-    gap += max(-drift, 0.0) * 0.25 * a3b;
+    // (in the colour, not the relief — so a low sun cannot rake it into dimples: ±16 % in value and the tips' yellow;
+    // at ±9 % a meadow from 30–60 m was a smooth suede)
+    val *= 1.0 + 0.16 * drift * a3b;
+    tip += max(drift, 0.0) * 0.32 * a3b;
+    gap += max(-drift, 0.0) * 0.3 * a3b;
     if (a3 > 0.0) {
       float fA = snoise(vec3(dot(P, S1) * 7.0, dot(P, L1) * 1.3, dot(P, T1) * 7.0) + 13.0);
       float fB = snoise(vec3(dot(P, S2) * 7.0, dot(P, L2) * 1.3, dot(P, T2) * 7.0) + 23.0);
@@ -535,6 +537,10 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
   float tus = snoise(P * 1.45 + warpV * 0.6 + 33.0) * ff_aa(fw, 0.7) * 0.75 + snoise(P * 0.45 + 51.0) * ff_aa(fw, 2.2) * 0.15;
   float thin = smoothstep(0.35, 0.85, snoise(P * 0.16 + warpV * 0.5 + 71.0) * 0.5 + 0.5) * ff_aa(fw, 6.0);
   g *= 0.89 + 0.22 * smoothstep(-0.8, 0.8, tus);
+  // the sward is not one green: drifts of yellowing, seeding blades (~1–2 m) through the green, warmer and paler — hue
+  // and value together, as a meadow looks from a god's 30–60 m (one even green there read as felt)
+  float seedP = snoise(P * 0.62 + warpV * 0.8 + 9.0) * 0.7 + snoise(P * 1.7 + 19.0) * 0.3 * ff_aa(fw, 0.5);
+  g = mix(g, g * vec3(1.22, 1.1, 0.72) + vec3(0.01, 0.007, 0.0), smoothstep(0.15, 0.75, seedP) * 0.3 * ff_aa(fw, 1.2) * (1.0 - winter * 0.7));
   g = mix(g, g * vec3(1.2, 1.12, 0.86) + vec3(0.012, 0.008, 0.002), thin * 0.45);
   // the sward's own grain: clumps (~0.35 m) and tussocks (~1.1 m), each a lit crown with a shaded gap round it —
   // rounded and anti-aliased by the footprint, mean-preserving. Soft noise alone left the turf out of focus at 10–80 m

@@ -489,7 +489,8 @@ void main() {
       float nightG = smoothstep(0.1, -0.14, dot(normalize(pm), uSunDir));
       // (tied to the star's light at the world, so the band keeps its place against the night exposure everywhere)
       float sunL = dot(uSunE, vec3(0.2126, 0.7152, 0.0722));
-      col += vec3(0.32, 1.0, 0.5) * (2.2e-6 * path * nightG * sunL);
+      // (a thin line, as from the ISS: at 2.2e-6 it drew a broad neon-green halo round the night limb)
+      col += vec3(0.38, 1.0, 0.55) * (1.4e-6 * path * nightG * sunL);
     }
   }
   gl_FragColor = vec4(col, 1.0);

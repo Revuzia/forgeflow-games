@@ -566,3 +566,25 @@ test('integration: a person a natural storm throws is thrown by nature — if th
   assert.equal(god.god, 0, 'the god\'s own storm throws as the god');
   assert.deepEqual(god.deaths, ['the god'], `a fall from the god's storm is the god's doing: ${god.deaths}`);
 });
+
+test('integration: scraps of fuel that make a unit together light the hearth — the town does not stand round a cold one', () => {
+  // (2026-10-27, the sixth integration: planTendFire sends a tender when the fuels together make a unit (storeAny), but
+  // tendFire took only a whole unit of one fuel, so with 0.34 wood and 0.77 bark in store every grown-up of seed 3's
+  // 50-year world tended a hearth that never caught — 39 % of their time at year 50, no work and no wood cut:
+  // _harness/scratch/living/integrate/r6/tendfire.ts. work.ts tendFire now burns the scraps as one unit)
+  const { sim, st } = town();
+  const p = sim.u.planets[0], ps = p.people, A = ps.agents, c = sim.u.content;
+  const hearth = ps.of(st.id).find((b) => c.buildings.list[b.type].function === 'hearth' && b.progress >= 1);
+  assert.ok(hearth, 'the town has a hearth');
+  for (const it of c.itemsByTag.get('fuel') ?? []) st.store[it] = 0;
+  st.store[c.items.idx('wood')] = 0.4;
+  st.store[c.items.idx('bark')] = 0.8;
+  for (const b of ps.of(st.id)) if (c.buildings.list[b.type].function === 'hearth') b.fuel = 0;
+  let tending = 0, n = 0;
+  for (let k = 0; k < 180; k += 5) {
+    sim.step(5);
+    for (const s of ps.members.get(st.id) ?? []) if (!(A.flags[s] & 1)) { n++; if (A.task[s] === TASK.tendFire) tending++; }
+  }
+  assert.ok(ps.of(st.id).some((b) => c.buildings.list[b.type].function === 'hearth' && b.fuel > 0), 'a hearth is lit from the scraps');
+  assert.ok(tending / n < 0.15, `grown-ups tending the fire: ${(tending / n).toFixed(2)} of their time over three hours`);
+});

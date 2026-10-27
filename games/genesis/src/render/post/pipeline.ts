@@ -16,7 +16,7 @@
 
 import {
   DepthTexture, FloatType, HalfFloatType, LinearFilter, NearestFilter, RGBAFormat, RedFormat, RGFormat, ShaderMaterial,
-  UnsignedByteType, Vector2, Vector3, WebGLRenderTarget, AdditiveBlending, type Texture, type WebGLRenderer,
+  UnsignedByteType, Vector2, Vector3, Vector4, WebGLRenderTarget, AdditiveBlending, type Texture, type WebGLRenderer,
   type TextureDataType, type PixelFormat, type MagnificationTextureFilter,
 } from 'three';
 import { FullscreenQuad, passMaterial } from './fsquad.ts';
@@ -188,14 +188,35 @@ uniform float uDt;
 uniform float uCut;
 uniform float uKey;
 uniform vec2 uRange;
+// the incident-light guard (renderer.ts incidentMeter): x = log2 of the luminance an 18 % grey card would have in the
+// sun and sky at the camera, y = how much it holds (0 off: night, space, orbit's dark side), z / w = how far below / above
+// that grey the reflected metering may stray (EV). A reflected meter brings whatever fills the view to mid-grey: a
+// snowfield, a cloud deck or a white beach under a noon sun turned a dull grey, a dark wood lifted to a washed-out
+// noon. A camera metered by the light falling on the scene keeps snow white and shade dark; the reflected meter still
+// rules within the band (its framing, its taste), so the change is felt only where the view is far from average.
+uniform vec4 uIncident;
 void main() {
   vec2 s = texture(tLum, vec2(0.5)).rg;
   float avgLog = s.y > 1e-5 ? s.x / s.y : log2(0.02);
+  if (uIncident.y > 0.0) avgLog = mix(avgLog, clamp(avgLog, uIncident.x - uIncident.z, uIncident.x + uIncident.w), uIncident.y);
   float target = clamp(uKey / exp2(avgLog), uRange.x, uRange.y);
   float prev = texture(tPrev, vec2(0.5)).r;
   float rate = target < prev ? 2.2 : 1.1;
   float e = (uCut > 0.5 || prev <= 0.0) ? target : exp(mix(log(prev), log(target), 1.0 - exp(-uDt * rate)));
   gl_FragColor = vec4(e, target, 0.0, 1.0);
+}
+`;
+
+// (probes and the dev HUD) the last frame's metering packed into one RGBA float texel: log2 average luminance, the
+// adapted exposure, its target, the metered weight
+const METER_FRAG = /* glsl */ `
+varying vec2 vUv;
+uniform sampler2D tLum;
+uniform sampler2D tAdapt;
+void main() {
+  vec2 s = texture(tLum, vec2(0.5)).rg;
+  vec2 a = texture(tAdapt, vec2(0.5)).rg;
+  gl_FragColor = vec4(s.y > 1e-5 ? s.x / s.y : -99.0, a.x, a.y, s.y);
 }
 `;
 
@@ -508,6 +529,7 @@ export class PostPipeline {
   private lumMat = passMaterial(LUM_FRAG, { tIn: { value: null }, uSrcTexel: { value: new Vector2() }, uFirst: { value: 1 }, uLumFloor: { value: 0.004 } });
   private adaptMat = passMaterial(ADAPT_FRAG, {
     tLum: { value: null }, tPrev: { value: null }, uDt: { value: 0.016 }, uCut: { value: 1 }, uKey: { value: 0.16 }, uRange: { value: new Vector2(0.02, 6) },
+    uIncident: { value: new Vector4(0, 0, 1.5, 0.6) },
   });
   readonly tonemapMat = passMaterial(TONEMAP_FRAG, {
     tHDR: { value: null }, tBloom: { value: null }, tGod: { value: null }, tExposure: { value: null }, tMask: { value: null },
@@ -586,6 +608,13 @@ export class PostPipeline {
 
   /** exposure key (mid-grey target): lower at dusk so sunsets and twilight stay dusky instead of being lifted */
   setKey(key: number): void { this.adaptMat.uniforms.uKey.value = key; }
+  /**
+   * the incident-light guard: log2 of an 18 % grey card's luminance in the light at the camera, its weight (0 = off) and
+   * how far below / above it (EV) the reflected metering may read (ADAPT_FRAG)
+   */
+  setIncident(logGrey: number, weight: number, below = 1.5, above = 0.6): void {
+    (this.adaptMat.uniforms.uIncident.value as Vector4).set(logGrey, Math.max(0, Math.min(1, weight)), below, above);
+  }
   /** auto-exposure limits and the metering floor (luminance below which pixels do not count): night lowers both */
   setMetering(minExposure: number, maxExposure: number, lumFloor: number): void {
     (this.adaptMat.uniforms.uRange.value as Vector2).set(minExposure, maxExposure);
@@ -697,11 +726,29 @@ export class PostPipeline {
     fsq.render(r, this.fxaaMat, target);
   }
 
+  private meterRT: WebGLRenderTarget | null = null;
+  private meterMat: ShaderMaterial | null = null;
+  private readonly meterPx = new Float32Array(4);
+  /**
+   * (probes, the dev HUD; a GPU read — not for every frame) the last frame's metering: log2 of the metered average
+   * luminance (before the incident guard), the adapted exposure and its target
+   */
+  readMeter(r: WebGLRenderer, fsq: FullscreenQuad): { avgLog: number; exposure: number; target: number; weight: number } {
+    this.meterRT ??= rt(1, 1, FloatType, RGBAFormat, NearestFilter);
+    this.meterMat ??= passMaterial(METER_FRAG, { tLum: { value: null }, tAdapt: { value: null } });
+    this.meterMat.uniforms.tLum.value = this.lum[this.lum.length - 1].texture;
+    this.meterMat.uniforms.tAdapt.value = this.adapt[this.adaptIdx].texture;
+    fsq.render(r, this.meterMat, this.meterRT);
+    r.readRenderTargetPixels(this.meterRT, 0, 0, 1, 1, this.meterPx);
+    return { avgLog: this.meterPx[0], exposure: this.meterPx[1], target: this.meterPx[2], weight: this.meterPx[3] };
+  }
+
   /** the adapted exposure lives on the GPU; the dev HUD reads it rarely through this */
   exposureTexture(): Texture { return this.adapt[this.adaptIdx].texture; }
 
   dispose(): void {
-    for (const t of [this.hdr, this.sceneCopy, this.linDepth, this.atmoA, this.atmoB, this.godMask, this.godA, this.godB, this.ldr, ...this.bloomMips, ...this.lum, ...this.adapt]) t?.dispose();
+    for (const t of [this.hdr, this.sceneCopy, this.linDepth, this.atmoA, this.atmoB, this.godMask, this.godA, this.godB, this.ldr, ...this.bloomMips, ...this.lum, ...this.adapt, this.meterRT]) t?.dispose();
+    this.meterMat?.dispose();
   }
 }
 

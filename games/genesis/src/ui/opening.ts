@@ -89,6 +89,29 @@ const KINDLE_DAYS = 3;
 const STORM_DAYS = 2;
 /** water (or ice) deeper than this on a cell of an airless rock is "water poured on the rock" */
 const ROCK_WATER = 0.2;
+/*
+ * The speeds the whispers set. A preset is ticks per real second (1x is TICKS_PER_SECOND_1X: one tick, one game minute,
+ * a second; LIVING §1.1). The people's drop and both "let the day pass" acts were all 10x when 1x was ten ticks a second,
+ * and that 10x was 100 ticks a second (a 24-hour day in 14 s). At the new pace each beat gets the step that does what it
+ * needs. The figures are for Cinder, the opening's world (30-hour days of 1 800 ticks; people walk 2 m a tick). All
+ * three are steps the quiet HUD keeps (hud.ts QUIET_SPEEDS: pause, 1x, 10x, 100x, 1000x), so its lit button shows where
+ * time stands.
+ */
+/**
+ * The people are set down and time that was racing slows to this so their first day can be watched: at 10x they cross
+ * the ground at 20 m/s (the old 10x showed 25), and the 7 to 14 hours of daylight left on the morning side play out over
+ * 40 to 85 s. At 100x they would streak at 200 m/s through a day over in 4 to 8 s.
+ */
+const WATCH_SPEED = 10;
+/**
+ * "Let the day pass" (the first night coming, the first hearth awaited): 100x, a Cinder day in 18 s, the pace the old
+ * 10x had. The first night comes 4 to 8 s after the band is set down. Once fire is given, the first hearth glows some 14
+ * to 16 s later (0.8 to 0.9 of a day, measured on the barren path over three seeds), and the KINDLE_DAYS offer of
+ * Kindling comes after 54 s. At 10x those were 1 to 1.5 min to nightfall, 2.5 min to the hearth and 9 min to the offer.
+ */
+const DAY_SPEED = 100;
+/** "Let a century run": 1000x, the time-lapse. A year takes about 17 s and a century about half an hour (100x: 4.8 hours) */
+const CENTURY_SPEED = 1000;
 
 export class Opening {
   readonly root: HTMLDivElement;
@@ -590,7 +613,7 @@ export class Opening {
         return {
           beat, ack: late ? undefined : 'They know of fire now.',
           line: late ? 'Still no hearth. They know of fire, but none burns yet.' : night ? 'Night. Their first hearth is not lit yet.' : 'Watch for their first hearth.',
-          act: this.host.view.speed < 10 ? { label: 'let the day pass', run: () => this.host.setSpeed(10) } : undefined,
+          act: this.host.view.speed < DAY_SPEED ? { label: 'let the day pass', run: () => this.host.setSpeed(DAY_SPEED) } : undefined,
           later: late
             ? `Hold ${k('ui.gesture', 'G')} over them and draw the flame sigil: Kindling lights their hearths — or press ${k('ui.palette', '/')} and search “kindling”.`
             : `Time runs faster with ${k('time.speed10', '5')} and ${k('time.speed100', '7')}.`,
@@ -606,15 +629,16 @@ export class Opening {
       };
       case 'wait': return {
         beat, line: 'Watch them. Their first night is coming.',
-        act: { label: 'let the day pass', run: () => this.host.setSpeed(10) },
+        act: { label: 'let the day pass', run: () => this.host.setSpeed(DAY_SPEED) },
         // (the Touch, suggested once there is someone to lift)
         later: `Time runs faster with ${k('time.speed10', '5')} and ${k('time.speed100', '7')}; ${k('time.pause', 'Space')} stops it. Or come close and lift one with the Touch — drag them, and set them down gently.`,
       };
       case 'rest': return {
         beat, line: 'Leave them. Come back in a hundred years.',
-        // (1000×: the time-lapse, a year in ~17 s and a century in ~half an hour — the old 100× it was written for;
-        // presets are ticks a second since the living-world pace, LIVING §1.1, and 100× now takes a century 4.8 hours)
-        act: { label: 'let a century run', run: () => this.host.setSpeed(1000) },
+        // (CENTURY_SPEED, 1000×: the time-lapse, a year in ~17 s and a century in ~half an hour — the old 100× it was
+        // written for; presets are ticks a second since the living-world pace, LIVING §1.1, and 100× now takes a century
+        // 4.8 hours)
+        act: { label: 'let a century run', run: () => this.host.setSpeed(CENTURY_SPEED) },
       };
     }
   }
@@ -622,14 +646,17 @@ export class Opening {
   /**
    * the people's whisper: the Touch holds a band of plains folk — the next click on the ground sets them down. The camera
    * goes down to the ringed spot (green, near water, warm enough, the morning side), and time that was racing slows to
-   * 10× so their first day can be watched.
+   * WATCH_SPEED (10×) so their first day can be watched: the band at a brisk walk on screen and their daylight in about
+   * a minute. The 'wait' whisper's "let the day pass" (DAY_SPEED, 100×) then brings the night on in seconds. (It slowed to
+   * 10× before too, but that was 100 ticks a second, the same pace "let the day pass" asked for, so the button did
+   * nothing.)
    */
   private dropPeople(planet: number): void {
     const pv = this.host.view.planet(planet);
     if (pv) this.spot ??= this.findSpot(pv);
     const sp = this.spot;
     if (sp) this.host.lookAt(sp.planet, sp.pos, 520);
-    if (this.host.view.speed > 10) this.host.setSpeed(10);
+    if (this.host.view.speed > WATCH_SPEED) this.host.setSpeed(WATCH_SPEED);
     const p = this.host.powers.get('people');
     if (p) { this.deps.arm(p, { species: 'plains-folk', count: 30 }); this.armedPeople = true; return; }
     const poi = this.host.poi?.('homestead');

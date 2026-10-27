@@ -210,6 +210,11 @@ export class SignsLayer {
     this.poll(f);
     const st = this.stats;
     st.prophets = 0; st.called = 0; st.places = 0; st.animals = 0;
+    // (from the god's height a thread finds a prophet or a holy place; from orbit it would stand hundreds of metres off
+    // the limb into space: the threads fade there, and a holy place is a point of its light on the world)
+    const camAlt = cam.length() - pv.params.radius;
+    const orbit = smooth(1500, 3000, camAlt);
+    M.beams.scale = 1 - orbit;
     // ── prophets and the Called ──
     const A = pv.agents;
     if (A && A.flags2) {
@@ -272,13 +277,18 @@ export class SignsLayer {
       // its beacon: faint up close, a thread to find it by from afar
       const kb = 0.12 + 0.78 * smooth(90, 520, dist);
       M.beams.add(_c.copy(g).addScaledVector(up, look.lift * 0.3), up, Math.max(30, Math.min(900, dist * 0.32)), 0.18, cr, cg, cb, kb, cam, pl.id * 1.31);
+      if (orbit > 0) M.glints.add(g.x + up.x * look.lift, g.y + up.y * look.lift, g.z + up.z * look.lift, Math.max(3, dist * 0.004), cr, cg, cb, 0.55 * orbit);
       if (pl.kind === 'spring') {
         // rings of light spreading on the water, one after another (drawn after the water: a ground decal is under it)
+        // (fine and faint, spreading slowly from where the water wells up: broad bright rings read as a sonar's target,
+        // not a holy spring; a few pixels wide at any distance so the map still finds them)
         const lift = _h.copy(g).addScaledVector(up, 0.08);
         for (let j = 0; j < 3; j++) {
-          const ph = (f.real / 5 + j / 3) % 1;
-          M.ripples.add(lift.x, lift.y, lift.z, look.ring * (0.15 + 1.1 * ph), 0.25 + look.ring * 0.03 * (1 + ph), cr, cg, cb, 0.36 * Math.sin(Math.PI * ph) * (1 - 0.5 * ph));
+          const ph = (f.real / 6 + j / 3) % 1;
+          M.ripples.add(lift.x, lift.y, lift.z, look.ring * (0.12 + 0.95 * ph), Math.max(0.12 + look.ring * 0.012, dist * 0.0012), cr, cg, cb, 0.2 * Math.sin(Math.PI * ph) * (1 - 0.6 * ph));
         }
+        // the light welling up from below where the spring rises: a soft glow on the water
+        M.glints.add(lift.x, lift.y, lift.z, Math.max(look.ring * 0.22, dist * 0.006), cr, cg, cb, 0.22 + 0.06 * Math.sin(f.real * 0.8 + pl.id));
       } else if (pl.kind === 'mountain') {
         // a light on the peak
         const top = _c.copy(g).addScaledVector(up, look.lift);
@@ -362,8 +372,9 @@ export class SignsLayer {
       const tw = 0.5 + 0.5 * Math.sin(f.real * 1.1 + fxHash(M.id[i], 3) * 6.28);
       const k = (0.3 + 0.25 * tw) * (1 - smooth(300, 600, d));
       this.marks.glints.add(back.x, back.y, back.z, Math.max(0.3, d * 0.0045), ANIMAL_COL[0], ANIMAL_COL[1], ANIMAL_COL[2], k);
-      const L = decal(DECAL.light, [u.x * g, u.y * g, u.z * g], size * 4 + 2);
-      L.cr = ANIMAL_COL[0]; L.cg = ANIMAL_COL[1]; L.cb = ANIMAL_COL[2]; L.p0 = size * 4 + 2; L.p1 = 36 * k * (size + 0.5); L.p2 = size + 1.8; L.p3 = 1;
+      const L = decal(DECAL.light, [u.x * g, u.y * g, u.z * g], size * 3 + 1.5);
+      // (a little light on the beast, not a spotlight on the hillside: a broad bright pool read as a stage lamp)
+      L.cr = ANIMAL_COL[0]; L.cg = ANIMAL_COL[1]; L.cb = ANIMAL_COL[2]; L.p0 = size * 3 + 1.5; L.p1 = 22 * k * (size + 0.5); L.p2 = size + 1.8; L.p3 = 1;
       f.decals.add(L);
       this.stats.animals++;
     }

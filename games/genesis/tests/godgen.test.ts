@@ -15,7 +15,9 @@
 //   * the sigils (fx/sigils.ts): ONE glyph per sigil — the stroke the Touch traces and the miracle writes on the land
 //     is the UI recogniser's own template, so the recogniser reads each drawn glyph back as its sigil; every power's
 //     `sigil` has one; evenly sampled inside the unit box; none reads as one of the old gesture shapes (circle,
-//     spiral, zigzag, triangle, V, square, star — a $1-style shape distance); an invented miracle draws the fallback
+//     spiral, zigzag, triangle, V, square, star — a $1-style shape distance); an invented miracle draws the fallback;
+//     a landed glyph (fx/sigilfx.ts) lies on the ground, or on the water over a lake or the sea, and its depth test's
+//     slack grows with distance (the far terrain is drawn coarser: tested exactly, the glyph broke into dashes)
 //   * the signs (render/signs): prophets and the Called are found by AgentFlag2, a sacred animal by its id or the old
 //     id it replaced, the sim's events become sacred places and moments (an ordinary strike is no sign); the sea's
 //     drawback before a tsunami (fx/drawback.ts) lies on the coast's shallows, on the ground, never inland
@@ -39,8 +41,10 @@ import { FALLBACK_SIGIL, SIGIL_IDS, sigilOfDisaster, sigilOfMiracle, sigilStroke
 import { SHAPES, Unistroke, type Pt } from '../src/ui/unistroke.ts';
 import { BASE_PACK } from '../src/data/index.ts';
 import { AgentFlag2, type EntityRef, type HandView, type ProjectileView } from '../src/sim/types.ts';
-import { PLACE_LOOK, SignsLayer, animalIndex, markedPeople } from '../src/render/signs/signs.ts';
+import { PLACE_LOOK, SignsLayer, animalIndex, markedPeople, type SignsFrame } from '../src/render/signs/signs.ts';
 import { DRAWBACK_MAX, Drawback } from '../src/render/fx/drawback.ts';
+import { SigilMarks, landTop } from '../src/render/fx/sigilfx.ts';
+import { groundHeight } from '../src/sim/grid/surface.ts';
 import type { Decal, DecalPass } from '../src/render/fx/decals.ts';
 import { getGrid } from '../src/sim/grid/icogrid.ts';
 import { Noise3 } from '../src/sim/grid/noise.ts';
@@ -557,6 +561,49 @@ test('one glyph per sigil: what the Touch traces and the land shows is the strok
   assert.ok(!(FALLBACK_SIGIL in SHAPES), 'the fallback is not a castable sigil');
 });
 
+test('a sigil lands where the miracle falls: on the ground, on the water over a lake or the sea, never broken by the far terrain', () => {
+  const pv = slopeWorld();
+  const R = 3000;
+  const marks = new SigilMarks({});
+  const light = { r: 1, g: 0.7, b: 0.3 };
+  const radii = (m: { mesh: Mesh }): number[] => {
+    const pos = m.mesh.geometry.getAttribute('position');
+    const out: number[] = [];
+    for (let i = 0; i < pos.count; i++) out.push(Math.hypot(pos.getX(i), pos.getY(i), pos.getZ(i)));
+    return out;
+  };
+  const pool = () => (marks as unknown as { pool: { mesh: Mesh; mat: ShaderMaterial; live: boolean }[] }).pool;
+  // over the sea (west of the slope's shore the ground is under water, its surface at the datum)
+  const sea = new Vector3(-0.6, 0.05, 0.8).normalize();
+  const camNear = sea.clone().multiplyScalar(R + 120).add(new Vector3(0, 60, 0));
+  marks.land(pv, 'water', sea.clone().multiplyScalar(R - 36), 40, light, camNear, sea.clone().negate(), 0);
+  const onSea = radii(pool()[0]);
+  assert.ok(onSea.every((r) => r >= R - 0.5 && r < R + 4), `on the water's surface, not the bed 30 m under it (${Math.min(...onSea).toFixed(1)}…${Math.max(...onSea).toFixed(1)})`);
+  assert.ok(Math.abs(landTop(pv, sea) - R) < 0.5, 'the top of the sea is its surface');
+  // over the land: on the ground (the slope stands ~36 m over the datum there)
+  const land = new Vector3(0.6, 0.05, 0.8).normalize();
+  const camFar = land.clone().multiplyScalar(R + 500).add(new Vector3(0, 300, 0));
+  marks.land(pv, 'heal', land.clone().multiplyScalar(R + 36), 40, light, camFar, land.clone().negate(), 0);
+  const onLand = radii(pool()[1]);
+  for (const [i, r] of onLand.entries()) {
+    const pos = pool()[1].mesh.geometry.getAttribute('position');
+    const u = new Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
+    const g = groundHeight(pv.ground, u.x, u.y, u.z);
+    assert.ok(r > g && r < g + 3, `a hand's breadth over the ground (${(r - g).toFixed(2)} m)`);
+  }
+  // the depth test's slack grows with the distance (the drawn terrain is coarser far away): a far glyph is not cut
+  // into dashes by it, a near one is still hidden by a house in front of it
+  const bNear = pool()[0].mat.uniforms.uBias.value as number, bFar = pool()[1].mat.uniforms.uBias.value as number;
+  assert.ok(bNear >= 0.5 && bNear < 3 && bFar > bNear * 2, `slack near ${bNear.toFixed(2)} m, far ${bFar.toFixed(2)} m`);
+  // written in the light it was given, traced and then fading
+  marks.update(0.5, { add: () => {} } as unknown as DecalPass);
+  assert.equal(marks.live, 2);
+  assert.deepEqual((pool()[1].mat.uniforms.uCol.value as Vector3).toArray(), [1, 0.7, 0.3]);
+  marks.update(60, { add: () => {} } as unknown as DecalPass);
+  assert.equal(marks.live, 0, 'gone after its life');
+  marks.dispose();
+});
+
 // ───────────────────────────── signs (render/signs, render/fx/drawback) ─────────────────────────────
 
 test('signs: prophets and the Called are found by their flags, sacred animals by id or old id, every place kind has a look', () => {
@@ -617,6 +664,29 @@ test('signs: the lightning sigil read as a sign leaves its struck place glowing;
     assert.equal(kinds(q).filter((x) => x.kind === 'strike').length, 0, `${kind} after ${dt} s at ${pos}`);
     q.dispose();
   }
+  s.dispose();
+});
+
+test('signs: a holy place is a thread of light from the god\'s height and a point of its light from orbit', () => {
+  const pv = { ...slopeWorld(), id: 0, settlements: [], agents: undefined, animals: undefined } as unknown as PlanetView;
+  const R = 3000;
+  const s = new SignsLayer({});
+  const u = new Vector3(0.6, 0.05, 0.8).normalize();
+  s.onEvent({ t: 'sacred.place', tick: 1, planet: 0, pos: [u.x, u.y, u.z], data: { id: 3, kind: 'mountain', settlement: -1 } }, R, 0);
+  const frame = (camAlt: number) => {
+    const cam = u.clone().multiplyScalar(R + camAlt).add(new Vector3(0, camAlt * 0.3, 0));
+    s.update({
+      pv, camBody: cam, now: 1, real: 1, decals: { add: () => {} } as unknown as DecalPass,
+      vfx: { emit: () => 1, alive: () => true, set: () => {}, stop: () => {} } as unknown as SignsFrame['vfx'],
+      ticksSinceSnap: 0, personAt: () => null,
+    });
+    return { beams: s.marks.beams.count, glints: s.marks.glints.count };
+  };
+  const god = frame(600), orbit = frame(5000);
+  assert.ok(god.beams >= 1, 'from the god\'s height its thread stands over it');
+  assert.equal(orbit.beams, 0, 'from orbit no thread stands off the world into space');
+  assert.ok(orbit.glints > god.glints - 1 && orbit.glints >= 1, 'from orbit a point of its light marks it');
+  assert.equal(s.stats.places, 1);
   s.dispose();
 });
 

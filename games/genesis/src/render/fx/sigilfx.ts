@@ -3,8 +3,11 @@
 // radius, within reach of the eye), a bright head running along it, then the whole glyph glowing and fading as the
 // miracle's own effect takes over (render/fx/miracles.ts). The Touch traces the same glyph in the air as it casts
 // (render/hand.ts). The glyph is the power's `sigil` (sigilOfMiracle), drawn upright for the eye that watches: its
-// "up" is the camera's forward laid on the ground. Draped on the terrain (the ground's own height function), in the
-// FX layer over the composited image, soft-tested against the scene's depth (a house or a tree in the way hides it).
+// "up" is the camera's forward laid on the ground. Draped on the terrain (the ground's own height function) — or on
+// the water, where it falls on a lake or the sea — in the FX layer over the composited image, soft-tested against the
+// scene's depth with a slack that grows with distance (a house or a tree in the way hides it; the coarser far terrain
+// does not cut it into dashes). A line of the Touch's light deepened at its heart, the land pressed dark round it, so
+// its colour survives on sunlit ground.
 
 import { BufferAttribute, CustomBlending, DoubleSide, Group, Mesh, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, ZeroFactor, type IUniform } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
@@ -40,26 +43,32 @@ uniform vec3 uCol;
 uniform float uTrace;
 uniform float uK;
 uniform float uSoft;
+uniform float uBias;
 varying float vT;
 varying float vSide;
 varying float vZ;
 void main() {
-  float vis = fxSoft(vZ, uSoft);
+  // (the land under the glyph may lie a little above the terrain's own height function where the terrain is drawn
+  // coarser far away: tested against the scene's depth with a bias that grows with distance — tested exactly, a glyph
+  // seen from the god's height broke into dashes wherever the drawn ground stood over it — so only a thing standing
+  // well in front of it, a house, a tree, a hill, hides it)
+  float vis = clamp((fxSceneZ() + uBias - vZ) / max(uSoft, 1e-3), 0.0, 1.0);
   if (vis <= 0.0) discard;
   float x = abs(vSide);
-  // a bright line of light in a soft glow (the line is drawn some two fifths of the strip wide: the rest is its glow
-  // and the shadow pressed round it)
+  // a line of light in a soft glow (the line some two fifths of the strip wide: the rest is its glow and the shadow
+  // pressed round it)
   float core = exp(-x * x * 11.0), halo = exp(-x * x * 3.2) * (1.0 - smoothstep(0.8, 1.0, x));
   float drawn = 1.0 - smoothstep(uTrace - 0.003, uTrace + 0.003, vT);
   float head = exp(-pow((vT - uTrace) / 0.02, 2.0)) * (1.0 - step(0.999, uTrace));
-  float k = (core * 1.25 + halo * 0.45) * drawn + head * (core * 3.5 + halo);
-  // (the land under the stroke shadowed, as if the glyph were pressed into it, most under the line itself: on snow,
-  // sand, a ripe field or a lightning-lit hillside the glyph keeps its edge and its colour where light added to bright
-  // ground alone summed to a faint white thread)
-  float press = clamp(core * 0.5 + halo * 0.3, 0.0, 0.66) * (1.0 - smoothstep(0.85, 1.0, x)) * max(drawn, head);
-  // (a white-hot heart along the line, the colour in its glow)
-  vec3 col = mix(uCol, vec3(1.0), 0.25 * core * core);
-  gl_FragColor = vec4(col * k * uK * vis * fxDisplay(0.75), press * uK * vis);
+  // (kept below the tone curve's shoulder: brighter, the gold burned to a white thread on sunlit ground)
+  // (nearly display-referred, so it reads alike by day and in the dusk, when the view's exposure opens up)
+  float k = (core * 0.62 + halo * 0.26) * drawn + head * (core * 1.9 + halo * 0.52);
+  // the land under the stroke pressed dark, as if the glyph were burned into it, most under the line itself: on snow,
+  // sand, a ripe field or the sea the glyph keeps its edge and its colour
+  float press = clamp(core * 0.62 + halo * 0.34, 0.0, 0.8) * (1.0 - smoothstep(0.85, 1.0, x)) * max(drawn, head);
+  // (its colour deepened toward the line's heart, a white-hot point only at the running head)
+  vec3 col = mix(uCol, uCol * uCol, 0.35 * core) + vec3(1.0) * 0.3 * head * core;
+  gl_FragColor = vec4(col * k * uK * vis * fxDisplay(0.92), press * uK * vis);
 }
 `;
 
@@ -87,7 +96,7 @@ export class SigilMarks {
       vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthTest: false, depthWrite: false, side: DoubleSide,
       // light added over the land, which its alpha darkens a little first (premultiplied over; the target's alpha kept)
       blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor, blendSrcAlpha: ZeroFactor, blendDstAlpha: OneFactor,
-      uniforms: { ...this.fx, uCol: { value: new Vector3(1, 0.85, 0.5) }, uTrace: { value: 0 }, uK: { value: 0 }, uSoft: { value: 2 } },
+      uniforms: { ...this.fx, uCol: { value: new Vector3(1, 0.85, 0.5) }, uTrace: { value: 0 }, uK: { value: 0 }, uSoft: { value: 2 }, uBias: { value: 0.5 } },
     });
     const mesh = new Mesh(geo, mat);
     mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.layers.set(FX_LAYER); mesh.renderOrder = 12; mesh.visible = false;
@@ -112,6 +121,8 @@ export class SigilMarks {
     slot.col.set(light.r, light.g, light.b);
     slot.mat.uniforms.uCol.value.copy(slot.col);
     slot.mat.uniforms.uSoft.value = Math.max(1.5, slot.R * 0.05);
+    // (the depth test's slack: the drawn terrain's error grows with distance — about a metre at 80 m, ten at 800 m)
+    slot.mat.uniforms.uBias.value = Math.max(0.5, dist * 0.012);
     // the glyph's frame on the ground: up = the camera's forward laid flat (else north)
     const up = _u.copy(c).normalize();
     const fw = _f.copy(camFwd).addScaledVector(up, -camFwd.dot(up));
@@ -134,7 +145,7 @@ export class SigilMarks {
       for (let s = 0; s < 2; s++) {
         const sg = s === 0 ? 1 : -1;
         _p.copy(c).addScaledVector(right, (sx + ox * sg * w / R) * R).addScaledVector(fw, (sy + oy * sg * w / R) * R).normalize();
-        const g = groundHeight(pv.ground, _p.x, _p.y, _p.z) + lift;
+        const g = landTop(pv, _p) + lift;
         pos.setXYZ(i * 2 + s, _p.x * g, _p.y * g, _p.z * g);
       }
     }
@@ -161,4 +172,16 @@ export class SigilMarks {
   get live(): number { return this.pool.filter((s) => s.live).length; }
 
   dispose(): void { for (const s of this.pool) { s.mesh.geometry.dispose(); s.mat.dispose(); } }
+}
+
+/**
+ * the top of what a glyph lies on under unit vector u (body m): the ground, or the water over it where there is water
+ * (a sigil cast over a lake or the sea is written on its surface, not on the bed under it)
+ */
+export function landTop(pv: PlanetView, u: Vector3): number {
+  const g = groundHeight(pv.ground, u.x, u.y, u.z);
+  const water = pv.fields.get('water'), surf = pv.fields.get('surface');
+  if (!water || !surf) return g;
+  const w = pv.grid.sample(water, u.x, u.y, u.z);
+  return w > 0.05 ? Math.max(g, pv.params.radius + pv.grid.sample(surf, u.x, u.y, u.z) + w) : g;
 }

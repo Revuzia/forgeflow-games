@@ -107,6 +107,12 @@ const MOON_CAP = 0.028;
  * buildings, trees and people take the full moonlight: with the orange town spill gone, at 0.012 a moonlit village
  * sank to black under the night exposure ceiling and only its windows showed. */
 const MOON_SKY_SHARE = 0.43;
+/** incident meter (Renderer.incidentMeter): the sky's irradiance on level ground as a share of the star's at the top of
+ * the air (high sun), a bias (EV) on the grey card, and how far below / above it the reflected meter may read (EV) */
+const INC_SKY = 0.12;
+const INC_BIAS = -0.8;
+const INC_BELOW = 2.0;
+const INC_ABOVE = 0.4;
 const MOON_CLOUD_SHARE = 0.19;
 
 export class Renderer {
@@ -559,6 +565,10 @@ export class Renderer {
         orbitNight = (1 - smoothstepN(-0.35, 0.05, sub)) * smoothstepN(primaryVis.atmo.thickness * 1.5, primaryVis.atmo.thickness * 3, primaryVis.altitude);
         // (0.05 still metered a lamp-lit city up into AgX's cream: its streets and houses read white, not lamplight)
         key += (0.022 - key) * orbitNight;
+      } else if (primaryVis && !primaryVis.atmo.has) {
+        // an airless world from orbit over its night side (the starlit floor fills the view): a night key too, or the
+        // auto exposure lifts the starlit regolith to a flat grey day (it has no sun elevation to go by)
+        key += (0.03 - key) * this.airlessNight;
       }
       post.setKey(key);
       // (additive, world-events lane) over the night side from orbit the exposure may open further: the starlit,
@@ -568,6 +578,7 @@ export class Renderer {
       // and lamps still lead)
       const ceil = Math.exp(Math.log(6) + (Math.log(8.5) - Math.log(6)) * night);
       post.setMetering(0.02, ceil + (10 - ceil) * orbitNight, Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * night));
+      this.incidentMeter(view, primaryVis, starCol);
     }
     // bloom: half by day (a veil), full at dusk and night where lamps, windows and fire should glow
     post.bloomScale = 0.5 + 0.5 * (1 - smoothstepN(-0.02, 0.15, this.sunElevation));
@@ -597,6 +608,45 @@ export class Renderer {
     if (this.cutFrames > 0) this.cutFrames--;
     this.updateStats();
     this.stats.frameMs = performance.now() - t0;
+  }
+
+  /**
+   * The incident-light meter (post ADAPT_FRAG uIncident): the luminance an 18 % grey card on level ground would have in
+   * the sun and sky at the camera — the star's light through the air at the sun's elevation (the same column optical
+   * depths the white balance uses, Kasten–Young air mass) plus the sky's share — so the auto exposure is held within a
+   * band round what the LIGHT calls for, not only what the view reflects: a snowfield, a white beach or a cloud deck at
+   * noon stays white, a wood in shade stays shaded. Near the ground by day only; from orbit, at night and inside the
+   * twilight the reflected meter (and its night key) rules alone. INC_BIAS was calibrated against the metered
+   * log-average of ordinary lookdev views at Low (EV against the biased grey card: meadow at 08:30 / noon / 16:30 +0.0 /
+   * +0.1 / +0.5, town −0.3, valley at eye height −0.3, coast −0.8, a wood −1.5; a bare peak +0.8 and a snowfield +1.1 —
+   * so the band, −2.0 / +0.4 EV, leaves ordinary views alone and keeps snow and pale rock bright).
+   */
+  readonly incident = { logGrey: 0, weight: 0 };
+  private incidentMeter(view: WorldView, vis: PlanetVisual | null, starCol: [number, number, number]): void {
+    const inc = this.incident;
+    inc.weight = 0;
+    const el = this.sunElevation;
+    if (!vis || !vis.atmo.has) { this.post.setIncident(0, 0); return; }
+    const thick = vis.atmo.thickness;
+    const w = (1 - smoothstepN(thick * 0.6, thick * 1.8, vis.altitude)) * smoothstepN(0.03, 0.14, el);
+    if (w <= 0) { this.post.setIncident(0, 0); return; }
+    const pv = vis.pv;
+    const E = sunIlluminance(view.star.luminosity, Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1);
+    const u = vis.atmo.uniforms;
+    const elDeg = Math.asin(Math.min(1, el)) * 180 / Math.PI;
+    const airmass = 1 / (el + 0.15 * Math.pow(elDeg + 3.885, -1.253));
+    const tau = (i: 'x' | 'y' | 'z') => u.uBetaR.value[i] * u.uHR.value + u.uBetaMe.value[i] * u.uHM.value + u.uBetaO.value[i] * u.uOzone.value.y;
+    const T = 0.2126 * starCol[0] * Math.exp(-tau('x') * airmass) + 0.7152 * starCol[1] * Math.exp(-tau('y') * airmass) + 0.0722 * starCol[2] * Math.exp(-tau('z') * airmass);
+    const Lstar = 0.2126 * starCol[0] + 0.7152 * starCol[1] + 0.0722 * starCol[2];
+    // (under a heavy deck the sun is mostly hidden: the sim's cloud cover at the camera dims the direct share, so a storm
+    // is metered as the dim day it is, not held to a clear noon)
+    const cl = pv.fields.get('cloud');
+    let over = 0;
+    if (cl) { const c = vis.camBody; const rc = c.length() || 1; over = pv.grid.sample(cl, c.x / rc, c.y / rc, c.z / rc); }
+    const Eh = E * (T * el * (1 - 0.75 * smoothstepN(0.45, 1.0, over)) + INC_SKY * Lstar * (0.3 + 0.7 * el));
+    inc.logGrey = Math.log2(Math.max(1e-9, 0.18 * Eh / Math.PI)) + INC_BIAS;
+    inc.weight = w;
+    this.post.setIncident(inc.logGrey, w, INC_BELOW, INC_ABOVE);
   }
 
   /** the view did not move since the last frame (within a millimetre and a few micro-radians) */
@@ -737,9 +787,16 @@ export class Renderer {
     const farK = smoothstepN(Math.max(vis.atmo.thickness, 200) * 2, Math.max(vis.atmo.thickness, 200) * 6, vis.altitude);
     const subSolar = _v3.copy(vis.camBody).normalize().dot(u.uSunDirBody.value as Vector3);
     const lift = farK * (1 - smoothstepN(-0.35, 0.05, subSolar));
+    this.airlessNight = vis.atmo.has ? 0 : lift;
     const nf = this.nightFloor;
-    if (vis.atmo.has) nf.set(0.021, 0.028, 0.058).multiplyScalar(1 + 4 * lift);
-    else nf.set(0.0045, 0.005, 0.0064).multiplyScalar(1 + 7 * lift * farK);
+    // (×7 over a night side seen from orbit: at ×5 most of the night disc was black — the coasts and snowfields only
+    // where the snow caught the starlight)
+    if (vis.atmo.has) nf.set(0.021, 0.028, 0.058).multiplyScalar(1 + 6 * lift);
+    // (airless: starlight alone, as a share of the star's light so a dim or a bright star keeps the same look — ~1/1700
+    // of the sun at the ground, black-shadowed by day; from orbit the night half of the disc is a dim charcoal world
+    // ~4–5 EV under the sunlit crescent beside it (at 1/150, under the crescent's exposure, it was pure black against
+    // space), a little more as the night side fills the view)
+    else nf.set(0.92, 0.96, 1.1).multiplyScalar(E * (0.0006 + farK * (0.02 + 0.02 * lift)));
     (u.uNightAmbient.value as Vector3).add(nf);
     if (u.uNightRim) u.uNightRim.value = farK;
     // the thin starlit edge on the night limb (terrainmat FRAG_AMBIENT): while the view is mostly day (the exposure set
@@ -749,6 +806,8 @@ export class Renderer {
     if (u.uNightEdge) u.uNightEdge.value = farK * E * (vis.atmo.has ? 0.006 : 0.03) * (1 - lift);
     return on;
   }
+  /** 0..1: the view of an airless primary is its night side seen from afar (the exposure key follows it) */
+  private airlessNight = 0;
   /** this frame's night floor on the primary planet (starlight / airglow irradiance), shared with its clouds */
   readonly nightFloor = new Vector3();
   private wb = new Vector3(1, 1, 1);

@@ -1997,12 +1997,16 @@ passes before and after. Trade suites (boats, contact, plague, society, worlds):
 
 ---
 
-## 10. Integrated acceptance (sim integrator, 2026-10-21; probes and logs in `_harness/scratch/living/integrate/`, this pass in `r5/`)
+## 10. Integrated acceptance (sim integrators, 2026-10-21 and 2026-10-27; probes and logs in `_harness/scratch/living/integrate/`, the fifth pass in `r5/`, the sixth in `r6/`)
 
-Five integrators worked this tree; the first four (2026-10-14/15 and 2026-10-20, commits `58a1c495` … `fc35ab48`) were
+Six integrators worked this tree; the first four (2026-10-14/15 and 2026-10-20, commits `58a1c495` … `fc35ab48`) were
 cut off before they wrote this section, and on 2026-10-21 (00:00–03:30) the four lanes ran a second time over their
-finished work. This pass audited all of it, finished what was half-done, fixed what the integrated runs showed, ran the
-acceptance suite over 8 seeds and wrote `_harness/scratch/living/acceptance.json` (every metric, per seed).
+finished work. The fifth (2026-10-21, checkpoints `9ab25226`, `adeb2894`) audited all of it, finished what was half-done,
+fixed what its integrated runs showed (§10.2) and ran most of the suite, and was cut off before its results (its 50-year
+run of seed 5 stopped at year 44; the kin fixture, the speciation runs and the year-50 sessions never ran). The sixth
+(2026-10-27) re-audited the tree, kept the fifth's work, fixed one more bug its 50-year runs held (§10.2), added a
+migration test on a save of the previous 1.5 build, and ran the whole suite again on the final tree (`r6/`), writing
+`_harness/scratch/living/acceptance.json` (every metric, per seed).
 
 ### 10.1 What the integrated tree holds (audit)
 - **LAND, round 5** (§2.14): kept whole. Its 8-seed after-census had finished at 01:10 (before the other lanes' second
@@ -2034,6 +2038,16 @@ acceptance suite over 8 seeds and wrote `_harness/scratch/living/acceptance.json
   `hud.ts` and `inspector.ts` is unchanged (`prayer.answer`, `god.omen`, `prophet.call | abandon | foretell`,
   `settlement.sacred`, `content.material`, `content.plant`, `set`, `disaster.*`, `hand.*`; queries `omens`, `sacred`,
   `prophets`, `settlement`, `agent`, …); `tests/ui-living.test.ts`, `ui-defaults.test.ts`, `ui-embed.test.ts` run in the gate.
+- **The sixth pass's audit (2026-10-27).** The tree's sim files had not changed since 2026-10-21 06:03 (the last fix of
+  §10.2), so the fifth pass's acceptance runs started after that hour stand on the final code but for §10.2's last fix.
+  Re-read: every hunk of `git diff fc35ab48 9ab25226 -- src/sim src/data tests` (CONTENT's `ecology.ts` `mayDiverge`,
+  `lineageRested`, `meets`, `formName`, `herds.ts immigrant`, `inventions.ts` `god: 1`, `query.ts` `brought`; HISTORY's
+  `politics.ts` hard times / `ambientCap` / `refuses`, `knowledge.ts itemSeen`, `eras.ts` DWELL / PRACTICE; LAND's
+  round 5; RELATIONSHIP's air burst) and of `adeb2894` (`disease.ts sentLethality`, `disasters.ts lift`,
+  `projectiles.ts lost`): each function is wired and called, nothing is stubbed or left half-done, each has its test —
+  all kept. LAND's §2.14 is complete (its 8 after-seeds finished, `land/r5/out-after/done.txt`; tables in
+  `land/r5/out/table-final.txt`). RELATIONSHIP's §3.10 and the §9 owner fixes are unchanged. The UI team's tests
+  (`ui-living`, `ui-defaults`, `ui-embed`) pass in the gate; no command, snapshot field or query they use changed.
 
 ### 10.2 Fixed in this pass
 - **A plague the god sends kills by its wrath** (`life/disease.ts sentLethality`, `god/disasters.ts` spread). The god's
@@ -2060,11 +2074,31 @@ acceptance suite over 8 seeds and wrote `_harness/scratch/living/acceptance.json
   the old launch). The 50-year worlds of seeds 20261008 and 7 (and 1234, 1) loaded the tree before this fix: seed 7
   saw no natural throw in 50 years (its run is the fixed tree's), seed 20261008 two in year 39 (the same world until
   then); §10.4 lists the throws of every seed.
+- **Scraps of fuel light the hearth** (sixth pass; `people/work.ts tendFire`). The fifth pass's 50-year world of seed 3
+  ended with its grown-ups spending **0.39 of their time "tending the fire"** at year 50 (`r5/out/alone-live-3.json`,
+  the day slice), working 0.03 of it; from year 45 its food was all foraged and 85–100 % of its adults had no curiosity
+  left. Its year-50 save (`r6/tendfire.ts`): the one hearth out, 0.34 wood and 0.77 bark in store, and 94–100 % of the
+  adults at the hearth hour after hour, through the night. `planTendFire` (decide.ts) sends a tender when the fuels
+  TOGETHER make a unit (`storeAny ≥ 1`), and the tending takes a unit from one fuel only (`storeHas ≥ 1`): neither held
+  one, so the hearth never caught, nobody went to cut wood, and the hearth called them back (utility 0.98 by day and 1.54
+  at night with the fire out, above work). The tending now burns the scraps as one unit (their fuel values weighed). On the
+  same save the hearth caught in the first hour and the town went back to chopping, farming, herding and mining (tending
+  0.16 of the first hour, then 0). Test: `tests/living-integration.test.ts` "scraps of fuel that make a unit together
+  light the hearth …" (fails with the scraps branch taken out: the hearth stays cold). No saved state changed.
+- **A save of the previous 1.5 build** (sixth pass; `tests/living-migration.test.ts`, two tests). The second passes and
+  the fifth pass added optional saved fields under 1.5 without a bump (`HistState.hard / calam / sick / cp / ep`,
+  `DerivedAnimal.god`, `LandState.more`, `HuntParty.cache`, `Settlement.recent.sentPlague*`). A fixture written by the
+  1.5 build of 2026-10-21 00:10 (LAND's copy of that tree, `land/r5/base`, with `r6/fixture15.ts`: Aru and its daughter
+  Lune of one polity, Lune's grievance 0.52 with a famine being judged, a zebra the god brought) loads in this build with
+  the old build's own hash (`8a07301846261933`), the same people, towns, polity and grievance; the old grievance record
+  is judged by this build's rules (the famine weighed: 0.52 → 0.97, the calamity counters begun); a re-saved copy and two
+  loads live three days alike. (The old build's zebra reads as born here, as §4.8 says.)
 
 ### 10.3 The acceptance suite (how it ran)
-All on the integrated tree, two processes at a time on the shared 4-core machine (`r5/jobs-a.txt`, `r5/jobs-b.txt`,
-run by `queue.sh`; logs in `r5/out/`). `r5/summarize5.ts` checks every target below and writes
-`_harness/scratch/living/acceptance.json` (each metric with its target, value, met, and per seed).
+All on the final integrated tree, two processes at a time on the shared 4-core machine (`r6/jobs.txt`, run by
+`queue.sh`; logs in `r6/out/`; the fifth pass's runs on the tree before the last fix are kept in `r5/out/`).
+`r6/summarize6.ts` checks every target below and writes `_harness/scratch/living/acceptance.json` (each metric with its
+target, value, met, and per seed).
 - **A world left alone, 50 game years** (`alone.ts <seed> 50 3000`, the 8 census seeds `20261008 7 1234 1 2 3 4 5`): 30
   stone-age plains folk as a band on the n = 64 sandbox, natural disasters on, the god silent, at 3000x (level 2). Each
   year: people and demography from the ledger, food by source, hunts, herds, crops, fishing, houses, needs, gatherings,
@@ -2080,10 +2114,61 @@ run by `queue.sh`; logs in `r5/out/`). `r5/summarize5.ts` checks every target be
   records the four values at the start, after a day and at the end, the original townsfolk killed, what the town did
   (task shares, events) and what it holds. The same sessions ran on the biggest town of each year-50 world
   (`FROM=y50`, natural disasters on, the town's own risen prophet where it has one).
-- **The kin fixture** (`history/kin.ts`, seeds 1–8, 20 years, and its control), **speciation without people**
-  (`content/r2/spec.ts`, 4 seeds × 30 years), **the fire and day probes** (`pace/live/pace.ts fire` 4 seeds × 2 years
-  without people, `daily` 6 seeds), the **plague** at the default wrath (`relationship/rel2.ts lethality`, 4 seeds), and
-  LAND's round-5 census (§2.14, 8 seeds × 8 years).
+- **The kin fixture** (`history/kin.ts <seed> 20 i6`, seeds 1–8, 20 years, and its control `CONTROL=1 … i6c`),
+  **speciation without people** (`content/r2/spec.ts`, `TAGX=-i6`, 4 seeds × 30 years), **the fire and day probes**
+  (`pace/live/pace.ts fire` 4 seeds × 6 years without people — the target reads years 1–2, years 3–6 show where the
+  as-built world goes; `daily` 6 seeds), the **plague** at the default wrath (`relationship/rel2.ts lethality`,
+  `REL_ONLY=plague`, 4 seeds), and LAND's round-5 census (§2.14, 8 seeds × 8 years, the lane's own runs).
 
 ### 10.4 Results
-*(integrator's runs in progress — results pending)*
+
+**The god's sessions** (`god.ts`, seeds 1–8, the 30-person bronze town; `r6/out/god-*.json`, 96 sessions, none failed).
+The four values are means over the 8 seeds of the town's people (query `regard`), at the start → a day after → the end
+of the session; "killed" is the share of the original townsfolk dead by the end. All 96 sessions are identical, value
+for value, to the fifth pass's runs on the tree before §10.2's last fixes (`r5/out/god-*.json`): none of the fixes is
+on their path, and the runs reproduce.
+
+| session | killed | faith | fear | trust | loyalty | the town's response (first watch; events over the 8 seeds) |
+|---|---|---|---|---|---|---|
+| nothing (control, 6 days) | 0.4 % | 0.18 → 0.18 → 0.17 | 0.06 → 0.06 → 0.05 | 0.09 → 0.09 → 0.09 | 0.04 → 0.04 → 0.04 | quarrying 24 %, crafts 16 %, building 12 %, children at play 12 %; 8 festivals, 10 harvests |
+| thunderstorm over the town (6 h) | 0 | 0.18 → 0.22 → 0.22 | 0.06 → 0.07 → 0.07 | 0.09 → 0.10 → 0.10 | 0.04 → 0.04 → 0.04 | 69 % sheltering in the first 6 h (awake adults inside or sheltering 0.61, 0.26–0.96); outdoor work 72 % below the control; 8 prayers raised (all lapsed: the storm passed) |
+| default meteor (wrath 0.3) | **18.3 %** (10–31 %) | 0.18 → 0.24 → **0.46** | 0.06 → 0.08 → **0.41** | 0.09 → 0.11 → **0.00** | 0.04 → 0.04 → 0.01 | warned on all 8 (12-tick warning, 36-minute streak); 94 % evacuating in the first watch; 65 % of buildings standing after the blow, never fallen, 2–7 rebuilt within 10 days; 28 prayers raised, 10 funerals |
+| drought, every prayer answered | 0.4 % | 0.18 → 0.18 → **0.92** | 0.06 → 0.06 → 0.26 | 0.09 → 0.09 → **0.66** | 0.04 → 0.04 → 0.12 | 24 prayers for rain raised and answered (24 rains); worship 9 % of the first watch |
+| drought, prayers left to lapse | 0.8 % (≤ 3.3 %) | 0.18 → 0.18 → 0.66 | 0.06 → 0.06 → 0.34 | 0.09 → 0.09 → **0.00** | 0.04 → 0.04 → 0.01 | 13 prayers raised, 7 lapsed; one town left its dry site and was founded again nearby |
+| prophet, three prophecies fulfilled | 0.4 % | 0.18 → 0.25 → **0.94** | 0.06 → 0.06 → 0.10 | 0.09 → 0.10 → **0.81** | 0.04 → 0.08 → **0.63** | credibility 0.705 on all 8; 8 called, 16 foretold, 8 fulfilled; one prophet persecuted |
+| prophet, three prophecies failed | 0.4 % | 0.18 → 0.25 → **0.10** | 0.06 → 0.06 → 0.05 | 0.09 → 0.10 → 0.00 | 0.04 → 0.08 → 0.02 | credibility 0 on all 8 |
+| comet read by the prophet, made true | 0.4 % | 0.18 → 0.49 → 0.76 | 0.06 → 0.12 → 0.14 | 0.09 → 0.11 → **0.28** | 0.04 → 0.08 → **0.19** | credibility 0.475; 16 omens, 8 fulfilled; 5 prophets persecuted |
+| comet read by the prophet, contradicted | 0.4 % | 0.18 → 0.49 → 0.57 | 0.06 → 0.12 → 0.12 | 0.09 → 0.11 → 0.22 | 0.04 → 0.08 → 0.09 | credibility 0.05; 8 failed |
+| "introduce mithril" (20 days) | 2.4 % | 0.18 → 0.22 → 0.21 | 0.06 → 0.07 → 0.05 | 0.09 → 0.16 → 0.17 | 0.04 → 0.04 → 0.04 | 55–66 deposit cells; 17–49 ore in store by day 10, 5 crafts taught; mithril tools on 5 of 8 by day 10, on all 8 by day 20; 16 "first made" lines |
+| an iron vein within reach | 2.0 % | 0.18 → 0.19 → 0.23 | 0.06 → 0.06 → 0.06 | 0.09 → 0.09 → 0.13 | 0.04 → 0.04 → 0.03 | laid 158–210 m out on 8 of 8; untouched while nobody can smelt iron, mined on day 10.2–12.1 once iron smelting is taught (10–56 ore by day 15) |
+| a new crop (sunroot, two game years) | 2.0 % | 0.18 → 0.21 → 0.21 | 0.06 → 0.07 → 0.07 | 0.09 → 0.10 → 0.10 | 0.04 → 0.04 → 0.04 | taken up on 8 of 8: 7–21 sowings, 6–16 harvests, 569–2 160 sunroot in store |
+
+(The deaths in the 20-day and two-year sessions are the town's ordinary deaths: the control lost 0.4 % in 6 days.)
+What the people make of their god follows what it does: harm builds **fear** and, unless prayers are answered, costs
+**trust**; prayers answered and prophecies fulfilled build **trust** and **loyalty**; a sign raises **faith** at once
+whatever comes after; gifts of material and crops raise trust a little and fear not at all.
+
+*(the 50-year worlds, the year-50 sessions, the kin fixture, speciation, fire, day and plague probes: the sixth
+integration's runs in progress — `r6/out/`; results pending)*
+
+### 10.5 Lightning fires on the as-built world (a known miss, measured)
+- **Target** (§1.4): 2–12 lightning-started fires a world-year on the n = 64 sandbox without people (4 seeds × 2 years),
+  ≥ 70 % in the dry half-year, ≤ 5 % of the land burnt a year.
+- **Final tree** (`pace/live/pace.ts fire`, 4 seeds × **6** years, `r6/out/fire-integ6.log`): years 1–2 **0.13** a
+  world-year (one fire in 8 world-years: seed 1, year 2); year 3 0.25; years 4–6 **4.9** a world-year (1–10 per world),
+  95 % in the dry half; the land burnt ≤ 5.3 % a year but for one year of 8.5 % (seed 20261008, year 4). The fire
+  seasons work — from the fourth year.
+- **Cause** (`r6/moist2.ts`, seeds 20261008 and 7, 4 years; `r6/out/moist2-*.log`): PACE's fire seasons strike grass and
+  scrub country (and forest dried below 0.18) whose soil holds less than 0.3 of water. CONTENT's soil rebalance (§4.5,
+  §4.7) builds the world wetter and sown almost all as forest, and the world then dries toward its own climate over its
+  first years: fire-country cell-days 3 / 75 / 3 357 / 12 544 in years 1–4 of seed 20261008 (1 324 / 5 507 / 7 444 /
+  18 635 on seed 7); forest soil moisture median 0.665 → 0.572; warm, rainless, fuelled fire-country samples under the
+  0.3 cure 0 / 0 / 34 / 1 247. On the same code with the old soil, 4.0 a world-year in years 1–2 (2 seeds,
+  `out/r4/fire-oldsoil.log`).
+- **Not changed, and why.** The fourth integrator's cure what-ifs (`out/r4/fire-*.log`, kept in `acceptance.json`
+  under this metric) show that a cure loose enough for years 1–2 overshoots once the world has dried — a forest cure of
+  0.48 / 0.50 / 0.53 gave 1.0 / 1.5 / 3.25 a world-year in years 1–2 and 11.5 / 14 / 19.5 in years 3–4, up to 10.3 % of
+  the land burnt in a year — and with the 0.53 cure the time-lapse fidelity test failed (`tests/perf-lapse3.test.ts`
+  "unwatched worlds …": Verdance's plant cover −5.8 % against 1x, `out/r4/check-superseded-cure053.log`). The fix belongs to the world's spin-up (built at
+  its own equilibrium: CONTENT's open-grassland ≥ 3 % and tree-mix drift targets, §4.7, are unmet for the same reason),
+  not to the fire's thresholds. People do not wait on it: fire-keeping comes by other roads (§10.4, the 50-year worlds).

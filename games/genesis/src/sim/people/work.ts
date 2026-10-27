@@ -398,9 +398,23 @@ function tendFire(x: PCtx, s: number, st: Settlement | undefined): void {
   if (b.fuel <= 0 && !fireSourceNear(x, st)) return;
   // the best fuel at hand
   let fuel = 0;
-  for (const it of x.c.itemsByTag.get('fuel') ?? []) {
+  const fuels = x.c.itemsByTag.get('fuel') ?? [];
+  for (const it of fuels) {
     if (storeHas(st, it) < 1) continue;
     if (storeTake(st, it, 1) >= 1) { fuel = x.c.items.list[it].fuel ?? 1; break; }
+  }
+  // (LIVING integration 2026-10-27: scraps make a unit. planTendFire sends a tender when the fuels TOGETHER make a unit
+  // (decide.ts storeAny); taking only a whole unit of one, a town down to 0.34 wood and 0.77 bark sent everyone, night and
+  // day, to a hearth that never caught: seed 3's 50-year world, 39 % of its adults' time at year 50, no work, no wood cut —
+  // _harness/scratch/living/integrate/r6/tendfire.ts)
+  if (fuel <= 0 && storeAny(st, fuels) >= 1) {
+    let q = 0;
+    for (const it of fuels) {
+      const t = storeTake(st, it, Math.min(storeHas(st, it), 1 - q));
+      fuel += t * (x.c.items.list[it].fuel ?? 1);
+      q += t;
+      if (q >= 0.999) break;
+    }
   }
   if (fuel <= 0) return;
   const was = b.fuel > 0;
