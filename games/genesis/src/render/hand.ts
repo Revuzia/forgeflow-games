@@ -48,7 +48,7 @@ import { NOISE_GLSL } from './shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from './shaders/atmosphere.glsl.ts';
 import { ADD_LIGHT, FX_DEPTH_GLSL, FX_LAYER, clamp01, fxHash, smooth } from './fx/fxcommon.ts';
 import { DECAL, decal, type DecalPass } from './fx/decals.ts';
-import { HELD_SHARE, presentScale, touchSize } from './fx/present.ts';
+import { HELD_SHARE, heldTrueSize, presentScale, touchSize } from './fx/present.ts';
 import { sigilOfMiracle, sigilStroke } from './fx/sigils.ts';
 import type { PlanetView } from '../client/worldview.ts';
 import type { HandView } from '../sim/types.ts';
@@ -1441,11 +1441,7 @@ export class HandVisual {
     if (k === 'agent') { this.heldDrawn = 1.8; return; }
     if (k === 'animal') { this.heldDrawn = Math.max(1.4, HELD_SHARE * L); return; }
     // its true size (a boulder by its mass, a tree a dozen metres, a hut a few), drawn at least HELD_SHARE of the Touch
-    let sTrue: number, unit: number;
-    if (k === 'rock') { sTrue = 2 * Math.max(0.5, Math.cbrt((3 * Math.max(50, this.heldId) / 2600) / (4 * Math.PI))); unit = 2; }
-    else if (k === 'tree') { sTrue = 12; unit = 1; }
-    else if (k === 'building') { sTrue = 4.5; unit = 4.5; }
-    else { sTrue = 1.2; unit = 2; }
+    const { size: sTrue, unit } = heldTrueSize(k, this.heldId);
     const drawn = presentScale(sTrue, L, -1);
     this.heldDrawn = drawn;
     let mesh = this.heldMeshes.get(k);

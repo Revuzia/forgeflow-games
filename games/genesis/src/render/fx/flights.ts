@@ -4,8 +4,10 @@
 // 'thrown' event (where, how fast, from how high, what) and the 'landed' / 'splash' events arrive together. The
 // renderer therefore flies each throw itself, in FX time, along the same ballistic arc under the planet's gravity
 // (a few real seconds), and plays the landing when ITS flight comes down (the sim's landing event is held until then).
-// What flies is drawn: a boulder, an uprooted tree, a bundle, a hut torn off its foundations (lit props, tumbling), a
-// person (the crowds draw them where the flight says, tumbling, in the thrown pose); a pale streak of displaced air
+// What flies is drawn: a boulder, an uprooted tree, a bundle, a hut torn off its foundations (lit props, tumbling about
+// their middle — the very meshes the Touch holds them as, at the size it drew them, render/hand.ts heldPropGeometry and
+// present.ts heldTrueSize, so nothing changes shape or pops as it is let go), a person (the crowds draw them where the
+// flight says, tumbling, in the thrown pose); a pale streak of displaced air
 // trails anything fast. (There is no creature to fly: LIVING §3.5 — the sim never sends one.) Projectiles the snapshot still carries
 // that no event announced (a long flight, a gravity slip, a reload) are flown from their snapshot state.
 
@@ -14,7 +16,8 @@ import type { PlanetView } from '../../client/worldview.ts';
 import type { ProjectileView, SimEvent } from '../../sim/types.ts';
 import { AnimState } from '../../sim/types.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
-import { boulderGeo } from '../hand.ts';
+import { heldPropGeometry, makeLeafPropMaterial } from '../hand.ts';
+import { heldTrueSize } from './present.ts';
 import { makePropMaterial } from './propmat.ts';
 import { SYS } from './vfx.ts';
 import type { FxCtx } from './disasters.ts';
@@ -31,7 +34,11 @@ interface Flight {
   last: number;
   mesh: Mesh | null;
   spin: Vector3;
+  /** its resting frame at the throw (its up the ground's up, its x along the flight), the tumble turns it from there */
+  base: Matrix4 | null;
+  /** its true size (m) along its mesh's span `unit` (present.ts heldTrueSize) */
   size: number;
+  unit: number;
   landing: SimEvent | null;
   trail: number;
   /** set down, not thrown (the Touch let it go barely moving): a person comes down on their feet */
@@ -44,7 +51,8 @@ export class Flights {
   readonly group = new Group();
   private flights = new Map<number, Flight>();
   private mat: MeshStandardMaterial | null = null;
-  private geos = new Map<string, BufferGeometry>();
+  private leafMat: MeshStandardMaterial | null = null;
+  private geos = new Map<string, { geo: BufferGeometry; mid: Vector3 }>();
   private shared: Record<string, IUniform>;
   private seenProj = new Set<number>();
   /** people flying now: AGENT id → body-frame point and tumble (the crowds draw them) */
@@ -70,9 +78,10 @@ export class Flights {
 
   /**
    * a 'thrown' event: fly it; a 'landed' / 'splash' for a flight in the air: hold it until the flight lands.
-   * `heldAgent`: the person the Touch held until this frame, if any (who a thrown 'agent' is when the event does not say)
+   * `heldAgent`: the id of what the Touch held until this frame, if any — who a thrown 'agent' is when the event does
+   * not say; with `heldKind` (what it held) also a boulder's mass, so it flies at the size it was held at
    */
-  onEvent(e: SimEvent, ctx: FxCtx, heldAgent = -1): boolean {
+  onEvent(e: SimEvent, ctx: FxCtx, heldAgent = -1, heldKind?: string): boolean {
     const data = (e.data ?? {}) as { id?: number; payload?: string; vel?: number[]; agent?: number; what?: number };
     if (e.t === 'thrown' && e.pos) {
       const id = typeof data.id === 'number' ? data.id : this.nextLocal++;
@@ -83,7 +92,10 @@ export class Flights {
       const kind = data.payload ?? 'rock';
       // who flies, for a person: the event's word (data.agent / data.what) else the one the Touch just let go of; the
       // snapshot's projectile fills it in otherwise (update)
-      const what = kind === 'agent' ? (typeof data.agent === 'number' ? data.agent : typeof data.what === 'number' ? data.what : heldAgent) : -1;
+      const fromHeld = heldAgent >= 0 && (heldKind === undefined ? kind === 'agent' : heldKind === kind);
+      const what = kind === 'agent'
+        ? (typeof data.agent === 'number' ? data.agent : typeof data.what === 'number' ? data.what : fromHeld ? heldAgent : -1)
+        : typeof data.what === 'number' ? data.what : fromHeld ? heldAgent : -1;
       this.start(id, kind, what, p, v, ctx);
       // the sim's landing may already be queued behind it
       const held = this.holdLanding.get(id);
@@ -101,17 +113,35 @@ export class Flights {
 
   private start(id: number, kind: string, what: number, p: Vector3, v: Vector3, ctx: FxCtx): void {
     if (this.flights.has(id)) return;
-    const f: Flight = { id, kind, what, p: p.clone(), v: v.clone(), t0: ctx.now, last: ctx.now, mesh: null, spin: new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(), size: 1, landing: null, trail: 0, gentle: v.length() < 3.5 };
+    const f: Flight = { id, kind, what, p: p.clone(), v: v.clone(), t0: ctx.now, last: ctx.now, mesh: null, spin: new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(), size: 1, unit: 1, base: null, landing: null, trail: 0, gentle: v.length() < 3.5 };
     if (kind === 'rock' || kind === 'tree' || kind === 'item' || kind === 'building') {
+      // (the mesh the Touch held it as — an uprooted tree's leaf sprays alpha-tested — tumbling about its middle)
       if (!this.mat) this.mat = makePropMaterial(this.shared, { key: 'flight', roughness: 0.9 });
-      let geo = this.geos.get(kind);
-      if (!geo) { geo = kind === 'rock' ? boulderGeo(11) : boulderGeo(5); this.geos.set(kind, geo); }
-      f.mesh = new Mesh(geo, this.mat);
+      if (kind === 'tree' && !this.leafMat) this.leafMat = makeLeafPropMaterial(this.shared);
+      let g = this.geos.get(kind);
+      if (!g) {
+        const geo = heldPropGeometry(kind);
+        if (!geo.boundingBox) geo.computeBoundingBox();
+        g = { geo, mid: geo.boundingBox!.getCenter(new Vector3()) };
+        this.geos.set(kind, g);
+      }
+      f.mesh = new Mesh(g.geo, kind === 'tree' ? this.leafMat! : this.mat);
       f.mesh.matrixAutoUpdate = false;
       f.mesh.frustumCulled = false;
       f.mesh.layers.enable(1);
       this.group.add(f.mesh);
-      f.size = kind === 'rock' ? 0.8 : kind === 'tree' ? 2.5 : kind === 'building' ? 3 : 0.6;
+      const ts = heldTrueSize(kind, what);
+      f.size = ts.size; f.unit = ts.unit;
+      // upright where it was let go (a tree's crown up, as the Touch held it), its x along the flight; a long thing
+      // turns end over end about the level axis across its flight (a hurled log does), a boulder any way
+      const up = p.clone().normalize();
+      const tv = v.clone().addScaledVector(up, -v.dot(up));
+      if (tv.lengthSq() < 1e-8) tv.set(0, 1, 0).cross(up);
+      if (tv.lengthSq() < 1e-8) tv.set(1, 0, 0).cross(up);
+      tv.normalize();
+      const across = new Vector3().crossVectors(tv, up).normalize();
+      f.base = new Matrix4().makeBasis(tv, up, across);
+      if (kind === 'tree' || kind === 'building') f.spin.copy(across).addScaledVector(f.spin, 0.15).normalize();
     }
     // (a puff of displaced air behind a hurled boulder, tree or hut; a person or a beast in the air is left clear to see —
     // the streak of the god's light behind them is throwfx's — a white puff round a flying villager hid them)
@@ -171,8 +201,15 @@ export class Flights {
         else if (f.gentle) this.agentPins.set(who, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: 0, anim: AnimState.idle });
         else this.agentPins.set(who, { x: f.p.x + up.x * 1.6, y: f.p.y + up.y * 1.6, z: f.p.z + up.z * 1.6, tumble: age * 5.5, anim: AnimState.thrown });
       } else if (f.mesh) {
-        const s = this.sizeOf ? this.sizeOf(f.kind, f.size, age, f.p, f.v, id) : f.size;
-        _m.makeRotationAxis(f.spin, age * 6).scale(_q.set(s, s, s)).setPosition(f.p);
+        const s = (this.sizeOf ? this.sizeOf(f.kind, f.size, age, f.p, f.v, id) : f.size) / f.unit;
+        // tumbling about its middle (a tree's mesh stands on its foot, a hut on its floor): p − R·S·mid
+        // (a tree turns slower than a boulder: it is long, and it reads as a tree only while it is not a blur)
+        const mid = this.geos.get(f.kind)?.mid;
+        _m.makeRotationAxis(f.spin, age * (f.kind === 'tree' || f.kind === 'building' ? 2.2 : 6));
+        if (f.base) _m.multiply(f.base);
+        _m.scale(_q.set(s, s, s));
+        if (mid) _q.copy(mid).applyMatrix4(_m); else _q.set(0, 0, 0);
+        _m.setPosition(f.p.x - _q.x, f.p.y - _q.y, f.p.z - _q.z);
         f.mesh.matrix.copy(_m);
         f.mesh.matrixWorldNeedsUpdate = true;
       }
@@ -193,8 +230,10 @@ export class Flights {
   dispose(): void {
     for (const f of this.flights.values()) if (f.mesh) this.group.remove(f.mesh);
     this.flights.clear();
-    for (const g of this.geos.values()) g.dispose();
+    // (the tree's and the hut's meshes are the generators' cached ones: only the boulder and the bundle are ours)
+    for (const [k, g] of this.geos) if (k === 'rock' || k === 'item') g.geo.dispose();
     this.mat?.dispose();
+    this.leafMat?.dispose();
   }
 }
 

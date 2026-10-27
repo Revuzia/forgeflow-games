@@ -465,12 +465,13 @@ export class GodFx {
       case 'eruption': this.addShake(p, 0.5, 4000); M.disasters.onEvent(e, ctx); break;
       case 'collapsed': case 'landslide': case 'steam': case 'fireball': M.disasters.onEvent(e, ctx); break;
       case 'thrown': case 'landed': case 'splash': {
-        // (a person hurled from the Touch: it held them until this frame — events run before the Touch updates)
+        // (a thing hurled from the Touch: it held it until this frame — events run before the Touch updates — so who a
+        // person is, and how heavy a boulder, are what it held)
         // (measured over the ground, not through it: the event's point is on the datum sphere, the grip over the land)
         const g = this.hand.grip, gl = g.length() || 1;
         const along = p ? Math.acos(Math.max(-1, Math.min(1, g.dot(p) / (gl * R)))) * R : Infinity;
-        const fromTouch = e.t === 'thrown' && this.hand.heldKind === 'agent' && along < Math.max(60, this.hand.scale * 4);
-        if (!M.flights.onEvent(e, ctx, fromTouch ? this.hand.heldId : -1)) M.disasters.onEvent(e, ctx);
+        const fromTouch = e.t === 'thrown' && this.hand.heldKind !== '' && along < Math.max(60, this.hand.scale * 4);
+        if (!M.flights.onEvent(e, ctx, fromTouch ? this.hand.heldId : -1, fromTouch ? this.hand.heldKind : undefined)) M.disasters.onEvent(e, ctx);
         break;
       }
       case 'lightning': {

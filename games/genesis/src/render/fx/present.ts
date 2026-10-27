@@ -63,3 +63,17 @@ export function flightTime(vUp: number, h0: number, g: number): number {
   const gg = Math.max(0.1, g);
   return (vUp + Math.sqrt(Math.max(0, vUp * vUp + 2 * gg * Math.max(0, h0)))) / gg;
 }
+
+/**
+ * The true size (m) of a thing the god lifts or hurls, and the span of its mesh (render/hand.ts heldPropGeometry) that
+ * size is measured along — so the Touch draws it held and the flight draws it hurled at the same size, with no pop when
+ * it is let go: a boulder by its mass (`id`, kg: ProjectileView.what / HandView.held.id; its diameter, the mesh's ~2),
+ * an uprooted tree a dozen metres tall (the mesh is unit height), a hut a few metres across (the mesh in metres), a
+ * bundle of goods (the mesh's ~2).
+ */
+export function heldTrueSize(kind: string, id = -1): { size: number; unit: number } {
+  if (kind === 'rock') return { size: 2 * Math.max(0.5, Math.cbrt((3 * Math.max(50, id) / 2600) / (4 * Math.PI))), unit: 2 };
+  if (kind === 'tree') return { size: 12, unit: 1 };
+  if (kind === 'building') return { size: 4.5, unit: 4.5 };
+  return { size: 1.2, unit: 2 };
+}

@@ -18,10 +18,12 @@
 //   moments          an omen read in a town (a ring of light spreading through it — warm where they read favour, a
 //                    cold violet where they read anger), a lightning strike made a sign (the struck place left glowing,
 //                    light lingering over it), a prophet called (a column of light coming down onto them), a prophecy
-//                    fulfilled, a place hallowed, a beast taken for holy, a prophet's death (their thread lifting away)
+//                    fulfilled (a warm ring through the town) or failed (a faint grey one, closing in), a place hallowed,
+//                    a beast taken for holy, a prophet's death (their thread lifting away), a prophet the god turned
+//                    from (their thread drawn up off them into the sky, grey)
 // Data: the agents' `flags2` (AgentFlag2.prophet / called), SettlementView.prophet / .sacred, the sim's events
-// (sacred.place, sacred.animal, omen, lightning with data.omen, prophet.called / .fulfilled / .died) and the `sacred`
-// query for the places
+// (sacred.place, sacred.animal, omen, lightning with data.omen, prophet.called / .fulfilled / .failed / .died /
+// .abandoned) and the `sacred` query for the places
 // that were holy before this view was made (polled now and then: the snapshot does not carry them).
 
 import { Group, Vector3, type IUniform } from 'three';
@@ -75,6 +77,8 @@ const FAVOUR_COL: [number, number, number] = [1.0, 0.82, 0.48];
 const ANGER_COL: [number, number, number] = [0.62, 0.52, 1.0];
 const ANIMAL_COL: [number, number, number] = [1.0, 0.9, 0.62];
 const STRIKE_COL: [number, number, number] = [1.0, 0.92, 0.78];
+/** a word that failed, a prophet the god turned from: the light gone grey */
+const FAILED_COL: [number, number, number] = [0.62, 0.64, 0.72];
 
 /** the animal content index of a sacred animal's id (its own id, or an old id it replaced: `aliases`) — -1 none */
 export function animalIndex(id: string | undefined): number {
@@ -94,7 +98,7 @@ export function markedPeople(flags2: ArrayLike<number> | undefined, count: numbe
 }
 
 interface Moment {
-  kind: 'hallowed' | 'omen' | 'strike' | 'called' | 'fulfilled' | 'passing';
+  kind: 'hallowed' | 'omen' | 'strike' | 'called' | 'fulfilled' | 'failed' | 'passing' | 'withdrawn';
   p: Vector3;
   t0: number;
   dur: number;
@@ -172,6 +176,17 @@ export class SignsLayer {
       case 'sacred.animal': {
         // a town takes a beast for holy: a soft ring through it, in the sacred animal's own light
         if (p) this.moments.push({ kind: 'fulfilled', p, t0: real, dur: 4.5, col: ANIMAL_COL, agent: -1, size: 120 });
+        break;
+      }
+      case 'prophet.failed': {
+        // the word did not come true: a faint grey ring closing in on the town (the light leaving them)
+        if (p) this.moments.push({ kind: 'failed', p, t0: real, dur: 4, col: FAILED_COL, agent: typeof d.agent === 'number' ? d.agent : -1, size: 120 });
+        break;
+      }
+      case 'prophet.abandoned': {
+        // the god turned from them: their thread drawn up off them into the sky, gone grey (the event has no place: it
+        // is found where the crowds draw them)
+        if (typeof d.agent === 'number') this.moments.push({ kind: 'withdrawn', p: new Vector3(), t0: real, dur: 4.5, col: FAILED_COL, agent: d.agent, size: 3 });
         break;
       }
       case 'prophet.died': {
@@ -386,6 +401,19 @@ export class SignsLayer {
     this.stats.moments = this.moments.length;
     for (const m of this.moments) {
       const age = this.hold !== null ? Math.min(this.hold, m.dur * 0.98) : f.real - m.t0, k = age / m.dur;
+      if (m.kind === 'withdrawn') {
+        // the thread drawn up off the one the god turned from, shortening into the sky as it greys (found where the
+        // crowds draw them: the event has no place)
+        const d = m.agent >= 0 ? f.personAt(m.agent) : null;
+        if (!d) continue;
+        const at = _g.set(d[0], d[1], d[2]);
+        const pu = _u.copy(at).normalize();
+        const top = Math.max(40, Math.min(520, at.distanceTo(cam) * 0.42));
+        const rise = smooth(0, 1, k);
+        const foot = _h.copy(at).addScaledVector(pu, d[3] * 1.02 + top * rise);
+        this.marks.beams.add(foot, pu, top * (1 - 0.7 * rise), 0.14, m.col[0], m.col[1], m.col[2], 0.9 * (1 - smooth(0.3, 1, k)), cam, m.t0);
+        continue;
+      }
       const up = _u.copy(m.p).normalize();
       const g = groundPoint(f.pv, [up.x, up.y, up.z], _g);
       const [cr, cg, cb] = m.col;
@@ -428,6 +456,12 @@ export class SignsLayer {
         const L = decal(DECAL.light, [_g.x, _g.y, _g.z], 14);
         L.cr = cr; L.cg = cg; L.cb = cb; L.p0 = 14; L.p1 = 260 * fade * down; L.p2 = 6; L.p3 = 2;
         f.decals.add(L);
+      } else if (m.kind === 'failed') {
+        // a faint ring closing in on the town, fading as it goes (a fulfilment's spreads out, bright)
+        const r = m.size * (1 - 0.85 * smooth(0, 1, k));
+        const rp = decal(DECAL.ripple, [g.x, g.y, g.z], r + m.size * 0.2 + 4);
+        rp.cr = cr; rp.cg = cg; rp.cb = cb; rp.p0 = r; rp.p1 = Math.max(2, m.size * 0.03); rp.p2 = 0.22 * fade; rp.q0 = Math.max(8, m.size * 0.3);
+        f.decals.add(rp);
       } else if (m.kind === 'passing') {
         // the thread lifts off the ground where they fell and rises away, thinning
         const top = Math.max(80, Math.min(700, dist * 0.5));

@@ -11,7 +11,8 @@
 //     traces the miracle's sigil; feared it crackles (an arc struck at the moment nextCrackle names) under a gloom of
 //     its storm on the land round it, by day and night, trusted never;
 //     its shadow and its pool of light lie on the ground; a person it hurls is drawn flying by their own id (the
-//     sim's 'thrown' event names the projectile, a different id sequence), never a stranger
+//     sim's 'thrown' event names the projectile, a different id sequence), never a stranger; what it hurls flies as it held it
+//     (a tree as its own uprooted tree, upright as it left, end over end; a boulder at its mass's size)
 //   * the creature is gone from the renderer: no creature layer or generator module ships
 //   * the sigils (fx/sigils.ts): ONE glyph per sigil — the stroke the Touch traces and the miracle writes on the land
 //     is the UI recogniser's own template, so the recogniser reads each drawn glyph back as its sigil; every power's
@@ -20,7 +21,8 @@
 //     a landed glyph (fx/sigilfx.ts) lies on the ground, or on the water over a lake or the sea, and its depth test's
 //     slack grows with distance (the far terrain is drawn coarser: tested exactly, the glyph broke into dashes)
 //   * the signs (render/signs): prophets and the Called are found by AgentFlag2, a sacred animal by its id or the old
-//     id it replaced, the sim's events become sacred places and moments (an ordinary strike is no sign); the sea's
+//     id it replaced, the sim's events become sacred places and moments (an ordinary strike is no sign; a failed word
+//     rings the town grey; a prophet the god turns from has their thread drawn up off them); the sea's
 //     drawback before a tsunami (fx/drawback.ts) lies on the coast's shallows, on the ground, never inland
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,7 +34,8 @@ import {
   touchRng, tuftGeometry, vortexR, type VortexFrame,
 } from '../src/render/gen/handgen.ts';
 import * as handgen from '../src/render/gen/handgen.ts';
-import { HandVisual, type HandFrame } from '../src/render/hand.ts';
+import { HandVisual, heldPropGeometry, type HandFrame } from '../src/render/hand.ts';
+import { heldTrueSize } from '../src/render/fx/present.ts';
 import { Flights } from '../src/render/fx/flights.ts';
 import { ThrowFx } from '../src/render/fx/throwfx.ts';
 import { Debris } from '../src/render/fx/meshfx.ts';
@@ -403,6 +406,38 @@ test('a person the Touch hurls is drawn flying by their own id, never the projec
   fx.dispose();
 });
 
+test('what the Touch hurls flies as it was held: a tree as the tree, upright as it left, a boulder at its mass\'s size', () => {
+  const pv = { ...slopeWorld(), id: 0 } as PlanetView;
+  const u = new Vector3(0.15, 0.05, 1).normalize();
+  const vfx = { emit: () => 1, set: () => { /* */ }, stop: () => { /* */ }, alive: () => true };
+  const ctx = { pv, now: 0, dt: 0.05, vfx } as unknown as FxCtx;
+  const side = new Vector3().crossVectors(u, new Vector3(0, 1, 0)).normalize();
+  const thrown = (id: number, payload: string) => ({ t: 'thrown', tick: 1, planet: 0, pos: [u.x, u.y, u.z] as [number, number, number], a: 14, b: 4, data: { id, payload, vel: [side.x * 10 + u.x * 9, side.y * 10 + u.y * 9, side.z * 10 + u.z * 9] } });
+  const f = new Flights({});
+  f.onEvent(thrown(1, 'tree'), ctx);
+  f.onEvent(thrown(2, 'rock'), ctx, 2600 * 4, 'rock');
+  f.onEvent(thrown(3, 'rock'), ctx);
+  ctx.now = 0.02;
+  f.update(ctx, []);
+  const meshes = f.group.children as Mesh[];
+  assert.equal(meshes.length, 3);
+  // the tree is the Touch's own uprooted tree (the same geometry), not a boulder; leafed and casting a shadow
+  const [tree, heavy, plain] = meshes;
+  assert.equal(tree.geometry, heldPropGeometry('tree'), 'the tree the Touch held');
+  assert.ok(tree.layers.isEnabled(1) && (tree.material as { userData: { propDepth?: unknown } }).userData.propDepth, 'a lit prop with its depth twin');
+  // upright as it left the Touch: its trunk along the ground's up, a dozen metres tall, its middle on the flight
+  const e = tree.matrix.elements;
+  const yAxis = new Vector3(e[4], e[5], e[6]);
+  const up = new Vector3(); f.forEach((id, _k, p) => { if (id === 1) up.copy(p).normalize(); }, ctx.now);
+  assert.ok(yAxis.clone().normalize().dot(up) > 0.99, `upright at release (${yAxis.clone().normalize().dot(up).toFixed(3)})`);
+  assert.ok(Math.abs(yAxis.length() - heldTrueSize('tree').size) < 0.5, `as tall as it was held (${yAxis.length().toFixed(1)} m)`);
+  // a 10 t boulder the Touch held flies bigger than a boulder nobody weighed (the default 50 kg)
+  const sz = (m: Mesh) => new Vector3(m.matrix.elements[0], m.matrix.elements[1], m.matrix.elements[2]).length();
+  assert.ok(sz(heavy) > sz(plain) * 1.5, `a boulder at its mass's size (${sz(heavy).toFixed(2)} vs ${sz(plain).toFixed(2)})`);
+  assert.ok(Math.abs(sz(heavy) * 2 - heldTrueSize('rock', 2600 * 4).size) < 0.05, 'the size the Touch drew it at');
+  f.dispose();
+});
+
 test('the Touch\'s weather lies on the ground: a pool of its light, its cloud\'s shadow in the sun', () => {
   for (const sunUp of [true, false]) {
     const S = touchStage(sunUp);
@@ -648,10 +683,37 @@ test('signs: the sim\'s events become places and moments', () => {
   s.onEvent({ t: 'sacred.animal', tick: 8, planet: 0, pos: [0, 0, 1], data: { settlement: 2, animal: 'cattle' } }, 3000, 3);
   s.onEvent({ t: 'prophet.died', tick: 9, planet: 0, pos: [0, 0, 1], data: { agent: 3, settlement: 2 } }, 3000, 3);
   s.onEvent({ t: 'prophet.foretold', tick: 9, planet: 0, pos: [0, 0, 1], data: { agent: 3 } }, 3000, 3);
+  s.onEvent({ t: 'prophet.failed', tick: 10, planet: 0, pos: [0, 0, 1], data: { agent: 4, settlement: 2, kind: 'rain', credibility: 0.2 } }, 3000, 3);
+  s.onEvent({ t: 'prophet.abandoned', tick: 11, planet: 0, data: { agent: 4, settlement: 2 } }, 3000, 3);
   const m = (s as unknown as { moments: { kind: string; col: number[] }[] }).moments;
-  assert.deepEqual(m.slice(before).map((x) => x.kind), ['omen', 'strike', 'called', 'fulfilled', 'passing'], 'an ordinary strike is no sign; a prophecy spoken shows nothing yet');
+  assert.deepEqual(m.slice(before).map((x) => x.kind), ['omen', 'strike', 'called', 'fulfilled', 'passing', 'failed', 'withdrawn'], 'an ordinary strike is no sign; a prophecy spoken shows nothing yet');
   assert.ok(m[before].col[2] > m[before].col[0], 'anger reads cold');
+  const failed = m[m.length - 2], warm = m[before + 3];
+  assert.ok(lum(failed.col as [number, number, number]) < lum(warm.col as [number, number, number]) && failed.col[2] >= failed.col[0], 'a failed word reads grey beside a fulfilled one');
   s.dispose();
+  // drawn: the failed word a ring on the town; the one the god turned from, their thread drawn up off them where the
+  // crowds draw them — and nothing where nobody draws them (the event has no place)
+  const pv = { ...slopeWorld(), id: 0, settlements: [], agents: undefined, animals: undefined } as unknown as PlanetView;
+  const R = 3000, u = new Vector3(0.6, 0.05, 0.8).normalize();
+  const draw = (who: number | null) => {
+    const q = new SignsLayer({});
+    q.onEvent({ t: 'prophet.failed', tick: 10, planet: 0, pos: [u.x, u.y, u.z], data: { agent: 4 } }, R, 0);
+    q.onEvent({ t: 'prophet.abandoned', tick: 11, planet: 0, data: { agent: 4 } }, R, 0);
+    const decals: Decal[] = [];
+    const feet = u.clone().multiplyScalar(R + 60);
+    q.update({
+      pv, camBody: u.clone().multiplyScalar(R + 160), now: 1, real: 1, decals: { add: (d: Decal) => { decals.push(d); } } as unknown as DecalPass,
+      vfx: { emit: () => 1, alive: () => true, set: () => {}, stop: () => {} } as unknown as SignsFrame['vfx'],
+      ticksSinceSnap: 0, personAt: (id) => (id === who ? [feet.x, feet.y, feet.z, 1.7] : null),
+    });
+    const r = { rings: decals.filter((d) => d.type === 15).length, beams: q.marks.beams.count };
+    q.dispose();
+    return r;
+  };
+  const seen = draw(4), unseen = draw(null);
+  assert.ok(seen.rings >= 1 && unseen.rings >= 1, 'the failed word rings the town');
+  assert.equal(seen.beams, 1, 'the thread drawn up off them');
+  assert.equal(unseen.beams, 0, 'nobody drawn: no thread');
 });
 
 test('signs: the lightning sigil read as a sign leaves its struck place glowing; unread, or read as another sign, nothing', () => {
