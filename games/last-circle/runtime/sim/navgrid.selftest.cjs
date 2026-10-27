@@ -316,6 +316,12 @@ const street = { x: 36.5, y: 0, z: 33 };
   const down = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25), up = NG.findPath(W1, 36.5, 0, 25, 33.4, 3.6, 25);
   ok(down && down.length <= 4 && down.some((w) => w.k === NG.EDGE_DROP), "balcony -> street is a short route with a drop (" + (down && down.length) + " waypoints)");
   ok(up && up.length > 10 && !up.some((w) => w.k === NG.EDGE_DROP && w.y > 3), "street -> balcony goes through the house, never up a 'drop' (" + (up && up.length) + " waypoints)");
+  // (P2-E) opts.maxDrop: a route that may not take the 3.6 m drop walks down through the house; a budget over the drop changes nothing
+  const downMd = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25, { maxDrop: 1.0 }), downMd6 = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25, { maxDrop: NG.DROP_MAX });
+  let tallest = 0;
+  if (downMd) for (let i = 1; i < downMd.length; i++) if (downMd[i].k === NG.EDGE_DROP) tallest = Math.max(tallest, downMd[i - 1].y - downMd[i].y);
+  ok(downMd && downMd.length > 10 && tallest <= 1.0 + 1e-6, "maxDrop 1 m: balcony -> street goes down through the house (" + (downMd && downMd.length) + " waypoints, tallest drop leg " + tallest.toFixed(2) + " m)");
+  ok(downMd6 && down && JSON.stringify(downMd6.map((w) => [w.x, w.y, w.z, w.k])) === JSON.stringify(down.map((w) => [w.x, w.y, w.z, w.k])), "maxDrop = DROP_MAX: the very route the default query returns");
   // islands
   const vault = NG.findPath(W1, 36.5, 0, 25, 43, 0, 23);
   ok(vault === null && W1.lastFail === "no-goal", "the sealed vault has no node (pruned): lastFail " + W1.lastFail);
@@ -753,6 +759,89 @@ const mkc = (k) => ({ kind: k[0] ? "ramp" : "box", minX: k[1], maxX: k[2], minY:
   const E2 = NG.createWorld({ colliders: scene, heightFn: flat, cover });
   ok(E2.noBake === false && NG.tileFor(E2, 26, 25, true) !== null, "a world without the lazy flag still bakes on demand (default behaviour unchanged)");
   info("the lazy / incremental section took " + (nowMs() - tLazy0).toFixed(0) + " ms");
+}
+
+// ── 6h. Wave P2 (lane P2-E, LC-88): the PREBAKE and the SEAMS - work done ahead (workers) is invisible to the sim ───────────────────
+// The schedule run slice by slice with queries in between gives the same per-slice trace (done, steps, hops, the mover's carried ramp / margin flags),
+// the same world hash and the same routes whether no tile, every tile, or every other tile was prebaked, with or without the stitch's seams answered
+// ahead. Then the worker protocol itself (the factory's own source in a fresh context, as the Blob worker runs it): its tiles hash like the main
+// thread's bake, and its stitch worker's seam records are the in-process ones byte for byte.
+if (typeof NG.prebakeInline === "function") {
+  const tPb0 = nowMs();
+  const area = { minX: 0, maxX: 64, minZ: 0, maxZ: 64 };
+  const pq = [[36.5, 0, 33, 29, 7.2, 25], [36.5, 0, 33, 22, 0, 22], [9, 0, 30, 36.5, 0, 25]];
+  const run = (mode) => {
+    const W = NG.createWorld({ colliders: scene, heightFn: flat, cover, lazy: true, rects: [area], margin: 0 });
+    if (mode !== "none") { let i = 0; NG.prebakeInline(W, (d) => mode.startsWith("all") || (i++ % 2) === 0, { seams: mode.endsWith("S") }); }
+    for (const j of NG.collectJobs(W, area)) if (j.kind === 0) NG.runJob(W, j);
+    const tr = [], routes = [];
+    let qn = 0;
+    for (let pass = 0; pass < 20; pass++) {
+      const js = NG.collectJobs(W, area);
+      if (!js.length) break;
+      for (const j of js) {
+        const job = NG.beginJob(W, j);
+        for (;;) {
+          const w0 = NG.work(), h0 = NG.counters().hops, d = NG.stepJob(W, job), sr = NG.supRampState();
+          tr.push((d ? 1 : 0) + ":" + (NG.work() - w0) + ":" + (NG.counters().hops - h0) + ":" + sr.ramp + sr.margin);
+          if (d) break;
+          if ((++qn % 7) === 0) { const p = NG.findPath(W, ...pq[qn % pq.length]); routes.push(p ? p.length : -1); }
+        }
+      }
+    }
+    for (const q of pq) routes.push(JSON.stringify(NG.findPath(W, ...q)));
+    return { mode, tr: tr.join(","), routes: routes.join("|"), hash: NG.worldHash(W), st: NG.prebakeStats(W), slices: tr.length };
+  };
+  const R0 = run("none"), RS = ["all", "allS", "halfS", "half"].map(run);
+  ok(RS.every((r) => r.tr === R0.tr && r.hash === R0.hash && r.routes === R0.routes),
+    "prebaked tiles and seams answered ahead change nothing: the same " + R0.slices + "-slice trace (steps, hops, carried ramp/margin flags), routes and world hash (" + R0.hash + ") in " +
+    RS.map((r) => r.mode + " [" + (r.tr === R0.tr ? "=" : "TRACE") + (r.hash === R0.hash ? "" : " HASH") + (r.routes === R0.routes ? "" : " ROUTES") + "]").join(", "));
+  const S = RS[1].st;
+  ok(S.hits > 0 && S.seamsIn > 0 && S.recMemo > 0, "... and the work ahead was really used (allS: " + S.hits + " tiles replayed from the prebake, " + S.seamsIn + " seams answered ahead, " + S.recMemo + " stitch records taken, " + S.recLive + " replayed live)");
+  // the worker protocol: the factory's source in a fresh context (as pbStart's Blob runs it), driven by messages
+  const vm = require("vm");
+  const src = fs.readFileSync(path.join(__dirname, "navgrid.js"), "utf8");
+  const mkWorker = () => {
+    const box = { out: [], __ngPrebake: 1, Map, Set, Float64Array, Float32Array, Int32Array, Uint32Array, Int16Array, Uint16Array, Int8Array, Uint8Array, Array, Math, Object, String, Number, Error, JSON, performance };
+    box.self = box; box.postMessage = (m) => box.out.push(m);
+    vm.runInNewContext("var self = this;\n" + src.replace(/^\(function navgridFactory/m, "(function navgridFactory").replace(/\}\)\(typeof window !== "undefined" \? window : globalThis\);\s*$/, "})(self);\n"), box);
+    return box;
+  };
+  const lat = new Float32Array(9 * 9);
+  const flatL = () => 0; flatL.ground = { lattice: lat, latN: 9 }; flatL.size = 256;
+  const Wm = NG.createWorld({ colliders: scene, heightFn: flatL, cover, lazy: true, rects: [area], margin: 0, prebake: false });
+  NG.prebakeInline(Wm, null, { seams: true });
+  const pbm = Wm.pb, jobs = pbm.coarse.concat(pbm.fine);
+  const bw = mkWorker(), sw = mkWorker(), csd = { n: Wm.cs.n, minX: Wm.cs.minX, maxX: Wm.cs.maxX, minY: Wm.cs.minY, maxY: Wm.cs.maxY, minZ: Wm.cs.minZ, maxZ: Wm.cs.maxZ, kind: Wm.cs.kind, dir: Wm.cs.dir };
+  const workerOk = typeof bw.onmessage === "function" && typeof sw.onmessage === "function";
+  let hashSame = workerOk, seamSame = workerOk, nT = 0, nS = 0;
+  if (workerOk) {
+    bw.onmessage({ data: { t: "init", cs: csd, L: lat, latN: 9, size: 256 } });
+    sw.onmessage({ data: { t: "sinit", cs: csd, L: lat, latN: 9, size: 256, world: { tileSize: Wm.tileSize, cellOutdoor: Wm.cellOutdoor, cellIndoor: Wm.cellIndoor, waterY: Wm.waterY,
+      fine: Wm.fine.map((r) => ({ minX: r.minX, minZ: r.minZ, maxX: r.maxX, maxZ: r.maxZ, idx: r.idx })) }, jobs: pbm.list } });
+    const portBox = { onmessage: null };
+    sw.onmessage({ data: { t: "port" }, ports: [portBox] });
+    for (const d of jobs) {
+      bw.out.length = 0;
+      bw.onmessage({ data: Object.assign({}, d, { t: "job" }) });
+      const m = bw.out.find((x) => x.t === "tile");
+      if (!m) { hashSame = false; continue; }
+      nT++;
+      if (m.P.hash !== pbm.cache.get(d.key).hash) hashSame = false;
+      portBox.onmessage({ data: { t: "tile", P: m.P } });
+    }
+    const got = new Map(sw.out.filter((x) => x.t === "seam").map((x) => [x.s.a + "," + x.s.b, x.s]));
+    nS = got.size;
+    const eq = (p, q) => p.length === q.length && p.every((v, i) => Object.is(v, q[i]));
+    for (const [k, s] of pbm.seams) {
+      const g = got.get(k);
+      if (!g || !["L0", "L1", "K", "C", "S", "H", "F", "X", "TL"].every((f) => eq(Array.from(s[f]), Array.from(g[f])))) seamSame = false;
+    }
+    if (got.size !== pbm.seams.size || !sw.out.some((x) => x.t === "sidle")) seamSame = false;
+  }
+  ok(workerOk && hashSame && nT === jobs.length, "the bake worker (the module's own source in a fresh context, message for message) bakes every tile with the main thread's hash (" + nT + " of " + jobs.length + ")");
+  ok(workerOk && seamSame && nS > 0, "the stitch worker answers the same seams with the same records as the in-process host (" + nS + " seams, then 'sidle')");
+  info("the prebake / seams section took " + (nowMs() - tPb0).toFixed(0) + " ms");
 }
 
 // ── 6e. a fresh process builds the same world ─────────────────────────────────────────────────────────────────────────────

@@ -199,7 +199,12 @@ def main(v, args):
           let lit = 0; for (let i = 0; i < A.length; i += 4) if (A[i] | A[i + 1] | A[i + 2]) lit++;
           return { w, h, litPixels: lit, lcVsStock: diff(A, B), lcVsLc: diff(A, A2), grade05VsNeutral: diff(A, G) };
         }"""
+        # P2-F: bit identity is judged with the AA pass OFF (on medium / high the FXAA / SMAA step lives INSIDE LCOutputPass, so LC vs stock can never be
+        # bit-identical with AA on: P1-C measured 0 differing bytes with ?aa=0). AA itself is P1-C's aa probe's to judge.
+        aa_tok = L.aa_off(s)
         neu = s.js(NEUTRAL_JS)
+        L.aa_restore(s, aa_tok)
+        neu["aaDuringCompare"] = "off" if aa_tok.get("had") else "build has no W.setGfx (AA absent)"
         M["neutralGrade"] = neu
         if neu.get("error"):
             v.cnj("LCOutputPass at grade 0 is bit-identical to the stock OutputPass", neu["error"])
