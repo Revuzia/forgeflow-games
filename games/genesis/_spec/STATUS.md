@@ -40,16 +40,16 @@ the god's acts land on a society that answers them. What is in the sim now:
 alone for 50 game years at 3000x, scripted god sessions on 8 seeds (storm, default meteor, drought answered vs ignored,
 prophet fulfilled vs failed, omen fulfilled vs contradicted, a new material, an iron vein, a new crop) and on each
 year-50 town, the kin fixture (8 seeds and its control), the fire and day probes, and speciation over 30 years.
-**Results so far** (2026-10-27 22:10 UTC; LIVING §10.4): the 96 god sessions on 8 seeds all ran and every relationship
+**Results so far** (2026-10-27 22:35 UTC; LIVING §10.4): the 96 god sessions on 8 seeds all ran and every relationship
 row is met (harm builds fear and costs trust unless prayers are answered; answered prayers and fulfilled prophecies
-build trust and loyalty); 6 of the 8 fifty-year worlds have finished (seeds 4 and 5, the other six year-50 sessions,
-the kin fixture and speciation are queued, `_harness/scratch/living/integrate/r6/jobs8.txt`): 38 targets met, 10
-partly, 10 missed.
-**Known misses** (measured, with causes, LIVING §10.4–10.6): kills (3.7 per 100 a year, ≥ 20) and the hunted share
+build trust and loyalty); all 8 fifty-year worlds have finished (the other six year-50 sessions, the kin fixture and
+speciation are queued, `_harness/scratch/living/integrate/r6/jobs8.txt`): 36 targets met, 10 partly, 12 missed.
+**Known misses** (measured, with causes, LIVING §10.4–10.6): kills (3.9 per 100 a year, ≥ 20) and the hunted share
 (0.065, 0.15–0.35) over 50 years — farms, herds and fish outrun a 2–3 day hunt once a town settles; houses at every year
-end only outside natural-disaster years (rebuilt in 1–2 years); pottery a little early (5.8, 6–18); deaths under 15
-(28 % of births, 12–25 %) with growth 1.47 %/year and an under-15 share of 0.46 (the targets meet only at their corner,
-LIVING §2.14); lightning fires in years 1–2 (0.13 a world-year, 2–12: the world dries into fire country from year 3,
+end only outside natural-disaster years (7 of 8; rebuilt in 1–3 years); deaths under 15 (28 % of births, 12–25 %) with
+growth 1.47 %/year and an under-15 share of 0.46 (the targets meet only at their corner, LIVING §2.14); three rows
+seeds 4 and 5 pulled just under their line (fire-keeping median 4.04, ≤ 4; herding share 0.0495, ≥ 0.05; kinds
+gathered at year 8 9.5, ≥ 10); lightning fires in years 1–2 (0.13 a world-year, 2–12: the world dries into fire country from year 3,
 §10.5); a band driven out by a dust bowl onto a cut-off headland died of thirst (seed 1, year 46, §10.6; a design task
 is open); on the year-50 towns the meteor left 48 % standing (≥ 60 %; the blast set the dry 50-year world alight) and one
 prophet's credibility ended at 0.335 (the town's own prophet had a fourth, failed prophecy of its own).

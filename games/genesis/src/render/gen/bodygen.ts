@@ -724,10 +724,28 @@ export function jellyMesh(lod: number): BodyMesh {
 /** bones: 0 body, 1 neck, 2 head, 3 tail, 4/5 front-left upper/lower, 6/7 front-right, 8/9 back-left, 10/11 back-right */
 interface QuadSpec {
   len: number; depth: number; width: number; legR: number; neckLen: number; neckAng: number; headLen: number; headR: number;
-  tail: number; tailR: number; ears: number; earUp: number; horns: 'none' | 'antlers' | 'curl' | 'up' | 'short' | 'tusks'; mane: boolean; wool: boolean;
+  tail: number; tailR: number; ears: number; earUp: number;
+  /** palmate: a bull moose's flat antlers (males only, like antlers); boss: a musk ox's horns, down past the eye and up */
+  horns: 'none' | 'antlers' | 'curl' | 'up' | 'short' | 'tusks' | 'palmate' | 'boss'; mane: boolean; wool: boolean;
   hump: number; snout: number; legLen: number; sprawl: number; hairyTail: boolean;
   /** the back's dip behind the withers (× depth), how far the hip bones stand out, hooves (else paws) */
   dip: number; hips: number; hoof: boolean;
+  /** humps along the back besides the withers' `hump`: [t (rump −0.5 … chest +0.5), height] (a camel's one or two) */
+  humps?: [number, number][];
+  /** the body's centre height (× shoulder) for the low-slung (crocodiles, lizards); else a mammal's stance */
+  low?: number;
+  /** the tail runs straight back along the ground (reptiles), not hanging from the rump */
+  tailFlat?: boolean;
+  /** a tuft of dark hair at the tail's end (lions) */
+  tuft?: boolean;
+  /** a male lion's mane: a ruff of hair round the head and neck (× head radius), drawn on males only */
+  ruff?: number;
+  /** guard hair hanging from the flanks over the legs (× depth): a musk ox's skirt */
+  skirt?: number;
+  /** the bell: a flap of skin under a moose's throat, m */
+  bell?: number;
+  /** how far the head points down from level, rad (else from the neck's angle: a grazer's head hangs, a reptile's not) */
+  headPitch?: number;
 }
 
 const QUADS: Record<string, QuadSpec> = {
@@ -741,19 +759,33 @@ const QUADS: Record<string, QuadSpec> = {
   goat: { len: 1.0, depth: 0.46, width: 0.3, legR: 0.042, neckLen: 0.4, neckAng: 0.9, headLen: 0.3, headR: 0.09, tail: 0.1, tailR: 0.025, ears: 0.1, earUp: 0.2, horns: 'curl', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 0.95, sprawl: 0, hairyTail: false, dip: 0.04, hips: 0.05, hoof: true },
   sheep: { len: 1.05, depth: 0.6, width: 0.48, legR: 0.035, neckLen: 0.28, neckAng: 0.5, headLen: 0.28, headR: 0.08, tail: 0.12, tailR: 0.04, ears: 0.09, earUp: 0.0, horns: 'none', mane: false, wool: true, hump: 0, snout: 0.5, legLen: 0.78, sprawl: 0, hairyTail: false, dip: 0.02, hips: 0.03, hoof: true },
   hare: { len: 1.3, depth: 0.55, width: 0.4, legR: 0.05, neckLen: 0.15, neckAng: 0.7, headLen: 0.38, headR: 0.17, tail: 0.1, tailR: 0.09, ears: 0.55, earUp: 1.2, horns: 'none', mane: false, wool: false, hump: 0.1, snout: 0.4, legLen: 0.6, sprawl: 0, hairyTail: true, dip: 0.0, hips: 0.0, hoof: false },
-  lizard: { len: 2.2, depth: 0.42, width: 0.5, legR: 0.07, neckLen: 0.25, neckAng: 0.1, headLen: 0.45, headR: 0.16, tail: 1.8, tailR: 0.13, ears: 0, earUp: 0, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 0.6, sprawl: 0.6, hairyTail: false, dip: 0.0, hips: 0.0, hoof: false },
+  lizard: { len: 2.2, depth: 0.42, width: 0.5, legR: 0.07, neckLen: 0.25, neckAng: 0.1, headLen: 0.45, headR: 0.16, tail: 1.8, tailR: 0.13, ears: 0, earUp: 0, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 0.6, sprawl: 0.6, hairyTail: false, dip: 0.0, hips: 0.0, hoof: false, low: 0.42, tailFlat: true, headPitch: 0.12 },
+  // ── the living world's real species (src/data/animals.json): each its own silhouette at 60 m, nothing invented ──
+  // a big cat (tiger, caracal): long and low in the loins, a deep chest, a round head with a short muzzle, a long tail
+  cat: { len: 1.4, depth: 0.44, width: 0.32, legR: 0.058, neckLen: 0.26, neckAng: 0.3, headLen: 0.2, headR: 0.13, tail: 0.95, tailR: 0.035, ears: 0.07, earUp: 1.1, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.2, legLen: 0.95, sprawl: 0, hairyTail: false, dip: 0.02, hips: 0.02, hoof: false },
+  // a lion: the cat, a tufted tail, and on males a mane round the head and down the chest
+  lion: { len: 1.4, depth: 0.46, width: 0.33, legR: 0.06, neckLen: 0.26, neckAng: 0.35, headLen: 0.22, headR: 0.14, tail: 0.85, tailR: 0.03, ears: 0.06, earUp: 1.0, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.25, legLen: 0.95, sprawl: 0, hairyTail: false, dip: 0.02, hips: 0.02, hoof: false, tuft: true, ruff: 2.1 },
+  // a dromedary: long legs under a short deep body, one hump mid-back, a long neck bowed forward, the head held level
+  camel: { len: 1.15, depth: 0.42, width: 0.32, legR: 0.045, neckLen: 0.72, neckAng: 0.42, headLen: 0.4, headR: 0.095, tail: 0.45, tailR: 0.025, ears: 0.05, earUp: 0.6, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.45, legLen: 1.3, sprawl: 0, hairyTail: true, dip: 0, hips: 0.07, hoof: false, humps: [[-0.02, 0.36]] },
+  // a Bactrian camel (the wild camel): two humps, a shaggier, heavier build
+  bactrian: { len: 1.25, depth: 0.46, width: 0.36, legR: 0.05, neckLen: 0.66, neckAng: 0.45, headLen: 0.4, headR: 0.1, tail: 0.45, tailR: 0.025, ears: 0.05, earUp: 0.6, horns: 'none', mane: true, wool: false, hump: 0, snout: 0.45, legLen: 1.2, sprawl: 0, hairyTail: true, dip: 0, hips: 0.06, hoof: false, humps: [[-0.24, 0.28], [0.17, 0.3]] },
+  // a moose: very long legs, a high humped shoulder, a long overhanging muzzle, the bell, a bull's palmate antlers
+  moose: { len: 1.15, depth: 0.44, width: 0.32, legR: 0.045, neckLen: 0.3, neckAng: 0.45, headLen: 0.52, headR: 0.11, tail: 0.08, tailR: 0.03, ears: 0.14, earUp: 0.45, horns: 'palmate', mane: true, wool: false, hump: 0.17, snout: 0.05, legLen: 1.2, sprawl: 0, hairyTail: false, dip: 0.04, hips: 0.05, hoof: true, bell: 0.2 },
+  // a musk ox: a low, humped, massive body hidden in a skirt of long hair to the shins, the horns' boss on the brow
+  muskox: { len: 1.25, depth: 0.74, width: 0.62, legR: 0.07, neckLen: 0.2, neckAng: -0.1, headLen: 0.38, headR: 0.15, tail: 0.1, tailR: 0.03, ears: 0.04, earUp: 0, horns: 'boss', mane: false, wool: true, hump: 0.2, snout: 0.35, legLen: 0.6, sprawl: 0, hairyTail: false, dip: 0, hips: 0.02, hoof: true, skirt: 0.55 },
+  // a macaque on all fours: a short body, a round flat-faced head, hands and feet, a short tail
+  primate: { len: 0.9, depth: 0.4, width: 0.3, legR: 0.055, neckLen: 0.14, neckAng: 0.5, headLen: 0.12, headR: 0.15, tail: 0.32, tailR: 0.03, ears: 0.05, earUp: 0.2, horns: 'none', mane: false, wool: false, hump: 0.04, snout: 0.15, legLen: 0.9, sprawl: 0.05, hairyTail: false, dip: 0, hips: 0.02, hoof: false, low: 0.68 },
+  // a crocodile: belly on the ground, sprawled legs, the long armoured snout and a tail as long again
+  croc: { len: 2.4, depth: 0.34, width: 0.55, legR: 0.075, neckLen: 0.2, neckAng: 0.0, headLen: 0.85, headR: 0.13, tail: 2.3, tailR: 0.14, ears: 0, earUp: 0, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.95, legLen: 0.4, sprawl: 0.8, hairyTail: false, dip: 0.0, hips: 0.0, hoof: false, low: 0.3, tailFlat: true, headPitch: 0.03 },
 };
 
 export function quadSpecFor(form: AnimalForm): QuadSpec {
-  switch (form) {
-    case 'deer': case 'horse': case 'cattle': case 'bison': case 'bear': case 'wolf': case 'boar': case 'goat': case 'sheep': case 'hare': case 'lizard': return QUADS[form];
-    default: return QUADS.deer;
-  }
+  return QUADS[form] ?? QUADS.deer;
 }
 
 export function quadRig(q: QuadSpec): Rig {
   const L = q.len, sh = 1.0;
-  const bodyY = sh - q.depth * 0.3;
+  const bodyY = q.low ?? sh - q.depth * 0.3;
   const front = L * 0.38, back = -L * 0.4;
   const hipY = bodyY - q.depth * 0.15;
   const legTop = hipY;
@@ -789,7 +821,7 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
     [0.12, 1.02, 1.08, 0.06], [0.32, 1.07, 1.08, 0.04], [0.46, 0.86, 0.9, 0.0], [0.54, 0.5, 0.62, -0.02],
   ];
   // (full detail: twice the rings, interpolated, so the back line, the hips and the barrel read as curves, not a box)
-  let pr = lod === 2 ? [prof[0], prof[2], prof[3], prof[4], prof[6], prof[7]] : lod === 1 ? [prof[0], prof[1], prof[2], prof[3], prof[4], prof[5], prof[7]] : prof;
+  let pr = q.humps && lod > 0 ? prof : lod === 2 ? [prof[0], prof[2], prof[3], prof[4], prof[6], prof[7]] : lod === 1 ? [prof[0], prof[1], prof[2], prof[3], prof[4], prof[5], prof[7]] : prof;
   if (lod === 0) {
     const fine: [number, number, number, number][] = [];
     for (let i = 0; i < pr.length; i++) {
@@ -799,7 +831,9 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
     pr = fine;
   }
   for (const [t, kx, ky, drop] of pr) {
-    const hump = q.hump * Math.max(0, 1 - Math.abs(t - 0.32) / 0.3);
+    let hump = q.hump * Math.max(0, 1 - Math.abs(t - 0.32) / 0.3);
+    // (a camel's hump: a rounded mound of fat on the back, not a ridge — a bell curve a third of the body long)
+    for (const [ht, hh] of q.humps ?? []) hump += hh * Math.exp(-Math.pow((t - ht) / 0.13, 2));
     bodyPts.push([0, bodyY + hump * 0.5 - drop * q.depth * 0.5, t * L]);
     bodyRad.push([q.width * 0.5 * kx, (q.depth * 0.5 + hump * 0.4) * ky]);
   }
@@ -839,7 +873,8 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
   const hR = q.headR * 1.17;
   // (deep through the throat and broad where it meets the shoulders: a thin neck read as a stick)
   b.tube([[nb[0], nb[1] - q.depth * 0.22, nb[2] - 0.12], nb, lerp3(nb, hd, 0.55), hd], [[q.width * 0.44, q.depth * 0.56], [q.width * 0.34, q.depth * 0.42], [q.width * 0.27, q.depth * 0.3], [hR * 0.95, hR * 1.1]], seg(8), (t) => (t < 0.5 ? [1, 0, 0.5 + t] : [1, 1, 1]), bodyPart === BPART.fur ? BPART.coat : bodyPart, {}, false, false, [1, 0, 0]);
-  const headDir: V3 = [0, -Math.sin(0.5 - q.neckAng * 0.3), Math.cos(0.5 - q.neckAng * 0.3)];
+  const hp = q.headPitch ?? 0.5 - q.neckAng * 0.3;
+  const headDir: V3 = [0, -Math.sin(hp), Math.cos(hp)];
   const snoutEnd: V3 = [0, hd[1] + headDir[1] * q.headLen, hd[2] + headDir[2] * q.headLen];
   b.tube([[hd[0], hd[1] + hR * 0.1, hd[2] - hR * 0.4], hd, lerp3(hd, snoutEnd, 0.6), snoutEnd], [[hR * 0.9, hR], [hR, hR * 1.05], [hR * (0.5 + 0.3 * (1 - q.snout)), hR * 0.7], [hR * (0.35 + 0.2 * (1 - q.snout)), hR * 0.45]], seg(8), rigid(2), BPART.coat, {}, true, true, [1, 0, 0]);
   // (far — a few pixels — the head is the jaw and the taper alone: the nose, muzzle and hooves below were most of
@@ -864,17 +899,51 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
         b.tube([base, [sx * 0.1, base[1] + 0.12, base[2] - 0.12], [sx * 0.14, base[1] + 0.02, base[2] - 0.24], [sx * 0.12, base[1] - 0.08, base[2] - 0.18]], [[0.03, 0.03], [0.025, 0.025], [0.016, 0.016], [0.008, 0.008]], 5, rigid(2), BPART.horn);
       } else if (q.horns === 'short') {
         b.tube([base, [sx * hR * 1.1, base[1] + 0.03, base[2]], [sx * hR * 1.3, base[1] + 0.12, base[2] + 0.02]], [[0.03, 0.03], [0.02, 0.02], [0.005, 0.005]], 5, rigid(2), BPART.horn);
+      } else if (q.horns === 'palmate') {
+        // a bull moose's antlers (males only): a short beam out sideways, then a broad flat palm tilted up and back with
+        // tines along its outer rim
+        const beam: V3 = [sx * (hR * 0.45 + 0.13), base[1] + 0.05, base[2] - 0.02];
+        b.tube([base, beam], [[0.024, 0.024], [0.02, 0.02]], 5, rigid(2), BPART.horn, { req: 1 });
+        const p0: V3 = [beam[0], beam[1] + 0.01, beam[2] + 0.07], p1: V3 = [sx * (hR * 0.45 + 0.4), beam[1] + 0.11, beam[2] + 0.1];
+        const p2: V3 = [sx * (hR * 0.45 + 0.45), beam[1] + 0.15, beam[2] - 0.17], p3: V3 = [beam[0], beam[1] + 0.03, beam[2] - 0.09];
+        b.card(p0, p1, p2, p3, rigid(2), BPART.horn, { req: 1 });
+        // (the palm's thickness: a second card a finger's breadth below, so the palm reads edge-on too)
+        b.card([p0[0], p0[1] - 0.025, p0[2]], [p1[0], p1[1] - 0.025, p1[2]], [p2[0], p2[1] - 0.025, p2[2]], [p3[0], p3[1] - 0.025, p3[2]], rigid(2), BPART.horn, { req: 1 });
+        for (let k = 0; k < 5; k++) {
+          const u = k / 4;
+          const r0 = lerp3(p1, p2, u);
+          b.tube([r0, [r0[0] + sx * 0.06, r0[1] + 0.09, r0[2] + 0.02]], [[0.014, 0.012], [0.004, 0.004]], 4, rigid(2), BPART.horn, { req: 1 });
+        }
+      } else if (q.horns === 'boss') {
+        // a musk ox's horns: a broad boss across the brow, each horn sweeping down past the eye and hooking up and out
+        b.tube([[sx * hR * 0.12, hd[1] + hR * 0.88, hd[2] - hR * 0.15], [sx * hR * 0.85, hd[1] + hR * 0.78, hd[2] - hR * 0.1], [sx * hR * 1.3, hd[1] + hR * 0.15, hd[2] + hR * 0.05], [sx * hR * 1.55, hd[1] + hR * 0.3, hd[2] + hR * 0.4]],
+          [[0.06, 0.035], [0.05, 0.035], [0.03, 0.03], [0.008, 0.008]], 6, rigid(2), BPART.horn);
       } else if (q.horns === 'tusks') {
         const m: V3 = [sx * hR * 0.4, hd[1] - hR * 0.25, hd[2] + q.headLen * 0.75];
         b.tube([m, [m[0] + sx * 0.03, m[1] + 0.06, m[2] + 0.05]], [[0.012, 0.012], [0.003, 0.003]], 4, rigid(2), BPART.horn);
       }
     }
+    if (q.ruff) {
+      // a male lion's mane (males only): a ruff of long hair framing the face and down the neck to the chest
+      const mid = lerp3(nb, hd, 0.62);
+      b.ellipsoid([0, mid[1] + hR * 0.15, mid[2] - hR * 0.1], [hR * q.ruff * 0.75, hR * q.ruff * 0.82, hR * q.ruff * 0.85], seg(9), seg(7), rigid(1), BPART.hair, { req: 1 });
+      b.ellipsoid([0, nb[1] - q.depth * 0.05, nb[2] + 0.02], [hR * q.ruff * 0.62, hR * q.ruff * 0.8, hR * q.ruff * 0.7], seg(8), seg(6), rigid(1), BPART.hair, { req: 1 });
+    }
+    if (q.bell) b.tube([[0, hd[1] - hR * 0.75, hd[2] - hR * 0.6], [0, hd[1] - hR * 0.75 - q.bell * 0.6, hd[2] - hR * 0.75], [0, hd[1] - hR * 0.75 - q.bell, hd[2] - hR * 0.7]], [[0.03, 0.05], [0.025, 0.04], [0.02, 0.025]], 5, rigid(2), BPART.hair);
     if (q.mane) b.tube([[0, nb[1] + q.depth * 0.12, nb[2] - 0.1], [0, (nb[1] + hd[1]) / 2 + 0.08, (nb[2] + hd[2]) / 2], [0, hd[1] + hR * 0.6, hd[2] - hR * 0.4]], [[0.03, 0.06], [0.025, 0.07], [0.02, 0.04]], 5, (t) => [1, 0, 0.5 + 0.5 * t], BPART.hair);
   }
   // tail
   const tb = P[3];
-  const tailEnd: V3 = [0, tb[1] - q.tail * 0.8, tb[2] - q.tail * 0.5];
-  b.tube([tb, lerp3(tb, tailEnd, 0.5), tailEnd], [[q.tailR, q.tailR], [q.tailR * 0.8, q.tailR * 0.8], [q.hairyTail ? q.tailR * 1.4 : q.tailR * 0.3, q.hairyTail ? q.tailR * 1.4 : q.tailR * 0.3]], seg(6), rigid(3), q.hairyTail ? BPART.hair : BPART.coat, {}, false, true);
+  // (a reptile's tail runs back along the ground, thick at the root; a mammal's hangs from the rump)
+  const tailEnd: V3 = q.tailFlat ? [0, 0.06, tb[2] - q.tail] : [0, tb[1] - q.tail * 0.8, tb[2] - q.tail * 0.5];
+  const tailMid: V3 = q.tailFlat ? [0, Math.max(0.1, tb[1] * 0.55), tb[2] - q.tail * 0.45] : lerp3(tb, tailEnd, 0.5);
+  b.tube([tb, tailMid, tailEnd], [[q.tailR, q.tailR], [q.tailR * 0.8, q.tailR * 0.8], [q.hairyTail ? q.tailR * 1.4 : q.tailR * 0.3, q.hairyTail ? q.tailR * 1.4 : q.tailR * 0.3]], seg(6), rigid(3), q.hairyTail ? BPART.hair : BPART.coat, {}, false, true);
+  if (q.tuft && lod <= 1) b.ellipsoid(tailEnd, [0.045, 0.07, 0.045], seg(6), 4, rigid(3), BPART.dark);
+  if (q.skirt) {
+    // a musk ox's skirt: long guard hair hanging from the flanks and the belly nearly to the hooves
+    const sk = q.skirt * q.depth;
+    b.tube(bodyPts.slice(1, -1).map((p) => [p[0], p[1] - sk * 0.45, p[2]] as V3), bodyRad.slice(1, -1).map(([rx, ry]) => [rx * 1.1, ry + sk * 0.5] as [number, number]), seg(14), rigid(0), BPART.fur, {}, true, true, [1, 0, 0]);
+  }
   // legs: upper from the body, lower to a hoof / paw
   for (const [up, lo, front] of [[4, 5, true], [6, 7, true], [8, 9, false], [10, 11, false]] as [number, number, boolean][]) {
     const a = P[up], k = P[lo];
@@ -911,7 +980,12 @@ export const BIRD_RIG: Rig = {
   parents: [-1, 0, 0, 2, 0, 4, 0],
 };
 
-export function birdMesh(lod: number, gull: boolean): BodyMesh {
+/** a duck's rig: the bird's, lowered so the body sits on the water with its keel just under the surface */
+const DUCK_DROP = -0.4;
+export const DUCK_RIG: Rig = { ...BIRD_RIG, pivots: BIRD_RIG.pivots.map((p) => [p[0], p[1] + DUCK_DROP, p[2]] as V3) };
+
+export function birdMesh(lod: number, gull: boolean, duck = false): BodyMesh {
+  if (duck) return duckMesh(lod);
   const b = new RigBuilder();
   const seg = (n: number) => Math.max(3, Math.round(n * (lod === 0 ? 1 : lod === 1 ? 0.5 : 0.35)));
   // (beyond the nearest LOD — a few pixels against the sky — a bird is its body, head, wings and tail: no belly shell or
@@ -974,4 +1048,85 @@ export function rayMesh(): BodyMesh {
   }
   b.tube([[0, 0, -0.35], [0, 0.02, -0.9], [0, 0.05, -1.4]], [[0.04, 0.03], [0.02, 0.015], [0.005, 0.005]], 4, rigid(3), BPART.coat);
   return b.build(RAY_RIG, 0.2);
+}
+
+/**
+ * a dabbling duck (mallard, the farm duck): a broad boat-shaped body riding low, a rounded head on a short neck, the
+ * flat broad bill and the short upcurled tail; built on the bird rig lowered by DUCK_DROP (y 0 = the waterline)
+ */
+function duckMesh(lod: number): BodyMesh {
+  const b = new RigBuilder();
+  const seg = (n: number) => Math.max(3, Math.round(n * (lod === 0 ? 1 : lod === 1 ? 0.5 : 0.35)));
+  const y0 = 0.5 + DUCK_DROP;
+  b.ellipsoid([0, y0, -0.02], [0.15, 0.11, 0.3], seg(10), seg(7), rigid(0), BPART.coat);
+  if (lod === 0) b.ellipsoid([0, y0 - 0.03, 0.0], [0.13, 0.08, 0.26], seg(10), seg(6), rigid(0), BPART.belly, {}, (p) => p[1] < y0 - 0.02);
+  // the neck and head held up over the breast; the bill flat, broad and spatulate
+  b.tube([[0, y0 + 0.05, 0.2], [0, y0 + 0.16, 0.26]], [[0.06, 0.06], [0.045, 0.045]], seg(6), rigid(1), BPART.coat, {}, false, false);
+  b.ellipsoid([0, y0 + 0.19, 0.27], [0.055, 0.06, 0.07], seg(8), seg(6), rigid(1), BPART.coat);
+  if (lod <= 1) b.ellipsoid([0, y0 + 0.17, 0.35], [0.03, 0.011, 0.055], seg(6), 4, rigid(1), BPART.horn);
+  if (lod === 0) for (const sx of [1, -1]) b.ellipsoid([sx * 0.04, y0 + 0.205, 0.3], [0.01, 0.01, 0.01], 4, 3, rigid(1), BPART.dark);
+  // folded wings along the back (they open on the wing bones in flight) and the short tail curling up
+  for (const [sx, inn, out] of [[1, 2, 3], [-1, 4, 5]] as [number, number, number][]) {
+    b.card([sx * 0.06, y0 + 0.07, 0.12], [sx * 0.42, y0 + 0.07, 0.06], [sx * 0.42, y0 + 0.07, -0.12], [sx * 0.06, y0 + 0.07, -0.14], rigid(inn), BPART.coat);
+    b.card([sx * 0.42, y0 + 0.07, 0.06], [sx * 0.72, y0 + 0.07, -0.02], [sx * 0.7, y0 + 0.07, -0.13], [sx * 0.42, y0 + 0.07, -0.12], rigid(out), BPART.dark);
+  }
+  b.card([0, y0 + 0.02, -0.28], [0.07, y0 + 0.1, -0.4], [-0.07, y0 + 0.1, -0.4], [0, y0 + 0.02, -0.28], rigid(6), BPART.dark);
+  return b.build(DUCK_RIG, 0.4);
+}
+
+/** a seal's rig: the fish's bones (it swims and hauls itself along by bending), at its lying height */
+export const SEAL_RIG: Rig = { plan: PLAN.fish, pivots: [[0, 0.1, 0.15], [0, 0.1, 0.0], [0, 0.1, -0.25], [0, 0.1, -0.42]], parents: [-1, 0, 1, 2] };
+
+/**
+ * a harbour seal, nose +0.5 … hind flippers −0.6 (unit length), lying on its belly: the round head with no ear flaps,
+ * the plump spindle of the body, the short fore-flippers and the hind flippers trailing together
+ */
+export function sealMesh(lod: number): BodyMesh {
+  const b = new RigBuilder();
+  const seg = (n: number) => Math.max(3, Math.round(n * (lod === 0 ? 1 : lod === 1 ? 0.6 : 0.4)));
+  const prof: [number, number, number][] = [[0.5, 0.025, 0.025], [0.45, 0.06, 0.055], [0.37, 0.085, 0.08], [0.29, 0.08, 0.075], [0.16, 0.13, 0.115], [-0.04, 0.145, 0.125], [-0.22, 0.115, 0.095], [-0.36, 0.065, 0.055], [-0.44, 0.035, 0.03]];
+  const pts: V3[] = prof.map(([z, , ry]) => [0, ry, z]);
+  const rad: [number, number][] = prof.map(([, rx, ry]) => [rx, ry]);
+  const boneAt = (t: number): [number, number, number] => { const z = 0.5 - t * 0.94; return z > 0.1 ? [0, 1, 1] : z > -0.15 ? [1, 0, 1 - (0.1 - z) / 0.25 * 0.5] : z > -0.38 ? [2, 1, 0.6 + 0.4 * ((-0.15 - z) / 0.23)] : [2, 2, 1]; };
+  b.tube(pts, rad, seg(12), boneAt, BPART.coat, {}, true, true, [1, 0, 0]);
+  if (lod <= 1) b.tube(pts.map((p) => [p[0], p[1] - 0.012, p[2]] as V3), rad.map(([x, y]) => [x * 0.97, y * 0.92] as [number, number]), seg(12), boneAt, BPART.belly, {}, false, false, [1, 0, 0]);
+  if (lod <= 1) {
+    b.ellipsoid([0, 0.05, 0.495], [0.02, 0.014, 0.012], 5, 3, rigid(0), BPART.dark);
+    if (lod === 0) for (const sx of [1, -1]) b.ellipsoid([sx * 0.045, 0.09, 0.42], [0.014, 0.014, 0.012], 5, 4, rigid(0), BPART.dark);
+  }
+  for (const sx of [1, -1]) {
+    b.card([sx * 0.1, 0.05, 0.2], [sx * 0.2, 0.012, 0.15], [sx * 0.19, 0.008, 0.08], [sx * 0.1, 0.04, 0.12], rigid(1), BPART.dark);
+    b.card([sx * 0.012, 0.03, -0.42], [sx * 0.09, 0.025, -0.6], [sx * 0.02, 0.025, -0.62], [0, 0.03, -0.44], rigid(3), BPART.dark);
+  }
+  return b.build(SEAL_RIG, 0.27);
+}
+
+/** still things drawn with the body material (one bone; their material runs at freqK 0, so nothing moves) */
+export const STILL_RIG: Rig = { plan: PLAN.insect, pivots: [[0, 0, 0], [0, 0, 0]], parents: [-1, 0] };
+
+/** one shell of a shell bed (a mussel / oyster valve pair), unit length, lying on the sea floor */
+export function shellMesh(): BodyMesh {
+  const b = new RigBuilder();
+  b.ellipsoid([0, 0.0, 0], [0.26, 0.12, 0.5], 8, 5, rigid(0), BPART.coat, {}, (p) => p[1] >= -0.01);
+  b.ellipsoid([0, 0.02, 0.02], [0.24, 0.07, 0.46], 8, 4, rigid(0), BPART.belly, {}, (p) => p[1] >= 0.0);
+  return b.build(STILL_RIG, 0.12);
+}
+
+/**
+ * a straw bee skep on a flat stone (kept bees): a dome of coiled straw, 1 unit high, with the dark flight hole at its
+ * foot facing +z
+ */
+export function skepMesh(): BodyMesh {
+  const b = new RigBuilder();
+  b.ellipsoid([0, 0.04, 0], [0.62, 0.05, 0.62], 10, 3, rigid(0), BPART.stone);
+  b.ellipsoid([0, 0.07, 0], [0.48, 0.9, 0.48], 12, 8, rigid(0), BPART.straw, {}, (p) => p[1] >= 0.06);
+  // the coils: five rings of rope-thick straw round the dome, narrowing to the top
+  for (let k = 0; k < 5; k++) {
+    const h = 0.12 + k * 0.17, rr = 0.48 * Math.sqrt(Math.max(0, 1 - Math.pow((h - 0.07) / 0.9, 2))) + 0.01;
+    const ring: V3[] = [];
+    for (let i = 0; i <= 12; i++) { const a = (i / 12) * Math.PI * 2; ring.push([Math.sin(a) * rr, h, Math.cos(a) * rr]); }
+    b.tube(ring, ring.map(() => [0.035, 0.03] as [number, number]), 4, rigid(0), BPART.straw, {}, false, false);
+  }
+  b.ellipsoid([0, 0.13, 0.47], [0.09, 0.06, 0.04], 6, 4, rigid(0), BPART.dark);
+  return b.build(STILL_RIG, 1);
 }

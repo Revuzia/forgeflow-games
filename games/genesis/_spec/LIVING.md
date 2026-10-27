@@ -2149,9 +2149,9 @@ What the people make of their god follows what it does: harm builds **fear** and
 whatever comes after; gifts of material and crops raise trust a little and fear not at all.
 
 **A world left alone for 50 game years** (`alone.ts <seed> 50 3000`; `r6/out/alone-live-<seed>.json`, the god silent,
-natural disasters on). **Six of the eight seeds have finished on the final tree** (20261008, 7, 1234, 1, 2, 3; seeds 4
-and 5 were still running when this was written — `r6/out/alone-live-4.log`, `-5.log` — and `acceptance.json` is
-re-written by `r6/summarize6.ts` when they end). Firsts are the game year of the first recipe of each kind.
+natural disasters on). **All eight seeds finished on the final tree** (20261008, 7, 1234, 1, 2, 3 by 21:42; seeds 4
+and 5 at 22:21 and 22:31 UTC on 2026-10-27; `acceptance.json` re-written by `r6/summarize6.ts` at 22:31 from all
+eight, `r6/out/summarize-8alone.log`). Firsts are the game year of the first recipe of each kind.
 
 | seed | people Y1 / Y10 / Y30 / Y50 | era at Y50 | fire / pottery / agriculture / copper / writing | towns fallen | deaths: old age / childhood fever / sickness / other | CPU s |
 |---|---|---|---|---|---|---|
@@ -2161,39 +2161,53 @@ re-written by `r6/summarize6.ts` when they end). Firsts are the game year of the
 | 1 | 32 / 30 / 42 / 33 | bronze age | 4.2 / 4.9 / 4.1 / 20.9 / 38.3 | 2 | 23 / 9 / 27 / thirst 14, hunger 6 | 1678 |
 | 2 | 30 / 36 / 53 / 63 | bronze age | 2.2 / 6.2 / 6.3 / 22.5 / 36.8 | 0 | 23 / 15 / 32 / — | 1133 |
 | 3 | 32 / 36 / 40 / 29 | bronze age | 0.2 / 4.2 / 4.2 / 20.2 / 36.8 | 0 | 25 / 10 / 24 / predator 1 | 1379 |
+| 4 | 31 / 24 / 28 / 50 | iron age (iron smelting 41.0) | 5.0 / 11.0 / 4.1 / 27.8 / 45.9 | 0 | 16 / 10 / 35 / thirst 1 | 1363 |
+| 5 | 30 / 42 / 69 / 126 | bronze age | 4.0 / 8.0 / 8.0 / 24.1 / 38.3 | 0 (one split) | 29 / 22 / 3 / disaster 2, thirst 2 | 1207 |
 
-- **Met** (6 seeds): walking 0.23 of waking time in year 1 (≤ 0.30; 0.15–0.31) and 0.25 over all slices; walking to work
-  0.14; food per adult-day over year 1 1.47 (1.29–1.71; 1.25 ± 25 %); every save → load copy hashed as the original
-  (42 / 42 slices); children wander 0, play 0.19, do chores 0.17; fire-keeping by year 5 on 6 / 6 (median 3.9) without the
-  god; agriculture 5.3 (3–12), copper smelting 21.9 (20–40), writing 37.5 (35–65) by median; no era label at odds with
-  what a town can do; no hunter killed; the first herd within 2 years of husbandry on 6 / 6, herds 0.07 of food where
-  kept (0.05–0.20); fishing on a shoal or a finite stock ≥ 0.98; 0.97 harvests a sowing; every year end housed outside
-  the disaster years (6 / 6; rebuilt in 1–2 years); infant deaths 9 % of births (5–12 %), birth interval 3.36 years;
-  2 festivals a settlement-year, 0.8 attendance, 95 % of couples wed, 98 % of deaths at home buried; in these worlds the first
-  speciation at year 9.5 (median), 0.02 speciations a world-year over the first 8 (≤ 0.3).
-- **Partly met**: work begun after dusk 0.009 on average but 0.085 in the worst slice; walking in the dark 0.064, worst
-  0.246; parched / starving 0.001 / 0.002 on average, worst 0.029 / 0.031 (seed 1's drought years); food per adult-day
-  in the year-1 day slices 1.35 (0.75–2.04, one seed above +50 %); fire-keeping in 1–6 on 5 / 6 (seed 3 kept fire at 0.17);
-  bronze by year 50 on 4 / 6 (31.6–40.3; seeds 7 and 1234 end in the copper age); farming 0.47 of food 3+ years after
-  agriculture (0.28–0.70); 10 kinds gathered a settlement-year at year 8 (7–12); adults without curiosity at a year end
-  above 0.20 in 12 of 294 seed-years (worst 0.93 and 0.60 on seed 1 in years 46–47, the band whose town fell, §10.6;
-  the others 0.22–0.33), without status 0.33 at worst (the same band), ≤ 0.11 elsewhere.
-- **Missed, and why**: *kills* 3.7 per 100 people a year (≥ 20) and *hunted share* 0.065 of food over 50 years
-  (0.15–0.35): the targets were set for stone-age bands, and over eight years LAND's census holds 10.6 kills and 0.16
-  of food (§2.14); once a town farms, herds and fishes (by years 4–8 here) the hunt is a 2–3 day trip that the other
-  sources outrun — food by source over 50 years: forage 0.26, hunt 0.065, fish 0.19, farm 0.42, herd 0.07 (medians).
-  *Houses* at every year end (≥ 7 of 8): 0 / 6 by the letter, 269 / 300 seed-years housed; every unhoused year end is a
-  year a natural disaster threw homes down (≥ 5 buildings collapsed — quakes, wildfires, tornadoes threw down 31–122 on
-  the four worlds traced — or the town fell), or the rebuild year after (§2.5's row "outside disaster years": 6 / 6). *Pottery* 5.8 by median (6–18; 3 / 6 in the band, 4.2–8.2): the kiln follows fire-keeping
-  within 0.6–4.5 years. *Deaths under 15* 28 % of births (12–25 %; 23–34 %), *growth* 1.47 %/year over years 5–30 (1.5–3)
-  and *under-15 share* 0.46 (0.35–0.45): the cohort model of §2.14 — with these death rates the two demographic
-  targets meet only at their corner (0.45 at 1.5 %); over 50 years more children die than in LAND's eight-year census (19–23 %; deaths
-  by cause over the six worlds: sickness 170, old age 134, childhood fevers 65); nothing was tuned (a fertility
-  or illness change moves every era date HISTORY calibrated). *Lightning fires* in years 1–2: §10.5.
-- **The people and a silent god** (years 10–50, mean of seeds): faith 0.10, fear 0.02, trust 0.03, loyalty 0.01 —
-  they worship a little, fear little, and owe nothing to a god that has done nothing; one polity per world, 9 towns
-  founded (the 6 first towns and 3 refoundings), 3 fallen (seed 1 twice, seed 7 once), no secession, war or raid in 50
-  years without a second town to quarrel with (the kin fixture holds the politics targets).
+- **Met** (8 seeds): walking 0.21 of waking time in year 1 (≤ 0.30; 0.15–0.31) and 0.26 over all slices; walking to work
+  0.13; food per adult-day over year 1 1.44 (1.29–1.71; 1.25 ± 25 %); every save → load copy hashed as the original
+  (56 / 56 slices); children wander 0, play 0.19, do chores 0.16; agriculture 5.3 (3–12; 8 / 8 in the band), copper
+  smelting 23.3 (20–40; 8 / 8), writing 38.3 (35–65; 8 / 8) by median; no era label at odds with what a town can do;
+  no hunter killed; the first herd within 2 years of husbandry on 8 / 8; fishing on a shoal or a finite stock ≥ 0.98 on
+  the 7 seeds that fished (seed 4 never did); 0.97 harvests a sowing; every year end housed outside the disaster years
+  on 7 / 8 (rebuilt in 1 year by median, 3 at most; the one calm unhoused year end is seed 5's year 50: beds for all
+  126, 21 of 31 households housed — the town grew 114 → 126 in its last two years and new couples waited for houses);
+  infant deaths 9.5 % of births by median (6–23 %; seed 4 alone above 12 %), birth interval 3.36 years (3.22–3.64);
+  2 festivals a settlement-year, 0.82 attendance, 92 % of couples wed, 98 % of deaths at home buried; the first
+  speciation at year 9 (median), 0.03 speciations a world-year over the first 8 (≤ 0.3).
+- **Partly met**: work begun after dusk 0.009 on average but 0.085 in the worst slice; walking in the dark 0.063, worst
+  0.246; parched / starving 0.001 / 0.001 on average, worst 0.029 / 0.031 (seed 1's drought years); food per adult-day
+  in the year-1 day slices 1.30 (0.75–2.04, one seed above +50 %); fire-keeping in years 1–6 on 7 / 8 (seed 3 kept fire
+  at 0.17); pottery 7.1 by median (6–18) but in the band on 5 / 8 (4.2–11.0: the kiln follows fire-keeping within
+  0.7–6 years); bronze by year 50 on 6 / 8 (31.6–40.3; seeds 7 and 1234 end in the copper age; seed 4 smelted iron at
+  year 41 and ends in the iron age); farming 0.47 of food 3+ years after agriculture (0.21–0.70); adults without
+  curiosity at their worst year end above 0.20 on 7 / 8 seeds (seed 1 0.93 in years 46–47, the band whose town fell,
+  §10.6; seed 5 0.59; the others 0.16–0.33), without status 0.33 at worst (the same band), ≤ 0.11 elsewhere.
+- **Missed, and why**: *kills* 3.9 per 100 people a year (3.1–9.2; ≥ 20) and *hunted share* 0.065 of food over 50 years
+  (0.014–0.125; 0.15–0.35): the targets were set for stone-age bands, and over eight years LAND's census holds 10.6 kills
+  and 0.16 of food (§2.14); once a town farms, herds and fishes (by years 4–8 here) the hunt is a 2–3 day trip that the
+  other sources outrun — food by source over 50 years: forage 0.29, hunt 0.065, fish 0.19, farm 0.42, herd 0.05
+  (medians). *Houses* at every year end (≥ 7 of 8): 0 / 8 by the letter, 356 / 400 seed-years housed; every unhoused
+  year end but seed 5's last is a year a natural disaster threw homes down (≥ 5 buildings collapsed — quakes, wildfires,
+  tornadoes threw down 31–122 on the four worlds traced — or the town fell), or the rebuild year after (§2.5's row
+  "outside disaster years": 7 / 8, met). *Deaths under 15* 28 % of births (16–44 %; 12–25 %), *growth* 1.47 %/year over
+  years 5–30 (−1.4 to 2.3; 1.5–3) and *under-15 share* 0.46 (0.40–0.47; 0.35–0.45): the cohort model of §2.14 — with
+  these death rates the two demographic targets meet only at their corner (0.45 at 1.5 %); over 50 years more children
+  die than in LAND's eight-year census (19–23 %; deaths by cause over the eight worlds: sickness 208, old age 179,
+  childhood fevers 97, thirst 17, hunger 6, disasters 4, predators 3); seed 4 is the hard-luck world (31 → 24 people in
+  its first ten years, 36 of its 82 births dead before 15) and seed 5 the lucky one (30 → 126, 16 %); nothing was tuned
+  (a fertility or illness change moves every era date HISTORY calibrated). Three rows the two last seeds pulled just
+  under their line (met on the first six): *fire-keeping* by year 5 on 8 / 8 but at a median of 4.04 (≤ 4: seed 4 at
+  5.0, seed 5 at 4.0 — two weeks of game time over); *herding share* in years with herds 0.0495 (0.05–0.20; 4 / 8 in the
+  band, 0.007–0.121: where fish or fields feed a town its herd stays small); *kinds gathered* a settlement-year at year 8
+  9.5 (≥ 10; 7–12, 4 / 8 at 10 or more). No mechanism behind them changed with the last two seeds; they are the spread
+  of eight worlds around targets the first six met by a small margin. *Lightning fires* in years 1–2: §10.5.
+- **The people and a silent god** (years 10–50, mean of seeds): faith 0.09, fear 0.02, trust 0.02, loyalty 0.01 —
+  they worship a little, fear little, and owe nothing to a god that has done nothing; one polity per world, 11 towns
+  founded (the 8 first towns and 3 refoundings), 3 fallen (seed 1 twice, seed 7 once), one split (seed 5), no
+  secession, war or raid in 50 years without a second town to quarrel with (the kin fixture holds the politics targets).
+- **Count** (`acceptance.json`, all eight 50-year worlds, the 8-seed god sessions and the year-50 sessions run so far):
+  36 targets met, 10 partly, 12 missed, 13 report-only rows (six seeds: 38 / 10 / 10).
 
 **The god's sessions on year-50 towns** (`god.ts`, `FROM=y50`, the biggest town of each 50-year world, natural disasters
 on; so far seeds 20261008 and 7, 24 sessions, none failed; the other six run after their worlds): meteor 11.7 %
@@ -2257,8 +2271,9 @@ needs here (not roaming from water it has into land with none; hands freed of st
 its own multi-seed measurement, filed as a follow-up task. (Correction, 2026-10-27 21:35–21:40, from that task's two designers, `living/drought/
 design-movement/LEDGER.md`, `design-abandonment/LEDGER.md`: the land the band can walk from the ruins is 204 cells,
 912 m across, and 158–160 of its edges are deep sea water against 0–2 cliffs — an island or cut-off headland, not a
-cliff-bound plateau; the fresh water A* could not reach is across the sea.) Of the five other worlds finished so far, none
-lost a band to thirst (§10.4: thirst deaths only on seed 1).
+cliff-bound plateau; the fresh water A* could not reach is across the sea.) Of the seven other 50-year worlds, none lost
+a band to thirst: seed 4 lost one person to thirst (year 37), seed 5 two (year 24), the other five none (§10.4's table;
+`r6/out/alone-live-<seed>.log`).
 
 ### 10.7 The gate (seventh pass, 2026-10-27)
 `npm run check` on the final integrated tree (HEAD `ccfcb5c3`; the sim unchanged since the sixth pass's `work.ts` fix at

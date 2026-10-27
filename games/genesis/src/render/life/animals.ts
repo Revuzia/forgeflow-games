@@ -17,11 +17,11 @@ import { groundHeight } from '../../sim/grid/surface.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
 import { animalAt, type AnimalLook } from './catalog.ts';
 import {
-  BIRD_RIG, FISH_RIG, HEX_RIG, INSECT_RIG, PLAN, RAY_RIG, birdMesh, fishMesh, hexMesh, insectMesh, quadMesh, quadRig, quadSpecFor, rayMesh,
-  type BodyMesh, type Rig,
+  BIRD_RIG, DUCK_RIG, FISH_RIG, HEX_RIG, INSECT_RIG, PLAN, RAY_RIG, SEAL_RIG, STILL_RIG, birdMesh, fishMesh, hexMesh, insectMesh, quadMesh, quadRig,
+  quadSpecFor, rayMesh, sealMesh, shellMesh, skepMesh, type BodyMesh, type Rig,
 } from '../gen/bodygen.ts';
 import type { BodyMaterialOpts } from './bodymat.ts';
-import { BodyBuckets, bodyMatrix } from './bodies.ts';
+import { BodyBuckets, bodyMatrix, type BodyBucket } from './bodies.ts';
 
 const _mat = new Float32Array(16);
 const _a = new Float32Array(3), _b = new Float32Array(3), _c = new Float32Array(3);
@@ -29,11 +29,16 @@ const _a = new Float32Array(3), _b = new Float32Array(3), _c = new Float32Array(
 /** per animal: animation blend, cached ground / water, and the same decaying-offset motion smoothing as crowds.ts */
 interface Track { anim: number; prev: number; at: number; gx: number; gy: number; gz: number; ground: number; water: number; sx: number; sy: number; sz: number; ox: number; oy: number; oz: number }
 
-/** what to build for an animal look */
-function bodyFor(look: AnimalLook, lod: number): { body: BodyMesh; opts: BodyMaterialOpts; shadows: boolean } {
+/** what to build for an animal look (exported for the body lineup page and tests) */
+export function bodyFor(look: AnimalLook, lod: number): { body: BodyMesh; opts: BodyMaterialOpts; shadows: boolean } {
   switch (look.form) {
     case 'bird': case 'gull': case 'chicken': case 'vulture':
       return { body: birdMesh(lod, look.form === 'gull' || look.form === 'vulture'), opts: { plan: PLAN.bird, rig: BIRD_RIG }, shadows: lod === 0 };
+    case 'duck': return { body: birdMesh(lod, false, true), opts: { plan: PLAN.bird, rig: DUCK_RIG }, shadows: lod === 0 };
+    case 'seal': return { body: sealMesh(lod), opts: { plan: PLAN.fish, rig: SEAL_RIG, freqK: 0.35 }, shadows: lod === 0 };
+    case 'bees': return { body: insectMesh(), opts: { plan: PLAN.insect, rig: INSECT_RIG, freqK: 1.6 }, shadows: false };
+    // (still things: the material runs at freqK 0, so a shell or a skep never rocks)
+    case 'shells': return { body: shellMesh(), opts: { plan: PLAN.insect, rig: STILL_RIG, freqK: 0 }, shadows: false };
     case 'fish': return { body: fishMesh(lod, false), opts: { plan: PLAN.fish, rig: FISH_RIG }, shadows: false };
     case 'whale': return { body: fishMesh(lod, true), opts: { plan: PLAN.fish, rig: FISH_RIG, pitchSwim: true, freqK: 0.25 }, shadows: false };
     case 'locust': return { body: insectMesh(), opts: { plan: PLAN.insect, rig: INSECT_RIG }, shadows: false };
@@ -51,8 +56,13 @@ function bodyFor(look: AnimalLook, lod: number): { body: BodyMesh; opts: BodyMat
 /** mesh length / height the generator builds at, to scale to the content size */
 function unitSize(look: AnimalLook): number {
   switch (look.form) {
-    case 'bird': case 'gull': case 'chicken': case 'vulture': return 1.0;
+    case 'bird': case 'gull': case 'chicken': case 'vulture': case 'duck': return 1.0;
     case 'fish': case 'whale': return 1.1;
+    // (content sizes of the long and low are lengths, not shoulder heights: a seal's mesh is ~1.1 long; a 1.0
+    // crocodile is drawn ~4 m long (its mesh ~5.5 long); a 0.6 desert lizard 0.6 m nose to tail, not a 2.7 m dragon)
+    case 'seal': return 1.05;
+    case 'croc': return 1.4;
+    case 'lizard': return 4.2;
     case 'locust': return 1.0;
     case 'ray': return 2.0;
     case 'crawler': return 1.3;
@@ -83,8 +93,13 @@ export class Animals {
   get group() { return this.bodies.group; }
 
   private bucket(look: AnimalLook, lod: number) {
-    const l = look.form === 'locust' ? 0 : lod;
+    const l = look.form === 'locust' || look.form === 'bees' || look.form === 'shells' ? 0 : lod;
     return this.bodies.get(`${look.form}|${l}`, () => bodyFor(look, l));
+  }
+
+  /** the straw skep kept bees live in (one mesh for every kept colony) */
+  private skepBucket(): BodyBucket {
+    return this.bodies.get('skep', () => ({ body: skepMesh(), opts: { plan: PLAN.insect, rig: STILL_RIG, freqK: 0 }, shadows: true }));
   }
 
   private colours(look: AnimalLook, id: number): void {
@@ -152,6 +167,10 @@ export class Animals {
         // swimmers hang below the water surface (altitude < 0 = depth); everyone else stands on the ground (+ flight)
         let r = swim && tr.water > 0.2 ? tr.ground + tr.water + Math.max(M.alt[i], -tr.water + 0.3) : tr.ground + Math.max(0, M.alt[i]);
         if (look.form === 'whale') r = tr.ground + tr.water - 0.6;
+        // a duck on water rides on the surface (its mesh's y 0 is the waterline); a seal in the water swims with its
+        // back awash; a shell bed lies on the bottom
+        else if ((look.form === 'duck' || look.form === 'seal') && tr.water > 0.15 && M.anim[i] !== AnimState.fly) r = tr.ground + tr.water - (look.form === 'seal' ? 0.18 : 0);
+        else if (look.form === 'shells') r = tr.ground;
         const d = Math.hypot(ux * r - cx, uy * r - cy, uz * r - cz);
         if (d > range) continue;
         // (the far LOD from 85 m: a beast is ~14 px long there)
@@ -159,7 +178,8 @@ export class Animals {
         const size = (look.size / unitSize(look)) * (M.scale[i] || 1);
         const cadence = Math.max(0.35, Math.min(2.5, Math.pow(1.0 / Math.max(0.05, look.size), 0.45))) * (0.9 + 0.2 * hashFloat(id, 7));
         const blend = Math.min(1, (realTime - tr.at) / 0.35);
-        const male = look.form === 'deer' && hashFloat(id, 9) < 0.4 ? 1 : 0;
+        // (antlers, a bull moose's palms and a lion's mane are drawn on males only)
+        const male = (look.form === 'deer' || look.form === 'moose') && hashFloat(id, 9) < 0.4 || look.form === 'lion' && hashFloat(id, 9) < 0.3 ? 1 : 0;
         this.colours(look, id);
         if (look.form === 'fish') {
           // a shoal: fish circling the school's centre, all heading round together, at depths
@@ -175,6 +195,49 @@ export class Animals {
             bodyMatrix(_mat, _pu[0], _pu[1], _pu[2], fr, Math.atan2(Math.cos(a), -Math.sin(a)), size * (0.8 + 0.4 * hashFloat(id, k, 4)));
             const j = this.bodies.push(b);
             this.bodies.set(b, j, _mat, [AnimState.swim, AnimState.swim, 1, hashFloat(id, k, 5)], _a, _b, _c, [0, 0, cadence * 1.8, 0]);
+          }
+          continue;
+        }
+        if (look.form === 'bees') {
+          // a bee colony: a few dozen bees working the flowers round it, never more than a couple of metres up (not a
+          // locust cloud); kept bees live in a straw skep, and their bees come and go from its door
+          const b = this.bucket(look, 0);
+          if (look.kept) {
+            const sb = this.skepBucket();
+            this.place(ux, uy, uz, 0, 0, R);
+            bodyMatrix(_mat, _pu[0], _pu[1], _pu[2], tr.ground, hashFloat(id, 2) * 6.28, 0.55);
+            const j = this.bodies.push(sb);
+            _a[0] = 0.5; _a[1] = 0.4; _a[2] = 0.22; _b[0] = 0.5; _b[1] = 0.4; _b[2] = 0.22; _c[0] = 0.4; _c[1] = 0.32; _c[2] = 0.2;
+            this.bodies.set(sb, j, _mat, [AnimState.idle, AnimState.idle, 1, 0], _a, _b, _c, [0, 0, 1, 0]);
+            this.colours(look, id);
+          }
+          if (d > 90) continue;
+          const n = d < 30 ? 40 : 18;
+          for (let k = 0; k < n; k++) {
+            const h1 = hashFloat(id, k, 11), h2 = hashFloat(id, k, 12), h3 = hashFloat(id, k, 13);
+            const t = animTime * (0.5 + h1 * 0.7) + h2 * 30;
+            const span = 0.6 + 2.2 * h3;
+            const ex = Math.sin(t + h2 * 6.28) * span + Math.sin(t * 3.7 + h1 * 9) * 0.15;
+            const nz = Math.cos(t * 0.8 + h3 * 6.28) * span + Math.cos(t * 2.9 + h2 * 7) * 0.15;
+            const ey = 0.3 + 1.6 * h1 * h1 + Math.sin(t * 2.3 + h3 * 5) * 0.2;
+            this.place(ux, uy, uz, ex, nz, R);
+            const hd = Math.atan2(Math.cos(t + h2 * 6.28), -Math.sin(t * 0.8 + h3 * 6.28));
+            bodyMatrix(_mat, _pu[0], _pu[1], _pu[2], tr.ground + ey, hd, 0.016 * (0.85 + 0.3 * h2));
+            const j = this.bodies.push(b);
+            this.bodies.set(b, j, _mat, [AnimState.fly, AnimState.fly, 1, h3], _a, _b, _c, [0, 0, 1, 0]);
+          }
+          continue;
+        }
+        if (look.form === 'shells') {
+          // a shell bed: a scatter of mussel and oyster shells on the bottom of the shallows (seen through clear water)
+          if (d > 60) continue;
+          const b = this.bucket(look, 0);
+          for (let k = 0; k < 24; k++) {
+            const a = hashFloat(id, k, 1) * 6.28, rr = Math.sqrt(hashFloat(id, k, 2)) * 1.6;
+            this.place(ux, uy, uz, Math.cos(a) * rr, Math.sin(a) * rr, R);
+            bodyMatrix(_mat, _pu[0], _pu[1], _pu[2], r + 0.01, hashFloat(id, k, 3) * 6.28, size * (0.7 + 0.6 * hashFloat(id, k, 4)));
+            const j = this.bodies.push(b);
+            this.bodies.set(b, j, _mat, [AnimState.idle, AnimState.idle, 1, 0], _a, _b, _c, [0, 0, 1, 0]);
           }
           continue;
         }

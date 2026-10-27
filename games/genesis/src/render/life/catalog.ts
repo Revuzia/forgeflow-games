@@ -455,7 +455,9 @@ export function speciesIndex(id: string): number {
 // ───────────────────────────── animals ─────────────────────────────
 
 /** quadruped / bird / fish / insect body variants the generator knows (render/gen/bodygen.ts) */
-export const ANIMAL_FORMS = ['deer', 'boar', 'wolf', 'bear', 'bison', 'goat', 'sheep', 'horse', 'cattle', 'bird', 'gull', 'fish', 'locust', 'hare', 'lizard', 'crawler', 'ray', 'whale', 'chicken', 'vulture'] as const;
+export const ANIMAL_FORMS = ['deer', 'boar', 'wolf', 'bear', 'bison', 'goat', 'sheep', 'horse', 'cattle', 'bird', 'gull', 'fish', 'locust', 'hare', 'lizard', 'crawler', 'ray', 'whale', 'chicken', 'vulture',
+  // the living world's real species: big cats, camels, moose, musk ox, macaques, seals, crocodiles, ducks, bees, shell beds
+  'cat', 'lion', 'camel', 'bactrian', 'moose', 'muskox', 'primate', 'seal', 'croc', 'duck', 'bees', 'shells'] as const;
 export type AnimalForm = (typeof ANIMAL_FORMS)[number];
 
 export interface AnimalLook {
@@ -467,6 +469,8 @@ export interface AnimalLook {
   belly: [number, number, number];
   /** coat colour variants (each animal picks one by a hash of its id) */
   coats: [number, number, number][];
+  /** kept by people (content `domestic`): kept bees live in skeps */
+  kept?: boolean;
 }
 
 const DEFAULT_ANIMALS: AnimalLook[] = [
@@ -493,6 +497,21 @@ function animalFromDef(d: Def): AnimalLook {
   const all = `${id} ${str(d.name)} ${str(d.kind)} ${str(d.body)} ${str(d.form)} ${strs(d.tags).join(' ')}`;
   const body = str(d.body);
   const form: AnimalForm = (ANIMAL_FORMS as readonly string[]).includes(id) ? id as AnimalForm
+    // (the specific real bodies first: a seal, a macaque or a caracal fell through every pattern to a deer, lions and
+    // tigers were drawn as wolves, camels as horses, a musk ox as a cow, shellfish as a swimming shoal, a bee colony
+    // as a locust plague)
+    : /bee-colony|\bbees?\b|honey|hive/.test(all) ? 'bees'
+    : /shell-bed|shellfish|mussel|oyster|clam|cockle/.test(all) ? 'shells'
+    : /\bseal\b|-seal\b|sea.?lion|walrus/.test(all) ? 'seal'
+    : /crocodile|alligator|caiman|reptile-large/.test(all) ? 'croc'
+    : /primate|macaque|monkey|baboon/.test(all) ? 'primate'
+    : /bactrian|wild-camel/.test(all) ? 'bactrian'
+    : /camel|dromedary/.test(all) ? 'camel'
+    : /moose|\belk\b/.test(all) ? 'moose'
+    : /musk.?ox/.test(all) ? 'muskox'
+    : /\blion\b/.test(all) ? 'lion'
+    : /feline|tiger|caracal|lynx|leopard|panther|jaguar|cheetah|\bcat\b/.test(all) ? 'cat'
+    : /bird-water|duck|mallard|goose|swan/.test(all) ? 'duck'
     : /chicken|hen|bird-small/.test(all) ? 'chicken'
     : /vulture|bird-large|eagle|condor/.test(all) ? 'vulture'
     : /ray/.test(body) ? 'ray'
@@ -533,6 +552,7 @@ function animalFromDef(d: Def): AnimalLook {
   return {
     id: id || dflt.id, form, size: Math.max(0.03, Math.min(20, num(d.size, dflt.size))),
     coat, belly, coats: Array.isArray(colors) ? colors.map((x) => hexLinear(x, coat)) : [coat],
+    kept: d.domestic === true,
   };
 }
 
