@@ -487,7 +487,7 @@ function initTouch(W) {
     updateRotate();
     placeBand();
     clearTimeout(R._bandRsT);
-    R._bandRsT = setTimeout(() => placeBand(), 200);
+    R._bandRsT = setTimeout(() => { placeBand(); fitHint(); }, 200);
   };
   window.addEventListener("resize", ro);
   window.addEventListener("orientationchange", ro);
@@ -2566,7 +2566,10 @@ const _sil = { off: false, all: false, probe: null, st: {} };            // st[i
 // asking for its file used to cost a FAILED REQUEST and - because onerror reads "the set is missing" - switched EVERY
 // silhouette off for the rest of the session. New guns get a runtime silhouette instead (silRuntime: the same look - flat
 // white, side view, muzzle right, fitted to 160 x 60 - rendered from the gun's own view model in the icon context).
-const SIL_SHIPPED = { pistol: 1, smg: 1, ar: 1, shotgun: 1, sniper: 1, glauncher: 1 };
+// Fix round: lane sim shipped wpn_dmr / wpn_lmg / wpn_burst.png (art_b_wpn from the CC0 models) and D8 ships wpn_frag / wpn_smoke.png
+// (flat white from the vitals-row frag / smoke icons, F:/lc_p23/hud/fix/make_throw_icons.py): a frag kill shows its silhouette in the
+// feed and on the death card instead of the text fallback. Any gun not listed here still gets the runtime silhouette.
+const SIL_SHIPPED = { pistol: 1, smg: 1, ar: 1, shotgun: 1, sniper: 1, glauncher: 1, dmr: 1, lmg: 1, burst: 1, frag: 1, smoke: 1 };
 function silFor(W, id) {
   if (!id || !K || !K.WEAPONS[id]) return null;
   if (!SIL_SHIPPED[id]) return silRuntime(W || _tW, id);
@@ -2798,8 +2801,7 @@ function updateWeaponCard(W, p, C) {
       const rn = K.RARITY[rar] || "common", rc = K.RARITY_COLOR[rn] || "#dfe7f2";
       R.wName.textContent = K.weaponName(wid); R.wName.style.color = rc;
       R.wTag.textContent = rn; R.wTag.style.color = rc; R.wTag.style.display = "";
-      // AUTO / SEMI: the same rule weapons.js fires by (SMG + AR hold-to-fire, the rest click)
-      // LC-16: the gun's own `fire` field ("auto" | "semi" | "burst", lane sim) when it has one, else the old class rule
+      // AUTO / SEMI / BURST: K.fireMode, the rule weapons.js fires by (LC-16)
       R.wMode.textContent = fireLabel(def); R.wMode.style.display = "";
       R.wAType.textContent = AMMO_NAME[def.ammo] || String(def.ammo || "").toUpperCase();
       const n = Math.min(MAG_SEGS, Math.max(1, def.mag | 0));
@@ -4081,9 +4083,12 @@ function shortName(s) {
   if (def && def.short) return String(def.short).toUpperCase().slice(0, 5);
   return s.id.slice(0, 4).toUpperCase();
 }
-/** AUTO / SEMI / BURST for the weapon card (LC-16). */
+/** AUTO / SEMI / BURST for the weapon card (LC-16). The SAME rule weapons.js fires by: K.fireMode (sim) - its `fire` field, else
+ *  the class rule - so the card can never disagree with the trigger (the verifier saw LMG SEMI / burst AUTO on a cls-only rule). */
 function fireLabel(def) {
-  const f = def && def.fire;
+  let f = null;
+  if (def && K && typeof K.fireMode === "function") { try { f = K.fireMode(def); } catch (e) { f = null; } }
+  if (!f) f = def && def.fire;
   if (f === "burst") return "BURST";
   if (f === "auto") return "AUTO";
   if (f === "semi") return "SEMI";
@@ -4826,10 +4831,14 @@ function wireEvents(W) {
     }
     flashMsg("SUPPLY DROP HAS LANDED");
   });
-  W.events.on("supplyDropOpened", (p2) => {
+  // D6: loot emits ("supplyDropOpened", actor, rec) with rec = { id, x, z, n } (actor null when nobody opened it in person). The
+  // first argument used to be read as the record: its id never matched an "sd<n>" mark and an actor has no .x, so opened crates
+  // stayed marked. A lone record (an older emitter) is still accepted.
+  W.events.on("supplyDropOpened", (a, rec) => {
+    const p2 = rec && (rec.id != null || rec.x != null) ? rec : (a && a.id != null && !a.pos ? a : null);
     const L2 = W._supplyMarks; if (!L2 || !p2) return;
     let m = p2.id != null ? L2.find((q) => q.id === p2.id) : null;
-    if (!m) { let bd = 30; for (const q of L2) { const d = Math.hypot(q.x - p2.x, q.z - p2.z); if (d < bd) { bd = d; m = q; } } }
+    if (!m && Number.isFinite(p2.x) && Number.isFinite(p2.z)) { let bd = 30; for (const q of L2) { const d = Math.hypot(q.x - p2.x, q.z - p2.z); if (d < bd) { bd = d; m = q; } } }
     if (m) { m.opened = true; mmT = 1; }
   });
 }
@@ -5780,12 +5789,289 @@ export function showCareer(W) {
   go.onclick = () => { L.remove(); R.career = null; };
 }
 
+// ═══ SETTINGS on TOUCH (D9, owner: phones untouched) ═══════════════════════════════════════════════════════════
+// A phone builds the settings panel EXACTLY as int-p1 did: the same rows in the same order, the same labels ('Graphics'
+// LOW / MEDIUM / HIGH through applyGraphics), the same 560 px box with the DONE button at the end of the scroller. This is the
+// int-p1 9aa2b746 showSettings, byte for byte except its name; its own re-renders call showSettings(W), which comes back here
+// while the HUD is in touch mode. The tabbed panel below is the desktop one.
+function showSettingsTouch(W) {
+  releaseCursor(W);
+  W.captureKey = null;   // drop any armed keybind capture when (re)rendering the modal
+  // Every graphics button, every sprint/ADS toggle, the perf toggle, RESET and
+  // each successful rebind re-enter this function, which tears the panel down
+  // and builds a fresh scroll container — so the offset went back to the top and
+  // the 17-row keybind grid (below the fold at maxHeight 82vh) threw you back up
+  // to the volume sliders after every single bind.
+  const prevScroll = (R.settings && R.settings.firstChild) ? R.settings.firstChild.scrollTop : 0;
+  if (R.settings) { R.settings.remove(); R.settings = null; }
+  const L = layer("settings", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 });
+  const box = h("div", Object.assign({ padding: "28px 36px", width: "560px", maxWidth: "calc(100vw - 96px)", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }, PANEL), null, L);
+  box.dataset.lc = "settings";
+  h("div", { fontSize: "22px", fontWeight: "900", letterSpacing: "2px" }, "SETTINGS", box);
+
+  // Every kill-feed line, the lobby cell and the name tags read actor.name, and
+  // playerName has been a settings default since ffg_royale3d.js:420 with NO UI
+  // anywhere that writes it — so you were "You" in your own kill feed while the
+  // 68 hand-written bot names gave every opponent more identity than the player.
+  // net.js papers over it online with "Player-XXX".
+  // Wired on `change`/`blur`, never on every keystroke: showSettings rebuilds
+  // itself on most interactions, so a per-keystroke re-render would lose focus
+  // mid-word. player.js already ignores keydown on INPUT targets, so the field
+  // cannot drive the character or steal a keybind capture.
+  const nRow = h("div", { display: "flex", gap: "10px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Player name", nRow);
+  const nInp = h("input", {
+    flex: "1", padding: "7px 10px", borderRadius: "8px", background: "rgba(0,0,0,0.4)",
+    border: "1px solid rgba(255,255,255,0.2)", color: "#eaf2ff", fontWeight: "700",
+    fontFamily: "Rajdhani, " + FONT,
+  }, null, nRow);
+  nInp.type = "text"; nInp.maxLength = 14; nInp.placeholder = "You";
+  nInp.value = (W.settings.playerName && W.settings.playerName !== "You") ? W.settings.playerName : "";
+  const commitName = () => {
+    const clean = String(nInp.value).replace(/[^A-Za-z0-9_\-. ]/g, "").replace(/\s+/g, " ").trim().slice(0, 14);
+    nInp.value = clean;
+    W.settings.playerName = clean || "You";
+    save(W);
+  };
+  nInp.onchange = commitName;
+  nInp.onblur = commitName;
+  h("div", { fontSize: FS(11), opacity: "0.6", marginTop: "-4px", fontFamily: "Rajdhani, " + FONT },
+    // the name is baked into the actor at match start (ffg_royale3d.js: `name:
+    // W.settings.playerName || "You"`), so a mid-match change must not look inert
+    "Applies from the next match.", box);
+
+  slider(box, "Master volume", W.settings.masterVol, (v) => { W.settings.masterVol = v; applyAudio(W); });
+  slider(box, "Music volume", W.settings.musicVol, (v) => { W.settings.musicVol = v; applyAudio(W); });
+  slider(box, "SFX volume", W.settings.sfxVol, (v) => { W.settings.sfxVol = v; applyAudio(W); });
+  // mouse / keyboard rows are .kbd-hint: hidden while the player is on touch,
+  // where the TOUCH CONTROLS rows below take their place
+  slider(box, "Mouse sensitivity", W.settings.sensitivity / 2, (v) => { W.settings.sensitivity = v * 2; save(W); }, { min: 0.075 }).className = "kbd-hint";   // never draggable to 0 — that killed mouse-look, and it persisted
+  slider(box, "ADS sensitivity", W.settings.adsSensitivity / 2, (v) => { W.settings.adsSensitivity = v * 2; save(W); }, { min: 0.075 }).className = "kbd-hint";
+
+  // TOUCH CONTROLS — the settings touch.js (lane L10) reads, feature-detected
+  // there: touchScale, touchLeftHanded, touchSens, touchOpacity, aimAssist,
+  // haptics. Shown only in touch mode. A change re-lays the controls out (a
+  // resize event, which touch.js listens for) and the HUD (syncTouchPrefs).
+  const touchChanged = () => {
+    save(W); syncTouchPrefs(W);
+    clearTimeout(R._touchRelayT);   // a slider drag fires per pixel: one relayout when it settles
+    R._touchRelayT = setTimeout(() => { try { window.dispatchEvent(new Event("resize")); } catch (e) {} }, 150);
+    if (W.events) W.events.emit("touchSettings");
+  };
+  h("div", { fontSize: "15px", fontWeight: "800", marginTop: "4px" }, "TOUCH CONTROLS", box).className = "lc-touch-only";
+  const tRow = (label, opts, cur, set) => {
+    const row2 = h("div", { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }, null, box);
+    row2.className = "lc-touch-only";
+    h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, label, row2);
+    opts.forEach((o) => {
+      const on = cur === o[1];
+      const b = h("button", Object.assign({}, BTN, {
+        padding: "7px 16px", fontSize: "13px",
+        background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+      }), o[0], row2);
+      b.onclick = () => { set(o[1]); touchChanged(); showSettings(W); };
+    });
+  };
+  const tsNow = +W.settings.touchScale > 0 ? +W.settings.touchScale : 1;
+  tRow("Button size", [["S", 0.85], ["M", 1], ["L", 1.2]], tsNow <= 0.9 ? 0.85 : tsNow > 1.1 ? 1.2 : 1, (v) => { W.settings.touchScale = v; });
+  tRow("Left-handed", [["OFF", false], ["ON", true]], W.settings.touchLeftHanded === true, (v) => { W.settings.touchLeftHanded = v; });
+  tRow("Aim assist", [["OFF", false], ["ON", true]], W.settings.aimAssist !== false, (v) => { W.settings.aimAssist = v; });
+  tRow("Vibration", [["OFF", false], ["ON", true]], W.settings.haptics !== false, (v) => { W.settings.haptics = v; });
+  const tsens = +W.settings.touchSens > 0 ? +W.settings.touchSens : 1;
+  slider(box, "Look sensitivity", (Math.max(0.3, Math.min(3, tsens)) - 0.3) / 2.7,
+    (v) => { W.settings.touchSens = Math.round((0.3 + v * 2.7) * 100) / 100; touchChanged(); },
+    { min: 0, fmt: (v) => (0.3 + v * 2.7).toFixed(1) + "x" }).className = "lc-touch-only";
+  const topa = +W.settings.touchOpacity > 0 ? +W.settings.touchOpacity : 0.75;
+  slider(box, "Button opacity", (Math.max(0.35, Math.min(1, topa)) - 0.35) / 0.65,
+    (v) => { W.settings.touchOpacity = Math.round((0.35 + v * 0.65) * 100) / 100; touchChanged(); },
+    { min: 0, fmt: (v) => Math.round((0.35 + v * 0.65) * 100) + "%" }).className = "lc-touch-only";
+
+  // graphics
+  const gRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Graphics", gRow);
+  ["low", "medium", "high"].forEach((g2) => {
+    const b = h("button", Object.assign({}, BTN, { padding: "7px 16px", fontSize: "13px", background: W.settings.graphics === g2 ? "#57b0ff" : "rgba(255,255,255,0.1)", color: W.settings.graphics === g2 ? "#fff" : "#cfe4ff" }), g2.toUpperCase(), gRow);
+    b.onclick = () => { W.settings.graphics = g2; applyGraphics(W); save(W); showSettings(W); };
+  });
+
+  // FOV: hardcoded at 57 (70 sprinting) with no control, in a genre where an FOV
+  // slider is table stakes AND a motion-sickness accommodation.
+  // The label read "20%" for the 57° default (the shared slider printed the
+  // 0..1 position): it is an angle, so it says one.
+  slider(box, "Field of view", (( W.settings.fov || 57) - 50) / 35, (v) => {
+    W.settings.fov = Math.round(50 + v * 35);   // 50–85
+    save(W);
+  }, { fmt: (v) => Math.round(50 + v * 35) + "°" });
+  // Sprint and ADS were hold-only. Toggle is an accessibility need, not a taste.
+  // live binding in the label, not a hardcoded SHIFT — Sprint is rebindable
+  // four rows down and the label lied after a rebind (sweep finding)
+  [["Sprint (" + ((() => { const ph = physFor(W, "ShiftLeft"); return ph ? keyLabel(ph) : "SHIFT"; })()) + ")", "sprintToggle"], ["Aim down sights", "adsToggle"]].forEach((e) => {
+    const row2 = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+    row2.className = "kbd-hint";       // keyboard / mouse behaviour; touch ADS is always a toggle
+    h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, e[0], row2);
+    [["HOLD", false], ["TOGGLE", true]].forEach((o) => {
+      const on = !!W.settings[e[1]] === o[1];
+      const b = h("button", Object.assign({}, BTN, {
+        padding: "7px 16px", fontSize: "13px",
+        background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+      }), o[0], row2);
+      b.onclick = () => { W.settings[e[1]] = o[1]; save(W); showSettings(W); };
+    });
+  });
+
+  // Screen shake (W.camShake, consumed by the camera in player.js) had no control
+  // at all. Motion sensitivity is the same accommodation the FOV slider above
+  // answers, and it is the one effect a player cannot opt out of by looking away.
+  const shRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Screen shake", shRow);
+  [["OFF", 0], ["HALF", 0.5], ["FULL", 1]].forEach((o) => {
+    const on = (W.settings.shake == null ? 1 : W.settings.shake) === o[1];
+    const b = h("button", Object.assign({}, BTN, {
+      padding: "7px 16px", fontSize: "13px",
+      background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+    }), o[0], shRow);
+    b.onclick = () => { W.settings.shake = o[1]; save(W); showSettings(W); };
+  });
+
+  // Sound indicators — the screen-edge footstep/gunfire/damage ring was hard-on
+  // with nothing behind it. Opt-OUT rather than opt-in (Fortnite ships Visualize
+  // Sound Effects opt-in) because it has always been on here and removing it by
+  // default would be a regression against today.
+  const svRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Sound indicators", svRow);
+  [["OFF", false], ["ON", true]].forEach((o) => {
+    const on = (W.settings.soundVis !== false) === o[1];
+    const b = h("button", Object.assign({}, BTN, {
+      padding: "7px 16px", fontSize: "13px",
+      background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+    }), o[0], svRow);
+    b.onclick = () => { W.settings.soundVis = o[1]; save(W); showSettings(W); };
+  });
+
+  // performance readout — a browser game runs on unknown hardware, so "is it me
+  // or is it the game" needs an answer the player can read
+  const pRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Performance readout", pRow);
+  [["OFF", false], ["ON", true]].forEach((o) => {
+    const on = !!W.settings.showPerf === o[1];
+    const b = h("button", Object.assign({}, BTN, {
+      padding: "7px 16px", fontSize: "13px",
+      background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+    }), o[0], pRow);
+    b.onclick = () => {
+      W.settings.showPerf = o[1];
+      if (R.perf) R.perf.style.display = o[1] ? "block" : "none";
+      save(W); showSettings(W);
+    };
+  });
+
+  // keybinds
+  h("div", { fontSize: "15px", fontWeight: "800", marginTop: "8px" }, "KEYBINDS (click to rebind)", box).className = "kbd-hint";
+  const kGrid = h("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }, null, box);
+  kGrid.className = "kbd-hint";
+  for (const [label, canonical] of ACTIONS) {
+    const row = h("div", { display: "flex", justifyContent: "space-between", alignItems: "center" }, null, kGrid);
+    h("div", { fontSize: "13px", opacity: "0.8" }, label, row);
+    // current physical key for this action — UNBOUND if its default was released
+    const phys = physFor(W, canonical);
+    const kb = h("button", Object.assign({}, BTN, { padding: "4px 12px", fontSize: "12px", background: "rgba(255,255,255,0.12)", color: phys ? "#dfeaff" : "#ffb3a7", minWidth: "84px" }), phys ? keyLabel(phys) : "—", row);
+    kb.onclick = () => {
+      kb.textContent = "press key… (Esc = cancel)";
+      W.captureKey = (code) => {
+        W.captureKey = null;
+        const restore = () => { kb.textContent = phys ? keyLabel(phys) : "—"; };
+        if (code === "Escape") { restore(); return; }   // cancel, don't bind to Esc
+        const rm = W.settings.remap = W.settings.remap || {};
+        // Which action does the chosen key drive right now? canon() falls
+        // through to identity, so an unmapped key drives its own default.
+        const owner = rm[code] !== undefined ? rm[code] : code;
+        if (owner !== canonical && owner !== UNBOUND && ACTIONS.some((a) => a[1] === owner)) {
+          // Refuse instead of silently stealing it: rebinding Forward onto D used
+          // to kill strafe-right while its row still proudly displayed "D".
+          const other = ACTIONS.find((a) => a[1] === owner);
+          kb.textContent = "already: " + other[0];
+          setTimeout(restore, 1400);
+          return;
+        }
+        for (const k3 in rm) if (rm[k3] === canonical) delete rm[k3];
+        delete rm[code];
+        if (code === canonical) {
+          delete rm[canonical];                  // back to its own default
+        } else {
+          rm[code] = canonical;
+          rm[canonical] = UNBOUND;               // RELEASE the old default: without
+          // this, canon() identity-mapped it and BOTH keys fired the action
+          // (rebind Map to Q and M kept opening the map forever).
+        }
+        save(W);
+        showSettings(W);                          // repaint every row's truth
+      };
+    };
+  }
+
+  const resetRow = h("div", { display: "flex", justifyContent: "flex-end", marginTop: "4px" }, null, box);
+  resetRow.className = "kbd-hint";
+  const resetB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "RESET TO DEFAULTS", resetRow);
+  resetB.onclick = () => { W.settings.remap = {}; save(W); showSettings(W); };
+
+  // LOCAL career transfer code. Progress is localStorage-only, so clearing site
+  // data wipes the career and nothing crosses browsers. Real cross-device sync
+  // needs a backend and is flagged for the owner; a copyable code covers the two
+  // cases a browser player actually hits — clearing site data, and moving to
+  // another browser on the same machine — with no network call, no account and
+  // no identifier generated or transmitted.
+  h("div", { fontSize: "15px", fontWeight: "800", marginTop: "8px" }, "CAREER TRANSFER CODE", box);
+  const xRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  const xInp = h("input", {
+    flex: "1", padding: "6px 9px", borderRadius: "8px", background: "rgba(0,0,0,0.4)",
+    border: "1px solid rgba(255,255,255,0.2)", color: "#cfe4ff", fontSize: FS(11),
+    fontFamily: "ui-monospace, Consolas, monospace",
+  }, null, xRow);
+  xInp.type = "text"; xInp.placeholder = "EXPORT to generate · paste a code and IMPORT to restore";
+  const xMsg = h("div", { fontSize: FS(11.5), opacity: "0.75", fontFamily: "Rajdhani, " + FONT, minHeight: "15px" }, "", box);
+  const expB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "EXPORT", xRow);
+  expB.onclick = () => {
+    try {
+      if (!localStorage.getItem("lc_progress")) { xMsg.textContent = "No career to export yet — finish a match first."; return; }
+      xInp.value = btoa(JSON.stringify({
+        p: localStorage.getItem("lc_progress"),
+        d: localStorage.getItem("lc_daily"),
+        s: localStorage.getItem("lc_skin"),
+      }));
+      xInp.select();
+      xMsg.textContent = "Copy this code and keep it somewhere safe.";
+    } catch (e) { xMsg.textContent = "This browser would not produce a code."; }
+  };
+  const impB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "IMPORT", xRow);
+  impB.onclick = () => {
+    // Validate the SHAPE. A bad paste has to produce a message — never a thrown
+    // exception, and never a wiped career.
+    let blob = null, prog = null;
+    try { blob = JSON.parse(atob(String(xInp.value).trim())); } catch (e) { blob = null; }
+    try { prog = JSON.parse((blob && blob.p) || "null"); } catch (e) { prog = null; }
+    if (!prog || typeof prog.level !== "number" || typeof prog.xp !== "number" || !prog.career || typeof prog.career !== "object") {
+      xMsg.textContent = "That is not a Last Circle career code.";
+      return;
+    }
+    try {
+      localStorage.setItem("lc_progress", blob.p);
+      if (blob.d) localStorage.setItem(DAILY_KEY, blob.d);
+      if (blob.s) localStorage.setItem("lc_skin", blob.s);
+    } catch (e) { xMsg.textContent = "This browser refused to store the career."; return; }
+    W.progress = loadProgress();
+    W.daily = loadDaily();      // re-validated, so an imported stale day rolls over
+    xMsg.textContent = "Career restored — LVL " + W.progress.level + " · " + rankLabel(W.progress.level) + ". The menu updates when you close settings.";
+  };
+
+  const closeB = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", marginTop: "10px" }), "DONE", box);
+  closeB.onclick = () => closeSettings(W);
+  if (prevScroll) box.scrollTop = prevScroll;
+}
 // ═══ SETTINGS (P2-G: LC-46 tabs + rebinds, C-GFX Video tab, LC-69 Audio tab, LC-43 Accessibility) ═══════════
 // One modal, five tabs: GAME / VIDEO / AUDIO / CONTROLS / ACCESSIBILITY. Every panel is BUILT on every render and the
 // inactive ones are display:none, so a row's text exists whichever tab is open (layoutcheck reads the FOV row's "57°").
 // The 17-row keybind grid used to push the whole modal to 1150 px inside a 588 px box (parity audit LC-46); only the
-// CONTROLS tab can scroll now. On TOUCH the tab bar is hidden and the panels stack in one scroller as before, and every
-// new row is desktop-only (.kbd-hint): a phone sees the same rows it always did (owner: phones untouched).
+// CONTROLS tab can scroll now. On TOUCH this panel is never built: showSettingsTouch (above) is the int-p1 panel (D9).
 const SET_TABS = [["game", "GAME"], ["video", "VIDEO"], ["audio", "AUDIO"], ["controls", "CONTROLS"], ["access", "ACCESSIBILITY"]];
 let _setTab = "game";
 function ensureSetStyles() {
@@ -5812,6 +6098,7 @@ html.lc-touch .lc-tabp { display: flex; margin-bottom: 9px; }
   document.head.appendChild(st);
 }
 function showSettings(W, tab) {
+  if (touchOn) return showSettingsTouch(W);   // D9: phones get the int-p1 panel, unchanged
   releaseCursor(W);
   W.captureKey = null;   // drop any armed keybind capture when (re)rendering the modal
   if (tab && SET_TABS.some((t) => t[0] === tab)) _setTab = tab;
@@ -6220,6 +6507,7 @@ function applyHudScale(W) {
   hsEl(R.specBar, s, "0px", "calc(100% + 84px)");
   hsEl(R.guideCard, s, "-14px", "-" + GUIDE_TOP + "px");                  // left edge, under the minimap
   R._bandKey = null; placeBand(true);
+  fitHint();
   return s;
 }
 function applyBrightness(W) {
@@ -6543,7 +6831,7 @@ const HINTS = {
   ping:    (W) => "Middle mouse or " + keyOf(W, PING_KEY) + " pings what you are aiming at — your squad sees it.",
   throw:   () => "FIRE throws it — the arc under the reticle shows the lob.",
   revive:  (W) => "Your teammate is down! Stand next to them and hold " + keyOf(W, "KeyE") + " to revive.",
-  downed:  () => "You are down: crawl to cover. A teammate can hold E next to you to revive you.",
+  downed:  (W) => "You are down: crawl to cover. A teammate can hold " + keyOf(W, "KeyE") + " next to you to revive you.",
   supply:  () => "Supply drop inbound — legendary loot. Its marker is on your minimap.",
 };
 let _hintSeen = null;
@@ -6567,6 +6855,7 @@ function hintFire(W, id, arg) {
   try { localStorage.setItem(HINT_KEY, JSON.stringify(seen)); } catch (e) {}
   R.hintTxt.textContent = HINTS[id](W, arg);
   R.hintEl.dataset.id = id;
+  fitHint();
   R.hintEl.style.opacity = "1"; R.hintEl.style.display = "flex";
   R._hintUntil = performance.now() + HINT_MS;
   R._hintN = (R._hintN || 0) + 1;
@@ -6580,12 +6869,43 @@ function buildHints(W) {
     position: "absolute", left: "50%", bottom: "160px", transform: "translateX(-50%)", display: "none", alignItems: "center", gap: "10px",
     padding: "7px 16px 7px 10px", borderRadius: "10px", background: "rgba(6,12,24,0.72)", border: "1px solid rgba(255,210,84,0.45)",
     boxShadow: "0 6px 22px rgba(0,0,0,0.45)", fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "700", letterSpacing: "0.4px",
-    color: "#f3f7ff", textShadow: "0 1px 3px rgba(0,0,0,0.8)", whiteSpace: "nowrap", pointerEvents: "none", opacity: "0", transition: "opacity .35s",
+    color: "#f3f7ff", textShadow: "0 1px 3px rgba(0,0,0,0.8)", whiteSpace: "normal", lineHeight: "1.25", boxSizing: "border-box",
+    width: "max-content", pointerEvents: "none", opacity: "0", transition: "opacity .35s",
   }, null, R.hud);
   R.hintEl.dataset.lc = "hint";
   h("span", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: FS(10), fontWeight: "900", letterSpacing: "1.6px", color: "#1a1204", background: "#ffd254", padding: "3px 7px", borderRadius: "5px" }, "TIP", R.hintEl);
   R.hintTxt = h("span", null, "", R.hintEl);
   R._hintUntil = 0;
+  fitHint();
+}
+// The hint line is centred at bottom 160 px and is NOT HUD-scaled, while the bottom-left vitals stack and the bottom-right weapon card /
+// slot column ARE (80-130 %, about their screen corners). Nowrap, the longest hint (about 640 px) ran into the card at 100 % on a 1280 px
+// window and 8 of 11 hints did at 130 % (verifier, fix-first). The line now wraps inside the band the anchored panels leave free: its
+// max-width is twice the distance from the centre to the nearest side panel whose height range meets the hint's (less a 12 px gap).
+// Measured on a hint, a HUD-scale change and a resize only (never per frame).
+const HINT_BOTTOM = 160, HINT_BAND = 96;
+function fitHint() {
+  const el = R.hintEl;
+  if (!el || !R.root || !el.isConnected) return;
+  const vw = window.innerWidth || 1280, vh = window.innerHeight || 720, cx = vw / 2;
+  const bot = vh - HINT_BOTTOM, top = bot - HINT_BAND;
+  let half = cx - 12;
+  for (const e of R.root.querySelectorAll("[data-lc]")) {
+    if (e === el || el.contains(e) || e.contains(el)) continue;
+    let p = e.parentElement, nested = false;
+    while (p && p !== R.root) { if (p.dataset && p.dataset.lc) { nested = true; break; } p = p.parentElement; }
+    if (nested) continue;
+    const r = e.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2 || r.bottom <= top || r.top >= bot) continue;
+    if (r.left < cx && r.right > cx) continue;          // a centred element: not a side panel
+    const cs = getComputedStyle(e);
+    if (cs.display === "none" || cs.visibility === "hidden" || +cs.opacity === 0) continue;
+    const d = r.right <= cx ? cx - r.right : r.left - cx;
+    if (d < half) half = d;
+  }
+  const mw = Math.max(220, Math.floor(2 * (half - 12)));
+  const v = mw + "px";
+  if (el.style.maxWidth !== v) el.style.maxWidth = v;
 }
 /** The situations (2 Hz from update). Each test is cheap and reads state the HUD already has. */
 function stepHints(W, p, dt) {
