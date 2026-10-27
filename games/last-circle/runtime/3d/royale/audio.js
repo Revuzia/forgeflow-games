@@ -51,7 +51,10 @@ let _threat = 0;                    // 0..1, raised by enemy fire near you, deca
 const _opt = { output: "headphones", mix: "default", mono: false };
 // counters for the probes (cumulative for the page, like the pool's)
 const _acc = { occTests: 0, occCached: 0, occluded: 0, roofed: 0, delayed: 0, remoteSteps: 0, remoteReloads: 0,
-               steps: 0, tailSends: 0, roomSends: 0, musicLoops: 0, musicXfades: 0, pings: 0 };
+               steps: 0, tailSends: 0, roomSends: 0, musicLoops: 0, musicXfades: 0, pings: 0,
+               // P23
+               distMid: 0, distFar: 0, vocals: 0, vocalsDropped: 0, downed: 0, revives: 0, reviveCancels: 0, revived: 0,
+               falls: 0, smokes: 0, shimmerOn: 0, knockConfirms: 0, teamAlerts: 0 };
 
 // Speed of sound, and the range below which a report is left on time (a 25 m
 // shot would be 73 ms late — inside the muzzle-flash read, so not worth it).
@@ -70,6 +73,8 @@ const ROOM_SEND = 0.7;
 // Per-call acoustic recipes. tail/room scale the sends, occl enables the
 // occlusion test, delay the speed-of-sound offset. null = dry (UI, stings).
 const FX_GUN = { tail: 1, room: 1, occl: true, delay: true };
+// P23 (LC-08): a recorded mid / far take carries its own outdoor tail, so it sends less into the generated one
+const FX_GUN_DIST = { tail: 0.55, room: 1, occl: true, delay: true, dist: true };
 const FX_BOOM = { tail: 1.3, room: 1, occl: true, delay: true };
 const FX_FOLEY = { tail: 0, room: 0.9, occl: true, delay: false };
 const FX_STEP = { tail: 0, room: 0.9, occl: true, delay: false };
@@ -353,6 +358,11 @@ export function readback(W) {
     acoustics: Object.assign({}, _acc),
     tick: { ms: Math.round(_tickMs * 1000) / 1000, n: _tickN },
     wind: windBed ? { speed: Math.round(windBed.speed * 10) / 10, level: Math.round(windBed.level * 10000) / 10000 } : null,
+    // P23
+    shimmer: shimmer ? { d: shimmer.d != null ? Math.round(shimmer.d * 100) / 100 : null, level: Math.round(shimmer.level * 100000) / 100000,
+                         x: shimmer.x, z: shimmer.z, accessor: typeof (W && W.nearbyChests) === "function" ? "nearbyChests" : "debugChests" } : null,
+    revivesActive: _rev.size,
+    sfxLate: Object.keys(sfxBuf).filter(lateSfx).length,
   };
 }
 
@@ -363,6 +373,15 @@ export function readback(W) {
  * threat duck and the acoustic cache (it holds collider-derived answers).
  * Voices in flight are left to finish — the victory/defeat sting is one of them.
  */
+/** Test hook: forget an actor's vocal state (voice key, hurt-grunt gap and busy window) so a probe can fire the
+ *  next cue at once. The state is a module WeakMap (see voSt), never fields on the actor. */
+export function resetVocal(a, keepVoice) {
+  if (!a) return;
+  const s = _voSt.get(a);
+  if (!s) return;
+  s.t = -1e9; s.end = 0;
+  if (!keepVoice) s.v = null;
+}
 export function disposeMatch(W) {
   cancelReload();
   duckFireRelease(true);
@@ -370,6 +389,10 @@ export function disposeMatch(W) {
   _scoped = false;
   _threat = 0;
   _envCache.clear();
+  // P23: no revive rustle, chest hum or queued grunt survives into the next match
+  stopAllRevives();
+  stopShimmer();
+  _hurtQ.length = 0;
   // startMatch runs every disposeMatch before the ~20 s world build: fetch the
   // match and endgame tracks now, so both are seekable Blobs by the drop
   if (W && W.assetBase != null) { fetchBlob(W, "music_match.mp3"); fetchBlob(W, "music_endgame.mp3"); }
@@ -426,7 +449,27 @@ const SFX = {
   hit_shield:    ["hit_shield_0", "hit_shield_1"],
   shield_break:  ["shield_break_0"],
   explosion:     ["explosion_0", "explosion_1"],
+  // P23 (LC-16 sound side): the two new near takes - DMR = SKS, burst AR = AR-15 (FFSL CC0). The LMG plays the
+  // AR takes pitched down (GUN_SND.lmg.rate), so it needs no file of its own.
+  shot_dmr:      ["shot_dmr_0", "shot_dmr_1", "shot_dmr_2"],
+  shot_burst:    ["shot_burst_0", "shot_burst_1"],
 };
+// P23 (LC-08): the DISTANT layers - FFSL "mid distance" (Prepared SFX) and "far distance" (Master Tracks) takes,
+// recorded tens to hundreds of metres from the shooter: gd_<class>_mid / gd_<class>_far. No shotgun far layer
+// (its 120 m radius ends before the far band starts). Built by F:/lc_p23/audio/tools/build_sfx.py.
+const GD_SETS = { pistol: [2, 2], smg: [2, 2], ar: [2, 2], shotgun: [2, 0], sniper: [2, 2], dmr: [2, 2], burst: [2, 2] };
+for (const k in GD_SETS) {
+  const [m, f] = GD_SETS[k];
+  if (m) SFX["gd_" + k + "_mid"] = Array.from({ length: m }, (_, i) => "gd_" + k + "_mid_" + i);
+  if (f) SFX["gd_" + k + "_far"] = Array.from({ length: f }, (_, i) => "gd_" + k + "_far_" + i);
+}
+// P23 (LC-67): the vocal layer - three CC0 voices (m1 Potapooo, m2 qubodup + thebardofblasphemy, f
+// Nocturnal_Vanguard + mvVoiceActing), each with hurt / downed / death / revive takes: vo_<voice>_<kind>.
+const VO_SETS = { m1: { hurt: 4, downed: 2, death: 2, revive: 2 }, m2: { hurt: 5, downed: 2, death: 3, revive: 2 },
+                  f: { hurt: 5, downed: 2, death: 2, revive: 1 } };
+for (const v in VO_SETS) for (const k in VO_SETS[v]) SFX["vo_" + v + "_" + k] = Array.from({ length: VO_SETS[v][k] }, (_, i) => "vo_" + v + "_" + k + "_" + i);
+/** the second fetch wave: layers that only ever ADD to a cue that already has a fallback */
+function lateSfx(n) { return n.indexOf("gd_") === 0 || n.indexOf("vo_") === 0; }
 const sfxBuf = {};       // filename -> AudioBuffer
 const sfxSlice = {};     // filename -> {off, dur} — see oneShotSlice()
 
@@ -473,14 +516,19 @@ async function loadSfx(W) {
   sfxReady = true;
   const names = [];
   for (const k in SFX) for (const n of SFX[k]) if (names.indexOf(n) < 0) names.push(n);
-  await Promise.all(names.map(async (n) => {
+  const one = async (n) => {
     try {
       const r = await fetch(W.assetBase + "assets/audio/sfx/" + n + ".ogg");
       if (!r.ok) return;
       sfxBuf[n] = await ctx.decodeAudioData(await r.arrayBuffer());
       if (n.indexOf("shot_") === 0) sfxSlice[n] = oneShotSlice(sfxBuf[n]);
     } catch (e) { /* fall back to synth */ }
-  }));
+  };
+  // P23: the core pack first; the distant gun layers and the vocals (63 files, ~690 KB) only once it is in, so
+  // they never queue ahead of a footstep or the player's own report. Until a late clip decodes, its cue plays
+  // what it played before (the near take, no vocal).
+  await Promise.all(names.filter((n) => !lateSfx(n)).map(one));
+  await Promise.all(names.filter(lateSfx).map(one));
 }
 
 /** Play one variant of a logical cue. Returns false if unavailable, so the
@@ -520,7 +568,9 @@ function sample(key, pos, gain, maxD, rate, tier, fx) {
   // Own/UI plays (__d null) skip the filter.
   if (out.__d != null && out.__d > 8) {
     const df = Math.max(0.12, 1 - out.__d / maxD);
-    const fc = 600 + 17000 * df * df;
+    // a DISTANT take (fx.dist, P23 LC-08) was recorded far away: the air already took its treble, so it only
+    // gets a gentle extra slope instead of the near take's full darkening (that would count the distance twice)
+    const fc = fx && fx.dist ? 1800 + 15000 * df : 600 + 17000 * df * df;
     if (st) {
       const f = st.lp.frequency;
       if (fc < f.value) { f.value = fc; if (st.lp.Q.value > 0.6) st.lp.Q.value = 1; }
@@ -1259,10 +1309,47 @@ function spatialOut(pos, vol, dist, fx, env, maxD, h) {
 // ~20 m) carry 240 m too far while the sniper (105 damage out to 200 m) killed
 // from beyond its own report. Distant gunfire is the rotation signal in a BR,
 // so the radius tracks the gun's reach. Deliberately NOT in SIM.WEAPONS.
-const AUDIBLE_M = { pistol: 220, smg: 200, ar: 320, shotgun: 120, sniper: 520, launcher: 260 };
+const AUDIBLE_M = { pistol: 220, smg: 200, ar: 320, shotgun: 120, sniper: 520, launcher: 260, dmr: 420, lmg: 360, burst: 320 };
 // Beyond this a report also gets its distant BODY (farBoom): the low rolling
 // thump that is what is left of a gunshot once the air has taken the crack.
+// P23: farBoom is now only the FALLBACK for that - a recorded distant take (below) replaces it.
 const FAR_M = 80;
+
+// P23 (LC-08 + LC-16 sound side). One sound profile per gun class: the near take (shot_*), the distant
+// layers (gd_<dist>_mid from MID_M, gd_<dist>_far from farFrom(R)), the audible radius R, a playback rate
+// and gain, and the synth class shot() falls back to. The three new guns of P2-D (DMR, LMG, burst AR) are
+// resolved by id, by cls or by an explicit fire: "burst" (gunSnd), so whatever ids lane sim ships, a gun
+// never falls silent: anything unknown sounds like the AR.
+const GUN_SND = {
+  pistol:   { near: "shot_pistol",  dist: "pistol",  R: 220 },
+  smg:      { near: "shot_smg",     dist: "smg",     R: 200 },
+  ar:       { near: "shot_ar",      dist: "ar",      R: 320 },
+  shotgun:  { near: "shot_shotgun", dist: "shotgun", R: 120 },
+  sniper:   { near: "shot_sniper",  dist: "sniper",  R: 520 },
+  dmr:      { near: "shot_dmr",     dist: "dmr",     R: 420, synth: "sniper" },              // SKS: a heavier semi-auto crack than the AR
+  lmg:      { near: "shot_ar",      dist: "ar",      R: 360, rate: 0.86, g: 1.12, synth: "ar" },   // AK takes a fourth lower = a bigger, slower gun
+  burst:    { near: "shot_burst",   dist: "burst",   R: 320, synth: "ar" },                  // AR-15: a brighter 5.56 than the AK
+  launcher: { near: null,           dist: null,      R: 260 },
+};
+const GUN_ALIAS = { dmr: "dmr", marksman: "dmr", lmg: "lmg", mg: "lmg", hmg: "lmg", burst: "burst", burstar: "burst",
+                    burst_ar: "burst", ar_burst: "burst", rifle: "ar", glauncher: "launcher" };
+/** sound class for a weaponId + its SIM.WEAPONS def (id alias > cls alias > fire "burst" > cls > "ar") */
+export function gunSnd(wid, def) {
+  const id = String(wid || "").toLowerCase(), cls = String((def && def.cls) || "").toLowerCase();
+  let k = GUN_ALIAS[id] || GUN_ALIAS[cls];
+  if (!k && def && def.fire === "burst") k = "burst";
+  if (!k) k = GUN_SND[cls] ? cls : GUN_SND[id] ? id : "ar";
+  return k;
+}
+const MID_M = 80;                                        // the mid-distance take from here ...
+function farFrom(R) { return Math.max(150, 0.5 * R); }  // ... the far one from here (AR 160 m, sniper 260 m)
+// Level of each distant layer against the near take, per sound class [mid, far]: the hand-over at MID_M and
+// at farFrom(R) is level-continuous (about 1 dB down across it, the distance it covers), so a fight walking
+// away never "steps" quieter or louder. Measured on the output tap (P23 mix pass, probe_p23.py "bands",
+// loudest-10 ms RMS of the same shot 3-4 m either side of each hand-over; all gains 1.0 gave jumps of
+// -10.1 dB (AR at 80 m) to +2.1 dB (AR at 160 m)). The LMG shares the AR takes but not its near level.
+const DIST_G = { pistol: [1.64, 2.19], smg: [1.22, 1.57], ar: [2.85, 1.99], shotgun: [1.76, 0], sniper: [1.06, 1.51],
+                 dmr: [1.17, 1.62], lmg: [2.16, 1.9], burst: [0.92, 0.99] };
 
 // synth report per class: [lowpass Hz, decay s, gain]
 const SHOT_P = {
@@ -1463,6 +1550,268 @@ function reloadFoley(a, wpn) {
   if (own) reloadTimers.push(t1, t2, t3);
 }
 
+// ── vocals (P23 / LC-67) ────────────────────────────────────────────────────
+// Every body in the game was mute: a hit, a knock and a death were a thud and a damage number. Now each
+// actor has ONE voice for the match (female for the athlete and viper skins, else one of two male voices
+// by a hash of its id) and grunts on a hit, cries out when knocked, groans when it dies and exhales when it
+// is back up. Hurt is rate-limited per actor (an SMG burst is one grunt, not 30) and is queued for one
+// frame, so a lethal or knocking hit plays the death / downed cry instead of both. Your own voice is
+// head-relative and lower; others are placed at the mouth and ride the acoustics like any foley.
+const FEMALE_SKINS = { athlete: 1, viper: 1 };
+const VO_P = {
+  hurt:   { g: 0.24, own: 0.11, d: 38, gap: 0.6, len: 0.45, tier: VOICE_TIER.step },
+  downed: { g: 0.36, own: 0.2,  d: 60, gap: 0,   len: 1.1,  tier: VOICE_TIER.gun },
+  death:  { g: 0.34, own: 0.2,  d: 60, gap: 0,   len: 1.2,  tier: VOICE_TIER.gun },
+  revive: { g: 0.2,  own: 0.12, d: 30, gap: 0,   len: 0.7,  tier: VOICE_TIER.step },
+};
+const _mouth = { x: 0, y: 0, z: 0 };
+// Per-actor vocal state lives HERE, never as new fields on the actor: stamping a._audVo* on the bots that happen to
+// grunt mid-match changed their hidden class, the sim's hot actor loops (bots.js / player.js / loot.js) went
+// polymorphic and lost escape analysis - framecheck measured 125-129 KB/frame vs the base's 89-94 on the SAME world
+// state (fingerprint identical at t 65.533). actor -> { v: voice key | null, t: last start, end: busy until }
+const _voSt = new WeakMap();
+function voSt(a) {
+  let s = _voSt.get(a);
+  if (!s) { s = { v: null, t: -1e9, end: 0 }; _voSt.set(a, s); }
+  return s;
+}
+function voiceOf(a) {
+  const st = voSt(a);
+  if (st.v) return st.v;
+  let v;
+  if (a.skin && FEMALE_SKINS[a.skin]) v = "f";
+  else {
+    const s = String(a.id != null ? a.id : "");
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+    v = (h >>> 0) & 1 ? "m2" : "m1";
+  }
+  if (a.skin) st.v = v;                 // stable once the rig (and so the skin) is known
+  return v;
+}
+function vocal(a, kind, force) {
+  const W = W_;
+  if (!ctx || !W || !a || a.isDummy || !a.pos) return false;
+  const P = VO_P[kind];
+  const now = ctx.currentTime;
+  const st = voSt(a);
+  if (!force && kind === "hurt" && (now - st.t < P.gap || st.end > now)) { _acc.vocalsDropped++; return false; }
+  st.t = now; st.end = now + P.len;
+  const own = a === W.player;
+  let pos = null;
+  if (!own) { _mouth.x = a.pos.x; _mouth.y = a.pos.y + (a.downed ? 0.45 : a.crouching ? 1.1 : 1.55); _mouth.z = a.pos.z; pos = _mouth; }
+  _acc.vocals++;
+  return sample("vo_" + voiceOf(a) + "_" + kind, pos, own ? P.own : P.g, P.d, 1, own ? VOICE_TIER.own : P.tier, own ? null : FX_FOLEY);
+}
+// hurt grunts wait one frame (see above); wall-clock stamped so a burst emitted inside fastForward never
+// plays seconds late
+const _hurtQ = [];
+function flushHurt() {
+  if (!_hurtQ.length) return;
+  const wall = performance.now();
+  for (let i = 0; i < _hurtQ.length; i += 2) {
+    const a = _hurtQ[i];
+    if (wall - _hurtQ[i + 1] < 250 && a.alive !== false && !(a.hp <= 0 && !a.downed)) vocal(a, "hurt");
+  }
+  _hurtQ.length = 0;
+}
+
+// ── DBNO cues (P23 / C-DBNO) ─────────────────────────────────────────────────
+// Knock: the downed cry + the body hitting the ground; a teammate (or you) going down gets the Apex-style
+// alert sting, an enemy YOU knocked a knock-confirm that is distinct from the kill confirm. Revive: a kit /
+// bandage rustle every ~0.6 s for the 5 s channel (positional at the downed body), cut on cancel; a revived
+// teammate gets a rising chime and their own exhale.
+const _rev = new Map();               // target -> { iv, to, reviver }
+function stopRevive(target) {
+  const r = _rev.get(target);
+  if (!r) return false;
+  clearInterval(r.iv); clearTimeout(r.to); _rev.delete(target);
+  return true;
+}
+function stopAllRevives() { for (const t of [..._rev.keys()]) stopRevive(t); }
+function isOwnTeam(a) { const me = W_ && W_.player; return !!(me && a && (a === me || isMate(a))); }
+function teamSting(up) {
+  _acc.teamAlerts++;
+  const seq = up ? [660, 990] : [880, 587];
+  blip(seq[0], 0.09, 0.15, "triangle", null, 0, VOICE_TIER.own);
+  setTimeout(() => blip(seq[1], up ? 0.16 : 0.2, 0.15, "triangle", null, 0, VOICE_TIER.own), 85);
+  if (up) sample("ui_ok", null, 0.14, 999);
+  else thump(160, 0.16, 0.16, null, 0, VOICE_TIER.own, null);
+}
+function knockConfirm() {
+  _acc.knockConfirms++;
+  blip(560, 0.06, 0.18, "square", null, 0, VOICE_TIER.own);
+  setTimeout(() => blip(420, 0.12, 0.18, "square", null, 0, VOICE_TIER.own), 60);
+}
+function reviveFoley(reviver, target) {
+  if (!target) return;
+  stopRevive(target);
+  _acc.revives++;
+  const me = W_ && W_.player, own = reviver === me || target === me;
+  const pos = own ? null : target.pos;
+  if (!sample("equip", pos, own ? 0.16 : 0.12, 20, 0.9, VOICE_TIER.step, own ? null : FX_FOLEY)) thump(1400, 0.04, 0.1, pos, 20);
+  const step = () => {
+    if (!target.alive) { stopRevive(target); return; }
+    if (!sample("cloth", pos, own ? 0.15 : 0.11, 20, 0.75 + Math.random() * 0.35, VOICE_TIER.step, own ? null : FX_FOLEY))
+      thump(900, 0.06, own ? 0.1 : 0.07, pos, 20, VOICE_TIER.step);
+  };
+  const iv = setInterval(step, 620);
+  const to = setTimeout(() => stopRevive(target), 7000);   // a lost cancel event never rustles forever
+  _rev.set(target, { iv, to, reviver });
+}
+
+// ── fall damage (P23 / C-FALL) ───────────────────────────────────────────────
+// The landing thump (hardLand / touchdown) already plays; a landing that HURT adds a crunch scaled by the
+// damage and the grunt (forced past the hurt rate limit: it is one event, not a burst).
+function fallCue(a, info) {
+  const dmg = typeof info === "number" ? info : (info && (info.dmg != null ? info.dmg : info.damage)) || 0;
+  if (!a || !(dmg > 0)) return;
+  _acc.falls++;
+  const own = a === W_.player, p = own ? null : a.pos;
+  const k = Math.min(1, dmg / 60);
+  thump(110, 0.2 + 0.15 * k, 0.2 + 0.2 * k, p, 50, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
+  sample("imp_wood", p, 0.16 + 0.14 * k, 30, 0.5, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
+  // player.js emits fallDamage BEFORE it applies the hp: a fall that kills or knocks cries via
+  // actorDied / actorDowned instead, so it never grunts AND cries
+  if (a.alive !== false && !a.downed && !(a.hp - dmg <= 0)) vocal(a, "hurt", true);
+}
+
+// ── smoke (P23 / C-SMOKE) ────────────────────────────────────────────────────
+// W.smokes [{x, y, z, r, t0, t1}] is weapons.js's (lane sim). A new entry = a canister that just popped: a
+// metallic pop and a ~5 s pressurised hiss at the cloud, positional (you hear WHERE the smoke went down).
+// Read only; scanned at the 4 Hz rate and also on a "smokeLanded" / "smokeDeployed" event if one exists.
+// Only clouds younger than 1 s are voiced (a late joiner does not hear every smoke of the match).
+const _smokeSeen = new WeakMap();
+function smokeScan(W) {
+  const L = W.smokes;
+  if (!L || !L.length) return;
+  for (let i = 0; i < L.length; i++) {
+    const s = L[i];
+    if (!s || typeof s !== "object" || _smokeSeen.get(s) === s.t0) continue;
+    _smokeSeen.set(s, s.t0);
+    if (W.t != null && s.t0 != null && W.t - s.t0 > 1.0) continue;
+    smokePop(s);
+  }
+}
+function smokePop(s) {
+  if (!ctx || !s || !isFinite(s.x) || !isFinite(s.z)) return;
+  _acc.smokes++;
+  const pos = { x: s.x, y: (isFinite(s.y) ? s.y : 0) + 0.3, z: s.z };
+  blip(190, 0.05, 0.16, "square", pos, 60, VOICE_TIER.step, FX_FOLEY);
+  sample("imp_metal", pos, 0.14, 60, 0.7, VOICE_TIER.step, FX_FOLEY);
+  const h = openVoice(pos, 55, VOICE_TIER.step, 0.2, 1, FX_FOLEY); if (!h) return;
+  // the canister vents for seconds while the cloud builds (PUBG / Warzone smokes hiss ~5 s): hold, then a long fade
+  const out = h.out, t = h.start, dur = 5.5;
+  const n = ctx.createBufferSource(); n.buffer = noiseBuf(); n.loop = true;
+  n.playbackRate.value = 0.9 + Math.random() * 0.15;
+  const f = ctx.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 0.7;
+  f.frequency.setValueAtTime(5200, t); f.frequency.exponentialRampToValueAtTime(2400, t + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.2, t + 0.06);
+  g.gain.setValueAtTime(0.2, t + 1.8); g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+  n.connect(f); f.connect(g); g.connect(out);
+  n.start(t); n.stop(t + dur + 0.02);
+  voiceArm(h, out, [n], t + dur + 0.02);
+}
+
+// ── chest shimmer (P2-J) ─────────────────────────────────────────────────────
+// The nearest UNOPENED chest (or supply crate) within SHIM_R hums: a soft, beating, twinkling tone at the
+// chest - the Fortnite rule that you can find a chest by ear, through a wall (muffled by the same occlusion
+// test as every source). One persistent bed (3 oscillators + panner), retuned at 4 Hz; stopped when no chest
+// has been in range for 2 s. The chest list comes from lane loot's accessor W.nearbyChests(pos, r, out)
+// (P2-H, allocation-free); until that merges, the W.debugChests() hook (refreshed once a second) stands in.
+const SHIM_R = 12;
+const _chOut = [];
+let shimmer = null, _shimIdle = 0, _chFallL = null, _chFallT = -1e9;
+function nearestChest(W, p) {
+  let L = null, n = 0;
+  if (typeof W.nearbyChests === "function") {
+    // P2-H contract: fills the first N records of _chOut (reused; records past N are STALE) and returns N
+    let r = null;
+    try { r = W.nearbyChests(p, SHIM_R, _chOut); } catch (e) { r = null; }
+    if (typeof r === "number") { L = _chOut; n = Math.min(r, _chOut.length); }
+    else if (Array.isArray(r)) { L = r; n = r.length; }
+  } else if (typeof W.debugChests === "function") {
+    const now = performance.now();
+    if (!_chFallL || now - _chFallT > 1000) { try { _chFallL = W.debugChests(); } catch (e) { _chFallL = null; } _chFallT = now; }
+    L = _chFallL; n = L ? L.length : 0;
+  }
+  if (!L) return null;
+  let best = null, bd = SHIM_R * SHIM_R;
+  for (let i = 0; i < n; i++) {
+    const c = L[i];
+    if (!c || c.opened) continue;
+    const q = c.pos || c;
+    const dx = q.x - p.x, dz = q.z - p.z, dy = (q.y || 0) - p.y, d2 = dx * dx + dz * dz + dy * dy;
+    if (d2 < bd) { bd = d2; best = q; }
+  }
+  return best;
+}
+function makeShimmer() {
+  const out = ctx.createGain(); out.gain.value = 0;
+  const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 9000; lp.Q.value = 0.5;
+  const pan = ctx.createPanner();
+  pan.panningModel = _opt.output === "speakers" ? "equalpower" : "HRTF"; pan.distanceModel = "inverse"; pan.refDistance = 1; pan.rolloffFactor = 0;
+  const mix = ctx.createGain(); mix.gain.value = 0.5;
+  const oscs = [];
+  for (const [f, g] of [[1568, 0.5], [1576, 0.35], [2352, 0.22]]) {      // G6 + a beating twin + the fifth above
+    const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f;
+    const og = ctx.createGain(); og.gain.value = g;
+    o.connect(og); og.connect(mix); oscs.push(o);
+  }
+  // twinkle: a 6.5 Hz tremolo on the cluster
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 6.5;
+  const lg = ctx.createGain(); lg.gain.value = 0.35;
+  lfo.connect(lg); lg.connect(mix.gain); oscs.push(lfo);
+  mix.connect(lp); lp.connect(out); out.connect(pan); pan.connect(sfxBus);
+  const t = ctx.currentTime;
+  for (const o of oscs) o.start(t);
+  _acc.shimmerOn++;
+  return { out, lp, pan, oscs, x: 1e9, y: 1e9, z: 1e9, level: 0, d: null, w: -1 };
+}
+function stopShimmer() {
+  if (!shimmer) return;
+  const t = ctx ? ctx.currentTime : 0;
+  try { shimmer.out.gain.cancelScheduledValues(t); shimmer.out.gain.setTargetAtTime(0, t, 0.05); } catch (e) {}
+  for (const o of shimmer.oscs) { try { o.stop(t + 0.3); } catch (e) {} }
+  shimmer = null;
+}
+function chestShimmer(W, dt) {
+  const f = W.player;
+  const live = (W.phase === "match") && f && f.alive && !f.gliding && !f.downed && f.pos;
+  const c = live ? nearestChest(W, f.pos) : null;
+  if (!c) {
+    if (shimmer) {
+      if (shimmer.w !== 0) { shimmer.w = 0; shimmer.out.gain.setTargetAtTime(0, ctx.currentTime, 0.15); }
+      shimmer.level = 0; shimmer.d = null;
+      _shimIdle += dt;
+      if (_shimIdle > 2) stopShimmer();
+    }
+    return;
+  }
+  _shimIdle = 0;
+  if (!shimmer) shimmer = makeShimmer();
+  const pos = { x: c.x, y: (c.y || 0) + 0.5, z: c.z };
+  const vol = place(pos, SHIM_R + 2);
+  const d = _pd;
+  if (vol < 0) { shimmer.w = 0; shimmer.out.gain.setTargetAtTime(0, ctx.currentTime, 0.15); return; }
+  const env = sourceEnv(pos, FX_FOLEY);
+  const want = SHIM_G * vol * OCC_G[env.occ];
+  const t = ctx.currentTime;
+  if (Math.abs(want - shimmer.w) > 0.0005) { shimmer.w = want; shimmer.out.gain.setTargetAtTime(want, t, 0.2); }
+  const fc = env.occ ? OCC_F[env.occ] : 9000;
+  if (shimmer.lp.frequency.value !== fc) shimmer.lp.frequency.setTargetAtTime(fc, t, 0.1);
+  if (Math.abs(pos.x - shimmer.x) + Math.abs(pos.z - shimmer.z) + Math.abs(pos.y - shimmer.y) > 0.05) {
+    shimmer.x = pos.x; shimmer.y = pos.y; shimmer.z = pos.z;
+    if (shimmer.pan.positionX) { shimmer.pan.positionX.value = pos.x; shimmer.pan.positionY.value = pos.y; shimmer.pan.positionZ.value = pos.z; }
+    else shimmer.pan.setPosition(pos.x, pos.y, pos.z);
+  }
+  shimmer.level = want; shimmer.d = d;
+}
+// shimmer level at the chest (before distance), P23 mix pass: at 4 m its tone sits ~10 dB over the wind / storm beds in
+// its band and ~14 dB under a walking step at 3 m - findable by ear, never masking a step (0.05 measured 20 dB under)
+const SHIM_G = 0.1;
+
 // ── settings engine (LC-69) ─────────────────────────────────────────────────
 /** "headphones" (HRTF, the default) | "speakers" (equal-power panning: HRTF's
  *  ear filtering sounds phasey over two speakers). Applies to new voices and
@@ -1472,6 +1821,7 @@ export function setOutput(mode) {
   if (W_ && W_.settings) W_.settings.audioOutput = _opt.output;
   const model = _opt.output === "speakers" ? "equalpower" : "HRTF";
   if (stormBed && stormBed.pan) { try { stormBed.pan.panningModel = model; } catch (e) {} }
+  if (shimmer && shimmer.pan) { try { shimmer.pan.panningModel = model; } catch (e) {} }
   for (let i = 0; i < _strips.length; i++) { try { _strips[i].p.panningModel = model; } catch (e) {} }
   return _opt.output;
 }
@@ -1532,9 +1882,10 @@ function wire(W) {
 
   on("shotFired", (a, weaponId, eye) => {
     const def = W.SIM.WEAPONS[weaponId];
-    const cls = def ? def.cls : "ar";
+    const k = gunSnd(weaponId, def), G = GUN_SND[k];
+    const cls = G.synth || k;                 // the synth / farBoom class
     const own = a === W.player;
-    const maxD = AUDIBLE_M[cls] || 260;
+    const maxD = G.R;
     // recorded report first (multi-take round-robin + sample()'s rate jitter),
     // synth shot() verbatim when the class has no recording (launcher) or the
     // pack failed to decode. Per-class audible radius (sample() reports
@@ -1542,11 +1893,20 @@ function wire(W) {
     // report is top tier; an enemy's outranks footsteps and impacts.
     const tier = own ? VOICE_TIER.own : VOICE_TIER.gun;
     const pos = own ? null : eye;
-    const g = own ? (_opt.mix === "focused" ? 0.35 : 0.5) : 0.4;
-    if (!(SFX["shot_" + cls] && sample("shot_" + cls, pos, g, maxD, 0, tier, FX_GUN))) shot(cls, pos, tier);
+    const g = (own ? (_opt.mix === "focused" ? 0.35 : 0.5) : 0.4) * (G.g || 1);
+    // P23 (LC-08): beyond MID_M the report is a DISTANT recording (mid, then far), never the close-mic take
+    // darkened - that is what a gunshot 150 m away actually sounds like. Falls back to the near take until
+    // the late wave has decoded (sample() returns false for an undecoded clip).
+    let distant = false;
+    if (!own && eye && G.dist && ctx && place(eye, maxD) >= 0 && _pd >= MID_M) {
+      const band = _pd >= farFrom(maxD) && SFX["gd_" + G.dist + "_far"] ? "far" : "mid";
+      const key = "gd_" + G.dist + "_" + band;
+      if (SFX[key] && sample(key, pos, g * ((DIST_G[k] || [1, 1])[band === "far" ? 1 : 0] || 1), maxD, G.rate, tier, FX_GUN_DIST)) { distant = true; _acc[band === "far" ? "distFar" : "distMid"]++; }
+    }
+    if (!distant && !(G.near && sample(G.near, pos, g, maxD, G.rate, tier, FX_GUN))) shot(cls, pos, tier);
     if (own) duckFireShot();
     else if (ctx && eye && place(eye, maxD) >= 0) {
-      if (_pd > FAR_M) farBoom(cls, eye, maxD);
+      if (_pd > FAR_M && !distant) farBoom(cls, eye, maxD);
       if (!isMate(a)) bumpThreat(Math.max(0, 1 - _pd / 120));
     }
   });
@@ -1577,9 +1937,13 @@ function wire(W) {
       if (info.toShield > 0) sample("hit_shield", null, 0.2, 0, 1.0, VOICE_TIER.own, null);
       else sample("hit_flesh", null, 0.32, 0, 1.0, VOICE_TIER.own, null);
     }
+    // P23 (LC-67): the hurt grunt, one frame later (flushHurt) so a lethal / knocking hit cries once
+    if (info && info.dmg > 0 && victim && !victim.isDummy && _hurtQ.length < 32) _hurtQ.push(victim, performance.now());
   });
   on("actorDied", (victim) => {
     if (victim === W.player) cancelReload();   // do not rack the slide of a corpse's gun
+    stopRevive(victim);
+    vocal(victim, "death");                    // P23 (LC-67)
     thump(300, 0.3, 0.3, victim === W.player ? null : victim.pos, 90, victim === W.player ? VOICE_TIER.own : VOICE_TIER.gun);
   });
   on("swimState", (a, swimming) => { if (swimming) thump(900, 0.25, 0.25, a === W.player ? null : a.pos, 40); });
@@ -1703,9 +2067,40 @@ function wire(W) {
     _acc.pings++;
     const fromMe = !p || p.own || p.local || (W.player && (p.by === W.player.id || p.owner === W.player.id || p.from === W.player.id || p.actor === W.player));
     const g = fromMe ? 0.16 : 0.12, danger = p && (p.kind === "enemy" || p.kind === "danger");
+    // P23: a big-map PIN (a waypoint, not a callout) is one soft low note; a world ping keeps the chirp
+    if (p && p.kind === "pin") { blip(880, 0.12, g * 0.8, "sine", null, 0, VOICE_TIER.own); return; }
     blip(danger ? 1320 : 1180, 0.07, g, "triangle", null, 0, VOICE_TIER.own);
     setTimeout(() => blip(danger ? 990 : 1570, 0.11, g * 0.85, "triangle", null, 0, VOICE_TIER.own), 70);
   });
+  // ── P23: DBNO (C-DBNO), fall damage (C-FALL), smoke (C-SMOKE), chest shimmer (P2-J) ──
+  on("actorDowned", (a, src) => {
+    if (!a) return;
+    _acc.downed++;
+    stopRevive(a);
+    vocal(a, "downed");
+    const own = a === W.player;
+    thump(210, 0.24, own ? 0.24 : 0.2, own ? null : a.pos, 50, own ? VOICE_TIER.own : VOICE_TIER.gun, own ? null : FX_FOLEY);
+    const me = W.player;
+    if (me && isOwnTeam(a)) teamSting(false);
+    else if (me && src != null && (src === me || src === me.id || src.id === me.id)) knockConfirm();
+  });
+  on("reviveStart", (reviver, target) => reviveFoley(reviver, target));
+  on("reviveCancel", (reviver, target) => {
+    // by target; a cancel that names only the reviver stops that reviver's channel
+    if (!(target && stopRevive(target)) && reviver) for (const [t, r] of _rev) if (r.reviver === reviver) stopRevive(t);
+    _acc.reviveCancels++;
+    if (W.player && (reviver === W.player || target === W.player)) blip(300, 0.1, 0.1, "square", null, 0, VOICE_TIER.own);
+  });
+  on("actorRevived", (a) => {
+    if (!a) return;
+    _acc.revived++;
+    stopRevive(a);
+    vocal(a, "revive");
+    if (isOwnTeam(a)) teamSting(true);
+  });
+  on("fallDamage", (a, info) => fallCue(a, info));
+  for (const ev of ["smokeLanded", "smokeDeployed", "smokePopped"]) on(ev, (s) => { if (s && typeof s === "object" && isFinite(s.x)) { _smokeSeen.set(s, s.t0); smokePop(s); } });
+  on("chestOpened", () => { if (shimmer && W_) chestShimmer(W_, 0); });
 }
 
 function siren(W, n) {
@@ -1777,9 +2172,10 @@ function tick(W, dt) {
   windAudio(W);
   musicIntensity(W);              // (the loop seam has its own 100 ms pump + timer)
   remoteActors(W, dt || 0);
-  // the two probes that cost a lookup rather than a gain write run at 4 Hz
+  flushHurt();                    // P23: last frame's hurt grunts (see vocal)
+  // the probes that cost a lookup rather than a gain write run at 4 Hz
   _slowAcc += dt;
-  if (_slowAcc >= 0.25) { _slowAcc = 0; roomTone(W); waterTone(W); }
+  if (_slowAcc >= 0.25) { const sd = _slowAcc; _slowAcc = 0; roomTone(W); waterTone(W); smokeScan(W); chestShimmer(W, sd); }
   _tickMs += performance.now() - t0; _tickN++;
 }
 

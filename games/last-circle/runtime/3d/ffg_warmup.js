@@ -125,7 +125,7 @@ function depthSignature(o, m, vsm) {
 
 /** Pick one representative caster per depth signature and give it its own depth material for the warm frame.
  *  Call AFTER force() (everything visible, un-culled) and before the one real composer frame. Returns { reps, undo }. */
-function armDepthVariants(renderer, scene) {
+function armDepthVariants(renderer, scene, camera) {
   const sm = renderer.shadowMap;
   const out = { reps: 0, skipped: 0, undo() {} };
   if (!sm || !sm.enabled) return out;                 // low tier: no shadow pass, no depth programs
@@ -144,6 +144,16 @@ function armDepthVariants(renderer, scene) {
     const have = reps.get(sig);
     if (!have || (o.castShadow === true && have.castShadow !== true)) reps.set(sig, o);
   });
+  // SYNTHETIC COVERAGE (P23 boot, C-GFX "0 programs after the first drop frame on every tier"): a signature no mesh wears
+  // at warm time can still appear later - measured once on ULTRA (late_probe 03:07, ashgrid s11): a plain front-side caster
+  // with no map ("-,-,-,0,-1,-1,0,-1,1") linked its depth program at t 53.6 s mid-fight; the warm frame had no such caster
+  // (a later loot / pile / FX mesh switching its shadow on). The common signature space (instanced or not x map or not x
+  // the three depth sides) is small, so every member nobody represents gets a one-triangle stand-in inside the shadow
+  // box but OUTSIDE the view frustum: three's shadow pass frustum-tests it against the shadow camera and draws it with the
+  // shared depth path; the colour pass culls it, so no colour program is linked for it. (Added after force(), so it keeps
+  // frustumCulled = true. three tests an object's layers against the VIEW camera in the shadow pass too, so a private
+  // layer cannot hide it from the colour pass alone.)
+  const synth = synthDepthReps(scene, camera, vsm, reps);
   const armed = [];
   for (const [sig, o] of reps) {
     let d = _depthPool.get(sig);
@@ -153,7 +163,9 @@ function armDepthVariants(renderer, scene) {
     o.customDepthMaterial = d;
   }
   out.reps = armed.length;
-  out.list = armed.map((a) => (a.o.name || a.o.type) + (a.cast === true ? "*" : ""));     // diagnostics: the representative of each signature (* = a current caster)
+  out.synth = synth.n;
+  out.list = armed.map((a) => (a.o.name || a.o.type) + (a.cast === true ? "*" : ""));   // diagnostics: the representative of each signature (* = a current caster)
+  out.sigs = [...reps.keys()];                       // diagnostics: the depth signatures this warm frame linked (W._warm.depthSigs)
   out.undo = () => {
     for (const a of armed) {
       a.o.castShadow = a.cast;
@@ -161,8 +173,62 @@ function armDepthVariants(renderer, scene) {
       // getDepthMaterial() copied the caster's textures onto the pooled material: drop them so a finished match is never held alive
       a.d.map = null; a.d.alphaMap = null; a.d.displacementMap = null;
     }
+    synth.undo();
   };
   return out;
+}
+
+// the synthetic stand-ins: one shared triangle (with uv, so a map variant is a real draw), one 1x1 texture, session-lived
+let _synthGeo = null, _synthTex = null;
+const _synthMats = new Map();       // "map|side" -> MeshBasicMaterial (never drawn by a colour pass: view-frustum culled)
+function synthDepthReps(scene, camera, vsm, reps) {
+  const res = { n: 0, undo() {} };
+  const light = (() => { let l = null; scene.traverse((o) => { if (!l && o.isDirectionalLight && o.castShadow) l = o; }); return l; })();
+  if (!light || !light.shadow || !light.shadow.camera || !camera || !camera.isCamera) return res;
+  if (!_synthGeo) {
+    _synthGeo = new THREE.BufferGeometry();
+    _synthGeo.setAttribute("position", new THREE.Float32BufferAttribute([-0.05, 0, 0, 0.05, 0, 0, 0, 0.05, 0], 3));
+    _synthGeo.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    _synthGeo.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2));
+    _synthTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    _synthTex.needsUpdate = true;
+  }
+  // a spot inside the shadow box (centred on the light's target, half-size = the shadow camera's right) that the view
+  // frustum does not contain: the target itself, else half the box out in one of 8 directions (one is always behind the view)
+  const sc = light.shadow.camera, half = Math.max(1, Math.abs(sc.right || 10)) * 0.5;
+  const tgt = new THREE.Vector3();
+  if (light.target) light.target.getWorldPosition(tgt);
+  camera.updateMatrixWorld();
+  const vf = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const at = new THREE.Vector3();
+  let found = false;
+  for (let k = -1; k < 8 && !found; k++) {
+    at.copy(tgt); at.y += 1;
+    if (k >= 0) { at.x += Math.cos(k * Math.PI / 4) * half; at.z += Math.sin(k * Math.PI / 4) * half; }
+    found = !vf.containsPoint(at);
+  }
+  if (!found) return res;
+  const sideOf = (s) => (vsm ? s : SHADOW_SIDE[s]);
+  const made = [];
+  for (const inst of [false, true]) for (const map of [false, true]) for (const side of [THREE.FrontSide, THREE.BackSide, THREE.DoubleSide]) {
+    const sig = [inst ? "I" : "-", "-", "-", "0", map ? 0 : -1, -1, 0, -1, sideOf(side)].join(",");
+    if (reps.has(sig)) continue;
+    const mk = (map ? 1 : 0) + "|" + side;
+    let m = _synthMats.get(mk);
+    if (!m) { m = new THREE.MeshBasicMaterial({ side, map: map ? _synthTex : null }); _synthMats.set(mk, m); }
+    const o = inst ? new THREE.InstancedMesh(_synthGeo, m, 1) : new THREE.Mesh(_synthGeo, m);
+    if (inst) { o.setMatrixAt(0, new THREE.Matrix4()); o.instanceMatrix.needsUpdate = true; }
+    o.position.copy(at); o.frustumCulled = true; o.castShadow = true; o.receiveShadow = false;
+    o.name = "warm-depth-synth";
+    scene.add(o); o.updateMatrixWorld(true);
+    reps.set(sig, o); made.push(o);
+  }
+  if (!made.length) return res;
+  res.n = made.length;
+  res.undo = () => {
+    for (const o of made) { if (o.parent) o.parent.remove(o); if (o.isInstancedMesh && o.dispose) o.dispose(); }
+  };
+  return res;
 }
 
 /**
@@ -215,7 +281,7 @@ export async function warmup(kernel, opts) {
   try {
     renderer.autoClear = true;
     if (sm && sm.enabled) sm.needsUpdate = true;    // a real shadow pass even when autoUpdate is off (glide cadence)
-    try { dv = armDepthVariants(renderer, scene); stats.depthVariants = dv.reps; stats.depthVariantList = dv.list; } catch (e) { dv = null; /* an optimisation only */ }
+    try { dv = armDepthVariants(renderer, scene, camera); stats.depthVariants = dv.reps; stats.depthVariantList = dv.list; stats.depthSigs = dv.sigs; stats.depthSynth = dv.synth; } catch (e) { dv = null; /* an optimisation only */ }
     if (composer) composer.render(0);
     else { renderer.setRenderTarget(null); renderer.render(scene, camera); }
   } finally {
