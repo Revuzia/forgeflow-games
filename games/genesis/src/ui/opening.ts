@@ -558,7 +558,8 @@ export class Opening {
   private placeRing(): void {
     const sp = this.spot;
     const beat = this.cur?.beat;
-    const p = sp && (beat === 'people' || beat === 'gone') && !this.card.classList.contains('gn-away') ? this.host.screenOf(sp.planet, sp.pos, 2) : null;
+    // (the card steps aside while the people are held in the Touch — that is exactly when the ring must guide the drop)
+    const p = sp && (beat === 'people' || beat === 'gone') && (this.armedPeople || !this.card.classList.contains('gn-away')) ? this.host.screenOf(sp.planet, sp.pos, 2) : null;
     if (!p) { this.ring.hidden = true; return; }
     this.ring.hidden = false;
     this.ring.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
@@ -583,7 +584,7 @@ export class Opening {
         beat, line: this.met.has('air') ? 'Water?' : 'Water — though it will not stay without air.',
         // (the opening's storm passes by itself once a sea has gathered — stormCheck — so it never snows the world under)
         act: { label: 'let it rain', run: () => { this.stormAt = this.host.view.renderTick; this.cmd({ k: 'weather.global', planet, kind: 'storm' }, { k: 'water.sea-level', planet, value: -40 }); } },
-        later: `The air warms the rock slowly; rain on frozen ground lies as snow. Let time run (${k('time.speed100', '7')}), or hold ${k('ui.gesture', 'G')} and draw the drop — a hook falling into a small loop — for rain where you point.`,
+        later: `The air warms the rock slowly; rain on frozen ground lies as snow. Let time run (${k('time.speed1000', '9')}), or hold ${k('ui.gesture', 'G')} and draw the drop — a hook falling into a small loop — for rain where you point.`,
       };
       case 'green': return {
         beat, line: 'Soil, and a seed.',
