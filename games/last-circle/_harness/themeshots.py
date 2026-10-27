@@ -4,7 +4,7 @@
 
     python _harness/themeshots.py --disk --label after                       # the working copy -> _harness/_shots/themes_after_*.png
     python _harness/themeshots.py --rev 1b445153 --label before              # a frozen build (the "before" column)
-    python _harness/themeshots.py --disk --overlay DIR --label try           # serve DIR/<game-relative path> over the working copy
+    python _harness/themeshots.py --disk --theme-overlay DIR --label try     # serve DIR/<game-relative path> over the working copy
                                                                              # (a generator run into DIR via art_b_city.py --out-root, a patched citykit.js, ...)
     python _harness/themeshots.py --disk --themes resort,lodge,city --shots DIR --label after
 
@@ -328,7 +328,7 @@ def main_fn(v, args):
     s.start()
     if not s.disk:
         raise C.EnvFailure("themeshots serves through page routing: run it with --disk (or --rev)")
-    overlay_served = overlay_route(s, args.overlay)
+    overlay_served = overlay_route(s, args.theme_overlay)
     s.page.set_default_timeout(900_000)
     out = {}
     try:
@@ -470,7 +470,7 @@ def look_rows(v, man, tabs, themes, args):
             if ent is None:
                 rows.append("%s:%s has no palette file" % (key, var))
                 continue
-            img = fetch_png(args.overlay, args.rev, "assets/props/city/" + ent["file"])
+            img = fetch_png(args.theme_overlay, args.rev, "assets/props/city/" + ent["file"])
             w, r = swatch_mean(img, CELLS["wall"]), swatch_mean(img, CELLS["roof"])
             hw, sw, lw = _hsl(w)
             hr, sr, lr = _hsl(r)
@@ -488,7 +488,7 @@ def look_rows(v, man, tabs, themes, args):
                 ent = man["variants"][key].get(var) if key == "suburban" else None
                 if ent is None:
                     continue
-                g = board_gaps(fetch_png(args.overlay, args.rev, "assets/props/city/" + ent["file"]), CELLS["wall"], 9)
+                g = board_gaps(fetch_png(args.theme_overlay, args.rev, "assets/props/city/" + ent["file"]), CELLS["wall"], 9)
                 per.append("%s %d" % (var, g))
                 n_ok += 1 if g >= 8 else 0
             v.check("lodge-timber", n_ok >= 4, "suburban colourways whose wall swatch carries horizontal boards (>= 8 board gaps over a storey): %d (bar 4); gaps per colourway: %s" % (n_ok, ", ".join(per)))
@@ -540,7 +540,9 @@ def main():
     ap.add_argument("--themes", default="resort,lodge", help="comma list of themes (resort, lodge, city, farm, ruin, mill)")
     ap.add_argument("--views", default="street,hero,air", help="town views, every district at detail")
     ap.add_argument("--far-views", default="drop,drop2", help="town views with the real LOD (the drop cameras: 330 m up, 500 / 330 m back; every district is its far proxy)")
-    ap.add_argument("--overlay", default=None, help="serve DIR/<game-relative path> over the game's file when it exists (generator output, a patched citykit.js)")
+    # its own loose-directory overlay (any DIR holding game-relative files, e.g. generator output); renamed from --overlay in the P2/P3 fix round,
+    # when common.add_common_args gained the shared --overlay (a games/last-circle dir) and the duplicate option crashed argparse (gate 10-27 12:43)
+    ap.add_argument("--theme-overlay", default=None, help="serve DIR/<game-relative path> over the game's file when it exists (generator output, a patched citykit.js)")
     ap.add_argument("--min-house", type=int, default=5, help="bar: distinct house colourways per theme (resort, lodge)")
     ap.add_argument("--min-big", type=int, default=3, help="bar: distinct big-building colourways per theme (resort, lodge)")
     args = ap.parse_args()
