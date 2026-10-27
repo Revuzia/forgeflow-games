@@ -60,14 +60,14 @@
   },
   "uv_coverage": 0.712,
   "bake": {
-    "base": 7.17,
-    "rough_metal": 6.72,
-    "normal": 5.0,
-    "ao": 3.45,
+    "base": 12.43,
+    "rough_metal": 4.68,
+    "normal": 3.01,
+    "ao": 2.76,
     "normal_fixed_px": 10603,
-    "projection": 35.64,
-    "pack_save": 37.16,
-    "total": 60.42
+    "projection": 10.29,
+    "pack_save": 11.11,
+    "total": 34.41
   },
   "tris": 3429,
   "mesh_top_m": 1.625,
@@ -166,18 +166,18 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1346080,
+  "glb_bytes_raw": 1344508,
   "optimize": {
     "ok": true,
-    "before": 1346080,
-    "after": 471436,
+    "before": 1344508,
+    "after": 471604,
     "metallic_zero": 3
   },
-  "glb_bytes": 471476,
+  "glb_bytes": 471644,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_aubade.glb (460 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_aubade.glb (461 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: greatwick_aubade_base 1024x1024 87K, greatwick_aubade_normal 512x512 47K, greatwick_aubade_orm 256x256 17K",
       "  skinned meshes: greatwick_aubade(4354v), greatwick_aubade_accent_1(181v), greatwick_aubade_accent_2(97v)",
       "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
@@ -217,26 +217,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_greatwick_aubade.png",
-    "seconds": 37.6,
+    "seconds": 26.9,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_greatwick_aubade.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.27,
-      "model": 47.33,
-      "lows_bind": 0.12,
-      "uv": 17.83,
-      "bake": 60.42,
-      "clips": 93.14,
-      "export": 4.38,
-      "optimize": 1.09,
-      "load_test": 0.25,
-      "three_qa": 94.1,
-      "cache": 0.57
+      "rig": 0.01,
+      "materials": 0.3,
+      "model": 26.39,
+      "lows_bind": 0.22,
+      "uv": 11.93,
+      "bake": 34.42,
+      "clips": 56.68,
+      "export": 1.81,
+      "optimize": 0.68,
+      "load_test": 0.23,
+      "three_qa": 58.53,
+      "cache": 0.16
     },
-    "total_s": 319.59
+    "total_s": 191.46
   },
   "run_ref_speed": 3.2,
   "height_m": 1.1700000000000002

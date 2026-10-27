@@ -2135,9 +2135,10 @@ PAINT = {
             # cowl folds running back from the rim, a nape crease, wool brushwork, a lit crown (it read as smooth plastic)
             "hood": {"kind": "cowl", "hex": "#7E8A97", "light": (0.70, 1.12), "key": 0.12, "brush": 0.06,
                      "centre": (-0.022, 0.02, 0.93), "folds": 7, "fold": 0.16},
-            "hood_rim": dict(_CHALK, hex="#C3BFB5", light=(0.80, 1.05), cracks=0.05, edge=0.20,
+            "hood_rim": dict(_CHALK, hex="#B8B4AA", light=(0.80, 1.05), cracks=0.05, edge=0.20,
                              arch=(AUB_ARCH, AUB_RIM_JOINTS, -0.03)),
-            "knob": _CHALK, "clasp": dict(_CHALK, edge=0.22), "pommel": _CHALK,
+            # (fix round 3) the knob and the clasp ring a shade under the chalk (in game the hood's top read L* 78 at p80)
+            "knob": dict(_CHALK, hex="#BDB9AF"), "clasp": dict(_CHALK, hex="#B3AFA5", edge=0.22), "pommel": _CHALK,
             "stole": {"kind": "linen", "hex": "#D9D5CB"},
             "sleeve_L": dict(_AUB_CLOTH, cuff="#55606C"), "sleeve_R": dict(_AUB_CLOTH, cuff="#55606C"),
             "mitt_L": {"kind": "mitt", "hex": "#525C68"}, "mitt_R": {"kind": "mitt", "hex": "#525C68"},
@@ -2158,7 +2159,7 @@ PAINT = {
             "lantern_roof": _CHALK,
             # (fix round 3) a deeper dawnglass with a dim frost (the core is the light: a near-white bloom out-valued the
             # ally azure, so the west viewer saw a blue hole in white glass)
-            "lantern_glass": {"kind": "glass", "hex": "#8AA2B9", "frost": "#A3B7C9", "bloom": 0.45,
+            "lantern_glass": {"kind": "glass", "hex": "#7F8D9A", "frost": "#98A5B1", "bloom": 0.40,
                               "box": (0.0, _A_LANT[1], _AL["hw"] - 0.015, _AL["hd"] - 0.015, *_AL["z_pane"])},
         },
         "gw_top": {

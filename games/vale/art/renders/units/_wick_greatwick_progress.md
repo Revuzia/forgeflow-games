@@ -327,3 +327,68 @@ art/out/units/greatwick_{aubade,serenade}.glb, art/renders/units/*greatwick*.
   fragmented (the shared unwrap, uv_coverage 0.66-0.71). The accent is one uniform emissive (the renderer's
   tint): the 'soft volume' comes from shape (wide, low, smooth-shaded ellipsoid; domed lens cores in a frosted
   bloom painted on the glass), not from a gradient.
+
+## Fix round 3 (review: 2 open majors + the in-game notes) — 2026-10-27
+Majors: (1) Serenade back-lantern lost the concept (flat accent tiles edge to edge = a blue-tiled birdcage, thin smooth
+bands read as grey wood, a pale cream lid with six spokes = a pie, two pale domes stacked on a post at 52 deg); (2) the
+hood light read as a tongue in an open mouth on both factions (a uniform hard-edged emissive disc lying on the sill).
+In-game notes: Aubade blue-grey cloth weak under the ally azure, Serenade tan / amber weak under the enemy marigold,
+the light small from above, surfaces flat / plastic. Shared targets: one soft light centred in a dark hollow, clean
+inner lip, Art 2.0 paint, team read from both seats, hoods L* <= 65, gates.
+- New scratch QA (scratchpad/wick_greatwick/tools): gw_review.mjs (the shieldwick review harness re-aimed: hood,
+  lantern, true1x, metrics with the accent split into opaque cores and see-through glow, a three.js pick), gw_ingame.mjs
+  + gw_ingame.py (a real Rift match from seat 0 and seat 5 at the same sim times, per greatwick on screen: accent pixels
+  of the viewer's tint vs a 3 px ring round them, CIE Lab dE76 / dL / hue; the hood's L* round its crown),
+  hollow_probe.py / uvfind.py (what a ray through the hood opening hits, by part).
+- (2) HOOD LIGHT, both: ONE smooth UV-ellipsoid core (exact low_mesh, 96 tris) in the MIDDLE of the hollow, 8 cm back,
+  wider than tall (A 10 x 6 cm, S 14 x 8 cm), dark hollow above, below and to both sides. Its soft falloff: a see-through
+  LINING of light over the hollow's deep half (rings marched onto the hood's inner wall from 9 cm in + a back cap,
+  1.2 cm off the wall, 84 tris), material `glow_halo1` (KEEP prefix glow_: unbaked), renamed `accent` and alpha-BLENDED
+  (0.20) in the GLB by glb_metallic_zero, so the renderer tints it per viewer with the core (it tints every material
+  named accent; factor-only, the load test passes). Nested shells concentric with the core were tried first (1.42x
+  alpha 0.40, 1.80x 0.17): their stepped rings read as an iris round a pupil -> replaced by the lining. The ink spill
+  round the light reduced (glow_r 9 -> 4.5 cm: a wide pale lift ringed the walls).
+  Inner lip: the chalk rim's (A) and the felt roll's (S) inner walls inked (lit, they read as lips round the hole).
+  Serenade hollow: a tan / grey sliver in the back-bottom corner was the mantle collar (and the tunic's top) rising
+  through the hood's floor (decimated lows bridging the carve; the head-bound hood dips in the idle breath): both now
+  carved 6 cm under the hollow's deep part (SER_ARCH_SINK, behind the opening plane only), the faces that carve leaves
+  and the hood's own deep corner inked (SER_ARCH_DEEP), + an ink floor plate 1.2 cm over the hollow floor (8 tris).
+  A ~3 px grey fleck remains in the extreme 0.6 m close-up from the wick's left; nothing at eye level / 52 deg.
+- (1) SERENADE DRUM rebuilt (the concept's lamp): two HEAVY BLOCK-CUT ironstone courses (8 carved hull blocks each,
+  two outer facets, chamfered, hand-cut jitter, broken top corners, 7.5 mm joints, the upper course laid half a block
+  round), 8 ironstone posts standing 1.8 cm proud of 8 LAMPRESIN PANES, each pane framing ONE domed accent core (82 x
+  72 % of the window) in a deep smoky resin margin with a frosted bloom toward the core (`_pp_resin`), a low padded TAN
+  felt lid (#A88C64, was cream) with FOUR crossed dark leather straps (#3F2F25) and a button (was six pale spokes), a
+  floor slab under the ring. Painters `_pp_blocks` (per-block tone, dark joint ends, chisel dressing; chamfer light and
+  joint cavities from the hulls' own field) and `_pp_resin`.
+- LANTERN GLOW: one see-through accent fan round every lamp core (A dawnglass 1.22x, S resin 1.18x; same material as
+  the hood lining): the team light spreads into the glass instead of stopping at a hard oval. The Aubade cores are
+  domed fans now (68 tris; the 3-ring dome hulls cost 398).
+- PAINT: cloth / felt / leather / wood / stone matte (a MAXIMUM node on each role's roughness before the bake: cloth
+  0.93; the baked ORM held cloth at 0.74 = a plastic sheen); the hoods painted (`_pp_cowl`: soft folds back from the
+  rim, a nape crease, brushwork, a deeper drape) instead of a smooth flat fill; cloak folds and brushwork stronger
+  (fold_light A 1.05 / S 1.1, brush 0.075 / 0.065).
+- VALUES / TEAM READ: hoods A #939FAB -> #7E8A97, S #C6AB86 -> #A58C69, Serenade mantle #A88B66; dark beds round the
+  seam (#38414C, 3.4 cm) and the crown band (#3B2F26, 3.6 cm); Aubade dawnglass deeper and greyer (#7F8D9A, dim frost:
+  a near-white bloom out-valued the ally azure), chalk rim / knob / clasp a shade under the chalk; Serenade resin panes
+  smoky (#8A6640 / #523822). FACTION_PALETTES (wick_common.py) unchanged.
+- Budget trims (Serenade): cloak 500 -> 428, mantle 360 -> 304, hood 320 -> 296, hammer head 220 -> 160, sleeves 128 ->
+  112, A-frame 130 -> 112, pack 90 -> 72, rim 120 -> 112, collar 92 -> 84.
+- FINAL (both --clip-sheet; three.js load test OK, facing +Z):
+  aubade 3429 tris, 461 KiB, pipeline accent 7.31 % (top half 69.4 %); serenade 3600 tris, 479 KiB, 4.92 % (64.6 %).
+  The pipeline counts the see-through glow as full accent: split at the game camera (8 facings, gw_review metrics):
+  aubade opaque cores 5.46 % + glow 2.12 % (alpha-weighted ~5.9 %), serenade 4.59 % + 0.75 % (~4.75 %).
+  Value bands (three.js AgX, 8 facings, median top / mid / bottom): A 75 / 61 / 48, S 65 / 46 / 43.
+  In game (Rift, seed 7, t 602-931, zoom 28.5 + 16, seat 0 = west and seat 5 = east, median per greatwick; baseline =
+  the round-2 GLBs at the same sim times): Aubade under the ally azure dL +11.2 (was -2.6), dE76 40.1 (43.5), ring
+  L* 47 (61); Aubade under the enemy marigold dE 63.9 (66.5), dL +15.9 (+6.7); Serenade under the enemy marigold dE 63.6
+  (38.1), dL +37.1 (+14.1), ring L* 27 / C* 15 (57 / 24); Serenade under the ally azure dE 56.5 (58.0). Hood L* p50:
+  Aubade 57-60 (59-71), Serenade 40-44 (68); p80 Aubade 67-77 (the chalk rim and knob).
+  Pose check (proto/wick_greatwick_pose.py): run planted (min -0.001), attack1 impact f12 head 1.21 / 1.27 m high,
+  0.89 / 0.94 m in front, death at rest from f30-40 with the lantern on the ground (min 0.000 / -0.004).
+  Renders: three_greatwick_*.png, three_clips_greatwick_*.png, paint_greatwick_*.png, compare_greatwick.jpg
+  (concept | three.js front, 3/4 | game camera ally / enemy). Review set (scratchpad/wick_greatwick/review: beauty,
+  hood, lantern, true1x, game52_x3; ig_final2: in-game shots from both seats).
+  Open: the Aubade ally read stays chroma-led (dHue ~1: azure on the faction's blue-grey; value now +11); the hollow
+  lining reads as a dim lit interior at eye level (dark lip band all round, never a ring round the core); the
+  Serenade pipeline accent 4.9 % sits just under the brief's 5 % (opaque 4.6 %) with the cores framed by resin.
