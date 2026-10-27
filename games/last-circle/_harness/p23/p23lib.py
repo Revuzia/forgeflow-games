@@ -442,3 +442,40 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
     for pg in (hpg, gpg):
         pg.evaluate(land)
     return ctx, hpg, hrec, gpg, grec, code
+
+
+# ───────────────────────── a served file patched in memory (planted faults that live in a module's private code) ─────────────────────────
+def served_text(s, rel):
+    """the text the page would be served for game-relative `rel`: an --overlay copy first, then --rev's blob, else the working copy"""
+    d = s.disk
+    if d is None:
+        raise C.EnvFailure("a served-file plant needs --disk / --rev (page routing)")
+    of = d._overlay_file(rel) if d.overlays else None
+    if of:
+        with open(of, "rb") as fh:
+            return fh.read().decode("utf-8")
+    if d.git is not None:
+        b = d.git.read(rel)
+    else:
+        with open(os.path.join(C.ROOT, rel.replace("/", os.sep)), "rb") as fh:
+            b = fh.read()
+    if b is None:
+        raise C.EnvFailure("plant: %s is not in the served tree" % rel)
+    return b.decode("utf-8")
+
+
+def serve_patched(s, rel, edits):
+    """serve `rel` with each (old, new) edit applied (each `old` must occur exactly once: a moved anchor is could-not-judge, never a silent
+    no-op plant). Call BEFORE the page loads the module. Returns the number of edits applied."""
+    import urllib.parse
+    src = served_text(s, rel)
+    for old, new in edits:
+        n = src.count(old)
+        if n != 1:
+            raise C.EnvFailure("plant anchor in %s found %d times (want 1): %r" % (rel, n, old[:80]))
+        src = src.replace(old, new, 1)
+    body = src.encode("utf-8")
+    s.disk.overrides.append((lambda url, rel=rel: urllib.parse.urlparse(url).path.endswith("/" + rel),
+                             lambda route, body=body: route.fulfill(status=200, body=body, headers={
+                                 "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})))
+    return len(edits)

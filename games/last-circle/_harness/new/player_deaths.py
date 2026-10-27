@@ -10,7 +10,9 @@ A standard match is loaded, the human lands (protected) and the kernel loop is f
       death_right, headshots the head variants, a crouching headshot death_crouch_head, a mover can take death_walking; the pick is a
       pure function of (seed, victim, sim tick) - same inputs, same fall - and a side hit varies with the tick (seeded, never Math.random()).
   (3) THE FACING MATHS IS RIGHT: independent of the game's own formula, the real skeleton of 6 living bots is measured:
-      the toes (both feet summed) point along (sin b, cos b) and the right hand lies on the (-cos b, sin b) side, b = actor.obj.rotation.y.
+      the torso (the shoulder line's forward) faces (sin b, cos b) within 60 deg and the right hand lies on the (-cos b, sin b) side,
+      b = actor.obj.rotation.y. The toes (both feet summed) are information since the P2/P3 fix round: the sprint-strafe / run clips turn the
+      feet toward the direction of travel. --plant rig-turned (every model turned 90 deg inside its actor) must FAIL this row.
   (4) CORPSE TIMELINE ON SIM TIME: (a) a real 3.6 s wait with NO frames stepped does not advance it (the old setTimeout(3000) did);
       (b) a pause during the sink freezes it exactly (y and _sinkT unchanged over 300 stepped frames), resume finishes it and the
       rig is freed; (c) hit-stop slows it (a 0.667 s hit-stop window advances _sinkT by 0.05-0.14 s, not 0.667); (d) a body killed
@@ -140,8 +142,10 @@ FORCED_JS = r"""() => {
   return out;
 }"""
 
-FACING_JS = r"""() => {
+FACING_JS = r"""([plant]) => {
   const Cn = window.__LC__, W = Cn.W;
+  // --plant rig-turned: every model turned 90 deg inside its actor (a wrong model-forward axis) - the row must FAIL
+  if (plant === 'rig-turned') for (const a of W.actors) if (a.rig && a.rig.scene && !a.rig.scene.__p23turn) { a.rig.scene.rotation.y += Math.PI / 2; a.rig.scene.__p23turn = 1; }
   Cn.stepFrames(4, 1 / 60, false);
   const bots = W.actors.filter((a) => a.alive && !a.isDummy && a.rig && a.onGround).slice(0, 8);
   const out = []; const v1 = new W.camera.position.constructor(), v2 = new W.camera.position.constructor();
@@ -149,15 +153,20 @@ FACING_JS = r"""() => {
   for (const a of bots) {
     a.obj.updateMatrixWorld(true);
     const b = a.obj.rotation.y, fx = Math.sin(b), fz = Math.cos(b), rx = -Math.cos(b), rz = Math.sin(b);
-    const hips = bone(a, /Hips$/), rh = bone(a, /RightHand$/);
+    const hips = bone(a, /Hips$/), rh = bone(a, /RightHand$/), shR = bone(a, /RightArm$/) || bone(a, /RightShoulder$/), shL = bone(a, /LeftArm$/) || bone(a, /LeftShoulder$/);
     const toeR = bone(a, /RightToeBase$/), footR = bone(a, /RightFoot$/), toeL = bone(a, /LeftToeBase$/), footL = bone(a, /LeftFoot$/);
-    if (!hips || !rh || !toeR || !footR || !toeL || !footL) continue;
+    if (!hips || !rh || !toeR || !footR || !toeL || !footL || !shR || !shL) continue;
     hips.getWorldPosition(v1); rh.getWorldPosition(v2);
     const rightDot = (v2.x - v1.x) * rx + (v2.z - v1.z) * rz;
     // BOTH feet summed: a swing foot at toe-off points its toes down/back (one viper sample read -0.008 on the right foot alone)
     let toeDot = 0;
     for (const [t, f] of [[toeR, footR], [toeL, footL]]) { t.getWorldPosition(v1); f.getWorldPosition(v2); toeDot += (v1.x - v2.x) * fx + (v1.z - v2.z) * fz; }
-    out.push({ id: a.id, skin: a.skin, toeForward: +toeDot.toFixed(3), handRight: +rightDot.toFixed(3) });
+    // the VISIBLE facing: the torso's forward = up x (right shoulder - left shoulder), level, unit length (fix round: the P2 sprint-strafe and run
+    // clips turn the FEET toward the direction of travel - rifle_sprint_right 19 of 82 frames toes-not-forward - while the body faces the aim)
+    shR.getWorldPosition(v1); shL.getWorldPosition(v2);
+    const sx = v1.x - v2.x, sz = v1.z - v2.z, tfx = -sz, tfz = sx, tn = Math.hypot(tfx, tfz) || 1;
+    const torso = (tfx / tn) * fx + (tfz / tn) * fz;
+    out.push({ id: a.id, skin: a.skin, clip: a.anim || null, torsoForward: +torso.toFixed(3), toeForward: +toeDot.toFixed(3), handRight: +rightDot.toFixed(3) });
     if (out.length >= 6) break;
   }
   return out;
@@ -202,6 +211,7 @@ def main():
     C.add_common_args(ap)
     PL.add_args(ap)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--plant", default=None, choices=["rig-turned"], help="rig-turned: every model turned 90 deg in its actor - the facing row MUST FAIL")
     ap.add_argument("--map", default="isla_viva", choices=C.MAPS)
     ap.add_argument("--kills", type=int, default=20)
     ap.add_argument("--kills-extended", type=int, default=30,
@@ -284,13 +294,16 @@ def main():
                         set(fo["lightFront"]) == {"death_front"} and set(fo["heavySide"]) == {"death_right"}, {"lightFront": fo["lightFront"], "heavySide": fo["heavySide"]})
                 v.check("every one of the seven clips is bound on the rig (clips map)", all(d in fo["avail"] for d in DEATHS), fo["avail"])
             # --- (3) facing maths vs the real skeleton
-            fc = s.js(FACING_JS)
-            v.info("facing (toe . forward, right hand . right)", fc)
+            fc = s.js(FACING_JS, [args.plant])
+            v.info("facing (torso . forward, toe . forward, right hand . right, the clip playing)", fc)
             if len(fc) < 3:
                 v.cnj("the facing maths matches the real skeleton", "fewer than 3 grounded bots measured")
             else:
-                v.check("the facing maths matches the real skeleton (toes of both feet along (sin b, cos b), right hand on the (-cos b, sin b) side)",
-                        all(x["toeForward"] > 0.02 and x["handRight"] > 0.0 for x in fc), fc)
+                # the body as SEEN faces (sin b, cos b): the shoulder line's forward within 60 deg (cos >= 0.5) and the right hand on the (-cos b, sin b)
+                # side. The toes are information (strafe / sprint-strafe clips turn the feet 45-90 deg toward travel by design); the plant rig-turned
+                # (every model turned 90 deg) FAILS it
+                v.check("the facing maths matches the real skeleton (the torso faces (sin b, cos b) within 60 deg, right hand on the (-cos b, sin b) side; toes INFO)",
+                        all(x["torsoForward"] >= 0.5 and x["handRight"] > 0.0 for x in fc), fc, "torso >= 0.5, hand > 0 on every bot")
             # --- (4) corpse timeline on sim time
             k0 = s.js(KILL_JS, [3])
             v.info("kill A", k0)
