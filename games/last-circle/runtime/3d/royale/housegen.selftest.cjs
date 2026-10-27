@@ -854,6 +854,27 @@ if (require.main === module) (async () => {
       }
       okP(wbad.length === 0 && nFoot > 200 && nEave > 50 && nBurn > 100 && wTris <= 0.14 * baseTris && ruinTris / 12 <= 1000, "meshData wear strips (LC-17): outside wall faces only, 12 mm in front of a box face, darker than the wall (foot " + nFoot + ", eave " + nEave + " strips on 36 houses; ruin soot " + nBurn + " strips on 12 ruins), +" + (100 * wTris / Math.max(1, baseTris)).toFixed(1) + " % wall triangles (<= 14 %), ruins +" + (ruinTris / 12).toFixed(0) + " triangles a house (<= 1000: drawn in the district mix, no draw call; +" + (100 * ruinTris / Math.max(1, ruinBase)).toFixed(0) + " % of their wall triangles); box vertices and boxRanges untouched", wbad.slice(0, 4).join(" | "));
     }
+    // (P23-fix / D10) the per-tier rule: WEAR_BY_TIER low = no wear strip and no ruin soot at all (the geometry equals wear: false), medium / high / ultra = the full
+    // strips (equal to the default); buildHouse follows the same option; the tier never touches a collider
+    {
+      const grey = () => [0.5, 0.5, 0.5], sig = (m) => [...m.groups.walls].map(([k, g]) => k + ":" + g.pos.length + ":" + g.idx.length).join("|");
+      let bad = [], lowTris = 0, fullTris = 0;
+      const T = HGmod.WEAR_BY_TIER;
+      if (!T || !Object.isFrozen(T) || T.low !== false || !T.medium || !T.high || !T.ultra) bad.push("WEAR_BY_TIER " + JSON.stringify(T));
+      for (let k = 0; k < 16; k++) {
+        const ruin = k >= 10;
+        const par = Object.assign({}, PS[(k * 11) % PS.length], { theme: ruin ? "ruin" : THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 });
+        const H = HGmod.generate(par);
+        const off = HGmod.meshData(H, grey, { interior: true, ns: true, wear: false }), on = HGmod.meshData(H, grey, { interior: true, ns: true });
+        const low = HGmod.meshData(H, grey, { interior: true, ns: true, wear: "low" });
+        if (sig(low) !== sig(off)) bad.push(par.use + (ruin ? " (ruin)" : "") + " low != off");
+        if (sig(on) === sig(off)) bad.push(par.use + (ruin ? " (ruin)" : "") + " the default draws no wear (the row would be blind)");
+        for (const t of ["medium", "high", "ultra"]) if (sig(HGmod.meshData(H, grey, { interior: true, ns: true, wear: t })) !== sig(on)) bad.push(par.use + " " + t + " != full");
+        for (const g of low.groups.walls.values()) lowTris += g.idx.length / 3;
+        for (const g of on.groups.walls.values()) fullTris += g.idx.length / 3;
+      }
+      okP(bad.length === 0, "wear per graphics tier (D10): low = no wear strip / ruin soot (== wear: false; " + lowTris + " wall triangles vs " + fullTris + " full on 16 houses incl. 6 ruins), medium / high / ultra = the full strips", bad.slice(0, 4).join(" | "));
+    }
   // O3 on tall shells: <= 3 walkable floors, the rest closed (one exact mass: nobody gets in), the asked height kept
   {
     let bad = [];
