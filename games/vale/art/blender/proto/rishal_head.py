@@ -3,7 +3,7 @@ the build voxel, coloured per vertex with rishal.head_preview_colour (the proced
 role colour elsewhere), rendered from the front, his left three-quarter, his left side, the back and the game camera.
 
     blender -b --factory-startup --python art/blender/proto/rishal_head.py -- [--parts extra,parts] [--out <png>]
-        [--cell 420] [--glossy]
+        [--cell 420] [--views q3,side] [--ortho 0.62]
 """
 from __future__ import annotations
 
@@ -28,6 +28,10 @@ def args():
     p.add_argument("--parts", default="")
     p.add_argument("--cell", type=int, default=420)
     p.add_argument("--skin", default="")
+    p.add_argument("--views", default="", help="a subset of front,q3,side,back,q3back,game,gamef")
+    p.add_argument("--ortho", type=float, default=0.62)
+    p.add_argument("--target", default="0,0,1.66", help="the views' target x,y,z (m)")
+    p.add_argument("--only", action="store_true", help="only the --parts (not the helmet)")
     p.add_argument("--out", default=os.path.join(scene.RENDERS_DIR, "fighters", "rishal", "_fit", "head.png"))
     return p.parse_args(scene.script_args())
 
@@ -46,7 +50,9 @@ def main():
     pal = dict(R.PALETTE)
     if skin:
         pal.update(skin["palette"])
-    want = set(R.HEAD_PARTS) | {"neck", "cowl", "visor_ridge"} | set(x for x in a.parts.split(",") if x)
+    want = set(x for x in a.parts.split(",") if x)
+    if not a.only:
+        want |= set(R.HEAD_PARTS) | {"neck", "cowl", "visor_ridge"}
     items = [s for s in R.sculpts() if s[0] in want]
     if skin:
         items += [s for s in R.skin_extras(skin.get("extra") or {}) if s[0] in want or True]
@@ -92,11 +98,13 @@ def main():
     sc.collection.objects.link(co)
     sc.camera = co
     cam.type = "ORTHO"
-    cam.ortho_scale = 0.62
+    cam.ortho_scale = a.ortho
     sc.render.resolution_x = sc.render.resolution_y = a.cell
     sc.render.film_transparent = False
-    tgt = Vector((0.0, 0.0, 1.66))
-    views = [("front", 0, 0), ("q3", 35, 5), ("side", 90, 0), ("back", 180, 5), ("q3back", 140, 10), ("game", 25, 52)]
+    tgt = Vector(tuple(float(v) for v in a.target.split(",")))
+    views = [("front", 0, 0), ("q3", 35, 5), ("side", 90, 0), ("back", 180, 5), ("q3back", 140, 10), ("game", 25, 52), ("gamef", 0, 52)]
+    if a.views:
+        views = [v for v in views if v[0] in a.views.split(",")]
     paths = []
     for nm, yaw, pitch in views:
         y, p = math.radians(yaw), math.radians(pitch)

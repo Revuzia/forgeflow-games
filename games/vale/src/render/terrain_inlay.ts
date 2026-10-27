@@ -4,7 +4,7 @@
 //   R  chalk inlay (pale): road hour-ticks, the deck's hour-script, FRAY hour-lines and numerals
 //   G  carved groove (dark): Dialwood hour-line grooves, the Snap's crazing, the shadow tip
 //   B  lit fracture (emissive ≤ 0.8): the Snap's crack
-//   A  mid inlay (L* 40): FRAY's shop ring, Sunmote dishes
+//   A  mid inlay (a value between the floor and the dark inlays): FRAY's shop ring, Sunmote dishes
 //
 // Each texel stores the signed distance to the nearest capsule of its channel, (d + 0.15) / 0.6 → 0..1,
 // so −0.15 m (deep inside a stroke) .. +0.45 m. A coarse field covers the map; every 2 m cell a thin stroke

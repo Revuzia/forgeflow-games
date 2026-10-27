@@ -1133,7 +1133,7 @@ BLADE_OWNER = "blade"
 DESPECKLE = {"cape": ((0.66, 0.34), (0.45, 1.0)), "cowl": ((0.55, 0.36), (0.5, 1.0)), "trousers": ((0.5, 0.6), (0.5, 0.6))}
 # the felt and the legs lighter than the concept's back view (the bible's middle and feet bands; lineup_qa build 16:
 # top 68.3 / mid 48.5 / feet 17.1 -> the hat ramp +3 L*, the wraps and boots x1.5-1.7 in linear light, umber)
-TONE = {"cape": 2.45, "cowl": 1.6, "tabard": 1.3, "sleeves": 1.15}
+TONE = {"cape": 2.7, "cowl": 1.6, "tabard": 1.3, "sleeves": 1.15}
 UMBER: dict = {}          # (fix pass 3: the legs take LEG_TARGET, the boots are painted)
 #                                                                                                    (luminance kept)
 _PAINT0 = {}
@@ -1303,7 +1303,7 @@ def paint_hat(p, n):
     slat = np.clip((np.abs(np.sin(phi * 18.0 + 0.15 * NOISE(p, 9.0))) - 0.965) / 0.035, 0, 1)
     # the key light's painted shading compressed (the game lights the cone too: the shade side seen from behind
     # read dark, lineup top band 61 at facing 180)
-    v = 0.34 + 0.60 * t + 0.05 * streak + 0.035 * mottle + 0.05 * _ss(0.0, 0.35, r) * (1 - _ss(0.35, 0.6, r))
+    v = 0.46 + 0.48 * t + 0.05 * streak + 0.035 * mottle + 0.05 * _ss(0.0, 0.35, r) * (1 - _ss(0.35, 0.6, r))
     v = v - 0.08 * _ss(0.86, 1.0, r) - 0.035 * slat
     v = np.clip(v, 0.0, 1.0)
     col = np.where((v < 0.25)[:, None], _mix(C["deep"], C["shade"], v / 0.25),
@@ -1329,10 +1329,11 @@ def paint_hat(p, n):
         inkc = _mix(_hexs("#3A3844"), _hexs(INK), 0.6) * (0.92 + 0.14 * t)[:, None]
         col = _mix(col, inkc, 0.96 * ink)
         col = _mix(col, _hexs("#CAC6D3"), 0.85 * rib)
-        e = 0.905
-        line = _ss(e - 0.030, e - 0.024, r) * (1 - _ss(e - 0.016, e - 0.010, r))
-        col = _mix(col, _hexs("#DAD7E0"), 0.9 * line)
-        col = _mix(col, inkc, _ss(e - 0.004, e + 0.004, r))
+        # fix pass 4: the ink brim band is a band (r 0.865 -> the rim, 3 cm; was a 4 mm line) under the chalk
+        # rim: an ink-brimmed hat with a light rim, its crown printed pale. (r 0.79 + a second ring cost the
+        # top band 12.6 L*: lineup facing 0 top 65.4 < 70; the game camera sees the front brim broad-on)
+        e0 = 0.865
+        col = _mix(col, inkc, _ss(e0 - 0.004, e0 + 0.004, r))
     # the cone's buried brim edge (inside the iron rim) takes the rim's iron: never a lacquer fringe past the rim
     col = _mix(col, _hexs(RIM_IRON["base"]) if sid != "nurrow_shadeprint" else _hexs(INK), _ss(0.945, 0.96, r))
     # the underside: dark lacquer, darker toward the crown, a warm bounce near the brim
@@ -1534,12 +1535,15 @@ def paint_strap(p, n):
     return col.astype(np.float32)
 
 
-PAUL_COLS = ("#33251F", "#574134", "#7A5D49", "#9E7C62", "#BD9A7D")      # dark .. hi (hue 18-27, sat <= 0.40)
+PAUL_COLS = ("#2B1B13", "#4B3022", "#6A4631", "#875D42", "#A06F50")      # dark .. hi (hue 20-24: below the
+#   marigold band, so the concept's rich wood is allowed its ~50 % chroma; L* 12-51: fix pass 4, the old ramp
+#   (L* 16-66, 34-40 %) read pale tan suede in the splash, the concept's lames are L* 27-44 walnut)
 
 
 # ── the boots: painted, not projected (the concept's re-posed feet stretched into pink-tan clay with no sole) ──
-BOOT_COLS = {"shade": "#30251F", "base": "#4D3B32", "lit": "#765A4A", "scuff": "#866B59", "sole": "#241B17",
-             "welt": "#4C3B32"}          # dark umber waxed leather (hue 18-24, L* 14-38): darker than the trousers
+BOOT_COLS = {"shade": "#322625", "base": "#503D3A", "lit": "#765D59", "scuff": "#846C67", "sole": "#221A1A",
+             "welt": "#4E3D3A"}          # fix pass 4: the concept's plum-umber (hue 5-11, 22-28 %: was 18-24 / 35 %;
+#                                          +1.5 L* over the first try: the facing-0 feet band fell to 20.3)          # dark umber waxed leather (hue 18-24, L* 14-38): darker than the trousers
 #                                          in the splash, the feet band (lineup facing 0, L* >= 20) held by the boots
 
 
@@ -1609,8 +1613,11 @@ def paint_pauldron(p, n):
         if not m.any():
             continue
         hb = h_[m] - edges[i][0]                              # height above this lame's lower edge
-        g = np.sin(hb * 240.0 + 2.5 * NOISE(p[m] * np.array([1.0, 1.0, 4.0]), 9.0))
-        gr[m] = 0.05 * g + 0.03 * NOISE(p[m] * np.array([4.0, 4.0, 1.0]), 30.0)
+        # the grain: dark streaks running round the shoulder along the lame (wavy, broken), a few lighter ones
+        g = np.sin(hb * 170.0 + 3.2 * NOISE(p[m] * np.array([1.0, 1.0, 4.0]), 9.0) + 1.7 * th_[m])
+        brk = np.clip(0.55 + 0.9 * NOISE(p[m] * np.array([3.0, 3.0, 1.0]), 22.0), 0, 1)
+        gr[m] = -0.13 * np.clip(g, 0, 1) ** 4 * brk + 0.05 * np.clip(-g, 0, 1) ** 6 \
+            + 0.03 * NOISE(p[m] * np.array([4.0, 4.0, 1.0]), 30.0)
         lip = _ss(0.024, 0.012, hb)                            # the rolled lip
         up_ = n[m] @ PAUL_UP
         vv = v[m] + 0.16 * lip * np.clip(up_ + 0.3, 0, 1)
@@ -1618,7 +1625,10 @@ def paint_pauldron(p, n):
         if i > 0:                                               # the seam shadow under the lip above
             vv = vv - 0.30 * _ss(edges[i][1] - 0.018, edges[i][1] - 0.002, h_[m])
         for t0 in (-0.50 + 0.22 * i, 0.16 + 0.18 * i):        # carved plank lines (not on the lip)
-            vv = vv - 0.20 * _ss(0.040, 0.016, np.abs(th_[m] - t0)) * _ss(0.012, 0.022, hb)
+            vv = vv - 0.24 * _ss(0.040, 0.016, np.abs(th_[m] - t0)) * _ss(0.012, 0.022, hb)
+        # a carved border line just above the rolled lip, lit on its lower lip (the concept's carved edge)
+        bd = np.abs(hb - 0.030)
+        vv = vv - 0.20 * _ss(0.0045, 0.0018, bd) + 0.08 * _ss(0.0075, 0.0045, bd) * (hb < 0.030)
         v[m] = vv
     v = np.clip(v + gr + 0.04 * NOISE.fbm(p, 14.0, 2), 0.0, 1.0)
     idx = np.clip(v * 4.0, 0, 3.999)
@@ -1911,7 +1921,9 @@ def _lift_ao(masks, floors, log=print):
     log(f"  ao floor on {img.name}: {sum(int(m.sum()) for m in masks)} texels")
 
 
-ROUGH_FLOOR = {"boots": 0.74}      # the waxed-leather role's 0.5 gloss mirrored the splash's bright sky: grey boots
+ROUGH_FLOOR = {"boots": 0.74, "pauldron": 0.80}
+#   the waxed-leather role's 0.5 gloss mirrored the splash's bright sky: grey boots; fix pass 4: the wood_dark
+#   pauldron's 0.5 gloss lit a white snow-cap and a pale outer shard in the splash (the sun on the domed cap)
 
 
 def _flatten_normal_seams(have, cape, log=print, rough_floor=()):

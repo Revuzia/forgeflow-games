@@ -87,8 +87,10 @@
       "sightRange": 12,
       "art": { "model": "assets/units/needle_outer_aubade.glb",
         "teamModels": ["assets/units/needle_outer_aubade.glb", "assets/units/needle_outer_serenade.glb"],
-        "height": 7, "icon": "assets/units/needle_outer_icon.png",
-        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
+        "height": 4.65, "icon": "assets/units/needle_outer_icon.png",
+        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" },
+        "damage": { "at": [0.66, 0.33], "vfx": "lib_structure_crack" },
+        "ruin": { "height": 1.3, "collapse": 1.8, "breakVfx": "lib_structure_break", "landVfx": "lib_structure_land" } }
     },
     {
       "id": "needle_inner",
@@ -103,8 +105,10 @@
       "sightRange": 12,
       "art": { "model": "assets/units/needle_inner_aubade.glb",
         "teamModels": ["assets/units/needle_inner_aubade.glb", "assets/units/needle_inner_serenade.glb"],
-        "height": 7.5, "icon": "assets/units/needle_inner_icon.png",
-        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
+        "height": 4.75, "icon": "assets/units/needle_inner_icon.png",
+        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" },
+        "damage": { "at": [0.66, 0.33], "vfx": "lib_structure_crack" },
+        "ruin": { "height": 1.35, "collapse": 1.8, "breakVfx": "lib_structure_break", "landVfx": "lib_structure_land" } }
     },
     {
       "id": "needle_bell",
@@ -119,8 +123,10 @@
       "sightRange": 12,
       "art": { "model": "assets/units/needle_bell_aubade.glb",
         "teamModels": ["assets/units/needle_bell_aubade.glb", "assets/units/needle_bell_serenade.glb"],
-        "height": 6.5, "icon": "assets/units/needle_bell_icon.png",
-        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
+        "height": 4.6, "icon": "assets/units/needle_bell_icon.png",
+        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" },
+        "damage": { "at": [0.66, 0.33], "vfx": "lib_structure_crack" },
+        "ruin": { "height": 1.4, "collapse": 1.8, "breakVfx": "lib_structure_break", "landVfx": "lib_structure_land" } }
     },
     {
       "id": "lantern",
@@ -134,8 +140,10 @@
       "onTakedownTeamBuff": "lanternwake",
       "art": { "model": "assets/units/lantern_aubade.glb",
         "teamModels": ["assets/units/lantern_aubade.glb", "assets/units/lantern_serenade.glb"],
-        "height": 4.5, "icon": "assets/units/lantern_icon.png",
-        "clips": { "idle": "idle", "death": "death" } }
+        "height": 4.65, "icon": "assets/units/lantern_icon.png",
+        "clips": { "idle": "idle", "death": "death" },
+        "damage": { "at": [0.66, 0.33], "vfx": "lib_structure_crack" },
+        "ruin": { "height": 1.4, "collapse": 1.8, "breakVfx": "lib_structure_break", "landVfx": "lib_structure_land" } }
     },
     {
       "id": "hourbell",
@@ -148,8 +156,10 @@
       "sightRange": 14,
       "art": { "model": "assets/units/hourbell_aubade.glb",
         "teamModels": ["assets/units/hourbell_aubade.glb", "assets/units/hourbell_serenade.glb"],
-        "height": 9, "icon": "assets/units/hourbell_icon.png",
-        "clips": { "idle": "idle", "death": "death" } }
+        "height": 5.3, "icon": "assets/units/hourbell_icon.png",
+        "clips": { "idle": "idle", "death": "death" },
+        "damage": { "at": [0.66, 0.33], "vfx": "lib_structure_crack" },
+        "ruin": { "height": 1.4, "collapse": 2.0, "breakVfx": "lib_structure_break", "landVfx": "lib_structure_land" } }
     },
 
     {

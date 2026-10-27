@@ -92,6 +92,7 @@ def args():
     p.add_argument("--bar", action="store_true", help="health-bar visibility of the blade per frame")
     p.add_argument("--brief", type=int, default=-1, help="only print frames with torso/head hits above this count")
     p.add_argument("--height", type=float, default=2.16, help="art.height for --bar")
+    p.add_argument("--carry", default="", help="override CARRY: 'rx,ry,rz;dx,dy,dz;ux,uy,uz' (compare carries)")
     return p.parse_args(scene.script_args())
 
 
@@ -108,6 +109,9 @@ def main():
     ctx = types.SimpleNamespace(info=types.SimpleNamespace(armature=arm, props=F.PROPORTIONS, joints={}), spec=F,
                                 chains={}, skin=None)
     skel = anim.Skeleton(arm)
+    if a.carry:
+        rr, dd, uu = ([float(c) for c in part.split(",")] for part in a.carry.split(";"))
+        F.CARRY = dict(F.CARRY, rel=tuple(rr), d=tuple(dd), up=tuple(uu))
     clips = anim.standard_clips(skel, F.MOTION, F.clip_overrides(ctx))
     body = bpy.data.objects["burdam"]
     names = [x[0] for x in F.sculpts()]

@@ -97,8 +97,9 @@ vec3 valeFlag( vec3 band, vec4 f, vec3 grainN, float chip, float jointW, vec3 jo
   float e = f.y + chip;
   jw = 1.0 - smoothstep( jointW * 0.35, jointW, e );
   float hue = fract( f.x * 13.7 ) - 0.5;
-  vec3 c = band * ( 1.0 + ( f.x - 0.5 ) * varK ) * vec3( 1.0 + 0.05 * hue, 1.0, 1.0 - 0.06 * hue ) * grainN;
-  c *= mix( 0.8, 1.0, smoothstep( 0.0, 0.16, e ) ) * ( 1.0 + 0.035 * smoothstep( 0.18, 0.5, e ) );
+  vec3 c = band * ( 1.0 + ( f.x - 0.5 ) * varK ) * vec3( 1.0 + 0.08 * hue, 1.0, 1.0 - 0.09 * hue ) * grainN;
+  // a soft painted edge and a worn, paler face (r12 B5: low-contrast joints, so the walked stone stays one quiet band)
+  c *= mix( 0.86, 1.0, smoothstep( 0.0, 0.16, e ) ) * ( 1.0 + 0.05 * smoothstep( 0.18, 0.5, e ) );
   c = mix( c, jointC, jw );
   h = smoothstep( 0.0, 0.085, e ) * 0.032 + ( f.x - 0.5 ) * 0.006;
   return c;
@@ -274,6 +275,9 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   vec4 fl = valeCourses( p, 1.18, 2.9 );
   float fh, jw;
   col = valeFlag( uLane * ( 0.97 + 0.07 * nMid + 0.03 * ( nBig - 0.5 ) ), fl, grainN, chip, 0.035, uGrout, 0.1, fh, jw );
+  // the walked course: the deck is honed palest along the road and weathers darker, stone by stone, toward the drop
+  // (r12 B5: the road owns the top of the terrain's value range; the outer courses sit a band lower)
+  col *= mix( 1.0, 0.35, smoothstep( uLaneHalf - 0.8, uLaneHalf + 1.8, laneD + ( fl.x - 0.5 ) * 0.9 ) );
   h = fh; rough = 0.7;
   float offLane = smoothstep( uLaneHalf + 1.2, uLaneHalf + 3.5, laneD );
   col = mix( col, uMoss * mossN * 0.8, jw * max( offLane, brush ) * 0.9 );
@@ -306,8 +310,8 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   h -= lit * 0.012 + litE * 0.01;
 #endif
 #ifdef VALE_STYLE_PLATE
-  // ── the Noonplate at the Shadowless Noon: honed pale dial-stone in rings of great slabs, luminous under the
-  //    overhead sun (L* ~66-72 in vision; fog of war still darkens it), faint grey veins, a satin sheen. The ten
+  // ── the Noonplate at the Shadowless Noon: honed dial-stone in rings of great slabs under the overhead sun
+  //    (L* 34-40 in vision, r12 B5; fog of war still darkens it), faint grey veins, a satin sheen. The ten
   //    hour-lines and the numerals are inlaid DARK (basalt in the pale stone, like a sundial's cut lines), the
   //    shop ring a mid inlay, the hour-ring and half-hour ticks cut as grooves with a sunlit lip ──
   vec4 pf = valeRingFlags( p, uPlate.xy, 4.15, 3.3, 3.9 );
@@ -556,7 +560,8 @@ export const WALL_MAIN_GLSL = /* glsl */`
     c = mix( c, uLip * 0.45, jt );
     h = smoothstep( 0.0, 0.08, e ) * 0.02 + gh * 0.02;
     if ( kind == 2 ) c *= mix( 0.8, 1.0, vl );
-    if ( kind == 3 ) c = mix( c, uEdgeLight * ( 0.92 + 0.12 * r1 ), 0.7 * ( 1.0 - jt ) * smoothstep( 0.15, 0.6, vl ) );
+    // the painted edge light: uEdgeLight is capped (terrain.ts) at L* 48 on screen; no block lifts above it
+    if ( kind == 3 ) c = mix( c, uEdgeLight * ( 0.9 + 0.1 * r1 ), 0.7 * ( 1.0 - jt ) * smoothstep( 0.15, 0.6, vl ) );
     if ( kind == 4 ) c *= 1.0 - 0.1 * smoothstep( 0.55, 1.0, vl );
     if ( kind == 5 ) {
       // the inner bevel: the wood's dark floor creeping over the cap's inner edge in a ragged line — opaque moss
@@ -599,7 +604,7 @@ export const WALL_MAIN_GLSL = /* glsl */`
     vec3 mM = valeTexMean( uTexMoss ), mL = valeTexMean( uTexLitter );
     float big = valeFbm( q * 0.06 + seed );
     float med = valeNoise( q * 0.27 + 4.0 );
-    vec3 under = mix( uCanopy, uEarthC, 0.45 ) * 0.25 * ( 0.82 + 0.34 * big );
+    vec3 under = mix( uCanopy, uEarthC, 0.45 ) * 0.28 * ( 0.82 + 0.34 * big );
     under = mix( vec3( dot( under, vec3( 0.2126, 0.7152, 0.0722 ) ) ), under, 0.75 );
     vec3 a = valeOrganic( mix( mM, tM.rgb, 0.6 ), mM, under * vec3( 0.94, 1.03, 0.9 ), 0.6 );
     vec3 b = valeOrganic( mix( mL, tL.rgb, 0.7 ), mL, under * vec3( 1.14, 0.95, 0.72 ), 0.5 );

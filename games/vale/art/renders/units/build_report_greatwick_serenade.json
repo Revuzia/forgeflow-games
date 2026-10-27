@@ -8,6 +8,8 @@
       "unweighted": 0,
       "fixed_vertices": 0,
       "empty_groups": [
+        "hips",
+        "hand.R",
         "thigh.L",
         "shin.L",
         "foot.L",
@@ -18,7 +20,7 @@
         "toe.R"
       ]
     },
-    "tris_mantle": 360,
+    "tris_mantle": 304,
     "bind_legs": {
       "heat_ok": true,
       "unweighted": 0,
@@ -42,43 +44,48 @@
       ]
     },
     "tris_legs": 50,
-    "tris_hood": 320,
-    "tris_hood_rim": 120,
-    "tris_collar": 92,
+    "tris_hood": 296,
+    "tris_hood_rim": 112,
+    "tris_collar": 84,
     "tris_crown_band": 180,
     "tris_hoodlight": 96,
-    "tris_cloak": 500,
-    "tris_sleeve_R": 128,
+    "tris_hoodglow1": 84,
+    "tris_cloak": 428,
+    "tris_sleeve_R": 110,
     "tris_mitt_R": 62,
-    "tris_sleeve_L": 128,
+    "tris_sleeve_L": 110,
     "tris_mitt_L": 62,
     "tris_boot_L": 58,
     "tris_boot_R": 58,
     "tris_haft": 56,
     "tris_pommel": 40,
-    "tris_hammer_head": 220,
+    "tris_hammer_head": 160,
     "tris_hammer_bands": 40,
     "tris_hammer_window": 44,
-    "tris_drum_body": 498,
-    "tris_drum_glow": 96,
-    "tris_drum_lid": 184,
-    "tris_frame_posts": 130,
-    "tris_pack": 90,
-    "validate_greatwick_serenade": "3240->3238"
+    "tris_drum_bands": 432,
+    "tris_drum_floor": 44,
+    "tris_drum_posts": 96,
+    "tris_drum_panes": 96,
+    "tris_drum_glow": 80,
+    "tris_drum_halo": 80,
+    "tris_drum_lid": 150,
+    "tris_frame_posts": 110,
+    "tris_pack": 72,
+    "validate_greatwick_serenade": "2978->2976"
   },
-  "uv_coverage": 0.662,
+  "uv_coverage": 0.672,
   "bake": {
-    "base": 2.6,
-    "rough_metal": 2.42,
-    "normal": 1.17,
-    "ao": 1.37,
-    "normal_fixed_px": 6334,
-    "projection": 9.14,
-    "pack_save": 9.23,
-    "total": 17.11
+    "base": 20.83,
+    "rough_metal": 6.19,
+    "normal": 1.28,
+    "ao": 1.47,
+    "normal_fixed_px": 29582,
+    "projection": 54.19,
+    "pack_save": 56.65,
+    "total": 87.25
   },
-  "tris": 3610,
-  "mesh_top_m": 1.552,
+  "tris": 3592,
+  "mesh_top_m": 1.516,
   "clips": {
     "idle": {
       "frames": 72,
@@ -174,24 +181,24 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1365084,
+  "glb_bytes_raw": 1418312,
   "optimize": {
     "ok": true,
-    "before": 1365084,
-    "after": 479104,
-    "metallic_zero": 2
+    "before": 1418312,
+    "after": 512444,
+    "metallic_zero": 3
   },
-  "glb_bytes": 479164,
+  "glb_bytes": 512484,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_serenade.glb (468 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: greatwick_serenade_base 1024x1024 85K, greatwick_serenade_normal 512x512 52K, greatwick_serenade_orm 256x256 20K",
-      "  skinned meshes: greatwick_serenade(4253v), greatwick_serenade_accent(362v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/greatwick_serenade.glb (500 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: greatwick_serenade_base 1024x1024 91K, greatwick_serenade_normal 512x512 56K, greatwick_serenade_orm 256x256 20K",
+      "  skinned meshes: greatwick_serenade(5046v), greatwick_serenade_accent_1(258v), greatwick_serenade_accent_2(137v)",
       "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.000s/20tr, attack2:1.000s/20tr, cast_a1:1.167s/20tr, cast_a2:1.167s/20tr, cast_a3:1.333s/20tr, cast_ult:2.000s/20tr, channel:1.333s/20tr, dash:0.667s/21tr, death:2.000s/20tr, idle:2.400s/19tr, idle_lobby:3.200s/20tr, recall:2.000s/21tr, run:0.400s/22tr, stunned:1.333s/20tr, victory:2.000s/20tr",
       "  tracks checked: 303; materials: body, accent; textures: body.map=1024x1024, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 3610; bind-pose bounds (three units, Y up): 1.20 x 1.55 x 1.22; facing (-0.00, 1.00); head bone y 0.92; runRefSpeed 3.2",
+      "  tris: 3592; bind-pose bounds (three units, Y up): 1.20 x 1.52 x 1.23; facing (-0.00, 1.00); head bone y 0.92; runRefSpeed 3.2",
       "  run: 12 f, planted samples 4, max foot-speed error 3.4%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -203,11 +210,11 @@
       [
         -0.589,
         0,
-        -0.719
+        -0.724
       ],
       [
         0.61,
-        1.552,
+        1.516,
         0.505
       ]
     ],
@@ -216,35 +223,34 @@
       1
     ],
     "headY": 0.918,
-    "accentPct": 7.12,
-    "accentTopHalfPct": 66.5,
-    "heightPx1080": 82,
+    "accentPct": 4.59,
+    "accentTopHalfPct": 63.1,
+    "heightPx1080": 80,
     "size": [
       2400,
       900
     ],
     "clips": 15,
     "out": "art/renders/units/three_greatwick_serenade.png",
-    "seconds": 20.8,
-    "exit": 0,
-    "clip_sheet": "art/renders/units/three_clips_greatwick_serenade.png"
+    "seconds": 40,
+    "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.21,
-      "model": 14.27,
-      "lows_bind": 0.07,
-      "uv": 14.39,
-      "bake": 17.12,
-      "clips": 50.71,
-      "export": 6.15,
-      "optimize": 1.71,
-      "load_test": 0.51,
-      "three_qa": 36.56,
-      "cache": 0.05
+      "materials": 0.35,
+      "model": 37.98,
+      "lows_bind": 0.09,
+      "uv": 21.34,
+      "bake": 87.27,
+      "clips": 86.11,
+      "export": 3.99,
+      "optimize": 2.28,
+      "load_test": 0.44,
+      "three_qa": 40.53,
+      "cache": 0.24
     },
-    "total_s": 141.8
+    "total_s": 280.69
   },
   "run_ref_speed": 3.2,
   "height_m": 1.215

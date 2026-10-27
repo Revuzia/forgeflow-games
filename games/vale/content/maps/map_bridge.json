@@ -495,6 +495,7 @@
    "surface": "span",
    "textures": {"$comment": "painted tiling textures by role (tools/terrain_textures.py; render/terrain.ts maps each painting's mean onto the band colour, alpha = height)", "litter": "assets/textures/terrain_litter.webp", "grain": "assets/textures/terrain_grain.webp", "moss": "assets/textures/terrain_moss.webp"},
    "props": { "$comment": "scatter props (art/blender/props/scatter.py; read check art/renders/props/scatter_bridge.png). No trees on the span. Needle-stone fragments, cool pale chalk-grey with chalk-inlaid grooves so they read on the warm deck and both terraces (brief \u00a75: \u2264 0.8 m, on the stubs, the deck's broken edges and the gorge lip, never on the open deck). rock: a drum sector with its hour-band and a broken slab (\u2264 0.58 m authored, \u2264 0.8 m at the terrain's rock scale); stone: a chip and a grooved shard (\u2264 0.85 m authored, \u2264 0.36 m at the stone scale). They render where render/terrain.ts places rock / stone spots", "tree": [], "rock": ["assets/props/needle_drum.glb", "assets/props/needle_slab.glb"], "stone": ["assets/props/needle_chip.glb", "assets/props/needle_shard.glb"] },
+   "propValue": {"$comment": "r12 B5 value rebase: linear multipliers on the authored props' colours so they land in tokens grade.maps.bridge.valueLstar (render/terrain.ts propValue)", "rock": 0.32, "stone": 0.32, "landmark": 0.33},
    "$comment": "the walls of Needlespan are the gorge: render them as a drop, never as cliffs rising from the span",
    "wallStyle": "gorge",
    "landmarks": [
@@ -556,7 +557,7 @@
      "note": "Serenade shop kiosk"
     }
    ],
-   "colors": {"lane": "#A59B86", "clearing": "#7E786B", "inscription": "#D8D1BE", "laneGrout": "#746C5C", "moss": "#4A5A42", "cliffFace": "#4C4842", "cliffLip": "#8E8979", "edgeLight": "#D8D0BC", "flank": "#3D3A37", "rock": "#4D515B", "mist": "#5E6C93", "grassRoot": "#2F3B30", "grassTip": "#9AA478", "lit": "#FFE2B8", "plazaAubade": "#A3A7A8", "plazaSerenade": "#A8916E", "inlayAubade": "#C6CFD6", "inlaySerenade": "#C7924E"}
+   "colors": {"lane": "#6A6456", "clearing": "#4B4740", "inscription": "#777469", "laneGrout": "#605A4C", "moss": "#34402F", "cliffFace": "#322F2B", "cliffLip": "#524F45", "edgeLight": "#716D63", "flank": "#272523", "rock": "#33353C", "mist": "#3F4963", "grassRoot": "#2B362C", "grassTip": "#8F986F", "lit": "#FFE2B8", "plazaAubade": "#5F6A6C", "plazaSerenade": "#685A45", "inlayAubade": "#868C91", "inlaySerenade": "#856234"}
   },
   "lighting": {
    "sunDir": [

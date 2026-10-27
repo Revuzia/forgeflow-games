@@ -287,6 +287,7 @@ def dial_plinth(B, steps, tick_r, metal, tick_len=0.26, tick_w=0.075):
             prof = [(rin, z0), (r - 0.03, z0), (r, z0 + 0.03), (r, z1 - 0.04), (r - 0.04, z1), (rin, z1)]
             B.add("dialstone", K.lathe(prof, 6, a0=a0, a1=a1, closed=True))
     ztop = steps[-1][2]
+    B.plinth_top = max(B.plinth_top, ztop)
     for k in range(12):
         a = k * K.TAU / 12
         big = k % 3 == 0
@@ -594,7 +595,7 @@ def aubade_hourbell(B):
     B.add("steel", ring(2.3, 2.44, z0 + 0.3, z0 + 0.4, 0.01, 8, PI / 8))
     # eight columns on the octagon's corners
     rc = 1.98
-    zcap = 4.95
+    zcap = 3.35                              # r12 M9: was 4.95 (the belfry at <= 3x a fighter on screen)
     for k in range(8):
         a = PI / 8 + k * PI / 4
         c = (rc * math.cos(a), rc * math.sin(a))
@@ -602,7 +603,7 @@ def aubade_hourbell(B):
                                   (0.27, zcap + 0.12), (0, zcap + 0.12)], 0.025)
         v, f = K.lathe(prof, 8, phase=PI / 8)
         B.add("chalk", (K.move(v, (c[0], c[1], 0)), f))
-        for zz in (zp + 0.55, 3.4):
+        for zz in (zp + 0.55, zcap - 1.0):
             v, f = ring(0.18, 0.235, zz, zz + 0.09, 0.008, 8, PI / 8)
             B.add("steel", (K.move(v, (c[0], c[1], 0)), f))
     # pointed arches on the eight faces
@@ -637,7 +638,7 @@ def aubade_hourbell(B):
     # the needle's eye crowns the belfry: eight chalk ribs converge over the great crystal (a roofed stage
     # would hide it from the 52-degree camera)
     zf = zs1
-    tip = 10.0
+    tip = 6.4                                # r12 M9: was 10.0
     B.add("steel", K.lathe(K.chamfer_profile([(0, zf - 0.02), (1.3, zf - 0.02), (1.3, zf + 0.06), (0, zf + 0.06)], 0.02), **O8))
     B.add("dawnglass", ring(0.62, 0.74, zf + 0.05, zf + 0.1, 0.01, 8, PI / 8))
     for k in range(8):
@@ -645,10 +646,10 @@ def aubade_hourbell(B):
         v, f = K.crystal((0, 0, 0), 0.09, 0.62, 0.08, sides=4, phase=PI / 4)
         v = K.rot(v, (0, 1, 0), -0.45)
         B.add("dawnglass", (K.rotz(K.move(v, (0.95, 0, zf + 0.08)), a), f))
-    a_eye(B, zf, tip, r_eye=1.2, ribs=8, w=0.16, ring_t=0.6, finial=0.9)
-    zcore = zf + (tip - zf) * 0.4
+    a_eye(B, zf, tip, r_eye=1.0, ribs=8, w=0.16, ring_t=0.6, finial=0.65)
+    zcore = zf + (tip - zf) * 0.42
     # the bell (blued steel) hung from a yoke; accent lip and heart
-    zl, zcr = 1.9, 4.15
+    zl, zcr = 1.62, 3.02
     hgt = zcr - zl
     pr = [(0.0, zcr), (0.35, zcr), (0.58, zcr - 0.12 * hgt), (0.7, zcr - 0.35 * hgt), (0.78, zcr - 0.65 * hgt), (0.98, zcr - 0.88 * hgt),
           (1.14, zl + 0.04), (1.12, zl), (0.98, zl + 0.02), (0.86, zl + 0.12 * hgt), (0.68, zl + 0.4 * hgt), (0.6, zl + 0.75 * hgt),
@@ -662,7 +663,7 @@ def aubade_hourbell(B):
     B.add("accent", ring(1.08, 1.17, zl + 0.03, zl + 0.15, 0.01, 40))
     B.add("accent", ring(0.73, 0.79, zl + 0.62 * hgt, zl + 0.68 * hgt, 0.008, 40))
     B.add("accent", K.crystal((0, 0, zl + 0.35), 0.24, 0.4, 0.45, sides=4, band=0.08, phase=PI / 4))
-    B.add("accent", K.crystal((0, 0, zcore), 0.46, 1.05, 0.85, sides=4, band=0.16, phase=PI / 4), node="core")
+    B.add("accent", K.crystal((0, 0, zcore), 0.34, 0.72, 0.52, sides=4, band=0.12, phase=PI / 4), node="core")
     return "crystal", (0, 0, zcore)
 
 
@@ -699,6 +700,7 @@ def s_dome(B, a, b, z0, r_top, ribs=8, rib_phase=0.0, segs=40, rib_mat="sandston
             a1 = rib_phase + (k + 1) * K.TAU / ribs - g
             prof = pts + [(r, z) for r, z in inner[::-1]]
             B.add("ironstone", K.lathe(prof, max(3, segs // ribs), a0=a0, a1=a1, closed=True))
+            B.pieces[-1]["nochip"] = True          # a lost gore would bare the whole lit inner dome
     for k in range(ribs):
         ang = rib_phase + (k + 0.5) * K.TAU / ribs if seams else rib_phase + k * K.TAU / ribs
         path = [(r * math.cos(ang), r * math.sin(ang), z) for r, z in pts]
@@ -870,6 +872,7 @@ def serenade_lantern(B):
             g = 0.055 / 0.48
             v, f = K.lathe(pts + [(r, z) for r, z in inner[::-1]], 4, a0=k * K.TAU / 6 + g, a1=(k + 1) * K.TAU / 6 - g, closed=True)
             B.add("ironstone", (K.move(v, c), f))
+            B.pieces[-1]["nochip"] = True
         v, f = K.lathe([(0, pts[-1][1] - 0.02), (0.13, pts[-1][1] - 0.02), (0.13, pts[-1][1] + 0.06), (0.06, pts[-1][1] + 0.22), (0, pts[-1][1] + 0.3)], 12)
         B.add("sandstone", (K.move(v, c), f))
         # an arched lampresin window on each pier's camera face
@@ -919,13 +922,14 @@ def serenade_hourbell(B):
     z0 = 0.66
     R = 2.4
     zt = s_foot(B, z0, R, 0.34)
-    za0, zs = zt, 2.5                       # arcade: piers, round arches, spandrels
+    za0, zs = zt, 2.0                       # arcade: piers, round arches, spandrels (r12 M9: was 2.5)
+    zpt = 2.7                               # pier tops (was 3.2)
     npier = 8
     pa = 0.36
     for k in range(npier):
         a = PI / 8 + k * K.TAU / npier
         c = (R * math.cos(a), R * math.sin(a))
-        B.add("sandstone", K.box((c[0], c[1], (za0 + 3.2) / 2), (0.3, pa, (3.2 - za0) / 2), 0.035, rz=a))
+        B.add("sandstone", K.box((c[0], c[1], (za0 + zpt) / 2), (0.3, pa, (zpt - za0) / 2), 0.035, rz=a))
         B.add("ironstone", K.box((c[0], c[1], za0 + 0.16), (0.36, pa + 0.06, 0.16), 0.03, rz=a))
         B.add("ironstone", K.box((c[0], c[1], zs - 0.04), (0.35, pa + 0.05, 0.08), 0.02, rz=a))
     span = R * K.TAU / npier - 2 * pa
@@ -943,7 +947,7 @@ def serenade_hourbell(B):
                 poly = poly[::-1]
             B.add("sandstone", K.prism(poly, origin=tuple(o * (R - 0.02)), u=u, v=(0, 0, 1), depth=0.36))
     zdr = zs + span / 2 + 0.24
-    B.add("sandstone", K.lathe(K.chamfer_profile([(0, 3.15), (R + 0.22, 3.15), (R + 0.22, zdr), (0, zdr)], 0.02), 48))
+    B.add("sandstone", K.lathe(K.chamfer_profile([(0, zpt - 0.05), (R + 0.22, zpt - 0.05), (R + 0.22, zdr), (0, zdr)], 0.02), 48))
     B.add("ironstone", K.lathe(K.chamfer_profile([(0, zdr), (R + 0.24, zdr), (R + 0.42, zdr + 0.16), (R + 0.42, zdr + 0.3), (R + 0.32, zdr + 0.38),
                                                   (0, zdr + 0.38)], 0.025), 48))
     for k in range(16):
@@ -952,9 +956,9 @@ def serenade_hourbell(B):
     zr = zdr + 0.38
     rt = R + 0.22
     B.add("accent", ring(rt - 0.24, rt - 0.06, zr - 0.01, zr + 0.11, 0.012, 48))
-    ztop = s_dome(B, rt - 0.16, 1.85, zr, 0.86, ribs=8, segs=40)
+    ztop = s_dome(B, rt - 0.16, 1.22, zr, 0.86, ribs=8, segs=40)          # r12 M9: dome 1.85 -> 1.22 tall
     B.add("ironstone", ring(rt - 0.22, rt - 0.12, zr - 0.01, zr + 0.24, 0.012, 48))
-    zcore = s_cupola(B, ztop - 0.1, 0.78, 0.86, posts=8, core_r=0.46, cap_b=0.42, gnomon=0)
+    zcore = s_cupola(B, ztop - 0.1, 0.78, 0.6, posts=8, core_r=0.38, cap_b=0.4, gnomon=0)
     # under the dome a lampresin brazier keeps the arcade lit (seen through the arches)
     B.add("sandstone", K.lathe(K.chamfer_profile([(0, zt), (0.62, zt), (0.62, zt + 0.12), (0.42, zt + 0.22), (0.36, zt + 0.55), (0, zt + 0.55)], 0.02), 24))
     B.add("lampresin", K.lathe([(0, zt + 0.5), (0.4, zt + 0.5), (0.95, zt + 0.86), (1.0, zt + 0.95), (0.9, zt + 0.98), (0, zt + 0.72)], 32))
@@ -962,7 +966,7 @@ def serenade_hourbell(B):
     # the Hourbell itself hangs in the open air, in a crown of two crossed iron arches over the lamp
     # cupola (inside the drum it would be invisible from the 52-degree camera)
     za = B.cap_top - 0.04
-    ra, ha = 0.82, 1.45
+    ra, ha = 0.82, 0.82                      # r12 M9: was 1.45
     B.add("sandstone", ring(0.0, 0.3, za - 0.02, za + 0.1, 0.015, 24))
     for k in range(2):
         a = PI / 4 + k * PI / 2
@@ -974,9 +978,9 @@ def serenade_hourbell(B):
             B.add("sandstone", K.box(tuple(u * ra * sgn + np.array([0, 0, za + 0.08])), (0.13, 0.13, 0.1), 0.02, rz=a))
     zap = za + ha
     B.add("iron", K.lathe([(0, zap - 0.12), (0.14, zap - 0.1), (0.16, zap + 0.04), (0.08, zap + 0.12), (0, zap + 0.13)], 12))
-    s_gnomon(B, zap + 0.08, 0.75)
+    s_gnomon(B, zap + 0.08, 0.45)
     zcr = zap - 0.14
-    hb = 0.86
+    hb = 0.52
     zl = zcr - hb
     pr = [(0.0, zcr), (0.2, zcr), (0.33, zcr - 0.12 * hb), (0.39, zcr - 0.35 * hb), (0.43, zcr - 0.65 * hb), (0.53, zcr - 0.88 * hb),
           (0.62, zl + 0.03), (0.61, zl), (0.53, zl + 0.015), (0.47, zl + 0.12 * hb), (0.38, zl + 0.4 * hb), (0.34, zl + 0.75 * hb),
@@ -989,22 +993,35 @@ def serenade_hourbell(B):
     return "lamp", (0, 0, zcore)
 
 
-# ── registry: (unit id, culture) -> (builder, size, texture) ─────────────────────────────────────
+# ── registry: (unit id, culture) -> (builder, texture size, uniform scale) ─────────────────────────
+# r12 M9: on screen at the gameplay camera (52 deg, 28.5 m) lane structures stand ~2.4-2.6x a fighter and the
+# Hourbell <= 3x (measured: _harness/shot_structures.mjs; a tall top sits nearer the camera, so ~4.6 m of
+# needle reads 2.5x a 2.05 m fighter, the median of the roster). The designs are built at their authored size, their shafts / belfry
+# shortened where a plain scale would have left them miniatures, then scaled uniformly (the identity of
+# each culture keeps its proportions). The plinth still covers the sim's collision disc (needles 1.1 m,
+# lanterns 1.5 m, Hourbell 2.6 m).
 DESIGNS = {
-    ("needle_outer", "aubade"): (lambda B: aubade_needle(B, 7.3, 4.15, r0=0.7, r1=0.56), 1024),
-    ("needle_inner", "aubade"): (lambda B: aubade_needle(B, 7.8, 4.45, r0=0.74, r1=0.6, fins=8, bands=3, pinnacles=True), 1024),
-    ("needle_bell", "aubade"): (lambda B: aubade_needle(B, 6.8, 3.75, r0=0.66, r1=0.53, bands=2, bell=True), 1024),
-    ("lantern", "aubade"): (aubade_lantern, 1024),
-    ("hourbell", "aubade"): (aubade_hourbell, 2048),
-    ("needle_outer", "serenade"): (lambda B: serenade_needle(B), 1024),
-    ("needle_inner", "serenade"): (lambda B: serenade_needle(B, R=1.26, zd=2.85, n_win=6, dome_b=1.15, cup_r=0.56, cup_h=0.76, gnomon=1.5, lamps=True), 1024),
-    ("needle_bell", "serenade"): (lambda B: serenade_needle(B, R=1.1, zd=2.4, n_win=4, dome_b=0.95, cup_r=0.5, cup_h=0.86, gnomon=1.15, bell=True), 1024),
-    ("lantern", "serenade"): (serenade_lantern, 1024),
-    ("hourbell", "serenade"): (serenade_hourbell, 2048),
+    ("needle_outer", "aubade"): (lambda B: aubade_needle(B, 6.28, 3.13, r0=0.7, r1=0.56), 1024, 0.72),
+    ("needle_inner", "aubade"): (lambda B: aubade_needle(B, 6.4, 3.1, r0=0.74, r1=0.6, fins=8, bands=2, pinnacles=True), 1024, 0.72),
+    ("needle_bell", "aubade"): (lambda B: aubade_needle(B, 6.2, 3.15, r0=0.66, r1=0.53, bands=2, bell=True), 1024, 0.72),
+    ("lantern", "aubade"): (aubade_lantern, 1024, 0.9),
+    ("hourbell", "aubade"): (aubade_hourbell, 2048, 0.75),
+    ("needle_outer", "serenade"): (lambda B: serenade_needle(B), 1024, 0.69),
+    ("needle_inner", "serenade"): (lambda B: serenade_needle(B, R=1.26, zd=2.85, n_win=6, dome_b=1.15, cup_r=0.56, cup_h=0.76, gnomon=1.5, lamps=True), 1024, 0.67),
+    ("needle_bell", "serenade"): (lambda B: serenade_needle(B, R=1.1, zd=2.4, n_win=4, dome_b=0.95, cup_r=0.5, cup_h=0.86, gnomon=1.15, bell=True), 1024, 0.75),
+    ("lantern", "serenade"): (serenade_lantern, 1024, 1.15),
+    ("hourbell", "serenade"): (serenade_hourbell, 2048, 0.76),
 }
 UNITS = ["needle_outer", "needle_inner", "needle_bell", "lantern", "hourbell"]
 CULTURES = ["aubade", "serenade"]
-HEIGHT = {"needle_outer": 7.0, "needle_inner": 7.5, "needle_bell": 6.5, "lantern": 4.5, "hourbell": 9.0}
+HEIGHT = {"needle_outer": 4.65, "needle_inner": 4.7, "needle_bell": 4.6, "lantern": 4.65, "hourbell": 5.25}
+# the break of the ruin's stump (m above the ground, before its tilt) and the rubble count
+RUIN = {"needle_outer": (1.12, 9), "needle_inner": (1.12, 10), "needle_bell": (1.08, 9), "lantern": (1.1, 8), "hourbell": (1.2, 16)}
+# damage cracks per threshold (count, width m)
+CRACKS = {"needle_outer": ((7, 0.12), (10, 0.16)), "needle_inner": ((7, 0.12), (10, 0.16)), "needle_bell": ((7, 0.12), (10, 0.16)),
+          "lantern": ((7, 0.11), (10, 0.15)), "hourbell": ((10, 0.13), (15, 0.17))}
+RUIN_CORE = {"aubade": "#5F5A52", "serenade": "#5A4735"}       # the broken stone's raw inside (darker than the faces)
+CRACK_INK = "#1F1B18"
 
 
 def glb_path(uid: str, culture: str) -> str:
@@ -1023,26 +1040,70 @@ def build_one(uid: str, culture: str, fast: bool = False) -> dict:
     from common import export as X
     scene.reset()
     col = scene.collection(f"{uid}_{culture}")
-    fn, size = DESIGNS[(uid, culture)]
+    fn, size, s = DESIGNS[(uid, culture)]
     mats_spec = AUBADE_MATS if culture == "aubade" else SERENADE_MATS
-    B = K.Build(f"{uid}_{culture}", HEIGHT[uid])
+    name = f"{uid}_{culture}"
+    B = K.Build(name, HEIGHT[uid])
     kind, pivot = fn(B)
-    zmax = max(float(v[:, 2].max()) for lst in B.parts.values() for v, _, _ in lst)
-    K.paint_set(mats_spec, zmax)
+    B.scale(s)
+    pivot = tuple(c * s for c in pivot)
+    import random as _random
+    rng = _random.Random(scene.seed_of(name) + 9)
+    groups = K.classify(B, rng)
+    zmax = max(float(v[:, 2].max()) for lst in B.parts.values() for v, _, _, _ in lst)
+    mats = K.paint_set(mats_spec, zmax)
     objs = B.objects(col)
     body = objs["body"]
     K.drop_hidden_bottoms(body)
     others = [o for n, o in objs.items() if n != "body"]
     buried = K.drop_buried_faces(body, others)
-    scene.log(f"{uid}_{culture}: {buried} buried faces dropped")
-    tris = sum(len(p.vertices) - 2 for o in objs.values() for p in o.data.polygons)
-    K.bake_body(body, others, os.path.join(SCRATCH), f"{uid}_{culture}", size=512 if fast else size,
+    scene.log(f"{name}: {buried} buried faces dropped")
+    K.bake_body(body, others, os.path.join(SCRATCH), name, size=512 if fast else size,
                 samples=6 if fast else 24, ao_samples=16 if fast else 96, ao_distance=1.2 if uid == "hourbell" else 0.8)
-    root = bpy.data.objects.new(f"{uid}_{culture}", None)
-    col.objects.link(root)
-    for n, o in objs.items():
-        o.parent = root
+    # r12 M9: split for the damage states and the collapse, cracks, the ruin
+    parts = {}
+    for g in ("base", "upper", "chip1", "chip2"):
+        o = K.subset(body, groups[g], f"{name}_{g}", col)
+        if o is not None:
+            parts[g] = o
+    glow = objs.get("glow")
+    if glow is not None:
+        for g, nm in (("glow_base", "glow_base"), ("glow", "glow")):
+            o = K.subset(glow, groups[g], f"{name}_{nm}", col)
+            if o is not None:
+                parts[nm] = o
+    base_r = max(max(abs(float(B.pieces[p]["hi"][0])), abs(float(B.pieces[p]["hi"][1])), abs(float(B.pieces[p]["lo"][0])),
+                     abs(float(B.pieces[p]["lo"][1]))) for p in groups["base"])
+    cut, n_rubble = RUIN[uid]
+    ruin, ruin_h = K.make_ruin(body, B, groups, rng, name, col, RUIN_CORE[culture], cut, max_h=1.45, rubble=n_rubble, plinth_r=base_r)
+    if ruin is not None:
+        parts["ruin"] = ruin
+    crack_mat = K.plain_material(f"{name}_crack", CRACK_INK, 0.95)
+    zt = B.plinth_top
+    tgt = [parts["upper"]]
+    for i, (n, w) in enumerate(CRACKS[uid]):
+        o = K.cracks(tgt, B, rng, n, zt + 0.35, zt + (zmax - zt) * (0.62 if i == 0 else 0.8), w, f"{name}_dmg{i + 1}", col, crack_mat, mats["accent"])
+        if o is not None:
+            parts[f"dmg{i + 1}"] = o
+    for n, o in list(objs.items()):
+        if n in ("body", "glow"):
+            me = o.data
+            bpy.data.objects.remove(o)
+            bpy.data.meshes.remove(me)
+            del objs[n]
     core = objs.get("core")
+    if core is not None:
+        parts["core"] = core
+    tris = sum(len(p.vertices) - 2 for n, o in parts.items() if n not in ("ruin",) for p in o.data.polygons)
+    ruin_tris = sum(len(p.vertices) - 2 for p in parts["ruin"].data.polygons) if "ruin" in parts else 0
+    root = bpy.data.objects.new(name, None)
+    col.objects.link(root)
+    up = parts["upper"]
+    up.parent = root
+    for n, o in parts.items():
+        if n in ("upper",):
+            continue
+        o.parent = up if n in ("chip1", "chip2", "dmg1", "dmg2", "glow", "core") else root
     if core is not None:
         me = core.data
         me.transform(Matrix.Translation((-pivot[0], -pivot[1], -pivot[2])))
@@ -1054,22 +1115,30 @@ def build_one(uid: str, culture: str, fast: bool = False) -> dict:
     os.makedirs(os.path.join(SCRATCH, "raw"), exist_ok=True)
     shutil.copyfile(path, raw_path(uid, culture))        # the contact sheet imports the unquantized export
     X.optimize(path, fighter=True)
-    rep = {"unit": uid, "culture": culture, "tris": tris, "height": round(zmax, 2), "kb_raw": raw // 1024,
+    rep = {"unit": uid, "culture": culture, "tris": tris, "height": round(zmax, 2), "scale": s, "plinth_top": round(B.plinth_top, 3),
+           "plinth_r": round(base_r, 2), "ruin_height": round(ruin_h, 2), "ruin_tris": ruin_tris,
+           "chips": [len(groups["chip1"]), len(groups["chip2"])], "nodes": sorted(parts), "kb_raw": raw // 1024,
            "kb": os.path.getsize(path) // 1024, "texture": 512 if fast else size, "buried_faces_dropped": buried,
            "clips": ["idle", "attack1", "death"] if core is not None else []}
     scene.log(f"{uid}_{culture}: {rep}")
     return rep
 
 
-def preview(paths: dict, out_png: str, fast: bool = False, pitch_deg: float = 40.0, lens: float = 40.0, w: int = 2400, h: int = 1240):
+HIDE = {"intact": ("_ruin", "_dmg1", "_dmg2"), "damaged": ("_ruin", "_chip1", "_chip2"),
+        "ruin": ("_upper", "_chip1", "_chip2", "_dmg1", "_dmg2", "_glow", "_core")}
+
+
+def preview(paths: dict, out_png: str, fast: bool = False, pitch_deg: float = 40.0, lens: float = 40.0, w: int = 2400, h: int = 1240,
+            state: str = "intact"):
     """Both cultures in the game's light: Aubade in the front row, Serenade behind, left to right
-    needle_outer, needle_inner, needle_bell, lantern, hourbell; framed to what was built."""
+    needle_outer, needle_inner, needle_bell, lantern, hourbell; framed to what was built. `state`:
+    intact | damaged (both crack sets, chips gone) | ruin (r12 M9 nodes, see structure_kit)."""
     from common import render
     scene.reset()
     light = render.map_lighting("map_rift")
     render.sky_world(light["sky"], light["ambient"], camera_strength=0.9)
     order = [u for u in UNITS if any((u, c) in paths and os.path.isfile(paths[(u, c)]) for c in CULTURES)]
-    gapx = {"needle_outer": 5.2, "needle_inner": 5.2, "needle_bell": 5.2, "lantern": 5.6, "hourbell": 8.4}
+    gapx = {"needle_outer": 4.2, "needle_inner": 4.2, "needle_bell": 4.2, "lantern": 5.4, "hourbell": 7.0}
     x = 0.0
     xs = {}
     for i, u in enumerate(order):
@@ -1090,17 +1159,20 @@ def preview(paths: dict, out_png: str, fast: bool = False, pitch_deg: float = 40
                 o.animation_data.action = None
             o.animation_data_clear()
         for o in new:
+            base = o.name.split(".")[0]
+            if base.endswith(HIDE[state]):
+                o.hide_render = True
             if o.name.endswith("_core"):
                 o.scale = (1.0, 1.0, 1.0)
                 o.rotation_mode = "QUATERNION"
                 o.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
-        y = 0.0 if culture == "aubade" else 8.0
+        y = 0.0 if culture == "aubade" else 7.0
         for r in [o for o in new if o.parent is None]:
             r.location = (xs[uid], y, 0.0)
             r.rotation_mode = "XYZ"
             r.rotation_euler = (0.0, 0.0, PI / 2)
         lo = Vector((min(lo.x, xs[uid] - 3), min(lo.y, y - 3), 0))
-        hi = Vector((max(hi.x, xs[uid] + 3), max(hi.y, y + 3), 9.0))
+        hi = Vector((max(hi.x, xs[uid] + 3), max(hi.y, y + 3), 6.5))
     import bmesh as _bm
     g = bpy.data.meshes.new("ground")
     bm = _bm.new()
@@ -1138,6 +1210,7 @@ def main():
     p.add_argument("--preview-only", action="store_true")
     p.add_argument("--fast", action="store_true")
     p.add_argument("--look", default="", help="preview only these units, closer, to this png name")
+    p.add_argument("--state", default="intact", help="preview state: intact | damaged | ruin")
     a = p.parse_args(scene.script_args())
     units = [u for u in UNITS if not a.only or u in a.only.split(",")]
     cultures = [c for c in CULTURES if not a.culture or c in a.culture.split(",")]
@@ -1153,9 +1226,10 @@ def main():
         scene.write_json(rp, old)
     if a.look:
         preview({(u, c): sheet_path(u, c) for u in units for c in CULTURES}, os.path.join(SCRATCH, f"{a.look}.png"), a.fast,
-                pitch_deg=48.0, lens=50.0, w=1800, h=1100)
+                pitch_deg=48.0, lens=50.0, w=1800, h=1100, state=a.state)
     elif a.preview or a.preview_only:
-        preview({(u, c): sheet_path(u, c) for u in UNITS for c in CULTURES}, os.path.join(RENDERS, "structures.png"), a.fast)
+        tail = "" if a.state == "intact" else f"_{a.state}"
+        preview({(u, c): sheet_path(u, c) for u in UNITS for c in CULTURES}, os.path.join(RENDERS, f"structures{tail}.png"), a.fast, state=a.state)
 
 
 if __name__ == "__main__":

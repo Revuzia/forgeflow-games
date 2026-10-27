@@ -30,10 +30,10 @@ Heights are above the walkable plane. **Camera rule:** the camera looks north (�
 |---|---|---|---|---|
 | **Glass Belfry** (Aubade base) | The **Glass Belfry**: a stacked chalk spire of three open-lattice stages with a dawnglass bell-lantern in the top stage. Height ≥ 3× footprint (spire language). It stands just beyond the west edge, behind the fountain. | (−5.0, 55.0) | 7 × 7 m · 22 m | chalk limestone, dawnglass, blued steel bands. The lantern glass stays neutral cool (`#BFD3E6`): the **Hourbell** carries relationship light, not the Belfry |
 | **Lamp Dome** (Serenade base) | The **Lamp Dome**: a low banded ironstone dome on a heavy drum, with a lampresin oculus. Footprint ≥ 2× height (dome language). It stands beyond the east edge, behind the fountain; its wide footprint sits 5 m further out than the Belfry so it stays off the plaza. | (180.0, 55.0) | 18 m Ø · 8 m | ironstone, ochre sandstone drum, lampresin oculus (`#E8A04A` translucency, emissive ≤ 0.8) |
-| **The Seat** (centre) | The needle's base-stone: a polished round disc of dial-stone, **flush** with the road (r 8 m). It has a 0.15 m carved rim step, a ring-shaped socket scar (r 3 m) where the needle stood, and the twelve hour-ticks engraved round its rim. Nothing rises from it. It never blocks sight. | (85.0, 55.0) | r 8 m · ≤ 0.15 m | honed pale dial-stone L* 66–70, engraving ≤ 6 L* contrast |
-| **The Standing Shadow** (north Noonline) | The shadow itself: a hard-edged violet-cool floor from the Seat's north rim up the strip and into **Longshade's pit**. Its tip is a sharp point engraved on the pit floor at (85, 24). The pit's silhouette is **two leaning basalt slabs** framing the north choke, like the edges of the shadow standing up. | pit (85, 31) r 9 · slabs (79.4, 19.6) and (90.6, 19.6) | slabs 2 × 3 m · 4 m (north of the pit, so they hide only wall) | shadow floor L* 30–36, violet `#4A4560`, saturation **kept** and the edge engraved, so it never reads as fog of war (bible: "the Standing Shadow keeps colour and a hard edge"). Slabs: dark basalt with chalk-lit top edges |
-| **The Fallen Shaft** (south Noonline) | One **lying drum of the fallen needle** splits the channel south of the Seat. It is a banded cylinder on its side, its broken face turned toward **Sunsplinter's pit**. The pit is the broken tip; its floor is shallow water over pale stone. | drum (85.0, 66.6), 3 × 6.4 m (a wall) · pit (85, 80) r 8.5 | drum ≤ 2.2 m (south of the Seat: low) | needle stone (pale chalk-grey with two carved hour-bands), shallow water ≤ 0.05 m, floor L* 40–48 cool. Loose shard fragments in the water stay flush |
-| **Elevenmark** (NW Dialwood) | The numeral **XI**, giant and half-buried, tilted 20° in the block between the two hour-lines | (55.3, 28.2) | 9 × 4 m · ≤ 5 m | carved dial-stone, weathered; inscription L* 70 on the cut faces only |
+| **The Seat** (centre) | The needle's base-stone: a polished round disc of dial-stone, **flush** with the road (r 8 m). It has a 0.15 m carved rim step, a ring-shaped socket scar (r 3 m) where the needle stood, and the twelve hour-ticks engraved round its rim. Nothing rises from it. It never blocks sight. | (85.0, 55.0) | r 8 m · ≤ 0.15 m | honed dial-stone L* 36–41 (r12 B5), engraving ≤ 6 L* contrast |
+| **The Standing Shadow** (north Noonline) | The shadow itself: a hard-edged violet-cool floor from the Seat's north rim up the strip and into **Longshade's pit**. Its tip is a sharp point engraved on the pit floor at (85, 24). The pit's silhouette is **two leaning basalt slabs** framing the north choke, like the edges of the shadow standing up. | pit (85, 31) r 9 · slabs (79.4, 19.6) and (90.6, 19.6) | slabs 2 × 3 m · 4 m (north of the pit, so they hide only wall) | shadow floor L* 14–18 (r12 B5), violet, saturation **kept** and the edge engraved, so it never reads as fog of war (bible: "the Standing Shadow keeps colour and a hard edge"). Slabs: dark basalt with chalk-lit top edges |
+| **The Fallen Shaft** (south Noonline) | One **lying drum of the fallen needle** splits the channel south of the Seat. It is a banded cylinder on its side, its broken face turned toward **Sunsplinter's pit**. The pit is the broken tip; its floor is shallow water over pale stone. | drum (85.0, 66.6), 3 × 6.4 m (a wall) · pit (85, 80) r 8.5 | drum ≤ 2.2 m (south of the Seat: low) | needle stone (pale chalk-grey with two carved hour-bands), shallow water ≤ 0.05 m, floor L* 24–30 cool (r12 B5). Loose shard fragments in the water stay flush |
+| **Elevenmark** (NW Dialwood) | The numeral **XI**, giant and half-buried, tilted 20° in the block between the two hour-lines | (55.3, 28.2) | 9 × 4 m · ≤ 5 m | carved dial-stone, weathered; inscription ≤ L* 46 on the cut faces only (r12 B5) |
 | **Twomark** (NE) | numeral **II**, same treatment | (114.7, 28.2) | 6 × 4 m · ≤ 5 m | as above |
 | **Sevenmark** (SW) | numeral **VII** | (55.3, 81.8) | 10 × 4 m · ≤ 5 m (the block's south edge is 8 m away, so it occludes nothing) | as above |
 | **Fourmark** (SE) | numeral **IIII** (the dial-maker's four) | (114.7, 81.8) | 9 × 4 m · ≤ 5 m | as above |
@@ -55,7 +55,7 @@ Structures are units with their own GLBs (`assets/units/<unit>.glb`). The scene 
 | Base plaza (Glass Belfry terrace) | disc (12, 55) r 13 | fountain (4.5, 55) r 5 · shop circle (6, 47.5) r 3 · spawn (8.5, 55) |
 | Lampwright's stall prop (Aubade) | (5.5, 41.5), on the wall lip north of the shop circle | a small spire-roofed kiosk facing the circle; never on the walkable plaza |
 
-| Camp (team 0 side; mirror for team 1) | Sim (x, y) of the lead unit | Clearing (L* 45–50) | Dressing (low, flush or on the clearing's wall lip) |
+| Camp (team 0 side; mirror for team 1) | Sim (x, y) of the lead unit | Clearing (L* 30–35) | Dressing (low, flush or on the clearing's wall lip) |
 |---|---|---|---|
 | **Glasshorn** (buff) | (61.6, 41.5), where the hour-ring meets the Baseward line | r 4.6 | shed glass antler tines on the lip, catching the sun |
 | **Gloamoths** | (64.3, 24.9), half-way out the Rimward line | r 4.2 | moth-lamps hung in the canopy above the north lip (unlit by day) |
@@ -79,19 +79,21 @@ Engrave the floor of every Dialwood path with a faint **hour-line**: a 0.3 m cha
 
 | Surface | Where (from the JSON) | Material | Value (L*, after grade) |
 |---|---|---|---|
-| Roads | `lanes[]` centre ± 3.6 m | honed pale dial-stone flags. A 0.3 m inscription band runs on each outer edge, with hour-ticks every 9 m along the side roads | 62–68, variation ≤ ±4 |
-| Road verges | road ± 3.6 to 5.2 m | worn stone with moss in the joints | 50–56 |
-| Dialwood floor | open ground off the roads | moss and leaf-litter over stone, with the faint hour-line groove | 30–40 |
-| Camp clearings | camp discs | dusty pale stone "rooms" inside the dark wood | 45–50 |
-| Base plazas | disc (12, 55) r 13 and mirror | Aubade: chalk flags with dawnglass inlay rings round the fountain. Serenade: ochre sandstone with lampresin inlay | 60–66 |
-| Standing Shadow | `art.terrain.noonline.standingShadow.floor` | violet-cool stone, hard engraved edge | 30–36, saturation kept |
-| Fallen Shaft | `art.terrain.noonline.fallenShaft.floor` | shallow water (≤ 0.05 m) over pale stone, fragments flush | 40–48, cool |
-| The Seat | disc (85, 55) r 8 | polished dial-stone | 66–70 |
-| Wall tops | every `walls[]` polygon, extruded 2.6–3.4 m | carved stone lip, then Dialwood canopy on the block | lit top 55–62, with a painted 1 px edge light at 1080p |
-| Wall faces | the extrusion sides | dark cut stone in horizontal courses | 18–25 |
-| Needlegrass | `thickets[]` | tall stone-green solid blades (no alpha cards) on a carved stone curb | 48–54, more yellow than the moss |
+| Roads | `lanes[]` centre ± 3.6 m | honed warm honey dial-stone flags (HSV saturation 0.22–0.35 on screen: warm and painted, never grey). A 0.3 m inscription band runs on each outer edge, with hour-ticks every 9 m along the side roads | 36–41 (luma p50 85–100), spread p95 − p5 ≤ 45 luma |
+| Road verges | road ± 3.6 to 5.2 m | worn stone with moss in the joints | between the road and the floor (≈ 18–26) |
+| Dialwood floor | open ground off the roads | moss and leaf-litter over stone, with the faint hour-line groove | 12–20 |
+| Camp clearings | camp discs | dusty stone "rooms" inside the dark wood | 30–35 |
+| Base plazas | disc (12, 55) r 13 and mirror | Aubade: chalk flags with dawnglass inlay rings round the fountain. Serenade: ochre sandstone with lampresin inlay | 34–40 |
+| Standing Shadow | `art.terrain.noonline.standingShadow.floor` | violet-cool stone, hard engraved edge | 14–18, saturation kept |
+| Fallen Shaft | `art.terrain.noonline.fallenShaft.floor` | shallow water (≤ 0.05 m) over pale stone, fragments flush | 24–30, cool |
+| The Seat | disc (85, 55) r 8 | polished dial-stone | 36–41 |
+| Wall tops | every `walls[]` polygon, extruded 2.6–3.4 m | carved stone lip, then Dialwood canopy on the block | lit top 20–28, with a painted 1 px edge light at 1080p (≤ 48) |
+| Wall faces | the extrusion sides | dark cut stone in horizontal courses | 12–16 |
+| Needlegrass | `thickets[]` | tall stone-green solid blades (no alpha cards) on a carved stone curb | ≈ 18–30, more yellow than the moss |
 
-- **Temperature field.** Ambient/IBL is tinted cool `#B8C6D9` on the west half and warm `#D9C2A0` on the east, at strength 0.08 (`art.terrain.temperatureField`). The west stone sits at L* 66–72 with a blue-grey cast; the east at 58–64 with an ochre cast (WORLD §2). Never use a team hue.
+(2026-10-27, r12 B5 value rebase: the environment moved down from the old law (roads 62–68, floor 30–40, wall faces 18–25) so fighters, effects and UI own the top of the value range; the light rigs are unchanged. No environment pixel above luma 180 but authored lamp emissives. Measured by `_harness/value_probe.mjs`; values are on-screen L* after the grade, VFX and UI hidden.)
+
+- **Temperature field.** Ambient/IBL is tinted cool `#B8C6D9` on the west half and warm `#D9C2A0` on the east, at strength 0.08 (`art.terrain.temperatureField`). The west stone sits a few L* above the east with a blue-grey cast; the east with an ochre cast (WORLD §2), both inside the road band. Never use a team hue.
 - **Height mist.** Mist `#9AA7B4` at 0.035/m sits below 0.8 m, in the Fallen Shaft and the Dialwood hollows only. Edge fog `#8E9AA6` starts 4 m outside the map and is full at 18 m. There is no camera-distance fog and no cloud shadow.
 
 ## 6. Scatter

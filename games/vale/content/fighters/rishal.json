@@ -166,7 +166,7 @@
           "distance": 5,
           "speed": 16,
           "present": {
-            "anim": "dash",
+            "anim": "cast_a1",
             "vfx": "rishal_a1_dash"
           }
         }
@@ -341,7 +341,7 @@
             }
           ],
           "present": {
-            "anim": "dash",
+            "anim": "cast_a3",
             "vfx": "rishal_a3_spring"
           }
         }
@@ -476,7 +476,7 @@
     "portrait": "assets/fighters/rishal/portrait.png",
     "splash": "assets/fighters/rishal/splash.png",
     "icon": "assets/fighters/rishal/icon.png",
-    "height": 1.89,
+    "height": 1.88,
     "scale": 1,
     "runRefSpeed": 3.55,
     "clips": {

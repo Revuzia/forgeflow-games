@@ -58,10 +58,10 @@ NOTCH_DEPTH = 0.046
 # fix pass 3: ONE accent mark per notch (the review read the old diamonds + bite floors as a 10-cell checker):
 # the bite's floor filled with an ember core (CORE_FILL deep) and a tall diamond hanging from it, its top point
 # in the core, so each notch reads as one blue spade along the spine (five marks, 3.8 cm of stone between)
+# fix pass 5: the cores are gone (core + diamond still read as ten cells, a zipper); FIVE diamonds, a size up, each
+# with its top point just into its bite's floor (the lit notch), 2.8 cm of ironstone between them
 CORE_FILL = 0.028
-GEM_A, GEM_B = 0.035, 0.060
-GEMS = [(nu, HEEL_SPINE_V - NOTCH_DEPTH - GEM_B + 0.006, GEM_A, GEM_B) for nu in NOTCHES]
-POMMEL_INSET = (0.044, 0.038)             # the carved (not lit) diamond recess on the pommel plate
+POMMEL_INSET = (0.044, 0.038)             # (pass 5) the carved diamond recess on the pommel plate
 
 
 def notch_circle(nu: float) -> tuple:
@@ -135,6 +135,24 @@ def notch_floors(proud: float = 0.005, into: float = 0.010, n: int = 18) -> list
         outer = [(cu + (r + into) * np.cos(t), cv + (r + into) * np.sin(t)) for t in ts]
         inner = [(cu + (r - proud) * np.cos(t), cv + (r - proud) * np.sin(t)) for t in ts[::-1]]
         out.append(outer + inner)
+    return out
+
+
+GEM_INSET_A, GEM_INSET_B = 0.037, 0.056   # fix pass 6: the inlay diamonds' half-diagonals (along u, across v)
+GEM_GAP = 0.013                           # the dark stone left between a bite's floor and its inlay's top point
+POMMEL_GEM = (0.052, 0.046)               # the pommel's blue diamond (the concept's gem pommel), half-diagonals
+
+
+def gem_polys() -> list:
+    """fix pass 6: ONE small diamond inlay under each notch (u, v polygons), set IN the dark band with stone all
+    round it: its top point GEM_GAP under the bite's floor (the review read the pass-5 spades, their tops in the
+    bites, as saw teeth / a zipper / white teeth in the player tint), 7 x 11 cm"""
+    out = []
+    for nu in NOTCHES:
+        cu, cv, r = notch_circle(nu)
+        vb = cv - r
+        vc = vb - GEM_GAP - GEM_INSET_B
+        out.append([(nu, vc + GEM_INSET_B), (nu - GEM_INSET_A, vc), (nu, vc - GEM_INSET_B), (nu + GEM_INSET_A, vc)])
     return out
 
 

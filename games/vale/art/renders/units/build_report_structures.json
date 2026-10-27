@@ -2,91 +2,361 @@
   "needle_outer_aubade": {
     "unit": "needle_outer",
     "culture": "aubade",
-    "tris": 7238,
-    "height": 7.48,
-    "kb_raw": 630,
-    "kb": 354,
-    "texture": 1024
+    "tris": 7084,
+    "height": 4.65,
+    "scale": 0.72,
+    "plinth_top": 0.36,
+    "plinth_r": 1.31,
+    "ruin_height": 1.03,
+    "ruin_tris": 1427,
+    "chips": [
+      4,
+      3
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 687,
+    "kb": 395,
+    "texture": 1024,
+    "buried_faces_dropped": 482,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "needle_outer_serenade": {
     "unit": "needle_outer",
     "culture": "serenade",
-    "tris": 12184,
-    "height": 6.65,
-    "kb_raw": 734,
-    "kb": 435,
-    "texture": 1024
+    "tris": 12640,
+    "height": 4.59,
+    "scale": 0.69,
+    "plinth_top": 0.29,
+    "plinth_r": 1.39,
+    "ruin_height": 1.27,
+    "ruin_tris": 3144,
+    "chips": [
+      7,
+      6
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 882,
+    "kb": 540,
+    "texture": 1024,
+    "buried_faces_dropped": 1474,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "needle_inner_aubade": {
     "unit": "needle_inner",
     "culture": "aubade",
-    "tris": 8472,
-    "height": 7.98,
-    "kb_raw": 698,
-    "kb": 400,
-    "texture": 1024
+    "tris": 7600,
+    "height": 4.74,
+    "scale": 0.72,
+    "plinth_top": 0.36,
+    "plinth_r": 1.31,
+    "ruin_height": 1.17,
+    "ruin_tris": 2573,
+    "chips": [
+      4,
+      3
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 782,
+    "kb": 459,
+    "texture": 1024,
+    "buried_faces_dropped": 756,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "needle_inner_serenade": {
     "unit": "needle_inner",
     "culture": "serenade",
-    "tris": 14574,
-    "height": 7.0,
-    "kb_raw": 825,
-    "kb": 497,
-    "texture": 1024
+    "tris": 15042,
+    "height": 4.69,
+    "scale": 0.67,
+    "plinth_top": 0.281,
+    "plinth_r": 1.35,
+    "ruin_height": 1.31,
+    "ruin_tris": 3836,
+    "chips": [
+      7,
+      7
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 1024,
+    "kb": 635,
+    "texture": 1024,
+    "buried_faces_dropped": 1635,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "needle_bell_aubade": {
     "unit": "needle_bell",
     "culture": "aubade",
-    "tris": 7914,
-    "height": 6.98,
-    "kb_raw": 648,
-    "kb": 368,
-    "texture": 1024
+    "tris": 7816,
+    "height": 4.59,
+    "scale": 0.72,
+    "plinth_top": 0.36,
+    "plinth_r": 1.31,
+    "ruin_height": 1.24,
+    "ruin_tris": 1920,
+    "chips": [
+      4,
+      3
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 709,
+    "kb": 413,
+    "texture": 1024,
+    "buried_faces_dropped": 420,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "needle_bell_serenade": {
     "unit": "needle_bell",
     "culture": "serenade",
-    "tris": 12698,
-    "height": 6.11,
-    "kb_raw": 733,
-    "kb": 434,
-    "texture": 1024
+    "tris": 13094,
+    "height": 4.59,
+    "scale": 0.75,
+    "plinth_top": 0.315,
+    "plinth_r": 1.52,
+    "ruin_height": 1.36,
+    "ruin_tris": 3250,
+    "chips": [
+      7,
+      7
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 910,
+    "kb": 556,
+    "texture": 1024,
+    "buried_faces_dropped": 1524,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "lantern_aubade": {
     "unit": "lantern",
     "culture": "aubade",
-    "tris": 5416,
-    "height": 5.17,
-    "kb_raw": 538,
-    "kb": 294,
-    "texture": 1024
+    "tris": 5644,
+    "height": 4.65,
+    "scale": 0.9,
+    "plinth_top": 0.414,
+    "plinth_r": 1.98,
+    "ruin_height": 1.25,
+    "ruin_tris": 992,
+    "chips": [
+      6,
+      5
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 612,
+    "kb": 345,
+    "texture": 1024,
+    "buried_faces_dropped": 457,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "lantern_serenade": {
     "unit": "lantern",
     "culture": "serenade",
-    "tris": 10896,
-    "height": 4.04,
-    "kb_raw": 645,
-    "kb": 373,
-    "texture": 1024
+    "tris": 11164,
+    "height": 4.64,
+    "scale": 1.15,
+    "plinth_top": 0.483,
+    "plinth_r": 2.6,
+    "ruin_height": 1.28,
+    "ruin_tris": 2024,
+    "chips": [
+      3,
+      2
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 750,
+    "kb": 449,
+    "texture": 1024,
+    "buried_faces_dropped": 990,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "hourbell_aubade": {
     "unit": "hourbell",
     "culture": "aubade",
-    "tris": 13332,
-    "height": 10.9,
-    "kb_raw": 1524,
-    "kb": 749,
-    "texture": 2048
+    "tris": 13680,
+    "height": 5.29,
+    "scale": 0.75,
+    "plinth_top": 0.54,
+    "plinth_r": 2.7,
+    "ruin_height": 1.35,
+    "ruin_tris": 1869,
+    "chips": [
+      7,
+      6
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 1763,
+    "kb": 892,
+    "texture": 2048,
+    "buried_faces_dropped": 1512,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   },
   "hourbell_serenade": {
     "unit": "hourbell",
     "culture": "serenade",
-    "tris": 16464,
-    "height": 9.25,
-    "kb_raw": 1597,
-    "kb": 803,
-    "texture": 2048
+    "tris": 16918,
+    "height": 5.28,
+    "scale": 0.76,
+    "plinth_top": 0.502,
+    "plinth_r": 2.83,
+    "ruin_height": 1.39,
+    "ruin_tris": 2146,
+    "chips": [
+      9,
+      9
+    ],
+    "nodes": [
+      "base",
+      "chip1",
+      "chip2",
+      "core",
+      "dmg1",
+      "dmg2",
+      "glow",
+      "glow_base",
+      "ruin",
+      "upper"
+    ],
+    "kb_raw": 1648,
+    "kb": 855,
+    "texture": 2048,
+    "buried_faces_dropped": 1724,
+    "clips": [
+      "idle",
+      "attack1",
+      "death"
+    ]
   }
 }

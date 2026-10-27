@@ -174,6 +174,28 @@ def run_pose(sc, arm, R, res_scale=1.0):
     sc.render.film_transparent = False
 
 
+def part_stats(rgb, part, names):
+    """per part: median sRGB, L* p5 / p50 / p95, the share of warm-yellow texels (backdrop / pommel bleed) and of
+    brown texels (leather bleed onto cloth)"""
+    lin = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    Y = lin @ np.array([0.2126, 0.7152, 0.0722])
+    L = np.where(Y > 0.008856, 116 * np.cbrt(Y) - 16, 903.3 * Y)
+    mx, mn = rgb.max(-1), rgb.min(-1)
+    sat = (mx - mn) / np.maximum(mx, 1e-4)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    yellow = (r >= g) & (g > b + 0.04) & (L > 62)
+    brown = (r > b + 0.06) & (L < 55) & (sat > 0.15)
+    print("[rishal_look] part stats: name  median  L*p5/p50/p95  yellow%  brown%")
+    for i, nm in enumerate(names):
+        m = part == i
+        if not m.any():
+            continue
+        med = np.median(rgb[m], 0)
+        q = np.percentile(L[m], [5, 50, 95])
+        print(f"  {nm:16s} #{int(med[0]*255):02X}{int(med[1]*255):02X}{int(med[2]*255):02X}  "
+              f"{q[0]:3.0f}/{q[1]:3.0f}/{q[2]:3.0f}  {100*yellow[m].mean():5.1f}  {100*brown[m].mean():5.1f}")
+
+
 def repaint(sc, R):
     """the current module's paint on the cached body, written into its base colour image (no AO multiply)"""
     body = sc.objects["rishal"]
@@ -185,7 +207,9 @@ def repaint(sc, R):
         src = next(i.links[0].from_node for i in src.inputs if i.links)
     img = src.image
     size = img.size[0]
-    rgb = R.paint_object(body, size, R.PROJECTION, names)
+    rgb, maps = R.paint_object(body, size, R.PROJECTION, names, return_maps=True)
+    part_stats(rgb, maps["part"], names)
+    save_array(rgb, os.path.join(OUT, "atlas.png"))
     a = np.ones((size, size, 4), dtype=np.float32)
     a[..., :3] = rgb[::-1]
     img.pixels.foreach_set(a.ravel())

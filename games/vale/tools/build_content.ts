@@ -541,6 +541,16 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
     u.art.teamModels?.forEach((ref, k) => {
       if (!/\.glb$/i.test(ref)) dg.err(['units', i, 'art', 'teamModels', k], `team model "${ref}" must be a .glb (like art.model)`);
     });
+    // r12 M9 structure states: vfx refs resolve, thresholds descend, only structures carry them
+    const dmg = u.art.damage, ruin = u.art.ruin;
+    if ((dmg || ruin) && u.kind !== 'structure') dg.err(['units', i, 'art'], `art.damage / art.ruin are for structures; "${u.id}" is a ${u.kind}`);
+    if (dmg?.vfx !== undefined && !vfx.has(dmg.vfx)) dg.err(['units', i, 'art', 'damage', 'vfx'], unknownRef('vfx id', dmg.vfx, vfx));
+    if (dmg && dmg.at.some((x, k) => k > 0 && x >= dmg.at[k - 1])) dg.err(['units', i, 'art', 'damage', 'at'], `damage thresholds must descend (got ${dmg.at.join(', ')})`);
+    for (const k of ['breakVfx', 'landVfx'] as const) {
+      const id = ruin?.[k];
+      if (id !== undefined && !vfx.has(id)) dg.err(['units', i, 'art', 'ruin', k], unknownRef('vfx id', id, vfx));
+    }
+    if (ruin && ruin.height > u.art.height) dg.err(['units', i, 'art', 'ruin', 'height'], `ruin height ${ruin.height} m is taller than the structure (${u.art.height} m)`);
     checkBehavior(u, ['units', i, 'behavior'], dg);
     // effect lists inside behavior (pickup grants) get the same reference checks as any other
     for (const [k, v] of Object.entries(u.behavior)) {

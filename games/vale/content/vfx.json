@@ -7622,6 +7622,352 @@
     ]
   },
   {
+    "$comment": "T3 · impact · a structure's top shears off at the break: its light bursts out, heavy chips and a dust collar",
+    "id": "lib_structure_break",
+    "duration": 1.3,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "flash",
+        "at": "origin",
+        "radius": 1.54,
+        "life": 0.06,
+        "color": "team",
+        "intensity": 6.0
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 18,
+        "dir": "out",
+        "spreadDeg": 170,
+        "speed": [
+          4,
+          9
+        ],
+        "life": [
+          0.15,
+          0.4
+        ],
+        "size": [
+          0.16,
+          0.064
+        ],
+        "color": [
+          "team",
+          "#BFD3E6"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 4.0,
+        "gravity": 6,
+        "drag": 2.5,
+        "texture": "spark",
+        "stretch": 0.035,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 34,
+        "dir": "up",
+        "spreadDeg": 170,
+        "speed": [
+          2.5,
+          6.5
+        ],
+        "life": [
+          0.8,
+          1.3
+        ],
+        "size": [
+          0.24,
+          0.24,
+          0.144
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 13,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "delay": 0.03,
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 10,
+        "shape": "ring",
+        "radius": 0.7,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          1.0,
+          2.8
+        ],
+        "life": [
+          0.8,
+          1.3
+        ],
+        "size": [
+          0.9,
+          1.8,
+          2.25
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.06,
+        "secondary": true
+      },
+      {
+        "type": "light",
+        "at": "origin",
+        "color": "team",
+        "intensity": 8,
+        "radius": 9,
+        "life": 0.5
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · impact · a structure passes a damage threshold: its light flares through the new cracks, chips rain off the flank",
+    "id": "lib_structure_crack",
+    "duration": 1.1,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "flash",
+        "at": "origin",
+        "radius": 0.54,
+        "life": 0.05,
+        "color": "team",
+        "intensity": 2.0
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 8,
+        "dir": "out",
+        "spreadDeg": 120,
+        "speed": [
+          2.5,
+          5.5
+        ],
+        "life": [
+          0.12,
+          0.3
+        ],
+        "size": [
+          0.16,
+          0.064
+        ],
+        "color": [
+          "team",
+          "#BFD3E6"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.6,
+        "gravity": 4,
+        "drag": 2.5,
+        "texture": "spark",
+        "stretch": 0.035,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 16,
+        "dir": "up",
+        "spreadDeg": 110,
+        "speed": [
+          1.2,
+          3.2
+        ],
+        "life": [
+          0.8,
+          1.1
+        ],
+        "size": [
+          0.16,
+          0.16,
+          0.096
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 12,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "delay": 0.02,
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 5,
+        "shape": "sphere",
+        "radius": 0.4,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          0.5,
+          1.4
+        ],
+        "life": [
+          0.6,
+          1.0
+        ],
+        "size": [
+          0.55,
+          1.1,
+          1.375
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.05,
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 4,
+        "shape": "ring",
+        "radius": 0.9,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          0.6,
+          1.6
+        ],
+        "life": [
+          0.7,
+          1.0
+        ],
+        "size": [
+          0.6,
+          1.2,
+          1.5
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.35,
+        "secondary": true
+      }
+    ]
+  },
+  {
     "$comment": "T4 · impact · Needle, Lantern or Hourbell falls: white core flash (T4), stone collapses into heavy chips, a team ring",
     "id": "lib_structure_fall",
     "duration": 1.6,
@@ -7787,6 +8133,203 @@
         "intensity": 20,
         "radius": 14,
         "life": 0.6
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · settle · the fallen top hits the ground and breaks up: a wide dust ring, a burst of rubble, a crack mark",
+    "id": "lib_structure_land",
+    "duration": 1.8,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 22,
+        "shape": "ring",
+        "radius": 1.6,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          2.0,
+          5.0
+        ],
+        "life": [
+          1.0,
+          1.7
+        ],
+        "size": [
+          1.3,
+          2.6,
+          3.25
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.55,
+          0.33,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 10,
+        "shape": "sphere",
+        "radius": 0.6,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          0.6,
+          1.8
+        ],
+        "life": [
+          1.2,
+          1.8
+        ],
+        "size": [
+          0.9,
+          1.8,
+          2.25
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.12,
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 40,
+        "dir": "up",
+        "spreadDeg": 150,
+        "speed": [
+          3,
+          8
+        ],
+        "life": [
+          0.7,
+          1.2
+        ],
+        "size": [
+          0.26,
+          0.26,
+          0.156
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 15,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "delay": 0.03,
+        "secondary": true
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.8
+          ],
+          [
+            0.35,
+            4.7
+          ],
+          [
+            1,
+            6.0
+          ]
+        ],
+        "width": [
+          1.4,
+          0.3
+        ],
+        "life": 0.7,
+        "color": "#6E6A62",
+        "alpha": [
+          0.7,
+          0.5,
+          0
+        ],
+        "emissive": 0.0,
+        "sharp": 1.6,
+        "noise": 0.5,
+        "blend": "alpha"
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "crack",
+        "radius": 3.2,
+        "life": 2.2,
+        "color": "#2A2C33",
+        "alpha": [
+          0.75,
+          0.6,
+          0
+        ]
       }
     ]
   },

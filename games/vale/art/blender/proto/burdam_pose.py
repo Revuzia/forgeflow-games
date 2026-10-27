@@ -38,6 +38,8 @@ def args():
     p.add_argument("--partcolors", action="store_true", help="flat colour per part (find which part is where)")
     p.add_argument("--tex", default="", help="swap the cached base colour for this image (post-paint work)")
     p.add_argument("--lit", action="store_true", help="studio lighting instead of flat (reads values)")
+    p.add_argument("--carry", default="", help="override CARRY: 'rx,ry,rz;dx,dy,dz;ux,uy,uz' (fix pass 6 search)")
+    p.add_argument("--bar", type=float, default=0.0, help="game views: draw the health bar for this art height")
     return p.parse_args(scene.script_args())
 
 
@@ -54,6 +56,9 @@ def main():
     ctx = types.SimpleNamespace(info=types.SimpleNamespace(armature=arm, props=F.PROPORTIONS, joints={}), spec=F,
                                 chains={}, skin=None)
     skel = anim.Skeleton(arm)
+    if a.carry:
+        rr, dd, uu = ([float(c) for c in part.split(",")] for part in a.carry.split(";"))
+        F.CARRY = dict(F.CARRY, rel=tuple(rr), d=tuple(dd), up=tuple(uu))
     clips = anim.standard_clips(skel, F.MOTION, F.clip_overrides(ctx) if hasattr(F, "clip_overrides") else {})
     sc = bpy.context.scene
     sc.render.engine = "BLENDER_WORKBENCH"
@@ -102,19 +107,39 @@ def main():
                 view[3:] if not view.startswith("headc") else view[5:]]
             pitch = 15.0
             dist = 1.8
-        elif view == "game":
+        elif view.startswith("game"):
             cam_data.lens = 115
-            pitch, yaw, dist = 52.0, 0.0, 9.5
+            pitch, dist = 52.0, 9.5
+            yaw = {"game": 0.0, "gameW": 90.0, "gameE": -90.0, "gameN": 180.0, "gameSW": 45.0, "gameSE": -45.0,
+                   "gameNW": 135.0, "gameNE": -135.0, "gameSSW": 22.5, "gameWSW": 67.5, "gameESE": -67.5,
+                   "gameSSE": -22.5}[view]
             tgt = Vector((0, 0, 1.0))
         elif not view.startswith("lhand"):
             cam_data.lens = 80
             pitch, dist = 8.0, 6.6
-            yaw = {"3q": -35.0, "front": 0.0, "side": 90.0, "back": 180.0, "3qb": 145.0}[view]
+            yaw = {"3q": -35.0, "3qL": 35.0, "front": 0.0, "side": 90.0, "sideR": -90.0, "back": 180.0, "3qb": 145.0}[view]
         p, y = math.radians(pitch), math.radians(yaw)
         loc = tgt + Vector((math.sin(y) * math.cos(p) * dist, -math.cos(y) * math.cos(p) * dist, math.sin(p) * dist))
         cam.location = loc
         cam.rotation_euler = (tgt - loc).to_track_quat("-Z", "Y").to_euler()
+        bar = bpy.data.objects.get("pv_bar")
+        if bar is not None:
+            bar.hide_render = not view.startswith("game")
+            if view.startswith("game"):
+                # the health bar: 108 + 22 px x 18 px at 82.1 px/m, centred 11 px left of the anchor, facing the camera
+                R3 = cam.rotation_euler.to_matrix()
+                bar.location = Vector((0, 0, a.bar + 0.35)) + R3 @ Vector((-11 / 82.1, 0, 0.0))
+                bar.rotation_euler = cam.rotation_euler
 
+    if a.bar > 0:
+        bpy.ops.mesh.primitive_plane_add(size=1.0)
+        bar = bpy.context.active_object
+        bar.name = "pv_bar"
+        bar.scale = (130 / 82.1, 18 / 82.1, 1.0)
+        m = bpy.data.materials.new("pv_bar_m")
+        m.diffuse_color = (0.25, 0.75, 0.4, 1.0)
+        bar.data.materials.append(m)
+        sh.color_type = "TEXTURE"
     names = [x[0] for x in F.sculpts()]
     if a.rebind:
         import burdam_audit

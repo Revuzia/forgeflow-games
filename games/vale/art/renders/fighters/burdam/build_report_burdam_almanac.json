@@ -9,12 +9,12 @@
     "tris_skirt": 1250,
     "tris_belt": 818,
     "tris_tally": 640,
-    "tris_forearms": 898,
-    "tris_fist_R": 650,
+    "tris_forearms": 900,
+    "tris_fist_R": 950,
     "tris_palm_L": 380,
-    "tris_fingers_L": 340,
+    "tris_fingers_L": 640,
     "tris_vambrace": 450,
-    "tris_strap_plate": 474,
+    "tris_strap_plate": 680,
     "tris_shoulder_plate": 500,
     "tris_fringe": 300,
     "tris_tier1": 620,
@@ -28,40 +28,41 @@
     "tris_gems": 640,
     "tris_haft": 480,
     "tris_pommel": 300,
-    "tris_almanac_wood": 300,
-    "tris_almanac_face": 120,
-    "validate_burdam": "18660->18655"
+    "tris_almanac_wood": 420,
+    "tris_almanac_face": 140,
+    "tris_almanac_tabs": 160,
+    "validate_burdam": "19768->19765"
   },
-  "uv_coverage": 0.614,
+  "uv_coverage": 0.609,
   "bake": {
-    "base": 4.97,
-    "rough_metal": 3.65,
-    "normal": 2.78,
-    "ao": 3.17,
-    "normal_fixed_px": 40955,
-    "projection": 312.03,
-    "pack_save": 312.34,
-    "total": 327.32
+    "base": 11.68,
+    "rough_metal": 7.04,
+    "normal": 4.95,
+    "ao": 5.13,
+    "normal_fixed_px": 36609,
+    "projection": 246.49,
+    "pack_save": 246.89,
+    "total": 277.38
   },
-  "tris": 19295,
+  "tris": 20405,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2489988,
+  "glb_bytes_raw": 2646804,
   "optimize": {
     "ok": true,
-    "before": 2489988,
-    "after": 965772
+    "before": 2646804,
+    "after": 1031756
   },
-  "glb_bytes": 965772,
+  "glb_bytes": 1031756,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (943 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: burdam_almanac_base 2048x2048 236K, burdam_almanac_normal 512x512 42K, burdam_almanac_orm 512x512 72K",
-      "  skinned meshes: burdam_accent(330v), burdam_almanac(16823v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (1008 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_almanac_base 2048x2048 243K, burdam_almanac_normal 512x512 44K, burdam_almanac_orm 512x512 74K",
+      "  skinned meshes: burdam_accent(342v), burdam_almanac(18541v)",
       "  bones: 26 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19295; bind-pose bounds (three units, Y up): 1.42 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
+      "  tris: 20405; bind-pose bounds (three units, Y up): 1.42 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -71,8 +72,8 @@
       "portrait": "art/out/fighters/burdam/burdam_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 9.32,
-      "portrait": 3.72
+      "splash": 12.2,
+      "portrait": 9.11
     }
   },
   "three_qa": {
@@ -80,7 +81,7 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.632,
+        -0.636,
         0,
         -0.335
       ],
@@ -96,7 +97,7 @@
     ],
     "headY": 1.849,
     "accentPct": 0.72,
-    "accentTopHalfPct": 34.3,
+    "accentTopHalfPct": 32.4,
     "heightPx1080": 116,
     "size": [
       2400,
@@ -104,24 +105,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_almanac.png",
-    "seconds": 9,
+    "seconds": 26.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.46,
-      "model": 17.16,
-      "lows_bind": 12.25,
-      "uv": 7.55,
-      "bake": 327.33,
-      "export": 0.24,
+      "rig": 0.01,
+      "materials": 3.42,
+      "model": 90.89,
+      "lows_bind": 31.17,
+      "uv": 16.2,
+      "bake": 277.39,
+      "export": 0.14,
       "optimize": 0.64,
-      "load_test": 0.13,
-      "render": 13.09,
-      "three_qa": 9.35
+      "load_test": 0.15,
+      "render": 21.37,
+      "three_qa": 27.09
     },
-    "total_s": 388.28
+    "total_s": 468.96
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

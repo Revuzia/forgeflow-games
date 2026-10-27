@@ -25,9 +25,9 @@ Needlespan is the needle's fallen shaft lying across a gorge. One straight road,
 | **Dawn Arch** (Aubade terrace, disc (10, 22) r 13) | The **Dawn Arch**: a tall pointed arch of stacked chalk with dawnglass infill. It stands just beyond the west edge, behind the fountain, framing the morning sky. Spire language: height ≥ 3× each leg's footprint. | (−4.0, 22.0): legs at (−4, 10.5) and (−4, 33.5) | 3 m deep, 24 m wide · 12 m crown | chalk limestone, dawnglass (`#BFD3E6`, translucent, never bloom), blued steel ties |
 | **Lamp Gate** (Serenade terrace, disc (146, 22) r 13) | The **Lamp Gate**: a low wide banded ironstone gate between two drum towers, with one lampresin lamp in its keystone. Dome language: wider than tall. It stands just beyond the east edge. | (160.0, 22.0): drums at (160, 11) and (160, 33) | 5 m deep, 24 m wide · 7 m | ironstone, ochre sandstone drums, lampresin lamp (emissive ≤ 0.8) |
 | **West span** (x 23 → 66) | The shaft itself. Its carved **hour-bands** bulge over the deck edges and pinch the walkable top: to 9.0 m at x = 33 and to 9.8 m at x = 62. Between them, at x = 46, the top widens into two flank ledges (2.4 m deep) with Needlegrass. No standing landmark. | bands centred on x = 33 (2.4 m long) and x = 62 (3.4 m long), both edges · ledges at (46, 12.6) and (46, 31.4) | bands are wall notches ≤ 1.2 m above the deck | needle stone, honed. The bands are the shaft's carved rings, read from above as two pairs of notches |
-| **The Snap** (disc (78, 22) r 12) | The **crack**: an engraved fracture line running north–south across the plaza floor at x = 78 (flush, lit from inside, emissive ≤ 0.8). Two broken **stubs** of the shaft stand on the crack at its north and south ends. The open middle between them, from y 17.9 to 26.1, is the teamfight floor. | stubs (78, 15.8) and (78, 28.2), each 2.6 × 4.2 m (walls) | ≤ 2.4 m. Loose fragments ≤ 0.8 m lie only on the stubs and the shaft's broken edges, never on the deck | needle stone with a raw fracture face (paler, L* 72, rough ≥ 0.6) |
+| **The Snap** (disc (78, 22) r 12) | The **crack**: an engraved fracture line running north–south across the plaza floor at x = 78 (flush, lit from inside, emissive ≤ 0.8). Two broken **stubs** of the shaft stand on the crack at its north and south ends. The open middle between them, from y 17.9 to 26.1, is the teamfight floor. | stubs (78, 15.8) and (78, 28.2), each 2.6 × 4.2 m (walls) | ≤ 2.4 m. Loose fragments ≤ 0.8 m lie only on the stubs and the shaft's broken edges, never on the deck | needle stone with a raw fracture face (paler than the deck, rough ≥ 0.6; r12 B5: ≤ L* 46 on screen) |
 | **East span** (x 90 → 133) | mirror of the west span | bands on x = 123 and x = 94 · ledges at (110, 12.6) and (110, 31.4) | | |
-| **The gorge** (all `walls[]`) | No landmark. The shaft's curved flanks fall away below the deck edge. Depth fog: `#5E6C93`, 0.06/m below Y = −2, near-solid by −25 m. Lane ends fade into `#8A7F96`. | the four big wall polygons | down to −25 m | chasm L* 15–30, cool |
+| **The gorge** (all `walls[]`) | No landmark. The shaft's curved flanks fall away below the deck edge. Depth fog: `#5E6C93`, 0.06/m below Y = −2, near-solid by −25 m. Lane ends fade into `#8A7F96`. | the four big wall polygons | down to −25 m | chasm L* 8–16, cool (r12 B5) |
 
 ## 3. Structures, bases and pickups (placements; model plinths and clearings to these)
 
@@ -48,12 +48,14 @@ Team 0 is listed; team 1 is the mirror (x → 156 − x). Structures alternate r
 
 | Surface | Where | Material | Value (L*) |
 |---|---|---|---|
-| Deck (the lane) | the shaft top, y 15–29 | honed needle stone in long courses running along the shaft | 60–66 |
-| Inscription band | a 0.4 m band on **each walkable edge** of the deck, terraces and Snap | carved hour-script in chalk inlay, so the edge of the drop is unmistakable | 70 |
-| Terraces | discs r 13 at both ends | Aubade: chalk flags with dawnglass rings round the fountain. Serenade: ochre sandstone with lampresin inlay | 60–66 |
-| The Snap | disc r 12 | the same stone, crazed with fine cracks radiating from the crack line | 60–66, cracks ≤ 6 L* |
-| Gorge walls (edges) | `walls[]` | the shaft's flank curving down, then raw rock to the fog | 15–30 |
-| Needlegrass | `thickets[]`: the flank ledges (x 46 and 110) and the Snap's four corners | stone-green blades growing from the cracks, on a carved curb | 48–54 |
+| Deck (the lane) | the shaft top, y 15–29 | honed needle stone in long courses running along the shaft: palest along the road (the walked course), weathering darker stone by stone toward the drop | road 36–41 (luma p50 85–100), outer courses ≈ 18–26 |
+| Inscription band | a 0.4 m band on **each walkable edge** of the deck, terraces and Snap | carved hour-script in chalk inlay, so the edge of the drop is unmistakable | ≤ 46 |
+| Terraces | discs r 13 at both ends | Aubade: chalk flags with dawnglass rings round the fountain. Serenade: ochre sandstone with lampresin inlay | 34–40 |
+| The Snap | disc r 12 | the same stone, crazed with fine cracks radiating from the crack line | the deck's values, cracks ≤ 6 L* |
+| Gorge walls (edges) | `walls[]` | the shaft's flank curving down, then raw rock to the fog | 8–16 |
+| Needlegrass | `thickets[]`: the flank ledges (x 46 and 110) and the Snap's four corners | stone-green blades growing from the cracks, on a carved curb | ≈ 18–30 |
+
+(2026-10-27, r12 B5 value rebase: deck 60–66 → 36–41, chalk band 70 → ≤ 46, gorge 15–30 → 8–16; the lit fracture stays an authored emissive. On-screen L* after the grade, `_harness/value_probe.mjs`.)
 
 - **Light.** Sun 46° elevation, bearing 200° (`#FFC890`, 2.9). sunDir (−0.2376, 0.7193, 0.6528). Ambient 0.7.
 - **Temperature.** The Dawn Arch end may lean cool and the Lamp Gate end warm, through materials only. There is no team hue anywhere in the world.

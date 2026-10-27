@@ -458,7 +458,14 @@ export const UnitDef = z.object({
      *  a neutral unit (team < 0) and FFA modes use `model`; every entry shares `height`, `clips` and `scale`. */
     teamModels: z.array(AssetRef).optional(),
     scale: z.number().positive().default(1), height: z.number().positive(),
-    clips: z.record(z.string(), z.string()).default({}), icon: AssetRef.optional(), instanced: z.boolean().default(false) }).strict(),
+    clips: z.record(z.string(), z.string()).default({}), icon: AssetRef.optional(), instanced: z.boolean().default(false),
+    /** CHANGED(ART) r12 M9, structures, presentation only: damage states. Past each hp fraction in `at` (descending)
+     *  the model's `_dmg<n>` node shows, its `_chip<n>` node breaks off and `vfx` plays once on the tower's flank */
+    damage: z.object({ at: z.array(z.number().gt(0).lt(1)).min(1).max(2), vfx: Id.optional() }).strict().optional(),
+    /** CHANGED(ART) r12 M9, structures: on death the `_upper` node collapses over `collapse` s (`breakVfx` as the top
+     *  shears off, `landVfx` where it lands) and the `_ruin` node (at most `height` m tall) stays for the match */
+    ruin: z.object({ height: z.number().positive().max(1.5), collapse: z.number().min(1).max(3).default(1.8),
+      breakVfx: Id.optional(), landVfx: Id.optional() }).strict().optional() }).strict(),
 }).strict();
 
 export const TeamBuffDef = z.object({

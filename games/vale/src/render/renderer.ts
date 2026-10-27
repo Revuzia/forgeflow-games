@@ -50,6 +50,7 @@ import { Sky } from './sky.ts';
 import { buildTerrain, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
 import { SocketResolver } from './vfx/sockets.ts';
 import { VfxSystem } from './vfx/system.ts';
+import { StructureFx } from './structures.ts';
 import { patchWorldMaterial, worldUniforms } from './world_material.ts';
 
 export interface RendererOptions {
@@ -191,6 +192,8 @@ class ValeRenderer implements Renderer {
   private readonly vfx: VfxSystem;
   private readonly director: Director;
   private readonly reactions: HitReactions;
+  /** r12 M9: structure damage states, collapse + ruin, occlusion fade, protected shell (structures.ts) */
+  private readonly structs: StructureFx;
   private readonly actors = new Map<number, Actor>();
   private client: MatchClient | null = null;
   private offEvents: (() => void) | null = null;
@@ -270,6 +273,15 @@ class ValeRenderer implements Renderer {
     this.scene.add(this.vfx.group);
     this.scene.add(this.crowd.group);
     this.reactions = new HitReactions(catalog);
+    this.structs = new StructureFx({
+      vfx: this.vfx,
+      tint: (v) => this.palette.get(accentHexFor(this.palette, v)).clone(),
+      compile: (root) => {
+        if (!this.envReady) return false;
+        this.asIfComposer(() => void this.gl.compileAsync(root, this.rig.camera, this.scene).catch(() => undefined));
+        return true;
+      },
+    });
     this.vfx.onFeel = (e) => { if (e.shake > 0) this.rig.shake(e.shake * 4, 90 + e.shake * 60); this.reactions.feel(e, this.actors, this.time); };
     this.director = new Director(catalog, this.vfx, {
       view: () => this.client?.view ?? null,
@@ -414,6 +426,7 @@ class ValeRenderer implements Renderer {
       if (t) this.sky.apply(this.scene, t, L.ambient);
       this.envReady = true;
       this.lib.warmAll();
+      this.structs.warmAll(this.actors.values());
       for (const a of this.actors.values()) this.warmVeil(a);
     });
     this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
@@ -458,6 +471,7 @@ class ValeRenderer implements Renderer {
     this.crowd.clear();
     this.actors.clear();
     this.director.clear();
+    this.structs.clear();
     this.vfx.clear();
     if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
     if (this.mapScene) { this.scene.remove(this.mapScene); this.mapScene = null; }
@@ -577,7 +591,10 @@ class ValeRenderer implements Renderer {
           const def = this.lib.unit(e.def);
           if (def) {
             a.configureUnit(def);
-            this.lib.unitTemplate(e.def, this.palette.ffa ? null : e.team).then((t) => { actor.attach(t, def.art.scale, 'accent'); this.warmHover(actor); });
+            this.lib.unitTemplate(e.def, this.palette.ffa ? null : e.team).then((t) => {
+              actor.attach(t, def.art.scale, 'accent'); this.warmHover(actor);
+              if (def.kind === 'structure' && actor.model) this.structs.attach(actor, def);
+            });
           }
         }
         a.pushTick(e, tick);
@@ -586,6 +603,8 @@ class ValeRenderer implements Renderer {
     for (const [id, a] of this.actors) {
       if (seen.has(id)) continue;
       if (a.leaving < 0) a.leaving = 0;
+      // r12 M9: a structure never sinks away: its ruin stays until its entity is replaced (a gate's respawn)
+      if (a.kind === 'structure') { this.structs.forget(a); a.dispose(); this.actors.delete(id); continue; }
       if (a.leaving > 0.6) { a.dispose(); this.actors.delete(id); }
     }
   }
@@ -829,7 +848,7 @@ class ValeRenderer implements Renderer {
     const alpha = client.alpha;
     this.syncActors(view);
     // events → VFX / telegraphs
-    if (this.pending.length) { const evs = this.pending.splice(0, this.pending.length); this.reactions.handle(evs, this.actors, this.time); this.director.handle(evs); }
+    if (this.pending.length) { const evs = this.pending.splice(0, this.pending.length); this.reactions.handle(evs, this.actors, this.time); this.director.handle(evs); this.structs.handle(evs); }
     this.director.update(view);
     this.updateActors(d, alpha);
     // the crowd's instances: every live, visible, on-screen crowd unit, after its envelopes ran
@@ -841,6 +860,8 @@ class ValeRenderer implements Renderer {
     const a = me ? this.actors.get(me.entity) : undefined;
     if (a && a.view?.alive) this.rig.setSelf(a.x, a.y); else this.rig.setSelf(null, null);
     this.rig.update(d);
+    // structures after the camera moved: the occlusion fade looks for your fighter, the hovered and the targeted unit
+    this.structs.update(d, this.time, view, this.rig.camera, [me ? me.entity : -1, this.hover ?? -1, this.target ?? -1], this.actors);
     // fog of war
     this.fog.update(view, this.palette.viewer.team, d);
     this.sun.fit(this.rig.camera);

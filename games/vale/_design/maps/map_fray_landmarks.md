@@ -36,13 +36,14 @@ The sun is at 86° elevation, so shadows pool straight under everything. Height 
 
 | Surface | Material | Value (L*) |
 |---|---|---|
-| The plate | **honed pale dial-stone** in rings of great slabs, each slab its own even tone, faint grey veins, a satin sheen of the overhead sun (not a mirror). Luminous at the Shadowless Noon; the fog of war still darkens what is unseen. The seat colours sit in carved grooves round each numeral and pop against the pale stone | 66–72 in vision (≈ 30 under fog of war) |
-| Hour-lines and numerals | ten basalt-inlaid lines, 0.15 m wide, from the cart ring to each mark: dark in the pale stone, like a sundial's cut lines | 30 |
-| Hour-ring | a carved chapter ring round the marks: a double groove inside them, one outside, a half-hour tick between every two marks, quarter ticks on the outer band | grooves ≤ 40 |
-| Shop ring | flush mid-grey inlay at r 4 | 48 |
-| Hour-stones, cart and rim | dark basalt with a chalk lip (the obstacles read dark on the bright stage) | lit top 55–62, faces 18–25 |
+| The plate | **honed dial-stone** in rings of great slabs, warm, each slab its own even tone, faint grey veins, a satin sheen of the overhead sun (not a mirror). The fog of war still darkens what is unseen. The seat colours sit in carved grooves round each numeral and pop against the stone | 34–40 in vision (≈ 27 under fog of war) |
+| Hour-lines and numerals | ten basalt-inlaid lines, 0.15 m wide, from the cart ring to each mark: dark in the stone, like a sundial's cut lines | ≈ 20 (never above 48) |
+| Hour-ring | a carved chapter ring round the marks: a double groove inside them, one outside, a half-hour tick between every two marks, quarter ticks on the outer band | grooves below the plate |
+| Shop ring | flush mid inlay at r 4 | ≈ 28 |
+| Hour-stones, cart and rim | dark basalt with a chalk lip (the obstacles read dark on the stage) | lit top 20–28 (edge light ≤ 48), faces 12–18 |
 
 (2026-10-20, terrain polish: the plate moved from polished basalt, L* 28–36, to pale dial-stone at the noon; the obstacles kept the basalt. Render: `src/render/terrain_glsl.ts` VALE_STYLE_PLATE.)
+(2026-10-27, r12 B5 value rebase: plate 66–72 → 34–40 so fighters, effects and UI own the top of the value range; the plate fills ~86 % of a FRAY frame, so the frame median follows the plate. On-screen L* after the grade, `_harness/value_probe.mjs`.)
 
 - **Light.** Sun 86° elevation, bearing 200° (`#FFF3E6`, 3.0). sunDir (−0.0239, 0.9976, 0.0655). Ambient 0.55.
 - **Fog.** There is no fog in the arena; the glare is beyond the rim.

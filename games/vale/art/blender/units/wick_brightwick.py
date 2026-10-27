@@ -104,13 +104,15 @@ FORM = {
         # hollow inside the chalk rim; a bigger one was a big dark mouth from the 52 deg camera), a
         # rounded head space behind it (`Tomb`): (half width, bottom, arch top, corner radius), back ellipsoid
         "tomb": ((0.099, 1.330, 1.560, 0.036), ((0.0, -0.10, 1.445), (0.130, 0.190, 0.150))),
-        # ONE soft lamp glow in the head space (brief §0.2): a broad low volume, wider than tall (25 x 8 cm), low
-        # in the hollow, its front 3 cm behind the opening, its sides tucked behind the opening's walls (the arch
-        # frames the light: never a closed oval badge / an eye in the dark), tilted 35 deg so the 52 deg camera
-        # sees its top over the sill (136 cm2 at 52 deg, 172 at eye level; the deep 10 x 7 cm one was hidden by the
-        # brow: 5 cm2). A painted spill on the hollow's
-        # walls round it (`ink_hollow`) gives the soft falloff. Matte. Centre, radii (local X, Y, Z), tilt (deg)
-        "hood_light": ((0.0, -0.070, 1.368), (0.124, 0.098, 0.038), 35.0),
+        # ONE soft lamp CORE in the head space (brief §0.2, fix round 3): an ellipsoid wider than tall (11 x 7 cm),
+        # its front ~2.5-3.5 cm behind the opening (the opening's edge lies at y -0.155 .. -0.18), floating at a third
+        # of the arch's height so that BOTH the eye level (under the middle) and the 52 deg camera (over the middle:
+        # the deeper a point, the higher it shows from above, and the brow hides the hollow's top) see dark hollow
+        # above, below and to both sides of it (the floor under it is ink). The broad tilted slab it replaces (25 x 8 cm on the sill) read as a tongue in an open
+        # mouth. The soft falloff is the painted spill on the hollow's walls BEHIND and beside it (`ink_hollow`:
+        # the front of the hollow, the sill and the cheeks stay ink). Matte. Centre, radii (local X, depth, up),
+        # tilt (deg, top back)
+        "hood_light": ((0.0, -0.118, 1.405), (0.055, 0.028, 0.035), 8.0),
         "shoulder": 0.205,
         # A-line cape: +-0.33 under the pauldrons -> +-0.43 at the hem, deeper toward the hem (side view flares too)
         "cloak_rx": [(0.04, 0.432), (0.25, 0.418), (0.50, 0.400), (0.75, 0.380), (0.95, 0.362), (1.10, 0.338),
@@ -137,7 +139,8 @@ FORM = {
         "hood_bell": [(1.34, 0.200), (1.40, 0.214), (1.46, 0.214), (1.51, 0.204), (1.56, 0.186), (1.60, 0.164)],
         # a SHORT arch (the concept: 1.37-1.575; the 26 cm arch read as a tall dark mouth), the collar its sill
         "tomb": ((0.114, 1.370, 1.575, 0.045), ((0.0, -0.10, 1.470), (0.150, 0.205, 0.150))),
-        "hood_light": ((0.0, -0.075, 1.392), (0.136, 0.100, 0.040), 35.0),  # the concept's warm pool low in the hollow
+        # one soft core floating in the hollow (see the Aubade note): 12 x 7 cm, front ~3.5 cm behind the opening
+        "hood_light": ((0.0, -0.124, 1.432), (0.059, 0.028, 0.036), 8.0),
         "shoulder": 0.215,
         "cloak_rx": [(0.13, 0.398), (0.20, 0.405), (0.30, 0.398), (0.45, 0.378), (0.62, 0.350), (0.80, 0.326),
                      (0.98, 0.308), (1.10, 0.288), (1.18, 0.245), (1.24, 0.18)],
@@ -1054,7 +1057,7 @@ def matte_accent(mat) -> None:
 TRIS = {
     "aubade": {"hood": 440, "hood_rim": 110, "legs": 64, "boot_L": 84, "boot_R": 84,
                "sleeves": 150, "forearms": 96, "mitt_L": 80, "mitt_R": 80, "staff": 130},
-    "serenade": {"hood": 372, "hood_rim": 110, "legs": 40, "boot_L": 84, "boot_R": 84,
+    "serenade": {"hood": 310, "hood_rim": 110, "legs": 40, "boot_L": 84, "boot_R": 84,
                  "sleeves": 138, "cuffs": 48, "forearms": 76, "mitt_L": 80, "mitt_R": 80, "staff": 110},
 }
 PAINT: dict = {}            # paint id -> spec (the hybrid paint looks its spec up here)
@@ -1083,29 +1086,104 @@ def hood_parts(F, aub, part):
     # the broad tombstone opening into a rounded head space; its walls are painted ink (no separate lining:
     # a second shell inside read as a lip / tongue)
     hood.sub(tomb_of(F), k=0.010)
+    if not aub:
+        # (fix round 3) the felt dome's TOP is its own clean low (rings of rays from the dome's centre): decimated,
+        # its cap went to a few big facets (a flat triangle on the crown, a polygonal silhouette at close range).
+        # The two meet under the crown band.
+        hood.inter(HalfSpace((0.0, 0.0, CAP_Z[1]), (0.0, 0.0, 1.0), 2.0), k=0.0)
     part("hood", hood, "cloth2", "bone:head", 620, 1.0, 1.4)
-    # the rim all round the opening: a carved chalk lip (Aubade) / a rolled dark felt edge (Serenade). The game
-    # low is a clean swept tube (the decimated capsule chain went lumpy); the capsule chain stays the bake source
-    rim = Sculpt("hood_rim")
-    rr = 0.017 if aub else 0.018
-    loop = opening_loop(F, n=24, lift=0.004)
-    loop_tube(rim, loop, rr, closed=False)
-    tv, tf = sweep_tube(opening_loop(F, n=13, lift=0.004), rr * 1.04, 5)
-    part("hood_rim", rim, "chalk" if aub else "cloth", "bone:head", 0, 0.7, 1.4, low=lambda D, v=tv, f=tf: (v, f))
-    # the hood light (brief §0.2 / §4): ONE soft volume, wider than tall, set deep in the head space at the
-    # middle of the arch, with ink all round it: a lamp glowing inside the hood. (A broad tilted lens that filled
-    # the opening read as a lit visor / face plate at eye level; a lens low on the sill read as a tongue / egg.)
+    if not aub:
+        hc = np.asarray(F["hood"][0], dtype=np.float64)
+        cap = Sculpt("hood_cap")
+        cap.add(hood_outer(F), k=0.0)
+        cap.inter(HalfSpace((0.0, 0.0, CAP_Z[0]), (0.0, 0.0, -1.0), 2.0), k=0.0)
+        part("hood_cap", cap, "cloth2", "bone:head", 0, 1.0, 1.2,
+             low=lambda D, hc=hc: central_low(hood_outer(F), hc, np.eye(3), 16, [0.0, 16.0, 31.0, 45.0, 57.0]))
+    # the rim round the opening's arch. Aubade (fix round 3): a FLAT CARVED CHALK BAND lying on the cowl (an inner
+    # wall turning back into the hollow, chamfers, a flat face 1.1 cm proud, a fall into the linen): the round
+    # white tube read as lips round a mouth. Serenade: the rolled dark felt edge (a clean swept tube over the
+    # capsule chain it is baked from)
+    if aub:
+        base = Sculpt("hood_base")
+        base.add(hood.ops[0][1], k=0.0)
+        rv, rf = rim_band(F, sdf_of(base), RIM_A[0], RIM_A[1], n=15)
+        part("hood_rim", ("mesh", rv, rf), "chalk", "bone:head", None, 0.7)
+    else:
+        rim = Sculpt("hood_rim")
+        rr = 0.018
+        loop = opening_loop(F, n=24, lift=0.004)
+        loop_tube(rim, loop, rr, closed=False)
+        tv, tf = sweep_tube(opening_loop(F, n=15, lift=0.004), rr * 1.04, 6)
+        part("hood_rim", rim, "cloth", "bone:head", 0, 0.7, 1.4, low=lambda D, v=tv, f=tf: (v, f))
+    # the hood light (brief §0.2 / §4): ONE soft core, wider than tall, floating in the head space with ink all
+    # round it (FORM "hood_light"): a lamp glowing inside the hood. (A broad tilted lens that filled the opening
+    # read as a lit visor; a lens or slab low on the sill read as a tongue in a mouth.)
     lc, lr, tilt = F["hood_light"]
     t = math.radians(tilt)
-    # its pole axis runs front to back: the outline seen through the arch is the smooth 16-segment equator
-    # (never a faceted disc)
+    # its pole axis runs front to back: the outline seen through the arch is the smooth 18-segment equator
+    # (never a faceted disc), five rings deep (round from the 52 deg camera too)
     axes = np.array([(1.0, 0.0, 0.0), (0.0, math.sin(t), math.cos(t)), (0.0, -math.cos(t), math.sin(t))])
-    v, f = ellipsoid_mesh(lc, (lr[0], lr[2], lr[1]), nu=16, nv=4, axes=axes)
+    v, f = ellipsoid_mesh(lc, (lr[0], lr[2], lr[1]), nu=16, nv=5, axes=axes)
     part("hood_light", ("mesh", v, f), "accent", "bone:head", None, 0.5)
     if aub:
         crown_aubade(F, part, hood)
     else:
         crown_serenade(F, part)
+
+
+RIM_A = (0.034, 0.011)      # the Aubade carved rim band: width on the cowl, height proud of it (m)
+
+
+def rim_band(F, D, width, height, n=17, inner=0.016):
+    """the Aubade CARVED RIM as a clean low lying on the cowl round the opening's arch (up the left side, over
+    the arch, down the right side; the cowl's scarf is the sill): per station an inner wall going straight back
+    into the hollow (it covers the hood low's lip: no crumpled polygons at the edge), a chamfer, a flat face
+    `height` proud, a chamfer and a fall into the linen. Every band has its own vertices (crisp carved creases,
+    never a round tube)."""
+    T = tomb_of(F)
+    xz = np.array(T.arch(n), dtype=np.float64)
+    tg = np.gradient(xz, axis=0)
+    tg /= np.linalg.norm(tg, axis=1, keepdims=True)
+    n2 = np.stack([-tg[:, 1], tg[:, 0]], 1)
+    cen2 = np.array((0.0, 0.5 * (T.zb + T.zc)))
+    n2[((xz - cen2) * n2).sum(1) < 0] *= -1.0
+    rows = [(None, None), (0.0, 0.70), (0.005, 1.0), (width - 0.006, 1.0), (width - 0.0015, 0.55), (width + 0.002, -0.25)]
+    G = np.zeros((len(xz), len(rows), 3))
+    e = 1e-3
+    for j, (g, h) in enumerate(rows):
+        gg = 0.0 if g is None else g
+        q = xz + n2 * gg
+        O = np.stack([q[:, 0], np.zeros(len(q)), q[:, 1]], 1)
+        t = march_in(D, O, np.tile((0.0, -1.0, 0.0), (len(O), 1)), 0.6, steps=140)
+        S = O + np.array((0.0, -1.0, 0.0))[None] * np.nan_to_num(t, nan=0.2)[:, None]
+        if g is None:
+            G[:, j] = S + np.array((0.0, inner, 0.0))[None] - np.stack([n2[:, 0], np.zeros(len(q)), n2[:, 1]], 1) * 0.002
+            continue
+        gr = np.stack([D.d(S + np.eye(3)[i] * e) - D.d(S - np.eye(3)[i] * e) for i in range(3)], 1)
+        gr /= np.linalg.norm(gr, axis=1, keepdims=True) + 1e-12
+        G[:, j] = S + gr * height * h
+    V, Fc, band = [], [], []
+    for r in range(len(rows) - 1):
+        b0 = len(V)
+        for k in range(len(xz)):
+            V += [G[k, r], G[k, r + 1]]
+        for k in range(len(xz) - 1):
+            a, b, c, d = b0 + 2 * k, b0 + 2 * k + 1, b0 + 2 * k + 3, b0 + 2 * k + 2
+            Fc += [(a, b, c), (a, c, d)]
+            band += [r, r]
+    V = np.array(V)
+    Fc = np.array(Fc, dtype=np.int64)
+    cen = V[Fc].mean(1)
+    hc = np.asarray(F["hood"][0], dtype=np.float64)
+    zmid = 0.5 * (T.zb + T.zt)
+    out = cen - hc[None]
+    inw = np.array(band) == 0
+    axis_pt = np.stack([np.zeros(len(cen)), cen[:, 1], np.full(len(cen), zmid)], 1)
+    out[inw] = (axis_pt - cen)[inw]
+    nn = np.cross(V[Fc[:, 1]] - V[Fc[:, 0]], V[Fc[:, 2]] - V[Fc[:, 0]])
+    flip = (nn * out).sum(1) < 0
+    Fc[flip] = Fc[flip][:, ::-1]
+    return V, Fc
 
 
 def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0)):
@@ -1140,7 +1218,7 @@ def sweep_tube(pts, r, nseg=5, out=(0.0, -1.0, 0.0)):
     return V, F_
 
 
-FLAME = [(0.0, 0.0), (0.012, 0.032), (0.038, 0.030), (0.064, 0.0)]   # a crown lamp: a round-shouldered drop, 6.4 cm
+FLAME = [(0.0, 0.0), (0.011, 0.028), (0.034, 0.027), (0.057, 0.0)]   # a crown lamp: a round-shouldered drop, 5.7 cm
 CROWN_A = (1.584, 1.614)            # the Aubade circlet (z): just over the opening's arch, under the round cap
 
 
@@ -1194,7 +1272,7 @@ def crown_aubade(F, part, hood):
     part("seam", ("mesh", v, q), "accent", "bone:head", None, 0.5)
 
 
-SEAM_W = 0.044              # the Aubade hood seam's width down the back of the cowl (m)
+SEAM_W = 0.036              # the Aubade hood seam's width down the back of the cowl (m)
 # the seam's span (deg on the hood's meridian from the crown, - = front): from the brow over the cap and down the back
 # of the cowl to the nape (the brief's hood mark); over the cap it is a fine lit seam (3 cm), never a crest stripe
 SEAM_A = (-50.0, 130.0)
@@ -1204,6 +1282,7 @@ BEZEL = 0.015               # the thin slate bezel painted round each Aubade bod
 # dark edge for the ally azure, the chalk and the blue-grey stay chalk and blue-grey)
 
 
+CAP_Z = (1.600, 1.648)              # the Serenade felt dome's cap low (its own part) above CAP_Z[0]; the hood below CAP_Z[1]
 CROWN_S = (1.582, 1.670)            # the Serenade crown band (z, 9 cm: the brief): over the short arch, under the cap
 WINDOWS = [360.0 * k / 12 for k in range(12)]       # 12 even, spaced (the concept: round windows with iron between,
 # never a string of touching beads): six across the front, one over the arch's crown
@@ -1222,7 +1301,7 @@ def crown_serenade(F, part):
     v, f, surf = band_mesh(hc[1], z0, z1, rad, -0.006, 0.016, 18)
     zc = 0.5 * (z0 + z1)
     part("crown", ("mesh", v, f), "ironstone", "bone:head", None, 0.7)
-    discs = [disc_on(surf, a, zc, 0.031, nseg=11, rad_fn=rad, dz_per_m=1.0, lift=0.002) for a in WINDOWS]
+    discs = [disc_on(surf, a, zc, 0.029, nseg=11, rad_fn=rad, dz_per_m=1.0, lift=0.002) for a in WINDOWS]
     v, f = merge_meshes(discs)
     part("crown_lamps", ("mesh", v, f), "accent", "bone:head", None, 0.5)
 
@@ -1307,6 +1386,17 @@ def cloak_low(F, aub):
     return lambda D: lathe_low(D, cols, zr, rmax=0.70, bottom_cap=True, top_cap=True)
 
 
+def mantle_hem(a):
+    """the Serenade mantle's hem height by azimuth (a = ang(P), 0 = front): rounded lapels in front (bottoms at
+    0.975, rounded corners into the notch), the hem rising over the arms, then DIPPING to a soft point at the centre
+    back (the concept's draped felt capelet; fix round 3: the straight squared back hem read as a slab)"""
+    nl, nh, nz = MANTLE["notch"]
+    d = np.abs(np.degrees(a))
+    notch = 1.0 - smooth(nl, nh, d)
+    base = np.interp(d, [0, 16, 46, 70, 92, 120, 150, 180], [0.985, 0.976, 0.978, 1.020, 1.074, 1.058, 1.012, 0.962])
+    return base + notch * (nz - base)
+
+
 def body_parts(F, aub, info, part):
     sh = F["shoulder"]
     if aub:
@@ -1347,9 +1437,19 @@ def body_parts(F, aub, info, part):
         # dome at the sides; then the iron GORGET across the chest under it and the sand MANTLE
         cax = sdf.frame((0, -0.22, 0.976))
         cc, cR, cr, crz = (0, 0.030, 1.372), 0.222, 0.074, 0.066
-        v, f = torus_mesh(cc, cax, cR, cr, nu=15, nv=5, rz=crz, ry_scale=1.04)
+        v, f = torus_mesh(cc, cax, cR, cr, nu=18, nv=5, rz=crz, ry_scale=1.04)
         col = Sculpt("collar")
-        col.add(Torus(cc, cR, cr, axes=cax, rz=crz), k=0.0)
+        cax_ = np.asarray(cax, dtype=np.float64)
+
+        def twist(P):
+            # a ROLLED felt collar (fix round 3: "a plain smooth torus"): the felt wound round the roll in a slow
+            # spiral, soft grooves between the turns (the normal map and the fold paint carry them)
+            q = (P - np.asarray(cc)[None]) @ cax_.T
+            u_ = np.arctan2(q[:, 1], q[:, 0])
+            rho = np.hypot(q[:, 0], q[:, 1])
+            v_ = np.arctan2(q[:, 2] / crz, rho - cR)
+            return -0.0065 * smooth(0.35, 0.95, np.cos(u_ * 13.0 + v_)) + 0.0015 * NOISE(P, 9.0)
+        col.add(Torus(cc, cR, cr, axes=cax, rz=crz).displaced(twist, 0.008), k=0.0)
         part("collar", col, "cloth", ("zblend", "chest", "neck", 1.30, 1.44), 0, 1.0, 1.1,
              low=lambda D, v=v, f=f: (v, f))
 
@@ -1358,20 +1458,16 @@ def body_parts(F, aub, info, part):
         mantle = Sculpt("mantle")
         nl, nh, nz = MANTLE["notch"]
 
-        def mhem(a):
-            # rounded lapels in front (their bottoms at 0.975, rounded corners into the notch), the hem rising
-            # over the arms and a soft U across the back (the concept: 1.05 at the spine, 1.08-1.12 at the sides)
-            d = np.abs(np.degrees(a))
-            notch = 1.0 - smooth(nl, nh, d)
-            base = np.interp(d, [0, 16, 46, 70, 92, 120, 150, 180], [0.985, 0.976, 0.978, 1.020, 1.080, 1.074, 1.058, 1.050])
-            return base + notch * (nz - base)
+        mhem = mantle_hem
 
         def drape(P):
-            # broad soft sags across the back (felt hanging off the shoulders), none on the lapels
+            # the felt capelet HANGS (fix round 3: "a flat slab from the back"): deep soft sags over the arms and
+            # across the back, gathering toward the dip at the spine, none on the lapels
             a = ang(P)
-            back = smooth(60.0, 120.0, np.degrees(np.abs(a)))
-            low = 1.0 - smooth(1.06, 1.30, P[:, 2])
-            return -0.010 * back * low * np.abs(np.sin(a * 3.0 + 0.4 * NOISE(P, 2.5)))
+            da_ = np.degrees(np.abs(a))
+            back = np.maximum(smooth(50.0, 110.0, da_), 0.5 * smooth(18.0, 34.0, da_))     # (the fronts beside the lapels too)
+            low = 1.0 - smooth(1.04, 1.28, P[:, 2])
+            return -0.017 * back * low * np.abs(np.sin(a * 4.0 + 0.35 * NOISE(P, 2.5))) ** 1.3
         mantle.add(Bell(MANTLE["rx"], MANTLE["ry"], 0.95, 1.335).displaced(
             lambda P: folds(0.006, 3.0, 0.7, phase=1.1, sharp=2.0)(P) + drape(P), 0.016), k=0.0)
         mantle.inter(FnCut(mhem, 0.7, 0.9), k=0.02)
@@ -1409,25 +1505,13 @@ def body_parts(F, aub, info, part):
     if aub:
         # the back stripe (accent) down the cloak's spine, below the cowl's V: one SOLID 5.6 cm light with a thin
         # painted slate bezel (`_cloak_aubade`), laid ON the folded coat (it floated off the profile on the smooth bell)
-        zz = np.linspace(0.15, 1.12, 12)
+        zz = np.linspace(0.36, 1.12, 10)        # (fix round 3: starts at 0.36, not 0.15: no light at the feet)
         P0 = np.stack([np.zeros_like(zz), interp(tab, zz) * interp(ytab, zz), zz], 1)
         S0, G0 = onto_surface(cl_d, P0, np.tile((0.0, 1.0, 0.0), (len(zz), 1)), reach=0.07, lift=0.0015)
         v, q = ribbon(S0, G0, BACK_W, 0.004, sink=0.008)
         part("back_stripe", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.6)
-        # the HEM PIPING (accent): a lit line over the ironstone hem band, following the pointed hem round the
-        # back and sides between the coat's front edges (the dawn points picked out in light; the side facings
-        # read the team from it). A flat inlay (2 tris a segment)
-        hz0, hamp, hn = F["hem"]
-        aw = abs(wall_angle(F, 0.10, 1.0, 0.0)) + 3.0
-        aa = np.radians(np.linspace(aw, 360.0 - aw, 31))
-        R_ = interp(tab, 0.10)
-        ry_ = interp(ytab, 0.10)
-        P0 = np.stack([np.sin(aa) * R_, -np.cos(aa) * R_ * ry_, np.zeros(len(aa))], 1)
-        P0[:, 2] = hem_line(hz0, hamp, hn, P0) + HEM_PIPE[0]
-        N0 = np.stack([np.sin(aa) * ry_, -np.cos(aa), np.zeros(len(aa))], 1)
-        S0, G0 = onto_surface(cl_d, P0, N0, reach=0.07)
-        v, q = flat_strip(S0, G0, HEM_PIPE[1], lift=0.0025)
-        part("hem_light", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.5)
+        # (fix round 3: the lit HEM PIPING is gone: a light at the feet broke the light-top / dark-feet read and
+        # pushed the accent over the brief's 5-7 %; the side facings keep the pauldron inlays and the back stripe)
         # the chalk bandage belt across the robe floor between the cloak's front edges
         oa = abs(wall_angle(F, 0.965, 1.0, RECESS)) + 2.5
         aa = np.radians(np.linspace(-oa, oa, 9))
@@ -1533,7 +1617,7 @@ def aubade_pauldron(part, s, sx, px, bind):
     part(f"pauldron_light_{s}", ("mesh", v, f), "accent", bind, None, 0.4)
 
 
-INLAY_TH, INLAY_PH, INLAY_W = 63.0, 110.0, 0.032     # the pauldron inlay: theta on the middle lame, phi span, width
+INLAY_TH, INLAY_PH, INLAY_W = 63.0, 110.0, 0.026     # the pauldron inlay: theta on the middle lame, phi span, width
 
 
 PAULDRON_S_Z = 1.226
@@ -1590,15 +1674,14 @@ def serenade_pauldron(part, s, sx, px, bind):
     part(f"pauldron_light_{s}", ("mesh", sv, sf), "accent", bind, None, 0.4)
 
 
-STRIP_S = (52.0, -100.0, 78.0, 0.030)      # the Serenade dome strip: theta from the dome's top, phi back -> front, width
+STRIP_S = (52.0, -100.0, 78.0, 0.026)      # the Serenade dome strip: theta from the dome's top, phi back -> front, width
 STRIPS: dict = {}                          # side -> (strip points, width): its iron bezel is painted
 
 
-BACK_W = 0.056              # the Aubade back stripe's width (m)
-HEM_PIPE = (0.074, 0.024)   # the Aubade hem piping: height over the hem line, width (m)
-TAB_W = 0.046               # the Aubade stole's centre light (m); it ends square at TAB_END, above the stole's V
+BACK_W = 0.042              # the Aubade back stripe's width (m)
+TAB_W = 0.038               # the Aubade stole's centre light (m); it ends square at TAB_END, above the stole's V
 TAB_END = 0.355             # (a pointed end over the dark belt read as a sword: blade, crossguard, pommel)
-SASH_Z, SASH_W = 0.912, 0.092   # the Serenade sash: height, width (m); ironstone borders painted round it
+SASH_Z, SASH_W = 0.912, 0.070   # the Serenade sash: height, width (m); ironstone borders painted round it
 TAB_BANDS = (0.912, 1.004)      # the Serenade tabard's two glowing bands (the lower one continues the sash)
 TAB_TOP = 1.115             # its top: just under the cowl's V (its light never runs under the blue-grey scarf)
 CHANNEL_HEX = "#171A1E"     # the painted slate channel round every Aubade body light (L* 9): the lights sit in
@@ -1663,10 +1746,10 @@ def tabard_parts(F, aub, part):
     else:
         for zc_ in TAB_BANDS:
             pts = [front(x, zc_) + np.array((0, -0.002, 0)) for x in np.linspace(-hw - 0.012, hw + 0.012, 4)]
-            meshes.append(ribbon(pts, np.tile(nrm, (len(pts), 1)), 0.074, 0.006, sink=0.006))
+            meshes.append(ribbon(pts, np.tile(nrm, (len(pts), 1)), 0.060, 0.006, sink=0.006))
         pts = [front(-hw + 0.016, zv + 0.026), front(0.0, ztip + 0.034), front(hw - 0.016, zv + 0.026)]
         pts = [pts[0], 0.5 * (pts[0] + pts[1]), pts[1], 0.5 * (pts[1] + pts[2]), pts[2]]
-        meshes.append(ribbon(pts, np.tile(nrm, (len(pts), 1)), 0.060, 0.006, sink=0.004))
+        meshes.append(ribbon(pts, np.tile(nrm, (len(pts), 1)), 0.050, 0.006, sink=0.004))
     v, q = merge_meshes(meshes)
     part("tabard_light", ("mesh", v, q), "accent", ("bw_transfer", "cloak"), None, 0.5)
 
@@ -1744,10 +1827,11 @@ def rodrigues(k, a):
     return np.eye(3) + math.sin(a) * K + (1 - math.cos(a)) * K @ K
 
 
+STAFF_P: dict = {}          # faction -> the right palm's rest position (the staff frame's origin: the paint's grain)
 STAFF_HEAD: dict = {}       # faction -> the lantern socket's rest position (the staff's dark binding is painted below it)
 BEND_S, BEND_DEG = 0.80, 14.0       # Aubade: the staff head bends up 14 deg above the left fist (the lantern
 # leans out along the diagonal a little: from behind it never stands as an upright pale column over the hood)
-LANTERN_A = {"len": 0.200, "r": (0.054, 0.086)}     # the Aubade lantern's glass: length, foot / eave radius (m)
+LANTERN_A = {"len": 0.188, "r": (0.050, 0.079)}     # (fix round 3: a little smaller, the accent to 5-7 %) the Aubade lantern's glass: length, foot / eave radius (m)
 
 
 def ring_mesh(c, axes, r_in, r_out, hw, nu):
@@ -1782,6 +1866,7 @@ def ring_mesh(c, axes, r_in, r_out, hw, nu):
 def staff_parts(spec, F, aub, info, part):
     st = staff_frame(info)
     P, u, v, w = st["P"], st["u"], st["v"], st["w"]
+    STAFF_P[spec.faction] = np.array(P)
 
     def at(s, dv=0.0, dw=0.0):
         return tuple(P + u * s + v * dv + w * dw)
@@ -1796,21 +1881,21 @@ def staff_parts(spec, F, aub, info, part):
 
         def hat(s, dv=0.0, dw=0.0):
             return tuple(O + u2 * (s - BEND_S) + v2 * dv + w2 * dw)
-        # gnarled pale ash: the shaft wanders a little, knots swell it, and it ends in a split ROOT FOOT (two
-        # blunt prongs + a nub), never a point; the head bends up into the lantern
-        ss = np.linspace(-STAFF_BACK + 0.11, BEND_S, 9)
+        # gnarled pale ash: the shaft wanders a little, two knots swell it, and it ends in a dark slate FERRULE
+        # (fix round 3: the split root foot read as a bone end); the head bends up into the lantern
+        ss = np.linspace(-STAFF_BACK + 0.03, BEND_S, 10)
         pts = [at(s_, 0.008 * math.sin(s_ * 8.5 + 0.6), 0.006 * math.cos(s_ * 6.0 + 0.3)) for s_ in ss]
         rad = [r * (1.0 + 0.10 * math.sin(s_ * 13.0) + (0.26 if abs(s_ - 0.18) < 0.05 or abs(s_ + 0.12) < 0.04 else 0.0))
                for s_ in ss]
         shaft.add(sdf.Tube(pts, rad, k=0.012).displaced(
             lambda Q: 0.0035 * NOISE(Q, 14.0) - 0.002 * np.abs(np.sin(np.arctan2((Q - P) @ w, (Q - P) @ v) * 3)), 0.0035),
             k=0.0)
-        root = at(-STAFF_BACK + 0.12)
-        shaft.add(Ellipsoid(root, (r * 1.45, r * 1.6, r * 1.45)), k=0.015)                       # the root knot
-        for dv_, dw_, rr in ((0.068, -0.012, 0.019), (-0.062, 0.014, 0.018), (0.008, -0.060, 0.015)):
-            shaft.add(RoundCone(root, at(-STAFF_BACK + 0.020 + abs(dw_) * 0.4, dv_, dw_), r * 0.95, rr), k=0.018)
         shaft.add(RoundCone(hat(BEND_S), hat(0.88), r * 1.05, r * 1.6), k=0.03)                       # bends up, flares
-        part("staff", shaft, "wood", "bone:prop.R", 180, 0.7, 0.8)
+        part("staff", shaft, "wood", "bone:prop.R", 130, 0.7, 0.8)
+        fu = sdf.frame(u)
+        foot = lathe_mesh(at(-STAFF_BACK + 0.005), fu, [(0.0, 0.0), (0.004, r * 1.05), (0.016, r * 1.32), (0.052, r * 1.30),
+                                                        (0.060, r * 1.12), (0.068, 0.0)], 6)
+        part("staff_cap", ("mesh", foot[0], foot[1]), "ironstone", "bone:prop.R", None, 0.4)
         fr2 = sdf.frame(u2, v2)
         # the concept's HEXAGONAL dawnglass lantern: a fluted chalk socket, six big glowing panes (the job lamp:
         # the widest light on the wick) between six slim chalk corner posts, a framing ring, a low six-sided roof
@@ -1857,7 +1942,7 @@ def staff_parts(spec, F, aub, info, part):
     foot = lathe_mesh(at(-STAFF_BACK - 0.028), fu, [(0.0, 0.0), (0.004, r * 1.30), (0.060, r * 1.48), (0.078, r * 1.32),
                                                     (0.090, r * 1.05), (0.100, 0.0)], 6)
     part("staff_cap", ("mesh", foot[0], foot[1]), "ironstone", "bone:prop.R", None, 0.5)
-    c, Rg_ = 0.985, 0.116
+    c, Rg_ = 0.985, 0.106             # (fix round 3: r 11.6 -> 10.6 cm, the accent to 5-7 %)
     Rgp = prop_rotation(info, guard_pose())
     nX, nY, nZ = (Rgp.T @ np.array(e) for e in ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)))
     iron = [band_ring(at(c), sdf.frame(n_), Rg_ - 0.006, Rg_ + 0.020, 0.015, 9) for n_ in (nX, nY, nZ)]
@@ -1908,31 +1993,38 @@ def band_ring(c, axes, r_in, r_out, hw, nu):
 # ── paint: the palette base painted from the sculpt, carrying the concept's strokes ────────────────────────
 # part colours beyond the role palette (the concepts' colour placement)
 PART_HEX = {
-    "aubade": {"hood": "#A2B4C4", "cowl": "#74889C", "forearms": "#CFCBC0", "belt": "#C2BEB3", "tabard": "#E0DDD4",
-               "crown_cups": "#30353C", "lantern_bezel": "#30353C", "lantern": "#D9D6CD",
-               "mitt_L": "#76838F", "mitt_R": "#76838F", "staff": "#C4BBA9", "hood_rim": "#D9D6CD",
-               "pauldron_L": "#D9D6CD", "pauldron_R": "#D9D6CD", "crown": "#D9D6CD"},
-    # Serenade: ochre / umber, as warm as the reserved-marigold cap allows (<= 40 % saturation at hue 25-50; the
-    # umber cloak sits at 23 deg, under the band): lit by the cool lane sky the old #CDB087 mantle read greige
-    # fix pass 5: the felt richer ochre (the concept's dome, never pale cream), the domes darker iron, the mitts
-    # dark iron (were mauve-brown): all still <= 40 % saturation
-    "serenade": {"hood": "#CCA97B", "hood_rim": "#563F31", "pauldron_L": "#433934", "pauldron_R": "#433934",
-                 "collar": "#523D30", "bib": "#C6A378", "forearms": "#4E3C30", "mitt_L": "#3B3430", "mitt_R": "#3B3430",
-                 "cloak": "#7B5842", "sleeves": "#7B5842", "mantle": "#CEAB7D", "tabard": "#CAA77A"},
+    # fix round 3 (B5 value law: the hoods at L* <= 65 in game and under the fighters; the team read for both
+    # viewers): the linen hood #A2B4C4 -> #8A939B (L* 72 -> 60, chroma 10.6 -> 5.6: the ally azure stood weakly
+    # on the blue linen), every chalk piece #D9D6CD -> #A39F95 (L* 86 -> 65: weathered chalk, still the lightest
+    # stone on the wick), the stole #E0DDD4 -> #ACA89E (L* 69), the wool cloak a little greyer (#6E7A86 -> #6A727B,
+    # chroma 8 -> 5.5; same blue-grey family as the other Aubade wicks), the ash staff #C4BBA9 -> #9E907A (L* 60:
+    # the near-white tube read as bone)
+    "aubade": {"hood": "#7E878F", "cowl": "#646E79", "forearms": "#A29E94", "belt": "#9A968C", "tabard": "#A8A49A",
+               "crown_cups": "#30353C", "lantern_bezel": "#30353C", "lantern": "#A29E94",
+               "mitt_L": "#68727C", "mitt_R": "#68727C", "staff": "#9A8C76", "hood_rim": "#98948A",
+               "pauldron_L": "#9C988E", "pauldron_R": "#9C988E", "crown": "#98948A",
+               "lantern_roof": "#A29E94", "staff_cap": "#3A3F46", "cloak": "#6A727B", "sleeves": "#6A727B"},
+    # Serenade: ochre / umber. Fix round 3: the felt down to L* ~60 and ~31 % saturation (was L* 71-72 at 39.7 %,
+    # on the 40 % cap of the reserved marigold band: the enemy tint sat on a near-amber body, and the pale cream
+    # dome out-valued the fighters); the umber cloak stays at 23 deg (under the band)
+    "serenade": {"hood": "#9A846A", "hood_cap": "#9A846A", "hood_rim": "#563F31", "pauldron_L": "#433934", "pauldron_R": "#433934",
+                 "collar": "#523D30", "bib": "#9E876B", "forearms": "#4E3C30", "mitt_L": "#3B3430", "mitt_R": "#3B3430",
+                 "cloak": "#7B5842", "sleeves": "#7B5842", "mantle": "#A48B6E", "tabard": "#9E876B"},
 }
 CLOTH_ROLES = ("cloth", "cloth2", "under")
 ROUGH = {"cloth": 0.93, "cloth2": 0.92, "under": 0.92, "chalk": 0.86, "stone": 0.82, "ironstone": 0.80, "lampresin": 0.5,
          "leather": 0.66, "wood": 0.76, "wood_dark": 0.74, "ink": 0.95}
 RAMP = {   # value (linear multiplier) by height: light top, dark feet (bible §2.4)
-    "aubade": [(0.0, 0.45), (0.20, 0.55), (0.45, 0.75), (0.80, 0.93), (1.05, 1.0), (1.28, 1.10), (1.80, 1.18)],
-    "serenade": [(0.0, 0.60), (0.20, 0.70), (0.45, 0.84), (0.80, 0.95), (1.05, 1.02), (1.35, 1.16), (1.80, 1.26)],
+    # (fix round 3: the top lifts trimmed, 1.18 -> 1.09 / 1.26 -> 1.14: the hoods stay under L* 65 in game)
+    "aubade": [(0.0, 0.45), (0.20, 0.55), (0.45, 0.75), (0.80, 0.93), (1.05, 1.0), (1.28, 1.05), (1.80, 1.09)],
+    "serenade": [(0.0, 0.60), (0.20, 0.70), (0.45, 0.84), (0.80, 0.95), (1.05, 1.02), (1.35, 1.08), (1.80, 1.14)],
 }
 SHADOW_TINT = {"aubade": (-0.10, -0.03, 0.14), "serenade": (0.10, -0.02, -0.14)}
 KEY = np.array((-0.35, -0.60, 0.72)) / np.linalg.norm((-0.35, -0.60, 0.72))   # painted key: front, upper right
 LUMA = np.array([0.2126, 0.7152, 0.0722])
 # how much of the concept a role carries: (its strokes, its painted fold light, its colour breakup)
 KCON = {"cloth": (0.95, 0.80, 0.55), "cloth2": (0.95, 0.80, 0.55), "under": (0.6, 0.5, 0.3),
-        "chalk": (0.35, 0.35, 0.2), "stone": (0.8, 0.6, 0.3), "ironstone": (0.9, 0.65, 0.35),
+        "chalk": (0.60, 0.50, 0.25), "stone": (0.8, 0.6, 0.3), "ironstone": (0.9, 0.65, 0.35),
         "leather": (0.75, 0.55, 0.3), "wood": (0.75, 0.5, 0.3), "wood_dark": (0.75, 0.5, 0.3)}
 BOSS: dict = {}             # (faction, side) -> (boss centre, normal): the Serenade boss paints sandstone
 
@@ -2027,6 +2119,34 @@ def _hood_aubade(spec, p, g, col):
     return col
 
 
+def _hood_serenade(spec, p, g, col):
+    """the felt DOME (fix round 3: "a bald head with a headband"): felt, not skin: a soft pile of blotchy felt tone
+    and the crown band's cast shadow on the felt over and under it (the band stands proud of the dome). No
+    seams: radial seams meeting at the crown read as a pie / umbrella from the 52 deg camera"""
+    z = p[:, 2]
+    z0, z1 = CROWN_S
+    over = (1 - smooth(z1 + 0.004, z1 + 0.040, z)) * smooth(z1 - 0.004, z1 + 0.003, z)
+    under = smooth(z0 - 0.035, z0 - 0.003, z) * (1 - smooth(z0 - 0.003, z0 + 0.004, z))
+    col = col * (1 - 0.22 * over - 0.32 * under)[:, None]
+    return col * (1 + 0.07 * PNOISE(p, 7.0, (2.2, 0.4, 1.1)) + 0.04 * PNOISE(p, 23.0, (0.7, 3.1, 0.2)))[:, None]
+
+
+def _mantle_serenade(spec, p, g, col):
+    """the felt capelet (fix round 3: "a smooth cream bulb from the front"): soft painted folds falling from the
+    shoulders to the hem (deeper toward the hem), the thick turned edge of the felt darker along the hem, and a
+    worn light along the shoulder tops"""
+    z = p[:, 2]
+    a = ang(p)
+    hem = mantle_hem(a)
+    fall = smooth(1.30, 1.06, z)
+    f1 = np.abs(np.sin(a * 7.0 + 0.6 * PNOISE(p, 3.0) + 0.9)) ** 2.2
+    col = col * (1 - 0.16 * f1 * fall)[:, None]
+    edge = 1 - smooth(0.010, 0.026, z - hem)
+    col = col * (1 - 0.20 * edge)[:, None]
+    top = smooth(0.55, 0.95, g[:, 2]) * smooth(1.18, 1.30, z)
+    return col * (1 + 0.10 * top)[:, None]
+
+
 def _cloak_aubade(spec, p, g, col):
     F = spec.F
     hz0, hamp, hn = F["hem"]
@@ -2035,23 +2155,22 @@ def _cloak_aubade(spec, p, g, col):
     col = _robe_floor(spec, p, col, "#454C56", "#30363E", low="#373D45")
     # the back stripe's thin slate bezel (the light is the `back_stripe` ribbon down the spine, z 0.15 - 1.12)
     z = p[:, 2]
-    span = smooth(0.12, 0.14, z) * (1 - smooth(1.13, 1.15, z)) * (p[:, 1] > 0.05)
+    span = smooth(0.33, 0.35, z) * (1 - smooth(1.13, 1.15, z)) * (p[:, 1] > 0.05)
     col = channel(col, np.abs(p[:, 0]) - BACK_W / 2 + (1 - span) * 1.0, w=BEZEL)
     # the 6.5 cm ironstone hem band follows the pointed hem (bible §2.4: dark feet), a pale chalk piping above it
     band = 1.0 - smooth(hem + 0.062, hem + 0.068, p[:, 2])
     col = mix(col, "#3E434A", band)
-    # the hem piping's slate bezel above it (the light is the `hem_light` strip; the hem band is its dark below)
-    top = hem + HEM_PIPE[0] + HEM_PIPE[1] / 2
-    bz = smooth(top - 0.004, top, p[:, 2]) * (1 - smooth(top + BEZEL - 0.004, top + BEZEL, p[:, 2]))
-    col = mix(col, CHANNEL_HEX, bz * (np.abs(np.degrees(ang(p))) > 40.0))
     # the bell's underside (its hem cap) is the coat's dark INSIDE: seen when the wick lies on its side, it
     # reads as the opening of the robe, never a flat lid
     return mix(col, "#2F353D", 0.92 * smooth(-0.55, -0.80, g[:, 2]))
 
 
 def _cloak_serenade(spec, p, g, col):
-    col = _robe_floor(spec, p, col, "#A88C6B", "#5A473B", low="#7A6250")
+    col = _robe_floor(spec, p, col, "#8E785E", "#5A473B", low="#6E5A4A")
     z = p[:, 2]
+    # the mantle's cast shadow on the coat under its hem (it stands off the coat: a felt capelet, never a slab)
+    dh = mantle_hem(ang(p)) - z
+    col = col * (1.0 - 0.38 * smooth(-0.006, 0.006, dh) * (1 - smooth(0.012, 0.060, dh)))[:, None]
     # the concept's bands: an ironstone band at 0.245-0.29 and the dark rolled hem edge
     b1 = smooth(0.150, 0.152, z) * (1 - smooth(0.183, 0.187, z))
     b2 = smooth(0.243, 0.247, z) * (1 - smooth(0.288, 0.292, z))
@@ -2103,7 +2222,7 @@ def _pauldron_serenade(spec, p, g, col, sx):
         dd = np.concatenate([np.sqrt(((p[k:k + 4096, None, :] - dense[None]) ** 2).sum(2)).min(1)
                              for k in range(0, len(p), 4096)])
         m = m * smooth(st[1] / 2 + 0.008, st[1] / 2 + 0.016, dd)
-    col = mix(col, "#C3A47A", m)
+    col = mix(col, "#A88F70", m)
     # the bands' cracks (the concept's carved lines)
     cr = np.clip(NOISE.ridged(p, 26.0, 2), 0, 1)
     col = col * (1 - 0.40 * m * smooth(0.72, 0.9, cr))[:, None]
@@ -2113,7 +2232,7 @@ def _pauldron_serenade(spec, p, g, col, sx):
         h = o @ bc[1]
         d = np.linalg.norm(o - h[:, None] * bc[1][None], axis=1)            # across the boss face
         face = (1 - smooth(0.040, 0.045, d)) * smooth(0.004, 0.012, h)        # on the raised face, not the dome
-        col = mix(col, "#C3A47A", face)                                       # the carved sandstone disc
+        col = mix(col, "#A88F70", face)                                       # the carved sandstone disc
         cr2 = np.clip(NOISE.ridged(p, 60.0, 2), 0, 1)
         col = col * (1 - 0.30 * face * smooth(0.80, 0.95, cr2))[:, None]
         rim = (1 - smooth(0.004, 0.008, np.abs(d - 0.040))) * smooth(0.0, 0.008, h)
@@ -2167,9 +2286,27 @@ def _pauldron_aubade(spec, p, g, col, side):
 
 
 def _grain(spec, p, g, col, k=0.14):
-    """wood grain along the staff (rest frame: the staff runs along -Y from the right fist)"""
+    """wood grain along the staff (rest frame: the staff runs along -Y from the right fist). Aubade (fix round 3:
+    "a featureless near-white tube"): pale ash with long dark grain streaks, two dark KNOTS where the shaft swells
+    and a carved double ring above each grip"""
+    aub = spec.faction == "aubade"
+    k = 0.30 if aub else k
     n = PNOISE(p * np.array((22.0, 1.4, 22.0)), 1.0) + 0.5 * PNOISE(p * np.array((60.0, 3.0, 60.0)), 1.0, (3.1, 0, 0))
     col = col * (1 + k * n)[:, None]
+    if aub:
+        streak = smooth(0.55, 0.95, PNOISE(p * np.array((90.0, 2.0, 90.0)), 1.0, (1.3, 0.2, 0.7)))
+        col = col * (1 - 0.22 * streak)[:, None]
+        P0 = np.asarray(STAFF_P.get("aubade", (0.0, 0.0, 0.0)))
+        s_ = -(p[:, 1] - P0[1])                       # along the staff from the right fist (rest: the staff runs -Y)
+        aa = np.arctan2(p[:, 2] - P0[2], p[:, 0] - P0[0])
+        for sk, a0 in ((0.18, 0.9), (-0.12, -2.1)):    # the knots (the shaft swells there): a dark eye on one side
+            da = (aa - a0 + math.pi) % (2 * math.pi) - math.pi
+            dk = np.hypot(s_ - sk, da * 0.026)
+            halo = (1 - smooth(0.010, 0.032, dk)) * np.abs(np.sin(dk * math.pi / 0.007))
+            col = col * (1 - 0.45 * (1 - smooth(0.005, 0.011, dk)) - 0.14 * halo)[:, None]
+        for sc in (0.07, GRIP_L + 0.08):             # carved double rings above the grips
+            for o_ in (-0.009, 0.009):
+                col = col * (1 - 0.40 * (1 - smooth(0.0015, 0.0040, np.abs(s_ - sc - o_))))[:, None]
     head = STAFF_HEAD.get(spec.faction)
     if head is not None:
         # a dark leather BINDING wound round the head under the lantern socket (the lamp's light stands off it)
@@ -2189,13 +2326,13 @@ def _tabard_serenade(spec, p, g, col):
     chevron (the team colour must stand off the sand in BOTH tints: marigold melts into bare sand)"""
     hw, ztop, ztip, zv = spec.F["tabard"]
     z, x = p[:, 2], np.abs(p[:, 0])
-    col = mix(col, "#A88C68", 0.35 * (1 - smooth(zv + 0.02, zv + 0.10, z)))
+    col = mix(col, "#8C7659", 0.35 * (1 - smooth(zv + 0.02, zv + 0.10, z)))
     band = np.zeros(len(p))
     for zc in TAB_BANDS:
-        band = np.maximum(band, 1 - smooth(0.046, 0.053, np.abs(z - zc)))
+        band = np.maximum(band, 1 - smooth(0.039, 0.046, np.abs(z - zc)))
     # the chevron's border: a V from (+-hw, zv + 0.026) to (0, ztip + 0.034)
     zv_line = (ztip + 0.034) + (zv + 0.026 - ztip - 0.034) * np.clip(x / max(hw - 0.016, 1e-3), 0, 1)
-    band = np.maximum(band, (1 - smooth(0.042, 0.050, np.abs(z - zv_line))) * (x < hw))
+    band = np.maximum(band, (1 - smooth(0.036, 0.044, np.abs(z - zv_line))) * (x < hw))
     return mix(col, "#3E3029", band * 0.94)
 
 
@@ -2218,7 +2355,8 @@ REGIONS = {
     "aubade": {"cloak": _cloak_aubade, "staff": _grain, "tabard": _tabard_aubade, "hood": _hood_aubade,
                "pauldron_R": lambda s, p, g, c: _pauldron_aubade(s, p, g, c, "R"),
                "pauldron_L": lambda s, p, g, c: _pauldron_aubade(s, p, g, c, "L")},
-    "serenade": {"cloak": _cloak_serenade, "staff": _grain, "gorget": _iron, "lantern": _iron,
+    "serenade": {"cloak": _cloak_serenade, "staff": _grain, "gorget": _iron, "lantern": _iron, "hood": _hood_serenade,
+                 "hood_cap": _hood_serenade, "mantle": _mantle_serenade,
                  "tabard": _tabard_serenade,
                  "pauldron_R": lambda s, p, g, c: _pauldron_serenade(s, p, g, c, -1.0),
                  "pauldron_L": lambda s, p, g, c: _pauldron_serenade(s, p, g, c, 1.0)},
@@ -2240,14 +2378,16 @@ def paint_part(spec, name, role, p, g, lap, occ) -> np.ndarray:
     crest = np.clip(lap / 40.0, -1.0, 1.0)
     # (fix pass 5: a stronger painted form - deeper folds, a firmer top light and key - the flat value fields
     # read as untextured at the game camera)
-    shade = 1.0 - (0.58 if cloth else 0.40) * occ
-    shade = shade * (1.0 + np.where(crest > 0, 0.40, 0.42) * crest)    # crests catch light, valleys go dark
-    shade = shade * (0.56 + 0.54 * (0.5 + 0.5 * g[:, 2]))               # soft sky light (painted)
-    shade = shade * (1.0 + 0.22 * np.clip(g @ KEY, -1.0, 1.0))          # the painted key
+    # (fix round 3: a firmer painted value structure again, toward the fighters' Art 2.0 finish: deeper fold
+    # valleys and occlusion, a stronger top light and key)
+    shade = 1.0 - (0.72 if cloth else 0.52) * occ
+    shade = shade * (1.0 + np.where(crest > 0, 0.50, 0.58) * crest)    # crests catch light, valleys go dark
+    shade = shade * (0.48 + 0.62 * (0.5 + 0.5 * g[:, 2]))               # soft sky light (painted)
+    shade = shade * (1.0 + 0.28 * np.clip(g @ KEY, -1.0, 1.0))          # the painted key
     ramp = np.interp(p[:, 2], *zip(*RAMP[fac]))                         # light top, dark feet
     if fac == "aubade" and name in ("tabard", "hood"):
         ramp = ramp ** (0.35 if name == "tabard" else 0.4)    # the chalk stole stays white; the linen hood stays linen
-    elif fac == "serenade" and name in ("hood", "mantle"):
+    elif fac == "serenade" and name in ("hood", "hood_cap", "mantle"):
         ramp = ramp ** 0.75                                   # the ochre felt stays ochre (lifted, it read cream)
     shade = shade * ramp
     nz = 0.034 * PNOISE(p, 6.0) + 0.016 * PNOISE(p, 17.0, (1.7, 0.3, 0.9))
@@ -2256,8 +2396,9 @@ def paint_part(spec, name, role, p, g, lap, occ) -> np.ndarray:
         nz = nz + 0.040 * PNOISE(p * np.array((24.0, 24.0, 2.2)), 1.0, (0.2, 1.1, 0.0))
         nz = nz + 0.016 * PNOISE(p * np.array((60.0, 60.0, 6.0)), 1.0, (2.0, 0.5, 0.0))
     elif cloth:
-        # felt: a soft mottle and a fine nap (never banded)
-        nz = nz + 0.030 * PNOISE(p, 11.0, (5.0, 1.0, 2.0)) + 0.016 * PNOISE(p, 34.0, (0.4, 2.2, 1.3))
+        # felt: a soft mottle, a fine nap and a fibre speckle (never banded; fix round 3: the nap stronger)
+        nz = nz + 0.034 * PNOISE(p, 11.0, (5.0, 1.0, 2.0)) + 0.028 * PNOISE(p, 34.0, (0.4, 2.2, 1.3)) \
+            + 0.050 * PNOISE(p, 140.0, (0.3, 2.2, 5.1))
     elif role in ("chalk", "stone"):
         nz = nz + 0.030 * PNOISE(p, 12.0, (2.0, 0.0, 1.0)) - 0.035 * smooth(0.80, 0.97, np.clip(NOISE.ridged(p, 20.0, 2), 0, 1))
         shade = shade * (1.0 + 0.20 * smooth(0.20, 0.75, crest))                                  # worn bright edges
@@ -2280,7 +2421,7 @@ def paint_part(spec, name, role, p, g, lap, occ) -> np.ndarray:
     return col
 
 
-def ink_hollow(spec, P, N, col):
+def ink_hollow(spec, P, N, col, with_mask=False):
     """the head space is INK (no lining shell): every texel of the hood that lies on the tombstone hollow's walls
     (raster position, and a normal facing INTO the hollow: the decimated cheek beside the opening never takes
     ink), with a faint lift where the felt turns in at the opening"""
@@ -2295,19 +2436,36 @@ def ink_hollow(spec, P, N, col):
     y_open = hc[1] - hr[1]
     behind = smooth(y_open + 0.030, y_open + 0.060, P[:, 1])
     inside = (1.0 - smooth(0.006, 0.020, d)) * np.maximum(smooth(-0.05, 0.25, facing), behind)
+    # (fix round 3) and EVERYTHING seen through the opening: a texel inside the arch's outline (x, z) lies in the
+    # hollow whatever the decimated low did there (bits of the hood low bulging past the rim read as felt
+    # triangles poking into the dark; the cowl / collar tops under the arch as a lit lower lip)
+    thru = 1.0 - smooth(-0.006, 0.0, T.outline(P[:, 0], P[:, 2]))
+    (ec_, er_) = spec.F["tomb"][1]
+    deep_y = ec_[1] + 0.8 * er_[1]                  # never past the head space's back (the hood's back stays felt)
+    inside = np.maximum(inside, thru * (P[:, 1] > -0.30) * (P[:, 1] < deep_y))
     deep = smooth(0.0, 0.06, P[:, 1] + 0.20)
-    ink = np.tile(lin(spec.PALETTE.get("ink", "#15171B")), (len(P), 1)) * (1.0 + 1.8 * (1 - deep))[:, None]
-    # the lamp's SPILL on the hollow's walls: a soft neutral falloff round the glow (its light on the felt, never
-    # a team colour: grey-warm / grey-cool), strongest right at the glow's edge, gone 7 cm out
+    ink = np.tile(lin(spec.PALETTE.get("ink", "#15171B")), (len(P), 1)) * (1.0 + 0.8 * (1 - deep))[:, None]
+    # the core's SPILL (fix round 3: the soft falloff round the one lamp core): its light on the walls that FACE it,
+    # falling off with the distance from its surface (1 / (1 + (d / 7 cm)^2)), only at and BEHIND the core's
+    # depth: the front of the hollow (the sill, the floor in front of the core, the cheeks inside the rim) stays
+    # ink, so the core floats in the dark with no lit floor (a tongue) and no pale ring (a sclera) round it. A
+    # neutral grey glow (never a team colour), dim: at most L* ~38 right behind the core
     lc, lr, tilt = spec.F["hood_light"]
+    lc = np.asarray(lc, dtype=np.float64)
     t = math.radians(tilt)
     ax = np.array([(1.0, 0.0, 0.0), (0.0, math.cos(t), -math.sin(t)), (0.0, math.sin(t), math.cos(t))])
-    q = ((P - np.asarray(lc)[None]) @ ax.T) / np.asarray(lr)[None]
-    dist = (np.linalg.norm(q, axis=1) - 1.0) * float(min(lr))
-    spill = (1.0 - smooth(0.0, 0.07, dist)) ** 1.6 * 0.85
+    q = ((P - lc[None]) @ ax.T) / np.asarray(lr)[None]
+    dist = np.maximum((np.linalg.norm(q, axis=1) - 1.0) * float(min(lr)), 0.0)
+    to_c = lc[None] - P
+    to_c /= np.linalg.norm(to_c, axis=1, keepdims=True) + 1e-9
+    face = np.clip((N * to_c).sum(1), 0.0, 1.0) ** 0.6
+    back = smooth(lc[1] - 0.025, lc[1] + 0.020, P[:, 1])
+    spill = face * back / (1.0 + (dist / 0.070) ** 2) * 0.85
     warm = spec.faction == "serenade"
-    ink = mix(ink, "#6B645C" if warm else "#5E646C", spill)
-    return col * (1 - inside[:, None]) + ink * inside[:, None]
+    ink = mix(ink, "#645E57" if warm else "#5A5F66", np.clip(spill, 0.0, 1.0))
+    out = col * (1 - inside[:, None]) + ink * inside[:, None]
+    # the ORM's dark (occluded, matte) ink: less of it where the spill paints the glow (the glow takes the sky)
+    return (out, inside * (1.0 - 0.6 * np.clip(spill, 0.0, 1.0))) if with_mask else out
 
 
 def lowpass3d(P, v, cell, keep=None, passes=1):
@@ -2479,7 +2637,7 @@ def apply_concept(col, pc, w, P, role, sw=None):
     painted fold light (1.8 cm against 7.5 cm) and its local colour breakup, where the plate sees the texel"""
     k1, k2, k3 = KCON.get(role, (0.6, 0.4, 0.3))
     if sw is not None:                       # the swatch's brushwork, gentle (its pixel grain is not paint)
-        sw = (1.0 + 0.45 * (sw[0] - 1.0), sw[1])
+        sw = (1.0 + 0.75 * (sw[0] - 1.0), sw[1])
     ww = smooth(0.30, 0.75, w)
     if (ww > 0.01).any():                    # soft projection edges: never a stair-stepped seam
         ww = np.clip(lowpass3d(P, ww, 0.016, passes=1), 0.0, 1.0)
@@ -2651,6 +2809,24 @@ def posed_projection(spec, obj, size, part_attr, cfg, log=print, names=None):
     return proj, wmax
 
 
+# the form's own value structure, per material (fix round 3: "chalk, stone, cloth and wood all render as the same
+# soft matte clay"): carved edges and fold crests catch a worn edge LIGHT, seams and creases sink into CAVITY
+CAV = {"chalk": (0.26, 0.20), "stone": (0.24, 0.18), "ironstone": (0.28, 0.22), "leather": (0.22, 0.14),
+       "wood": (0.24, 0.16), "wood_dark": (0.24, 0.16), "cloth": (0.20, 0.08), "cloth2": (0.20, 0.08),
+       "under": (0.14, 0.04), "lampresin": (0.12, 0.10)}       # role -> (cavity contrast, edge light)
+
+
+def cavity(P, N, cell=0.022):
+    """how far each texel's surface point stands out of its 3D neighbourhood along its normal (the low-pass mean
+    of the part's surface): + carved edges, rims and fold crests, - seams, creases and fold valleys; -1..1"""
+    Pd = np.asarray(P, dtype=np.float64)
+    if len(Pd) < 60:
+        return np.zeros(len(Pd))
+    lp = np.stack([lowpass3d(Pd, Pd[:, i], cell, passes=1) for i in range(3)], 1)
+    c = ((Pd - lp) * np.asarray(N, dtype=np.float64)).sum(1) / 0.005
+    return np.tanh(c - float(np.median(c)))
+
+
 def paint_hybrid(spec, obj, size, names, part_attr="vale_part", log=print, cfg=None):
     maps = project.rasterize(obj, size, part_attr)
     P, N, part = maps["P"].astype(np.float64), maps["N"].astype(np.float64), maps["part"]
@@ -2668,6 +2844,7 @@ def paint_hybrid(spec, obj, size, names, part_attr="vale_part", log=print, cfg=N
             log(f"WARNING brightwick: concept projection failed ({e!r}); painted base only")
     cao = contact_ao(obj, P, N, part, names, log=log)
     out = np.zeros((size, size, 3), dtype=np.float32)
+    inkm = np.zeros((size, size), dtype=np.float32)           # the hollow's ink texels (the ORM hook darkens them)
     shares = {}
     for k in np.unique(part[part >= 0]):
         name = names[int(k)]
@@ -2683,10 +2860,20 @@ def paint_hybrid(spec, obj, size, names, part_attr="vale_part", log=print, cfg=N
         else:
             p2, g, lap, occ = p, n, np.zeros(len(p)), np.zeros(len(p))
         col = paint_part(spec, name, role, p2, g, lap, occ)
-        if name == "hood":
-            col = ink_hollow(spec, p, n, col)
+        kc, ke = CAV.get(role, (0.0, 0.0))
+        if kc > 0:
+            cv = cavity(p2, g)
+            if name == "hood":                      # the hollow is ink: its walls carry no carving
+                cv = cv * (tomb_of(spec.F).d(p) > 0.02)
+            col = col * (1.0 + kc * np.minimum(cv, 0.0) + 0.5 * kc * np.maximum(cv, 0.0))[:, None]
+            edge = ke * np.maximum(cv, 0.0) ** 1.5 * smooth(-0.3, 0.6, g[:, 2])      # worn, lit from above
+            col = col + (col @ LUMA)[:, None] * edge[:, None] * np.array((1.06, 1.0, 0.92))[None]
+        if name in ("hood", "hood_rim", "cowl", "collar", "cloak"):   # (the rim's inner wall, the cowl / collar cut faces and the coat's top cap under
+            # the Aubade hood are the hollow's floor: seen through the arch they read as a lit shelf / tongue)
+            col, ins = ink_hollow(spec, p, n, col, with_mask=True)
+            inkm[sel] = ins
         if role != "ink":                                                    # contact shadow between parts
-            lo_ = 0.62 if name == "hood" else 0.30        # (the hood's decimated low dips into the collar: no dark slivers)
+            lo_ = 0.62 if name in ("hood", "hood_cap") else 0.22   # (the hood's decimated low dips into the collar: no dark slivers)
             col = col * (lo_ + (1 - lo_) * cao[sel] ** 1.6)[:, None]
         if proj is not None and role != "ink":
             key = SWATCH_OF[spec.faction].get(name)     # the concept's brushwork on every painted part
@@ -2704,6 +2891,7 @@ def paint_hybrid(spec, obj, size, names, part_attr="vale_part", log=print, cfg=N
     out = out[iy, ix]
     log(f"brightwick: painted from the sculpt + the concept ({len(shares)} parts; concept share {shares})")
     spec.paint_shares = shares
+    spec.ink_map = inkm
     return project._srgb(np.clip(out, 0, 1)).astype(np.float32), maps
 
 
@@ -3292,6 +3480,13 @@ def _set_image_array(img, arr):
                 role = spec.parts_info.get(n, ("cloth", None))[0]
                 rough[part == k] = ROUGH.get(role, 0.9)
             rgb[..., 1] = rough
+            # (fix round 3) the hollow's ink: matte (roughness 1) and OCCLUDED (0.05): the sky's indirect light and
+            # the 4 % specular greyed the up-facing ink floor into a lit shelf / tongue under the hood light
+            ink = getattr(spec, "ink_map", None)
+            if ink is not None and ink.shape == rgb.shape[:2]:
+                w = np.clip(ink[::-1], 0.0, 1.0)
+                rgb[..., 1] = rgb[..., 1] * (1 - w) + 1.0 * w
+                rgb[..., 0] = rgb[..., 0] * (1 - w) + np.minimum(rgb[..., 0], 0.05) * w
         rgb[..., 2] = 0.0
         arr[..., :3] = rgb
         print(f"[brightwick] ORM fill: {n0} empty texels ({100.0 * n0 / valid.size:.1f} %) filled from neighbours; "

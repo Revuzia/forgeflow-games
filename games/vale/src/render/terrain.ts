@@ -6,23 +6,27 @@
 //             splat2: Standing Shadow, Fallen Shaft, chasm; inlay: engraved / inlaid strokes) and three
 //             painted tiling textures with height in alpha (terrain_litter / grain / moss, each
 //             mapped so its MEAN lands on the designed band colour: the bible's value law holds).
-//             `art.terrain.surface` picks the floor:
-//               dial   RIFT: honed irregular dial-stone flags on the roads (L* 62–68) with a carved
-//                      inscription band and hour-ticks, broken mossy verges (50–56) whose flags are lost
+//             `art.terrain.surface` picks the floor. Values are on-screen L* after the grade (tokens
+//             grade.maps.*.valueLstar, r12 B5): the environment sits low and warm so fighters, effects and UI
+//             own the top of the value range; the roads are the brightest terrain:
+//               dial   RIFT: honed irregular dial-stone flags on the roads (L* 36–41, warm honey stone) with a
+//                      carved inscription band and hour-ticks (≤ 46), broken mossy verges whose flags are lost
 //                      to the wood flag by flag, a Dialwood floor of moss and fan-leaf litter with broad
-//                      hue/value drifts (30–40) and the hour-line groove along every path, dusty pale
-//                      camp rooms (45–50), moss banks and occlusion at every wall foot, the Seat, the
-//                      Fallen Shaft's pale floor under its water.
-//               span   BRIDGE: the fallen shaft's deck in long courses (60–66), a chalk band of carved
-//                      hour-script on every edge of the drop (70), the Snap's crazing and lit fracture.
-//               plate  FRAY: honed pale dial-stone slabs in rings, luminous at the Shadowless Noon (L* ~66–72
-//                      in vision), the ten hour-lines and numerals inlaid dark, a carved hour-ring with
-//                      half-hour ticks round the marks, the shop ring, a satin sheen.
+//                      hue/value drifts (12–20) and the hour-line groove along every path, dusty camp rooms
+//                      (30–35), moss banks and occlusion at every wall foot, the Seat, the Fallen Shaft's floor
+//                      under its water (24–30).
+//               span   BRIDGE: the fallen shaft's deck in long courses, honed palest along the road (36–41)
+//                      and weathering darker toward the drop, a chalk band of carved hour-script on every edge
+//                      of the drop (≤ 46), the Snap's crazing and lit fracture.
+//               plate  FRAY: honed dial-stone slabs in rings at the Shadowless Noon (L* 34–40 in vision), the
+//                      ten hour-lines and numerals inlaid dark, a carved hour-ring with half-hour ticks round
+//                      the marks, the shop ring, a satin sheen.
 //             Base plazas (art.terrain.plazas): Aubade chalk flags with dawnglass rings round the
 //             fountain, Serenade ochre sandstone with lampresin. Roughness ≥ 0.5 everywhere walkable.
 //   walls     every wall polygon swept course by course (terrain_walls.ts): dark cut stone in battered
-//             horizontal courses with chunky chiselled blocks (18–25), a protruding cap course whose
-//             chamfer carries the painted edge light, a carved lip, then moss and canopy on top (55–62).
+//             horizontal courses with chunky chiselled blocks (12–16), a protruding cap course whose
+//             chamfer carries the painted edge light (capped at L* 48), a carved lip (20–28), then moss and
+//             canopy on top.
 //             Heights from art.terrain.wallHeights (small / hourStones, large / rim, frame).
 //             `wallStyle: "gorge"` (Needlespan): large walls are the gorge. The ground opens; the deck's
 //             edges roll over into the shaft's curved needle-stone flank, then raw rock in strata falls
@@ -265,6 +269,26 @@ const DEFAULT_COLORS: TerrainColors = {
   inlayAubade: '#BFD3E6', inlaySerenade: '#C99A5E', midInlay: '#5F5D58', lit: '#FFE2B8', shadowLine: '#7A7396', water: '#4F6B70',
   litter: '#6A5434', pebble: '#7A766D', canopy: '#8E9A60', glare: '#E9E6DF',
 };
+/** linear luminance (Rec.709) of a linear colour */
+const lum = (c: Color): number => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+/** the colour scaled down (hue kept) so its luminance is at most `max` */
+function capLum(c: Color, max: number): Color {
+  const l = lum(c);
+  return l > max && l > 0 ? c.multiplyScalar(max / l) : c;
+}
+/** the painted edge light's ceiling over the road's albedo luminance (tokens grade.maps: lanes L* 36-41, edge light
+ *  ≤ 48). Y(48) / Y(41) = 1.41 on a flat surface, but the chamfers that face the sun catch more light than the road
+ *  and Low draws them without AO: 1.2 keeps their brightest pixels at or under L* 48 on every map and tier
+ *  (_harness/value_probe.mjs, mask `edge`, 1080p High and 720p Low) */
+const EDGE_OVER_ROAD = 1.2;
+/** map.art.terrain.propValue: linear value multipliers that land authored and procedural props in the map's bands
+ *  (tree, rock, stone, clutter, landmark; default 1). A landmark entry's own `value` multiplies its map's. */
+interface PropValue { tree: number; rock: number; stone: number; clutter: number; landmark: number }
+function propValueOf(terrain: Record<string, unknown> | undefined): PropValue {
+  const src = (terrain?.propValue && typeof terrain.propValue === 'object' ? terrain.propValue : {}) as Record<string, unknown>;
+  const v = (k: keyof PropValue): number => (typeof src[k] === 'number' && Number.isFinite(src[k]) && (src[k] as number) > 0 ? (src[k] as number) : 1);
+  return { tree: v('tree'), rock: v('rock'), stone: v('stone'), clutter: v('clutter'), landmark: v('landmark') };
+}
 function colorsFrom(terrain: Record<string, unknown> | undefined): TerrainColors {
   const c: TerrainColors = { ...DEFAULT_COLORS };
   const src = (terrain?.colors && typeof terrain.colors === 'object' ? terrain.colors : undefined) as Record<string, unknown> | undefined;
@@ -405,9 +429,10 @@ export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => 
   ground: (x: number, y: number) => number = () => 0): Promise<Object3D[]> {
   const list = ((map.art.terrain ?? {}) as { landmarks?: unknown }).landmarks;
   if (!Array.isArray(list)) return [];
+  const pv = propValueOf(map.art.terrain as Record<string, unknown> | undefined);
   const out: Object3D[] = [];
   await Promise.all(list.map(async (raw: unknown) => {
-    const l = raw as { model?: unknown; at?: unknown; rot?: unknown };
+    const l = raw as { model?: unknown; at?: unknown; rot?: unknown; value?: unknown };
     if (typeof l.model !== 'string' || !Array.isArray(l.at)) return;
     const m = await load(l.model);
     if (!m?.renderable) return;
@@ -415,10 +440,21 @@ export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => 
     const x = Number(l.at[0]), y = Number(l.at[1]);
     o.position.set(x, ground(x, y), y);
     o.rotation.y = typeof l.rot === 'number' ? (l.rot * Math.PI) / 180 : 0;
+    // its value band (propValue.landmark × its own `value`): the albedo scales, an authored lamp's emissive never
+    // does; the materials are the asset cache's, so a scaled landmark draws with its own copies
+    const k = pv.landmark * (typeof l.value === 'number' && Number.isFinite(l.value) && l.value > 0 ? l.value : 1);
+    const own = new Map<Material, Material>();
+    const valued = (mat: Material): Material => {
+      if (k === 1 || !(mat as MeshStandardMaterial).color) return mat;
+      let c = own.get(mat);
+      if (!c) { c = mat.clone(); (c as MeshStandardMaterial).color.multiplyScalar(k); own.set(mat, c); }
+      return c;
+    };
     o.traverse((c) => {
       const mesh = c as Mesh;
       if (!mesh.isMesh) return;
       mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(valued) : valued(mesh.material);
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) patchWorldMaterial(mat);
     });
     out.push(o);
@@ -454,6 +490,11 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const lanes = map.lanes.map((l) => l.path.map((p) => [p[0], p[1]] as V2));
   const disposables: { dispose(): void }[] = [];
   const lin = (hex: string): Color => new Color().setStyle(hex);
+  const pv = propValueOf(tr);
+  // r12 B5: the painted edge light (the cap course's chamfer, the hour-band ticks, the gorge's lit lip) never
+  // lifts above L* 48 on screen, whatever the map paints: its albedo luminance is capped against the road's (the
+  // plate's, the deck's), EDGE_OVER_ROAD
+  const edgeLight = capLum(lin(colors.edgeLight), lum(lin(colors.lane)) * EDGE_OVER_ROAD);
   const onBorder = (x: number, y: number): boolean => Math.abs(x) < 0.01 || Math.abs(y) < 0.01 || Math.abs(x - SX) < 0.01 || Math.abs(y - SY) < 0.01;
 
   // clearings: bases, shops, structures, camps, pickups, spawns (scatter keeps out); rooms = camp floors
@@ -711,7 +752,9 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     uSplatScale: { value: new Vector2(1 / (W * texel), 1 / (H * texel)) },
     uLaneHalf: { value: LANE_HALF },
     uRooms: { value: roomU }, uRoomN: { value: Math.min(16, rooms.length) }, uShaftAx: { value: axisOf(shaftPolys) },
-    uSheenC: { value: lin('#9FB0C4').multiplyScalar(0.075) },
+    // the plate's satin sky sheen: a cool emissive at ~10 % of the plate's own albedo luminance (it rides on the
+    // plate's value band, so rebasing the plate rebases its sheen)
+    uSheenC: { value: ((s: Color) => s.multiplyScalar((0.1 * lum(lin(colors.lane))) / Math.max(1e-4, lum(s))))(lin('#9FB0C4')) },
     uRockC: { value: lin(colors.rock) },
     uTexLitter: tex.litter, uTexGrain: tex.grain, uTexMoss: tex.moss,
     uLane: { value: lin(colors.lane) }, uGrout: { value: lin(colors.laneGrout) }, uVerge: { value: lin(colors.verge) }, uJungle: { value: lin(colors.jungle) },
@@ -936,7 +979,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const wallMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.86, metalness: 0 });
   const wu = {
     ...shared,
-    uFace: { value: lin(colors.cliffFace) }, uLip: { value: lin(colors.cliffLip) }, uEdgeLight: { value: lin(colors.edgeLight) },
+    uFace: { value: lin(colors.cliffFace) }, uLip: { value: lin(colors.cliffLip) }, uEdgeLight: { value: edgeLight },
     uTop: { value: lin(colors.cliffTop) }, uMossC: { value: lin(colors.moss) }, uFlank: { value: lin(colors.flank) }, uRock: { value: lin(colors.rock) },
     // the gorge's height mist (brief: #5E6C93, 0.06/m below −2 m, near-solid by −25 m): a paler sunlit haze under
     // the rim, the deep cool blue below
@@ -1137,7 +1180,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const shU = {
     uSplat: { value: splatTex }, uSplat2: { value: splat2Tex },
     uSplatScale: gu.uSplatScale, uTexGrain: tex.grain, uShAx: { value: shAx }, uShWedge: { value: shWedge },
-    // ×1.62: lands the lit, graded floor on the designed L* 30–36 (≈ 33; the tint is the designed screen colour)
+    // ×1.62: lands the lit, graded floor on the map's designed band (valueLstar; the tint is the designed screen colour)
     uShadowC: { value: lin(typeof shadowDef?.tint === 'string' ? shadowDef.tint : '#4A4560').multiplyScalar(1.62) }, uShadowLine: { value: lin(colors.shadowLine) },
   };
   for (const poly of shadowPolys) {
@@ -1173,11 +1216,15 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     // catching the sky, a brighter wet rim where it laps the stone
     const mat = new MeshStandardMaterial({ color: lin(colors.water), roughness: 0.5, metalness: 0, transparent: true, opacity: 0.5, depthWrite: false,
       envMapIntensity: 1.2, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    const wU = { uWaterT: worldUniforms.valeTime, uSplat2: { value: splat2Tex }, uSplatScale: gu.uSplatScale };
+    // the film's sky sheen and its wet rim ride on the shaft floor's own value band (r12 B5): constants scaled by
+    // the floor's albedo luminance, so a rebased floor rebases its water
+    const wl = lum(lin(colors.shaftFloor));
+    const wU = { uWaterT: worldUniforms.valeTime, uSplat2: { value: splat2Tex }, uSplatScale: gu.uSplatScale,
+      uWaterSheen: { value: new Vector3(0.55, 0.69, 0.83).multiplyScalar(wl) }, uWaterLap: { value: 0.07 * wl } };
     mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
       Object.assign(shader.uniforms, wU);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\nuniform float uWaterT; uniform sampler2D uSplat2; uniform vec2 uSplatScale;\n${NOISE_GLSL}`)
+        .replace('#include <common>', `#include <common>\nuniform float uWaterT; uniform sampler2D uSplat2; uniform vec2 uSplatScale; uniform vec3 uWaterSheen; uniform float uWaterLap;\n${NOISE_GLSL}`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   {
     vec2 wp = vValeWorld.xz;
@@ -1188,14 +1235,14 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   float sd = texture( uSplat2, vValeWorld.xz * uSplatScale ).g * 8.0 - 4.0;
   float lap = 1.0 - smoothstep( 0.0, 0.35, -sd );
   diffuseColor.a = mix( diffuseColor.a, 0.75, lap );
-  outgoingLight = mix( outgoingLight, outgoingLight * 1.25 + vec3( 0.02 ), lap * ( 0.6 + 0.4 * sin( uWaterT * 0.9 + vValeWorld.x * 2.0 + vValeWorld.z ) ) );
+  outgoingLight = mix( outgoingLight, outgoingLight * 1.25 + vec3( uWaterLap ), lap * ( 0.6 + 0.4 * sin( uWaterT * 0.9 + vValeWorld.x * 2.0 + vValeWorld.z ) ) );
   // the sky in the film (roughness stays ≥ 0.5 on walkable ground): a cool sheen off the ripples at grazing view
   float nv = clamp( dot( normal, normalize( vViewPosition ) ), 0.0, 1.0 );
-  outgoingLight += vec3( 0.16, 0.2, 0.24 ) * smoothstep( 0.98, 0.55, nv );
+  outgoingLight += uWaterSheen * smoothstep( 0.98, 0.55, nv );
 }
 #include <opaque_fragment>`);
     };
-    mat.customProgramCacheKey = () => 'vale_water_v3';
+    mat.customProgramCacheKey = () => 'vale_water_v4';
     patchWorldMaterial(mat);
     const mesh = new Mesh(geo, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';
@@ -1462,6 +1509,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     for (let k = 0; k < p.count; k++) { H = Math.max(H, p.getY(k)); R = Math.max(R, Math.hypot(p.getX(k), p.getZ(k))); }
     return { H, R };
   };
+  /** a prop's instance value (propValue): none at 1, so an unscaled map keeps its programs */
+  const pvC = (k: number): Color | undefined => (k === 1 ? undefined : new Color(k, k, k));
   const setScatter = (level: 0 | 1 | 2): void => {
     scatterLevel = level;
     for (const g of scatterParts) { scatterGroup.remove(g); g.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); }); }
@@ -1485,19 +1534,19 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         // the deep wood a shade darker and cooler than the edge rows (they catch the light at the lip)
         const deep = Math.min(1, Math.max(0, (t.e - 2) / 6));
         const k = 1 - 0.1 * deep;
-        items.push({ x: t.x, y: t.y, m: new Matrix4().compose(pos, q, s), c: new Color((0.86 + t.tint * 0.22) * k, (0.9 + t.tint * 0.14) * k, (0.86 + t.tint * 0.12) * (k + 0.04 * deep)) });
+        items.push({ x: t.x, y: t.y, m: new Matrix4().compose(pos, q, s), c: new Color((0.86 + t.tint * 0.22) * k, (0.9 + t.tint * 0.14) * k, (0.86 + t.tint * 0.12) * (k + 0.04 * deep)).multiplyScalar(pv.tree) });
       }
       scatterParts.push(...propParts(geos, items, 'vale_trees'));
     } else if (trees.length) {
-      const trunks: { m: Matrix4 }[] = [], canopies: { m: Matrix4; c: Color }[] = [];
+      const trunks: { m: Matrix4; c?: Color }[] = [], canopies: { m: Matrix4; c: Color }[] = [];
       for (const t of trees) {
         if (treeScale(t, 2.6, 1.3) <= 0) continue;
         const th = 1.0 + t.s * 0.8;
         q.setFromAxisAngle(up, t.r);
         s.set(t.s, th, t.s); pos.set(t.x, t.h - 0.1, t.y);
-        trunks.push({ m: new Matrix4().compose(pos, q, s) });
+        trunks.push({ m: new Matrix4().compose(pos, q, s), c: pvC(pv.tree) });
         s.set(t.s * 1.25, t.s * 1.15, t.s * 1.25); pos.set(t.x, t.h + th * 0.82, t.y);
-        canopies.push({ m: new Matrix4().compose(pos, q, s), c: new Color(0.82 + t.tint * 0.3, 0.86 + t.tint * 0.24, 0.84 + t.tint * 0.2) });
+        canopies.push({ m: new Matrix4().compose(pos, q, s), c: new Color(0.82 + t.tint * 0.3, 0.86 + t.tint * 0.24, 0.84 + t.tint * 0.2).multiplyScalar(pv.tree) });
       }
       scatterParts.push(chunked(trunkGeo, trunkMat, trunks, 'vale_trunks'), chunked(canopyGeo, leafMat, canopies, 'vale_canopies'));
     }
@@ -1506,12 +1555,12 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     } else if (boulders.length && props.rock?.length) {
       scatterParts.push(...propParts(props.rock, boulders.map((b) => {
         q.setFromAxisAngle(up, b.r); s.set(b.s * 1.25, b.s * 1.1, b.s * 1.25); pos.set(b.x, (b.h ?? 0) - 0.04, b.y);
-        return { x: b.x, y: b.y, m: new Matrix4().compose(pos, q, s) };
+        return { x: b.x, y: b.y, m: new Matrix4().compose(pos, q, s), c: pvC(pv.rock) };
       }), 'vale_boulders'));
     } else if (boulders.length) {
       scatterParts.push(chunked(rockGeo, stoneMat, boulders.map((b) => {
         q.setFromAxisAngle(up, b.r); s.set(b.s * 1.2, b.s * 0.8, b.s); pos.set(b.x, b.s * 0.15, b.y);
-        return { m: new Matrix4().compose(pos, q, s) };
+        return { m: new Matrix4().compose(pos, q, s), c: pvC(pv.rock) };
       }), 'vale_boulders'));
     }
     // stones fall back to the rock variants only when the map names no stone list at all
@@ -1521,12 +1570,12 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     } else if (stones.length && stoneGeos?.length) {
       scatterParts.push(...propParts(stoneGeos, stones.map((p) => {
         q.setFromAxisAngle(up, p.r); s.set(p.s * 1.1, p.s * 0.9, p.s); pos.set(p.x, (p.h ?? 0) - 0.02, p.y);
-        return { x: p.x, y: p.y, m: new Matrix4().compose(pos, q, s) };
+        return { x: p.x, y: p.y, m: new Matrix4().compose(pos, q, s), c: pvC(pv.stone) };
       }), 'vale_stones', false));
     } else if (stones.length) {
       scatterParts.push(chunked(rockGeo, stoneMat, stones.map((p) => {
         q.setFromAxisAngle(up, p.r); s.set(p.s, p.s * 0.6, p.s * 0.85); pos.set(p.x, p.s * 0.1, p.y);
-        return { m: new Matrix4().compose(pos, q, s) };
+        return { m: new Matrix4().compose(pos, q, s), c: pvC(pv.stone) };
       }), 'vale_stones', false));
     }
     // ground clutter: none on Low, half on Medium, all on High/Ultra; never casts shadows
@@ -1534,7 +1583,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     const place = (list: CSpot[], geo: BufferGeometry, name: string, yS: number, y0: number): void => {
       const items = pick(list, keepC).map((p) => {
         q.setFromAxisAngle(up, p.r); s.set(p.s, p.s * yS, p.s); pos.set(p.x, y0, p.y);
-        return { m: new Matrix4().compose(pos, q, s), c: p.c };
+        return { m: new Matrix4().compose(pos, q, s), c: pv.clutter === 1 ? p.c : p.c.clone().multiplyScalar(pv.clutter) };
       });
       if (items.length) scatterParts.push(chunked(geo, clutterMat, items, name, false));
     };

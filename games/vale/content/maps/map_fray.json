@@ -346,8 +346,9 @@
    "surface": "plate",
    "textures": {"$comment": "painted tiling textures by role (tools/terrain_textures.py; render/terrain.ts maps each painting's mean onto the band colour, alpha = height)", "litter": "assets/textures/terrain_litter.webp", "grain": "assets/textures/terrain_grain.webp", "moss": "assets/textures/terrain_moss.webp"},
    "props": { "$comment": "none (brief \u00a74: the Noonplate is a clean stone stage; no foliage beyond the rim, where the fair's stands are landmarks)", "tree": [], "rock": [], "stone": [] },
+   "propValue": {"$comment": "r12 B5 value rebase: linear multipliers on the authored props' colours so they land in tokens grade.maps.fray.valueLstar (render/terrain.ts propValue)", "landmark": 0.46},
    "$comment": "the Noonplate at the Shadowless Noon: honed pale dial-stone, luminous under the overhead sun (lane), the ten hour-lines and numerals inlaid dark basalt (inscription), the cart ring a mid inlay (midInlay), a carved hour-ring round the marks; hour-stones and rim stay basalt",
-   "colors": {"lane": "#A19A8B", "jungle": "#4A4744", "clearing": "#6E6A62", "inscription": "#4C4945", "midInlay": "#7A766C", "cliffFace": "#3E3D40", "cliffLip": "#8E8A80", "edgeLight": "#D8D2C2", "cliffTop": "#CFCAC0", "moss": "#4A5A42", "grassRoot": "#2F3B30", "grassTip": "#9AA478"},
+   "colors": {"lane": "#544832", "jungle": "#343230", "clearing": "#3D3B36", "inscription": "#353330", "midInlay": "#45433D", "cliffFace": "#3E3D40", "cliffLip": "#45433E", "edgeLight": "#53504A", "cliffTop": "#C1BCB3", "moss": "#34402F", "grassRoot": "#2A342B", "grassTip": "#8B946C"},
    "hourMarks": "spawns[] in seat order I-X, clockwise from 12",
    "wallHeights": {
     "hourStones": 1.2,

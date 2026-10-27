@@ -37,6 +37,8 @@ def main():
     p.add_argument("--fold", default="4,8,12")
     p.add_argument("--dx", default="-0.03,-0.12")
     p.add_argument("--elev", default="-0.78")
+    p.add_argument("--along", type=float, default=None, help="the left grip along the haft (default POMMEL_GRIP)")
+    p.add_argument("--head", type=float, default=14.0, help="the head bow (deg)")
     a = p.parse_args(scene.script_args())
     bpy.ops.wm.open_mainfile(filepath=os.path.join(scene.CACHE_DIR, "fighters", "burdam.blend"))
     from mathutils import Vector
@@ -95,18 +97,18 @@ def main():
     for wx, wy, wz, fold, dx, dz in itertools.product(fl(a.wx), fl(a.wy), fl(a.wz), fl(a.fold), fl(a.dx), fl(a.elev)):
         d = np.array([dx, -np.sqrt(max(0.0, 1.0 - dx * dx - dz * dz)), dz])
         F.STUB_W, F.STUB_D = (wx, wy, wz), tuple(d)
-        base = F._plant_two(R, 1.3)
+        base = F._plant_two(R, 1.3, head=a.head)
         base = anim.add(base, F._P(hips=(fold - 12.0, 0, 0)))
         pose = R.tip_to(base)
         clip = F._two_handed(anim.Clip("t", 30, False, lambda t, _p=pose: _p), [(0.0, 1.0), (1.0, 1.0)], skel,
-                             along=F.POMMEL_GRIP)
+                             along=F.POMMEL_GRIP if a.along is None else a.along)
         q = clip.sample(0.5)
         co = posed(q)
         W = lambda b: np.array((arm.matrix_world @ pb[b].matrix).translation)  # noqa: E731
         miss_r = float(np.linalg.norm(W("hand.R") - np.array((wx, wy, wz))))
         Mp = (arm.matrix_world @ pb["prop.R"].matrix)
         ax = np.array(Mp.to_3x3().col[1])
-        pom = np.array(Mp.translation) + ax * F.POMMEL_GRIP
+        pom = np.array(Mp.translation) + ax * (F.POMMEL_GRIP if a.along is None else a.along)
         miss_l = float(np.linalg.norm(W("prop.L") - pom))
         ch = W("chest")
         hh = inside(co, cl_v | hand_v, head_f)

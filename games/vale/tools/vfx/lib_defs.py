@@ -364,6 +364,30 @@ def defs() -> list:
                  light("origin", "team", 20, 14, 0.6),
                  shake(1.0, who="all"),
                  comment="T4 · impact · Needle, Lantern or Hourbell falls: white core flash (T4), stone collapses into heavy chips, a team ring"))
+    # r12 M9 structure states (src/render/structures.ts; ids from UnitDef.art.damage / art.ruin): origin = the
+    # tower's flank at the break / crack height, ground = its foot; the camera never shakes for these
+    D.append(vfx("lib_structure_crack", 1.1,
+                 flash(1, at="origin", scale=1.2, color="team"),
+                 sparks("origin", 8, color=["team", DAWNGLASS], speed=(2.5, 5.5), life=(0.12, 0.3), emissive=2.6, gravity=4, spread=120, dir_="out"),
+                 chips("origin", 16, color=(CHALK, CHALK_DK), speed=(1.2, 3.2), life=(0.8, 1.1), size=0.16, spread=110, gravity=12, delay=0.02),
+                 dust("origin", 5, size=1.1, speed=(0.5, 1.4), radius=0.4, life=(0.6, 1.0), delay=0.05, shape="sphere"),
+                 dust("ground", 4, size=1.2, speed=(0.6, 1.6), radius=0.9, life=(0.7, 1.0), delay=0.35),
+                 comment="T2 · impact · a structure passes a damage threshold: its light flares through the new cracks, chips rain off the flank"))
+    D.append(vfx("lib_structure_break", 1.3,
+                 flash(3, at="origin", scale=1.4, color="team"),
+                 sparks("origin", 18, color=["team", DAWNGLASS], speed=(4, 9), life=(0.15, 0.4), emissive=4.0, gravity=6, spread=170, dir_="out"),
+                 chips("origin", 34, color=(CHALK, CHALK_DK), speed=(2.5, 6.5), life=(0.8, 1.3), size=0.24, spread=170, gravity=13),
+                 dust("origin", 10, size=1.8, speed=(1.0, 2.8), radius=0.7, life=(0.8, 1.3), delay=0.06, shape="ring"),
+                 light("origin", "team", 8, 9, 0.5),
+                 comment="T3 · impact · a structure's top shears off at the break: its light bursts out, heavy chips and a dust collar"))
+    D.append(vfx("lib_structure_land", 1.8,
+                 dust("ground", 22, size=2.6, speed=(2.0, 5.0), life=(1.0, 1.7), radius=1.6, delay=0.0, alpha=0.55),
+                 dust("ground", 10, size=1.8, speed=(0.6, 1.8), life=(1.2, 1.8), radius=0.6, delay=0.12, shape="sphere"),
+                 chips("ground", 40, color=(CHALK, CHALK_DK), speed=(3, 8), life=(0.7, 1.2), size=0.26, spread=150, gravity=15),
+                 shockwave("ground", color=DUST, radius=(0.8, 6.0), width=(1.4, 0.3), life=0.7, emissive=0.0, alpha=(0.7, 0.5, 0), blend="alpha",
+                           noise=0.5),
+                 decal("ground", "crack", 3.2, 2.2, color=INK2, alpha=(0.75, 0.6, 0)),
+                 comment="T3 · settle · the fallen top hits the ground and breaks up: a wide dust ring, a burst of rubble, a crack mark"))
     D.append(vfx("lib_wick_death", 0.35,
                  flash(1, at="origin", scale=0.8),
                  dust("origin", 2, size=0.5, radius=0.1, delay=0.0),

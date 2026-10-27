@@ -56,6 +56,11 @@ def render_icon(uid: str, fast: bool = False) -> str:
         for o in bpy.context.scene.objects:
             if o.name.endswith("_core"):
                 o.scale = (1.0, 1.0, 1.0)
+        # r12 M9: the ruin and the crack sets ship hidden in the GLB (the renderer shows them); the icon is intact
+        for o in [o for o in bpy.context.scene.objects if o.name.split(".")[0].endswith(("_ruin", "_dmg1", "_dmg2"))]:
+            for c in [o] + list(o.children_recursive):
+                bpy.data.objects.remove(c, do_unlink=True)
+        for o in bpy.context.scene.objects:
             if o.parent is None and o.type == "EMPTY":
                 o.rotation_mode = "XYZ"
                 o.rotation_euler = (0.0, 0.0, 1.5707963)     # the side the game camera sees (facing 0)
