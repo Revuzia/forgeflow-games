@@ -72,9 +72,11 @@ HIDE_JS = r"""([bid, cx, cy, cz, bx, bz]) => { const C = window.__LC__, W = C.W,
   x0 = Math.max(0, Math.floor(x0)); x1 = Math.min(w - 1, Math.ceil(x1)); y0 = Math.max(0, Math.floor(y0)); y1 = Math.min(h - 1, Math.ceil(y1));
   if (x1 - x0 < 3 || y1 - y0 < 6) return { error: 'the bot projects off screen', box: [x0, y0, x1, y1] };
   const diff = (a, c) => { let s = 0, n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = 4 * (y * w + x); s += Math.abs(a.px[i] - c.px[i]) + Math.abs(a.px[i + 1] - c.px[i + 1]) + Math.abs(a.px[i + 2] - c.px[i + 2]); n += 3; } return s / n; };
-  smoke(true); place(true); const A = read(); place(false); const B = read();
+  // the OPEN pair first: a cloud taken out of W.smokes fades out on fx time, which dt 1e-5 never advances (smoke_all8 10-26: the cost
+  // section's three clouds still stood in front of the bot at the first tier - open diff 0.64 / 255)
   smoke(false); place(true); const Cc = read(); place(false); const D = read();
-  smoke(false); place(true); C.stepFrames(1, 1e-5, true);
+  smoke(true); place(true); const A = read(); place(false); const B = read();
+  smoke(false); place(true); C.stepFrames(180, 1 / 60, true);
   const dAB = diff(A, B), dCD = diff(Cc, D);
   return { visibility: dCD > 0 ? +(dAB / dCD).toFixed(3) : null, smokedDiff: +dAB.toFixed(2), openDiff: +dCD.toFixed(2), boxPx: [x0, y0, x1, y1], tier: W.gfxTier,
          }; }"""
@@ -253,7 +255,8 @@ def main():
                 except Exception as ex_:
                     hide[tier] = {"error": str(ex_).splitlines()[0][:120]}
                     continue
-                s.step_frames(30, 1 / 60, render=True)
+                s.js("() => { const W = window.__LC__.W; if (W.smokes) W.smokes.length = 0; }")
+                s.step_frames(180, 1 / 60, render=True)       # 3 s of fx time: every earlier cloud has faded out
                 hide[tier] = s.js(HIDE_JS, [e, iso["x"], iso["y"] + K_YOFF(s), iso["z"] - 14, iso["x"], iso["z"] - 21])
             try:
                 s.js("(t) => window.__LC__.W.setGfx('tier', t)", tier0)
