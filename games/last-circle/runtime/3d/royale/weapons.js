@@ -48,6 +48,8 @@ export function init(W) {
   // LC-22: the same bone-derived volumes the bullets test, for any caller that needs "is this ray on the body"
   // (hud.js aim-at name tags per OD-11, bots' line checks). Returns the entry distance along the unit ray or -1.
   W.hitVolRay = (t, ox, oy, oz, dx, dy, dz, maxT) => hitVolRay(W, t, ox, oy, oz, dx, dy, dz, maxT);
+  // the live joints the hit test would use for t right now (sim HITVOL_LIVE layout, world) or null = the table (probes / harness)
+  W.hitVolLiveJoints = (t) => liveJoints(W, t);
   protosPromise = null;
   W.weaponProto = (id) => protos(W).then((p) => p[id]);
 }
