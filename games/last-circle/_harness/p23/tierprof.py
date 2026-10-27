@@ -43,10 +43,11 @@ KB_MAX, QC_MAX, RAW_P50_MAX = 85.0, 150, 20.0
 
 MEASURE_JS = r"""([n, render]) => { const W = window.__LC__.W, P = window.__H_PUMP__, k = W.kernel; const M = W.map; const q0 = M.queryColliders; let qc = 0, qsum = 0;
   M.queryColliders = function () { qc++; return q0.apply(this, arguments); };
-  const mem = () => (performance.memory ? performance.memory.usedJSHeapSize : null); let alloc = 0, last = mem(), qmax = 0; const p0 = k.renderer.info.programs.length;
+  const mem = () => (performance.memory ? performance.memory.usedJSHeapSize : null); let alloc = 0, last = mem(), qmax = 0; const p0 = k.renderer.info.programs.length; const pset0 = new Set(k.renderer.info.programs);
   try { for (let i = 0; i < n; i++) { qc = 0; P.step(1, 1 / 60, render); const m = mem(); if (m != null && last != null && m > last) alloc += m - last; last = m; qsum += qc; if (qc > qmax) qmax = qc; } }
   finally { M.queryColliders = q0; }
-  return { kbPerFrame: performance.memory ? +(alloc / 1024 / n).toFixed(2) : null, qcMax: qmax, qcMean: +(qsum / n).toFixed(1), programsBefore: p0, programsAfter: k.renderer.info.programs.length }; }"""
+  return { kbPerFrame: performance.memory ? +(alloc / 1024 / n).toFixed(2) : null, qcMax: qmax, qcMean: +(qsum / n).toFixed(1), programsBefore: p0, programsAfter: k.renderer.info.programs.length,
+    newPrograms: k.renderer.info.programs.filter((q) => !pset0.has(q)).slice(0, 4).map((q) => ({ name: q.name, key: String(q.cacheKey || '').slice(0, 160) })) }; }"""
 RAW_JS = r"""([ms]) => new Promise((res) => { const d = []; let t0 = null, last = null; const f = (t) => { if (t0 == null) t0 = t; if (last != null) d.push(t - last); last = t;
   if (t - t0 < ms) requestAnimationFrame(f); else { d.sort((a, b) => a - b); res({ n: d.length, p50: d.length ? +d[d.length >> 1].toFixed(2) : null, p90: d.length ? +d[Math.floor(d.length * 0.9)].toFixed(2) : null }); } };
   requestAnimationFrame(f); })"""
@@ -123,7 +124,7 @@ def main():
                     v.check("qc [%s %s] (queryColliders calls per frame, mean <= %d, as framecheck)" % (mp, t, QC_MAX), m["qcMean"] <= QC_MAX,
                             {"qcMean": m["qcMean"], "qcMaxInfo": m["qcMax"]}, "mean <= %d" % QC_MAX)
                     v.check("programs [%s %s] (no shader linked in 240 measured frames)" % (mp, t), m["programsAfter"] == m["programsBefore"],
-                            {"before": m["programsBefore"], "after": m["programsAfter"]}, "unchanged")
+                            {"before": m["programsBefore"], "after": m["programsAfter"], "new": m.get("newPrograms")}, "unchanged")
                     v.info("gpu / raw [%s %s]" % (mp, t), {"gpuMsMedian": prof[t]["gpu"], "raw": raw})
                 v.data.setdefault("profile", {})[mp] = prof
                 gs = [prof.get(t, {}).get("gpu") for t in TIERS]
