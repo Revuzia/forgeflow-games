@@ -353,7 +353,7 @@ class ValeRenderer implements Renderer {
     this.vfx.budget = this.q.particleBudget;
     this.vfx.density = this.q.particleDensity;
     this.vfx.setLightCount(this.q.flashLights);
-    this.terrain?.setScatter(this.q.scatter);
+    this.terrain?.setScatter(this.q.scatter, this.q.ao > 0);
     this.menu.setScatter(this.q.scatter);
     this.applySize();
   }
@@ -432,7 +432,7 @@ class ValeRenderer implements Renderer {
     this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
     // world: procedural terrain now; the Blender scene replaces it when it exists
     this.terrain = buildTerrain(map);
-    this.terrain.setScatter(this.q.scatter);
+    this.terrain.setScatter(this.q.scatter, this.q.ao > 0);
     this.scene.add(this.terrain.group);
     this.loadTerrainTextures(map, gen);
     void loadTerrainProps(map, (r) => this.assets.model(r)).then((p) => { if (gen === this.matchGen && this.terrain && p) this.terrain.setProps(p); });

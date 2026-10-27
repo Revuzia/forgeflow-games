@@ -11,7 +11,9 @@
 //           wake of discs that settle back the same way); within 1.2 m of your own fighter or an allied fighter
 //           they fade to 35 % (alpha), back to full by 1.6 m. Only units near a thicket take a slot: your fighter
 //           first, then allied fighters, then every other unit by strength, then the wakes.
-//           One instanced draw per 24 m chunk, as before (the bend runs in the vertex shader).
+//           One instanced draw per 24 m chunk, as before (the bend runs in the vertex shader). On a tier without
+//           screen-space AO (Low) the clump bakes its own occlusion (× 0.55 at the foot → × 0.8 at the tip), so the
+//           brush keeps the dark band it has with AO on.
 //   sway    Dialwood crowns: the tip moves ≤ 4 cm at 0.2–0.4 Hz (three partials at 0.21, 0.29 and 0.37 Hz),
 //           each tree its own phase (a hash of its position), weighted by the vertex's height (the root flare
 //           stays put), one wind direction for the map. The trees' shadow depth material runs the same code,
@@ -28,7 +30,7 @@ export const BRUSH = {
   fadeAlpha: 0.35,
   easeIn: 0.12,        // bend / fade eased in over 120 ms
   easeOut: 0.4,        // and out over 400 ms
-  bend: 0.55,          // horizontal lean of a blade's tip at full bend (m)
+  bend: 0.7,           // horizontal lean of a blade's tip at full bend (m)
   wakeStep: 0.45,      // a moving unit drops a wake disc every this many metres
   maxWakes: 32,
 } as const;
@@ -122,11 +124,14 @@ export class BrushField {
 }
 
 const f = (x: number): string => x.toFixed(4);
+/** the Needlegrass's baked occlusion when the tier has no screen-space AO: × foot → × tip (linear) */
+const GRASS_NO_AO = [0.55, 0.8] as const;
 
 /** Needlegrass vertex code (after #include <begin_vertex>): the T0 wind sway, then the brush's bend and fade.
  *  `position.y / 1.25` is the blade's height fraction (the clump is authored ≤ 1.3 m). */
 export const GRASS_VERT_PARS = /* glsl */`
 uniform float uWindT;
+uniform float uGrassAO;
 uniform vec4 uBrush[ ${BRUSH_SLOTS} ];
 uniform vec4 uBrushFade[ ${BRUSH_SLOTS / 4} ];
 uniform int uBrushN;
@@ -144,6 +149,11 @@ export const GRASS_VERT_MAIN = /* glsl */`
   float ksx = 1.0, ksy = 1.0;
   #endif
   float hf = clamp( position.y / 1.25, 0.0, 1.0 );
+  #ifdef USE_COLOR
+  // no screen-space AO on this tier (Low): the clump's own occlusion, deepest at the foot, so the brush keeps the
+  // dark band it has with AO on (r12 M11)
+  vColor.rgb *= mix( mix( ${f(GRASS_NO_AO[0])}, ${f(GRASS_NO_AO[1])}, hf ), 1.0, uGrassAO );
+  #endif
   float ph = base.x * 0.37 + base.y * 0.53;
   // T0 ambient: slow sway, at most 0.5 Hz
   float sway = sin( uWindT * 2.2 + ph ) * 0.05 + sin( uWindT * 1.3 + ph * 1.7 ) * 0.03;

@@ -1597,6 +1597,10 @@ SER_RIM_W, SER_RIM_WB = 0.036, 0.026
 # decimated fold of the hood's own floor stood up in the back corner as a tan sliver)
 SER_ARCH_DEEP = Arch((-0.035, -0.229, 0.975), 8.0, hw_bot=0.200, hw_mid=0.170, h_bot=0.125, h_top=0.185, r_corner=0.05,
                      w0=0.04, w1=0.21, kb=0.06, z_floor=0.86)
+# the body parts under the hollow are cut down further (6 cm under its floor): the head bone carries the hood in idle,
+# and the chest-bound mantle collar rose through the hood's floor by a few cm in the breathing pose
+SER_ARCH_SINK = Arch((-0.035, -0.229, 0.975), 8.0, hw_bot=0.200, hw_mid=0.170, h_bot=0.20, h_top=0.185, r_corner=0.05,
+                     w0=0.04, w1=0.21, kb=0.06, z_floor=0.825)
 SER_BAND_HW = 0.0215                          # the crown band: 3.1 cm over the opening (6 cm read as a headband)
 
 
@@ -1697,10 +1701,10 @@ def serenade_parts(L: dict) -> list:
                         "low_mesh": band_ribbon(F_out, hc[0], hc[1], _ser_band_z, _ser_band_hw, 30, lift=0.005)}))
     # the light: one soft core in the middle of the hollow, 8 cm behind the rim's plane, 12 x 7 cm, in its see-through
     # shells (rule 0.2; fix round 3: the wide low lens on the sill read as a tongue)
-    # (fix round 3) an ink floor plate over the hollow's deep floor, 3 mm up: the decimated mantle's collar bridged the
+    # (fix round 3) an ink floor plate over the hollow's deep floor: the decimated mantle's collar bridged the
     # clearance carve and rose through the hood's floor in the back corner (a tan / grey sliver in the dark)
-    zf = A.zf + 0.003
-    fp = np.array([[x_, A.at(0.0, 0.0, w_)[1], zf] for w_ in (0.035, 0.115, 0.195) for x_ in (A.o[0] - 0.165, A.o[0], A.o[0] + 0.165)])
+    zf = A.zf + 0.012                             # (1.2 cm up: the head-bound hood dips in the idle breath)
+    fp = np.array([[x_, A.at(0.0, 0.0, w_)[1], zf] for w_ in (0.035, 0.115, 0.200) for x_ in (A.o[0] - 0.172, A.o[0], A.o[0] + 0.172)])
     fq = []
     for r_ in range(2):
         for c_ in range(2):
@@ -1732,7 +1736,7 @@ def serenade_parts(L: dict) -> list:
     tunic.sub(DomainWarp(SER_ARCH, lambda P: _arr(P) + np.array([-0.035, 0.0, 0.0]), 0.04), k=0.01)   # (not in the hollow)
     # (fix round 3) and 2.5 cm clear of its walls: cut flush with the hollow, the decimated tunic poked through its
     # back corners (a tan sliver low in the dark)
-    tunic.sub(DomainWarp(SER_ARCH_DEEP, lambda P: _arr(P) + np.array([-0.035, 0.0, 0.0]), 0.06), k=0.01)
+    tunic.sub(DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.035, 0.0, 0.0]), 0.06), k=0.01)
     out.append(SP("cloak", tunic, "cloth", ("gw_cloak",), 428, to_model=body))
     mantle = Sculpt("mantle")
     # a thick felt capelet (8 cm: a thin shell decimates into a zigzag rim) with ROUNDED shoulders (a convex
@@ -1771,7 +1775,7 @@ def serenade_parts(L: dict) -> list:
     mantle.sub(DomainWarp(SER_ARCH, lambda P: _arr(P) + np.array([-0.005, 0.0, 0.0]), 0.01), k=0.01)
     # (fix round 3) and 2 cm clear of the hollow's deep part (its collar rose through the hollow's floor in the back
     # corner: a tan sliver in the dark)
-    mantle.sub(DomainWarp(SER_ARCH_DEEP, lambda P: _arr(P) + np.array([-0.005, 0.0, 0.0]), 0.03), k=0.01)
+    mantle.sub(DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.005, 0.0, 0.0]), 0.03), k=0.01)
     mantle_tf = compose(shift(dx=0.03), body)
     out.append(SP("mantle", mantle, "cloth2", "auto", 304, to_model=mantle_tf))
     # (no over-the-shoulder straps: their ends stopped dead on the felt; the A-frame is lashed at the belt, paint)
@@ -2253,10 +2257,10 @@ PAINT = {
                     "hex": "#17150F", "pad": 0.014},
                    # (fix round 3) the tunic's top rises through the hollow's floor (side-facing slivers, umber / sand, at
                    # the lower corners: the 'tan sliver'): every tunic texel inside the carve itself, whatever its facing
-                   {"part": "cloak", "carve": DomainWarp(SER_ARCH_DEEP, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.06),
+                   {"part": "cloak", "carve": DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.035, 0, 0]), 0.06),
                     "hex": "#17150F", "pad": 0.012},
                    # (the faces the clearance carve leaves round the hollow's deep part, seen through the hood's floor)
-                   {"part": "mantle", "carve": DomainWarp(SER_ARCH_DEEP, lambda P: _arr(P) + np.array([-0.005, 0, 0]), 0.03),
+                   {"part": "mantle", "carve": DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.005, 0, 0]), 0.03),
                     "hex": "#17150F", "pad": 0.012}],
         "gw_under": {"cloak": "#33291F"},
         "gw_inner": {"mantle": ((-0.03, 0.02), 0.62)},

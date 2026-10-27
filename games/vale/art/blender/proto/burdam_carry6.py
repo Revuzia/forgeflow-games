@@ -142,6 +142,11 @@ def main():
     p.add_argument("--clip", default="", help="score the cached build posed by a CURRENT clip key instead: 'run:0.25'")
     p.add_argument("--eye-min", type=float, default=0.0, help="keep candidates whose eye-level front view shows this share")
     p.add_argument("--eye-ang", default="0,90", help="keep candidates whose eye-level front angle lies in this range")
+    p.add_argument("--max-angw", type=float, default=999.0,
+                   help="fix pass 8: keep candidates whose blade falls at least this steeply on screen (degrees, e.g. "
+                        "-30) facing W / WSW / WNW (the lane facing the yoke was tuned for), no more pointer facings "
+                        "than --max-ptr, ranked by the eye-level front angle and the blade + heel in view")
+    p.add_argument("--max-ptr", type=int, default=99)
     p.add_argument("--lobby", type=float, default=0.0,
                    help="fix pass 8: rank for the LOBBY carry (no health bar): the eye-level front angle near this "
                         "value, the blade, the heel and the haft + pommel all in view at eye level (front, portrait)")
@@ -324,10 +329,16 @@ def main():
                  - abs(e0[0] - a.lobby) / 6.0 - abs(e28[0] - a.lobby) / 12.0)
 
     lo_a, hi_a = fl(a.eye_ang)
+    if a.max_angw < 900:
+        rows = [r for r in rows if max(r["angs"][y] for y in (255, 270, 285)) <= a.max_angw and r["ptr"] <= a.max_ptr]
+
+        def key_w(r):
+            e0, e28 = r["eye"][0], r["eye"][-28]
+            return -(e0[0] / 10.0 + 2.0 * e0[1] + e0[5] + e28[1] + r["lane"] / 800.0 + r["minall"] / 800.0)
     rows = [r for r in rows if r["eye"][0][1] >= a.eye_min and r["eye"][-28][1] >= a.eye_min
             and lo_a <= r["eye"][0][0] <= hi_a] if not a.pick else rows
     print(f"{len(rows)} pass the eye-level filter")
-    rows.sort(key=key_lobby if a.lobby else (key_sw if a.by_sw else (key_min if a.by_min else key)))
+    rows.sort(key=key_w if a.max_angw < 900 else (key_lobby if a.lobby else (key_sw if a.by_sw else (key_min if a.by_min else key))))
     if not a.pick:
         top = []
         for r in rows:

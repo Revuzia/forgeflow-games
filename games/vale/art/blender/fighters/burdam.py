@@ -656,7 +656,8 @@ def sculpts() -> list:
     # (core + hanging diamond read as ten cells, a zipper down the spine); fix pass 6: small diamonds set IN the dark
     # band (stone all round them) and the concept's blue gem in the pommel
     for poly in cl.gem_polys():                                        # one diamond per notch, under its bite
-        gems.add(Plate(poly, 0.0350, r=0.004), k=0.0)                      # proud of the setting (decimation-safe)
+        gems.add(Plate(poly, 0.0380, r=0.004), k=0.0)                      # proud of the setting (decimation-safe;
+                                                                           # fix pass 8: 8 mm proud, its rim lit too)
     gems.add(Plate(_diamond(cl.POMMEL_U, 0.0, *cl.POMMEL_GEM), 0.040, r=0.004), k=0.0)
     # fix pass 8: no lit linings in the bites' floors any more (passes 6-7 lined each bite: with the diamond under it
     # that made two staggered rows, ten lit marks plus the pommel gem, a white piano-key strip in the player tint);
@@ -2232,7 +2233,7 @@ COWL_MEAN = "#6A5845"         # fix pass 8: the concept's WARM taupe felt (L* ~3
                               # cool charcoal, L* 36-40 / b* +3 in the splash, near black round the mask in the portrait)
 RUST_MEAN = "#8E8A84"         # neutral grey oxidised stone (L* ~57; lit from above it reads near 70)
 RUST_PART_MEAN = {"shoulder_plate": "#77736D"}    # the right shoulder's carved plate faces the key: a step down
-TROUSER_MEAN = "#4E4239"      # dark trousers (feet band); fix pass 8 a greyer taupe (the brief's `under` family), so the
+TROUSER_MEAN = "#504236"      # dark trousers (feet band); fix pass 8 a greyer taupe (the brief's `under` family), so the
                               # warm leather boots and their wraps separate from them (the review: one brown mass)
 BOOT_MEAN = "#3F2D20"         # dark waxed-leather boots (warm brown: cooler browns read mauve outdoors; fix pass 4
                               # a step darker: the splash lit them tan)
@@ -2750,7 +2751,8 @@ def grade_parts(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarr
         elif nm in RUST_PARTS:
             out[m] = stone_paint(nm, out[m], maps, m, cache)
         elif nm == "trousers":
-            out[m] = _tint(out[m], TROUSER_MEAN, contrast=0.5, keep=0.25)
+            out[m] = _tint(out[m], TROUSER_MEAN, contrast=0.4, keep=0.2)      # (fix pass 8: the projected light patches
+                                                                               # read as camo in the splash's sun)
         elif nm == "boots":
             c = _tint(out[m], BOOT_MEAN, contrast=0.65, keep=0.1)
             Yb = _lum(c)
@@ -2768,7 +2770,10 @@ def grade_parts(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarr
 
 
 
-def almanac_print(img: np.ndarray, maps: dict, names: list, ink_hex: str) -> np.ndarray:
+ALMANAC_HEM = (0.668, 0.738)      # fix pass 8: the coat's hem printed as a ledger strip (z range, rest pose)
+
+
+def almanac_print(img: np.ndarray, maps: dict, names: list, ink_hex: str, parchment_hex: str = "#A3987F") -> np.ndarray:
     """Almanac Ledger's printing (brief section 9: texture, not geometry): ruled ledger lines across the
     parchment pauldrons and plates (every 3.2 cm of height), and day-marks down the cleaver's back (tallies
     of five: four strokes and a slash). Drawn into the re-coloured atlas from each texel's surface point
@@ -2811,6 +2816,36 @@ def almanac_print(img: np.ndarray, maps: dict, names: list, ink_hex: str) -> np.
             d = np.minimum(t, 1.0 - t) * 0.016
             a = (np.clip(1.0 - d / 0.0018, 0.0, 1.0) * 0.6)[:, None]
             out[tb] = out[tb] * (1 - a) + ink * a
+    if "skirt" in names:
+        # fix pass 8 (the review: the deluxe tier read as a recolour plus a small board): the coat's hem a parchment
+        # ledger strip all round, ruled top and bottom, with day-marks (fives) along it: a light band at the skirt's
+        # edge that reads from the game camera at every facing, the almanac's page worn as the hem
+        sk = part == names.index("skirt")
+        if sk.any():
+            from common.hifi import project
+            p = P[sk]
+            z0, z1 = ALMANAC_HEM
+            band = np.clip((z1 - p[:, 2]) / 0.004, 0.0, 1.0) * np.clip((p[:, 2] - z0 + 0.02) / 0.004, 0.0, 1.0)
+            lin = project._lin(out[sk])
+            par = project._lin(np.asarray(scene.hex_srgb(parchment_hex), dtype=np.float32))
+            Y = _lum(lin)
+            det = np.clip(1.0 + (Y / max(float(np.median(Y)), 1e-5) - 1.0) * 0.45, 0.6, 1.25)[:, None]
+            lin = lin * (1 - band[:, None]) + par[None] * det * band[:, None]
+            s_ = np.arctan2(p[:, 1], p[:, 0]) * 0.36                # arc length round the skirt (m)
+            w = s_ - np.floor(s_ / 0.085) * 0.085
+            stroke = np.zeros(len(p))
+            for c0 in (0.012, 0.024, 0.036, 0.048):
+                stroke = np.maximum(stroke, np.clip(1.0 - np.abs(w - c0) / 0.0026, 0.0, 1.0))
+            zz = (p[:, 2] - (z0 + 0.012)) / (z1 - z0 - 0.026)
+            stroke *= ((zz > 0.0) & (zz < 1.0)).astype(np.float32)
+            slash = np.abs((w - 0.006) - zz * 0.050)               # the fifth stroke, across the four
+            stroke = np.maximum(stroke, np.clip(1.0 - slash / 0.0028, 0.0, 1.0) * ((zz > 0.0) & (zz < 1.0)))
+            rule = np.maximum(np.clip(1.0 - np.abs(p[:, 2] - (z1 - 0.006)) / 0.0018, 0.0, 1.0),
+                              np.clip(1.0 - np.abs(p[:, 2] - (z0 + 0.004)) / 0.0018, 0.0, 1.0))
+            a_ = (np.maximum(stroke * 0.7, rule * 0.75) * band)[:, None]
+            inkl = project._lin(ink)
+            lin = lin * (1 - a_) + inkl[None] * a_
+            out[sk] = project._srgb(lin).astype(np.float32)
     if "blade" in names:
         bl = part == names.index("blade")
         u, v = cl.to_uv(P[..., 0][bl], P[..., 2][bl])
@@ -2918,7 +2953,8 @@ def _install_skin_print() -> None:
             log("burdam: Stillwater reed slats painted (grain, darker edges and nodes)")
         if (skin.get("extra") or {}).get("almanac_board"):
             log("burdam: Almanac Ledger print (ruled pauldrons, day-marks on the cleaver's back)")
-            out = almanac_print(out, maps, list(names), skin_pal.get("ironstone", "#2E2A26"))
+            out = almanac_print(out, maps, list(names), skin_pal.get("ironstone", "#2E2A26"),
+                                skin_pal.get("parchment", "#A3987F"))
         return out
 
     recolour._burdam = True

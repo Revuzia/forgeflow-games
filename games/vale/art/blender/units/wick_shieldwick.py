@@ -871,7 +871,7 @@ def _arm_parts(F, out, sleeve_r, mitt, cuff_role, cuff_kind, tris=(90, 60, 64)):
         # sleeve, the thumb lying over the haft across the fingers)
         if s == "R":
             fm = fist_mesh(G, W, np.asarray(F["mace_u"]), mitt[1] * 0.98, mitt[0] * 1.02, mitt[2] * 0.66, seg=10)
-            out.append((f"mitt_{s}", fm, 1.0, "leather", f"bone:hand.{s}", None))
+            out.append((f"mitt_{s}", fm, 1.0, "cloth", f"bone:hand.{s}", None))
             continue
         # the shield hand: a smooth turned mitten along the hand (wrist neck -> fist) and a thumb lobe on the
         # inner-front side over the grip (review item 12: the decimated three-shape sculpt read as a faceted rock)
@@ -886,7 +886,7 @@ def _arm_parts(F, out, sleeve_r, mitt, cuff_role, cuff_kind, tris=(90, 60, 64)):
         tr = mitt[0] * 0.42
         th_ = float(np.linalg.norm(tb - ta)) / 2 + tr
         m = m + lathe((ta + tb) / 2, sdf.frame(unit(tb - ta)), [(0.0, -th_), (tr, -th_ + tr * 0.7), (tr, th_ - tr * 0.7), (0.0, th_)], 6)
-        out.append((f"mitt_{s}", m, 1.0, "leather", f"bone:hand.{s}", None))
+        out.append((f"mitt_{s}", m, 1.0, "cloth", f"bone:hand.{s}", None))
 
 
 def _legs_boots(out, boot_half, boot_r=None, toe_out=10.0, tris=None):
@@ -3015,7 +3015,9 @@ if not getattr(project.paint_object, "_palette_fit", False):
 
 # AO floors (dilate_bake_maps; the AO goes into the base colour after it): review 2026-10-27b item 6 - the scarf's
 # occlusion cut dark bow-tie notches into the stole tops
-AO_FLOOR = {"aubade": {"stole": 0.80}, "serenade": {}}
+# (fix round 3: the haft running through the fist and the wrist neck / thumb overlapping it baked near-black AO into
+# the mittens - dark glossy balls)
+AO_FLOOR = {"aubade": {"stole": 0.80, "mitt_R": 0.78, "mitt_L": 0.78}, "serenade": {"mitt_R": 0.78, "mitt_L": 0.78}}
 
 
 def fac_of(names) -> str:
@@ -3023,8 +3025,8 @@ def fac_of(names) -> str:
 
 
 # matte overrides in the roughness bake (dilate_bake_maps)
-ROUGH = {"aubade": {"throat": 1.0, "hood_carved": 1.0},
-         "serenade": {"throat": 1.0, "hood_carved": 1.0, "collar": 0.97}}
+ROUGH = {"aubade": {"throat": 1.0, "hood_carved": 1.0, "mitt_R": 0.92, "mitt_L": 0.92},
+         "serenade": {"throat": 1.0, "hood_carved": 1.0, "collar": 0.97, "mitt_R": 0.92, "mitt_L": 0.92}}
 ACCENT_ROUGH = 0.9
 
 

@@ -34,7 +34,9 @@
 //             of war so the drop never goes to a black void); the far walls fall in terraces from a sunlit
 //             lip; rock columns stand in the drop (parallax); three drifting mist banks lie in it, the deepest
 //             with the river's faint glint; the hour-band notches stand proud as carved rings.
-//   brush     Needlegrass: instanced clumps of SOLID tapered blades (no alpha cards) on a carved curb.
+//   brush     Needlegrass: instanced clumps of SOLID tapered blades (no alpha cards) on a carved curb, painted
+//             dark foot → lit tip; the blades lean away from the units the viewer sees and fade round your own
+//             and allied fighters (r12 M11, terrain_brush.ts: the renderer feeds the field).
 //   clutter   (quality 0 none · 1 half · 2 full) moss cushions, fallen fan leaves, pebbles, wall-foot
 //             tufts: solid, instanced, chunked, no shadows; Dialwood floor only (never on roads, rooms,
 //             plazas, the Seat or the Noonline; the deck and the Noonplate stay clean stages).
@@ -42,7 +44,8 @@
 //             rows + a body of larger crowns, each sized so it hides nothing walkable — see treeScale),
 //             boulders at the cliff feet and stones on the jungle floor, needle fragments on Needlespan's
 //             far lips; never in lanes, clearings or brush. A role the map lists EMPTY scatters nothing
-//             (the Noonplate is a clean stage). Props read a gloss mask from COLOR_0's alpha.
+//             (the Noonplate is a clean stage). Props are matte (r12 M11; COLOR_0's alpha, the gloss mask, only
+//             takes roughness down to 0.75); the Dialwood crowns sway (≤ 4 cm at 0.2–0.4 Hz, terrain_brush.ts).
 //   marks     the Standing Shadow floor (violet-cool stone, hard engraved edge, keeps its colour under
 //             fog) and the Fallen Shaft's shallow water.
 // Instanced scatter is chunked (24 m cells) so off-screen chunks are culled from the main and shadow
@@ -50,7 +53,7 @@
 
 import {
   BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, IcosahedronGeometry,
-  InstancedMesh, LinearFilter, type Material, Matrix4, Mesh, Raycaster, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion,
+  InstancedMesh, LinearFilter, type Material, Matrix4, Mesh, Raycaster, MeshBasicMaterial, MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion,
   RGBAFormat, Shape, ShapeGeometry, ShapeUtils, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
   type WebGLProgramParametersWithUniforms,
 } from 'three';
@@ -333,7 +336,9 @@ export interface TerrainBuild {
   group: Group;
   /** heights of every wall polygon (0 for chasm walls) */
   wallHeights: number[];
-  setScatter(level: 0 | 1 | 2): void;
+  /** `ao`: is screen-space AO on (the quality's ao > 0)? Without it the Needlegrass bakes its own occlusion
+   *  (r12 M11: the brush stays in the dark band on Low too); left out, the last value holds */
+  setScatter(level: 0 | 1 | 2, ao?: boolean): void;
   /** the Needlegrass's unit field (r12 M11, terrain_brush.ts): the renderer feeds it the units the viewer sees
    *  every frame; null when the map has no thickets */
   brush: BrushField | null;
@@ -357,8 +362,8 @@ export const TERRAIN_TEX_ROLES: readonly TerrainTexRole[] = ['litter', 'grain', 
  *  node transforms applied); null when the map names none. An explicitly EMPTY list (e.g. "rock": []) means
  *  "scatter nothing" for that role (an empty entry in the result); a role the map leaves out, or whose GLBs
  *  all fail, keeps the procedural shapes.
- *  GLOSS (shared interface with the props lane): the alpha of COLOR_0 is a per-vertex gloss mask (1 =
- *  lacquered leaf, 0 = bark / stone), read by propMaterial(). A GLB whose alpha is 1 everywhere carries no
+ *  GLOSS (shared interface with the props lane): the alpha of COLOR_0 is a per-vertex gloss mask (0 = matte;
+ *  propMaterial() takes a masked vertex no lower than roughness 0.75). A GLB whose alpha is 1 everywhere carries no
  *  mask (an exporter's opaque default), so it is dropped and the prop stays matte, as before. */
 export async function loadTerrainProps(map: MapDefT, load: (ref: string) => Promise<{ gltf: { scene: import('three').Object3D }; renderable: boolean } | null>):
   Promise<Partial<Record<TerrainPropRole, BufferGeometry[]>> | null> {
@@ -1142,7 +1147,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   }) : null;
   const grassMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0, side: DoubleSide, transparent: true, depthWrite: true });
   grassMat.forceSinglePass = true;
-  const grassU = { uWindT: worldUniforms.valeTime, ...(brush ? brush.uniforms : { uBrush: { value: [] }, uBrushFade: { value: [] }, uBrushN: { value: 0 } }) };
+  const grassAO = { value: 1 };
+  const grassU = { uWindT: worldUniforms.valeTime, uGrassAO: grassAO, ...(brush ? brush.uniforms : { uBrush: { value: [] }, uBrushFade: { value: [] }, uBrushN: { value: 0 } }) };
   grassMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     Object.assign(shader.uniforms, grassU);
     shader.vertexShader = shader.vertexShader
@@ -1530,8 +1536,9 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   };
   /** a prop's instance value (propValue): none at 1, so an unscaled map keeps its programs */
   const pvC = (k: number): Color | undefined => (k === 1 ? undefined : new Color(k, k, k));
-  const setScatter = (level: 0 | 1 | 2): void => {
+  const setScatter = (level: 0 | 1 | 2, ao?: boolean): void => {
     scatterLevel = level;
+    if (ao !== undefined) grassAO.value = ao ? 1 : 0;
     for (const g of scatterParts) { scatterGroup.remove(g); g.traverse((o) => { if ((o as InstancedMesh).isInstancedMesh) (o as InstancedMesh).dispose(); }); }
     scatterParts = [];
     // level 0 keeps a sparse tree line so cliff tops never read as empty slabs
@@ -1699,8 +1706,8 @@ function needlegrassClump(root: Color, tip: Color): BufferGeometry {
     const dirx = Math.cos(a + 0.3), dirz = Math.sin(a + 0.3);
     const px = -dirz, pz = dirx;
     const inner = b === 0 ? 0.82 : 0.9 + (r0 / 0.17) * 0.1 + (rand() - 0.5) * 0.08;
-    const foot = root.clone().multiplyScalar(0.55 * inner), body = root.clone().lerp(tip, 0.3).multiplyScalar(inner);
-    const lit = tip.clone().multiplyScalar(0.9 * (0.94 + 0.06 * inner));
+    const foot = root.clone().multiplyScalar(0.6 * inner), body = root.clone().lerp(tip, 0.5).multiplyScalar(inner);
+    const lit = tip.clone().multiplyScalar(0.64 * (0.94 + 0.06 * inner));
     lit.r *= 1.05; lit.b *= 0.86;
     const ring: [number, number, number][][] = [];
     for (let k = 0; k <= SEG; k++) {

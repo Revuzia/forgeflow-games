@@ -9,7 +9,9 @@
 //                                     three, fade round you and the ally)
 //     foliage_<map>_<tag>_hidden.png  the same with the enemy out of your vision (no bend, no fade, nothing drawn)
 //     foliage_<map>_<tag>_empty.png   the thicket with nobody in it
-//     foliage_<map>_<tag>_wood.png    (maps with Dialwood) a 1:1 crop of the canopy, a boulder and a stone
+//     foliage_<map>_<tag>_wood.png    (maps with boulders) a look-dev close-up (camera at 11 m) of the boulder
+//                                     nearest the thicket and the canopy behind it
+//     foliage_<map>_<tag>_trees.png   (maps with Dialwood) the tree nearest the thicket, camera at 14 m
 //   --canon 1 also copies foliage_<map>_<tag>.png to _harness/_shots/foliage_<map>.png
 //
 //   leak test (the numbers printed and written to --report): an enemy alone in the brush, rendered at one fixed
@@ -17,6 +19,10 @@
 //   and the display pixels of a box round its spot compared: hidden vs absent must be IDENTICAL (bit-exact: the
 //   grass never moves for a unit the viewer cannot see), visible vs absent must differ (the bend is live).
 //   The brush slots the terrain received (terrain.brush.snapshot()) are listed per case.
+//
+//   sway (maps with Dialwood): the tree close-up rendered at t, t + 1.25 s and t again (dt 0): pixels moved, pixels
+//   that differ on return (0: the sway is a pure function of the clock), and the largest tip offset of the
+//   shader's own constants (terrain_brush.ts SWAY) swept over 120 s × 64 phases (must stay ≤ 4 cm).
 //
 //   node _harness/shot_foliage.mjs [--maps rift,bridge,fray] [--q high] [--tag after] [--dir <dir>] [--canon 0]
 //                                   [--report <file.json>] [--thicket <index>]
@@ -133,16 +139,17 @@ function install(thIdx) {
       };
     },
     /** a canopy / boulder / stone spot near the thicket for the wood crop */
-    woodSpot: () => {
+    woodSpot: (re = '^vale_boulders') => {
       let best = null;
+      const rx = new RegExp(re);
       R.terrain?.group.traverse((o) => {
-        if (!o.isInstancedMesh || !/^vale_boulders/.test(o.parent?.name ?? '')) return;
+        if (!o.isInstancedMesh || !rx.test(o.parent?.name ?? '')) return;
         const mm = new o.matrixWorld.constructor();
         for (let i = 0; i < o.count; i++) {
           o.getMatrixAt(i, mm);
-          const x = mm.elements[12], y = mm.elements[14];
+          const x = mm.elements[12], y = mm.elements[14], h = mm.elements[13];
           const d = Math.hypot(x - cx, y - cy);
-          if (!best || d < best.d) best = { x, y, d };
+          if (!best || d < best.d) best = { x, y, h, d };
         }
       });
       return best;
@@ -165,6 +172,20 @@ for (const map of MAPS) {
   const F = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__FOL__, x), [fn.toString(), a]);
   const res = { info };
   res.leak = await F((f) => f.leak());
+  // the envelope (terrain_brush.ts BrushField, 60 fps): a unit pushed for 0.5 s then gone — bend reaches 1 by
+  // ~120 ms and is back to 0 by ~400 ms after it left
+  res.timing = await page.evaluate(async () => {
+    const { BrushField } = await import('/src/render/terrain_brush.ts');
+    const bf = new BrushField(() => true);
+    const dt = 1 / 60; let up = null, down = null;
+    for (let i = 0; i < 90; i++) {
+      bf.begin(); if (i < 30) bf.push(1, 0, 0, 0.5, 0); bf.end(dt);
+      const sl = bf.snapshot(), b = sl.length ? sl[0].bend : 0;
+      if (up === null && b >= 0.999) up = +((i + 1) * dt * 1000).toFixed(0);
+      if (i >= 30 && down === null && b <= 0) down = +((i + 1 - 30) * dt * 1000).toFixed(0);
+    }
+    return { inMs: up, outMs: down };
+  });
   const name = (s) => join(DIR, `foliage_${map}_${TAG}${s}.png`);
   await F((f) => { f.set({}); f.focus(); f.settle(40); });
   await page.screenshot({ path: name('_empty') });
@@ -177,16 +198,55 @@ for (const map of MAPS) {
   if (CANON) copyFileSync(name(''), join(HERE, '_shots', `foliage_${map}.png`));
   const wood = await F((f) => f.woodSpot());
   if (wood) {
-    await F((f, p) => { f.set({}); window.__VALE_BENCH__.focus(p.x, p.y + 2.5); window.__VALE_BENCH__.zoom(28.5); f.settle(40); }, wood);
-    const c = await page.evaluate((p) => { const R = window.__VALE_BENCH__.renderer; const s = R.worldToScreen(p.x, p.y, 0); return [s.x, s.y]; }, wood);
-    const cw = Math.round(W * 0.42), ch = Math.round(H * 0.5);
-    const x0 = Math.max(0, Math.min(W - cw, Math.round(c[0] - cw / 2))), y0 = Math.max(0, Math.min(H - ch, Math.round(c[1] - ch * 0.6)));
-    await page.screenshot({ path: name('_wood'), clip: { x: x0, y: y0, width: cw, height: ch } });
+    // look-dev close-up (harness only): the camera pulled in to 11 m (past the player's zoom clamp) over the
+    // boulder nearest the thicket and the canopy behind it, so the rocks' paint and the crowns' plates read
+    await F((f, p) => {
+      f.set({});
+      const b = window.__VALE_BENCH__, cam = b.renderer.rig;
+      b.focus(p.x, p.y - 1.2); b.zoom(28.5);
+      cam.distance = cam.zoomTarget = 11;
+      f.settle(40);
+    }, wood);
+    await page.screenshot({ path: name('_wood') });
+    await F(() => { const b = window.__VALE_BENCH__; b.zoom(28.5); });
     res.wood = wood;
   }
-  res.errors = logs.filter((l) => /error/i.test(l)).slice(0, 8);
+  // the Dialwood nearest the thicket, close (14 m): plates, the value gradient, no lacquer hot spots
+  const tree = await F((f) => f.woodSpot('^vale_trees'));
+  if (tree) {
+    await F((f, p) => { f.set({}); const b = window.__VALE_BENCH__, cam = b.renderer.rig; b.focus(p.x, p.y - (p.h + 1.6) * 0.78); b.zoom(28.5); cam.distance = cam.zoomTarget = 14; f.settle(40); }, tree);
+    await page.screenshot({ path: name('_trees') });
+    // sway: the frame at t, t + 1.25 s and t again (dt 0, the sim held): the crowns move, and return exactly
+    res.sway = await page.evaluate(async () => {
+      const R = window.__VALE_BENCH__.renderer, gl = R.gl, ctx = gl.getContext();
+      const w = gl.domElement.width, h = gl.domElement.height;
+      const grab = (t) => { R.time = t; R.render(0); R.time = t; R.render(0); const b = new Uint8Array(w * h * 4); ctx.readPixels(0, 0, w, h, ctx.RGBA, ctx.UNSIGNED_BYTE, b); return b; };
+      const T0 = R.time;
+      const a = grab(T0), b = grab(T0 + 1.25), c = grab(T0);
+      const cnt = (x, y) => { let n = 0; for (let i = 0; i < x.length; i += 4) if (x[i] !== y[i] || x[i + 1] !== y[i + 1] || x[i + 2] !== y[i + 2]) n++; return n; };
+      // the shader's own numbers (terrain_brush.ts SWAY), swept over 120 s and 64 phases: the largest tip offset
+      const { SWAY } = await import('/src/render/terrain_brush.ts');
+      let max = 0;
+      for (let k = 0; k < 64; k++) {
+        const ph = (k / 64) * Math.PI * 2;
+        for (let t = 0; t < 120; t += 0.05) {
+          const T = t * Math.PI * 2;
+          const A = SWAY.w[0] * Math.sin(SWAY.hz[0] * T + ph) + SWAY.w[2] * Math.sin(SWAY.hz[2] * T + ph * 1.9 + 1.3);
+          const B = SWAY.w[1] * Math.sin(SWAY.hz[1] * T + ph * 2.7 + 0.4);
+          const [wx, wz] = SWAY.wind;
+          max = Math.max(max, Math.hypot(wx * A - wz * B, wz * A + wx * B) * SWAY.tip);
+        }
+      }
+      return { changedPx: cnt(a, b), of: w * h, returnPx: cnt(a, c), tipMaxCm: +(max * 100).toFixed(2), hz: SWAY.hz };
+    });
+    await F(() => { window.__VALE_BENCH__.zoom(28.5); });
+    res.tree = tree;
+  }
+  res.errors = logs.filter((l) => /error|http 4|http 5/i.test(l)).slice(0, 8);
   out.maps[map] = res;
   const L = res.leak;
+  console.log(`${map}: brush envelope in ${res.timing.inMs} ms, out ${res.timing.outMs} ms`);
+  if (res.sway) console.log(`${map}: sway tip ≤ ${res.sway.tipMaxCm} cm at ${res.sway.hz.join('/')} Hz; ${res.sway.changedPx} px moved over 1.25 s, ${res.sway.returnPx} px differ on return`);
   console.log(`${map}: thicket ${info.thicket} at ${info.centre.map((v) => v.toFixed(1))}  leak hidden-vs-absent ${L.hiddenVsAbsent.px}/${L.hiddenVsAbsent.of} px (max ${L.hiddenVsAbsent.max})  visible-vs-absent ${L.visibleVsAbsent.px} px  repeat ${L.absentRepeat.px} px  slots all=${JSON.stringify(res.slotsAll)}`);
   await browser.close();
 }

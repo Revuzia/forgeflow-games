@@ -73,10 +73,13 @@ SOCKETS = {"weapon": "prop.R", "knife_tip_r": "x_knife_tip_r", "knife_tip_l": "x
 # (fix pass 4, review: a small centred figure in a casual stance next to Marund's frame-filling hero shot): the
 # splash_hero lunge (a splash-only pose), larger and on the right-hand columns like the roster's other splashes
 SPLASH = {"map": "map_rift", "clip": "splash_hero", "t": 0.0, "yaw": 52.0, "pitch": -4.0, "fill": 0.86, "x": 0.66,
-          "sun": 2.4, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 36.0, "icon_yaw": 8.0}
+          "sun": 1.9, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 36.0, "icon_yaw": 28.0}
+# (fix pass 5, review: the hero art read as untextured plastic, washed out: the sun 2.4 -> 1.9 and the sky fill
+# x0.5, so the painted values, strokes and carving hold in the light; the icon turned to 28 degrees: from the front
+# the crest stood edge-on over the visor, the review's down-arrow, where the crescent frame and its panes now show)
 HERO_SPEC = 0.15
 PORTRAIT_TIGHTEN, PORTRAIT_X = 0.15, 0.47
-HERO_FILL = 0.6
+HERO_FILL = 0.5
 HERO_SAMPLES = 2.0        # hero render samples x this, and the nlmeans denoise strength x HERO_DENOISE (grain)
 HERO_DENOISE = 1.4
 TEXTURE_SIZE = 2048
@@ -99,7 +102,8 @@ SKINS: list = [
      "absolute": ("cloth", "ironstone", "under", "leather"),
      # (fix pass 5, review: the mid band read L* 31-40 against the brief's 45-65, the scarf a near-white bib): the
      # coat, apron, sleeves and chest a step lighter mid ink-grey, the scarf a chalky grey a step under the crest
-     "parts": {"apron": "#666E79", "sleeves": "#77808B", "chest_plate": "#8A919B", "cowl": "#A7AEB3",
+     "parts": {"apron": "#6C7480", "sleeves": "#7E8792", "chest_plate": "#8E959F", "cowl": "#959CA3",
+               "skirt_L": "#707884", "skirt_R": "#707884",
                "pauldron_L": "#98A0AA", "lames_L": "#98A0AA", "pauldron_R": "#98A0AA",
                "helm": "#959BA3", "nape": "#5F6670", "visor": "#A2A8B0", "fins": "#B2B7BD"},
      # (fix pass 3, review: the portrait was the base's: the helm itself goes a mid ink-grey under its chalk
@@ -113,7 +117,8 @@ SKINS: list = [
     # (the painting's cowl and sleeves are pale blue linen: their mean moves onto the warm scarf colour, `absolute`)
     {"id": "rishal_lamplit", "extra": {"lamp_cage": True}, "card": {"primary": "#4A4036", "secondary": "#A38C6B"},
      "absolute": ("cloth2",),
-     "parts": {"cowl": "#C4B6A0", "sleeves": "#ABA08F"},   # (review: the cowl blew out near white: the scarf a step
+     "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F"},   # (fix pass 5: the scarf a step down again, L* 69: the
+     # hero light still blew the painted scarf's lit folds out to near white)   # (review: the cowl blew out near white: the scarf a step
      # down, L* 74; fix pass 2: the sleeves keep the base's mid-light step under the scarf, L* 66)
      "palette": {"dawnglass": "#A38C6B", "chalk": "#D5CDBF", "stone": "#BFB09A", "cloth2": "#CFC5B3", "cloth": "#8B7A68",
                  "leather": "#5E4D3E", "ironstone": "#3F3730", "under": "#3A332D", "wood_dark": "#5A4636",
@@ -1104,7 +1109,7 @@ def sculpts() -> list:
         # (fix pass 5, review: orange staples standing off the greave): flat straps lying on the calf, round the back
         # only, their ends tucked under the greave's edges
         part(f"calfwrap_{s}", RingBands(f"calfwrap_{s}", bands, sd, width=0.020, thick=0.0035, segs=12,
-                                        arc=(math.pi / 2 - 1.15, math.pi / 2 + 1.15)), "leather", f"bone:shin.{s}", 300)
+                                        arc=(math.pi / 2 - 0.95, math.pi / 2 + 0.95)), "leather", f"bone:shin.{s}", 300)
     boots = Sculpt("boots")
     for s, sx in (("R", -1.0), ("L", 1.0)):
         an, fw = J[f"ankle.{s}"], J[f"fwd.{s}"]
@@ -2092,7 +2097,7 @@ def wrap_paint(p, n):
 TROUSER_COL = {"base": "#5A6A78", "fold": "#3B4652", "lit": "#71818E"}
 COAT_COL = {"front": "#97A6AD", "back": "#8A959D", "lining": "#69747D", "trim": "#5F6B74", "trim_lit": "#B3BFC4",
             "ink": "#3A434B"}
-COWL_COL = {"front": "#8DA6B8", "back": "#91A4B2", "fold": "#5E7486", "lit": "#AFC4D2"}
+COWL_COL = {"front": "#8DA6B8", "back": "#9AADBB", "fold": "#5E7486", "lit": "#AFC4D2"}
 SLEEVE_COL = {"base": "#8E9FAC", "fold": "#64747F"}
 
 

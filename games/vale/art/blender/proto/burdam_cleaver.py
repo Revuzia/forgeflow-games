@@ -139,13 +139,15 @@ def notch_floors(proud: float = 0.005, into: float = 0.010, n: int = 18) -> list
     return out
 
 
-GEM_INSET_A, GEM_INSET_B = 0.040, 0.068   # fix pass 8: the inlay diamonds' half-diagonals (along u, across v): the
+GEM_INSET_A, GEM_INSET_B = 0.042, 0.072   # fix pass 8: the inlay diamonds' half-diagonals (along u, across v): the
                                           # bite-floor linings are gone (the review: lining + diamond = a 10-mark
                                           # two-row checker), so the five diamonds carry the accent alone, a size up
-                                          # (8 x 13.6 cm, 2.8 cm of ironstone between them)
+                                          # (8.4 x 14.4 cm, 2.4 cm of ironstone between them; the band's narrowing
+                                          # end shortens the last two)
 GEM_GAP = 0.010                           # the dark stone left between a bite's floor and its inlay's top point
 GEM_EDGE = 0.016                          # ... and between an inlay's bottom point and the band's lower edge
-POMMEL_GEM = (0.052, 0.046)               # the pommel's blue diamond (the concept's gem pommel), half-diagonals
+POMMEL_GEM = (0.062, 0.054)               # the pommel's blue diamond (the concept's gem pommel), half-diagonals
+                                          # (fix pass 8: a size up, inside the plate's 0.080 x 0.070)
 
 
 def heel_low(u):

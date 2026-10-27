@@ -57,7 +57,7 @@ PALETTES = {
     # foot, warmer lit tops / cooler shade, a chalk rim on the lit convex edges over the chamfers)
     "dial": dict(stops=[(0.0, "#1F1D1B"), (0.25, "#37322C"), (0.5, "#514A40"), (0.75, "#6E6656"), (1.0, "#8C826E")],
                  chalk="#BDB194", groove="#B0A891", broken="#8A8173", moss="#3E4A32", moss_hi="#66703F", warm=0.13, keep=0.9,
-                 facet=0.035, ao=0.68, rim=0.38),
+                 facet=0.035, ao=0.68, rim=0.3),
     # BRIDGE needle stone: pale chalk-grey, cooler; fracture faces paler still (brief: L* 72 raw face)
     # BRIDGE needle stone: pale chalk-grey and COOL against the warm deck (#A59B86) and terraces; fracture faces
     # paler still (brief: L* 72 raw face); its carved groove and hour-band hold chalk inlay like the deck's script

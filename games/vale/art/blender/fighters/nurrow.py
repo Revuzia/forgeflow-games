@@ -119,12 +119,12 @@ BRIM_R = 0.395            # the cone's outer radius at the brim
 CONE_H = 0.165            # brim plane -> apex (outer surface)
 CONE_T = 0.013            # lacquer shell thickness
 # fix pass 5 (review: 'six 12.6 x 6.2 cm inlays, 3x the brief, glossy blue buttons / a tambourine'): the concept's
-# MANY SMALL studs, 22 glass studs (6 x 3.8 cm) in small iron collars round the rim, spaced 18 deg at the sides
-# opening to 12 deg at the back. Their size is the floor lineup_qa leaves (>= 1 % of the silhouette from behind,
+# MANY SMALL studs, 21 glass studs (6.4 x 4.1 cm) in small iron collars round the rim, spaced 18 deg at the sides
+# closing to 12 deg at the back. Their size is the floor lineup_qa leaves (>= 1 % of the silhouette from behind,
 # the bible's accent rule; the brief's 4 x 1.5 cm x 6 is 0.4 %); the front 60 deg stays bare (the idle's front brim
 # drops toward the figure's middle row: the accent's top-half share)
-_RA = (36.0, 54.0, 71.0, 87.0, 102.0, 116.0, 129.0, 141.0, 152.0, 163.0, 174.0)
-RIM_ANGLES = tuple(a for a in _RA) + tuple(-a for a in _RA)
+_RA = (36.0, 54.0, 71.0, 87.0, 102.0, 116.0, 129.0, 141.0, 152.0, 164.0)
+RIM_ANGLES = tuple(a for a in _RA) + tuple(-a for a in _RA) + (180.0,)
 RIM_N = len(RIM_ANGLES)
 
 
@@ -474,7 +474,7 @@ def sculpts() -> list:
     rim = Sculpt("hat_rim")
     rim.add(Lathe(HAT_C, rim_prof, BRIM_R + 0.03, -0.04, 0.03, axes=HAT_AX).displaced(chips(0.003, 30.0), 0.003), k=0.0)
     glass = Sculpt("hat_inlays")
-    # 22 small oval glass studs, each in a raised iron collar that swells the rim (7.2 x 4.8 cm), the glass 6 x 3.8 cm
+    # 21 small oval glass studs, each in a raised iron collar that swells the rim (7.6 x 5.2 cm), the glass 6.4 x 4.1 cm
     # on the rim's upper-outer bevel (the colour reads from any angle, from above most): the concept's stud row
     for i, phi in enumerate(RIM_ANGLES):
         rd = rim_angle_dir(phi)
@@ -484,9 +484,9 @@ def sculpts() -> list:
         b_w = np.cross(n_w, t_w)
         ax = np.stack([unit(t_w), unit(b_w), unit(n_w)])
         c_w = hat_w(rd * (BRIM_R + 0.002) + V3([0, 0, 0.004]))
-        rim.add(Ellipsoid(c_w - n_w * 0.005, (0.036, 0.024, 0.0120), axes=ax), k=0.008)         # the collar
-        rim.sub(Ellipsoid(c_w + n_w * 0.0015, (0.0315, 0.0205, 0.0070), axes=ax), k=0.002)       # its seat
-        glass.add(Ellipsoid(c_w + n_w * 0.0008, (0.030, 0.019, 0.0075), axes=ax), k=0.0)
+        rim.add(Ellipsoid(c_w - n_w * 0.005, (0.038, 0.026, 0.0120), axes=ax), k=0.008)         # the collar
+        rim.sub(Ellipsoid(c_w + n_w * 0.0015, (0.0335, 0.0215, 0.0070), axes=ax), k=0.002)       # its seat
+        glass.add(Ellipsoid(c_w + n_w * 0.0008, (0.032, 0.0205, 0.0075), axes=ax), k=0.0)
     part("hat_rim", rim, "ironstone", "bone:x_hat", 1250, 0.5)
     part("hat_inlays", glass, "accent", "bone:x_hat", 720, 0.35)
 
@@ -851,10 +851,15 @@ def extra_materials(ctx) -> dict:
     return {"hand_wood": materials.carved_wood("hand_wood", pal, "hand_wood", ctx.gradient)}
 
 
-def cone_low(N=64, K=6, K_in=4, r0=0.03):
+HAT_UVW = (2.0, 0.3)      # fix pass 5: texel weights of the lacquered top and the underside (the underside, never seen
+#                           by the game camera, took more atlas than the painted top: its brushwork blurred)
+
+
+def cone_low(N=64, K=6, K_in=4, r0=0.03, which="all"):
     """the hat's game mesh, built clean (a decimated voxel cone pinched into dents that the bake turned into dark
     smudges on the lacquer): outer rings on z = h (1 - r / R), the underside offset by the shell thickness, the brim
-    edge and the apex closed (under the knob's disc). Returns (verts world, quads)."""
+    edge and the apex closed (under the knob's disc). which: "outer" (the lacquered top), "inner" (the underside +
+    the brim edge + the apex strip), "all". Faces wound outward. Returns (verts world, quads)."""
     s = CONE_H / BRIM_R
     nrm = np.array([s, 1.0]) / math.hypot(s, 1.0)              # the outer line's normal in (r, z)
     phis = np.linspace(0, 2 * math.pi, N, endpoint=False)
@@ -868,17 +873,22 @@ def cone_low(N=64, K=6, K_in=4, r0=0.03):
         r = r0 + (R_lo - r0) * (k / K_in)
         ro, zo = r, CONE_H * (1 - r / BRIM_R)
         inner.append((ro - nrm[0] * CONE_T, zo - nrm[1] * CONE_T))
-    prof = rings + inner[::-1]                                   # outer apex -> brim, then inner brim -> apex
+    if which == "outer":
+        prof, closed = rings, False
+    elif which == "inner":
+        prof, closed = [rings[-1]] + inner[::-1] + [rings[0]], False
+    else:
+        prof, closed = rings + inner[::-1], True                 # outer apex -> brim, then inner brim -> apex
     V, F = [], []
     for (r, z) in prof:
         for ph in phis:
             V.append(hat_ws((r * math.sin(ph), -r * math.cos(ph), z)))
     nr = len(prof)
-    for i in range(nr):                                          # the closing strip (inner apex -> outer apex) wraps
+    for i in range(nr if closed else nr - 1):                    # (closed: the inner apex -> outer apex strip wraps)
         j = (i + 1) % nr
         for a in range(N):
             b = (a + 1) % N
-            F.append((i * N + a, i * N + b, j * N + b, j * N + a))
+            F.append((i * N + a, j * N + a, j * N + b, i * N + b))   # outward (apex -> brim x phi: up on the top)
     return np.asarray(V), np.asarray(F)
 
 
@@ -893,11 +903,13 @@ def model(ctx) -> list:
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
         ob.data.materials.append(ctx.mats[role])
         if name == "hat_cone":
-            lv, lq = cone_low()
-            low = sdf.to_object(f"{name}_low", lv, lq, ctx.col)
-            low.data.materials.append(ctx.mats[role])
-            mesh.cleanup(low, merge=1e-5, recalc=True, loose=False)
-            P.append(fighter.Part(name, high=ob, low=low, bind=bind))
+            # the lacquered top and the underside as two parts (their own texel weights, HAT_UVW), one sculpt
+            for nm_, which, uvw in ((name, "outer", HAT_UVW[0]), ("hat_under", "inner", HAT_UVW[1])):
+                lv, lq = cone_low(which=which)
+                low = sdf.to_object(f"{nm_}_low", lv, lq, ctx.col)
+                low.data.materials.append(ctx.mats[role])
+                mesh.cleanup(low, merge=1e-5, recalc=False, loose=False)
+                P.append(fighter.Part(nm_, high=ob, low=low, bind=bind, uv_weight=uvw))
             continue
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
     return P
@@ -1243,18 +1255,19 @@ def _lacquer(p, n, q, r, phi):
     fade = _ss(0.10, 0.26, r)
     seam = _ss(0.0024, 0.0008, arc) * fade
     lip = _ss(0.0045, 0.0028, u * wd * r * BRIM_R) * (1 - _ss(0.0028, 0.0018, u * wd * r * BRIM_R)) * fade
-    broad = _streaks(phi, r, 17.0, 3.2) * (0.55 + 0.45 * _streaks(phi, r, 7.0, 7.0, 31.0))
+    broad = _streaks(phi, r, 11.0, 2.6) * (0.55 + 0.45 * _streaks(phi, r, 6.0, 6.0, 31.0))
     hair = _streaks(phi, r, 58.0, 2.0, 11.0)
     mott = NOISE.fbm(p, 7.0, 3)
-    v = 0.40 + 0.47 * t
-    v = v + 0.040 * HAT_OFF[k] + 0.045 * (u - 0.5) * fade
-    v = v + 0.095 * broad + 0.05 * hair + 0.03 * mott
+    # (f5-2: bolder: the f5-1 strokes vanished in the splash's sky light and the 2 mm texels)
+    v = 0.34 + 0.56 * t
+    v = v + 0.065 * HAT_OFF[k] + 0.06 * (u - 0.5) * fade
+    v = v + 0.13 * broad + 0.05 * hair + 0.04 * mott + 0.05 * NOISE.fbm(p, 2.5, 2, offset=(9.0, 4.0, 1.0))
     v = v + 0.04 * _ss(0.0, 0.3, r) * (1 - _ss(0.3, 0.55, r))
     v = v - 0.12 * seam + 0.06 * lip
     rl = r + 0.004 * _streaks(phi, r, 9.0, 1.0, 5.0)
-    line = _ss(0.0042, 0.0016, np.abs(rl - 0.875) * BRIM_R)
+    line = _ss(0.0050, 0.0020, np.abs(rl - 0.875) * BRIM_R)
     line_lit = _ss(0.0035, 0.0012, np.abs(rl - 0.887) * BRIM_R)
-    v = v - 0.20 * line + 0.06 * line_lit
+    v = v - 0.26 * line + 0.07 * line_lit
     v = v - 0.10 * _ss(0.89, 1.0, r)                                        # the brim's lower band in its shade
     soot = _ss(0.30, 0.07, r + 0.06 * (0.5 + _streaks(phi, r, 6.0, 2.0, 3.0)) * _ss(0.05, 0.25, r))
     v = v - 0.16 * soot
@@ -1866,7 +1879,7 @@ def nurrow_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed
     def sel(name):
         return (part == names.index(name)) if name in names else np.zeros_like(have)
     # 3. painted parts
-    for nm, fn in (("hat_cone", paint_hat), ("hat_rim", paint_rim), ("hat_knob", paint_knob), (BLADE_OWNER, paint_blade),
+    for nm, fn in (("hat_cone", paint_hat), ("hat_under", paint_hat), ("hat_rim", paint_rim), ("hat_knob", paint_knob), (BLADE_OWNER, paint_blade),
                    ("grip", paint_grip), ("head", paint_head), ("hat_band", paint_band), ("belt_strap", paint_strap),
                    ("brooch_glass", paint_slate), ("pauldron", paint_pauldron), ("boots", paint_boots)):
         m = sel(nm)
@@ -1892,7 +1905,7 @@ def nurrow_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed
         pid = vis.part["front"]
         for k in np.unique(part[hit]):
             nm = names[int(k)]
-            if nm in (BLADE_OWNER, "grip", "hat_cone", "hat_rim", "hat_knob", "head", "hat_band", "belt_strap", "boots",
+            if nm in (BLADE_OWNER, "grip", "hat_cone", "hat_under", "hat_rim", "hat_knob", "head", "hat_band", "belt_strap", "boots",
                       "pauldron"):
                 continue
             valid = (pid[y0:y1, x0:x1] == k) & ~bmask[y0:y1, x0:x1]
@@ -2014,6 +2027,9 @@ def nurrow_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed
         lin = _lin(out[m])
         Y = lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
         ratio = np.clip(Y / max(float(np.median(Y)), 1e-5), rlo, rhi) ** gain_
+        zk = LEG_ZDARK.get(nm)
+        if zk:                                               # the thighs a step darker (the splash), the cuffs kept
+            ratio = ratio * (1.0 - (1.0 - zk[2]) * _ss(zk[0], zk[1], P[m][:, 2]))
         out[m] = _srgb(_lin(_hexs(hexc))[None, :] * ratio[:, None]).astype(np.float32)
         log(f"  leg colour {nm}: median -> {hexc}")
     _lift_ao([sel(nm) for nm in AO_FLOOR], list(AO_FLOOR.values()), log)
@@ -2024,6 +2040,9 @@ def nurrow_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed
     return out
 
 
+# fix pass 5: the thighs (above the gathered cuffs) x0.80 in linear light: the splash lit them mauve-pink at L* 45
+# (the concept's L* 23); the cuffs and wraps below carry the facing-0 feet band and stay
+LEG_ZDARK = {"trousers": (0.56, 0.66, 0.80)}
 SIDE_FILL = {"trousers": (0.50, 0.80), "legwraps": (0.45, 0.75)}
 
 
@@ -2167,7 +2186,7 @@ def _flatten_normal_seams(have, cape, log=print, rough_floor=()):
         log(f"  roughness margin filled from the islands on {r_.name}: {int((~hv).sum())} texels")
 
 
-PAINTED = ("hat_cone", "hat_rim", "hat_knob")      # painted in the skin's own colours by nurrow_paint
+PAINTED = ("hat_cone", "hat_under", "hat_rim", "hat_knob")      # painted in the skin's own colours by nurrow_paint
 
 
 def nurrow_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
@@ -2731,7 +2750,7 @@ def clip_overrides(ctx) -> dict:
     spear = pose(dict(hips=(40, 0, 0), spine=(14, 0, 0), chest=(8, 0, 0), neck=(-26, 0, 0), head=(-18, 0, 0)),
                  (0, -0.25, -0.24), R=((0.02, -0.99, -0.06), (-0.85, 0.3, -0.3)), aim=(0.0, -0.99, -0.12),
                  L=((0.70, 0.62, -0.22), (0.3, 0.6, 0.6)), laim=(0.62, 0.40, -0.67),      # (chest frame, pitched 62)
-                 ft=feet(dl=(0.05, -0.40, 0.0), dr=(0.02, 0.48, 0.06), pr=-55.0), cape=-38.0)
+                 ft=feet(dl=(0.05, -0.40, 0.0), dr=(0.02, 0.48, 0.06), pr=-55.0), cape=-24.0)
     # the landing beside the target: a low crouch, the blade arm swept back low behind the right hip (done), the lull
     #    hand lowered in front of her PALM-DOWN (PalmAim: the back of the hand up), the head bowed toward it: the room
     #    falls quiet. Held f16-f30, then she straightens
