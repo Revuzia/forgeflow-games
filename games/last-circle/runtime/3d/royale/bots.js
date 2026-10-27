@@ -431,7 +431,7 @@ export function attachBrain(W, actor, nBots) {
       graceMul: 0, assist: null, ping: null, pingRec: null, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
       nadeS: 0, nadeKind: 0, nadeSlot: -1, nadePrev: -1, nadeX: 0, nadeY: 0, nadeZ: 0, nadeYaw: 0, nadePitch: 0, nadeT: -99, nadeNextT: 0, nadeCheckT: 0, smokeWant: 0,
       reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, followBack: false, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
-      wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, fdS: 0, fdA: 0, arcSweepT: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
+      wantShield: false, shieldScanT: 0, shieldNear: false, shieldGo: null, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, fdS: 0, fdA: 0, arcSweepT: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
     },
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
@@ -911,20 +911,33 @@ function think(W, b) {
       if (!s2 || s2.kind !== "consumable" || !(s2.count > 0)) continue;
       const c = K.CONSUMABLES[s2.id];
       if (!c || !c.heals) continue;
+      if (c.heals === "shield" && keepBig(a, s2)) continue;       // (fix round) a lone big shield is kept for the bar under 75
       if (c.heals === "shield" ? a.shield < c.cap : a.hp < c.cap) { if (c.heals === "shield") shieldItem = true; else hpItem = true; }
     }
-    if (shieldItem) s.HEAL = Math.max(s.HEAL, bb.target ? 60 : 66);
+    // (fix round, P2-B) a lull with a target in memory (calm: unseen 2.5 s, no hit for 4 s) is a lull in the endgame too: the stale-target
+    // ENGAGE there scores 62-87 (endgame + last-few bonuses) and outbid the 60, so at <= 10 alive - the whole t >= 600 window - a bot
+    // carried its minis through every gap in the fight (census: 0-shield ENGAGE bots holding 1-6 minis)
+    if (shieldItem) s.HEAL = Math.max(s.HEAL, bb.target ? Math.max(60, s.ENGAGE + 2) : 66);
     else if (hpItem && a.hp < 90) s.HEAL = Math.max(s.HEAL, 62);
   }
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
   // (P23, LC-20) ...and goes and gets a shield when it has none: calm, upgraded, bar under 75, no shield item carried, a shield it could take
   // (or make room for: makeRoom) or an unopened chest within SHIELD_SEEK_M. pickLoot ranks shields first while bb.wantShield is set.
-  bb.wantShield = calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= 50);
-  if (bb.wantShield && W.t >= bb.shieldScanT) {
+  bb.wantShield = calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= MINI_CAP());
+  if (!bb.wantShield) bb.shieldGo = null;
+  else if (W.t >= bb.shieldScanT) {
     bb.shieldScanT = W.t + 2;
-    bb.shieldNear = !!nearShield(W, a, SHIELD_SEEK_M);
+    const n = nearShield(W, a, SHIELD_SEEK_M);
+    // (fix round, P2-B) AT THE MINI CAP, GO FURTHER. A bar at 50 with no big shield in the bag only climbs on a big one (a mini caps at 50), and
+    // the verifier's census found the in-circle big shields of the late game 60-200 m from the bots that needed them, unclaimed: nearbyLoot's
+    // 4 m vertical window (NEAR_DY) drops anything up or down a slope, and the LOOT scan stops at 90 m. So once the bar sits at the cap a calm
+    // bot looks out to SHIELD_FAR_M, slope or not, for a big shield (a death pile's too) or an unopened supply crate (two of them), inside the
+    // next circle, and walks to it (bb.shieldGo: onEnter LOOT takes it over a pick that is not a shield).
+    bb.shieldGo = n && n.type === "item" ? n : (a.shield >= MINI_CAP() ? farShield(W, a) : null);
+    bb.shieldNear = !!(n || bb.shieldGo);
   }
-  if (bb.wantShield && bb.shieldNear) s.LOOT = Math.max(s.LOOT, 58);
+  // (fix round, P2-B) ...and the shield it goes for outbids a stale target in the endgame the same way (not in the last few: that is the fight)
+  if (bb.wantShield && bb.shieldNear) s.LOOT = Math.max(s.LOOT, 58, bb.target && !lastFew ? s.ENGAGE + 1 : 0);
   // ...and loots the body of the man it just killed, once nobody is in sight (his shields, ammo and heals are the restock a player takes)
   if (!liveTarget && W.t - bb.pileT < 35 && W.t - (a.lastDamageT || -99) > 3 && hyp(bb.pileX - a.pos.x, bb.pileZ - a.pos.z) < 60) s.LOOT = Math.max(s.LOOT, 56);
   // GRAB FIRST. Measured 2026-09-30 (isla_viva 7, deepwood 3): of the pistol kills
@@ -981,6 +994,7 @@ function think(W, b) {
   // for a crate that whoever was standing next to it has already emptied.
   s.SUPPLY = bb.supply && W.t - bb.supply.t < 90
     ? (a.personality === "loot_goblin" ? 78 : 58) - hyp(a.pos.x - bb.supply.x, a.pos.z - bb.supply.z) * 0.12
+      + (a.shield < SHIELD_KEEP && bigCount(a) < 2 ? 8 : 0)       // (fix round, P2-B) a crate is two big shields: worth more to a thin bar
     : 0;
   // ENDGAME HUNT (owner playtest: "at some point they just wander around
   // aimlessly doing nothing"): ≤10 alive, nothing visible, safely inside the
@@ -1177,7 +1191,11 @@ function onEnter(W, b, state) {
       for (const k in bad) if (bad[k] <= W.t) delete bad[k];
       near = near.filter((n) => !(bad[n.id] > W.t));
     }
-    const pick = pickLoot(W, a, near);
+    let pick = pickLoot(W, a, near);
+    if (bb.wantShield && bb.shieldGo && !(pick && shieldGoal(a, pick))) {      // (fix round, P2-B) the shield the scan found, over loot that is not one
+      const g = liveLoot(W, bb.shieldGo);
+      if (g) pick = g; else bb.shieldGo = null;
+    }
     if (!pick || pick.id !== bb.lootId) bb.nearLootT = 0;
     if (!pick) { bb.pileT = -99; bb.shieldNear = false; }        // (P23) nothing left to take: the restock marks are spent
     bb.lootId = pick ? pick.id : null;
@@ -1342,9 +1360,11 @@ function pickLoot(W, a, near) {
     else if (n.data.kind === "consumable") {
       score = n.data.id.includes("shield") ? 45 : 34;
       // (P23, LC-20) a calm bot with a thin bar and no shield in the bag goes for the shield first
-      if (score === 45 && a.brain && a.brain.bb.wantShield) score = n.data.id === "big_shield" ? 70 : 62;
-      // ...and a big shield is the only item that takes the bar past 50 (a mini caps there): one in the bag is worth a detour
-      else if (n.data.id === "big_shield" && !carriesShield(a, true)) score = 54;
+      // (fix round) a mini only while it still adds (under its cap): at the cap the boost walked a bot to minis that do nothing
+      if (score === 45 && a.brain && a.brain.bb.wantShield && (n.data.id === "big_shield" || a.shield < MINI_CAP())) score = n.data.id === "big_shield" ? 70 : 62;
+      // ...and a big shield is the only item that takes the bar past 50 (a mini caps there): the first two in the bag are worth a detour (fix
+      // round: two, not one - the late game's bar is what the bag carried into it)
+      else if (n.data.id === "big_shield" && bigCount(a) < 2) score = 54;
     }
     else if (n.data.kind === "ammo") score = dry ? 80 : (feedsStarvingPrimary(a, n.data.id) ? 70 : 38);
     score -= n.d * 0.4;
@@ -1452,8 +1472,11 @@ function startHeal(W, a) {
   // (P23, LC-20) calm (5 s since the last hit, no target): the minis first while they still add (cap 50), then the big ones - the whole bar
   // ends up full. Under fire: the old order (the big shield first: the most bar per second).
   const calm = a.brain && !a.brain.bb.target && W.t - (a.lastDamageT || -99) > 5;
-  const order = calm && a.shield < 50 ? HEAL_CALM_ORDER : a.shield < 40 ? ["big_shield", "mini_shield", "medkit", "bandage"] : ["medkit", "bandage", "big_shield", "mini_shield"];
-  for (const id of order) if (W.useConsumable(a, id)) return true;
+  // (fix round, P2-B) under 40 the minis go first under fire too: a mini is the faster bar (25 in 2 s = 12.5/s; a big 50 in 5 s =
+  // 10/s), and a big spent at 0 is the only refill past 50 gone (census: 7-14 bigs a match used from a 0 bar, then the bar sat at 50)
+  const order = calm && a.shield < MINI_CAP() ? HEAL_CALM_ORDER : a.shield < 40 ? ["mini_shield", "big_shield", "medkit", "bandage"] : ["medkit", "bandage", "big_shield", "mini_shield"];
+  const keep = calm && a.shield >= SHIELD_KEEP && bigCount(a) < 2;      // (fix round) a lone big is kept for the bar under 75 (keepBig)
+  for (const id of order) if (!(keep && id === "big_shield") && W.useConsumable(a, id)) return true;
   return false;
 }
 
@@ -4840,9 +4863,60 @@ function nearShield(W, a, r) {
     if (n.type === "chest") { if (!chest && !(a.brain && a.brain.bb.badLoot && a.brain.bb.badLoot[n.id] > W.t)) chest = n; continue; }
     if (n.type !== "item" || n.data.kind !== "consumable") continue;
     const c = K.CONSUMABLES[n.data.id];
-    if (c && c.heals === "shield" && (!W.wouldAcceptItem || W.wouldAcceptItem(a, n.data) || shieldNeedsRoom(W, a, n.data))) return n;
+    if (c && c.heals === "shield" && shieldGoal(a, n) && (!W.wouldAcceptItem || W.wouldAcceptItem(a, n.data) || shieldNeedsRoom(W, a, n.data))) return n;
   }
   return chest;
+}
+/** (fix round, P2-B) the mini shield's cap (the bar a mini fills to: 50) and the big shields in the bag. */
+const MINI_CAP = () => (K.CONSUMABLES.mini_shield && K.CONSUMABLES.mini_shield.cap) || 50;
+function bigCount(a) {
+  const sl = a.inventory.slots;
+  let n = 0;
+  for (let i = 0; i < sl.length; i++) { const s2 = sl[i]; if (s2 && s2.kind === "consumable" && s2.id === "big_shield") n += s2.count || 0; }
+  return n;
+}
+/** (fix round, P2-B) KEEP A LONE BIG. A calm bot at 75+ with one big shield used it for the last 20-25 points of the bar; the big is the only
+ *  thing that refills past 50, and it is worth twice as much after the next fight. Kept while the bar is at or over SHIELD_KEEP and it is the
+ *  bag's last big one (with two, one tops up). Under fire the old order stands (startHeal: the biggest bar per second first). */
+const SHIELD_KEEP = 75;
+function keepBig(a, s2) { return s2.id === "big_shield" && a.shield >= SHIELD_KEEP && bigCount(a) < 2; }
+/** (fix round, P2-B) a loot node that answers wantShield: a shield item that still adds to this bar (a big one at the mini cap), an unopened
+ *  supply crate (two big shields), or - under the mini cap - any unopened chest (6 in 10 of its consumable rolls are shields). */
+function shieldGoal(a, n) {
+  if (n.type === "chest") return !!n.supply || a.shield < MINI_CAP();
+  if (n.type !== "item" || !n.data || n.data.kind !== "consumable") return false;
+  const c = K.CONSUMABLES[n.data.id];
+  return !!(c && c.heals === "shield" && a.shield < c.cap - 5 && (n.data.id === "big_shield" || a.shield < MINI_CAP()));
+}
+/** (fix round, P2-B) the far big-shield scan: the nearest big shield item (or unopened supply crate) within SHIELD_FAR_M, any slope
+ *  (SHIELD_FAR_DY), inside the next circle (6 m in from its edge: the walk there is a walk the storm wants anyway), that this bot has not
+ *  failed to reach (badLoot), with headroom over it and on this bot's shore. One query per 2 s per calm bot at the cap with no big shield. */
+const SHIELD_FAR_M = 220, SHIELD_FAR_DY = 60;
+function farShield(W, a) {
+  if (!W.nearbyLoot) return null;
+  let cx = 0, cz = 0, cr = Infinity;
+  if (W.stormCtl) {
+    const st = W.stormCtl.storm.stateAt(W.t), c = st.nextCenter || st.center;
+    cx = c.x; cz = c.z; cr = (st.nextRadius != null ? st.nextRadius : st.radius) - 6;
+  }
+  const near = W.nearbyLoot(a.pos, SHIELD_FAR_M, SHIELD_FAR_DY);
+  const bad = a.brain && a.brain.bb.badLoot;
+  for (let i = 0; i < near.length; i++) {           // nearest first (nearbyLoot sorts by distance)
+    const n = near[i];
+    if (n.type === "chest" ? !n.supply : !(n.type === "item" && n.data && n.data.id === "big_shield")) continue;
+    if (bad && bad[n.id] > W.t) continue;
+    if (cr < Infinity && hyp(n.pos.x - cx, n.pos.z - cz) > cr) continue;
+    if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data) && !shieldNeedsRoom(W, a, n.data)) continue;
+    if (lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) || offShore(W, a, n.pos)) continue;
+    return n;
+  }
+  return null;
+}
+/** (fix round) `n` re-read from loot.js: null once it is taken / opened (a nearbyLoot node is a snapshot). */
+function liveLoot(W, n) {
+  const q = W.nearbyLoot(n.pos, 0.6, 1);
+  for (let i = 0; i < q.length; i++) if (q[i].id === n.id) return q[i];
+  return null;
 }
 /** (LC-20) MAKE ROOM FOR A SHIELD. Measured (3 AFK matches, t >= 600 s): every calm bot under 75 shield with no shield item carried three guns,
  *  and 2 in 3 had no free slot at all (a bandage stack and a frag in the other two) - the walkover had filled the bag before a shield came by, so
