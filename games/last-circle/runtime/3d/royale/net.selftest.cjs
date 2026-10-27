@@ -421,6 +421,22 @@ function suiteP23(M, SIM, count) {
     row(c.length === 2 && c[0].slot === 1 && c[1].slot === 2 && c[1].at === now - 20000, "LC-49: the candidates are this tab's record first, then a closed tab's stale record; a live tab (< 3 s), another room and an expired record are not", c);
     row(M.rejoinCandidates("ABCD", null, null, now).length === 0 && M.rejoinCandidates("ABCD", { room: "ABCD", slot: 1, key: s1, at: now - M.REJOIN_MS - 16000 }, [], now).length === 0,
       "LC-49: no record / an expired record -> no rejoin ask");
+    // second fix pass: a tab that closes writes its record on pagehide (age ~46 ms when the invite link opens in a new tab at once) and marks
+    // it closed; an unmarked young record (a killed tab) is re-read when it comes of age
+    const one = (age, extra) => M.rejoinCandidates("ABCD", null, [Object.assign({ room: "ABCD", slot: 2, key: s2, at: now - age }, extra || {})], now).length;
+    row(one(46) === 0 && one(59) === 0 && one(2999) === 0 && one(3000) === 1 && one(46, { closed: 1 }) === 1 && one(0, { closed: 1 }) === 1 && one(M.REJOIN_MS + 16000, { closed: 1 }) === 0 &&
+        M.rejoinCandidates("ABCD", { room: "ABCD", slot: 1, key: s1, at: now - 46 }, [], now).length === 1 && M.REJOIN_LIVE_TAB_MS === 3000,
+      "LC-49 rejoin: a record its tab marked closed (pagehide) is a candidate at once (46 ms old); unmarked, one younger than 3 s is a live tab; expired stays out", [one(46), one(2999), one(3000), one(46, { closed: 1 })]);
+    const rs = (age, extra, own2) => M.rejoinRescanMs("ABCD", own2 || null, [Object.assign({ room: "ABCD", slot: 2, key: s2, at: now - age }, extra || {})], now);
+    row(rs(46) === 3000 - 46 + 50 && rs(2999) === 51 && rs(3000) === -1 && rs(46, { closed: 1 }) === -1 && rs(46, { room: "ZZZZ" }) === -1 && M.rejoinRescanMs("ABCD", null, null, now) === -1 &&
+        M.rejoinCandidates("ABCD", null, [{ room: "ABCD", slot: 2, key: s2, at: now - 46 }], now + rs(46)).length === 1 && M.REJOIN_RESCANS >= 1 && M.REJOIN_RESCANS * M.REJOIN_LIVE_TAB_MS <= 15000,
+      "LC-49 rejoin: a page with no candidate re-reads the records when the youngest one comes of age (46 ms old -> 3004 ms, then it is a candidate); nothing to wait for -> -1", [rs(46), rs(2999), rs(3000)]);
+  }
+  // ── D3: the revive done range reads sim's K ──────────────────────────────────────────────────────────────────────────────────────
+  {
+    row(M.reviveDoneRange(SIM) === SIM.REVIVE_RANGE + M.REVIVE_LAG_SLACK_M && M.reviveDoneRange({ REVIVE_RANGE: 3 }) === 3 + M.REVIVE_LAG_SLACK_M &&
+        M.reviveDoneRange({}) === 2 + M.REVIVE_LAG_SLACK_M && M.reviveDoneRange(null) === 2 + M.REVIVE_LAG_SLACK_M && M.reviveDoneRange({ REVIVE_RANGE: NaN }) === 2 + M.REVIVE_LAG_SLACK_M,
+      "D3: the owner's revive 'done' distance is K.REVIVE_RANGE + the lag slack (5 m at sim's 2 m), 2 m only when sim has none", [M.reviveDoneRange(SIM), M.reviveDoneRange({ REVIVE_RANGE: 3 })]);
   }
   // ── C-DBNO ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   {
@@ -678,6 +694,9 @@ function suiteP23(M, SIM, count) {
     ["a smoke parser that drops rMax (a relayed cloud stuck at its send-time radius)", { normSmoke: (d, h) => { const s = M.normSmoke(d, h); if (s) s.rMax = s.r; return s; } }],
     ["a run-it-back that takes the last RESOLVED mode as the pick (the old rule)", { rematchTeamWant: (cfg, asked) => M.normTeamMode(asked) || (cfg && cfg.teamWant !== "auto" ? M.normTeamMode(cfg.teamWant) : null) }],
     ["a late-join sync that applies the taken list first (the ghost-item bug)", { applyLootSync: (loot, open, take) => { const out = []; for (const id of (loot && loot.taken) || []) { take(id); if (M.isChestItem(id)) out.push(id); } for (const id of (loot && loot.opened) || []) open(id); return out; } }],
+    ["a candidate scan that holds a closed tab's record back 3 s (the rj3_d0 miss)", { rejoinCandidates: (room, own, list, n) => M.rejoinCandidates(room, own, (list || []).map((r) => (r ? Object.assign({}, r, { closed: 0 }) : r)), n) }],
+    ["a page that never re-reads the records (one scan before the first hello)", { rejoinRescanMs: () => -1 }],
+    ["a revive done range fixed at 5 m (not K.REVIVE_RANGE)", { reviveDoneRange: () => 5 }],
     ["a late-join sync that forgets the chest items for a crate that lands later", { applyLootSync: (loot, open, take) => { M.applyLootSync(loot, open, take); return []; } }],
   ];
   for (const [name, over] of p23Mutants) {
@@ -719,8 +738,14 @@ function suiteP23(M, SIM, count) {
       "D5: the room starts from the menu's team pick (W.settings.teamMode), START carries teamMode + teamWant, run it back re-resolves the room's pick");
     ok(/if \(S\.rejoinAsk\.tries >= REJOIN_ASK_TRIES\)/.test(src) && /setTimeout\(ask, REJOIN_ASK_EVERY_MS\);/.test(src) && !/tries >= 6/.test(src) &&
       /silentMs: typeof seen === "number" \? now - seen : null/.test(src) && /if \(S\.goneAt\) delete S\.goneAt\[id\];\s+\/\/ \(null when/.test(src) && /if \(S\.lastSeen\) delete S\.lastSeen\[id\];/.test(src) &&
-      /window\.addEventListener\("pagehide", flushRejoin\)/.test(src),
+      /window\.addEventListener\("pagehide", \(\) => flushRejoin\(true\)\)/.test(src) && /if \(closed\) rec\.closed = 1;/.test(src),
       "LC-49 rejoin: the page asks for the whole window, the host judges the slot's silence, a rejoin by silence alone cannot throw on a null goneAt, and a hidden / closing tab writes its record");
+    const lobR = sl("const readCands = () =>", 'send("hello", hello);');
+    ok(/S\.rejoinAsk\.cands = mergeCands\(S\.rejoinAsk\.cands, readCands\(\)\);/.test(lobR) && /rejoinRescanMs\(net\.room,/.test(lobR) && /setTimeout\(\(\) => rescan\(n \+ 1\), ms\)/.test(lobR) &&
+      /n < REJOIN_RESCANS/.test(lobR) && /startAsk\(c2, false\)/.test(lobR) && /if \(d\.code === "busy" && S\.rejoinAsk\) return;\s+if \(d\.code === "busy" && S\.rjRescan\) \{ S\.rjBusy = \{ from, d \}; return; \}/.test(src),
+      "LC-49 rejoin (second pass): every ask re-reads the records, a page with no candidate yet re-reads them when one comes of age, and the host's 'busy' (a reply to a hello without rj) never ends an ask and waits until the re-reads have given up");
+    ok(/bp\.distanceTo\(a\.pos\) > reviveDoneRange\(K\)/.test(src) && !/distanceTo\(a\.pos\) > 5\)/.test(src) && !/\+ `dh`/.test(src),
+      "D3: onRevive checks the reviver's distance with reviveDoneRange(K) (no literal 5 m); the header no longer promises a dh key");
     ok(/const full = smokeRelayRoom\(W\.smokes, d\.by, W\.t\);\s*if \(full\) \{ reject\(t, from, full\); return; \}/.test(src) && !/x\._net === from/.test(src),
       "D12: the smoke relay's cap is applied per thrower (d.by) on receive, never per sending peer");
     const syncSrc = sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState");
