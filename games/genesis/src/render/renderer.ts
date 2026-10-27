@@ -567,8 +567,9 @@ export class Renderer {
         key += (0.022 - key) * orbitNight;
         // ... and over the night side itself the starlit land is metered too (below): a key a little lower again, so the
         // land reads as a dim world while the towns' lights keep their colour (at 0.014 the exposure rose 6× and the
-        // night side read as a dim day: snow and cloud tops near white, the lit limb a blown ring)
-        key += (0.008 - key) * this.nightView;
+        // night side read as a dim day: snow and cloud tops near white, the lit limb a blown ring; at 0.008 the land in the
+        // middle of the disc was all but black)
+        key += (0.01 - key) * this.nightView;
       } else if (primaryVis && !primaryVis.atmo.has) {
         // an airless world from orbit over its night side (the starlit floor fills the view): a night key too, or the
         // auto exposure lifts the starlit regolith to a flat grey day (it has no sun elevation to go by)
