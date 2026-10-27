@@ -96,25 +96,33 @@ function fallDmgForDrop(h) {
   return (K.FALL_DMG_PER_V || 1) * Math.pow(v - K.FALL_SAFE_V, K.FALL_EXP || K.FALL_DMG_EXP || 1.5);
 }
 let WALK_H = null;
-function dropTable(margin) {
+// (fix pass 2, probe_match stuck rows) A DROP THAT COSTS NOTHING IS ALWAYS WALKABLE. With hp at or under the margin (WALK_H: 6 hp, LETHAL_H: 2) no drop
+// leaves `left` hp - fall damage is never below 0 - so the table said 0 m, and edgeGuard refused every heading whose ground sampled a millimetre under
+// the feet: on flat ground the bot froze until it died (probe_match ashgrid seed 11: s41 at 5 hp held in one 10 x 3 m patch of level ground at 9.2 m
+// from 211 s to its death at 325 s - 7 stuck episodes). The floor of every row is now `floorK` of the highest drop that does no damage at all
+// (sim's FALL_SAFE_V: about 4 m at this gravity), so a wounded bot still walks steps, kerbs and slopes, and is still held at a real ledge.
+function dropTable(margin, floorK) {
   const T = new Float64Array(201);
+  let slo = 0, shi = 120;
+  for (let i = 0; i < 30; i++) { const m = (slo + shi) / 2; if (fallDmgForDrop(m) <= 0) slo = m; else shi = m; }
+  const floor = slo * floorK;
   for (let hp = 0; hp <= 200; hp++) {
     const left = hp - margin(hp);
     let lo = 0, hi = 120;
     if (fallDmgForDrop(hi) < left) { T[hp] = hi; continue; }
     for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fallDmgForDrop(m) < left) lo = m; else hi = m; }
-    T[hp] = lo;
+    T[hp] = Math.max(lo, floor);
   }
   return T;
 }
 function buildFallTable() {
   LETHAL_H = null; WALK_H = null;
   if (!K || !(K.FALL_SAFE_V > 0)) return;
-  LETHAL_H = dropTable(() => 2);
+  LETHAL_H = dropTable(() => 2, 0.9);
   // walking off an edge keeps a real margin: the guard samples the ground ahead at 0.8 m steps 4 times a second, a jump or a strafe adds
   // height and speed, and a wounded bot dies of what the table calls survivable (stub duo 10-26, Isla seed 2: a 2-attacker fight at 738 s,
   // a bot took 6 then 11.4 hp of falls and died of the second)
-  WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));
+  WALK_H = dropTable((hp) => Math.max(6, hp * 0.25), 0.75);
 }
 /** The highest drop this actor survives with >= 2 hp (Infinity when the sim has no fall damage): the canopy rescue's rule. */
 // (a knocked man's pool is downedHp: damage to a downed actor comes off it, C-DBNO)
