@@ -99,30 +99,30 @@ let WALK_H = null;
 // (fix pass 2, probe_match stuck rows) A DROP THAT COSTS NOTHING IS ALWAYS WALKABLE. With hp at or under the margin (WALK_H: 6 hp, LETHAL_H: 2) no drop
 // leaves `left` hp - fall damage is never below 0 - so the table said 0 m, and edgeGuard refused every heading whose ground sampled a millimetre under
 // the feet: on flat ground the bot froze until it died (probe_match ashgrid seed 11: s41 at 5 hp held in one 10 x 3 m patch of level ground at 9.2 m
-// from 211 s to its death at 325 s - 7 stuck episodes). The floor of every row is now `floorK` of the highest drop that does no damage at all
-// (sim's FALL_SAFE_V: about 4 m at this gravity), so a wounded bot still walks steps, kerbs and slopes, and is still held at a real ledge.
-function dropTable(margin, floorK) {
+// from 211 s to its death at 325 s - 7 stuck episodes). (final) The rule itself, not a fraction of it: a drop whose fall damage is 0
+// (fallDmgForDrop(m) <= 0: the sim's FALL_SAFE_V and the rounding of K.fallDamage, about 4 m at this gravity) counts as walkable in every row,
+// so a wounded bot still walks steps, kerbs and slopes, and is still held at a real ledge. This replaces ab99e26b's floor (x0.75 / x0.9 of that
+// drop) with the form the maps re-check verified: sim_pacing at 50cc573a froze bots at 2-5 hp on open beach (isla s7 2.1 %, s1 1.5 %, s3 6.2 %
+// stuck, edgeGuard renewing its ban on slopes of 0.01-0.03) and passed 11/11 with exactly this rule.
+function dropTable(margin) {
   const T = new Float64Array(201);
-  let slo = 0, shi = 120;
-  for (let i = 0; i < 30; i++) { const m = (slo + shi) / 2; if (fallDmgForDrop(m) <= 0) slo = m; else shi = m; }
-  const floor = slo * floorK;
   for (let hp = 0; hp <= 200; hp++) {
     const left = hp - margin(hp);
     let lo = 0, hi = 120;
     if (fallDmgForDrop(hi) < left) { T[hp] = hi; continue; }
-    for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fallDmgForDrop(m) < left) lo = m; else hi = m; }
-    T[hp] = Math.max(lo, floor);
+    for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; const d = fallDmgForDrop(m); if (d <= 0 || d < left) lo = m; else hi = m; }
+    T[hp] = lo;
   }
   return T;
 }
 function buildFallTable() {
   LETHAL_H = null; WALK_H = null;
   if (!K || !(K.FALL_SAFE_V > 0)) return;
-  LETHAL_H = dropTable(() => 2, 0.9);
+  LETHAL_H = dropTable(() => 2);
   // walking off an edge keeps a real margin: the guard samples the ground ahead at 0.8 m steps 4 times a second, a jump or a strafe adds
   // height and speed, and a wounded bot dies of what the table calls survivable (stub duo 10-26, Isla seed 2: a 2-attacker fight at 738 s,
   // a bot took 6 then 11.4 hp of falls and died of the second)
-  WALK_H = dropTable((hp) => Math.max(6, hp * 0.25), 0.75);
+  WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));
 }
 /** The highest drop this actor survives with >= 2 hp (Infinity when the sim has no fall damage): the canopy rescue's rule. */
 // (a knocked man's pool is downedHp: damage to a downed actor comes off it, C-DBNO)
