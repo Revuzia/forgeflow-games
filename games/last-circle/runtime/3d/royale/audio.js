@@ -537,14 +537,6 @@ async function loadSfx(W) {
   await Promise.all(names.filter(lateSfx).map(one));
 }
 
-/** brightness 1.0 -> 0.12 at the cull radius as a lowpass cutoff. A DISTANT take (fx.dist, P23 LC-08) was recorded
- *  far away: the air already took its treble, so it only gets a gentle extra slope instead of the near take's full
- *  darkening (that would count the distance twice). */
-function distFc(d, maxD, fx) {
-  const df = Math.max(0.12, 1 - d / maxD);
-  return fx && fx.dist ? 1800 + 15000 * df : 600 + 17000 * df * df;
-}
-
 /** Play one variant of a logical cue. Returns false if unavailable, so the
  *  caller can run its synth line instead. Routes through the same voice pool,
  *  panner + sfxBus as everything else, so sliders and mute still apply.
@@ -562,31 +554,32 @@ function sample(key, pos, gain, maxD, rate, tier, fx) {
   // inherits the same distance curve, panning, mute and slider behaviour as
   // every synthesised voice. null means out of earshot OR dropped by the voice
   // pool: report handled either way, because the synth fallback must not double-fire.
-  const rr = (rate || 1) * (0.94 + Math.random() * 0.12);
-  const lvl = (gain == null ? 0.5 : gain) * (0.9 + Math.random() * 0.2);
-  // On a pooled strip the per-play level folds into the strip's own gain (and its two sends, which tap BEFORE that
-  // gain) and the distance cutoff into its lowpass - both written once, inside spatialOut (_play) - and the end taper
-  // rides its input gain, so a placed clip costs ONE new node (the source). Head-relative clips keep their own gain node.
-  _play.on = true; _play.lvl = lvl; _play.folded = false;
-  let h;
-  try { h = openVoice(pos, maxD, tier, gain == null ? 0.5 : gain, 1, fx); } finally { _play.on = false; }
+  const h = openVoice(pos, maxD, tier, gain == null ? 0.5 : gain, 1, fx);
   if (!h) return true;
   const out = h.out;
   const src = ctx.createBufferSource();
   src.buffer = buf;
-  src.playbackRate.value = rr;
+  src.playbackRate.value = (rate || 1) * (0.94 + Math.random() * 0.12);
+  const lvl = (gain == null ? 0.5 : gain) * (0.9 + Math.random() * 0.2);
+  // On a pooled strip the per-play level folds into the strip's own gain (and
+  // its two sends, which tap BEFORE that gain) and the end taper rides its input gain, so a placed clip costs ONE new node
+  // (the source). Head-relative clips keep their own gain node.
   const st = h.strip;
   let g = null;
-  if (st) { if (!_play.folded) { st.g.gain.value *= lvl; st.ts.gain.value *= lvl; st.rs.gain.value *= lvl; } src.connect(out); }
+  if (st) { st.g.gain.value *= lvl; st.ts.gain.value *= lvl; st.rs.gain.value *= lvl; src.connect(out); }
   else { g = ctx.createGain(); g.gain.value = lvl; }
   // DISTANCE TIMBRE (sweep finding): air eats treble long before loudness —
   // brightness 1.0 -> 0.12 at the cull radius, mapped onto a lowpass (on a
   // strip: folded into its occlusion lowpass, the lower cutoff wins).
   // Own/UI plays (__d null) skip the filter.
   if (out.__d != null && out.__d > 8) {
-    const fc = distFc(out.__d, maxD, fx);
+    const df = Math.max(0.12, 1 - out.__d / maxD);
+    // a DISTANT take (fx.dist, P23 LC-08) was recorded far away: the air already took its treble, so it only
+    // gets a gentle extra slope instead of the near take's full darkening (that would count the distance twice)
+    const fc = fx && fx.dist ? 1800 + 15000 * df : 600 + 17000 * df * df;
     if (st) {
-      if (!_play.folded) { const f = st.lp.frequency; if (fc < f.value) { f.value = fc; if (st.lp.Q.value > 0.6) st.lp.Q.value = 1; } }
+      const f = st.lp.frequency;
+      if (fc < f.value) { f.value = fc; if (st.lp.Q.value > 0.6) st.lp.Q.value = 1; }
     } else {
       const lp = ctx.createBiquadFilter();
       lp.type = "lowpass";
@@ -1266,10 +1259,6 @@ function sendLevels(fx, env, dist, maxD, occ) {
 }
 const _sl = [0, 0], _sl0 = [0, 0];
 
-// sample() -> openVoice() -> spatialOut(): on = a sample() is opening its voice, lvl = its per-play level; spatialOut
-// sets folded when it applied the level and the distance cutoff on a pooled strip (every other caller: on false)
-const _play = { on: false, lvl: 1, folded: false };
-
 /** Input node for an already-placed cue (place() decided vol / dist). The
  *  returned node is the pool handle's .out (voiceKill fades it, which silences
  *  the dry path AND the sends). __d carries the distance (null = head-relative). */
@@ -1284,20 +1273,13 @@ function spatialOut(pos, vol, dist, fx, env, maxD, h) {
       st.busy = t + 5;                       // until voiceArm says when it really ends
       if (h) h.strip = st;
       const gi = st.inp.gain; gi.cancelScheduledValues(t); gi.setValueAtTime(1, t);
-      // P23 fix (budget): every AudioParam .value write is an automation event on Chrome's audio thread, so each
-      // param is written ONCE per voice: sample()'s per-play level (_play.lvl) and its distance-timbre cutoff
-      // (from this same distance) are folded in here instead of being written over these values a moment later
-      let fq = occ ? OCC_F[occ] : ctx.sampleRate / 2, q = occ ? 0.5 : 0.7071;
-      const lv = _play.on ? _play.lvl : 1;
-      if (_play.on && dist != null && dist > 8) { const fc = distFc(dist, maxD, fx); if (fc < fq) { fq = fc; if (q > 0.6) q = 1; } }
-      st.lp.frequency.value = fq;
-      st.lp.Q.value = q;
-      st.g.gain.value = vol * OCC_G[occ] * lv;
+      st.lp.frequency.value = occ ? OCC_F[occ] : ctx.sampleRate / 2;
+      st.lp.Q.value = occ ? 0.5 : 0.7071;
+      st.g.gain.value = vol * OCC_G[occ];
       const py = pos.y || 0;
       if (st.p.positionX) { st.p.positionX.value = pos.x; st.p.positionY.value = py; st.p.positionZ.value = pos.z; }
       else st.p.setPosition(pos.x, py, pos.z);
-      st.ts.gain.value = sl[0] * lv; st.rs.gain.value = sl[1] * lv;
-      if (_play.on) _play.folded = true;
+      st.ts.gain.value = sl[0]; st.rs.gain.value = sl[1];
       st.inp.__d = dist;
       return st.inp;
     }
