@@ -258,6 +258,18 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // (land is broadly convex: on the lookdev world the median cell sits ~3 m above its neighbours' mean, the sharpest
   // 5 % of ridges 12 m and more — the scale keeps rock to those)
   float concave = clamp(vCurv / 15.0, -1.0, 1.0);
+  // OUTCROPS: on ground no plants hold, rock breaks through the soil on crests and ridges — where soil is thinnest in
+  // nature — in ragged patches (~30–100 m, broken at ~10 m), more where the soil is thin. (A barren world's mountains
+  // are the sim's soil from the summit down — 0.9 m of it on a fresh sandbox's highest peak — and drawn as soil
+  // alone every height read as one grey-brown felt from a few hundred metres.)
+  float vegC = vF2.x + vF2.y + vF2.z + vF2.w;
+  float outc = 0.0;
+  if (fw < 12.0) {
+    float oN = snoise(P * 0.028 + 5.0) * 0.6 + snoise(P * 0.1 + 9.0) * 0.4 * aaF(fw, 4.0);
+    float crestK = smoothstep(0.1, 0.65, -concave);
+    outc = smoothstep(0.0, 0.18 + fw * 0.01, crestK * 0.85 + oN * 0.45 - 0.42 + 0.35 * (1.0 - smoothstep(0.25, 1.1, soil)))
+      * (1.0 - smoothstep(0.12, 0.45, vegC)) * (uKind > 2.5 && uKind < 3.5 ? 0.5 : 1.0) * (1.0 - smoothstep(7.0, 12.0, fw));
+  }
 
   // ── rock: tonal masses and weathering streaks in the albedo; structure (ledges, fractures) in the bump ──
   vec3 warpV = vec3(snoise(P * 0.045), snoise(P * 0.045 + 7.3), snoise(P * 0.045 + 13.1));
@@ -296,7 +308,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // beds' bands in the albedo below)
     float rkLayered = smoothstep(-0.15, 0.25, snoise(P * 0.004 + 61.0));
     float rockLikely = max(max(steep, smoothstep(0.5, 0.9, -concave)), max(1.0 - smoothstep(0.25, 0.6, soil + vF2.x + vF2.y + vF2.z + vF2.w), smoothstep(0.25, 0.4, vOre.a)));
-    rockLikely = max(rockLikely, smoothstep(180.0, 220.0, hG - uSeaLevel));
+    rockLikely = max(max(rockLikely, smoothstep(180.0, 220.0, hG - uSeaLevel)), outc);
     // the same three joint sets at the scale of SLABS and ledges (~17 m, beds ~8 m): what bare rock reads by from
     // 100 m to a kilometre — blocky masses, each its own tilt and tone, split by dark open fissures. (With the 5 m
     // blocks alone, which fade out past ~150 m, a bald peak from 130 m was a smooth grey dome: clay, not stone.)
@@ -397,7 +409,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
 
   // ── regolith (airless) / soil ──
   // noise-broken thresholds: per-cell fields change linearly across 50 m triangles, the noise hides those edges
-  float soilW = smoothstep(0.1, 0.9, soil + m1 * 0.45 + m2 * 0.25) * (1.0 - steep * 0.85);
+  float soilW = smoothstep(0.1, 0.9, soil + m1 * 0.45 + m2 * 0.25) * (1.0 - steep * 0.85) * (1.0 - outc);
   // where plants grow there is earth under them: the gaps of a thin sward show soil, not the bedrock grey (partial
   // cover on uplands read as blue-grey rock blotches between the grass); rock stays on steep faces and ridges
   if (!airless) soilW = max(soilW, smoothstep(0.04, 0.3, vF2.x + vF2.y + vF2.z + vF2.w) * (1.0 - steep * 0.9) * 0.9);
@@ -416,6 +428,28 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float clod = fine ? snoise(P * 1.7) * aaF(fw, 0.6) : 0.0;
       sc *= 0.92 + 0.12 * clod;
       sb = clod * 0.05;
+      // RILLS: on bare slopes the rain cuts the soil into runnels down the fall line (~7 m apart, drawn out ~6:1 along
+      // it), damp and darker in their beds, the ribs between them paler and drier — what bare earth reads by from a
+      // few hundred metres (an even soft noise there read as felt). The fall line by three ridged noises each stretched
+      // along one body axis, cross-faded by how well that axis runs downhill here (as the rock's gullies).
+      float bareS = (1.0 - smoothstep(0.05, 0.35, vegC)) * smoothstep(0.025, 0.1, slope) * aaF(fw, 6.0);
+      if (bareS > 0.01) {
+        vec3 tanR = Nb - up * dot(Nb, up);
+        float tlR = length(tanR);
+        if (tlR > 1e-4) {
+          vec3 wr = pow(abs(tanR / tlR), vec3(4.0));
+          wr /= wr.x + wr.y + wr.z;
+          vec3 Pr = P + warpV * 5.0;
+          float rq = 0.0;
+          if (wr.x > 0.05) rq += snoise(Pr * vec3(1.0 / 42.0, 1.0 / 7.0, 1.0 / 7.0) + 2.3) * wr.x;
+          if (wr.y > 0.05) rq += snoise(Pr * vec3(1.0 / 7.0, 1.0 / 42.0, 1.0 / 7.0) + 6.1) * wr.y;
+          if (wr.z > 0.05) rq += snoise(Pr * vec3(1.0 / 7.0, 1.0 / 7.0, 1.0 / 42.0) + 9.7) * wr.z;
+          float rill = smoothstep(0.62, 0.95, 1.0 - abs(rq));
+          sc *= 1.0 - 0.28 * rill * bareS;
+          sc *= 1.0 + 0.14 * smoothstep(0.15, 0.65, abs(rq)) * bareS;
+          sb -= rill * 0.18 * bareS;
+        }
+      }
       // clods, cracks, damp patches and pebbles at 1 cm–2 m (groundfloor.ts soilDetail)
       if (fw < 0.12 && soilW > 0.05) {
         vec3 sd = soilDetail(P, fw);

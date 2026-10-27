@@ -16,11 +16,11 @@
 //   a sacred animal  the revered species near the town that keeps it: a faint glint over each beast's back and a
 //                    little light on it — subtle: it is still a real animal, life-size
 //   moments          an omen read in a town (a ring of light spreading through it — warm where they read favour, a
-//                    cold violet where they read anger), a lightning strike made a sign (the struck place left glowing,
-//                    light lingering over it), a prophet called (a column of light coming down onto them), a prophecy
-//                    fulfilled (a warm ring through the town) or failed (a faint grey one, closing in), a place hallowed,
-//                    a beast taken for holy, a prophet's death (their thread lifting away), a prophet the god turned
-//                    from (their thread drawn up off them into the sky, grey)
+//                    cold violet where they read anger; a rival god's in its own cold silver), a lightning strike made
+//                    a sign (the struck place left glowing, light lingering over it), a prophet called (a column of
+//                    light coming down onto them), a prophecy fulfilled (a warm ring through the town) or failed (a
+//                    faint grey one, closing in), a place hallowed, a beast taken for holy, a prophet's death (their
+//                    thread lifting away), a prophet the god turned from (their thread drawn up off them, grey)
 // Data: the agents' `flags2` (AgentFlag2.prophet / called), SettlementView.prophet / .sacred, the sim's events
 // (sacred.place, sacred.animal, omen, lightning with data.omen, prophet.called / .fulfilled / .failed / .died /
 // .abandoned) and the `sacred` query for the places
@@ -77,6 +77,8 @@ const FAVOUR_COL: [number, number, number] = [1.0, 0.82, 0.48];
 const ANGER_COL: [number, number, number] = [0.62, 0.52, 1.0];
 const ANIMAL_COL: [number, number, number] = [1.0, 0.9, 0.62];
 const STRIKE_COL: [number, number, number] = [1.0, 0.92, 0.78];
+/** a rival god's sign: its own cold silver (render/fx/godfx.ts RIVAL_LIGHT), never the player's warm light */
+const RIVAL_COL: [number, number, number] = [0.66, 0.72, 0.95];
 /** a word that failed, a prophet the god turned from: the light gone grey */
 const FAILED_COL: [number, number, number] = [0.62, 0.64, 0.72];
 
@@ -148,7 +150,9 @@ export class SignsLayer {
         break;
       }
       case 'omen': {
-        if (p) this.moments.push({ kind: 'omen', p, t0: real, dur: 6.5, col: d.reading === 'feared' ? ANGER_COL : FAVOUR_COL, agent: -1, size: 220 });
+        // (a rival god's sign in its own cold silver; nature's — a natural eclipse, god < 0 — and the player's as read)
+        const rival = typeof d.god === 'number' && d.god > 0;
+        if (p) this.moments.push({ kind: 'omen', p, t0: real, dur: 6.5, col: rival ? RIVAL_COL : d.reading === 'feared' ? ANGER_COL : FAVOUR_COL, agent: -1, size: 220 });
         // the lightning sigil on one thing, read as a sign (god/omens.ts omensOfCommand: the town's `omen` event follows
         // the strike's own `lightning` in the same batch) — the struck place is left glowing, as a Signs-power strike is
         const ls = this.lastStrike;

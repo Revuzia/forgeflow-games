@@ -690,6 +690,11 @@ test('signs: the sim\'s events become places and moments', () => {
   assert.ok(m[before].col[2] > m[before].col[0], 'anger reads cold');
   const failed = m[m.length - 2], warm = m[before + 3];
   assert.ok(lum(failed.col as [number, number, number]) < lum(warm.col as [number, number, number]) && failed.col[2] >= failed.col[0], 'a failed word reads grey beside a fulfilled one');
+  // a rival god's omen in its own cold silver, whatever the town reads; nature's (god < 0) and the player's as read
+  const col = (god: number, reading: string) => { s.onEvent({ t: 'omen', tick: 12, planet: 0, pos: [0, 1, 0], data: { kind: 'comet', reading, god } }, 3000, 4); return m[m.length - 1].col; };
+  const rival = col(2, 'trusted'), mine = col(0, 'trusted'), nature = col(-1, 'trusted');
+  assert.ok(rival[2] > rival[0] && mine[0] > mine[2], 'a rival\'s sign is not drawn in the player\'s warm light');
+  assert.deepEqual(nature, mine, 'nature\'s sign as the town reads it');
   s.dispose();
   // drawn: the failed word a ring on the town; the one the god turned from, their thread drawn up off them where the
   // crowds draw them — and nothing where nobody draws them (the event has no place)

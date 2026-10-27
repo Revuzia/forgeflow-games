@@ -2173,6 +2173,27 @@ integration's runs in progress — `r6/out/`; results pending)*
   its own equilibrium: CONTENT's open-grassland ≥ 3 % and tree-mix drift targets, §4.7, are unmet for the same reason),
   not to the fire's thresholds. People do not wait on it: fire-keeping comes by other roads (§10.4, the 50-year worlds).
 
+### 10.6 Known misses
+
+**A band driven out by a dust bowl, on a dry plateau (seed 1, year 46; traced, not changed).** The 50-year world of
+seed 1 (§10.4) lost 15 of its 47 in year 47: 10 of thirst, 4 of hunger, 1 of age. The seventh pass traced it from a
+year-45 save (`integrate/r7/`: `alone.ts 1 45` with `KEEP=1`, then `famine.ts`, `famine2.ts`, `store.ts`, `reach.ts`):
+a dust bowl at year 45.67 dried the town's plateau (soil moisture 0.5 → 0.07); 2 days later the town fell for drought
+(`abandonCheck`: no fresh water in reach) with 291 food-days in store. Its people carried what their hands held — four
+kinds each (`INV`), in the species' food order, beside the stone and flint they carried — and left 342 maize, 44 roots
+and 33 wild grain in the ruins. Its band (47) camped by the ruins while its leader foraged with an empty belly; no water
+within 300 m of the leader, 4–5 drinkable cells within 700 m (rain pools), 107 within 1.5 km — and every fresh water
+within 2.5 km of the band (the nearest 0.94–1.2 km, on the coast 47 m below) is **out of reach**: A* finds no path
+even at 200 000 expansions (the plateau is cliff-bound, `stepFactor` grade > 0.9). Thirsty people search 7 rings
+(~400 m) for water they do not know of (`planDrink`); those who found none foraged or slept.
+Three fixes were tried and measured from the same save (deaths year 45 → 48; the tree as is: thirst 10, hunger 4):
+(A) the parched (water < 0.15) search ~1 km: thirst 12, hunger 3; (A)+(B) a band a quarter thirsty with no water within
+three rings heads for the nearest reachable fresh water within 2.5 km: thirst 11, hunger 3 (there was none reachable);
+(A)+(B)+(C) a town leaving carries the foods that feed most first: **38 of 47 died of thirst** — fed, the band followed
+its leader off the ruins' rain pools into dry land. None was kept (`src/sim` is the gate's tree); the behaviour a band
+needs here (not roaming from water it has into land with none; hands freed of stone for food) is a design change with
+its own multi-seed measurement, filed as a follow-up task. The other seven worlds lost no band to thirst (§10.4).
+
 ### 10.7 The gate (seventh pass, 2026-10-27)
 `npm run check` on the final integrated tree (HEAD `ccfcb5c3`; the sim unchanged since the sixth pass's `work.ts` fix at
 13:59), run 18:39–19:23 UTC while the acceptance runs used two of the four cores (`integrate/r6/out/check-7.log`):
