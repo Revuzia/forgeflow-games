@@ -170,8 +170,15 @@ def main():
             v.info("page visibility during the walks", {k: pg.evaluate("() => document.visibilityState") for k, pg in (("host", hpg), ("guest", gpg))})
             v.data["settle1"] = settle(gpg, h_id)
             b = walk_and_track(hpg, gpg, h_id)
-            v.check("baseline (reorder off: the guest's copy of the host moves forward only)", b["progress"] is not None and b["progress"] > 5 and (b["maxBackM"] or 0) <= 0.05,
-                    b, "> 5 m, never back > 0.05 m")
+            # the walk must be OBSERVED (>= 30 samples of the 50 ms track, > 5 m of progress on the guest's copy): a starved / background guest page
+            # that sampled 10 times and saw 1.4 m (gateA2 10-27 06:43) is a setup miss (D16), not a verdict; any pull-back > 0.05 m seen is a FAIL
+            def walk_row(name, r, extra_ok=True, extra_why=""):
+                back = (r["maxBackM"] or 0) > 0.05
+                if not back and (r["samples"] < 30 or r["progress"] is None or r["progress"] <= 5 or not extra_ok):
+                    v.cnj(name, "SETUP missed: the walk was not observed well enough (>= 30 samples, > 5 m%s): %s" % (extra_why, r))
+                else:
+                    v.check(name, not back, r, "> 5 m observed, never back > 0.05 m")
+            walk_row("baseline (reorder off: the guest's copy of the host moves forward only)", b)
             hpg.evaluate("() => { const p = window.__LC__.W.player; p.input.yaw += Math.PI; }")
             # SETUP: the guest's copy of the host must have come to REST before the reversed walk is tracked (gateA 10-27 02:53: 800 ms was not
             # enough - the copy was still finishing the baseline walk, 5.4 m 'backwards' along the new direction at samples 1-4)
@@ -182,8 +189,7 @@ def main():
             held = gpg.evaluate("() => (window.__SQ_REORDER__ || {}).held || 0")
             gpg.evaluate("() => { window.__SQ_REORDER__ = null; }")
             r["latePackets"] = held
-            v.check("no-backward (every 3rd state packet 250 ms late: the remote never pulled back > 0.05 m)", held >= 10 and r["progress"] is not None and r["progress"] > 5
-                    and (r["maxBackM"] or 0) <= 0.05, r, ">= 10 late, never back > 0.05 m")
+            walk_row("no-backward (every 3rd state packet 250 ms late: the remote never pulled back > 0.05 m)", r, held >= 10, ", >= 10 late packets")
             # rejoin. Fix round: the row records WHERE a miss stopped (both pages polled every 1 s until back / 60 s): the new page's boot time,
             # phase, its lobby status (data-net-rejoin + text) and asks left, and the host's view (ticking? its rejoin log, goneAt, lastSeen of
             # the slot, silentTake) - so a miss names net / boot, or a harness setup that never let the host see the old page leave
