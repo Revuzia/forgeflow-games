@@ -69,6 +69,8 @@
 
 export const KIT_API = 1;
 export const MANIFEST_PATH = "assets/props/city/manifest.json";
+/** C-GFX / D10: the facade detail strength per graphics tier (createCityKit env.detail / kit.setDetail take a tier name or a number). Off on low. */
+export const DETAIL_BY_TIER = Object.freeze({ low: 0, medium: 0.62, high: 0.62, ultra: 0.62 });
 export const DEFAULTS = Object.freeze({
   farDistance: 250,        // m beyond a district's bounding sphere before it collapses to its one proxy mesh
   hysteresis: 0.04,        // THREE.LOD hysteresis (fraction of the level distance)
@@ -631,14 +633,14 @@ export function createCityKit(env) {
     const tex = pf ? await loadTexture(pf) : null;
     if (palMats.has(id)) return palMats.get(id);
     const bldg = pal.key === "suburban" || pal.key === "commercial";
-    const det = tex && bldg ? await detailTexture() : null;
+    if (tex && bldg && detailWant > 0) await detailTexture();        // (D10: never fetched while the strength is 0 - the low tier; setDetail(> 0) fetches it later)
     if (palMats.has(id)) return palMats.get(id);
     const m = new THREE.MeshStandardMaterial({ map: tex || null, roughness: 1, metalness: 0, side: double ? THREE.DoubleSide : THREE.FrontSide });
     m.color.setHex(tex ? pal.tint : 0xb4b8c4);
     m.name = "citykit:" + id;
     if (tex && (bldg || pal.key === "car")) installSurfaceMap(m, tex, pal.key === "car" ? "car" : "building");
     if (pal.key === "car") installCarPaint(m);
-    else if (det) installFacadeDetail(m, det);
+    else if (tex && bldg) installFacadeDetail(m);
     palMats.set(id, m);
     return m;
   }
@@ -699,20 +701,29 @@ export function createCityKit(env) {
   // Facade detail (LC-17): the kit's colormaps are flat swatches - a 40 m tower face is one colour. A CC0 photographic plaster (assets/tex/facade_detail.jpg, Poly Haven,
   // greyscale, mean 0.5, low frequencies removed) multiplies the albedo of every building swatch that is not glass or trim (the surface map's roughness >= 0.75), projected
   // in WORLD space on the face's dominant plane at two scales (2.6 m and 9 m), faded out from 40 to 120 m (no shimmer at range). One shared texture and uniform for every
-  // building palette: no draw call; the program is the material's own (customProgramCacheKey), compiled in the warm frame. setDetail(0) (the low tier) turns it off
-  // without a recompile.
+  // building palette: no draw call; the program is the material's own (customProgramCacheKey), compiled in the warm frame.
+  // C-GFX / D10 (the low tier): env.detail / setDetail(v) set the strength (DETAIL_BY_TIER: 0 on low). At 0 the texture is never fetched (the 131 KB jpg stays on the
+  // server) and the shader's detail block is skipped by a uniform branch (no texture fetch per fragment); the program is the same at every strength, so a tier change
+  // is a uniform write, never a recompile. Raising it from 0 fetches the texture once and the detail shows when it lands (the live strength stays 0 until then).
   const DETAIL_PATH = "../../tex/facade_detail.jpg";
-  const detailU = { value: env.detail != null ? +env.detail : 0.62 };
+  const detailOf = (v) => (typeof v === "string" ? (DETAIL_BY_TIER[v] != null ? DETAIL_BY_TIER[v] : DETAIL_BY_TIER.medium) : Math.max(0, Math.min(1.5, +v || 0)));
+  let detailWant = env.detail != null ? detailOf(env.detail) : DETAIL_BY_TIER.medium, detailUsers = 0;
+  const detailU = { value: 0 };                        // the live strength (shared by every building palette): 0 until the texture is in, then detailWant
+  const detailTexU = { value: null };                  // the shared sampler (null = three's empty texture: never sampled behind the uLcDetail > 0 branch)
   let detailP = null;
   function detailTexture() {
     if (detailP) return detailP;
     const pf = { file: DETAIL_PATH, sampler: "LINEAR/LINEAR_MIPMAP_LINEAR" };
-    detailP = loadTexture(pf).then((t) => { if (t) { textures.delete(t); surfTextures.add(t); t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; } return t; });
+    detailP = loadTexture(pf).then((t) => {
+      if (t) { textures.delete(t); surfTextures.add(t); t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; detailTexU.value = t; detailU.value = detailWant; }
+      return t;
+    });
     return detailP;
   }
-  function installFacadeDetail(m, det) {
+  function installFacadeDetail(m) {
+    detailUsers++;
     m.onBeforeCompile = (sh) => {
-      sh.uniforms.tLcDetail = { value: det };
+      sh.uniforms.tLcDetail = detailTexU;
       sh.uniforms.uLcDetail = detailU;
       sh.vertexShader = sh.vertexShader
         .replace("#include <common>", "#include <common>\nvarying vec3 vLcW;\nvarying vec3 vLcN;")
@@ -730,7 +741,7 @@ export function createCityKit(env) {
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <common>", "#include <common>\nuniform sampler2D tLcDetail;\nuniform float uLcDetail;\nvarying vec3 vLcW;\nvarying vec3 vLcN;")
         .replace("#include <map_fragment>", `#include <map_fragment>
-{
+if (uLcDetail > 0.0) {
   vec3 lcN = normalize(vLcN), lcA = abs(lcN);
   vec2 lcUv = lcA.y > 0.6 ? vLcW.xz : (lcA.x > lcA.z ? vLcW.zy : vLcW.xy);
   float lcF = uLcDetail * (1.0 - smoothstep(40.0, 120.0, distance(cameraPosition, vLcW)));
@@ -1054,7 +1065,7 @@ export function createCityKit(env) {
   // -- stats ---------------------------------------------------------------------------------------------------------------------------------
   function stats() {
     const out = { districts: {}, totals: { districts: 0, instances: 0, detailDrawCalls: 0, detailTriangles: 0, proxyDrawCalls: 0, proxyTriangles: 0, currentDrawCalls: 0, currentTriangles: 0,
-      fallbackBoxes: 0, textures: textures.size, surfaceTextures: surfTextures.size, materials: palMats.size + (proxyMat ? 1 : 0) }, failedTypes: [], inexactEntries: 0, oversize: [], tableDrift: man ? man.drift.slice() : null };
+      fallbackBoxes: 0, textures: textures.size, surfaceTextures: surfTextures.size, materials: palMats.size + (proxyMat ? 1 : 0) }, failedTypes: [], detail: { strength: detailWant, live: detailU.value, fetched: !!detailP, materials: detailUsers }, inexactEntries: 0, oversize: [], tableDrift: man ? man.drift.slice() : null };
     const failed = new Set();
     for (const P of placements) {
       out.inexactEntries += P.inexact || 0;
@@ -1079,8 +1090,14 @@ export function createCityKit(env) {
     shadowsOpt.value = on;
     for (const P of placements) for (const D of P.districts.values()) for (const it of D.meshes) it.mesh.castShadow = on === "auto" ? (it.type ? casts(it.type) : true) : !!on;
   }
-  /** (P23 / LC-17) the facade detail's strength, 0 = off (the low tier); every building palette shares the uniform: no recompile */
-  function setDetail(v) { detailU.value = Math.max(0, +v || 0); }
+  /** (P23 / LC-17, C-GFX / D10) the facade detail's strength: a number (0 = off) or a tier name ("low" | "medium" | "high" | "ultra": DETAIL_BY_TIER). Every
+   *  building palette shares the uniform: no recompile. Off -> on fetches the texture the first time (never fetched while it stays 0). Returns the strength set. */
+  function setDetail(v) {
+    detailWant = detailOf(v);
+    if (detailWant > 0 && !detailP && !disposed && detailUsers) detailTexture();
+    detailU.value = detailTexU.value ? detailWant : 0;
+    return detailWant;
+  }
   function setFarDistance(m) {
     opt.farDistance = m;
     for (const P of placements) for (const D of P.districts.values()) if (D.lod.levels.length > 1) D.lod.levels[1].distance = m + D.radius;
@@ -1102,7 +1119,7 @@ export function createCityKit(env) {
     if (proxyMat) { proxyMat.dispose(); m++; }
     for (const tex of textures) { tex.dispose(); t++; }
     for (const tex of surfTextures) { tex.dispose(); t++; }
-    palMats.clear(); textures.clear(); surfTextures.clear(); surfCache.clear(); detailP = null; texP.clear(); glb.clear(); glbP.clear(); placements.length = 0; proxyMat = null;
+    palMats.clear(); textures.clear(); surfTextures.clear(); surfCache.clear(); detailP = null; detailTexU.value = null; detailU.value = 0; detailUsers = 0; texP.clear(); glb.clear(); glbP.clear(); placements.length = 0; proxyMat = null;
     return { geometries: g, materials: m, textures: t, instancedMeshes: im };
   }
 
