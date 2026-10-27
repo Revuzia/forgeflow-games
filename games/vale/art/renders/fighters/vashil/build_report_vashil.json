@@ -1,0 +1,272 @@
+{
+  "id": "vashil",
+  "fighter": "vashil",
+  "skin": false,
+  "parts": {
+    "bind_legs": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": [
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "toe.L",
+        "toe.R"
+      ]
+    },
+    "tris_legs": 360,
+    "tris_hood": 1500,
+    "tris_visor_frame": 698,
+    "tris_visor_glass": 500,
+    "tris_mask": 1000,
+    "tris_neckwrap": 350,
+    "tris_cowl": 1650,
+    "tris_pauldron_R1": 400,
+    "tris_pauldron_R2": 400,
+    "tris_pauldron_R3": 400,
+    "tris_pauldron_L1": 400,
+    "tris_pauldron_L2": 400,
+    "tris_pauldron_L3": 400,
+    "tris_robe_top": 1298,
+    "tris_sash": 800,
+    "tris_skirt": 2400,
+    "tris_sleeve_L": 1100,
+    "tris_sleeve_R": 1200,
+    "tris_wrap_L": 500,
+    "tris_wrap_R": 500,
+    "tris_hand_R": 800,
+    "tris_hand_L": 800,
+    "tris_boots": 850,
+    "tris_rod_shaft": 420,
+    "tris_rod_grip": 218,
+    "tris_rod_collar": 300,
+    "tris_striker": 300,
+    "tris_striker_core": 160,
+    "tris_wrist_cord": 160,
+    "tris_wrist_bell": 160,
+    "tris_wrist_clapper": 60,
+    "tris_halo_ring": 1100,
+    "tris_halo_clasps": 300,
+    "tris_clasp_windows": 120,
+    "tris_bells": 1120,
+    "tris_bell_hooks": 180,
+    "tris_clapper_stems": 138,
+    "tris_clappers": 350,
+    "validate_vashil": "23102->23096",
+    "validate_vashil_accent": "690->682"
+  },
+  "uv_coverage": 0.616,
+  "bake": {
+    "base": 5.04,
+    "rough_metal": 3.62,
+    "normal": 2.31,
+    "ao": 3.36,
+    "normal_fixed_px": 17329,
+    "projection": 43.86,
+    "pack_save": 44.08,
+    "total": 58.77
+  },
+  "tris": 23778,
+  "mesh_top_m": 2.105,
+  "clips": {
+    "idle": {
+      "frames": 72,
+      "duration_s": 2.4,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 16,
+      "duration_s": 0.5333,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.35,
+      "stride_m": 0.893,
+      "cycle_s": 0.533
+    },
+    "attack1": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 50,
+      "duration_s": 1.6667,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 120,
+      "duration_s": 4.0,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 55,
+      "duration_s": 1.8333,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "taunt": {
+      "frames": 45,
+      "duration_s": 1.5,
+      "loop": false,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 2683660,
+  "optimize": {
+    "ok": true,
+    "before": 2683660,
+    "after": 1162096
+  },
+  "glb_bytes": 1162096,
+  "three_load_test": {
+    "ok": false,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil.glb (1135 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: vashil_base 2048x2048 231K, vashil_normal 512x512 41K, vashil_orm 256x256 24K",
+      "  skinned meshes: vashil(20123v), vashil_accent(369v)",
+      "  bones: 26 (root hips spine chest neck head x_halo shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_rod_head thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:0.667s/17tr, attack2:0.667s/17tr, cast_a1:0.833s/18tr, cast_a2:0.500s/17tr, cast_a3:0.667s/20tr, cast_ult:1.333s/20tr, channel:1.333s/15tr, dash:0.500s/19tr, death:1.667s/21tr, idle:2.400s/18tr, idle_lobby:4.000s/17tr, recall:2.000s/17tr, run:0.533s/23tr, stunned:1.333s/18tr, taunt:1.500s/15tr, victory:1.833s/18tr",
+      "  tracks checked: 290; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 23778; bind-pose bounds (three units, Y up): 0.98 x 2.11 x 0.84; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
+      "  run: 16 f, planted samples 0, max foot-speed error null%",
+      "[three] FAIL (1)",
+      "  - run: no planted-foot frames found"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/vashil/splash.png",
+      "portrait": "art/out/fighters/vashil/portrait.png",
+      "icon": "art/out/fighters/vashil/icon.png",
+      "turntable": "art/renders/fighters/vashil/turntable.png"
+    },
+    "seconds": {
+      "splash": 9.36,
+      "portrait": 4.64,
+      "icon": 1.38,
+      "turntable": 13.09
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.565,
+        -0.005,
+        -0.446
+      ],
+      [
+        0.413,
+        2.105,
+        0.395
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.642,
+    "accentPct": 1.99,
+    "accentTopHalfPct": 97.1,
+    "heightPx1080": 113,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 16,
+    "out": "art/renders/fighters/vashil/three_vashil.png",
+    "seconds": 33.6,
+    "exit": 0,
+    "clip_sheet": "art/renders/fighters/vashil/three_clips_vashil.png"
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.19,
+      "model": 6.06,
+      "lows_bind": 3.84,
+      "uv": 4.6,
+      "bake": 58.78,
+      "clips": 0.13,
+      "export": 1.45,
+      "optimize": 1.38,
+      "load_test": 0.27,
+      "render": 28.58,
+      "three_qa": 131.52,
+      "cache": 0.39
+    },
+    "total_s": 237.25
+  },
+  "run_ref_speed": 3.35,
+  "height_m": 1.9
+}

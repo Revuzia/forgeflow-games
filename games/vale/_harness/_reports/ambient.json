@@ -1,24 +1,24 @@
 {
- "at": "2026-10-27T21:36:43.959Z",
+ "at": "2026-10-27T22:38:21.393Z",
  "maps": {
   "rift": {
    "high": {
     "reads": {
      "inSitu": {
-      "px": 5465,
-      "share": 0.264,
-      "p50": 30.2,
-      "p95": 48.4,
-      "p99": 59.6,
+      "px": 22167,
+      "share": 1.069,
+      "p50": 34.1,
+      "p95": 54.8,
+      "p99": 65.2,
       "max": 72.4
      },
      "own": {
       "effects": {
-       "px": 5653,
-       "p50": 3,
-       "p95": 34.4,
-       "p99": 51.1,
-       "max": 63.5
+       "px": 30589,
+       "p50": 4,
+       "p95": 38.5,
+       "p99": 55.5,
+       "max": 59.3
       },
       "critters": {
        "px": 854,
@@ -28,22 +28,23 @@
        "max": 65.6
       },
       "props": {
-       "px": 19423,
-       "p50": 37.4,
+       "px": 15693,
+       "p50": 37.2,
        "p95": 40.8,
        "p99": 41.6,
-       "max": 70.9
+       "max": 70.1
       }
      },
-     "movedPx": 1315037,
+     "movedPx": 1304441,
      "returnPx": 0,
      "on": {
-      "particles": 88,
+      "particles": 194,
       "critters": 4,
       "onScreen": {
-       "amb_rift_shaft_dust": 42,
-       "amb_rift_shallows_glint": 28,
-       "amb_rift_shallows_insects": 18
+       "amb_rift_canopy_motes": 20,
+       "amb_rift_shaft_dust": 90,
+       "amb_rift_shallows_glint": 60,
+       "amb_rift_shallows_insects": 24
       },
       "calls": 196
      },
@@ -53,62 +54,180 @@
       "calls": 187
      }
     },
+    "effSpots": {
+     "base": {
+      "px": 2549,
+      "p95": 22.4,
+      "p99": 27.9,
+      "max": 34.7
+     },
+     "wood": {
+      "px": 9500,
+      "p95": 39.7,
+      "p99": 56.6,
+      "max": 56.9
+     },
+     "shrine": {
+      "px": 3845,
+      "p95": 19,
+      "p99": 25.5,
+      "max": 42.1
+     },
+     "sweep0": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep1": {
+      "px": 6,
+      "p95": 4.2,
+      "p99": 4.2,
+      "max": 4.2
+     },
+     "sweep2": {
+      "px": 16085,
+      "p95": 38.1,
+      "p99": 58.2,
+      "max": 58.5
+     },
+     "sweep3": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep4": {
+      "px": 19831,
+      "p95": 40.2,
+      "p99": 57.4,
+      "max": 58.5
+     },
+     "sweep5": {
+      "px": 7711,
+      "p95": 40.1,
+      "p99": 58.2,
+      "max": 58.5
+     },
+     "sweep6": {
+      "px": 1041,
+      "p95": 38.2,
+      "p99": 49.6,
+      "max": 55.5
+     },
+     "sweep7": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep8": {
+      "px": 3114,
+      "p95": 39.8,
+      "p99": 55.1,
+      "max": 55.4
+     },
+     "sweep9": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep10": {
+      "px": 7482,
+      "p95": 40.7,
+      "p99": 57.8,
+      "max": 58.4
+     },
+     "sweep11": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep12": {
+      "px": 24974,
+      "p95": 40.5,
+      "p99": 57.7,
+      "max": 58.5
+     },
+     "sweep13": {
+      "px": 1070,
+      "p95": 37.4,
+      "p99": 49.6,
+      "max": 53.2
+     }
+    },
     "flee": {
      "critter": "dialwren",
      "at": [
-      81.6,
-      67.6
+      81.7,
+      66.9
      ],
      "hidden": {
       "tookOffS": null,
       "state": "idle",
-      "moved": 0.14
+      "moved": 0.15
      },
      "visible": {
       "tookOffS": 0.033,
       "state": "flee",
-      "moved": 4.44
+      "moved": 4.1
      }
     },
     "sweep": {
-     "worst": 7,
+     "worst": 30,
      "per": [
-      7,
-      7,
-      7,
-      7,
+      10,
+      20,
+      20,
+      10,
+      20,
+      20,
+      30,
       0,
-      7,
-      0,
-      0
+      20,
+      20,
+      20,
+      20,
+      20,
+      30
      ]
+    },
+    "flame": {
+     "px": 1402,
+     "share": 0.068,
+     "p50": 32.7,
+     "p95": 45.8,
+     "p99": 52.6,
+     "max": 57.3
     },
     "cost": {
      "frames": 240,
-     "meanMs": 0.0992,
+     "meanMs": 0.1046,
      "p95Ms": 0.2,
-     "maxMs": 0.6,
-     "emaMs": 0.096
+     "maxMs": 0.2,
+     "emaMs": 0.103
     },
     "logs": []
    },
    "low": {
     "reads": {
      "inSitu": {
-      "px": 383,
-      "share": 0.074,
-      "p50": 31,
-      "p95": 44.2,
-      "p99": 51.1,
-      "max": 54.4
+      "px": 2108,
+      "share": 0.407,
+      "p50": 34.7,
+      "p95": 53.6,
+      "p99": 62.4,
+      "max": 68.2
      },
      "own": {
       "effects": {
-       "px": 524,
-       "p50": 2.4,
-       "p95": 24.3,
-       "p99": 35.9,
-       "max": 41.8
+       "px": 3041,
+       "p50": 3.4,
+       "p95": 35.1,
+       "p99": 51.1,
+       "max": 55.9
       },
       "critters": {
        "px": 33,
@@ -118,22 +237,23 @@
        "max": 55.8
       },
       "props": {
-       "px": 4614,
+       "px": 3707,
        "p50": 37.9,
        "p95": 41.2,
        "p99": 41.6,
        "max": 71.1
       }
      },
-     "movedPx": 255775,
+     "movedPx": 253146,
      "returnPx": 0,
      "on": {
-      "particles": 38,
+      "particles": 78,
       "critters": 1,
       "onScreen": {
-       "amb_rift_shaft_dust": 18,
-       "amb_rift_shallows_glint": 12,
-       "amb_rift_shallows_insects": 8
+       "amb_rift_canopy_motes": 8,
+       "amb_rift_shaft_dust": 35,
+       "amb_rift_shallows_glint": 25,
+       "amb_rift_shallows_insects": 10
       },
       "calls": 122
      },
@@ -141,6 +261,110 @@
       "particles": 0,
       "critters": 0,
       "calls": 119
+     }
+    },
+    "effSpots": {
+     "base": {
+      "px": 650,
+      "p95": 21.5,
+      "p99": 23.7,
+      "max": 24.1
+     },
+     "wood": {
+      "px": 2283,
+      "p95": 40.6,
+      "p99": 56.6,
+      "max": 56.9
+     },
+     "shrine": {
+      "px": 967,
+      "p95": 18.4,
+      "p99": 21.5,
+      "max": 28.6
+     },
+     "sweep0": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep1": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep2": {
+      "px": 1661,
+      "p95": 39.8,
+      "p99": 57.8,
+      "max": 58.5
+     },
+     "sweep3": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep4": {
+      "px": 648,
+      "p95": 36.8,
+      "p99": 55.8,
+      "max": 58.5
+     },
+     "sweep5": {
+      "px": 1920,
+      "p95": 40.1,
+      "p99": 57.4,
+      "max": 58.5
+     },
+     "sweep6": {
+      "px": 151,
+      "p95": 33.1,
+      "p99": 38.2,
+      "max": 38.6
+     },
+     "sweep7": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep8": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep9": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep10": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep11": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "sweep12": {
+      "px": 3305,
+      "p95": 41.9,
+      "p99": 57.4,
+      "max": 58.5
+     },
+     "sweep13": {
+      "px": 136,
+      "p95": 34.9,
+      "p99": 39.4,
+      "max": 41.1
      }
     },
     "flee": {
@@ -156,29 +380,43 @@
      },
      "visible": {
       "tookOffS": 0.033,
-      "state": "settle",
-      "moved": 3
+      "state": "flee",
+      "moved": 0.6
      }
     },
     "sweep": {
-     "worst": 3,
+     "worst": 12,
      "per": [
-      3,
-      3,
-      3,
-      3,
+      4,
+      8,
+      8,
+      4,
+      8,
+      8,
+      12,
       0,
-      3,
-      0,
-      0
+      8,
+      8,
+      8,
+      8,
+      8,
+      12
      ]
+    },
+    "flame": {
+     "px": 341,
+     "share": 0.066,
+     "p50": 33.4,
+     "p95": 53.4,
+     "p99": 55.5,
+     "max": 59.1
     },
     "cost": {
      "frames": 240,
-     "meanMs": 0.0458,
+     "meanMs": 0.0442,
      "p95Ms": 0.1,
      "maxMs": 0.2,
-     "emaMs": 0.062
+     "emaMs": 0.038
     },
     "logs": []
    }
@@ -187,27 +425,27 @@
    "high": {
     "reads": {
      "inSitu": {
-      "px": 8569,
-      "share": 0.413,
-      "p50": 16.2,
-      "p95": 36.9,
-      "p99": 47.7,
-      "max": 57.2
+      "px": 14011,
+      "share": 0.676,
+      "p50": 17.7,
+      "p95": 41.9,
+      "p99": 52.5,
+      "max": 62.9
      },
      "own": {
       "effects": {
-       "px": 9870,
+       "px": 18180,
        "p50": 3.8,
-       "p95": 18.6,
-       "p99": 39.4,
-       "max": 50.4
+       "p95": 27.3,
+       "p99": 47.2,
+       "max": 54
       },
       "critters": {
-       "px": 556,
-       "p50": 35.8,
-       "p95": 47.4,
-       "p99": 50.9,
-       "max": 54.4
+       "px": 566,
+       "p50": 36.4,
+       "p95": 49.8,
+       "p99": 53.4,
+       "max": 54.2
       },
       "props": {
        "px": 0,
@@ -217,15 +455,15 @@
        "max": null
       }
      },
-     "movedPx": 264487,
+     "movedPx": 277712,
      "returnPx": 0,
      "on": {
-      "particles": 50,
+      "particles": 92,
       "critters": 2,
       "onScreen": {
-       "amb_bridge_updraft": 30,
+       "amb_bridge_updraft": 60,
        "amb_bridge_gorge_wisps": 12,
-       "amb_bridge_chalk_dust": 8
+       "amb_bridge_chalk_dust": 20
       },
       "calls": 88
      },
@@ -235,11 +473,31 @@
       "calls": 83
      }
     },
+    "effSpots": {
+     "snap": {
+      "px": 11016,
+      "p95": 23.9,
+      "p99": 45.2,
+      "max": 54.1
+     },
+     "gate": {
+      "px": 4129,
+      "p95": 31.3,
+      "p99": 47.3,
+      "max": 54.3
+     },
+     "south": {
+      "px": 460,
+      "p95": 20.6,
+      "p99": 30,
+      "max": 34.7
+     }
+    },
     "flee": {
      "critter": "hourskink",
      "at": [
-      100.3,
-      15.9
+      93.5,
+      15.8
      ],
      "hidden": {
       "tookOffS": null,
@@ -248,43 +506,51 @@
      },
      "visible": {
       "tookOffS": 0.033,
-      "state": "settle",
-      "moved": 3
+      "state": "flee",
+      "moved": 1
      }
+    },
+    "flame": {
+     "px": 1250,
+     "share": 0.06,
+     "p50": 22.8,
+     "p95": 43.4,
+     "p99": 46,
+     "max": 46.5
     },
     "cost": {
      "frames": 240,
-     "meanMs": 0.0667,
-     "p95Ms": 0.2,
-     "maxMs": 0.6,
-     "emaMs": 0.041
+     "meanMs": 0.0304,
+     "p95Ms": 0.1,
+     "maxMs": 0.2,
+     "emaMs": 0.054
     },
     "logs": []
    },
    "low": {
     "reads": {
      "inSitu": {
-      "px": 1434,
-      "share": 0.277,
-      "p50": 17,
-      "p95": 37.5,
-      "p99": 46.5,
-      "max": 52.1
+      "px": 2242,
+      "share": 0.432,
+      "p50": 17.8,
+      "p95": 43,
+      "p99": 52.1,
+      "max": 59.1
      },
      "own": {
       "effects": {
-       "px": 1448,
-       "p50": 6.5,
-       "p95": 12.1,
-       "p99": 27.8,
-       "max": 43.9
+       "px": 2533,
+       "p50": 5.4,
+       "p95": 24.6,
+       "p99": 43.7,
+       "max": 52.8
       },
       "critters": {
-       "px": 67,
-       "p50": 37,
-       "p95": 46.5,
-       "p99": 48.9,
-       "max": 48.9
+       "px": 118,
+       "p50": 37.5,
+       "p95": 50.7,
+       "p99": 53.7,
+       "max": 54.3
       },
       "props": {
        "px": 0,
@@ -294,17 +560,17 @@
        "max": null
       }
      },
-     "movedPx": 54811,
+     "movedPx": 56664,
      "returnPx": 0,
      "on": {
-      "particles": 20,
-      "critters": 1,
+      "particles": 36,
+      "critters": 2,
       "onScreen": {
-       "amb_bridge_updraft": 12,
+       "amb_bridge_updraft": 24,
        "amb_bridge_gorge_wisps": 4,
-       "amb_bridge_chalk_dust": 4
+       "amb_bridge_chalk_dust": 8
       },
-      "calls": 51
+      "calls": 53
      },
      "off": {
       "particles": 0,
@@ -312,11 +578,31 @@
       "calls": 48
      }
     },
+    "effSpots": {
+     "snap": {
+      "px": 844,
+      "p95": 30.8,
+      "p99": 46.8,
+      "max": 50.5
+     },
+     "gate": {
+      "px": 763,
+      "p95": 27.6,
+      "p99": 43.1,
+      "max": 48.6
+     },
+     "south": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     }
+    },
     "flee": {
      "critter": "hourskink",
      "at": [
-      51.2,
-      27.9
+      93.5,
+      15.8
      ],
      "hidden": {
       "tookOffS": null,
@@ -325,16 +611,24 @@
      },
      "visible": {
       "tookOffS": 0.033,
-      "state": "settle",
-      "moved": 3.26
+      "state": "flee",
+      "moved": 1
      }
+    },
+    "flame": {
+     "px": 312,
+     "share": 0.06,
+     "p50": 23.3,
+     "p95": 50.4,
+     "p99": 50.9,
+     "max": 51.1
     },
     "cost": {
      "frames": 240,
-     "meanMs": 0.0354,
+     "meanMs": 0.0054,
      "p95Ms": 0.1,
-     "maxMs": 0.2,
-     "emaMs": 0.027
+     "maxMs": 0.1,
+     "emaMs": 0.001
     },
     "logs": []
    }
@@ -343,44 +637,44 @@
    "high": {
     "reads": {
      "inSitu": {
-      "px": 4827,
-      "share": 0.233,
-      "p50": 37,
-      "p95": 84.7,
-      "p99": 85.1,
-      "max": 86.3
+      "px": 11935,
+      "share": 0.576,
+      "p50": 36.2,
+      "p95": 50.9,
+      "p99": 52.1,
+      "max": 56.1
      },
      "own": {
       "effects": {
-       "px": 15280,
-       "p50": 0.9,
-       "p95": 27.8,
-       "p99": 45,
-       "max": 65.3
+       "px": 18187,
+       "p50": 1.4,
+       "p95": 21.4,
+       "p99": 39.9,
+       "max": 52.5
       },
       "critters": {
-       "px": 435,
-       "p50": 43.3,
+       "px": 427,
+       "p50": 43.7,
        "p95": 54.2,
        "p99": 56.2,
        "max": 56.2
       },
       "props": {
-       "px": 18158,
-       "p50": 14,
-       "p95": 43.8,
-       "p99": 48.8,
+       "px": 18905,
+       "p50": 19.6,
+       "p95": 52.1,
+       "p99": 55.2,
        "max": 57.8
       }
      },
-     "movedPx": 65071,
+     "movedPx": 83668,
      "returnPx": 0,
      "on": {
-      "particles": 21,
+      "particles": 31,
       "critters": 1,
       "onScreen": {
-       "amb_fray_petals": 7,
-       "amb_fray_rim_haze": 6,
+       "amb_fray_petals": 14,
+       "amb_fray_rim_haze": 9,
        "amb_fray_lantern_glow": 2,
        "amb_fray_lamp_flame": 6
       },
@@ -392,49 +686,71 @@
       "calls": 49
      }
     },
+    "effSpots": {
+     "rim": {
+      "px": 3166,
+      "p95": 5.9,
+      "p99": 6.4,
+      "max": 6.4
+     },
+     "corner": {
+      "px": 27253,
+      "p95": 23.6,
+      "p99": 43.6,
+      "max": 55.9
+     }
+    },
     "flee": {
      "critter": "dialwren",
      "at": [
-      8.7,
-      15.6
+      4.8,
+      12.8
      ],
      "hidden": {
       "tookOffS": null,
       "state": "idle",
-      "moved": 0.06
+      "moved": 0
      },
      "visible": {
       "tookOffS": 0.033,
       "state": "flee",
-      "moved": 5.04
+      "moved": 4.48
      }
+    },
+    "flame": {
+     "px": 26734,
+     "share": 1.289,
+     "p50": 38,
+     "p95": 45.8,
+     "p99": 47.2,
+     "max": 51.5
     },
     "cost": {
      "frames": 240,
-     "meanMs": 0.0396,
-     "p95Ms": 0.1,
-     "maxMs": 0.3,
-     "emaMs": 0.038
+     "meanMs": 0.0046,
+     "p95Ms": 0,
+     "maxMs": 0.1,
+     "emaMs": 0.006
     },
     "logs": []
    },
    "low": {
     "reads": {
      "inSitu": {
-      "px": 651,
-      "share": 0.126,
-      "p50": 85,
-      "p95": 85.9,
-      "p99": 87,
-      "max": 87.7
+      "px": 904,
+      "share": 0.174,
+      "p50": 40.4,
+      "p95": 52.3,
+      "p99": 53,
+      "max": 53.8
      },
      "own": {
       "effects": {
-       "px": 1989,
-       "p50": 4,
-       "p95": 32.3,
-       "p99": 49.7,
-       "max": 58.3
+       "px": 2391,
+       "p50": 1.9,
+       "p95": 23.5,
+       "p99": 39.2,
+       "max": 51.4
       },
       "critters": {
        "px": 0,
@@ -445,19 +761,19 @@
       },
       "props": {
        "px": 4404,
-       "p50": 14.1,
-       "p95": 46.4,
-       "p99": 50.5,
+       "p50": 20.4,
+       "p95": 53.3,
+       "p99": 57.2,
        "max": 57.9
       }
      },
-     "movedPx": 5694,
+     "movedPx": 6084,
      "returnPx": 0,
      "on": {
-      "particles": 11,
+      "particles": 13,
       "critters": 0,
       "onScreen": {
-       "amb_fray_petals": 3,
+       "amb_fray_petals": 5,
        "amb_fray_rim_haze": 3,
        "amb_fray_lantern_glow": 2,
        "amb_fray_lamp_flame": 3
@@ -470,29 +786,51 @@
       "calls": 24
      }
     },
+    "effSpots": {
+     "rim": {
+      "px": 0,
+      "p95": null,
+      "p99": null,
+      "max": null
+     },
+     "corner": {
+      "px": 3224,
+      "p95": 30,
+      "p99": 43.7,
+      "max": 55
+     }
+    },
     "flee": {
      "critter": "dialwren",
      "at": [
-      40.7,
-      4.7
+      42.2,
+      0
      ],
      "hidden": {
       "tookOffS": null,
       "state": "idle",
-      "moved": 0
+      "moved": 0.03
      },
      "visible": {
       "tookOffS": 0.033,
       "state": "flee",
-      "moved": 5.1
+      "moved": 4.43
      }
+    },
+    "flame": {
+     "px": 3291,
+     "share": 0.635,
+     "p50": 31.8,
+     "p95": 41,
+     "p99": 47.4,
+     "max": 53.9
     },
     "cost": {
      "frames": 240,
-     "meanMs": 0.0108,
-     "p95Ms": 0.1,
+     "meanMs": 0.0033,
+     "p95Ms": 0,
      "maxMs": 0.1,
-     "emaMs": 0.01
+     "emaMs": 0.001
     },
     "logs": []
    }

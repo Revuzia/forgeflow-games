@@ -1,0 +1,16 @@
+[
+  {
+    "id": "vashil_chalkline",
+    "fighter": "vashil",
+    "model": "assets/fighters/vashil/vashil_chalkline.glb",
+    "portrait": "assets/fighters/vashil/vashil_chalkline_portrait.png",
+    "splash": "assets/fighters/vashil/vashil_chalkline_splash.png"
+  },
+  {
+    "id": "vashil_first_bell",
+    "fighter": "vashil",
+    "model": "assets/fighters/vashil/vashil_first_bell.glb",
+    "portrait": "assets/fighters/vashil/vashil_first_bell_portrait.png",
+    "splash": "assets/fighters/vashil/vashil_first_bell_splash.png"
+  }
+]

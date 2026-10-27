@@ -8,11 +8,12 @@
 //       and the props (scenery) p95 <= 60 and max <= 72 (luma 180, r12 B5's environment cap); p50 / p99 reported. In
 //       situ: the share of the frame the layer changes (ambientEffects ON vs OFF at one clock; props stay: they are
 //       scenery), and the lamp flames in play (effects ON vs OFF at a lamp spot, critters hidden: the flame over its
-//       own ground): p99 <= 60 (the flame band, r12 M14: L* 55-60)
+//       own ground): max <= 60 (the flame band, r12 M14: L* 55-60)
 //     · determinism: the frame at T, T + 1.25 s and T again (dt 0): 0 px may differ on return (particles are pure
 //       functions of the clock; the critters only move with dt)
 //     · the toggle: OFF draws no ambient particle and no critter (stats().ambient)
-//     · canopy motes on screen (RIFT, a sweep of jungle spots): <= 30
+//     · canopy motes on screen (RIFT, a sweep of jungle spots): <= 30; the effects' layer-only max is read again at every
+//       extra spot and sweep spot (each def is gated where it lives, not only at the canonical spot)
 //     · flee: a VISIBLE enemy (a presentation-only view patch, as shot_foliage.mjs) set 1.5 m from a resting critter:
 //       it takes off within 0.5 s; the same enemy OUT of the viewer's vision: the critter never takes off (no leak;
 //       its own idle hops go on)
@@ -42,7 +43,7 @@ mkdirSync(DIR, { recursive: true });
 
 /** each map's canonical spot (a stretch of its ambient life at the gameplay camera) and a few more */
 const SPOTS = {
-  rift: { canon: [85.0, 70.0], more: { base: [23.0, 47.5], wood: [44.0, 64.0], shrine: [85.0, 9.0] }, sweep: [[48, 62], [62, 48], [40, 30], [122, 62], [108, 80], [130, 40], [60, 90], [85, 20]], flame: [23.0, 47.5] },
+  rift: { canon: [85.0, 70.0], more: { base: [23.0, 47.5], wood: [44.0, 64.0], shrine: [85.0, 9.0] }, sweep: [[48, 62], [62, 48], [40, 30], [122, 62], [108, 80], [130, 40], [60, 90], [85, 20], [22, 95], [22, 27], [148, 95], [148, 27], [40, 30], [60, 90]], flame: [23.0, 47.5] },
   bridge: { canon: [100.0, 15.0], more: { snap: [78.0, 20.0], gate: [150.0, 22.0], south: [40.0, 30.0] }, sweep: [], flame: [150.0, 22.0] },
   fray: { canon: [10.0, 11.0], more: { rim: [32.0, 8.0], corner: [56.0, 54.0] }, sweep: [], flame: [56.0, 54.0] },
 };
@@ -160,6 +161,30 @@ function install() {
         off: { particles: sOff.particles, critters: sOff.crittersDrawn, calls: callsOff },
       };
     },
+    /** the effects alone at the current spot (layer-only, over black): their own L* (the T0 law at every spot) */
+    effOwn: () => {
+      settle(4);
+      const T0 = R.time;
+      const pr = R.post.render.bind(R.post);
+      R.post.render = (d) => {
+        const hid = [];
+        for (const o of R.scene.children) {
+          if (o === R.ambient.group || o.isLight || o === R.sun?.target) continue;
+          if (o.visible) { o.visible = false; hid.push(o); }
+        }
+        const kids = R.ambient.group.children, was = kids.map((k) => k.visible);
+        kids.forEach((k) => { k.visible = k.visible && k.name === 'vale_ambient_particles'; });
+        const bg = R.scene.background; R.scene.background = null;
+        const od = R.overlay.draw; R.overlay.draw = () => {};
+        try { pr(d); } finally { R.overlay.draw = od; R.scene.background = bg; kids.forEach((k, i) => { k.visible = was[i]; }); for (const o of hid) o.visible = true; }
+      };
+      try { at(T0); const img = read(); const ls = [];
+        for (let i = 0; i < img.buf.length; i += 4) if (img.buf[i] + img.buf[i + 1] + img.buf[i + 2] > 6) ls.push(lstar(img.buf[i], img.buf[i + 1], img.buf[i + 2]));
+        ls.sort((a, c) => a - c);
+        const r1 = (x) => (x === null ? null : Math.round(x * 10) / 10);
+        return { px: ls.length, p95: r1(pct(ls, 0.95)), p99: r1(pct(ls, 0.99)), max: r1(ls.length ? ls[ls.length - 1] : null) };
+      } finally { R.post.render = pr; at(T0); }
+    },
     /** the lamp flames in play: effects ON vs OFF at one clock with the critters hidden (the flame over its own ground) */
     flame: () => {
       settle(6);
@@ -242,7 +267,9 @@ for (const map of MAPS) {
     await page.screenshot({ path: name('_off') });
     await page.evaluate(() => { const R = window.__VALE_BENCH__.renderer; R.ambientOn = true; R.ambient.configure(true, R.q.tier); R.render(0); });
     if (CANON && q === 'high') copyFileSync(name(''), join(HERE, '_shots', `ambient_${map}.png`));
-    for (const [k, p] of Object.entries(S.more)) { await F((f, pp) => f.focus(pp[0], pp[1]), p); await page.screenshot({ path: name(`_${k}`) }); }
+    res.effSpots = {};
+    for (const [k, p] of Object.entries(S.more)) { await F((f, pp) => f.focus(pp[0], pp[1]), p); await page.screenshot({ path: name(`_${k}`) }); res.effSpots[k] = await F((f) => f.effOwn()); }
+    for (const [i, p] of S.sweep.entries()) { await F((f, pp) => f.focus(pp[0], pp[1]), p); res.effSpots[`sweep${i}`] = await F((f) => f.effOwn()); }
     res.flee = await F((f, p) => { f.focus(p[0], p[1]); return f.flee(); }, S.canon);
     if (res.flee.skipped && S.more) for (const p of Object.values(S.more)) { if (!res.flee.skipped) break; res.flee = await F((f, pp) => { f.focus(pp[0], pp[1]); return f.flee(); }, p); }
     if (S.sweep.length) res.sweep = await F((f, s) => f.sweep(s), S.sweep);
@@ -257,13 +284,15 @@ for (const map of MAPS) {
     console.log(`  in situ ${r.inSitu.share} % of the frame · moved ${r.movedPx} return ${r.returnPx} · on ${r.on.particles}p/${r.on.critters}c (${r.on.calls} calls) off ${r.off.particles}p/${r.off.critters}c (${r.off.calls} calls)`);
     console.log(`  flee ${JSON.stringify(res.flee)}${res.sweep ? `  motes on screen ${JSON.stringify(res.sweep)}` : ''}`);
     if (res.flame) console.log(`  lamp flames in play: ${res.flame.px} px L* p95 ${res.flame.p95} p99 ${res.flame.p99} max ${res.flame.max}`);
+    console.log(`  effects layer-only at the other spots: ${Object.entries(res.effSpots).map(([k, e]) => `${k} ${e.px}px max ${e.max}`).join(' · ')}`);
     console.log(`  cost ${JSON.stringify(res.cost)}`);
     check(o.effects.max === null || o.effects.max <= 60, `${map} ${q}: ambient effects own L* max ${o.effects.max} > 60 (T0)`);
+    for (const [k, e] of Object.entries(res.effSpots)) check(e.max === null || e.max <= 60, `${map} ${q}: ambient effects own L* max ${e.max} > 60 at ${k} (T0)`);
     for (const k of ['critters', 'props']) {
       check(o[k].p95 === null || o[k].p95 <= 60, `${map} ${q}: ambient ${k} own L* p95 ${o[k].p95} > 60`);
       check(o[k].max === null || o[k].max <= 72, `${map} ${q}: ambient ${k} own L* max ${o[k].max} > 72 (luma 180, B5)`);
     }
-    if (res.flame && res.flame.px) check(res.flame.p99 <= 60, `${map} ${q}: lamp flames in play L* p99 ${res.flame.p99} > 60 (flame band 55-60)`);
+    if (res.flame && res.flame.px) check(res.flame.max <= 60, `${map} ${q}: lamp flames in play L* max ${res.flame.max} > 60 (flame band 55-60)`);
     check(r.returnPx === 0, `${map} ${q}: the frame did not return bit-exact to its clock (${r.returnPx} px)`);
     check(r.off.particles === 0 && r.off.critters === 0, `${map} ${q}: ambientEffects off still draws ${r.off.particles} particles / ${r.off.critters} critters`);
     if (!res.flee.skipped) {

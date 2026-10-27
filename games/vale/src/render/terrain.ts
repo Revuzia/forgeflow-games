@@ -724,7 +724,9 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       strokes.circle([s[0] - ux * 0.35, s[1] - uy * 0.35], 1.62, 0.14, INLAY.lit, 0.3);
     });
     strokes.circle(plateAt, 4.0, 0.22, INLAY.mid, 0.3);
-    strokes.circle(plateAt, plateR - 0.75, 0.18, INLAY.chalk, 0.4);
+    // the rim course's inlay: a mid band, not the hour-lines' dark basalt (every seat's spawn view runs along it, next
+    // to the rim wall's contact shadow: r12 B5 keeps the walked stone one quiet band)
+    strokes.circle(plateAt, plateR - 0.75, 0.18, INLAY.mid, 0.4);
     // the carved hour-ring: a chapter ring cut round the ten marks (a double groove inside them, one outside),
     // a half-hour tick cut across it between every two marks
     const sp0 = (map.spawns ?? [])[0];

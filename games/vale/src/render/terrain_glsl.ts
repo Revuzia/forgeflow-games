@@ -365,6 +365,10 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   col = mix( col, uLane * 0.72, vein * 0.3 );
   h = fh * 0.7; rough = 0.52 + 0.08 * valeHash12( pf.zw + 9.0 );
   gSheen = 0.6 + 0.4 * valeHash12( pf.zw + 2.0 );
+  // a worn, paler course of stone at the foot of the rim wall and round the hour-stones (where every walker turns),
+  // so their contact shadow never sinks the walked stone below its band (r12 B5: walkable p95 - p5 <= 45 in every
+  // seat's spawn view)
+  col *= 1.0 + 0.14 * ( 1.0 - smoothstep( 0.05, 1.0, wallD ) );
   col = mix( col, uThicketFloor * mossN, brush * 0.9 );
   float ch = 1.0 - smoothstep( -aa, aa, inl.r );
   float md = 1.0 - smoothstep( -aa, aa, inl.a );

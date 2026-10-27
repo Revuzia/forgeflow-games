@@ -123,9 +123,10 @@ HALO_C = np.array([0.0, 0.02, 2.035])
 HALO_RI, HALO_RO, HALO_HZ = 0.355, 0.400, 0.0175
 HALO_RM = 0.5 * (HALO_RI + HALO_RO)
 CLASP_ANG = (0.0, 125.0, -125.0)                    # degrees from the front (-Y) toward the left (+X)
-BELL_H = 0.12
+BELL_H = 0.11
 BELL_TOP = HALO_C[2] - HALO_HZ - 0.016              # the bell crowns hang 1.6 cm under the band (a hook loop)
-BEAD_R = 0.023
+BEAD_R = 0.021
+INLAY_HZ = 0.0055                                   # the inner accent line's half height (1.1 cm)
 _N_BELLS = [7]                                      # the bells on the halo being built (First Bell: 10)
 
 
@@ -284,15 +285,15 @@ def sculpts(n_bells: int = 7) -> list:
     E_hood = Ellipsoid((0.0, 0.035, 1.70), (0.40, 0.172, 0.30))
 
     def hood_out(P):
-        return np.maximum(arch_d(P[:, 0], P[:, 2], 1.70, 0.142, 1.945), E_hood.d(P))
+        return np.maximum(arch_d(P[:, 0], P[:, 2], 1.78, 0.107, 1.945), E_hood.d(P))
     hood.add(Fn(hood_out, (-0.16, -0.15, 1.55), (0.16, 0.22, 1.96)).displaced(cloth_noise(0.003, 9.0), 0.003), k=0.0)
-    hood.add(Ellipsoid((0.0, 0.04, 1.62), (0.17, 0.15, 0.08)), k=0.04)                              # the flare
+    hood.add(Ellipsoid((0.0, 0.04, 1.625), (0.150, 0.15, 0.085)), k=0.05)                            # the flare
     hood.inter(HalfSpace((0, 0, 1.565), (0, 0, -1), 1.0), k=0.01)
 
     def opening(P):
-        return np.maximum(arch_d(P[:, 0], P[:, 2], 1.70, 0.100, 1.912), P[:, 1] + 0.035)
+        return np.maximum(arch_d(P[:, 0], P[:, 2], 1.80, 0.091, 1.913), P[:, 1] + 0.035)
     hood.sub(Fn(opening, (-0.12, -0.30, 1.55), (0.12, -0.03, 1.93)), k=0.012)
-    part("hood", hood, "chalk", ("zblend", "neck", "head", 1.60, 1.70), 1700, uvw=1.6)
+    part("hood", hood, "chalk", ("zblend", "neck", "head", 1.60, 1.70), 1500, uvw=1.6)
 
     # VISOR: a faceted dawnglass arch (pointed top like a bell window) in a chalk frame, over the face-plate
     a_v = math.radians(24.0)
@@ -305,17 +306,17 @@ def sculpts(n_bells: int = 7) -> list:
         return np.maximum(np.maximum(q @ n1, q @ n2), top)
 
     def frame_d(P):
-        outer = np.maximum(arch_d(P[:, 0], P[:, 2], 1.80, 0.098, 1.912), 1.735 - P[:, 2])
+        outer = np.maximum(arch_d(P[:, 0], P[:, 2], 1.80, 0.091, 1.909), 1.735 - P[:, 2])
         slab = np.maximum(facets(P, -0.124), -(P[:, 1] + 0.055))
-        inner = np.maximum(arch_d(P[:, 0], P[:, 2], 1.80, 0.079, 1.890), 1.752 - P[:, 2])
+        inner = np.maximum(arch_d(P[:, 0], P[:, 2], 1.80, 0.074, 1.889), 1.752 - P[:, 2])
         return np.maximum(np.maximum(outer, slab), -inner)
     vf = Sculpt("visor_frame")
     vf.add(Fn(frame_d, (-0.11, -0.14, 1.72), (0.11, -0.05, 1.92)), k=0.0)
-    vf.add(RoundBox((0.0, -0.112, 1.742), (0.099, 0.020, 0.009), 0.006), k=0.004)                    # the brim bar
+    vf.add(RoundBox((0.0, -0.112, 1.742), (0.093, 0.020, 0.009), 0.006), k=0.004)                    # the brim bar
     part("visor_frame", vf, "chalk", "bone:head", 700, 0.5, uvw=2.2)
 
     def glass_d(P):
-        inner = np.maximum(arch_d(P[:, 0], P[:, 2], 1.80, 0.081, 1.892), 1.750 - P[:, 2])
+        inner = np.maximum(arch_d(P[:, 0], P[:, 2], 1.80, 0.076, 1.891), 1.750 - P[:, 2])
         return np.maximum(inner, np.maximum(facets(P, -0.118), -(P[:, 1] + 0.05)))
     vg = Sculpt("visor_glass")
     vg.add(Fn(glass_d, (-0.09, -0.13, 1.74), (0.09, -0.04, 1.90)), k=0.0)
@@ -333,7 +334,7 @@ def sculpts(n_bells: int = 7) -> list:
         for R_, rr in ((0.026, 0.0038), (0.013, 0.0034)):
             mask.sub(Torus((sx * 0.047, -0.112, 1.708), R_, rr, axes=sdf.frame((sx * 0.35, -1.0, 0.0))), k=0.002)
         mask.sub(Capsule((sx * 0.024, -0.112, 1.664), (sx * 0.068, -0.103, 1.668), 0.0035), k=0.002)
-    part("mask", mask, "chalk", "bone:head", 1100, 0.5, uvw=2.4)
+    part("mask", mask, "chalk", "bone:head", 1000, 0.5, uvw=2.4)
 
     neck = Sculpt("neckwrap")
     neck.add(Ellipsoid((0.0, 0.0, 1.615), (0.105, 0.105, 0.060)), k=0.0)
@@ -351,21 +352,21 @@ def sculpts(n_bells: int = 7) -> list:
                       [0.024, 0.02, 0.016], k=0.01), k=0.02)                                         # the drape's folds
     cowl.ops = [(op, prim.displaced(cloth_noise(0.0035, 8.0), 0.0035) if op == "add" else prim, k, tg)
                 for op, prim, k, tg in cowl.ops]
-    part("cowl", cowl, "cloth2", ("weights", "cowl"), 1900, uvw=1.2)
+    part("cowl", cowl, "cloth2", ("weights", "cowl"), 1650, uvw=1.2)
 
     # PAULDRONS: three stepped stone lames per shoulder (rigid on the shoulder, the lower ones toward the upper arm)
     for s, sx in (("R", -1), ("L", 1)):
-        for i, (zc, rad) in enumerate(((1.475, (0.118, 0.150, 0.088)), (1.405, (0.126, 0.158, 0.085)),
-                                       (1.335, (0.132, 0.164, 0.080)))):
+        for i, (zc, rad) in enumerate(((1.475, (0.100, 0.150, 0.088)), (1.405, (0.105, 0.158, 0.085)),
+                                       (1.335, (0.110, 0.164, 0.080)))):
             L = Sculpt(f"pauldron_{s}{i + 1}")
-            c = (sx * 0.215, 0.03, zc)
+            c = (sx * 0.200, 0.03, zc)
             E = Ellipsoid(c, rad)
             L.add(shell(E, 0.016).displaced(chips(0.004, 9.0), 0.004), k=0.0)
             L.inter(HalfSpace((0, 0, zc - 0.012), (0, 0, -1), 1.0), k=0.004)
             L.inter(HalfSpace((sx * 0.105, 0, 0), (-sx, 0, 0), 1.0), k=0.004)
             org = (sx * 0.22, 0.03, 1.472)
             part(f"pauldron_{s}{i + 1}", L, "stone", ("dblend", f"shoulder.{s}", f"upper_arm.{s}", org,
-                                                        (sx * 0.14, 0.0, -0.99), 0.03 + 0.03 * i, 0.10 + 0.03 * i), 520, 0.6)
+                                                        (sx * 0.14, 0.0, -0.99), 0.03 + 0.03 * i, 0.10 + 0.03 * i), 400, 0.6)
 
     # ROBE TOP (chalk) under the cowl, the SASH over the seam, the SKIRT to the hem (coat + blue-grey panel + band)
     top = Sculpt("robe_top")
@@ -378,7 +379,7 @@ def sculpts(n_bells: int = 7) -> list:
                      [0.010, 0.010, 0.009], k=0.01), k=0.012)
     top.ops = [(op, prim.displaced(folds_ang(0.006, 9, zfade=(1.40, 1.15), phase=0.7), 0.006) if op == "add" and i == 0
                 else prim, k, tg) for i, (op, prim, k, tg) in enumerate(top.ops)]
-    part("robe_top", top, "chalk", ("weights", "torso"), 1500)
+    part("robe_top", top, "chalk", ("weights", "torso"), 1300)
 
     sash = Sculpt("sash")
     sash.add(Torus((0.0, 0.018, 1.168), 0.247, 0.052, axes=np.diag([1.0, 0.247 / 0.182, 1.0]), rz=0.060)
@@ -386,38 +387,38 @@ def sculpts(n_bells: int = 7) -> list:
     sash.add(Ellipsoid((-0.105, -0.196, 1.172), (0.052, 0.034, 0.042)), k=0.012)                      # the knot
     sash.add(FlatCapsule((-0.12, -0.198, 1.14), (-0.145, -0.215, 0.87), 0.030, 0.010, 0.027, 0.008, side=(1, 0, 0)), k=0.01)
     sash.add(FlatCapsule((-0.085, -0.200, 1.14), (-0.070, -0.222, 0.90), 0.026, 0.010, 0.022, 0.008, side=(1, 0, 0)), k=0.01)
-    part("sash", sash, "cloth2", ("weights", "sash"), 1000)
+    part("sash", sash, "cloth2", ("weights", "sash"), 800)
 
     skirt = Sculpt("skirt")
-    f1 = FlatCapsule((0.0, 0.015, 1.14), (0.0, 0.02, 0.76), 0.232, 0.17, 0.283, 0.215, side=(1, 0, 0))
-    f2 = FlatCapsule((0.0, 0.02, 0.78), (0.0, 0.03, 0.12), 0.283, 0.215, 0.302, 0.245, side=(1, 0, 0))
+    f1 = FlatCapsule((0.0, 0.015, 1.14), (0.0, 0.02, 0.76), 0.222, 0.165, 0.236, 0.175, side=(1, 0, 0))
+    f2 = FlatCapsule((0.0, 0.02, 0.78), (0.0, 0.03, 0.12), 0.236, 0.175, 0.300, 0.240, side=(1, 0, 0))
     fold = folds_ang(0.011, 11, zfade=(1.05, 0.55))
     skirt.add(f1.displaced(fold, 0.011), k=0.0)
     skirt.add(f2.displaced(fold, 0.011), k=0.10)
     skirt.inter(HalfSpace((0, 0, 0.13), (0, 0, -1), 2.0), k=0.006)
     # the coat open at the front: the blue-grey panel recessed 2.5 cm between the coat's edges
     skirt.sub(RoundBox((-0.010, -0.33, 0.62), (0.086, 0.12, 0.47), 0.018), k=0.010)
-    skirt.add(Fn(lambda P: np.hypot(np.hypot(P[:, 0] / 0.305, (P[:, 1] - 0.03) / 0.248) * 0.29 - 0.29, P[:, 2] - 0.272) - 0.010,
+    skirt.add(Fn(lambda P: np.hypot(np.hypot(P[:, 0] / 0.289, (P[:, 1] - 0.028) / 0.231) * 0.27 - 0.27, P[:, 2] - 0.272) - 0.010,
                  (-0.33, -0.27, 0.25), (0.33, 0.30, 0.30)), k=0.006)                                  # the coat's hem roll
     skirt.sub(RoundBox((-0.010, -0.33, 0.27), (0.086, 0.06, 0.03), 0.010), k=0.006)
-    part("skirt", skirt, "chalk", ("weights", "skirt"), 2600, uvw=1.0)
+    part("skirt", skirt, "chalk", ("weights", "skirt"), 2400, uvw=1.0)
 
     # SLEEVES: wide bell sleeves, the right hanging from the bent arm (its drape below the forearm), the left straight
     sl = Sculpt("sleeve_L")
-    sl.add(FlatCapsule((0.245, 0.03, 1.43), (0.29, 0.005, 0.90), 0.082, 0.10, 0.088, 0.145, side=(1, 0, 0))
+    sl.add(FlatCapsule((0.235, 0.03, 1.42), (0.278, 0.005, 0.90), 0.070, 0.10, 0.080, 0.145, side=(1, 0, 0))
            .displaced(folds_ang(0.008, 7, c=(0.28, 0.01), zfade=(1.25, 1.0)), 0.008), k=0.0)
     nrm = unit((-0.30, -0.45, -0.84))
     sl.inter(HalfSpace((0.29, 0.0, 0.93), nrm, 1.0), k=0.008)
-    sl.sub(FlatCapsule((0.268, 0.01, 1.20), (0.30, -0.005, 0.80), 0.050, 0.07, 0.064, 0.118, side=(1, 0, 0)), k=0.008)
+    sl.sub(FlatCapsule((0.262, 0.01, 1.20), (0.288, -0.005, 0.80), 0.046, 0.07, 0.058, 0.118, side=(1, 0, 0)), k=0.008)
     part("sleeve_L", sl, "chalk", ("weights", "sleeves"), 1100)
-    sr = Sculpt("sleeve_R")
-    sr.add(FlatCapsule((-0.245, 0.03, 1.43), (-0.282, 0.035, 1.17), 0.084, 0.10, 0.10, 0.11, side=(1, 0, 0)), k=0.0)
-    cuff = E_R + FO_R * 0.115
-    sr.add(RoundCone(E_R + FO_R * 0.005, cuff, 0.105, 0.128), k=0.05)
-    sr.add(Ellipsoid((-0.325, -0.030, 0.99), (0.072, 0.115, 0.165)), k=0.07)                          # the drape
-    sr.ops = [(op, prim.displaced(cloth_noise(0.004, 8.0), 0.004), k, tg) for op, prim, k, tg in sr.ops]
-    sr.inter(HalfSpace(cuff, FO_R, 1.0), k=0.01)
-    sr.sub(RoundCone(E_R + FO_R * 0.03, cuff + FO_R * 0.05, 0.058, 0.098), k=0.01)
+    sr = Sculpt("sleeve_R")                     # a bell sleeve hanging from the bent arm, its mouth turned front-out
+    sr.add(FlatCapsule((-0.235, 0.03, 1.42), (-0.292, 0.02, 0.86), 0.070, 0.10, 0.084, 0.142, side=(1, 0, 0))
+           .displaced(folds_ang(0.008, 7, c=(-0.28, 0.02), zfade=(1.25, 1.0)), 0.008), k=0.0)
+    n_open = unit((-0.55, -0.80, 0.15))
+    p_open = np.array([-0.29, -0.035, 1.0])
+    sr.sub(Fn(lambda P: np.maximum(-((P - p_open) @ n_open), P[:, 2] - 1.235), (-0.5, -0.4, 0.7), (0.0, 0.3, 1.3)), k=0.012)
+    sr.inter(HalfSpace((0.0, 0.0, 0.84), (0.25, 0.30, -0.92), 1.0), k=0.01)
+    sr.sub(FlatCapsule((-0.258, 0.015, 1.24), (-0.30, 0.005, 0.80), 0.046, 0.07, 0.060, 0.118, side=(1, 0, 0)), k=0.008)
     part("sleeve_R", sr, "chalk", ("weights", "sleeves"), 1200)
 
     # FOREARMS: tan linen bandages out of the cuffs
@@ -430,16 +431,12 @@ def sculpts(n_bells: int = 7) -> list:
 
     # HANDS: slate gloves, the right closed round the rod (index up), the left a hanging fist (index forward)
     fo_out = unit(np.cross(FO_R, ROD_U))
-    out.append(fist("hand_R", GRIP, ROD_U, FO_R, fo_out, "ironstone", "bone:hand.R", 900))
+    out.append(fist("hand_R", GRIP, ROD_U, FO_R, fo_out, "ironstone", "bone:hand.R", 800))
     out.append(fist("hand_L", FIST_L + np.array([0.0, 0.0, 0.03]), (0.0, -1.0, 0.0), FO_L, (1.0, 0.0, 0.0), "ironstone",
-                    "bone:hand.L", 900, grip=False))
+                    "bone:hand.L", 800, grip=False))
 
-    # LEGS (hidden under the robe) and BOOTS (slate shoes, the toe a little pointed)
-    legs = Sculpt("legs")
-    for sx in (-1, 1):
-        legs.add(Capsule((sx * 0.10, 0.02, 0.96), (sx * 0.14, 0.0, 0.53), 0.085), k=0.0)
-        legs.add(Capsule((sx * 0.14, 0.0, 0.53), (sx * 0.18, 0.02, 0.12), 0.06), k=0.03)
-    part("legs", legs, "under", "auto", 500, 0.9)
+    # BOOTS (slate shoes, the toe a little pointed)
+    # (no legs: the robe falls to the boots; legs inside only poked through the skirt in the stride)
     boots = Sculpt("boots")
     for sx in (-1, 1):
         to = math.radians(8.0) * sx
@@ -450,7 +447,7 @@ def sculpts(n_bells: int = 7) -> list:
         boots.add(RoundCone(a0 + fwd * 0.17 + np.array([0, 0, 0.032]), a0 + fwd * 0.20 + np.array([0, 0, 0.028]), 0.036, 0.022), k=0.03)
         boots.add(FlatCapsule(a0 + np.array([0, 0, 0.06]), a0 + np.array([0, 0, 0.17]), 0.062, 0.066, 0.058, 0.060, side=(1, 0, 0)), k=0.035)
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "leather", ("weights", "boots"), 1000)
+    part("boots", boots, "leather", ("weights", "boots"), 850)
 
     # THE ROD (prop.R): gnarled ash, a leather grip under the fist, a chalk collar, the faceted glass striker, a cap
     pts, rads = [], []
@@ -483,8 +480,8 @@ def sculpts(n_bells: int = 7) -> list:
                      axes=sdf.rot_z(45.0) @ sdf.frame(ROD_U)), k=0.0)
     part("striker", stk, "dawnglass", "bone:prop.R", 300, 0.45, uvw=1.6)
     core = Sculpt("striker_core")                       # the accent glow showing through the glass's four faces
-    core.add(RoundBox(sc, (0.0115, 0.0405, 0.042), 0.006, axes=sdf.rot_z(45.0) @ sdf.frame(ROD_U)), k=0.0)
-    core.add(RoundBox(sc, (0.0405, 0.0115, 0.042), 0.006, axes=sdf.rot_z(45.0) @ sdf.frame(ROD_U)), k=0.0)
+    core.add(RoundBox(sc, (0.0180, 0.0400, 0.050), 0.006, axes=sdf.rot_z(45.0) @ sdf.frame(ROD_U)), k=0.0)
+    core.add(RoundBox(sc, (0.0400, 0.0180, 0.050), 0.006, axes=sdf.rot_z(45.0) @ sdf.frame(ROD_U)), k=0.0)
     part("striker_core", core, "accent", "bone:prop.R", 160, 0.45)
 
     # THE WRIST BELL (left): a 5 cm dawnglass bell on a short cord at the wrist
@@ -507,8 +504,8 @@ def sculpts(n_bells: int = 7) -> list:
 def bell_prof(r, z, H=BELL_H):
     """A bell in (r, z): the crown at z 0, the lip at -H (z negative down). Rounded crown, waist, flared lip."""
     u = np.clip(-z / H, 0.0, 1.0)
-    R = H * (0.20 + 0.06 * np.sin(u * math.pi * 0.5) + 0.065 * ss(0.55, 1.0, u) + 0.020 * ss(0.88, 1.0, u))
-    crown = np.hypot(r, z + H * 0.16) - H * 0.215
+    R = H * (0.27 + 0.04 * np.sin(u * math.pi * 0.5) + 0.10 * ss(0.45, 1.0, u) + 0.03 * ss(0.86, 1.0, u))
+    crown = np.hypot(r, z + H * 0.20) - H * 0.285
     side = np.maximum(r - R, np.maximum(z + H * 0.14, -H - z))
     return np.minimum(side, crown) * 0.85
 
@@ -522,12 +519,21 @@ def halo_parts(n_bells: int = 7) -> list:
         return np.hypot(np.maximum(q[..., 0], 0), np.maximum(q[..., 1], 0)) + np.minimum(np.max(q, -1), 0) - 0.008
     ring.add(Lathe(HALO_C, ring_prof, HALO_RO + 0.01, -0.03, 0.03).displaced(chips(0.0035, 8.0), 0.0035), k=0.0)
     out.append(("halo_ring", ring, 0.6, "chalk", "bone:x_halo", 1100, 1.4))
+    inl = Sculpt("halo_inlay")                      # a thin glowing line round the ring's inner face (the accent ring)
+    inl.add(Lathe(HALO_C, lambda r, z: np.maximum(np.abs(r - (HALO_RI + 0.001)) - 0.0045, np.abs(z) - INLAY_HZ),
+                  HALO_RI + 0.01, -0.012, 0.012), k=0.0)
+    out.append(("halo_inlay", inl, 0.45, "accent", "bone:x_halo", 500, 1.0))
     cl = Sculpt("halo_clasps")
     for ang in CLASP_ANG:
         c = ring_pt(ang, z=HALO_C[2] + 0.012)
         cl.add(RoundBox(c, (0.026, 0.034, 0.047), 0.008, axes=sdf.rot_z(-ang)).displaced(chips(0.003, 10.0), 0.003), k=0.0)
         cl.add(RoundBox(c + np.array([0, 0, 0.050]), (0.019, 0.026, 0.008), 0.005, axes=sdf.rot_z(-ang)), k=0.004)
-    out.append(("halo_clasps", cl, 0.5, "stone", "bone:x_halo", 380, 1.0))
+    out.append(("halo_clasps", cl, 0.5, "stone", "bone:x_halo", 300, 1.0))
+    win = Sculpt("clasp_windows")                   # a glowing slot through each clasp (the accent marks the facings)
+    for ang in CLASP_ANG:
+        c = ring_pt(ang, z=HALO_C[2] + 0.016)
+        win.add(RoundBox(c, (0.013, 0.038, 0.030), 0.004, axes=sdf.rot_z(-ang)), k=0.0)
+    out.append(("clasp_windows", win, 0.45, "accent", "bone:x_halo", 72, 1.0))
     bells, hooks, stems, beads = Sculpt("bells"), Sculpt("bell_hooks"), Sculpt("clapper_stems"), Sculpt("clappers")
     for ang in bell_angles(n_bells):
         top = ring_pt(ang, z=BELL_TOP)
@@ -535,10 +541,10 @@ def halo_parts(n_bells: int = 7) -> list:
         a = math.radians(ang)
         tang = np.array([math.cos(a), math.sin(a), 0.0])
         hooks.add(Torus(top + np.array([0, 0, 0.012]), 0.0085, 0.0035, axes=sdf.frame(tang)), k=0.0)
-        bot = top + np.array([0, 0, -BELL_H - 0.012])
+        bot = top + np.array([0, 0, -BELL_H - 0.030])               # the bead hangs clear of the lip (read from above)
         stems.add(Capsule(top + np.array([0, 0, -0.06]), bot, 0.0042), k=0.0)
-        beads.add(Sphere(bot + np.array([0, 0, -BEAD_R * 0.55]), BEAD_R), k=0.0)
-        beads.add(RoundCone(bot + np.array([0, 0, -BEAD_R * 0.9]), bot + np.array([0, 0, -BEAD_R * 2.2]), BEAD_R * 0.72, 0.004), k=0.006)
+        beads.add(Sphere(bot + np.array([0, 0, -BEAD_R * 0.75]), BEAD_R), k=0.0)
+        beads.add(RoundCone(bot + np.array([0, 0, -BEAD_R * 1.0]), bot + np.array([0, 0, -BEAD_R * 2.5]), BEAD_R * 0.75, 0.004), k=0.006)
     out.append(("bells", bells, 0.5, "dawnglass", "bone:x_halo", 160 * n_bells, 1.2))
     out.append(("bell_hooks", hooks, 0.4, "ironstone", "bone:x_halo", 26 * n_bells, 0.5))
     out.append(("clapper_stems", stems, 0.4, "ironstone", "bone:x_halo", 20 * n_bells, 0.5))
@@ -627,9 +633,9 @@ def _w_skirt(P, J):
     """The robe from the sash to the hem: the hips at the waist, the legs below (each side its own thigh, blended
     across the middle), the shins taking a share near the hem behind the calves."""
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
-    leg = 0.78 * ss(1.06, 0.62, z)
-    side_l = ss(-0.07, 0.07, x)
-    shin = leg * 0.38 * ss(0.55, 0.20, z) * (0.5 + 0.5 * ss(-0.05, 0.12, y))
+    leg = 0.64 * ss(1.06, 0.60, z)
+    side_l = ss(-0.13, 0.13, x)
+    shin = leg * 0.30 * ss(0.55, 0.20, z) * (0.4 + 0.6 * ss(-0.05, 0.12, y))
     th = leg - shin
     return {"hips": 1 - leg, "thigh.L": th * side_l, "thigh.R": th * (1 - side_l),
             "shin.L": shin * side_l, "shin.R": shin * (1 - side_l)}
@@ -644,11 +650,7 @@ def _w_sleeves(P, J):
         lu = float(np.linalg.norm(e - j))
         d = (P - j) @ u
         wsh = 1 - ss(-0.06, 0.06, d)
-        wf = ss(lu - 0.10, lu + 0.02, d)
-        if s == "R":                                          # the cuff and the drape below the bent forearm
-            e2, w2 = J["forearm.R"]
-            df = (P - e2) @ unit(w2 - e2)
-            wf = np.maximum(wf, ss(-0.02, 0.06, df) * ss(1.24, 1.12, P[:, 2]))
+        wf = ss(lu - 0.10, lu + 0.02, d) * (0.5 if s == "R" else 0.85)   # the bag below the elbow half on the forearm
         wu = np.clip(1 - wsh - wf, 0, 1)
         out[f"shoulder.{s}"] = wsh * m
         out[f"upper_arm.{s}"] = wu * m
@@ -741,6 +743,9 @@ VALUE_RAMP = [(0.0, 0.80), (0.20, 0.86), (0.45, 0.94), (0.70, 1.0), (1.0, 1.04)]
 HI_KNEE, HI_TOP = 0.56, 0.70   # linear luminance: a soft shoulder from L* 80 up to L* 87 (no large area over 86)
 # per part (target median, hue strength, contrast gamma), applied after the projection; None = the painting's own
 BASE_TONE: dict = {}
+WARM = (1.035, 1.0, 0.90)
+WARM_PARTS = ("hood", "cowl", "robe_top", "skirt", "sleeve_L", "sleeve_R", "sash", "mask", "visor_frame", "wrap_L",
+              "wrap_R", "pauldron_R1", "pauldron_R2", "pauldron_R3", "pauldron_L1", "pauldron_L2", "pauldron_L3")
 
 
 def _hex(h):
@@ -826,18 +831,26 @@ def _proj_sides(maps, plates, vis, names, eps=0.02, log=print):
     return idx, k, p, n, cols, wb
 
 
+BACK_PARTS = ("hood", "cowl", "robe_top", "sash", "skirt", "sleeve_L", "sleeve_R", "neckwrap", "wrap_L", "wrap_R",
+              "pauldron_R1", "pauldron_R2", "pauldron_R3", "pauldron_L1", "pauldron_L2", "pauldron_L3")
+
+
 def _match_back(k, cols, wb, names, log):
-    """The back sheet is painted in shadow: per part, the back projection's median moves onto the front's."""
+    """The back sheet is painted in shadow: per cloth / stone part, the back projection's median (its cream class:
+    no blue-grey panel, no dark hem) moves onto the front's."""
     fr, bk = _lin(cols["front"]), _lin(cols["back"])
+    cf, cb = _classes(cols["front"])["coat"], _classes(cols["back"])["coat"]
     for kk in np.unique(k):
+        if names[kk] not in BACK_PARTS:
+            continue
         sel = k == kk
-        f = sel & (wb < 0.25)
-        b = sel & (wb > 0.75)
+        f = sel & (wb < 0.25) & cf
+        b = sel & (wb > 0.75) & cb
         if f.sum() < 150 or b.sum() < 150:
             continue
         mf = np.median(fr[f], axis=0)
         mb = np.median(bk[b], axis=0)
-        gain = np.clip(mf / np.maximum(mb, 1e-4), 0.6, 2.6) ** BACK_MATCH
+        gain = np.clip(mf / np.maximum(mb, 1e-4), 0.7, 2.4) ** BACK_MATCH
         bk[sel] = bk[sel] * gain
         log(f"  vashil back match {names[kk]}: gain {np.round(gain, 2).tolist()}")
     cols["back"] = _srgb(bk)
@@ -966,6 +979,16 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         pp = p[m]
         kk = 1 - 0.40 * ss(0.050, 0.088, np.abs(pp[:, 0]))
         lin[m] = lin[m] * kk[:, None]
+    # the concept's cream (the sheet reads warm next to the cool blue-grey; lit in game it went white-grey): the
+    # cream texels of the cloth and chalk parts a touch warmer in linear light (saturation stays under ~15 %)
+    for name in WARM_PARTS:
+        m = sel(name)
+        if m is None:
+            continue
+        cream = _classes(_srgb(lin[m]))["coat"]
+        sub = lin[m]
+        sub[cream] = sub[cream] * np.array(WARM, dtype=np.float32)[None, :]
+        lin[m] = sub
     for name, tone in BASE_TONE.items():
         m = sel(name)
         if m is not None and tone:
@@ -1179,6 +1202,37 @@ def _apply_pose(arm, pose):
 anim.apply_pose = _apply_pose
 
 
+# ── the foot roll (anim._solve_foot, wrapped by a corrected copy) ──────────────────────────────────────
+# The shared solver rotates the foot by -pitch about its local X (~ -X world), which turns the toes DOWN for a
+# positive pitch (the doc: + toes up): Vashil's light 16-frame run dipped the ankle 4 cm on the toe-off frame and the
+# three load test found no planted frames. Here the pitch follows the doc: + toes up about the heel, - heel up about
+# the ball (the run's heel-strike and toe-off rolls, the kneel on the toes).
+def _solve_foot(skel, pose, M, side, ft):
+    foot, toe = f"foot.{side}", f"toe.{side}"
+    rest_f = skel.rest[foot]
+    ankle0 = rest_f.translation.copy()
+    ball0 = skel.rest[toe].translation.copy()
+    heel0 = ankle0 + V((0, 0, -ankle0.z)) + (ankle0 - ball0) * V((1, 1, 0)) * 0.55
+    off = V(ft.ankle)
+    lat = rest_f.to_3x3().col[0].normalized()
+    rot = Matrix.Rotation(math.radians(ft.yaw), 3, "Z") @ Matrix.Rotation(math.radians(ft.pitch), 3, lat)
+    pivot = (heel0 if ft.pitch > 0 else ball0) + off
+    ankle_t = pivot + rot @ (ankle0 + off - pivot)
+    knee_dir = Matrix.Rotation(math.radians(ft.yaw + ft.knee), 3, "Z") @ V((0, -1, 0))
+    hips_fwd = M["hips"].to_3x3() @ (skel.rest["hips"].to_3x3().inverted() @ V((0, -1, 0)))
+    hips_fwd.z = 0
+    if hips_fwd.length > 1e-4:
+        knee_dir = (knee_dir + hips_fwd.normalized()).normalized()
+    end_frame = rot @ rest_f.to_3x3()
+    skel.solve_two_bone(pose, M, f"thigh.{side}", f"shin.{side}", foot, ankle_t, knee_dir, True, end_frame, ft.weight)
+    t = pose.get(toe, (0.0, 0.0, 0.0))
+    toe_counter = -ft.pitch if ft.pitch < 0 else 0.0
+    pose[toe] = (t[0] + (toe_counter + ft.toe) * ft.weight, t[1], t[2])
+
+
+anim._solve_foot = _solve_foot
+
+
 # ── motion (brief §8) ─────────────────────────────────────────────────────────────────────────────────
 # Arms are IK: wrist targets `rel` to the posed shoulder in arm lengths (chest frame: +X his left, -Y front, +Z up),
 # `aim` = the rod's axis (prop.R +Y up the rod to the striker), the left hand grips the rod with to_prop
@@ -1186,8 +1240,16 @@ anim.apply_pose = _apply_pose
 GUARD_R = tuple(np.round((W_R - SH_R) / ARM, 4))
 GUARD_L = tuple(np.round((W_L - SH_L) / ARM, 4))
 UP = tuple(np.round(ROD_U, 4))
-POLE_R = (-0.9, 0.35, -0.25)
-POLE_L = (0.7, 0.6, -0.2)
+def _pole(S, E, W):
+    d = unit(W - S)
+    v = (E - S) - d * float((E - S) @ d)
+    return tuple(np.round(unit(v), 3))
+
+
+POLE_R = _pole(SH_R, E_R, W_R)            # the rest elbows (the IK reproduces the concept carry exactly)
+POLE_L = _pole(SH_L, E_L, W_L)
+POLE_RF = (-0.45, 0.25, -0.86)            # the right elbow out and down once the hand leaves the carry
+HALO_LEVEL = 0.6                          # share of the body's pitch / roll the floating halo takes back (sits level)
 BLOCKS = {
     "guard": (GUARD_R, POLE_R, UP, GUARD_L, POLE_L),
     "run_fwd": ((-0.30, -0.52, -0.52), POLE_R, (-0.08, -0.42, 0.90), (0.06, -0.42, -0.86), POLE_L),
@@ -1209,7 +1271,7 @@ def _feet(l=(0.0, 0.0, 0.0), r=(0.0, 0.0, 0.0), yl=0.0, yr=0.0, pl=0.0, pr=0.0, 
     return {"foot.L": FootTarget(tuple(l), pl, yl, 0.0, 0.0, wl), "foot.R": FootTarget(tuple(r), pr, yr, 0.0, 0.0, wr)}
 
 
-def pose(torso=None, hips=(0.0, 0.0, 0.0), R=GUARD_R, Rp=POLE_R, aim=UP, L=GUARD_L, Lp=POLE_L, grip=None,
+def pose(torso=None, hips=(0.0, 0.0, 0.0), R=GUARD_R, Rp=None, aim=UP, L=GUARD_L, Lp=POLE_L, grip=None,
          feet=None, halo=(0.0, 0.0, 0.0), slide=0.0, fk=None) -> dict:
     """A full pose: torso rotations (deg), hips_loc offset, the right wrist + rod aim, the left wrist (or `grip`: the
     left hand on the rod at `grip` m from the right fist toward the striker), feet, the halo's rock, the rod's slide."""
@@ -1221,6 +1283,8 @@ def pose(torso=None, hips=(0.0, 0.0, 0.0), R=GUARD_R, Rp=POLE_R, aim=UP, L=GUARD
     p["prop.R_loc"] = (0.0, float(slide), 0.0)
     ik = {}
     ik.update(feet or _feet())
+    if Rp is None:
+        Rp = POLE_R if tuple(R) == tuple(GUARD_R) else POLE_RF
     ik["hand.R"] = HandTarget(rel=tuple(R), pole=tuple(Rp))
     ik["aim.R"] = Aim(tuple(aim))
     if grip is not None:
@@ -1255,8 +1319,17 @@ def with_halo(fn, rings, frames):
     return sample
 
 
-def _ease_keys(keys):
-    return anim.keyed(keys)
+def level(fn):
+    """The halo floats: it takes back HALO_LEVEL of the summed hips..head pitch and roll, so it stays near level
+    through bows, kneels and stuns (the authored rocks ride on top)."""
+    def sample(t):
+        p = dict(fn(t))
+        sx = sum(p.get(b, (0.0, 0.0, 0.0))[0] for b in ("hips", "spine", "chest", "neck", "head"))
+        sz = sum(p.get(b, (0.0, 0.0, 0.0))[2] for b in ("hips", "spine", "chest", "neck", "head"))
+        h = p.get("x_halo", (0.0, 0.0, 0.0))
+        p["x_halo"] = (h[0] - HALO_LEVEL * sx, h[1], h[2] - HALO_LEVEL * sz)
+        return p
+    return sample
 
 
 def clip_overrides(ctx) -> dict:
@@ -1433,14 +1506,13 @@ def clip_overrides(ctx) -> dict:
     sag = pose(torso=dict(hips=(-4, 4, 2), spine=(8, 0, 2), chest=(10, 4, 3), neck=(8, 0, 0), head=(12, 6, 4)),
                hips=(0.02, 0.06, -0.20), R=(-0.30, -0.45, -0.62), aim=(-0.20, -0.30, 0.93), L=(0.16, -0.15, -0.90),
                halo=(3, 0, 6))
-    kneel_fk = dict(thigh_L=(4, 0, 0), shin_L=(-88, 0, 0), foot_L=(-30, 0, 0), toe_L=(30, 0, 0),
-                    thigh_R=(-2, 0, 0), shin_R=(-90, 0, 0), foot_R=(-28, 0, 0), toe_R=(30, 0, 0))
-    kneel = pose(torso=dict(hips=(8, 4, 0), spine=(10, 0, 3), chest=(12, 4, 4), neck=(14, 0, 0), head=(18, 8, 8)),
-                 hips=(0.02, 0.05, -(hip_h - 0.545)), R=(0.10, -0.62, -0.72), aim=(0.97, -0.20, -0.08), slide=0.22,
-                 L=(-0.10, -0.55, -0.78), feet=_feet(wl=0.0, wr=0.0), fk=kneel_fk, halo=(6, 0, 10))
-    slump = pose(torso=dict(hips=(10, 4, 0), spine=(12, 0, 3), chest=(14, 4, 5), neck=(18, 0, 0), head=(24, 10, 10)),
-                 hips=(0.02, 0.06, -(hip_h - 0.535)), R=(0.10, -0.60, -0.74), aim=(0.97, -0.20, -0.10), slide=0.22,
-                 L=(-0.10, -0.52, -0.80), feet=_feet(wl=0.0, wr=0.0), fk=kneel_fk, halo=(8, 0, 12))
+    kfeet = _feet(l=(0.0, 0.42, 0.045), r=(0.0, 0.44, 0.045), yl=4.0, yr=-6.0, pl=-55.0, pr=-55.0)
+    kneel = pose(torso=dict(hips=(4, 4, 0), spine=(5, 0, 3), chest=(6, 4, 4), neck=(8, 0, 0), head=(10, 8, 6)),
+                 hips=(0.02, 0.05, -(hip_h - 0.585)), R=(0.10, -0.62, -0.72), aim=(0.97, -0.20, -0.08), slide=0.22,
+                 L=(-0.10, -0.55, -0.78), feet=kfeet, halo=(6, 0, 10))
+    slump = pose(torso=dict(hips=(5, 4, 0), spine=(7, 0, 3), chest=(8, 4, 5), neck=(10, 0, 0), head=(14, 10, 8)),
+                 hips=(0.02, 0.06, -(hip_h - 0.575)), R=(0.10, -0.60, -0.74), aim=(0.97, -0.20, -0.10), slide=0.22,
+                 L=(-0.10, -0.52, -0.80), feet=kfeet, halo=(8, 0, 12))
     k = [(0.0, G, "linear"), (0.10, tap_up, "inout"), (0.18, tap, "accel"), (0.30, sag, "inout"),
          (0.56, kneel, "in"), (0.64, anim.lerp_pose(kneel, slump, 1.15), "out"), (0.80, slump, "inout"), (1.0, slump, "linear")]
     out["death"] = clip("death", 50, k, rings=[(0.18, 4.0, (1, 0, 0)), (0.56, 5.0, (0.3, 0, 1))])
@@ -1476,7 +1548,7 @@ def clip_overrides(ctx) -> dict:
     out["dash"] = clip("dash", 15, [(0.0, G, "linear"), (0.25, gl, "snap"), (0.75, gl, "linear"), (1.0, G, "inout")])
 
     # STUNNED: a jolt, the halo ringing, the head wobbling (loops)
-    st = pose(torso=dict(spine=(8, 0, 0), chest=(8, 0, 0), neck=(8, 0, 0), head=(12, 0, 0)), hips=(0, 0.02, -0.04),
+    st = pose(torso=dict(spine=(4, 0, 0), chest=(5, 0, 0), neck=(4, 0, 0), head=(7, 0, 0)), hips=(0, 0.02, -0.04),
               R=(-0.34, -0.30, -0.70), aim=(-0.20, -0.10, 0.97), L=(0.10, -0.10, -0.95))
 
     def stun_s(t):
@@ -1537,6 +1609,8 @@ def clip_overrides(ctx) -> dict:
             p["chest"] = tuple(np.add(p["chest"], (0.6 * b, 0, 0)))
         return p
     out["victory"] = anim.Clip("victory", 55, False, vic_s)
+    for c in out.values():
+        c.sample = level(c.sample)
     return out
 
 

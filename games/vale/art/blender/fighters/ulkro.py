@@ -111,8 +111,12 @@ def _skin_pal(identity: dict, relative: dict) -> dict:
 
 
 SKINS: list = [
+    # Highrim: the named sandstone #CDBB9C (hue 38, 24 %) set a step under its hex like the base's own colours (three.js
+    # lifts the albedo ~1.4x: as named it rendered the hood near white), on the hood AND the sleeve wraps (the brief's
+    # "sandstone wraps"; the sleeves are cloth2 here)
     {"id": "ulkro_highrim", "extra": {}, "card": {"primary": "#8E8068", "secondary": "#E0D8C6"},
-     "palette": _skin_pal({"sandstone": "#CDBB9C"}, {"wood": "#E0D8C6", "cloth": "#85796A", "stone": "#BDB6A8"})},
+     "palette": dict(_skin_pal({"sandstone": "#B29F7E"}, {"wood": "#E0D8C6", "cloth": "#85796A", "stone": "#BDB6A8"}),
+                     cloth2="#9C8B6E")},
     {"id": "ulkro_long_evening", "extra": {"lacquer_fan": True}, "card": {"primary": "#4A3548", "secondary": "#9C8566"},
      "palette": dict(_skin_pal({"sandstone": "#5B3A5E", "dawnglass": "#9C8566"},
                                {"wood": "#E2D8C4", "stone": "#C9C1B3", "cloth2": "#D2CBBE"}), lacquer="#4B3049")},
@@ -153,18 +157,22 @@ Q_U = _n(Q_TOP - Q_BOT)                              # up the quiver
 Q_N = _n(np.array([0.0, 1.0, 0.0]) - Q_U * Q_U[1])  # out from her back
 Q_W = np.cross(Q_U, Q_N)                             # across the quiver (in the back's plane)
 Q_HW, Q_HD = 0.078, 0.048                            # half width / half depth of the tube
-# the five crest darts: tilt from vertical toward her right (deg), base offset across the mouth (m), length
-CREST = [(22.0, -0.040, 0.60), (29.0, -0.018, 0.62), (36.0, 0.004, 0.63), (43.0, 0.026, 0.61), (50.0, 0.046, 0.58)]
-CREST_BACK = 17.0                                    # tipped back (deg)
+# the five crest darts: (tilt toward her right, tilt forward (-) / back (+), base offset across the mouth, length).
+# The concept fans them 18-46 degrees over the right shoulder; in game (build 4/6) the health bar, which sits 0.35 m over
+# art.height = the crest's top, hid every tip that leaned AWAY from the camera: the tips leaning back whenever she faced
+# the camera, the outer darts whenever her right side faced away (one of the two lane facings). The fan is kept to her
+# right but stands more upright (6-30 degrees) and its darts lean a little forward over the hood instead of back, so
+# the spray of lines stays under the bar from both lane facings.
+CREST = [(6.0, -10.0, -0.040, 0.60), (12.0, -3.0, -0.018, 0.62), (18.0, 3.0, 0.004, 0.63), (24.0, -1.0, 0.026, 0.61),
+         (30.0, -8.0, 0.046, 0.58)]
 DART_R = 0.0145
 HEAD_L, HEAD_W, HEAD_T = 0.16, 0.034, 0.007          # the leaf head: length, half width, half thickness
 
 
 def crest_dart(i):
     """(base inside the quiver, unit direction, tip) of crest dart i"""
-    a, off, L = CREST[i]
-    a, b = math.radians(a), math.radians(CREST_BACK)
-    d = _n([-math.sin(a), math.sin(b) * 0.9, math.cos(a) * math.cos(b)])
+    a, b, off, L = CREST[i]
+    d = _n([-math.tan(math.radians(a)), math.tan(math.radians(b)), 1.0])
     base = Q_TOP - Q_U * 0.16 + Q_W * off + Q_N * 0.004 * (i - 2)
     return base, d, base + d * L
 
@@ -824,7 +832,7 @@ _install_bind()
 # sit a step under the concept's lit values)
 TONE = {
     "hood": ("#957853", 1.0, 0.35), "hood_tail": ("#8C714E", 1.0, 0.35), "cowl": ("#8A6F4E", 1.0, 0.40),
-    "head": ("#7A7367", 0.85, 0.75), "eyeband": ("#4A382B", 1.15, 0.45),
+    "head": ("#5F584E", 0.85, 0.75), "eyeband": ("#4A382B", 1.15, 0.45),
     "torso": ("#4E3B2E", 1.0, 0.45), "straps": ("#3F2D22", 0.9, 0.55), "sash": ("#563A2B", 0.95, 0.45),
     "plate_R1": ("#A69F92", 0.85, 0.65), "plate_L1": ("#A69F92", 0.85, 0.65),
     "plate_R2": ("#9D9689", 0.85, 0.65), "plate_L2": ("#9D9689", 0.85, 0.65),
@@ -985,7 +993,7 @@ def paint_shafts(p, n):
         t = q @ d
         dist = np.linalg.norm(q - np.outer(t, d), axis=1)
         m = dist < best
-        best[m], tt[m], Lx[m] = dist[m], t[m], CREST[i][2]
+        best[m], tt[m], Lx[m] = dist[m], t[m], CREST[i][3]
     grain = 1 + 0.05 * np.sin(tt * 300.0 + 5 * NOISE(p, 25.0)) + 0.04 * NOISE(p, 14.0)
     col = _hl("#C8BEA8") * grain[:, None]
     hb = Lx - HEAD_L
@@ -1080,6 +1088,11 @@ def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> 
             c = hood_shade(c, P[m], N[m])
         elif name == "head":
             c = face_shade(c, P[m], N[m])
+        elif name == "eyeband":
+            # the eye slit: an ink line along the band's lower groove, the carved relief's recesses a step darker
+            pz_ = P[m][:, 2]
+            slit = np.exp(-((pz_ - (BAND_Z - BAND_H + 0.006)) / 0.0035) ** 2) * (N[m][:, 1] < 0.2)
+            c = c * (1 - slit[:, None]) + _hl("#17161A") * slit[:, None]
         L[m] = c
         log(f"  tone {name}: -> {hx}")
     L = np.clip(L, 0.0, MAX_LIN)
@@ -1464,8 +1477,8 @@ def gen_death(skel) -> anim.Clip:
     kneel["ik"].update(lh((0.10, -0.28, -0.38)))
     down = anim.merge(anim.arms_relaxed(), anim.P(hips=(84, 6, 0), spine=(4, 0, 0), chest=(2, 0, 0), neck=(-24, 0, 0),
                                                   head=(-10, 50, 0), thigh_L=(4, 0, 4), shin_L=(-6, 0, 0),
-                                                  foot_L=(-55, 0, 0), thigh_R=(6, 0, -10), shin_R=(-30, 0, 0),
-                                                  foot_R=(-50, 0, 0), upper_arm_L=(-30, 0, 20), forearm_L=(30, 0, 0)))
+                                                  foot_L=(-55, 0, 0), thigh_R=(6, 0, -10), shin_R=(-6, 0, 0),
+                                                  foot_R=(-55, 0, 0), upper_arm_L=(-30, 0, 20), forearm_L=(30, 0, 0)))
     down["hips_loc"] = (0.0, -0.10, -hip_h + 0.17)
     down["ik"] = {"hand.R": HT(pos=(-0.42, -0.95, 0.06), pole=(-0.6, 0.2, 1.0)),
                   "aim.R": AimRoll((0.25, -0.97, 0.0), 1.0, (0.0, 0.0, 1.0))}
@@ -1550,7 +1563,7 @@ def gen_victory() -> anim.Clip:
     hold = pz(lean=2.0, yaw=24.0, drop=0.03, look=(-6.0, 22.0, 0.0),
               feet=feet_(l=(0.05, -0.16, 0.0), r=(-0.04, 0.12, 0.0), yl=24.0, yr=0.0),
               R=rh((-0.10, -0.06, 0.06), aim=(0.30, 0.30, 0.90), up=(0.0, -0.95, 0.30), pole=(-0.9, 0.2, -0.4)),
-              L=lh((-0.18, -0.30, 0.20), pole=(0.6, 0.0, -0.8)))
+              L=lh((-0.10, -0.22, 0.33), pole=(0.9, -0.1, -0.4)))
     keys = [(0.0, g, "linear"), (0.16, skid, "out"), (0.36, settle, "inout"), (0.62, hold, "out"), (1.0, hold, "linear")]
     base = anim.drag(anim.keyed(keys), 45, {"head": 2.0, "neck": 1.0})
 
