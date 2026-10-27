@@ -12,7 +12,7 @@ All audio added in P2+P3 is CC0 1.0 and cost $0. Per-file provenance ships besid
 | vo_m2_* | 12 | qubodup https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds ; thebardofblasphemy https://opengameart.org/content/grunts-male-death-and-pain | CC0 |
 | vo_f_* | 10 | Nocturnal_Vanguard https://opengameart.org/content/female-hurt-grunts-groans ; mvVoiceActing Freesound 855460 | CC0 |
 
-## Fix round (2026-10-27): 16 footstep files, 95,409 bytes
+## Fix round (2026-10-27): 16 footstep files, 99,292 bytes
 
 | set | files | source | licence (checked 2026-10-27) |
 |---|---|---|---|

@@ -76,21 +76,21 @@ P23 fix round (2026-10-27) - 16 footstep takes for the surfaceAt labels that had
 All CC0 1.0, $0. Licence field read on each OpenGameArt page this session (2026-10-27): Fantozzi (submitted by qubodup),
 TinyWorlds, rubberduck and Peludo pages all CC0 (creativecommons.org/publicdomain/zero/1.0). Kenney Impact Sounds 1.0
 is the CC0 pack this game already ships (KENNEY-LICENSE.txt). Built by F:/lc_p23/audio/fixtools/build_steps.py
-(trim, 60 Hz high-pass, peak limiter <= 6 dB, loudest-50 ms RMS matched to step_grass, mono 44.1 kHz Ogg Vorbis q3).
-Total 95,409 bytes.
+(trim, 60 Hz high-pass, peak limiter <= 10 dB, loudest-50 ms RMS matched to step_grass plus a per-surface trim so a 9 m
+enemy step on the game's output sits within 2 dB of the grass step; mono 44.1 kHz Ogg Vorbis q3). Total 99,292 bytes.
 
-step_sand_000.ogg	6873 B	Fantozzi-SandL1.flac (Fantozzi, OGA, submitted by qubodup)	https://opengameart.org/content/fantozzis-footsteps-grasssand-stone	CC0 1.0
-step_sand_001.ogg	6558 B	Fantozzi-SandR1.flac (Fantozzi, OGA, submitted by qubodup)	https://opengameart.org/content/fantozzis-footsteps-grasssand-stone	CC0 1.0
-step_sand_002.ogg	6494 B	Fantozzi-SandL2.flac (Fantozzi, OGA, submitted by qubodup)	https://opengameart.org/content/fantozzis-footsteps-grasssand-stone	CC0 1.0
-step_sand_003.ogg	6329 B	Fantozzi-SandR3.flac (Fantozzi, OGA, submitted by qubodup)	https://opengameart.org/content/fantozzis-footsteps-grasssand-stone	CC0 1.0
-step_dirt_000.ogg	7335 B	[kdd]DifferentSteps gravel.ogg (TinyWorlds)	https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud	CC0 1.0
-step_dirt_001.ogg	6036 B	[kdd]DifferentSteps mud02.ogg (TinyWorlds)	https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud	CC0 1.0
-step_dirt_002.ogg	5381 B	sfx100v2_footstep_01.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
-step_dirt_003.ogg	5111 B	sfx100v2_footstep_02.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
-step_water_000.ogg	5566 B	sfx100v2_footstep_wet_01.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
-step_water_001.ogg	6569 B	sfx100v2_footstep_wet_02.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
-step_water_002.ogg	6457 B	sfx100v2_footstep_wet_03.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
-step_water_003.ogg	7611 B	splash2.wav 0.66-1.12 s at rate 1.25 (Peludo)	https://opengameart.org/content/water-splash-and-sand-footsteps	CC0 1.0
+step_sand_000.ogg	6742 B	Fantozzi-SandL1.flac (Fantozzi, OGA, submitted by qubodup)	https://opengameart.org/content/fantozzis-footsteps-grasssand-stone	CC0 1.0
+step_sand_001.ogg	6871 B	Fantozzi-SandR1.flac (Fantozzi, OGA, submitted by qubodup)	https://opengameart.org/content/fantozzis-footsteps-grasssand-stone	CC0 1.0
+step_sand_002.ogg	6472 B	Fantozzi-SandL2.flac (Fantozzi, OGA, submitted by qubodup)	https://opengameart.org/content/fantozzis-footsteps-grasssand-stone	CC0 1.0
+step_sand_003.ogg	6524 B	Fantozzi-SandR3.flac (Fantozzi, OGA, submitted by qubodup)	https://opengameart.org/content/fantozzis-footsteps-grasssand-stone	CC0 1.0
+step_dirt_000.ogg	7603 B	[kdd]DifferentSteps gravel.ogg (TinyWorlds)	https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud	CC0 1.0
+step_dirt_001.ogg	6603 B	[kdd]DifferentSteps mud02.ogg (TinyWorlds)	https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud	CC0 1.0
+step_dirt_002.ogg	5756 B	sfx100v2_footstep_01.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
+step_dirt_003.ogg	5335 B	sfx100v2_footstep_02.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
+step_water_000.ogg	6278 B	sfx100v2_footstep_wet_01.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
+step_water_001.ogg	7407 B	sfx100v2_footstep_wet_02.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
+step_water_002.ogg	7116 B	sfx100v2_footstep_wet_03.ogg (rubberduck)	https://opengameart.org/content/100-cc0-sfx-2	CC0 1.0
+step_water_003.ogg	7496 B	splash2.wav 0.66-1.12 s at rate 1.25 (Peludo)	https://opengameart.org/content/water-splash-and-sand-footsteps	CC0 1.0
 step_metal_000.ogg	4653 B	Kenney footstep_concrete_000 + impactTin_medium_000 (-1 dB) + impactMetal_light_001 (rate 0.8, -11 dB), layered	https://kenney.nl/assets/impact-sounds	CC0 1.0
 step_metal_001.ogg	4680 B	Kenney footstep_concrete_001 + impactTin_medium_001 (-1 dB) + impactMetal_light_002 (rate 0.8, -11 dB), layered	https://kenney.nl/assets/impact-sounds	CC0 1.0
 step_metal_002.ogg	5021 B	Kenney footstep_concrete_002 + impactTin_medium_002 (-1 dB) + impactMetal_light_003 (rate 0.8, -11 dB), layered	https://kenney.nl/assets/impact-sounds	CC0 1.0
