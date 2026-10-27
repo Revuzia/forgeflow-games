@@ -58,7 +58,11 @@ PLANT_ROWS = {"stale-table": {"table-current"}, "rng-shift": {"rng-stream"}}
 RNG_ANCHOR = "const rng = W.SIM.mulberry32(seed ^ 0xabcdef);"
 
 
-def run_node(args_list, timeout=900):
+NODE_TIMEOUT = [900]          # --node-timeout (an environment knob for a loaded box: a timeout is could-not-judge, never a verdict; no row changes)
+
+
+def run_node(args_list, timeout=None):
+    timeout = timeout or NODE_TIMEOUT[0]
     run_node.n = getattr(run_node, "n", 0) + 1
     out = os.path.join(tempfile.gettempdir(), "lc_world_node_%d_%d.json" % (os.getpid(), run_node.n))
     cmd = ["node", NODE_PROBE] + args_list + ["--out", out]
@@ -267,9 +271,11 @@ def main():
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--baseline-rev", default=None, help="the revision the RNG stream is compared with (default %s, the Wave-4 commit)" % WAVE4_REV)
     ap.add_argument("--quick", action="store_true", help="seed 7 only for the RNG stream")
+    ap.add_argument("--node-timeout", type=int, default=900, help="seconds each world_node.mjs run may take before the gate says could-not-judge (environment: a loaded box)")
     ap.add_argument("--wild-info-maps", default="", help="Wave 8: judged maps whose WILD LOOT is information (their buildings change on purpose: housegen footprints reject other wild-loot draws); POIs and prop anchors stay judged (gate.py: ashgrid)")
     ap.add_argument("--rng-maps", default="held", help="'held' (default): the stream row skips ashgrid (Wave 7 builds Savanna's towns on purpose) and judges isla_viva + deepwood; 'all': every map; or a comma list of the maps JUDGED (Wave 7b: 'ashgrid' - Savanna must read the live build's stream, the themed maps get their towns on purpose)")
     args = ap.parse_args()
+    NODE_TIMEOUT[0] = max(60, args.node_timeout)
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)
 
 
