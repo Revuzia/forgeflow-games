@@ -742,8 +742,8 @@ function suiteP23(M, SIM, count) {
       "LC-49 rejoin: the page asks for the whole window, the host judges the slot's silence, a rejoin by silence alone cannot throw on a null goneAt, and a hidden / closing tab writes its record");
     const lobR = sl("const readCands = () =>", 'send("hello", hello);');
     ok(/S\.rejoinAsk\.cands = mergeCands\(S\.rejoinAsk\.cands, readCands\(\)\);/.test(lobR) && /rejoinRescanMs\(net\.room,/.test(lobR) && /setTimeout\(\(\) => rescan\(n \+ 1\), ms\)/.test(lobR) &&
-      /n < REJOIN_RESCANS/.test(lobR) && /startAsk\(c2, false\)/.test(lobR) && /if \(d\.code === "busy" && S\.rjRescan && !S\.rejoinAsk\) \{ S\.rjBusy = \{ from, d \}; return; \}/.test(src),
-      "LC-49 rejoin (second pass): every ask re-reads the records, a page with no candidate yet re-reads them when one comes of age, and the host's 'busy' waits until it has given up");
+      /n < REJOIN_RESCANS/.test(lobR) && /startAsk\(c2, false\)/.test(lobR) && /if \(d\.code === "busy" && S\.rejoinAsk\) return;\s+if \(d\.code === "busy" && S\.rjRescan\) \{ S\.rjBusy = \{ from, d \}; return; \}/.test(src),
+      "LC-49 rejoin (second pass): every ask re-reads the records, a page with no candidate yet re-reads them when one comes of age, and the host's 'busy' (a reply to a hello without rj) never ends an ask and waits until the re-reads have given up");
     ok(/bp\.distanceTo\(a\.pos\) > reviveDoneRange\(K\)/.test(src) && !/distanceTo\(a\.pos\) > 5\)/.test(src) && !/\+ `dh`/.test(src),
       "D3: onRevive checks the reviver's distance with reviveDoneRange(K) (no literal 5 m); the header no longer promises a dh key");
     ok(/const full = smokeRelayRoom\(W\.smokes, d\.by, W\.t\);\s*if \(full\) \{ reject\(t, from, full\); return; \}/.test(src) && !/x\._net === from/.test(src),

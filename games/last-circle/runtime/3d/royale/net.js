@@ -1600,7 +1600,10 @@ function onRejoinAnswer(W, from, d) {
   const st = S.status;
   if (d.k === "no") {
     if (d.code === "retry" && S.rejoinAsk) return;            // the old page has not been seen leaving yet: the next try (3 s) asks again
-    if (d.code === "busy" && S.rjRescan && !S.rejoinAsk) { S.rjBusy = { from, d }; return; }   // a closed tab's record may still come of age
+    // "busy" answers a hello WITHOUT rj (the host sends it for no other): while this page asks with rj it is a stale reply (the hello that
+    // answered the host's own hello, or the first one before the records came of age) - the rj hellos get their own answers
+    if (d.code === "busy" && S.rejoinAsk) return;
+    if (d.code === "busy" && S.rjRescan) { S.rjBusy = { from, d }; return; }   // a closed tab's record may still come of age
     if (S.rejoinAsk || d.code === "busy") {
       S.rejoinAsk = null;
       if (d.code !== "busy") clearRejoin();
