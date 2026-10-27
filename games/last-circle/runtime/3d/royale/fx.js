@@ -118,15 +118,15 @@ const NS = STYLE_TAB.length;
 // are the P1-E numbers bit-for-bit (every P1-E gate measured them); low trims the counts, ultra spends more.
 //   far / lod: bullet-impact distances (nothing beyond far; only the puff beyond lod)
 //   smoke / debris / skirt: explosion column puffs, debris chunks, ground dust puffs
-//   cloud: puffs per smoke-grenade cloud - NEVER fewer than medium's 12: a cloud must hide what is behind it on every
-//   tier (the sim's sight cut is the same for everyone; a thinner low-tier cloud would let low-tier players see
-//   through smoke - 8 puffs let up to 19 % through); high / ultra add puffs for a fuller silhouette;
+//   cloud: OUTLINE puffs per smoke-grenade cloud. What hides is the cloud's BODY (fix round: one disc whose opacity is the
+//   sim's own sphere chord), the same on every tier - the sim's sight cut is the same for everyone, so a low-tier player
+//   never sees through smoke a bot cannot see through; the tiers only differ in how billowy the outline is;
 //   motes: revive / DBNO light motes multiplier
 const FXQ = {
-  low:    { far: 120, lod: 40,  smoke: 12, debris: 8,  skirt: 4,  cloud: 12, motes: 0.5 },
-  medium: { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 12, motes: 1 },
-  high:   { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 18, motes: 1 },
-  ultra:  { far: 240, lod: 110, smoke: 26, debris: 18, skirt: 10, cloud: 26, motes: 1.5 },
+  low:    { far: 120, lod: 40,  smoke: 12, debris: 8,  skirt: 4,  cloud: 6,  motes: 0.5 },
+  medium: { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 8,  motes: 1 },
+  high:   { far: 180, lod: 70,  smoke: 20, debris: 14, skirt: 8,  cloud: 12, motes: 1 },
+  ultra:  { far: 240, lod: 110, smoke: 26, debris: 18, skirt: 10, cloud: 18, motes: 1.5 },
 };
 /** The tier the FX follow: lane boot's W.gfxTier (C-GFX, adds 'ultra'), else the applied tier, else the saved setting. */
 function fxTierOf(W) {
@@ -858,8 +858,8 @@ function explosionFx(W, pos, R) {
 // min(K.SMOKE.fadeS, 25 %) of its life it thins (puffs swelling a little). Sight through it is cut by maps.js losBlocked
 // (the same live spheres); this is the picture: dense enough in the middle that nothing reads through it.
 const SMOKE_MAX = 6;                              // clouds drawn at once
-const SPUFF_MAX = 28;                             // puffs per cloud at the top tier (FXQ.cloud)
-const SMOKE_SLOTS = SMOKE_MAX * SPUFF_MAX + 2;    // + the two in-cloud veils
+const SPUFF_MAX = 20;                             // outline puffs per cloud at the top tier (FXQ.cloud)
+const SMOKE_SLOTS = SMOKE_MAX * (SPUFF_MAX + 1) + 2;   // + one body per cloud + the two in-cloud veils
 const SMOKE_FADE_MAX = 3, SMOKE_DRAW_MAX = 520;
 /** K.SMOKE.fadeS (the sim says fx fades the cloud's last fadeS), else 3 s. */
 function smokeFadeS(W) {
@@ -870,7 +870,7 @@ const SP = 10;                                    // static floats per puff in t
 let smokeMesh = null, smokeMat = null;
 const smokeCache = [];                            // per drawn cloud: { ref, seed, used, gy / gx / gz: Float32Array, st: Float32Array, jetAcc, floor }
 const _sKey = new Float32Array(SMOKE_SLOTS), _sOrd = new Int32Array(SMOKE_SLOTS), _sBuf = new Float32Array(SMOKE_SLOTS * 16);
-const smokeStats = { clouds: 0, puffs: 0, veil: 0, inside: false, jets: 0, maxClouds: 0 };
+const smokeStats = { clouds: 0, puffs: 0, bodies: 0, veil: 0, inside: false, jets: 0, maxClouds: 0 };
 const _sunDir = new THREE.Vector3(0.4, 0.8, 0.3);
 let _hemi = null, _hemiScene = null;
 
@@ -883,7 +883,8 @@ function hash01(a, b) {
 
 const SMOKE_VS = /* glsl */`
 // instanceMatrix carries DATA, not a transform: [0] = size, alpha, ground y, occlusion; [1] = sheet puff 0..3, spin,
-// sun-side factor, veil flag; [3] = centre. The smoke's cost on the iGPU is its fill, so everything but the texture and
+// sun-side factor, kind (0 puff, 1 / 2 the in-cloud veils, 3 the BODY); [2] = the body's sphere: live r, camera distance,
+// ground under its left / right edge; [3] = centre. The smoke's cost on the iGPU is its fill, so everything but the texture and
 // the fades is worked out HERE, per vertex: the puff is a two-ring disc (17 vertices) and its pseudo-sphere lighting is
 // sampled at each vertex and interpolated (soft smoke has no hard terminator to lose). P23/fx: the per-pixel lighting
 // cost 0.60 ms GPU for 3 clouds on the iGPU, the bar is 0.3.
@@ -899,6 +900,7 @@ varying vec2 vUvS;        // the sheet uv of this pixel (cell offset applied)
 varying vec2 vQ;          // puffs: camera-aligned -1..1 across the puff; near veil: position in the clear ellipse's radii
 varying vec4 vP;          // alpha, height above its ground, view depth, veil flag
 varying vec3 vCol;        // the lit, fogged colour (linear, straight)
+varying vec3 vB;          // the body: sphere radius, camera distance, the disc's inscribed radius (world)
 void main() {
   vec3 c = instanceMatrix[3].xyz;
   float size = instanceMatrix[0].x;
@@ -917,12 +919,15 @@ void main() {
   vec4 mv = viewMatrix * vec4( wp, 1.0 );
   gl_Position = projectionMatrix * mv;
   vQ = q * 2.0;
-  if ( veil > 1.5 ) vQ = ( gl_Position.xy / gl_Position.w - uBubble.xy ) / uBubble.zw;   // the veils face the camera: exact
+  if ( veil > 1.5 && veil < 2.5 ) vQ = ( gl_Position.xy / gl_Position.w - uBubble.xy ) / uBubble.zw;   // the near veil faces the camera: exact
   vP = vec4( instanceMatrix[0].y, wp.y - instanceMatrix[0].z, -mv.z, veil );
+  vB = vec3( instanceMatrix[2].x, instanceMatrix[2].y, 0.5 * size );
+  // the body spans the whole cloud: its ground is the terrain under its left / right edge, interpolated across it
+  if ( veil > 2.5 ) vP.y = wp.y - mix( instanceMatrix[2].z, instanceMatrix[2].w, clamp( q.x + 0.5, 0.0, 1.0 ) );
   // lit like the world: hemisphere + a wrapped sun term, both divided by PI (three's Lambert), on a pseudo-sphere normal,
   // shaded by the puff's place in the cloud (occlusion: low and inner puffs sit in the cloud's own shadow; the sun-facing
   // side is brighter). The veils: one flat normal, tipped up.
-  vec2 lq = veil > 0.5 ? vec2( 0.0, 0.894 ) : vQ;
+  vec2 lq = veil > 0.5 && veil < 2.5 ? vec2( 0.0, 0.894 ) : vQ;
   float r2 = min( dot( lq, lq ), 1.0 );
   vec3 n = normalize( right * lq.x + up * lq.y + back * sqrt( 1.0 - r2 ) * 0.9 );
   float wrapL = clamp( ( dot( n, uSunDir ) + 0.5 ) / 1.5, 0.0, 1.0 );
@@ -938,23 +943,38 @@ varying vec2 vUvS;
 varying vec2 vQ;
 varying vec4 vP;
 varying vec3 vCol;
+varying vec3 vB;
 void main() {
   float a;
   float dens;
-  if ( vP.w > 0.5 ) {
+  float sh = 1.0;
+  if ( vP.w > 2.5 ) {
+    // the BODY (fix round, C-SMOKE D1): the sim's own sphere. maps.js losBlocked cuts a sight line whose chord through the live
+    // sphere is longer than 1.5 m, so the body's opacity IS that chord: 1 - exp( -0.95 m^-1 x chord ) (1.5 m -> 0.76, 3 m -> 0.94)
+    // for the exact ray through this pixel (its offset in the centre's view plane -> its closest approach to the centre). What
+    // you see hidden is what a bot cannot see, at every radius the sim grows it through; the puffs only break its outline.
+    float rho = length( vQ ) * vB.z, D = vB.y, R = vB.x;
+    float d2 = rho * rho * D * D / ( D * D + rho * rho );
+    float ch = 2.0 * sqrt( max( R * R - d2, 0.0 ) );
+    vec4 tb = texture2D( map2, vUvS );
+    dens = 1.0 - exp( -0.95 * ch );
+    dens *= 1.0 - 0.55 * smoothstep( 0.88, 1.0, sqrt( d2 ) / R ) * ( 1.0 - tb.a );   // a ragged outline, not a ball's
+    sh = 0.80 + 0.30 * tb.g;                                                        // the sheet's billows as shading
+    a = dens * vP.x * smoothstep( 0.0, 0.7, vP.y ) * smoothstep( uNear.x, uNear.y, vP.z );
+  } else if ( vP.w > 0.5 ) {
     // inside a cloud: one flat lit layer just beyond your character (1) and one just past the lens (2) with a clear
     // ellipse round your character, so the near ground and walls white out too but you still see yourself
     a = vP.x; dens = 1.0;
     if ( vP.w > 1.5 ) a *= smoothstep( 0.55, 1.6, length( vQ ) );
   } else {
-    // thickened towards the core: a dozen of these must hide what is behind the cloud's middle, while the rim stays
+    // the OUTLINE puffs (the body behind them hides): thickened towards the middle, while the rim stays
     // wispy; the edge rounded off; a soft contact where a puff meets the ground; never between the lens and you
     float t = texture2D( map2, vUvS ).a * ( 1.0 - smoothstep( 0.61, 1.0, dot( vQ, vQ ) ) );
     dens = min( t * 1.9, 1.0 );
     a = dens * vP.x * smoothstep( 0.0, 0.7, vP.y ) * smoothstep( uNear.x, uNear.y, vP.z );
   }
   if ( a < 0.004 ) discard;
-  gl_FragColor = vec4( vCol * ( 1.0 - 0.18 * dens ), 1.0 );   // thin edges let a little more light through
+  gl_FragColor = vec4( vCol * ( sh * ( 1.0 - 0.18 * dens ) ), 1.0 );   // thin edges let a little more light through
   // tone-map and encode the UNpremultiplied colour, then premultiply: both curves are non-linear, and run on col * a
   // they darkened every soft rim (a grey halo round each puff and round the in-cloud veil's clear ellipse). Render-target
   // routes (medium and up) compile both chunks to nothing; the low tier's straight-to-canvas route runs them.
@@ -1041,26 +1061,18 @@ function smokeBind(W, e, s) {
   for (let i = 0; i < SPUFF_MAX; i++) {
     const o = i * SP;
     const h = (k) => hash01(e.seed + i * 131, k);
-    // a squashed sphere: denser low and in the middle (the canister vents at the ground), the first puffs nearest the core
-    // directions from the R2 low-discrepancy sequence (offset by the cloud's seed): ANY prefix of the table - each tier
-    // draws its first 8 / 12 / 18 / 26 - spreads evenly over the sphere, so no seed leaves a see-through gap in the shell
-    // (pure random directions let 4-6 % of a box behind the cloud show through on some throws)
+    // fix round: the BODY (one disc per cloud whose opacity is the sim's own sphere chord, updateSmoke) hides what losBlocked
+    // cuts; these puffs are the cloud's billowing OUTLINE round it. Directions from the R2 low-discrepancy sequence (offset
+    // by the cloud's seed): ANY prefix of the table - each tier draws its first 6 / 8 / 12 / 18 - spreads evenly over the
+    // sphere, so the outline is lumpy all round on every tier
     const u = h(1);
     const r2a = (h(2) + i * 0.7548776662) % 1, r2b = (h(3) + i * 0.5698402910) % 1;
     const th = r2a * 6.2832, ph = Math.acos(1 - 2 * r2b);
-    // every 4th puff is a CORE puff (whatever the tier's count): near the middle and smaller - it only thickens the
-    // middle, which the shell in front already covers, so its fill is kept down (the iGPU's smoke cost is its fill)
-    const core = (i & 3) === 0;
-    const rr = core ? (0.06 + 0.28 * Math.cbrt(u)) : (0.36 + 0.32 * Math.sqrt(u));
-    let ox = Math.sin(ph) * Math.cos(th) * rr, oz = Math.sin(ph) * Math.sin(th) * rr, oy = Math.cos(ph) * rr * 0.74 - 0.05;   // a dome, not a pancake: at 0.62 the lumpy top dipped below a standing box's top on some throws
-    // puff 0 is the HEART: dead centre, full size, near opaque. A camera-facing puff at the middle covers every sight line
-    // through the cloud's middle from ANY side and height, whatever the seed did with the rest (without it 1 throw in ~7
-    // left a hole a box 7 m behind showed through: transmittance up to 0.36)
-    const heart = i === 0;
-    if (heart) { ox = 0; oz = 0; oy = 0.14; }   // a little above the middle: a cloud's mass sits high, and a sight line from above (a hill, a roof) to a man behind crosses the cloud above its centre
+    const rr = 0.50 + 0.28 * Math.sqrt(u);                                    // 0.5 .. 0.78 r out: on the body's rim
+    const ox = Math.sin(ph) * Math.cos(th) * rr, oz = Math.sin(ph) * Math.sin(th) * rr, oy = Math.cos(ph) * rr * 0.9;
     e.st[o] = ox; e.st[o + 1] = oy; e.st[o + 2] = oz;
-    e.st[o + 3] = heart ? 1.15 : (0.78 + 0.34 * h(4)) * (core ? 0.72 : 1);   // quad edge / R (the puff fills its quad)
-    e.st[o + 4] = heart ? 0.96 : core ? 0.86 + 0.10 * h(5) : 0.62 + 0.26 * h(5);   // alpha (the core is the line of sight through the middle from any side: near opaque, free in fill)
+    e.st[o + 3] = 0.62 + 0.30 * h(4);                 // quad edge / r (the puff fills its quad)
+    e.st[o + 4] = 0.58 + 0.30 * h(5);                 // alpha
     e.st[o + 5] = h(6) * 6.2832;                      // spin
     e.st[o + 6] = (h(7) - 0.5) * 0.10;                // spin rate (rad/s)
     e.st[o + 7] = (h(8) - 0.5) * 0.06;                // swirl round the cloud's axis (rad/s)
@@ -1096,12 +1108,12 @@ function smokeLights(W) {
   else u.uFogDensity.value = 0;
 }
 
-const _vFwd = new THREE.Vector3(), _vA = new THREE.Vector3(), _vB = new THREE.Vector3();
+const _vFwd = new THREE.Vector3(), _vA = new THREE.Vector3(), _vB = new THREE.Vector3(), _vR = new THREE.Vector3();
 function updateSmoke(W, dt) {
   if (!smokeMesh) return;
   if (!smokeMesh.parent) W.group("smoke").add(smokeMesh);
   const S = W.smokes, cam = W.camera;
-  smokeStats.clouds = 0; smokeStats.puffs = 0; smokeStats.veil = 0; smokeStats.inside = false;
+  smokeStats.clouds = 0; smokeStats.puffs = 0; smokeStats.bodies = 0; smokeStats.veil = 0; smokeStats.inside = false;
   for (let i = 0; i < smokeCache.length; i++) smokeCache[i].used = false;
   let n = 0, veilA = 0;
   if (S && S.length && cam) {
@@ -1110,6 +1122,7 @@ function updateSmoke(W, dt) {
     // your character's view depth: puffs fade in from just in front of you (third person: the 3-4 m between the lens and
     // you is never smoked over, so you always see yourself; inside a cloud the veils cover the rest)
     cam.getWorldDirection(_vFwd);
+    _vR.setFromMatrixColumn(cam.matrixWorld, 0);
     const p = W.player;
     let pd = -1;
     if (p && p.pos && p.alive !== false) pd = (p.pos.x - cx) * _vFwd.x + (p.pos.y + 1.0 - cy) * _vFwd.y + (p.pos.z - cz) * _vFwd.z;
@@ -1168,6 +1181,22 @@ function updateSmoke(W, dt) {
         if (ddx * _vFwd.x + ddy * _vFwd.y + ddz * _vFwd.z + 0.5 * size < nearA) continue;
         _sKey[n] = ddx * ddx + ddy * ddy + ddz * ddz;
         n++;
+      }
+      // the BODY: one camera-facing disc over the sphere's whole silhouette (radius r D / sqrt(D^2 - r^2) in the centre's view
+      // plane), its opacity the chord through the live sphere (SMOKE_FS). Not drawn with the lens inside the sphere (the
+      // veils below are the picture there).
+      {
+        const dx = s.x - cx, dy = s.y - cy, dz = s.z - cz, D = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (D > R * 1.03) {
+          const sil = R * D / Math.sqrt(D * D - R * R) * 1.02, b = n * 16;
+          _sBuf[b] = sil * 2; _sBuf[b + 1] = aIn * fade; _sBuf[b + 2] = 0; _sBuf[b + 3] = 0.84;
+          _sBuf[b + 4] = (hash01(e.seed, 99) * 4) | 0; _sBuf[b + 5] = 0; _sBuf[b + 6] = 0.80; _sBuf[b + 7] = 3;
+          _sBuf[b + 8] = R; _sBuf[b + 9] = D;
+          _sBuf[b + 10] = smokeGround(W, e, s, s.x - _vR.x * sil, s.z - _vR.z * sil); _sBuf[b + 11] = smokeGround(W, e, s, s.x + _vR.x * sil, s.z + _vR.z * sil);
+          _sBuf[b + 12] = s.x; _sBuf[b + 13] = s.y; _sBuf[b + 14] = s.z; _sBuf[b + 15] = 1;
+          _sKey[n] = D * D;
+          n++; smokeStats.bodies++;
+        }
       }
       // inside the cloud's body: the veils. Measured from YOUR EYES, not the lens: maps.js cuts every sight line that
       // starts inside the sphere, so with your head in the cloud the picture whites out all round (ramping in over the
@@ -1235,7 +1264,7 @@ function updateSmoke(W, dt) {
     smokeMesh.instanceMatrix.needsUpdate = true;
   }
   smokeMesh.count = n;
-  smokeStats.puffs = n - (smokeStats.veil > 0 ? 2 : 0);
+  smokeStats.puffs = n - (smokeStats.veil > 0 ? 2 : 0) - smokeStats.bodies;
 }
 
 // ── C-DBNO / C-FALL ──────────────────────────────────────────────────────────
@@ -1854,7 +1883,7 @@ export function readback(W) {
     impacts: Object.assign({}, impactCounts),
     // P23/fx read-backs
     tier: fxTierOf(W),
-    smoke: { clouds: smokeStats.clouds, puffs: smokeStats.puffs, veil: smokeStats.veil, inside: smokeStats.inside, jets: smokeStats.jets, maxClouds: smokeStats.maxClouds,
+    smoke: { clouds: smokeStats.clouds, puffs: smokeStats.puffs, bodies: smokeStats.bodies, veil: smokeStats.veil, inside: smokeStats.inside, jets: smokeStats.jets, maxClouds: smokeStats.maxClouds,
              count: smokeMesh ? smokeMesh.count : 0, slots: SMOKE_SLOTS, group: smokeMesh && smokeMesh.parent ? smokeMesh.parent.name : null, perCloud: Math.min(SPUFF_MAX, fxQ(W).cloud) },
     dbno: { downedTracked: downedList.length, revivesLive: revives.length, downedFx: dbnoStats.downedFx, revivedFx: dbnoStats.revivedFx,
             reviveQuads: dbnoStats.reviveQuads, dripQuads: dbnoStats.dripQuads, pulseQuads: dbnoStats.pulseQuads },
