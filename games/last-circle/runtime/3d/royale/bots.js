@@ -5321,6 +5321,7 @@ function actEngage(W, b, dt) {
     }
   }
 
+  const aimYaw0 = wantYaw, aimPitch0 = wantPitch;   // (fix pass 2) the true aim line, before the wobble: the bolt squeeze reads against it
   // error: base tier error × acquire overshoot (3× decaying 0.6s) × target-motion penalty
   const sinceAcq = W.t - bb.acquireT;
   const acquireMul = sinceAcq < 0.6 ? 3 - (sinceAcq / 0.6) * 2 : 1;
@@ -5387,10 +5388,19 @@ function actEngage(W, b, dt) {
       // the bolt does land have to come from the rounds it aims. The wobble below (yaw sin, pitch cos x 0.6) is read against the man's own
       // angular size (0.4 m half-width, 0.8 m half-height at this range): squeeze when both are inside it, or after 2.5 s of waiting (a
       // player takes the shot he has). A DMR past 45 m is a rifle: the old rule.
+      // (fix pass 2, probe_match sniper row) ...read against the CROSSHAIR and the BODY THAT IS HIT. The window above was the legacy 0.57 m
+      // cylinder's; sim's bone hit volumes (K.HITVOL, LC-22) are a ~0.4 m-wide chest and a ~0.12 m head, so on the integrated tree the
+      // "on" squeeze landed beside the man half the time (sniper hit rate 5.2 % -> 2.1-2.5 % of rounds, lane batches). The test now reads
+      // where the gun really points (the steered input yaw / pitch, after the turn lag) against the aim point, inside the hit volume's
+      // half-size there: chest 0.2 m wide x 0.35 m up / down; head 0.12 m wide x 0.12 m up (a low head round still finds the neck / chest).
       let timed = true;
       if (def.rpm > 0 && def.rpm < 100) {
-        const ey = Math.abs(Math.sin(bb.errPhase) * err), ep = Math.abs(Math.cos(bb.errPhase * 0.83) * err * 0.6);
-        const on = ey < Math.atan2(0.4, dist) && ep < Math.atan2(0.8, dist);
+        let ey = inp.yaw - aimYaw0;
+        while (ey > Math.PI) ey -= Math.PI * 2;
+        while (ey < -Math.PI) ey += Math.PI * 2;
+        const ep = inp.pitch - aimPitch0, hv = !!(K.HITVOL && K.HITVOL.ok), high = !!bb.aimHigh;
+        const hw = !hv ? 0.4 : high ? 0.12 : 0.2, hUp = !hv ? 0.8 : high ? 0.12 : 0.35, hDn = !hv ? 0.8 : 0.35;
+        const on = Math.abs(ey) < Math.atan2(hw, dist) && (ep >= 0 ? ep < Math.atan2(hUp, dist) : -ep < Math.atan2(hDn, dist));
         if (!(bb.boltWaitT > 0) || W.t - bb.boltWaitT > 6) bb.boltWaitT = W.t;          // (a wait older than 6 s is another fight)
         timed = on || W.t - bb.boltWaitT > 2.5;
       }
