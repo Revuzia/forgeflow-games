@@ -32,7 +32,10 @@ C = L.C
 PLANTS = {
     # the death path itself caps every ammo stack at 60 (the base's 2-box pile cap, put back into the game's killActor)
     "ammo-cap": "const ka = W.killActor; W.killActor = function (a) { if (a && a.inventory && a.inventory.ammo) for (const t in a.inventory.ammo) a.inventory.ammo[t] = Math.min(a.inventory.ammo[t], 60); return ka.apply(this, arguments); }",
-    "no-supply": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'supplyDropLanded') return; return em.apply(null, arguments); }; W.kernel._updaters.push(() => { if (Array.isArray(W.supplyDrops)) W.supplyDrops.length = 0; })",
+    # every 'supplyDropLanded' swallowed and W.supplyDrops always empty (a getter: C.fastForward steps the sim without the kernel's updaters, so the
+    # old per-frame 'length = 0' updater never ran - pl_lootp2_nosupply 10-26 PASSED the supply rows)
+    "no-supply": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'supplyDropLanded') return; return em.apply(null, arguments); };"
+                 " Object.defineProperty(W, 'supplyDrops', { configurable: true, get: () => [], set: () => {} })",
 }
 RUNS = [("ashgrid", 7), ("isla_viva", 21), ("deepwood", 1234)]
 # tiers only (match start, no fast-forward): three more seeds. lootp2_all (10-26 03:44) read 1.469 on 49 BASIC guns over 3 seeds - a rare+ share
@@ -46,7 +49,7 @@ TIER_JS = r"""() => { const W = window.__LC__.W, T = W.lootTiers; if (!T || !Arr
   return { counts: c, hot: W.lootHotZone || T.hot || null, tiers: T.pois.reduce((m, p) => { m[p.tier] = (m[p.tier] || 0) + 1; return m; }, {}) }; }"""
 SUPPLY_JS = r"""([toT]) => { const C = window.__LC__, W = C.W; if (!window.__P23SD__) { window.__P23SD__ = []; W.events.on('supplyDropLanded', (d) => window.__P23SD__.push(+W.t.toFixed(1))); }
   while (W.t < toT && W.phase !== 'over') { C.fastForward(5, 1 / 30); const p = W.player; if (p && p.alive) { p.hp = 100; p.shield = 100; } }
-  const list = (W.supplyDrops || []).map((s) => ({ id: s.id, x: s.x, z: s.z, landed: !!s.landed, opened: !!s.opened }));
+  const list = (W.supplyDrops || []).map((s) => ({ id: s.id, x: s.x, y: s.y != null ? s.y : (s.pos ? s.pos.y : null), z: s.z, landed: !!s.landed, opened: !!s.opened }));
   // the drop's beacon = its beam slot in the shared marker pool (loot.js debugLootFx(id): the base's test hook), alive and tall
   const beaconAt = (s) => { if (!W.debugLootFx) return null; const o = (W.debugLootFx(s.id) || {}).obj; return !!(o && o.beam && o.beam.alive && (o.beam.top || 0) - (o.beam.y || 0) > 20); };
   return { t: +W.t.toFixed(1), events: window.__P23SD__.slice(), list, beacons: list.filter((s) => s.landed && !s.opened).map((s) => beaconAt(s)) }; }"""
@@ -103,18 +106,27 @@ def open_drop(s, sp):
     if not tgt:
         return {"ok": False, "why": "no landed unopened drop"}
     s.install_pump()
-    s.js("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x + 1.3, W.map.heightAt(x + 1.3, z), z); p.vel.set(0, 0, 0); p.input.yaw = Math.PI / 2; window.__P23SO__ = [];"
-         " W.events.on('supplyDropOpened', (a, d) => window.__P23SO__.push(d && d.id)); }", [tgt["x"], tgt["z"]])
+    # the player stands 1.3 m beside the crate at the CRATE's height when it has one (a crate on a roof / a rock: terrain height is out of the
+    # 2.2 m reach), alive and healed (760 s of fast-forward in a late storm); the state at the hold is recorded (lootp2_all2 10-26: the hold
+    # opened nothing - no events, beam still up)
+    s.js("([x, y, z]) => { const W = window.__LC__.W, p = W.player; const gy = W.map.heightAt(x + 1.3, z); p.pos.set(x + 1.3, y != null && y > gy ? y : gy, z); p.vel.set(0, 0, 0); p.input.yaw = Math.PI / 2;"
+         " if (p.alive) { p.hp = 100; p.shield = 100; } window.__P23SO__ = []; W.events.on('supplyDropOpened', (a, d) => window.__P23SO__.push(d && d.id)); }", [tgt["x"], tgt.get("y"), tgt["z"]])
     n_items0 = s.js("() => window.__LC__.W.debugItems ? window.__LC__.W.debugItems().length : null")
     s.step_frames(10, 1 / 60)
     s.page.keyboard.down("KeyE")
-    s.step_frames(5 * 60, 1 / 60)
+    s.step_frames(30, 1 / 60)
+    held = s.js("""(id) => { const W = window.__LC__.W, p = W.player; const h = W.interactHint; const near = W.nearbyChests ? W.nearbyChests(p.pos, 3, []) : null;
+        return { alive: p.alive, downed: !!p.downed, phase: W.phase, t: +W.t.toFixed(1), pos: [p.pos.x, p.pos.y, p.pos.z].map((x) => +x.toFixed(2)), interactDown: !!p.input.interactDown,
+                 hint: h ? { type: h.type, id: h.id, progress: h.progress != null ? +(+h.progress).toFixed(2) : null } : null, near: near ? near.map((c) => c && (c.id || c)).slice(0, 4) : null }; }""", tgt["id"])
+    s.step_frames(5 * 60 - 30, 1 / 60)
     s.page.keyboard.up("KeyE")
     s.step_frames(30, 1 / 60)
     r = s.js("""(id) => { const W = window.__LC__.W; const s = (W.supplyDrops || []).find((q) => q.id === id); const o = W.debugLootFx ? (W.debugLootFx(id) || {}).obj : null;
         const beam = !!(o && o.beam && o.beam.alive);
         return { opened: !!(s && s.opened), events: window.__P23SO__.slice(), beam, items: W.debugItems ? W.debugItems().length : null }; }""", tgt["id"])
     r["itemsBefore"] = n_items0
+    r["target"] = tgt
+    r["atHold"] = held
     r["ok"] = r["opened"] and tgt["id"] in r["events"] and r["beam"] is False and (r["items"] or 0) > (n_items0 or 0)
     return r
 

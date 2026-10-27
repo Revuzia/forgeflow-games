@@ -36,8 +36,12 @@ import p23lib as L  # noqa: E402
 C = L.C
 
 PLANTS = {
-    "fat": "if (K.HITVOL && K.HITVOL.RADII) for (const k in K.HITVOL.RADII) { const r = K.HITVOL.RADII[k]; if (Array.isArray(r)) for (let i = 0; i < r.length; i++) r[i] *= 1.6; }",
-    "thin": "if (K.HITVOL && K.HITVOL.RADII) for (const k in K.HITVOL.RADII) { const r = K.HITVOL.RADII[k]; if (Array.isArray(r)) for (let i = 0; i < r.length; i++) r[i] *= 0.4; }",
+    # every measured hit radius scaled - the per-skin RADII AND the per-hold / per-gait HRADII rows the lane now looks up first (the first 10 values;
+    # an 11th is a thigh fraction, not a radius): pl_hitbox_fat2 / thin2 10-26 scaled RADII only and changed nothing on the pistol dummy
+    "fat": "const sc = (r) => { if (Array.isArray(r)) for (let i = 0; i < Math.min(10, r.length); i++) r[i] *= 1.6; }; if (K.HITVOL) { for (const k in (K.HITVOL.RADII || {})) sc(K.HITVOL.RADII[k]);"
+           " for (const sk in (K.HITVOL.HRADII || {})) for (const h in K.HITVOL.HRADII[sk]) sc(K.HITVOL.HRADII[sk][h]); }",
+    "thin": "const sc = (r) => { if (Array.isArray(r)) for (let i = 0; i < Math.min(10, r.length); i++) r[i] *= 0.4; }; if (K.HITVOL) { for (const k in (K.HITVOL.RADII || {})) sc(K.HITVOL.RADII[k]);"
+            " for (const sk in (K.HITVOL.HRADII || {})) for (const h in K.HITVOL.HRADII[sk]) sc(K.HITVOL.HRADII[sk][h]); }",
 }
 
 SETUP_JS = r"""([dist]) => { const C = window.__LC__, W = C.W, K = W.SIM, T = W.THREE, p = W.player, d = W.rangeDummies && W.rangeDummies[0]; if (!d || !d.obj) return { err: 'no dummy' };
@@ -174,7 +178,7 @@ def main():
                 v.check("outside [%s] (sim hits > 0.06 m outside the drawn silhouette = 0)" % name, r["n"] > 400 and outside == 0, res[name], "0")
                 v.check("coverage [%s] (lines deep inside the silhouette: >= 95 %% sim hits)" % name, cov is not None and cov >= 0.95, {"deep": len(deep), "coverage": res[name]["coverage"]}, ">= 0.95")
             s.js(POSE_JS, [16, 0.0])
-            ht = s.js(RASTER_JS, [args.step, 0.10, True])
+            ht = s.js(RASTER_JS, [min(args.step, 0.03), 0.10, True])     # the head-top row at a 3 cm step whatever --step (a coarse control run fired 16 < 20)
             if ht.get("err"):
                 v.cnj("head-top", "raster: %s" % ht)
                 ht = {"n": 0, "rows": []}
