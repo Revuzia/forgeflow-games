@@ -498,7 +498,9 @@ vec4 swardDetail(vec3 P, float fw, float NdV) {
     gap += max(-drift, 0.0) * 0.3 * a3b;
     // clumps of blades: a ridged noise along the combing (thin bright bundles of tips over darker partings), broken up
     // along their length — the fibrous grain of a sward at 2–6 pixels from a god's height
-    float aC = sw_aa(fw, 0.28);
+    // (they hand over to the tufts below as those resolve: drawn over resolved tufts at 8+ px, from 30 m on a 1280-wide
+    // view, the ridged bundles curled into worm-like swirls — combed fur, not a sward)
+    float aC = sw_aa(fw, 0.28) * (1.0 - 0.8 * sw_aa(fw, 0.14));
     if (aC > 0.0) {
       float kA = 1.0 - abs(snoise(PA * vec3(3.6, 1.1, 3.6) + 71.0));
       float kB = 1.0 - abs(snoise(PB * vec3(3.6, 1.1, 3.6) + 83.0));
