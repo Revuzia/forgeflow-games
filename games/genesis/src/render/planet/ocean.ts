@@ -604,8 +604,12 @@ void main() {
   // a bed no steeper than a shelf)
   float bedC = clamp(vBedCos, 1e-3, 1.0);
   float bedSlope = sqrt(max(1.0 - bedC * bedC, 0.0)) / bedC;
-  float surge = smoothstep(0.045, 0.16, sheetSlope - bedSlope) * (1.0 - smoothstep(0.12, 0.3, bedSlope)) * smoothstep(1.0, 3.0, vDepth)
-    * (1.0 - smoothstep(0.5, 1.5, riverK + max(flowSpd - 2.0, 0.0)));
+  // (fast water spares only a gentle excess slope — a river's surface tilting over its bed — never a wall: where a
+  // surge runs with its flow, as the bore of a wave does, a gate on the speed alone took the white off the whole face
+  // and left a smooth grey slope that mirrored the sky like polished metal)
+  float excess = sheetSlope - bedSlope;
+  float surge = smoothstep(0.045, 0.16, excess) * (1.0 - smoothstep(0.12, 0.3, bedSlope)) * smoothstep(1.0, 3.0, vDepth)
+    * (1.0 - smoothstep(0.5, 1.5, riverK + max(flowSpd - 2.0, 0.0)) * (1.0 - smoothstep(0.1, 0.2, excess)));
   vec3 surgeDown = sgL > 1e-20 ? (sgN / sgL) * sign(dot(sgN, up)) : up;
   surgeDown -= up * dot(surgeDown, up);
   surgeDown = length(surgeDown) > 1e-5 ? normalize(surgeDown) : vec3(0.0);
@@ -653,8 +657,8 @@ void main() {
       float sk = (snoise(P * 0.9 + surgeDown * uTime * 1.6) * 0.6 + snoise(P * 2.3 - surgeDown * uTime * 2.2) * 0.4 * (1.0 - smoothstep(0.1, 0.5, fw))) * 0.5 + 0.5;
       pat = mix(pat, 0.7 + 0.3 * smoothstep(0.15, 0.75, sk), surge * 0.8);
     }
-    // soft coverage, never saturated white
-    float foam = smoothstep(0.05, 0.9, foamAmt * (0.55 + 0.75 * pat)) * 0.8;
+    // soft coverage, never saturated white (… except a surge's face, a wall of churned white water)
+    float foam = smoothstep(0.05, 0.9, foamAmt * (0.55 + 0.75 * pat)) * mix(0.8, 0.95, surge);
     vec3 foamC = vec3(0.85) * (sunCol * max(muS, 0.0) + skyE) / 3.14159;
     col = mix(col, foamC, foam);
   }

@@ -489,9 +489,14 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     if (shrub > 0.01) {
       float sw = smoothstep(0.15, 0.7, shrub + m2 * 0.3);
       vec3 sv = fine ? voronoi3((P + warpV * 2.5) * 0.36) : vec3(0.5, 0.8, 0.5);
-      float blobRaw = 1.0 - smoothstep(0.15, 0.75, sv.x);
+      // (thin cover: only some cells hold a bush — by the cell's own id against the cover — and each crown's outline is
+      // broken by a little noise: a bush in every 2.8 m cell, every one round, spread a regular dot grid over the land
+      // that a dusting of snow turned into a dalmatian print)
+      float keepS = fine ? smoothstep(sv.z - 0.12, sv.z + 0.12, mix(0.3, 1.1, sw)) : 1.0;
+      float edgeS = fine ? snoise(P * 0.9 + 3.7) * 0.12 * aaF(fw, 0.6) : 0.0;
+      float blobRaw = (1.0 - smoothstep(0.15, 0.75, sv.x + edgeS)) * keepS;
       float blob = blobRaw * aaF(fw, 2.0);
-      shrubLocal = sw * mix(0.45, blobRaw, aaF(fw, 2.0));
+      shrubLocal = sw * mix(0.45 * mix(0.3, 1.1, sw), blobRaw, aaF(fw, 2.0));
       vec3 shc = mix(vec3(0.045, 0.07, 0.025), vec3(0.09, 0.09, 0.04), cold * 0.5 + sv.z * 0.4);
       float cover = sw * mix(0.65, 1.0, blob);
       vcol = mix(vcol, shc, cover * mix(0.55, 1.0, blob));
@@ -822,7 +827,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float full = smoothstep(sC - sW, sC + sW, sd + sOff);
     // (the shrubs stand out of a thin cover where they grow — crown by crown — until it is deep enough to bury them: a
     // uniform share taken off the cover laid a grey veil over every shrubby meadow instead of white ground and dark bushes)
-    full *= 1.0 - shrubLocal * (1.0 - smoothstep(0.12, 0.42, sd)) * 0.9;
+    // (a crown catches some of the snow on its top — in patches of a few decimetres — so a bush in a dusting is dark
+    // green flecked white, not a clean dark spot)
+    float crownSnow = 0.55 + 0.35 * smoothstep(-0.3, 0.5, snoise(P * 2.3 + 11.0)) * aaF(fw, 0.3);
+    full *= 1.0 - shrubLocal * (1.0 - smoothstep(0.12, 0.42, sd)) * crownSnow;
     float sw = full * (1.0 - smoothstep(0.3, 0.55, slope));
     // under a canopy (the forest floor's weight) the crowns catch part of the snow, and litter, twigs and stones poke
     // through a thin cover; the floor keeps its canopy occlusion (ao below)
