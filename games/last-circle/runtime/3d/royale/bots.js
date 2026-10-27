@@ -805,7 +805,17 @@ function think(W, b) {
   ensureGunOut(W, a);
 
   const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null;
-  const inStorm = st && st.dps > 0 && hyp(a.pos.x - st.center.x, a.pos.z - st.center.z) > st.radius;
+  // (fix pass 2, probe_match stuck rows) HYSTERESIS ON THE STORM EDGE. The in-storm override flipped at exactly the live radius, and a loot goal in the
+  // storm pulled the bot back over it at every think: the override walked it in, LOOT (20) walked it out, 0.5-1 s each (probe_match deepwood seed 23:
+  // s36 paced a 5 m box beside chests c68 / c67 just outside the closing edge from 165 s to 245 s, 1 hp a second, 6-7 stuck episodes; a replay with the
+  // think scores read ROTATE 0, LOOT 20 at every think - the ROTATE samples were this override). Once in it, a bot is out of the storm only STORM_IN_M
+  // inside the edge, and the loot goal it was walking to in the storm is parked for 30 s (a player leaves the chest the storm has taken).
+  const inStorm = st && st.dps > 0 && hyp(a.pos.x - st.center.x, a.pos.z - st.center.z) > st.radius - (bb.stormLatch ? STORM_IN_M : 0);
+  if (inStorm && !bb.stormLatch && bb.lootId && bb.moveTo && hyp(bb.moveTo.x - st.center.x, bb.moveTo.z - st.center.z) > st.radius - 2) {
+    if (!bb.badLoot) bb.badLoot = {};
+    bb.badLoot[bb.lootId] = W.t + 30; bb.lootId = null;
+  }
+  bb.stormLatch = !!inStorm;
   const outsideNext = st && st.nextRadius != null &&
     hyp(a.pos.x - (st.nextCenter ? st.nextCenter.x : st.center.x), a.pos.z - (st.nextCenter ? st.nextCenter.z : st.center.z)) > st.nextRadius * 0.9;
   const alive = W.match.aliveCount();
@@ -1082,6 +1092,7 @@ function pingAckStep(W, b, best) {
   W.events.emit("pingAck", { by: b.actor.id, owner: r.owner, kind: r.kind, x: r.x, z: r.z, busy: !going });
 }
 const GRAB_R = 8, GRAB_CLOSE_M = 8;
+const STORM_IN_M = 8;             // (fix pass 2) a bot the storm sent rotating is out of it again only this far inside the live edge
 /** Nearest ground gun that is a real upgrade over the starter pistol (a primary:
  *  isUpgraded's definition, so a pistol of any rarity is not one) and that the
  *  inventory would take (same predicate give() enforces). */
