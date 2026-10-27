@@ -41,7 +41,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import type { MapDefT, VfxDefT } from '../contracts/catalog.ts';
 import { motionDepthMaterial } from './terrain_brush.ts';
 import { CURVE_N, evalCurve, type Gradient } from './vfx/curves.ts';
-import { type EmitterL, parseDef, SHAPE } from './vfx/defs.ts';
+import { type EmitterL, parseDef } from './vfx/defs.ts';
 import { patchWorldMaterial, WORLD_FOG_PARS, worldUniforms } from './world_material.ts';
 
 type ModelLoad = (ref: string) => Promise<{ gltf: { scene: Object3D; animations: AnimationClip[] }; renderable: boolean } | null>;
@@ -797,4 +797,3 @@ function curveMaxSize(l: EmitterL): number {
   return m * Math.max(l.sizeVar[0], l.sizeVar[1]);
 }
 
-export { SHAPE as AMBIENT_SHAPES };

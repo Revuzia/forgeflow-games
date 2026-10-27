@@ -1,0 +1,88 @@
+{
+ "banner_aubade": {
+  "albedoMaxSrgb": 0.671,
+  "fx": null,
+  "kb": 7.5,
+  "size_m": [
+   0.694,
+   0.1,
+   3.74
+  ],
+  "swayVerts": 91,
+  "tris": 215,
+  "verts": 140
+ },
+ "banner_serenade": {
+  "albedoMaxSrgb": 0.609,
+  "fx": null,
+  "kb": 9.5,
+  "size_m": [
+   1.179,
+   0.2,
+   2.76
+  ],
+  "swayVerts": 88,
+  "tris": 282,
+  "verts": 185
+ },
+ "bunting": {
+  "albedoMaxSrgb": 0.651,
+  "fx": null,
+  "kb": 13.9,
+  "size_m": [
+   8.095,
+   0.11,
+   3.227
+  ],
+  "swayVerts": 260,
+  "tris": 396,
+  "verts": 294
+ },
+ "fair_lantern": {
+  "albedoMaxSrgb": 0.737,
+  "fx": [
+   0.36,
+   2.19,
+   0.0
+  ],
+  "kb": 6.3,
+  "size_m": [
+   0.555,
+   0.297,
+   2.682
+  ],
+  "swayVerts": 83,
+  "tris": 188,
+  "verts": 111
+ },
+ "resin_lamp": {
+  "albedoMaxSrgb": 0.516,
+  "fx": [
+   0.0,
+   1.74,
+   0.0
+  ],
+  "kb": 6.8,
+  "size_m": [
+   0.34,
+   0.34,
+   2.167
+  ],
+  "swayVerts": 0,
+  "tris": 130,
+  "verts": 136
+ },
+ "shallows_pads": {
+  "albedoMaxSrgb": 0.62,
+  "fx": null,
+  "kb": 4.3,
+  "size_m": [
+   1.171,
+   1.064,
+   0.114
+  ],
+  "swayVerts": 72,
+  "tris": 73,
+  "verts": 72
+ }
+}

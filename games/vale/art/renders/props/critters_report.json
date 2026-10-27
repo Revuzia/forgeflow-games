@@ -1,0 +1,68 @@
+{
+  "dialwren": {
+    "tris": 532,
+    "verts": 375,
+    "bones": 9,
+    "size_m": [
+      0.452,
+      0.291,
+      0.225
+    ],
+    "clips": {
+      "idle": {
+        "frames": 120,
+        "seconds": 4.0,
+        "loop": true
+      },
+      "flee": {
+        "frames": 8,
+        "seconds": 0.267,
+        "loop": true
+      },
+      "settle": {
+        "frames": 24,
+        "seconds": 0.8,
+        "loop": false
+      }
+    },
+    "kb": 30.1,
+    "optimize": true,
+    "three_qa": {
+      "ok": true,
+      "line": "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.226,0.001,-0.153],[0.226,0.226,0.138]],\"facing\":[0,1],\"headY\":0.13,\"heightPx1080\":11,\"rows\":[\"facings\",\"flee\",\"idle\",\"settle\"],\"size\":[1600,800],\"clips\":3,\"out\":\"art/renders/props/critters_dialwren.png\",\"seconds\":32}"
+    }
+  },
+  "hourskink": {
+    "tris": 622,
+    "verts": 399,
+    "bones": 12,
+    "size_m": [
+      0.161,
+      0.48,
+      0.121
+    ],
+    "clips": {
+      "idle": {
+        "frames": 120,
+        "seconds": 4.0,
+        "loop": true
+      },
+      "flee": {
+        "frames": 10,
+        "seconds": 0.333,
+        "loop": true
+      },
+      "settle": {
+        "frames": 27,
+        "seconds": 0.9,
+        "loop": false
+      }
+    },
+    "kb": 38.1,
+    "optimize": true,
+    "three_qa": {
+      "ok": true,
+      "line": "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.081,0.001,-0.332],[0.081,0.122,0.148]],\"facing\":[0,1],\"headY\":0.04,\"heightPx1080\":6,\"rows\":[\"facings\",\"flee\",\"idle\",\"settle\"],\"size\":[1600,800],\"clips\":3,\"out\":\"art/renders/props/critters_hourskink.png\",\"seconds\":32.8}"
+    }
+  }
+}
