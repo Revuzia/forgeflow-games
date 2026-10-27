@@ -914,7 +914,10 @@ function think(W, b) {
       if (c.heals === "shield" && keepBig(a, s2)) continue;       // (fix round) a lone big shield is kept for the bar under 75
       if (c.heals === "shield" ? a.shield < c.cap : a.hp < c.cap) { if (c.heals === "shield") shieldItem = true; else hpItem = true; }
     }
-    if (shieldItem) s.HEAL = Math.max(s.HEAL, bb.target ? 60 : 66);
+    // (fix round, P2-B) a lull with a target in memory (calm: unseen 2.5 s, no hit for 4 s) is a lull in the endgame too: the stale-target
+    // ENGAGE there scores 62-87 (endgame + last-few bonuses) and outbid the 60, so at <= 10 alive - the whole t >= 600 window - a bot
+    // carried its minis through every gap in the fight (census: 0-shield ENGAGE bots holding 1-6 minis)
+    if (shieldItem) s.HEAL = Math.max(s.HEAL, bb.target ? Math.max(60, s.ENGAGE + 2) : 66);
     else if (hpItem && a.hp < 90) s.HEAL = Math.max(s.HEAL, 62);
   }
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
@@ -933,7 +936,8 @@ function think(W, b) {
     bb.shieldGo = n && n.type === "item" ? n : (a.shield >= MINI_CAP() ? farShield(W, a) : null);
     bb.shieldNear = !!(n || bb.shieldGo);
   }
-  if (bb.wantShield && bb.shieldNear) s.LOOT = Math.max(s.LOOT, 58);
+  // (fix round, P2-B) ...and the shield it goes for outbids a stale target in the endgame the same way (not in the last few: that is the fight)
+  if (bb.wantShield && bb.shieldNear) s.LOOT = Math.max(s.LOOT, 58, bb.target && !lastFew ? s.ENGAGE + 1 : 0);
   // ...and loots the body of the man it just killed, once nobody is in sight (his shields, ammo and heals are the restock a player takes)
   if (!liveTarget && W.t - bb.pileT < 35 && W.t - (a.lastDamageT || -99) > 3 && hyp(bb.pileX - a.pos.x, bb.pileZ - a.pos.z) < 60) s.LOOT = Math.max(s.LOOT, 56);
   // GRAB FIRST. Measured 2026-09-30 (isla_viva 7, deepwood 3): of the pistol kills
@@ -1468,7 +1472,9 @@ function startHeal(W, a) {
   // (P23, LC-20) calm (5 s since the last hit, no target): the minis first while they still add (cap 50), then the big ones - the whole bar
   // ends up full. Under fire: the old order (the big shield first: the most bar per second).
   const calm = a.brain && !a.brain.bb.target && W.t - (a.lastDamageT || -99) > 5;
-  const order = calm && a.shield < 50 ? HEAL_CALM_ORDER : a.shield < 40 ? ["big_shield", "mini_shield", "medkit", "bandage"] : ["medkit", "bandage", "big_shield", "mini_shield"];
+  // (fix round, P2-B) under 40 the minis go first under fire too: a mini is the faster bar (25 in 2 s = 12.5/s; a big 50 in 5 s =
+  // 10/s), and a big spent at 0 is the only refill past 50 gone (census: 7-14 bigs a match used from a 0 bar, then the bar sat at 50)
+  const order = calm && a.shield < MINI_CAP() ? HEAL_CALM_ORDER : a.shield < 40 ? ["mini_shield", "big_shield", "medkit", "bandage"] : ["medkit", "bandage", "big_shield", "mini_shield"];
   const keep = calm && a.shield >= SHIELD_KEEP && bigCount(a) < 2;      // (fix round) a lone big is kept for the bar under 75 (keepBig)
   for (const id of order) if (!(keep && id === "big_shield") && W.useConsumable(a, id)) return true;
   return false;
