@@ -323,6 +323,15 @@ def part_human2(args, v):
         v.check("human2: both humans on one team in a duo", ids["host"]["team"] is not None and ids["host"]["team"] == ids["guest"]["team"] and ids["host"]["mode"] == "duo",
                 ids, "same team, duo")
         g_id = ids["guest"]["me"]
+        # SETUP (D16, fix round): one squad session, both match clocks >= 0.6 x real time (net.js's watchdogs and the revive channel's relay
+        # slack run on the wall clock: a starved page fails the revive rows by itself - gateA 10-27 01:55, 4 other Chromes: 'guest: null')
+        ok_s, sess = L.pair_session(hpg, gpg, ids["host"]["me"], g_id)
+        hpg.bring_to_front()
+        rates = L.sim_rates(hpg, gpg)
+        v.info("human2: pair session + sim rates (match-clock s per wall s, host / guest)", {"session": sess, "rates": rates})
+        if not ok_s or min(rates) < L.SIM_RATE_MIN:
+            v.cnj("human2: the two-page rows", "SETUP missed: %s" % ("the pair is not one squad session: %s" % sess if not ok_s else "the box is starved - sim rates %s" % rates))
+            return
         # both bodies together on open ground (host page moves its own body; guest its own)
         spot = hpg.evaluate(ISO_JS)
         if not spot:
