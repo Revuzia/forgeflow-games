@@ -280,6 +280,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   float rockBump = big * 0.9 + m2 * 0.35;
   float rockJoint = 0.0;
   vec3 rockG = vec3(0.0);
+  // where rock can show — steep faces, ridges, the heights, thin cover, ore outcrops (the jointed bedrock below, near
+  // and far, is paid for only there); about half the ranges are bedded rock, the rest massive (rk_joints' 'layered')
+  float rkLayered = smoothstep(-0.15, 0.25, snoise(P * 0.004 + 61.0));
+  float rockLikely = max(max(steep, smoothstep(0.5, 0.9, -concave)), max(1.0 - smoothstep(0.25, 0.6, soil + vF2.x + vF2.y + vF2.z + vF2.w), smoothstep(0.25, 0.4, vOre.a)));
+  rockLikely = max(max(rockLikely, smoothstep(180.0, 220.0, hG - uSeaLevel)), outc);
   if (fine) {
     // triplanar (body axes) vertical streaks: water and lichen run down steep faces
     vec3 tpw = pow(abs(up), vec3(8.0));
@@ -306,9 +311,6 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // faces, ridges, the heights, thin cover, ore outcrops: a closed meadow or wood pays nothing for it
     // (about half the ranges are bedded rock — steps and ledges — the rest massive: the same regional field draws the
     // beds' bands in the albedo below)
-    float rkLayered = smoothstep(-0.15, 0.25, snoise(P * 0.004 + 61.0));
-    float rockLikely = max(max(steep, smoothstep(0.5, 0.9, -concave)), max(1.0 - smoothstep(0.25, 0.6, soil + vF2.x + vF2.y + vF2.z + vF2.w), smoothstep(0.25, 0.4, vOre.a)));
-    rockLikely = max(max(rockLikely, smoothstep(180.0, 220.0, hG - uSeaLevel)), outc);
     // the same three joint sets at the scale of SLABS and ledges (~17 m, beds ~8 m): what bare rock reads by from
     // 100 m to a kilometre — blocky masses, each its own tilt and tone, split by dark open fissures. (With the 5 m
     // blocks alone, which fade out past ~150 m, a bald peak from 130 m was a smooth grey dome: clay, not stone.)
@@ -394,6 +396,19 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float lichO = smoothstep(0.62, 0.85, snoise(P * 0.71 + 13.0) * 0.5 + 0.5) * (1.0 - smoothstep(0.5, 0.9, moist)) * aaF(fw, 1.5);
       rock = mix(rock, vec3(0.3, 0.16, 0.05), lichO * 0.45);
     }
+  }
+  // From ~250 m to a few kilometres the 17 m slabs shrink to their tone and fade, and a bald summit or a gentle ridge
+  // (no couloirs: those need steep ground) went back to one even grey felt — the sandbox's highest peak from 600 m. The
+  // same joint sets at the scale of BUTTRESSES and benches (~60 m) take over there: big blocky masses, each its own
+  // tone and tilt, split by dark fissures (rk_joints fades its own lines and facets as the blocks shrink to pixels).
+  float farRk = rockLikely * smoothstep(1.0, 2.5, fw) * (1.0 - smoothstep(12.0, 20.0, fw));
+  if (farRk > 0.01) {
+    vec3 gF;
+    vec3 BF = rk_joints(P + vec3(-23.5, 57.2, 8.8), up, Nb, 60.0, fw, mix(0.35, 0.6, steep), rkLayered, gF);
+    rock *= mix(1.0, BF.x, 0.8 * farRk);
+    rock *= mix(1.0, mix(0.74, 1.2, fract(BF.z * 5.71)), 0.75 * farRk);
+    rockG += gF * 0.7 * farRk;
+    rockJoint = max(rockJoint, BF.y * 0.6 * farRk);
   }
   vec3 col = rock;
   float rough = 0.84;

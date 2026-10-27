@@ -293,8 +293,10 @@ export class SignsLayer {
         ring.cr = cr; ring.cg = cg; ring.cb = cb; ring.p0 = look.ring; ring.p1 = 0.32; ring.p2 = 1; ring.q0 = Math.max(4, look.ring * 0.5);
         f.decals.add(ring);
       }
-      // its beacon: faint up close, a thread to find it by from afar
-      const kb = 0.12 + 0.78 * smooth(90, 520, dist);
+      // its beacon: faint up close, a thread to find it by from afar — still soft light at the god's working height (at
+      // full strength from a few hundred metres up, every holy place in view stood a hard white wire into the sky, and
+      // the ones behind a ridge read as scratches on the view: real-meteor-warning / real-volcano-warning shots)
+      const kb = 0.08 + 0.5 * smooth(200, 4000, dist);
       M.beams.add(_c.copy(g).addScaledVector(up, look.lift * 0.3), up, Math.max(30, Math.min(900, dist * 0.32)), 0.18, cr, cg, cb, kb, cam, pl.id * 1.31);
       if (orbit > 0) M.glints.add(g.x + up.x * look.lift, g.y + up.y * look.lift, g.z + up.z * look.lift, Math.max(3, dist * 0.004), cr, cg, cb, 0.55 * orbit);
       if (pl.kind === 'spring') {

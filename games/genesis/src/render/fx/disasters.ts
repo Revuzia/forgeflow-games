@@ -986,8 +986,10 @@ export class DisasterFx {
         const near = 1 - clamp01((hAlt - alt0 * 0.85) / Math.max(1, alt0));
         bo.place(head, dir, Math.max((P.size ?? 12) * 0.5, dist * 0.0012), ctx.camBody);
         bo.u.uLen.value = Math.min(6000, Math.max(600, dist * 0.12));
-        bo.u.uW.value = Math.max(2, dist * 0.0008);
-        bo.u.uK.value = k * (0.3 + 0.25 * near) * (0.85 + 0.15 * Math.sin(ctx.now * 2.3) * Math.sin(ctx.now * 0.9));
+        // (a trail some two pixels wide and a head bright enough to read as a new star against a dusk sky: at a few
+        // hundred metres wide it was a sub-pixel dot — the wr-meteor-first-light shot)
+        bo.u.uW.value = Math.max(2, dist * 0.0024);
+        bo.u.uK.value = k * (0.55 + 0.45 * near) * (0.85 + 0.15 * Math.sin(ctx.now * 2.3) * Math.sin(ctx.now * 0.9));
         // a faint ring where it will fall
         const ret = decal(DECAL.reticle, [g.x, g.y, g.z], Rd * 1.4);
         ret.cr = 1.6; ret.cg = 0.3; ret.cb = 0.15; ret.ca = 0.4 * k; ret.p0 = Rd; ret.p1 = 1; ret.p2 = 0.8; ret.p3 = 0.1; ret.q0 = Rd * 0.6;
