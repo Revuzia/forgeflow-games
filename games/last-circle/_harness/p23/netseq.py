@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """netseq - LC-49 netcode (P3 lane net): sequence numbers + server-time stamps in pack(); rejoin within 60 s on ?room=. Plan gate: "out-of-order
 injection never pulls a remote backwards" (+ section 5 Online "rejoin within 60 s; no backward pulls from out-of-order packets"). Two REAL pages over
-the squad relay stand-in (squadguard_live's FAKE_SB + p23lib.fake_sb_plus: the inbound REORDER switch holds every 3rd state packet 250 ms and delivers
+the squad relay stand-in (squadguard_live's FAKE_SB + p23lib.fake_sb_plus: the inbound REORDER switch holds every 3rd state packet REORDER_HOLD_MS (600 ms) and delivers
 it after newer ones) - and the same switch on the guest's DataChannel receive (state travels P2P over unordered DataChannels first).
 
     python _harness/p23/netseq.py --disk
@@ -12,14 +12,21 @@ it after newer ones) - and the same switch on the guest's DataChannel receive (s
 
 Rows:
   baseline        reorder OFF: the host walks straight (real W, 3 s); the guest's copy of the host only moves forward (control of the measure)
-  no-backward     reorder ON (every 3rd state packet late by 250 ms): the guest's copy of the host never moves backwards along the walk by > 0.05 m
-                  (sampled every 50 ms), while >= 10 late packets were delivered
+  no-backward     reorder ON (every 3rd state packet late by REORDER_HOLD_MS = 600 ms): the guest's copy of the host never moves backwards along
+                  the walk by > 0.05 m (sampled every 50 ms), while >= 10 late packets were delivered. Fix round: 250 ms did not bite the base build
+                  (--rev BASE_P23 pulled back 0.007 m and 0.107 m in two runs, 14 / 16 late packets): its copy lerps (k = 800 / stateMs) and trails
+                  the newest target by ~0.7-1.2 m at a walk, so a target 250 ms old lies only 0.2-0.7 m behind the drawn body and a fresh packet
+                  usually replaces it before the guest's next frame; 600 ms puts it ~2 m behind - a harsher injection, the same 0.05 m bar
   rejoin          the guest's page closed; a NEW page in the same context opens ?room=<code>: within 60 s it is back in the RUNNING match as the
                   same actor (slot id), alive, and the host sees that body move again
   errors          both pages
 SETUP (D16, could-not-judge, never FAIL): the pair is ONE squad session after the landing (both pages' W.net, the host drives the guest's body
-from its packets) and both match clocks run at >= 0.6 x real time (a starved page trips net.js's wall-clock watchdogs by itself); during the
-rejoin wait the host's clock must keep >= 0.6 x real time. Fix-round finding: every rejoin miss traced on 10-26 was this - the host's watchdog
+from its packets) and the host's match clock runs at >= 0.6 x real time, the guest >= 5 fps (a starved page trips net.js's wall-clock watchdogs by
+itself); during the rejoin wait the host - now the BACKGROUND page, the new page is in front - must draw >= PAIR_FPS_MIN (5) frames per wall
+second (its watchdogs read the wall clock and need only a few frames a second). Fix round 2: the wait's old rule (host match clock >= 0.6 x real
+time) measured the harness, not the box: the background host read 0.28-0.49 x in EVERY run on a quiet box (0 other Chromes), the passing ones
+too (rejoin back in 26.2 s at 0.49 x), so a rejoin that never came back was always could-not-judge and the base control (no rejoin at all) could
+never FAIL the row. The match-clock rate stays in the trace as information. Fix-round finding: every rejoin miss traced on 10-26 was this - the host's watchdog
 took s1 (12 s of wall-clock silence) and the guest's rejoin record went stale (refreshed every 2 s by its game loop, fresh 75 s), so the new
 page asked nothing and the host said 'busy'.
 """
@@ -52,7 +59,7 @@ GUEST_DIAG_JS = r"""() => { const W = window.__LC__ && window.__LC__.W; if (!W) 
     status: st ? (st.textContent || '').replace(/\s+/g, ' ').slice(0, 120) : null, asks: S && S.rejoinAsk ? S.rejoinAsk.tries : null,
     rejoin: S && S.rejoin ? S.rejoin.state : null, room: S && S.net ? S.net.room : null, inMsgs: (window.__SQ_LOG__ || []).filter((m) => m.dir === 'in' && m.t === 'rejoin').map((m) => m.d && (m.d.k + ':' + (m.d.code || '') + ':' + (m.d.why || ''))).slice(-4) }; }"""
 HOST_DIAG_JS = r"""(id) => { const W = window.__LC__.W, S = W.net || {}; const now = performance.now(); const a = W.actorById.get(id);
-  return { phase: W.phase, vis: document.visibilityState, simT: +(W.t || 0).toFixed(2), goneAt: S.goneAt && S.goneAt[id] != null ? Math.round(now - S.goneAt[id]) : null,
+  return { phase: W.phase, vis: document.visibilityState, simT: +(W.t || 0).toFixed(2), fn: W.kernel ? W.kernel.frameNo : null, goneAt: S.goneAt && S.goneAt[id] != null ? Math.round(now - S.goneAt[id]) : null,
     lastSeenAgoMs: S.lastSeen && S.lastSeen[id] != null ? Math.round(now - S.lastSeen[id]) : null, silentTake: !!(S.silentTake && S.silentTake[id]),
     rejoinLog: (S.rejoinLog || []).slice(-3).map((r) => r.why + '@' + Math.round((now - r.at) / 1000) + 's ago'), rejoined: !!(S.rejoined && S.rejoined[id]),
     body: a ? { alive: a.alive, netRemote: !!a.netRemote, isBot: !!a.isBot } : null }; }"""
@@ -79,18 +86,27 @@ def compress_trace(trace):
     return out[:14]
 
 
-SIM_RATE_MIN_HOST = 0.6
+REORDER_HOLD_MS = 600     # see the docstring (no-backward): 250 ms did not bite the base build
+
+
+def host_wait_rates(trace):
+    """(host rendered fps, host match-clock rate) over the rejoin wait, from the 1 s trace; None where not read"""
+    hs = [(r["t"], r.get("host") or {}) for r in trace]
+    fn = [(t, h["fn"]) for t, h in hs if isinstance(h.get("fn"), (int, float))]
+    st = [(t, h["simT"]) for t, h in hs if isinstance(h.get("simT"), (int, float))]
+    fps = round((fn[-1][1] - fn[0][1]) / max(0.001, fn[-1][0] - fn[0][0]), 1) if len(fn) >= 3 else None
+    rate = round((st[-1][1] - st[0][1]) / max(0.001, st[-1][0] - st[0][0]), 3) if len(st) >= 3 else None
+    return fps, rate
 
 
 def rejoin_setup_miss(trace):
-    """a rejoin that missed because the HARNESS never let the host run (D16): the host page's sim clock stood still across the wait (a hidden /
-    throttled tab runs no frames, so its watchdog can never see the old page leave). None = the setup was sound: the miss is a verdict."""
-    hs = [r.get("host") or {} for r in trace]
-    ts = [(r["t"], h.get("simT")) for r, h in zip(trace, hs) if isinstance(h.get("simT"), (int, float))]
-    if len(ts) >= 3:
-        rate = (ts[-1][1] - ts[0][1]) / max(0.001, ts[-1][0] - ts[0][0])
-        if rate < SIM_RATE_MIN_HOST:
-            return "the host's match clock ran at %.3f x real time over the wait (%d polls): a starved / stalled page" % (rate, len(ts))
+    """a rejoin that missed because the HARNESS never let the host run (D16): the host page drew fewer than PAIR_FPS_MIN frames per wall second
+    across the wait (a stalled / starved tab cannot run its watchdog, so it can never see the old page leave). The host is the background page
+    here, so its match-clock rate (0.28-0.49 x on a quiet box) is information, not the rule. None = the setup was sound: the miss is a verdict."""
+    fps, rate = host_wait_rates(trace)
+    if fps is not None and fps < L.PAIR_FPS_MIN:
+        return "the host drew %.1f frames per wall second over the wait (match clock %s x real time, %d polls): a starved / stalled page" % (
+            fps, rate, len(trace))
     g = [r.get("guest") or {} for r in trace]
     if g and all(not x.get("booted", True) for x in g):
         return "the rejoining page never booted"
@@ -183,13 +199,13 @@ def main():
             # SETUP: the guest's copy of the host must have come to REST before the reversed walk is tracked (gateA 10-27 02:53: 800 ms was not
             # enough - the copy was still finishing the baseline walk, 5.4 m 'backwards' along the new direction at samples 1-4)
             v.data["settle2"] = settle(gpg, h_id)
-            gpg.evaluate("() => { window.__SQ_REORDER__ = { every: 3, holdMs: 250 }; }")
+            gpg.evaluate("(ms) => { window.__SQ_REORDER__ = { every: 3, holdMs: ms }; }", REORDER_HOLD_MS)
             hpg.wait_for_timeout(300)
             r = walk_and_track(hpg, gpg, h_id, 4000)
             held = gpg.evaluate("() => (window.__SQ_REORDER__ || {}).held || 0")
             gpg.evaluate("() => { window.__SQ_REORDER__ = null; }")
             r["latePackets"] = held
-            walk_row("no-backward (every 3rd state packet 250 ms late: the remote never pulled back > 0.05 m)", r, held >= 10, ", >= 10 late packets")
+            walk_row("no-backward (every 3rd state packet %d ms late: the remote never pulled back > 0.05 m)" % REORDER_HOLD_MS, r, held >= 10, ", >= 10 late packets")
             # rejoin. Fix round: the row records WHERE a miss stopped (both pages polled every 1 s until back / 60 s): the new page's boot time,
             # phase, its lobby status (data-net-rejoin + text) and asks left, and the host's view (ticking? its rejoin log, goneAt, lastSeen of
             # the slot, silentTake) - so a miss names net / boot, or a harness setup that never let the host see the old page leave
@@ -225,7 +241,9 @@ def main():
                 p1 = hpg.evaluate("(id) => { const a = window.__LC__.W.actorById.get(id); return a ? [a.pos.x, a.pos.z] : null; }", g_id)
                 moved = round(((p1[0] - p0[0]) ** 2 + (p1[1] - p0[1]) ** 2) ** 0.5, 2) if p0 and p1 else None
             last = trace[-1] if trace else {}
+            w_fps, w_rate = host_wait_rates(trace)
             diag = {"backAfterS": took if back else None, "slot": g_id, "movedOnHostM": moved, "close": close_mode, "bootS": boot_s, "bootDoneAtS": t_boot,
+                    "hostWaitFps": w_fps, "hostWaitClockRate": w_rate,
                     "guestLast": last.get("guest"), "hostLast": last.get("host"), "trace": compress_trace(trace)}
             v.data["rejoinTrace"] = trace
             ok = bool(back) and took <= 60 and (moved or 0) > 1.0
