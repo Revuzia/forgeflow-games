@@ -5546,6 +5546,27 @@ export async function buildMap(W, mapId) {
     });
   }
 
+  // P23 / LC-47: rotation cover (towngen.js rotationCover): the holes the wild scatter left between the POIs get a rock outcrop, a ruined wall or (beside a road) an abandoned
+  // car - only where nothing that stops a bullet stands within 15.5 m. Built with what the map already draws (the instanced rocks / cars and their baked colliders, quarter-turn
+  // box walls in the structure batches): no new mesh, program or draw call. towngen draws from its own per-cell sub-streams: the shared `rng` is never touched.
+  if (city && typeof city.TG.rotationCover === "function") {
+    const RAD = { palm: 0.5, tree: 0.6, pine: 0.55, birch: 0.5, rocks: 1.4, car: 1.6, container: 2.2 };
+    const have = [];
+    for (const k in RAD) for (const it of props[k] || []) have.push([it.x, it.z, RAD[k] * (it.s || 1)]);
+    for (const r of cityBld) have.push([(r[0] + r[2]) / 2, (r[1] + r[3]) / 2, Math.min(r[2] - r[0], r[3] - r[1]) / 2]);
+    const free = (x, z, pad) => !(nearPoi(x, z, pad) || nearLandmark(x, z) || inCity(x, z, pad) || inRects(cityBld, x, z, pad) || inRects(cityDecks, x, z, pad));
+    const cov = city.TG.rotationCover(seed, mapId, { half: HALF, waterY, h: (x, z) => heightAt0(x, z), free, cover: have, roads: cityRoadLog });
+    for (const c of cov.pieces) {
+      if (c.kind === "rocks") props.rocks.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: c.s, ry: c.ry, rej: 1, reliefMax: 1.2 });
+      else if (c.kind === "car") props.car.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: 2.2, ry: c.ry, rej: 1 });
+      else if (c.kind === "wall") {
+        const ry = c.quarter ? Math.PI / 2 : 0;
+        addBox(c.x, lowGround(c.x, c.z, c.w, c.d, ry) + c.h / 2 - 0.15, c.z, c.w, c.h + 0.3, c.d, c.tone, { rotY: ry });
+      }
+    }
+    city.cover = cov.stats; city.coverPieces = cov.pieces;            // (the gates / shot tools read them)
+  }
+
   // (the road network between the POIs is registered right after each branch declares its POIs, above: its corridors must be in the ground
   // BEFORE any building or piece of street furniture is built on it)
 
@@ -7033,7 +7054,7 @@ export async function buildMap(W, mapId) {
     fallback: cityFallback,                                                     // null, or { reason, genVersion, wanted }: the towns did not load, this is the Wave-6 Savanna
     // WAVE 7: the Savanna city as built (null on the other maps): towngen's layout (towns, compounds, links, stats), the citykit list and what it placed, the
     // decals - read-only, for the gates (citycheck, placementcheck, perf_district) and for debugging
-    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog, furniture: city.furniture || null, houseVersion: city.HG ? city.HG.VERSION : null } : null,
+    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog, furniture: city.furniture || null, houseVersion: city.HG ? city.HG.VERSION : null, cover: city.cover || null, coverPieces: city.coverPieces || null } : null,
     ground: { lattice: field.lat, latN: LAT_N, pitch: LAT_PITCH, pads: field.pads.length, corridors: field.corridors, corridorSegments: field.segs.length, bakeMs, roads: roadStats, roadSections: roadLog, padLog },
     // the look to restore to when the camera surfaces (underwater overrides it)
     fogSurface: { color: K.sky, density: K.fog },
