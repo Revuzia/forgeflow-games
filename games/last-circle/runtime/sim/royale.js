@@ -178,8 +178,9 @@
 
   /** Smoke cloud tunables (C-SMOKE). On its fuse a smoke round becomes a sphere at its rest point: radius grows from
    *  r0Frac x r to r over growS (eased), holds, and the entry is dropped at t1 = t0 + lifeS (fx fades the last fadeS).
-   *  W.smokes entries carry {x, y, z, r, t0, t1} (the contract) plus rMax/grow/ownerId: r is the LIVE radius,
-   *  rewritten every tick by weapons.js, so losBlocked never blocks more than the cloud already covers.
+   *  W.smokes entries are {x, y, z, r, rMax, t0, t1} (integrator D1; + ownerId): r is the LIVE radius (0.35 rMax ->
+   *  rMax over growS 1.6 s, rewritten every tick by weapons.js tickSmokes), rMax the full radius. fx draws exactly r
+   *  and maps.losBlocked uses r, so nothing blocks or shows more than the cloud already covers.
    *  Sizes: PUBG's smoke is ~6 m across at 2 s and lasts ~40 s; Apex's Bangalore canister ~30 s. 6 m radius / 20 s
    *  covers a doorway or a street crossing for a revive (owner D-DBNO) without blanking a whole compound. */
   var SMOKE = { r: 6.0, r0Frac: 0.35, growS: 1.6, lifeS: 20, fadeS: 3, maxLive: 12, yOff: 1.2 };

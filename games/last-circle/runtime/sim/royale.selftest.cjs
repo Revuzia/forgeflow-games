@@ -1333,6 +1333,8 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(/const mode = K\.fireMode\(def\);/.test(wj) && !/const isAuto = def\.cls === "smg" \|\| def\.cls === "ar";/.test(wj), "P2-D: weapons.js reads the explicit fire mode (no cls inference left)");
     ok(/p\.bounce = !!def\.arc && !def\.impact;/.test(wj) && R.WEAPONS.glauncher.impact === true, "P2-D: launcher shells are impact-fused (no bounce), frags still bounce");
     ok(/else if \(p\.weaponId === "smoke"\) deploySmoke\(W, p\.x, p\.y, p\.z, p\.ownerId\);/.test(wj) && /W\.smokes\.length = 0;/.test(wj), "C-SMOKE: the fuse pops a cloud onto W.smokes; reset clears it in place");
+    ok(/const s = \{ x, y: y \+ S\.yOff, z, r: 0, t0: now, t1: now \+ S\.lifeS, rMax: S\.r,/.test(wj) && /s\.r = K\.smokeRadiusAt\(s, W\.t\);/.test(wj),
+       "C-SMOKE (D1): W.smokes entries carry {x, y, z, r, rMax, t0, t1} with r the live (growing) radius");
     ok(/if \(a\.downed\) \{\s*\n\s*inp\.slot = -1; inp\.reload = false;/.test(wj), "C-DBNO: stepWeapon's first gate - a downed actor cannot switch, reload, fire, throw or heal");
     ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz, W\.t, liveJoints\(W, t\)\)/.test(wj) && /W\.hitVolRay = \(t, ox, oy, oz, dx, dy, dz, maxT\) => hitVolRay\(W, /.test(wj) && /^function hitVolRay\(W, t,/m.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume (live bones where fresh) and its head sphere; W.hitVolRay is defined");
   } else console.log("  INFO  weapons.js not found next to this file: P2-D source pins skipped");

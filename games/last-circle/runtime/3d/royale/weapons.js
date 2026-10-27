@@ -24,7 +24,7 @@
  *
  * View models: Meshy GLBs for the six original guns (composed low-poly builds
  * as the fallback); the P2-D guns are CC0 Poly Pizza models baked to
- * assets/props/wpn_cc0/ (credits: F:/lc_p23/sim/credits.md -> CREDITS.md).
+ * assets/props/wpn_cc0/ (credits: _spec/parity_2026-10/credits_sim.md -> CREDITS.md).
  */
 import * as THREE from "three";
 
