@@ -103,7 +103,7 @@ const STYLE_TAB = [
   /* FIRE    */ [C_FIRE,   0.12, 1.00, 1.90, 0.62, 1.0, 0, 0.35, 0.45, 8],   // 8-frame flipbook, mostly NORMAL blend (layers replace, never stack light): glare bar <= 8x the ground behind
   /* COLUMN  */ [C_PUFF,   0.00, 0.58, 2.20, 1.00, 1.0, 1, 0.22, 0.45, 0],   // the smoke column (variant cell picked per puff)
   /* DEBRIS  */ [C_DEBRIS, 0.00, 1.00, 1.00, 1.00, 1.0, 1, 7.0,  0.18, 0],   // tumbling chunks. P23/fx: fade in over the first 1/12 of life (~0.1 s): born on the young fireball they read as black specks on it (P1-E check item)
-  /* RING    */ [C_RING,   0.30, 0.60, 4.60, 1.00, 1.0, 0, 0,    1.00, 0],   // FLAT dust ring racing out along the ground
+  /* RING    */ [C_RING,   0.10, 0.60, 4.60, 0.85, 1.0, 0, 0,    1.00, 0],   // FLAT dust ring racing out along the ground. Fix round (E4): dust does not glow - additive 0.30 -> 0.10, gain 0.85 (touch keeps P1-E's, init)
   /* SPLINTER*/ [C_SPLINTER, 0.00, 1.00, 1.00, 1.00, 1.0, 0, 9.0, 0.25, 0],  // wood splinters
   /* SPATTER */ [C_SPATTER, 0.00, 0.90, 1.50, 1.00, 1.0, 0, 0,    0.55, 0],   // blood / water droplets
   /* PUFF    */ [C_PUFF,   0.00, 0.62, 2.30, 1.00, 1.0, 1, 0.50, 0.60, 0],   // impact dust / blood mist / water spray
@@ -405,6 +405,8 @@ void main() {
 export function init(W) {
   _p1eLook = fxTouch(W);
   sFadeIn[ST_DEBRIS] = _p1eLook ? 0 : STYLE_TAB[ST_DEBRIS][6];   // D9: touch keeps the P1-E debris (no fade-in)
+  sAdd[ST_RING] = _p1eLook ? 0.30 : STYLE_TAB[ST_RING][1];        // D9: ... and the P1-E ground ring
+  sGain[ST_RING] = _p1eLook ? 1.00 : STYLE_TAB[ST_RING][4];
   buildAtlas();
   loadAtlasPngs(W);
   buildSheet();
@@ -867,11 +869,13 @@ function explosionFx(W, pos, R) {
   }
   // 7) dust skirt thrown out along the ground, and 8) a scorch along the terrain normal
   if (onGround) {
-    // random angles, speeds and sizes: evenly spaced identical puffs read as a ring of beads (look sheet run 1)
+    // random angles, speeds and sizes: evenly spaced identical puffs read as a ring of beads (look sheet run 1). Fix round
+    // (E4): the skirt is unlit, so over a shaded road its P1-E beige read 6-9x the surface behind mid-blast on the
+    // integrated towns; a darker, dustier beige on desktop (touch keeps P1-E's colours, D9)
     for (let i = 0; i < q.skirt; i++) {
       const a = Math.random() * 6.2832, sp = (2.2 + Math.random() * 4.2) * k, r0 = Math.random() * 1.2;
       setCode(spawnRaw(x + Math.cos(a) * r0, gy + (0.3 + Math.random() * 0.6) * k, z + Math.sin(a) * r0, Math.cos(a) * sp, 0.3 + Math.random() * 1.0, Math.sin(a) * sp,
-        i & 1 ? 0xb3a283 : 0xa29274, (1.0 + Math.random() * 1.3) * k, 1.6 + Math.random() * 1.0, 0.2, 2.0, null, 0, ST_SKIRT), rPuff());
+        _p1eLook ? (i & 1 ? 0xb3a283 : 0xa29274) : (i & 1 ? 0x8c7f66 : 0x7e7260), (1.0 + Math.random() * 1.3) * k, 1.6 + Math.random() * 1.0, 0.2, 2.0, null, 0, ST_SKIRT), rPuff());
     }
     if (map && map.heightAt) {
       ensureDecals(W);
@@ -1353,6 +1357,9 @@ function updateSmoke(W, dt) {
 
 // ── C-DBNO / C-FALL ──────────────────────────────────────────────────────────
 const downedList = [];          // actors between 'actorDowned' and their revive / death
+// fx's own per-actor timers (fix round: kept HERE, never written onto the sim's actor objects)
+const dbnoFx = new WeakMap();    // actor -> { drip, pulse, x, z }
+function dbnoOf(a) { let o = dbnoFx.get(a); if (!o) { o = { drip: 0.3, pulse: 0, x: null, z: null }; dbnoFx.set(a, o); } return o; }
 const revives = [];             // live revive channels { r: reviver, a: target, age, acc }
 const REVIVE_S_DEF = 5;
 const dbnoStats = { downedFx: 0, revivedFx: 0, reviveQuads: 0, dripQuads: 0, pulseQuads: 0, fallFx: 0, lastFall: null };
@@ -1449,20 +1456,21 @@ function updateDbno(W, dt) {
     if (!a || !a.alive || !a.downed || !a.pos) { downedList.splice(i, 1); continue; }
     const mate = isTeammate(W, a);
     if (!mate && camDist(W, a.pos.x, a.pos.z) > 45) continue;
-    a._fxDripT = (a._fxDripT || 0) - dt;
-    if (a._fxDripT <= 0) {
-      const moved = a._fxX != null ? Math.hypot(a.pos.x - a._fxX, a.pos.z - a._fxZ) : 0;
-      a._fxX = a.pos.x; a._fxZ = a.pos.z;
-      a._fxDripT = moved > 0.15 ? 0.45 + Math.random() * 0.2 : 1.1 + Math.random() * 0.5;
+    const fs = dbnoOf(a);
+    fs.drip -= dt;
+    if (fs.drip <= 0) {
+      const moved = fs.x != null ? Math.hypot(a.pos.x - fs.x, a.pos.z - fs.z) : 0;
+      fs.x = a.pos.x; fs.z = a.pos.z;
+      fs.drip = moved > 0.15 ? 0.45 + Math.random() * 0.2 : 1.1 + Math.random() * 0.5;
       spawnRaw(a.pos.x + (Math.random() - 0.5) * 0.3, a.pos.y + 0.35, a.pos.z + (Math.random() - 0.5) * 0.3, 0, -0.5, 0, 0x5e0a0a, 0.09, 0.4, -9, 0.4, null, 0, ST_SPATTER);
       dbnoStats.dripQuads++;
       if (moved > 0.15) { burst({ x: a.pos.x, y: a.pos.y + 0.04, z: a.pos.z, n: 2, color: 0x9a8562, speed: 0.8, up: 0.3, size: 0.06, life: 0.3, gravity: -5, drag: 3, st: ST_DUST }); dbnoStats.dripQuads += 2; }
     }
     // your downed teammate pulses on the ground (where to go), unless someone is already reviving them
     if (mate) {
-      a._fxPulseT = (a._fxPulseT || 0) - dt;
-      if (a._fxPulseT <= 0) {
-        a._fxPulseT = 1.1;
+      fs.pulse -= dt;
+      if (fs.pulse <= 0) {
+        fs.pulse = 1.1;
         let busy = false;
         for (let j = 0; j < revives.length; j++) if (revives[j].a === a) { busy = true; break; }
         if (!busy) { feetRing(W, a.pos.x, a.pos.y, a.pos.z, 0xff4a3a, 1.1, 0.9, ST_DRING); dbnoStats.pulseQuads++; }
@@ -1686,7 +1694,7 @@ function wireEvents(W) {
   W.events.on("actorDowned", (a) => {
     if (!a) return;
     if (downedList.indexOf(a) < 0) downedList.push(a);
-    a._fxDripT = 0.3; a._fxPulseT = 0; a._fxX = null;
+    const fs = dbnoOf(a); fs.drip = 0.3; fs.pulse = 0; fs.x = null;
     if (a === W.player || isTeammate(W, a) || nearCam(a.pos.x, a.pos.z, 80)) downedFx(W, a);
   });
   W.events.on("reviveStart", (reviver, target) => {
@@ -1703,7 +1711,7 @@ function wireEvents(W) {
   W.events.on("actorRevived", (a) => {
     if (!a) return;
     dropDowned(a); dropRevives(a);
-    a._fxX = null;
+    dbnoFx.delete(a);
     if (a === W.player || isTeammate(W, a) || nearCam(a.pos.x, a.pos.z, 80)) revivedFx(W, a);
   });
   W.events.on("actorDied", (victim) => { if (victim) { dropDowned(victim); dropRevives(victim); } });
