@@ -472,7 +472,10 @@ SESSION_JS = r"""(other) => { const W = window.__LC__ && window.__LC__.W, S = W 
 SIM_RATE_MIN = 0.6      # match-clock seconds per wall second below which a two-page row measures the box, not net.js (lane net's live probe rule)
 
 
-PAIR_FPS_MIN = 15       # rendered frames per wall second a GUEST page needs (its match clock is slewed to the host's, so W.t is no rate for it)
+# rendered frames per wall second a GUEST page needs (its match clock is slewed to the host's, so W.t is no rate for it). Of two pages in one
+# context only the FRONT one gets full rAF; the other runs at Chrome's background rate - lane net measured 5-8 fps there on a healthy box, and
+# gateA2 (10-27 06:36) read 10.5 with the host at 0.99 x real time - so the floor is 5 (a 12 s silence watchdog needs only a few packets a second)
+PAIR_FPS_MIN = 5
 
 
 def sim_rates(*pgs, secs=3.0):
