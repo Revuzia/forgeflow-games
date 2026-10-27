@@ -534,9 +534,12 @@
   // FIX ROUND (int-p23): the integrated player.js draws the body on its own facing state a._bodyYaw (model yaw = facing +
   // PI) - a still body stays PLANTED while the aim turns (LC-64 turn-in-place, the chest twists up to 0.95 rad), a combat
   // strafer's body is warped onto its cardinal clip (LC-10). syncObj writes it for every live actor every frame (not
-  // camera-gated), so the table path faces the DRAWN lower body whenever that state exists, else the old rule below.
-  function hitVolFacing(a, now) {
-    if (a && a._hasBodyYaw && a._bodyYaw === a._bodyYaw && typeof a._bodyYaw === "number") return a._bodyYaw - Math.PI;
+  // camera-gated), so a VIEW test (view true: the local human's own shot, weapons.js) faces the DRAWN lower body when
+  // that state exists. SECOND FIX PASS: _bodyYaw is view state - eased with the FRAME dt and written only for view-mode
+  // actors - so a SIM test (every other shot: bots, remotes, the headless sim; view false, the default) never reads it:
+  // the old sim-state rule below keeps a seed's outcome independent of the display rate and of the camera.
+  function hitVolFacing(a, now, view) {
+    if (view && a && a._hasBodyYaw && a._bodyYaw === a._bodyYaw && typeof a._bodyYaw === "number") return a._bodyYaw - Math.PI;
     var vx = (a.vel && a.vel.x) || 0, vz = (a.vel && a.vel.z) || 0;
     if (!a.gliding && !a.swimming && !hvCombat(a, now) && vx * vx + vz * vz > HV_FACE_GS * HV_FACE_GS) return Math.atan2(-vx, -vz);
     return a.yaw || 0;
@@ -548,7 +551,7 @@
     if (!a || !a.vel || a.onGround === false) return K3.stand;
     var vx = a.vel.x || 0, vz = a.vel.z || 0, gs = Math.sqrt(vx * vx + vz * vz);
     if (gs <= HV_WALK_GS) return K3.stand;
-    var f = hitVolFacing(a, now);
+    var f = hitVolFacing(a, now, _hvView);
     var back = vx * -Math.sin(f) + vz * -Math.cos(f) < -0.5;
     return gs > HV_RUN_GS && !back ? K3.run : K3.walk;
   }
@@ -579,7 +582,7 @@
     // was the pre-P23 clamp
     var pistolCombat = key.charCodeAt(0) === 112 /* p */ && key.charCodeAt(6) === 65 /* pistolAds */;
     if ((key.charCodeAt(0) === 114 /* r: rifle */ || pistolCombat) && a.onGround !== false && !a.swimming && !a.gliding) {
-      var tw = (a.yaw || 0) - hitVolFacing(a, now);
+      var tw = (a.yaw || 0) - hitVolFacing(a, now, _hvView);
       while (tw > Math.PI) tw -= Math.PI * 2;
       while (tw < -Math.PI) tw += Math.PI * 2;
       tw = clamp(tw, -HV_TWIST_MAX, HV_TWIST_MAX);
@@ -705,15 +708,20 @@
     HITVOL_HIT.head = head; HITVOL_HIT.part = part;
     return best;
   }
-  function hitVolSegment(t, ax, ay, az, bx, by, bz, now, live) {
+  // view: true only for a test made FOR the local human's eye (weapons.js: the local player's own rounds and crosshair):
+  // the table may then face the drawn body (_bodyYaw). live: the drawn joints (weapons.js passes them only with view).
+  // Every other test is a pure function of sim state, so a seed replays identically at any frame rate (SECOND FIX PASS).
+  var _hvView = false;
+  function hitVolSegment(t, ax, ay, az, bx, by, bz, now, live, view) {
     HITVOL_HIT.head = false; HITVOL_HIT.part = -1; HITVOL_HIT.legacy = false; HITVOL_HIT.live = false;
+    _hvView = !!view;
     if (live && t && !t.swimming && !t.downed && HITVOL.ok) {
       var lv = hitVolLive(t, live, ax, ay, az, bx, by, bz);
       if (lv !== -2) return lv;
     }
     var R = (t && !t.swimming && !t.downed) ? hitVolJoints(t, now) : null;
     if (!R) { HITVOL_HIT.legacy = true; return -2; }
-    var fy = hitVolFacing(t, now), s = Math.sin(fy), c = Math.cos(fy);
+    var fy = hitVolFacing(t, now, _hvView), s = Math.sin(fy), c = Math.cos(fy);
     // world -> local (x right = (c, -s), z forward = (-s, -c) in world xz)
     var px = ax - t.pos.x, pz = az - t.pos.z, qx = bx - t.pos.x, qz = bz - t.pos.z;
     var lpx = px * c - pz * s, lpz = -px * s - pz * c, lqx = qx * c - qz * s, lqz = -qx * s - qz * c;
