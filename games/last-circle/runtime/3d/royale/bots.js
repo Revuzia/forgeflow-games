@@ -952,6 +952,13 @@ function think(W, b) {
     // bot looks out to SHIELD_FAR_M, slope or not, for a big shield (a death pile's too) or an unopened supply crate (two of them), inside the
     // next circle, and walks to it (bb.shieldGo: onEnter LOOT takes it over a pick that is not a shield).
     bb.shieldGo = n && n.type === "item" ? n : (a.shield >= MINI_CAP() ? farShield(W, a) : null);
+    // (final, OD-13) ...AND THE DEAD MEN'S SHIELDS. A body's bag is on the floor in its death pile (loot.js deathDrop); a calm bot under the cap
+    // walks to the nearest pile still holding a shield it can use, out to PILE_SHIELD_M and up or down a slope, over an unopened chest (a pile's
+    // shield is certain, a chest's is 6 in 10) unless the chest is much nearer
+    if (!bb.shieldGo || bb.shieldGo.type !== "item") {
+      const ps = pileShield(W, a, bb);
+      if (ps && !(n && n.type === "chest" && n.d + PILE_OVER_CHEST_M < ps.d)) bb.shieldGo = ps;
+    }
     bb.shieldNear = !!(n || bb.shieldGo);
   }
   // (fix round, P2-B) ...and the shield it goes for outbids a stale target in the endgame the same way (not in the last few: that is the fight)
@@ -4943,6 +4950,40 @@ function farShield(W, a) {
     return n;
   }
   return null;
+}
+/** (final, OD-13) THE DEATH-PILE SHIELD SCAN: the best shield item still in a death pile (W.pileShields) within PILE_SHIELD_M, any slope up to
+ *  PILE_SHIELD_DY, that adds to this bar (shieldGoal), that the bag would take (or make room for), not under a low ceiling or off-shore, not one
+ *  this bot failed to reach (badLoot). Weighed the way pickLoot weighs loot - distance (0.4 a metre), plus the storm: a pile in the storm now is
+ *  skipped, one outside the next circle costs PILE_OUT_CIRCLE points - and danger: a pile within PILE_DANGER_M of where this bot last saw an
+ *  enemy (8 s memory) is the fight it just left, skipped. A big shield is worth PILE_BIG_BONUS metres more than a mini. One call per 2 s per calm
+ *  bot that wants a shield (the wantShield scan). */
+const PILE_SHIELD_M = 160, PILE_SHIELD_DY = 40, PILE_OVER_CHEST_M = 40, PILE_OUT_CIRCLE = 25, PILE_DANGER_M = 35, PILE_BIG_BONUS = 12;
+function pileShield(W, a, bb) {
+  if (!W.pileShields) return null;
+  const near = W.pileShields(a.pos, PILE_SHIELD_M, PILE_SHIELD_DY);
+  if (!near.length) return null;
+  let st = null;
+  if (W.stormCtl) st = W.stormCtl.storm.stateAt(W.t);
+  const nc = st ? (st.nextCenter || st.center) : null, nr = st ? (st.nextRadius != null ? st.nextRadius : st.radius) : Infinity;
+  const bad = bb.badLoot;
+  const foe = bb.target && W.t - bb.targetSeenT < 8 && bb.targetPos ? bb.targetPos : null;
+  let best = null, bs = Infinity;
+  for (let i = 0; i < near.length; i++) {           // nearest first: a candidate past the best score cannot win (every bonus is <= PILE_BIG_BONUS)
+    const n = near[i];
+    if (n.d * 0.4 - PILE_BIG_BONUS * 0.4 > bs) break;
+    if (bad && bad[n.id] > W.t) continue;
+    if (!shieldGoal(a, n)) continue;
+    if (st && st.dps > 0 && hyp(n.pos.x - st.center.x, n.pos.z - st.center.z) > st.radius - 4) continue;
+    if (foe && hyp(n.pos.x - foe.x, n.pos.z - foe.z) < PILE_DANGER_M) continue;
+    let sc = n.d * 0.4;
+    if (n.data.id === "big_shield") sc -= PILE_BIG_BONUS * 0.4;
+    if (nc && hyp(n.pos.x - nc.x, n.pos.z - nc.z) > nr) sc += PILE_OUT_CIRCLE;
+    if (!(sc < bs)) continue;
+    if (W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data) && !shieldNeedsRoom(W, a, n.data)) continue;
+    if (lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) || offShore(W, a, n.pos)) continue;
+    best = n; bs = sc;
+  }
+  return best;
 }
 /** (fix round) `n` re-read from loot.js: null once it is taken / opened (a nearbyLoot node is a snapshot). */
 function liveLoot(W, n) {

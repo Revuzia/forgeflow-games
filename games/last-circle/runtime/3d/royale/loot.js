@@ -38,6 +38,7 @@
  *  - CHEST BURST (LC-77): a chest bursts IN FRONT of itself, the gun and its own ammo on the same spot (one walk-over takes both).
  *  - W.nearbyChests(pos, r, out): allocation-free list of unopened chests / supply crates near a point (the audio lane's chest shimmer).
  *  - C-DBNO: a downed actor (a.downed) cannot pick up, open, walk over or drop loot; the player's E yields to a revive when a downed teammate is near.
+ *  - (final, OD-13) W.pileShields(pos, r, maxDy): the shield items still in death piles near a point, nearest first (the bots' late-game restock).
  */
 import * as THREE from "three";
 
@@ -100,6 +101,7 @@ export function init(W) {
   W.openChest = (a, id) => openChest(W, a, id);
   W.giveItem = (a, data) => give(W, a, data);
   W.wouldAcceptItem = (a, data) => wouldAccept(W, a, data);
+  W.pileShields = (pos, r, maxDy) => pileShields(pos, r, maxDy);          // (final, OD-13) the death piles' shield items near a point (bots' restock)
   W.events.on("actorDied", (victim) => deathDrop(W, victim));
 
   // network mirrors + join-sync
@@ -2368,6 +2370,29 @@ function pileMarkers(W, P) {
     P.glow = glowAlloc(x, floor + 0.75, z, 1.5, hex, GLOW_GAIN);
     if (!P.vis && FP) poolShow(FP.rings, P.ring, false);
   }
+}
+/** (final, OD-13) THE DEATH PILES' SHIELDS. Every shield item a killed actor carried is a member of its pile (deathDrop drops the whole bag); this
+ *  lists the ones still on the floor within r (maxDy: vertical reach, default NEAR_DY) as nearbyLoot item nodes (type "item", pile set), nearest
+ *  first. It walks the piles (one per death, at most 49 a match), not the loot grid, so a bot's long look for a restock costs ~50 distance checks
+ *  where a 160 m nearbyLoot reads 14 x 14 cells. A player sees and takes the same items (they are ordinary pile members). */
+function pileShields(pos, r, maxDy) {
+  const out = [];
+  if (!piles.size) return out;
+  const r2 = r * r, rp = r + PILE_RING2 + 0.5, dyMax = maxDy == null ? NEAR_DY : maxDy;
+  for (const P of piles.values()) {
+    const px = P.pos.x - pos.x, pz = P.pos.z - pos.z;
+    if (px * px + pz * pz > rp * rp) continue;
+    for (const id of P.members) {
+      const it = items.get(id);
+      if (!it || it.taken || !it.data || it.data.kind !== "consumable") continue;
+      const c = K.CONSUMABLES[it.data.id];
+      if (!c || c.heals !== "shield") continue;
+      const dx = it.pos.x - pos.x, dz = it.pos.z - pos.z, d2 = dx * dx + dz * dz;
+      if (d2 < r2 && Math.abs(it.pos.y - pos.y) < dyMax) out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d: Math.sqrt(d2), stand: it.stand || null, pile: it.pile });
+    }
+  }
+  out.sort((a, b) => a.d - b.d);
+  return out;
 }
 /** a pile member left the floor: re-mark the pile (its best may have gone) */
 function pileTaken(W, it) {
