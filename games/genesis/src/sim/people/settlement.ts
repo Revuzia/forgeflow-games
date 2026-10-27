@@ -26,7 +26,7 @@ import { cohortStep, cohortTotal } from './cohorts.ts';
 import { diseaseStep } from '../life/disease.ts';
 import { inputsAvailable, seedItems } from './decide.ts';
 import { placeFor } from './context.ts';
-import { FOOD, NEED_N, WARMTH } from './needs.ts';
+import { FOOD, NEED_N, WARMTH, WATER } from './needs.ts';
 import { packColor } from './ctx.ts';
 import { recipeTable } from '../recipes/recipes.ts';
 import type { Household } from './state.ts';
@@ -472,6 +472,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   A.posAt(lead, x.tick, at);
   const here = x.p.cellAt(at);
   refreshLibrary(x, st);
+  if (waterFirst(x, st, members, at, here)) return;
   if (!st.target) {
     // sites the band found it cannot walk to (across a lake, up a cliff), gave up on or fled are passed over for ten
     // days; the expired marks are forgotten (a band wandering for weeks would otherwise carry them all in its save)
@@ -560,6 +561,55 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
     st.target = null;
     delete st.recent.tgtAt; delete st.recent.tgtBest; delete st.recent.roam;
   }
+}
+
+/**
+ * LIVING integration (2026-10-27): a parched band goes to water before it looks for land. Seed 1's 50-year world: a dust
+ * bowl drove its town of 47 out in year 46; the band roamed on bearings chosen for green land (none of them by water)
+ * while its leader foraged, and 13 died of thirst in a year with fresh water 0.5–1.5 km off
+ * (`_harness/scratch/living/integrate/r7/famine2.ts`). When a quarter of the band is thirsty and there is no fresh water
+ * within three rings of the leader (nor at the band's target), the band's target becomes the nearest fresh water it can
+ * walk to within 2.5 km — a bearing, not a site (not re-scored; a site is looked for again from the water).
+ * True when it set the target (bandStep is done for the hour).
+ */
+function waterFirst(x: PCtx, st: Settlement, members: number[], at: number[], here: number): boolean {
+  // (a band on its way to kin who have water, or to a place its god chose, keeps going: abandon, civic.ts)
+  if (x.info[st.species].needW[WATER] <= 0 || st.recent.kin !== undefined || st.recent.godSite !== undefined) return false;
+  const A = x.A;
+  let dry = 0;
+  for (const m of members) if (A.needs[m * NEED_N + WATER] < 0.35) dry++;
+  if (dry < Math.max(2, members.length * 0.25)) return false;
+  const tc = st.target ? x.p.cellAt(st.target) : -1;
+  if (tc >= 0 && freshAt(x, st, tc)) return false;
+  const g = x.p.grid;
+  let ring = [here];
+  const seen = new Set<number>(ring);
+  for (let d = 0; d <= 3; d++) {
+    for (const c of ring) if (freshAt(x, st, c)) return false;
+    const nx: number[] = [];
+    for (const c of ring) for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) { const o = g.nbr[e]; if (!seen.has(o)) { seen.add(o); nx.push(o); } }
+    ring = nx;
+  }
+  const cand: { c: number; d: number }[] = [];
+  for (const c of x.p.cellsNear(at, 2500)) {
+    if (!isLand(x.p, c) || x.p.f.lava[c] > 0 || st.recent[`w${c}`] !== undefined || !freshAt(x, st, c)) continue;
+    cand.push({ c, d: distM(x.p, at, cellPos(x.p, c)) });
+  }
+  cand.sort((a, b) => a.d - b.d || a.c - b.c);
+  // (a water the band cannot walk to — across a lake, up a cliff — is passed over for this drought)
+  for (const k of Object.keys(st.recent)) if (k.charCodeAt(0) === 119 /* w */ && /^w\d+$/.test(k) && x.tick - st.recent[k] >= 10 * x.day) delete st.recent[k];
+  for (let i = 0; i < Math.min(4, cand.length); i++) {
+    const c = cand[i].c;
+    if (!reachable(x, st, here, c)) { st.recent[`w${c}`] = x.tick; continue; }
+    st.target = cellPos(x.p, c) as [number, number, number];
+    st.recent.roam = x.tick;
+    st.recent.tgtAt = x.tick;
+    st.recent.tgtBest = Math.round(cand[i].d);
+    st.pos = [at[0], at[1], at[2]];
+    st.cell = here;
+    return true;
+  }
+  return false;
 }
 
 /** scouts range ~1.2 km out (every third cell, in index order): the best site, nearer ones preferred */

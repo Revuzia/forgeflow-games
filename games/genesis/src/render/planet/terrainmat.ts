@@ -733,10 +733,13 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // ore's own colour — malachite and azurite over copper, sulfur yellow, gold's quartz — blooms in patches through it,
       // the rock showing between (a wash of the ore's colour over the whole outcrop read as a pale puddle)
       float stainN = snoise(P * 0.33 + warpV * 2.0 + 17.0) * 0.6 + snoise(P * 1.3 + 5.0) * 0.4 * aaF(fw, 0.8);
+      // (the gossan held back on a strongly coloured ore and its own stain spread wider and stronger: a copper outcrop
+      // from a god's 100 m read as one more grey-brown crag — its malachite green has to tell it from iron's rust and
+      // tin's grey, or the player cannot read the hills)
       float gossan = smoothstep(-0.35, 0.25, snoise(P * 0.21 + warpV + 3.3)) * (1.0 - softO) * (1.0 - darkO) * (1.0 - paleO);
-      oc = mix(oc, oc * vec3(1.2, 0.86, 0.62) + vec3(0.022, 0.006, 0.0), gossan * 0.55);
-      float stain = smoothstep(0.2, 0.6, stainN) * (0.45 + 0.55 * oSat);
-      oc = mix(oc, oc * 0.3 + oreC * 0.8, stain * 0.7 * (1.0 - darkO * 0.5));
+      oc = mix(oc, oc * vec3(1.2, 0.86, 0.62) + vec3(0.022, 0.006, 0.0), gossan * 0.55 * (1.0 - 0.5 * oSat));
+      float stain = smoothstep(0.02, 0.5, stainN) * (0.45 + 0.55 * oSat);
+      oc = mix(oc, oc * 0.25 + oreC * 0.95, stain * 0.85 * (1.0 - darkO * 0.5));
       // veins along the fractures (thin ridged noise), faded to their share where a pixel cannot hold them
       float vr = 1.0 - abs(snoise((P + warpV * 3.0) * 0.32 + 5.0));
       float vein = smoothstep(0.88, 0.97, vr) * aaF(fw, 0.5);

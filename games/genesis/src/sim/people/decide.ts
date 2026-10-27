@@ -383,6 +383,9 @@ function nearestCell(x: PCtx, from: number, rings: number, pred: (c: number) => 
 
 // ───────────────────────────── survival ─────────────────────────────
 
+/** how far the parched (water < 0.15) look for water they do not know of (planDrink), metres */
+const PARCHED_M = 1000;
+
 function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | null {
   const p = x.p, A = x.A;
   const c0 = A.cell[s];
@@ -406,8 +409,13 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
     }
   }
   // nothing known: search around, farther the thirstier
+  // (LIVING integration 2026-10-27: the parched look a kilometre out. Seed 1's 50-year world: a dust bowl drove its town
+  // out in year 46, and its band of 47 died of thirst — 9 in two days — with no water within 400 m (7 rings) and water
+  // within 900 m for most of them: the parched who found none foraged or slept where they stood —
+  // _harness/scratch/living/integrate/r7/famine2.ts)
   const melt = x.info[A.species[s]].def.habitat.includes('cold');
-  if (c < 0) c = nearestCell(x, c0, A.needs[s * NEED_N + WATER] < 0.3 ? 7 : 4, (o) => p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_BURN && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
+  const wNow = A.needs[s * NEED_N + WATER];
+  if (c < 0) c = nearestCell(x, c0, wNow < 0.15 ? Math.max(7, Math.min(24, Math.ceil(PARCHED_M / p.edgeM))) : wNow < 0.3 ? 7 : 4, (o) => p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_BURN && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
   if (c < 0) return null;
   return { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
 }
