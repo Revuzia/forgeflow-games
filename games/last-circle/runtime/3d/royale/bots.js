@@ -244,7 +244,10 @@ export function init(W) {
     if (!pg || !Number.isFinite(pg.x) || !Number.isFinite(pg.z)) return;
     const owner = W.actorById.get(pg.owner);
     if (!owner || owner.isBot || !hasTeam(owner)) return;
-    let acked = false;
+    // (fix round) the ack is EARNED: one record per ping, shared by the squad's bots; think() acks it when a mate actually takes the ping
+    // (PING / ASSIST chosen: busy false), or - nobody free 1 s after it was placed - sends one busy ack (busy true) and still acks "going"
+    // later if a mate frees up inside the ping's 30 s. It used to ack at once while the mate stayed in its fight for the ping's whole life.
+    const rec = { t: W.t, owner: owner.id, kind: pg.kind, x: pg.x, z: pg.z, acked: false, busy: false };
     for (const b of brains) {
       const a2 = b.actor;
       if (!a2.alive || a2.downed || !sameTeam(a2, owner)) continue;
@@ -260,8 +263,8 @@ export function init(W) {
           if (d2 < bd) { bd = d2; p.id = t.id; }
         }
       }
+      bb2.pingRec = rec;
       b.nextThink = 0;
-      if (!acked) { acked = true; W.events.emit("pingAck", { by: a2.id, owner: owner.id, kind: pg.kind, x: pg.x, z: pg.z }); }
     }
   });
   // (P23, C-DBNO) the revive bookkeeping, whoever channels it (a human through player.js, a bot through actRevive below)
@@ -425,7 +428,7 @@ export function attachBrain(W, actor, nBots) {
       // (P23) graceMul: the new-player grace of the target at its acquisition (0 = none); assist / ping: a squadmate's fight / ping (C-MODE, C-PING);
       // danger*: a live grenade's predicted blast (LC-14); nade*: the throw machine (nadeS 0 idle / 1 drawing / 2 aiming, nadeKind 1 frag / 2 smoke);
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
-      graceMul: 0, assist: null, ping: null, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
+      graceMul: 0, assist: null, ping: null, pingRec: null, pingDone: 0, dangerX: 0, dangerZ: 0, dangerR: 0, dangerUntil: 0,
       nadeS: 0, nadeKind: 0, nadeSlot: -1, nadePrev: -1, nadeX: 0, nadeY: 0, nadeZ: 0, nadeYaw: 0, nadePitch: 0, nadeT: -99, nadeNextT: 0, nadeCheckT: 0, smokeWant: 0,
       reviveId: null, reviveT: 0, reviveHurtT: 0, reviveStarted: false, leaderId: null, leaderT: -99, followX: 0, followZ: 0, followBack: false, edgeT: 0, edgeBanUntil: 0, edgeBanX: 0, edgeBanZ: 0,
       wantShield: false, shieldScanT: 0, shieldNear: false, roomFor: null, nadePushT: -99, fdN: 0, fdR: 0, fdW: 0, fdB: 0, fdP: 0, fdS: 0, fdA: 0, arcSweepT: 0, reSightT: -99, pileX: 0, pileZ: 0, pileT: -99, coverTX: 0, coverTZ: 0, coverPeekT: -99,
@@ -1033,6 +1036,7 @@ function think(W, b) {
   // pick best
   let best = "WANDER", bs = -1;
   for (const k in s) if (s[k] > bs) { bs = s[k]; best = k; }
+  if (bb.pingRec) pingAckStep(W, b, best);
   if (b.state !== best) { b.state = best; onEnter(W, b, best); }
   if (best === "LOOT" && grab && bb.lootId !== grab.id) {
     bb.lootId = grab.id; bb.lootType = "item"; bb.nearLootT = 0;
@@ -1040,6 +1044,17 @@ function think(W, b) {
   }
 }
 
+/** (C-PING, fix round) this bot's part in its squad's ping record (see the pingPlaced listener): "going" when the state it just chose is the
+ *  ping's (PING for a spot / pin, ASSIST for an enemy mark), "busy" once 1 s has passed with no mate going. Both at most once per ping. */
+const PING_BUSY_S = 1.0, PING_LIFE_S = 30;
+function pingAckStep(W, b, best) {
+  const r = b.bb.pingRec;
+  if (r.acked || W.t - r.t > PING_LIFE_S) { b.bb.pingRec = null; return; }
+  const going = best === (r.kind === "enemy" ? "ASSIST" : "PING");
+  if (!going && (r.busy || W.t - r.t < PING_BUSY_S)) return;
+  if (going) { r.acked = true; b.bb.pingRec = null; } else r.busy = true;
+  W.events.emit("pingAck", { by: b.actor.id, owner: r.owner, kind: r.kind, x: r.x, z: r.z, busy: !going });
+}
 const GRAB_R = 8, GRAB_CLOSE_M = 8;
 /** Nearest ground gun that is a real upgrade over the starter pistol (a primary:
  *  isUpgraded's definition, so a pistol of any rarity is not one) and that the
