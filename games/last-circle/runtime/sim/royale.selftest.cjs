@@ -1067,29 +1067,20 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const wall = { kind: "box", minX: -2, maxX: 2, minY: 0, maxY: 4, minZ: -8.3, maxZ: -8 };
   const pw = R.predictArc(0, 1.6, 0, lv.vx, lv.vy, lv.vz, g, 5, flat, () => [wall], []);
   ok(pw.kind === "collider" && approx(pw.z, -8, 1e-6) && pw.nz === 1, "frag: predictArc stops on a wall face with its normal (z " + pw.z.toFixed(3) + ")");
-  // LOOT: the frag rides at weight 0, so every roll is what it was. Replay the PRE-P1 literals against the tables.
-  const oldFloorCon = (rng) => ["bandage", "mini_shield", "medkit", "big_shield"][R.weightedIndex(rng, [32, 34, 18, 16])];
-  const oldChestCon = (rng) => ["mini_shield", "big_shield", "medkit", "bandage"][R.weightedIndex(rng, [34, 26, 20, 20])];
-  let same = 0, n = 0;
-  for (let sd = 1; sd <= 20000; sd++) {
-    const a = R.mulberry32(sd), b = R.mulberry32(sd);
-    if (R.FLOOR_CON_IDS[R.weightedIndex(a, R.FLOOR_CON_WEIGHTS)] === oldFloorCon(b) && a() === b()) same++;
-    const c = R.mulberry32(sd ^ 0x55), d = R.mulberry32(sd ^ 0x55);
-    if (R.CHEST_CON_IDS[R.weightedIndex(c, R.CHEST_CON_WEIGHTS)] === oldChestCon(d) && c() === d()) same++;
-    n += 2;
-  }
-  ok(same === n, "frag: loot rolls at weight 0 are identical to the pre-P1 tables on " + same + " / " + n + " seeded rolls (and the stream stays in step)");
-  // the edges of weightedIndex: a roll of 0 and the largest double below 1 never land on the trailing zero
-  ok(R.weightedIndex(() => 0, R.FLOOR_CON_WEIGHTS) === 0 && R.weightedIndex(() => 1 - Math.pow(2, -53), R.FLOOR_CON_WEIGHTS) === 3 &&
-     R.weightedIndex(() => 1 - Math.pow(2, -53), R.CHEST_CON_WEIGHTS) === 3, "frag: weightedIndex never returns the trailing weight-0 frag (rng 0 and 1 - 2^-53)");
-  let floorFrag = 0, chestFrag = 0;
+  // LOOT (FIX ROUND, D8): frag + smoke are LIVE in every consumable list; the four heal / shield items keep their
+  // relative weights (the old totals are the prefix of the new ones)
+  ok(R.FLOOR_CON_IDS.slice(0, 4).join() === "bandage,mini_shield,medkit,big_shield" && R.FLOOR_CON_WEIGHTS.slice(0, 4).join() === "32,34,18,16" &&
+     R.CHEST_CON_IDS.slice(0, 4).join() === "mini_shield,big_shield,medkit,bandage" && R.CHEST_CON_WEIGHTS.slice(0, 4).join() === "34,26,20,20",
+     "frag: the heal / shield consumables keep their pre-P1 weights ahead of frag + smoke");
+  let floorFrag = 0, chestFrag = 0, floorCon = 0, supplyFrag = 0;
   const lr = R.mulberry32(777);
   for (let i = 0; i < 50000; i++) {
-    for (const it of R.rollFloorSpawn(lr)) if (it.id === "frag") floorFrag++;
+    for (const it of R.rollFloorSpawn(lr)) { if (it.kind === "consumable") floorCon++; if (it.id === "frag") floorFrag++; }
     for (const it of R.rollChest(lr)) if (it.id === "frag") chestFrag++;
-    for (const it of R.rollSupplyDrop(lr)) if (it.id === "frag") chestFrag++;
+    for (const it of R.rollSupplyDrop(lr)) if (it.id === "frag") supplyFrag++;
   }
-  ok(floorFrag === 0 && chestFrag === 0, "frag: 0 frags in 50,000 floor spawns, chests and supply drops (built dark)");
+  ok(floorFrag / floorCon > 0.09 && floorFrag / floorCon < 0.14 && chestFrag > 2000 && supplyFrag === 0 && R.conCount("frag") === 2,
+     "frag (D8): live - " + (100 * floorFrag / floorCon).toFixed(1) + " % of floor consumable rolls, " + chestFrag + " in 50,000 chests (2 a stack; supply drops carry none)");
 
   // source pins: the browser halves of the contract (weapons.js; read-only check, skipped outside the repo)
   let wj = null;
@@ -1151,25 +1142,10 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const cr = R.mulberry32(4711);
   for (let i = 0; i < 20000; i++) for (const it of R.rollChest(cr)) if (it.kind === "weapon") { chestN++; if (it.rarity === 0) chestCommon++; }
   ok(chestN === 20000 && chestCommon === 0 && R.LOOT_WEIGHTS.chest[0] === 0, "LC-77: 0 common guns in " + chestN + " chest rolls");
-  // LC-29 tier tables
-  const share = (tab, i) => R.LOOT_WEIGHTS[tab][i] / R.LOOT_WEIGHTS[tab].reduce((a, b) => a + b, 0);
-  ok(share("floor_high", 2) >= 1.5 * share("floor", 2) && share("floor_hot", 2) >= share("floor_high", 2) && share("floor_mid", 2) > share("floor", 2),
-     "LC-29: rare share basic " + (100 * share("floor", 2)).toFixed(0) + "% < mid " + (100 * share("floor_mid", 2)).toFixed(0) + "% < high " + (100 * share("floor_high", 2)).toFixed(0) + "% (>= 1.5x) <= hot " + (100 * share("floor_hot", 2)).toFixed(0) + "%");
-  const ta = R.mulberry32(31337), tb = R.mulberry32(31337);
-  let tierSame = true;
-  for (let i = 0; i < 5000 && tierSame; i++) {
-    if (JSON.stringify(R.rollFloorSpawn(ta)) !== JSON.stringify(R.rollFloorSpawn(tb, "basic"))) tierSame = false;
-    if (R.floorRollCount(ta, 1) !== R.floorRollCount(tb, 1, "basic")) tierSame = false;
-  }
-  ok(tierSame && R.lootTier("nope") === R.LOOT_TIERS.basic, "LC-29: an untiered point (or tier 'basic') rolls exactly the old floor draw sequence and roll count");
-  let rareB = 0, rareH = 0, gB = 0, gH = 0;
-  const rb = R.mulberry32(77), rh = R.mulberry32(77);
-  for (let i = 0; i < 40000; i++) {
-    const a1 = R.rollFloorItem(rb), a2 = R.rollFloorItem(rh, "high");
-    if (a1.kind === "weapon") { gB++; if (a1.rarity >= 2) rareB++; }
-    if (a2.kind === "weapon") { gH++; if (a2.rarity >= 2) rareH++; }
-  }
-  ok(rareH / gH >= 1.5 * (rareB / gB), "LC-29: rolled rare+ share high " + (100 * rareH / gH).toFixed(1) + "% vs basic " + (100 * rareB / gB).toFixed(1) + "% (>= 1.5x)");
+  // D7: ONE tier source = loot.js's rarity uplift; the sim carries no tier tables and its floor rolls take no tier
+  ok(!R.LOOT_TIERS && !R.lootTier && !R.LOOT_WEIGHTS.floor_mid && !R.LOOT_WEIGHTS.floor_high && !R.LOOT_WEIGHTS.floor_hot &&
+     R.rollFloorItem.length === 1 && R.floorRollCount.length === 2,
+     "LC-29 (D7): no sim tier tables (loot.js's uplift is the one tier source)");
 }
 
 // LC-13 storm placement (owner OD-1 at F = 1.0, STANDARD only)
@@ -1216,8 +1192,8 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   let n = 0;
   const lr = R.mulberry32(5150);
   for (let i = 0; i < 30000; i++) { for (const it of R.rollFloorSpawn(lr)) if (it.id === "smoke") n++; for (const it of R.rollChest(lr)) if (it.id === "smoke") n++; }
-  ok(n === 0 && R.FLOOR_CON_WEIGHTS[R.FLOOR_CON_IDS.indexOf("smoke")] === 0 && R.CHEST_CON_WEIGHTS[R.CHEST_CON_IDS.indexOf("smoke")] === 0,
-     "C-SMOKE: built dark - loot weight 0, 0 smokes in 30,000 floor + chest rolls");
+  ok(n > 1000 && R.FLOOR_CON_WEIGHTS[R.FLOOR_CON_IDS.indexOf("smoke")] > 0 && R.CHEST_CON_WEIGHTS[R.CHEST_CON_IDS.indexOf("smoke")] > 0,
+     "C-SMOKE (D8): live - " + n + " smokes in 30,000 floor + chest rolls");
 }
 
 // C-MODE, C-DBNO, C-FALL
@@ -1233,11 +1209,11 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const v = R.fallSpeedForHeight;
   ok(R.fallDamage(v(1)) === 0 && R.fallDamage(v(4)) === 0 && R.fallDamage(v(5)) > 0, "C-FALL: no damage up to a 4 m drop (" + v(4).toFixed(1) + " m/s at this game's gravity)");
   const d10 = R.fallDamage(v(10)), d15 = R.fallDamage(v(15)), d20 = R.fallDamage(v(20));
-  ok(d10 >= 35 && d10 <= 50 && d15 > d10 && d20 >= 100, "C-FALL: 10 m costs " + d10 + " (35-50), 15 m " + d15 + ", 20 m " + d20 + " (lethal from full hp)");
+  ok(d10 >= 35 && d10 <= 40 && d15 >= 60 && d15 <= 75 && d20 >= 100, "C-FALL (D2): 10 m costs " + d10 + " (35-40), 15 m " + d15 + " (60-75), 20 m " + d20 + " (lethal from full hp)");
   let mono = true;
   for (let h = 0; h < 40; h += 0.25) if (R.fallDamage(v(h + 0.25)) < R.fallDamage(v(h))) mono = false;
   const lh = R.fallLethalHeight(100);
-  ok(mono && lh > 15 && lh < 20 && R.fallDamage(v(lh + 0.05)) >= 100 && R.fallDamage(v(lh - 0.3)) < 100, "C-FALL: monotone; a full-health actor dies from " + lh.toFixed(1) + " m (fallLethalHeight for bots)");
+  ok(mono && lh > 18 && lh <= 20 && R.FALL_EXP === 1.5 && R.fallDamage(v(lh + 0.05)) >= 100 && R.fallDamage(v(lh - 0.3)) < 100, "C-FALL: monotone; a full-health actor dies from " + lh.toFixed(1) + " m (fallLethalHeight for bots)");
   ok(R.LAND_STAGGER_S === 0.4 && R.weaponName("fall") === "a fall", "C-FALL: 0.4 s landing stagger; the kill feed names the fall");
 }
 
@@ -1309,6 +1285,43 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(R.hitVolSegment(runner, 10 - 3, 2 + knee, -5, 10 + 3, 2 + knee, -5) < 0 && R.hitVolSegment(runner, 10 - 3, 2 + 1.2, -5, 10 + 3, 2 + 1.2, -5) >= 0,
        "LC-22: a runner's chest still hits; the swinging knee does not (no stride phase in the sim)");
   }
+  // FIX ROUND (int-p23): the drawn lower-body yaw (player.js a._bodyYaw = facing + PI) wins over the velocity rule when it exists
+  ok(Math.abs(R.hitVolFacing(actor({ _hasBodyYaw: true, _bodyYaw: Math.PI + 0.4, yaw: 1.2, vel: { x: 6, y: 0, z: 0 } })) - 0.4) < 1e-12 &&
+     Math.abs(R.hitVolFacing(actor({ yaw: 1.2 })) - 1.2) < 1e-12,
+     "LC-22: the table faces the DRAWN body (player.js _bodyYaw: turn-in-place / strafe warp) when it exists, else the sim rule");
+  // LIVE BONES: the caller's world joints replace the table. Consistency: the table's own joints handed in as a live set give
+  // the same verdict and entry on every ray above the feet (the live path adds only the Foot -> ToeBase capsules)
+  {
+    const b = actor({ yaw: 0.7 }), NJ = H.JOINTS.length, live = new Float64Array(R.HITVOL_LIVE_N);
+    R.hitVolJoints(b, 0);
+    const J = R.HITVOL_J, s = Math.sin(0.7), c = Math.cos(0.7);
+    const toW = (x, y, z, o) => { live[o] = b.pos.x + x * c - z * s; live[o + 1] = b.pos.y + y; live[o + 2] = b.pos.z - x * s - z * c; };
+    for (let i = 0; i < NJ; i++) toW(J[i * 3], J[i * 3 + 1], J[i * 3 + 2], i * 3);
+    toW(J[NJ * 3], J[NJ * 3 + 1], J[NJ * 3 + 2], 45);
+    toW(J[11 * 3], 0.03, J[11 * 3 + 2] + 0.12, 48); toW(J[14 * 3], 0.03, J[14 * 3 + 2] + 0.12, 51);
+    let same = true, n = 0, hits = 0;
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let k = 0; k < 400; k++) {
+      const y = 0.35 + rnd() * 1.6, ang = rnd() * Math.PI * 2, off = (rnd() - 0.5) * 1.0;
+      const dx = Math.cos(ang), dz = Math.sin(ang), ox = b.pos.x - dx * 6 - dz * off, oz = b.pos.z - dz * 6 + dx * off;
+      const tt = R.hitVolSegment(b, ox, b.pos.y + y, oz, ox + dx * 12, b.pos.y + y, oz + dz * 12, 0);
+      const th = R.HITVOL_HIT.head;
+      const tl = R.hitVolSegment(b, ox, b.pos.y + y, oz, ox + dx * 12, b.pos.y + y, oz + dz * 12, 0, live);
+      if (!R.HITVOL_HIT.live || (tt >= 0) !== (tl >= 0) || Math.abs(tt - tl) > 1e-9 || (tl >= 0 && th !== R.HITVOL_HIT.head)) same = false;
+      n++; if (tl >= 0) hits++;
+    }
+    ok(same && hits > 40 && R.HITVOL_LIVE_N === 54 && R.hitVolHeadR("soldier") > 0.05 && R.hitVolHeadR("soldier") < 0.2,
+       "LC-22: live bones = the table's own joints give the same verdict + entry + headshot on " + n + " rays (" + hits + " hits)");
+    const far = new Float64Array(live); for (let i = 0; i < far.length; i += 3) far[i] += 1.5;   // the drawn body 1.5 m to +x
+    ok(R.hitVolSegment(b, b.pos.x - 5, b.pos.y + 1.2, b.pos.z, b.pos.x + 5, b.pos.y + 1.2, b.pos.z, 0, far) > 0.6 &&
+       R.hitVolSegment(b, b.pos.x, b.pos.y - 3, b.pos.z, b.pos.x, b.pos.y + 3, b.pos.z, 0, far) < 0 &&
+       R.hitVolSegment(b, b.pos.x, b.pos.y - 3, b.pos.z, b.pos.x, b.pos.y + 3, b.pos.z, 0) >= 0,
+       "LC-22: a live set is what is tested (a body drawn 1.5 m off is hit there, not at the sim position)");
+    const foot = R.hitVolSegment(b, live[48] - 3, live[49], live[50], live[48] + 3, live[49], live[50], 0, live);
+    ok(foot >= 0 && R.hitVolSegment(b, live[48] - 3, live[49] - 0.12, live[50], live[48] + 3, live[49] - 0.12, live[50], 0, live) < 0,
+       "LC-22: live feet carry a Foot -> ToeBase capsule (r <= " + 0.055 + " m)");
+    ok(R.hitVolSegment(actor({ downed: true }), 0, 2.3, -5, 20, 2.3, -5, 0, live) === -2, "LC-22: a downed actor keeps the legacy cylinder even with live bones");
+  }
   ok(H.reach > 0.5 && H.reach < 1.0, "LC-22: broad-phase reach " + H.reach.toFixed(2) + " m covers every measured joint");
 }
 
@@ -1320,8 +1333,10 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(/const mode = K\.fireMode\(def\);/.test(wj) && !/const isAuto = def\.cls === "smg" \|\| def\.cls === "ar";/.test(wj), "P2-D: weapons.js reads the explicit fire mode (no cls inference left)");
     ok(/p\.bounce = !!def\.arc && !def\.impact;/.test(wj) && R.WEAPONS.glauncher.impact === true, "P2-D: launcher shells are impact-fused (no bounce), frags still bounce");
     ok(/else if \(p\.weaponId === "smoke"\) deploySmoke\(W, p\.x, p\.y, p\.z, p\.ownerId\);/.test(wj) && /W\.smokes\.length = 0;/.test(wj), "C-SMOKE: the fuse pops a cloud onto W.smokes; reset clears it in place");
+    ok(/const s = \{ x, y: y \+ S\.yOff, z, r: 0, t0: now, t1: now \+ S\.lifeS, rMax: S\.r,/.test(wj) && /s\.r = K\.smokeRadiusAt\(s, W\.t\);/.test(wj),
+       "C-SMOKE (D1): W.smokes entries carry {x, y, z, r, rMax, t0, t1} with r the live (growing) radius");
     ok(/if \(a\.downed\) \{\s*\n\s*inp\.slot = -1; inp\.reload = false;/.test(wj), "C-DBNO: stepWeapon's first gate - a downed actor cannot switch, reload, fire, throw or heal");
-    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz, W\.t\)/.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume and its head sphere");
+    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz, W\.t, liveJoints\(W, t\)\)/.test(wj) && /W\.hitVolRay = \(t, ox, oy, oz, dx, dy, dz, maxT\) => hitVolRay\(W, /.test(wj) && /^function hitVolRay\(W, t,/m.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume (live bones where fresh) and its head sphere; W.hitVolRay is defined");
   } else console.log("  INFO  weapons.js not found next to this file: P2-D source pins skipped");
 }
 

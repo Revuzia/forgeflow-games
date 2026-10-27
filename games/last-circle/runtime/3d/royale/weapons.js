@@ -24,7 +24,7 @@
  *
  * View models: Meshy GLBs for the six original guns (composed low-poly builds
  * as the fallback); the P2-D guns are CC0 Poly Pizza models baked to
- * assets/props/wpn_cc0/ (credits: F:/lc_p23/sim/credits.md -> CREDITS.md).
+ * assets/props/wpn_cc0/ (credits: _spec/parity_2026-10/credits_sim.md -> CREDITS.md).
  */
 import * as THREE from "three";
 
@@ -47,7 +47,9 @@ export function init(W) {
   W.deploySmoke = (x, y, z, ownerId, t0) => deploySmoke(W, x, y, z, ownerId, t0);
   // LC-22: the same bone-derived volumes the bullets test, for any caller that needs "is this ray on the body"
   // (hud.js aim-at name tags per OD-11, bots' line checks). Returns the entry distance along the unit ray or -1.
-  W.hitVolRay = (t, ox, oy, oz, dx, dy, dz, maxT) => hitVolRay(t, ox, oy, oz, dx, dy, dz, maxT, null);
+  W.hitVolRay = (t, ox, oy, oz, dx, dy, dz, maxT) => hitVolRay(W, t, ox, oy, oz, dx, dy, dz, maxT);
+  // the live joints the hit test would use for t right now (sim HITVOL_LIVE layout, world) or null = the table (probes / harness)
+  W.hitVolLiveJoints = (t) => liveJoints(W, t);
   protosPromise = null;
   W.weaponProto = (id) => protos(W).then((p) => p[id]);
 }
@@ -733,7 +735,7 @@ function crosshairPoint(W, shooter, out) {
     if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.actorHeight(t) + 0.3) continue;
     if (W.SIM.hitVolSegment) {
       const L = bestT;
-      const hv = W.SIM.hitVolSegment(t, o.x, o.y, o.z, o.x + _camDir.x * L, o.y + _camDir.y * L, o.z + _camDir.z * L, W.t);
+      const hv = W.SIM.hitVolSegment(t, o.x, o.y, o.z, o.x + _camDir.x * L, o.y + _camDir.y * L, o.z + _camDir.z * L, W.t, liveJoints(W, t));
       if (hv >= 0) { if (hv * L >= 1) bestT = hv * L; continue; }
       if (hv === -1) continue;
     }
@@ -1009,8 +1011,93 @@ function tickSmokes(W) {
   }
   L.length = j;
 }
+// ── LC-22 LIVE BONES (FIX ROUND) ────────────────────────────────────────────────────────────────────────────────────
+// The hit test reads the bones of an actor whose DRAWN pose is fresh: the camera focus, or on screen with its mixer at
+// the full rate (player.js actorView: _onScreen, _mixRate 1 = within 40 m fov-scaled, every pose layer applied every
+// frame). Everyone else (far, off screen, a half-rate mixer, no rig yet) keeps sim's deterministic table. The joints are
+// the bones' world positions as last posed (the tick runs after the frame that drew them: the body the shooter saw);
+// matrices are refreshed from the bones' local transforms here because a frame can be stepped without a render.
+// Per actor, once per sim time W.t: one Float64Array(54) + the 18-bone list, built once per rig (no per-frame garbage).
+const HV_LIVE_BONES = ["Hips", "Spine2", "Neck", "LeftArm", "LeftForeArm", "LeftHand", "RightArm", "RightForeArm", "RightHand",
+  "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot", "Head", "LeftToeBase", "RightToeBase"];
+const _hvV = new THREE.Vector3(), _hvM = new THREE.Matrix4();
+/** the head-sphere centre in the Head bone's own frame: the centroid of the body meshes' Head-dominant vertices in bind
+ *  pose (skinned world = bone.matrixWorld x boneInverse x bindMatrix x v, three's attached bind mode). Once per skin. */
+const _hvHeadBySkin = new Map();
+function headLocal(t, headBone) {
+  const key = t.skin || "?";
+  if (_hvHeadBySkin.has(key)) return _hvHeadBySkin.get(key);
+  let n = 0, sx = 0, sy = 0, sz = 0;
+  for (const mesh of t._bodies) {
+    const g = mesh.geometry, sk = mesh.skeleton;
+    if (!g || !sk || !g.attributes.skinIndex || !g.attributes.skinWeight) continue;
+    const hi = sk.bones.indexOf(headBone);
+    if (hi < 0) continue;
+    const P = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight;
+    _hvM.multiplyMatrices(sk.boneInverses[hi], mesh.bindMatrix);
+    for (let i = 0; i < P.count; i++) {
+      let bw = -1, bi = -1;
+      for (let k = 0; k < 4; k++) { const w = SW.getComponent(i, k); if (w > bw) { bw = w; bi = SI.getComponent(i, k); } }
+      if (bi !== hi) continue;
+      _hvV.fromBufferAttribute(P, i).applyMatrix4(_hvM);
+      sx += _hvV.x; sy += _hvV.y; sz += _hvV.z; n++;
+    }
+  }
+  const out = n > 20 ? { x: sx / n, y: sy / n, z: sz / n } : null;
+  _hvHeadBySkin.set(key, out);
+  return out;
+}
+function liveRig(t) {
+  const rig = t.rig;
+  if (t._hvRig === rig) return t._hvLB;
+  t._hvRig = rig; t._hvLB = null;
+  if (!rig || !rig.scene || !t._bodies || !t._bodies.length) return null;
+  const by = {};
+  rig.scene.traverse((o) => { if (o.isBone) { const n = o.name.replace(/^mixamorig:?/, ""); if (!by[n]) by[n] = o; } });
+  const bones = HV_LIVE_BONES.map((n) => by[n] || null);
+  if (bones.some((b) => !b)) return null;
+  const hl = headLocal(t, bones[15]);
+  if (!hl) return null;
+  t._hvLB = { bones, head: hl, J: new Float64Array(K.HITVOL_LIVE_N || 54), t: -1 };
+  return t._hvLB;
+}
+/** the live joints of t (world, the sim's HITVOL_LIVE layout) or null = use the table */
+function liveJoints(W, t) {
+  if (!K.HITVOL_LIVE_N || !t || !t.rig || !t.obj || t.downed || t.swimming) return null;
+  const fresh = t === W.player || t === W._camFocus || (t._onScreen === true && t._mixRate === 1);
+  if (!fresh || t.obj.visible === false) return null;
+  const L = liveRig(t);
+  if (!L) return null;
+  if (L.t === W.t) return L.J;
+  const B = L.bones, J = L.J;
+  B[0].updateWorldMatrix(true, true);            // the obj chain down to the hips, then the whole skeleton under it
+  for (let i = 0; i < 15; i++) { const e = B[i].matrixWorld.elements; J[i * 3] = e[12]; J[i * 3 + 1] = e[13]; J[i * 3 + 2] = e[14]; }
+  _hvV.set(L.head.x, L.head.y, L.head.z).applyMatrix4(B[15].matrixWorld);
+  J[45] = _hvV.x; J[46] = _hvV.y; J[47] = _hvV.z;
+  for (let i = 0; i < 2; i++) { const e = B[16 + i].matrixWorld.elements; J[48 + i * 3] = e[12]; J[49 + i * 3] = e[13]; J[50 + i * 3] = e[14]; }
+  L.t = W.t;
+  return J;
+}
+/** LC-22 for any caller that needs "is this ray on the body" (hud aim-at tags, bots' line checks): the entry distance of
+ *  the unit ray (o, d) into actor t's body within maxT (default 300 m), or -1. Same volumes as the bullets (live bones
+ *  where fresh, else the table; swimming / downed / no data: the legacy cylinder). */
+function hitVolRay(W, t, ox, oy, oz, dx, dy, dz, maxT) {
+  if (!K || !t || !t.alive || !t.pos) return -1;
+  const L = maxT > 0 ? maxT : 300;
+  const bx = ox + dx * L, by = oy + dy * L, bz = oz + dz * L;
+  const hv = K.hitVolSegment ? K.hitVolSegment(t, ox, oy, oz, bx, by, bz, W.t, liveJoints(W, t)) : -2;
+  if (hv !== -2) return hv >= 0 ? hv * L : -1;
+  // legacy cylinder (the bullets' own rule in testSegment): closest approach of the segment to the actor's axis
+  const ex = bx - ox, ez = bz - oz, len2 = ex * ex + ez * ez;
+  let u = len2 > 0 ? ((t.pos.x - ox) * ex + (t.pos.z - oz) * ez) / len2 : 0;
+  u = u < 0 ? 0 : u > 1 ? 1 : u;
+  const px = ox + ex * u - t.pos.x, pz = oz + ez * u - t.pos.z, py = oy + (by - oy) * u;
+  const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));
+  if (px * px + pz * pz < (K.PLAYERK.radius + 0.12) ** 2 && py > feetY - 0.05 && py < headY + 0.12) return u * L;
+  return -1;
+}
 const NO_ACTORS = [];
-const BOUNCED = 2;          // testSegment: the round bounced and its position + velocity are already set
+const BOUNCED = 2;         // testSegment: the round bounced and its position + velocity are already set
 // Colliders along ONE projectile's whole frame of travel. testSegment used to run a
 // fresh queryColliders per 2.5 m sub-step (up to 8 a frame per round, each building
 // an array, a Set and string keys) — the top allocation site of the whole frame,
@@ -1139,7 +1226,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
     const cx = t.pos.x, cz = t.pos.z;
     if (cx < bx0 || cx > bx1 || cz < bz0 || cz > bz1) continue;
     // LC-22: the bone-derived body (sim HITVOL); -2 = no measured volume here (swimming, downed, no data): the cylinder
-    const hv = K.hitVolSegment ? K.hitVolSegment(t, ax, ay, az, bx, by, bz, W.t) : -2;
+    const hv = K.hitVolSegment ? K.hitVolSegment(t, ax, ay, az, bx, by, bz, W.t, liveJoints(W, t)) : -2;
     if (hv !== -2) {
       if (hv >= 0 && hv < hitT) {
         hitT = hv; hitActor = t; hitVol = true; hitHead = K.HITVOL_HIT.head;
