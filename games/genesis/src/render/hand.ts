@@ -1332,8 +1332,9 @@ export class HandVisual {
       const R = Math.min(L * 6.5, 520);
       const gl = decal(DECAL.shadow, [up.x * gR, up.y * gR, up.z * gR], R * 1.05 + 2);
       gl.ax = this.fwd.x; gl.ay = this.fwd.y; gl.az = this.fwd.z;
-      gl.p0 = R; gl.p1 = R; gl.p2 = 1;
-      gl.ca = 0.3 * feared * this.presence * (0.92 + 0.08 * Math.sin(this.u.uTouchT.value * 0.7));
+      // (deep enough to read through the tone curve and the eye's adaptation: at 0.3 it was a 10 % dimming on screen)
+      gl.p0 = R; gl.p1 = R; gl.p2 = 0.9;
+      gl.ca = 0.5 * feared * this.presence * (0.92 + 0.08 * Math.sin(this.u.uTouchT.value * 0.7));
       // (a deep slab: on a hillside the gloom lies over the slope above and below the Touch's foot)
       gl.q0 = Math.max(4, R * 0.45);
       f.decals.add(gl);

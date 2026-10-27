@@ -264,7 +264,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // alone every height read as one grey-brown felt from a few hundred metres.)
   float vegC = vF2.x + vF2.y + vF2.z + vF2.w;
   float outc = 0.0;
-  if (fw < 12.0) {
+  if (fw < 12.0 && vegC < 0.45) {
     float oN = snoise(P * 0.028 + 5.0) * 0.6 + snoise(P * 0.1 + 9.0) * 0.4 * aaF(fw, 4.0);
     float crestK = smoothstep(0.1, 0.65, -concave);
     outc = smoothstep(0.0, 0.18 + fw * 0.01, crestK * 0.85 + oN * 0.45 - 0.42 + 0.35 * (1.0 - smoothstep(0.25, 1.1, soil)))
@@ -866,7 +866,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // uniform share taken off the cover laid a grey veil over every shrubby meadow instead of white ground and dark bushes)
     // (a crown catches some of the snow on its top — in patches of a few decimetres — so a bush in a dusting is dark
     // green flecked white, not a clean dark spot)
-    float crownSnow = 0.55 + 0.35 * smoothstep(-0.3, 0.5, snoise(P * 2.3 + 11.0)) * aaF(fw, 0.3);
+    // (0.75–0.95 of it shed: at 0.55–0.9 the bushes went grey smudges — dirty snow — rather than dark crowns)
+    float crownSnow = 0.75 + 0.2 * smoothstep(-0.3, 0.5, snoise(P * 2.3 + 11.0)) * aaF(fw, 0.3);
     full *= 1.0 - shrubLocal * (1.0 - smoothstep(0.12, 0.42, sd)) * crownSnow;
     float sw = full * (1.0 - smoothstep(0.3, 0.55, slope));
     // under a canopy (the forest floor's weight) the crowns catch part of the snow, and litter, twigs and stones poke
