@@ -4492,6 +4492,23 @@ function drawMinimap(W, ctx, size, big) {
       }
     }
   }
+  // LC-29 HOT ZONE (loot.js W.lootHotZone {x, z, r, name}): the POI whose guns are uplifted most, marked as a dashed ember ring with a
+  // faint fill on the big map ("HOT ZONE" under its name) and on the desktop local minimap when it is in the window. Touch keeps its
+  // whole-map minimap and big map exactly as they were (owner: phones untouched), so the mark is desktop-only.
+  const hz = !touchOn && W.mode !== "practice" ? W.lootHotZone : null;
+  if (hz && Number.isFinite(hz.x) && Number.isFinite(hz.z) && hz.r > 0 && (big || local)) {
+    const hx = tx(hz.x), hzz = tz(hz.z), hr = Math.max(big ? 10 : 6, hz.r * k);
+    if (hx > -hr && hzz > -hr && hx < size + hr && hzz < size + hr) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255,110,40,0.13)";
+      ctx.beginPath(); ctx.arc(hx, hzz, hr, 0, Math.PI * 2); ctx.fill();
+      ctx.setLineDash(big ? [9, 6] : [5, 4]);
+      ctx.strokeStyle = "rgba(10,6,4,0.7)"; ctx.lineWidth = big ? 4.2 : 3; ctx.stroke();
+      ctx.strokeStyle = "#ff8a3d"; ctx.lineWidth = big ? 2.4 : 1.6; ctx.stroke();
+      ctx.restore();
+      R._hotDrawn = (R._hotDrawn | 0) + 1;      // test surface (readback): the mark was painted
+    }
+  }
   // supply drops: hollow ring while it falls, filled diamond once it is down (LC-28: every drop, not only the last one)
   const marks = W._supplyMarks && W._supplyMarks.length ? W._supplyMarks : (W._supplyMark ? [W._supplyMark] : null);
   if (marks) for (const sm of marks) {
@@ -4529,6 +4546,13 @@ function drawMinimap(W, ctx, size, big) {
       ctx.fillText(p.name, px + 1, pz + 1);
       ctx.fillStyle = big ? "#fff" : "rgba(255,255,255,0.82)";
       ctx.fillText(p.name, px, pz);
+      if (hz && (hz.id != null ? hz.id === p.id : (p.x === hz.x && p.z === hz.z))) {
+        const t2 = big ? "HOT ZONE" : "HOT", dy = big ? 15 : 11;
+        ctx.font = big ? "800 11px system-ui" : "800 9px system-ui";
+        ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillText(t2, px + 1, pz + dy + 1);
+        ctx.fillStyle = "#ffa463"; ctx.fillText(t2, px, pz + dy);
+        ctx.font = big ? "700 13px system-ui" : "700 10px system-ui";
+      }
     }
   }
   // Squadmates. Online humans (gated on W.net, as before) AND, in Duos / Trios / Squads, bot teammates - each in its own
@@ -5352,6 +5376,7 @@ export function readback(W) {
     tags: R._tagPol ? { enemyM: R._tagPol.enemyM, aimedId: R._tagPol.aimedId, aimedLeftS: +Math.max(0, R._tagPol.aimedUntil - performance.now() / 1000).toFixed(2) } : null,
     hints: { shown: (R._hintLog || []).slice(), seen: Object.keys(hintSeen()), guide: R._guide ? { idx: R._guide.idx, done: R._guide.done, steps: R._guide.rows.filter((r) => r.done).map((r) => r.id) } : null },
     supply: W && W._supplyMarks ? W._supplyMarks.map((m) => ({ landed: !!m.landed, opened: !!m.opened })) : [],
+    hotZone: W && W.lootHotZone && !touchOn ? { id: W.lootHotZone.id, drawn: R._hotDrawn | 0 } : null,
   };
 }
 
@@ -6282,6 +6307,9 @@ function showSettings(W, tab) {
       const sl = note(V, "In use: " + bits.join("  ·  "));
       kbd(sl); sl.dataset.lc = "gfxstatus"; sl.style.marginTop = "-2px";
     }
+    // boot (ship notes): a tier / AA change MID-MATCH compiles programs (the low route rebuild, the composer / SMAA passes) - one
+    // hitch on a deliberate choice, none at a fixed tier. Said here so it never reads as the game breaking.
+    { const hn = kbd(note(V, "Changing the preset or anti-aliasing during a match rebuilds the shaders once: expect a short one-time hitch.")); hn.dataset.lc = "gfxhitch"; }
     if (W.setGfx) {
       const sg = (k) => (v) => { gfx(k, v); rerender(); };
       kbd(optRow(V, "Anti-aliasing", [["AUTO", "auto"], ["OFF", "off"], ["FXAA", "fxaa"], ["SMAA", "smaa"]], pf.aa || "auto", sg("aa"), "aa"));
@@ -6508,6 +6536,7 @@ function applyHudScale(W) {
   hsEl(R.guideCard, s, "-14px", "-" + GUIDE_TOP + "px");                  // left edge, under the minimap
   R._bandKey = null; placeBand(true);
   fitHint();
+  clearTimeout(R._fitT); R._fitT = setTimeout(fitHint, 1200);   // again once the match HUD has laid out (weapon card, mates)
   return s;
 }
 function applyBrightness(W) {
@@ -6565,7 +6594,7 @@ function reviveS() { return (K && +K.REVIVE_S > 0) ? +K.REVIVE_S : 5; }
 function reviveRange() { return (K && +K.REVIVE_RANGE > 0) ? +K.REVIVE_RANGE : REVIVE_RANGE_M; }
 /** The actors on `me`'s team (not `me`, not range dummies). Cached per match + focus; teams never change mid-match. */
 function matesOf(W, me) {
-  if (!me || me.teamId == null || !W.actors) return _noMates;
+  if (!me || !me.teamId || !W.actors) return _noMates;      // D4: a team id is a non-empty string
   if (R._matesFor === me && R._matesN === W.actors.length && R._mates) return R._mates;
   const out = [];
   for (const a of W.actors) if (a !== me && a.teamId === me.teamId && !a.isDummy) out.push(a);
