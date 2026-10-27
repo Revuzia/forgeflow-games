@@ -438,6 +438,34 @@ function suiteP23(M, SIM, count) {
         !M.normSmoke({ x: 9000, y: 0, z: 0, r: 5, t0: 0, t1: 10 }, 850) && !M.normSmoke({ x: NaN, y: 0, z: 0, r: 5, t0: 0, t1: 10 }) && !M.normSmoke(null),
       "LC-14: a smoke that is huge, ends before it starts, lasts over 60 s, is off the map or not a number is dropped");
     row(M.SMOKE_MAX_PER_SENDER === 6, "LC-14: at most 6 relayed smokes alive per sender");
+    // late-join loot sync: a fake loot.js (a chest bursts its "cb:<id>:<i>" items when it opens; a take of a missing item is a no-op) - the
+    // host's sync must leave no item the host already saw taken
+    {
+      const mkLoot = (landed) => {
+        const items = new Set(["w1"]), chests = new Map([["c7", { id: "c7", opened: false }], ["sd2", { id: "sd2", supply: true, n: 2, opened: false }]]);
+        const pending = new Set();
+        const L = { items, opened: [],
+          open(id) { const c = chests.get(id); if (!c || c.opened) return; if (c.supply && !landed.has(id)) { pending.add(id); return; } c.opened = true; L.opened.push(c);
+            const pre = M.chestItemPrefix(c); for (let i = 0; i < 3; i++) items.add(pre + i); },
+          take(id) { items.delete(id); },
+          land(id) { landed.add(id); if (pending.has(id)) { pending.delete(id); L.open(id); } } };
+        return L;
+      };
+      const sync = { opened: ["c7", "sd2"], taken: ["w1", "cb:c7:0", "cb:c7:2", "sd:2:1"] };
+      const L1 = mkLoot(new Set(["sd2"]));
+      const def1 = M.applyLootSync(rt(sync), L1.open, L1.take);
+      row([...L1.items].sort().join() === "cb:c7:1,sd:2:0,sd:2:2", "late join: the opened list is applied before the taken list - no item taken from a chest comes back as a ghost", [...L1.items]);
+      row(def1.join() === "cb:c7:0,cb:c7:2,sd:2:1" && M.isChestItem("sd:2:1") && !M.isChestItem("w1") && !M.isChestItem(null), "late join: the chest items of the sync are handed back to be kept until their chest opens here", def1);
+      // a supply crate that has not landed on the joiner yet: the kept take goes when it opens (net.js chestOpened listener)
+      const L2 = mkLoot(new Set());
+      const def2 = M.applyLootSync(rt(sync), L2.open, L2.take);
+      L2.land("sd2");
+      const c2 = L2.opened.find((c) => c.supply), pre2 = M.chestItemPrefix(c2);
+      for (const id of def2) if (id.startsWith(pre2)) L2.take(id);
+      row(pre2 === "sd:2:" && M.chestItemPrefix({ id: "c7" }) === "cb:c7:" && !M.chestItemPrefix(null) && ![...L2.items].includes("sd:2:1") && [...L2.items].includes("sd:2:0"),
+        "late join: a crate that lands on the joiner after the sync still loses the items taken from it", [...L2.items]);
+      row(!M.applyLootSync(null, L2.open, L2.take).length && M.LOOT_DEFER_MAX >= 64, "late join: a sync without loot is a no-op; the kept takes are bounded");
+    }
     const roster = [{ peerId: "a_host", slot: 0 }, { peerId: "b_g1", slot: 1 }, { peerId: "c_g2", slot: 2 }];
     const actor = (id) => (id === "s10" ? { isBot: true } : /^s[0-2]$/.test(id) ? { isBot: false } : null);
     const onHost = { roster, isHost: true, actor, K: SIM }, onGuest = { roster, isHost: false, actor, K: SIM };
@@ -619,6 +647,8 @@ function suiteP23(M, SIM, count) {
     ["a reconnect judge with no time window", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { nowMs: c.takenAt })) }],
     ["a reconnect judge that lets any peer reclaim a body", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { senderSlot: parseInt(String(c.id).slice(1), 10) })) }],
     ["a smoke parser with no radius / life cap", { normSmoke: (d) => (d && typeof d === "object" && [d.x, d.y, d.z].every(Number.isFinite) ? d : null) }],
+    ["a late-join sync that applies the taken list first (the ghost-item bug)", { applyLootSync: (loot, open, take) => { const out = []; for (const id of (loot && loot.taken) || []) { take(id); if (M.isChestItem(id)) out.push(id); } for (const id of (loot && loot.opened) || []) open(id); return out; } }],
+    ["a late-join sync that forgets the chest items for a crate that lands later", { applyLootSync: (loot, open, take) => { M.applyLootSync(loot, open, take); return []; } }],
   ];
   for (const [name, over] of p23Mutants) {
     const bad = suiteP23(Object.assign({}, M, over), SIM, false);
@@ -651,6 +681,11 @@ function suiteP23(M, SIM, count) {
       /if \(S\.silentTake\) delete S\.silentTake\[r\.id\];/.test(src) && /if \(S\.silentTake\) delete S\.silentTake\[d\.slot\];/.test(src),
       "LC-49 reconnect: only the silence watchdogs mark a body reclaimable (a bye or a map fallback never does) and a fresh state packet reclaims it before it is applied");
     ok(/if \(d\.to && d\.to !== S\.net\.id\) return;/.test(sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState")), "LC-49: a sync addressed to a rejoining page is ignored by everyone else (no clock snap)");
+    const syncSrc = sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState");
+    ok(/deferTakes\(applyLootSync\(d\.loot, W\.netOpenChest, W\.netTakeItem\)\)/.test(syncSrc) && !/W\.netTakeItem\(id\)/.test(syncSrc) &&
+      /if \(t === "take"\) \{ W\.netTakeItem\(d\.id\); if \(isChestItem\(d\.id\)\) deferTakes\(\[d\.id\]\);/.test(src) &&
+      /const pre = chestItemPrefix\(c\);[\s\S]{0,120}for \(const id of \[\.\.\.S\.lootDefer\]\) if \(id\.startsWith\(pre\)\) \{ S\.lootDefer\.delete\(id\); W\.netTakeItem\(id\); \}/.test(src) && /S\.lootDefer = null;/.test(src),
+      "late join: the sync goes through applyLootSync (opened first) and a chest that opens here later drops the items taken from it");
   }
 
   console.log("");

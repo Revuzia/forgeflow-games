@@ -588,6 +588,29 @@ export function normSmoke(d, half) {
 /** At most this many relayed smokes alive per sender at once (a client that floods smokes cannot blind every bot on the host). */
 export const SMOKE_MAX_PER_SENDER = 6;
 
+// ── late-join loot sync (P23 fix round) ──────────────────────────────────────────────────────────────────────────────────────────────
+/** The id prefix of the items a chest bursts into (loot.js openChest: "cb:<chest id>:<i>", a supply crate "sd:<n>:<i>"). */
+export function chestItemPrefix(c) {
+  if (!c || typeof c !== "object") return null;
+  return c.supply ? "sd:" + c.n + ":" : typeof c.id === "string" ? "cb:" + c.id + ":" : null;
+}
+/** Is `id` an item a chest / supply crate bursts into (its take can arrive before that chest is open on this client)? */
+export function isChestItem(id) { return typeof id === "string" && /^(cb|sd):/.test(id); }
+/** Apply a host's late-join / rejoin loot sync ({ taken: [item ids], opened: [chest ids] }): the OPENED list first - an item a chest bursts
+ *  into exists on this client only once that chest is open, so a take applied before the open was a no-op and the item came back as a ghost
+ *  the moment the chest opened here - then the TAKEN list. Returns the chest items it took, which the caller keeps until their chest opens here
+ *  (a supply crate that has not landed on this client yet opens later: loot.js pendingOpen). open(id) / take(id) are W.netOpenChest /
+ *  W.netTakeItem. */
+export function applyLootSync(loot, open, take) {
+  const out = [];
+  if (!loot || typeof loot !== "object") return out;
+  for (const id of Array.isArray(loot.opened) ? loot.opened : []) if (typeof id === "string") open(id);
+  for (const id of Array.isArray(loot.taken) ? loot.taken : []) { if (typeof id !== "string") continue; take(id); if (isChestItem(id)) out.push(id); }
+  return out;
+}
+/** Takes kept for chests that are not open on this client yet: at most this many (oldest dropped). */
+export const LOOT_DEFER_MAX = 512;
+
 /** The rejoin candidates a page asks with for `room` (newest first, at most 3): this tab's own record (sessionStorage `own`) when it is for
  *  this room and fresh, then records other tabs of this browser left in localStorage (`list`) that STOPPED updating (a live tab rewrites
  *  its record every 2 s, so a record younger than 3 s belongs to a tab that is still playing). */
@@ -636,6 +659,14 @@ export function init(W) {
   // chests interactable (loot beam + re-open) and the shared world diverged.
   // Replayed opens (loot.js netOpenChest) pass a=null → filtered by the `a &&` guard.
   W.events.on("chestOpened", (a, c) => { if (S && a && !a.netRemote) qsend("chest", { id: c.id }); });
+  // a chest / supply crate that opened HERE after another client took items out of it (late join, a crate that landed late here, a take
+  // that beat the chest's own open message): those items go at once - never a ghost item that cannot be picked up anywhere else
+  W.events.on("chestOpened", (a, c) => {
+    if (!S || !S.lootDefer || !S.lootDefer.size || !W.netTakeItem) return;
+    const pre = chestItemPrefix(c);
+    if (!pre) return;
+    for (const id of [...S.lootDefer]) if (id.startsWith(pre)) { S.lootDefer.delete(id); W.netTakeItem(id); }
+  });
   // pickups by anything simulated locally (own player + host's bots) despawn everywhere
   W.events.on("pickedUp", (a, data, id) => { if (S && a && !a.netRemote) qsend("take", { id }); });
   // relay OUR gunfire so guests see remote muzzle flash + tracers and HEAR the shot
@@ -2068,7 +2099,7 @@ function onMsg(W, { from, t, d }) {
   if (t === "rejoin") { onRejoinInMatch(W, from, d); return; }
   if (t === "drop") { W.netSpawnItem && W.netSpawnItem(d); return; }
   if (t === "chest") { W.netOpenChest(d.id); return; }
-  if (t === "take") { W.netTakeItem(d.id); return; }
+  if (t === "take") { W.netTakeItem(d.id); if (isChestItem(d.id)) deferTakes([d.id]); return; }   // (its chest may not be open here yet)
   if (t === "died") {
     const a = W.actorById.get(d.slot);
     if (a && a.alive) { a.hp = 0; a.shield = 0; W.killActor(a, d.killer, d.weapon); }
@@ -2097,8 +2128,8 @@ function onMsg(W, { from, t, d }) {
     // late-join / drift correction from host. (LC-49) A sync addressed to a rejoining peer (`to`) is for that peer only.
     if (d.to && d.to !== S.net.id) return;
     if (typeof d.t === "number" && Number.isFinite(d.t)) W.t = d.t;
-    for (const id of (d.loot && d.loot.taken) || []) W.netTakeItem(id);
-    for (const id of (d.loot && d.loot.opened) || []) W.netOpenChest(id);
+    // opened BEFORE taken (applyLootSync): items taken from a chest never come back as ghosts when it opens here
+    deferTakes(applyLootSync(d.loot, W.netOpenChest, W.netTakeItem));
     // LC-49: the actors that died before this page (re)joined fall quietly - the right alive count, no kill-feed flood, no body in the sky
     if (Array.isArray(d.dead)) for (const row of d.dead.slice(0, 64)) quietDeath(W, Array.isArray(row) ? row[0] : row, Array.isArray(row) ? row[1] : null);
     return;
@@ -2223,7 +2254,14 @@ function resetMatchState() {
   S.pingIn = null; S.pingOut = null;
   // P23: the receive order gate, the revive book, the rejoin book and the relayed smokes belong to the match that ended (txSeq keeps counting)
   S.rxGate = null; S.reviveIn = null; S.reviveOut = null; S.goneAt = null; S.rejoined = null; S.rejoin = null; S.slotKeys = null;
-  S.teamCheck = null; S.rjSavedAt = 0; S.silentTake = null; S.reclaimed = null;
+  S.teamCheck = null; S.rjSavedAt = 0; S.silentTake = null; S.reclaimed = null; S.lootDefer = null;
+}
+/** Keep chest-item takes until their chest opens on this client (the chestOpened listener in init applies them). */
+function deferTakes(ids) {
+  if (!S || !ids || !ids.length) return;
+  const set = S.lootDefer = S.lootDefer || new Set();
+  for (const id of ids) { set.delete(id); set.add(id); }
+  while (set.size > LOOT_DEFER_MAX) set.delete(set.values().next().value);
 }
 
 let _waitCard = null;
