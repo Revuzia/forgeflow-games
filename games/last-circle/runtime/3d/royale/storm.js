@@ -305,8 +305,29 @@ export function init(W) {
   if (!W.stormU) W.stormU = { cx: 0, cz: 0, r: 1e9 };
 }
 
+/** LC-13 land predicate for the storm plan (owner OD-1): true where the TERRAIN (groundAt: no roofs, no props)
+ *  stands more than 0.5 m over the water plane - the P1-G storm study's rule (storm_study.cjs: land = height >
+ *  waterY + 0.5). A dry map (Ashgrid, waterY -999) is land everywhere. A pure function of the seeded map, so every
+ *  client builds the same circles. Exposed as W.stormLandAt for harness callers (new SIM.Storm({..., landAt})). */
+export function landPredicate(map) {
+  if (!map) return null;
+  const ground = typeof map.groundAt === "function" ? map.groundAt : typeof map.heightAt === "function" ? map.heightAt : null;
+  if (!ground) return null;
+  const wy = typeof map.waterY === "number" ? map.waterY : 0;
+  return (x, z) => ground(x, z) > wy + 0.5;
+}
+
+/** The storm's pacing key: W.match.pace (contract C-MODE) when the boot lane sets it, else the legacy W.mode, which
+ *  IS the pacing (standard / quick / practice). A team mode (solo / duo / trio / squad) is never a pacing. */
+function stormPace(W) {
+  const p = W.match && W.match.pace;
+  if (p && K.STORM_PHASES[p]) return p;
+  return K.STORM_PHASES[W.mode] ? W.mode : "standard";
+}
+
 export function createStorm(W) {
-  const storm = new K.Storm({ seed: W.seed, mode: W.mode, half: W.map.half });
+  W.stormLandAt = landPredicate(W.map);
+  const storm = new K.Storm({ seed: W.seed, mode: stormPace(W), half: W.map.half, landAt: W.stormLandAt });
   const g = W.group("storm");
   g.clear();
 

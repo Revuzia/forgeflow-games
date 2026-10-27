@@ -137,11 +137,18 @@ def main(v, args):
                 # BLOOM caused by the wall: the same A/B with the bloom pass off. (on - off) with bloom minus (on - off) without it is exactly the
                 # light the bloom pass added or took away BECAUSE the wall is drawn: a halo around streaks or the band shows up here (plan glare bar:
                 # nothing but lightning above the bloom threshold, halo <= 2-3x the source width).
+                # P2-F: the factorial is measured with the AA pass OFF (all four grabs): FXAA / SMAA are edge-dependent, so (on - off) with and without
+                # bloom is not additive through them (P1-C: max 17-42/255 on edge pixels with AA on, p99 0.00; ?aa=0 39/39). The other rows keep the AA.
+                aa_tok = L.aa_off(s)
+                s.js("(t) => window.__SF__.setT(t)", t)
+                onA = L.png_to_arr(s.js("() => window.__SF__.grab(false)"))
+                offA = L.png_to_arr(s.js("() => window.__SF__.grab(true)"))
                 s.js("() => { const k = window.__LC__.W.kernel; if (k.bloom) k.bloom.enabled = false; }")
                 on0 = L.png_to_arr(s.js("() => window.__SF__.grab(false)"))
                 off0 = L.png_to_arr(s.js("() => window.__SF__.grab(true)"))
                 s.js("() => { const k = window.__LC__.W.kernel; if (k.bloom) k.bloom.enabled = true; }")
-                sgn = ((on - off) - (on0 - off0)).mean(axis=2)          # + = the wall made the bloom pass ADD light here; - = the veil dimmed the sky's own bloom
+                L.aa_restore(s, aa_tok)
+                sgn = ((onA - offA) - (on0 - off0)).mean(axis=2)        # + = the wall made the bloom pass ADD light here; - = the veil dimmed the sky's own bloom
                 bx = np.clip(sgn, 0, None)
                 bloom_x = {"mean": float(bx.mean()), "p99": float(np.percentile(bx, 99)), "max": float(bx.max()),
                            "removedMean": float(np.clip(-sgn, 0, None).mean()), "wallDeltaMean": float(np.abs(on0 - off0).mean())}

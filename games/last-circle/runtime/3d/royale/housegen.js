@@ -592,6 +592,7 @@ export function generate(parcel, opts) {
   const use = P.use || (rng() < TH.shop ? "shop" : "house");
   const FHu = P.fh != null ? P.fh : USE_FH[use];
   const tall = use === "tower" || use === "midrise";      // tall shells: the storeys over the walkable ones (O3) stay CLOSED
+  const store = use === "shop" && nx >= 11 && nz >= 8;    // (P23 / LC-29) a DEPARTMENT STORE (towngen's Old Mall, 30 x 22.5 m; no other shop is that wide): big trading floors on every storey, no flat upstairs
   let S = Math.min(P.storeysAsked, MAX_FLOORS);
   if (P.storeysAsked > MAX_FLOORS && !tall) notes.push("storeys " + P.storeysAsked + " -> " + MAX_FLOORS + " (O3: <= 3 walkable floors)");
   if (S >= 2 && FHu > STAIR_MAX_RISE + 1e-9) { notes.push("storeys " + S + " -> 1: a " + FHu + " m storey is too tall for a 5 m stair"); S = 1; }
@@ -622,7 +623,7 @@ export function generate(parcel, opts) {
   // ---- footprint (rectangle or L: a back corner removed)
   let cut = null;
   const wantL = P.plan === "L" ? true : P.plan === "rect" ? false : rng() < TH.L;
-  if (wantL && !tall && S <= 2 && nx >= 4 && nz >= 4 && (!strips.length || strips[0].axis === "col")) {
+  if (wantL && !tall && !store && S <= 2 && nx >= 4 && nz >= 4 && (!strips.length || strips[0].axis === "col")) {
     const side = strips.length ? (strips[0].at === 0 ? 1 : 0) : (rng() < 0.5 ? 0 : 1);       // 0 = cut on the -u side, 1 = +u side
     const cw = rint(rng, 1, Math.max(1, Math.min(nx >> 1, nx - 2 - (strips.length ? 1 : 0))));
     const cd = rint(rng, 1, Math.max(1, Math.min(nz >> 1, nz - 2)));
@@ -717,7 +718,8 @@ export function generate(parcel, opts) {
     for (let j = rj0; j < rj1; j++) for (let i = ri0; i < ri1; i++) if (type[cIdx(i, j)] === 1) restCells++;
     // about one room per 4 cells (25 m2): PUBG-sized rooms, cleared one by one, not 40 m2 halls
     const target = use === "shed" ? 1 : use === "barn" ? (restCells >= 24 ? 2 : 1) : use === "hall" ? (restCells >= 24 ? 3 : 2)
-      : use === "shop" && f === 0 ? (restCells >= 12 ? 2 : 1) : clamp(Math.round(restCells / 4), 1, 6);
+      : store ? clamp(Math.round(restCells / 14), 2, 4)
+        : use === "shop" && f === 0 ? (restCells >= 12 ? 2 : 1) : clamp(Math.round(restCells / 4), 1, 6);
     const rects = guillotine(rng, ri0, rj0, ri1, rj1, target);
     for (const r of rects) {
       const cells = [];
@@ -828,7 +830,7 @@ export function generate(parcel, opts) {
       if (root) order.push(root);
       const others = rest.filter((x) => x !== root).sort((a, b) => b.n - a.n || a.i - b.i);
       for (const o of others) order.push(o);
-      const seq = use === "shop" ? ["shop", "storage", "office", "storage"] : use === "shed" ? ["storage"] : use === "barn" ? ["barn", "storage"]
+      const seq = store ? ["shop", "shop", "storage", "office"] : use === "shop" ? ["shop", "storage", "office", "storage"] : use === "shed" ? ["storage"] : use === "barn" ? ["barn", "storage"]
         : use === "hall" ? ["warehouse", "office", "storage", "bath"] : tall ? ["lobby", "office", "storage", "bath", "office", "storage"]
           : P.theme === "lodge" || P.theme === "farm" ? ["living", "kitchen", "storage", "bedroom", "bath", "office"]
             : P.theme === "mill" ? ["warehouse", "office", "storage", "bath", "office", "storage"]
@@ -843,7 +845,7 @@ export function generate(parcel, opts) {
       }
     } else {
       const bySize = rest.slice().sort((a, b) => b.n - a.n || a.i - b.i);
-      const seq = use === "shop" && F.f === 1 ? ["office", "storage", "bedroom", "bath"] : tall ? ["office", "meeting", "bath", "office", "storage", "office"]
+      const seq = store ? ["shop", "shop", "storage", "office"] : use === "shop" && F.f === 1 ? ["office", "storage", "bedroom", "bath"] : tall ? ["office", "meeting", "bath", "office", "storage", "office"]
         : ["bedroom", "bath", "bedroom", "office", "bedroom", "storage"];
       bySize.forEach((o, k) => { o.r.kind = seq[Math.min(k, seq.length - 1)]; });
       if (bySize.length >= 3) {                                        // the bath is the SMALLEST room upstairs
@@ -1649,6 +1651,7 @@ export function generate(parcel, opts) {
     // foot of the walls and on the roof (drawn only: skins on a collider face, or deco tufts outside every opening's approach), broken panes (no glass in most
     // windows). Openings stay clear: nothing within 0.6 m of a doorway's sides or in front of it, nothing in a window's aperture.
     if (TH.ruined) {
+      const nbRuin = boxes.length;                        // (K1 re-run: every box of the wreckage below is flagged ns - drawn, never in the shadow pass; see the end of this block)
       const rr = rr5, P_SOOT = pal(fMat, 0x3a332c), P_SOOT2 = pal(fMat, 0x5e554a), P_MOSS = pal("fabric", 0x5f6c47), P_WEED = pal("fabric", 0x5d7036), P_WEED2 = pal("fabric", 0x7c8546);
       const P_RUB = pal("stone", 0xa39a88), P_RUB2 = pal("stone", 0x857d70), P_BEAM = pal("wood", 0x2f2620), P_CRACK = pal(fMat, 0x3a342e);
       const top = s[S] + (parapetRoof ? PARAPET : 0), rf = s[S];
@@ -1861,6 +1864,45 @@ export function generate(parcel, opts) {
         const u = rr() < 0.5 ? rU0 + rr() * 0.4 : rU1 - rr() * 0.4, v = rV0 + rr() * Math.max(0, rV1 - rV0), w = 0.1 + rr() * 0.12;
         if (onRoof(u - w, u + w, v - w, v + w)) deco(u - w, u + w, rf, rf + 0.12 + rr() * 0.2, v - w, v + w, rr() < 0.5 ? P_WEED : P_WEED2);
       }
+      // (7) (K1 re-run) A BURNT-THROUGH ROOF, as the drop sees it: from the air the rim village still read as whole flat roofs (crater_after7_air0: dusty roofs,
+      // jagged parapets, no holes). A real hole would leave a room with no drawn ceiling (interiorcheck ceiling) and open the storey to the sky, so the roof
+      // keeps its slab and the hole is PAINTED on it: a charred ring, a near-black core of three overlapping lobes and burnt rafters across it - plates
+      // (skins <= 1.5 cm, top face only, each lying on the roof slab's top: drawn with the walls, so the drop sees them - a 'deco' box is furniture, hidden
+      // past 60 m), materials the ruin already uses (no new material / program / draw call). Last in this stream (rr5): every earlier ruin draw is unchanged.
+      if (parapetRoof) {
+        // (a plate lies flat on collider tops only: the roof slab's, the slab boxes whose top is the roof surface - never over a roof opening)
+        const tops = boxes.filter((b) => b.c && b.p !== "skin" && Math.abs(b.y1 - rf) < 1e-6);
+        const onTops = (u0, u1, v0, v1) => {
+          for (let qu = 0; qu <= 12; qu++) for (let qv = 0; qv <= 12; qv++) {
+            const u = u0 + (u1 - u0) * (qu === 0 ? 0.001 : qu === 12 ? 0.999 : qu / 12), v = v0 + (v1 - v0) * (qv === 0 ? 0.001 : qv === 12 ? 0.999 : qv / 12);
+            if (!tops.some((b) => u >= b.u0 && u <= b.u1 && v >= b.v0 && v <= b.v1)) return false;
+          }
+          return true;
+        };
+        const plate = (u0, u1, t, v0, v1, pi) => { if (!onTops(u0, u1, v0, v1)) return -1; const bi = addBox("skin", u0, u1, rf, rf + t, v0, v1, [pi, pi, pi, pi, pi, pi], 0, S - 1); if (bi >= 0) boxes[bi].hp = 63 & ~4; return bi; };
+        const P_CHAR = pal(fMat, 0x2e2924), P_HOLE = pal("fabric", 0x16130f), P_RAFT = pal("wood", 0x3b2f25);
+        const area = (rU1 - rU0) * (rV1 - rV0);
+        for (let k = 0, nh = (rr() < 0.85 ? 1 : 0) + (area > 60 && rr() < 0.4 ? 1 : 0); k < nh; k++) {
+          const a = Math.min(1.0 + rr() * 0.8, Math.min(rU1 - rU0, rV1 - rV0) / 2.7), uc = rU0 + a * 1.3 + rr() * Math.max(0, rU1 - rU0 - a * 2.6), vc = rV0 + a * 1.3 + rr() * Math.max(0, rV1 - rV0 - a * 2.6);
+          const lob = (fu0, fu1, fv0, fv1) => [uc - a * fu0, uc + a * fu1, vc - a * fv0, vc + a * fv1];
+          const ring = [lob(1.25, 1.1, 0.75, 0.9), lob(0.8, 0.95, 1.2, 1.05)];
+          const core = [lob(1.0, 0.75, 0.5, 0.6), lob(0.5, 0.6, 0.95, 0.8), lob(0.25, 0.95, 0.3, 0.45)].map((q) => q.map((x, i) => x + (rr() - 0.5) * 0.12 * a));
+          if (!ring.concat(core).every((q) => onRoof(q[0], q[1], q[2], q[3]) && onTops(q[0], q[1], q[2], q[3]))) continue;
+          for (const q of ring) plate(q[0], q[1], 0.005, q[2], q[3], P_CHAR);
+          for (const q of core) plate(q[0], q[1], 0.01, q[2], q[3], P_HOLE);
+          const alongU = rr() < 0.5, nR = 2 + (rr() < 0.5 ? 1 : 0);
+          for (let r = 0; r < nR; r++) {
+            const off = (r - (nR - 1) / 2) * (0.45 + rr() * 0.2) * a, len0 = a * (0.9 + rr() * 0.4), len1 = a * (0.7 + rr() * 0.5), w = 0.1;
+            const q = alongU ? [uc - len0, uc + len1, vc + off - w / 2, vc + off + w / 2] : [uc + off - w / 2, uc + off + w / 2, vc - len0, vc + len1];
+            if (onRoof(q[0], q[1], q[2], q[3])) plate(q[0], q[1], 0.015, q[2], q[3], P_RAFT);
+          }
+        }
+      }
+      // (K1 re-run) THE WRECKAGE CASTS NO SHADOW: a ruin district's mesh is drawn twice whenever it casts (the main pass and the sun's depth pass, the whole merged
+      // mesh once its sphere meets the shadow box), and the dressing above is ~375 triangles a house - perf_district Isla Viva s1234's endgame view over the crater
+      // read x1.271 of the live build's triangles (x1.191 without the dressing; bar x1.25). meshData(..., { ns: true }) keys these faces "<mat>#ns" and maps.js
+      // draws them in the district's no-shadow twin mesh (same material and program, receives shadow). Drawing and colliders are unchanged; 'deco' tufts are furniture.
+      for (let q = nbRuin; q < boxes.length; q++) if (boxes[q].p !== "deco") boxes[q].ns = 1;
     }
   }
 
@@ -3268,7 +3310,9 @@ export function generate(parcel, opts) {
   const outBoxes = boxes.map((b) => {
     const wb = wbox(b.u0, b.u1, b.y0, b.y1, b.v0, b.v1);
     let hw = 0; for (let w = 0; w < 6; w++) if (b.h & (1 << faceMap[w])) hw |= 1 << w;
-    return { p: b.p, min: wb.min, max: wb.max, f: faceMap.map((li) => b.f[li]), h: hw, c: b.c, fl: b.fl };
+    const ob = { p: b.p, min: wb.min, max: wb.max, f: faceMap.map((li) => b.f[li]), h: hw, c: b.c, fl: b.fl };
+    if (b.ns) ob.ns = 1;                                  // (K1 re-run: a ruin's wreckage - drawn without a shadow; absent on every other box)
+    return ob;
   });
   // furniture: kit entries and authored boxes
   const furniture = [];
@@ -3669,6 +3713,97 @@ export function defaultMaterials(THREE) {
   return cache;
 }
 
+// ── wear (parity P2-I, LC-17) ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The audit: every house wall was one flat value from the pavement to the eaves - no splash grime at the foot, no shadowed band under the eaves, so a street read as
+// clean plastic boxes. wearBands lays two thin overlay strips (WEAR_OFF in front of the face, the face's own material, colour and uv - no new material, program
+// or draw call: they join the face's material group) on every OUTSIDE wall face of the house:
+//   foot   the ground storey's faces that reach the slab: 0 .. WEAR_FOOT[0] m above the ground floor at WEAR_K[0] .. WEAR_K[1] of the wall colour, then a fade to the
+//          wall colour at WEAR_FOOT[1] m (linear working-space colour: the band 0 .. WEAR_FOOT[1] reads 15-25 % darker on screen, the LC-17 gate)
+//   eave   the top storey's faces that reach its ceiling: a fade from the wall colour WEAR_EAVE m under the top to WEAR_K[2] at it
+// Appended after every box's 24 vertices (boxRanges unchanged); meshData(..., { wear: false }) leaves them out. 2-4 triangles a face; nothing collides.
+const WEAR_MATS = { brick: 1, plaster: 1, stucco: 1, plank: 1, stone: 1, sheet: 1 };
+const WEAR_PARTS = { wall: 1, skin: 1, shell: 1, slab: 1, gable: 1 };
+export const WEAR_FOOT = [0.5, 1.15], WEAR_EAVE = 0.7, WEAR_K = [0.44, 0.56, 0.8];
+// (P23 / LC-17, the Wave-8 stage-B "crater village does not read as a ruin" look) a RUIN's every broken top is charred: on the outside faces of its walls,
+// parapet, stubs, remnants and standing corners that reach the roof line (face top >= the top ceiling), a soot fade from the wall colour WEAR_BURN.h0 ..
+// WEAR_BURN.h1 m under the face's top to WEAR_BURN.k at it. Its lower edge is a zig-zag: a depth every ~WEAR_BURN.seg m along the face (a hash of the face and the
+// point: ragged, no stream drawn), each piece a trapezoid between two depths (looks: one even band per face read as a shadow under the cornice; square tongues read
+// as painted panels). Two pieces deep: 1 -> km over the lower 1 - f of the depth, km -> k over the top f (a charred lip). Drawn only; replaces the eave strip there.
+export const WEAR_BURN = { k: 0.1, km: 0.4, f: 0.45, h0: 0.5, h1: 2.7, seg: 1.1 };
+const BURN_PARTS = { wall: 1, skin: 1, shell: 1, gable: 1, trim: 1 };
+const WEAR_OFF = 0.012;
+function wearBands(H, groups, acc, faceIn, colOf) {
+  const yG = H.floors[0].y, top = H.floors[H.floors.length - 1].ceil;
+  const ruin = !!(THEMES[H.theme] && THEMES[H.theme].ruined);
+  const hash01 = (b, fi, q) => { let h = 0x811c9dc5; for (const v of [b.min[0], b.min[2], b.max[0], b.max[2], b.max[1], fi, q]) { h ^= Math.round(v * 100) | 0; h = Math.imul(h, 0x01000193); h ^= h >>> 13; } return ((h >>> 0) % 10007) / 10007; };
+  const quad = (a, n, P, rgbs, uvAx, tile) => {
+    const base = a.pos.length / 3;
+    for (let k = 0; k < 4; k++) { const p = P[k]; a.pos.push(p[0], p[1], p[2]); a.nor.push(n[0], n[1], n[2]); a.uv.push(p[uvAx[0]] / tile, p[uvAx[1]] / tile); a.col.push(rgbs[k][0], rgbs[k][1], rgbs[k][2]); }
+    a.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const VERT = [[0, [1, 0, 0], [2, 1]], [1, [-1, 0, 0], [2, 1]], [4, [0, 0, 1], [0, 1]], [5, [0, 0, -1], [0, 1]]];
+  H.boxes.forEach((b) => {
+    const wearP = !!WEAR_PARTS[b.p], burnP = ruin && !!BURN_PARTS[b.p] && b.max[1] >= top - 0.05;
+    if (!wearP && !burnP) return;
+    for (const [fi, n, uvAx] of VERT) {
+      if (b.h & (1 << fi)) continue;
+      const pe = H.palette[b.f[fi]];
+      if (!pe || !WEAR_MATS[pe.mat] || faceIn(b, fi)) continue;
+      const y0 = b.min[1], y1 = b.max[1];
+      if (y1 - y0 < (burnP ? 0.1 : 0.3)) continue;                       // (a ruin's charred stub tops: >= 0.1 m)
+      const ax = fi >> 1, side = fi & 1 ? b.min[ax] - WEAR_OFF : b.max[ax] + WEAR_OFF;         // the face's plane, nudged out
+      const ua = ax === 0 ? 2 : 0, u0 = b.min[ua], u1 = b.max[ua];
+      if (u1 - u0 < 0.45) continue;                                    // (not the 0.24 m reveal of an opening or a jamb: 2-4 triangles for a sliver)
+      const P = (u, y) => { const p = [0, y, 0]; p[ax] = side; p[ua] = u; return p; };
+      // corner order of FACES (counter-clockwise seen from outside): +x / -z run u from max to min, -x / +z from min to max
+      const fwd = fi === 1 || fi === 4;
+      const strip = (ya, yb, ka, kb, sa, sb) => {                     // (sa .. sb: a part of the face's width, default all of it)
+        if (yb - ya < 0.02) return;
+        const rgb = colOf(pe.color), ca = [rgb[0] * ka, rgb[1] * ka, rgb[2] * ka], cb = [rgb[0] * kb, rgb[1] * kb, rgb[2] * kb];
+        const a0 = sa == null ? u0 : sa, a1 = sb == null ? u1 : sb, ul = fwd ? a0 : a1, ur = fwd ? a1 : a0;
+        quad(acc("walls", pe.mat, false), n, [P(ul, ya), P(ur, ya), P(ur, yb), P(ul, yb)], [ca, ca, cb, cb], uvAx, TILE[pe.mat] || 2);
+      };
+      let footTop = -1e9;
+      if (wearP && y0 <= yG + 0.25 && y1 > yG) {
+        const f0 = yG + WEAR_FOOT[0], f1 = yG + WEAR_FOOT[1];
+        const kAt = (y) => (y <= f0 ? WEAR_K[0] + (WEAR_K[1] - WEAR_K[0]) * Math.max(0, (y - (yG - FLOOR0 - BASE0))) / (f0 - (yG - FLOOR0 - BASE0)) : y >= f1 ? 1 : WEAR_K[1] + (1 - WEAR_K[1]) * (y - f0) / (f1 - f0));
+        const ya = Math.max(y0, yG - FLOOR0 - BASE0), ym = Math.min(y1, f0), yb = Math.min(y1, f1);
+        strip(ya, ym, kAt(ya), kAt(ym));
+        if (yb > ym) strip(ym, yb, kAt(ym), kAt(yb));
+        footTop = yb;
+      }
+      if (burnP) {                                                     // (a ruin: soot down from the broken top, never over the foot strip)
+        const nSeg = Math.max(1, Math.round((u1 - u0) / WEAR_BURN.seg)), sw = (u1 - u0) / nSeg, floor = Math.max(y0, footTop);
+        const depth = (q) => WEAR_BURN.h0 + (WEAR_BURN.h1 - WEAR_BURN.h0) * hash01(b, fi, q);
+        // the colour at height y of a column whose soot reaches hb down from the top
+        const kAt = (y, hb) => { const ym = y1 - hb * WEAR_BURN.f; return y <= ym ? Math.min(1, 1 - (1 - WEAR_BURN.km) * (y - (y1 - hb)) / (hb * (1 - WEAR_BURN.f))) : WEAR_BURN.km - (WEAR_BURN.km - WEAR_BURN.k) * (y - ym) / (hb * WEAR_BURN.f); };
+        const rgb = colOf(pe.color), cK = (k) => [rgb[0] * k, rgb[1] * k, rgb[2] * k], tile = TILE[pe.mat] || 2, a = acc("walls", pe.mat, false);
+        // a trapezoid from (ua, ya0 .. ya1) to (ub, yb0 .. yb1), corners in the face's winding (as strip): bottom-left, bottom-right, top-right, top-left
+        const trap = (ua, ub, ya0, ya1, yb0, yb1, ka0, ka1, kb0, kb1) => {
+          if (ya1 - ya0 < 0.01 && yb1 - yb0 < 0.01) return;
+          const L = fwd ? [ua, ya0, ya1, ka0, ka1] : [ub, yb0, yb1, kb0, kb1], R = fwd ? [ub, yb0, yb1, kb0, kb1] : [ua, ya0, ya1, ka0, ka1];
+          quad(a, n, [P(L[0], L[1]), P(R[0], R[1]), P(R[0], R[2]), P(L[0], L[2])], [cK(L[3]), cK(R[3]), cK(R[4]), cK(L[4])], uvAx, tile);
+        };
+        let dA = depth(0);
+        for (let q = 0; q < nSeg; q++) {
+          const dB = depth(q + 1), ua = u0 + q * sw, ub = u0 + (q + 1) * sw;
+          const bA = Math.max(floor, y1 - dA), bB = Math.max(floor, y1 - dB), mA = Math.max(bA, y1 - dA * WEAR_BURN.f), mB = Math.max(bB, y1 - dB * WEAR_BURN.f);
+          if (y1 - bA >= 0.05 || y1 - bB >= 0.05) {
+            trap(ua, ub, bA, mA, bB, mB, kAt(bA, dA), kAt(mA, dA), kAt(bB, dB), kAt(mB, dB));
+            trap(ua, ub, mA, y1, mB, y1, kAt(mA, dA), WEAR_BURN.k, kAt(mB, dB), WEAR_BURN.k);
+          }
+          dA = dB;
+        }
+        continue;
+      }
+      if (wearP && y1 >= top - 0.05 && y1 <= top + 0.3 && y0 < top - WEAR_EAVE && top - yG >= WEAR_FOOT[1] + WEAR_EAVE) {        // (a face that ends at the top ceiling; not a tall shell's)
+        const e0 = Math.max(y0, top - WEAR_EAVE);
+        strip(e0, Math.min(y1, top), 1, WEAR_K[2]);
+      }
+    }
+  });
+}
+
 /** meshData(H, colOf, opts?) -> { groups: { walls, furniture, glass }: Map(key -> { pos, nor, uv, col, idx, boxes }), boxRanges }   (pure: no THREE)
  *  The drawn geometry of a house as flat arrays, the one definition buildHouse and the game's integration (maps.js, stage B) both draw from: every box face
  *  not hidden (h bits), the pitched roofs' planks exactly as their ramps collide, the gables' end polygons. key = the palette material ("brick", "floor_wood",
@@ -3697,7 +3832,9 @@ export function meshData(H, colOf, opts) {
   };
   const groups = { walls: new Map(), furniture: new Map(), glass: new Map() };      // mat -> { pos, nor, uv, col, idx, boxes }
   const boxRanges = new Array(H.boxes.length);
-  const acc = (grp, mat, inn) => { const key = inn ? mat + "|in" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
+  // (K1 re-run) opts.ns: an OUTSIDE face of a box flagged ns (a ruin's wreckage) is keyed "<mat>#ns" (maps.js: the no-shadow twin mesh); without opts.ns nothing changes
+  const nsSplit = !!opts.ns;
+  const acc = (grp, mat, inn, ns) => { const key = inn ? mat + "|in" : ns ? mat + "#ns" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
   // a box -> faces grouped by material (one box can span two materials: brick outside, plaster inside)
   const FACES = [                                    // [normal, 4 corners as (x, y, z) picks 0 = min 1 = max], uv axes
     [[1, 0, 0], [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], [2, 1]],
@@ -3713,7 +3850,7 @@ export function meshData(H, colOf, opts) {
     let first = null;
     for (let fi = 0; fi < 6; fi++) {
       if (b.h & (1 << fi)) continue;
-      const pe = H.palette[b.f[fi]], a = acc(grp, pe.mat, split && grp !== "glass" && faceIn(b, fi)), base = a.pos.length / 3;
+      const pe = H.palette[b.f[fi]], a = acc(grp, pe.mat, split && grp !== "glass" && faceIn(b, fi), nsSplit && grp === "walls" && b.ns === 1), base = a.pos.length / 3;
       if (!first) first = [grp, pe.mat, base];
       const [n, cs, ax] = FACES[fi], tile = TILE[pe.mat] || 2, rgb = colOf(pe.color);
       for (const cr of cs) {
@@ -3759,6 +3896,7 @@ export function meshData(H, colOf, opts) {
     }
   }
   for (const g of H.gables || []) { const pe = pick0(H.palette, g.pal); poly(pe.mat, pe.color, g.pts, g.n, (P) => [g.n[0] ? P[2] : P[0], P[1]]); }
+  if (opts.wear !== false) wearBands(H, groups, acc, faceIn, colOf);           // (P23 / LC-17: after every box face and roof polygon)
   return { groups, boxRanges };
 }
 
@@ -3773,7 +3911,7 @@ export function buildHouse(THREE, H, opts) {
   const col3 = (c) => { const k = new THREE.Color(c); return [k.r, k.g, k.b]; };     // sRGB hex -> working colour space (three r152+ colour management)
   const colCache = new Map();
   const colOf = (c) => { let v = colCache.get(c); if (!v) { v = col3(c); colCache.set(c, v); } return v; };
-  const { groups, boxRanges } = meshData(H, colOf);
+  const { groups, boxRanges } = meshData(H, colOf, { wear: opts.wear });                 // (P23: opts.wear === false leaves the wear strips out)
   const meshOf = (a, mat) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
