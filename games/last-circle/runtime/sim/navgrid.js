@@ -12,6 +12,11 @@
  *   NavGrid.findPath(world, sx, sy, sz, tx, ty, tz [, { pad, maxExpand, noPull, maxDrop }])  -> [{ x, y, z, k }, ...] | null
  *       (P2-E) opts.maxDrop (m): drop edges taller than this are left out (default: all, up to DROP_MAX 6 m). For C-FALL (a 4 m drop is safe, a
  *       taller one hurts) and C-DBNO crawlers. A downed actor (0.6 m capsule, same radius) needs no grid of its own: every standing edge fits it.
+ *       maxDrop is a HEIGHT; C-FALL gives the safe landing as a SPEED (K.FALL_SAFE_V, m/s): convert it with h = v^2 / (2 g) at THIS game's gravity,
+ *       g = 22 m/s^2 (sim MOVE.gravity; not 9.8): NavGrid.dropHeight(K.FALL_SAFE_V) = 4.0 m (= K.FALL_SAFE_H; a fall-damage budget of b hp: the height
+ *       whose fallDamage is b). A NULL route is a valid answer, not an error: with a budget it is "no-path" whenever every way needs a taller drop
+ *       (a downed crawler on a deck whose only exits are drops, a walled yard only a drop leads into) - the caller keeps its own plan (stays, or
+ *       uses its fallback planner) and may ask again; world.lastFail says why.
  *       k = the kind of the leg that ARRIVES at the waypoint (0 walk, 1 drop, 2 ramp); the array also carries .cost .expanded
  *       .nodes; world.lastFail names why a query returned null: "no-goal" (no floor near the goal), "no-start", "start-blocked"
  *       (the walker cannot walk to any node near it), "no-path", "limit" (maxExpand reached, or the search table is full)
@@ -1669,11 +1674,23 @@
   // tile arrived in time or not - a missing one is simply baked as before - and a replay of a seed is identical with or without workers.
   // Only the wall clock differs: the drop's bots section loses the bake (89 % of its nav cost, split.mjs). Workers start when a lazy world is created
   // (bots.js startNav, right after buildMap: the model loading and the lobby are their time) and stop when every tile of the world's rects is done.
+  // (P23 fix round) THAT IS MAP-BUILD TIME: the world needs the map's final collider set, which exists when buildMap resolves, and startNav runs from the
+  // first attachBrain right after it (measured: bakeTown 0.08-0.13 s, before the first idle moment after W.map is set). The window to Enter is then only the
+  // actor-model load, the shader warm-up and the lobby - 6-14 s on the shared box when Enter is pressed at once (the default flow). So the queue puts the
+  // BUILDINGS first (the only tiles the drop's schedule bakes: the outdoor ones are bots.js's own loading pump + barrier) and a desktop runs up to 6 bake
+  // workers. Measured (ashgrid seed 7, Enter at once): at Enter 525 of 711 buildings in (was ~30), drop bots section p95 2.3 ms real rAF (base 4.6) and
+  // 1.9 ms per paced tick (base 3.8), first 5 s p95 1.1 ms (base 15.9), every state hash equal to the base build's.
+  // The schedule itself is NOT paced by the wall clock while results are pending: which tile is in at which tick is sim state, so a wall-clock pace would
+  // make a seed play differently with and without workers (and on a fast and a slow machine). A deterministic pace (a smaller NAV_STEPS_TICK_DROP while
+  // nobody has landed) would be bots.js's schedule, as is prebakeHint(world, landing spots) - the exact drop order - which assignDrops could pass.
   // Off when: no Worker / Blob (Node, old browsers), the height function carries no validated lattice (a worker could not read the same ground), the
   // page URL has ngworker=0 (A/B), opts.prebake === false, or anything throws (the bake then runs on the main thread exactly as before).
   var _rec = null, _recB0 = 0, _recB1 = 0;
   function recEv(k) { _rec.push(k, _cnt[0] - _recB0, _cnt[1] - _recB1); }
-  var PB_MAX_WORKERS = 3, PB_INFLIGHT = 2, PB_SEEDS = 64;
+  // (P23 fix round) PB_MAX_WORKERS 3 -> 6 on a desktop (half the hardware threads, at most 6): the default flow (Enter straight from the lobby) leaves the
+  // workers only the actor-model load + the shader warm-up after buildMap (6-13 s on the shared box) to bake ~750 building tiles; 3 workers had 40 % of them
+  // in at Enter. A touch device keeps the 3 workers it had (PB_TOUCH_WORKERS: phones untouched).
+  var PB_MAX_WORKERS = 6, PB_TOUCH_WORKERS = 3, PB_INFLIGHT = 2, PB_SEEDS = 64;
   var PB_ARRS = ["nearStart", "nearItems", "x", "y", "z", "flag", "bord", "adj", "cellStart", "edgeStart", "edgeTo", "edgeCost", "edgeKind"];
   var _pbLive = null;                // the world whose workers run (a new lazy world retires the old one's)
 
@@ -1770,22 +1787,31 @@
   }
   function pbInit(W, on) {
     var J = pbJobs(W);
-    W.pb = { on: on, cache: new Map(), done: new Set(), coarse: J.coarse, ci: 0, fine: J.fine, front: [], seeds: [], hinted: false, jobs: J.coarse.length + J.fine.length,
+    W.pb = { on: on, cache: new Map(), done: new Set(), coarse: J.coarse, ci: J.coarse.length, fine: J.fine, front: [], seeds: [], hinted: false, jobs: J.coarse.length + J.fine.length,
              byKey: null, list: null, workers: [], sw: null, swIdle: false, bakeOver: false, url: null, sent: 0, baked: 0, dropped: 0, hits: 0, misses: 0, workerMs: 0,
-             t0: now(), tDone: -1, tSeams: -1, err: null,
+             t0: now(), tDone: -1, tSeams: -1, tFine: -1, fineSent: 0, fineBaked: 0, fineMs: 0, err: null,
              seams: new Map(), seamsIn: 0, seamsUsed: 0, seamsLate: 0, recMemo: 0, recLive: 0, fwd: 0, swMs: 0 };
     var bk = new Map(), i, list = [];
     for (i = 0; i < J.coarse.length; i++) { bk.set(J.coarse[i].key, J.coarse[i]); list.push({ key: J.coarse[i].key, rect: J.coarse[i].rect }); }
     for (i = 0; i < J.fine.length; i++) { bk.set(J.fine[i].key, J.fine[i]); list.push({ key: J.fine[i].key, rect: J.fine[i].rect }); }
-    W.pb.byKey = bk; W.pb.list = list;
+    W.pb.byKey = bk; W.pb.list = list; W.pb.fine0 = J.fine.length;
     return W.pb;
   }
-  /** The next job to hand a worker: a tile a query asked for (takeWanted) first, then the outdoor tiles in order, then the building nearest to the
-   *  buildings the schedule has started (its first jobs are the ones round the bots' landing spots, bots.js navPrefetch) - or prebakeHint's points. */
+  /** The next job to hand a worker: a tile a query asked for (takeWanted) first, then the building nearest to the buildings the schedule has started (its
+   *  first jobs are the ones round the bots' landing spots, bots.js navPrefetch) - or prebakeHint's points - and the OUTDOOR tiles last, from the far end
+   *  of their list. (P23 fix round) The outdoor tiles came first: bots.js bakes every one of them itself in the loading screen's idle time (startNav's
+   *  background pump, collectJobs order, then the barrier), so the workers spent half their load-time window racing it for the same tiles (225 of 1205 jobs
+   *  "dropped" at Enter) while the drop's BUILDINGS - the only tiles the drop's schedule bakes - waited. From the far end, a worker never takes the tile the
+   *  pump takes next. */
   function pbNext(pb) {
+    var j = pbNextFine(pb);
+    if (j !== null) return j;
+    while (pb.ci > 0) { j = pb.coarse[--pb.ci]; if (!pb.done.has(j.key) && !j.sent) return j; }
+    return null;
+  }
+  function pbNextFine(pb) {
     var j, i;
     while (pb.front.length) { j = pb.front.shift(); if (!pb.done.has(j.key) && !j.sent) return j; }
-    while (pb.ci < pb.coarse.length) { j = pb.coarse[pb.ci++]; if (!pb.done.has(j.key) && !j.sent) return j; }
     var F = pb.fine, best = -1, bd = Infinity, S = pb.seeds;
     for (i = 0; i < F.length; i++) {
       j = F[i];
@@ -1804,6 +1830,7 @@
       var j = pbNext(pb);
       if (j === null) break;
       j.sent = true; wk.out++; pb.sent++;
+      if (j.kind === 1) pb.fineSent++;
       wk.w.postMessage(j);
     }
     if (pb.on && !pb.bakeOver) {
@@ -1844,7 +1871,7 @@
     if (pb.jobs === 0) { pb.on = false; return; }
     try {
       var hc = typeof navigator !== "undefined" && navigator.hardwareConcurrency > 0 ? navigator.hardwareConcurrency : 2;
-      var nW = Math.max(1, Math.min(PB_MAX_WORKERS, hc - 2, Math.ceil(pb.jobs / 8)));
+      var nW = pbWorkerCount(hc, typeof navigator !== "undefined" && navigator.maxTouchPoints > 0, pb.jobs);
       var src = "self.__ngPrebake = 1;\n(" + navgridFactory.toString() + ")(self);\n";
       pb.url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
       var cs = W.cs, csd = { n: cs.n, minX: cs.minX, maxX: cs.maxX, minY: cs.minY, maxY: cs.maxY, minZ: cs.minZ, maxZ: cs.maxZ, kind: cs.kind, dir: cs.dir };
@@ -1867,6 +1894,12 @@
       for (i = 0; i < pb.workers.length; i++) pbFeed(W, pb, pb.workers[i]);
     } catch (e) { pb.err = String(e && e.message || e); pbStop(W); }
   }
+  /** How many bake workers: half the hardware threads (the main thread, the GPU process and the stitch worker keep the rest), at most PB_MAX_WORKERS
+   *  (PB_TOUCH_WORKERS on a touch device: the phones' count of before), at most one per 8 jobs, at least one. */
+  function pbWorkerCount(hc, touch, jobs) {
+    var cap = touch ? Math.min(PB_TOUCH_WORKERS, hc - 2) : Math.min(PB_MAX_WORKERS, Math.floor(hc / 2));
+    return Math.max(1, Math.min(cap, Math.ceil(jobs / 8)));
+  }
   function pbOnMessage(W, pb, wk) {
     return function (e) {
       var d = e.data;
@@ -1876,6 +1909,7 @@
       if (d.t === "tile") {
         var P = d.P;
         pb.workerMs += P.stats.ms; pb.baked++;
+        if (P.kind === 1) { pb.fineBaked++; pb.fineMs += P.stats.ms; if (pb.fineBaked === pb.fine0 && pb.tFine < 0) pb.tFine = now() - pb.t0; }
         if (pb.done.has(P.key)) pb.dropped++;          // the schedule got there first: it baked the tile itself
         else pb.cache.set(P.key, P);
       }
@@ -2024,6 +2058,10 @@
   /** Open the seam X-Y: it runs once every job tile that its replays may look up (2 m round the two rects' overlap) is in the mirror. (A lookup
    *  outside that, or of a tile that is never baked, only makes that record unusable: the main thread replays it.) */
   function pbHostSeam(H, X, Y) {
+    // (P23 fix round) only a seam with a BUILDING tile on one side: the outdoor tiles are all baked AND stitched to each other before the first tick (bots.js
+    // startNav's loading-screen pump + the barrier), so an outdoor-outdoor record could only arrive late (1020 of 3376 seams "late" at Enter, the stitch
+    // worker's time and a core of the box spent on them while the drop's building seams waited). The main thread stitches those pairs live, as it always did.
+    if (X.kind === "coarse" && Y.kind === "coarse") return;
     var A = X.key < Y.key ? X : Y, B = A === X ? Y : X, sk = A.key + "," + B.key, M = H.M;
     if (H.pend.has(sk)) return;
     H.pend.add(sk);
@@ -2200,7 +2238,14 @@
     return { on: pb.on, workers: pb.workers.length, stitchWorker: pb.sw !== null, jobs: pb.jobs, sent: pb.sent, baked: pb.baked, cached: pb.cache.size, hits: pb.hits, misses: pb.misses,
              dropped: pb.dropped, fwd: pb.fwd, workerMs: Math.round(pb.workerMs), doneMs: pb.tDone >= 0 ? Math.round(pb.tDone) : null,
              seamsIn: pb.seamsIn, seamsHeld: pb.seams.size, seamsUsed: pb.seamsUsed, seamsLate: pb.seamsLate, recMemo: pb.recMemo, recLive: pb.recLive,
-             stitchMs: Math.round(pb.swMs), seamsDoneMs: pb.tSeams >= 0 ? Math.round(pb.tSeams) : null, err: pb.err };
+             stitchMs: Math.round(pb.swMs), seamsDoneMs: pb.tSeams >= 0 ? Math.round(pb.tSeams) : null, err: pb.err,
+             fineJobs: pb.fine0, fineSent: pb.fineSent, fineBaked: pb.fineBaked, fineMs: Math.round(pb.fineMs), fineDoneMs: pb.tFine >= 0 ? Math.round(pb.tFine) : null,
+             fineCached: pbCountFine(pb), ageMs: Math.round(now() - pb.t0) };
+  }
+  function pbCountFine(pb) {
+    var n = 0;
+    pb.cache.forEach(function (v, k) { if (k >= 100000000) n++; });
+    return n;
   }
 
   /** A lazy world (W.noBake) refused to bake a tile: remember it, once, as a job for runJob. A building cut into chunks is wanted whole
@@ -3059,6 +3104,11 @@
     return o;
   }
 
+  /** The height (m) of a free fall that lands at vertical speed v (m/s): h = v^2 / (2 g), g = |GRAVITY| (22 m/s^2, the sim's MOVE.gravity, the value player.js
+   *  integrates). C-FALL states its safe landing as a SPEED (K.FALL_SAFE_V, 13.3 m/s here); findPath's opts.maxDrop wants the HEIGHT: dropHeight(K.FALL_SAFE_V)
+   *  = 4.0 m = K.FALL_SAFE_H. 0 for v <= 0. */
+  function dropHeight(v) { v = +v; return v > 0 ? v * v / (2 * Math.abs(GRAVITY)) : 0; }
+
   var api = {
     bakeTile: bakeTile, createWorld: createWorld, findPath: findPath, walkSegment: walkSegment, tileFor: tileFor, prewarm: prewarm,
     VERSION: VERSION, bakeTown: bakeTown, rectOfLayout: rectOfLayout, edgesOf: edgesOf, linkTile: linkTile,
@@ -3076,6 +3126,8 @@
       return ok ? { y: _hr[0], gap: _hr[1], ramp: _hr[2] === 1, yMin: _hr[3] } : null;
     },
     counters: function () { return { hops: _cnt[0], steps: _cnt[1] }; }, resetCounters: function () { _cnt[0] = 0; _cnt[1] = 0; },
+    // (P23 fix round) the drop height a landing speed stands for, at this grid's gravity (= sim MOVE.gravity): findPath's opts.maxDrop is a HEIGHT
+    dropHeight: dropHeight,
     // (P2-E, LC-88) the prebake: workers bake a lazy world's tiles ahead (see PREBAKE); the sim is the same with or without them
     prebakeStats: prebakeStats, prebakeHint: prebakeHint, prebakeStop: pbStop, prebakeInline: prebakeInline,
     EDGE_WALK: EDGE_WALK, EDGE_DROP: EDGE_DROP, EDGE_RAMP: EDGE_RAMP,
