@@ -1233,11 +1233,11 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const v = R.fallSpeedForHeight;
   ok(R.fallDamage(v(1)) === 0 && R.fallDamage(v(4)) === 0 && R.fallDamage(v(5)) > 0, "C-FALL: no damage up to a 4 m drop (" + v(4).toFixed(1) + " m/s at this game's gravity)");
   const d10 = R.fallDamage(v(10)), d15 = R.fallDamage(v(15)), d20 = R.fallDamage(v(20));
-  ok(d10 >= 35 && d10 <= 50 && d15 > d10 && d20 >= 100, "C-FALL: 10 m costs " + d10 + " (35-50), 15 m " + d15 + ", 20 m " + d20 + " (lethal from full hp)");
+  ok(d10 >= 35 && d10 <= 40 && d15 >= 60 && d15 <= 75 && d20 >= 100, "C-FALL (D2): 10 m costs " + d10 + " (35-40), 15 m " + d15 + " (60-75), 20 m " + d20 + " (lethal from full hp)");
   let mono = true;
   for (let h = 0; h < 40; h += 0.25) if (R.fallDamage(v(h + 0.25)) < R.fallDamage(v(h))) mono = false;
   const lh = R.fallLethalHeight(100);
-  ok(mono && lh > 15 && lh < 20 && R.fallDamage(v(lh + 0.05)) >= 100 && R.fallDamage(v(lh - 0.3)) < 100, "C-FALL: monotone; a full-health actor dies from " + lh.toFixed(1) + " m (fallLethalHeight for bots)");
+  ok(mono && lh > 18 && lh <= 20 && R.FALL_EXP === 1.5 && R.fallDamage(v(lh + 0.05)) >= 100 && R.fallDamage(v(lh - 0.3)) < 100, "C-FALL: monotone; a full-health actor dies from " + lh.toFixed(1) + " m (fallLethalHeight for bots)");
   ok(R.LAND_STAGGER_S === 0.4 && R.weaponName("fall") === "a fall", "C-FALL: 0.4 s landing stagger; the kill feed names the fall");
 }
 
