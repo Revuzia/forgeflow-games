@@ -439,6 +439,14 @@ export function resolveTeamMode(want, nHumans, pace, K) {
   for (const k of order) if (T[k] >= n) return k;
   return order[order.length - 1];
 }
+/** D5, run it back: the team-mode PICK of the next match in the room. `cfg` = the start of the match that ended (its teamWant: a mode or
+ *  "auto"), `asked` = the caller's mode (the boot passes the mode the last match resolved to). The room's own pick wins; AUTO stays AUTO
+ *  (null); only a start that carried no teamWant falls back to `asked`. "solo" in a room = AUTO. */
+export function rematchTeamWant(cfg, asked) {
+  const tw = cfg && typeof cfg.teamWant === "string" ? cfg.teamWant : null;
+  const w = tw === "auto" ? null : tw != null ? normTeamMode(tw) : normTeamMode(asked);
+  return w === "solo" ? null : w;
+}
 /** The teamId of the human in roster slot `slot` for `teamMode`: solo = the actor's own id ("s" + slot, what Match.teamOf falls back to), a
  *  team mode = "t0" (the humans' team; the boot fills its other seats with bot teammates and numbers the bot teams t1, t2, ...). */
 export function humanTeamId(slot, teamMode, K) {
@@ -1099,7 +1107,9 @@ function openLobby(W, sel) {
   // small for the room is played as the smallest that holds it - resolveTeamMode); the guests read the host's pick ("room" message). Every human
   // in the room is one team; the boot fills the team's other seats with bot teammates. Placed AFTER the START button so the box keeps the
   // child order squadguard_live.py reads (title, status, buttons row, roster, notices, START).
-  let teamWant = normTeamMode(sel && (sel.teamMode || sel.team));
+  // D5: the menu's team pick comes along - the SQUAD UP button sends only { mode } (hud.js), and the pick lives in W.settings.teamMode (the
+  // mode card writes it), so a menu pick of SQUADS is the room's starting pick instead of AUTO.
+  let teamWant = normTeamMode(sel && (sel.teamMode || sel.team)) || normTeamMode(W.settings && W.settings.teamMode);
   if (teamWant === "solo") teamWant = null;           // a room is for playing together: solo in a room = AUTO
   const modeRow = document.createElement("div");
   modeRow.className = "lcn-row";
@@ -2341,8 +2351,9 @@ export function rematch(W, opts) {
     S.rematchN = (S.rematchN | 0) + 1;
     const mode = opts.mode || (S.cfg && S.cfg.mode) || "standard";
     const pace = mode === "practice" ? "standard" : mode;
-    // C-MODE: the room keeps its team-mode pick (re-resolved for who is still here)
-    const want = normTeamMode(opts.teamMode) || (S.cfg && S.cfg.teamWant !== "auto" ? normTeamMode(S.cfg.teamWant) : null);
+    // C-MODE / D5: the room keeps its team-mode PICK (re-resolved for who is still here): a pick of SQUADS stays SQUADS, AUTO stays AUTO (the
+    // boot passes the mode the last match RESOLVED to, which for an AUTO room is not a pick); a start without teamWant (older host) -> opts
+    const want = rematchTeamWant(S.cfg, opts.teamMode);
     const teamMode = resolveTeamMode(want === "solo" ? null : want, plan.roster.length, pace, W.SIM);
     const cfg = S.hs.startMsg({
       seed: (Math.random() * 0xffffffff) >>> 0,
