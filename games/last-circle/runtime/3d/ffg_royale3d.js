@@ -428,6 +428,7 @@ register3d("royale", async function (kernel, content) {
 
   function applyTier(tier, src) {
     tier = TIERS.includes(tier) ? tier : (TIERS.includes(W.settings.graphics) ? W.settings.graphics : "medium");
+    const routeBefore = W._gfx ? routeKey(W._gfx) : null;
     const g = gfxPrefs();
     const r = kernel.renderer;
     const touch = isTouchDevice();
@@ -583,8 +584,23 @@ register3d("royale", async function (kernel, content) {
     W._gfx.src = src || null;
     // keep the kernel's own quality key in sync (shell buttons + next boot)
     try { const s = JSON.parse(localStorage.getItem("ffg_settings") || "{}"); s.quality = tier === "medium" ? "med" : tier === "ultra" ? "high" : tier; localStorage.setItem("ffg_settings", JSON.stringify(s)); } catch (e) {}
+    // D10 C-GFX: W.events 'gfxTier'(tier) once at start (the boot apply) and on every change of the tier in force, after the tables
+    // above have landed (a listener reads W.gfxTier / W._gfx). A ladder step or a setGfx of another key keeps the tier: no event.
+    // A listener that throws is logged, never allowed to abort the apply or starve the next listener's turn on the next change.
+    // a mid-match route / shadow change re-warms the scene for the new variant (rewarmRoute above); the match start's own apply is
+    // followed by warmMatch anyway (W._starting), and the menu / a teardown has no match scene to warm
+    if (routeBefore !== null && routeKey(W._gfx) !== routeBefore && W.match && !W._starting &&
+        (W.phase === "lobby" || W.phase === "drop" || W.phase === "match")) rewarmRoute((src || "tier") + ":" + routeBefore + "->" + routeKey(W._gfx));
+    if (tier !== tierEmitted) {
+      tierEmitted = tier;
+      W._gfxTierEvents = (W._gfxTierEvents | 0) + 1;
+      try { W.events.emit("gfxTier", tier); } catch (e) { console.warn("[royale] a gfxTier listener failed:", e && e.message); }
+    }
     return W._gfx;
   }
+  let tierEmitted = null;              // the tier the last 'gfxTier' event announced (D10)
+  /** what keys the scene's programs: the draw route (direct canvas vs the composer's RT) and whether the shadow pass runs */
+  function routeKey(g) { return (g.post === "direct" ? "direct" : "rt") + (g.shadows ? "+sh" : ""); }
   applyTier(W.settings.graphics, "boot");   // BOOT-apply the stored tier (the fix)
 
   function saveSettings() { try { localStorage.setItem("lc_settings", JSON.stringify(W.settings)); } catch (e) {} }
@@ -1302,8 +1318,12 @@ register3d("royale", async function (kernel, content) {
     // setting, or two peers could derive different teams from one start message.
     const online = !!(opts.humans || opts.guestOf);
     const wantMode = opts.teamMode != null ? opts.teamMode : (!online && W.settings ? W.settings.teamMode : null);
-    const teamMode = resolveTeamMode(wantMode, humans.length, W.mode);
-    const teamIds = assignTeams(total, humans.map((h) => h.slot), teamSize(teamMode));
+    // D5: the start message's humans[].teamId (net.js rosterWithTeams) names the humans' teams. When EVERY human carries one, the teams
+    // group by it and the mode must hold the largest such team; otherwise every human is one team (the rule above). net.js names all the
+    // humans of a team mode "t0" and each solo human its own "s"+slot, so for today's starts this builds exactly the teams it always did.
+    const humanTeams = humanTeamIdsOf(humans);
+    const teamMode = resolveTeamMode(wantMode, humanTeams ? largestGroup(humanTeams) : humans.length, W.mode);
+    const teamIds = assignTeams(total, humans.map((h) => h.slot), teamSize(teamMode), humanTeams);
     W.teamMode = teamMode;
     // teamOf is resolved LAZILY, at elimination time: the actors it reads are
     // created below this line, so a table built here would be empty. Without a
@@ -1410,7 +1430,7 @@ register3d("royale", async function (kernel, content) {
    *  bodies, FX pools) plus the weapon and pickup prototypes, which are never in
    *  the scene themselves (only clones are) — warmup parents them for the one
    *  frame and removes them again. Every provider is feature-detected. */
-  async function warmMatch() {
+  async function warmMatch(slot) {
     const extras = [];
     const seen = new Set();                 // the same object offered by two modules is parented once
     const by = {};                          // per-provider counts (W._warm.by) so a probe sees who contributed
@@ -1457,8 +1477,33 @@ register3d("royale", async function (kernel, content) {
       console.warn("[royale] warm-up failed (the match starts cold):", e);
     }
     const post = W._gfx && W._gfx.post;     // "direct" = low tier drew the warm frame straight to the canvas (stats.target says "composer" either way)
-    W._warm = stats ? Object.assign({ extrasIn: extras.length, by, post }, stats) : { extrasIn: extras.length, by, post, legacy: typeof kernel.warmup !== "function" };
-    return W._warm;
+    const rec = stats ? Object.assign({ extrasIn: extras.length, by, post }, stats) : { extrasIn: extras.length, by, post, legacy: typeof kernel.warmup !== "function" };
+    W[slot || "_warm"] = rec;               // the match-start warm stays in W._warm; a mid-match re-warm reports in W._rewarm
+    return rec;
+  }
+  /** C-GFX: a tier change INSIDE a match (the Video tab, W.setGfx) that moves the draw route (low's direct canvas <-> the composer's RT)
+   *  or turns the shadow pass on / off re-keys EVERY scene program (three keys a program on the output colour space and the shadow state).
+   *  The switch frame only links what that one frame draws; whatever is off screen then (a bot across the map, a gun in a hand that was
+   *  culled, a pickup out of cull range) linked on the frame it first came into view - measured: a MeshStandardMaterial body/gun program at
+   *  frame 135 after medium -> low. So the same C7 warm-up the match start runs is re-run for the new route: every variant links at the
+   *  switch (the player's own deliberate action), none later. One at a time; a change that lands while one runs queues ONE more. */
+  const REWARM = { busy: false, again: null, n: 0 };
+  async function rewarmRoute(why) {
+    if (REWARM.busy) { REWARM.again = why; return; }
+    REWARM.busy = true;
+    try {
+      let w = why;
+      while (w) {
+        REWARM.again = null;
+        if (!(W.match && !W._starting && (W.phase === "lobby" || W.phase === "drop" || W.phase === "match"))) break;
+        const t0 = performance.now();
+        const rec = await warmMatch("_rewarm");
+        REWARM.n++;
+        rec.why = w; rec.n = REWARM.n; rec.tier = W.gfxTier; rec.wallMs = Math.round(performance.now() - t0);
+        w = REWARM.again;
+      }
+    } catch (e) { console.warn("[royale] tier re-warm failed:", e && e.message); }
+    finally { REWARM.busy = false; }
   }
 
   function endMatch(victory) {
@@ -1917,21 +1962,51 @@ function resolveTeamMode(want, nHumans, pace) {
  *  Match.teamOf fell back to before teams existed). Team modes: team "t0" = every human + the lowest free bot slots up to
  *  the team size (the human's bot teammates, OD-4); the remaining bot slots, in slot order, fill t1, t2, ... (the last
  *  team may be short when the lobby does not divide evenly). */
-function assignTeams(total, humanSlots, size) {
+function assignTeams(total, humanSlots, size, humanTeams) {
   const out = new Array(total);
   if (!(size > 1)) { for (let i = 0; i < total; i++) out[i] = "s" + i; return out; }
-  const hs = new Set(humanSlots.filter((s) => s >= 0 && s < total));
-  let n0 = 0;
-  for (const s of hs) { out[s] = "t0"; n0++; }
-  const t0Size = Math.max(size, n0);
+  // D5: the humans' own teamIds (the start message's), else one team "t0" for every human
+  const want = [];                          // [slot, teamId] of the humans inside the lobby, in the order given
+  const seen = new Set();
+  humanSlots.forEach((s, k) => {
+    if (!(s >= 0 && s < total) || seen.has(s)) return;
+    seen.add(s);
+    want.push([s, humanTeams ? humanTeams[k] : "t0"]);
+  });
+  // the humans' teams, in the order of each one's lowest human slot (deterministic on every peer)
+  want.sort((a, b) => a[0] - b[0]);
+  const groups = new Map();                 // teamId -> members so far
+  for (const [s, id] of want) { out[s] = id; groups.set(id, (groups.get(id) || 0) + 1); }
+  // bot teammates: each human team takes the lowest free bot slots up to the team size (a team already over it keeps its humans)
+  let cur = 0;
+  for (const [id, n0] of groups) {
+    let n = n0;
+    for (; n < size && cur < total; cur++) { if (out[cur]) continue; out[cur] = id; n++; }
+  }
+  // the remaining bot slots, in slot order, fill t1, t2, ... (skipping a name a human team already holds); the last may be short
   let team = 1, inTeam = 0;
+  const nextFree = () => { while (groups.has("t" + team)) team++; return "t" + team; };
+  let tid = nextFree();
   for (let i = 0; i < total; i++) {
     if (out[i]) continue;
-    if (n0 < t0Size) { out[i] = "t0"; n0++; continue; }
-    out[i] = "t" + team;
-    if (++inTeam >= size) { team++; inTeam = 0; }
+    out[i] = tid;
+    if (++inTeam >= size) { team++; inTeam = 0; tid = nextFree(); }
   }
   return out;
+}
+/** D5: the teamId of every human (index-aligned with `humans`) when EVERY one carries a usable teamId (a non-empty string of at most 24
+ *  chars, net.js's own bound), else null (the boot's rule: all humans are one team). */
+function humanTeamIdsOf(humans) {
+  if (!Array.isArray(humans) || !humans.length) return null;
+  const ids = humans.map((h) => (h && typeof h.teamId === "string" && h.teamId.length > 0 && h.teamId.length <= 24 ? h.teamId : null));
+  return ids.every((x) => x) ? ids : null;
+}
+/** the size of the largest group of equal ids */
+function largestGroup(ids) {
+  const c = new Map();
+  let m = 0;
+  for (const id of ids) { const n = (c.get(id) || 0) + 1; c.set(id, n); if (n > m) m = n; }
+  return m;
 }
 function nextFrame() { return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); }
 /** Reject after `ms` (a bounded wait on an optional asset; never a hang). */

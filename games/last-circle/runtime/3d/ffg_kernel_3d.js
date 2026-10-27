@@ -703,7 +703,12 @@ export class Kernel3D {
       const render0 = bloom.render.bind(bloom);
       // r172 UnrealBloomPass.render (MIT, three.js authors) minus the final blend, which LCOutputPass does
       bloom.render = function (renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
-        if (!k3.bloomFold || this.renderToScreen) { out.setBloomTexture(null); return render0(renderer, writeBuffer, readBuffer, deltaTime, maskActive); }
+        // the fold needs ITS consumer: the next enabled pass must be this LC output pass. Anything else in that slot (a
+        // probe's stock OutputPass, a pass added later) gets three's own blend, so the frame is never left without its bloom.
+        let consumer = null;
+        const P = composer.passes;
+        for (let i = P.indexOf(this) + 1; i < P.length; i++) if (P[i].enabled) { consumer = P[i]; break; }
+        if (!k3.bloomFold || this.renderToScreen || consumer !== out) { out.setBloomTexture(null); return render0(renderer, writeBuffer, readBuffer, deltaTime, maskActive); }
         renderer.getClearColor(this._oldClearColor);
         this.oldClearAlpha = renderer.getClearAlpha();
         const oldAutoClear = renderer.autoClear;

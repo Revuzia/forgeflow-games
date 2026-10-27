@@ -132,11 +132,31 @@ export const LCOutputShader = {
       #endif
     }
 
+    // three's blend pass wrote the scene + bloom sum INTO the half-float read buffer, i.e. rounded to binary16 (round to
+    // nearest, ties to even); the folded sum is rounded the same way, so the fold reproduces the stored value exactly
+    // (bit-identical output, not just within 1/255). Normal range: spacing 2^(e-10); below 2^-14 the subnormal step 2^-24.
+    float lcRne( float x ) {
+      float f = floor( x ); float d = x - f;
+      if ( d > 0.5 ) return f + 1.0;
+      if ( d < 0.5 ) return f;
+      return mod( f, 2.0 ) == 0.0 ? f : f + 1.0;
+    }
+    float lcHalf1( float v ) {
+      float a = abs( v );
+      if ( a < 6.103515625e-05 ) return sign( v ) * lcRne( a * 16777216.0 ) * 5.9604644775390625e-08;
+      float e = floor( log2( a ) );
+      float p = exp2( e );
+      if ( p > a ) p *= 0.5; else if ( p * 2.0 <= a ) p *= 2.0;      // log2 / exp2 off by one ulp at a power of two
+      float q = p * 0.0009765625;                                      // the binary16 spacing at a (2^-10 of the binade)
+      return sign( v ) * min( lcRne( a / q ) * q, 65504.0 );
+    }
+    vec3 lcHalf( vec3 v ) { return vec3( lcHalf1( v.r ), lcHalf1( v.g ), lcHalf1( v.b ) ); }
+
     // the HDR input at uv: the scene plus, when the bloom composite is folded in, the bloom exactly as three's additive
-    // blend pass laid it over the scene (blendFunc SRC_ALPHA, ONE: rgb += bloom.rgb * bloom.a)
+    // blend pass laid it over the scene (blendFunc SRC_ALPHA, ONE: rgb += bloom.rgb * bloom.a, stored as binary16)
     vec3 lcSrc( vec2 uv ) {
       vec3 c = texture2D( tDiffuse, uv ).rgb;
-      if ( bloomOn > 0.5 ) { vec4 b = texture2D( tBloom, uv ); c += b.rgb * b.a; }
+      if ( bloomOn > 0.5 ) { vec4 b = texture2D( tBloom, uv ); c = lcHalf( c + b.rgb * b.a ); }
       return c;
     }
 
@@ -181,7 +201,7 @@ export const LCOutputShader = {
 
       gl_FragColor = texture2D( tDiffuse, vUv );
       // folded bloom composite (uniform-coherent; off = skipped)
-      if ( bloomOn > 0.5 ) { vec4 lcB = texture2D( tBloom, vUv ); gl_FragColor.rgb += lcB.rgb * lcB.a; }
+      if ( bloomOn > 0.5 ) { vec4 lcB = texture2D( tBloom, vUv ); gl_FragColor.rgb = lcHalf( gl_FragColor.rgb + lcB.rgb * lcB.a ); }
       vec3 lcIn = gl_FragColor.rgb;
 
       // tone mapping
