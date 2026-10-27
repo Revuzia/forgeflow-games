@@ -628,9 +628,10 @@ def radial_low(D, cx, cy, angles_deg, zrows, rmax=0.75, sy=1.0, lip=None):
     return Vf, F
 
 
-def oval_ring_low(c, prof, n=20, sy=1.0, phase=0.0):
+def oval_ring_low(c, prof, n=20, sy=1.0, phase=0.0, inside=None):
     """A ring (lathe) around the vertical axis through c on an OVAL (y scaled by sy): prof = [(r, z), ...] in order
-    (r = 0 makes a pole); open where the profile is open. Triangles wound away from the axis (poles: up / down)."""
+    (r = 0 makes a pole); open where the profile is open. Triangles wound away from `inside` = (r, z), a point of the
+    solid's cross-section (default: the axis at the profile's mean height)."""
     c = np.asarray(c, float)
     V, rings = [], []
     for r, z in prof:
@@ -656,13 +657,11 @@ def oval_ring_low(c, prof, n=20, sy=1.0, phase=0.0):
                 F += [(A_[i], A_[j], B_[j]), (A_[i], B_[j], B_[i])]
     V = np.array(V)
     F = np.array(F, dtype=np.int64)
-    zmid = float(np.mean([z for _, z in prof]))
+    r_in, z_in = inside if inside is not None else (0.0, float(np.mean([z for _, z in prof])))
 
     def ref(cen):
-        r = np.stack([np.full(len(cen), c[0]), np.full(len(cen), c[1]), cen[:, 2]], 1)
-        on_axis = np.hypot(cen[:, 0] - c[0], cen[:, 1] - c[1]) < 1e-5
-        r[on_axis, 2] = zmid
-        return r
+        a = np.arctan2((cen[:, 1] - c[1]) / sy, cen[:, 0] - c[0])
+        return np.stack([c[0] + r_in * np.cos(a), c[1] + r_in * sy * np.sin(a), np.full(len(cen), z_in)], 1)
     return V, wind_out(V, F, ref)
 
 

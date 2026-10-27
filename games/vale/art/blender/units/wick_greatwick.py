@@ -1680,7 +1680,7 @@ def serenade_parts(L: dict) -> list:
     outer.ops = list(hood.ops)
     F_out = field_of(outer)
     hood.sub(A, k=0.014)                                                                  # the hollow (17.5 cm deep)
-    out.append(SP("hood", hood, "cloth2", "bone:head", 296, to_model=hood_tf))
+    out.append(SP("hood", hood, "cloth2", "bone:head", 270, to_model=hood_tf))      # (r5: 296; the clean lows' tris)
     # the dark felt cowl edge: a soft roll in the opening's plane (2D band, 2.4 cm thick, rounded 1 cm), 3.6 cm wide
     # over the brow and the sides, 2.6 cm at the sill
     rim = Sculpt("hood_rim")
@@ -1751,7 +1751,7 @@ def serenade_parts(L: dict) -> list:
     # (fix round 3) and 2.5 cm clear of its walls: cut flush with the hollow, the decimated tunic poked through its
     # back corners (a tan sliver low in the dark)
     tunic.sub(DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.035, 0.0, 0.0]), 0.06), k=0.01)
-    out.append(SP("cloak", tunic, "cloth", ("gw_cloak",), 400, to_model=body))       # (fix round 4: headroom)
+    out.append(SP("cloak", tunic, "cloth", ("gw_cloak",), 372, to_model=body))       # (r5: 400; most of it under the mantle)
     mantle = Sculpt("mantle")
     # a thick felt capelet (8 cm: a thin shell decimates into a zigzag rim) with ROUNDED shoulders (a convex
     # profile: a straight cone read as a lampshade), soft folds
@@ -1791,7 +1791,21 @@ def serenade_parts(L: dict) -> list:
     # corner: a tan sliver in the dark)
     mantle.sub(DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.005, 0.0, 0.0]), 0.03), k=0.01)
     mantle_tf = compose(shift(dx=0.03), body)
-    out.append(SP("mantle", mantle, "cloth2", "auto", 250, to_model=mantle_tf))
+    # (fix round 5) the GAME mesh is an exact radial low over the capelet (columns on the notch, the lapel points and
+    # round the back, rows from the collar to the hem, one turned-under lip row): the decimated felt shell broke into
+    # torn-paper shards behind the hood and a spike under the chin
+    F_m = field_of(mantle)
+
+    def m_rows(a):
+        hz = 0.745 + float(lapels(np.array([[-0.03 + math.sin(a), 0.02 - math.cos(a), 0.0]]))[0])
+        zb = hz - 0.006
+        zt = 0.936
+        return [zt, zt + (zb - zt) * 0.36, zt + (zb - zt) * 0.70, zb]
+    m_cols = [0.0, 8.0, 15.0, 24.0, 34.0, 46.0, 60.0, 75.0, 90.0, 105.0, 120.0, 135.0, 150.0, 165.0, 180.0]
+    m_cols = sorted(set(m_cols + [-c_ for c_ in m_cols if 0.0 < c_ < 180.0]))
+    mV, mF = wc.radial_low(F_m, -0.03, 0.02, m_cols, m_rows, rmax=0.62, lip=[(0.030, 0.008)])
+    out.append(SP("mantle", mantle, "cloth2", "auto", len(mF), to_model=mantle_tf,
+                  meta={"low_mesh": (mV, mF), "smooth": True}))
     # (no over-the-shoulder straps: their ends stopped dead on the felt; the A-frame is lashed at the belt, paint)
 
     # ── ARMS, FISTS, LEGS, BOOTS ───────────────────────────────────────────────────────────────────────
@@ -1857,17 +1871,24 @@ def hammer_serenade(L, out, body):
     # painter); as a separate part the two decimated lows crossed into a torn-paper zigzag
     for sz in (-1, 1):
         hd.add(Lathe(head_c + up * sz * 0.078, flat_ring(0.0, 0.130, 0.024, 0.007), 0.15, -0.04, 0.04, axes=ax_h), k=0.003)
-    out.append(SP("hammer_head", hd, "ironstone", "bone:prop.R", 160, 0.8, to_concept=pose,
-                  meta={"spool": (tuple(head_c), tuple(up), tuple(d))}))
+    # (fix round 5) the GAME mesh is an exact 10-sided lathe of the same drum: striking faces, chamfered flanges, the
+    # straight body and the two sandstone bands as clean rings (decimated, the bands read as crumpled tape)
+    hprof = [(0.0, 0.202), (0.128, 0.202), (0.142, 0.190), (0.142, 0.146), (0.116, 0.134), (0.116, 0.104),
+             (0.131, 0.100), (0.131, 0.056), (0.116, 0.052)]
+    hprof = hprof + [(r_, -t_) for r_, t_ in hprof[::-1]]
+    hV, hF = wc.oval_ring_low((0.0, 0.0, 0.0), hprof, n=10, phase=math.pi / 10, inside=(0.0, 0.0))
+    hV = np.asarray(head_c, float)[None] + hV @ np.asarray(ax_h, float)
+    out.append(SP("hammer_head", hd, "ironstone", "bone:prop.R", len(hF), 0.8, to_concept=pose,
+                  meta={"spool": (tuple(head_c), tuple(up), tuple(d)), "low_mesh": (hV, hF), "smooth": True}))
     bands = Sculpt("hammer_bands")
     bands.add(Torus(head_c - d * 0.13, 0.04, 0.013, axes=sdf.frame(d)), k=0.0)         # haft collar
     out.append(SP("hammer_bands", bands, "sandstone", "bone:prop.R", 40, 0.6, to_concept=pose))
-    # the small window in its outer face: glossy LAMPRESIN, not accent (brief: the hammer's window is accent only
-    # while the total stays <= 6 %; the drum, the crown band and the hood light already carry 6.3-6.8 %)
-    # (an exact 12-gon lens 7 mm proud: the decimated ellipsoid's edge bit into the painted ring as a notch)
+    # the small window in its outer face (an exact lens 7 mm proud: the decimated ellipsoid's edge bit into the painted
+    # ring as a notch). (fix round 5) ACCENT, framed in iron (brief: the hammer window is accent while the total stays
+    # <= 6 %; the Serenade sat at 5.15 %): a lampresin amber lens read as a marigold light on ally-blue wicks
     ax_w = np.stack([ax[1], d, up])
-    out.append(hull_sp("hammer_window", [oval_disc(head_c + d * 0.115, ax_w, 0.036, 0.036, 0.016, 12)], "lampresin",
-                       "bone:prop.R", to_concept=pose))
+    out.append(hull_sp("hammer_window", [oval_disc(head_c + d * 0.123, ax_w, 0.030, 0.030, 0.012, 8)], "accent",
+                       "bone:prop.R", to_concept=pose, meta={"smooth": True}))
 
 
 # the Serenade drum lantern (MODEL space, procedural paint; fix round 3, the concept's lamp): a squat ironstone drum
