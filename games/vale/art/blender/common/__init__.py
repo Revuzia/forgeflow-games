@@ -24,3 +24,12 @@ Modules:
 """
 
 import bpy  # noqa: F401,E402  (with the `bpy` wheel, mathutils/bmesh exist only after bpy is imported)
+
+# a Blender process (not the `bpy` wheel) takes one machine-wide heavy slot for its lifetime, so parallel
+# agents queue instead of swapping the machine to a halt (heavy.py)
+if bpy.app.background and bpy.app.binary_path:
+    import os as _os, sys as _sys
+    from . import heavy as _heavy
+    _script = next((a for a in _sys.argv[_sys.argv.index("--python") + 1:][:1]), "") if "--python" in _sys.argv else ""
+    _heavy.hold("blender:" + (_os.path.relpath(_script) if _script else "?") + " " + " ".join(_sys.argv[_sys.argv.index("--") + 1:] if "--" in _sys.argv else [])[:60])
+

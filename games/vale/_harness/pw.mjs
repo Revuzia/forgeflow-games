@@ -12,6 +12,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { holdHeavy } from './heavy_slot.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const BASE = process.env.VALE_URL ?? 'http://localhost:5190';
@@ -19,11 +20,13 @@ export const SHOTS = process.env.VALE_SHOTS ?? join(HERE, '_shots');
 
 /** launch Chrome (the installed channel) with the GPU on, open `path` at 1920×1080 */
 export async function open(path = '/?dev=1', o = {}) {
+  const release = await holdHeavy('pw ' + path);   // one machine-wide heavy slot per harness process (heavy_slot.mjs)
   const browser = await chromium.launch({
     channel: 'chrome',
     headless: process.env.VALE_HEADED !== '1',
     args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
   });
+  browser.on('disconnected', release);
   const context = await browser.newContext({ viewport: { width: o.width ?? 1920, height: o.height ?? 1080 }, deviceScaleFactor: 1 });
   // o.hmr === false: a silent stand-in for the dev server's HMR socket, so edits other lanes make to the
   // shared checkout mid-run never reload the page under a long measurement

@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, mkdtempSync, rmSy
 import { join, resolve, dirname, relative, extname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { holdHeavy } from '../../_harness/heavy_slot.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GAME = resolve(HERE, '..', '..');
@@ -293,6 +294,7 @@ const rel = (p) => '/' + relative(GAME, p).split('\\').join('/');
 const url = `http://127.0.0.1:${port}/__snap.html?glb=${encodeURIComponent(rel(glb))}&cell=${cell}` +
   `&tint=${encodeURIComponent(tint)}&mode=${mode}` + (sky ? `&sky=${encodeURIComponent(rel(sky))}` : '') + (strip ? `&strip=${encodeURIComponent(strip)}` : '') + (camArg ? `&cam=${encodeURIComponent(camArg)}` : '');
 
+await holdHeavy('three_snapshot ' + relative(GAME, glb));   // queued with the other heavy processes (released at exit)
 const prof = mkdtempSync(join(tmpdir(), 'vale-snap-'));
 const W = cell * 8, H = cell * (mode === 'clips' || mode === 'unit' ? 24 : 3);
 const proc = spawn(chrome, ['--headless', '--no-sandbox', '--disable-gpu-sandbox', '--use-angle=swiftshader',

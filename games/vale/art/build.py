@@ -99,7 +99,10 @@ def run_script(script: str, args: list[str]) -> int:
         return 1
     exe = blender_exe()
     if exe:
-        cmd = [exe, "--background", "--factory-startup", "--python-exit-code", "1", "--python", script, "--", *args]
+        # threads per Blender = cores / heavy slots (art/blender/common/heavy.py queues the processes), so a
+        # few parallel builds share the machine instead of each grabbing every core
+        threads = max(2, (os.cpu_count() or 8) // max(1, int(os.environ.get("VALE_HEAVY_SLOTS", "3") or 3)))
+        cmd = [exe, "--background", "--factory-startup", "-t", str(threads), "--python-exit-code", "1", "--python", script, "--", *args]
     else:
         cmd = [sys.executable, script, "--", *args]
     print("[art] $", " ".join(f'"{c}"' if " " in c else c for c in cmd), flush=True)
