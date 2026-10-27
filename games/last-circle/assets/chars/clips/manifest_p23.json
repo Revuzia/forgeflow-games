@@ -71,7 +71,7 @@
   }
  ],
  "budget": {
-  "totalBytes": 181948
+  "totalBytes": 216176
  },
  "clips": {
   "rifle_idle_g": {
@@ -361,6 +361,40 @@
     410
    ],
    "reduceMaxDeg": 0
+  },
+  "slide": {
+   "bytes": 34228,
+   "kind": "slide",
+   "group": "slide",
+   "loop": false,
+   "duration": 1.4,
+   "source": "Mixamo (Adobe) Soccer_Game_Pack/soccer tackle (2).fbx + Rifle_8-Way_Locomotion_Pack/walk crouching forward.fbx (composite, see bake_slide.mjs)",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 0,
+   "rootDirDeg": null,
+   "strideM": 0,
+   "contactSpeed": 0.358,
+   "skateRatio": null,
+   "footMinY": -0.02,
+   "hipsY": [
+    0.233,
+    0.922
+   ],
+   "headY": [
+    0.625,
+    1.464
+   ],
+   "seamDeg": null,
+   "srcSeamDeg": null,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    2236,
+    2236
+   ],
+   "reduceMaxDeg": 0,
+   "tool": "F:/lc_p23/player/tools/bake_slide.mjs (bake_p23.mjs + a composite source, P23 fix round)",
+   "note": "LC-21 slide, one-shot: no Mixamo rifle slide exists in the local library; the closest Mixamo clip is Soccer_Game_Pack 'soccer tackle (2)' (a sliding tackle: pelvis to 0.24 m, the lead right leg ~0.9 m out). Composite of two Mixamo clips (no hand-keyed poses): tackle 0.07-1.47 s for hips + legs + spine, the spine re-aimed so the chest holds the crouch walk's orientation pitched back 20 deg (the tackle turns ~100 deg sideways onto its hip and lies back 60-70 deg, which would aim the rifle at the sky), shoulders / arms / hands / neck / head from Rifle_8-Way 'walk crouching forward' (= rifle_crouch_g) so the rifle grip is exactly the crouch walk's. player.js plays it at clip duration / the slide's predicted time."
   }
  }
 }
