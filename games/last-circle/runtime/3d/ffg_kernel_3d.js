@@ -693,11 +693,17 @@ export class Kernel3D {
     // draw of its half-res result over the composer's read buffer (a read-modify-write of the whole half-float frame)
     // that the output pass reads straight back. With the LC output pass the bloom texture is handed to it instead and
     // added in the shader it already runs (same sum, before tone mapping): one full-frame pass fewer, no new target, no
-    // extra program (a uniform branch). ?bloomfold=0 restores three's own blend (A/B and rollback).
+    // extra program (a uniform branch).
+    // DEFAULT OFF (P23 fix round): three's blend stores the sum in the half-float read buffer through the GPU's blend unit,
+    // whose rounding the shader cannot reproduce (Intel UHD / D3D11: none of 18 binary16 rounding rules - round-to-nearest
+    // or toward zero for the source, the product and the sum - matched it), so the fold left 1/255 on ~6.6 % of the
+    // pixels and broke stormfx_fx's bit-identity bar (LCOutputPass at grade 0 == three's stock OutputPass), while its
+    // GPU saving on the default MEDIUM tier measured -0.06 ms (paired median, noise +-1-2 ms on the shared iGPU).
+    // ?bloomfold=1 (or kernel.bloomFold = true) turns it on for an A/B.
     this.bloomFold = false;
     if (out && typeof out.setBloomTexture === "function") {
-      let fold = true;
-      try { fold = new URLSearchParams(location.search).get("bloomfold") !== "0"; } catch (e) { /* default on */ }
+      let fold = false;
+      try { fold = new URLSearchParams(location.search).get("bloomfold") === "1"; } catch (e) { /* default off */ }
       this.bloomFold = fold;
       const k3 = this;
       const render0 = bloom.render.bind(bloom);
