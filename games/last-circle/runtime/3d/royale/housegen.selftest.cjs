@@ -51,11 +51,16 @@ function loadManifest() {
 }
 const THREE_JS = path.join(ROOT, "assets", "vendor", "three", "build", "three.module.js");
 const N_PARCELS = Number(process.env.HG_PARCELS || 500);
+const PLANT_SLOW_MS = Number(process.env.HG_PLANT_SLOW_MS) || 0;
+const HG_CPU_MS_PER_HOUSE = 36;                                    // (P23-fix timing bar: CPU ms of the JS threads (workers + main) per generated + checked house; 25.8-27.3 ms measured 2026-10-27 on the shared 16-core box with 3 other lanes running (wall 21-25 s); x1.3-1.4 headroom; HG_PLANT_SLOW_MS=15 (+11 ms a house, x1.4) reads 37.6 and FAILS)
 const THEMES = ["city", "resort", "lodge"];                        // the town themes (the fixed rows below)
 const ALL_THEMES = ["city", "resort", "lodge", "farm", "ruin", "mill"];   // + towngen's compound themes (round 3)
 /** the three themes parcel k is built in: rotating over all six (every theme gets 250 of the 500 parcels) */
 const themesOf = (k) => [ALL_THEMES[k % 6], ALL_THEMES[(k + 2) % 6], ALL_THEMES[(k + 4) % 6]];
 const T0 = Date.now();
+/** (P23-fix) this thread's CPU time in ms (user + system): the timing row judges CPU, which a box shared with other lanes does not stretch the way it stretches
+ *  the wall clock (Node >= 22.? process.threadCpuUsage; older: the process total, which on the main thread before the workers start is the same thing) */
+const threadCpuMs = () => { const u = typeof process.threadCpuUsage === "function" ? process.threadCpuUsage() : process.cpuUsage(); return (u.user + u.system) / 1000; };
 
 // ── constants the checker uses (its own copies: a change in housegen must be a change here too) ─────────────────────────────────────────
 const R = 0.45, HGT = 1.8, STEP = 0.55, GRID = 0.25, RING = 1.5, REACH_XZ = 1.5, REACH_DY = 2.2, TOL = 0.02, TRI_BUDGET = 4000;
@@ -650,7 +655,8 @@ async function runJobs(jobs) {
     const p = Object.assign({}, j.parcel, { theme: j.theme, storeys: j.storeys });
     const t = Date.now();
     const H = HGmod.generate(p, j.opts);
-    const ms = Date.now() - t;
+    if (PLANT_SLOW_MS > 0) { const t1 = performance.now(); while (performance.now() - t1 < PLANT_SLOW_MS); }   // (negative control for the timing row: HG_PLANT_SLOW_MS=15 must FAIL it)
+    const ms = Date.now() - t;                                     // (wall ms: the p50 / p99 info only - Windows counts thread CPU in 15.6 ms ticks, fine summed, too coarse per house)
     // (the JSON is only needed where it is compared: a house generated twice, and the sampled houses whose hash the main thread / a fresh process check)
     // (twice: the second house compared with the first value by value, key by key in order - the same verdict as comparing their JSON, without
     // building two strings; the hashed houses' JSON is what the main thread and a fresh process hash)
@@ -680,7 +686,7 @@ if (!isMainThread) {
       if (i >= all.length) break;
       for (const r of await runJobs(all.slice(i, i + workerData.chunk))) out.push(r);
     }
-    return out;
+    return { rows: out, cpuMs: threadCpuMs() };                    // (P23-fix: the thread's own CPU time rides home with its rows)
   })().then((r) => parentPort.postMessage(r), (e) => parentPort.postMessage({ error: String(e && e.stack || e) }));
   return;
 }
@@ -720,10 +726,10 @@ if (require.main === module) (async () => {
   for (let k = 0; k < Math.min(40, PS.length); k++) for (const theme of themesOf(k)) for (let st = 1; st <= 3; st++) jobs.push({ key: "base:" + k + ":" + theme + ":" + st, parcel: PS[k], theme, storeys: storeysOf(PS[k], k, st), opts: { kit: "base" }, twice: k % 3 === 0 });
   // (one worker per PHYSICAL core: os.cpus() lists hyperthreads - on the 8-core / 16-thread laptop 8 workers ran 14.7-15.7 s, 12 ran 17.3 s, 14 ran 19.4 s)
   const NW = Number(process.env.HG_WORKERS) || Math.max(1, Math.min(8, Math.floor(os.cpus().length / 2)));
-  const counter = new SharedArrayBuffer(4), tW = Date.now();
+  const counter = new SharedArrayBuffer(4), tW = Date.now(), workerCpuMs = [];
   const resP = Promise.all(Array.from({ length: NW }, () => new Promise((resolve, reject) => {
     const w = new Worker(__filename, { workerData: { jobs, counter, chunk: 8 }, resourceLimits: { maxYoungGenerationSizeMb: Number(process.env.HG_YOUNG) || 64 } });   // (a bigger young generation: a house is ~100 kB of short-lived objects, fewer scavenges)
-    w.once("message", (m) => { if (m && m.error) reject(new Error(m.error)); else resolve(m); w.terminate(); });
+    w.once("message", (m) => { if (m && m.error) reject(new Error(m.error)); else { workerCpuMs.push(m.cpuMs); resolve(m.rows); } w.terminate(); });
     w.once("error", reject);
   })));
   // while the workers run: a fresh process and this thread hash every 30th house on their own (cross-thread / cross-process determinism)
@@ -847,6 +853,27 @@ if (require.main === module) (async () => {
         }
       }
       okP(wbad.length === 0 && nFoot > 200 && nEave > 50 && nBurn > 100 && wTris <= 0.14 * baseTris && ruinTris / 12 <= 1000, "meshData wear strips (LC-17): outside wall faces only, 12 mm in front of a box face, darker than the wall (foot " + nFoot + ", eave " + nEave + " strips on 36 houses; ruin soot " + nBurn + " strips on 12 ruins), +" + (100 * wTris / Math.max(1, baseTris)).toFixed(1) + " % wall triangles (<= 14 %), ruins +" + (ruinTris / 12).toFixed(0) + " triangles a house (<= 1000: drawn in the district mix, no draw call; +" + (100 * ruinTris / Math.max(1, ruinBase)).toFixed(0) + " % of their wall triangles); box vertices and boxRanges untouched", wbad.slice(0, 4).join(" | "));
+    }
+    // (P23-fix / D10) the per-tier rule: WEAR_BY_TIER low = no wear strip and no ruin soot at all (the geometry equals wear: false), medium / high / ultra = the full
+    // strips (equal to the default); buildHouse follows the same option; the tier never touches a collider
+    {
+      const grey = () => [0.5, 0.5, 0.5], sig = (m) => [...m.groups.walls].map(([k, g]) => k + ":" + g.pos.length + ":" + g.idx.length).join("|");
+      let bad = [], lowTris = 0, fullTris = 0;
+      const T = HGmod.WEAR_BY_TIER;
+      if (!T || !Object.isFrozen(T) || T.low !== false || !T.medium || !T.high || !T.ultra) bad.push("WEAR_BY_TIER " + JSON.stringify(T));
+      for (let k = 0; k < 16; k++) {
+        const ruin = k >= 10;
+        const par = Object.assign({}, PS[(k * 11) % PS.length], { theme: ruin ? "ruin" : THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 });
+        const H = HGmod.generate(par);
+        const off = HGmod.meshData(H, grey, { interior: true, ns: true, wear: false }), on = HGmod.meshData(H, grey, { interior: true, ns: true });
+        const low = HGmod.meshData(H, grey, { interior: true, ns: true, wear: "low" });
+        if (sig(low) !== sig(off)) bad.push(par.use + (ruin ? " (ruin)" : "") + " low != off");
+        if (sig(on) === sig(off)) bad.push(par.use + (ruin ? " (ruin)" : "") + " the default draws no wear (the row would be blind)");
+        for (const t of ["medium", "high", "ultra"]) if (sig(HGmod.meshData(H, grey, { interior: true, ns: true, wear: t })) !== sig(on)) bad.push(par.use + " " + t + " != full");
+        for (const g of low.groups.walls.values()) lowTris += g.idx.length / 3;
+        for (const g of on.groups.walls.values()) fullTris += g.idx.length / 3;
+      }
+      okP(bad.length === 0, "wear per graphics tier (D10): low = no wear strip / ruin soot (== wear: false; " + lowTris + " wall triangles vs " + fullTris + " full on 16 houses incl. 6 ruins), medium / high / ultra = the full strips", bad.slice(0, 4).join(" | "));
     }
   // O3 on tall shells: <= 3 walkable floors, the rest closed (one exact mass: nobody gets in), the asked height kept
   {
@@ -1041,9 +1068,15 @@ if (require.main === module) (async () => {
     const p2 = Object.assign({}, PS[0], { theme: "city", storeys: 2 });
     ok(fnv(JSON.stringify(HGmod.generate(p2))) !== fnv(JSON.stringify(HGmod.generate(Object.assign({}, p2, { seed: (p2.seed + 1) >>> 0 })))), "negative control [determinism]: a different seed gives a different house (the hash compare bites)");
   }
-  const secs = (Date.now() - T0) / 1000, cpu = process.cpuUsage();
-  info("CPU: " + ((cpu.user + cpu.system) / 1e6).toFixed(1) + " s for the whole process (all " + (NW + 1) + " threads; a shared box under load stretches the wall time)");
-  ok(secs < 15, "selftest ran in " + secs.toFixed(1) + " s (< 15 s)");
+  // the timing row (P23-fix): judged on CPU time, not the wall clock. The old bar (wall < 15 s: the 8-core laptop's 14.7-15.7 s on 8 workers) failed on this
+  // shared 16-core box whenever the other lanes ran (21-62 s wall, base int-p1 included) while the CPU stayed put (183-206 s). CPU per house is what a slower
+  // generator or checker raises; the worker share is what a serialised run (the workers idle, the main thread doing the work) lowers. Wall time is printed only.
+  const secs = (Date.now() - T0) / 1000, cpu = process.cpuUsage(), cpuS = (cpu.user + cpu.system) / 1e6;
+  // (the process total also counts V8's own helper threads - parallel GC, background compiles - whose CPU swings 65-94 s with the box's load (spinning GC helpers on a
+  // contended box), so the bar judges the JS threads only: the workers' own thread CPU + the main thread's; the share is workers / (workers + main))
+  const wCpuS = workerCpuMs.reduce((a, b) => a + b, 0) / 1000, mCpuS = threadCpuMs() / 1000, perHouse = (wCpuS + mCpuS) * 1000 / Math.max(1, res.length), share = wCpuS / Math.max(1e-9, wCpuS + mCpuS);
+  info("CPU: " + cpuS.toFixed(1) + " s for the whole process (" + wCpuS.toFixed(1) + " s on the " + NW + " workers, " + mCpuS.toFixed(1) + " s on the main thread, " + (cpuS - wCpuS - mCpuS).toFixed(1) + " s in V8 helper threads); wall " + secs.toFixed(1) + " s (a shared box stretches the wall time, not the CPU)");
+  ok(workerCpuMs.length === NW && perHouse <= HG_CPU_MS_PER_HOUSE && share >= 0.75, "selftest CPU " + perHouse.toFixed(1) + " ms a house on the JS threads (<= " + HG_CPU_MS_PER_HOUSE + " ms: " + (wCpuS + mCpuS).toFixed(1) + " s for " + res.length + " houses), " + (100 * share).toFixed(0) + " % of the JS threads' CPU on the workers (>= 75 %: the run stays parallel); wall " + secs.toFixed(1) + " s, not judged");
   console.log("\n" + (failed ? "FAIL" : "PASS") + "  " + passed + " passed, " + failed + " failed");
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error("FAIL  selftest crashed: " + (e && e.stack || e)); process.exit(1); });

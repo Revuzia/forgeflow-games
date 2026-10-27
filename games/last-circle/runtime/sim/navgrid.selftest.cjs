@@ -322,6 +322,26 @@ const street = { x: 36.5, y: 0, z: 33 };
   if (downMd) for (let i = 1; i < downMd.length; i++) if (downMd[i].k === NG.EDGE_DROP) tallest = Math.max(tallest, downMd[i - 1].y - downMd[i].y);
   ok(downMd && downMd.length > 10 && tallest <= 1.0 + 1e-6, "maxDrop 1 m: balcony -> street goes down through the house (" + (downMd && downMd.length) + " waypoints, tallest drop leg " + tallest.toFixed(2) + " m)");
   ok(downMd6 && down && JSON.stringify(downMd6.map((w) => [w.x, w.y, w.z, w.k])) === JSON.stringify(down.map((w) => [w.x, w.y, w.z, w.k])), "maxDrop = DROP_MAX: the very route the default query returns");
+  // (P23 fix round) maxDrop is a HEIGHT: a fall-damage budget comes from C-FALL's safe impact SPEED as h = v^2 / (2 g) at this game's gravity (NG.dropHeight)
+  ok(Math.abs(NG.dropHeight(R.FALL_SAFE_V) - (R.FALL_SAFE_H != null ? R.FALL_SAFE_H : 4)) < 1e-9 && NG.dropHeight(0) === 0 && NG.dropHeight(-3) === 0,
+    "dropHeight(K.FALL_SAFE_V = " + (+R.FALL_SAFE_V).toFixed(3) + " m/s) = " + NG.dropHeight(R.FALL_SAFE_V).toFixed(3) + " m = K.FALL_SAFE_H at g = " + Math.abs(NG.GRAVITY) + " m/s^2");
+  {
+    // ... and a NULL path is an answer: a walled yard (3 m walls, no door) that only a 3 m drop off a ramped platform leads into. With a 1 m budget there is
+    // no route in ("no-path"), from inside there is no route out at all (the yard is kept: the directed flood reaches it by the drop); a budget of the
+    // safe fall height takes the drop exactly as the default query does.
+    const yc = [], yb = (x0, x1, y0, y1, z0, z1) => yc.push(mk("box", x0, x1, y0, y1, z0, z1));
+    yb(9.8, 10.2, 0, 2.7, 9.8, 16.2); yb(15.8, 16.2, 0, 3, 9.8, 16.2); yb(10.2, 15.8, 0, 3, 9.8, 10.2); yb(10.2, 15.8, 0, 3, 15.8, 16.2);   // the yard's walls
+    yb(5, 10.2, 2.7, 3.0, 9.8, 16.2);                                                                                                     // the platform, its east edge on the west wall
+    yc.push(mk("ramp", -1, 5, 0, 3, 11, 15, 0));                                                                                        // its ramp, rising toward +x
+    const WY = NG.createWorld({ colliders: yc, heightFn: flat, cover: (tx, tz) => tx >= -1 && tx <= 0 && tz === 0 });
+    const inD = NG.findPath(WY, -4, 0, 13, 13, 0, 13), fD = WY.lastFail, inSafe = NG.findPath(WY, -4, 0, 13, 13, 0, 13, { maxDrop: NG.dropHeight(R.FALL_SAFE_V) });
+    const in1 = NG.findPath(WY, -4, 0, 13, 13, 0, 13, { maxDrop: 1 }), f1 = WY.lastFail;
+    const out = NG.findPath(WY, 13, 0, 13, -4, 0, 13), fo = WY.lastFail;
+    const legs = (p) => JSON.stringify(p && p.map((w) => [w.x, w.y, w.z, w.k]));
+    ok(inD && inD.some((w) => w.k === NG.EDGE_DROP) && legs(inSafe) === legs(inD), "the walled yard: in over the platform with a drop leg (" + (inD ? inD.length + " waypoints" : "null: " + fD) + "); maxDrop = the safe fall height gives the same route");
+    ok(in1 === null && f1 === "no-path", "... maxDrop 1 m: null, lastFail " + f1 + " (a valid answer: the caller keeps its own plan)");
+    ok(out === null && fo === "no-path", "... from inside the yard: null, lastFail " + fo + " (no way out at any budget)");
+  }
   // islands
   const vault = NG.findPath(W1, 36.5, 0, 25, 43, 0, 23);
   ok(vault === null && W1.lastFail === "no-goal", "the sealed vault has no node (pruned): lastFail " + W1.lastFail);

@@ -348,8 +348,8 @@ const LCU = {
   uLcWind: { value: new THREE.Vector4(0.8, 0.6, 1, 0) },               // xy = wind direction, z = strength (0 = still)
   uLcGrime: { value: null },                                            // the CC0 wall photograph (detail, divided by its own mean)
   uLcGrimeK: { value: new THREE.Vector4(0, 1 / 6, 0, 0) },             // x = gain (0 = off), y = 1 / the photo's tile (m, world-planar)
-  uLcWear: { value: new THREE.Vector2(0.30, 0.85) },                    // x = how much darker the base of a wall is at the ground, y = the band's height (m)
-  uLcWater: { value: new THREE.Vector4(0, 0, 0, 0) },                  // x = water y
+  uLcWear: { value: new THREE.Vector3(0.30, 0.85, 1.15) },              // x = how much darker ON SCREEN the base of a wall is at the ground, y = the band's height (m), z = the tone-map exposure
+  uLcWater: { value: new THREE.Vector4(0, 0, 7, 0) },                  // x = water y, z = the depth that reads fully deep (m)
   uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
 };
 const GRIME_FILE = { url: "assets/tex/wall_grime.jpg", avg: [0.6339, 0.4989, 0.3582] };   // Poly Haven "Concrete Wall 003" (CC0), 1k diffuse JPG (265 KB); avg = its LINEAR mean (numpy over the decoded sRGB pixels)
@@ -438,7 +438,8 @@ uniform sampler2D uLcAO; uniform vec4 uLcAOK;
 uniform sampler2D uLcGrime; uniform vec4 uLcGrimeK;
 #endif
 #ifdef LC_WEAR
-uniform vec2 uLcWear;
+uniform vec3 uLcWear;
+float lcWB = 0.0;                    // the wear band's on-screen darkening at this fragment (set in the albedo terms, applied to the lit colour)
 #endif
 #ifdef LC_WATER
 uniform vec4 uLcWater; uniform vec3 uLcShallow; uniform vec3 uLcDeep;
@@ -451,7 +452,7 @@ const LC_FRAG_ALBEDO = `
   float lvert = 1.0 - abs( vLcN.y );
   float lhb = vLcW.y - lcGround( vLcW.xz );
   float lband = ( 1.0 - smoothstep( 0.0, uLcWear.y, lhb ) ) * smoothstep( 0.25, 0.75, lvert ) * step( -0.6, lhb );
-  diffuseColor.rgb *= 1.0 - uLcWear.x * lband;
+  lcWB = uLcWear.x * lband;
 }
 #endif
 #ifdef LC_GRIME
@@ -468,7 +469,7 @@ const LC_FRAG_ALBEDO = `
 #ifdef LC_WATER
 {
   float ldep = uLcWater.x - lcGround( vLcW.xz );
-  float lk = smoothstep( 0.0, 7.0, ldep );
+  float lk = smoothstep( 0.0, uLcWater.z, ldep );                // (the depth that reads as deep: 7 m on the sea, 3.2 m in Deepwood's rivers and lakes)
   diffuseColor.rgb = mix( uLcShallow, uLcDeep, lk );
   // surf lines follow the depth contours (so they run along the shore and roll in), broken into ~12 m patches; once a band is under ~2 px (the drop
   // view) its sine is replaced by its mean, so the plane sees a soft white rim, not stripes (was one world-space diagonal sine: zebra bands from the air)
@@ -495,6 +496,24 @@ const LC_FRAG_LIGHT = `
 {
   float lao = texture2D( uLcAO, vLcW.xz * uLcAOK.x + uLcAOK.y ).r;
   reflectedLight.indirectDiffuse *= 1.0 - uLcAOK.z * lao; reflectedLight.directDiffuse *= 1.0 - uLcAOK.w * lao;
+}
+#endif`;
+// P23-fix / LC-17 wall base: the wear band darkens the LIT colour by a share of its ON-SCREEN brightness (uLcWear.x x the band), not the albedo by a fixed
+// factor. An albedo factor k reads as 1 - k^(1/2.4) on a sunlit face but ~1 - k on a shaded one (sRGB's dark end is near-linear): one wear setting read 7-14 %
+// on Savanna's sunlit walls and 25-28 % on Isla's shaded ones (the plan's band is 15-25 %). Here the lit colour x the exposure goes through the screen's own
+// curve (PBR Neutral's toe - its shoulder starts at 0.76 - then sRGB, PER CHANNEL), is lowered by the band's share and comes back through the inverse: the
+// same darkening on every face, lit or not.
+const LC_FRAG_OUT = `
+#ifdef LC_WEAR
+if ( lcWB > 0.0 ) {
+  vec3 lx = max( outgoingLight * uLcWear.z, vec3( 0.0 ) );
+  float lm = min( lx.r, min( lx.g, lx.b ) );
+  lx -= lm < 0.08 ? lm - 6.25 * lm * lm : 0.04;                                   // PBR Neutral's toe (three's NeutralToneMapping below its 0.76 shoulder)
+  vec3 lt = mix( 1.055 * pow( lx, vec3( 0.41667 ) ) - 0.055, lx * 12.92, vec3( lessThanEqual( lx, vec3( 0.0031308 ) ) ) ) * ( 1.0 - lcWB );
+  lx = mix( pow( ( lt + 0.055 ) * 0.947867, vec3( 2.4 ) ), lt * 0.0773994, vec3( lessThanEqual( lt, vec3( 0.04045 ) ) ) );
+  lm = min( lx.r, min( lx.g, lx.b ) );
+  lx += lm < 0.04 ? sqrt( max( lm, 0.0 ) * 0.16 ) - lm : 0.04;                   // (its inverse)
+  outgoingLight = lx / uLcWear.z;
 }
 #endif`;
 const LC_UNIFORMS = { LC_WIND: ["uLcT", "uLcWind"], LC_CLOUD: ["uLcCloud", "uLcCloudK", "uLcCloudOff"], LC_HGT: ["uLcHgt", "uLcHgtK"], LC_AO: ["uLcAO", "uLcAOK"],
@@ -525,7 +544,8 @@ function lcPatch(mat, defs) {
       sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n" + LC_VERT_WORLD);
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + LC_FRAG_HEAD)
         .replace("#include <map_fragment>", "#include <map_fragment>\n" + LC_FRAG_ALBEDO)
-        .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + LC_FRAG_LIGHT);
+        .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + LC_FRAG_LIGHT)
+        .replace("#include <opaque_fragment>", LC_FRAG_OUT + "\n#include <opaque_fragment>");
     }
     if (prevCompile) prevCompile.call(mat, sh, r);
   };
@@ -534,6 +554,22 @@ function lcPatch(mat, defs) {
 }
 /** the graphics tier this map is built for (lane boot's C-GFX W.gfxTier, else the stored setting): low | medium | high | ultra */
 function gfxTierOf(W) { const t = W.gfxTier || (W.settings && W.settings.graphics) || (W._gfx && W._gfx.tier) || "medium"; return t === "low" || t === "medium" || t === "high" || t === "ultra" ? t : "medium"; }
+/** C-GFX / D10: the citykit facade-detail strength for a tier (0 = off on low: setDetail(0) needs no recompile) and the wall photograph's gain. */
+const KIT_DETAIL = 0.62, GRIME_GAIN = 0.7;
+function kitDetailFor(tier) { return tier === "low" ? 0 : KIT_DETAIL; }
+/** D10: boot emits W.events 'gfxTier'(tier) whenever the tier changes (and once at start). One listener per W (the emitter has no off()), acting on
+ *  whatever map is current: the city kit's facade detail and the wall photograph follow the tier without a recompile (a map BUILT on low never loaded the
+ *  photograph or patched the shaders, so raising the tier mid-match cannot add them: the draw distances (TIER_Q) stay those of the tier the map was built for). */
+function hookGfxTier(W) {
+  if (!W || W._mapsGfxHook || !W.events || typeof W.events.on !== "function") return;
+  W._mapsGfxHook = true;
+  W.events.on("gfxTier", (tier) => {
+    const t = tier || W.gfxTier;
+    const kit = W._cityKit;
+    if (kit && typeof kit.setDetail === "function") { try { kit.setDetail(kitDetailFor(t)); } catch (e) { /* a disposed kit */ } }
+    if (LCU.uLcGrime.value) LCU.uLcGrimeK.value.x = t === "low" ? 0 : GRIME_GAIN;
+  });
+}
 
 /** the photo splat of a terrain vertex: weights of (grass/rock, beach, sand) - the same biome zones colorAt tints, so the detail and the colour agree */
 function splatAt(mapId, h, x, z, seed, out) {
@@ -1223,6 +1259,7 @@ function bakeContactAO(colliders, gyc, N, size) {
 export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
   const seed = W.seed;
+  hookGfxTier(W);                                       // D10: the city kit detail / wall photograph follow boot's 'gfxTier' event
   // C-GFX: the tier this map is BUILT for (fixed for the match: the in-match ladder only moves bloom / DPR). LCFX = the world-shader layer (LCU) and the photo
   // wall detail: off on low. ULTRA (lane boot) = the longest draw / foliage / grass / furniture distances and the 5 x 5 near terrain ring (see TIER_Q).
   const TIER = gfxTierOf(W), LCFX = TIER !== "low";
@@ -1341,6 +1378,7 @@ export async function buildMap(W, mapId) {
     // The menu is untouched: hud.js restores ACES 1.12 for the menu diorama.
     kn.renderer.toneMapping = THREE.NeutralToneMapping;
     kn.renderer.toneMappingExposure = K.grade ? K.grade.exposure : 1.15;
+    LCU.uLcWear.value.z = kn.renderer.toneMappingExposure;           // (the wear band's on-screen darkening: LC_FRAG_OUT)
     const sunK = K.sun || MAPS.isla_viva.sun, hemiK = K.hemi || MAPS.isla_viva.hemi;
     kn.sun.intensity = sunK.intensity; kn.sun.color.setHex(sunK.color);
     kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
@@ -4741,7 +4779,7 @@ export async function buildMap(W, mapId) {
     const { CK, lay } = city;
     if (!city.kit.length) return;
     const tier = W.settings && W.settings.graphics;
-    const kit = CK.createCityKit({ THREE, kernel: W.kernel, assetBase: W.assetBase || "" });
+    const kit = CK.createCityKit({ THREE, kernel: W.kernel, assetBase: W.assetBase || "", detail: kitDetailFor(TIER) });   // (C-GFX / D10: the facade detail is 0 on low)
     W._cityKit = kit;
     const districts = {};
     for (const it of city.kit) if (!districts[it.district]) districts[it.district] = { theme: "city" };
@@ -5546,6 +5584,27 @@ export async function buildMap(W, mapId) {
     });
   }
 
+  // P23 / LC-47: rotation cover (towngen.js rotationCover): the holes the wild scatter left between the POIs get a rock outcrop, a ruined wall or (beside a road) an abandoned
+  // car - only where nothing that stops a bullet stands within 15.5 m. Built with what the map already draws (the instanced rocks / cars and their baked colliders, quarter-turn
+  // box walls in the structure batches): no new mesh, program or draw call. towngen draws from its own per-cell sub-streams: the shared `rng` is never touched.
+  if (city && typeof city.TG.rotationCover === "function") {
+    const RAD = { palm: 0.5, tree: 0.6, pine: 0.55, birch: 0.5, rocks: 1.4, car: 1.6, container: 2.2 };
+    const have = [];
+    for (const k in RAD) for (const it of props[k] || []) have.push([it.x, it.z, RAD[k] * (it.s || 1)]);
+    for (const r of cityBld) have.push([(r[0] + r[2]) / 2, (r[1] + r[3]) / 2, Math.min(r[2] - r[0], r[3] - r[1]) / 2]);
+    const free = (x, z, pad) => !(nearPoi(x, z, pad) || nearLandmark(x, z) || inCity(x, z, pad) || inRects(cityBld, x, z, pad) || inRects(cityDecks, x, z, pad));
+    const cov = city.TG.rotationCover(seed, mapId, { half: HALF, waterY, h: (x, z) => heightAt0(x, z), free, cover: have, roads: cityRoadLog });
+    for (const c of cov.pieces) {
+      if (c.kind === "rocks") props.rocks.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: c.s, ry: c.ry, rej: 1, reliefMax: 1.2 });
+      else if (c.kind === "car") props.car.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: 2.2, ry: c.ry, rej: 1 });
+      else if (c.kind === "wall") {
+        const ry = c.quarter ? Math.PI / 2 : 0;
+        addBox(c.x, lowGround(c.x, c.z, c.w, c.d, ry) + c.h / 2 - 0.15, c.z, c.w, c.h + 0.3, c.d, c.tone, { rotY: ry });
+      }
+    }
+    city.cover = cov.stats; city.coverPieces = cov.pieces;            // (the gates / shot tools read them)
+  }
+
   // (the road network between the POIs is registered right after each branch declares its POIs, above: its corridors must be in the ground
   // BEFORE any building or piece of street furniture is built on it)
 
@@ -5568,6 +5627,7 @@ export async function buildMap(W, mapId) {
     LCU.uLcHgt.value = ht;
     LCU.uLcHgtK.value.set(LAT_CELLS / (SIZE * LAT_N), (HALF * LAT_CELLS / SIZE + 0.5) / LAT_N, 0, 0);
     LCU.uLcWater.value.x = waterY;
+    LCU.uLcWater.value.z = mapId === "deepwood" ? 3.2 : 7.0;   // LC-39: Deepwood's water is 3.7 m at its deepest (p90 2.9 m): on the sea's 7 m scale it never read deep
   }
   photo = await photoPromise;
   buildTerrain();
@@ -5871,7 +5931,7 @@ export async function buildMap(W, mapId) {
   const KIND_PBR = { s: [0.86, 0.03], plank: [0.9, 0.0], shingle: [0.8, 0.02], metal: [0.45, 0.5], block: [0.84, 0.02], stucco: [0.93, 0.0] };
   const STRUCT_LC = { LC_CLOUD: "", LC_WEAR: "" };
   const grimeTex = await grimePromise;
-  if (grimeTex) { LCU.uLcGrime.value = grimeTex; LCU.uLcGrimeK.value.set(0.7, 1 / 6.0, 0, 0); STRUCT_LC.LC_GRIME = ""; }
+  if (grimeTex) { LCU.uLcGrime.value = grimeTex; LCU.uLcGrimeK.value.set(GRIME_GAIN, 1 / 6.0, 0, 0); STRUCT_LC.LC_GRIME = ""; }
   else LCU.uLcGrimeK.value.set(0, 1 / 6.0, 0, 0);
   function structMaterial(tkind) {
     let mat = structMats[tkind];
@@ -7033,7 +7093,7 @@ export async function buildMap(W, mapId) {
     fallback: cityFallback,                                                     // null, or { reason, genVersion, wanted }: the towns did not load, this is the Wave-6 Savanna
     // WAVE 7: the Savanna city as built (null on the other maps): towngen's layout (towns, compounds, links, stats), the citykit list and what it placed, the
     // decals - read-only, for the gates (citycheck, placementcheck, perf_district) and for debugging
-    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog, furniture: city.furniture || null, houseVersion: city.HG ? city.HG.VERSION : null } : null,
+    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog, furniture: city.furniture || null, houseVersion: city.HG ? city.HG.VERSION : null, cover: city.cover || null, coverPieces: city.coverPieces || null } : null,
     ground: { lattice: field.lat, latN: LAT_N, pitch: LAT_PITCH, pads: field.pads.length, corridors: field.corridors, corridorSegments: field.segs.length, bakeMs, roads: roadStats, roadSections: roadLog, padLog },
     // the look to restore to when the camera surfaces (underwater overrides it)
     fogSurface: { color: K.sky, density: K.fog },

@@ -430,6 +430,12 @@ const SFX = {
   step_concrete: ["step_concrete_000", "step_concrete_001", "step_concrete_002", "step_concrete_003"],
   step_wood:     ["step_wood_000", "step_wood_001", "step_wood_002", "step_wood_003"],
   step_snow:     ["step_snow_000", "step_snow_001", "step_snow_002", "step_snow_003"],
+  // P23 fix round: the rest of maps.surfaceAt's labels (CC0; OGA Fantozzi / TinyWorlds / rubberduck / Peludo + Kenney
+  // impact layers for metal; F:/lc_p23/audio/fixtools/build_steps.py, loudest-50 ms RMS matched to step_grass)
+  step_sand:     ["step_sand_000", "step_sand_001", "step_sand_002", "step_sand_003"],
+  step_dirt:     ["step_dirt_000", "step_dirt_001", "step_dirt_002", "step_dirt_003"],
+  step_metal:    ["step_metal_000", "step_metal_001", "step_metal_002", "step_metal_003"],
+  step_water:    ["step_water_000", "step_water_001", "step_water_002", "step_water_003"],
   imp_stone:     ["impactPlate_light_000", "impactPlate_light_001", "impactPlate_light_002"],
   imp_wood:      ["impactPlank_medium_000", "impactPlank_medium_001", "impactPlank_medium_002"],
   imp_metal:     ["impactMetal_light_000", "impactMetal_light_001", "impactMetal_light_002"],
@@ -1349,7 +1355,8 @@ function farFrom(R) { return Math.max(150, 0.5 * R); }  // ... the far one from 
 // loudest-10 ms RMS of the same shot 3-4 m either side of each hand-over; all gains 1.0 gave jumps of
 // -10.1 dB (AR at 80 m) to +2.1 dB (AR at 160 m)). The LMG shares the AR takes but not its near level.
 const DIST_G = { pistol: [1.64, 2.19], smg: [1.22, 1.57], ar: [2.85, 1.99], shotgun: [1.76, 0], sniper: [1.06, 1.51],
-                 dmr: [1.17, 1.62], lmg: [2.16, 1.9], burst: [0.92, 0.99] };
+                 dmr: [1.17, 1.62], lmg: [2.16, 1.9], burst: [0.92, 0.99] };   // 0 = no such band for the class
+const DIST_G_DEF = [1, 1];
 
 // synth report per class: [lowpass Hz, decay s, gain]
 const SHOT_P = {
@@ -1490,6 +1497,11 @@ function isMate(a) {
  *  ducks the ambience, the music and the friendly footsteps under it. */
 function bumpThreat(v) { if (v > _threat) _threat = Math.min(1, v); }
 
+// maps.surfaceAt label -> footstep cue (every label it returns: grass, concrete, stone, wood, snow, metal, sand, dirt,
+// water); anything else, or no surfaceAt, is grass
+const STEP_KEY = { grass: "step_grass", wood: "step_wood", snow: "step_snow", stone: "step_concrete", concrete: "step_concrete",
+                   sand: "step_sand", dirt: "step_dirt", metal: "step_metal", water: "step_water" };
+
 /** One footstep for actor `a` — the "footstep" event and the remote-step
  *  synthesiser both land here. */
 function playStep(a, sprintGuess) {
@@ -1506,11 +1518,12 @@ function playStep(a, sprintGuess) {
   // footstep's whole identity is its surface texture. The feet height goes
   // along (LC-52, part): Wave 8's surfaceAt reads house storeys from it.
   const surf = (W.map && W.map.surfaceAt) ? W.map.surfaceAt(a.pos.x, a.pos.z, a.pos.y) : null;
-  const keyed = surf === "wood" ? "step_wood" : surf === "snow" ? "step_snow"
-              : surf === "stone" || surf === "concrete" ? "step_concrete" : "step_grass";
+  const keyed = STEP_KEY[surf] || "step_grass";
   // footsteps (yours included) sit below every gunshot in the voice pool
   const gain = (own ? s.own : s.g) * k;
   if (sample(keyed, own ? null : a.pos, gain, s.d, s.f, VOICE_TIER.step, FX_STEP)) return;
+  // a surface whose takes have not decoded (blocked fetch, old cache) plays the grass step it played before
+  if (keyed !== "step_grass" && sample("step_grass", own ? null : a.pos, gain, s.d, s.f, VOICE_TIER.step, FX_STEP)) return;
   thump((300 + Math.random() * 90) * s.f, 0.055, gain, own ? null : a.pos, s.d, VOICE_TIER.step, FX_STEP);
 }
 
@@ -1899,9 +1912,12 @@ function wire(W) {
     // the late wave has decoded (sample() returns false for an undecoded clip).
     let distant = false;
     if (!own && eye && G.dist && ctx && place(eye, maxD) >= 0 && _pd >= MID_M) {
-      const band = _pd >= farFrom(maxD) && SFX["gd_" + G.dist + "_far"] ? "far" : "mid";
-      const key = "gd_" + G.dist + "_" + band;
-      if (SFX[key] && sample(key, pos, g * ((DIST_G[k] || [1, 1])[band === "far" ? 1 : 0] || 1), maxD, G.rate, tier, FX_GUN_DIST)) { distant = true; _acc[band === "far" ? "distFar" : "distMid"]++; }
+      // a band whose DIST_G level is 0 does not exist for that class (shotgun far): the band below it carries on.
+      // (The old `[..] || 1` turned that 0 into full level.) A class missing from DIST_G plays both bands at 1.
+      const dg = DIST_G[k] || DIST_G_DEF;
+      const band = _pd >= farFrom(maxD) && dg[1] > 0 && SFX["gd_" + G.dist + "_far"] ? "far" : "mid";
+      const key = "gd_" + G.dist + "_" + band, dgain = dg[band === "far" ? 1 : 0];
+      if (dgain > 0 && SFX[key] && sample(key, pos, g * dgain, maxD, G.rate, tier, FX_GUN_DIST)) { distant = true; _acc[band === "far" ? "distFar" : "distMid"]++; }
     }
     if (!distant && !(G.near && sample(G.near, pos, g, maxD, G.rate, tier, FX_GUN))) shot(cls, pos, tier);
     if (own) duckFireShot();

@@ -14,3 +14,6 @@ Merge this block into `CREDITS.md` (it is not referenced by the game).
   redistributed.
 - Ram-air canopy `assets/props/canopy.glb` / `canopy.json`: original asset authored for this game (parametric model built in Blender 5.1 by
   `_tools/art_a_canopy_build.py`); no third-party source. Draco-compressed with glTF-Transform (MIT).
+- Slide clip `slide` (P23 fix round, LC-21): Adobe Mixamo animations "soccer tackle (2)" (Soccer Game Pack; hips, legs, spine) and
+  "walk crouching forward" (Rifle 8-Way Locomotion Pack; shoulders, arms, hands, neck, head), combined into one baked clip (the spine
+  re-aimed so the chest holds the crouch walk's orientation). Mixamo terms as above; only the baked clip ships.

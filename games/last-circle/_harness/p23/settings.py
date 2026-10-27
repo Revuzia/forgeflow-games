@@ -253,19 +253,36 @@ def main():
             a1 = s.js(ANCH_JS)
             # the REAL slider: Escape -> the pause card -> SETTINGS -> ACCESSIBILITY -> a click at the right end of the HUD scale range (= 130 %)
             s.thaw_loop()
-            s.page.keyboard.press("Escape")
-            s.sleep(0.6)
             scaled = None
-            if open_settings(s):
-                click(s, "^ACCESSIBILITY$")
-                rr = s.js("""() => { const lab = [...document.querySelectorAll('div')].find((d) => d.children.length === 0 && /^HUD scale$/i.test((d.textContent || '').trim()));
-                    const inp = lab && lab.parentElement ? lab.parentElement.querySelector('input[type=range]') : null; if (!inp) return null; inp.scrollIntoView({ block: 'center' });
-                    const r = inp.getBoundingClientRect(); return [r.right - 2, r.top + r.height / 2]; }""")
-                if rr:
-                    s.page.mouse.click(rr[0], rr[1])
-                    s.sleep(0.4)
-                    scaled = s.js("() => window.__LC__.W.settings.hudScale")
-                close_settings(s)
+            reach = []
+            # SETUP (fix round, D16): Escape opens the pause card only while the pointer is LOCKED (an unlocked page shows CLICK TO LOOK AROUND
+            # and Escape does nothing: check run 10-26 21:04 - set=null, a FAIL that judged nothing). Lock first, verify the pause card, and try
+            # twice; a slider never reached is could-not-judge, never FAIL
+            for attempt in range(2):
+                st = {"attempt": attempt + 1, "locked": bool(L.lock_pointer(s))}
+                s.page.keyboard.press("Escape")
+                st["paused"] = s.wait_js("() => !!window.__LC__.W.paused", 3, 0.1) is not None
+                st["settings"] = open_settings(s)
+                if st["settings"]:
+                    click(s, "^ACCESSIBILITY$")
+                    rr = s.js("""() => { const lab = [...document.querySelectorAll('div')].find((d) => d.children.length === 0 && /^HUD scale$/i.test((d.textContent || '').trim()));
+                        const inp = lab && lab.parentElement ? lab.parentElement.querySelector('input[type=range]') : null; if (!inp) return null; inp.scrollIntoView({ block: 'center' });
+                        const r = inp.getBoundingClientRect(); return [r.right - 2, r.top + r.height / 2]; }""")
+                    st["slider"] = bool(rr)
+                    if rr:
+                        s.page.mouse.click(rr[0], rr[1])
+                        s.sleep(0.4)
+                        scaled = s.js("() => window.__LC__.W.settings.hudScale")
+                    close_settings(s)
+                st["set"] = scaled
+                reach.append(st)
+                if scaled is not None:
+                    break
+                for _ in range(2):
+                    if s.js("() => !!window.__LC__.W.paused"):
+                        s.page.keyboard.press("Escape")
+                        s.sleep(0.5)
+            v.data["hudScaleReach"] = reach
             for _ in range(2):
                 if s.js("() => !!window.__LC__.W.paused"):
                     s.page.keyboard.press("Escape")
@@ -305,10 +322,14 @@ def main():
                     cornerX = abs((r2[0] + r2[2]) / 2 - cx)
                 if not (grew and inside and cornerX <= 2 and cornerY <= 2):
                     bad[k] = {"100": r1, "130": r2, "grew": grew, "inside": inside, "dx": round(cornerX, 1), "dy": round(cornerY, 1)}
-            v.check("hud-scale (130 % by the real slider: every anchored panel grows from its anchor corner, +-2 px, inside the viewport)",
-                    bool(a1["a"]) and scaled is not None and abs(scaled - 1.3) < 0.01 and not bad and len(a1["a"]) - len(empty) >= 5,
-                    {"set": scaled, "panels": len(a1["a"]), "judged": len(a1["a"]) - len(empty), "empty": empty, "bad": bad,
-                     "css130": {k: a2.get("css", {}).get(k) for k in ("minimap", "bars")}, "plantActive": a2.get("planted")}, "1.3, >= 5 judged, 0 bad")
+            hs_name = "hud-scale (130 % by the real slider: every anchored panel grows from its anchor corner, +-2 px, inside the viewport)"
+            if scaled is None:
+                v.cnj(hs_name, "SETUP missed: the HUD-scale slider was never reached in 2 attempts (no pointer lock / no pause card / no SETTINGS): %s" % reach)
+            else:
+                v.check(hs_name,
+                      bool(a1["a"]) and scaled is not None and abs(scaled - 1.3) < 0.01 and not bad and len(a1["a"]) - len(empty) >= 5,
+                      {"set": scaled, "panels": len(a1["a"]), "judged": len(a1["a"]) - len(empty), "empty": empty, "bad": bad,
+                       "css130": {k: a2.get("css", {}).get(k) for k in ("minimap", "bars")}, "plantActive": a2.get("planted")}, "1.3, >= 5 judged, 0 bad")
             s.js(HUDMOD_JS)
             rb = s.safe_js("() => { const C = window.__LC__; const f = C.feel ? C.feel() : null; if (f && f.hud) return f.hud; const H = window.__HUDMOD__; return H && H.readback ? H.readback(C.W) : null; }", default=None) or {}
             mm = rb.get("minimap")

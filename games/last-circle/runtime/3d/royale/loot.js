@@ -32,11 +32,13 @@
  *    all carry it), with a red beacon beam + glow until it is opened. W.supplyDrops lists them (x, z, landed, opened) for the HUD.
  *  - LOOT TIERS + HOT ZONE (LC-29): POIs ranked by loot density into high / mid / basic, plus one seeded hot zone per match; a gun spawned inside a
  *    tiered POI gets a rarity uplift drawn from its OWN stream (seed x item id), so the shared streams and every item's kind and spot are unchanged.
- *    W.lootTiers / W.lootHotZone describe them (the big map marks the hot zone).
+ *    W.lootTiers / W.lootHotZone ({id, name, x, z, r, tier}, null between matches) describe them. loot.js draws NO marker of its own: the hot
+ *    zone is shown by the hud's big map, which reads W.lootHotZone (hud lane; desktop only, not on touch).
  *  - AMMO TINTS (LC-76): one colour per ammo type on the box (per-instance colour: no extra draw call) and on its ring.
  *  - CHEST BURST (LC-77): a chest bursts IN FRONT of itself, the gun and its own ammo on the same spot (one walk-over takes both).
  *  - W.nearbyChests(pos, r, out): allocation-free list of unopened chests / supply crates near a point (the audio lane's chest shimmer).
  *  - C-DBNO: a downed actor (a.downed) cannot pick up, open, walk over or drop loot; the player's E yields to a revive when a downed teammate is near.
+ *  - (final, OD-13) W.pileShields(pos, r, maxDy): the shield items still in death piles near a point, nearest first (the bots' late-game restock).
  */
 import * as THREE from "three";
 
@@ -73,6 +75,7 @@ const itemProtoCache = {};
 
 export function init(W) {
   K = W.SIM;
+  ensureCrateProto(W);             // the supply crate model (LC-28): loads now, long before populate and the warm-up need it
   // Meshy 3D pickup models (medkit / bandage / shield potions) with a cached
   // normalized proto per id; consumers: ground items + HUD slot icons.
   W.itemProto = async (id) => {
@@ -98,6 +101,7 @@ export function init(W) {
   W.openChest = (a, id) => openChest(W, a, id);
   W.giveItem = (a, data) => give(W, a, data);
   W.wouldAcceptItem = (a, data) => wouldAccept(W, a, data);
+  W.pileShields = (pos, r, maxDy) => pileShields(pos, r, maxDy);          // (final, OD-13) the death piles' shield items near a point (bots' restock)
   W.events.on("actorDied", (victim) => deathDrop(W, victim));
 
   // network mirrors + join-sync
@@ -191,6 +195,7 @@ export function disposeLootResources(W) {
     });
   };
   keep(chestProto);
+  keep(crateProto);                // the supply crate model (page-lifetime: every live crate shares its geometry and maps)
   if (blobMesh) { keep(blobMesh.geometry); keep(blobMesh.material); }
   // the marker pools are page-lifetime (like the blobs): their geometry, shader
   // material and instance buffers are shared by every match, so teardown leaves them alone
@@ -323,7 +328,7 @@ export function warmObjects(W) {
   // opaque box shares the plain standard program, but the BALLOON is a transparent MeshStandardMaterial and three keys `opaque`, so it is a
   // program of its own (measured on all three maps, 270-290 s into the match). A page-lifetime proxy built by the SAME factory the live drop uses
   // gives the warm frame both materials; it holds the programs for the session, and no live crate shares an instance with it.
-  if (!_warmCrate) _warmCrate = makeSupplyCrate().crate;
+  if (!_warmCrate || (crateProto && !_warmCrate.children[0].userData.model)) _warmCrate = makeSupplyCrate().crate;   // (the model's proxy once it has loaded)
   const out = [P.rings.mesh, P.beams.mesh, P.glows.mesh, _warmCrate];
   // The model pools (INSTANCED LOOT MODELS): every kind a match can show is built here when its model is loaded - every weapon proto, the
   // pickups, ammo and the chest pools - so the warm frame links each instanced program (and the near chests' instanced depth variant);
@@ -337,13 +342,44 @@ export function warmObjects(W) {
 }
 let _warmCrate = null;
 
-/** ONE builder for the supply crate (box + balloon), used by the live drop and by warmObjects, so the materials the warm-up links can never drift
+/** ONE builder for the supply crate (model + balloon), used by the live drop and by warmObjects, so the materials the warm-up links can never drift
  *  from the ones the drop draws. */
-// The crate (LC-28 look pass): a plain 1.6 m blue cube read as a placeholder next to PUBG's red-and-white care package and Apex's banded pod. Now a
-// steel-framed military crate: a dark body, a light metal frame on all 12 edges with corner feet, a red band round it and a red lamp on the lid (the
-// beacon's colour; it goes dark when the crate is opened). Four meshes, each ONE merged geometry, all plain opaque MeshStandardMaterial (the program
-// every untextured prop already uses) - and the same factory builds the warm proxy, so nothing links mid-match.
+// The crate (LC-28 look pass, fix round): a CC0 MODEL - Quaternius "Fantasy Props MegaKit" Crate_Metal (a planked crate in a riveted steel frame;
+// CC0 1.0, quaternius.com; credits_loot.md), baked to assets/props/supply_crate.glb (2738 tris, 2 textured materials, 512 px maps, 295 KB). It
+// replaced a crate merged from BoxGeometry primitives (the owner's no-primitive-props rule). Scaled to CRATE_W across; its steel frame is tinted the
+// beacon's red (the frame material's colour multiplies its map), so a supply crate never reads as a house chest. Every crate gets its OWN clones of
+// the two materials (same maps, same program: an opened crate dims without dimming the others); the geometry and the maps are the page-lifetime
+// proto's. Loaded from init (seconds before the warm-up); if the GLB cannot load, the drop falls back to the old composed crate (flagged: a
+// missing-file fallback only, never the shipped look).
 const CRATE_W = 1.6, CRATE_H = 1.4, CRATE_E = 0.11;
+const CRATE_URL = "assets/props/supply_crate.glb";
+const CRATE_FRAME_TINT = 0xff6a58;           // x the steel frame's map: a red-painted frame (the beacon's colour)
+let crateProto = null, crateLoad = null;
+function ensureCrateProto(W) {
+  if (crateProto || crateLoad) return crateLoad || Promise.resolve(crateProto);
+  if (!W || !W.kernel || typeof W.kernel.loadGLTF !== "function") return Promise.resolve(null);
+  crateLoad = W.kernel.loadGLTF(W.assetBase + CRATE_URL).then((m) => {
+    if (!m) return null;
+    m.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(m), size = bb.getSize(new THREE.Vector3());
+    const s = CRATE_W / Math.max(size.x, size.z, 0.01);
+    const c = bb.getCenter(new THREE.Vector3());
+    m.scale.multiplyScalar(s);
+    m.position.set(-c.x * s, -bb.min.y * s, -c.z * s);   // centred on its footprint, standing on y = 0
+    let ok = false;
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      ok = true;
+      o.castShadow = true; o.receiveShadow = true;
+      for (const mt of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (mt && /metal/i.test(mt.name || "") && mt.color) mt.color.setHex(CRATE_FRAME_TINT);
+      }
+    });
+    crateProto = ok ? m : null;
+    return crateProto;
+  }).catch(() => null).finally(() => { crateLoad = null; });
+  return crateLoad;
+}
 function mergeBoxes(list) {
   // list: [w, h, d, x, y, z] ... -> one indexed BufferGeometry (position / normal / uv)
   const pos = [], nor = [], uv = [], idx = [];
@@ -363,31 +399,39 @@ function mergeBoxes(list) {
   g.computeBoundingSphere();
   return g;
 }
-function makeSupplyCrate() {
-  const crate = new THREE.Group();
-  const W2 = CRATE_W / 2, H = CRATE_H, e = CRATE_E, y0 = 0.08;     // y0: the feet lift the body off the ground
+/** the crate body: a clone of the CC0 model (own material clones), or - only when the GLB failed to load - the old composed crate */
+function crateBody() {
+  if (crateProto) {
+    const b = crateProto.clone(true), mm = new Map();
+    b.traverse((o) => {
+      if (!o.isMesh) return;
+      const one = (mt) => { if (!mt) return mt; let c = mm.get(mt); if (!c) { c = mt.clone(); mm.set(mt, c); } return c; };
+      o.material = Array.isArray(o.material) ? o.material.map(one) : one(o.material);
+    });
+    const g = new THREE.Group(); g.add(b); g.userData.model = true;
+    return g;
+  }
+  // FALLBACK (missing GLB only)
+  const g = new THREE.Group();
+  const W2 = CRATE_W / 2, H = CRATE_H, e = CRATE_E, y0 = 0.08;
   const body = new THREE.Mesh(mergeBoxes([[CRATE_W - 0.06, H - 0.06, CRATE_W - 0.06, 0, y0 + H / 2, 0]]),
     new THREE.MeshStandardMaterial({ color: 0x34495e, metalness: 0.35, roughness: 0.62 }));
   const bars = [];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) bars.push([e, H, e, sx * (W2 - e / 2), y0 + H / 2, sz * (W2 - e / 2)]);   // 4 uprights
-  for (const yy of [y0 + e / 2, y0 + H - e / 2]) for (const s of [-1, 1]) {
-    bars.push([CRATE_W, e, e, 0, yy, s * (W2 - e / 2)]);
-    bars.push([e, e, CRATE_W, s * (W2 - e / 2), yy, 0]);
-  }
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) bars.push([0.2, y0 + 0.02, 0.2, sx * (W2 - 0.1), (y0 + 0.02) / 2, sz * (W2 - 0.1)]);   // feet
-  bars.push([0.08, 0.06, CRATE_W - 0.2, 0, y0 + H + 0.01, 0], [CRATE_W - 0.2, 0.06, 0.08, 0, y0 + H + 0.01, 0]);   // lid cross straps
-  const frame = new THREE.Mesh(mergeBoxes(bars), new THREE.MeshStandardMaterial({ color: 0xc3c9cf, metalness: 0.7, roughness: 0.38 }));
-  const bandY = y0 + H * 0.62, bh = 0.2;
-  const band = new THREE.Mesh(mergeBoxes([[CRATE_W - 0.03, bh, CRATE_W - 0.03, 0, bandY, 0]]),
-    new THREE.MeshStandardMaterial({ color: 0xc8322a, metalness: 0.2, roughness: 0.55 }));
-  const lamp = new THREE.Mesh(mergeBoxes([[0.34, 0.14, 0.34, 0, y0 + H + 0.08, 0], [0.2, 0.08, 0.2, 0, y0 + H + 0.19, 0]]),
-    new THREE.MeshStandardMaterial({ color: 0x3a0d0a, emissive: 0xff4a38, emissiveIntensity: 2.2, metalness: 0.1, roughness: 0.4 }));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) bars.push([e, H, e, sx * (W2 - e / 2), y0 + H / 2, sz * (W2 - e / 2)]);
+  for (const yy of [y0 + e / 2, y0 + H - e / 2]) for (const s of [-1, 1]) { bars.push([CRATE_W, e, e, 0, yy, s * (W2 - e / 2)]); bars.push([e, e, CRATE_W, s * (W2 - e / 2), yy, 0]); }
+  const frame = new THREE.Mesh(mergeBoxes(bars), new THREE.MeshStandardMaterial({ color: 0xc8322a, metalness: 0.6, roughness: 0.4 }));
   body.castShadow = frame.castShadow = true;
-  crate.add(body, frame, band, lamp);
+  g.add(body, frame); g.userData.model = false;
+  return g;
+}
+function makeSupplyCrate() {
+  const crate = new THREE.Group();
+  const body = crateBody();
+  crate.add(body);
   const balloon = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf2a33c, transparent: true, opacity: 0.85 }));
   balloon.position.y = 5;
   crate.add(balloon);
-  return { crate, box: body, lamp, balloon };
+  return { crate, box: body, balloon };
 }
 
 function slotInfo(P, slot) {
@@ -436,6 +480,7 @@ export function disposeMatch(W) {
   visReset();                      // the model pools' lists (the pools, their geometry and buffers are page-lifetime)
   takenIds.length = 0;
   supplyState = null;
+  tierState.pois = []; tierState.hot = null; W.lootHotZone = null;   // (the hud's big map stops drawing last match's hot zone)
   chestChannel.id = null; chestChannel.t = 0;
   losMap = null;                   // (the per-room pickup's line-of-sight map: never keep a finished match's colliders alive)
   return r;
@@ -1698,8 +1743,10 @@ export function debugHouseLoot() { return JSON.parse(JSON.stringify(houseStats))
 // floor table for every point, so a POI's rare+ share was noise around it (audit: isla 15-50 %, ashgrid 0-50 %). Here every named POI is ranked by its
 // loot DENSITY (floor + chest points inside its circle - the towns and the big signature POIs rank high, a lone lighthouse low): the top third is HIGH,
 // the next third MID, the rest BASIC (and loot outside every POI is basic). One POI with at least the median loot is the HOT ZONE (seeded per match).
-// A gun spawned inside a tiered POI is UPLIFTED: +1 rarity with chance p1, and a further +1 with chance p2 (capped at legendary). The uplift composes
-// with whatever base table sim/royale.js rolls (P2-D owns the tables: a chest table without commons stays without them), and it draws from the item's
+// A gun spawned inside a tiered POI is UPLIFTED: +1 rarity with chance p1, and a further +1 with chance p2 (capped at legendary). THIS UPLIFT IS THE
+// ONE TIER SOURCE (integrator D7): loot.js calls K.rollFloorSpawn(rng) / K.floorRollCount(rng, lootMult) / K.rollChest(rng) WITHOUT a tier, so
+// sim/royale.js's per-tier tables (LOOT_TIERS / lootTier, floor_mid / floor_high / floor_hot) are never applied on top - never pass one here. The uplift
+// sits on sim's BASE tables (floor / chest; a chest table without commons stays without them), and it draws from the item's
 // OWN stream (seed x item id): the shared populate / house / chest streams see exactly the draws they saw before, so every item keeps its kind, count and
 // spot - only some guns' rarity (and with it their beam and ring) changes. Changes the seeded loot output: MAP_GEN_VERSION (integrator).
 const TIER_UPLIFT = { basic: [0, 0], mid: [0.35, 0], high: [0.7, 0.12], hot: [1.0, 0.3] };
@@ -2324,6 +2371,29 @@ function pileMarkers(W, P) {
     if (!P.vis && FP) poolShow(FP.rings, P.ring, false);
   }
 }
+/** (final, OD-13) THE DEATH PILES' SHIELDS. Every shield item a killed actor carried is a member of its pile (deathDrop drops the whole bag); this
+ *  lists the ones still on the floor within r (maxDy: vertical reach, default NEAR_DY) as nearbyLoot item nodes (type "item", pile set), nearest
+ *  first. It walks the piles (one per death, at most 49 a match), not the loot grid, so a bot's long look for a restock costs ~50 distance checks
+ *  where a 160 m nearbyLoot reads 14 x 14 cells. A player sees and takes the same items (they are ordinary pile members). */
+function pileShields(pos, r, maxDy) {
+  const out = [];
+  if (!piles.size) return out;
+  const r2 = r * r, rp = r + PILE_RING2 + 0.5, dyMax = maxDy == null ? NEAR_DY : maxDy;
+  for (const P of piles.values()) {
+    const px = P.pos.x - pos.x, pz = P.pos.z - pos.z;
+    if (px * px + pz * pz > rp * rp) continue;
+    for (const id of P.members) {
+      const it = items.get(id);
+      if (!it || it.taken || !it.data || it.data.kind !== "consumable") continue;
+      const c = K.CONSUMABLES[it.data.id];
+      if (!c || c.heals !== "shield") continue;
+      const dx = it.pos.x - pos.x, dz = it.pos.z - pos.z, d2 = dx * dx + dz * dz;
+      if (d2 < r2 && Math.abs(it.pos.y - pos.y) < dyMax) out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d: Math.sqrt(d2), stand: it.stand || null, pile: it.pile });
+    }
+  }
+  out.sort((a, b) => a.d - b.d);
+  return out;
+}
 /** a pile member left the floor: re-mark the pile (its best may have gone) */
 function pileTaken(W, it) {
   const P = it.pile ? piles.get(it.pile) : null;
@@ -2493,18 +2563,22 @@ function botWalkover(W, a) {
 const CHEST_OPEN_S = 2.0;
 const chestChannel = { id: null, t: 0 };
 
-/** C-DBNO: does the player's E belong to a revive right now? (player.js owns the revive channel: a teammate holds E within K.REVIVE_R / 2 m of a downed
- *  team member.) True while the player is reviving (a.reviving, if player.js sets it) or a downed, living teammate is within reach - then a chest
- *  channel or a tap-E swap would fight the revive for the same key. Solo / FFA: no teammates, never true. */
+/** C-DBNO: does the player's E belong to a revive right now? (player.js owns the revive channel: a teammate holds E within K.REVIVE_RANGE of a downed
+ *  team member for K.REVIVE_S.) True while the player is reviving (a._reviveOf, player.js's channel) or a revive would start on this E: a downed,
+ *  living teammate within EXACTLY K.REVIVE_RANGE (integrator D3: sim's K is the single source, no slack of loot's own) and player.js's 1.5 m of
+ *  height - the rule player.js canRevive applies, which also gets the last word when it is there (somebody else already reviving him: E is free for
+ *  the chest). Outside that range E opens the chest, inside it E revives: no gap where it does neither. Same team = the same non-empty teamId
+ *  (D4). Solo / FFA: no teammates, never true. */
+const REVIVE_DY = 1.5;
 function reviveYield(W, a) {
-  if (a.reviving) return true;
-  if (a.teamId == null || !W.actors) return false;
-  const R = (K && K.REVIVE_R) || 2.0, R2 = (R + 0.3) * (R + 0.3);
+  if (a.reviving || a._reviveOf) return true;
+  if (!a.teamId || !W.actors) return false;
+  const R = K && +K.REVIVE_RANGE > 0 ? +K.REVIVE_RANGE : 2.0, R2 = R * R;
   for (let i = 0; i < W.actors.length; i++) {
     const b = W.actors[i];
     if (b === a || !b.downed || !b.alive || b.teamId !== a.teamId) continue;
-    const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
-    if (dx * dx + dz * dz < R2 && Math.abs(b.pos.y - a.pos.y) < REACH_DY) return true;
+    const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, dy = b.pos.y - a.pos.y;
+    if (dx * dx + dz * dz <= R2 && dy > -REVIVE_DY && dy < REVIVE_DY && (typeof W.canRevive !== "function" || W.canRevive(a, b))) return true;
   }
   return false;
 }

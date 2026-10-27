@@ -35,6 +35,11 @@ const ATLAS_W = CELL_W * COLS, ATLAS_H = CELL_H * ROWS;
 const MARGIN = 8;                       // transparent rows above/below the 48 px tag band
 const MAX = COLS * ROWS;                // 64 >= 50 actors + 5 range dummies
 const TAG_W = 2.6, TAG_H = 0.49, TAG_Y = 2.25;
+// Fix round (verifier screenshot: a teammate's plate drawn very large at 1-2 m): a tag is world-sized (2.6 x 0.49 m), so its screen
+// size grew without bound as it neared the camera - from 12 m in it covered a fifth of the screen width and more. With the HUD's
+// policy on, a tag nearer the camera than TAG_FULL_M keeps the screen size it had at TAG_FULL_M (its world size shrinks with the
+// distance, down to TAG_MIN_SC of full); past it nothing changes. No policy (null) = the old drawing, untouched.
+const TAG_FULL_M = 12, TAG_MIN_SC = 0.12;
 
 let S = null;
 
@@ -184,7 +189,9 @@ export function refresh(camera) {
     if (h.cell < 0) continue;
     const a = h.actor;
     // hidden by player.js and not a teammate (whom the policy may show further out): nothing to compute
-    if (!h.visible && !(foc && a && foc.teamId != null && a.teamId === foc.teamId)) continue;
+    // same team = a non-empty team id shared with the focus actor (D4: the rule player canRevive and bots sameTeam use)
+    const mate = !!(foc && a && foc.teamId && a.teamId === foc.teamId);
+    if (!h.visible && !mate) continue;
     const o = a && a.obj;
     if (!o || !o.parent) continue;
     const e = o.matrixWorld.elements;
@@ -192,7 +199,7 @@ export function refresh(camera) {
     const d2 = dx * dx + dy * dy + dz * dz;
     let vis = h.visible;
     if (foc && !a.isDummy) {
-      if (foc.teamId != null && a.teamId === foc.teamId) {
+      if (mate) {
         // teammate: out to mateM from the camera, never the watched actor itself, in the squad colour
         // near cut 10 m from the camera: the tag is world-sized (2.6 m wide), so a squadmate a few metres away got a tag a third
         // of the screen wide; up close a mate is known by their squad colour (vitals chip, blip, pings) - the tag is for finding them far
@@ -222,10 +229,15 @@ export function refresh(camera) {
   mesh.position.set(near[12], near[13] + TAG_Y, near[14]);
   mesh.updateMatrixWorld(true);
   const im = mesh.instanceMatrix.array, ca = s.cellAttr.array;
+  const capOn = !!pol, full2 = TAG_FULL_M * TAG_FULL_M;
+  let maxSc = 0;
   for (let i = 0; i < n; i++) {
     const h = order[i], e = h.actor.obj.matrixWorld.elements, b = i * 16, c = i * 4;
-    im[b] = TAG_W; im[b + 1] = 0; im[b + 2] = 0; im[b + 3] = 0;
-    im[b + 4] = 0; im[b + 5] = TAG_H; im[b + 6] = 0; im[b + 7] = 0;
+    const sc = capOn && key[i] < full2 && !h.actor.isDummy ? Math.max(TAG_MIN_SC, Math.sqrt(key[i]) / TAG_FULL_M) : 1;
+    const ang = TAG_W * sc / Math.max(0.25, Math.sqrt(key[i]));   // world width / camera distance (probe readback)
+    if (ang > maxSc) maxSc = ang;
+    im[b] = TAG_W * sc; im[b + 1] = 0; im[b + 2] = 0; im[b + 3] = 0;
+    im[b + 4] = 0; im[b + 5] = TAG_H * sc; im[b + 6] = 0; im[b + 7] = 0;
     im[b + 8] = 0; im[b + 9] = 0; im[b + 10] = 1; im[b + 11] = 0;
     im[b + 12] = e[12] - mesh.position.x; im[b + 13] = e[13] + TAG_Y - mesh.position.y; im[b + 14] = e[14] - mesh.position.z; im[b + 15] = 1;
     const x0 = (h.cell % COLS) * CELL_W, y0 = Math.floor(h.cell / COLS) * CELL_H + MARGIN;
@@ -234,6 +246,7 @@ export function refresh(camera) {
   }
   mesh.instanceMatrix.needsUpdate = true;
   s.cellAttr.needsUpdate = true;
+  s.maxAng = maxSc;
   return n;
 }
 
@@ -276,7 +289,8 @@ export function disposeMatch() {
 /** read-back for probes */
 export function stats() {
   return S ? { handles: S.handles.length, free: S.free.length, drawn: S.mesh.count, visible: S.mesh.visible, parented: !!S.mesh.parent,
-               policy: POL ? { enemyM: POL.enemyM, mateM: POL.mateM, aimedId: POL.aimedId || null } : null, policyHidden: S.policyHidden || 0 } : null;
+               policy: POL ? { enemyM: POL.enemyM, mateM: POL.mateM, aimedId: POL.aimedId || null } : null, policyHidden: S.policyHidden || 0,
+               maxAng: S.maxAng || 0, fullM: TAG_FULL_M } : null;
 }
 /** read-back for probes: which actors' tags were packed on the last refresh */
 export function drawnIds() {
