@@ -851,18 +851,24 @@ function explosionFx(W, pos, R) {
 }
 
 // ── C-SMOKE: smoke-grenade clouds ────────────────────────────────────────────
-// W.smokes = [{x, y, z, r, t0, t1}] (weapons.js, lane sim; times on W.t). The cloud is a pure function of its entry and
-// W.t: puff offsets / sizes / spins come from a hash of the entry, so nothing per puff is stored but a cached ground
-// height. Life: billows out over SMOKE_GROW s (85 % of its radius in ~1.3 s), holds, then over the last
-// min(SMOKE_FADE_MAX, 25 %) of its life thins, swells and lifts. Sight through it is cut by maps.js losBlocked (the
-// same spheres); this is the picture: dense enough in the middle that nothing reads through it.
+// W.smokes = [{x, y, z, r, t0, t1, rMax}] (weapons.js, lane sim; times on W.t; integrator D1: r is the LIVE radius, grown
+// by the sim from 0.35 x rMax to rMax over K.SMOKE.growS). The cloud is a pure function of its entry and W.t: puff offsets
+// / sizes / spins come from a hash of the entry, scaled by exactly s.r every frame, so nothing per puff is stored but a
+// cached ground height (re-sampled where the puff is). Life: the sim's growth, a hold, then over the last
+// min(K.SMOKE.fadeS, 25 %) of its life it thins (puffs swelling a little). Sight through it is cut by maps.js losBlocked
+// (the same live spheres); this is the picture: dense enough in the middle that nothing reads through it.
 const SMOKE_MAX = 6;                              // clouds drawn at once
 const SPUFF_MAX = 28;                             // puffs per cloud at the top tier (FXQ.cloud)
 const SMOKE_SLOTS = SMOKE_MAX * SPUFF_MAX + 2;    // + the two in-cloud veils
-const SMOKE_GROW = 2.2, SMOKE_FADE_MAX = 3, SMOKE_DRAW_MAX = 520;
+const SMOKE_FADE_MAX = 3, SMOKE_DRAW_MAX = 520;
+/** K.SMOKE.fadeS (the sim says fx fades the cloud's last fadeS), else 3 s. */
+function smokeFadeS(W) {
+  const S = W && W.SIM && W.SIM.SMOKE;
+  return S && S.fadeS > 0 ? S.fadeS : SMOKE_FADE_MAX;
+}
 const SP = 10;                                    // static floats per puff in the cache
 let smokeMesh = null, smokeMat = null;
-const smokeCache = [];                            // per drawn cloud: { ref, seed, used, gy: Float32Array, st: Float32Array, jetAcc }
+const smokeCache = [];                            // per drawn cloud: { ref, seed, used, gy / gx / gz: Float32Array, st: Float32Array, jetAcc, floor }
 const _sKey = new Float32Array(SMOKE_SLOTS), _sOrd = new Int32Array(SMOKE_SLOTS), _sBuf = new Float32Array(SMOKE_SLOTS * 16);
 const smokeStats = { clouds: 0, puffs: 0, veil: 0, inside: false, jets: 0, maxClouds: 0 };
 const _sunDir = new THREE.Vector3(0.4, 0.8, 0.3);
@@ -1003,17 +1009,35 @@ function ensureSmoke(W) {
     // flash or tracer in front of one is never smoked over (one mesh cannot sort against the other per particle)
     smokeMesh.renderOrder = 6.5;
     smokeMesh.name = "fx-smoke";
-    for (let i = 0; i < SMOKE_MAX; i++) smokeCache.push({ ref: null, seed: 0, used: false, gy: new Float32Array(SPUFF_MAX), st: new Float32Array(SPUFF_MAX * SP), jetAcc: 0, gyc: 0 });
+    for (let i = 0; i < SMOKE_MAX; i++) smokeCache.push({ ref: null, seed: 0, used: false, gy: new Float32Array(SPUFF_MAX), gx: new Float32Array(SPUFF_MAX), gz: new Float32Array(SPUFF_MAX), st: new Float32Array(SPUFF_MAX * SP), jetAcc: 0, floor: null });
   }
   if (W && !smokeMesh.parent) W.group("smoke").add(smokeMesh);
 }
 
-/** The cloud's static puff table (unit offsets, size, alpha, spin, swirl, bob phase, occlusion) and the ground under
- *  each puff's full-grown position, made once when the cloud is first drawn. */
+/** K.SMOKE.yOff (the cloud's centre sits this far over the canister's rest point), else the sim's default. */
+function smokeYOff(W) {
+  const S = W && W.SIM && W.SIM.SMOKE;
+  return S && S.yOff > 0 ? S.yOff : 1.2;
+}
+/** The ground under one puff at (x, z): the terrain, or for a cloud on a roof / upper floor that floor (the terrain far
+ *  below is not what the smoke sits on). */
+function smokeGround(W, e, s, x, z) {
+  const map = W.map;
+  const h = map && map.heightAt ? map.heightAt(x, z) : s.y - smokeYOff(W);
+  return e.floor != null ? Math.max(h, e.floor) : h;
+}
+/** The cloud's static puff table (unit offsets, size, alpha, spin, swirl, bob phase, occlusion), made once when the cloud
+ *  is first drawn. The ground under each puff is sampled where the puff IS (updateSmoke): the cloud grows from 0.35 x
+ *  rMax to rMax (the sim's live r) and swirls, so a height cached at the first frame's small radius sat a third of the way
+ *  out and left gaps under the downhill side of a slope (fix round: sampled out to rMax as the cloud grows). */
 function smokeBind(W, e, s) {
   e.ref = s; e.used = true; e.jetAcc = 0;
   e.seed = (Math.round(s.x * 10) * 73856093) ^ (Math.round(s.z * 10) * 19349663) ^ (Math.round((s.t0 || 0) * 100) * 83492791);
-  const R = s.r || 5, map = W.map;
+  const map = W.map, floorY = s.y - smokeYOff(W);
+  // a cloud on a roof / upstairs floor: the terrain under its centre is far below the canister's floor -> that floor is
+  // the ground for every puff (a cloud on a hillside keeps the terrain: its centre's ground IS the canister's floor)
+  const g0 = map && map.heightAt ? map.heightAt(s.x, s.z) : floorY;
+  e.floor = g0 < floorY - 1.5 ? floorY : null;
   for (let i = 0; i < SPUFF_MAX; i++) {
     const o = i * SP;
     const h = (k) => hash01(e.seed + i * 131, k);
@@ -1043,9 +1067,7 @@ function smokeBind(W, e, s) {
     e.st[o + 8] = h(9) * 6.2832;                      // bob phase
     // occlusion: a puff low and deep inside sits in the cloud's own shadow
     e.st[o + 9] = 0.60 + 0.40 * Math.max(0, Math.min(1, 0.55 + 0.75 * oy + 0.35 * Math.hypot(ox, oz)));
-    e.gy[i] = map && map.heightAt ? map.heightAt(s.x + ox * R, s.z + oz * R) : (s.y - R * 0.5);
-    // a cloud on a roof / upstairs floor: the floor under it is the sphere's own base, never the terrain far below
-    if (e.gy[i] < s.y - R * 1.2) e.gy[i] = s.y - R * 0.7;
+    e.gx[i] = 1e9; e.gz[i] = 1e9; e.gy[i] = floorY;   // sampled on the first draw (gx / gz = where the height was taken)
   }
 }
 
@@ -1111,22 +1133,29 @@ function updateSmoke(W, dt) {
       }
       e.used = true;
       smokeStats.clouds++;
-      const R = s.r || 5, age = t - s.t0, life = Math.max(1, s.t1 - s.t0);
-      const g0 = Math.min(1, age / SMOKE_GROW), grow = 1 - (1 - g0) * (1 - g0) * (1 - g0);
-      const fadeD = Math.min(SMOKE_FADE_MAX, 0.12 * life);   // sight is cut for the whole life: the picture holds until the end
+      // C-SMOKE (integrator D1): s.r is the sim's LIVE radius (weapons.js grows it 0.35 x rMax -> rMax over K.SMOKE.growS and
+      // maps.js losBlocked cuts sight with exactly it), so the cloud is drawn at exactly s.r - no grow curve of fx's own on
+      // top (that double growth left ~1 s where bots lost sight through air that showed no smoke yet). An entry without a
+      // live r (a legacy / stub {x,y,z,r,t0,t1}) is its own fixed radius.
+      const R = s.r > 0 ? s.r : 0, age = t - s.t0, life = Math.max(1, s.t1 - s.t0);
+      if (!(R > 0)) { smokeStats.clouds--; continue; }
+      // the end: sight is cut until t1, so the picture holds and only thins over the sim's fadeS (K.SMOKE.fadeS), its
+      // puffs swelling a little as they thin (the sphere itself does not move or grow: no lift, no spread)
+      const fadeD = Math.min(smokeFadeS(W), 0.25 * life);
       let fade = Math.max(0, Math.min(1, (s.t1 - t) / fadeD)); fade = fade * fade * (3 - 2 * fade);
-      const aIn = Math.min(1, age / 0.45);
-      const spread = (0.28 + 0.72 * grow) * (1 + 0.14 * (1 - fade));
-      const sizeK = (0.42 + 0.58 * grow) * (1 + 0.30 * (1 - fade));
-      const lift = (1 - fade) * 1.6;
+      const aIn = Math.min(1, age / 0.12);                     // the canister's pop: dense within a few frames (sight is cut from t0)
+      const sizeK = 1 + 0.20 * (1 - fade);
       for (let i = 0; i < np; i++) {
         const o = i * SP, st = e.st;
         const sw = st[o + 7] * age, c = Math.cos(sw), sn = Math.sin(sw);
         const ox = st[o] * c - st[o + 2] * sn, oz = st[o] * sn + st[o + 2] * c;
         const size = st[o + 3] * R * sizeK;
-        const px = s.x + ox * R * spread, pz = s.z + oz * R * spread;
-        let py = s.y + st[o + 1] * R * spread + 0.12 * Math.sin(age * 0.45 + st[o + 8]) + lift;
-        const gy = e.gy[i];
+        const px = s.x + ox * R, pz = s.z + oz * R;
+        let py = s.y + st[o + 1] * R + 0.12 * Math.sin(age * 0.45 + st[o + 8]);
+        // the ground under the puff where it is NOW (growth to rMax, swirl): re-sampled once it has moved 5 cm (on a 45 deg
+        // hillside a 0.4 m step already put a puff's clamp 0.45 m off the terrain under it)
+        let gy = e.gy[i];
+        if (Math.abs(px - e.gx[i]) + Math.abs(pz - e.gz[i]) > 0.05) { gy = e.gy[i] = smokeGround(W, e, s, px, pz); e.gx[i] = px; e.gz[i] = pz; }
         if (py < gy + 0.30 * size) py = gy + 0.30 * size;
         const sunK = 0.50 + 0.50 * Math.max(0, Math.min(1, 0.5 + 0.9 * (ox * _sunDir.x + st[o + 1] * _sunDir.y + oz * _sunDir.z)));
         const b = n * 16;
@@ -1142,8 +1171,8 @@ function updateSmoke(W, dt) {
       }
       // inside the cloud's body: the veils. Measured from YOUR EYES, not the lens: maps.js cuts every sight line that
       // starts inside the sphere, so with your head in the cloud the picture whites out all round (ramping in over the
-      // outer fifth of the grown radius); a camera boom poking into a cloud behind you does not.
-      const Reff = R * (0.30 + 0.70 * grow);
+      // outer fifth of the live radius); a camera boom poking into a cloud behind you does not.
+      const Reff = R;
       const ex = pd > -1 ? p.pos.x : cx, ey = pd > -1 ? p.pos.y + 1.5 : cy, ez = pd > -1 ? p.pos.z : cz;
       const dIn = Math.hypot(s.x - ex, s.y - ey, s.z - ez);
       if (dIn < Reff) { smokeStats.inside = true; const k = Math.min(1, (1 - dIn / Reff) * 5); veilA = Math.max(veilA, 0.94 * k * k * (3 - 2 * k) * fade * aIn); }
