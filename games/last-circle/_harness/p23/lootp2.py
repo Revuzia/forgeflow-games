@@ -48,7 +48,10 @@ TIER_JS = r"""() => { const W = window.__LC__.W, T = W.lootTiers; if (!T || !Arr
     const e = c[t] = c[t] || { n: 0, rare: 0 }; e.n++; if ((d.rarity || 0) >= 2) e.rare++; }
   return { counts: c, hot: W.lootHotZone || T.hot || null, tiers: T.pois.reduce((m, p) => { m[p.tier] = (m[p.tier] || 0) + 1; return m; }, {}) }; }"""
 SUPPLY_JS = r"""([toT]) => { const C = window.__LC__, W = C.W; if (!window.__P23SD__) { window.__P23SD__ = []; W.events.on('supplyDropLanded', (d) => window.__P23SD__.push(+W.t.toFixed(1))); }
-  while (W.t < toT && W.phase !== 'over') { C.fastForward(5, 1 / 30); const p = W.player; if (p && p.alive) { p.hp = 100; p.shield = 100; } }
+  // the human is the opener later: it must live to 760 s (lootp2_all4 10-26: dead at the hold, a late storm between 5 s refills). 1 s slices,
+  // refilled each slice, and W.hurtActor skips it (SETUP: no row here judges the human's damage)
+  if (!window.__P23SAFE__ && W.hurtActor) { const hu = W.hurtActor; window.__P23SAFE__ = true; W.hurtActor = function (a) { if (a && a === W.player) return 0; return hu.apply(this, arguments); }; }
+  while (W.t < toT && W.phase !== 'over') { C.fastForward(1, 1 / 30); const p = W.player; if (p && p.alive) { p.hp = 100; p.shield = 100; } }
   const list = (W.supplyDrops || []).map((s) => ({ id: s.id, x: s.x, y: s.y != null ? s.y : (s.pos ? s.pos.y : null), z: s.z, landed: !!s.landed, opened: !!s.opened }));
   // the drop's beacon = its beam slot in the shared marker pool (loot.js debugLootFx(id): the base's test hook), alive and tall
   const beaconAt = (s) => { if (!W.debugLootFx) return null; const o = (W.debugLootFx(s.id) || {}).obj; return !!(o && o.beam && o.beam.alive && (o.beam.top || 0) - (o.beam.y || 0) > 20); };
@@ -98,7 +101,10 @@ def part_tiers_supply(s, v, plant=None):
         v.check("supply [%s] (>= 3 drops landed by t 760 s; every landed unopened drop has its beacon)" % k,
                 len(landed) >= 3 and bea is not None and all(b is True for b in bea), {"t": sp["t"], "landed": len(landed), "events": sp["events"], "beacons": bea},
                 ">= 3, beacons")
-    v.check("supply-open (REAL E at a landed drop: opened, beacon gone, items out)", bool(opened) and opened.get("ok"), opened, "opened")
+    if opened and opened.get("atHold") and not opened["atHold"].get("alive"):
+        v.cnj("supply-open (REAL E at a landed drop: opened, beacon gone, items out)", "SETUP: the human was dead at the hold (%s)" % opened["atHold"])
+    else:
+        v.check("supply-open (REAL E at a landed drop: opened, beacon gone, items out)", bool(opened) and opened.get("ok"), opened, "opened")
 
 
 def open_drop(s, sp):
