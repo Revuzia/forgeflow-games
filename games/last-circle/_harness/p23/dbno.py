@@ -327,18 +327,25 @@ def part_human2(args, v):
         # state travels P2P first (ffg_rtc.js DataChannels): the relay stand-in's size log (p23lib.fake_sb_plus) saw no state packet with the DCs
         # open (dbno_h2_all5 10-26: upBytes null) - log the envelope size on the guest's RTC send too; whichever path carried >= 10 is judged
         gpg.evaluate("""() => { const S = window.__LC__.W.net; if (!S || !S.rtc || S.rtc.__p23sz) return; const f = S.rtc.sendState;
-            S.rtc.sendState = function (env) { try { if (env && env.t === 'state') { const A = window.__SQ_STATE_RTC__ = window.__SQ_STATE_RTC__ || []; A.push(JSON.stringify(env.d).length); if (A.length > 600) A.shift(); } } catch (e) {}
+            S.rtc.sendState = function (env) { try { if (env && env.t === 'state') { const A = window.__SQ_STATE_RTC__ = window.__SQ_STATE_RTC__ || []; A.push(JSON.stringify(env.d).length); if (A.length > 600) A.shift(); window.__SQ_STATE_LAST__ = env.d; } } catch (e) {}
               return f.apply(this, arguments); }; S.rtc.__p23sz = true; }""")
         hpg.wait_for_timeout(2500)
         size_js = ("() => { const pick = (S) => (S || []).slice(-40); const R = pick(window.__SQ_STATE_RTC__), B = pick(window.__SQ_STATE__); const S = R.length >= 10 ? R : B;"
                    " return S.length >= 10 ? S.reduce((a, b) => a + b, 0) / S.length : null; }")
         up_b = gpg.evaluate(size_js)
+        keys_js = "() => { const d = window.__SQ_STATE_LAST__; const me = d && (Array.isArray(d.p) ? d.p[0] : d); return d ? { top: Object.keys(d).sort(), sample: JSON.stringify(d).slice(0, 240) } : null; }"
+        up_k = gpg.evaluate(keys_js)
         gpg.bring_to_front()          # the page that acts must be the visible one: a background tab gets no rAF, so its game does not tick
         src = gpg.evaluate("() => { const W = window.__LC__.W, p = W.player; const e = W.actors.find((a) => a.isBot && a.alive && a.teamId !== p.teamId); return e && e.id; }")
         gpg.evaluate("(src) => { const W = window.__LC__.W, p = W.player; p.hp = 100; p.shield = 0; W.hurtActor(p, 250, src, 'ar', false); }", src)
         seen = SQ.wait(hpg, "(id) => { const a = window.__LC__.W.actorById.get(id); return a && a.downed ? window.__LC__.W.t : null; }", 1.0, 0.05, g_id)
         gd = gpg.evaluate("() => { const p = window.__LC__.W.player; return { alive: p.alive, downed: !!p.downed }; }")
         v.check("human2: knocked on its own page, seen downed on the host's within 1 s", gd["downed"] and gd["alive"] and seen is not None, {"guest": gd, "hostSaw": seen}, "downed both")
+        # the downed size is read STILL, like the up size (dbno_h2_all6 10-26 read it after the crawl: 121.2 vs 115.8 B - a moving body's
+        # non-zero velocity / changing position digits, not the downed flag); 2.5 s of stillness refills the 40-packet window
+        gpg.wait_for_timeout(2500)
+        dn_b = gpg.evaluate(size_js)
+        dn_k = gpg.evaluate(keys_js)
         p0 = hpg.evaluate("(id) => { const a = window.__LC__.W.actorById.get(id); return [a.pos.x, a.pos.z]; }", g_id)
         gpg.keyboard.down("KeyW")
         gpg.wait_for_timeout(2500)
@@ -346,7 +353,6 @@ def part_human2(args, v):
         hpg.wait_for_timeout(800)
         p1 = hpg.evaluate("(id) => { const a = window.__LC__.W.actorById.get(id); return [a.pos.x, a.pos.z]; }", g_id)
         moved = ((p1[0] - p0[0]) ** 2 + (p1[1] - p0[1]) ** 2) ** 0.5
-        dn_b = gpg.evaluate(size_js)
         v.check("human2: the guest crawls (real W) and the host sees it move (> 1 m)", moved > 1.0, {"movedOnHostM": round(moved, 2)}, "> 1 m")
         gp = gpg.evaluate("() => { const p = window.__LC__.W.player.pos; return [p.x, p.z]; }")
         hpg.evaluate("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x + 1.2, W.map.heightAt(x + 1.2, z), z); p.vel.set(0, 0, 0); }", gp)
@@ -362,7 +368,7 @@ def part_human2(args, v):
         v.check("human2: the host's real 5 s E revives the guest: 30 hp on its page, up on the host's", bool(rev) and abs(rev["hp"] - 30) <= 1 and bool(hup),
                 {"guest": rev, "hostSeesUp": hup}, "hp 30, up")
         v.check("human2: per-tick 'state' message the same size downed as up (+-4 B)", up_b is not None and dn_b is not None and abs(dn_b - up_b) <= 4,
-                {"upBytes": up_b and round(up_b, 1), "downedBytes": dn_b and round(dn_b, 1)}, "+-4 B")
+                {"upBytes": up_b and round(up_b, 1), "downedBytes": dn_b and round(dn_b, 1), "upKeys": up_k, "downedKeys": dn_k}, "+-4 B (both still)")
         for rec in (hrec, grec):
             v.check("human2: %s - 0 console / page errors, 0 failed requests" % rec.name.split("/")[1], rec.clean(), rec.problems())
     finally:
