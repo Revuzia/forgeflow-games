@@ -348,7 +348,7 @@ const LCU = {
   uLcWind: { value: new THREE.Vector4(0.8, 0.6, 1, 0) },               // xy = wind direction, z = strength (0 = still)
   uLcGrime: { value: null },                                            // the CC0 wall photograph (detail, divided by its own mean)
   uLcGrimeK: { value: new THREE.Vector4(0, 1 / 6, 0, 0) },             // x = gain (0 = off), y = 1 / the photo's tile (m, world-planar)
-  uLcWear: { value: new THREE.Vector2(0.30, 0.85) },                    // x = how much darker the base of a wall is at the ground, y = the band's height (m)
+  uLcWear: { value: new THREE.Vector3(0.30, 0.85, 1.15) },              // x = how much darker ON SCREEN the base of a wall is at the ground, y = the band's height (m), z = the tone-map exposure
   uLcWater: { value: new THREE.Vector4(0, 0, 0, 0) },                  // x = water y
   uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
 };
@@ -438,7 +438,8 @@ uniform sampler2D uLcAO; uniform vec4 uLcAOK;
 uniform sampler2D uLcGrime; uniform vec4 uLcGrimeK;
 #endif
 #ifdef LC_WEAR
-uniform vec2 uLcWear;
+uniform vec3 uLcWear;
+float lcWB = 0.0;                    // the wear band's on-screen darkening at this fragment (set in the albedo terms, applied to the lit colour)
 #endif
 #ifdef LC_WATER
 uniform vec4 uLcWater; uniform vec3 uLcShallow; uniform vec3 uLcDeep;
@@ -451,7 +452,7 @@ const LC_FRAG_ALBEDO = `
   float lvert = 1.0 - abs( vLcN.y );
   float lhb = vLcW.y - lcGround( vLcW.xz );
   float lband = ( 1.0 - smoothstep( 0.0, uLcWear.y, lhb ) ) * smoothstep( 0.25, 0.75, lvert ) * step( -0.6, lhb );
-  diffuseColor.rgb *= 1.0 - uLcWear.x * lband;
+  lcWB = uLcWear.x * lband;
 }
 #endif
 #ifdef LC_GRIME
@@ -497,6 +498,24 @@ const LC_FRAG_LIGHT = `
   reflectedLight.indirectDiffuse *= 1.0 - uLcAOK.z * lao; reflectedLight.directDiffuse *= 1.0 - uLcAOK.w * lao;
 }
 #endif`;
+// P23-fix / LC-17 wall base: the wear band darkens the LIT colour by a share of its ON-SCREEN brightness (uLcWear.x x the band), not the albedo by a fixed
+// factor. An albedo factor k reads as 1 - k^(1/2.4) on a sunlit face but ~1 - k on a shaded one (sRGB's dark end is near-linear): one wear setting read 7-14 %
+// on Savanna's sunlit walls and 25-28 % on Isla's shaded ones (the plan's band is 15-25 %). Here the lit colour x the exposure goes through the screen's own
+// curve (PBR Neutral's toe - its shoulder starts at 0.76 - then sRGB, PER CHANNEL), is lowered by the band's share and comes back through the inverse: the
+// same darkening on every face, lit or not.
+const LC_FRAG_OUT = `
+#ifdef LC_WEAR
+if ( lcWB > 0.0 ) {
+  vec3 lx = max( outgoingLight * uLcWear.z, vec3( 0.0 ) );
+  float lm = min( lx.r, min( lx.g, lx.b ) );
+  lx -= lm < 0.08 ? lm - 6.25 * lm * lm : 0.04;                                   // PBR Neutral's toe (three's NeutralToneMapping below its 0.76 shoulder)
+  vec3 lt = mix( 1.055 * pow( lx, vec3( 0.41667 ) ) - 0.055, lx * 12.92, vec3( lessThanEqual( lx, vec3( 0.0031308 ) ) ) ) * ( 1.0 - lcWB );
+  lx = mix( pow( ( lt + 0.055 ) * 0.947867, vec3( 2.4 ) ), lt * 0.0773994, vec3( lessThanEqual( lt, vec3( 0.04045 ) ) ) );
+  lm = min( lx.r, min( lx.g, lx.b ) );
+  lx += lm < 0.04 ? sqrt( max( lm, 0.0 ) * 0.16 ) - lm : 0.04;                   // (its inverse)
+  outgoingLight = lx / uLcWear.z;
+}
+#endif`;
 const LC_UNIFORMS = { LC_WIND: ["uLcT", "uLcWind"], LC_CLOUD: ["uLcCloud", "uLcCloudK", "uLcCloudOff"], LC_HGT: ["uLcHgt", "uLcHgtK"], LC_AO: ["uLcAO", "uLcAOK"],
   LC_GRIME: ["uLcGrime", "uLcGrimeK"], LC_WEAR: ["uLcWear"], LC_WATER: ["uLcWater", "uLcShallow", "uLcDeep"] };
 /** Patch a MeshStandardMaterial (or a MeshDepthMaterial for the wind) with the world-shader layer. `defs` = { LC_CLOUD: "", LC_WEAR: "", LC_WIND_H: "6.5", ... }
@@ -525,7 +544,8 @@ function lcPatch(mat, defs) {
       sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n" + LC_VERT_WORLD);
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + LC_FRAG_HEAD)
         .replace("#include <map_fragment>", "#include <map_fragment>\n" + LC_FRAG_ALBEDO)
-        .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + LC_FRAG_LIGHT);
+        .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + LC_FRAG_LIGHT)
+        .replace("#include <opaque_fragment>", LC_FRAG_OUT + "\n#include <opaque_fragment>");
     }
     if (prevCompile) prevCompile.call(mat, sh, r);
   };
@@ -1358,6 +1378,7 @@ export async function buildMap(W, mapId) {
     // The menu is untouched: hud.js restores ACES 1.12 for the menu diorama.
     kn.renderer.toneMapping = THREE.NeutralToneMapping;
     kn.renderer.toneMappingExposure = K.grade ? K.grade.exposure : 1.15;
+    LCU.uLcWear.value.z = kn.renderer.toneMappingExposure;           // (the wear band's on-screen darkening: LC_FRAG_OUT)
     const sunK = K.sun || MAPS.isla_viva.sun, hemiK = K.hemi || MAPS.isla_viva.hemi;
     kn.sun.intensity = sunK.intensity; kn.sun.color.setHex(sunK.color);
     kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
