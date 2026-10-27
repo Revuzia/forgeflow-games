@@ -473,6 +473,12 @@ export function update(W, dt) {
   // the reticle's bloom registry describes the LIVE local human only
   if (W.player && !W.player.alive) K.setLiveHeat(null);
   tickSmokes(W);
+  // LC-22: build the live-bone rig tables (bone list + the per-skin head capsule, a one-time sort of ~4k vertices per skin)
+  // during the lobby / drop, one actor a frame, so the first fight of the match never pays for them
+  if (W.phase !== "match" && acts.length) {
+    const a = acts[_hvWarm++ % acts.length];
+    if (a && a.rig && a._hvRig !== a.rig) liveRig(a);
+  }
   stepProjectiles(W, dt);
 }
 
@@ -1030,6 +1036,7 @@ const _hvV = new THREE.Vector3(), _hvM = new THREE.Matrix4();
  *  cloud is 0.36 m ear to ear and 0.19 m front to back), its tips at the p10 / p90 extents less the radius, the radius
  *  the p80 distance of the cloud from that axis. Local units (the bone frame carries the rig's scale); once per skin. */
 const _hvHeadBySkin = new Map();
+let _hvWarm = 0;
 function headLocal(t, headBone) {
   const key = t.skin || "?";
   if (_hvHeadBySkin.has(key)) return _hvHeadBySkin.get(key);
