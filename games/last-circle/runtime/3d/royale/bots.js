@@ -415,6 +415,9 @@ export function attachBrain(W, actor, nBots) {
       // (Wave 8 fix round, lane K2) standGoal: the moveTo object that is a house loot STAND point (arrive closer: LOOT_STAND_M); solid*: the
       // inside-a-solid detector's 0.5 s window (escapeSolid)
       standGoal: null, solidT: -99, solidX: 0, solidZ: 0, solidN: 0,
+      // (K2, re-run) offFurn*: offFurniture's committed heading (until when, which heading, where the window began, which candidate, for which room);
+      // furn*: the off-the-floor pin detector's 0.5 s window (escapeToWalk)
+      offFurnUntil: -99, offFurnYaw: 0, offFurnX: 0, offFurnZ: 0, offFurnK: 0, offFurnGi: -1, furnT: -99, furnX: 0, furnZ: 0, furnN: 0, furnD: 0,
       // (P23) graceMul: the new-player grace of the target at its acquisition (0 = none); assist / ping: a squadmate's fight / ping (C-MODE, C-PING);
       // danger*: a live grenade's predicted blast (LC-14); nade*: the throw machine (nadeS 0 idle / 1 drawing / 2 aiming, nadeKind 1 frag / 2 smoke);
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
@@ -446,7 +449,7 @@ export function attachBrain(W, actor, nBots) {
  *  function that reads a blackboard is thrown away and runs interpreted - boxing every number - until it is optimized again. Over a match that
  *  happened once per field, at the moment the match first used it (framecheck, isla_viva: ~8,500 map deprecations and ~2,300 deopts, 195 of them in
  *  bots.js, in bursts through the measured window; the housed maps' new indoor fields added their own). Done here, it happens once, in the lobby. */
-const INT_FIELDS = new Set(["solidN", "roomI", "tRoomI", "strafeDir", "healSide", "hdHold", "pinN", "heldN", "breaks", "slideFlips", "progKind", "wallSide", "detourDir",
+const INT_FIELDS = new Set(["solidN", "offFurnK", "offFurnGi", "furnN", "furnD", "roomI", "tRoomI", "strafeDir", "healSide", "hdHold", "pinN", "heldN", "breaks", "slideFlips", "progKind", "wallSide", "detourDir",
   "coverFace", "ramp", "pushRoll", "chuteRoll", "nadeS", "nadeKind", "nadeSlot", "nadePrev", "smokeWant", "pingDone", "finishRoll"]);      // small integers / indexes / signs: they stay Smi fields (they never hold a fraction)
 function doubleFields(o) {
   for (const k in o) {
@@ -1581,6 +1584,26 @@ function act(W, b, dt) {
     if (still && insideSolid(W, a.pos.x, a.pos.y, a.pos.z)) { if (++bb.solidN >= 2) { bb.solidN = 0; escapeSolid(W, b); } }
     else bb.solidN = 0;
   }
+  // (K2, re-run) PINNED OFF THE ROOM'S FLOOR. A bot that means to move (an intent, or a travelling state held still by the wall guard) but stays off its room's walkable area - on a piece of furniture 0.3-3 m over the
+  // floor, or in a floor pocket outside the walk rects - and gets nowhere (< 15 cm across the ground) for FURN_ESC_N windows of 0.5 s running is put at the
+  // nearest free spot of that room's walk area, on its floor (escapeToWalk): the push-out the detector above gives a bot inside a box. By then
+  // offFurniture has tried its committed headings (0.6 s each). Measured: a bot on a crate stack's top in a Deepwood lakeside house (furntop probe,
+  // seed 7) still stood there after 15 s.
+  // (K2, re-run 4) ... and a TRAVELLING bot (LOOT / ROTATE / ...) that stays off the walkable area FURN_DWELL_N windows running however much it moves:
+  // a floor pocket closed by furniture (the planners answer null from inside it: findPath / findExit start on a blocked cell) where it hops on and off
+  // the low pieces round it. Measured (furntop, ashgrid seed 7, cmp09@p4's storage room): a ROTATE bot, path null, bounced between the floor and a drum
+  // inside 5 m for 32 s (the previous file) - never still for 0.5 s, so the detector above never ran.
+  if (IND.H !== null && (W.t - bb.furnT >= 0.5 || W.t < bb.furnT)) {
+    const fx = a.pos.x - bb.furnX, fz = a.pos.z - bb.furnZ;
+    const free = !a.gliding && !bb.chestId, travel = free && !!MOVING_STATES[b.state];
+    const still = fx * fx + fz * fz < 0.15 * 0.15 && (inp.mz || inp.mx || MOVING_STATES[b.state]) && a.onGround && free;
+    bb.furnT = W.t; bb.furnX = a.pos.x; bb.furnZ = a.pos.z;
+    const gi = still ? offWalkRoom(W, b, true) : travel ? offWalkRoom(W, b, false) : -1;     // (the travel-only test reads the room without refreshing the brain's cached one)
+    if (gi >= 0 && still && ++bb.furnN >= FURN_ESC_N) { bb.furnN = 0; bb.furnD = 0; escapeToWalk(W, b, gi); }
+    else if (gi >= 0 && travel && ++bb.furnD >= FURN_DWELL_N) { bb.furnN = 0; bb.furnD = 0; if (escapeToWalk(W, b, gi)) nav.st.furnDwell++; }
+    if (!(gi >= 0 && still)) bb.furnN = 0;
+    if (!(gi >= 0 && travel)) bb.furnD = 0;
+  }
 
   // PROGRESS BREAKER for the fight and the heal (Wave 5; Unreal's path follower does block detection the same way). The
   // hard breaker below exempts them - standing still is their job - but a bot that is TRYING to move (strafe, back off,
@@ -1637,28 +1660,139 @@ function insideSolid(W, x, y, z) {
   return false;
 }
 const ESC_RINGS = 10, ESC_STEP = 0.4, ESC_DIRS = 16;   // escapeSolid: rings of 0.4 m out to 4 m, 16 headings each (fixed order: deterministic)
+const ESC_FACE_M = [0.45, 1.0, 2.0];                    // (K2, re-run 4) how far past a containing box's face: the capsule clear of it, then further out
+const ESC_FAR_RINGS = 12, ESC_FAR_STEP = 1.0;           // (K2, re-run 4) last resort: rings of 1 m from 5 m out to 16 m
 /** (K2) put a bot that is inside a solid at the nearest spot round it where a standing capsule fits (player.js fitsAt), on the floor there
- *  (supportAt at its own height: never up onto a roof), dry, not more than 4 m below; its path is dropped and re-planned. No spot: nothing changes. */
+ *  (supportAt at its own height: never up onto a roof), dry, not more than 4 m below; its path is dropped and re-planned. No spot: nothing changes.
+ *  (K2, re-run 4) The rings out to 4 m come first (unchanged). A bot deeper inside a big box than that - a whole block's box: the wedge probe's bot put at
+ *  the middle of a 9.7 x 10.2 x 21.6 m box on Savanna seed 51002 was still inside after 20 s, every ring point inside the same box - then steps out
+ *  through the faces of the boxes it is inside (nearest face first, 0.45 / 1.0 / 2.0 m past it), and last the far rings (5-16 m). */
 function escapeSolid(W, b) {
-  const a = b.actor, bb = b.bb, M = W.map;
+  const a = b.actor, M = W.map;
   const wy = M.waterY != null ? M.waterY : -1e9;
+  const px = a.pos.x, pz = a.pos.z, py = a.pos.y;
   for (let ri = 1; ri <= ESC_RINGS; ri++) {
     const r = ri * ESC_STEP;
     for (let k = 0; k < ESC_DIRS; k++) {
       const an = k * (Math.PI * 2 / ESC_DIRS);
-      const x = a.pos.x + Math.cos(an) * r, z = a.pos.z + Math.sin(an) * r;
-      const s = supportAt(W, x, z, a.pos.y);
-      if (!(s === s) || s < a.pos.y - 4 || s < wy + 0.2) continue;
-      if (insideSolid(W, x, s, z) || !fitsAt(W, x, z, s)) continue;
-      a.pos.x = x; a.pos.y = s; a.pos.z = z;
-      a.vel.x = 0; a.vel.y = 0; a.vel.z = 0;
-      bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.nextPathT = 0; bb.stuckT = 0;
-      bb.solidX = x; bb.solidZ = z;
-      nav.st.solidEsc++;
-      return true;
+      if (escTry(W, b, px + Math.cos(an) * r, pz + Math.sin(an) * r, wy)) return true;
+    }
+  }
+  // the faces of every box the bot is inside (insideSolid's test), as exits sorted by distance (Array sort is stable: ties keep the collider order).
+  // Copied out first: escTry's own queries reuse the shared query array. (Rare path: the bot is inside a solid with no free spot within 4 m.)
+  const cols = M.queryColliders(px, pz, 0.6, _solidCols), h = K.PLAYERK.height, ex = [];
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    if (c.dead || c.kind === "ramp") continue;
+    if (px <= c.minX + 0.02 || px >= c.maxX - 0.02 || pz <= c.minZ + 0.02 || pz >= c.maxZ - 0.02) continue;
+    if (!(c.maxY > py + NAV_STEP_UP && c.minY < py + h - 0.1)) continue;
+    ex.push([px - c.minX, c.minX, pz, -1, 0], [c.maxX - px, c.maxX, pz, 1, 0], [pz - c.minZ, px, c.minZ, 0, -1], [c.maxZ - pz, px, c.maxZ, 0, 1]);
+  }
+  ex.sort((p, q) => p[0] - q[0]);
+  for (let i = 0; i < ex.length; i++) {
+    const e = ex[i];
+    for (let k = 0; k < ESC_FACE_M.length; k++) if (escTry(W, b, e[1] + e[3] * ESC_FACE_M[k], e[2] + e[4] * ESC_FACE_M[k], wy)) return true;
+  }
+  for (let ri = 1; ri <= ESC_FAR_RINGS; ri++) {
+    const r = ESC_RINGS * ESC_STEP + ri * ESC_FAR_STEP;
+    for (let k = 0; k < ESC_DIRS; k++) {
+      const an = k * (Math.PI * 2 / ESC_DIRS);
+      if (escTry(W, b, px + Math.cos(an) * r, pz + Math.sin(an) * r, wy)) return true;
     }
   }
   return false;
+}
+/** (K2) one escapeSolid candidate: the floor at (x, z) under the bot's own height (dry, not more than 4 m below) where a standing capsule fits and is not
+ *  inside a solid - the bot is put there (its path dropped and re-planned). false = not this spot. */
+function escTry(W, b, x, z, wy) {
+  const a = b.actor, bb = b.bb;
+  const s = supportAt(W, x, z, a.pos.y);
+  if (!(s === s) || s < a.pos.y - 4 || s < wy + 0.2) return false;
+  if (insideSolid(W, x, s, z) || !fitsAt(W, x, z, s)) return false;
+  a.pos.x = x; a.pos.y = s; a.pos.z = z;
+  a.vel.x = 0; a.vel.y = 0; a.vel.z = 0;
+  bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.nextPathT = 0; bb.stuckT = 0;
+  bb.solidX = x; bb.solidZ = z;
+  nav.st.solidEsc++;
+  return true;
+}
+const FURN_ESC_N = 8;     // (K2, re-run) 0.5 s windows (4 s) pinned off the room's floor before escapeToWalk
+const FURN_DWELL_N = 20;  // (K2, re-run 4) 0.5 s windows (10 s) a travelling bot stays off the room's walkable area, moving or not, before escapeToWalk.
+                          // (8 s was tried: in Deepwood's real-step matches seeds 14 / 15 / 22 it fired once each, 0.5-1 s before the bot - a LOOT bot hopping in a pocket -
+                          // jumped out on its own (the control run, 8-9 s in the pocket); the furntop drum bot stayed 32 s without it)
+/** (K2, re-run) The room (IND.R index) the bot stands in when its feet are OFF that room's walkable floor: 0.3-3 m over the floor (a piece of furniture),
+ *  or on the floor outside the walk rects (a pocket). -1 = outdoors, on the walk area, on / beside a stair (its own rules), or a room without walk data.
+ *  cached: the room from the brain's own cache (myRoom, which refreshes it); false = a fresh lookup that leaves the cache alone. */
+function offWalkRoom(W, b, cached) {
+  const a = b.actor, gi = cached ? myRoom(W, b) : roomAt(W, a.pos.x, a.pos.y, a.pos.z);
+  if (gi < 0) return -1;
+  const R = IND.R[gi], dy = a.pos.y - R.y;
+  if (dy > 3.0 || dy < -0.3) return -1;
+  if (!(R.r.walk && R.r.walk.length)) return -1;
+  if (dy < 0.3 && inWalk(R, a.pos.x, a.pos.z, 0.2)) return -1;
+  if (onStairOf(R.h, a.pos.x, a.pos.y, a.pos.z)) return -1;
+  return gi;
+}
+/** (K2, re-run) Is (x, y = feet, z) ON one of the house's stairs: within 0.6 m of its footprint AND within 0.6 m of the flight's height there (the
+ *  height runs from the foot to the top along the flight, flat past either end)? The footprint test alone (the old rule) also caught a bot on a crate
+ *  stack 0.58 m past a stair's top end, 1.8 m under the landing (Deepwood lakeside@p1, seed 7: it stood on the crates for good). */
+function onStairOf(h, x, y, z) {
+  const st = h.stairs || [];
+  for (let k = 0; k < st.length; k++) {
+    const s = st[k];
+    if (!(x > s.x0 - 0.6 && x < s.x1 + 0.6 && z > s.z0 - 0.6 && z < s.z1 + 0.6)) continue;
+    const F = s.foot, T = s.top;
+    if (!F || !T) return true;                    // (no flight data: the old footprint rule)
+    const ux = T[0] - F[0], uz = T[2] - F[2], L2 = ux * ux + uz * uz;
+    let f = L2 > 1e-6 ? ((x - F[0]) * ux + (z - F[2]) * uz) / L2 : 0;
+    f = f < 0 ? 0 : f > 1 ? 1 : f;
+    const sy = F[1] + (T[1] - F[1]) * f;
+    if (y > sy - 0.6 && y < sy + 0.6) return true;
+  }
+  return false;
+}
+/** (K2, re-run) Put a bot pinned off its room's floor at the nearest spot (rings of 0.4 m out to 4 m, 16 headings: deterministic) that lies 0.1 m inside
+ *  one of the room's walk rects, on the room's floor (support within 0.35 m of it), where a standing capsule fits. No spot: nothing changes.
+ *  (K2, re-run 4) No such spot within 4 m: the walk rects themselves, nearest first - the point of each nearest the bot (0.1 m inside it), then its centre.
+ *  Measured (furntop, isla_viva seed 51204): a bot on a carton in the corner of palm_bay@p1's office, whose walkable area is a strip along the far wall
+ *  5.1 m away - every ring point lay outside it, the escape fired every 4 s and found nothing for 15 s. */
+function escapeToWalk(W, b, gi) {
+  const a = b.actor, R = IND.R[gi], px = a.pos.x, pz = a.pos.z;
+  for (let ri = 1; ri <= ESC_RINGS; ri++) {
+    const r = ri * ESC_STEP;
+    for (let k = 0; k < ESC_DIRS; k++) {
+      const an = k * (Math.PI * 2 / ESC_DIRS);
+      const x = px + Math.cos(an) * r, z = pz + Math.sin(an) * r;
+      if (!inWalk(R, x, z, -0.1)) continue;
+      if (walkTry(W, b, R, x, z)) return true;
+    }
+  }
+  const wk = R.r.walk || [], ord = [];
+  for (let k = 0; k < wk.length; k++) {
+    const q = wk[k], dx = Math.max(q[0] - px, 0, px - q[2]), dz = Math.max(q[1] - pz, 0, pz - q[3]);
+    ord.push([dx * dx + dz * dz, k]);
+  }
+  ord.sort((p, q) => p[0] - q[0]);                       // (stable: ties keep the rect order)
+  for (let i = 0; i < ord.length; i++) {
+    const q = wk[ord[i][1]], cx = (q[0] + q[2]) * 0.5, cz = (q[1] + q[3]) * 0.5;
+    const nx = q[2] - q[0] > 0.2 ? Math.min(Math.max(px, q[0] + 0.1), q[2] - 0.1) : cx, nz = q[3] - q[1] > 0.2 ? Math.min(Math.max(pz, q[1] + 0.1), q[3] - 0.1) : cz;
+    if (walkTry(W, b, R, nx, nz) || walkTry(W, b, R, cx, cz)) return true;
+  }
+  return false;
+}
+/** (K2) one escapeToWalk candidate: the room's floor at (x, z) (support within 0.35 m of it) where a standing capsule fits and is not inside a solid -
+ *  the bot is put there (its path dropped and re-planned). false = not this spot. */
+function walkTry(W, b, R, x, z) {
+  const a = b.actor, bb = b.bb;
+  const s = supportAt(W, x, z, R.y + 0.3);
+  if (!(s === s) || s > R.y + 0.35 || s < R.y - 0.35) return false;
+  if (insideSolid(W, x, s, z) || !fitsAt(W, x, z, s)) return false;
+  a.pos.x = x; a.pos.y = s; a.pos.z = z;
+  a.vel.x = 0; a.vel.y = 0; a.vel.z = 0;
+  bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.nextPathT = 0; bb.stuckT = 0; bb.offFurnUntil = -99;
+  bb.furnX = x; bb.furnZ = z; bb.solidX = x; bb.solidZ = z;
+  nav.st.furnEsc++;
+  return true;
 }
 /** (Wave 5) A fighter / healer pinned solid with a move intent for FIGHT_UNSTICK_S. First time: ENGAGE flips its strafe, HEAL
  *  bans the heading that pinned it for 1.5 s (pickRetreat takes the next one). Pinned again within 8 s: ENGAGE closes in on a
@@ -1873,7 +2007,9 @@ function wallAheadQ(W, a) {
      every frame, and a call with double arguments boxes them. */
   const dx = -Math.sin(yaw), dz = -Math.cos(yaw);
   const ax = a.pos.x, az = a.pos.z, ex = ax + dx * look, ez = az + dz * look;
-  const got = W.map.queryColliders((ax + ex) * 0.5, (az + ez) * 0.5, look * 0.5 + 0.9, _wq);
+  // (Wave 8 fix round, lane K1 -> K2) the leg's vertical band (maps.js queryColliders' optional y0 / y1): its floor can fall or climb at most `look` along a <= 45
+  // degree stair, the wall band sits 0.55-2.0 m over that floor - every collider the leg's tests read meets [feet - look - 2, feet + look + 2.6]
+  const got = W.map.queryColliders((ax + ex) * 0.5, (az + ez) * 0.5, look * 0.5 + 0.9, _wq, a.pos.y - look - 2, a.pos.y + look + 2.6);
   const x0 = (ax < ex ? ax : ex) - 0.35, x1 = (ax < ex ? ex : ax) + 0.35, z0 = (az < ez ? az : ez) - 0.35, z1 = (az < ez ? ez : az) + 0.35;
   // (Wave 8) written by index, the length set once (maps.js queryColliders' rule): `length = 0` then push() dropped the backing store every call - garbage that
   // grows with the colliders of a furnished house
@@ -2644,7 +2780,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, edgeHolds: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, error: null });, furnEsc: 0, furnDwell: 0
 nav.st = navStats0();
 
 function navReset() {
@@ -2924,7 +3060,8 @@ function firstLegBlocked(W, sx, sy, sz, wp) {
   const L = L0 > 14 ? 14 : L0;
   dx = dx / L0 * L; dz = dz / L0 * L;
   const ex = sx + dx, ez = sz + dz;
-  const got = W.map.queryColliders((sx + ex) * 0.5, (sz + ez) * 0.5, L * 0.5 + 1.0, _fl);
+  // (lane K1 -> K2) only the knee-to-head band is tested below (minY < sy + 2.0 && maxY > sy + 0.55): ask maps.js for that band alone
+  const got = W.map.queryColliders((sx + ex) * 0.5, (sz + ez) * 0.5, L * 0.5 + 1.0, _fl, sy + 0.55, sy + 2.0);
   const x0 = (sx < ex ? sx : ex) - 0.5, x1 = (sx < ex ? ex : sx) + 0.5, z0 = (sz < ez ? sz : ez) - 0.5, z1 = (sz < ez ? ez : sz) + 0.5;
   const n = Math.ceil(L / 0.3);
   for (let k = 0; k < got.length; k++) {
@@ -3667,42 +3804,64 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   }
   // (Wave 8) ... and the same for a bot PINNED (pushing, not moving: stuckT) in a pocket of the furniture outside the room's walkable area
   // (pinned: stuckT - frozen legs - or the pin window - a bot jittering 2-3 cm a frame in a nook never runs stuckT up, the 0.5 s net-displacement window sees it)
-  if (inHouse && a.onGround && (bb.heldN > 0 || holdStill || bb.stuckT > 0.3 || bb.pinN >= 1) && offFurniture(W, b, dt)) { bb.heldN = 0; bb.heldAcc = 0; }
+  // (K2, re-run) ... and every frame of its committed window (offFurnUntil): the flags above come and go frame by frame
+  if (inHouse && a.onGround && (bb.heldN > 0 || holdStill || bb.stuckT > 0.3 || bb.pinN >= 1 || W.t < bb.offFurnUntil) && offFurniture(W, b, dt)) { bb.heldN = 0; bb.heldAcc = 0; }
   qx = tx - a.pos.x; qz = tz - a.pos.z;
   MTQ[2] = Math.sqrt(qx * qx + qz * qz);
 }
 
 /** (Wave 8) A bot standing on furniture in its room (feet 0.3-3 m over the floor, not over a stair) walks off it: raw input straight at the centre of the
- *  nearest of the room's walkable rects at least 0.8 m away. true = it did (the caller's hold is overridden). */
+ *  nearest of the room's walkable rects at least 0.8 m away. true = it did (the caller's hold is overridden).
+ *  (K2, re-run) COMMITTED: the heading is picked once and held for OFF_FURN_COMMIT_S (the caller keeps calling while the window runs); a window that
+ *  ends with the bot < 0.15 m from where it began moves on to the next candidate (the second-nearest rect centre, then 7 headings round the nearest
+ *  one's). The pick used to be made afresh every frame, and only on the frames a hold / pin flag was up: a bot on a bathroom sink half over the room's
+ *  edge (isla_viva seed 51204, verify_c: stuck 13.1 %) alternated between it and the hard-stuck detour's strafe, frame by frame, and stood there 320 s -
+ *  the real mover walks off that spot on 15 of 16 headings (Node, mover_env). */
+const OFF_FURN_COMMIT_S = 0.6;
+const OFF_FURN_ALT = [0, 0, 0.785, -0.785, 1.571, -1.571, 2.356, -2.356, 3.142];      // candidate k: 0 = nearest centre, 1 = second centre, 2.. = nearest + these
 function offFurniture(W, b, dt) {
-  const a = b.actor, gi = b.bb.roomI;        // (fresh: the caller's inHouse test read myRoom this frame)
+  const a = b.actor, bb = b.bb, gi = bb.roomI;        // (fresh: the caller's inHouse test read myRoom this frame)
   if (gi < 0) return false;
   const R = IND.R[gi], dy = a.pos.y - R.y;
   if (dy > 3.0 || dy < -0.3) return false;
   // on the floor: only when the bot stands OUTSIDE the room's walkable area (a pocket behind a chair and a plant, a corner the generator's capsule
   // never reached: the grid finds no way out of it and every probe heading is walled)
-  if (dy < 0.3 && inWalk(R, a.pos.x, a.pos.z, 0.2)) return false;
-  const st = R.h.stairs || [];
-  for (let k = 0; k < st.length; k++) { const s = st[k]; if (a.pos.x > s.x0 - 0.6 && a.pos.x < s.x1 + 0.6 && a.pos.z > s.z0 - 0.6 && a.pos.z < s.z1 + 0.6) return false; }
-  const wk = R.r.walk || [];
-  let bx = 0, bz = 0, bd = 1e9;
-  for (let k = 0; k < wk.length; k++) {
-    const q = wk[k], cx = (q[0] + q[2]) * 0.5, cz = (q[1] + q[3]) * 0.5, dx = cx - a.pos.x, dz = cz - a.pos.z, d = dx * dx + dz * dz;
-    if (d >= 0.64 && d < bd) { bd = d; bx = cx; bz = cz; }
+  if (dy < 0.3 && inWalk(R, a.pos.x, a.pos.z, 0.2)) { bb.offFurnUntil = -99; return false; }
+  if (onStairOf(R.h, a.pos.x, a.pos.y, a.pos.z)) return false;
+  if (!(W.t < bb.offFurnUntil && bb.offFurnGi === gi)) {
+    const wk = R.r.walk || [];
+    let bx = 0, bz = 0, bd = 1e9, cx2 = 0, cz2 = 0, bd2 = 1e9;
+    for (let k = 0; k < wk.length; k++) {
+      const q = wk[k], cx = (q[0] + q[2]) * 0.5, cz = (q[1] + q[3]) * 0.5, dx = cx - a.pos.x, dz = cz - a.pos.z, d = dx * dx + dz * dz;
+      if (d < 0.64) continue;
+      if (d < bd) { bd2 = bd; cx2 = bx; cz2 = bz; bd = d; bx = cx; bz = cz; } else if (d < bd2) { bd2 = d; cx2 = cx; cz2 = cz; }
+    }
+    if (bd >= 1e9) {
+      // (no centre 0.8 m away: the nearest at any distance, else straight ahead - a room whose walk area is one small rect under / beside the piece)
+      for (let k = 0; k < wk.length; k++) {
+        const q = wk[k], cx = (q[0] + q[2]) * 0.5, cz = (q[1] + q[3]) * 0.5, dx = cx - a.pos.x, dz = cz - a.pos.z, d = dx * dx + dz * dz;
+        if (d > 0.0004 && d < bd) { bd = d; bx = cx; bz = cz; }
+      }
+    }
+    // the window that just ended (a continuing escape) got the bot nowhere: the next candidate; anything else starts again at the nearest centre
+    const mx = a.pos.x - bb.offFurnX, mz = a.pos.z - bb.offFurnZ;
+    bb.offFurnK = bb.offFurnGi === gi && W.t - bb.offFurnUntil < 0.25 && mx * mx + mz * mz < 0.15 * 0.15 ? (bb.offFurnK + 1) % OFF_FURN_ALT.length : 0;
+    if (bb.offFurnK === 1 && bd2 >= 1e9) bb.offFurnK = 2;
+    const y0 = bd < 1e9 ? Math.atan2(-(bx - a.pos.x), -(bz - a.pos.z)) : a.input.yaw;
+    bb.offFurnYaw = bb.offFurnK === 1 ? Math.atan2(-(cx2 - a.pos.x), -(cz2 - a.pos.z)) : y0 + OFF_FURN_ALT[bb.offFurnK];
+    bb.offFurnUntil = W.t + OFF_FURN_COMMIT_S; bb.offFurnGi = gi; bb.offFurnX = a.pos.x; bb.offFurnZ = a.pos.z;
   }
-  if (bd >= 1e9) return false;
   // a loot goal a few metres off is what led the bot in (an item in the pocket / on the piece): park it, or the bot walks back in the moment it is out
-  const bb = b.bb;
   if (bb.lootId && bb.moveTo && hyp(bb.moveTo.x - a.pos.x, bb.moveTo.z - a.pos.z) < 4) {
     if (!bb.badLoot) bb.badLoot = {};
     bb.badLoot[bb.lootId] = W.t + 30;
     bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
   }
   nav.st.offFurn++;
-  SYQ[0] = Math.atan2(-(bx - a.pos.x), -(bz - a.pos.z)); steerYawQ(a, dt, 20);
+  SYQ[0] = bb.offFurnYaw; steerYawQ(a, dt, 20);
   // a pocket on the FLOOR is often closed by low pieces (a side table, a chair): pinned there, hop (a 0.85 m table is in reach: then this walks off it)
-  if (dy < 0.3 && (b.bb.stuckT > 0.7 || b.bb.pinN >= 1) && b.bb.nextJumpT <= W.t) { a.input.jump = true; b.bb.nextJumpT = W.t + 0.9; }
-  const B = K.moveBasis(a.input.yaw, _mb0), wdx = -Math.sin(SYQ[0]), wdz = -Math.cos(SYQ[0]);
+  if (dy < 0.3 && (bb.stuckT > 0.7 || bb.pinN >= 1) && bb.nextJumpT <= W.t) { a.input.jump = true; bb.nextJumpT = W.t + 0.9; }
+  const B = K.moveBasis(a.input.yaw, _mb0), wdx = -Math.sin(bb.offFurnYaw), wdz = -Math.cos(bb.offFurnYaw);
   a.input.mz = wdx * B.fx + wdz * B.fz; a.input.mx = wdx * B.rx + wdz * B.rz; a.input.sprint = false;
   return true;
 }
