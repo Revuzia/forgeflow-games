@@ -1012,9 +1012,12 @@ function tickSmokes(W) {
   L.length = j;
 }
 // ── LC-22 LIVE BONES (FIX ROUND) ────────────────────────────────────────────────────────────────────────────────────
-// The hit test reads the bones of an actor whose DRAWN pose is fresh: the camera focus, or on screen with its mixer at
-// the full rate (player.js actorView: _onScreen, _mixRate 1 = within 40 m fov-scaled, every pose layer applied every
-// frame). Everyone else (far, off screen, a half-rate mixer, no rig yet) keeps sim's deterministic table. The joints are
+// The hit test reads the bones of an actor whose pose is LIVE: the camera focus, or any actor whose mixer player.js
+// actorView keeps stepping (_mixRate 1 / 2 / 4: on screen within 250 m fov-scaled, or off screen inside shadow range -
+// its bones are the pose it would be drawn in, re-keyed every 1-4 frames). An actor whose mixer the view policy SKIPS
+// (_mixRate 0: beyond 250 m, or off screen with no shadow; its bones are stale) or that has no rig yet keeps sim's
+// deterministic table. (A first cut took only on-screen full-rate actors: p23_hitbox's range dummy sits off the
+// camera's frustum at rate 2, so it kept the table - whose facing is 180 deg off a dummy's drawn body.) The joints are
 // the bones' world positions as last posed (the tick runs after the frame that drew them: the body the shooter saw);
 // matrices are refreshed from the bones' local transforms here because a frame can be stepped without a render.
 // Per actor, once per sim time W.t: one Float64Array(54) + the 18-bone list, built once per rig (no per-frame garbage).
@@ -1064,7 +1067,7 @@ function liveRig(t) {
 /** the live joints of t (world, the sim's HITVOL_LIVE layout) or null = use the table */
 function liveJoints(W, t) {
   if (!K.HITVOL_LIVE_N || !t || !t.rig || !t.obj || t.downed || t.swimming) return null;
-  const fresh = t === W.player || t === W._camFocus || (t._onScreen === true && t._mixRate === 1);
+  const fresh = t === W.player || t === W._camFocus || t._mixRate > 0;
   if (!fresh || t.obj.visible === false) return null;
   const L = liveRig(t);
   if (!L) return null;

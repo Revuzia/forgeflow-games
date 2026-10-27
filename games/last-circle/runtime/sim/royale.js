@@ -649,13 +649,13 @@
   // LIVE BONES (FIX ROUND, int-p23). The integrated player.js draws far more than the table can key on (turn-in-place
   // planted feet + chest twist, the combat-strafe orientation warp on four cardinal clips, the re-baked "_g" clip set, a
   // crouched-still rifle lean that accumulates): measured on the integrated build the table path put a pistol dummy's arm
-  // 0.28 m BEHIND its drawn body in the side view. So an actor whose drawn pose is FRESH (weapons.js liveJoints: the camera
-  // focus, or on screen with its mixer at the full rate - the pose the shooter is looking at) is tested against its LIVE
+  // 0.28 m BEHIND its drawn body in the side view. So an actor whose pose is LIVE (weapons.js liveJoints: the camera
+  // focus, or any actor whose mixer the view policy still steps - the pose it is drawn in) is tested against its LIVE
   // bones: the caller passes `live` = the world positions of the 15 JOINTS (0-44), the head-sphere centre (45-47, the
   // Head-weighted vertex centroid carried in the Head bone's frame) and the two ToeBase joints (48-53). Same capsules, the
   // skin's measured RADII (the idle fit, <= 0.045 m outside the drawn triangles; no phase shrink is needed when the joints
-  // ARE the drawn ones), plus a foot capsule Foot -> ToeBase. Everything else (far, off screen, half-rate mixers, the
-  // headless sim) keeps the deterministic table. HITVOL_LIVE_N = the length of `live`.
+  // ARE the drawn ones), plus a foot capsule Foot -> ToeBase. Everything else (a mixer the view policy skips: beyond
+  // 250 m or off screen without a shadow; no rig yet; the headless sim) keeps the deterministic table. HITVOL_LIVE_N = the length of `live`.
   var HITVOL_LIVE_N = 54, HV_FOOT_R = 0.055;
   var HV_HEAD_R = {};
   function hitVolHeadR(sk) {
