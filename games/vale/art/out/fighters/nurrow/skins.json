@@ -1,0 +1,16 @@
+[
+  {
+    "id": "nurrow_noon_fair",
+    "fighter": "nurrow",
+    "model": "assets/fighters/nurrow/nurrow_noon_fair.glb",
+    "portrait": "assets/fighters/nurrow/nurrow_noon_fair_portrait.png",
+    "splash": "assets/fighters/nurrow/nurrow_noon_fair_splash.png"
+  },
+  {
+    "id": "nurrow_shadeprint",
+    "fighter": "nurrow",
+    "model": "assets/fighters/nurrow/nurrow_shadeprint.glb",
+    "portrait": "assets/fighters/nurrow/nurrow_shadeprint_portrait.png",
+    "splash": "assets/fighters/nurrow/nurrow_shadeprint_splash.png"
+  }
+]

@@ -7,6 +7,10 @@ fighters/burdam.py, every `--step` frames of every clip, measured on the skinned
   low      the lowest body vertex (m; the cleaver's planted tip excluded) and its part
   stretch  edges >= 1 cm stretched over 1.5x / squashed under 0.6x their bind length, the worst ratio + part
   tip      the blade tip height and the blade's elevation (deg above horizontal; carry clips)
+  torso    cleaver vertices inside the torso / head parts only (the haft against the forearm wraps excluded)
+  grip     the left palm's distance to the haft line (m; two-handed frames read ~0)
+  bar      (--bar) share of the blade in view around the game's health bar from the 52 degree camera,
+           min / mean over eight facings (bar 108 + 22 px x 18 px at art height + 0.35 m, name above it)
 
     Blender -b --factory-startup --python art/blender/proto/burdam_audit.py -- [--clips idle,run] [--step 2]
 """
@@ -30,6 +34,26 @@ HANDS = ("fist_R", "palm_L", "fingers_L")
 ARMS = ("forearms", "fist_R", "palm_L", "fingers_L")
 TORSO = ("coat", "skirt", "belt", "cowl", "mask")
 HEAD = ("mask", "cowl")
+ARM_PARTS = ("forearms", "strap_plate", "vambrace", "fringe")
+BLADE = ("blade", "heel")
+
+
+def bar_visibility(P, height=2.16, yaws=range(0, 360, 45)):
+    """share of the points P (armature space, metres) NOT under the game's health bar / name plate seen from the
+    52 degree gameplay camera (82.1 px per m at 1080p), per facing: bar 108 px + a 22 px level box on its left,
+    18 px tall centred at height + 0.35 m; the name ~90 x 14 px from 11 px above it"""
+    c52, s52 = math.cos(math.radians(52)), math.sin(math.radians(52))
+    anchor = (height + 0.35) * c52
+    out = []
+    for yd in yaws:
+        a = math.radians(yd)
+        x = P[:, 0] * math.cos(a) - P[:, 1] * math.sin(a)
+        y = P[:, 0] * math.sin(a) + P[:, 1] * math.cos(a)
+        v = (P[:, 2] * c52 + y * s52 - anchor) * 82.1
+        xp = x * 82.1
+        hid = ((xp >= -76) & (xp <= 54) & (np.abs(v) <= 9)) | ((np.abs(xp) <= 45) & (v > 9) & (v <= 25))
+        out.append(1.0 - float(hid.mean()))
+    return out
 
 
 def rebind_cache(body, arm, names, binds, log=print):
@@ -65,6 +89,9 @@ def args():
     p.add_argument("--haft-min-u", type=float, default=-9.0,
                    help="ignore cleaver vertices below this cleaver u (emulate a shorter haft on an older cache)")
     p.add_argument("--where", action="store_true", help="print where the worst stretched edges sit (bind pose)")
+    p.add_argument("--bar", action="store_true", help="health-bar visibility of the blade per frame")
+    p.add_argument("--brief", type=int, default=-1, help="only print frames with torso/head hits above this count")
+    p.add_argument("--height", type=float, default=2.16, help="art.height for --bar")
     return p.parse_args(scene.script_args())
 
 
@@ -114,6 +141,7 @@ def main():
         print(f"ignoring {int(gone.sum())} cleaver vertices below u {a.haft_min_u}")
         cleaver = cleaver & ~gone
     hands = np.isin(pv, [ids[x] for x in HANDS if x in ids])
+    blade_sel = np.isin(pv, [ids[x] for x in BLADE if x in ids])
     armsv = np.isin(pv, [ids[x] for x in ARMS if x in ids])
     body_faces = [i for i in range(len(polys)) if names[ppart[i]] not in F.CLEAVER + HANDS] if True else []
     torso_faces = [i for i in range(len(polys)) if names[ppart[i]] in TORSO]
@@ -159,7 +187,7 @@ def main():
         clip = clips[name]
         print(f"== {name} ({clip.frames} f)")
         print("   f  cleaver(n,max m)        head(n,max)   arms(n)  low(m part)            stretch(>1.5,<0.6,max part)   tip  elev")
-        worst = {"cleaver": 0, "head": 0, "low": 0.0, "stretch": 0.0}
+        worst = {"cleaver": 0, "head": 0, "low": 0.0, "stretch": 0.0, "torso": 0, "bar": 1.0}
         frames = list(range(0, clip.frames, a.step))
         if clip.frames - 1 not in frames:
             frames.append(clip.frames - 1)
@@ -198,16 +226,32 @@ def main():
                     p0 = co0[ed[e, 0]]
                     print(f"        edge {r[e]:.1f}x {names[pv[ed[e, 0]]]:9s} bind ({p0[0]:+.2f},{p0[1]:+.2f},{p0[2]:+.2f}) L0 {L0[e]:.3f}")
             top = sorted(by1.items(), key=lambda kv: -kv[1])[:2]
-            print(f"  {f:3d}  {c1:4d} {d1:5.3f} {str(top):24s} {c2:4d} {d2:5.3f}  {c3:5d}   {co[lo, 2]:+.3f} {names[pv[lo]]:10s}"
+            c4 = sum(v for k, v in by1.items() if k not in ARM_PARTS)
+            hl, pr = W("prop.L"), W("prop.R")
+            ax = (arm.matrix_world @ pb["prop.R"].matrix).to_3x3().col[1].normalized()
+            rel = hl - pr
+            gd = float(np.linalg.norm(rel - np.array(ax) * float(np.dot(rel, np.array(ax)))))
+            bar = ""
+            if a.bar:
+                vis = bar_visibility(co[blade_sel], a.height)
+                bar = f" bar {min(vis):.2f}/{np.mean(vis):.2f}"
+                worst["bar"] = min(worst["bar"], min(vis))
+            worst["torso"] = max(worst["torso"], c4)
+            skip = a.brief >= 0 and c4 <= a.brief and c2 <= a.brief
+            print_ = (lambda *x, **k: None) if skip else print
+            print_(f"  {f:3d}  torso {c4:3d} grip {gd:5.3f}{bar} |"
+                  f"  {c1:4d} {d1:5.3f} {str(top):24s} {c2:4d} {d2:5.3f}  {c3:5d}   {co[lo, 2]:+.3f} {names[pv[lo]]:10s}"
                   f"  {s_hi:4d} {s_lo:4d} {r[wi]:4.1f} {wpart:10s}  {tip[2]:+.2f} {elev:+4.0f} {hi_parts if s_hi else ''}")
             worst["cleaver"] = max(worst["cleaver"], c1)
             worst["head"] = max(worst["head"], c2)
             worst["low"] = min(worst["low"], float(co[lo, 2]))
             worst["stretch"] = max(worst["stretch"], float(r[wi]))
         summary[name] = worst
-    print("== SUMMARY (worst per clip): cleaver-in-body verts, cleaver/hand-in-head verts, lowest body z, max stretch")
+    print("== SUMMARY (worst per clip): cleaver-in-body verts (torso / head parts only), cleaver/hand-in-head verts, "
+          "lowest body z, max stretch" + (", min blade share in view (bar)" if a.bar else ""))
     for k, w in summary.items():
-        print(f"  {k:11s} cleaver {w['cleaver']:4d}  head {w['head']:4d}  low {w['low']:+.3f}  stretch {w['stretch']:.1f}")
+        print(f"  {k:11s} cleaver {w['cleaver']:4d} (torso {w['torso']:3d})  head {w['head']:4d}  low {w['low']:+.3f}  "
+              f"stretch {w['stretch']:.1f}" + (f"  bar {w['bar']:.2f}" if a.bar else ""))
 
 
 if __name__ == "__main__":

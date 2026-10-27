@@ -1,0 +1,144 @@
+{
+  "id": "rishal_chalkline",
+  "fighter": "rishal",
+  "skin": true,
+  "parts": {
+    "tris_helm": 900,
+    "tris_face": 648,
+    "tris_visor": 800,
+    "tris_visor_ridge": 178,
+    "tris_crest": 460,
+    "tris_crest_glass": 360,
+    "tris_crest_ribs": 118,
+    "tris_fins": 478,
+    "tris_neck": 300,
+    "tris_cowl": 800,
+    "tris_torso": 900,
+    "tris_chest_plate": 560,
+    "tris_straps": 360,
+    "tris_medallion": 160,
+    "tris_medallion_glass": 60,
+    "tris_belt": 498,
+    "tris_buckle": 200,
+    "tris_skirt_R": 658,
+    "tris_skirt_L": 620,
+    "tris_apron": 400,
+    "tris_sleeves": 700,
+    "tris_bracer_R": 458,
+    "tris_bracer_L": 460,
+    "tris_hand_R": 560,
+    "tris_hand_L": 560,
+    "tris_pauldron_R": 478,
+    "tris_pauldron_L": 500,
+    "tris_lames_L": 900,
+    "tris_trousers": 1200,
+    "tris_knee_R": 260,
+    "tris_greave_R": 340,
+    "tris_calfwrap_R": 324,
+    "tris_knee_L": 260,
+    "tris_greave_L": 340,
+    "tris_calfwrap_L": 324,
+    "tris_boots": 798,
+    "tris_knife_grip_R": 160,
+    "tris_knife_guard_R": 80,
+    "tris_knife_blade_R": 300,
+    "tris_knife_grip_L": 160,
+    "tris_knife_guard_L": 80,
+    "tris_knife_blade_L": 300,
+    "validate_rishal": "18138->18124",
+    "validate_rishal_accent": "538->537"
+  },
+  "uv_coverage": 0.588,
+  "bake": {
+    "base": 5.66,
+    "rough_metal": 2.87,
+    "normal": 2.61,
+    "ao": 3.2,
+    "normal_fixed_px": 111804,
+    "projection": 98.98,
+    "pack_save": 99.34,
+    "total": 114.07
+  },
+  "tris": 18985,
+  "mesh_top_m": 1.894,
+  "glb_bytes_raw": 2391020,
+  "optimize": {
+    "ok": true,
+    "before": 2391020,
+    "after": 996380
+  },
+  "glb_bytes": 996380,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal_chalkline.glb (973 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: rishal_chalkline_base 2048x2048 258K, rishal_chalkline_normal 512x512 43K, rishal_chalkline_orm 512x512 69K",
+      "  skinned meshes: rishal_accent(269v), rishal_chalkline(17320v)",
+      "  bones: 27 (root hips spine chest neck head x_visor_ridge shoulderL upper_armL forearmL handL propL x_knife_tip_l shoulderR upper_armR forearmR handR propR x_knife_tip_r thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 18985; bind-pose bounds (three units, Y up): 0.76 x 1.89 x 0.63; facing (-0.00, 1.00); head bone y 1.55; runRefSpeed 3.55",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/rishal/rishal_chalkline_splash.png",
+      "portrait": "art/out/fighters/rishal/rishal_chalkline_portrait.png"
+    },
+    "seconds": {
+      "splash": 15.14,
+      "portrait": 5.33
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.334,
+        0,
+        -0.404
+      ],
+      [
+        0.423,
+        1.894,
+        0.23
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.549,
+    "accentPct": 1.6,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 101,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/rishal/three_rishal_chalkline.png",
+    "seconds": 8.9,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.59,
+      "model": 98.99,
+      "lows_bind": 5.94,
+      "uv": 9.45,
+      "bake": 114.07,
+      "export": 0.33,
+      "optimize": 0.98,
+      "load_test": 0.28,
+      "render": 20.54,
+      "three_qa": 9.17
+    },
+    "total_s": 260.66
+  },
+  "run_ref_speed": 3.55,
+  "height_m": 1.79
+}

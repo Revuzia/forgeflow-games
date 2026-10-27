@@ -55,7 +55,12 @@ NOTCH_HALF_W = 0.037
 NOTCH_DEPTH = 0.046
 # the accent slab under each notch: a diamond inlay (u, v of its centre, half-diagonal along u, across v),
 # set flush in the ironstone a little below the bite (the concept's blue diamonds), rising toward the tip
-GEMS = [(nu, 0.006 + 0.030 * nu, 0.047, 0.050) for nu in NOTCHES]
+# fix pass 3: ONE accent mark per notch (the review read the old diamonds + bite floors as a 10-cell checker):
+# the bite's floor filled with an ember core (CORE_FILL deep) and a tall diamond hanging from it, its top point
+# in the core, so each notch reads as one blue spade along the spine (five marks, 3.8 cm of stone between)
+CORE_FILL = 0.028
+GEM_A, GEM_B = 0.035, 0.060
+GEMS = [(nu, HEEL_SPINE_V - NOTCH_DEPTH - GEM_B + 0.006, GEM_A, GEM_B) for nu in NOTCHES]
 POMMEL_INSET = (0.044, 0.038)             # the carved (not lit) diamond recess on the pommel plate
 
 

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "rishal_chalkline",
+    "fighter": "rishal",
+    "model": "assets/fighters/rishal/rishal_chalkline.glb",
+    "portrait": "assets/fighters/rishal/rishal_chalkline_portrait.png",
+    "splash": "assets/fighters/rishal/rishal_chalkline_splash.png"
+  },
+  {
+    "id": "rishal_lamplit",
+    "fighter": "rishal",
+    "model": "assets/fighters/rishal/rishal_lamplit.glb",
+    "portrait": "assets/fighters/rishal/rishal_lamplit_portrait.png",
+    "splash": "assets/fighters/rishal/rishal_lamplit_splash.png"
+  }
+]

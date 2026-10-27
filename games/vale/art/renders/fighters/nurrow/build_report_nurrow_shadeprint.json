@@ -1,0 +1,126 @@
+{
+  "id": "nurrow_shadeprint",
+  "fighter": "nurrow",
+  "skin": true,
+  "parts": {
+    "tris_hat_cone": 1536,
+    "tris_hat_rim": 1100,
+    "tris_hat_inlays": 520,
+    "tris_hat_knob": 360,
+    "tris_head": 800,
+    "tris_mask": 1500,
+    "tris_torso": 1498,
+    "tris_cowl": 1300,
+    "tris_brooch": 160,
+    "tris_brooch_glass": 80,
+    "tris_straps": 360,
+    "tris_pauldron": 700,
+    "tris_belt": 650,
+    "tris_tabard": 360,
+    "tris_tassets": 700,
+    "tris_sleeves": 698,
+    "tris_forearm_wraps": 700,
+    "tris_hand_R": 650,
+    "tris_hand_L": 850,
+    "tris_trousers": 1300,
+    "tris_legwraps": 748,
+    "tris_boots": 898,
+    "tris_cape": 1750,
+    "tris_grip": 260,
+    "tris_blade": 526,
+    "validate_nurrow": "18636->18624"
+  },
+  "uv_coverage": 0.607,
+  "bake": {
+    "base": 3.6,
+    "rough_metal": 2.98,
+    "normal": 3.03,
+    "ao": 3.38,
+    "normal_fixed_px": 63165,
+    "projection": 42.86,
+    "pack_save": 43.05,
+    "total": 56.14
+  },
+  "tris": 19992,
+  "mesh_top_m": 1.999,
+  "glb_bytes_raw": 2257176,
+  "optimize": {
+    "ok": true,
+    "before": 2257176,
+    "after": 980788
+  },
+  "glb_bytes": 980788,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_shadeprint.glb (958 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: nurrow_shadeprint_base 2048x2048 254K, nurrow_shadeprint_normal 512x512 42K, nurrow_shadeprint_orm 256x256 24K",
+      "  skinned meshes: nurrow_accent(332v), nurrow_shadeprint(18278v)",
+      "  bones: 30 (root hips spine chest neck head x_hat_rim shoulderL upper_armL forearmL handL propL x_dart_hand shoulderR upper_armR forearmR handR propR x_blade_tip x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_1)",
+      "  clips: ",
+      "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 19992; bind-pose bounds (three units, Y up): 1.17 x 2.00 x 0.85; facing (0.00, 1.00); head bone y 1.50; runRefSpeed 3.55",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/nurrow/nurrow_shadeprint_splash.png",
+      "portrait": "art/out/fighters/nurrow/nurrow_shadeprint_portrait.png"
+    },
+    "seconds": {
+      "splash": 8.43,
+      "portrait": 5.83
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.625,
+        0,
+        -0.444
+      ],
+      [
+        0.544,
+        1.999,
+        0.408
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.5,
+    "accentPct": 1.87,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 107,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/nurrow/three_nurrow_shadeprint.png",
+    "seconds": 8.5,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.18,
+      "model": 4.57,
+      "lows_bind": 1.84,
+      "uv": 4.64,
+      "bake": 56.15,
+      "export": 0.05,
+      "optimize": 0.45,
+      "load_test": 0.1,
+      "render": 14.29,
+      "three_qa": 8.87
+    },
+    "total_s": 91.25
+  },
+  "run_ref_speed": 3.55,
+  "height_m": 1.78
+}

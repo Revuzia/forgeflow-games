@@ -28,6 +28,8 @@ from common import anim, scene  # noqa: E402
 
 import odrum  # noqa: E402
 
+PR, PH = 0.124 * odrum.POT_S, 0.135 * odrum.POT_S          # the pot belly radius and half height (scaled pots)
+
 GROUPS = ["head", "torso", "armL", "armR", "handL", "handR", "hips", "shin", "foot", "staff", "potL", "potR", "other"]
 
 
@@ -130,8 +132,8 @@ def main():
                 t = d @ ax
                 rad = np.linalg.norm(d - t[:, None] * ax, axis=1)
                 L = pb[f"x_hang_{side}"].length
-                inz = (t > L - 0.135) & (t < L + 0.135)
-                pots[side] = (int(((rad < 0.122) & inz).sum()), int(((rad < 0.162) & inz).sum()))
+                inz = (t > L - PH) & (t < L + PH)
+                pots[side] = (int(((rad < PR - 0.002) & inz).sum()), int(((rad < PR + 0.038) & inz).sum()))
             Bp = bone_mat("prop.R")
             g0, sx = Bp[:3, 3], Bp[:3, 1] / np.linalg.norm(Bp[:3, 1])
 
@@ -154,7 +156,7 @@ def main():
                 t = d @ ax
                 rad = np.linalg.norm(d - t[:, None] * ax, axis=1)
                 L = pb[f"x_hang_{side}"].length
-                m = (rad < 0.122) & (t > L - 0.135) & (t < L + 0.135)
+                m = (rad < PR - 0.002) & (t > L - PH) & (t < L + PH)
                 if m.any():
                     gs = np.bincount(cls[body][m], minlength=len(GROUPS))
                     hits.append(f"pot{side}:" + ",".join(f"{GROUPS[i]}{n}" for i, n in enumerate(gs) if n))
@@ -183,7 +185,7 @@ def main():
                 t = d @ ax
                 rad = np.linalg.norm(d - t[:, None] * ax, axis=1)
                 L = pb[f"x_hang_{side}"].length
-                near8 += int(((rad < 0.124 + 0.08) & (t > L - 0.135) & (t < L + 0.135)).sum())
+                near8 += int(((rad < PR + 0.08) & (t > L - PH) & (t < L + PH)).sum())
             worst["pouchGap"] = min(worst.get("pouchGap", 9.0), dp)
             worst["potShoulder8"] = max(worst.get("potShoulder8", 0), near8)
             hips = bone_mat("hips")[:3, 3]
@@ -197,7 +199,7 @@ def main():
             print(f"f{f:3d} pouch=({pouch[0]:+.2f},{pouch[1]:+.2f},{pouch[2]:+.2f}) hips=({hips[0]:+.2f},{hips[1]:+.2f},{hips[2]:+.2f}) "
                   f"staffDir=({sx[0]:+.2f},{sx[1]:+.2f},{sx[2]:+.2f}) potL={pots['l']} potR={pots['r']} staffHead={sh} "
                   f"staffBody={sb} potStaff=({pot_staff['l'][0]:.2f},{pot_staff['r'][0]:.2f}|{pot_staff['l'][1]},{pot_staff['r'][1]}) "
-                  f"low={low:+.3f} {('BELOW ' + below) if below else ''} "
+                  f"low={low:+.3f} potLow=({lows.get('potL', 9):+.3f},{lows.get('potR', 9):+.3f}) p8={near8} {('BELOW ' + below) if below else ''} "
                   + " ".join(x if isinstance(x, str) else "hit@(%+.2f,%+.2f,%+.2f)" % tuple(x) for x in hits))
             if a.dump:
                 dump[f"{name}/{f}"] = V[:: a.every].astype(np.float32)
