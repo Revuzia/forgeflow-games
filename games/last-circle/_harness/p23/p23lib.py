@@ -357,6 +357,14 @@ def _screen_text(pg):
         return "<unreadable: %s>" % e
 
 
+def _pair_state(pg):
+    try:
+        return pg.evaluate("() => { const W = window.__LC__ && window.__LC__.W; return W ? { phase: W.phase, net: !!W.net, squadLeft: W.squadLeft || null, err: W.lastMatchError || null,"
+                           r" text: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 200) } : 'no W'; }")
+    except Exception as e:
+        return "<unreadable: %s>" % str(e).splitlines()[0][:100]
+
+
 def _pair_shot(pg, tag):
     try:
         d = os.path.join(C.REPORTS, "p23_shots")
@@ -435,13 +443,56 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
                 break
             pg.keyboard.press("Enter")
             pg.wait_for_timeout(1500)
-    if not all(SQ.wait(pg, "() => ['drop','match'].includes(window.__LC__.W.phase)", 120, 1.0) for pg in (hpg, gpg)):
-        raise C.EnvFailure("%s: a page never reached the drop" % name)
-    land = ("() => { const C = window.__LC__, W = C.W, p = W.player; let n = 0; while (n < 900 && p.alive && (p.gliding || !p.onGround)) { C.fastForward(1 / 30, 1 / 30);"
-            " p.hp = 100; p.shield = 100; n++; } return { n, onGround: p.onGround }; }")
-    for pg in (hpg, gpg):
-        pg.evaluate(land)
+    # each page in front while it is waited on (a background tab gets few rAF frames: the lobby countdown / drop start can stall there)
+    for label, pg in (("host", hpg), ("guest", gpg)):
+        pg.bring_to_front()
+        if not SQ.wait(pg, "() => ['drop','match'].includes(window.__LC__.W.phase)", 180, 1.0):
+            st = {lb: _pair_state(p) for lb, p in (("host", hpg), ("guest", gpg))}
+            _pair_shot(pg, name + "_" + label + "_nodrop")
+            raise C.EnvFailure("%s: the %s page never reached the drop in 180 s: %s" % (name, label, st))
+    # the landing in SHORT slices, the two pages alternating (fix round): one synchronous 900-frame fastForward blocked that page's event loop
+    # for many wall seconds while net.js's watchdogs kept reading the wall clock - the guest's silent-HOST watchdog (8 s) dropped the session
+    # (W.net null: netseq_1 10-26 22:50 - no reorder hook, the guest's copy of the host never moved, the rejoin record cleared -> 'busy') and
+    # the host's silent-guest watchdog (12 s) gave s1 to a bot. Slices of 15 frames (0.5 s of sim) return to the event loop in well under 1 s
+    land = ("() => { const C = window.__LC__, W = C.W, p = W.player; let n = 0; while (n < 15 && p.alive && (p.gliding || !p.onGround)) { C.fastForward(1 / 30, 1 / 30);"
+            " p.hp = 100; p.shield = 100; n++; } return { n, landed: !(p.alive && (p.gliding || !p.onGround)) }; }")
+    for _ in range(80):
+        done = [pg.evaluate(land)["landed"] for pg in (hpg, gpg)]
+        if all(done):
+            break
+        hpg.wait_for_timeout(40)
     return ctx, hpg, hrec, gpg, grec, code
+
+
+SESSION_JS = r"""(other) => { const W = window.__LC__ && window.__LC__.W, S = W && W.net; const a = W && W.actorById && W.actorById.get(other);
+  return { phase: W && W.phase, net: !!S, started: !!(S && S.started), host: !!(S && S.net && S.net.isHost && S.net.isHost()), squadLeft: (W && W.squadLeft) || null,
+           other: a ? { netRemote: !!a.netRemote, isBot: !!a.isBot, alive: !!a.alive } : null, tookOver: (S && S.tookOver) || null, silentTake: S && S.silentTake ? Object.keys(S.silentTake) : null }; }"""
+
+
+SIM_RATE_MIN = 0.6      # match-clock seconds per wall second below which a two-page row measures the box, not net.js (lane net's live probe rule)
+
+
+def sim_rates(*pgs, secs=3.0):
+    """match-clock seconds per wall second on each page over ~secs (1.0 = real time). net.js's watchdogs and rejoin-record freshness run on
+    the WALL clock (8 s host silence, 12 s guest silence, a record refreshed every 2 s and fresh for 75 s): a page starved below SIM_RATE_MIN
+    trips them by itself"""
+    t0 = [(time.time(), p.evaluate("() => window.__LC__.W.t")) for p in pgs]
+    pgs[0].wait_for_timeout(int(secs * 1000))
+    t1 = [(time.time(), p.evaluate("() => window.__LC__.W.t")) for p in pgs]
+    return [round((b[1] - a[1]) / max(0.001, b[0] - a[0]), 3) for a, b in zip(t0, t1)]
+
+
+def pair_session(hpg, gpg, h_id, g_id, wait_s=20):
+    """SETUP check of a squad pair (D16): both pages still in the squad session and the host driving the guest's body from its packets (netRemote,
+    not a bot). Returns (ok, detail); waits up to wait_s for a reclaim (net.js hands a silenced body back when its peer speaks again)."""
+    t0 = time.time()
+    while True:
+        h = hpg.evaluate(SESSION_JS, g_id)
+        g = gpg.evaluate(SESSION_JS, h_id)
+        ok = h["net"] and g["net"] and h["other"] and h["other"]["netRemote"] and not h["other"]["isBot"]
+        if ok or time.time() - t0 > wait_s:
+            return bool(ok), {"host": h, "guest": g, "waitedS": round(time.time() - t0, 1)}
+        hpg.wait_for_timeout(1000)
 
 
 # ───────────────────────── a served file patched in memory (planted faults that live in a module's private code) ─────────────────────────
