@@ -437,7 +437,21 @@ function suiteP23(M, SIM, count) {
     row(!M.normSmoke({ x: 0, y: 0, z: 0, r: 60, t0: 0, t1: 10 }) && !M.normSmoke({ x: 0, y: 0, z: 0, r: 5, t0: 10, t1: 5 }) && !M.normSmoke({ x: 0, y: 0, z: 0, r: 5, t0: 0, t1: 600 }) &&
         !M.normSmoke({ x: 9000, y: 0, z: 0, r: 5, t0: 0, t1: 10 }, 850) && !M.normSmoke({ x: NaN, y: 0, z: 0, r: 5, t0: 0, t1: 10 }) && !M.normSmoke(null),
       "LC-14: a smoke that is huge, ends before it starts, lasts over 60 s, is off the map or not a number is dropped");
-    row(M.SMOKE_MAX_PER_SENDER === 6, "LC-14: at most 6 relayed smokes alive per sender");
+    row(M.SMOKE_MAX_PER_SENDER === 6 && M.SMOKE_MAX_PER_THROWER === 6, "LC-14: at most 6 relayed smokes alive per thrower");
+    // D1: the live radius AND the full radius travel (weapons.js grows r from t0 + rMax on every client)
+    const sg = M.normSmoke(rt({ x: 1, y: 2, z: 3, r: 2.1, rMax: 6, t0: 50, t1: 70 }), 850), sOld = M.normSmoke({ x: 1, y: 2, z: 3, r: 6, t0: 50, t1: 70 }, 850);
+    row(sg && sg.r === 2.1 && sg.rMax === 6 && sOld && sOld.rMax === 6 && !M.normSmoke({ x: 1, y: 2, z: 3, r: 7, rMax: 6, t0: 50, t1: 70 }) && !M.normSmoke({ x: 1, y: 2, z: 3, r: 1, rMax: 40, t0: 50, t1: 70 }),
+      "D1: a relayed smoke carries its live r and its full rMax (r <= rMax <= 15; a sender without rMax reads as rMax = r)", { sg, sOld });
+    // D12: the cap counts per THROWER: the host relays every bot's smokes, each bot has its own 6
+    const L0 = [];
+    for (let i = 0; i < 8; i++) { row(M.smokeRelayRoom(L0, "s" + (10 + i), 60) === null, "D12: host bot s" + (10 + i) + "'s first smoke is relayed (the cap is not per sending peer)"); L0.push({ _net: "a_host", by: "s" + (10 + i), t1: 80 }); }
+    const L1 = [];
+    for (let i = 0; i < 6; i++) L1.push({ _net: "b_g1", by: "s1", t1: 80 });
+    row(M.smokeRelayRoom(L1, "s1", 60) !== null && M.smokeRelayRoom(L1, "s1", 81) === null && M.smokeRelayRoom(L1, "s2", 60) === null,
+      "D12: a 7th live smoke by the same thrower is refused; ended clouds do not count; another thrower is not capped by it");
+    const L2 = [];
+    for (let i = 0; i < M.SMOKE_MAX_RELAYED; i++) L2.push({ _net: "a_host", by: "s" + (10 + (i % 40)), t1: 80 });
+    row(M.smokeRelayRoom(L2, "s49", 60) !== null && M.SMOKE_MAX_RELAYED >= 24, "D12: every thrower together is still bounded (SMOKE_MAX_RELAYED)");
     // late-join loot sync: a fake loot.js (a chest bursts its "cb:<id>:<i>" items when it opens; a take of a missing item is a no-op) - the
     // host's sync must leave no item the host already saw taken
     {
@@ -647,6 +661,8 @@ function suiteP23(M, SIM, count) {
     ["a reconnect judge with no time window", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { nowMs: c.takenAt })) }],
     ["a reconnect judge that lets any peer reclaim a body", { judgeReclaim: (c) => M.judgeReclaim(Object.assign({}, c, { senderSlot: parseInt(String(c.id).slice(1), 10) })) }],
     ["a smoke parser with no radius / life cap", { normSmoke: (d) => (d && typeof d === "object" && [d.x, d.y, d.z].every(Number.isFinite) ? d : null) }],
+    ["a smoke cap counted per sending peer (D12: the host's bots share one cap)", { smokeRelayRoom: (list, by, t) => { const L = (list || []).filter((x) => x && x._net && !(x.t1 < t)); const peer = L.length ? L[L.length - 1]._net : null; return L.filter((x) => x._net === peer).length >= 6 ? "flood" : null; } }],
+    ["a smoke parser that drops rMax (a relayed cloud stuck at its send-time radius)", { normSmoke: (d, h) => { const s = M.normSmoke(d, h); if (s) s.rMax = s.r; return s; } }],
     ["a late-join sync that applies the taken list first (the ghost-item bug)", { applyLootSync: (loot, open, take) => { const out = []; for (const id of (loot && loot.taken) || []) { take(id); if (M.isChestItem(id)) out.push(id); } for (const id of (loot && loot.opened) || []) open(id); return out; } }],
     ["a late-join sync that forgets the chest items for a crate that lands later", { applyLootSync: (loot, open, take) => { M.applyLootSync(loot, open, take); return []; } }],
   ];
@@ -681,6 +697,8 @@ function suiteP23(M, SIM, count) {
       /if \(S\.silentTake\) delete S\.silentTake\[r\.id\];/.test(src) && /if \(S\.silentTake\) delete S\.silentTake\[d\.slot\];/.test(src),
       "LC-49 reconnect: only the silence watchdogs mark a body reclaimable (a bye or a map fallback never does) and a fresh state packet reclaims it before it is applied");
     ok(/if \(d\.to && d\.to !== S\.net\.id\) return;/.test(sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState")), "LC-49: a sync addressed to a rejoining page is ignored by everyone else (no clock snap)");
+    ok(/const full = smokeRelayRoom\(W\.smokes, d\.by, W\.t\);\s*if \(full\) \{ reject\(t, from, full\); return; \}/.test(src) && !/x\._net === from/.test(src),
+      "D12: the smoke relay's cap is applied per thrower (d.by) on receive, never per sending peer");
     const syncSrc = sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState");
     ok(/deferTakes\(applyLootSync\(d\.loot, W\.netOpenChest, W\.netTakeItem\)\)/.test(syncSrc) && !/W\.netTakeItem\(id\)/.test(syncSrc) &&
       /if \(t === "take"\) \{ W\.netTakeItem\(d\.id\); if \(isChestItem\(d\.id\)\) deferTakes\(\[d\.id\]\);/.test(src) &&

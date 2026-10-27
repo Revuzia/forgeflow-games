@@ -574,19 +574,41 @@ export function reviveDoneOk(rec, by, nowMs, reviveMs) {
 }
 
 // ── LC-14: smoke relay ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** A smoke cloud as it travels ({ x, y, z, r, t0, t1 } in match time, C-SMOKE). Finite, on the map (+-half), radius 0.5..15 m, a life of at
- *  most 60 s. null = drop. */
+/** A smoke cloud as it travels ({ x, y, z, r, rMax, t0, t1 } in match time, C-SMOKE / D1): r = the LIVE radius when it was sent, rMax = the
+ *  full radius it grows to (weapons.js tickSmokes rewrites r from t0 + rMax on every client, so a relayed cloud grows exactly like the
+ *  thrower's - without rMax it fell back to the send-time r and stayed at 35 % of its size on every other screen). A sender without rMax
+ *  (r is then the full radius) is read as rMax = r. Finite, on the map (+-half), rMax 0.5..15 m with 0 <= r <= rMax, a life of at most 60 s.
+ *  null = drop. */
 export function normSmoke(d, half) {
   if (!d || typeof d !== "object") return null;
   const H = half > 0 ? half : 2000;
   const fin = (v, lim) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= lim;
-  if (!fin(d.x, H) || !fin(d.z, H) || !fin(d.y, 5000) || !fin(d.t0, 1e6) || !fin(d.t1, 1e6)) return null;
-  if (!(d.r >= 0.5 && d.r <= 15) || !(d.t1 > d.t0) || d.t1 - d.t0 > 60) return null;
+  if (!fin(d.x, H) || !fin(d.z, H) || !fin(d.y, 5000) || !fin(d.t0, 1e6) || !fin(d.t1, 1e6) || !fin(d.r, 15)) return null;
+  const rMax = d.rMax == null ? d.r : d.rMax;
+  if (!(rMax >= 0.5 && rMax <= 15) || !(d.r >= 0 && d.r <= rMax) || !(d.t1 > d.t0) || d.t1 - d.t0 > 60) return null;
   const r2 = (v) => +(+v).toFixed(2);
-  return { x: r2(d.x), y: r2(d.y), z: r2(d.z), r: r2(d.r), t0: r2(d.t0), t1: r2(d.t1) };
+  return { x: r2(d.x), y: r2(d.y), z: r2(d.z), r: r2(d.r), rMax: r2(rMax), t0: r2(d.t0), t1: r2(d.t1) };
 }
-/** At most this many relayed smokes alive per sender at once (a client that floods smokes cannot blind every bot on the host). */
-export const SMOKE_MAX_PER_SENDER = 6;
+/** At most this many relayed smokes alive per THROWER at once (D12: counted per `by`, not per sending peer - the host relays the smokes of
+ *  every bot it simulates, and a cap per peer let a 7th host-side smoke vanish on the guests while it still blinded the host's bots). A guest
+ *  can only name its own actor (senderMay), so for a guest this is still its own cap. */
+export const SMOKE_MAX_PER_THROWER = 6;
+/** (the old name: the cap is per thrower now) */
+export const SMOKE_MAX_PER_SENDER = SMOKE_MAX_PER_THROWER;
+/** Relayed smokes alive at once from every thrower together (a bound on the sight-line cost, far above play: 12 per client's own weapons.js). */
+export const SMOKE_MAX_RELAYED = 48;
+/** May a relayed smoke by `by` join `list` (W.smokes) at match time t? null = yes, else the reason it is refused. */
+export function smokeRelayRoom(list, by, t) {
+  let mine = 0, all = 0;
+  for (const x of Array.isArray(list) ? list : []) {
+    if (!x || !x._net || x.t1 < t) continue;
+    all++;
+    if (x.by === by) mine++;
+  }
+  if (mine >= SMOKE_MAX_PER_THROWER) return "smoke flood (thrower)";
+  if (all >= SMOKE_MAX_RELAYED) return "smoke flood (all)";
+  return null;
+}
 
 // ── late-join loot sync (P23 fix round) ──────────────────────────────────────────────────────────────────────────────────────────────
 /** The id prefix of the items a chest bursts into (loot.js openChest: "cb:<chest id>:<i>", a supply crate "sd:<n>:<i>"). */
@@ -2075,12 +2097,12 @@ function onMsg(W, { from, t, d }) {
   if (t === "revive") { onRevive(W, from, d); return; }
   if (t === "smoke") {
     // LC-14 / C-SMOKE: a smoke cloud thrown on another client joins W.smokes here, so fx.js draws it and maps.js losBlocked (the host's bots)
-    // respects it; marked _net so it is never relayed back. At most SMOKE_MAX_PER_SENDER alive per sender.
+    // respects it; marked _net so it is never relayed back. At most SMOKE_MAX_PER_THROWER alive per thrower (`by`, D12), SMOKE_MAX_RELAYED in all.
     const s = normSmoke(d, W.map && W.map.size ? W.map.size / 2 + 50 : 2000);
     if (!s) { reject(t, from, "malformed smoke"); return; }
     if (!Array.isArray(W.smokes)) W.smokes = [];
-    const live = W.smokes.filter((x) => x && x._net === from && !(x.t1 < W.t)).length;
-    if (live >= SMOKE_MAX_PER_SENDER) { reject(t, from, "smoke flood"); return; }
+    const full = smokeRelayRoom(W.smokes, d.by, W.t);
+    if (full) { reject(t, from, full); return; }
     W.smokes.push(Object.assign(s, { _net: from, by: d.by }));
     W.events.emit("smokeNet", s);
     (S.relayIn = S.relayIn || {}).smoke = ((S.relayIn && S.relayIn.smoke) || 0) + 1;
