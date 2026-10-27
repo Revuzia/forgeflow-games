@@ -1285,10 +1285,25 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(R.hitVolSegment(runner, 10 - 3, 2 + knee, -5, 10 + 3, 2 + knee, -5) < 0 && R.hitVolSegment(runner, 10 - 3, 2 + 1.2, -5, 10 + 3, 2 + 1.2, -5) >= 0,
        "LC-22: a runner's chest still hits; the swinging knee does not (no stride phase in the sim)");
   }
-  // FIX ROUND (int-p23): the drawn lower-body yaw (player.js a._bodyYaw = facing + PI) wins over the velocity rule when it exists
-  ok(Math.abs(R.hitVolFacing(actor({ _hasBodyYaw: true, _bodyYaw: Math.PI + 0.4, yaw: 1.2, vel: { x: 6, y: 0, z: 0 } })) - 0.4) < 1e-12 &&
-     Math.abs(R.hitVolFacing(actor({ yaw: 1.2 })) - 1.2) < 1e-12,
-     "LC-22: the table faces the DRAWN body (player.js _bodyYaw: turn-in-place / strafe warp) when it exists, else the sim rule");
+  // FIX ROUND (int-p23): the drawn lower-body yaw (player.js a._bodyYaw = facing + PI) wins over the velocity rule when it
+  // exists - for a VIEW test only (the local human's shot). SECOND FIX PASS: a sim test (default) never reads that view state.
+  {
+    const by = actor({ _hasBodyYaw: true, _bodyYaw: Math.PI + 0.4, yaw: 1.2, vel: { x: 6, y: 0, z: 0 } });
+    ok(Math.abs(R.hitVolFacing(by, 0, true) - 0.4) < 1e-12 && Math.abs(R.hitVolFacing(actor({ yaw: 1.2 }), 0, true) - 1.2) < 1e-12 &&
+       Math.abs(R.hitVolFacing(by) - Math.atan2(-6, 0)) < 1e-12 && Math.abs(R.hitVolFacing(by, 0, false) - Math.atan2(-6, 0)) < 1e-12,
+       "LC-22: a VIEW test faces the DRAWN body (player.js _bodyYaw) when it exists; a SIM test keeps the sim-state rule (no view state)");
+    // the same actor and segment: a sim test is unchanged by any _bodyYaw value (frame-rate / camera independence)
+    const a0 = actor({ yaw: 0.3, vel: { x: 0, y: 0, z: 0 } }), a1 = actor({ yaw: 0.3, vel: { x: 0, y: 0, z: 0 }, _hasBodyYaw: true, _bodyYaw: Math.PI + 1.4 });
+    let same = true, diff = false;
+    for (let y = 0.2; y < 1.9; y += 0.1) for (let u = -0.6; u <= 0.6; u += 0.1) {
+      const s0 = R.hitVolSegment(a0, a0.pos.x + u, a0.pos.y + y, a0.pos.z - 5, a0.pos.x + u, a0.pos.y + y, a0.pos.z + 5, 0);
+      const s1 = R.hitVolSegment(a1, a1.pos.x + u, a1.pos.y + y, a1.pos.z - 5, a1.pos.x + u, a1.pos.y + y, a1.pos.z + 5, 0);
+      const v1 = R.hitVolSegment(a1, a1.pos.x + u, a1.pos.y + y, a1.pos.z - 5, a1.pos.x + u, a1.pos.y + y, a1.pos.z + 5, 0, null, true);
+      if (s0 !== s1) same = false;
+      if ((v1 >= 0) !== (s1 >= 0)) diff = true;
+    }
+    ok(same && diff, "LC-22: a sim hit test ignores _bodyYaw (identical rasters); the view test follows it (raster differs)");
+  }
   // LIVE BONES: the caller's world joints replace the table. Consistency: the table's own joints handed in as a live set give
   // the same verdict and entry on every ray above the feet (the live path adds only the Foot -> ToeBase capsules)
   {
@@ -1345,7 +1360,12 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(/const s = \{ x, y: y \+ S\.yOff, z, r: 0, t0: now, t1: now \+ S\.lifeS, rMax: S\.r,/.test(wj) && /s\.r = K\.smokeRadiusAt\(s, W\.t\);/.test(wj),
        "C-SMOKE (D1): W.smokes entries carry {x, y, z, r, rMax, t0, t1} with r the live (growing) radius");
     ok(/if \(a\.downed\) \{\s*\n\s*inp\.slot = -1; inp\.reload = false;/.test(wj), "C-DBNO: stepWeapon's first gate - a downed actor cannot switch, reload, fire, throw or heal");
-    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz, W\.t, liveJoints\(W, t\)\)/.test(wj) && /W\.hitVolRay = \(t, ox, oy, oz, dx, dy, dz, maxT\) => hitVolRay\(W, /.test(wj) && /^function hitVolRay\(W, t,/m.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume (live bones where fresh) and its head sphere; W.hitVolRay is defined");
+    ok(/K\.hitVolSegment\(t, ax, ay, az, bx, by, bz, W\.t, view \? liveJoints\(W, t\) : null, view\)/.test(wj) && /W\.hitVolRay = \(t, ox, oy, oz, dx, dy, dz, maxT, shooter\) => hitVolRay\(W, /.test(wj) && /^function hitVolRay\(W, t,/m.test(wj) && /const isHead = hitVol \? hitHead :/.test(wj), "LC-22: bullets test the bone-derived volume (drawn bones for the local human's rounds) and its head sphere; W.hitVolRay is defined");
+    // SECOND FIX PASS: only the local human's round is a view test; the drawn pose is captured AFTER the royale frame
+    // (a kernel updater), never read from the bones inside simTick (re-keyed to the raw clip by then)
+    ok(/const view = p\.ownerId != null && !!W\.player && p\.ownerId === W\.player\.id;/.test(wj) && /W\.kernel\.onUpdate\(\(\) => captureDrawn\(W\)\)/.test(wj) &&
+       /return age >= 0 && age <= LIVE_MAX_TICKS \? L\.J : null;/.test(wj) && !/function liveJoints[\s\S]{0,400}updateWorldMatrix/.test(wj),
+       "LC-22: bots' / remote rounds test the sim table (seed-deterministic at any frame rate); the local human's test the pose drawn last frame");
   } else console.log("  INFO  weapons.js not found next to this file: P2-D source pins skipped");
 }
 
