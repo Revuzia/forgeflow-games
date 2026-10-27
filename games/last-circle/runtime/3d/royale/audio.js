@@ -1355,7 +1355,8 @@ function farFrom(R) { return Math.max(150, 0.5 * R); }  // ... the far one from 
 // loudest-10 ms RMS of the same shot 3-4 m either side of each hand-over; all gains 1.0 gave jumps of
 // -10.1 dB (AR at 80 m) to +2.1 dB (AR at 160 m)). The LMG shares the AR takes but not its near level.
 const DIST_G = { pistol: [1.64, 2.19], smg: [1.22, 1.57], ar: [2.85, 1.99], shotgun: [1.76, 0], sniper: [1.06, 1.51],
-                 dmr: [1.17, 1.62], lmg: [2.16, 1.9], burst: [0.92, 0.99] };
+                 dmr: [1.17, 1.62], lmg: [2.16, 1.9], burst: [0.92, 0.99] };   // 0 = no such band for the class
+const DIST_G_DEF = [1, 1];
 
 // synth report per class: [lowpass Hz, decay s, gain]
 const SHOT_P = {
@@ -1911,9 +1912,12 @@ function wire(W) {
     // the late wave has decoded (sample() returns false for an undecoded clip).
     let distant = false;
     if (!own && eye && G.dist && ctx && place(eye, maxD) >= 0 && _pd >= MID_M) {
-      const band = _pd >= farFrom(maxD) && SFX["gd_" + G.dist + "_far"] ? "far" : "mid";
-      const key = "gd_" + G.dist + "_" + band;
-      if (SFX[key] && sample(key, pos, g * ((DIST_G[k] || [1, 1])[band === "far" ? 1 : 0] || 1), maxD, G.rate, tier, FX_GUN_DIST)) { distant = true; _acc[band === "far" ? "distFar" : "distMid"]++; }
+      // a band whose DIST_G level is 0 does not exist for that class (shotgun far): the band below it carries on.
+      // (The old `[..] || 1` turned that 0 into full level.) A class missing from DIST_G plays both bands at 1.
+      const dg = DIST_G[k] || DIST_G_DEF;
+      const band = _pd >= farFrom(maxD) && dg[1] > 0 && SFX["gd_" + G.dist + "_far"] ? "far" : "mid";
+      const key = "gd_" + G.dist + "_" + band, dgain = dg[band === "far" ? 1 : 0];
+      if (dgain > 0 && SFX[key] && sample(key, pos, g * dgain, maxD, G.rate, tier, FX_GUN_DIST)) { distant = true; _acc[band === "far" ? "distFar" : "distMid"]++; }
     }
     if (!distant && !(G.near && sample(G.near, pos, g, maxD, G.rate, tier, FX_GUN))) shot(cls, pos, tier);
     if (own) duckFireShot();
