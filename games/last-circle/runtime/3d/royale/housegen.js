@@ -3720,7 +3720,7 @@ export function defaultMaterials(THREE) {
 //   foot   the ground storey's faces that reach the slab: 0 .. WEAR_FOOT[0] m above the ground floor at WEAR_K[0] .. WEAR_K[1] of the wall colour, then a fade to the
 //          wall colour at WEAR_FOOT[1] m (linear working-space colour: the band 0 .. WEAR_FOOT[1] reads 15-25 % darker on screen, the LC-17 gate)
 //   eave   the top storey's faces that reach its ceiling: a fade from the wall colour WEAR_EAVE m under the top to WEAR_K[2] at it
-// Appended after every box's 24 vertices (boxRanges unchanged); meshData(..., { wear: false }) leaves them out. 2-4 triangles a face; nothing collides.
+// Appended after every box's 24 vertices (boxRanges unchanged); meshData(..., { wear: false | "low" }) leaves them out (WEAR_BY_TIER). 2-4 triangles a face; nothing collides.
 const WEAR_MATS = { brick: 1, plaster: 1, stucco: 1, plank: 1, stone: 1, sheet: 1 };
 const WEAR_PARTS = { wall: 1, skin: 1, shell: 1, slab: 1, gable: 1 };
 export const WEAR_FOOT = [0.5, 1.15], WEAR_EAVE = 0.7, WEAR_K = [0.44, 0.56, 0.8];
@@ -3731,6 +3731,13 @@ export const WEAR_FOOT = [0.5, 1.15], WEAR_EAVE = 0.7, WEAR_K = [0.44, 0.56, 0.8
 // as painted panels). Two pieces deep: 1 -> km over the lower 1 - f of the depth, km -> k over the top f (a charred lip). Drawn only; replaces the eave strip there.
 export const WEAR_BURN = { k: 0.1, km: 0.4, f: 0.45, h0: 0.5, h1: 2.7, seg: 1.1 };
 const BURN_PARTS = { wall: 1, skin: 1, shell: 1, gable: 1, trim: 1 };
+// C-GFX / D10, the per-tier rule for the wear strips AND the ruin soot (draw-only geometry: +10.8 % wall triangles, ~+800 a ruin): OFF on low (not built at all -
+// no vertex, no triangle), full on medium / high / ultra. meshData / buildHouse take opts.wear = a tier name ("low" | "medium" | "high" | "ultra") or a boolean
+// (false = off, true / undefined = on). The geometry is built with the map, so a map BUILT on low keeps its plain walls until the next build (a tier change mid-match
+// does not rebuild the houses); nothing collides, so the world (colliders, loot, MAP_GEN_VERSION) is the same at every tier.
+export const WEAR_BY_TIER = Object.freeze({ low: false, medium: true, high: true, ultra: true });
+/** wearOn(w): the wear option (tier name | boolean | undefined) -> build the strips? (an unknown tier name = medium: on) */
+export function wearOn(w) { return typeof w === "string" ? WEAR_BY_TIER[w] !== false : w !== false; }
 const WEAR_OFF = 0.012;
 function wearBands(H, groups, acc, faceIn, colOf) {
   const yG = H.floors[0].y, top = H.floors[H.floors.length - 1].ceil;
@@ -3896,7 +3903,7 @@ export function meshData(H, colOf, opts) {
     }
   }
   for (const g of H.gables || []) { const pe = pick0(H.palette, g.pal); poly(pe.mat, pe.color, g.pts, g.n, (P) => [g.n[0] ? P[2] : P[0], P[1]]); }
-  if (opts.wear !== false) wearBands(H, groups, acc, faceIn, colOf);           // (P23 / LC-17: after every box face and roof polygon)
+  if (wearOn(opts.wear)) wearBands(H, groups, acc, faceIn, colOf);           // (P23 / LC-17: after every box face and roof polygon; D10: opts.wear "low" / false = none)
   return { groups, boxRanges };
 }
 
@@ -3911,7 +3918,7 @@ export function buildHouse(THREE, H, opts) {
   const col3 = (c) => { const k = new THREE.Color(c); return [k.r, k.g, k.b]; };     // sRGB hex -> working colour space (three r152+ colour management)
   const colCache = new Map();
   const colOf = (c) => { let v = colCache.get(c); if (!v) { v = col3(c); colCache.set(c, v); } return v; };
-  const { groups, boxRanges } = meshData(H, colOf, { wear: opts.wear });                 // (P23: opts.wear === false leaves the wear strips out)
+  const { groups, boxRanges } = meshData(H, colOf, { wear: opts.wear });                 // (P23: opts.wear false / "low" leaves the wear strips out, see WEAR_BY_TIER)
   const meshOf = (a, mat) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
