@@ -80,6 +80,7 @@ export function uprightTorso(obj, bones, weight) {
 // scratch (module-local, reused every frame — no per-call allocation)
 const _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3(), _t = new THREE.Vector3();
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion(), _oq = new THREE.Quaternion();
+const _qYaw = new THREE.Quaternion(), _yAxis = new THREE.Vector3(0, 1, 0);
 
 /** Slerp `arm` so the arm→child segment points along local dir (tx,ty,tz),
  *  where local = the actor object's frame (+Z forward, +Y up). */
@@ -331,11 +332,14 @@ function applySpineAim(bone, off) {
   bone.rotation.x = bone.userData._aimBaseX + (off || 0);
 }
 
-export function applyArmPose(obj, bones, mode, weight, pitch) {
+export function applyArmPose(obj, bones, mode, weight, pitch, yawOff) {
   if (!bones || weight <= 0) return;
   const P = POSES[mode];
   if (!P) return;
   obj.getWorldQuaternion(_oq);
+  // (P23/player) yawOff: the arms aim in a frame turned by this much about the body's up axis (a pistol's chest twisted back onto
+  // the aim over a combat strafe warp / a planted turn); 0 / undefined = the body frame, as before
+  if (yawOff) _oq.multiply(_qYaw.setFromAxisAngle(_yAxis, yawOff));
   // AIM PITCH (AAA upper-body layer): the gun and torso track the camera's
   // vertical aim — only for weapon poses, capped so the spine stays sane
   const pk = (mode === "gunReady" || mode === "reload") ? Math.max(-0.9, Math.min(0.9, pitch || 0)) : 0;
@@ -365,4 +369,29 @@ export function applyArmPose(obj, bones, mode, weight, pitch) {
     aim(bones.lUpLeg, bones.lLeg, _oq, P[6][0], P[6][1], P[6][2], bl);
     aim(bones.lLeg, bones.lFoot, _oq, P[7][0], P[7][1], P[7][2], bf);
   }
+}
+
+// ── LEG POSES (P23/player, parity P2-A) ─────────────────────────────────────
+// Procedural LEG layer for the two moves no local Mixamo clip covers (the library has no mantle / vault and no slide clip):
+//   mantle - the legs TUCK up and over the ledge (the old mantle froze the crouch clip, so the legs hung straight down
+//            through the wall top for the whole pull-up);
+//   slide  - the lead (right) leg reaches out ahead, the trailing (left) leg folds under the body: the genre's slide stance.
+// Same format as POSES' leg rows, actor-local (+Z = facing, +X = model left, +Y = up):
+//   [rUpLeg->rLeg, rLeg->rFoot, lUpLeg->lLeg, lLeg->lFoot]
+export const LEG_POSES = {
+  mantle: [[-0.14, -0.30, 0.94], [-0.08, -0.96, -0.26], [0.14, -0.62, 0.77], [0.10, -0.90, -0.42]],
+  slide: [[-0.10, -0.46, 0.88], [-0.06, -0.30, 0.95], [0.16, -0.86, 0.48], [0.10, -0.20, -0.97]],
+};
+
+/** Steer the leg chains toward LEG_POSES[mode] over the current animation frame, blended by `weight` (0..1). */
+export function applyLegPose(obj, bones, mode, weight) {
+  if (!bones || !(weight > 0)) return;
+  const P = LEG_POSES[mode];
+  if (!P) return;
+  obj.getWorldQuaternion(_oq);
+  const w = Math.min(1, weight);
+  aim(bones.rUpLeg, bones.rLeg, _oq, P[0][0], P[0][1], P[0][2], 0.95 * w);
+  aim(bones.lUpLeg, bones.lLeg, _oq, P[2][0], P[2][1], P[2][2], 0.95 * w);
+  aim(bones.rLeg, bones.rFoot, _oq, P[1][0], P[1][1], P[1][2], 0.92 * w);
+  aim(bones.lLeg, bones.lFoot, _oq, P[3][0], P[3][1], P[3][2], 0.92 * w);
 }

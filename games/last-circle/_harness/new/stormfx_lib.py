@@ -98,6 +98,27 @@ SF_JS = r"""() => {
 }"""
 
 
+AA_OFF_JS = r"""() => { const W = window.__LC__.W; if (typeof W.setGfx !== 'function' || typeof W.getGfx !== 'function') return { had: false };
+  const g = W.getGfx(); const prev = g && g.prefs ? g.prefs.aa : null; const live = g && g.live ? g.live.aa : null;
+  if (live && live !== 'off') W.setGfx('aa', 'off'); return { had: true, prev, live }; }"""
+
+
+def aa_off(s):
+    """P2-F (parity P2+P3, P1-C's open item): switch the anti-aliasing pass OFF for an A/B whose rule is additive / bit-exact (FXAA and SMAA
+    are edge-dependent and non-linear: a 2x2 factorial or a bit-identity comparison through them is not additive by construction). The rows
+    that judge AA itself live in P1-C's aa probe; every other row of these gates still runs with the build's own AA. Returns the restore token."""
+    tok = s.js(AA_OFF_JS)
+    if tok.get("had") and tok.get("live") not in (None, "off"):
+        s.step_frames(2, 1 / 60, True)
+    return tok
+
+
+def aa_restore(s, tok):
+    if tok and tok.get("had") and tok.get("live") not in (None, "off"):
+        s.js("(v) => window.__LC__.W.setGfx('aa', v || 'auto')", tok.get("prev"))
+        s.step_frames(2, 1 / 60, True)
+
+
 def install(s):
     return s.js(SF_JS)
 

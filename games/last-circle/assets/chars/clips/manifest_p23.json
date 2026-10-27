@@ -1,0 +1,366 @@
+{
+ "about": "P23/player sidecar clip manifest (parity Waves P2+P3; bake tool = a copy of P1-F art_a_make_loco8.mjs with this CLIPS list). NOT read by the runtime; the live manifest.json is unchanged. Rig space: +Y up, character faces +Z, +X = character's left. rootSpeed/strideM = the Mixamo root travel per loop on the game rig (m/s, m; the authored speed: P2-A play rate = ground speed / rootSpeed), rootDirDeg 0 = forward, 90 = character's left, 180 = back; contactSpeed = planted-foot backwards speed when played in place (information: noisy, the 2.5 cm contact window includes heel roll); skateRatio = residual planted-foot slide with the root travel re-added / rootSpeed; footMinY = lowest toe/ankle joint Y (m) over the clip on the soldier rest skeleton. gatedBy = owner decision that must be answered before P2/P3 wires the clip.",
+ "tool": "_tools/art_a_make_loco8.mjs",
+ "forP2": [
+  "Not loaded by the runtime yet: wiring = add the names to player.js ALL_CLIPS (shared files, no per-skin fallback, like DEATH_CLIPS) plus exact-anchored classifyClips patterns.",
+  "Hips: these clips carry the Mixamo hips height (feet on the ground; lowest vertex -0.10..+0.07 m on the soldier). The SHIPPED rifle_idle/walk/run/crouch carry a constant 1.0179 m hips, measured in the game page (probe_clips.py, soldier): lowest vertex +0.065 idle, +0.10..+0.18 walk, +0.01..+0.17 run, +0.21..+0.31 crouch-walk. Blending a shipped forward clip with a new strafe pops the body 0.1-0.3 m: re-bake the forward rifle set with this tool (same sources, see retargetCheck) before blending.",
+  "pistol_strafe_*: the Mixamo pistol arms carry the gun at face height (owner rejected that carry, player.js gunFamily); use the lower-body tracks only under the procedural pistol pose.",
+  "dbno_crawl: hips lifted by hipsLiftM (0.052 m) to a 0.21 m mean so player.js stripRootMotion's unit guard (mean < 0.2 m -> rescale to 0.99 m) does not throw it into the air; dbno_* and injured_idle wait for owner decision OD-3.",
+  "jump_up/jump_loop/jump_down/fall_idle/land_hard keep their authored hips Y; stripRootMotion flattens Y only for the clip named exactly 'jump', so the engine-owned arc must flatten these too if wired as in-air states."
+ ],
+ "retargetCheck": [
+  {
+   "shipped": "rifle_idle",
+   "fbx": "Rifle_8-Way_Locomotion_Pack/idle.fbx",
+   "bones": 52,
+   "compared": 52,
+   "shippedLagS": 0.0333,
+   "meanDeg": 0.0005,
+   "worstBoneMeanDeg": 0.0021,
+   "maxDeg": 0.004,
+   "worst": "mixamorigRightUpLeg@0.533",
+   "gate": true
+  },
+  {
+   "shipped": "rifle_walk",
+   "fbx": "Rifle_8-Way_Locomotion_Pack/walk forward.fbx",
+   "bones": 52,
+   "compared": 52,
+   "shippedLagS": 0.0333,
+   "meanDeg": 0.0001,
+   "worstBoneMeanDeg": 0.0007,
+   "maxDeg": 0.004,
+   "worst": "mixamorigLeftArm@0.700",
+   "gate": false
+  },
+  {
+   "shipped": "rifle_run",
+   "fbx": "Rifle_8-Way_Locomotion_Pack/run forward.fbx",
+   "bones": 52,
+   "compared": 52,
+   "shippedLagS": 0.0333,
+   "meanDeg": 0.0001,
+   "worstBoneMeanDeg": 0.0004,
+   "maxDeg": 0.004,
+   "worst": "mixamorigRightToeBase@0.267",
+   "gate": false
+  },
+  {
+   "shipped": "rifle_crouch",
+   "fbx": "Rifle_8-Way_Locomotion_Pack/walk crouching forward.fbx",
+   "bones": 52,
+   "compared": 52,
+   "shippedLagS": 0.0333,
+   "meanDeg": 0.0003,
+   "worstBoneMeanDeg": 0.0039,
+   "maxDeg": 0.077,
+   "worst": "mixamorigRightLeg@0.633",
+   "gate": false
+  },
+  {
+   "shipped": "rifle_reload",
+   "fbx": "Basic_Shooter_Pack/reloading.fbx",
+   "bones": 52,
+   "compared": 52,
+   "shippedLagS": 0.0333,
+   "meanDeg": 0.0031,
+   "worstBoneMeanDeg": 0.1284,
+   "maxDeg": 3.187,
+   "worst": "mixamorigLeftHand@1.483",
+   "gate": false
+  }
+ ],
+ "budget": {
+  "totalBytes": 181948
+ },
+ "clips": {
+  "rifle_idle_g": {
+   "bytes": 20732,
+   "kind": "idle",
+   "group": "fwd",
+   "loop": true,
+   "duration": 2.1,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/idle.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 0,
+   "rootDirDeg": null,
+   "strideM": 0,
+   "contactSpeed": 0.001,
+   "skateRatio": null,
+   "footMinY": 0.028,
+   "hipsY": [
+    0.946,
+    0.953
+   ],
+   "headY": [
+    1.545,
+    1.556
+   ],
+   "seamDeg": 0.02,
+   "srcSeamDeg": 0.03,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    592,
+    592
+   ],
+   "reduceMaxDeg": 0
+  },
+  "rifle_walk_g": {
+   "bytes": 21404,
+   "kind": "strafe",
+   "group": "fwd",
+   "loop": true,
+   "duration": 1.033,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/walk forward.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 1.889,
+   "rootDirDeg": 0,
+   "strideM": 1.952,
+   "contactSpeed": 1.807,
+   "skateRatio": 0.067,
+   "footMinY": -0.046,
+   "hipsY": [
+    0.834,
+    0.887
+   ],
+   "headY": [
+    1.393,
+    1.447
+   ],
+   "seamDeg": 0,
+   "srcSeamDeg": 2.98,
+   "closedFrames": 1,
+   "hipsLiftM": 0,
+   "keys": [
+    638,
+    638
+   ],
+   "reduceMaxDeg": 0
+  },
+  "rifle_run_g": {
+   "bytes": 18968,
+   "kind": "strafe",
+   "group": "fwd",
+   "loop": true,
+   "duration": 0.5,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/run forward.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 4.723,
+   "rootDirDeg": 0,
+   "strideM": 2.361,
+   "contactSpeed": 4.321,
+   "skateRatio": 0.085,
+   "footMinY": -0.054,
+   "hipsY": [
+    0.828,
+    0.934
+   ],
+   "headY": [
+    1.39,
+    1.488
+   ],
+   "seamDeg": 0.01,
+   "srcSeamDeg": 0.03,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    372,
+    372
+   ],
+   "reduceMaxDeg": 0
+  },
+  "rifle_crouch_g": {
+   "bytes": 21260,
+   "kind": "crouch_strafe",
+   "group": "fwd",
+   "loop": true,
+   "duration": 1,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/walk crouching forward.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 2.005,
+   "rootDirDeg": 0,
+   "strideM": 2.005,
+   "contactSpeed": 1.783,
+   "skateRatio": 0.115,
+   "footMinY": -0.06,
+   "hipsY": [
+    0.699,
+    0.729
+   ],
+   "headY": [
+    1.173,
+    1.203
+   ],
+   "seamDeg": 0.01,
+   "srcSeamDeg": 0.03,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    630,
+    630
+   ],
+   "reduceMaxDeg": 0
+  },
+  "turn_left_90": {
+   "bytes": 20148,
+   "kind": "turn",
+   "group": "turn",
+   "loop": false,
+   "duration": 1,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/turn 90 left.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 0,
+   "rootDirDeg": null,
+   "strideM": 0,
+   "contactSpeed": 0.2,
+   "skateRatio": null,
+   "footMinY": -0.001,
+   "hipsY": [
+    0.927,
+    0.953
+   ],
+   "headY": [
+    1.529,
+    1.556
+   ],
+   "seamDeg": null,
+   "srcSeamDeg": null,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    536,
+    536
+   ],
+   "reduceMaxDeg": 0
+  },
+  "turn_right_90": {
+   "bytes": 20672,
+   "kind": "turn",
+   "group": "turn",
+   "loop": false,
+   "duration": 1,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/turn 90 right.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 0,
+   "rootDirDeg": null,
+   "strideM": 0,
+   "contactSpeed": 0.218,
+   "skateRatio": null,
+   "footMinY": -0.006,
+   "hipsY": [
+    0.929,
+    0.957
+   ],
+   "headY": [
+    1.531,
+    1.559
+   ],
+   "seamDeg": null,
+   "srcSeamDeg": null,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    563,
+    563
+   ],
+   "reduceMaxDeg": 0
+  },
+  "rifle_sprint_g": {
+   "bytes": 20092,
+   "kind": "strafe",
+   "group": "fwd",
+   "loop": true,
+   "duration": 0.5,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/sprint forward.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 7.084,
+   "rootDirDeg": 0,
+   "strideM": 3.542,
+   "contactSpeed": 6.7,
+   "skateRatio": 0.069,
+   "footMinY": -0.023,
+   "hipsY": [
+    0.865,
+    0.926
+   ],
+   "headY": [
+    1.387,
+    1.454
+   ],
+   "seamDeg": 0.01,
+   "srcSeamDeg": 0.03,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    465,
+    465
+   ],
+   "reduceMaxDeg": 0
+  },
+  "rifle_sprint_left": {
+   "bytes": 19240,
+   "kind": "strafe",
+   "group": "strafe",
+   "loop": true,
+   "duration": 0.5,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/sprint left.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 7.084,
+   "rootDirDeg": 90,
+   "strideM": 3.542,
+   "contactSpeed": 7.049,
+   "skateRatio": 0.052,
+   "footMinY": -0.028,
+   "hipsY": [
+    0.901,
+    0.988
+   ],
+   "headY": [
+    1.488,
+    1.573
+   ],
+   "seamDeg": 0,
+   "srcSeamDeg": 0.03,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    394,
+    394
+   ],
+   "reduceMaxDeg": 0
+  },
+  "rifle_sprint_right": {
+   "bytes": 19432,
+   "kind": "strafe",
+   "group": "strafe",
+   "loop": true,
+   "duration": 0.5,
+   "source": "Mixamo (Adobe) Rifle_8-Way_Locomotion_Pack/sprint right.fbx",
+   "licence": "Mixamo royalty-free for use in games; baked clip only",
+   "rootSpeed": 7.084,
+   "rootDirDeg": -90,
+   "strideM": 3.542,
+   "contactSpeed": 6.537,
+   "skateRatio": 0.108,
+   "footMinY": -0.042,
+   "hipsY": [
+    0.871,
+    0.989
+   ],
+   "headY": [
+    1.445,
+    1.557
+   ],
+   "seamDeg": 0.07,
+   "srcSeamDeg": 0.06,
+   "closedFrames": 0,
+   "hipsLiftM": 0,
+   "keys": [
+    410,
+    410
+   ],
+   "reduceMaxDeg": 0
+  }
+ }
+}

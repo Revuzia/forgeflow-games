@@ -82,7 +82,9 @@ SPEC_JS = r"""([kind, opt]) => { const W = window.__LC__.W, M = W.map;
   else if (kind === 'street') { const p = poi(opt.streetAt), x0 = p.x - p.r * 0.55, z = p.z + 1; spec = [x0, H(x0, z) + 1.62, z, x0 + 60, H(x0 + 60, z + 1) + 1.8, z + 1, 70]; }
   else {
     // the endgame: 8 m up on the rim of storm circle 6 (matched seed), looking at its centre; never start inside a collider
-    const S = new W.SIM.Storm({ seed: W.seed, mode: W.mode || 'standard', half: M.half }); const c = S.circles[S.circles.length - 3];
+    // P2-F (parity P2+P3): the game's own storm plan = its seed, its PACE (C-MODE W.match.pace) and OD-1's land predicate (storm.js W.stormLandAt; the same
+    // rule when a build has none: terrain > waterY + 0.5 m). A Storm without landAt builds other circles than the match's on the OD-1 build
+    const S = new W.SIM.Storm({ seed: W.seed, mode: (W.match && W.match.pace) || W.mode || 'standard', half: M.half, landAt: (W.stormLandAt || ((g, wy) => g ? (x, z) => g(x, z) > wy + 0.5 : undefined)(M.groundAt || M.heightAt, typeof M.waterY === 'number' ? M.waterY : 0)) }); const c = S.circles[S.circles.length - 3];
     const px = c.x - 55, pz = c.z + 50; let py = H(px, pz) + 8;
     for (let i = 0; i < 8; i++) { let inside = false;
       for (const q of M.queryColliders(px, pz, 0.5, [])) if (px > q.minX && px < q.maxX && pz > q.minZ && pz < q.maxZ && py > q.minY && py < q.maxY) { inside = true; break; }

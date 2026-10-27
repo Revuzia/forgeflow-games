@@ -22,6 +22,21 @@
  * down onto a hillside - from the static colliders only (same result on every squad client; see SETTLE below). A pickup (walkover / E / chest) reaches
  * 2.2 m up or down (REACH_DY), so a player standing on an upper floor or a roof does not take the loot of the room under it. W.nearbyLoot(pos, r, maxDy)
  * takes the same reach as an optional third argument (the default 4 m is the bots' planning query).
+ *
+ * Parity wave P2-H / P3 (lane loot, 2026-10):
+ *  - DEATH PILE (LC-27): a death drop is ONE tidy pile (best item in the middle, the rest on a 0.55 m ring, sorted by value) with ONE marker (ring +
+ *    beam + glow) in the RARITY_COLOR of its best gun, and ALL the victim's ammo (no 2-box cap). W.lootLabels(pos, r) is nearbyLoot with every pile
+ *    folded into one entry carrying a sorted label (for the HUD's pills). An ammo pickup that does not fit leaves the remainder on the floor.
+ *  - SUPPLY DROPS (LC-28): 4 per standard match, 3 per quick one, one at the start of each storm phase from 2; the crate lands on clear dry ground and
+ *    is a "chest" record (id sd<N>): HOLD E to open (the chest channel, the bots' chest path, the net 'chest' message and the join-sync 'opened' list
+ *    all carry it), with a red beacon beam + glow until it is opened. W.supplyDrops lists them (x, z, landed, opened) for the HUD.
+ *  - LOOT TIERS + HOT ZONE (LC-29): POIs ranked by loot density into high / mid / basic, plus one seeded hot zone per match; a gun spawned inside a
+ *    tiered POI gets a rarity uplift drawn from its OWN stream (seed x item id), so the shared streams and every item's kind and spot are unchanged.
+ *    W.lootTiers / W.lootHotZone describe them (the big map marks the hot zone).
+ *  - AMMO TINTS (LC-76): one colour per ammo type on the box (per-instance colour: no extra draw call) and on its ring.
+ *  - CHEST BURST (LC-77): a chest bursts IN FRONT of itself, the gun and its own ammo on the same spot (one walk-over takes both).
+ *  - W.nearbyChests(pos, r, out): allocation-free list of unopened chests / supply crates near a point (the audio lane's chest shimmer).
+ *  - C-DBNO: a downed actor (a.downed) cannot pick up, open, walk over or drop loot; the player's E yields to a revive when a downed teammate is near.
  */
 import * as THREE from "three";
 
@@ -45,6 +60,13 @@ function gridAdd(kind, id, pos) {
 }
 let nextId = 1;
 let supplyState = null;
+const piles = new Map();      // death piles: pileId -> {id, pos, members:Set<itemId>, best, hex, ring, beam, glow, ringOn}
+
+/** Match pacing (quick / standard / practice). C-MODE moves it to W.match.pace (W.match.mode becomes solo/duo/trio/squad); W.mode is the old field. */
+function paceOf(W) {
+  const p = W.match && W.match.pace;
+  return p && K.MODE[p] ? p : W.mode;
+}
 
 const ITEM_FILES = { medkit: "item_medkit", bandage: "item_bandage", mini_shield: "item_shield_s", big_shield: "item_shield_l" };
 const itemProtoCache = {};
@@ -81,15 +103,27 @@ export function init(W) {
   // network mirrors + join-sync
   W.netTakeItem = (id) => {
     const it = items.get(id);
-    if (it) { it.taken = true; releaseItem(it); items.delete(id); takenIds.push(id); }
+    if (it) { it.taken = true; releaseItem(it, W); items.delete(id); takenIds.push(id); }
   };
-  W.netOpenChest = (id) => openChest(W, null, id);
-  W.netSpawnItem = (d) => spawnItem(W, d.data, d.x, d.y, d.z, d.id);
+  // (a supply crate that has not landed on THIS client yet - the host's clock runs a little ahead, or a late joiner - is opened the moment it lands)
+  W.netOpenChest = (id) => { if (!chests.has(id) && supplyState && /^sd\d+$/.test(id)) { supplyState.pendingOpen.add(id); return false; } return openChest(W, null, id); };
+  W.netSpawnItem = (d) => {
+    // (a partial ammo take's remainder carries its pile and surface, so it rejoins the same pile on every client)
+    const P = d.pile ? piles.get(d.pile) : null;
+    const id = spawnItem(W, d.data, d.x, d.y, d.z, d.id, d.surf != null || P ? { surf: d.surf != null ? d.surf : undefined, pile: P ? d.pile : undefined } : undefined);
+    if (P && items.has(id)) { P.members.add(id); pileMarkers(W, P); }
+    return id;
+  };
+  W.lootLabels = (pos, r) => lootLabels(pos, r);
+  W.nearbyChests = (pos, r, out) => nearbyChests(pos, r, out);
+  W.debugSupply = () => (supplyState ? { dropped: supplyState.dropped, max: supplyState.max, list: supplyState.list.map((s) => Object.assign({}, s)) } : null);
+  W.debugPiles = () => [...piles.values()].map((p) => ({ id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, members: [...p.members], best: p.best, ring: p.ring, beam: p.beam, glow: p.glow, color: p.hex }));
   // [Q] — drop the active weapon for a squadmate (Final Drop parity, owner
   // screenshots). Refuses the LAST weapon: there is no melee in this game, so
   // an armed player must stay armed. Mag rides the drop (data.mag) and the
   // next weapon slot auto-equips.
   W.dropActive = (a) => {
+    if (a.downed) return false;                    // C-DBNO: a downed actor cannot loot (nor throw its guns away)
     const inv = a.inventory;
     const s = inv.slots[inv.active];
     if (!s || s.kind !== "weapon") return false;
@@ -202,16 +236,19 @@ const PILE = [[0, 0], [0.85, 0.45], [-0.8, 0.55], [0.15, -0.9], [1.05, -0.55], [
 const LIGHT_MIN_PER_50 = 8;
 
 export function populate(W) {
-  items.clear(); chests.clear(); lootGrid.clear();
+  items.clear(); chests.clear(); lootGrid.clear(); piles.clear();
   takenIds.length = 0;
   nextId = 1;
   swapN = 0;                      // swap-drop ids restart, so a replayed seed names drops identically
-  supplyState = { dropped: 0, next: null };
+  remN = 0;
+  supplyState = newSupplyState(W);
+  W.supplyDrops = supplyState.list;
   chestChannel.id = null; chestChannel.t = 0;
   // Per-system stream for swap-drop scatter (was Math.random, which broke replay).
   W._scatterRng = K.mulberry32((((W.seed >>> 0) ^ 0x5ca77e) >>> 0));
   const rng = K.mulberry32(W.seed ^ 0x100f);
-  const modeK = K.MODE[W.mode] || K.MODE.standard;
+  const modeK = K.MODE[paceOf(W)] || K.MODE.standard;
+  computeTiers(W);                 // LC-29: POI tiers + the hot zone (before any item spawns: the uplift reads them)
   const g = W.group("loot");
   g.clear();
   g.userData.disposed = false;
@@ -239,7 +276,9 @@ export function populate(W) {
       const spawn = K.rollFloorSpawn ? K.rollFloorSpawn(rng) : [K.rollFloorItem(rng)];
       for (const data of spawn) {
         const o = PILE[k % PILE.length];
-        spawnItem(W, data, lp.x + o[0], lp.y, lp.z + o[1], k ? "f" + k + ":" + fi : "f:" + fi);
+        const fid = k ? "f" + k + ":" + fi : "f:" + fi;
+        uplift(W, data, lp.x, lp.z, fid);
+        spawnItem(W, data, lp.x + o[0], lp.y, lp.z + o[1], fid);
         if (data.kind === "ammo" && data.id === "light") light++;
         k++;
       }
@@ -300,14 +339,55 @@ let _warmCrate = null;
 
 /** ONE builder for the supply crate (box + balloon), used by the live drop and by warmObjects, so the materials the warm-up links can never drift
  *  from the ones the drop draws. */
+// The crate (LC-28 look pass): a plain 1.6 m blue cube read as a placeholder next to PUBG's red-and-white care package and Apex's banded pod. Now a
+// steel-framed military crate: a dark body, a light metal frame on all 12 edges with corner feet, a red band round it and a red lamp on the lid (the
+// beacon's colour; it goes dark when the crate is opened). Four meshes, each ONE merged geometry, all plain opaque MeshStandardMaterial (the program
+// every untextured prop already uses) - and the same factory builds the warm proxy, so nothing links mid-match.
+const CRATE_W = 1.6, CRATE_H = 1.4, CRATE_E = 0.11;
+function mergeBoxes(list) {
+  // list: [w, h, d, x, y, z] ... -> one indexed BufferGeometry (position / normal / uv)
+  const pos = [], nor = [], uv = [], idx = [];
+  for (const [w, h, d, x, y, z] of list) {
+    const b = new THREE.BoxGeometry(w, h, d);
+    b.translate(x, y, z);
+    const o = pos.length / 3;
+    pos.push(...b.attributes.position.array); nor.push(...b.attributes.normal.array); uv.push(...b.attributes.uv.array);
+    for (const i of b.index.array) idx.push(i + o);
+    b.dispose();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
 function makeSupplyCrate() {
   const crate = new THREE.Group();
-  const box = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), new THREE.MeshStandardMaterial({ color: 0x4aa8ff, metalness: 0.3, roughness: 0.5 }));
-  box.position.y = 0.8;
+  const W2 = CRATE_W / 2, H = CRATE_H, e = CRATE_E, y0 = 0.08;     // y0: the feet lift the body off the ground
+  const body = new THREE.Mesh(mergeBoxes([[CRATE_W - 0.06, H - 0.06, CRATE_W - 0.06, 0, y0 + H / 2, 0]]),
+    new THREE.MeshStandardMaterial({ color: 0x34495e, metalness: 0.35, roughness: 0.62 }));
+  const bars = [];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) bars.push([e, H, e, sx * (W2 - e / 2), y0 + H / 2, sz * (W2 - e / 2)]);   // 4 uprights
+  for (const yy of [y0 + e / 2, y0 + H - e / 2]) for (const s of [-1, 1]) {
+    bars.push([CRATE_W, e, e, 0, yy, s * (W2 - e / 2)]);
+    bars.push([e, e, CRATE_W, s * (W2 - e / 2), yy, 0]);
+  }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) bars.push([0.2, y0 + 0.02, 0.2, sx * (W2 - 0.1), (y0 + 0.02) / 2, sz * (W2 - 0.1)]);   // feet
+  bars.push([0.08, 0.06, CRATE_W - 0.2, 0, y0 + H + 0.01, 0], [CRATE_W - 0.2, 0.06, 0.08, 0, y0 + H + 0.01, 0]);   // lid cross straps
+  const frame = new THREE.Mesh(mergeBoxes(bars), new THREE.MeshStandardMaterial({ color: 0xc3c9cf, metalness: 0.7, roughness: 0.38 }));
+  const bandY = y0 + H * 0.62, bh = 0.2;
+  const band = new THREE.Mesh(mergeBoxes([[CRATE_W - 0.03, bh, CRATE_W - 0.03, 0, bandY, 0]]),
+    new THREE.MeshStandardMaterial({ color: 0xc8322a, metalness: 0.2, roughness: 0.55 }));
+  const lamp = new THREE.Mesh(mergeBoxes([[0.34, 0.14, 0.34, 0, y0 + H + 0.08, 0], [0.2, 0.08, 0.2, 0, y0 + H + 0.19, 0]]),
+    new THREE.MeshStandardMaterial({ color: 0x3a0d0a, emissive: 0xff4a38, emissiveIntensity: 2.2, metalness: 0.1, roughness: 0.4 }));
+  body.castShadow = frame.castShadow = true;
+  crate.add(body, frame, band, lamp);
   const balloon = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf2a33c, transparent: true, opacity: 0.85 }));
   balloon.position.y = 5;
-  crate.add(box, balloon);
-  return { crate, box, balloon };
+  crate.add(balloon);
+  return { crate, box: body, lamp, balloon };
 }
 
 function slotInfo(P, slot) {
@@ -350,7 +430,7 @@ export function debugLootFx(id) {
  *  disposeLootResources in the same teardown. */
 export function disposeMatch(W) {
   const r = disposeLootResources(W);
-  items.clear(); chests.clear(); lootGrid.clear();
+  items.clear(); chests.clear(); lootGrid.clear(); piles.clear();
   blobReset();
   fxResetPools();                  // every marker slot back to the free list; the pools themselves are page-lifetime
   visReset();                      // the model pools' lists (the pools, their geometry and buffers are page-lifetime)
@@ -367,7 +447,7 @@ const kindGeos = {
   consumable: new THREE.CylinderGeometry(0.14, 0.14, 0.4, 8),
 };
 const kindMats = {
-  ammo: new THREE.MeshStandardMaterial({ color: 0x8a7d3a, metalness: 0.4, roughness: 0.5 }),
+  ammo: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.35, roughness: 0.5 }),   // x the per-instance AMMO_TINT (LC-76)
   heal: new THREE.MeshStandardMaterial({ color: 0x59d68a, emissive: 0x1a4, emissiveIntensity: 0.4 }),
   shieldC: new THREE.MeshStandardMaterial({ color: 0x4aa8ff, emissive: 0x123a66, emissiveIntensity: 0.5 }),
 };
@@ -551,6 +631,12 @@ const RING_GAIN_MAX = 3.6, RING_WHITE = 0.12;
 const RING_D_WEAPON = 2.0, RING_D_SMALL = 1.0, RING_D_CHEST = 3.4;   // quad diameter, m
 const GLOW_GAIN = 0.8;
 const GOLD_HEX = "#ffd254", AMMO_HEX = "#cfa84a", HEAL_HEX = "#59d68a", SHIELD_HEX = "#4aa8ff";
+// LC-76: one colour per ammo type (all five shared one olive box and one ring colour). Hues far apart and away from the heal green / shield blue rings:
+// light amber, medium teal, shells red, heavy (sniper) violet, grenades steel. The box takes it as its instance colour (the ammo pool is ONE draw).
+const AMMO_TINT = { light: "#e8a636", medium: "#2fc4a4", shells: "#e0453a", heavy: "#8a7cf4", grenades: "#a9b3bf" };
+const AMMO_BOX_K = 0.8;                // the box's albedo = tint x this (painted metal, not a lamp)
+const _tintC = new THREE.Color();
+function ammoTint(id) { _tintC.set(AMMO_TINT[id] || AMMO_HEX); return [_tintC.r * AMMO_BOX_K, _tintC.g * AMMO_BOX_K, _tintC.b * AMMO_BOX_K]; }
 
 // 1 inside the storm circle (or when there is none), 0 beyond its edge + 18 m. W.stormU.r is 1e9 when no circle exists
 // (practice, before the first circle); in float32 r - 6 and r + 18 both round to 1e9, so smoothstep() would get EQUAL edges, which
@@ -918,6 +1004,7 @@ function itemFx(W, it) {
   const d = it.data, x = it.pos.x, y = it.pos.y, z = it.pos.z;
   it.ring = it.beam = it.glow = -1;
   it.ceil = Infinity;
+  if (it.pile) return;                 // a death-pile member: the pile carries ONE marker (see DEATH PILE)
   if (d.kind === "weapon") {
     const rar = d.rarity || 0, hex = K.RARITY_COLOR[K.RARITY[rar]] || K.RARITY_COLOR.common;
     it.ring = ringAlloc(W, x, y, z, hex, false, it.ringD || RING_D_WEAPON, it.id, it.surf);
@@ -926,7 +1013,7 @@ function itemFx(W, it) {
       it.beam = beamAlloc(x, _surf.floor, z, hex, BEAM_H[rar], BEAM_R[rar], BEAM_GAIN[rar], BEAM_FAR[rar], it.ceil);
     }
   } else {
-    const hex = d.kind === "ammo" ? AMMO_HEX : (d.id && d.id.indexOf("shield") >= 0 ? SHIELD_HEX : HEAL_HEX);
+    const hex = d.kind === "ammo" ? (AMMO_TINT[d.id] || AMMO_HEX) : (d.id && d.id.indexOf("shield") >= 0 ? SHIELD_HEX : HEAL_HEX);
     it.ring = ringAlloc(W, x, y, z, hex, true, Math.min(RING_D_SMALL, it.ringD || RING_D_SMALL), it.id, it.surf);
   }
 }
@@ -1097,7 +1184,7 @@ function itemPool(W, data) {
     if (!W.weaponProto) return null;
     return visPool(key, () => W.weaponProto(data.id).then((proto) => (proto ? [proto, _rootXf(0.45, 0.5, proto)] : null)));
   }
-  if (data.kind === "ammo") return visPool(key, () => { const g = new THREE.Group(); g.add(new THREE.Mesh(kindGeos.ammo, kindMats.ammo)); return [g, _rootXf(0.35, 0, null)]; });
+  if (data.kind === "ammo") return visPool(key, () => { const g = new THREE.Group(); g.add(new THREE.Mesh(kindGeos.ammo, kindMats.ammo)); return [g, _rootXf(0.35, 0, null)]; }, { color: true, tinted: true });
   // consumable: the Meshy model when there is one, the glowing capsule when not
   const fallback = () => { const g = new THREE.Group(); g.add(new THREE.Mesh(kindGeos.consumable, data.id.includes("shield") ? kindMats.shieldC : kindMats.heal)); return [g, _rootXf(0.4, 0, null)]; };
   if (!W.itemProto) return visPool(key, fallback);
@@ -1107,7 +1194,7 @@ function itemPool(W, data) {
 function chestPools(W) {
   if (CHEST_P) return CHEST_P;
   const src = () => ensureChestProto(W).then((proto) => { proto.updateMatrix(); return [proto, proto.matrix.clone()]; });   // (the clone kept the proto root's own scale + lift)
-  return (CHEST_P = [visPool("chest:far", src, { color: true }), visPool("chest:near", src, { color: true, cast: true, depthFor: chestDepthFor })]);
+  return (CHEST_P = [visPool("chest:far", src, { color: true, chest: true }), visPool("chest:near", src, { color: true, chest: true, cast: true, depthFor: chestDepthFor })]);
 }
 let CHEST_P = null;
 /** Write the drawn instances of every pool: the items / chests whose `vis` is set (update(): inside the 150 m model cull) and whose model is
@@ -1123,9 +1210,9 @@ function visFrame(cam) {
   for (let pi = 0; pi < VIS_ARR.length; pi++) {
     const P = VIS_ARR[pi];
     if (!P.parts || !P.parts.length) continue;
-    const chest = !!P.col, viewTest = useF && !P.cast;
+    const chest = !!P.opts.chest, tinted = !!P.opts.tinted, viewTest = useF && !P.cast;
     if (chest && !P.dirty && !viewTest) continue;      // the near chests never move: rewritten only when their set changes
-    const a = P.mat.array, ca = chest ? P.col.array : null, rr = P.parts[0].userData.geoR + 0.5;
+    const a = P.mat.array, ca = P.col ? P.col.array : null, rr = P.parts[0].userData.geoR + 0.5;
     let n = 0, x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (let i = 0; i < P.items.length && n < VIS_MAX; i++) {
       const o = P.items[i];
@@ -1135,7 +1222,10 @@ function visFrame(cam) {
       const q = chest ? o.sc : 1, c = (chest ? o.rc : cs) * q, s = (chest ? o.rs : sn) * q, k = n * 16;   // (q: a house chest is drawn to fit its slot)
       a[k] = c; a[k + 1] = 0; a[k + 2] = -s; a[k + 3] = 0; a[k + 4] = 0; a[k + 5] = q; a[k + 6] = 0; a[k + 7] = 0;
       a[k + 8] = s; a[k + 9] = 0; a[k + 10] = c; a[k + 11] = 0; a[k + 12] = x; a[k + 13] = y; a[k + 14] = z; a[k + 15] = 1;
-      if (ca) { const v = o.opened ? 0.45 : 1; ca[n * 3] = v; ca[n * 3 + 1] = v; ca[n * 3 + 2] = v; }
+      if (ca) {
+        if (tinted && o.tint) { ca[n * 3] = o.tint[0]; ca[n * 3 + 1] = o.tint[1]; ca[n * 3 + 2] = o.tint[2]; }
+        else { const v = o.opened ? 0.45 : 1; ca[n * 3] = v; ca[n * 3 + 1] = v; ca[n * 3 + 2] = v; }
+      }
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
       n++;
     }
@@ -1251,7 +1341,8 @@ export function spawnItem(W, data, x, y, z, id, opt) {
   }
   // the model is an instance of its kind's pool (see INSTANCED LOOT MODELS); vis = inside the model cull (set by update)
   const it = { id, data, pos: { x, y: gy, z }, taken: false, vis: true, vp: null, vi: -1, blob: -1, ring: -1, beam: -1, glow: -1, ceil: Infinity,
-    surf: opt && opt.surf != null ? opt.surf : null, ringD: opt && opt.ringD ? opt.ringD : 0, house: opt && opt.house ? opt.house : null, drop: opt && opt.drop ? opt.drop : 0, rr: opt && opt.rr ? opt.rr : null };   // rr: a house item's room rects (K2)
+    surf: opt && opt.surf != null ? opt.surf : null, ringD: opt && opt.ringD ? opt.ringD : 0, house: opt && opt.house ? opt.house : null, drop: opt && opt.drop ? opt.drop : 0, rr: opt && opt.rr ? opt.rr : null,   // rr: a house item's room rects (K2)
+    pile: opt && opt.pile ? opt.pile : null, tint: data.kind === "ammo" ? ammoTint(data.id) : null };   // pile: a death pile member (no marker of its own); tint: LC-76
   const P = itemPool(W, data);
   if (P) visAdd(P, it);
   items.set(id, it);
@@ -1571,7 +1662,9 @@ function houseLoot(W, H, modeK, floorOut) {
     for (let r = 0; r < rolls; r++) {
       const spawn = K.rollFloorSpawn ? K.rollFloorSpawn(rng) : [K.rollFloorItem(rng)];
       for (const data of spawn) {
-        if (houseItem(W, data, e, e.k, e.k ? "h" + e.k + ":" + l.id : "h:" + l.id)) { C.bk.items++; if (data.kind === "ammo" && data.id === "light") light++; if (data.kind === "weapon" && data.id !== "pistol") e.gun = true; }
+        const hid = e.k ? "h" + e.k + ":" + l.id : "h:" + l.id;
+        uplift(W, data, l.x, l.z, hid);
+        if (houseItem(W, data, e, e.k, hid)) { C.bk.items++; if (data.kind === "ammo" && data.id === "light") light++; if (data.kind === "weapon" && data.id !== "pistol") e.gun = true; }
         e.k++;
       }
     }
@@ -1600,48 +1693,168 @@ function houseLoot(W, H, modeK, floorOut) {
 /** Test hook: what the per-room pass did this match (houses, points used / skipped, chests, per room kind). */
 export function debugHouseLoot() { return JSON.parse(JSON.stringify(houseStats)); }
 
-// ── supply drops ─────────────────────────────────────────────────────────────
-function maybeSupplyDrop(W, dt) {
-  if (W.mode === "practice" || !W.stormCtl || !supplyState) return;   // null between disposeMatch and populate
-  const st = W.stormCtl.storm.stateAt(W.t);
-  // one drop early (~phase 2), one late (~phase 5+). The old `dropped < phase-1`
-  // gate front-loaded BOTH into phases 2-3, leaving the tense endgame with none.
-  if (st.phase >= 2 && supplyState.dropped < 2 && !supplyState.falling &&
-      st.phase - (supplyState.lastDropPhase == null ? -99 : supplyState.lastDropPhase) >= 3) {
-    supplyState.lastDropPhase = st.phase;
-    // spawn a crate drifting down inside the next circle
-    const rng = K.mulberry32((W.seed ^ 0xd209) + supplyState.dropped * 77);
-    const ang = rng() * Math.PI * 2, rr = (st.nextRadius || st.radius) * 0.6 * rng();
-    const cx = (st.nextCenter ? st.nextCenter.x : st.center.x) + Math.cos(ang) * rr;
-    const cz = (st.nextCenter ? st.nextCenter.z : st.center.z) + Math.sin(ang) * rr;
-    const { crate, balloon } = makeSupplyCrate();
-    crate.position.set(cx, 200, cz);
-    W.group("loot").add(crate);
-    supplyState.falling = { crate, x: cx, z: cz, balloon };
-    W.events.emit("supplyDropSpawned", { x: cx, z: cz });
+// ── LOOT TIERS + HOT ZONE (parity P2-H, LC-29) ───────────────────────────────────────────────────────────────────────────────────────
+// Apex splits its map into basic / mid / high tier loot zones and marks ONE random hot zone per match (apexlegends.wiki.gg/wiki/Loot); ours had one
+// floor table for every point, so a POI's rare+ share was noise around it (audit: isla 15-50 %, ashgrid 0-50 %). Here every named POI is ranked by its
+// loot DENSITY (floor + chest points inside its circle - the towns and the big signature POIs rank high, a lone lighthouse low): the top third is HIGH,
+// the next third MID, the rest BASIC (and loot outside every POI is basic). One POI with at least the median loot is the HOT ZONE (seeded per match).
+// A gun spawned inside a tiered POI is UPLIFTED: +1 rarity with chance p1, and a further +1 with chance p2 (capped at legendary). The uplift composes
+// with whatever base table sim/royale.js rolls (P2-D owns the tables: a chest table without commons stays without them), and it draws from the item's
+// OWN stream (seed x item id): the shared populate / house / chest streams see exactly the draws they saw before, so every item keeps its kind, count and
+// spot - only some guns' rarity (and with it their beam and ring) changes. Changes the seeded loot output: MAP_GEN_VERSION (integrator).
+const TIER_UPLIFT = { basic: [0, 0], mid: [0.35, 0], high: [0.7, 0.12], hot: [1.0, 0.3] };
+const tierState = { pois: [], hot: null };
+function computeTiers(W) {
+  tierState.pois = []; tierState.hot = null;
+  const M = W.map;
+  const P = M && Array.isArray(M.pois) ? M.pois : [];
+  const pts = (M && M.lootPoints) || [];
+  const recs = [];
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i];
+    if (!p || !(p.r > 0)) continue;
+    let n = 0;
+    for (let j = 0; j < pts.length; j++) { const q = pts[j], dx = q.x - p.x, dz = q.z - p.z; if (dx * dx + dz * dz < p.r * p.r) n += q.kind === "chest" ? 2 : 1; }
+    recs.push({ id: p.id, name: p.name || p.id, x: p.x, z: p.z, r: p.r, points: n, tier: "basic", i });
   }
-  const f = supplyState.falling;
-  if (f) {
-    f.crate.position.y -= 9 * dt;
-    const gy = W.map.heightAt(f.x, f.z);
-    if (f.crate.position.y <= gy) {
-      f.crate.position.y = gy;
-      f.crate.remove(f.balloon);
-      // detached = unreachable by the match teardown: free it now
-      f.balloon.geometry.dispose(); f.balloon.material.dispose();
-      // becomes a "supply chest": burst immediately into legendary loot items
-      const rng = K.mulberry32((W.seed ^ 0xdead) + supplyState.dropped);
-      const drops = K.rollSupplyDrop(rng);
-      let i = 0;
-      for (const d of drops) {
-        const a = (i / drops.length) * Math.PI * 2;
-        spawnItem(W, d, f.x + Math.cos(a) * 1.6, gy + 0.2, f.z + Math.sin(a) * 1.6, "sd:" + supplyState.dropped + ":" + i);
-        i++;
-      }
-      W.events.emit("supplyDropLanded", { x: f.x, z: f.z });
-      supplyState.dropped++;
-      supplyState.falling = null;
+  const ranked = recs.filter((r) => r.points > 0).sort((a, b) => b.points - a.points || a.i - b.i);
+  const third = Math.ceil(ranked.length / 3);
+  for (let k = 0; k < ranked.length; k++) ranked[k].tier = k < third ? "high" : k < 2 * third ? "mid" : "basic";
+  if (ranked.length) {
+    const med = ranked[Math.floor((ranked.length - 1) / 2)].points;
+    const cand = ranked.filter((r) => r.points >= med).sort((a, b) => a.i - b.i);
+    const rng = K.mulberry32((((W.seed >>> 0) ^ 0x407e2a) >>> 0));
+    const h = cand[Math.floor(rng() * cand.length) % cand.length];
+    h.hot = true;
+    tierState.hot = { id: h.id, name: h.name, x: h.x, z: h.z, r: h.r, tier: h.tier };
+  }
+  tierState.pois = recs;
+  W.lootTiers = tierState;
+  W.lootHotZone = tierState.hot;
+}
+/** the tier of the loot at (x, z): the POI whose circle holds it (the nearest centre, relative to its radius, when circles overlap) */
+function tierAt(x, z) {
+  let best = null, bk = Infinity;
+  for (let i = 0; i < tierState.pois.length; i++) {
+    const p = tierState.pois[i], dx = x - p.x, dz = z - p.z, k = (dx * dx + dz * dz) / (p.r * p.r);
+    if (k < 1 && k < bk) { bk = k; best = p; }
+  }
+  return best ? (best.hot ? "hot" : best.tier) : "basic";
+}
+/** the rarity uplift of a gun lying at (x, z) (mutates data.rarity; ammo / consumables untouched). Returns the tier. */
+function uplift(W, data, x, z, id) {
+  if (!data || data.kind !== "weapon") return null;
+  const tier = tierAt(x, z), u = TIER_UPLIFT[tier];
+  if (!u || !u[0]) return tier;
+  const r = K.mulberry32((((W.seed >>> 0) ^ 0x71e5a3) ^ strHash(id)) >>> 0);
+  let rar = data.rarity || 0;
+  if (r() < u[0]) rar++;
+  if (r() < u[1]) rar++;
+  data.rarity = Math.min(4, rar);
+  return tier;
+}
+
+// ── supply drops (parity P2-H, LC-28) ────────────────────────────────────────────────────────────────────────────────────────────────
+// Was: at most 2 a match (measured: one in 604 s), burst into loot the instant it touched the terrain (often inside a ruin or on a roof: maps'
+// heightAt only), and nothing marked it once it was down. Now (Apex: 4 a match, a beam until opened - apexlegends.wiki.gg/wiki/Care_Package; PUBG:
+// red smoke - pubg.wiki.gg/wiki/Care_Package):
+//  - SUPPLY_MAX[pace] crates, one at the start of each storm phase from SUPPLY_FIRST_PHASE (standard phases 2-5: ~269 / 437 / 566 / 673 s; quick
+//    phases 2-4), each into the NEXT circle; several may be in the air at once;
+//  - the landing spot is searched (seeded, so every client agrees): dry ground, nothing solid over a 1.4 m disc from the ground to 6 m up (no roof,
+//    no wall, no tree trunk), and a gentle slope - else the least bad candidate;
+//  - it descends at SUPPLY_FALL m/s from SUPPLY_H over the ground (~30 s to be seen and contested), and on landing becomes a "chest" record (id
+//    sd<N>): HOLD E opens it through the chest channel; bots open it through their chest path; the net 'chest' message and the join-sync 'opened'
+//    list carry it like any chest (an open that arrives before the crate landed here waits in pendingOpen);
+//  - until it is opened it stands under a tall red beacon (the shared beam pool: a far beacon keeps its white core at every range, SUPPLY_BEAM.h m
+//    so it clears every roof and crater rim round it) with a red glow and ring; opened, the markers go and the crate stays, dimmed.
+// Contents: K.rollSupplyDrop from the same per-drop stream as before ((seed ^ 0xdead) + n); item ids sd:<n>:<i> as before.
+const SUPPLY_MAX = { standard: 4, quick: 3 };
+const SUPPLY_FIRST_PHASE = 2;
+const SUPPLY_H = 180, SUPPLY_FALL = 6.0;
+const SUPPLY_HEX = "#ff4a38";
+const SUPPLY_BEAM = { h: 110, r: 0.2, gain: 0.95, far: 1800 };
+const SUPPLY_CLEAR_R = 1.4, SUPPLY_CLEAR_H = 6.0;
+function newSupplyState(W) {
+  const pace = paceOf(W);
+  return { dropped: 0, landed: 0, max: SUPPLY_MAX[pace] || 0, falling: [], list: [], pendingOpen: new Set() };
+}
+const _spCols = [];
+/** how bad a crate landing spot is (0 = good; Infinity = never): water, a solid over the crate's disc up to 6 m, the slope under it */
+function supplySpotCost(M, x, z) {
+  const g = M.heightAt(x, z);
+  if (M.waterY != null && g < M.waterY + 0.5) return Infinity;
+  if (M.half && (Math.abs(x) > M.half - 8 || Math.abs(z) > M.half - 8)) return Infinity;
+  let cost = 0;
+  if (M.queryColliders) {
+    const cs = M.queryColliders(x, z, SUPPLY_CLEAR_R + 0.1, _spCols);
+    for (let i = 0; i < cs.length; i++) {
+      const c = cs[i];
+      if (c.dead) continue;
+      if (c.maxX < x - SUPPLY_CLEAR_R || c.minX > x + SUPPLY_CLEAR_R || c.maxZ < z - SUPPLY_CLEAR_R || c.minZ > z + SUPPLY_CLEAR_R) continue;
+      if (c.maxY > g + 0.25 && c.minY < g + SUPPLY_CLEAR_H) cost += 100;
     }
+  }
+  const e = 1.5;
+  const sl = Math.max(Math.abs(M.heightAt(x + e, z) - M.heightAt(x - e, z)), Math.abs(M.heightAt(x, z + e) - M.heightAt(x, z - e))) / (2 * e);
+  if (sl > 0.45) cost += 50;
+  return cost + sl;
+}
+function supplySpawn(W, st) {
+  const n = supplyState.dropped;
+  const rng = K.mulberry32((W.seed ^ 0xd209) + n * 77);
+  const cx0 = st.nextCenter ? st.nextCenter.x : st.center.x, cz0 = st.nextCenter ? st.nextCenter.z : st.center.z;
+  const R = (st.nextRadius || st.radius) * 0.6;
+  let bx = cx0, bz = cz0, bc = Infinity;
+  for (let k = 0; k < 28 && bc > 0.3; k++) {
+    const ang = rng() * Math.PI * 2, rr = R * Math.sqrt(rng());
+    const x = cx0 + Math.cos(ang) * rr, z = cz0 + Math.sin(ang) * rr;
+    const c = W.map ? supplySpotCost(W.map, x, z) : 0;
+    if (c < bc) { bc = c; bx = x; bz = z; }
+  }
+  const gy = W.map.heightAt(bx, bz);
+  const { crate, box, balloon } = makeSupplyCrate();
+  crate.position.set(bx, gy + SUPPLY_H, bz);
+  crate.rotation.y = rng() * Math.PI * 2;
+  W.group("loot").add(crate);
+  const rec = { id: "sd" + n, n, x: bx, z: bz, y: gy, landed: false, opened: false, tSpawn: W.t, tLand: null, tOpen: null };
+  supplyState.list.push(rec);
+  supplyState.falling.push({ crate, box, balloon, x: bx, z: bz, gy, n, rec });
+  supplyState.dropped++;
+  W.events.emit("supplyDropSpawned", { x: bx, z: bz, id: rec.id, n });
+}
+function supplyLand(W, f) {
+  f.crate.position.y = f.gy;
+  f.crate.remove(f.balloon);
+  // detached = unreachable by the match teardown: free it now
+  f.balloon.geometry.dispose(); f.balloon.material.dispose();
+  const id = "sd" + f.n, x = f.x, z = f.z, gy = f.gy;
+  const ry = f.crate.rotation.y;
+  fxInit();
+  const ring = ringAlloc(W, x, gy + 0.15, z, SUPPLY_HEX, false, RING_D_CHEST, id, null);
+  let beam = -1, glow = -1, ceil = Infinity;
+  if (ring >= 0) {
+    ceil = ceilingAbove(W, x, z, _surf.floor, SUPPLY_BEAM.r + 0.12);
+    beam = beamAlloc(x, _surf.floor, z, SUPPLY_HEX, SUPPLY_BEAM.h, SUPPLY_BEAM.r, SUPPLY_BEAM.gain, SUPPLY_BEAM.far, ceil);
+    glow = glowAlloc(x, _surf.floor + 2.0, z, 3.6, SUPPLY_HEX, GLOW_GAIN);
+  }
+  const c = { id, supply: true, n: f.n, pos: { x, y: gy, z }, opened: false, glow, beam, ring, ringOn: true, ceil, rc: Math.cos(ry), rs: Math.sin(ry), vis: true, cast: false,
+    vp: null, vi: -1, sc: 1, R: null, house: null, crate: f.crate, box: f.box, rec: f.rec };
+  chests.set(id, c);
+  gridAdd("chest", id, { x, z });
+  f.rec.landed = true; f.rec.tLand = W.t; f.rec.y = gy;
+  supplyState.landed++;
+  W.events.emit("supplyDropLanded", { x, z, id, n: f.n });
+  if (supplyState.pendingOpen.has(id)) { supplyState.pendingOpen.delete(id); openChest(W, null, id); }
+}
+function maybeSupplyDrop(W, dt) {
+  if (!supplyState || !supplyState.max || !W.stormCtl || !W.stormCtl.storm) return;   // practice / no storm; null between disposeMatch and populate
+  const st = W.stormCtl.storm.stateAt(W.t);
+  while (supplyState.dropped < supplyState.max && st.phase >= SUPPLY_FIRST_PHASE + supplyState.dropped) supplySpawn(W, st);
+  const F = supplyState.falling;
+  for (let i = F.length - 1; i >= 0; i--) {
+    const f = F[i];
+    f.crate.position.y -= SUPPLY_FALL * dt;
+    if (f.crate.position.y <= f.gy) { F.splice(i, 1); supplyLand(W, f); }
   }
 }
 
@@ -1685,7 +1898,7 @@ function nearby(pos, r, maxDy, los) {
           const dx = it.pos.x - pos.x, dz = it.pos.z - pos.z;
           const d2 = dx * dx + dz * dz;                     // squared compare: no sqrt per candidate
           if (d2 < r2 && Math.abs(it.pos.y - pos.y) < dyMax && (!los || !it.house || r > PICK_LOS_R || pickLos(pos, it, 0.1))) {
-            out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d: Math.sqrt(d2), stand: it.stand || null });
+            out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d: Math.sqrt(d2), stand: it.stand || null, pile: it.pile });
           }
         } else {
           const c = chests.get(e.id);
@@ -1693,7 +1906,7 @@ function nearby(pos, r, maxDy, los) {
           const dx = c.pos.x - pos.x, dz = c.pos.z - pos.z;
           const d2 = dx * dx + dz * dz;
           if (d2 < r2 && Math.abs(c.pos.y - pos.y) < dyMax && (!los || !c.house || r > PICK_LOS_R || pickLos(pos, c, 0.45))) {
-            out.push({ type: "chest", id: c.id, pos: c.pos, d: Math.sqrt(d2), stand: c.stand || null });
+            out.push({ type: "chest", id: c.id, pos: c.pos, d: Math.sqrt(d2), stand: c.stand || null, supply: !!c.supply });
           }
         }
       }
@@ -1706,44 +1919,97 @@ function nearby(pos, r, maxDy, los) {
 function openChest(W, a, id) {
   const c = chests.get(id);
   if (!c || c.opened) return false;
+  if (a && a.downed) return false;                   // C-DBNO: a downed actor cannot loot
   c.opened = true;
   if (FX.pools) { poolRelease(FX.pools.glows, c.glow); poolRelease(FX.pools.beams, c.beam); poolRelease(FX.pools.rings, c.ring); }
   c.glow = c.beam = c.ring = -1;
   if (c.vp) c.vp.dirty = true;                       // the opened chest is drawn dimmed (instance colour 0.45: what the cloned material's colour x 0.45 was)
-  const rng = K.mulberry32((W.seed ^ 0xc4e57) + parseInt(id.slice(1), 10));
-  const drops = K.rollChest(rng);
-  let i = 0;
-  for (const d of drops) {
-    const ang = (i / drops.length) * Math.PI * 2 + 0.6;
-    if (c.R) { const sp = chestBurstSpot(W, c, ang); spawnItem(W, d, sp.x, c.pos.y + HOUSE_HOVER, sp.z, "cb:" + id + ":" + i, { surf: c.pos.y, house: c.house, rr: c.R.rects || null }); }   // a house chest: the room's floor, never through its wall
-    else spawnItem(W, d, c.pos.x + Math.cos(ang) * 1.1, c.pos.y + 0.2, c.pos.z + Math.sin(ang) * 1.1, "cb:" + id + ":" + i);
-    i++;
+  let drops;
+  if (c.supply) {
+    drops = K.rollSupplyDrop(K.mulberry32((W.seed ^ 0xdead) + c.n));   // the stream the instant burst used (same contents per seed)
+    if (c.crate) c.crate.traverse((m) => {                                // the crate stays, dimmed, its lamp dark (same program)
+      if (!m.isMesh || !m.material || !m.material.color) return;
+      m.material.color.multiplyScalar(0.45);
+      if (m.material.emissive) m.material.emissive.setRGB(0, 0, 0);
+    });
+    if (c.rec) { c.rec.opened = true; c.rec.tOpen = W.t; }
+  } else {
+    drops = K.rollChest(K.mulberry32((W.seed ^ 0xc4e57) + parseInt(id.slice(1), 10)));
+    for (let i = 0; i < drops.length; i++) uplift(W, drops[i], c.pos.x, c.pos.z, "cb:" + id + ":" + i);   // LC-29 (the chest's POI tier; own stream per item)
+  }
+  // LC-77: the burst lands IN FRONT of the chest (local +z, the side the lid opens to), the gun and the ammo that feeds it on ONE spot and the rest
+  // beside it - one walk-over takes the gun with its ammo. It used to fan out round the chest at 1.1 m, so the walk-over that took the gun left its
+  // ammo on the far side ("MEDI" on the lid, live shots). A supply crate bursts the same way from its (seeded) heading.
+  const fx = c.rs, fz = c.rc, lx = fz, lz = -fx;     // front and lateral (world)
+  const gun = drops.find((d) => d.kind === "weapon");
+  const feed = gun && K.WEAPONS[gun.id] ? K.WEAPONS[gun.id].ammo : null;
+  const SLOTS = [-1, 2, -2, 3, -3];
+  let feedDone = false, si = 0;
+  for (let i = 0; i < drops.length; i++) {
+    const d = drops[i];
+    // slot: 0 = the gun's spot, 1 = beside it (the gun's own ammo), then -1, 2, -2 ... (the rest, alternating sides)
+    let s;
+    if (d === gun) s = 0;
+    else if (!feedDone && d.kind === "ammo" && d.id === feed) { s = 1; feedDone = true; }
+    else s = SLOTS[Math.min(si++, SLOTS.length - 1)];
+    const lat = s * 0.42;
+    const iid = c.supply ? "sd:" + c.n + ":" + i : "cb:" + id + ":" + i;   // (a supply crate keeps the ids its instant burst used)
+    if (c.R) {
+      const ang = Math.atan2(fz, fx) + s * 0.38;
+      const sp = chestBurstSpot(W, c, ang);
+      spawnItem(W, d, sp.x, c.pos.y + HOUSE_HOVER, sp.z, iid, { surf: c.pos.y, house: c.house, rr: c.R.rects || null });   // a house chest: the room's floor, never through its wall
+    } else {
+      const fd = c.supply ? 1.9 : 1.35;
+      spawnItem(W, d, c.pos.x + fx * fd + lx * lat, c.pos.y + 0.2, c.pos.z + fz * fd + lz * lat, iid);
+    }
   }
   W.events.emit("chestOpened", a, c);
+  if (c.supply) W.events.emit("supplyDropOpened", a, { id: c.id, x: c.pos.x, z: c.pos.z, n: c.n });
   return true;
 }
 
 /** Detach a taken item and park its pooled markers (contact blob, floor ring, beam,
  *  death-drop glow). It owns no GPU object of its own any more - everything per-item
  *  is a slot in a shared instanced pool - so nothing here needs disposing. */
-function releaseItem(it) {
+function releaseItem(it, W) {
   visRemove(it);
   blobRelease(it);
   itemFxRelease(it);
+  if (it.pile && W) pileTaken(W, it);   // the pile's one marker follows its best remaining member
 }
 
+let remN = 0;
 function pickup(W, a, id, opts) {
   const it = items.get(id);
   if (!it || it.taken) return false;
-  if (opts && opts.swap) it.data.swap = true;
-  const ok = give(W, a, it.data);
-  delete it.data.swap;
+  if (a && a.downed) return false;                   // C-DBNO: a downed actor cannot loot
+  // An ammo item bigger than the room left in the reserve is taken IN PART: the rest stays on the floor as a new item (deterministic id, mirrored
+  // online like a swap drop). With a death pile now holding ALL the victim's ammo (up to 240 medium), taking it all would burn the remainder.
+  let rem = 0;
+  const d0 = it.data;
+  if (d0.kind === "ammo" && a && a.inventory && K.AMMO[d0.id]) {
+    const cnt = d0.count || K.AMMO[d0.id].box, room = K.AMMO[d0.id].max - (a.inventory.ammo[d0.id] || 0);
+    if (room > 0 && cnt > room) rem = cnt - room;
+  }
+  const data = rem ? { kind: "ammo", id: d0.id, count: (d0.count || K.AMMO[d0.id].box) - rem } : d0;
+  if (opts && opts.swap) data.swap = true;
+  const ok = give(W, a, data);
+  delete data.swap;
   if (!ok) return false;
   it.taken = true;
-  releaseItem(it);
+  const pileId = it.pile;
+  if (rem) it.pile = null;                           // (the remainder takes its place in the pile: one re-mark below, not two)
+  releaseItem(it, W);
   items.delete(id);
   takenIds.push(id);
-  W.events.emit("pickedUp", a, it.data, id);
+  W.events.emit("pickedUp", a, data, id);
+  if (rem) {
+    const rid = "r" + (remN++) + ":" + id, rd = { kind: "ammo", id: d0.id, count: rem }, p = it.pos;
+    const nid = spawnItem(W, rd, p.x, p.y, p.z, rid, it.surf != null ? { surf: it.surf, house: it.house, rr: it.rr, drop: it.drop, pile: pileId } : { pile: pileId });
+    const P = pileId ? piles.get(pileId) : null;
+    if (P) { P.members.delete(id); if (items.has(nid)) P.members.add(nid); pileMarkers(W, P); }
+    if (W.net && a && !a.netRemote) W.events.emit("netDropItem", { data: rd, x: p.x, y: p.y, z: p.z, id: rid, pile: pileId || undefined, surf: it.surf != null ? it.surf : undefined });
+  }
   return true;
 }
 
@@ -1977,32 +2243,93 @@ function dropItem(W, a, data, fwd) {
 
 function hashId(s) { let h2 = 0; for (let i = 0; i < s.length; i++) h2 = (h2 * 31 + s.charCodeAt(i)) | 0; return h2 >>> 0; }
 
-/** Fully deterministic (seeded by victim id) — every client that runs the
- * kill spawns identical death loot with identical ids; no mirroring needed. */
+/** DEATH PILE (parity P2-H, LC-27). Fully deterministic (seeded by victim id): every client that runs the kill spawns identical death loot with
+ *  identical ids; no mirroring needed.
+ *  Was: every item thrown to a random spot 0.5-1.6 m out, each with its own ring, beam and gold glow (8 items over 2.44 m, 5 overlapping pills:
+ *  unreadable), and the ammo cut to 2 boxes a type (a bot holding 240 medium dropped 40). Now (Apex's death box: everything, one marker in the
+ *  colour of the best item - apexlegends.wiki.gg/wiki/Death_Box):
+ *  - EVERYTHING is dropped: every gun, every stack, ALL the ammo of each type (one item a type, any count > 0);
+ *  - laid out as one tidy pile, sorted by value: the best gun in the middle, the rest on a 0.55 m ring round it (a second ring at 1.0 m only
+ *    past 7 items), turned by one seeded draw; every member is inside the 1.5 m walk-over of the middle;
+ *  - the members carry NO marker of their own; the pile has ONE ring, ONE beam and ONE glow in the RARITY_COLOR of its best gun (common grey when
+ *    it holds no gun), re-coloured when the best is taken and parked when the last member goes;
+ *  - W.lootLabels folds the pile into one label entry (best first). */
+const PILE_RING1 = 0.55, PILE_RING2 = 1.0, PILE_N1 = 6;
+const CON_VALUE = { big_shield: 40, medkit: 38, frag: 30, mini_shield: 26, bandage: 20 };
+function lootValue(d) {
+  if (d.kind === "weapon") return 1000 + (d.rarity || 0) * 100 + Math.min(99, K.gunScore ? K.gunScore(d.id, d.rarity || 0) / 4 : 0);
+  if (d.kind === "consumable") return 100 + (CON_VALUE[d.id] || 10);
+  return 10 + Math.min(9, (d.count || 0) / 40);
+}
 function deathDrop(W, victim) {
   const inv = victim.inventory;
+  if (!inv) return;
   const rng = K.mulberry32(W.seed ^ hashId(victim.id));
-  let k = 0;
-  const drop = (data) => {
-    const ang = rng() * Math.PI * 2, r = 0.5 + rng() * 1.1;
-    const iid = spawnItem(W, data, victim.pos.x + Math.cos(ang) * r, victim.pos.y + 0.2, victim.pos.z + Math.sin(ang) * r, "dd:" + victim.id + ":" + (k++));
-    // Death loot got no burst, no beam and no glow, while an untouched CHEST
-    // gets a glow sprite plus a 7 m additive beam (spawnChest, above) — so the
-    // gun a kill just dropped was harder to spot than loot nobody had touched.
-    // Scaled to 1.3 (chests use 3.2): a marker, not a beacon. Now a slot in the
-    // shared glow pool, on top of the ring + (for a weapon) beam every floor item has.
-    const it = items.get(iid);
-    if (it && it.ring >= 0) it.glow = glowAlloc(it.pos.x, it.pos.y + 0.55, it.pos.z, 1.3, GOLD_HEX, GLOW_GAIN);
-  };
-  // EVERY carried weapon (including the equipped one) + consumables + ammo
+  const list = [];
+  // EVERY carried weapon (including the equipped one) + consumables + ALL ammo
   for (let i = 0; i < inv.slots.length; i++) {
     const s = inv.slots[i];
     if (!s) continue;
-    if (s.kind === "weapon") drop({ kind: "weapon", id: s.id, rarity: s.rarity, mag: s.mag });
-    if (s.kind === "consumable" && s.count > 0) drop({ kind: "consumable", id: s.id, count: s.count });
+    if (s.kind === "weapon") list.push({ kind: "weapon", id: s.id, rarity: s.rarity, mag: s.mag });
+    if (s.kind === "consumable" && s.count > 0) list.push({ kind: "consumable", id: s.id, count: s.count });
     inv.slots[i] = null;
   }
-  for (const am in inv.ammo) if (inv.ammo[am] > 8) drop({ kind: "ammo", id: am, count: Math.min(inv.ammo[am], K.AMMO[am].box * 2) });
+  for (const am in inv.ammo) if (inv.ammo[am] > 0 && K.AMMO[am]) list.push({ kind: "ammo", id: am, count: inv.ammo[am] });
+  if (!list.length) return;
+  // stable sort by value (ties keep the slot order: the same on every client)
+  const ord = list.map((d, i) => ({ d, i, v: lootValue(d) })).sort((a, b) => b.v - a.v || a.i - b.i);
+  const pid = "pile:" + victim.id;
+  const rot = rng() * Math.PI * 2;
+  const P = { id: pid, pos: { x: victim.pos.x, y: victim.pos.y, z: victim.pos.z }, members: new Set(), best: -1, hex: null, ring: -1, beam: -1, glow: -1, ringOn: true, vis: true };
+  piles.set(pid, P);
+  const n1 = Math.min(PILE_N1, ord.length - 1), n2 = ord.length - 1 - n1;
+  let centre = null;
+  for (let k = 0; k < ord.length; k++) {
+    let x = victim.pos.x, z = victim.pos.z;
+    if (k > 0) {
+      const inner = k <= n1, j = inner ? k - 1 : k - 1 - n1, n = inner ? n1 : n2;
+      const a = rot + (j / Math.max(1, n)) * Math.PI * 2 + (inner ? 0 : Math.PI / Math.max(1, n));
+      const r = inner ? PILE_RING1 : PILE_RING2;
+      x += Math.cos(a) * r; z += Math.sin(a) * r;
+    }
+    const iid = spawnItem(W, ord[k].d, x, victim.pos.y + 0.2, z, "dd:" + victim.id + ":" + k, { pile: pid });
+    const it = items.get(iid);
+    if (it) { P.members.add(iid); if (!centre) centre = it.pos; }
+  }
+  if (centre) { P.pos.x = centre.x; P.pos.y = centre.y; P.pos.z = centre.z; }
+  pileMarkers(W, P);
+}
+/** (re)build a pile's one marker for its current best member; parks it when the pile is empty */
+function pileMarkers(W, P) {
+  const FP = FX.pools;
+  if (FP) { poolRelease(FP.rings, P.ring); poolRelease(FP.beams, P.beam); poolRelease(FP.glows, P.glow); }
+  P.ring = P.beam = P.glow = -1;
+  let best = null, bv = -Infinity;
+  for (const id of P.members) { const it = items.get(id); if (!it || it.taken) continue; const v = lootValue(it.data); if (v > bv) { bv = v; best = it; } }
+  if (!best) { piles.delete(P.id); return; }
+  P.best = best.data.kind === "weapon" ? (best.data.rarity || 0) : -1;
+  const rar = Math.max(0, P.best);
+  const hex = K.RARITY_COLOR[K.RARITY[rar]] || K.RARITY_COLOR.common;
+  P.hex = hex;
+  fxInit();
+  const x = P.pos.x, y = P.pos.y, z = P.pos.z;
+  P.ring = ringAlloc(W, x, y, z, hex, false, 2.9, P.id, null);
+  if (P.ring >= 0) {
+    const floor = _surf.floor;
+    const ceil = ceilingAbove(W, x, z, floor, BEAM_R[rar] + 0.12);
+    // a pile reads a step above a floor gun of the same rarity: the next height up, never below the uncommon beam
+    const hk = Math.min(4, Math.max(1, rar + 1));
+    P.beam = beamAlloc(x, floor, z, hex, BEAM_H[hk], BEAM_R[rar], BEAM_GAIN[rar], BEAM_FAR[hk], ceil);
+    P.glow = glowAlloc(x, floor + 0.75, z, 1.5, hex, GLOW_GAIN);
+    if (!P.vis && FP) poolShow(FP.rings, P.ring, false);
+  }
+}
+/** a pile member left the floor: re-mark the pile (its best may have gone) */
+function pileTaken(W, it) {
+  const P = it.pile ? piles.get(it.pile) : null;
+  if (!P) return;
+  P.members.delete(it.id);
+  pileMarkers(W, P);
 }
 
 // ── frame update ─────────────────────────────────────────────────────────────
@@ -2037,6 +2364,10 @@ export function update(W, dt) {
   for (const c of chests.values()) {
     const cdx = c.pos.x - cp.x, cdy = c.pos.y - cp.y, cdz = c.pos.z - cp.z;
     const d2 = cdx * cdx + cdy * cdy + cdz * cdz;
+    if (c.supply) {                                  // a landed supply crate: its own mesh (always drawn), only its ring follows the cull
+      if (c.ring >= 0) { const ringOn = d2 < cull2; if (c.ringOn !== ringOn) { c.ringOn = ringOn; if (FX.pools) poolShow(FX.pools.rings, c.ring, ringOn); } }
+      continue;
+    }
     // Cull the chest MODEL and its ring only. The glow billboard and the light
     // beam stay lit at any range (the shader fades them) — they are the beacon you
     // steer the glider toward, and hiding them would make chests unfindable on
@@ -2050,6 +2381,12 @@ export function update(W, dt) {
     const cast = d2 < (c.cast ? CHEST_SHADOW_OFF2 : CHEST_SHADOW_R2);
     if (c.cast !== cast && CP) { c.cast = cast; visRemove(c); visAdd(CP[cast ? 1 : 0], c); }
   }
+  // death piles: their one ring follows the cull like an item's (the beam and the glow fade in their shaders)
+  if (piles.size && FX.pools) for (const P of piles.values()) {
+    const pdx = P.pos.x - cp.x, pdy = P.pos.y - cp.y, pdz = P.pos.z - cp.z;
+    const vis = pdx * pdx + pdy * pdy + pdz * pdz < cull2;
+    if (P.vis !== vis) { P.vis = vis; poolShow(FX.pools.rings, P.ring, vis); }
+  }
   fxFrame(W, dt, cull);
 
   // human interact:
@@ -2057,8 +2394,9 @@ export function update(W, dt) {
   //  - tap E on an item with a full inventory → SWAP with the active slot
   //  - HOLD E for 2 s on a chest → open (progress surfaces on the HUD)
   const a = W.player;
-  if (a && a.alive) {
+  if (a && a.alive && !a.downed) {                   // C-DBNO: a downed player loots nothing (and keeps no loot hint: the HUD shows BLEEDING OUT)
     const near = nearby(a.pos, 2.4, REACH_DY, true);
+    const yieldE = reviveYield(W, a);                  // a downed teammate within reach: E is the revive's (player.js), not a chest's or a swap's
     // walkover auto-pickup: ammo/heals always (if they fit); weapons only up
     // to 3 carried — hoarding 5 guns left NO room for shield potions, which
     // read as "shields don't work". Tap E to take/swap anything explicitly.
@@ -2088,7 +2426,7 @@ export function update(W, dt) {
     a._eHoldT = a.input.interactDown ? (a._eHoldT || 0) + dt : 0;
     const chestNear = near.find((n) => n.type === "chest") || null;
     const itemNear = near.find((n) => n.type === "item" && items.has(n.id)) || null;
-    const target = ((a._eHoldT || 0) > 0.18 && chestNear) ? chestNear : (itemNear || chestNear);
+    const target = yieldE ? null : ((a._eHoldT || 0) > 0.18 && chestNear) ? chestNear : (itemNear || chestNear);
     // chest channel
     if (target && target.type === "chest" && a.input.interactDown) {
       if (chestChannel.id !== target.id) { chestChannel.id = target.id; chestChannel.t = 0; }
@@ -2099,10 +2437,16 @@ export function update(W, dt) {
     }
     // tap E on an item = swap into active slot
     if (a.input.interact) {
-      a.input.interact = false;
-      if (target && target.type === "item") pickup(W, a, target.id, { swap: true });
+      a.input.interact = false;                       // (consumed while yielding too: a tap that started a revive must not swap a gun after it)
+      if (!yieldE && target && target.type === "item") pickup(W, a, target.id, { swap: true });
     }
-    W.interactHint = target ? Object.assign({}, target, { progress: target.type === "chest" ? chestChannel.t / CHEST_OPEN_S : 0 }) : null;
+    // _loot marks the hints this module wrote: with no loot target only OUR stale hint is cleared (a revive prompt another module wrote stays)
+    if (target) W.interactHint = Object.assign({}, target, { progress: target.type === "chest" ? chestChannel.t / CHEST_OPEN_S : 0, _loot: true });
+    else if (W.interactHint && W.interactHint._loot) W.interactHint = null;
+  } else if (a) {
+    if (chestChannel.id) { chestChannel.id = null; chestChannel.t = 0; }
+    a._eHoldT = 0;
+    if (W.interactHint && W.interactHint._loot) W.interactHint = null;
   }
 
   // BOT WALKOVER (audit M6/gap 9). Bots only ever picked things up inside actLoot,
@@ -2112,7 +2456,7 @@ export function update(W, dt) {
   // and stack caps) and the same [Q]-drop grace. Allocation-free grid walk.
   for (let i = 0; i < W.actors.length; i++) {
     const b = W.actors[i];
-    if (!b.isBot || !b.alive || b.gliding || b.netRemote || !b.inventory) continue;
+    if (!b.isBot || !b.alive || b.downed || b.gliding || b.netRemote || !b.inventory) continue;
     botWalkover(W, b);
   }
   blobFlush();                    // this frame's blob slot changes, one sub-range upload
@@ -2148,3 +2492,90 @@ function botWalkover(W, a) {
 }
 const CHEST_OPEN_S = 2.0;
 const chestChannel = { id: null, t: 0 };
+
+/** C-DBNO: does the player's E belong to a revive right now? (player.js owns the revive channel: a teammate holds E within K.REVIVE_R / 2 m of a downed
+ *  team member.) True while the player is reviving (a.reviving, if player.js sets it) or a downed, living teammate is within reach - then a chest
+ *  channel or a tap-E swap would fight the revive for the same key. Solo / FFA: no teammates, never true. */
+function reviveYield(W, a) {
+  if (a.reviving) return true;
+  if (a.teamId == null || !W.actors) return false;
+  const R = (K && K.REVIVE_R) || 2.0, R2 = (R + 0.3) * (R + 0.3);
+  for (let i = 0; i < W.actors.length; i++) {
+    const b = W.actors[i];
+    if (b === a || !b.downed || !b.alive || b.teamId !== a.teamId) continue;
+    const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
+    if (dx * dx + dz * dz < R2 && Math.abs(b.pos.y - a.pos.y) < REACH_DY) return true;
+  }
+  return false;
+}
+
+/** W.lootLabels(pos, r): nearbyLoot(pos, r) for the HUD's world pills, with every DEATH PILE folded into ONE entry at the pile's centre:
+ *  { type: "pile", id, pos, d, data (the best member's data), count, label ("AR · EPIC  +6"), lines (every member's short label, best first),
+ *    color (the pile's RARITY_COLOR), members (item ids) }. Other entries are nearbyLoot's own (chests carry `supply`). Allocates (a HUD 4-10 Hz call). */
+const AMMO_SHORT = { light: "LIGHT", medium: "MEDIUM", shells: "SHELLS", heavy: "HEAVY", grenades: "GRENADES" };
+const CON_SHORT = { bandage: "BANDAGE", medkit: "MEDKIT", mini_shield: "MINI SHIELD", big_shield: "BIG SHIELD", frag: "FRAG" };
+function shortLabel(d) {
+  if (d.kind === "weapon") return String(d.id).toUpperCase() + " · " + String(K.RARITY[d.rarity || 0] || "").toUpperCase();
+  if (d.kind === "ammo") return (d.count || 0) + " " + (AMMO_SHORT[d.id] || String(d.id).toUpperCase());
+  return (CON_SHORT[d.id] || String(d.id).toUpperCase()) + ((d.count || 1) > 1 ? " x" + d.count : "");
+}
+function lootLabels(pos, r) {
+  const near = nearby(pos, r);
+  const out = [], seen = new Map();
+  for (const n of near) {
+    if (n.type !== "item" || !n.pile || !piles.has(n.pile)) { out.push(n); continue; }
+    let e = seen.get(n.pile);
+    if (!e) {
+      const P = piles.get(n.pile);
+      const dx = P.pos.x - pos.x, dz = P.pos.z - pos.z;
+      e = { type: "pile", id: P.id, pos: P.pos, d: Math.hypot(dx, dz), data: null, count: 0, label: "", lines: [], color: P.hex, members: [], _m: [] };
+      seen.set(n.pile, e);
+      out.push(e);
+    }
+    e._m.push(n);
+  }
+  for (const e of seen.values()) {
+    // the WHOLE pile (members outside r too), best first
+    const P = piles.get(e.id), all = [];
+    for (const id of P.members) { const it = items.get(id); if (it && !it.taken) all.push(it); }
+    all.sort((x, y) => lootValue(y.data) - lootValue(x.data));
+    e.members = all.map((it) => it.id);
+    e.lines = all.map((it) => shortLabel(it.data));
+    e.count = all.length;
+    e.data = all.length ? all[0].data : null;
+    e.label = (e.lines[0] || "") + (all.length > 1 ? "  +" + (all.length - 1) : "");
+    delete e._m;
+  }
+  out.sort((x, y) => x.d - y.d);
+  return out;
+}
+
+/** W.nearbyChests(pos, r, out): the unopened chests and landed, unopened supply crates within r (horizontal) of pos, written into the first N
+ *  records of `out` (an array the caller keeps; its records are reused, so nothing is allocated once it has grown), nearest first. Returns N (the
+ *  records past N are stale, kept for reuse). For the audio lane's chest shimmer (P2-J): { id, x, y, z, d, supply, house }. */
+function nearbyChests(pos, r, out) {
+  out = out || [];
+  let n = 0;
+  const r2 = r * r;
+  const x0 = Math.floor((pos.x - r) / LOOT_CELL), x1 = Math.floor((pos.x + r) / LOOT_CELL);
+  const z0 = Math.floor((pos.z - r) / LOOT_CELL), z1 = Math.floor((pos.z + r) / LOOT_CELL);
+  for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+    const l = lootGrid.get(lkey(cx, cz));
+    if (!l) continue;
+    for (let i = 0; i < l.length; i++) {
+      const e = l[i];
+      if (e.kind !== "chest") continue;
+      const c = chests.get(e.id);
+      if (!c || c.opened) continue;
+      const dx = c.pos.x - pos.x, dz = c.pos.z - pos.z, d2 = dx * dx + dz * dz;
+      if (d2 >= r2) continue;
+      let o = out[n];
+      if (!o) { o = { id: null, x: 0, y: 0, z: 0, d: 0, supply: false, house: null }; out[n] = o; }
+      o.id = c.id; o.x = c.pos.x; o.y = c.pos.y; o.z = c.pos.z; o.d = Math.sqrt(d2); o.supply = !!c.supply; o.house = c.house || null;
+      n++;
+    }
+  }
+  // insertion sort by distance (a handful of entries; no comparator closure)
+  for (let i = 1; i < n; i++) { const o = out[i]; let j = i - 1; while (j >= 0 && out[j].d > o.d) { out[j + 1] = out[j]; j--; } out[j + 1] = o; }
+  return n;
+}
