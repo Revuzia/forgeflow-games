@@ -720,6 +720,8 @@ class Greatwick(wc.Wick):
         pose = self.PROJECTION["gw_pose"]
         self.PROJECTION["gw_halo"].clear()
         _halo_materials(ctx)
+        wc.halo_material(ctx)
+        wc.install_halo_export()
         _matte_materials(ctx)
         for sp in self.parts():
             v, q = sp.S.mesh(VOXEL * sp.vs)
@@ -1189,30 +1191,28 @@ def _hollow_lining(F_hood, A, v_c, ws, n=12, inset=0.012, back=0.40):
     return V, F
 
 
-def hood_light(c, out: list, to_model=None, s: float = 1.0, radii=(0.088, 0.034, 0.052), axes=None, n: int = 12,
-               lining=None):
-    """The hood light: ONE soft volume, wider than tall (never eyes, never a disc on the sill): a smooth UV-ellipsoid
-    core (radii along the rows of `axes`, the arch's frame: across, up, depth) in the middle of the opening and set back
-    in the hollow, and (`lining` = (hood field, arch, v_c, depths)) a dim see-through lining of light over the deep half
-    of the hollow behind it, so the core sits in lamplight that falls off to the ink of the lip instead of in a black
-    socket. Fix round 3: the wide low lens of fix 5 (70-80 % of the opening, on the sill) read as a tongue in an open
-    mouth on both factions."""
-    rx, ry, rz = (r * s for r in radii)
+def hood_light(c, out: list, to_model=None, s: float = 1.0, radii=(0.050, 0.030, 0.032), axes=None):
+    """The hood light (fix round 4, shared by every kind: wick_common.cap_mesh / halo_mesh): ONE soft core, the front of
+    a 16-round ellipsoid wider than tall (radii along the rows of `axes`, the arch's frame: across, up, depth into the
+    hood), centred in the opening and set back, and its HALO: an alpha-blended cap 1.6 x the core across and up whose
+    vertex alpha falls from 0.5 over the core's outline to 0 at its rim (inject_halo), so the light fades into the
+    dark hollow instead of stopping at a hard 10-gon (review r3: a pupil in a socket). The see-through lining of round
+    3 is gone (a second flat plateau, and accent area the gate could not afford)."""
+    rx, ry, rz = (r * s for r in radii)          # across, up, depth
     ax = np.eye(3) if axes is None else np.asarray(axes, float)
     c = np.asarray(c, float)
-    V, F = _ellipsoid_mesh(c, ax, (rx, ry, rz), n, 5)
+    X, Y, Z = ax[0], -ax[2], ax[1]                # wick_common frame: across, OUT of the hood, up
+    V, F = wc.cap_mesh(c, X, Y, Z, rx, rz, ry, seg=16)
     S = Sculpt("hoodlight")
     S.add(Ellipsoid(tuple(c), (rx, ry, rz), axes=ax), k=0.0)
     out.append(SP("hoodlight", S, "accent", "bone:head", len(F), 0.5, to_model=to_model,
                   meta={"light": (tuple(c), (rx, ry, rz), None if axes is None else ax.tolist()), "smooth": True,
                         "low_mesh": (V, F)}))
-    if lining is not None:
-        Fh, A, v_c, ws = lining
-        V, F = _hollow_lining(Fh, A, v_c, ws)
-        S = Sculpt("hoodglow1")
-        S.add(Ellipsoid(tuple(A.at(0.0, v_c, ws[-1])), (0.05, 0.05, 0.03)), k=0.0)
-        out.append(SP("hoodglow1", S, "glow_halo1", "bone:head", len(F), 0.6, to_model=to_model,
-                      meta={"smooth": True, "low_mesh": (V, F)}))
+    V, F = wc.halo_mesh(c, X, Y, Z, rx, rz, ry)
+    S = Sculpt("hoodhalo")
+    S.add(Ellipsoid(tuple(c), (rx, ry, rz), axes=ax), k=0.0)
+    out.append(SP("hoodhalo", S, wc.HALO_MAT, "bone:head", len(F), 0.5, to_model=to_model,
+                  meta={"smooth": True, "low_mesh": (V, F)}))
 
 
 # ══ AUBADE (concept space: front x = (px - 573) / 762, z = (1372 - py) / 762) ══════════════════════════════
@@ -1295,8 +1295,9 @@ def aubade_parts(L: dict) -> list:
     # (fix round 3) ONE soft core in the MIDDLE of the hollow, 8 cm back, 10 x 6 cm (wider than tall), in two see-through
     # shells (HOOD_HALOS): dark hollow above, below and to both sides. The wide low lens of fix 5 (80 % of the opening,
     # on the sill) read as a tongue in an open mouth; the hard 13 x 8 cm oval before it as a pupil.
-    hood_light(A.at(0.0, -0.008, 0.080), out, to_model=hood_tf, radii=(0.050, 0.030, 0.032), axes=A.ax,
-               lining=(field_of(hood), A, 0.011, (0.088, 0.110, 0.132, 0.152)))
+    # (fix round 4) centred: 0.5 of the opening from the sill at eye level (the plane leans back 14 deg: deeper reads
+    # lower), its front 3 cm behind the opening; a soft halo round it (hood_light)
+    hood_light(A.at(0.0, 0.024, 0.062), out, to_model=hood_tf, radii=(0.050, 0.030, 0.030), axes=A.ax)
 
     # ── BODY: a straight-folded cloak bell to the shins, a pointed hem, chalk stoles, a dawnglass clasp ──────
     cloak = Sculpt("cloak")
@@ -1485,21 +1486,21 @@ def lantern_aubade(L, out, back=None):
     for py in (-1, 1):                             # front / back faces (normal -Y / +Y)
         cax = np.array([[1.0, 0, 0], [0, py * 1.0, 0], [0, 0, 1.0]])
         c_ = np.array([0.0, yl + py * (hd - 0.015 + 0.002), zm])
-        a_, b_ = (hw - 2 * po) * 0.44, hz * 0.62           # (fix round 3: + a see-through glow fan round it)
+        # (fix round 4: 25 % less area, the accent gate 5-6 %: 7.3 % with the roof disc and the hood lining)
+        a_, b_ = (hw - 2 * po) * 0.44 * 0.866, hz * 0.62 * 0.866
         cores.append(dome_oval(c_, cax, a_, b_, 0.024, 16))
         ovals.append((tuple(c_), cax.tolist(), a_, b_))
     for px in (-1, 1):                             # the side panes
         cax = np.array([[0, 1.0, 0], [px * 1.0, 0, 0], [0, 0, 1.0]])
         c_ = np.array([px * (hw - 0.015 + 0.002), yl, zm])
-        a_, b_ = (hd - 2 * po) * 0.74, hz * 0.68
+        a_, b_ = (hd - 2 * po) * 0.74 * 0.866, hz * 0.68 * 0.866
         cores.append(dome_oval(c_, cax, a_, b_, 0.018, 12))
         ovals.append((tuple(c_), cax.tolist(), a_, b_))
-    cores.append(dome_oval((0, yl, zr - 0.020), np.array([[1.0, 0, 0], [0, 0, 1.0], [0, 1.0, 0]]), 0.068, 0.058,
-                           0.026, 12))                                                  # the roof's light well core
+    # (fix round 4) no light well in the roof: its disc was accent the 5-6 % gate could not afford, and a pale lit
+    # disc on top of the box; the roof is a closed chalk top
     # (fix round 3) the game mesh: one domed FAN per core (16 / 12 tris, smooth shaded; the 3-ring dome hulls cost 398)
     V_, F_ = [], []
-    for (c_, cax_, a_, b_), nn_ in zip(ovals + [((0, yl, zr - 0.020), [[1.0, 0, 0], [0, 0, 1.0], [0, 1.0, 0]], 0.068, 0.058)],
-                                        (16, 16, 12, 12, 12)):
+    for (c_, cax_, a_, b_), nn_ in zip(ovals, (16, 16, 12, 12)):
         v_, f_ = _dome_fan(np.asarray(c_, float), np.asarray(cax_, float), a_, b_, 0.022, nn_)
         F_.append(f_ + len(V_))
         V_ += list(v_)
@@ -1522,7 +1523,6 @@ def lantern_aubade(L, out, back=None):
         return -(ze + (zr - ze) * (1 - f))
     roof.add(RoundBox((0, yl, (zc + zr) / 2), (rh, rd, (zr - zc) / 2), 0.012), k=0.0)
     roof.inter(sdf.Displaced(HalfSpace((0, yl, 0.0), (0, 0, 1), 3.0), slope, 0.2), k=0.006)
-    roof.sub(RoundBox((0, yl, zr + 0.02), (0.076, 0.067, 0.04), 0.010), k=0.004)             # the light well
     out.append(SP("lantern_roof", roof, "chalk", "bone:chest", 120, 0.8))
     # four short corner spires on the post lines (to 1.62 front, 1.60 back); far off the hood's axis
     sp = Sculpt("spires")
@@ -1714,8 +1714,9 @@ def serenade_parts(L: dict) -> list:
     fpS.add(RoundBox(tuple(fp.mean(0)), (0.16, 0.07, 0.003), 0.001), k=0.0)
     out.append(SP("hollow_floor", fpS, "under", "bone:head", 8, 0.6, to_model=hood_tf,
                   meta={"low_mesh": (fp, np.array(fq, np.int64))}))
-    hood_light(A.at(0.0, 0.012, 0.080), out, to_model=hood_tf, radii=(0.070, 0.041, 0.040), axes=A.ax,
-               lining=(field_of(hood), A, 0.031, (0.092, 0.118, 0.144, 0.170)))
+    # (fix round 4) centred between the hollow's floor and the arch top at eye level, 3 cm back, a little smaller
+    # (14 x 8 cm read as one big pupil), in its halo
+    hood_light(A.at(0.0, 0.040, 0.062), out, to_model=hood_tf, radii=(0.058, 0.034, 0.032), axes=A.ax)
 
     # ── BODY: wide umber bell, two dark hem bands, a belt, the sand mantle with pointed lapels ───────────────
     tunic = Sculpt("cloak")
@@ -1777,7 +1778,7 @@ def serenade_parts(L: dict) -> list:
     # corner: a tan sliver in the dark)
     mantle.sub(DomainWarp(SER_ARCH_SINK, lambda P: _arr(P) + np.array([-0.005, 0.0, 0.0]), 0.03), k=0.01)
     mantle_tf = compose(shift(dx=0.03), body)
-    out.append(SP("mantle", mantle, "cloth2", "auto", 304, to_model=mantle_tf))
+    out.append(SP("mantle", mantle, "cloth2", "auto", 262, to_model=mantle_tf))
     # (no over-the-shoulder straps: their ends stopped dead on the felt; the A-frame is lashed at the belt, paint)
 
     # ── ARMS, FISTS, LEGS, BOOTS ───────────────────────────────────────────────────────────────────────
@@ -1865,7 +1866,7 @@ def hammer_serenade(L, out, body):
 # back to the belt, a felt pack under it. (Before: the panes were flat accent tiles filling each window edge to edge,
 # a blue-tiled birdcage; the bands thin smooth rings that read as grey wood; the lid a pale cream dome with six spokes.)
 SER_DRUM = dict(R=0.362, R_core=0.328, R_pane=0.310, R_in=0.285, sy=0.62, z_lo=(0.985, 1.076), z_win=(1.076, 1.318),
-                z_up=(1.318, 1.398), z_lid=1.510, n=8, post_hw=0.026, straps=4, chamfer=0.013)
+                z_up=(1.318, 1.398), z_lid=1.478, n=8, post_hw=0.026, straps=4, chamfer=0.013)
 
 
 def drum_windows(c, Rc, sy, n, post_hw, depth):
@@ -2035,17 +2036,20 @@ def lantern_serenade(L, out, back):
         da = np.min(np.abs(((a[:, None] - rib_a[None, :]) + np.pi) % (2 * np.pi) - np.pi), axis=1)
         r = np.hypot(x, y)
         w = np.clip(r / 0.08, 0, 1)
-        return (0.007 - 0.014 * np.exp(-((da * np.maximum(r, 0.02)) / 0.026) ** 2)) * w * -1.0
+        # (fix round 4) no strap grooves: a soft quilted swell only (the grooves crossed the lid like the straps did)
+        return -0.004 * w * (1.0 - np.clip(r / (Rl * 0.9), 0, 1)) + 0.0 * da
     lid.add(Lathe(c, lid_prof, R0, zl0 - 0.01, zl1 + 0.02, axes=np.diag([1.0, 1.0 / sy, 1.0])).displaced(puff, 0.008), k=0.0)
-    for a in rib_a:                                  # the straps: dark leather laid over the felt, 1.2 cm proud
-        pts = []
-        for tt in np.linspace(0.08, 0.99, 7):
-            r = Rl * tt
-            z = zl0 + 0.012 + hl * math.sqrt(max(0.0, 1 - tt * tt)) - 0.004
-            pts.append((r * math.cos(a), yl + r * sy * math.sin(a), z))
-        lid.add(Tube(np.array(pts), [0.017] * len(pts), k=0.006), k=0.008)
-    lid.add(Ellipsoid((0, yl, zl1 + 0.002), (0.040, 0.040, 0.016)), k=0.01)            # the button where they cross
-    out.append(SP("drum_lid", lid, "cloth2", "bone:chest", 150, 0.8,
+    # (fix round 4) a broad dark ironstone RIM framing the lid's foot (round its skirt, 2.2 cm, 1.4 cm proud) instead of
+    # four straps crossing over its top (from 52 deg they read as a pale hot-cross bun stacked behind the hood dome)
+    pts = []
+    for a in np.linspace(0.0, 2 * np.pi, 25):
+        tt = 0.93
+        r = Rl * tt
+        z = zl0 + 0.012 + hl * math.sqrt(max(0.0, 1 - tt * tt)) - 0.006
+        pts.append((r * math.cos(a), yl + r * sy * math.sin(a), z))
+    lid.add(Tube(np.array(pts), [0.022] * len(pts), k=0.006), k=0.010)
+    lid.add(Ellipsoid((0, yl, zl1 - 0.004), (0.030, 0.030 * sy / 0.62, 0.012)), k=0.01)          # a small iron knob
+    out.append(SP("drum_lid", lid, "cloth2", "bone:chest", 118, 0.8,
                   meta={"lid": (tuple(c), Rl, sy, zl0, hl, tuple(rib_a))}))
     # the A-frame: two walnut posts from under the drum down the back, ON the mantle and the tunic (they follow
     # the back's outermost surface 2.6 cm out), to the belt; a yoke bar under the drum between them
@@ -2103,6 +2107,7 @@ _AL = AUB_LANT
 # cracks, stone courses and wood grain, they stay crisp at any distance.
 _CHALK = {"kind": "stone", "hex": "#D6D3CA", "light": (0.80, 1.07), "cracks": 0.07, "crack_t": 0.72, "freq": 6.0,
           "mottle": 0.05, "edge": 0.16, "cavity": 0.40, "edge_w": 0.012}
+_CHALK_LANT = dict(_CHALK, hex="#ABA89F", light=(0.78, 1.0), edge=0.22, cavity=0.48)
 _ASH = {"kind": "wood", "hex": "#B5A68C", "light": (0.80, 1.08), "edge": 0.12, "cavity": 0.30, "edge_w": 0.008}
 _IRON = {"kind": "iron", "hex": "#4B4039", "edge": 0.38, "cavity": 0.40, "edge_w": 0.012}   # painted, not granite
 _WALNUT = {"kind": "wood", "hex": "#5A4436", "light": (0.82, 1.18), "edge": 0.22, "cavity": 0.30, "edge_w": 0.008}
@@ -2154,9 +2159,11 @@ PAINT = {
                             "edge": 0.30, "cavity": 0.30, "edge_w": 0.005},
             "grip": {"kind": "felt", "hex": "#7F8B97", "light": (0.80, 1.10), "bands": 0.35},
             "haft": _ASH, "shelf": _ASH,
-            "frame_posts": dict(_ASH, segs="frame"),
-            "lantern_bars": _CHALK, "lantern_slabs": _CHALK, "spires": dict(_CHALK, cracks=0.05),
-            "lantern_roof": _CHALK,
+            # (fix round 4) the lantern's chalk a step down (in game its roof and frame were the brightest non-accent
+            # thing in a wave, p95 L* 71-74 over the fighters' 42-66): weathered chalk, the read from cavity and lit edges
+            "frame_posts": dict(_ASH, hex="#A2957E", segs="frame"),
+            "lantern_bars": _CHALK_LANT, "lantern_slabs": _CHALK_LANT, "spires": dict(_CHALK_LANT, cracks=0.05),
+            "lantern_roof": dict(_CHALK_LANT, hex="#A19E95"),
             # (fix round 3) a deeper dawnglass with a dim frost (the core is the light: a near-white bloom out-valued the
             # ally azure, so the west viewer saw a blue hole in white glass)
             "lantern_glass": {"kind": "glass", "hex": "#7F8D9A", "frost": "#98A5B1", "bloom": 0.40,
@@ -2164,7 +2171,7 @@ PAINT = {
         },
         "gw_top": {
             "lantern_roof": {"kind": "roof", "box": (_A_LANT[0], _A_LANT[1], _AL["hw"] + _AL["eave"], _AL["hd"] + _AL["eave"]),
-                             "from": 0.5},
+                             "from": 0.5, "hex": "#A19E95"},
         },
         # ghost paint the projected cloak must not take (CIE L*a*b* tests on the plate): the sheet's warm ash haft
         # and frame (b* > 3), its chalk stoles / hammer (L* > 80), the black gap of its open robe (L* < 20)
@@ -2208,7 +2215,7 @@ PAINT = {
             # sand / ochre felt (fix 4: #D2B994 / #D4BE99 read near-white cream under the game light; the sheet's
             # felt is ochre): 39-40 % saturation (the reserved-band cap), lower value, modelled by the key
             "mantle": {"kind": "cloth", "hex": "#A88B66", "light": (0.68, 1.08), "key": 0.14, "brush": 0.06, "felt": True},
-            "hood": {"kind": "cowl", "hex": "#A58C69", "light": (0.70, 1.10), "key": 0.14, "brush": 0.05, "felt": True,
+            "hood": {"kind": "cowl", "hex": "#9D8565", "light": (0.70, 1.06), "key": 0.14, "brush": 0.05, "felt": True,
                      "centre": (-0.035, 0.03, 1.07), "folds": 5, "fold": 0.10},
             "hood_rim": {"kind": "felt", "hex": "#45392F", "light": (0.80, 1.40), "nap": 0.06},
             "hollow_floor": {"kind": "flat", "hex": "#17150F", "light": (1.0, 1.0), "noise": 0.03},
@@ -2236,7 +2243,9 @@ PAINT = {
             # (deep smoky resin: an amber bloom round the cores sat in the enemy marigold's own hue and value; in game the
             # east viewer's ring contrast was dE 38)
             "drum_panes": {"kind": "resin", "hex": "#8A6640", "deep": "#523822"},
-            "drum_lid": {"kind": "lid", "hex": "#A88C64", "rib": "#3F2F25", "edge": 0.18, "cavity": 0.35, "edge_w": 0.008},
+            # (fix round 4) the lid a step darker than the hood, low, framed by an ironstone rim (no crossed straps:
+            # the pale 'hot-cross bun' over the hood): the lit window band is the brightest read on the back
+            "drum_lid": {"kind": "lid", "hex": "#857055", "rib": "#3A2E26", "edge": 0.18, "cavity": 0.35, "edge_w": 0.008},
             "frame_posts": dict(_WALNUT, segs="posts"),
             "pack": {"kind": "pack", "hex": "#6E5848", "light": (0.70, 1.12), "key": 0.12, "nap": 0.04,
                      "strap": "#45362C", "edge": 0.20, "cavity": 0.35, "edge_w": 0.010},
@@ -3165,26 +3174,24 @@ def _pp_resin(p, n, spec, cfg=None, nm=None):
 
 
 def _pp_lid(p, n, spec, cfg=None, nm=None):
-    """The drum's padded felt lid: sand felt puffing between six sunk walnut ribs (lit crests, shaded toward the
-    ribs), the ribs and the button walnut with lit edges, a darker felt rim where it meets the band."""
+    """The drum's padded felt lid (fix round 4): a low felt dome a step darker than the hood, puffed, its nap and a
+    soft dome light, FRAMED by a broad dark ironstone rim round its foot (lit upper edge, a contact shade on the felt
+    above it) and a small dark knob on top; no straps crossing it."""
     meta = ((cfg or {}).get("gw_meta") or {}).get(nm) or {}
     c, Rl, sy, zl0, hl, rib_a = meta["lid"]
     x, y = p[:, 0] - c[0], (p[:, 1] - c[1]) / sy
     r = np.hypot(x, y)
-    a = np.arctan2(y, x)
-    da = np.min(np.abs(((a[:, None] - np.asarray(rib_a)[None, :]) + np.pi) % (2 * np.pi) - np.pi), axis=1)
-    dw = da * np.maximum(r, 0.02)                                  # metres from the nearest rib's centre line
-    v = _lit(n, {"light": (0.84, 1.12)}, key=0.06) * (1.0 + 0.04 * NOISE.fbm(p, 9.0, 3) + 0.03 * NOISE(p, 70.0))
-    puff = _smooth01((dw - 0.012) / 0.05)
-    v = v * (0.86 + 0.14 * puff) * (1.0 - 0.10 * _smooth01((r / Rl - 0.86) / 0.14))
-    col = _out(spec.get("hex", "#DAC4A0"), v)
-    rib = (1 - _smooth01((dw - 0.012) / 0.004)) * _smooth01((r - 0.02) / 0.01)
-    button = 1 - _smooth01((r - 0.040) / 0.006)
-    wv = _lit(n, {"light": (0.82, 1.25)}, key=0.06) * (1.0 + 0.06 * NOISE.fbm(p * np.array([1, 1, 3]), 30.0, 2))
-    wv = wv * (1.0 + 0.10 * _smooth01((0.006 - np.abs(dw - 0.007)) / 0.004))
-    wood = _out(spec.get("rib", "#6A5140"), wv)
-    w = np.maximum(rib, button)[:, None]
-    return np.clip(col * (1 - w) + wood * w, 0, 1)
+    q = r / Rl
+    v = _lit(n, {"light": (0.80, 1.06)}, key=0.06) * (1.0 + 0.05 * NOISE.fbm(p, 9.0, 3) + 0.035 * NOISE(p, 70.0))
+    v = v * (1.0 - 0.10 * _smooth01((q - 0.70) / 0.18))                    # the felt shades toward the rim
+    col = _out(spec.get("hex", "#857055"), v)
+    rim = _smooth01((q - 0.80) / 0.035) * (1.0 - _smooth01((p[:, 2] - (zl0 + 0.012 + hl * 0.42)) / 0.006))
+    knob = 1.0 - _smooth01((r - 0.030) / 0.005)
+    wv = _lit(n, {"light": (0.78, 1.22)}, key=0.06) * (1.0 + 0.06 * NOISE.fbm(p * np.array([1, 1, 3]), 30.0, 2))
+    wv = wv * (1.0 + 0.16 * _smooth01((n[:, 2] - 0.55) / 0.3) * _smooth01((q - 0.88) / 0.04))   # the rim's lit top
+    iron = _out(spec.get("rib", "#3A2E26"), wv)
+    w = np.maximum(rim, knob)[:, None]
+    return np.clip(col * (1 - w) + iron * w, 0, 1)
 
 
 def _pp_spool(p, n, spec, cfg=None, nm=None):

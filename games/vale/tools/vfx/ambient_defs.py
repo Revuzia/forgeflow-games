@@ -55,9 +55,9 @@ def defs() -> list:
         # ── RIFT (Hourfall) ──────────────────────────────────────────────────────────────────────────
         {"$comment": "T0 ambient · RIFT: pale motes of stalled light adrift over the Dialwood crowns (on the blocks, never over a road or room; <= 30 on screen)",
          "id": "amb_rift_canopy_motes", "duration": 10, "teamTint": False, "layers": [
-             em({"count": 6, "shape": "aura", "radius": 4.5, "height": 2.4, "life": [7, 11], "velocity": [0.05, 0.06, 0.02], "turbulence": 0.7,
-                 "size": [[0, 0.0], [0.2, 0.5], [0.8, 0.5], [1, 0.0]], "sizeVar": [0.7, 1.3], "color": "#D8D4B8", "alpha": fade(0.85),
-                 "emissive": 0.7, "texture": "mote", "blend": "add"})]},
+             em({"count": 7, "shape": "aura", "radius": 4.0, "height": 2.4, "life": [7, 11], "velocity": [0.05, 0.06, 0.02], "turbulence": 0.7,
+                 "size": [[0, 0.0], [0.2, 0.55], [0.8, 0.55], [1, 0.0]], "sizeVar": [0.7, 1.3], "color": "#D8D4B8", "alpha": fade(0.85),
+                 "emissive": 0.72, "texture": "mote", "blend": "add"})]},
         {"$comment": "T0 ambient · RIFT: a lampresin flame in a resin lamp (plaza lips, the noonline shrine): red-amber, below the harm hues",
          "id": "amb_rift_resin_flame", "duration": 2.6, "teamTint": False, "layers": flame("#E0A070", "#A9543A", "#C98457")},
         {"$comment": "T0 ambient · RIFT: dust turning in the light over the Fallen Shaft's banks (the needle's shaft)",
@@ -67,23 +67,23 @@ def defs() -> list:
                  "emissive": 0.5, "texture": "mote", "blend": "add"})]},
         {"$comment": "T0 ambient · RIFT: slow glints on the Fallen Shaft's shallows (ground-level, tiny, never a pool of light)",
          "id": "amb_rift_shallows_glint", "duration": 3, "teamTint": False, "layers": [
-             em({"count": 5, "shape": "disc", "radius": 2.6, "life": [2.2, 3.6], "size": [[0, 0], [0.5, 0.42], [1, 0]], "sizeVar": [0.6, 1.2],
+             em({"count": 7, "shape": "disc", "radius": 2.8, "life": [2.2, 3.6], "size": [[0, 0], [0.5, 0.42], [1, 0]], "sizeVar": [0.6, 1.2],
                  "rotDeg": [0, 90], "color": "#D2DCD8", "alpha": [[0, 0], [0.5, 0.9], [1, 0]], "emissive": 0.65, "texture": "glint", "blend": "add"})]},
-        {"$comment": "T0 ambient · RIFT: midges drifting at the wall feet and the shallows' banks (dark specks, alpha)",
+        {"$comment": "T0 ambient · RIFT: a loose swarm of midges catching the light at the wall feet and over the shallows' banks",
          "id": "amb_rift_shallows_insects", "duration": 4, "teamTint": False, "layers": [
-             em({"count": 9, "shape": "sphere", "radius": 0.7, "life": [3, 5], "turbulence": 0.35, "size": 0.1, "sizeVar": [0.8, 1.2],
-                 "color": "#2B2924", "alpha": fade(0.85, 0.15, 0.85), "emissive": 0.25, "texture": "mote", "blend": "alpha"})]},
+             em({"count": 9, "shape": "sphere", "radius": 0.6, "life": [3, 5], "turbulence": 0.3, "size": 0.16, "sizeVar": [0.8, 1.2],
+                 "color": "#CBC6AE", "alpha": fade(0.8, 0.15, 0.85), "emissive": 0.42, "texture": "mote", "blend": "add"})]},
         # ── BRIDGE (Needlespan) ──────────────────────────────────────────────────────────────────────
         {"$comment": "T0 ambient · BRIDGE: chalk dust riding the gorge's warm updraft, far below the deck",
          "id": "amb_bridge_updraft", "duration": 11, "teamTint": False, "layers": [
              em({"count": 10, "shape": "disc", "radius": 7, "life": [9, 13], "velocity": [0.15, 0.7, 0], "turbulence": 0.9,
-                 "size": [[0, 0], [0.2, 0.34], [0.8, 0.34], [1, 0]], "sizeVar": [0.6, 1.4], "color": "#C9B9A4", "alpha": fade(0.7),
-                 "emissive": 0.45, "texture": "mote", "blend": "add"})]},
+                 "size": [[0, 0], [0.2, 0.46], [0.8, 0.46], [1, 0]], "sizeVar": [0.6, 1.4], "color": "#CDBDA8", "alpha": fade(0.8),
+                 "emissive": 0.6, "texture": "mote", "blend": "add"})]},
         {"$comment": "T0 ambient · BRIDGE: long mist wisps drifting along the drop under the lip",
          "id": "amb_bridge_gorge_wisps", "duration": 14, "teamTint": False, "layers": [
              em({"count": 3, "shape": "line", "length": 22, "radius": 3, "life": [12, 16], "velocity": [0.3, 0.04, 0], "turbulence": 0.5,
-                 "size": [[0, 2.2], [1, 3.4]], "rotDeg": [-20, 20], "color": "#7F89A6", "alpha": [[0, 0], [0.35, 0.2], [0.7, 0.16], [1, 0]],
-                 "emissive": 0.42, "texture": "wisp", "blend": "alpha"})]},
+                 "size": [[0, 2.4], [1, 3.8]], "rotDeg": [-20, 20], "color": "#98A1BB", "alpha": [[0, 0], [0.35, 0.3], [0.7, 0.24], [1, 0]],
+                 "emissive": 0.5, "texture": "wisp", "blend": "alpha"})]},
         {"$comment": "T0 ambient · BRIDGE: a lampresin flame in the terrace lamps by the Dawn Arch and the Lamp Gate (the long evening's warmer cast)",
          "id": "amb_bridge_resin_flame", "duration": 2.6, "teamTint": False, "layers": flame("#E39A68", "#A64E36", "#CB7E54")},
         {"$comment": "T0 ambient · BRIDGE: fine chalk dust lifting off the deck's broken edges (off the road, at the drop)",

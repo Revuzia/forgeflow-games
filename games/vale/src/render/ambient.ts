@@ -444,13 +444,14 @@ class Critter {
 
   private startFlight(threats: readonly Threat[], from: Threat): void {
     const S = this.spec.spots;
-    // another perch: far enough, clear of every unit; the seeded order decides among the candidates
+    // another perch 7-26 m off, clear of every unit; the seeded order decides among the candidates
     let pick: [number, number] | null = null;
-    for (let n = 0; n < 12 && !pick; n++) {
+    for (let n = 0; n < 16 && !pick; n++) {
       const s = S[Math.floor(this.rnd() * S.length)];
       const a = this.rnd() * Math.PI * 2, r = Math.sqrt(this.rnd()) * s[2];
       const x = s[0] + Math.cos(a) * r, y = s[1] + Math.sin(a) * r;
-      if (Math.hypot(x - this.x, y - this.y) < 7) continue;
+      const d = Math.hypot(x - this.x, y - this.y);
+      if (d < 7 || d > 26) continue;
       if (!this.clearOf(x, y, threats, this.spec.flee + 2)) continue;
       pick = [x, y];
     }
@@ -461,7 +462,8 @@ class Critter {
     const d = Math.hypot(pick[0] - this.x, pick[1] - this.y);
     const h1 = this.groundAt(pick[0], pick[1]);
     this.mv = {
-      x0: this.x, y0: this.y, h0: this.h, x1: pick[0], y1: pick[1], h1, arc: Math.min(6, Math.max(2.5, d * 0.28)),
+      // the arc clears a cliff block and its crowns on the way (blocks ~3 m, crowns ~4 m over the lip)
+      x0: this.x, y0: this.y, h0: this.h, x1: pick[0], y1: pick[1], h1, arc: Math.min(8, Math.max(5, d * 0.3)),
       t: 0, dur: Math.max(1.3, d / 6.5), kind: 'fly', yaw0: this.heading, yaw1: Math.atan2(pick[0] - this.x, pick[1] - this.y),
     };
     this.state = 'flee';
@@ -617,6 +619,8 @@ export class AmbientLayer {
   private readonly m4 = new Matrix4();
   private disposed = false;
   private crittersDrawn = 0;
+  /** called with each part as it lands (critters, props, the particles): the renderer warms its programs */
+  onPart: ((o: Object3D) => void) | null = null;
 
   constructor(map: MapDefT, defs: readonly VfxDefT[], atlas: Texture | null, grid: number, load: ModelLoad, groundAt: (x: number, y: number) => number) {
     this.group.name = 'vale_ambient';
@@ -661,8 +665,15 @@ export class AmbientLayer {
       this.particles = new AmbientParticles(rows, emitters, atlas, grid);
       this.group.add(this.particles.mesh);
     }
+    void Promise.resolve().then(() => { if (this.particles && !this.disposed) this.onPart?.(this.particles.mesh); });
     void this.loadCritters(load, groundAt);
     void this.loadProps(load, groundAt);
+  }
+
+  /** every model ref the layer loads (the loading screen preloads them) */
+  static refs(map: MapDefT): string[] {
+    const s = ambientSpec(map);
+    return [...new Set([...s.critters.map((c) => c.model), ...s.props.map((p) => p.model)])];
   }
 
   private async loadCritters(load: ModelLoad, groundAt: (x: number, y: number) => number): Promise<void> {
@@ -681,6 +692,7 @@ export class AmbientLayer {
         (c.root as Object3D & { userData: { ambIndex: number } }).userData.ambIndex = i;
         this.critters.push(c);
         this.group.add(c.root);
+        if (i === 0) this.onPart?.(c.root);
       }
       ci++;
     }
@@ -714,6 +726,7 @@ export class AmbientLayer {
       im.computeBoundingSphere();
       this.propMeshes.push(im);
       this.group.add(im);
+      this.onPart?.(im);
     }
   }
 

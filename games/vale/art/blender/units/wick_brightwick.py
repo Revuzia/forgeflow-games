@@ -361,6 +361,8 @@ def hood_outer(F) -> sdf.Blend:
     if "hood_bell" in F:
         bell = F["hood_bell"]
         ops.append(("add", Bell(bell, [(0.0, 1.0), (2.0, 1.0)], bell[0][0], bell[-1][0], cy=hc[1]), 0.03))
+        # (fix round 4) the felt cap inside the raised circlet: flattened low (a small cap, not a bald dome over it)
+        ops.append(("inter", HalfSpace((0.0, hc[1], CROWN_TOP_S), (0.0, 0.0, 1.0), 0.5), 0.03))
     else:
         # swept back at the nape (the cowl falls back and down, never up), the lower hood flares onto the cowl
         ops += [("add", RoundCone((0, 0.06, 1.47), (0, 0.13, 1.33), 0.150, 0.135), 0.06),
@@ -958,6 +960,8 @@ class Brightwick(wc.Wick):
         P = []
         self.parts_info = {}
         matte_accent(ctx.mats.get("accent"))
+        wc.halo_material(ctx)
+        wc.install_halo_export()
         for name, S, vs, role, bind, tris, uvw, low in self.sculpts(ctx):
             if isinstance(S, tuple):                       # ("mesh", verts, faces): explicit low geometry
                 ob = sdf.to_object(f"{name}_low", S[1], S[2], ctx.col)
@@ -1126,8 +1130,14 @@ def hood_parts(F, aub, part):
     # its pole axis runs front to back: the outline seen through the arch is the smooth 18-segment equator
     # (never a faceted disc), five rings deep (round from the 52 deg camera too)
     axes = np.array([(1.0, 0.0, 0.0), (0.0, math.sin(t), math.cos(t)), (0.0, -math.cos(t), math.sin(t))])
-    v, f = ellipsoid_mesh(lc, (lr[0], lr[2], lr[1]), nu=16, nv=5, axes=axes)
+    # (fix round 4: a hard-edged core with no falloff read as a pupil in a socket) the core is the front of a
+    # 16-round ellipsoid, and a HALO cap 1.6 x round it, alpha-blended, its vertex alpha falling from 0.5 over the
+    # core's outline to 0 at its rim (wick_common.halo_mesh / inject_halo)
+    X, Zu, Yo = axes
+    v, f = wc.cap_mesh(lc, X, Yo, Zu, lr[0], lr[1], lr[2], seg=16)
     part("hood_light", ("mesh", v, f), "accent", "bone:head", None, 0.5)
+    v, f = wc.halo_mesh(lc, X, Yo, Zu, lr[0], lr[1], lr[2])
+    part("hood_halo", ("mesh", v, f), wc.HALO_MAT, "bone:head", None, 0.5)
     if aub:
         crown_aubade(F, part, hood)
     else:
@@ -1285,8 +1295,14 @@ BEZEL = 0.015               # the thin slate bezel painted round each Aubade bod
 # dark edge for the ally azure, the chalk and the blue-grey stay chalk and blue-grey)
 
 
-CAP_Z = (1.600, 1.648)              # the Serenade felt dome's cap low (its own part) above CAP_Z[0]; the hood below CAP_Z[1]
-CROWN_S = (1.582, 1.670)            # the Serenade crown band (z, 9 cm: the brief): over the short arch, under the cap
+# (fix round 4, review r3: from the 52 deg camera the flush dark band of lit windows under a bald pale dome read as a
+# helmet with a lit visor slot / a row of teeth) the lamp ring is a RAISED CIRCLET sitting on the crown: a near-vertical
+# ironstone ring standing off the dome from its foot (z 1.628) to the brief's 1.70, the felt cap inside it flattened low
+# (CROWN_TOP_S), so from above it reads as a ring round a small felt cap, never a horizontal slit; its value lifted to
+# the ironstone / felt mid (no dark slot)
+CAP_Z = (1.626, 1.642)              # the Serenade felt dome's cap low (its own part) above CAP_Z[0]; the hood below CAP_Z[1]
+CROWN_S = (1.628, 1.700)            # the Serenade crown circlet (z): its foot on the dome, its top at the brief's 1.70
+CROWN_TOP_S = 1.684                 # the felt cap inside the circlet is flattened here (it rose 1.5 cm over the ring)
 WINDOWS = [360.0 * k / 12 for k in range(12)]       # 12 even, spaced (the concept: round windows with iron between,
 # never a string of touching beads): six across the front, one over the arch's crown
 
@@ -1298,13 +1314,16 @@ def crown_serenade(F, part):
     hollow: brief §0.2)"""
     hc, hr = F["hood"]
     z0, z1 = CROWN_S
+    r0 = hood_radius(F, z0)
 
     def rad(z):
-        return hood_radius(F, z)
-    v, f, surf = band_mesh(hc[1], z0, z1, rad, -0.006, 0.016, 18)
-    zc = 0.5 * (z0 + z1)
+        # the circlet stands off the dome: its radius is the dome's at the foot, leaning in 9 mm over its height
+        k = 0.125 * (z - z0)
+        return (r0[0] - k, r0[1] - k)
+    v, f, surf = band_mesh(hc[1], z0, z1, rad, -0.014, 0.012, 18)
+    zc = 0.5 * (z0 + z1) + 0.002
     part("crown", ("mesh", v, f), "ironstone", "bone:head", None, 0.7)
-    discs = [disc_on(surf, a, zc, 0.029, nseg=11, rad_fn=rad, dz_per_m=1.0, lift=0.002) for a in WINDOWS]
+    discs = [disc_on(surf, a, zc, 0.0215, nseg=10, rad_fn=rad, dz_per_m=1.0, lift=0.002) for a in WINDOWS]
     v, f = merge_meshes(discs)
     part("crown_lamps", ("mesh", v, f), "accent", "bone:head", None, 0.5)
 
@@ -2005,13 +2024,14 @@ PART_HEX = {
     # L* 61-64
     "aubade": {"hood": "#7E878F", "cowl": "#646E79", "forearms": "#A29E94", "belt": "#9A968C", "tabard": "#A8A49A",
                "crown_cups": "#30353C", "lantern_bezel": "#30353C", "lantern": "#A29E94",
-               "mitt_L": "#68727C", "mitt_R": "#68727C", "staff": "#9A8C76", "hood_rim": "#98948A",
+               "mitt_L": "#68727C", "mitt_R": "#68727C", "staff": "#85775F", "hood_rim": "#98948A",
                "pauldron_L": "#9C988E", "pauldron_R": "#9C988E", "crown": "#98948A",
                "lantern_roof": "#A29E94", "staff_cap": "#3A3F46", "cloak": "#6A727B", "sleeves": "#6A727B"},
     # Serenade: ochre / umber. Fix round 3: the felt down to L* ~57-60 and ~31 % saturation (was L* 71-72 at 39.7 %,
     # on the 40 % cap of the reserved marigold band: the enemy tint sat on a near-amber body, and the pale cream
     # dome out-valued the fighters); the umber cloak stays at 23 deg (under the band)
-    "serenade": {"hood": "#9A846A", "hood_cap": "#9A846A", "hood_rim": "#563F31", "pauldron_L": "#433934", "pauldron_R": "#433934",
+    "serenade": {"hood": "#9A846A", "hood_cap": "#93806A", "hood_rim": "#563F31", "pauldron_L": "#433934", "pauldron_R": "#433934",
+                 "crown": "#6E5E50",
                  "collar": "#523D30", "bib": "#9E876B", "forearms": "#4E3C30", "mitt_L": "#3B3430", "mitt_R": "#3B3430",
                  "cloak": "#7B5842", "sleeves": "#7B5842", "mantle": "#A48B6E", "tabard": "#9E876B"},
 }
@@ -2294,20 +2314,23 @@ def _grain(spec, p, g, col, k=0.14):
     "a featureless near-white tube"): pale ash with long dark grain streaks, two dark KNOTS where the shaft swells
     and a carved double ring above each grip"""
     aub = spec.faction == "aubade"
-    k = 0.30 if aub else k
+    k = 0.36 if aub else k
     n = PNOISE(p * np.array((22.0, 1.4, 22.0)), 1.0) + 0.5 * PNOISE(p * np.array((60.0, 3.0, 60.0)), 1.0, (3.1, 0, 0))
     col = col * (1 + k * n)[:, None]
     if aub:
-        streak = smooth(0.55, 0.95, PNOISE(p * np.array((90.0, 2.0, 90.0)), 1.0, (1.3, 0.2, 0.7)))
-        col = col * (1 - 0.22 * streak)[:, None]
+        # (fix round 4: still "a featureless near-white tube" in game) a darker weathered ash (#85775F, L* 50), broad
+        # grain streaks that read at wick scale, the wood's value drifting along the shaft
+        streak = smooth(0.50, 0.90, PNOISE(p * np.array((40.0, 1.6, 40.0)), 1.0, (1.3, 0.2, 0.7)))
+        col = col * (1 - 0.32 * streak)[:, None]
+        col = col * (1 + 0.10 * PNOISE(p * np.array((3.0, 5.0, 3.0)), 1.0, (0.4, 1.9, 2.6)))[:, None]
         P0 = np.asarray(STAFF_P.get("aubade", (0.0, 0.0, 0.0)))
         s_ = -(p[:, 1] - P0[1])                       # along the staff from the right fist (rest: the staff runs -Y)
         aa = np.arctan2(p[:, 2] - P0[2], p[:, 0] - P0[0])
         for sk, a0 in ((0.18, 0.9), (-0.12, -2.1)):    # the knots (the shaft swells there): a dark eye on one side
             da = (aa - a0 + math.pi) % (2 * math.pi) - math.pi
             dk = np.hypot(s_ - sk, da * 0.026)
-            halo = (1 - smooth(0.010, 0.032, dk)) * np.abs(np.sin(dk * math.pi / 0.007))
-            col = col * (1 - 0.45 * (1 - smooth(0.005, 0.011, dk)) - 0.14 * halo)[:, None]
+            halo = (1 - smooth(0.014, 0.040, dk)) * np.abs(np.sin(dk * math.pi / 0.009))
+            col = col * (1 - 0.55 * (1 - smooth(0.007, 0.014, dk)) - 0.18 * halo)[:, None]
         for sc in (0.07, GRIP_L + 0.08):             # carved double rings above the grips
             for o_ in (-0.009, 0.009):
                 col = col * (1 - 0.40 * (1 - smooth(0.0015, 0.0040, np.abs(s_ - sc - o_))))[:, None]

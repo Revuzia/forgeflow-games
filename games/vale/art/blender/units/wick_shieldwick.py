@@ -648,6 +648,17 @@ def ellipsoid_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 10, rings: int = 6) -> Mes
     return lathe(c, np.stack([unit(X), unit(Y), unit(Z)]), prof, seg, scale=(rx, ry))
 
 
+def hood_light_parts(lc, A, rx, rd, rz) -> list:
+    """fix round 4 (review r3: a hard-edged 10-sided disc, L* 60 -> 15 in one step: a pupil in a socket): the core is the
+    front of a 16-round ellipsoid (a smooth outline), and a HALO cap 1.6 x its width and height, alpha-blended, its
+    vertex alpha falling from 0.5 over the core's outline to 0 at its rim (wick_common.halo_mesh / inject_halo): one
+    soft volume of lamplight, dark all round it."""
+    core = MeshPart(*wc.cap_mesh(lc, A.X, A.N, A.U, rx, rd, rz, seg=16))
+    halo = MeshPart(*wc.halo_mesh(lc, A.X, A.N, A.U, rx, rd, rz))
+    return [("hood_light", core, 1.0, "accent", "bone:head", None),
+            ("hood_halo", halo, 1.0, wc.HALO_MAT, "bone:head", None)]
+
+
 def throat_mesh(rings3, cap_point, axis_point) -> MeshPart:
     """The hood's throat: a tube through the given rings (list of (M, 3) closed loops, front to back) closed by a fan to
     `cap_point`; faces look INTO the tube (toward `axis_point`, a point on its axis), the side a viewer sees through the
@@ -879,7 +890,7 @@ def _arm_parts(F, out, sleeve_r, mitt, cuff_role, cuff_kind, tris=(90, 60, 64)):
         back = float(np.linalg.norm(G - W)) + 0.006
         ax_m = sdf.frame(hd, (1.0, 0.0, 0.0))
         m = lathe(G, ax_m, [(0.0, -back), (0.74, -back + 0.010), (1.0, -0.012), (0.86, mitt[2] * 0.55), (0.50, mitt[2] * 0.90),
-                            (0.0, mitt[2])], 12,
+                            (0.0, mitt[2])], 10 if cuff_kind == "cuff" else 12,
                   scale=(mitt[0], mitt[1]))
         inward = np.array([1.0 if s == "R" else -1.0, -0.6, 0.35])
         ta, tb = G + unit(inward) * 0.02 + np.array([0, 0, 0.02]), G + unit(inward) * (mitt[0] * 0.85)
@@ -1041,8 +1052,7 @@ def parts_aubade(F) -> list:
     # throat round it (hood_light_paint)
     lc = A.to3(*AU_LIGHT)
     rx, rd, rz = AU_LIGHT_R
-    out.append(("hood_light", ellipsoid_mesh(lc, A.X, -A.N, A.U, rx, rd, rz, seg=8, rings=6), 1.0, "accent", "bone:head",
-                None))
+    out += hood_light_parts(lc, A, rx, rd, rz)
     # THE HOOD MARK: one broad accent seam centred on the frame (x of the arch), its front end UNDER the chalk frame (it
     # starts 1.4 cm inside the frame's outer edge, so no end shows: review 2026-10-27c - the free end above the brow
     # read as tape peeling off), over the crown UNDER the knob's base disc, down the back to the nape. A low band
@@ -1450,8 +1460,7 @@ def parts_serenade(F) -> list:
     # THE HOOD LIGHT (its falloff painted on the throat round it)
     lc = A.to3(*SE_LIGHT)
     rx, rd, rz = SE_LIGHT_R
-    out.append(("hood_light", ellipsoid_mesh(lc, A.X, -A.N, A.U, rx, rd, rz, seg=8, rings=6), 1.0, "accent", "bone:head",
-                None))
+    out += hood_light_parts(lc, A, rx, rd, rz)
 
     # ARMS (chunky banded felt sleeves widening to the cuff, big mittens: review item 12), LEGS
     _arm_parts(F, out, (0.064, 0.066, 0.078), (0.074, 0.068, 0.090), "ironstone", "cuff", (76, 50, 76))
@@ -1482,7 +1491,7 @@ def parts_serenade(F) -> list:
         a = math.radians(ang)
         d2 = t * math.cos(a) + up * math.sin(a)
         e1 = np.cross(n, d2)
-        pm = pad_mesh(c, n, t, up, R, face, PR, ang, PHA, PHB, seg=12)
+        pm = pad_mesh(c, n, t, up, R, face, PR, ang, PHA, PHB, seg=10)
         pads = pm if pads is None else pads + pm
         pad_frames.append((c + d2 * PR + n * (face(PR) + 0.012), e1, d2, (PHB, PHA)))
     out.append(("shield_pads", pads, 1.0, "sandstone", "bone:hand.L", None))
@@ -1506,8 +1515,8 @@ def parts_serenade(F) -> list:
     out.append(("haft", haft, 0.8, "wood_dark", "bone:hand.R", 42))
     gc = at(0.152)
     base = lathe(at(0.062), fr, [(0.022, -0.012), (0.038, 0.002), (0.045, 0.020), (0.0, 0.026)], 8)
-    lid = lathe(gc + u * 0.050, fr, [(0.0, -0.004), (0.075, -0.002), (0.068, 0.021), (0.037, 0.038), (0.015, 0.046),
-                                     (0.022, 0.059), (0.0, 0.071)], 8)
+    lid = lathe(gc + u * 0.050, fr, [(0.0, -0.004), (0.075, -0.002), (0.068, 0.021), (0.037, 0.038), (0.022, 0.059),
+                                     (0.0, 0.071)], 8)
     bars = None
     for az in (45.0, 135.0, 225.0, 315.0):
         a_ = math.radians(az)
@@ -1675,7 +1684,9 @@ RAMP = {
                "shield": [(0.30, 0.66), (0.50, 0.84), (0.72, 0.96)],
                "sleeve_R": [(0.38, 0.85), (0.50, 1.0)], "sleeve_L": [(0.38, 0.85), (0.50, 1.0)]},
     "serenade": {"cloak": [(0.11, 0.48), (0.20, 0.56), (0.30, 0.74), (0.44, 0.94), (0.54, 1.0)],
-                 "shield": [(0.30, 0.82), (0.60, 1.0)]},
+                 "shield": [(0.30, 0.82), (0.60, 1.0)],
+                 # (fix round 4) the dome's crown a step down (top quarter L* 67-69 in game, cap 65), still the lightest
+                 "hood": [(0.88, 1.0), (0.98, 0.90), (1.08, 0.85)]},
 }
 # CLEAN: projection ghosts (review 2026-10-21 item 8: the concept's arms, cuffs, wraps and haft painted onto the
 # cloak where the model has open cloth) - texels far from their part's median in value (dL* above / below) or colour
@@ -2268,33 +2279,19 @@ def au_rim_paint(img, maps, names, geo: dict, log=print):
     # raised border fillets (a step lighter) and the grooves inside them
     k *= 1.0 + 0.07 * face * (sstep(0.17, 0.13, s) + sstep(0.83, 0.87, s))
     k *= 1.0 - 0.42 * face * (sstep(0.045, 0.015, np.abs(s - 0.155)) + sstep(0.045, 0.015, np.abs(s - 0.845)))
-    # the running scroll
+    # the running scroll (fix round 4, review r3: the volutes still read as a chain of drawn spirals): ONE continuous
+    # carved relief - a soft-walled wave groove with a lit upper lip and a shaded lower lip, and the bays either side of
+    # it low rounded lobes (lit through their middle, sinking toward the groove and the fillets); read by light and
+    # shade, no drawn lines
     lam = 0.150
     sc = 0.50 + 0.17 * np.sin(2 * np.pi * e / lam)
     g = (s - sc) * wv                                                # metres across the band from the wave
-    # (review 2026-10-27b item 6: the groove read as faint thin doodle loops - a broader, deeper cut, a brighter lip)
-    k *= 1.0 - 0.66 * face * sstep(0.0085, 0.0040, np.abs(g))
-    k *= 1.0 + 0.34 * face * sstep(0.0055, 0.0018, np.abs(g - 0.0105))      # the lit upper lip
-    k *= 1.0 - 0.20 * face * sstep(0.0055, 0.0018, np.abs(g + 0.0105))      # the shaded lower lip
-    # a carved VOLUTE curling out of the wave in each bay (fix round 3, review 2026-10-27c: the raised bosses with a
-    # ring groove read as a doodled chain of 'o' circles): a spiral groove that leaves the wave on the bay's side and
-    # winds 1.2 turns inward, its lit lip on the outside of each turn, a small raised eye at its heart - with the wave,
-    # a running scroll
-    for ph_, sv, turn in ((0.25, 0.32, 1.0), (0.75, 0.68, -1.0)):
-        ec = (np.round(e / lam - ph_) + ph_) * lam
-        de, ds = e - ec, (s - sv) * wv
-        rho = np.hypot(de, ds)
-        a0 = math.pi / 2 if sv < 0.5 else -math.pi / 2                  # start: toward the wave
-        th = np.mod(turn * (np.arctan2(ds, de) - a0), 2 * np.pi)       # 0 .. 2 pi along the winding
-        best = np.full(len(p), 1.0)
-        for wind in range(2):
-            tt = th + wind * 2 * np.pi
-            R = 0.0118 - 0.0062 * np.clip(tt / (2.4 * np.pi), 0, 1)
-            best = np.where(tt <= 2.4 * np.pi, np.minimum(best, np.abs(rho - R)), best)
-        k *= 1.0 - 0.62 * face * sstep(0.0026, 0.0010, best) * sstep(0.0175, 0.0150, rho)
-        k *= 1.0 + 0.26 * face * sstep(0.0018, 0.0006, np.abs(best - 0.0034)) * sstep(0.0175, 0.0150, rho) \
-            * (1.0 - sstep(0.0026, 0.0010, best))
-        k *= 1.0 + 0.24 * face * sstep(0.0042, 0.0026, rho)            # the volute's raised eye
+    k *= 1.0 - 0.50 * face * sstep(0.0072, 0.0026, np.abs(g))
+    k *= 1.0 + 0.28 * face * sstep(0.0060, 0.0020, np.abs(g - 0.0090))      # the lit upper lip
+    k *= 1.0 - 0.18 * face * sstep(0.0060, 0.0020, np.abs(g + 0.0090))      # the shaded lower lip
+    edge_ = np.where(g > 0, (0.845 - sc) * wv, (sc - 0.155) * wv)            # the bay's width (groove -> fillet)
+    t_ = np.clip(np.abs(g) / np.maximum(edge_, 1e-3), 0.0, 1.0)
+    k *= 1.0 + 0.12 * face * np.sin(np.pi * t_) ** 1.5 - 0.06 * face * sstep(0.75, 1.0, t_)
 
     # block joints: at the brow corners and under the chin
     for aj in np.radians([40.0, 140.0, -90.0]):
@@ -2471,8 +2468,9 @@ def hollow_ink(img, maps, names, spec: dict, geo: dict, log=print):
 # is a dim neutral that only lifts the ink next to the core)
 # (build 2: a halo DISH behind the core, lit by the room and floored in AO, still read as a grey ring round an iris; the
 # dish is gone - the falloff lies on the throat's own walls and back, broad and dim, the spill of a lamp in a hood)
-LIGHT_PAINT = {"aubade": {"lamp": "#8A867F", "walls": 0.75, "lip": ("#4A525D", (-0.006, 0.010))},
-               "serenade": {"lamp": "#8B857C", "walls": 0.75, "lip": ("#433730", (-0.003, 0.008))}}
+# (fix round 4: the painted throat glow did not show, L* 10-17 next to the core) a wider, stronger lamplight on the throat
+LIGHT_PAINT = {"aubade": {"lamp": "#8A867F", "walls": 0.85, "reach": 1.5, "lip": ("#4A525D", (-0.006, 0.010))},
+               "serenade": {"lamp": "#8B857C", "walls": 0.85, "reach": 1.5, "lip": ("#433730", (-0.003, 0.008))}}
 
 
 def hood_light_paint(img, maps, names, geo: dict, fac: str, log=print):
@@ -2498,7 +2496,7 @@ def hood_light_paint(img, maps, names, geo: dict, fac: str, log=print):
             lw = lw * sstep(SE_FLOOR - A.O[2] + 0.004, SE_FLOOR - A.O[2] + 0.014, v)
         col = inkc * (1 - lw[:, None]) + _lin(scene.hex_srgb(lipc))[None, :] * lw[:, None]
         col = col * (1.0 + 0.10 * NOISE(p, 60.0))[:, None]
-        gl = light_falloff((u, v, w), lc, lr) * cfg["walls"]
+        gl = light_falloff((u, v, w), lc, lr, reach=cfg.get("reach", 0.9)) * cfg["walls"]
         col = col * (1 - gl[:, None]) + lamp * gl[:, None]
         lin[idx] = col.astype(np.float32)
         log(f"  throat: {len(p)} texels, lip {int((lw > 0.5).sum())}, lit {int((gl > 0.2).sum())}")
@@ -3025,8 +3023,12 @@ def fac_of(names) -> str:
 
 
 # matte overrides in the roughness bake (dilate_bake_maps)
-ROUGH = {"aubade": {"throat": 1.0, "hood_carved": 1.0, "mitt_R": 0.92, "mitt_L": 0.92},
-         "serenade": {"throat": 1.0, "hood_carved": 1.0, "collar": 0.97, "mitt_R": 0.92, "mitt_L": 0.92}}
+# (fix round 4, review r3: the Aubade cloak's satin sheen on the back read as plastic) the cloth all matte (>= 0.9)
+# (the whole-part values first: "hood_carved", the hollow, is applied after "hood")
+ROUGH = {"aubade": {"cloak": 0.94, "hood": 0.92, "scarf": 0.93, "sleeve_R": 0.94, "sleeve_L": 0.94, "stole": 0.9,
+                    "wraps_R": 0.9, "wraps_L": 0.9, "throat": 1.0, "hood_carved": 1.0, "mitt_R": 0.92, "mitt_L": 0.92},
+         "serenade": {"cloak": 0.95, "hood": 0.94, "mantle": 0.95, "sleeve_R": 0.95, "sleeve_L": 0.95, "throat": 1.0,
+                      "hood_carved": 1.0, "collar": 0.97, "mitt_R": 0.92, "mitt_L": 0.92}}
 ACCENT_ROUGH = 0.9
 
 
@@ -3161,7 +3163,7 @@ DEATH_LIFT = {"aubade": (0.115, 0.175, 0.09), "serenade": (0.10, 0.17, 0.10)}
 # the parts the camera reads - hood, frame, cloak, shield face, mantle - get the texels, flat or hidden parts few)
 UVW = {"hood": 2.2, "hood_rim": 1.6, "cloak": 1.5, "shield": 1.6, "stole": 1.2, "mantle": 1.6, "collar": 1.3, "scarf": 0.9,
        "knob": 0.9, "shield_rib": 0.9, "shield_pads": 1.0, "lantern": 1.0, "lantern_lid": 0.9, "sleeve_R": 0.9, "sleeve_L": 0.9,
-       "throat": 0.55, "hood_light": 0.2, "leg_R": 0.15, "leg_L": 0.15, "boot_R": 0.5, "boot_L": 0.5, "mitt_R": 0.6, "mitt_L": 0.6,
+       "throat": 0.55, "hood_light": 0.2, "hood_halo": 0.05, "leg_R": 0.15, "leg_L": 0.15, "boot_R": 0.5, "boot_L": 0.5, "mitt_R": 0.6, "mitt_L": 0.6,
        "hood_rim_s": 1.0, "lantern_pane": 0.35, "shield_ring": 0.45, "lantern_bowl": 0.45, "haft": 0.5, "wraps_R": 0.6,
        "wraps_L": 0.6, "cuff_R": 0.6, "cuff_L": 0.6, "lantern_mullion": 0.4}
 
@@ -3221,6 +3223,8 @@ class Shieldwick(wc.Wick):
         P = []
         self._part_names = []
         lows = {}
+        wc.halo_material(ctx)
+        wc.install_halo_export()
         for name, S, vs, role, bind, tris in self.sculpts():
             self._part_names.append(name)
             if isinstance(S, tuple):

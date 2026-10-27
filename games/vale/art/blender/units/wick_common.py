@@ -29,6 +29,7 @@ three.js QA sheet (three_<id>.png) is the review image.
 """
 from __future__ import annotations
 
+import math
 import os
 import sys
 
@@ -232,6 +233,266 @@ def legacy_pole_lamp(spec: Wick, ctx, part, rise: float) -> None:
     lc = (tip[0], tip[1] - 0.12 * k, tip[2] - 0.16 * k)
     lamp.add(Ellipsoid(lc, (0.06 * k, 0.06 * k, 0.08 * k)), k=0.0)
     part("lamp", lamp, "accent", "bone:prop.R", 100)
+
+
+# ── the hood light: one soft core + its halo (fix round 4, shared by every kind) ───────────────────────────────────
+# Brief §0.2 / §4: ONE soft glowing volume deep in a dark hollow, wider than tall, dark all round it. The accent is
+# factor-only (the shared load test), so the core is one flat emissive colour; its falloff is a second, alpha-blended
+# accent: a HALO cap (the front of an ellipsoid HALO_SCALE x the core's width and height) whose COLOR_0 vertex alpha
+# runs from HALO_ALPHA0 over the core's outline to 0 at its rim. Built with the kept material HALO_MAT (`glow_`:
+# never baked, split into the accent mesh), the export hook (install_halo_export) renames it `accent` (the renderer
+# and the crowd path tint every material of that name per viewer), sets it BLEND and writes the vertex alpha.
+HALO_MAT = "glow_halo"
+HALO_SCALE = 1.6                 # the halo's rim, in core radii (across and up)
+HALO_ALPHA0 = 0.85               # vertex alpha over the core's outline (0 at the rim): the light fades from the core's
+HALO_ALPHA_IN = 0.90             # own value instead of stepping down at its edge; at the apex (over the core) 0.9
+HALO_FALL = 1.6                  # the fall's exponent (alpha0 * (1 - s) ** HALO_FALL, s = 0 at the core .. 1 at the rim)
+HALO_RINGS = (0.0, 1.0 / HALO_SCALE, 0.70, 0.78, 0.87, 1.0)
+
+
+def halo_alpha(rho):
+    """vertex alpha of the halo at normalized lateral radius rho (0 apex, 1 rim)"""
+    rho = np.clip(np.asarray(rho, dtype=np.float64), 0.0, 1.0)
+    r0 = 1.0 / HALO_SCALE
+    inside = HALO_ALPHA0 + (HALO_ALPHA_IN - HALO_ALPHA0) * (1.0 - rho / r0) ** 2
+    s = np.clip((rho - r0) / (1.0 - r0), 0.0, 1.0)
+    return np.where(rho <= r0, inside, HALO_ALPHA0 * (1.0 - s) ** HALO_FALL)
+
+
+def _frame(X, Y, Z):
+    ax = np.stack([np.asarray(v, dtype=np.float64) for v in (X, Y, Z)])
+    return ax / np.linalg.norm(ax, axis=1, keepdims=True)
+
+
+def cap_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 16, polar_deg=(0.0, 50.0, 100.0)):
+    """The hood-light CORE: the front of an ellipsoid (apex toward Y, the opening's outward normal; X across, Z up;
+    half sizes rx across, ry deep, rz up), from the apex to `polar_deg[-1]` degrees off it (a little past the
+    outline seen from the front, so the open back never shows from in front or above). `seg` round: a smooth
+    outline (review r3: a 10-sided core read as a polygon up close). Returns (V, F), faces outward."""
+    c = np.asarray(c, dtype=np.float64)
+    ax = _frame(X, Y, Z)
+    V = [c + ry * ax[1]]
+    for p in polar_deg[1:]:
+        t = math.radians(p)
+        for i in range(seg):
+            a = 2.0 * math.pi * i / seg
+            V.append(c + math.sin(t) * math.cos(a) * rx * ax[0] + math.cos(t) * ry * ax[1]
+                     + math.sin(t) * math.sin(a) * rz * ax[2])
+    V = np.asarray(V)
+    return V, orient_out(V, _cap_faces(seg, len(polar_deg) - 1), c)
+
+
+def halo_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 10, depth: float = 1.15):
+    """The HALO round a core of half sizes (rx, ry, rz) at c (frame as cap_mesh): the front cap of an ellipsoid
+    HALO_SCALE x the core across and up, `depth` x its depth (the apex just in front of the core's), rings at
+    HALO_RINGS of the lateral radius (the vertex alpha's stations). Returns (V, F), faces outward (toward Y)."""
+    c = np.asarray(c, dtype=np.float64)
+    ax = _frame(X, Y, Z)
+    Rx, Rz, D = rx * HALO_SCALE, rz * HALO_SCALE, ry * depth
+    V = [c + D * ax[1]]
+    for rho in HALO_RINGS[1:]:
+        dep = D * math.sqrt(max(0.0, 1.0 - rho * rho))
+        for i in range(seg):
+            a = 2.0 * math.pi * i / seg
+            V.append(c + rho * math.cos(a) * Rx * ax[0] + dep * ax[1] + rho * math.sin(a) * Rz * ax[2])
+    V = np.asarray(V)
+    return V, orient_out(V, _cap_faces(seg, len(HALO_RINGS) - 1), c)
+
+
+def _cap_faces(seg: int, rings: int) -> np.ndarray:
+    """apex 0, then `rings` rings of `seg`; winding: outward for a cap whose apex points along +Y with X, Z the
+    right-handed rows (X x Z = -Y, so the order runs a -> a+1 around +Y seen from the front)"""
+    F = [(0, 1 + (i + 1) % seg, 1 + i) for i in range(seg)]
+    for r in range(rings - 1):
+        b0, b1 = 1 + r * seg, 1 + (r + 1) * seg
+        for i in range(seg):
+            j = (i + 1) % seg
+            F += [(b0 + i, b0 + j, b1 + j), (b0 + i, b1 + j, b1 + i)]
+    F = np.asarray(F, dtype=np.int64)
+    return F
+
+
+def orient_out(V, F, c):
+    """flip faces so each normal points away from c (the cap's own centre)"""
+    V, F = np.asarray(V, dtype=np.float64), np.asarray(F, dtype=np.int64).copy()
+    cen = V[F].mean(axis=1)
+    n = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    flip = np.einsum("ij,ij->i", n, cen - np.asarray(c, dtype=np.float64)[None]) < 0
+    F[flip] = F[flip][:, ::-1]
+    return F
+
+
+def halo_material(ctx):
+    """ctx.mats[HALO_MAT]: a copy of the accent (factor-only), alpha-blended; its emission a hair lower and its alpha
+    below 1 so the optimizer's dedup can never merge it with the core (the export hook rewrites it anyway)."""
+    if HALO_MAT in ctx.mats:
+        return ctx.mats[HALO_MAT]
+    acc = ctx.mats["accent"]
+    m = acc.copy()
+    m.name = HALO_MAT
+    b = m.node_tree.nodes.get("BSDF") if m.use_nodes else None
+    if b is not None:
+        b.inputs["Alpha"].default_value = HALO_ALPHA0
+        b.inputs["Emission Strength"].default_value = max(0.05, b.inputs["Emission Strength"].default_value - 0.02)
+        b.inputs["Roughness"].default_value = 1.0
+    for attr, val in (("surface_render_method", "BLENDED"), ("blend_method", "BLEND")):
+        try:
+            setattr(m, attr, val)
+        except (AttributeError, TypeError):
+            pass
+    ctx.mats[HALO_MAT] = m
+    return m
+
+
+def _glb_read(path):
+    import json
+    import struct
+    with open(path, "rb") as fh:
+        data = fh.read()
+    magic, ver, _ = struct.unpack_from("<III", data, 0)
+    if magic != 0x46546C67:
+        return None
+    jlen, _jt = struct.unpack_from("<II", data, 12)
+    js = json.loads(data[20:20 + jlen].decode("utf-8"))
+    off = 20 + jlen
+    bin_ = b""
+    if off + 8 <= len(data):
+        blen, _bt = struct.unpack_from("<II", data, off)
+        bin_ = data[off + 8:off + 8 + blen]
+    return ver, js, bytearray(bin_)
+
+
+def _glb_write(path, ver, js, bin_):
+    import json
+    import struct
+    raw = json.dumps(js, separators=(",", ":")).encode("utf-8")
+    raw += b" " * ((4 - len(raw) % 4) % 4)
+    bin_ = bytes(bin_) + b"\0" * ((4 - len(bin_) % 4) % 4)
+    body = struct.pack("<II", len(raw), 0x4E4F534A) + raw + struct.pack("<II", len(bin_), 0x004E4942) + bin_
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<III", 0x46546C67, ver, 12 + len(body)) + body)
+
+
+def _accessor_array(js, bin_, idx):
+    acc = js["accessors"][idx]
+    comp = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}[acc["componentType"]]
+    ncomp = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[acc["type"]]
+    bv = js["bufferViews"][acc["bufferView"]]
+    start = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
+    isz = np.dtype(comp).itemsize
+    stride = bv.get("byteStride", isz * ncomp)
+    n = acc["count"]
+    raw = np.frombuffer(bytes(bin_[start:start + stride * (n - 1) + isz * ncomp]), dtype=np.uint8)
+    out = np.empty((n, ncomp), dtype=comp)
+    for i in range(ncomp):
+        out[:, i] = np.ndarray((n,), dtype=comp, buffer=raw.tobytes(), offset=i * isz, strides=(stride,))
+    return out.astype(np.float64) if ncomp > 1 else out.reshape(-1).astype(np.int64)
+
+
+def _halo_rho(P, F):
+    """normalized lateral radius of every vertex of a halo primitive: per connected cap (vertices welded by position),
+    the two widest principal axes span the cap's face; rho = the elliptic radius from the cap's centre (bbox centre
+    on those axes), 1 at its rim"""
+    n = len(P)
+    key = np.round(P / 1e-5).astype(np.int64)
+    _, inv = np.unique(key, axis=0, return_inverse=True)
+    inv = np.asarray(inv).reshape(-1)
+    parent = np.arange(inv.max() + 1)
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    for f in F.reshape(-1, 3):
+        a, b, c = find(inv[f[0]]), find(inv[f[1]]), find(inv[f[2]])
+        parent[b] = a
+        parent[find(c)] = a
+    comp = np.array([find(inv[i]) for i in range(n)])
+    rho = np.zeros(n)
+    for cid in np.unique(comp):
+        sel = comp == cid
+        Q = P[sel] - P[sel].mean(axis=0)
+        _, _, vt = np.linalg.svd(Q, full_matrices=False)
+        uv = Q @ vt[:2].T
+        mid = 0.5 * (uv.max(axis=0) + uv.min(axis=0))
+        uv = uv - mid
+        half = np.maximum(np.abs(uv).max(axis=0), 1e-9)
+        rho[sel] = np.sqrt(((uv / half) ** 2).sum(axis=1))
+    return np.clip(rho, 0.0, 1.0)
+
+
+def inject_halo(path: str) -> int:
+    """GLB post-export (before the optimizer): every material named HALO_MAT becomes a BLEND copy of the core
+    `accent` (same factors and extensions, name `accent`), and every primitive drawn with it gets a COLOR_0 (white,
+    alpha = halo_alpha(rho)). Returns the primitives patched."""
+    import json
+    got = _glb_read(path)
+    if got is None:
+        return 0
+    ver, js, bin_ = got
+    mats = js.get("materials", [])
+    halo = {i for i, m in enumerate(mats) if m.get("name") == HALO_MAT}
+    if not halo:
+        return 0
+    core = next((m for m in mats if m.get("name") == "accent"), None)
+    for i in halo:
+        m = mats[i]
+        src = core if core is not None else m
+        pbr = dict(src.get("pbrMetallicRoughness", {}))
+        bc = list(pbr.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0]))[:3] + [1.0]
+        new = {"name": "accent", "alphaMode": "BLEND", "doubleSided": False,
+               "emissiveFactor": list(src.get("emissiveFactor", m.get("emissiveFactor", [0.25, 0.61, 1.0]))),
+               "pbrMetallicRoughness": {"baseColorFactor": bc, "metallicFactor": 0.0, "roughnessFactor": 1.0}}
+        if "extensions" in src:
+            new["extensions"] = json.loads(json.dumps(src["extensions"]))
+        m.clear()
+        m.update(new)
+    n = 0
+    buf_views = js.setdefault("bufferViews", [])
+    accs = js.setdefault("accessors", [])
+    for mesh_ in js.get("meshes", []):
+        for prim in mesh_.get("primitives", []):
+            if prim.get("material") not in halo or "COLOR_0" in prim.get("attributes", {}):
+                continue
+            P = _accessor_array(js, bin_, prim["attributes"]["POSITION"])
+            if "indices" in prim:
+                F = _accessor_array(js, bin_, prim["indices"])
+            else:
+                F = np.arange(len(P))
+            a = halo_alpha(_halo_rho(P, F))
+            col = np.ones((len(P), 4), dtype=np.float32)
+            col[:, 3] = a.astype(np.float32)
+            pad = (4 - len(bin_) % 4) % 4
+            bin_ += b"\0" * pad
+            off = len(bin_)
+            raw = col.tobytes()
+            bin_ += raw
+            buf_views.append({"buffer": 0, "byteOffset": off, "byteLength": len(raw), "target": 34962})
+            accs.append({"bufferView": len(buf_views) - 1, "componentType": 5126, "count": int(len(P)), "type": "VEC4"})
+            prim["attributes"]["COLOR_0"] = len(accs) - 1
+            n += 1
+    js["buffers"][0]["byteLength"] = len(bin_) + (4 - len(bin_) % 4) % 4
+    _glb_write(path, ver, js, bin_)
+    return n
+
+
+def install_halo_export() -> None:
+    """Wrap common.export.optimize once: inject_halo on the raw export, then the optimizer (which keeps COLOR_0,
+    quantizes it, and dedups nothing of it: the halo differs from the core by alphaMode)."""
+    from common import export
+    if getattr(export.optimize, "_wick_halo", False):
+        return
+    orig = export.optimize
+
+    def optimize(path, *a, **kw):
+        k = inject_halo(path)
+        if k:
+            scene.log(f"wick halo: {k} hood-light halo primitive(s) -> BLEND accent + COLOR_0 alpha")
+        return orig(path, *a, **kw)
+
+    optimize._wick_halo = True
+    export.optimize = optimize
 
 
 # ── projection plates ────────────────────────────────────────────────────────────────────────────────

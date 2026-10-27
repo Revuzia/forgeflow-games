@@ -1277,6 +1277,8 @@
   "settings.video.scatter.opt.0": "Sparse",
   "settings.video.scatter.opt.1": "Normal",
   "settings.video.scatter.opt.2": "Dense",
+  "settings.video.ambientEffects.label": "Ambient life",
+  "settings.video.ambientEffects.desc": "Drifting motes, lamp flames and small creatures away from the fights. Banners still sway.",
   "settings.video.fpsCap.label": "Frame rate limit",
   "settings.video.fpsCap.desc": "Caps frames per second to save power and heat.",
   "settings.video.fpsCap.opt.0": "Uncapped",

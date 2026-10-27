@@ -14,6 +14,8 @@ effects in content/vfx.json add the flames and the lantern glow at their `fx` po
   bunting          a fair garland: two posts 8 m apart, a sagging cord and fourteen muted cloth pennants (linen,
                    rose-lilac lacquer, sage, ochre, slate; never a seat colour, saturation <= 0.3).
   fair_lantern     a shepherd's-crook post with a round ribbed paper lantern (the glow is amb_fray_lantern_glow).
+  shallows_pads    a raft of dial-lilies for the Fallen Shaft's shallows: four round floating leaves, each notched to
+                   its centre like a dial and its gnomon slot, and one closed pale bud (they bob on the water).
 
 Stone tells you whose land; light tells you whose side (WORLD §2): the banners carry the SIDE's materials and
 marks (linen and slate spire, felt and ochre dome), never a team hue. Values stay in the environment band
@@ -315,7 +317,7 @@ def bunting() -> Prop:
     return pr
 
 
-PAPER = lin("#A88E6A")
+PAPER = lin("#BC9064")
 
 
 def fair_lantern() -> Prop:
@@ -355,12 +357,47 @@ def fair_lantern() -> Prop:
     return pr
 
 
+PAD = lin("#3F5638")
+PAD_RIM = lin("#56693F")
+BUD = lin("#9E9478")
+
+
+def shallows_pads() -> Prop:
+    """a raft of four round floating leaves on the Fallen Shaft's shallows, each notched to its centre like a dial
+    with its gnomon slot (the dial-lily), and one closed pale bud; flat on the water (origin at the water line)"""
+    pr = Prop()
+    leaves = [(0.0, 0.0, 0.3, 20), (0.42, 0.16, 0.22, 140), (-0.34, 0.3, 0.2, 260), (0.12, -0.4, 0.17, 320)]
+    for k, (cx, cy, r, notch) in enumerate(leaves):
+        seg = 12
+        a0 = math.radians(notch)
+        gap = math.radians(26)
+        P = [[cx, cy, 0.046 + 0.002 * k]]          # just over the shallows' film (0.03 m)
+        for i in range(seg + 1):
+            a = a0 + gap / 2 + (2 * math.pi - gap) * i / seg
+            rr = r * (1 + 0.04 * math.sin(i * 2.3 + k))
+            P.append([cx + rr * math.cos(a), cy + rr * math.sin(a), 0.044 + 0.002 * k])
+        P = np.array(P)
+        F = np.array([[0, i + 1, i + 2] for i in range(seg)])
+        fn = np.cross(P[F[:, 1]] - P[F[:, 0]], P[F[:, 2]] - P[F[:, 0]])
+        F[fn[:, 2] < 0] = F[fn[:, 2] < 0][:, [0, 2, 1]]
+        N = np.tile([0.0, 0.0, 1.0], (len(P), 1))
+        part = Part(P, F, N)
+        d = np.hypot(P[:, 0] - cx, P[:, 1] - cy) / r
+        col = PAD[None, :] * (0.85 + 0.15 * d)[:, None]
+        col = np.where((d > 0.86)[:, None], PAD_RIM[None, :], col)
+        pr.add(part, col, 0.5 + 0.5 * d)
+    bud = tube([[0.2, -0.12, 0.03], [0.2, -0.12, 0.09], [0.2, -0.12, 0.14]], [0.035, 0.03, 0.006], sides=5, cap_end=True)
+    pr.add(bud, BUD, 0.4)
+    return pr
+
+
 PROPS = {
     "banner_aubade": (banner_aubade, {"fx": None}),
     "banner_serenade": (banner_serenade, {"fx": None}),
     "resin_lamp": (resin_lamp, {"fx": [0.0, 1.74, 0.0]}),
     "bunting": (bunting, {"fx": None}),
     "fair_lantern": (fair_lantern, {"fx": [0.36, 2.19, 0.0]}),
+    "shallows_pads": (shallows_pads, {"fx": None}),
 }
 
 

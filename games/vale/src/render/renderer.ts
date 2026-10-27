@@ -203,6 +203,10 @@ class ValeRenderer implements Renderer {
   /** r12 M14: T0 ambient effects, critters and swaying props from map.art.ambient (ambient.ts) */
   private ambient: AmbientLayer | null = null;
   private ambientOn = true;
+  private readonly ambientPending: import('three').Object3D[] = [];
+  private warmAmbient(o: import('three').Object3D): void {
+    this.asIfComposer(() => void this.gl.compileAsync(o, this.rig.camera, this.scene).catch(() => undefined));
+  }
   private readonly actors = new Map<number, Actor>();
   private client: MatchClient | null = null;
   private offEvents: (() => void) | null = null;
@@ -436,6 +440,7 @@ class ValeRenderer implements Renderer {
       if (gen !== this.matchGen) return;
       if (t) this.sky.apply(this.scene, t, L.ambient);
       this.envReady = true;
+      for (const o of this.ambientPending.splice(0)) this.warmAmbient(o);
       this.lib.warmAll();
       this.structs.warmAll(this.actors.values());
       for (const a of this.actors.values()) this.warmVeil(a);
@@ -445,6 +450,8 @@ class ValeRenderer implements Renderer {
     this.terrain = buildTerrain(map);
     this.terrain.setScatter(this.q.scatter, this.q.ao > 0);
     this.ambient = new AmbientLayer(map, this.catalog.vfx, this.vfx.textures.atlas, ATLAS_GRID, (r) => this.assets.model(r), this.terrain.groundAt);
+    // its programs (skinned critters, swaying cloth, the particle shader) compile as each part lands, not on first sight
+    this.ambient.onPart = (o) => { if (gen === this.matchGen) { if (this.envReady) this.warmAmbient(o); else this.ambientPending.push(o); } };
     this.ambient.configure(this.ambientOn, this.q.tier);
     this.scene.add(this.ambient.group);
     this.scene.add(this.terrain.group);
@@ -487,6 +494,7 @@ class ValeRenderer implements Renderer {
     this.director.clear();
     this.structs.clear();
     if (this.ambient) { this.scene.remove(this.ambient.group); this.ambient.dispose(); this.ambient = null; }
+    this.ambientPending.length = 0;
     this.vfx.clear();
     if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
     if (this.mapScene) { this.scene.remove(this.mapScene); this.mapScene = null; }
@@ -1080,7 +1088,7 @@ class ValeRenderer implements Renderer {
     const teams = isFfaMode(mode) ? null : [...setup.seats.map((s) => s.team), ...(map?.structures.map((s) => s.team) ?? [])];
     const refs = this.lib.refsFor(setup.seats.map((s) => ({ fighter: s.fighter, skin: s.skin })), units, teams);
     const jobs: Promise<unknown>[] = refs.map((r) => this.assets.model(r));
-    if (map) { jobs.push(this.assets.hdr(map.art.sky), this.assets.lut(map.art.lut), this.assets.model(map.art.scene)); }
+    if (map) { jobs.push(this.assets.hdr(map.art.sky), this.assets.lut(map.art.lut), this.assets.model(map.art.scene)); for (const r of AmbientLayer.refs(map)) jobs.push(this.assets.model(r)); }
     for (const s of setup.seats) jobs.push(this.lib.fighterTemplate(s.fighter, s.skin));
     // unit templates too (per side): their textures upload and their programs compile behind the loading screen
     for (const u of units) for (const t of teams ? [...new Set(teams)] : [null]) jobs.push(this.lib.unitTemplate(u, t));

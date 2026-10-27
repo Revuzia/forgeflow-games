@@ -124,6 +124,9 @@ function Video(p: { s: Settings; set: SetFn }): JSX.Element {
       <Row id="v-scatter" label={L('scatter', 'Scenery detail')} desc={D('scatter')}>
         <Segmented size="s" label={L('scatter', 'Scenery detail')} value={v.scatter} options={opts(cv, 'video.scatter', [0, 1, 2] as const)} onChange={(x) => p.set('video', { scatter: x })} />
       </Row>
+      <Row id="v-ambient" label={L('ambientEffects', 'Ambient life')} desc={D('ambientEffects')}>
+        <Toggle id="v-ambient" label={L('ambientEffects', 'Ambient life')} checked={v.ambientEffects !== false} onChange={(x) => p.set('video', { ambientEffects: x })} />
+      </Row>
       <Row id="v-fps" label={L('fpsCap', 'Frame rate limit')} desc={D('fpsCap')}>
         <Select id="v-fps" label={L('fpsCap', 'Frame rate limit')} value={v.fpsCap} options={opts(cv, 'video.fpsCap', [0, 30, 60, 120, 144] as const)} onChange={(x) => p.set('video', { fpsCap: x })} />
       </Row>

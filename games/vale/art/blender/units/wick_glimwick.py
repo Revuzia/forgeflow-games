@@ -691,6 +691,60 @@ class HoodGlow:
         part(out, "hoodlight", g, "accent", "bone:head", len(F), vs=1.0, paint="accent", prim=("mesh", V, F))
 
 
+class HoodCore:
+    """THE HOOD LIGHT, fix round 4 (review r3 BLOCKER: the wide flat dome lying on the sill read as a tongue in an open
+    mouth at eye level and as a lit mouth / visor crescent from the 52 deg camera; every other kind had moved to a
+    centred core): ONE soft core, the front of a 16-round ellipsoid wider than tall, its front `front` m behind the
+    opening, CENTRED vertically between the sill (the pocket's floor at the opening, or the Serenade collar roll that
+    rises into it) and the arch top (`h` = 0.5), dark hollow above, below and to both sides; and its HALO (wick_common:
+    an alpha-blended cap 1.6 x the core, its vertex alpha falling to 0 at the rim). The light it throws on the hollow's
+    walls round it is PAINT (team-neutral, dim, radial: spill(P))."""
+
+    def __init__(self, A: Arch, pocket, front=0.035, rx=0.046, ry=0.022, rz=0.029, solid=None, h=0.5, reach=0.9):
+        self.A, self.pocket, self.reach = A, pocket, reach
+        # the sill: straight down the opening's centre line just behind its plane, the first solid (the pocket's
+        # floor or the solid filling the hollow's bottom)
+        p0 = A.O + np.array([0.0, A.y_top - 0.01, -0.012]) @ A.F
+        ts = np.linspace(0.0, A.y_top - A.y_bot + 0.06, 600)
+        pts = p0[None, :] - ts[:, None] * A.F[1][None, :]
+        dv = pocket.d(pts)
+        if solid is not None:
+            dv = np.maximum(dv, -solid.d(pts))
+        i = int(np.argmax(dv > 0.0)) if (dv > 0.0).any() else len(pts) - 1
+        self.y_sill = float(A.q(pts[max(0, i - 1)][None, :])[0, 1])
+        yc = self.y_sill + h * (A.y_top - self.y_sill)
+        self.c = A.O + np.array([0.0, yc, -(front + ry)]) @ A.F
+        self.r = np.array([rx, ry, rz])
+        self.ax = np.stack([A.F[0], A.F[2], A.F[1]])            # across, out (toward the viewer), up
+        self.top = self.c + rz * A.F[1]
+        self.h_frac = (yc - self.y_sill) / (A.y_top - self.y_sill)
+
+    def spill(self, P, N=None):
+        """0..1, the lamplight on the hollow's walls round the core: 1 at its outline, an exponential fall over `reach`
+        core radii, the same all round (never a pool below it: that was the old sill light); on faces turned to it"""
+        P = np.asarray(P, dtype=np.float64)
+        d = (P - self.c) @ self.ax.T
+        e = np.sqrt((d[:, 0] / self.r[0]) ** 2 + (d[:, 2] / self.r[2]) ** 2 + (d[:, 1] / (self.r[1] * 2.6)) ** 2)
+        w = np.exp(-np.maximum(e - 1.0, 0.0) / self.reach)
+        if N is not None:
+            v = self.c - P
+            facing = np.einsum("ij,ij->i", np.asarray(N, dtype=np.float64), v) / np.maximum(np.linalg.norm(v, axis=1), 1e-6)
+            w = w * smooth(-0.15, 0.45, facing)
+        return w
+
+    def add(self, out):
+        X, Y, Z = self.ax
+        rx, ry, rz = self.r
+        V, F = wc.cap_mesh(self.c, X, Y, Z, rx, ry, rz, seg=16)
+        g = Sculpt("hoodlight")
+        g.add(Sphere(self.top, 0.01), k=0.0)                  # stand-in high (the accent is never baked)
+        part(out, "hoodlight", g, "accent", "bone:head", len(F), vs=1.0, paint="accent", prim=("mesh", V, F))
+        V, F = wc.halo_mesh(self.c, X, Y, Z, rx, ry, rz)
+        g = Sculpt("hoodhalo")
+        g.add(Sphere(self.top, 0.01), k=0.0)
+        part(out, "hoodhalo", g, wc.HALO_MAT, "bone:head", len(F), vs=1.0, paint="accent", prim=("mesh", V, F))
+
+
 # ── part list ──────────────────────────────────────────────────────────────────────────────────────────
 def part(out, name, S, role, bind, tris, vs=1.0, paint="proj", uv=1.0, tint=None, light=0.30, detail=0.5, grad=None,
          cav=0.16, prim=None, hang=0.0, sym=True):
@@ -1076,7 +1130,7 @@ def aubade_parts() -> list:
     hood.add(Ellipsoid((0.0, -0.118, 0.668), (0.135, 0.075, 0.052)), k=0.045)        # the chin of the cowl
     base = sdf.Blend([(o_, p_, k_) for o_, p_, k_, _ in hood.ops])                    # uncarved: rim + seam hug it
     hood.sub(pocket, k=0.012)
-    part(out, "hood", hood, "cloth2", "bone:head", 520, vs=0.8, uv=1.9, tint="#93A9C3", light=0.30, detail=0.6,
+    part(out, "hood", hood, "cloth2", "bone:head", 520, vs=0.8, uv=1.9, tint="#727A84", light=0.30, detail=0.6,
          grad=(0.66, 0.95, 0.10), cav=0.16)
     # the carved chalk rim: 3.4 cm, 1.6 cm proud, crisp chamfered edges (a clean mesh on the cowl; the block joints
     # and scroll relief are painted)
@@ -1110,9 +1164,8 @@ def aubade_parts() -> list:
         F += [tuple(int(i) + len(V) for i in f) for f in F2]
         V = np.vstack([V, V2])
     part(out, "seam", seam, "accent", "bone:head", len(F), vs=0.5, paint="accent", prim=("mesh", V, F))
-    # wall to wall (rx well past the walls: at eye level its top is a broad flat horizon of light, not a hump /
-    # tongue; at the 52 deg camera it fills the floor, so no dark ring round it)
-    light = HoodGlow(A, pocket, front=0.018, rx=0.135, ry=0.080, rz=0.068)
+    # THE HOOD LIGHT (fix round 4): one soft core centred in the opening, set back 3.5 cm, and its halo
+    light = HoodCore(A, pocket, front=0.035)
     light.add(out)
     # CLOAK: a bell from the shoulders, long straight folds, a hem cut into shallow points, a front slit
     cloak = Sculpt("cloak")
@@ -1125,9 +1178,9 @@ def aubade_parts() -> list:
     for xc in (-A_STOLE_X, A_STOLE_X):
         cloak.add(shell((0.0, 0.0), Rc, 0.17, 0.645, 0.0075, 0.006, sy=A_CLOAK_SY,
                         extra=lambda P, xc=xc: a_stole_strip(P, xc)), k=0.0)
-    part(out, "cloak", cloak, "cloth", CLOAK_BIND, 720, vs=1.0, uv=1.35, tint="#5B6F88", light=0.26, detail=0.75,
+    part(out, "cloak", cloak, "cloth", CLOAK_BIND, 720, vs=1.0, uv=1.35, tint="#4C5765", light=0.26, detail=0.75,
          grad=(0.15, 0.62, 0.22), cav=0.16, hang=1.0)
-    _sleeves(out, "cloth", 0.056, wraps=True, tint="#63778F")
+    _sleeves(out, "cloth", 0.056, wraps=True, tint="#535E6B")
     _mitts(out, "cloth")
     _legs(out, felt=False)
     # PROPS: pale ash pole, chalk spire finial, angled chalk crook, hexagonal dawn lantern
@@ -1348,7 +1401,7 @@ def serenade_parts() -> list:
     dome.add(lat, k=0.0)
     base = sdf.Blend([(o_, p_, k_) for o_, p_, k_, _ in dome.ops])
     dome.sub(pocket, k=0.012)
-    part(out, "dome", dome, "cloth2", "bone:head", 380, vs=0.85, uv=1.7, tint="#C2A274", light=0.26, detail=0.6,
+    part(out, "dome", dome, "cloth2", "bone:head", 380, vs=0.85, uv=1.7, tint="#B0956F", light=0.26, detail=0.6,
          grad=(0.70, 0.96, 0.10), cav=0.08)
     # ROLLED COLLAR (lower at the front) + the THICK dark felt roll round the opening (concept: 5.4 cm, 4 cm proud,
     # round), one felt mesh; the roll's ends sink into the collar, whose front is the sill
@@ -1356,7 +1409,7 @@ def serenade_parts() -> list:
     roll.add(Torus((0.0, 0.03, 0.660), 0.150, 0.060, axes=np.diag([1.0, 1 / 1.06, 1.0]) @ sdf.rot_x(-S_COLLAR_TILT), rz=0.055), k=0.0)
     roll.add(arch_frame(base, A, S_FRAME_W, 0.040, sink=0.016, behind=0.075, k=0.024, y_min=A.y_bot + 0.03), k=0.03)
     roll_d = sdf.Blend([(o_, p_, k_) for o_, p_, k_, _ in roll.ops])
-    part(out, "roll", roll, "ironstone", "bone:head", 330, vs=0.8, uv=1.4, tint="#4A3C33", light=0.30, detail=0.6,
+    part(out, "roll", roll, "ironstone", "bone:head", 300, vs=0.8, uv=1.4, tint="#4A3C33", light=0.30, detail=0.6,
          cav=0.14)
     # THE CROWN BAND (accent): a 3 cm ribbon lying on the dome right on top of the felt roll all round (the lit lip
     # over the opening at the front, the dome / collar seam round the back)
@@ -1375,7 +1428,8 @@ def serenade_parts() -> list:
     band.add(Sphere(bp.mean(axis=0) + (0.0, 0.0, 0.1), 0.01), k=0.0)     # stand-in high (accent: never baked)
     bv, bf = ribbon(bp, bn, S_BAND_HALF, closed=True, lift=(0.0042, 0.0072))
     part(out, "band", band, "accent", "bone:head", len(bf), vs=0.6, paint="accent", prim=("mesh", bv, bf))
-    light = HoodGlow(A, pocket, front=0.006, rx=0.150, ry=0.085, rz=0.088, sink=0.024, solid=roll_d, floor_spill=True)
+    # THE HOOD LIGHT (fix round 4): one soft core centred between the collar roll (the sill) and the arch top
+    light = HoodCore(A, pocket, front=0.035, rx=0.050, rz=0.030, solid=roll_d)
     light.add(out)
     # MANTLE: the concept's wide sand-felt capelet: a 1.6 cm felt layer over a bell that drapes over the shoulders
     # AND the upper arms (arm covers smooth-unioned in; their outer part follows the arms: _bind_mantle), the
@@ -1414,7 +1468,7 @@ def serenade_parts() -> list:
     trim.add(Sphere(np.array([0.0, 0.0, 0.5]), 0.01), k=0.0)            # stand-in high (accent: never baked)
     mv, mf = ribbon(np.array(tp), np.array(tn), S_TRIM_HALF, lift=(0.0040, 0.0075))
     part(out, "mantle_band", trim, "accent", ("glim_mantle",), len(mf), vs=0.6, paint="accent", prim=("mesh", mv, mf))
-    part(out, "mantle", mantle, "cloth2", ("glim_mantle",), 275, vs=0.6, uv=1.3, tint="#B08F64", light=0.28,
+    part(out, "mantle", mantle, "cloth2", ("glim_mantle",), 250, vs=0.6, uv=1.3, tint="#B08F64", light=0.28,
          detail=0.6, grad=(0.47, 0.65, 0.12), cav=0.14, sym=False)      # (X-symmetric collapse creased the back)
     # CLOAK: a wide bell of warm umber felt (the concept's main value idea: light mantle over a dark cloak), soft
     # felt folds, the hem lifted so the boots show; the two ironstone hem bands are crisp paint
@@ -1438,7 +1492,7 @@ def serenade_parts() -> list:
              (0.016, 0.078), (0.0, 0.082)]
     kn = Sculpt("knob")
     kn.add(lathe_sdf(kc, POLE_AX, kprof), k=0.0)
-    kv, kf = lathe_mesh(kc, POLE_AX, kprof, nsides=8)
+    kv, kf = lathe_mesh(kc, POLE_AX, kprof, nsides=7)
     part(out, "knob", kn, "ironstone", "bone:prop.R", len(kf), vs=0.4, paint="proc", uv=0.3, prim=("mesh", kv, kf))
     base_ = POLE_FOOT + POLE_AX * 1.215
     end = np.array([HOOK[0], HOOK[1], base_[2]])
@@ -1798,7 +1852,7 @@ def _ink_near(lin, P, info, ink, thr, N, through):
     xr, h, t = pocket_coords(A, pocket, Pd)
     # deeper and higher = darker (the light pools at the bottom); round the hood light a team-neutral spill on
     # the ink (the accent is factor-only: this soft falloff is what keeps its edge from reading as a sticker)
-    col = ink[None, :] * (1.0 - 0.55 * depth - 0.25 * smooth(0.3, 0.9, h))[:, None].astype(np.float32)
+    col = ink[None, :] * (1.0 - 0.55 * depth)[:, None].astype(np.float32)
     sp = info["light"].spill(Pd, N)
     col = _mix(col, _hexlin(info["spill"]), info.get("spill_k", 0.6) * sp)
     return _mix(lin, col, w)
@@ -2450,6 +2504,8 @@ class Glimwick(wc.Wick):
         from common import fighter
         CUR.clear()
         CUR.update(faction=self.faction, names=[p["name"] for p in self._parts])
+        wc.halo_material(ctx)
+        wc.install_halo_export()
         P = []
         for p in self._parts:
             v, q = p["S"].mesh(VOXEL * p["vs"])

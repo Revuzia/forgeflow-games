@@ -294,9 +294,9 @@ WREN_J = {
     "hand_r": ((-0.122, -0.022, 0.128), "wing_r"),
 }
 WREN = {
-    "back": lin("#7D8288"), "belly": lin("#99978F"), "head": lin("#6F757D"), "band": lin("#ABA79C"), "eye": lin("#1E1D1C"),
-    "beak": lin("#34312D"), "leg": lin("#5A4C40"), "tail": lin("#868C93"), "bar": lin("#2F3338"), "tip": lin("#A8A397"),
-    "wing": lin("#6E747B"), "prim": lin("#4B5057"), "edge": lin("#9EA2A3"),
+    "back": lin("#6C7177"), "belly": lin("#86847D"), "head": lin("#60666D"), "band": lin("#959187"), "eye": lin("#1E1D1C"),
+    "beak": lin("#34312D"), "leg": lin("#55493E"), "tail": lin("#737980"), "bar": lin("#2F3338"), "tip": lin("#928E83"),
+    "wing": lin("#60666D"), "prim": lin("#454A50"), "edge": lin("#8A8E8F"),
 }
 
 

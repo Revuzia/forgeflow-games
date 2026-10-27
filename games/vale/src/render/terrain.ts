@@ -493,7 +493,7 @@ function quadUniforms(v: unknown): QuadUniforms {
   const k = typeof q.strength === 'number' && Number.isFinite(q.strength) ? Math.max(0, Math.min(0.1, q.strength)) : 0.04;
   const mul = (hex: unknown): Color => {
     if (typeof hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hex)) return new Color(1, 1, 1);
-    const c = lin(hex);
+    const c = new Color().setStyle(hex);
     const l = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
     const n = [c.r / l - 1, c.g / l - 1, c.b / l - 1];
     const m = Math.max(1e-6, ...n.map(Math.abs));
