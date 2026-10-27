@@ -349,7 +349,7 @@ const LCU = {
   uLcGrime: { value: null },                                            // the CC0 wall photograph (detail, divided by its own mean)
   uLcGrimeK: { value: new THREE.Vector4(0, 1 / 6, 0, 0) },             // x = gain (0 = off), y = 1 / the photo's tile (m, world-planar)
   uLcWear: { value: new THREE.Vector3(0.30, 0.85, 1.15) },              // x = how much darker ON SCREEN the base of a wall is at the ground, y = the band's height (m), z = the tone-map exposure
-  uLcWater: { value: new THREE.Vector4(0, 0, 0, 0) },                  // x = water y
+  uLcWater: { value: new THREE.Vector4(0, 0, 7, 0) },                  // x = water y, z = the depth that reads fully deep (m)
   uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
 };
 const GRIME_FILE = { url: "assets/tex/wall_grime.jpg", avg: [0.6339, 0.4989, 0.3582] };   // Poly Haven "Concrete Wall 003" (CC0), 1k diffuse JPG (265 KB); avg = its LINEAR mean (numpy over the decoded sRGB pixels)
@@ -469,7 +469,7 @@ const LC_FRAG_ALBEDO = `
 #ifdef LC_WATER
 {
   float ldep = uLcWater.x - lcGround( vLcW.xz );
-  float lk = smoothstep( 0.0, 7.0, ldep );
+  float lk = smoothstep( 0.0, uLcWater.z, ldep );                // (the depth that reads as deep: 7 m on the sea, 3.2 m in Deepwood's rivers and lakes)
   diffuseColor.rgb = mix( uLcShallow, uLcDeep, lk );
   // surf lines follow the depth contours (so they run along the shore and roll in), broken into ~12 m patches; once a band is under ~2 px (the drop
   // view) its sine is replaced by its mean, so the plane sees a soft white rim, not stripes (was one world-space diagonal sine: zebra bands from the air)
@@ -5627,6 +5627,7 @@ export async function buildMap(W, mapId) {
     LCU.uLcHgt.value = ht;
     LCU.uLcHgtK.value.set(LAT_CELLS / (SIZE * LAT_N), (HALF * LAT_CELLS / SIZE + 0.5) / LAT_N, 0, 0);
     LCU.uLcWater.value.x = waterY;
+    LCU.uLcWater.value.z = mapId === "deepwood" ? 3.2 : 7.0;   // LC-39: Deepwood's water is 3.7 m at its deepest (p90 2.9 m): on the sea's 7 m scale it never read deep
   }
   photo = await photoPromise;
   buildTerrain();
