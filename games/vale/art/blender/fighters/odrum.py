@@ -111,11 +111,13 @@ MATERIAL_SET = "bible"
 # _paint_lit). Noon Fair swaps the pots for paper lanterns and hangs rigid ribbon pairs at both ends; Shadeprint is
 # ink below and pale above, with ink pots under pale rims (no extra geometry).
 SKINS: list = [
-    # Noon Fair also takes the brief's pale fair cap and mouth-wrap (cloth2 #D0C3AE): at gameplay zoom the crown of the
-    # silhouette changes too, not only the props (the sixth review: "the body, jerkin and mask are identical")
+    # Noon Fair also takes the brief's pale fair cap and mouth-wrap (cloth2 #D0C3AE) and a mulberry fair-day jerkin
+    # (#6A4655: the base jerkin's value, L* 34, hue 335, sat 34 %, in tune with the lilac yoke): at gameplay zoom the
+    # crown and the body change too, not only the props (the sixth review: "the body, jerkin and mask are identical")
     {"id": "odrum_noon_fair", "extra": {"paper_lanterns": True, "ribbons": True},
      "card": {"primary": "#6A4F5F", "secondary": "#E2D6C4"},
-     "palette": {"wood": "#AE89AA", "paper": "#E2D6C4", "fair_rim": "#C48D4A", "ribbon": "#C9A9C8", "cloth2": "#D0C3AE"}},
+     "palette": {"wood": "#AE89AA", "paper": "#E2D6C4", "fair_rim": "#C48D4A", "ribbon": "#C9A9C8", "cloth2": "#D0C3AE",
+                 "cloth": "#6A4655"}},
     {"id": "odrum_shadeprint", "extra": {"ink_pots": True}, "card": {"primary": "#2B2A33", "secondary": "#B7B4BE"},
      "palette": {"sandstone": "#B7B4BE", "cloth2": "#CFCBD6", "wood": "#C9C5D0", "wood_dark": "#2B2A33", "cloth": "#8A8896",
                  "lampresin": "#7A6BB0", "leather": "#3A3942", "under": "#34333C", "ironstone": "#2B2A33", "pot": "#2B2A33",
@@ -578,7 +580,13 @@ def sculpts(lanterns: bool = False) -> list:
     # the rolled brim (the concept's back view: a felt roll x +-0.16): its front half hides behind the brow band
     brim = Lathe((0, -0.005, 0), lambda r, z: RoundBox((0.138, 0, 1.726), (0.026, 1.0, 0.058), 0.026).d(
         np.stack([r, np.zeros_like(r), z], 1)), 0.17, 1.66, 1.79, axes=np.diag([1.0, 1.12, 1.0]))
-    cap.add(brim.displaced(felt(0.003, 22.0), 0.003), k=0.0)
+    # the roll's flanks rise toward the front: its lower edge never drops below the brow band's (z 1.706) forward of
+    # y +0.04, reaching its full depth only behind the ears (y +0.13). Under the band's side walls the roll used to
+    # hang 5 cm lower beside the head block: a dark earmuff in the portrait and the splash (the sixth review)
+    brs = Sculpt("_brim")
+    brs.add(brim.displaced(felt(0.003, 22.0), 0.003), k=0.0)
+    brs.inter(HalfSpace((0.0, 0.04, 1.706), unit((0.0, -0.455, -0.890)), 1.0), k=0.010)
+    cap.add(as_prim(brs), k=0.0)
     # the roll shows only at the back (the concept): in front of y -0.03 it tucks in behind the brow band's sides
     # (the sixth review: its front quarter stuck out beside the mask like an earmuff)
     tuck = Sculpt("_tuck")
@@ -756,20 +764,19 @@ def sculpts(lanterns: bool = False) -> list:
     skirt.add(sk.displaced(folds(0.012, 14.0, axis=0, phase=0.7, zfade=(1.0, 0.5)), 0.012), k=0.0)
     skirt.inter(HalfSpace((0, 0, 0.50), unit((0.0, -0.05, -1.0)), 2.0), k=0.006)       # the hem at the knee (concept 0.52)
     # the front closure as painted (the concept's only opening: centre front, closed under the belt at x -0.030,
-    # opening toward the hem): a carved valley where the right panel laps under the left, its floor sunk ~1.3 cm at
-    # the hem, so the painted dark of the gap lands in a real crease. Never a hole (the sixth review: a through-cut
-    # V notch rendered as a stair-stepped hole with the trouser showing through, and the thigh poked out of it)
+    # opening toward the hem): a shallow carved crease (at most ~6 mm deep, 1.6 cm wide at the hem) under the painted
+    # dark of the gap. Never a hole (the sixth review: a through-cut V notch rendered as a stair-stepped hole with the
+    # trouser showing through), and no deep valley or raised lap edge either: since the front panels follow their own
+    # thighs (_bind_odrum) the closure shears in a stride, and the 1.3 cm valley with a lap ridge beside it folded
+    # over itself into dark shards there (the seventh pass); a smooth shallow crease shears cleanly
     sk_prim = as_prim(skirt)
     pts, rr = [], []
-    for z, x, r in ((0.935, -0.030, 0.0035), (0.86, -0.031, 0.006), (0.76, -0.030, 0.009), (0.66, -0.029, 0.012),
-                    (0.57, -0.028, 0.015), (0.50, -0.027, 0.017), (0.45, -0.027, 0.017)):
+    for z, x, r in ((0.935, -0.030, 0.0030), (0.86, -0.031, 0.0045), (0.76, -0.030, 0.006), (0.66, -0.029, 0.007),
+                    (0.57, -0.028, 0.008), (0.50, -0.027, 0.008), (0.45, -0.027, 0.008)):
         p, nrm = surface_at(sk_prim, x, z, -1.0)
         pts.append(p + nrm * (0.30 * r))
         rr.append(r)
     skirt.sub(Tube(pts, rr, k=0.004), k=0.004)
-    lap = [surface_at(sk_prim, x, z, -1.0) for x, z in ((-0.022, 0.90), (-0.015, 0.70), (-0.009, 0.51))]   # the left panel's edge
-    for (a, na), (b, nb) in zip(lap[:-1], lap[1:]):
-        skirt.add(Capsule(a - na * 0.004, b - nb * 0.004, 0.0065), k=0.006)
     part("skirt", skirt, "cloth", "auto", 1350)
 
     # LEGS: full trousers bloused softly over the boot tops (vertical folds, the blouse overhanging the cuff), tall
@@ -1090,6 +1097,8 @@ _bind0 = _pipeline.bind_part
 SKIRT_LEG = 0.72                     # share of the bone-heat leg weight the skirt keeps (the rest goes to the hips)
 SKIRT_CROSS = 0.20                   # ... of which this much follows the OTHER thigh (the back panels blend)
 SKIRT_LEG_FRONT, SKIRT_CROSS_FRONT = 0.92, 0.08   # the front panels, either side of the closure
+SKIRT_FRONT_TAKE = 0.9               # share of the hips' weight the lower front panels hand to their thighs
+SKIRT_CLOSURE_X = -0.030             # the front closure (see sculpts' SKIRT)
 
 
 def _bind_odrum(ctx, part, obj, body_low=None):
@@ -1117,10 +1126,22 @@ def _bind_odrum(ctx, part, obj, body_low=None):
         own_l = leg_l / leg
         # the FRONT panels (split at the closure) follow their own thigh more, so a stride or a lunge carries the
         # panel forward over the knee instead of the thigh pushing through it (the sixth review); the back hangs
-        fr = min(1.0, max(0.0, (0.02 - (Mw @ v.co).y) / 0.08))
+        pw = Mw @ v.co
+        fr = min(1.0, max(0.0, (0.02 - pw.y) / 0.08))
         keep = SKIRT_LEG + (SKIRT_LEG_FRONT - SKIRT_LEG) * fr
         cross = SKIRT_CROSS + (SKIRT_CROSS_FRONT - SKIRT_CROSS) * fr
+        # below mid-thigh each front panel hangs from ITS thigh (chosen by its side of the closure, not by bone heat,
+        # which gave each panel ~18 % of the other thigh), with the hips' weight handed over too: with that left, a
+        # raised knee still came out through the panel in the run (the seventh review pass). Across the closure the
+        # two panels meet in a 12 cm ramp (93/7 on the closure line, 50/50 4 cm into the left panel), so the closure
+        # eases open over a stride: a 5 cm ramp over the old valley sheared it into dark jagged shards.
+        hz = float(_smooth(0.97, 0.78, pw.z)) * fr
+        side_l = float(_smooth(SKIRT_CLOSURE_X - 0.020, SKIRT_CLOSURE_X + 0.100, pw.x))
+        own_l += (side_l - own_l) * hz
+        cross *= 1.0 - hz
         k = keep * leg
+        hip_w = w.get("hips", 0.0) + (leg - k)
+        k += hip_w * SKIRT_FRONT_TAKE * hz
         nl = k * (own_l * (1 - cross) + (1 - own_l) * cross)
         nr = k - nl
         for b in ("shin.L", "shin.R", "foot.L", "foot.R"):
@@ -1129,7 +1150,7 @@ def _bind_odrum(ctx, part, obj, body_low=None):
                 g.remove([v.index])
         tl.add([v.index], nl, "REPLACE")
         tr.add([v.index], nr, "REPLACE")
-        hips.add([v.index], w.get("hips", 0.0) + (leg - k), "REPLACE")
+        hips.add([v.index], max(0.0, w.get("hips", 0.0) + leg - k), "REPLACE")
         moved += 1
     _mesh.limit_weights(obj)
     scene.log(f"odrum skirt: leg weights softened on {moved} vertices (keep {SKIRT_LEG}/{SKIRT_LEG_FRONT}, cross {SKIRT_CROSS}/{SKIRT_CROSS_FRONT})")
@@ -1221,7 +1242,7 @@ _paint0 = project.paint
 KEY_LIGHT = unit((-0.45, -0.55, 0.70))                    # the concept's key: upper left of the front view
 BACK_KEY = unit((-0.35, 0.60, 0.72))                      # a second key over the back (the back view's light)
 SHEEN = unit((-0.2, -0.45, 0.87))
-WALNUT = "#B49470"                                        # oiled pale walnut (the concept's bar): warm, under 40 % sat
+WALNUT = "#BB9B76"                                        # oiled pale walnut (the concept's bar): warm, under 40 % sat
 WALNUT_GRAIN = "#6A4A30"                                  # its darker grain lines and knots
 # the yoke's props are not painted on the concept at the yoke's built length: they paint procedurally, in the
 # concept's palette and light (oiled pale walnut, wound leather, glossy amber lampresin)
@@ -1251,8 +1272,11 @@ DESPECKLE = ("cap", "mask", "coat", "straps", "belt", "skirt", "trousers", "boot
 # concept's #DFA341 / #D8A14D, held a step under it in value and saturation: hue 34, ~62 % sat), a lighter brown felt
 # cap (concept L* 48-62), the jerkin at the concept's mid brown (L* ~38, less saturated than painted so the hero sun
 # does not turn it copper), near-black trousers and boots (concept L* 12-20) under it.
-TONE = {"mask": ("#C28C44", 0.12), "cap": ("#7E5D47", 0.22), "coat": ("#6A4937", 0.30), "skirt": ("#634434", 0.30),
-        "straps": ("#4A3324", 0.40), "belt": ("#45301F", 0.40), "trousers": ("#2F241D", 0.30), "boots": ("#241913", 0.35)}
+# (seventh pass: the lineup at the game camera read top/mid/feet L* 54.5 / 43.4 / 13.9 against Marund's 57.4 / 43.1 /
+# 17.9: the cap and the yoke a step lighter for the top band, the trousers and boots lifted off black for the feet band,
+# still the darkest forms, under the jerkin by a clear step)
+TONE = {"mask": ("#C28C44", 0.12), "cap": ("#86644C", 0.22), "coat": ("#6A4937", 0.30), "skirt": ("#634434", 0.30),
+        "straps": ("#4A3324", 0.40), "belt": ("#45301F", 0.40), "trousers": ("#382B22", 0.30), "boots": ("#2C2018", 0.35)}
 POT_GLAZE = "#C07E32"                     # the jars' golden-ochre glaze (the concept's #C57B23)
 POT_RIM = "#D09A50"                       # the carved window collar and the band: a lighter, carved ochre
 POT_LIP = "#C88B40"                       # the rolled lip
@@ -1580,7 +1604,7 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
         w[beak_z] = 0.0
         lam, shade = _light(n, 0.76, 0.26)                 # plane by plane in the key light: the geometry carves
         lamb = np.clip(n @ BACK_KEY, 0.0, 1.0)              # ... and a back key, so the back's planes part too
-        shade = shade + 0.16 * lamb
+        shade = shade + 0.22 * lamb                         # (seventh pass: 0.16 left the back's planes too alike)
         col = stone_ref[None, :] * (shade * (1.0 + 0.045 * NOISE(p, 45.0) + 0.025 * NOISE(p, 140.0)))[:, None]
         # the carved cracks (CRACKS): dark lines on the side and back planes, a pale chipped lip beside each
         dmin = np.full(len(p), 1.0)
@@ -1589,9 +1613,11 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
                 ab = b_ - a_
                 t_ = np.clip(((p - a_) @ ab) / max(float(ab @ ab), 1e-12), 0.0, 1.0)
                 dmin = np.minimum(dmin, np.linalg.norm(p - (a_ + np.outer(t_, ab)), axis=1) / r)
-        dark = _smooth(1.7, 0.9, dmin)
-        lip = _smooth(2.6, 1.9, dmin) * (1.0 - dark) * (n[:, 2] > 0.0)
-        col = col * (1.0 - 0.58 * dark)[:, None] * (1.0 + 0.10 * lip)[:, None]
+        # (bolder since the seventh pass: the review still read the back as a smooth block next to the concept's
+        # cracked, faceted back)
+        dark = _smooth(2.1, 1.0, dmin)
+        lip = _smooth(3.0, 2.2, dmin) * (1.0 - dark) * (n[:, 2] > 0.0)
+        col = col * (1.0 - 0.70 * dark)[:, None] * (1.0 + 0.12 * lip)[:, None]
         out[m] = out[m] * (1.0 - w[:, None]) + np.clip(col, 0, 1) * w[:, None]
         # the painted eyes are larger than the carved slits: the painted dark round each slit becomes face stone
         ev = in_eye(p, 0.004, EYES_PAINTED) & ~in_eye(p, 0.0015) & (n[:, 1] < -0.3)
@@ -1843,9 +1869,12 @@ SHADEPRINT = {"ink": "#2B2A33", "pale": "#B7B4BE", "rim_col": "#C6C2CF", "bleed"
               # L* 1-4 with no form left)
               "deep": {"boots": 21.0, "belt": 22.0, "straps": 24.0, "wrap_L": 26.0, "wrap_R": 26.0, "pouch": 26.0,
                        "staff_wraps": 28.0},
-              "ink_L": {"coat": 24.0, "skirt": 21.0, "trousers": 22.0},
+              "ink_L": {"coat": 24.0, "skirt": 23.0, "trousers": 22.0},
               # the wash's weight by height (rest pose): full ink at the hem, rising past the belt, pale shoulders
-              "wash": ((0.45, 0.62, 0.90, 1.16, 1.40), (1.0, 0.94, 0.72, 0.22, 0.04)),
+              # (mixed in linear light, a third of the pale still reads light: the weights stay high down the skirt so
+              # the hem prints near the ink, mid-skirt ~L* 32 and under the belt ~45; the seventh pass measured the
+              # old curve at L* 47 a hand under the belt)
+              "wash": ((0.45, 0.62, 0.80, 1.00, 1.16, 1.40), (1.0, 0.97, 0.88, 0.62, 0.25, 0.04)),
               "rim": ("coat", "skirt"), "rim_w": 0.45}
 
 OWN_REF = ("neckwrap",)
@@ -1869,7 +1898,7 @@ def _recolour_value(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
     shade_skin = _BUILD["id"] == "odrum_shadeprint"
     for i, n in enumerate(names):
         contrast = (SHADEPRINT["inked_contrast"] if n in SHADEPRINT["inked"]
-                    else 1.38 if n in ("coat", "skirt") else 1.18) if shade_skin else 1.0   # the felt's folds print in ink
+                    else 1.2 if n in ("coat", "skirt") else 1.18) if shade_skin else 1.0   # the felt's folds print in ink
         r = roles.get(n)
         if n in skip or not r or r == "accent" or r not in skin_pal or r not in base_pal:
             continue
@@ -1907,10 +1936,10 @@ def _recolour_value(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
                 out[m] = np.clip(out[m] * (((Lt + 16.0) / 116.0) ** 3 / p85), 0.0, 0.92)
         inkY = max(float(ink @ LUMA), 1e-4)
 
-        def ink_at(Y, Lt, gamma=1.0):
+        def ink_at(Y, Lt, gamma=1.0, lo=0.30, hi=2.6):
             """the ink at a median value L* `Lt`, each texel keeping its own light about the part's median"""
             med = max(float(np.median(Y)), 1e-4)
-            rel = np.clip(Y / med, 0.30, 2.6) ** gamma
+            rel = np.clip(Y / med, lo, hi) ** gamma
             return ink[None, :] * ((((Lt + 16.0) / 116.0) ** 3) / inkY) * rel[:, None]
         for nm, Lt in SHADEPRINT["deep"].items():     # ink below: boots, belt, straps and wraps at the ink's values
             m = sel(nm)
@@ -1930,7 +1959,9 @@ def _recolour_value(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
             z = p[:, 2] + 0.09 * strokes + 0.05 * bloom + 0.015 * NOISE(p, 40.0)
             w = np.interp(z, zs, ws)[:, None]
             Y = out[m] @ LUMA
-            o = out[m] * (1.0 - w) + ink_at(Y, SHADEPRINT["ink_L"][nm], 1.25) * w
+            # (the seventh pass: at gamma 1.25 and up to 2.6x its median, the felt's lit folds came back pale through
+            # the ink: the skirt measured L* 49-56 at the hem and 52 under the belt, no wash read at all)
+            o = out[m] * (1.0 - w) + ink_at(Y, SHADEPRINT["ink_L"][nm], 0.9, 0.55, 1.6) * w
             # the wash's wet edge: a darker tide line with a violet bleed just above it (ink pooling as it dried)
             edge = np.exp(-((w - 0.50) / 0.09) ** 2)
             rel = np.clip(Y / max(float(Y.mean()), 1e-4), 0.6, 1.4)[:, None]
@@ -1958,7 +1989,7 @@ def _recolour_value(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
             side = _smooth(0.86, 0.98, np.abs(n[:, 0])) * (n[:, 2] > -0.4)          # a thin rim on the flanks' edge
             edge = np.zeros(len(p))
             if nm == "skirt":
-                edge = np.maximum(edge, _smooth(0.518, 0.505, p[:, 2]))           # a fine pale line along the hem
+                edge = np.maximum(edge, 0.7 * _smooth(0.512, 0.503, p[:, 2]))     # a fine pale line along the hem
             rim = np.clip(np.maximum(side * 0.85, edge) * SHADEPRINT["rim_w"]
                           * (0.85 + 0.15 * NOISE(p, 40.0)), 0.0, 1.0)[:, None]
             out[m] = out[m] * (1.0 - rim) + rimc[None, :] * rim
@@ -2065,6 +2096,7 @@ def _resolve_plumb(skel, pose: dict) -> dict:
     return out
 
 
+RUN_LIFT = 0.74                                          # the run's swing-foot height (x the shared run's)
 RUN_PITCH_FIX, RUN_TOE_K = True, 1.0                    # run foot pitch flipped (see clip_overrides' RUN)
 POT_REACH = POT_DROP + POT_H * 0.5                      # knot to the pot's centre along the hang bone
 DH_POT = 0.266 * (POT_S - 1.0)                           # the jars' extra height over the brief's 0.266 m pot
@@ -2218,7 +2250,8 @@ def clip_overrides(ctx) -> dict:
       idle       breathing under the bar, the pots hanging still
       run        3.35 m/s, the bar steady on the shoulders, the left arm swinging
       attack1    pellet flick: the sling end hauled up over the right shoulder, then whipped down and forward
-      attack2    staff jab: the yoke swung to point ahead at the right side and driven forward like a lance, a lunge
+      attack2    staff jab: the yoke lifted over the cap and turned to point ahead at the right hip, the long end
+                 leading, both hands driving it forward like a lance with a lunge
       cast_a1    Resin Shot: one loop of the sling end at the right side: off the shoulder, the pour (the right pot
                  tips over the pouch), down past the hip and up behind (the cock), over the top to the release at
                  f12 (pouch high in front, the bar a long diagonal), follow-through at the target, the free arm
@@ -2293,11 +2326,16 @@ def clip_overrides(ctx) -> dict:
         toe = ft.toe + (RUN_TOE_K * abs(pt) * near if pt < 0 else -pt)
         return FT(tuple(ft.ankle[i] + d[i] for i in range(3)), pn, ft.yaw, toe, ft.knee, ft.weight)
 
+    def low(ft):
+        """the swing foot carried lower (RUN_LIFT): a runner in a knee-length skirt lifts the knee less, so the raised
+        thigh stays under the front panel (the planted feet are untouched: their lift is 0)"""
+        return FT((ft.ankle[0], ft.ankle[1], ft.ankle[2] * RUN_LIFT), ft.pitch, ft.yaw, ft.toe, ft.knee, ft.weight)
+
     def run_s(t):
         p = dict(base_run.sample(t))
         for b in ARM_BONES:
             p.pop(b, None)
-        p["ik"] = {k: (fix_pitch(k[-1], v) if RUN_PITCH_FIX else v) for k, v in p["ik"].items() if k.startswith("foot")}
+        p["ik"] = {k: (fix_pitch(k[-1], low(v)) if RUN_PITCH_FIX else low(v)) for k, v in p["ik"].items() if k.startswith("foot")}
         for b, k in (("chest", 0.55), ("spine", 0.6)):
             x, y, z = p[b]
             p[b] = (x, y * k, z)
@@ -2336,38 +2374,55 @@ def clip_overrides(ctx) -> dict:
                             rp(b_h, yoke_about(PIV, 13, 10, (0.0, 0.015, 0.0)), swing(26, 6)),
                             rp(b_f, yoke_about(PIV, 15, 8, (0.0, 0.015, 0.0)), swing(14, 4)))
 
-    # ATTACK2 (25, f10): the staff jab, TWO-HANDED (the sixth review: one-handed, the bar stayed across the body, the
-    # near pot swung over the belly and the free hand flapped). The fist swings the yoke off the right shoulder (f0-f3:
-    # the long part round BEHIND the head) and down to the right hip, the bar along his right side pointing ahead,
-    # the left hand crossing to grip it in front of the right fist (f6: drawn back, the body coiled right, the left
-    # shoulder leading); then both hands drive it straight at the target with a lunge on the left foot (f10: the
-    # sling end ahead at chest height, the near pot thrown forward and out by the thrust), held, and back up onto
-    # the shoulder by f25. Silhouette: the bar from across the shoulders to a lance along the line of attack.
-    lunge = feet_from(g, dl=(0.0, -0.22, 0.0))
-    pole_rj, pole_lj = (-0.7, 0.55, -0.45), (0.55, 0.15, -0.8)
-    ax_j = Vector((-0.05, 1.0, 0.06))                # toward the long end: back and a little OUT past the right hip
-    j_off = pose(g, P(hips=(0, -6, 0), spine=(0, -4, 0), chest=(-2, -6, 0), head=(2, 10, 0)), (0.0, 0.01, -0.01),
-                 hold(*yoke_about(PR, 75, 0, (-0.11, 0.05, 0.06)), pole_r=(-0.9, 0.3, -0.2)))
-    j_w = pose(g, P(hips=(4, -16, 0), spine=(6, -11, 0), chest=(5, -13, 0), head=(-2, 28, 0)),
-               (0.0, 0.03, -0.05), hold(Vector((-0.28, 0.06, 1.08)), ax_j, -0.16, pole_r=pole_rj, pole_l=pole_lj),
-               swing(6, 0))
-    j_c = pose(g, P(hips=(5, -18, 0), spine=(7, -12, 0), chest=(6, -13, 0), head=(-3, 30, 0)),
-               (0.0, 0.04, -0.055), hold(Vector((-0.28, 0.09, 1.08)), ax_j, -0.16, pole_r=pole_rj, pole_l=pole_lj),
-               swing(4, 0))
-    j_h = pose(g, P(hips=(9, -14, 0), spine=(7, -10, 0), chest=(5, -10, 0), head=(-8, 26, 0)), (0.0, -0.12, -0.07),
-               hold(Vector((-0.27, -0.24, 1.17)), ax_j, -0.16, pole_r=pole_rj, pole_l=pole_lj), lunge, swing(44, 6))
-    j_f = pose(g, P(hips=(10, -14, 0), spine=(8, -10, 0), chest=(6, -10, 0), head=(-9, 26, 0)), (0.0, -0.13, -0.075),
-               hold(Vector((-0.27, -0.27, 1.16)), ax_j, -0.16, pole_r=pole_rj, pole_l=pole_lj), lunge, swing(28, 4))
-    # the left hand lets go first (its arm swings back down), then the right fist carries the yoke back up
-    j_let = pose(g, P(hips=(6, -10, 0), spine=(4, -6, 0), chest=(2, -6, 0), head=(-4, 16, 0), upper_arm_L=(14, 0, 4),
-                      forearm_L=(24, 0, 0)), (0.0, -0.08, -0.05),
-                 hold(Vector((-0.30, -0.12, 1.20)), ax_j, None, pole_r=pole_rj), feet_from(g, dl=(0.0, -0.12, 0.0)), swing(8, 2))
-    j_back = pose(g, P(hips=(0, -6, 0), spine=(0, -4, 0), chest=(-2, -6, 0), head=(2, 10, 0)), (0.0, 0.0, -0.01),
-                  hold(*yoke_about(PR, 75, 0, (-0.11, 0.05, 0.06)), pole_r=(-0.9, 0.3, -0.2)))
-    a2k = [(0.0, gI, "linear"), (3 / 25, j_off, "inout"), (6 / 25, j_w, "inout"), (8 / 25, j_c, "out"),
-           (anim.IMPACT, j_h, "accel"), (12 / 25, j_f, "out"), (15 / 25, j_f, "linear"), (18 / 25, j_let, "inout"),
-           (21.5 / 25, j_back, "inout"), (1.0, gI, "inout")]
-    out["attack2"] = anim.Clip("attack2", 25, False, anim.drag(seq(a2k), 25, {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
+    # ATTACK2 (25, f10): the staff jab as a LANCE, two-handed, the LONG end leading (the seventh pass: with the short
+    # sling end forward the 1.4 m long part trailed behind him and dominated the read, and the near pot hung over the
+    # belly: "does not read as a jab toward the target"). The fist lifts the yoke off the shoulders over the cap (f0-f4,
+    # the head ducking under it, as in Swing Out), brings it down in front and turns it to point AHEAD at his right hip
+    # with the left hand closing on it in front of the right fist (f7: drawn back, the body coiled right); then both
+    # hands drive it at the target with a lunge on the left foot (f10: the long end 1.4 m ahead, a little out to the
+    # right so its pot hangs beside him, never over the torso, and the sling end back past the right hip, clear of
+    # it, its pot swung out off his hip), held, drawn back, and back over the cap onto the shoulders by f25. Silhouette: the bar from across the
+    # shoulders to a lance along the line of attack, the pot at its tip.
+    j_back_lo, j_over_b, j_over_f = (-0.34, 0.34, 1.60), (-0.33, 0.28, 1.92), (-0.31, -0.30, 1.92)
+    j_pr_up, j_pl_up = (-0.9, 0.2, 0.0), (0.9, 0.2, 0.0)
+    j_pr, j_pl = (-0.8, 0.5, -0.35), (0.45, 0.1, -0.9)
+    ax_c, ax_h = (-0.30, -1.0, 0.10), (-0.24, -1.0, 0.05)             # the long end ahead, out to his right ~13 deg
+    a2j = [(0.0, tuple(GRIP0), tuple(AX0), 0.0, _POLES["R"], (0.8, 0.4, -0.4)),
+           (1.4, j_back_lo, (1.0, 0.0, 0.0), 0.0, j_pr_up, j_pl_up),
+           (2.8, j_over_b, (1.0, 0.0, 0.0), 0.0, j_pr_up, j_pl_up),
+           (4.2, j_over_f, (1.0, -0.02, 0.0), 0.0, j_pr_up, j_pl_up),
+           (7.0, (-0.36, -0.02, 1.07), ax_c, 1.0, j_pr, j_pl),             # chambered at the right hip
+           (10.0, (-0.35, -0.40, 1.13), ax_h, 1.0, j_pr, j_pl),            # the thrust (impact)
+           (13.0, (-0.35, -0.42, 1.13), ax_h, 1.0, j_pr, j_pl),            # held
+           (16.0, (-0.35, -0.12, 1.09), ax_c, 0.0, j_pr, j_pl),            # drawn back, the left hand off
+           (19.6, j_over_f, (1.0, -0.02, 0.0), 0.0, j_pr_up, j_pl_up),
+           (21.6, j_over_b, (1.0, 0.0, 0.0), 0.0, j_pr_up, j_pl_up),
+           (23.3, j_back_lo, (1.0, 0.0, 0.0), 0.0, j_pr_up, j_pl_up),
+           (25.0, tuple(GRIP0), tuple(AX0), 0.0, _POLES["R"], (0.8, 0.4, -0.4))]
+    LEFT_J = 0.14                                                     # the left hand, in front of the right fist
+    lunge = feet_from(g, dl=(0.0, -0.24, 0.0))
+    b_duck = pose(g, P(spine=(4, 0, 0), chest=(3, 0, 0), neck=(4, 0, 0), head=(6, 0, 0)), (0.0, 0.0, -0.02))
+    b_ch = pose(g, P(hips=(4, -14, 0), spine=(5, -10, 0), chest=(5, -12, 0), head=(-2, 26, 0)), (0.0, 0.04, -0.06),
+                swing(12, -6))
+    b_hit = pose(g, P(hips=(10, -12, 0), spine=(8, -12, 0), chest=(6, -16, 0), head=(-9, 30, 0)), (0.0, -0.12, -0.08),
+                 lunge, swing(24, 16))
+    b_hold = pose(g, P(hips=(11, -12, 0), spine=(8, -12, 0), chest=(6, -16, 0), head=(-10, 30, 0)), (0.0, -0.13, -0.085),
+                  lunge, swing(18, 6))
+    b_back = pose(g, P(hips=(5, -6, 0), spine=(4, -5, 0), chest=(2, -6, 0), head=(-4, 12, 0)), (0.0, -0.06, -0.04),
+                  feet_from(g, dl=(0.0, -0.12, 0.0)))
+    body_j = anim.keyed([(0.0, g, "linear"), (3 / 25, b_duck, "inout"), (7 / 25, b_ch, "inout"), (anim.IMPACT, b_hit, "accel"),
+                         (13 / 25, b_hold, "out"), (16 / 25, b_back, "inout"), (20.5 / 25, b_duck, "inout"), (1.0, g, "inout")])
+
+    def a2j_s(t):
+        f = t * 25
+        p = dict(body_j(t))
+        grip, ax, lw, prl, pll = path(a2j, f)
+        p["ik"] = dict(p.get("ik", {}))
+        p["ik"].update(hold(grip, ax, None, pole_r=tuple(prl))["ik"])
+        if lw > 1e-3:
+            p["ik"]["hand.L"] = HT(to_prop=("prop.R", LEFT_J), pole=tuple(pll), weight=min(1.0, lw))
+        return p
+    out["attack2"] = anim.Clip("attack2", 25, False, anim.drag(a2j_s, 25, {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
 
     # CAST_A1 (30, f12) Resin Shot, one long loop of the sling end at the right side: the right fist swings the
     # yoke off the shoulders (f0-f4: the long part sweeps round BEHIND the head until the bar points ahead at his
