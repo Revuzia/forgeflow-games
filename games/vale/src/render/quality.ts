@@ -45,7 +45,7 @@ export interface ResolvedQuality {
   flashLights: number;
 }
 
-export const PRESETS: Readonly<Record<Tier, Omit<Video, 'preset' | 'fpsCap' | 'fullscreen'>>> = {
+export const PRESETS: Readonly<Record<Tier, Omit<Video, 'preset' | 'fpsCap' | 'fullscreen' | 'ambientEffects'>>> = {
   low: { renderScale: 0.75, shadows: 1, ao: 0, bloom: false, antialias: 'off', particles: 0, scatter: 0, maxDpr: 1 },
   medium: { renderScale: 0.9, shadows: 2, ao: 1, bloom: true, antialias: 'smaa', particles: 1, scatter: 1, maxDpr: 1 },
   high: { renderScale: 1.0, shadows: 2, ao: 1, bloom: true, antialias: 'smaa', particles: 2, scatter: 2, maxDpr: 1 },
@@ -53,7 +53,7 @@ export const PRESETS: Readonly<Record<Tier, Omit<Video, 'preset' | 'fpsCap' | 'f
 };
 
 export function presetVideo(tier: Tier, base?: Partial<Video>): Video {
-  return { fpsCap: 0, fullscreen: false, ...base, ...PRESETS[tier], preset: tier };
+  return { fpsCap: 0, fullscreen: false, ambientEffects: true, ...base, ...PRESETS[tier], preset: tier };
 }
 
 function tierOf(v: Video): Tier {

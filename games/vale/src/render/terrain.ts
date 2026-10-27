@@ -63,7 +63,7 @@ import { NOISE_GLSL } from './glsl.ts';
 import { FRAY_SEATS } from './palette.ts';
 import { patchWorldMaterial, worldUniforms } from './world_material.ts';
 import {
-  GROUND_MAIN_GLSL, GROUND_PARS_GLSL, GROUND_SHEEN_GLSL, SHADOW_MAIN_GLSL, SHADOW_PARS_GLSL, TERRAIN_HELPERS_GLSL, WALL_MAIN_GLSL,
+  GROUND_MAIN_GLSL, GROUND_PARS_GLSL, GROUND_SHEEN_GLSL, QUAD_TINT_GLSL, QUAD_TINT_VERT, SHADOW_MAIN_GLSL, SHADOW_PARS_GLSL, TERRAIN_HELPERS_GLSL, WALL_MAIN_GLSL,
   GORGE_MIST_PARS, gorgeFogLift, gorgeMistApply, MIST_SHEET_MAIN, MIST_SHEET_PARS, WALL_PARS_GLSL, WALL_VERT_MAIN, WALL_VERT_PARS,
 } from './terrain_glsl.ts';
 import { bandRing, cliffProfile, farWallProfile, flankProfile, type Strip, sweep, WallMesh, WK } from './terrain_walls.ts';
@@ -417,7 +417,7 @@ export async function loadTerrainProps(map: MapDefT, load: (ref: string) => Prom
  *  (0.42 + a clearcoat) made one wet hot spot per crown. The Dialwood props carry a mask of 0 since M11.
  *  `sway`: the Dialwood's crowns move (terrain_brush.ts TREE_SWAY_MAIN: tip ≤ 4 cm at 0.2–0.4 Hz, per-tree
  *  phase, weighted by height); rocks and stones never do. One program per kind, no extra draws. */
-function propMaterial(sway = false): MeshStandardMaterial {
+function propMaterial(sway = false, quad: QuadUniforms | null = null): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0 });
   const u = { uSwayT: worldUniforms.valeTime };
   m.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
@@ -432,8 +432,14 @@ function propMaterial(sway = false): MeshStandardMaterial {
         .replace('#include <common>', `#include <common>\n${TREE_SWAY_PARS}`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>\n${TREE_SWAY_MAIN}`);
     }
+    if (quad) {
+      Object.assign(shader.uniforms, quad);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>\n${QUAD_TINT_GLSL}`)
+        .replace('#include <color_vertex>', `#include <color_vertex>\n${QUAD_TINT_VERT}`);
+    }
   };
-  m.customProgramCacheKey = () => (sway ? 'vale_prop_matte_sway_v3' : 'vale_prop_matte_v3');
+  m.customProgramCacheKey = () => (sway ? 'vale_prop_matte_sway_v3' : 'vale_prop_matte_v3') + (quad ? '_q' : '');
   return m;
 }
 
@@ -476,6 +482,28 @@ export async function loadTerrainLandmarks(map: MapDefT, load: (ref: string) => 
     out.push(o);
   }));
   return out;
+}
+
+/** r12 M14: art.terrain.quadrantTint → the four per-channel multipliers (terrain_glsl.ts QUAD_TINT_GLSL). Each quadrant's
+ *  colour is taken at unit luminance and scaled so its largest channel departs from 1 by exactly `strength` (default
+ *  0.04: the ±4 % hue tint), so the value bands hold; a map without one gets the identity. */
+type QuadUniforms = { uQuadNW: { value: Color }; uQuadNE: { value: Color }; uQuadSW: { value: Color }; uQuadSE: { value: Color }; uQuadC: { value: Vector3 } };
+function quadUniforms(v: unknown): QuadUniforms {
+  const q = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const k = typeof q.strength === 'number' && Number.isFinite(q.strength) ? Math.max(0, Math.min(0.1, q.strength)) : 0.04;
+  const mul = (hex: unknown): Color => {
+    if (typeof hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hex)) return new Color(1, 1, 1);
+    const c = lin(hex);
+    const l = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+    const n = [c.r / l - 1, c.g / l - 1, c.b / l - 1];
+    const m = Math.max(1e-6, ...n.map(Math.abs));
+    return new Color(1 + (k * n[0]) / m, 1 + (k * n[1]) / m, 1 + (k * n[2]) / m);
+  };
+  const c = Array.isArray(q.centre) ? (q.centre as number[]) : [0, 0];
+  return {
+    uQuadNW: { value: mul(q.nw) }, uQuadNE: { value: mul(q.ne) }, uQuadSW: { value: mul(q.sw) }, uQuadSE: { value: mul(q.se) },
+    uQuadC: { value: new Vector3(Number(c[0]) || 0, Number(c[1]) || 0, typeof q.blendM === 'number' ? q.blendM : 8) },
+  };
 }
 
 /** a 1×1 stand-in so the samplers exist from the first compile (textures swap in without a recompile) */
@@ -737,6 +765,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     return c.multiplyScalar(1 / Math.max(1e-3, l));
   };
   const tempK = typeof tempField.strength === 'number' ? Math.min(1, tempField.strength * 3) : 0;
+  const quadU = quadUniforms(tr.quadrantTint);
   const tex = { litter: { value: grey as Texture }, grain: { value: grey as Texture }, moss: { value: grey as Texture } };
   const shared = {
     uTempW: { value: tempOf(tempField.west, '#B8C6D9') }, uTempE: { value: tempOf(tempField.east, '#D9C2A0') }, uTempK: { value: tempK },
@@ -763,7 +792,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   };
   const roomU = Array.from({ length: 16 }, (_, k) => (rooms[k] ? new Vector4(rooms[k].x, rooms[k].y, rooms[k].r, 0) : new Vector4()));
   const gu = {
-    ...shared, ...inlayU,
+    ...shared, ...inlayU, ...quadU,
     uSplat: { value: splatTex }, uSplat2: { value: splat2Tex },
     uSplatScale: { value: new Vector2(1 / (W * texel), 1 / (H * texel)) },
     uLaneHalf: { value: LANE_HALF },
@@ -791,13 +820,13 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       .replace('#include <common>', '#include <common>\nvarying vec3 vGroundW;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvGroundW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n#define ${styleDef}\n${gorge ? '#define VALE_GORGE\n' : ''}${GROUND_PARS_GLSL}\n${NOISE_GLSL}\n${INLAY_GLSL}\n${TERRAIN_HELPERS_GLSL}`)
+      .replace('#include <common>', `#include <common>\n#define ${styleDef}\n${gorge ? '#define VALE_GORGE\n' : ''}${GROUND_PARS_GLSL}\n${QUAD_TINT_GLSL}\n${NOISE_GLSL}\n${INLAY_GLSL}\n${TERRAIN_HELPERS_GLSL}`)
       .replace('#include <map_fragment>', GROUND_MAIN_GLSL)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRough;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += gEmit;\n${GROUND_SHEEN_GLSL}`)
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, gHeight, 1.0 );');
   };
-  groundMat.customProgramCacheKey = () => `vale_ground_v8_${surface}${gorge ? '_g' : ''}`;
+  groundMat.customProgramCacheKey = () => `vale_ground_v9_${surface}${gorge ? '_g' : ''}`;
   patchWorldMaterial(groundMat);
   const ground = new Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
@@ -814,7 +843,10 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     .map((l) => {
       const at = l.at as number[], sz = Array.isArray(l.size) ? (l.size as number[]) : [2, 2];
       return { x: at[0], y: at[1], sx: sz[0] / 2, sy: sz[1] / 2, h: num(l.height) ?? 3 };
-    });
+    })
+    // r12 M14: the ambient props (art.ambient.props: banners, resin lamps on the wall lips) keep a small footprint
+    // and their sight line the same way, so no crown swallows a lamp or a banner
+    .concat((map.art.ambient?.props ?? []).flatMap((p) => p.at.map((q) => ({ x: q[0], y: q[1], sx: 0.6, sy: 0.6, h: 3.6 }))));
   // loose stones keep off a landmark's footprint and the strip in front of it (camera side, +y)
   const onMark = (x: number, y: number): boolean => marks.some((m) => Math.abs(x - m.x) < m.sx + 1.0 && y > m.y - m.sy - 1.0 && y < m.y + m.sy + 2);
   const replaced = walls.map((_, i) => marks.some((m) => {
@@ -1150,15 +1182,16 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const grassAO = { value: 1 };
   const grassU = { uWindT: worldUniforms.valeTime, uGrassAO: grassAO, ...(brush ? brush.uniforms : { uBrush: { value: [] }, uBrushFade: { value: [] }, uBrushN: { value: 0 } }) };
   grassMat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-    Object.assign(shader.uniforms, grassU);
+    Object.assign(shader.uniforms, grassU, quadU);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${GRASS_VERT_PARS}`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${GRASS_VERT_MAIN}`);
+      .replace('#include <common>', `#include <common>\n${GRASS_VERT_PARS}\n${QUAD_TINT_GLSL}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${GRASS_VERT_MAIN}`)
+      .replace('#include <color_vertex>', `#include <color_vertex>\n${QUAD_TINT_VERT}`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vBrushA;')
       .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vBrushA;');
   };
-  grassMat.customProgramCacheKey = () => 'vale_grass_v3';
+  grassMat.customProgramCacheKey = () => 'vale_grass_v4';
   patchWorldMaterial(grassMat);
   const grassDepth = motionDepthMaterial(GRASS_VERT_PARS, GRASS_VERT_MAIN, grassU, 'vale_grass_depth_v1');
   const grassItems: { m: Matrix4; c: Color }[] = [];
@@ -1515,7 +1548,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const propMat = propMaterial();
   patchWorldMaterial(propMat);
   // the Dialwood sway (r12 M11): its own program, and a shadow depth material running the same motion
-  const treeMat = propMaterial(true);
+  const treeMat = propMaterial(true, quadU);
   patchWorldMaterial(treeMat);
   const treeDepth = motionDepthMaterial(TREE_SWAY_PARS, TREE_SWAY_MAIN, { uSwayT: worldUniforms.valeTime }, 'vale_tree_sway_depth_v1');
   disposables.push(propMat, treeMat, treeDepth);

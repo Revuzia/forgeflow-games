@@ -559,6 +559,377 @@
    ],
    "colors": {"lane": "#6A6456", "clearing": "#4B4740", "inscription": "#777469", "laneGrout": "#605A4C", "moss": "#34402F", "cliffFace": "#322F2B", "cliffLip": "#524F45", "edgeLight": "#716D63", "flank": "#272523", "rock": "#33353C", "mist": "#3F4963", "grassRoot": "#2B362C", "grassTip": "#8F986F", "lit": "#FFE2B8", "plazaAubade": "#5F6A6C", "plazaSerenade": "#685A45", "inlayAubade": "#868C91", "inlaySerenade": "#856234"}
   },
+  "ambient": {
+   "$comment": "r12 M14 ambient life (see map_rift): the gorge's updraft and wisps and a wheeling flock far below the deck, chalk dust off the broken edges, skinks basking on the deck's edges, resin lamps and side banners at the Dawn Arch and the Lamp Gate.",
+   "seed": 2207,
+   "effects": [
+    {
+     "vfx": "amb_bridge_updraft",
+     "at": [
+      [
+       22,
+       4.5,
+       -9
+      ],
+      [
+       22,
+       39.5,
+       -9
+      ],
+      [
+       46,
+       4.5,
+       -9
+      ],
+      [
+       46,
+       39.5,
+       -9
+      ],
+      [
+       70,
+       4.5,
+       -9
+      ],
+      [
+       70,
+       39.5,
+       -9
+      ],
+      [
+       94,
+       4.5,
+       -9
+      ],
+      [
+       94,
+       39.5,
+       -9
+      ],
+      [
+       118,
+       4.5,
+       -9
+      ],
+      [
+       118,
+       39.5,
+       -9
+      ],
+      [
+       140,
+       4.5,
+       -9
+      ],
+      [
+       140,
+       39.5,
+       -9
+      ]
+     ]
+    },
+    {
+     "vfx": "amb_bridge_gorge_wisps",
+     "at": [
+      [
+       18,
+       5.0,
+       -4.5
+      ],
+      [
+       18,
+       39.0,
+       -4.5
+      ],
+      [
+       52,
+       5.0,
+       -4.5
+      ],
+      [
+       52,
+       39.0,
+       -4.5
+      ],
+      [
+       86,
+       5.0,
+       -4.5
+      ],
+      [
+       86,
+       39.0,
+       -4.5
+      ],
+      [
+       120,
+       5.0,
+       -4.5
+      ],
+      [
+       120,
+       39.0,
+       -4.5
+      ]
+     ]
+    },
+    {
+     "vfx": "amb_bridge_chalk_dust",
+     "at": [
+      [
+       26.5,
+       15.6,
+       0.15
+      ],
+      [
+       26.5,
+       28.4,
+       0.15
+      ],
+      [
+       56,
+       15.6,
+       0.15
+      ],
+      [
+       56,
+       28.4,
+       0.15
+      ],
+      [
+       66,
+       15.6,
+       0.15
+      ],
+      [
+       66,
+       28.4,
+       0.15
+      ],
+      [
+       90,
+       15.6,
+       0.15
+      ],
+      [
+       90,
+       28.4,
+       0.15
+      ],
+      [
+       100,
+       15.6,
+       0.15
+      ],
+      [
+       100,
+       28.4,
+       0.15
+      ],
+      [
+       129.5,
+       15.6,
+       0.15
+      ],
+      [
+       129.5,
+       28.4,
+       0.15
+      ]
+     ]
+    }
+   ],
+   "critters": [
+    {
+     "id": "hourskink",
+     "model": "assets/props/ambient/hourskink.glb",
+     "kind": "runner",
+     "count": 12,
+     "scale": 1.4,
+     "spots": [
+      [
+       39.5,
+       15.5,
+       1.0
+      ],
+      [
+       22.5,
+       28.5,
+       1.0
+      ],
+      [
+       55.5,
+       15.5,
+       1.0
+      ],
+      [
+       50.5,
+       28.5,
+       1.0
+      ],
+      [
+       28.5,
+       15.5,
+       1.0
+      ],
+      [
+       38.5,
+       28.5,
+       1.0
+      ],
+      [
+       116.5,
+       15.5,
+       1.0
+      ],
+      [
+       133.5,
+       28.5,
+       1.0
+      ],
+      [
+       100.5,
+       15.5,
+       1.0
+      ],
+      [
+       105.5,
+       28.5,
+       1.0
+      ],
+      [
+       127.5,
+       15.5,
+       1.0
+      ],
+      [
+       117.5,
+       28.5,
+       1.0
+      ]
+     ]
+    },
+    {
+     "id": "dialwren",
+     "model": "assets/props/ambient/dialwren.glb",
+     "kind": "circler",
+     "count": 10,
+     "scale": 1.6,
+     "height": -6,
+     "spots": [
+      [
+       34,
+       5.5,
+       5.0
+      ],
+      [
+       70,
+       4.5,
+       4.0
+      ],
+      [
+       100,
+       5.5,
+       5.0
+      ],
+      [
+       124,
+       5.0,
+       4.5
+      ],
+      [
+       30,
+       38.5,
+       5.0
+      ],
+      [
+       58,
+       39.0,
+       4.5
+      ],
+      [
+       92,
+       39.0,
+       4.0
+      ],
+      [
+       128,
+       38.5,
+       5.0
+      ]
+     ]
+    }
+   ],
+   "props": [
+    {
+     "model": "assets/props/ambient/resin_lamp.glb",
+     "at": [
+      [
+       -1.6,
+       12.6,
+       0
+      ],
+      [
+       -1.6,
+       31.4,
+       0
+      ],
+      [
+       157.6,
+       12.6,
+       0
+      ],
+      [
+       157.6,
+       31.4,
+       0
+      ]
+     ],
+     "fx": {
+      "vfx": "amb_bridge_resin_flame",
+      "offset": [
+       0,
+       1.74,
+       0
+      ]
+     }
+    },
+    {
+     "model": "assets/props/ambient/banner_aubade.glb",
+     "at": [
+      [
+       -2.4,
+       16.8,
+       90
+      ],
+      [
+       -2.4,
+       27.2,
+       90
+      ]
+     ],
+     "sway": 0.13,
+     "value": 0.72
+    },
+    {
+     "model": "assets/props/ambient/banner_serenade.glb",
+     "at": [
+      [
+       158.4,
+       16.8,
+       -90
+      ],
+      [
+       158.4,
+       27.2,
+       -90
+      ]
+     ],
+     "sway": 0.1,
+     "value": 0.85
+    }
+   ]
+  },
   "lighting": {
    "sunDir": [
     -0.2376,

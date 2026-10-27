@@ -106,6 +106,27 @@ vec3 valeFlag( vec3 band, vec4 f, vec3 grainN, float chip, float jointW, vec3 jo
 }
 `;
 
+/** r12 M14: the jungle quadrant tint (art.terrain.quadrantTint): four per-channel multipliers (each within ±4 % of 1,
+ *  luminance kept) blended across the map's two axes (the Noonline and the Mid road) over ± blend m, so a player knows
+ *  which quarter of the Dialwood they stand in. Identity (all 1) on a map without one. */
+export const QUAD_TINT_GLSL = /* glsl */`
+uniform vec3 uQuadNW, uQuadNE, uQuadSW, uQuadSE;
+uniform vec3 uQuadC;
+vec3 valeQuadTint( vec2 p ) {
+  float e = smoothstep( -uQuadC.z, uQuadC.z, p.x - uQuadC.x );
+  float s = smoothstep( -uQuadC.z, uQuadC.z, p.y - uQuadC.y );
+  return mix( mix( uQuadNW, uQuadNE, e ), mix( uQuadSW, uQuadSE, e ), s );
+}
+`;
+/** the same tint on an instanced, vertex-coloured mesh (trees, Needlegrass): after <color_vertex> */
+export const QUAD_TINT_VERT = /* glsl */`
+#if defined( USE_COLOR ) && defined( USE_INSTANCING )
+vColor.rgb *= valeQuadTint( ( modelMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xz );
+#elif defined( USE_COLOR_ALPHA ) && defined( USE_INSTANCING )
+vColor.rgb *= valeQuadTint( ( modelMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xz );
+#endif
+`;
+
 /** ground: uniform + varying declarations (fragment) */
 export const GROUND_PARS_GLSL = /* glsl */`
 varying vec3 vGroundW;
@@ -453,6 +474,8 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   // the temperature field: a cool cast west, a warm cast east (never a team hue)
   vec3 tmp = mix( uTempW, uTempE, smoothstep( 0.12, 0.88, p.x / uMapSize.x ) );
   col *= mix( vec3( 1.0 ), tmp, uTempK );
+  // r12 M14: the quadrant tint, off the roads
+  col *= mix( vec3( 1.0 ), valeQuadTint( p ), smoothstep( uLaneHalf, uLaneHalf + 3.0, laneD ) );
   diffuseColor.rgb *= col;
   gHeight = h; gRough = rough; gEmit = emit;
 }

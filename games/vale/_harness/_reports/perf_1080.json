@@ -8,31 +8,46 @@
   "high": {
    "fps": 60.1,
    "avgMs": 16.65,
-   "p95Ms": 17.6,
-   "p99Ms": 17.7,
+   "p95Ms": 16.8,
+   "p99Ms": 16.8,
    "frames": 481,
    "stats": {
-    "fps": 60.2,
-    "frameMs": 7,
-    "calls": 198,
-    "triangles": 954264,
-    "sceneCalls": 198,
-    "sceneTriangles": 954264,
-    "programs": 74,
-    "geometries": 120,
-    "textures": 148,
+    "fps": 60,
+    "frameMs": 1.1,
+    "calls": 230,
+    "triangles": 1124743,
+    "sceneCalls": 230,
+    "sceneTriangles": 1124743,
+    "programs": 89,
+    "geometries": 115,
+    "textures": 164,
     "renderScale": 1,
     "pixelRatio": 1,
     "tier": "high",
     "width": 1920,
     "height": 1080,
-    "particles": 226,
-    "vfx": 48,
-    "actors": 119,
+    "particles": 401,
+    "vfx": 59,
+    "actors": 124,
     "telegraphs": 1,
     "mode": "match",
     "gpuMs": null,
-    "bound": ""
+    "bound": "",
+    "ambient": {
+     "on": true,
+     "density": 1,
+     "ms": 0.008,
+     "emitters": 81,
+     "particles": 31,
+     "onScreen": {
+      "amb_rift_shaft_dust": 21,
+      "amb_rift_shallows_glint": 10
+     },
+     "critters": 26,
+     "crittersDrawn": 0,
+     "flights": 15,
+     "props": 24
+    }
    }
   }
  }

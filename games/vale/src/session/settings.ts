@@ -12,7 +12,7 @@
 //   high       1.0        2     1  yes   smaa      2         2       1
 //   ultra      1.0        3     2  yes   smaa      2         2       2
 // ('High: AO' vs 'Ultra: AO full' in §9.4 reads as High = the half-resolution pass.) A preset
-// never touches fpsCap or fullscreen. Changing any ladder field by hand turns the preset 'custom'.
+// never touches fpsCap, fullscreen or ambientEffects (r12 M14: on/off; its density follows the tier). Changing any ladder field by hand turns the preset 'custom'.
 //
 // KEYBINDS: action → KeyboardEvent.code (layout-independent). Actions: a1 a2 a3 ult spell1 spell2
 // item1..item6 recall shop scoreboard ping attackMove stop cameraLock centerCamera selfCastMod.
@@ -48,7 +48,7 @@ export function defaultSettings(): Settings {
 
 function rawDefaults(): Settings {
   return {
-    video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false },
+    video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false, ambientEffects: true },
     audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true },
     controls: { binds: { ...DEFAULT_BINDS }, quickCast: false, cameraLock: false, edgePan: true, panSpeed: 0.5, attackMoveOnClick: false, selfCastModifier: 'AltLeft' },
     access: { colorblind: 'off', uiScale: 1, hudScale: 1, minimapScale: 1, reduceMotion: false, screenShake: 0.5, subtitles: true, locFlash: false, damageFlash: false },
@@ -98,6 +98,7 @@ export function normalizeSettings(raw: unknown, base: Settings = defaultSettings
     fpsCap: oneOf(v.fpsCap, [0, 30, 60, 120, 144] as const, bv.fpsCap),
     maxDpr: clamp(v.maxDpr, 0.5, 4, bv.maxDpr),
     fullscreen: bool(v.fullscreen, bv.fullscreen),
+    ambientEffects: bool(v.ambientEffects, bv.ambientEffects !== false),
   };
   return {
     video,

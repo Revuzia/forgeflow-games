@@ -476,6 +476,25 @@ export const TeamBuffDef = z.object({
 }).strict();
 
 // ── maps ────────────────────────────────────────────────────────────────────────────────────────
+/** CHANGED(RENDER), additive (r12 M14): the map's ambient life, read only by render/ambient.ts (the sim never). Points
+ *  are [x, y] or [x, y, height above the ground there]; props are [x, y, rotation°]; critter spots [x, y, radius m]. */
+const AmbientPoint = z.union([z.tuple([z.number(), z.number()]), z.tuple([z.number(), z.number(), z.number()])]);
+export const AmbientArt = z.object({
+  /** the presentation PRNG's seed (critter spots, idle timers, flee choices) */
+  seed: z.number().int().default(1),
+  /** T0 `amb_*` VfxDefs at authored points (never on a lane or in a fight zone) */
+  effects: z.array(z.object({ vfx: Id, at: z.array(AmbientPoint).min(1), scale: z.number().positive().optional() }).strict()).default([]),
+  /** rigged critters (clips idle / flee / settle): a flier or runner takes off when a unit the viewer sees comes within
+   *  `flee` m; a circler wheels round its spots at `height` m (below a deck: negative) and never lands */
+  critters: z.array(z.object({ id: Id, model: AssetRef, kind: z.enum(['flier', 'runner', 'circler']), count: z.number().int().positive(),
+    scale: z.number().positive().optional(), flee: z.number().positive().optional(), height: z.number().optional(),
+    spots: z.array(z.tuple([z.number(), z.number(), z.number().positive()])).min(1) }).strict()).default([]),
+  /** static swaying props (banners, lamps, bunting): `sway` = metres at the cloth's free edge; `fx` an effect on each */
+  props: z.array(z.object({ model: AssetRef, at: z.array(z.tuple([z.number(), z.number(), z.number()])).min(1),
+    scale: z.number().positive().optional(), value: z.number().positive().optional(), sway: z.number().nonnegative().optional(),
+    fx: z.object({ vfx: Id, offset: z.tuple([z.number(), z.number(), z.number()]) }).strict().optional() }).strict()).default([]),
+}).strict();
+
 export const MapDef = z.object({
   id: Id, name: z.string(), desc: z.string(),
   /** sim plane extents in metres: x ∈ [0, size[0]], y ∈ [0, size[1]] (world X = x, world Z = y) */
@@ -504,6 +523,7 @@ export const MapDef = z.object({
     lut: AssetRef,            // locked color grade (.cube)
     minimap: AssetRef,        // painted minimap image
     terrain: z.record(z.string(), z.unknown()).default({}),
+    ambient: AmbientArt.optional(),
     lighting: z.object({ sunDir: z.tuple([z.number(), z.number(), z.number()]), sunColor: Color, sunIntensity: z.number(),
       ambient: z.number(), fogColor: Color, fogDensity: z.number(), exposure: z.number() }).strict(),
     music: Id,

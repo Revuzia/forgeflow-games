@@ -35,29 +35,29 @@
   },
   "uv_coverage": 0.609,
   "bake": {
-    "base": 12.57,
-    "rough_metal": 6.76,
-    "normal": 4.86,
-    "ao": 7.19,
+    "base": 6.67,
+    "rough_metal": 4.18,
+    "normal": 3.22,
+    "ao": 6.25,
     "normal_fixed_px": 37682,
-    "projection": 111.91,
-    "pack_save": 112.18,
-    "total": 144.51
+    "projection": 98.37,
+    "pack_save": 98.64,
+    "total": 119.22
   },
   "tris": 21150,
   "mesh_top_m": 1.967,
-  "glb_bytes_raw": 2252740,
+  "glb_bytes_raw": 2253788,
   "optimize": {
     "ok": true,
-    "before": 2252740,
-    "after": 1042436
+    "before": 2253788,
+    "after": 1042956
   },
-  "glb_bytes": 1042436,
+  "glb_bytes": 1042956,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_noon_fair.glb (1018 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: nurrow_noon_fair_base 2048x2048 305K, nurrow_noon_fair_normal 512x512 16K, nurrow_noon_fair_orm 256x256 14K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow_noon_fair.glb (1019 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: nurrow_noon_fair_base 2048x2048 306K, nurrow_noon_fair_normal 512x512 16K, nurrow_noon_fair_orm 256x256 14K",
       "  skinned meshes: nurrow_accent(397v), nurrow_noon_fair(19615v)",
       "  bones: 31 (root hips spine chest neck head x_hat x_hat_rim shoulderL upper_armL forearmL handL propL x_dart_hand shoulderR upper_armR forearmR handR propR x_blade_tip x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_1)",
       "  clips: ",
@@ -72,8 +72,8 @@
       "portrait": "art/out/fighters/nurrow/nurrow_noon_fair_portrait.png"
     },
     "seconds": {
-      "splash": 13.62,
-      "portrait": 10.35
+      "splash": 21.29,
+      "portrait": 16.97
     }
   },
   "three_qa": {
@@ -105,24 +105,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/nurrow/three_nurrow_noon_fair.png",
-    "seconds": 43.9,
+    "seconds": 23.3,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.22,
-      "materials": 1.44,
-      "model": 140.83,
-      "lows_bind": 19.61,
-      "uv": 12.42,
-      "bake": 144.52,
-      "export": 0.17,
-      "optimize": 1.0,
+      "rig": 0.11,
+      "materials": 0.19,
+      "model": 27.65,
+      "lows_bind": 5.45,
+      "uv": 7.16,
+      "bake": 119.22,
+      "export": 0.14,
+      "optimize": 0.82,
       "load_test": 0.29,
-      "render": 24.08,
-      "three_qa": 44.81
+      "render": 38.32,
+      "three_qa": 24.13
     },
-    "total_s": 389.57
+    "total_s": 223.57
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78

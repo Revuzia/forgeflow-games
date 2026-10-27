@@ -6,7 +6,7 @@
 Sources: lib_defs.py (the shared lib_*), bespoke_defs.py (every <fighter>_<slot>_* def, when present),
 system_defs.py (lib_status_* looks, the generic wind-ups lib_windup* and lib_cast_flare: the VFX system's own),
 kit_defs.py (generated from the fighter records: every timed cast's <f>_<slot>_windup and the basic attacks
-<f>_atk_swing / _atk_draw / _atk_shot). passes.py applies the house rules (signature colours, the ultimate
+<f>_atk_swing / _atk_draw / _atk_shot), ambient_defs.py (the T0 amb_* defs the maps place, r12 M14). passes.py applies the house rules (signature colours, the ultimate
 envelope, mid-scale secondary shapes, no camera shake) to the bespoke defs; drop_shake to every def.
 Defs in content/vfx.json that no source defines yet are KEPT as they are (a port in progress never
 drops a def the catalog references); `--prune` drops them instead.
@@ -33,7 +33,7 @@ def main() -> None:
     import passes  # noqa: E402
 
     built = []
-    for mod in ("lib_defs", "bespoke_defs", "system_defs", "kit_defs"):
+    for mod in ("lib_defs", "bespoke_defs", "system_defs", "kit_defs", "ambient_defs"):
         try:
             m = importlib.import_module(mod)
         except ModuleNotFoundError as e:

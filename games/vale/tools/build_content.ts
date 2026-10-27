@@ -869,9 +869,10 @@ function checkPresentation(c: CatalogT, designDir: string, dg: Diagnostics): voi
 function checkVfx(c: CatalogT, dg: Diagnostics): void {
   const fighterIds = c.fighters.map((f) => f.id);
   c.vfx.forEach((v, i) => {
-    if (!v.id.startsWith('lib_') && !fighterIds.some((f) => v.id.startsWith(`${f}_`))) {
-      dg.warn(['vfx', i, 'id'], `"${v.id}" follows neither "lib_*" (shared) nor "<fighter>_<slot>_*" (bespoke) (CONTRACT §9.5)`);
+    if (!v.id.startsWith('lib_') && !v.id.startsWith('amb_') && !fighterIds.some((f) => v.id.startsWith(`${f}_`))) {
+      dg.warn(['vfx', i, 'id'], `"${v.id}" follows neither "lib_*" (shared), "amb_*" (T0 ambient) nor "<fighter>_<slot>_*" (bespoke) (CONTRACT §9.5)`);
     }
+    if (v.id.startsWith('amb_')) checkAmbientDef(v, i, dg);
     v.layers.forEach((layer, j) => {
       const p: Seg[] = ['vfx', i, 'layers', j];
       const type = layer.type;
@@ -884,6 +885,81 @@ function checkVfx(c: CatalogT, dg: Diagnostics): void {
         const e = vfxValueError(kind, val);
         if (e) dg.err([...p, k], `${e}, got ${JSON.stringify(val)}`);
       }
+    });
+  });
+}
+
+// r12 M14: T0 ambient defs (tokens vfx.tiers.T0: emissive <= 0.8, <= 0.5 Hz, never a reserved / team colour) run as
+// closed-form particles in render/ambient.ts: only emitter and sprite layers, lives >= 2 s, orbit and spin <= 180°/s,
+// literal hex colours, no team tint.
+const T0_EMISSIVE = 0.8;
+const T0_MIN_LIFE = 2;
+const T0_MAX_TURN_DEG = 180;
+function curveMaxOf(v: unknown): number {
+  if (typeof v === 'number') return v;
+  if (!Array.isArray(v)) return 0;
+  return Math.max(...v.map((x) => (Array.isArray(x) ? Number(x[1]) : Number(x))).filter(Number.isFinite), 0);
+}
+function checkAmbientDef(v: CatalogT['vfx'][number], i: number, dg: Diagnostics): void {
+  if (v.teamTint) dg.err(['vfx', i, 'teamTint'], `ambient def "${v.id}" must set teamTint false (T0 never carries a team colour)`);
+  v.layers.forEach((layer, j) => {
+    const p: Seg[] = ['vfx', i, 'layers', j];
+    const l = layer as Record<string, unknown>;
+    if (l.type !== 'emitter' && l.type !== 'sprite') { dg.err([...p, 'type'], `ambient def "${v.id}": only emitter and sprite layers run in the T0 ambient layer (render/ambient.ts), got ${JSON.stringify(l.type)}`); return; }
+    const e = curveMaxOf(l.emissive ?? 1);
+    if (e > T0_EMISSIVE + 1e-6) dg.err([...p, 'emissive'], `ambient def "${v.id}": emissive peaks at ${e}; T0 caps it at ${T0_EMISSIVE} (tokens vfx.tiers.T0)`);
+    const life = Array.isArray(l.life) ? Number(l.life[0]) : typeof l.life === 'number' ? l.life : NaN;
+    if (!(life >= T0_MIN_LIFE)) dg.err([...p, 'life'], `ambient def "${v.id}": a particle lives ${Number.isFinite(life) ? life : 'unset'} s; T0 loops at <= 0.5 Hz, so lives are >= ${T0_MIN_LIFE} s`);
+    for (const k of ['orbitDeg', 'spinDeg'] as const) {
+      const val = l[k];
+      const m = Array.isArray(val) ? Math.max(...val.map((x) => Math.abs(Number(x)))) : Math.abs(Number(val ?? 0));
+      if (m > T0_MAX_TURN_DEG) dg.err([...p, k], `ambient def "${v.id}": ${k} ${m} exceeds ${T0_MAX_TURN_DEG}°/s (0.5 Hz)`);
+    }
+    const cols = Array.isArray(l.color) ? (l.color as unknown[]).map((x) => (Array.isArray(x) ? x[1] : x)) : [l.color];
+    for (const c0 of cols) if (typeof c0 !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(c0)) dg.err([...p, 'color'], `ambient def "${v.id}": colours are literal "#rrggbb" (no team, element or signature refs), got ${JSON.stringify(c0)}`);
+  });
+}
+
+/** r12 M14: map.art.ambient refs resolve to amb_* defs, and nothing ambient sits on a lane, a camp, a base or a shop */
+const AMB_LANE_CLEAR_M = 3.6 + 1.0;      // render/terrain.ts LANE_HALF + 1 m
+const AMB_CAMP_CLEAR_M = 4.0;
+function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+}
+function checkAmbientMaps(c: CatalogT, dg: Diagnostics): void {
+  const vfx = new Set(c.vfx.map((v) => v.id));
+  c.maps.forEach((m, i) => {
+    const a = m.art.ambient;
+    if (!a) return;
+    const p: Seg[] = ['maps', i, 'art', 'ambient'];
+    const zoneOf = (x: number, y: number, pad: number): string | null => {
+      for (const l of m.lanes) for (let k = 1; k < l.path.length; k++) {
+        if (segDist(x, y, l.path[k - 1][0], l.path[k - 1][1], l.path[k][0], l.path[k][1]) < AMB_LANE_CLEAR_M + pad) return `lane "${l.id}"`;
+      }
+      for (const cp of m.camps) for (const u of cp.units) if (Math.hypot(x - u.at[0], y - u.at[1]) < AMB_CAMP_CLEAR_M + pad) return `camp "${cp.id}"`;
+      for (const b of m.bases) {
+        if (Math.hypot(x - b.fountain.at[0], y - b.fountain.at[1]) < b.fountain.radius + pad) return 'a fountain';
+      }
+      for (const s of m.shops) if (Math.hypot(x - s.at[0], y - s.at[1]) < s.radius + pad) return 'a shop';
+      return null;
+    };
+    const needAmb = (path: Seg[], id: string): void => {
+      if (!vfx.has(id)) dg.err(path, unknownRef('vfx id', id, vfx));
+      else if (!id.startsWith('amb_')) dg.err(path, `"${id}" is not a T0 ambient def (amb_*)`);
+    };
+    a.effects.forEach((e, j) => {
+      needAmb([...p, 'effects', j, 'vfx'], e.vfx);
+      e.at.forEach((pt, k) => { const z = zoneOf(pt[0], pt[1], 0); if (z) dg.err([...p, 'effects', j, 'at', k], `ambient effect point (${pt[0]}, ${pt[1]}) is on ${z}: T0 stays out of gameplay zones`); });
+    });
+    a.critters.forEach((cr, j) => cr.spots.forEach((s, k) => {
+      const z = zoneOf(s[0], s[1], s[2]);
+      if (z) dg.err([...p, 'critters', j, 'spots', k], `critter spot (${s[0]}, ${s[1]}) r ${s[2]} reaches ${z}: critters live off the gameplay zones`);
+    }));
+    a.props.forEach((pr, j) => {
+      if (pr.fx) needAmb([...p, 'props', j, 'fx', 'vfx'], pr.fx.vfx);
+      pr.at.forEach((pt, k) => { const z = zoneOf(pt[0], pt[1], 0); if (z) dg.err([...p, 'props', j, 'at', k], `ambient prop at (${pt[0]}, ${pt[1]}) stands on ${z}`); });
     });
   });
 }
@@ -1135,7 +1211,7 @@ export function buildContent(opts: BuildOptions): BuildResult {
   if (!parsed.success) reportIssues(parsed.error.issues as unknown as IssueLike[], [], dg);
   const data = (parsed.success ? parsed.data : raw) as Record<string, unknown>;
 
-  if (parsed.success) { semanticChecks(parsed.data, opts, dg); checkVfx(parsed.data, dg); checkPresentation(parsed.data, opts.designDir, dg); }
+  if (parsed.success) { semanticChecks(parsed.data, opts, dg); checkVfx(parsed.data, dg); checkAmbientMaps(parsed.data, dg); checkPresentation(parsed.data, opts.designDir, dg); }
   else if (!opts.quiet) dg.fileWarn('(build)', 'schema errors present — cross-reference checks are skipped until they are fixed');
 
   // assets + names run on raw data too, so one pass shows as many problems as possible

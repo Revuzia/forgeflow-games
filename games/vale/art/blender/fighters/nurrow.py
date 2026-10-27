@@ -1267,9 +1267,10 @@ def _lacquer(p, n, q, r, phi):
     hair = _streaks(phi, r, 58.0, 2.0, 11.0)
     mott = NOISE.fbm(p, 7.0, 3)
     # (f5-2: bolder: the f5-1 strokes vanished in the splash's sky light and the 2 mm texels)
+    # (f5-3: the strokes +-3.5 L* still vanished in the splash's sky light -> +-6; the gores +-4.5)
     v = 0.36 + 0.56 * t
-    v = v + 0.08 * HAT_OFF[k] + 0.07 * (u - 0.5) * fade
-    v = v + 0.17 * broad + 0.05 * hair + 0.04 * mott + 0.06 * NOISE.fbm(p, 2.5, 2, offset=(9.0, 4.0, 1.0))
+    v = v + 0.11 * HAT_OFF[k] + 0.08 * (u - 0.5) * fade
+    v = v + 0.30 * broad + 0.08 * hair + 0.05 * mott + 0.07 * NOISE.fbm(p, 2.5, 2, offset=(9.0, 4.0, 1.0))
     v = v + 0.04 * _ss(0.0, 0.3, r) * (1 - _ss(0.3, 0.55, r))
     v = v - 0.12 * seam + 0.06 * lip - 0.06 * pool
     rl = r + 0.004 * _streaks(phi, r, 9.0, 1.0, 5.0)

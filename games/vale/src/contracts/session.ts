@@ -54,7 +54,10 @@ export interface MatchHistoryEntry {
 }
 export interface Settings {
   video: { preset: 'low' | 'medium' | 'high' | 'ultra' | 'custom'; renderScale: number; shadows: 0 | 1 | 2 | 3; ao: 0 | 1 | 2; bloom: boolean;
-    antialias: 'off' | 'smaa' | 'msaa'; particles: 0 | 1 | 2; scatter: 0 | 1 | 2; fpsCap: 0 | 30 | 60 | 120 | 144; maxDpr: number; fullscreen: boolean };
+    antialias: 'off' | 'smaa' | 'msaa'; particles: 0 | 1 | 2; scatter: 0 | 1 | 2; fpsCap: 0 | 30 | 60 | 120 | 144; maxDpr: number; fullscreen: boolean;
+    /** CHANGED(RENDER), r12 M14, default true: the T0 ambient life (motes, flames, critters; ambient.ts). Not on the
+     *  ladder: a preset never changes it; its density follows the tier. A stored profile without it reads true */
+    ambientEffects: boolean };
   audio: { master: number; music: number; sfx: number; voice: number; ui: number; ambience: number; muteInBackground: boolean };
   controls: { binds: Record<string, string>; quickCast: boolean; cameraLock: boolean; edgePan: boolean; panSpeed: number; attackMoveOnClick: boolean; selfCastModifier: string };
   access: { colorblind: 'off' | 'deutan' | 'protan' | 'tritan'; uiScale: number; hudScale: number; minimapScale: number; reduceMotion: boolean; screenShake: number; subtitles: boolean;

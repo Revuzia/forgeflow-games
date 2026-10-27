@@ -51,6 +51,8 @@ import { buildTerrain, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES
 import { SocketResolver } from './vfx/sockets.ts';
 import { VfxSystem } from './vfx/system.ts';
 import { StructureFx } from './structures.ts';
+import { AmbientLayer, type AmbientStats } from './ambient.ts';
+import { ATLAS_GRID } from './vfx/atlas.ts';
 import { patchWorldMaterial, worldUniforms } from './world_material.ts';
 
 export interface RendererOptions {
@@ -91,6 +93,8 @@ export interface RenderStats {
   /** GPU time of the last measured frame (ms; null = no timer query, or dynamic resolution off) and what the
    *  dynamic-resolution controller last found limiting a slow second ('cpu' holds the scale) */
   gpuMs: number | null; bound: FrameBound;
+  /** r12 M14 ambient life (ambient.ts): its CPU ms (EMA), particles / critters drawn; null outside a match */
+  ambient?: AmbientStats | null;
 }
 
 export interface CameraControl {
@@ -196,6 +200,9 @@ class ValeRenderer implements Renderer {
   private readonly reactions: HitReactions;
   /** r12 M9: structure damage states, collapse + ruin, occlusion fade, protected shell (structures.ts) */
   private readonly structs: StructureFx;
+  /** r12 M14: T0 ambient effects, critters and swaying props from map.art.ambient (ambient.ts) */
+  private ambient: AmbientLayer | null = null;
+  private ambientOn = true;
   private readonly actors = new Map<number, Actor>();
   private client: MatchClient | null = null;
   private offEvents: (() => void) | null = null;
@@ -356,6 +363,8 @@ class ValeRenderer implements Renderer {
     this.vfx.density = this.q.particleDensity;
     this.vfx.setLightCount(this.q.flashLights);
     this.terrain?.setScatter(this.q.scatter, this.q.ao > 0);
+    this.ambientOn = video.ambientEffects !== false;
+    this.ambient?.configure(this.ambientOn, this.q.tier);
     this.menu.setScatter(this.q.scatter);
     this.applySize();
   }
@@ -435,6 +444,9 @@ class ValeRenderer implements Renderer {
     // world: procedural terrain now; the Blender scene replaces it when it exists
     this.terrain = buildTerrain(map);
     this.terrain.setScatter(this.q.scatter, this.q.ao > 0);
+    this.ambient = new AmbientLayer(map, this.catalog.vfx, this.vfx.textures.atlas, ATLAS_GRID, (r) => this.assets.model(r), this.terrain.groundAt);
+    this.ambient.configure(this.ambientOn, this.q.tier);
+    this.scene.add(this.ambient.group);
     this.scene.add(this.terrain.group);
     this.loadTerrainTextures(map, gen);
     void loadTerrainProps(map, (r) => this.assets.model(r)).then((p) => { if (gen === this.matchGen && this.terrain && p) this.terrain.setProps(p); });
@@ -474,6 +486,7 @@ class ValeRenderer implements Renderer {
     this.actors.clear();
     this.director.clear();
     this.structs.clear();
+    if (this.ambient) { this.scene.remove(this.ambient.group); this.ambient.dispose(); this.ambient = null; }
     this.vfx.clear();
     if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
     if (this.mapScene) { this.scene.remove(this.mapScene); this.mapScene = null; }
@@ -570,6 +583,22 @@ class ValeRenderer implements Renderer {
       b.push(a.id, a.x, a.y, v.radius, rel === 'self' ? 2 : rel === 'ally' ? 1 : 0);
     }
     b.end(d);
+  }
+
+  /** r12 M14: the critters flee only from units the VIEWER SEES (a.visible: the sim's visibleMask), like the brush */
+  private readonly threats: { x: number; y: number; r: number }[] = [];
+  private feedAmbient(d: number): void {
+    const amb = this.ambient;
+    if (!amb) return;
+    const T = this.threats;
+    T.length = 0;
+    for (const a of this.actors.values()) {
+      const v = a.view;
+      if (!v || !a.visible || !v.alive || a.leaving >= 0) continue;
+      if (v.kind !== 'fighter' && v.kind !== 'minion' && v.kind !== 'monster' && v.kind !== 'summon') continue;
+      T.push({ x: a.x, y: a.y, r: v.radius });
+    }
+    amb.update(this.time, d, this.rig.camera, T);
   }
 
   private entityVisible(e: EntityView): boolean {
@@ -896,6 +925,7 @@ class ValeRenderer implements Renderer {
     this.fog.update(view, this.palette.viewer.team, d);
     this.sun.fit(this.rig.camera);
     this.feedBrush(d);
+    this.feedAmbient(d);
     this.terrain?.update(this.time);
     this.vfx.update(d);
     this.buildOverlay(view);
@@ -1072,6 +1102,7 @@ class ValeRenderer implements Renderer {
       renderScale: this.dyn.scale, pixelRatio: this.gl.getPixelRatio(), tier: this.q.tier, width: size.x, height: size.y,
       particles: this.vfx.particleCount, vfx: this.vfx.instanceCount, actors: this.actors.size, telegraphs: this.teles.size, mode: this.mode,
       gpuMs: this.dyn.enabled ? this.gpuTimer.last : null, bound: this.dyn.bound,
+      ambient: this.ambient?.stats() ?? null,
     };
   }
 

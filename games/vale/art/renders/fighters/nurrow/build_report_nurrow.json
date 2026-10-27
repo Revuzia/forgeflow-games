@@ -35,14 +35,14 @@
   },
   "uv_coverage": 0.609,
   "bake": {
-    "base": 12.43,
-    "rough_metal": 7.65,
-    "normal": 3.71,
-    "ao": 8.3,
+    "base": 6.63,
+    "rough_metal": 4.37,
+    "normal": 4.0,
+    "ao": 7.27,
     "normal_fixed_px": 37682,
-    "projection": 108.3,
-    "pack_save": 108.56,
-    "total": 141.38
+    "projection": 93.18,
+    "pack_save": 93.45,
+    "total": 115.99
   },
   "tris": 21150,
   "mesh_top_m": 1.967,
@@ -153,18 +153,18 @@
       "impact": 0.4
     }
   },
-  "glb_bytes_raw": 2660528,
+  "glb_bytes_raw": 2662400,
   "optimize": {
     "ok": true,
-    "before": 2660528,
-    "after": 1183780
+    "before": 2662400,
+    "after": 1184724
   },
-  "glb_bytes": 1183780,
+  "glb_bytes": 1184724,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow.glb (1156 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: nurrow_base 2048x2048 237K, nurrow_normal 512x512 16K, nurrow_orm 256x256 14K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow.glb (1157 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: nurrow_base 2048x2048 238K, nurrow_normal 512x512 16K, nurrow_orm 256x256 14K",
       "  skinned meshes: nurrow(19615v), nurrow_accent(397v)",
       "  bones: 31 (root hips spine chest neck head x_hat x_hat_rim shoulderL upper_armL forearmL handL propL x_dart_hand shoulderR upper_armR forearmR handR propR x_blade_tip x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_1)",
       "  clips: attack1:0.667s/23tr, attack2:0.667s/23tr, cast_a1:0.500s/24tr, cast_a2:0.833s/23tr, cast_a3:0.667s/23tr, cast_ult:1.333s/24tr, channel:1.333s/23tr, crit:0.833s/23tr, dash:0.333s/25tr, death:1.667s/26tr, idle:2.667s/23tr, idle_lobby:4.000s/23tr, recall:2.000s/23tr, run:0.533s/25tr, stunned:1.333s/23tr, taunt:2.000s/23tr, victory:2.000s/23tr",
@@ -182,10 +182,10 @@
       "turntable": "art/renders/fighters/nurrow/turntable.png"
     },
     "seconds": {
-      "splash": 14.0,
-      "portrait": 6.29,
-      "icon": 4.11,
-      "turntable": 13.6
+      "splash": 22.12,
+      "portrait": 16.98,
+      "icon": 5.54,
+      "turntable": 9.74
     }
   },
   "three_qa": {
@@ -217,27 +217,27 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/nurrow/three_nurrow.png",
-    "seconds": 38.1,
+    "seconds": 14.3,
     "exit": 0,
     "clip_sheet": "art/renders/fighters/nurrow/three_clips_nurrow.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.23,
-      "materials": 1.1,
-      "model": 138.49,
-      "lows_bind": 21.5,
-      "uv": 12.57,
-      "bake": 141.38,
-      "clips": 0.34,
-      "export": 1.65,
+      "rig": 0.11,
+      "materials": 0.19,
+      "model": 27.58,
+      "lows_bind": 5.49,
+      "uv": 7.2,
+      "bake": 115.99,
+      "clips": 0.35,
+      "export": 1.87,
       "optimize": 0.8,
-      "load_test": 0.16,
-      "render": 38.14,
-      "three_qa": 166.25,
-      "cache": 0.41
+      "load_test": 0.19,
+      "render": 54.56,
+      "three_qa": 37.36,
+      "cache": 0.15
     },
-    "total_s": 523.19
+    "total_s": 251.92
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78
