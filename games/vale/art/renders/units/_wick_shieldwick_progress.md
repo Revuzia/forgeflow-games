@@ -337,3 +337,86 @@ art/out/units/shieldwick_{aubade,serenade}.glb, art/renders/units/*shieldwick*.
   target (CONTRACT 1.5-4k; the review asked for 400-800 more tris on the silhouettes); stance ankle dip 1.1 cm between
   30 fps keys; tiny background specks may remain at the Serenade hollow's floor corners in extreme close-ups;
   common/anim._solve_foot's pitch sign (worked around in Shieldwick._ft).
+
+## 2026-10-27 13:40 FIX ROUND 3 start (review 2026-10-27c: score 5.5, 3 open majors + the in-game notes)
+- Majors: (1) Serenade opening broken up close (crumpled grey polygon ring on the arch's inner lip, felt triangles at
+  the upper corners, a sliver at the lower left; the light a flat hard half-disc on the sill = a tongue at eye level, a
+  pupil from 52 deg); (2) Aubade seam = tape peeling off (free front end lifted above the brow, runs beside the knob, a
+  chalk chip at the knob's base; dark cracks in the lit inner band); (3) paint not premium / not Art 2.0 (clean
+  procedural fields, no felt fuzz / linen folds / brushwork, a doodled chain of 'o' circles on the Aubade frame, faceted
+  tube arms, grey-ball mitts). In-game: Aubade blue-grey under the ally azure and Serenade tan under the enemy marigold
+  read weakly; hood light small from above; surfaces flat, like tidy toys.
+- Shared targets of the round: one soft ellipsoid core centred in the opening (no slab / disc / mouth / eye), Art 2.0
+  paint, team read for every viewer (no large area in a reserved hue band over 40 % sat, accent-vs-surround contrast
+  measured in game from both seats), hoods L* <= 65 and under the fighters after B5, gates (tris <= 3.0k, accent
+  4.5-6 %, clips, three.js QA).
+- Module backed up: art/.cache/shieldwick_review/wick_shieldwick_1027_r3_start.py
+
+## 2026-10-27 fix round 3 - what changed (module wick_shieldwick.py; wick_common.py untouched)
+- HOOD LIGHT (both): the Aubade lit inner rim, ink cup, chalk dish and flame and the Serenade floor mound are gone. One
+  smooth accent ellipsoid core (8 x 6 turned, 80 tris), 10 x 6.2 cm face-on (1.6 : 1), centred vertically in the
+  opening, its front 3-4 cm behind the opening / brow, dark throat above, below and to both sides. Its soft falloff is
+  painted on the throat's walls and back round it (hood_light_paint + light_falloff: a dim team-neutral lamplight at the
+  core's outline, falling off fastest there, measured in core radii so the glow is wider than tall). The accent stays
+  factor-only (shared load test), so the nested shell is paint, not a second emissive. Tried and dropped: a halo dish
+  behind the core (lit by the room + AO-floored it read as a grey ring round an iris, builds 1-2) and a 2.15 : 1 core
+  (a horizontal dash = a slot at the game camera, build 2).
+- THROAT (both): one clean hand-built inked tube (throat_mesh) from the opening's lip to a round back cap replaces the
+  decimated carve + lining. Aubade: its lip tucks under the chalk frame's inner edge and rolls in over the edge; every
+  hood face inside the frame's inner edge is culled (cull_hidden; first try also culled the hood's BACK - the depth
+  window w < 4.5 cm fixes that). Serenade: the dome's game mesh is now SAMPLED on the sculpt (lathe_low, 22 x 8, clean
+  round dome) and its door hole conformed exactly under a hand-built rolled dark-felt rim (conform_hole + a 5 x 17 roll
+  that curls into the throat; rim_tube_paint inks its inner side) - no decimated carve edge anywhere, no felt
+  triangles, no slivers; the throat's floor sits on the collar's sill.
+- AUBADE SEAM: centred on the arch (x of the frame), starts 1.4 cm inside the chalk frame's outer edge (under the
+  frame: no free end), passes under the knob, tapers into the nape; an inlaid profile (SEAM_BAND: 3 mm proud, bevelled
+  edges sunk 7.5 mm) so no edge lifts off the cowl; the knob stands ON the seam with a 3.5 cm base disc covering the
+  crossing and sinking 4-5 mm into the cowl (no chip); wider, darker ink beds (x0.20 / x0.24).
+- PAINT v4: the raw projection's brushwork carried onto the finished paint (concept_detail: the luminance ratio over a
+  4.5 cm 3D low-pass + its chroma strokes, front / back-facing texels only, arm-ghost zones excluded) on hood, cloak,
+  scarf / mantle, collar, stole, the mace sleeve; stronger material texture (linen 2.0, wool 2.2, felt 2.4) and sculpt
+  edge light / cavity (EDGES +25-40 %); the Aubade frame relief is a running scroll with carved VOLUTES curling out of
+  the wave (the raised 'o' bosses are gone); the Serenade cloak under the mantle shades into its shadow (the pale wedge
+  in the mantle's V is gone).
+- ARMS: sleeves are smooth 8-sided tubes sampled from the sleeve radii with capped ends (the sculpt stays the bake
+  source); the mace hand is a mitten FIST (fist_mesh: a drum turned round the haft, the back of the hand toward the
+  wrist, a wrist neck, the thumb over the haft); mittens are cloth (blue-grey wool #66727F / umber felt #6A5546, matte,
+  AO floor 0.78 - the haft through the fist had baked them near-black and glossy).
+- TEAM READ / VALUES (FACTION_PALETTES unchanged; the per-part fit targets moved): Aubade linen #93A7BA -> #727880
+  (L* 50, 11 % sat, toward the palette's cloth2 208 deg / 6 %), wool #485769 -> #4A5562, hood chalk (frame, knob)
+  #C9C5BB -> #A5A197 / #ABA79D, dawnglass round the boss and the lantern core DEEP (#4F6276 / #55687C: pale blue glass
+  round an azure-tinted core hid it); Serenade dome #A6825E (43 % sat - over the 40 % limit in the marigold band)
+  -> #86735F (30 %), mantle #A8875F -> #9A866F, pads #BC9C6E -> #AE9A7C, cloak 36 -> 32 %; crown band 5.1 -> 3.7 cm
+  with a darker bed.
+- Budget: hood light / throat / seam / knob / rim rebuilt lean, wraps 10, shield 16-18, boss 10, ring 12-14, globe 9,
+  cage bars 2 segments, pads 12, Serenade cloak 26 stations, mantle 26, collar 20 x 6, boots 9.
+
+## 2026-10-27 15:30 FIX ROUND 3 done (5 builds, both factions; final with --clip-sheet)
+- Gates: three.js load test OK both (run 8 f, planted samples 2, foot-speed error 0 %), QA OK, facing +Z; clips idle
+  72 f / run 8 f / attack1 25 f (impact 0.4) / death 40 f. Aubade 2931 tris / 357 KiB / pipeline accent 5.74 % (top
+  half 73 %) / mesh top 1.08 m / 56 px; Serenade 2995 tris / 339 KiB / 5.95 % (87 %) / 1.086 m / 57 px (brief: <= 3.0k,
+  <= 500 KB, 4.5-6 %, >= 60 % top half, 1.1 m +-5 %). Ground (three.js skinned minimum): run -1.1 cm, attack1 -0.7 cm,
+  death -2.1 cm with 2-3 vertices under -2 cm (as round 2).
+- Review harness (game camera 3x, 8 facings): accent A 4.8-6.5 % (mean 5.7), S 4.6-8.6 % (mean 6.0); on-screen L*
+  top / mid / bottom median A 63 / 55 / 36 (was 73 / 65 / 37), S 64 / 49 / 39 (was 70 / 50 / 39).
+- IN GAME (scratchpad ingame.mjs + ingame_measure.py: a real RIFT match, seed 7, 1080p High, gameplay zoom 28.5, the
+  same frame re-rendered with one faction's shieldwick crowd materials swapped to mask colours; t 78 / 86, after the B5
+  rebase; team 1 is seat 5 - rift has 5 per team, so the wiring step's "seat 1" was still the west viewer):
+  * hood (top quarter of each wick) L* A 46.5-52.9, S 51.6-52.9 (round 2 GLBs, same frames: 65.4-72.3 / 64.2-66.9);
+    the fighters' top quarter is 59-67 in game (B5 report): the hoods sit under them, the light-top / dark-feet
+    gradient holds (mid 24-43, feet 8-20).
+  * accent vs its surround (1-4 px ring), dE2000 / dL*: west viewer - Aubade under the ALLY azure 22.3-25.4 /
+    +10..+16 (was 15.8-16.6 / +4..+5), Serenade under the ENEMY marigold 30.4-30.5 / +25 (was 17.8-19.2 / +14); east
+    viewer - Aubade under the enemy marigold 39.1-41.4 (was 31.9-37.6), Serenade under the ally azure 35.0-35.9 (was
+    38.1-38.8). No large body area in a reserved band above 40 % sat (the Serenade dome was 43 %, now 30 %).
+- Checks: typecheck OK, probe 40 / 40, content build + --check OK (80 warnings, all fighter-lane assets not built yet).
+- Renders: three_shieldwick_{aubade,serenade}.png, three_clips_shieldwick_*.png (pipeline), shieldwick_hero.png,
+  shieldwick_review.png (8 facings x ally / enemy + lane crowd), shieldwick_true1x.png, shieldwick_beauty.png,
+  shieldwick_close.png, shieldwick_clips.png, shieldwick_fit_{aubade,serenade}.png; scratch review set (eye-level front /
+  3/4 / side / back, hood close-ups, 52 deg x10, in-game crowds from both seats before / after) in the session scratchpad
+  wick_shieldwick/.
+- Open: the core itself is one flat emissive (factor-only accent), so up close its own outline is crisp - the softness is
+  the painted throat glow round it; the paint is the concept's brushwork over palette fields + procedural material /
+  edge / cavity layers, richer than round 2 but not a full hand-painted texture (the Serenade dome reads a little
+  plaster-like up close); Serenade-under-ally-azure contrast dipped 38 -> 35 dE2000 (still high); common/anim
+  _solve_foot's pitch sign (worked around in Shieldwick._ft).
