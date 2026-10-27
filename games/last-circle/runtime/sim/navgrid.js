@@ -543,13 +543,15 @@
     // support and the blocking tests (one tick of fall); a grounded one is not.
     _marginUse = 0;
     var water = T0.deepY > -1e8;
+    // (final/nav) the fields of the tile the line is in, as locals: read once per tile, not twice a step (each read of a tile field was a property load; see tileShell)
+    var tMinX = T.minX, tMaxX = T.maxX, tMinZ = T.minZ, tMaxZ = T.maxZ, tInv = T.inv, tCell = T.cell, tNx = T.nx, tNz = T.nz, tNS = T.nearStart, tNI = T.nearItems, tDeep = T.deepY, tWet = T.wetY;
     for (var s = 1; s <= n; s++) {
       var f = rest ? (s >= n ? 1 : (s <= REST_N ? REST_D[s] : REST_D[REST_N] + (s - REST_N) * HOP_STEP) / L) : s / n, px = ax + dx * f, pz = az + dz * f;      // (restDist, inlined)
       // X move (the destination floor decides the band, player.js blockedIn)
       if (!fixed) {
-        if (px < T.minX || px >= T.maxX || z < T.minZ || z >= T.maxZ) { T = W ? (_tf[0] = px, _tf[1] = z, tileForQ(W, true)) : null; if (T === null) return false; }
-        { var cix0 = ((px - T.minX) * T.inv) | 0, ciz0 = ((z - T.minZ) * T.inv) | 0; if (cix0 >= T.nx) cix0 = T.nx - 1; if (ciz0 >= T.nz) ciz0 = T.nz - 1; ci = ciz0 * T.nx + cix0; }      // (cellOf, inlined: no boxed call per step)
-        a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
+        if (px < tMinX || px >= tMaxX || z < tMinZ || z >= tMaxZ) { T = W ? (_tf[0] = px, _tf[1] = z, tileForQ(W, true)) : null; if (T === null) return false; tMinX = T.minX; tMaxX = T.maxX; tMinZ = T.minZ; tMaxZ = T.maxZ; tInv = T.inv; tCell = T.cell; tNx = T.nx; tNz = T.nz; tNS = T.nearStart; tNI = T.nearItems; tDeep = T.deepY; tWet = T.wetY; }
+        { var cix0 = ((px - tMinX) * tInv) | 0, ciz0 = ((z - tMinZ) * tInv) | 0; if (cix0 >= tNx) cix0 = tNx - 1; if (ciz0 >= tNz) ciz0 = tNz - 1; ci = ciz0 * tNx + cix0; }      // (cellOf, inlined: no boxed call per step)
+        a = tNS[ci]; b = tNS[ci + 1]; items = tNI;
       }
       if (b > a) {
         if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; gT = false; vy = 0; air = false; }
@@ -562,9 +564,9 @@
       x = px;
       // Z move
       if (!fixed) {
-        if (x < T.minX || x >= T.maxX || pz < T.minZ || pz >= T.maxZ) { T = W ? (_tf[0] = x, _tf[1] = pz, tileForQ(W, true)) : null; if (T === null) return false; }
-        { var cix1 = ((x - T.minX) * T.inv) | 0, ciz1 = ((pz - T.minZ) * T.inv) | 0; if (cix1 >= T.nx) cix1 = T.nx - 1; if (ciz1 >= T.nz) ciz1 = T.nz - 1; ci = ciz1 * T.nx + cix1; }
-        a = T.nearStart[ci]; b = T.nearStart[ci + 1]; items = T.nearItems;
+        if (x < tMinX || x >= tMaxX || pz < tMinZ || pz >= tMaxZ) { T = W ? (_tf[0] = x, _tf[1] = pz, tileForQ(W, true)) : null; if (T === null) return false; tMinX = T.minX; tMaxX = T.maxX; tMinZ = T.minZ; tMaxZ = T.maxZ; tInv = T.inv; tCell = T.cell; tNx = T.nx; tNz = T.nz; tNS = T.nearStart; tNI = T.nearItems; tDeep = T.deepY; tWet = T.wetY; }
+        { var cix1 = ((x - tMinX) * tInv) | 0, ciz1 = ((pz - tMinZ) * tInv) | 0; if (cix1 >= tNx) cix1 = tNx - 1; if (ciz1 >= tNz) ciz1 = tNz - 1; ci = ciz1 * tNx + cix1; }
+        a = tNS[ci]; b = tNS[ci + 1]; items = tNI;
       }
       if (b === a && !fixed) {
         // OPEN cell: nothing within reach of the capsule, so nothing blocks, nothing lifts, the floor is the terrain. Over GENTLE ground the feet ride it
@@ -574,9 +576,9 @@
         _hq[0] = x; _hq[1] = z; hfQ(T);
         var hS = _hq[2];
         if (gT) {
-          var cix = ci % T.nx, ciz = (ci - cix) / T.nx;
-          var tx1 = dx > 1e-12 ? (T.minX + (cix + 1) * T.cell - ax) / dx : dx < -1e-12 ? (T.minX + cix * T.cell - ax) / dx : 1e30;
-          var tz1 = dz > 1e-12 ? (T.minZ + (ciz + 1) * T.cell - az) / dz : dz < -1e-12 ? (T.minZ + ciz * T.cell - az) / dz : 1e30;
+          var cix = ci % tNx, ciz = (ci - cix) / tNx;
+          var tx1 = dx > 1e-12 ? (tMinX + (cix + 1) * tCell - ax) / dx : dx < -1e-12 ? (tMinX + cix * tCell - ax) / dx : 1e30;
+          var tz1 = dz > 1e-12 ? (tMinZ + (ciz + 1) * tCell - az) / dz : dz < -1e-12 ? (tMinZ + ciz * tCell - az) / dz : 1e30;
           var tEx = tx1 < tz1 ? tx1 : tz1;
           var sLast = rest ? restTicks(tEx * L) - 1 : Math.ceil(tEx * n) - 1;
           if (sLast > n) sLast = n;
@@ -588,13 +590,13 @@
             var hJ = _hq[2];
             if (!(hS - hS === 0) || !(hJ - hJ === 0)) return false;                      // no ground height at either end of the jump (NaN, infinite): nobody walks there
             var jl = Math.sqrt((jx - x) * (jx - x) + (jz - z) * (jz - z));
-            if ((hS - hJ) <= JUMP_SLOPE * jl && (!water || (hS >= T.deepY + WATER_GUARD && hJ >= T.deepY + WATER_GUARD))) { s = sLast; x = jx; z = jz; continue; }
+            if ((hS - hJ) <= JUMP_SLOPE * jl && (!water || (hS >= tDeep + WATER_GUARD && hJ >= tDeep + WATER_GUARD))) { s = sLast; x = jx; z = jz; continue; }
           }
           _hq[0] = x; _hq[1] = pz; hfQ(T);
           var hN = _hq[2];
           if (!(hN - hN === 0)) return false;
           if (hS - hN <= GLUE_DROP) {                       // still glued to the ground: one more step on it
-            if (water && hN < T.deepY) return false;
+            if (water && hN < tDeep) return false;
             z = pz;
             continue;
           }
@@ -604,7 +606,7 @@
         Hz = _hq[2];
         if (!(Hz - Hz === 0)) return false;
         vy += GRAVITY * TICK; y += vy * TICK;
-        if (water && Hz < T.deepY && (air ? y - AIR_PAD : y) <= T.wetY) return false;
+        if (water && Hz < tDeep && (air ? y - AIR_PAD : y) <= tWet) return false;
         sup = Hz;
         if (y <= Hz + 0.02) { y = Hz; vy = 0; air = false; gT = (hS - Hz) <= GLUE_DROP; } else { air = true; airTicks++; if (y - Hz > BIG_GAP) bigTicks++; }
         z = pz;
@@ -613,7 +615,7 @@
       if (gT) { _hq[0] = x; _hq[1] = z; hfQ(T); y = _hq[2]; gT = false; vy = 0; air = false; }
       _hq[0] = x; _hq[1] = pz; hfQ(T);
       Hz = _hq[2];
-      if (water && Hz < T.deepY && (air ? y - AIR_PAD : y) <= T.wetY) return false;          // swimming (player.js: deep terrain under feet at the surface)
+      if (water && Hz < tDeep && (air ? y - AIR_PAD : y) <= tWet) return false;          // swimming (player.js: deep terrain under feet at the surface)
       var sr0 = _supRamp;                  // the ramp flag this support call starts from (see the gravity step below)
       if (b > a) {
         yq = air ? y - AIR_PAD : y;
@@ -1031,6 +1033,54 @@
   /** bakeTile as a GENERATOR (Wave 7, lane 7B2): the same code, with a `yield` every 4 flagged cells of the node pass and every YIELD_STEPS replayed
    *  steps of the edge pass, so one 10-190 ms tile can be baked a slice at a time (stepJob). The yields carry no data and change no state: driven
    *  to the end the result is byte for byte the tile the single call gave (world hash pinned by the selftest). The work counters are the only clock. */
+  /** (final/nav) EVERY TILE HAS ONE HIDDEN CLASS, from birth to the end of the match. A tile used to start with 30 properties and grow the rest in
+   *  stages (the bake's graph, the install's kind / tx / tz / rectRef, the stitch's linking / linkedAt, the settle's rch), so the tiles of a match wore
+   *  5+ hidden classes (5 in a fully baked Deepwood, more while tiles are mid-bake or mid-stitch). Every read of a tile field in the replay was then a
+   *  megamorphic load, and a megamorphic load of a double field (minX, inv, cell, deepY ...) hands back a FRESH heap number: hopQ made 49 B of garbage
+   *  per replayed 10 cm step in TurboFan (Node probe, Deepwood seed 7: 5,842 B a 12 m hop; ~465 B a step before it is optimized), and each new class
+   *  a hot function met deoptimized it ("wrong map", Chrome's V8 log of a framecheck run). Now: one literal with every field, in one order, with a value
+   *  of the field's final kind; the later stages assign in place. Same values, read the same way: no tile, edge or route changes (world hash). */
+  function tileShell(key, minX, minZ, maxX, maxZ, cell, nx, nz, inv, hf, deepY, wetY, cs) {
+    return {
+      isTile: true, grp: null, island: null, key: key, minX: minX, minZ: minZ, maxX: maxX, maxZ: maxZ, cell: cell, nx: nx, nz: nz, inv: inv, hf: hf, hl: latFor(hf),
+      deepY: deepY, wetY: wetY,
+      m: cs.n, lx0: cs.minX, lx1: cs.maxX, ly0: cs.minY, ly1: cs.maxY,
+      lz0: cs.minZ, lz1: cs.maxZ, lk: cs.kind, ld: cs.dir,
+      nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
+      // set by the bake (bakeTileGen) / the payload (pbAssemble)
+      dOrth: cell, dDiag: cell * Math.SQRT2, n: 0, x: null, y: null, z: null, flag: null, bord: null, adj: null, cellStart: null,
+      edgeStart: null, edgeTo: null, edgeCost: null, edgeKind: null, bordCount: 0, holes: null,
+      extStart: null, extTo: null, extCost: null, extKind: null, pend: null, linked: null, stats: null, hash: "",
+      // set by the install (bakeCoarse / bakeFine / stepJob / pbHostAdd), the stitch (stepJob, linkTileGen) and the settle (resolveGroup)
+      kind: "", tx: 0, tz: 0, rectRef: null, linking: false, linkedAt: -1, rch: null,
+    };
+  }
+  /** Drive every field of the tile class through the kinds of value it will ever hold, once, when the module loads: a field's representation (small
+   *  integer -> double), its type (null -> an array) and its constness (written once -> written again) only ever GENERALIZE, and each generalization
+   *  deoptimizes the code that relied on the old one. Done here, before any code is optimized, no tile ever changes the class mid-match. */
+  (function primeTileShape() {
+    var f0 = function () { return 0; }, cs = makeColSet([], null, null);
+    var A = tileShell(1, 0, 0, 32, 32, 2, 16, 16, 1, f0, -Infinity, -Infinity, cs), B = tileShell(100000001, 0.25, 0.5, 16.25, 16.5, 0.75, 21, 21, 4 / 3, f0, -1.08, 0.3, cs);
+    var P = [A, B], i, T;
+    for (i = 0; i < 2; i++) {
+      T = P[i];
+      T.grp = { rects: [] }; T.island = new Uint8Array(1); T.island = null; T.key = 2 + i; T.minX = 0.5; T.minZ = 0.5; T.maxX = 1.5; T.maxZ = 1.5; T.cell = 1.5; T.inv = 0.6;
+      T.nx = 3; T.nz = 3; T.hf = function () { return 1; }; T.hl = { L: null, n: 0, c: 0, k: 0.5, h: 0.5 }; T.hl = null; T.deepY = -0.5; T.wetY = 0.5; T.m = 1;
+      T.nearStart = new Int32Array(1); T.nearItems = new Int32Array(1); T.nearStart = new Uint16Array(1); T.nearItems = new Uint16Array(1);
+      T.slot = 1; T.base = STRIDE; T.linkedAll = true; T.linkedAll = false;
+      T.dOrth = 0.75; T.dDiag = 1.06; T.n = 1; T.n = 2;
+      T.x = new Float32Array(1); T.y = new Float32Array(1); T.z = new Float32Array(1); T.flag = new Uint8Array(1); T.bord = new Uint8Array(1); T.adj = new Uint8Array(1);
+      T.cellStart = new Int32Array(1); T.cellStart = new Uint16Array(1); T.edgeStart = new Int32Array(1); T.edgeStart = new Uint16Array(1);
+      T.edgeTo = new Int32Array(1); T.edgeTo = new Uint16Array(1); T.edgeCost = new Float32Array(1); T.edgeKind = new Uint8Array(1);
+      T.bordCount = 1; T.bordCount = 2; T.holes = []; T.holes = [];
+      T.extStart = new Int32Array(1); T.extStart = new Uint16Array(1); T.extTo = new Int32Array(1); T.extCost = new Float32Array(1); T.extKind = new Uint8Array(1);
+      T.extStart = null; T.extTo = null; T.extCost = null; T.extKind = null;
+      T.pend = []; T.pend = null; T.linked = []; T.linked = [];
+      T.stats = { ms: 0.5 }; T.stats = { ms: 1.5 }; T.hash = (0x811c9dc5 + i).toString(16); T.hash = "1";
+      T.kind = "coarse"; T.kind = "fine"; T.tx = 1; T.tx = -1; T.tz = 1; T.tz = -1; T.rectRef = { tile: null }; T.rectRef = null;
+      T.linking = true; T.linking = false; T.linkedAt = 0; T.linkedAt = 1; T.rch = new Uint8Array(1); T.rch = null;
+    }
+  })();
   function* bakeTileGen(colliders, heightFn, rect, cell, opts) {
     var t0 = now();
     opts = opts || {};
@@ -1055,13 +1105,7 @@
     // (Wave 8, lane I2) the tile reads the collider set's own arrays and its lists hold collider-set indices: it used to copy its colliders (6 Float64 + 2 bytes
     // each, ~50 B a collider a tile: 3.1 MB in a furnished downtown, the biggest part of its tiles). Same numbers, same order in every list (the selection runs
     // in collider-set order and the lists are built in that order), so every replay reads exactly what it read before. T.m = the index space (_mk's size).
-    var T = {
-      isTile: true, grp: null, island: null, key: opts.key != null ? opts.key : 0, minX: minX, minZ: minZ, maxX: maxX, maxZ: maxZ, cell: cell, nx: nx, nz: nz, inv: inv, hf: hf, hl: latFor(hf),
-      deepY: waterY - DEEP, wetY: waterY + 0.3,
-      m: cs.n, lx0: cs.minX, lx1: cs.maxX, ly0: cs.minY, ly1: cs.maxY,
-      lz0: cs.minZ, lz1: cs.maxZ, lk: cs.kind, ld: cs.dir,
-      nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
-    };
+    var T = tileShell(opts.key != null ? opts.key : 0, minX, minZ, maxX, maxZ, cell, nx, nz, inv, hf, waterY - DEEP, waterY + 0.3, cs);
     var lx0 = T.lx0, lx1 = T.lx1, ly0 = T.ly0, ly1 = T.ly1, lz0 = T.lz0, lz1 = T.lz1, lk = T.lk;
 
     // 2. per-cell collider lists: every collider within E1 (capsule + pad) of the cell's rectangle. An empty list = an
@@ -1717,13 +1761,7 @@
   function pbAssemble(W, P) {
     var s = P.s, a = P.a, cs = W.cs, hf = W.hf;
     var holes = P.kind === 0 ? (W.fineByCoarse.get(P.key) || null) : null;
-    var T = {
-      isTile: true, grp: null, island: null, key: P.key, minX: s[0], minZ: s[1], maxX: s[2], maxZ: s[3], cell: s[4], nx: s[5], nz: s[6], inv: s[7], hf: hf, hl: latFor(hf),
-      deepY: s[8], wetY: s[9],
-      m: cs.n, lx0: cs.minX, lx1: cs.maxX, ly0: cs.minY, ly1: cs.maxY,
-      lz0: cs.minZ, lz1: cs.maxZ, lk: cs.kind, ld: cs.dir,
-      nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
-    };
+    var T = tileShell(P.key, s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], hf, s[8], s[9], cs);      // (final/nav) the one tile class, see tileShell
     T.nearStart = a.nearStart; T.nearItems = a.nearItems;
     T.dOrth = s[11]; T.dDiag = s[12];
     T.n = s[10]; T.x = a.x; T.y = a.y; T.z = a.z; T.flag = a.flag; T.bord = a.bord; T.adj = a.adj; T.cellStart = a.cellStart;
