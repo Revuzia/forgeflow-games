@@ -41,6 +41,52 @@ TRACK_JS = r"""([id, ms, dx, dz]) => new Promise((res) => { const W = window.__L
     if (performance.now() - t0 > ms) { clearInterval(iv); res(out); } }, 50); })"""
 
 
+GUEST_DIAG_JS = r"""() => { const W = window.__LC__ && window.__LC__.W; if (!W) return { booted: false };
+  const st = document.querySelector('[data-net-rejoin]'); const S = W.net;
+  return { phase: W.phase, vis: document.visibilityState, rejoinAttr: st ? st.getAttribute('data-net-rejoin') : null,
+    status: st ? (st.textContent || '').replace(/\s+/g, ' ').slice(0, 120) : null, asks: S && S.rejoinAsk ? S.rejoinAsk.tries : null,
+    rejoin: S && S.rejoin ? S.rejoin.state : null, room: S && S.net ? S.net.room : null, inMsgs: (window.__SQ_LOG__ || []).filter((m) => m.dir === 'in' && m.t === 'rejoin').map((m) => m.d && (m.d.k + ':' + (m.d.code || '') + ':' + (m.d.why || ''))).slice(-4) }; }"""
+HOST_DIAG_JS = r"""(id) => { const W = window.__LC__.W, S = W.net || {}; const now = performance.now(); const a = W.actorById.get(id);
+  return { phase: W.phase, vis: document.visibilityState, simT: +(W.t || 0).toFixed(2), goneAt: S.goneAt && S.goneAt[id] != null ? Math.round(now - S.goneAt[id]) : null,
+    lastSeenAgoMs: S.lastSeen && S.lastSeen[id] != null ? Math.round(now - S.lastSeen[id]) : null, silentTake: !!(S.silentTake && S.silentTake[id]),
+    rejoinLog: (S.rejoinLog || []).slice(-3).map((r) => r.why + '@' + Math.round((now - r.at) / 1000) + 's ago'), rejoined: !!(S.rejoined && S.rejoined[id]),
+    body: a ? { alive: a.alive, netRemote: !!a.netRemote, isBot: !!a.isBot } : null }; }"""
+
+
+def safe_eval(pg, js, arg=None):
+    try:
+        return pg.evaluate(js, arg) if arg is not None else pg.evaluate(js)
+    except Exception as e:
+        return {"error": str(e).splitlines()[0][:120]}
+
+
+def compress_trace(trace):
+    """the trace rows where anything but the clocks changed (the full trace is in the report's rejoinTrace)"""
+    out, prev = [], None
+    for r in trace:
+        g, h = dict(r.get("guest") or {}), dict(r.get("host") or {})
+        for k in ("simT", "goneAt", "lastSeenAgoMs"):
+            h.pop(k, None)
+        key = repr((g, h))
+        if key != prev:
+            out.append(r)
+            prev = key
+    return out[:14]
+
+
+def rejoin_setup_miss(trace):
+    """a rejoin that missed because the HARNESS never let the host run (D16): the host page's sim clock stood still across the wait (a hidden /
+    throttled tab runs no frames, so its watchdog can never see the old page leave). None = the setup was sound: the miss is a verdict."""
+    hs = [r.get("host") or {} for r in trace]
+    ts = [h.get("simT") for h in hs if isinstance(h.get("simT"), (int, float))]
+    if len(ts) >= 3 and max(ts) - min(ts) < 1.0:
+        return "the host's sim clock advanced %.2f s over %d polls: its page was not ticking" % (max(ts) - min(ts), len(ts))
+    g = [r.get("guest") or {} for r in trace]
+    if g and all(not x.get("booted", True) for x in g):
+        return "the rejoining page never booted"
+    return None
+
+
 def walk_and_track(hpg, gpg, h_id, ms=3000):
     yaw = hpg.evaluate("() => window.__LC__.W.player.input.yaw")
     import math
@@ -58,6 +104,9 @@ def walk_and_track(hpg, gpg, h_id, ms=3000):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
+    ap.add_argument("--close", default="plain", choices=("plain", "unload"),
+                    help="how the guest's first page is closed: plain = Playwright close (no beforeunload, so no 'bye': a crash-like leave), "
+                         "unload = close running beforeunload (a tab closed by a player: net.js sends its 'bye')")
     args = L.parse(ap)
 
     def body(v):
@@ -95,14 +144,29 @@ def main():
             r["latePackets"] = held
             v.check("no-backward (every 3rd state packet 250 ms late: the remote never pulled back > 0.05 m)", held >= 10 and r["progress"] is not None and r["progress"] > 5
                     and (r["maxBackM"] or 0) <= 0.05, r, ">= 10 late, never back > 0.05 m")
-            # rejoin
+            # rejoin. Fix round: the row records WHERE a miss stopped (both pages polled every 1 s until back / 60 s): the new page's boot time,
+            # phase, its lobby status (data-net-rejoin + text) and asks left, and the host's view (ticking? its rejoin log, goneAt, lastSeen of
+            # the slot, silentTake) - so a miss names net / boot, or a harness setup that never let the host see the old page leave
             url = gpg.url.split("?")[0] + "?room=" + code
-            gpg.close()
+            close_mode = getattr(args, "close", "plain")
+            gpg.close(run_before_unload=(close_mode == "unload"))
             t0 = time.time()
             g2, grec2 = rig.page(ctx, "netseq/guest-rejoin")
-            SQ.boot_url(g2, url, args.boot_timeout)
-            back = SQ.wait(g2, "(id) => { const W = window.__LC__ && window.__LC__.W; return W && ['drop', 'match'].includes(W.phase) && W.player && W.player.id === id && W.player.alive ? true : null; }",
-                           max(1.0, 60 - (time.time() - t0)), 0.5, g_id)
+            boot_s = SQ.boot_url(g2, url, args.boot_timeout)
+            t_boot = round(time.time() - t0, 1)
+            trace = []
+            back = None
+            back_js = "(id) => { const W = window.__LC__ && window.__LC__.W; return W && ['drop', 'match'].includes(W.phase) && W.player && W.player.id === id && W.player.alive ? true : null; }"
+            while True:
+                el = round(time.time() - t0, 1)
+                try:
+                    back = g2.evaluate(back_js, g_id)
+                except Exception:
+                    back = None
+                trace.append({"t": el, "guest": safe_eval(g2, GUEST_DIAG_JS), "host": safe_eval(hpg, HOST_DIAG_JS, g_id)})
+                if back or el >= 60:
+                    break
+                g2.wait_for_timeout(1000)
             took = round(time.time() - t0, 1)
             moved = None
             if back:
@@ -114,8 +178,17 @@ def main():
                 hpg.wait_for_timeout(600)
                 p1 = hpg.evaluate("(id) => { const a = window.__LC__.W.actorById.get(id); return a ? [a.pos.x, a.pos.z] : null; }", g_id)
                 moved = round(((p1[0] - p0[0]) ** 2 + (p1[1] - p0[1]) ** 2) ** 0.5, 2) if p0 and p1 else None
-            v.check("rejoin (?room=<code> in a new page: back in the running match as the same actor within 60 s; the host sees it move)",
-                    bool(back) and took <= 60 and (moved or 0) > 1.0, {"backAfterS": took if back else None, "slot": g_id, "movedOnHostM": moved}, "<= 60 s, > 1 m")
+            last = trace[-1] if trace else {}
+            diag = {"backAfterS": took if back else None, "slot": g_id, "movedOnHostM": moved, "close": close_mode, "bootS": boot_s, "bootDoneAtS": t_boot,
+                    "guestLast": last.get("guest"), "hostLast": last.get("host"), "trace": compress_trace(trace)}
+            v.data["rejoinTrace"] = trace
+            ok = bool(back) and took <= 60 and (moved or 0) > 1.0
+            name = "rejoin (?room=<code> in a new page: back in the running match as the same actor within 60 s; the host sees it move)"
+            setup_miss = rejoin_setup_miss(trace)
+            if not ok and setup_miss:
+                v.cnj(name, "SETUP missed (%s): %s" % (setup_miss, diag))
+            else:
+                v.check(name, ok, diag, "<= 60 s, > 1 m")
             for rec in (hrec, grec2):
                 v.check("errors [%s] (0 console / page errors, 0 failed requests)" % rec.name.split("/")[1], rec.clean(), rec.problems())
         finally:

@@ -54,6 +54,11 @@ CONTRACT = {
     "K.DBNO_CRAWL": "typeof K.DBNO_CRAWL === 'number'",
     "K.DBNO_BLEED_HPS": "typeof K.DBNO_BLEED_HPS === 'number'",
     "K.REVIVE_S": "typeof K.REVIVE_S === 'number'",
+    # integrator D3 (fix round): sim's K is the single source of the DBNO tunables - these names are canonical
+    "K.DBNO_HP": "typeof K.DBNO_HP === 'number'",
+    "K.DBNO_KNOCK_MULT": "typeof K.DBNO_KNOCK_MULT === 'number'",
+    "K.REVIVE_HP": "typeof K.REVIVE_HP === 'number'",
+    "K.REVIVE_RANGE": "Math.abs(K.REVIVE_RANGE - 2.0) < 1e-9",
     "K.actorHeight": "typeof K.actorHeight === 'function'",
     "K.TEAM_SIZE": "!!K.TEAM_SIZE && K.TEAM_SIZE.duo === 2 && K.TEAM_SIZE.trio === 3",
 }
@@ -130,7 +135,7 @@ def part_bot(args, v):
         st = L.start(s, "standard", 7, "ashgrid", team="duo", guard=True)
         v.data["bot_start"] = st
         have = L.contract(s, CONTRACT)
-        L.contract_row(v, "contract (K.DBNO_CRAWL, K.DBNO_BLEED_HPS, K.REVIVE_S, K.actorHeight, K.TEAM_SIZE)", have)
+        L.contract_row(v, "contract (K.DBNO_CRAWL, K.DBNO_BLEED_HPS, K.REVIVE_S, K.DBNO_HP, K.DBNO_KNOCK_MULT, K.REVIVE_HP, K.REVIVE_RANGE 2.0 (D3), K.actorHeight, K.TEAM_SIZE)", have)
         s.land(140, protect=True)
         s.freeze_loop()
         s.install_pump()

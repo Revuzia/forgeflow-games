@@ -9,22 +9,25 @@ sim -, application in player.js - lane player.)
     python _harness/p23/fall.py --disk --plant no-damage       # K.FALL_SAFE_V = 1e9 - MUST FAIL (10 m drop costs nothing)
     python _harness/p23/fall.py --disk --plant harsh           # K.FALL_DMG_PER_V x 4 - MUST FAIL (10 m drop over the band)
     python _harness/p23/fall.py --disk --plant no-event        # 'fallDamage' never reaches W.events - MUST FAIL
+    python _harness/p23/fall.py --disk --plant no-fall-guard --parts lip   # bots.js served with its fall guard off - MUST FAIL (bots-avoid lips)
     python _harness/p23/fall.py --disk --inject F:/lc_p23/harness/stubs/fall_stub.js   # validation against a contract stub
 
 Part HUMAN (PRACTICE, Isla Viva seed 4242, kernel loop frozen, frames stepped, the hp guard OFF during each drop): the player is set
 h metres above open, flat ground (nothing within 4 m) with zero velocity and stepped until grounded; hp / shield before and after, every
-'fallDamage' event. Heights 1, 3, 4, 6, 10 (shield 100 and shield 0), 15, then 20 (lethal) last. 10 REAL Space jumps on the same ground.
+'fallDamage' event. Heights 1, 3, 4, 6, 10 (shield 100 and shield 0), 15, 17, then 22 (lethal) last (D2). 10 REAL Space jumps on the same ground.
 A 20 m drop into deep water.
-Part BOTS (a QUICK match on Savanna seed 77, ground start): three bots lifted 10 m and three 20 m over open ground - the same rule
-(10 m costs 35-50, 20 m kills); then 180 s of play through fastForward: 0 bot deaths from a fall.
+Part BOTS (a QUICK match on Savanna seed 77, ground start): three bots lifted 10 m, three 15 m and three 22 m over open ground - the same rule
+(10 m costs 35-40, 15 m = the human's, 22 m kills); then 180 s of play through fastForward: 0 bot deaths from a fall.
+Part LIP (a QUICK match on Isla Viva seed 77): bots-avoid's falsifier - a dry 14 hp bot provoked by an enemy 9 m behind it on a plateau flees
+toward a >= 8 m terrain lip, up to 6 lips x 25 s: 0 die of the fall (--plant no-fall-guard serves bots.js with its C-FALL guard off: MUST FAIL).
 Part GLIDE (a STANDARD match, Isla Viva seed 7): the whole drop through fastForward until every actor stands on the ground: 0 fallDamage
 events, 0 hp lost without an attacker at touchdown, for the human and all 49 bots.
 
 Rows: contract (K.FALL_SAFE_V, K.FALL_DMG_PER_V, K.LAND_STAGGER_S numbers) - safe-drops (1 / 3 / 4 m: 0 hp) - jumps (0 hp) - ten-metre
-(35-50 hp) - monotonic (damage non-decreasing with height) - lethal-20 (20 m kills at full shield) - shield-untouched (shield 100 before
+(35-40 hp) - fifteen-metre (60-75 hp) - monotonic (damage non-decreasing with height) - lethal (17 m survived, 22 m kills at full shield) - shield-untouched (shield 100 before
 = 100 after a 10 m drop, hp loss equal to the shield-0 drop) - event (one 'fallDamage' per damaging landing, none otherwise) - stagger
 (after the 10 m landing with W held: horizontal speed <= 50 % of walk over the first 0.3 s, back to >= 85 % of walk by 0.8 s; after a 1 m
-drop >= 85 % within 0.3 s) - water (0 hp) - bots-rule - bots-avoid - glide - errors.
+drop >= 85 % within 0.3 s) - water (0 hp) - bots-rule - bots-avoid - bots-avoid lips - glide - errors.
 """
 from __future__ import annotations
 
@@ -42,8 +45,14 @@ PLANTS = {
     "no-damage": "K.FALL_SAFE_V = 1e9; if (typeof K.fallDamage === 'function') K.fallDamage = () => 0; if (K.FALL) K.FALL.SAFE_V = 1e9",
     "harsh": "K.FALL_DMG_PER_V = (K.FALL_DMG_PER_V || 1) * 4; if (typeof K.fallDamage === 'function') { const f0 = K.fallDamage; K.fallDamage = function () { return 4 * f0.apply(this, arguments); }; } if (K.FALL) K.FALL.DMG_PER_V *= 4",
     "no-event": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'fallDamage') return; return em.apply(null, arguments); }",
+    # bots.js served with its C-FALL guard off (part lip; see NO_FALL_GUARD): no page snippet
+    "no-fall-guard": "",
 }
-TEN_LO, TEN_HI = 35, 50
+# integrator D2 (fix round, binding): a 10 m drop costs 35-40 hp, 15 m 60-75, lethal from full health from about 20 m (not 16.6 m): 17 m
+# survives, 22 m kills (the 4 m safe drop stays). Was 35-50 / 20 m kills before D2
+TEN_LO, TEN_HI = 35, 40
+FIF_LO, FIF_HI = 60, 75
+LIVE_H, DEAD_H = 17, 22
 
 SPOT_JS = r"""([wantWater]) => {
   const W = window.__LC__.W, M = W.map, p = W.player, wy = M.waterY;
@@ -115,6 +124,7 @@ def part_human(s, v, args):
     rows["10s"] = drop(s, spot, 10, 100, 100)
     rows["10n"] = drop(s, spot, 10, 100, 0)
     rows[15] = drop(s, spot, 15)
+    rows[LIVE_H] = drop(s, spot, LIVE_H)
     # 10 REAL jumps
     s.guard_player(False)
     s.js("([x, z]) => { const W = window.__LC__.W, p = W.player; p.pos.set(x, W.map.heightAt(x, z), z); p.vel.set(0, 0, 0); p.hp = 100; p.shield = 100; p.onGround = true; window.__P23J__ = []; window.__P23JN__ = 0; W.events.on('fallDamage', (a) => { if (a === p) window.__P23J__.push(W.t); }); W.events.on('jump', (a) => { if (a === p) window.__P23JN__++; }); }",
@@ -130,7 +140,7 @@ def part_human(s, v, args):
     s.page.keyboard.up("KeyW")
     wspot = s.js(SPOT_JS, [True])
     rows["water20"] = drop(s, wspot, 20) if wspot else None
-    rows[20] = drop(s, spot, 20)
+    rows[DEAD_H] = drop(s, spot, DEAD_H)
     R["rows"] = {str(k): {kk: vv for kk, vv in r.items() if kk != "trace"} if r else None for k, r in rows.items()}
     lost = {k: (r["lost"] if r else None) for k, r in rows.items()}
     # the curve the bots row compares against (fall_all3 10-26: bots-rule read "human15": null - nothing stored it, so the row fell back to
@@ -140,17 +150,21 @@ def part_human(s, v, args):
     v.check("jumps (10 real Space jumps cost 0 hp, 0 events)", jumps["hp"] == 100 and jumps["ev"] == 0 and jumps["jumps"] >= 8, jumps, "hp 100, 0 events, >= 8 jumps happened")
     ten = lost["10n"]
     v.check("ten-metre (a 10 m drop costs %d-%d hp)" % (TEN_LO, TEN_HI), ten is not None and TEN_LO <= ten <= TEN_HI, {"lost": ten}, "%d-%d" % (TEN_LO, TEN_HI))
-    seq = [lost[1], lost[3], lost[4], lost[6], lost["10n"], lost[15]]
-    v.check("monotonic (damage non-decreasing 1 -> 15 m)", all(a is not None and b is not None and b >= a for a, b in zip(seq, seq[1:])) and lost[15] > lost[6],
-            {"1,3,4,6,10,15 m": seq}, "non-decreasing, 15 m > 6 m")
-    r20 = rows[20]
-    v.check("lethal-20 (a 20 m drop kills at hp 100 + shield 100)", not r20["after"]["alive"], {"after": r20["after"], "at": r20["at"]}, "dead")
+    fif = lost[15]
+    v.check("fifteen-metre (a 15 m drop costs %d-%d hp, D2)" % (FIF_LO, FIF_HI), fif is not None and FIF_LO <= fif <= FIF_HI, {"lost": fif}, "%d-%d" % (FIF_LO, FIF_HI))
+    seq = [lost[1], lost[3], lost[4], lost[6], lost["10n"], lost[15], lost[LIVE_H]]
+    v.check("monotonic (damage non-decreasing 1 -> %d m)" % LIVE_H, all(a is not None and b is not None and b >= a for a, b in zip(seq, seq[1:])) and lost[15] > lost[6],
+            {"1,3,4,6,10,15,%d m" % LIVE_H: seq}, "non-decreasing, 15 m > 6 m")
+    rl, rd = rows[LIVE_H], rows[DEAD_H]
+    v.check("lethal (D2: from full health a %d m drop is survived, a %d m drop kills; hp 100 + shield 100)" % (LIVE_H, DEAD_H),
+            rl["after"]["alive"] and not rd["after"]["alive"], {"%dm" % LIVE_H: {"after": rl["after"], "lost": rl["lost"]}, "%dm" % DEAD_H: {"after": rd["after"], "at": rd["at"]}},
+            "%d m alive, %d m dead" % (LIVE_H, DEAD_H))
     r10 = rows["10s"]
     v.check("shield-untouched (armour does not absorb a fall)", r10["after"]["alive"] and r10["shieldLost"] == 0 and r10["lost"] == lost["10n"],
             {"withShield": {"hpLost": r10["lost"], "shieldLost": r10["shieldLost"]}, "noShield": {"hpLost": lost["10n"]}}, "shield 100 -> 100, same hp loss")
     damaging = [k for k in rows if rows[k] and rows[k]["lost"] > 0]
     clean = [k for k in rows if rows[k] and rows[k]["lost"] == 0]
-    ev_ok = all(len(rows[k]["ev"]) == 1 for k in damaging if k != 20) and all(len(rows[k]["ev"]) == 0 for k in clean) and bool(damaging)
+    ev_ok = all(len(rows[k]["ev"]) == 1 for k in damaging if k != DEAD_H) and all(len(rows[k]["ev"]) == 0 for k in clean) and bool(damaging)
     v.check("event (one 'fallDamage' per damaging landing, none otherwise)", ev_ok,
             {str(k): len(rows[k]["ev"]) for k in rows if rows[k]}, "1 per damaging, 0 per clean")
     walk = st_hard["walk"]
@@ -192,7 +206,7 @@ def part_bots(s, v, args):
     s.step_frames(30, 1 / 60)
     if args.plant:
         L.plant_js(s, PLANTS[args.plant])
-    rows = s.js(BOT_DROP_JS, [[10, 10, 10, 15, 15, 15, 20, 20, 20]])
+    rows = s.js(BOT_DROP_JS, [[10, 10, 10, 15, 15, 15, DEAD_H, DEAD_H, DEAD_H]])
     R["drops"] = rows
     # the SAME rule as the human: 10 m and 15 m (both below the height at which a falling player can still open the canopy: > 12 m
     # above the ground while already falling fast) cost what the human's drop cost (part human, +- 4 hp for the ground under a bot);
@@ -201,12 +215,12 @@ def part_bots(s, v, args):
     hum = (v.data.get("human") or {}).get("curve") or {}
     ten = [100 - r["hp"] for r in rows if r["h"] == 10 and r["alive"]]
     fif = [100 - r["hp"] for r in rows if r["h"] == 15 and r["alive"]]
-    twenty = [r for r in rows if r["h"] == 20]
+    twenty = [r for r in rows if r["h"] == DEAD_H]
     h15 = hum.get("15")
     ok15 = len(fif) == 3 and (all(abs(x - h15) <= 4 for x in fif) if h15 is not None else all(x > TEN_HI for x in fif))
     ok20 = len(twenty) == 3 and all((not r["alive"]) or (r["canopy"] and r["fallDmg"] == 0) for r in twenty)
     ok = len(ten) == 3 and all(TEN_LO <= x <= TEN_HI for x in ten) and ok15 and ok20
-    v.check("bots-rule (bots: 10 m costs %d-%d, 15 m = the human's 15 m +- 4 hp, 20 m kills unless the bot opened its canopy mid-air)" % (TEN_LO, TEN_HI), ok,
+    v.check("bots-rule (bots: 10 m costs %d-%d, 15 m = the human's 15 m +- 4 hp, %d m kills unless the bot opened its canopy mid-air)" % (TEN_LO, TEN_HI, DEAD_H), ok,
             {"tenLost": ten, "fifteenLost": fif, "human15": h15,
              "twenty": [{"alive": r["alive"], "canopy": r["canopy"], "fallDmg": round(r["fallDmg"], 2)} for r in twenty]}, "same rule as the human")
     # bots avoid lethal drops: 180 s of play, count deaths whose damage came from a fall
@@ -219,6 +233,88 @@ def part_bots(s, v, args):
     R["avoid"] = av
     v.check("bots-avoid (0 bot deaths from a fall in 180 s of a quick match)", av["botFallDeaths"] == 0 and av["botDeaths"] > 0,
             av, "0 fall deaths (and the match did run: > 0 bot deaths)")
+
+
+# bots-avoid's falsifier (fix round, the check's request): the 180 s quick match never offers a bot a lethal lip, so the row passed with the base
+# bots.js too. This setup does: on Isla Viva's terrain lips (ground falling >= 8 m within 4 m, a flat collider-free plateau behind), a bot at
+# LIP_HP hp (no shield, no heals) stands 1.2 m from the lip, DRY (no gun, no ammo: FLEE 92 is its top score while an enemy is inside 18 m), and an
+# enemy bot (pinned, unarmed, guarded) stands 9 m behind it on the plateau and keeps provoking it: it runs from him, toward the drop. A drop of
+# >= 8 m costs more than LIP_HP at the C-FALL curve (a 10 m drop costs 35-40), so a bot that walks off dies of the fall. 25 s per lip.
+LIP_MAP, LIP_SEED, LIP_HP, LIP_N = "isla_viva", 77, 14, 6
+LIP_FIND_JS = r"""([drop, wantN]) => { const W = window.__LC__.W, M = W.map, wy = M.waterY;
+  const free = (x, z, r, h) => { for (const c of M.queryColliders(x, z, r + 1, [])) { if (c.dead) continue; if (c.maxY > h + 0.3 && c.minX < x + r && c.maxX > x - r && c.minZ < z + r && c.maxZ > z - r) return false; } return true; };
+  const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null; const cc = st ? (st.nextCenter || st.center) : { x: 0, z: 0 };
+  const lips = []; const span = (M.half || 800) * 0.85;
+  for (let x = -span; x <= span; x += 6) for (let z = -span; z <= span; z += 6) { const h0 = M.heightAt(x, z); if (!(h0 > wy + 2)) continue;
+    for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a); let fall = 0;
+      for (let d = 1; d <= 4; d += 0.5) fall = Math.max(fall, h0 - M.heightAt(x + dx * d, z + dz * d)); if (fall < drop) continue;
+      let flat = true; for (let d = 1; d <= 10; d += 1) if (Math.abs(M.heightAt(x - dx * d, z - dz * d) - h0) > 1.5) { flat = false; break; } if (!flat) continue;
+      const hf = M.heightAt(x + dx * 6, z + dz * 6); if (!(hf > wy + 0.5) || h0 - hf < drop) continue;
+      if (!free(x - dx * 5, z - dz * 5, 5.5, h0)) continue;
+      // FLEE runs 60 m from the threat blended 0.45 toward the circle centre: keep the lips whose escape heads over the drop
+      const fx = (x + dx * 60) * 0.55 + cc.x * 0.45, fz = (z + dz * 60) * 0.55 + cc.z * 0.45; const ahead = (fx - x) * dx + (fz - z) * dz;
+      if (ahead < 8) continue;
+      lips.push({ x, z, dx, dz, h0: +h0.toFixed(2), foot: +hf.toFixed(2), drop: +(h0 - hf).toFixed(2), ahead: +ahead.toFixed(1) }); break; } }
+  lips.sort((p, q) => q.drop - p.drop); const pick = [];
+  for (const l of lips) if (pick.every((p) => Math.hypot(p.x - l.x, p.z - l.z) >= 60)) pick.push(l);
+  return { n: lips.length, lips: pick.slice(0, wantN), centre: cc }; }"""
+LIP_RUN_JS = r"""([lip, hp, secs]) => { const W = window.__LC__.W, C = window.__LC__, M = W.map;
+  const pool = W.actors.filter((a) => a.isBot && a.alive && !a.downed && !a.gliding && !window.__P23LIPUSED__?.has(a.id));
+  const [b, e] = pool.sort((q, r) => Math.hypot(q.pos.x - lip.x, q.pos.z - lip.z) - Math.hypot(r.pos.x - lip.x, r.pos.z - lip.z)).slice(0, 2);
+  if (!b || !e) return { error: 'no two free bots' };
+  (window.__P23LIPUSED__ = window.__P23LIPUSED__ || new Set()).add(b.id); window.__P23LIPUSED__.add(e.id);
+  const put = (a, x, z) => { a.pos.set(x, M.heightAt(x, z) + 0.05, z); a.vel.set(0, 0, 0); a.onGround = true; a.gliding = false; if (a.obj) a.obj.position.copy(a.pos); };
+  const strip = (a) => { const sl = a.inventory.slots; for (let i = 0; i < sl.length; i++) sl[i] = null; for (const k in a.inventory.ammo) a.inventory.ammo[k] = 0; };
+  put(b, lip.x - lip.dx * 1.2, lip.z - lip.dz * 1.2); b.yaw = Math.atan2(-lip.dx, -lip.dz); b.hp = hp; b.shield = 0; strip(b);
+  const ex = lip.x - lip.dx * 10.2, ez = lip.z - lip.dz * 10.2; put(e, ex, ez); strip(e); e.hp = 100; e.shield = 100;
+  const fall = []; let died = null; const y0 = b.pos.y;
+  const onF = (a, d) => { if (a && a.id === b.id) fall.push({ d: +(+d || 0).toFixed(1), t: +W.t.toFixed(2) }); };
+  const onD = (a) => { if (a && a.id === b.id && !died) died = { t: +W.t.toFixed(2), byFall: fall.length > 0, y: +a.pos.y.toFixed(2) }; };
+  W.events.on('fallDamage', onF); W.events.on('actorDied', onD);
+  // SETUP ONLY, every frame: the threat pinned + unhurt; the bot under test kept provoked by him, dry and at most `hp` (never topped up)
+  const upd = () => { const E = W.actorById.get(e.id); if (E && E.alive) { E.pos.set(ex, M.heightAt(ex, ez) + 0.05, ez); E.vel.set(0, 0, 0); E.hp = 100; E.shield = 100; }
+    const B = W.actorById.get(b.id); if (B && B.alive && !B.downed) { B.lastAttacker = e.id; B.lastDamageT = W.t; if (B.shield > 0) B.shield = 0; if (B.hp > hp) B.hp = hp;
+      if (B.inventory) for (const k in B.inventory.ammo) B.inventory.ammo[k] = 0; } };
+  W.kernel._updaters.push(upd);
+  const states = {}; let minY = y0, past = -9;
+  for (let i = 0; i < secs * 10 && !died; i++) { C.fastForward(0.1, 1 / 30); const B = W.actorById.get(b.id); if (!B) break;
+    const st = B.brain && B.brain.state; if (st) states[st] = (states[st] || 0) + 1; minY = Math.min(minY, B.pos.y);
+    past = Math.max(past, (B.pos.x - lip.x) * lip.dx + (B.pos.z - lip.z) * lip.dz); }
+  const k = W.kernel._updaters.indexOf(upd); if (k >= 0) W.kernel._updaters.splice(k, 1);
+  if (W.events.off) { W.events.off('fallDamage', onF); W.events.off('actorDied', onD); }
+  const B = W.actorById.get(b.id);
+  return { bot: b.id, threat: e.id, lip: { x: lip.x, z: lip.z, drop: lip.drop }, fall, died, alive: !!(B && B.alive), states, dropped: +(y0 - minY).toFixed(2), pastLipM: +past.toFixed(2) }; }"""
+
+
+def part_lip(s, v, args):
+    R = v.data.setdefault("lip", {})
+    if args.plant == "no-fall-guard":
+        R["plant"] = L.serve_patched(s, "runtime/3d/royale/bots.js", NO_FALL_GUARD)
+    s.boot()
+    L.dismiss_cards(s)
+    R["start"] = s.start_match("quick", LIP_SEED, LIP_MAP, enter=True, guard=True)
+    s.freeze_loop()
+    s.install_pump()
+    s.step_frames(30, 1 / 60)
+    found = s.js(LIP_FIND_JS, [8, LIP_N])
+    R["found"] = {"n": found["n"], "centre": found["centre"], "lips": found["lips"]}
+    runs = [s.js(LIP_RUN_JS, [lip, LIP_HP, 25]) for lip in found["lips"]]
+    R["runs"] = runs
+    judged = [r for r in runs if not r.get("error")]
+    walked = [r for r in judged if r["died"] and r["died"]["byFall"]]
+    fled = [r for r in judged if r["states"].get("FLEE", 0) >= 5]
+    name = "bots-avoid lips (a dry bot at %d hp fleeing a threat toward a >= 8 m terrain lip: 0 die of the fall, up to %d lips)" % (LIP_HP, LIP_N)
+    det = {"fallDeaths": len(walked), "lips": len(judged), "fled": len(fled),
+           "runs": [{k: r.get(k) for k in ("bot", "lip", "fall", "died", "states", "dropped", "pastLipM")} for r in judged]}
+    if len(judged) < 3 or len(fled) < 2:
+        v.cnj(name, "SETUP missed (D16): %d lips judged (want >= 3), %d bots fled (want >= 2): %s" % (len(judged), len(fled), det))
+    else:
+        v.check(name, not walked, det, "0 fall deaths")
+
+
+# plant no-fall-guard: bots.js as if the sim had no fall damage (LETHAL_H / WALK_H stay null: "nothing below changes a single step" - the base
+# bots' behaviour). The sim's fall damage is untouched, so a bot that walks off a lethal lip dies of it: bots-avoid lips must FAIL
+NO_FALL_GUARD = [("LETHAL_H = dropTable(() => 2);", "LETHAL_H = null;"), ("WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));", "WALK_H = null;")]
 
 
 def part_glide(s, v, args):
@@ -250,7 +346,7 @@ def part_glide(s, v, args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
-    ap.add_argument("--parts", default="human,bots,glide")
+    ap.add_argument("--parts", default="human,bots,lip,glide")
     args = L.parse(ap)
     parts = set(args.parts.split(","))
 
@@ -269,6 +365,10 @@ def main():
             with C.Session(args, "p23_fall_bots") as s:
                 part_bots(s, v, args)
                 L.errors_row(v, s, "errors [bots]")
+        if "lip" in parts:
+            with C.Session(args, "p23_fall_lip") as s:
+                part_lip(s, v, args)
+                L.errors_row(v, s, "errors [lip]")
         if "glide" in parts:
             with C.Session(args, "p23_fall_glide") as s:
                 part_glide(s, v, args)
