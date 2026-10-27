@@ -24,8 +24,9 @@ Rows:
   coverage [v] lines deep inside the silhouette (all 8 offsets cross it): >= 95 % are sim hits (a hitbox that hits nothing cannot pass)
   NOISE (fix round): each view starts from the same animation phase (the dummy's mixer reset to clip time 0) and the frames are stepped,
                so two runs on identical code fire the same lines at the same poses; before that, coverage moved by 0.014-0.054 between
-               runs (front 0.952 / 0.938, side 0.771 / 0.717) from the idle clip's wall-clock phase alone. The binomial floor of a
-               coverage over ~700 deep lines is +-0.008 (1 sigma); the report keeps both runs' numbers (README)
+               runs (front 0.952 / 0.938, side 0.771 / 0.717) from the idle clip's wall-clock phase alone. Measured after the fix (10-27,
+               two runs, identical code): every count identical to the line - front 541 sim / 635 mesh / 2 outside / 153 deep / 0.9412,
+               side 318 / 409 / 55 / 104 / 0.7212, back 547 / 649 / 1 / 151 / 0.9536, 45deg 490 / 598 / 34 / 158 / 0.8544 (noise 0.000)
   head-top     horizontal shots at the drawn head top + 0.10 m across the body width: 0 sim hits
   errors
 """

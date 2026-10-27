@@ -654,10 +654,15 @@ def main():
         args.base = "http://127.0.0.1:%d/games/last-circle/index.html" % args.serve
         args.disk = False
         print("p23_netlive: in-process server for %s on :%d (backlog %d, %d overlay dir(s))" % (root, args.serve, Srv.request_queue_size, len(ovl)), flush=True)
+        # the server serves the overlays itself: the page-routing layer (which refuses --overlay without --disk / --rev) must not see them
+        args.served_overlay, args.overlay = list(args.overlay or []), []
     args.full = False
     args.full_now = False
 
     def body(v):
+        if getattr(args, "served_overlay", None):
+            v.data["validation"] = {"overlay": args.served_overlay, "inject": [], "servedBy": "--serve"}
+            v.info("VALIDATION RUN (not a game verdict)", v.data["validation"])
         rig = SG.Rig(args)
         try:
             for c in [x.strip() for x in args.cases.split(",") if x.strip()]:

@@ -725,11 +725,13 @@ def main():
                         return q ? { id: q.id, members: q.members.length, ring: q.ring, beam: q.beam, glow: q.glow, best: q.best, color: q.color,
                                      want: K.RARITY_COLOR[K.RARITY[Math.max(0, q.best)]] } : null; }""", b["id"])
                     own = [d["id"] for d in drops if d["ring"] >= 0 or d["beam"] >= 0 or d["glow"] >= 0]
+                    # the best gun DROPPED (the given legendary sniper needs a free slot: a full bag keeps what it had)
+                    best_r = max([d["r"] or 0 for d in drops if d["kind"] == "weapon"] or [-1])
                     okd = bool(drops) and len(drops) >= 2 and not own and bool(pile) and pile["members"] == len(drops) and pile["ring"] >= 0 and pile["glow"] >= 0 \
-                        and pile["beam"] >= 0 and pile["best"] == 4 and pile["color"] == pile["want"]
-                    v.check("deaths (LC-27): a killed bot's drops form ONE death pile - 0 member markers, one ring + beam + glow in the best gun's rarity colour (legendary)", okd,
+                        and pile["beam"] >= 0 and pile["best"] == best_r and pile["color"] == pile["want"]
+                    v.check("deaths (LC-27): a killed bot's drops form ONE death pile - 0 member markers, one ring + beam + glow in the best dropped gun's rarity colour", okd,
                             {"drops": drops[:8], "nDrops": len(drops), "membersWithOwnMarker": own[:5], "pile": pile, "liveBefore": before, "liveAfter": after,
-                             "markerDelta": [a - b_ for a, b_ in zip(after, before)]})
+                             "markerDelta": [a - b_ for a, b_ in zip(after, before)], "bestDroppedRarity": best_r})
 
             # ---- chestview ---------------------------------------------------------------------------------------------
             if want("chestview"):
