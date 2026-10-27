@@ -78,14 +78,14 @@
   },
   "uv_coverage": 0.747,
   "bake": {
-    "base": 0.95,
-    "rough_metal": 0.76,
-    "normal": 0.56,
-    "ao": 0.73,
+    "base": 3.06,
+    "rough_metal": 2.32,
+    "normal": 1.45,
+    "ao": 1.7,
     "normal_fixed_px": 4868,
-    "projection": 15.96,
-    "pack_save": 16.0,
-    "total": 19.1
+    "projection": 44.08,
+    "pack_save": 44.3,
+    "total": 52.99
   },
   "tris": 2998,
   "mesh_top_m": 1.333,
@@ -184,19 +184,19 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 1068108,
+  "glb_bytes_raw": 1069100,
   "optimize": {
     "ok": true,
-    "before": 1069168,
-    "after": 319572
+    "before": 1070840,
+    "after": 320484
   },
-  "glb_bytes": 319572,
+  "glb_bytes": 320484,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_serenade.glb (312 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/units/glimwick_serenade.glb (313 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: glimwick_serenade_base 1024x1024 68K, glimwick_serenade_normal 512x512 38K, glimwick_serenade_orm 256x256 15K",
-      "  skinned meshes: glimwick_serenade(3044v), glimwick_serenade_accent_1(279v), glimwick_serenade_accent_2(57v)",
+      "  skinned meshes: glimwick_serenade(3044v), glimwick_serenade_accent_1(246v), glimwick_serenade_accent_2(33v), glimwick_serenade_accent_3(57v)",
       "  bones: 29 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b x_skirt_f x_skirt_l x_skirt_r)",
       "  clips: attack1:0.833s/23tr, attack2:0.833s/23tr, cast_a1:0.833s/23tr, cast_a2:0.833s/23tr, cast_a3:0.833s/23tr, cast_ult:0.833s/23tr, channel:2.000s/19tr, dash:0.333s/25tr, death:1.500s/23tr, idle:2.000s/19tr, idle_lobby:2.000s/19tr, recall:2.000s/19tr, run:0.333s/25tr, stunned:2.000s/19tr, victory:2.000s/19tr",
       "  tracks checked: 325; materials: body, accent; textures: body.map=1024x1024, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
@@ -225,8 +225,8 @@
       1
     ],
     "headY": 0.66,
-    "accentPct": 7.99,
-    "accentTopHalfPct": 61.8,
+    "accentPct": 8.17,
+    "accentTopHalfPct": 62,
     "heightPx1080": 70,
     "size": [
       2400,
@@ -234,26 +234,26 @@
     ],
     "clips": 15,
     "out": "art/renders/units/three_glimwick_serenade.png",
-    "seconds": 5.5,
+    "seconds": 21.6,
     "exit": 0,
     "clip_sheet": "art/renders/units/three_clips_glimwick_serenade.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.11,
-      "model": 15.33,
-      "lows_bind": 0.02,
-      "uv": 11.64,
-      "bake": 19.13,
-      "clips": 0.19,
-      "export": 0.51,
-      "optimize": 0.29,
-      "load_test": 0.09,
-      "three_qa": 12.28,
-      "cache": 0.02
+      "materials": 0.14,
+      "model": 29.32,
+      "lows_bind": 0.03,
+      "uv": 17.41,
+      "bake": 53.08,
+      "clips": 0.8,
+      "export": 2.98,
+      "optimize": 0.89,
+      "load_test": 0.29,
+      "three_qa": 41.61,
+      "cache": 0.08
     },
-    "total_s": 59.65
+    "total_s": 146.69
   },
   "run_ref_speed": 3.25,
   "height_m": 0.93

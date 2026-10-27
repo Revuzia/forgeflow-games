@@ -1206,7 +1206,7 @@ def hood_light(c, out: list, to_model=None, s: float = 1.0, radii=(0.050, 0.030,
     V, F = wc.cap_mesh(c, X, Y, Z, rx, rz, ry, seg=16)
     S = Sculpt("hoodlight")
     S.add(Ellipsoid(tuple(c), (rx, ry, rz), axes=ax), k=0.0)
-    out.append(SP("hoodlight", S, "accent", "bone:head", len(F), 0.5, to_model=to_model,
+    out.append(SP("hoodlight", S, wc.CORE_MAT, "bone:head", len(F), 0.5, to_model=to_model,
                   meta={"light": (tuple(c), (rx, ry, rz), None if axes is None else ax.tolist()), "smooth": True,
                         "low_mesh": (V, F)}))
     V, F = wc.halo_mesh(c, X, Y, Z, rx, rz, ry)

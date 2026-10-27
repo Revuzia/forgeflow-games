@@ -738,7 +738,7 @@ class HoodCore:
         V, F = wc.cap_mesh(self.c, X, Y, Z, rx, ry, rz, seg=16)
         g = Sculpt("hoodlight")
         g.add(Sphere(self.top, 0.01), k=0.0)                  # stand-in high (the accent is never baked)
-        part(out, "hoodlight", g, "accent", "bone:head", len(F), vs=1.0, paint="accent", prim=("mesh", V, F))
+        part(out, "hoodlight", g, wc.CORE_MAT, "bone:head", len(F), vs=1.0, paint="accent", prim=("mesh", V, F))
         V, F = wc.halo_mesh(self.c, X, Y, Z, rx, ry, rz)
         g = Sculpt("hoodhalo")
         g.add(Sphere(self.top, 0.01), k=0.0)
@@ -1403,8 +1403,9 @@ def serenade_parts() -> list:
     dome.add(lat, k=0.0)
     base = sdf.Blend([(o_, p_, k_) for o_, p_, k_, _ in dome.ops])
     dome.sub(pocket, k=0.012)
-    part(out, "dome", dome, "cloth2", "bone:head", 380, vs=0.85, uv=1.7, tint="#978165", light=0.12, detail=0.6,
-         grad=(0.70, 0.96, 0.03), cav=0.08)      # (r4: a softer top light: the crown read L* 70 in game, cap 65)
+    part(out, "dome", dome, "cloth2", "bone:head", 380, vs=0.85, uv=1.7, tint="#978165", light=0.08, detail=0.6,
+         grad=(0.70, 0.96, 0.03), cav=0.08)      # (r4: a softer top light: the crown read L* 70 in game, cap 65;
+                                                  # r5: 0.12 -> 0.08, the hood's top quarter 65.5 under the enemy tint)
     # ROLLED COLLAR (lower at the front) + the THICK dark felt roll round the opening (concept: 5.4 cm, 4 cm proud,
     # round), one felt mesh; the roll's ends sink into the collar, whose front is the sill
     roll = Sculpt("roll")
@@ -1431,7 +1432,8 @@ def serenade_parts() -> list:
     bv, bf = ribbon(bp, bn, S_BAND_HALF, closed=True, lift=(0.0042, 0.0072))
     part(out, "band", band, "accent", "bone:head", len(bf), vs=0.6, paint="accent", prim=("mesh", bv, bf))
     # THE HOOD LIGHT (fix round 4): one soft core centred between the collar roll (the sill) and the arch top
-    light = HoodCore(A, pocket, front=0.030, rx=0.041, rz=0.025, solid=roll_d, h=0.45)
+    # (r5: 1 cm forward and lower: from 52 deg the thick brow roll hid the core's top half, mostly glow showed under it)
+    light = HoodCore(A, pocket, front=0.021, rx=0.041, rz=0.025, solid=roll_d, h=0.40)
     light.add(out)
     # MANTLE: the concept's wide sand-felt capelet: a 1.6 cm felt layer over a bell that drapes over the shoulders
     # AND the upper arms (arm covers smooth-unioned in; their outer part follows the arms: _bind_mantle), the
@@ -2027,8 +2029,10 @@ def _serenade_marks(nm, lin, P, N, info, pal):
         lin = lin * (1.0 - 0.14 * smooth(0.0055, 0.0018, da) * fr * (q[:, 1] > A.y_bot + 0.03))[:, None]
         # the lip: the roll's top faces inside the arch outline are the floor of the opening, in shadow (an
         # up-facing lit felt strip there read as a pale tray under the glow)
-        lip = smooth(0.006, -0.012, A.d2(P)) * (q[:, 2] > -0.24) * (q[:, 2] < 0.06)
-        lin = _mix(lin, _hexlin(pal["ink"]) * 1.6, 0.85 * lip)
+        # (r5) pure ink, a little wider: at 0.85 x ink 1.6 its texels stayed over the ORM's ink threshold, so the
+        # roll's inner faces kept the sky's specular / ambient (a blue-lit band under the core from 3/4: a mouth)
+        lip = smooth(0.010, -0.008, A.d2(P)) * (q[:, 2] > -0.24) * (q[:, 2] < 0.06)
+        lin = _mix(lin, _hexlin(pal["ink"]), lip)
     elif nm == "mantle":
         # the band lies along the hem (e 0.0015-0.0315); above it a slim dark felt bed (the band's edge for either
         # tint) with running stitches, a lit roll on the turned edge below it
@@ -2100,6 +2104,13 @@ def _finish_paint(img, maps, names, g, log):
             out[m] = _srgb(lin)
         c_ = (np.clip(out[m].mean(axis=0), 0, 1) * 255).round().astype(int)
         means[nm] = "#%02X%02X%02X" % tuple(c_)
+    if g["faction"] == "serenade":
+        # (r5) the reserved marigold band: the paint noise and the concept transfer pushed walnut, leather and the felt
+        # frame over 40 % saturation at hue 25-50 (the resin panes keep theirs: the brief's <= 4 % allowance)
+        have = part_ >= 0
+        res = np.isin(part_, [i for i, nm in enumerate(names) if nm in ("lamp_resin",)])
+        out[have], frac = wc.clamp_reserved(out[have], res[have])
+        log(f"glimwick paint: reserved-band clamp on {100 * frac:.1f} % of texels")
     # re-bleed the island padding from the finished paint (else the projected colour shows as light seams)
     iy, ix = project.nearest_index(part_ >= 0)
     out = out[iy, ix]

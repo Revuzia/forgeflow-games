@@ -655,7 +655,7 @@ def hood_light_parts(lc, A, rx, rd, rz) -> list:
     soft volume of lamplight, dark all round it."""
     core = MeshPart(*wc.cap_mesh(lc, A.X, A.N, A.U, rx, rd, rz, seg=16))
     halo = MeshPart(*wc.halo_mesh(lc, A.X, A.N, A.U, rx, rd, rz))
-    return [("hood_light", core, 1.0, "accent", "bone:head", None),
+    return [("hood_light", core, 1.0, wc.CORE_MAT, "bone:head", None),
             ("hood_halo", halo, 1.0, wc.HALO_MAT, "bone:head", None)]
 
 

@@ -46,6 +46,7 @@ import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 from common import anim, fighter, materials, rig, scene  # noqa: E402
+from common import render as _render  # noqa: E402
 from common import mesh as _mesh, pipeline as _pipeline  # noqa: E402
 from common.anim import Aim, FootTarget, HandTarget  # noqa: E402
 from common.hifi import project as _project, sdf  # noqa: E402
@@ -145,7 +146,7 @@ PALETTE = materials.bible_palette(chalk="#D9D4C6", dawnglass="#B9D0E2", stone="#
                                   under="#313439", ink="#17181B", accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_rod_head", "rod_head": "x_rod_head", "halo": "x_halo"}
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "portrait_yaw": 2.0, "icon_yaw": 0.0}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
 GLB_COMPRESS = True
@@ -235,6 +236,27 @@ def wraps(amp, pitch, a, b):
         th = np.arctan2(q @ ref2, q @ ref)
         ph = (s / pitch + th / (2 * math.pi)) % 1.0
         return -amp * (ss(0.0, 0.18, ph) - ss(0.70, 1.0, ph)) + amp * 0.5
+    return fn
+
+
+LAME_R, LAME_T = 0.140, 0.017
+# per lame: the tile cylinder's axis (x out from the midline, z), its angular span (degrees: 0 = straight out, 90 = up)
+# and its half depth front-to-back
+LAME_GEO = ((0.170, 1.420, 38.0, 96.0, 0.128), (0.186, 1.358, 14.0, 72.0, 0.134), (0.190, 1.290, -6.0, 54.0, 0.140))
+
+
+def lame_fn(sx, cxl, czl, a0, a1, hy, yc=0.03):
+    s0, c0 = math.sin(math.radians(a0)), math.cos(math.radians(a0))
+    s1, c1 = math.sin(math.radians(a1)), math.cos(math.radians(a1))
+
+    def fn(P):
+        q = (P[:, 0] - sx * cxl) * sx
+        w = P[:, 2] - czl
+        d_shell = np.abs(np.hypot(q, w) - LAME_R) - LAME_T * 0.5
+        d1 = -q * s1 + w * c1
+        d0 = q * s0 - w * c0
+        dy = np.abs(P[:, 1] - yc) - hy * (1.0 - 0.18 * ss(LAME_R * 0.2, LAME_R, q))     # tapering toward the tip
+        return np.maximum(np.maximum(d_shell, np.maximum(d0, d1)), dy)
     return fn
 
 
@@ -354,16 +376,13 @@ def sculpts(n_bells: int = 7) -> list:
                 for op, prim, k, tg in cowl.ops]
     part("cowl", cowl, "cloth2", ("weights", "cowl"), 1650, uvw=1.2)
 
-    # PAULDRONS: three stepped stone lames per shoulder (rigid on the shoulder, the lower ones toward the upper arm)
+    # PAULDRONS: three stepped stone lames per shoulder like roof tiles (curved slabs over the shoulder, each lower one
+    # further out; rigid on the shoulder, the lower ones toward the upper arm)
     for s, sx in (("R", -1), ("L", 1)):
-        for i, (zc, rad) in enumerate(((1.475, (0.100, 0.150, 0.088)), (1.405, (0.105, 0.158, 0.085)),
-                                       (1.335, (0.110, 0.164, 0.080)))):
+        for i, (cxl, czl, a0, a1, hy) in enumerate(LAME_GEO):
             L = Sculpt(f"pauldron_{s}{i + 1}")
-            c = (sx * 0.200, 0.03, zc)
-            E = Ellipsoid(c, rad)
-            L.add(shell(E, 0.016).displaced(chips(0.004, 9.0), 0.004), k=0.0)
-            L.inter(HalfSpace((0, 0, zc - 0.012), (0, 0, -1), 1.0), k=0.004)
-            L.inter(HalfSpace((sx * 0.105, 0, 0), (-sx, 0, 0), 1.0), k=0.004)
+            L.add(Fn(lame_fn(sx, cxl, czl, a0, a1, hy), (min(sx * 0.10, sx * 0.36), -0.16, czl - 0.12),
+                     (max(sx * 0.10, sx * 0.36), 0.22, czl + 0.16)).displaced(chips(0.0035, 10.0), 0.0035), k=0.0)
             org = (sx * 0.22, 0.03, 1.472)
             part(f"pauldron_{s}{i + 1}", L, "stone", ("dblend", f"shoulder.{s}", f"upper_arm.{s}", org,
                                                         (sx * 0.14, 0.0, -0.99), 0.03 + 0.03 * i, 0.10 + 0.03 * i), 400, 0.6)
@@ -556,6 +575,7 @@ def model(ctx) -> list:
     P = []
     extra = (ctx.skin or {}).get("extra") or {}
     _N_BELLS[0] = int(extra.get("bells", 7))
+    _BUILD["vashil"] = True
     for name, S, vs, role, bind, tris, uvw in sculpts(_N_BELLS[0]):
         v, q = S.mesh(VOXEL * vs)
         ob = sdf.to_object(f"{name}_high", v, q, ctx.col)
@@ -743,7 +763,7 @@ VALUE_RAMP = [(0.0, 0.80), (0.20, 0.86), (0.45, 0.94), (0.70, 1.0), (1.0, 1.04)]
 HI_KNEE, HI_TOP = 0.56, 0.70   # linear luminance: a soft shoulder from L* 80 up to L* 87 (no large area over 86)
 # per part (target median, hue strength, contrast gamma), applied after the projection; None = the painting's own
 BASE_TONE: dict = {}
-WARM = (1.035, 1.0, 0.90)
+WARM = (1.02, 1.0, 0.95)
 WARM_PARTS = ("hood", "cowl", "robe_top", "skirt", "sleeve_L", "sleeve_R", "sash", "mask", "visor_frame", "wrap_L",
               "wrap_R", "pauldron_R1", "pauldron_R2", "pauldron_R3", "pauldron_L1", "pauldron_L2", "pauldron_L3")
 
@@ -918,6 +938,30 @@ def _striker_paint(p, n):
     return c * (1 - 0.25 * edge)[:, None]
 
 
+LAMES = {f"pauldron_{s}{i + 1}": g for s in ("R", "L") for i, g in enumerate(LAME_GEO)}
+
+
+def _lame_paint(name, p, n, painted):
+    """the stepped shoulder lames as carved pale stone (the projection streaked along their curved sides): the
+    painted front's median colour, honed grain, a darker underside toward the rim, chips, a lit top edge"""
+    cls = _classes(_srgb(painted))["coat"]
+    base = np.median(painted[cls], axis=0) if cls.sum() > 30 else _lin(_hex("#CFC8BA"))
+    cxl, czl, a0, a1, hy = LAMES[name]
+    sx = 1.0 if name[9] == "L" else -1.0
+    q = (p[:, 0] - sx * cxl) * sx
+    w = p[:, 2] - czl
+    ang = np.degrees(np.arctan2(w, q))
+    rr = np.hypot(q, w)
+    outer = ss(LAME_R - 0.002, LAME_R + 0.006, rr)                        # the tile's outer face (vs its underside)
+    lip = 1 - ss(a0, a0 + 9.0, ang)                                      # the lower lip (in the next lame's shadow above)
+    endy = ss(hy - 0.025, hy, np.abs(p[:, 1] - 0.03))                    # the front / back ends
+    c = base[None, :] * (1 + 0.09 * _fbm(p, 16.0))[:, None]
+    k = (0.62 + 0.38 * outer) * (1 + 0.10 * ss(0.3, 0.9, n[:, 2])) * (1 - 0.22 * lip * outer) * (1 - 0.18 * endy)
+    k = k * (1 + 0.12 * ss(a1 - 8.0, a1, ang))                         # a lit top edge
+    chip = np.clip(NOISE.ridged(p, 22.0, 2) - 0.62, 0, 1) * 2.2
+    return c * (k * (1 - 0.30 * chip))[:, None]
+
+
 def _hood_inside(p, n):
     """the hood's inside: deep shade toward the back of the opening (the painted dark gap round the face)"""
     c = np.array([0.0, 0.06, 1.74])
@@ -970,6 +1014,10 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
             lin[m] = _glass_paint(p[m], n[m], top, np.array([0.0, 0.0, 1.0]), 0.05)
         else:
             lin[m] = fn(p[m], n[m])
+    for name in LAMES:
+        m = sel(name)
+        if m is not None:
+            lin[m] = _lame_paint(name, p[m], n[m], lin[m])
     # the hood's inside in shade; the face-plate's sides shaded by the hood
     m = sel("hood")
     if m is not None:
@@ -1079,7 +1127,7 @@ CLASS_ROLE = {   # part -> {class: role}; classes: coat (cream), panel (blue-gre
     "neckwrap": {"coat": "ironstone", "band": "ironstone"},
 }
 SKIN_ROLES = {   # per skin: the derived roles the painting's classes move to
-    "vashil_chalkline": {"cloth": "#3A3F47", "sleeve": "#3A3F47", "lining": "#2E3238", "cloth2": "#C9C9C1"},
+    "vashil_chalkline": {"cloth": "#3A3F47", "sleeve": "#3A3F47", "lining": "#2E3238"},
     "vashil_first_bell": {"chalk": "#D8D2C4", "cloth": "#8D8A84", "lining": "#8D8A84", "stone": "#C9C4B8",
                           "ironstone": "#38363A", "under": "#34322F", "leather": "#3A332D"},
 }
@@ -1094,8 +1142,14 @@ def _classes(c):
     return {"band": band, "panel": panel, "coat": ~band & ~panel}
 
 
-def _shift(c, target_hex, strength=0.9, gamma=0.9):
-    return _tone(c, target_hex, strength, gamma)
+BASE_ROLE_HEX = {"sleeve": "#D9D4C6", "lining": "#7D8996"}     # the derived roles' base colours (chalk, cloth)
+
+
+def _shift(c, target_hex, base_hex):
+    """the painting moved by the skin's own change: target / base role colour per channel in linear light (the
+    painted values and detail keep their relationships; a skin that barely moves a colour barely moves the paint)"""
+    gain = np.clip(_lin(_hex(target_hex)) / np.maximum(_lin(_hex(base_hex)), 1e-4), 0.03, 4.0)
+    return _srgb(_hi_cap(_lin(c) * gain[None, :]))
 
 
 def _linework(P, n):
@@ -1138,7 +1192,7 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             sm = cls.get(cname)
             if not h or sm is None or sm.sum() < 20:
                 continue
-            c[sm] = _shift(c[sm], h)
+            c[sm] = _shift(c[sm], h, BASE_ROLE_HEX.get(role) or base_pal.get(role) or h)
             log(f"  vashil recolour {nm}.{cname} ({role}) -> {h}")
         if sid == "vashil_chalkline" and (nm.startswith("sleeve") or nm in ("skirt", "robe_top")):
             ink = cls["panel"] | (cls["coat"] if nm.startswith("sleeve") else np.zeros_like(cls["coat"]))
@@ -1200,6 +1254,24 @@ def _apply_pose(arm, pose):
 
 
 anim.apply_pose = _apply_pose
+
+
+# ── portrait / icon framing (render._fit_camera wrapper): the head boxes reach up to the halo's top ────────
+# (brief §10-11: the portrait shows the arched visor, the lowest bells and the chalk ring; the shared box stops 0.36 m
+# over the skull base, under the ring); the yaw is near frontal so the two front bells hang either side of the visor
+_orig_fit_camera = _render._fit_camera
+
+
+def _fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=None):
+    if _BUILD.get("vashil") and (hi.z - lo.z) < 1.0 and hi.z < HALO_C[2] + 0.06:
+        hi = V((hi.x, hi.y, HALO_C[2] + 0.075))
+        lo = V((lo.x - 0.12, lo.y - 0.12, lo.z))
+        hi = V((hi.x + 0.12, hi.y + 0.12, hi.z))
+    return _orig_fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center)
+
+
+_render._fit_camera = _fit_camera
+_BUILD: dict = {}
 
 
 # ── the foot roll (anim._solve_foot, wrapped by a corrected copy) ──────────────────────────────────────
@@ -1596,8 +1668,8 @@ def clip_overrides(ctx) -> dict:
     s1 = pose(torso=dict(chest=(4, 4, 0), head=(-3, -2, 0)), R=(-0.22, -0.72, -0.10), aim=(-0.05, -0.80, 0.60))
     held_back = pose(torso=dict(chest=(-5, -6, 0), head=(-6, 3, 0)), R=(-0.22, -0.40, 0.20), aim=(-0.05, 0.25, 0.97),
                      L=(0.10, -0.40, -0.40))
-    final = pose(torso=dict(hips=(0, -14, 0), spine=(0, -6, 0), chest=(-2, -8, 0), neck=(0, 6, 0), head=(-4, 10, -3)),
-                 L=(0.06, -0.38, 0.42), Lp=(0.9, 0.3, -0.3), feet=_feet(l=(0.0, -0.04, 0.0), yl=-6.0, yr=-16.0))
+    final = pose(torso=dict(hips=(0, -6, 0), spine=(0, -3, 0), chest=(-2, -4, 0), neck=(0, 3, 0), head=(-4, 6, -3)),
+                 L=(0.30, -0.56, 0.12), Lp=(0.6, 0.3, -0.75), feet=_feet(l=(0.0, -0.04, 0.0), yl=-4.0, yr=-10.0))
     k = [(0.0, G, "linear"), (0.12, up1, "inout"), (0.20, s1, "accel"), (0.30, up1, "out"), (0.38, s1, "accel"),
          (0.50, held_back, "out"), (0.64, held_back, "linear"), (0.80, final, "inout"), (1.0, final, "linear")]
     vic = with_halo(anim.keyed(k), [(0.20, 4.0, (1, 0, 0.3)), (0.38, 4.0, (1, 0, -0.3))], 55)

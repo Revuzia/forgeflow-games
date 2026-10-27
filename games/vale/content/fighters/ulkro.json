@@ -424,7 +424,7 @@
     "portrait": "assets/fighters/ulkro/portrait.png",
     "splash": "assets/fighters/ulkro/splash.png",
     "icon": "assets/fighters/ulkro/icon.png",
-    "height": 2.06,
+    "height": 2.08,
     "scale": 1,
     "runRefSpeed": 3.5,
     "clips": {

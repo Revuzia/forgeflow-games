@@ -10,11 +10,11 @@
  "boot_L": "#333439",
  "boot_R": "#333439",
  "pole": "#A99D87",
- "finial": "#D8D5CC",
+ "finial": "#D8D5CD",
  "crook": "#DCD9D0",
- "brace": "#DBD8CF",
+ "brace": "#DBD9D0",
  "lamp_glass": "#53667D",
- "lamp_posts": "#E4E2D9",
- "lamp_caps": "#DBD8D0",
- "cord": "#C4CDD6"
+ "lamp_posts": "#E5E2DA",
+ "lamp_caps": "#DBD8CF",
+ "cord": "#C8D1DA"
 }

@@ -1133,7 +1133,7 @@ def hood_parts(F, aub, part):
     # core's outline to 0 at its rim (wick_common.halo_mesh / inject_halo)
     X, Zu, Yo = axes
     v, f = wc.cap_mesh(lc, X, Yo, Zu, lr[0], lr[1], lr[2], seg=16)
-    part("hood_light", ("mesh", v, f), "accent", "bone:head", None, 0.5)
+    part("hood_light", ("mesh", v, f), wc.CORE_MAT, "bone:head", None, 0.5)
     v, f = wc.halo_mesh(lc, X, Yo, Zu, lr[0], lr[1], lr[2])
     part("hood_halo", ("mesh", v, f), wc.HALO_MAT, "bone:head", None, 0.5)
     if aub:

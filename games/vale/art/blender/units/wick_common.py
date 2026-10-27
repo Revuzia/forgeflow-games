@@ -237,29 +237,58 @@ def legacy_pole_lamp(spec: Wick, ctx, part, rise: float) -> None:
 
 # ── the hood light: one soft core + its halo (fix round 4, shared by every kind) ───────────────────────────────────
 # Brief §0.2 / §4: ONE soft glowing volume deep in a dark hollow, wider than tall, dark all round it. The accent is
-# factor-only (the shared load test), so the core is one flat emissive colour; its falloff is a second, alpha-blended
-# accent: a HALO cap (the front of an ellipsoid HALO_SCALE x the core's width and height) whose COLOR_0 vertex alpha
-# runs from HALO_ALPHA0 over the core's outline to 0 at its rim. Built with the kept material HALO_MAT (`glow_`:
-# never baked, split into the accent mesh), the export hook (install_halo_export) renames it `accent` (the renderer
-# and the crowd path tint every material of that name per viewer), sets it BLEND and writes the vertex alpha.
+# factor-only (the shared load test) and the renderer tints every material named `accent` per viewer (colour x 0.3,
+# emissive x glow), so the only per-vertex control is alpha. Both pieces are alpha-blended accent copies:
+#   the CORE (CORE_MAT): the front of a 16-round ellipsoid, CORE_SHRINK x the nominal radii, its vertex alpha 1.0 at
+#     the apex falling to CORE_ALPHA_RIM at its outline, so its own centre is the brightest point and it has no outline;
+#   the HALO (HALO_MAT): a shallow dome HALO_SCALE x the core across and up, through the core's middle, its vertex
+#     alpha a PLATEAU (HALO_ALPHA_IN .. HALO_ALPHA0) out to HALO_PLATEAU of its radius (past the core's outline, so the
+#     core still sits on it when parallax slides it at 3/4 and from the 52 deg camera), then falling to 0 at the rim.
+# Over the hollow's ink, layers of one colour composite to 1 - prod(1 - a) in any draw order: core centre 1.0, the
+# core's rim = the plateau, then the fall (fix round 5: an opaque core on a plateau that ended at its outline read as a
+# flat disc with a crisp edge, a pupil in a socket, when the core slid off the plateau in 3/4 views).
+# Built with kept `glow_` materials (never baked, split into the accent mesh); the export hook (install_halo_export)
+# renames them `accent`, sets BLEND and writes COLOR_0.
 HALO_MAT = "glow_halo"           # the hood light's halo: HALO_SCALE x its core
 HALO_LAMP_MAT = "glow_halo_lamp" # a carried lamp's pane glow: HALO_LAMP_SCALE x its core (a tighter glow, less area)
-HALO_SCALE = 2.0                 # the halo's rim, in core radii (across and up): a small core in a wide soft glow
+CORE_MAT = "glow_core"           # the hood light's core (alpha 1 at the apex -> CORE_ALPHA_RIM at its outline)
+CORE_SHRINK = 0.90               # the core's size against the nominal radii a kind passes (r5: the halo carries more)
+HALO_SCALE = 2.3                 # the halo's rim, in core radii (across and up): a small core in a wide soft glow
 HALO_LAMP_SCALE = 1.6
 HALO_SCALES = {HALO_MAT: HALO_SCALE, HALO_LAMP_MAT: HALO_LAMP_SCALE}
-HALO_ALPHA0 = 0.85               # vertex alpha over the core's outline (0 at the rim): the light fades from the core's
-HALO_ALPHA_IN = 0.90             # own value instead of stepping down at its edge; at the apex (over the core) 0.9
-HALO_FALL = 1.5                  # the fall's exponent (alpha0 * (1 - s) ** HALO_FALL, s = 0 at the core .. 1 at the rim)
-HALO_RINGS = (0.0, 1.0 / HALO_SCALE, 0.66, 0.82, 1.0)
+HALO_ALPHA0 = 0.80               # vertex alpha at the plateau's edge (0 at the rim)
+HALO_ALPHA_IN = 0.84             # at the apex (behind the core's centre)
+HALO_PLATEAU = 0.62              # the plateau's end, in halo radii (the core's outline is at 1 / HALO_SCALE = 0.435)
+HALO_FALL = 1.5                  # the fall's exponent (alpha0 * (1 - s) ** HALO_FALL, s = 0 at the plateau .. 1 at the rim)
+HALO_RINGS = (0.0, 1.0 / HALO_SCALE, HALO_PLATEAU, 0.82, 1.0)
+CORE_ALPHA_RIM = 0.0             # the core's vertex alpha at its outline (it fades into the plateau: no edge)
+CORE_FALL = 1.6                  # 1 - (1 - CORE_ALPHA_RIM) * rho ** CORE_FALL
+LAMP_HALO_BLACK = True           # a lamp halo's vertex RGB is black: only emissive x alpha shows (its diffuse, the tint
+                                 # x 0.3, darkened the grey pane it lay on: a muddy ring round each lamp core)
 
 
-def halo_alpha(rho, scale: float = HALO_SCALE):
-    """vertex alpha of a halo `scale` x its core at normalized lateral radius rho (0 apex, 1 rim)"""
+def halo_alpha(rho, scale: float = HALO_SCALE, plateau: float | None = None):
+    """vertex alpha of a halo `scale` x its core at normalized lateral radius rho (0 apex, 1 rim): HALO_ALPHA_IN at
+    the apex easing to HALO_ALPHA0 at `plateau` (default: the core's outline, 1 / scale), then the fall to 0"""
     rho = np.clip(np.asarray(rho, dtype=np.float64), 0.0, 1.0)
-    r0 = 1.0 / scale
+    r0 = 1.0 / scale if plateau is None else float(plateau)
     inside = HALO_ALPHA0 + (HALO_ALPHA_IN - HALO_ALPHA0) * (1.0 - rho / r0) ** 2
     s = np.clip((rho - r0) / (1.0 - r0), 0.0, 1.0)
     return np.where(rho <= r0, inside, HALO_ALPHA0 * (1.0 - s) ** HALO_FALL)
+
+
+def core_alpha(rho):
+    """vertex alpha of the hood-light core at normalized lateral radius rho (0 apex, 1 its outline)"""
+    rho = np.clip(np.asarray(rho, dtype=np.float64), 0.0, 1.0)
+    return 1.0 - (1.0 - CORE_ALPHA_RIM) * rho ** CORE_FALL
+
+
+# per kept material: (alpha of rho, vertex RGB)
+HALO_PROFILES = {
+    HALO_MAT: (lambda rho: halo_alpha(rho, HALO_SCALE, HALO_PLATEAU), 1.0),
+    HALO_LAMP_MAT: (lambda rho: halo_alpha(rho, HALO_LAMP_SCALE), 0.0 if LAMP_HALO_BLACK else 1.0),
+    CORE_MAT: (core_alpha, 1.0),
+}
 
 
 def _frame(X, Y, Z):
@@ -267,13 +296,15 @@ def _frame(X, Y, Z):
     return ax / np.linalg.norm(ax, axis=1, keepdims=True)
 
 
-def cap_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 16, polar_deg=(0.0, 50.0, 100.0)):
+def cap_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 16, polar_deg=(0.0, 50.0, 100.0), shrink: float = CORE_SHRINK):
     """The hood-light CORE: the front of an ellipsoid (apex toward Y, the opening's outward normal; X across, Z up;
     half sizes rx across, ry deep, rz up), from the apex to `polar_deg[-1]` degrees off it (a little past the
     outline seen from the front, so the open back never shows from in front or above). `seg` round: a smooth
-    outline (review r3: a 10-sided core read as a polygon up close). Returns (V, F), faces outward."""
+    outline (review r3: a 10-sided core read as a polygon up close). Across and up it is `shrink` x the nominal
+    radii (the halo keeps HALO_SCALE x this). Draw it with CORE_MAT. Returns (V, F), faces outward."""
     c = np.asarray(c, dtype=np.float64)
     ax = _frame(X, Y, Z)
+    rx, rz = rx * shrink, rz * shrink
     V = [c + ry * ax[1]]
     for p in polar_deg[1:]:
         t = math.radians(p)
@@ -285,15 +316,18 @@ def cap_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 16, polar_deg=(0.0, 50.0, 100.0)
     return V, orient_out(V, _cap_faces(seg, len(polar_deg) - 1), c)
 
 
-def halo_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 14, depth: float = 0.3, rings=None, scale: float = HALO_SCALE):
+def halo_mesh(c, X, Y, Z, rx, ry, rz, seg: int = 14, depth: float = 0.3, rings=None, scale: float | None = None):
     """The HALO round a core of half sizes (rx, ry, rz) at c (frame as cap_mesh): the front cap of an ellipsoid
     HALO_SCALE x the core across and up, `depth` x its depth: a shallow dome through the core's middle (its outline
     meets the core's from any angle; a deep cap in front of the core slid off it by parallax in 3/4 and leaned views,
     leaving a hard core edge on one side), rings at
     HALO_RINGS (or `rings`, always including 1 / HALO_SCALE) of the lateral radius (the vertex alpha's stations).
+    `scale` None: the HOOD halo, HALO_SCALE x the core cap_mesh builds from the same nominal radii (CORE_SHRINK x them).
     Returns (V, F), faces outward (toward Y)."""
     c = np.asarray(c, dtype=np.float64)
     ax = _frame(X, Y, Z)
+    if scale is None:
+        scale = HALO_SCALE * CORE_SHRINK
     Rx, Rz, D = rx * scale, rz * scale, ry * depth
     rings = HALO_RINGS if rings is None else tuple(rings)
     V = [c + D * ax[1]]
@@ -331,7 +365,10 @@ def orient_out(V, F, c):
 
 def halo_material(ctx, name: str = HALO_MAT):
     """ctx.mats[name]: a copy of the accent (factor-only), alpha-blended; its emission a hair lower and its alpha
-    below 1 so the optimizer's dedup can never merge it with the core (the export hook rewrites it anyway)."""
+    below 1 so the optimizer's dedup can never merge it with the core (the export hook rewrites it anyway). The
+    default call (the hood halo) also makes the hood core's material (CORE_MAT)."""
+    if name == HALO_MAT and CORE_MAT not in ctx.mats:
+        halo_material(ctx, CORE_MAT)
     if name in ctx.mats:
         return ctx.mats[name]
     acc = ctx.mats["accent"]
@@ -339,8 +376,9 @@ def halo_material(ctx, name: str = HALO_MAT):
     m.name = name
     b = m.node_tree.nodes.get("BSDF") if m.use_nodes else None
     if b is not None:
-        b.inputs["Alpha"].default_value = HALO_ALPHA0
-        b.inputs["Emission Strength"].default_value = max(0.05, b.inputs["Emission Strength"].default_value - 0.02)
+        b.inputs["Alpha"].default_value = 0.95 if name == CORE_MAT else HALO_ALPHA0
+        drop = 0.03 if name == CORE_MAT else 0.02
+        b.inputs["Emission Strength"].default_value = max(0.05, b.inputs["Emission Strength"].default_value - drop)
         b.inputs["Roughness"].default_value = 1.0
     for attr, val in (("surface_render_method", "BLENDED"), ("blend_method", "BLEND")):
         try:
@@ -430,16 +468,16 @@ def _halo_rho(P, F):
 
 
 def inject_halo(path: str) -> int:
-    """GLB post-export (before the optimizer): every material named in HALO_SCALES becomes a BLEND copy of the core
-    `accent` (same factors and extensions, name `accent`), and every primitive drawn with it gets a COLOR_0 (white,
-    alpha = halo_alpha(rho)). Returns the primitives patched."""
+    """GLB post-export (before the optimizer): every material named in HALO_PROFILES becomes a BLEND copy of the core
+    `accent` (same factors and extensions, name `accent`), and every primitive drawn with it gets a COLOR_0 (RGB from
+    the profile, alpha = the profile's alpha of rho). Returns the primitives patched."""
     import json
     got = _glb_read(path)
     if got is None:
         return 0
     ver, js, bin_ = got
     mats = js.get("materials", [])
-    halo = {i: HALO_SCALES[m.get("name")] for i, m in enumerate(mats) if m.get("name") in HALO_SCALES}
+    halo = {i: HALO_PROFILES[m.get("name")] for i, m in enumerate(mats) if m.get("name") in HALO_PROFILES}
     if not halo:
         return 0
     core = next((m for m in mats if m.get("name") == "accent"), None)
@@ -467,8 +505,9 @@ def inject_halo(path: str) -> int:
                 F = _accessor_array(js, bin_, prim["indices"])
             else:
                 F = np.arange(len(P))
-            a = halo_alpha(_halo_rho(P, F), halo[prim["material"]])
-            col = np.ones((len(P), 4), dtype=np.float32)
+            prof, rgb = halo[prim["material"]]
+            a = prof(_halo_rho(P, F))
+            col = np.full((len(P), 4), float(rgb), dtype=np.float32)
             col[:, 3] = a.astype(np.float32)
             pad = (4 - len(bin_) % 4) % 4
             bin_ += b"\0" * pad
@@ -500,6 +539,333 @@ def install_halo_export() -> None:
 
     optimize._wick_halo = True
     export.optimize = optimize
+
+
+# ── clean game lows (fix round 5: exact meshes instead of decimated SDF shards for straps, packs, capes, rings) ──────
+def march_in(D, O, d, rmax, steps=64):
+    """t of the OUTERMOST zero crossing of the field D on each ray O + t d, marching in from t = rmax (nan: never
+    inside); bisected"""
+    O, d = np.asarray(O, float), np.asarray(d, float)
+    n = len(O)
+    t_in, t_out = np.full(n, np.nan), np.full(n, np.nan)
+    prev = np.full(n, float(rmax))
+    for t in np.linspace(rmax, 0.0, steps)[1:]:
+        idx = np.nonzero(np.isnan(t_in))[0]
+        if not len(idx):
+            break
+        hit = D.d(O[idx] + d[idx] * t) < 0
+        t_in[idx[hit]] = t
+        t_out[idx[hit]] = prev[idx[hit]]
+        prev[idx[~hit]] = t
+    ok = ~np.isnan(t_in)
+    lo, hi = t_in[ok], t_out[ok]
+    Oo, do = O[ok], d[ok]
+    for _ in range(26):
+        mid = 0.5 * (lo + hi)
+        inside = D.d(Oo + do * mid[:, None]) < 0
+        lo = np.where(inside, mid, lo)
+        hi = np.where(inside, hi, mid)
+    t = np.full(n, np.nan)
+    t[ok] = 0.5 * (lo + hi)
+    return t
+
+
+def grid_faces(nu, nv, closed=True, off=0):
+    """two triangles per cell of an (nu columns x nv rows) vertex grid, column-major (i * nv + j)"""
+    F = []
+    for i in range(nu if closed else nu - 1):
+        i2 = (i + 1) % nu
+        for j in range(nv - 1):
+            a, b, c, d = off + i * nv + j, off + i2 * nv + j, off + i2 * nv + j + 1, off + i * nv + j + 1
+            F += [(a, b, c), (a, c, d)]
+    return np.array(F, dtype=np.int64)
+
+
+def wind_out(V, F, ref):
+    """flip triangles whose normal points toward `ref(centroids) -> points inside` (per-face reference points)"""
+    V, F = np.asarray(V, float), np.asarray(F, np.int64).copy()
+    a, b, c = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    cen = (a + b + c) / 3.0
+    n = np.cross(b - a, c - a)
+    flip = np.einsum("ij,ij->i", n, cen - ref(cen)) < 0
+    F[flip] = F[flip][:, ::-1]
+    return F
+
+
+def radial_low(D, cx, cy, angles_deg, zrows, rmax=0.75, sy=1.0, lip=None):
+    """A clean low for a bell / cape around the vertical axis through (cx, cy): columns at world angles (deg; 0 = the
+    front, -Y; +90 = the wick's left, +X) x rows zrows(a_rad) (heights, top first, the same count per column), each
+    vertex the OUTERMOST point of the field D on the horizontal ray (sin a, -cos a * sy) from the axis. lip: [(dr, dz),
+    ...] rows tucked under the bottom row ((r - dr) along the ray, z + dz): a thick turned hem. Returns (V, F)."""
+    A = [math.radians(a) for a in sorted(angles_deg)]
+    rows = [np.asarray(zrows(a), float) for a in A]
+    nu, nv = len(A), len(rows[0])
+    O = np.array([(cx, cy, z) for zs in rows for z in zs])
+    dd = []
+    for a in A:
+        v = np.array([math.sin(a), -math.cos(a) * sy, 0.0])
+        dd += [v / np.linalg.norm(v)] * nv
+    dd = np.array(dd)
+    t = march_in(D, O, dd, rmax).reshape(nu, nv)
+    for i in range(nu):
+        bad = np.isnan(t[i])
+        if bad.any():
+            good = np.nonzero(~bad)[0]
+            t[i, bad] = np.interp(np.nonzero(bad)[0], good, t[i, good]) if len(good) else 0.05
+    V = (O + dd * t.reshape(-1)[:, None]).reshape(nu, nv, 3)
+    if lip:
+        ext = []
+        d_last = dd.reshape(nu, nv, 3)[:, -1]
+        for dr, dz in lip:
+            e = V[:, -1] - d_last * dr
+            e[:, 2] += dz
+            ext.append(e)
+        V = np.concatenate([V, np.stack(ext, 1)], 1)
+    nv2 = V.shape[1]
+    Vf = V.reshape(-1, 3)
+    F = grid_faces(nu, nv2)
+    F = wind_out(Vf, F, lambda cen: np.stack([np.full(len(cen), cx), np.full(len(cen), cy), cen[:, 2]], 1))
+    return Vf, F
+
+
+def oval_ring_low(c, prof, n=20, sy=1.0, phase=0.0):
+    """A ring (lathe) around the vertical axis through c on an OVAL (y scaled by sy): prof = [(r, z), ...] in order
+    (r = 0 makes a pole); open where the profile is open. Triangles wound away from the axis (poles: up / down)."""
+    c = np.asarray(c, float)
+    V, rings = [], []
+    for r, z in prof:
+        if r <= 1e-7:
+            rings.append([len(V)])
+            V.append(np.array([c[0], c[1], z]))
+            continue
+        idx = []
+        for i in range(n):
+            a = phase + 2 * math.pi * i / n
+            idx.append(len(V))
+            V.append(np.array([c[0] + r * math.cos(a), c[1] + r * sy * math.sin(a), z]))
+        rings.append(idx)
+    F = []
+    for A_, B_ in zip(rings[:-1], rings[1:]):
+        if len(A_) == 1:
+            F += [(A_[0], B_[(i + 1) % n], B_[i]) for i in range(n)]
+        elif len(B_) == 1:
+            F += [(A_[i], A_[(i + 1) % n], B_[0]) for i in range(n)]
+        else:
+            for i in range(n):
+                j = (i + 1) % n
+                F += [(A_[i], A_[j], B_[j]), (A_[i], B_[j], B_[i])]
+    V = np.array(V)
+    F = np.array(F, dtype=np.int64)
+    zmid = float(np.mean([z for _, z in prof]))
+
+    def ref(cen):
+        r = np.stack([np.full(len(cen), c[0]), np.full(len(cen), c[1]), cen[:, 2]], 1)
+        on_axis = np.hypot(cen[:, 0] - c[0], cen[:, 1] - c[1]) < 1e-5
+        r[on_axis, 2] = zmid
+        return r
+    return V, wind_out(V, F, ref)
+
+
+def tube_low(pts, radii, nsides=6, caps=(True, True), up=(0.0, 0.0, 1.0)):
+    """An exact tube through pts (radius per point), parallel-transported frames, optional flat end caps (fans).
+    Returns (V, F) wound outward."""
+    P = np.asarray(pts, float)
+    R = np.broadcast_to(np.asarray(radii, float), (len(P),))
+    T = np.gradient(P, axis=0)
+    T /= np.linalg.norm(T, axis=1, keepdims=True)
+    u = np.cross(T[0], np.asarray(up, float))
+    if np.linalg.norm(u) < 1e-6:
+        u = np.cross(T[0], (1.0, 0.0, 0.0))
+    u /= np.linalg.norm(u)
+    V, U = [], [u]
+    for i in range(1, len(P)):
+        u = U[-1] - T[i] * (U[-1] @ T[i])
+        U.append(u / np.linalg.norm(u))
+    for i, p in enumerate(P):
+        w = np.cross(T[i], U[i])
+        for k in range(nsides):
+            a = 2 * math.pi * (k + 0.5) / nsides
+            V.append(p + R[i] * (math.cos(a) * U[i] + math.sin(a) * w))
+    F = []
+    for i in range(len(P) - 1):
+        for k in range(nsides):
+            k2 = (k + 1) % nsides
+            a, b, c, d = i * nsides + k, i * nsides + k2, (i + 1) * nsides + k2, (i + 1) * nsides + k
+            F += [(a, b, c), (a, c, d)]
+    V = list(V)
+    for end, on in ((0, caps[0]), (len(P) - 1, caps[1])):
+        if not on:
+            continue
+        ci = len(V)
+        V.append(P[end])
+        F += [(ci, end * nsides + k, end * nsides + (k + 1) % nsides) for k in range(nsides)]
+    V = np.array(V)
+    F = np.array(F, dtype=np.int64)
+    # wind outward: from the nearest axis point (segments) / along the axis (caps)
+    a, b, c = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    cen = (a + b + c) / 3.0
+    n = np.cross(b - a, c - a)
+    ref = np.empty_like(cen)
+    for fi, q in enumerate(cen):
+        best, bp = 1e9, P[0]
+        for j in range(len(P) - 1):
+            ab = P[j + 1] - P[j]
+            t = np.clip((q - P[j]) @ ab / max(ab @ ab, 1e-12), 0, 1)
+            x = P[j] + t * ab
+            dd = np.linalg.norm(q - x)
+            if dd < best:
+                best, bp = dd, x
+        ref[fi] = bp
+    o = cen - ref
+    tiny = np.linalg.norm(o, axis=1) < 1e-6
+    if tiny.any():                                        # cap fans: outward along the axis
+        for fi in np.nonzero(tiny)[0]:
+            j = 0 if np.linalg.norm(cen[fi] - P[0]) < np.linalg.norm(cen[fi] - P[-1]) else -1
+            o[fi] = (P[0] - P[1]) if j == 0 else (P[-1] - P[-2])
+    flip = np.einsum("ij,ij->i", n, o) < 0
+    F[flip] = F[flip][:, ::-1]
+    return V, F
+
+
+def roundbox_low(box, n=(2, 2, 2)):
+    """A clean low for a sdf.RoundBox: a cube grid (n cells per local axis) scaled to the box, every vertex moved from
+    the box centre onto its own surface (rounded edges become chamfers). Returns (V, F) wound outward."""
+    nx, ny, nz = n
+    P, F, key = [], [], {}
+
+    def vid(p):
+        k = tuple(np.round(p, 6))
+        if k not in key:
+            key[k] = len(P)
+            P.append(p)
+        return key[k]
+    cnt = (nx, ny, nz)
+    for ax_ in range(3):
+        for sgn in (-1.0, 1.0):
+            ua, va = [a for a in range(3) if a != ax_]
+            nu_, nv_ = cnt[ua], cnt[va]
+            ids = np.zeros((nu_ + 1, nv_ + 1), dtype=np.int64)
+            for i in range(nu_ + 1):
+                for j in range(nv_ + 1):
+                    p = np.zeros(3)
+                    p[ax_] = sgn
+                    p[ua] = -1 + 2 * i / nu_
+                    p[va] = -1 + 2 * j / nv_
+                    ids[i, j] = vid(p)
+            for i in range(nu_):
+                for j in range(nv_):
+                    F += [(ids[i, j], ids[i + 1, j], ids[i + 1, j + 1]), (ids[i, j], ids[i + 1, j + 1], ids[i, j + 1])]
+    Q = np.array(P) * box.h[None]
+    dirs = Q @ box.ax
+    rmax = np.linalg.norm(Q, axis=1) * 1.3 + 0.03
+    dirs = dirs / np.linalg.norm(dirs, axis=1, keepdims=True)
+    t = np.array([march_in(box, box.c[None], dirs[i:i + 1], rmax[i], steps=32)[0] for i in range(len(dirs))])
+    t = np.where(np.isnan(t), 0.0, t)
+    V = box.c[None] + dirs * t[:, None]
+    F = np.array(F, dtype=np.int64)
+    return V, wind_out(V, F, lambda cen: np.repeat(box.c[None], len(cen), 0))
+
+
+# ── shared paint means (fix round 5: the glimwick's Art 2.0 finish, for every kind's painter) ─────────────────────
+# Inputs are per texel: P (surface points, m), N (normals), colours as float RGB arrays (any one space per call).
+def lowpass3d(P, v, cell, keep=None):
+    """3D low-pass of per-texel values v over their surface points P: trilinear splat onto a `cell` grid, a [1 2 1]
+    blur per axis, trilinear gather (the glimwick's `_lowpass3d`)."""
+    P = np.asarray(P, dtype=np.float64)
+    v = np.asarray(v, dtype=np.float64)
+    wt = np.ones(len(P)) if keep is None else np.asarray(keep, dtype=np.float64)
+    lo = P.min(axis=0) - 2 * cell
+    g = (P - lo) / cell
+    i0 = np.floor(g).astype(np.int64)
+    f = g - i0
+    n = i0.max(axis=0) + 4
+    size = int(np.prod(n))
+    S, W = np.zeros(size), np.zeros(size)
+    corners = []
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                w_ = ((f[:, 0] if dx else 1 - f[:, 0]) * (f[:, 1] if dy else 1 - f[:, 1])
+                      * (f[:, 2] if dz else 1 - f[:, 2]))
+                idx = ((i0[:, 0] + dx) * n[1] + (i0[:, 1] + dy)) * n[2] + (i0[:, 2] + dz)
+                S += np.bincount(idx, weights=w_ * wt * v, minlength=size)
+                W += np.bincount(idx, weights=w_ * wt, minlength=size)
+                corners.append((idx, w_))
+    S, W = S.reshape(tuple(n)), W.reshape(tuple(n))
+    for ax in range(3):
+        S = 0.25 * (np.roll(S, 1, ax) + 2 * S + np.roll(S, -1, ax))
+        W = 0.25 * (np.roll(W, 1, ax) + 2 * W + np.roll(W, -1, ax))
+    M = (S / np.maximum(W, 1e-12)).ravel()
+    return sum(M[idx] * w_ for idx, w_ in corners)
+
+
+def cavity(P, N, keep=None, cell=0.025, unit=0.006):
+    """The form's own value structure per texel: how far the surface point stands out of its 3D neighbourhood (the
+    low-pass of the surface) along its normal: + ridges, carved edges, fold crests; - seams, creases, fold valleys.
+    In units of `unit` m, centred on the part's median, squashed to -1..1."""
+    Pd = np.asarray(P, dtype=np.float64)
+    lp = np.stack([lowpass3d(Pd, Pd[:, i], cell, keep) for i in range(3)], axis=1)
+    c = np.einsum("ij,ij->i", Pd - lp, np.asarray(N, dtype=np.float64)) / unit
+    sel = c if keep is None else c[np.asarray(keep, dtype=bool)]
+    return np.tanh(c - (np.median(sel) if len(sel) else 0.0))
+
+
+def detail_ratio(proj, P, N, keep=None, cell=0.045, clamp=(0.66, 1.40), chroma=(0.86, 1.16), up_fade=(0.45, 0.80)):
+    """THE CONCEPT'S OWN PAINTING as gains (the glimwick's detail transfer): its brush strokes, fold light and felt /
+    linen texture as a luminance ratio of the projected colour `proj` against its own 3D low-pass (`cell`: the
+    plates' patches and baked lighting live below it), clamped; its warm / cool strokes as a chroma ratio. Texels
+    off the part's own value (a neighbour projected onto it), outside `keep` or up-facing (the plates see tops at
+    grazing angles: their outline strokes land there as scars) get no detail. Returns (lum_gain - 1, chroma_gain - 1,
+    weight): apply as col *= 1 + det * w * lum, col *= 1 + 0.7 * det * w * chroma."""
+    proj = np.asarray(proj, dtype=np.float64)
+    L = proj @ np.array([0.2126, 0.7152, 0.0722])
+    ok = np.ones(len(L), dtype=bool) if keep is None else np.asarray(keep, dtype=bool).copy()
+    n = len(L)
+    if ok.sum() > 50:
+        med = float(np.median(L[ok]))
+        ok &= (L > med / 1.6) & (L < med * 1.6)
+    if ok.sum() <= 50:
+        return np.zeros(n), np.zeros((n, 3)), np.zeros(n)
+    Pd = np.asarray(P, dtype=np.float64)
+    Ll = lowpass3d(Pd, L, cell, ok)
+    lum = np.where(ok, np.clip(L / np.maximum(Ll, 1e-4), *clamp), 1.0) - 1.0
+    ch = proj / np.maximum(L[:, None], 1e-4)
+    chl = np.stack([lowpass3d(Pd, ch[:, k], cell, ok) for k in range(3)], axis=1)
+    cr = np.where(ok[:, None], np.clip(ch / np.maximum(chl, 1e-4), *chroma), 1.0) - 1.0
+    nz = np.asarray(N, dtype=np.float64)[:, 2]
+    t = np.clip((nz - up_fade[0]) / (up_fade[1] - up_fade[0]), 0.0, 1.0)
+    w = 1.0 - t * t * (3 - 2 * t)
+    return lum, cr, w
+
+
+def nap(P, amount=0.035, fine=140.0, coarse=13.0, seed=(0.3, 2.2, 5.1)):
+    """felt / wool nap: a fine fibre speckle + a soft mottle, as a gain around 1"""
+    Pd = np.asarray(P, dtype=np.float64)
+    return 1.0 + amount * N(Pd, fine, offset=seed) + 0.6 * amount * N(Pd, coarse, offset=(seed[2], seed[0], seed[1]))
+
+
+def clamp_reserved(rgb, keep=None, hue=(25.0, 50.0), sat_max=0.38, feather=3.0):
+    """sRGB 0..1 texels (n, 3): inside the reserved marigold hue band (brief §2.3: no large area above 40 % saturation
+    there) pull HSV saturation down to `sat_max`, value kept; `keep` (bool, n) = texels left alone (lampresin panes,
+    the brief's <= 4 % allowance). The paint noise and the concept transfer push walnut, leather and felt over the cap.
+    Returns (rgb, fraction changed)."""
+    c = np.clip(np.asarray(rgb, dtype=np.float64), 0.0, 1.0)
+    mx, mn = c.max(axis=1), c.min(axis=1)
+    d = np.maximum(mx - mn, 1e-9)
+    r, g, b = c[:, 0], c[:, 1], c[:, 2]
+    h = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60.0
+    s = (mx - mn) / np.maximum(mx, 1e-9)
+    band = np.clip(np.minimum(h - hue[0], hue[1] - h) / feather + 1.0, 0.0, 1.0) * (mx - mn > 1e-4)
+    over = (s > sat_max) & (band > 0)
+    if keep is not None:
+        over &= ~np.asarray(keep, dtype=bool)
+    if not over.any():
+        return np.asarray(rgb), 0.0
+    s_new = s + (np.minimum(s, sat_max) - s) * band
+    out = c.copy()
+    k = s_new[over] / np.maximum(s[over], 1e-9)
+    out[over] = mx[over, None] - (mx[over, None] - c[over]) * k[:, None]
+    return out.astype(np.asarray(rgb).dtype), float(over.mean())
 
 
 # ── projection plates ────────────────────────────────────────────────────────────────────────────────
