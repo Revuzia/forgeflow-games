@@ -534,6 +534,22 @@ function lcPatch(mat, defs) {
 }
 /** the graphics tier this map is built for (lane boot's C-GFX W.gfxTier, else the stored setting): low | medium | high | ultra */
 function gfxTierOf(W) { const t = W.gfxTier || (W.settings && W.settings.graphics) || (W._gfx && W._gfx.tier) || "medium"; return t === "low" || t === "medium" || t === "high" || t === "ultra" ? t : "medium"; }
+/** C-GFX / D10: the citykit facade-detail strength for a tier (0 = off on low: setDetail(0) needs no recompile) and the wall photograph's gain. */
+const KIT_DETAIL = 0.62, GRIME_GAIN = 0.7;
+function kitDetailFor(tier) { return tier === "low" ? 0 : KIT_DETAIL; }
+/** D10: boot emits W.events 'gfxTier'(tier) whenever the tier changes (and once at start). One listener per W (the emitter has no off()), acting on
+ *  whatever map is current: the city kit's facade detail and the wall photograph follow the tier without a recompile (a map BUILT on low never loaded the
+ *  photograph or patched the shaders, so raising the tier mid-match cannot add them: the draw distances (TIER_Q) stay those of the tier the map was built for). */
+function hookGfxTier(W) {
+  if (!W || W._mapsGfxHook || !W.events || typeof W.events.on !== "function") return;
+  W._mapsGfxHook = true;
+  W.events.on("gfxTier", (tier) => {
+    const t = tier || W.gfxTier;
+    const kit = W._cityKit;
+    if (kit && typeof kit.setDetail === "function") { try { kit.setDetail(kitDetailFor(t)); } catch (e) { /* a disposed kit */ } }
+    if (LCU.uLcGrime.value) LCU.uLcGrimeK.value.x = t === "low" ? 0 : GRIME_GAIN;
+  });
+}
 
 /** the photo splat of a terrain vertex: weights of (grass/rock, beach, sand) - the same biome zones colorAt tints, so the detail and the colour agree */
 function splatAt(mapId, h, x, z, seed, out) {
@@ -1223,6 +1239,7 @@ function bakeContactAO(colliders, gyc, N, size) {
 export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
   const seed = W.seed;
+  hookGfxTier(W);                                       // D10: the city kit detail / wall photograph follow boot's 'gfxTier' event
   // C-GFX: the tier this map is BUILT for (fixed for the match: the in-match ladder only moves bloom / DPR). LCFX = the world-shader layer (LCU) and the photo
   // wall detail: off on low. ULTRA (lane boot) = the longest draw / foliage / grass / furniture distances and the 5 x 5 near terrain ring (see TIER_Q).
   const TIER = gfxTierOf(W), LCFX = TIER !== "low";
@@ -4741,7 +4758,7 @@ export async function buildMap(W, mapId) {
     const { CK, lay } = city;
     if (!city.kit.length) return;
     const tier = W.settings && W.settings.graphics;
-    const kit = CK.createCityKit({ THREE, kernel: W.kernel, assetBase: W.assetBase || "" });
+    const kit = CK.createCityKit({ THREE, kernel: W.kernel, assetBase: W.assetBase || "", detail: kitDetailFor(TIER) });   // (C-GFX / D10: the facade detail is 0 on low)
     W._cityKit = kit;
     const districts = {};
     for (const it of city.kit) if (!districts[it.district]) districts[it.district] = { theme: "city" };
@@ -5892,7 +5909,7 @@ export async function buildMap(W, mapId) {
   const KIND_PBR = { s: [0.86, 0.03], plank: [0.9, 0.0], shingle: [0.8, 0.02], metal: [0.45, 0.5], block: [0.84, 0.02], stucco: [0.93, 0.0] };
   const STRUCT_LC = { LC_CLOUD: "", LC_WEAR: "" };
   const grimeTex = await grimePromise;
-  if (grimeTex) { LCU.uLcGrime.value = grimeTex; LCU.uLcGrimeK.value.set(0.7, 1 / 6.0, 0, 0); STRUCT_LC.LC_GRIME = ""; }
+  if (grimeTex) { LCU.uLcGrime.value = grimeTex; LCU.uLcGrimeK.value.set(GRIME_GAIN, 1 / 6.0, 0, 0); STRUCT_LC.LC_GRIME = ""; }
   else LCU.uLcGrimeK.value.set(0, 1 / 6.0, 0, 0);
   function structMaterial(tkind) {
     let mat = structMats[tkind];
