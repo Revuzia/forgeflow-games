@@ -304,22 +304,57 @@
         out.centres.push(rec);
       }
     }
-    // grass indoors: from 0.4 m under the ceiling looking straight down at the room floor, the frame with the ground clutter (grass tufts) drawn vs hidden
+    // grass indoors: from 0.4 m under the ceiling looking straight down at the room floor, the frame with the ground clutter (grass tufts) drawn vs hidden.
+    // (Wave 8 fix round, lane K3 on lane K1's request) a changed pixel COUNTS only when it can show something inside the room: its camera ray, at the height of
+    // the tallest tuft over this floor (r.y + GRASS_TOP: maps.js's 0.45 m tuft card x its 1.45 top scale = 0.65 m), still lies inside the room (r.inside = its
+    // cells, else its AABB). The 16:9 frame is wider than the room: through a window (sill 1.20 m over the floor, so the ray is >= 1.2 m up where it leaves the
+    // room) or a doorway at its edge it shows the landscape outside (verify: a crater ruin's frame saw tufts 22-55 m down the slope through a window at the
+    // frame's edge). Those pixels are information (pxOutside), never counted. Every tuft standing on this floor (<= 0.65 m tall) lies on rays that are still
+    // inside the room at that height, so a tuft in the room counts in full. Plant `grass-on-floor` (match source, the control of this correction): three tufts
+    // stood on the room's own floor lattice (the point nearest the centre and the first / last lattice points, 0.35 m from two walls) for this render only.
     out.grass = [];
     {
       const clutter = []; W.group("map").traverse((o) => { if ((o.isMesh || o.isInstancedMesh) && /clutter|grass/i.test(o.name || "")) clutter.push(o); });
       const Cam = W.camera.constructor;
+      const GRASS_TOP = 0.65;
+      const inRoom = (r, x, z) => (typeof r.inside === "function" ? r.inside(x, z) : true) && x > r.minX - 0.15 && x < r.maxX + 0.15 && z > r.minZ - 0.15 && z < r.maxZ + 0.15;
+      const plantGrass = !!(P.opt && P.opt.plant === "grass-on-floor");
       for (const r of H.rooms) {
         const cx = (r.minX + r.maxX) / 2, cz = (r.minZ + r.maxZ) / 2, top = (r.ceil != null ? r.ceil : r.y + 2.8) - 0.4;
         const half = Math.max(r.maxX - r.minX, r.maxZ - r.minZ) / 2;
         const cam = new Cam(Math.min(120, 2 * Math.atan2(half, Math.max(0.3, top - r.y)) * 180 / Math.PI), w / h, 0.05, 30);
         cam.position.set(cx, top, cz); cam.up.set(0, 0, -1); cam.lookAt(cx, r.y, cz); cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
         setPlayer(cx + 500, r.y + 50, cz + 500);                           // the player out of the shot (the clutter ring follows the camera focus, not this camera)
+        // the plant: three tufts on this room's floor (instances 0..2 of each clutter InstancedMesh; restored after the two renders)
+        const saved = [];
+        let planted = 0;
+        if (plantGrass) {
+          const pts = (r.pts && r.pts.length ? r.pts : [[cx, cz]]).slice();
+          const nearC = pts.slice().sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz))[0];
+          const spots = [nearC, pts[0], pts[pts.length - 1]];
+          for (const o of clutter) {
+            if (!o.isInstancedMesh) continue;
+            const M4 = new o.matrix.constructor();
+            const keep = { o, count: o.count, m: [] };
+            for (let n = 0; n < spots.length && n < o.instanceMatrix.count; n++) { const m = new o.matrix.constructor(); o.getMatrixAt(n, m); keep.m.push(m); M4.makeTranslation(spots[n][0], r.y, spots[n][1]); o.setMatrixAt(n, M4); planted++; }
+            o.count = Math.max(o.count, keep.m.length); o.instanceMatrix.needsUpdate = true; saved.push(keep);
+          }
+        }
         R.render(k.scene, cam); const ref = read().slice();
         const vis = clutter.map((o) => o.visible); clutter.forEach((o) => { o.visible = false; });
         R.render(k.scene, cam); const px = read(); clutter.forEach((o, n) => { o.visible = vis[n]; });
-        let d = 0; for (let q = 0; q < px.length; q += 4) if (Math.abs(px[q] - ref[q]) + Math.abs(px[q + 1] - ref[q + 1]) + Math.abs(px[q + 2] - ref[q + 2]) > 24) d++;
-        out.grass.push({ room: r.id, px: d, clutterMeshes: clutter.length });
+        for (const s of saved) { s.m.forEach((m, n) => s.o.setMatrixAt(n, m)); s.o.count = s.count; s.o.instanceMatrix.needsUpdate = true; }
+        const tH = Math.tan(cam.fov * Math.PI / 360), asp = w / h, dyT = top - (r.y + GRASS_TOP);
+        let d = 0, dOut = 0, dAll = 0;
+        for (let q = 0; q < px.length; q += 4) {
+          if (Math.abs(px[q] - ref[q]) + Math.abs(px[q + 1] - ref[q + 1]) + Math.abs(px[q + 2] - ref[q + 2]) <= 24) continue;
+          dAll++;
+          if (!(dyT > 0)) { d++; continue; }                                   // a storey too low to separate the heights: every changed pixel counts
+          const i = q / 4, sx = ((i % w) + 0.5) / w * 2 - 1, sy = (Math.floor(i / w) + 0.5) / h * 2 - 1;   // readPixels rows run bottom-up: +sy = the top of the frame
+          const x = cx + sx * tH * asp * dyT, z = cz - sy * tH * dyT;          // camera right = world +x, camera up = world -z
+          if (inRoom(r, x, z)) d++; else dOut++;
+        }
+        out.grass.push({ room: r.id, px: d, pxOutside: dOut, pxAll: dAll, clutterMeshes: clutter.length, planted });
       }
     }
     // an outdoor reference: 8 m out of the first exterior door, facing the house

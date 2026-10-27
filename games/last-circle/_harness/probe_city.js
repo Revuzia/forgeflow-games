@@ -347,7 +347,8 @@
   /** static cover pieces (>= 1.2 m tall, no prop, no ramp) whose middle lies inside a storm circle; thin 0.3 m roof decks apart */
   function endgame(M, SIM, seed, mode) {
     if (!SIM || typeof SIM.Storm !== "function") return null;
-    const S = new SIM.Storm({ seed, mode: mode || "standard", half: M.half });
+    // P2-F: OD-1's land predicate, the rule storm.js passes (terrain > waterY + 0.5 m): without it the probe judged other circles than the match's
+    const S = new SIM.Storm({ seed, mode: mode || "standard", half: M.half, landAt: ((g, wy) => (g ? (x, z) => g(x, z) > wy + 0.5 : undefined))(M.groundAt || M.heightAt, typeof M.waterY === "number" ? M.waterY : 0) });
     const circles = S.circles;
     const idx = [circles.length - 3, circles.length - 2, circles.length - 1];
     const out = {};
