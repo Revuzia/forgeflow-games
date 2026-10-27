@@ -105,7 +105,7 @@ const ACTOR_DOUBLES = ["yaw", "pitch", "hp", "shield", "downedAt", "aimErr", "la
   "_tiltX", "_tiltZ", "_eyeY", "_armW", "_animTS", "_adsT", "_stepAcc", "hitReactT", "_hitReactAt", "_portalT", "_sinkT", "_sinkHold", "_sinkY0", "_sinkVy",
   "_sinkFloor", "lastHurtByActorT", "dummyDamage", "_flashT", "_eHoldT", "_fireRelayT", "_stormT", "vmKick", "recoilYaw", "recoilPitch", "_pyaw",
   // P23/player (parity P2-A + P3): DBNO, air / landing, slide, locomotion warp, turn-in-place, throw overlay
-  "downedHp", "downedT", "_reviveT", "_airT", "_airPeakY", "_landT", "_landUntil", "_slideT", "_slideV", "_slideDx", "_slideDz", "_slideCd",
+  "downedHp", "downedT", "_reviveT", "_airT", "_airPeakY", "_landT", "_landUntil", "_slideT", "_slideV", "_slideDx", "_slideDz", "_slideCd", "_slideTs",
   "_warp", "_turnT", "_turnYaw0", "_turnAmt", "_turnRate", "_throwT", "_throwStart", "_locoAng", "_fallV"];
 export function createActor(W, opts) {
   const a = {
@@ -180,6 +180,8 @@ export function createActor(W, opts) {
     _airT: 0, _airPeakY: 0, _jumped: false, _landKind: 0, _landT: 0, _landUntil: 0, _fallV: 0,
     // slide (LC-21): seconds into the slide (-1 = none), speed, direction, cooldown clock
     _slideT: -1, _slideV: 0, _slideDx: 0, _slideDz: 0, _slideCd: 0, _crouchPrev: false,
+    // slide clip (LC-21): its play rate for this slide, the slide count and the slide the clip was started for
+    _slideTs: 1, _slideN: 0, _slideClipN: -1,
     // directional locomotion (LC-10): quadrant 0 fwd / 1 left / 2 back / 3 right, the orientation warp, the move angle
     _locoQ: 0, _warp: 0, _locoAng: 0, _locoRun: false, _locoCombat: false, _locoKey: null, _dbnoHid: false,
     // turn-in-place (LC-64): clock (-1 = none), body yaw at the start, the turn it covers (rad, signed), the clip
@@ -460,6 +462,8 @@ const EXT_CLIPS = [
   "rifle_crouch_left", "rifle_crouch_right", "rifle_crouch_back", "pistol_strafe_left", "pistol_strafe_right",
   "jump_up", "jump_loop", "jump_down", "fall_idle", "land_hard", "toss_grenade",
   "dbno_crawl_fast", "turn_left_90", "turn_right_90", "rifle_sprint_left", "rifle_sprint_right",
+  // (P23-fix, LC-21) the slide: Mixamo "soccer tackle (2)" (a sliding tackle) legs / hips / spine + the rifle crouch arms
+  "slide",
 ];
 // (P23, download budget) not requested: P1-F's slow `dbno_crawl` (80 KB; the running crawl dbno_crawl_fast covers every downed
 // move) and `injured_idle` (46 KB; a still downed body holds its crawl pose), and the four Mixamo rifle clips the P23 feet-down
@@ -3056,8 +3060,8 @@ function syncObj(W, a, dt) {
   } else if (a.gliding && a.chute) {
     wantTiltX = -0.12 - Math.sin(W.t * 1.7) * 0.06;          // sway under canopy (reclined in the harness)
     wantTiltZ = -a.input.mx * 0.18 + Math.cos(W.t * 1.3) * 0.04;
-  } else if (a._slideT >= 0) {
-    // (P23, LC-21) no Mixamo slide clip exists locally: the crouch pose leans BACK into the slide (plus the leg layer, animate)
+  } else if (a._slideT >= 0 && !(a.clips && a.clips.slide)) {
+    // (P23, LC-21) a build without the slide clip: the crouch pose leans BACK into the slide (plus the leg layer, animate)
     wantTiltX = -0.32;
   }
   a._tiltX = (a._tiltX || 0) + (wantTiltX - (a._tiltX || 0)) * Math.min(1, dt * 4);
@@ -3177,7 +3181,7 @@ function animate(W, a, dt) {
       if (layers && a.armBones && a.alive && !a.downed) {
         let lw = 0, lm = null;
         if (a.mantleT != null) { lm = "mantle"; lw = Math.sin(Math.PI * K.clamp(1 - a.mantleT / 0.45, 0, 1)); }
-        else if (a._slideT >= 0) { lm = "slide"; lw = Math.min(1, a._slideT / 0.12); }
+        else if (a._slideT >= 0 && !(a.clips && a.clips.slide)) { lm = "slide"; lw = Math.min(1, a._slideT / 0.12); }
         if (lm && lw > 0.01) applyLegPose(a.obj, a.armBones, lm, lw);
       }
       const wantW = mode ? 1 : 0;
@@ -3270,8 +3274,18 @@ function selectClip(W, a, gs, fam, FK, useMixamoGun) {
     _paOnceTs.timeScale = reloadTs(a, C.rifle_reload);
     playAnim(a, "rifle_reload", _paOnceTs);
   }
+  else if (a._slideT >= 0 && C.slide) {
+    // (P23-fix, LC-21) slide: the baked Mixamo slide (pelvis drops to ~0.25 m, the lead right leg out, chest curled over the
+    // rifle), started once per slide and played so its get-up ends with the slide (a._slideTs, slideStart); clamped at its end
+    if (a.anim !== "slide" || a._slideClipN !== a._slideN) {
+      a._slideClipN = a._slideN;
+      _paSlide.timeScale = a._slideTs;
+      playAnim(a, "slide", _paSlide);
+    }
+  }
   else if (a._slideT >= 0 && (C.rifle_crouch_g || C.rifle_crouch || C.crouch)) {
-    // (P23, LC-21) slide: a held crouch frame under the procedural slide legs (animate) and the lean-back (syncObj)
+    // (P23, LC-21) a build without the slide clip: a held crouch frame under the procedural slide legs (animate) and the
+    // lean-back (syncObj)
     playAnim(a, C.rifle_crouch_g ? "rifle_crouch_g" : C.rifle_crouch ? "rifle_crouch" : "crouch", PA_FREEZE);
   }
   else if (a.crouching && (C.rifle_crouch_g || (useMixamoGun && fam === "rifle" && C.rifle_crouch))) {
@@ -3343,6 +3357,7 @@ function selectClip(W, a, gs, fam, FK, useMixamoGun) {
 // (P23) shared option objects (playAnim and the kernel's play() only read them)
 const _paOnceTs = { once: true, timeScale: 1 }, _paTurn = { once: true, timeScale: 1, force: false };
 const _paJumpUp = { once: true, startAt: 0 }, _paLand = { once: true, timeScale: 1, startAt: 0, force: true };
+const _paSlide = { once: true, timeScale: 1, startAt: 0, force: true, fade: 0.12 };
 const AIR_CLIP_MIN_S = 0.16;          // unsupported for less than this (a stair, a kerb) keeps the ground clip
 // walk <-> run clip hysteresis (m/s). The ADS pace (3.8 m/s) stays on the WALK set (at ~2x): in game its strafes skate 0.91-1.16x
 // its forward, against 1.3-2.2x for the run strafes at 0.85x (F:/lc_p23/player/reports/calib2.log, calib3.log)
@@ -4274,6 +4289,13 @@ function slideStart(W, a) {
   a._slideDx = a.vel.x / sp; a._slideDz = a.vel.z / sp;
   a._slideV = Math.max(SLIDE_PEAK, sp);
   a._slideT = 0;
+  // (P23-fix, LC-21) the slide clip's rate: its whole drop / hold / get-up over the time this slide's friction takes to reach
+  // the crouch-walk speed (9.5 m/s entry: 0.82 s -> ~1.7x), so the body is back up when the slide hands over to the crouch
+  a._slideN++;
+  const act = a.clips && a.clips.slide && a.rig && a.rig.actions ? a.rig.actions[a.clips.slide] : null;
+  const dur = act ? act.getClip().duration : 0;
+  const tEnd = Math.min(SLIDE_MAX_S, SLIDE_TAU * Math.log(a._slideV / SLIDE_END_V));
+  a._slideTs = dur > 0 && tEnd > 0.2 ? K.clamp(dur / tEnd, 1.1, 2.4) : 1;
   // the run ends in the slide: you come out of it crouched (C held / toggled) or walking, never back into a sprint by itself
   if (a === W.player) W._sprintLatch = false;
   W.events.emit("slideStart", a);
