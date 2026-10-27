@@ -14,6 +14,7 @@ import { barSeconds, composeBar, describeStyle, orbitalStyle, styleFor, type Mus
 import { buffersFor, playNote, type NoteCtx } from './instruments.ts';
 import type { BufferBank } from './bank.ts';
 import { Knob } from './synth.ts';
+import { AuthoredMusic, type AuthoredState } from './authored.ts';
 
 const LOOKAHEAD = 0.6;
 const MAX_POLY = 32;
@@ -131,6 +132,8 @@ export class MusicPlayer {
 export interface MusicState {
   culture: string;
   players: { key: string; gain: number; style: string; bar: number }[];
+  /** the authored layer (authored.ts): which piece, its phase and level */
+  authored?: AuthoredState;
 }
 
 export class MusicDirector {
@@ -144,6 +147,8 @@ export class MusicDirector {
   /** 0..1 extra fade applied to everything (the opening's ignition, a duck) */
   private master = 1;
   private styles = new Map<string, MusicStyle>();
+  /** the authored pieces, woven with the procedural players (they take what the authored piece leaves) */
+  private readonly authored: AuthoredMusic;
 
   /** styles are pure functions of the culture: cache them by everything styleFor reads */
   private styleOf(c: MusicCandidate['culture']): MusicStyle {
@@ -159,6 +164,7 @@ export class MusicDirector {
 
   constructor(ctx: BaseAudioContext, bank: BufferBank, dest: AudioNode, wet: AudioNode | null, r: () => number) {
     this.ctx = ctx; this.bank = bank; this.dest = dest; this.wet = wet; this.r = r;
+    this.authored = new AuthoredMusic(ctx, dest);
   }
 
   /** the star's identity seeds the orbital score */
@@ -180,6 +186,7 @@ export class MusicDirector {
   }
 
   update(scene: AudioScene | null, now: number): void {
+    const aw = this.authored.update(scene, now, this.master);
     const wanted = new Map<string, { gain: number; pan: number; far: number; style: () => MusicStyle }>();
     let loudest = 0;
     if (scene) {
@@ -206,7 +213,7 @@ export class MusicDirector {
         this.players.set(key, p);
       } else p.restyle(style);
       // the orbital score is a bed under the hum of space, not a town's band: it plays softer
-      p.update(now, w.gain * (key === 'orbital' ? 0.5 : 0.85) * this.master, w.pan, w.far);
+      p.update(now, w.gain * (key === 'orbital' ? 0.5 : 0.85) * this.master * (1 - aw), w.pan, w.far);
     }
     for (const [key, p] of this.players) {
       if (wanted.has(key)) continue;
@@ -216,6 +223,7 @@ export class MusicDirector {
   }
 
   stop(): void {
+    this.authored.stop();
     for (const p of this.players.values()) p.dispose();
     this.players.clear();
   }
@@ -227,6 +235,6 @@ export class MusicDirector {
       players.push({ key: p.key, gain: Math.round(p.target * 1000) / 1000, style: p.describe(), bar: p.barIndex });
       if (p.target > bg) { bg = p.target; best = `${p.key} · ${p.describe()}`; }
     }
-    return { culture: best, players };
+    return { culture: best, players, authored: this.authored.state() };
   }
 }

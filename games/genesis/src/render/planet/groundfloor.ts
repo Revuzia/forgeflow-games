@@ -469,9 +469,13 @@ vec4 swardDetail(vec3 P, float fw, float NdV) {
   float a2 = sw_aa(fw, 0.6);
   if (a2 > 0.0) {
     vec3 q = P * 1.7 + vec3(snoise(P * 0.5 + 2.0), snoise(P * 0.5 + 6.0), snoise(P * 0.5 + 9.0)) * 0.9;
-    float tus = smoothstep(-0.45, 0.65, snoise(q) * 0.75 + snoise(q * 2.3 + 4.0) * 0.25);
-    val *= 1.0 + 0.24 * (tus - 0.5) * a2;
-    bump += (tus - 0.5) * 0.04 * a2;
+    float tn = snoise(q) * 0.75 + snoise(q * 2.3 + 4.0) * 0.25;
+    float tus = smoothstep(-0.45, 0.65, tn);
+    val *= 1.0 + 0.3 * (tus - 0.5) * a2;
+    // (the mounds live in the colour; the relief is the raw noise at ±1 cm, slopes under ~2°: the saturated mound at
+    // ±2 cm bunched its slope (~8°) on the noise's level sets, and a dusk sun lower than that shaded every such band —
+    // thin dark meandering 'worms', 1–3 m long, all over a meadow at 35 m)
+    bump += tn * 0.01 * a2;
     gap += (1.0 - tus) * 0.5 * a2;
     tip += tus * 0.2 * a2;
   }

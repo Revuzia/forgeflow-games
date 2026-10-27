@@ -1,0 +1,233 @@
+// GENESIS — the AUTHORED music layer (LIVING §0: "authored music"): the title / orbit theme "First Light" and the era
+// pieces, composed in src/audio/score/*, rendered offline and shipped as Opus in src/audio/assets/. They share one motif
+// and one key (D dorian), so they are woven WITH the procedural score rather than laid over it (a culture's own tune is
+// in its own mode and key): an authored piece plays its passes, then rests while the procedural culture or orbital
+// music fills in, then returns; the director (musicplayer.ts) fades each under the other.
+//
+// Era pieces come as stems that loop together, sample-locked: `day` and `night` cross-fade with the daylight, `tension`
+// rises over either with war and disaster; `main` always plays. Buffers are decoded on demand (fetch +
+// decodeAudioData, off the main thread) and only the playing piece and the one fading out are kept. If a file fails
+// to load or decode (an old browser without Opus), the procedural score simply plays on.
+
+import type { AudioScene } from './scene.ts';
+
+export type StemRole = 'main' | 'day' | 'night' | 'tension';
+
+export interface AuthoredPiece {
+  id: string;
+  /** exact loop length, seconds (the encoded file may carry a few ms of codec padding past it) */
+  loop: number;
+  stems: Partial<Record<StemRole, string>>;
+  /** loops per appearance */
+  passes: number;
+  /** seconds the procedural score plays between appearances */
+  rest: number;
+  /** linear trim against the procedural score */
+  gain: number;
+}
+
+/**
+ * The shipped pieces. `new URL(literal, import.meta.url)` is resolved by Vite into a hashed asset next to the bundle
+ * (works under any base path); in Node (tests) it is a plain file URL that nothing fetches.
+ */
+export const AUTHORED: Record<string, AuthoredPiece> = {
+  title: {
+    id: 'title', loop: 40 * 4 * 60 / 70, passes: 1, rest: 75, gain: 0.85,
+    stems: { main: new URL('./assets/title.ogg', import.meta.url).href },
+  },
+};
+
+/** seconds over which a piece fades in / out at the edges of an appearance */
+export const FADE_IN = 3;
+export const FADE_OUT = 6;
+/** an appearance runs this far past its last loop (the folded reverb tail plays out over the quiet intro) */
+export const OVERRUN = 4;
+
+/** which authored piece the scene calls for (null: the procedural score alone) */
+export function pieceFor(scene: AudioScene | null): string | null {
+  if (!scene) return null;
+  const town = scene.music[0]?.weight ?? 0;
+  if (scene.orbital >= 0.35 && town < 0.15 && AUTHORED.title) return 'title';
+  return null;
+}
+
+export interface Weave {
+  piece: string | null;
+  phase: 'idle' | 'play' | 'rest';
+  /** audio-clock time the current appearance started (play) or the rest began */
+  since: number;
+  /** when the current phase ends */
+  until: number;
+}
+
+export function idleWeave(): Weave { return { piece: null, phase: 'idle', since: 0, until: 0 }; }
+
+/**
+ * Advance the weave: a newly wanted piece starts at once if its audio is ready (else the procedural score plays until
+ * it is); an appearance lasts `passes` loops (+ OVERRUN), then the piece rests for `rest` seconds, then returns.
+ */
+export function weave(w: Weave, want: string | null, now: number, ready: boolean): Weave {
+  const p = want ? AUTHORED[want] : undefined;
+  if (!p) return want === w.piece && w.phase === 'idle' ? w : idleWeave();
+  if (w.piece !== want || w.phase === 'idle') {
+    return ready ? { piece: want, phase: 'play', since: now, until: now + p.passes * p.loop + OVERRUN } : { piece: want, phase: 'idle', since: now, until: now };
+  }
+  if (now < w.until) return w;
+  if (w.phase === 'play') return { piece: want, phase: 'rest', since: now, until: now + p.rest };
+  return ready ? { piece: want, phase: 'play', since: now, until: now + p.passes * p.loop + OVERRUN } : { piece: want, phase: 'idle', since: now, until: now };
+}
+
+/** 0..1: how much of the authored piece sounds now (the procedural score takes the rest) */
+export function weaveLevel(w: Weave, now: number): number {
+  if (w.phase !== 'play') return 0;
+  const a = Math.min(1, Math.max(0, (now - w.since) / FADE_IN));
+  const b = Math.min(1, Math.max(0, (w.until - now) / FADE_OUT));
+  return Math.min(a, b);
+}
+
+/** the stems' levels from the scene: daylight cross-fades day and night, tension rises over either */
+export function stemLevels(scene: AudioScene | null, tension: number): Record<StemRole, number> {
+  const day = scene ? Math.max(0, Math.min(1, (scene.day - 0.15) / 0.5)) : 1;
+  const t = Math.max(0, Math.min(1, tension));
+  return { main: 1, day: Math.sqrt(day), night: Math.sqrt(1 - day), tension: t };
+}
+
+/** 0..1 tension the scene carries: war near the listener, fire, quakes, storms, the heartbeat of a dying world */
+export function sceneTension(scene: AudioScene | null): number {
+  if (!scene) return 0;
+  const L = scene.layers;
+  const war = scene.music[0]?.culture.war ? 0.8 * Math.min(1, (scene.music[0]?.weight ?? 0) * 3) : 0;
+  const danger = Math.max(L.fire * 0.8, L.lava, L.quake, Math.min(1, L.thunderRate * 0.6), L.heartbeat, L.ash * 0.7);
+  return Math.max(war, Math.min(1, danger));
+}
+
+interface Loaded { buf: AudioBuffer | null; failed: boolean }
+
+/** the playing (or fading) appearance of a piece: its stems, sample-locked, under one fader */
+class Voice {
+  readonly piece: AuthoredPiece;
+  private readonly ctx: BaseAudioContext;
+  readonly fader: GainNode;
+  private readonly stems = new Map<StemRole, { src: AudioBufferSourceNode; g: GainNode }>();
+  constructor(ctx: BaseAudioContext, dest: AudioNode, piece: AuthoredPiece, bufs: Map<StemRole, AudioBuffer>, when: number) {
+    this.ctx = ctx; this.piece = piece;
+    this.fader = ctx.createGain();
+    this.fader.gain.value = 0;
+    this.fader.connect(dest);
+    for (const [role, buf] of bufs) {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.loopStart = 0;
+      src.loopEnd = Math.min(piece.loop, buf.duration);
+      const g = ctx.createGain();
+      g.gain.value = role === 'main' || role === 'day' ? 1 : 0;
+      src.connect(g); g.connect(this.fader);
+      src.start(when);
+      this.stems.set(role, { src, g });
+    }
+  }
+  set(level: number, stems: Record<StemRole, number>, now: number): void {
+    this.fader.gain.setTargetAtTime(level * this.piece.gain, now, 0.25);
+    for (const [role, s] of this.stems) s.g.gain.setTargetAtTime(stems[role], now, role === 'tension' ? 1.2 : 2.5);
+  }
+  stop(now: number): void {
+    this.fader.gain.cancelScheduledValues(now);
+    this.fader.gain.setTargetAtTime(0, now, 0.8);
+    for (const s of this.stems.values()) { try { s.src.stop(now + 4.5); } catch { /* already stopped */ } }
+    setTimeout(() => { try { this.fader.disconnect(); } catch { /* gone */ } }, 5000);
+  }
+}
+
+export interface AuthoredState { piece: string | null; phase: Weave['phase']; level: number; ready: string[]; failed: string[] }
+
+export class AuthoredMusic {
+  private readonly ctx: BaseAudioContext;
+  private readonly dest: AudioNode;
+  private readonly loads = new Map<string, Loaded>();
+  private readonly pending = new Set<string>();
+  private w: Weave = idleWeave();
+  private voice: Voice | null = null;
+  private level = 0;
+  private tension = 0;
+  private lastNow = 0;
+
+  constructor(ctx: BaseAudioContext, dest: AudioNode) { this.ctx = ctx; this.dest = dest; }
+
+  private load(url: string): void {
+    if (this.loads.has(url) || this.pending.has(url) || typeof fetch !== 'function') return;
+    this.pending.add(url);
+    fetch(url)
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); })
+      .then((ab) => this.ctx.decodeAudioData(ab))
+      .then((buf) => { this.loads.set(url, { buf, failed: false }); })
+      .catch(() => { this.loads.set(url, { buf: null, failed: true }); })
+      .finally(() => { this.pending.delete(url); });
+  }
+
+  /** every stem of the piece decoded (starts the loads it needs) */
+  private ready(id: string): Map<StemRole, AudioBuffer> | null {
+    const p = AUTHORED[id];
+    if (!p) return null;
+    const out = new Map<StemRole, AudioBuffer>();
+    for (const [role, url] of Object.entries(p.stems) as [StemRole, string][]) {
+      const l = this.loads.get(url);
+      if (!l) { this.load(url); return null; }
+      if (!l.buf) return null;
+      out.set(role, l.buf);
+    }
+    return out;
+  }
+
+  private failed(id: string): boolean {
+    const p = AUTHORED[id];
+    return !p || Object.values(p.stems).some((u) => this.loads.get(u as string)?.failed);
+  }
+
+  /** drop decoded audio no longer needed (keeps memory to the playing piece) */
+  private release(keep: string | null): void {
+    const urls = new Set<string>(keep && AUTHORED[keep] ? Object.values(AUTHORED[keep].stems) as string[] : []);
+    for (const [u, l] of this.loads) if (!urls.has(u) && !l.failed) this.loads.delete(u);
+  }
+
+  /**
+   * Called every frame by the director with the scene and the director's master (0..1, the opening's hold).
+   * Returns how much of the music the authored piece holds now (0..1): the procedural players take the rest.
+   */
+  update(scene: AudioScene | null, now: number, master: number): number {
+    const dt = Math.max(0, Math.min(0.5, now - this.lastNow));
+    this.lastNow = now;
+    let want = pieceFor(scene);
+    if (want && this.failed(want)) want = null;
+    const bufs = want ? this.ready(want) : null;
+    const next = weave(this.w, want, now, !!bufs);
+    if (next.phase === 'play' && (this.w.phase !== 'play' || this.w.since !== next.since)) {
+      // a new appearance: start the stems together at the loop's top
+      this.voice?.stop(now);
+      this.voice = bufs ? new Voice(this.ctx, this.dest, AUTHORED[next.piece!], bufs, now + 0.05) : null;
+      if (this.voice) this.release(next.piece);
+    }
+    this.w = next;
+    // tension: quick to rise, slow to fall
+    const target = sceneTension(scene);
+    this.tension += (target - this.tension) * (1 - Math.exp(-dt / (target > this.tension ? 1.5 : 8)));
+    this.level = weaveLevel(this.w, now) * Math.max(0, Math.min(1, master));
+    if (this.voice) {
+      if (this.w.phase !== 'play' && this.level <= 0) { this.voice.stop(now); this.voice = null; }
+      else this.voice.set(this.level, stemLevels(scene, this.tension), now);
+    }
+    return this.voice ? weaveLevel(this.w, now) : 0;
+  }
+
+  stop(): void { this.voice?.stop(this.ctx.currentTime); this.voice = null; this.w = idleWeave(); }
+
+  state(): AuthoredState {
+    const ready: string[] = [], failed: string[] = [];
+    for (const id of Object.keys(AUTHORED)) {
+      const urls = Object.values(AUTHORED[id].stems) as string[];
+      if (urls.every((u) => this.loads.get(u)?.buf)) ready.push(id);
+      if (urls.some((u) => this.loads.get(u)?.failed)) failed.push(id);
+    }
+    return { piece: this.w.piece, phase: this.w.phase, level: Math.round(this.level * 1000) / 1000, ready, failed };
+  }
+}
